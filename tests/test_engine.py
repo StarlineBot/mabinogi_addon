@@ -58,6 +58,30 @@ def test_internal_clock_advances_between_ticks():
     assert after["vivace"] == 121
 
 
+def test_set_order_reorders_entries_live():
+    region = _region()
+    eng = _engine()
+    res = eng.tick(region, now=0.0)
+    ids = [e.buff_id for e in res.entries]
+    assert len(ids) >= 2
+    # 순서를 뒤집어 라이브 반영 → 다음 틱부터 역순
+    eng.set_order(list(reversed(ids)))
+    res2 = eng.tick(region, now=0.2)
+    ids2 = [e.buff_id for e in res2.entries]
+    assert ids2 == list(reversed(ids))
+
+
+def test_set_alert_before_affects_alerting():
+    region = _region()
+    eng = _engine()
+    eng.tick(region, now=0.0)
+    # vivace(121초 남음)에 큰 알림 기준을 주면 임박 처리
+    eng.set_alert_before({"vivace": 200})
+    res = eng.tick(region, now=0.2)
+    by_id = {e.buff_id: e for e in res.entries}
+    assert by_id["vivace"].alerting is True
+
+
 def test_anchor_missing_freezes():
     # 이 화면엔 앵커(premium_battle)가 없음 → 판정 불가 → 아무것도 활성화 안 됨
     eng = _engine(anchor_id="premium_battle")

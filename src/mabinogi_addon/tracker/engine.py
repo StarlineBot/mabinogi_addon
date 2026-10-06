@@ -65,6 +65,17 @@ class BuffEngine:
             for bid in templates
         }
 
+    def set_order(self, order: list[str]) -> None:
+        """표시 순서 갱신(실행 중 버프 목록 재정렬·숨김 반영). 상태는 유지."""
+        self._order = list(order)
+
+    def set_show_duration(self, show_duration: dict[str, bool]) -> None:
+        self._show_duration = dict(show_duration)
+
+    def set_alert_before(self, alert_before: dict[str, int]) -> None:
+        for bid, machine in self._machines.items():
+            machine.alert_before = alert_before.get(bid, 30)
+
     def tick(self, region: np.ndarray, now: float) -> TickResult:
         detections = detect_buffs(
             region, self._templates, self._icon_column, self._threshold

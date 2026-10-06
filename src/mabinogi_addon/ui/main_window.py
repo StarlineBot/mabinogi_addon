@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
 from .. import config
 from ..capture import Region, create_live_source
 from ..catalog import build_templates, load_catalog
+from ..system.window_watcher import create_window_watcher
 from ..tracker.engine import BuffEngine
 from .buff_controller import BuffController
 from .buff_tab import ANCHOR_ID, BuffTab
@@ -56,7 +57,11 @@ class MainWindow(QMainWindow):
         # 버프 오버레이: 고정 버튼으로 클릭통과/드래그 토글
         self.buff_overlay = BuffOverlay()
         self.buff_controller: BuffController | None = None
+        self._engine: BuffEngine | None = None
+        self._watcher = create_window_watcher()  # 포그라운드 감지(맥=항상 활성)
         self.buff_tab.lock_toggled.connect(self._on_overlay_lock)
+        self.buff_tab.tracking_changed.connect(self._on_tracking_changed)
+        self.buff_tab.catalog_changed.connect(self._on_catalog_changed)
 
     def _on_overlay_lock(self, locked: bool) -> None:
         self.buff_overlay.set_locked(locked)
@@ -73,19 +78,10 @@ class MainWindow(QMainWindow):
         self.buff_overlay.show()
         self._start_buff_tracking()
 
-    def _start_buff_tracking(self) -> None:
-        """저장된 영역이 있으면 라이브 캡처(dxcam)로 버프 추적 시작."""
-        region = config.load_capture_region("buffTracker")
-        if not region:
-            return
-        try:
-            source = create_live_source(
-                Region(region["x"], region["y"], region["w"], region["h"])
-            )
-        except Exception:  # noqa: BLE001 — dxcam 없음(맥 등)이면 라이브 미시작
-            return
-
-        catalog = load_catalog()
+    def _compute_tracking(
+        self, catalog
+    ) -> tuple[list[str], dict[str, bool], dict[str, int]]:
+        """저장된 설정으로 (표시 순서, 지속시간 표시, 알림 기준초)를 만든다."""
         catalog_by = {b.id: b for b in catalog}
         saved = {s.id: s for s in config.load_buff_settings()}
 
@@ -106,9 +102,31 @@ class MainWindow(QMainWindow):
             b.id: (saved[b.id].alert.before_sec if b.id in saved else 30)
             for b in catalog
         }
+        return order, show_duration, alert_before
+
+    def _start_buff_tracking(self) -> None:
+        """저장된 영역이 있으면 라이브 캡처(dxcam)로 버프 추적 시작(재시작 포함)."""
+        if self.buff_controller is not None:
+            self.buff_controller.stop()
+            self.buff_controller = None
+            self._engine = None
+
+        region = config.load_capture_region("buffTracker")
+        if not region:
+            return
+        try:
+            source = create_live_source(
+                Region(region["x"], region["y"], region["w"], region["h"])
+            )
+        except Exception:  # noqa: BLE001 — dxcam 없음(맥 등)이면 라이브 미시작
+            return
+
+        catalog = load_catalog()
+        catalog_by = {b.id: b for b in catalog}
+        order, show_duration, alert_before = self._compute_tracking(catalog)
         # 초기 구동에선 앵커 게이팅 off(앵커가 영역 밖이면 전부 동결되는 것 방지).
         # 매칭 안정화 후 앵커 기반 '판정 불가' 로직을 다시 켠다.
-        engine = BuffEngine(
+        self._engine = BuffEngine(
             build_templates(catalog),
             order,
             anchor_id=None,
@@ -116,9 +134,24 @@ class MainWindow(QMainWindow):
             alert_before=alert_before,
         )
         self.buff_controller = BuffController(
-            self.buff_overlay, catalog_by, show_duration
+            self.buff_overlay, catalog_by, show_duration, watcher=self._watcher
         )
-        self.buff_controller.start(source, engine)
+        self.buff_controller.start(source, self._engine)
+
+    def _on_tracking_changed(self) -> None:
+        """순서·노출·지속시간·알림 변경을 실행 중 엔진에 즉시 반영(재시작 없이)."""
+        if self._engine is None or self.buff_controller is None:
+            return
+        order, show_duration, alert_before = self._compute_tracking(load_catalog())
+        self._engine.set_order(order)
+        self._engine.set_show_duration(show_duration)
+        self._engine.set_alert_before(alert_before)
+        self.buff_controller.set_show_duration(show_duration)
+
+    def _on_catalog_changed(self) -> None:
+        """버프 추가·삭제·아이콘 변경 → 템플릿 재구성을 위해 추적 재시작."""
+        if self.buff_controller is not None:
+            self._start_buff_tracking()
 
     def closeEvent(self, event) -> None:  # noqa: N802 (Qt 시그니처)
         self.party_tab.stop_polling()

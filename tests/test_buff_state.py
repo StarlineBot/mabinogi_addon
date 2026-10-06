@@ -25,6 +25,33 @@ def test_internal_clock_counts_down():
     assert abs(sm.remaining(10.4) - 90.0) < 0.01
 
 
+def test_resume_after_inactive_gap_keeps_state_and_clock():
+    """게임 비활성(관측 끊김) 동안 상태 동결·내부 시계 유지 → 복귀 시 정상.
+
+    비활성 중엔 observe()가 아예 호출되지 않으므로 상태는 그대로이고,
+    복귀하면 실제 경과시간(monotonic)만큼 줄어든 남은 시간이 그대로 이어진다.
+    """
+    sm = BuffStateMachine(appear_frames=3)
+    _appear(sm, reading=100, t0=0.0)  # 100초 버프, @0.4 활성
+    assert sm.state is State.ACTIVE
+
+    # --- 여기서 60초간 '잠깐 쉼'(관측 없음, 시계만 흐름) ---
+    # 복귀: 화면에 버프가 그대로 있으면 신선한 판독값으로 재탐지
+    ev = sm.observe(detected=True, reading=40, now=60.4)
+    assert ev is Event.NONE  # 이미 ACTIVE 유지
+    assert sm.state is State.ACTIVE
+    assert abs(sm.remaining(60.4) - 40.0) < 0.01
+
+
+def test_buff_expires_while_inactive_then_removed_on_return():
+    """비활성 동안 수명이 다한 버프는 복귀 후 미감지 1프레임에 즉시 만료."""
+    sm = BuffStateMachine(appear_frames=3)
+    _appear(sm, reading=5, t0=0.0)  # 5초 버프
+    # 10초 쉬고 복귀 → 화면엔 이미 사라짐 + 내부 시계 소진 → 즉시 EXPIRED
+    assert sm.observe(detected=False, reading=None, now=10.4) is Event.EXPIRED
+    assert sm.state is State.ABSENT
+
+
 def test_alert_fires_once_at_threshold():
     sm = BuffStateMachine(alert_before=30)
     _appear(sm, reading=100, t0=0.0)

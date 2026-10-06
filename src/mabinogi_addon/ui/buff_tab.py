@@ -51,6 +51,8 @@ def _pixmap(path: Path | None, size: int) -> QPixmap | None:
 
 class BuffTab(QWidget):
     lock_toggled = Signal(bool)  # 오버레이 고정 토글 → main이 오버레이에 적용
+    tracking_changed = Signal()  # 순서·노출·지속시간·알림 변경 → 라이브 반영(재시작 X)
+    catalog_changed = Signal()  # 버프 추가·삭제·아이콘 변경 → 엔진 재구성 필요
 
     def __init__(self) -> None:
         super().__init__()
@@ -234,6 +236,7 @@ class BuffTab(QWidget):
         self._current = new_id
         self._save()
         self._rebuild_list()
+        self.catalog_changed.emit()
 
     def _on_delete(self) -> None:
         bid = self._current_id()
@@ -261,6 +264,7 @@ class BuffTab(QWidget):
         self._current = select
         self._save()
         self._rebuild_list()
+        self.catalog_changed.emit()
 
     def _move(self, delta: int) -> None:
         bid = self._current_id()
@@ -274,6 +278,7 @@ class BuffTab(QWidget):
         self._current = bid
         self._save()
         self._rebuild_list()
+        self.tracking_changed.emit()
 
     # ---- 폼 ----
     def _build_form_panel(self) -> QWidget:
@@ -394,6 +399,7 @@ class BuffTab(QWidget):
             sound=self.sound_check.isChecked(),
         )
         self._save()
+        self.tracking_changed.emit()
 
     # ---- 이름·아이콘 편집 ----
     def _save_name(self) -> None:
@@ -408,6 +414,7 @@ class BuffTab(QWidget):
         s.name = new
         self._save()
         self._rebuild_list()
+        self.tracking_changed.emit()
 
     def _pick_match_icon(self) -> None:
         bid = self._current
