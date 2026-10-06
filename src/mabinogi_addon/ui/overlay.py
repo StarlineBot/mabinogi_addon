@@ -35,7 +35,7 @@ def overlay_spec(
     return specs
 
 _ICON_BASE = 40  # 100% 기준 아이콘 변
-_GAP_BASE = 8
+_GAP_BASE = 3  # 아이콘 사이 간격(100% 기준)
 _TEXT_BASE = 16  # 아이콘 아래 글자 칸 높이
 _PAD = 6
 

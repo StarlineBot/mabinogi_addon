@@ -25,6 +25,7 @@ from ..tracker.engine import BuffEngine
 from .buff_controller import BuffController
 from .buff_tab import ANCHOR_ID, BuffTab
 from .debuff_tab import DebuffTab
+from .notifier import SoundNotifier, default_sound_map
 from .overlay import BuffOverlay
 from .party_tab import PartyTab
 from .settings_tab import SettingsTab
@@ -59,6 +60,8 @@ class MainWindow(QMainWindow):
         self.buff_controller: BuffController | None = None
         self._engine: BuffEngine | None = None
         self._watcher = create_window_watcher()  # 포그라운드 감지(맥=항상 활성)
+        self._notifier = SoundNotifier(default_sound_map())
+        self._sound_ids: set[str] = set()  # 소리 알림 켠 버프(알림 때 재생)
         self.buff_tab.lock_toggled.connect(self._on_overlay_lock)
         self.buff_tab.tracking_changed.connect(self._on_tracking_changed)
         self.buff_tab.catalog_changed.connect(self._on_catalog_changed)
@@ -124,6 +127,7 @@ class MainWindow(QMainWindow):
         catalog = load_catalog()
         catalog_by = {b.id: b for b in catalog}
         order, show_duration, alert_before = self._compute_tracking(catalog)
+        self._sound_ids = self._sound_enabled_ids()
         # 초기 구동에선 앵커 게이팅 off(앵커가 영역 밖이면 전부 동결되는 것 방지).
         # 매칭 안정화 후 앵커 기반 '판정 불가' 로직을 다시 켠다.
         self._engine = BuffEngine(
@@ -134,9 +138,27 @@ class MainWindow(QMainWindow):
             alert_before=alert_before,
         )
         self.buff_controller = BuffController(
-            self.buff_overlay, catalog_by, show_duration, watcher=self._watcher
+            self.buff_overlay,
+            catalog_by,
+            show_duration,
+            on_alert=self._on_buff_alert,
+            watcher=self._watcher,
         )
         self.buff_controller.start(source, self._engine)
+
+    def _sound_enabled_ids(self) -> set[str]:
+        """'종료 알림'과 '소리'를 모두 켠 버프 id 집합(알림 시 사운드 재생 대상)."""
+        return {
+            s.id
+            for s in config.load_buff_settings()
+            if s.alert.enabled and s.alert.sound
+        }
+
+    def _on_buff_alert(self, buff_ids) -> None:
+        """엔진이 만료임박 알림을 올리면, 소리 켠 버프만 사운드 재생."""
+        to_play = [b for b in buff_ids if b in self._sound_ids]
+        if to_play:
+            self._notifier.alert(to_play)
 
     def _on_tracking_changed(self) -> None:
         """순서·노출·지속시간·알림 변경을 실행 중 엔진에 즉시 반영(재시작 없이)."""
@@ -147,6 +169,7 @@ class MainWindow(QMainWindow):
         self._engine.set_show_duration(show_duration)
         self._engine.set_alert_before(alert_before)
         self.buff_controller.set_show_duration(show_duration)
+        self._sound_ids = self._sound_enabled_ids()
 
     def _on_catalog_changed(self) -> None:
         """버프 추가·삭제·아이콘 변경 → 템플릿 재구성을 위해 추적 재시작."""
