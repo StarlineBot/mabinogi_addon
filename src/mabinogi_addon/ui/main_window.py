@@ -19,8 +19,9 @@ from PySide6.QtWidgets import (
 
 from .. import config
 from ..capture import Region, create_live_source
-from ..catalog import build_templates, load_catalog
+from ..catalog import build_templates, load_catalog, load_debuff_catalog
 from ..system.window_watcher import create_window_watcher
+from ..tracker.debuff_engine import DebuffEngine
 from ..tracker.engine import BuffEngine
 from .buff_controller import BuffController
 from .buff_tab import ANCHOR_ID, BuffTab
@@ -46,65 +47,85 @@ class MainWindow(QMainWindow):
         self.resize(780, 620)
 
         self.buff_tab = BuffTab()
+        self.debuff_tab = DebuffTab()
         self.party_tab = PartyTab()
         tabs = QTabWidget()
         tabs.addTab(self.buff_tab, "버프")
-        tabs.addTab(DebuffTab(), "디버프")
+        tabs.addTab(self.debuff_tab, "디버프")
         tabs.addTab(self.party_tab, "파티")
         tabs.addTab(SettingsTab(), "설정")
         tabs.setCornerWidget(self._status_widget(), Qt.Corner.TopRightCorner)
         self.setCentralWidget(tabs)
 
-        # 버프 오버레이: 고정 버튼으로 클릭통과/드래그 토글
+        self._watcher = create_window_watcher()  # 포그라운드 감지(맥=항상 활성)
+        self._restoring = False  # 복원 중엔 상태 저장 안 함
+
+        # 버프 오버레이
         self.buff_overlay = BuffOverlay()
         self.buff_controller: BuffController | None = None
         self._engine: BuffEngine | None = None
-        self._watcher = create_window_watcher()  # 포그라운드 감지(맥=항상 활성)
         self._notifier = SoundNotifier(default_sound_map())
         self._sound_ids: set[str] = set()  # 소리 알림 켠 버프(알림 때 재생)
-        self._restoring = False  # 복원 중엔 상태 저장 안 함
         self.buff_tab.lock_toggled.connect(self._on_overlay_lock)
         self.buff_tab.tracking_changed.connect(self._on_tracking_changed)
         self.buff_tab.catalog_changed.connect(self._on_catalog_changed)
         self.buff_overlay.moved.connect(self._save_overlay_state)
 
-    def _on_overlay_lock(self, locked: bool) -> None:
-        self.buff_overlay.set_locked(locked)
-        if locked and not self.buff_overlay._items:
-            self.buff_overlay.hide()  # 고정+비어있음 → 숨김
-        else:
-            self.buff_overlay.show()
-        self._save_overlay_state()
+        # 디버프 오버레이
+        self.debuff_overlay = BuffOverlay(placeholder_name="디버프")
+        self.debuff_controller: BuffController | None = None
+        self._debuff_engine = None
+        self.debuff_tab.lock_toggled.connect(self._on_debuff_lock)
+        self.debuff_tab.tracking_changed.connect(self._on_debuff_tracking_changed)
+        self.debuff_tab.catalog_changed.connect(self._on_debuff_catalog_changed)
+        self.debuff_overlay.moved.connect(self._save_debuff_overlay_state)
 
-    def _save_overlay_state(self) -> None:
-        """현재 오버레이 위치·고정 상태를 저장(복원 중엔 생략)."""
+    # ---- 오버레이 고정/저장/복원(버프·디버프 공용 로직) ----
+    def _apply_lock(self, overlay: BuffOverlay, locked: bool, section: str) -> None:
+        overlay.set_locked(locked)
+        if locked and not overlay._items:
+            overlay.hide()  # 고정+비어있음 → 숨김
+        else:
+            overlay.show()
+        self._save_overlay(overlay, section)
+
+    def _save_overlay(self, overlay: BuffOverlay, section: str) -> None:
         if self._restoring:
             return
-        pos = self.buff_overlay.pos()
-        config.save_overlay_state(
-            pos.x(), pos.y(), self.buff_overlay.locked, "buffTracker"
-        )
+        pos = overlay.pos()
+        config.save_overlay_state(pos.x(), pos.y(), overlay.locked, section)
+
+    def _restore_overlay(self, overlay: BuffOverlay, tab, section: str) -> None:
+        self._restoring = True
+        try:
+            overlay.set_items([])  # 플레이스홀더 크기 확정
+            state = config.load_overlay_state(section)
+            if state and "x" in state and "y" in state:
+                overlay.move(int(state["x"]), int(state["y"]))
+            locked = bool(state.get("locked")) if state else False
+            tab.set_lock_state(locked)  # 버튼 동기화 + lock_toggled(→ 가시성 적용)
+        finally:
+            self._restoring = False
+
+    def _on_overlay_lock(self, locked: bool) -> None:
+        self._apply_lock(self.buff_overlay, locked, "buffTracker")
+
+    def _save_overlay_state(self) -> None:
+        self._save_overlay(self.buff_overlay, "buffTracker")
+
+    def _on_debuff_lock(self, locked: bool) -> None:
+        self._apply_lock(self.debuff_overlay, locked, "debuffTracker")
+
+    def _save_debuff_overlay_state(self) -> None:
+        self._save_overlay(self.debuff_overlay, "debuffTracker")
 
     def start(self) -> None:
         """탐지/폴링 시작. 실제 앱 실행(main)에서만 호출한다(스크린샷 렌더 땐 미호출)."""
         self.party_tab.start_polling()
-        # 빈 목록으로 플레이스홀더 크기 확정 후, 저장된 위치·고정 상태 복원.
-        self.buff_overlay.set_items([])
-        self._restore_overlay_state()
+        self._restore_overlay(self.buff_overlay, self.buff_tab, "buffTracker")
+        self._restore_overlay(self.debuff_overlay, self.debuff_tab, "debuffTracker")
         self._start_buff_tracking()
-
-    def _restore_overlay_state(self) -> None:
-        """저장된 오버레이 위치·고정 상태 복원. 없으면 해제 상태로 보이게."""
-        self._restoring = True
-        try:
-            state = config.load_overlay_state("buffTracker")
-            if state and "x" in state and "y" in state:
-                self.buff_overlay.move(int(state["x"]), int(state["y"]))
-            locked = bool(state.get("locked")) if state else False
-            # 버튼 UI 동기화 + lock_toggled 방출(→ _on_overlay_lock가 가시성 처리)
-            self.buff_tab.set_lock_state(locked)
-        finally:
-            self._restoring = False
+        self._start_debuff_tracking()
 
     def _compute_tracking(
         self, catalog
@@ -237,12 +258,70 @@ class MainWindow(QMainWindow):
         if self.buff_controller is not None:
             self._start_buff_tracking()
 
+    # ---- 디버프 추적 ----
+    def _debuff_order(self, catalog) -> list[str]:
+        """저장 순서(숨김 제외) + 새 디버프. 등록 순서대로 표시."""
+        catalog_by = {b.id: b for b in catalog}
+        saved = {s.id: s for s in config.load_debuff_settings()}
+        order: list[str] = []
+        for s in config.load_debuff_settings():
+            if s.id in catalog_by and not s.hidden:
+                order.append(s.id)
+        for b in catalog:
+            if b.id not in order and (b.id not in saved or not saved[b.id].hidden):
+                order.append(b.id)
+        return order
+
+    def _start_debuff_tracking(self) -> None:
+        """저장된 디버프 영역이 있으면 라이브로 디버프 추적 시작(재시작 포함)."""
+        if self.debuff_controller is not None:
+            self.debuff_controller.stop()
+            self.debuff_controller = None
+            self._debuff_engine = None
+
+        region = config.load_capture_region("debuffTracker")
+        if not region:
+            return
+        try:
+            source = create_live_source(
+                Region(region["x"], region["y"], region["w"], region["h"])
+            )
+        except Exception:  # noqa: BLE001 — dxcam 없음(맥 등)
+            return
+
+        catalog = load_debuff_catalog()
+        catalog_by = {b.id: b for b in catalog}
+        self._debuff_engine = DebuffEngine(
+            build_templates(catalog), self._debuff_order(catalog)
+        )
+        # 지속시간·알림·점멸 없음 → show_duration 전부 False.
+        self.debuff_controller = BuffController(
+            self.debuff_overlay,
+            catalog_by,
+            {b.id: False for b in catalog},
+            watcher=self._watcher,
+        )
+        self.debuff_controller.start(source, self._debuff_engine)
+
+    def _on_debuff_tracking_changed(self) -> None:
+        if self._debuff_engine is None:
+            return
+        self._debuff_engine.set_order(self._debuff_order(load_debuff_catalog()))
+
+    def _on_debuff_catalog_changed(self) -> None:
+        self._start_debuff_tracking()
+
     def closeEvent(self, event) -> None:  # noqa: N802 (Qt 시그니처)
-        self._save_overlay_state()  # 종료 시 위치·고정 상태 저장(드래그 후 미저장 대비)
+        # 종료 시 위치·고정 상태 저장(드래그 후 미저장 대비)
+        self._save_overlay_state()
+        self._save_debuff_overlay_state()
         self.party_tab.stop_polling()
         if self.buff_controller is not None:
             self.buff_controller.stop()
+        if self.debuff_controller is not None:
+            self.debuff_controller.stop()
         self.buff_overlay.close()
+        self.debuff_overlay.close()
         super().closeEvent(event)
 
     def _status_widget(self) -> QWidget:

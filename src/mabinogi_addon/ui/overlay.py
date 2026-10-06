@@ -50,7 +50,7 @@ class OverlayItem:
 class BuffOverlay(QWidget):
     moved = Signal()  # 드래그로 위치가 바뀜 → main이 저장
 
-    def __init__(self, scale: float = 1.5) -> None:
+    def __init__(self, scale: float = 1.5, placeholder_name: str = "버프") -> None:
         super().__init__(
             None,
             Qt.WindowType.FramelessWindowHint
@@ -60,6 +60,7 @@ class BuffOverlay(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
 
+        self._name = placeholder_name  # 플레이스홀더 안내 문구용
         self._scale = scale
         self._items: list[OverlayItem] = []
         self._blink_on = True
@@ -188,7 +189,7 @@ class BuffOverlay(QWidget):
         painter.drawText(
             self.rect(),
             Qt.AlignmentFlag.AlignCenter,
-            "버프 오버레이\n(드래그로 이동 · 고정하면 사라짐)",
+            f"{self._name} 오버레이\n(드래그로 이동 · 고정하면 사라짐)",
         )
         painter.end()
 

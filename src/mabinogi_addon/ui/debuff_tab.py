@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QSize, Qt
+from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -31,6 +31,10 @@ from .widgets import hint_label, icon_slot, section_label
 
 
 class DebuffTab(QWidget):
+    lock_toggled = Signal(bool)  # 디버프 오버레이 고정 토글
+    tracking_changed = Signal()  # 순서·노출 변경 → 라이브 반영
+    catalog_changed = Signal()  # 디버프 추가·삭제·아이콘 변경 → 엔진 재구성
+
     def __init__(self) -> None:
         super().__init__()
         self._catalog: dict[str, BuffDef] = {
@@ -79,8 +83,23 @@ class DebuffTab(QWidget):
         v = QVBoxLayout(panel)
         v.setContentsMargins(0, 0, 0, 0)
 
-        v.addWidget(QPushButton("디버프 줄 영역 지정"))
-        v.addWidget(hint_label("영역 미지정 — 버튼으로 디버프 줄 영역을 지정하세요"))
+        top = QHBoxLayout()
+        top.setSpacing(6)
+        region_btn = QPushButton("디버프 줄 영역 지정")
+        region_btn.clicked.connect(self._pick_region)
+        top.addWidget(region_btn, 1)
+        self.lock_btn = QPushButton("오버레이 고정")
+        self.lock_btn.setCheckable(True)
+        self.lock_btn.setStyleSheet(
+            "QPushButton:checked { background:#00B894; color:white; font-weight:600; }"
+        )
+        self.lock_btn.toggled.connect(self._on_lock_toggled)
+        top.addWidget(self.lock_btn, 1)
+        v.addLayout(top)
+
+        self.region_hint = hint_label("")
+        self._update_region_hint()
+        v.addWidget(self.region_hint)
 
         self.debuff_list = QListWidget()
         self.debuff_list.setIconSize(QSize(28, 28))
@@ -103,6 +122,43 @@ class DebuffTab(QWidget):
             order_row.addWidget(b, 1)
         v.addLayout(order_row)
         return panel
+
+    # ---- 영역 지정 / 고정 ----
+    def _update_region_hint(self) -> None:
+        region = config.load_capture_region("debuffTracker")
+        if region:
+            self.region_hint.setText(
+                f"영역: {region['x']},{region['y']}  "
+                f"{region['w']}×{region['h']}  ✔"
+            )
+            self.region_hint.setStyleSheet("color:#2ecc71;")
+        else:
+            self.region_hint.setText(
+                "영역 미지정 — 버튼으로 디버프 줄 영역을 지정하세요"
+            )
+            self.region_hint.setStyleSheet("color:#8a8f98;")
+
+    def _pick_region(self) -> None:
+        from .region_selector import RegionSelector
+
+        self._selector = RegionSelector()  # 참조 유지(GC 방지)
+        self._selector.selected.connect(self._on_region_selected)
+        self._selector.start()
+
+    def _on_region_selected(self, x: int, y: int, w: int, h: int) -> None:
+        config.save_capture_region(x, y, w, h, "debuffTracker")
+        self._update_region_hint()
+        self.catalog_changed.emit()  # 영역 생기면 추적 (재)시작
+
+    def _on_lock_toggled(self, locked: bool) -> None:
+        self.lock_btn.setText("오버레이 고정됨" if locked else "오버레이 고정")
+        self.lock_toggled.emit(locked)
+
+    def set_lock_state(self, locked: bool) -> None:
+        self.lock_btn.blockSignals(True)
+        self.lock_btn.setChecked(locked)
+        self.lock_btn.blockSignals(False)
+        self._on_lock_toggled(locked)
 
     def _rebuild_list(self) -> None:
         keep = self._current
@@ -150,6 +206,7 @@ class DebuffTab(QWidget):
         self._current = new_id
         self._save()
         self._rebuild_list()
+        self.catalog_changed.emit()
 
     def _on_delete(self) -> None:
         did = self._current_id()
@@ -178,6 +235,7 @@ class DebuffTab(QWidget):
         self._current = select
         self._save()
         self._rebuild_list()
+        self.catalog_changed.emit()
 
     def _move(self, delta: int) -> None:
         did = self._current_id()
@@ -191,6 +249,7 @@ class DebuffTab(QWidget):
         self._current = did
         self._save()
         self._rebuild_list()
+        self.tracking_changed.emit()
 
     # ---- 폼 ----
     def _build_form_panel(self) -> QWidget:
@@ -245,6 +304,7 @@ class DebuffTab(QWidget):
             return
         self._settings[self._current].hidden = not self.display_check.isChecked()
         self._save()
+        self.tracking_changed.emit()
 
     def _save_name(self) -> None:
         if self._loading or self._name_id is None:
@@ -255,6 +315,7 @@ class DebuffTab(QWidget):
         s.name = self.name_edit.text().strip()
         self._save()
         self._rebuild_list()
+        self.tracking_changed.emit()
 
     def _pick_match_icon(self) -> None:
         did = self._current
