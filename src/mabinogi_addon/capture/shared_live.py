@@ -47,13 +47,16 @@ class _SharedLiveCamera:
             return cls._instance
 
     def release(self) -> None:
+        camera = None
         with _SharedLiveCamera._lock:
             self._refs -= 1
             if self._refs <= 0:
-                if self._camera is not None:
-                    self._camera.release()
-                    self._camera = None
+                camera = self._camera
+                self._camera = None
                 _SharedLiveCamera._instance = None
+        # dxcam 해제(DXGI)는 느릴 수 있어 데몬 스레드로 → 종료/재시작을 막지 않는다.
+        if camera is not None:
+            threading.Thread(target=camera.release, daemon=True).start()
 
     def full_frame(self) -> np.ndarray | None:
         """전체 프레임. max_age 안에선 캐시 재사용, 새 프레임 없으면 직전 유지."""

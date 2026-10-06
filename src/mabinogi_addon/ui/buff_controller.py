@@ -93,6 +93,7 @@ class BuffController(QObject):
         self._on_alert = on_alert
         self._watcher = watcher or AlwaysActiveWatcher()
         self._worker: _TrackWorker | None = None
+        self._source: FrameSource | None = None
         self._items: list[OverlayItem] = []
         self._game_active = True  # 게임 포그라운드
         self._self_active = False  # 우리 앱 포그라운드
@@ -102,6 +103,7 @@ class BuffController(QObject):
         self, source: FrameSource, engine: BuffEngine, interval_ms: int = 200
     ) -> None:
         self.stop()
+        self._source = source
         self._worker = _TrackWorker(source, engine, self._watcher, interval_ms)
         self._worker.updated.connect(self._on_updated)
         self._worker.alerted.connect(self._on_alerted)
@@ -113,6 +115,11 @@ class BuffController(QObject):
             self._worker.stop()
             self._worker.wait(2000)
             self._worker = None
+        # 워커를 멈춘 뒤(캡처 중 아님) 소스를 닫는다 — dxcam 카메라를 제어된 시점에 해제
+        # (안 닫으면 프로세스 종료 시점에 정리되며 종료가 느려진다).
+        if self._source is not None:
+            self._source.close()
+            self._source = None
 
     def set_show_duration(self, show_duration: dict[str, bool]) -> None:
         """지속시간 표시 설정 갱신(실행 중 폼 변경 반영)."""

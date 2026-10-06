@@ -57,7 +57,10 @@ class BuffTab(QWidget):
 
     def __init__(self) -> None:
         super().__init__()
+        from .notifier import default_sound_map
+
         self._catalog: dict[str, BuffDef] = {b.id: b for b in load_catalog()}
+        self._sound_ids = set(default_sound_map())  # 사운드 파일이 있는 버프만
         self._settings, self._order = self._load_state()
         self._current: str | None = None
         self._name_id: str | None = None
@@ -402,7 +405,10 @@ class BuffTab(QWidget):
         self.alert_check.setChecked(s.alert.enabled)
         self.before_spin.setValue(s.alert.before_sec)
         self.blink_check.setChecked(s.alert.blink)
-        self.sound_check.setChecked(s.alert.sound)
+        # 소리 체크는 사운드 파일이 등록된 버프에만 노출한다.
+        has_sound = bid in self._sound_ids
+        self.sound_check.setVisible(has_sound)
+        self.sound_check.setChecked(s.alert.sound and has_sound)
         self.alert2_check.setChecked(s.alert.enabled2)
         self.before2_spin.setValue(s.alert.before_sec2)
         self._apply_alert_enabled(s.alert.enabled)

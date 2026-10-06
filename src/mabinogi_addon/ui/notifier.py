@@ -24,6 +24,7 @@ DEFAULT_SOUNDS: dict[str, str] = {
     "sharp": "상태지원 알림.mp3",
     "han_adrenaline": "햄 버닝 연장.mp3",
     "march": "행진곡 연장.mp3",
+    "overture_of_the_battlefield": "전장의 서곡 연장.mp3",
 }
 
 
