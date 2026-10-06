@@ -1,11 +1,16 @@
 """버프 탭 (기획서 5.1 상단).
 
-왼쪽: 영역 지정 + 등록 버프 목록 + 순서 버튼
+왼쪽: 영역 지정 + 버프 목록(카탈로그) + 순서 버튼
 오른쪽: 선택한 버프의 상세 편집 폼
+목록은 catalog.load_catalog()로 채운다(매칭용 아이콘 + 표시용 이미지).
 """
 
 from __future__ import annotations
 
+from pathlib import Path
+
+from PySide6.QtCore import QSize, Qt
+from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
     QHBoxLayout,
@@ -18,25 +23,37 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ..catalog import BuffDef, load_catalog
 from .widgets import hint_label, icon_slot, section_label
 
-# 목록 미리보기용 샘플. 실제로는 설정 파일(buffTracker.buffs)에서 읽어온다.
-_SAMPLE_BUFFS = [
-    ("⚓", "프리미엄 배틀 멤버십 (앵커)"),
-    ("▣", "마법 대미지 증가"),
-    ("▣", "골렘의 의지"),
-    ("⚠", "새 버프 (아이콘 없음)"),
-]
+
+def _pixmap(path: Path | None, size: int) -> QPixmap | None:
+    if path is None:
+        return None
+    pm = QPixmap(str(path))
+    if pm.isNull():
+        return None
+    return pm.scaled(
+        size,
+        size,
+        Qt.AspectRatioMode.KeepAspectRatio,
+        Qt.TransformationMode.FastTransformation,  # Nearest (픽셀 아이콘 선명)
+    )
 
 
 class BuffTab(QWidget):
     def __init__(self) -> None:
         super().__init__()
+        self._catalog: list[BuffDef] = load_catalog()
+
         outer = QHBoxLayout(self)
         outer.setContentsMargins(12, 12, 12, 12)
         outer.setSpacing(14)
         outer.addWidget(self._build_list_panel(), 1)
         outer.addWidget(self._build_form_panel(), 1)
+
+        if self._catalog:
+            self.buff_list.setCurrentRow(0)
 
     def _build_list_panel(self) -> QWidget:
         panel = QWidget()
@@ -44,14 +61,19 @@ class BuffTab(QWidget):
         v.setContentsMargins(0, 0, 0, 0)
 
         v.addWidget(QPushButton("버프 영역 지정"))
-        region = hint_label("영역: 1770,400  220×550  ✔")
-        region.setStyleSheet("color:#2ecc71;")
+        region = hint_label("영역 미지정 — 버튼으로 상태창 영역을 지정하세요")
         v.addWidget(region)
 
         self.buff_list = QListWidget()
-        for marker, name in _SAMPLE_BUFFS:
-            QListWidgetItem(f"{marker}  {name}", self.buff_list)
-        self.buff_list.setCurrentRow(1)
+        self.buff_list.setIconSize(QSize(32, 32))
+        for buff in self._catalog:
+            item = QListWidgetItem(buff.name)
+            # 표시이미지 우선, 없으면 매칭 아이콘
+            pm = _pixmap(buff.display_image or buff.match_icon, 32)
+            if pm is not None:
+                item.setIcon(QIcon(pm))
+            self.buff_list.addItem(item)
+        self.buff_list.currentRowChanged.connect(self._on_select)
         v.addWidget(self.buff_list, 1)
 
         order = QHBoxLayout()
@@ -76,18 +98,21 @@ class BuffTab(QWidget):
         v.setSpacing(8)
 
         v.addWidget(section_label("이름"))
-        v.addWidget(QLineEdit("마법 대미지 증가"))
+        self.name_edit = QLineEdit()
+        v.addWidget(self.name_edit)
 
         v.addWidget(section_label("매칭 아이콘"))
         match_row = QHBoxLayout()
-        match_row.addWidget(icon_slot())
+        self.match_slot = icon_slot()
+        match_row.addWidget(self.match_slot)
         match_row.addWidget(QPushButton("상태창에서 가져오기"))
         match_row.addStretch(1)
         v.addLayout(match_row)
 
         v.addWidget(section_label("보여줄 아이콘"))
         show_row = QHBoxLayout()
-        show_row.addWidget(icon_slot("—"))
+        self.display_slot = icon_slot("—")
+        show_row.addWidget(self.display_slot)
         show_row.addWidget(QPushButton("파일 선택"))
         show_row.addWidget(QPushButton("초기화"))
         show_row.addStretch(1)
@@ -120,3 +145,18 @@ class BuffTab(QWidget):
         v.addWidget(QCheckBox("앵커로 사용 (항상 있는 버프)"))
         v.addStretch(1)
         return panel
+
+    def _on_select(self, row: int) -> None:
+        if not (0 <= row < len(self._catalog)):
+            return
+        buff = self._catalog[row]
+        self.name_edit.setText(buff.name)
+        self._set_slot(self.match_slot, buff.match_icon, "▣")
+        self._set_slot(self.display_slot, buff.display_image, "—")
+
+    def _set_slot(self, slot, path: Path | None, placeholder: str) -> None:
+        pm = _pixmap(path, 40)
+        if pm is not None:
+            slot.setPixmap(pm)
+        else:
+            slot.setText(placeholder)

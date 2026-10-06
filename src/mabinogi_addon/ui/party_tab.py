@@ -6,15 +6,17 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtGui import QBrush, QColor
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QGroupBox,
     QHBoxLayout,
     QHeaderView,
+    QLabel,
     QLineEdit,
     QListWidget,
+    QListWidgetItem,
     QMessageBox,
     QPushButton,
     QTableWidget,
@@ -31,6 +33,42 @@ from .toast import show_toast
 from .widgets import hint_label
 
 _DIM = QColor("#9aa0a6")
+
+
+class _ChipRow(QWidget):
+    """목록 한 줄: 텍스트 + (마우스 올리면 나타나는) 오른쪽 X 삭제 버튼."""
+
+    deleted = Signal(str)
+
+    def __init__(self, text: str) -> None:
+        super().__init__()
+        self._text = text
+        row = QHBoxLayout(self)
+        row.setContentsMargins(6, 1, 4, 1)
+        row.addWidget(QLabel(text), 1)
+
+        self._x = QPushButton("✕")
+        self._x.setFixedSize(18, 18)
+        self._x.setFlat(True)
+        self._x.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._x.setToolTip("삭제")
+        self._x.setStyleSheet("QPushButton{border:none;color:#e06c75;}")
+        self._x.clicked.connect(lambda: self.deleted.emit(self._text))
+        self._x.setVisible(False)  # 평소 숨김, 호버/선택 시 표시
+        row.addWidget(self._x)
+
+    def set_x_visible(self, visible: bool) -> None:
+        self._x.setVisible(visible)
+
+    def enterEvent(self, event) -> None:  # noqa: N802 (Qt 시그니처)
+        self._x.setVisible(True)
+        super().enterEvent(event)
+
+    def leaveEvent(self, event) -> None:  # noqa: N802
+        # 선택된 항목은 계속 X 유지(아래 _sync_x에서 관리)
+        if not self.property("selected"):
+            self._x.setVisible(False)
+        super().leaveEvent(event)
 
 
 class PartyTab(QWidget):
@@ -74,7 +112,7 @@ class PartyTab(QWidget):
         self.table.cellClicked.connect(self._on_cell_clicked)
         v.addWidget(self.table)
 
-        self.status_label = hint_label("대기 중 · 탐지 시작 시 10초마다 갱신")
+        self.status_label = hint_label("대기 중 · 탐지 시작 시 5초마다 갱신")
         v.addWidget(self.status_label)
         return box
 
@@ -95,16 +133,20 @@ class PartyTab(QWidget):
         name = leader_item.text()
         if name in self._excludes:
             return
-        reply = QMessageBox.question(
-            self,
-            "파티장 제외",
-            f"'{name}'\n\n이 파티장을 제외하시겠습니까?\n이 파티장의 모집은 현황·알림에서 숨겨집니다.",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No,
+        # Qt 기본 버튼은 영어라 '예/아니오'로 직접 지정
+        box = QMessageBox(self)
+        box.setWindowTitle("파티장 제외")
+        box.setText(
+            f"'{name}'\n\n이 파티장을 제외하시겠습니까?\n"
+            "이 파티장의 모집은 현황·알림에서 숨겨집니다."
         )
-        if reply == QMessageBox.StandardButton.Yes:
+        yes = box.addButton("예", QMessageBox.ButtonRole.YesRole)
+        no = box.addButton("아니오", QMessageBox.ButtonRole.NoRole)
+        box.setDefaultButton(no)
+        box.exec()
+        if box.clickedButton() is yes:
             self._excludes.append(name)
-            self.exclude_list.addItem(name)
+            self._refresh_exclude_list()
             self._save()
             self._refresh_board()
 
@@ -133,6 +175,35 @@ class PartyTab(QWidget):
                     item.setForeground(QBrush(_DIM))
                 self.table.setItem(row, col, item)
 
+    # ---- 목록 공통 (칩 행 + Ctrl/Shift 다중선택) ----
+    def _make_chip_list(self) -> QListWidget:
+        lst = QListWidget()
+        lst.setMaximumHeight(110)
+        # Ctrl=개별 토글, Shift=범위 선택(표준 동작)
+        lst.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
+        lst.itemSelectionChanged.connect(lambda target=lst: self._sync_x(target))
+        return lst
+
+    def _fill_chip_list(self, lst: QListWidget, items, on_delete) -> None:
+        lst.clear()
+        for text in items:
+            item = QListWidgetItem()
+            item.setData(Qt.ItemDataRole.UserRole, text)
+            row = _ChipRow(text)
+            row.deleted.connect(on_delete)
+            item.setSizeHint(row.sizeHint())
+            lst.addItem(item)
+            lst.setItemWidget(item, row)
+
+    def _sync_x(self, lst: QListWidget) -> None:
+        # 선택된 항목은 X를 계속 보이게(호버 외에도)
+        for i in range(lst.count()):
+            item = lst.item(i)
+            row = lst.itemWidget(item)
+            if isinstance(row, _ChipRow):
+                row.setProperty("selected", item.isSelected())
+                row.set_x_visible(item.isSelected())
+
     # ---- 키워드 ----
     def _build_keywords(self) -> QGroupBox:
         box = QGroupBox("키워드 알림")
@@ -148,37 +219,48 @@ class PartyTab(QWidget):
         add_row.addWidget(add_button)
         v.addLayout(add_row)
 
-        self.keyword_list = QListWidget()
-        self.keyword_list.setMaximumHeight(96)
-        self.keyword_list.addItems(self._keywords)
+        self.keyword_list = self._make_chip_list()
+        self._refresh_keyword_list()
         v.addWidget(self.keyword_list)
 
         remove_button = QPushButton("선택 삭제")
-        remove_button.clicked.connect(self._remove_keyword)
+        remove_button.clicked.connect(self._remove_selected_keywords)
         btn_row = QHBoxLayout()
         btn_row.addWidget(remove_button)
         btn_row.addStretch(1)
         v.addLayout(btn_row)
 
         v.addWidget(
-            hint_label("등록한 키워드가 뜨면 화면 우측 하단에 토스트 알림 (3초 후 사라짐)")
+            hint_label("키워드가 뜨면 화면 우측 하단에 토스트 알림 (5초) · 항목 위 X로 삭제")
         )
         return box
 
+    def _refresh_keyword_list(self) -> None:
+        self._fill_chip_list(self.keyword_list, self._keywords, self._delete_keyword)
+
     def _add_keyword(self) -> None:
         text = self.keyword_input.text().strip()
+        self.keyword_input.clear()
         if not text or text in self._keywords:
-            self.keyword_input.clear()
             return
         self._keywords.append(text)
-        self.keyword_list.addItem(text)
-        self.keyword_input.clear()
+        self._refresh_keyword_list()
         self._save()
 
-    def _remove_keyword(self) -> None:
-        for item in self.keyword_list.selectedItems():
-            self._keywords.remove(item.text())
-            self.keyword_list.takeItem(self.keyword_list.row(item))
+    def _delete_keyword(self, text: str) -> None:
+        if text in self._keywords:
+            self._keywords.remove(text)
+            self._refresh_keyword_list()
+            self._save()
+
+    def _remove_selected_keywords(self) -> None:
+        selected = {
+            i.data(Qt.ItemDataRole.UserRole) for i in self.keyword_list.selectedItems()
+        }
+        if not selected:
+            return
+        self._keywords = [k for k in self._keywords if k not in selected]
+        self._refresh_keyword_list()
         self._save()
 
     # ---- 파티장 제외 ----
@@ -196,36 +278,48 @@ class PartyTab(QWidget):
         add_row.addWidget(add_button)
         v.addLayout(add_row)
 
-        self.exclude_list = QListWidget()
-        self.exclude_list.setMaximumHeight(96)
-        self.exclude_list.addItems(self._excludes)
+        self.exclude_list = self._make_chip_list()
+        self._refresh_exclude_list()
         v.addWidget(self.exclude_list)
 
         remove_button = QPushButton("선택 삭제")
-        remove_button.clicked.connect(self._remove_exclude)
+        remove_button.clicked.connect(self._remove_selected_excludes)
         btn_row = QHBoxLayout()
         btn_row.addWidget(remove_button)
         btn_row.addStretch(1)
         v.addLayout(btn_row)
 
-        v.addWidget(hint_label("이 파티장의 모집은 현황·알림에서 숨깁니다"))
+        v.addWidget(hint_label("이 파티장의 모집은 현황·알림에서 숨깁니다 · 항목 위 X로 삭제"))
         return box
+
+    def _refresh_exclude_list(self) -> None:
+        self._fill_chip_list(self.exclude_list, self._excludes, self._delete_exclude)
 
     def _add_exclude(self) -> None:
         text = self.exclude_input.text().strip()
+        self.exclude_input.clear()
         if not text or text in self._excludes:
-            self.exclude_input.clear()
             return
         self._excludes.append(text)
-        self.exclude_list.addItem(text)
-        self.exclude_input.clear()
+        self._refresh_exclude_list()
         self._save()
         self._refresh_board()  # 즉시 반영
 
-    def _remove_exclude(self) -> None:
-        for item in self.exclude_list.selectedItems():
-            self._excludes.remove(item.text())
-            self.exclude_list.takeItem(self.exclude_list.row(item))
+    def _delete_exclude(self, text: str) -> None:
+        if text in self._excludes:
+            self._excludes.remove(text)
+            self._refresh_exclude_list()
+            self._save()
+            self._refresh_board()
+
+    def _remove_selected_excludes(self) -> None:
+        selected = {
+            i.data(Qt.ItemDataRole.UserRole) for i in self.exclude_list.selectedItems()
+        }
+        if not selected:
+            return
+        self._excludes = [e for e in self._excludes if e not in selected]
+        self._refresh_exclude_list()
         self._save()
         self._refresh_board()  # 즉시 반영(제외 풀면 다시 나타남)
 
@@ -267,4 +361,4 @@ class PartyTab(QWidget):
         show_toast(f"🔔 파티모집 · '{keyword}'", f"{recruit.content}\n{meta}")
 
     def _on_status(self, text: str) -> None:
-        self.status_label.setText(text or "실행 중 · 10초마다 갱신")
+        self.status_label.setText(text or "실행 중 · 5초마다 갱신")
