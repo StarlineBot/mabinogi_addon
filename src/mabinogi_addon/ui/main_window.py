@@ -90,14 +90,14 @@ class MainWindow(QMainWindow):
         self._memo_timer.setInterval(300)
         self._memo_timer.timeout.connect(self._tick_memo_visibility)
 
-        # 오버레이 배율(설정 탭): 저장값 적용 + 변경 시 즉시 반영.
+        # 오버레이 배율(각 탭): 저장값 적용 + 변경 시 즉시 반영.
         buff_pct, debuff_pct = config.load_overlay_scales()
         self.buff_overlay.set_scale(buff_pct / 100)
         self.debuff_overlay.set_scale(debuff_pct / 100)
-        self.settings_tab.buff_scale_changed.connect(
+        self.buff_tab.scale_changed.connect(
             lambda pct: self.buff_overlay.set_scale(pct / 100)
         )
-        self.settings_tab.debuff_scale_changed.connect(
+        self.debuff_tab.scale_changed.connect(
             lambda pct: self.debuff_overlay.set_scale(pct / 100)
         )
 

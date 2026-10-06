@@ -53,6 +53,7 @@ class BuffTab(QWidget):
     lock_toggled = Signal(bool)  # 오버레이 고정 토글 → main이 오버레이에 적용
     tracking_changed = Signal()  # 순서·노출·지속시간·알림 변경 → 라이브 반영(재시작 X)
     catalog_changed = Signal()  # 버프 추가·삭제·아이콘 변경 → 엔진 재구성 필요
+    scale_changed = Signal(int)  # 오버레이 배율(%) 변경
 
     def __init__(self) -> None:
         super().__init__()
@@ -151,7 +152,23 @@ class BuffTab(QWidget):
         for b in (self.add_btn, self.del_btn, self.up_btn, self.down_btn):
             order_row.addWidget(b, 1)
         v.addLayout(order_row)
+
+        scale_row = QHBoxLayout()
+        self.scale_spin = QSpinBox()
+        self.scale_spin.setRange(50, 300)
+        self.scale_spin.setSingleStep(10)
+        self.scale_spin.setPrefix("오버레이 배율  ")
+        self.scale_spin.setSuffix(" %")
+        self.scale_spin.setValue(config.load_overlay_scales()[0])
+        self.scale_spin.valueChanged.connect(self._on_scale)
+        scale_row.addWidget(self.scale_spin)
+        scale_row.addStretch(1)
+        v.addLayout(scale_row)
         return panel
+
+    def _on_scale(self, pct: int) -> None:
+        config.set_buff_scale(pct)
+        self.scale_changed.emit(pct)
 
     def _rows(self) -> list[str]:
         """목록에 표시되는 id 순서: 앵커 먼저, 그다음 표시 순서."""

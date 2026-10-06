@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
     QMessageBox,
     QPushButton,
+    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
@@ -34,6 +35,7 @@ class DebuffTab(QWidget):
     lock_toggled = Signal(bool)  # 디버프 오버레이 고정 토글
     tracking_changed = Signal()  # 순서·노출 변경 → 라이브 반영
     catalog_changed = Signal()  # 디버프 추가·삭제·아이콘 변경 → 엔진 재구성
+    scale_changed = Signal(int)  # 디버프 오버레이 배율(%) 변경
 
     def __init__(self) -> None:
         super().__init__()
@@ -121,7 +123,23 @@ class DebuffTab(QWidget):
         for b in (add_btn, del_btn, up_btn, down_btn):
             order_row.addWidget(b, 1)
         v.addLayout(order_row)
+
+        scale_row = QHBoxLayout()
+        self.scale_spin = QSpinBox()
+        self.scale_spin.setRange(50, 300)
+        self.scale_spin.setSingleStep(10)
+        self.scale_spin.setPrefix("오버레이 배율  ")
+        self.scale_spin.setSuffix(" %")
+        self.scale_spin.setValue(config.load_overlay_scales()[1])
+        self.scale_spin.valueChanged.connect(self._on_scale)
+        scale_row.addWidget(self.scale_spin)
+        scale_row.addStretch(1)
+        v.addLayout(scale_row)
         return panel
+
+    def _on_scale(self, pct: int) -> None:
+        config.set_debuff_scale(pct)
+        self.scale_changed.emit(pct)
 
     # ---- 영역 지정 / 고정 ----
     def _update_region_hint(self) -> None:

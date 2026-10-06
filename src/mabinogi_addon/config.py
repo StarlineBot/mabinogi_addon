@@ -232,6 +232,16 @@ def save_overlay_scales(
     _write_local_config(data, path)
 
 
+def set_buff_scale(pct: int, path: Path = LOCAL_CONFIG_PATH) -> None:
+    _, debuff = load_overlay_scales(path)
+    save_overlay_scales(pct, debuff, path)
+
+
+def set_debuff_scale(pct: int, path: Path = LOCAL_CONFIG_PATH) -> None:
+    buff, _ = load_overlay_scales(path)
+    save_overlay_scales(buff, pct, path)
+
+
 def load_memo(path: Path = LOCAL_CONFIG_PATH) -> dict:
     """메모 상태 {text, locked, fontSize}. 없으면 빈 dict."""
     m = _read_local_config(path).get("memo")
