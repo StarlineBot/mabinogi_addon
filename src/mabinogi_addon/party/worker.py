@@ -27,7 +27,7 @@ class PartyWorker(QThread):
         get_excludes: Callable[[], list[str]],
         *,
         poll_sec: int = 10,
-        list_size: int = 5,
+        list_size: int | None = None,
         parent=None,
     ) -> None:
         super().__init__(parent)

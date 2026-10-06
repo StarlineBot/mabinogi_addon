@@ -29,22 +29,26 @@ def _parse_recruits(raw: list[dict], excludes: set[str]) -> list[Recruit]:
 
 
 def build_board(
-    raw: list[dict], excludes: list[str] | set[str], list_size: int = 5
+    raw: list[dict], excludes: list[str] | set[str], list_size: int | None = None
 ) -> list[Recruit]:
-    """현황판: 제외 파티장을 뺀 뒤, 사람당 최신 1건, 최신순 상위 N개."""
+    """현황판: 제외 파티장을 뺀 뒤 파티장(캐릭)별 최신 1건을 최신순으로 전부.
+
+    같은 파티장이 인원 채우며 반복 외친 것만 묶고(최신 1건), 모집 중인 파티장은
+    모두 표시한다. list_size가 주어지면 그 수만큼만 자른다(기본 무제한).
+    """
     recruits = _parse_recruits(raw, set(excludes))
     recruits.sort(key=lambda r: r.date_send, reverse=True)
 
     seen: set[str] = set()
-    top: list[Recruit] = []
+    board: list[Recruit] = []
     for recruit in recruits:
         if recruit.character_name in seen:
             continue
         seen.add(recruit.character_name)
-        top.append(recruit)
-        if len(top) >= list_size:
+        board.append(recruit)
+        if list_size is not None and len(board) >= list_size:
             break
-    return top
+    return board
 
 
 def humanize_age(date_send: str, now: datetime | None = None) -> str:

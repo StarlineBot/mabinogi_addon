@@ -21,16 +21,26 @@ def _raw(name, ch, title, cur, need, minutes_ago, done=False):
     }
 
 
-def test_board_latest_per_person_top_n():
+def test_board_latest_per_person_all():
     raw = [
         _raw("A", 1, "글렌 레이드", 1, 4, 1),
         _raw("A", 1, "글렌 레이드", 2, 4, 0),  # 같은 사람 최신 → 이게 남아야
         _raw("B", 2, "브리레흐", 3, 8, 2),
         _raw("C", 3, "탈라가흐", 1, 4, 3),
     ]
-    board = build_board(raw, excludes=[], list_size=2)
-    assert [r.character_name for r in board] == ["A", "B"]  # 최신순 상위 2, A는 1건
+    board = build_board(raw, excludes=[])  # 무제한
+    assert [r.character_name for r in board] == ["A", "B", "C"]  # 파티장별 1건 전부, 최신순
     assert board[0].current == 2  # A의 최신 건
+
+
+def test_board_optional_cap():
+    raw = [
+        _raw("A", 1, "글렌", 1, 4, 0),
+        _raw("B", 2, "브리레흐", 3, 8, 1),
+        _raw("C", 3, "탈라가흐", 1, 4, 2),
+    ]
+    board = build_board(raw, excludes=[], list_size=2)
+    assert [r.character_name for r in board] == ["A", "B"]
 
 
 def test_board_excludes_leader():
