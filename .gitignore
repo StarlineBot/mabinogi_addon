@@ -23,6 +23,9 @@ Thumbs.db
 *.webm
 *.mov
 
+# 비밀 값 (넥슨 API 키 등). .env.example만 커밋한다.
+.env
+
 # 사용자 로컬 설정
 config.local.json
 

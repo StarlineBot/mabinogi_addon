@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
 
 from .buff_tab import BuffTab
 from .debuff_tab import DebuffTab
+from .party_tab import PartyTab
 from .settings_tab import SettingsTab
 
 
@@ -28,6 +29,7 @@ class MainWindow(QMainWindow):
         tabs = QTabWidget()
         tabs.addTab(BuffTab(), "버프")
         tabs.addTab(DebuffTab(), "디버프")
+        tabs.addTab(PartyTab(), "파티")
         tabs.addTab(SettingsTab(), "설정")
         tabs.setCornerWidget(self._status_widget(), Qt.Corner.TopRightCorner)
 
