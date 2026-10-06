@@ -11,7 +11,6 @@ from PySide6.QtGui import QBrush, QColor
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
-    QCheckBox,
     QGroupBox,
     QHBoxLayout,
     QHeaderView,
@@ -103,7 +102,7 @@ class PartyTab(QWidget):
         self._keywords, self._excludes = config.load_party_lists()
         self._worker: PartyWorker | None = None
         self._last_raw: list[dict] = []  # 마지막 거뿔 원본(즉시 재필터용)
-        self._alert_sound = SoundNotifier({"party": PARTY_ALERT_FILE})
+        self._sound = SoundNotifier({"party": PARTY_ALERT_FILE})
 
         root = QVBoxLayout(self)
         root.setContentsMargins(12, 12, 12, 12)
@@ -253,6 +252,20 @@ class PartyTab(QWidget):
         box = QGroupBox("키워드 알림")
         v = QVBoxLayout(box)
 
+        # 종 아이콘 토글(효과음 켜기/끄기). 상단 우측에 배치.
+        bell_row = QHBoxLayout()
+        bell_row.addStretch(1)
+        self._alert_sound = config.load_party_alert_sound()
+        self.alert_bell = QPushButton()
+        self.alert_bell.setFlat(True)
+        self.alert_bell.setFixedSize(30, 26)
+        self.alert_bell.setStyleSheet("QPushButton { font-size:16px; border:none; }")
+        self.alert_bell.setToolTip("키워드 알림 효과음 켜기/끄기")
+        self.alert_bell.clicked.connect(self._toggle_alert_sound)
+        self._update_bell()
+        bell_row.addWidget(self.alert_bell)
+        v.addLayout(bell_row)
+
         add_row = QHBoxLayout()
         self.keyword_input = QLineEdit()
         self.keyword_input.setPlaceholderText("제목에 포함될 단어 (예: 브리, 글렌)")
@@ -274,17 +287,23 @@ class PartyTab(QWidget):
         btn_row.addStretch(1)
         v.addLayout(btn_row)
 
-        self.alert_sound_check = QCheckBox("키워드 알림 효과음")
-        self.alert_sound_check.setChecked(config.load_party_alert_sound())
-        self.alert_sound_check.toggled.connect(config.save_party_alert_sound)
-        v.addWidget(self.alert_sound_check)
-
         v.addWidget(
             hint_label(
-                "키워드가 뜨면 화면 우측 하단에 토스트 + 효과음(트레이·게임 중에도) · 항목 위 X로 삭제"
+                "키워드가 뜨면 화면 우측 하단에 토스트 + 효과음(트레이·게임 중에도) · 항목 위 X로 삭제\n"
+                "위 종 아이콘(🔔/🔕)으로 효과음을 켜고 끌 수 있습니다."
             )
         )
         return box
+
+    def _update_bell(self) -> None:
+        self.alert_bell.setText("🔔" if self._alert_sound else "🔕")
+
+    def _toggle_alert_sound(self) -> None:
+        self._alert_sound = not self._alert_sound
+        config.save_party_alert_sound(self._alert_sound)
+        self._update_bell()
+        state = "켜짐 🔔" if self._alert_sound else "꺼짐 🔕"
+        show_toast("키워드 알림 효과음", state)
 
     def _refresh_keyword_list(self) -> None:
         self._fill_chip_list(self.keyword_list, self._keywords, self._delete_keyword)
@@ -413,7 +432,7 @@ class PartyTab(QWidget):
         )
         show_toast(f"🔔 파티모집 · '{keyword}'", f"{recruit.content}\n{meta}")
         # 효과음: 파일 있으면 재생, 없으면 시스템 비프로 폴백(토스트와 함께 항상 알림).
-        if self.alert_sound_check.isChecked() and not self._alert_sound.play("party"):
+        if self._alert_sound and not self._sound.play("party"):
             QApplication.beep()
 
     def _on_status(self, text: str) -> None:
