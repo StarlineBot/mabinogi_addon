@@ -14,7 +14,6 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QHBoxLayout,
     QLabel,
-    QLineEdit,
     QPushButton,
     QRadioButton,
     QSpinBox,
@@ -51,7 +50,6 @@ class SettingsTab(QWidget):
         v.setSpacing(12)
         v.addWidget(self._general_group())
         v.addWidget(self._overlay_group())
-        v.addWidget(self._game_group())
         v.addStretch(1)
 
     def _general_group(self) -> QGroupBox:
@@ -107,13 +105,3 @@ class SettingsTab(QWidget):
         config.save_overlay_scales(buff_pct, debuff_pct)
         self.buff_scale_changed.emit(buff_pct)
         self.debuff_scale_changed.emit(debuff_pct)
-
-    def _game_group(self) -> QGroupBox:
-        box = QGroupBox("게임")
-        v = QVBoxLayout(box)
-        row = QHBoxLayout()
-        row.addWidget(QLabel("마비노기 창 식별"))
-        row.addWidget(QLineEdit("Mabinogi"))
-        row.addWidget(QPushButton("자동 찾기"))
-        v.addLayout(row)
-        return box
