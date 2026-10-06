@@ -14,7 +14,7 @@ from __future__ import annotations
 import cv2
 import numpy as np
 
-from ..detect import DEFAULT_THRESHOLD, match_icon
+from ..detect import match_icon
 from .engine import OverlayEntry, TickResult
 
 # 매칭 전 영역을 이 높이로 정규화한다(디버프 줄 아이콘≈영역 높이로 가정).
@@ -22,6 +22,9 @@ from .engine import OverlayEntry, TickResult
 _NORM_H = 18
 # 아이콘이 영역을 꽉 채우거나(1.0) 위아래 여백이 좀 있는 경우(0.75)까지 커버.
 _VARIANT_FACTORS = (1.0, 0.75)
+# 디버프는 아이콘이 작고 숫자(4M 등)가 겹쳐 실데이터 점수가 ~0.65~0.84로 낮게 나온다.
+# (안 걸린 것은 ≤0.56) → 버프(0.8)보다 낮은 전용 임계값을 쓴다.
+DEBUFF_THRESHOLD = 0.6
 
 
 def _variant(template: np.ndarray, target_h: int) -> np.ndarray:
@@ -36,7 +39,7 @@ class DebuffEngine:
         templates: dict[str, np.ndarray],
         order: list[str],
         *,
-        threshold: float = DEFAULT_THRESHOLD,
+        threshold: float = DEBUFF_THRESHOLD,
         reappear_sec: float = 1.5,
     ) -> None:
         self._templates = templates
