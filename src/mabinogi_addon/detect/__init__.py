@@ -4,6 +4,7 @@ import cv2
 
 cv2.setNumThreads(1)
 
+from .binarize import binarize  # noqa: E402
 from .buff_detector import Detection, detect_buffs  # noqa: E402
 from .icon_matcher import DEFAULT_THRESHOLD, MatchResult, match_icon  # noqa: E402
 
@@ -13,4 +14,5 @@ __all__ = [
     "DEFAULT_THRESHOLD",
     "Detection",
     "detect_buffs",
+    "binarize",
 ]
