@@ -1,0 +1,29 @@
+[project]
+name = "mabinogi-addon"
+version = "0.1.0"
+description = "마비노기 버프·디버프 화면 트래커 오버레이"
+readme = "README.md"
+authors = [
+    { name = "StarlineBot", email = "wjdalstlr21@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "dxcam>=0.3.0 ; sys_platform == 'win32'",
+    "mss>=10.2.0",
+    "numpy>=2.5.3",
+    "opencv-python-headless>=5.0.0.93",
+    "pyside6>=6.11.2",
+    "pywin32>=312 ; sys_platform == 'win32'",
+]
+
+[project.scripts]
+mabinogi-addon = "mabinogi_addon:main"
+
+[build-system]
+requires = ["uv_build>=0.10.8,<0.11.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]

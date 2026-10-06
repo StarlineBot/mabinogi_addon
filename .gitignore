@@ -1,0 +1,30 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 테스트 영상은 용량 때문에 제외 (스크린샷 PNG만 커밋)
+*.mp4
+*.mkv
+*.webm
+*.mov
+
+# 사용자 로컬 설정
+config.local.json
+
+# PyInstaller
+*.spec.bak
