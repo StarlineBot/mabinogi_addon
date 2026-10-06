@@ -11,6 +11,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+from ..image_io import imread
 from .base import FrameSource, Region
 
 
@@ -35,7 +36,7 @@ class FileFrameSource(FrameSource):
                 return None
             self._index = 0
 
-        image = cv2.imread(str(self._paths[self._index]), cv2.IMREAD_COLOR)
+        image = imread(self._paths[self._index], cv2.IMREAD_COLOR)
         self._index += 1
         if image is None:
             return None

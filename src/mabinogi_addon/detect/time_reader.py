@@ -12,6 +12,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+from ..image_io import imread
 from .binarize import binarize
 
 _TEMPLATE_DIR = Path(__file__).parent / "templates" / "time"
@@ -25,7 +26,7 @@ GLYPH_THRESHOLD = 0.7
 
 def _load_templates() -> dict[str, np.ndarray]:
     return {
-        path.stem: cv2.imread(str(path), cv2.IMREAD_GRAYSCALE)
+        path.stem: imread(path, cv2.IMREAD_GRAYSCALE)
         for path in sorted(_TEMPLATE_DIR.glob("*.png"))
     }
 

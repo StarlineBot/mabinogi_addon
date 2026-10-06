@@ -18,6 +18,7 @@ import cv2
 import numpy as np
 
 from .config import PROJECT_ROOT
+from .image_io import imread
 
 DEFAULT_ICON_DIR = PROJECT_ROOT / "tests" / "data" / "icon"
 DEFAULT_IMAGE_DIR = PROJECT_ROOT / "tests" / "data" / "image"
@@ -131,11 +132,19 @@ def clear_display_image(buff_id: str, *, image_dir: Path = DEFAULT_IMAGE_DIR) ->
             path.unlink()
 
 
-def load_template(path: Path) -> np.ndarray:
-    """매칭용 BGR 템플릿 로드(알파는 무시 — 아이콘은 모두 불투명)."""
-    return cv2.imread(str(path), cv2.IMREAD_COLOR)
+def load_template(path: Path) -> np.ndarray | None:
+    """매칭용 BGR 템플릿 로드(알파는 무시 — 아이콘은 모두 불투명).
+
+    한글 경로도 읽히도록 유니코드 안전 로더 사용(Windows cv2.imread 한계 회피).
+    """
+    return imread(path, cv2.IMREAD_COLOR)
 
 
 def build_templates(catalog: list[BuffDef]) -> dict[str, np.ndarray]:
-    """detect_buffs에 넘길 {buff_id: BGR 템플릿} 사전."""
-    return {buff.id: load_template(buff.match_icon) for buff in catalog}
+    """detect_buffs에 넘길 {buff_id: BGR 템플릿} 사전. 못 읽은 아이콘은 건너뛴다."""
+    out: dict[str, np.ndarray] = {}
+    for buff in catalog:
+        template = load_template(buff.match_icon)
+        if template is not None:
+            out[buff.id] = template
+    return out
