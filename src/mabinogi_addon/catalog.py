@@ -56,6 +56,15 @@ def load_catalog(
     return catalog
 
 
+def load_debuff_catalog(icon_dir: Path = DEFAULT_DEBUFF_ICON_DIR) -> list[BuffDef]:
+    """디버프 매칭 아이콘 폴더 → 디버프 목록. (표시이미지 없음 → 오버레이는 matchIcon)"""
+    icons = {p.stem: p for p in icon_dir.glob("*.png")}
+    return [
+        BuffDef(id=key, name=key, match_icon=path, display_image=None)
+        for key, path in sorted(icons.items())
+    ]
+
+
 def load_template(path: Path) -> np.ndarray:
     """매칭용 BGR 템플릿 로드(알파는 무시 — 아이콘은 모두 불투명)."""
     return cv2.imread(str(path), cv2.IMREAD_COLOR)
