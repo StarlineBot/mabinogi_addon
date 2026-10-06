@@ -91,6 +91,7 @@ class MainWindow(QMainWindow):
         self.memo_tab.lock_toggled.connect(self._on_memo_lock)
         self.memo_tab.region_changed.connect(self._apply_memo_region)
         self.memo_tab.font_changed.connect(self._on_memo_font)
+        self.memo_overlay.moved.connect(self._on_memo_moved)
         self._memo_timer = QTimer(self)
         self._memo_timer.setInterval(300)
         self._memo_timer.timeout.connect(self._tick_memo_visibility)
@@ -335,6 +336,17 @@ class MainWindow(QMainWindow):
             self.memo_overlay.setGeometry(
                 region["x"], region["y"], region["w"], region["h"]
             )
+
+    def _on_memo_moved(self) -> None:
+        """드래그로 옮긴 메모 위치를 저장(크기는 유지)."""
+        if self._restoring:
+            return
+        pos = self.memo_overlay.pos()
+        config.save_capture_region(
+            pos.x(), pos.y(),
+            self.memo_overlay.width(), self.memo_overlay.height(),
+            "memoTracker",
+        )
 
     def _on_memo_lock(self, locked: bool) -> None:
         self.memo_overlay.set_locked(locked)
