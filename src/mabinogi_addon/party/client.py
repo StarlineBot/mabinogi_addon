@@ -20,7 +20,7 @@ def fetch_horn_bugle(
     api_key: str,
     server_name: str = DEFAULT_SERVER,
     *,
-    timeout: float = 5.0,
+    timeout: float = 3.0,
     urlopen=urllib.request.urlopen,
 ) -> list[dict]:
     """거뿔 외침 기록을 반환. 응답의 horn_bugle_world_history 배열.

@@ -380,12 +380,14 @@ class PartyTab(QWidget):
         self._worker.status.connect(self._on_status)
         self._worker.start()
 
-    def stop_polling(self) -> None:
+    def stop_polling(self, wait_ms: int = 2000) -> None:
         if self._worker is None:
             return
         self._worker.stop()
-        self._worker.wait(2000)
-        self._worker = None
+        # HTTP 요청 중이면 그 요청이 끝나야 깬다 → 종료 시엔 짧게만 기다리고 넘어간다
+        # (못 깨면 참조를 유지해 스레드가 요청을 마치고 스스로 종료하게 둔다).
+        if self._worker.wait(wait_ms):
+            self._worker = None
 
     def _on_alert(self, keyword: str, recruit: Recruit) -> None:
         meta = " · ".join(

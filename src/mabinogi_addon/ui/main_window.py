@@ -400,7 +400,7 @@ class MainWindow(QMainWindow):
         self._save_debuff_overlay_state()
         self._save_memo()  # 메모 내용·고정·글자크기 저장
         self._memo_timer.stop()
-        self.party_tab.stop_polling()
+        self.party_tab.stop_polling(wait_ms=600)  # 종료는 빠르게(HTTP 중이면 포기)
         if self.buff_controller is not None:
             self.buff_controller.stop()
         if self.debuff_controller is not None:
