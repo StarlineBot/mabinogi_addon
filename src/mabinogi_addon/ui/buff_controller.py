@@ -20,6 +20,11 @@ from ..system.window_watcher import AlwaysActiveWatcher, WindowWatcher
 from ..tracker.engine import BuffEngine
 from .overlay import BuffOverlay, OverlayItem, overlay_spec
 
+# 표시 평활: 판독 지터로 남은 시간이 이 값 이하만큼 '올라가는' 건 무시(단조 감소).
+# 게임이 만료 직전 숫자를 깜빡이면 일부 프레임을 못 읽어 7↔6으로 튀는 걸 막는다.
+# 실제 연장(유의미한 증가)은 이 값보다 크므로 그대로 반영된다.
+_SMOOTH_EPS = 1.5
+
 
 class _TrackWorker(QThread):
     updated = Signal(list)  # list[OverlayEntry]
@@ -83,6 +88,7 @@ class BuffController(QObject):
         self._worker: _TrackWorker | None = None
         self._items: list[OverlayItem] = []
         self._active = True
+        self._last_remaining: dict[str, float] = {}  # 표시 평활용 직전 표시값
 
     def start(self, source: FrameSource, engine: BuffEngine) -> None:
         self.stop()
@@ -118,7 +124,23 @@ class BuffController(QObject):
             items.append(OverlayItem(pixmap, text, blink))
         return items
 
+    def _smooth(self, entries) -> None:
+        """판독 지터로 인한 작은 상승을 억제해 표시 시간을 단조 감소시킨다."""
+        seen: set[str] = set()
+        for e in entries:
+            if e.remaining is None:
+                continue
+            seen.add(e.buff_id)
+            last = self._last_remaining.get(e.buff_id)
+            # 직전보다 _SMOOTH_EPS 이하로만 올라가면(지터) 직전값 유지. 큰 증가(연장)는 통과.
+            if last is not None and last < e.remaining <= last + _SMOOTH_EPS:
+                e.remaining = last
+            self._last_remaining[e.buff_id] = e.remaining
+        for bid in [b for b in self._last_remaining if b not in seen]:
+            del self._last_remaining[bid]  # 사라진 버프는 재등장 시 초기화
+
     def _on_updated(self, entries) -> None:
+        self._smooth(entries)
         self._items = self.build_items(entries)
         self._overlay.set_items(self._items)
         self._apply_visibility()

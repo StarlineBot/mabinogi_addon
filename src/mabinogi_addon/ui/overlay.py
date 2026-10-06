@@ -159,7 +159,7 @@ class BuffOverlay(QWidget):
 
         x = _PAD
         for item in self._items:
-            # 점멸: off 단계에서 반투명
+            # 점멸: off 단계에서 아이콘만 반투명(숫자는 항상 선명하게 읽히도록).
             painter.setOpacity(
                 0.35 if (item.blinking and not self._blink_on) else 1.0
             )
@@ -172,6 +172,7 @@ class BuffOverlay(QWidget):
             painter.drawPixmap(x, _PAD, scaled)
 
             if item.duration_text:
+                painter.setOpacity(1.0)  # 숫자는 점멸과 무관하게 선명
                 rect = QRect(x, _PAD + icon, icon, text_h)
                 self._draw_text(painter, rect, item.duration_text)
             x += icon + gap
