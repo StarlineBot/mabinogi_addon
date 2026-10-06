@@ -36,6 +36,7 @@ class PartyWorker(QThread):
         self._poll_sec = poll_sec
         self._alert_state = AlertState()
         self._running = True
+        self._primed = False  # 첫 폴링은 토스트 억제(기존 모집을 '이미 봄'으로 기억)
 
     def run(self) -> None:
         while self._running:
@@ -61,9 +62,15 @@ class PartyWorker(QThread):
         self.updated.emit(raw)  # UI가 현재 제외 목록으로 즉시 재필터
         self.status.emit("")  # 정상 → 상태 문구 비움
 
-        for keyword, recruit in find_alerts(
+        hits = find_alerts(
             raw, self._get_keywords(), self._get_excludes(), self._alert_state
-        ):
+        )
+        # 첫 폴링은 지금 떠 있는 모집을 '이미 봄'으로만 기록하고 토스트는 띄우지 않는다.
+        # (앱 켤 때 최근 몇 분치가 한꺼번에 뜨는 것 방지 → 그 뒤 새로 올라온 것만 알림)
+        if not self._primed:
+            self._primed = True
+            return
+        for keyword, recruit in hits:
             self.alerted.emit(keyword, recruit)
 
     def stop(self) -> None:
