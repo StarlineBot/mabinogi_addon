@@ -54,7 +54,7 @@ class _TrackWorker(QThread):
                 self.active_changed.emit(active)
             if not active:
                 # 비활성: 캡처·탐지 안 함(상태 동결), 오버레이는 숨김 처리.
-                self.msleep(self._interval)
+                self._sleep()
                 continue
             region = self._source.grab()
             if region is not None:
@@ -62,7 +62,15 @@ class _TrackWorker(QThread):
                 self.updated.emit(result.entries)
                 if result.alerts:
                     self.alerted.emit(result.alerts)
-            self.msleep(self._interval)
+            self._sleep()
+
+    def _sleep(self) -> None:
+        """주기를 작게 쪼개 자며 _running을 자주 확인(종료 요청 즉시 반응)."""
+        step = 30
+        waited = 0
+        while self._running and waited < self._interval:
+            self.msleep(min(step, self._interval - waited))
+            waited += step
 
     def stop(self) -> None:
         self._running = False
