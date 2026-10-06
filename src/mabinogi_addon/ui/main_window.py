@@ -7,15 +7,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import QTimer
 from PySide6.QtGui import QIcon
-from PySide6.QtWidgets import (
-    QHBoxLayout,
-    QLabel,
-    QMainWindow,
-    QTabWidget,
-    QWidget,
-)
+from PySide6.QtWidgets import QMainWindow, QTabWidget
 
 from .. import config
 from ..capture import Region, create_live_source
@@ -58,7 +52,6 @@ class MainWindow(QMainWindow):
         tabs.addTab(self.party_tab, "파티")
         tabs.addTab(self.memo_tab, "메모")
         tabs.addTab(SettingsTab(), "설정")
-        tabs.setCornerWidget(self._status_widget(), Qt.Corner.TopRightCorner)
         self.setCentralWidget(tabs)
 
         self._watcher = create_window_watcher()  # 포그라운드 감지(맥=항상 활성)
@@ -397,16 +390,3 @@ class MainWindow(QMainWindow):
         self.debuff_overlay.close()
         self.memo_overlay.close()
         super().closeEvent(event)
-
-    def _status_widget(self) -> QWidget:
-        """오른쪽 위 '● 실행 중' 표시. 나중에 탐지 상태와 연결한다."""
-        widget = QWidget()
-        row = QHBoxLayout(widget)
-        row.setContentsMargins(8, 0, 12, 0)
-
-        dot = QLabel("●")
-        dot.setStyleSheet("color:#2ecc71;")
-        text = QLabel("실행 중")
-        row.addWidget(dot)
-        row.addWidget(text)
-        return widget
