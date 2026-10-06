@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QLineEdit,
     QListWidget,
-    QListWidgetItem,
+    QMessageBox,
     QPushButton,
     QTableWidget,
     QTableWidgetItem,
@@ -25,7 +25,7 @@ from PySide6.QtWidgets import (
 
 from .. import config
 from ..party.models import Recruit
-from ..party.service import humanize_age
+from ..party.service import build_board, humanize_age
 from ..party.worker import PartyWorker
 from .toast import show_toast
 from .widgets import hint_label
@@ -38,6 +38,7 @@ class PartyTab(QWidget):
         super().__init__()
         self._keywords, self._excludes = config.load_party_lists()
         self._worker: PartyWorker | None = None
+        self._last_raw: list[dict] = []  # 마지막 거뿔 원본(즉시 재필터용)
 
         root = QVBoxLayout(self)
         root.setContentsMargins(12, 12, 12, 12)
@@ -69,11 +70,43 @@ class PartyTab(QWidget):
         header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
+        self.table.setToolTip("파티장을 클릭하면 제외할 수 있어요")
+        self.table.cellClicked.connect(self._on_cell_clicked)
         v.addWidget(self.table)
 
         self.status_label = hint_label("대기 중 · 탐지 시작 시 10초마다 갱신")
         v.addWidget(self.status_label)
         return box
+
+    def _on_updated(self, raw: list[dict]) -> None:
+        """워커가 준 원본을 캐시하고 현재 제외 목록으로 리스트를 그린다."""
+        self._last_raw = raw
+        self._refresh_board()
+
+    def _refresh_board(self) -> None:
+        """캐시된 원본으로 즉시 재필터·재표시(제외 목록 변경 시 바로 반영)."""
+        self._populate(build_board(self._last_raw, self._excludes))
+
+    def _on_cell_clicked(self, row: int, _col: int) -> None:
+        """리스트의 파티장을 클릭 → 제외 확인 팝업."""
+        leader_item = self.table.item(row, 1)  # 1 = 파티장 열
+        if leader_item is None:
+            return
+        name = leader_item.text()
+        if name in self._excludes:
+            return
+        reply = QMessageBox.question(
+            self,
+            "파티장 제외",
+            f"'{name}'\n\n이 파티장을 제외하시겠습니까?\n이 파티장의 모집은 현황·알림에서 숨겨집니다.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            self._excludes.append(name)
+            self.exclude_list.addItem(name)
+            self._save()
+            self._refresh_board()
 
     def _populate(self, recruits: list[Recruit]) -> None:
         self.table.setRowCount(0)
@@ -107,7 +140,7 @@ class PartyTab(QWidget):
 
         add_row = QHBoxLayout()
         self.keyword_input = QLineEdit()
-        self.keyword_input.setPlaceholderText("제목에 포함될 단어 (예: 글렌, 글라스)")
+        self.keyword_input.setPlaceholderText("제목에 포함될 단어 (예: 브리, 글렌)")
         self.keyword_input.returnPressed.connect(self._add_keyword)
         add_button = QPushButton("등록")
         add_button.clicked.connect(self._add_keyword)
@@ -187,12 +220,14 @@ class PartyTab(QWidget):
         self.exclude_list.addItem(text)
         self.exclude_input.clear()
         self._save()
+        self._refresh_board()  # 즉시 반영
 
     def _remove_exclude(self) -> None:
         for item in self.exclude_list.selectedItems():
             self._excludes.remove(item.text())
             self.exclude_list.takeItem(self.exclude_list.row(item))
         self._save()
+        self._refresh_board()  # 즉시 반영(제외 풀면 다시 나타남)
 
     def _save(self) -> None:
         config.save_party_lists(self._keywords, self._excludes)
@@ -206,7 +241,7 @@ class PartyTab(QWidget):
             get_keywords=lambda: list(self._keywords),
             get_excludes=lambda: list(self._excludes),
         )
-        self._worker.updated.connect(self._populate)
+        self._worker.updated.connect(self._on_updated)
         self._worker.alerted.connect(self._on_alert)
         self._worker.status.connect(self._on_status)
         self._worker.start()

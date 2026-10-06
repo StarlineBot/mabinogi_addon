@@ -12,11 +12,11 @@ from PySide6.QtCore import QThread, Signal
 
 from .alerts import AlertState
 from .client import fetch_horn_bugle
-from .service import build_board, find_alerts
+from .service import find_alerts
 
 
 class PartyWorker(QThread):
-    updated = Signal(list)  # list[Recruit] — 현황판 갱신
+    updated = Signal(list)  # list[dict] — 거뿔 원본(UI가 제외 적용/재필터)
     alerted = Signal(str, object)  # (keyword, Recruit) — 토스트
     status = Signal(str)  # 상태/오류 문구
 
@@ -27,7 +27,6 @@ class PartyWorker(QThread):
         get_excludes: Callable[[], list[str]],
         *,
         poll_sec: int = 10,
-        list_size: int | None = None,
         parent=None,
     ) -> None:
         super().__init__(parent)
@@ -35,7 +34,6 @@ class PartyWorker(QThread):
         self._get_keywords = get_keywords
         self._get_excludes = get_excludes
         self._poll_sec = poll_sec
-        self._list_size = list_size
         self._alert_state = AlertState()
         self._running = True
 
@@ -60,12 +58,11 @@ class PartyWorker(QThread):
             self.status.emit(f"거뿔 조회 실패: {error}")
             return
 
-        excludes = self._get_excludes()
-        self.updated.emit(build_board(raw, excludes, self._list_size))
+        self.updated.emit(raw)  # UI가 현재 제외 목록으로 즉시 재필터
         self.status.emit("")  # 정상 → 상태 문구 비움
 
         for keyword, recruit in find_alerts(
-            raw, self._get_keywords(), excludes, self._alert_state
+            raw, self._get_keywords(), self._get_excludes(), self._alert_state
         ):
             self.alerted.emit(keyword, recruit)
 
