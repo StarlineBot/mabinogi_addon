@@ -355,6 +355,7 @@ class BuffTab(QWidget):
         self.alert2_check = QCheckBox("2차 알림")
         self.before2_spin = QSpinBox()
         self.before2_spin.setRange(1, 300)
+        self.before2_spin.setValue(5)  # 기본 5초 전
         self.before2_spin.setSuffix(" 초 전")
         alert_row2.addWidget(self.alert2_check)
         alert_row2.addWidget(self.before2_spin)
@@ -408,12 +409,9 @@ class BuffTab(QWidget):
         self._form_changed()
 
     def _on_alert2_toggled(self, _enabled: bool) -> None:
-        if not self._loading:
-            if self.alert2_check.isChecked():
-                # 1차보다 10초 늦은(만료에 더 가까운) 시점 자동 입력
-                self.before2_spin.setValue(max(1, self.before_spin.value() - 10))
-            else:
-                self.before2_spin.setValue(self.before2_spin.minimum())  # 초기화
+        # 체크 시 보이는 그대로(기본 5초 전) 등록, 해제 시 기본값 5로 초기화.
+        if not self._loading and not self.alert2_check.isChecked():
+            self.before2_spin.setValue(5)
         self._apply_alert_enabled(self.alert_check.isChecked())
         self._form_changed()
 
