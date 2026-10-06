@@ -1,6 +1,6 @@
 """실제 상태창 스크린샷 기반 아이콘 매칭 회귀 테스트 (기획서 4.2)."""
 
-import glob
+import os
 
 import cv2
 import numpy as np
@@ -8,16 +8,15 @@ import pytest
 
 from mabinogi_addon.detect import match_icon
 
-# 네이티브 스크린샷(2556x1436)에서 잰 좌표.
-# 버프 패널은 화면 좌상단, 아이콘 ≈30px.
-_SCREENSHOT = next(iter(glob.glob("tests/data/*.png")), None)
+# 좌표를 측정한 보정 기준 이미지(2556x1436). 여러 스크린샷 중 이 한 장으로 고정.
+_SCREENSHOT = "tests/data/스크린샷 2026-10-06 223724.png"
 BUFF_REGION = (400, 0, 720, 360)  # (y0, x0, y1, x1)
 FIRST_ICON = (424, 8, 452, 36)  # 환생시 아이콘 (y0, x0, y1, x1)
 
 
 def _load():
-    if _SCREENSHOT is None:
-        pytest.skip("tests/data에 스크린샷 PNG가 없음")
+    if not os.path.exists(_SCREENSHOT):
+        pytest.skip("보정 기준 스크린샷이 없음")
     img = cv2.imread(_SCREENSHOT, cv2.IMREAD_COLOR)
     if img is None or img.shape[0] < 720:
         pytest.skip("스크린샷 해상도가 예상과 다름(좌표 재측정 필요)")

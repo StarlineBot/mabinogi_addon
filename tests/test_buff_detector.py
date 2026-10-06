@@ -1,6 +1,6 @@
 """버프 디텍터 회귀 테스트 (실제 상태창 스크린샷 기반)."""
 
-import glob
+import os
 
 import cv2
 import numpy as np
@@ -8,7 +8,8 @@ import pytest
 
 from mabinogi_addon.detect import detect_buffs
 
-_SCREENSHOT = next(iter(glob.glob("tests/data/*.png")), None)
+# 좌표를 측정한 보정 기준 이미지(2556x1436)로 고정.
+_SCREENSHOT = "tests/data/스크린샷 2026-10-06 223724.png"
 REGION = (400, 0, 720, 360)  # (y0, x0, y1, x1) 버프 패널
 ICON_COLUMN = (0, 44)  # 영역 기준 아이콘 세로 띠 x범위
 # 영역 기준 아이콘 위치(y) — 측정값. (아이콘 상단 y, 화면 424/514/574 - 400)
@@ -16,7 +17,7 @@ SAMPLE_ROWS = {"buff_top": 24, "buff_mid": 114, "buff_low": 174}
 
 
 def _region():
-    if _SCREENSHOT is None:
+    if not os.path.exists(_SCREENSHOT):
         pytest.skip("tests/data에 스크린샷 PNG가 없음")
     img = cv2.imread(_SCREENSHOT, cv2.IMREAD_COLOR)
     if img is None or img.shape[0] < 720:
@@ -50,7 +51,7 @@ def test_detects_all_registered_in_y_order():
 
 
 def test_icon_absent_in_background_region():
-    if _SCREENSHOT is None:
+    if not os.path.exists(_SCREENSHOT):
         pytest.skip("tests/data에 스크린샷 PNG가 없음")
     img = cv2.imread(_SCREENSHOT, cv2.IMREAD_COLOR)
     region = _region()
