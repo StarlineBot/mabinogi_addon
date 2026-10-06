@@ -7,6 +7,7 @@ cv2.setNumThreads(1)
 from .binarize import binarize  # noqa: E402
 from .buff_detector import Detection, detect_buffs  # noqa: E402
 from .icon_matcher import DEFAULT_THRESHOLD, MatchResult, match_icon  # noqa: E402
+from .time_reader import read_time  # noqa: E402
 
 __all__ = [
     "MatchResult",
@@ -15,4 +16,5 @@ __all__ = [
     "Detection",
     "detect_buffs",
     "binarize",
+    "read_time",
 ]
