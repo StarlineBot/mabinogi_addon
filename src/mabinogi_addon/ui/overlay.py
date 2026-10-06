@@ -57,14 +57,43 @@ class BuffOverlay(QWidget):
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
-        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
 
         self._scale = scale
         self._items: list[OverlayItem] = []
         self._blink_on = True
+        self._locked = False  # 고정=클릭 통과, 해제=드래그 이동
+        self._drag_offset = None
         self._timer = QTimer(self)
         self._timer.setInterval(400)
         self._timer.timeout.connect(self._toggle_blink)
+
+    # ---- 고정/이동 ----
+    def set_locked(self, locked: bool) -> None:
+        self._locked = locked
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, locked)
+        from ..system.clickthrough import set_click_through
+
+        set_click_through(self, locked)
+        self._relayout()  # 해제 시 비어 있어도 위치 잡게 플레이스홀더 크기
+
+    @property
+    def locked(self) -> bool:
+        return self._locked
+
+    def mousePressEvent(self, event) -> None:  # noqa: N802
+        if not self._locked and event.button() == Qt.MouseButton.LeftButton:
+            self._drag_offset = (
+                event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            )
+            event.accept()
+
+    def mouseMoveEvent(self, event) -> None:  # noqa: N802
+        if not self._locked and self._drag_offset is not None:
+            self.move(event.globalPosition().toPoint() - self._drag_offset)
+            event.accept()
+
+    def mouseReleaseEvent(self, event) -> None:  # noqa: N802
+        self._drag_offset = None
 
     def set_scale(self, scale: float) -> None:
         self._scale = max(0.5, min(3.0, scale))
@@ -85,8 +114,11 @@ class BuffOverlay(QWidget):
         icon, gap, text_h = self._metrics()
         n = len(self._items)
         if n == 0:
-            self.resize(1, 1)
             self._timer.stop()
+            if self._locked:
+                self.resize(1, 1)  # 고정+비어있음 → 보이지 않게
+            else:
+                self.resize(220, 56)  # 해제 시 드래그용 플레이스홀더
             self.update()
             return
         width = n * icon + (n - 1) * gap + 2 * _PAD
@@ -108,6 +140,8 @@ class BuffOverlay(QWidget):
     # ---- 그리기 ----
     def paintEvent(self, _event) -> None:  # noqa: N802
         if not self._items:
+            if not self._locked:
+                self._paint_placeholder()
             return
         icon, gap, text_h = self._metrics()
         painter = QPainter(self)
@@ -136,6 +170,20 @@ class BuffOverlay(QWidget):
                 rect = QRect(x, _PAD + icon, icon, text_h)
                 self._draw_text(painter, rect, item.duration_text)
             x += icon + gap
+        painter.end()
+
+    def _paint_placeholder(self) -> None:
+        """고정 해제 + 비어있을 때 드래그용 안내 박스."""
+        painter = QPainter(self)
+        painter.fillRect(self.rect(), QColor(0, 0, 0, 120))
+        painter.setPen(QColor(0, 209, 167))
+        painter.drawRect(self.rect().adjusted(0, 0, -1, -1))
+        painter.setPen(QColor(255, 255, 255))
+        painter.drawText(
+            self.rect(),
+            Qt.AlignmentFlag.AlignCenter,
+            "버프 오버레이\n(드래그로 이동 · 고정하면 사라짐)",
+        )
         painter.end()
 
     def _draw_text(self, painter: QPainter, rect: QRect, text: str) -> None:

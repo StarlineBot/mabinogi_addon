@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 
 from .buff_tab import BuffTab
 from .debuff_tab import DebuffTab
+from .overlay import BuffOverlay
 from .party_tab import PartyTab
 from .settings_tab import SettingsTab
 
@@ -37,15 +38,28 @@ class MainWindow(QMainWindow):
         self.setWindowIcon(app_icon())
         self.resize(780, 620)
 
+        self.buff_tab = BuffTab()
         self.party_tab = PartyTab()
         tabs = QTabWidget()
-        tabs.addTab(BuffTab(), "버프")
+        tabs.addTab(self.buff_tab, "버프")
         tabs.addTab(DebuffTab(), "디버프")
         tabs.addTab(self.party_tab, "파티")
         tabs.addTab(SettingsTab(), "설정")
         tabs.setCornerWidget(self._status_widget(), Qt.Corner.TopRightCorner)
-
         self.setCentralWidget(tabs)
+
+        # 버프 오버레이: 고정 버튼으로 클릭통과/드래그 토글
+        self.buff_overlay = BuffOverlay()
+        self.buff_tab.lock_toggled.connect(self._on_overlay_lock)
+
+    def _on_overlay_lock(self, locked: bool) -> None:
+        self.buff_overlay.set_locked(locked)
+        if locked:
+            # 아이템이 없으면 숨고, 있으면 고정된 위치에 클릭통과로 유지
+            if not self.buff_overlay._items:
+                self.buff_overlay.hide()
+        else:
+            self.buff_overlay.show()  # 드래그로 위치 잡기
 
     def start(self) -> None:
         """탐지/폴링 시작. 실제 앱 실행(main)에서만 호출한다(스크린샷 렌더 땐 미호출)."""
@@ -53,6 +67,7 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event) -> None:  # noqa: N802 (Qt 시그니처)
         self.party_tab.stop_polling()
+        self.buff_overlay.close()
         super().closeEvent(event)
 
     def _status_widget(self) -> QWidget:

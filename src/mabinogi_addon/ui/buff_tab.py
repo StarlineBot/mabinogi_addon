@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QSize, Qt
+from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -51,6 +51,8 @@ def _pixmap(path: Path | None, size: int) -> QPixmap | None:
 
 
 class BuffTab(QWidget):
+    lock_toggled = Signal(bool)  # 오버레이 고정 토글 → main이 오버레이에 적용
+
     def __init__(self) -> None:
         super().__init__()
         self._catalog: dict[str, BuffDef] = {b.id: b for b in load_catalog()}
@@ -109,7 +111,17 @@ class BuffTab(QWidget):
         v = QVBoxLayout(panel)
         v.setContentsMargins(0, 0, 0, 0)
 
-        v.addWidget(QPushButton("버프 영역 지정"))
+        top = QHBoxLayout()
+        top.setSpacing(6)
+        top.addWidget(QPushButton("버프 영역 지정"), 1)
+        self.lock_btn = QPushButton("오버레이 고정")
+        self.lock_btn.setCheckable(True)
+        self.lock_btn.setStyleSheet(
+            "QPushButton:checked { background:#00B894; color:white; font-weight:600; }"
+        )
+        self.lock_btn.toggled.connect(self._on_lock_toggled)
+        top.addWidget(self.lock_btn, 1)
+        v.addLayout(top)
         v.addWidget(hint_label("영역 미지정 — 버튼으로 상태창 영역을 지정하세요"))
 
         self.buff_list = QListWidget()
@@ -138,6 +150,10 @@ class BuffTab(QWidget):
     def _rows(self) -> list[str]:
         """목록에 표시되는 id 순서: 앵커 먼저, 그다음 표시 순서."""
         return [ANCHOR_ID, *self._order]
+
+    def _on_lock_toggled(self, locked: bool) -> None:
+        self.lock_btn.setText("오버레이 고정됨" if locked else "오버레이 고정")
+        self.lock_toggled.emit(locked)
 
     def _display_name(self, bid: str) -> str:
         s = self._settings.get(bid)
