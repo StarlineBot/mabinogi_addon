@@ -16,7 +16,7 @@ _active: list["Toast"] = []  # 현재 떠 있는 토스트(아래→위로 쌓�
 
 
 class Toast(QWidget):
-    def __init__(self, title: str, body: str, duration_ms: int = 3000) -> None:
+    def __init__(self, title: str, body: str, duration_ms: int = 5000) -> None:
         super().__init__(
             None,
             Qt.WindowType.FramelessWindowHint
@@ -88,7 +88,7 @@ def _reflow() -> None:
         y -= _GAP
 
 
-def show_toast(title: str, body: str, duration_ms: int = 3000) -> Toast:
+def show_toast(title: str, body: str, duration_ms: int = 5000) -> Toast:
     toast = Toast(title, body, duration_ms)
     toast.show_bottom_right()
     return toast
