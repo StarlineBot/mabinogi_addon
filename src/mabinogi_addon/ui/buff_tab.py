@@ -16,7 +16,6 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QFileDialog,
     QHBoxLayout,
-    QInputDialog,
     QLineEdit,
     QListWidget,
     QListWidgetItem,
@@ -188,27 +187,24 @@ class BuffTab(QWidget):
         return item.data(Qt.ItemDataRole.UserRole) if item else None
 
     # ---- 등록/삭제/순서 ----
+    def _new_id(self) -> str:
+        n = 1
+        while f"buff_{n}" in self._catalog:
+            n += 1
+        return f"buff_{n}"
+
     def _on_register(self) -> None:
-        """새 버프 등록: 이름 + 매칭 아이콘 파일 + (선택)표시 이미지 파일."""
-        name, ok = QInputDialog.getText(self, "새 버프 등록", "버프 이름")
-        name = name.strip()
-        if not ok or not name:
-            return
-        if name in self._catalog or name == ANCHOR_ID:
-            QMessageBox.warning(self, "새 버프 등록", f"'{name}'은 이미 있습니다.")
-            return
-        match_path, _ = QFileDialog.getOpenFileName(
-            self, "매칭 아이콘 선택 (상태창 아이콘)", "", "이미지 (*.png)"
-        )
-        if not match_path:
-            return
-        display_path, _ = QFileDialog.getOpenFileName(
-            self, "표시 이미지 선택 (선택, 취소 가능)", "", "이미지 (*.png)"
-        )
+        """새 버프 추가: 빈 아이콘·이름 '-'로 목록 하단에 넣고, 오른쪽에서 설정."""
+        new_id = self._new_id()
         catalog_mod.register_buff(
-            name, Path(match_path), Path(display_path) if display_path else None
+            new_id, catalog_mod.NONE_MATCH_ICON, catalog_mod.NONE_DISPLAY_IMAGE
         )
-        self._reload_catalog(select=name)
+        self._catalog = {b.id: b for b in load_catalog()}
+        self._settings, self._order = self._load_state()
+        self._settings[new_id].name = "-"  # 미설정 표시
+        self._current = new_id
+        self._save()
+        self._rebuild_list()
 
     def _on_delete(self) -> None:
         bid = self._current_id()

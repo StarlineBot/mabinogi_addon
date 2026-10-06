@@ -22,6 +22,9 @@ from .config import PROJECT_ROOT
 DEFAULT_ICON_DIR = PROJECT_ROOT / "tests" / "data" / "icon"
 DEFAULT_IMAGE_DIR = PROJECT_ROOT / "tests" / "data" / "image"
 DEFAULT_DEBUFF_ICON_DIR = PROJECT_ROOT / "tests" / "data" / "debuff_icon"
+# 새 버프/디버프 등록 시 쓰는 빈(none) placeholder
+NONE_MATCH_ICON = PROJECT_ROOT / "tests" / "data" / "default" / "none.png"
+NONE_DISPLAY_IMAGE = PROJECT_ROOT / "tests" / "data" / "default" / "none_enable.png"
 
 
 def _stem(path: Path) -> str:

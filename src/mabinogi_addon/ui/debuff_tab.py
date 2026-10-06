@@ -14,7 +14,6 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QFileDialog,
     QHBoxLayout,
-    QInputDialog,
     QLineEdit,
     QListWidget,
     QListWidgetItem,
@@ -129,27 +128,28 @@ class DebuffTab(QWidget):
         return item.data(Qt.ItemDataRole.UserRole) if item else None
 
     # ---- 등록/삭제/순서 ----
+    def _new_id(self) -> str:
+        n = 1
+        while f"debuff_{n}" in self._catalog:
+            n += 1
+        return f"debuff_{n}"
+
     def _on_register(self) -> None:
-        name, ok = QInputDialog.getText(self, "새 디버프 등록", "디버프 이름")
-        name = name.strip()
-        if not ok or not name:
-            return
-        if name in self._catalog:
-            QMessageBox.warning(self, "새 디버프 등록", f"'{name}'은 이미 있습니다.")
-            return
-        path, _ = QFileDialog.getOpenFileName(
-            self, "매칭 아이콘 선택", "", "이미지 (*.png)"
-        )
-        if not path:
-            return
+        """빈 아이콘·이름 '-'로 하단에 추가, 오른쪽에서 설정."""
+        new_id = self._new_id()
         catalog_mod.register_buff(
-            name,
-            Path(path),
+            new_id,
+            catalog_mod.NONE_MATCH_ICON,
             None,
             icon_dir=DEFAULT_DEBUFF_ICON_DIR,
             image_dir=DEFAULT_DEBUFF_ICON_DIR,
         )
-        self._reload(select=name)
+        self._catalog = {b.id: b for b in load_debuff_catalog()}
+        self._settings, self._order = self._load_state()
+        self._settings[new_id].name = "-"
+        self._current = new_id
+        self._save()
+        self._rebuild_list()
 
     def _on_delete(self) -> None:
         did = self._current_id()
