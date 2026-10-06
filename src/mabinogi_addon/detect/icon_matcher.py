@@ -12,8 +12,9 @@ from dataclasses import dataclass
 import cv2
 import numpy as np
 
-# 반투명 배경 때문에 완벽 일치는 어렵다. 1단계 기본값, tests/data로 추후 튜닝.
-DEFAULT_THRESHOLD = 0.6
+# 실데이터 기준 튜닝: 실제 버프는 1.00, 오탐은 ≤0.67로 명확히 갈림(아이콘 불투명).
+# 0.8이면 양쪽에 여유를 두고 분리된다.
+DEFAULT_THRESHOLD = 0.8
 
 
 @dataclass(frozen=True)
