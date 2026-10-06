@@ -2,13 +2,20 @@
 
 전체화면 반투명 위에서 드래그로 사각형을 그려 영역(실제 화면 픽셀)을 고른다.
 ESC로 취소. 선택 완료 시 selected(x, y, w, h) 시그널.
+
+커서 옆에 돋보기(확대경)를 띄워 현재 포인터 주변을 크게 보여준다 → 얇은 디버프 줄 등
+픽셀 단위로 정밀하게 집을 수 있다. 확대경 원본은 '선택창을 띄우기 전' 화면 스냅샷.
 """
 
 from __future__ import annotations
 
 from PySide6.QtCore import QPoint, QRect, Qt, Signal
-from PySide6.QtGui import QColor, QGuiApplication, QPainter, QPen
+from PySide6.QtGui import QColor, QGuiApplication, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import QWidget
+
+_LOUPE = 150  # 돋보기 박스 변(px)
+_ZOOM = 6  # 확대 배율
+_OFFSET = 28  # 커서에서 돋보기까지 거리
 
 
 class RegionSelector(QWidget):
@@ -22,16 +29,23 @@ class RegionSelector(QWidget):
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setCursor(Qt.CursorShape.CrossCursor)
+        self.setMouseTracking(True)  # 버튼 안 눌러도 이동 이벤트 받기(돋보기용)
         # 주 화면 전체 덮기(위젯 로컬 좌표 = 화면 좌표 + screen.topLeft())
         self._screen_geo = QGuiApplication.primaryScreen().geometry()
         self.setGeometry(self._screen_geo)
 
         self._origin: QPoint | None = None
         self._rect = QRect()
+        self._cursor: QPoint | None = None
+        self._shot = QPixmap()  # 선택창 띄우기 전 화면 스냅샷(돋보기 원본)
 
     def start(self) -> None:
         self._origin = None
         self._rect = QRect()
+        self._cursor = None
+        # 오버레이를 덮기 전에 현재 화면을 캡처(돋보기 원본). 띄운 뒤 캡처하면 오버레이가 찍힌다.
+        screen = QGuiApplication.primaryScreen()
+        self._shot = screen.grabWindow(0) if screen else QPixmap()
         self.showFullScreen()
         self.raise_()
         self.activateWindow()
@@ -43,9 +57,10 @@ class RegionSelector(QWidget):
             self.update()
 
     def mouseMoveEvent(self, event) -> None:  # noqa: N802
+        self._cursor = event.position().toPoint()
         if self._origin is not None:
-            self._rect = QRect(self._origin, event.position().toPoint()).normalized()
-            self.update()
+            self._rect = QRect(self._origin, self._cursor).normalized()
+        self.update()
 
     def mouseReleaseEvent(self, event) -> None:  # noqa: N802
         if self._origin is None:
@@ -84,3 +99,38 @@ class RegionSelector(QWidget):
             label = f"{self._rect.width()} × {self._rect.height()}"
             painter.setPen(QColor(255, 255, 255))
             painter.drawText(self._rect.adjusted(4, 4, 0, 0), 0, label)
+        if self._cursor is not None and not self._shot.isNull():
+            self._draw_loupe(painter, self._cursor)
+
+    def _draw_loupe(self, painter: QPainter, pos: QPoint) -> None:
+        """커서 주변을 _ZOOM배로 확대해 커서 옆 박스에 그린다(중앙 십자선)."""
+        src = max(4, _LOUPE // _ZOOM)
+        crop = self._shot.copy(pos.x() - src // 2, pos.y() - src // 2, src, src)
+        crop.setDevicePixelRatio(1.0)
+        zoomed = crop.scaled(
+            _LOUPE, _LOUPE,
+            Qt.AspectRatioMode.IgnoreAspectRatio,
+            Qt.TransformationMode.FastTransformation,  # Nearest → 픽셀 또렷
+        )
+        # 돋보기 위치: 커서 우하단, 화면 밖이면 반대쪽으로 뒤집기
+        lx = pos.x() + _OFFSET
+        ly = pos.y() + _OFFSET
+        if lx + _LOUPE > self.width():
+            lx = pos.x() - _OFFSET - _LOUPE
+        if ly + _LOUPE > self.height():
+            ly = pos.y() - _OFFSET - _LOUPE
+
+        painter.setOpacity(1.0)
+        painter.drawPixmap(lx, ly, zoomed)
+        painter.setPen(QPen(QColor(0, 209, 167), 2))
+        painter.drawRect(lx, ly, _LOUPE, _LOUPE)
+        # 중앙 십자선(현재 포인터 지점)
+        cx, cy = lx + _LOUPE // 2, ly + _LOUPE // 2
+        painter.setPen(QPen(QColor(255, 60, 60), 1))
+        painter.drawLine(cx - 10, cy, cx + 10, cy)
+        painter.drawLine(cx, cy - 10, cx, cy + 10)
+        # 화면 좌표 표시
+        sx = self._screen_geo.x() + pos.x()
+        sy = self._screen_geo.y() + pos.y()
+        painter.setPen(QColor(255, 255, 255))
+        painter.drawText(lx + 4, ly + _LOUPE - 6, f"{sx}, {sy}")
