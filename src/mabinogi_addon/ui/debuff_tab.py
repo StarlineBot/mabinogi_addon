@@ -97,6 +97,14 @@ class DebuffTab(QWidget):
         )
         self.lock_btn.toggled.connect(self._on_lock_toggled)
         top.addWidget(self.lock_btn, 1)
+        self.scale_spin = QSpinBox()
+        self.scale_spin.setRange(50, 300)
+        self.scale_spin.setSingleStep(10)
+        self.scale_spin.setPrefix("배율 ")
+        self.scale_spin.setSuffix(" %")
+        self.scale_spin.setValue(config.load_overlay_scales()[1])
+        self.scale_spin.valueChanged.connect(self._on_scale)
+        top.addWidget(self.scale_spin, 1)
         v.addLayout(top)
 
         self.region_hint = hint_label("")
@@ -123,18 +131,6 @@ class DebuffTab(QWidget):
         for b in (add_btn, del_btn, up_btn, down_btn):
             order_row.addWidget(b, 1)
         v.addLayout(order_row)
-
-        scale_row = QHBoxLayout()
-        self.scale_spin = QSpinBox()
-        self.scale_spin.setRange(50, 300)
-        self.scale_spin.setSingleStep(10)
-        self.scale_spin.setPrefix("오버레이 배율  ")
-        self.scale_spin.setSuffix(" %")
-        self.scale_spin.setValue(config.load_overlay_scales()[1])
-        self.scale_spin.valueChanged.connect(self._on_scale)
-        scale_row.addWidget(self.scale_spin)
-        scale_row.addStretch(1)
-        v.addLayout(scale_row)
         return panel
 
     def _on_scale(self, pct: int) -> None:
