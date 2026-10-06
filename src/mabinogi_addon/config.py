@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+from dataclasses import dataclass, field
 from pathlib import Path
 
 # src/mabinogi_addon/config.py → 프로젝트 루트
@@ -33,17 +34,17 @@ def _load_env() -> None:
                 os.environ.setdefault(key.strip(), value.strip())
 
 
-def _read_local_config() -> dict:
-    if not LOCAL_CONFIG_PATH.exists():
+def _read_local_config(path: Path = LOCAL_CONFIG_PATH) -> dict:
+    if not path.exists():
         return {}
     try:
-        return json.loads(LOCAL_CONFIG_PATH.read_text(encoding="utf-8"))
+        return json.loads(path.read_text(encoding="utf-8"))
     except (ValueError, OSError):
         return {}
 
 
-def _write_local_config(data: dict) -> None:
-    LOCAL_CONFIG_PATH.write_text(
+def _write_local_config(data: dict, path: Path = LOCAL_CONFIG_PATH) -> None:
+    path.write_text(
         json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
     )
 
@@ -77,3 +78,71 @@ def save_party_lists(keywords: list[str], excludes: list[str]) -> None:
     party["excludeLeaders"] = excludes
     data["party"] = party
     _write_local_config(data)
+
+
+# ---- 버프별 설정 (기획서 6 buffTracker.buffs) ----
+
+
+@dataclass
+class AlertConfig:
+    enabled: bool = True
+    before_sec: int = 30
+    blink: bool = True
+    sound: bool = True
+
+
+@dataclass
+class BuffSettings:
+    """버프 하나의 사용자 설정. 카탈로그(아이콘·이미지)와 별개로 id로 연결된다."""
+
+    id: str
+    show_duration: bool = True
+    hidden: bool = False  # 오버레이에서 숨김(목록엔 남김)
+    alert: AlertConfig = field(default_factory=AlertConfig)
+
+
+def _settings_from_dict(raw: dict) -> BuffSettings:
+    alert = raw.get("alert") or {}
+    return BuffSettings(
+        id=str(raw.get("id", "")),
+        show_duration=bool(raw.get("showDuration", True)),
+        hidden=bool(raw.get("hidden", False)),
+        alert=AlertConfig(
+            enabled=bool(alert.get("enabled", True)),
+            before_sec=int(alert.get("beforeSec", 30)),
+            blink=bool(alert.get("blink", True)),
+            sound=bool(alert.get("sound", True)),
+        ),
+    )
+
+
+def _settings_to_dict(s: BuffSettings) -> dict:
+    return {
+        "id": s.id,
+        "showDuration": s.show_duration,
+        "hidden": s.hidden,
+        "alert": {
+            "enabled": s.alert.enabled,
+            "beforeSec": s.alert.before_sec,
+            "blink": s.alert.blink,
+            "sound": s.alert.sound,
+        },
+    }
+
+
+def load_buff_settings(path: Path = LOCAL_CONFIG_PATH) -> list[BuffSettings]:
+    """저장된 버프 설정을 순서대로 반환(목록 표시 순서 = 저장 순서)."""
+    raw = (_read_local_config(path).get("buffTracker") or {}).get("buffs") or []
+    return [_settings_from_dict(b) for b in raw if b.get("id")]
+
+
+def save_buff_settings(
+    items: list[BuffSettings], path: Path = LOCAL_CONFIG_PATH
+) -> None:
+    data = _read_local_config(path)
+    bt = data.get("buffTracker")
+    if not isinstance(bt, dict):
+        bt = {}
+    bt["buffs"] = [_settings_to_dict(s) for s in items]
+    data["buffTracker"] = bt
+    _write_local_config(data, path)
