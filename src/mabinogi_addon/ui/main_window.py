@@ -323,7 +323,8 @@ class MainWindow(QMainWindow):
             {b.id: False for b in catalog},
             watcher=self._watcher,
         )
-        self.debuff_controller.start(source, self._debuff_engine)
+        # 디버프는 느리게 변하고 템플릿 수가 많아 500ms 주기(기획 0.3~0.5초).
+        self.debuff_controller.start(source, self._debuff_engine, interval_ms=500)
 
     def _on_debuff_tracking_changed(self) -> None:
         if self._debuff_engine is None:

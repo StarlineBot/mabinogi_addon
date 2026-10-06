@@ -90,9 +90,11 @@ class BuffController(QObject):
         self._active = True
         self._last_remaining: dict[str, float] = {}  # 표시 평활용 직전 표시값
 
-    def start(self, source: FrameSource, engine: BuffEngine) -> None:
+    def start(
+        self, source: FrameSource, engine: BuffEngine, interval_ms: int = 200
+    ) -> None:
         self.stop()
-        self._worker = _TrackWorker(source, engine, self._watcher)
+        self._worker = _TrackWorker(source, engine, self._watcher, interval_ms)
         self._worker.updated.connect(self._on_updated)
         self._worker.alerted.connect(self._on_alerted)
         self._worker.active_changed.connect(self._on_active_changed)

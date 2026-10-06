@@ -11,10 +11,23 @@
 
 from __future__ import annotations
 
+import cv2
 import numpy as np
 
 from ..detect import DEFAULT_THRESHOLD, match_icon
 from .engine import OverlayEntry, TickResult
+
+# 매칭 전 영역을 이 높이로 정규화한다(디버프 줄 아이콘≈영역 높이로 가정).
+# 템플릿도 같은 높이로 맞춰 matchTemplate 크기 불일치를 없애고, 좁은 영역이라 빠르다.
+_NORM_H = 18
+# 아이콘이 영역을 꽉 채우거나(1.0) 위아래 여백이 좀 있는 경우(0.75)까지 커버.
+_VARIANT_FACTORS = (1.0, 0.75)
+
+
+def _variant(template: np.ndarray, target_h: int) -> np.ndarray:
+    h, w = template.shape[:2]
+    tw = max(6, round(w * target_h / h))
+    return cv2.resize(template, (tw, target_h), interpolation=cv2.INTER_AREA)
 
 
 class DebuffEngine:
@@ -30,6 +43,11 @@ class DebuffEngine:
         self._order = list(order)
         self._threshold = threshold
         self._reappear = reappear_sec
+        # 정규화 높이 기준 배율 변형을 미리 생성(틱마다 resize 비용 제거).
+        self._variants = {
+            bid: [_variant(t, max(6, round(_NORM_H * f))) for f in _VARIANT_FACTORS]
+            for bid, t in templates.items()
+        }
         # shown=True면 '안 걸림' → 오버레이 표시. 초기엔 전부 표시(보스 전 상태).
         self._shown = {bid: True for bid in templates}
         self._absent_since: dict[str, float | None] = {bid: None for bid in templates}
@@ -37,9 +55,34 @@ class DebuffEngine:
     def set_order(self, order: list[str]) -> None:
         self._order = list(order)
 
+    @staticmethod
+    def _normalize(region: np.ndarray) -> np.ndarray:
+        """영역을 고정 높이(_NORM_H)로 축소 — 아이콘 크기 정규화 + 매칭 비용 절감."""
+        h = region.shape[0]
+        if h == _NORM_H or h == 0:
+            return region
+        scale = _NORM_H / h
+        return cv2.resize(
+            region,
+            (max(1, round(region.shape[1] * scale)), _NORM_H),
+            interpolation=cv2.INTER_AREA,
+        )
+
+    def _detected(self, norm: np.ndarray, bid: str) -> bool:
+        """정규화 영역에서 배율 변형 중 하나라도 임계 이상이면 '걸림'."""
+        for variant in self._variants.get(bid, ()):
+            if (
+                variant.shape[0] <= norm.shape[0]
+                and variant.shape[1] <= norm.shape[1]
+                and match_icon(norm, variant).present(self._threshold)
+            ):
+                return True
+        return False
+
     def tick(self, region: np.ndarray, now: float) -> TickResult:
-        for bid, template in self._templates.items():
-            detected = match_icon(region, template).present(self._threshold)
+        norm = self._normalize(region)
+        for bid in self._templates:
+            detected = self._detected(norm, bid)
             if detected:
                 self._shown[bid] = False  # 걸림 → 즉시 숨김
                 self._absent_since[bid] = None
