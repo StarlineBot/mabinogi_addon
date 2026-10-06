@@ -23,6 +23,7 @@ QTextEdit {
 }
 """
 _BAR_STYLE = "background: rgba(0,0,0,150); color:#cfd3da; padding:2px 6px;"
+_BAR_H = 22  # 상단 드래그 핸들 높이(항상 이만큼 자리 확보 → 고정해도 글자 위치 그대로)
 
 
 class _DragBar(QLabel):
@@ -68,19 +69,23 @@ class MemoOverlay(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
 
         self._locked = False
+        # 본문은 상단 핸들 높이만큼 항상 띄워 배치(핸들 숨겨도 글자 위치 고정).
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setContentsMargins(0, _BAR_H, 0, 0)
         layout.setSpacing(0)
-        self._bar = _DragBar(self)
-        layout.addWidget(self._bar)
         self._edit = QTextEdit()
         self._edit.setStyleSheet(_EDIT_STYLE)
         self._edit.setFrameShape(QTextEdit.Shape.NoFrame)
         self._edit.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._edit.setPlaceholderText("메모 (해제 상태에서 클릭해 입력)")
-        self._edit.viewport().setContentsMargins(6, 6, 6, 6)
         layout.addWidget(self._edit, 1)
+        # 드래그 핸들은 레이아웃 밖 상단에 떠 있게(숨겨도 레이아웃이 안 바뀜).
+        self._bar = _DragBar(self)
+        self._bar.raise_()
         self.set_font_size(font_size)
+
+    def resizeEvent(self, _event) -> None:  # noqa: N802
+        self._bar.setGeometry(0, 0, self.width(), _BAR_H)
 
     # ---- 내용/글꼴 ----
     def text(self) -> str:
