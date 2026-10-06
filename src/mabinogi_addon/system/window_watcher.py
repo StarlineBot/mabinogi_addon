@@ -21,9 +21,17 @@ DEFAULT_GAME_TITLES = ("mabinogi", "마비노기")
 
 
 class WindowWatcher(ABC):
-    @abstractmethod
     def is_active(self) -> bool:
-        """오버레이를 보여도 되는 상태(게임 또는 자기 앱이 포그라운드)인지."""
+        """게임 또는 자기 앱이 포그라운드인지(기존 호환)."""
+        return self.is_game_active() or self.is_self_active()
+
+    @abstractmethod
+    def is_game_active(self) -> bool:
+        """포그라운드가 게임(마비노기)인지."""
+
+    def is_self_active(self) -> bool:
+        """포그라운드가 우리 앱 창인지(편집 중 오버레이 유지에 사용)."""
+        return False
 
     def foreground_title(self) -> str:
         """현재 포그라운드 창 제목(진단용). 알 수 없으면 빈 문자열."""
@@ -31,9 +39,9 @@ class WindowWatcher(ABC):
 
 
 class AlwaysActiveWatcher(WindowWatcher):
-    """맥/리눅스 개발용 — 항상 활성(오버레이 항상 표시)."""
+    """맥/리눅스 개발용 — 게임이 항상 활성인 것으로 취급."""
 
-    def is_active(self) -> bool:
+    def is_game_active(self) -> bool:
         return True
 
 
@@ -66,15 +74,22 @@ class WindowsWatcher(WindowWatcher):
         except Exception:  # noqa: BLE001
             return ""
 
-    def is_active(self) -> bool:
+    def _classify(self) -> str:
+        """'game' / 'self' / 'other'. 판정 실패 시 'game'으로(숨기지 않게)."""
         try:
             title, pid = self._foreground()
         except Exception:  # noqa: BLE001
-            return True  # 판정 실패 시 숨기지 않음(오버레이 유지)
+            return "game"
         if pid == self._own_pid:
-            return True  # 자기 앱 창(메인·편집 모드 오버레이 등)
+            return "self"
         low = title.lower()
-        return any(t in low for t in self._titles)
+        return "game" if any(t in low for t in self._titles) else "other"
+
+    def is_game_active(self) -> bool:
+        return self._classify() == "game"
+
+    def is_self_active(self) -> bool:
+        return self._classify() == "self"
 
 
 def create_window_watcher(

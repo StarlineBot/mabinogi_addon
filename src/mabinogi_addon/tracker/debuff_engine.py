@@ -68,6 +68,21 @@ class DebuffEngine:
             interpolation=cv2.INTER_AREA,
         )
 
+    def best_scores(self, region: np.ndarray) -> dict[str, float]:
+        """각 디버프의 최고 매칭 점수(진단용). 임계 판정 없이 점수만."""
+        norm = self._normalize(region)
+        out: dict[str, float] = {}
+        for bid, variants in self._variants.items():
+            best = -1.0
+            for variant in variants:
+                if (
+                    variant.shape[0] <= norm.shape[0]
+                    and variant.shape[1] <= norm.shape[1]
+                ):
+                    best = max(best, match_icon(norm, variant).score)
+            out[bid] = best
+        return out
+
     def _detected(self, norm: np.ndarray, bid: str) -> bool:
         """정규화 영역에서 배율 변형 중 하나라도 임계 이상이면 '걸림'."""
         for variant in self._variants.get(bid, ()):
