@@ -85,7 +85,9 @@ class BuffController(QObject):
     def _on_updated(self, entries) -> None:
         items = self.build_items(entries)
         self._overlay.set_items(items)
-        if items:
+        # 비어 있어도 해제(드래그) 상태면 위치 잡기용 플레이스홀더를 보인다.
+        # 숨기는 건 '고정 + 비어있음'일 때만.
+        if items or not self._overlay.locked:
             self._overlay.show()
         else:
             self._overlay.hide()
