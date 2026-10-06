@@ -20,11 +20,15 @@ from .engine import OverlayEntry, TickResult
 # 보스 디버프 줄 아이콘의 실제 화면 높이(px). 2560x1440 기준 실측 ≈16.
 _ONSCREEN_ICON_PX = 16
 # 매칭은 이 높이로 축소해서 한다: 비용↓(영역을 크게 잡아도 됨) + 숫자 겹침 노이즈 완화.
-_MATCH_ICON_PX = 8
+# 너무 작으면(8px) 아이콘이 뭉개져 서로 점수가 겹치므로 10px로.
+_MATCH_ICON_PX = 10
 # 영역과 템플릿을 같은 비율로 축소 → 화면 아이콘이 _MATCH_ICON_PX가 되게.
-_DOWNSCALE = _MATCH_ICON_PX / _ONSCREEN_ICON_PX  # 0.5
-# 축소 매칭 실데이터: 걸린 디버프 ≥0.70, 안 걸린 것 ≤0.65 → 0.67로 가른다.
-DEBUFF_THRESHOLD = 0.67
+_DOWNSCALE = _MATCH_ICON_PX / _ONSCREEN_ICON_PX  # 0.625
+# 이력 임계(hysteresis): 실데이터에서 걸린 것 ≥0.70 / 안 걸린 것 ≤0.61.
+# 감지 시작은 높게(0.68), 해제는 낮게(0.58) 잡아 경계 점수의 프레임별 요동을 없앤다.
+DEBUFF_DETECT_THRESHOLD = 0.68
+DEBUFF_RELEASE_THRESHOLD = 0.58
+DEBUFF_THRESHOLD = DEBUFF_DETECT_THRESHOLD  # 진단 스크립트 표시용
 
 
 def _variant(template: np.ndarray, target_h: int) -> np.ndarray:
@@ -39,12 +43,14 @@ class DebuffEngine:
         templates: dict[str, np.ndarray],
         order: list[str],
         *,
-        threshold: float = DEBUFF_THRESHOLD,
-        reappear_sec: float = 1.5,
+        detect_threshold: float = DEBUFF_DETECT_THRESHOLD,
+        release_threshold: float = DEBUFF_RELEASE_THRESHOLD,
+        reappear_sec: float = 1.0,
     ) -> None:
         self._templates = templates
         self._order = list(order)
-        self._threshold = threshold
+        self._detect_thr = detect_threshold
+        self._release_thr = release_threshold
         self._reappear = reappear_sec
         # 템플릿을 매칭 크기(축소 후 화면 아이콘 크기)로 미리 맞춘다.
         self._variants = {
@@ -52,6 +58,7 @@ class DebuffEngine:
         }
         # shown=True면 '안 걸림' → 오버레이 표시. 초기엔 전부 표시(보스 전 상태).
         self._shown = {bid: True for bid in templates}
+        self._matched = {bid: False for bid in templates}  # 이력 임계용 직전 판정
         self._absent_since: dict[str, float | None] = {bid: None for bid in templates}
 
     def set_order(self, order: list[str]) -> None:
@@ -89,10 +96,22 @@ class DebuffEngine:
                 best = max(best, match_icon(small, variant).score)
         return best
 
+    def _detect(self, small: np.ndarray, bid: str) -> bool:
+        """이력 임계: 시작은 detect_thr 이상, 해제는 release_thr 미만. 그 사이는 유지."""
+        score = self._best(small, bid)
+        if score >= self._detect_thr:
+            matched = True
+        elif score < self._release_thr:
+            matched = False
+        else:
+            matched = self._matched.get(bid, False)  # 경계 구간 → 직전 판정 유지
+        self._matched[bid] = matched
+        return matched
+
     def tick(self, region: np.ndarray, now: float) -> TickResult:
         small = self._scale(region)
         for bid in self._templates:
-            detected = self._best(small, bid) >= self._threshold
+            detected = self._detect(small, bid)
             if detected:
                 self._shown[bid] = False  # 걸림 → 즉시 숨김
                 self._absent_since[bid] = None
