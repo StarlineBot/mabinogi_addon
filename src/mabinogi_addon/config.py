@@ -232,6 +232,25 @@ def save_overlay_scales(
     _write_local_config(data, path)
 
 
+def load_general_flag(
+    key: str, default: bool = False, path: Path = LOCAL_CONFIG_PATH
+) -> bool:
+    """general 섹션의 불리언 설정(없으면 default)."""
+    g = _read_local_config(path).get("general") or {}
+    v = g.get(key)
+    return bool(v) if isinstance(v, bool) else default
+
+
+def save_general_flag(key: str, value: bool, path: Path = LOCAL_CONFIG_PATH) -> None:
+    data = _read_local_config(path)
+    g = data.get("general")
+    if not isinstance(g, dict):
+        g = {}
+    g[key] = bool(value)
+    data["general"] = g
+    _write_local_config(data, path)
+
+
 def load_game_exe(path: Path = LOCAL_CONFIG_PATH) -> str | None:
     """포그라운드 판정에 쓸 게임 실행파일명(basename). 없으면 None(제목 폴백)."""
     g = _read_local_config(path).get("general") or {}

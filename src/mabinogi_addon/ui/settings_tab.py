@@ -27,6 +27,11 @@ def _checked(text: str, on: bool = True) -> QCheckBox:
     return box
 
 
+# general 설정 키 ↔ 체크박스 라벨
+_TRAY_MINIMIZE = "minimizeToTray"
+_TRAY_START = "startInTray"
+
+
 class SettingsTab(QWidget):
     def __init__(self, watcher: WindowWatcher) -> None:
         super().__init__()
@@ -43,10 +48,26 @@ class SettingsTab(QWidget):
     def _general_group(self) -> QGroupBox:
         box = QGroupBox("일반")
         v = QVBoxLayout(box)
-        v.addWidget(_checked("Windows 시작 시 자동 실행"))
-        v.addWidget(_checked("실행 시 트레이로 시작"))
-        v.addWidget(_checked("닫기(X) 버튼을 누르면 트레이로 최소화"))
-        v.addWidget(_checked("게임 비활성 중에도 소리 알림"))
+        v.addWidget(_checked("Windows 시작 시 자동 실행"))  # (미연결)
+
+        self._start_tray = _checked(
+            "실행 시 트레이로 시작", config.load_general_flag(_TRAY_START, False)
+        )
+        self._start_tray.toggled.connect(
+            lambda on: config.save_general_flag(_TRAY_START, on)
+        )
+        v.addWidget(self._start_tray)
+
+        self._min_tray = _checked(
+            "닫기(X) 버튼을 누르면 트레이로 최소화",
+            config.load_general_flag(_TRAY_MINIMIZE, True),
+        )
+        self._min_tray.toggled.connect(
+            lambda on: config.save_general_flag(_TRAY_MINIMIZE, on)
+        )
+        v.addWidget(self._min_tray)
+
+        v.addWidget(_checked("게임 비활성 중에도 소리 알림"))  # (미연결)
         return box
 
     # ---- 게임 창 인식(포그라운드 판정 대상) ----

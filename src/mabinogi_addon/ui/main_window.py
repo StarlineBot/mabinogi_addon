@@ -9,8 +9,14 @@ import logging
 from pathlib import Path
 
 from PySide6.QtCore import QTimer
-from PySide6.QtGui import QIcon
-from PySide6.QtWidgets import QMainWindow, QTabWidget
+from PySide6.QtGui import QAction, QIcon
+from PySide6.QtWidgets import (
+    QApplication,
+    QMainWindow,
+    QMenu,
+    QSystemTrayIcon,
+    QTabWidget,
+)
 
 from .. import config
 from ..capture import Region, create_live_source
@@ -47,6 +53,8 @@ class MainWindow(QMainWindow):
         # 포그라운드 감지(맥=항상 활성). 저장된 게임 실행파일로 판정(없으면 제목 폴백).
         self._watcher = create_window_watcher(game_exe=config.load_game_exe())
         self._restoring = False  # 복원 중엔 상태 저장 안 함
+        self._force_quit = False  # 트레이 '종료'로 진짜 종료할 때만 True
+        self._tray = self._build_tray()
 
         self.buff_tab = BuffTab()
         self.debuff_tab = DebuffTab()
@@ -397,8 +405,62 @@ class MainWindow(QMainWindow):
             self._restoring = False
         self._memo_timer.start()
 
+    # ---- 시스템 트레이 ----
+    def _build_tray(self) -> QSystemTrayIcon | None:
+        if not QSystemTrayIcon.isSystemTrayAvailable():
+            return None
+        tray = QSystemTrayIcon(app_icon(), self)
+        tray.setToolTip("마비노기 버프 트래커")
+        menu = QMenu()
+        open_act = QAction("열기", self)
+        open_act.triggered.connect(self._show_from_tray)
+        quit_act = QAction("종료", self)
+        quit_act.triggered.connect(self._quit_from_tray)
+        menu.addAction(open_act)
+        menu.addSeparator()
+        menu.addAction(quit_act)
+        tray.setContextMenu(menu)
+        tray.activated.connect(self._on_tray_activated)
+        tray.show()
+        return tray
+
+    def _on_tray_activated(self, reason) -> None:
+        # 트레이 아이콘 클릭·더블클릭 → 창 복귀
+        if reason in (
+            QSystemTrayIcon.ActivationReason.Trigger,
+            QSystemTrayIcon.ActivationReason.DoubleClick,
+        ):
+            self._show_from_tray()
+
+    def _show_from_tray(self) -> None:
+        self.showNormal()
+        self.raise_()
+        self.activateWindow()
+
+    def _quit_from_tray(self) -> None:
+        self._force_quit = True
+        self.close()
+
+    def _minimize_to_tray_enabled(self) -> bool:
+        return self._tray is not None and config.load_general_flag(
+            "minimizeToTray", True
+        )
+
     def closeEvent(self, event) -> None:  # noqa: N802 (Qt 시그니처)
         import time
+
+        # 트레이 최소화: X를 눌러도 종료하지 않고 트레이로 숨긴다(백그라운드 계속 동작).
+        if self._minimize_to_tray_enabled() and not self._force_quit:
+            event.ignore()
+            self.hide()
+            if self._tray is not None:
+                self._tray.showMessage(
+                    "마비노기 버프 트래커",
+                    "트레이로 최소화됨. 트레이 아이콘으로 열거나 종료하세요.",
+                    app_icon(),
+                    2000,
+                )
+            return
 
         def _step(name, fn):
             t = time.perf_counter()
@@ -426,5 +488,8 @@ class MainWindow(QMainWindow):
             self.debuff_overlay.close(),
             self.memo_overlay.close(),
         ))
+        if self._tray is not None:
+            self._tray.hide()
         _log.info("종료 총 %.0fms", (time.perf_counter() - total) * 1000)
         super().closeEvent(event)
+        QApplication.quit()  # 트레이/오버레이가 남아도 프로세스 확실히 종료

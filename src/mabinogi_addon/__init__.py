@@ -19,11 +19,15 @@ def main() -> None:
         datefmt="%H:%M:%S",
     )
 
+    from mabinogi_addon import config
     from mabinogi_addon.ui.main_window import MainWindow, app_icon
 
     app = QApplication(sys.argv)
     app.setWindowIcon(app_icon())  # 작업표시줄/트레이 아이콘
+    # 트레이 최소화를 위해, 창을 숨겨도(마지막 창 닫혀도) 앱이 종료되지 않게 한다.
+    app.setQuitOnLastWindowClosed(False)
     window = MainWindow()
-    window.show()
+    if not config.load_general_flag("startInTray", False):
+        window.show()  # '트레이로 시작'이면 창 없이 트레이만
     window.start()  # 파티 폴링 등 백그라운드 작업 시작
     sys.exit(app.exec())
