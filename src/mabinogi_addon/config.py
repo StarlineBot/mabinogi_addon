@@ -213,6 +213,20 @@ def save_overlay_state(
     _write_local_config(data, path)
 
 
+def load_memo(path: Path = LOCAL_CONFIG_PATH) -> dict:
+    """메모 상태 {text, locked, fontSize}. 없으면 빈 dict."""
+    m = _read_local_config(path).get("memo")
+    return m if isinstance(m, dict) else {}
+
+
+def save_memo(
+    text: str, locked: bool, font_size: int, path: Path = LOCAL_CONFIG_PATH
+) -> None:
+    data = _read_local_config(path)
+    data["memo"] = {"text": text, "locked": locked, "fontSize": font_size}
+    _write_local_config(data, path)
+
+
 def load_debuff_settings(path: Path = LOCAL_CONFIG_PATH) -> list[BuffSettings]:
     """디버프 설정(이름·노출 여부·순서). 지속시간·알림은 쓰지 않는다."""
     return _load_settings("debuffTracker", "debuffs", path)

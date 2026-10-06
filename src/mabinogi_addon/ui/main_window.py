@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QHBoxLayout,
@@ -26,6 +26,8 @@ from ..tracker.engine import BuffEngine
 from .buff_controller import BuffController
 from .buff_tab import ANCHOR_ID, BuffTab
 from .debuff_tab import DebuffTab
+from .memo_overlay import MemoOverlay
+from .memo_tab import MemoTab
 from .notifier import SoundNotifier, default_sound_map
 from .overlay import BuffOverlay
 from .party_tab import PartyTab
@@ -49,10 +51,12 @@ class MainWindow(QMainWindow):
         self.buff_tab = BuffTab()
         self.debuff_tab = DebuffTab()
         self.party_tab = PartyTab()
+        self.memo_tab = MemoTab()
         tabs = QTabWidget()
         tabs.addTab(self.buff_tab, "버프")
         tabs.addTab(self.debuff_tab, "디버프")
         tabs.addTab(self.party_tab, "파티")
+        tabs.addTab(self.memo_tab, "메모")
         tabs.addTab(SettingsTab(), "설정")
         tabs.setCornerWidget(self._status_widget(), Qt.Corner.TopRightCorner)
         self.setCentralWidget(tabs)
@@ -79,6 +83,17 @@ class MainWindow(QMainWindow):
         self.debuff_tab.tracking_changed.connect(self._on_debuff_tracking_changed)
         self.debuff_tab.catalog_changed.connect(self._on_debuff_catalog_changed)
         self.debuff_overlay.moved.connect(self._save_debuff_overlay_state)
+
+        # 메모 오버레이: 위치·크기는 영역 지정, 고정=클릭통과. 게임 활성 시만 표시.
+        memo = config.load_memo()
+        self.memo_overlay = MemoOverlay(font_size=int(memo.get("fontSize", 16)))
+        self.memo_overlay.set_text(str(memo.get("text", "")))
+        self.memo_tab.lock_toggled.connect(self._on_memo_lock)
+        self.memo_tab.region_changed.connect(self._apply_memo_region)
+        self.memo_tab.font_changed.connect(self._on_memo_font)
+        self._memo_timer = QTimer(self)
+        self._memo_timer.setInterval(300)
+        self._memo_timer.timeout.connect(self._tick_memo_visibility)
 
     # ---- 오버레이 고정/저장/복원(버프·디버프 공용 로직) ----
     def _apply_lock(self, overlay: BuffOverlay, locked: bool, section: str) -> None:
@@ -124,6 +139,7 @@ class MainWindow(QMainWindow):
         self.party_tab.start_polling()
         self._restore_overlay(self.buff_overlay, self.buff_tab, "buffTracker")
         self._restore_overlay(self.debuff_overlay, self.debuff_tab, "debuffTracker")
+        self._restore_memo()
         self._start_buff_tracking()
         self._start_debuff_tracking()
 
@@ -311,10 +327,55 @@ class MainWindow(QMainWindow):
     def _on_debuff_catalog_changed(self) -> None:
         self._start_debuff_tracking()
 
+    # ---- 메모 오버레이 ----
+    def _apply_memo_region(self) -> None:
+        """저장된 메모 영역(위치·크기)을 오버레이에 적용."""
+        region = config.load_capture_region("memoTracker")
+        if region:
+            self.memo_overlay.setGeometry(
+                region["x"], region["y"], region["w"], region["h"]
+            )
+
+    def _on_memo_lock(self, locked: bool) -> None:
+        self.memo_overlay.set_locked(locked)
+        self._save_memo()
+
+    def _on_memo_font(self, px: int) -> None:
+        self.memo_overlay.set_font_size(px)
+        self._save_memo()
+
+    def _save_memo(self) -> None:
+        if self._restoring:
+            return
+        config.save_memo(
+            self.memo_overlay.text(),
+            self.memo_overlay.locked,
+            self.memo_tab.font_spin.value(),
+        )
+
+    def _tick_memo_visibility(self) -> None:
+        """메모는 영역이 지정돼 있고 게임(또는 자기 앱)이 활성일 때만 보인다."""
+        if config.load_capture_region("memoTracker") is None:
+            self.memo_overlay.hide()
+            return
+        self.memo_overlay.setVisible(self._watcher.is_active())
+
+    def _restore_memo(self) -> None:
+        self._restoring = True
+        try:
+            self._apply_memo_region()
+            locked = bool(config.load_memo().get("locked", False))
+            self.memo_tab.set_lock_state(locked)  # 버튼 동기화 + set_locked 적용
+        finally:
+            self._restoring = False
+        self._memo_timer.start()
+
     def closeEvent(self, event) -> None:  # noqa: N802 (Qt 시그니처)
         # 종료 시 위치·고정 상태 저장(드래그 후 미저장 대비)
         self._save_overlay_state()
         self._save_debuff_overlay_state()
+        self._save_memo()  # 메모 내용·고정·글자크기 저장
+        self._memo_timer.stop()
         self.party_tab.stop_polling()
         if self.buff_controller is not None:
             self.buff_controller.stop()
@@ -322,6 +383,7 @@ class MainWindow(QMainWindow):
             self.debuff_controller.stop()
         self.buff_overlay.close()
         self.debuff_overlay.close()
+        self.memo_overlay.close()
         super().closeEvent(event)
 
     def _status_widget(self) -> QWidget:

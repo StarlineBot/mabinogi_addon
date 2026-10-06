@@ -2,10 +2,19 @@ from mabinogi_addon.config import (
     AlertConfig,
     BuffSettings,
     load_buff_settings,
+    load_memo,
     load_overlay_state,
     save_buff_settings,
+    save_memo,
     save_overlay_state,
 )
+
+
+def test_memo_round_trip(tmp_path):
+    path = tmp_path / "config.local.json"
+    assert load_memo(path) == {}
+    save_memo("메모\n내용", True, 20, path)
+    assert load_memo(path) == {"text": "메모\n내용", "locked": True, "fontSize": 20}
 
 
 def test_overlay_state_round_trip(tmp_path):
