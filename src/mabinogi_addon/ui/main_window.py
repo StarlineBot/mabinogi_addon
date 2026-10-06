@@ -372,11 +372,17 @@ class MainWindow(QMainWindow):
         )
 
     def _tick_memo_visibility(self) -> None:
-        """메모는 영역이 지정돼 있고 게임(또는 자기 앱)이 활성일 때만 보인다."""
+        """메모 표시 규칙: 게임 포그라운드면 표시. 해제(편집) 상태면 우리 앱에서도
+        표시(위치/입력). 고정 상태인데 게임이 포그라운드 아니면 숨김."""
         if config.load_capture_region("memoTracker") is None:
             self.memo_overlay.hide()
             return
-        self.memo_overlay.setVisible(self._watcher.is_active())
+        if self._watcher.is_game_active():
+            self.memo_overlay.show()
+        elif self._watcher.is_self_active() and not self.memo_overlay.locked:
+            self.memo_overlay.show()
+        else:
+            self.memo_overlay.hide()
 
     def _restore_memo(self) -> None:
         self._restoring = True

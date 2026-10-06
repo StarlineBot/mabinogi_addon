@@ -29,7 +29,7 @@ _SMOOTH_EPS = 1.5
 class _TrackWorker(QThread):
     updated = Signal(list)  # list[OverlayEntry]
     alerted = Signal(list)  # list[buff_id]
-    active_changed = Signal(bool)  # 포그라운드(게임/자기 앱) 활성 여부 변경
+    foreground_changed = Signal(bool, bool)  # (게임 활성, 자기 앱 활성)
 
     def __init__(
         self,
@@ -44,24 +44,23 @@ class _TrackWorker(QThread):
         self._watcher = watcher
         self._interval = interval_ms
         self._running = True
-        self._active = True
+        self._fg: tuple[bool, bool] | None = None
 
     def run(self) -> None:
         while self._running:
-            active = self._watcher.is_active()
-            if active != self._active:
-                self._active = active
-                self.active_changed.emit(active)
-            if not active:
-                # 비활성: 캡처·탐지 안 함(상태 동결), 오버레이는 숨김 처리.
-                self._sleep()
-                continue
-            region = self._source.grab()
-            if region is not None:
-                result = self._engine.tick(region, time.monotonic())
-                self.updated.emit(result.entries)
-                if result.alerts:
-                    self.alerted.emit(result.alerts)
+            game = self._watcher.is_game_active()
+            selfa = self._watcher.is_self_active()
+            if (game, selfa) != self._fg:
+                self._fg = (game, selfa)
+                self.foreground_changed.emit(game, selfa)
+            if game:
+                # 캡처·탐지는 게임이 포그라운드일 때만(다른 창을 캡처해 오탐 방지).
+                region = self._source.grab()
+                if region is not None:
+                    result = self._engine.tick(region, time.monotonic())
+                    self.updated.emit(result.entries)
+                    if result.alerts:
+                        self.alerted.emit(result.alerts)
             self._sleep()
 
     def _sleep(self) -> None:
@@ -95,7 +94,8 @@ class BuffController(QObject):
         self._watcher = watcher or AlwaysActiveWatcher()
         self._worker: _TrackWorker | None = None
         self._items: list[OverlayItem] = []
-        self._active = True
+        self._game_active = True  # 게임 포그라운드
+        self._self_active = False  # 우리 앱 포그라운드
         self._last_remaining: dict[str, float] = {}  # 표시 평활용 직전 표시값
 
     def start(
@@ -105,7 +105,7 @@ class BuffController(QObject):
         self._worker = _TrackWorker(source, engine, self._watcher, interval_ms)
         self._worker.updated.connect(self._on_updated)
         self._worker.alerted.connect(self._on_alerted)
-        self._worker.active_changed.connect(self._on_active_changed)
+        self._worker.foreground_changed.connect(self._on_foreground_changed)
         self._worker.start()
 
     def stop(self) -> None:
@@ -155,20 +155,23 @@ class BuffController(QObject):
         self._overlay.set_items(self._items)
         self._apply_visibility()
 
-    def _on_active_changed(self, active: bool) -> None:
-        self._active = active
+    def _on_foreground_changed(self, game: bool, selfa: bool) -> None:
+        self._game_active = game
+        self._self_active = selfa
         self._apply_visibility()
 
     def _apply_visibility(self) -> None:
-        # 비활성(게임·자기 앱이 포그라운드 아님) → 무조건 숨김.
-        if not self._active:
-            self._overlay.hide()
-            return
-        # 활성: 버프가 있거나, 해제(드래그) 상태면 플레이스홀더 유지.
-        if self._items or not self._overlay.locked:
-            self._overlay.show()
+        locked = self._overlay.locked
+        if self._game_active:
+            # 게임이 포그라운드: 버프가 있거나, 해제(편집) 상태면 플레이스홀더 유지.
+            show = bool(self._items) or not locked
+        elif self._self_active and not locked:
+            # 게임이 아니어도 '편집(해제)' 중엔 우리 앱 위에서 위치 조정 가능하게.
+            show = True
         else:
-            self._overlay.hide()
+            # 고정 상태인데 게임이 포그라운드 아님(앱·다른 창) → 숨김.
+            show = False
+        self._overlay.show() if show else self._overlay.hide()
 
     def _on_alerted(self, buff_ids) -> None:
         if self._on_alert is not None:
