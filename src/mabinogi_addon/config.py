@@ -133,19 +133,38 @@ def _settings_to_dict(s: BuffSettings) -> dict:
     }
 
 
-def load_buff_settings(path: Path = LOCAL_CONFIG_PATH) -> list[BuffSettings]:
-    """저장된 버프 설정을 순서대로 반환(목록 표시 순서 = 저장 순서)."""
-    raw = (_read_local_config(path).get("buffTracker") or {}).get("buffs") or []
+def _load_settings(section: str, key: str, path: Path) -> list[BuffSettings]:
+    raw = (_read_local_config(path).get(section) or {}).get(key) or []
     return [_settings_from_dict(b) for b in raw if b.get("id")]
 
 
-def save_buff_settings(
-    items: list[BuffSettings], path: Path = LOCAL_CONFIG_PATH
+def _save_settings(
+    items: list[BuffSettings], section: str, key: str, path: Path
 ) -> None:
     data = _read_local_config(path)
-    bt = data.get("buffTracker")
-    if not isinstance(bt, dict):
-        bt = {}
-    bt["buffs"] = [_settings_to_dict(s) for s in items]
-    data["buffTracker"] = bt
+    sec = data.get(section)
+    if not isinstance(sec, dict):
+        sec = {}
+    sec[key] = [_settings_to_dict(s) for s in items]
+    data[section] = sec
     _write_local_config(data, path)
+
+
+def load_buff_settings(path: Path = LOCAL_CONFIG_PATH) -> list[BuffSettings]:
+    """저장된 버프 설정을 순서대로 반환(목록 표시 순서 = 저장 순서)."""
+    return _load_settings("buffTracker", "buffs", path)
+
+
+def save_buff_settings(items: list[BuffSettings], path: Path = LOCAL_CONFIG_PATH) -> None:
+    _save_settings(items, "buffTracker", "buffs", path)
+
+
+def load_debuff_settings(path: Path = LOCAL_CONFIG_PATH) -> list[BuffSettings]:
+    """디버프 설정(이름·노출 여부·순서). 지속시간·알림은 쓰지 않는다."""
+    return _load_settings("debuffTracker", "debuffs", path)
+
+
+def save_debuff_settings(
+    items: list[BuffSettings], path: Path = LOCAL_CONFIG_PATH
+) -> None:
+    _save_settings(items, "debuffTracker", "debuffs", path)
