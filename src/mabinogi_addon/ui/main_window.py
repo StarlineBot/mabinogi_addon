@@ -402,6 +402,10 @@ class MainWindow(QMainWindow):
         self._save_memo()  # 메모 내용·고정·글자크기 저장
         self._memo_timer.stop()
         self.party_tab.stop_polling(wait_ms=600)  # 종료는 빠르게(HTTP 중이면 포기)
+        # 두 캡처 워커에 먼저 정지 신호를 보내 병렬로 멈춘 뒤 각각 대기(합산 대신 겹침).
+        for c in (self.buff_controller, self.debuff_controller):
+            if c is not None:
+                c.request_stop()
         if self.buff_controller is not None:
             self.buff_controller.stop()
         if self.debuff_controller is not None:

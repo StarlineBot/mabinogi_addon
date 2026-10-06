@@ -110,6 +110,11 @@ class BuffController(QObject):
         self._worker.foreground_changed.connect(self._on_foreground_changed)
         self._worker.start()
 
+    def request_stop(self) -> None:
+        """워커에 정지 신호만 보낸다(대기 없음). 여러 컨트롤러를 병렬로 멈출 때."""
+        if self._worker is not None:
+            self._worker.stop()
+
     def stop(self) -> None:
         if self._worker is not None:
             self._worker.stop()
