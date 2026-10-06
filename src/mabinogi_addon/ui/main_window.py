@@ -5,7 +5,10 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -19,11 +22,19 @@ from .debuff_tab import DebuffTab
 from .party_tab import PartyTab
 from .settings_tab import SettingsTab
 
+LOGO_PATH = Path(__file__).resolve().parents[1] / "assets" / "logo.png"
+
+
+def app_icon() -> QIcon:
+    """앱 로고 아이콘(창·작업표시줄)."""
+    return QIcon(str(LOGO_PATH))
+
 
 class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("마비노기 버프 트래커")
+        self.setWindowIcon(app_icon())
         self.resize(780, 620)
 
         self.party_tab = PartyTab()

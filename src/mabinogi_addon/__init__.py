@@ -9,9 +9,10 @@ def main() -> None:
 
     from PySide6.QtWidgets import QApplication
 
-    from mabinogi_addon.ui.main_window import MainWindow
+    from mabinogi_addon.ui.main_window import MainWindow, app_icon
 
     app = QApplication(sys.argv)
+    app.setWindowIcon(app_icon())  # 작업표시줄/트레이 아이콘
     window = MainWindow()
     window.show()
     window.start()  # 파티 폴링 등 백그라운드 작업 시작
