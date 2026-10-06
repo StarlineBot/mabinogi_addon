@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 from PySide6.QtWidgets import (
+    QButtonGroup,
     QCheckBox,
     QComboBox,
     QFormLayout,
@@ -14,6 +15,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QPushButton,
+    QRadioButton,
     QSpinBox,
     QVBoxLayout,
     QWidget,
@@ -53,6 +55,20 @@ class SettingsTab(QWidget):
         v.addWidget(_checked("실행 시 트레이로 시작"))
         v.addWidget(_checked("닫기(X) 버튼을 누르면 트레이로 최소화"))
         v.addWidget(_checked("게임 비활성 중에도 소리 알림"))
+
+        v.addSpacing(4)
+        v.addWidget(QLabel("알림음 방식"))
+        sound_row = QHBoxLayout()
+        self.sound_group = QButtonGroup(self)
+        beep = QRadioButton("기본음")
+        tts = QRadioButton("TTS (버프명 + 연장)")
+        tts.setChecked(True)
+        self.sound_group.addButton(beep)
+        self.sound_group.addButton(tts)
+        sound_row.addWidget(beep)
+        sound_row.addWidget(tts)
+        sound_row.addStretch(1)
+        v.addLayout(sound_row)
         return box
 
     def _overlay_group(self) -> QGroupBox:

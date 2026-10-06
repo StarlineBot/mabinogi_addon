@@ -28,3 +28,6 @@ config.local.json
 
 # PyInstaller
 *.spec.bak
+
+# TTS 음성 오디션 결과물 (개발용)
+scripts/_tts_preview/
