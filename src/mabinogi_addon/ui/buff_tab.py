@@ -112,7 +112,9 @@ class BuffTab(QWidget):
 
         top = QHBoxLayout()
         top.setSpacing(6)
-        top.addWidget(QPushButton("버프 영역 지정"), 1)
+        region_btn = QPushButton("버프 영역 지정")
+        region_btn.clicked.connect(self._pick_region)
+        top.addWidget(region_btn, 1)
         self.lock_btn = QPushButton("오버레이 고정")
         self.lock_btn.setCheckable(True)
         self.lock_btn.setStyleSheet(
@@ -121,7 +123,10 @@ class BuffTab(QWidget):
         self.lock_btn.toggled.connect(self._on_lock_toggled)
         top.addWidget(self.lock_btn, 1)
         v.addLayout(top)
-        v.addWidget(hint_label("영역 미지정 — 버튼으로 상태창 영역을 지정하세요"))
+
+        self.region_hint = hint_label("")
+        self._update_region_hint()
+        v.addWidget(self.region_hint)
 
         self.buff_list = QListWidget()
         self.buff_list.setIconSize(QSize(32, 32))
@@ -153,6 +158,30 @@ class BuffTab(QWidget):
     def _on_lock_toggled(self, locked: bool) -> None:
         self.lock_btn.setText("오버레이 고정됨" if locked else "오버레이 고정")
         self.lock_toggled.emit(locked)
+
+    # ---- 영역 지정 ----
+    def _update_region_hint(self) -> None:
+        region = config.load_capture_region("buffTracker")
+        if region:
+            self.region_hint.setText(
+                f"영역: {region['x']},{region['y']}  "
+                f"{region['w']}×{region['h']}  ✔"
+            )
+            self.region_hint.setStyleSheet("color:#2ecc71;")
+        else:
+            self.region_hint.setText("영역 미지정 — 버튼으로 상태창 영역을 지정하세요")
+            self.region_hint.setStyleSheet("color:#8a8f98;")
+
+    def _pick_region(self) -> None:
+        from .region_selector import RegionSelector
+
+        self._selector = RegionSelector()  # 참조 유지(GC 방지)
+        self._selector.selected.connect(self._on_region_selected)
+        self._selector.start()
+
+    def _on_region_selected(self, x: int, y: int, w: int, h: int) -> None:
+        config.save_capture_region(x, y, w, h, "buffTracker")
+        self._update_region_hint()
 
     def _display_name(self, bid: str) -> str:
         s = self._settings.get(bid)

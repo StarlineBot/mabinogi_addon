@@ -159,6 +159,29 @@ def save_buff_settings(items: list[BuffSettings], path: Path = LOCAL_CONFIG_PATH
     _save_settings(items, "buffTracker", "buffs", path)
 
 
+def load_capture_region(
+    section: str = "buffTracker", path: Path = LOCAL_CONFIG_PATH
+) -> dict | None:
+    """저장된 캡처 영역 {x,y,w,h} 또는 None."""
+    sec = _read_local_config(path).get(section) or {}
+    region = sec.get("captureRegion")
+    return region if isinstance(region, dict) else None
+
+
+def save_capture_region(
+    x: int, y: int, w: int, h: int,
+    section: str = "buffTracker",
+    path: Path = LOCAL_CONFIG_PATH,
+) -> None:
+    data = _read_local_config(path)
+    sec = data.get(section)
+    if not isinstance(sec, dict):
+        sec = {}
+    sec["captureRegion"] = {"x": x, "y": y, "w": w, "h": h}
+    data[section] = sec
+    _write_local_config(data, path)
+
+
 def load_debuff_settings(path: Path = LOCAL_CONFIG_PATH) -> list[BuffSettings]:
     """디버프 설정(이름·노출 여부·순서). 지속시간·알림은 쓰지 않는다."""
     return _load_settings("debuffTracker", "debuffs", path)
