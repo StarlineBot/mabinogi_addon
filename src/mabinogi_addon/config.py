@@ -89,6 +89,8 @@ class AlertConfig:
     before_sec: int = 30
     blink: bool = True
     sound: bool = True
+    enabled2: bool = False  # 2차 알림(놓침·오독 대비 재알림) 사용 여부
+    before_sec2: int = 5  # 2차 알림 기준(만료 N초 전)
 
 
 @dataclass
@@ -114,6 +116,8 @@ def _settings_from_dict(raw: dict) -> BuffSettings:
             before_sec=int(alert.get("beforeSec", 30)),
             blink=bool(alert.get("blink", True)),
             sound=bool(alert.get("sound", True)),
+            enabled2=bool(alert.get("enabled2", False)),
+            before_sec2=int(alert.get("beforeSec2", 5)),
         ),
     )
 
@@ -129,6 +133,8 @@ def _settings_to_dict(s: BuffSettings) -> dict:
             "beforeSec": s.alert.before_sec,
             "blink": s.alert.blink,
             "sound": s.alert.sound,
+            "enabled2": s.alert.enabled2,
+            "beforeSec2": s.alert.before_sec2,
         },
     }
 

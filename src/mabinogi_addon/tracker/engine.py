@@ -40,6 +40,7 @@ class BuffEngine:
         anchor_id: str | None = None,
         show_duration: dict[str, bool] | None = None,
         alert_before: dict[str, int] | None = None,
+        alert_before2: dict[str, int | None] | None = None,
         icon_column: tuple[int, int] = (0, 50),
         time_x0: int = 150,
         row_pad_top: int = 4,
@@ -58,9 +59,12 @@ class BuffEngine:
         self._threshold = threshold
 
         before = alert_before or {}
+        before2 = alert_before2 or {}
         self._machines = {
             bid: BuffStateMachine(
-                alert_before=before.get(bid, 30), appear_frames=appear_frames
+                alert_before=before.get(bid, 30),
+                alert_before2=before2.get(bid),
+                appear_frames=appear_frames,
             )
             for bid in templates
         }
@@ -75,6 +79,10 @@ class BuffEngine:
     def set_alert_before(self, alert_before: dict[str, int]) -> None:
         for bid, machine in self._machines.items():
             machine.alert_before = alert_before.get(bid, 30)
+
+    def set_alert_before2(self, alert_before2: dict[str, int | None]) -> None:
+        for bid, machine in self._machines.items():
+            machine.alert_before2 = alert_before2.get(bid)
 
     def tick(self, region: np.ndarray, now: float) -> TickResult:
         detections = detect_buffs(
@@ -94,6 +102,9 @@ class BuffEngine:
                 detected=detected, reading=reading, now=now, frame_valid=frame_valid
             )
             if event is Event.ALERT:
+                alerts.append(bid)
+            # 2차 알림: 더 가까운 기준 교차 시 1회 더(놓침·오독 대비).
+            if frame_valid and machine.check_second_alert(now):
                 alerts.append(bid)
 
         entries = []

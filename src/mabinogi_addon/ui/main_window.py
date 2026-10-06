@@ -108,8 +108,14 @@ class MainWindow(QMainWindow):
 
     def _compute_tracking(
         self, catalog
-    ) -> tuple[list[str], dict[str, bool], dict[str, int], dict[str, bool]]:
-        """저장된 설정으로 (표시 순서, 지속시간 표시, 알림 기준초, 점멸 여부)를 만든다."""
+    ) -> tuple[
+        list[str],
+        dict[str, bool],
+        dict[str, int],
+        dict[str, bool],
+        dict[str, int | None],
+    ]:
+        """저장 설정으로 (순서, 지속시간, 1차초, 점멸, 2차초[없으면 None])를 만든다."""
         catalog_by = {b.id: b for b in catalog}
         saved = {s.id: s for s in config.load_buff_settings()}
 
@@ -139,7 +145,20 @@ class MainWindow(QMainWindow):
             )
             for b in catalog
         }
-        return order, show_duration, alert_before, blink
+        # 2차 알림 기준초: '종료 알림'+'2차 알림'을 모두 켠 버프만, 아니면 None(없음).
+        alert_before2 = {
+            b.id: (
+                saved[b.id].alert.before_sec2
+                if (
+                    b.id in saved
+                    and saved[b.id].alert.enabled
+                    and saved[b.id].alert.enabled2
+                )
+                else None
+            )
+            for b in catalog
+        }
+        return order, show_duration, alert_before, blink, alert_before2
 
     def _start_buff_tracking(self) -> None:
         """저장된 영역이 있으면 라이브 캡처(dxcam)로 버프 추적 시작(재시작 포함)."""
@@ -160,7 +179,9 @@ class MainWindow(QMainWindow):
 
         catalog = load_catalog()
         catalog_by = {b.id: b for b in catalog}
-        order, show_duration, alert_before, blink = self._compute_tracking(catalog)
+        order, show_duration, alert_before, blink, alert_before2 = (
+            self._compute_tracking(catalog)
+        )
         self._sound_ids = self._sound_enabled_ids()
         # 초기 구동에선 앵커 게이팅 off(앵커가 영역 밖이면 전부 동결되는 것 방지).
         # 매칭 안정화 후 앵커 기반 '판정 불가' 로직을 다시 켠다.
@@ -170,6 +191,7 @@ class MainWindow(QMainWindow):
             anchor_id=None,
             show_duration=show_duration,
             alert_before=alert_before,
+            alert_before2=alert_before2,
         )
         self.buff_controller = BuffController(
             self.buff_overlay,
@@ -199,12 +221,13 @@ class MainWindow(QMainWindow):
         """순서·노출·지속시간·알림 변경을 실행 중 엔진에 즉시 반영(재시작 없이)."""
         if self._engine is None or self.buff_controller is None:
             return
-        order, show_duration, alert_before, blink = self._compute_tracking(
-            load_catalog()
+        order, show_duration, alert_before, blink, alert_before2 = (
+            self._compute_tracking(load_catalog())
         )
         self._engine.set_order(order)
         self._engine.set_show_duration(show_duration)
         self._engine.set_alert_before(alert_before)
+        self._engine.set_alert_before2(alert_before2)
         self.buff_controller.set_show_duration(show_duration)
         self.buff_controller.set_blink_enabled(blink)
         self._sound_ids = self._sound_enabled_ids()

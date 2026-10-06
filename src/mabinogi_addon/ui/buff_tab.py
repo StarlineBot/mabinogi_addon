@@ -350,6 +350,20 @@ class BuffTab(QWidget):
             else:
                 wdg.valueChanged.connect(self._form_changed)
 
+        # 2차 알림: 놓침·오독 대비 재알림(소리·점멸은 1차 설정을 그대로 재사용).
+        alert_row2 = QHBoxLayout()
+        self.alert2_check = QCheckBox("2차 알림")
+        self.before2_spin = QSpinBox()
+        self.before2_spin.setRange(1, 300)
+        self.before2_spin.setSuffix(" 초 전")
+        alert_row2.addWidget(self.alert2_check)
+        alert_row2.addWidget(self.before2_spin)
+        alert_row2.addStretch(1)
+        v.addLayout(alert_row2)
+        self.alert2_check.toggled.connect(self._on_alert2_toggled)
+        self.before2_spin.valueChanged.connect(self._form_changed)
+        v.addWidget(hint_label("└ 1차를 놓치거나 시간을 잘못 읽었을 때 한 번 더 알림"))
+
         v.addStretch(1)
         return panel
 
@@ -375,10 +389,13 @@ class BuffTab(QWidget):
         self.before_spin.setValue(s.alert.before_sec)
         self.blink_check.setChecked(s.alert.blink)
         self.sound_check.setChecked(s.alert.sound)
+        self.alert2_check.setChecked(s.alert.enabled2)
+        self.before2_spin.setValue(s.alert.before_sec2)
         self._apply_alert_enabled(s.alert.enabled)
         # 앵커는 오버레이 표시·지속시간·알림 없음 → 편집 비활성
         for wdg in (self.display_check, self.show_duration, self.alert_check,
-                    self.before_spin, self.blink_check, self.sound_check):
+                    self.before_spin, self.blink_check, self.sound_check,
+                    self.alert2_check, self.before2_spin):
             wdg.setEnabled(not is_anchor)
         self._loading = False
 
@@ -387,11 +404,26 @@ class BuffTab(QWidget):
         if not enabled:
             self.blink_check.setChecked(False)
             self.sound_check.setChecked(False)
+            self.alert2_check.setChecked(False)  # 1차 끄면 2차도 해제(→ 초기화)
+        self._form_changed()
+
+    def _on_alert2_toggled(self, _enabled: bool) -> None:
+        if not self._loading:
+            if self.alert2_check.isChecked():
+                # 1차보다 10초 늦은(만료에 더 가까운) 시점 자동 입력
+                self.before2_spin.setValue(max(1, self.before_spin.value() - 10))
+            else:
+                self.before2_spin.setValue(self.before2_spin.minimum())  # 초기화
+        self._apply_alert_enabled(self.alert_check.isChecked())
         self._form_changed()
 
     def _apply_alert_enabled(self, enabled: bool) -> None:
-        for wdg in (self.before_spin, self.blink_check, self.sound_check):
-            wdg.setEnabled(enabled and self._current != ANCHOR_ID)
+        on = enabled and self._current != ANCHOR_ID
+        for wdg in (self.before_spin, self.blink_check, self.sound_check,
+                    self.alert2_check):
+            wdg.setEnabled(on)
+        # 2차 초 입력은 '종료 알림'과 '2차 알림'이 모두 켜졌을 때만
+        self.before2_spin.setEnabled(on and self.alert2_check.isChecked())
 
     def _form_changed(self) -> None:
         if self._loading or self._current is None:
@@ -404,6 +436,8 @@ class BuffTab(QWidget):
             before_sec=self.before_spin.value(),
             blink=self.blink_check.isChecked(),
             sound=self.sound_check.isChecked(),
+            enabled2=self.alert2_check.isChecked(),
+            before_sec2=self.before2_spin.value(),
         )
         self._save()
         self.tracking_changed.emit()

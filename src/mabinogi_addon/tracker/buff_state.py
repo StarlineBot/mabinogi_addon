@@ -41,10 +41,12 @@ class BuffStateMachine:
         self,
         *,
         alert_before: float = 30.0,
+        alert_before2: float | None = None,
         appear_frames: int = 3,
         disappear_sec: float = 2.0,
     ) -> None:
         self.alert_before = alert_before
+        self.alert_before2 = alert_before2  # None=2차 알림 없음
         self.appear_frames = appear_frames
         self.disappear_sec = disappear_sec
 
@@ -53,6 +55,7 @@ class BuffStateMachine:
         self._last_read_at: float | None = None  # 그때의 now
         self._detections = 0
         self._missing_since: float | None = None
+        self._alerted2 = False  # 2차 알림 1회 발생 플래그(연장·소멸 시 재무장)
 
     # ---- 조회 ----
     def remaining(self, now: float) -> float | None:
@@ -64,6 +67,24 @@ class BuffStateMachine:
     @property
     def alerting(self) -> bool:
         return self.state is State.EXPIRING
+
+    def check_second_alert(self, now: float) -> bool:
+        """2차 알림 시점(만료 before_sec2 이하)을 1회 교차하면 True.
+
+        1차 알림과 독립. 연장(EXTENDED)·소멸(reset) 시 재무장되어 다음 주기에 또 울린다.
+        """
+        if self.alert_before2 is None or self._alerted2:
+            return False
+        remaining = self.remaining(now)
+        if remaining is None:
+            return False
+        if remaining <= self.alert_before2 and self.state in (
+            State.ACTIVE,
+            State.EXPIRING,
+        ):
+            self._alerted2 = True
+            return True
+        return False
 
     # ---- 갱신 ----
     def observe(
@@ -98,6 +119,7 @@ class BuffStateMachine:
                 and reading > prev + _EXTEND_EPS
             ):
                 self.state = State.ACTIVE
+                self._alerted2 = False  # 연장 → 2차 알림 재무장
                 return Event.EXTENDED
 
         if self.state is State.ABSENT:
@@ -143,3 +165,4 @@ class BuffStateMachine:
         self._last_read_at = None
         self._detections = 0
         self._missing_since = None
+        self._alerted2 = False  # 소멸 → 2차 알림 재무장

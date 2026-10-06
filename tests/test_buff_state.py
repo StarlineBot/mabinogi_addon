@@ -52,6 +52,27 @@ def test_buff_expires_while_inactive_then_removed_on_return():
     assert sm.state is State.ABSENT
 
 
+def test_second_alert_fires_once_and_rearms_on_extension():
+    sm = BuffStateMachine(alert_before=30, alert_before2=20)
+    _appear(sm, reading=100, t0=0.0)
+    # 아직 2차 기준(20초) 위 → 안 울림
+    assert sm.check_second_alert(10.4) is False  # remaining ~90
+    sm.observe(detected=True, reading=18, now=11.0)  # 18초로 판독
+    assert sm.check_second_alert(11.0) is True  # 20초 이하 교차 → 1회
+    assert sm.check_second_alert(12.0) is False  # 재알림 없음
+    # 연장(80초로) → 2차 재무장
+    sm.observe(detected=True, reading=80, now=13.0)
+    assert sm.check_second_alert(13.0) is False  # remaining 80 > 20
+    sm.observe(detected=True, reading=15, now=14.0)
+    assert sm.check_second_alert(14.0) is True  # 다시 1회
+
+
+def test_no_second_alert_when_disabled():
+    sm = BuffStateMachine(alert_before=30, alert_before2=None)
+    _appear(sm, reading=10, t0=0.0)
+    assert sm.check_second_alert(1.0) is False
+
+
 def test_alert_fires_once_at_threshold():
     sm = BuffStateMachine(alert_before=30)
     _appear(sm, reading=100, t0=0.0)
