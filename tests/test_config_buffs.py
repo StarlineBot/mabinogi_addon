@@ -3,11 +3,20 @@ from mabinogi_addon.config import (
     BuffSettings,
     load_buff_settings,
     load_memo,
+    load_overlay_scales,
     load_overlay_state,
     save_buff_settings,
     save_memo,
+    save_overlay_scales,
     save_overlay_state,
 )
+
+
+def test_overlay_scales_round_trip(tmp_path):
+    path = tmp_path / "config.local.json"
+    assert load_overlay_scales(path) == (150, 100)  # 기본값
+    save_overlay_scales(200, 120, path)
+    assert load_overlay_scales(path) == (200, 120)
 
 
 def test_memo_round_trip(tmp_path):

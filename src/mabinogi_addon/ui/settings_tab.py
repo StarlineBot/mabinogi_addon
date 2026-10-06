@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QButtonGroup,
     QCheckBox,
@@ -20,6 +21,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+from .. import config
 
 
 def _checked(text: str, on: bool = True) -> QCheckBox:
@@ -38,6 +41,9 @@ def _scale_spin(value: int) -> QSpinBox:
 
 
 class SettingsTab(QWidget):
+    buff_scale_changed = Signal(int)  # 버프 오버레이 배율(%)
+    debuff_scale_changed = Signal(int)  # 디버프 오버레이 배율(%)
+
     def __init__(self) -> None:
         super().__init__()
         v = QVBoxLayout(self)
@@ -78,8 +84,13 @@ class SettingsTab(QWidget):
         form = QFormLayout()
         scaling = QComboBox()
         scaling.addItems(["Nearest", "Bilinear"])
-        form.addRow("버프 배율", _scale_spin(150))
-        form.addRow("디버프 배율", _scale_spin(100))
+        buff_pct, debuff_pct = config.load_overlay_scales()
+        self.buff_scale = _scale_spin(buff_pct)
+        self.debuff_scale = _scale_spin(debuff_pct)
+        self.buff_scale.valueChanged.connect(self._on_scale_changed)
+        self.debuff_scale.valueChanged.connect(self._on_scale_changed)
+        form.addRow("버프 배율", self.buff_scale)
+        form.addRow("디버프 배율", self.debuff_scale)
         form.addRow("아이콘 확대 방식", scaling)
         v.addLayout(form)
 
@@ -88,6 +99,14 @@ class SettingsTab(QWidget):
         edit_row.addStretch(1)
         v.addLayout(edit_row)
         return box
+
+    def _on_scale_changed(self) -> None:
+        """배율 변경 → 저장하고 오버레이에 즉시 적용(시그널)."""
+        buff_pct = self.buff_scale.value()
+        debuff_pct = self.debuff_scale.value()
+        config.save_overlay_scales(buff_pct, debuff_pct)
+        self.buff_scale_changed.emit(buff_pct)
+        self.debuff_scale_changed.emit(debuff_pct)
 
     def _game_group(self) -> QGroupBox:
         box = QGroupBox("게임")

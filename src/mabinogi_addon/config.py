@@ -213,6 +213,25 @@ def save_overlay_state(
     _write_local_config(data, path)
 
 
+def load_overlay_scales(path: Path = LOCAL_CONFIG_PATH) -> tuple[int, int]:
+    """(버프 배율%, 디버프 배율%). 기본 150 / 100."""
+    s = _read_local_config(path).get("overlay") or {}
+    return int(s.get("buffScale", 150)), int(s.get("debuffScale", 100))
+
+
+def save_overlay_scales(
+    buff_scale: int, debuff_scale: int, path: Path = LOCAL_CONFIG_PATH
+) -> None:
+    data = _read_local_config(path)
+    s = data.get("overlay")
+    if not isinstance(s, dict):
+        s = {}
+    s["buffScale"] = buff_scale
+    s["debuffScale"] = debuff_scale
+    data["overlay"] = s
+    _write_local_config(data, path)
+
+
 def load_memo(path: Path = LOCAL_CONFIG_PATH) -> dict:
     """메모 상태 {text, locked, fontSize}. 없으면 빈 dict."""
     m = _read_local_config(path).get("memo")

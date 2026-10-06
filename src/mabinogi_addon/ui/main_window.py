@@ -46,12 +46,13 @@ class MainWindow(QMainWindow):
         self.debuff_tab = DebuffTab()
         self.party_tab = PartyTab()
         self.memo_tab = MemoTab()
+        self.settings_tab = SettingsTab()
         tabs = QTabWidget()
         tabs.addTab(self.buff_tab, "버프")
         tabs.addTab(self.debuff_tab, "디버프")
         tabs.addTab(self.party_tab, "파티")
         tabs.addTab(self.memo_tab, "메모")
-        tabs.addTab(SettingsTab(), "설정")
+        tabs.addTab(self.settings_tab, "설정")
         self.setCentralWidget(tabs)
 
         self._watcher = create_window_watcher()  # 포그라운드 감지(맥=항상 활성)
@@ -88,6 +89,17 @@ class MainWindow(QMainWindow):
         self._memo_timer = QTimer(self)
         self._memo_timer.setInterval(300)
         self._memo_timer.timeout.connect(self._tick_memo_visibility)
+
+        # 오버레이 배율(설정 탭): 저장값 적용 + 변경 시 즉시 반영.
+        buff_pct, debuff_pct = config.load_overlay_scales()
+        self.buff_overlay.set_scale(buff_pct / 100)
+        self.debuff_overlay.set_scale(debuff_pct / 100)
+        self.settings_tab.buff_scale_changed.connect(
+            lambda pct: self.buff_overlay.set_scale(pct / 100)
+        )
+        self.settings_tab.debuff_scale_changed.connect(
+            lambda pct: self.debuff_overlay.set_scale(pct / 100)
+        )
 
     # ---- 오버레이 고정/저장/복원(버프·디버프 공용 로직) ----
     def _apply_lock(self, overlay: BuffOverlay, locked: bool, section: str) -> None:
