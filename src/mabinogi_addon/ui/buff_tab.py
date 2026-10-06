@@ -26,6 +26,9 @@ from PySide6.QtWidgets import (
 from ..catalog import BuffDef, load_catalog
 from .widgets import hint_label, icon_slot, section_label
 
+# 앵커로 고정 사용할 버프(항상 존재, 지속시간 없음 → 판정 기준)
+ANCHOR_ID = "premium_battle"
+
 
 def _pixmap(path: Path | None, size: int) -> QPixmap | None:
     if path is None:
@@ -45,6 +48,8 @@ class BuffTab(QWidget):
     def __init__(self) -> None:
         super().__init__()
         self._catalog: list[BuffDef] = load_catalog()
+        # 앵커는 premium_battle 고정 → 항상 최상단에
+        self._catalog.sort(key=lambda b: (b.id != ANCHOR_ID, b.id))
 
         outer = QHBoxLayout(self)
         outer.setContentsMargins(12, 12, 12, 12)
@@ -67,7 +72,8 @@ class BuffTab(QWidget):
         self.buff_list = QListWidget()
         self.buff_list.setIconSize(QSize(32, 32))
         for buff in self._catalog:
-            item = QListWidgetItem(buff.name)
+            label = f"⚓ {buff.name} (앵커)" if buff.id == ANCHOR_ID else buff.name
+            item = QListWidgetItem(label)
             # 표시이미지 우선, 없으면 매칭 아이콘
             pm = _pixmap(buff.display_image or buff.match_icon, 32)
             if pm is not None:
@@ -125,26 +131,35 @@ class BuffTab(QWidget):
         v.addWidget(show_duration)
 
         alert_row = QHBoxLayout()
-        alert = QCheckBox("종료 알림")
-        alert.setChecked(True)
-        before = QSpinBox()
-        before.setRange(1, 300)
-        before.setValue(30)
-        before.setSuffix(" 초 전")
-        blink = QCheckBox("점멸")
-        blink.setChecked(True)
-        sound = QCheckBox("소리")
-        sound.setChecked(True)
-        alert_row.addWidget(alert)
-        alert_row.addWidget(before)
-        alert_row.addWidget(blink)
-        alert_row.addWidget(sound)
+        self.alert_check = QCheckBox("종료 알림")
+        self.alert_check.setChecked(True)
+        self.before_spin = QSpinBox()
+        self.before_spin.setRange(1, 300)
+        self.before_spin.setValue(30)
+        self.before_spin.setSuffix(" 초 전")
+        self.blink_check = QCheckBox("점멸")
+        self.blink_check.setChecked(True)
+        self.sound_check = QCheckBox("소리")
+        self.sound_check.setChecked(True)
+        alert_row.addWidget(self.alert_check)
+        alert_row.addWidget(self.before_spin)
+        alert_row.addWidget(self.blink_check)
+        alert_row.addWidget(self.sound_check)
         alert_row.addStretch(1)
         v.addLayout(alert_row)
 
-        v.addWidget(QCheckBox("앵커로 사용 (항상 있는 버프)"))
+        # 종료 알림 해제 → 점멸·소리·기준초 비활성(+해제)
+        self.alert_check.toggled.connect(self._on_alert_toggled)
         v.addStretch(1)
         return panel
+
+    def _on_alert_toggled(self, enabled: bool) -> None:
+        self.before_spin.setEnabled(enabled)
+        self.blink_check.setEnabled(enabled)
+        self.sound_check.setEnabled(enabled)
+        if not enabled:
+            self.blink_check.setChecked(False)
+            self.sound_check.setChecked(False)
 
     def _on_select(self, row: int) -> None:
         if not (0 <= row < len(self._catalog)):

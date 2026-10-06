@@ -33,6 +33,7 @@ from .toast import show_toast
 from .widgets import hint_label
 
 _DIM = QColor("#9aa0a6")
+_ACCENT = QColor("#00B894")  # 키워드 매칭 강조색
 
 
 class _ChipRow(QWidget):
@@ -94,8 +95,9 @@ class PartyTab(QWidget):
         box = QGroupBox("파티모집현황 (하프 서버)")
         v = QVBoxLayout(box)
 
-        self.table = QTableWidget(0, 5)
-        self.table.setHorizontalHeaderLabels(["채널", "파티장", "제목", "인원", "시간"])
+        # 0번은 키워드 매칭 강조용 좁은 액센트 바
+        self.table = QTableWidget(0, 6)
+        self.table.setHorizontalHeaderLabels(["", "채널", "파티장", "제목", "인원", "시간"])
         self.table.verticalHeader().setVisible(False)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
@@ -103,11 +105,13 @@ class PartyTab(QWidget):
         self.table.setAlternatingRowColors(True)
 
         header = self.table.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
+        self.table.setColumnWidth(0, 6)
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
-        header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
         self.table.setToolTip("파티장을 클릭하면 제외할 수 있어요")
         self.table.cellClicked.connect(self._on_cell_clicked)
         v.addWidget(self.table)
@@ -127,7 +131,7 @@ class PartyTab(QWidget):
 
     def _on_cell_clicked(self, row: int, _col: int) -> None:
         """리스트의 파티장을 클릭 → 제외 확인 팝업."""
-        leader_item = self.table.item(row, 1)  # 1 = 파티장 열
+        leader_item = self.table.item(row, 2)  # 2 = 파티장 열(0=액센트,1=채널)
         if leader_item is None:
             return
         name = leader_item.text()
@@ -156,9 +160,19 @@ class PartyTab(QWidget):
             row = self.table.rowCount()
             self.table.insertRow(row)
 
+            matched = self._matches_keyword(recruit.content)
+
+            accent = QTableWidgetItem()
+            if matched:
+                accent.setBackground(QBrush(_ACCENT))  # 앞쪽 두꺼운 색 강조 바
             channel = QTableWidgetItem(f"채널 {recruit.channel}")
             leader = QTableWidgetItem(recruit.character_name)
             title = QTableWidgetItem(("✅ " if recruit.done else "") + recruit.content)
+            if matched:
+                font = title.font()
+                font.setBold(True)
+                title.setFont(font)
+                title.setForeground(QBrush(_ACCENT))
             count = QTableWidgetItem(recruit.headcount)
             count.setTextAlignment(
                 Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
@@ -169,11 +183,15 @@ class PartyTab(QWidget):
             )
             age.setForeground(QBrush(_DIM))  # 시각은 항상 흐리게(보조 정보)
 
-            items = [channel, leader, title, count, age]
+            items = [accent, channel, leader, title, count, age]
             for col, item in enumerate(items):
-                if recruit.done and col != 4:
+                # 완료 파티는 흐리게(단, 매칭 제목·시간·액센트는 유지)
+                if recruit.done and col not in (0, 3, 5) and not matched:
                     item.setForeground(QBrush(_DIM))
                 self.table.setItem(row, col, item)
+
+    def _matches_keyword(self, content: str) -> bool:
+        return any(kw in content for kw in self._keywords)
 
     # ---- 목록 공통 (칩 행 + Ctrl/Shift 다중선택) ----
     def _make_chip_list(self) -> QListWidget:
