@@ -56,6 +56,7 @@ class BuffTab(QWidget):
         self._catalog: dict[str, BuffDef] = {b.id: b for b in load_catalog()}
         self._settings, self._order = self._load_state()
         self._current: str | None = None
+        self._name_id: str | None = None
         self._loading = False
 
         outer = QHBoxLayout(self)
@@ -138,13 +139,20 @@ class BuffTab(QWidget):
         """목록에 표시되는 id 순서: 앵커 먼저, 그다음 표시 순서."""
         return [ANCHOR_ID, *self._order]
 
+    def _display_name(self, bid: str) -> str:
+        s = self._settings.get(bid)
+        if s is not None and s.name:
+            return s.name
+        buff = self._catalog.get(bid)
+        return buff.name if buff else bid
+
     def _rebuild_list(self) -> None:
         keep = self._current
         self.buff_list.blockSignals(True)
         self.buff_list.clear()
         for bid in self._rows():
             buff = self._catalog.get(bid)
-            name = buff.name if buff else bid
+            name = self._display_name(bid)
             label = f"⚓ {name} (앵커)" if bid == ANCHOR_ID else name
             item = QListWidgetItem(label)
             item.setData(Qt.ItemDataRole.UserRole, bid)
@@ -235,7 +243,7 @@ class BuffTab(QWidget):
 
         v.addWidget(section_label("이름"))
         self.name_edit = QLineEdit()
-        self.name_edit.setReadOnly(True)  # 이름은 파일(카탈로그) 기준
+        self.name_edit.editingFinished.connect(self._save_name)  # 포커스 아웃·엔터 시 저장
         v.addWidget(self.name_edit)
 
         v.addWidget(section_label("매칭 아이콘"))
@@ -243,6 +251,9 @@ class BuffTab(QWidget):
         self.match_slot = icon_slot()
         match_row.addWidget(self.match_slot)
         match_row.addWidget(QPushButton("상태창에서 가져오기"))
+        self.match_file_btn = QPushButton("파일 선택")
+        self.match_file_btn.clicked.connect(self._pick_match_icon)
+        match_row.addWidget(self.match_file_btn)
         match_row.addStretch(1)
         v.addLayout(match_row)
 
@@ -250,13 +261,20 @@ class BuffTab(QWidget):
         show_row = QHBoxLayout()
         self.display_slot = icon_slot("—")
         show_row.addWidget(self.display_slot)
-        show_row.addWidget(QPushButton("파일 선택"))
-        show_row.addWidget(QPushButton("초기화"))
+        self.display_file_btn = QPushButton("파일 선택")
+        self.display_file_btn.clicked.connect(self._pick_display_image)
+        self.display_clear_btn = QPushButton("초기화")
+        self.display_clear_btn.clicked.connect(self._clear_display_image)
+        show_row.addWidget(self.display_file_btn)
+        show_row.addWidget(self.display_clear_btn)
         show_row.addStretch(1)
         v.addLayout(show_row)
         v.addWidget(hint_label("└ 비워두면 매칭 아이콘 사용"))
 
         v.addSpacing(6)
+        self.display_check = QCheckBox("오버레이에 표시")
+        self.display_check.toggled.connect(self._form_changed)
+        v.addWidget(self.display_check)
         self.show_duration = QCheckBox("지속시간 표시")
         self.show_duration.toggled.connect(self._form_changed)
         v.addWidget(self.show_duration)
@@ -292,20 +310,22 @@ class BuffTab(QWidget):
         is_anchor = bid == ANCHOR_ID
 
         self._loading = True
-        self.name_edit.setText(buff.name if buff else bid)
+        self._name_id = bid  # name_edit이 편집 중인 버프(포커스 아웃 저장 기준)
+        self.name_edit.setText(self._display_name(bid))
         self._set_slot(self.match_slot, buff.match_icon if buff else None, "▣")
         self._set_slot(
             self.display_slot, buff.display_image if buff else None, "—"
         )
+        self.display_check.setChecked(not s.hidden)
         self.show_duration.setChecked(s.show_duration)
         self.alert_check.setChecked(s.alert.enabled)
         self.before_spin.setValue(s.alert.before_sec)
         self.blink_check.setChecked(s.alert.blink)
         self.sound_check.setChecked(s.alert.sound)
         self._apply_alert_enabled(s.alert.enabled)
-        # 앵커는 지속시간·알림 없음 → 편집 비활성
-        for wdg in (self.show_duration, self.alert_check, self.before_spin,
-                    self.blink_check, self.sound_check):
+        # 앵커는 오버레이 표시·지속시간·알림 없음 → 편집 비활성
+        for wdg in (self.display_check, self.show_duration, self.alert_check,
+                    self.before_spin, self.blink_check, self.sound_check):
             wdg.setEnabled(not is_anchor)
         self._loading = False
 
@@ -324,6 +344,7 @@ class BuffTab(QWidget):
         if self._loading or self._current is None:
             return
         s = self._settings[self._current]
+        s.hidden = not self.display_check.isChecked()  # 오버레이 노출 여부
         s.show_duration = self.show_duration.isChecked()
         s.alert = config.AlertConfig(
             enabled=self.alert_check.isChecked(),
@@ -332,6 +353,51 @@ class BuffTab(QWidget):
             sound=self.sound_check.isChecked(),
         )
         self._save()
+
+    # ---- 이름·아이콘 편집 ----
+    def _save_name(self) -> None:
+        if self._loading or self._name_id is None:
+            return
+        s = self._settings.get(self._name_id)
+        if s is None:
+            return
+        new = self.name_edit.text().strip()
+        if s.name == new:
+            return
+        s.name = new
+        self._save()
+        self._rebuild_list()
+
+    def _pick_match_icon(self) -> None:
+        bid = self._current
+        if bid is None:
+            return
+        path, _ = QFileDialog.getOpenFileName(
+            self, "매칭 아이콘 선택", "", "이미지 (*.png)"
+        )
+        if not path:
+            return
+        catalog_mod.set_match_icon(bid, Path(path))
+        self._reload_catalog(select=bid)
+
+    def _pick_display_image(self) -> None:
+        bid = self._current
+        if bid is None:
+            return
+        path, _ = QFileDialog.getOpenFileName(
+            self, "표시 이미지 선택", "", "이미지 (*.png)"
+        )
+        if not path:
+            return
+        catalog_mod.set_display_image(bid, Path(path))
+        self._reload_catalog(select=bid)
+
+    def _clear_display_image(self) -> None:
+        bid = self._current
+        if bid is None:
+            return
+        catalog_mod.clear_display_image(bid)
+        self._reload_catalog(select=bid)
 
     def _set_slot(self, slot, path: Path | None, placeholder: str) -> None:
         pm = _pixmap(path, 40)

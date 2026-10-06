@@ -99,6 +99,35 @@ def delete_buff(
                 path.unlink()
 
 
+def _existing_or(path_dir: Path, buff_id: str) -> Path:
+    """buff_id에 해당하는 기존 파일 경로(있으면), 없으면 {id}.png."""
+    for path in path_dir.glob("*.png"):
+        if _stem(path) == buff_id:
+            return path
+    return path_dir / f"{buff_id}.png"
+
+
+def set_match_icon(buff_id: str, src: Path, *, icon_dir: Path = DEFAULT_ICON_DIR) -> None:
+    """버프의 매칭 아이콘 파일을 교체."""
+    icon_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(src, _existing_or(icon_dir, buff_id))
+
+
+def set_display_image(
+    buff_id: str, src: Path, *, image_dir: Path = DEFAULT_IMAGE_DIR
+) -> None:
+    """버프의 표시 이미지 파일을 교체/추가."""
+    image_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(src, _existing_or(image_dir, buff_id))
+
+
+def clear_display_image(buff_id: str, *, image_dir: Path = DEFAULT_IMAGE_DIR) -> None:
+    """버프의 표시 이미지 파일 삭제(오버레이는 매칭 아이콘 사용)."""
+    for path in image_dir.glob("*.png"):
+        if _stem(path) == buff_id:
+            path.unlink()
+
+
 def load_template(path: Path) -> np.ndarray:
     """매칭용 BGR 템플릿 로드(알파는 무시 — 아이콘은 모두 불투명)."""
     return cv2.imread(str(path), cv2.IMREAD_COLOR)

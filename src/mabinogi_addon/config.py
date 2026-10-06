@@ -96,6 +96,7 @@ class BuffSettings:
     """버프 하나의 사용자 설정. 카탈로그(아이콘·이미지)와 별개로 id로 연결된다."""
 
     id: str
+    name: str = ""  # 표시 이름(비우면 id 사용)
     show_duration: bool = True
     hidden: bool = False  # 오버레이에서 숨김(목록엔 남김)
     alert: AlertConfig = field(default_factory=AlertConfig)
@@ -105,6 +106,7 @@ def _settings_from_dict(raw: dict) -> BuffSettings:
     alert = raw.get("alert") or {}
     return BuffSettings(
         id=str(raw.get("id", "")),
+        name=str(raw.get("name", "")),
         show_duration=bool(raw.get("showDuration", True)),
         hidden=bool(raw.get("hidden", False)),
         alert=AlertConfig(
@@ -119,6 +121,7 @@ def _settings_from_dict(raw: dict) -> BuffSettings:
 def _settings_to_dict(s: BuffSettings) -> dict:
     return {
         "id": s.id,
+        "name": s.name,
         "showDuration": s.show_duration,
         "hidden": s.hidden,
         "alert": {
