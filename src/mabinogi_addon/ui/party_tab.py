@@ -34,6 +34,7 @@ _SAMPLE_PARTIES = [
     ("31", "별빛나그네", "믿음의 균열 풀파티", "8/8", True),
 ]
 _SAMPLE_KEYWORDS = ["글렌", "글라스"]
+_SAMPLE_EXCLUDES = ["시끄러운파티장"]
 
 
 class PartyTab(QWidget):
@@ -43,7 +44,12 @@ class PartyTab(QWidget):
         v.setContentsMargins(12, 12, 12, 12)
         v.setSpacing(10)
         v.addWidget(self._build_board(), 1)
-        v.addWidget(self._build_keywords())
+
+        bottom = QHBoxLayout()
+        bottom.setSpacing(10)
+        bottom.addWidget(self._build_keywords())
+        bottom.addWidget(self._build_excludes())
+        v.addLayout(bottom)
 
     def _build_board(self) -> QGroupBox:
         box = QGroupBox("파티모집현황 (하프 서버)")
@@ -111,4 +117,29 @@ class PartyTab(QWidget):
         v.addWidget(
             hint_label("등록한 키워드가 뜨면 화면 우측 하단에 토스트 알림 (3초 후 사라짐)")
         )
+        return box
+
+    def _build_excludes(self) -> QGroupBox:
+        box = QGroupBox("파티장 제외")
+        v = QVBoxLayout(box)
+
+        add_row = QHBoxLayout()
+        self.exclude_input = QLineEdit()
+        self.exclude_input.setPlaceholderText("제외할 파티장 캐릭터명")
+        add_row.addWidget(self.exclude_input, 1)
+        add_row.addWidget(QPushButton("등록"))
+        v.addLayout(add_row)
+
+        self.exclude_list = QListWidget()
+        self.exclude_list.setMaximumHeight(96)
+        for name in _SAMPLE_EXCLUDES:
+            QListWidgetItem(name, self.exclude_list)
+        v.addWidget(self.exclude_list)
+
+        btn_row = QHBoxLayout()
+        btn_row.addWidget(QPushButton("선택 삭제"))
+        btn_row.addStretch(1)
+        v.addLayout(btn_row)
+
+        v.addWidget(hint_label("이 파티장의 모집은 현황·알림에서 숨깁니다"))
         return box
