@@ -20,6 +20,7 @@ from .config import PROJECT_ROOT
 
 DEFAULT_ICON_DIR = PROJECT_ROOT / "tests" / "data" / "icon"
 DEFAULT_IMAGE_DIR = PROJECT_ROOT / "tests" / "data" / "image"
+DEFAULT_DEBUFF_ICON_DIR = PROJECT_ROOT / "tests" / "data" / "debuff_icon"
 
 
 def _stem(path: Path) -> str:

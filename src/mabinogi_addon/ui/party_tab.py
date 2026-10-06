@@ -19,6 +19,8 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
     QMessageBox,
     QPushButton,
+    QStyle,
+    QStyledItemDelegate,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -35,6 +37,25 @@ from .widgets import hint_label
 _DIM = QColor("#9aa0a6")
 _ACCENT = QColor("#00D1A7")  # 키워드 매칭 강조색(왼쪽 바)
 _MATCH_BG = QColor("#17352f")  # 매칭 행 배경 띠(어두운 초록 틴트)
+_BAR_WIDTH = 4  # 왼쪽 강조 바 두께(px)
+
+
+class _AccentBarDelegate(QStyledItemDelegate):
+    """매칭 행 왼쪽 가장자리에 세로 바를 그린다. 셀(칸)이 아니라 그림이라
+    별도 칸·마우스 오버 강조가 생기지 않는다. 테이블 전체 오버 강조도 끈다."""
+
+    def __init__(self, is_matched, parent=None) -> None:
+        super().__init__(parent)
+        self._is_matched = is_matched  # callable(row) -> bool
+
+    def paint(self, painter, option, index) -> None:
+        option.state &= ~QStyle.StateFlag.State_MouseOver  # 오버 강조 제거
+        super().paint(painter, option, index)
+        if index.column() == 0 and self._is_matched(index.row()):
+            painter.save()
+            r = option.rect
+            painter.fillRect(r.left(), r.top(), _BAR_WIDTH, r.height(), _ACCENT)
+            painter.restore()
 
 
 class _ChipRow(QWidget):
@@ -96,23 +117,23 @@ class PartyTab(QWidget):
         box = QGroupBox("파티모집현황 (하프 서버)")
         v = QVBoxLayout(box)
 
-        # 0번은 키워드 매칭 강조용 좁은 액센트 바
-        self.table = QTableWidget(0, 6)
-        self.table.setHorizontalHeaderLabels(["", "채널", "파티장", "제목", "인원", "시간"])
+        self.table = QTableWidget(0, 5)
+        self.table.setHorizontalHeaderLabels(["채널", "파티장", "제목", "인원", "시간"])
         self.table.verticalHeader().setVisible(False)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
         self.table.setShowGrid(False)
         self.table.setAlternatingRowColors(True)
+        # 매칭 행 왼쪽 세로 바는 셀이 아니라 델리게이트로 직접 그린다(칸 아님 → 오버 강조 없음)
+        self._matched_rows: set[int] = set()
+        self.table.setItemDelegate(_AccentBarDelegate(lambda r: r in self._matched_rows, self.table))
 
         header = self.table.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
-        self.table.setColumnWidth(0, 6)
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
         self.table.setToolTip("파티장을 클릭하면 제외할 수 있어요")
         self.table.cellClicked.connect(self._on_cell_clicked)
         v.addWidget(self.table)
@@ -132,7 +153,7 @@ class PartyTab(QWidget):
 
     def _on_cell_clicked(self, row: int, _col: int) -> None:
         """리스트의 파티장을 클릭 → 제외 확인 팝업."""
-        leader_item = self.table.item(row, 2)  # 2 = 파티장 열(0=액센트,1=채널)
+        leader_item = self.table.item(row, 1)  # 1 = 파티장 열(0=채널)
         if leader_item is None:
             return
         name = leader_item.text()
@@ -157,19 +178,18 @@ class PartyTab(QWidget):
 
     def _populate(self, recruits: list[Recruit]) -> None:
         self.table.setRowCount(0)
+        self._matched_rows.clear()
         for recruit in recruits:
             row = self.table.rowCount()
             self.table.insertRow(row)
 
             matched = self._matches_keyword(recruit.content)
+            if matched:
+                self._matched_rows.add(row)  # 왼쪽 바는 델리게이트가 그린다
 
-            accent = QTableWidgetItem()  # 0번: 왼쪽 세로 강조 바
             channel = QTableWidgetItem(f"채널 {recruit.channel}")
             leader = QTableWidgetItem(recruit.character_name)
-            title_text = ("✅ " if recruit.done else "") + recruit.content
-            if matched:
-                title_text = "🔔 " + title_text  # 매칭 표시(벨)
-            title = QTableWidgetItem(title_text)
+            title = QTableWidgetItem(("✅ " if recruit.done else "") + recruit.content)
             count = QTableWidgetItem(recruit.headcount)
             count.setTextAlignment(
                 Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
@@ -180,18 +200,15 @@ class PartyTab(QWidget):
             )
             age.setForeground(QBrush(_DIM))  # 시각은 항상 흐리게(보조 정보)
 
-            items = [accent, channel, leader, title, count, age]
+            items = [channel, leader, title, count, age]
             for col, item in enumerate(items):
                 if matched:
-                    if col == 0:
-                        item.setBackground(QBrush(_ACCENT))  # 왼쪽 강조 바
-                    else:
-                        item.setBackground(QBrush(_MATCH_BG))  # 행 전체 밝은 띠
-                        if col == 3:
-                            font = item.font()
-                            font.setBold(True)
-                            item.setFont(font)
-                elif recruit.done and col not in (0,):
+                    item.setBackground(QBrush(_MATCH_BG))  # 행 전체 밝은 띠
+                    if col == 2:  # 제목 굵게
+                        font = item.font()
+                        font.setBold(True)
+                        item.setFont(font)
+                elif recruit.done:
                     item.setForeground(QBrush(_DIM))  # 완료 파티 흐리게
                 self.table.setItem(row, col, item)
 
