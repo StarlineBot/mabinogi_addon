@@ -42,11 +42,15 @@ class MainWindow(QMainWindow):
         self.setWindowIcon(app_icon())
         self.resize(780, 620)
 
+        # 포그라운드 감지(맥=항상 활성). 저장된 게임 실행파일로 판정(없으면 제목 폴백).
+        self._watcher = create_window_watcher(game_exe=config.load_game_exe())
+        self._restoring = False  # 복원 중엔 상태 저장 안 함
+
         self.buff_tab = BuffTab()
         self.debuff_tab = DebuffTab()
         self.party_tab = PartyTab()
         self.memo_tab = MemoTab()
-        self.settings_tab = SettingsTab()
+        self.settings_tab = SettingsTab(self._watcher)
         tabs = QTabWidget()
         tabs.addTab(self.buff_tab, "버프")
         tabs.addTab(self.debuff_tab, "디버프")
@@ -54,9 +58,6 @@ class MainWindow(QMainWindow):
         tabs.addTab(self.memo_tab, "메모")
         tabs.addTab(self.settings_tab, "설정")
         self.setCentralWidget(tabs)
-
-        self._watcher = create_window_watcher()  # 포그라운드 감지(맥=항상 활성)
-        self._restoring = False  # 복원 중엔 상태 저장 안 함
 
         # 버프 오버레이
         self.buff_overlay = BuffOverlay()

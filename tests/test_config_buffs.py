@@ -19,6 +19,15 @@ def test_overlay_scales_round_trip(tmp_path):
     assert load_overlay_scales(path) == (200, 120)
 
 
+def test_game_exe_round_trip(tmp_path):
+    from mabinogi_addon.config import load_game_exe, save_game_exe
+
+    path = tmp_path / "config.local.json"
+    assert load_game_exe(path) is None
+    save_game_exe("Client.exe", path)
+    assert load_game_exe(path) == "client.exe"  # 소문자 정규화
+
+
 def test_memo_round_trip(tmp_path):
     path = tmp_path / "config.local.json"
     assert load_memo(path) == {}

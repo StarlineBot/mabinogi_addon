@@ -33,9 +33,12 @@ class WindowWatcher(ABC):
         """포그라운드가 우리 앱 창인지(편집 중 오버레이 유지에 사용)."""
         return False
 
-    def foreground_title(self) -> str:
-        """현재 포그라운드 창 제목(진단용). 알 수 없으면 빈 문자열."""
-        return ""
+    def foreground_info(self) -> tuple[str, str]:
+        """현재 포그라운드 창의 (제목, 실행파일명). 자동 찾기·진단용."""
+        return "", ""
+
+    def set_game_exe(self, exe: str | None) -> None:
+        """게임으로 볼 실행파일명(basename). None/빈값이면 제목 기반 폴백."""
 
 
 class AlwaysActiveWatcher(WindowWatcher):
@@ -45,14 +48,48 @@ class AlwaysActiveWatcher(WindowWatcher):
         return True
 
 
-class WindowsWatcher(WindowWatcher):
-    """포그라운드 창이 우리 프로세스이거나 게임이면 활성."""
+def _exe_basename_of_pid(pid: int) -> str:
+    """pid의 실행파일 basename(소문자). 실패 시 빈 문자열. Windows 전용(ctypes)."""
+    if not pid:
+        return ""
+    import ctypes
+    from ctypes import wintypes
 
-    def __init__(self, game_titles: tuple[str, ...] = DEFAULT_GAME_TITLES) -> None:
+    PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+    k32 = ctypes.windll.kernel32
+    handle = k32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+    if not handle:
+        return ""
+    try:
+        buf = ctypes.create_unicode_buffer(32768)
+        size = wintypes.DWORD(len(buf))
+        if k32.QueryFullProcessImageNameW(handle, 0, buf, ctypes.byref(size)):
+            return buf.value.replace("/", "\\").split("\\")[-1].lower()
+        return ""
+    finally:
+        k32.CloseHandle(handle)
+
+
+class WindowsWatcher(WindowWatcher):
+    """포그라운드 창을 프로세스(실행파일)로 판정. 미등록 시 제목으로 폴백.
+
+    실행파일 기반이라 '마비노기'라는 이름의 폴더(탐색기) 창은 explorer.exe라서
+    게임으로 오판하지 않는다. 사용자가 '자동 찾기'로 게임 실행파일을 등록하면 그걸 쓴다.
+    """
+
+    def __init__(
+        self,
+        game_titles: tuple[str, ...] = DEFAULT_GAME_TITLES,
+        game_exe: str | None = None,
+    ) -> None:
         self._titles = tuple(t.lower() for t in game_titles)
+        self._game_exe = (game_exe or "").lower() or None
         self._own_pid = os.getpid()
         import win32gui  # noqa: F401  — 생성 시점에 사용 가능 여부 확인
         import win32process  # noqa: F401
+
+    def set_game_exe(self, exe: str | None) -> None:
+        self._game_exe = (exe or "").lower() or None
 
     def _foreground(self) -> tuple[str, int]:
         import win32gui
@@ -68,11 +105,12 @@ class WindowsWatcher(WindowWatcher):
             pid = 0
         return title, pid
 
-    def foreground_title(self) -> str:
+    def foreground_info(self) -> tuple[str, str]:
         try:
-            return self._foreground()[0]
+            title, pid = self._foreground()
+            return title, _exe_basename_of_pid(pid)
         except Exception:  # noqa: BLE001
-            return ""
+            return "", ""
 
     def _classify(self) -> str:
         """'game' / 'self' / 'other'. 판정 실패 시 'game'으로(숨기지 않게)."""
@@ -82,7 +120,9 @@ class WindowsWatcher(WindowWatcher):
             return "game"
         if pid == self._own_pid:
             return "self"
-        low = title.lower()
+        if self._game_exe:  # 등록된 실행파일이 있으면 그걸로 판정(정확)
+            return "game" if _exe_basename_of_pid(pid) == self._game_exe else "other"
+        low = title.lower()  # 폴백: 제목 매칭(폴더 창 등 오판 가능)
         return "game" if any(t in low for t in self._titles) else "other"
 
     def is_game_active(self) -> bool:
@@ -94,11 +134,12 @@ class WindowsWatcher(WindowWatcher):
 
 def create_window_watcher(
     game_titles: tuple[str, ...] = DEFAULT_GAME_TITLES,
+    game_exe: str | None = None,
 ) -> WindowWatcher:
     """Windows면 WindowsWatcher, 아니면 AlwaysActiveWatcher."""
     if sys.platform == "win32":
         try:
-            return WindowsWatcher(game_titles)
+            return WindowsWatcher(game_titles, game_exe)
         except Exception:  # noqa: BLE001 — pywin32 없음 등
             return AlwaysActiveWatcher()
     return AlwaysActiveWatcher()

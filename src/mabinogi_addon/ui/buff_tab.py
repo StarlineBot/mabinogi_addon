@@ -379,7 +379,8 @@ class BuffTab(QWidget):
         v.addLayout(alert_row2)
         self.alert2_check.toggled.connect(self._on_alert2_toggled)
         self.before2_spin.valueChanged.connect(self._form_changed)
-        v.addWidget(hint_label("└ 1차를 놓치거나 시간을 잘못 읽었을 때 한 번 더 알림"))
+        self._alert2_hint = hint_label("└ 1차를 놓치거나 시간을 잘못 읽었을 때 한 번 더 알림")
+        v.addWidget(self._alert2_hint)
 
         v.addStretch(1)
         return panel
@@ -405,11 +406,15 @@ class BuffTab(QWidget):
         self.alert_check.setChecked(s.alert.enabled)
         self.before_spin.setValue(s.alert.before_sec)
         self.blink_check.setChecked(s.alert.blink)
-        # 소리 체크는 사운드 파일이 등록된 버프에만 노출한다.
+        # 소리 체크와 2차 알림은 사운드 파일이 등록된 버프에만 노출한다.
+        # (소리 없는 버프는 점멸만 되고 점멸은 임박 내내 계속 → 2차는 무의미)
         has_sound = bid in self._sound_ids
         self.sound_check.setVisible(has_sound)
         self.sound_check.setChecked(s.alert.sound and has_sound)
-        self.alert2_check.setChecked(s.alert.enabled2)
+        self.alert2_check.setVisible(has_sound)
+        self.before2_spin.setVisible(has_sound)
+        self._alert2_hint.setVisible(has_sound)
+        self.alert2_check.setChecked(s.alert.enabled2 and has_sound)
         self.before2_spin.setValue(s.alert.before_sec2)
         self._apply_alert_enabled(s.alert.enabled)
         # 앵커는 오버레이 표시·지속시간·알림 없음 → 편집 비활성

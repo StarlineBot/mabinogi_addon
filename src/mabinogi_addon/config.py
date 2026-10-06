@@ -232,6 +232,23 @@ def save_overlay_scales(
     _write_local_config(data, path)
 
 
+def load_game_exe(path: Path = LOCAL_CONFIG_PATH) -> str | None:
+    """포그라운드 판정에 쓸 게임 실행파일명(basename). 없으면 None(제목 폴백)."""
+    g = _read_local_config(path).get("general") or {}
+    exe = g.get("gameExe")
+    return exe.strip().lower() if isinstance(exe, str) and exe.strip() else None
+
+
+def save_game_exe(exe: str, path: Path = LOCAL_CONFIG_PATH) -> None:
+    data = _read_local_config(path)
+    g = data.get("general")
+    if not isinstance(g, dict):
+        g = {}
+    g["gameExe"] = exe
+    data["general"] = g
+    _write_local_config(data, path)
+
+
 def set_buff_scale(pct: int, path: Path = LOCAL_CONFIG_PATH) -> None:
     _, debuff = load_overlay_scales(path)
     save_overlay_scales(pct, debuff, path)
