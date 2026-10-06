@@ -26,14 +26,23 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("마비노기 버프 트래커")
         self.resize(780, 620)
 
+        self.party_tab = PartyTab()
         tabs = QTabWidget()
         tabs.addTab(BuffTab(), "버프")
         tabs.addTab(DebuffTab(), "디버프")
-        tabs.addTab(PartyTab(), "파티")
+        tabs.addTab(self.party_tab, "파티")
         tabs.addTab(SettingsTab(), "설정")
         tabs.setCornerWidget(self._status_widget(), Qt.Corner.TopRightCorner)
 
         self.setCentralWidget(tabs)
+
+    def start(self) -> None:
+        """탐지/폴링 시작. 실제 앱 실행(main)에서만 호출한다(스크린샷 렌더 땐 미호출)."""
+        self.party_tab.start_polling()
+
+    def closeEvent(self, event) -> None:  # noqa: N802 (Qt 시그니처)
+        self.party_tab.stop_polling()
+        super().closeEvent(event)
 
     def _status_widget(self) -> QWidget:
         """오른쪽 위 '● 실행 중' 표시. 나중에 탐지 상태와 연결한다."""

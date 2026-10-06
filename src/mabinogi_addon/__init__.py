@@ -14,4 +14,5 @@ def main() -> None:
     app = QApplication(sys.argv)
     window = MainWindow()
     window.show()
+    window.start()  # 파티 폴링 등 백그라운드 작업 시작
     sys.exit(app.exec())
