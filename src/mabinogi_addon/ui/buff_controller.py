@@ -71,11 +71,13 @@ class BuffController(QObject):
         show_duration: dict[str, bool],
         on_alert=None,
         watcher: WindowWatcher | None = None,
+        blink_enabled: dict[str, bool] | None = None,
     ) -> None:
         super().__init__()
         self._overlay = overlay
         self._catalog = catalog  # id -> BuffDef
         self._show_duration = show_duration
+        self._blink_enabled = blink_enabled or {}
         self._on_alert = on_alert
         self._watcher = watcher or AlwaysActiveWatcher()
         self._worker: _TrackWorker | None = None
@@ -100,14 +102,20 @@ class BuffController(QObject):
         """지속시간 표시 설정 갱신(실행 중 폼 변경 반영)."""
         self._show_duration = show_duration
 
+    def set_blink_enabled(self, blink_enabled: dict[str, bool]) -> None:
+        """점멸 설정 갱신(실행 중 폼 변경 반영)."""
+        self._blink_enabled = blink_enabled
+
     def build_items(self, entries) -> list[OverlayItem]:
         items: list[OverlayItem] = []
         for buff_id, text, blinking in overlay_spec(entries, self._show_duration):
             buff = self._catalog.get(buff_id)
             if buff is None:
                 continue
+            # 임박(alerting)이어도 '점멸' 끈 버프는 깜빡이지 않는다.
+            blink = blinking and self._blink_enabled.get(buff_id, True)
             pixmap = QPixmap(str(buff.display_image or buff.match_icon))
-            items.append(OverlayItem(pixmap, text, blinking))
+            items.append(OverlayItem(pixmap, text, blink))
         return items
 
     def _on_updated(self, entries) -> None:
