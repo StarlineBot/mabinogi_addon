@@ -13,6 +13,27 @@ from PySide6.QtCore import QRect, Qt, QTimer
 from PySide6.QtGui import QColor, QFont, QPainter, QPixmap
 from PySide6.QtWidgets import QWidget
 
+from ..duration import format_duration
+
+
+def overlay_spec(
+    entries, show_duration: dict[str, bool]
+) -> list[tuple[str, str | None, bool]]:
+    """엔진 결과(OverlayEntry) → (buff_id, 표시할 시간 문자열|None, 점멸) 목록.
+
+    지속시간 표시를 끈 버프나 판독값 없는 버프는 시간 None(칸만 비움).
+    """
+    specs: list[tuple[str, str | None, bool]] = []
+    for entry in entries:
+        show = show_duration.get(entry.buff_id, True)
+        text = (
+            format_duration(entry.remaining)
+            if show and entry.remaining is not None
+            else None
+        )
+        specs.append((entry.buff_id, text, entry.alerting))
+    return specs
+
 _ICON_BASE = 40  # 100% 기준 아이콘 변
 _GAP_BASE = 8
 _TEXT_BASE = 16  # 아이콘 아래 글자 칸 높이
