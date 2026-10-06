@@ -14,12 +14,15 @@ Windows 전용이라 dxcam import는 지연한다(맥/CI에선 create_region_vie
 
 from __future__ import annotations
 
+import logging
 import threading
 import time
 
 import numpy as np
 
 from .base import FrameSource, Region
+
+_log = logging.getLogger("mabinogi_addon.capture")
 
 # 전체 프레임을 다시 잡는 최소 간격(초). 두 영역이 한 틱 안에서 같은 프레임을 쓰게 한다.
 _MAX_AGE = 0.08
@@ -32,7 +35,9 @@ class _SharedLiveCamera:
     def __init__(self) -> None:
         import dxcam  # Windows 전용 (지연 import)
 
+        t = time.perf_counter()
         self._camera = dxcam.create(output_color="BGR")
+        _log.info("dxcam.create %.0fms", (time.perf_counter() - t) * 1000)
         self._frame_lock = threading.Lock()
         self._last_frame: np.ndarray | None = None
         self._last_ts = 0.0
@@ -56,14 +61,23 @@ class _SharedLiveCamera:
                 _SharedLiveCamera._instance = None
         # dxcam 해제(DXGI)는 느릴 수 있어 데몬 스레드로 → 종료/재시작을 막지 않는다.
         if camera is not None:
-            threading.Thread(target=camera.release, daemon=True).start()
+            def _rel() -> None:
+                t = time.perf_counter()
+                camera.release()
+                _log.info("dxcam release %.0fms", (time.perf_counter() - t) * 1000)
+
+            threading.Thread(target=_rel, daemon=True).start()
 
     def full_frame(self) -> np.ndarray | None:
         """전체 프레임. max_age 안에선 캐시 재사용, 새 프레임 없으면 직전 유지."""
         with self._frame_lock:
             now = time.monotonic()
             if self._camera is not None and now - self._last_ts >= _MAX_AGE:
+                t = time.perf_counter()
                 frame = self._camera.grab()  # 변화 없으면 None
+                dt = (time.perf_counter() - t) * 1000
+                if dt > 50:  # grab이 오래 걸리면(블로킹 의심) 경고
+                    _log.warning("dxcam grab %.0fms (느림)", dt)
                 self._last_ts = now
                 if frame is not None:
                     self._last_frame = frame

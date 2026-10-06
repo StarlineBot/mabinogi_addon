@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 from PySide6.QtCore import QTimer
@@ -28,6 +29,7 @@ from .party_tab import PartyTab
 from .settings_tab import SettingsTab
 
 LOGO_PATH = Path(__file__).resolve().parents[1] / "assets" / "logo.png"
+_log = logging.getLogger("mabinogi_addon.close")
 
 
 def app_icon() -> QIcon:
@@ -396,21 +398,33 @@ class MainWindow(QMainWindow):
         self._memo_timer.start()
 
     def closeEvent(self, event) -> None:  # noqa: N802 (Qt 시그니처)
-        # 종료 시 위치·고정 상태 저장(드래그 후 미저장 대비)
-        self._save_overlay_state()
-        self._save_debuff_overlay_state()
-        self._save_memo()  # 메모 내용·고정·글자크기 저장
-        self._memo_timer.stop()
-        self.party_tab.stop_polling(wait_ms=600)  # 종료는 빠르게(HTTP 중이면 포기)
+        import time
+
+        def _step(name, fn):
+            t = time.perf_counter()
+            fn()
+            _log.info("종료 단계 '%s' %.0fms", name, (time.perf_counter() - t) * 1000)
+
+        total = time.perf_counter()
+        _step("상태 저장", lambda: (
+            self._save_overlay_state(),
+            self._save_debuff_overlay_state(),
+            self._save_memo(),
+            self._memo_timer.stop(),
+        ))
+        _step("파티 폴링 정지", lambda: self.party_tab.stop_polling(wait_ms=600))
         # 두 캡처 워커에 먼저 정지 신호를 보내 병렬로 멈춘 뒤 각각 대기(합산 대신 겹침).
         for c in (self.buff_controller, self.debuff_controller):
             if c is not None:
                 c.request_stop()
         if self.buff_controller is not None:
-            self.buff_controller.stop()
+            _step("버프 추적 정지", self.buff_controller.stop)
         if self.debuff_controller is not None:
-            self.debuff_controller.stop()
-        self.buff_overlay.close()
-        self.debuff_overlay.close()
-        self.memo_overlay.close()
+            _step("디버프 추적 정지", self.debuff_controller.stop)
+        _step("오버레이 닫기", lambda: (
+            self.buff_overlay.close(),
+            self.debuff_overlay.close(),
+            self.memo_overlay.close(),
+        ))
+        _log.info("종료 총 %.0fms", (time.perf_counter() - total) * 1000)
         super().closeEvent(event)

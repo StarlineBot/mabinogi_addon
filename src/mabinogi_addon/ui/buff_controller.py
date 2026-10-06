@@ -10,7 +10,10 @@ FrameSource를 주입받으므로 Windows(dxcam)·개발(File) 모두 같은 코
 
 from __future__ import annotations
 
+import logging
 import time
+
+_log = logging.getLogger("mabinogi_addon.close")
 
 from PySide6.QtCore import QObject, QThread, Signal
 from PySide6.QtGui import QPixmap
@@ -118,12 +121,20 @@ class BuffController(QObject):
     def stop(self) -> None:
         if self._worker is not None:
             self._worker.stop()
-            self._worker.wait(2000)
-            self._worker = None
+            t = time.perf_counter()
+            ok = self._worker.wait(2000)
+            _log.info(
+                "워커 wait %.0fms (정상종료=%s)",
+                (time.perf_counter() - t) * 1000, ok,
+            )
+            if ok:
+                self._worker = None  # 정상 종료한 것만 참조 해제(아니면 유지해 파괴 방지)
         # 워커를 멈춘 뒤(캡처 중 아님) 소스를 닫는다 — dxcam 카메라를 제어된 시점에 해제
         # (안 닫으면 프로세스 종료 시점에 정리되며 종료가 느려진다).
-        if self._source is not None:
+        if self._worker is None and self._source is not None:
+            t = time.perf_counter()
             self._source.close()
+            _log.info("소스 close %.0fms", (time.perf_counter() - t) * 1000)
             self._source = None
 
     def set_show_duration(self, show_duration: dict[str, bool]) -> None:
