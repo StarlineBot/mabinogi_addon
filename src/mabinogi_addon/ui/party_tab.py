@@ -249,22 +249,25 @@ class PartyTab(QWidget):
 
     # ---- 키워드 ----
     def _build_keywords(self) -> QGroupBox:
-        box = QGroupBox("키워드 알림")
+        # 제목을 라벨로 만들어 그 '바로 옆'에 종 아이콘 토글을 둔다(테두리 제목 대신).
+        box = QGroupBox("")
         v = QVBoxLayout(box)
 
-        # 종 아이콘 토글(효과음 켜기/끄기). 상단 우측에 배치.
-        bell_row = QHBoxLayout()
-        bell_row.addStretch(1)
+        title_row = QHBoxLayout()
+        title = QLabel("키워드 알림")
+        title.setStyleSheet("font-weight:600;")
+        title_row.addWidget(title)
         self._alert_sound = config.load_party_alert_sound()
         self.alert_bell = QPushButton()
         self.alert_bell.setFlat(True)
-        self.alert_bell.setFixedSize(30, 26)
-        self.alert_bell.setStyleSheet("QPushButton { font-size:16px; border:none; }")
+        self.alert_bell.setFixedSize(26, 22)
+        self.alert_bell.setStyleSheet("QPushButton { font-size:15px; border:none; }")
         self.alert_bell.setToolTip("키워드 알림 효과음 켜기/끄기")
         self.alert_bell.clicked.connect(self._toggle_alert_sound)
         self._update_bell()
-        bell_row.addWidget(self.alert_bell)
-        v.addLayout(bell_row)
+        title_row.addWidget(self.alert_bell)
+        title_row.addStretch(1)
+        v.addLayout(title_row)
 
         add_row = QHBoxLayout()
         self.keyword_input = QLineEdit()
