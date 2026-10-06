@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -63,6 +64,39 @@ def load_debuff_catalog(icon_dir: Path = DEFAULT_DEBUFF_ICON_DIR) -> list[BuffDe
         BuffDef(id=key, name=key, match_icon=path, display_image=None)
         for key, path in sorted(icons.items())
     ]
+
+
+def register_buff(
+    name: str,
+    match_icon_src: Path,
+    display_image_src: Path | None = None,
+    *,
+    icon_dir: Path = DEFAULT_ICON_DIR,
+    image_dir: Path = DEFAULT_IMAGE_DIR,
+) -> str:
+    """새 버프 등록: 고른 파일을 카탈로그 폴더에 {name}.png로 복사. 반환=버프 id."""
+    name = name.strip()
+    if not name:
+        raise ValueError("이름이 비어 있습니다")
+    icon_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(match_icon_src, icon_dir / f"{name}.png")
+    if display_image_src is not None:
+        image_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(display_image_src, image_dir / f"{name}.png")
+    return name
+
+
+def delete_buff(
+    buff_id: str,
+    *,
+    icon_dir: Path = DEFAULT_ICON_DIR,
+    image_dir: Path = DEFAULT_IMAGE_DIR,
+) -> None:
+    """등록 버프 삭제: 해당 id의 매칭 아이콘·표시 이미지 파일을 지운다."""
+    for directory in (icon_dir, image_dir):
+        for path in directory.glob("*.png"):
+            if _stem(path) == buff_id:
+                path.unlink()
 
 
 def load_template(path: Path) -> np.ndarray:

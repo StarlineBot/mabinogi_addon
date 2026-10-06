@@ -11,20 +11,23 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtCore import QSize, Qt
-from PySide6.QtGui import QAction, QIcon, QPixmap
+from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
+    QFileDialog,
     QHBoxLayout,
+    QInputDialog,
     QLineEdit,
     QListWidget,
     QListWidgetItem,
-    QMenu,
+    QMessageBox,
     QPushButton,
     QSpinBox,
     QVBoxLayout,
     QWidget,
 )
 
+from .. import catalog as catalog_mod
 from .. import config
 from ..catalog import BuffDef, load_catalog
 from .widgets import hint_label, icon_slot, section_label
@@ -114,20 +117,20 @@ class BuffTab(QWidget):
         v.addWidget(self.buff_list, 1)
 
         order_row = QHBoxLayout()
+        order_row.setSpacing(4)
         self.add_btn = QPushButton("＋")
-        self.add_btn.setToolTip("숨긴 버프 다시 표시")
-        self.add_btn.clicked.connect(self._on_add)
+        self.add_btn.setToolTip("새 버프 등록")
+        self.add_btn.clicked.connect(self._on_register)
         self.del_btn = QPushButton("－")
-        self.del_btn.setToolTip("오버레이에서 숨김")
-        self.del_btn.clicked.connect(self._on_hide)
+        self.del_btn.setToolTip("선택한 버프 삭제")
+        self.del_btn.clicked.connect(self._on_delete)
         self.up_btn = QPushButton("▲")
         self.up_btn.clicked.connect(lambda: self._move(-1))
         self.down_btn = QPushButton("▼")
         self.down_btn.clicked.connect(lambda: self._move(1))
+        # 목록 폭에 꽉 차게 4등분(균등 신축)
         for b in (self.add_btn, self.del_btn, self.up_btn, self.down_btn):
-            b.setFixedWidth(46)
-            order_row.addWidget(b)
-        order_row.addStretch(1)
+            order_row.addWidget(b, 1)
         v.addLayout(order_row)
         return panel
 
@@ -160,36 +163,53 @@ class BuffTab(QWidget):
         item = self.buff_list.currentItem()
         return item.data(Qt.ItemDataRole.UserRole) if item else None
 
-    # ---- 순서/표시 ----
-    def _on_add(self) -> None:
-        hidden = [
-            bid
-            for bid in self._catalog
-            if bid != ANCHOR_ID and bid not in self._order
-        ]
-        if not hidden:
+    # ---- 등록/삭제/순서 ----
+    def _on_register(self) -> None:
+        """새 버프 등록: 이름 + 매칭 아이콘 파일 + (선택)표시 이미지 파일."""
+        name, ok = QInputDialog.getText(self, "새 버프 등록", "버프 이름")
+        name = name.strip()
+        if not ok or not name:
             return
-        menu = QMenu(self)
-        for bid in sorted(hidden):
-            act: QAction = menu.addAction(self._catalog[bid].name)
-            act.setData(bid)
-        chosen = menu.exec(self.add_btn.mapToGlobal(self.add_btn.rect().bottomLeft()))
-        if chosen is None:
+        if name in self._catalog or name == ANCHOR_ID:
+            QMessageBox.warning(self, "새 버프 등록", f"'{name}'은 이미 있습니다.")
             return
-        bid = chosen.data()
-        self._settings[bid].hidden = False
-        self._order.append(bid)
-        self._current = bid
-        self._save()
-        self._rebuild_list()
+        match_path, _ = QFileDialog.getOpenFileName(
+            self, "매칭 아이콘 선택 (상태창 아이콘)", "", "이미지 (*.png)"
+        )
+        if not match_path:
+            return
+        display_path, _ = QFileDialog.getOpenFileName(
+            self, "표시 이미지 선택 (선택, 취소 가능)", "", "이미지 (*.png)"
+        )
+        catalog_mod.register_buff(
+            name, Path(match_path), Path(display_path) if display_path else None
+        )
+        self._reload_catalog(select=name)
 
-    def _on_hide(self) -> None:
+    def _on_delete(self) -> None:
         bid = self._current_id()
-        if bid is None or bid == ANCHOR_ID or bid not in self._order:
+        if bid is None or bid == ANCHOR_ID:
             return
-        self._settings[bid].hidden = True
-        self._order.remove(bid)
+        box = QMessageBox(self)
+        box.setWindowTitle("버프 삭제")
+        box.setText(f"'{bid}' 버프를 삭제할까요?\n(매칭 아이콘·표시 이미지 파일이 삭제됩니다)")
+        yes = box.addButton("예", QMessageBox.ButtonRole.YesRole)
+        box.addButton("아니오", QMessageBox.ButtonRole.NoRole)
+        box.exec()
+        if box.clickedButton() is not yes:
+            return
+        catalog_mod.delete_buff(bid)
+        self._settings.pop(bid, None)
+        if bid in self._order:
+            self._order.remove(bid)
         self._current = None
+        self._reload_catalog()
+
+    def _reload_catalog(self, select: str | None = None) -> None:
+        """파일 변경(등록/삭제) 후 카탈로그·상태 재적재."""
+        self._catalog = {b.id: b for b in load_catalog()}
+        self._settings, self._order = self._load_state()
+        self._current = select
         self._save()
         self._rebuild_list()
 
