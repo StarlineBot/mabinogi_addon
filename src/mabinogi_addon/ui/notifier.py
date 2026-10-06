@@ -17,6 +17,8 @@ from PySide6.QtCore import QObject, QUrl
 from ..config import PROJECT_ROOT
 
 SOUND_DIR = PROJECT_ROOT / "tests" / "data" / "default"
+# 파티 키워드 알림 효과음(있으면 재생, 없으면 호출 측에서 시스템 비프로 폴백).
+PARTY_ALERT_FILE = SOUND_DIR / "파티 알림.mp3"
 
 # buff_id → 사운드 파일명(개발 자산). 배포 때 패키지 자산으로 옮긴다.
 DEFAULT_SOUNDS: dict[str, str] = {

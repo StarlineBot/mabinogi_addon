@@ -10,6 +10,8 @@ from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtGui import QBrush, QColor
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QApplication,
+    QCheckBox,
     QGroupBox,
     QHBoxLayout,
     QHeaderView,
@@ -31,6 +33,7 @@ from .. import config
 from ..party.models import Recruit
 from ..party.service import build_board, humanize_age
 from ..party.worker import PartyWorker
+from .notifier import PARTY_ALERT_FILE, SoundNotifier
 from .toast import show_toast
 from .widgets import hint_label
 
@@ -100,6 +103,7 @@ class PartyTab(QWidget):
         self._keywords, self._excludes = config.load_party_lists()
         self._worker: PartyWorker | None = None
         self._last_raw: list[dict] = []  # 마지막 거뿔 원본(즉시 재필터용)
+        self._alert_sound = SoundNotifier({"party": PARTY_ALERT_FILE})
 
         root = QVBoxLayout(self)
         root.setContentsMargins(12, 12, 12, 12)
@@ -270,8 +274,15 @@ class PartyTab(QWidget):
         btn_row.addStretch(1)
         v.addLayout(btn_row)
 
+        self.alert_sound_check = QCheckBox("키워드 알림 효과음")
+        self.alert_sound_check.setChecked(config.load_party_alert_sound())
+        self.alert_sound_check.toggled.connect(config.save_party_alert_sound)
+        v.addWidget(self.alert_sound_check)
+
         v.addWidget(
-            hint_label("키워드가 뜨면 화면 우측 하단에 토스트 알림 (5초) · 항목 위 X로 삭제")
+            hint_label(
+                "키워드가 뜨면 화면 우측 하단에 토스트 + 효과음(트레이·게임 중에도) · 항목 위 X로 삭제"
+            )
         )
         return box
 
@@ -401,6 +412,9 @@ class PartyTab(QWidget):
             if part
         )
         show_toast(f"🔔 파티모집 · '{keyword}'", f"{recruit.content}\n{meta}")
+        # 효과음: 파일 있으면 재생, 없으면 시스템 비프로 폴백(토스트와 함께 항상 알림).
+        if self.alert_sound_check.isChecked() and not self._alert_sound.play("party"):
+            QApplication.beep()
 
     def _on_status(self, text: str) -> None:
         self.status_label.setText(text or "실행 중 · 5초마다 갱신")

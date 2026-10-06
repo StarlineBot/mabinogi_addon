@@ -68,6 +68,24 @@ def load_party_lists() -> tuple[list[str], list[str]]:
     return keywords, excludes
 
 
+def load_party_alert_sound(path: Path = LOCAL_CONFIG_PATH) -> bool:
+    """키워드 알림 효과음 사용 여부(기본 켜짐)."""
+    data = _read_local_config(path)
+    party = data.get("party", {}) if isinstance(data.get("party"), dict) else {}
+    v = party.get("alertSound")
+    return bool(v) if isinstance(v, bool) else True
+
+
+def save_party_alert_sound(on: bool, path: Path = LOCAL_CONFIG_PATH) -> None:
+    data = _read_local_config(path)
+    party = data.get("party")
+    if not isinstance(party, dict):
+        party = {}
+    party["alertSound"] = bool(on)
+    data["party"] = party
+    _write_local_config(data, path)
+
+
 def save_party_lists(keywords: list[str], excludes: list[str]) -> None:
     """키워드·제외 목록을 로컬 설정에 저장(다른 설정은 보존)."""
     data = _read_local_config()

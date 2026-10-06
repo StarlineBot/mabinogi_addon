@@ -66,8 +66,6 @@ class SettingsTab(QWidget):
             lambda on: config.save_general_flag(_TRAY_MINIMIZE, on)
         )
         v.addWidget(self._min_tray)
-
-        v.addWidget(_checked("게임 비활성 중에도 소리 알림"))  # (미연결)
         return box
 
     # ---- 게임 창 인식(포그라운드 판정 대상) ----
