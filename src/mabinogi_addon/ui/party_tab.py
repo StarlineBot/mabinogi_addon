@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
 
 from .. import config
 from ..party.models import Recruit
+from ..party.service import humanize_age
 from ..party.worker import PartyWorker
 from .toast import show_toast
 from .widgets import hint_label
@@ -54,8 +55,8 @@ class PartyTab(QWidget):
         box = QGroupBox("파티모집현황 (하프 서버)")
         v = QVBoxLayout(box)
 
-        self.table = QTableWidget(0, 4)
-        self.table.setHorizontalHeaderLabels(["채널", "파티장", "제목", "인원"])
+        self.table = QTableWidget(0, 5)
+        self.table.setHorizontalHeaderLabels(["채널", "파티장", "제목", "인원", "시간"])
         self.table.verticalHeader().setVisible(False)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
@@ -67,6 +68,7 @@ class PartyTab(QWidget):
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
         v.addWidget(self.table)
 
         self.status_label = hint_label("대기 중 · 탐지 시작 시 10초마다 갱신")
@@ -86,10 +88,15 @@ class PartyTab(QWidget):
             count.setTextAlignment(
                 Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
             )
+            age = QTableWidgetItem(humanize_age(recruit.date_send))
+            age.setTextAlignment(
+                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+            )
+            age.setForeground(QBrush(_DIM))  # 시각은 항상 흐리게(보조 정보)
 
-            items = [channel, leader, title, count]
+            items = [channel, leader, title, count, age]
             for col, item in enumerate(items):
-                if recruit.done:
+                if recruit.done and col != 4:
                     item.setForeground(QBrush(_DIM))
                 self.table.setItem(row, col, item)
 
@@ -212,11 +219,17 @@ class PartyTab(QWidget):
         self._worker = None
 
     def _on_alert(self, keyword: str, recruit: Recruit) -> None:
-        channel = f"채널 {recruit.channel}"
-        show_toast(
-            f"🔔 파티모집 · '{keyword}'",
-            f"{recruit.content}\n{recruit.character_name} · {channel} · {recruit.headcount}",
+        meta = " · ".join(
+            part
+            for part in (
+                recruit.character_name,
+                f"채널 {recruit.channel}",
+                recruit.headcount,
+                humanize_age(recruit.date_send),
+            )
+            if part
         )
+        show_toast(f"🔔 파티모집 · '{keyword}'", f"{recruit.content}\n{meta}")
 
     def _on_status(self, text: str) -> None:
         self.status_label.setText(text or "실행 중 · 10초마다 갱신")

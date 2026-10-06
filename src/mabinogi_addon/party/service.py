@@ -47,6 +47,25 @@ def build_board(
     return top
 
 
+def humanize_age(date_send: str, now: datetime | None = None) -> str:
+    """발송 시각을 상대 표기로. 예: "방금", "3분 전", "1시간 전". 파싱 불가면 빈 문자열."""
+    try:
+        sent = datetime.fromisoformat(date_send)
+    except ValueError:
+        return ""
+    if sent.tzinfo is None:
+        sent = sent.replace(tzinfo=KST)
+    now = now or datetime.now(KST)
+    seconds = max(0, (now - sent).total_seconds())
+    if seconds < 60:
+        return "방금"
+    if seconds < 3600:
+        return f"{int(seconds // 60)}분 전"
+    if seconds < 86400:
+        return f"{int(seconds // 3600)}시간 전"
+    return f"{int(seconds // 86400)}일 전"
+
+
 def _is_fresh(date_send: str, now: datetime, minutes: int) -> bool:
     try:
         sent = datetime.fromisoformat(date_send)
