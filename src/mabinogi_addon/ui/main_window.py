@@ -62,9 +62,11 @@ class MainWindow(QMainWindow):
         self._watcher = create_window_watcher()  # 포그라운드 감지(맥=항상 활성)
         self._notifier = SoundNotifier(default_sound_map())
         self._sound_ids: set[str] = set()  # 소리 알림 켠 버프(알림 때 재생)
+        self._restoring = False  # 복원 중엔 상태 저장 안 함
         self.buff_tab.lock_toggled.connect(self._on_overlay_lock)
         self.buff_tab.tracking_changed.connect(self._on_tracking_changed)
         self.buff_tab.catalog_changed.connect(self._on_catalog_changed)
+        self.buff_overlay.moved.connect(self._save_overlay_state)
 
     def _on_overlay_lock(self, locked: bool) -> None:
         self.buff_overlay.set_locked(locked)
@@ -72,14 +74,37 @@ class MainWindow(QMainWindow):
             self.buff_overlay.hide()  # 고정+비어있음 → 숨김
         else:
             self.buff_overlay.show()
+        self._save_overlay_state()
+
+    def _save_overlay_state(self) -> None:
+        """현재 오버레이 위치·고정 상태를 저장(복원 중엔 생략)."""
+        if self._restoring:
+            return
+        pos = self.buff_overlay.pos()
+        config.save_overlay_state(
+            pos.x(), pos.y(), self.buff_overlay.locked, "buffTracker"
+        )
 
     def start(self) -> None:
         """탐지/폴링 시작. 실제 앱 실행(main)에서만 호출한다(스크린샷 렌더 땐 미호출)."""
         self.party_tab.start_polling()
-        # 시작부터 보이게(해제=드래그로 위치 잡기). 빈 목록으로 플레이스홀더 크기 확정.
+        # 빈 목록으로 플레이스홀더 크기 확정 후, 저장된 위치·고정 상태 복원.
         self.buff_overlay.set_items([])
-        self.buff_overlay.show()
+        self._restore_overlay_state()
         self._start_buff_tracking()
+
+    def _restore_overlay_state(self) -> None:
+        """저장된 오버레이 위치·고정 상태 복원. 없으면 해제 상태로 보이게."""
+        self._restoring = True
+        try:
+            state = config.load_overlay_state("buffTracker")
+            if state and "x" in state and "y" in state:
+                self.buff_overlay.move(int(state["x"]), int(state["y"]))
+            locked = bool(state.get("locked")) if state else False
+            # 버튼 UI 동기화 + lock_toggled 방출(→ _on_overlay_lock가 가시성 처리)
+            self.buff_tab.set_lock_state(locked)
+        finally:
+            self._restoring = False
 
     def _compute_tracking(
         self, catalog
@@ -190,6 +215,7 @@ class MainWindow(QMainWindow):
             self._start_buff_tracking()
 
     def closeEvent(self, event) -> None:  # noqa: N802 (Qt 시그니처)
+        self._save_overlay_state()  # 종료 시 위치·고정 상태 저장(드래그 후 미저장 대비)
         self.party_tab.stop_polling()
         if self.buff_controller is not None:
             self.buff_controller.stop()

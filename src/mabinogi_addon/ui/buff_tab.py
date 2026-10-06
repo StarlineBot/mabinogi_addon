@@ -161,6 +161,13 @@ class BuffTab(QWidget):
         self.lock_btn.setText("오버레이 고정됨" if locked else "오버레이 고정")
         self.lock_toggled.emit(locked)
 
+    def set_lock_state(self, locked: bool) -> None:
+        """저장된 고정 상태 복원(버튼 UI 동기화 + 적용)."""
+        self.lock_btn.blockSignals(True)
+        self.lock_btn.setChecked(locked)
+        self.lock_btn.blockSignals(False)
+        self._on_lock_toggled(locked)  # 텍스트 갱신 + lock_toggled 방출(→ 오버레이 적용)
+
     # ---- 영역 지정 ----
     def _update_region_hint(self) -> None:
         region = config.load_capture_region("buffTracker")

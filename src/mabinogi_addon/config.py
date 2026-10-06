@@ -182,6 +182,31 @@ def save_capture_region(
     _write_local_config(data, path)
 
 
+def load_overlay_state(
+    section: str = "buffTracker", path: Path = LOCAL_CONFIG_PATH
+) -> dict | None:
+    """저장된 오버레이 상태 {x,y,locked} 또는 None."""
+    sec = _read_local_config(path).get(section) or {}
+    state = sec.get("overlay")
+    return state if isinstance(state, dict) else None
+
+
+def save_overlay_state(
+    x: int,
+    y: int,
+    locked: bool,
+    section: str = "buffTracker",
+    path: Path = LOCAL_CONFIG_PATH,
+) -> None:
+    data = _read_local_config(path)
+    sec = data.get(section)
+    if not isinstance(sec, dict):
+        sec = {}
+    sec["overlay"] = {"x": x, "y": y, "locked": locked}
+    data[section] = sec
+    _write_local_config(data, path)
+
+
 def load_debuff_settings(path: Path = LOCAL_CONFIG_PATH) -> list[BuffSettings]:
     """디버프 설정(이름·노출 여부·순서). 지속시간·알림은 쓰지 않는다."""
     return _load_settings("debuffTracker", "debuffs", path)

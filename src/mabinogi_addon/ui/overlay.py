@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from PySide6.QtCore import QRect, Qt, QTimer
+from PySide6.QtCore import QRect, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QPainter, QPixmap
 from PySide6.QtWidgets import QWidget
 
@@ -48,6 +48,8 @@ class OverlayItem:
 
 
 class BuffOverlay(QWidget):
+    moved = Signal()  # 드래그로 위치가 바뀜 → main이 저장
+
     def __init__(self, scale: float = 1.5) -> None:
         super().__init__(
             None,
@@ -93,7 +95,10 @@ class BuffOverlay(QWidget):
             event.accept()
 
     def mouseReleaseEvent(self, event) -> None:  # noqa: N802
+        was_dragging = self._drag_offset is not None
         self._drag_offset = None
+        if was_dragging:
+            self.moved.emit()
 
     def set_scale(self, scale: float) -> None:
         self._scale = max(0.5, min(3.0, scale))

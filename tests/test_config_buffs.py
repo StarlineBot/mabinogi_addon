@@ -2,8 +2,21 @@ from mabinogi_addon.config import (
     AlertConfig,
     BuffSettings,
     load_buff_settings,
+    load_overlay_state,
     save_buff_settings,
+    save_overlay_state,
 )
+
+
+def test_overlay_state_round_trip(tmp_path):
+    path = tmp_path / "config.local.json"
+    assert load_overlay_state("buffTracker", path) is None
+    save_overlay_state(321, 654, True, "buffTracker", path)
+    assert load_overlay_state("buffTracker", path) == {
+        "x": 321,
+        "y": 654,
+        "locked": True,
+    }
 
 
 def test_round_trip(tmp_path):
