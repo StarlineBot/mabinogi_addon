@@ -17,19 +17,19 @@ import numpy as np
 from ..detect import match_icon
 from .engine import OverlayEntry, TickResult
 
-# 매칭 전 영역을 이 높이로 정규화한다(디버프 줄 아이콘≈영역 높이로 가정).
-# 템플릿도 같은 높이로 맞춰 matchTemplate 크기 불일치를 없애고, 좁은 영역이라 빠르다.
-_NORM_H = 18
-# 아이콘이 영역을 꽉 채우거나(1.0) 위아래 여백이 좀 있는 경우(0.75)까지 커버.
-_VARIANT_FACTORS = (1.0, 0.75)
-# 디버프는 아이콘이 작고 숫자(4M 등)가 겹쳐 실데이터 점수가 ~0.65~0.84로 낮게 나온다.
-# (안 걸린 것은 ≤0.56) → 버프(0.8)보다 낮은 전용 임계값을 쓴다.
-DEBUFF_THRESHOLD = 0.6
+# 보스 디버프 줄 아이콘의 실제 화면 높이(px). 2560x1440 기준 실측 ≈16.
+_ONSCREEN_ICON_PX = 16
+# 매칭은 이 높이로 축소해서 한다: 비용↓(영역을 크게 잡아도 됨) + 숫자 겹침 노이즈 완화.
+_MATCH_ICON_PX = 8
+# 영역과 템플릿을 같은 비율로 축소 → 화면 아이콘이 _MATCH_ICON_PX가 되게.
+_DOWNSCALE = _MATCH_ICON_PX / _ONSCREEN_ICON_PX  # 0.5
+# 축소 매칭 실데이터: 걸린 디버프 ≥0.70, 안 걸린 것 ≤0.65 → 0.67로 가른다.
+DEBUFF_THRESHOLD = 0.67
 
 
 def _variant(template: np.ndarray, target_h: int) -> np.ndarray:
     h, w = template.shape[:2]
-    tw = max(6, round(w * target_h / h))
+    tw = max(4, round(w * target_h / h))
     return cv2.resize(template, (tw, target_h), interpolation=cv2.INTER_AREA)
 
 
@@ -46,10 +46,9 @@ class DebuffEngine:
         self._order = list(order)
         self._threshold = threshold
         self._reappear = reappear_sec
-        # 정규화 높이 기준 배율 변형을 미리 생성(틱마다 resize 비용 제거).
+        # 템플릿을 매칭 크기(축소 후 화면 아이콘 크기)로 미리 맞춘다.
         self._variants = {
-            bid: [_variant(t, max(6, round(_NORM_H * f))) for f in _VARIANT_FACTORS]
-            for bid, t in templates.items()
+            bid: [_variant(t, _MATCH_ICON_PX)] for bid, t in templates.items()
         }
         # shown=True면 '안 걸림' → 오버레이 표시. 초기엔 전부 표시(보스 전 상태).
         self._shown = {bid: True for bid in templates}
@@ -59,48 +58,41 @@ class DebuffEngine:
         self._order = list(order)
 
     @staticmethod
-    def _normalize(region: np.ndarray) -> np.ndarray:
-        """영역을 고정 높이(_NORM_H)로 축소 — 아이콘 크기 정규화 + 매칭 비용 절감."""
-        h = region.shape[0]
-        if h == _NORM_H or h == 0:
+    def _scale(region: np.ndarray) -> np.ndarray:
+        """영역을 _DOWNSCALE로 축소 — 화면 아이콘이 _MATCH_ICON_PX가 되도록."""
+        if region.shape[0] == 0 or region.shape[1] == 0:
             return region
-        scale = _NORM_H / h
         return cv2.resize(
             region,
-            (max(1, round(region.shape[1] * scale)), _NORM_H),
+            (
+                max(1, round(region.shape[1] * _DOWNSCALE)),
+                max(1, round(region.shape[0] * _DOWNSCALE)),
+            ),
             interpolation=cv2.INTER_AREA,
         )
 
     def best_scores(self, region: np.ndarray) -> dict[str, float]:
         """각 디버프의 최고 매칭 점수(진단용). 임계 판정 없이 점수만."""
-        norm = self._normalize(region)
+        small = self._scale(region)
         out: dict[str, float] = {}
-        for bid, variants in self._variants.items():
-            best = -1.0
-            for variant in variants:
-                if (
-                    variant.shape[0] <= norm.shape[0]
-                    and variant.shape[1] <= norm.shape[1]
-                ):
-                    best = max(best, match_icon(norm, variant).score)
-            out[bid] = best
+        for bid in self._variants:
+            out[bid] = self._best(small, bid)
         return out
 
-    def _detected(self, norm: np.ndarray, bid: str) -> bool:
-        """정규화 영역에서 배율 변형 중 하나라도 임계 이상이면 '걸림'."""
+    def _best(self, small: np.ndarray, bid: str) -> float:
+        best = -1.0
         for variant in self._variants.get(bid, ()):
             if (
-                variant.shape[0] <= norm.shape[0]
-                and variant.shape[1] <= norm.shape[1]
-                and match_icon(norm, variant).present(self._threshold)
+                variant.shape[0] <= small.shape[0]
+                and variant.shape[1] <= small.shape[1]
             ):
-                return True
-        return False
+                best = max(best, match_icon(small, variant).score)
+        return best
 
     def tick(self, region: np.ndarray, now: float) -> TickResult:
-        norm = self._normalize(region)
+        small = self._scale(region)
         for bid in self._templates:
-            detected = self._detected(norm, bid)
+            detected = self._best(small, bid) >= self._threshold
             if detected:
                 self._shown[bid] = False  # 걸림 → 즉시 숨김
                 self._absent_since[bid] = None

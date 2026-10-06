@@ -21,7 +21,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from mabinogi_addon import config  # noqa: E402
 from mabinogi_addon.catalog import build_templates, load_debuff_catalog  # noqa: E402
 from mabinogi_addon.image_io import imread  # noqa: E402
-from mabinogi_addon.tracker.debuff_engine import DebuffEngine  # noqa: E402
+from mabinogi_addon.tracker.debuff_engine import (  # noqa: E402
+    DEBUFF_THRESHOLD,
+    DebuffEngine,
+)
 
 
 def main(argv: list[str]) -> int:
@@ -51,9 +54,9 @@ def main(argv: list[str]) -> int:
     engine = DebuffEngine(build_templates(catalog), [b.id for b in catalog])
     scores = engine.best_scores(crop)
 
-    print("\n디버프별 최고 매칭 점수(높은 순):")
+    print(f"\n디버프별 최고 매칭 점수(높은 순, 임계값 {DEBUFF_THRESHOLD}):")
     for bid, score in sorted(scores.items(), key=lambda kv: kv[1], reverse=True):
-        mark = "◀ 감지" if score >= 0.8 else ""
+        mark = "◀ 감지" if score >= DEBUFF_THRESHOLD else ""
         print(f"  {score:5.2f}  {bid}  {mark}")
     return 0
 
