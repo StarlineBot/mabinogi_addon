@@ -1,0 +1,145 @@
+"""버프 상태 머신 + 내부 시계 (기획서 4.5).
+
+프레임마다 observe()로 관측을 넣는다. 시계 테스트를 위해 현재 시각(now, 초)을
+외부에서 주입한다(단조 시계 값).
+
+상태: ABSENT → ACTIVE → EXPIRING(만료임박: 점멸+소리 1회)
+- ABSENT→ACTIVE: appear_frames 연속 감지
+- ACTIVE→EXPIRING: 내부 시계 ≤ alert_before
+- EXPIRING→ACTIVE: 시간 증가(연장) 감지 → 알림 해제
+- ACTIVE/EXPIRING→ABSENT: 사라짐 판정
+내부 시계: 마지막 정상 판독값 − 경과시간. 알림은 내부 시계 기준(화면 안 보여도 울림).
+판정 불가(frame_valid=False: 앵커 미검출·게임 비활성): 상태 동결, 시계만 진행.
+"""
+
+from __future__ import annotations
+
+from enum import Enum, auto
+
+
+class State(Enum):
+    ABSENT = auto()
+    ACTIVE = auto()
+    EXPIRING = auto()
+
+
+class Event(Enum):
+    NONE = auto()
+    APPEARED = auto()
+    ALERT = auto()  # 만료임박 진입(점멸+소리 1회)
+    EXTENDED = auto()  # 연장 성공 → 알림 해제
+    EXPIRED = auto()  # 시간이 다 됨
+    RELEASED = auto()  # 중간 해제(시간 남았는데 사라짐)
+
+
+# 판독 지터(±1초)를 연장으로 오인하지 않도록 한 여유값
+_EXTEND_EPS = 2.0
+
+
+class BuffStateMachine:
+    def __init__(
+        self,
+        *,
+        alert_before: float = 30.0,
+        appear_frames: int = 3,
+        disappear_sec: float = 2.0,
+    ) -> None:
+        self.alert_before = alert_before
+        self.appear_frames = appear_frames
+        self.disappear_sec = disappear_sec
+
+        self.state = State.ABSENT
+        self._last_read: float | None = None  # 마지막 판독한 남은 시간
+        self._last_read_at: float | None = None  # 그때의 now
+        self._detections = 0
+        self._missing_since: float | None = None
+
+    # ---- 조회 ----
+    def remaining(self, now: float) -> float | None:
+        """내부 시계 기준 남은 시간(초). 판독값 없으면 None(무기한 버프 등)."""
+        if self._last_read is None or self._last_read_at is None:
+            return None
+        return self._last_read - (now - self._last_read_at)
+
+    @property
+    def alerting(self) -> bool:
+        return self.state is State.EXPIRING
+
+    # ---- 갱신 ----
+    def observe(
+        self,
+        *,
+        detected: bool,
+        reading: float | None,
+        now: float,
+        frame_valid: bool = True,
+    ) -> Event:
+        # 판정 불가: 아무 판단도 하지 않고 시계만 흐르게 둔다(상태 동결).
+        if not frame_valid:
+            return Event.NONE
+
+        if detected:
+            return self._on_detected(reading, now)
+        return self._on_missing(now)
+
+    def _on_detected(self, reading: float | None, now: float) -> Event:
+        self._missing_since = None
+        self._detections += 1
+        event = Event.NONE
+
+        if reading is not None:
+            prev = self.remaining(now)
+            self._last_read = reading
+            self._last_read_at = now
+            # 연장: 남은 시간이 유의미하게 늘었고 이미 임박 중이면 알림 해제
+            if (
+                self.state is State.EXPIRING
+                and prev is not None
+                and reading > prev + _EXTEND_EPS
+            ):
+                self.state = State.ACTIVE
+                return Event.EXTENDED
+
+        if self.state is State.ABSENT:
+            if self._detections >= self.appear_frames:
+                self.state = State.ACTIVE
+                event = Event.APPEARED
+            else:
+                return Event.NONE
+
+        return self._check_alert(now) or event
+
+    def _on_missing(self, now: float) -> Event:
+        self._detections = 0
+        if self.state is State.ABSENT:
+            return Event.NONE
+
+        if self._missing_since is None:
+            self._missing_since = now
+        remaining = self.remaining(now)
+
+        # 1) 내부 시계 소진 + 미감지 → 만료
+        if remaining is not None and remaining <= 0:
+            self._reset()
+            return Event.EXPIRED
+        # 2) 시간 남았는데 정상 프레임에서 disappear_sec 이상 연속 미감지 → 중간 해제
+        if now - self._missing_since >= self.disappear_sec:
+            self._reset()
+            return Event.RELEASED
+        return Event.NONE
+
+    def _check_alert(self, now: float) -> Event | None:
+        remaining = self.remaining(now)
+        if remaining is None:
+            return None  # 무기한 버프는 알림 없음
+        if self.state is State.ACTIVE and remaining <= self.alert_before:
+            self.state = State.EXPIRING
+            return Event.ALERT
+        return None
+
+    def _reset(self) -> None:
+        self.state = State.ABSENT
+        self._last_read = None
+        self._last_read_at = None
+        self._detections = 0
+        self._missing_since = None
