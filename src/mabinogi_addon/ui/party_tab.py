@@ -33,7 +33,8 @@ from .toast import show_toast
 from .widgets import hint_label
 
 _DIM = QColor("#9aa0a6")
-_ACCENT = QColor("#00B894")  # 키워드 매칭 강조색
+_ACCENT = QColor("#00D1A7")  # 키워드 매칭 강조색(왼쪽 바)
+_MATCH_BG = QColor("#17352f")  # 매칭 행 배경 띠(어두운 초록 틴트)
 
 
 class _ChipRow(QWidget):
@@ -162,17 +163,13 @@ class PartyTab(QWidget):
 
             matched = self._matches_keyword(recruit.content)
 
-            accent = QTableWidgetItem()
-            if matched:
-                accent.setBackground(QBrush(_ACCENT))  # 앞쪽 두꺼운 색 강조 바
+            accent = QTableWidgetItem()  # 0번: 왼쪽 세로 강조 바
             channel = QTableWidgetItem(f"채널 {recruit.channel}")
             leader = QTableWidgetItem(recruit.character_name)
-            title = QTableWidgetItem(("✅ " if recruit.done else "") + recruit.content)
+            title_text = ("✅ " if recruit.done else "") + recruit.content
             if matched:
-                font = title.font()
-                font.setBold(True)
-                title.setFont(font)
-                title.setForeground(QBrush(_ACCENT))
+                title_text = "🔔 " + title_text  # 매칭 표시(벨)
+            title = QTableWidgetItem(title_text)
             count = QTableWidgetItem(recruit.headcount)
             count.setTextAlignment(
                 Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
@@ -185,9 +182,17 @@ class PartyTab(QWidget):
 
             items = [accent, channel, leader, title, count, age]
             for col, item in enumerate(items):
-                # 완료 파티는 흐리게(단, 매칭 제목·시간·액센트는 유지)
-                if recruit.done and col not in (0, 3, 5) and not matched:
-                    item.setForeground(QBrush(_DIM))
+                if matched:
+                    if col == 0:
+                        item.setBackground(QBrush(_ACCENT))  # 왼쪽 강조 바
+                    else:
+                        item.setBackground(QBrush(_MATCH_BG))  # 행 전체 밝은 띠
+                        if col == 3:
+                            font = item.font()
+                            font.setBold(True)
+                            item.setFont(font)
+                elif recruit.done and col not in (0,):
+                    item.setForeground(QBrush(_DIM))  # 완료 파티 흐리게
                 self.table.setItem(row, col, item)
 
     def _matches_keyword(self, content: str) -> bool:
