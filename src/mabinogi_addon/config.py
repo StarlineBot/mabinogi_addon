@@ -78,6 +78,24 @@ def get_inquiry_webhook_url() -> str | None:
     return url.strip() if isinstance(url, str) and url.strip() else None
 
 
+def load_discord_user(path: Path = LOCAL_CONFIG_PATH) -> dict | None:
+    """로그인한 Discord 사용자 {id, name} 또는 None(비로그인)."""
+    u = _read_local_config(path).get("discordUser")
+    return u if isinstance(u, dict) and u.get("id") else None
+
+
+def save_discord_user(user_id: str, name: str, path: Path = LOCAL_CONFIG_PATH) -> None:
+    data = _read_local_config(path)
+    data["discordUser"] = {"id": str(user_id), "name": str(name)}
+    _write_local_config(data, path)
+
+
+def clear_discord_user(path: Path = LOCAL_CONFIG_PATH) -> None:
+    data = _read_local_config(path)
+    data.pop("discordUser", None)
+    _write_local_config(data, path)
+
+
 def load_party_lists() -> tuple[list[str], list[str]]:
     """(keywords, excludeLeaders)를 로컬 설정에서 읽는다."""
     data = _read_local_config()

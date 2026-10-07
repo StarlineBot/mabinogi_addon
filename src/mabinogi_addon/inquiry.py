@@ -36,12 +36,15 @@ def send_inquiry(
     *,
     category: str | None = None,
     log_text: str | None = None,
+    user_id: str | None = None,
     username: str | None = None,
     timeout: float = 5.0,
     urlopen=urllib.request.urlopen,
 ) -> None:
     """Discord 웹훅으로 문의를 전송. 실패하면 예외를 던진다.
 
+    user_id가 있으면(로그인) 글 끝에 <@id> 멘션을 넣어, 봇이 '이 글 = 이 사용자'로
+    연결해 제작자 답변을 그 사용자에게 DM할 수 있게 한다.
     urlopen은 테스트에서 가짜로 주입할 수 있다.
     """
     title = title.strip()
@@ -52,6 +55,8 @@ def send_inquiry(
         raise ValueError("문의 채널(웹훅)이 설정되지 않았습니다")
 
     full_title = (f"[{category}] {title}" if category else title)[:_TITLE_MAX]
+    if user_id:
+        content = f"{content}\n\n문의자: <@{user_id}>"
     body = content[:_CONTENT_MAX]
     log_file = None
     if log_text and log_text.strip():

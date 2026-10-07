@@ -60,6 +60,19 @@ def test_category_prefixes_title():
     assert sent["body"]["thread_name"] == "[버그 신고] 안 뜸"
 
 
+def test_user_id_adds_mention():
+    sent = {}
+
+    def fake_urlopen(req, timeout=None):
+        sent["body"] = json.loads(req.data.decode("utf-8"))
+        return _Resp(204)
+
+    send_inquiry(
+        "https://x", "제목", "내용", user_id="123456789", urlopen=fake_urlopen
+    )
+    assert "<@123456789>" in sent["body"]["content"]
+
+
 def test_attaches_log_as_multipart():
     captured = {}
 
