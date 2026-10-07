@@ -255,8 +255,10 @@ class SettingsTab(QWidget):
         except Exception:  # noqa: BLE001 — 포트 사용 중·네트워크 오류 등
             result = None
         if result:
+            _log.info("워커: login() 반환 성공 → UI로 전달")
             self._login_done.emit(True, result[0], result[1])
         else:
+            _log.info("워커: login() 반환 실패/None → UI로 전달")
             self._login_done.emit(False, "", "")
 
     def _on_login_done(self, ok: bool, user_id: str, name: str) -> None:
