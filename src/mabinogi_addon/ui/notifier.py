@@ -14,9 +14,9 @@ from pathlib import Path
 
 from PySide6.QtCore import QObject, QUrl
 
-from ..config import PROJECT_ROOT
+from .. import paths
 
-SOUND_DIR = PROJECT_ROOT / "tests" / "data" / "default"
+SOUND_DIR = paths.resource_dir() / "sounds"
 # 파티 키워드 알림 효과음(있으면 재생, 없으면 호출 측에서 시스템 비프로 폴백).
 PARTY_ALERT_FILE = SOUND_DIR / "파티 알림.mp3"
 

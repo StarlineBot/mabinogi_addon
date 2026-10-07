@@ -12,10 +12,13 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from . import paths
+
 # src/mabinogi_addon/config.py → 프로젝트 루트
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+PROJECT_ROOT = paths.project_root()
 ENV_PATH = PROJECT_ROOT / ".env"
-LOCAL_CONFIG_PATH = PROJECT_ROOT / "config.local.json"
+# 설정 파일: 개발=repo 루트(기존 유지), exe=사용자 데이터 폴더(paths.config_path).
+LOCAL_CONFIG_PATH = paths.config_path()
 
 # 앱 식별 정보(창 제목·트레이·제작자 표기)
 APP_NAME = "섯다라인 마비노기 애드온"
@@ -344,6 +347,30 @@ def save_memo(
 ) -> None:
     data = _read_local_config(path)
     data["memo"] = {"text": text, "locked": locked, "fontSize": font_size}
+    _write_local_config(data, path)
+
+
+def load_removed_defaults(
+    section: str = "buffTracker", path: Path = LOCAL_CONFIG_PATH
+) -> set[str]:
+    """사용자가 '지운' 기본(번들) id 집합. 목록에서 걸러내는 데 쓴다."""
+    sec = _read_local_config(path).get(section) or {}
+    r = sec.get("removedDefaults")
+    return {str(x) for x in r} if isinstance(r, list) else set()
+
+
+def add_removed_default(
+    item_id: str, section: str = "buffTracker", path: Path = LOCAL_CONFIG_PATH
+) -> None:
+    """기본 id를 '지움' 목록에 추가(배포돼도 계속 숨김 유지)."""
+    removed = load_removed_defaults(section, path)
+    removed.add(item_id)
+    data = _read_local_config(path)
+    sec = data.get(section)
+    if not isinstance(sec, dict):
+        sec = {}
+    sec["removedDefaults"] = sorted(removed)
+    data[section] = sec
     _write_local_config(data, path)
 
 

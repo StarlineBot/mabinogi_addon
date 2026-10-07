@@ -17,15 +17,20 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from .config import PROJECT_ROOT
+from . import paths
 from .image_io import imread
 
-DEFAULT_ICON_DIR = PROJECT_ROOT / "tests" / "data" / "icon"
-DEFAULT_IMAGE_DIR = PROJECT_ROOT / "tests" / "data" / "image"
-DEFAULT_DEBUFF_ICON_DIR = PROJECT_ROOT / "tests" / "data" / "debuff_icon"
+# 번들(기본) 자산 — 읽기전용, exe에 포함
+DEFAULT_ICON_DIR = paths.resource_dir() / "buff" / "icon"
+DEFAULT_IMAGE_DIR = paths.resource_dir() / "buff" / "image"
+DEFAULT_DEBUFF_ICON_DIR = paths.resource_dir() / "debuff" / "icon"
+# 사용자 커스텀 자산 — 쓰기 가능(사용자가 추가한 버프/디버프)
+USER_ICON_DIR = paths.user_data_dir() / "buff" / "icon"
+USER_IMAGE_DIR = paths.user_data_dir() / "buff" / "image"
+USER_DEBUFF_ICON_DIR = paths.user_data_dir() / "debuff" / "icon"
 # 새 버프/디버프 등록 시 쓰는 빈(none) placeholder
-NONE_MATCH_ICON = PROJECT_ROOT / "tests" / "data" / "default" / "none.png"
-NONE_DISPLAY_IMAGE = PROJECT_ROOT / "tests" / "data" / "default" / "none_enable.png"
+NONE_MATCH_ICON = paths.resource_dir() / "placeholder" / "none.png"
+NONE_DISPLAY_IMAGE = paths.resource_dir() / "placeholder" / "none_enable.png"
 
 
 def _stem(path: Path) -> str:
@@ -41,29 +46,33 @@ class BuffDef:
     display_image: Path | None  # 오버레이 표시용 (없으면 matchIcon 사용)
 
 
-def load_catalog(
-    icon_dir: Path = DEFAULT_ICON_DIR,
-    image_dir: Path = DEFAULT_IMAGE_DIR,
-) -> list[BuffDef]:
-    """matchIcon이 있는 버프만 id 순으로 반환. displayImage는 있으면 짝지운다."""
-    icons = {_stem(p): p for p in icon_dir.glob("*.png")}
-    images = {_stem(p): p for p in image_dir.glob("*.png")}
+def _collect(dirs, key_fn) -> dict[str, Path]:
+    """여러 폴더의 png를 key→경로로 모은다. 뒤 폴더(사용자)가 앞(기본)을 덮어쓴다."""
+    out: dict[str, Path] = {}
+    for directory in dirs:
+        for path in directory.glob("*.png"):
+            out[key_fn(path)] = path
+    return out
 
-    catalog = [
-        BuffDef(
-            id=key,
-            name=key,
-            match_icon=icon_path,
-            display_image=images.get(key),
-        )
+
+def load_catalog(
+    icon_dirs: tuple[Path, ...] = (DEFAULT_ICON_DIR, USER_ICON_DIR),
+    image_dirs: tuple[Path, ...] = (DEFAULT_IMAGE_DIR, USER_IMAGE_DIR),
+) -> list[BuffDef]:
+    """번들 기본 + 사용자 커스텀을 합쳐, matchIcon 있는 버프만 id 순으로 반환."""
+    icons = _collect(icon_dirs, _stem)
+    images = _collect(image_dirs, _stem)
+    return [
+        BuffDef(id=key, name=key, match_icon=icon_path, display_image=images.get(key))
         for key, icon_path in sorted(icons.items())
     ]
-    return catalog
 
 
-def load_debuff_catalog(icon_dir: Path = DEFAULT_DEBUFF_ICON_DIR) -> list[BuffDef]:
-    """디버프 매칭 아이콘 폴더 → 디버프 목록. (표시이미지 없음 → 오버레이는 matchIcon)"""
-    icons = {p.stem: p for p in icon_dir.glob("*.png")}
+def load_debuff_catalog(
+    icon_dirs: tuple[Path, ...] = (DEFAULT_DEBUFF_ICON_DIR, USER_DEBUFF_ICON_DIR),
+) -> list[BuffDef]:
+    """번들 기본 + 사용자 커스텀 디버프 목록. (표시이미지 없음 → 오버레이는 matchIcon)"""
+    icons = _collect(icon_dirs, lambda p: p.stem)
     return [
         BuffDef(id=key, name=key, match_icon=path, display_image=None)
         for key, path in sorted(icons.items())
@@ -75,10 +84,10 @@ def register_buff(
     match_icon_src: Path,
     display_image_src: Path | None = None,
     *,
-    icon_dir: Path = DEFAULT_ICON_DIR,
-    image_dir: Path = DEFAULT_IMAGE_DIR,
+    icon_dir: Path = USER_ICON_DIR,
+    image_dir: Path = USER_IMAGE_DIR,
 ) -> str:
-    """새 버프 등록: 고른 파일을 카탈로그 폴더에 {name}.png로 복사. 반환=버프 id."""
+    """새 버프 등록: 고른 파일을 사용자 폴더에 {name}.png로 복사. 반환=버프 id."""
     name = name.strip()
     if not name:
         raise ValueError("이름이 비어 있습니다")
@@ -90,46 +99,71 @@ def register_buff(
     return name
 
 
-def delete_buff(
-    buff_id: str,
-    *,
-    icon_dir: Path = DEFAULT_ICON_DIR,
-    image_dir: Path = DEFAULT_IMAGE_DIR,
-) -> None:
-    """등록 버프 삭제: 해당 id의 매칭 아이콘·표시 이미지 파일을 지운다."""
-    for directory in (icon_dir, image_dir):
+def _delete_matching(directories, buff_id: str, key_fn) -> None:
+    """여러 폴더에서 id가 일치하는 png 삭제. 읽기전용(번들/exe)이면 조용히 건너뜀."""
+    for directory in directories:
         for path in directory.glob("*.png"):
-            if _stem(path) == buff_id:
-                path.unlink()
+            if key_fn(path) == buff_id:
+                try:
+                    path.unlink()
+                except OSError:
+                    pass  # 번들(읽기전용) 기본 아이콘 — 삭제 불가
 
 
-def _existing_or(path_dir: Path, buff_id: str) -> Path:
-    """buff_id에 해당하는 기존 파일 경로(있으면), 없으면 {id}.png."""
-    for path in path_dir.glob("*.png"):
-        if _stem(path) == buff_id:
-            return path
-    return path_dir / f"{buff_id}.png"
+#: 삭제 시 지울 폴더(사용자 폴더만). 번들 기본은 절대 파일 삭제하지 않는다 —
+#  기본을 '지움'은 config의 removedDefaults로 기록해 목록에서 걸러낸다(배포돼도 유지).
+_BUFF_DELETE_DIRS = (USER_ICON_DIR, USER_IMAGE_DIR)
+DEBUFF_DELETE_DIRS = (USER_DEBUFF_ICON_DIR,)
 
 
-def set_match_icon(buff_id: str, src: Path, *, icon_dir: Path = DEFAULT_ICON_DIR) -> None:
-    """버프의 매칭 아이콘 파일을 교체."""
+def delete_buff(buff_id: str, *, dirs: tuple[Path, ...] = _BUFF_DELETE_DIRS) -> None:
+    """사용자가 추가/덮어쓴 파일만 지운다(번들 기본은 건드리지 않음)."""
+    _delete_matching(dirs, buff_id, _stem)
+
+
+def default_buff_ids() -> set[str]:
+    """번들(기본) 버프 id 집합."""
+    return {_stem(p) for p in DEFAULT_ICON_DIR.glob("*.png")}
+
+
+def default_debuff_ids() -> set[str]:
+    """번들(기본) 디버프 id 집합."""
+    return {p.stem for p in DEFAULT_DEBUFF_ICON_DIR.glob("*.png")}
+
+
+def available_catalog() -> list[BuffDef]:
+    """앱에서 실제로 쓰는 버프 목록(기본+커스텀 − 사용자가 지운 기본)."""
+    from . import config
+
+    removed = config.load_removed_defaults("buffTracker")
+    return [b for b in load_catalog() if b.id not in removed]
+
+
+def available_debuff_catalog() -> list[BuffDef]:
+    """앱에서 실제로 쓰는 디버프 목록(기본+커스텀 − 사용자가 지운 기본)."""
+    from . import config
+
+    removed = config.load_removed_defaults("debuffTracker")
+    return [b for b in load_debuff_catalog() if b.id not in removed]
+
+
+def set_match_icon(buff_id: str, src: Path, *, icon_dir: Path = USER_ICON_DIR) -> None:
+    """버프의 매칭 아이콘을 사용자 폴더에 저장(기본 아이콘이면 덮어쓰기=override)."""
     icon_dir.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(src, _existing_or(icon_dir, buff_id))
+    shutil.copyfile(src, icon_dir / f"{buff_id}.png")
 
 
 def set_display_image(
-    buff_id: str, src: Path, *, image_dir: Path = DEFAULT_IMAGE_DIR
+    buff_id: str, src: Path, *, image_dir: Path = USER_IMAGE_DIR
 ) -> None:
-    """버프의 표시 이미지 파일을 교체/추가."""
+    """버프의 표시 이미지를 사용자 폴더에 저장/추가."""
     image_dir.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(src, _existing_or(image_dir, buff_id))
+    shutil.copyfile(src, image_dir / f"{buff_id}.png")
 
 
-def clear_display_image(buff_id: str, *, image_dir: Path = DEFAULT_IMAGE_DIR) -> None:
-    """버프의 표시 이미지 파일 삭제(오버레이는 매칭 아이콘 사용)."""
-    for path in image_dir.glob("*.png"):
-        if _stem(path) == buff_id:
-            path.unlink()
+def clear_display_image(buff_id: str, *, image_dir: Path = USER_IMAGE_DIR) -> None:
+    """버프의 표시 이미지 삭제(사용자·기본 양쪽, 오버레이는 매칭 아이콘 사용)."""
+    _delete_matching({image_dir, DEFAULT_IMAGE_DIR}, buff_id, _stem)
 
 
 def load_template(path: Path) -> np.ndarray | None:

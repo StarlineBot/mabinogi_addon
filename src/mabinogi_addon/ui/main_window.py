@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
 
 from .. import config
 from ..capture import Region, create_live_source
-from ..catalog import build_templates, load_catalog, load_debuff_catalog
+from ..catalog import available_catalog, available_debuff_catalog, build_templates
 from ..system.window_watcher import create_window_watcher
 from ..tracker.debuff_engine import DebuffEngine
 from ..tracker.engine import BuffEngine
@@ -231,7 +231,7 @@ class MainWindow(QMainWindow):
         except Exception:  # noqa: BLE001 — dxcam 없음(맥 등)이면 라이브 미시작
             return
 
-        catalog = load_catalog()
+        catalog = available_catalog()
         catalog_by = {b.id: b for b in catalog}
         order, show_duration, alert_before, blink, alert_before2 = (
             self._compute_tracking(catalog)
@@ -278,7 +278,7 @@ class MainWindow(QMainWindow):
         if self._engine is None or self.buff_controller is None:
             return
         order, show_duration, alert_before, blink, alert_before2 = (
-            self._compute_tracking(load_catalog())
+            self._compute_tracking(available_catalog())
         )
         self._engine.set_order(order)
         self._engine.set_show_duration(show_duration)
@@ -324,7 +324,7 @@ class MainWindow(QMainWindow):
         except Exception:  # noqa: BLE001 — dxcam 없음(맥 등)
             return
 
-        catalog = load_debuff_catalog()
+        catalog = available_debuff_catalog()
         catalog_by = {b.id: b for b in catalog}
         self._debuff_engine = DebuffEngine(
             build_templates(catalog), self._debuff_order(catalog)
@@ -342,7 +342,7 @@ class MainWindow(QMainWindow):
     def _on_debuff_tracking_changed(self) -> None:
         if self._debuff_engine is None:
             return
-        self._debuff_engine.set_order(self._debuff_order(load_debuff_catalog()))
+        self._debuff_engine.set_order(self._debuff_order(available_debuff_catalog()))
 
     def _on_debuff_catalog_changed(self) -> None:
         self._start_debuff_tracking()

@@ -20,13 +20,13 @@ def test_register_and_delete(tmp_path):
     bid = register_buff("글렌", src_icon, src_img, icon_dir=icon_dir, image_dir=image_dir)
     assert bid == "글렌"
 
-    catalog = load_catalog(icon_dir=icon_dir, image_dir=image_dir)
+    catalog = load_catalog(icon_dirs=(icon_dir,), image_dirs=(image_dir,))
     by_id = {b.id: b for b in catalog}
     assert "글렌" in by_id
     assert by_id["글렌"].display_image is not None
 
-    delete_buff("글렌", icon_dir=icon_dir, image_dir=image_dir)
-    catalog = load_catalog(icon_dir=icon_dir, image_dir=image_dir)
+    delete_buff("글렌", dirs=(icon_dir, image_dir))
+    catalog = load_catalog(icon_dirs=(icon_dir,), image_dirs=(image_dir,))
     assert "글렌" not in {b.id for b in catalog}
 
 
@@ -36,7 +36,7 @@ def test_register_without_display(tmp_path):
     src_icon = tmp_path / "s.png"
     _png(src_icon, (1, 2, 3))
     register_buff("쿤", src_icon, None, icon_dir=icon_dir, image_dir=image_dir)
-    by_id = {b.id: b for b in load_catalog(icon_dir=icon_dir, image_dir=image_dir)}
+    by_id = {b.id: b for b in load_catalog(icon_dirs=(icon_dir,), image_dirs=(image_dir,))}
     assert by_id["쿤"].display_image is None
 
 

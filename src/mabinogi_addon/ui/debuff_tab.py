@@ -26,7 +26,7 @@ from PySide6.QtWidgets import (
 
 from .. import catalog as catalog_mod
 from .. import config
-from ..catalog import DEFAULT_DEBUFF_ICON_DIR, BuffDef, load_debuff_catalog
+from ..catalog import USER_DEBUFF_ICON_DIR, BuffDef, available_debuff_catalog
 from .buff_tab import _capture_icon_to, _pixmap
 from .widgets import hint_label, icon_slot, section_label
 
@@ -40,7 +40,7 @@ class DebuffTab(QWidget):
     def __init__(self) -> None:
         super().__init__()
         self._catalog: dict[str, BuffDef] = {
-            b.id: b for b in load_debuff_catalog()
+            b.id: b for b in available_debuff_catalog()
         }
         self._settings, self._order = self._load_state()
         self._current: str | None = None
@@ -211,10 +211,10 @@ class DebuffTab(QWidget):
             new_id,
             catalog_mod.NONE_MATCH_ICON,
             None,
-            icon_dir=DEFAULT_DEBUFF_ICON_DIR,
-            image_dir=DEFAULT_DEBUFF_ICON_DIR,
+            icon_dir=USER_DEBUFF_ICON_DIR,
+            image_dir=USER_DEBUFF_ICON_DIR,
         )
-        self._catalog = {b.id: b for b in load_debuff_catalog()}
+        self._catalog = {b.id: b for b in available_debuff_catalog()}
         self._settings, self._order = self._load_state()
         self._settings[new_id].name = "-"
         self._current = new_id
@@ -228,15 +228,20 @@ class DebuffTab(QWidget):
             return
         box = QMessageBox(self)
         box.setWindowTitle("디버프 삭제")
-        box.setText(f"'{did}' 디버프를 삭제할까요?\n(매칭 아이콘 파일이 삭제됩니다)")
+        is_default = did in catalog_mod.default_debuff_ids()
+        box.setText(
+            f"'{did}' 기본 디버프를 목록에서 뺄까요?\n(배포돼도 계속 숨겨집니다)"
+            if is_default
+            else f"'{did}' 디버프를 삭제할까요?\n(매칭 아이콘 파일이 삭제됩니다)"
+        )
         yes = box.addButton("예", QMessageBox.ButtonRole.YesRole)
         box.addButton("아니오", QMessageBox.ButtonRole.NoRole)
         box.exec()
         if box.clickedButton() is not yes:
             return
-        catalog_mod.delete_buff(
-            did, icon_dir=DEFAULT_DEBUFF_ICON_DIR, image_dir=DEFAULT_DEBUFF_ICON_DIR
-        )
+        if is_default:
+            config.add_removed_default(did, "debuffTracker")
+        catalog_mod.delete_buff(did, dirs=catalog_mod.DEBUFF_DELETE_DIRS)
         self._settings.pop(did, None)
         if did in self._order:
             self._order.remove(did)
@@ -244,7 +249,7 @@ class DebuffTab(QWidget):
         self._reload()
 
     def _reload(self, select: str | None = None) -> None:
-        self._catalog = {b.id: b for b in load_debuff_catalog()}
+        self._catalog = {b.id: b for b in available_debuff_catalog()}
         self._settings, self._order = self._load_state()
         self._current = select
         self._save()
@@ -345,7 +350,7 @@ class DebuffTab(QWidget):
         )
         if not path:
             return
-        catalog_mod.set_match_icon(did, Path(path), icon_dir=DEFAULT_DEBUFF_ICON_DIR)
+        catalog_mod.set_match_icon(did, Path(path), icon_dir=USER_DEBUFF_ICON_DIR)
         self._reload(select=did)
 
     def _capture_match_icon(self) -> None:
@@ -358,7 +363,7 @@ class DebuffTab(QWidget):
     def _on_match_captured(self, did: str, tmp: Path, ok: bool) -> None:
         if not ok or not tmp.exists():
             return
-        catalog_mod.set_match_icon(did, tmp, icon_dir=DEFAULT_DEBUFF_ICON_DIR)
+        catalog_mod.set_match_icon(did, tmp, icon_dir=USER_DEBUFF_ICON_DIR)
         self._reload(select=did)
 
     def _set_slot(self, slot, path: Path | None, placeholder: str) -> None:

@@ -28,7 +28,7 @@ from PySide6.QtWidgets import (
 
 from .. import catalog as catalog_mod
 from .. import config
-from ..catalog import BuffDef, load_catalog
+from ..catalog import BuffDef, available_catalog
 from .widgets import hint_label, icon_slot, section_label
 
 # 앵커로 고정 사용할 버프(항상 존재, 지속시간 없음 → 판정 기준)
@@ -76,7 +76,7 @@ class BuffTab(QWidget):
         super().__init__()
         from .notifier import default_sound_map
 
-        self._catalog: dict[str, BuffDef] = {b.id: b for b in load_catalog()}
+        self._catalog: dict[str, BuffDef] = {b.id: b for b in available_catalog()}
         self._sound_ids = set(default_sound_map())  # 사운드 파일이 있는 버프만
         self._settings, self._order = self._load_state()
         self._current: str | None = None
@@ -270,7 +270,7 @@ class BuffTab(QWidget):
         catalog_mod.register_buff(
             new_id, catalog_mod.NONE_MATCH_ICON, catalog_mod.NONE_DISPLAY_IMAGE
         )
-        self._catalog = {b.id: b for b in load_catalog()}
+        self._catalog = {b.id: b for b in available_catalog()}
         self._settings, self._order = self._load_state()
         self._settings[new_id].name = "-"  # 미설정 표시
         self._current = new_id
@@ -284,13 +284,21 @@ class BuffTab(QWidget):
             return
         box = QMessageBox(self)
         box.setWindowTitle("버프 삭제")
-        box.setText(f"'{bid}' 버프를 삭제할까요?\n(매칭 아이콘·표시 이미지 파일이 삭제됩니다)")
+        is_default = bid in catalog_mod.default_buff_ids()
+        msg = (
+            f"'{bid}' 기본 버프를 목록에서 뺄까요?\n(배포돼도 계속 숨겨집니다)"
+            if is_default
+            else f"'{bid}' 버프를 삭제할까요?\n(매칭 아이콘·표시 이미지 파일이 삭제됩니다)"
+        )
+        box.setText(msg)
         yes = box.addButton("예", QMessageBox.ButtonRole.YesRole)
         box.addButton("아니오", QMessageBox.ButtonRole.NoRole)
         box.exec()
         if box.clickedButton() is not yes:
             return
-        catalog_mod.delete_buff(bid)
+        if is_default:
+            config.add_removed_default(bid, "buffTracker")
+        catalog_mod.delete_buff(bid)  # 사용자 커스텀/덮어쓴 파일 정리(기본 파일은 보존)
         self._settings.pop(bid, None)
         if bid in self._order:
             self._order.remove(bid)
@@ -299,7 +307,7 @@ class BuffTab(QWidget):
 
     def _reload_catalog(self, select: str | None = None) -> None:
         """파일 변경(등록/삭제) 후 카탈로그·상태 재적재."""
-        self._catalog = {b.id: b for b in load_catalog()}
+        self._catalog = {b.id: b for b in available_catalog()}
         self._settings, self._order = self._load_state()
         self._current = select
         self._save()
