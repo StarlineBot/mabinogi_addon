@@ -122,7 +122,7 @@ class PartyTab(QWidget):
         self._keywords, self._excludes = config.load_party_lists()
         self._worker: PartyWorker | None = None
         self._last_raw: list[dict] = []  # 마지막 거뿔 원본(즉시 재필터용)
-        self._sound = SoundNotifier({"party": PARTY_ALERT_FILE})
+        self._sound = SoundNotifier({"party": PARTY_ALERT_FILE}, volume=0.6)
 
         root = QVBoxLayout(self)
         root.setContentsMargins(12, 12, 12, 12)

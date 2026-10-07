@@ -72,7 +72,10 @@ def test_defaults_for_missing_fields(tmp_path):
     path.write_text('{"buffTracker": {"buffs": [{"id": "x"}]}}', encoding="utf-8")
     loaded = load_buff_settings(path)
     assert loaded[0].id == "x"
-    assert loaded[0].show_duration is True
+    # 기본값: 오버레이 표시만 ON, 지속시간·종료알림은 OFF
+    assert loaded[0].hidden is False
+    assert loaded[0].show_duration is False
+    assert loaded[0].alert.enabled is False
     assert loaded[0].alert.before_sec == 30
 
 

@@ -43,7 +43,12 @@ def default_sound_map() -> dict[str, Path]:
 class SoundNotifier(QObject):
     """buff_id별 알림 사운드 재생기. 사운드 꺼진 버프는 호출 측에서 걸러준다."""
 
-    def __init__(self, sounds: dict[str, Path], parent: QObject | None = None) -> None:
+    def __init__(
+        self,
+        sounds: dict[str, Path],
+        parent: QObject | None = None,
+        volume: float = 1.0,
+    ) -> None:
         super().__init__(parent)
         self._sounds = dict(sounds)
         self._player = None
@@ -52,6 +57,7 @@ class SoundNotifier(QObject):
             from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 
             self._audio = QAudioOutput(self)
+            self._audio.setVolume(max(0.0, min(1.0, volume)))  # 0.0~1.0
             self._player = QMediaPlayer(self)
             self._player.setAudioOutput(self._audio)
         except Exception:  # noqa: BLE001 — QtMultimedia/백엔드 없음 → 무음

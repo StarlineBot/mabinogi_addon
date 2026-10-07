@@ -201,7 +201,7 @@ def save_party_lists(keywords: list[str], excludes: list[str]) -> None:
 
 @dataclass
 class AlertConfig:
-    enabled: bool = True
+    enabled: bool = False  # 기본: 종료 알림 꺼짐(사용자가 필요한 버프만 켬)
     before_sec: int = 30
     blink: bool = True
     sound: bool = True
@@ -215,7 +215,7 @@ class BuffSettings:
 
     id: str
     name: str = ""  # 표시 이름(비우면 id 사용)
-    show_duration: bool = True
+    show_duration: bool = False  # 기본: 지속시간 표시 꺼짐(오버레이 표시만 기본 ON)
     hidden: bool = False  # 오버레이에서 숨김(목록엔 남김)
     alert: AlertConfig = field(default_factory=AlertConfig)
 
@@ -225,10 +225,10 @@ def _settings_from_dict(raw: dict) -> BuffSettings:
     return BuffSettings(
         id=str(raw.get("id", "")),
         name=str(raw.get("name", "")),
-        show_duration=bool(raw.get("showDuration", True)),
+        show_duration=bool(raw.get("showDuration", False)),
         hidden=bool(raw.get("hidden", False)),
         alert=AlertConfig(
-            enabled=bool(alert.get("enabled", True)),
+            enabled=bool(alert.get("enabled", False)),
             before_sec=int(alert.get("beforeSec", 30)),
             blink=bool(alert.get("blink", True)),
             sound=bool(alert.get("sound", True)),

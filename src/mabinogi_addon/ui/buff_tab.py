@@ -493,12 +493,16 @@ class BuffTab(QWidget):
         self._alert2_hint.setVisible(has_sound)
         self.alert2_check.setChecked(s.alert.enabled2 and has_sound)
         self.before2_spin.setValue(s.alert.before_sec2)
-        self._apply_alert_enabled(s.alert.enabled)
-        # 앵커는 오버레이 표시·지속시간·알림 없음 → 편집 비활성
+        # 앵커는 '기준' 버프라 수정·삭제·순서변경 불가 → 관련 위젯을 전부 비활성(회색)해
+        # 못 누르는 걸 눈으로 알 수 있게 한다(＋ 새 버프 추가만 항상 가능).
+        editable = not is_anchor
         for wdg in (self.display_check, self.show_duration, self.alert_check,
-                    self.before_spin, self.blink_check, self.sound_check,
-                    self.alert2_check, self.before2_spin):
-            wdg.setEnabled(not is_anchor)
+                    self.name_edit, self.match_capture_btn, self.match_file_btn,
+                    self.display_file_btn, self.display_clear_btn,
+                    self.del_btn, self.up_btn, self.down_btn):
+            wdg.setEnabled(editable)
+        # 알림 하위 위젯(초·점멸·소리·2차)은 앵커여부 + 알림 켜짐 상태로 최종 결정.
+        self._apply_alert_enabled(s.alert.enabled)
         self._loading = False
 
     def _on_alert_toggled(self, enabled: bool) -> None:
