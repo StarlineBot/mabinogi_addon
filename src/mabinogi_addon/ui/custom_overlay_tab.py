@@ -77,8 +77,15 @@ class CustomOverlayTab(QWidget):
     def __init__(self, watcher: WindowWatcher) -> None:
         super().__init__()
         self._watcher = watcher
-        # 게임 비활성/최소화면 미러 캡처를 쉬고 오버레이를 숨긴다(CPU 절약).
-        self._mgr = MirrorManager(is_active=watcher.is_game_active, parent=self)
+        # 게임 '또는 우리 앱'이 활성일 때만 캡처·표시(그 외엔 쉬어 CPU 절약).
+        # 자기앱도 포함해야: 미러를 클릭해 드래그하는 순간(우리 앱이 포그라운드가 됨)에도
+        # 숨지 않아 이동이 끊기지 않는다.
+        self._mgr = MirrorManager(
+            is_active=lambda: (
+                watcher.is_game_active() or watcher.is_self_active()
+            ),
+            parent=self,
+        )
         self._mgr.changed.connect(self._refresh_overlays)
         self._mgr.changed.connect(self._save_current)
         self._mgr.overlay_moved.connect(self._save_current)
@@ -175,8 +182,22 @@ class CustomOverlayTab(QWidget):
         self._selector.start()
 
     def _on_selected(self, x: int, y: int, w: int, h: int) -> None:
+        # 새 미러는 원본 위에 겹쳐 뜨면 "된 건가?" 헷갈리므로, 화면 좌측 1/4 지점에
+        # 띄워 분명히 보이게 한다(사용자가 원하는 위치로 드래그).
+        from PySide6.QtGui import QGuiApplication
+
+        screen = QGuiApplication.primaryScreen()
+        geo = screen.geometry() if screen else None
+        if geo is not None:
+            pos_x = geo.x() + geo.width() // 4 - w // 2
+            pos_y = geo.y() + geo.height() // 4 - h // 2
+        else:
+            pos_x, pos_y = x, y
         self._mgr.add(
-            {"x": x, "y": y, "w": w, "h": h, "posX": x, "posY": y, "name": self._pending_name}
+            {
+                "x": x, "y": y, "w": w, "h": h,
+                "posX": pos_x, "posY": pos_y, "name": self._pending_name,
+            }
         )
 
     # ---- 목록 ----
