@@ -28,7 +28,8 @@ def main() -> None:
 
     app = QApplication(sys.argv)
     app.setApplicationName(config.APP_NAME)
-    app.setApplicationDisplayName(config.APP_NAME)
+    # setApplicationDisplayName은 쓰지 않는다 — 설정하면 Qt가 모든 창 제목 뒤에
+    # " - <이름>"을 자동으로 붙여, 창 제목에 이름이 두 번 나온다(중복).
     app.setWindowIcon(app_icon())  # 작업표시줄/트레이 아이콘
     # 트레이 최소화를 위해, 창을 숨겨도(마지막 창 닫혀도) 앱이 종료되지 않게 한다.
     app.setQuitOnLastWindowClosed(False)
