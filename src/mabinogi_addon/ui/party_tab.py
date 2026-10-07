@@ -32,9 +32,29 @@ from .. import config
 from ..party.models import Recruit
 from ..party.service import build_board, humanize_age
 from ..party.worker import PartyWorker
+from .help_dialog import help_title_row
 from .notifier import PARTY_ALERT_FILE, SoundNotifier
 from .toast import show_toast
 from .widgets import hint_label
+
+# 파티 모집 사용법(? 아이콘 → 새 창).
+HELP_TITLE = "파티 모집 사용법"
+HELP_HTML = """
+<h3>파티 모집이란?</h3>
+<p>인게임 <b>파티모집(거뿔)</b> 현황만 모아서 보여줍니다. 원하는 키워드를 등록하면
+<b>알림 소리와 토스트</b>로 알려드립니다.</p>
+
+<h3>키워드 알림</h3>
+<ul>
+<li>제목에 포함될 단어를 등록하면, 그 단어가 뜰 때 화면 <b>우측 하단 토스트</b> +
+효과음으로 알립니다. (트레이·게임 중에도)</li>
+<li>알림 효과음은 <b>종 아이콘(🔔/🔕)</b>을 눌러 켜고 끌 수 있습니다.</li>
+</ul>
+
+<h3>파티장 제외</h3>
+<p>보기 싫은 파티장은 <b>제외</b>할 수 있습니다. 현황 목록의 파티장을 클릭하거나
+'파티장 제외'에 이름을 등록하면, 그 파티장의 모집은 현황·알림에서 숨겨집니다.</p>
+"""
 
 _DIM = QColor("#9aa0a6")
 _ACCENT = QColor("#00D1A7")  # 키워드 매칭 강조색(왼쪽 바)
@@ -107,6 +127,7 @@ class PartyTab(QWidget):
         root = QVBoxLayout(self)
         root.setContentsMargins(12, 12, 12, 12)
         root.setSpacing(10)
+        root.addLayout(help_title_row("파티 모집", HELP_TITLE, HELP_HTML, self))
         root.addWidget(self._build_board(), 1)
 
         bottom = QHBoxLayout()

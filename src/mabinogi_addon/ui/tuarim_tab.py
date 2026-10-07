@@ -28,11 +28,30 @@ from PySide6.QtWidgets import (
 from .. import config
 from ..detect.tuarim_reader import read_percent
 from ..tracker import TuarimTracker
+from .help_dialog import help_title_row
 from .widgets import hint_label
 
 # 숫자 두 자리+% 를 덮는 고정 박스 크기(px). 스샷 측정: 한 글자 ~16px, '0%'=32×19.
 # 2자리+% ≈ 48×19 → 여유를 둔 기본값. (해상도/UI 배율 다르면 추후 조정)
 TUARIM_BOX_SIZE = (58, 28)
+
+# 투아림 관리 사용법(? 아이콘 → 새 창).
+HELP_TITLE = "투아림 관리 사용법"
+HELP_HTML = """
+<h3>투아림 관리란?</h3>
+<p>화면의 투아림 <b>% 게이지</b>(작은 원 안 숫자 아래 %)를 읽어, 지정한 %(예: 95·98)
+이상이 되면 소리로 알립니다. 100%가 되면 다시 0%부터 시작합니다.
+오버레이로 화면을 가리지 않고 <b>읽기만</b> 합니다.</p>
+
+<h3>사용 순서</h3>
+<ol>
+<li><b>영역 지정</b> — 버튼을 누르면 고정 크기 박스가 커서를 따라옵니다.
+투아림 <b>%(숫자 두 자리)</b> 위에 올려 클릭해 배치합니다. (돋보기)</li>
+<li><b>알림 기준</b> — 1차·2차 %를 정하고, 각각 <b>소리</b> 알림을 켤 수 있습니다.</li>
+</ol>
+
+<p>아래 <b>미리보기</b>와 <b>현재 값</b>으로 영역이 숫자에 잘 맞았는지 확인하세요.</p>
+"""
 
 
 class TuarimTab(QWidget):
@@ -50,6 +69,7 @@ class TuarimTab(QWidget):
         v = QVBoxLayout(self)
         v.setContentsMargins(12, 12, 12, 12)
         v.setSpacing(10)
+        v.addLayout(help_title_row("투아림 관리", HELP_TITLE, HELP_HTML, self))
         v.addWidget(
             hint_label(
                 "'영역 지정'을 누르면 고정 크기 박스가 커서를 따라옵니다. 투아림 %(숫자 두"

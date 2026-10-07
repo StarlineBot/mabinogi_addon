@@ -28,7 +28,30 @@ from .. import catalog as catalog_mod
 from .. import config
 from ..catalog import USER_DEBUFF_ICON_DIR, BuffDef, available_debuff_catalog
 from .buff_tab import _capture_icon_to, _pixmap
+from .help_dialog import help_title_row
 from .widgets import hint_label, icon_slot, section_label
+
+# 디버프 트래커 사용법(? 아이콘 → 새 창).
+HELP_TITLE = "디버프 트래커 사용법"
+HELP_HTML = """
+<h3>디버프 트래커란?</h3>
+<p>보스 체력바 위의 <b>디버프 줄</b>을 읽어, 아직 걸지 않은 디버프를
+화면 위 오버레이로 보여줍니다. 화면을 <b>읽기만</b> 하며 키 입력·클릭은 하지 않습니다.</p>
+
+<h3>사용 순서</h3>
+<ol>
+<li><b>디버프 줄 영역 지정</b> — 보스 체력바 위, 디버프가 표시되는 영역을 먼저
+드래그로 잡습니다. (돋보기로 픽셀 단위 조정)</li>
+<li><b>디버프 등록 (＋)</b> — 보고 싶은 디버프를 추가하고, 그 아이콘을
+<b>영역에서 바로 집거나</b> 이미지 파일로 등록합니다.
+(－ 삭제 / ▲▼ 표시 순서)</li>
+<li><b>오버레이 배치</b> — 드래그로 원하는 위치에 옮기고 마우스 휠로 <b>배율</b>을
+조절합니다. <b>오버레이 고정</b>을 누르면 위치가 잠기고 클릭도 통과해
+게임에 방해되지 않습니다.</li>
+</ol>
+
+<p>※ 디버프는 <b>아직 걸리지 않은 것</b>만 오버레이에 나열됩니다.</p>
+"""
 
 
 class DebuffTab(QWidget):
@@ -84,6 +107,8 @@ class DebuffTab(QWidget):
         panel = QWidget()
         v = QVBoxLayout(panel)
         v.setContentsMargins(0, 0, 0, 0)
+
+        v.addLayout(help_title_row("디버프 트래커", HELP_TITLE, HELP_HTML, self))
 
         top = QHBoxLayout()
         top.setSpacing(6)

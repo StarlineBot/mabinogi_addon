@@ -28,8 +28,31 @@ from PySide6.QtWidgets import (
 
 from .. import config
 from ..system.window_watcher import WindowWatcher
+from .help_dialog import help_title_row
 from .mirror_manager import MirrorManager
 from .widgets import hint_label, section_label
+
+# 커스텀 오버레이 사용법(? 아이콘 → 새 창).
+HELP_TITLE = "커스텀 오버레이 사용법"
+HELP_HTML = """
+<h3>커스텀 오버레이란?</h3>
+<p>지정한 화면 영역을 원하는 위치로 <b>미러링(복제)</b>하는 기능입니다.
+단축바에 있는 스킬의 쿨타임을 캐릭터 근처에 두고 확인하거나,
+체력바를 지정해 원하는 위치에 둘 수 있습니다.</p>
+
+<h3>사용 순서</h3>
+<ol>
+<li><b>영역 지정</b> — 복제할 화면 영역을 드래그로 잡습니다.
+(돋보기로 픽셀 단위 조정)</li>
+<li><b>오버레이 이동</b> — 만들어진 오버레이를 드래그로 원하는 위치에 둡니다.
+마우스 휠로 크기 조절, 더블클릭으로 원래 크기.
+<b>고정</b>을 누르면 위치가 잠기고 클릭도 통과합니다.</li>
+</ol>
+
+<h3>프리셋</h3>
+<p>여러 오버레이 묶음을 <b>프리셋</b>으로 저장해 캐릭터·상황별로 전환할 수 있습니다.
+(선택/전체 고정·해제·삭제)</p>
+"""
 
 _LIST_QSS = """
 QListWidget { border:1px solid #3a3d44; border-radius:4px; background:#202227; }
@@ -66,6 +89,7 @@ class CustomOverlayTab(QWidget):
         v.setContentsMargins(12, 12, 12, 12)
         v.setSpacing(10)
 
+        v.addLayout(help_title_row("커스텀 오버레이", HELP_TITLE, HELP_HTML, self))
         v.addWidget(
             hint_label("화면 특정 영역을 선택, 원하는 위치에 오버레이로 띄우는 기능입니다.")
         )
