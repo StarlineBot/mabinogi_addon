@@ -79,13 +79,15 @@ class CustomOverlayTab(QWidget):
     def __init__(self, watcher: WindowWatcher) -> None:
         super().__init__()
         self._watcher = watcher
-        # 게임 '또는 우리 앱'이 활성일 때만 캡처·표시(그 외엔 쉬어 CPU 절약).
-        # 자기앱도 포함해야: 미러를 클릭해 드래그하는 순간(우리 앱이 포그라운드가 됨)에도
-        # 숨지 않아 이동이 끊기지 않는다.
+        # 미러 표시 조건: (1) 게임이 포그라운드 = 실제 사용 중, 또는
+        # (2) 우리 앱이 포그라운드 '이면서 이 커스텀 오버레이 탭을 보고 있을 때' = 위치
+        #     조정(세팅) 중. → 다른 탭·다른 작업 중엔 안 떠서 화면을 가리지 않고 커서
+        #     깜빡임도 없다. 이 탭에서 미러를 클릭해 드래그해도 탭이 보이는 상태라 안 숨음.
         self._mgr = MirrorManager(
             fps=60,  # 화면 전환 끊김 최소화(전체 캡처 1회/틱). CPU 사용량 보고 조절.
             is_active=lambda: (
-                watcher.is_game_active() or watcher.is_self_active()
+                watcher.is_game_active()
+                or (watcher.is_self_active() and self.isVisible())
             ),
             parent=self,
         )
