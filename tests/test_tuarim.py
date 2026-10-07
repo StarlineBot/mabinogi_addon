@@ -24,28 +24,54 @@ def test_read_percent_on_real_samples(value):
     assert read_percent(img) == value
 
 
-# ---- 트래커 ----
-def test_fires_once_then_rearms_on_reset():
+# ---- 트래커 (완만한 상승 교차 = edge) ----
+def test_fires_on_gradual_crossing():
     t = TuarimTracker([95, 98])
-    assert t.observe(90) == []
-    assert t.observe(95) == [95]  # 95 도달 → 1회
-    assert t.observe(96) == []  # 이미 울림(재무장 전)
-    assert t.observe(98) == [98]  # 98 도달 → 1회
-    assert t.observe(100) == []  # 둘 다 울린 뒤
-    assert t.observe(0) == []  # 리셋 → 둘 다 재무장(이 틱엔 미달이라 안 울림)
-    assert t.observe(95) == [95]  # 다음 주기 다시 울림
+    assert t.observe(93) == []  # 기준점
+    assert t.observe(94) == []
+    assert t.observe(95) == [95]  # 94→95 교차
+    assert t.observe(96) == []
+    assert t.observe(97) == []
+    assert t.observe(98) == [98]  # 97→98 교차
+    assert t.observe(99) == []
 
 
-def test_jump_fires_both():
+def test_reentry_jump_does_not_fire():
+    """자리 비웠다 복귀로 값이 점프하면(이미 임계 이상) 울리지 않는다."""
+    t = TuarimTracker([90])
+    assert t.observe(85) == []
+    assert t.observe(93) == []  # 85→93 점프 → 교차 아님
+
+
+def test_big_jump_does_not_fire():
     t = TuarimTracker([95, 98])
     assert t.observe(10) == []
-    assert sorted(t.observe(99)) == [95, 98]  # 한 번에 둘 다 넘으면 둘 다
+    assert t.observe(99) == []  # 큰 점프는 교차로 보지 않음
 
 
-def test_none_value_no_change():
+def test_misread_drop_recovery_does_not_fire():
+    """90%대에서 한 틱 급락 후 복구돼도(큰 하강→큰 상승) 울리지 않는다."""
+    t = TuarimTracker([90])
+    assert t.observe(91) == []
+    assert t.observe(92) == []
+    assert t.observe(10) == []  # 오탐 급락
+    assert t.observe(92) == []  # 10→92 급등 → 교차 아님
+
+
+def test_refires_next_cycle_after_reset():
     t = TuarimTracker([95])
-    assert t.observe(None) == []
+    assert t.observe(94) == []
     assert t.observe(95) == [95]
+    assert t.observe(1) == []  # 리셋(급락)
+    assert t.observe(94) == []  # 급등 구간은 무음
+    assert t.observe(95) == [95]  # 94→95 완만 교차 → 다음 주기 재발동
+
+
+def test_none_value_keeps_prev():
+    t = TuarimTracker([95])
+    assert t.observe(94) == []
+    assert t.observe(None) == []  # 판독 실패는 직전 값 유지
+    assert t.observe(95) == [95]  # 94→95 교차(None 틱 건너뜀)
 
 
 # ---- % 리더 ----
