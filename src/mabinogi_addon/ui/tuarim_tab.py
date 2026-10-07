@@ -1,16 +1,18 @@
 """투아림 관리 탭 (기획서 3.3 변형).
 
-화면의 투아림 % 게이지 위에 '리더 박스'를 올려두면, 그 영역의 % 숫자를 읽어 지정한
-임계(예 95/98) 이상이 될 때 소리로 알린다. 오버레이로 뭔가를 더 띄우지는 않는다.
+화면의 투아림 % 게이지 영역을 '영역 지정'으로 한 번 잡아두면, 그 화면 좌표를 직접
+읽어(오버레이로 가리지 않음) 지정한 임계(예 95/98) 이상이 될 때 소리로 알린다.
 
-숫자 템플릿(detect/templates/tuarim)이 아직 없으면 판독이 None이라 '현재 값: —'로
-표시되고 알림도 울리지 않는다(집 스크린샷으로 템플릿을 채우면 동작).
+제대로 읽는지 확인용으로, 탭에 '캡처된 영역 미리보기 + 현재 값'을 실시간 표시한다.
+숫자 템플릿(detect/templates/tuarim)이 아직 없으면 판독은 None('현재 값: —')이지만,
+미리보기 이미지로 영역이 숫자에 맞았는지 눈으로 확인할 수 있다.
 """
 
 from __future__ import annotations
 
 import numpy as np
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
     QGridLayout,
@@ -26,8 +28,11 @@ from PySide6.QtWidgets import (
 from .. import config
 from ..detect.tuarim_reader import read_percent
 from ..tracker import TuarimTracker
-from .tuarim_box import TuarimBox
 from .widgets import hint_label
+
+# 숫자 두 자리+% 를 덮는 고정 박스 크기(px). 스샷 측정: 한 글자 ~16px, '0%'=32×19.
+# 2자리+% ≈ 48×19 → 여유를 둔 기본값. (해상도/UI 배율 다르면 추후 조정)
+TUARIM_BOX_SIZE = (58, 28)
 
 
 class TuarimTab(QWidget):
@@ -37,49 +42,44 @@ class TuarimTab(QWidget):
         cfg = config.load_tuarim()
         self._thresholds = cfg["thresholds"]
         self._sounds = cfg["sounds"]
-        self._box: TuarimBox | None = None
-        self._box_state = cfg["box"]
+        self._region = cfg["box"]  # {x,y,w,h} 또는 None
         self._sct = None
         self._tracker = TuarimTracker(self._thresholds)
-        self._notifier = None  # 지연 생성(소리)
+        self._notifier = None
 
         v = QVBoxLayout(self)
         v.setContentsMargins(12, 12, 12, 12)
         v.setSpacing(10)
         v.addWidget(
             hint_label(
-                "투아림 % 게이지 위에 리더 박스를 올려두면, 지정한 %에 도달할 때 소리로"
-                " 알립니다. (추가 오버레이는 없음)"
+                "'영역 지정'을 누르면 고정 크기 박스가 커서를 따라옵니다. 투아림 %(숫자 두"
+                " 자리) 위에 올려 클릭해 배치하면, 그 자리를 읽어 지정 %에 소리로 알립니다."
+                " (읽기만 하며 화면을 가리지 않음)"
             )
         )
 
-        # 리더 박스
-        box_row = QHBoxLayout()
+        row = QHBoxLayout()
         self.region_btn = QPushButton("영역 지정")
-        self.region_btn.setToolTip("% 숫자 두 자리에 맞춰 드래그(돋보기). 리더 박스가 생깁니다.")
+        self.region_btn.setToolTip("% 숫자 두 자리에 맞춰 드래그(돋보기). 다시 누르면 재지정.")
         self.region_btn.clicked.connect(self._on_region)
-        self.lock_btn = QPushButton("고정")
-        self.lock_btn.setCheckable(True)
-        self.lock_btn.setStyleSheet(
-            "QPushButton:checked { background:#00B894; color:white; font-weight:600; }"
-        )
-        self.lock_btn.toggled.connect(self._on_lock)
-        box_row.addWidget(self.region_btn)
-        box_row.addWidget(self.lock_btn)
-        box_row.addStretch(1)
-        v.addLayout(box_row)
-        v.addWidget(
-            hint_label(
-                "영역 지정으로 % 숫자 두 자리에 맞춰 박스를 만든 뒤, 드래그로 미세조정·"
-                "휠로 크기조절. 다 맞추면 '고정'(투명+클릭통과)."
-            )
-        )
+        row.addWidget(self.region_btn)
+        self.region_label = hint_label("")
+        row.addWidget(self.region_label, 1)
+        v.addLayout(row)
 
+        # 확인용: 캡처 미리보기 + 현재 값
+        prev_row = QHBoxLayout()
+        self.preview = QLabel()
+        self.preview.setFixedHeight(40)
+        self.preview.setMinimumWidth(80)
+        self.preview.setStyleSheet("background:#202227; border:1px solid #3a3d44;")
+        self.preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        prev_row.addWidget(self.preview)
         self.value_label = QLabel("현재 값: —")
         self.value_label.setStyleSheet("font-size:14px; font-weight:600;")
-        v.addWidget(self.value_label)
+        prev_row.addWidget(self.value_label, 1)
+        v.addLayout(prev_row)
 
-        # 사용 + 임계
         self.enable = QCheckBox("투아림 알림 사용")
         self.enable.setChecked(cfg["enabled"])
         self.enable.toggled.connect(self._save)
@@ -88,13 +88,7 @@ class TuarimTab(QWidget):
         v.addWidget(self._threshold_group())
         v.addStretch(1)
 
-        if self._box_state:  # 저장된 박스 복원
-            self._ensure_box(self._box_state)
-            self._box.show()
-            locked = bool(self._box_state.get("locked"))
-            self.lock_btn.setChecked(locked)
-            self._box.set_locked(locked)
-
+        self._update_region_label()
         self._timer = QTimer(self)
         self._timer.setInterval(150)
         self._timer.timeout.connect(self._tick)
@@ -105,9 +99,8 @@ class TuarimTab(QWidget):
         grid = QGridLayout(box)
         self._spins: list[QSpinBox] = []
         self._sound_checks: list[QCheckBox] = []
-        labels = ["1차", "2차"]
-        for i in range(2):
-            grid.addWidget(QLabel(labels[i]), i, 0)
+        for i, name in enumerate(("1차", "2차")):
+            grid.addWidget(QLabel(name), i, 0)
             spin = QSpinBox()
             spin.setRange(1, 99)
             spin.setSuffix(" %")
@@ -123,33 +116,28 @@ class TuarimTab(QWidget):
         grid.setColumnStretch(3, 1)
         return box
 
-    # ---- 리더 박스 ----
-    def _ensure_box(self, state: dict | None = None) -> None:
-        if self._box is None:
-            self._box = TuarimBox(state or {})
-            self._box.moved.connect(self._save)
-
+    # ---- 영역 지정 ----
     def _on_region(self) -> None:
         from .region_selector import RegionSelector
 
-        self._selector = RegionSelector()  # 참조 유지(GC 방지)
+        # 고정 크기 박스를 커서에 붙여 % 위에 클릭 한 번으로 배치(돋보기).
+        self._selector = RegionSelector(fixed_size=TUARIM_BOX_SIZE)
         self._selector.selected.connect(self._on_selected)
         self._selector.start()
 
     def _on_selected(self, x: int, y: int, w: int, h: int) -> None:
-        self._ensure_box({"x": x, "y": y, "w": w, "h": h})
-        self._box.move(x, y)
-        self._box.resize(w, h)
-        self.lock_btn.setChecked(False)  # 방금 지정 → 미세조정 가능하게 해제
-        self._box.set_locked(False)
-        self._box.show()
+        self._region = {"x": x, "y": y, "w": w, "h": h}
+        self._update_region_label()
         self._save()
 
-    def _on_lock(self, locked: bool) -> None:
-        self.lock_btn.setText("고정됨" if locked else "고정")
-        if self._box is not None:
-            self._box.set_locked(locked)
-        self._save()
+    def _update_region_label(self) -> None:
+        if self._region:
+            r = self._region
+            self.region_label.setText(f"영역: {r['x']},{r['y']}  {r['w']}×{r['h']}  ✔")
+            self.region_label.setStyleSheet("color:#2ecc71;")
+        else:
+            self.region_label.setText("영역 미지정 — % 숫자 두 자리를 지정하세요")
+            self.region_label.setStyleSheet("color:#8a8f98;")
 
     # ---- 저장 ----
     def _save(self) -> None:
@@ -159,7 +147,7 @@ class TuarimTab(QWidget):
         config.save_tuarim(
             {
                 "enabled": self.enable.isChecked(),
-                "box": self._box.to_dict() if self._box is not None else self._box_state,
+                "box": self._region,
                 "thresholds": self._thresholds,
                 "sounds": self._sounds,
             }
@@ -167,16 +155,29 @@ class TuarimTab(QWidget):
 
     # ---- 읽기 루프 ----
     def _tick(self) -> None:
-        if not self.enable.isChecked() or self._box is None or not self._box.isVisible():
+        if not self._region or not self._watcher.is_game_active():
             return
-        if not self._watcher.is_game_active():
+        r = self._region
+        frame = self._grab_rect(r["x"], r["y"], r["w"], r["h"])
+        if frame is None:
             return
-        rect = self._box.to_dict()
-        frame = self._grab_rect(rect["x"], rect["y"], rect["w"], rect["h"])
-        value = read_percent(frame) if frame is not None else None
-        self.value_label.setText(f"현재 값: {value}%" if value is not None else "현재 값: —")
-        for t in self._tracker.observe(value):
-            self._play(t)
+        self._show_preview(frame)
+        value = read_percent(frame)
+        self.value_label.setText(
+            f"현재 값: {value}%" if value is not None else "현재 값: —"
+        )
+        if self.enable.isChecked():
+            for t in self._tracker.observe(value):
+                self._play(t)
+
+    def _show_preview(self, frame: np.ndarray) -> None:
+        h, w = frame.shape[:2]
+        rgb = np.ascontiguousarray(frame[:, :, ::-1])  # BGR→RGB
+        img = QImage(rgb.tobytes(), w, h, 3 * w, QImage.Format.Format_RGB888)
+        pm = QPixmap.fromImage(img).scaledToHeight(
+            38, Qt.TransformationMode.FastTransformation
+        )
+        self.preview.setPixmap(pm)
 
     def _grab_rect(self, x: int, y: int, w: int, h: int):
         try:
@@ -206,5 +207,3 @@ class TuarimTab(QWidget):
 
     def shutdown(self) -> None:
         self._timer.stop()
-        if self._box is not None:
-            self._box.close()

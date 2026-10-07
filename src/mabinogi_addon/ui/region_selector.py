@@ -32,12 +32,16 @@ class RegionSelector(QWidget):
     cancelled = Signal()
     captured = Signal(bool)  # 크롭 모드: 저장 성공=True, 취소/너무 작음=False
 
-    def __init__(self, save_path: Path | None = None) -> None:
+    def __init__(
+        self, save_path: Path | None = None, fixed_size: tuple[int, int] | None = None
+    ) -> None:
         super().__init__(
             None,
             Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint,
         )
         self._save_path = save_path
+        # fixed_size가 있으면 '고정 크기 박스를 커서에 붙여 클릭 한 번으로 배치' 모드.
+        self._fixed = fixed_size
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setCursor(Qt.CursorShape.CrossCursor)
         self.setMouseTracking(True)  # 버튼 안 눌러도 이동 이벤트 받기(돋보기용)
@@ -61,19 +65,37 @@ class RegionSelector(QWidget):
         self.raise_()
         self.activateWindow()
 
-    def mousePressEvent(self, event) -> None:  # noqa: N802
-        if event.button() == Qt.MouseButton.LeftButton:
-            self._origin = event.position().toPoint()
-            self._rect = QRect(self._origin, self._origin)
-            self.update()
+    def mousePressEvent(self, event) -> None:
+        if event.button() != Qt.MouseButton.LeftButton:
+            return
+        if self._fixed is not None:
+            # 고정 크기 모드: 클릭 지점에 중심을 둔 박스를 확정.
+            rect = self._fixed_rect(event.position().toPoint())
+            self.close()
+            self.selected.emit(
+                self._screen_geo.x() + rect.x(),
+                self._screen_geo.y() + rect.y(),
+                rect.width(),
+                rect.height(),
+            )
+            return
+        self._origin = event.position().toPoint()
+        self._rect = QRect(self._origin, self._origin)
+        self.update()
 
-    def mouseMoveEvent(self, event) -> None:  # noqa: N802
+    def _fixed_rect(self, center: QPoint) -> QRect:
+        w, h = self._fixed
+        return QRect(center.x() - w // 2, center.y() - h // 2, w, h)
+
+    def mouseMoveEvent(self, event) -> None:
         self._cursor = event.position().toPoint()
-        if self._origin is not None:
+        if self._fixed is not None:
+            self._rect = self._fixed_rect(self._cursor)  # 커서 따라 박스 이동
+        elif self._origin is not None:
             self._rect = QRect(self._origin, self._cursor).normalized()
         self.update()
 
-    def mouseReleaseEvent(self, event) -> None:  # noqa: N802
+    def mouseReleaseEvent(self, event) -> None:
         if self._origin is None:
             return
         rect = self._rect
@@ -110,12 +132,12 @@ class RegionSelector(QWidget):
             return False
         return crop.save(str(self._save_path), "PNG")
 
-    def keyPressEvent(self, event) -> None:  # noqa: N802
+    def keyPressEvent(self, event) -> None:
         if event.key() == Qt.Key.Key_Escape:
             self.close()
             self.cancelled.emit()
 
-    def paintEvent(self, _event) -> None:  # noqa: N802
+    def paintEvent(self, _event) -> None:
         painter = QPainter(self)
         painter.fillRect(self.rect(), QColor(0, 0, 0, 110))  # 전체 어둡게
         if not self._rect.isNull():
