@@ -110,7 +110,7 @@ class SettingsTab(QWidget):
         v.addWidget(
             hint_label(
                 "현재 설정을 파일로 저장/불러옵니다(다른 PC로 이동·백업).\n"
-                "API 키·웹훅 등 비밀값은 제외됩니다. 가져온 뒤 앱을 다시 시작하면 적용됩니다."
+                "가져온 뒤 앱을 다시 시작하면 적용됩니다."
             )
         )
         return box
@@ -126,9 +126,7 @@ class SettingsTab(QWidget):
         except OSError as exc:
             QMessageBox.warning(self, "설정 내보내기", f"저장 실패: {exc}")
             return
-        QMessageBox.information(
-            self, "설정 내보내기", "설정을 저장했습니다.\n(비밀값 제외)"
-        )
+        QMessageBox.information(self, "설정 내보내기", "설정을 저장했습니다.")
 
     def _on_import_config(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
