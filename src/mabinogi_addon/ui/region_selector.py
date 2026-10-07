@@ -176,8 +176,64 @@ class RegionSelector(QWidget):
             label = f"{self._rect.width()} × {self._rect.height()}"
             painter.setPen(QColor(255, 255, 255))
             painter.drawText(self._rect.adjusted(4, 4, 0, 0), 0, label)
-        if self._cursor is not None and not self._shot.isNull():
+        if self._fixed is not None:
+            # 고정 박스 모드: 조작 안내 + '박스가 실제로 잡는 영역' 미리보기(커서 돋보기 X).
+            self._draw_hint(
+                painter, "마우스 휠: 박스 크기 조절   ·   클릭: 배치   ·   ESC: 취소"
+            )
+            if not self._rect.isNull() and not self._shot.isNull():
+                self._draw_box_preview(painter, self._rect)
+        elif self._cursor is not None and not self._shot.isNull():
             self._draw_loupe(painter, self._cursor)
+
+    def _draw_hint(self, painter: QPainter, text: str) -> None:
+        """화면 상단 중앙에 조작 안내 알약(pill)을 그린다."""
+        painter.setOpacity(1.0)
+        fm = painter.fontMetrics()
+        tw = fm.horizontalAdvance(text)
+        pad = 14
+        w = tw + pad * 2
+        h = fm.height() + 12
+        x = (self.width() - w) // 2
+        y = 24
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(0, 0, 0, 180))
+        painter.drawRoundedRect(x, y, w, h, h // 2, h // 2)
+        painter.setPen(QColor(235, 238, 244))
+        painter.drawText(
+            QRect(x, y, w, h),
+            Qt.AlignmentFlag.AlignCenter,
+            text,
+        )
+
+    def _draw_box_preview(self, painter: QPainter, rect: QRect) -> None:
+        """고정 박스가 실제로 캡처할 영역을 확대해 보여준다(지정이 숫자에 맞는지 확인)."""
+        crop = self._shot.copy(rect)
+        crop.setDevicePixelRatio(1.0)
+        pw = 180
+        ph = max(1, round(pw * rect.height() / max(1, rect.width())))
+        zoomed = crop.scaled(
+            pw, ph,
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.FastTransformation,
+        )
+        # 박스 아래에 패널 배치, 화면 밖이면 위로/안쪽으로 접기
+        px = rect.x()
+        py = rect.bottom() + 14
+        if py + ph + 6 > self.height():
+            py = rect.y() - ph - 24
+        px = max(8, min(px, self.width() - pw - 8))
+        py = max(24, py)
+
+        painter.setOpacity(1.0)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(0, 0, 0, 190))
+        painter.drawRoundedRect(px - 6, py - 22, pw + 12, ph + 30, 8, 8)
+        painter.setPen(QColor(235, 238, 244))
+        painter.drawText(px, py - 7, f"박스 미리보기  {rect.width()}×{rect.height()}")
+        painter.drawPixmap(px, py, zoomed)
+        painter.setPen(QPen(QColor(0, 209, 167), 2))
+        painter.drawRect(px, py, zoomed.width(), zoomed.height())
 
     def _draw_loupe(self, painter: QPainter, pos: QPoint) -> None:
         """커서 주변을 _ZOOM배로 확대해 커서 옆 박스에 그린다(중앙 십자선)."""
