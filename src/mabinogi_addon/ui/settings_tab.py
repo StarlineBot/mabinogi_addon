@@ -6,7 +6,10 @@
 
 from __future__ import annotations
 
+import logging
 import threading
+
+_log = logging.getLogger("mabinogi_addon.discord")
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer, Signal
@@ -141,9 +144,16 @@ class SettingsTab(QWidget):
             self._login_done.emit(False, "", "")
 
     def _on_login_done(self, ok: bool, user_id: str, name: str) -> None:
+        _log.info("UI 로그인 결과 수신: ok=%s id=%s", ok, user_id)
         self._login_btn.setEnabled(True)
         if ok:
-            config.save_discord_user(user_id, name)
+            try:
+                config.save_discord_user(user_id, name)
+            except Exception as exc:  # noqa: BLE001 — 저장 실패도 UI엔 알림
+                _log.warning("사용자 저장 실패: %r", exc)
+                self._login_status.setText("로그인됐지만 저장 실패 — 다시 시도하세요.")
+                self._login_status.setStyleSheet("color:#e67e22;")
+                return
         else:
             self._login_status.setText("로그인 실패/취소 — 다시 시도하세요.")
             self._login_status.setStyleSheet("color:#e67e22;")
