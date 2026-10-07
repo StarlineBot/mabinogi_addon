@@ -1,10 +1,27 @@
 """투아림 트래커 + % 리더 + config 테스트."""
 
+from pathlib import Path
+
+import cv2
 import numpy as np
+import pytest
 
 from mabinogi_addon import config
 from mabinogi_addon.detect.tuarim_reader import read_percent
 from mabinogi_addon.tracker import TuarimTracker
+
+_SAMPLES = Path(__file__).parent / "data" / "tuarim_samples"
+
+
+@pytest.mark.parametrize(
+    "value",
+    [0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+)
+def test_read_percent_on_real_samples(value):
+    """실게임 수집 샘플(선명한 프레임)을 기본 템플릿으로 정확히 판독한다."""
+    img = cv2.imread(str(_SAMPLES / f"{value:02d}.png"))
+    assert img is not None
+    assert read_percent(img) == value
 
 
 # ---- 트래커 ----
