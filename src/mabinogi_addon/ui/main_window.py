@@ -26,6 +26,7 @@ from ..tracker.debuff_engine import DebuffEngine
 from ..tracker.engine import BuffEngine
 from .buff_controller import BuffController
 from .buff_tab import ANCHOR_ID, BuffTab
+from .custom_overlay_tab import CustomOverlayTab
 from .debuff_tab import DebuffTab
 from .memo_overlay import MemoOverlay
 from .memo_tab import MemoTab
@@ -60,12 +61,14 @@ class MainWindow(QMainWindow):
         self.debuff_tab = DebuffTab()
         self.party_tab = PartyTab()
         self.memo_tab = MemoTab()
+        self.custom_overlay_tab = CustomOverlayTab(self._watcher)
         self.settings_tab = SettingsTab(self._watcher)
         tabs = QTabWidget()
         tabs.addTab(self.buff_tab, "버프")
         tabs.addTab(self.debuff_tab, "디버프")
         tabs.addTab(self.party_tab, "파티")
         tabs.addTab(self.memo_tab, "메모")
+        tabs.addTab(self.custom_overlay_tab, "커스텀 오버레이")
         tabs.addTab(self.settings_tab, "설정")
         self.setCentralWidget(tabs)
 
@@ -489,6 +492,7 @@ class MainWindow(QMainWindow):
             self.buff_overlay.close(),
             self.debuff_overlay.close(),
             self.memo_overlay.close(),
+            self.custom_overlay_tab.shutdown(),
         ))
         if self._tray is not None:
             self._tray.hide()

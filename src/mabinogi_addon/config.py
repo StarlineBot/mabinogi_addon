@@ -389,6 +389,68 @@ def add_removed_default(
     _write_local_config(data, path)
 
 
+def _custom_section(path: Path) -> dict:
+    sec = _read_local_config(path).get("customOverlay")
+    return sec if isinstance(sec, dict) else {}
+
+
+def load_custom_overlays(path: Path = LOCAL_CONFIG_PATH) -> list[dict]:
+    """현재 커스텀 오버레이(미러) 목록."""
+    items = _custom_section(path).get("overlays")
+    return [x for x in items if isinstance(x, dict)] if isinstance(items, list) else []
+
+
+def save_custom_overlays(items: list[dict], path: Path = LOCAL_CONFIG_PATH) -> None:
+    data = _read_local_config(path)
+    sec = data.get("customOverlay")
+    if not isinstance(sec, dict):
+        sec = {}
+    sec["overlays"] = items
+    data["customOverlay"] = sec
+    _write_local_config(data, path)
+
+
+def load_custom_presets(path: Path = LOCAL_CONFIG_PATH) -> dict[str, list[dict]]:
+    """저장된 프리셋 {이름: [오버레이...]}."""
+    presets = _custom_section(path).get("presets")
+    if not isinstance(presets, dict):
+        return {}
+    return {
+        str(k): [x for x in v if isinstance(x, dict)]
+        for k, v in presets.items()
+        if isinstance(v, list)
+    }
+
+
+def save_custom_preset(
+    name: str, items: list[dict], path: Path = LOCAL_CONFIG_PATH
+) -> None:
+    data = _read_local_config(path)
+    sec = data.get("customOverlay")
+    if not isinstance(sec, dict):
+        sec = {}
+    presets = sec.get("presets")
+    if not isinstance(presets, dict):
+        presets = {}
+    presets[name] = items
+    sec["presets"] = presets
+    data["customOverlay"] = sec
+    _write_local_config(data, path)
+
+
+def delete_custom_preset(name: str, path: Path = LOCAL_CONFIG_PATH) -> None:
+    data = _read_local_config(path)
+    sec = data.get("customOverlay")
+    if not isinstance(sec, dict):
+        return
+    presets = sec.get("presets")
+    if isinstance(presets, dict) and name in presets:
+        del presets[name]
+        sec["presets"] = presets
+        data["customOverlay"] = sec
+        _write_local_config(data, path)
+
+
 def load_debuff_settings(path: Path = LOCAL_CONFIG_PATH) -> list[BuffSettings]:
     """디버프 설정(이름·노출 여부·순서). 지속시간·알림은 쓰지 않는다."""
     return _load_settings("debuffTracker", "debuffs", path)
