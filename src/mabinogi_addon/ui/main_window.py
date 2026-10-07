@@ -69,9 +69,9 @@ class MainWindow(QMainWindow):
         tabs.addTab(self.buff_tab, "버프")
         tabs.addTab(self.debuff_tab, "디버프")
         tabs.addTab(self.tuarim_tab, "투아림")
+        tabs.addTab(self.custom_overlay_tab, "커스텀 오버레이")
         tabs.addTab(self.party_tab, "파티")
         tabs.addTab(self.memo_tab, "메모")
-        tabs.addTab(self.custom_overlay_tab, "커스텀 오버레이")
         tabs.addTab(self.settings_tab, "설정")
         self.setCentralWidget(tabs)
 

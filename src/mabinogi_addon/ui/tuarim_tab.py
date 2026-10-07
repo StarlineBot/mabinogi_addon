@@ -55,21 +55,24 @@ class TuarimTab(QWidget):
 
         # 리더 박스
         box_row = QHBoxLayout()
-        self.show_btn = QPushButton("리더 박스 표시")
-        self.show_btn.setCheckable(True)
-        self.show_btn.toggled.connect(self._on_show)
+        self.region_btn = QPushButton("영역 지정")
+        self.region_btn.setToolTip("% 숫자 두 자리에 맞춰 드래그(돋보기). 리더 박스가 생깁니다.")
+        self.region_btn.clicked.connect(self._on_region)
         self.lock_btn = QPushButton("고정")
         self.lock_btn.setCheckable(True)
         self.lock_btn.setStyleSheet(
             "QPushButton:checked { background:#00B894; color:white; font-weight:600; }"
         )
         self.lock_btn.toggled.connect(self._on_lock)
-        box_row.addWidget(self.show_btn)
+        box_row.addWidget(self.region_btn)
         box_row.addWidget(self.lock_btn)
         box_row.addStretch(1)
         v.addLayout(box_row)
         v.addWidget(
-            hint_label("박스를 % 숫자 두 자리에 맞추세요(드래그 이동·휠 크기조절). 고정하면 투명+클릭통과.")
+            hint_label(
+                "영역 지정으로 % 숫자 두 자리에 맞춰 박스를 만든 뒤, 드래그로 미세조정·"
+                "휠로 크기조절. 다 맞추면 '고정'(투명+클릭통과)."
+            )
         )
 
         self.value_label = QLabel("현재 값: —")
@@ -85,8 +88,12 @@ class TuarimTab(QWidget):
         v.addWidget(self._threshold_group())
         v.addStretch(1)
 
-        if self._box_state:
-            self.show_btn.setChecked(True)
+        if self._box_state:  # 저장된 박스 복원
+            self._ensure_box(self._box_state)
+            self._box.show()
+            locked = bool(self._box_state.get("locked"))
+            self.lock_btn.setChecked(locked)
+            self._box.set_locked(locked)
 
         self._timer = QTimer(self)
         self._timer.setInterval(150)
@@ -117,14 +124,25 @@ class TuarimTab(QWidget):
         return box
 
     # ---- 리더 박스 ----
-    def _on_show(self, on: bool) -> None:
-        if on:
-            if self._box is None:
-                self._box = TuarimBox(self._box_state or {})
-                self._box.moved.connect(self._save)
-            self._box.show()
-        elif self._box is not None:
-            self._box.hide()
+    def _ensure_box(self, state: dict | None = None) -> None:
+        if self._box is None:
+            self._box = TuarimBox(state or {})
+            self._box.moved.connect(self._save)
+
+    def _on_region(self) -> None:
+        from .region_selector import RegionSelector
+
+        self._selector = RegionSelector()  # 참조 유지(GC 방지)
+        self._selector.selected.connect(self._on_selected)
+        self._selector.start()
+
+    def _on_selected(self, x: int, y: int, w: int, h: int) -> None:
+        self._ensure_box({"x": x, "y": y, "w": w, "h": h})
+        self._box.move(x, y)
+        self._box.resize(w, h)
+        self.lock_btn.setChecked(False)  # 방금 지정 → 미세조정 가능하게 해제
+        self._box.set_locked(False)
+        self._box.show()
         self._save()
 
     def _on_lock(self, locked: bool) -> None:
