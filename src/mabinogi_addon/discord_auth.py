@@ -30,6 +30,34 @@ REDIRECT_URI = f"http://localhost:{PORT}/callback"
 AUTH_BASE = "https://discord.com/api/oauth2/authorize"
 USER_URL = "https://discord.com/api/users/@me"
 
+# 로그인 성공 시 브라우저에 보여줄 페이지(라이트/다크 모두 대응하는 카드).
+_SUCCESS_BODY = """
+<title>로그인 완료</title>
+<style>
+  :root { color-scheme: light dark; }
+  * { box-sizing: border-box; }
+  body { margin:0; min-height:100vh; display:flex; align-items:center;
+    justify-content:center; padding:24px;
+    background:#1e1f24; color:#eef0f4;
+    font-family:'Malgun Gothic','Apple SD Gothic Neo',system-ui,sans-serif; }
+  .card { width:100%; max-width:360px; background:#26272e;
+    border:1px solid #33343c; border-radius:16px; padding:40px 36px;
+    text-align:center; box-shadow:0 10px 34px rgba(0,0,0,.4); }
+  .check { width:66px; height:66px; border-radius:50%; background:#00B894;
+    display:flex; align-items:center; justify-content:center;
+    margin:0 auto 22px; font-size:36px; line-height:1; color:#fff; }
+  h1 { margin:0 0 10px; font-size:22px; font-weight:700; }
+  p { margin:0; color:#a7acb6; font-size:15px; line-height:1.55; }
+  .app { margin-top:24px; font-size:13px; color:#6f7580; }
+</style>
+<div class="card">
+  <div class="check">&#10003;</div>
+  <h1>로그인 완료</h1>
+  <p>디스코드 계정이 연결되었습니다.<br>이 창을 닫고 앱으로 돌아가세요.</p>
+  <div class="app">섯다라인 마비노기 애드온</div>
+</div>
+"""
+
 
 def authorize_url(state: str) -> str:
     """Discord 인증 페이지 URL(implicit: 토큰을 fragment로 돌려줌)."""
@@ -92,7 +120,7 @@ def login(*, open_browser=webbrowser.open, timeout: float = 120.0):
                 params = urllib.parse.parse_qs(parsed.query)
                 captured["access_token"] = (params.get("access_token") or [None])[0]
                 captured["state"] = (params.get("state") or [None])[0]
-                self._send("<h3>로그인 완료</h3><p>이 창을 닫고 앱으로 돌아가세요.</p>")
+                self._send(_SUCCESS_BODY)
                 done.set()
             else:
                 self.send_response(404)
