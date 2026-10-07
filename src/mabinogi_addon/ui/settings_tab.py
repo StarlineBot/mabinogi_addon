@@ -7,12 +7,11 @@
 from __future__ import annotations
 
 import logging
-import threading
 
 _log = logging.getLogger("mabinogi_addon.discord")
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtCore import Qt, QThread, QTimer, Signal
 from PySide6.QtGui import QPainter, QPainterPath, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -75,18 +74,62 @@ _GRID_SIZES = [8, 16, 24, 32, 48, 64]  # 격자 크기 선택지(px)
 _TRAY_START = "startInTray"
 
 
+class _LoginThread(QThread):
+    """디스코드 로그인(브라우저 콜백 대기)을 백그라운드로. QThread라야 done 시그널이
+    UI 스레드로 확실히 전달된다(일반 threading.Thread는 전달이 안 됐다)."""
+
+    done = Signal(bool, str, str)  # (성공, user_id, 이름)
+
+    def run(self) -> None:
+        try:
+            result = discord_auth.login()
+        except Exception:  # noqa: BLE001 — 포트 사용 중·네트워크 오류 등
+            result = None
+        if result:
+            _log.info("워커: login() 반환 성공 → UI로 전달")
+            self.done.emit(True, result[0], result[1])
+        else:
+            _log.info("워커: login() 반환 실패/None → UI로 전달")
+            self.done.emit(False, "", "")
+
+
+class _ConfigExportThread(QThread):
+    """설정을 디스코드 릴레이 웹훅으로 전송(백그라운드)."""
+
+    done = Signal(bool, str)  # (성공, 메시지)
+
+    def __init__(self, webhook: str, user: dict, payload: str, parent=None) -> None:
+        super().__init__(parent)
+        self._webhook = webhook
+        self._user = user
+        self._payload = payload
+
+    def run(self) -> None:
+        from .. import settings_sync
+
+        try:
+            settings_sync.send_config_backup(
+                self._webhook,
+                self._user["id"],
+                self._payload,
+                username=self._user.get("name"),
+            )
+            self.done.emit(True, "설정을 DM으로 보냈습니다. 디스코드를 확인하세요.")
+        except Exception as exc:  # noqa: BLE001 — 네트워크/웹훅 오류 UI로
+            self.done.emit(False, f"전송 실패: {exc}")
+
+
 class SettingsTab(QWidget):
     # 로그인 상태가 바뀌면 메인이 받아 기능 노출(게이팅)을 갱신할 수 있게 알린다.
     login_changed = Signal()
-    _login_done = Signal(bool, str, str)  # (성공, user_id, 이름)
-    _dm_result = Signal(bool, str)  # (성공, 메시지) — DM 내보내기 결과
 
     def __init__(self, watcher: WindowWatcher) -> None:
         super().__init__()
         self._watcher = watcher
         self._detect_count = 0
         self._detect_timer: QTimer | None = None
-        self._dm_result.connect(self._on_dm_result)
+        self._login_thread: _LoginThread | None = None
+        self._export_thread: _ConfigExportThread | None = None
         v = QVBoxLayout(self)
         v.setContentsMargins(12, 12, 12, 12)
         v.setSpacing(12)
@@ -154,20 +197,9 @@ class SettingsTab(QWidget):
         payload = config.config_json_for_export()
         self._dm_export_btn.setEnabled(False)
         self._dm_export_btn.setText("보내는 중…")
-
-        def worker() -> None:
-            from .. import settings_sync
-
-            try:
-                settings_sync.send_config_backup(
-                    webhook, user["id"], payload, username=user.get("name")
-                )
-                ok, msg = True, "설정을 DM으로 보냈습니다. 디스코드를 확인하세요."
-            except Exception as exc:  # noqa: BLE001 — 네트워크/웹훅 오류 UI로
-                ok, msg = False, f"전송 실패: {exc}"
-            self._dm_result.emit(ok, msg)
-
-        threading.Thread(target=worker, daemon=True).start()
+        self._export_thread = _ConfigExportThread(webhook, user, payload, self)
+        self._export_thread.done.connect(self._on_dm_result)
+        self._export_thread.start()
 
     def _on_dm_result(self, ok: bool, msg: str) -> None:
         self._dm_export_btn.setText("디스코드로 내보내기 (DM)")
@@ -206,7 +238,6 @@ class SettingsTab(QWidget):
             "설정 가져오기",
             "설정을 가져왔습니다.\n앱을 다시 시작하면 적용됩니다.",
         )
-        self._login_done.connect(self._on_login_done)
 
     # ---- Discord 계정(로그인) ----
     def _discord_group(self) -> QGroupBox:
@@ -247,19 +278,9 @@ class SettingsTab(QWidget):
         self._login_btn.setEnabled(False)
         self._login_status.setText("브라우저에서 Discord 승인을 진행하세요…")
         self._login_status.setStyleSheet("color:#8a8f98;")
-        threading.Thread(target=self._login_worker, daemon=True).start()
-
-    def _login_worker(self) -> None:
-        try:
-            result = discord_auth.login()
-        except Exception:  # noqa: BLE001 — 포트 사용 중·네트워크 오류 등
-            result = None
-        if result:
-            _log.info("워커: login() 반환 성공 → UI로 전달")
-            self._login_done.emit(True, result[0], result[1])
-        else:
-            _log.info("워커: login() 반환 실패/None → UI로 전달")
-            self._login_done.emit(False, "", "")
+        self._login_thread = _LoginThread(self)
+        self._login_thread.done.connect(self._on_login_done)
+        self._login_thread.start()
 
     def _on_login_done(self, ok: bool, user_id: str, name: str) -> None:
         _log.info("UI 로그인 결과 수신: ok=%s id=%s", ok, user_id)
