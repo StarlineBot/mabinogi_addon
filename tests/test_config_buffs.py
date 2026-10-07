@@ -35,6 +35,17 @@ def test_memo_round_trip(tmp_path):
     assert load_memo(path) == {"text": "메모\n내용", "locked": True, "fontSize": 20}
 
 
+def test_toast_corner_round_trip(tmp_path):
+    from mabinogi_addon.config import load_toast_corner, save_toast_corner
+
+    path = tmp_path / "config.local.json"
+    assert load_toast_corner(path) == "br"  # 기본 우하단
+    save_toast_corner("tl", path)
+    assert load_toast_corner(path) == "tl"
+    save_toast_corner("엉뚱", path)  # 잘못된 값은 기본으로
+    assert load_toast_corner(path) == "br"
+
+
 def test_overlay_state_round_trip(tmp_path):
     path = tmp_path / "config.local.json"
     assert load_overlay_state("buffTracker", path) is None

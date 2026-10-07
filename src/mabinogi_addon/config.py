@@ -184,6 +184,23 @@ def save_party_alert_sound(on: bool, path: Path = LOCAL_CONFIG_PATH) -> None:
     _write_local_config(data, path)
 
 
+# 토스트 표시 모서리: br=우하단(기본) tr=우상단 bl=좌하단 tl=좌상단
+TOAST_CORNERS = ("br", "tr", "bl", "tl")
+
+
+def load_toast_corner(path: Path = LOCAL_CONFIG_PATH) -> str:
+    """토스트 알림이 뜰 화면 모서리(기본 우하단)."""
+    sec = _read_local_config(path).get("toast")
+    corner = sec.get("corner") if isinstance(sec, dict) else None
+    return corner if corner in TOAST_CORNERS else "br"
+
+
+def save_toast_corner(corner: str, path: Path = LOCAL_CONFIG_PATH) -> None:
+    data = _read_local_config(path)
+    data["toast"] = {"corner": corner if corner in TOAST_CORNERS else "br"}
+    _write_local_config(data, path)
+
+
 def save_party_lists(keywords: list[str], excludes: list[str]) -> None:
     """키워드·제외 목록을 로컬 설정에 저장(다른 설정은 보존)."""
     data = _read_local_config()

@@ -72,6 +72,13 @@ _TRAY_MINIMIZE = "minimizeToTray"
 _GRID_SNAP = "gridSnap"
 _GRID_SIZES = [8, 16, 24, 32, 48, 64]  # 격자 크기 선택지(px)
 _TRAY_START = "startInTray"
+# 토스트 알림 위치 선택지(라벨, config 모서리 코드)
+_TOAST_CORNER_CHOICES = [
+    ("우측 하단", "br"),
+    ("우측 상단", "tr"),
+    ("좌측 하단", "bl"),
+    ("좌측 상단", "tl"),
+]
 
 
 class _LoginThread(QThread):
@@ -136,9 +143,9 @@ class SettingsTab(QWidget):
         v.addWidget(self._creator_header())
         v.addWidget(self._inquiry_button())
         v.addWidget(self._discord_group())
+        v.addWidget(self._backup_group())
         v.addWidget(self._general_group())
         v.addWidget(self._game_group())
-        v.addWidget(self._backup_group())
         v.addStretch(1)
 
     def _backup_group(self) -> QGroupBox:
@@ -392,7 +399,34 @@ class SettingsTab(QWidget):
         v.addWidget(
             hint_label("작을수록 미세, 클수록 큼직하게 칸칸 이동. (기본 32px)")
         )
+
+        toast_row = QHBoxLayout()
+        toast_row.addWidget(QLabel("토스트 알림 위치"))
+        self._toast_corner = QComboBox()
+        for label, corner in _TOAST_CORNER_CHOICES:
+            self._toast_corner.addItem(label, corner)
+        cur_corner = config.load_toast_corner()
+        corner_idx = next(
+            (i for i, (_, c) in enumerate(_TOAST_CORNER_CHOICES) if c == cur_corner),
+            0,
+        )
+        self._toast_corner.setCurrentIndex(corner_idx)
+        self._toast_corner.currentIndexChanged.connect(self._on_toast_corner_changed)
+        toast_row.addWidget(self._toast_corner)
+        toast_row.addStretch(1)
+        v.addLayout(toast_row)
+        v.addWidget(
+            hint_label("파티모집 등 토스트 알림이 뜰 화면 모서리. (기본 우측 하단)")
+        )
         return box
+
+    def _on_toast_corner_changed(self, _index: int) -> None:
+        corner = self._toast_corner.currentData()
+        config.save_toast_corner(corner)
+        # 바뀐 위치를 바로 확인할 수 있게 샘플 토스트를 띄운다(다음 토스트부터 적용).
+        from .toast import show_toast
+
+        show_toast("알림 위치", "토스트가 여기에 표시됩니다.", 2000)
 
     # ---- 게임 창 인식(포그라운드 판정 대상) ----
     def _game_group(self) -> QGroupBox:

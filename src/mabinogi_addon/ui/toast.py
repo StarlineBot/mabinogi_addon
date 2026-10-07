@@ -10,9 +10,11 @@ from __future__ import annotations
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import QApplication, QLabel, QVBoxLayout, QWidget
 
+from .. import config
+
 _MARGIN = 16  # 화면 가장자리 여백
 _GAP = 10  # 토스트 사이 간격
-_active: list["Toast"] = []  # 현재 떠 있는 토스트(아래→위로 쌓기)
+_active: list[Toast] = []  # 현재 떠 있는 토스트(아래→위로 쌓기)
 
 
 class Toast(QWidget):
@@ -58,16 +60,16 @@ class Toast(QWidget):
         self._timer.start(duration_ms)
 
     # 클릭하면 즉시 닫기
-    def mousePressEvent(self, event) -> None:  # noqa: N802 (Qt 시그니처)
+    def mousePressEvent(self, event) -> None:
         self.close()
 
-    def closeEvent(self, event) -> None:  # noqa: N802
+    def closeEvent(self, event) -> None:
         if self in _active:
             _active.remove(self)
         _reflow()
         super().closeEvent(event)
 
-    def show_bottom_right(self) -> None:
+    def show_toast_window(self) -> None:
         self.adjustSize()
         _active.append(self)
         _reflow()
@@ -75,20 +77,28 @@ class Toast(QWidget):
 
 
 def _reflow() -> None:
-    """우측 하단 기준으로 떠 있는 토스트들을 아래에서 위로 재배치."""
+    """설정된 모서리 기준으로 떠 있는 토스트들을 쌓아 재배치(안쪽 방향으로)."""
     screen = QApplication.primaryScreen()
     if screen is None:
         return
     area = screen.availableGeometry()
-    y = area.bottom() - _MARGIN
-    for toast in reversed(_active):  # 최신이 맨 아래
-        x = area.right() - _MARGIN - toast.width()
-        y -= toast.height()
-        toast.move(x, y)
-        y -= _GAP
+    corner = config.load_toast_corner()
+    right = corner in ("br", "tr")
+    bottom = corner in ("br", "bl")
+    # 바깥 모서리에서 시작해, 최신이 모서리에 가장 가깝게 안쪽으로 쌓는다.
+    y = (area.bottom() - _MARGIN) if bottom else (area.top() + _MARGIN)
+    for toast in reversed(_active):  # 최신이 모서리 쪽
+        x = (area.right() - _MARGIN - toast.width()) if right else (area.left() + _MARGIN)
+        if bottom:
+            y -= toast.height()
+            toast.move(x, y)
+            y -= _GAP
+        else:
+            toast.move(x, y)
+            y += toast.height() + _GAP
 
 
 def show_toast(title: str, body: str, duration_ms: int = 5000) -> Toast:
     toast = Toast(title, body, duration_ms)
-    toast.show_bottom_right()
+    toast.show_toast_window()
     return toast
