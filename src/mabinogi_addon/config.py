@@ -60,12 +60,15 @@ def _write_local_config(data: dict, path: Path = LOCAL_CONFIG_PATH) -> None:
 _SECRET_KEYS = ("nexonApiKey", "inquiryWebhookUrl")
 
 
+def config_json_for_export(path: Path = LOCAL_CONFIG_PATH) -> str:
+    """내보낼 설정 JSON 문자열(비밀값 제외). 파일 저장·디스코드 전송 공용."""
+    data = {k: v for k, v in _read_local_config(path).items() if k not in _SECRET_KEYS}
+    return json.dumps(data, ensure_ascii=False, indent=2)
+
+
 def export_config(dest: Path, path: Path = LOCAL_CONFIG_PATH) -> None:
     """현재 설정을 파일로 저장(비밀값 제외)."""
-    data = {k: v for k, v in _read_local_config(path).items() if k not in _SECRET_KEYS}
-    Path(dest).write_text(
-        json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
+    Path(dest).write_text(config_json_for_export(path), encoding="utf-8")
 
 
 def import_config(src: Path, path: Path = LOCAL_CONFIG_PATH) -> None:
@@ -118,6 +121,22 @@ def get_inquiry_webhook_url() -> str | None:
     if isinstance(url, str) and url.strip():
         return url.strip()
     return _bundled("INQUIRY_WEBHOOK_URL")
+
+
+def get_config_webhook_url() -> str | None:
+    """설정 백업(디스코드 DM 릴레이)용 웹훅 URL.
+
+    탐색 순서: `.env`/환경변수(CONFIG_WEBHOOK_URL) → `config.local.json`의
+    configWebhookUrl → 번들. 봇이 이 채널을 보고 첨부된 설정을 작성자에게 DM한다.
+    """
+    _load_env()
+    url = os.environ.get("CONFIG_WEBHOOK_URL")
+    if url and url.strip():
+        return url.strip()
+    url = _read_local_config().get("configWebhookUrl")
+    if isinstance(url, str) and url.strip():
+        return url.strip()
+    return _bundled("CONFIG_WEBHOOK_URL")
 
 
 def load_discord_user(path: Path = LOCAL_CONFIG_PATH) -> dict | None:

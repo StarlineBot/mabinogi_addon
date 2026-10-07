@@ -8,3 +8,4 @@ GitHub Secrets에서 이 파일을 채워 PyInstaller로 번들한다. 개발 �
 
 NEXON_API_KEY = ""
 INQUIRY_WEBHOOK_URL = ""
+CONFIG_WEBHOOK_URL = ""

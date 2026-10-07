@@ -79,12 +79,14 @@ class SettingsTab(QWidget):
     # 로그인 상태가 바뀌면 메인이 받아 기능 노출(게이팅)을 갱신할 수 있게 알린다.
     login_changed = Signal()
     _login_done = Signal(bool, str, str)  # (성공, user_id, 이름)
+    _dm_result = Signal(bool, str)  # (성공, 메시지) — DM 내보내기 결과
 
     def __init__(self, watcher: WindowWatcher) -> None:
         super().__init__()
         self._watcher = watcher
         self._detect_count = 0
         self._detect_timer: QTimer | None = None
+        self._dm_result.connect(self._on_dm_result)
         v = QVBoxLayout(self)
         v.setContentsMargins(12, 12, 12, 12)
         v.setSpacing(12)
@@ -113,7 +115,67 @@ class SettingsTab(QWidget):
                 "가져온 뒤 앱을 다시 시작하면 적용됩니다."
             )
         )
+
+        # 디스코드로 내보내기: 봇이 설정 파일을 내 DM으로 보내준다(로그인 필요).
+        self._dm_export_btn = QPushButton("디스코드로 내보내기 (DM)")
+        self._dm_export_btn.clicked.connect(self._on_export_discord)
+        v.addWidget(self._dm_export_btn)
+        v.addWidget(
+            hint_label(
+                "로그인한 계정으로 섯다라인 봇이 설정 파일을 DM으로 보냅니다.\n"
+                "다른 PC에서 그 파일을 받아 '설정 가져오기'로 적용하세요."
+            )
+        )
+        self._refresh_dm_export()
         return box
+
+    def _refresh_dm_export(self) -> None:
+        """로그인 상태에 따라 'DM 내보내기' 버튼 활성/비활성."""
+        if hasattr(self, "_dm_export_btn"):
+            logged_in = config.load_discord_user() is not None
+            self._dm_export_btn.setEnabled(logged_in)
+            self._dm_export_btn.setToolTip(
+                "" if logged_in else "먼저 Discord 로그인이 필요합니다"
+            )
+
+    def _on_export_discord(self) -> None:
+        user = config.load_discord_user()
+        if user is None:
+            QMessageBox.information(
+                self, "디스코드로 내보내기", "먼저 Discord 로그인을 해주세요."
+            )
+            return
+        webhook = config.get_config_webhook_url()
+        if not webhook:
+            QMessageBox.warning(
+                self, "디스코드로 내보내기", "설정 백업 채널이 구성되지 않았습니다."
+            )
+            return
+        payload = config.config_json_for_export()
+        self._dm_export_btn.setEnabled(False)
+        self._dm_export_btn.setText("보내는 중…")
+
+        def worker() -> None:
+            from .. import settings_sync
+
+            try:
+                settings_sync.send_config_backup(
+                    webhook, user["id"], payload, username=user.get("name")
+                )
+                ok, msg = True, "설정을 DM으로 보냈습니다. 디스코드를 확인하세요."
+            except Exception as exc:  # noqa: BLE001 — 네트워크/웹훅 오류 UI로
+                ok, msg = False, f"전송 실패: {exc}"
+            self._dm_result.emit(ok, msg)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _on_dm_result(self, ok: bool, msg: str) -> None:
+        self._dm_export_btn.setText("디스코드로 내보내기 (DM)")
+        self._refresh_dm_export()
+        if ok:
+            QMessageBox.information(self, "디스코드로 내보내기", msg)
+        else:
+            QMessageBox.warning(self, "디스코드로 내보내기", msg)
 
     def _on_export_config(self) -> None:
         path, _ = QFileDialog.getSaveFileName(
@@ -174,6 +236,7 @@ class SettingsTab(QWidget):
             self._login_status.setText("로그인하지 않음")
             self._login_status.setStyleSheet("color:#8a8f98;")
             self._login_btn.setText("Discord 로그인")
+        self._refresh_dm_export()  # 로그인 상태에 맞춰 DM 내보내기 버튼 갱신
 
     def _on_login_clicked(self) -> None:
         if config.load_discord_user():

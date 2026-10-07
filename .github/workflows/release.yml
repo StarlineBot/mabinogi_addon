@@ -29,12 +29,14 @@ jobs:
         env:
           NEXON_API_KEY: ${{ secrets.NEXON_API_KEY }}
           INQUIRY_WEBHOOK_URL: ${{ secrets.INQUIRY_WEBHOOK_URL }}
+          CONFIG_WEBHOOK_URL: ${{ secrets.CONFIG_WEBHOOK_URL }}
         run: |
           uv run python - <<'PY'
           import os
           open("src/mabinogi_addon/_bundled.py", "w", encoding="utf-8").write(
               f'NEXON_API_KEY = {os.environ.get("NEXON_API_KEY", "")!r}\n'
               f'INQUIRY_WEBHOOK_URL = {os.environ.get("INQUIRY_WEBHOOK_URL", "")!r}\n'
+              f'CONFIG_WEBHOOK_URL = {os.environ.get("CONFIG_WEBHOOK_URL", "")!r}\n'
           )
           PY
 
