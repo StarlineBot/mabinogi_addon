@@ -17,7 +17,6 @@ from __future__ import annotations
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QAbstractItemView,
-    QCheckBox,
     QGridLayout,
     QHBoxLayout,
     QInputDialog,
@@ -33,7 +32,7 @@ from .. import config
 from ..system.window_watcher import WindowWatcher
 from .help_dialog import help_title_row
 from .mirror_manager import MirrorManager
-from .widgets import hint_label, section_label
+from .widgets import checkbox, hint_label, section_label
 
 # 커스텀 오버레이 사용법(? 아이콘 → 새 창).
 HELP_TITLE = "커스텀 오버레이 사용법"
@@ -84,7 +83,7 @@ class CustomOverlayTab(QWidget):
         # 자기앱도 포함해야: 미러를 클릭해 드래그하는 순간(우리 앱이 포그라운드가 됨)에도
         # 숨지 않아 이동이 끊기지 않는다.
         self._mgr = MirrorManager(
-            fps=30,  # 화면 전환 시 끊김(드드득) 줄이려 15→30 (전체 캡처 1회/틱, CPU 여유)
+            fps=60,  # 화면 전환 끊김 최소화(전체 캡처 1회/틱). CPU 사용량 보고 조절.
             is_active=lambda: (
                 watcher.is_game_active() or watcher.is_self_active()
             ),
@@ -124,7 +123,7 @@ class CustomOverlayTab(QWidget):
         v.addLayout(preset_row)
 
         # 시작 시 자동 불러오기(선택한 프리셋 대상). ⭐ 표시로 목록에서 구분.
-        self.auto_chk = QCheckBox("⭐ 선택한 프리셋을 시작 시 자동 불러오기")
+        self.auto_chk = checkbox("⭐ 선택한 프리셋을 시작 시 자동 불러오기")
         self.auto_chk.toggled.connect(self._on_auto_toggled)
         v.addWidget(self.auto_chk)
         self.preset_list.itemSelectionChanged.connect(self._sync_auto_checkbox)

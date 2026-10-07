@@ -29,7 +29,7 @@ from .. import config, image_io, paths
 from ..detect.tuarim_reader import read_percent
 from ..tracker import TuarimTracker
 from .help_dialog import help_title_row
-from .widgets import hint_label
+from .widgets import checkbox, hint_label
 
 # 숫자 두 자리+% 를 덮는 고정 박스 크기(px). 스샷 측정: 한 글자 ~16px, '0%'=32×19.
 # 2자리+% ≈ 48×19 → 여유를 둔 기본값. (해상도/UI 배율 다르면 추후 조정)
@@ -110,7 +110,7 @@ class TuarimTab(QWidget):
         prev_row.addWidget(self.value_label, 1)
         v.addLayout(prev_row)
 
-        self.enable = QCheckBox("투아림 알림 사용")
+        self.enable = checkbox("투아림 알림 사용")
         self.enable.setChecked(cfg["enabled"])
         self.enable.toggled.connect(self._save)
         v.addWidget(self.enable)
@@ -138,7 +138,7 @@ class TuarimTab(QWidget):
             spin.setValue(self._thresholds[i] if i < len(self._thresholds) else 95)
             spin.valueChanged.connect(self._save)
             grid.addWidget(spin, i, 1)
-            chk = QCheckBox("소리")
+            chk = checkbox("소리")
             chk.setChecked(self._sounds[i] if i < len(self._sounds) else True)
             chk.toggled.connect(self._save)
             grid.addWidget(chk, i, 2)
@@ -163,7 +163,7 @@ class TuarimTab(QWidget):
         self.snap_btn.setToolTip("지금 캡처된 영역 1장 저장")
         self.snap_btn.clicked.connect(self._save_snapshot)
         row.addWidget(self.snap_btn)
-        self.collect_chk = QCheckBox("수집 모드(값 바뀔 때 자동 저장)")
+        self.collect_chk = checkbox("수집 모드(값 바뀔 때 자동 저장)")
         row.addWidget(self.collect_chk, 1)
         g.addLayout(row)
         self.collect_label = hint_label("")

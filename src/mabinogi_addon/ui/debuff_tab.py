@@ -11,7 +11,6 @@ from pathlib import Path
 from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
-    QCheckBox,
     QFileDialog,
     QHBoxLayout,
     QLineEdit,
@@ -29,7 +28,7 @@ from .. import config
 from ..catalog import USER_DEBUFF_ICON_DIR, BuffDef, available_debuff_catalog
 from .buff_tab import _capture_icon_to, _pixmap
 from .help_dialog import help_title_row
-from .widgets import hint_label, icon_slot, section_label
+from .widgets import checkbox, hint_label, icon_slot, section_label
 
 # 디버프 트래커 사용법(? 아이콘 → 새 창).
 HELP_TITLE = "디버프 트래커 사용법"
@@ -324,7 +323,7 @@ class DebuffTab(QWidget):
         v.addLayout(match_row)
 
         v.addSpacing(6)
-        self.display_check = QCheckBox("오버레이에 표시")
+        self.display_check = checkbox("오버레이에 표시")
         self.display_check.toggled.connect(self._form_changed)
         v.addWidget(self.display_check)
 

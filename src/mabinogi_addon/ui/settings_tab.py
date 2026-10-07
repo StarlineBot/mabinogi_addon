@@ -27,7 +27,7 @@ from PySide6.QtWidgets import (
 
 from .. import config, discord_auth
 from ..system.window_watcher import WindowWatcher
-from .widgets import hint_label
+from .widgets import checkbox, hint_label
 
 _ASSETS = Path(__file__).resolve().parents[1] / "assets"
 PROFILE_IMAGE = _ASSETS / "profile.png"  # 제작자 프로필(없으면 로고로 폴백)
@@ -60,7 +60,7 @@ def _circular(path: Path, size: int) -> QPixmap | None:
 
 
 def _checked(text: str, on: bool = True) -> QCheckBox:
-    box = QCheckBox(text)
+    box = checkbox(text)
     box.setChecked(on)
     return box
 

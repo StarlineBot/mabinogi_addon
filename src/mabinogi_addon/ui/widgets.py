@@ -7,7 +7,19 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QLabel
+from PySide6.QtWidgets import QCheckBox, QLabel, QSizePolicy
+
+
+def checkbox(text: str = "") -> QCheckBox:
+    """체크박스를 글자 너비만큼만 차지하게 만든다.
+
+    세로/stretch 레이아웃에 넣으면 체크박스가 가로로 꽉 늘어나, 그 줄의 빈 공간을
+    클릭해도 토글돼 버린다(앱을 클릭하려다 설정이 바뀌는 문제). 가로 정책을 Maximum으로
+    두면 sizeHint 너비(체크표시+이름)만 차지해 그 영역만 클릭에 반응한다.
+    """
+    cb = QCheckBox(text)
+    cb.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
+    return cb
 
 
 def icon_slot(placeholder: str = "▣") -> QLabel:

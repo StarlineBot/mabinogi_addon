@@ -11,7 +11,6 @@ import threading
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
-    QCheckBox,
     QComboBox,
     QDialog,
     QHBoxLayout,
@@ -26,6 +25,7 @@ from .. import config
 from ..inquiry import send_inquiry
 from ..logbuffer import recent_logs
 from .toast import show_toast
+from .widgets import checkbox
 
 _BUG = "버그 신고"
 _CATEGORIES = [_BUG, "기능 요청", "기타"]
@@ -76,7 +76,7 @@ class InquiryDialog(QDialog):
         v.addWidget(self.content_edit, 1)
 
         # 버그 신고일 때만: 진단용 최근 로그를 파일로 첨부(민감하면 끌 수 있음)
-        self.attach_log = QCheckBox("오류 로그 첨부 (진단용)")
+        self.attach_log = checkbox("오류 로그 첨부 (진단용)")
         self.attach_log.setChecked(True)
         self.attach_log.setToolTip(
             "최근 실행 로그를 파일로 함께 보냅니다. 어떤 상황이었는지 확인에 도움이 됩니다."

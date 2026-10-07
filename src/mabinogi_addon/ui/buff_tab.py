@@ -29,7 +29,7 @@ from PySide6.QtWidgets import (
 from .. import catalog as catalog_mod
 from .. import config
 from ..catalog import BuffDef, available_catalog
-from .widgets import hint_label, icon_slot, section_label
+from .widgets import checkbox, hint_label, icon_slot, section_label
 
 # 앵커로 고정 사용할 버프(항상 존재, 지속시간 없음 → 판정 기준)
 ANCHOR_ID = "premium_battle"
@@ -418,20 +418,20 @@ class BuffTab(QWidget):
         v.addWidget(hint_label("└ 비워두면 매칭 아이콘 사용"))
 
         v.addSpacing(6)
-        self.display_check = QCheckBox("오버레이에 표시")
+        self.display_check = checkbox("오버레이에 표시")
         self.display_check.toggled.connect(self._form_changed)
         v.addWidget(self.display_check)
-        self.show_duration = QCheckBox("지속시간 표시")
+        self.show_duration = checkbox("지속시간 표시")
         self.show_duration.toggled.connect(self._form_changed)
         v.addWidget(self.show_duration)
 
         alert_row = QHBoxLayout()
-        self.alert_check = QCheckBox("종료 알림")
+        self.alert_check = checkbox("종료 알림")
         self.before_spin = QSpinBox()
         self.before_spin.setRange(1, 300)
         self.before_spin.setSuffix(" 초 전")
-        self.blink_check = QCheckBox("점멸")
-        self.sound_check = QCheckBox("소리")
+        self.blink_check = checkbox("점멸")
+        self.sound_check = checkbox("소리")
         for wdg in (self.alert_check, self.before_spin, self.blink_check, self.sound_check):
             alert_row.addWidget(wdg)
         alert_row.addStretch(1)
@@ -445,7 +445,7 @@ class BuffTab(QWidget):
 
         # 2차 알림: 놓침·오독 대비 재알림(소리·점멸은 1차 설정을 그대로 재사용).
         alert_row2 = QHBoxLayout()
-        self.alert2_check = QCheckBox("2차 알림")
+        self.alert2_check = checkbox("2차 알림")
         self.before2_spin = QSpinBox()
         self.before2_spin.setRange(1, 300)
         self.before2_spin.setValue(5)  # 기본 5초 전
