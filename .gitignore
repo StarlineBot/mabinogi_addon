@@ -29,7 +29,8 @@ Thumbs.db
 # 사용자 로컬 설정
 config.local.json
 
-# PyInstaller
+# PyInstaller (빌드 산출물·생성 spec)
+*.spec
 *.spec.bak
 
 # TTS 음성 오디션 결과물 (개발용)

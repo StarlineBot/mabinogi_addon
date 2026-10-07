@@ -56,14 +56,27 @@ def _write_local_config(data: dict, path: Path = LOCAL_CONFIG_PATH) -> None:
     )
 
 
+def _bundled(name: str) -> str | None:
+    """빌드 시 번들된 비밀값(개발 땐 빈 값). 없으면 None."""
+    try:
+        from . import _bundled as b
+
+        v = getattr(b, name, "")
+        return v.strip() if isinstance(v, str) and v.strip() else None
+    except Exception:  # noqa: BLE001 — 번들 모듈 없음/깨짐 → 폴백 없음
+        return None
+
+
 def get_nexon_api_key() -> str | None:
-    """키 탐색 순서: `.env`/환경변수 → `config.local.json`의 nexonApiKey."""
+    """키 탐색 순서: `.env`/환경변수 → `config.local.json` → 번들(배포 exe)."""
     _load_env()
     key = os.environ.get("NEXON_API_KEY")
     if key and key.strip():
         return key.strip()
     key = _read_local_config().get("nexonApiKey")
-    return key.strip() if isinstance(key, str) and key.strip() else None
+    if isinstance(key, str) and key.strip():
+        return key.strip()
+    return _bundled("NEXON_API_KEY")
 
 
 def get_inquiry_webhook_url() -> str | None:
@@ -78,7 +91,9 @@ def get_inquiry_webhook_url() -> str | None:
     if url and url.strip():
         return url.strip()
     url = _read_local_config().get("inquiryWebhookUrl")
-    return url.strip() if isinstance(url, str) and url.strip() else None
+    if isinstance(url, str) and url.strip():
+        return url.strip()
+    return _bundled("INQUIRY_WEBHOOK_URL")
 
 
 def load_discord_user(path: Path = LOCAL_CONFIG_PATH) -> dict | None:

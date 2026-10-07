@@ -1,0 +1,65 @@
+name: release
+
+# 태그(vX.Y.Z) 푸시 → Windows exe 빌드 후 GitHub Release에 첨부.
+# 수동 실행(workflow_dispatch)은 빌드만 하고 아티팩트로 올린다(릴리스는 안 만듦).
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    permissions:
+      contents: write # 릴리스에 exe 업로드
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Sync deps (+ build group)
+        run: uv sync --group build
+
+      - name: Inject bundled secrets
+        shell: bash
+        env:
+          NEXON_API_KEY: ${{ secrets.NEXON_API_KEY }}
+          INQUIRY_WEBHOOK_URL: ${{ secrets.INQUIRY_WEBHOOK_URL }}
+        run: |
+          uv run python - <<'PY'
+          import os
+          open("src/mabinogi_addon/_bundled.py", "w", encoding="utf-8").write(
+              f'NEXON_API_KEY = {os.environ.get("NEXON_API_KEY", "")!r}\n'
+              f'INQUIRY_WEBHOOK_URL = {os.environ.get("INQUIRY_WEBHOOK_URL", "")!r}\n'
+          )
+          PY
+
+      - name: Build exe (PyInstaller)
+        run: >
+          uv run --group build pyinstaller --noconfirm --clean --onefile --windowed
+          --name mabinogi-addon
+          --paths src
+          --add-data "src/mabinogi_addon/assets;assets"
+          --collect-all PySide6
+          --collect-all dxcam
+          --collect-all comtypes
+          --hidden-import win32gui
+          --hidden-import win32process
+          --hidden-import win32con
+          packaging/entry.py
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mabinogi-addon-exe
+          path: dist/mabinogi-addon.exe
+
+      - name: Attach to Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/mabinogi-addon.exe
