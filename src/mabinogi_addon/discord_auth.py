@@ -15,12 +15,16 @@ from __future__ import annotations
 
 import http.server
 import json
+import logging
 import secrets
 import socketserver
 import threading
+import urllib.error
 import urllib.parse
 import urllib.request
 import webbrowser
+
+_log = logging.getLogger("mabinogi_addon.discord")
 
 # 공개값(비밀 아님). 포털 OAuth2 → Redirects에 REDIRECT_URI를 '똑같이' 등록해야 한다.
 CLIENT_ID = "1172437289339727913"
@@ -53,9 +57,27 @@ _SUCCESS_BODY = """
 <div class="card">
   <div class="check">&#10003;</div>
   <h1>로그인 완료</h1>
-  <p>디스코드 계정이 연결되었습니다.<br>이 창을 닫고 앱으로 돌아가세요.</p>
+  <p>디스코드 계정이 연결되었습니다.<br>
+     이 창은 <b id="sec">5</b>초 후 자동으로 닫힙니다.</p>
   <div class="app">섯다라인 마비노기 애드온</div>
 </div>
+<script>
+  var n = 5;
+  var el = document.getElementById('sec');
+  var t = setInterval(function () {
+    n -= 1;
+    if (el) el.textContent = n;
+    if (n <= 0) {
+      clearInterval(t);
+      window.close();               // 스크립트로 연 창이 아니면 막힐 수 있음
+      // 닫기가 막히면 안내 문구로 교체
+      setTimeout(function () {
+        document.querySelector('p').innerHTML =
+          '디스코드 계정이 연결되었습니다.<br>이 창을 닫고 앱으로 돌아가세요.';
+      }, 300);
+    }
+  }, 1000);
+</script>
 """
 
 
@@ -95,6 +117,10 @@ def fetch_user(
     return uid, name
 
 
+class _ReuseTCPServer(socketserver.TCPServer):
+    allow_reuse_address = True  # 재시도 시 포트 '사용 중' 방지
+
+
 def login(*, open_browser=webbrowser.open, timeout: float = 120.0):
     """브라우저로 Discord 로그인 → (user_id, 이름). 실패/취소 시 None.
 
@@ -120,6 +146,11 @@ def login(*, open_browser=webbrowser.open, timeout: float = 120.0):
                 params = urllib.parse.parse_qs(parsed.query)
                 captured["access_token"] = (params.get("access_token") or [None])[0]
                 captured["state"] = (params.get("state") or [None])[0]
+                _log.info(
+                    "콜백 수신: token=%s state=%s",
+                    "있음" if captured["access_token"] else "없음",
+                    "있음" if captured["state"] else "없음",
+                )
                 self._send(_SUCCESS_BODY)
                 done.set()
             else:
@@ -134,18 +165,38 @@ def login(*, open_browser=webbrowser.open, timeout: float = 120.0):
             self.end_headers()
             self.wfile.write(data)
 
-    server = socketserver.TCPServer(("127.0.0.1", PORT), Handler)
+    try:
+        server = _ReuseTCPServer(("127.0.0.1", PORT), Handler)
+    except OSError as exc:
+        _log.warning("로컬 서버 바인드 실패(포트 %d): %s", PORT, exc)
+        return None
     server.timeout = 1.0
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
+        _log.info("로그인 시작: 브라우저 열기")
         open_browser(authorize_url(state))
         if not done.wait(timeout):
+            _log.warning("로그인 시간 초과(%.0fs) — 승인 안 됨", timeout)
             return None  # 시간 초과(사용자가 승인 안 함)
         token = captured.get("access_token")
-        if not token or captured.get("state") != state:
-            return None  # 토큰 없음/상태 불일치(변조 방지)
-        return fetch_user(token)
+        if not token:
+            _log.warning("콜백에 access_token 없음")
+            return None
+        if captured.get("state") != state:
+            _log.warning("state 불일치 — 변조 의심(무시)")
+            return None
+        try:
+            uid, name = fetch_user(token)
+        except urllib.error.HTTPError as exc:
+            _log.warning("사용자 조회 실패(HTTP %s): %s", exc.code, exc.reason)
+            return None
+        except Exception as exc:  # noqa: BLE001 — 네트워크/파싱 오류
+            _log.warning("사용자 조회 실패: %r", exc)
+            return None
+        _log.info("로그인 성공: %s (%s)", name, uid)
+        return uid, name
     finally:
         server.shutdown()
         server.server_close()
+        _log.info("로컬 서버 종료")
