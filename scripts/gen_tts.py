@@ -54,13 +54,13 @@ PACKS: list[dict] = [
         "speaking_rate": 0.95,
         # 부드러운: 마침표로 자연스럽게(Chirp3는 ~/!를 어색하게 읽음). 감정은 단어·목소리로.
         "lines": {
-            F_VIVACE: "비바체 연장해요.",
-            F_SHARP: "상지 잊지 말아요.",
-            F_HAM: "햄 버닝 연장할 시간이에요.",
-            F_MARCH: "행진곡 연장해요.",
-            F_OVERTURE: "전장의 서곡 연장해요.",
+            F_VIVACE: "비바체 연장해주세요.",
+            F_SHARP: "상지를 다시 걸어요.",
+            F_HAM: "햄찌를 다시 소환해요.",
+            F_MARCH: "행진곡 연장해주세요.",
+            F_OVERTURE: "전장 연장해주세요.",
             F_PARTY: "파티 모집이 올라왔어요.",
-            F_TUARIM: "투아림 곧 터져요.",
+            F_TUARIM: "투아림이 곧 다가와요.",
         },
     },
     {
@@ -74,9 +74,9 @@ PACKS: list[dict] = [
         "lines": {
             F_VIVACE: "비바체 연장할 시간이에요.",
             F_SHARP: "상지 잊지 마세요.",
-            F_HAM: "햄 버닝 연장할 시간이에요.",
+            F_HAM: "햄찌 연장할 시간이에요.",
             F_MARCH: "행진곡 연장할 시간이에요.",
-            F_OVERTURE: "전장의 서곡 연장할 시간이에요.",
+            F_OVERTURE: "전장 연장할 시간이에요.",
             F_PARTY: "파티 모집이 올라왔어요.",
             F_TUARIM: "투아림 곧 터져요.",
         },
