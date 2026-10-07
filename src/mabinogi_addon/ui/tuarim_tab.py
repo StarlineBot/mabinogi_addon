@@ -232,7 +232,12 @@ class TuarimTab(QWidget):
 
     # ---- 읽기 루프 ----
     def _tick(self) -> None:
-        if not self._region or not self._watcher.is_game_active():
+        # 게임 '또는 우리 앱'이 활성일 때 읽는다. 앱을 보며 영역을 맞추거나 템플릿을
+        # 수집할 때도 미리보기가 갱신되게(버프/미러와 동일 기준).
+        active = (
+            self._watcher.is_game_active() or self._watcher.is_self_active()
+        )
+        if not self._region or not active:
             return
         r = self._region
         frame = self._grab_rect(r["x"], r["y"], r["w"], r["h"])
