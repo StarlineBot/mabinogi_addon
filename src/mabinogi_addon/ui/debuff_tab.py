@@ -27,7 +27,7 @@ from PySide6.QtWidgets import (
 from .. import catalog as catalog_mod
 from .. import config
 from ..catalog import DEFAULT_DEBUFF_ICON_DIR, BuffDef, load_debuff_catalog
-from .buff_tab import _pixmap
+from .buff_tab import _capture_icon_to, _pixmap
 from .widgets import hint_label, icon_slot, section_label
 
 
@@ -281,7 +281,12 @@ class DebuffTab(QWidget):
         match_row = QHBoxLayout()
         self.match_slot = icon_slot()
         match_row.addWidget(self.match_slot)
-        match_row.addWidget(QPushButton("영역에서 가져오기"))
+        self.match_capture_btn = QPushButton("영역에서 가져오기")
+        self.match_capture_btn.setToolTip(
+            "화면에서 아이콘을 드래그로 집어 매칭 아이콘으로 저장(돋보기 지원)"
+        )
+        self.match_capture_btn.clicked.connect(self._capture_match_icon)
+        match_row.addWidget(self.match_capture_btn)
         file_btn = QPushButton("파일 선택")
         file_btn.clicked.connect(self._pick_match_icon)
         match_row.addWidget(file_btn)
@@ -341,6 +346,19 @@ class DebuffTab(QWidget):
         if not path:
             return
         catalog_mod.set_match_icon(did, Path(path), icon_dir=DEFAULT_DEBUFF_ICON_DIR)
+        self._reload(select=did)
+
+    def _capture_match_icon(self) -> None:
+        """화면에서 아이콘을 드래그로 집어(돋보기 지원) 매칭 아이콘으로 저장."""
+        did = self._current
+        if did is None:
+            return
+        _capture_icon_to(self, did, self._on_match_captured)
+
+    def _on_match_captured(self, did: str, tmp: Path, ok: bool) -> None:
+        if not ok or not tmp.exists():
+            return
+        catalog_mod.set_match_icon(did, tmp, icon_dir=DEFAULT_DEBUFF_ICON_DIR)
         self._reload(select=did)
 
     def _set_slot(self, slot, path: Path | None, placeholder: str) -> None:

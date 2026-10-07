@@ -35,6 +35,23 @@ from .widgets import hint_label, icon_slot, section_label
 ANCHOR_ID = "premium_battle"
 
 
+def _capture_icon_to(tab: QWidget, item_id: str, on_done) -> None:
+    """전체화면 선택창(돋보기)으로 아이콘을 드래그해 임시 PNG로 저장한다.
+
+    저장이 끝나면 on_done(item_id, tmp_path, ok)를 호출한다. 선택창은 GC되지 않도록
+    탭에 참조(_icon_selector)를 붙여 둔다.
+    """
+    import tempfile
+
+    from .region_selector import RegionSelector
+
+    tmp = Path(tempfile.gettempdir()) / f"_mabi_icon_{item_id}.png"
+    selector = RegionSelector(save_path=tmp)
+    tab._icon_selector = selector  # 참조 유지(GC 방지)
+    selector.captured.connect(lambda ok: on_done(item_id, tmp, ok))
+    selector.start()
+
+
 def _pixmap(path: Path | None, size: int) -> QPixmap | None:
     if path is None:
         return None
@@ -319,7 +336,12 @@ class BuffTab(QWidget):
         match_row = QHBoxLayout()
         self.match_slot = icon_slot()
         match_row.addWidget(self.match_slot)
-        match_row.addWidget(QPushButton("상태창에서 가져오기"))
+        self.match_capture_btn = QPushButton("상태창에서 가져오기")
+        self.match_capture_btn.setToolTip(
+            "화면에서 아이콘을 드래그로 집어 매칭 아이콘으로 저장(돋보기 지원)"
+        )
+        self.match_capture_btn.clicked.connect(self._capture_match_icon)
+        match_row.addWidget(self.match_capture_btn)
         self.match_file_btn = QPushButton("파일 선택")
         self.match_file_btn.clicked.connect(self._pick_match_icon)
         match_row.addWidget(self.match_file_btn)
@@ -489,6 +511,19 @@ class BuffTab(QWidget):
         if not path:
             return
         catalog_mod.set_match_icon(bid, Path(path))
+        self._reload_catalog(select=bid)
+
+    def _capture_match_icon(self) -> None:
+        """화면에서 아이콘을 드래그로 집어(돋보기 지원) 매칭 아이콘으로 저장."""
+        bid = self._current
+        if bid is None or bid == ANCHOR_ID:
+            return
+        _capture_icon_to(self, bid, self._on_match_captured)
+
+    def _on_match_captured(self, bid: str, tmp: Path, ok: bool) -> None:
+        if not ok or not tmp.exists():
+            return
+        catalog_mod.set_match_icon(bid, tmp)
         self._reload_catalog(select=bid)
 
     def _pick_display_image(self) -> None:

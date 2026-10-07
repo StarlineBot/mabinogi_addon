@@ -9,6 +9,8 @@ ESC로 취소. 선택 완료 시 selected(x, y, w, h) 시그널.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from PySide6.QtCore import QPoint, QRect, Qt, Signal
 from PySide6.QtGui import QColor, QGuiApplication, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import QWidget
@@ -19,14 +21,23 @@ _OFFSET = 28  # 커서에서 돋보기까지 거리
 
 
 class RegionSelector(QWidget):
+    """전체화면 드래그로 영역을 고른다(돋보기 포함).
+
+    기본은 '좌표만' 돌려주는 영역 지정(selected). save_path를 주면 '크롭 모드'가 되어
+    고른 영역을 스냅샷에서 잘라 PNG로 저장하고 captured(저장 성공 여부)를 방출한다 →
+    그림판 없이 상태창에서 바로 매칭 아이콘을 집을 때 쓴다.
+    """
+
     selected = Signal(int, int, int, int)  # 화면 픽셀 x, y, w, h
     cancelled = Signal()
+    captured = Signal(bool)  # 크롭 모드: 저장 성공=True, 취소/너무 작음=False
 
-    def __init__(self) -> None:
+    def __init__(self, save_path: Path | None = None) -> None:
         super().__init__(
             None,
             Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint,
         )
+        self._save_path = save_path
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setCursor(Qt.CursorShape.CrossCursor)
         self.setMouseTracking(True)  # 버튼 안 눌러도 이동 이벤트 받기(돋보기용)
@@ -67,7 +78,12 @@ class RegionSelector(QWidget):
             return
         rect = self._rect
         self.close()
-        if rect.width() >= 4 and rect.height() >= 4:
+        big_enough = rect.width() >= 4 and rect.height() >= 4
+        if self._save_path is not None:
+            # 크롭 모드: 좌표가 아니라 잘라낸 이미지를 저장.
+            self.captured.emit(big_enough and self._save_crop(rect))
+            return
+        if big_enough:
             self.selected.emit(
                 self._screen_geo.x() + rect.x(),
                 self._screen_geo.y() + rect.y(),
@@ -76,6 +92,23 @@ class RegionSelector(QWidget):
             )
         else:
             self.cancelled.emit()
+
+    def _save_crop(self, rect: QRect) -> bool:
+        """스냅샷에서 고른 영역을 물리 픽셀 기준으로 잘라 PNG로 저장."""
+        if self._shot.isNull() or self._save_path is None:
+            return False
+        dpr = self._shot.devicePixelRatio()  # HiDPI(배율>100%)에서도 실제 픽셀로
+        shot = self._shot
+        shot.setDevicePixelRatio(1.0)
+        crop = shot.copy(
+            round(rect.x() * dpr),
+            round(rect.y() * dpr),
+            round(rect.width() * dpr),
+            round(rect.height() * dpr),
+        )
+        if crop.isNull() or crop.width() < 2 or crop.height() < 2:
+            return False
+        return crop.save(str(self._save_path), "PNG")
 
     def keyPressEvent(self, event) -> None:  # noqa: N802
         if event.key() == Qt.Key.Key_Escape:
