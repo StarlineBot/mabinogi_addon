@@ -82,6 +82,51 @@ def test_tuarim_config_defaults(tmp_path):
     assert d["box"] is None
 
 
+def _make_tab(monkeypatch, reads):
+    """읽기값 시퀀스(reads)를 돌려주는 가짜 리더로 TuarimTab을 구성."""
+    from PySide6.QtWidgets import QApplication
+
+    QApplication.instance() or QApplication([])
+    from mabinogi_addon.ui import tuarim_tab as mod
+
+    seq = list(reads)
+    monkeypatch.setattr(mod, "read_percent", lambda _f: seq.pop(0) if seq else None)
+
+    class W:
+        def is_game_active(self):
+            return True
+
+        def is_self_active(self):
+            return False
+
+    tab = mod.TuarimTab(W())
+    tab._region = {"x": 0, "y": 0, "w": 28, "h": 13}
+    tab._grab_rect = lambda *a: np.zeros((13, 28, 3), np.uint8)
+    tab._tracker = TuarimTracker([70])
+    tab.enable.setChecked(True)
+    fired = []
+    tab._play = lambda t: fired.append(t)
+    return tab, fired, len(reads)
+
+
+def test_single_misread_spike_does_not_fire(monkeypatch):
+    """65 유지 중 한 프레임만 71로 오탐 → 임계 70 알림이 울리면 안 된다."""
+    tab, fired, n = _make_tab(monkeypatch, [65, 65, 71, 65, 65, 65])
+    for _ in range(n):
+        tab._tick()
+    tab.shutdown()
+    assert fired == []
+
+
+def test_genuine_crossing_fires_once(monkeypatch):
+    """69→70으로 올라가면(확정) 임계 70이 정확히 한 번만 울린다."""
+    tab, fired, n = _make_tab(monkeypatch, [69, 69, 70, 70, 71, 71])
+    for _ in range(n):
+        tab._tick()
+    tab.shutdown()
+    assert fired == [70]
+
+
 def test_tuarim_config_roundtrip(tmp_path):
     p = tmp_path / "config.local.json"
     config.save_tuarim(

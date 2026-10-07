@@ -69,6 +69,8 @@ class TuarimTab(QWidget):
         # 숫자 템플릿 수집용 상태
         self._last_frame = None  # 마지막으로 캡처한 영역(스냅샷 저장 대상)
         self._last_value: int | None = None  # 마지막 판독값(스냅샷 파일명 태그용)
+        self._prev_raw: int | None = None  # 직전 원시 판독값(2연속 확정용)
+        self._stable_value: int | None = None  # 확정된 값(알림·표시에 사용)
         self._last_saved_frame = None  # 수집 모드: 직전 '저장한' 영상(변화 감지 기준)
         # 개발용: git 추적 폴더에 저장 → 집에서 수집 후 '푸시'하면 클로드가 템플릿을 만든다.
         self._shot_dir = paths.project_root() / "tests" / "data" / "tuarim_shots"
@@ -246,8 +248,15 @@ class TuarimTab(QWidget):
             return
         self._show_preview(frame)
         self._last_frame = frame  # 스냅샷 저장 대상
-        value = read_percent(frame)
-        self._last_value = value  # 스냅샷 파일명 태그용
+        raw = read_percent(frame)
+        self._last_value = raw  # 스냅샷 파일명 태그용(원시값)
+        # 안정화: 같은 값이 2번 연속 읽혀야 '확정'으로 채택한다. 게이지는 150ms당
+        # 천천히 변하므로, 단발 오탐(한 프레임만 다른 값)은 걸러져 거짓/중복 알림을 막는다.
+        value = self._stable_value
+        if raw is not None and raw == self._prev_raw:
+            value = raw
+            self._stable_value = raw
+        self._prev_raw = raw
         self.value_label.setText(
             f"현재 값: {value}%" if value is not None else "현재 값: —"
         )
@@ -255,7 +264,7 @@ class TuarimTab(QWidget):
         # 아니라 영상 변화 기준이라, 템플릿이 아직 없어(value=None) 판독이 안 돼도 숫자가
         # 바뀔 때마다 모인다.
         if self.collect_chk.isChecked() and self._frame_changed(frame):
-            self._write_shot(frame, value)
+            self._write_shot(frame, raw)
             self._last_saved_frame = frame
         if self.enable.isChecked():
             for t in self._tracker.observe(value):
