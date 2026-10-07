@@ -9,7 +9,8 @@
 - EXPIRING→ACTIVE: 시간 증가(연장) 감지 → 알림 해제
 - ACTIVE/EXPIRING→ABSENT: 사라짐 판정
 내부 시계: 마지막 정상 판독값 − 경과시간. 알림은 내부 시계 기준(화면 안 보여도 울림).
-판정 불가(frame_valid=False: 앵커 미검출·게임 비활성): 상태 동결, 시계만 진행.
+판정 불가(frame_valid=False: 앵커 미검출·게임 비활성): 화면 기반 판단은 동결하되,
+  내부 시계가 0에 닿으면 만료 처리(시간 경과는 화면과 무관).
 """
 
 from __future__ import annotations
@@ -95,8 +96,19 @@ class BuffStateMachine:
         now: float,
         frame_valid: bool = True,
     ) -> Event:
-        # 판정 불가: 아무 판단도 하지 않고 시계만 흐르게 둔다(상태 동결).
+        # 판정 불가: 화면 기반 판단(감지·연장·해제)은 멈추되(상태 동결), 내부 시계가
+        # 0에 닿으면 만료 처리한다. "시간이 다 됐다"는 화면을 안 읽어도 아는 사실이라
+        # 동결 원칙을 깨지 않는다 → 앵커가 오래 안 보여도 0초면 오버레이에서 사라지고,
+        # 다시 보일 때 버프가 살아 있으면 재감지로 다시 뜬다.
         if not frame_valid:
+            remaining = self.remaining(now)
+            if (
+                self.state is not State.ABSENT
+                and remaining is not None
+                and remaining <= 0
+            ):
+                self._reset()
+                return Event.EXPIRED
             return Event.NONE
 
         if detected:

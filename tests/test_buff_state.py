@@ -112,10 +112,27 @@ def test_mid_release_when_missing_long_enough():
 def test_frozen_on_invalid_frame():
     sm = BuffStateMachine(disappear_sec=2.0)
     _appear(sm, reading=100, t0=0.0)
-    # 판정 불가: 미감지여도 사라짐 처리 안 함
+    # 판정 불가: 미감지여도 사라짐 처리 안 함(내부 시계는 아직 양수)
     for t in (1.0, 5.0, 10.0):
         assert sm.observe(detected=False, reading=None, now=t, frame_valid=False) is Event.NONE
     assert sm.state is State.ACTIVE
+
+
+def test_frozen_clock_expires_when_zero():
+    """판정 불가(앵커 오래 안 보임) 중에도 내부 시계가 0에 닿으면 만료·제거.
+
+    시간 경과는 화면과 무관한 사실 → 동결 원칙을 깨지 않는다. 다시 보일 때
+    버프가 살아 있으면 재감지로 다시 뜬다.
+    """
+    sm = BuffStateMachine(appear_frames=3, alert_before=2)
+    _appear(sm, reading=5, t0=0.0)  # 5초 버프, @0.4 활성(알림 기준 2초라 ACTIVE 유지)
+    assert sm.state is State.ACTIVE
+    # 앵커가 계속 안 보이는 동안(frame_valid=False) 시계만 흐름
+    assert sm.observe(detected=False, reading=None, now=3.0, frame_valid=False) is Event.NONE
+    assert sm.state is State.ACTIVE
+    # 시계 소진(5초 경과) → 화면을 못 봐도 만료 처리
+    assert sm.observe(detected=False, reading=None, now=6.0, frame_valid=False) is Event.EXPIRED
+    assert sm.state is State.ABSENT
 
 
 def test_duration_less_buff_never_alerts():
