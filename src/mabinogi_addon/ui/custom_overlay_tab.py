@@ -35,6 +35,12 @@ QListWidget::item:hover { background:#2f333a; }
 QListWidget::item:selected { background:#00B894; color:white; }
 """
 
+# 삭제(파괴적) 버튼 강조색
+_DANGER_QSS = (
+    "QPushButton { background:#e74c3c; color:white; font-weight:600; }"
+    "QPushButton:hover { background:#c0392b; }"
+)
+
 
 def _name_list() -> QListWidget:
     lst = QListWidget()
@@ -70,6 +76,7 @@ class CustomOverlayTab(QWidget):
         self.preset_load_btn = QPushButton("불러오기")
         self.preset_load_btn.clicked.connect(self.preset_load_requested)
         self.preset_delete_btn = QPushButton("삭제")
+        self.preset_delete_btn.setStyleSheet(_DANGER_QSS)
         self.preset_delete_btn.clicked.connect(self.preset_delete_requested)
         preset_row.addWidget(self.preset_load_btn)
         preset_row.addWidget(self.preset_delete_btn)
@@ -95,7 +102,9 @@ class CustomOverlayTab(QWidget):
         self.sel_lock_btn = QPushButton("선택 고정")
         self.sel_unlock_btn = QPushButton("선택 해제")
         self.del_sel_btn = QPushButton("선택 삭제")
+        self.del_sel_btn.setStyleSheet(_DANGER_QSS)
         self.del_all_btn = QPushButton("전체 삭제")
+        self.del_all_btn.setStyleSheet(_DANGER_QSS)
         self.lock_all_btn = QPushButton("전체 고정")
         self.unlock_all_btn = QPushButton("전체 해제")
         # 1행: 프리셋 저장(2칸) · 선택 고정(1) · 선택 해제(1)
