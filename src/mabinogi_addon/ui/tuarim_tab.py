@@ -304,11 +304,11 @@ class TuarimTab(QWidget):
         idx = self._thresholds.index(threshold) if threshold in self._thresholds else 0
         if idx < len(self._sounds) and not self._sounds[idx]:
             return
-        from .notifier import SOUND_DIR, SoundNotifier
+        from .notifier import SoundNotifier, sound_path
 
         if self._notifier is None:
             self._notifier = SoundNotifier(
-                {"tuarim": SOUND_DIR / "투아림 부스트 발동 직전.mp3"}
+                {"tuarim": sound_path("투아림 부스트 발동 직전.mp3")}
             )
         if not self._notifier.play("tuarim"):
             from PySide6.QtWidgets import QApplication

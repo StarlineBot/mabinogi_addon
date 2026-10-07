@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QSize, Qt, Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QBrush, QColor
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -33,7 +33,7 @@ from ..party.models import Recruit
 from ..party.service import build_board, humanize_age
 from ..party.worker import PartyWorker
 from .help_dialog import help_title_row
-from .notifier import PARTY_ALERT_FILE, SoundNotifier
+from .notifier import SoundNotifier, sound_path
 from .toast import show_toast
 from .widgets import hint_label
 
@@ -105,11 +105,11 @@ class _ChipRow(QWidget):
     def set_x_visible(self, visible: bool) -> None:
         self._x.setVisible(visible)
 
-    def enterEvent(self, event) -> None:  # noqa: N802 (Qt 시그니처)
+    def enterEvent(self, event) -> None:
         self._x.setVisible(True)
         super().enterEvent(event)
 
-    def leaveEvent(self, event) -> None:  # noqa: N802
+    def leaveEvent(self, event) -> None:
         # 선택된 항목은 계속 X 유지(아래 _sync_x에서 관리)
         if not self.property("selected"):
             self._x.setVisible(False)
@@ -122,7 +122,9 @@ class PartyTab(QWidget):
         self._keywords, self._excludes = config.load_party_lists()
         self._worker: PartyWorker | None = None
         self._last_raw: list[dict] = []  # 마지막 거뿔 원본(즉시 재필터용)
-        self._sound = SoundNotifier({"party": PARTY_ALERT_FILE}, volume=0.6)
+        self._sound = SoundNotifier(
+            {"party": sound_path("파티 알림.mp3")}, volume=0.6
+        )
 
         root = QVBoxLayout(self)
         root.setContentsMargins(12, 12, 12, 12)

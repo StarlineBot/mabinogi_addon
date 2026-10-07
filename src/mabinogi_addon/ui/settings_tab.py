@@ -465,6 +465,27 @@ class SettingsTab(QWidget):
         v.addWidget(
             hint_label("파티모집 등 토스트 알림이 뜰 화면 모서리. (기본 우측 하단)")
         )
+
+        from .notifier import list_voice_packs
+
+        voice_row = QHBoxLayout()
+        voice_row.addWidget(QLabel("알림 목소리"))
+        self._voice_pack = QComboBox()
+        self._voice_pack.addItem("기본(녹음)", "")  # flat 녹음본
+        for pack in list_voice_packs():
+            self._voice_pack.addItem(pack, pack)
+        cur_pack = config.load_voice_pack()
+        vi = self._voice_pack.findData(cur_pack)
+        self._voice_pack.setCurrentIndex(max(vi, 0))
+        self._voice_pack.currentIndexChanged.connect(
+            lambda _i: config.save_voice_pack(self._voice_pack.currentData())
+        )
+        voice_row.addWidget(self._voice_pack)
+        voice_row.addStretch(1)
+        v.addLayout(voice_row)
+        v.addWidget(
+            hint_label("버프·투아림·파티 알림에 쓸 목소리 팩. (다시 시작하면 적용)")
+        )
         return box
 
     def _on_autostart_toggled(self, on: bool) -> None:

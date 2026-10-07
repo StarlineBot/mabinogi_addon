@@ -20,6 +20,29 @@ SOUND_DIR = paths.resource_dir() / "sounds"
 # 파티 키워드 알림 효과음(있으면 재생, 없으면 호출 측에서 시스템 비프로 폴백).
 PARTY_ALERT_FILE = SOUND_DIR / "파티 알림.mp3"
 
+
+def list_voice_packs() -> list[str]:
+    """사용 가능한 목소리 팩(하위 폴더) 이름들. 기본(녹음본)은 flat이라 제외."""
+    if not SOUND_DIR.exists():
+        return []
+    return sorted(p.name for p in SOUND_DIR.iterdir() if p.is_dir())
+
+
+def sound_path(filename: str) -> Path:
+    """활성 목소리 팩에 그 파일이 있으면 그 경로, 없으면 기본(flat) 경로.
+
+    팩은 '같은 파일명, 다른 음성·말투' 묶음이라 폴더만 바뀐다. 팩에 없는 알림은
+    기본 녹음본으로 폴백한다.
+    """
+    from .. import config
+
+    pack = config.load_voice_pack()
+    if pack:
+        candidate = SOUND_DIR / pack / filename
+        if candidate.exists():
+            return candidate
+    return SOUND_DIR / filename
+
 # buff_id → 사운드 파일명(개발 자산). 배포 때 패키지 자산으로 옮긴다.
 DEFAULT_SOUNDS: dict[str, str] = {
     "vivace": "비바체 연장.mp3",
@@ -31,10 +54,10 @@ DEFAULT_SOUNDS: dict[str, str] = {
 
 
 def default_sound_map() -> dict[str, Path]:
-    """존재하는 사운드 파일만 buff_id → 경로로."""
+    """존재하는 사운드 파일만 buff_id → 경로로(활성 목소리 팩 우선)."""
     out: dict[str, Path] = {}
     for bid, name in DEFAULT_SOUNDS.items():
-        path = SOUND_DIR / name
+        path = sound_path(name)
         if path.exists():
             out[bid] = path
     return out

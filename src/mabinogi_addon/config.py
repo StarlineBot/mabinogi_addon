@@ -278,6 +278,19 @@ def save_party_alert_sound(on: bool, path: Path = LOCAL_CONFIG_PATH) -> None:
     _write_local_config(data, path)
 
 
+def load_voice_pack(path: Path = LOCAL_CONFIG_PATH) -> str:
+    """알림 목소리 팩 폴더 이름. 빈 문자열이면 기본(녹음본)."""
+    v = _read_local_config(path).get("voice")
+    pack = v.get("pack") if isinstance(v, dict) else None
+    return pack if isinstance(pack, str) else ""
+
+
+def save_voice_pack(pack: str, path: Path = LOCAL_CONFIG_PATH) -> None:
+    data = _read_local_config(path)
+    data["voice"] = {"pack": pack or ""}
+    _write_local_config(data, path)
+
+
 # 토스트 표시 모서리: br=우하단(기본) tr=우상단 bl=좌하단 tl=좌상단
 TOAST_CORNERS = ("br", "tr", "bl", "tl")
 

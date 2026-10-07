@@ -35,6 +35,17 @@ def test_memo_round_trip(tmp_path):
     assert load_memo(path) == {"text": "메모\n내용", "locked": True, "fontSize": 20}
 
 
+def test_voice_pack_round_trip(tmp_path):
+    from mabinogi_addon.config import load_voice_pack, save_voice_pack
+
+    path = tmp_path / "config.local.json"
+    assert load_voice_pack(path) == ""  # 기본(녹음)
+    save_voice_pack("부드러운 여성", path)
+    assert load_voice_pack(path) == "부드러운 여성"
+    save_voice_pack("", path)  # 기본으로 되돌리기
+    assert load_voice_pack(path) == ""
+
+
 def test_toast_corner_round_trip(tmp_path):
     from mabinogi_addon.config import load_toast_corner, save_toast_corner
 
