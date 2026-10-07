@@ -118,11 +118,11 @@ class BuffController(QObject):
         if self._worker is not None:
             self._worker.stop()
 
-    def stop(self) -> None:
+    def stop(self, timeout_ms: int = 2000) -> None:
         if self._worker is not None:
             self._worker.stop()
             t = time.perf_counter()
-            ok = self._worker.wait(2000)
+            ok = self._worker.wait(timeout_ms)
             _log.info(
                 "워커 wait %.0fms (정상종료=%s)",
                 (time.perf_counter() - t) * 1000, ok,

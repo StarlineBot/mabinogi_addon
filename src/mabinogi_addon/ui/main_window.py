@@ -485,10 +485,12 @@ class MainWindow(QMainWindow):
         for c in (self.buff_controller, self.debuff_controller):
             if c is not None:
                 c.request_stop()
+        # 종료 시엔 짧게만 기다린다. dxcam grab이 프레임 대기로 블로킹되면 2초까지
+        # 걸리는데, 어차피 종료 중이라 abandon해도 안전(코드가 참조 유지로 파괴 방지).
         if self.buff_controller is not None:
-            _step("버프 추적 정지", self.buff_controller.stop)
+            _step("버프 추적 정지", lambda: self.buff_controller.stop(timeout_ms=600))
         if self.debuff_controller is not None:
-            _step("디버프 추적 정지", self.debuff_controller.stop)
+            _step("디버프 추적 정지", lambda: self.debuff_controller.stop(timeout_ms=600))
         _step("오버레이 닫기", lambda: (
             self.buff_overlay.close(),
             self.debuff_overlay.close(),
