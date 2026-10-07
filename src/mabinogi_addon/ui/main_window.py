@@ -237,12 +237,14 @@ class MainWindow(QMainWindow):
             self._compute_tracking(catalog)
         )
         self._sound_ids = self._sound_enabled_ids()
-        # 초기 구동에선 앵커 게이팅 off(앵커가 영역 밖이면 전부 동결되는 것 방지).
-        # 매칭 안정화 후 앵커 기반 '판정 불가' 로직을 다시 켠다.
+        # 앵커 게이팅: 앵커(프리미엄 전투)가 보이는 프레임만 '정상'으로 보고,
+        # 안 보이면 상태를 동결(내부 시계로 버팀)하다 다시 보이면 동기화한다.
+        # 단 앵커가 영역에 애초에 없으면(한 번도 안 보이면) 게이팅하지 않아
+        # 기존 동작과 동일 — 엔진 쪽 anchor_seen 안전장치가 처리한다.
         self._engine = BuffEngine(
             build_templates(catalog),
             order,
-            anchor_id=None,
+            anchor_id=ANCHOR_ID,
             show_duration=show_duration,
             alert_before=alert_before,
             alert_before2=alert_before2,

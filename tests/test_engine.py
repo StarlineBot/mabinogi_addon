@@ -82,9 +82,35 @@ def test_set_alert_before_affects_alerting():
     assert by_id["vivace"].alerting is True
 
 
-def test_anchor_missing_freezes():
-    # 이 화면엔 앵커(premium_battle)가 없음 → 판정 불가 → 아무것도 활성화 안 됨
+def test_anchor_never_seen_does_not_gate():
+    # 앵커를 지정해도 한 번도 보인 적 없으면(영역에 앵커가 없는 설정 등) 게이팅하지
+    # 않는다 — 안전장치. 이 화면엔 앵커(premium_battle)가 없으므로 정상 프레임으로
+    # 취급되어 기존처럼 버프가 활성화돼야 한다.
     eng = _engine(anchor_id="premium_battle")
     res = eng.tick(_region(), now=0.0)
-    assert res.frame_valid is False
-    assert res.entries == []
+    assert res.frame_valid is True
+    assert res.entries  # 버프가 정상적으로 잡힘
+
+
+def test_anchor_gates_after_first_seen(monkeypatch):
+    # 앵커를 한 번이라도 본 뒤에는, 앵커가 사라진 프레임을 '판정 불가'로 동결한다.
+    from mabinogi_addon.tracker import engine as engine_mod
+
+    eng = _engine(anchor_id="premium_battle")
+
+    # 1) 앵커가 보이는 프레임을 가짜로 주입 → anchor_seen=True, 정상 프레임
+    class _Det:
+        def __init__(self, buff_id):
+            self.buff_id = buff_id
+            self.y = 0
+
+    monkeypatch.setattr(
+        engine_mod, "detect_buffs", lambda *a, **k: [_Det("premium_battle")]
+    )
+    res_seen = eng.tick(_region(), now=0.0)
+    assert res_seen.frame_valid is True
+
+    # 2) 이후 앵커가 사라진 프레임 → 판정 불가(동결)
+    monkeypatch.setattr(engine_mod, "detect_buffs", lambda *a, **k: [])
+    res_gone = eng.tick(_region(), now=1.0)
+    assert res_gone.frame_valid is False

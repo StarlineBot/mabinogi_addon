@@ -58,6 +58,7 @@ class BuffEngine:
         self._row_height = row_height
         self._threshold = threshold
 
+        self._anchor_seen = False  # 앵커를 한 번이라도 봤는지(게이팅 안전장치)
         before = alert_before or {}
         before2 = alert_before2 or {}
         self._machines = {
@@ -89,7 +90,16 @@ class BuffEngine:
             region, self._templates, self._icon_column, self._threshold
         )
         present = {d.buff_id: d for d in detections}
-        frame_valid = self._anchor is None or self._anchor in present
+        # 앵커 게이팅: 앵커가 한 번도 안 보였으면(영역에 앵커가 없는 설정 등)
+        # 게이팅하지 않는다 — 즉 기존처럼 항상 정상 프레임으로 본다.
+        # 앵커를 한 번이라도 본 뒤부터는, 앵커가 사라진 프레임은 '판정 불가'로
+        # 간주해 상태를 동결(내부 시계로 버팀)하고, 다시 보이면 실제 시간으로 동기화.
+        anchor_present = self._anchor is not None and self._anchor in present
+        if anchor_present:
+            self._anchor_seen = True
+        frame_valid = (
+            self._anchor is None or anchor_present or not self._anchor_seen
+        )
 
         alerts: list[str] = []
         for bid, machine in self._machines.items():
