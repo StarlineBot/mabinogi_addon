@@ -22,3 +22,15 @@ def imread(path: Path | str, flags: int = cv2.IMREAD_COLOR) -> np.ndarray | None
     if data.size == 0:
         return None
     return cv2.imdecode(data, flags)
+
+
+def imwrite(path: Path | str, image: np.ndarray, ext: str = ".png") -> bool:
+    """경로 인코딩과 무관하게 이미지를 저장한다(cv2.imencode + 바이트 쓰기). 실패 시 False."""
+    ok, buf = cv2.imencode(ext, image)
+    if not ok:
+        return False
+    try:
+        Path(path).write_bytes(buf.tobytes())
+    except OSError:
+        return False
+    return True

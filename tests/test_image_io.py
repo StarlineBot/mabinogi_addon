@@ -3,7 +3,7 @@
 import cv2
 import numpy as np
 
-from mabinogi_addon.image_io import imread
+from mabinogi_addon.image_io import imread, imwrite
 
 
 def test_imread_korean_filename(tmp_path):
@@ -22,3 +22,16 @@ def test_imread_korean_filename(tmp_path):
 
 def test_imread_missing_returns_none(tmp_path):
     assert imread(tmp_path / "없음.png") is None
+
+
+def test_imwrite_roundtrip_korean_path(tmp_path):
+    img = np.zeros((5, 7, 3), np.uint8)
+    img[:, :, 1] = 128  # 초록(BGR)
+    path = tmp_path / "투아림 스냅샷.png"
+    assert imwrite(path, img)
+    assert path.exists()
+
+    loaded = imread(path)
+    assert loaded is not None
+    assert loaded.shape == (5, 7, 3)
+    assert int(loaded[0, 0, 1]) == 128

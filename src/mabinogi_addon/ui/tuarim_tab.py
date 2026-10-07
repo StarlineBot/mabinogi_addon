@@ -25,7 +25,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from .. import config
+from .. import config, image_io, paths
 from ..detect.tuarim_reader import read_percent
 from ..tracker import TuarimTracker
 from .help_dialog import help_title_row
@@ -65,6 +65,12 @@ class TuarimTab(QWidget):
         self._sct = None
         self._tracker = TuarimTracker(self._thresholds)
         self._notifier = None
+        # 숫자 템플릿 수집용 상태
+        self._last_frame = None  # 마지막으로 캡처한 영역(스냅샷 저장 대상)
+        self._last_saved_frame = None  # 수집 모드: 직전 '저장한' 영상(변화 감지 기준)
+        # 개발용: git 추적 폴더에 저장 → 집에서 수집 후 '푸시'하면 클로드가 템플릿을 만든다.
+        self._shot_dir = paths.project_root() / "tests" / "data" / "tuarim_shots"
+        self._shot_count = 0
 
         v = QVBoxLayout(self)
         v.setContentsMargins(12, 12, 12, 12)
@@ -106,6 +112,7 @@ class TuarimTab(QWidget):
         v.addWidget(self.enable)
 
         v.addWidget(self._threshold_group())
+        v.addWidget(self._collect_group())
         v.addStretch(1)
 
         self._update_region_label()
@@ -135,6 +142,50 @@ class TuarimTab(QWidget):
             self._sound_checks.append(chk)
         grid.setColumnStretch(3, 1)
         return box
+
+    def _collect_group(self) -> QGroupBox:
+        """숫자 템플릿 수집(개발용). 앱이 이미 캡처 중인 영역을 PNG로 저장만 한다."""
+        box = QGroupBox("숫자 템플릿 수집 (개발용)")
+        g = QVBoxLayout(box)
+        g.addWidget(
+            hint_label(
+                "영역 지정 후, 지금 캡처된 영역을 PNG로 저장합니다(전체화면 캡처 불필요).\n"
+                "'수집 모드'를 켜면 값이 바뀔 때마다 자동 저장 → 0~100 한 바퀴면 0~9 숫자가 모입니다.\n"
+                "저장 후 커밋·푸시하면 저장소에서 숫자 템플릿을 만들 수 있습니다."
+            )
+        )
+        row = QHBoxLayout()
+        self.snap_btn = QPushButton("스냅샷 저장")
+        self.snap_btn.setToolTip("지금 캡처된 영역 1장 저장")
+        self.snap_btn.clicked.connect(self._save_snapshot)
+        row.addWidget(self.snap_btn)
+        self.collect_chk = QCheckBox("수집 모드(값 바뀔 때 자동 저장)")
+        row.addWidget(self.collect_chk, 1)
+        g.addLayout(row)
+        self.collect_label = hint_label("")
+        self._update_collect_label()
+        g.addWidget(self.collect_label)
+        return box
+
+    def _update_collect_label(self) -> None:
+        self.collect_label.setText(f"저장 위치: {self._shot_dir}  ·  수집 {self._shot_count}장")
+
+    def _save_snapshot(self) -> None:
+        if self._last_frame is None:
+            self.collect_label.setText("저장할 캡처가 없습니다 — 먼저 영역을 지정하세요")
+            return
+        self._write_shot(self._last_frame, self._last_value)
+
+    def _write_shot(self, frame, value: int | None) -> None:
+        try:
+            self._shot_dir.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            return
+        tag = f"v{value:02d}" if value is not None else "raw"
+        path = self._shot_dir / f"{tag}_{self._shot_count:03d}.png"
+        if image_io.imwrite(path, frame):
+            self._shot_count += 1
+            self._update_collect_label()
 
     # ---- 영역 지정 ----
     def _on_region(self) -> None:
@@ -182,13 +233,28 @@ class TuarimTab(QWidget):
         if frame is None:
             return
         self._show_preview(frame)
+        self._last_frame = frame  # 스냅샷 저장 대상
         value = read_percent(frame)
         self.value_label.setText(
             f"현재 값: {value}%" if value is not None else "현재 값: —"
         )
+        # 수집 모드: 영상이 '눈에 띄게 바뀌면' 저장(중복 방지). 값(read_percent) 기준이
+        # 아니라 영상 변화 기준이라, 템플릿이 아직 없어(value=None) 판독이 안 돼도 숫자가
+        # 바뀔 때마다 모인다.
+        if self.collect_chk.isChecked() and self._frame_changed(frame):
+            self._write_shot(frame, value)
+            self._last_saved_frame = frame
         if self.enable.isChecked():
             for t in self._tracker.observe(value):
                 self._play(t)
+
+    def _frame_changed(self, frame, threshold: float = 6.0) -> bool:
+        """직전 저장 영상 대비 평균 밝기차가 threshold 이상이면 '바뀜'(새 숫자)."""
+        prev = self._last_saved_frame
+        if prev is None or prev.shape != frame.shape:
+            return True
+        diff = np.abs(frame.astype(np.int16) - prev.astype(np.int16))
+        return float(diff.mean()) >= threshold
 
     def _show_preview(self, frame: np.ndarray) -> None:
         h, w = frame.shape[:2]
