@@ -477,16 +477,34 @@ class SettingsTab(QWidget):
         cur_pack = config.load_voice_pack()
         vi = self._voice_pack.findData(cur_pack)
         self._voice_pack.setCurrentIndex(max(vi, 0))
-        self._voice_pack.currentIndexChanged.connect(
-            lambda _i: config.save_voice_pack(self._voice_pack.currentData())
-        )
+        self._voice_pack.currentIndexChanged.connect(self._on_voice_pack_changed)
         voice_row.addWidget(self._voice_pack)
         voice_row.addStretch(1)
         v.addLayout(voice_row)
         v.addWidget(
-            hint_label("버프·투아림·파티 알림에 쓸 목소리 팩. (다시 시작하면 적용)")
+            hint_label(
+                "버프·투아림·파티 알림에 쓸 목소리 팩. 고르면 미리듣기가 재생돼요.\n"
+                "(실제 알림 적용은 다시 시작 후)"
+            )
         )
         return box
+
+    def _on_voice_pack_changed(self, _index: int) -> None:
+        pack = self._voice_pack.currentData()
+        config.save_voice_pack(pack)  # 먼저 저장 → sound_path가 선택 팩을 가리킴
+        self._preview_voice()
+
+    def _preview_voice(self) -> None:
+        """선택한 팩의 샘플 음성을 재생(미리듣기). 팩에 없으면 기본 녹음본."""
+        from .notifier import SoundNotifier, sound_path
+
+        sample = sound_path("투아림 부스트 발동 직전.mp3")
+        if not sample.exists():
+            return
+        if getattr(self, "_voice_preview", None) is None:
+            self._voice_preview = SoundNotifier({})
+        self._voice_preview.set_sounds({"preview": sample})
+        self._voice_preview.play("preview")
 
     def _on_autostart_toggled(self, on: bool) -> None:
         from ..system import autostart
