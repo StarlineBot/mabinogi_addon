@@ -68,6 +68,7 @@ class TuarimTab(QWidget):
         self._notifier = None
         # 숫자 템플릿 수집용 상태
         self._last_frame = None  # 마지막으로 캡처한 영역(스냅샷 저장 대상)
+        self._last_value: int | None = None  # 마지막 판독값(스냅샷 파일명 태그용)
         self._last_saved_frame = None  # 수집 모드: 직전 '저장한' 영상(변화 감지 기준)
         # 개발용: git 추적 폴더에 저장 → 집에서 수집 후 '푸시'하면 클로드가 템플릿을 만든다.
         self._shot_dir = paths.project_root() / "tests" / "data" / "tuarim_shots"
@@ -246,6 +247,7 @@ class TuarimTab(QWidget):
         self._show_preview(frame)
         self._last_frame = frame  # 스냅샷 저장 대상
         value = read_percent(frame)
+        self._last_value = value  # 스냅샷 파일명 태그용
         self.value_label.setText(
             f"현재 값: {value}%" if value is not None else "현재 값: —"
         )
