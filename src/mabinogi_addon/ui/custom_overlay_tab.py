@@ -84,6 +84,7 @@ class CustomOverlayTab(QWidget):
         # 자기앱도 포함해야: 미러를 클릭해 드래그하는 순간(우리 앱이 포그라운드가 됨)에도
         # 숨지 않아 이동이 끊기지 않는다.
         self._mgr = MirrorManager(
+            fps=30,  # 화면 전환 시 끊김(드드득) 줄이려 15→30 (전체 캡처 1회/틱, CPU 여유)
             is_active=lambda: (
                 watcher.is_game_active() or watcher.is_self_active()
             ),
