@@ -63,6 +63,7 @@ def _checked(text: str, on: bool = True) -> QCheckBox:
 
 # general 설정 키 ↔ 체크박스 라벨
 _TRAY_MINIMIZE = "minimizeToTray"
+_GRID_SNAP = "gridSnap"
 _TRAY_START = "startInTray"
 
 
@@ -213,6 +214,15 @@ class SettingsTab(QWidget):
             lambda on: config.save_general_flag(_TRAY_MINIMIZE, on)
         )
         v.addWidget(self._min_tray)
+
+        self._grid_snap = _checked(
+            "오버레이 격자 맞춤 (이동 시 16px 칸에 딱 맞춤)",
+            config.load_general_flag(_GRID_SNAP, False),
+        )
+        self._grid_snap.toggled.connect(
+            lambda on: config.save_general_flag(_GRID_SNAP, on)
+        )
+        v.addWidget(self._grid_snap)
         return box
 
     # ---- 게임 창 인식(포그라운드 판정 대상) ----

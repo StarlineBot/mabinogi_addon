@@ -91,16 +91,29 @@ class MemoOverlay(QWidget):
             self._drag_offset = (
                 event.globalPosition().toPoint() - self.frameGeometry().topLeft()
             )
+            from . import grid
+
+            self._snap = grid.enabled()
+            if self._snap:
+                grid.show_guide()
             event.accept()
 
     def mouseMoveEvent(self, event) -> None:  # noqa: N802
         if not self._locked and self._drag_offset is not None:
-            self.move(event.globalPosition().toPoint() - self._drag_offset)
+            target = event.globalPosition().toPoint() - self._drag_offset
+            if getattr(self, "_snap", False):
+                from . import grid
+
+                target = grid.snap(target)
+            self.move(target)
             event.accept()
 
     def mouseReleaseEvent(self, event) -> None:  # noqa: N802
         if self._drag_offset is not None:
             self._drag_offset = None
+            from . import grid
+
+            grid.hide_guide()
             self.moved.emit()
 
     # ---- 배경/헤더(해제 상태에서만) ----

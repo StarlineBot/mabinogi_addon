@@ -88,17 +88,30 @@ class BuffOverlay(QWidget):
             self._drag_offset = (
                 event.globalPosition().toPoint() - self.frameGeometry().topLeft()
             )
+            from . import grid
+
+            self._snap = grid.enabled()
+            if self._snap:
+                grid.show_guide()
             event.accept()
 
     def mouseMoveEvent(self, event) -> None:  # noqa: N802
         if not self._locked and self._drag_offset is not None:
-            self.move(event.globalPosition().toPoint() - self._drag_offset)
+            target = event.globalPosition().toPoint() - self._drag_offset
+            if getattr(self, "_snap", False):
+                from . import grid
+
+                target = grid.snap(target)
+            self.move(target)
             event.accept()
 
     def mouseReleaseEvent(self, event) -> None:  # noqa: N802
         was_dragging = self._drag_offset is not None
         self._drag_offset = None
         if was_dragging:
+            from . import grid
+
+            grid.hide_guide()
             self.moved.emit()
 
     def set_scale(self, scale: float) -> None:
