@@ -392,9 +392,16 @@ class SettingsTab(QWidget):
         InquiryDialog(self).exec()
 
     def _general_group(self) -> QGroupBox:
+        from ..system import autostart
+
         box = QGroupBox("일반")
         v = QVBoxLayout(box)
-        v.addWidget(_checked("Windows 시작 시 자동 실행"))  # (미연결)
+        self._autostart = _checked("Windows 시작 시 자동 실행", autostart.is_enabled())
+        self._autostart.setEnabled(autostart.available())
+        if not autostart.available():
+            self._autostart.setToolTip("Windows에서만 사용할 수 있습니다")
+        self._autostart.toggled.connect(self._on_autostart_toggled)
+        v.addWidget(self._autostart)
 
         self._start_tray = _checked(
             "실행 시 트레이로 시작", config.load_general_flag(_TRAY_START, False)
@@ -459,6 +466,26 @@ class SettingsTab(QWidget):
             hint_label("파티모집 등 토스트 알림이 뜰 화면 모서리. (기본 우측 하단)")
         )
         return box
+
+    def _on_autostart_toggled(self, on: bool) -> None:
+        from ..system import autostart
+
+        if not autostart.set_enabled(on):
+            # 실패: 체크 상태를 실제 결과로 되돌린다(시그널 재발 방지로 blockSignals).
+            self._autostart.blockSignals(True)
+            self._autostart.setChecked(autostart.is_enabled())
+            self._autostart.blockSignals(False)
+            QMessageBox.warning(
+                self, "자동 실행", "자동 실행 설정을 변경하지 못했습니다."
+            )
+            return
+        if on and not config.load_general_flag(_TRAY_START, False):
+            QMessageBox.information(
+                self,
+                "자동 실행",
+                "로그인 시 자동으로 실행됩니다.\n"
+                "창 없이 조용히 시작하려면 '실행 시 트레이로 시작'도 켜두세요.",
+            )
 
     def _on_toast_corner_changed(self, _index: int) -> None:
         corner = self._toast_corner.currentData()

@@ -163,6 +163,9 @@ class MainWindow(QMainWindow):
 
     def start(self) -> None:
         """탐지/폴링 시작. 실제 앱 실행(main)에서만 호출한다(스크린샷 렌더 땐 미호출)."""
+        from ..system import autostart
+
+        autostart.refresh()  # 자동실행 켜져 있으면 현재 exe 경로로 갱신(이동 시 self-heal)
         self.party_tab.start_polling()
         self._restore_overlay(self.buff_overlay, self.buff_tab, "buffTracker")
         self._restore_overlay(self.debuff_overlay, self.debuff_tab, "debuffTracker")
