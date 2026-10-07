@@ -38,10 +38,19 @@ class MirrorManager(QObject):
     changed = Signal()  # 미러 집합 변경 → 탭 목록 갱신
     overlay_moved = Signal()  # 드래그 이동 → 현재 상태 저장
 
-    def __init__(self, fps: int = 15, grab=None, parent: QObject | None = None) -> None:
+    def __init__(
+        self,
+        fps: int = 15,
+        grab=None,
+        is_active=None,
+        parent: QObject | None = None,
+    ) -> None:
         super().__init__(parent)
         self._overlays: list[MirrorOverlay] = []
         self._grab = grab  # 테스트 주입: () -> (np.ndarray BGRA, left, top) | None
+        # 게임 활성 여부(비활성/최소화면 캡처를 쉬고 오버레이를 숨긴다). 기본 항상 활성.
+        self._is_active = is_active or (lambda: True)
+        self._shown = True
         self._sct = None
         self._timer = QTimer(self)
         self._timer.setInterval(max(1, 1000 // max(1, fps)))
@@ -105,6 +114,18 @@ class MirrorManager(QObject):
             self._timer.stop()
 
     def _tick(self) -> None:
+        # 게임 비활성/최소화: 캡처를 쉬고(가장 큰 비용) 오버레이를 숨긴다.
+        if not self._is_active():
+            if self._shown:
+                for o in self._overlays:
+                    o.hide()
+                self._shown = False
+            return
+        if not self._shown:
+            for o in self._overlays:
+                o.show()
+            self._shown = True
+
         got = self._grab_full()
         if got is None:
             return

@@ -54,7 +54,8 @@ class CustomOverlayTab(QWidget):
     def __init__(self, watcher: WindowWatcher) -> None:
         super().__init__()
         self._watcher = watcher
-        self._mgr = MirrorManager(parent=self)
+        # 게임 비활성/최소화면 미러 캡처를 쉬고 오버레이를 숨긴다(CPU 절약).
+        self._mgr = MirrorManager(is_active=watcher.is_game_active, parent=self)
         self._mgr.changed.connect(self._refresh_overlays)
         self._mgr.changed.connect(self._save_current)
         self._mgr.overlay_moved.connect(self._save_current)

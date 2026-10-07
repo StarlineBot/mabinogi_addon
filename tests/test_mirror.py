@@ -27,6 +27,30 @@ def test_crop_region_out_of_bounds():
     assert crop_region(frame, 0, 0, {"x": 40, "y": 40, "w": 20, "h": 20}) is None
 
 
+def test_tick_skips_capture_when_inactive():
+    """게임 비활성이면 grab을 호출하지 않는다(캡처 쉼)."""
+    import os
+
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtWidgets import QApplication
+
+    from mabinogi_addon.ui.mirror_manager import MirrorManager
+
+    QApplication.instance() or QApplication([])
+    calls = {"n": 0}
+
+    def fake_grab():
+        calls["n"] += 1
+
+    active = {"v": False}
+    mgr = MirrorManager(grab=fake_grab, is_active=lambda: active["v"])
+    mgr._tick()  # 비활성 → grab 호출 안 함
+    assert calls["n"] == 0
+    active["v"] = True
+    mgr._tick()  # 활성 → grab 호출
+    assert calls["n"] == 1
+
+
 def test_custom_preset_roundtrip(tmp_path):
     p = tmp_path / "config.local.json"
     items = [{"x": 1, "y": 2, "w": 3, "h": 4, "posX": 5, "posY": 6, "locked": True, "name": "a.exe"}]
