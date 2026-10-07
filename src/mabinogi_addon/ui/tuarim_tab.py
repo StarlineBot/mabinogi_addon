@@ -285,7 +285,9 @@ class TuarimTab(QWidget):
         from .notifier import SOUND_DIR, SoundNotifier
 
         if self._notifier is None:
-            self._notifier = SoundNotifier({"tuarim": SOUND_DIR / "투아림 관리.mp3"})
+            self._notifier = SoundNotifier(
+                {"tuarim": SOUND_DIR / "투아림 부스트 발동 직전.mp3"}
+            )
         if not self._notifier.play("tuarim"):
             from PySide6.QtWidgets import QApplication
 
