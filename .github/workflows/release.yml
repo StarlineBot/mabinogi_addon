@@ -44,6 +44,7 @@ jobs:
         run: >
           uv run --group build pyinstaller --noconfirm --clean --onefile --windowed
           --name mabinogi-addon
+          --icon packaging/logo.ico
           --paths src
           --add-data "src/mabinogi_addon/assets;assets"
           --collect-all PySide6
