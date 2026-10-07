@@ -78,15 +78,15 @@ class TuarimTab(QWidget):
         v.addLayout(help_title_row("투아림 관리", HELP_TITLE, HELP_HTML, self))
         v.addWidget(
             hint_label(
-                "'영역 지정'을 누르면 고정 크기 박스가 커서를 따라옵니다. 투아림 %(숫자 두"
-                " 자리) 위에 올려 클릭해 배치하면, 그 자리를 읽어 지정 %에 소리로 알립니다."
-                " (읽기만 하며 화면을 가리지 않음)"
+                "'영역 지정'을 누르면 박스가 커서를 따라옵니다. 마우스 휠로 크기를 숫자에"
+                " 맞게 조절하고, 투아림 %(숫자 두 자리) 위에 올려 클릭해 배치하세요. 그 자리를"
+                " 읽어 지정 %에 소리로 알립니다. (읽기만 하며 화면을 가리지 않음)"
             )
         )
 
         row = QHBoxLayout()
         self.region_btn = QPushButton("영역 지정")
-        self.region_btn.setToolTip("% 숫자 두 자리에 맞춰 드래그(돋보기). 다시 누르면 재지정.")
+        self.region_btn.setToolTip("% 숫자에 휠로 크기 맞춰 클릭 배치(돋보기). 다시 누르면 재지정.")
         self.region_btn.clicked.connect(self._on_region)
         row.addWidget(self.region_btn)
         self.region_label = hint_label("")
@@ -191,8 +191,13 @@ class TuarimTab(QWidget):
     def _on_region(self) -> None:
         from .region_selector import RegionSelector
 
-        # 고정 크기 박스를 커서에 붙여 % 위에 클릭 한 번으로 배치(돋보기).
-        self._selector = RegionSelector(fixed_size=TUARIM_BOX_SIZE)
+        # 고정 크기 박스를 커서에 붙여 % 위에 클릭 한 번으로 배치(돋보기, 휠로 크기 조절).
+        # 이전에 지정한 적 있으면 그 크기로 시작(사용자가 맞춰 둔 크기 유지).
+        if self._region:
+            size = (int(self._region["w"]), int(self._region["h"]))
+        else:
+            size = TUARIM_BOX_SIZE
+        self._selector = RegionSelector(fixed_size=size)
         self._selector.selected.connect(self._on_selected)
         self._selector.start()
 

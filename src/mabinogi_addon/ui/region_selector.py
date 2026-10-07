@@ -87,6 +87,21 @@ class RegionSelector(QWidget):
         w, h = self._fixed
         return QRect(center.x() - w // 2, center.y() - h // 2, w, h)
 
+    def wheelEvent(self, event) -> None:
+        # 고정 박스 모드: 마우스 휠로 박스 크기를 조절(숫자에 딱 맞추기). 비율 유지.
+        if self._fixed is None:
+            return
+        w, h = self._fixed
+        step = 1.1 if event.angleDelta().y() > 0 else 1 / 1.1
+        self._fixed = (
+            max(12, min(400, round(w * step))),
+            max(8, min(300, round(h * step))),
+        )
+        if self._cursor is not None:
+            self._rect = self._fixed_rect(self._cursor)
+        self.update()
+        event.accept()
+
     def mouseMoveEvent(self, event) -> None:
         self._cursor = event.position().toPoint()
         if self._fixed is not None:
@@ -141,14 +156,21 @@ class RegionSelector(QWidget):
         painter = QPainter(self)
         painter.fillRect(self.rect(), QColor(0, 0, 0, 110))  # 전체 어둡게
         if not self._rect.isNull():
-            # 선택 영역은 비워서(원래 화면 보이게) + 테두리
-            painter.setCompositionMode(
-                QPainter.CompositionMode.CompositionMode_Clear
-            )
-            painter.fillRect(self._rect, Qt.GlobalColor.transparent)
-            painter.setCompositionMode(
-                QPainter.CompositionMode.CompositionMode_SourceOver
-            )
+            if self._fixed is not None:
+                # 고정 박스: 완전 투명(Clear)으로 비우면 레이어드 창 per-pixel 히트테스트
+                # 때문에 그 위 클릭이 창을 '통과'해 배치가 안 된다(커서가 늘 박스 안이라
+                # 모든 클릭이 통과). 옅은 틴트(alpha>0)를 깔아 클릭을 받게 한다.
+                painter.fillRect(self._rect, QColor(0, 209, 167, 36))
+            else:
+                # 드래그 선택: 영역을 비워 원래 화면이 보이게(드래그 중 마우스 grab 유지라
+                # 통과 문제가 없다).
+                painter.setCompositionMode(
+                    QPainter.CompositionMode.CompositionMode_Clear
+                )
+                painter.fillRect(self._rect, Qt.GlobalColor.transparent)
+                painter.setCompositionMode(
+                    QPainter.CompositionMode.CompositionMode_SourceOver
+                )
             painter.setPen(QPen(QColor(0, 209, 167), 2))
             painter.drawRect(self._rect)
             label = f"{self._rect.width()} × {self._rect.height()}"

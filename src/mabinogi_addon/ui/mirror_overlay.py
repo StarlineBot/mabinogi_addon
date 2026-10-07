@@ -69,6 +69,8 @@ class MirrorOverlay(QWidget):
         self.setCursor(
             Qt.CursorShape.ArrowCursor if locked else Qt.CursorShape.SizeAllCursor
         )
+        # 다른 오버레이와 동일: Qt 레벨 마우스 투과도 함께 토글(해제=받음, 고정=통과).
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, locked)
         from ..system.clickthrough import set_click_through
 
         set_click_through(self, locked)  # Windows 클릭 통과

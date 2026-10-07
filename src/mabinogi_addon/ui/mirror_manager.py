@@ -29,9 +29,15 @@ def crop_region(frame: np.ndarray, left: int, top: int, region: dict) -> np.ndar
 
 
 def _to_qimage(bgra: np.ndarray) -> QImage:
-    """BGRA 배열 → 불투명 QImage(RGB32). 데이터 소유 복사."""
-    h, w = bgra.shape[:2]
-    return QImage(bgra.tobytes(), w, h, QImage.Format.Format_RGB32).copy()
+    """BGRA 배열 → 불투명 QImage(RGB32). 데이터 소유 복사.
+
+    mss 캡처는 알파가 0이라, 그대로 두면 레이어드(투명) 창 합성에서 창 전체가 투명으로
+    간주돼 클릭이 통과(드래그 불가)한다. 알파를 255로 채워 불투명하게 만든다.
+    """
+    arr = np.array(bgra, copy=True)
+    arr[:, :, 3] = 255
+    h, w = arr.shape[:2]
+    return QImage(arr.tobytes(), w, h, QImage.Format.Format_RGB32).copy()
 
 
 class MirrorManager(QObject):
