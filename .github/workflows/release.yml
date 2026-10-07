@@ -52,6 +52,7 @@ jobs:
         run: >
           uv run --group build pyinstaller --noconfirm --clean --onefile --windowed
           --name mabinogi-addon-v${{ env.APP_VERSION }}
+          --uac-admin
           --icon packaging/logo.ico
           --version-file packaging/version_info.txt
           --paths src

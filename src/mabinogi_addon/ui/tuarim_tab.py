@@ -116,7 +116,9 @@ class TuarimTab(QWidget):
         v.addWidget(self.enable)
 
         v.addWidget(self._threshold_group())
-        v.addWidget(self._collect_group())
+        # 숫자 템플릿 수집은 개발용(수집→git 푸시→템플릿 생성)이라 배포본(exe)에선 숨긴다.
+        if not paths.is_frozen():
+            v.addWidget(self._collect_group())
         v.addStretch(1)
 
         self._update_region_label()
@@ -263,7 +265,12 @@ class TuarimTab(QWidget):
         # 수집 모드: 영상이 '눈에 띄게 바뀌면' 저장(중복 방지). 값(read_percent) 기준이
         # 아니라 영상 변화 기준이라, 템플릿이 아직 없어(value=None) 판독이 안 돼도 숫자가
         # 바뀔 때마다 모인다.
-        if self.collect_chk.isChecked() and self._frame_changed(frame):
+        # 수집 UI는 배포본(exe)에선 없으므로 존재할 때만(개발 모드).
+        if (
+            getattr(self, "collect_chk", None) is not None
+            and self.collect_chk.isChecked()
+            and self._frame_changed(frame)
+        ):
             self._write_shot(frame, raw)
             self._last_saved_frame = frame
         if self.enable.isChecked():
