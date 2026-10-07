@@ -481,16 +481,23 @@ class MainWindow(QMainWindow):
             self._memo_timer.stop(),
         ))
         _step("파티 폴링 정지", lambda: self.party_tab.stop_polling(wait_ms=600))
-        # 두 캡처 워커에 먼저 정지 신호를 보내 병렬로 멈춘 뒤 각각 대기(합산 대신 겹침).
+        # 두 캡처 워커에 먼저 정지 신호를 보내고, '공유 마감시한'으로 대기를 겹친다.
+        # (각각 600ms씩 순차로 기다리면 합산 ~1.2초. 둘 다 dxcam grab에 물려도 abandon은
+        #  안전하므로, 전체 0.7초 안에서 나눠 기다려 총 종료를 1초 밑으로.)
         for c in (self.buff_controller, self.debuff_controller):
             if c is not None:
                 c.request_stop()
-        # 종료 시엔 짧게만 기다린다. dxcam grab이 프레임 대기로 블로킹되면 2초까지
-        # 걸리는데, 어차피 종료 중이라 abandon해도 안전(코드가 참조 유지로 파괴 방지).
-        if self.buff_controller is not None:
-            _step("버프 추적 정지", lambda: self.buff_controller.stop(timeout_ms=600))
-        if self.debuff_controller is not None:
-            _step("디버프 추적 정지", lambda: self.debuff_controller.stop(timeout_ms=600))
+        deadline = time.perf_counter() + 0.7
+        for name, c in (
+            ("버프 추적 정지", self.buff_controller),
+            ("디버프 추적 정지", self.debuff_controller),
+        ):
+            if c is not None:
+                remaining = max(0, deadline - time.perf_counter())
+                _step(
+                    name,
+                    lambda c=c, ms=int(remaining * 1000): c.stop(timeout_ms=ms),
+                )
         _step("오버레이 닫기", lambda: (
             self.buff_overlay.close(),
             self.debuff_overlay.close(),
