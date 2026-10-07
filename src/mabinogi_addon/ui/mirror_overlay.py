@@ -81,6 +81,7 @@ class MirrorOverlay(QWidget):
             from . import grid
 
             self._snap = grid.enabled()
+            self._grid_size = grid.size() if self._snap else None
             if self._snap:
                 grid.show_guide()
             event.accept()
@@ -91,7 +92,7 @@ class MirrorOverlay(QWidget):
             if getattr(self, "_snap", False):
                 from . import grid
 
-                target = grid.snap(target)
+                target = grid.snap(target, getattr(self, "_grid_size", None))
             self.move(target)
             event.accept()
 

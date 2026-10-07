@@ -83,7 +83,7 @@ class BuffOverlay(QWidget):
     def locked(self) -> bool:
         return self._locked
 
-    def mousePressEvent(self, event) -> None:  # noqa: N802
+    def mousePressEvent(self, event) -> None:
         if not self._locked and event.button() == Qt.MouseButton.LeftButton:
             self._drag_offset = (
                 event.globalPosition().toPoint() - self.frameGeometry().topLeft()
@@ -91,21 +91,22 @@ class BuffOverlay(QWidget):
             from . import grid
 
             self._snap = grid.enabled()
+            self._grid_size = grid.size() if self._snap else None
             if self._snap:
                 grid.show_guide()
             event.accept()
 
-    def mouseMoveEvent(self, event) -> None:  # noqa: N802
+    def mouseMoveEvent(self, event) -> None:
         if not self._locked and self._drag_offset is not None:
             target = event.globalPosition().toPoint() - self._drag_offset
             if getattr(self, "_snap", False):
                 from . import grid
 
-                target = grid.snap(target)
+                target = grid.snap(target, getattr(self, "_grid_size", None))
             self.move(target)
             event.accept()
 
-    def mouseReleaseEvent(self, event) -> None:  # noqa: N802
+    def mouseReleaseEvent(self, event) -> None:
         was_dragging = self._drag_offset is not None
         self._drag_offset = None
         if was_dragging:
@@ -157,7 +158,7 @@ class BuffOverlay(QWidget):
         self.update()
 
     # ---- 그리기 ----
-    def paintEvent(self, _event) -> None:  # noqa: N802
+    def paintEvent(self, _event) -> None:
         if not self._items:
             if not self._locked:
                 self._paint_placeholder()

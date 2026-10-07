@@ -324,6 +324,23 @@ def save_general_flag(key: str, value: bool, path: Path = LOCAL_CONFIG_PATH) -> 
     _write_local_config(data, path)
 
 
+def load_grid_size(path: Path = LOCAL_CONFIG_PATH) -> int:
+    """오버레이 격자 칸 크기(px). 기본 32. 작을수록 미세, 클수록 큼직한 이동."""
+    g = _read_local_config(path).get("general") or {}
+    v = g.get("gridSize")
+    return int(v) if isinstance(v, (int, float)) and int(v) > 0 else 32
+
+
+def save_grid_size(px: int, path: Path = LOCAL_CONFIG_PATH) -> None:
+    data = _read_local_config(path)
+    g = data.get("general")
+    if not isinstance(g, dict):
+        g = {}
+    g["gridSize"] = int(px)
+    data["general"] = g
+    _write_local_config(data, path)
+
+
 def load_game_exe(path: Path = LOCAL_CONFIG_PATH) -> str | None:
     """포그라운드 판정에 쓸 게임 실행파일명(basename). 없으면 None(제목 폴백)."""
     g = _read_local_config(path).get("general") or {}

@@ -86,7 +86,7 @@ class MemoOverlay(QWidget):
         self.update()
 
     # ---- 드래그 이동(테두리·헤더에서 시작) ----
-    def mousePressEvent(self, event) -> None:  # noqa: N802
+    def mousePressEvent(self, event) -> None:
         if not self._locked and event.button() == Qt.MouseButton.LeftButton:
             self._drag_offset = (
                 event.globalPosition().toPoint() - self.frameGeometry().topLeft()
@@ -94,21 +94,22 @@ class MemoOverlay(QWidget):
             from . import grid
 
             self._snap = grid.enabled()
+            self._grid_size = grid.size() if self._snap else None
             if self._snap:
                 grid.show_guide()
             event.accept()
 
-    def mouseMoveEvent(self, event) -> None:  # noqa: N802
+    def mouseMoveEvent(self, event) -> None:
         if not self._locked and self._drag_offset is not None:
             target = event.globalPosition().toPoint() - self._drag_offset
             if getattr(self, "_snap", False):
                 from . import grid
 
-                target = grid.snap(target)
+                target = grid.snap(target, getattr(self, "_grid_size", None))
             self.move(target)
             event.accept()
 
-    def mouseReleaseEvent(self, event) -> None:  # noqa: N802
+    def mouseReleaseEvent(self, event) -> None:
         if self._drag_offset is not None:
             self._drag_offset = None
             from . import grid
@@ -117,7 +118,7 @@ class MemoOverlay(QWidget):
             self.moved.emit()
 
     # ---- 배경/헤더(해제 상태에서만) ----
-    def paintEvent(self, _event) -> None:  # noqa: N802
+    def paintEvent(self, _event) -> None:
         if self._locked:
             return  # 고정: 완전 투명(흰 글씨만)
         painter = QPainter(self)

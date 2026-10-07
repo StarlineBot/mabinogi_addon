@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
@@ -216,13 +217,28 @@ class SettingsTab(QWidget):
         v.addWidget(self._min_tray)
 
         self._grid_snap = _checked(
-            "오버레이 격자 맞춤 (이동 시 16px 칸에 딱 맞춤)",
+            "오버레이 격자 맞춤 (이동 시 칸에 딱 맞춤)",
             config.load_general_flag(_GRID_SNAP, False),
         )
         self._grid_snap.toggled.connect(
             lambda on: config.save_general_flag(_GRID_SNAP, on)
         )
         v.addWidget(self._grid_snap)
+
+        size_row = QHBoxLayout()
+        size_row.addWidget(QLabel("격자 크기"))
+        self._grid_size = QSpinBox()
+        self._grid_size.setRange(4, 200)
+        self._grid_size.setSingleStep(4)
+        self._grid_size.setSuffix(" px")
+        self._grid_size.setValue(config.load_grid_size())
+        self._grid_size.valueChanged.connect(config.save_grid_size)
+        size_row.addWidget(self._grid_size)
+        size_row.addStretch(1)
+        v.addLayout(size_row)
+        v.addWidget(
+            hint_label("작을수록 미세, 클수록 큼직하게 칸칸 이동. (기본 32px)")
+        )
         return box
 
     # ---- 게임 창 인식(포그라운드 판정 대상) ----

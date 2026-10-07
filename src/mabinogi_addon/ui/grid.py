@@ -11,7 +11,7 @@ from PySide6.QtCore import QPoint, Qt
 from PySide6.QtGui import QColor, QGuiApplication, QPainter, QPen
 from PySide6.QtWidgets import QWidget
 
-GRID_SIZE = 16  # 격자 한 칸(px) ≈ 버프 아이콘 한 칸
+_DEFAULT_SIZE = 32  # 격자 한 칸(px) 기본값. 설정에서 조절 가능.
 
 
 def enabled() -> bool:
@@ -20,9 +20,16 @@ def enabled() -> bool:
     return config.load_general_flag("gridSnap", False)
 
 
-def snap(point: QPoint, size: int = GRID_SIZE) -> QPoint:
+def size() -> int:
+    from .. import config
+
+    return config.load_grid_size()
+
+
+def snap(point: QPoint, grid_size: int | None = None) -> QPoint:
     """좌표를 가장 가까운 격자 배수로 반올림."""
-    return QPoint(round(point.x() / size) * size, round(point.y() / size) * size)
+    s = grid_size or _DEFAULT_SIZE
+    return QPoint(round(point.x() / s) * s, round(point.y() / s) * s)
 
 
 class _GridGuide(QWidget):
@@ -38,8 +45,10 @@ class _GridGuide(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
+        self._size = _DEFAULT_SIZE
 
-    def show_guide(self) -> None:
+    def show_guide(self, grid_size: int) -> None:
+        self._size = max(2, int(grid_size))
         screen = QGuiApplication.primaryScreen()
         if screen is None:
             return
@@ -51,9 +60,9 @@ class _GridGuide(QWidget):
         painter = QPainter(self)
         painter.setPen(QPen(QColor(0, 209, 167, 70), 1))
         w, h = self.width(), self.height()
-        for x in range(0, w, GRID_SIZE):
+        for x in range(0, w, self._size):
             painter.drawLine(x, 0, x, h)
-        for y in range(0, h, GRID_SIZE):
+        for y in range(0, h, self._size):
             painter.drawLine(0, y, w, y)
         painter.end()
 
@@ -65,7 +74,7 @@ def show_guide() -> None:
     global _guide
     if _guide is None:
         _guide = _GridGuide()
-    _guide.show_guide()
+    _guide.show_guide(size())
 
 
 def hide_guide() -> None:
