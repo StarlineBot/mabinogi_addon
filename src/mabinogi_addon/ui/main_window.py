@@ -48,7 +48,9 @@ def app_icon() -> QIcon:
 class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
-        self.setWindowTitle(config.APP_NAME)
+        from ..version import display_version
+
+        self.setWindowTitle(f"{config.APP_NAME}  {display_version()}")
         self.setWindowIcon(app_icon())
         self.resize(780, 620)
 

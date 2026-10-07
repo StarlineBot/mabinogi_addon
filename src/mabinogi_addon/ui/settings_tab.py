@@ -366,7 +366,9 @@ class SettingsTab(QWidget):
 
         col = QVBoxLayout()
         col.setSpacing(2)
-        name = QLabel(f"제작자: {config.CREATOR_NAME}")
+        from ..version import display_version
+
+        name = QLabel(f"제작자: {config.CREATOR_NAME}  ·  {display_version()}")
         name.setStyleSheet("font-size:15px; font-weight:700;")
         desc = QLabel(
             "개인개발용 마비노기 애드온 입니다.\n"
