@@ -45,12 +45,13 @@ jobs:
         run: |
           # 태그(vX.Y.Z)면 그 버전, 아니면(수동 실행) 0.0.0.
           if [[ "$GITHUB_REF" == refs/tags/* ]]; then VER="${GITHUB_REF_NAME#v}"; else VER="0.0.0"; fi
+          echo "APP_VERSION=$VER" >> "$GITHUB_ENV"   # 이후 단계(파일명)에서 사용
           uv run python packaging/make_version_info.py "$VER"
 
       - name: Build exe (PyInstaller)
         run: >
           uv run --group build pyinstaller --noconfirm --clean --onefile --windowed
-          --name mabinogi-addon
+          --name mabinogi-addon-v${{ env.APP_VERSION }}
           --icon packaging/logo.ico
           --version-file packaging/version_info.txt
           --paths src
@@ -84,10 +85,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: mabinogi-addon-exe
-          path: dist/mabinogi-addon.exe
+          path: dist/mabinogi-addon-v${{ env.APP_VERSION }}.exe
 
       - name: Attach to Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/mabinogi-addon.exe
+          files: dist/mabinogi-addon-v${{ env.APP_VERSION }}.exe
