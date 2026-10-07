@@ -158,9 +158,17 @@ def main() -> None:
     if args.backend == "google":
         import os
 
+        # 다른 비밀값(CONFIG_WEBHOOK_URL 등)처럼 .env에 GOOGLE_TTS_API_KEY=키(따옴표 X)로
+        # 넣어두면 된다. 쉘 환경변수가 있으면 그게 우선(setdefault).
+        try:
+            from mabinogi_addon import config
+
+            config._load_env()
+        except Exception:  # noqa: BLE001 — .env 없거나 패키지 경로 문제면 쉘 변수로 폴백
+            pass
         key = os.environ.get("GOOGLE_TTS_API_KEY", "").strip()
         if not key:
-            print("환경변수 GOOGLE_TTS_API_KEY 가 필요합니다.")
+            print("GOOGLE_TTS_API_KEY 가 없습니다. .env에 한 줄 넣거나(따옴표 X) 쉘에 설정하세요.")
             sys.exit(1)
         for pack in targets:
             _gen_google(pack, key)
