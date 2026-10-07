@@ -25,11 +25,12 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from .. import config, discord_auth
+from .. import config, discord_auth, paths
 from ..system.window_watcher import WindowWatcher
 from .widgets import checkbox, hint_label
 
-_ASSETS = Path(__file__).resolve().parents[1] / "assets"
+# 번들 경로 사용(exe=_MEIPASS/assets). __file__ 기준은 frozen에서 어긋나 이미지가 안 뜬다.
+_ASSETS = paths.resource_dir()
 PROFILE_IMAGE = _ASSETS / "profile.png"  # 제작자 프로필(없으면 로고로 폴백)
 LOGO_IMAGE = _ASSETS / "logo.png"
 

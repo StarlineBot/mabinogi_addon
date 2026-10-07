@@ -6,7 +6,6 @@
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 
 from PySide6.QtCore import QTimer
 from PySide6.QtGui import QAction, QIcon
@@ -18,7 +17,7 @@ from PySide6.QtWidgets import (
     QTabWidget,
 )
 
-from .. import config
+from .. import config, paths
 from ..capture import Region, create_live_source
 from ..catalog import available_catalog, available_debuff_catalog, build_templates
 from ..system.window_watcher import create_window_watcher
@@ -36,7 +35,8 @@ from .party_tab import PartyTab
 from .settings_tab import SettingsTab
 from .tuarim_tab import TuarimTab
 
-LOGO_PATH = Path(__file__).resolve().parents[1] / "assets" / "logo.png"
+# 번들 경로 사용(exe=_MEIPASS/assets). __file__ 기준은 frozen에서 어긋난다.
+LOGO_PATH = paths.resource_dir() / "logo.png"
 _log = logging.getLogger("mabinogi_addon.close")
 
 
@@ -469,8 +469,12 @@ class MainWindow(QMainWindow):
             return
 
         def _step(name, fn):
+            # 한 단계가 실패해도 나머지(특히 '오버레이 닫기')는 반드시 실행되게 감싼다.
             t = time.perf_counter()
-            fn()
+            try:
+                fn()
+            except Exception:  # noqa: BLE001 — 종료 중 오류로 오버레이가 남지 않게
+                _log.exception("종료 단계 '%s' 실패", name)
             _log.info("종료 단계 '%s' %.0fms", name, (time.perf_counter() - t) * 1000)
 
         total = time.perf_counter()
