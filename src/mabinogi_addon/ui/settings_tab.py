@@ -13,11 +13,11 @@ from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QPainter, QPainterPath, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
+    QComboBox,
     QGroupBox,
     QHBoxLayout,
     QLabel,
     QPushButton,
-    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
@@ -65,6 +65,7 @@ def _checked(text: str, on: bool = True) -> QCheckBox:
 # general 설정 키 ↔ 체크박스 라벨
 _TRAY_MINIMIZE = "minimizeToTray"
 _GRID_SNAP = "gridSnap"
+_GRID_SIZES = [8, 16, 24, 32, 48, 64]  # 격자 크기 선택지(px)
 _TRAY_START = "startInTray"
 
 
@@ -227,12 +228,15 @@ class SettingsTab(QWidget):
 
         size_row = QHBoxLayout()
         size_row.addWidget(QLabel("격자 크기"))
-        self._grid_size = QSpinBox()
-        self._grid_size.setRange(4, 200)
-        self._grid_size.setSingleStep(4)
-        self._grid_size.setSuffix(" px")
-        self._grid_size.setValue(config.load_grid_size())
-        self._grid_size.valueChanged.connect(config.save_grid_size)
+        self._grid_size = QComboBox()
+        for px in _GRID_SIZES:
+            self._grid_size.addItem(f"{px} px", px)
+        cur = config.load_grid_size()
+        idx = _GRID_SIZES.index(cur) if cur in _GRID_SIZES else _GRID_SIZES.index(32)
+        self._grid_size.setCurrentIndex(idx)
+        self._grid_size.currentIndexChanged.connect(
+            lambda _i: config.save_grid_size(self._grid_size.currentData())
+        )
         size_row.addWidget(self._grid_size)
         size_row.addStretch(1)
         v.addLayout(size_row)

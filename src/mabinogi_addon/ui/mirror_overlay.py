@@ -12,6 +12,14 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QImage, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import QWidget
 
+_SCALE_MIN = 0.25
+_SCALE_MAX = 4.0
+_SCALE_STEP = 0.1
+
+
+def _clamp_scale(s: float) -> float:
+    return max(_SCALE_MIN, min(_SCALE_MAX, round(s, 2)))
+
 
 class MirrorOverlay(QWidget):
     moved = Signal()  # 드래그로 위치 변경 → 저장
@@ -26,16 +34,23 @@ class MirrorOverlay(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
 
-        # source: {x,y,w,h, name, posX?, posY?, locked?}
+        # source: {x,y,w,h, name, posX?, posY?, locked?, scale?}
         self.source = dict(source)
         self._pix: QPixmap | None = None
         self._locked = False
         self._drag_offset = None
 
-        w = int(source["w"])
-        h = int(source["h"])
-        self.resize(max(1, w), max(1, h))
+        self._base_w = max(1, int(source["w"]))
+        self._base_h = max(1, int(source["h"]))
+        self._scale = _clamp_scale(float(source.get("scale", 1.0)))
+        self._apply_size()
         self.move(int(source.get("posX", source["x"])), int(source.get("posY", source["y"])))
+
+    def _apply_size(self) -> None:
+        self.resize(
+            max(1, round(self._base_w * self._scale)),
+            max(1, round(self._base_h * self._scale)),
+        )
 
     @property
     def name(self) -> str:
@@ -69,8 +84,28 @@ class MirrorOverlay(QWidget):
             "posX": int(self.x()),
             "posY": int(self.y()),
             "locked": bool(self._locked),
+            "scale": round(self._scale, 2),
             "name": self.name,
         }
+
+    # ---- 배율(해제 상태에서 휠=크기조절, 더블클릭=100%) ----
+    def wheelEvent(self, event) -> None:
+        if self._locked:
+            return
+        step = _SCALE_STEP if event.angleDelta().y() > 0 else -_SCALE_STEP
+        new = _clamp_scale(self._scale + step)
+        if new != self._scale:
+            self._scale = new
+            self._apply_size()
+            self.moved.emit()  # 크기 변경도 저장
+        event.accept()
+
+    def mouseDoubleClickEvent(self, event) -> None:
+        if not self._locked:
+            self._scale = 1.0
+            self._apply_size()
+            self.moved.emit()
+            event.accept()
 
     # ---- 드래그 이동(해제 상태에서만) ----
     def mousePressEvent(self, event) -> None:
