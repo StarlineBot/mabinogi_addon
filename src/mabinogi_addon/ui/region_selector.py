@@ -238,9 +238,22 @@ class RegionSelector(QWidget):
     def _draw_loupe(self, painter: QPainter, pos: QPoint) -> None:
         """커서 주변을 _ZOOM배로 확대해 커서 옆 박스에 그린다(중앙 십자선)."""
         src = max(4, _LOUPE // _ZOOM)
-        crop = self._shot.copy(pos.x() - src // 2, pos.y() - src // 2, src, src)
-        crop.setDevicePixelRatio(1.0)
-        zoomed = crop.scaled(
+        half = src // 2
+        sx0, sy0 = pos.x() - half, pos.y() - half
+        # 화면 가장자리에서도 커서가 항상 '중앙'에 오도록, src×src 검정 캔버스에 화면 안
+        # 유효 영역만 제자리에 붙인다(바로 copy하면 음수 좌표라 크롭이 밀려 깨진다).
+        canvas = QPixmap(src, src)
+        canvas.fill(Qt.GlobalColor.black)
+        sw, sh = self._shot.width(), self._shot.height()
+        vx0, vy0 = max(0, sx0), max(0, sy0)
+        vx1, vy1 = min(sw, sx0 + src), min(sh, sy0 + src)
+        if vx1 > vx0 and vy1 > vy0:
+            part = self._shot.copy(vx0, vy0, vx1 - vx0, vy1 - vy0)
+            part.setDevicePixelRatio(1.0)
+            cp = QPainter(canvas)
+            cp.drawPixmap(vx0 - sx0, vy0 - sy0, part)
+            cp.end()
+        zoomed = canvas.scaled(
             _LOUPE, _LOUPE,
             Qt.AspectRatioMode.IgnoreAspectRatio,
             Qt.TransformationMode.FastTransformation,  # Nearest → 픽셀 또렷
