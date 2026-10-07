@@ -99,13 +99,18 @@ class SettingsTab(QWidget):
         row.addWidget(avatar)
 
         col = QVBoxLayout()
-        col.setSpacing(1)
-        name = QLabel(config.CREATOR_NAME)
+        col.setSpacing(2)
+        name = QLabel(f"제작자: {config.CREATOR_NAME}")
         name.setStyleSheet("font-size:15px; font-weight:700;")
-        sub = QLabel(config.APP_NAME)
-        sub.setStyleSheet("color:#8a8f98; font-size:11px;")
+        desc = QLabel(
+            "개인개발용 마비노기 애드온 입니다.\n"
+            "건의사항이나 필요한 기능은 아래 문의하기 버튼 혹은 "
+            "하프서버 Starline 에게 문의해 주세요."
+        )
+        desc.setWordWrap(True)
+        desc.setStyleSheet("color:#8a8f98; font-size:11px;")
         col.addWidget(name)
-        col.addWidget(sub)
+        col.addWidget(desc)
         row.addLayout(col, 1)
         return box
 

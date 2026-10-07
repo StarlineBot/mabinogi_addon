@@ -18,6 +18,10 @@ def main() -> None:
         format="%(asctime)s.%(msecs)03d %(levelname)s %(name)s: %(message)s",
         datefmt="%H:%M:%S",
     )
+    # 문의 '버그 신고' 첨부용: 최근 로그를 메모리에 함께 쌓는다(터미널과 별개).
+    from mabinogi_addon import logbuffer
+
+    logbuffer.install()
 
     from mabinogi_addon import config
     from mabinogi_addon.ui.main_window import MainWindow, app_icon
