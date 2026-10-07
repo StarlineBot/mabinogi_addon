@@ -129,8 +129,8 @@ class _ConfigExportThread(QThread):
 class SettingsTab(QWidget):
     # 로그인 상태가 바뀌면 메인이 받아 기능 노출(게이팅)을 갱신할 수 있게 알린다.
     login_changed = Signal()
-    # 설정 가져오기/초기화 후 전체 반영을 위해 메인에 앱 재시작을 요청한다.
-    restart_requested = Signal()
+    # 설정 가져오기/초기화 직후 메인에 알려, 종료 시 낡은 상태로 덮어쓰지 않게 한다.
+    config_imported = Signal()
 
     def __init__(self, watcher: WindowWatcher) -> None:
         super().__init__()
@@ -272,18 +272,19 @@ class SettingsTab(QWidget):
         self._offer_restart("설정 초기화", "설정을 초기화했습니다.")
 
     def _offer_restart(self, title: str, msg: str) -> None:
-        """가져오기/초기화 후: 전체 반영을 위해 지금 재시작할지 묻는다."""
-        resp = QMessageBox.question(
+        """가져오기/초기화 후: 종료 시 덮어쓰기 방지 신호를 보내고, 재실행을 안내한다.
+
+        자동 재시작은 하지 않는다(onefile exe 자가 재실행이 임시폴더 충돌로 깨짐).
+        대신 사용자가 직접 '완전히 종료 후 다시 실행'하면 바뀐 설정·자산이 반영된다.
+        """
+        self.config_imported.emit()
+        QMessageBox.information(
             self,
             title,
-            f"{msg}\n전부 반영하려면 앱을 다시 시작해야 합니다.\n지금 다시 시작할까요?",
+            f"{msg}\n\n전부 반영하려면 앱을 완전히 종료한 뒤 다시 실행하세요.\n"
+            "(트레이로 최소화가 아니라 트레이 아이콘 → '종료' 후 재실행)\n"
+            "지금 창을 닫아도 가져온 설정은 안전하게 유지됩니다.",
         )
-        if resp == QMessageBox.StandardButton.Yes:
-            self.restart_requested.emit()
-        else:
-            QMessageBox.information(
-                self, title, "다음에 앱을 다시 시작하면 적용됩니다."
-            )
 
     # ---- Discord 계정(로그인) ----
     def _discord_group(self) -> QGroupBox:

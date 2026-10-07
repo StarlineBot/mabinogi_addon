@@ -55,6 +55,9 @@ class MainWindow(QMainWindow):
         # 포그라운드 감지(맥=항상 활성). 저장된 게임 실행파일로 판정(없으면 제목 폴백).
         self._watcher = create_window_watcher(game_exe=config.load_game_exe())
         self._restoring = False  # 복원 중엔 상태 저장 안 함
+        # 설정 가져오기/초기화 후: 이 세션의 (가져오기 전) 낡은 오버레이·메모 상태가
+        # 종료 시 방금 가져온 설정을 덮어쓰지 않도록 저장을 막는다. 다음 실행에서 반영.
+        self._config_pending_restart = False
         self._force_quit = False  # 트레이 '종료'로 진짜 종료할 때만 True
         self._tray = self._build_tray()
 
@@ -65,7 +68,7 @@ class MainWindow(QMainWindow):
         self.tuarim_tab = TuarimTab(self._watcher)
         self.custom_overlay_tab = CustomOverlayTab(self._watcher)
         self.settings_tab = SettingsTab(self._watcher)
-        self.settings_tab.restart_requested.connect(self._restart_app)
+        self.settings_tab.config_imported.connect(self._on_config_imported)
         tabs = QTabWidget()
         tabs.addTab(self.buff_tab, "버프")
         tabs.addTab(self.debuff_tab, "디버프")
@@ -129,7 +132,7 @@ class MainWindow(QMainWindow):
         self._save_overlay(overlay, section)
 
     def _save_overlay(self, overlay: BuffOverlay, section: str) -> None:
-        if self._restoring:
+        if self._restoring or self._config_pending_restart:
             return
         pos = overlay.pos()
         config.save_overlay_state(pos.x(), pos.y(), overlay.locked, section)
@@ -383,7 +386,7 @@ class MainWindow(QMainWindow):
         self._save_memo()
 
     def _save_memo(self) -> None:
-        if self._restoring:
+        if self._restoring or self._config_pending_restart:
             return
         config.save_memo(
             self.memo_overlay.text(),
@@ -448,24 +451,15 @@ class MainWindow(QMainWindow):
         self._force_quit = True
         self.close()
 
-    def _restart_app(self) -> None:
-        """앱을 정상 종료 후 새 프로세스로 다시 띄운다(설정 가져오기/초기화 반영).
+    def _on_config_imported(self) -> None:
+        """설정 가져오기/초기화 직후: 종료 시 낡은 상태로 덮어쓰지 않도록 저장을 막는다.
 
-        종료 경로(closeEvent)를 그대로 타서 오버레이·캡처 워커를 깨끗이 정리하고,
-        그 전에 분리된 새 프로세스를 띄워 둔다. 기존 시작 경로(start())가 바뀐
-        설정·자산을 전부 다시 읽으므로 라이브 반영보다 안전하고 확실하다.
+        자동 재시작(QProcess로 자기 자신 재실행)은 PyInstaller onefile에서 기존
+        인스턴스의 _MEI 임시폴더 추출/정리와 충돌해 새 프로세스의 네이티브 모듈
+        (cv2 등) 로드가 깨졌다. 그래서 재실행은 하지 않고, 이 세션은 상태 저장만
+        멈춘 뒤 사용자가 직접 종료→재실행하면 바뀐 설정·자산이 깨끗이 반영된다.
         """
-        import sys
-
-        from PySide6.QtCore import QProcess
-
-        exe = sys.executable
-        # frozen(exe): 인자 없이 자기 자신 재실행. 개발(uv): python + 콘솔 스크립트 경로.
-        args = sys.argv[1:] if getattr(sys, "frozen", False) else sys.argv
-        _log.info("앱 재시작: %s %s", exe, args)
-        QProcess.startDetached(exe, args)
-        self._force_quit = True
-        self.close()
+        self._config_pending_restart = True
 
     def _minimize_to_tray_enabled(self) -> bool:
         return self._tray is not None and config.load_general_flag(
@@ -476,7 +470,13 @@ class MainWindow(QMainWindow):
         import time
 
         # 트레이 최소화: X를 눌러도 종료하지 않고 트레이로 숨긴다(백그라운드 계속 동작).
-        if self._minimize_to_tray_enabled() and not self._force_quit:
+        # 단, 설정 가져오기/초기화 후엔 낡은 인스턴스가 남지 않게 X로도 완전 종료한다
+        # (재실행해야 반영되므로 트레이에 숨겨두면 혼란 — 재실행 시 중복 실행됨).
+        if (
+            self._minimize_to_tray_enabled()
+            and not self._force_quit
+            and not self._config_pending_restart
+        ):
             event.ignore()
             self.hide()
             if self._tray is not None:
