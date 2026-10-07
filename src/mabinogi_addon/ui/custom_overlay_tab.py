@@ -238,10 +238,24 @@ class CustomOverlayTab(QWidget):
         if not self._mgr.overlays():
             self._info("저장할 오버레이가 없습니다.")
             return
-        name, ok = QInputDialog.getText(self, "프리셋 저장", "프리셋 이름:")
-        name = name.strip()
-        if not ok or not name:
-            return
+        rows = self._selected_rows(self.preset_list)
+        if rows:
+            # 상단 목록에서 고른 프리셋이 있으면: 이름 입력 없이 그 프리셋에 덮어쓰기(확인).
+            name = self.preset_list.item(rows[0]).text()
+            if not self._confirm(
+                "프리셋 덮어쓰기", f"'{name}' 프리셋을 덮어쓸까요?"
+            ):
+                return
+        else:
+            # 선택이 없으면: 새 프리셋으로 등록(이름 입력). 이름이 겹치면 한 번 확인.
+            name, ok = QInputDialog.getText(self, "프리셋 저장", "프리셋 이름:")
+            name = name.strip()
+            if not ok or not name:
+                return
+            if name in config.load_custom_presets() and not self._confirm(
+                "프리셋 덮어쓰기", f"'{name}' 프리셋을 덮어쓸까요?"
+            ):
+                return
         config.save_custom_preset(name, self._mgr.to_dicts())
         self._refresh_presets()
 
