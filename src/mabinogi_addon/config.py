@@ -406,6 +406,35 @@ def add_removed_default(
     _write_local_config(data, path)
 
 
+def load_tuarim(path: Path = LOCAL_CONFIG_PATH) -> dict:
+    """투아림 설정. {enabled, box:{x,y,w,h,locked}, thresholds:[int], sounds:[bool,bool]}."""
+    sec = _read_local_config(path).get("tuarim")
+    sec = sec if isinstance(sec, dict) else {}
+    box = sec.get("box") if isinstance(sec.get("box"), dict) else None
+    thresholds = sec.get("thresholds")
+    thresholds = (
+        [int(x) for x in thresholds] if isinstance(thresholds, list) else [95, 98]
+    )
+    sounds = sec.get("sounds")
+    sounds = [bool(x) for x in sounds] if isinstance(sounds, list) else [True, True]
+    return {
+        "enabled": bool(sec.get("enabled", False)),
+        "box": box,
+        "thresholds": thresholds,
+        "sounds": sounds,
+    }
+
+
+def save_tuarim(data: dict, path: Path = LOCAL_CONFIG_PATH) -> None:
+    cfg = _read_local_config(path)
+    sec = cfg.get("tuarim")
+    if not isinstance(sec, dict):
+        sec = {}
+    sec.update(data)
+    cfg["tuarim"] = sec
+    _write_local_config(cfg, path)
+
+
 def _custom_section(path: Path) -> dict:
     sec = _read_local_config(path).get("customOverlay")
     return sec if isinstance(sec, dict) else {}
