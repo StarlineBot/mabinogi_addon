@@ -136,7 +136,7 @@ class CustomOverlayTab(QWidget):
         v.addWidget(self.overlay_list, 2)
         v.addWidget(
             hint_label(
-                "영역 지정으로 추가됩니다. 이름 옆 (…)은 캡처한 프로그램.\n"
+                "영역 지정으로 추가됩니다.\n"
                 "해제 상태에서 드래그로 이동 · 마우스 휠로 크기 조절 · 더블클릭 원래 크기."
             )
         )
@@ -250,7 +250,7 @@ class CustomOverlayTab(QWidget):
         self.overlay_list.clear()
         for i, o in enumerate(self._mgr.overlays(), 1):
             tag = " · 고정" if o.locked else ""
-            self.overlay_list.addItem(f"오버레이{i} ({o.name}){tag}")
+            self.overlay_list.addItem(f"오버레이{i}{tag}")
 
     def _refresh_presets(self) -> None:
         self.preset_list.clear()
