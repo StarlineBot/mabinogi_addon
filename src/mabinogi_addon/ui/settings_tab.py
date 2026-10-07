@@ -6,9 +6,10 @@
 
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QPainter, QPainterPath, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -20,7 +21,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from .. import config
+from .. import config, discord_auth
 from ..system.window_watcher import WindowWatcher
 from .widgets import hint_label
 
@@ -66,6 +67,10 @@ _TRAY_START = "startInTray"
 
 
 class SettingsTab(QWidget):
+    # 로그인 상태가 바뀌면 메인이 받아 기능 노출(게이팅)을 갱신할 수 있게 알린다.
+    login_changed = Signal()
+    _login_done = Signal(bool, str, str)  # (성공, user_id, 이름)
+
     def __init__(self, watcher: WindowWatcher) -> None:
         super().__init__()
         self._watcher = watcher
@@ -76,9 +81,71 @@ class SettingsTab(QWidget):
         v.setSpacing(12)
         v.addWidget(self._creator_header())
         v.addWidget(self._inquiry_button())
+        v.addWidget(self._discord_group())
         v.addWidget(self._general_group())
         v.addWidget(self._game_group())
         v.addStretch(1)
+        self._login_done.connect(self._on_login_done)
+
+    # ---- Discord 계정(로그인) ----
+    def _discord_group(self) -> QGroupBox:
+        box = QGroupBox("Discord 계정")
+        v = QVBoxLayout(box)
+        self._login_status = hint_label("")
+        v.addWidget(self._login_status)
+        row = QHBoxLayout()
+        self._login_btn = QPushButton("")
+        self._login_btn.clicked.connect(self._on_login_clicked)
+        row.addWidget(self._login_btn)
+        row.addStretch(1)
+        v.addLayout(row)
+        v.addWidget(
+            hint_label("로그인하면 문의 답변을 DM으로 받을 수 있어요.")
+        )
+        self._refresh_login()
+        return box
+
+    def _refresh_login(self) -> None:
+        user = config.load_discord_user()
+        if user:
+            self._login_status.setText(f"로그인됨: {user['name']}")
+            self._login_status.setStyleSheet("color:#2ecc71;")
+            self._login_btn.setText("로그아웃")
+        else:
+            self._login_status.setText("로그인하지 않음")
+            self._login_status.setStyleSheet("color:#8a8f98;")
+            self._login_btn.setText("Discord 로그인")
+
+    def _on_login_clicked(self) -> None:
+        if config.load_discord_user():
+            config.clear_discord_user()
+            self._refresh_login()
+            self.login_changed.emit()
+            return
+        self._login_btn.setEnabled(False)
+        self._login_status.setText("브라우저에서 Discord 승인을 진행하세요…")
+        self._login_status.setStyleSheet("color:#8a8f98;")
+        threading.Thread(target=self._login_worker, daemon=True).start()
+
+    def _login_worker(self) -> None:
+        try:
+            result = discord_auth.login()
+        except Exception:  # noqa: BLE001 — 포트 사용 중·네트워크 오류 등
+            result = None
+        if result:
+            self._login_done.emit(True, result[0], result[1])
+        else:
+            self._login_done.emit(False, "", "")
+
+    def _on_login_done(self, ok: bool, user_id: str, name: str) -> None:
+        self._login_btn.setEnabled(True)
+        if ok:
+            config.save_discord_user(user_id, name)
+        else:
+            self._login_status.setText("로그인 실패/취소 — 다시 시도하세요.")
+            self._login_status.setStyleSheet("color:#e67e22;")
+        self._refresh_login()
+        self.login_changed.emit()
 
     # ---- 제작자 헤더 + 문의하기 ----
     def _creator_header(self) -> QWidget:

@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
-from .. import config, discord_auth
+from .. import config
 from ..inquiry import send_inquiry
 from ..logbuffer import recent_logs
 from .toast import show_toast
@@ -35,28 +35,29 @@ class InquiryDialog(QDialog):
     """제목·내용 입력 → Discord 웹훅 전송."""
 
     _done = Signal(bool, str)  # (성공 여부, 실패 메시지)
-    _login_done = Signal(bool, str, str)  # (성공, user_id, 이름)
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.setWindowTitle("문의하기")
         self.setModal(True)
-        self.resize(420, 400)
+        self.resize(420, 360)
 
         v = QVBoxLayout(self)
         v.setContentsMargins(16, 16, 16, 16)
         v.setSpacing(8)
 
-        # 로그인 행: 로그인하면 답변을 Discord DM으로 받을 수 있다(비로그인=단방향 접수).
-        login_row = QHBoxLayout()
-        self.login_status = QLabel("")
-        self.login_status.setWordWrap(True)
-        login_row.addWidget(self.login_status, 1)
-        self.login_btn = QPushButton("")
-        self.login_btn.clicked.connect(self._on_login_clicked)
-        login_row.addWidget(self.login_btn)
-        v.addLayout(login_row)
-        self._refresh_login()
+        # 로그인 상태면 답변을 DM으로 받을 수 있다는 안내(로그인은 설정 탭에서).
+        user = config.load_discord_user()
+        hint = QLabel(
+            f"답변 받을 계정: {user['name']}"
+            if user
+            else "로그인(설정 탭)하면 답변을 Discord DM으로 받을 수 있어요"
+        )
+        hint.setWordWrap(True)
+        hint.setStyleSheet(
+            "color:#2ecc71;" if user else "color:#8a8f98;"
+        )
+        v.addWidget(hint)
 
         v.addWidget(QLabel("분류"))
         self.category = QComboBox()
@@ -103,47 +104,6 @@ class InquiryDialog(QDialog):
         v.addLayout(btn_row)
 
         self._done.connect(self._on_done)
-        self._login_done.connect(self._on_login_done)
-
-    # ---- 로그인 ----
-    def _refresh_login(self) -> None:
-        user = config.load_discord_user()
-        if user:
-            self.login_status.setText(f"답변 받을 계정: {user['name']}")
-            self.login_status.setStyleSheet("color:#2ecc71;")
-            self.login_btn.setText("로그아웃")
-        else:
-            self.login_status.setText("Discord 로그인하면 답변을 DM으로 받을 수 있어요")
-            self.login_status.setStyleSheet("color:#8a8f98;")
-            self.login_btn.setText("Discord 로그인")
-
-    def _on_login_clicked(self) -> None:
-        if config.load_discord_user():
-            config.clear_discord_user()
-            self._refresh_login()
-            return
-        self.login_btn.setEnabled(False)
-        self.login_status.setText("브라우저에서 Discord 승인을 진행하세요…")
-        self.login_status.setStyleSheet("color:#8a8f98;")
-        threading.Thread(target=self._login_worker, daemon=True).start()
-
-    def _login_worker(self) -> None:
-        try:
-            result = discord_auth.login()
-        except Exception:  # noqa: BLE001 — 포트 사용 중·네트워크 오류 등
-            result = None
-        if result:
-            self._login_done.emit(True, result[0], result[1])
-        else:
-            self._login_done.emit(False, "", "")
-
-    def _on_login_done(self, ok: bool, user_id: str, name: str) -> None:
-        self.login_btn.setEnabled(True)
-        if ok:
-            config.save_discord_user(user_id, name)
-        else:
-            self._set_status("로그인 실패/취소 — 로그인 없이도 보낼 수 있어요.", error=True)
-        self._refresh_login()
 
     def _set_status(self, text: str, *, error: bool = False) -> None:
         self.status.setText(text)
