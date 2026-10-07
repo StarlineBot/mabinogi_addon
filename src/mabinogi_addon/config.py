@@ -495,6 +495,31 @@ def delete_custom_preset(name: str, path: Path = LOCAL_CONFIG_PATH) -> None:
         sec["presets"] = presets
         data["customOverlay"] = sec
         _write_local_config(data, path)
+    # 자동 불러오기로 지정된 프리셋이 삭제되면 지정도 해제한다.
+    if sec.get("autoPreset") == name:
+        sec.pop("autoPreset", None)
+        data["customOverlay"] = sec
+        _write_local_config(data, path)
+
+
+def load_auto_preset(path: Path = LOCAL_CONFIG_PATH) -> str | None:
+    """시작 시 자동 불러올 프리셋 이름(없으면 None)."""
+    name = _custom_section(path).get("autoPreset")
+    return name if isinstance(name, str) and name else None
+
+
+def save_auto_preset(name: str | None, path: Path = LOCAL_CONFIG_PATH) -> None:
+    """시작 시 자동 불러올 프리셋 지정(None이면 해제)."""
+    data = _read_local_config(path)
+    sec = data.get("customOverlay")
+    if not isinstance(sec, dict):
+        sec = {}
+    if name:
+        sec["autoPreset"] = name
+    else:
+        sec.pop("autoPreset", None)
+    data["customOverlay"] = sec
+    _write_local_config(data, path)
 
 
 def load_debuff_settings(path: Path = LOCAL_CONFIG_PATH) -> list[BuffSettings]:

@@ -69,3 +69,20 @@ def test_custom_overlays_roundtrip(tmp_path):
     assert config.load_custom_overlays(p) == []
     config.save_custom_overlays([{"x": 0, "y": 0, "w": 10, "h": 10}], p)
     assert len(config.load_custom_overlays(p)) == 1
+
+
+def test_auto_preset_roundtrip_and_clear(tmp_path):
+    p = tmp_path / "config.local.json"
+    assert config.load_auto_preset(p) is None
+    config.save_auto_preset("프리셋1", p)
+    assert config.load_auto_preset(p) == "프리셋1"
+    config.save_auto_preset(None, p)  # 해제
+    assert config.load_auto_preset(p) is None
+
+
+def test_deleting_auto_preset_clears_it(tmp_path):
+    p = tmp_path / "config.local.json"
+    config.save_custom_preset("프리셋1", [], p)
+    config.save_auto_preset("프리셋1", p)
+    config.delete_custom_preset("프리셋1", p)  # 자동 지정 프리셋 삭제
+    assert config.load_auto_preset(p) is None

@@ -14,12 +14,15 @@
 
 from __future__ import annotations
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QCheckBox,
     QGridLayout,
     QHBoxLayout,
     QInputDialog,
     QListWidget,
+    QListWidgetItem,
     QMessageBox,
     QPushButton,
     QVBoxLayout,
@@ -119,6 +122,12 @@ class CustomOverlayTab(QWidget):
         preset_row.addWidget(self.preset_delete_btn)
         v.addLayout(preset_row)
 
+        # 시작 시 자동 불러오기(선택한 프리셋 대상). ⭐ 표시로 목록에서 구분.
+        self.auto_chk = QCheckBox("⭐ 선택한 프리셋을 시작 시 자동 불러오기")
+        self.auto_chk.toggled.connect(self._on_auto_toggled)
+        v.addWidget(self.auto_chk)
+        self.preset_list.itemSelectionChanged.connect(self._sync_auto_checkbox)
+
         # 오버레이 목록(선택만)
         v.addWidget(section_label("오버레이 목록"))
         self.overlay_list = _name_list()
@@ -166,6 +175,40 @@ class CustomOverlayTab(QWidget):
 
         self._refresh_presets()
         self._refresh_overlays()
+        self._auto_load_startup()  # 시작 시 자동 프리셋 불러오기
+
+    # ---- 시작 시 자동 불러오기 ----
+    def _auto_load_startup(self) -> None:
+        name = config.load_auto_preset()
+        if not name:
+            return
+        items = config.load_custom_presets().get(name)
+        if items:
+            self._mgr.load(items)
+
+    def _sync_auto_checkbox(self) -> None:
+        """선택한 프리셋이 자동 불러오기 대상인지 체크박스에 반영."""
+        rows = self._selected_rows(self.preset_list)
+        self.auto_chk.blockSignals(True)
+        if rows:
+            name = self.preset_list.item(rows[0]).data(Qt.ItemDataRole.UserRole)
+            self.auto_chk.setEnabled(True)
+            self.auto_chk.setChecked(name == config.load_auto_preset())
+        else:
+            self.auto_chk.setChecked(False)
+            self.auto_chk.setEnabled(False)
+        self.auto_chk.blockSignals(False)
+
+    def _on_auto_toggled(self, checked: bool) -> None:
+        rows = self._selected_rows(self.preset_list)
+        if not rows:
+            return
+        name = self.preset_list.item(rows[0]).data(Qt.ItemDataRole.UserRole)
+        if checked:
+            config.save_auto_preset(name)
+        elif config.load_auto_preset() == name:
+            config.save_auto_preset(None)
+        self._refresh_presets()
 
     # ---- 영역 지정 → 오버레이 추가 ----
     def _on_region(self) -> None:
@@ -209,8 +252,16 @@ class CustomOverlayTab(QWidget):
 
     def _refresh_presets(self) -> None:
         self.preset_list.clear()
+        auto = config.load_auto_preset()
         for name in sorted(config.load_custom_presets()):
-            self.preset_list.addItem(name)
+            # 실제 이름은 UserRole에 보관(표시엔 자동 불러오기 ⭐ 표시 추가).
+            item = QListWidgetItem(f"⭐ {name}" if name == auto else name)
+            item.setData(Qt.ItemDataRole.UserRole, name)
+            self.preset_list.addItem(item)
+        self._sync_auto_checkbox()
+
+    def _preset_name(self, row: int) -> str:
+        return self.preset_list.item(row).data(Qt.ItemDataRole.UserRole)
 
     def _selected_rows(self, lst: QListWidget) -> list[int]:
         return sorted(lst.row(i) for i in lst.selectedItems())
@@ -241,7 +292,7 @@ class CustomOverlayTab(QWidget):
         rows = self._selected_rows(self.preset_list)
         if rows:
             # 상단 목록에서 고른 프리셋이 있으면: 이름 입력 없이 그 프리셋에 덮어쓰기(확인).
-            name = self.preset_list.item(rows[0]).text()
+            name = self._preset_name(rows[0])
             if not self._confirm(
                 "프리셋 덮어쓰기", f"'{name}' 프리셋을 덮어쓸까요?"
             ):
@@ -263,7 +314,7 @@ class CustomOverlayTab(QWidget):
         rows = self._selected_rows(self.preset_list)
         if not rows:
             return
-        name = self.preset_list.item(rows[0]).text()
+        name = self._preset_name(rows[0])
         items = config.load_custom_presets().get(name, [])
         self._mgr.load(items)
 
@@ -271,7 +322,7 @@ class CustomOverlayTab(QWidget):
         rows = self._selected_rows(self.preset_list)
         if not rows:
             return
-        name = self.preset_list.item(rows[0]).text()
+        name = self._preset_name(rows[0])
         if self._confirm("프리셋 삭제", f"'{name}' 프리셋을 삭제할까요?"):
             config.delete_custom_preset(name)
             self._refresh_presets()
