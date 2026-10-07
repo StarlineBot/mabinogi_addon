@@ -18,13 +18,18 @@ from . import inquiry
 def send_config_backup(
     webhook_url: str,
     user_id: str,
-    config_json: str,
+    payload_bytes: bytes,
     *,
+    filename: str = "섯다라인_설정.zip",
     username: str | None = None,
     timeout: float = 5.0,
     urlopen=urllib.request.urlopen,
 ) -> None:
-    """설정 JSON을 릴레이 웹훅에 config.json 첨부로 전송. 실패 시 예외."""
+    """설정 백업(zip 바이트)을 릴레이 웹훅에 첨부로 전송. 실패 시 예외.
+
+    설정 JSON만으론 커스텀 버프 아이콘 등 자산이 빠지므로, 설정+자산을 묶은
+    zip 번들을 보낸다. 섯다라인 봇이 멘션을 보고 작성자에게 DM으로 relay한다.
+    """
     if not webhook_url:
         raise ValueError("설정 백업 채널(웹훅)이 설정되지 않았습니다")
     if not user_id:
@@ -36,7 +41,7 @@ def send_config_backup(
     inquiry._post(
         webhook_url,
         payload,
-        ("config.json", config_json.encode("utf-8")),
+        (filename, payload_bytes),
         timeout,
         urlopen,
     )

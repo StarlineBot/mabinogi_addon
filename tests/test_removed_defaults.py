@@ -41,10 +41,8 @@ def test_export_import_excludes_secrets(tmp_path):
          "nexonApiKey": "SECRET", "inquiryWebhookUrl": "https://hook"},
         cfg,
     )
-    out = tmp_path / "export.json"
-    config.export_config(out, cfg)
     import json
-    exported = json.loads(out.read_text(encoding="utf-8"))
+    exported = json.loads(config.config_json_for_export(cfg))
     assert "nexonApiKey" not in exported and "inquiryWebhookUrl" not in exported
     assert exported["partyKeywords"] == ["브리"]
 

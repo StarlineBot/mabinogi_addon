@@ -105,7 +105,7 @@ class _ConfigExportThread(QThread):
 
     done = Signal(bool, str)  # (성공, 메시지)
 
-    def __init__(self, webhook: str, user: dict, payload: str, parent=None) -> None:
+    def __init__(self, webhook: str, user: dict, payload: bytes, parent=None) -> None:
         super().__init__(parent)
         self._webhook = webhook
         self._user = user
@@ -129,6 +129,8 @@ class _ConfigExportThread(QThread):
 class SettingsTab(QWidget):
     # 로그인 상태가 바뀌면 메인이 받아 기능 노출(게이팅)을 갱신할 수 있게 알린다.
     login_changed = Signal()
+    # 설정 가져오기/초기화 후 전체 반영을 위해 메인에 앱 재시작을 요청한다.
+    restart_requested = Signal()
 
     def __init__(self, watcher: WindowWatcher) -> None:
         super().__init__()
@@ -161,20 +163,27 @@ class SettingsTab(QWidget):
         v.addLayout(row)
         v.addWidget(
             hint_label(
-                "현재 설정을 파일로 저장/불러옵니다(다른 PC로 이동·백업).\n"
-                "가져온 뒤 앱을 다시 시작하면 적용됩니다."
+                "설정과 등록한 버프·디버프 아이콘까지 하나의 zip으로 저장/불러옵니다"
+                "(다른 PC로 이동·백업).\n가져오면 앱을 다시 시작해 전부 반영합니다."
             )
         )
 
-        # 디스코드로 내보내기: 봇이 설정 파일을 내 DM으로 보내준다(로그인 필요).
+        # 디스코드로 내보내기: 봇이 백업 파일을 내 DM으로 보내준다(로그인 필요).
         self._dm_export_btn = QPushButton("디스코드로 내보내기 (DM)")
         self._dm_export_btn.clicked.connect(self._on_export_discord)
         v.addWidget(self._dm_export_btn)
         v.addWidget(
             hint_label(
-                "로그인한 계정으로 섯다라인 봇이 설정 파일을 DM으로 보냅니다.\n"
+                "로그인한 계정으로 섯다라인 봇이 백업 파일을 DM으로 보냅니다.\n"
                 "다른 PC에서 그 파일을 받아 '설정 가져오기'로 적용하세요."
             )
+        )
+
+        reset_btn = QPushButton("설정 초기화")
+        reset_btn.clicked.connect(self._on_reset_config)
+        v.addWidget(reset_btn)
+        v.addWidget(
+            hint_label("모든 설정을 지우고 처음 상태로 되돌립니다(되돌릴 수 없음).")
         )
         self._refresh_dm_export()
         return box
@@ -201,7 +210,7 @@ class SettingsTab(QWidget):
                 self, "디스코드로 내보내기", "설정 백업 채널이 구성되지 않았습니다."
             )
             return
-        payload = config.config_json_for_export()
+        payload = config.export_bundle_bytes()
         self._dm_export_btn.setEnabled(False)
         self._dm_export_btn.setText("보내는 중…")
         self._export_thread = _ConfigExportThread(webhook, user, payload, self)
@@ -218,12 +227,15 @@ class SettingsTab(QWidget):
 
     def _on_export_config(self) -> None:
         path, _ = QFileDialog.getSaveFileName(
-            self, "설정 내보내기", "섯다라인_애드온_설정.json", "설정 파일 (*.json)"
+            self,
+            "설정 내보내기",
+            "섯다라인_애드온_설정.zip",
+            "설정 백업 (*.zip)",
         )
         if not path:
             return
         try:
-            config.export_config(Path(path))
+            config.export_bundle(Path(path))
         except OSError as exc:
             QMessageBox.warning(self, "설정 내보내기", f"저장 실패: {exc}")
             return
@@ -231,20 +243,47 @@ class SettingsTab(QWidget):
 
     def _on_import_config(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
-            self, "설정 가져오기", "", "설정 파일 (*.json)"
+            self, "설정 가져오기", "", "설정 백업 (*.zip *.json)"
         )
         if not path:
             return
         try:
-            config.import_config(Path(path))
+            config.import_bundle(Path(path))
         except (OSError, ValueError) as exc:
             QMessageBox.warning(self, "설정 가져오기", f"불러오기 실패: {exc}")
             return
-        QMessageBox.information(
+        self._offer_restart("설정 가져오기", "설정을 가져왔습니다.")
+
+    def _on_reset_config(self) -> None:
+        if (
+            QMessageBox.question(
+                self,
+                "설정 초기화",
+                "모든 설정을 지우고 처음 상태로 되돌립니다.\n계속할까요?",
+            )
+            != QMessageBox.StandardButton.Yes
+        ):
+            return
+        try:
+            config.reset_config()
+        except OSError as exc:
+            QMessageBox.warning(self, "설정 초기화", f"초기화 실패: {exc}")
+            return
+        self._offer_restart("설정 초기화", "설정을 초기화했습니다.")
+
+    def _offer_restart(self, title: str, msg: str) -> None:
+        """가져오기/초기화 후: 전체 반영을 위해 지금 재시작할지 묻는다."""
+        resp = QMessageBox.question(
             self,
-            "설정 가져오기",
-            "설정을 가져왔습니다.\n앱을 다시 시작하면 적용됩니다.",
+            title,
+            f"{msg}\n전부 반영하려면 앱을 다시 시작해야 합니다.\n지금 다시 시작할까요?",
         )
+        if resp == QMessageBox.StandardButton.Yes:
+            self.restart_requested.emit()
+        else:
+            QMessageBox.information(
+                self, title, "다음에 앱을 다시 시작하면 적용됩니다."
+            )
 
     # ---- Discord 계정(로그인) ----
     def _discord_group(self) -> QGroupBox:

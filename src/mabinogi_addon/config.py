@@ -66,14 +66,9 @@ def config_json_for_export(path: Path = LOCAL_CONFIG_PATH) -> str:
     return json.dumps(data, ensure_ascii=False, indent=2)
 
 
-def export_config(dest: Path, path: Path = LOCAL_CONFIG_PATH) -> None:
-    """현재 설정을 파일로 저장(비밀값 제외)."""
-    Path(dest).write_text(config_json_for_export(path), encoding="utf-8")
-
-
-def import_config(src: Path, path: Path = LOCAL_CONFIG_PATH) -> None:
-    """파일에서 설정을 가져와 병합(비밀값은 기존 것 유지). 형식 오류면 ValueError."""
-    incoming = json.loads(Path(src).read_text(encoding="utf-8"))
+def _merge_config_text(text: str, path: Path) -> None:
+    """설정 JSON 문자열을 병합(비밀값은 기존 유지). 형식 오류면 ValueError."""
+    incoming = json.loads(text)
     if not isinstance(incoming, dict):
         raise ValueError("설정 파일 형식이 올바르지 않습니다")  # noqa: TRY004
     data = _read_local_config(path)
@@ -81,6 +76,105 @@ def import_config(src: Path, path: Path = LOCAL_CONFIG_PATH) -> None:
         if key not in _SECRET_KEYS:
             data[key] = value
     _write_local_config(data, path)
+
+
+def import_config(src: Path, path: Path = LOCAL_CONFIG_PATH) -> None:
+    """단일 JSON 파일에서 설정을 가져와 병합(레거시). 비밀값은 기존 것 유지."""
+    _merge_config_text(Path(src).read_text(encoding="utf-8"), path)
+
+
+# ---- 전체 백업(zip): 설정 + 사용자 자산(커스텀 버프·디버프 아이콘 등) ----
+# 설정 JSON만으론 부족하다. 버프 목록·순서·고정은 '아이콘 파일'(카탈로그)이 있어야
+# 복원되는데, 그 파일들은 사용자 데이터 폴더에 있고 config.local.json엔 없다.
+# 그래서 다른 PC(특히 exe)로 옮길 땐 설정 + 자산 파일을 zip 하나로 묶는다.
+_BUNDLE_CONFIG_NAME = "config.json"
+_BUNDLE_USERDATA_PREFIX = "userdata/"
+
+
+def _iter_user_files(user_dir: Path, config_name: str):
+    """사용자 데이터 폴더의 모든 파일(비밀 담긴 config.local.json은 제외)."""
+    if not user_dir.exists():
+        return
+    for p in sorted(user_dir.rglob("*")):
+        if not p.is_file():
+            continue
+        if p.parent == user_dir and p.name == config_name:
+            continue  # 비밀값 유출 방지(별도 sanitized config.json으로만 포함)
+        yield p
+
+
+def export_bundle_bytes(
+    path: Path = LOCAL_CONFIG_PATH, user_dir: Path | None = None
+) -> bytes:
+    """설정 + 사용자 자산을 zip 바이트로. 파일 저장·디스코드 DM 공용."""
+    import io
+    import zipfile
+
+    if user_dir is None:
+        user_dir = paths.user_data_dir()
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr(_BUNDLE_CONFIG_NAME, config_json_for_export(path))
+        for f in _iter_user_files(user_dir, path.name):
+            rel = f.relative_to(user_dir).as_posix()
+            z.write(f, _BUNDLE_USERDATA_PREFIX + rel)
+    return buf.getvalue()
+
+
+def export_bundle(
+    dest: Path, path: Path = LOCAL_CONFIG_PATH, user_dir: Path | None = None
+) -> None:
+    """현재 설정 + 사용자 자산을 zip 파일로 저장(비밀값 제외)."""
+    Path(dest).write_bytes(export_bundle_bytes(path, user_dir))
+
+
+def _safe_extract_path(base: Path, rel: str) -> Path | None:
+    """zip 멤버 경로를 base 안으로만 풀도록 검증(zip slip 방지). 벗어나면 None."""
+    base = base.resolve()
+    target = (base / rel).resolve()
+    try:
+        target.relative_to(base)
+    except ValueError:
+        return None
+    return target
+
+
+def import_bundle(
+    src: Path, path: Path = LOCAL_CONFIG_PATH, user_dir: Path | None = None
+) -> None:
+    """백업을 가져온다. zip(설정+자산) 또는 단일 JSON(레거시) 모두 수용."""
+    import zipfile
+
+    src = Path(src)
+    if not zipfile.is_zipfile(src):
+        import_config(src, path)  # 레거시 단일 JSON
+        return
+    if user_dir is None:
+        user_dir = paths.user_data_dir()
+    with zipfile.ZipFile(src) as z:
+        config_text: str | None = None
+        for name in z.namelist():
+            if name.endswith("/"):
+                continue
+            if name == _BUNDLE_CONFIG_NAME:
+                config_text = z.read(name).decode("utf-8")
+            elif name.startswith(_BUNDLE_USERDATA_PREFIX):
+                rel = name[len(_BUNDLE_USERDATA_PREFIX):]
+                dest = _safe_extract_path(user_dir, rel)
+                if dest is None:
+                    continue  # 경로 탈출 시도 멤버는 건너뛴다
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                dest.write_bytes(z.read(name))
+        if config_text is None:
+            raise ValueError("백업 파일에 설정(config.json)이 없습니다")
+        _merge_config_text(config_text, path)
+
+
+def reset_config(path: Path = LOCAL_CONFIG_PATH) -> None:
+    """모든 사용자 설정을 지운다(비밀값은 유지해 API 키·웹훅은 보존)."""
+    data = _read_local_config(path)
+    kept = {k: v for k, v in data.items() if k in _SECRET_KEYS}
+    _write_local_config(kept, path)
 
 
 def _bundled(name: str) -> str | None:

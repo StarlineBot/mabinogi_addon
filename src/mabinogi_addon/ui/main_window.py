@@ -65,6 +65,7 @@ class MainWindow(QMainWindow):
         self.tuarim_tab = TuarimTab(self._watcher)
         self.custom_overlay_tab = CustomOverlayTab(self._watcher)
         self.settings_tab = SettingsTab(self._watcher)
+        self.settings_tab.restart_requested.connect(self._restart_app)
         tabs = QTabWidget()
         tabs.addTab(self.buff_tab, "버프")
         tabs.addTab(self.debuff_tab, "디버프")
@@ -444,6 +445,25 @@ class MainWindow(QMainWindow):
         self.activateWindow()
 
     def _quit_from_tray(self) -> None:
+        self._force_quit = True
+        self.close()
+
+    def _restart_app(self) -> None:
+        """앱을 정상 종료 후 새 프로세스로 다시 띄운다(설정 가져오기/초기화 반영).
+
+        종료 경로(closeEvent)를 그대로 타서 오버레이·캡처 워커를 깨끗이 정리하고,
+        그 전에 분리된 새 프로세스를 띄워 둔다. 기존 시작 경로(start())가 바뀐
+        설정·자산을 전부 다시 읽으므로 라이브 반영보다 안전하고 확실하다.
+        """
+        import sys
+
+        from PySide6.QtCore import QProcess
+
+        exe = sys.executable
+        # frozen(exe): 인자 없이 자기 자신 재실행. 개발(uv): python + 콘솔 스크립트 경로.
+        args = sys.argv[1:] if getattr(sys, "frozen", False) else sys.argv
+        _log.info("앱 재시작: %s %s", exe, args)
+        QProcess.startDetached(exe, args)
         self._force_quit = True
         self.close()
 

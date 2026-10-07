@@ -28,17 +28,18 @@ def test_sends_config_as_attachment_with_mention():
         return _Resp(204)
 
     send_config_backup(
-        "https://x", "12345", '{"a": 1}', username="Star", urlopen=fake_urlopen
+        "https://x", "12345", b"PK\x03\x04zipbytes", username="Star",
+        urlopen=fake_urlopen,
     )
     assert sent["ctype"].startswith("multipart/form-data; boundary=")
     assert b'name="files[0]"' in sent["data"]
-    assert b"config.json" in sent["data"]
+    assert "섯다라인_설정.zip".encode() in sent["data"]  # zip 번들 첨부
     assert b"<@12345>" in sent["data"]  # 봇이 DM 보낼 대상 멘션
-    assert b'{"a": 1}' in sent["data"]
+    assert b"PK\x03\x04zipbytes" in sent["data"]
 
 
 def test_requires_login_and_webhook():
     with pytest.raises(ValueError):
-        send_config_backup("", "123", "{}", urlopen=lambda *a, **k: _Resp())
+        send_config_backup("", "123", b"{}", urlopen=lambda *a, **k: _Resp())
     with pytest.raises(ValueError):
-        send_config_backup("https://x", "", "{}", urlopen=lambda *a, **k: _Resp())
+        send_config_backup("https://x", "", b"{}", urlopen=lambda *a, **k: _Resp())
