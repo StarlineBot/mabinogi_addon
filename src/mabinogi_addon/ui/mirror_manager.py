@@ -132,6 +132,11 @@ class MirrorManager(QObject):
                 o.show()
             self._shown = True
 
+        # 드래그 중엔 캡처(메인 스레드에서 전체 화면 grab)를 쉰다 → 그 시간을 드래그에
+        # 양보해 창 이동이 부드럽다. 위치 잡는 중엔 내용 갱신이 필요 없다.
+        if any(o.dragging for o in self._overlays):
+            return
+
         got = self._grab_full()
         if got is None:
             return

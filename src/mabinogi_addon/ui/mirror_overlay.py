@@ -60,6 +60,11 @@ class MirrorOverlay(QWidget):
     def locked(self) -> bool:
         return self._locked
 
+    @property
+    def dragging(self) -> bool:
+        """드래그 이동 중인지. 매니저가 이때 캡처를 쉬어 드래그를 부드럽게 한다."""
+        return self._drag_offset is not None
+
     def set_frame(self, image: QImage) -> None:
         self._pix = QPixmap.fromImage(image)
         self.update()
