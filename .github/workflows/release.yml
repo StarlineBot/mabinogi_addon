@@ -89,6 +89,7 @@ jobs:
           --version-file packaging/version_info.txt
           --paths src
           --add-data "src/mabinogi_addon/assets;assets"
+          --add-data "src/mabinogi_addon/detect/templates;mabinogi_addon/detect/templates"
           --collect-all PySide6
           --collect-all dxcam
           --collect-all comtypes

@@ -7,15 +7,14 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import cv2
 import numpy as np
 
+from .. import paths
 from ..image_io import imread
 from .binarize import binarize
 
-_TEMPLATE_DIR = Path(__file__).parent / "templates" / "time"
+_TEMPLATE_DIR = paths.detect_templates_dir() / "time"
 
 # 단위 라벨 → 초. 숫자 라벨은 "0".."9".
 _UNIT_SECONDS = {"day": 86400, "hour": 3600, "bun": 60, "cho": 1}

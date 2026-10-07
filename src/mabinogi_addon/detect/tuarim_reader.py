@@ -9,15 +9,14 @@ x 순서로 정렬 → 두 자리까지 이어 % 정수로 돌려준다. '%' 기
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import cv2
 import numpy as np
 
+from .. import paths
 from ..image_io import imread
 from .binarize import binarize
 
-_TEMPLATE_DIR = Path(__file__).parent / "templates" / "tuarim"
+_TEMPLATE_DIR = paths.detect_templates_dir() / "tuarim"
 GLYPH_THRESHOLD = 0.7
 
 

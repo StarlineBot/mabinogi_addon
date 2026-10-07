@@ -49,6 +49,20 @@ def user_data_dir() -> Path:
     return d
 
 
+def detect_templates_dir() -> Path:
+    """탐지용 템플릿 루트(detect/templates).
+
+    frozen(exe)에선 PyInstaller가 `--add-data`로 넣은 번들 경로
+    (_MEIPASS/mabinogi_addon/detect/templates). 개발에선 패키지 내부.
+    `__file__` 기준으로 로드하면 frozen에서 템플릿이 없어 시간·투아림 판독이
+    조용히 실패한다(= 지속시간/퍼센트가 안 뜸).
+    """
+    if is_frozen():
+        base = Path(getattr(sys, "_MEIPASS", _PKG))
+        return base / "mabinogi_addon" / "detect" / "templates"
+    return _PKG / "detect" / "templates"
+
+
 def config_path() -> Path:
     """설정 파일 경로. 개발은 repo 루트(기존 유지), exe는 사용자 데이터 폴더."""
     if is_frozen():
