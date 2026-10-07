@@ -17,9 +17,11 @@ from PySide6.QtGui import QPainter, QPainterPath, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
+    QFileDialog,
     QGroupBox,
     QHBoxLayout,
     QLabel,
+    QMessageBox,
     QPushButton,
     QVBoxLayout,
     QWidget,
@@ -91,7 +93,59 @@ class SettingsTab(QWidget):
         v.addWidget(self._discord_group())
         v.addWidget(self._general_group())
         v.addWidget(self._game_group())
+        v.addWidget(self._backup_group())
         v.addStretch(1)
+
+    def _backup_group(self) -> QGroupBox:
+        box = QGroupBox("설정 백업")
+        v = QVBoxLayout(box)
+        row = QHBoxLayout()
+        export_btn = QPushButton("설정 내보내기")
+        export_btn.clicked.connect(self._on_export_config)
+        import_btn = QPushButton("설정 가져오기")
+        import_btn.clicked.connect(self._on_import_config)
+        row.addWidget(export_btn)
+        row.addWidget(import_btn)
+        v.addLayout(row)
+        v.addWidget(
+            hint_label(
+                "현재 설정을 파일로 저장/불러옵니다(다른 PC로 이동·백업).\n"
+                "API 키·웹훅 등 비밀값은 제외됩니다. 가져온 뒤 앱을 다시 시작하면 적용됩니다."
+            )
+        )
+        return box
+
+    def _on_export_config(self) -> None:
+        path, _ = QFileDialog.getSaveFileName(
+            self, "설정 내보내기", "섯다라인_애드온_설정.json", "설정 파일 (*.json)"
+        )
+        if not path:
+            return
+        try:
+            config.export_config(Path(path))
+        except OSError as exc:
+            QMessageBox.warning(self, "설정 내보내기", f"저장 실패: {exc}")
+            return
+        QMessageBox.information(
+            self, "설정 내보내기", "설정을 저장했습니다.\n(비밀값 제외)"
+        )
+
+    def _on_import_config(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self, "설정 가져오기", "", "설정 파일 (*.json)"
+        )
+        if not path:
+            return
+        try:
+            config.import_config(Path(path))
+        except (OSError, ValueError) as exc:
+            QMessageBox.warning(self, "설정 가져오기", f"불러오기 실패: {exc}")
+            return
+        QMessageBox.information(
+            self,
+            "설정 가져오기",
+            "설정을 가져왔습니다.\n앱을 다시 시작하면 적용됩니다.",
+        )
         self._login_done.connect(self._on_login_done)
 
     # ---- Discord 계정(로그인) ----

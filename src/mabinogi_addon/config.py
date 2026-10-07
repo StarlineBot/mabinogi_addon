@@ -56,6 +56,30 @@ def _write_local_config(data: dict, path: Path = LOCAL_CONFIG_PATH) -> None:
     )
 
 
+# 내보내기에서 제외할 비밀값(공유·이동 시 유출 방지). 가져올 때도 덮어쓰지 않음.
+_SECRET_KEYS = ("nexonApiKey", "inquiryWebhookUrl")
+
+
+def export_config(dest: Path, path: Path = LOCAL_CONFIG_PATH) -> None:
+    """현재 설정을 파일로 저장(비밀값 제외)."""
+    data = {k: v for k, v in _read_local_config(path).items() if k not in _SECRET_KEYS}
+    Path(dest).write_text(
+        json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+
+def import_config(src: Path, path: Path = LOCAL_CONFIG_PATH) -> None:
+    """파일에서 설정을 가져와 병합(비밀값은 기존 것 유지). 형식 오류면 ValueError."""
+    incoming = json.loads(Path(src).read_text(encoding="utf-8"))
+    if not isinstance(incoming, dict):
+        raise ValueError("설정 파일 형식이 올바르지 않습니다")  # noqa: TRY004
+    data = _read_local_config(path)
+    for key, value in incoming.items():
+        if key not in _SECRET_KEYS:
+            data[key] = value
+    _write_local_config(data, path)
+
+
 def _bundled(name: str) -> str | None:
     """빌드 시 번들된 비밀값(개발 땐 빈 값). 없으면 None."""
     try:
