@@ -175,9 +175,13 @@ class PartyTab(QWidget):
         """캐시된 원본으로 즉시 재필터·재표시(제외 목록 변경 시 바로 반영)."""
         self._populate(build_board(self._last_raw, self._excludes))
 
-    def _on_cell_clicked(self, row: int, _col: int) -> None:
-        """리스트의 파티장을 클릭 → 제외 확인 팝업."""
-        leader_item = self.table.item(row, 1)  # 1 = 파티장 열(0=채널)
+    _LEADER_COL = 1  # 파티장 열(0=채널)
+
+    def _on_cell_clicked(self, row: int, col: int) -> None:
+        """파티장 열을 클릭했을 때만 제외 확인 팝업(다른 칸 클릭으로 실수 방지)."""
+        if col != self._LEADER_COL:
+            return
+        leader_item = self.table.item(row, self._LEADER_COL)
         if leader_item is None:
             return
         name = leader_item.text()
