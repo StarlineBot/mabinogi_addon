@@ -117,8 +117,11 @@ def fetch_user(
     return uid, name
 
 
-class _ReuseTCPServer(socketserver.TCPServer):
+class _ReuseTCPServer(socketserver.ThreadingTCPServer):
+    # ThreadingTCPServer: 요청마다 스레드로 처리 → serve_forever가 select 루프에 머물러
+    # shutdown()이 교착되지 않는다(단일 스레드 TCPServer는 연결이 물리면 shutdown이 멈춤).
     allow_reuse_address = True  # 재시도 시 포트 '사용 중' 방지
+    daemon_threads = True  # 남은 요청 스레드가 종료를 막지 않게
 
 
 def login(*, open_browser=webbrowser.open, timeout: float = 120.0):
@@ -197,6 +200,15 @@ def login(*, open_browser=webbrowser.open, timeout: float = 120.0):
         _log.info("로그인 성공: %s (%s)", name, uid)
         return uid, name
     finally:
-        server.shutdown()
-        server.server_close()
-        _log.info("로컬 서버 종료")
+        # 정리는 데몬 스레드로 — shutdown()이 혹시 늦어져도 login() 반환(=결과 전달)을
+        # 막지 않는다. 이게 막히면 UI가 로그인 결과를 못 받아 저장·표시가 안 된다.
+        def _cleanup() -> None:
+            try:
+                server.shutdown()
+                server.server_close()
+            except Exception as exc:  # noqa: BLE001 — 정리 실패는 무시
+                _log.warning("로컬 서버 종료 실패: %r", exc)
+            else:
+                _log.info("로컬 서버 종료")
+
+        threading.Thread(target=_cleanup, daemon=True).start()

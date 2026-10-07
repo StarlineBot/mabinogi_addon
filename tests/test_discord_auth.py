@@ -1,7 +1,9 @@
-"""Discord 로그인 순수 함수 테스트(네트워크 없이). 로컬 서버 흐름은 제외."""
+"""Discord 로그인 테스트. 순수 함수 + 로컬 서버 end-to-end(루프백)."""
 
 import json
+import threading
 import urllib.parse
+import urllib.request
 
 from mabinogi_addon import discord_auth
 
@@ -46,3 +48,27 @@ def test_fetch_user_falls_back_to_username():
 
     uid, name = discord_auth.fetch_user("TKN", urlopen=fake_urlopen)
     assert (uid, name) == ("9", "starline")
+
+
+def test_login_end_to_end_returns_user(monkeypatch):
+    """실제 로컬 서버를 띄워 콜백→조회→서버종료까지. 종료 교착이면 여기서 멈춰 실패."""
+    monkeypatch.setattr(discord_auth, "fetch_user", lambda tok, **k: ("42", "Star"))
+
+    def fake_open(url):
+        # authorize_url의 state를 그대로 실어 /token 콜백을 흉내(프래그먼트→질의문자열).
+        st = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)["state"][0]
+        target = (
+            f"http://127.0.0.1:{discord_auth.PORT}"
+            f"/token?access_token=TKN&state={st}"
+        )
+
+        def hit():
+            opener = urllib.request.build_opener(  # 로컬은 프록시 우회
+                urllib.request.ProxyHandler({})
+            )
+            opener.open(target, timeout=5).read()
+
+        threading.Thread(target=hit, daemon=True).start()
+
+    result = discord_auth.login(open_browser=fake_open, timeout=10.0)
+    assert result == ("42", "Star")
