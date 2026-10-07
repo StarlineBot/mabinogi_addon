@@ -34,6 +34,7 @@ from .notifier import SoundNotifier, default_sound_map
 from .overlay import BuffOverlay
 from .party_tab import PartyTab
 from .settings_tab import SettingsTab
+from .tuarim_tab import TuarimTab
 
 LOGO_PATH = Path(__file__).resolve().parents[1] / "assets" / "logo.png"
 _log = logging.getLogger("mabinogi_addon.close")
@@ -61,11 +62,13 @@ class MainWindow(QMainWindow):
         self.debuff_tab = DebuffTab()
         self.party_tab = PartyTab()
         self.memo_tab = MemoTab()
+        self.tuarim_tab = TuarimTab(self._watcher)
         self.custom_overlay_tab = CustomOverlayTab(self._watcher)
         self.settings_tab = SettingsTab(self._watcher)
         tabs = QTabWidget()
         tabs.addTab(self.buff_tab, "버프")
         tabs.addTab(self.debuff_tab, "디버프")
+        tabs.addTab(self.tuarim_tab, "투아림")
         tabs.addTab(self.party_tab, "파티")
         tabs.addTab(self.memo_tab, "메모")
         tabs.addTab(self.custom_overlay_tab, "커스텀 오버레이")
@@ -393,9 +396,7 @@ class MainWindow(QMainWindow):
         if config.load_capture_region("memoTracker") is None:
             self.memo_overlay.hide()
             return
-        if self._watcher.is_game_active():
-            self.memo_overlay.show()
-        elif self._watcher.is_self_active() and not self.memo_overlay.locked:
+        if self._watcher.is_game_active() or self._watcher.is_self_active() and not self.memo_overlay.locked:
             self.memo_overlay.show()
         else:
             self.memo_overlay.hide()
@@ -451,7 +452,7 @@ class MainWindow(QMainWindow):
             "minimizeToTray", True
         )
 
-    def closeEvent(self, event) -> None:  # noqa: N802 (Qt 시그니처)
+    def closeEvent(self, event) -> None:
         import time
 
         # 트레이 최소화: X를 눌러도 종료하지 않고 트레이로 숨긴다(백그라운드 계속 동작).
@@ -493,6 +494,7 @@ class MainWindow(QMainWindow):
             self.debuff_overlay.close(),
             self.memo_overlay.close(),
             self.custom_overlay_tab.shutdown(),
+            self.tuarim_tab.shutdown(),
         ))
         if self._tray is not None:
             self._tray.hide()
