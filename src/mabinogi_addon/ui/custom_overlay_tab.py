@@ -84,11 +84,13 @@ class CustomOverlayTab(QWidget):
         #     조정(세팅) 중. → 다른 탭·다른 작업 중엔 안 떠서 화면을 가리지 않고 커서
         #     깜빡임도 없다. 이 탭에서 미러를 클릭해 드래그해도 탭이 보이는 상태라 안 숨음.
         self._mgr = MirrorManager(
-            fps=60,  # 화면 전환 끊김 최소화(전체 캡처 1회/틱). CPU 사용량 보고 조절.
+            fps=60,  # mss 폴백 경로에서만 쓰임(Windows는 DWM 썸네일 → fps 무관).
             is_active=lambda: (
                 watcher.is_game_active()
                 or (watcher.is_self_active() and self.isVisible())
             ),
+            # Windows: 게임 창을 소스로 DWM 썸네일 미러(CPU ~0%). 못 찾으면 mss 폴백.
+            source_hwnd=self._find_game_hwnd,
             parent=self,
         )
         self._mgr.changed.connect(self._refresh_overlays)
@@ -96,6 +98,7 @@ class CustomOverlayTab(QWidget):
         self._mgr.overlay_moved.connect(self._save_current)
         self._pending_name = "화면"
         self._selector = None
+        self._game_hwnd = 0  # DWM 미러 소스(게임 창) 캐시
 
         v = QVBoxLayout(self)
         v.setContentsMargins(12, 12, 12, 12)
@@ -180,6 +183,18 @@ class CustomOverlayTab(QWidget):
         self._auto_load_startup()  # 시작 시 자동 프리셋 불러오기
 
     # ---- 시작 시 자동 불러오기 ----
+    def _find_game_hwnd(self) -> int:
+        """DWM 미러 소스로 쓸 게임 창 HWND(캐시; 무효화되면 다시 찾는다). 0=못 찾음."""
+        from ..system import dwm_thumbnail
+        from ..system.window_watcher import DEFAULT_GAME_TITLES
+
+        if self._game_hwnd and dwm_thumbnail.window_rect(self._game_hwnd):
+            return self._game_hwnd  # 아직 유효 → 재탐색 생략(EnumWindows 비용 회피)
+        self._game_hwnd = dwm_thumbnail.find_game_window(
+            config.load_game_exe(), DEFAULT_GAME_TITLES
+        )
+        return self._game_hwnd
+
     def _auto_load_startup(self) -> None:
         name = config.load_auto_preset()
         if not name:

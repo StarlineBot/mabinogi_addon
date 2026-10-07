@@ -8,9 +8,13 @@
 
 from __future__ import annotations
 
+import logging
+
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QImage, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import QWidget
+
+_log = logging.getLogger("mabinogi_addon.mirror")
 
 _SCALE_MIN = 0.25
 _SCALE_MAX = 4.0
@@ -24,14 +28,19 @@ def _clamp_scale(s: float) -> float:
 class MirrorOverlay(QWidget):
     moved = Signal()  # 드래그로 위치 변경 → 저장
 
-    def __init__(self, source: dict) -> None:
+    def __init__(self, source: dict, thumbnail_mode: bool = False) -> None:
         super().__init__(
             None,
             Qt.WindowType.FramelessWindowHint
             | Qt.WindowType.WindowStaysOnTopHint
             | Qt.WindowType.Tool,
         )
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        # DWM 썸네일 모드: 컴포지터가 창 표면에 소스를 직접 합성하므로 창은 불투명이어야
+        # 한다. per-pixel 투명(WA_TranslucentBackground)이면 레이어드 창이 돼 썸네일이
+        # 안 보인다. mss 모드에서만 투명 배경을 쓴다.
+        self._thumb_mode = thumbnail_mode
+        if not thumbnail_mode:
+            self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
 
         # source: {x,y,w,h, name, posX?, posY?, locked?, scale?}
@@ -39,6 +48,8 @@ class MirrorOverlay(QWidget):
         self._pix: QPixmap | None = None
         self._locked = False
         self._drag_offset = None
+        self._thumb = None  # DWM 썸네일 핸들(썸네일 모드)
+        self._src_rel: tuple[int, int, int, int] | None = None  # 게임창 상대 소스 영역
 
         self._base_w = max(1, int(source["w"]))
         self._base_h = max(1, int(source["h"]))
@@ -51,6 +62,7 @@ class MirrorOverlay(QWidget):
             max(1, round(self._base_w * self._scale)),
             max(1, round(self._base_h * self._scale)),
         )
+        self.refresh_thumbnail()  # 크기 변경 시 썸네일 목적지도 갱신(썸네일 모드만)
 
     @property
     def name(self) -> str:
@@ -69,6 +81,50 @@ class MirrorOverlay(QWidget):
         self._pix = QPixmap.fromImage(image)
         self.update()
 
+    # ---- DWM 썸네일 모드(CPU ~0% 미러) ----
+    def attach_thumbnail(self, src_hwnd: int) -> bool:
+        """게임 창(src_hwnd)의 소스 영역을 이 창에 실시간 미러. 성공 True.
+
+        창이 떠 있어야 winId가 유효하다(매니저가 show 후 호출). 소스 영역을 게임 창
+        '현재 위치 기준 상대 좌표'로 한 번 환산해 저장 → 게임 창이 움직여도 같은
+        인게임 요소를 따라간다.
+        """
+        from ..system import dwm_thumbnail
+
+        wr = dwm_thumbnail.window_rect(src_hwnd)
+        if wr is None:
+            return False
+        wl, wt, _, _ = wr
+        sx, sy = int(self.source["x"]), int(self.source["y"])
+        sw, sh = int(self.source["w"]), int(self.source["h"])
+        self._src_rel = (sx - wl, sy - wt, sx - wl + sw, sy - wt + sh)
+        thumb = dwm_thumbnail.Thumbnail()
+        if not thumb.register(int(self.winId()), int(src_hwnd)):
+            _log.warning("DWM 썸네일 연결 실패: 게임창=%s 소스상대=%s", src_hwnd, self._src_rel)
+            return False
+        self._thumb = thumb
+        self.refresh_thumbnail()
+        _log.info("DWM 썸네일 연결: 게임창=%s 소스상대=%s", src_hwnd, self._src_rel)
+        return True
+
+    def refresh_thumbnail(self) -> None:
+        """현재 크기·고정상태에 맞춰 썸네일 사각형 갱신(저비용: 비트맵 복사 없음)."""
+        if self._thumb is None or self._src_rel is None:
+            return
+        inset = 0 if self._locked else 2  # 해제 땐 이동 테두리 보이게 살짝 안쪽
+        w, h = self.width(), self.height()
+        dest = (inset, inset, max(1, w - 2 * inset), max(1, h - 2 * inset))
+        self._thumb.update(self._src_rel, dest)
+
+    def detach_thumbnail(self) -> None:
+        if self._thumb is not None:
+            self._thumb.unregister()
+            self._thumb = None
+
+    @property
+    def thumbnail_active(self) -> bool:
+        return self._thumb is not None
+
     def set_locked(self, locked: bool) -> None:
         self._locked = locked
         self.setCursor(
@@ -79,6 +135,7 @@ class MirrorOverlay(QWidget):
         from ..system.clickthrough import set_click_through
 
         set_click_through(self, locked)  # Windows 클릭 통과
+        self.refresh_thumbnail()  # 고정/해제에 따라 테두리 inset 반영
         self.update()
 
     def to_dict(self) -> dict:
@@ -146,8 +203,22 @@ class MirrorOverlay(QWidget):
             grid.hide_guide()
             self.moved.emit()
 
+    def closeEvent(self, event) -> None:
+        self.detach_thumbnail()
+        super().closeEvent(event)
+
     def paintEvent(self, _event) -> None:
         painter = QPainter(self)
+        if self._thumb_mode:
+            # 썸네일 모드: DWM이 창 표면에 소스를 직접 합성한다. 해제 땐 inset(2px)만큼
+            # 바깥이 드러나므로 배경을 강조색으로 칠해 이동 테두리로 보이게 한다.
+            # 고정 땐 썸네일이 창을 꽉 채워 배경색은 가려진다.
+            painter.fillRect(
+                self.rect(),
+                QColor(0, 209, 167) if not self._locked else QColor(0, 0, 0),
+            )
+            painter.end()
+            return
         if self._pix is not None:
             painter.drawPixmap(self.rect(), self._pix)
         else:

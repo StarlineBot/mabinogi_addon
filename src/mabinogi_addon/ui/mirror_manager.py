@@ -49,6 +49,7 @@ class MirrorManager(QObject):
         fps: int = 15,
         grab=None,
         is_active=None,
+        source_hwnd=None,
         parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
@@ -56,11 +57,25 @@ class MirrorManager(QObject):
         self._grab = grab  # 테스트 주입: () -> (np.ndarray BGRA, left, top) | None
         # 게임 활성 여부(비활성/최소화면 캡처를 쉬고 오버레이를 숨긴다). 기본 항상 활성.
         self._is_active = is_active or (lambda: True)
+        # DWM 썸네일 미러 소스(게임 창 HWND) 공급자. Windows + 공급자 있으면 DWM 모드:
+        # 컴포지터가 복사를 맡아 CPU ~0%, mss 전체화면 캡처를 안 한다.
+        self._source_hwnd = source_hwnd
+        self._dwm = source_hwnd is not None and self._dwm_available()
+        self._attached_hwnd = 0  # 현재 썸네일이 물린 게임 창(바뀌면 재연결)
         self._shown = True
         self._sct = None
         self._timer = QTimer(self)
-        self._timer.setInterval(max(1, 1000 // max(1, fps)))
+        # DWM 모드는 비트맵 복사가 없어 자주 돌 필요가 없다(연결 확인·활성 토글용 250ms).
+        # mss 모드만 fps 기반 주기.
+        interval = 250 if self._dwm else max(1, 1000 // max(1, fps))
+        self._timer.setInterval(interval)
         self._timer.timeout.connect(self._tick)
+
+    @staticmethod
+    def _dwm_available() -> bool:
+        from ..system import dwm_thumbnail
+
+        return dwm_thumbnail.available()
 
     # ---- 조회 ----
     def overlays(self) -> list[MirrorOverlay]:
@@ -71,14 +86,25 @@ class MirrorManager(QObject):
 
     # ---- 추가/삭제 ----
     def add(self, region: dict) -> MirrorOverlay:
-        overlay = MirrorOverlay(region)
+        overlay = MirrorOverlay(region, thumbnail_mode=self._dwm)
         overlay.moved.connect(self.overlay_moved)
         overlay.set_locked(bool(region.get("locked", False)))
         overlay.show()
+        if self._dwm:
+            self._attach(overlay)  # 창이 떠서 winId 유효 → 바로 썸네일 연결 시도
         self._overlays.append(overlay)
         self._sync_timer()
         self.changed.emit()
         return overlay
+
+    def _attach(self, overlay: MirrorOverlay) -> None:
+        """DWM 모드: 게임 창을 찾아 썸네일 연결(이미 연결됐으면 생략)."""
+        if overlay.thumbnail_active:
+            return
+        hwnd = self._source_hwnd() if self._source_hwnd else 0
+        if hwnd:
+            self._attached_hwnd = hwnd
+            overlay.attach_thumbnail(hwnd)
 
     def remove_indices(self, indices) -> None:
         for i in sorted(set(indices), reverse=True):
@@ -131,6 +157,19 @@ class MirrorManager(QObject):
             for o in self._overlays:
                 o.show()
             self._shown = True
+
+        # DWM 모드: 비트맵 복사 없음. 게임 창이 (처음/재실행으로) 생기면 연결하고,
+        # 게임 창이 바뀌면(HWND 변경) 재연결만 한다. 이후는 컴포지터가 알아서 그린다.
+        if self._dwm:
+            hwnd = self._source_hwnd() if self._source_hwnd else 0
+            if hwnd and hwnd != self._attached_hwnd:
+                self._attached_hwnd = hwnd
+                for o in self._overlays:
+                    o.detach_thumbnail()
+            for o in self._overlays:
+                if hwnd and not o.thumbnail_active:
+                    o.attach_thumbnail(hwnd)
+            return
 
         # 드래그 중엔 캡처(메인 스레드에서 전체 화면 grab)를 쉰다 → 그 시간을 드래그에
         # 양보해 창 이동이 부드럽다. 위치 잡는 중엔 내용 갱신이 필요 없다.
