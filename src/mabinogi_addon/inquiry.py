@@ -24,6 +24,9 @@ import uuid
 _TITLE_MAX = 90  # 포럼 포스트 제목 길이(모드메일과 동일 기준)
 _CONTENT_MAX = 1900  # Discord 메시지 content 한도(2000) 여유분
 _LOG_FILENAME = "문의로그.txt"
+# Discord 앞단 Cloudflare는 기본 Python-urllib User-Agent를 403으로 막는다.
+# 식별 가능한 UA를 보내야 통과한다(Discord 권장: 앱명 + URL).
+_USER_AGENT = "mabinogi-addon (https://github.com/StarlineBot/mabinogi_addon, 1.0)"
 
 # Discord 웹훅 성공 응답
 _OK_STATUS = (200, 204)
@@ -84,6 +87,7 @@ def _post(webhook_url, payload, log_file, timeout, urlopen) -> None:
         headers = {"Content-Type": "application/json"}
     else:
         data, headers = _multipart(payload, log_file)
+    headers["User-Agent"] = _USER_AGENT  # 없으면 Cloudflare가 403
     req = urllib.request.Request(
         webhook_url, data=data, headers=headers, method="POST"
     )

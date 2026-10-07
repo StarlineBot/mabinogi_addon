@@ -47,6 +47,18 @@ def test_creates_forum_post_with_thread_name():
     assert sent["body"]["content"] == "내용입니다"
 
 
+def test_sends_user_agent_header():
+    """User-Agent 없으면 Discord 앞단 Cloudflare가 403 → 반드시 실려야 함."""
+    sent = {}
+
+    def fake_urlopen(req, timeout=None):
+        sent["ua"] = req.get_header("User-agent")
+        return _Resp(204)
+
+    send_inquiry("https://x", "제목", "내용", urlopen=fake_urlopen)
+    assert sent["ua"] and "mabinogi-addon" in sent["ua"]
+
+
 def test_category_prefixes_title():
     sent = {}
 

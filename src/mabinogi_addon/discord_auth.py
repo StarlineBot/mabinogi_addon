@@ -50,7 +50,15 @@ def fetch_user(
 ) -> tuple[str, str]:
     """액세스 토큰으로 내 (user_id, 표시이름) 조회."""
     req = urllib.request.Request(
-        USER_URL, headers={"Authorization": f"Bearer {access_token}"}
+        USER_URL,
+        headers={
+            "Authorization": f"Bearer {access_token}",
+            # Discord API는 User-Agent를 요구(없으면 Cloudflare 403).
+            "User-Agent": (
+                "mabinogi-addon "
+                "(https://github.com/StarlineBot/mabinogi_addon, 1.0)"
+            ),
+        },
     )
     with urlopen(req, timeout=timeout) as resp:
         data = json.loads(resp.read().decode("utf-8"))
