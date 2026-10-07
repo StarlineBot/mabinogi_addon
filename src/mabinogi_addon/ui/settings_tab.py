@@ -6,11 +6,15 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QTimer
+from pathlib import Path
+
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QPainter, QPainterPath, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
     QGroupBox,
     QHBoxLayout,
+    QLabel,
     QPushButton,
     QVBoxLayout,
     QWidget,
@@ -19,6 +23,35 @@ from PySide6.QtWidgets import (
 from .. import config
 from ..system.window_watcher import WindowWatcher
 from .widgets import hint_label
+
+_ASSETS = Path(__file__).resolve().parents[1] / "assets"
+PROFILE_IMAGE = _ASSETS / "profile.png"  # 제작자 프로필(없으면 로고로 폴백)
+LOGO_IMAGE = _ASSETS / "logo.png"
+
+
+def _circular(path: Path, size: int) -> QPixmap | None:
+    """이미지를 정사각 중앙 크롭 후 원형으로 잘라 size×size 픽스맵으로."""
+    src = QPixmap(str(path))
+    if src.isNull():
+        return None
+    src = src.scaled(
+        size, size,
+        Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+        Qt.TransformationMode.SmoothTransformation,
+    )
+    x = (src.width() - size) // 2
+    y = (src.height() - size) // 2
+    src = src.copy(x, y, size, size)
+    out = QPixmap(size, size)
+    out.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(out)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    clip = QPainterPath()
+    clip.addEllipse(0, 0, size, size)
+    painter.setClipPath(clip)
+    painter.drawPixmap(0, 0, src)
+    painter.end()
+    return out
 
 
 def _checked(text: str, on: bool = True) -> QCheckBox:
@@ -41,9 +74,51 @@ class SettingsTab(QWidget):
         v = QVBoxLayout(self)
         v.setContentsMargins(12, 12, 12, 12)
         v.setSpacing(12)
+        v.addWidget(self._creator_header())
+        v.addWidget(self._inquiry_button())
         v.addWidget(self._general_group())
         v.addWidget(self._game_group())
         v.addStretch(1)
+
+    # ---- 제작자 헤더 + 문의하기 ----
+    def _creator_header(self) -> QWidget:
+        box = QWidget()
+        row = QHBoxLayout(box)
+        row.setContentsMargins(4, 4, 4, 0)
+        row.setSpacing(10)
+
+        avatar = QLabel()
+        avatar.setFixedSize(48, 48)
+        avatar.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        pm = _circular(PROFILE_IMAGE, 48) or _circular(LOGO_IMAGE, 48)
+        if pm is not None:
+            avatar.setPixmap(pm)
+        else:
+            avatar.setText("👤")
+            avatar.setStyleSheet("font-size:28px;")
+        row.addWidget(avatar)
+
+        col = QVBoxLayout()
+        col.setSpacing(1)
+        name = QLabel(config.CREATOR_NAME)
+        name.setStyleSheet("font-size:15px; font-weight:700;")
+        sub = QLabel(config.APP_NAME)
+        sub.setStyleSheet("color:#8a8f98; font-size:11px;")
+        col.addWidget(name)
+        col.addWidget(sub)
+        row.addLayout(col, 1)
+        return box
+
+    def _inquiry_button(self) -> QPushButton:
+        btn = QPushButton("문의하기")
+        btn.setToolTip("제작자에게 제목·내용으로 문의를 보냅니다")
+        btn.clicked.connect(self._open_inquiry)
+        return btn
+
+    def _open_inquiry(self) -> None:
+        from .inquiry_dialog import InquiryDialog
+
+        InquiryDialog(self).exec()
 
     def _general_group(self) -> QGroupBox:
         box = QGroupBox("일반")
@@ -118,7 +193,7 @@ class SettingsTab(QWidget):
             return
         if self._detect_timer is not None:
             self._detect_timer.stop()
-        title, exe = self._watcher.foreground_info()
+        _title, exe = self._watcher.foreground_info()
         self._detect_btn.setEnabled(True)
         self._detect_btn.setText("게임 창 자동 찾기")
         if exe:

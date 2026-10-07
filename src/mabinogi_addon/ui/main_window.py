@@ -46,7 +46,7 @@ def app_icon() -> QIcon:
 class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
-        self.setWindowTitle("마비노기 버프 트래커")
+        self.setWindowTitle(config.APP_NAME)
         self.setWindowIcon(app_icon())
         self.resize(780, 620)
 
@@ -412,7 +412,7 @@ class MainWindow(QMainWindow):
         if not QSystemTrayIcon.isSystemTrayAvailable():
             return None
         tray = QSystemTrayIcon(app_icon(), self)
-        tray.setToolTip("마비노기 버프 트래커")
+        tray.setToolTip(config.APP_NAME)
         menu = QMenu()
         open_act = QAction("열기", self)
         open_act.triggered.connect(self._show_from_tray)

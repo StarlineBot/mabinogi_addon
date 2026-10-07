@@ -17,6 +17,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 ENV_PATH = PROJECT_ROOT / ".env"
 LOCAL_CONFIG_PATH = PROJECT_ROOT / "config.local.json"
 
+# 앱 식별 정보(창 제목·트레이·제작자 표기)
+APP_NAME = "섯다라인 마비노기 애드온"
+CREATOR_NAME = "HP Starline"
+
 
 def _load_env() -> None:
     """`.env`를 환경변수로 로드. python-dotenv 있으면 사용, 없으면 간단 파싱."""
@@ -57,6 +61,21 @@ def get_nexon_api_key() -> str | None:
         return key.strip()
     key = _read_local_config().get("nexonApiKey")
     return key.strip() if isinstance(key, str) and key.strip() else None
+
+
+def get_inquiry_webhook_url() -> str | None:
+    """문의 전송용 Discord 웹훅 URL.
+
+    탐색 순서: `.env`/환경변수(INQUIRY_WEBHOOK_URL) → `config.local.json`의
+    inquiryWebhookUrl. 넥슨 API 키와 같은 '앱이 보관하는 비밀' — git에 커밋하지 않고
+    배포 때 번들한다.
+    """
+    _load_env()
+    url = os.environ.get("INQUIRY_WEBHOOK_URL")
+    if url and url.strip():
+        return url.strip()
+    url = _read_local_config().get("inquiryWebhookUrl")
+    return url.strip() if isinstance(url, str) and url.strip() else None
 
 
 def load_party_lists() -> tuple[list[str], list[str]]:

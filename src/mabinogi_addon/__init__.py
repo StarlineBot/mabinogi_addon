@@ -23,6 +23,8 @@ def main() -> None:
     from mabinogi_addon.ui.main_window import MainWindow, app_icon
 
     app = QApplication(sys.argv)
+    app.setApplicationName(config.APP_NAME)
+    app.setApplicationDisplayName(config.APP_NAME)
     app.setWindowIcon(app_icon())  # 작업표시줄/트레이 아이콘
     # 트레이 최소화를 위해, 창을 숨겨도(마지막 창 닫혀도) 앱이 종료되지 않게 한다.
     app.setQuitOnLastWindowClosed(False)
