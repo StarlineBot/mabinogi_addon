@@ -71,6 +71,7 @@ class MainWindow(QMainWindow):
         self.custom_overlay_tab = CustomOverlayTab(self._watcher)
         self.settings_tab = SettingsTab(self._watcher)
         self.settings_tab.config_imported.connect(self._on_config_imported)
+        self.settings_tab.voice_pack_changed.connect(self._on_voice_pack_changed)
         tabs = QTabWidget()
         tabs.addTab(self.buff_tab, "버프")
         tabs.addTab(self.debuff_tab, "디버프")
@@ -455,6 +456,15 @@ class MainWindow(QMainWindow):
     def _quit_from_tray(self) -> None:
         self._force_quit = True
         self.close()
+
+    def _on_voice_pack_changed(self) -> None:
+        """설정에서 알림 목소리 팩이 바뀌면 실행 중 재생기들을 새 팩으로 갱신(바로 적용)."""
+        from .notifier import default_sound_map
+
+        if self._notifier is not None:
+            self._notifier.set_sounds(default_sound_map())  # 버프
+        self.tuarim_tab.refresh_sound()
+        self.party_tab.refresh_sound()
 
     def _on_config_imported(self) -> None:
         """설정 가져오기/초기화 직후: 종료 시 낡은 상태로 덮어쓰지 않도록 저장을 막는다.

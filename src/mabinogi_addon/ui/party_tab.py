@@ -428,6 +428,10 @@ class PartyTab(QWidget):
         config.save_party_lists(self._keywords, self._excludes)
 
     # ---- 폴링 ----
+    def refresh_sound(self) -> None:
+        """목소리 팩이 바뀌면 파티 알림 재생기 소스를 새 팩으로 갱신(바로 적용)."""
+        self._sound.set_sounds({"party": sound_path("파티 알림.mp3")})
+
     def start_polling(self) -> None:
         if self._worker is not None:
             return

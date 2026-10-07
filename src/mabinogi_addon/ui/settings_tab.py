@@ -131,6 +131,8 @@ class SettingsTab(QWidget):
     login_changed = Signal()
     # 설정 가져오기/초기화 직후 메인에 알려, 종료 시 낡은 상태로 덮어쓰지 않게 한다.
     config_imported = Signal()
+    # 알림 목소리 팩 변경 → 메인이 실행 중 재생기들을 새 팩으로 갱신(바로 적용).
+    voice_pack_changed = Signal()
 
     def __init__(self, watcher: WindowWatcher) -> None:
         super().__init__()
@@ -485,8 +487,7 @@ class SettingsTab(QWidget):
         v.addLayout(voice_row)
         v.addWidget(
             hint_label(
-                "버프·투아림·파티 알림에 쓸 목소리 팩. 고르면 미리듣기가 재생돼요.\n"
-                "(실제 알림 적용은 다시 시작 후)"
+                "버프·투아림·파티 알림에 쓸 목소리 팩. 고르면 미리듣기가 재생되고 바로 적용돼요."
             )
         )
         return box
@@ -495,6 +496,7 @@ class SettingsTab(QWidget):
         pack = self._voice_pack.currentData()
         config.save_voice_pack(pack)  # 먼저 저장 → sound_path가 선택 팩을 가리킴
         self._preview_voice()
+        self.voice_pack_changed.emit()  # 실행 중 재생기도 새 팩으로 갱신(바로 적용)
 
     def _preview_voice(self) -> None:
         """선택한 팩의 샘플 음성을 재생(미리듣기). 팩에 없으면 기본 녹음본."""

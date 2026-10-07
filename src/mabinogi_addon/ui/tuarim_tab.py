@@ -315,5 +315,14 @@ class TuarimTab(QWidget):
 
             QApplication.beep()
 
+    def refresh_sound(self) -> None:
+        """목소리 팩이 바뀌면 재생기 소스를 새 팩으로 갱신(바로 적용)."""
+        if self._notifier is not None:
+            from .notifier import sound_path
+
+            self._notifier.set_sounds(
+                {"tuarim": sound_path("투아림 부스트 발동 직전.mp3")}
+            )
+
     def shutdown(self) -> None:
         self._timer.stop()

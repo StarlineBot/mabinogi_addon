@@ -52,15 +52,15 @@ PACKS: list[dict] = [
         "pitch": "-2Hz",
         "google_voice": "ko-KR-Chirp3-HD-Pulcherrima",
         "speaking_rate": 0.95,
-        # 부드러운: ~ 로 늘어지는 상냥한 말투
+        # 부드러운: 마침표로 자연스럽게(Chirp3는 ~/!를 어색하게 읽음). 감정은 단어·목소리로.
         "lines": {
-            F_VIVACE: "비바체 연장해요~",
-            F_SHARP: "상지 잊지 말아요~",
-            F_HAM: "햄 버닝 연장할 시간이에요~",
-            F_MARCH: "행진곡 연장해요~",
-            F_OVERTURE: "전장의 서곡 연장해요~",
-            F_PARTY: "파티 모집이 올라왔어요~",
-            F_TUARIM: "투아림 곧 터져요~",
+            F_VIVACE: "비바체 연장해요.",
+            F_SHARP: "상지 잊지 말아요.",
+            F_HAM: "햄 버닝 연장할 시간이에요.",
+            F_MARCH: "행진곡 연장해요.",
+            F_OVERTURE: "전장의 서곡 연장해요.",
+            F_PARTY: "파티 모집이 올라왔어요.",
+            F_TUARIM: "투아림 곧 터져요.",
         },
     },
     {
@@ -70,15 +70,15 @@ PACKS: list[dict] = [
         "pitch": "+6Hz",
         "google_voice": "ko-KR-Chirp3-HD-Sulafat",
         "speaking_rate": 1.05,
-        # 밝은: ! 로 활기. 문구는 자연스럽게 다듬음.
+        # 밝은: 마침표로 자연스럽게. 밝은 느낌은 Sulafat 보이스 + 말투로.
         "lines": {
-            F_VIVACE: "비바체 연장할 시간이에요!",
-            F_SHARP: "상지 챙기는 거 잊지 마요!",
-            F_HAM: "햄 버닝 다시 가요!",
-            F_MARCH: "행진곡 연장할게요!",
-            F_OVERTURE: "전장의 서곡 다시 넣어요!",
-            F_PARTY: "파티 모집 떴어요!",
-            F_TUARIM: "투아림 곧 터져요!",
+            F_VIVACE: "비바체 연장할 시간이에요.",
+            F_SHARP: "상지 챙기는 거 잊지 마요.",
+            F_HAM: "햄 버닝 다시 가요.",
+            F_MARCH: "행진곡 연장할게요.",
+            F_OVERTURE: "전장의 서곡 다시 넣어요.",
+            F_PARTY: "파티 모집 떴어요.",
+            F_TUARIM: "투아림 곧 터져요.",
         },
     },
     {
