@@ -180,6 +180,13 @@ class BuffTab(QWidget):
         for b in (self.add_btn, self.del_btn, self.up_btn, self.down_btn):
             order_row.addWidget(b, 1)
         v.addLayout(order_row)
+
+        v.addWidget(
+            hint_label(
+                "※ 아이콘이 완전히 같은 버프는 서로 구분되지 않습니다.\n"
+                "   예: 급소관통(스킬) ≡ 물리공격력증가(물약) — 같이 떠 있으면 하나로만 잡힙니다."
+            )
+        )
         return panel
 
     def _on_scale(self, pct: int) -> None:
