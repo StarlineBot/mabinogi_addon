@@ -81,6 +81,10 @@ class MainWindow(QMainWindow):
         # 포그라운드 감지(맥=항상 활성). 저장된 게임 실행파일로 판정(없으면 제목 폴백).
         self._watcher = create_window_watcher(game_exe=config.load_game_exe())
         self._restoring = False  # 복원 중엔 상태 저장 안 함
+        # 부팅(생성~복원 완료) 구간엔 저장을 전부 막는다. 이 사이에 위젯 구성·레이아웃에서
+        # 파생된 신호(예: 에디터 textChanged)가 _save_memo를 불러, '기본 해제 상태'로
+        # 저장된 잠금을 덮어쓰던 버그 방지. start() 끝에서 해제.
+        self._booting = True
         # 설정 가져오기/초기화 후: 이 세션의 (가져오기 전) 낡은 오버레이·메모 상태가
         # 종료 시 방금 가져온 설정을 덮어쓰지 않도록 저장을 막는다. 다음 실행에서 반영.
         self._config_pending_restart = False
@@ -469,7 +473,7 @@ class MainWindow(QMainWindow):
         self._save_overlay(overlay, section)
 
     def _save_overlay(self, overlay: BuffOverlay, section: str) -> None:
-        if self._restoring or self._config_pending_restart:
+        if self._restoring or self._booting or self._config_pending_restart:
             return
         pos = overlay.pos()
         config.save_overlay_state(pos.x(), pos.y(), overlay.locked, section)
@@ -518,6 +522,7 @@ class MainWindow(QMainWindow):
         self._status_timer.timeout.connect(self._update_tracking_status)
         self._status_timer.start()
         self._update_tracking_status()
+        self._booting = False  # 부팅 끝 — 이제부터 사용자 변경을 저장
 
     def _compute_tracking(
         self, catalog
@@ -720,7 +725,7 @@ class MainWindow(QMainWindow):
 
     def _on_memo_moved(self) -> None:
         """드래그로 옮긴 메모 위치를 저장(크기는 유지)."""
-        if self._restoring:
+        if self._restoring or self._booting:
             return
         pos = self.memo_overlay.pos()
         config.save_capture_region(
@@ -742,7 +747,7 @@ class MainWindow(QMainWindow):
         self._save_memo()
 
     def _save_memo(self) -> None:
-        if self._restoring or self._config_pending_restart:
+        if self._restoring or self._booting or self._config_pending_restart:
             return
         config.save_memo(
             self.memo_overlay.text(),
