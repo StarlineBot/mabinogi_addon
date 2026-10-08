@@ -286,7 +286,8 @@ class BuffTab(QWidget):
         for bid in self._rows():
             buff = self._catalog.get(bid)
             name = self._display_name(bid)
-            label = f"⚓ {name} (앵커)" if bid == ANCHOR_ID else name
+            # 설명과 용어 통일: '앵커'(스킬 앵커러시와 혼동)가 아니라 '기준' 버프로 표기.
+            label = f"⚓ {name} (기준)" if bid == ANCHOR_ID else name
             item = QListWidgetItem(label)
             item.setData(Qt.ItemDataRole.UserRole, bid)
             if buff is not None:
