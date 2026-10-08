@@ -65,13 +65,17 @@ def main() -> None:
     # Qt 스플래시: 초기화(무거운 MainWindow 생성) 구간을 로고+진행바+위트 메시지로 덮는다.
     # '트레이로 시작'이면 창을 안 띄우므로 스플래시도 생략.
     splash = None
+    splash_shown_at = 0.0
     if not start_in_tray:
+        import time
+
         from mabinogi_addon.ui.splash import Splash
 
         splash = Splash()
         splash.center_on_screen()
         splash.show()
         splash.step(10)
+        splash_shown_at = time.monotonic()
 
     window = MainWindow()  # 가장 무거운 단계(카탈로그·엔진·오버레이 구성)
     if splash is not None:
@@ -81,5 +85,13 @@ def main() -> None:
     window.start()  # 파티 폴링 등 백그라운드 작업 시작
     if splash is not None:
         splash.step(100)
+        # 빠른 PC에선 초기화가 순식간이라 아바타·문구가 깜빡하고 사라진다.
+        # 제작자 아이콘 + 로딩 문구가 보이도록 최소 노출 시간을 보장한다.
+        import time
+
+        _SPLASH_MIN_SEC = 1.2
+        while time.monotonic() - splash_shown_at < _SPLASH_MIN_SEC:
+            app.processEvents()
+            time.sleep(0.03)
         splash.close()
     sys.exit(app.exec())
