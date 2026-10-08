@@ -6,19 +6,31 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QPlainTextEdit,
     QPushButton,
     QSpinBox,
+    QSplitter,
+    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
 
 from .. import config
 from .help_dialog import help_title_row
+from .markdown_highlighter import MarkdownHighlighter
 from .widgets import hint_label, section_label
+
+# 마크다운 툴바 아이콘 버튼 스타일(hover 시 민트).
+_TOOL_QSS = (
+    "QPushButton { background:#222835; color:#dfe3ea; border:1px solid #333b49;"
+    " border-radius:7px; font-size:14px; font-weight:800; padding:4px 10px; }"
+    "QPushButton:hover { background:#00B894; color:#06281e; border-color:#00B894; }"
+    "QPushButton:checked { background:#00B894; color:#06281e; border-color:#00B894; }"
+)
 
 # 메모 사용법(? 아이콘 → 새 창).
 HELP_TITLE = "메모 사용법"
@@ -87,39 +99,65 @@ class MemoTab(QWidget):
         font_row.addStretch(1)
         v.addLayout(font_row)
 
-        # ---- 메모 입력(마크다운) + 빠른 삽입 툴바 ----
+        # ---- 메모 입력(마크다운): 아이콘 툴바 + 하이라이팅 편집 + 미리보기 토글 ----
         v.addWidget(section_label("메모 내용 (마크다운)"))
         tools = QHBoxLayout()
-        tools.setSpacing(4)
-        for text, snippet in (
-            ("제목", "## 제목\n"),
-            ("굵게", "**굵게**"),
-            ("리스트", "- 항목\n"),
-            ("표", "| 구분 | 값 |\n| --- | --- |\n| 1관 | 85, 35 |\n"),
-            ("구분선", "\n---\n"),
+        tools.setSpacing(6)
+        _TABLE = "| 구분 | 값 |\n| --- | --- |\n| 1관 | 85, 35 |\n"
+        for glyph, tip, snippet in (
+            ("H", "제목", "## 제목\n"),
+            ("B", "굵게", "**굵게**"),
+            ("•", "리스트", "- 항목\n"),
+            ("▦", "표", _TABLE),
+            ("―", "구분선", "\n---\n"),
+            ("<>", "코드", "`코드`"),
         ):
-            b = QPushButton(text)
-            b.setToolTip("커서 위치에 마크다운 삽입")
+            b = QPushButton(glyph)
+            b.setFixedSize(34, 30)
+            b.setToolTip(f"{tip} 삽입")
+            b.setStyleSheet(_TOOL_QSS)
             b.clicked.connect(lambda _c=False, s=snippet: self._insert(s))
             tools.addWidget(b)
         tools.addStretch(1)
+        self.preview_btn = QPushButton("👁 미리보기")
+        self.preview_btn.setCheckable(True)
+        self.preview_btn.setStyleSheet(_TOOL_QSS)
+        self.preview_btn.toggled.connect(self._on_preview_toggled)
+        tools.addWidget(self.preview_btn)
         v.addLayout(tools)
 
+        # 편집(좌) | 미리보기(우) — 가운데 손잡이로 좌우 너비 조절. 미리보기 기본 숨김.
         self.editor = QPlainTextEdit()
         self.editor.setPlaceholderText(
             "예)\n## 던전 패턴\n| 관문 | 수치 |\n| --- | --- |\n| 1관 | 85, 35 |\n\n- **중요** 항목"
         )
         self.editor.setPlainText(str(config.load_memo().get("text", "")))
-        self.editor.textChanged.connect(
-            lambda: self.text_changed.emit(self.editor.toPlainText())
+        mono = QFont("Consolas")
+        mono.setStyleHint(QFont.StyleHint.Monospace)
+        mono.setPixelSize(14)
+        self.editor.setFont(mono)
+        self._highlighter = MarkdownHighlighter(self.editor.document())
+        self.editor.textChanged.connect(self._on_editor_changed)
+
+        self.preview = QTextEdit()
+        self.preview.setReadOnly(True)
+        self.preview.document().setDefaultStyleSheet(
+            "th,td{border:1px solid #556; padding:2px 8px;} "
+            "h1,h2,h3{color:#7CF0D6;}"
         )
-        v.addWidget(self.editor, 1)
+        self.preview.hide()
+
+        self._split = QSplitter(Qt.Orientation.Horizontal)
+        self._split.addWidget(self.editor)
+        self._split.addWidget(self.preview)
+        self._split.setSizes([600, 0])
+        v.addWidget(self._split, 1)
 
         v.addWidget(
             hint_label(
-                "여기서 적으면 오버레이에 표·리스트·강조로 바로 나타납니다.\n"
-                "오버레이는 '해제' 상태에서 끌어 위치를 옮기고, '고정'하면 클릭이 통과돼요.\n"
-                "메모는 마비노기가 활성일 때만 보입니다."
+                "여기서 적으면 오버레이에 표·리스트·강조로 바로 나타납니다. "
+                "👁 미리보기로 결과를 미리 보고, 가운데를 끌어 좌우 너비를 조절하세요.\n"
+                "오버레이는 '해제' 상태에서 끌어 위치를 옮기고, '고정'하면 클릭이 통과돼요."
             )
         )
 
@@ -131,6 +169,20 @@ class MemoTab(QWidget):
         else:
             cur.insertText(snippet)
         self.editor.setFocus()
+
+    def _on_editor_changed(self) -> None:
+        md = self.editor.toPlainText()
+        self.text_changed.emit(md)
+        if self.preview.isVisible():
+            self.preview.setMarkdown(md)
+
+    def _on_preview_toggled(self, on: bool) -> None:
+        self.preview.setVisible(on)
+        if on:
+            self.preview.setMarkdown(self.editor.toPlainText())
+            self._split.setSizes([360, 300])  # 편집/미리보기 반반쯤
+        else:
+            self._split.setSizes([600, 0])
 
     def _update_region_hint(self) -> None:
         region = config.load_capture_region("memoTracker")
