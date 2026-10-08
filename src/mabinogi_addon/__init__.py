@@ -11,17 +11,33 @@ def main() -> None:
 
     from PySide6.QtWidgets import QApplication
 
-    # 디버그 로그: 기본 INFO, `MABINOGI_DEBUG=1`이면 DEBUG. 터미널(stderr)로 출력.
-    level = logging.DEBUG if os.environ.get("MABINOGI_DEBUG") else logging.INFO
-    logging.basicConfig(
-        level=level,
-        format="%(asctime)s.%(msecs)03d %(levelname)s %(name)s: %(message)s",
-        datefmt="%H:%M:%S",
+    # 콘솔(stderr)은 기본 INFO(디버그 켜면 DEBUG). 단 루트는 DEBUG로 두고 핸들러별로
+    # 레벨을 제어해, 버그 신고 첨부용 링버퍼는 '항상 DEBUG까지' 담는다(배포본에서도
+    # 깊은 단서가 남게). 콘솔은 그대로 조용.
+    console_level = logging.DEBUG if os.environ.get("MABINOGI_DEBUG") else logging.INFO
+    fmt = logging.Formatter(
+        "%(asctime)s.%(msecs)03d %(levelname)s %(name)s: %(message)s", "%H:%M:%S"
     )
-    # 문의 '버그 신고' 첨부용: 최근 로그를 메모리에 함께 쌓는다(터미널과 별개).
+    root = logging.getLogger()
+    root.setLevel(logging.DEBUG)
+    console = logging.StreamHandler()
+    console.setLevel(console_level)
+    console.setFormatter(fmt)
+    root.addHandler(console)
+
+    # 문의 '버그 신고' 첨부용: 최근 로그를 메모리에 함께 쌓는다(DEBUG까지, 터미널과 별개).
     from mabinogi_addon import logbuffer
 
     logbuffer.install()
+
+    # 처리되지 않은 예외도 로그에 남겨, 버그 신고 로그에서 크래시 원인이 보이게 한다.
+    def _excepthook(exc_type, exc, tb) -> None:
+        logging.getLogger("mabinogi_addon").critical(
+            "처리되지 않은 예외", exc_info=(exc_type, exc, tb)
+        )
+        sys.__excepthook__(exc_type, exc, tb)
+
+    sys.excepthook = _excepthook
 
     from mabinogi_addon import config
     from mabinogi_addon.system import updater
