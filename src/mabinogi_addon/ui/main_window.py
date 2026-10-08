@@ -45,6 +45,7 @@ from .tuarim_tab import TuarimTab
 # 번들 경로 사용(exe=_MEIPASS/assets). __file__ 기준은 frozen에서 어긋난다.
 LOGO_PATH = paths.resource_dir() / "logo.png"
 _log = logging.getLogger("mabinogi_addon.close")
+_hk_log = logging.getLogger("mabinogi_addon.system.hotkey")  # 핫키 토글 진단
 
 
 def app_icon() -> QIcon:
@@ -937,7 +938,17 @@ class MainWindow(QMainWindow):
         if now - getattr(self, "_last_hotkey_at", 0.0) < 0.25:
             return
         self._last_hotkey_at = now
-        self._set_paused(not self._paused)
+        new_paused = not self._paused
+        # 진단: 누른 순간 맨 앞 창(인게임=client.exe 여부)과 바뀐 상태를 남긴다.
+        # 인게임 누름이 여기까지 오면 front=client.exe로 찍혀 '키는 받는다'가 증명된다.
+        try:
+            _, front_exe = self._watcher.foreground_info()
+        except Exception:  # noqa: BLE001
+            front_exe = ""
+        _hk_log.info(
+            "핫키 토글: front=%s → %s", front_exe or "?", "정지" if new_paused else "시작"
+        )
+        self._set_paused(new_paused)
 
     def _apply_pause_hotkey(self, spec: str) -> bool:
         """설정에서 조합이 바뀌면 재등록. 등록 성공 여부를 돌려준다(설정 탭 안내용)."""
