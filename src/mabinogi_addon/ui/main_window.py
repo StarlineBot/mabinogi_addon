@@ -221,10 +221,10 @@ class MainWindow(QMainWindow):
         h.setContentsMargins(12, 6, 12, 6)
         h.setSpacing(10)
         h.addStretch(1)  # 오른쪽 정렬: 상태·버튼을 우상단에 모은다.
-        self._status_label = QLabel("● 화면 감지 중")
+        self._status_label = QLabel("● 오버레이 동작중")
         self._status_label.setObjectName("statusText")
         self._status_label.setToolTip(
-            "오버레이 동작 여부입니다. '화면 감지 중'이어도 실제 표시는 "
+            "오버레이 동작 여부입니다. '동작중'이어도 실제 표시는 "
             "마비노기가 맨 앞일 때만 — 자세한 추적 상태는 각 탭 안내를 보세요."
         )
         h.addWidget(self._status_label)
@@ -257,8 +257,8 @@ class MainWindow(QMainWindow):
         상태 줄에 '게임 비활성' 안내가 따로 있음).
         """
         if self._paused:
-            return ("⏸ 화면 감지 정지중", self._STATUS_WARN)
-        return ("● 화면 감지 중", self._STATUS_OK)
+            return ("⏸ 오버레이 정지중", self._STATUS_WARN)
+        return ("● 오버레이 동작중", self._STATUS_OK)
 
     def _update_header_status(self) -> None:
         text, color = self._overlay_status()
@@ -781,7 +781,7 @@ class MainWindow(QMainWindow):
         open_act = QAction("열기", self)
         open_act.triggered.connect(self._show_from_tray)
         # 글자가 상태를 말하므로 체크표시 대신 라벨을 토글(⏸ 정지 ↔ ▶ 다시 시작).
-        self._pause_act = QAction("⏸ 오버레이 일시정지", self)
+        self._pause_act = QAction("⏸ 오버레이 정지", self)
         self._pause_act.setToolTip("사냥 안 할 때 오버레이·알림을 잠깐 끕니다")
         self._pause_act.triggered.connect(lambda: self._set_paused(not self._paused))
         quit_act = QAction("종료", self)
@@ -827,7 +827,7 @@ class MainWindow(QMainWindow):
         self.custom_overlay_tab.set_paused(paused)
         # 트레이 라벨 + 상단 버튼 동기화(어느 쪽에서 눌러도 둘 다 반영, 루프 방지).
         self._pause_act.setText(
-            "▶ 오버레이 다시 시작" if paused else "⏸ 오버레이 일시정지"
+            "▶ 오버레이 시작" if paused else "⏸ 오버레이 정지"
         )
         if self._pause_btn.isChecked() != paused:
             self._pause_btn.blockSignals(True)
@@ -836,14 +836,14 @@ class MainWindow(QMainWindow):
         self._update_header_status()
         if self._tray is not None:
             self._tray.setToolTip(
-                f"{config.APP_NAME} — 오버레이 일시정지됨"
+                f"{config.APP_NAME} — 오버레이 정지됨"
                 if paused else config.APP_NAME
             )
         from .toast import show_toast
         if paused:
-            show_toast("오버레이 일시정지", "버프·디버프·커스텀을 껐어요. 재개하려면 다시 켜세요", 2500)
+            show_toast("오버레이 정지", "버프·디버프·커스텀을 껐어요. 다시 시작하려면 ▶", 2500)
         else:
-            show_toast("오버레이 켜짐", "버프·디버프·커스텀 오버레이가 다시 동작합니다", 2000)
+            show_toast("오버레이 시작", "버프·디버프·커스텀 오버레이가 다시 동작합니다", 2000)
 
     def _on_voice_pack_changed(self) -> None:
         """설정에서 알림 목소리 팩이 바뀌면 실행 중 재생기들을 새 팩으로 갱신(바로 적용)."""
