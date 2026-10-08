@@ -53,6 +53,7 @@ class RegionSelector(QWidget):
         self._rect = QRect()
         self._cursor: QPoint | None = None
         self._shot = QPixmap()  # 선택창 띄우기 전 화면 스냅샷(돋보기 원본)
+        self._dpr = 1.0  # 스냅샷 배율(물리픽셀=논리×dpr). start()에서 실제값으로 채움
 
     def start(self) -> None:
         self._origin = None
@@ -61,6 +62,12 @@ class RegionSelector(QWidget):
         # 오버레이를 덮기 전에 현재 화면을 캡처(돋보기 원본). 띄운 뒤 캡처하면 오버레이가 찍힌다.
         screen = QGuiApplication.primaryScreen()
         self._shot = screen.grabWindow(0) if screen else QPixmap()
+        # 스냅샷을 '물리픽셀 그대로'로 다룬다: dpr을 1로 떼고 배율은 self._dpr에 보관.
+        # 150% 등에서 논리좌표(rect/pos)에 self._dpr을 곱해 물리픽셀로 인덱싱해야
+        # 돋보기·박스 미리보기가 엉뚱한 자리를 확대하지 않는다(안 그러면 '이상한 화면').
+        if not self._shot.isNull():
+            self._dpr = float(self._shot.devicePixelRatio() or 1.0)
+            self._shot.setDevicePixelRatio(1.0)
         self.showFullScreen()
         self.raise_()
         self.activateWindow()
@@ -134,10 +141,8 @@ class RegionSelector(QWidget):
         """스냅샷에서 고른 영역을 물리 픽셀 기준으로 잘라 PNG로 저장."""
         if self._shot.isNull() or self._save_path is None:
             return False
-        dpr = self._shot.devicePixelRatio()  # HiDPI(배율>100%)에서도 실제 픽셀로
-        shot = self._shot
-        shot.setDevicePixelRatio(1.0)
-        crop = shot.copy(
+        dpr = self._dpr  # 스냅샷은 start()에서 이미 dpr=1로 떼어 뒀다(물리픽셀 그대로)
+        crop = self._shot.copy(
             round(rect.x() * dpr),
             round(rect.y() * dpr),
             round(rect.width() * dpr),
@@ -213,8 +218,11 @@ class RegionSelector(QWidget):
 
     def _draw_box_preview(self, painter: QPainter, rect: QRect) -> None:
         """고정 박스가 실제로 캡처할 영역을 확대해 보여준다(지정이 숫자에 맞는지 확인)."""
-        crop = self._shot.copy(rect)
-        crop.setDevicePixelRatio(1.0)
+        dpr = self._dpr  # 논리 rect → 물리픽셀로 환산해 스냅샷을 자른다(150% 보정)
+        crop = self._shot.copy(
+            round(rect.x() * dpr), round(rect.y() * dpr),
+            round(rect.width() * dpr), round(rect.height() * dpr),
+        )
         pw = 180
         ph = max(1, round(pw * rect.height() / max(1, rect.width())))
         zoomed = crop.scaled(
@@ -244,7 +252,9 @@ class RegionSelector(QWidget):
         """커서 주변을 _ZOOM배로 확대해 커서 옆 박스에 그린다(중앙 십자선)."""
         src = max(4, _LOUPE // _ZOOM)
         half = src // 2
-        sx0, sy0 = pos.x() - half, pos.y() - half
+        # 커서(논리좌표)를 물리픽셀로 환산해 스냅샷(물리픽셀)을 인덱싱한다(150% 보정).
+        cx, cy = round(pos.x() * self._dpr), round(pos.y() * self._dpr)
+        sx0, sy0 = cx - half, cy - half
         # 화면 가장자리에서도 커서가 항상 '중앙'에 오도록, src×src 검정 캔버스에 화면 안
         # 유효 영역만 제자리에 붙인다(바로 copy하면 음수 좌표라 크롭이 밀려 깨진다).
         canvas = QPixmap(src, src)
@@ -254,7 +264,6 @@ class RegionSelector(QWidget):
         vx1, vy1 = min(sw, sx0 + src), min(sh, sy0 + src)
         if vx1 > vx0 and vy1 > vy0:
             part = self._shot.copy(vx0, vy0, vx1 - vx0, vy1 - vy0)
-            part.setDevicePixelRatio(1.0)
             cp = QPainter(canvas)
             cp.drawPixmap(vx0 - sx0, vy0 - sy0, part)
             cp.end()
