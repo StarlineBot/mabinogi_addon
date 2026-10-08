@@ -34,6 +34,11 @@ from .widgets import checkbox, hint_label, icon_slot, section_label
 # 앵커로 고정 사용할 버프(항상 존재, 지속시간 없음 → 판정 기준)
 ANCHOR_ID = "premium_battle"
 
+# 영역에 꼭 들어가야 하는 것(앱 힌트 ↔ 화면 점선 라벨이 같은 기준을 공유).
+REGION_CRITERION = "버프 아이콘 + 남은시간이 함께 보이게 드래그하세요"
+HIGHLIGHT_TITLE = "버프 영역 확인"
+HIGHLIGHT_SUB = "아이콘 + 남은시간이 점선 안에 다 들어왔나요?"
+
 # 버프 트래커 사용법(? 버튼 → 새 창). 내용만 바꾸면 다른 탭에도 재사용 가능.
 HELP_TITLE = "버프 트래커 사용법"
 HELP_HTML = """
@@ -202,9 +207,16 @@ class BuffTab(QWidget):
         top.addWidget(self.scale_spin, 1)
         v.addLayout(top)
 
+        hint_row = QHBoxLayout()
+        hint_row.setSpacing(6)
         self.region_hint = hint_label("")
+        hint_row.addWidget(self.region_hint, 1)
+        self.view_region_btn = QPushButton("영역 보기")
+        self.view_region_btn.setToolTip("잡힌 영역을 화면에 점선으로 잠깐 표시")
+        self.view_region_btn.clicked.connect(self._flash_region)
+        hint_row.addWidget(self.view_region_btn)
         self._update_region_hint()
-        v.addWidget(self.region_hint)
+        v.addLayout(hint_row)
 
         self.status_label = hint_label("")  # 진단 상태(추적 중/게임 비활성 등)
         v.addWidget(self.status_label)
@@ -272,9 +284,11 @@ class BuffTab(QWidget):
                 f"{region['w']}×{region['h']}  ✔"
             )
             self.region_hint.setStyleSheet("color:#2ecc71;")
+            self.view_region_btn.setEnabled(True)
         else:
-            self.region_hint.setText("영역 미지정 — 버튼으로 상태창 영역을 지정하세요")
+            self.region_hint.setText(f"영역 미지정 — {REGION_CRITERION}")
             self.region_hint.setStyleSheet("color:#8a8f98;")
+            self.view_region_btn.setEnabled(False)
 
     def _pick_region(self) -> None:
         from .region_selector import RegionSelector
@@ -286,6 +300,20 @@ class BuffTab(QWidget):
     def _on_region_selected(self, x: int, y: int, w: int, h: int) -> None:
         config.save_capture_region(x, y, w, h, "buffTracker")
         self._update_region_hint()
+        self._flash_region()  # 잡힌 영역을 화면에 점선으로 바로 확인
+
+    def _flash_region(self) -> None:
+        """저장된 버프 영역을 화면에 굵은 점선으로 잠깐 표시(아이콘·시간 확인용)."""
+        region = config.load_capture_region("buffTracker")
+        if not region:
+            return
+        from .region_highlight import RegionHighlight
+
+        self._highlight = RegionHighlight()  # 참조 유지(GC 방지)
+        self._highlight.flash(
+            region["x"], region["y"], region["w"], region["h"],
+            HIGHLIGHT_TITLE, HIGHLIGHT_SUB,
+        )
 
     def _display_name(self, bid: str) -> str:
         s = self._settings.get(bid)
