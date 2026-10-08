@@ -193,6 +193,28 @@ class MainWindow(QMainWindow):
     def _update_banner_hide(self) -> None:
         self._update_banner.hide()
 
+    def _maybe_prompt_game_window(self) -> None:
+        """게임 창 인식이 안 돼 있으면 시작 시 한 번 선택 팝업을 띄운다(권장).
+
+        창이 보일 때만(트레이 시작 아님) + 아직 미등록 + '다시 묻지 않기' 안 했을 때.
+        """
+        import sys
+
+        if not self.isVisible():
+            return  # 트레이로 시작 등 창이 없으면 팝업도 생략
+        if sys.platform != "win32":
+            return  # 맥/리눅스는 포그라운드 개념이 없어(항상 활성) 불필요
+        if config.load_game_exe():
+            return  # 이미 등록됨
+        if config.load_general_flag("suppressGamePrompt", False):
+            return  # 사용자가 '다시 묻지 않기' 선택
+
+        from .game_window_dialog import GameWindowDialog
+
+        dlg = GameWindowDialog(self._watcher, self)
+        dlg.exec()
+        self.settings_tab.refresh_game_label()  # 지정했으면 설정 라벨도 갱신
+
     def _maybe_check_update(self) -> None:
         """시작 시 백그라운드로 새 버전 확인(개발/실패는 조용히 무시)."""
         import threading
@@ -323,6 +345,7 @@ class MainWindow(QMainWindow):
         self._start_buff_tracking()
         self._start_debuff_tracking()
         self._maybe_check_update()
+        self._maybe_prompt_game_window()
 
     def _compute_tracking(
         self, catalog

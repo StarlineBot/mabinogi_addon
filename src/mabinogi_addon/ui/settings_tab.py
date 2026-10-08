@@ -561,6 +561,10 @@ class SettingsTab(QWidget):
         )
         return box
 
+    def refresh_game_label(self) -> None:
+        """외부(시작 팝업 등)에서 게임 창 등록을 바꾼 뒤 라벨 동기화."""
+        self._update_game_label()
+
     def _update_game_label(self) -> None:
         exe = config.load_game_exe()
         if exe:
