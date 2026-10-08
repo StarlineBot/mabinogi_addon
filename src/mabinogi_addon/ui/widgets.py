@@ -36,6 +36,7 @@ def icon_slot(placeholder: str = "▣") -> QLabel:
 
 def hint_label(text: str) -> QLabel:
     lbl = QLabel(text)
+    lbl.setWordWrap(True)  # 긴 안내문이 한 줄로 창 폭을 강제하지 않게(여러 줄로 접힘)
     lbl.setStyleSheet("color:#8a8f98;")
     return lbl
 

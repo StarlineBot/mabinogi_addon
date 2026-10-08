@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import logging
 
-from PySide6.QtCore import QTimer, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import (
     QApplication,
@@ -52,14 +52,29 @@ def app_icon() -> QIcon:
     return QIcon(str(LOGO_PATH))
 
 
-def _scrolled(widget: QWidget) -> QScrollArea:
-    """위젯을 세로 스크롤 영역으로 감싼다(창 높이 고정 시 내용 잘림 방지).
+class _VScroll(QScrollArea):
+    """세로 스크롤 영역: 가로는 뷰포트 폭에 맞추되, 세로는 내용의 '자연 높이'를 지킨다.
 
-    가로는 뷰포트 너비에 맞춰(setWidgetResizable) 가로 스크롤이 생기지 않게 한다.
+    그냥 setWidgetResizable(True)만 쓰면, 내용이 뷰포트보다 크면 눌리고(압축) 작으면
+    늘어나(확대) 버튼 등이 찌그러진다. 내용 위젯의 최소 높이를 그 sizeHint 높이로
+    고정해, 넘칠 때 '압축' 대신 '스크롤'이 생기게 한다.
     """
-    area = QScrollArea()
+
+    def resizeEvent(self, event) -> None:
+        inner = self.widget()
+        if inner is not None:
+            inner.setMinimumHeight(inner.sizeHint().height())
+        super().resizeEvent(event)
+
+
+def _scrolled(widget: QWidget) -> QScrollArea:
+    """위젯을 세로 스크롤 영역으로 감싼다(창 높이 고정 시 내용 잘림·찌그러짐 방지)."""
+    area = _VScroll()
     area.setWidgetResizable(True)
     area.setFrameShape(QFrame.Shape.NoFrame)
+    # 줄바꿈 후 모든 탭이 창 폭에 들어오므로 가로 스크롤은 끈다(미세 잔차로 생기는
+    # 얇은 가로 스크롤바 방지 — 세로만 스크롤).
+    area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
     area.setWidget(widget)
     return area
 
@@ -92,11 +107,10 @@ class MainWindow(QMainWindow):
         self.setWindowIcon(app_icon())
         # 고정 크기(크기 변경 비활성). 내용이 넘치면 각 탭이 스크롤로 처리한다.
         # (resize 가능 상태로 두면 가장자리에 리사이즈 커서만 뜨고 실제론 안 줄던 혼란.)
-        # 논리 px 기준 — 실제 크기는 Windows 디스플레이 배율만큼 커진다. 탭마다 필요
-        # 폭이 달라(커스텀 463~투아림 1209), 주력인 버프 탭(≈774)에 맞춰 잡는다. 더 넓은
-        # 탭(투아림·파티·디버프)은 가로 스크롤로 본다(예전엔 스크롤이 없어 제일 넓은 탭에
-        # 창이 강제로 맞춰져 과하게 넓었다).
-        self.setFixedSize(790, 540)
+        # 고정 크기(크기 변경 비활성). 안내문 줄바꿈 후 탭 최대 폭이 ≈700이라 740이면
+        # 가로 스크롤 없이 모두 들어온다. 높이 660은 주력 버프 탭(≈496)이 스크롤 없이
+        # 들어오고, 더 긴 탭(커스텀·파티·설정)만 세로 스크롤로 본다(_VScroll이 눌림 방지).
+        self.setFixedSize(740, 660)
 
         # 포그라운드 감지(맥=항상 활성). 저장된 게임 실행파일로 판정(없으면 제목 폴백).
         self._watcher = create_window_watcher(game_exe=config.load_game_exe())
