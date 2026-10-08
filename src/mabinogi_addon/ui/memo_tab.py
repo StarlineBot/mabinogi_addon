@@ -46,8 +46,8 @@ HELP_HTML = """
 <li><b>내용 입력</b> — 아래 편집창에 <b>마크다운</b>으로 적습니다(입력은 여기서, 오버레이엔
 바로 렌더). 툴바 아이콘 <b>H·B·•·▦·―·&lt;&gt;</b>(제목·굵게·리스트·표·구분선·코드)로 문법
 몰라도 넣을 수 있고, <b>👁 미리보기</b>로 결과를 미리 봅니다. 글자 크기도 조절돼요.</li>
-<li><b>위치 조정·고정</b> — 오버레이는 <b>'해제'</b> 상태에서 테두리를 끌어 옮기고(입력 아님),
-<b>'고정'</b>하면 클릭이 통과되어(표시 전용) 게임을 가리지 않습니다.</li>
+<li><b>위치 조정·잠금</b> — 오버레이는 <b>잠그기 전</b>에 테두리를 끌어 옮기고(입력 아님),
+<b>위치 잠금</b>하면 클릭이 통과되어(표시 전용) 게임을 가리지 않습니다.</li>
 </ol>
 
 <h3>마크다운 예</h3>
@@ -78,8 +78,12 @@ class MemoTab(QWidget):
         region_btn = QPushButton("메모 영역 지정")
         region_btn.clicked.connect(self._pick_region)
         top.addWidget(region_btn, 1)
-        self.lock_btn = QPushButton("오버레이 고정")
+        self.lock_btn = QPushButton("위치 잠금")
         self.lock_btn.setCheckable(True)
+        self.lock_btn.setToolTip(
+            "잠그면 메모 위치가 고정되고, 클릭이 통과돼 게임을 가리지 않습니다.\n"
+            "해제하면 테두리를 끌어 위치를 옮길 수 있어요."
+        )
         self.lock_btn.setStyleSheet(
             "QPushButton:checked { background:#00B894; color:white; font-weight:600; }"
         )
@@ -160,7 +164,7 @@ class MemoTab(QWidget):
             hint_label(
                 "여기서 적으면 오버레이에 표·리스트·강조로 바로 나타납니다. "
                 "👁 미리보기로 결과를 미리 보고, 가운데를 끌어 좌우 너비를 조절하세요.\n"
-                "오버레이는 '해제' 상태에서 끌어 위치를 옮기고, '고정'하면 클릭이 통과돼요."
+                "오버레이는 잠그기 전에 끌어 위치를 옮기고, 위치 잠금하면 클릭이 통과돼요."
             )
         )
 
@@ -214,7 +218,7 @@ class MemoTab(QWidget):
         self.region_changed.emit()
 
     def _on_lock_toggled(self, locked: bool) -> None:
-        self.lock_btn.setText("오버레이 고정됨" if locked else "오버레이 고정")
+        self.lock_btn.setText("위치 잠금됨" if locked else "위치 잠금")
         self.lock_toggled.emit(locked)
 
     def set_lock_state(self, locked: bool) -> None:

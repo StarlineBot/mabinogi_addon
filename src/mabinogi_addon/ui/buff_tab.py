@@ -29,7 +29,7 @@ from PySide6.QtWidgets import (
 from .. import catalog as catalog_mod
 from .. import config
 from ..catalog import BuffDef, available_catalog
-from .widgets import checkbox, hint_label, icon_slot, section_label
+from .widgets import callout, checkbox, hint_label, icon_slot, section_label
 
 # 앵커로 고정 사용할 버프(항상 존재, 지속시간 없음 → 판정 기준)
 ANCHOR_ID = "premium_battle"
@@ -67,7 +67,7 @@ HELP_HTML = """
 <b>점멸·소리</b>로 알리고, <b>2차 알림</b>은 놓쳤을 때 한 번 더 울립니다.
 (소리는 사운드가 등록된 버프만)</li>
 <li><b>오버레이 배치</b> — 드래그로 원하는 위치에 옮기고 마우스 휠로 <b>배율</b>을
-조절합니다. <b>오버레이 고정</b>을 누르면 위치가 잠기고 클릭도 통과해
+조절합니다. <b>위치 잠금</b>을 누르면 위치가 고정되고 클릭도 통과해
 게임에 방해되지 않습니다.</li>
 </ol>
 
@@ -190,8 +190,12 @@ class BuffTab(QWidget):
         region_btn.clicked.connect(self._pick_region)
         self.region_btn = region_btn  # 온보딩 투어가 강조 대상으로 참조
         top.addWidget(region_btn, 1)
-        self.lock_btn = QPushButton("오버레이 고정")
+        self.lock_btn = QPushButton("위치 잠금")
         self.lock_btn.setCheckable(True)
+        self.lock_btn.setToolTip(
+            "잠그면 오버레이 위치가 고정되고, 클릭이 통과돼 게임을 가리지 않습니다.\n"
+            "해제하면 드래그로 위치를 옮길 수 있어요."
+        )
         self.lock_btn.setStyleSheet(
             "QPushButton:checked { background:#00B894; color:white; font-weight:600; }"
         )
@@ -226,27 +230,29 @@ class BuffTab(QWidget):
         self.buff_list.currentRowChanged.connect(self._on_select)
         v.addWidget(self.buff_list, 1)
 
+        # 추가·삭제는 글자 라벨(짝 맞춤), 순서 이동은 아이콘 — 4등분 균등 너비.
         order_row = QHBoxLayout()
         order_row.setSpacing(4)
-        self.add_btn = QPushButton("＋")
+        self.add_btn = QPushButton("＋ 추가")
         self.add_btn.setToolTip("새 버프 등록")
         self.add_btn.clicked.connect(self._on_register)
-        self.del_btn = QPushButton("－")
+        self.del_btn = QPushButton("－ 삭제")
         self.del_btn.setToolTip("선택한 버프 삭제")
         self.del_btn.clicked.connect(self._on_delete)
         self.up_btn = QPushButton("▲")
+        self.up_btn.setToolTip("위로 (표시 순서)")
         self.up_btn.clicked.connect(lambda: self._move(-1))
         self.down_btn = QPushButton("▼")
+        self.down_btn.setToolTip("아래로 (표시 순서)")
         self.down_btn.clicked.connect(lambda: self._move(1))
-        # 목록 폭에 꽉 차게 4등분(균등 신축)
         for b in (self.add_btn, self.del_btn, self.up_btn, self.down_btn):
             order_row.addWidget(b, 1)
         v.addLayout(order_row)
 
         v.addWidget(
-            hint_label(
-                "※ 아이콘이 완전히 같은 버프는 서로 구분되지 않습니다.\n"
-                "   예: 급소관통(스킬) ≡ 물리공격력증가(물약) — 같이 떠 있으면 하나로만 잡힙니다."
+            callout(
+                "아이콘이 완전히 같은 버프는 서로 구분되지 않습니다. "
+                "예: 급소관통(스킬) ≡ 물리공격력증가(물약) — 같이 떠 있으면 하나로만 잡힙니다."
             )
         )
         return panel
@@ -260,7 +266,7 @@ class BuffTab(QWidget):
         return [ANCHOR_ID, *self._order]
 
     def _on_lock_toggled(self, locked: bool) -> None:
-        self.lock_btn.setText("오버레이 고정됨" if locked else "오버레이 고정")
+        self.lock_btn.setText("위치 잠금됨" if locked else "위치 잠금")
         self.lock_toggled.emit(locked)
 
     def set_lock_state(self, locked: bool) -> None:

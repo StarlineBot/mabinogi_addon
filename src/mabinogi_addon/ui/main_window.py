@@ -282,9 +282,9 @@ class MainWindow(QMainWindow):
             ),
             TourStep(
                 target=self.buff_tab.lock_btn,
-                title="③ 오버레이 고정",
-                body="오버레이를 원하는 위치로 옮긴 뒤 '오버레이 고정'을 누르면\n"
-                     "위치가 잠기고 클릭도 통과해 게임에 방해되지 않아요.",
+                title="③ 위치 잠금",
+                body="오버레이를 원하는 위치로 옮긴 뒤 '위치 잠금'을 누르면\n"
+                     "위치가 고정되고 클릭도 통과해 게임에 방해되지 않아요.",
             ),
             TourStep(
                 target=None,

@@ -50,7 +50,7 @@ HELP_HTML = """
 <b>영역에서 바로 집거나</b> 이미지 파일로 등록합니다.
 (－ 삭제 / ▲▼ 표시 순서)</li>
 <li><b>오버레이 배치</b> — 드래그로 원하는 위치에 옮기고 마우스 휠로 <b>배율</b>을
-조절합니다. <b>오버레이 고정</b>을 누르면 위치가 잠기고 클릭도 통과해
+조절합니다. <b>위치 잠금</b>을 누르면 위치가 고정되고 클릭도 통과해
 게임에 방해되지 않습니다.</li>
 </ol>
 
@@ -123,8 +123,12 @@ class DebuffTab(QWidget):
         region_btn = QPushButton("디버프 줄 영역 지정")
         region_btn.clicked.connect(self._pick_region)
         top.addWidget(region_btn, 1)
-        self.lock_btn = QPushButton("오버레이 고정")
+        self.lock_btn = QPushButton("위치 잠금")
         self.lock_btn.setCheckable(True)
+        self.lock_btn.setToolTip(
+            "잠그면 오버레이 위치가 고정되고, 클릭이 통과돼 게임을 가리지 않습니다.\n"
+            "해제하면 드래그로 위치를 옮길 수 있어요."
+        )
         self.lock_btn.setStyleSheet(
             "QPushButton:checked { background:#00B894; color:white; font-weight:600; }"
         )
@@ -161,15 +165,17 @@ class DebuffTab(QWidget):
 
         order_row = QHBoxLayout()
         order_row.setSpacing(4)
-        add_btn = QPushButton("＋")
+        add_btn = QPushButton("＋ 추가")
         add_btn.setToolTip("새 디버프 등록")
         add_btn.clicked.connect(self._on_register)
-        del_btn = QPushButton("－")
+        del_btn = QPushButton("－ 삭제")
         del_btn.setToolTip("선택한 디버프 삭제")
         del_btn.clicked.connect(self._on_delete)
         up_btn = QPushButton("▲")
+        up_btn.setToolTip("위로 (표시 순서)")
         up_btn.clicked.connect(lambda: self._move(-1))
         down_btn = QPushButton("▼")
+        down_btn.setToolTip("아래로 (표시 순서)")
         down_btn.clicked.connect(lambda: self._move(1))
         for b in (add_btn, del_btn, up_btn, down_btn):
             order_row.addWidget(b, 1)
@@ -227,7 +233,7 @@ class DebuffTab(QWidget):
         )
 
     def _on_lock_toggled(self, locked: bool) -> None:
-        self.lock_btn.setText("오버레이 고정됨" if locked else "오버레이 고정")
+        self.lock_btn.setText("위치 잠금됨" if locked else "위치 잠금")
         self.lock_toggled.emit(locked)
 
     def set_lock_state(self, locked: bool) -> None:
