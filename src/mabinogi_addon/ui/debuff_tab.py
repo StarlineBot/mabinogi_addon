@@ -27,7 +27,7 @@ from .. import catalog as catalog_mod
 from .. import config
 from ..catalog import USER_DEBUFF_ICON_DIR, BuffDef, available_debuff_catalog
 from .buff_tab import _capture_icon_to, _pixmap
-from .help_dialog import help_title_row
+from .help_dialog import tab_header
 from .widgets import checkbox, hint_label, icon_slot, section_label
 
 # 디버프 트래커 사용법(? 아이콘 → 새 창).
@@ -69,11 +69,17 @@ class DebuffTab(QWidget):
         self._name_id: str | None = None
         self._loading = False
 
-        outer = QHBoxLayout(self)
+        outer = QVBoxLayout(self)
         outer.setContentsMargins(12, 12, 12, 12)
-        outer.setSpacing(14)
-        outer.addWidget(self._build_list_panel(), 1)
-        outer.addWidget(self._build_form_panel(), 1)
+        outer.setSpacing(10)
+        outer.addWidget(tab_header(
+            "아직 안 걸린 디버프만 오버레이로 표시", HELP_TITLE, HELP_HTML, self
+        ))
+        body = QHBoxLayout()
+        body.setSpacing(14)
+        body.addWidget(self._build_list_panel(), 1)
+        body.addWidget(self._build_form_panel(), 1)
+        outer.addLayout(body, 1)
 
         self._rebuild_list()
         if self.debuff_list.count():
@@ -106,8 +112,6 @@ class DebuffTab(QWidget):
         panel = QWidget()
         v = QVBoxLayout(panel)
         v.setContentsMargins(0, 0, 0, 0)
-
-        v.addLayout(help_title_row("디버프 트래커", HELP_TITLE, HELP_HTML, self))
 
         top = QHBoxLayout()
         top.setSpacing(6)

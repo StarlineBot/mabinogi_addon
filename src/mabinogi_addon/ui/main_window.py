@@ -50,6 +50,20 @@ def app_icon() -> QIcon:
     return QIcon(str(LOGO_PATH))
 
 
+# 탭 바: 밑줄 스타일 + 균등 고정 너비. 선택 탭은 민트색·굵게 + 민트 밑줄로 또렷하게.
+# (앱은 OS 테마를 따르므로, 무채색 글자 + 민트 강조로 라이트/다크 모두 자연스럽게.)
+_TAB_QSS = (
+    "QTabWidget::pane { border: none; border-top: 1px solid #2a2f3a; }"
+    "QTabBar { qproperty-drawBase: 0; }"
+    "QTabBar::tab { background: transparent; color: #8a8f98; padding: 9px 4px;"
+    " min-width: 104px; border: none; border-bottom: 2px solid transparent;"
+    " font-size: 13px; }"
+    "QTabBar::tab:hover { color: #cfd3da; }"
+    "QTabBar::tab:selected { color: #00C9A2; font-weight: 800;"
+    " border-bottom: 2px solid #00D1A7; }"
+)
+
+
 class MainWindow(QMainWindow):
     # 백그라운드 스레드(업데이트 확인/다운로드)에서 UI 스레드로 안전하게 넘기는 신호.
     _update_found = Signal(dict)  # 새 버전 발견 → 배너 표시
@@ -85,13 +99,14 @@ class MainWindow(QMainWindow):
         self.settings_tab.replay_tour.connect(self._run_tour)
         tabs = QTabWidget()
         self._tabs = tabs  # 온보딩 투어에서 탭 전환에 사용
-        tabs.addTab(self.buff_tab, "버프")
-        tabs.addTab(self.debuff_tab, "디버프")
-        tabs.addTab(self.tuarim_tab, "투아림")
+        tabs.addTab(self.buff_tab, "버프 트래커")
+        tabs.addTab(self.debuff_tab, "디버프 트래커")
+        tabs.addTab(self.tuarim_tab, "투아림 트래커")
         tabs.addTab(self.custom_overlay_tab, "커스텀 오버레이")
-        tabs.addTab(self.party_tab, "파티")
+        tabs.addTab(self.party_tab, "파티 모집")
         tabs.addTab(self.memo_tab, "메모")
         tabs.addTab(self.settings_tab, "설정")
+        tabs.setStyleSheet(_TAB_QSS)
 
         # 중앙: 상단 업데이트 배너(기본 숨김) + 탭
         central = QWidget()

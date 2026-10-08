@@ -121,11 +121,19 @@ class BuffTab(QWidget):
         self._name_id: str | None = None
         self._loading = False
 
-        outer = QHBoxLayout(self)
+        from .help_dialog import tab_header
+
+        outer = QVBoxLayout(self)
         outer.setContentsMargins(12, 12, 12, 12)
-        outer.setSpacing(14)
-        outer.addWidget(self._build_list_panel(), 1)
-        outer.addWidget(self._build_form_panel(), 1)
+        outer.setSpacing(10)
+        outer.addWidget(tab_header(
+            "등록한 버프의 남은 시간을 오버레이로 표시", HELP_TITLE, HELP_HTML, self
+        ))
+        body = QHBoxLayout()
+        body.setSpacing(14)
+        body.addWidget(self._build_list_panel(), 1)
+        body.addWidget(self._build_form_panel(), 1)
+        outer.addLayout(body, 1)
 
         self._rebuild_list()
         self.buff_list.setCurrentRow(0)
@@ -170,10 +178,6 @@ class BuffTab(QWidget):
         panel = QWidget()
         v = QVBoxLayout(panel)
         v.setContentsMargins(0, 0, 0, 0)
-
-        from .help_dialog import help_title_row
-
-        v.addLayout(help_title_row("버프 트래커", HELP_TITLE, HELP_HTML, self))
 
         top = QHBoxLayout()
         top.setSpacing(6)

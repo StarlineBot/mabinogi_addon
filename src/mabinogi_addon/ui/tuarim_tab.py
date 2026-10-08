@@ -28,7 +28,7 @@ from PySide6.QtWidgets import (
 from .. import config, image_io, paths
 from ..detect.tuarim_reader import read_percent
 from ..tracker import TuarimTracker
-from .help_dialog import help_title_row
+from .help_dialog import tab_header
 from .widgets import checkbox, hint_label
 
 # 숫자 두 자리+% 를 덮는 고정 박스 크기(px). 스샷 측정: 한 글자 ~16px, '0%'=32×19.
@@ -79,7 +79,9 @@ class TuarimTab(QWidget):
         v = QVBoxLayout(self)
         v.setContentsMargins(12, 12, 12, 12)
         v.setSpacing(10)
-        v.addLayout(help_title_row("투아림 트래커", HELP_TITLE, HELP_HTML, self))
+        v.addWidget(tab_header(
+            "투아림 게이지(%)를 읽어 지정 %에서 알림", HELP_TITLE, HELP_HTML, self
+        ))
         v.addWidget(
             hint_label(
                 "'영역 지정'을 누르면 박스가 커서를 따라옵니다. 마우스 휠로 크기를 숫자에"

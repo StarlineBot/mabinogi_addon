@@ -30,7 +30,7 @@ from PySide6.QtWidgets import (
 
 from .. import config
 from ..system.window_watcher import WindowWatcher
-from .help_dialog import help_title_row
+from .help_dialog import tab_header
 from .mirror_manager import MirrorManager
 from .widgets import checkbox, hint_label, section_label
 
@@ -104,10 +104,10 @@ class CustomOverlayTab(QWidget):
         v.setContentsMargins(12, 12, 12, 12)
         v.setSpacing(10)
 
-        v.addLayout(help_title_row("커스텀 오버레이", HELP_TITLE, HELP_HTML, self))
-        v.addWidget(
-            hint_label("화면 특정 영역을 선택, 원하는 위치에 오버레이로 띄우는 기능입니다.")
-        )
+        v.addWidget(tab_header(
+            "화면 일부를 다른 위치에 미러링 — 단축바·체력바 등을 눈에 편한 곳에",
+            HELP_TITLE, HELP_HTML, self
+        ))
         self.region_btn = QPushButton("영역 지정")
         self.region_btn.setToolTip("드래그로 화면 일부를 잘라 오버레이로 복제(돋보기)")
         self.region_btn.clicked.connect(self._on_region)

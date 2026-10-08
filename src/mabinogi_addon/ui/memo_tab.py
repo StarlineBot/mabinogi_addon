@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
 )
 
 from .. import config
-from .help_dialog import help_title_row
+from .help_dialog import tab_header
 from .markdown_highlighter import MarkdownHighlighter
 from .widgets import hint_label, section_label
 
@@ -69,7 +69,9 @@ class MemoTab(QWidget):
         v = QVBoxLayout(self)
         v.setContentsMargins(12, 12, 12, 12)
         v.setSpacing(10)
-        v.addLayout(help_title_row("메모", HELP_TITLE, HELP_HTML, self))
+        v.addWidget(tab_header(
+            "게임 위에 마크다운 메모 띄우기", HELP_TITLE, HELP_HTML, self
+        ))
 
         top = QHBoxLayout()
         top.setSpacing(6)

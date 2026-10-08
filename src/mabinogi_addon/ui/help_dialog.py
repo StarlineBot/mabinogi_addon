@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QTextBrowser,
     QVBoxLayout,
+    QWidget,
 )
 
 _ICON_PX = 22  # 도움말 아이콘 크기
@@ -99,6 +100,33 @@ def help_button(title: str, html: str, parent=None) -> QPushButton:
 
     btn.clicked.connect(_open)
     return btn
+
+
+def tab_header(
+    desc_text: str, help_title: str, html: str, parent=None
+) -> QWidget:
+    """탭 상단 전체 폭 헤더: 왼쪽 한 줄 설명 + 오른쪽 '?' + 아래 구분선.
+
+    탭 이름이 풀네임(예: '버프 트래커')이라 큰 제목은 중복 → 제목 대신 한 줄 설명만
+    두고, ? 는 탭 전체 폭의 맨 오른쪽에 둔다.
+    """
+    box = QWidget()
+    v = QVBoxLayout(box)
+    v.setContentsMargins(0, 0, 0, 0)
+    v.setSpacing(6)
+    row = QHBoxLayout()
+    row.setContentsMargins(0, 0, 0, 0)
+    desc = QLabel(desc_text)
+    desc.setStyleSheet("color:#8a8f98; font-size:13px;")
+    row.addWidget(desc)
+    row.addStretch(1)
+    row.addWidget(help_button(help_title, html, parent))
+    v.addLayout(row)
+    line = QWidget()
+    line.setFixedHeight(1)
+    line.setStyleSheet("background:#2a2f3a;")
+    v.addWidget(line)
+    return box
 
 
 def help_title_row(
