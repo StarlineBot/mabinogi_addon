@@ -11,20 +11,39 @@ def main() -> None:
 
     from PySide6.QtWidgets import QApplication
 
-    # 디버그 로그: 기본 INFO, `MABINOGI_DEBUG=1`이면 DEBUG. 터미널(stderr)로 출력.
-    level = logging.DEBUG if os.environ.get("MABINOGI_DEBUG") else logging.INFO
-    logging.basicConfig(
-        level=level,
-        format="%(asctime)s.%(msecs)03d %(levelname)s %(name)s: %(message)s",
-        datefmt="%H:%M:%S",
+    # 콘솔(stderr)은 기본 INFO(디버그 켜면 DEBUG). 단 루트는 DEBUG로 두고 핸들러별로
+    # 레벨을 제어해, 버그 신고 첨부용 링버퍼는 '항상 DEBUG까지' 담는다(배포본에서도
+    # 깊은 단서가 남게). 콘솔은 그대로 조용.
+    console_level = logging.DEBUG if os.environ.get("MABINOGI_DEBUG") else logging.INFO
+    fmt = logging.Formatter(
+        "%(asctime)s.%(msecs)03d %(levelname)s %(name)s: %(message)s", "%H:%M:%S"
     )
-    # 문의 '버그 신고' 첨부용: 최근 로그를 메모리에 함께 쌓는다(터미널과 별개).
+    root = logging.getLogger()
+    root.setLevel(logging.DEBUG)
+    console = logging.StreamHandler()
+    console.setLevel(console_level)
+    console.setFormatter(fmt)
+    root.addHandler(console)
+
+    # 문의 '버그 신고' 첨부용: 최근 로그를 메모리에 함께 쌓는다(DEBUG까지, 터미널과 별개).
     from mabinogi_addon import logbuffer
 
     logbuffer.install()
 
+    # 처리되지 않은 예외도 로그에 남겨, 버그 신고 로그에서 크래시 원인이 보이게 한다.
+    def _excepthook(exc_type, exc, tb) -> None:
+        logging.getLogger("mabinogi_addon").critical(
+            "처리되지 않은 예외", exc_info=(exc_type, exc, tb)
+        )
+        sys.__excepthook__(exc_type, exc, tb)
+
+    sys.excepthook = _excepthook
+
     from mabinogi_addon import config
+    from mabinogi_addon.system import updater
     from mabinogi_addon.ui.main_window import MainWindow, app_icon
+
+    updater.cleanup_old()  # 지난 업데이트 교체 후 남은 <exe>.old 정리(배포본만)
 
     app = QApplication(sys.argv)
     app.setApplicationName(config.APP_NAME)
@@ -33,8 +52,76 @@ def main() -> None:
     app.setWindowIcon(app_icon())  # 작업표시줄/트레이 아이콘
     # 트레이 최소화를 위해, 창을 숨겨도(마지막 창 닫혀도) 앱이 종료되지 않게 한다.
     app.setQuitOnLastWindowClosed(False)
-    window = MainWindow()
-    if not config.load_general_flag("startInTray", False):
-        window.show()  # '트레이로 시작'이면 창 없이 트레이만
+
+    start_in_tray = config.load_general_flag("startInTray", False)
+    # Qt 스플래시: 압축 해제 구간의 정적 스플래시(packaging/splash.png, 같은 디자인)에
+    # 이어, 초기화·업데이트 구간을 아바타+진행바+문구로 덮는다. '트레이로 시작'이면 생략.
+    splash = None
+    if not start_in_tray:
+        from mabinogi_addon.ui.splash import Splash
+
+        splash = Splash()
+        splash.center_on_screen()
+        splash.show()
+        splash.step(8, "시작하는 중")
+
+    # 정적 스플래시(압축해제)는 Qt 스플래시를 띄운 '뒤'에 닫는다(검은 틈 방지).
+    try:
+        import pyi_splash  # type: ignore
+
+        pyi_splash.close()
+    except Exception:  # noqa: BLE001, S110 — 개발(uv)엔 pyi_splash 없음(정상)
+        pass
+
+    # 실행 전 업데이트 선적용: 새 버전이 있으면 스플래시에서 받아 교체·재실행한다.
+    # (옛 버전 창을 먼저 보여준 뒤 배너로 안내하던 흐름을 대체)
+    if _apply_update_before_launch(splash):
+        return  # 교체 + 새 exe 재실행됨 → 이 프로세스는 조용히 종료
+
+    if splash is not None:
+        splash.step(45)
+    window = MainWindow()  # 가장 무거운 단계(카탈로그·엔진·오버레이 구성)
+    if splash is not None:
+        splash.step(95)
     window.start()  # 파티 폴링 등 백그라운드 작업 시작
+    if splash is not None:
+        splash.step(100)
+        splash.close()  # 창을 띄우기 '전'에 닫는다(뒤에 흰 빈 창이 비치지 않게)
+    if not start_in_tray:
+        window.show()  # '트레이로 시작'이면 창 없이 트레이만
     sys.exit(app.exec())
+
+
+def _apply_update_before_launch(splash) -> bool:
+    """새 버전이 있으면 스플래시에서 받아 교체·재실행한다. 적용했으면 True.
+
+    네트워크·다운로드·교체 실패는 전부 삼키고 False(현재 버전으로 계속 실행) — 업데이트는
+    부가 기능이라 앱 실행을 막지 않는다. 스플래시가 없으면(트레이 시작) 건너뛴다.
+    """
+    import logging
+
+    from mabinogi_addon.system import updater
+
+    if splash is None or not updater.can_update():
+        return False
+    try:
+        splash.step(12, "업데이트 확인 중")
+        info = updater.check_latest()
+        if not info:
+            return False
+        ver = str(info.get("version", "?"))
+        splash.step(15, f"새 버전 v{ver} 받는 중")
+        new_path = updater.download(
+            info,
+            progress_cb=lambda p: splash.step(
+                15 + int(p * 0.7), f"새 버전 v{ver} 받는 중 {p}%"
+            ),
+        )
+        splash.step(92, "업데이트 적용 중")
+        updater.apply_update(new_path)  # 교체 + 새 exe 재실행
+        return True
+    except Exception:
+        logging.getLogger("mabinogi_addon").info(
+            "실행 전 업데이트 생략(실패/무시)", exc_info=True
+        )
+        return False

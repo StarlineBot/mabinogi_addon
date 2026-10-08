@@ -155,6 +155,11 @@ class RegionSelector(QWidget):
     def paintEvent(self, _event) -> None:
         painter = QPainter(self)
         painter.fillRect(self.rect(), QColor(0, 0, 0, 110))  # 전체 어둡게
+        if self._fixed is None:
+            # 드래그 선택 모드 안내(고정 박스 모드는 아래에서 별도 안내).
+            self._draw_hint(
+                painter, "드래그해서 영역을 지정하세요   ·   ESC: 취소"
+            )
         if not self._rect.isNull():
             if self._fixed is not None:
                 # 고정 박스: 완전 투명(Clear)으로 비우면 레이어드 창 per-pixel 히트테스트

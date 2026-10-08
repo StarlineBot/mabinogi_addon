@@ -25,7 +25,7 @@ from .. import config
 from ..inquiry import send_inquiry
 from ..logbuffer import recent_logs
 from .toast import show_toast
-from .widgets import checkbox
+from .widgets import hint_label
 
 _BUG = "버그 신고"
 _CATEGORIES = [_BUG, "기능 요청", "기타"]
@@ -75,13 +75,11 @@ class InquiryDialog(QDialog):
         self.content_edit.setPlaceholderText("문의 내용을 적어주세요")
         v.addWidget(self.content_edit, 1)
 
-        # 버그 신고일 때만: 진단용 최근 로그를 파일로 첨부(민감하면 끌 수 있음)
-        self.attach_log = checkbox("오류 로그 첨부 (진단용)")
-        self.attach_log.setChecked(True)
-        self.attach_log.setToolTip(
-            "최근 실행 로그를 파일로 함께 보냅니다. 어떤 상황이었는지 확인에 도움이 됩니다."
+        # 버그 신고는 진단 로그를 항상 자동 첨부(개발자가 원인 파악에 꼭 필요).
+        self._log_hint = hint_label(
+            "🛠 진단용 최근 로그가 자동으로 함께 전송됩니다(버전·환경 포함)."
         )
-        v.addWidget(self.attach_log)
+        v.addWidget(self._log_hint)
         self._on_category(self.category.currentText())
 
         self.status = QLabel("")
@@ -110,8 +108,8 @@ class InquiryDialog(QDialog):
         self.status.setStyleSheet("color:#e74c3c;" if error else "color:#8a8f98;")
 
     def _on_category(self, text: str) -> None:
-        # 로그 첨부 옵션은 '버그 신고'에서만 노출.
-        self.attach_log.setVisible(text == _BUG)
+        # 로그 자동 첨부 안내는 '버그 신고'에서만 노출.
+        self._log_hint.setVisible(text == _BUG)
 
     def _on_send(self) -> None:
         title = self.title_edit.text().strip()
@@ -127,11 +125,12 @@ class InquiryDialog(QDialog):
             return
 
         category = self.category.currentText()
-        log_text = (
-            recent_logs()
-            if category == _BUG and self.attach_log.isChecked()
-            else None
-        )
+        # 버그 신고는 진단 헤더(버전·환경·설정) + 최근 로그를 항상 첨부.
+        log_text = None
+        if category == _BUG:
+            from ..diagnostics import header_text
+
+            log_text = f"{header_text()}\n\n===== 최근 로그 =====\n{recent_logs()}"
         user = config.load_discord_user()
         user_id = user["id"] if user else None
 

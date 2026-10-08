@@ -44,3 +44,20 @@ def section_label(text: str) -> QLabel:
     lbl = QLabel(text)
     lbl.setStyleSheet("font-weight:600; color:#c8ccd4;")
     return lbl
+
+
+def callout(text: str, icon: str = "⚠") -> QLabel:
+    """꼭 알아야 할 제약·주의를 눈에 띄게 보여주는 호박색 박스.
+
+    회색 각주(hint_label)로 묻히면 놓치기 쉬운 '제약'(예: 같은 아이콘은 구분 불가)을
+    테두리·배경 있는 콜아웃으로 승격한다. 색은 라이트/다크 테마 모두에서 읽히게
+    반투명 호박색을 쓴다.
+    """
+    lbl = QLabel(f"{icon}  {text}" if icon else text)
+    lbl.setWordWrap(True)
+    lbl.setStyleSheet(
+        "QLabel { background: rgba(230,160,30,0.12);"
+        " border:1px solid rgba(230,160,30,0.55);"
+        " border-radius:7px; padding:8px 10px; color:#d98a1a; }"
+    )
+    return lbl

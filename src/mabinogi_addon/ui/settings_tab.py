@@ -133,10 +133,14 @@ class SettingsTab(QWidget):
     config_imported = Signal()
     # 알림 목소리 팩 변경 → 메인이 실행 중 재생기들을 새 팩으로 갱신(바로 적용).
     voice_pack_changed = Signal()
+    # '사용법 투어 다시 보기' → 메인이 온보딩 투어를 다시 실행.
+    replay_tour = Signal()
 
-    def __init__(self, watcher: WindowWatcher) -> None:
+    def __init__(self, watcher: WindowWatcher, on_hotkey_change=None) -> None:
         super().__init__()
         self._watcher = watcher
+        # 단축키 조합 변경 시 재등록 콜백: spec(str) -> 등록성공(bool). 메인창이 제공.
+        self._on_hotkey_change = on_hotkey_change
         self._detect_count = 0
         self._detect_timer: QTimer | None = None
         self._login_thread: _LoginThread | None = None
@@ -146,9 +150,11 @@ class SettingsTab(QWidget):
         v.setSpacing(12)
         v.addWidget(self._creator_header())
         v.addWidget(self._inquiry_button())
+        v.addWidget(self._diag_button())
         v.addWidget(self._discord_group())
         v.addWidget(self._backup_group())
         v.addWidget(self._general_group())
+        v.addWidget(self._hotkey_group())  # '게임 창 인식' 위에 둔다
         v.addWidget(self._game_group())
         v.addStretch(1)
 
@@ -395,6 +401,75 @@ class SettingsTab(QWidget):
 
         InquiryDialog(self).exec()
 
+    def _diag_button(self) -> QPushButton:
+        btn = QPushButton("진단 스냅샷 저장 (시간·% 오류 신고용)")
+        btn.setToolTip(
+            "지금 설정된 버프·디버프·투아림 영역을 그대로 캡처해 PNG로 저장합니다.\n"
+            "시간/% 가 틀리게 읽힐 때, 저장된 파일을 제작자에게 보내면 원인을 찾습니다."
+        )
+        btn.clicked.connect(self._on_diag_snapshot)
+        return btn
+
+    def _on_diag_snapshot(self) -> None:
+        from PySide6.QtCore import QTimer
+        from PySide6.QtWidgets import QMessageBox
+
+        # 바로 캡처하면 앱 창이 게임 영역을 덮어 '어두운 화면'이 찍힌다.
+        # 앱을 잠시 최소화하고 몇 초 뒤 캡처해, 그 사이 게임을 맨 앞으로 두게 한다.
+        if QMessageBox.question(
+            self, "진단 스냅샷",
+            "게임에서 버프창(남은시간)이 보이게 띄워 주세요.\n\n"
+            "'확인'을 누르면 이 앱이 잠시 최소화되고 5초 뒤 자동으로 캡처합니다.\n"
+            "그 사이 게임 화면을 맨 앞으로 두세요.",
+            QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel,
+        ) != QMessageBox.StandardButton.Ok:
+            return
+        self.window().showMinimized()
+        QTimer.singleShot(5000, self._do_diag_capture)
+
+    def _do_diag_capture(self) -> None:
+        from PySide6.QtWidgets import QMessageBox
+
+        from .diag_capture import save_diagnostic
+
+        out, saved = save_diagnostic()
+        win = self.window()
+        win.showNormal()
+        win.raise_()
+        win.activateWindow()
+        if not saved:
+            QMessageBox.information(
+                self, "진단 스냅샷",
+                "저장할 영역이 없습니다 — 버프/디버프/투아림 영역을 먼저 지정하세요.",
+            )
+            return
+        box = QMessageBox(self)
+        box.setWindowTitle("진단 스냅샷")
+        box.setText(
+            f"{len(saved)}개 저장했습니다:\n" + "\n".join(saved)
+            + f"\n\n폴더: {out}\n\n이 파일들을 제작자에게 보내 주세요."
+        )
+        open_btn = box.addButton("폴더 열기", QMessageBox.ButtonRole.AcceptRole)
+        box.addButton("닫기", QMessageBox.ButtonRole.RejectRole)
+        box.exec()
+        if box.clickedButton() is open_btn:
+            self._open_folder(out)
+
+    @staticmethod
+    def _open_folder(path) -> None:
+        import subprocess
+        import sys
+
+        try:
+            if sys.platform == "win32":
+                subprocess.Popen(["explorer", str(path)])
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", str(path)])
+            else:
+                subprocess.Popen(["xdg-open", str(path)])
+        except Exception:  # noqa: BLE001, S110 — 폴더 열기는 부가기능(실패해도 무시)
+            pass
+
     def _general_group(self) -> QGroupBox:
         from ..system import autostart
 
@@ -464,6 +539,10 @@ class SettingsTab(QWidget):
         self._toast_corner.setCurrentIndex(corner_idx)
         self._toast_corner.currentIndexChanged.connect(self._on_toast_corner_changed)
         toast_row.addWidget(self._toast_corner)
+        toast_test = QPushButton("테스트")
+        toast_test.setToolTip("지금 설정한 위치로 샘플 토스트를 한 번 띄웁니다")
+        toast_test.clicked.connect(self._on_toast_test)
+        toast_row.addWidget(toast_test)
         toast_row.addStretch(1)
         v.addLayout(toast_row)
         v.addWidget(
@@ -490,7 +569,20 @@ class SettingsTab(QWidget):
                 "버프·투아림·파티 알림에 쓸 목소리 팩. 고르면 미리듣기가 재생되고 바로 적용돼요."
             )
         )
+
+        tour_row = QHBoxLayout()
+        tour_btn = QPushButton("사용법 투어 다시 보기")
+        tour_btn.setToolTip("처음 실행 때 나온 단계별 사용법 안내를 다시 봅니다")
+        tour_btn.clicked.connect(self.replay_tour.emit)
+        tour_row.addWidget(tour_btn)
+        tour_row.addStretch(1)
+        v.addLayout(tour_row)
         return box
+
+    def _on_toast_test(self) -> None:
+        from .toast import show_toast
+
+        show_toast("테스트 알림", "토스트가 이 위치에 이렇게 표시됩니다 🎉", 3000)
 
     def _on_voice_pack_changed(self, _index: int) -> None:
         pack = self._voice_pack.currentData()
@@ -539,6 +631,105 @@ class SettingsTab(QWidget):
         show_toast("알림 위치", "토스트가 여기에 표시됩니다.", 2000)
 
     # ---- 게임 창 인식(포그라운드 판정 대상) ----
+    # ---- 전역 단축키(오버레이 정지/시작) ----
+    def _hotkey_group(self) -> QGroupBox:
+        from PySide6.QtGui import QKeySequence
+        from PySide6.QtWidgets import QKeySequenceEdit
+
+        box = QGroupBox("단축키")
+        v = QVBoxLayout(box)
+        row = QHBoxLayout()
+        row.addWidget(QLabel("전체 오버레이 정지/시작"))
+        self._hotkey_edit = QKeySequenceEdit()
+        cur = config.load_pause_hotkey()
+        if cur:
+            self._hotkey_edit.setKeySequence(QKeySequence(cur))
+        self._hotkey_edit.editingFinished.connect(self._on_hotkey_edited)
+        row.addWidget(self._hotkey_edit, 1)
+        clear = QPushButton("지우기")
+        clear.setFixedWidth(64)
+        clear.clicked.connect(self._clear_hotkey)
+        row.addWidget(clear)
+        v.addLayout(row)
+        self._hotkey_hint = hint_label("")
+        v.addWidget(self._hotkey_hint)
+        v.addWidget(
+            hint_label(
+                "Ctrl/Alt/Shift + 글자(또는 F1~F12) 조합을 누르세요. "
+                "윈도우키는 게임이 선점해 쓸 수 없습니다.\n"
+                "게임이 맨 앞이어도 동작합니다(게임엔 아무 키도 보내지 않음 — "
+                "오버레이만 켜고 끕니다)."
+            )
+        )
+        if cur:
+            self._set_hotkey_hint(f"현재: {cur}", warn=False)
+        else:
+            self._set_hotkey_hint("단축키 없음 (상단 ⏸/▶·트레이로 토글)", warn=False)
+        return box
+
+    def _spec_from_edit(self) -> str:
+        from PySide6.QtGui import QKeySequence
+
+        seq = self._hotkey_edit.keySequence()
+        spec = seq.toString(QKeySequence.SequenceFormat.PortableText) or ""
+        return spec.split(",")[0].strip()  # 여러 조합이 잡히면 첫 조합만
+
+    def _on_hotkey_edited(self) -> None:
+        from PySide6.QtGui import QKeySequence
+
+        from ..system.hotkey import parse_spec
+
+        spec = self._spec_from_edit()
+        # 빈 값·모디파이어만(알트탭 등으로 칸이 비워짐)·무효 조합은 '지우기'가 아니다.
+        # 저장된 값으로 되돌려 등록을 보존한다(지우려면 '지우기' 버튼만으로).
+        if parse_spec(spec) is None:
+            saved = config.load_pause_hotkey()
+            self._hotkey_edit.blockSignals(True)
+            self._hotkey_edit.setKeySequence(QKeySequence(saved))
+            self._hotkey_edit.blockSignals(False)
+            if spec:  # 뭔가 눌렀는데 무효일 때만 안내(단순 포커스 이탈은 조용히)
+                self._set_hotkey_hint(
+                    "⚠ 쓸 수 없는 조합 — Ctrl/Alt/Shift + 글자/F키 (윈도우키 불가)",
+                    warn=True,
+                )
+            self._hotkey_edit.clearFocus()  # 녹화 상태 해제(계속 키 먹는 것 방지)
+            return
+        config.save_pause_hotkey(spec)
+        ok = bool(self._on_hotkey_change(spec)) if self._on_hotkey_change else False
+        self._announce_hotkey(spec, ok)
+        self._hotkey_edit.clearFocus()  # 설정 후 포커스 해제 → 실수 재녹화 방지
+
+    def _clear_hotkey(self) -> None:
+        from PySide6.QtGui import QKeySequence
+
+        self._hotkey_edit.blockSignals(True)
+        self._hotkey_edit.setKeySequence(QKeySequence())
+        self._hotkey_edit.blockSignals(False)
+        config.save_pause_hotkey("")
+        if self._on_hotkey_change:
+            self._on_hotkey_change("")
+        self._set_hotkey_hint("단축키 없음 (상단 ⏸/▶·트레이로 토글)", warn=False)
+
+    def _announce_hotkey(self, spec: str, ok: bool) -> None:
+        from ..system.hotkey import is_supported
+
+        if not spec:
+            self._set_hotkey_hint("단축키 없음 (상단 ⏸/▶·트레이로 토글)", warn=False)
+        elif not is_supported():
+            self._set_hotkey_hint(f"'{spec}' 저장됨 — Windows에서 동작합니다", warn=False)
+        elif ok:
+            self._set_hotkey_hint(f"'{spec}' 등록됨 ✓", warn=False)
+        else:
+            self._set_hotkey_hint(
+                f"⚠ '{spec}' 등록 실패 — 다른 앱이 이미 쓰는 조합일 수 있어요. "
+                "다른 조합을 시도하세요",
+                warn=True,
+            )
+
+    def _set_hotkey_hint(self, text: str, warn: bool) -> None:
+        self._hotkey_hint.setText(text)
+        self._hotkey_hint.setStyleSheet("color:%s;" % ("#e67e22" if warn else "#8a8f98"))
+
     def _game_group(self) -> QGroupBox:
         box = QGroupBox("게임 창 인식")
         v = QVBoxLayout(box)
@@ -560,6 +751,10 @@ class SettingsTab(QWidget):
             )
         )
         return box
+
+    def refresh_game_label(self) -> None:
+        """외부(시작 팝업 등)에서 게임 창 등록을 바꾼 뒤 라벨 동기화."""
+        self._update_game_label()
 
     def _update_game_label(self) -> None:
         exe = config.load_game_exe()

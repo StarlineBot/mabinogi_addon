@@ -12,6 +12,7 @@ from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QFileDialog,
+    QGroupBox,
     QHBoxLayout,
     QLineEdit,
     QListWidget,
@@ -27,8 +28,13 @@ from .. import catalog as catalog_mod
 from .. import config
 from ..catalog import USER_DEBUFF_ICON_DIR, BuffDef, available_debuff_catalog
 from .buff_tab import _capture_icon_to, _pixmap
-from .help_dialog import help_title_row
+from .help_dialog import tab_header
 from .widgets import checkbox, hint_label, icon_slot, section_label
+
+# 영역에 꼭 들어가야 하는 것(앱 힌트 ↔ 화면 점선 라벨이 같은 기준을 공유).
+REGION_CRITERION = "디버프 아이콘 줄이 점선 안에 들어오게 드래그하세요"
+HIGHLIGHT_TITLE = "디버프 영역 확인"
+HIGHLIGHT_SUB = "디버프 아이콘이 점선 안에 다 들어왔나요?"
 
 # 디버프 트래커 사용법(? 아이콘 → 새 창).
 HELP_TITLE = "디버프 트래커 사용법"
@@ -45,7 +51,7 @@ HELP_HTML = """
 <b>영역에서 바로 집거나</b> 이미지 파일로 등록합니다.
 (－ 삭제 / ▲▼ 표시 순서)</li>
 <li><b>오버레이 배치</b> — 드래그로 원하는 위치에 옮기고 마우스 휠로 <b>배율</b>을
-조절합니다. <b>오버레이 고정</b>을 누르면 위치가 잠기고 클릭도 통과해
+조절합니다. <b>위치 잠금</b>을 누르면 위치가 고정되고 클릭도 통과해
 게임에 방해되지 않습니다.</li>
 </ol>
 
@@ -69,11 +75,17 @@ class DebuffTab(QWidget):
         self._name_id: str | None = None
         self._loading = False
 
-        outer = QHBoxLayout(self)
+        outer = QVBoxLayout(self)
         outer.setContentsMargins(12, 12, 12, 12)
-        outer.setSpacing(14)
-        outer.addWidget(self._build_list_panel(), 1)
-        outer.addWidget(self._build_form_panel(), 1)
+        outer.setSpacing(10)
+        outer.addWidget(tab_header(
+            "아직 안 걸린 디버프만 오버레이로 표시", HELP_TITLE, HELP_HTML, self
+        ))
+        body = QHBoxLayout()
+        body.setSpacing(14)
+        body.addWidget(self._build_list_panel(), 1)
+        body.addWidget(self._build_form_panel(), 1)
+        outer.addLayout(body, 1)
 
         self._rebuild_list()
         if self.debuff_list.count():
@@ -92,7 +104,12 @@ class DebuffTab(QWidget):
         return settings, order
 
     def _save(self) -> None:
-        config.save_debuff_settings([self._settings[i] for i in self._order])
+        shown = [self._settings[i] for i in self._order]
+        # 아이콘이 (일시적으로) 없어 목록에 없는 설정도 보존한다. 업데이트 중 카탈로그가
+        # 잠깐 비어도 자동저장이 사용자의 디버프를 영구 삭제하지 않도록(아이콘이 다시
+        # 생기면 그대로 복원). 삭제(－)는 self._settings에서 직접 빼므로 의도대로 사라진다.
+        others = [s for i, s in self._settings.items() if i not in self._order]
+        config.save_debuff_settings([*shown, *others])
 
     def _display_name(self, did: str) -> str:
         s = self._settings.get(did)
@@ -107,15 +124,17 @@ class DebuffTab(QWidget):
         v = QVBoxLayout(panel)
         v.setContentsMargins(0, 0, 0, 0)
 
-        v.addLayout(help_title_row("디버프 트래커", HELP_TITLE, HELP_HTML, self))
-
         top = QHBoxLayout()
         top.setSpacing(6)
         region_btn = QPushButton("디버프 줄 영역 지정")
         region_btn.clicked.connect(self._pick_region)
         top.addWidget(region_btn, 1)
-        self.lock_btn = QPushButton("오버레이 고정")
+        self.lock_btn = QPushButton("위치 잠금")
         self.lock_btn.setCheckable(True)
+        self.lock_btn.setToolTip(
+            "잠그면 오버레이 위치가 고정되고, 클릭이 통과돼 게임을 가리지 않습니다.\n"
+            "해제하면 드래그로 위치를 옮길 수 있어요."
+        )
         self.lock_btn.setStyleSheet(
             "QPushButton:checked { background:#00B894; color:white; font-weight:600; }"
         )
@@ -131,9 +150,19 @@ class DebuffTab(QWidget):
         top.addWidget(self.scale_spin, 1)
         v.addLayout(top)
 
+        hint_row = QHBoxLayout()
+        hint_row.setSpacing(6)
         self.region_hint = hint_label("")
+        hint_row.addWidget(self.region_hint, 1)
+        self.view_region_btn = QPushButton("영역 보기")
+        self.view_region_btn.setToolTip("잡힌 영역을 화면에 점선으로 잠깐 표시")
+        self.view_region_btn.clicked.connect(self._flash_region)
+        hint_row.addWidget(self.view_region_btn)
         self._update_region_hint()
-        v.addWidget(self.region_hint)
+        v.addLayout(hint_row)
+
+        self.status_label = hint_label("")  # 진단 상태(추적 중/게임 비활성 등)
+        v.addWidget(self.status_label)
 
         self.debuff_list = QListWidget()
         self.debuff_list.setIconSize(QSize(28, 28))
@@ -142,15 +171,17 @@ class DebuffTab(QWidget):
 
         order_row = QHBoxLayout()
         order_row.setSpacing(4)
-        add_btn = QPushButton("＋")
+        add_btn = QPushButton("＋ 추가")
         add_btn.setToolTip("새 디버프 등록")
         add_btn.clicked.connect(self._on_register)
-        del_btn = QPushButton("－")
+        del_btn = QPushButton("－ 삭제")
         del_btn.setToolTip("선택한 디버프 삭제")
         del_btn.clicked.connect(self._on_delete)
         up_btn = QPushButton("▲")
+        up_btn.setToolTip("위로 (표시 순서)")
         up_btn.clicked.connect(lambda: self._move(-1))
         down_btn = QPushButton("▼")
+        down_btn.setToolTip("아래로 (표시 순서)")
         down_btn.clicked.connect(lambda: self._move(1))
         for b in (add_btn, del_btn, up_btn, down_btn):
             order_row.addWidget(b, 1)
@@ -161,6 +192,11 @@ class DebuffTab(QWidget):
         config.set_debuff_scale(pct)
         self.scale_changed.emit(pct)
 
+    def set_status(self, text: str, color: str) -> None:
+        """진단 상태 한 줄 갱신(메인의 주기 폴링에서 호출)."""
+        self.status_label.setText(text)
+        self.status_label.setStyleSheet(f"color:{color};")
+
     # ---- 영역 지정 / 고정 ----
     def _update_region_hint(self) -> None:
         region = config.load_capture_region("debuffTracker")
@@ -170,11 +206,11 @@ class DebuffTab(QWidget):
                 f"{region['w']}×{region['h']}  ✔"
             )
             self.region_hint.setStyleSheet("color:#2ecc71;")
+            self.view_region_btn.setEnabled(True)
         else:
-            self.region_hint.setText(
-                "영역 미지정 — 버튼으로 디버프 줄 영역을 지정하세요"
-            )
+            self.region_hint.setText(f"영역 미지정 — {REGION_CRITERION}")
             self.region_hint.setStyleSheet("color:#8a8f98;")
+            self.view_region_btn.setEnabled(False)
 
     def _pick_region(self) -> None:
         from .region_selector import RegionSelector
@@ -186,10 +222,24 @@ class DebuffTab(QWidget):
     def _on_region_selected(self, x: int, y: int, w: int, h: int) -> None:
         config.save_capture_region(x, y, w, h, "debuffTracker")
         self._update_region_hint()
+        self._flash_region()  # 잡힌 영역을 화면에 점선으로 바로 확인
         self.catalog_changed.emit()  # 영역 생기면 추적 (재)시작
 
+    def _flash_region(self) -> None:
+        """저장된 디버프 영역을 화면에 굵은 점선으로 잠깐 표시(아이콘 확인용)."""
+        region = config.load_capture_region("debuffTracker")
+        if not region:
+            return
+        from .region_highlight import RegionHighlight
+
+        self._highlight = RegionHighlight()  # 참조 유지(GC 방지)
+        self._highlight.flash(
+            region["x"], region["y"], region["w"], region["h"],
+            HIGHLIGHT_TITLE, HIGHLIGHT_SUB,
+        )
+
     def _on_lock_toggled(self, locked: bool) -> None:
-        self.lock_btn.setText("오버레이 고정됨" if locked else "오버레이 고정")
+        self.lock_btn.setText("위치 잠금됨" if locked else "위치 잠금")
         self.lock_toggled.emit(locked)
 
     def set_lock_state(self, locked: bool) -> None:
@@ -299,14 +349,18 @@ class DebuffTab(QWidget):
         panel = QWidget()
         v = QVBoxLayout(panel)
         v.setContentsMargins(0, 0, 0, 0)
-        v.setSpacing(8)
+        v.setSpacing(10)
 
-        v.addWidget(section_label("이름"))
+        # --- 그룹 1: 아이콘(이름 + 매칭 아이콘) ---
+        icon_box = QGroupBox("아이콘")
+        iv = QVBoxLayout(icon_box)
+        iv.setSpacing(6)
+        iv.addWidget(section_label("이름"))
         self.name_edit = QLineEdit()
         self.name_edit.editingFinished.connect(self._save_name)
-        v.addWidget(self.name_edit)
+        iv.addWidget(self.name_edit)
 
-        v.addWidget(section_label("매칭 아이콘"))
+        iv.addWidget(section_label("매칭 아이콘"))
         match_row = QHBoxLayout()
         self.match_slot = icon_slot()
         match_row.addWidget(self.match_slot)
@@ -320,16 +374,21 @@ class DebuffTab(QWidget):
         file_btn.clicked.connect(self._pick_match_icon)
         match_row.addWidget(file_btn)
         match_row.addStretch(1)
-        v.addLayout(match_row)
+        iv.addLayout(match_row)
+        v.addWidget(icon_box)
 
-        v.addSpacing(6)
+        # --- 그룹 2: 표시 ---
+        show_box = QGroupBox("표시")
+        sv = QVBoxLayout(show_box)
+        sv.setSpacing(6)
         self.display_check = checkbox("오버레이에 표시")
         self.display_check.toggled.connect(self._form_changed)
-        v.addWidget(self.display_check)
-
-        v.addWidget(
+        sv.addWidget(self.display_check)
+        sv.addWidget(
             hint_label("디버프는 '아직 걸리지 않은 것'만 오버레이에 나열됩니다.")
         )
+        v.addWidget(show_box)
+
         v.addStretch(1)
         return panel
 

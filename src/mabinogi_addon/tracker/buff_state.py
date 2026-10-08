@@ -11,6 +11,13 @@
 내부 시계: 마지막 정상 판독값 − 경과시간. 알림은 내부 시계 기준(화면 안 보여도 울림).
 판정 불가(frame_valid=False: 앵커 미검출·게임 비활성): 화면 기반 판단은 동결하되,
   내부 시계가 0에 닿으면 만료 처리(시간 경과는 화면과 무관).
+
+튐 가드: 믿을 기준은 내부 시계다. 판독값이 시계와 어긋나면(위로든 아래로든) 한
+프레임만으론 반영하지 않고, 다음 프레임이 그 값에서 매끄럽게 이어질 때(자기일관)만
+반영한다. 밝은 게임 지형 위 글자가 흐려져 생기는 한 프레임짜리 오독을 양방향으로
+막는다: 위로 튐('2분3초' 등)은 거짓 연장→알림 꺼짐을, 아래로 튐(분을 놓쳐 '20초'로)
+은 거짓 임박을 유발하는데, 둘 다 이어지지 않으므로 무시되고 내부 시계가 그대로
+흐른다. 위로 튐이 이어지면 연장(EXTENDED), 아래로 튐이 이어지면 조용히 재동기화.
 """
 
 from __future__ import annotations
@@ -35,6 +42,8 @@ class Event(Enum):
 
 # 판독 지터(±1초)를 연장으로 오인하지 않도록 한 여유값
 _EXTEND_EPS = 2.0
+# 판독값이 내부 시계와 '일치'한다고 볼 허용 오차(초). 이 밖이면 튐으로 보고 확인 대기.
+_AGREE_EPS = 2.0
 
 
 class BuffStateMachine:
@@ -57,6 +66,8 @@ class BuffStateMachine:
         self._detections = 0
         self._missing_since: float | None = None
         self._alerted2 = False  # 2차 알림 1회 발생 플래그(연장·소멸 시 재무장)
+        # 위로 튄 판독의 연장 후보 (reading, now). 다음 프레임에서 이어지는지 확인용.
+        self._pending: tuple[float, float] | None = None
 
     # ---- 조회 ----
     def remaining(self, now: float) -> float | None:
@@ -120,19 +131,9 @@ class BuffStateMachine:
         self._detections += 1
         event = Event.NONE
 
+        extended = False
         if reading is not None:
-            prev = self.remaining(now)
-            self._last_read = reading
-            self._last_read_at = now
-            # 연장: 남은 시간이 유의미하게 늘었고 이미 임박 중이면 알림 해제
-            if (
-                self.state is State.EXPIRING
-                and prev is not None
-                and reading > prev + _EXTEND_EPS
-            ):
-                self.state = State.ACTIVE
-                self._alerted2 = False  # 연장 → 2차 알림 재무장
-                return Event.EXTENDED
+            extended = self._anchor(reading, now)
 
         if self.state is State.ABSENT:
             if self._detections >= self.appear_frames:
@@ -141,10 +142,55 @@ class BuffStateMachine:
             else:
                 return Event.NONE
 
+        if extended:
+            return Event.EXTENDED
         return self._check_alert(now) or event
+
+    def _commit(self, reading: float, now: float) -> None:
+        self._last_read = reading
+        self._last_read_at = now
+
+    def _anchor(self, reading: float, now: float) -> bool:
+        """판독값을 내부 시계에 반영할지 결정한다. 연장으로 확정됐으면 True.
+
+        - 첫 기준값: 즉시 반영.
+        - 시계와 일치(정상 감소분·판독지터 포함): 즉시 반영.
+        - 시계와 어긋남(위/아래로 튐): 한 프레임만으론 안 믿는다. 다음 프레임이 그
+          후보에서 매끄럽게 이어질 때만(자기일관) 반영한다. 위로 이어지면 연장(알림
+          해제), 아래로 이어지면 조용히 재동기화. 한 프레임짜리 오독은 양방향 모두
+          무시되어, 거짓 연장(알림 꺼짐)도 거짓 임박(알림 켜짐)도 생기지 않는다.
+        """
+        prev = self.remaining(now)
+        # 첫 기준값(갓 등장 등) → 바로 반영
+        if prev is None:
+            self._commit(reading, now)
+            return False
+        # 내부 시계와 일치 → 정상 반영
+        if abs(reading - prev) <= _AGREE_EPS:
+            self._pending = None
+            self._commit(reading, now)
+            return False
+        # --- 시계와 어긋남(위/아래로 튐): 확인 대기 ---
+        pend = self._pending
+        if pend is not None:
+            pred = pend[0] - (now - pend[1])  # 후보가 이어졌다면 지금쯤의 예상값
+            if abs(reading - pred) <= _AGREE_EPS:
+                # 후보에서 매끄럽게 이어짐 → 반영
+                self._pending = None
+                extended = self.state is State.EXPIRING and reading > prev + _EXTEND_EPS
+                self._commit(reading, now)
+                if extended:  # 위로 이어짐 + 임박 중 → 연장
+                    self.state = State.ACTIVE
+                    self._alerted2 = False  # 연장 → 2차 알림 재무장
+                    return True
+                return False
+        # 아직 확정 못 함: 후보만 갱신하고 내부 시계는 유지(튐 반영 안 함)
+        self._pending = (reading, now)
+        return False
 
     def _on_missing(self, now: float) -> Event:
         self._detections = 0
+        self._pending = None  # 미감지 프레임은 연장 확인 연쇄를 끊는다
         if self.state is State.ABSENT:
             return Event.NONE
 
@@ -178,3 +224,4 @@ class BuffStateMachine:
         self._detections = 0
         self._missing_since = None
         self._alerted2 = False  # 소멸 → 2차 알림 재무장
+        self._pending = None

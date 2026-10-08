@@ -63,6 +63,7 @@ class MirrorManager(QObject):
         self._dwm = source_hwnd is not None and self._dwm_available()
         self._attached_hwnd = 0  # 현재 썸네일이 물린 게임 창(바뀌면 재연결)
         self._shown = True
+        self._paused = False  # 사용자 일시정지 → 미러 숨김·캡처 쉼
         self._sct = None
         self._timer = QTimer(self)
         # DWM 모드는 비트맵 복사가 없어 자주 돌 필요가 없다(연결 확인·활성 토글용 250ms).
@@ -145,9 +146,17 @@ class MirrorManager(QObject):
         elif not self._overlays and self._timer.isActive():
             self._timer.stop()
 
+    def set_paused(self, paused: bool) -> None:
+        """사용자 일시정지: 미러 오버레이를 숨기고 캡처를 쉰다(다시 켜면 _tick이 복원)."""
+        self._paused = paused
+        if paused and self._shown:
+            for o in self._overlays:
+                o.hide()
+            self._shown = False
+
     def _tick(self) -> None:
-        # 게임 비활성/최소화: 캡처를 쉬고(가장 큰 비용) 오버레이를 숨긴다.
-        if not self._is_active():
+        # 일시정지 또는 게임 비활성/최소화: 캡처를 쉬고(가장 큰 비용) 오버레이를 숨긴다.
+        if self._paused or not self._is_active():
             if self._shown:
                 for o in self._overlays:
                     o.hide()

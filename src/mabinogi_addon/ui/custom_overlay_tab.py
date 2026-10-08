@@ -30,7 +30,7 @@ from PySide6.QtWidgets import (
 
 from .. import config
 from ..system.window_watcher import WindowWatcher
-from .help_dialog import help_title_row
+from .help_dialog import tab_header
 from .mirror_manager import MirrorManager
 from .widgets import checkbox, hint_label, section_label
 
@@ -56,10 +56,12 @@ HELP_HTML = """
 (선택/전체 고정·해제·삭제)</p>
 """
 
+# 밝은 배경 + 또렷한 테두리 + 최소 높이 → 비어 있어도 '여기 리스트가 있다'가 보이게.
 _LIST_QSS = """
-QListWidget { border:1px solid #3a3d44; border-radius:4px; background:#202227; }
+QListWidget { border:1px solid #525866; border-radius:6px; background:#2b2f38;
+  min-height:72px; }
 QListWidget::item { padding:6px 10px; border:none; }
-QListWidget::item:hover { background:#2f333a; }
+QListWidget::item:hover { background:#363b45; }
 QListWidget::item:selected { background:#00B894; color:white; }
 """
 _DANGER_QSS = (
@@ -104,10 +106,10 @@ class CustomOverlayTab(QWidget):
         v.setContentsMargins(12, 12, 12, 12)
         v.setSpacing(10)
 
-        v.addLayout(help_title_row("커스텀 오버레이", HELP_TITLE, HELP_HTML, self))
-        v.addWidget(
-            hint_label("화면 특정 영역을 선택, 원하는 위치에 오버레이로 띄우는 기능입니다.")
-        )
+        v.addWidget(tab_header(
+            "화면 일부를 다른 위치에 미러링 — 단축바·체력바 등을 눈에 편한 곳에",
+            HELP_TITLE, HELP_HTML, self
+        ))
         self.region_btn = QPushButton("영역 지정")
         self.region_btn.setToolTip("드래그로 화면 일부를 잘라 오버레이로 복제(돋보기)")
         self.region_btn.clicked.connect(self._on_region)
@@ -263,7 +265,17 @@ class CustomOverlayTab(QWidget):
     # ---- 목록 ----
     def _refresh_overlays(self) -> None:
         self.overlay_list.clear()
-        for i, o in enumerate(self._mgr.overlays(), 1):
+        overlays = self._mgr.overlays()
+        if not overlays:
+            # 비었을 때: 리스트가 비어 '없는 줄' 알기 쉬워, 안내 문구를 회색으로 1줄.
+            from PySide6.QtGui import QColor
+
+            hint = QListWidgetItem("표시할 오버레이가 없어요 — 위 '영역 지정'으로 추가하세요")
+            hint.setFlags(Qt.ItemFlag.NoItemFlags)  # 선택·호버 안 됨(안내 전용)
+            hint.setForeground(QColor("#8a8f98"))
+            self.overlay_list.addItem(hint)
+            return
+        for i, o in enumerate(overlays, 1):
             tag = " · 고정" if o.locked else ""
             self.overlay_list.addItem(f"오버레이{i}{tag}")
 
@@ -356,6 +368,10 @@ class CustomOverlayTab(QWidget):
 
     def _info(self, text: str) -> None:
         QMessageBox.information(self, "커스텀 오버레이", text)
+
+    def set_paused(self, paused: bool) -> None:
+        """사용자 일시정지 → 미러 오버레이 숨김·캡처 쉼(메인 윈도우가 호출)."""
+        self._mgr.set_paused(paused)
 
     def shutdown(self) -> None:
         self._mgr.shutdown()

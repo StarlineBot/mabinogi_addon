@@ -32,7 +32,7 @@ from .. import config
 from ..party.models import Recruit
 from ..party.service import build_board, humanize_age
 from ..party.worker import PartyWorker
-from .help_dialog import help_title_row
+from .help_dialog import tab_header
 from .notifier import SoundNotifier, sound_path
 from .toast import show_toast
 from .widgets import hint_label
@@ -129,7 +129,9 @@ class PartyTab(QWidget):
         root = QVBoxLayout(self)
         root.setContentsMargins(12, 12, 12, 12)
         root.setSpacing(10)
-        root.addLayout(help_title_row("파티 모집", HELP_TITLE, HELP_HTML, self))
+        root.addWidget(tab_header(
+            "파티모집 현황 모아 보기 + 키워드 알림", HELP_TITLE, HELP_HTML, self
+        ))
         root.addWidget(self._build_board(), 1)
 
         bottom = QHBoxLayout()

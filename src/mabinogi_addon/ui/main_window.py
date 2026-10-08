@@ -7,14 +7,19 @@ from __future__ import annotations
 
 import logging
 
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QTimer, Signal
 from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import (
     QApplication,
+    QHBoxLayout,
+    QLabel,
     QMainWindow,
     QMenu,
+    QPushButton,
     QSystemTrayIcon,
     QTabWidget,
+    QVBoxLayout,
+    QWidget,
 )
 
 from .. import config, paths
@@ -45,7 +50,26 @@ def app_icon() -> QIcon:
     return QIcon(str(LOGO_PATH))
 
 
+# 탭 바: 밑줄 스타일 + 균등 고정 너비. 선택 탭은 민트색·굵게 + 민트 밑줄로 또렷하게.
+# (앱은 OS 테마를 따르므로, 무채색 글자 + 민트 강조로 라이트/다크 모두 자연스럽게.)
+_TAB_QSS = (
+    "QTabWidget::pane { border: none; border-top: 1px solid #2a2f3a; }"
+    "QTabBar { qproperty-drawBase: 0; }"
+    "QTabBar::tab { background: transparent; color: #8a8f98; padding: 9px 4px;"
+    " min-width: 104px; border: none; border-bottom: 2px solid transparent;"
+    " font-size: 13px; }"
+    "QTabBar::tab:hover { color: #cfd3da; }"
+    "QTabBar::tab:selected { color: #00C9A2; font-weight: 800;"
+    " border-bottom: 2px solid #00D1A7; }"
+)
+
+
 class MainWindow(QMainWindow):
+    # 백그라운드 스레드(업데이트 확인/다운로드)에서 UI 스레드로 안전하게 넘기는 신호.
+    _update_found = Signal(dict)  # 새 버전 발견 → 배너 표시
+    _update_progress = Signal(int)  # 다운로드 진행률(0~100)
+    _update_result = Signal(bool, str)  # (성공?, 메시지) 교체 끝
+
     def __init__(self) -> None:
         super().__init__()
         from ..version import display_version
@@ -57,10 +81,15 @@ class MainWindow(QMainWindow):
         # 포그라운드 감지(맥=항상 활성). 저장된 게임 실행파일로 판정(없으면 제목 폴백).
         self._watcher = create_window_watcher(game_exe=config.load_game_exe())
         self._restoring = False  # 복원 중엔 상태 저장 안 함
+        # 부팅(생성~복원 완료) 구간엔 저장을 전부 막는다. 이 사이에 위젯 구성·레이아웃에서
+        # 파생된 신호(예: 에디터 textChanged)가 _save_memo를 불러, '기본 해제 상태'로
+        # 저장된 잠금을 덮어쓰던 버그 방지. start() 끝에서 해제.
+        self._booting = True
         # 설정 가져오기/초기화 후: 이 세션의 (가져오기 전) 낡은 오버레이·메모 상태가
         # 종료 시 방금 가져온 설정을 덮어쓰지 않도록 저장을 막는다. 다음 실행에서 반영.
         self._config_pending_restart = False
         self._force_quit = False  # 트레이 '종료'로 진짜 종료할 때만 True
+        self._paused = False  # 오버레이 일시정지(사냥 안 할 때 잠깐 끄기) — 세션 한정
         self._tray = self._build_tray()
 
         self.buff_tab = BuffTab()
@@ -69,18 +98,40 @@ class MainWindow(QMainWindow):
         self.memo_tab = MemoTab()
         self.tuarim_tab = TuarimTab(self._watcher)
         self.custom_overlay_tab = CustomOverlayTab(self._watcher)
-        self.settings_tab = SettingsTab(self._watcher)
+        # 전역 단축키(오버레이 정지/시작). Windows에서만 실제 등록(그 외 no-op).
+        from ..system.hotkey import PauseHotkey
+
+        self._pause_hotkey = PauseHotkey(self)
+        self._pause_hotkey.activated.connect(self._on_pause_hotkey)
+        self.settings_tab = SettingsTab(
+            self._watcher, on_hotkey_change=self._apply_pause_hotkey
+        )
         self.settings_tab.config_imported.connect(self._on_config_imported)
         self.settings_tab.voice_pack_changed.connect(self._on_voice_pack_changed)
+        self.settings_tab.replay_tour.connect(self._run_tour)
         tabs = QTabWidget()
-        tabs.addTab(self.buff_tab, "버프")
-        tabs.addTab(self.debuff_tab, "디버프")
-        tabs.addTab(self.tuarim_tab, "투아림")
+        self._tabs = tabs  # 온보딩 투어에서 탭 전환에 사용
+        tabs.addTab(self.buff_tab, "버프 트래커")
+        tabs.addTab(self.debuff_tab, "디버프 트래커")
+        tabs.addTab(self.tuarim_tab, "투아림 트래커")
         tabs.addTab(self.custom_overlay_tab, "커스텀 오버레이")
-        tabs.addTab(self.party_tab, "파티")
+        tabs.addTab(self.party_tab, "파티 모집")
         tabs.addTab(self.memo_tab, "메모")
         tabs.addTab(self.settings_tab, "설정")
-        self.setCentralWidget(tabs)
+        tabs.setStyleSheet(_TAB_QSS)
+
+        # 중앙: 상단 업데이트 배너(기본 숨김) + 탭
+        central = QWidget()
+        cv = QVBoxLayout(central)
+        cv.setContentsMargins(0, 0, 0, 0)
+        cv.setSpacing(0)
+        self._update_banner = self._build_update_banner()
+        self._pending_update: dict | None = None  # 확인된 새 버전 정보
+        self._update_found.connect(self._on_update_found)
+        cv.addWidget(self._update_banner)
+        cv.addWidget(self._build_status_bar())  # 탭 위 최상단: 재생/일시정지 + 상태
+        cv.addWidget(tabs)
+        self.setCentralWidget(central)
 
         # 버프 오버레이
         self.buff_overlay = BuffOverlay()
@@ -105,10 +156,11 @@ class MainWindow(QMainWindow):
         # 메모 오버레이: 위치·크기는 영역 지정, 고정=클릭통과. 게임 활성 시만 표시.
         memo = config.load_memo()
         self.memo_overlay = MemoOverlay(font_size=int(memo.get("fontSize", 16)))
-        self.memo_overlay.set_text(str(memo.get("text", "")))
+        self.memo_overlay.set_markdown(str(memo.get("text", "")))
         self.memo_tab.lock_toggled.connect(self._on_memo_lock)
         self.memo_tab.region_changed.connect(self._apply_memo_region)
         self.memo_tab.font_changed.connect(self._on_memo_font)
+        self.memo_tab.text_changed.connect(self._on_memo_text)
         self.memo_overlay.moved.connect(self._on_memo_moved)
         self._memo_timer = QTimer(self)
         self._memo_timer.setInterval(300)
@@ -125,6 +177,299 @@ class MainWindow(QMainWindow):
             lambda pct: self.debuff_overlay.set_scale(pct / 100)
         )
 
+    # ---- 상단 업데이트 배너(새 버전 있을 때만) ----
+    def _build_update_banner(self) -> QWidget:
+        bar = QWidget()
+        bar.setObjectName("updateBar")
+        h = QHBoxLayout(bar)
+        h.setContentsMargins(12, 6, 8, 6)
+        h.setSpacing(8)
+        self._update_label = QLabel("새 버전이 있습니다")
+        self._update_label.setObjectName("updateMsg")
+        h.addWidget(self._update_label)
+        h.addStretch(1)
+        btn = QPushButton("지금 업데이트")
+        btn.setObjectName("updateBtn")
+        btn.clicked.connect(self._on_update_clicked)
+        h.addWidget(btn)
+        close = QPushButton("✕")
+        close.setObjectName("updateClose")
+        close.setFixedWidth(26)
+        close.setToolTip("이번만 숨기기")
+        close.clicked.connect(self._update_banner_hide)
+        h.addWidget(close)
+        bar.setStyleSheet(
+            "#updateBar { background:#10402f; border-bottom:1px solid #00B894; }"
+            "#updateMsg { color:#d1fae5; font-size:12px; }"
+            "#updateBtn { background:#00B894; color:#06281e; border:none;"
+            " border-radius:4px; padding:4px 12px; font-weight:700; }"
+            "#updateBtn:hover { background:#00D1A7; }"
+            "#updateClose { background:transparent; color:#9ae6c7; border:none;"
+            " font-size:13px; }"
+            "#updateClose:hover { color:#ffffff; }"
+        )
+        bar.hide()  # 기본 숨김 — 새 버전이 확인될 때만 show_update_banner로 표시
+        return bar
+
+    def show_update_banner(self, latest: str) -> None:
+        """새 버전이 있을 때 상단 배너 표시(자동업데이트 확인에서 호출 예정)."""
+        from ..version import __version__
+
+        cur = __version__ if __version__ != "0.0.0" else "개발"
+        self._update_label.setText(
+            f"🔔 새 버전 v{latest} 가 나왔어요   (현재 {cur})"
+        )
+        self._update_banner.show()
+
+    def _update_banner_hide(self) -> None:
+        self._update_banner.hide()
+
+    # ---- 탭 위 최상단: 재생/일시정지 토글 + 상태 표시 ----
+    def _build_status_bar(self) -> QWidget:
+        bar = QWidget()
+        bar.setObjectName("statusBar")
+        h = QHBoxLayout(bar)
+        h.setContentsMargins(12, 6, 12, 6)
+        h.setSpacing(10)
+        h.addStretch(1)  # 오른쪽 정렬: 상태·버튼을 우상단에 모은다.
+        self._status_label = QLabel("● 전체 오버레이 동작중")
+        self._status_label.setObjectName("statusText")
+        self._status_label.setToolTip(
+            "오버레이 동작 여부입니다. '동작중'이어도 실제 표시는 "
+            "마비노기가 맨 앞일 때만 — 자세한 추적 상태는 각 탭 안내를 보세요."
+        )
+        h.addWidget(self._status_label)
+        # 재생/일시정지 토글: 감지 중이면 ⏸(누르면 멈춤), 멈추면 ▶(누르면 재개).
+        self._pause_btn = QPushButton("⏸")
+        self._pause_btn.setObjectName("playPause")
+        self._pause_btn.setCheckable(True)
+        self._pause_btn.setFixedSize(30, 26)
+        self._pause_btn.setToolTip("사냥 안 할 때 오버레이를 잠깐 끄고/켭니다")
+        self._pause_btn.toggled.connect(self._set_paused)
+        h.addWidget(self._pause_btn)
+        bar.setStyleSheet(
+            "#statusBar { border-bottom:1px solid rgba(128,128,128,0.25); }"
+            # 감지 중(기본): 무색 — 가는 테두리만.
+            "#playPause { background:transparent; color:#8a8f98;"
+            " border:1px solid rgba(128,128,128,0.45);"
+            " border-radius:5px; font-size:12px; font-weight:800; }"
+            "#playPause:hover { color:#c8ccd4; border-color:rgba(128,128,128,0.85); }"
+            # 일시정지: ▶ 재개 버튼을 민트로 강조(눈에 띄게).
+            "#playPause:checked { background:#00B894; color:#06281e; border:none; }"
+            "#playPause:checked:hover { background:#00D1A7; }"
+            "#statusText { font-size:12px; }"
+        )
+        return bar
+
+    def _overlay_status(self) -> tuple[str, str]:
+        """최상단 상태 한 줄 = 재생/일시정지 토글과 1:1(2상태).
+
+        게임 포그라운드 여부는 성격이 다른 축이라 여기 섞지 않는다(각 탭의 진단
+        상태 줄에 '게임 비활성' 안내가 따로 있음).
+        """
+        if self._paused:
+            return ("⏸ 전체 오버레이 정지중", self._STATUS_WARN)
+        return ("● 전체 오버레이 동작중", self._STATUS_OK)
+
+    def _update_header_status(self) -> None:
+        text, color = self._overlay_status()
+        self._status_label.setText(text)  # 앞의 ●/⏸ 가 상태 표시('상태:' 접두어 없음)
+        self._status_label.setStyleSheet(f"color:{color}; font-size:12px;")
+        # 버튼 글리프: 재생 중이면 ⏸(멈춤 유도), 일시정지면 ▶(재개 유도).
+        # 색은 QSS :checked 로 반전(감지 중=무색, 일시정지=강조).
+        self._pause_btn.setText("▶" if self._paused else "⏸")
+
+    # ---- 진단 상태 한 줄 ----
+    _STATUS_OK = "#2ecc71"
+    _STATUS_WARN = "#e67e22"
+    _STATUS_MUTED = "#8a8f98"
+
+    def _update_tracking_status(self) -> None:
+        self.buff_tab.set_status(*self._buff_status())
+        self.debuff_tab.set_status(*self._debuff_status())
+        self._update_header_status()
+
+    def _buff_status(self) -> tuple[str, str]:
+        if not config.load_capture_region("buffTracker"):
+            return ("⚠ 영역 미지정 — '버프 영역 지정'을 먼저 하세요", self._STATUS_WARN)
+        if self.buff_controller is None:
+            return ("ℹ 추적 대기 — 이 PC에선 라이브 캡처가 안 됩니다", self._STATUS_MUTED)
+        if not self._watcher.is_game_active():
+            return ("⏸ 게임 비활성 — 마비노기 창을 맨 앞으로 두면 추적합니다",
+                    self._STATUS_MUTED)
+        if self._engine is not None and not self._engine.anchor_seen:
+            return ("⚠ 기준 버프 미검출 — 영역에 ⚓ 프리미엄 배틀 멤버십이 보이나요?",
+                    self._STATUS_WARN)
+        n = self.buff_controller.item_count
+        if n:
+            return (f"● 추적 중 — 버프 {n}개 표시", self._STATUS_OK)
+        return ("● 추적 중 — 지금 표시할 버프 없음", self._STATUS_OK)
+
+    def _debuff_status(self) -> tuple[str, str]:
+        if not config.load_capture_region("debuffTracker"):
+            return ("⚠ 영역 미지정 — '디버프 줄 영역 지정'을 먼저 하세요",
+                    self._STATUS_WARN)
+        if self.debuff_controller is None:
+            return ("ℹ 추적 대기 — 이 PC에선 라이브 캡처가 안 됩니다", self._STATUS_MUTED)
+        if not self._watcher.is_game_active():
+            return ("⏸ 게임 비활성 — 마비노기 창을 맨 앞으로 두면 추적합니다",
+                    self._STATUS_MUTED)
+        n = self.debuff_controller.item_count
+        if n:
+            return (f"● 추적 중 — 안 걸린 디버프 {n}개 표시", self._STATUS_OK)
+        return ("● 추적 중 — 표시할 디버프 없음", self._STATUS_OK)
+
+    def _maybe_run_tour(self) -> None:
+        """첫 실행 때 한 번, 사용 순서를 노란 점선 강조로 안내(코치마크)."""
+        if not self.isVisible():
+            return
+        if config.load_general_flag("tourShown", False):
+            return
+        self._run_tour()
+
+    def _run_tour(self) -> None:
+        """온보딩 투어 실행(첫 실행 + '다시 보기' 공용)."""
+        if not self.isVisible():
+            self.show()  # 트레이 상태에서 '다시 보기' 누르면 창을 띄운다
+        from .tour_overlay import TourOverlay, TourStep
+
+        def _go_buff() -> None:
+            self._tabs.setCurrentWidget(self.buff_tab)
+
+        steps = [
+            TourStep(
+                target=self.buff_tab.region_btn,
+                title="① 영역 지정",
+                body="먼저 게임에서 버프가 모여 있는 곳을 드래그로 잡아요.\n"
+                     "⚓ 기준 버프(프리미엄 배틀 멤버십)도 영역 안에 꼭 포함하세요.",
+                before=_go_buff,
+            ),
+            TourStep(
+                target=self.buff_tab.add_btn,
+                title="② 버프 등록",
+                body="＋로 추적할 버프를 추가하고, 그 아이콘을 상태창에서 바로 집어요.",
+            ),
+            TourStep(
+                target=self.buff_tab.lock_btn,
+                title="③ 위치 잠금",
+                body="오버레이를 원하는 위치로 옮긴 뒤 '위치 잠금'을 누르면\n"
+                     "위치가 고정되고 클릭도 통과해 게임에 방해되지 않아요.",
+            ),
+            TourStep(
+                target=None,
+                title="준비 끝! 🎉",
+                body="디버프·투아림 탭도 같은 순서로 쓰면 됩니다.\n"
+                     "자세한 설명은 각 탭의 ? 버튼, 세부 설정은 ⚙️ 설정 탭에서.",
+            ),
+        ]
+
+        def _done() -> None:
+            config.save_general_flag("tourShown", True)
+
+        self._tour = TourOverlay(self, steps, on_done=_done)
+        self._tour.start()
+
+    def _maybe_prompt_game_window(self) -> None:
+        """게임 창 인식이 안 돼 있으면 시작 시 한 번 선택 팝업을 띄운다(권장).
+
+        창이 보일 때만(트레이 시작 아님) + 아직 미등록 + '다시 묻지 않기' 안 했을 때.
+        """
+        import sys
+
+        if not self.isVisible():
+            return  # 트레이로 시작 등 창이 없으면 팝업도 생략
+        if sys.platform != "win32":
+            return  # 맥/리눅스는 포그라운드 개념이 없어(항상 활성) 불필요
+        if config.load_game_exe():
+            return  # 이미 등록됨
+        if config.load_general_flag("suppressGamePrompt", False):
+            return  # 사용자가 '다시 묻지 않기' 선택
+
+        from .game_window_dialog import GameWindowDialog
+
+        dlg = GameWindowDialog(self._watcher, self)
+        dlg.exec()
+        self.settings_tab.refresh_game_label()  # 지정했으면 설정 라벨도 갱신
+
+    def _maybe_check_update(self) -> None:
+        """시작 시 백그라운드로 새 버전 확인(개발/실패는 조용히 무시)."""
+        import threading
+
+        from ..system import updater
+
+        if not updater.can_update():
+            return
+
+        def work() -> None:
+            info = updater.check_latest()
+            if info:
+                self._update_found.emit(info)  # UI 스레드로 전달 → 배너
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _on_update_found(self, info: dict) -> None:
+        self._pending_update = info
+        self.show_update_banner(str(info.get("version", "?")))
+
+    def _on_update_clicked(self) -> None:
+        """[지금 업데이트] → 다운로드(진행바) → B안 교체 → 재실행."""
+        import threading
+
+        from PySide6.QtWidgets import QMessageBox, QProgressDialog
+
+        from ..system import updater
+
+        info = self._pending_update
+        if not info:
+            return
+
+        ver = info.get("version", "?")
+        if QMessageBox.question(
+            self, "업데이트",
+            f"새 버전 v{ver} 을(를) 받아 교체하고 다시 시작합니다.\n진행할까요?",
+        ) != QMessageBox.StandardButton.Yes:
+            return
+
+        dlg = QProgressDialog("새 버전 받는 중…", None, 0, 100, self)
+        dlg.setWindowTitle("업데이트")
+        dlg.setAutoClose(False)
+        dlg.setCancelButton(None)  # 교체 중 취소는 위험 → 막음
+        dlg.setMinimumDuration(0)
+        dlg.setValue(0)
+        dlg.show()
+
+        self._update_progress.connect(dlg.setValue)
+        self._update_result.connect(
+            lambda ok, msg: self._on_update_result(ok, msg, dlg)
+        )
+
+        def work() -> None:
+            try:
+                new_path = updater.download(
+                    info, progress_cb=lambda p: self._update_progress.emit(p)
+                )
+                updater.apply_update(new_path)  # 교체 + 새 exe 실행
+            except Exception as exc:  # noqa: BLE001 — 사용자에게 사유 표시
+                self._update_result.emit(False, str(exc))
+                return
+            self._update_result.emit(True, "")
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _on_update_result(self, ok: bool, msg: str, dlg) -> None:
+        from PySide6.QtWidgets import QMessageBox
+
+        dlg.close()
+        if ok:
+            # 새 exe 가 이미 떠 있으니 현재(구버전) 프로세스는 완전히 종료.
+            self._force_quit = True
+            QApplication.quit()
+            return
+        QMessageBox.warning(
+            self, "업데이트 실패",
+            f"업데이트에 실패했습니다.\n{msg}\n\n나중에 다시 시도해 주세요.",
+        )
+
     # ---- 오버레이 고정/저장/복원(버프·디버프 공용 로직) ----
     def _apply_lock(self, overlay: BuffOverlay, locked: bool, section: str) -> None:
         overlay.set_locked(locked)
@@ -135,7 +480,7 @@ class MainWindow(QMainWindow):
         self._save_overlay(overlay, section)
 
     def _save_overlay(self, overlay: BuffOverlay, section: str) -> None:
-        if self._restoring or self._config_pending_restart:
+        if self._restoring or self._booting or self._config_pending_restart:
             return
         pos = overlay.pos()
         config.save_overlay_state(pos.x(), pos.y(), overlay.locked, section)
@@ -175,6 +520,24 @@ class MainWindow(QMainWindow):
         self._restore_memo()
         self._start_buff_tracking()
         self._start_debuff_tracking()
+        self._maybe_check_update()
+        self._maybe_prompt_game_window()
+        self._maybe_run_tour()
+        # 진단 상태 한 줄(추적 중/게임 비활성/영역 미지정 등) 주기 갱신.
+        self._status_timer = QTimer(self)
+        self._status_timer.setInterval(700)
+        self._status_timer.timeout.connect(self._update_tracking_status)
+        self._status_timer.start()
+        self._update_tracking_status()
+        # 저장된 전역 단축키 등록(있으면). Windows 외/충돌이면 조용히 무시.
+        self._pause_hotkey.set_hotkey(config.load_pause_hotkey())
+        # 실행 중 업데이트 감지: 시작 1회 외에 주기적으로도 확인(켜둔 채 새 버전이
+        # 나와도 모르던 문제). 새 버전이면 상단 배너가 뜬다(강제 아님).
+        self._update_timer = QTimer(self)
+        self._update_timer.setInterval(30 * 60 * 1000)  # 30분
+        self._update_timer.timeout.connect(self._maybe_check_update)
+        self._update_timer.start()
+        self._booting = False  # 부팅 끝 — 이제부터 사용자 변경을 저장
 
     def _compute_tracking(
         self, catalog
@@ -241,9 +604,9 @@ class MainWindow(QMainWindow):
         if not region:
             return
         try:
-            source = create_live_source(
-                Region(region["x"], region["y"], region["w"], region["h"])
-            )
+            from .dpi import to_physical
+
+            source = create_live_source(Region(*to_physical(region)))
         except Exception:  # noqa: BLE001 — dxcam 없음(맥 등)이면 라이브 미시작
             return
 
@@ -273,6 +636,7 @@ class MainWindow(QMainWindow):
             watcher=self._watcher,
             blink_enabled=blink,
         )
+        self.buff_controller.set_paused(self._paused)  # 재생성 시 일시정지 상태 유지
         self.buff_controller.start(source, self._engine)
 
     def _sound_enabled_ids(self) -> set[str]:
@@ -334,9 +698,9 @@ class MainWindow(QMainWindow):
         if not region:
             return
         try:
-            source = create_live_source(
-                Region(region["x"], region["y"], region["w"], region["h"])
-            )
+            from .dpi import to_physical
+
+            source = create_live_source(Region(*to_physical(region)))
         except Exception:  # noqa: BLE001 — dxcam 없음(맥 등)
             return
 
@@ -352,6 +716,7 @@ class MainWindow(QMainWindow):
             {b.id: False for b in catalog},
             watcher=self._watcher,
         )
+        self.debuff_controller.set_paused(self._paused)  # 재생성 시 일시정지 상태 유지
         # 디버프는 느리게 변하고 템플릿 수가 많아 500ms 주기(기획 0.3~0.5초).
         self.debuff_controller.start(source, self._debuff_engine, interval_ms=500)
 
@@ -365,16 +730,17 @@ class MainWindow(QMainWindow):
 
     # ---- 메모 오버레이 ----
     def _apply_memo_region(self) -> None:
-        """저장된 메모 영역(위치·크기)을 오버레이에 적용."""
+        """저장된 메모 영역에서 위치·너비를 적용. 높이는 내용에 맞춰 자동."""
         region = config.load_capture_region("memoTracker")
         if region:
             self.memo_overlay.setGeometry(
                 region["x"], region["y"], region["w"], region["h"]
             )
+            self.memo_overlay.autosize()  # 높이는 내용에 맞춰(드래그 높이 무시)
 
     def _on_memo_moved(self) -> None:
         """드래그로 옮긴 메모 위치를 저장(크기는 유지)."""
-        if self._restoring:
+        if self._restoring or self._booting:
             return
         pos = self.memo_overlay.pos()
         config.save_capture_region(
@@ -391,8 +757,12 @@ class MainWindow(QMainWindow):
         self.memo_overlay.set_font_size(px)
         self._save_memo()
 
+    def _on_memo_text(self, md: str) -> None:
+        self.memo_overlay.set_markdown(md)  # 입력 즉시 오버레이에 렌더
+        self._save_memo()
+
     def _save_memo(self) -> None:
-        if self._restoring or self._config_pending_restart:
+        if self._restoring or self._booting or self._config_pending_restart:
             return
         config.save_memo(
             self.memo_overlay.text(),
@@ -430,9 +800,16 @@ class MainWindow(QMainWindow):
         menu = QMenu()
         open_act = QAction("열기", self)
         open_act.triggered.connect(self._show_from_tray)
+        # 글자가 상태를 말하므로 체크표시 대신 라벨을 토글(⏸ 정지 ↔ ▶ 다시 시작).
+        self._pause_act = QAction("⏸ 전체 오버레이 정지", self)
+        self._pause_act.setToolTip(
+            "버프·디버프·커스텀 오버레이를 한 번에 끕니다(메모·투아림은 따로)"
+        )
+        self._pause_act.triggered.connect(lambda: self._set_paused(not self._paused))
         quit_act = QAction("종료", self)
         quit_act.triggered.connect(self._quit_from_tray)
         menu.addAction(open_act)
+        menu.addAction(self._pause_act)
         menu.addSeparator()
         menu.addAction(quit_act)
         tray.setContextMenu(menu)
@@ -456,6 +833,48 @@ class MainWindow(QMainWindow):
     def _quit_from_tray(self) -> None:
         self._force_quit = True
         self.close()
+
+    # ---- 오버레이 일시정지(사냥 안 할 때 잠깐 끄기) ----
+    def _set_paused(self, paused: bool) -> None:
+        """사냥용 오버레이(버프·디버프·커스텀)를 끄거나(True) 다시 켠다(False).
+
+        추적 스레드는 그대로 두고 표시·알림만 토글하므로, 다시 켜면 재시작 없이
+        즉시 현재 상태가 보인다. 세션 한정(저장 안 함) — 재실행하면 항상 켜진 상태.
+        투아림(소리 알림)·메모(직접 띄운 참고 노트)는 성격이 달라 영향받지 않는다.
+        """
+        self._paused = paused
+        for c in (self.buff_controller, self.debuff_controller):
+            if c is not None:
+                c.set_paused(paused)
+        self.custom_overlay_tab.set_paused(paused)
+        # 트레이 라벨 + 상단 버튼 동기화(어느 쪽에서 눌러도 둘 다 반영, 루프 방지).
+        self._pause_act.setText(
+            "▶ 전체 오버레이 시작" if paused else "⏸ 전체 오버레이 정지"
+        )
+        if self._pause_btn.isChecked() != paused:
+            self._pause_btn.blockSignals(True)
+            self._pause_btn.setChecked(paused)
+            self._pause_btn.blockSignals(False)
+        self._update_header_status()
+        if self._tray is not None:
+            self._tray.setToolTip(
+                f"{config.APP_NAME} — 오버레이 정지됨"
+                if paused else config.APP_NAME
+            )
+        from .toast import show_toast
+
+        if paused:
+            show_toast("전체 오버레이 정지", "버프·디버프·커스텀을 껐어요. 다시 시작하려면 ▶", 2500)
+        else:
+            show_toast("전체 오버레이 시작", "버프·디버프·커스텀 오버레이가 다시 동작합니다", 2000)
+
+    def _on_pause_hotkey(self) -> None:
+        """전역 단축키가 눌리면 오버레이 정지/시작을 토글(게임이 맨 앞이어도 동작)."""
+        self._set_paused(not self._paused)
+
+    def _apply_pause_hotkey(self, spec: str) -> bool:
+        """설정에서 조합이 바뀌면 재등록. 등록 성공 여부를 돌려준다(설정 탭 안내용)."""
+        return self._pause_hotkey.set_hotkey(spec)
 
     def _on_voice_pack_changed(self) -> None:
         """설정에서 알림 목소리 팩이 바뀌면 실행 중 재생기들을 새 팩으로 갱신(바로 적용)."""

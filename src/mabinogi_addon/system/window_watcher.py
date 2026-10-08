@@ -70,6 +70,52 @@ def _exe_basename_of_pid(pid: int) -> str:
         k32.CloseHandle(handle)
 
 
+def list_windows() -> list[tuple[str, str]]:
+    """현재 보이는 top-level 창의 (제목, 실행파일) 목록. Windows 전용(아니면 빈 목록).
+
+    시작 시 '게임 창 선택' 팝업에서 목록으로 고르게 하는 용도. 제목이 빈 창·우리 앱
+    창은 제외하고, (제목, exe) 중복은 합친다.
+    """
+    if sys.platform != "win32":
+        return []
+    try:
+        import win32gui
+        import win32process
+    except Exception:  # noqa: BLE001 — pywin32 없음
+        return []
+
+    own = os.getpid()
+    out: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+
+    def _cb(hwnd: int, _extra: object) -> bool:
+        if not win32gui.IsWindowVisible(hwnd):
+            return True
+        title = (win32gui.GetWindowText(hwnd) or "").strip()
+        if not title:
+            return True
+        try:
+            _, pid = win32process.GetWindowThreadProcessId(hwnd)
+        except Exception:  # noqa: BLE001
+            pid = 0
+        if not pid or pid == own:
+            return True
+        exe = _exe_basename_of_pid(pid)
+        if not exe:
+            return True
+        key = (title, exe)
+        if key not in seen:
+            seen.add(key)
+            out.append(key)
+        return True  # 계속 열거
+
+    try:
+        win32gui.EnumWindows(_cb, None)
+    except Exception:  # noqa: BLE001
+        return out
+    return out
+
+
 class WindowsWatcher(WindowWatcher):
     """포그라운드 창을 프로세스(실행파일)로 판정. 미등록 시 제목으로 폴백.
 

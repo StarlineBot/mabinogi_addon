@@ -15,6 +15,7 @@ from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
     QFileDialog,
+    QGroupBox,
     QHBoxLayout,
     QLineEdit,
     QListWidget,
@@ -29,10 +30,15 @@ from PySide6.QtWidgets import (
 from .. import catalog as catalog_mod
 from .. import config
 from ..catalog import BuffDef, available_catalog
-from .widgets import checkbox, hint_label, icon_slot, section_label
+from .widgets import callout, checkbox, hint_label, icon_slot, section_label
 
 # 앵커로 고정 사용할 버프(항상 존재, 지속시간 없음 → 판정 기준)
 ANCHOR_ID = "premium_battle"
+
+# 영역에 꼭 들어가야 하는 것(앱 힌트 ↔ 화면 점선 라벨이 같은 기준을 공유).
+REGION_CRITERION = "버프 아이콘 + 남은시간이 함께 보이게 드래그하세요"
+HIGHLIGHT_TITLE = "버프 영역 확인"
+HIGHLIGHT_SUB = "아이콘 + 남은시간이 점선 안에 다 들어왔나요?"
 
 # 버프 트래커 사용법(? 버튼 → 새 창). 내용만 바꾸면 다른 탭에도 재사용 가능.
 HELP_TITLE = "버프 트래커 사용법"
@@ -51,7 +57,9 @@ HELP_HTML = """
 <h3>사용 순서</h3>
 <ol>
 <li><b>영역 지정</b> — 게임에서 버프 아이콘이 모여 있는 곳을 드래그로 잡습니다.
-(돋보기로 픽셀 단위 조정)</li>
+(돋보기로 픽셀 단위 조정)<br>
+<b>⚠️ 이때 위에서 말한 ⚓ 기준 버프(프리미엄 배틀 멤버십)도 영역 안에 꼭
+포함되게</b> 잡으세요.</li>
 <li><b>버프 등록 (＋)</b> — 추적할 버프를 추가하고, 그 아이콘을
 <b>상태창에서 바로 집거나</b> 이미지 파일로 등록합니다.
 (－ 삭제 / ▲▼ 표시 순서)</li>
@@ -60,7 +68,7 @@ HELP_HTML = """
 <b>점멸·소리</b>로 알리고, <b>2차 알림</b>은 놓쳤을 때 한 번 더 울립니다.
 (소리는 사운드가 등록된 버프만)</li>
 <li><b>오버레이 배치</b> — 드래그로 원하는 위치에 옮기고 마우스 휠로 <b>배율</b>을
-조절합니다. <b>오버레이 고정</b>을 누르면 위치가 잠기고 클릭도 통과해
+조절합니다. <b>위치 잠금</b>을 누르면 위치가 고정되고 클릭도 통과해
 게임에 방해되지 않습니다.</li>
 </ol>
 
@@ -119,11 +127,19 @@ class BuffTab(QWidget):
         self._name_id: str | None = None
         self._loading = False
 
-        outer = QHBoxLayout(self)
+        from .help_dialog import tab_header
+
+        outer = QVBoxLayout(self)
         outer.setContentsMargins(12, 12, 12, 12)
-        outer.setSpacing(14)
-        outer.addWidget(self._build_list_panel(), 1)
-        outer.addWidget(self._build_form_panel(), 1)
+        outer.setSpacing(10)
+        outer.addWidget(tab_header(
+            "등록한 버프의 남은 시간을 오버레이로 표시", HELP_TITLE, HELP_HTML, self
+        ))
+        body = QHBoxLayout()
+        body.setSpacing(14)
+        body.addWidget(self._build_list_panel(), 1)
+        body.addWidget(self._build_form_panel(), 1)
+        outer.addLayout(body, 1)
 
         self._rebuild_list()
         self.buff_list.setCurrentRow(0)
@@ -156,12 +172,15 @@ class BuffTab(QWidget):
 
     def _save(self) -> None:
         shown = [self._settings[i] for i in self._order]
-        hidden = [
+        # 숨김(표시 OFF)뿐 아니라, 아이콘이 (일시적으로) 없어 목록에서 빠진 설정도 보존한다.
+        # 업데이트 중 카탈로그가 잠깐 비어도 자동저장이 사용자 버프를 영구 삭제하지 않도록
+        # (아이콘이 다시 생기면 복원). 삭제(－)는 self._settings에서 직접 빼므로 의도대로 사라진다.
+        rest = [
             s
             for i, s in self._settings.items()
-            if i != ANCHOR_ID and i not in self._order and i in self._catalog
+            if i != ANCHOR_ID and i not in self._order
         ]
-        config.save_buff_settings([self._settings[ANCHOR_ID], *shown, *hidden])
+        config.save_buff_settings([self._settings[ANCHOR_ID], *shown, *rest])
 
     # ---- 목록 ----
     def _build_list_panel(self) -> QWidget:
@@ -169,17 +188,18 @@ class BuffTab(QWidget):
         v = QVBoxLayout(panel)
         v.setContentsMargins(0, 0, 0, 0)
 
-        from .help_dialog import help_title_row
-
-        v.addLayout(help_title_row("버프 트래커", HELP_TITLE, HELP_HTML, self))
-
         top = QHBoxLayout()
         top.setSpacing(6)
         region_btn = QPushButton("버프 영역 지정")
         region_btn.clicked.connect(self._pick_region)
+        self.region_btn = region_btn  # 온보딩 투어가 강조 대상으로 참조
         top.addWidget(region_btn, 1)
-        self.lock_btn = QPushButton("오버레이 고정")
+        self.lock_btn = QPushButton("위치 잠금")
         self.lock_btn.setCheckable(True)
+        self.lock_btn.setToolTip(
+            "잠그면 오버레이 위치가 고정되고, 클릭이 통과돼 게임을 가리지 않습니다.\n"
+            "해제하면 드래그로 위치를 옮길 수 있어요."
+        )
         self.lock_btn.setStyleSheet(
             "QPushButton:checked { background:#00B894; color:white; font-weight:600; }"
         )
@@ -195,36 +215,48 @@ class BuffTab(QWidget):
         top.addWidget(self.scale_spin, 1)
         v.addLayout(top)
 
+        hint_row = QHBoxLayout()
+        hint_row.setSpacing(6)
         self.region_hint = hint_label("")
+        hint_row.addWidget(self.region_hint, 1)
+        self.view_region_btn = QPushButton("영역 보기")
+        self.view_region_btn.setToolTip("잡힌 영역을 화면에 점선으로 잠깐 표시")
+        self.view_region_btn.clicked.connect(self._flash_region)
+        hint_row.addWidget(self.view_region_btn)
         self._update_region_hint()
-        v.addWidget(self.region_hint)
+        v.addLayout(hint_row)
+
+        self.status_label = hint_label("")  # 진단 상태(추적 중/게임 비활성 등)
+        v.addWidget(self.status_label)
 
         self.buff_list = QListWidget()
         self.buff_list.setIconSize(QSize(32, 32))
         self.buff_list.currentRowChanged.connect(self._on_select)
         v.addWidget(self.buff_list, 1)
 
+        # 추가·삭제는 글자 라벨(짝 맞춤), 순서 이동은 아이콘 — 4등분 균등 너비.
         order_row = QHBoxLayout()
         order_row.setSpacing(4)
-        self.add_btn = QPushButton("＋")
+        self.add_btn = QPushButton("＋ 추가")
         self.add_btn.setToolTip("새 버프 등록")
         self.add_btn.clicked.connect(self._on_register)
-        self.del_btn = QPushButton("－")
+        self.del_btn = QPushButton("－ 삭제")
         self.del_btn.setToolTip("선택한 버프 삭제")
         self.del_btn.clicked.connect(self._on_delete)
         self.up_btn = QPushButton("▲")
+        self.up_btn.setToolTip("위로 (표시 순서)")
         self.up_btn.clicked.connect(lambda: self._move(-1))
         self.down_btn = QPushButton("▼")
+        self.down_btn.setToolTip("아래로 (표시 순서)")
         self.down_btn.clicked.connect(lambda: self._move(1))
-        # 목록 폭에 꽉 차게 4등분(균등 신축)
         for b in (self.add_btn, self.del_btn, self.up_btn, self.down_btn):
             order_row.addWidget(b, 1)
         v.addLayout(order_row)
 
         v.addWidget(
-            hint_label(
-                "※ 아이콘이 완전히 같은 버프는 서로 구분되지 않습니다.\n"
-                "   예: 급소관통(스킬) ≡ 물리공격력증가(물약) — 같이 떠 있으면 하나로만 잡힙니다."
+            callout(
+                "아이콘이 완전히 같은 버프는 서로 구분되지 않습니다. "
+                "예: 급소관통(스킬) ≡ 물리공격력증가(물약) — 같이 떠 있으면 하나로만 잡힙니다."
             )
         )
         return panel
@@ -238,7 +270,7 @@ class BuffTab(QWidget):
         return [ANCHOR_ID, *self._order]
 
     def _on_lock_toggled(self, locked: bool) -> None:
-        self.lock_btn.setText("오버레이 고정됨" if locked else "오버레이 고정")
+        self.lock_btn.setText("위치 잠금됨" if locked else "위치 잠금")
         self.lock_toggled.emit(locked)
 
     def set_lock_state(self, locked: bool) -> None:
@@ -247,6 +279,11 @@ class BuffTab(QWidget):
         self.lock_btn.setChecked(locked)
         self.lock_btn.blockSignals(False)
         self._on_lock_toggled(locked)  # 텍스트 갱신 + lock_toggled 방출(→ 오버레이 적용)
+
+    def set_status(self, text: str, color: str) -> None:
+        """진단 상태 한 줄 갱신(메인의 주기 폴링에서 호출)."""
+        self.status_label.setText(text)
+        self.status_label.setStyleSheet(f"color:{color};")
 
     # ---- 영역 지정 ----
     def _update_region_hint(self) -> None:
@@ -257,9 +294,11 @@ class BuffTab(QWidget):
                 f"{region['w']}×{region['h']}  ✔"
             )
             self.region_hint.setStyleSheet("color:#2ecc71;")
+            self.view_region_btn.setEnabled(True)
         else:
-            self.region_hint.setText("영역 미지정 — 버튼으로 상태창 영역을 지정하세요")
+            self.region_hint.setText(f"영역 미지정 — {REGION_CRITERION}")
             self.region_hint.setStyleSheet("color:#8a8f98;")
+            self.view_region_btn.setEnabled(False)
 
     def _pick_region(self) -> None:
         from .region_selector import RegionSelector
@@ -271,6 +310,20 @@ class BuffTab(QWidget):
     def _on_region_selected(self, x: int, y: int, w: int, h: int) -> None:
         config.save_capture_region(x, y, w, h, "buffTracker")
         self._update_region_hint()
+        self._flash_region()  # 잡힌 영역을 화면에 점선으로 바로 확인
+
+    def _flash_region(self) -> None:
+        """저장된 버프 영역을 화면에 굵은 점선으로 잠깐 표시(아이콘·시간 확인용)."""
+        region = config.load_capture_region("buffTracker")
+        if not region:
+            return
+        from .region_highlight import RegionHighlight
+
+        self._highlight = RegionHighlight()  # 참조 유지(GC 방지)
+        self._highlight.flash(
+            region["x"], region["y"], region["w"], region["h"],
+            HIGHLIGHT_TITLE, HIGHLIGHT_SUB,
+        )
 
     def _display_name(self, bid: str) -> str:
         s = self._settings.get(bid)
@@ -286,7 +339,8 @@ class BuffTab(QWidget):
         for bid in self._rows():
             buff = self._catalog.get(bid)
             name = self._display_name(bid)
-            label = f"⚓ {name} (앵커)" if bid == ANCHOR_ID else name
+            # 설명과 용어 통일: '앵커'(스킬 앵커러시와 혼동)가 아니라 '기준' 버프로 표기.
+            label = f"⚓ {name} (기준)" if bid == ANCHOR_ID else name
             item = QListWidgetItem(label)
             item.setData(Qt.ItemDataRole.UserRole, bid)
             if buff is not None:
@@ -380,14 +434,18 @@ class BuffTab(QWidget):
         panel = QWidget()
         v = QVBoxLayout(panel)
         v.setContentsMargins(0, 0, 0, 0)
-        v.setSpacing(8)
+        v.setSpacing(10)
 
-        v.addWidget(section_label("이름"))
+        # --- 그룹 1: 아이콘(이름 + 매칭/표시 아이콘) ---
+        icon_box = QGroupBox("아이콘")
+        iv = QVBoxLayout(icon_box)
+        iv.setSpacing(6)
+        iv.addWidget(section_label("이름"))
         self.name_edit = QLineEdit()
         self.name_edit.editingFinished.connect(self._save_name)  # 포커스 아웃·엔터 시 저장
-        v.addWidget(self.name_edit)
+        iv.addWidget(self.name_edit)
 
-        v.addWidget(section_label("매칭 아이콘"))
+        iv.addWidget(section_label("매칭 아이콘"))
         match_row = QHBoxLayout()
         self.match_slot = icon_slot()
         match_row.addWidget(self.match_slot)
@@ -401,9 +459,9 @@ class BuffTab(QWidget):
         self.match_file_btn.clicked.connect(self._pick_match_icon)
         match_row.addWidget(self.match_file_btn)
         match_row.addStretch(1)
-        v.addLayout(match_row)
+        iv.addLayout(match_row)
 
-        v.addWidget(section_label("보여줄 아이콘"))
+        iv.addWidget(section_label("보여줄 아이콘"))
         show_row = QHBoxLayout()
         self.display_slot = icon_slot("—")
         show_row.addWidget(self.display_slot)
@@ -414,17 +472,26 @@ class BuffTab(QWidget):
         show_row.addWidget(self.display_file_btn)
         show_row.addWidget(self.display_clear_btn)
         show_row.addStretch(1)
-        v.addLayout(show_row)
-        v.addWidget(hint_label("└ 비워두면 매칭 아이콘 사용"))
+        iv.addLayout(show_row)
+        iv.addWidget(hint_label("└ 비워두면 매칭 아이콘 사용"))
+        v.addWidget(icon_box)
 
-        v.addSpacing(6)
+        # --- 그룹 2: 표시(오버레이 노출·지속시간) ---
+        show_box = QGroupBox("표시")
+        sv = QVBoxLayout(show_box)
+        sv.setSpacing(6)
         self.display_check = checkbox("오버레이에 표시")
         self.display_check.toggled.connect(self._form_changed)
-        v.addWidget(self.display_check)
+        sv.addWidget(self.display_check)
         self.show_duration = checkbox("지속시간 표시")
         self.show_duration.toggled.connect(self._form_changed)
-        v.addWidget(self.show_duration)
+        sv.addWidget(self.show_duration)
+        v.addWidget(show_box)
 
+        # --- 그룹 3: 알림(종료 알림 + 2차) ---
+        alert_box = QGroupBox("알림")
+        alv = QVBoxLayout(alert_box)
+        alv.setSpacing(6)
         alert_row = QHBoxLayout()
         self.alert_check = checkbox("종료 알림")
         self.before_spin = QSpinBox()
@@ -435,7 +502,7 @@ class BuffTab(QWidget):
         for wdg in (self.alert_check, self.before_spin, self.blink_check, self.sound_check):
             alert_row.addWidget(wdg)
         alert_row.addStretch(1)
-        v.addLayout(alert_row)
+        alv.addLayout(alert_row)
         self.alert_check.toggled.connect(self._on_alert_toggled)
         for wdg in (self.before_spin, self.blink_check, self.sound_check):
             if isinstance(wdg, QCheckBox):
@@ -453,11 +520,12 @@ class BuffTab(QWidget):
         alert_row2.addWidget(self.alert2_check)
         alert_row2.addWidget(self.before2_spin)
         alert_row2.addStretch(1)
-        v.addLayout(alert_row2)
+        alv.addLayout(alert_row2)
         self.alert2_check.toggled.connect(self._on_alert2_toggled)
         self.before2_spin.valueChanged.connect(self._form_changed)
         self._alert2_hint = hint_label("└ 1차를 놓치거나 시간을 잘못 읽었을 때 한 번 더 알림")
-        v.addWidget(self._alert2_hint)
+        alv.addWidget(self._alert2_hint)
+        v.addWidget(alert_box)
 
         v.addStretch(1)
         return panel

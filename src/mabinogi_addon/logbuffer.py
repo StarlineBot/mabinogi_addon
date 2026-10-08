@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 from collections import deque
 
-_MAX_LINES = 500
+_MAX_LINES = 2000  # DEBUG까지 담으므로 넉넉히(최근 맥락 유지)
 _DEFAULT_FMT = "%(asctime)s.%(msecs)03d %(levelname)s %(name)s: %(message)s"
 _DEFAULT_DATEFMT = "%H:%M:%S"
 
@@ -42,12 +42,13 @@ def install(
     global _handler
     if _handler is None:
         _handler = RingBufferHandler()
+        _handler.setLevel(logging.DEBUG)  # 콘솔이 INFO여도 버퍼는 DEBUG까지 담는다
         _handler.setFormatter(logging.Formatter(fmt, datefmt))
         logging.getLogger().addHandler(_handler)
     return _handler
 
 
-def recent_logs(max_chars: int = 40000) -> str:
+def recent_logs(max_chars: int = 150000) -> str:
     """보관된 최근 로그(끝에서 max_chars). 미설치면 빈 문자열."""
     if _handler is None:
         return ""

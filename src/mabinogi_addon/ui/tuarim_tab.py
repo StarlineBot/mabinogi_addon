@@ -28,17 +28,21 @@ from PySide6.QtWidgets import (
 from .. import config, image_io, paths
 from ..detect.tuarim_reader import read_percent
 from ..tracker import TuarimTracker
-from .help_dialog import help_title_row
+from .help_dialog import tab_header
 from .widgets import checkbox, hint_label
 
 # 숫자 두 자리+% 를 덮는 고정 박스 크기(px). 스샷 측정: 한 글자 ~16px, '0%'=32×19.
 # 2자리+% ≈ 48×19 → 여유를 둔 기본값. (해상도/UI 배율 다르면 추후 조정)
 TUARIM_BOX_SIZE = (58, 28)
 
+# 영역에 꼭 들어가야 하는 것(앱 라벨 ↔ 화면 점선 라벨이 같은 기준을 공유).
+HIGHLIGHT_TITLE = "투아림 영역 확인"
+HIGHLIGHT_SUB = "숫자 두 자리와 % 가 점선 안에 보이나요?"
+
 # 투아림 관리 사용법(? 아이콘 → 새 창).
-HELP_TITLE = "투아림 관리 사용법"
+HELP_TITLE = "투아림 트래커 사용법"
 HELP_HTML = """
-<h3>투아림 관리란?</h3>
+<h3>투아림 트래커란?</h3>
 <p>화면의 투아림 <b>% 게이지</b>(작은 원 안 숫자 아래 %)를 읽어, 지정한 %(예: 95·98)
 이상이 되면 소리로 알립니다. 100%가 되면 다시 0%부터 시작합니다.
 오버레이로 화면을 가리지 않고 <b>읽기만</b> 합니다.</p>
@@ -79,7 +83,9 @@ class TuarimTab(QWidget):
         v = QVBoxLayout(self)
         v.setContentsMargins(12, 12, 12, 12)
         v.setSpacing(10)
-        v.addLayout(help_title_row("투아림 관리", HELP_TITLE, HELP_HTML, self))
+        v.addWidget(tab_header(
+            "투아림 게이지(%)를 읽어 지정 %에서 알림", HELP_TITLE, HELP_HTML, self
+        ))
         v.addWidget(
             hint_label(
                 "'영역 지정'을 누르면 박스가 커서를 따라옵니다. 마우스 휠로 크기를 숫자에"
@@ -95,6 +101,10 @@ class TuarimTab(QWidget):
         row.addWidget(self.region_btn)
         self.region_label = hint_label("")
         row.addWidget(self.region_label, 1)
+        self.view_region_btn = QPushButton("영역 보기")
+        self.view_region_btn.setToolTip("잡힌 영역을 화면에 점선으로 잠깐 표시")
+        self.view_region_btn.clicked.connect(self._flash_region)
+        row.addWidget(self.view_region_btn)
         v.addLayout(row)
 
         # 확인용: 캡처 미리보기 + 현재 값
@@ -116,7 +126,9 @@ class TuarimTab(QWidget):
         v.addWidget(self.enable)
 
         v.addWidget(self._threshold_group())
-        v.addWidget(self._collect_group())
+        # 숫자 템플릿 수집은 개발용(수집→git 푸시→템플릿 생성)이라 배포본(exe)에선 숨긴다.
+        if not paths.is_frozen():
+            v.addWidget(self._collect_group())
         v.addStretch(1)
 
         self._update_region_label()
@@ -209,15 +221,31 @@ class TuarimTab(QWidget):
         self._region = {"x": x, "y": y, "w": w, "h": h}
         self._update_region_label()
         self._save()
+        self._flash_region()  # 잡힌 영역을 화면에 점선으로 바로 확인
+
+    def _flash_region(self) -> None:
+        """저장된 투아림 영역을 화면에 굵은 점선으로 잠깐 표시(숫자·% 확인용)."""
+        if not self._region:
+            return
+        from .region_highlight import RegionHighlight
+
+        r = self._region
+        self._highlight = RegionHighlight()  # 참조 유지(GC 방지)
+        self._highlight.flash(
+            int(r["x"]), int(r["y"]), int(r["w"]), int(r["h"]),
+            HIGHLIGHT_TITLE, HIGHLIGHT_SUB,
+        )
 
     def _update_region_label(self) -> None:
         if self._region:
             r = self._region
             self.region_label.setText(f"영역: {r['x']},{r['y']}  {r['w']}×{r['h']}  ✔")
             self.region_label.setStyleSheet("color:#2ecc71;")
+            self.view_region_btn.setEnabled(True)
         else:
-            self.region_label.setText("영역 미지정 — % 숫자 두 자리를 지정하세요")
+            self.region_label.setText("영역 미지정 — 숫자 두 자리와 % 가 보이게 지정하세요")
             self.region_label.setStyleSheet("color:#8a8f98;")
+            self.view_region_btn.setEnabled(False)
 
     # ---- 저장 ----
     def _save(self) -> None:
@@ -242,8 +270,11 @@ class TuarimTab(QWidget):
         )
         if not self._region or not active:
             return
-        r = self._region
-        frame = self._grab_rect(r["x"], r["y"], r["w"], r["h"])
+        # 캡처(mss)는 물리픽셀 → 저장된 논리좌표를 배율만큼 변환(150% 등에서 어긋남 방지).
+        from .dpi import to_physical
+
+        px, py, pw, ph = to_physical(self._region)
+        frame = self._grab_rect(px, py, pw, ph)
         if frame is None:
             return
         self._show_preview(frame)
@@ -263,7 +294,12 @@ class TuarimTab(QWidget):
         # 수집 모드: 영상이 '눈에 띄게 바뀌면' 저장(중복 방지). 값(read_percent) 기준이
         # 아니라 영상 변화 기준이라, 템플릿이 아직 없어(value=None) 판독이 안 돼도 숫자가
         # 바뀔 때마다 모인다.
-        if self.collect_chk.isChecked() and self._frame_changed(frame):
+        # 수집 UI는 배포본(exe)에선 없으므로 존재할 때만(개발 모드).
+        if (
+            getattr(self, "collect_chk", None) is not None
+            and self.collect_chk.isChecked()
+            and self._frame_changed(frame)
+        ):
             self._write_shot(frame, raw)
             self._last_saved_frame = frame
         if self.enable.isChecked():

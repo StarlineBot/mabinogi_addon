@@ -6,7 +6,7 @@ import cv2
 import pytest
 
 from mabinogi_addon.catalog import build_templates, load_catalog
-from mabinogi_addon.tracker import BuffEngine, State
+from mabinogi_addon.tracker import BuffEngine
 
 _SHOT = "tests/data/스크린샷 2026-10-06 224732.png"
 REGION = (395, 775, 0, 380)  # (y0, y1, x0, x1) 버프 패널 전체
@@ -48,14 +48,13 @@ def test_internal_clock_advances_between_ticks():
     region = _region()
     eng = _engine()
     eng.tick(region, now=0.0)
-    res = eng.tick(region, now=0.0)  # 같은 화면 다시
-    before = {e.buff_id: e.remaining for e in res.entries}
-    # 10초 경과(화면 갱신 없이 now만) → 내부 시계가 줄어야 함
+    eng.tick(region, now=0.0)  # 같은 화면 다시 → 판독값 121 그대로
+    # 10초 경과(화면은 그대로 121이지만 now만 흐름). 정적 화면의 121은 내부 시계보다
+    # 위로 '튄' 값이라 위로-튐 가드가 한 프레임만으론 반영하지 않는다(실게임엔 없는
+    # 인공 상황 — 실제론 화면도 함께 줄어든다). 따라서 내부 시계가 10초만큼 줄어든다.
     res2 = eng.tick(region, now=10.0)
     after = {e.buff_id: e.remaining for e in res2.entries}
-    # vivace는 매 틱 재판독(121로 리셋)되므로, 판독 안 되는 틱 기준이 아니라
-    # 여기선 '판독값이 그대로 121 부근'이면 OK(화면이 안 변했으니 재판독)
-    assert after["vivace"] == 121
+    assert abs(after["vivace"] - 111.0) < 0.5  # 121 → 10초 경과 → ~111
 
 
 def test_set_order_reorders_entries_live():
