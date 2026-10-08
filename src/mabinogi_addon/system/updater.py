@@ -60,7 +60,14 @@ def check_latest() -> dict | None:
     네트워크·파싱 오류는 전부 조용히 None(업데이트는 부가 기능이라 앱 실행을 막지 않음).
     """
     try:
-        req = urllib.request.Request(VERSION_URL, headers=_UA)
+        # 캐시 무효화: raw.githubusercontent는 CDN(Fastly)이 엣지별로 ~5분 캐시해,
+        # 릴리스 직후엔 지역에 따라 옛 version.json이 돌아온다(실행 중/시작 시 감지 지연).
+        # 매번 다른 쿼리(?t=epoch) + no-cache 헤더로 엣지 캐시를 건너뛰고 원본을 받는다.
+        import time
+
+        bust = f"{VERSION_URL}?t={int(time.time())}"
+        headers = {**_UA, "Cache-Control": "no-cache", "Pragma": "no-cache"}
+        req = urllib.request.Request(bust, headers=headers)
         with urllib.request.urlopen(req, timeout=10) as r:
             data = json.loads(r.read().decode("utf-8"))
     except Exception as exc:  # noqa: BLE001
