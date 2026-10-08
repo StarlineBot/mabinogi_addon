@@ -53,7 +53,7 @@ jobs:
       - name: Build exe (PyInstaller)
         run: >
           uv run --group build pyinstaller --noconfirm --clean --onefile --windowed
-          --name mabinogi-addon-v${{ env.APP_VERSION }}
+          --name mabinogi-addon
           --uac-admin
           --splash packaging/splash.png
           --icon packaging/logo.ico
@@ -89,23 +89,23 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: mabinogi-addon-exe
-          path: dist/mabinogi-addon-v${{ env.APP_VERSION }}.exe
+          path: dist/mabinogi-addon.exe
 
       - name: Attach to Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/mabinogi-addon-v${{ env.APP_VERSION }}.exe
+          files: dist/mabinogi-addon.exe
 
       # --- 공개 저장소(릴리스 창고)로 배포: 앱 자동 업데이트가 여기를 확인/다운로드 ---
       - name: Build version.json (sha256 + size)
         if: startsWith(github.ref, 'refs/tags/')
         shell: bash
         run: |
-          EXE="dist/mabinogi-addon-v${APP_VERSION}.exe"
+          EXE="dist/mabinogi-addon.exe"
           SHA=$(sha256sum "$EXE" | awk '{print $1}')
           SIZE=$(stat -c%s "$EXE")
-          URL="https://github.com/StarlineBot/mabinogi_addon-releases/releases/download/v${APP_VERSION}/mabinogi-addon-v${APP_VERSION}.exe"
+          URL="https://github.com/StarlineBot/mabinogi_addon-releases/releases/download/v${APP_VERSION}/mabinogi-addon.exe"
           cat > version.json <<EOF
           {
             "version": "${APP_VERSION}",
@@ -186,7 +186,7 @@ jobs:
           token: ${{ secrets.RELEASES_TOKEN }}
           tag_name: v${{ env.APP_VERSION }}
           files: |
-            dist/mabinogi-addon-v${{ env.APP_VERSION }}.exe
+            dist/mabinogi-addon.exe
             version.json
 
       # 배포가 끝난 뒤(위 단계들 성공 시에만) Discord 포럼에 새 글 작성.
@@ -200,7 +200,7 @@ jobs:
           RELEASE_WEBHOOK_URL: ${{ secrets.RELEASE_WEBHOOK_URL }}
         run: |
           NOTES=$(cat notes.md)
-          DL="https://github.com/StarlineBot/mabinogi_addon-releases/releases/download/v${APP_VERSION}/mabinogi-addon-v${APP_VERSION}.exe"
+          DL="https://github.com/StarlineBot/mabinogi_addon-releases/releases/download/v${APP_VERSION}/mabinogi-addon.exe"
           LINK="https://github.com/StarlineBot/mabinogi_addon-releases/releases/tag/v${APP_VERSION}"
           BODY=$(printf "%s\n\n📥 다운로드: %s\n🔗 릴리스: %s" "$NOTES" "$DL" "$LINK")
 
