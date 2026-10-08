@@ -12,9 +12,10 @@ from __future__ import annotations
 import random
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QPixmap
+from PySide6.QtGui import QPainter, QPainterPath, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
+    QHBoxLayout,
     QLabel,
     QProgressBar,
     QVBoxLayout,
@@ -24,22 +25,53 @@ from PySide6.QtWidgets import (
 from .. import paths
 
 _LOGO = paths.resource_dir() / "logo.png"
+_PROFILE = paths.resource_dir() / "profile.png"  # 제작자 아이콘(없으면 로고로 폴백)
+_CREATOR = "섯다라인"  # 캐릭터가 말하는 것처럼 "섯다라인 : <문구>"
 
-# 로딩 문구 자리에 랜덤으로 뜨는 위트 메시지(마비노기 감성).
+# 로딩 문구(마비노기 상황극) — discord_bot modules/loading.js 의 FLAVORS에서 가져옴.
 MESSAGES = [
-    "마나를 끌어모으는 중…",
-    "글렌 베르나 날씨 확인 중…",
-    "투아림 눈치 보는 중…",
-    "상지 다시 거는 중…",
-    "비바체 리듬 타는 중…",
-    "햄찌 소환 준비 중…",
-    "하프 줄 고르는 중…",
-    "요정 깨우는 중…",
-    "버프 아이콘 외우는 중…",
-    "파티원 수소문 중…",
-    "전장의 서곡 튜닝 중…",
-    "크리스탈 닦는 중…",
+    "브리레흐 3관 도는 중",
+    "크롬바스에서 보상상자 까는 중",
+    "볼트 마법 조합 준비 중",
+    "비바체 연주 하는 중",
+    "스노우 스톰 시전 중",
+    "익스플로전 런지 시전 중",
+    "80 헤일로 어떻게 한 번에 깰지 고민 중",
+    "브리레흐 2관 줄넘기 중",
+    "크롬바스 심연에서 회오리 피하는 중",
+    "잔흔 부족으로 레이턴트 이그니션 사용 못하는 중",
+    "잘못 나간 라이트닝 체인 줍는 중",
+    "브리레흐 1관 도는 중",
+    "크롬바스에서 100버스트 중",
+    "스노우 스톰 아끼는 중",
+    "레이턴트 이그니션 사용 중",
+    "크롬바스 심연에서 레이저 맞는 중",
 ]
+
+
+def _round_pixmap(path, size: int) -> QPixmap | None:
+    """이미지를 정사각 중앙 크롭 후 원형으로."""
+    src = QPixmap(str(path))
+    if src.isNull():
+        return None
+    src = src.scaled(
+        size, size,
+        Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+        Qt.TransformationMode.SmoothTransformation,
+    )
+    x = (src.width() - size) // 2
+    y = (src.height() - size) // 2
+    src = src.copy(x, y, size, size)
+    out = QPixmap(size, size)
+    out.fill(Qt.GlobalColor.transparent)
+    p = QPainter(out)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    clip = QPainterPath()
+    clip.addEllipse(0, 0, size, size)
+    p.setClipPath(clip)
+    p.drawPixmap(0, 0, src)
+    p.end()
+    return out
 
 
 class Splash(QWidget):
@@ -52,11 +84,11 @@ class Splash(QWidget):
             | Qt.WindowType.WindowStaysOnTopHint
             | Qt.WindowType.SplashScreen,
         )
-        self.setFixedSize(360, 240)
+        self.setFixedSize(440, 240)
 
         card = QWidget(self)
         card.setObjectName("card")
-        card.setFixedSize(360, 240)
+        card.setFixedSize(440, 240)
         v = QVBoxLayout(card)
         v.setContentsMargins(24, 28, 24, 22)
         v.setSpacing(14)
@@ -87,11 +119,23 @@ class Splash(QWidget):
         self.bar.setFixedHeight(6)
         v.addWidget(self.bar)
 
-        self.msg = QLabel(random.choice(MESSAGES))
-        self.msg.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        # 프로필 아이콘 + "섯다라인 : <문구>" — 캐릭터가 말하는 느낌
+        say = QHBoxLayout()
+        say.setSpacing(8)
+        say.addStretch(1)
+        avatar = QLabel()
+        pm = _round_pixmap(_PROFILE, 22) or _round_pixmap(_LOGO, 22)
+        if pm is not None:
+            avatar.setPixmap(pm)
+        avatar.setFixedSize(22, 22)
+        say.addWidget(avatar)
+        self.msg = QLabel()
         self.msg.setObjectName("msg")
-        v.addWidget(self.msg)
+        say.addWidget(self.msg)
+        say.addStretch(1)
+        v.addLayout(say)
         v.addStretch(1)
+        self._set_msg(random.choice(MESSAGES))
 
         self.setStyleSheet(
             "#card { background:#1f2937; border:1px solid #00B894; border-radius:14px; }"
@@ -101,10 +145,13 @@ class Splash(QWidget):
             "QProgressBar::chunk { background:#00D1A7; border-radius:3px; }"
         )
 
+    def _set_msg(self, text: str) -> None:
+        self.msg.setText(f"{_CREATOR} : {text}")
+
     def step(self, pct: int, msg: str | None = None) -> None:
-        """진행률(%)과 문구 갱신. 문구 생략 시 랜덤 위트 메시지."""
+        """진행률(%)과 문구 갱신. 문구 생략 시 랜덤 상황 문구."""
         self.bar.setValue(max(0, min(100, pct)))
-        self.msg.setText(msg or random.choice(MESSAGES))
+        self._set_msg(msg or random.choice(MESSAGES))
         QApplication.processEvents()  # 스플래시가 바로 다시 그려지게
 
     def center_on_screen(self) -> None:
