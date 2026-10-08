@@ -469,12 +469,18 @@ class MainWindow(QMainWindow):
             play_update_sound()
 
     def _on_update_clicked(self) -> None:
-        """[지금 업데이트] → 다운로드(진행바) → B안 교체 → 재실행."""
+        """[지금 업데이트] → 다운로드(진행바) → B안 교체 → 재실행.
+
+        교체 도중 사용자가 본 창을 건드려 상태를 바꾸면 위험해, 본 창을 숨기고(=뒤에서
+        못 누르게) 시작 때와 같은 스플래시(로고+프로그레스바)를 재활용해 진행률만 보인다.
+        성공하면 새 exe가 이미 떠 있으니 그대로 종료, 실패하면 본 창을 다시 띄워 안내한다.
+        """
         import threading
 
-        from PySide6.QtWidgets import QMessageBox, QProgressDialog
+        from PySide6.QtWidgets import QMessageBox
 
         from ..system import updater
+        from .splash import Splash
 
         info = self._pending_update
         if not info:
@@ -487,18 +493,16 @@ class MainWindow(QMainWindow):
         ) != QMessageBox.StandardButton.Yes:
             return
 
-        dlg = QProgressDialog("새 버전 받는 중…", None, 0, 100, self)
-        dlg.setWindowTitle("업데이트")
-        dlg.setAutoClose(False)
-        dlg.setCancelButton(None)  # 교체 중 취소는 위험 → 막음
-        dlg.setMinimumDuration(0)
-        dlg.setValue(0)
-        dlg.show()
+        # 시작 스플래시 재활용: 본 창을 숨기고 그 자리에 진행률 스플래시만 띄운다.
+        splash = Splash()
+        splash.center_on_screen()
+        splash.step(0, f"새 버전 v{ver} 받는 중…")
+        splash.show()
+        self._update_splash = splash  # 재생 중 GC 방지(모듈 아닌 self에 보관)
+        self.hide()
 
-        self._update_progress.connect(dlg.setValue)
-        self._update_result.connect(
-            lambda ok, msg: self._on_update_result(ok, msg, dlg)
-        )
+        self._update_progress.connect(self._on_update_progress)
+        self._update_result.connect(self._on_update_result)
 
         def work() -> None:
             try:
@@ -513,15 +517,31 @@ class MainWindow(QMainWindow):
 
         threading.Thread(target=work, daemon=True).start()
 
-    def _on_update_result(self, ok: bool, msg: str, dlg) -> None:
+    def _on_update_progress(self, pct: int) -> None:
+        splash = getattr(self, "_update_splash", None)
+        if splash is not None:
+            splash.step(pct, "새 버전 받는 중…")
+
+    def _on_update_result(self, ok: bool, msg: str) -> None:
         from PySide6.QtWidgets import QMessageBox
 
-        dlg.close()
+        # 재시도(실패 후 다시 클릭) 시 신호가 중복 연결되지 않게 정리.
+        for sig in (self._update_progress, self._update_result):
+            try:
+                sig.disconnect()
+            except (TypeError, RuntimeError):
+                pass
+        splash = getattr(self, "_update_splash", None)
+        if splash is not None:
+            splash.close()
+            self._update_splash = None
         if ok:
             # 새 exe 가 이미 떠 있으니 현재(구버전) 프로세스는 완전히 종료.
             self._force_quit = True
             QApplication.quit()
             return
+        # 실패 → 숨겼던 본 창을 다시 띄우고 사유 안내.
+        self.show()
         QMessageBox.warning(
             self, "업데이트 실패",
             f"업데이트에 실패했습니다.\n{msg}\n\n나중에 다시 시도해 주세요.",
