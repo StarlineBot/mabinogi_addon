@@ -11,10 +11,15 @@ from PySide6.QtCore import QTimer
 from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import (
     QApplication,
+    QHBoxLayout,
+    QLabel,
     QMainWindow,
     QMenu,
+    QPushButton,
     QSystemTrayIcon,
     QTabWidget,
+    QVBoxLayout,
+    QWidget,
 )
 
 from .. import config, paths
@@ -80,7 +85,16 @@ class MainWindow(QMainWindow):
         tabs.addTab(self.party_tab, "파티")
         tabs.addTab(self.memo_tab, "메모")
         tabs.addTab(self.settings_tab, "설정")
-        self.setCentralWidget(tabs)
+
+        # 중앙: 상단 업데이트 배너(기본 숨김) + 탭
+        central = QWidget()
+        cv = QVBoxLayout(central)
+        cv.setContentsMargins(0, 0, 0, 0)
+        cv.setSpacing(0)
+        self._update_banner = self._build_update_banner()
+        cv.addWidget(self._update_banner)
+        cv.addWidget(tabs)
+        self.setCentralWidget(central)
 
         # 버프 오버레이
         self.buff_overlay = BuffOverlay()
@@ -123,6 +137,62 @@ class MainWindow(QMainWindow):
         )
         self.debuff_tab.scale_changed.connect(
             lambda pct: self.debuff_overlay.set_scale(pct / 100)
+        )
+
+    # ---- 상단 업데이트 배너(새 버전 있을 때만) ----
+    def _build_update_banner(self) -> QWidget:
+        bar = QWidget()
+        bar.setObjectName("updateBar")
+        h = QHBoxLayout(bar)
+        h.setContentsMargins(12, 6, 8, 6)
+        h.setSpacing(8)
+        self._update_label = QLabel("새 버전이 있습니다")
+        self._update_label.setObjectName("updateMsg")
+        h.addWidget(self._update_label)
+        h.addStretch(1)
+        btn = QPushButton("지금 업데이트")
+        btn.setObjectName("updateBtn")
+        btn.clicked.connect(self._on_update_clicked)
+        h.addWidget(btn)
+        close = QPushButton("✕")
+        close.setObjectName("updateClose")
+        close.setFixedWidth(26)
+        close.setToolTip("이번만 숨기기")
+        close.clicked.connect(self._update_banner_hide)
+        h.addWidget(close)
+        bar.setStyleSheet(
+            "#updateBar { background:#10402f; border-bottom:1px solid #00B894; }"
+            "#updateMsg { color:#d1fae5; font-size:12px; }"
+            "#updateBtn { background:#00B894; color:#06281e; border:none;"
+            " border-radius:4px; padding:4px 12px; font-weight:700; }"
+            "#updateBtn:hover { background:#00D1A7; }"
+            "#updateClose { background:transparent; color:#9ae6c7; border:none;"
+            " font-size:13px; }"
+            "#updateClose:hover { color:#ffffff; }"
+        )
+        bar.hide()  # 기본 숨김 — 새 버전이 확인될 때만 show_update_banner로 표시
+        return bar
+
+    def show_update_banner(self, latest: str) -> None:
+        """새 버전이 있을 때 상단 배너 표시(자동업데이트 확인에서 호출 예정)."""
+        from ..version import __version__
+
+        cur = __version__ if __version__ != "0.0.0" else "개발"
+        self._update_label.setText(
+            f"🔔 새 버전 v{latest} 가 나왔어요   (현재 {cur})"
+        )
+        self._update_banner.show()
+
+    def _update_banner_hide(self) -> None:
+        self._update_banner.hide()
+
+    def _on_update_clicked(self) -> None:
+        # 공개 호스팅(version.json+exe) 준비되면 여기서 다운로드 → B(이름 트릭) 교체 →
+        # 재실행. 지금은 자리만.
+        from PySide6.QtWidgets import QMessageBox
+
+        QMessageBox.information(
+            self, "업데이트", "자동 업데이트는 준비 중입니다.\n최신 버전을 받아 교체합니다."
         )
 
     # ---- 오버레이 고정/저장/복원(버프·디버프 공용 로직) ----
