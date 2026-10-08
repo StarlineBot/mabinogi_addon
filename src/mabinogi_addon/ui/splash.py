@@ -84,28 +84,41 @@ class Splash(QWidget):
             | Qt.WindowType.WindowStaysOnTopHint
             | Qt.WindowType.SplashScreen,
         )
-        self.setFixedSize(440, 170)
+        self.setFixedSize(440, 208)
 
         card = QWidget(self)
         card.setObjectName("card")
-        card.setFixedSize(440, 170)
+        card.setFixedSize(440, 208)
         v = QVBoxLayout(card)
-        v.setContentsMargins(24, 22, 24, 22)
-        v.setSpacing(12)
+        v.setContentsMargins(24, 18, 24, 16)
+        v.setSpacing(0)
 
-        v.addStretch(1)
-        # [캐릭터 얼굴] 옆에 [이름(위) / 내용(아래)] 두 줄 — 캐릭터가 말하는 느낌
+        # 위: 매듭 로고(가운데) — 정적 스플래시(packaging/splash.png)와 같은 배치.
+        logo = QLabel()
+        lp = QPixmap(str(_LOGO))
+        if not lp.isNull():
+            lp = lp.scaled(
+                80, 80,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+            logo.setPixmap(lp)
+        logo.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+        v.addWidget(logo)
+        v.addSpacing(14)
+
+        # 아래: [캐릭터 얼굴] + [이름 / 문구] — 왼쪽 정렬(캐릭터가 일하는 느낌)
         row = QHBoxLayout()
-        row.setSpacing(14)
+        row.setSpacing(12)
         avatar = QLabel()
-        avatar.setFixedSize(56, 56)
-        pm = _round_pixmap(_PROFILE, 56) or _round_pixmap(_LOGO, 56)
+        avatar.setFixedSize(46, 46)
+        pm = _round_pixmap(_PROFILE, 46) or _round_pixmap(_LOGO, 46)
         if pm is not None:
             avatar.setPixmap(pm)
         row.addWidget(avatar)
 
         col = QVBoxLayout()
-        col.setSpacing(3)
+        col.setSpacing(2)
         col.addStretch(1)
         name = QLabel(_CREATOR)
         name.setObjectName("name")
@@ -114,16 +127,18 @@ class Splash(QWidget):
         self.msg.setObjectName("msg")
         col.addWidget(self.msg)
         col.addStretch(1)
-        row.addLayout(col, 1)
+        row.addLayout(col)
+        row.addStretch(1)  # 왼쪽 정렬(오른쪽 여백)
         v.addLayout(row)
+        v.addSpacing(10)  # 캐릭터와 로딩바 간격 좁게
 
         self.bar = QProgressBar()
         self.bar.setRange(0, 100)
         self.bar.setValue(0)
         self.bar.setTextVisible(False)
-        self.bar.setFixedHeight(6)
+        self.bar.setFixedHeight(7)
         v.addWidget(self.bar)
-        v.addStretch(1)  # 위·아래 stretch로 전체(얼굴+문구+바)를 세로 가운데 정렬
+        v.addStretch(1)
 
         self._set_msg(random.choice(MESSAGES))
 

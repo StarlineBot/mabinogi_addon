@@ -53,7 +53,19 @@ def main() -> None:
     # 트레이 최소화를 위해, 창을 숨겨도(마지막 창 닫혀도) 앱이 종료되지 않게 한다.
     app.setQuitOnLastWindowClosed(False)
 
-    # PyInstaller --splash(압축 해제 구간 정적 스플래시)가 떠 있으면 닫는다(frozen 전용).
+    start_in_tray = config.load_general_flag("startInTray", False)
+    # Qt 스플래시: 압축 해제 구간의 정적 스플래시(packaging/splash.png, 같은 디자인)에
+    # 이어, 초기화·업데이트 구간을 아바타+진행바+문구로 덮는다. '트레이로 시작'이면 생략.
+    splash = None
+    if not start_in_tray:
+        from mabinogi_addon.ui.splash import Splash
+
+        splash = Splash()
+        splash.center_on_screen()
+        splash.show()
+        splash.step(8, "시작하는 중")
+
+    # 정적 스플래시(압축해제)는 Qt 스플래시를 띄운 '뒤'에 닫는다(검은 틈 방지).
     try:
         import pyi_splash  # type: ignore
 
@@ -61,37 +73,55 @@ def main() -> None:
     except Exception:  # noqa: BLE001, S110 — 개발(uv)엔 pyi_splash 없음(정상)
         pass
 
-    start_in_tray = config.load_general_flag("startInTray", False)
-    # Qt 스플래시: 초기화(무거운 MainWindow 생성) 구간을 로고+진행바+위트 메시지로 덮는다.
-    # '트레이로 시작'이면 창을 안 띄우므로 스플래시도 생략.
-    splash = None
-    splash_shown_at = 0.0
-    if not start_in_tray:
-        import time
+    # 실행 전 업데이트 선적용: 새 버전이 있으면 스플래시에서 받아 교체·재실행한다.
+    # (옛 버전 창을 먼저 보여준 뒤 배너로 안내하던 흐름을 대체)
+    if _apply_update_before_launch(splash):
+        return  # 교체 + 새 exe 재실행됨 → 이 프로세스는 조용히 종료
 
-        from mabinogi_addon.ui.splash import Splash
-
-        splash = Splash()
-        splash.center_on_screen()
-        splash.show()
-        splash.step(10)
-        splash_shown_at = time.monotonic()
-
+    if splash is not None:
+        splash.step(45)
     window = MainWindow()  # 가장 무거운 단계(카탈로그·엔진·오버레이 구성)
     if splash is not None:
-        splash.step(75)
-    if not start_in_tray:
-        window.show()  # '트레이로 시작'이면 창 없이 트레이만
+        splash.step(95)
     window.start()  # 파티 폴링 등 백그라운드 작업 시작
     if splash is not None:
         splash.step(100)
-        # 빠른 PC에선 초기화가 순식간이라 아바타·문구가 깜빡하고 사라진다.
-        # 제작자 아이콘 + 로딩 문구가 보이도록 최소 노출 시간을 보장한다.
-        import time
-
-        _SPLASH_MIN_SEC = 1.2
-        while time.monotonic() - splash_shown_at < _SPLASH_MIN_SEC:
-            app.processEvents()
-            time.sleep(0.03)
-        splash.close()
+        splash.close()  # 창을 띄우기 '전'에 닫는다(뒤에 흰 빈 창이 비치지 않게)
+    if not start_in_tray:
+        window.show()  # '트레이로 시작'이면 창 없이 트레이만
     sys.exit(app.exec())
+
+
+def _apply_update_before_launch(splash) -> bool:
+    """새 버전이 있으면 스플래시에서 받아 교체·재실행한다. 적용했으면 True.
+
+    네트워크·다운로드·교체 실패는 전부 삼키고 False(현재 버전으로 계속 실행) — 업데이트는
+    부가 기능이라 앱 실행을 막지 않는다. 스플래시가 없으면(트레이 시작) 건너뛴다.
+    """
+    import logging
+
+    from mabinogi_addon.system import updater
+
+    if splash is None or not updater.can_update():
+        return False
+    try:
+        splash.step(12, "업데이트 확인 중")
+        info = updater.check_latest()
+        if not info:
+            return False
+        ver = str(info.get("version", "?"))
+        splash.step(15, f"새 버전 v{ver} 받는 중")
+        new_path = updater.download(
+            info,
+            progress_cb=lambda p: splash.step(
+                15 + int(p * 0.7), f"새 버전 v{ver} 받는 중 {p}%"
+            ),
+        )
+        splash.step(92, "업데이트 적용 중")
+        updater.apply_update(new_path)  # 교체 + 새 exe 재실행
+        return True
+    except Exception:
+        logging.getLogger("mabinogi_addon").info(
+            "실행 전 업데이트 생략(실패/무시)", exc_info=True
+        )
+        return False
