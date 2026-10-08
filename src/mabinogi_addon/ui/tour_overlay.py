@@ -15,7 +15,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from PySide6.QtCore import QEvent, QObject, QPoint, QRect, Qt
-from PySide6.QtGui import QColor, QPainter, QPen
+from PySide6.QtGui import QColor, QGuiApplication, QPainter, QPen
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -44,11 +44,20 @@ class TourOverlay(QWidget):
         steps: list[TourStep],
         on_done: Callable[[], None] | None = None,
     ) -> None:
-        super().__init__(host)
+        # 화면 전체를 덮는 최상위 반투명 창. (자식 위젯이면 앱 영역만 덮고, 게다가
+        # Clear로 뚫은 구멍이 부모를 비추지 못해 '검게' 나온다.) 최상위라야 바탕화면까지
+        # 어두워지고, 구멍이 뒤(앱 버튼)를 원래 밝기로 비춘다.
+        super().__init__(
+            None,
+            Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.WindowStaysOnTopHint
+            | Qt.WindowType.Tool,
+        )
         self._host = host
         self._steps = steps
         self._on_done = on_done
         self._i = 0
+        self._screen_geo = QRect()
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground)
 
@@ -98,23 +107,37 @@ class TourOverlay(QWidget):
 
     # ---- 공개 ----
     def start(self) -> None:
-        self.setGeometry(self._host.rect())
+        self._fit_to_screen()
         self.show()
         self.raise_()
+        self.activateWindow()
         self._show_step()
 
     # ---- 내부 ----
+    def _fit_to_screen(self) -> None:
+        """앱이 있는 화면 전체를 덮는다(바탕화면까지 어둡게)."""
+        screen = self._host.screen() or QGuiApplication.primaryScreen()
+        if screen is not None:
+            self._screen_geo = screen.geometry()
+            self.setGeometry(self._screen_geo)
+
     def eventFilter(self, obj: QObject, event: QEvent) -> bool:
-        if obj is self._host and event.type() == QEvent.Type.Resize:
-            self.setGeometry(self._host.rect())
+        # 앱이 움직이거나 크기가 바뀌면 대상 위치가 달라지므로 다시 맞춘다.
+        if obj is self._host and event.type() in (
+            QEvent.Type.Resize,
+            QEvent.Type.Move,
+        ):
+            self._fit_to_screen()
             self._place_card()
+            self.update()
         return super().eventFilter(obj, event)
 
     def _target_rect(self) -> QRect | None:
         step = self._steps[self._i]
         if step.target is None or not step.target.isVisible():
             return None
-        tl = step.target.mapTo(self._host, QPoint(0, 0))
+        gtl = step.target.mapToGlobal(QPoint(0, 0))  # 전역(스크린) 좌표
+        tl = gtl - self._screen_geo.topLeft()  # 화면 오버레이 로컬 좌표
         return QRect(tl, step.target.size()).adjusted(-_PAD, -_PAD, _PAD, _PAD)
 
     def _show_step(self) -> None:
