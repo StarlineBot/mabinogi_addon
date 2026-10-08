@@ -116,26 +116,65 @@ jobs:
           EOF
           cat version.json
 
-      # main 에 version.json 을 먼저 커밋한다 → 저장소에 커밋이 1개는 생겨서,
-      # 다음 단계의 Release(태그) 생성이 빈 저장소에서도 안전하다.
-      - name: Commit version.json to public repo main
+      # 릴리스 노트(notes.md) 생성 — README 업데이트 내역과 Discord 공지가 공용으로 쓴다.
+      #  1) 앱 코드(src/)가 바뀌었으면 → 직전 태그 이후 커밋 제목 목록
+      #  2) 아니면(배포/내부 정비만) → 위트 있는 "내부 정비" 문구 랜덤
+      - name: Build release notes (notes.md)
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: |
+          CUR="v${APP_VERSION}"
+          PREV=$(git describe --tags --abbrev=0 "${CUR}^" 2>/dev/null || echo "")
+          SRC_CHANGED=""
+          if [ -n "$PREV" ]; then
+            SRC_CHANGED=$(git diff --name-only "$PREV" "$CUR" -- src/mabinogi_addon/)
+          fi
+          if [ -n "$SRC_CHANGED" ]; then
+            NOTES=$(git log --no-merges --pretty='- %s' "${PREV}..${CUR}")
+            [ -z "$NOTES" ] && NOTES="- 소소한 개선이 있었어요."
+          else
+            MSGS=(
+              "- 섯다라인이 애드온 내부를 청소했어요 🧹"
+              "- 겉은 그대로지만 속을 손봤어요 🔧"
+              "- 보이지 않는 곳을 조용히 정리했어요"
+              "- 다음 업데이트를 위한 밑작업을 해뒀어요"
+            )
+            NOTES="${MSGS[$RANDOM % ${#MSGS[@]}]}"
+          fi
+          printf "%s\n" "$NOTES" > notes.md
+          echo "---- notes.md ----"; cat notes.md
+
+      # main 에 version.json + CHANGELOG + README 를 커밋.(빈 저장소여도 커밋 1개 보장 →
+      # 다음 Release(태그) 생성 안전). CHANGELOG 는 릴리즈마다 맨 위에 누적된다.
+      - name: Commit to public repo main (version.json + CHANGELOG + README)
         if: startsWith(github.ref, 'refs/tags/')
         shell: bash
         env:
           RELEASES_TOKEN: ${{ secrets.RELEASES_TOKEN }}
         run: |
-          # 앱은 공개 저장소 main 의 raw version.json 을 확인한다. 항상 최신으로 갱신.
           git clone --depth 1 \
             "https://x-access-token:${RELEASES_TOKEN}@github.com/StarlineBot/mabinogi_addon-releases.git" pub || \
           git clone \
             "https://x-access-token:${RELEASES_TOKEN}@github.com/StarlineBot/mabinogi_addon-releases.git" pub
           cd pub
           git checkout -B main           # 비어 있는 저장소여도 main 생성
+          # 1) CHANGELOG: 없으면 시드(packaging/CHANGELOG.md)로 시작.
+          [ -f CHANGELOG.md ] || cp ../packaging/CHANGELOG.md CHANGELOG.md
+          # 이번 버전 항목이 아직 없으면 notes.md 를 맨 위에 추가(재실행 시 중복 방지).
+          if ! grep -qE "^### v${APP_VERSION}( |\$)" CHANGELOG.md; then
+            DATE=$(date +%Y-%m-%d)
+            { printf '### v%s (%s)\n' "$APP_VERSION" "$DATE"; cat ../notes.md; printf '\n'; \
+              cat CHANGELOG.md; } > CHANGELOG.new
+            mv CHANGELOG.new CHANGELOG.md
+          fi
+          # 2) README = 템플릿의 <!-- CHANGELOG --> 자리에 CHANGELOG 내용을 끼워 렌더(awk).
+          awk '/<!-- CHANGELOG -->/ { while ((getline line < "CHANGELOG.md") > 0) print line; next } { print }' \
+            ../packaging/releases_README.md > README.md
+          # 3) version.json 갱신(앱 자동 업데이트가 raw 로 확인).
           cp ../version.json version.json
-          cp ../packaging/releases_README.md README.md   # 공개 저장소 소개 페이지
           git config user.name "github-actions"
           git config user.email "github-actions@users.noreply.github.com"
-          git add version.json README.md
+          git add version.json README.md CHANGELOG.md
           git commit -m "release: v${APP_VERSION}" || echo "변경 없음"
           git push -u origin main
 
@@ -151,7 +190,7 @@ jobs:
             version.json
 
       # 배포가 끝난 뒤(위 단계들 성공 시에만) Discord 포럼에 새 글 작성.
-      # 제목 = vX.Y.Z, 내용 = README 업데이트 내역의 해당 버전 섹션 + 다운로드 링크.
+      # 제목 = vX.Y.Z, 내용 = notes.md(위에서 만든 것, README 와 공용) + 다운로드 링크.
       # exe(약 117MB)는 Discord 업로드 한도를 넘어 첨부 불가 → 링크로 안내.
       # 웹훅 시크릿(RELEASE_WEBHOOK_URL)이 없으면 이 단계는 통째로 건너뛴다.
       - name: Announce release to Discord forum (webhook)
@@ -160,46 +199,13 @@ jobs:
         env:
           RELEASE_WEBHOOK_URL: ${{ secrets.RELEASE_WEBHOOK_URL }}
         run: |
-          CUR="v${APP_VERSION}"
-          # 릴리스 노트 본문을 아래 우선순위로 정한다:
-          #  1) README 에 "### vX.Y.Z" 섹션을 적어뒀으면 그걸 사용(사람이 쓴 안내).
-          #  2) 없고 앱 코드(src/)가 바뀌었으면 → 직전 태그 이후 커밋 제목 목록.
-          #  3) 없고 앱 코드 변화도 없으면(배포/내부 정비만) → 위트 있는 "내부 정비" 문구.
-          NOTES=$(awk -v ver="### ${CUR}" '
-            $0 == ver { grab = 1; next }
-            grab && /^(### |## |---)/ { exit }
-            grab { print }
-          ' packaging/releases_README.md)
-          NOTES=$(printf "%s" "$NOTES" | sed -e '/./,$!d' | sed -e :a -e '/^\n*$/{$d;N;ba}')
-
-          if [ -z "$NOTES" ]; then
-            PREV=$(git describe --tags --abbrev=0 "${CUR}^" 2>/dev/null || echo "")
-            SRC_CHANGED=""
-            if [ -n "$PREV" ]; then
-              SRC_CHANGED=$(git diff --name-only "$PREV" "$CUR" -- src/mabinogi_addon/)
-            fi
-            if [ -n "$SRC_CHANGED" ]; then
-              # 앱 코드 변경 있음 → 커밋 제목 목록(Merge 커밋 제외).
-              NOTES=$(git log --no-merges --pretty='- %s' "${PREV}..${CUR}")
-              [ -z "$NOTES" ] && NOTES="소소한 개선이 있었어요."
-            else
-              # 배포/내부 정비만 → 위트 문구 랜덤(스플래시 톤).
-              MSGS=(
-                "섯다라인이 애드온 내부를 청소했어요 🧹"
-                "겉은 그대로지만 속을 손봤어요 🔧"
-                "보이지 않는 곳을 조용히 정리했어요"
-                "다음 업데이트를 위한 밑작업을 해뒀어요"
-              )
-              NOTES="${MSGS[$RANDOM % ${#MSGS[@]}]}"
-            fi
-          fi
-
+          NOTES=$(cat notes.md)
           DL="https://github.com/StarlineBot/mabinogi_addon-releases/releases/download/v${APP_VERSION}/mabinogi-addon-v${APP_VERSION}.exe"
           LINK="https://github.com/StarlineBot/mabinogi_addon-releases/releases/tag/v${APP_VERSION}"
           BODY=$(printf "%s\n\n📥 다운로드: %s\n🔗 릴리스: %s" "$NOTES" "$DL" "$LINK")
 
-          # 2) Discord 포럼 웹훅: thread_name 이 새 포럼 글의 제목이 된다.
-          #    jq 로 안전하게 JSON 이스케이프. content 2000자 제한 대비 자른다.
+          # Discord 포럼 웹훅: thread_name 이 새 포럼 글의 제목이 된다.
+          # jq 로 안전하게 JSON 이스케이프. content 2000자 제한 대비 자른다.
           jq -n \
             --arg tn "v${APP_VERSION}" \
             --arg c "$(printf "%s" "$BODY" | cut -c1-1900)" \
