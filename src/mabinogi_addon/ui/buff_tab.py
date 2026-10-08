@@ -15,6 +15,7 @@ from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
     QFileDialog,
+    QGroupBox,
     QHBoxLayout,
     QLineEdit,
     QListWidget,
@@ -430,14 +431,18 @@ class BuffTab(QWidget):
         panel = QWidget()
         v = QVBoxLayout(panel)
         v.setContentsMargins(0, 0, 0, 0)
-        v.setSpacing(8)
+        v.setSpacing(10)
 
-        v.addWidget(section_label("이름"))
+        # --- 그룹 1: 아이콘(이름 + 매칭/표시 아이콘) ---
+        icon_box = QGroupBox("아이콘")
+        iv = QVBoxLayout(icon_box)
+        iv.setSpacing(6)
+        iv.addWidget(section_label("이름"))
         self.name_edit = QLineEdit()
         self.name_edit.editingFinished.connect(self._save_name)  # 포커스 아웃·엔터 시 저장
-        v.addWidget(self.name_edit)
+        iv.addWidget(self.name_edit)
 
-        v.addWidget(section_label("매칭 아이콘"))
+        iv.addWidget(section_label("매칭 아이콘"))
         match_row = QHBoxLayout()
         self.match_slot = icon_slot()
         match_row.addWidget(self.match_slot)
@@ -451,9 +456,9 @@ class BuffTab(QWidget):
         self.match_file_btn.clicked.connect(self._pick_match_icon)
         match_row.addWidget(self.match_file_btn)
         match_row.addStretch(1)
-        v.addLayout(match_row)
+        iv.addLayout(match_row)
 
-        v.addWidget(section_label("보여줄 아이콘"))
+        iv.addWidget(section_label("보여줄 아이콘"))
         show_row = QHBoxLayout()
         self.display_slot = icon_slot("—")
         show_row.addWidget(self.display_slot)
@@ -464,17 +469,26 @@ class BuffTab(QWidget):
         show_row.addWidget(self.display_file_btn)
         show_row.addWidget(self.display_clear_btn)
         show_row.addStretch(1)
-        v.addLayout(show_row)
-        v.addWidget(hint_label("└ 비워두면 매칭 아이콘 사용"))
+        iv.addLayout(show_row)
+        iv.addWidget(hint_label("└ 비워두면 매칭 아이콘 사용"))
+        v.addWidget(icon_box)
 
-        v.addSpacing(6)
+        # --- 그룹 2: 표시(오버레이 노출·지속시간) ---
+        show_box = QGroupBox("표시")
+        sv = QVBoxLayout(show_box)
+        sv.setSpacing(6)
         self.display_check = checkbox("오버레이에 표시")
         self.display_check.toggled.connect(self._form_changed)
-        v.addWidget(self.display_check)
+        sv.addWidget(self.display_check)
         self.show_duration = checkbox("지속시간 표시")
         self.show_duration.toggled.connect(self._form_changed)
-        v.addWidget(self.show_duration)
+        sv.addWidget(self.show_duration)
+        v.addWidget(show_box)
 
+        # --- 그룹 3: 알림(종료 알림 + 2차) ---
+        alert_box = QGroupBox("알림")
+        alv = QVBoxLayout(alert_box)
+        alv.setSpacing(6)
         alert_row = QHBoxLayout()
         self.alert_check = checkbox("종료 알림")
         self.before_spin = QSpinBox()
@@ -485,7 +499,7 @@ class BuffTab(QWidget):
         for wdg in (self.alert_check, self.before_spin, self.blink_check, self.sound_check):
             alert_row.addWidget(wdg)
         alert_row.addStretch(1)
-        v.addLayout(alert_row)
+        alv.addLayout(alert_row)
         self.alert_check.toggled.connect(self._on_alert_toggled)
         for wdg in (self.before_spin, self.blink_check, self.sound_check):
             if isinstance(wdg, QCheckBox):
@@ -503,11 +517,12 @@ class BuffTab(QWidget):
         alert_row2.addWidget(self.alert2_check)
         alert_row2.addWidget(self.before2_spin)
         alert_row2.addStretch(1)
-        v.addLayout(alert_row2)
+        alv.addLayout(alert_row2)
         self.alert2_check.toggled.connect(self._on_alert2_toggled)
         self.before2_spin.valueChanged.connect(self._form_changed)
         self._alert2_hint = hint_label("└ 1차를 놓치거나 시간을 잘못 읽었을 때 한 번 더 알림")
-        v.addWidget(self._alert2_hint)
+        alv.addWidget(self._alert2_hint)
+        v.addWidget(alert_box)
 
         v.addStretch(1)
         return panel

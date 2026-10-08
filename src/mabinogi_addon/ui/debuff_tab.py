@@ -12,6 +12,7 @@ from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QFileDialog,
+    QGroupBox,
     QHBoxLayout,
     QLineEdit,
     QListWidget,
@@ -343,14 +344,18 @@ class DebuffTab(QWidget):
         panel = QWidget()
         v = QVBoxLayout(panel)
         v.setContentsMargins(0, 0, 0, 0)
-        v.setSpacing(8)
+        v.setSpacing(10)
 
-        v.addWidget(section_label("이름"))
+        # --- 그룹 1: 아이콘(이름 + 매칭 아이콘) ---
+        icon_box = QGroupBox("아이콘")
+        iv = QVBoxLayout(icon_box)
+        iv.setSpacing(6)
+        iv.addWidget(section_label("이름"))
         self.name_edit = QLineEdit()
         self.name_edit.editingFinished.connect(self._save_name)
-        v.addWidget(self.name_edit)
+        iv.addWidget(self.name_edit)
 
-        v.addWidget(section_label("매칭 아이콘"))
+        iv.addWidget(section_label("매칭 아이콘"))
         match_row = QHBoxLayout()
         self.match_slot = icon_slot()
         match_row.addWidget(self.match_slot)
@@ -364,16 +369,21 @@ class DebuffTab(QWidget):
         file_btn.clicked.connect(self._pick_match_icon)
         match_row.addWidget(file_btn)
         match_row.addStretch(1)
-        v.addLayout(match_row)
+        iv.addLayout(match_row)
+        v.addWidget(icon_box)
 
-        v.addSpacing(6)
+        # --- 그룹 2: 표시 ---
+        show_box = QGroupBox("표시")
+        sv = QVBoxLayout(show_box)
+        sv.setSpacing(6)
         self.display_check = checkbox("오버레이에 표시")
         self.display_check.toggled.connect(self._form_changed)
-        v.addWidget(self.display_check)
-
-        v.addWidget(
+        sv.addWidget(self.display_check)
+        sv.addWidget(
             hint_label("디버프는 '아직 걸리지 않은 것'만 오버레이에 나열됩니다.")
         )
+        v.addWidget(show_box)
+
         v.addStretch(1)
         return panel
 
