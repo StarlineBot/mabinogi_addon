@@ -83,6 +83,7 @@ class MainWindow(QMainWindow):
         self.settings_tab.config_imported.connect(self._on_config_imported)
         self.settings_tab.voice_pack_changed.connect(self._on_voice_pack_changed)
         tabs = QTabWidget()
+        self._tabs = tabs  # 온보딩 투어에서 탭 전환에 사용
         tabs.addTab(self.buff_tab, "버프")
         tabs.addTab(self.debuff_tab, "디버프")
         tabs.addTab(self.tuarim_tab, "투아림")
@@ -192,6 +193,51 @@ class MainWindow(QMainWindow):
 
     def _update_banner_hide(self) -> None:
         self._update_banner.hide()
+
+    def _maybe_run_tour(self) -> None:
+        """첫 실행 때 한 번, 사용 순서를 노란 점선 강조로 안내(코치마크)."""
+        if not self.isVisible():
+            return
+        if config.load_general_flag("tourShown", False):
+            return
+
+        from .tour_overlay import TourOverlay, TourStep
+
+        def _go_buff() -> None:
+            self._tabs.setCurrentWidget(self.buff_tab)
+
+        steps = [
+            TourStep(
+                target=self.buff_tab.region_btn,
+                title="① 영역 지정",
+                body="먼저 게임에서 버프가 모여 있는 곳을 드래그로 잡아요.\n"
+                     "⚓ 기준 버프(프리미엄 배틀 멤버십)도 영역 안에 꼭 포함하세요.",
+                before=_go_buff,
+            ),
+            TourStep(
+                target=self.buff_tab.add_btn,
+                title="② 버프 등록",
+                body="＋로 추적할 버프를 추가하고, 그 아이콘을 상태창에서 바로 집어요.",
+            ),
+            TourStep(
+                target=self.buff_tab.lock_btn,
+                title="③ 오버레이 고정",
+                body="오버레이를 원하는 위치로 옮긴 뒤 '오버레이 고정'을 누르면\n"
+                     "위치가 잠기고 클릭도 통과해 게임에 방해되지 않아요.",
+            ),
+            TourStep(
+                target=None,
+                title="준비 끝! 🎉",
+                body="디버프·투아림 탭도 같은 순서로 쓰면 됩니다.\n"
+                     "자세한 설명은 각 탭의 ? 버튼, 세부 설정은 ⚙️ 설정 탭에서.",
+            ),
+        ]
+
+        def _done() -> None:
+            config.save_general_flag("tourShown", True)
+
+        self._tour = TourOverlay(self, steps, on_done=_done)
+        self._tour.start()
 
     def _maybe_prompt_game_window(self) -> None:
         """게임 창 인식이 안 돼 있으면 시작 시 한 번 선택 팝업을 띄운다(권장).
@@ -346,6 +392,7 @@ class MainWindow(QMainWindow):
         self._start_debuff_tracking()
         self._maybe_check_update()
         self._maybe_prompt_game_window()
+        self._maybe_run_tour()
 
     def _compute_tracking(
         self, catalog

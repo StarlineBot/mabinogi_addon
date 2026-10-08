@@ -179,6 +179,7 @@ class BuffTab(QWidget):
         top.setSpacing(6)
         region_btn = QPushButton("버프 영역 지정")
         region_btn.clicked.connect(self._pick_region)
+        self.region_btn = region_btn  # 온보딩 투어가 강조 대상으로 참조
         top.addWidget(region_btn, 1)
         self.lock_btn = QPushButton("오버레이 고정")
         self.lock_btn.setCheckable(True)
