@@ -56,10 +56,12 @@ HELP_HTML = """
 (선택/전체 고정·해제·삭제)</p>
 """
 
+# 밝은 배경 + 또렷한 테두리 + 최소 높이 → 비어 있어도 '여기 리스트가 있다'가 보이게.
 _LIST_QSS = """
-QListWidget { border:1px solid #3a3d44; border-radius:4px; background:#202227; }
+QListWidget { border:1px solid #525866; border-radius:6px; background:#2b2f38;
+  min-height:72px; }
 QListWidget::item { padding:6px 10px; border:none; }
-QListWidget::item:hover { background:#2f333a; }
+QListWidget::item:hover { background:#363b45; }
 QListWidget::item:selected { background:#00B894; color:white; }
 """
 _DANGER_QSS = (
@@ -263,7 +265,17 @@ class CustomOverlayTab(QWidget):
     # ---- 목록 ----
     def _refresh_overlays(self) -> None:
         self.overlay_list.clear()
-        for i, o in enumerate(self._mgr.overlays(), 1):
+        overlays = self._mgr.overlays()
+        if not overlays:
+            # 비었을 때: 리스트가 비어 '없는 줄' 알기 쉬워, 안내 문구를 회색으로 1줄.
+            from PySide6.QtGui import QColor
+
+            hint = QListWidgetItem("표시할 오버레이가 없어요 — 위 '영역 지정'으로 추가하세요")
+            hint.setFlags(Qt.ItemFlag.NoItemFlags)  # 선택·호버 안 됨(안내 전용)
+            hint.setForeground(QColor("#8a8f98"))
+            self.overlay_list.addItem(hint)
+            return
+        for i, o in enumerate(overlays, 1):
             tag = " · 고정" if o.locked else ""
             self.overlay_list.addItem(f"오버레이{i}{tag}")
 
