@@ -84,33 +84,39 @@ class Splash(QWidget):
             | Qt.WindowType.WindowStaysOnTopHint
             | Qt.WindowType.SplashScreen,
         )
-        self.setFixedSize(440, 240)
+        self.setFixedSize(440, 170)
 
         card = QWidget(self)
         card.setObjectName("card")
-        card.setFixedSize(440, 240)
+        card.setFixedSize(440, 170)
         v = QVBoxLayout(card)
-        v.setContentsMargins(24, 28, 24, 22)
-        v.setSpacing(14)
+        v.setContentsMargins(24, 22, 24, 22)
+        v.setSpacing(18)
 
-        logo = QLabel()
-        logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        pm = QPixmap(str(_LOGO))
-        if not pm.isNull():
-            logo.setPixmap(
-                pm.scaled(
-                    96, 96,
-                    Qt.AspectRatioMode.KeepAspectRatio,
-                    Qt.TransformationMode.SmoothTransformation,
-                )
-            )
         v.addStretch(1)
-        v.addWidget(logo)
+        # [캐릭터 얼굴] 옆에 [이름(위) / 내용(아래)] 두 줄 — 캐릭터가 말하는 느낌
+        row = QHBoxLayout()
+        row.setSpacing(14)
+        avatar = QLabel()
+        avatar.setFixedSize(56, 56)
+        pm = _round_pixmap(_PROFILE, 56) or _round_pixmap(_LOGO, 56)
+        if pm is not None:
+            avatar.setPixmap(pm)
+        row.addWidget(avatar)
 
-        title = QLabel("섯다라인 마비노기 애드온")
-        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title.setObjectName("title")
-        v.addWidget(title)
+        col = QVBoxLayout()
+        col.setSpacing(3)
+        col.addStretch(1)
+        name = QLabel(_CREATOR)
+        name.setObjectName("name")
+        col.addWidget(name)
+        self.msg = QLabel()
+        self.msg.setObjectName("msg")
+        col.addWidget(self.msg)
+        col.addStretch(1)
+        row.addLayout(col, 1)
+        v.addLayout(row)
+        v.addStretch(1)
 
         self.bar = QProgressBar()
         self.bar.setRange(0, 100)
@@ -119,34 +125,18 @@ class Splash(QWidget):
         self.bar.setFixedHeight(6)
         v.addWidget(self.bar)
 
-        # 프로필 아이콘 + "섯다라인 : <문구>" — 캐릭터가 말하는 느낌
-        say = QHBoxLayout()
-        say.setSpacing(8)
-        say.addStretch(1)
-        avatar = QLabel()
-        pm = _round_pixmap(_PROFILE, 22) or _round_pixmap(_LOGO, 22)
-        if pm is not None:
-            avatar.setPixmap(pm)
-        avatar.setFixedSize(22, 22)
-        say.addWidget(avatar)
-        self.msg = QLabel()
-        self.msg.setObjectName("msg")
-        say.addWidget(self.msg)
-        say.addStretch(1)
-        v.addLayout(say)
-        v.addStretch(1)
         self._set_msg(random.choice(MESSAGES))
 
         self.setStyleSheet(
             "#card { background:#1f2937; border:1px solid #00B894; border-radius:14px; }"
-            "#title { color:#e5e7eb; font-size:14px; font-weight:700; }"
-            "#msg { color:#8a8f98; font-size:12px; }"
+            "#name { color:#00D1A7; font-size:14px; font-weight:700; }"
+            "#msg { color:#e5e7eb; font-size:13px; }"
             "QProgressBar { background:#111827; border:none; border-radius:3px; }"
             "QProgressBar::chunk { background:#00D1A7; border-radius:3px; }"
         )
 
     def _set_msg(self, text: str) -> None:
-        self.msg.setText(f"{_CREATOR} : {text}")
+        self.msg.setText(text)
 
     def step(self, pct: int, msg: str | None = None) -> None:
         """진행률(%)과 문구 갱신. 문구 생략 시 랜덤 상황 문구."""
