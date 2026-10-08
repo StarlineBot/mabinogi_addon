@@ -425,7 +425,10 @@ class MainWindow(QMainWindow):
         self.settings_tab.refresh_game_label()  # 지정했으면 설정 라벨도 갱신
 
     # 업데이트 확인 최소 간격(초). 포커스 얻을 때마다 확인하되 이 간격으론 과호출 방지.
-    _UPDATE_CHECK_MIN_GAP = 120.0  # 주기 타이머(3분)보다 짧게 둬 타이머 확인이 안 막히게
+    # 활성화(앱으로 돌아옴) 시 확인의 최소 간격. 너무 길면(2~3분) 자주 들락거리는
+    # 실사용에서 돌아올 때마다 스로틀에 막혀 '포커스 확인'이 무용지물이 된다(로그로 확인).
+    # 30초면 빠른 alt-tab 연타만 묶고, 30초 지나 돌아오면 바로 최신을 확인한다.
+    _UPDATE_CHECK_MIN_GAP = 30.0
 
     def _maybe_check_update(self, reason: str = "?") -> None:
         """백그라운드로 새 버전 확인(시작 시·주기·창 활성화 시). 실패는 조용히 무시.
