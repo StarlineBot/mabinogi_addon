@@ -45,6 +45,7 @@ from .tuarim_tab import TuarimTab
 # 번들 경로 사용(exe=_MEIPASS/assets). __file__ 기준은 frozen에서 어긋난다.
 LOGO_PATH = paths.resource_dir() / "logo.png"
 _log = logging.getLogger("mabinogi_addon.close")
+_up_log = logging.getLogger("mabinogi_addon.updater")  # 업데이트 확인 진단(계기·스로틀·결과)
 
 
 def app_icon() -> QIcon:
@@ -426,10 +427,12 @@ class MainWindow(QMainWindow):
     # 업데이트 확인 최소 간격(초). 포커스 얻을 때마다 확인하되 이 간격으론 과호출 방지.
     _UPDATE_CHECK_MIN_GAP = 120.0  # 주기 타이머(3분)보다 짧게 둬 타이머 확인이 안 막히게
 
-    def _maybe_check_update(self) -> None:
+    def _maybe_check_update(self, reason: str = "?") -> None:
         """백그라운드로 새 버전 확인(시작 시·주기·창 활성화 시). 실패는 조용히 무시.
 
         여러 계기에서 호출되므로 최소 간격으로 스로틀한다(짧은 간격 중복 호출 무시).
+        진단 로그: 어떤 계기로 호출됐고, 스로틀에 막혔는지, check_latest가 뭘 받았는지
+        남겨 '릴리스~감지 지연'의 실제 원인(이벤트 미발생/스로틀/raw 전파 지연)을 가린다.
         """
         import threading
         import time
@@ -437,16 +440,32 @@ class MainWindow(QMainWindow):
         from ..system import updater
 
         if not updater.can_update():
+            _up_log.info("업데이트 확인 안 함(%s): 배포본 아님", reason)
             return
         now = time.monotonic()
-        if now - getattr(self, "_last_update_check", 0.0) < self._UPDATE_CHECK_MIN_GAP:
+        gap = now - getattr(self, "_last_update_check", 0.0)
+        if gap < self._UPDATE_CHECK_MIN_GAP:
+            _up_log.info(
+                "업데이트 확인 건너뜀(%s): %.0f초 전 확인함(스로틀 %.0f초)",
+                reason, gap, self._UPDATE_CHECK_MIN_GAP,
+            )
             return
         self._last_update_check = now
+        _up_log.info("업데이트 확인 시작(%s)", reason)
 
         def work() -> None:
-            info = updater.check_latest()
+            from ..version import __version__
+
+            try:
+                info = updater.check_latest()
+            except Exception as exc:  # noqa: BLE001 — 확인 실패는 무시(진단만 남김)
+                _up_log.info("업데이트 확인 예외(%s): %r", reason, exc)
+                return
             if info:
+                _up_log.info("업데이트 확인 결과(%s): 새 버전 %s", reason, info.get("version"))
                 self._update_found.emit(info)  # UI 스레드로 전달 → 배너
+            else:
+                _up_log.info("업데이트 확인 결과(%s): 새 버전 없음(현재 %s)", reason, __version__)
 
         threading.Thread(target=work, daemon=True).start()
 
@@ -592,7 +611,7 @@ class MainWindow(QMainWindow):
         self._restore_memo()
         self._start_buff_tracking()
         self._start_debuff_tracking()
-        self._maybe_check_update()
+        self._maybe_check_update("시작")
         self._maybe_prompt_game_window()
         self._maybe_run_tour()
         # 진단 상태 한 줄(추적 중/게임 비활성/영역 미지정 등) 주기 갱신.
@@ -608,7 +627,7 @@ class MainWindow(QMainWindow):
         # 둔다(캐시무효화로 매번 최신을 받고, version.json 폴링은 가벼워 부담 없음).
         self._update_timer = QTimer(self)
         self._update_timer.setInterval(3 * 60 * 1000)  # 3분
-        self._update_timer.timeout.connect(self._maybe_check_update)
+        self._update_timer.timeout.connect(lambda: self._maybe_check_update("주기"))
         self._update_timer.start()
         self._booting = False  # 부팅 끝 — 이제부터 사용자 변경을 저장
 
@@ -970,8 +989,11 @@ class MainWindow(QMainWindow):
         # 기다리지 않고, 사용자가 앱을 볼 때 바로 잡는다(_maybe_check_update가 스로틀).
         from PySide6.QtCore import QEvent
 
-        if event.type() == QEvent.Type.ActivationChange and self.isActiveWindow():
-            self._maybe_check_update()
+        if event.type() == QEvent.Type.ActivationChange:
+            active = self.isActiveWindow()
+            _up_log.info("창 활성화 변경: active=%s", active)  # 이벤트 수신 여부 진단
+            if active:
+                self._maybe_check_update("창활성화")
         super().changeEvent(event)
 
     def keyPressEvent(self, event) -> None:
