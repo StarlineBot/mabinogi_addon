@@ -780,10 +780,10 @@ class MainWindow(QMainWindow):
         menu = QMenu()
         open_act = QAction("열기", self)
         open_act.triggered.connect(self._show_from_tray)
-        self._pause_act = QAction("오버레이 일시정지", self)
-        self._pause_act.setCheckable(True)
+        # 글자가 상태를 말하므로 체크표시 대신 라벨을 토글(⏸ 정지 ↔ ▶ 다시 시작).
+        self._pause_act = QAction("⏸ 오버레이 일시정지", self)
         self._pause_act.setToolTip("사냥 안 할 때 오버레이·알림을 잠깐 끕니다")
-        self._pause_act.toggled.connect(self._set_paused)
+        self._pause_act.triggered.connect(lambda: self._set_paused(not self._paused))
         quit_act = QAction("종료", self)
         quit_act.triggered.connect(self._quit_from_tray)
         menu.addAction(open_act)
@@ -825,11 +825,10 @@ class MainWindow(QMainWindow):
             if c is not None:
                 c.set_paused(paused)
         self.custom_overlay_tab.set_paused(paused)
-        # 트레이 체크 + 설정 토글 동기화(어느 쪽에서 눌러도 둘 다 반영, 루프 방지).
-        if self._pause_act.isChecked() != paused:
-            self._pause_act.blockSignals(True)
-            self._pause_act.setChecked(paused)
-            self._pause_act.blockSignals(False)
+        # 트레이 라벨 + 상단 버튼 동기화(어느 쪽에서 눌러도 둘 다 반영, 루프 방지).
+        self._pause_act.setText(
+            "▶ 오버레이 다시 시작" if paused else "⏸ 오버레이 일시정지"
+        )
         if self._pause_btn.isChecked() != paused:
             self._pause_btn.blockSignals(True)
             self._pause_btn.setChecked(paused)
