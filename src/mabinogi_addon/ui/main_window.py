@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import logging
 
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QTimer, Signal
 from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import (
     QApplication,
@@ -51,6 +51,11 @@ def app_icon() -> QIcon:
 
 
 class MainWindow(QMainWindow):
+    # 백그라운드 스레드(업데이트 확인/다운로드)에서 UI 스레드로 안전하게 넘기는 신호.
+    _update_found = Signal(dict)  # 새 버전 발견 → 배너 표시
+    _update_progress = Signal(int)  # 다운로드 진행률(0~100)
+    _update_result = Signal(bool, str)  # (성공?, 메시지) 교체 끝
+
     def __init__(self) -> None:
         super().__init__()
         from ..version import display_version
@@ -92,6 +97,8 @@ class MainWindow(QMainWindow):
         cv.setContentsMargins(0, 0, 0, 0)
         cv.setSpacing(0)
         self._update_banner = self._build_update_banner()
+        self._pending_update: dict | None = None  # 확인된 새 버전 정보
+        self._update_found.connect(self._on_update_found)
         cv.addWidget(self._update_banner)
         cv.addWidget(tabs)
         self.setCentralWidget(central)
@@ -186,13 +193,83 @@ class MainWindow(QMainWindow):
     def _update_banner_hide(self) -> None:
         self._update_banner.hide()
 
+    def _maybe_check_update(self) -> None:
+        """시작 시 백그라운드로 새 버전 확인(개발/실패는 조용히 무시)."""
+        import threading
+
+        from ..system import updater
+
+        if not updater.can_update():
+            return
+
+        def work() -> None:
+            info = updater.check_latest()
+            if info:
+                self._update_found.emit(info)  # UI 스레드로 전달 → 배너
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _on_update_found(self, info: dict) -> None:
+        self._pending_update = info
+        self.show_update_banner(str(info.get("version", "?")))
+
     def _on_update_clicked(self) -> None:
-        # 공개 호스팅(version.json+exe) 준비되면 여기서 다운로드 → B(이름 트릭) 교체 →
-        # 재실행. 지금은 자리만.
+        """[지금 업데이트] → 다운로드(진행바) → B안 교체 → 재실행."""
+        import threading
+
+        from PySide6.QtWidgets import QMessageBox, QProgressDialog
+
+        from ..system import updater
+
+        info = self._pending_update
+        if not info:
+            return
+
+        ver = info.get("version", "?")
+        if QMessageBox.question(
+            self, "업데이트",
+            f"새 버전 v{ver} 을(를) 받아 교체하고 다시 시작합니다.\n진행할까요?",
+        ) != QMessageBox.StandardButton.Yes:
+            return
+
+        dlg = QProgressDialog("새 버전 받는 중…", None, 0, 100, self)
+        dlg.setWindowTitle("업데이트")
+        dlg.setAutoClose(False)
+        dlg.setCancelButton(None)  # 교체 중 취소는 위험 → 막음
+        dlg.setMinimumDuration(0)
+        dlg.setValue(0)
+        dlg.show()
+
+        self._update_progress.connect(dlg.setValue)
+        self._update_result.connect(
+            lambda ok, msg: self._on_update_result(ok, msg, dlg)
+        )
+
+        def work() -> None:
+            try:
+                new_path = updater.download(
+                    info, progress_cb=lambda p: self._update_progress.emit(p)
+                )
+                updater.apply_update(new_path)  # 교체 + 새 exe 실행
+            except Exception as exc:  # noqa: BLE001 — 사용자에게 사유 표시
+                self._update_result.emit(False, str(exc))
+                return
+            self._update_result.emit(True, "")
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _on_update_result(self, ok: bool, msg: str, dlg) -> None:
         from PySide6.QtWidgets import QMessageBox
 
-        QMessageBox.information(
-            self, "업데이트", "자동 업데이트는 준비 중입니다.\n최신 버전을 받아 교체합니다."
+        dlg.close()
+        if ok:
+            # 새 exe 가 이미 떠 있으니 현재(구버전) 프로세스는 완전히 종료.
+            self._force_quit = True
+            QApplication.quit()
+            return
+        QMessageBox.warning(
+            self, "업데이트 실패",
+            f"업데이트에 실패했습니다.\n{msg}\n\n나중에 다시 시도해 주세요.",
         )
 
     # ---- 오버레이 고정/저장/복원(버프·디버프 공용 로직) ----
@@ -245,6 +322,7 @@ class MainWindow(QMainWindow):
         self._restore_memo()
         self._start_buff_tracking()
         self._start_debuff_tracking()
+        self._maybe_check_update()
 
     def _compute_tracking(
         self, catalog

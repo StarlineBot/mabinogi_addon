@@ -24,7 +24,10 @@ def main() -> None:
     logbuffer.install()
 
     from mabinogi_addon import config
+    from mabinogi_addon.system import updater
     from mabinogi_addon.ui.main_window import MainWindow, app_icon
+
+    updater.cleanup_old()  # 지난 업데이트 교체 후 남은 <exe>.old 정리(배포본만)
 
     app = QApplication(sys.argv)
     app.setApplicationName(config.APP_NAME)
