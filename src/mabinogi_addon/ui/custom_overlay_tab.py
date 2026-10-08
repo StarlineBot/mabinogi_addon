@@ -357,5 +357,9 @@ class CustomOverlayTab(QWidget):
     def _info(self, text: str) -> None:
         QMessageBox.information(self, "커스텀 오버레이", text)
 
+    def set_paused(self, paused: bool) -> None:
+        """사용자 일시정지 → 미러 오버레이 숨김·캡처 쉼(메인 윈도우가 호출)."""
+        self._mgr.set_paused(paused)
+
     def shutdown(self) -> None:
         self._mgr.shutdown()

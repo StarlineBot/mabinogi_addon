@@ -100,6 +100,7 @@ class BuffController(QObject):
         self._items: list[OverlayItem] = []
         self._game_active = True  # 게임 포그라운드
         self._self_active = False  # 우리 앱 포그라운드
+        self._paused = False  # 사용자 일시정지(사냥 안 할 때) → 숨김·알림 억제
         self._last_remaining: dict[str, float] = {}  # 표시 평활용 직전 표시값
 
     def start(
@@ -146,6 +147,15 @@ class BuffController(QObject):
     def game_active(self) -> bool:
         """게임이 포그라운드로 판정되는지(진단 상태 표시용)."""
         return self._game_active
+
+    def set_paused(self, paused: bool) -> None:
+        """사용자 일시정지: 오버레이를 숨기고 알림을 억제(캡처 스레드는 유지).
+
+        추적 자체는 계속 돌지만 화면 표시·알림만 끈다 → 다시 켜면 즉시 현재 상태가
+        보인다(재시작 비용 없음).
+        """
+        self._paused = paused
+        self._apply_visibility()
 
     def set_show_duration(self, show_duration: dict[str, bool]) -> None:
         """지속시간 표시 설정 갱신(실행 중 폼 변경 반영)."""
@@ -194,6 +204,9 @@ class BuffController(QObject):
         self._apply_visibility()
 
     def _apply_visibility(self) -> None:
+        if self._paused:  # 일시정지: 포그라운드·고정 상태와 무관하게 무조건 숨김
+            self._overlay.hide()
+            return
         locked = self._overlay.locked
         if self._game_active:
             # 게임이 포그라운드: 버프가 있거나, 해제(편집) 상태면 플레이스홀더 유지.
@@ -207,5 +220,7 @@ class BuffController(QObject):
         self._overlay.show() if show else self._overlay.hide()
 
     def _on_alerted(self, buff_ids) -> None:
+        if self._paused:  # 일시정지 중엔 종료 알림(점멸·소리)도 울리지 않음
+            return
         if self._on_alert is not None:
             self._on_alert(buff_ids)

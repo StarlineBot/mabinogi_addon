@@ -85,6 +85,7 @@ class MainWindow(QMainWindow):
         # 종료 시 방금 가져온 설정을 덮어쓰지 않도록 저장을 막는다. 다음 실행에서 반영.
         self._config_pending_restart = False
         self._force_quit = False  # 트레이 '종료'로 진짜 종료할 때만 True
+        self._paused = False  # 오버레이 일시정지(사냥 안 할 때 잠깐 끄기) — 세션 한정
         self._tray = self._build_tray()
 
         self.buff_tab = BuffTab()
@@ -117,6 +118,7 @@ class MainWindow(QMainWindow):
         self._pending_update: dict | None = None  # 확인된 새 버전 정보
         self._update_found.connect(self._on_update_found)
         cv.addWidget(self._update_banner)
+        cv.addWidget(self._build_status_bar())  # 탭 위 최상단: 재생/일시정지 + 상태
         cv.addWidget(tabs)
         self.setCentralWidget(central)
 
@@ -211,6 +213,61 @@ class MainWindow(QMainWindow):
     def _update_banner_hide(self) -> None:
         self._update_banner.hide()
 
+    # ---- 탭 위 최상단: 재생/일시정지 토글 + 상태 표시 ----
+    def _build_status_bar(self) -> QWidget:
+        bar = QWidget()
+        bar.setObjectName("statusBar")
+        h = QHBoxLayout(bar)
+        h.setContentsMargins(12, 6, 12, 6)
+        h.setSpacing(10)
+        h.addStretch(1)  # 오른쪽 정렬: 상태·버튼을 우상단에 모은다.
+        self._status_label = QLabel("● 화면 감지 중")
+        self._status_label.setObjectName("statusText")
+        self._status_label.setToolTip(
+            "오버레이 동작 여부입니다. '화면 감지 중'이어도 실제 표시는 "
+            "마비노기가 맨 앞일 때만 — 자세한 추적 상태는 각 탭 안내를 보세요."
+        )
+        h.addWidget(self._status_label)
+        # 재생/일시정지 토글: 감지 중이면 ⏸(누르면 멈춤), 멈추면 ▶(누르면 재개).
+        self._pause_btn = QPushButton("⏸")
+        self._pause_btn.setObjectName("playPause")
+        self._pause_btn.setCheckable(True)
+        self._pause_btn.setFixedSize(30, 26)
+        self._pause_btn.setToolTip("사냥 안 할 때 오버레이를 잠깐 끄고/켭니다")
+        self._pause_btn.toggled.connect(self._set_paused)
+        h.addWidget(self._pause_btn)
+        bar.setStyleSheet(
+            "#statusBar { border-bottom:1px solid rgba(128,128,128,0.25); }"
+            # 감지 중(기본): 무색 — 가는 테두리만.
+            "#playPause { background:transparent; color:#8a8f98;"
+            " border:1px solid rgba(128,128,128,0.45);"
+            " border-radius:5px; font-size:12px; font-weight:800; }"
+            "#playPause:hover { color:#c8ccd4; border-color:rgba(128,128,128,0.85); }"
+            # 일시정지: ▶ 재개 버튼을 민트로 강조(눈에 띄게).
+            "#playPause:checked { background:#00B894; color:#06281e; border:none; }"
+            "#playPause:checked:hover { background:#00D1A7; }"
+            "#statusText { font-size:12px; }"
+        )
+        return bar
+
+    def _overlay_status(self) -> tuple[str, str]:
+        """최상단 상태 한 줄 = 재생/일시정지 토글과 1:1(2상태).
+
+        게임 포그라운드 여부는 성격이 다른 축이라 여기 섞지 않는다(각 탭의 진단
+        상태 줄에 '게임 비활성' 안내가 따로 있음).
+        """
+        if self._paused:
+            return ("⏸ 화면 감지 정지중", self._STATUS_WARN)
+        return ("● 화면 감지 중", self._STATUS_OK)
+
+    def _update_header_status(self) -> None:
+        text, color = self._overlay_status()
+        self._status_label.setText(text)  # 앞의 ●/⏸ 가 상태 표시('상태:' 접두어 없음)
+        self._status_label.setStyleSheet(f"color:{color}; font-size:12px;")
+        # 버튼 글리프: 재생 중이면 ⏸(멈춤 유도), 일시정지면 ▶(재개 유도).
+        # 색은 QSS :checked 로 반전(감지 중=무색, 일시정지=강조).
+        self._pause_btn.setText("▶" if self._paused else "⏸")
+
     # ---- 진단 상태 한 줄 ----
     _STATUS_OK = "#2ecc71"
     _STATUS_WARN = "#e67e22"
@@ -219,6 +276,7 @@ class MainWindow(QMainWindow):
     def _update_tracking_status(self) -> None:
         self.buff_tab.set_status(*self._buff_status())
         self.debuff_tab.set_status(*self._debuff_status())
+        self._update_header_status()
 
     def _buff_status(self) -> tuple[str, str]:
         if not config.load_capture_region("buffTracker"):
@@ -558,6 +616,7 @@ class MainWindow(QMainWindow):
             watcher=self._watcher,
             blink_enabled=blink,
         )
+        self.buff_controller.set_paused(self._paused)  # 재생성 시 일시정지 상태 유지
         self.buff_controller.start(source, self._engine)
 
     def _sound_enabled_ids(self) -> set[str]:
@@ -637,6 +696,7 @@ class MainWindow(QMainWindow):
             {b.id: False for b in catalog},
             watcher=self._watcher,
         )
+        self.debuff_controller.set_paused(self._paused)  # 재생성 시 일시정지 상태 유지
         # 디버프는 느리게 변하고 템플릿 수가 많아 500ms 주기(기획 0.3~0.5초).
         self.debuff_controller.start(source, self._debuff_engine, interval_ms=500)
 
@@ -720,9 +780,14 @@ class MainWindow(QMainWindow):
         menu = QMenu()
         open_act = QAction("열기", self)
         open_act.triggered.connect(self._show_from_tray)
+        self._pause_act = QAction("오버레이 일시정지", self)
+        self._pause_act.setCheckable(True)
+        self._pause_act.setToolTip("사냥 안 할 때 오버레이·알림을 잠깐 끕니다")
+        self._pause_act.toggled.connect(self._set_paused)
         quit_act = QAction("종료", self)
         quit_act.triggered.connect(self._quit_from_tray)
         menu.addAction(open_act)
+        menu.addAction(self._pause_act)
         menu.addSeparator()
         menu.addAction(quit_act)
         tray.setContextMenu(menu)
@@ -746,6 +811,40 @@ class MainWindow(QMainWindow):
     def _quit_from_tray(self) -> None:
         self._force_quit = True
         self.close()
+
+    # ---- 오버레이 일시정지(사냥 안 할 때 잠깐 끄기) ----
+    def _set_paused(self, paused: bool) -> None:
+        """사냥용 오버레이(버프·디버프·커스텀)를 끄거나(True) 다시 켠다(False).
+
+        추적 스레드는 그대로 두고 표시·알림만 토글하므로, 다시 켜면 재시작 없이
+        즉시 현재 상태가 보인다. 세션 한정(저장 안 함) — 재실행하면 항상 켜진 상태.
+        투아림(소리 알림)·메모(직접 띄운 참고 노트)는 성격이 달라 영향받지 않는다.
+        """
+        self._paused = paused
+        for c in (self.buff_controller, self.debuff_controller):
+            if c is not None:
+                c.set_paused(paused)
+        self.custom_overlay_tab.set_paused(paused)
+        # 트레이 체크 + 설정 토글 동기화(어느 쪽에서 눌러도 둘 다 반영, 루프 방지).
+        if self._pause_act.isChecked() != paused:
+            self._pause_act.blockSignals(True)
+            self._pause_act.setChecked(paused)
+            self._pause_act.blockSignals(False)
+        if self._pause_btn.isChecked() != paused:
+            self._pause_btn.blockSignals(True)
+            self._pause_btn.setChecked(paused)
+            self._pause_btn.blockSignals(False)
+        self._update_header_status()
+        if self._tray is not None:
+            self._tray.setToolTip(
+                f"{config.APP_NAME} — 오버레이 일시정지됨"
+                if paused else config.APP_NAME
+            )
+        from .toast import show_toast
+        if paused:
+            show_toast("오버레이 일시정지", "버프·디버프·커스텀을 껐어요. 재개하려면 다시 켜세요", 2500)
+        else:
+            show_toast("오버레이 켜짐", "버프·디버프·커스텀 오버레이가 다시 동작합니다", 2000)
 
     def _on_voice_pack_changed(self) -> None:
         """설정에서 알림 목소리 팩이 바뀌면 실행 중 재생기들을 새 팩으로 갱신(바로 적용)."""
