@@ -147,3 +147,45 @@ jobs:
           files: |
             dist/mabinogi-addon-v${{ env.APP_VERSION }}.exe
             version.json
+
+      # 배포가 끝난 뒤(위 단계들 성공 시에만) Discord 포럼에 새 글 작성.
+      # 제목 = vX.Y.Z, 내용 = README 업데이트 내역의 해당 버전 섹션 + 다운로드 링크.
+      # exe(약 117MB)는 Discord 업로드 한도를 넘어 첨부 불가 → 링크로 안내.
+      # 웹훅 시크릿(RELEASE_WEBHOOK_URL)이 없으면 이 단계는 통째로 건너뛴다.
+      - name: Announce release to Discord forum (webhook)
+        if: startsWith(github.ref, 'refs/tags/') && env.RELEASE_WEBHOOK_URL != ''
+        shell: bash
+        env:
+          RELEASE_WEBHOOK_URL: ${{ secrets.RELEASE_WEBHOOK_URL }}
+        run: |
+          # 1) README(packaging/releases_README.md)에서 "### vX.Y.Z" 섹션만 추출.
+          NOTES=$(awk -v ver="### v${APP_VERSION}" '
+            $0 == ver { grab = 1; next }
+            grab && /^(### |## |---)/ { exit }
+            grab { print }
+          ' packaging/releases_README.md)
+          # 앞뒤 빈 줄 정리.
+          NOTES=$(printf "%s" "$NOTES" | sed -e '/./,$!d' | sed -e :a -e '/^\n*$/{$d;N;ba}')
+          if [ -z "$NOTES" ]; then
+            NOTES="이번 버전의 변경 내역은 릴리스 페이지를 참고해 주세요."
+          fi
+
+          DL="https://github.com/StarlineBot/mabinogi_addon-releases/releases/download/v${APP_VERSION}/mabinogi-addon-v${APP_VERSION}.exe"
+          LINK="https://github.com/StarlineBot/mabinogi_addon-releases/releases/tag/v${APP_VERSION}"
+          BODY=$(printf "%s\n\n📥 다운로드: %s\n🔗 릴리스: %s" "$NOTES" "$DL" "$LINK")
+
+          # 2) Discord 포럼 웹훅: thread_name 이 새 포럼 글의 제목이 된다.
+          #    jq 로 안전하게 JSON 이스케이프. content 2000자 제한 대비 자른다.
+          jq -n \
+            --arg tn "v${APP_VERSION}" \
+            --arg c "$(printf "%s" "$BODY" | cut -c1-1900)" \
+            '{thread_name: $tn, content: $c}' > payload.json
+
+          # 성공/실패를 로그에 남기되, 공지 실패로 릴리스 전체를 깨뜨리진 않는다.
+          code=$(curl -sS -o resp.txt -w "%{http_code}" \
+            -X POST -H "Content-Type: application/json" \
+            -d @payload.json "${RELEASE_WEBHOOK_URL}?wait=true" || echo "000")
+          echo "webhook HTTP $code"; cat resp.txt || true
+          if [ "$code" != "200" ] && [ "$code" != "204" ]; then
+            echo "::warning::Discord 공지 실패(HTTP $code) — 릴리스 자체는 정상입니다."
+          fi
