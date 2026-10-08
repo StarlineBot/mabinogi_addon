@@ -424,7 +424,7 @@ class MainWindow(QMainWindow):
         self.settings_tab.refresh_game_label()  # 지정했으면 설정 라벨도 갱신
 
     # 업데이트 확인 최소 간격(초). 포커스 얻을 때마다 확인하되 이 간격으론 과호출 방지.
-    _UPDATE_CHECK_MIN_GAP = 180.0
+    _UPDATE_CHECK_MIN_GAP = 120.0  # 주기 타이머(3분)보다 짧게 둬 타이머 확인이 안 막히게
 
     def _maybe_check_update(self) -> None:
         """백그라운드로 새 버전 확인(시작 시·주기·창 활성화 시). 실패는 조용히 무시.
@@ -602,10 +602,12 @@ class MainWindow(QMainWindow):
         self._status_timer.start()
         self._update_tracking_status()
         # 실행 중 업데이트 감지: 시작 1회·창 활성화 외에 주기적으로도 확인(안 보고 있어도
-        # 알림이 오게). 새 버전이면 배너+토스트+소리(강제 아님). version.json은 CDN 캐시가
-        # 있어 더 자주 당길 이유가 없다.
+        # 알림이 오게). 새 버전이면 배너+토스트+소리(강제 아님). '창 활성화 시 확인'은
+        # mabinogi 창 자체를 앞으로 가져올 때만 울려, 오버레이를 뒤에 두고 다른 앱을 쓰는
+        # 실제 사용 패턴엔 거의 안 맞는다 → 이 타이머가 사실상 유일한 확인 수단이라 3분으로
+        # 둔다(캐시무효화로 매번 최신을 받고, version.json 폴링은 가벼워 부담 없음).
         self._update_timer = QTimer(self)
-        self._update_timer.setInterval(10 * 60 * 1000)  # 10분
+        self._update_timer.setInterval(3 * 60 * 1000)  # 3분
         self._update_timer.timeout.connect(self._maybe_check_update)
         self._update_timer.start()
         self._booting = False  # 부팅 끝 — 이제부터 사용자 변경을 저장
