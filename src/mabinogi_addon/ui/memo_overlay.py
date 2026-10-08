@@ -50,21 +50,54 @@ class MemoOverlay(QWidget):
         self._edit.setStyleSheet(_EDIT_STYLE)
         self._edit.setFrameShape(QTextEdit.Shape.NoFrame)
         self._edit.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self._edit.setPlaceholderText("메모 (해제 상태에서 클릭해 입력)")
+        self._edit.setReadOnly(True)  # 표시 전용 — 입력은 '메모' 탭에서
+        self._edit.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self._edit.setPlaceholderText("메모는 '메모' 탭에서 입력하세요")
+        # 마크다운 표/구분선이 흰 글씨 위에서도 보이게 기본 스타일 지정.
+        self._edit.document().setDefaultStyleSheet(
+            "table { border-collapse: collapse; }"
+            "th, td { border: 1px solid rgba(255,255,255,0.55); padding: 2px 8px; }"
+            "th { background: rgba(0,209,167,0.25); }"
+            "h1,h2,h3 { color: #7CF0D6; }"
+            "a { color: #7CF0D6; }"
+        )
+        self._markdown = ""
         layout.addWidget(self._edit)
         self.set_font_size(font_size)
 
     # ---- 내용/글꼴 ----
     def text(self) -> str:
-        return self._edit.toPlainText()
+        return self._markdown
 
+    def set_markdown(self, md: str) -> None:
+        self._markdown = md or ""
+        self._edit.setMarkdown(self._markdown)
+        self.autosize()
+
+    # 하위호환: 기존 호출부가 set_text를 쓰면 마크다운으로 렌더.
     def set_text(self, text: str) -> None:
-        self._edit.setPlainText(text)
+        self.set_markdown(text)
 
     def set_font_size(self, px: int) -> None:
         font = QFont()
         font.setPixelSize(max(8, int(px)))
         self._edit.setFont(font)
+        self.autosize()
+
+    def autosize(self) -> None:
+        """드래그로 정한 '너비'는 유지하고, 높이는 내용에 맞춰 자동으로 늘린다
+        (화면 아래 끝까지). → 박스보다 내용이 길어 잘리는 괴리를 없앤다."""
+        from PySide6.QtGui import QGuiApplication
+
+        doc = self._edit.document()
+        inner_w = max(60, self.width() - _BORDER * 2)
+        doc.setTextWidth(inner_w)
+        h = int(doc.size().height()) + _HEADER_H + _BORDER * 2 + 6
+        screen = QGuiApplication.primaryScreen()
+        if screen is not None:
+            max_h = max(60, screen.availableGeometry().bottom() - self.y() - 4)
+            h = min(h, max_h)
+        self.resize(self.width(), max(48, h))
 
     @property
     def locked(self) -> bool:
@@ -73,10 +106,7 @@ class MemoOverlay(QWidget):
     # ---- 고정(클릭 통과) ----
     def set_locked(self, locked: bool) -> None:
         self._locked = locked
-        self._edit.setReadOnly(locked)
-        self._edit.setFocusPolicy(
-            Qt.FocusPolicy.NoFocus if locked else Qt.FocusPolicy.StrongFocus
-        )
+        # 본문은 항상 표시 전용(입력은 메모 탭). 고정은 클릭 통과/커서만 바꾼다.
         self.setCursor(
             Qt.CursorShape.ArrowCursor if locked else Qt.CursorShape.SizeAllCursor
         )

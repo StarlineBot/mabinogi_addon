@@ -128,10 +128,11 @@ class MainWindow(QMainWindow):
         # 메모 오버레이: 위치·크기는 영역 지정, 고정=클릭통과. 게임 활성 시만 표시.
         memo = config.load_memo()
         self.memo_overlay = MemoOverlay(font_size=int(memo.get("fontSize", 16)))
-        self.memo_overlay.set_text(str(memo.get("text", "")))
+        self.memo_overlay.set_markdown(str(memo.get("text", "")))
         self.memo_tab.lock_toggled.connect(self._on_memo_lock)
         self.memo_tab.region_changed.connect(self._apply_memo_region)
         self.memo_tab.font_changed.connect(self._on_memo_font)
+        self.memo_tab.text_changed.connect(self._on_memo_text)
         self.memo_overlay.moved.connect(self._on_memo_moved)
         self._memo_timer = QTimer(self)
         self._memo_timer.setInterval(300)
@@ -634,12 +635,13 @@ class MainWindow(QMainWindow):
 
     # ---- 메모 오버레이 ----
     def _apply_memo_region(self) -> None:
-        """저장된 메모 영역(위치·크기)을 오버레이에 적용."""
+        """저장된 메모 영역에서 위치·너비를 적용. 높이는 내용에 맞춰 자동."""
         region = config.load_capture_region("memoTracker")
         if region:
             self.memo_overlay.setGeometry(
                 region["x"], region["y"], region["w"], region["h"]
             )
+            self.memo_overlay.autosize()  # 높이는 내용에 맞춰(드래그 높이 무시)
 
     def _on_memo_moved(self) -> None:
         """드래그로 옮긴 메모 위치를 저장(크기는 유지)."""
@@ -658,6 +660,10 @@ class MainWindow(QMainWindow):
 
     def _on_memo_font(self, px: int) -> None:
         self.memo_overlay.set_font_size(px)
+        self._save_memo()
+
+    def _on_memo_text(self, md: str) -> None:
+        self.memo_overlay.set_markdown(md)  # 입력 즉시 오버레이에 렌더
         self._save_memo()
 
     def _save_memo(self) -> None:

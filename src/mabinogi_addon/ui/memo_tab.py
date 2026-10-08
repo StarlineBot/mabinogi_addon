@@ -9,6 +9,7 @@ from __future__ import annotations
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QHBoxLayout,
+    QPlainTextEdit,
     QPushButton,
     QSpinBox,
     QVBoxLayout,
@@ -23,19 +24,24 @@ from .widgets import hint_label, section_label
 HELP_TITLE = "메모 사용법"
 HELP_HTML = """
 <h3>메모란?</h3>
-<p>게임 화면 위에 띄워두는 간단한 <b>메모 오버레이</b>입니다.
-공략 순서, 재료 체크 등을 적어 두고 게임하면서 볼 수 있습니다.</p>
+<p>게임 화면 위에 띄워두는 <b>메모 오버레이</b>입니다. 던전 패턴 표, 재료 체크리스트
+등을 적어 두고 게임하면서 볼 수 있습니다. <b>마크다운</b>으로 표·리스트·강조가 됩니다.</p>
 
 <h3>사용 순서</h3>
 <ol>
-<li><b>메모 영역 지정</b> — 메모가 들어갈 위치·크기를 드래그로 잡습니다.</li>
-<li><b>입력</b> — <b>'해제'</b> 상태에서 그 영역을 클릭해 글을 적습니다.
-글자 크기도 조절할 수 있습니다.</li>
-<li><b>고정</b> — <b>'고정'</b>하면 클릭이 통과되어(표시 전용) 게임을 가리지 않습니다.</li>
+<li><b>메모 영역 지정</b> — 오버레이가 들어갈 위치·크기를 드래그로 잡습니다.</li>
+<li><b>내용 입력</b> — 아래 편집창에 <b>마크다운</b>으로 적습니다(입력은 여기서,
+오버레이엔 바로 렌더됨). 툴바의 <b>표/리스트/굵게</b> 버튼으로 문법 몰라도 넣을 수 있어요.
+글자 크기도 조절됩니다.</li>
+<li><b>위치 조정·고정</b> — 오버레이는 <b>'해제'</b> 상태에서 끌어 옮기고(입력 아님),
+<b>'고정'</b>하면 클릭이 통과되어(표시 전용) 게임을 가리지 않습니다.</li>
 </ol>
 
-<p>메모는 <b>마비노기가 활성(화면 맨 앞)일 때만</b> 보입니다.
-다른 창을 보고 있으면 자동으로 숨겨져 방해되지 않습니다.</p>
+<h3>마크다운 예</h3>
+<p><code>## 제목</code> · <code>- 리스트</code> · <code>**굵게**</code> ·
+표는 <code>| 관문 | 수치 |</code> 아래 <code>| --- | --- |</code>.</p>
+
+<p>메모는 <b>마비노기가 활성(화면 맨 앞)일 때만</b> 보입니다.</p>
 """
 
 
@@ -43,6 +49,7 @@ class MemoTab(QWidget):
     lock_toggled = Signal(bool)  # 고정(클릭 통과) 토글
     region_changed = Signal()  # 메모 영역(위치·크기) 변경
     font_changed = Signal(int)  # 글자 크기 변경
+    text_changed = Signal(str)  # 메모(마크다운) 내용 변경 → 오버레이 렌더·저장
 
     def __init__(self) -> None:
         super().__init__()
@@ -80,14 +87,50 @@ class MemoTab(QWidget):
         font_row.addStretch(1)
         v.addLayout(font_row)
 
+        # ---- 메모 입력(마크다운) + 빠른 삽입 툴바 ----
+        v.addWidget(section_label("메모 내용 (마크다운)"))
+        tools = QHBoxLayout()
+        tools.setSpacing(4)
+        for text, snippet in (
+            ("제목", "## 제목\n"),
+            ("굵게", "**굵게**"),
+            ("리스트", "- 항목\n"),
+            ("표", "| 구분 | 값 |\n| --- | --- |\n| 1관 | 85, 35 |\n"),
+            ("구분선", "\n---\n"),
+        ):
+            b = QPushButton(text)
+            b.setToolTip("커서 위치에 마크다운 삽입")
+            b.clicked.connect(lambda _c=False, s=snippet: self._insert(s))
+            tools.addWidget(b)
+        tools.addStretch(1)
+        v.addLayout(tools)
+
+        self.editor = QPlainTextEdit()
+        self.editor.setPlaceholderText(
+            "예)\n## 던전 패턴\n| 관문 | 수치 |\n| --- | --- |\n| 1관 | 85, 35 |\n\n- **중요** 항목"
+        )
+        self.editor.setPlainText(str(config.load_memo().get("text", "")))
+        self.editor.textChanged.connect(
+            lambda: self.text_changed.emit(self.editor.toPlainText())
+        )
+        v.addWidget(self.editor, 1)
+
         v.addWidget(
             hint_label(
-                "메모 영역을 지정한 뒤, '해제' 상태에서 그 영역을 클릭해 입력하세요.\n"
-                "'고정'하면 클릭이 통과되어(표시 전용) 게임을 가리지 않습니다.\n"
+                "여기서 적으면 오버레이에 표·리스트·강조로 바로 나타납니다.\n"
+                "오버레이는 '해제' 상태에서 끌어 위치를 옮기고, '고정'하면 클릭이 통과돼요.\n"
                 "메모는 마비노기가 활성일 때만 보입니다."
             )
         )
-        v.addStretch(1)
+
+    def _insert(self, snippet: str) -> None:
+        """커서 위치에 마크다운 조각 삽입(선택 영역이 있으면 '굵게'는 감싼다)."""
+        cur = self.editor.textCursor()
+        if snippet == "**굵게**" and cur.hasSelection():
+            cur.insertText(f"**{cur.selectedText()}**")
+        else:
+            cur.insertText(snippet)
+        self.editor.setFocus()
 
     def _update_region_hint(self) -> None:
         region = config.load_capture_region("memoTracker")
