@@ -63,6 +63,33 @@ def default_sound_map() -> dict[str, Path]:
     return out
 
 
+# 새 버전 감지 알림 효과음(assets/sounds/에 이 이름으로 두면 재생, 없으면 조용히 생략).
+UPDATE_SOUND_FILE = "업데이트 알림.mp3"
+_update_player = None  # 일회성 재생기(모듈에 보관해 재생 전 GC 방지)
+
+
+def play_update_sound() -> bool:
+    """새 버전 감지 시 알림 효과음 재생. 파일 없거나 오디오 백엔드 없으면 False."""
+    global _update_player
+    path = sound_path(UPDATE_SOUND_FILE)
+    if not path.exists():
+        return False
+    try:
+        from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
+
+        if _update_player is None:
+            audio = QAudioOutput()
+            player = QMediaPlayer()
+            player.setAudioOutput(audio)
+            player._audio = audio  # 오디오 출력도 함께 보관(재생 중 끊김 방지)
+            _update_player = player
+        _update_player.setSource(QUrl.fromLocalFile(str(path)))
+        _update_player.play()
+        return True
+    except Exception:  # noqa: BLE001 — 오디오 없으면 무음(알림은 배너·토스트로도 뜸)
+        return False
+
+
 class SoundNotifier(QObject):
     """buff_id별 알림 사운드 재생기. 사운드 꺼진 버프는 호출 측에서 걸러준다."""
 

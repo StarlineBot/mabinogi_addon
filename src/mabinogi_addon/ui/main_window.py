@@ -11,11 +11,13 @@ from PySide6.QtCore import QTimer, Signal
 from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import (
     QApplication,
+    QFrame,
     QHBoxLayout,
     QLabel,
     QMainWindow,
     QMenu,
     QPushButton,
+    QScrollArea,
     QSystemTrayIcon,
     QTabWidget,
     QVBoxLayout,
@@ -50,6 +52,18 @@ def app_icon() -> QIcon:
     return QIcon(str(LOGO_PATH))
 
 
+def _scrolled(widget: QWidget) -> QScrollArea:
+    """위젯을 세로 스크롤 영역으로 감싼다(창 높이 고정 시 내용 잘림 방지).
+
+    가로는 뷰포트 너비에 맞춰(setWidgetResizable) 가로 스크롤이 생기지 않게 한다.
+    """
+    area = QScrollArea()
+    area.setWidgetResizable(True)
+    area.setFrameShape(QFrame.Shape.NoFrame)
+    area.setWidget(widget)
+    return area
+
+
 # 탭 바: 밑줄 스타일 + 균등 고정 너비. 선택 탭은 민트색·굵게 + 민트 밑줄로 또렷하게.
 # (앱은 OS 테마를 따르므로, 무채색 글자 + 민트 강조로 라이트/다크 모두 자연스럽게.)
 _TAB_QSS = (
@@ -76,7 +90,13 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle(f"{config.APP_NAME}  {display_version()}")
         self.setWindowIcon(app_icon())
-        self.resize(780, 620)
+        # 고정 크기(크기 변경 비활성). 내용이 넘치면 각 탭이 스크롤로 처리한다.
+        # (resize 가능 상태로 두면 가장자리에 리사이즈 커서만 뜨고 실제론 안 줄던 혼란.)
+        # 논리 px 기준 — 실제 크기는 Windows 디스플레이 배율만큼 커진다. 탭마다 필요
+        # 폭이 달라(커스텀 463~투아림 1209), 주력인 버프 탭(≈774)에 맞춰 잡는다. 더 넓은
+        # 탭(투아림·파티·디버프)은 가로 스크롤로 본다(예전엔 스크롤이 없어 제일 넓은 탭에
+        # 창이 강제로 맞춰져 과하게 넓었다).
+        self.setFixedSize(790, 540)
 
         # 포그라운드 감지(맥=항상 활성). 저장된 게임 실행파일로 판정(없으면 제목 폴백).
         self._watcher = create_window_watcher(game_exe=config.load_game_exe())
@@ -111,13 +131,14 @@ class MainWindow(QMainWindow):
         self.settings_tab.replay_tour.connect(self._run_tour)
         tabs = QTabWidget()
         self._tabs = tabs  # 온보딩 투어에서 탭 전환에 사용
-        tabs.addTab(self.buff_tab, "버프 트래커")
-        tabs.addTab(self.debuff_tab, "디버프 트래커")
-        tabs.addTab(self.tuarim_tab, "투아림 트래커")
-        tabs.addTab(self.custom_overlay_tab, "커스텀 오버레이")
-        tabs.addTab(self.party_tab, "파티 모집")
-        tabs.addTab(self.memo_tab, "메모")
-        tabs.addTab(self.settings_tab, "설정")
+        # 각 탭을 스크롤 영역으로 감싼다 → 창 높이를 고정해도 내용이 잘리지 않고 스크롤.
+        tabs.addTab(_scrolled(self.buff_tab), "버프 트래커")
+        tabs.addTab(_scrolled(self.debuff_tab), "디버프 트래커")
+        tabs.addTab(_scrolled(self.tuarim_tab), "투아림 트래커")
+        tabs.addTab(_scrolled(self.custom_overlay_tab), "커스텀 오버레이")
+        tabs.addTab(_scrolled(self.party_tab), "파티 모집")
+        tabs.addTab(_scrolled(self.memo_tab), "메모")
+        tabs.addTab(_scrolled(self.settings_tab), "설정")
         tabs.setStyleSheet(_TAB_QSS)
 
         # 중앙: 상단 업데이트 배너(기본 숨김) + 탭
@@ -334,7 +355,7 @@ class MainWindow(QMainWindow):
         from .tour_overlay import TourOverlay, TourStep
 
         def _go_buff() -> None:
-            self._tabs.setCurrentWidget(self.buff_tab)
+            self._tabs.setCurrentIndex(0)  # 버프 탭(스크롤로 감싸 위젯 기준 전환 불가)
 
         steps = [
             TourStep(
@@ -408,8 +429,17 @@ class MainWindow(QMainWindow):
         threading.Thread(target=work, daemon=True).start()
 
     def _on_update_found(self, info: dict) -> None:
+        ver = str(info.get("version", "?"))
         self._pending_update = info
-        self.show_update_banner(str(info.get("version", "?")))
+        self.show_update_banner(ver)
+        # 처음 감지한 버전일 때만 토스트+소리(주기 확인이 같은 버전을 반복해도 1회만).
+        if ver != getattr(self, "_announced_update", None):
+            self._announced_update = ver
+            from .notifier import play_update_sound
+            from .toast import show_toast
+
+            show_toast("새 버전 v" + ver, "상단의 [지금 업데이트]로 받을 수 있어요", 6000)
+            play_update_sound()
 
     def _on_update_clicked(self) -> None:
         """[지금 업데이트] → 다운로드(진행바) → B안 교체 → 재실행."""
