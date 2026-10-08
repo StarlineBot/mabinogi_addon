@@ -33,8 +33,34 @@ def main() -> None:
     app.setWindowIcon(app_icon())  # 작업표시줄/트레이 아이콘
     # 트레이 최소화를 위해, 창을 숨겨도(마지막 창 닫혀도) 앱이 종료되지 않게 한다.
     app.setQuitOnLastWindowClosed(False)
-    window = MainWindow()
-    if not config.load_general_flag("startInTray", False):
+
+    # PyInstaller --splash(압축 해제 구간 정적 스플래시)가 떠 있으면 닫는다(frozen 전용).
+    try:
+        import pyi_splash  # type: ignore
+
+        pyi_splash.close()
+    except Exception:  # noqa: BLE001, S110 — 개발(uv)엔 pyi_splash 없음(정상)
+        pass
+
+    start_in_tray = config.load_general_flag("startInTray", False)
+    # Qt 스플래시: 초기화(무거운 MainWindow 생성) 구간을 로고+진행바+위트 메시지로 덮는다.
+    # '트레이로 시작'이면 창을 안 띄우므로 스플래시도 생략.
+    splash = None
+    if not start_in_tray:
+        from mabinogi_addon.ui.splash import Splash
+
+        splash = Splash()
+        splash.center_on_screen()
+        splash.show()
+        splash.step(10)
+
+    window = MainWindow()  # 가장 무거운 단계(카탈로그·엔진·오버레이 구성)
+    if splash is not None:
+        splash.step(75)
+    if not start_in_tray:
         window.show()  # '트레이로 시작'이면 창 없이 트레이만
     window.start()  # 파티 폴링 등 백그라운드 작업 시작
+    if splash is not None:
+        splash.step(100)
+        splash.close()
     sys.exit(app.exec())
