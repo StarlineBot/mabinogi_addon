@@ -137,6 +137,16 @@ class BuffController(QObject):
             _log.info("소스 close %.0fms", (time.perf_counter() - t) * 1000)
             self._source = None
 
+    @property
+    def item_count(self) -> int:
+        """현재 오버레이에 표시 중인 항목 수(진단 상태 표시용)."""
+        return len(self._items)
+
+    @property
+    def game_active(self) -> bool:
+        """게임이 포그라운드로 판정되는지(진단 상태 표시용)."""
+        return self._game_active
+
     def set_show_duration(self, show_duration: dict[str, bool]) -> None:
         """지속시간 표시 설정 갱신(실행 중 폼 변경 반영)."""
         self._show_duration = show_duration

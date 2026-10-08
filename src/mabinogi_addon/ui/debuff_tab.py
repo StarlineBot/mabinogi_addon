@@ -135,6 +135,9 @@ class DebuffTab(QWidget):
         self._update_region_hint()
         v.addWidget(self.region_hint)
 
+        self.status_label = hint_label("")  # 진단 상태(추적 중/게임 비활성 등)
+        v.addWidget(self.status_label)
+
         self.debuff_list = QListWidget()
         self.debuff_list.setIconSize(QSize(28, 28))
         self.debuff_list.currentRowChanged.connect(self._on_select)
@@ -160,6 +163,11 @@ class DebuffTab(QWidget):
     def _on_scale(self, pct: int) -> None:
         config.set_debuff_scale(pct)
         self.scale_changed.emit(pct)
+
+    def set_status(self, text: str, color: str) -> None:
+        """진단 상태 한 줄 갱신(메인의 주기 폴링에서 호출)."""
+        self.status_label.setText(text)
+        self.status_label.setStyleSheet(f"color:{color};")
 
     # ---- 영역 지정 / 고정 ----
     def _update_region_hint(self) -> None:

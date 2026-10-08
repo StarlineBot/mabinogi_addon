@@ -133,6 +133,8 @@ class SettingsTab(QWidget):
     config_imported = Signal()
     # 알림 목소리 팩 변경 → 메인이 실행 중 재생기들을 새 팩으로 갱신(바로 적용).
     voice_pack_changed = Signal()
+    # '사용법 투어 다시 보기' → 메인이 온보딩 투어를 다시 실행.
+    replay_tour = Signal()
 
     def __init__(self, watcher: WindowWatcher) -> None:
         super().__init__()
@@ -464,6 +466,10 @@ class SettingsTab(QWidget):
         self._toast_corner.setCurrentIndex(corner_idx)
         self._toast_corner.currentIndexChanged.connect(self._on_toast_corner_changed)
         toast_row.addWidget(self._toast_corner)
+        toast_test = QPushButton("테스트")
+        toast_test.setToolTip("지금 설정한 위치로 샘플 토스트를 한 번 띄웁니다")
+        toast_test.clicked.connect(self._on_toast_test)
+        toast_row.addWidget(toast_test)
         toast_row.addStretch(1)
         v.addLayout(toast_row)
         v.addWidget(
@@ -490,7 +496,20 @@ class SettingsTab(QWidget):
                 "버프·투아림·파티 알림에 쓸 목소리 팩. 고르면 미리듣기가 재생되고 바로 적용돼요."
             )
         )
+
+        tour_row = QHBoxLayout()
+        tour_btn = QPushButton("사용법 투어 다시 보기")
+        tour_btn.setToolTip("처음 실행 때 나온 단계별 사용법 안내를 다시 봅니다")
+        tour_btn.clicked.connect(self.replay_tour.emit)
+        tour_row.addWidget(tour_btn)
+        tour_row.addStretch(1)
+        v.addLayout(tour_row)
         return box
+
+    def _on_toast_test(self) -> None:
+        from .toast import show_toast
+
+        show_toast("테스트 알림", "토스트가 이 위치에 이렇게 표시됩니다 🎉", 3000)
 
     def _on_voice_pack_changed(self, _index: int) -> None:
         pack = self._voice_pack.currentData()

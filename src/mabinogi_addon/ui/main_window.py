@@ -82,6 +82,7 @@ class MainWindow(QMainWindow):
         self.settings_tab = SettingsTab(self._watcher)
         self.settings_tab.config_imported.connect(self._on_config_imported)
         self.settings_tab.voice_pack_changed.connect(self._on_voice_pack_changed)
+        self.settings_tab.replay_tour.connect(self._run_tour)
         tabs = QTabWidget()
         self._tabs = tabs  # 온보딩 투어에서 탭 전환에 사용
         tabs.addTab(self.buff_tab, "버프")
@@ -194,13 +195,57 @@ class MainWindow(QMainWindow):
     def _update_banner_hide(self) -> None:
         self._update_banner.hide()
 
+    # ---- 진단 상태 한 줄 ----
+    _STATUS_OK = "#2ecc71"
+    _STATUS_WARN = "#e67e22"
+    _STATUS_MUTED = "#8a8f98"
+
+    def _update_tracking_status(self) -> None:
+        self.buff_tab.set_status(*self._buff_status())
+        self.debuff_tab.set_status(*self._debuff_status())
+
+    def _buff_status(self) -> tuple[str, str]:
+        if not config.load_capture_region("buffTracker"):
+            return ("⚠ 영역 미지정 — '버프 영역 지정'을 먼저 하세요", self._STATUS_WARN)
+        if self.buff_controller is None:
+            return ("ℹ 추적 대기 — 이 PC에선 라이브 캡처가 안 됩니다", self._STATUS_MUTED)
+        if not self._watcher.is_game_active():
+            return ("⏸ 게임 비활성 — 마비노기 창을 맨 앞으로 두면 추적합니다",
+                    self._STATUS_MUTED)
+        if self._engine is not None and not self._engine.anchor_seen:
+            return ("⚠ 기준 버프 미검출 — 영역에 ⚓ 프리미엄 배틀 멤버십이 보이나요?",
+                    self._STATUS_WARN)
+        n = self.buff_controller.item_count
+        if n:
+            return (f"● 추적 중 — 버프 {n}개 표시", self._STATUS_OK)
+        return ("● 추적 중 — 지금 표시할 버프 없음", self._STATUS_OK)
+
+    def _debuff_status(self) -> tuple[str, str]:
+        if not config.load_capture_region("debuffTracker"):
+            return ("⚠ 영역 미지정 — '디버프 줄 영역 지정'을 먼저 하세요",
+                    self._STATUS_WARN)
+        if self.debuff_controller is None:
+            return ("ℹ 추적 대기 — 이 PC에선 라이브 캡처가 안 됩니다", self._STATUS_MUTED)
+        if not self._watcher.is_game_active():
+            return ("⏸ 게임 비활성 — 마비노기 창을 맨 앞으로 두면 추적합니다",
+                    self._STATUS_MUTED)
+        n = self.debuff_controller.item_count
+        if n:
+            return (f"● 추적 중 — 안 걸린 디버프 {n}개 표시", self._STATUS_OK)
+        return ("● 추적 중 — 표시할 디버프 없음", self._STATUS_OK)
+
     def _maybe_run_tour(self) -> None:
         """첫 실행 때 한 번, 사용 순서를 노란 점선 강조로 안내(코치마크)."""
         if not self.isVisible():
             return
         if config.load_general_flag("tourShown", False):
             return
+        self._run_tour()
 
+    def _run_tour(self) -> None:
+        """온보딩 투어 실행(첫 실행 + '다시 보기' 공용)."""
+        if not self.isVisible():
+            self.show()  # 트레이 상태에서 '다시 보기' 누르면 창을 띄운다
         from .tour_overlay import TourOverlay, TourStep
 
         def _go_buff() -> None:
@@ -393,6 +438,12 @@ class MainWindow(QMainWindow):
         self._maybe_check_update()
         self._maybe_prompt_game_window()
         self._maybe_run_tour()
+        # 진단 상태 한 줄(추적 중/게임 비활성/영역 미지정 등) 주기 갱신.
+        self._status_timer = QTimer(self)
+        self._status_timer.setInterval(700)
+        self._status_timer.timeout.connect(self._update_tracking_status)
+        self._status_timer.start()
+        self._update_tracking_status()
 
     def _compute_tracking(
         self, catalog

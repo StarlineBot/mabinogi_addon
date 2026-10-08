@@ -70,6 +70,11 @@ class BuffEngine:
             for bid in templates
         }
 
+    @property
+    def anchor_seen(self) -> bool:
+        """기준(앵커) 버프를 한 번이라도 검출했는지(진단 상태 표시용)."""
+        return self._anchor_seen
+
     def set_order(self, order: list[str]) -> None:
         """표시 순서 갱신(실행 중 버프 목록 재정렬·숨김 반영). 상태는 유지."""
         self._order = list(order)

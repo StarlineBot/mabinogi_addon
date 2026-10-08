@@ -36,9 +36,9 @@ from .widgets import checkbox, hint_label
 TUARIM_BOX_SIZE = (58, 28)
 
 # 투아림 관리 사용법(? 아이콘 → 새 창).
-HELP_TITLE = "투아림 관리 사용법"
+HELP_TITLE = "투아림 트래커 사용법"
 HELP_HTML = """
-<h3>투아림 관리란?</h3>
+<h3>투아림 트래커란?</h3>
 <p>화면의 투아림 <b>% 게이지</b>(작은 원 안 숫자 아래 %)를 읽어, 지정한 %(예: 95·98)
 이상이 되면 소리로 알립니다. 100%가 되면 다시 0%부터 시작합니다.
 오버레이로 화면을 가리지 않고 <b>읽기만</b> 합니다.</p>
@@ -79,7 +79,7 @@ class TuarimTab(QWidget):
         v = QVBoxLayout(self)
         v.setContentsMargins(12, 12, 12, 12)
         v.setSpacing(10)
-        v.addLayout(help_title_row("투아림 관리", HELP_TITLE, HELP_HTML, self))
+        v.addLayout(help_title_row("투아림 트래커", HELP_TITLE, HELP_HTML, self))
         v.addWidget(
             hint_label(
                 "'영역 지정'을 누르면 박스가 커서를 따라옵니다. 마우스 휠로 크기를 숫자에"

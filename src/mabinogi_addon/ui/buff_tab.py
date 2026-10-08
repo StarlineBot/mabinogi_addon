@@ -202,6 +202,9 @@ class BuffTab(QWidget):
         self._update_region_hint()
         v.addWidget(self.region_hint)
 
+        self.status_label = hint_label("")  # 진단 상태(추적 중/게임 비활성 등)
+        v.addWidget(self.status_label)
+
         self.buff_list = QListWidget()
         self.buff_list.setIconSize(QSize(32, 32))
         self.buff_list.currentRowChanged.connect(self._on_select)
@@ -250,6 +253,11 @@ class BuffTab(QWidget):
         self.lock_btn.setChecked(locked)
         self.lock_btn.blockSignals(False)
         self._on_lock_toggled(locked)  # 텍스트 갱신 + lock_toggled 방출(→ 오버레이 적용)
+
+    def set_status(self, text: str, color: str) -> None:
+        """진단 상태 한 줄 갱신(메인의 주기 폴링에서 호출)."""
+        self.status_label.setText(text)
+        self.status_label.setStyleSheet(f"color:{color};")
 
     # ---- 영역 지정 ----
     def _update_region_hint(self) -> None:
