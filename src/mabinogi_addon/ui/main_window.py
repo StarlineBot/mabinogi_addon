@@ -412,14 +412,25 @@ class MainWindow(QMainWindow):
         dlg.exec()
         self.settings_tab.refresh_game_label()  # 지정했으면 설정 라벨도 갱신
 
+    # 업데이트 확인 최소 간격(초). 포커스 얻을 때마다 확인하되 이 간격으론 과호출 방지.
+    _UPDATE_CHECK_MIN_GAP = 180.0
+
     def _maybe_check_update(self) -> None:
-        """시작 시 백그라운드로 새 버전 확인(개발/실패는 조용히 무시)."""
+        """백그라운드로 새 버전 확인(시작 시·주기·창 활성화 시). 실패는 조용히 무시.
+
+        여러 계기에서 호출되므로 최소 간격으로 스로틀한다(짧은 간격 중복 호출 무시).
+        """
         import threading
+        import time
 
         from ..system import updater
 
         if not updater.can_update():
             return
+        now = time.monotonic()
+        if now - getattr(self, "_last_update_check", 0.0) < self._UPDATE_CHECK_MIN_GAP:
+            return
+        self._last_update_check = now
 
         def work() -> None:
             info = updater.check_latest()
@@ -561,10 +572,11 @@ class MainWindow(QMainWindow):
         self._update_tracking_status()
         # 저장된 전역 단축키 등록(있으면). Windows 외/충돌이면 조용히 무시.
         self._pause_hotkey.set_hotkey(config.load_pause_hotkey())
-        # 실행 중 업데이트 감지: 시작 1회 외에 주기적으로도 확인(켜둔 채 새 버전이
-        # 나와도 모르던 문제). 새 버전이면 상단 배너가 뜬다(강제 아님).
+        # 실행 중 업데이트 감지: 시작 1회·창 활성화 외에 주기적으로도 확인(안 보고 있어도
+        # 알림이 오게). 새 버전이면 배너+토스트+소리(강제 아님). version.json은 CDN 캐시가
+        # 있어 더 자주 당길 이유가 없다.
         self._update_timer = QTimer(self)
-        self._update_timer.setInterval(30 * 60 * 1000)  # 30분
+        self._update_timer.setInterval(10 * 60 * 1000)  # 10분
         self._update_timer.timeout.connect(self._maybe_check_update)
         self._update_timer.start()
         self._booting = False  # 부팅 끝 — 이제부터 사용자 변경을 저장
@@ -929,6 +941,15 @@ class MainWindow(QMainWindow):
         return self._tray is not None and config.load_general_flag(
             "minimizeToTray", True
         )
+
+    def changeEvent(self, event) -> None:
+        # 창을 앞으로 가져올 때(포커스 얻기) 새 버전 확인 — 실행 중 감지를 30분 주기만
+        # 기다리지 않고, 사용자가 앱을 볼 때 바로 잡는다(_maybe_check_update가 스로틀).
+        from PySide6.QtCore import QEvent
+
+        if event.type() == QEvent.Type.ActivationChange and self.isActiveWindow():
+            self._maybe_check_update()
+        super().changeEvent(event)
 
     def closeEvent(self, event) -> None:
         import time
