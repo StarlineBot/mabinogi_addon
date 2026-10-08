@@ -408,11 +408,32 @@ class SettingsTab(QWidget):
         return btn
 
     def _on_diag_snapshot(self) -> None:
+        from PySide6.QtCore import QTimer
+        from PySide6.QtWidgets import QMessageBox
+
+        # 바로 캡처하면 앱 창이 게임 영역을 덮어 '어두운 화면'이 찍힌다.
+        # 앱을 잠시 최소화하고 몇 초 뒤 캡처해, 그 사이 게임을 맨 앞으로 두게 한다.
+        if QMessageBox.question(
+            self, "진단 스냅샷",
+            "게임에서 버프창(남은시간)이 보이게 띄워 주세요.\n\n"
+            "'확인'을 누르면 이 앱이 잠시 최소화되고 5초 뒤 자동으로 캡처합니다.\n"
+            "그 사이 게임 화면을 맨 앞으로 두세요.",
+            QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel,
+        ) != QMessageBox.StandardButton.Ok:
+            return
+        self.window().showMinimized()
+        QTimer.singleShot(5000, self._do_diag_capture)
+
+    def _do_diag_capture(self) -> None:
         from PySide6.QtWidgets import QMessageBox
 
         from .diag_capture import save_diagnostic
 
         out, saved = save_diagnostic()
+        win = self.window()
+        win.showNormal()
+        win.raise_()
+        win.activateWindow()
         if not saved:
             QMessageBox.information(
                 self, "진단 스냅샷",
