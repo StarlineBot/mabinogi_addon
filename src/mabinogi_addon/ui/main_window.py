@@ -110,7 +110,7 @@ class MainWindow(QMainWindow):
         # 고정 크기(크기 변경 비활성). 안내문 줄바꿈 후 탭 최대 폭이 ≈700이라 740이면
         # 가로 스크롤 없이 모두 들어온다. 높이 660은 주력 버프 탭(≈496)이 스크롤 없이
         # 들어오고, 더 긴 탭(커스텀·파티·설정)만 세로 스크롤로 본다(_VScroll이 눌림 방지).
-        self.setFixedSize(740, 660)
+        self.setFixedSize(790, 660)
 
         # 포그라운드 감지(맥=항상 활성). 저장된 게임 실행파일로 판정(없으면 제목 폴백).
         self._watcher = create_window_watcher(game_exe=config.load_game_exe())
@@ -925,7 +925,17 @@ class MainWindow(QMainWindow):
             show_toast("전체 오버레이 시작", "버프·디버프·커스텀 오버레이가 다시 동작합니다", 2000)
 
     def _on_pause_hotkey(self) -> None:
-        """전역 단축키가 눌리면 오버레이 정지/시작을 토글(게임이 맨 앞이어도 동작)."""
+        """전역 단축키가 눌리면 오버레이 정지/시작을 토글(게임이 맨 앞이어도 동작).
+
+        디바운스: 한 번 누름이 두 번 전달돼 정지+시작으로 상쇄되던 문제 방지(0.25초 내
+        중복 무시).
+        """
+        import time
+
+        now = time.monotonic()
+        if now - getattr(self, "_last_hotkey_at", 0.0) < 0.25:
+            return
+        self._last_hotkey_at = now
         self._set_paused(not self._paused)
 
     def _apply_pause_hotkey(self, spec: str) -> bool:

@@ -99,21 +99,6 @@ class PauseHotkey(QObject):
         super().__init__(parent)
         self._registered = False
         self._filter: _MsgFilter | None = None
-        self._hwnd = 0  # 등록에 쓴 창 핸들(해제 때 동일해야 함)
-
-    def _window_hwnd(self) -> int:
-        """메인 창의 HWND. 여기 등록해야 Qt가 WM_HOTKEY를 네이티브 필터로 넘긴다.
-
-        hwnd=NULL(스레드 큐)로 등록하면 Qt가 그 메시지를 필터로 안 넘기는 경우가 있어
-        단축키가 조용히 안 먹는다. 부모(메인 창)의 winId()를 쓴다.
-        """
-        w = self.parent()
-        try:
-            if w is not None and hasattr(w, "window"):
-                return int(w.window().winId())
-        except Exception:  # noqa: BLE001, S110 — 핸들 못 구하면 NULL로 폴백
-            pass
-        return 0
 
     def set_hotkey(self, spec: str) -> bool:
         """조합을 등록한다. 성공 True. 빈 값/미지원/충돌/비Windows면 False(해제만)."""
@@ -126,19 +111,20 @@ class PauseHotkey(QObject):
         mods, vk = parsed
         import ctypes
 
-        hwnd = self._window_hwnd()
-        if not ctypes.windll.user32.RegisterHotKey(hwnd, _HOTKEY_ID, mods, vk):
+        # hwnd=NULL(스레드) 전역 등록: WM_HOTKEY가 스레드 큐로 와 포커스와 무관하게
+        # 받는다(게임이 맨 앞이어도). 특정 창에 걸면 창이 비활성일 때 전달이 끊기거나
+        # 중복 전달되는 문제가 있었다(앱 포커스일 때만 동작·두 번 토글).
+        if not ctypes.windll.user32.RegisterHotKey(None, _HOTKEY_ID, mods, vk):
             _log.info("전역 단축키 등록 실패(충돌?): %s", spec)
             return False
         app = _app()
         if app is None:
-            ctypes.windll.user32.UnregisterHotKey(hwnd, _HOTKEY_ID)
+            ctypes.windll.user32.UnregisterHotKey(None, _HOTKEY_ID)
             return False
-        self._hwnd = hwnd
         self._filter = _MsgFilter(self)
         app.installNativeEventFilter(self._filter)
         self._registered = True
-        _log.info("전역 단축키 등록: %s (hwnd=%s)", spec, hwnd)
+        _log.info("전역 단축키 등록: %s", spec)
         return True
 
     def unregister(self) -> None:
@@ -148,7 +134,7 @@ class PauseHotkey(QObject):
         try:
             import ctypes
 
-            ctypes.windll.user32.UnregisterHotKey(self._hwnd, _HOTKEY_ID)
+            ctypes.windll.user32.UnregisterHotKey(None, _HOTKEY_ID)
             app = _app()
             if app is not None and self._filter is not None:
                 app.removeNativeEventFilter(self._filter)
