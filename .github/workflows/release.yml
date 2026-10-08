@@ -14,6 +14,8 @@ jobs:
       contents: write # 릴리스에 exe 업로드
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 릴리스 노트 생성에 직전 태그·커밋 이력이 필요(얕은 체크아웃이면 없음)
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
@@ -158,16 +160,38 @@ jobs:
         env:
           RELEASE_WEBHOOK_URL: ${{ secrets.RELEASE_WEBHOOK_URL }}
         run: |
-          # 1) README(packaging/releases_README.md)에서 "### vX.Y.Z" 섹션만 추출.
-          NOTES=$(awk -v ver="### v${APP_VERSION}" '
+          CUR="v${APP_VERSION}"
+          # 릴리스 노트 본문을 아래 우선순위로 정한다:
+          #  1) README 에 "### vX.Y.Z" 섹션을 적어뒀으면 그걸 사용(사람이 쓴 안내).
+          #  2) 없고 앱 코드(src/)가 바뀌었으면 → 직전 태그 이후 커밋 제목 목록.
+          #  3) 없고 앱 코드 변화도 없으면(배포/내부 정비만) → 위트 있는 "내부 정비" 문구.
+          NOTES=$(awk -v ver="### ${CUR}" '
             $0 == ver { grab = 1; next }
             grab && /^(### |## |---)/ { exit }
             grab { print }
           ' packaging/releases_README.md)
-          # 앞뒤 빈 줄 정리.
           NOTES=$(printf "%s" "$NOTES" | sed -e '/./,$!d' | sed -e :a -e '/^\n*$/{$d;N;ba}')
+
           if [ -z "$NOTES" ]; then
-            NOTES="이번 버전의 변경 내역은 릴리스 페이지를 참고해 주세요."
+            PREV=$(git describe --tags --abbrev=0 "${CUR}^" 2>/dev/null || echo "")
+            SRC_CHANGED=""
+            if [ -n "$PREV" ]; then
+              SRC_CHANGED=$(git diff --name-only "$PREV" "$CUR" -- src/mabinogi_addon/)
+            fi
+            if [ -n "$SRC_CHANGED" ]; then
+              # 앱 코드 변경 있음 → 커밋 제목 목록(Merge 커밋 제외).
+              NOTES=$(git log --no-merges --pretty='- %s' "${PREV}..${CUR}")
+              [ -z "$NOTES" ] && NOTES="소소한 개선이 있었어요."
+            else
+              # 배포/내부 정비만 → 위트 문구 랜덤(스플래시 톤).
+              MSGS=(
+                "섯다라인이 애드온 내부를 청소했어요 🧹"
+                "겉은 그대로지만 속을 손봤어요 🔧"
+                "보이지 않는 곳을 조용히 정리했어요"
+                "다음 업데이트를 위한 밑작업을 해뒀어요"
+              )
+              NOTES="${MSGS[$RANDOM % ${#MSGS[@]}]}"
+            fi
           fi
 
           DL="https://github.com/StarlineBot/mabinogi_addon-releases/releases/download/v${APP_VERSION}/mabinogi-addon-v${APP_VERSION}.exe"
