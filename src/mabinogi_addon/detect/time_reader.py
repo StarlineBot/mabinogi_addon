@@ -7,6 +7,8 @@
 
 from __future__ import annotations
 
+import itertools
+
 import cv2
 import numpy as np
 
@@ -80,6 +82,33 @@ def _parse(labels: list[str]) -> int:
     return total
 
 
+# 이 이상 x가 벌어지면 '다른 덩어리'로 본다(버프 이름과 시간 사이의 공백).
+_CLUSTER_GAP = 14
+
+
+def _time_labels(kept: list) -> list[str]:
+    """글자들을 x간격으로 덩어리로 묶고, '단위(분/초/시간/일)를 포함한 덩어리'만 남긴다.
+
+    시간은 오른쪽 정렬이라 숫자+단위가 한 덩어리로 뭉쳐 있다. 반면 버프 이름이 길어
+    시간 영역(time_x0 오른쪽)까지 넘어오면, 이름 끝 획이 '1' 등으로 오인돼 실제 분
+    앞에 붙는다(예: 2분 → 12분, +10분). 단위가 없는 고립 덩어리(=이름 획)를 버려
+    이를 막는다. kept는 (x, score, label, w)의 x오름차순 리스트.
+    """
+    if not kept:
+        return []
+    clusters: list[list] = [[kept[0]]]
+    for prev, cur in itertools.pairwise(kept):
+        if cur[0] - (prev[0] + prev[3]) > _CLUSTER_GAP:
+            clusters.append([cur])
+        else:
+            clusters[-1].append(cur)
+    labels: list[str] = []
+    for c in clusters:
+        if any(lab in _UNIT_SECONDS for _x, _s, lab, _w in c):
+            labels.extend(lab for _x, _s, lab, _w in c)
+    return labels
+
+
 def read_time(time_bgr: np.ndarray, threshold: float = GLYPH_THRESHOLD) -> int | None:
     """시간 영역(BGR)에서 남은 시간을 초로. 글자를 못 찾으면 None."""
     strip = binarize(time_bgr)
@@ -88,7 +117,7 @@ def read_time(time_bgr: np.ndarray, threshold: float = GLYPH_THRESHOLD) -> int |
         hits.extend(_occurrences(strip, label, template, threshold))
     if not hits:
         return None
-    labels = [label for _x, _s, label, _w in _nms(hits)]
-    if not any(lab in _UNIT_SECONDS for lab in labels):
+    labels = _time_labels(_nms(hits))
+    if not labels:
         return None  # 단위가 하나도 없으면 시간 아님
     return _parse(labels)

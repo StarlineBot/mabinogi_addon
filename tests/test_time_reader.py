@@ -45,3 +45,30 @@ def test_empty_region_returns_none():
         pytest.skip("스크린샷 없음")
     img = cv2.imread(path, cv2.IMREAD_COLOR)
     assert read_time(img[900:950, 700:860]) is None
+
+
+# --- +10분 회귀: 긴 버프 이름 획이 '1'로 오인돼 분 앞에 붙던 버그 ---
+from mabinogi_addon.detect.time_reader import _parse, _time_labels
+
+
+def test_isolated_name_stroke_dropped():
+    # 왼쪽 멀리 고립된 '1'(이름 끝 획) + 오른쪽 '2분 6초'(실제 시간, 단위 포함 덩어리)
+    kept = [
+        (0, 0.71, "1", 5),      # 이름 획(단위 없는 고립 덩어리)
+        (100, 0.95, "2", 5),
+        (106, 0.95, "bun", 9),
+        (122, 0.95, "6", 5),
+        (128, 0.95, "cho", 9),
+    ]
+    assert _parse(_time_labels(kept)) == 2 * 60 + 6  # 12분 아님
+
+
+def test_multi_token_time_kept():
+    # '1시간 5분' 처럼 단위가 여럿이어도(각 덩어리에 단위) 전부 유지
+    kept = [
+        (0, 0.95, "1", 5),
+        (6, 0.95, "hour", 9),
+        (20, 0.95, "5", 5),
+        (26, 0.95, "bun", 9),
+    ]
+    assert _parse(_time_labels(kept)) == 3600 + 5 * 60
