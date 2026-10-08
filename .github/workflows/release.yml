@@ -63,6 +63,7 @@ jobs:
           --add-data "src/mabinogi_addon/detect/templates;mabinogi_addon/detect/templates"
           --collect-all dxcam
           --collect-all comtypes
+          --collect-data certifi
           --exclude-module PySide6.QtWebEngineCore
           --exclude-module PySide6.QtWebEngineWidgets
           --exclude-module PySide6.QtWebEngineQuick
@@ -81,6 +82,7 @@ jobs:
           --exclude-module PySide6.QtQuickWidgets
           --exclude-module PySide6.QtQuickControls2
           --hidden-import win32gui
+          --hidden-import win32ui
           --hidden-import win32process
           --hidden-import win32con
           packaging/entry.py

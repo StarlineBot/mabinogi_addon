@@ -40,6 +40,29 @@ VERSION_URL = (
 )
 _UA = {"User-Agent": "mabinogi-addon-updater"}
 
+_ssl_ctx = None
+
+
+def _ssl_context():
+    """certifi의 CA 번들로 SSL 컨텍스트를 만든다(한 번 만들어 재사용).
+
+    왜: 일부 PC는 Windows 신뢰 저장소에 깃허브 인증서의 발급자(중간 CA)가 없어
+    기본 검증이 CERTIFICATE_VERIFY_FAILED로 터진다(업데이트 다운로드 실패). 앱이
+    함께 담은 certifi 번들을 쓰면 머신 저장소 상태와 무관하게 검증된다. certifi가
+    없으면 None(기본 컨텍스트)으로 폴백한다.
+    """
+    global _ssl_ctx
+    if _ssl_ctx is None:
+        try:
+            import ssl
+
+            import certifi
+
+            _ssl_ctx = ssl.create_default_context(cafile=certifi.where())
+        except Exception:  # noqa: BLE001 — certifi 없거나 실패 시 기본 컨텍스트
+            _ssl_ctx = False  # None과 구분(재시도 안 하게): urlopen엔 None으로 넘김
+    return _ssl_ctx or None
+
 
 def can_update() -> bool:
     """배포본(exe)이고 버전이 실제 릴리스 버전일 때만 업데이트를 시도한다."""
@@ -68,7 +91,7 @@ def check_latest() -> dict | None:
         bust = f"{VERSION_URL}?t={int(time.time())}"
         headers = {**_UA, "Cache-Control": "no-cache", "Pragma": "no-cache"}
         req = urllib.request.Request(bust, headers=headers)
-        with urllib.request.urlopen(req, timeout=10) as r:
+        with urllib.request.urlopen(req, timeout=10, context=_ssl_context()) as r:
             data = json.loads(r.read().decode("utf-8"))
     except Exception as exc:  # noqa: BLE001
         _log.info("업데이트 확인 실패(무시): %r", exc)
@@ -121,7 +144,9 @@ def download(info: dict, progress_cb=None) -> Path:
     sha = hashlib.sha256()
     req = urllib.request.Request(url, headers=_UA)
     try:
-        with urllib.request.urlopen(req, timeout=30) as r, open(dest, "wb") as f:
+        with urllib.request.urlopen(
+            req, timeout=30, context=_ssl_context()
+        ) as r, open(dest, "wb") as f:
             total = int(r.headers.get("Content-Length") or size or 0)
             got = 0
             while True:
