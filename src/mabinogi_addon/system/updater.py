@@ -160,7 +160,25 @@ def apply_update(new_path: Path) -> None:
         [str(exe)],
         close_fds=True,
         creationflags=creationflags,
+        env=_relaunch_env(),
     )
+
+
+def _relaunch_env() -> dict[str, str]:
+    """자식(새 exe)이 '부모의 _MEI 추출 폴더'를 재사용하지 않도록 PyInstaller 내부
+    환경변수를 제거한 환경을 만든다.
+
+    onefile 부트로더는 _MEIPASS2(구버전)·_PYI_*(신버전) 환경변수로 '이미 풀었음(=재실행
+    자식)'을 판단한다. 업데이트가 새 exe를 Popen으로 띄울 때 이 값이 그대로 상속되면,
+    새 프로세스가 자기 에셋을 새로 풀지 않고 '종료 예정인 옛 프로세스의 _MEI'를 가리킨다.
+    옛 프로세스가 그 폴더를 지우면 → 번들 아이콘·템플릿이 사라지고('아이콘 없어짐'),
+    'Failed to remove temporary directory' 경고가 뜬다. 그래서 상속을 끊는다.
+    """
+    env = os.environ.copy()
+    for key in list(env):
+        if key == "_MEIPASS2" or key.startswith("_PYI"):
+            env.pop(key, None)
+    return env
 
 
 def _safe_unlink(p: Path) -> None:
