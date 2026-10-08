@@ -148,6 +148,7 @@ class SettingsTab(QWidget):
         v.setSpacing(12)
         v.addWidget(self._creator_header())
         v.addWidget(self._inquiry_button())
+        v.addWidget(self._diag_button())
         v.addWidget(self._discord_group())
         v.addWidget(self._backup_group())
         v.addWidget(self._general_group())
@@ -396,6 +397,54 @@ class SettingsTab(QWidget):
         from .inquiry_dialog import InquiryDialog
 
         InquiryDialog(self).exec()
+
+    def _diag_button(self) -> QPushButton:
+        btn = QPushButton("진단 스냅샷 저장 (시간·% 오류 신고용)")
+        btn.setToolTip(
+            "지금 설정된 버프·디버프·투아림 영역을 그대로 캡처해 PNG로 저장합니다.\n"
+            "시간/% 가 틀리게 읽힐 때, 저장된 파일을 제작자에게 보내면 원인을 찾습니다."
+        )
+        btn.clicked.connect(self._on_diag_snapshot)
+        return btn
+
+    def _on_diag_snapshot(self) -> None:
+        from PySide6.QtWidgets import QMessageBox
+
+        from .diag_capture import save_diagnostic
+
+        out, saved = save_diagnostic()
+        if not saved:
+            QMessageBox.information(
+                self, "진단 스냅샷",
+                "저장할 영역이 없습니다 — 버프/디버프/투아림 영역을 먼저 지정하세요.",
+            )
+            return
+        box = QMessageBox(self)
+        box.setWindowTitle("진단 스냅샷")
+        box.setText(
+            f"{len(saved)}개 저장했습니다:\n" + "\n".join(saved)
+            + f"\n\n폴더: {out}\n\n이 파일들을 제작자에게 보내 주세요."
+        )
+        open_btn = box.addButton("폴더 열기", QMessageBox.ButtonRole.AcceptRole)
+        box.addButton("닫기", QMessageBox.ButtonRole.RejectRole)
+        box.exec()
+        if box.clickedButton() is open_btn:
+            self._open_folder(out)
+
+    @staticmethod
+    def _open_folder(path) -> None:
+        import subprocess
+        import sys
+
+        try:
+            if sys.platform == "win32":
+                subprocess.Popen(["explorer", str(path)])
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", str(path)])
+            else:
+                subprocess.Popen(["xdg-open", str(path)])
+        except Exception:  # noqa: BLE001, S110 — 폴더 열기는 부가기능(실패해도 무시)
+            pass
 
     def _general_group(self) -> QGroupBox:
         from ..system import autostart
