@@ -6,7 +6,8 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QSize, Qt
+from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
     QDialog,
     QHBoxLayout,
@@ -15,6 +16,58 @@ from PySide6.QtWidgets import (
     QTextBrowser,
     QVBoxLayout,
 )
+
+_ICON_PX = 22  # 도움말 아이콘 크기
+
+
+def _help_icon(color: str) -> QIcon:
+    """테두리 원 + ? 를 벡터로 그린 또렷한 도움말 아이콘(폰트 글리프보다 선명)."""
+    scale = 3  # 3배로 그린 뒤 축소 → 안티앨리어싱 또렷
+    s = _ICON_PX * scale
+    pm = QPixmap(s, s)
+    pm.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    pen = QPen(QColor(color))
+    pen.setWidth(max(2, int(s * 0.07)))
+    p.setPen(pen)
+    p.setBrush(Qt.BrushStyle.NoBrush)
+    inset = int(s * 0.1)
+    p.drawEllipse(inset, inset, s - 2 * inset, s - 2 * inset)
+    f = QFont("Arial")
+    f.setPixelSize(int(s * 0.56))
+    f.setBold(True)
+    p.setFont(f)
+    p.drawText(pm.rect(), Qt.AlignmentFlag.AlignCenter, "?")
+    p.end()
+    return QIcon(pm.scaled(
+        _ICON_PX, _ICON_PX,
+        Qt.AspectRatioMode.KeepAspectRatio,
+        Qt.TransformationMode.SmoothTransformation,
+    ))
+
+
+class _HelpButton(QPushButton):
+    """아이콘만 있는 도움말 버튼. hover 시 민트색 아이콘으로 교체."""
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self._normal = _help_icon("#9aa0aa")
+        self._hover = _help_icon("#00B894")
+        self.setIcon(self._normal)
+        self.setIconSize(QSize(_ICON_PX, _ICON_PX))
+        self.setFixedSize(_ICON_PX + 4, _ICON_PX + 4)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setToolTip("사용법 보기")
+        self.setStyleSheet("QPushButton { border:none; background:transparent; }")
+
+    def enterEvent(self, event) -> None:
+        self.setIcon(self._hover)
+        super().enterEvent(event)
+
+    def leaveEvent(self, event) -> None:
+        self.setIcon(self._normal)
+        super().leaveEvent(event)
 
 
 class HelpDialog(QDialog):
@@ -39,16 +92,7 @@ def help_button(title: str, html: str, parent=None) -> QPushButton:
     """'?' 도움말 아이콘. 버튼 테두리 없이 동그란 물음표만 보이며,
     누르면 HelpDialog를 띄운다.
     """
-    btn = QPushButton("?")
-    btn.setToolTip("사용법 보기")
-    btn.setFixedSize(20, 20)
-    btn.setCursor(Qt.CursorShape.PointingHandCursor)
-    btn.setStyleSheet(
-        "QPushButton {"
-        " border:1px solid #8a8f98; border-radius:10px;"
-        " color:#8a8f98; font-weight:700; background:transparent; padding:0; }"
-        "QPushButton:hover { color:#00B894; border-color:#00B894; }"
-    )
+    btn = _HelpButton(parent)
 
     def _open() -> None:
         HelpDialog(title, html, parent).exec()
