@@ -921,6 +921,10 @@ class MainWindow(QMainWindow):
         self.showNormal()
         self.raise_()
         self.activateWindow()
+        # 트레이 복원은 '사용자가 앱을 보려는' 명백한 신호. Windows는 백그라운드
+        # 프로세스의 포그라운드 강탈을 막아 activateWindow()가 실제 활성화를 못 해
+        # changeEvent(활성화)가 안 울릴 수 있으므로, 여기서 직접 업데이트 확인을 돈다.
+        self._maybe_check_update("트레이복원")
 
     def _quit_from_tray(self) -> None:
         self._force_quit = True
