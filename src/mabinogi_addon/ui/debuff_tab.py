@@ -104,7 +104,12 @@ class DebuffTab(QWidget):
         return settings, order
 
     def _save(self) -> None:
-        config.save_debuff_settings([self._settings[i] for i in self._order])
+        shown = [self._settings[i] for i in self._order]
+        # 아이콘이 (일시적으로) 없어 목록에 없는 설정도 보존한다. 업데이트 중 카탈로그가
+        # 잠깐 비어도 자동저장이 사용자의 디버프를 영구 삭제하지 않도록(아이콘이 다시
+        # 생기면 그대로 복원). 삭제(－)는 self._settings에서 직접 빼므로 의도대로 사라진다.
+        others = [s for i, s in self._settings.items() if i not in self._order]
+        config.save_debuff_settings([*shown, *others])
 
     def _display_name(self, did: str) -> str:
         s = self._settings.get(did)

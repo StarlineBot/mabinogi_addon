@@ -172,12 +172,15 @@ class BuffTab(QWidget):
 
     def _save(self) -> None:
         shown = [self._settings[i] for i in self._order]
-        hidden = [
+        # 숨김(표시 OFF)뿐 아니라, 아이콘이 (일시적으로) 없어 목록에서 빠진 설정도 보존한다.
+        # 업데이트 중 카탈로그가 잠깐 비어도 자동저장이 사용자 버프를 영구 삭제하지 않도록
+        # (아이콘이 다시 생기면 복원). 삭제(－)는 self._settings에서 직접 빼므로 의도대로 사라진다.
+        rest = [
             s
             for i, s in self._settings.items()
-            if i != ANCHOR_ID and i not in self._order and i in self._catalog
+            if i != ANCHOR_ID and i not in self._order
         ]
-        config.save_buff_settings([self._settings[ANCHOR_ID], *shown, *hidden])
+        config.save_buff_settings([self._settings[ANCHOR_ID], *shown, *rest])
 
     # ---- 목록 ----
     def _build_list_panel(self) -> QWidget:
