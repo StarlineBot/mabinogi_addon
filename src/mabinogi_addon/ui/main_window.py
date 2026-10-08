@@ -448,7 +448,7 @@ class MainWindow(QMainWindow):
         now = time.monotonic()
         gap = now - getattr(self, "_last_update_check", 0.0)
         if gap < self._UPDATE_CHECK_MIN_GAP:
-            _up_log.info(
+            _up_log.debug(  # 자주 울려 DEBUG(버그리포트 버퍼엔 남고 평소엔 조용히)
                 "업데이트 확인 건너뜀(%s): %.0f초 전 확인함(스로틀 %.0f초)",
                 reason, gap, self._UPDATE_CHECK_MIN_GAP,
             )
@@ -998,7 +998,7 @@ class MainWindow(QMainWindow):
 
         if event.type() == QEvent.Type.ActivationChange:
             active = self.isActiveWindow()
-            _up_log.info("창 활성화 변경: active=%s", active)  # 이벤트 수신 여부 진단
+            _up_log.debug("창 활성화 변경: active=%s", active)  # 자주 울려 DEBUG(버퍼엔 남음)
             if active:
                 self._maybe_check_update("창활성화")
         super().changeEvent(event)
