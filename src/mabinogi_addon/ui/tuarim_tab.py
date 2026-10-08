@@ -270,8 +270,11 @@ class TuarimTab(QWidget):
         )
         if not self._region or not active:
             return
-        r = self._region
-        frame = self._grab_rect(r["x"], r["y"], r["w"], r["h"])
+        # 캡처(mss)는 물리픽셀 → 저장된 논리좌표를 배율만큼 변환(150% 등에서 어긋남 방지).
+        from .dpi import to_physical
+
+        px, py, pw, ph = to_physical(self._region)
+        frame = self._grab_rect(px, py, pw, ph)
         if frame is None:
             return
         self._show_preview(frame)

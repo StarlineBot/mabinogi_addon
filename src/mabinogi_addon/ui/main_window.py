@@ -584,9 +584,9 @@ class MainWindow(QMainWindow):
         if not region:
             return
         try:
-            source = create_live_source(
-                Region(region["x"], region["y"], region["w"], region["h"])
-            )
+            from .dpi import to_physical
+
+            source = create_live_source(Region(*to_physical(region)))
         except Exception:  # noqa: BLE001 — dxcam 없음(맥 등)이면 라이브 미시작
             return
 
@@ -678,9 +678,9 @@ class MainWindow(QMainWindow):
         if not region:
             return
         try:
-            source = create_live_source(
-                Region(region["x"], region["y"], region["w"], region["h"])
-            )
+            from .dpi import to_physical
+
+            source = create_live_source(Region(*to_physical(region)))
         except Exception:  # noqa: BLE001 — dxcam 없음(맥 등)
             return
 
