@@ -124,6 +124,14 @@ def set_enabled(enabled: bool) -> bool:
 
 
 def refresh() -> None:
-    """자동실행이 켜져 있으면 현재 실행 경로로 갱신(exe 이동 시 self-heal)."""
-    if available() and is_enabled():
-        set_enabled(True)
+    """자동실행이 켜져 있으면 현재 실행 경로로 갱신(exe 이동/교체 시 self-heal).
+
+    진단: 켜짐 여부와 현재 exe를 남겨, '구버전이 부팅마다 뜨는' 증상의 원인(작업
+    감지 실패로 재지정이 통째로 건너뛰어졌는지)이 로그에 보이게 한다.
+    """
+    if not available():
+        return
+    enabled = is_enabled()
+    _log.info("자동실행 self-heal: 켜짐=%s, 현재exe=%s", enabled, sys.executable)
+    if enabled:
+        set_enabled(True)  # _task_set이 등록 경로/성패를 로그로 남긴다
