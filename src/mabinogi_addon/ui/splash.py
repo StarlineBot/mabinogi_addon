@@ -91,7 +91,7 @@ class Splash(QWidget):
         card.setFixedSize(440, 170)
         v = QVBoxLayout(card)
         v.setContentsMargins(24, 22, 24, 22)
-        v.setSpacing(18)
+        v.setSpacing(12)
 
         v.addStretch(1)
         # [캐릭터 얼굴] 옆에 [이름(위) / 내용(아래)] 두 줄 — 캐릭터가 말하는 느낌
@@ -116,7 +116,6 @@ class Splash(QWidget):
         col.addStretch(1)
         row.addLayout(col, 1)
         v.addLayout(row)
-        v.addStretch(1)
 
         self.bar = QProgressBar()
         self.bar.setRange(0, 100)
@@ -124,6 +123,7 @@ class Splash(QWidget):
         self.bar.setTextVisible(False)
         self.bar.setFixedHeight(6)
         v.addWidget(self.bar)
+        v.addStretch(1)  # 위·아래 stretch로 전체(얼굴+문구+바)를 세로 가운데 정렬
 
         self._set_msg(random.choice(MESSAGES))
 
