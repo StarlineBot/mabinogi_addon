@@ -680,19 +680,24 @@ class SettingsTab(QWidget):
         from ..system.hotkey import parse_spec
 
         spec = self._spec_from_edit()
-        if spec and parse_spec(spec) is None:
-            self._set_hotkey_hint(
-                "⚠ 쓸 수 없는 조합 — Ctrl/Alt/Shift + 글자/F키 (윈도우키 불가)",
-                warn=True,
-            )
-            saved = config.load_pause_hotkey()  # 되돌리기
+        # 빈 값·모디파이어만(알트탭 등으로 칸이 비워짐)·무효 조합은 '지우기'가 아니다.
+        # 저장된 값으로 되돌려 등록을 보존한다(지우려면 '지우기' 버튼만으로).
+        if parse_spec(spec) is None:
+            saved = config.load_pause_hotkey()
             self._hotkey_edit.blockSignals(True)
             self._hotkey_edit.setKeySequence(QKeySequence(saved))
             self._hotkey_edit.blockSignals(False)
+            if spec:  # 뭔가 눌렀는데 무효일 때만 안내(단순 포커스 이탈은 조용히)
+                self._set_hotkey_hint(
+                    "⚠ 쓸 수 없는 조합 — Ctrl/Alt/Shift + 글자/F키 (윈도우키 불가)",
+                    warn=True,
+                )
+            self._hotkey_edit.clearFocus()  # 녹화 상태 해제(계속 키 먹는 것 방지)
             return
         config.save_pause_hotkey(spec)
         ok = bool(self._on_hotkey_change(spec)) if self._on_hotkey_change else False
         self._announce_hotkey(spec, ok)
+        self._hotkey_edit.clearFocus()  # 설정 후 포커스 해제 → 실수 재녹화 방지
 
     def _clear_hotkey(self) -> None:
         from PySide6.QtGui import QKeySequence
