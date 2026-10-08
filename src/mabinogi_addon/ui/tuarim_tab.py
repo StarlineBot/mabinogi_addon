@@ -35,6 +35,10 @@ from .widgets import checkbox, hint_label
 # 2자리+% ≈ 48×19 → 여유를 둔 기본값. (해상도/UI 배율 다르면 추후 조정)
 TUARIM_BOX_SIZE = (58, 28)
 
+# 영역에 꼭 들어가야 하는 것(앱 라벨 ↔ 화면 점선 라벨이 같은 기준을 공유).
+HIGHLIGHT_TITLE = "투아림 영역 확인"
+HIGHLIGHT_SUB = "숫자 두 자리와 % 가 점선 안에 보이나요?"
+
 # 투아림 관리 사용법(? 아이콘 → 새 창).
 HELP_TITLE = "투아림 트래커 사용법"
 HELP_HTML = """
@@ -97,6 +101,10 @@ class TuarimTab(QWidget):
         row.addWidget(self.region_btn)
         self.region_label = hint_label("")
         row.addWidget(self.region_label, 1)
+        self.view_region_btn = QPushButton("영역 보기")
+        self.view_region_btn.setToolTip("잡힌 영역을 화면에 점선으로 잠깐 표시")
+        self.view_region_btn.clicked.connect(self._flash_region)
+        row.addWidget(self.view_region_btn)
         v.addLayout(row)
 
         # 확인용: 캡처 미리보기 + 현재 값
@@ -213,15 +221,31 @@ class TuarimTab(QWidget):
         self._region = {"x": x, "y": y, "w": w, "h": h}
         self._update_region_label()
         self._save()
+        self._flash_region()  # 잡힌 영역을 화면에 점선으로 바로 확인
+
+    def _flash_region(self) -> None:
+        """저장된 투아림 영역을 화면에 굵은 점선으로 잠깐 표시(숫자·% 확인용)."""
+        if not self._region:
+            return
+        from .region_highlight import RegionHighlight
+
+        r = self._region
+        self._highlight = RegionHighlight()  # 참조 유지(GC 방지)
+        self._highlight.flash(
+            int(r["x"]), int(r["y"]), int(r["w"]), int(r["h"]),
+            HIGHLIGHT_TITLE, HIGHLIGHT_SUB,
+        )
 
     def _update_region_label(self) -> None:
         if self._region:
             r = self._region
             self.region_label.setText(f"영역: {r['x']},{r['y']}  {r['w']}×{r['h']}  ✔")
             self.region_label.setStyleSheet("color:#2ecc71;")
+            self.view_region_btn.setEnabled(True)
         else:
-            self.region_label.setText("영역 미지정 — % 숫자 두 자리를 지정하세요")
+            self.region_label.setText("영역 미지정 — 숫자 두 자리와 % 가 보이게 지정하세요")
             self.region_label.setStyleSheet("color:#8a8f98;")
+            self.view_region_btn.setEnabled(False)
 
     # ---- 저장 ----
     def _save(self) -> None:
