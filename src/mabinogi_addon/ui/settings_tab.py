@@ -136,9 +136,11 @@ class SettingsTab(QWidget):
     # '사용법 투어 다시 보기' → 메인이 온보딩 투어를 다시 실행.
     replay_tour = Signal()
 
-    def __init__(self, watcher: WindowWatcher) -> None:
+    def __init__(self, watcher: WindowWatcher, on_hotkey_change=None) -> None:
         super().__init__()
         self._watcher = watcher
+        # 단축키 조합 변경 시 재등록 콜백: spec(str) -> 등록성공(bool). 메인창이 제공.
+        self._on_hotkey_change = on_hotkey_change
         self._detect_count = 0
         self._detect_timer: QTimer | None = None
         self._login_thread: _LoginThread | None = None
@@ -152,6 +154,7 @@ class SettingsTab(QWidget):
         v.addWidget(self._discord_group())
         v.addWidget(self._backup_group())
         v.addWidget(self._general_group())
+        v.addWidget(self._hotkey_group())  # '게임 창 인식' 위에 둔다
         v.addWidget(self._game_group())
         v.addStretch(1)
 
@@ -628,6 +631,100 @@ class SettingsTab(QWidget):
         show_toast("알림 위치", "토스트가 여기에 표시됩니다.", 2000)
 
     # ---- 게임 창 인식(포그라운드 판정 대상) ----
+    # ---- 전역 단축키(오버레이 정지/시작) ----
+    def _hotkey_group(self) -> QGroupBox:
+        from PySide6.QtGui import QKeySequence
+        from PySide6.QtWidgets import QKeySequenceEdit
+
+        box = QGroupBox("단축키")
+        v = QVBoxLayout(box)
+        row = QHBoxLayout()
+        row.addWidget(QLabel("전체 오버레이 정지/시작"))
+        self._hotkey_edit = QKeySequenceEdit()
+        cur = config.load_pause_hotkey()
+        if cur:
+            self._hotkey_edit.setKeySequence(QKeySequence(cur))
+        self._hotkey_edit.editingFinished.connect(self._on_hotkey_edited)
+        row.addWidget(self._hotkey_edit, 1)
+        clear = QPushButton("지우기")
+        clear.setFixedWidth(64)
+        clear.clicked.connect(self._clear_hotkey)
+        row.addWidget(clear)
+        v.addLayout(row)
+        self._hotkey_hint = hint_label("")
+        v.addWidget(self._hotkey_hint)
+        v.addWidget(
+            hint_label(
+                "Ctrl/Alt/Shift + 글자(또는 F1~F12) 조합을 누르세요. "
+                "윈도우키는 게임이 선점해 쓸 수 없습니다.\n"
+                "게임이 맨 앞이어도 동작합니다(게임엔 아무 키도 보내지 않음 — "
+                "오버레이만 켜고 끕니다)."
+            )
+        )
+        if cur:
+            self._set_hotkey_hint(f"현재: {cur}", warn=False)
+        else:
+            self._set_hotkey_hint("단축키 없음 (상단 ⏸/▶·트레이로 토글)", warn=False)
+        return box
+
+    def _spec_from_edit(self) -> str:
+        from PySide6.QtGui import QKeySequence
+
+        seq = self._hotkey_edit.keySequence()
+        spec = seq.toString(QKeySequence.SequenceFormat.PortableText) or ""
+        return spec.split(",")[0].strip()  # 여러 조합이 잡히면 첫 조합만
+
+    def _on_hotkey_edited(self) -> None:
+        from PySide6.QtGui import QKeySequence
+
+        from ..system.hotkey import parse_spec
+
+        spec = self._spec_from_edit()
+        if spec and parse_spec(spec) is None:
+            self._set_hotkey_hint(
+                "⚠ 쓸 수 없는 조합 — Ctrl/Alt/Shift + 글자/F키 (윈도우키 불가)",
+                warn=True,
+            )
+            saved = config.load_pause_hotkey()  # 되돌리기
+            self._hotkey_edit.blockSignals(True)
+            self._hotkey_edit.setKeySequence(QKeySequence(saved))
+            self._hotkey_edit.blockSignals(False)
+            return
+        config.save_pause_hotkey(spec)
+        ok = bool(self._on_hotkey_change(spec)) if self._on_hotkey_change else False
+        self._announce_hotkey(spec, ok)
+
+    def _clear_hotkey(self) -> None:
+        from PySide6.QtGui import QKeySequence
+
+        self._hotkey_edit.blockSignals(True)
+        self._hotkey_edit.setKeySequence(QKeySequence())
+        self._hotkey_edit.blockSignals(False)
+        config.save_pause_hotkey("")
+        if self._on_hotkey_change:
+            self._on_hotkey_change("")
+        self._set_hotkey_hint("단축키 없음 (상단 ⏸/▶·트레이로 토글)", warn=False)
+
+    def _announce_hotkey(self, spec: str, ok: bool) -> None:
+        from ..system.hotkey import is_supported
+
+        if not spec:
+            self._set_hotkey_hint("단축키 없음 (상단 ⏸/▶·트레이로 토글)", warn=False)
+        elif not is_supported():
+            self._set_hotkey_hint(f"'{spec}' 저장됨 — Windows에서 동작합니다", warn=False)
+        elif ok:
+            self._set_hotkey_hint(f"'{spec}' 등록됨 ✓", warn=False)
+        else:
+            self._set_hotkey_hint(
+                f"⚠ '{spec}' 등록 실패 — 다른 앱이 이미 쓰는 조합일 수 있어요. "
+                "다른 조합을 시도하세요",
+                warn=True,
+            )
+
+    def _set_hotkey_hint(self, text: str, warn: bool) -> None:
+        self._hotkey_hint.setText(text)
+        self._hotkey_hint.setStyleSheet("color:%s;" % ("#e67e22" if warn else "#8a8f98"))
+
     def _game_group(self) -> QGroupBox:
         box = QGroupBox("게임 창 인식")
         v = QVBoxLayout(box)

@@ -98,7 +98,14 @@ class MainWindow(QMainWindow):
         self.memo_tab = MemoTab()
         self.tuarim_tab = TuarimTab(self._watcher)
         self.custom_overlay_tab = CustomOverlayTab(self._watcher)
-        self.settings_tab = SettingsTab(self._watcher)
+        # 전역 단축키(오버레이 정지/시작). Windows에서만 실제 등록(그 외 no-op).
+        from ..system.hotkey import PauseHotkey
+
+        self._pause_hotkey = PauseHotkey(self)
+        self._pause_hotkey.activated.connect(self._on_pause_hotkey)
+        self.settings_tab = SettingsTab(
+            self._watcher, on_hotkey_change=self._apply_pause_hotkey
+        )
         self.settings_tab.config_imported.connect(self._on_config_imported)
         self.settings_tab.voice_pack_changed.connect(self._on_voice_pack_changed)
         self.settings_tab.replay_tour.connect(self._run_tour)
@@ -522,6 +529,14 @@ class MainWindow(QMainWindow):
         self._status_timer.timeout.connect(self._update_tracking_status)
         self._status_timer.start()
         self._update_tracking_status()
+        # 저장된 전역 단축키 등록(있으면). Windows 외/충돌이면 조용히 무시.
+        self._pause_hotkey.set_hotkey(config.load_pause_hotkey())
+        # 실행 중 업데이트 감지: 시작 1회 외에 주기적으로도 확인(켜둔 채 새 버전이
+        # 나와도 모르던 문제). 새 버전이면 상단 배너가 뜬다(강제 아님).
+        self._update_timer = QTimer(self)
+        self._update_timer.setInterval(30 * 60 * 1000)  # 30분
+        self._update_timer.timeout.connect(self._maybe_check_update)
+        self._update_timer.start()
         self._booting = False  # 부팅 끝 — 이제부터 사용자 변경을 저장
 
     def _compute_tracking(
@@ -847,10 +862,19 @@ class MainWindow(QMainWindow):
                 if paused else config.APP_NAME
             )
         from .toast import show_toast
+
         if paused:
             show_toast("전체 오버레이 정지", "버프·디버프·커스텀을 껐어요. 다시 시작하려면 ▶", 2500)
         else:
             show_toast("전체 오버레이 시작", "버프·디버프·커스텀 오버레이가 다시 동작합니다", 2000)
+
+    def _on_pause_hotkey(self) -> None:
+        """전역 단축키가 눌리면 오버레이 정지/시작을 토글(게임이 맨 앞이어도 동작)."""
+        self._set_paused(not self._paused)
+
+    def _apply_pause_hotkey(self, spec: str) -> bool:
+        """설정에서 조합이 바뀌면 재등록. 등록 성공 여부를 돌려준다(설정 탭 안내용)."""
+        return self._pause_hotkey.set_hotkey(spec)
 
     def _on_voice_pack_changed(self) -> None:
         """설정에서 알림 목소리 팩이 바뀌면 실행 중 재생기들을 새 팩으로 갱신(바로 적용)."""

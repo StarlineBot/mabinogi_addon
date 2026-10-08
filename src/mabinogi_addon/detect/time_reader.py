@@ -25,7 +25,7 @@ _UNIT_SECONDS = {"day": 86400, "hour": 3600, "bun": 60, "cho": 1}
 GLYPH_THRESHOLD = 0.7
 
 
-def _load_templates(d: "object | None" = None) -> dict[str, np.ndarray]:
+def _load_templates(d: object | None = None) -> dict[str, np.ndarray]:
     """디렉터리의 *.png 를 {라벨: 이미지}로. 기본은 time 루트(개발자 세트)."""
     folder = _TEMPLATE_DIR if d is None else d
     return {
