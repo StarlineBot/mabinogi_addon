@@ -508,23 +508,6 @@ def save_grid_size(px: int, path: Path = LOCAL_CONFIG_PATH) -> None:
     _write_local_config(data, path)
 
 
-def load_pause_hotkey(path: Path = LOCAL_CONFIG_PATH) -> str:
-    """오버레이 정지/시작 전역 단축키 조합(예 'Ctrl+Alt+P'). 없으면 빈 문자열."""
-    g = _read_local_config(path).get("general") or {}
-    v = g.get("pauseHotkey")
-    return v if isinstance(v, str) else ""
-
-
-def save_pause_hotkey(spec: str, path: Path = LOCAL_CONFIG_PATH) -> None:
-    data = _read_local_config(path)
-    g = data.get("general")
-    if not isinstance(g, dict):
-        g = {}
-    g["pauseHotkey"] = str(spec)
-    data["general"] = g
-    _write_local_config(data, path)
-
-
 def load_game_exe(path: Path = LOCAL_CONFIG_PATH) -> str | None:
     """포그라운드 판정에 쓸 게임 실행파일명(basename). 없으면 None(제목 폴백)."""
     g = _read_local_config(path).get("general") or {}

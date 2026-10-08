@@ -45,7 +45,6 @@ from .tuarim_tab import TuarimTab
 # 번들 경로 사용(exe=_MEIPASS/assets). __file__ 기준은 frozen에서 어긋난다.
 LOGO_PATH = paths.resource_dir() / "logo.png"
 _log = logging.getLogger("mabinogi_addon.close")
-_hk_log = logging.getLogger("mabinogi_addon.system.hotkey")  # 핫키 토글 진단
 
 
 def app_icon() -> QIcon:
@@ -134,14 +133,7 @@ class MainWindow(QMainWindow):
         self.memo_tab = MemoTab()
         self.tuarim_tab = TuarimTab(self._watcher)
         self.custom_overlay_tab = CustomOverlayTab(self._watcher)
-        # 전역 단축키(오버레이 정지/시작). Windows에서만 실제 등록(그 외 no-op).
-        from ..system.hotkey import PauseHotkey
-
-        self._pause_hotkey = PauseHotkey(self)
-        self._pause_hotkey.activated.connect(self._on_pause_hotkey)
-        self.settings_tab = SettingsTab(
-            self._watcher, on_hotkey_change=self._apply_pause_hotkey
-        )
+        self.settings_tab = SettingsTab(self._watcher)
         self.settings_tab.config_imported.connect(self._on_config_imported)
         self.settings_tab.voice_pack_changed.connect(self._on_voice_pack_changed)
         self.settings_tab.replay_tour.connect(self._run_tour)
@@ -281,7 +273,10 @@ class MainWindow(QMainWindow):
         self._pause_btn.setObjectName("playPause")
         self._pause_btn.setCheckable(True)
         self._pause_btn.setFixedSize(30, 26)
-        self._pause_btn.setToolTip("사냥 안 할 때 오버레이를 잠깐 끄고/켭니다")
+        self._pause_btn.setToolTip(
+            "사냥 안 할 때 오버레이를 잠깐 끄고/켭니다 "
+            "(앱이 앞에 있을 때 Space로도 토글)"
+        )
         self._pause_btn.toggled.connect(self._set_paused)
         h.addWidget(self._pause_btn)
         bar.setStyleSheet(
@@ -606,8 +601,6 @@ class MainWindow(QMainWindow):
         self._status_timer.timeout.connect(self._update_tracking_status)
         self._status_timer.start()
         self._update_tracking_status()
-        # 저장된 전역 단축키 등록(있으면). Windows 외/충돌이면 조용히 무시.
-        self._pause_hotkey.set_hotkey(config.load_pause_hotkey())
         # 실행 중 업데이트 감지: 시작 1회·창 활성화 외에 주기적으로도 확인(안 보고 있어도
         # 알림이 오게). 새 버전이면 배너+토스트+소리(강제 아님). version.json은 CDN 캐시가
         # 있어 더 자주 당길 이유가 없다.
@@ -946,34 +939,6 @@ class MainWindow(QMainWindow):
         else:
             show_toast("전체 오버레이 시작", "버프·디버프·커스텀 오버레이가 다시 동작합니다", 2000)
 
-    def _on_pause_hotkey(self) -> None:
-        """전역 단축키가 눌리면 오버레이 정지/시작을 토글(게임이 맨 앞이어도 동작).
-
-        디바운스: 한 번 누름이 두 번 전달돼 정지+시작으로 상쇄되던 문제 방지(0.25초 내
-        중복 무시).
-        """
-        import time
-
-        now = time.monotonic()
-        if now - getattr(self, "_last_hotkey_at", 0.0) < 0.25:
-            return
-        self._last_hotkey_at = now
-        new_paused = not self._paused
-        # 진단: 누른 순간 맨 앞 창(인게임=client.exe 여부)과 바뀐 상태를 남긴다.
-        # 인게임 누름이 여기까지 오면 front=client.exe로 찍혀 '키는 받는다'가 증명된다.
-        try:
-            _, front_exe = self._watcher.foreground_info()
-        except Exception:  # noqa: BLE001
-            front_exe = ""
-        _hk_log.info(
-            "핫키 토글: front=%s → %s", front_exe or "?", "정지" if new_paused else "시작"
-        )
-        self._set_paused(new_paused)
-
-    def _apply_pause_hotkey(self, spec: str) -> bool:
-        """설정에서 조합이 바뀌면 재등록. 등록 성공 여부를 돌려준다(설정 탭 안내용)."""
-        return self._pause_hotkey.set_hotkey(spec)
-
     def _on_voice_pack_changed(self) -> None:
         """설정에서 알림 목소리 팩이 바뀌면 실행 중 재생기들을 새 팩으로 갱신(바로 적용)."""
         from .notifier import default_sound_map
@@ -1006,6 +971,40 @@ class MainWindow(QMainWindow):
         if event.type() == QEvent.Type.ActivationChange and self.isActiveWindow():
             self._maybe_check_update()
         super().changeEvent(event)
+
+    def keyPressEvent(self, event) -> None:
+        # Space: 오버레이 정지/시작 토글(오디오 앱처럼). 앱이 앞일 때만 — 키 이벤트는
+        # 포커스 창에만 오므로 전역이 아니다(게임엔 아무 영향 없음, 읽기전용 철학 유지).
+        # 입력칸(이름·키워드·메모 등)에 포커스면 글자가 먹히게 토글하지 않는다.
+        from PySide6.QtCore import Qt
+
+        if (
+            event.key() == Qt.Key.Key_Space
+            and not event.isAutoRepeat()
+            and not self._is_text_input_focused()
+        ):
+            self._set_paused(not self._paused)
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+    @staticmethod
+    def _is_text_input_focused() -> bool:
+        """현재 포커스가 글자를 입력받는 위젯인가(그러면 Space는 그쪽에 양보)."""
+        from PySide6.QtWidgets import (
+            QAbstractSpinBox,
+            QComboBox,
+            QLineEdit,
+            QPlainTextEdit,
+            QTextEdit,
+        )
+
+        w = QApplication.focusWidget()
+        if w is None:
+            return False
+        if isinstance(w, (QLineEdit, QTextEdit, QPlainTextEdit, QAbstractSpinBox)):
+            return True
+        return isinstance(w, QComboBox) and w.isEditable()
 
     def closeEvent(self, event) -> None:
         import time
