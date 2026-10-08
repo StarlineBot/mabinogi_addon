@@ -57,14 +57,17 @@ def test_second_alert_fires_once_and_rearms_on_extension():
     _appear(sm, reading=100, t0=0.0)
     # 아직 2차 기준(20초) 위 → 안 울림
     assert sm.check_second_alert(10.4) is False  # remaining ~90
-    sm.observe(detected=True, reading=18, now=11.0)  # 18초로 판독
-    assert sm.check_second_alert(11.0) is True  # 20초 이하 교차 → 1회
-    assert sm.check_second_alert(12.0) is False  # 재알림 없음
-    # 연장(80초로) → 2차 재무장
-    sm.observe(detected=True, reading=80, now=13.0)
-    assert sm.check_second_alert(13.0) is False  # remaining 80 > 20
-    sm.observe(detected=True, reading=15, now=14.0)
-    assert sm.check_second_alert(14.0) is True  # 다시 1회
+    # 시계가 자연히 18초 부근에 도달 → 판독 18이 시계와 일치 → 즉시 반영
+    sm.observe(detected=True, reading=18, now=82.0)  # remaining ~18
+    assert sm.check_second_alert(82.0) is True  # 20초 이하 교차 → 1회
+    assert sm.check_second_alert(83.0) is False  # 재알림 없음
+    # 연장(80초로) → 위로 튐은 두 프레임 연속 확인 후 확정 → 2차 재무장
+    sm.observe(detected=True, reading=80, now=84.0)  # 연장 후보(아직 미반영)
+    sm.observe(detected=True, reading=80, now=84.2)  # 이어짐 → 연장 확정
+    assert sm.check_second_alert(84.2) is False  # remaining 80 > 20
+    # 시계가 다시 15초 부근 도달 → 판독 15가 시계와 일치 → 즉시 반영
+    sm.observe(detected=True, reading=15, now=149.2)  # remaining ~15
+    assert sm.check_second_alert(149.2) is True  # 다시 1회
 
 
 def test_no_second_alert_when_disabled():
@@ -76,20 +79,74 @@ def test_no_second_alert_when_disabled():
 def test_alert_fires_once_at_threshold():
     sm = BuffStateMachine(alert_before=30)
     _appear(sm, reading=100, t0=0.0)
-    # 남은시간 25로 판독 → 임박 진입(점멸+소리)
-    assert sm.observe(detected=True, reading=25, now=1.0) is Event.ALERT
+    # 시계가 자연히 25초 부근 도달 → 판독 25가 시계와 일치 → 임박 진입(점멸+소리)
+    assert sm.observe(detected=True, reading=25, now=75.0) is Event.ALERT
     assert sm.state is State.EXPIRING
     # 계속 줄어도 재알림 없음
-    assert sm.observe(detected=True, reading=24, now=2.0) is Event.NONE
+    assert sm.observe(detected=True, reading=24, now=76.0) is Event.NONE
 
 
 def test_extension_clears_alert():
     sm = BuffStateMachine(alert_before=30)
     _appear(sm, reading=100, t0=0.0)
-    sm.observe(detected=True, reading=25, now=1.0)  # ALERT
-    # 다시 판독값이 크게 늘면 연장
-    assert sm.observe(detected=True, reading=120, now=2.0) is Event.EXTENDED
+    sm.observe(detected=True, reading=25, now=75.0)  # 시계 도달 → 임박(ALERT)
+    assert sm.state is State.EXPIRING
+    # 위로 튀는 판독은 한 프레임만으론 안 믿는다(오독 방지) → 다음 프레임에서
+    # 이어질 때 비로소 연장으로 확정된다.
+    assert sm.observe(detected=True, reading=120, now=75.2) is Event.NONE
+    assert sm.state is State.EXPIRING  # 아직 확정 전 → 알림 유지
+    assert sm.observe(detected=True, reading=120, now=75.4) is Event.EXTENDED
     assert sm.state is State.ACTIVE
+
+
+def test_single_frame_upward_spike_does_not_clear_alert():
+    """임박(≤30초) 중 한 프레임짜리 상향 오독('2분3초' 등)은 연장으로 오인되지
+    않아야 한다. 오인되면 연장 알림이 꺼져 전행비 연장 타이밍을 놓친다(딜로스)."""
+    sm = BuffStateMachine(alert_before=30)
+    _appear(sm, reading=23, t0=0.0)  # 23초 → 임박
+    assert sm.state is State.EXPIRING
+    # 빨강 오독으로 한 프레임 123초(2분3초)로 튐 → 무시, 알림 유지
+    assert sm.observe(detected=True, reading=123, now=0.6) is Event.NONE
+    assert sm.state is State.EXPIRING
+    assert sm.remaining(0.6) < 25  # 123으로 안 튐(내부 시계 23에서 감소)
+    # 다음 프레임 다시 정상(22초) → 그대로 임박 유지
+    assert sm.observe(detected=True, reading=22, now=0.8) is Event.NONE
+    assert sm.state is State.EXPIRING
+    assert sm.remaining(0.8) < 25
+
+
+def test_single_frame_downward_spike_does_not_false_alert():
+    """시간이 충분한데 밝은 배경 탓에 '분'을 놓쳐 수초로 읽히는 하향 오독은
+    무시된다 → 거짓 임박 알림/시간 급락 방지(게임엔 2분20초인데 20초로 뜨는 문제)."""
+    sm = BuffStateMachine(alert_before=30)
+    _appear(sm, reading=140, t0=0.0)  # 2분20초 → 여유
+    assert sm.state is State.ACTIVE
+    # 한 프레임 '20초'로 오독(분 유실) → 무시, 시계 유지, 거짓 임박 없음
+    assert sm.observe(detected=True, reading=20, now=1.0) is Event.NONE
+    assert sm.state is State.ACTIVE
+    assert sm.remaining(1.0) > 130  # 20으로 안 떨어짐
+    # 다음 프레임 정상(139) → 그대로 유지
+    assert sm.observe(detected=True, reading=139, now=1.2) is Event.NONE
+    assert sm.remaining(1.2) > 130
+
+
+def test_sustained_downward_resyncs():
+    """두 프레임 연속 일관된 하향값은(오독이 아니라고 보고) 반영된다 → 시계가
+    실제보다 높게 어긋나 있었다면 매끄럽게 재동기화."""
+    sm = BuffStateMachine(alert_before=30)
+    _appear(sm, reading=140, t0=0.0)
+    sm.observe(detected=True, reading=40, now=1.0)  # 후보(미반영)
+    sm.observe(detected=True, reading=40, now=1.2)  # 이어짐 → 반영
+    assert abs(sm.remaining(1.2) - 40.0) < 1.0
+
+
+def test_inconsistent_spikes_ignored():
+    """서로 다른 오독이 연달아 와도(자기일관 아님) 반영되지 않는다."""
+    sm = BuffStateMachine(appear_frames=3)
+    _appear(sm, reading=20, t0=0.0)
+    sm.observe(detected=True, reading=123, now=1.0)  # 후보 123
+    sm.observe(detected=True, reading=145, now=1.2)  # 다른 쓰레기값 → 미확정
+    assert sm.remaining(1.2) < 25  # 여전히 ~19, 튐 반영 안 됨
 
 
 def test_expired_when_clock_zero_and_missing():
