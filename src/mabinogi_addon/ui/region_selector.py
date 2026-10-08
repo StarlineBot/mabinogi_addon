@@ -12,7 +12,14 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtCore import QPoint, QRect, Qt, Signal
-from PySide6.QtGui import QColor, QGuiApplication, QPainter, QPen, QPixmap
+from PySide6.QtGui import (
+    QColor,
+    QGuiApplication,
+    QImage,
+    QPainter,
+    QPen,
+    QPixmap,
+)
 from PySide6.QtWidgets import QWidget
 
 _LOUPE = 150  # 돋보기 박스 변(px)
@@ -33,7 +40,10 @@ class RegionSelector(QWidget):
     captured = Signal(bool)  # 크롭 모드: 저장 성공=True, 취소/너무 작음=False
 
     def __init__(
-        self, save_path: Path | None = None, fixed_size: tuple[int, int] | None = None
+        self,
+        save_path: Path | None = None,
+        fixed_size: tuple[int, int] | None = None,
+        window_hwnd: int | None = None,
     ) -> None:
         super().__init__(
             None,
@@ -42,6 +52,9 @@ class RegionSelector(QWidget):
         self._save_path = save_path
         # fixed_size가 있으면 '고정 크기 박스를 커서에 붙여 클릭 한 번으로 배치' 모드.
         self._fixed = fixed_size
+        # window_hwnd가 있으면 그 창(게임) 내용을 스냅샷 위에 합성 → 작업표시줄 등에
+        # 가린 부분도 돋보기에 게임 그대로 보인다(커스텀 오버레이 미러 영역 지정용).
+        self._window_hwnd = window_hwnd
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setCursor(Qt.CursorShape.CrossCursor)
         self.setMouseTracking(True)  # 버튼 안 눌러도 이동 이벤트 받기(돋보기용)
@@ -68,9 +81,49 @@ class RegionSelector(QWidget):
         if not self._shot.isNull():
             self._dpr = float(self._shot.devicePixelRatio() or 1.0)
             self._shot.setDevicePixelRatio(1.0)
+            if self._window_hwnd:
+                self._composite_window(self._window_hwnd)
         self.showFullScreen()
         self.raise_()
         self.activateWindow()
+
+    def _composite_window(self, hwnd: int) -> None:
+        """게임 창 그림을 PrintWindow로 읽어 스냅샷(물리픽셀) 위에 덮는다.
+
+        작업표시줄 등에 가린 부분도 게임 내용으로 보이게 한다. 캡처 실패나 거의
+        검게 나오면(하드웨어 가속 게임) 아무것도 안 하고 화면 스냅샷을 그대로 둔다.
+        """
+        from ..system.window_capture import capture_window_bgra
+
+        cap = capture_window_bgra(hwnd)
+        if cap is None:
+            return
+        bgra, left, top, w, h = cap
+        img = QImage(bgra, w, h, QImage.Format.Format_RGB32).copy()  # bytes 수명 분리
+        if img.isNull() or self._mostly_black(img):
+            return  # D3D 등으로 검게 나옴 → 화면 스냅샷 유지(폴백)
+        # 창의 화면(물리) 좌표를 주 화면 스냅샷 기준으로 옮겨 그린다.
+        ox = round(self._screen_geo.x() * self._dpr)
+        oy = round(self._screen_geo.y() * self._dpr)
+        painter = QPainter(self._shot)
+        painter.drawImage(left - ox, top - oy, img)
+        painter.end()
+
+    @staticmethod
+    def _mostly_black(img: QImage) -> bool:
+        """샘플 픽셀이 거의 다 검으면 True(PrintWindow가 내용을 못 가져온 경우)."""
+        w, h = img.width(), img.height()
+        if w < 2 or h < 2:
+            return True
+        steps = 8
+        lit = total = 0
+        for i in range(1, steps):
+            for j in range(1, steps):
+                c = img.pixelColor(w * i // steps, h * j // steps)
+                total += 1
+                if c.red() + c.green() + c.blue() > 24:  # 거의 검정이 아님
+                    lit += 1
+        return total == 0 or lit <= total * 0.02  # 2% 이하만 밝으면 '검은 화면'
 
     def mousePressEvent(self, event) -> None:
         if event.button() != Qt.MouseButton.LeftButton:
