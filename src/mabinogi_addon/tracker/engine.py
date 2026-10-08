@@ -12,7 +12,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from ..detect import detect_buffs, read_time
+from ..detect import detect_buffs, read_time, score_sets, set_names
 from ..detect.icon_matcher import DEFAULT_THRESHOLD
 from .buff_state import BuffStateMachine, Event, State
 
@@ -59,6 +59,13 @@ class BuffEngine:
         self._threshold = threshold
 
         self._anchor_seen = False  # 앵커를 한 번이라도 봤는지(게이팅 안전장치)
+        # 시간 템플릿 세트 자동선택: 모니터·스케일링마다 글자 렌더링이 달라 세트가 여럿.
+        # 워밍업 동안 세트별 신뢰도를 누적해, 리더가 충분히 앞서면 그 세트로 고정한다.
+        self._time_set: str | None = None  # 고정된 세트(None=아직 워밍업)
+        self._set_conf: dict[str, float] = {}
+        if len(set_names()) <= 1:  # 세트가 하나뿐이면 바로 고정(기본)
+            only = set_names()
+            self._time_set = only[0] if only else None
         before = alert_before or {}
         before2 = alert_before2 or {}
         self._machines = {
@@ -131,9 +138,27 @@ class BuffEngine:
                 )
         return TickResult(entries=entries, alerts=alerts, frame_valid=frame_valid)
 
+    # 세트 고정 기준: 누적 신뢰도(≈ 좋은 판독 몇 회분)가 이만큼 앞서면 고정.
+    _SET_LOCK_CONF = 3.0
+
     def _read_row_time(self, region: np.ndarray, icon_y: int) -> float | None:
         top = max(0, icon_y - self._row_pad_top)
         strip = region[top : icon_y + self._row_height, self._time_x0 :]
         if strip.size == 0:
             return None
-        return read_time(strip)
+        if self._time_set is not None:  # 이미 고정됨 → 그 세트만(빠름)
+            return read_time(strip, set_name=self._time_set)
+        # 워밍업: 모든 세트로 읽어 신뢰도 누적, 이번 프레임은 최고 신뢰도 값 사용.
+        best_val: float | None = None
+        best_conf = -1.0
+        for name, (val, conf) in score_sets(strip).items():
+            if val is None:
+                continue
+            self._set_conf[name] = self._set_conf.get(name, 0.0) + conf
+            if conf > best_conf:
+                best_conf, best_val = conf, val
+        if self._set_conf:
+            lead = max(self._set_conf, key=self._set_conf.get)
+            if self._set_conf[lead] >= self._SET_LOCK_CONF:
+                self._time_set = lead  # 리더가 충분히 쌓임 → 고정
+        return best_val
