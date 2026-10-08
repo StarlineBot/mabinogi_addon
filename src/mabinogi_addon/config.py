@@ -491,6 +491,20 @@ def save_general_flag(key: str, value: bool, path: Path = LOCAL_CONFIG_PATH) -> 
     _write_local_config(data, path)
 
 
+_AUTOSTART_KEY = "autostart"  # general 섹션: Windows 시작 시 자동 실행 '의도'
+
+
+def load_autostart_intent(path: Path = LOCAL_CONFIG_PATH) -> bool | None:
+    """자동 실행 의도. 한 번도 설정 안 했으면 None(기존 작업 상태를 이어받도록)."""
+    g = _read_local_config(path).get("general") or {}
+    v = g.get(_AUTOSTART_KEY)
+    return v if isinstance(v, bool) else None
+
+
+def save_autostart_intent(on: bool, path: Path = LOCAL_CONFIG_PATH) -> None:
+    save_general_flag(_AUTOSTART_KEY, on, path)
+
+
 def load_grid_size(path: Path = LOCAL_CONFIG_PATH) -> int:
     """오버레이 격자 칸 크기(px). 기본 32. 작을수록 미세, 클수록 큼직한 이동."""
     g = _read_local_config(path).get("general") or {}

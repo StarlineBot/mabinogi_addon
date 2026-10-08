@@ -607,7 +607,13 @@ class MainWindow(QMainWindow):
         """탐지/폴링 시작. 실제 앱 실행(main)에서만 호출한다(스크린샷 렌더 땐 미호출)."""
         from ..system import autostart
 
-        autostart.refresh()  # 자동실행 켜져 있으면 현재 exe 경로로 갱신(이동 시 self-heal)
+        # 자동실행: 저장된 '의도'대로 현재 exe에 강제 동기화(신버전 실행=자동실행 대상).
+        # 기존 사용자(의도 미저장)는 현재 작업 상태를 의도로 이어받아 한 번 저장한다.
+        intent = config.load_autostart_intent()
+        if intent is None:
+            intent = autostart.is_enabled()
+            config.save_autostart_intent(intent)
+        autostart.reconcile(intent)
         self.party_tab.start_polling()
         self._restore_overlay(self.buff_overlay, self.buff_tab, "buffTracker")
         self._restore_overlay(self.debuff_overlay, self.debuff_tab, "debuffTracker")

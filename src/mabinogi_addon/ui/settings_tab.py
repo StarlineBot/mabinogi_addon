@@ -472,7 +472,11 @@ class SettingsTab(QWidget):
 
         box = QGroupBox("일반")
         v = QVBoxLayout(box)
-        self._autostart = _checked("Windows 시작 시 자동 실행", autostart.is_enabled())
+        # 체크 상태는 저장된 '의도' 기준(없으면 현재 작업 상태를 이어받음).
+        intent = config.load_autostart_intent()
+        if intent is None:
+            intent = autostart.is_enabled()
+        self._autostart = _checked("Windows 시작 시 자동 실행", intent)
         self._autostart.setEnabled(autostart.available())
         if not autostart.available():
             self._autostart.setToolTip("Windows에서만 사용할 수 있습니다")
@@ -611,6 +615,7 @@ class SettingsTab(QWidget):
                 self, "자동 실행", "자동 실행 설정을 변경하지 못했습니다."
             )
             return
+        config.save_autostart_intent(on)  # 의도 저장 → 다음 시작부터 reconcile이 유지
         if on and not config.load_general_flag(_TRAY_START, False):
             QMessageBox.information(
                 self,
