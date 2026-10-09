@@ -19,7 +19,7 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import QWidget
 
 # 경고 크기·위치(쉽게 조정). 글씨 = 화면높이 / FONT_DIV, 세로 위치 = 화면높이 * Y_FRAC.
-_FONT_DIV = 52  # 클수록 작아짐 (예전 14 → 약 1/4 크기)
+_FONT_DIV = 28  # 클수록 작아짐 (화면높이/28 ≈ 51px@1440)
 _FONT_MIN = 24
 _Y_FRAC = 0.14  # 0=맨 위, 0.5=정중앙 — 상단 쪽
 
