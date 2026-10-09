@@ -39,6 +39,11 @@ def test_identifies_eotgallin_poinche():
     assert identify(_region("193901")) == "eotgallin_poinche"
 
 
+def test_identifies_pellom():
+    # 195115 = "펠롬" (초록 바, 짧은 2글자 이름) — 오매칭 없이 식별
+    assert identify(_region("195115")) == "pellom"
+
+
 def test_prefix_trap_picks_longer_name():
     # 185247 = "레넨의 미이르 : 회한" — 접두어 'lenen_miir'도 맞지만 더 긴 쪽을 택해야
     assert identify(_region("185247")) == "lenen_miir_hoehan"
