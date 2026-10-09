@@ -946,9 +946,10 @@ class MainWindow(QMainWindow):
 
         catalog = available_debuff_catalog()
         catalog_by = {b.id: b for b in catalog}
-        self._debuff_engine = DebuffEngine(
-            build_templates(catalog), self._debuff_order(catalog)
-        )
+        order = self._debuff_order(catalog)
+        # 표시(숨기지 않은) 디버프만 매칭 — 버프와 동일하게 비용 절감.
+        tracked = [b for b in catalog if b.id in set(order)]
+        self._debuff_engine = DebuffEngine(build_templates(tracked), order)
         # 지속시간·알림·점멸 없음 → show_duration 전부 False.
         self.debuff_controller = BuffController(
             self.debuff_overlay,
@@ -957,8 +958,9 @@ class MainWindow(QMainWindow):
             watcher=self._watcher,
         )
         self.debuff_controller.set_paused(self._paused)  # 재생성 시 일시정지 상태 유지
-        # 디버프는 느리게 변하고 템플릿 수가 많아 500ms 주기(기획 0.3~0.5초).
-        self.debuff_controller.start(source, self._debuff_engine, interval_ms=500)
+        # 보스에서 떨어진 디버프(재적용 필요)를 빨리 캐치하도록 150ms 주기.
+        # 표시한 것만 매칭이라 비용은 낮다(시간 판독도 없음).
+        self.debuff_controller.start(source, self._debuff_engine, interval_ms=150)
 
     def _on_debuff_tracking_changed(self) -> None:
         if self._debuff_engine is None:

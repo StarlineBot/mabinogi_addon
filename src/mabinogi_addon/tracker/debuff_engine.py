@@ -45,7 +45,7 @@ class DebuffEngine:
         *,
         detect_threshold: float = DEBUFF_DETECT_THRESHOLD,
         release_threshold: float = DEBUFF_RELEASE_THRESHOLD,
-        reappear_sec: float = 1.0,
+        reappear_sec: float = 0.4,
     ) -> None:
         self._templates = templates
         self._order = list(order)
