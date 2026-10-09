@@ -46,6 +46,7 @@ from .tuarim_tab import TuarimTab
 LOGO_PATH = paths.resource_dir() / "logo.png"
 _log = logging.getLogger("mabinogi_addon.close")
 _up_log = logging.getLogger("mabinogi_addon.updater")  # 업데이트 확인 진단(계기·스로틀·결과)
+_notes_log = logging.getLogger("mabinogi_addon.notes")  # 업데이트 노트 표시 진단
 
 
 def app_icon() -> QIcon:
@@ -433,25 +434,31 @@ class MainWindow(QMainWindow):
         self._run_tour()
 
     def _maybe_show_release_notes(self) -> None:
-        """새 버전 첫 실행 시, 마지막으로 본 버전 이후의 업데이트 노트를 띄운다.
+        """버전이 바뀌었으면(마지막 본 버전 != 현재) 업데이트 노트를 띄운다.
 
-        - 개발 빌드(0.0.0)는 건너뜀.
-        - 신규 사용자(투어 미노출)는 노트 대신 투어를 보게 두고, 현재 버전만 기록해
-          다음 업데이트부터 노트가 뜨게 한다(첫 설치엔 '업데이트'가 없으므로).
+        개발 빌드(0.0.0)·창 비표시·같은 버전은 건너뛴다. 이전엔 '투어 미노출=신규'로
+        판단해 노트를 생략했는데, 투어 플래그가 환경마다 불안정해 기존 사용자에게도
+        노트가 안 뜨는 원인이 됐다. 이제 그 게이트를 없애고, 진단 로그를 남긴다.
         """
         from ..version import __version__
         from .release_notes import ReleaseNotesDialog, notes_since
 
-        if __version__ == "0.0.0" or not self.isVisible():
+        if __version__ == "0.0.0":
+            _notes_log.info("노트 생략: 개발 빌드(0.0.0)")
+            return
+        if not self.isVisible():
+            _notes_log.info("노트 생략: 창이 아직 안 보임")
             return
         last_seen = config.load_last_seen_version()
         if last_seen == __version__:
-            return  # 이미 이 버전 노트를 봄
-        first_run = not config.load_general_flag("tourShown", False)
-        config.save_last_seen_version(__version__)  # 봤든 건너뛰든 현재 버전 기록
-        if first_run:
-            return  # 신규 사용자 → 투어가 안내, 노트는 생략
+            _notes_log.info("노트 생략: 이미 본 버전(%s)", last_seen)
+            return
         body = notes_since(last_seen, __version__)
+        config.save_last_seen_version(__version__)  # 재시도 방지로 먼저 기록
+        _notes_log.info(
+            "노트 판정: last_seen=%r cur=%s body=%d자 → %s",
+            last_seen, __version__, len(body), "표시" if body else "내용없음",
+        )
         if body:
             ReleaseNotesDialog(body, __version__, self).exec()
 
@@ -731,12 +738,27 @@ class MainWindow(QMainWindow):
         # 얹어, 시작 중 무엇이 막아도 백그라운드 감지가 보장되게 한다(캐시무효화로 최신 수신).
         # 모달 안내는 타이머 시작 '뒤'에(위 이유). 이게 떠 있어도 감지는 계속 돈다.
         self._maybe_prompt_game_window()
-        # 노트·투어는 창이 '보인 뒤' 맨 앞에 떠야 한다. 진입점은 start() → window.show()
-        # 순서라, 여기서 바로 부르면 isVisible=False(아직 show 전)라 스킵된다. 이벤트 루프로
-        # 미뤄 show() 이후 실행되게 한다(그래야 메인 창 위에 뜬다).
-        QTimer.singleShot(0, self._maybe_show_release_notes)  # 기존 사용자: 새 버전 노트
-        QTimer.singleShot(0, self._maybe_run_tour)  # 신규 사용자: 온보딩 투어
+        # 노트·투어는 창이 '실제로 처음 보일 때'(showEvent) 띄운다. start()는 window.show()
+        # '전'에 불리고(진입점 순서), 트레이로 시작하거나 업데이트 후 재실행되는 등 경로가
+        # 다양해, start() 시점에 쏘면 isVisible=False라 놓친다. showEvent 로 옮겨 어느
+        # 경로든 창이 보이는 순간 한 번 확실히 뜨게 한다.
         self._booting = False  # 부팅 끝 — 이제부터 사용자 변경을 저장
+
+    def showEvent(self, event) -> None:
+        """창이 처음 보일 때 업데이트 노트·온보딩 투어를 한 번 띄운다.
+
+        최소화→복원 등으로 여러 번 불리므로 플래그로 1회만. 이벤트 루프로 한 틱 미뤄
+        창이 완전히 뜬 뒤 그 위에 올라오게 한다.
+        """
+        super().showEvent(event)
+        if getattr(self, "_post_show_done", False) or self._booting:
+            return
+        self._post_show_done = True
+        QTimer.singleShot(0, self._on_first_shown)
+
+    def _on_first_shown(self) -> None:
+        self._maybe_show_release_notes()  # 버전 바뀌었으면 업데이트 노트
+        self._maybe_run_tour()  # 신규 사용자 온보딩 투어
 
     def _compute_tracking(
         self, catalog

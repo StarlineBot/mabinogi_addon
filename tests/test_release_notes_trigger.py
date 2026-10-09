@@ -85,21 +85,17 @@ def test_no_notes_when_already_seen(win, monkeypatch):
     assert "exec" not in calls  # 같은 버전 → 안 뜸
 
 
-def test_new_user_skips_notes_but_records(win, monkeypatch):
+def test_shows_regardless_of_tour_flag(win, monkeypatch):
+    # 투어 플래그(tourShown)와 무관하게 버전만 바뀌면 노트가 뜬다(게이트 제거).
     monkeypatch.setattr(ver, "__version__", "0.3.21")
     monkeypatch.setattr(config, "load_last_seen_version", lambda *a, **k: None)
-    saved: dict = {}
-    monkeypatch.setattr(
-        config, "save_last_seen_version", lambda v, *a, **k: saved.update(v=v)
-    )
-    # 신규 사용자(투어 아직) → 노트 생략, 버전만 기록
+    monkeypatch.setattr(config, "save_last_seen_version", lambda *a, **k: None)
     monkeypatch.setattr(config, "load_general_flag", lambda *a, **k: False)
     calls = _stub_dialog(monkeypatch)
 
     win._maybe_show_release_notes()
 
-    assert "exec" not in calls
-    assert saved.get("v") == "0.3.21"
+    assert calls.get("exec") is True
 
 
 def test_dev_build_skips(win, monkeypatch):
@@ -109,3 +105,20 @@ def test_dev_build_skips(win, monkeypatch):
     win._maybe_show_release_notes()
 
     assert "exec" not in calls
+
+
+def test_showevent_fires_first_shown_once(monkeypatch):
+    _app()
+    from mabinogi_addon.ui.main_window import MainWindow
+
+    w = MainWindow()
+    w._booting = False  # 실앱에선 start()가 show() 전에 끝내는 상태
+    n = {"c": 0}
+    monkeypatch.setattr(w, "_on_first_shown", lambda: n.__setitem__("c", n["c"] + 1))
+    w.show()
+    QApplication.processEvents()
+    w.hide()
+    w.show()  # 복원 — 재실행되면 안 됨
+    QApplication.processEvents()
+    w.close()
+    assert n["c"] == 1  # 창이 여러 번 보여도 1회만
