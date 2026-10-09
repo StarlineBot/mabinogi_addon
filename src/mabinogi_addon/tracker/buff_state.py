@@ -53,7 +53,7 @@ class BuffStateMachine:
         alert_before: float = 30.0,
         alert_before2: float | None = None,
         appear_frames: int = 3,
-        disappear_sec: float = 2.0,
+        disappear_sec: float = 0.4,
     ) -> None:
         self.alert_before = alert_before
         self.alert_before2 = alert_before2  # None=2차 알림 없음

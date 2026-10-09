@@ -76,3 +76,33 @@ def test_newly_appeared_buff_is_read(monkeypatch):
     calls = _count_reads(eng, monkeypatch)
     eng.tick(region, now=0.0)  # 첫 등장
     assert calls["n"] >= 1  # 등장 직후엔 반드시 판독(시계 시드)
+
+
+# ---- 종료(종료된 버프 빠른 해제) vs 깜빡임(종료임박) 구분 ----
+def test_flicker_kept_but_termination_released(monkeypatch):
+    from mabinogi_addon.tracker import engine as engine_mod
+
+    class _Det:
+        def __init__(self, bid, y=0):
+            self.buff_id = bid
+            self.y = y
+
+    region = _region()
+    eng = _engine()  # appear_frames=1
+
+    # 1) vivace 감지 + 시간 50 → ACTIVE(시계=50)
+    monkeypatch.setattr(engine_mod, "detect_buffs", lambda *a, **k: [_Det("vivace")])
+    monkeypatch.setattr(eng, "_read_row_time", lambda region, y: 50.0)
+    eng.tick(region, now=0.0)
+
+    # 2) 아이콘 미검출이지만 그 행 시간이 시계와 일치(≈49.9) → 살아있음(유지)
+    monkeypatch.setattr(engine_mod, "detect_buffs", lambda *a, **k: [])
+    monkeypatch.setattr(eng, "_read_row_time", lambda region, y: 49.9)
+    res_keep = eng.tick(region, now=0.1)
+    assert any(e.buff_id == "vivace" for e in res_keep.entries)  # 깜빡임 → 유지
+
+    # 3) 아이콘 미검출 + 그 행 시간이 시계와 불일치(다른 버프가 올라옴) → 0.4초 후 해제
+    monkeypatch.setattr(eng, "_read_row_time", lambda region, y: 5.0)
+    eng.tick(region, now=0.2)  # 불일치 → 미감지 누적 시작
+    res_gone = eng.tick(region, now=0.7)  # 0.5초 미감지(>0.4) → 해제
+    assert not any(e.buff_id == "vivace" for e in res_gone.entries)

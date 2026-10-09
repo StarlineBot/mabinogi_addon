@@ -81,9 +81,11 @@ class BuffEngine:
         # 마다 + '임박 근처'엔 매 틱(연장을 놓쳐 거짓 알림 나는 걸 막음).
         self._present_prev: set[str] = set()
         self._last_read_at: dict[str, float] = {}
+        self._last_y: dict[str, int] = {}  # 마지막으로 아이콘을 본 행(미검출 시 시간-확정용)
 
     _TIME_READ_GAP = 3.0  # 초. 임박 근처가 아니면 이 간격으로만 시간 판독
     _NEAR_MARGIN = 8.0  # 알림 기준 + 이 값 이내면 매 틱 판독(연장 즉시 반영)
+    _TIME_CONFIRM_TOL = 3.0  # 미검출 시 읽은 시간이 내부 시계와 이 오차 이내면 '살아있음'
 
     @property
     def anchor_seen(self) -> bool:
@@ -126,14 +128,34 @@ class BuffEngine:
             det = present.get(bid)
             detected = det is not None
             reading: float | None = None
-            if detected and self._show_duration.get(bid, True):
-                just_appeared = bid not in self._present_prev
+            if detected:
+                self._last_y[bid] = det.y  # 미검출 시 시간-확정에 쓸 마지막 행
+                if self._show_duration.get(bid, True):
+                    just_appeared = bid not in self._present_prev
+                    rem = machine.remaining(now)
+                    near = (
+                        rem is not None and rem <= machine.alert_before + self._NEAR_MARGIN
+                    )
+                    last = self._last_read_at.get(bid, float("-inf"))
+                    if just_appeared or near or (now - last) >= self._TIME_READ_GAP:
+                        reading = self._read_row_time(region, det.y)
+                        self._last_read_at[bid] = now
+            elif (
+                frame_valid
+                and self._show_duration.get(bid, True)
+                and machine.state in (State.ACTIVE, State.EXPIRING)
+            ):
+                # 아이콘이 잠깐 안 잡힘(가림·점멸 등): 그 행의 시간을 읽어 내부 시계와
+                # 일치하면 '아직 살아있음'으로 인정(= 종료임박인데 깜빡인 것). 진짜 종료면
+                # 아래 줄이 올라와 그 자리 시간이 시계와 안 맞아 인정되지 않고, 곧 해제된다.
                 rem = machine.remaining(now)
-                near = rem is not None and rem <= machine.alert_before + self._NEAR_MARGIN
-                last = self._last_read_at.get(bid, float("-inf"))
-                if just_appeared or near or (now - last) >= self._TIME_READ_GAP:
-                    reading = self._read_row_time(region, det.y)
-                    self._last_read_at[bid] = now
+                y = self._last_y.get(bid)
+                if rem is not None and rem > 0 and y is not None:
+                    t = self._read_row_time(region, y)
+                    if t is not None and abs(t - rem) <= self._TIME_CONFIRM_TOL:
+                        detected = True
+                        reading = float(t)
+                        self._last_read_at[bid] = now
             event = machine.observe(
                 detected=detected, reading=reading, now=now, frame_valid=frame_valid
             )
