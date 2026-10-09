@@ -119,8 +119,10 @@ def read_percent(
 ) -> int | None:
     """리더 박스 영역에서 % 정수(0~99)를 읽는다. 못 읽으면 None.
 
-    여러 배율로 시도해(해상도가 달라 숫자 크기가 템플릿과 다른 경우 대응) 글자가
-    가장 또렷하게 맞는 배율의 결과를 쓴다. 동점이면 1.0(동일 해상도)이 먼저라 이긴다.
+    **모든 배율의 매칭을 한데 모아** 자리마다 가장 또렷이 맞는 배율로 숫자를 잡는다.
+    (예전처럼 한 배율을 통째로 고르면, '9'가 제일 또렷한 배율에서 옆 '6'이 안 맞아
+    96을 9로 읽는 문제가 났다.) 겹치는 후보는 점수 높은 쪽만 남기고, 점수 상위 두
+    자리를 x순(왼→오)으로 이어 값으로 만든다.
     """
     if region_bgr is None or region_bgr.size == 0:
         return None
@@ -133,12 +135,20 @@ def read_percent(
     if not sets:
         return None
     binary = binarize(region_bgr)
-    best: tuple[float, int] | None = None  # (peak점수, 값)
+    hits: list = []
     for scale in _SCALES:
-        got = _match_at(binary, sets[scale], threshold)
-        if got is None:
-            continue
-        value, peak = got
-        if best is None or peak > best[0]:  # 엄격한 > → 동점이면 먼저 온 1.0 우선
-            best = (peak, value)
-    return best[1] if best else None
+        for label, tmpl in sets[scale].items():
+            hits += _occurrences(binary, label, tmpl, threshold)
+    if not hits:
+        return None
+    kept = _nms(hits)  # 겹침 제거(점수 우선), x순 반환
+    if not kept:
+        return None
+    # 점수 상위 2개(팬텀 자리 방지) → x순으로 이어 읽기
+    top2 = sorted(sorted(kept, key=lambda o: -o[1])[:2], key=lambda o: o[0])
+    digits = [label for _x, _s, label, _w in top2]
+    try:
+        value = int("".join(digits))
+    except ValueError:
+        return None
+    return value if 0 <= value <= 100 else None

@@ -22,4 +22,4 @@ def test_make_tracker_fires():
     t.observe(95)
     alerts = t.observe(89)  # 90(=85+5) 통과 → pre
     assert alerts and alerts[0].threshold == 85 and alerts[0].stage == "pre"
-    assert alerts[0].text == "고목의 페타크 85% 진입 준비"
+    assert alerts[0].text == "고목의 페타크 85% 패턴 준비"

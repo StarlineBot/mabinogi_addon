@@ -57,6 +57,7 @@ class BossTab(QWidget):
         self._stable_hp: int | None = None
         self._hp_cand: int | None = None  # 확정 대기 후보값
         self._hp_cand_n = 0  # 후보 연속 횟수
+        self._unidentified = 0  # 이름이 연속으로 안 읽힌 프레임 수(보스 사라짐 판정)
         self._overlay = PatternWarningOverlay()
         self._notifier = None
 
@@ -146,7 +147,7 @@ class BossTab(QWidget):
         return lbl
 
     def _preview_warning(self) -> None:
-        self._overlay.show_message("고목의 페타크 85% 진입 준비  (미리보기)", 2500)
+        self._overlay.show_message("고목의 페타크 85% 패턴 준비  (미리보기)", 2500)
 
     # ---- 게이팅 ----
     @staticmethod
@@ -213,22 +214,30 @@ class BossTab(QWidget):
         name_reg = frame[:, : int(w * 0.60)]  # 왼쪽=이름
         pct_reg = frame[:, int(w * 0.58) :]  # 오른쪽=HP%(가운데 빈 띠는 글자 없음)
         boss_id = identify(name_reg, self._name_templates)
-        hp_raw = read_percent(pct_reg)
 
-        # HP 안정화: 보스 바가 막 뜰 때(진입 순간)의 순간 오판독이 거짓 교차를 내지
-        # 않도록, **소폭 변화는 2연속·큰 점프/첫 확정은 3연속**이어야 반영한다.
-        # (한두 프레임짜리 글리치는 버려지고, 완만한 체력 감소는 바로 추적)
-        self._accept_hp(hp_raw)
+        # 보스 식별/소멸 관리. **HP 판독·경고는 보스가 '이번 프레임' 식별됐을 때만**
+        # 처리한다 — 보스가 없으면 영역이 길바닥/UI라 HP가 garbage로 읽히는데, 그걸
+        # 트래커에 넣으면 옛 보스 경고가 거짓 발동한다(보스 없는데 40% 알림 버그).
+        #  - 식별되면 그 보스 트래커로. 깜빡임으로 1~수 프레임 미식별돼도 _stable_hp는
+        #    유지되고, 이름이 한참(=_GONE_FRAMES) 안 읽히면 '사라짐'으로 보고 해제.
+        if boss_id is not None:
+            self._unidentified = 0
+            if boss_id != self._cur_boss:
+                self._cur_boss = boss_id
+                self._tracker = (
+                    make_tracker(self._bosses[boss_id])
+                    if boss_id in self._bosses
+                    else None
+                )
+                self._reset_hp()  # 새 보스 → HP 상태 초기화
+            self._accept_hp(read_percent(pct_reg))  # 식별된 프레임만 HP 반영
+        else:
+            self._unidentified += 1
+            if self._unidentified > self._GONE_FRAMES and self._tracker is not None:
+                self._cur_boss = None
+                self._tracker = None
+                self._reset_hp()
         hp = self._stable_hp
-
-        # 보스 전환: 새 보스가 식별되면 그 보스 트래커로(미식별 프레임은 유지)
-        if boss_id is not None and boss_id != self._cur_boss:
-            self._cur_boss = boss_id
-            self._tracker = (
-                make_tracker(self._bosses[boss_id])
-                if boss_id in self._bosses
-                else None
-            )
 
         # 실시간 상태 표시(현재 프레임 기준)
         if boss_id in self._bosses:
@@ -240,8 +249,13 @@ class BossTab(QWidget):
         hp_txt = f"{hp}%" if hp is not None else "—"
         self.status_label.setText(f"식별: {name}   HP: {hp_txt}")
 
-        # 경고 발동
-        if self.enable.isChecked() and self._tracker is not None and hp is not None:
+        # 경고 발동: 보스가 이번 프레임 식별됐을 때만(garbage 발동 차단).
+        if (
+            boss_id is not None
+            and self.enable.isChecked()
+            and self._tracker is not None
+            and hp is not None
+        ):
             for alert in self._tracker.observe(hp):
                 self._overlay.show_message(alert.text, 3000)
                 self._play(alert.sound)
@@ -250,6 +264,13 @@ class BossTab(QWidget):
     _SMALL_STEP = 12  # 이 이하 변화면 '완만' (2연속으로 확정)
     _CONFIRM_SMALL = 2
     _CONFIRM_JUMP = 3  # 큰 점프·첫 확정은 3연속 필요(글리치 차단)
+    # 틱 300ms 기준. 이름이 이보다 오래 안 읽히면 보스 사라짐으로 보고 트래커 해제.
+    _GONE_FRAMES = 10  # ~3초
+
+    def _reset_hp(self) -> None:
+        self._stable_hp = None
+        self._hp_cand = None
+        self._hp_cand_n = 0
 
     def _accept_hp(self, raw: int | None) -> None:
         """판독값을 확정 HP(self._stable_hp)로 반영할지 결정. 못 읽은 프레임(None)은

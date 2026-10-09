@@ -23,8 +23,19 @@ def test_message_text_and_sound():
     t.observe(95)
     alerts = t.observe(89)  # 90 통과 → pre
     assert len(alerts) == 1
-    assert alerts[0].text == "고목의 페타크 85% 진입 준비"
+    assert alerts[0].text == "고목의 페타크 85% 패턴 준비"
     assert alerts[0].sound == "pre"
+
+
+def test_near_fires_at_threshold_plus_one_not_at_threshold():
+    """임박(near)은 임계+1(예 81)에 도달할 때 떠야 한다 — 임계(80, 패턴 시작점)에서
+    뜨면 늦다. (보스 HP는 임계에서 고정되므로 반드시 '전'에)"""
+    t = BossPatternTracker("레넨의 미이르", [80])  # near 지점 81
+    t.observe(83)
+    assert t.observe(82) == []  # 아직 82 — near 미발동
+    near = t.observe(81)  # 81 도달 → 발동
+    assert [(a.threshold, a.stage) for a in near] == [(80, "near")]
+    assert t.observe(80) == []  # 80(고정점)에선 재발동 없음
 
 
 def test_no_fire_on_first_observe():

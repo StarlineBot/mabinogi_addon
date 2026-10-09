@@ -50,14 +50,17 @@ class BossPatternTracker:
             if (
                 self._armed[i]
                 and prev is not None
-                and prev >= point > hp  # 하강하며 지점 통과
+                and prev > point >= hp  # 하강하며 지점에 '도달'(지점값에서 발동)
             ):
                 self._armed[i] = False
+                # 예고(pre)=5% 전, 임박(near)=1% 전. 보스 HP는 임계에서 고정되므로
+                # 둘 다 임계 '전'에 떠야 의미가 있다.
+                label = "준비" if stage == "pre" else "임박"
                 out.append(
                     PatternAlert(
                         threshold=t,
                         stage=stage,
-                        text=f"{self.boss_name} {t}% 진입 준비",
+                        text=f"{self.boss_name} {t}% 패턴 {label}",
                         sound=stage,
                     )
                 )
