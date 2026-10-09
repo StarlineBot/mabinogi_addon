@@ -731,8 +731,11 @@ class MainWindow(QMainWindow):
         # 얹어, 시작 중 무엇이 막아도 백그라운드 감지가 보장되게 한다(캐시무효화로 최신 수신).
         # 모달 안내는 타이머 시작 '뒤'에(위 이유). 이게 떠 있어도 감지는 계속 돈다.
         self._maybe_prompt_game_window()
-        self._maybe_show_release_notes()  # 기존 사용자: 새 버전 노트(신규는 투어가 안내)
-        self._maybe_run_tour()
+        # 노트·투어는 창이 '보인 뒤' 맨 앞에 떠야 한다. 진입점은 start() → window.show()
+        # 순서라, 여기서 바로 부르면 isVisible=False(아직 show 전)라 스킵된다. 이벤트 루프로
+        # 미뤄 show() 이후 실행되게 한다(그래야 메인 창 위에 뜬다).
+        QTimer.singleShot(0, self._maybe_show_release_notes)  # 기존 사용자: 새 버전 노트
+        QTimer.singleShot(0, self._maybe_run_tour)  # 신규 사용자: 온보딩 투어
         self._booting = False  # 부팅 끝 — 이제부터 사용자 변경을 저장
 
     def _compute_tracking(
