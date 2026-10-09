@@ -199,6 +199,7 @@ class MainWindow(QMainWindow):
         self.buff_tab = BuffTab()
         self.debuff_tab = DebuffTab()
         self.party_tab = PartyTab()
+        self.party_tab.activate_requested.connect(self._focus_party_tab)
         self.memo_tab = MemoTab()
         self.tuarim_tab = TuarimTab(self._watcher)
         self.custom_overlay_tab = CustomOverlayTab(self._watcher)
@@ -213,7 +214,8 @@ class MainWindow(QMainWindow):
         tabs.addTab(_scrolled(self.debuff_tab), "디버프 트래커")
         tabs.addTab(_scrolled(self.tuarim_tab), "투아림 트래커")
         tabs.addTab(_scrolled(self.custom_overlay_tab), "커스텀 오버레이")
-        tabs.addTab(_scrolled(self.party_tab), "파티 모집")
+        self._party_scroll = _scrolled(self.party_tab)  # 토스트 클릭 시 이 탭으로 전환
+        tabs.addTab(self._party_scroll, "파티 모집")
         tabs.addTab(_scrolled(self.memo_tab), "메모")
         tabs.addTab(_scrolled(self.settings_tab), "설정")
         tabs.setStyleSheet(_TAB_QSS)
@@ -589,7 +591,13 @@ class MainWindow(QMainWindow):
             from .notifier import play_update_sound
             from .toast import show_toast
 
-            show_toast("새 버전 v" + ver, "상단의 [지금 업데이트]로 받을 수 있어요", 6000)
+            # 토스트 클릭 → 창을 띄워(트레이·최소화 상태에서도) [지금 업데이트]를 누를 수 있게.
+            show_toast(
+                "새 버전 v" + ver,
+                "눌러서 앱을 열고 상단의 [지금 업데이트]로 받으세요",
+                6000,
+                on_click=self._show_from_tray,
+            )
             play_update_sound()
 
     def _on_update_clicked(self) -> None:
@@ -1059,6 +1067,11 @@ class MainWindow(QMainWindow):
         # 프로세스의 포그라운드 강탈을 막아 activateWindow()가 실제 활성화를 못 해
         # changeEvent(활성화)가 안 울릴 수 있으므로, 여기서 직접 업데이트 확인을 돈다.
         self._maybe_check_update("트레이복원")
+
+    def _focus_party_tab(self) -> None:
+        """파티 알림 토스트 클릭 → 창을 띄우고 파티 모집 탭으로 전환."""
+        self._show_from_tray()
+        self._tabs.setCurrentWidget(self._party_scroll)
 
     def _quit_from_tray(self) -> None:
         self._force_quit = True

@@ -7,6 +7,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import QApplication, QLabel, QVBoxLayout, QWidget
 
@@ -18,7 +20,14 @@ _active: list[Toast] = []  # 현재 떠 있는 토스트(아래→위로 쌓기)
 
 
 class Toast(QWidget):
-    def __init__(self, title: str, body: str, duration_ms: int = 5000) -> None:
+    def __init__(
+        self,
+        title: str,
+        body: str,
+        duration_ms: int = 5000,
+        on_click: Callable[[], None] | None = None,
+    ) -> None:
+        self._on_click = on_click
         super().__init__(
             None,
             Qt.WindowType.FramelessWindowHint
@@ -29,6 +38,8 @@ class Toast(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         self.setFixedWidth(320)
+        if on_click is not None:
+            self.setCursor(Qt.CursorShape.PointingHandCursor)  # 클릭 가능 표시
 
         wrap = QWidget(self)
         wrap.setObjectName("toast")
@@ -59,8 +70,13 @@ class Toast(QWidget):
         self._timer.timeout.connect(self.close)
         self._timer.start(duration_ms)
 
-    # 클릭하면 즉시 닫기
+    # 클릭하면 동작(있으면) 실행 후 즉시 닫기
     def mousePressEvent(self, event) -> None:
+        if self._on_click is not None:
+            try:
+                self._on_click()
+            except Exception:  # noqa: BLE001, S110 — 클릭 동작 실패로 앱이 죽지 않게
+                pass
         self.close()
 
     def closeEvent(self, event) -> None:
@@ -98,7 +114,12 @@ def _reflow() -> None:
             y += toast.height() + _GAP
 
 
-def show_toast(title: str, body: str, duration_ms: int = 5000) -> Toast:
-    toast = Toast(title, body, duration_ms)
+def show_toast(
+    title: str,
+    body: str,
+    duration_ms: int = 5000,
+    on_click: Callable[[], None] | None = None,
+) -> Toast:
+    toast = Toast(title, body, duration_ms, on_click)
     toast.show_toast_window()
     return toast

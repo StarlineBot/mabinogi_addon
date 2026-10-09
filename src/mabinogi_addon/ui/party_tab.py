@@ -117,6 +117,8 @@ class _ChipRow(QWidget):
 
 
 class PartyTab(QWidget):
+    activate_requested = Signal()  # 파티 알림 토스트 클릭 → 창 띄우고 이 탭으로 이동
+
     def __init__(self) -> None:
         super().__init__()
         self._keywords, self._excludes = config.load_party_lists()
@@ -466,7 +468,11 @@ class PartyTab(QWidget):
             )
             if part
         )
-        show_toast(f"🔔 파티모집 · '{keyword}'", f"{recruit.content}\n{meta}")
+        show_toast(
+            f"🔔 파티모집 · '{keyword}'",
+            f"{recruit.content}\n{meta}",
+            on_click=self.activate_requested.emit,  # 클릭 → 파티 모집 탭으로
+        )
         # 효과음: 파일 있으면 재생, 없으면 시스템 비프로 폴백(토스트와 함께 항상 알림).
         if self._alert_sound and not self._sound.play("party"):
             QApplication.beep()
