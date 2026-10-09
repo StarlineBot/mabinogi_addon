@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import numpy as np
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QImage, QPixmap
+from PySide6.QtGui import QGuiApplication, QImage, QPixmap
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -26,6 +26,7 @@ from ..detect.boss_hp_reader import read_percent
 from ..detect.boss_name_matcher import identify, load_name_templates
 from ..tracker.boss_catalog import load_bosses, make_tracker
 from .pattern_overlay import PatternWarningOverlay
+from .upcoming_overlay import UpcomingPatternsOverlay
 from .widgets import checkbox, hint_label
 
 _SOUND_DIR = paths.resource_dir() / "sounds"
@@ -60,6 +61,16 @@ class BossTab(QWidget):
         self._unidentified = 0  # 이름이 연속으로 안 읽힌 프레임 수(보스 사라짐 판정)
         self._overlay = PatternWarningOverlay()
         self._notifier = None
+        # 다음 패턴 목록 오버레이(왼쪽에 남은 패턴 % 나열). 위치/고정은 설정에 저장.
+        self._upcoming = UpcomingPatternsOverlay()
+        self._upcoming.moved.connect(self._on_upcoming_moved)
+        self._upcoming.set_locked(cfg["upcomingLocked"])
+        if cfg["upcomingPos"]:
+            self._upcoming.move(
+                int(cfg["upcomingPos"]["x"]), int(cfg["upcomingPos"]["y"])
+            )
+        else:
+            self._place_upcoming_default()
 
         v = QVBoxLayout(self)
         v.setContentsMargins(12, 12, 12, 12)
@@ -126,6 +137,21 @@ class BossTab(QWidget):
         cv.addWidget(
             hint_label("영역을 맞춘 뒤 위의 '식별'과 'HP'가 실제와 맞는지 먼저 확인하세요.")
         )
+
+        # 다음 패턴 목록(왼쪽에 남은 패턴 % 나열) — 준비(5% 전) 알림이 뜨면 그 %가 빠짐.
+        self.show_upcoming = checkbox("다음 패턴 보기 (왼쪽에 남은 패턴 % 나열)")
+        self.show_upcoming.setChecked(cfg["showUpcoming"])
+        self.show_upcoming.toggled.connect(self._on_show_upcoming)
+        cv.addWidget(self.show_upcoming)
+        up_row = QHBoxLayout()
+        self.upcoming_lock_btn = QPushButton()
+        self.upcoming_lock_btn.clicked.connect(self._toggle_upcoming_lock)
+        up_row.addWidget(self.upcoming_lock_btn)
+        up_row.addWidget(
+            hint_label("해제=끌어서 위치 이동 · 고정=게임 위 표시(클릭 통과)"), 1
+        )
+        cv.addLayout(up_row)
+        self._sync_upcoming_btn()
         v.addWidget(self._controls)
         v.addStretch(1)
 
@@ -191,15 +217,66 @@ class BossTab(QWidget):
             self.region_label.setText("영역 미지정")
 
     def _save(self) -> None:
-        config.save_boss_pattern({"enabled": self.enable.isChecked(), "box": self._region})
+        config.save_boss_pattern(
+            {
+                "enabled": self.enable.isChecked(),
+                "box": self._region,
+                "showUpcoming": self.show_upcoming.isChecked(),
+                "upcomingLocked": self._upcoming.locked,
+            }
+        )
+
+    # ---- 다음 패턴 목록 ----
+    def _place_upcoming_default(self) -> None:
+        """기본 위치: 화면 정중앙에서 왼쪽 1/4 지점, 세로 중간 위쪽."""
+        screen = QGuiApplication.primaryScreen()
+        if screen is None:
+            return
+        g = screen.geometry()
+        self._upcoming.move(int(g.width() * 0.25), int(g.height() * 0.40))
+
+    def _sync_upcoming_btn(self) -> None:
+        self.upcoming_lock_btn.setText(
+            "목록 위치 이동" if self._upcoming.locked else "목록 위치 고정"
+        )
+
+    def _on_show_upcoming(self, checked: bool) -> None:
+        self._save()
+        if not checked:
+            self._upcoming.hide()
+
+    def _toggle_upcoming_lock(self) -> None:
+        self._upcoming.set_locked(not self._upcoming.locked)
+        self._sync_upcoming_btn()
+        self._save()
+
+    def _on_upcoming_moved(self) -> None:
+        pos = self._upcoming.pos()
+        config.save_boss_pattern({"upcomingPos": {"x": pos.x(), "y": pos.y()}})
+
+    def _update_upcoming(self, hp: int | None) -> None:
+        """남은 패턴 목록을 오버레이에 반영. 고정 상태면 실제 남은 패턴이 있을 때만
+        표시하고, 해제 상태면 위치 지정을 위해 항상 보인다(비면 샘플)."""
+        if not self.show_upcoming.isChecked():
+            self._upcoming.hide()
+            return
+        items = self._tracker.upcoming(hp) if self._tracker is not None else []
+        self._upcoming.set_items(items)
+        if self._upcoming.locked and not items:
+            self._upcoming.hide()
+        else:
+            self._upcoming.show()
+            self._upcoming.raise_()
 
     # ---- 읽기 루프 ----
     def _tick(self) -> None:
         self._apply_gate()
         if not self._logged_in():
+            self._upcoming.hide()
             return
         active = self._watcher.is_game_active() or self._watcher.is_self_active()
         if not self._region or not active:
+            self._upcoming.hide()
             return
         from .dpi import to_physical
 
@@ -249,16 +326,18 @@ class BossTab(QWidget):
         hp_txt = f"{hp}%" if hp is not None else "—"
         self.status_label.setText(f"식별: {name}   HP: {hp_txt}")
 
-        # 경고 발동: 보스가 이번 프레임 식별됐을 때만(garbage 발동 차단).
-        if (
-            boss_id is not None
-            and self.enable.isChecked()
-            and self._tracker is not None
-            and hp is not None
-        ):
-            for alert in self._tracker.observe(hp):
+        # 트래커 상태 갱신: 보스가 이번 프레임 식별됐을 때만(garbage 발동 차단).
+        # 관측은 '경고 사용'과 무관하게 돌려 '다음 패턴 목록'도 최신으로 유지하고,
+        # 중앙 경고·소리만 '경고 사용'일 때 낸다.
+        alerts = []
+        if boss_id is not None and self._tracker is not None and hp is not None:
+            alerts = self._tracker.observe(hp)
+        if self.enable.isChecked():
+            for alert in alerts:
                 self._overlay.show_message(alert.text, 3000)
                 self._play(alert.sound)
+
+        self._update_upcoming(hp)
 
     # 큰 점프(진입 애니메이션·오판독)와 완만한 감소를 구분해 확정.
     _SMALL_STEP = 12  # 이 이하 변화면 '완만' (2연속으로 확정)
@@ -325,3 +404,5 @@ class BossTab(QWidget):
 
     def shutdown(self) -> None:
         self._timer.stop()
+        self._upcoming.close()
+        self._overlay.close()

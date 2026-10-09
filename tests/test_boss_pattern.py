@@ -70,3 +70,48 @@ def test_none_reading_ignored():
     t.observe(95)
     assert t.observe(None) == []  # 판독 실패 프레임 무시
     assert _fire(t, [89]) == [(85, "pre")]  # 직전 95 유지 → 정상 교차
+
+
+# ---- 다음 패턴 목록(upcoming) ----
+
+
+def test_upcoming_lists_thresholds_below_hp_descending():
+    t = BossPatternTracker("보스", [90, 60, 30])
+    t.observe(100)
+    assert t.upcoming(100) == [90, 60, 30]  # 전부 아래 → 내림차순
+
+
+def test_upcoming_drops_threshold_when_pre_fires():
+    t = BossPatternTracker("보스", [90, 60, 30])
+    t.observe(100)
+    assert t.upcoming(100) == [90, 60, 30]
+    # 90의 준비(pre)는 95에서 발동 → 90이 목록에서 빠짐
+    t.observe(94)
+    assert t.upcoming(94) == [60, 30]
+    # 60의 준비는 65에서 발동 → 60도 빠짐
+    t.observe(64)
+    assert t.upcoming(64) == [30]
+
+
+def test_upcoming_excludes_thresholds_above_current_hp():
+    """중간부터(예 50%) 합류하면 이미 지난 위쪽 임계는 나열하지 않는다."""
+    t = BossPatternTracker("보스", [90, 60, 30])
+    t.observe(50)
+    assert t.upcoming(50) == [30]  # 90·60은 현재 HP 위 → 제외
+
+
+def test_upcoming_rearms_on_phase_reset():
+    t = BossPatternTracker("보스", [90, 60])
+    t.observe(100)
+    t.observe(94)  # 90 준비 발동 → 빠짐
+    assert t.upcoming(94) == [60]
+    # 페이즈 리셋(HP 100 복귀) → 90 재무장 → 다시 목록에 등장
+    t.observe(100)
+    assert t.upcoming(100) == [90, 60]
+
+
+def test_upcoming_holds_last_on_none():
+    t = BossPatternTracker("보스", [90, 60])
+    t.observe(100)
+    assert t.upcoming(100) == [90, 60]
+    assert t.upcoming(None) == [90, 60]  # 판독 실패 프레임 → 직전 목록 유지

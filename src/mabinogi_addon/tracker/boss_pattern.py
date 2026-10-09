@@ -37,6 +37,7 @@ class BossPatternTracker:
             self._points.append((t + near_offset, t, "near"))
         self._armed = [True] * len(self._points)
         self._prev: int | None = None
+        self._last_upcoming: list[int] = []  # 판독 실패 프레임에 유지할 직전 목록
 
     def observe(self, hp: int | None) -> list[PatternAlert]:
         """현재 HP%를 넣어, 이번에 발동한 경고 목록을 돌려준다(없으면 빈 리스트)."""
@@ -65,4 +66,26 @@ class BossPatternTracker:
                     )
                 )
         self._prev = hp
+        return out
+
+    def upcoming(self, hp: int | None) -> list[int]:
+        """지금 HP보다 아래에 있고 아직 '준비'(pre) 알림이 안 뜬 임계 목록(내림차순).
+
+        '다음에 올 패턴'을 왼쪽에 미리 나열하는 용도. 각 임계의 준비 알림이 발동하면
+        (pre 교차) 그 임계는 목록에서 빠지고, 페이즈 리셋(HP가 위로 다시 오름)으로
+        재무장되면 다시 들어온다. 판독 실패(None) 프레임은 직전 목록을 그대로 유지해
+        바가 잠깐 숨어도 목록이 깜빡이지 않게 한다. observe() 뒤에 호출해야 이번
+        프레임의 발동이 반영된다.
+        """
+        if hp is None:
+            return list(self._last_upcoming)
+        out = sorted(
+            {
+                t
+                for (_point, t, stage), armed in zip(self._points, self._armed)
+                if stage == "pre" and armed and t < hp
+            },
+            reverse=True,
+        )
+        self._last_upcoming = out
         return out

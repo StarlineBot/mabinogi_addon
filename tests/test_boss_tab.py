@@ -91,6 +91,55 @@ def test_stale_tracker_cleared_when_boss_gone(monkeypatch):
     t.shutdown()
 
 
+def test_upcoming_list_updates_from_tracker(monkeypatch):
+    """'다음 패턴 보기'가 켜지면 식별된 보스의 남은 임계가 목록 오버레이에 들어가고,
+    준비(5% 전) 알림이 뜬 임계는 목록에서 빠진다."""
+    _app()
+    from mabinogi_addon.ui import boss_tab as bt_mod
+    from mabinogi_addon.ui.boss_tab import BossTab
+
+    monkeypatch.setattr(config, "load_discord_user", lambda *a, **k: {"name": "x"})
+    t = BossTab(_Watcher())
+    t._region = {"x": 0, "y": 0, "w": 150, "h": 36}
+    t.show_upcoming.setChecked(True)
+    monkeypatch.setattr(t, "_grab_rect", lambda *a: np.zeros((36, 150, 3), np.uint8))
+    monkeypatch.setattr(t, "_show_preview", lambda *a: None)
+
+    # 레넨(임계 80,40) 식별 + HP 90 → 둘 다 남은 패턴으로 나열
+    monkeypatch.setattr(bt_mod, "identify", lambda *a, **k: "lenen_miir")
+    monkeypatch.setattr(bt_mod, "read_percent", lambda *a, **k: 90)
+    for _ in range(4):
+        t._tick()
+    assert t._upcoming.items == [80, 40]
+
+    # HP 84로 하강 → 80 준비(85 통과) 발동 → 80이 목록에서 빠짐
+    monkeypatch.setattr(bt_mod, "read_percent", lambda *a, **k: 84)
+    for _ in range(4):
+        t._tick()
+    assert t._upcoming.items == [40]
+    t.shutdown()
+
+
+def test_upcoming_hidden_when_option_off(monkeypatch):
+    """'다음 패턴 보기'가 꺼져 있으면 보스가 식별돼도 목록 오버레이는 뜨지 않는다."""
+    _app()
+    from mabinogi_addon.ui import boss_tab as bt_mod
+    from mabinogi_addon.ui.boss_tab import BossTab
+
+    monkeypatch.setattr(config, "load_discord_user", lambda *a, **k: {"name": "x"})
+    t = BossTab(_Watcher())
+    t._region = {"x": 0, "y": 0, "w": 150, "h": 36}
+    t.show_upcoming.setChecked(False)
+    monkeypatch.setattr(t, "_grab_rect", lambda *a: np.zeros((36, 150, 3), np.uint8))
+    monkeypatch.setattr(t, "_show_preview", lambda *a: None)
+    monkeypatch.setattr(bt_mod, "identify", lambda *a, **k: "lenen_miir")
+    monkeypatch.setattr(bt_mod, "read_percent", lambda *a, **k: 90)
+    for _ in range(4):
+        t._tick()
+    assert not t._upcoming.isVisible()
+    t.shutdown()
+
+
 def test_accept_hp_ignores_entry_glitch(monkeypatch):
     """진입 순간 순간 오판독(89% 중 2프레임 40%)이 확정 HP를 바꾸지 않아야 한다.
     (레넨 89% 진입 시 40% 경고가 뜨던 버그 회귀 방지)"""

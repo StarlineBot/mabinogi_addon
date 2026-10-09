@@ -646,11 +646,24 @@ def save_tuarim(data: dict, path: Path = LOCAL_CONFIG_PATH) -> None:
 
 
 def load_boss_pattern(path: Path = LOCAL_CONFIG_PATH) -> dict:
-    """보스 패턴 경고 설정. {enabled, box:{x,y,w,h}}. (베타 — 디스코드 로그인 게이팅)"""
+    """보스 패턴 경고 설정. (베타 — 디스코드 로그인 게이팅)
+
+    {enabled, box:{x,y,w,h}, showUpcoming, upcomingLocked, upcomingPos:{x,y}}
+    - showUpcoming: 왼쪽 '다음 패턴 목록' 오버레이 사용
+    - upcomingLocked: 그 목록을 고정(클릭 통과)했는지
+    - upcomingPos: 목록 위치(없으면 기본 위치 사용)
+    """
     sec = _read_local_config(path).get("bossPattern")
     sec = sec if isinstance(sec, dict) else {}
     box = sec.get("box") if isinstance(sec.get("box"), dict) else None
-    return {"enabled": bool(sec.get("enabled", False)), "box": box}
+    pos = sec.get("upcomingPos") if isinstance(sec.get("upcomingPos"), dict) else None
+    return {
+        "enabled": bool(sec.get("enabled", False)),
+        "box": box,
+        "showUpcoming": bool(sec.get("showUpcoming", False)),
+        "upcomingLocked": bool(sec.get("upcomingLocked", False)),
+        "upcomingPos": pos,
+    }
 
 
 def save_boss_pattern(data: dict, path: Path = LOCAL_CONFIG_PATH) -> None:
