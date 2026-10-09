@@ -65,7 +65,8 @@ class BuffStateMachine:
         self._last_read_at: float | None = None  # 그때의 now
         self._detections = 0
         self._missing_since: float | None = None
-        self._alerted2 = False  # 2차 알림 1회 발생 플래그(연장·소멸 시 재무장)
+        self._alerted = False  # 1차 알림 1회 발생 플래그(소멸 시에만 재무장)
+        self._alerted2 = False  # 2차 알림 1회 발생 플래그(소멸 시에만 재무장)
         # 위로 튄 판독의 연장 후보 (reading, now). 다음 프레임에서 이어지는지 확인용.
         self._pending: tuple[float, float] | None = None
 
@@ -83,7 +84,8 @@ class BuffStateMachine:
     def check_second_alert(self, now: float) -> bool:
         """2차 알림 시점(만료 before_sec2 이하)을 1회 교차하면 True.
 
-        1차 알림과 독립. 연장(EXTENDED)·소멸(reset) 시 재무장되어 다음 주기에 또 울린다.
+        1차 알림과 독립. 한 버프가 살아있는 동안 1회만 — **연장돼도 재알림 안 함**.
+        버프가 완전히 사라졌다 새로 걸릴 때(reset)만 재무장된다.
         """
         if self.alert_before2 is None or self._alerted2:
             return False
@@ -145,6 +147,7 @@ class BuffStateMachine:
                 rem = self.remaining(now)
                 if rem is not None and rem <= self.alert_before:
                     self.state = State.EXPIRING
+                    self._alerted = True  # 이미 1차 시점 아래 → 1차 발동한 것으로
                     if self.alert_before2 is not None and rem <= self.alert_before2:
                         self._alerted2 = True
             else:
@@ -188,8 +191,7 @@ class BuffStateMachine:
                 extended = self.state is State.EXPIRING and reading > prev + _EXTEND_EPS
                 self._commit(reading, now)
                 if extended:  # 위로 이어짐 + 임박 중 → 연장
-                    self.state = State.ACTIVE
-                    self._alerted2 = False  # 연장 → 2차 알림 재무장
+                    self.state = State.ACTIVE  # 점멸 해제. 알림은 재무장하지 않음
                     return True
                 return False
         # 아직 확정 못 함: 후보만 갱신하고 내부 시계는 유지(튐 반영 안 함)
@@ -221,8 +223,10 @@ class BuffStateMachine:
         if remaining is None:
             return None  # 무기한 버프는 알림 없음
         if self.state is State.ACTIVE and remaining <= self.alert_before:
-            self.state = State.EXPIRING
-            return Event.ALERT
+            self.state = State.EXPIRING  # 상태(점멸)는 전이, 소리는 1회만
+            if not self._alerted:
+                self._alerted = True
+                return Event.ALERT
         return None
 
     def _reset(self) -> None:
@@ -231,5 +235,6 @@ class BuffStateMachine:
         self._last_read_at = None
         self._detections = 0
         self._missing_since = None
+        self._alerted = False  # 소멸 → 다음 버프에서 1차 알림 재무장
         self._alerted2 = False  # 소멸 → 2차 알림 재무장
         self._pending = None

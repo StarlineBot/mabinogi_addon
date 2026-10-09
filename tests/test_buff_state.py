@@ -52,22 +52,22 @@ def test_buff_expires_while_inactive_then_removed_on_return():
     assert sm.state is State.ABSENT
 
 
-def test_second_alert_fires_once_and_rearms_on_extension():
+def test_second_alert_fires_once_and_not_rearmed_on_extension():
+    """2차 알림은 한 버프가 사는 동안 1회만 — **연장돼도 재알림 안 함**.
+    (비바체 연장 시 10초 알림이 두 번 울리던 버그 회귀 방지)"""
     sm = BuffStateMachine(alert_before=30, alert_before2=20)
     _appear(sm, reading=100, t0=0.0)
-    # 아직 2차 기준(20초) 위 → 안 울림
-    assert sm.check_second_alert(10.4) is False  # remaining ~90
-    # 시계가 자연히 18초 부근에 도달 → 판독 18이 시계와 일치 → 즉시 반영
+    assert sm.check_second_alert(10.4) is False  # remaining ~90, 아직 위
     sm.observe(detected=True, reading=18, now=82.0)  # remaining ~18
     assert sm.check_second_alert(82.0) is True  # 20초 이하 교차 → 1회
     assert sm.check_second_alert(83.0) is False  # 재알림 없음
-    # 연장(80초로) → 위로 튐은 두 프레임 연속 확인 후 확정 → 2차 재무장
-    sm.observe(detected=True, reading=80, now=84.0)  # 연장 후보(아직 미반영)
-    sm.observe(detected=True, reading=80, now=84.2)  # 이어짐 → 연장 확정
-    assert sm.check_second_alert(84.2) is False  # remaining 80 > 20
-    # 시계가 다시 15초 부근 도달 → 판독 15가 시계와 일치 → 즉시 반영
-    sm.observe(detected=True, reading=15, now=149.2)  # remaining ~15
-    assert sm.check_second_alert(149.2) is True  # 다시 1회
+    # 연장(80초로) → 확정되어도 2차는 재무장하지 않는다
+    sm.observe(detected=True, reading=80, now=84.0)
+    sm.observe(detected=True, reading=80, now=84.2)  # 연장 확정
+    assert sm.check_second_alert(84.2) is False
+    # 시계가 다시 15초에 도달해도 재알림 없음(연장 중이므로)
+    sm.observe(detected=True, reading=15, now=149.2)
+    assert sm.check_second_alert(149.2) is False  # 두 번 안 울림
 
 
 def test_no_second_alert_when_disabled():
@@ -260,3 +260,40 @@ def test_fresh_recast_alerts_again():
         tick(True, round(t))
         t -= 0.5
     assert len(fired) == 2  # 캐스트마다 1차 1회씩
+
+
+def test_first_alert_not_rearmed_on_extension_but_on_fresh_recast():
+    """1차 알림도 연장 시 재발동하지 않고, 버프가 완전히 소멸한 뒤 새로 걸릴 때만
+    다시 울린다. (비바체 연장 시 30초 알림이 두 번 울리던 버그 회귀 방지)"""
+    sm = BuffStateMachine(appear_frames=1, alert_before=30.0, disappear_sec=0.4)
+    fired = []
+    now = 0.0
+
+    def tick(detected, reading, dt=0.05):
+        nonlocal now
+        ev = sm.observe(detected=detected, reading=reading, now=now)
+        if ev is Event.ALERT:
+            fired.append(round(now, 1))
+        now += dt
+
+    # 40→8 (1차 1회) → 연장(40으로) → 다시 40→0 : 재발동 없어야
+    for _ in range(2):
+        tick(True, 40.0)
+    t = 40.0
+    while t > 8:
+        tick(True, round(t, 1)); t -= 0.3
+    tick(True, 40.0); tick(True, 39.9)  # 연장 확정
+    t = 39.7
+    while t >= 0:
+        tick(True, round(t, 1)); t -= 0.3
+    assert len(fired) == 1  # 연장 중엔 1차 1회만
+
+    # 완전 소멸 후 새 캐스트 → 다시 울림
+    for _ in range(12):
+        tick(False, None)
+    for _ in range(2):
+        tick(True, 40.0)
+    t = 40.0
+    while t > 25:
+        tick(True, round(t, 1)); t -= 0.3
+    assert len(fired) == 2  # 새 버프에서 1차 다시
