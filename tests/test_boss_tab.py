@@ -47,3 +47,32 @@ def test_supported_label_lists_thresholds(monkeypatch):
     assert "고목의 페타크" in txt and "85%" in txt
     assert "레넨의 미이르 : 회한" in txt and "65%" in txt
     t.shutdown()
+
+
+def test_accept_hp_ignores_entry_glitch(monkeypatch):
+    """진입 순간 순간 오판독(89% 중 2프레임 40%)이 확정 HP를 바꾸지 않아야 한다.
+    (레넨 89% 진입 시 40% 경고가 뜨던 버그 회귀 방지)"""
+    _app()
+    from mabinogi_addon.ui.boss_tab import BossTab
+
+    monkeypatch.setattr(config, "load_discord_user", lambda *a, **k: {"name": "x"})
+    t = BossTab(_Watcher())
+
+    for _ in range(3):  # 89%로 첫 확정(큰 점프·첫 확정 = 3연속)
+        t._accept_hp(89)
+    assert t._stable_hp == 89
+
+    t._accept_hp(40)  # 글리치 2프레임 — 큰 점프라 3연속 전엔 반영 안 됨
+    t._accept_hp(40)
+    assert t._stable_hp == 89
+
+    t._accept_hp(None)  # 못 읽은 프레임: 후보 리셋
+    t._accept_hp(40)
+    t._accept_hp(40)
+    assert t._stable_hp == 89  # 리셋됐으니 아직 2연속
+
+    # 완만한 감소(≤12)는 2연속으로 바로 추적
+    t._accept_hp(85)
+    t._accept_hp(85)
+    assert t._stable_hp == 85
+    t.shutdown()

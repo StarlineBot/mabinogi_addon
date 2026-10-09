@@ -54,8 +54,9 @@ class BossTab(QWidget):
         self._name_templates = load_name_templates()
         self._tracker = None
         self._cur_boss: str | None = None
-        self._prev_hp: int | None = None
         self._stable_hp: int | None = None
+        self._hp_cand: int | None = None  # 확정 대기 후보값
+        self._hp_cand_n = 0  # 후보 연속 횟수
         self._overlay = PatternWarningOverlay()
         self._notifier = None
 
@@ -214,10 +215,10 @@ class BossTab(QWidget):
         boss_id = identify(name_reg, self._name_templates)
         hp_raw = read_percent(pct_reg)
 
-        # HP 안정화: 같은 값 2연속이어야 확정(단발 오탐으로 거짓 교차 방지)
-        if hp_raw is not None and hp_raw == self._prev_hp:
-            self._stable_hp = hp_raw
-        self._prev_hp = hp_raw
+        # HP 안정화: 보스 바가 막 뜰 때(진입 순간)의 순간 오판독이 거짓 교차를 내지
+        # 않도록, **소폭 변화는 2연속·큰 점프/첫 확정은 3연속**이어야 반영한다.
+        # (한두 프레임짜리 글리치는 버려지고, 완만한 체력 감소는 바로 추적)
+        self._accept_hp(hp_raw)
         hp = self._stable_hp
 
         # 보스 전환: 새 보스가 식별되면 그 보스 트래커로(미식별 프레임은 유지)
@@ -244,6 +245,28 @@ class BossTab(QWidget):
             for alert in self._tracker.observe(hp):
                 self._overlay.show_message(alert.text, 3000)
                 self._play(alert.sound)
+
+    # 큰 점프(진입 애니메이션·오판독)와 완만한 감소를 구분해 확정.
+    _SMALL_STEP = 12  # 이 이하 변화면 '완만' (2연속으로 확정)
+    _CONFIRM_SMALL = 2
+    _CONFIRM_JUMP = 3  # 큰 점프·첫 확정은 3연속 필요(글리치 차단)
+
+    def _accept_hp(self, raw: int | None) -> None:
+        """판독값을 확정 HP(self._stable_hp)로 반영할지 결정. 못 읽은 프레임(None)은
+        후보를 리셋하고 직전 확정값을 유지한다."""
+        if raw is None:
+            self._hp_cand = None
+            self._hp_cand_n = 0
+            return
+        self._hp_cand_n = self._hp_cand_n + 1 if raw == self._hp_cand else 1
+        self._hp_cand = raw
+        gradual = (
+            self._stable_hp is not None
+            and abs(raw - self._stable_hp) <= self._SMALL_STEP
+        )
+        need = self._CONFIRM_SMALL if gradual else self._CONFIRM_JUMP
+        if self._hp_cand_n >= need:
+            self._stable_hp = raw
 
     def _grab_rect(self, x: int, y: int, w: int, h: int):
         try:
