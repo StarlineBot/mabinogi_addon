@@ -46,3 +46,28 @@ uv run mabinogi-addon
   바꿔도 **로컬에 저장된 사용자 설정이 우선**하며 덮어쓰지 않는다.
 - 커밋 작성자는 이 저장소 로컬 설정(StarlineBot)을 쓴다. 회사 메일을 쓰지 않는다.
 - 게임은 Windows에서만 실행된다. OS 비의존 코드는 맥에서 `uv run pytest`로 검증 가능.
+
+## 시크릿 관리
+
+GitHub Actions 시크릿은 리포 **Settings → Secrets and variables → Actions**에서 넣는다.
+`release.yml`이 사용하며, 크게 **(A) exe에 구워 넣는 번들 시크릿**과 **(B) CI에서만 쓰는
+배포 시크릿**으로 나뉜다.
+
+| 시크릿 | 분류 | 무엇을 하나 | 언제 쓰나 |
+|---|---|---|---|
+| `NEXON_API_KEY` | A·번들 | 넥슨 오픈 API 호출 키 (**파티 모집** 조회) | 빌드 시 `_bundled.py`에 주입 → 배포 exe 런타임 |
+| `INQUIRY_WEBHOOK_URL` | A·번들 | **문의하기**를 Discord 웹훅으로 전송(모드메일 봇이 받아 작성자에게 DM relay) | 빌드 번들 |
+| `CONFIG_WEBHOOK_URL` | A·번들 | **설정 백업**(Discord DM 릴레이)용 웹훅 — 봇이 첨부된 설정을 작성자에게 DM | 빌드 번들 |
+| `RELEASES_TOKEN` | B·배포 | 공개 릴리즈 저장소 `mabinogi_addon-releases`에 push + GitHub Release 생성 | 태그(`vX.Y.Z`) push 시 |
+| `RELEASE_WEBHOOK_URL` | B·배포 | 새 릴리즈를 Discord **포럼에 새 글**로 공지 | 태그 push 후. **없으면 그 단계만 건너뜀**(릴리즈는 계속) |
+
+**앱 런타임 탐색 순서**(번들 시크릿 A): `.env`/환경변수 → `config.local.json` → 번들값.
+즉 개발 중엔 `.env`에 넣고, 배포본은 번들값을 쓴다.
+
+> ⚠️ **번들 시크릿(A)은 "진짜 비밀"이 아니다.** exe 안에 들어가므로 받은 사람이
+> 추출할 수 있다(난독화 수준). 넥슨 키/웹훅처럼 유출돼도 치명적이지 않은 것만 번들하고,
+> 권한 큰 토큰은 절대 번들하지 않는다.
+>
+> `RELEASES_TOKEN`(GitHub PAT, 릴리즈 저장소 **write** 권한 필요)과 `RELEASE_WEBHOOK_URL`은
+> **CI에서만** 쓰이고 exe에 들어가지 않는다 — 안전하게 보관할 것. PAT 만료 시 릴리즈가
+> 실패하므로 갱신 주기를 기억해 둔다.
