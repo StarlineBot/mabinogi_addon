@@ -337,6 +337,8 @@ class PartyTab(QWidget):
         self._update_bell()
         state = "켜짐 🔔" if self._alert_sound else "꺼짐 🔕"
         show_toast("키워드 알림 효과음", state)
+        if self._alert_sound:
+            self._sound.play("party")  # 다시 켤 때 미리듣기로 소리 한 번 재생
 
     def _refresh_keyword_list(self) -> None:
         self._fill_chip_list(self.keyword_list, self._keywords, self._delete_keyword)
