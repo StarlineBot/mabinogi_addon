@@ -62,7 +62,7 @@ class BossTab(QWidget):
         v = QVBoxLayout(self)
         v.setContentsMargins(12, 12, 12, 12)
 
-        title = QLabel("보스 패턴 알림  ·  베타")
+        title = QLabel("보스 패턴 알림  ·  [BETA]")
         title.setStyleSheet("font-size:14px; font-weight:700;")
         v.addWidget(title)
         v.addWidget(
@@ -79,7 +79,9 @@ class BossTab(QWidget):
         v.addWidget(prev_btn)
 
         # 디스코드 로그인 안내(게이트) — 미로그인 시만 보임
-        self._gate = hint_label("🔒 베타 기능입니다 — 설정 탭에서 디스코드 로그인 후 사용할 수 있어요.")
+        self._gate = hint_label(
+            "🔒 디스코드 로그인 하면 사용할 수 있는 [BETA] 기능이에요. (설정 탭에서 로그인)"
+        )
         self._gate.setStyleSheet("color:#e67e22; font-size:12px;")
         v.addWidget(self._gate)
 

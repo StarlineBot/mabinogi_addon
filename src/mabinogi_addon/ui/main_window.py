@@ -215,7 +215,7 @@ class MainWindow(QMainWindow):
         tabs.addTab(_scrolled(self.buff_tab), "버프 트래커")
         tabs.addTab(_scrolled(self.debuff_tab), "디버프 트래커")
         tabs.addTab(_scrolled(self.tuarim_tab), "투아림 트래커")
-        tabs.addTab(_scrolled(self.boss_tab), "보스 패턴 알림")
+        tabs.addTab(_scrolled(self.boss_tab), "보스 패턴 알림 [BETA]")
         tabs.addTab(_scrolled(self.custom_overlay_tab), "커스텀 오버레이")
         self._party_scroll = _scrolled(self.party_tab)  # 토스트 클릭 시 이 탭으로 전환
         tabs.addTab(self._party_scroll, "파티 모집")
