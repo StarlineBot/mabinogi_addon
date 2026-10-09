@@ -10,6 +10,8 @@ def test_loads_bundled_bosses():
     assert bosses["lenen_miir"].thresholds == (80, 40)
     assert bosses["lenen_miir_hoehan"].thresholds == (80, 65, 50, 35)
     assert bosses["gomok_petak"].thresholds == (85, 35)
+    assert bosses["eotgallin_poinche"].name == "엇갈린 운명의 포인셰"
+    assert bosses["eotgallin_poinche"].thresholds == (90, 75, 60, 40, 25, 15)
 
 
 def test_make_tracker_fires():

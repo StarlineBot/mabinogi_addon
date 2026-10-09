@@ -31,7 +31,7 @@ def test_construct_and_gate(monkeypatch):
 
     monkeypatch.setattr(config, "load_discord_user", lambda *a, **k: None)
     t = BossTab(_Watcher())
-    assert len(t._bosses) == 3  # 번들 3보스
+    assert "lenen_miir" in t._bosses  # 번들 보스가 로드됨
     t._apply_gate()  # 미로그인 → 컨트롤 숨김(예외 없이)
     t._preview_warning()  # 경고 미리보기 — 예외 없이
     t.shutdown()
