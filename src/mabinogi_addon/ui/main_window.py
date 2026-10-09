@@ -80,6 +80,71 @@ def _scrolled(widget: QWidget) -> QScrollArea:
     return area
 
 
+class _OverlayToggle(QPushButton):
+    """오버레이 재생/일시정지 토글 버튼(오디오 플레이어식).
+
+    폰트 이모지(⏸/▶)는 글리프마다 '자체 둥근 네모 테두리'가 딸려 와, 버튼 테두리와
+    겹쳐 '네모 안에 버튼' 처럼 보인다. 그래서 글자 대신 아이콘(두 막대/삼각형)을 직접
+    그린다. 색은 앱 전체 모노톤에 맞춰 무채색만 쓰고, 상태는 색이 아니라 모양·채움·
+    밝기로 구분한다. checked = 일시정지 상태(→ ▶ 재개 아이콘).
+    """
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setCheckable(True)
+        self.setFixedSize(30, 30)
+        self.setFlat(True)
+        self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)  # hover 때 다시 그리기
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.toggled.connect(self.update)
+
+    def paintEvent(self, _event) -> None:
+        from PySide6.QtCore import QPointF, QRectF
+        from PySide6.QtGui import QColor, QPainter, QPolygonF
+
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        paused = self.isChecked()
+        pressed = self.isDown()
+        hover = self.underMouse()
+        circle = QRectF(1, 1, self.width() - 2, self.height() - 2)
+
+        if paused:
+            # 일시정지 상태: 밝은 무채색 원으로 채워 '멈춤'을 또렷이(색 대신 명도로).
+            lum = 210 if pressed else (225 if hover else 200)
+            p.setBrush(QColor(lum, lum, lum))
+            p.setPen(Qt.PenStyle.NoPen)
+            p.drawEllipse(circle)
+            ink = QColor(40, 44, 52)  # 밝은 원 위 어두운 아이콘
+        else:
+            # 동작 중: 은은한 원(hover/press 때만 살짝 채움) + 가는 무채색 테두리.
+            fill = 46 if pressed else (34 if hover else 0)
+            p.setBrush(QColor(255, 255, 255, fill))
+            p.setPen(QColor(150, 150, 150, 210 if hover else 150))
+            p.drawEllipse(circle.adjusted(0.5, 0.5, -0.5, -0.5))
+            ink = QColor(220, 224, 228) if hover else QColor(150, 155, 164)
+
+        cx, cy = self.width() / 2.0, self.height() / 2.0
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(ink)
+        if paused:  # ▶ 재생(재개) 삼각형. 광학 중심 보정으로 살짝 오른쪽.
+            half_h, w = 5.5, 9.5
+            left = cx - w / 2.0 + 1.0
+            tri = QPolygonF(
+                [
+                    QPointF(left, cy - half_h),
+                    QPointF(left, cy + half_h),
+                    QPointF(left + w, cy),
+                ]
+            )
+            p.drawPolygon(tri)
+        else:  # ❚❚ 두 막대.
+            bw, bh, gap = 2.8, 11.0, 3.4
+            p.drawRoundedRect(QRectF(cx - gap / 2 - bw, cy - bh / 2, bw, bh), 1.2, 1.2)
+            p.drawRoundedRect(QRectF(cx + gap / 2, cy - bh / 2, bw, bh), 1.2, 1.2)
+        p.end()
+
+
 # 탭 바: 밑줄 스타일 + 균등 고정 너비. 선택 탭은 민트색·굵게 + 민트 밑줄로 또렷하게.
 # (앱은 OS 테마를 따르므로, 무채색 글자 + 민트 강조로 라이트/다크 모두 자연스럽게.)
 _TAB_QSS = (
@@ -269,11 +334,10 @@ class MainWindow(QMainWindow):
             "마비노기가 맨 앞일 때만 — 자세한 추적 상태는 각 탭 안내를 보세요."
         )
         h.addWidget(self._status_label)
-        # 재생/일시정지 토글: 감지 중이면 ⏸(누르면 멈춤), 멈추면 ▶(누르면 재개).
-        self._pause_btn = QPushButton("⏸")
-        self._pause_btn.setObjectName("playPause")
-        self._pause_btn.setCheckable(True)
-        self._pause_btn.setFixedSize(30, 26)
+        # 재생/일시정지 토글: 감지 중이면 ❚❚(누르면 멈춤), 멈추면 ▶(누르면 재개).
+        # 아이콘은 직접 그린다(_OverlayToggle) — 이모지의 자체 네모 테두리 artifact 제거 +
+        # 앱 민트 기조와 달리 이 버튼만 모노톤으로.
+        self._pause_btn = _OverlayToggle()
         self._pause_btn.setToolTip(
             "사냥 안 할 때 오버레이를 잠깐 끄고/켭니다 "
             "(앱이 앞에 있을 때 Space로도 토글)"
@@ -282,14 +346,6 @@ class MainWindow(QMainWindow):
         h.addWidget(self._pause_btn)
         bar.setStyleSheet(
             "#statusBar { border-bottom:1px solid rgba(128,128,128,0.25); }"
-            # 감지 중(기본): 무색 — 가는 테두리만.
-            "#playPause { background:transparent; color:#8a8f98;"
-            " border:1px solid rgba(128,128,128,0.45);"
-            " border-radius:5px; font-size:12px; font-weight:800; }"
-            "#playPause:hover { color:#c8ccd4; border-color:rgba(128,128,128,0.85); }"
-            # 일시정지: ▶ 재개 버튼을 민트로 강조(눈에 띄게).
-            "#playPause:checked { background:#00B894; color:#06281e; border:none; }"
-            "#playPause:checked:hover { background:#00D1A7; }"
             "#statusText { font-size:12px; }"
         )
         return bar
@@ -308,9 +364,9 @@ class MainWindow(QMainWindow):
         text, color = self._overlay_status()
         self._status_label.setText(text)  # 앞의 ●/⏸ 가 상태 표시('상태:' 접두어 없음)
         self._status_label.setStyleSheet(f"color:{color}; font-size:12px;")
-        # 버튼 글리프: 재생 중이면 ⏸(멈춤 유도), 일시정지면 ▶(재개 유도).
-        # 색은 QSS :checked 로 반전(감지 중=무색, 일시정지=강조).
-        self._pause_btn.setText("▶" if self._paused else "⏸")
+        # 버튼 아이콘: 재생 중이면 ❚❚(멈춤 유도), 일시정지면 ▶(재개 유도).
+        # 체크 상태는 _set_paused 에서 동기화되고, _OverlayToggle 이 직접 그린다.
+        self._pause_btn.update()
 
     # ---- 진단 상태 한 줄 ----
     _STATUS_OK = "#2ecc71"
