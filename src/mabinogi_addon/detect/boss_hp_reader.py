@@ -1,9 +1,9 @@
 """보스 HP% 판독 (기획서 12).
 
 보스 체력바의 'XXX.XX %' 영역에서 정수 HP%를 읽는다. 바 배경색이 HP에 따라
-변하고(초록/노랑/빨강/보라), 밝은 바에선 글자가 어둡고 어두운 바에선 밝아 명암
-극성이 뒤집힌다. 그래서 밝기 임계 대신 **색거리**(바 배경색에서 색이 먼 픽셀 =
-글자)로 이진화한다 — 흰/회/검 글자는 채도 높은 바 색과 항상 멀다.
+변하고(초록/노랑/빨강/보라), 바가 **2색(예: 파랑+초록, 금+빨강)**이기도 하다.
+그래서 **채도(saturation)**로 이진화한다 — 바 채움은 어떤 색이든 **채도가 높고**,
+글자(흰/회/검)는 **채도가 낮다**. 색 개수·명암 극성과 무관하게 글자만 남는다.
 
 숫자는 우측 정렬 monospace라 오른쪽 끝 기준 고정 칸으로 자른다. 다만 영역 박스의
 오른쪽 끝이 바 끝과 몇 px만 어긋나도 칸이 밀려 깨지므로, **정렬 오프셋을 조금씩
@@ -25,7 +25,7 @@ from .. import paths
 from ..image_io import imread
 
 _DIGIT_DIR = paths.resource_dir() / "boss_hp_digits"
-_COLOR_DIST = 70  # 바 배경색에서 이 거리 이상이면 글자
+_SAT_MAX = 110  # 채도가 이 미만이면 글자(흰/회/검). 바 채움은 고채도라 제외됨.
 _REF_H = 36.0  # 기준 바 높이(px) — 스케일 기준
 _FIRST = 62.0  # 바 오른쪽 끝 → 최우측 정수자리 right edge (기준 해상도)
 _PITCH = 11.0  # 정수 자리 간격(기준 해상도)
@@ -52,11 +52,10 @@ _DIGITS = _load_digits()
 
 
 def _color_mask(region_bgr: np.ndarray) -> np.ndarray:
-    """바 배경색(중앙값)에서 색이 먼 픽셀 = 글자. 극성·색 무관."""
-    r = region_bgr.astype(np.int16)
-    med = np.median(r.reshape(-1, 3), axis=0)
-    dist = np.sqrt(((r - med) ** 2).sum(axis=2))
-    return (dist > _COLOR_DIST).astype(np.uint8) * 255
+    """채도가 낮은 픽셀 = 글자. 바 채움(고채도)은 색·개수 무관하게 제외된다
+    (2색 바도 OK)."""
+    hsv = cv2.cvtColor(region_bgr, cv2.COLOR_BGR2HSV)
+    return (hsv[:, :, 1] < _SAT_MAX).astype(np.uint8) * 255
 
 
 def _classify(
