@@ -93,7 +93,7 @@ class _OverlayToggle(QPushButton):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setCheckable(True)
-        self.setFixedSize(30, 30)
+        self.setFixedSize(23, 23)  # 옆 상태 글자 대비 과하지 않게 작게
         self.setFlat(True)
         self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)  # hover 때 다시 그리기
         self.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -126,11 +126,12 @@ class _OverlayToggle(QPushButton):
             ink = QColor(220, 224, 228) if hover else QColor(150, 155, 164)
 
         cx, cy = self.width() / 2.0, self.height() / 2.0
+        s = min(self.width(), self.height())  # 아이콘을 버튼 크기에 비례시켜 축소 대응
         p.setPen(Qt.PenStyle.NoPen)
         p.setBrush(ink)
         if paused:  # ▶ 재생(재개) 삼각형. 광학 중심 보정으로 살짝 오른쪽.
-            half_h, w = 5.5, 9.5
-            left = cx - w / 2.0 + 1.0
+            half_h, w = s * 0.24, s * 0.40
+            left = cx - w / 2.0 + s * 0.04
             tri = QPolygonF(
                 [
                     QPointF(left, cy - half_h),
@@ -140,9 +141,10 @@ class _OverlayToggle(QPushButton):
             )
             p.drawPolygon(tri)
         else:  # ❚❚ 두 막대.
-            bw, bh, gap = 2.8, 11.0, 3.4
-            p.drawRoundedRect(QRectF(cx - gap / 2 - bw, cy - bh / 2, bw, bh), 1.2, 1.2)
-            p.drawRoundedRect(QRectF(cx + gap / 2, cy - bh / 2, bw, bh), 1.2, 1.2)
+            bw, bh, gap = s * 0.12, s * 0.46, s * 0.14
+            r = bw * 0.45
+            p.drawRoundedRect(QRectF(cx - gap / 2 - bw, cy - bh / 2, bw, bh), r, r)
+            p.drawRoundedRect(QRectF(cx + gap / 2, cy - bh / 2, bw, bh), r, r)
         p.end()
 
 
@@ -358,7 +360,9 @@ class MainWindow(QMainWindow):
         상태 줄에 '게임 비활성' 안내가 따로 있음).
         """
         if self._paused:
-            return ("⏸ 전체 오버레이 정지중", self._STATUS_WARN)
+            # 정지중은 빨간 ●로(동작중 초록 ●과 대비). 앞 글리프는 ⏸ 이모지가 아니라
+            # 일반 원(●)이라 OS 이모지 폰트의 네모 박스 artifact가 없다.
+            return ("● 전체 오버레이 정지중", self._STATUS_STOP)
         return ("● 전체 오버레이 동작중", self._STATUS_OK)
 
     def _update_header_status(self) -> None:
@@ -372,6 +376,7 @@ class MainWindow(QMainWindow):
     # ---- 진단 상태 한 줄 ----
     _STATUS_OK = "#2ecc71"
     _STATUS_WARN = "#e67e22"
+    _STATUS_STOP = "#e74c3c"  # 정지중 빨간 ●
     _STATUS_MUTED = "#8a8f98"
 
     def _update_tracking_status(self) -> None:
