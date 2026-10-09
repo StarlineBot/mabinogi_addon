@@ -321,6 +321,22 @@ class MainWindow(QMainWindow):
         self.buff_tab.set_status(*self._buff_status())
         self.debuff_tab.set_status(*self._debuff_status())
         self._update_header_status()
+        self._maybe_tick_update_check()
+
+    def _maybe_tick_update_check(self) -> None:
+        """업데이트 확인을 '항상 도는' 상태 타이머(700ms)에 얹는다.
+
+        전용 업데이트 타이머가 모종의 이유로 안 돌아도(시작 중 모달에 막히거나 등)
+        백그라운드 감지가 보장된다. 상태 타이머는 상태 라벨이 갱신되는 것으로 실제
+        동작이 눈에 확인된다. 자체 60초 게이트로 과호출·로그 스팸을 막는다
+        (_maybe_check_update의 30초 스로틀과 별개).
+        """
+        import time
+
+        now = time.monotonic()
+        if now - getattr(self, "_last_bg_update_tick", 0.0) >= 60.0:
+            self._last_bg_update_tick = now
+            self._maybe_check_update("주기")
 
     def _buff_status(self) -> tuple[str, str]:
         if not config.load_capture_region("buffTracker"):
@@ -621,23 +637,22 @@ class MainWindow(QMainWindow):
         self._start_buff_tracking()
         self._start_debuff_tracking()
         self._maybe_check_update("시작")
-        self._maybe_prompt_game_window()
-        self._maybe_run_tour()
+        # 타이머들을 모달(게임창 안내/투어)보다 '먼저' 시작한다. 안 그러면 그 모달이
+        # exec()로 열려 있는 동안 start()가 그 줄에서 멈춰, 주기 업데이트 확인·상태 갱신
+        # 타이머가 영영 시작되지 않는다(자동실행 직후 등 '백그라운드 감지 안 됨'의 원인).
+        # 모달 exec() 중에도 이미 start()된 타이머는 그 이벤트 루프에서 계속 돈다.
         # 진단 상태 한 줄(추적 중/게임 비활성/영역 미지정 등) 주기 갱신.
         self._status_timer = QTimer(self)
         self._status_timer.setInterval(700)
         self._status_timer.timeout.connect(self._update_tracking_status)
         self._status_timer.start()
         self._update_tracking_status()
-        # 실행 중 업데이트 감지: 시작 1회·창 활성화 외에 주기적으로도 확인(안 보고 있어도
-        # 알림이 오게). 새 버전이면 배너+토스트+소리(강제 아님). '창 활성화 시 확인'은
-        # mabinogi 창 자체를 앞으로 가져올 때만 울려, 오버레이를 뒤에 두고 다른 앱을 쓰는
-        # 실제 사용 패턴엔 거의 안 맞는다 → 이 타이머가 사실상 유일한 확인 수단이라 3분으로
-        # 둔다(캐시무효화로 매번 최신을 받고, version.json 폴링은 가벼워 부담 없음).
-        self._update_timer = QTimer(self)
-        self._update_timer.setInterval(3 * 60 * 1000)  # 3분
-        self._update_timer.timeout.connect(lambda: self._maybe_check_update("주기"))
-        self._update_timer.start()
+        # 실행 중 업데이트 감지: 시작 1회·창 활성화 외에, 위 상태 타이머(_maybe_tick_
+        # update_check)가 60초마다 확인한다. 전용 타이머 대신 '항상 도는' 상태 타이머에
+        # 얹어, 시작 중 무엇이 막아도 백그라운드 감지가 보장되게 한다(캐시무효화로 최신 수신).
+        # 모달 안내는 타이머 시작 '뒤'에(위 이유). 이게 떠 있어도 감지는 계속 돈다.
+        self._maybe_prompt_game_window()
+        self._maybe_run_tour()
         self._booting = False  # 부팅 끝 — 이제부터 사용자 변경을 저장
 
     def _compute_tracking(
