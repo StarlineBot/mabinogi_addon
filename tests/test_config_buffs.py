@@ -31,8 +31,15 @@ def test_game_exe_round_trip(tmp_path):
 def test_memo_round_trip(tmp_path):
     path = tmp_path / "config.local.json"
     assert load_memo(path) == {}
-    save_memo("메모\n내용", True, 20, path)
-    assert load_memo(path) == {"text": "메모\n내용", "locked": True, "fontSize": 20}
+    save_memo("메모\n내용", True, 20, path=path)
+    assert load_memo(path) == {
+        "text": "메모\n내용",
+        "locked": True,
+        "fontSize": 20,
+        "enabled": True,
+    }
+    save_memo("메모\n내용", True, 20, enabled=False, path=path)
+    assert load_memo(path).get("enabled") is False
 
 
 def test_voice_pack_round_trip(tmp_path):

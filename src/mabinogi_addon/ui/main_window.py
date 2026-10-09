@@ -260,10 +260,12 @@ class MainWindow(QMainWindow):
         memo = config.load_memo()
         self.memo_overlay = MemoOverlay(font_size=int(memo.get("fontSize", 16)))
         self.memo_overlay.set_markdown(str(memo.get("text", "")))
+        self._memo_enabled = bool(memo.get("enabled", True))
         self.memo_tab.lock_toggled.connect(self._on_memo_lock)
         self.memo_tab.region_changed.connect(self._apply_memo_region)
         self.memo_tab.font_changed.connect(self._on_memo_font)
         self.memo_tab.text_changed.connect(self._on_memo_text)
+        self.memo_tab.enabled_toggled.connect(self._on_memo_enabled)
         self.memo_overlay.moved.connect(self._on_memo_moved)
         self._memo_timer = QTimer(self)
         self._memo_timer.setInterval(300)
@@ -1006,6 +1008,11 @@ class MainWindow(QMainWindow):
         self.memo_overlay.set_markdown(md)  # 입력 즉시 오버레이에 렌더
         self._save_memo()
 
+    def _on_memo_enabled(self, enabled: bool) -> None:
+        self._memo_enabled = enabled
+        self._save_memo()
+        self._tick_memo_visibility()  # 즉시 반영(끄면 바로 숨김)
+
     def _save_memo(self) -> None:
         if self._restoring or self._booting or self._config_pending_restart:
             return
@@ -1013,12 +1020,13 @@ class MainWindow(QMainWindow):
             self.memo_overlay.text(),
             self.memo_overlay.locked,
             self.memo_tab.font_spin.value(),
+            self._memo_enabled,
         )
 
     def _tick_memo_visibility(self) -> None:
-        """메모 표시 규칙: 게임 포그라운드면 표시. 해제(편집) 상태면 우리 앱에서도
-        표시(위치/입력). 고정 상태인데 게임이 포그라운드 아니면 숨김."""
-        if config.load_capture_region("memoTracker") is None:
+        """메모 표시 규칙: '사용' 켜짐 + 게임 포그라운드면 표시. 해제(편집) 상태면
+        우리 앱에서도 표시(위치/입력). 고정인데 게임이 포그라운드 아니면 숨김."""
+        if not self._memo_enabled or config.load_capture_region("memoTracker") is None:
             self.memo_overlay.hide()
             return
         if self._watcher.is_game_active() or self._watcher.is_self_active() and not self.memo_overlay.locked:
@@ -1030,8 +1038,13 @@ class MainWindow(QMainWindow):
         self._restoring = True
         try:
             self._apply_memo_region()
-            locked = bool(config.load_memo().get("locked", False))
+            memo = config.load_memo()
+            locked = bool(memo.get("locked", False))
             self.memo_tab.set_lock_state(locked)  # 버튼 동기화 + set_locked 적용
+            self._memo_enabled = bool(memo.get("enabled", True))
+            self.memo_tab.enable_chk.blockSignals(True)
+            self.memo_tab.enable_chk.setChecked(self._memo_enabled)
+            self.memo_tab.enable_chk.blockSignals(False)
         finally:
             self._restoring = False
         self._memo_timer.start()

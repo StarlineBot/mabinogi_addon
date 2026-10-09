@@ -576,10 +576,19 @@ def load_memo(path: Path = LOCAL_CONFIG_PATH) -> dict:
 
 
 def save_memo(
-    text: str, locked: bool, font_size: int, path: Path = LOCAL_CONFIG_PATH
+    text: str,
+    locked: bool,
+    font_size: int,
+    enabled: bool = True,
+    path: Path = LOCAL_CONFIG_PATH,
 ) -> None:
     data = _read_local_config(path)
-    data["memo"] = {"text": text, "locked": locked, "fontSize": font_size}
+    data["memo"] = {
+        "text": text,
+        "locked": locked,
+        "fontSize": font_size,
+        "enabled": enabled,
+    }
     _write_local_config(data, path)
 
 
