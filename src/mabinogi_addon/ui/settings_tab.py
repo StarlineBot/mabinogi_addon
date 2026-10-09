@@ -36,27 +36,49 @@ PROFILE_IMAGE = _ASSETS / "profile.png"  # 제작자 프로필(없으면 로고�
 LOGO_IMAGE = _ASSETS / "logo.png"
 
 
-def _circular(path: Path, size: int) -> QPixmap | None:
-    """이미지를 정사각 중앙 크롭 후 원형으로 잘라 size×size 픽스맵으로."""
+def _circular(
+    path: Path,
+    size: int,
+    border_width: int = 0,
+    border_color: str | None = None,
+) -> QPixmap | None:
+    """이미지를 정사각 중앙 크롭 후 원형으로 잘라 size×size 픽스맵으로.
+
+    border_width>0 이면 그 두께·색으로 원 테두리를 그린다(테두리는 안쪽으로 그려
+    size 밖으로 새지 않게 함).
+    """
     src = QPixmap(str(path))
     if src.isNull():
         return None
+    # 테두리 두께만큼 이미지를 안으로 들여, 테두리가 이미지를 가리지 않게 한다.
+    inner = max(1, size - 2 * border_width)
     src = src.scaled(
-        size, size,
+        inner, inner,
         Qt.AspectRatioMode.KeepAspectRatioByExpanding,
         Qt.TransformationMode.SmoothTransformation,
     )
-    x = (src.width() - size) // 2
-    y = (src.height() - size) // 2
-    src = src.copy(x, y, size, size)
+    x = (src.width() - inner) // 2
+    y = (src.height() - inner) // 2
+    src = src.copy(x, y, inner, inner)
     out = QPixmap(size, size)
     out.fill(Qt.GlobalColor.transparent)
     painter = QPainter(out)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
     clip = QPainterPath()
-    clip.addEllipse(0, 0, size, size)
+    clip.addEllipse(border_width, border_width, inner, inner)
     painter.setClipPath(clip)
-    painter.drawPixmap(0, 0, src)
+    painter.drawPixmap(border_width, border_width, src)
+    if border_width > 0 and border_color:
+        from PySide6.QtCore import QRectF
+        from PySide6.QtGui import QColor, QPen
+
+        painter.setClipping(False)
+        pen = QPen(QColor(border_color))
+        pen.setWidth(border_width)
+        painter.setPen(pen)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        half = border_width / 2.0
+        painter.drawEllipse(QRectF(half, half, size - border_width, size - border_width))
     painter.end()
     return out
 
@@ -361,7 +383,10 @@ class SettingsTab(QWidget):
         avatar = QLabel()
         avatar.setFixedSize(48, 48)
         avatar.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        pm = _circular(PROFILE_IMAGE, 48) or _circular(LOGO_IMAGE, 48)
+        # 제작자 아이콘: 굵은 테두리(RGB 58,7,41 = #3A0729).
+        pm = _circular(PROFILE_IMAGE, 48, 3, "#3A0729") or _circular(
+            LOGO_IMAGE, 48, 3, "#3A0729"
+        )
         if pm is not None:
             avatar.setPixmap(pm)
         else:
@@ -371,9 +396,8 @@ class SettingsTab(QWidget):
 
         col = QVBoxLayout()
         col.setSpacing(2)
-        from ..version import display_version
-
-        name = QLabel(f"제작자: {config.CREATOR_NAME}  ·  {display_version()}")
+        # 버전은 상단 타이틀바에 이미 노출되므로 제작자 줄에서는 뺀다.
+        name = QLabel(f"제작자: {config.CREATOR_NAME}")
         name.setStyleSheet("font-size:15px; font-weight:700;")
         desc = QLabel(
             "개인개발용 마비노기 애드온 입니다.\n"
