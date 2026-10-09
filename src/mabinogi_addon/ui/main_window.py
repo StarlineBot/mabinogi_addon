@@ -7,15 +7,17 @@ from __future__ import annotations
 
 import logging
 
-from PySide6.QtCore import QTimer, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import (
     QApplication,
+    QFrame,
     QHBoxLayout,
     QLabel,
     QMainWindow,
     QMenu,
     QPushButton,
+    QScrollArea,
     QSystemTrayIcon,
     QTabWidget,
     QVBoxLayout,
@@ -43,11 +45,39 @@ from .tuarim_tab import TuarimTab
 # 번들 경로 사용(exe=_MEIPASS/assets). __file__ 기준은 frozen에서 어긋난다.
 LOGO_PATH = paths.resource_dir() / "logo.png"
 _log = logging.getLogger("mabinogi_addon.close")
+_up_log = logging.getLogger("mabinogi_addon.updater")  # 업데이트 확인 진단(계기·스로틀·결과)
 
 
 def app_icon() -> QIcon:
     """앱 로고 아이콘(창·작업표시줄)."""
     return QIcon(str(LOGO_PATH))
+
+
+class _VScroll(QScrollArea):
+    """세로 스크롤 영역: 가로는 뷰포트 폭에 맞추되, 세로는 내용의 '자연 높이'를 지킨다.
+
+    그냥 setWidgetResizable(True)만 쓰면, 내용이 뷰포트보다 크면 눌리고(압축) 작으면
+    늘어나(확대) 버튼 등이 찌그러진다. 내용 위젯의 최소 높이를 그 sizeHint 높이로
+    고정해, 넘칠 때 '압축' 대신 '스크롤'이 생기게 한다.
+    """
+
+    def resizeEvent(self, event) -> None:
+        inner = self.widget()
+        if inner is not None:
+            inner.setMinimumHeight(inner.sizeHint().height())
+        super().resizeEvent(event)
+
+
+def _scrolled(widget: QWidget) -> QScrollArea:
+    """위젯을 세로 스크롤 영역으로 감싼다(창 높이 고정 시 내용 잘림·찌그러짐 방지)."""
+    area = _VScroll()
+    area.setWidgetResizable(True)
+    area.setFrameShape(QFrame.Shape.NoFrame)
+    # 줄바꿈 후 모든 탭이 창 폭에 들어오므로 가로 스크롤은 끈다(미세 잔차로 생기는
+    # 얇은 가로 스크롤바 방지 — 세로만 스크롤).
+    area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+    area.setWidget(widget)
+    return area
 
 
 # 탭 바: 밑줄 스타일 + 균등 고정 너비. 선택 탭은 민트색·굵게 + 민트 밑줄로 또렷하게.
@@ -76,7 +106,13 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle(f"{config.APP_NAME}  {display_version()}")
         self.setWindowIcon(app_icon())
-        self.resize(780, 620)
+        # 고정 크기(크기 변경 비활성). 내용이 넘치면 각 탭이 스크롤로 처리한다.
+        # (resize 가능 상태로 두면 가장자리에 리사이즈 커서만 뜨고 실제론 안 줄던 혼란.)
+        # 고정 크기(크기 변경 비활성). 안내문 줄바꿈 후 탭 최대 폭이 ≈700이라 790이면
+        # 가로 스크롤 없이 모두 들어온다. 높이 800이면 뷰포트가 ≈724px라 버프(≈493)·
+        # 파티(≈612)·커스텀(≈718)이 스크롤 없이 들어오고, 길이가 압도적인 설정 탭
+        # (≈1265)만 세로 스크롤로 본다(_VScroll이 눌림 방지).
+        self.setFixedSize(790, 800)
 
         # 포그라운드 감지(맥=항상 활성). 저장된 게임 실행파일로 판정(없으면 제목 폴백).
         self._watcher = create_window_watcher(game_exe=config.load_game_exe())
@@ -98,26 +134,20 @@ class MainWindow(QMainWindow):
         self.memo_tab = MemoTab()
         self.tuarim_tab = TuarimTab(self._watcher)
         self.custom_overlay_tab = CustomOverlayTab(self._watcher)
-        # 전역 단축키(오버레이 정지/시작). Windows에서만 실제 등록(그 외 no-op).
-        from ..system.hotkey import PauseHotkey
-
-        self._pause_hotkey = PauseHotkey(self)
-        self._pause_hotkey.activated.connect(self._on_pause_hotkey)
-        self.settings_tab = SettingsTab(
-            self._watcher, on_hotkey_change=self._apply_pause_hotkey
-        )
+        self.settings_tab = SettingsTab(self._watcher)
         self.settings_tab.config_imported.connect(self._on_config_imported)
         self.settings_tab.voice_pack_changed.connect(self._on_voice_pack_changed)
         self.settings_tab.replay_tour.connect(self._run_tour)
         tabs = QTabWidget()
         self._tabs = tabs  # 온보딩 투어에서 탭 전환에 사용
-        tabs.addTab(self.buff_tab, "버프 트래커")
-        tabs.addTab(self.debuff_tab, "디버프 트래커")
-        tabs.addTab(self.tuarim_tab, "투아림 트래커")
-        tabs.addTab(self.custom_overlay_tab, "커스텀 오버레이")
-        tabs.addTab(self.party_tab, "파티 모집")
-        tabs.addTab(self.memo_tab, "메모")
-        tabs.addTab(self.settings_tab, "설정")
+        # 각 탭을 스크롤 영역으로 감싼다 → 창 높이를 고정해도 내용이 잘리지 않고 스크롤.
+        tabs.addTab(_scrolled(self.buff_tab), "버프 트래커")
+        tabs.addTab(_scrolled(self.debuff_tab), "디버프 트래커")
+        tabs.addTab(_scrolled(self.tuarim_tab), "투아림 트래커")
+        tabs.addTab(_scrolled(self.custom_overlay_tab), "커스텀 오버레이")
+        tabs.addTab(_scrolled(self.party_tab), "파티 모집")
+        tabs.addTab(_scrolled(self.memo_tab), "메모")
+        tabs.addTab(_scrolled(self.settings_tab), "설정")
         tabs.setStyleSheet(_TAB_QSS)
 
         # 중앙: 상단 업데이트 배너(기본 숨김) + 탭
@@ -244,7 +274,10 @@ class MainWindow(QMainWindow):
         self._pause_btn.setObjectName("playPause")
         self._pause_btn.setCheckable(True)
         self._pause_btn.setFixedSize(30, 26)
-        self._pause_btn.setToolTip("사냥 안 할 때 오버레이를 잠깐 끄고/켭니다")
+        self._pause_btn.setToolTip(
+            "사냥 안 할 때 오버레이를 잠깐 끄고/켭니다 "
+            "(앱이 앞에 있을 때 Space로도 토글)"
+        )
         self._pause_btn.toggled.connect(self._set_paused)
         h.addWidget(self._pause_btn)
         bar.setStyleSheet(
@@ -288,6 +321,22 @@ class MainWindow(QMainWindow):
         self.buff_tab.set_status(*self._buff_status())
         self.debuff_tab.set_status(*self._debuff_status())
         self._update_header_status()
+        self._maybe_tick_update_check()
+
+    def _maybe_tick_update_check(self) -> None:
+        """업데이트 확인을 '항상 도는' 상태 타이머(700ms)에 얹는다.
+
+        전용 업데이트 타이머가 모종의 이유로 안 돌아도(시작 중 모달에 막히거나 등)
+        백그라운드 감지가 보장된다. 상태 타이머는 상태 라벨이 갱신되는 것으로 실제
+        동작이 눈에 확인된다. 자체 60초 게이트로 과호출·로그 스팸을 막는다
+        (_maybe_check_update의 30초 스로틀과 별개).
+        """
+        import time
+
+        now = time.monotonic()
+        if now - getattr(self, "_last_bg_update_tick", 0.0) >= 60.0:
+            self._last_bg_update_tick = now
+            self._maybe_check_update("주기")
 
     def _buff_status(self) -> tuple[str, str]:
         if not config.load_capture_region("buffTracker"):
@@ -334,7 +383,7 @@ class MainWindow(QMainWindow):
         from .tour_overlay import TourOverlay, TourStep
 
         def _go_buff() -> None:
-            self._tabs.setCurrentWidget(self.buff_tab)
+            self._tabs.setCurrentIndex(0)  # 버프 탭(스크롤로 감싸 위젯 기준 전환 불가)
 
         steps = [
             TourStep(
@@ -391,33 +440,80 @@ class MainWindow(QMainWindow):
         dlg.exec()
         self.settings_tab.refresh_game_label()  # 지정했으면 설정 라벨도 갱신
 
-    def _maybe_check_update(self) -> None:
-        """시작 시 백그라운드로 새 버전 확인(개발/실패는 조용히 무시)."""
+    # 업데이트 확인 최소 간격(초). 포커스 얻을 때마다 확인하되 이 간격으론 과호출 방지.
+    # 활성화(앱으로 돌아옴) 시 확인의 최소 간격. 너무 길면(2~3분) 자주 들락거리는
+    # 실사용에서 돌아올 때마다 스로틀에 막혀 '포커스 확인'이 무용지물이 된다(로그로 확인).
+    # 30초면 빠른 alt-tab 연타만 묶고, 30초 지나 돌아오면 바로 최신을 확인한다.
+    _UPDATE_CHECK_MIN_GAP = 30.0
+
+    def _maybe_check_update(self, reason: str = "?") -> None:
+        """백그라운드로 새 버전 확인(시작 시·주기·창 활성화 시). 실패는 조용히 무시.
+
+        여러 계기에서 호출되므로 최소 간격으로 스로틀한다(짧은 간격 중복 호출 무시).
+        진단 로그: 어떤 계기로 호출됐고, 스로틀에 막혔는지, check_latest가 뭘 받았는지
+        남겨 '릴리스~감지 지연'의 실제 원인(이벤트 미발생/스로틀/raw 전파 지연)을 가린다.
+        """
         import threading
+        import time
 
         from ..system import updater
 
         if not updater.can_update():
+            _up_log.info("업데이트 확인 안 함(%s): 배포본 아님", reason)
             return
+        now = time.monotonic()
+        gap = now - getattr(self, "_last_update_check", 0.0)
+        if gap < self._UPDATE_CHECK_MIN_GAP:
+            _up_log.debug(  # 자주 울려 DEBUG(버그리포트 버퍼엔 남고 평소엔 조용히)
+                "업데이트 확인 건너뜀(%s): %.0f초 전 확인함(스로틀 %.0f초)",
+                reason, gap, self._UPDATE_CHECK_MIN_GAP,
+            )
+            return
+        self._last_update_check = now
+        _up_log.info("업데이트 확인 시작(%s)", reason)
 
         def work() -> None:
-            info = updater.check_latest()
+            from ..version import __version__
+
+            try:
+                info = updater.check_latest()
+            except Exception as exc:  # noqa: BLE001 — 확인 실패는 무시(진단만 남김)
+                _up_log.info("업데이트 확인 예외(%s): %r", reason, exc)
+                return
             if info:
+                _up_log.info("업데이트 확인 결과(%s): 새 버전 %s", reason, info.get("version"))
                 self._update_found.emit(info)  # UI 스레드로 전달 → 배너
+            else:
+                _up_log.info("업데이트 확인 결과(%s): 새 버전 없음(현재 %s)", reason, __version__)
 
         threading.Thread(target=work, daemon=True).start()
 
     def _on_update_found(self, info: dict) -> None:
+        ver = str(info.get("version", "?"))
         self._pending_update = info
-        self.show_update_banner(str(info.get("version", "?")))
+        self.show_update_banner(ver)
+        # 처음 감지한 버전일 때만 토스트+소리(주기 확인이 같은 버전을 반복해도 1회만).
+        if ver != getattr(self, "_announced_update", None):
+            self._announced_update = ver
+            from .notifier import play_update_sound
+            from .toast import show_toast
+
+            show_toast("새 버전 v" + ver, "상단의 [지금 업데이트]로 받을 수 있어요", 6000)
+            play_update_sound()
 
     def _on_update_clicked(self) -> None:
-        """[지금 업데이트] → 다운로드(진행바) → B안 교체 → 재실행."""
+        """[지금 업데이트] → 다운로드(진행바) → B안 교체 → 재실행.
+
+        교체 도중 사용자가 본 창을 건드려 상태를 바꾸면 위험해, 본 창을 숨기고(=뒤에서
+        못 누르게) 시작 때와 같은 스플래시(로고+프로그레스바)를 재활용해 진행률만 보인다.
+        성공하면 새 exe가 이미 떠 있으니 그대로 종료, 실패하면 본 창을 다시 띄워 안내한다.
+        """
         import threading
 
-        from PySide6.QtWidgets import QMessageBox, QProgressDialog
+        from PySide6.QtWidgets import QMessageBox
 
         from ..system import updater
+        from .splash import Splash
 
         info = self._pending_update
         if not info:
@@ -430,18 +526,16 @@ class MainWindow(QMainWindow):
         ) != QMessageBox.StandardButton.Yes:
             return
 
-        dlg = QProgressDialog("새 버전 받는 중…", None, 0, 100, self)
-        dlg.setWindowTitle("업데이트")
-        dlg.setAutoClose(False)
-        dlg.setCancelButton(None)  # 교체 중 취소는 위험 → 막음
-        dlg.setMinimumDuration(0)
-        dlg.setValue(0)
-        dlg.show()
+        # 시작 스플래시 재활용: 본 창을 숨기고 그 자리에 진행률 스플래시만 띄운다.
+        splash = Splash()
+        splash.center_on_screen()
+        splash.step(0, f"새 버전 v{ver} 받는 중…")
+        splash.show()
+        self._update_splash = splash  # 재생 중 GC 방지(모듈 아닌 self에 보관)
+        self.hide()
 
-        self._update_progress.connect(dlg.setValue)
-        self._update_result.connect(
-            lambda ok, msg: self._on_update_result(ok, msg, dlg)
-        )
+        self._update_progress.connect(self._on_update_progress)
+        self._update_result.connect(self._on_update_result)
 
         def work() -> None:
             try:
@@ -456,15 +550,31 @@ class MainWindow(QMainWindow):
 
         threading.Thread(target=work, daemon=True).start()
 
-    def _on_update_result(self, ok: bool, msg: str, dlg) -> None:
+    def _on_update_progress(self, pct: int) -> None:
+        splash = getattr(self, "_update_splash", None)
+        if splash is not None:
+            splash.step(pct, "새 버전 받는 중…")
+
+    def _on_update_result(self, ok: bool, msg: str) -> None:
         from PySide6.QtWidgets import QMessageBox
 
-        dlg.close()
+        # 재시도(실패 후 다시 클릭) 시 신호가 중복 연결되지 않게 정리.
+        for sig in (self._update_progress, self._update_result):
+            try:
+                sig.disconnect()
+            except (TypeError, RuntimeError):
+                pass
+        splash = getattr(self, "_update_splash", None)
+        if splash is not None:
+            splash.close()
+            self._update_splash = None
         if ok:
             # 새 exe 가 이미 떠 있으니 현재(구버전) 프로세스는 완전히 종료.
             self._force_quit = True
             QApplication.quit()
             return
+        # 실패 → 숨겼던 본 창을 다시 띄우고 사유 안내.
+        self.show()
         QMessageBox.warning(
             self, "업데이트 실패",
             f"업데이트에 실패했습니다.\n{msg}\n\n나중에 다시 시도해 주세요.",
@@ -513,30 +623,36 @@ class MainWindow(QMainWindow):
         """탐지/폴링 시작. 실제 앱 실행(main)에서만 호출한다(스크린샷 렌더 땐 미호출)."""
         from ..system import autostart
 
-        autostart.refresh()  # 자동실행 켜져 있으면 현재 exe 경로로 갱신(이동 시 self-heal)
+        # 자동실행: 저장된 '의도'대로 현재 exe에 강제 동기화(신버전 실행=자동실행 대상).
+        # 기존 사용자(의도 미저장)는 현재 작업 상태를 의도로 이어받아 한 번 저장한다.
+        intent = config.load_autostart_intent()
+        if intent is None:
+            intent = autostart.is_enabled()
+            config.save_autostart_intent(intent)
+        autostart.reconcile(intent)
         self.party_tab.start_polling()
         self._restore_overlay(self.buff_overlay, self.buff_tab, "buffTracker")
         self._restore_overlay(self.debuff_overlay, self.debuff_tab, "debuffTracker")
         self._restore_memo()
         self._start_buff_tracking()
         self._start_debuff_tracking()
-        self._maybe_check_update()
-        self._maybe_prompt_game_window()
-        self._maybe_run_tour()
+        self._maybe_check_update("시작")
+        # 타이머들을 모달(게임창 안내/투어)보다 '먼저' 시작한다. 안 그러면 그 모달이
+        # exec()로 열려 있는 동안 start()가 그 줄에서 멈춰, 주기 업데이트 확인·상태 갱신
+        # 타이머가 영영 시작되지 않는다(자동실행 직후 등 '백그라운드 감지 안 됨'의 원인).
+        # 모달 exec() 중에도 이미 start()된 타이머는 그 이벤트 루프에서 계속 돈다.
         # 진단 상태 한 줄(추적 중/게임 비활성/영역 미지정 등) 주기 갱신.
         self._status_timer = QTimer(self)
         self._status_timer.setInterval(700)
         self._status_timer.timeout.connect(self._update_tracking_status)
         self._status_timer.start()
         self._update_tracking_status()
-        # 저장된 전역 단축키 등록(있으면). Windows 외/충돌이면 조용히 무시.
-        self._pause_hotkey.set_hotkey(config.load_pause_hotkey())
-        # 실행 중 업데이트 감지: 시작 1회 외에 주기적으로도 확인(켜둔 채 새 버전이
-        # 나와도 모르던 문제). 새 버전이면 상단 배너가 뜬다(강제 아님).
-        self._update_timer = QTimer(self)
-        self._update_timer.setInterval(30 * 60 * 1000)  # 30분
-        self._update_timer.timeout.connect(self._maybe_check_update)
-        self._update_timer.start()
+        # 실행 중 업데이트 감지: 시작 1회·창 활성화 외에, 위 상태 타이머(_maybe_tick_
+        # update_check)가 60초마다 확인한다. 전용 타이머 대신 '항상 도는' 상태 타이머에
+        # 얹어, 시작 중 무엇이 막아도 백그라운드 감지가 보장되게 한다(캐시무효화로 최신 수신).
+        # 모달 안내는 타이머 시작 '뒤'에(위 이유). 이게 떠 있어도 감지는 계속 돈다.
+        self._maybe_prompt_game_window()
+        self._maybe_run_tour()
         self._booting = False  # 부팅 끝 — 이제부터 사용자 변경을 저장
 
     def _compute_tracking(
@@ -829,6 +945,10 @@ class MainWindow(QMainWindow):
         self.showNormal()
         self.raise_()
         self.activateWindow()
+        # 트레이 복원은 '사용자가 앱을 보려는' 명백한 신호. Windows는 백그라운드
+        # 프로세스의 포그라운드 강탈을 막아 activateWindow()가 실제 활성화를 못 해
+        # changeEvent(활성화)가 안 울릴 수 있으므로, 여기서 직접 업데이트 확인을 돈다.
+        self._maybe_check_update("트레이복원")
 
     def _quit_from_tray(self) -> None:
         self._force_quit = True
@@ -868,14 +988,6 @@ class MainWindow(QMainWindow):
         else:
             show_toast("전체 오버레이 시작", "버프·디버프·커스텀 오버레이가 다시 동작합니다", 2000)
 
-    def _on_pause_hotkey(self) -> None:
-        """전역 단축키가 눌리면 오버레이 정지/시작을 토글(게임이 맨 앞이어도 동작)."""
-        self._set_paused(not self._paused)
-
-    def _apply_pause_hotkey(self, spec: str) -> bool:
-        """설정에서 조합이 바뀌면 재등록. 등록 성공 여부를 돌려준다(설정 탭 안내용)."""
-        return self._pause_hotkey.set_hotkey(spec)
-
     def _on_voice_pack_changed(self) -> None:
         """설정에서 알림 목소리 팩이 바뀌면 실행 중 재생기들을 새 팩으로 갱신(바로 적용)."""
         from .notifier import default_sound_map
@@ -883,7 +995,7 @@ class MainWindow(QMainWindow):
         if self._notifier is not None:
             self._notifier.set_sounds(default_sound_map())  # 버프
         self.tuarim_tab.refresh_sound()
-        self.party_tab.refresh_sound()
+        # 파티 알림음은 보이스팩과 무관(기본 소리 고정)이라 갱신 불필요.
 
     def _on_config_imported(self) -> None:
         """설정 가져오기/초기화 직후: 종료 시 낡은 상태로 덮어쓰지 않도록 저장을 막는다.
@@ -899,6 +1011,52 @@ class MainWindow(QMainWindow):
         return self._tray is not None and config.load_general_flag(
             "minimizeToTray", True
         )
+
+    def changeEvent(self, event) -> None:
+        # 창을 앞으로 가져올 때(포커스 얻기) 새 버전 확인 — 실행 중 감지를 30분 주기만
+        # 기다리지 않고, 사용자가 앱을 볼 때 바로 잡는다(_maybe_check_update가 스로틀).
+        from PySide6.QtCore import QEvent
+
+        if event.type() == QEvent.Type.ActivationChange:
+            active = self.isActiveWindow()
+            _up_log.debug("창 활성화 변경: active=%s", active)  # 자주 울려 DEBUG(버퍼엔 남음)
+            if active:
+                self._maybe_check_update("창활성화")
+        super().changeEvent(event)
+
+    def keyPressEvent(self, event) -> None:
+        # Space: 오버레이 정지/시작 토글(오디오 앱처럼). 앱이 앞일 때만 — 키 이벤트는
+        # 포커스 창에만 오므로 전역이 아니다(게임엔 아무 영향 없음, 읽기전용 철학 유지).
+        # 입력칸(이름·키워드·메모 등)에 포커스면 글자가 먹히게 토글하지 않는다.
+        from PySide6.QtCore import Qt
+
+        if (
+            event.key() == Qt.Key.Key_Space
+            and not event.isAutoRepeat()
+            and not self._is_text_input_focused()
+        ):
+            self._set_paused(not self._paused)
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+    @staticmethod
+    def _is_text_input_focused() -> bool:
+        """현재 포커스가 글자를 입력받는 위젯인가(그러면 Space는 그쪽에 양보)."""
+        from PySide6.QtWidgets import (
+            QAbstractSpinBox,
+            QComboBox,
+            QLineEdit,
+            QPlainTextEdit,
+            QTextEdit,
+        )
+
+        w = QApplication.focusWidget()
+        if w is None:
+            return False
+        if isinstance(w, (QLineEdit, QTextEdit, QPlainTextEdit, QAbstractSpinBox)):
+            return True
+        return isinstance(w, QComboBox) and w.isEditable()
 
     def closeEvent(self, event) -> None:
         import time

@@ -33,7 +33,7 @@ from ..party.models import Recruit
 from ..party.service import build_board, humanize_age
 from ..party.worker import PartyWorker
 from .help_dialog import tab_header
-from .notifier import SoundNotifier, sound_path
+from .notifier import PARTY_ALERT_FILE, SoundNotifier
 from .toast import show_toast
 from .widgets import hint_label
 
@@ -122,9 +122,9 @@ class PartyTab(QWidget):
         self._keywords, self._excludes = config.load_party_lists()
         self._worker: PartyWorker | None = None
         self._last_raw: list[dict] = []  # 마지막 거뿔 원본(즉시 재필터용)
-        self._sound = SoundNotifier(
-            {"party": sound_path("파티 알림.mp3")}, volume=0.6
-        )
+        # 파티 알림은 TTS 보이스팩과 무관하게 '기본 소리' 고정(sound_path가 아니라
+        # 기본 경로). 보이스를 바꿔도 파티 알림음은 그대로다.
+        self._sound = SoundNotifier({"party": PARTY_ALERT_FILE}, volume=0.6)
 
         root = QVBoxLayout(self)
         root.setContentsMargins(12, 12, 12, 12)
@@ -322,8 +322,8 @@ class PartyTab(QWidget):
 
         v.addWidget(
             hint_label(
-                "키워드가 뜨면 화면 우측 하단에 토스트 + 효과음(트레이·게임 중에도) · 항목 위 X로 삭제\n"
-                "위 종 아이콘(🔔/🔕)으로 효과음을 켜고 끌 수 있습니다."
+                "키워드가 뜨면 우측 하단에 토스트·효과음 (게임 중에도)\n"
+                "위 종(🔔/🔕)으로 소리 켜고 끄기 · 항목은 X로 삭제"
             )
         )
         return box
@@ -337,6 +337,8 @@ class PartyTab(QWidget):
         self._update_bell()
         state = "켜짐 🔔" if self._alert_sound else "꺼짐 🔕"
         show_toast("키워드 알림 효과음", state)
+        if self._alert_sound:
+            self._sound.play("party")  # 다시 켤 때 미리듣기로 소리 한 번 재생
 
     def _refresh_keyword_list(self) -> None:
         self._fill_chip_list(self.keyword_list, self._keywords, self._delete_keyword)
@@ -430,9 +432,6 @@ class PartyTab(QWidget):
         config.save_party_lists(self._keywords, self._excludes)
 
     # ---- 폴링 ----
-    def refresh_sound(self) -> None:
-        """목소리 팩이 바뀌면 파티 알림 재생기 소스를 새 팩으로 갱신(바로 적용)."""
-        self._sound.set_sounds({"party": sound_path("파티 알림.mp3")})
 
     def start_polling(self) -> None:
         if self._worker is not None:

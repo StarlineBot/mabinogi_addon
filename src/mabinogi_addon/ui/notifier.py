@@ -21,6 +21,23 @@ SOUND_DIR = paths.resource_dir() / "sounds"
 PARTY_ALERT_FILE = SOUND_DIR / "파티 알림.mp3"
 
 
+def _sync_default_device(audio) -> None:
+    """출력 장치를 현재 시스템 기본으로 맞춘다(헤드셋/스피커 전환 따라가기).
+
+    QAudioOutput은 '생성 시점'의 기본 장치에 고정된다. 재생기들이 서로 다른 때 만들어져
+    중간에 장치가 바뀌면(헤드셋 꽂기 등) 어떤 소리는 옛 장치로 나간다. 재생 직전에 현재
+    기본 출력으로 다시 설정해, 모든 알림이 지금 쓰는 장치로 일관되게 나오게 한다.
+    """
+    if audio is None:
+        return
+    try:
+        from PySide6.QtMultimedia import QMediaDevices
+
+        audio.setDevice(QMediaDevices.defaultAudioOutput())
+    except Exception:  # noqa: BLE001, S110 — 장치 동기화 실패해도 재생은 계속
+        pass
+
+
 def list_voice_packs() -> list[str]:
     """사용 가능한 목소리 팩(하위 폴더) 이름들. 기본(녹음본)은 flat이라 제외."""
     if not SOUND_DIR.exists():
@@ -63,6 +80,34 @@ def default_sound_map() -> dict[str, Path]:
     return out
 
 
+# 새 버전 감지 알림 효과음(assets/sounds/에 이 이름으로 두면 재생, 없으면 조용히 생략).
+UPDATE_SOUND_FILE = "업데이트 알림.mp3"
+_update_player = None  # 일회성 재생기(모듈에 보관해 재생 전 GC 방지)
+
+
+def play_update_sound() -> bool:
+    """새 버전 감지 시 알림 효과음 재생. 파일 없거나 오디오 백엔드 없으면 False."""
+    global _update_player
+    path = sound_path(UPDATE_SOUND_FILE)
+    if not path.exists():
+        return False
+    try:
+        from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
+
+        if _update_player is None:
+            audio = QAudioOutput()
+            player = QMediaPlayer()
+            player.setAudioOutput(audio)
+            player._audio = audio  # 오디오 출력도 함께 보관(재생 중 끊김 방지)
+            _update_player = player
+        _sync_default_device(_update_player._audio)  # 지금 쓰는 출력 장치로 맞춤
+        _update_player.setSource(QUrl.fromLocalFile(str(path)))
+        _update_player.play()
+        return True
+    except Exception:  # noqa: BLE001 — 오디오 없으면 무음(알림은 배너·토스트로도 뜸)
+        return False
+
+
 class SoundNotifier(QObject):
     """buff_id별 알림 사운드 재생기. 사운드 꺼진 버프는 호출 측에서 걸러준다."""
 
@@ -96,6 +141,7 @@ class SoundNotifier(QObject):
         path = self._sounds.get(buff_id)
         if path is None or not path.exists():
             return False
+        _sync_default_device(self._audio)  # 지금 쓰는 출력 장치로 맞춤
         self._player.setSource(QUrl.fromLocalFile(str(path)))
         self._player.play()
         return True

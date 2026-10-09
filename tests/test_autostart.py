@@ -17,4 +17,5 @@ def test_safe_noop_off_windows():
         assert autostart.is_enabled() is False
         assert autostart.set_enabled(True) is False
         assert autostart.set_enabled(False) is False
-        autostart.refresh()  # 예외 없이 통과
+        autostart.reconcile(True)  # 예외 없이 통과(비Windows no-op)
+        autostart.reconcile(False)

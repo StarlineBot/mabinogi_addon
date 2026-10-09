@@ -12,7 +12,14 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtCore import QPoint, QRect, Qt, Signal
-from PySide6.QtGui import QColor, QGuiApplication, QPainter, QPen, QPixmap
+from PySide6.QtGui import (
+    QColor,
+    QGuiApplication,
+    QImage,
+    QPainter,
+    QPen,
+    QPixmap,
+)
 from PySide6.QtWidgets import QWidget
 
 _LOUPE = 150  # 돋보기 박스 변(px)
@@ -33,7 +40,10 @@ class RegionSelector(QWidget):
     captured = Signal(bool)  # 크롭 모드: 저장 성공=True, 취소/너무 작음=False
 
     def __init__(
-        self, save_path: Path | None = None, fixed_size: tuple[int, int] | None = None
+        self,
+        save_path: Path | None = None,
+        fixed_size: tuple[int, int] | None = None,
+        window_hwnd: int | None = None,
     ) -> None:
         super().__init__(
             None,
@@ -42,6 +52,9 @@ class RegionSelector(QWidget):
         self._save_path = save_path
         # fixed_size가 있으면 '고정 크기 박스를 커서에 붙여 클릭 한 번으로 배치' 모드.
         self._fixed = fixed_size
+        # window_hwnd가 있으면 그 창(게임) 내용을 스냅샷 위에 합성 → 작업표시줄 등에
+        # 가린 부분도 돋보기에 게임 그대로 보인다(커스텀 오버레이 미러 영역 지정용).
+        self._window_hwnd = window_hwnd
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setCursor(Qt.CursorShape.CrossCursor)
         self.setMouseTracking(True)  # 버튼 안 눌러도 이동 이벤트 받기(돋보기용)
@@ -53,6 +66,7 @@ class RegionSelector(QWidget):
         self._rect = QRect()
         self._cursor: QPoint | None = None
         self._shot = QPixmap()  # 선택창 띄우기 전 화면 스냅샷(돋보기 원본)
+        self._dpr = 1.0  # 스냅샷 배율(물리픽셀=논리×dpr). start()에서 실제값으로 채움
 
     def start(self) -> None:
         self._origin = None
@@ -61,9 +75,55 @@ class RegionSelector(QWidget):
         # 오버레이를 덮기 전에 현재 화면을 캡처(돋보기 원본). 띄운 뒤 캡처하면 오버레이가 찍힌다.
         screen = QGuiApplication.primaryScreen()
         self._shot = screen.grabWindow(0) if screen else QPixmap()
+        # 스냅샷을 '물리픽셀 그대로'로 다룬다: dpr을 1로 떼고 배율은 self._dpr에 보관.
+        # 150% 등에서 논리좌표(rect/pos)에 self._dpr을 곱해 물리픽셀로 인덱싱해야
+        # 돋보기·박스 미리보기가 엉뚱한 자리를 확대하지 않는다(안 그러면 '이상한 화면').
+        if not self._shot.isNull():
+            self._dpr = float(self._shot.devicePixelRatio() or 1.0)
+            self._shot.setDevicePixelRatio(1.0)
+            if self._window_hwnd:
+                self._composite_window(self._window_hwnd)
         self.showFullScreen()
         self.raise_()
         self.activateWindow()
+
+    def _composite_window(self, hwnd: int) -> None:
+        """게임 창 그림을 PrintWindow로 읽어 스냅샷(물리픽셀) 위에 덮는다.
+
+        작업표시줄 등에 가린 부분도 게임 내용으로 보이게 한다. 캡처 실패나 거의
+        검게 나오면(하드웨어 가속 게임) 아무것도 안 하고 화면 스냅샷을 그대로 둔다.
+        """
+        from ..system.window_capture import capture_window_bgra
+
+        cap = capture_window_bgra(hwnd)
+        if cap is None:
+            return
+        bgra, left, top, w, h = cap
+        img = QImage(bgra, w, h, QImage.Format.Format_RGB32).copy()  # bytes 수명 분리
+        if img.isNull() or self._mostly_black(img):
+            return  # D3D 등으로 검게 나옴 → 화면 스냅샷 유지(폴백)
+        # 창의 화면(물리) 좌표를 주 화면 스냅샷 기준으로 옮겨 그린다.
+        ox = round(self._screen_geo.x() * self._dpr)
+        oy = round(self._screen_geo.y() * self._dpr)
+        painter = QPainter(self._shot)
+        painter.drawImage(left - ox, top - oy, img)
+        painter.end()
+
+    @staticmethod
+    def _mostly_black(img: QImage) -> bool:
+        """샘플 픽셀이 거의 다 검으면 True(PrintWindow가 내용을 못 가져온 경우)."""
+        w, h = img.width(), img.height()
+        if w < 2 or h < 2:
+            return True
+        steps = 8
+        lit = total = 0
+        for i in range(1, steps):
+            for j in range(1, steps):
+                c = img.pixelColor(w * i // steps, h * j // steps)
+                total += 1
+                if c.red() + c.green() + c.blue() > 24:  # 거의 검정이 아님
+                    lit += 1
+        return total == 0 or lit <= total * 0.02  # 2% 이하만 밝으면 '검은 화면'
 
     def mousePressEvent(self, event) -> None:
         if event.button() != Qt.MouseButton.LeftButton:
@@ -134,10 +194,8 @@ class RegionSelector(QWidget):
         """스냅샷에서 고른 영역을 물리 픽셀 기준으로 잘라 PNG로 저장."""
         if self._shot.isNull() or self._save_path is None:
             return False
-        dpr = self._shot.devicePixelRatio()  # HiDPI(배율>100%)에서도 실제 픽셀로
-        shot = self._shot
-        shot.setDevicePixelRatio(1.0)
-        crop = shot.copy(
+        dpr = self._dpr  # 스냅샷은 start()에서 이미 dpr=1로 떼어 뒀다(물리픽셀 그대로)
+        crop = self._shot.copy(
             round(rect.x() * dpr),
             round(rect.y() * dpr),
             round(rect.width() * dpr),
@@ -213,8 +271,11 @@ class RegionSelector(QWidget):
 
     def _draw_box_preview(self, painter: QPainter, rect: QRect) -> None:
         """고정 박스가 실제로 캡처할 영역을 확대해 보여준다(지정이 숫자에 맞는지 확인)."""
-        crop = self._shot.copy(rect)
-        crop.setDevicePixelRatio(1.0)
+        dpr = self._dpr  # 논리 rect → 물리픽셀로 환산해 스냅샷을 자른다(150% 보정)
+        crop = self._shot.copy(
+            round(rect.x() * dpr), round(rect.y() * dpr),
+            round(rect.width() * dpr), round(rect.height() * dpr),
+        )
         pw = 180
         ph = max(1, round(pw * rect.height() / max(1, rect.width())))
         zoomed = crop.scaled(
@@ -244,7 +305,9 @@ class RegionSelector(QWidget):
         """커서 주변을 _ZOOM배로 확대해 커서 옆 박스에 그린다(중앙 십자선)."""
         src = max(4, _LOUPE // _ZOOM)
         half = src // 2
-        sx0, sy0 = pos.x() - half, pos.y() - half
+        # 커서(논리좌표)를 물리픽셀로 환산해 스냅샷(물리픽셀)을 인덱싱한다(150% 보정).
+        cx, cy = round(pos.x() * self._dpr), round(pos.y() * self._dpr)
+        sx0, sy0 = cx - half, cy - half
         # 화면 가장자리에서도 커서가 항상 '중앙'에 오도록, src×src 검정 캔버스에 화면 안
         # 유효 영역만 제자리에 붙인다(바로 copy하면 음수 좌표라 크롭이 밀려 깨진다).
         canvas = QPixmap(src, src)
@@ -254,7 +317,6 @@ class RegionSelector(QWidget):
         vx1, vy1 = min(sw, sx0 + src), min(sh, sy0 + src)
         if vx1 > vx0 and vy1 > vy0:
             part = self._shot.copy(vx0, vy0, vx1 - vx0, vy1 - vy0)
-            part.setDevicePixelRatio(1.0)
             cp = QPainter(canvas)
             cp.drawPixmap(vx0 - sx0, vy0 - sy0, part)
             cp.end()

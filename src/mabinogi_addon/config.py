@@ -491,6 +491,20 @@ def save_general_flag(key: str, value: bool, path: Path = LOCAL_CONFIG_PATH) -> 
     _write_local_config(data, path)
 
 
+_AUTOSTART_KEY = "autostart"  # general 섹션: Windows 시작 시 자동 실행 '의도'
+
+
+def load_autostart_intent(path: Path = LOCAL_CONFIG_PATH) -> bool | None:
+    """자동 실행 의도. 한 번도 설정 안 했으면 None(기존 작업 상태를 이어받도록)."""
+    g = _read_local_config(path).get("general") or {}
+    v = g.get(_AUTOSTART_KEY)
+    return v if isinstance(v, bool) else None
+
+
+def save_autostart_intent(on: bool, path: Path = LOCAL_CONFIG_PATH) -> None:
+    save_general_flag(_AUTOSTART_KEY, on, path)
+
+
 def load_grid_size(path: Path = LOCAL_CONFIG_PATH) -> int:
     """오버레이 격자 칸 크기(px). 기본 32. 작을수록 미세, 클수록 큼직한 이동."""
     g = _read_local_config(path).get("general") or {}
@@ -504,23 +518,6 @@ def save_grid_size(px: int, path: Path = LOCAL_CONFIG_PATH) -> None:
     if not isinstance(g, dict):
         g = {}
     g["gridSize"] = int(px)
-    data["general"] = g
-    _write_local_config(data, path)
-
-
-def load_pause_hotkey(path: Path = LOCAL_CONFIG_PATH) -> str:
-    """오버레이 정지/시작 전역 단축키 조합(예 'Ctrl+Alt+P'). 없으면 빈 문자열."""
-    g = _read_local_config(path).get("general") or {}
-    v = g.get("pauseHotkey")
-    return v if isinstance(v, str) else ""
-
-
-def save_pause_hotkey(spec: str, path: Path = LOCAL_CONFIG_PATH) -> None:
-    data = _read_local_config(path)
-    g = data.get("general")
-    if not isinstance(g, dict):
-        g = {}
-    g["pauseHotkey"] = str(spec)
     data["general"] = g
     _write_local_config(data, path)
 

@@ -123,7 +123,15 @@ def set_enabled(enabled: bool) -> bool:
     return _task_set(enabled) if _is_frozen() else _reg_set(enabled)
 
 
-def refresh() -> None:
-    """자동실행이 켜져 있으면 현재 실행 경로로 갱신(exe 이동 시 self-heal)."""
-    if available() and is_enabled():
-        set_enabled(True)
+def reconcile(intent: bool) -> None:
+    """저장된 '의도'(config)대로 작업을 현재 exe에 강제 동기화. 매 시작 호출.
+
+    이전 refresh()는 '작업이 켜져 있나?'(schtasks 조회)가 실패하면 재지정을 통째로
+    건너뛰어, 작업이 낡은(구버전) exe를 계속 가리키는 문제가 있었다. reconcile은
+    조회에 의존하지 않고 의도대로 무조건 맞춘다: True면 현재 exe로 재등록(self-heal),
+    False면 제거. 그래서 '신버전을 실행하면 그게 자동 실행 대상'이 항상 보장된다.
+    """
+    if not available():
+        return
+    _log.info("자동실행 reconcile: 의도=%s, 현재exe=%s", intent, sys.executable)
+    set_enabled(intent)  # _task_set이 등록/삭제 경로·성패를 로그로 남긴다

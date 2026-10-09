@@ -239,7 +239,9 @@ class CustomOverlayTab(QWidget):
             self._pending_name = "화면"
         from .region_selector import RegionSelector
 
-        self._selector = RegionSelector()
+        # 게임 창 HWND를 넘겨, 영역 지정 돋보기가 작업표시줄에 가린 부분도 게임 내용으로
+        # 보이게 한다(PrintWindow로 창을 직접 읽음 — 하단 체력바 미러링 등).
+        self._selector = RegionSelector(window_hwnd=self._find_game_hwnd() or None)
         self._selector.selected.connect(self._on_selected)
         self._selector.start()
 
