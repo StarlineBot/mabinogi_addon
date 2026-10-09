@@ -35,13 +35,19 @@ _NEAR_SOUND = _SOUND_DIR / "보스패턴 진입.mp3"
 HIGHLIGHT_TITLE = "보스 HP바 영역"
 HIGHLIGHT_SUB = "보스 이름 ~ HP% 가 다 들어오게"
 
+# 기본 영역(2560×1440 기준, 하단 중앙 보스 HP바). 오른쪽 끝 = 바 오른쪽 끝.
+# 다른 해상도면 '영역 수정'으로 바에 맞춘다(판독기가 박스 높이로 스케일 보정).
+DEFAULT_BOX = {"x": 1017, "y": 1248, "w": 523, "h": 36}
+
 
 class BossTab(QWidget):
     def __init__(self, watcher) -> None:
         super().__init__()
         self._watcher = watcher
         cfg = config.load_boss_pattern()
-        self._region = cfg["box"]
+        # 기본으로 바 위치가 이미 잡힌 상태(사용자 해상도 2560×1440면 바로 작동).
+        # 해상도가 다르면 '영역 수정'으로 맞춘다.
+        self._region = cfg["box"] or dict(DEFAULT_BOX)
         self._sct = None
         self._last_frame = None
         self._bosses = load_bosses()
@@ -83,8 +89,11 @@ class BossTab(QWidget):
         cv.setContentsMargins(0, 0, 0, 0)
 
         row = QHBoxLayout()
-        self.region_btn = QPushButton("보스 영역 지정")
-        self.region_btn.setToolTip("보스 HP바(이름~%)를 감싸게 박스를 배치합니다. 다시 누르면 재지정.")
+        self.region_btn = QPushButton("보스 영역 수정")
+        self.region_btn.setToolTip(
+            "기본 위치(2560×1440)로 이미 잡혀 있습니다. 해상도가 다르거나 안 맞으면 "
+            "눌러서 보스 HP바(이름~%)에 박스를 맞춥니다."
+        )
         self.region_btn.clicked.connect(self._on_region)
         row.addWidget(self.region_btn)
         self.region_label = hint_label("")
