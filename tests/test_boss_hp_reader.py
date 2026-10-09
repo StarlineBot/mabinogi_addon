@@ -49,6 +49,17 @@ def test_read_hp_percent(name, data):
     assert read_percent(_bar_box(name, right)) == expected
 
 
+# 박스 오른쪽 끝이 바 끝과 몇 px 어긋나도(자동정렬) 맞게 읽어야 한다 —
+# 라이브에서 기본 영역이 정확히 안 맞던 문제 회귀 방지.
+@pytest.mark.parametrize("off", [-4, -2, 2, 4])
+def test_read_tolerates_misalignment(off):
+    # 대표 케이스 몇 개만(전 케이스×오프셋은 느림)
+    for name in ("185117", "193901", "201512", "190926"):
+        right, expected = _CASES[name]
+        got = read_percent(_bar_box(name, right + off))
+        assert got == expected, f"{name} off={off}: {got} != {expected}"
+
+
 def test_empty_region_returns_none():
     assert read_percent(np.zeros((0, 0, 3), dtype=np.uint8)) is None
 
