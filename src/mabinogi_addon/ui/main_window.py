@@ -432,6 +432,29 @@ class MainWindow(QMainWindow):
             return
         self._run_tour()
 
+    def _maybe_show_release_notes(self) -> None:
+        """새 버전 첫 실행 시, 마지막으로 본 버전 이후의 업데이트 노트를 띄운다.
+
+        - 개발 빌드(0.0.0)는 건너뜀.
+        - 신규 사용자(투어 미노출)는 노트 대신 투어를 보게 두고, 현재 버전만 기록해
+          다음 업데이트부터 노트가 뜨게 한다(첫 설치엔 '업데이트'가 없으므로).
+        """
+        from ..version import __version__
+        from .release_notes import ReleaseNotesDialog, notes_since
+
+        if __version__ == "0.0.0" or not self.isVisible():
+            return
+        last_seen = config.load_last_seen_version()
+        if last_seen == __version__:
+            return  # 이미 이 버전 노트를 봄
+        first_run = not config.load_general_flag("tourShown", False)
+        config.save_last_seen_version(__version__)  # 봤든 건너뛰든 현재 버전 기록
+        if first_run:
+            return  # 신규 사용자 → 투어가 안내, 노트는 생략
+        body = notes_since(last_seen, __version__)
+        if body:
+            ReleaseNotesDialog(body, __version__, self).exec()
+
     def _run_tour(self) -> None:
         """온보딩 투어 실행(첫 실행 + '다시 보기' 공용)."""
         if not self.isVisible():
@@ -708,6 +731,7 @@ class MainWindow(QMainWindow):
         # 얹어, 시작 중 무엇이 막아도 백그라운드 감지가 보장되게 한다(캐시무효화로 최신 수신).
         # 모달 안내는 타이머 시작 '뒤'에(위 이유). 이게 떠 있어도 감지는 계속 돈다.
         self._maybe_prompt_game_window()
+        self._maybe_show_release_notes()  # 기존 사용자: 새 버전 노트(신규는 투어가 안내)
         self._maybe_run_tour()
         self._booting = False  # 부팅 끝 — 이제부터 사용자 변경을 저장
 

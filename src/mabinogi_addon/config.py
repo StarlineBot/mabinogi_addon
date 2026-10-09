@@ -505,6 +505,26 @@ def save_autostart_intent(on: bool, path: Path = LOCAL_CONFIG_PATH) -> None:
     save_general_flag(_AUTOSTART_KEY, on, path)
 
 
+_LAST_SEEN_VERSION_KEY = "lastSeenVersion"  # general: 마지막으로 업데이트 노트를 본 버전
+
+
+def load_last_seen_version(path: Path = LOCAL_CONFIG_PATH) -> str | None:
+    """마지막으로 업데이트 노트를 띄운 앱 버전. 한 번도 없으면 None."""
+    g = _read_local_config(path).get("general") or {}
+    v = g.get(_LAST_SEEN_VERSION_KEY)
+    return v if isinstance(v, str) and v else None
+
+
+def save_last_seen_version(version: str, path: Path = LOCAL_CONFIG_PATH) -> None:
+    data = _read_local_config(path)
+    g = data.get("general")
+    if not isinstance(g, dict):
+        g = {}
+    g[_LAST_SEEN_VERSION_KEY] = str(version)
+    data["general"] = g
+    _write_local_config(data, path)
+
+
 def load_grid_size(path: Path = LOCAL_CONFIG_PATH) -> int:
     """오버레이 격자 칸 크기(px). 기본 32. 작을수록 미세, 클수록 큼직한 이동."""
     g = _read_local_config(path).get("general") or {}
