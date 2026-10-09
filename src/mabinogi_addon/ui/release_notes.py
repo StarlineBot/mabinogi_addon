@@ -85,7 +85,7 @@ class ReleaseNotesDialog(QDialog):
     def __init__(self, markdown: str, version: str, parent=None) -> None:
         super().__init__(parent)
         self.setWindowTitle(f"업데이트 노트 · v{version}")
-        self.setMinimumSize(460, 420)
+        self.setMinimumSize(560, 440)  # 기본 너비를 넓혀 문장이 덜 접히게
         v = QVBoxLayout(self)
         v.setContentsMargins(16, 16, 16, 12)
         v.setSpacing(10)
@@ -93,6 +93,10 @@ class ReleaseNotesDialog(QDialog):
         body = QTextBrowser()
         body.setOpenExternalLinks(True)
         body.setMarkdown(markdown)
+        # QTextBrowser 기본 리스트 들여쓰기가 과하게 넓다. 불릿 앞 여백을 줄인다.
+        doc = body.document()
+        doc.setIndentWidth(14)  # 리스트/인용 한 단계 들여쓰기 폭(기본보다 좁게)
+        doc.setDocumentMargin(6)
         v.addWidget(body, 1)
 
         row = QHBoxLayout()
