@@ -38,6 +38,21 @@ class _SharedLiveCamera:
         t = time.perf_counter()
         self._camera = dxcam.create(output_color="BGR")
         _log.info("dxcam.create %.0fms", (time.perf_counter() - t) * 1000)
+        # dxcam.create()는 실패 시 예외가 아니라 None을 돌려준다(멀티모니터·하이브리드
+        # GPU 등). 그대로 두면 grab이 영원히 None → '라이브 캡처가 조용히 안 됨'이
+        # 된다. 여기서 명시적으로 에러를 내 호출부가 알 수 있게 하고, 진단용으로
+        # dxcam이 본 출력 목록을 로그에 남긴다.
+        if self._camera is None:
+            try:
+                info = dxcam.output_info()
+            except Exception as exc:  # noqa: BLE001 — 진단 로그용
+                info = f"(output_info 실패: {exc})"
+            _log.error("dxcam.create() 실패(None 반환). 출력 목록:\n%s", info)
+            raise RuntimeError(
+                "dxcam 라이브 캡처 카메라를 만들 수 없습니다. "
+                "게임을 '테두리 없는 창(전체 창)' 모드로 두거나, 그래픽 드라이버/"
+                "모니터 설정을 확인하세요."
+            )
         self._frame_lock = threading.Lock()
         self._last_frame: np.ndarray | None = None
         self._last_ts = 0.0

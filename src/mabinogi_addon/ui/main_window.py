@@ -46,6 +46,7 @@ from .tuarim_tab import TuarimTab
 # 번들 경로 사용(exe=_MEIPASS/assets). __file__ 기준은 frozen에서 어긋난다.
 LOGO_PATH = paths.resource_dir() / "logo.png"
 _log = logging.getLogger("mabinogi_addon.close")
+_cap_log = logging.getLogger("mabinogi_addon.capture")  # 라이브 캡처 시작 진단
 _up_log = logging.getLogger("mabinogi_addon.updater")  # 업데이트 확인 진단(계기·스로틀·결과)
 _notes_log = logging.getLogger("mabinogi_addon.notes")  # 업데이트 노트 표시 진단
 
@@ -846,7 +847,10 @@ class MainWindow(QMainWindow):
             from .dpi import to_physical
 
             source = create_live_source(Region(*to_physical(region)))
-        except Exception:  # noqa: BLE001 — dxcam 없음(맥 등)이면 라이브 미시작
+        except ImportError:
+            return  # dxcam 없음(맥/개발) → 라이브 미시작(정상)
+        except Exception as exc:  # noqa: BLE001 — Windows에서 실제 실패 시 진단 로그
+            _cap_log.error("버프 라이브 캡처 시작 실패: %s", exc)
             return
 
         catalog = available_catalog()
@@ -946,7 +950,10 @@ class MainWindow(QMainWindow):
             from .dpi import to_physical
 
             source = create_live_source(Region(*to_physical(region)))
-        except Exception:  # noqa: BLE001 — dxcam 없음(맥 등)
+        except ImportError:
+            return  # dxcam 없음(맥/개발) → 라이브 미시작(정상)
+        except Exception as exc:  # noqa: BLE001 — Windows에서 실제 실패 시 진단 로그
+            _cap_log.error("디버프 라이브 캡처 시작 실패: %s", exc)
             return
 
         catalog = available_debuff_catalog()
