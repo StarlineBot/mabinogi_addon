@@ -995,7 +995,7 @@ class MainWindow(QMainWindow):
         if self._notifier is not None:
             self._notifier.set_sounds(default_sound_map())  # 버프
         self.tuarim_tab.refresh_sound()
-        self.party_tab.refresh_sound()
+        # 파티 알림음은 보이스팩과 무관(기본 소리 고정)이라 갱신 불필요.
 
     def _on_config_imported(self) -> None:
         """설정 가져오기/초기화 직후: 종료 시 낡은 상태로 덮어쓰지 않도록 저장을 막는다.
