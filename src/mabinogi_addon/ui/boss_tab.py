@@ -264,8 +264,9 @@ class BossTab(QWidget):
     _SMALL_STEP = 12  # 이 이하 변화면 '완만' (2연속으로 확정)
     _CONFIRM_SMALL = 2
     _CONFIRM_JUMP = 3  # 큰 점프·첫 확정은 3연속 필요(글리치 차단)
-    # 틱 300ms 기준. 이름이 이보다 오래 안 읽히면 보스 사라짐으로 보고 트래커 해제.
-    _GONE_FRAMES = 10  # ~3초
+    # 틱 300ms 기준. 보스 바는 '패턴 중'에도 사라지므로, 패턴이 길어도 잠금이
+    # 유지되게 넉넉히 둔다. 이보다 오래 미식별이면 전투 종료로 보고 트래커 해제.
+    _GONE_FRAMES = 60  # ~18초
 
     def _reset_hp(self) -> None:
         self._stable_hp = None

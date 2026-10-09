@@ -200,3 +200,63 @@ def test_duration_less_buff_never_alerts():
     assert sm.state is State.ACTIVE
     assert sm.remaining(100.0) is None
     assert not sm.alerting
+
+
+def test_late_reappear_below_alert_does_not_refire():
+    """만료 임박 버프가 깜빡여(해제→재감지) 이미 알림 시점 아래에서 다시 등장해도
+    1차·2차 알림을 '다시' 울리지 않는다. (비바체 30/10 설정에 0초 알림이 추가로
+    오던 버그 회귀 방지)"""
+    sm = BuffStateMachine(
+        appear_frames=1, alert_before=30.0, alert_before2=10.0, disappear_sec=0.4
+    )
+    fired = []
+    now = 0.0
+
+    def tick(detected, reading, dt=0.05):
+        nonlocal now
+        ev = sm.observe(detected=detected, reading=reading, now=now)
+        if ev is Event.ALERT:
+            fired.append("1차")
+        if sm.check_second_alert(now):
+            fired.append("2차")
+        now += dt
+
+    # 40초 등장 → 5초까지 정상 카운트다운(30·10 각 1회)
+    t = 40.0
+    while t > 5:
+        tick(True, round(t))
+        t -= 0.25
+    # 0.6초 아이콘 깜빡(해제) 후 4초로 재감지 → 재발동 없어야
+    for _ in range(12):
+        tick(False, None)
+    t = 4.0
+    while t >= 0:
+        tick(True, round(t))
+        t -= 0.25
+    assert fired == ["1차", "2차"]  # 0초 추가 알림 없음
+
+
+def test_fresh_recast_alerts_again():
+    """버프가 만료된 뒤 새로 걸리면(풀 지속시간으로 재등장) 알림은 다시 울린다."""
+    sm = BuffStateMachine(appear_frames=1, alert_before=30.0, disappear_sec=0.4)
+    fired = []
+    now = 0.0
+
+    def tick(detected, reading, dt=0.05):
+        nonlocal now
+        ev = sm.observe(detected=detected, reading=reading, now=now)
+        if ev is Event.ALERT:
+            fired.append(round(now, 1))
+        now += dt
+
+    t = 40.0  # 첫 캐스트
+    while t >= 0:
+        tick(True, round(t))
+        t -= 0.5
+    for _ in range(12):  # 만료(미감지)
+        tick(False, None)
+    t = 40.0  # 새 캐스트(풀 지속시간)
+    while t > 25:
+        tick(True, round(t))
+        t -= 0.5
+    assert len(fired) == 2  # 캐스트마다 1차 1회씩

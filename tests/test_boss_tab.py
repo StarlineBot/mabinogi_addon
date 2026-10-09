@@ -78,7 +78,13 @@ def test_stale_tracker_cleared_when_boss_gone(monkeypatch):
     #    트래커가 지워져 경고가 안 떠야 한다.
     monkeypatch.setattr(bt_mod, "identify", lambda *a, **k: None)
     monkeypatch.setattr(bt_mod, "read_percent", lambda *a, **k: 40)
-    for _ in range(15):
+    # 짧은 미식별(패턴으로 바가 잠깐 숨음)엔 트래커 유지 + 발동 없음
+    for _ in range(5):
+        t._tick()
+    assert t._tracker is not None  # 아직 전투 중(잠금 유지)
+    assert fired == []
+    # 오래 미식별(전투 종료)이면 트래커 해제
+    for _ in range(t._GONE_FRAMES + 2):
         t._tick()
     assert t._tracker is None
     assert fired == []  # 거짓 40% 경고 없음

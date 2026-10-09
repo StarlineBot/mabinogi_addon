@@ -139,6 +139,14 @@ class BuffStateMachine:
             if self._detections >= self.appear_frames:
                 self.state = State.ACTIVE
                 event = Event.APPEARED
+                # 이미 알림 시점 아래에서 '뒤늦게' 등장(만료 임박 버프가 깜빡여
+                # 해제됐다 재감지되는 등) → 알림을 다시 울리지 않는다. 조용히 임박
+                # 상태로 두고, 지난 2차 시점도 발동한 것으로 표시.
+                rem = self.remaining(now)
+                if rem is not None and rem <= self.alert_before:
+                    self.state = State.EXPIRING
+                    if self.alert_before2 is not None and rem <= self.alert_before2:
+                        self._alerted2 = True
             else:
                 return Event.NONE
 
