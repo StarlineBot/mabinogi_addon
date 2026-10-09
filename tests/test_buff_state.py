@@ -52,22 +52,23 @@ def test_buff_expires_while_inactive_then_removed_on_return():
     assert sm.state is State.ABSENT
 
 
-def test_second_alert_fires_once_and_not_rearmed_on_extension():
-    """2차 알림은 한 버프가 사는 동안 1회만 — **연장돼도 재알림 안 함**.
-    (비바체 연장 시 10초 알림이 두 번 울리던 버그 회귀 방지)"""
+def test_second_alert_fires_once_then_rearms_on_extension():
+    """2차 알림은 한 '수명' 동안 1회만. 단, **연장이 확정되면 재무장**되어 다음
+    임박에 다시 울린다(상시 유지 버프를 갱신하면 다음 갱신 타이밍도 알려야 함).
+    같은 순간의 중복(플리커)은 연장으로 확정되지 않아 재무장되지 않는다."""
     sm = BuffStateMachine(alert_before=30, alert_before2=20)
     _appear(sm, reading=100, t0=0.0)
     assert sm.check_second_alert(10.4) is False  # remaining ~90, 아직 위
     sm.observe(detected=True, reading=18, now=82.0)  # remaining ~18
     assert sm.check_second_alert(82.0) is True  # 20초 이하 교차 → 1회
-    assert sm.check_second_alert(83.0) is False  # 재알림 없음
-    # 연장(80초로) → 확정되어도 2차는 재무장하지 않는다
+    assert sm.check_second_alert(83.0) is False  # 같은 수명에선 재알림 없음
+    # 연장(80초로) 확정 → 2차 재무장
     sm.observe(detected=True, reading=80, now=84.0)
     sm.observe(detected=True, reading=80, now=84.2)  # 연장 확정
-    assert sm.check_second_alert(84.2) is False
-    # 시계가 다시 15초에 도달해도 재알림 없음(연장 중이므로)
+    assert sm.check_second_alert(84.2) is False  # remaining ~80, 아직 교차 전
+    # 시계가 다시 15초에 도달 → 재무장됐으므로 2차 다시 울림
     sm.observe(detected=True, reading=15, now=149.2)
-    assert sm.check_second_alert(149.2) is False  # 두 번 안 울림
+    assert sm.check_second_alert(149.2) is True  # 연장 후 다음 임박에 재알림
 
 
 def test_no_second_alert_when_disabled():
@@ -262,9 +263,11 @@ def test_fresh_recast_alerts_again():
     assert len(fired) == 2  # 캐스트마다 1차 1회씩
 
 
-def test_first_alert_not_rearmed_on_extension_but_on_fresh_recast():
-    """1차 알림도 연장 시 재발동하지 않고, 버프가 완전히 소멸한 뒤 새로 걸릴 때만
-    다시 울린다. (비바체 연장 시 30초 알림이 두 번 울리던 버그 회귀 방지)"""
+def test_first_alert_rearms_on_extension_and_on_fresh_recast():
+    """1차 알림은 연장이 확정되면 재무장되어 다음 임박에 다시 울린다(상시 유지
+    버프를 30초에 갱신하면 그다음 갱신 타이밍도 알려야 함). 완전히 소멸한 뒤 새로
+    걸릴 때도 다시 울린다. 단, 같은 순간의 중복(플리커)은 연장으로 확정되지 않아
+    재무장되지 않으므로 한 번만 울린다."""
     sm = BuffStateMachine(appear_frames=1, alert_before=30.0, disappear_sec=0.4)
     fired = []
     now = 0.0
@@ -276,19 +279,19 @@ def test_first_alert_not_rearmed_on_extension_but_on_fresh_recast():
             fired.append(round(now, 1))
         now += dt
 
-    # 40→8 (1차 1회) → 연장(40으로) → 다시 40→0 : 재발동 없어야
+    # 40→8 (1차 1회) → 연장(40으로 재시전) → 다시 40→0 (재무장돼 1차 또 1회)
     for _ in range(2):
         tick(True, 40.0)
     t = 40.0
     while t > 8:
         tick(True, round(t, 1)); t -= 0.3
-    tick(True, 40.0); tick(True, 39.9)  # 연장 확정
+    tick(True, 40.0); tick(True, 39.9)  # 연장 확정 → 재무장
     t = 39.7
     while t >= 0:
         tick(True, round(t, 1)); t -= 0.3
-    assert len(fired) == 1  # 연장 중엔 1차 1회만
+    assert len(fired) == 2  # 연장 후 다음 임박에 다시 울림
 
-    # 완전 소멸 후 새 캐스트 → 다시 울림
+    # 완전 소멸 후 새 캐스트 → 또 울림
     for _ in range(12):
         tick(False, None)
     for _ in range(2):
@@ -296,4 +299,4 @@ def test_first_alert_not_rearmed_on_extension_but_on_fresh_recast():
     t = 40.0
     while t > 25:
         tick(True, round(t, 1)); t -= 0.3
-    assert len(fired) == 2  # 새 버프에서 1차 다시
+    assert len(fired) == 3  # 새 버프에서 1차 다시

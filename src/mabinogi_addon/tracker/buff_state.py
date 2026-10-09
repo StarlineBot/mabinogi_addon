@@ -65,8 +65,8 @@ class BuffStateMachine:
         self._last_read_at: float | None = None  # 그때의 now
         self._detections = 0
         self._missing_since: float | None = None
-        self._alerted = False  # 1차 알림 1회 발생 플래그(소멸 시에만 재무장)
-        self._alerted2 = False  # 2차 알림 1회 발생 플래그(소멸 시에만 재무장)
+        self._alerted = False  # 1차 알림 1회 발생 플래그(소멸·연장 시 재무장)
+        self._alerted2 = False  # 2차 알림 1회 발생 플래그(소멸·연장 시 재무장)
         # 위로 튄 판독의 연장 후보 (reading, now). 다음 프레임에서 이어지는지 확인용.
         self._pending: tuple[float, float] | None = None
 
@@ -84,8 +84,10 @@ class BuffStateMachine:
     def check_second_alert(self, now: float) -> bool:
         """2차 알림 시점(만료 before_sec2 이하)을 1회 교차하면 True.
 
-        1차 알림과 독립. 한 버프가 살아있는 동안 1회만 — **연장돼도 재알림 안 함**.
-        버프가 완전히 사라졌다 새로 걸릴 때(reset)만 재무장된다.
+        1차 알림과 독립. 한 '수명' 동안 1회만 울린다. 재무장(다시 울릴 수 있게)되는
+        건 두 경우: 버프가 완전히 사라졌다 새로 걸릴 때(reset), 그리고 **연장이
+        확정될 때**(다시 건 것이므로 새 수명 → 다음 임박에 또 알림). 플리커로 인한
+        같은 순간 중복은 연장으로 확정되지 않아 재무장되지 않는다.
         """
         if self.alert_before2 is None or self._alerted2:
             return False
@@ -191,7 +193,14 @@ class BuffStateMachine:
                 extended = self.state is State.EXPIRING and reading > prev + _EXTEND_EPS
                 self._commit(reading, now)
                 if extended:  # 위로 이어짐 + 임박 중 → 연장
-                    self.state = State.ACTIVE  # 점멸 해제. 알림은 재무장하지 않음
+                    self.state = State.ACTIVE  # 점멸 해제
+                    # 연장 = 버프를 다시 건 것(음악 버프 연장, 상시 유지 버프 갱신 등).
+                    # 다음에 다시 임박(≤alert_before)이 되면 "또 갱신해라"를 정상적으로
+                    # 다시 알려야 하므로 알림을 재무장한다. 플리커는 위로 '이어지는'
+                    # 상승 점프를 못 만들어(돌아올 때 값이 더 낮음) 여기 오지 않으므로,
+                    # 같은 순간 중복 알림은 여전히 울리지 않는다.
+                    self._alerted = False
+                    self._alerted2 = False
                     return True
                 return False
         # 아직 확정 못 함: 후보만 갱신하고 내부 시계는 유지(튐 반영 안 함)
