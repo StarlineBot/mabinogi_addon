@@ -76,6 +76,14 @@ class BuffEngine:
             )
             for bid in templates
         }
+        # 시간 판독 throttle: 아이콘 존재는 매 틱 빠르게 보되, 시간(초단위)은 자주 안
+        # 읽어도 내부 시계가 카운트다운·알림을 유지한다. 등장 직후 1회 + 이후 _TIME_READ_GAP
+        # 마다 + '임박 근처'엔 매 틱(연장을 놓쳐 거짓 알림 나는 걸 막음).
+        self._present_prev: set[str] = set()
+        self._last_read_at: dict[str, float] = {}
+
+    _TIME_READ_GAP = 3.0  # 초. 임박 근처가 아니면 이 간격으로만 시간 판독
+    _NEAR_MARGIN = 8.0  # 알림 기준 + 이 값 이내면 매 틱 판독(연장 즉시 반영)
 
     @property
     def anchor_seen(self) -> bool:
@@ -119,7 +127,13 @@ class BuffEngine:
             detected = det is not None
             reading: float | None = None
             if detected and self._show_duration.get(bid, True):
-                reading = self._read_row_time(region, det.y)
+                just_appeared = bid not in self._present_prev
+                rem = machine.remaining(now)
+                near = rem is not None and rem <= machine.alert_before + self._NEAR_MARGIN
+                last = self._last_read_at.get(bid, float("-inf"))
+                if just_appeared or near or (now - last) >= self._TIME_READ_GAP:
+                    reading = self._read_row_time(region, det.y)
+                    self._last_read_at[bid] = now
             event = machine.observe(
                 detected=detected, reading=reading, now=now, frame_valid=frame_valid
             )
@@ -128,6 +142,8 @@ class BuffEngine:
             # 2차 알림: 더 가까운 기준 교차 시 1회 더(놓침·오독 대비).
             if frame_valid and machine.check_second_alert(now):
                 alerts.append(bid)
+
+        self._present_prev = set(present)  # 다음 틱의 '방금 등장' 판정용
 
         entries = []
         for bid in self._order:

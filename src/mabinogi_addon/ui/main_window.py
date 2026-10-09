@@ -854,8 +854,12 @@ class MainWindow(QMainWindow):
         # 안 보이면 상태를 동결(내부 시계로 버팀)하다 다시 보이면 동기화한다.
         # 단 앵커가 영역에 애초에 없으면(한 번도 안 보이면) 게이팅하지 않아
         # 기존 동작과 동일 — 엔진 쪽 anchor_seen 안전장치가 처리한다.
+        # 표시(오버레이 ON)된 버프 + 앵커만 매칭한다. 숨긴 버프까지 전부 매칭하면
+        # 아이콘 탐지(매 틱)가 템플릿 수에 비례해 느려진다. 앵커는 프레임 게이팅에 필요.
+        tracked_ids = set(order) | {ANCHOR_ID}
+        tracked = [b for b in catalog if b.id in tracked_ids]
         self._engine = BuffEngine(
-            build_templates(catalog),
+            build_templates(tracked),
             order,
             anchor_id=ANCHOR_ID,
             show_duration=show_duration,
@@ -871,7 +875,9 @@ class MainWindow(QMainWindow):
             blink_enabled=blink,
         )
         self.buff_controller.set_paused(self._paused)  # 재생성 시 일시정지 상태 유지
-        self.buff_controller.start(source, self._engine)
+        # 아이콘 생성/소멸을 빠르게 캐치(50ms=20fps). 시간 판독은 엔진이 throttle하고,
+        # 매칭 대상도 표시된 버프만이라 비용이 낮아 이 주기가 감당된다.
+        self.buff_controller.start(source, self._engine, interval_ms=50)
 
     def _sound_enabled_ids(self) -> set[str]:
         """'종료 알림'과 '소리'를 모두 켠 버프 id 집합(알림 시 사운드 재생 대상)."""
