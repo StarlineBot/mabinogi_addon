@@ -636,6 +636,24 @@ def save_tuarim(data: dict, path: Path = LOCAL_CONFIG_PATH) -> None:
     _write_local_config(cfg, path)
 
 
+def load_boss_pattern(path: Path = LOCAL_CONFIG_PATH) -> dict:
+    """보스 패턴 경고 설정. {enabled, box:{x,y,w,h}}. (베타 — 디스코드 로그인 게이팅)"""
+    sec = _read_local_config(path).get("bossPattern")
+    sec = sec if isinstance(sec, dict) else {}
+    box = sec.get("box") if isinstance(sec.get("box"), dict) else None
+    return {"enabled": bool(sec.get("enabled", False)), "box": box}
+
+
+def save_boss_pattern(data: dict, path: Path = LOCAL_CONFIG_PATH) -> None:
+    cfg = _read_local_config(path)
+    sec = cfg.get("bossPattern")
+    if not isinstance(sec, dict):
+        sec = {}
+    sec.update(data)
+    cfg["bossPattern"] = sec
+    _write_local_config(cfg, path)
+
+
 def _custom_section(path: Path) -> dict:
     sec = _read_local_config(path).get("customOverlay")
     return sec if isinstance(sec, dict) else {}

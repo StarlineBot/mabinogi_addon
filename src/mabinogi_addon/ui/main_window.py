@@ -30,6 +30,7 @@ from ..catalog import available_catalog, available_debuff_catalog, build_templat
 from ..system.window_watcher import create_window_watcher
 from ..tracker.debuff_engine import DebuffEngine
 from ..tracker.engine import BuffEngine
+from .boss_tab import BossTab
 from .buff_controller import BuffController
 from .buff_tab import ANCHOR_ID, BuffTab
 from .custom_overlay_tab import CustomOverlayTab
@@ -202,6 +203,7 @@ class MainWindow(QMainWindow):
         self.party_tab.activate_requested.connect(self._focus_party_tab)
         self.memo_tab = MemoTab()
         self.tuarim_tab = TuarimTab(self._watcher)
+        self.boss_tab = BossTab(self._watcher)  # 베타(디스코드 로그인 게이팅)
         self.custom_overlay_tab = CustomOverlayTab(self._watcher)
         self.settings_tab = SettingsTab(self._watcher)
         self.settings_tab.config_imported.connect(self._on_config_imported)
@@ -213,6 +215,7 @@ class MainWindow(QMainWindow):
         tabs.addTab(_scrolled(self.buff_tab), "버프 트래커")
         tabs.addTab(_scrolled(self.debuff_tab), "디버프 트래커")
         tabs.addTab(_scrolled(self.tuarim_tab), "투아림 트래커")
+        tabs.addTab(_scrolled(self.boss_tab), "보스 패턴 알림")
         tabs.addTab(_scrolled(self.custom_overlay_tab), "커스텀 오버레이")
         self._party_scroll = _scrolled(self.party_tab)  # 토스트 클릭 시 이 탭으로 전환
         tabs.addTab(self._party_scroll, "파티 모집")
@@ -1251,6 +1254,7 @@ class MainWindow(QMainWindow):
             self.memo_overlay.close(),
             self.custom_overlay_tab.shutdown(),
             self.tuarim_tab.shutdown(),
+            self.boss_tab.shutdown(),
         ))
         if self._tray is not None:
             self._tray.hide()
