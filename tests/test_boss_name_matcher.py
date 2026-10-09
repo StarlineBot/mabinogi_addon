@@ -30,6 +30,10 @@ def test_identifies_registered_boss():
     assert identify(_region("185117")) == "lenen_miir"
 
 
+def test_identifies_gomok_petak():
+    assert identify(_region("185217")) == "gomok_petak"
+
+
 def test_prefix_trap_picks_longer_name():
     # 185247 = "레넨의 미이르 : 회한" — 접두어 'lenen_miir'도 맞지만 더 긴 쪽을 택해야
     assert identify(_region("185247")) == "lenen_miir_hoehan"
