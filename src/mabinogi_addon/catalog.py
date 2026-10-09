@@ -32,6 +32,67 @@ USER_DEBUFF_ICON_DIR = paths.user_data_dir() / "debuff" / "icon"
 NONE_MATCH_ICON = paths.resource_dir() / "placeholder" / "none.png"
 NONE_DISPLAY_IMAGE = paths.resource_dir() / "placeholder" / "none_enable.png"
 
+# 기본(번들) 버프의 한글 표시 이름. 아이콘 파일명은 영문 id라, 디버프(한글 파일명)와
+# 표기를 통일하려면 여기서 한글 이름을 매긴다. 사용자가 GUI에서 바꾼 이름이 있으면
+# 그쪽이 우선한다(_display_name). 목록에 없는 id(사용자 추가 버프)는 id 그대로 표시.
+DEFAULT_BUFF_NAMES: dict[str, str] = {
+    "premium_battle": "프리미엄 배틀 멤버십",
+    "sharp": "상태지원",
+    "overture_of_the_battlefield": "전장의 서곡",
+    "vivace": "비바체",
+    "march": "행진곡",
+    "tuan": "투안",
+    "han_adrenaline": "햄 버닝",
+    "melee_attack": "물리 공격력 증가",
+    "magic_attack": "마법 공격력 증가",
+    "magic_speed": "마법 시전 속도 증가",
+    "music_boost": "음악 부스트 포션",
+    "speed": "이동 속도 증가 포션",
+}
+
+# 기본 버프 표시 순서(사용자가 순서를 바꾸기 전 초기값). 앵커(premium_battle)는
+# 어차피 GUI에서 맨 위로 고정되지만, 목록 선두에 둬 catalog 순서도 자연스럽게.
+# 여기 없는 id(사용자 추가 버프)는 뒤에 id 순으로 붙는다.
+DEFAULT_BUFF_ORDER: tuple[str, ...] = (
+    "premium_battle",
+    "sharp",
+    "overture_of_the_battlefield",
+    "vivace",
+    "march",
+    "tuan",
+    "han_adrenaline",
+    "melee_attack",
+    "magic_attack",
+    "magic_speed",
+    "music_boost",
+    "speed",
+)
+
+# 기본 디버프 표시 순서(파일명=한글 이름 기준). 없는 이름은 뒤에 가나다순으로 붙는다.
+DEFAULT_DEBUFF_ORDER: tuple[str, ...] = (
+    "물리 방어력 보호 감소",
+    "마법 방어력 보호 감소",
+    "받는 대미지 증가",
+    "프라가라흐(물리)",
+    "프라가라흐(마법)",
+    "불협화음",
+    "크레센도",
+    "붕괴의 파동",
+    "물풍선",
+    "모모",
+    "야옹이",
+    "케라",
+    "쿤",
+    "이면을 보는 눈",
+    "방해 카드",
+)
+
+
+def _ordered_keys(keys, order: tuple[str, ...]) -> list[str]:
+    """keys를 order 순으로 정렬. order에 없는 키는 뒤에 이름순으로 붙인다."""
+    rank = {k: i for i, k in enumerate(order)}
+    return sorted(keys, key=lambda k: (rank.get(k, len(order)), k))
+
 
 def _stem(path: Path) -> str:
     """파일명에서 확장자와 _enable 접미사를 떼어낸 키."""
@@ -59,23 +120,35 @@ def load_catalog(
     icon_dirs: tuple[Path, ...] = (DEFAULT_ICON_DIR, USER_ICON_DIR),
     image_dirs: tuple[Path, ...] = (DEFAULT_IMAGE_DIR, USER_IMAGE_DIR),
 ) -> list[BuffDef]:
-    """번들 기본 + 사용자 커스텀을 합쳐, matchIcon 있는 버프만 id 순으로 반환."""
+    """번들 기본 + 사용자 커스텀을 합쳐, matchIcon 있는 버프만 기본 순서로 반환.
+
+    이름/순서는 '초기값'일 뿐이다 — 사용자가 GUI에서 바꾼 이름·순서는 config(로컬)에
+    저장돼 그쪽이 우선하므로, 여기 기본값을 바꿔도 로컬 설정을 덮어쓰지 않는다.
+    """
     icons = _collect(icon_dirs, _stem)
     images = _collect(image_dirs, _stem)
     return [
-        BuffDef(id=key, name=key, match_icon=icon_path, display_image=images.get(key))
-        for key, icon_path in sorted(icons.items())
+        BuffDef(
+            id=key,
+            name=DEFAULT_BUFF_NAMES.get(key, key),
+            match_icon=icons[key],
+            display_image=images.get(key),
+        )
+        for key in _ordered_keys(icons, DEFAULT_BUFF_ORDER)
     ]
 
 
 def load_debuff_catalog(
     icon_dirs: tuple[Path, ...] = (DEFAULT_DEBUFF_ICON_DIR, USER_DEBUFF_ICON_DIR),
 ) -> list[BuffDef]:
-    """번들 기본 + 사용자 커스텀 디버프 목록. (표시이미지 없음 → 오버레이는 matchIcon)"""
+    """번들 기본 + 사용자 커스텀 디버프 목록. (표시이미지 없음 → 오버레이는 matchIcon)
+
+    디버프는 파일명 자체가 한글이라 이름은 그대로 쓰고 순서만 기본값으로 맞춘다.
+    사용자가 바꾼 순서는 로컬 config에 저장돼 우선한다(기본값을 덮어쓰지 않음)."""
     icons = _collect(icon_dirs, lambda p: p.stem)
     return [
-        BuffDef(id=key, name=key, match_icon=path, display_image=None)
-        for key, path in sorted(icons.items())
+        BuffDef(id=key, name=key, match_icon=icons[key], display_image=None)
+        for key in _ordered_keys(icons, DEFAULT_DEBUFF_ORDER)
     ]
 
 
