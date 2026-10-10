@@ -26,10 +26,26 @@ def size() -> int:
     return config.load_grid_size()
 
 
+def _screen_center() -> tuple[int, int]:
+    screen = QGuiApplication.primaryScreen()
+    if screen is None:
+        return 960, 540
+    c = screen.geometry().center()
+    return c.x(), c.y()
+
+
 def snap(point: QPoint, grid_size: int | None = None) -> QPoint:
-    """좌표를 가장 가까운 격자 배수로 반올림."""
+    """좌표를 **화면 정중앙 기준** 격자에 맞춰 반올림.
+
+    0,0이 아니라 화면 중앙을 원점으로 삼아, 격자선(가이드)과 스냅이 항상 중앙을
+    지나도록 일치시킨다 → 중앙 기준선에 맞춰 오버레이를 정렬하기 쉽다.
+    """
     s = grid_size or _DEFAULT_SIZE
-    return QPoint(round(point.x() / s) * s, round(point.y() / s) * s)
+    cx, cy = _screen_center()
+    return QPoint(
+        cx + round((point.x() - cx) / s) * s,
+        cy + round((point.y() - cy) / s) * s,
+    )
 
 
 class _GridGuide(QWidget):
@@ -58,12 +74,23 @@ class _GridGuide(QWidget):
 
     def paintEvent(self, _event) -> None:
         painter = QPainter(self)
-        painter.setPen(QPen(QColor(0, 209, 167, 70), 1))
         w, h = self.width(), self.height()
-        for x in range(0, w, self._size):
+        s = max(2, self._size)
+        cx, cy = w // 2, h // 2
+        # 일반 격자선 — 중앙을 지나도록 위상을 맞춘다(중앙 대칭).
+        painter.setPen(QPen(QColor(0, 209, 167, 70), 1))
+        x = cx % s
+        while x < w:
             painter.drawLine(x, 0, x, h)
-        for y in range(0, h, self._size):
+            x += s
+        y = cy % s
+        while y < h:
             painter.drawLine(0, y, w, y)
+            y += s
+        # 중앙 기준선(십자) — 더 밝고 두껍게.
+        painter.setPen(QPen(QColor(255, 213, 74, 180), 2))
+        painter.drawLine(cx, 0, cx, h)
+        painter.drawLine(0, cy, w, cy)
         painter.end()
 
 

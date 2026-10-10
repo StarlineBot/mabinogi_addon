@@ -106,22 +106,36 @@ class UpcomingPatternsOverlay(QWidget):
         set_click_through(self, locked)
         self._relayout()
 
-    # ---- 드래그 이동 ----
+    # ---- 드래그 이동(격자 스냅은 메모/버프 오버레이와 동일) ----
     def mousePressEvent(self, event) -> None:
         if not self._locked and event.button() == Qt.MouseButton.LeftButton:
             self._drag_offset = (
                 event.globalPosition().toPoint() - self.frameGeometry().topLeft()
             )
+            from . import grid
+
+            self._snap = grid.enabled()
+            self._grid_size = grid.size() if self._snap else None
+            if self._snap:
+                grid.show_guide()
             event.accept()
 
     def mouseMoveEvent(self, event) -> None:
         if not self._locked and self._drag_offset is not None:
-            self.move(event.globalPosition().toPoint() - self._drag_offset)
+            target = event.globalPosition().toPoint() - self._drag_offset
+            if getattr(self, "_snap", False):
+                from . import grid
+
+                target = grid.snap(target, getattr(self, "_grid_size", None))
+            self.move(target)
             event.accept()
 
     def mouseReleaseEvent(self, _event) -> None:
         if self._drag_offset is not None:
             self._drag_offset = None
+            from . import grid
+
+            grid.hide_guide()
             self.moved.emit()
 
     # ---- 그리기 ----
