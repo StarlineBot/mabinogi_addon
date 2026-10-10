@@ -255,6 +255,15 @@ class PartyTab(QWidget):
     def _matches_keyword(self, content: str) -> bool:
         return any(kw in content for kw in self._keywords)
 
+    def apply_theme(self) -> None:
+        """테마 변경 시 현황판을 다시 그린다.
+
+        매칭 행 배경(_match_bg)은 행을 만들 때의 테마 색으로 셀에 '박혀' 있어, 테마를
+        바꿔도 옛 색을 그대로 들고 있었다(호버 등 리페인트 때만 어긋나 보임). 테마가
+        바뀌면 캐시된 원본으로 다시 그려 새 테마 색으로 갱신한다.
+        """
+        self._refresh_board()
+
     # ---- 목록 공통 (칩 행 + Ctrl/Shift 다중선택) ----
     def _make_chip_list(self) -> QListWidget:
         lst = QListWidget()

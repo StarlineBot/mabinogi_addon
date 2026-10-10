@@ -455,6 +455,9 @@ class MainWindow(QMainWindow):
         self._tracker_tabs.setStyleSheet(sub)
         self._convenience_tabs.setStyleSheet(sub)
         self._tabs.setStyleSheet(_tab_qss(dark))
+        # 파티 현황판은 매칭 행 배경색이 셀에 박혀 있어, 테마가 바뀌면 다시 그려야
+        # 새 테마 색으로 갱신된다(안 그러면 호버 전까지 옛 색으로 보임).
+        self.party_tab.apply_theme()
 
     def _update_tracking_status(self) -> None:
         self.buff_tab.set_status(*self._buff_status())
