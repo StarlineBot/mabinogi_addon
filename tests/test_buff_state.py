@@ -131,14 +131,38 @@ def test_single_frame_downward_spike_does_not_false_alert():
     assert sm.remaining(1.2) > 130
 
 
-def test_sustained_downward_resyncs():
-    """두 프레임 연속 일관된 하향값은(오독이 아니라고 보고) 반영된다 → 시계가
-    실제보다 높게 어긋나 있었다면 매끄럽게 재동기화."""
-    sm = BuffStateMachine(alert_before=30)
-    _appear(sm, reading=140, t0=0.0)
+def test_uncorroborated_anchor_resyncs_down():
+    """아직 판독으로 '확인'되지 않은 첫 기준값(차가운 앵커)이 실제보다 높게 잡혔다면,
+    두 프레임 연속 일관된 하향값으로 매끄럽게 재동기화된다(앵커가 한 번만 높게 읽힌 경우)."""
+    sm = BuffStateMachine(appear_frames=1, alert_before=30)
+    sm.observe(detected=True, reading=140, now=0.0)  # 차가운 앵커(미확인)
     sm.observe(detected=True, reading=40, now=1.0)  # 후보(미반영)
-    sm.observe(detected=True, reading=40, now=1.2)  # 이어짐 → 반영
+    sm.observe(detected=True, reading=40, now=1.2)  # 이어짐 → 반영(미확인 시계라 허용)
     assert abs(sm.remaining(1.2) - 40.0) < 1.0
+
+
+def test_small_downward_correction_still_applies():
+    """작은 하향 보정(분 유실이 아닌 범위)은 확인된 시계에서도 그대로 반영된다."""
+    sm = BuffStateMachine(appear_frames=1, alert_before=30)
+    sm.observe(detected=True, reading=50, now=0.0)
+    sm.observe(detected=True, reading=49.8, now=0.2)  # 일치 → 시계 '확인됨'
+    sm.observe(detected=True, reading=42, now=1.0)  # 후보(약 8초 하향: 분유실 범위 밖)
+    sm.observe(detected=True, reading=42, now=1.2)  # 이어짐 → 반영
+    assert abs(sm.remaining(1.2) - 42.0) < 1.0
+
+
+def test_trusted_clock_ignores_minute_loss_misread():
+    """확인된(신뢰된) 내부 시계가 한 번에 큰 폭으로 떨어지는 하향 점프는 '분 유실'
+    OCR 오독으로 보고 무시한다 → 거짓 임박/2차 알림 방지(재시전으로 '2분02초'가
+    떴는데 분을 놓쳐 '02초'로 두 프레임 읽혀 29초→2초로 급락하던 문제 회귀 방지)."""
+    sm = BuffStateMachine(appear_frames=1, alert_before=30, alert_before2=5)
+    sm.observe(detected=True, reading=30, now=0.0)
+    sm.observe(detected=True, reading=29.8, now=0.2)  # 일치 → 시계 '확인됨'
+    # 분 유실 오독 2프레임(2초 → 1.9초): 자기일관이지만 확인된 시계의 급락이라 무시
+    sm.observe(detected=True, reading=2.0, now=1.0)
+    sm.observe(detected=True, reading=1.9, now=1.2)
+    assert sm.remaining(1.2) > 25  # 2초로 급락 안 함(내부 시계 ~29 유지)
+    assert sm.check_second_alert(1.2) is False  # 거짓 2차 알림 없음
 
 
 def test_inconsistent_spikes_ignored():

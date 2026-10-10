@@ -44,6 +44,11 @@ class Event(Enum):
 _EXTEND_EPS = 2.0
 # 판독값이 내부 시계와 '일치'한다고 볼 허용 오차(초). 이 밖이면 튐으로 보고 확인 대기.
 _AGREE_EPS = 2.0
+# 이미 판독으로 '확인된(신뢰된)' 내부 시계가 한 번에 이만큼 넘게 하향 점프하는 건
+# 물리적으로 불가능(버프는 실시간으로만 준다) → '분 유실' OCR 오독으로 보고 무시한다.
+# (예: 재시전으로 '2분02초'가 떴는데 분을 놓쳐 '02초'로 읽히면 29초→2초로 급락해
+#  거짓 임박·2차 알림이 울리던 문제.) 지터(±2초)보다 넉넉히 크고 1분(60초)보다 작게.
+_TRUSTED_DROP_MAX = 15.0
 
 
 class BuffStateMachine:
@@ -69,6 +74,9 @@ class BuffStateMachine:
         self._alerted2 = False  # 2차 알림 1회 발생 플래그(소멸·연장 시 재무장)
         # 위로 튄 판독의 연장 후보 (reading, now). 다음 프레임에서 이어지는지 확인용.
         self._pending: tuple[float, float] | None = None
+        # 내부 시계가 판독값으로 한 번이라도 '확인'됐는지. 확인된 시계는 큰 하향 점프를
+        # 믿지 않는다(= 분 유실 오독 방어). 첫 기준값(차가운 앵커)은 아직 미확인.
+        self._trusted = False
 
     # ---- 조회 ----
     def remaining(self, now: float) -> float | None:
@@ -174,24 +182,31 @@ class BuffStateMachine:
           무시되어, 거짓 연장(알림 꺼짐)도 거짓 임박(알림 켜짐)도 생기지 않는다.
         """
         prev = self.remaining(now)
-        # 첫 기준값(갓 등장 등) → 바로 반영
+        # 첫 기준값(갓 등장 등) → 바로 반영(단, 아직 '확인'된 시계는 아님)
         if prev is None:
             self._commit(reading, now)
             return False
-        # 내부 시계와 일치 → 정상 반영
+        # 내부 시계와 일치 → 정상 반영 + 시계 '확인됨'으로 표시
         if abs(reading - prev) <= _AGREE_EPS:
             self._pending = None
             self._commit(reading, now)
+            self._trusted = True
             return False
         # --- 시계와 어긋남(위/아래로 튐): 확인 대기 ---
         pend = self._pending
         if pend is not None:
             pred = pend[0] - (now - pend[1])  # 후보가 이어졌다면 지금쯤의 예상값
             if abs(reading - pred) <= _AGREE_EPS:
-                # 후보에서 매끄럽게 이어짐 → 반영
+                # 후보에서 매끄럽게 이어짐 → 반영 후보. 단, '확인된' 시계가 한 번에
+                # 큰 폭으로 떨어지는 하향 점프는 분 유실 오독이므로 무시하고 더 지켜본다
+                # (거짓 임박/2차 알림 방지). 위로 튐(연장)·작은 보정은 그대로 반영.
+                if self._trusted and reading < prev - _TRUSTED_DROP_MAX:
+                    self._pending = (reading, now)  # 후보만 갱신, 시계 유지
+                    return False
                 self._pending = None
                 extended = self.state is State.EXPIRING and reading > prev + _EXTEND_EPS
                 self._commit(reading, now)
+                self._trusted = True
                 if extended:  # 위로 이어짐 + 임박 중 → 연장
                     self.state = State.ACTIVE  # 점멸 해제
                     # 연장 = 버프를 다시 건 것(음악 버프 연장, 상시 유지 버프 갱신 등).
@@ -247,3 +262,4 @@ class BuffStateMachine:
         self._alerted = False  # 소멸 → 다음 버프에서 1차 알림 재무장
         self._alerted2 = False  # 소멸 → 2차 알림 재무장
         self._pending = None
+        self._trusted = False  # 새 버프는 시계 다시 확인부터
