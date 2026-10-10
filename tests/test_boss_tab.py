@@ -105,18 +105,18 @@ def test_upcoming_list_updates_from_tracker(monkeypatch):
     monkeypatch.setattr(t, "_grab_rect", lambda *a: np.zeros((36, 150, 3), np.uint8))
     monkeypatch.setattr(t, "_show_preview", lambda *a: None)
 
-    # 레넨(임계 80,40) 식별 + HP 90 → 둘 다 남은 패턴으로 나열
+    # 레넨(임계 80,60,40,30) 식별 + HP 90 → 전부 남은 패턴으로 나열
     monkeypatch.setattr(bt_mod, "identify", lambda *a, **k: "lenen_miir")
     monkeypatch.setattr(bt_mod, "read_percent", lambda *a, **k: 90)
     for _ in range(4):
         t._tick()
-    assert t._upcoming.items == [80, 40]
+    assert t._upcoming.items == [80, 60, 40, 30]
 
     # HP 84로 하강 → 80 준비(85 통과) 발동 → 80이 목록에서 빠짐
     monkeypatch.setattr(bt_mod, "read_percent", lambda *a, **k: 84)
     for _ in range(4):
         t._tick()
-    assert t._upcoming.items == [40]
+    assert t._upcoming.items == [60, 40, 30]
     t.shutdown()
 
 
@@ -143,7 +143,7 @@ def test_upcoming_hides_quickly_after_boss_gone(monkeypatch):
     for _ in range(4):
         t._tick()
     assert t._upcoming.isVisible()
-    assert t._upcoming.items == [80, 40]
+    assert t._upcoming.items == [80, 60, 40, 30]
 
     # 보스 사라짐: 짧은 미식별(유예 내)엔 목록 유지
     monkeypatch.setattr(bt_mod, "identify", lambda *a, **k: None)
