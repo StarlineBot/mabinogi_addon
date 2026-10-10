@@ -352,6 +352,9 @@ class AlertConfig:
     sound: bool = True
     enabled2: bool = False  # 2차 알림(놓침·오독 대비 재알림) 사용 여부
     before_sec2: int = 5  # 2차 알림 기준(만료 N초 전)
+    # 사라짐 경고: 추적 중이던 버프가 사라지면 오버레이에 그 자리를 잠깐(3초) 빨간
+    # 테두리+X로 표시. 종료 알림(enabled)과 독립 — 소리 없이 시각으로만 알린다.
+    warn_gone: bool = False
 
 
 @dataclass
@@ -378,6 +381,7 @@ def _settings_from_dict(raw: dict) -> BuffSettings:
             sound=bool(alert.get("sound", True)),
             enabled2=bool(alert.get("enabled2", False)),
             before_sec2=int(alert.get("beforeSec2", 5)),
+            warn_gone=bool(alert.get("warnGone", False)),
         ),
     )
 
@@ -394,6 +398,7 @@ def _settings_to_dict(s: BuffSettings) -> dict:
             "sound": s.alert.sound,
             "enabled2": s.alert.enabled2,
             "beforeSec2": s.alert.before_sec2,
+            "warnGone": s.alert.warn_gone,
         },
     }
 
@@ -422,6 +427,28 @@ def load_buff_settings(path: Path = LOCAL_CONFIG_PATH) -> list[BuffSettings]:
 
 def save_buff_settings(items: list[BuffSettings], path: Path = LOCAL_CONFIG_PATH) -> None:
     _save_settings(items, "buffTracker", "buffs", path)
+
+
+def seed_warn_gone_defaults(
+    sound_ids: set[str], path: Path = LOCAL_CONFIG_PATH
+) -> None:
+    """최초 1회: '기본 음성알림 있는 버프'에 사라짐 경고를 켜 둔다(기존 사용자 이관).
+
+    사라짐 경고는 새 기능이라 기존 설정엔 전부 꺼짐(기본값)으로 로드된다. 사용자가
+    원하는 기본값('소리 있는 버프만 켜짐')을 한 번만 적용하고, 이후엔 사용자가 켜고
+    끈 값을 존중한다(warnGoneSeeded 플래그로 재적용 방지).
+    """
+    data = _read_local_config(path)
+    if data.get("warnGoneSeeded"):
+        return
+    items = load_buff_settings(path)
+    for s in items:
+        if s.id in sound_ids:
+            s.alert.warn_gone = True
+    save_buff_settings(items, path)
+    data = _read_local_config(path)  # 위 저장 이후 파일 상태로 다시 읽어 플래그만 추가
+    data["warnGoneSeeded"] = True
+    _write_local_config(data, path)
 
 
 def load_capture_region(

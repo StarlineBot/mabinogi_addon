@@ -215,6 +215,9 @@ class MainWindow(QMainWindow):
         self._paused = False  # 오버레이 일시정지(사냥 안 할 때 잠깐 끄기) — 세션 한정
         self._tray = self._build_tray()
 
+        # 최초 1회: 기본 음성알림 있는 버프에 '사라짐 경고' 기본 켜짐(기존 사용자 이관).
+        config.seed_warn_gone_defaults(set(default_sound_map()))
+
         self.buff_tab = BuffTab()
         self.debuff_tab = DebuffTab()
         self.party_tab = PartyTab()
@@ -908,6 +911,8 @@ class MainWindow(QMainWindow):
             on_alert=self._on_buff_alert,
             watcher=self._watcher,
         )
+        self.buff_controller.set_order(order)
+        self.buff_controller.set_warn_gone_ids(self._warn_gone_ids())
         self.buff_controller.set_paused(self._paused)  # 재생성 시 일시정지 상태 유지
         # 아이콘 생성/소멸을 빠르게 캐치(50ms=20fps). 시간 판독은 엔진이 throttle하고,
         # 매칭 대상도 표시된 버프만이라 비용이 낮아 이 주기가 감당된다.
@@ -920,6 +925,10 @@ class MainWindow(QMainWindow):
             for s in config.load_buff_settings()
             if s.alert.enabled and s.alert.sound
         }
+
+    def _warn_gone_ids(self) -> set[str]:
+        """'사라짐 경고'를 켠 버프 id 집합(사라지면 빨간 테두리+X+소리)."""
+        return {s.id for s in config.load_buff_settings() if s.alert.warn_gone}
 
     def _on_buff_alert(self, buff_ids) -> None:
         """엔진이 만료임박 알림을 올리면, 소리 켠 버프만 사운드 재생."""
@@ -939,6 +948,8 @@ class MainWindow(QMainWindow):
         self._engine.set_alert_before(alert_before)
         self._engine.set_alert_before2(alert_before2)
         self.buff_controller.set_show_duration(show_duration)
+        self.buff_controller.set_order(order)
+        self.buff_controller.set_warn_gone_ids(self._warn_gone_ids())
         self._sound_ids = self._sound_enabled_ids()
 
     def _on_catalog_changed(self) -> None:

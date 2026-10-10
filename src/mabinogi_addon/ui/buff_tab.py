@@ -159,7 +159,14 @@ class BuffTab(QWidget):
             ),
         )
         for bid in self._catalog:
-            settings.setdefault(bid, config.BuffSettings(id=bid))
+            # 새 버프 기본값: 기본 음성알림 있는 버프만 '사라짐 경고' 켜짐, 나머지는 꺼짐.
+            settings.setdefault(
+                bid,
+                config.BuffSettings(
+                    id=bid,
+                    alert=config.AlertConfig(warn_gone=bid in self._sound_ids),
+                ),
+            )
 
         # 표시 순서 = 저장 순서(숨김·앵커 제외) + 새 카탈로그 버프
         order: list[str] = []
@@ -487,6 +494,13 @@ class BuffTab(QWidget):
         self.show_duration = checkbox("지속시간 표시")
         self.show_duration.toggled.connect(self._form_changed)
         sv.addWidget(self.show_duration)
+        self.warn_gone_check = checkbox("사라짐 경고")
+        self.warn_gone_check.setToolTip(
+            "추적 중이던 버프가 사라지면 그 자리를 잠깐(3초) 빨간 테두리+X로 "
+            "보여주고 소리로 알려요."
+        )
+        self.warn_gone_check.toggled.connect(self._form_changed)
+        sv.addWidget(self.warn_gone_check)
         v.addWidget(show_box)
 
         # --- 그룹 3: 알림(종료 알림 + 2차) ---
@@ -548,6 +562,7 @@ class BuffTab(QWidget):
         )
         self.display_check.setChecked(not s.hidden)
         self.show_duration.setChecked(s.show_duration)
+        self.warn_gone_check.setChecked(s.alert.warn_gone)
         self.alert_check.setChecked(s.alert.enabled)
         self.before_spin.setValue(s.alert.before_sec)
         # 소리 체크와 2차 알림은 사운드 파일이 등록된 버프에만 노출한다.
@@ -563,7 +578,8 @@ class BuffTab(QWidget):
         # 앵커는 '기준' 버프라 수정·삭제·순서변경 불가 → 관련 위젯을 전부 비활성(회색)해
         # 못 누르는 걸 눈으로 알 수 있게 한다(＋ 새 버프 추가만 항상 가능).
         editable = not is_anchor
-        for wdg in (self.display_check, self.show_duration, self.alert_check,
+        for wdg in (self.display_check, self.show_duration, self.warn_gone_check,
+                    self.alert_check,
                     self.name_edit, self.match_capture_btn, self.match_file_btn,
                     self.display_file_btn, self.display_clear_btn,
                     self.del_btn, self.up_btn, self.down_btn):
@@ -605,6 +621,7 @@ class BuffTab(QWidget):
             sound=self.sound_check.isChecked(),
             enabled2=self.alert2_check.isChecked(),
             before_sec2=self.before2_spin.value(),
+            warn_gone=self.warn_gone_check.isChecked(),
         )
         self._save()
         self.tracking_changed.emit()

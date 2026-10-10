@@ -28,6 +28,13 @@ from .overlay import BuffOverlay, OverlayItem, overlay_spec
 # 실제 연장(유의미한 증가)은 이 값보다 크므로 그대로 반영된다.
 _SMOOTH_EPS = 1.5
 
+# 사라짐 경고 타이밍.
+# - 확정 대기: 버프가 목록에서 사라져도 이만큼(초) 연속으로 없어야 '완전히 사라짐'으로
+#   확정한다(짧은 미검출·깜빡임 오탐 방지). 이 안에 다시 뜨면 아무 일도 없던 것으로.
+# - 노출: 확정된 순간 빨간 테두리+X를 띄우고 소리를 1회 내며, 이만큼(초) 보여준 뒤 지운다.
+_GONE_CONFIRM_SEC = 3.0
+_GONE_SHOW_SEC = 3.0
+
 
 class _TrackWorker(QThread):
     updated = Signal(list)  # list[OverlayEntry]
@@ -100,6 +107,12 @@ class BuffController(QObject):
         self._self_active = False  # 우리 앱 포그라운드
         self._paused = False  # 사용자 일시정지(사냥 안 할 때) → 숨김·알림 억제
         self._last_remaining: dict[str, float] = {}  # 표시 평활용 직전 표시값
+        # 사라짐 경고용 상태
+        self._order: list[str] = []  # 표시 순서(고스트를 제자리에 끼우기 위함)
+        self._warn_gone_ids: set[str] = set()  # '사라짐 경고' 켠 버프
+        self._present_prev: set[str] = set()  # 직전 틱에 떠 있던 버프(사라짐 시작 감지)
+        self._absent_since: dict[str, float] = {}  # 사라진 버프 → 사라지기 시작한 시각
+        self._gone_show_until: dict[str, float] = {}  # 확정된 버프 → 경고 표시 종료 시각
 
     def start(
         self, source: FrameSource, engine: BuffEngine, interval_ms: int = 200
@@ -159,15 +172,44 @@ class BuffController(QObject):
         """지속시간 표시 설정 갱신(실행 중 폼 변경 반영)."""
         self._show_duration = show_duration
 
-    def build_items(self, entries) -> list[OverlayItem]:
-        items: list[OverlayItem] = []
+    def set_order(self, order: list[str]) -> None:
+        """표시 순서 갱신(사라짐 고스트를 제자리에 끼우는 데 사용)."""
+        self._order = list(order)
+
+    def set_warn_gone_ids(self, ids: set[str]) -> None:
+        """'사라짐 경고' 켠 버프 집합 갱신."""
+        self._warn_gone_ids = set(ids)
+
+    def _pixmap(self, buff_id: str):
+        buff = self._catalog.get(buff_id)
+        if buff is None:
+            return None
+        return QPixmap(str(buff.display_image or buff.match_icon))
+
+    def build_items(self, entries, now: float) -> list[OverlayItem]:
+        # 활성 버프: id -> OverlayItem(숫자 빨강은 warn=남은시간<60s)
+        active: dict[str, OverlayItem] = {}
         for buff_id, text, warn in overlay_spec(entries, self._show_duration):
-            buff = self._catalog.get(buff_id)
-            if buff is None:
-                continue
-            # warn=남은 시간 1분 미만 → 오버레이에서 숫자 빨강(점멸 없음).
-            pixmap = QPixmap(str(buff.display_image or buff.match_icon))
-            items.append(OverlayItem(pixmap, text, warn))
+            pm = self._pixmap(buff_id)
+            if pm is not None:
+                active[buff_id] = OverlayItem(pm, text, warn)
+        # 순서대로 활성 + 고스트(사라짐 확정) 병합. 활성이면 고스트보다 우선.
+        items: list[OverlayItem] = []
+        placed: set[str] = set()
+        order = self._order or list(active)
+        for bid in order:
+            if bid in active:
+                items.append(active[bid])
+                placed.add(bid)
+            elif bid in self._gone_show_until and now < self._gone_show_until[bid]:
+                pm = self._pixmap(bid)
+                if pm is not None:
+                    items.append(OverlayItem(pm, None, gone=True))
+                    placed.add(bid)
+        # order에 없는 활성 버프(혹시 모를 누락)는 뒤에 붙인다.
+        for bid, item in active.items():
+            if bid not in placed:
+                items.append(item)
         return items
 
     def _smooth(self, entries) -> None:
@@ -187,7 +229,30 @@ class BuffController(QObject):
 
     def _on_updated(self, entries) -> None:
         self._smooth(entries)
-        self._items = self.build_items(entries)
+        now = time.monotonic()
+        active_ids = {e.buff_id for e in entries}
+        # 다시 보이면(또는 아직 보이면) 사라짐 진행/확정 모두 취소 — 오탐 방지.
+        for bid in active_ids:
+            self._absent_since.pop(bid, None)
+            self._gone_show_until.pop(bid, None)
+        # 사라지기 시작: 직전 틱엔 있었는데 이번엔 없는 '사라짐 경고' 버프 → 확정 대기 시작.
+        for bid in (self._present_prev - active_ids):
+            if bid in self._warn_gone_ids and bid not in self._gone_show_until:
+                self._absent_since.setdefault(bid, now)
+        self._present_prev = active_ids
+        # 확정: 확정 대기 시간(_GONE_CONFIRM_SEC) 연속으로 없으면 '완전히 사라짐' 확정 →
+        # 경고 아이콘 노출 시작 + 소리 1회. (그 전에 다시 뜨면 위에서 취소되어 조용.)
+        just_confirmed = []
+        for bid, since in list(self._absent_since.items()):
+            if now - since >= _GONE_CONFIRM_SEC:
+                self._gone_show_until[bid] = now + _GONE_SHOW_SEC
+                del self._absent_since[bid]
+                just_confirmed.append(bid)
+        if just_confirmed and not self._paused:
+            from .notifier import play_warn_gone_sound
+
+            play_warn_gone_sound()  # 여러 개 동시 확정돼도 소리는 한 번
+        self._items = self.build_items(entries, now)
         self._overlay.set_items(self._items)
         self._apply_visibility()
 
