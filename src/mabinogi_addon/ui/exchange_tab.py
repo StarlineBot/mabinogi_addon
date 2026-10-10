@@ -46,7 +46,7 @@ class ExchangeTab(QWidget):
         v.setContentsMargins(12, 12, 12, 12)
         v.addWidget(
             hint_label(
-                "던전 구슬로 어떤 재료를 바꿔 팔아야 이득인지, 지역을 고르면 경매장 "
+                "던전 구슬로 어떤 재료를 바꿔 팔아야 이득인지, 던전을 고르면 경매장 "
                 "현재가 기준 '구슬당 가격' 순위를 보여줘요."
             )
         )
@@ -59,7 +59,7 @@ class ExchangeTab(QWidget):
         body.addWidget(self.region_list)
 
         right = QVBoxLayout()
-        self.title = QLabel("지역을 선택하세요")
+        self.title = QLabel("던전을 선택하세요")
         self.title.setStyleSheet("font-size:15px; font-weight:800;")
         right.addWidget(self.title)
 
