@@ -120,6 +120,26 @@ def test_upcoming_list_updates_from_tracker(monkeypatch):
     t.shutdown()
 
 
+def test_warn_lock_toggle_updates_overlay_and_button(monkeypatch):
+    """'경고 위치 이동/고정' 버튼이 경고 오버레이 잠금과 버튼 문구를 바꾼다."""
+    _app()
+    from mabinogi_addon.ui.boss_tab import BossTab
+
+    monkeypatch.setattr(config, "load_discord_user", lambda *a, **k: {"name": "x"})
+    t = BossTab(_Watcher())
+    # 알려진 상태(고정)에서 시작 — 토글이 잠금과 버튼 문구를 뒤집는지 본다.
+    t._overlay.set_locked(True)
+    t._sync_warn_btn()
+    assert t.warn_lock_btn.text() == "경고 위치 이동"
+    t._toggle_warn_lock()
+    assert t._overlay.locked is False  # 해제 → 위치 조정(샘플 표시)
+    assert t.warn_lock_btn.text() == "경고 위치 고정"
+    t._toggle_warn_lock()
+    assert t._overlay.locked is True  # 고정 → 경고만 표시(클릭 통과)
+    assert t.warn_lock_btn.text() == "경고 위치 이동"
+    t.shutdown()
+
+
 def test_upcoming_hidden_when_option_off(monkeypatch):
     """'다음 패턴 보기'가 꺼져 있으면 보스가 식별돼도 목록 오버레이는 뜨지 않는다."""
     _app()

@@ -60,6 +60,7 @@ class BossTab(QWidget):
         self._hp_cand_n = 0  # 후보 연속 횟수
         self._unidentified = 0  # 이름이 연속으로 안 읽힌 프레임 수(보스 사라짐 판정)
         self._overlay = PatternWarningOverlay()
+        self._overlay.moved.connect(self._on_warn_moved)
         self._notifier = None
         # 다음 패턴 목록 오버레이(왼쪽에 남은 패턴 % 나열). 위치/고정은 설정에 저장.
         self._upcoming = UpcomingPatternsOverlay()
@@ -71,6 +72,12 @@ class BossTab(QWidget):
             )
         else:
             self._place_upcoming_default()
+        # 경고 오버레이 위치/고정 복원(목록과 동일 구조). 저장 위치 없으면 기본(상단 중앙).
+        if cfg["warnPos"]:
+            self._overlay.move(int(cfg["warnPos"]["x"]), int(cfg["warnPos"]["y"]))
+        else:
+            self._place_warn_default()
+        self._overlay.set_locked(cfg["warnLocked"])
 
         v = QVBoxLayout(self)
         v.setContentsMargins(12, 12, 12, 12)
@@ -138,6 +145,17 @@ class BossTab(QWidget):
             hint_label("영역을 맞춘 뒤 위의 '식별'과 'HP'가 실제와 맞는지 먼저 확인하세요.")
         )
 
+        # 경고 위치 이동/고정(다음 패턴 목록과 동일 구조).
+        warn_row = QHBoxLayout()
+        self.warn_lock_btn = QPushButton()
+        self.warn_lock_btn.clicked.connect(self._toggle_warn_lock)
+        warn_row.addWidget(self.warn_lock_btn)
+        warn_row.addWidget(
+            hint_label("해제=끌어서 경고 위치 이동 · 고정=게임 위 표시(클릭 통과)"), 1
+        )
+        cv.addLayout(warn_row)
+        self._sync_warn_btn()
+
         # 다음 패턴 목록(왼쪽에 남은 패턴 % 나열) — 준비(5% 전) 알림이 뜨면 그 %가 빠짐.
         self.show_upcoming = checkbox("다음 패턴 보기 (왼쪽에 남은 패턴 % 나열)")
         self.show_upcoming.setChecked(cfg["showUpcoming"])
@@ -173,7 +191,10 @@ class BossTab(QWidget):
         return lbl
 
     def _preview_warning(self) -> None:
+        # 실제 경고처럼 소리까지 같이 내 어떻게 보이고 들리는지 보여준다. 위치 조정(해제)
+        # 중이면 샘플이 이미 떠 있으므로 소리만 난다(show_message는 고정 상태에서만).
         self._overlay.show_message("고목의 페타크 85% 패턴 준비  (미리보기)", 2500)
+        self._play("pre")
 
     # ---- 게이팅 ----
     @staticmethod
@@ -223,8 +244,34 @@ class BossTab(QWidget):
                 "box": self._region,
                 "showUpcoming": self.show_upcoming.isChecked(),
                 "upcomingLocked": self._upcoming.locked,
+                "warnLocked": self._overlay.locked,
             }
         )
+
+    # ---- 경고 위치 ----
+    def _place_warn_default(self) -> None:
+        """기본 위치: 화면 상단 중앙(기존 경고 위치와 비슷하게)."""
+        screen = QGuiApplication.primaryScreen()
+        if screen is None:
+            return
+        g = screen.geometry()
+        self._overlay._relayout()  # 샘플 크기로 폭 확정 후 중앙 정렬
+        x = int((g.width() - self._overlay.width()) / 2)
+        self._overlay.move(max(0, x), int(g.height() * 0.14))
+
+    def _sync_warn_btn(self) -> None:
+        self.warn_lock_btn.setText(
+            "경고 위치 이동" if self._overlay.locked else "경고 위치 고정"
+        )
+
+    def _toggle_warn_lock(self) -> None:
+        self._overlay.set_locked(not self._overlay.locked)
+        self._sync_warn_btn()
+        self._save()
+
+    def _on_warn_moved(self) -> None:
+        pos = self._overlay.pos()
+        config.save_boss_pattern({"warnPos": {"x": pos.x(), "y": pos.y()}})
 
     # ---- 다음 패턴 목록 ----
     def _place_upcoming_default(self) -> None:
