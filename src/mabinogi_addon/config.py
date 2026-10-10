@@ -42,18 +42,40 @@ def _load_env() -> None:
 
 
 def _read_local_config(path: Path = LOCAL_CONFIG_PATH) -> dict:
-    if not path.exists():
-        return {}
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (ValueError, OSError):
-        return {}
+    # 본 파일이 깨졌으면(.bak) 백업으로 복구 시도 → 전원차단 등으로 손상돼도 설정 보존.
+    for p in (path, path.with_name(path.name + ".bak")):
+        if not p.exists():
+            continue
+        try:
+            text = p.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        if not text.strip():
+            continue  # 빈 파일(쓰다 중단) → 다음 후보로
+        try:
+            return json.loads(text)
+        except ValueError:
+            continue
+    return {}
 
 
 def _write_local_config(data: dict, path: Path = LOCAL_CONFIG_PATH) -> None:
-    path.write_text(
-        json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
+    """원자적 저장: 임시 파일에 쓰고 flush+fsync 후 os.replace로 교체한다. 쓰는
+    도중 전원이 끊겨도 본 파일은 '이전 정상본' 아니면 '새 완본'이라 절대 깨지지
+    않는다(빈 파일로 초기화되던 문제 방지). 교체 직전 직전본을 .bak로 보존한다."""
+    text = json.dumps(data, ensure_ascii=False, indent=2)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write(text)
+        f.flush()
+        os.fsync(f.fileno())
+    if path.exists():
+        try:
+            os.replace(path, path.with_name(path.name + ".bak"))  # 직전본 백업
+        except OSError:  # 백업 실패해도 본 저장은 진행
+            pass
+    os.replace(tmp, path)  # 원자적 교체
 
 
 # 내보내기에서 제외할 비밀값(공유·이동 시 유출 방지). 가져올 때도 덮어쓰지 않음.
@@ -487,6 +509,25 @@ def save_general_flag(key: str, value: bool, path: Path = LOCAL_CONFIG_PATH) -> 
     if not isinstance(g, dict):
         g = {}
     g[key] = bool(value)
+    data["general"] = g
+    _write_local_config(data, path)
+
+
+def load_window_pos(path: Path = LOCAL_CONFIG_PATH) -> dict | None:
+    """메인 창 위치 {x,y}. 없으면 None(→ 중앙 배치)."""
+    g = _read_local_config(path).get("general") or {}
+    p = g.get("windowPos")
+    if isinstance(p, dict) and "x" in p and "y" in p:
+        return {"x": int(p["x"]), "y": int(p["y"])}
+    return None
+
+
+def save_window_pos(x: int, y: int, path: Path = LOCAL_CONFIG_PATH) -> None:
+    data = _read_local_config(path)
+    g = data.get("general")
+    if not isinstance(g, dict):
+        g = {}
+    g["windowPos"] = {"x": int(x), "y": int(y)}
     data["general"] = g
     _write_local_config(data, path)
 

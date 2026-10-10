@@ -198,6 +198,7 @@ class MainWindow(QMainWindow):
         # 파티(≈612)·커스텀(≈718)이 스크롤 없이 들어오고, 길이가 압도적인 설정 탭
         # (≈1265)만 세로 스크롤로 본다(_VScroll이 눌림 방지).
         self.setFixedSize(790, 800)
+        self._restore_window_pos()  # 저장된 창 위치 복원(없으면 화면 중앙)
 
         # 포그라운드 감지(맥=항상 활성). 저장된 게임 실행파일로 판정(없으면 제목 폴백).
         self._watcher = create_window_watcher(game_exe=config.load_game_exe())
@@ -1244,8 +1245,36 @@ class MainWindow(QMainWindow):
             return True
         return isinstance(w, QComboBox) and w.isEditable()
 
+    def _restore_window_pos(self) -> None:
+        """저장된 창 위치로 복원. 저장값이 없거나 연결된 화면 밖이면 주 화면 중앙에
+        둔다(자동 업데이트 재실행 등으로 좌상단 0,0에 뜨던 문제 방지)."""
+        from PySide6.QtCore import QRect
+        from PySide6.QtGui import QGuiApplication
+
+        pos = config.load_window_pos()
+        if pos is not None:
+            r = QRect(pos["x"], pos["y"], self.width(), self.height())
+            if any(s.availableGeometry().intersects(r) for s in QGuiApplication.screens()):
+                self.move(pos["x"], pos["y"])
+                return
+        screen = QGuiApplication.primaryScreen()
+        if screen is not None:
+            g = screen.availableGeometry()
+            self.move(
+                g.x() + (g.width() - self.width()) // 2,
+                g.y() + (g.height() - self.height()) // 2,
+            )
+
+    def _save_window_pos(self) -> None:
+        if self._restoring or self._booting or self._config_pending_restart:
+            return
+        p = self.pos()
+        config.save_window_pos(p.x(), p.y())
+
     def closeEvent(self, event) -> None:
         import time
+
+        self._save_window_pos()  # 트레이 최소화·완전 종료 모두에서 현재 위치 기억
 
         # 트레이 최소화: X를 눌러도 종료하지 않고 트레이로 숨긴다(백그라운드 계속 동작).
         # 단, 설정 가져오기/초기화 후엔 낡은 인스턴스가 남지 않게 X로도 완전 종료한다
