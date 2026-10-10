@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QLabel,
     QListWidget,
+    QPushButton,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -29,8 +30,9 @@ from .. import config
 from ..market import auction, exchange
 from .widgets import hint_label
 
-_CACHE_TTL = 10 * 60  # 경매 데이터가 ~10분 지연이라 지역별 10분 캐시
+_CACHE_TTL = 10 * 60  # 경매 데이터가 ~10분 지연이라 던전별 10분 캐시
 _ACCENT = QColor("#00C9A2")
+_GRAY = "color:#9aa0aa; font-size:12px;"
 
 
 class ExchangeTab(QWidget):
@@ -59,9 +61,20 @@ class ExchangeTab(QWidget):
         body.addWidget(self.region_list)
 
         right = QVBoxLayout()
+        title_row = QHBoxLayout()
         self.title = QLabel("던전을 선택하세요")
         self.title.setStyleSheet("font-size:15px; font-weight:800;")
-        right.addWidget(self.title)
+        title_row.addWidget(self.title)
+        title_row.addStretch(1)
+        self.refresh_btn = QPushButton("↻ 새로고침")
+        self.refresh_btn.setToolTip("경매 시세를 지금 다시 불러와요")
+        self.refresh_btn.clicked.connect(self._on_refresh)
+        self.refresh_btn.setEnabled(False)
+        title_row.addWidget(self.refresh_btn)
+        right.addLayout(title_row)
+        self.asof = QLabel("경매 시세는 넥슨 API 특성상 10분가량 지연돼요.")
+        self.asof.setStyleSheet(_GRAY)
+        right.addWidget(self.asof)
 
         self.table = QTableWidget(0, 4)
         self.table.setHorizontalHeaderLabels(
@@ -82,17 +95,24 @@ class ExchangeTab(QWidget):
         self._done.connect(self._show)
         self._fail.connect(self._show_fail)
 
-    def _on_region(self, region: str) -> None:
+    def _on_region(self, region: str, force: bool = False) -> None:
         if not region:
             return
         self._pending = region
+        self.refresh_btn.setEnabled(True)
         cached = self._cache.get(region)
-        if cached and time.time() - cached[0] < _CACHE_TTL:
+        if not force and cached and time.time() - cached[0] < _CACHE_TTL:
             self._render(region, cached[1])
             return
-        self.title.setText(f"{region}  ·  시세 확인 중…")
+        self.title.setText(region)
+        self.asof.setText("시세 확인 중…")
         self.table.setRowCount(0)
         threading.Thread(target=self._work, args=(region,), daemon=True).start()
+
+    def _on_refresh(self) -> None:
+        region = self.region_list.currentItem().text() if self.region_list.currentItem() else ""
+        if region:
+            self._on_region(region, force=True)
 
     def _work(self, region: str) -> None:
         key = config.get_nexon_api_key()
@@ -140,6 +160,9 @@ class ExchangeTab(QWidget):
     def _render(self, region: str, rows: list[dict]) -> None:
         kg = auction.korean_gold
         self.title.setText(region)
+        at = self._cache.get(region, (time.time(), None))[0]
+        hhmm = time.strftime("%H:%M", time.localtime(at))
+        self.asof.setText(f"기준 {hhmm} · 경매 시세는 넥슨 API 특성상 10분가량 지연돼요.")
         best = next((r for r in rows if r["efficiency"] is not None), None)
         self.table.setRowCount(len(rows))
         for i, r in enumerate(rows):
