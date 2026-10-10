@@ -35,6 +35,8 @@ from .buff_controller import BuffController
 from .buff_tab import ANCHOR_ID, BuffTab
 from .custom_overlay_tab import CustomOverlayTab
 from .debuff_tab import DebuffTab
+from .distribution_tab import DistributionTab
+from .exchange_tab import ExchangeTab
 from .memo_overlay import MemoOverlay
 from .memo_tab import MemoTab
 from .notifier import SoundNotifier, default_sound_map
@@ -234,9 +236,13 @@ class MainWindow(QMainWindow):
         self._tracker_tabs.addTab(_scrolled(self.boss_tab), "보스 패턴 알림 [BETA]")
         self._tracker_tabs.setStyleSheet(_SUBTAB_QSS)
 
-        # 편의기능: 메모 등 보조 기능을 묶는 상위 탭(하위 기능은 계속 추가 예정).
+        # 편의기능: 메모·계산기 등 보조 기능을 묶는 상위 탭.
+        self.distribution_tab = DistributionTab()
+        self.exchange_tab = ExchangeTab()
         self._convenience_tabs = QTabWidget()
         self._convenience_tabs.addTab(_scrolled(self.memo_tab), "메모")
+        self._convenience_tabs.addTab(_scrolled(self.distribution_tab), "분배 계산기")
+        self._convenience_tabs.addTab(_scrolled(self.exchange_tab), "환전비율 계산기")
         self._convenience_tabs.setStyleSheet(_SUBTAB_QSS)
 
         tabs = QTabWidget()

@@ -600,9 +600,23 @@ class SettingsTab(QWidget):
         tour_btn.setToolTip("처음 실행 때 나온 단계별 사용법 안내를 다시 봅니다")
         tour_btn.clicked.connect(self.replay_tour.emit)
         tour_row.addWidget(tour_btn)
+        notes_btn = QPushButton("업데이트 노트 보기")
+        notes_btn.setToolTip("지금까지 배포된 버전별 업데이트 노트를 다시 봅니다")
+        notes_btn.clicked.connect(self._show_release_notes)
+        tour_row.addWidget(notes_btn)
         tour_row.addStretch(1)
         v.addLayout(tour_row)
         return box
+
+    def _show_release_notes(self) -> None:
+        from ..version import display_version
+        from .release_notes import ReleaseNotesDialog, all_notes
+
+        md = all_notes()
+        if not md:
+            md = "표시할 업데이트 노트가 없어요."
+        dlg = ReleaseNotesDialog(md, display_version(), self)
+        dlg.exec()
 
     def _on_toast_test(self) -> None:
         from .toast import show_toast
