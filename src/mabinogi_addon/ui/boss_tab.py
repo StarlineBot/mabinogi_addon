@@ -1,4 +1,4 @@
-"""보스 패턴 경고 탭 (기획서 12). **베타 — 디스코드 로그인 사용자만.**
+"""보스 패턴 경고 탭 (기획서 12).
 
 보스 HP바 영역을 한 번 지정하면, 그 안에서 왼쪽=이름 / 오른쪽=HP%를 읽어:
 - 실시간으로 '식별된 보스 + 현재 HP%'를 표시(판독이 잘 되는지 눈으로 확인용)
@@ -82,7 +82,7 @@ class BossTab(QWidget):
         v = QVBoxLayout(self)
         v.setContentsMargins(12, 12, 12, 12)
 
-        title = QLabel("보스 패턴 알림  ·  [BETA]")
+        title = QLabel("보스 패턴 알림")
         title.setStyleSheet("font-size:14px; font-weight:700;")
         v.addWidget(title)
         v.addWidget(
@@ -98,14 +98,7 @@ class BossTab(QWidget):
         prev_btn.clicked.connect(self._preview_warning)
         v.addWidget(prev_btn)
 
-        # 디스코드 로그인 안내(게이트) — 미로그인 시만 보임
-        self._gate = hint_label(
-            "🔒 디스코드 로그인 하면 사용할 수 있는 [BETA] 기능이에요. (설정 탭에서 로그인)"
-        )
-        self._gate.setStyleSheet("color:#e67e22; font-size:12px;")
-        v.addWidget(self._gate)
-
-        # 실제 컨트롤 묶음(로그인 시만 보임)
+        # 실제 컨트롤 묶음(항상 표시 — 로그인 불필요)
         self._controls = QWidget()
         cv = QVBoxLayout(self._controls)
         cv.setContentsMargins(0, 0, 0, 0)
@@ -174,7 +167,6 @@ class BossTab(QWidget):
         v.addStretch(1)
 
         self._update_region_label()
-        self._apply_gate()
         self._timer = QTimer(self)
         self._timer.setInterval(300)  # HP는 천천히 변함 — 300ms면 충분
         self._timer.timeout.connect(self._tick)
@@ -195,16 +187,6 @@ class BossTab(QWidget):
         # 중이면 샘플이 이미 떠 있으므로 소리만 난다(show_message는 고정 상태에서만).
         self._overlay.show_message("고목의 페타크 85% 패턴 준비  (미리보기)", 2500)
         self._play("pre")
-
-    # ---- 게이팅 ----
-    @staticmethod
-    def _logged_in() -> bool:
-        return config.load_discord_user() is not None
-
-    def _apply_gate(self) -> None:
-        logged = self._logged_in()
-        self._gate.setVisible(not logged)
-        self._controls.setVisible(logged)
 
     # ---- 영역 지정 ----
     def _on_region(self) -> None:
@@ -334,10 +316,6 @@ class BossTab(QWidget):
 
     # ---- 읽기 루프 ----
     def _tick(self) -> None:
-        self._apply_gate()
-        if not self._logged_in():
-            self._upcoming.hide()
-            return
         active = self._watcher.is_game_active() or self._watcher.is_self_active()
         if not self._region or not active:
             self._upcoming.hide()

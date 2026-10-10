@@ -26,14 +26,15 @@ class _Watcher:
         return True
 
 
-def test_construct_and_gate(monkeypatch):
+def test_construct_without_login(monkeypatch):
+    """보스 패턴은 로그인 없이도 컨트롤이 보이고 동작한다(BETA·로그인 게이팅 제거)."""
     _app()
     from mabinogi_addon.ui.boss_tab import BossTab
 
     monkeypatch.setattr(config, "load_discord_user", lambda *a, **k: None)
     t = BossTab(_Watcher())
     assert "lenen_miir" in t._bosses  # 번들 보스가 로드됨
-    t._apply_gate()  # 미로그인 → 컨트롤 숨김(예외 없이)
+    assert t._controls.isVisibleTo(t)  # 미로그인이어도 컨트롤 노출
     t._preview_warning()  # 경고 미리보기 — 예외 없이
     t.shutdown()
 

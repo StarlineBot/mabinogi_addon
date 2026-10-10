@@ -342,6 +342,7 @@ class SettingsTab(QWidget):
             self._login_status.setStyleSheet("color:#8a8f98;")
             self._login_btn.setText("Discord 로그인")
         self._refresh_dm_export()  # 로그인 상태에 맞춰 DM 내보내기 버튼 갱신
+        self._refresh_diag()  # 진단 스냅샷(디버깅)도 로그인 시에만 노출
 
     def _on_login_clicked(self) -> None:
         if config.load_discord_user():
@@ -423,13 +424,21 @@ class SettingsTab(QWidget):
         InquiryDialog(self).exec()
 
     def _diag_button(self) -> QPushButton:
+        # 디버깅용 도구 → 디스코드 로그인 사용자에게만 노출(설명 없이 쓰기 어려움).
         btn = QPushButton("진단 스냅샷 저장 (시간·% 오류 신고용)")
         btn.setToolTip(
             "지금 설정된 버프·디버프·투아림 영역을 그대로 캡처해 PNG로 저장합니다.\n"
             "시간/% 가 틀리게 읽힐 때, 저장된 파일을 제작자에게 보내면 원인을 찾습니다."
         )
         btn.clicked.connect(self._on_diag_snapshot)
+        self._diag_btn = btn
+        self._refresh_diag()
         return btn
+
+    def _refresh_diag(self) -> None:
+        """진단 스냅샷 버튼은 디스코드 로그인 시에만 보인다(디버깅 전용)."""
+        if hasattr(self, "_diag_btn"):
+            self._diag_btn.setVisible(config.load_discord_user() is not None)
 
     def _on_diag_snapshot(self) -> None:
         from PySide6.QtCore import QTimer

@@ -238,7 +238,7 @@ class MainWindow(QMainWindow):
         self._tracker_tabs.addTab(_scrolled(self.debuff_tab), "디버프")
         self._tracker_tabs.addTab(_scrolled(self.tuarim_tab), "투아림")
         # 보스만 쓰면 뭘 추적하는지 모호해 풀네임 유지.
-        self._tracker_tabs.addTab(_scrolled(self.boss_tab), "보스 패턴 알림 [BETA]")
+        self._tracker_tabs.addTab(_scrolled(self.boss_tab), "보스 패턴 알림")
         self._tracker_tabs.setStyleSheet(_SUBTAB_QSS)
 
         # 편의기능: 메모·계산기 등 보조 기능을 묶는 상위 탭.
