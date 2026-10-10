@@ -1,8 +1,9 @@
 """환전비율 계산기 탭 (편의기능).
 
-왼쪽 지역 목록(탈라가흐·브리레흐·글렌베르나·크롬바스)에서 하나 고르면, 그 지역의
-구슬 교환 재료들을 경매장 현재 개당가로 조회해 '구슬당 골드' 효율 순위를 오른쪽에
-보여준다. 조회는 백그라운드(UI 안 멈춤) + 지역별 짧은 캐시.
+왼쪽 지역 목록(탈라가흐·브리레흐·글렌베르나·크롬바스)에서 하나 고르면, 오른쪽에 그
+지역 이름(제목) + 재료 테이블(재료명·상품가격·구슬개수·구슬당 가격)을 '구슬당 가격'
+내림차순으로 보여준다. 최고 효율 행은 ⭐+볼드 강조. 조회는 백그라운드(UI 안 멈춤) +
+지역별 짧은 캐시.
 """
 
 from __future__ import annotations
@@ -11,10 +12,15 @@ import threading
 import time
 
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QBrush, QColor
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QListWidget,
+    QTableWidget,
+    QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
@@ -24,23 +30,24 @@ from ..market import auction, exchange
 from .widgets import hint_label
 
 _CACHE_TTL = 10 * 60  # 경매 데이터가 ~10분 지연이라 지역별 10분 캐시
+_ACCENT = QColor("#00C9A2")
 
 
 class ExchangeTab(QWidget):
-    _done = Signal(object)  # (region, rows) / _fail: (region, message)
-    _fail = Signal(object)
+    _done = Signal(object)  # (region, rows)
+    _fail = Signal(object)  # (region, message)
 
     def __init__(self) -> None:
         super().__init__()
         self._cache: dict[str, tuple[float, list[dict]]] = {}
-        self._pending: str | None = None  # 마지막으로 요청한 지역(늦게 온 응답 무시용)
+        self._pending: str | None = None  # 마지막 요청 지역(늦게 온 응답 무시용)
 
         v = QVBoxLayout(self)
         v.setContentsMargins(12, 12, 12, 12)
         v.addWidget(
             hint_label(
                 "던전 구슬로 어떤 재료를 바꿔 팔아야 이득인지, 지역을 고르면 경매장 "
-                "현재가 기준 '구슬당 골드' 순위를 보여줘요."
+                "현재가 기준 '구슬당 가격' 순위를 보여줘요."
             )
         )
 
@@ -51,12 +58,25 @@ class ExchangeTab(QWidget):
         self.region_list.currentTextChanged.connect(self._on_region)
         body.addWidget(self.region_list)
 
-        self.result = QLabel("왼쪽에서 지역을 선택하세요.")
-        self.result.setWordWrap(True)
-        self.result.setAlignment(Qt.AlignmentFlag.AlignTop)
-        self.result.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        self.result.setStyleSheet("font-size:13px;")
-        body.addWidget(self.result, 1)
+        right = QVBoxLayout()
+        self.title = QLabel("지역을 선택하세요")
+        self.title.setStyleSheet("font-size:15px; font-weight:800;")
+        right.addWidget(self.title)
+
+        self.table = QTableWidget(0, 4)
+        self.table.setHorizontalHeaderLabels(
+            ["재료명", "상품가격", "구슬개수", "구슬당 가격"]
+        )
+        self.table.verticalHeader().setVisible(False)
+        self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        right.addWidget(self.table, 1)
+        body.addLayout(right, 1)
         v.addLayout(body, 1)
 
         self._done.connect(self._show)
@@ -70,7 +90,8 @@ class ExchangeTab(QWidget):
         if cached and time.time() - cached[0] < _CACHE_TTL:
             self._render(region, cached[1])
             return
-        self.result.setText(f"{region} 교환 재료 시세 확인 중…")
+        self.title.setText(f"{region}  ·  시세 확인 중…")
+        self.table.setRowCount(0)
         threading.Thread(target=self._work, args=(region,), daemon=True).start()
 
     def _work(self, region: str) -> None:
@@ -96,25 +117,39 @@ class ExchangeTab(QWidget):
     def _show_fail(self, payload) -> None:
         region, message = payload
         if region == self._pending:
-            self.result.setText(message)
+            self.title.setText(region)
+            self.table.setRowCount(0)
+            self.table.setRowCount(1)
+            cell = QTableWidgetItem(message)
+            self.table.setItem(0, 0, cell)
+            self.table.setSpan(0, 0, 1, 4)
+
+    def _cell(self, text: str, *, align_right: bool, best: bool) -> QTableWidgetItem:
+        item = QTableWidgetItem(text)
+        if align_right:
+            item.setTextAlignment(
+                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+            )
+        if best:
+            f = item.font()
+            f.setBold(True)
+            item.setFont(f)
+            item.setForeground(QBrush(_ACCENT))
+        return item
 
     def _render(self, region: str, rows: list[dict]) -> None:
         kg = auction.korean_gold
+        self.title.setText(region)
         best = next((r for r in rows if r["efficiency"] is not None), None)
-        lines = [f"[{region}] 구슬당 골드 순위", ""]
-        for r in rows:
-            mark = "⭐ " if best and r["name"] == best["name"] else "• "
+        self.table.setRowCount(len(rows))
+        for i, r in enumerate(rows):
+            is_best = best is not None and r["name"] == best["name"]
+            name = ("⭐ " if is_best else "") + r["name"]
             if r["efficiency"] is None:
-                lines.append(f"{mark}{r['name']} — 매물 없음 (구슬 {r['coin']})")
+                price_txt, eff_txt = "매물 없음", "-"
             else:
-                lines.append(
-                    f"{mark}{r['name']} — 구슬당 {kg(r['efficiency'])} "
-                    f"(개당 {kg(r['per_unit'])} / 구슬 {r['coin']})"
-                )
-        if best:
-            lines.append("")
-            lines.append(
-                f"🏆 추천: {best['name']} — 구슬당 {kg(best['efficiency'])} "
-                f"({best['efficiency']:,}골드)"
-            )
-        self.result.setText("\n".join(lines))
+                price_txt, eff_txt = kg(r["per_unit"]), kg(r["efficiency"])
+            self.table.setItem(i, 0, self._cell(name, align_right=False, best=is_best))
+            self.table.setItem(i, 1, self._cell(price_txt, align_right=True, best=is_best))
+            self.table.setItem(i, 2, self._cell(str(r["coin"]), align_right=True, best=is_best))
+            self.table.setItem(i, 3, self._cell(eff_txt, align_right=True, best=is_best))
