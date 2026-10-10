@@ -49,7 +49,7 @@ class BeadSplitTab(QWidget):
         v.addWidget(
             hint_label(
                 "던전에서 먹은 구슬 갯수와 구슬금액·분배 인원을 넣으면 1인당 분배금을 "
-                "바로 계산해요. 구슬은 1개를 2개로 쳐요(x2)."
+                "바로 계산해요.\n구슬은 개수를 입력하면 2배로 계산해요."
             )
         )
 
@@ -109,6 +109,11 @@ class BeadSplitTab(QWidget):
         ta.addWidget(self.gwan_tala)
         ta.addStretch(1)
         v.addWidget(self.talagah_box)
+
+        # 입력 칸 바로 아래 안내(상단 설명을 안 읽는 사람 대비)
+        note = hint_label("구슬은 2배로 계산하니 등장 개수만 적어요.")
+        note.setStyleSheet(_GRAY)
+        v.addWidget(note)
 
         # 결과 카드(테두리, 강조): 총 구슬 갯수(자동) + 1인당 분배금
         self.result_card = QFrame()
