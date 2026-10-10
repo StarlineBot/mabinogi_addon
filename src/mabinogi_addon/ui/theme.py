@@ -26,3 +26,22 @@ def apply_theme(name: str) -> None:
     hints = QGuiApplication.styleHints()
     if hints is not None:
         hints.setColorScheme(scheme)
+
+
+def is_dark() -> bool:
+    """현재 '실제로 적용 중'인 테마가 다크인지. 시스템(Unknown)이면 OS 설정 반영."""
+    hints = QGuiApplication.styleHints()
+    try:
+        scheme = hints.colorScheme() if hints is not None else None
+        if scheme == Qt.ColorScheme.Dark:
+            return True
+        if scheme == Qt.ColorScheme.Light:
+            return False
+    except Exception:  # noqa: BLE001, S110 — 구버전/플랫폼차 → 팔레트로 폴백
+        pass
+    app = QGuiApplication.instance()
+    if app is not None:
+        from PySide6.QtGui import QPalette
+
+        return app.palette().color(QPalette.ColorRole.Window).lightness() < 128
+    return True

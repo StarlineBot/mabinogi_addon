@@ -154,30 +154,43 @@ class _OverlayToggle(QPushButton):
 
 
 # 탭 바: 밑줄 스타일 + 균등 고정 너비. 선택 탭은 민트색·굵게 + 민트 밑줄로 또렷하게.
-# (앱은 OS 테마를 따르므로, 무채색 글자 + 민트 강조로 라이트/다크 모두 자연스럽게.)
-_TAB_QSS = (
-    "QTabWidget::pane { border: none; border-top: 1px solid palette(mid); }"
-    "QTabBar { qproperty-drawBase: 0; }"
-    "QTabBar::tab { background: transparent; color: palette(mid); padding: 9px 4px;"
-    " min-width: 104px; border: none; border-bottom: 2px solid transparent;"
-    " font-size: 13px; }"
-    "QTabBar::tab:hover { color: palette(text); }"
-    "QTabBar::tab:selected { color: #00C9A2; font-weight: 800;"
-    " border-bottom: 2px solid #00D1A7; }"
-)
+# 색은 테마별로 분기한다(단일 색으론 라이트/다크를 동시에 못 맞춤):
+# - 다크: 은은한 밝은 회색(원래 룩) / - 라이트: 어두운 회색.
+# 미선택은 중간 회색(#8a8f98) 고정 — 양쪽 다 보임. 호버/선택만 테마로 또렷하게.
 
-# 하위(트래커 내부) 탭: 상위와 확실히 구분되게 더 작고 밋밋하게. 선택 표시는 민트
-# 대신 무채색 밑줄 → '한 단계 아래'로 읽힌다.
-_SUBTAB_QSS = (
-    "QTabWidget::pane { border: none; border-top: 1px solid palette(mid); }"
-    "QTabBar { qproperty-drawBase: 0; }"
-    "QTabBar::tab { background: transparent; color: palette(mid); padding: 6px 14px;"
-    " min-width: 0px; border: none; border-bottom: 2px solid transparent;"
-    " font-size: 12px; }"
-    "QTabBar::tab:hover { color: palette(text); }"
-    "QTabBar::tab:selected { color: palette(text); font-weight: 700;"
-    " border-bottom: 2px solid palette(text); }"
-)
+
+def _tab_qss(dark: bool) -> str:
+    """상위 탭 스타일. 선택=민트(양쪽 공통), 호버는 테마별."""
+    pane = "#2a2f3a" if dark else "#d5d7dd"
+    hover = "#cfd3da" if dark else "#1f2124"
+    return (
+        f"QTabWidget::pane {{ border: none; border-top: 1px solid {pane}; }}"
+        "QTabBar { qproperty-drawBase: 0; }"
+        "QTabBar::tab { background: transparent; color: #8a8f98; padding: 9px 4px;"
+        " min-width: 104px; border: none; border-bottom: 2px solid transparent;"
+        " font-size: 13px; }"
+        f"QTabBar::tab:hover {{ color: {hover}; }}"
+        "QTabBar::tab:selected { color: #00C9A2; font-weight: 800;"
+        " border-bottom: 2px solid #00D1A7; }"
+    )
+
+
+def _subtab_qss(dark: bool) -> str:
+    """하위(트래커 내부) 탭. 선택 표시는 무채색 밑줄 → '한 단계 아래'. 테마별 색."""
+    pane = "#2a2f3a" if dark else "#d5d7dd"
+    hover = "#cfd3da" if dark else "#1f2124"
+    sel = "#cfd3da" if dark else "#1f2124"  # 다크=은은한 회색(흰색 아님), 라이트=어두움
+    underline = "#5a6270" if dark else "#b2b5bc"
+    return (
+        f"QTabWidget::pane {{ border: none; border-top: 1px solid {pane}; }}"
+        "QTabBar { qproperty-drawBase: 0; }"
+        "QTabBar::tab { background: transparent; color: #7d828b; padding: 6px 14px;"
+        " min-width: 0px; border: none; border-bottom: 2px solid transparent;"
+        " font-size: 12px; }"
+        f"QTabBar::tab:hover {{ color: {hover}; }}"
+        f"QTabBar::tab:selected {{ color: {sel}; font-weight: 700;"
+        f" border-bottom: 2px solid {underline}; }}"
+    )
 
 
 class MainWindow(QMainWindow):
@@ -230,6 +243,7 @@ class MainWindow(QMainWindow):
         self.settings_tab.config_imported.connect(self._on_config_imported)
         self.settings_tab.voice_pack_changed.connect(self._on_voice_pack_changed)
         self.settings_tab.replay_tour.connect(self._run_tour)
+        self.settings_tab.theme_changed.connect(self._apply_tab_styles)
         # 화면을 읽는 트래커들은 '트래커' 상위 탭 하나로 묶고, 그 아래 하위 탭으로 나눈다.
         # → 상단 탭이 짧아져(트래커·커스텀·파티·메모·설정) 설정이 넘침(<>) 뒤로 안 묻힌다.
         # 각 탭을 스크롤 영역으로 감싼다 → 창 높이를 고정해도 내용이 잘리지 않고 스크롤.
@@ -239,7 +253,6 @@ class MainWindow(QMainWindow):
         self._tracker_tabs.addTab(_scrolled(self.tuarim_tab), "투아림")
         # 보스만 쓰면 뭘 추적하는지 모호해 풀네임 유지.
         self._tracker_tabs.addTab(_scrolled(self.boss_tab), "보스 패턴 알림")
-        self._tracker_tabs.setStyleSheet(_SUBTAB_QSS)
 
         # 편의기능: 메모·계산기 등 보조 기능을 묶는 상위 탭.
         self.distribution_tab = DistributionTab()
@@ -250,7 +263,6 @@ class MainWindow(QMainWindow):
         self._convenience_tabs.addTab(_scrolled(self.distribution_tab), "분배 계산기")
         self._convenience_tabs.addTab(_scrolled(self.bead_split_tab), "구슬 분배 계산기")
         self._convenience_tabs.addTab(_scrolled(self.exchange_tab), "환전비율 계산기")
-        self._convenience_tabs.setStyleSheet(_SUBTAB_QSS)
 
         tabs = QTabWidget()
         self._tabs = tabs  # 온보딩 투어에서 탭 전환에 사용
@@ -260,7 +272,7 @@ class MainWindow(QMainWindow):
         tabs.addTab(self._party_scroll, "파티 모집")
         tabs.addTab(self._convenience_tabs, "편의기능")
         tabs.addTab(_scrolled(self.settings_tab), "설정")
-        tabs.setStyleSheet(_TAB_QSS)
+        self._apply_tab_styles()  # 테마에 맞는 탭 색 적용(테마 변경 시 재적용)
 
         # 중앙: 상단 업데이트 배너(기본 숨김) + 탭
         central = QWidget()
@@ -424,6 +436,16 @@ class MainWindow(QMainWindow):
     _STATUS_WARN = "#e67e22"
     _STATUS_STOP = "#e74c3c"  # 정지중 빨간 ●
     _STATUS_MUTED = "#8a8f98"
+
+    def _apply_tab_styles(self) -> None:
+        """현재 테마(다크/라이트)에 맞춰 상·하위 탭 색을 적용. 테마 변경 시 재호출."""
+        from .theme import is_dark
+
+        dark = is_dark()
+        sub = _subtab_qss(dark)
+        self._tracker_tabs.setStyleSheet(sub)
+        self._convenience_tabs.setStyleSheet(sub)
+        self._tabs.setStyleSheet(_tab_qss(dark))
 
     def _update_tracking_status(self) -> None:
         self.buff_tab.set_status(*self._buff_status())

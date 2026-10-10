@@ -169,6 +169,7 @@ class SettingsTab(QWidget):
     voice_pack_changed = Signal()
     # '사용법 투어 다시 보기' → 메인이 온보딩 투어를 다시 실행.
     replay_tour = Signal()
+    theme_changed = Signal()  # 테마 변경 → 메인이 탭 등 테마색 재적용
 
     def __init__(self, watcher: WindowWatcher) -> None:
         super().__init__()
@@ -572,6 +573,7 @@ class SettingsTab(QWidget):
         config.save_theme(name)
         apply_theme(name)  # 즉시 적용
         self._sync_theme_swatches(name)
+        self.theme_changed.emit()  # 메인이 탭 등 테마색 재적용
 
     def _general_group(self) -> QGroupBox:
         from ..system import autostart
