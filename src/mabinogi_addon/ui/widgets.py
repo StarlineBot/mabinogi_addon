@@ -7,7 +7,34 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QCheckBox, QLabel, QSizePolicy
+from PySide6.QtGui import QFocusEvent
+from PySide6.QtWidgets import QCheckBox, QLabel, QSizePolicy, QSpinBox
+
+
+class SuffixSpinBox(QSpinBox):
+    """suffix(' 만' 등)가 있어도 숫자 입력이 막히지 않는 스핀박스.
+
+    기본 QSpinBox는 커서가 suffix 뒤에 놓이면(칸을 클릭하면 보통 맨 뒤=suffix 뒤로
+    간다) 타이핑이 전부 무시된다. 그래서:
+    - 포커스가 들어오면 숫자를 전체 선택해 바로 타이핑하면 덮어쓰게 하고,
+    - 커서가 suffix 영역으로 들어가면 숫자 끝(suffix 앞)으로 되돌린다.
+    """
+
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.lineEdit().cursorPositionChanged.connect(self._clamp_cursor)
+
+    def _max_cursor(self) -> int:
+        return len(self.lineEdit().text()) - len(self.suffix())
+
+    def _clamp_cursor(self, _old: int, new: int) -> None:
+        limit = self._max_cursor()
+        if new > limit:
+            self.lineEdit().setCursorPosition(limit)  # suffix 앞으로 되돌림
+
+    def focusInEvent(self, event: QFocusEvent) -> None:
+        super().focusInEvent(event)
+        self.lineEdit().selectAll()  # 포커스 즉시 전체 선택 → 타이핑하면 교체
 
 
 def checkbox(text: str = "") -> QCheckBox:

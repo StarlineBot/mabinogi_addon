@@ -26,7 +26,7 @@ from PySide6.QtWidgets import (
 
 from .. import config
 from ..market import auction, fee
-from .widgets import hint_label
+from .widgets import SuffixSpinBox, hint_label
 
 _GRAY = "color:#9aa0aa; font-size:12px;"
 
@@ -66,7 +66,7 @@ class DistributionTab(QWidget):
         # 2줄: 분배금 [입력]  인원 [입력] (라벨 왼쪽정렬)
         r2 = QHBoxLayout()
         r2.addWidget(QLabel("분배금"))
-        self.price_spin = QSpinBox()
+        self.price_spin = SuffixSpinBox()
         self.price_spin.setRange(0, 99_999_999)
         self.price_spin.setSuffix(" 만")
         self.price_spin.setGroupSeparatorShown(True)

@@ -30,6 +30,7 @@ from ..catalog import available_catalog, available_debuff_catalog, build_templat
 from ..system.window_watcher import create_window_watcher
 from ..tracker.debuff_engine import DebuffEngine
 from ..tracker.engine import BuffEngine
+from .bead_split_tab import BeadSplitTab
 from .boss_tab import BossTab
 from .buff_controller import BuffController
 from .buff_tab import ANCHOR_ID, BuffTab
@@ -240,9 +241,11 @@ class MainWindow(QMainWindow):
         # 편의기능: 메모·계산기 등 보조 기능을 묶는 상위 탭.
         self.distribution_tab = DistributionTab()
         self.exchange_tab = ExchangeTab()
+        self.bead_split_tab = BeadSplitTab()
         self._convenience_tabs = QTabWidget()
         self._convenience_tabs.addTab(_scrolled(self.memo_tab), "메모")
         self._convenience_tabs.addTab(_scrolled(self.distribution_tab), "분배 계산기")
+        self._convenience_tabs.addTab(_scrolled(self.bead_split_tab), "구슬 분배")
         self._convenience_tabs.addTab(_scrolled(self.exchange_tab), "환전비율 계산기")
         self._convenience_tabs.setStyleSheet(_SUBTAB_QSS)
 
