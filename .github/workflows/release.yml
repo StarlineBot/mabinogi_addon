@@ -87,11 +87,18 @@ jobs:
           --hidden-import win32con
           packaging/entry.py
 
+      # 중간 빌드 아티팩트는 '수동 실행(workflow_dispatch)' 때만 올린다. 태그 릴리즈는
+      # 아래에서 exe를 GitHub Release에 바로 첨부하므로 이 아티팩트가 필요 없고, 매
+      # 릴리즈마다 쌓이면 Actions 아티팩트 저장 용량(quota)을 금세 채워 업로드가 실패
+      # → 그 뒤 릴리즈·배포 단계까지 통째로 막혔다(v0.4.17 빌드 실패 원인). 릴리즈
+      # 자산(Release asset)은 이 quota와 무관하므로, 릴리즈 경로는 이 단계를 건너뛴다.
       - name: Upload build artifact
+        if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
           name: mabinogi-addon-exe
           path: dist/mabinogi-addon.exe
+          retention-days: 7  # 수동 빌드 아티팩트는 1주 뒤 자동 삭제(용량 누적 방지)
 
       - name: Attach to Release
         if: startsWith(github.ref, 'refs/tags/')
