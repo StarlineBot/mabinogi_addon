@@ -821,10 +821,9 @@ class MainWindow(QMainWindow):
         list[str],
         dict[str, bool],
         dict[str, int],
-        dict[str, bool],
         dict[str, int | None],
     ]:
-        """저장 설정으로 (순서, 지속시간, 1차초, 점멸, 2차초[없으면 None])를 만든다."""
+        """저장 설정으로 (순서, 지속시간, 1차초, 2차초[없으면 None])를 만든다."""
         catalog_by = {b.id: b for b in catalog}
         saved = {s.id: s for s in config.load_buff_settings()}
 
@@ -845,15 +844,6 @@ class MainWindow(QMainWindow):
             b.id: (saved[b.id].alert.before_sec if b.id in saved else 30)
             for b in catalog
         }
-        # 점멸: '종료 알림'과 '점멸'을 모두 켠 버프만. 설정 없으면 기본 켜짐.
-        blink = {
-            b.id: (
-                saved[b.id].alert.enabled and saved[b.id].alert.blink
-                if b.id in saved
-                else True
-            )
-            for b in catalog
-        }
         # 2차 알림 기준초: '종료 알림'+'2차 알림'을 모두 켠 버프만, 아니면 None(없음).
         alert_before2 = {
             b.id: (
@@ -867,7 +857,7 @@ class MainWindow(QMainWindow):
             )
             for b in catalog
         }
-        return order, show_duration, alert_before, blink, alert_before2
+        return order, show_duration, alert_before, alert_before2
 
     def _start_buff_tracking(self) -> None:
         """저장된 영역이 있으면 라이브 캡처(dxcam)로 버프 추적 시작(재시작 포함)."""
@@ -891,7 +881,7 @@ class MainWindow(QMainWindow):
 
         catalog = available_catalog()
         catalog_by = {b.id: b for b in catalog}
-        order, show_duration, alert_before, blink, alert_before2 = (
+        order, show_duration, alert_before, alert_before2 = (
             self._compute_tracking(catalog)
         )
         self._sound_ids = self._sound_enabled_ids()
@@ -917,7 +907,6 @@ class MainWindow(QMainWindow):
             show_duration,
             on_alert=self._on_buff_alert,
             watcher=self._watcher,
-            blink_enabled=blink,
         )
         self.buff_controller.set_paused(self._paused)  # 재생성 시 일시정지 상태 유지
         # 아이콘 생성/소멸을 빠르게 캐치(50ms=20fps). 시간 판독은 엔진이 throttle하고,
@@ -942,7 +931,7 @@ class MainWindow(QMainWindow):
         """순서·노출·지속시간·알림 변경을 실행 중 엔진에 즉시 반영(재시작 없이)."""
         if self._engine is None or self.buff_controller is None:
             return
-        order, show_duration, alert_before, blink, alert_before2 = (
+        order, show_duration, alert_before, alert_before2 = (
             self._compute_tracking(available_catalog())
         )
         self._engine.set_order(order)
@@ -950,7 +939,6 @@ class MainWindow(QMainWindow):
         self._engine.set_alert_before(alert_before)
         self._engine.set_alert_before2(alert_before2)
         self.buff_controller.set_show_duration(show_duration)
-        self.buff_controller.set_blink_enabled(blink)
         self._sound_ids = self._sound_enabled_ids()
 
     def _on_catalog_changed(self) -> None:

@@ -1,7 +1,8 @@
 """버프 오버레이 (기획서 3.4 / 5.1).
 
 프레임리스·배경 투명·항상 위·포커스 안 뺏음. 매칭된 버프를 등록 순서대로 가로로
-나열하고, 지속시간 표시를 켠 버프는 아이콘 아래 남은 시간을 그린다. 만료임박은 점멸.
+나열하고, 지속시간 표시를 켠 버프는 아이콘 아래 남은 시간을 그린다. 남은 시간이
+1분 미만(<60초)이면 숫자를 빨갛게 표시한다(점멸은 쓰지 않는다 — 산만함).
 배율 50~300%(표시에만 적용). 클릭 통과는 Windows에서 system 헬퍼로 별도 적용.
 """
 
@@ -9,29 +10,31 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from PySide6.QtCore import QRect, Qt, QTimer, Signal
+from PySide6.QtCore import QRect, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QPainter, QPixmap
 from PySide6.QtWidgets import QWidget
 
 from ..duration import format_duration
 
+# 남은 시간이 이 값 미만이면 숫자를 빨갛게(임박 경고). 점멸 대신 색으로 알린다.
+WARN_SEC = 60.0
+
 
 def overlay_spec(
     entries, show_duration: dict[str, bool]
 ) -> list[tuple[str, str | None, bool]]:
-    """엔진 결과(OverlayEntry) → (buff_id, 표시할 시간 문자열|None, 점멸) 목록.
+    """엔진 결과(OverlayEntry) → (buff_id, 표시할 시간 문자열|None, 임박여부) 목록.
 
-    지속시간 표시를 끈 버프나 판독값 없는 버프는 시간 None(칸만 비움).
+    임박여부 = 남은 시간이 1분 미만(<60초)인지. True면 숫자를 빨갛게 그린다.
+    지속시간 표시를 끈 버프나 판독값 없는 버프는 시간 None(칸만 비움, 임박 False).
     """
     specs: list[tuple[str, str | None, bool]] = []
     for entry in entries:
         show = show_duration.get(entry.buff_id, True)
-        text = (
-            format_duration(entry.remaining)
-            if show and entry.remaining is not None
-            else None
-        )
-        specs.append((entry.buff_id, text, entry.alerting))
+        has_time = show and entry.remaining is not None
+        text = format_duration(entry.remaining) if has_time else None
+        warn = has_time and entry.remaining < WARN_SEC
+        specs.append((entry.buff_id, text, warn))
     return specs
 
 _ICON_BASE = 40  # 100% 기준 아이콘 변
@@ -44,7 +47,7 @@ _PAD = 6
 class OverlayItem:
     pixmap: QPixmap  # 표시 아이콘(원본 — 그릴 때 배율 적용)
     duration_text: str | None  # None=칸만 비움(아이콘 높이 맞춤)
-    blinking: bool = False
+    warn: bool = False  # 남은 시간 1분 미만 → 숫자 빨갛게
 
 
 class BuffOverlay(QWidget):
@@ -63,12 +66,8 @@ class BuffOverlay(QWidget):
         self._name = placeholder_name  # 플레이스홀더 안내 문구용
         self._scale = scale
         self._items: list[OverlayItem] = []
-        self._blink_on = True
         self._locked = False  # 고정=클릭 통과, 해제=드래그 이동
         self._drag_offset = None
-        self._timer = QTimer(self)
-        self._timer.setInterval(400)
-        self._timer.timeout.connect(self._toggle_blink)
 
     # ---- 고정/이동 ----
     def set_locked(self, locked: bool) -> None:
@@ -123,7 +122,7 @@ class BuffOverlay(QWidget):
         self._items = items
         self._relayout()
 
-    # ---- 레이아웃/점멸 ----
+    # ---- 레이아웃 ----
     def _metrics(self) -> tuple[int, int, int]:
         icon = int(_ICON_BASE * self._scale)
         gap = int(_GAP_BASE * self._scale)
@@ -134,7 +133,6 @@ class BuffOverlay(QWidget):
         icon, gap, text_h = self._metrics()
         n = len(self._items)
         if n == 0:
-            self._timer.stop()
             if self._locked:
                 self.resize(1, 1)  # 고정+비어있음 → 보이지 않게
             else:
@@ -144,17 +142,6 @@ class BuffOverlay(QWidget):
         width = n * icon + (n - 1) * gap + 2 * _PAD
         height = icon + text_h + 2 * _PAD
         self.resize(width, height)
-
-        if any(i.blinking for i in self._items):
-            self._blink_on = True
-            if not self._timer.isActive():
-                self._timer.start()
-        else:
-            self._timer.stop()
-        self.update()
-
-    def _toggle_blink(self) -> None:
-        self._blink_on = not self._blink_on
         self.update()
 
     # ---- 그리기 ----
@@ -174,10 +161,6 @@ class BuffOverlay(QWidget):
 
         x = _PAD
         for item in self._items:
-            # 점멸: off 단계에서 아이콘만 반투명(숫자는 항상 선명하게 읽히도록).
-            painter.setOpacity(
-                0.35 if (item.blinking and not self._blink_on) else 1.0
-            )
             scaled = item.pixmap.scaled(
                 icon,
                 icon,
@@ -187,9 +170,9 @@ class BuffOverlay(QWidget):
             painter.drawPixmap(x, _PAD, scaled)
 
             if item.duration_text:
-                painter.setOpacity(1.0)  # 숫자는 점멸과 무관하게 선명
                 rect = QRect(x, _PAD + icon, icon, text_h)
-                self._draw_text(painter, rect, item.duration_text)
+                # 1분 미만(warn)이면 빨강, 아니면 흰색
+                self._draw_text(painter, rect, item.duration_text, warn=item.warn)
             x += icon + gap
         painter.end()
 
@@ -207,11 +190,13 @@ class BuffOverlay(QWidget):
         )
         painter.end()
 
-    def _draw_text(self, painter: QPainter, rect: QRect, text: str) -> None:
+    def _draw_text(
+        self, painter: QPainter, rect: QRect, text: str, *, warn: bool = False
+    ) -> None:
         align = Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter
-        # 외곽선(검정) 후 흰색 → 어떤 배경에서도 읽힘
+        # 외곽선(검정) 후 본문 → 어떤 배경에서도 읽힘. 1분 미만이면 본문을 빨강으로.
         painter.setPen(QColor(0, 0, 0))
         for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
             painter.drawText(rect.translated(dx, dy), align, text)
-        painter.setPen(QColor(255, 255, 255))
+        painter.setPen(QColor(255, 80, 80) if warn else QColor(255, 255, 255))
         painter.drawText(rect, align, text)

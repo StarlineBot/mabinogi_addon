@@ -83,7 +83,7 @@ def test_round_trip(tmp_path):
             id="magic_speed",
             show_duration=False,
             hidden=True,
-            alert=AlertConfig(enabled=False, before_sec=10, blink=False, sound=False),
+            alert=AlertConfig(enabled=False, before_sec=10, sound=False),
         ),
     ]
     save_buff_settings(items, path)
