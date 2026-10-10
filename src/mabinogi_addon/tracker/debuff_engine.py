@@ -30,6 +30,18 @@ DEBUFF_DETECT_THRESHOLD = 0.68
 DEBUFF_RELEASE_THRESHOLD = 0.58
 DEBUFF_THRESHOLD = DEBUFF_DETECT_THRESHOLD  # 진단 스크립트 표시용
 
+# 보스 HP바 앵커(오탐 게이팅). 영역에 보스 체력바까지 포함해 잡으면, 바가 보일 때만
+# 디버프를 탐지해 마을·풀밭 오탐을 없앤다. 바 색은 HP/보스마다 달라(보라·파랑·초록·
+# 노랑·빨강) 색으로는 못 가르지만, **바 채움은 가로로 길게 '매끈'(인접 픽셀 거의 동일)**
+# 하다 — 풀밭 텍스처·채팅 글자는 매끈한 긴 가로런이 없다. 그 최장 매끈런 비율로 판정.
+# 실샘플: 보스 바 0.48~0.53 / 마을·풀밭 ≤0.33 → 0.42로 가른다.
+_BAR_SMOOTH_GAP = 6  # 인접 픽셀 밝기차가 이 미만이면 '매끈'
+_BAR_SAT_MIN = 60  # 이 미만 채도는 '무채색'(돌바닥 등) — 바 채움에서 제외
+_BAR_RUN_RATIO = 0.42  # 한 행의 최장 매끈런 / 영역 폭 이 이상이면 '바다운 행'
+_BAR_MIN_ROWS = 6  # 그런 '바다운 행'이 이만큼(세로로 두꺼운 띠) 있어야 바로 인정
+# (실샘플: 보스 바 22~45행 / 마을·풀밭 0행 → 우연한 매끈 한 줄엔 안 걸림)
+_BAR_GRACE_SEC = 1.0  # 바가 잠깐 안 보여도 이 시간까진 유지(보스로 걸어갈 때 깜빡임 방지)
+
 
 def _variant(template: np.ndarray, target_h: int) -> np.ndarray:
     h, w = template.shape[:2]
@@ -60,6 +72,10 @@ class DebuffEngine:
         self._shown = {bid: True for bid in templates}
         self._matched = {bid: False for bid in templates}  # 이력 임계용 직전 판정
         self._absent_since: dict[str, float | None] = {bid: None for bid in templates}
+        # 보스 HP바 앵커: 영역에서 바를 한 번이라도 본 뒤부터 게이팅(버프 앵커와 동일).
+        # 한 번도 못 봤으면(= 바를 안 넣은 기존 영역) 게이팅 안 함 → 기존처럼 항상 탐지.
+        self._bar_seen = False
+        self._bar_gone_since: float | None = None  # 바 사라진 시각(유예 판정용)
 
     def set_order(self, order: list[str]) -> None:
         self._order = list(order)
@@ -108,7 +124,53 @@ class DebuffEngine:
         self._matched[bid] = matched
         return matched
 
+    @staticmethod
+    def _bar_present(region: np.ndarray) -> bool:
+        """영역 안에 보스 HP바(길게 매끈하고 '색이 있는' 가로 띠)가 보이는가.
+
+        바 채움은 **채도 높은 색(보라·파랑·초록·노랑·빨강…) + 가로로 매끈**하다. 각
+        행에서 '매끈(인접차<gap)하며 채도도 높은' 픽셀의 최장 연속 길이를 재, 영역 폭의
+        _BAR_RUN_RATIO 이상인 행이 _BAR_MIN_ROWS개 이상이면 바로 본다.
+        - 매끈하지만 **채도 낮은 돌바닥**은 제외(매끈만으로는 바닥을 오인했던 버그 수정).
+        - 채도 높지만 **매끈하지 않은 풀밭·채팅·아이콘**도 제외.
+        """
+        if region is None or region.shape[0] < 3 or region.shape[1] < 20:
+            return False
+        g = cv2.cvtColor(region, cv2.COLOR_BGR2GRAY).astype(np.int16)
+        sat = cv2.cvtColor(region, cv2.COLOR_BGR2HSV)[:, :, 1]
+        smooth = np.abs(np.diff(g, axis=1)) < _BAR_SMOOTH_GAP  # (h, w-1)
+        colored = sat[:, :-1] > _BAR_SAT_MIN  # 왼쪽 픽셀 채도(바 채움=유채색)
+        ok = smooth & colored
+        need = int(region.shape[1] * _BAR_RUN_RATIO)
+        bar_rows = 0
+        for row in ok:
+            run = longest = 0
+            for v in row:
+                run = run + 1 if v else 0
+                longest = max(longest, run)
+            if longest >= need:
+                bar_rows += 1
+                if bar_rows >= _BAR_MIN_ROWS:
+                    return True
+        return False
+
     def tick(self, region: np.ndarray, now: float) -> TickResult:
+        # 보스 HP바 앵커 게이팅: 바를 본 적 있으면(영역에 바 포함), 바가 안 보이는
+        # 프레임엔 탐지를 멈춰(= 보스 없음) 마을·풀밭 오탐을 없앤다. 바를 한 번도 못 본
+        # 영역(기존 사용자)은 게이팅하지 않아 지금과 동일하게 동작한다(하위호환).
+        bar = self._bar_present(region)
+        if bar:
+            self._bar_seen = True
+            self._bar_gone_since = None
+        elif self._bar_seen:
+            # 바가 잠깐 안 보임: 보스로 걸어가는 중엔 바가 간헐적으로만 잡혀 매 틱
+            # 켜졌다 꺼지면 오버레이가 깜빡인다. _BAR_GRACE_SEC 동안 연속으로 없을
+            # 때만 '보스 없음'으로 확정해 숨긴다(그 전엔 직전처럼 탐지 유지).
+            if self._bar_gone_since is None:
+                self._bar_gone_since = now
+            if now - self._bar_gone_since >= _BAR_GRACE_SEC:
+                return TickResult(entries=[], alerts=[], frame_valid=True)  # 보스 없음
+
         small = self._scale(region)
         for bid in self._templates:
             detected = self._detect(small, bid)

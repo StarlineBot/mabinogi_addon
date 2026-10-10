@@ -28,6 +28,8 @@ Thumbs.db
 
 # 사용자 로컬 설정
 config.local.json
+config.local.json.bak
+config.local.json.tmp
 
 # PyInstaller (빌드 산출물·생성 spec)
 *.spec

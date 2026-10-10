@@ -52,22 +52,23 @@ def test_buff_expires_while_inactive_then_removed_on_return():
     assert sm.state is State.ABSENT
 
 
-def test_second_alert_fires_once_and_rearms_on_extension():
+def test_second_alert_fires_once_then_rearms_on_extension():
+    """2차 알림은 한 '수명' 동안 1회만. 단, **연장이 확정되면 재무장**되어 다음
+    임박에 다시 울린다(상시 유지 버프를 갱신하면 다음 갱신 타이밍도 알려야 함).
+    같은 순간의 중복(플리커)은 연장으로 확정되지 않아 재무장되지 않는다."""
     sm = BuffStateMachine(alert_before=30, alert_before2=20)
     _appear(sm, reading=100, t0=0.0)
-    # 아직 2차 기준(20초) 위 → 안 울림
-    assert sm.check_second_alert(10.4) is False  # remaining ~90
-    # 시계가 자연히 18초 부근에 도달 → 판독 18이 시계와 일치 → 즉시 반영
+    assert sm.check_second_alert(10.4) is False  # remaining ~90, 아직 위
     sm.observe(detected=True, reading=18, now=82.0)  # remaining ~18
     assert sm.check_second_alert(82.0) is True  # 20초 이하 교차 → 1회
-    assert sm.check_second_alert(83.0) is False  # 재알림 없음
-    # 연장(80초로) → 위로 튐은 두 프레임 연속 확인 후 확정 → 2차 재무장
-    sm.observe(detected=True, reading=80, now=84.0)  # 연장 후보(아직 미반영)
-    sm.observe(detected=True, reading=80, now=84.2)  # 이어짐 → 연장 확정
-    assert sm.check_second_alert(84.2) is False  # remaining 80 > 20
-    # 시계가 다시 15초 부근 도달 → 판독 15가 시계와 일치 → 즉시 반영
-    sm.observe(detected=True, reading=15, now=149.2)  # remaining ~15
-    assert sm.check_second_alert(149.2) is True  # 다시 1회
+    assert sm.check_second_alert(83.0) is False  # 같은 수명에선 재알림 없음
+    # 연장(80초로) 확정 → 2차 재무장
+    sm.observe(detected=True, reading=80, now=84.0)
+    sm.observe(detected=True, reading=80, now=84.2)  # 연장 확정
+    assert sm.check_second_alert(84.2) is False  # remaining ~80, 아직 교차 전
+    # 시계가 다시 15초에 도달 → 재무장됐으므로 2차 다시 울림
+    sm.observe(detected=True, reading=15, now=149.2)
+    assert sm.check_second_alert(149.2) is True  # 연장 후 다음 임박에 재알림
 
 
 def test_no_second_alert_when_disabled():
@@ -130,14 +131,76 @@ def test_single_frame_downward_spike_does_not_false_alert():
     assert sm.remaining(1.2) > 130
 
 
-def test_sustained_downward_resyncs():
-    """두 프레임 연속 일관된 하향값은(오독이 아니라고 보고) 반영된다 → 시계가
-    실제보다 높게 어긋나 있었다면 매끄럽게 재동기화."""
-    sm = BuffStateMachine(alert_before=30)
-    _appear(sm, reading=140, t0=0.0)
+def test_uncorroborated_anchor_resyncs_down():
+    """아직 판독으로 '확인'되지 않은 첫 기준값(차가운 앵커)이 실제보다 높게 잡혔다면,
+    두 프레임 연속 일관된 하향값으로 매끄럽게 재동기화된다(앵커가 한 번만 높게 읽힌 경우)."""
+    sm = BuffStateMachine(appear_frames=1, alert_before=30)
+    sm.observe(detected=True, reading=140, now=0.0)  # 차가운 앵커(미확인)
     sm.observe(detected=True, reading=40, now=1.0)  # 후보(미반영)
-    sm.observe(detected=True, reading=40, now=1.2)  # 이어짐 → 반영
+    sm.observe(detected=True, reading=40, now=1.2)  # 이어짐 → 반영(미확인 시계라 허용)
     assert abs(sm.remaining(1.2) - 40.0) < 1.0
+
+
+def test_small_downward_correction_still_applies():
+    """작은 하향 보정(분 유실이 아닌 범위)은 확인된 시계에서도 그대로 반영된다."""
+    sm = BuffStateMachine(appear_frames=1, alert_before=30)
+    sm.observe(detected=True, reading=50, now=0.0)
+    sm.observe(detected=True, reading=49.8, now=0.2)  # 일치 → 시계 '확인됨'
+    sm.observe(detected=True, reading=42, now=1.0)  # 후보(약 8초 하향: 분유실 범위 밖)
+    sm.observe(detected=True, reading=42, now=1.2)  # 이어짐 → 반영
+    assert abs(sm.remaining(1.2) - 42.0) < 1.0
+
+
+def test_trusted_clock_ignores_minute_loss_misread():
+    """확인된(신뢰된) 내부 시계가 한 번에 큰 폭으로 떨어지는 하향 점프는 '분 유실'
+    OCR 오독으로 보고 무시한다 → 거짓 임박/2차 알림 방지(재시전으로 '2분02초'가
+    떴는데 분을 놓쳐 '02초'로 두 프레임 읽혀 29초→2초로 급락하던 문제 회귀 방지)."""
+    sm = BuffStateMachine(appear_frames=1, alert_before=30, alert_before2=5)
+    sm.observe(detected=True, reading=30, now=0.0)
+    sm.observe(detected=True, reading=29.8, now=0.2)  # 일치 → 시계 '확인됨'
+    # 분 유실 오독 2프레임(2초 → 1.9초): 자기일관이지만 확인된 시계의 급락이라 무시
+    sm.observe(detected=True, reading=2.0, now=1.0)
+    sm.observe(detected=True, reading=1.9, now=1.2)
+    assert sm.remaining(1.2) > 25  # 2초로 급락 안 함(내부 시계 ~29 유지)
+    assert sm.check_second_alert(1.2) is False  # 거짓 2차 알림 없음
+
+
+def test_recast_minute_loss_does_not_refire_alert():
+    """임박(1차 울린 뒤) 중 갱신하면, 새 시간이 '1:30'처럼 분 단위로 뜨는데 OCR이
+    분을 놓쳐 '30'으로 두 프레임 읽히면 — 현재 시계가 낮아(27) '급락'이 아니라 소폭
+    상승처럼 보여 하향 가드를 통과해 연장으로 확정된다. 이때 커밋값(30)이 알림
+    기준(30) 이하라 재무장하면 그 즉시 거짓 재알림이 울렸다('30초 알림 → 갱신하며
+    또 울림' 버그). 재무장을 '연장값 > 기준'일 때만 하도록 고쳐 중복이 없어야 한다.
+    단, 다음 정상 프레임이 참값(90)을 읽으면 정상 연장으로 재무장돼, 90→30으로
+    다시 내려올 때는 정상적으로 재알림한다."""
+    sm = BuffStateMachine(appear_frames=1, alert_before=30)
+    now = 0.0
+    fired = []
+
+    def tick(reading, dt=0.1):
+        nonlocal now
+        if sm.observe(detected=True, reading=reading, now=now) is Event.ALERT:
+            fired.append(round(now, 1))
+        now += dt
+
+    # 40 → 30 하강: 1차 1회
+    t = 40.0
+    while t > 27:
+        tick(round(t, 1)); t -= 0.3
+    assert fired == [9.0] or len(fired) == 1  # 1차 정확히 1회
+    assert sm.state is State.EXPIRING
+    # 갱신: 진짜 90초인데 분을 놓쳐 '30'으로 2프레임 읽힘(자기일관)
+    tick(30.0); tick(30.0)
+    # 갱신 직후 몇 프레임 — 거짓 재알림이 울리면 안 된다
+    tick(30.0); tick(29.9)
+    assert len(fired) == 1, f"갱신 순간 중복 알림: {fired}"
+    # 다음 정상 프레임들이 참값(90)을 읽어 정상 연장 확정 → 재무장
+    tick(90.0); tick(89.9)
+    # 90 → 30 하강 시 정상 재알림(재무장됨)
+    t = 89.7
+    while t > 28:
+        tick(round(t, 1)); t -= 0.3
+    assert len(fired) == 2, f"정상 재알림이 빠짐: {fired}"
 
 
 def test_inconsistent_spikes_ignored():
@@ -200,3 +263,102 @@ def test_duration_less_buff_never_alerts():
     assert sm.state is State.ACTIVE
     assert sm.remaining(100.0) is None
     assert not sm.alerting
+
+
+def test_late_reappear_below_alert_does_not_refire():
+    """만료 임박 버프가 깜빡여(해제→재감지) 이미 알림 시점 아래에서 다시 등장해도
+    1차·2차 알림을 '다시' 울리지 않는다. (비바체 30/10 설정에 0초 알림이 추가로
+    오던 버그 회귀 방지)"""
+    sm = BuffStateMachine(
+        appear_frames=1, alert_before=30.0, alert_before2=10.0, disappear_sec=0.4
+    )
+    fired = []
+    now = 0.0
+
+    def tick(detected, reading, dt=0.05):
+        nonlocal now
+        ev = sm.observe(detected=detected, reading=reading, now=now)
+        if ev is Event.ALERT:
+            fired.append("1차")
+        if sm.check_second_alert(now):
+            fired.append("2차")
+        now += dt
+
+    # 40초 등장 → 5초까지 정상 카운트다운(30·10 각 1회)
+    t = 40.0
+    while t > 5:
+        tick(True, round(t))
+        t -= 0.25
+    # 0.6초 아이콘 깜빡(해제) 후 4초로 재감지 → 재발동 없어야
+    for _ in range(12):
+        tick(False, None)
+    t = 4.0
+    while t >= 0:
+        tick(True, round(t))
+        t -= 0.25
+    assert fired == ["1차", "2차"]  # 0초 추가 알림 없음
+
+
+def test_fresh_recast_alerts_again():
+    """버프가 만료된 뒤 새로 걸리면(풀 지속시간으로 재등장) 알림은 다시 울린다."""
+    sm = BuffStateMachine(appear_frames=1, alert_before=30.0, disappear_sec=0.4)
+    fired = []
+    now = 0.0
+
+    def tick(detected, reading, dt=0.05):
+        nonlocal now
+        ev = sm.observe(detected=detected, reading=reading, now=now)
+        if ev is Event.ALERT:
+            fired.append(round(now, 1))
+        now += dt
+
+    t = 40.0  # 첫 캐스트
+    while t >= 0:
+        tick(True, round(t))
+        t -= 0.5
+    for _ in range(12):  # 만료(미감지)
+        tick(False, None)
+    t = 40.0  # 새 캐스트(풀 지속시간)
+    while t > 25:
+        tick(True, round(t))
+        t -= 0.5
+    assert len(fired) == 2  # 캐스트마다 1차 1회씩
+
+
+def test_first_alert_rearms_on_extension_and_on_fresh_recast():
+    """1차 알림은 연장이 확정되면 재무장되어 다음 임박에 다시 울린다(상시 유지
+    버프를 30초에 갱신하면 그다음 갱신 타이밍도 알려야 함). 완전히 소멸한 뒤 새로
+    걸릴 때도 다시 울린다. 단, 같은 순간의 중복(플리커)은 연장으로 확정되지 않아
+    재무장되지 않으므로 한 번만 울린다."""
+    sm = BuffStateMachine(appear_frames=1, alert_before=30.0, disappear_sec=0.4)
+    fired = []
+    now = 0.0
+
+    def tick(detected, reading, dt=0.05):
+        nonlocal now
+        ev = sm.observe(detected=detected, reading=reading, now=now)
+        if ev is Event.ALERT:
+            fired.append(round(now, 1))
+        now += dt
+
+    # 40→8 (1차 1회) → 연장(40으로 재시전) → 다시 40→0 (재무장돼 1차 또 1회)
+    for _ in range(2):
+        tick(True, 40.0)
+    t = 40.0
+    while t > 8:
+        tick(True, round(t, 1)); t -= 0.3
+    tick(True, 40.0); tick(True, 39.9)  # 연장 확정 → 재무장
+    t = 39.7
+    while t >= 0:
+        tick(True, round(t, 1)); t -= 0.3
+    assert len(fired) == 2  # 연장 후 다음 임박에 다시 울림
+
+    # 완전 소멸 후 새 캐스트 → 또 울림
+    for _ in range(12):
+        tick(False, None)
+    for _ in range(2):
+        tick(True, 40.0)
+    t = 40.0
+    while t > 25:
+        tick(True, round(t, 1)); t -= 0.3
+    assert len(fired) == 3  # 새 버프에서 1차 다시

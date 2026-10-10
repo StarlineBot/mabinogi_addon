@@ -26,6 +26,60 @@ _log = logging.getLogger("mabinogi_addon.capture")
 
 # 전체 프레임을 다시 잡는 최소 간격(초). 두 영역이 한 틱 안에서 같은 프레임을 쓰게 한다.
 _MAX_AGE = 0.08
+# 카메라가 실제로 프레임을 잡는지 검증할 때의 재시도(정적 화면이어도 첫 프레임은 옴).
+_PROBE_TRIES = 6
+_PROBE_GAP = 0.05
+# 폴백으로 시도할 (device_idx, output_idx) 조합 범위(하이브리드 GPU·멀티모니터).
+_PROBE_DEVICES = 2
+_PROBE_OUTPUTS = 4
+
+
+def _grab_works(camera) -> bool:
+    """카메라가 실제로 프레임을 돌려주는지 확인. 하이브리드 GPU에서 DuplicateOutput이
+    DXGI_ERROR_UNSUPPORTED(0x887A0004)로 실패하면 create는 성공해도 grab이 영원히
+    None/예외다 — 그 '죽은' 카메라를 걸러낸다."""
+    for _ in range(_PROBE_TRIES):
+        try:
+            if camera.grab() is not None:
+                return True
+        except Exception:  # noqa: BLE001 — 복제 실패 카메라는 grab에서 터짐 → 탈락
+            return False
+        time.sleep(_PROBE_GAP)
+    return False
+
+
+def _create_working_camera():
+    """실제로 캡처되는 dxcam 카메라를 만든다. 기본(주 출력)을 먼저 시도하고, 안 되면
+    GPU/출력 조합을 순회한다. 하이브리드 GPU 노트북은 화면을 그리는 GPU가 dxcam이
+    기본으로 고른 GPU와 달라 기본 생성이 실패/무효가 되기 때문. 성공한 조합을 로그에
+    남긴다. 전부 실패하면 None."""
+    import dxcam
+
+    attempts: list[tuple[int | None, int | None]] = [(None, None)]
+    attempts += [
+        (d, o) for d in range(_PROBE_DEVICES) for o in range(_PROBE_OUTPUTS)
+    ]
+    for dev, out in attempts:
+        try:
+            cam = (
+                dxcam.create(output_color="BGR")
+                if dev is None
+                else dxcam.create(device_idx=dev, output_idx=out, output_color="BGR")
+            )
+        except Exception as exc:  # noqa: BLE001 — 없는 조합 등 → 다음 조합
+            _log.debug("dxcam.create(device=%s,output=%s) 예외: %s", dev, out, exc)
+            continue
+        if cam is None:
+            continue
+        if _grab_works(cam):
+            _log.info("dxcam 카메라 선택: device=%s output=%s", dev, out)
+            return cam
+        # 생성은 됐지만 캡처 안 됨(복제 실패) → 해제하고 다음 조합
+        try:
+            cam.release()
+        except Exception:  # noqa: BLE001, S110 — 해제 실패는 무시
+            pass
+    return None
 
 
 class _SharedLiveCamera:
@@ -36,8 +90,24 @@ class _SharedLiveCamera:
         import dxcam  # Windows 전용 (지연 import)
 
         t = time.perf_counter()
-        self._camera = dxcam.create(output_color="BGR")
-        _log.info("dxcam.create %.0fms", (time.perf_counter() - t) * 1000)
+        self._camera = _create_working_camera()
+        _log.info("dxcam 카메라 준비 %.0fms", (time.perf_counter() - t) * 1000)
+        # 어떤 GPU/출력 조합으로도 캡처가 안 되면(하이브리드 GPU에서 복제 미지원 등),
+        # 그대로 두면 grab이 영원히 None → '라이브 캡처가 조용히 안 됨'이 된다.
+        # 명시적으로 에러를 내 호출부가 알 수 있게 하고, dxcam이 본 출력 목록을 남긴다.
+        if self._camera is None:
+            try:
+                info = dxcam.output_info()
+            except Exception as exc:  # noqa: BLE001 — 진단 로그용
+                info = f"(output_info 실패: {exc})"
+            _log.error(
+                "dxcam 라이브 캡처 실패(모든 GPU/출력 조합). 출력 목록:\n%s", info
+            )
+            raise RuntimeError(
+                "dxcam 라이브 캡처 카메라를 만들 수 없습니다. "
+                "게임을 '테두리 없는 창(전체 창)' 모드로 두거나, 그래픽 드라이버/"
+                "모니터 설정을 확인하세요."
+            )
         self._frame_lock = threading.Lock()
         self._last_frame: np.ndarray | None = None
         self._last_ts = 0.0

@@ -17,6 +17,10 @@ from __future__ import annotations
 # 한 틱(확정값) 사이 허용 상승폭. 이보다 크게 오르면 실시간 교차가 아니라
 # 재진입/오탐복구/리셋후재상승으로 보고 울리지 않는다. 게이지는 틱당 천천히 오른다.
 MAX_RISE = 5
+# 한 번 울린 임계는 게이지가 이만큼 아래로 내려가야(=리셋/하강) 다시 무장된다.
+# 임계 경계(예 95%)에서 판독값이 흔들려(94→95→94→95) 같은 교차가 2~3번 울리던
+# 문제 방지(히스테리시스). 게이지는 매 주기 0까지 떨어지므로 다음 주기엔 반드시 재무장.
+REARM_DROP = 10
 
 
 class TuarimTracker:
@@ -26,6 +30,7 @@ class TuarimTracker:
     def set_thresholds(self, thresholds: list[int]) -> None:
         self._thresholds = sorted({int(t) for t in thresholds})
         self._prev: int | None = None  # 직전 값(교차 판정 기준)
+        self._fired: set[int] = set()  # 이번 주기에 이미 울린 임계(재무장 전까지 억제)
 
     def observe(self, value: int | None) -> list[int]:
         """현재 % 값을 넣고, 이번에 '완만히 넘은' 임계 목록을 돌려준다.
@@ -36,9 +41,17 @@ class TuarimTracker:
             return []
         prev = self._prev
         self._prev = value
+        # 임계보다 충분히 내려오면(리셋/하강) 그 임계를 재무장 → 다음 상승에 다시 울림.
+        for t in self._thresholds:
+            if value <= t - REARM_DROP:
+                self._fired.discard(t)
         if prev is None:
             return []  # 첫 값은 기준점만 잡음
         rise = value - prev
         if not (0 < rise <= MAX_RISE):
             return []  # 하강·정체·큰 점프 → 교차 아님
-        return [t for t in self._thresholds if prev < t <= value]
+        crossed = [
+            t for t in self._thresholds if prev < t <= value and t not in self._fired
+        ]
+        self._fired.update(crossed)  # 울린 임계는 재무장 전까지 억제(경계 흔들림 방지)
+        return crossed

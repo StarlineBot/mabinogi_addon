@@ -65,7 +65,8 @@ HELP_HTML = """
 (－ 삭제 / ▲▼ 표시 순서)</li>
 <li><b>표시 옵션</b> — 버프마다 <b>오버레이에 표시 / 지속시간 표시 /
 종료 알림</b>을 켤 수 있습니다. 종료 알림은 지정한 <b>N초 전</b>에
-<b>점멸·소리</b>로 알리고, <b>2차 알림</b>은 놓쳤을 때 한 번 더 울립니다.
+<b>소리</b>로 알리고, <b>2차 알림</b>은 놓쳤을 때 한 번 더 울립니다.
+남은 시간이 <b>1분 미만</b>이면 오버레이 숫자가 <b>빨갛게</b> 표시됩니다.
 (소리는 사운드가 등록된 버프만)</li>
 <li><b>오버레이 배치</b> — 드래그로 원하는 위치에 옮기고 마우스 휠로 <b>배율</b>을
 조절합니다. <b>위치 잠금</b>을 누르면 위치가 고정되고 클릭도 통과해
@@ -497,20 +498,19 @@ class BuffTab(QWidget):
         self.before_spin = QSpinBox()
         self.before_spin.setRange(1, 300)
         self.before_spin.setSuffix(" 초 전")
-        self.blink_check = checkbox("점멸")
         self.sound_check = checkbox("소리")
-        for wdg in (self.alert_check, self.before_spin, self.blink_check, self.sound_check):
+        for wdg in (self.alert_check, self.before_spin, self.sound_check):
             alert_row.addWidget(wdg)
         alert_row.addStretch(1)
         alv.addLayout(alert_row)
         self.alert_check.toggled.connect(self._on_alert_toggled)
-        for wdg in (self.before_spin, self.blink_check, self.sound_check):
+        for wdg in (self.before_spin, self.sound_check):
             if isinstance(wdg, QCheckBox):
                 wdg.toggled.connect(self._form_changed)
             else:
                 wdg.valueChanged.connect(self._form_changed)
 
-        # 2차 알림: 놓침·오독 대비 재알림(소리·점멸은 1차 설정을 그대로 재사용).
+        # 2차 알림: 놓침·오독 대비 재알림(소리는 1차 설정을 그대로 재사용).
         alert_row2 = QHBoxLayout()
         self.alert2_check = checkbox("2차 알림")
         self.before2_spin = QSpinBox()
@@ -550,9 +550,8 @@ class BuffTab(QWidget):
         self.show_duration.setChecked(s.show_duration)
         self.alert_check.setChecked(s.alert.enabled)
         self.before_spin.setValue(s.alert.before_sec)
-        self.blink_check.setChecked(s.alert.blink)
         # 소리 체크와 2차 알림은 사운드 파일이 등록된 버프에만 노출한다.
-        # (소리 없는 버프는 점멸만 되고 점멸은 임박 내내 계속 → 2차는 무의미)
+        # (소리 없는 버프는 2차 알림이 무의미 — 다시 울릴 소리가 없다)
         has_sound = bid in self._sound_ids
         self.sound_check.setVisible(has_sound)
         self.sound_check.setChecked(s.alert.sound and has_sound)
@@ -569,14 +568,13 @@ class BuffTab(QWidget):
                     self.display_file_btn, self.display_clear_btn,
                     self.del_btn, self.up_btn, self.down_btn):
             wdg.setEnabled(editable)
-        # 알림 하위 위젯(초·점멸·소리·2차)은 앵커여부 + 알림 켜짐 상태로 최종 결정.
+        # 알림 하위 위젯(초·소리·2차)은 앵커여부 + 알림 켜짐 상태로 최종 결정.
         self._apply_alert_enabled(s.alert.enabled)
         self._loading = False
 
     def _on_alert_toggled(self, enabled: bool) -> None:
         self._apply_alert_enabled(enabled)
         if not enabled:
-            self.blink_check.setChecked(False)
             self.sound_check.setChecked(False)
             self.alert2_check.setChecked(False)  # 1차 끄면 2차도 해제(→ 초기화)
         self._form_changed()
@@ -590,8 +588,7 @@ class BuffTab(QWidget):
 
     def _apply_alert_enabled(self, enabled: bool) -> None:
         on = enabled and self._current != ANCHOR_ID
-        for wdg in (self.before_spin, self.blink_check, self.sound_check,
-                    self.alert2_check):
+        for wdg in (self.before_spin, self.sound_check, self.alert2_check):
             wdg.setEnabled(on)
         # 2차 초 입력은 '종료 알림'과 '2차 알림'이 모두 켜졌을 때만
         self.before2_spin.setEnabled(on and self.alert2_check.isChecked())
@@ -605,7 +602,6 @@ class BuffTab(QWidget):
         s.alert = config.AlertConfig(
             enabled=self.alert_check.isChecked(),
             before_sec=self.before_spin.value(),
-            blink=self.blink_check.isChecked(),
             sound=self.sound_check.isChecked(),
             enabled2=self.alert2_check.isChecked(),
             before_sec2=self.before2_spin.value(),

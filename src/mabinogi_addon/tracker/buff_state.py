@@ -44,6 +44,11 @@ class Event(Enum):
 _EXTEND_EPS = 2.0
 # 판독값이 내부 시계와 '일치'한다고 볼 허용 오차(초). 이 밖이면 튐으로 보고 확인 대기.
 _AGREE_EPS = 2.0
+# 이미 판독으로 '확인된(신뢰된)' 내부 시계가 한 번에 이만큼 넘게 하향 점프하는 건
+# 물리적으로 불가능(버프는 실시간으로만 준다) → '분 유실' OCR 오독으로 보고 무시한다.
+# (예: 재시전으로 '2분02초'가 떴는데 분을 놓쳐 '02초'로 읽히면 29초→2초로 급락해
+#  거짓 임박·2차 알림이 울리던 문제.) 지터(±2초)보다 넉넉히 크고 1분(60초)보다 작게.
+_TRUSTED_DROP_MAX = 15.0
 
 
 class BuffStateMachine:
@@ -65,9 +70,13 @@ class BuffStateMachine:
         self._last_read_at: float | None = None  # 그때의 now
         self._detections = 0
         self._missing_since: float | None = None
-        self._alerted2 = False  # 2차 알림 1회 발생 플래그(연장·소멸 시 재무장)
+        self._alerted = False  # 1차 알림 1회 발생 플래그(소멸·연장 시 재무장)
+        self._alerted2 = False  # 2차 알림 1회 발생 플래그(소멸·연장 시 재무장)
         # 위로 튄 판독의 연장 후보 (reading, now). 다음 프레임에서 이어지는지 확인용.
         self._pending: tuple[float, float] | None = None
+        # 내부 시계가 판독값으로 한 번이라도 '확인'됐는지. 확인된 시계는 큰 하향 점프를
+        # 믿지 않는다(= 분 유실 오독 방어). 첫 기준값(차가운 앵커)은 아직 미확인.
+        self._trusted = False
 
     # ---- 조회 ----
     def remaining(self, now: float) -> float | None:
@@ -83,7 +92,10 @@ class BuffStateMachine:
     def check_second_alert(self, now: float) -> bool:
         """2차 알림 시점(만료 before_sec2 이하)을 1회 교차하면 True.
 
-        1차 알림과 독립. 연장(EXTENDED)·소멸(reset) 시 재무장되어 다음 주기에 또 울린다.
+        1차 알림과 독립. 한 '수명' 동안 1회만 울린다. 재무장(다시 울릴 수 있게)되는
+        건 두 경우: 버프가 완전히 사라졌다 새로 걸릴 때(reset), 그리고 **연장이
+        확정될 때**(다시 건 것이므로 새 수명 → 다음 임박에 또 알림). 플리커로 인한
+        같은 순간 중복은 연장으로 확정되지 않아 재무장되지 않는다.
         """
         if self.alert_before2 is None or self._alerted2:
             return False
@@ -139,6 +151,15 @@ class BuffStateMachine:
             if self._detections >= self.appear_frames:
                 self.state = State.ACTIVE
                 event = Event.APPEARED
+                # 이미 알림 시점 아래에서 '뒤늦게' 등장(만료 임박 버프가 깜빡여
+                # 해제됐다 재감지되는 등) → 알림을 다시 울리지 않는다. 조용히 임박
+                # 상태로 두고, 지난 2차 시점도 발동한 것으로 표시.
+                rem = self.remaining(now)
+                if rem is not None and rem <= self.alert_before:
+                    self.state = State.EXPIRING
+                    self._alerted = True  # 이미 1차 시점 아래 → 1차 발동한 것으로
+                    if self.alert_before2 is not None and rem <= self.alert_before2:
+                        self._alerted2 = True
             else:
                 return Event.NONE
 
@@ -161,27 +182,55 @@ class BuffStateMachine:
           무시되어, 거짓 연장(알림 꺼짐)도 거짓 임박(알림 켜짐)도 생기지 않는다.
         """
         prev = self.remaining(now)
-        # 첫 기준값(갓 등장 등) → 바로 반영
+        # 첫 기준값(갓 등장 등) → 바로 반영(단, 아직 '확인'된 시계는 아님)
         if prev is None:
             self._commit(reading, now)
             return False
-        # 내부 시계와 일치 → 정상 반영
+        # 내부 시계와 일치 → 정상 반영 + 시계 '확인됨'으로 표시
         if abs(reading - prev) <= _AGREE_EPS:
             self._pending = None
             self._commit(reading, now)
+            self._trusted = True
             return False
         # --- 시계와 어긋남(위/아래로 튐): 확인 대기 ---
         pend = self._pending
         if pend is not None:
             pred = pend[0] - (now - pend[1])  # 후보가 이어졌다면 지금쯤의 예상값
             if abs(reading - pred) <= _AGREE_EPS:
-                # 후보에서 매끄럽게 이어짐 → 반영
+                # 후보에서 매끄럽게 이어짐 → 반영 후보. 단, '확인된' 시계가 한 번에
+                # 큰 폭으로 떨어지는 하향 점프는 분 유실 오독이므로 무시하고 더 지켜본다
+                # (거짓 임박/2차 알림 방지). 위로 튐(연장)·작은 보정은 그대로 반영.
+                if self._trusted and reading < prev - _TRUSTED_DROP_MAX:
+                    self._pending = (reading, now)  # 후보만 갱신, 시계 유지
+                    return False
                 self._pending = None
                 extended = self.state is State.EXPIRING and reading > prev + _EXTEND_EPS
                 self._commit(reading, now)
+                self._trusted = True
                 if extended:  # 위로 이어짐 + 임박 중 → 연장
-                    self.state = State.ACTIVE
-                    self._alerted2 = False  # 연장 → 2차 알림 재무장
+                    self.state = State.ACTIVE  # 점멸 해제
+                    # 연장 = 버프를 다시 건 것(음악 버프 연장, 상시 유지 버프 갱신 등).
+                    # 다음에 다시 임박(≤alert_before)이 되면 "또 갱신해라"를 정상적으로
+                    # 다시 알려야 하므로 알림을 재무장한다.
+                    #
+                    # 단, 재무장은 **연장된 시계가 알림 기준보다 위일 때만** 한다.
+                    # 갱신 순간 새 시간이 '1:30'처럼 분 단위로 뜨는데 OCR이 분을 놓쳐
+                    # '30'으로 읽으면(현재 시계가 낮아 '급락'이 아니라 소폭 상승처럼
+                    # 보여 하향 가드를 통과) 연장으로 확정돼버린다. 이때 커밋된 값이
+                    # 기준 이하라 무조건 재무장하면 그 즉시 _check_alert가 거짓 재알림을
+                    # 낸다('30초 알림 → 갱신하며 또 울림' 버그). 진짜 연장은 기준 위로
+                    # 올라가므로 정상 재무장되고, 분-유실 오독은 기준 이하라 재무장되지
+                    # 않아 중복이 사라진다. (다음 정상 프레임이 참값을 읽으면 시계도
+                    # 조용히 재동기화된다.)
+                    new_rem = self.remaining(now)
+                    if new_rem is not None and new_rem > self.alert_before:
+                        self._alerted = False
+                    if (
+                        self.alert_before2 is not None
+                        and new_rem is not None
+                        and new_rem > self.alert_before2
+                    ):
+                        self._alerted2 = False
                     return True
                 return False
         # 아직 확정 못 함: 후보만 갱신하고 내부 시계는 유지(튐 반영 안 함)
@@ -213,8 +262,10 @@ class BuffStateMachine:
         if remaining is None:
             return None  # 무기한 버프는 알림 없음
         if self.state is State.ACTIVE and remaining <= self.alert_before:
-            self.state = State.EXPIRING
-            return Event.ALERT
+            self.state = State.EXPIRING  # 상태(점멸)는 전이, 소리는 1회만
+            if not self._alerted:
+                self._alerted = True
+                return Event.ALERT
         return None
 
     def _reset(self) -> None:
@@ -223,5 +274,7 @@ class BuffStateMachine:
         self._last_read_at = None
         self._detections = 0
         self._missing_since = None
+        self._alerted = False  # 소멸 → 다음 버프에서 1차 알림 재무장
         self._alerted2 = False  # 소멸 → 2차 알림 재무장
         self._pending = None
+        self._trusted = False  # 새 버프는 시계 다시 확인부터

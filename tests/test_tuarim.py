@@ -11,15 +11,17 @@ from mabinogi_addon.detect.tuarim_reader import read_percent
 from mabinogi_addon.tracker import TuarimTracker
 
 _SAMPLES = Path(__file__).parent / "data" / "tuarim_samples"
+_HI = Path(__file__).parent / "data" / "tuarim_hi"
 
 
-@pytest.mark.parametrize(
-    "value",
-    [0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
-)
-def test_read_percent_on_real_samples(value):
-    """실게임 수집 샘플(선명한 프레임)을 기본 템플릿으로 정확히 판독한다."""
-    img = cv2.imread(str(_SAMPLES / f"{value:02d}.png"))
+@pytest.mark.parametrize("value", list(range(90, 100)) + [85, 89])
+def test_read_percent_high_range(value):
+    """실게임 캡처(밝은 게이지 배경)에서 90%대와 경계를 정확히 판독한다.
+
+    투아림 트래커의 목적이 100% 직전(90%대)에 쿨 초기화 스킬을 터는 것이라,
+    90~99 + 89/90 경계 판독이 핵심이다. NCC 레퍼런스 뱅크(refs.npz) 기반.
+    """
+    img = cv2.imread(str(_HI / f"{value:02d}.png"))
     assert img is not None
     assert read_percent(img) == value
 
@@ -67,6 +69,26 @@ def test_refires_next_cycle_after_reset():
     assert t.observe(95) == [95]  # 94→95 완만 교차 → 다음 주기 재발동
 
 
+def test_boundary_jitter_fires_once():
+    """임계 경계(95%)에서 판독값이 흔들려도(94→95→94→95) 한 번만 울린다.
+    (배포판에서 '95%에 두세 번 울리던' 문제 회귀 방지 — 재무장 전까지 억제.)"""
+    t = TuarimTracker([95, 98])
+    fired = []
+    for v in [93, 94, 95, 94, 95, 96, 95, 96, 95]:
+        fired += t.observe(v)
+    assert fired == [95]  # 흔들려도 95는 한 번만
+
+
+def test_small_dip_within_hysteresis_does_not_rearm():
+    """임계 바로 아래로 조금만 내려갔다 다시 오르는 건 재무장 안 됨(같은 주기)."""
+    t = TuarimTracker([95])
+    assert t.observe(94) == []
+    assert t.observe(95) == [95]
+    assert t.observe(90) == []  # 95-10=85보다 위 → 재무장 안 함
+    assert t.observe(94) == []
+    assert t.observe(95) == []  # 여전히 억제
+
+
 def test_none_value_keeps_prev():
     t = TuarimTracker([95])
     assert t.observe(94) == []
@@ -75,27 +97,22 @@ def test_none_value_keeps_prev():
 
 
 # ---- % 리더 ----
-def _digit(rows: list[str]) -> np.ndarray:
-    """'.'/'#' 문자열 리스트 → 이진(0/255) 템플릿."""
-    return np.array(
-        [[255 if c == "#" else 0 for c in r] for r in rows], dtype=np.uint8
-    )
+def test_read_percent_none_on_blank():
+    """빈(검은) 영역은 판독 불가 → None."""
+    assert read_percent(np.zeros((13, 28, 3), dtype=np.uint8)) is None
 
 
-def test_read_percent_none_without_templates():
-    region = np.zeros((16, 40, 3), dtype=np.uint8)
-    assert read_percent(region, templates={}) is None
-    assert read_percent(region) is None  # 번들 템플릿 아직 없음
-
-
-def test_read_percent_reads_two_digits():
-    one = _digit(["..##..", "..##..", "..##..", "..##..", "..##..", "..##.."])
-    three = _digit(["####..", "....#.", "..##..", "....#.", "....#.", "####.."])
-    templates = {"1": one, "3": three}
-    region = np.zeros((12, 40, 3), dtype=np.uint8)
-    region[3:9, 4:10, :] = one[:, :, None]
-    region[3:9, 22:28, :] = three[:, :, None]
-    assert read_percent(region, templates=templates, threshold=0.6) == 13
+def test_reader_tracker_fires_at_90_and_95():
+    """실캡처 90~99 프레임을 순서대로 읽어 트래커(임계 90·95)에 흘리면,
+    90·95를 각각 정확히 한 번 넘는다(놓침·거짓발동 없음). 판독기+트래커 결합 회귀."""
+    t = TuarimTracker([90, 95])
+    fired = []
+    for value in [88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99]:
+        img = cv2.imread(str(_HI / f"{value:02d}.png"))
+        if img is None:
+            continue
+        fired += t.observe(read_percent(img))
+    assert fired == [90, 95]
 
 
 # ---- config ----
@@ -103,7 +120,7 @@ def test_tuarim_config_defaults(tmp_path):
     p = tmp_path / "config.local.json"
     d = config.load_tuarim(p)
     assert d["enabled"] is False
-    assert d["thresholds"] == [95, 98]
+    assert d["thresholds"] == [90, 95]
     assert d["sounds"] == [True, True]
     assert d["box"] is None
 

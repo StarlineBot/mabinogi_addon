@@ -49,6 +49,15 @@ def _parse_sections(text: str) -> list[tuple[str, str]]:
     return sections
 
 
+def all_notes() -> str:
+    """전체 업데이트 노트 마크다운(파일 그대로). '설정 → 업데이트 노트 보기'용.
+    없으면 빈 문자열."""
+    try:
+        return RELEASE_NOTES_FILE.read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+
+
 def notes_since(last_seen: str | None, current: str) -> str:
     """last_seen(제외) ~ current(포함) 사이 버전들의 노트를 하나의 마크다운으로.
 

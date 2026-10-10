@@ -86,13 +86,11 @@ class BuffController(QObject):
         show_duration: dict[str, bool],
         on_alert=None,
         watcher: WindowWatcher | None = None,
-        blink_enabled: dict[str, bool] | None = None,
     ) -> None:
         super().__init__()
         self._overlay = overlay
         self._catalog = catalog  # id -> BuffDef
         self._show_duration = show_duration
-        self._blink_enabled = blink_enabled or {}
         self._on_alert = on_alert
         self._watcher = watcher or AlwaysActiveWatcher()
         self._worker: _TrackWorker | None = None
@@ -161,20 +159,15 @@ class BuffController(QObject):
         """지속시간 표시 설정 갱신(실행 중 폼 변경 반영)."""
         self._show_duration = show_duration
 
-    def set_blink_enabled(self, blink_enabled: dict[str, bool]) -> None:
-        """점멸 설정 갱신(실행 중 폼 변경 반영)."""
-        self._blink_enabled = blink_enabled
-
     def build_items(self, entries) -> list[OverlayItem]:
         items: list[OverlayItem] = []
-        for buff_id, text, blinking in overlay_spec(entries, self._show_duration):
+        for buff_id, text, warn in overlay_spec(entries, self._show_duration):
             buff = self._catalog.get(buff_id)
             if buff is None:
                 continue
-            # 임박(alerting)이어도 '점멸' 끈 버프는 깜빡이지 않는다.
-            blink = blinking and self._blink_enabled.get(buff_id, True)
+            # warn=남은 시간 1분 미만 → 오버레이에서 숫자 빨강(점멸 없음).
             pixmap = QPixmap(str(buff.display_image or buff.match_icon))
-            items.append(OverlayItem(pixmap, text, blink))
+            items.append(OverlayItem(pixmap, text, warn))
         return items
 
     def _smooth(self, entries) -> None:
@@ -220,7 +213,7 @@ class BuffController(QObject):
         self._overlay.show() if show else self._overlay.hide()
 
     def _on_alerted(self, buff_ids) -> None:
-        if self._paused:  # 일시정지 중엔 종료 알림(점멸·소리)도 울리지 않음
+        if self._paused:  # 일시정지 중엔 종료 알림(소리)도 울리지 않음
             return
         if self._on_alert is not None:
             self._on_alert(buff_ids)

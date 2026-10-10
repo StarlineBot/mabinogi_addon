@@ -104,7 +104,9 @@ class CustomOverlayTab(QWidget):
 
         v = QVBoxLayout(self)
         v.setContentsMargins(12, 12, 12, 12)
-        v.setSpacing(10)
+        # 세로 여유가 뷰포트와 거의 딱 맞아(≈9px) Windows 글꼴/DPI에선 아주 얇은
+        # 스크롤바가 생겼다. 위젯 간격을 살짝 줄여 그만큼의 여유를 확보한다.
+        v.setSpacing(8)
 
         v.addWidget(tab_header(
             "화면 일부를 다른 위치에 미러링 — 단축바·체력바 등을 눈에 편한 곳에",

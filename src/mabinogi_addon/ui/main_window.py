@@ -30,10 +30,14 @@ from ..catalog import available_catalog, available_debuff_catalog, build_templat
 from ..system.window_watcher import create_window_watcher
 from ..tracker.debuff_engine import DebuffEngine
 from ..tracker.engine import BuffEngine
+from .bead_split_tab import BeadSplitTab
+from .boss_tab import BossTab
 from .buff_controller import BuffController
 from .buff_tab import ANCHOR_ID, BuffTab
 from .custom_overlay_tab import CustomOverlayTab
 from .debuff_tab import DebuffTab
+from .distribution_tab import DistributionTab
+from .exchange_tab import ExchangeTab
 from .memo_overlay import MemoOverlay
 from .memo_tab import MemoTab
 from .notifier import SoundNotifier, default_sound_map
@@ -45,6 +49,7 @@ from .tuarim_tab import TuarimTab
 # 번들 경로 사용(exe=_MEIPASS/assets). __file__ 기준은 frozen에서 어긋난다.
 LOGO_PATH = paths.resource_dir() / "logo.png"
 _log = logging.getLogger("mabinogi_addon.close")
+_cap_log = logging.getLogger("mabinogi_addon.capture")  # 라이브 캡처 시작 진단
 _up_log = logging.getLogger("mabinogi_addon.updater")  # 업데이트 확인 진단(계기·스로틀·결과)
 _notes_log = logging.getLogger("mabinogi_addon.notes")  # 업데이트 노트 표시 진단
 
@@ -161,6 +166,19 @@ _TAB_QSS = (
     " border-bottom: 2px solid #00D1A7; }"
 )
 
+# 하위(트래커 내부) 탭: 상위와 확실히 구분되게 더 작고 밋밋하게. 선택 표시는 민트
+# 대신 무채색 밑줄 → '한 단계 아래'로 읽힌다.
+_SUBTAB_QSS = (
+    "QTabWidget::pane { border: none; border-top: 1px solid #2a2f3a; }"
+    "QTabBar { qproperty-drawBase: 0; }"
+    "QTabBar::tab { background: transparent; color: #7d828b; padding: 6px 14px;"
+    " min-width: 0px; border: none; border-bottom: 2px solid transparent;"
+    " font-size: 12px; }"
+    "QTabBar::tab:hover { color: #cfd3da; }"
+    "QTabBar::tab:selected { color: #cfd3da; font-weight: 700;"
+    " border-bottom: 2px solid #5a6270; }"
+)
+
 
 class MainWindow(QMainWindow):
     # 백그라운드 스레드(업데이트 확인/다운로드)에서 UI 스레드로 안전하게 넘기는 신호.
@@ -181,6 +199,7 @@ class MainWindow(QMainWindow):
         # 파티(≈612)·커스텀(≈718)이 스크롤 없이 들어오고, 길이가 압도적인 설정 탭
         # (≈1265)만 세로 스크롤로 본다(_VScroll이 눌림 방지).
         self.setFixedSize(790, 800)
+        self._restore_window_pos()  # 저장된 창 위치 복원(없으면 화면 중앙)
 
         # 포그라운드 감지(맥=항상 활성). 저장된 게임 실행파일로 판정(없으면 제목 폴백).
         self._watcher = create_window_watcher(game_exe=config.load_game_exe())
@@ -202,21 +221,41 @@ class MainWindow(QMainWindow):
         self.party_tab.activate_requested.connect(self._focus_party_tab)
         self.memo_tab = MemoTab()
         self.tuarim_tab = TuarimTab(self._watcher)
+        self.boss_tab = BossTab(self._watcher)  # 베타(디스코드 로그인 게이팅)
         self.custom_overlay_tab = CustomOverlayTab(self._watcher)
         self.settings_tab = SettingsTab(self._watcher)
         self.settings_tab.config_imported.connect(self._on_config_imported)
         self.settings_tab.voice_pack_changed.connect(self._on_voice_pack_changed)
         self.settings_tab.replay_tour.connect(self._run_tour)
+        # 화면을 읽는 트래커들은 '트래커' 상위 탭 하나로 묶고, 그 아래 하위 탭으로 나눈다.
+        # → 상단 탭이 짧아져(트래커·커스텀·파티·메모·설정) 설정이 넘침(<>) 뒤로 안 묻힌다.
+        # 각 탭을 스크롤 영역으로 감싼다 → 창 높이를 고정해도 내용이 잘리지 않고 스크롤.
+        self._tracker_tabs = QTabWidget()
+        self._tracker_tabs.addTab(_scrolled(self.buff_tab), "버프")
+        self._tracker_tabs.addTab(_scrolled(self.debuff_tab), "디버프")
+        self._tracker_tabs.addTab(_scrolled(self.tuarim_tab), "투아림")
+        # 보스만 쓰면 뭘 추적하는지 모호해 풀네임 유지.
+        self._tracker_tabs.addTab(_scrolled(self.boss_tab), "보스 패턴 알림 [BETA]")
+        self._tracker_tabs.setStyleSheet(_SUBTAB_QSS)
+
+        # 편의기능: 메모·계산기 등 보조 기능을 묶는 상위 탭.
+        self.distribution_tab = DistributionTab()
+        self.exchange_tab = ExchangeTab()
+        self.bead_split_tab = BeadSplitTab()
+        self._convenience_tabs = QTabWidget()
+        self._convenience_tabs.addTab(_scrolled(self.memo_tab), "메모")
+        self._convenience_tabs.addTab(_scrolled(self.distribution_tab), "분배 계산기")
+        self._convenience_tabs.addTab(_scrolled(self.bead_split_tab), "구슬 분배 계산기")
+        self._convenience_tabs.addTab(_scrolled(self.exchange_tab), "환전비율 계산기")
+        self._convenience_tabs.setStyleSheet(_SUBTAB_QSS)
+
         tabs = QTabWidget()
         self._tabs = tabs  # 온보딩 투어에서 탭 전환에 사용
-        # 각 탭을 스크롤 영역으로 감싼다 → 창 높이를 고정해도 내용이 잘리지 않고 스크롤.
-        tabs.addTab(_scrolled(self.buff_tab), "버프 트래커")
-        tabs.addTab(_scrolled(self.debuff_tab), "디버프 트래커")
-        tabs.addTab(_scrolled(self.tuarim_tab), "투아림 트래커")
+        tabs.addTab(self._tracker_tabs, "트래커")
         tabs.addTab(_scrolled(self.custom_overlay_tab), "커스텀 오버레이")
         self._party_scroll = _scrolled(self.party_tab)  # 토스트 클릭 시 이 탭으로 전환
         tabs.addTab(self._party_scroll, "파티 모집")
-        tabs.addTab(_scrolled(self.memo_tab), "메모")
+        tabs.addTab(self._convenience_tabs, "편의기능")
         tabs.addTab(_scrolled(self.settings_tab), "설정")
         tabs.setStyleSheet(_TAB_QSS)
 
@@ -257,10 +296,12 @@ class MainWindow(QMainWindow):
         memo = config.load_memo()
         self.memo_overlay = MemoOverlay(font_size=int(memo.get("fontSize", 16)))
         self.memo_overlay.set_markdown(str(memo.get("text", "")))
+        self._memo_enabled = bool(memo.get("enabled", True))
         self.memo_tab.lock_toggled.connect(self._on_memo_lock)
         self.memo_tab.region_changed.connect(self._apply_memo_region)
         self.memo_tab.font_changed.connect(self._on_memo_font)
         self.memo_tab.text_changed.connect(self._on_memo_text)
+        self.memo_tab.enabled_toggled.connect(self._on_memo_enabled)
         self.memo_overlay.moved.connect(self._on_memo_moved)
         self._memo_timer = QTimer(self)
         self._memo_timer.setInterval(300)
@@ -476,7 +517,8 @@ class MainWindow(QMainWindow):
         from .tour_overlay import TourOverlay, TourStep
 
         def _go_buff() -> None:
-            self._tabs.setCurrentIndex(0)  # 버프 탭(스크롤로 감싸 위젯 기준 전환 불가)
+            self._tabs.setCurrentWidget(self._tracker_tabs)  # 상위 '트래커'
+            self._tracker_tabs.setCurrentIndex(0)  # 하위 '버프'
 
         steps = [
             TourStep(
@@ -779,10 +821,9 @@ class MainWindow(QMainWindow):
         list[str],
         dict[str, bool],
         dict[str, int],
-        dict[str, bool],
         dict[str, int | None],
     ]:
-        """저장 설정으로 (순서, 지속시간, 1차초, 점멸, 2차초[없으면 None])를 만든다."""
+        """저장 설정으로 (순서, 지속시간, 1차초, 2차초[없으면 None])를 만든다."""
         catalog_by = {b.id: b for b in catalog}
         saved = {s.id: s for s in config.load_buff_settings()}
 
@@ -803,15 +844,6 @@ class MainWindow(QMainWindow):
             b.id: (saved[b.id].alert.before_sec if b.id in saved else 30)
             for b in catalog
         }
-        # 점멸: '종료 알림'과 '점멸'을 모두 켠 버프만. 설정 없으면 기본 켜짐.
-        blink = {
-            b.id: (
-                saved[b.id].alert.enabled and saved[b.id].alert.blink
-                if b.id in saved
-                else True
-            )
-            for b in catalog
-        }
         # 2차 알림 기준초: '종료 알림'+'2차 알림'을 모두 켠 버프만, 아니면 None(없음).
         alert_before2 = {
             b.id: (
@@ -825,7 +857,7 @@ class MainWindow(QMainWindow):
             )
             for b in catalog
         }
-        return order, show_duration, alert_before, blink, alert_before2
+        return order, show_duration, alert_before, alert_before2
 
     def _start_buff_tracking(self) -> None:
         """저장된 영역이 있으면 라이브 캡처(dxcam)로 버프 추적 시작(재시작 포함)."""
@@ -841,12 +873,15 @@ class MainWindow(QMainWindow):
             from .dpi import to_physical
 
             source = create_live_source(Region(*to_physical(region)))
-        except Exception:  # noqa: BLE001 — dxcam 없음(맥 등)이면 라이브 미시작
+        except ImportError:
+            return  # dxcam 없음(맥/개발) → 라이브 미시작(정상)
+        except Exception as exc:  # noqa: BLE001 — Windows에서 실제 실패 시 진단 로그
+            _cap_log.error("버프 라이브 캡처 시작 실패: %s", exc)
             return
 
         catalog = available_catalog()
         catalog_by = {b.id: b for b in catalog}
-        order, show_duration, alert_before, blink, alert_before2 = (
+        order, show_duration, alert_before, alert_before2 = (
             self._compute_tracking(catalog)
         )
         self._sound_ids = self._sound_enabled_ids()
@@ -872,7 +907,6 @@ class MainWindow(QMainWindow):
             show_duration,
             on_alert=self._on_buff_alert,
             watcher=self._watcher,
-            blink_enabled=blink,
         )
         self.buff_controller.set_paused(self._paused)  # 재생성 시 일시정지 상태 유지
         # 아이콘 생성/소멸을 빠르게 캐치(50ms=20fps). 시간 판독은 엔진이 throttle하고,
@@ -897,7 +931,7 @@ class MainWindow(QMainWindow):
         """순서·노출·지속시간·알림 변경을 실행 중 엔진에 즉시 반영(재시작 없이)."""
         if self._engine is None or self.buff_controller is None:
             return
-        order, show_duration, alert_before, blink, alert_before2 = (
+        order, show_duration, alert_before, alert_before2 = (
             self._compute_tracking(available_catalog())
         )
         self._engine.set_order(order)
@@ -905,7 +939,6 @@ class MainWindow(QMainWindow):
         self._engine.set_alert_before(alert_before)
         self._engine.set_alert_before2(alert_before2)
         self.buff_controller.set_show_duration(show_duration)
-        self.buff_controller.set_blink_enabled(blink)
         self._sound_ids = self._sound_enabled_ids()
 
     def _on_catalog_changed(self) -> None:
@@ -941,7 +974,10 @@ class MainWindow(QMainWindow):
             from .dpi import to_physical
 
             source = create_live_source(Region(*to_physical(region)))
-        except Exception:  # noqa: BLE001 — dxcam 없음(맥 등)
+        except ImportError:
+            return  # dxcam 없음(맥/개발) → 라이브 미시작(정상)
+        except Exception as exc:  # noqa: BLE001 — Windows에서 실제 실패 시 진단 로그
+            _cap_log.error("디버프 라이브 캡처 시작 실패: %s", exc)
             return
 
         catalog = available_debuff_catalog()
@@ -1003,6 +1039,11 @@ class MainWindow(QMainWindow):
         self.memo_overlay.set_markdown(md)  # 입력 즉시 오버레이에 렌더
         self._save_memo()
 
+    def _on_memo_enabled(self, enabled: bool) -> None:
+        self._memo_enabled = enabled
+        self._save_memo()
+        self._tick_memo_visibility()  # 즉시 반영(끄면 바로 숨김)
+
     def _save_memo(self) -> None:
         if self._restoring or self._booting or self._config_pending_restart:
             return
@@ -1010,12 +1051,13 @@ class MainWindow(QMainWindow):
             self.memo_overlay.text(),
             self.memo_overlay.locked,
             self.memo_tab.font_spin.value(),
+            self._memo_enabled,
         )
 
     def _tick_memo_visibility(self) -> None:
-        """메모 표시 규칙: 게임 포그라운드면 표시. 해제(편집) 상태면 우리 앱에서도
-        표시(위치/입력). 고정 상태인데 게임이 포그라운드 아니면 숨김."""
-        if config.load_capture_region("memoTracker") is None:
+        """메모 표시 규칙: '사용' 켜짐 + 게임 포그라운드면 표시. 해제(편집) 상태면
+        우리 앱에서도 표시(위치/입력). 고정인데 게임이 포그라운드 아니면 숨김."""
+        if not self._memo_enabled or config.load_capture_region("memoTracker") is None:
             self.memo_overlay.hide()
             return
         if self._watcher.is_game_active() or self._watcher.is_self_active() and not self.memo_overlay.locked:
@@ -1027,8 +1069,13 @@ class MainWindow(QMainWindow):
         self._restoring = True
         try:
             self._apply_memo_region()
-            locked = bool(config.load_memo().get("locked", False))
+            memo = config.load_memo()
+            locked = bool(memo.get("locked", False))
             self.memo_tab.set_lock_state(locked)  # 버튼 동기화 + set_locked 적용
+            self._memo_enabled = bool(memo.get("enabled", True))
+            self.memo_tab.enable_chk.blockSignals(True)
+            self.memo_tab.enable_chk.setChecked(self._memo_enabled)
+            self.memo_tab.enable_chk.blockSignals(False)
         finally:
             self._restoring = False
         self._memo_timer.start()
@@ -1189,8 +1236,36 @@ class MainWindow(QMainWindow):
             return True
         return isinstance(w, QComboBox) and w.isEditable()
 
+    def _restore_window_pos(self) -> None:
+        """저장된 창 위치로 복원. 저장값이 없거나 연결된 화면 밖이면 주 화면 중앙에
+        둔다(자동 업데이트 재실행 등으로 좌상단 0,0에 뜨던 문제 방지)."""
+        from PySide6.QtCore import QRect
+        from PySide6.QtGui import QGuiApplication
+
+        pos = config.load_window_pos()
+        if pos is not None:
+            r = QRect(pos["x"], pos["y"], self.width(), self.height())
+            if any(s.availableGeometry().intersects(r) for s in QGuiApplication.screens()):
+                self.move(pos["x"], pos["y"])
+                return
+        screen = QGuiApplication.primaryScreen()
+        if screen is not None:
+            g = screen.availableGeometry()
+            self.move(
+                g.x() + (g.width() - self.width()) // 2,
+                g.y() + (g.height() - self.height()) // 2,
+            )
+
+    def _save_window_pos(self) -> None:
+        if self._restoring or self._booting or self._config_pending_restart:
+            return
+        p = self.pos()
+        config.save_window_pos(p.x(), p.y())
+
     def closeEvent(self, event) -> None:
         import time
+
+        self._save_window_pos()  # 트레이 최소화·완전 종료 모두에서 현재 위치 기억
 
         # 트레이 최소화: X를 눌러도 종료하지 않고 트레이로 숨긴다(백그라운드 계속 동작).
         # 단, 설정 가져오기/초기화 후엔 낡은 인스턴스가 남지 않게 X로도 완전 종료한다
@@ -1251,6 +1326,7 @@ class MainWindow(QMainWindow):
             self.memo_overlay.close(),
             self.custom_overlay_tab.shutdown(),
             self.tuarim_tab.shutdown(),
+            self.boss_tab.shutdown(),
         ))
         if self._tray is not None:
             self._tray.hide()

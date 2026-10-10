@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (
 from .. import config
 from .help_dialog import tab_header
 from .markdown_highlighter import MarkdownHighlighter
-from .widgets import hint_label, section_label
+from .widgets import checkbox, hint_label, section_label
 
 # 마크다운 툴바 아이콘 버튼 스타일(hover 시 민트).
 _TOOL_QSS = (
@@ -63,6 +63,7 @@ class MemoTab(QWidget):
     region_changed = Signal()  # 메모 영역(위치·크기) 변경
     font_changed = Signal(int)  # 글자 크기 변경
     text_changed = Signal(str)  # 메모(마크다운) 내용 변경 → 오버레이 렌더·저장
+    enabled_toggled = Signal(bool)  # 메모 오버레이 표시 on/off
 
     def __init__(self) -> None:
         super().__init__()
@@ -72,6 +73,15 @@ class MemoTab(QWidget):
         v.addWidget(tab_header(
             "게임 위에 마크다운 메모 띄우기", HELP_TITLE, HELP_HTML, self
         ))
+
+        # 메모 오버레이 표시 on/off (끄면 영역·내용은 그대로 두고 화면에만 안 띄움)
+        self.enable_chk = checkbox("메모 오버레이 사용")
+        self.enable_chk.setToolTip(
+            "끄면 영역·내용은 그대로 두고 게임 화면에 메모를 띄우지 않습니다."
+        )
+        self.enable_chk.setChecked(bool(config.load_memo().get("enabled", True)))
+        self.enable_chk.toggled.connect(self.enabled_toggled.emit)
+        v.addWidget(self.enable_chk)
 
         top = QHBoxLayout()
         top.setSpacing(6)

@@ -1,10 +1,18 @@
-"""투아림 % 숫자 판독.
+"""투아림 % 숫자 판독 (NCC 최근접 이웃).
 
-투아림 리더 박스 영역(BGR)을 이진화한 뒤, 0~9 숫자 템플릿을 matchTemplate으로 찾아
-x 순서로 정렬 → 두 자리까지 이어 % 정수로 돌려준다. '%' 기호는 무시(숫자만 인식).
+투아림 % 숫자는 **밝은 게이지(분홍빛) 위**에 얹혀 있어 글자·배경 모두 밝다(저대비).
+게다가 전투 이펙트로 프레임마다 배경 밝기가 변한다. 그래서 "밝기 임계 이진화 +
+평균 템플릿 1개" 방식은 두 자리(특히 90%대)에서 무너진다.
 
-숫자 템플릿은 detect/templates/tuarim/{0..9}.png. 폰트가 버프 타이머와 달라 별도로
-뜬다(집 스크린샷에서 추출 예정). 템플릿이 없으면 None(판독 불가).
+대신 실게임 캡처로 만든 **레퍼런스 뱅크**(숫자별 여러 장)에 대해 정규화 상관(NCC)
+최근접 이웃으로 각 자리 숫자를 고른다. 대비 정규화(평균 빼고 표준편차로 나눔) 덕에
+배경 밝기가 변해도 글자 모양만 비교된다.
+
+- 입력 영역은 높이를 13px로 맞춰(해상도 차 흡수) V=max(B,G,R) 채널로 본다.
+- 숫자는 오른쪽 정렬이고 맨 오른쪽이 '%'. '%' 오른쪽 끝(R)을 기준으로 일/십의 자리
+  칸을 고정 오프셋으로 자른다(실측값).
+- 레퍼런스: detect/templates/tuarim/refs.npz (Ro/Lo=일의 자리, Rt/Lt=십의 자리).
+  `tests/data/tuarim_shots`의 실캡처로 scripts로 재생성한다(라벨은 0→100 단조 순서).
 """
 
 from __future__ import annotations
@@ -13,132 +21,107 @@ import cv2
 import numpy as np
 
 from .. import paths
-from ..image_io import imread
-from .binarize import binarize
 
-_TEMPLATE_DIR = paths.detect_templates_dir() / "tuarim"
-GLYPH_THRESHOLD = 0.7
+_REFS_PATH = paths.detect_templates_dir() / "tuarim" / "refs.npz"
 
-# 멀티스케일: 해상도가 높을수록 게임이 숫자를 크게 그려(4K>1440p) 1440p 템플릿과
-# 안 맞는다. 템플릿을 여러 배율로 '확대'해 맞춰보고 가장 또렷이 맞는 배율을 쓴다.
-# 축소(×<1)는 넣지 않는다: 작아진 '1'(세로 막대)이 다른 글자의 세로획에 완벽히
-# 과매칭돼 오독을 만든다(예 '6'→'11'). 템플릿은 최저 해상도(1440p) 기준이라 실사용은
-# 전부 확대로 충분하고, 과하게 확대되면 '템플릿>영역'이라 자동 제외된다. 1.0을 먼저
-# 둬(동일 해상도 빠른 경로·동점 우선).
-_SCALES = (1.0, 1.15, 1.3, 1.45, 1.6, 1.75)
+CH, CW = 13, 8  # 셀 표준 크기(높이 13 정규화)
+# '%' 오른쪽 끝(R) 기준 자리 칸 오프셋(실측). ones=일의 자리, tens=십의 자리.
+_ONES = (-17, -9)
+_TENS = (-25, -17)
+_TENS_INK_MIN = 5  # 십의 자리 칸에 이만큼 잉크가 있어야 '두 자리'로 본다
+NCC_MIN = 0.30  # 최근접 상관이 이보다 낮으면 판독 포기(None)
 
 
-def _load_templates() -> dict[str, np.ndarray]:
-    if not _TEMPLATE_DIR.exists():
-        return {}
-    out: dict[str, np.ndarray] = {}
-    for path in sorted(_TEMPLATE_DIR.glob("*.png")):
-        img = imread(path, cv2.IMREAD_GRAYSCALE)
-        if img is not None:
-            out[path.stem] = img
-    return out
+def _load_refs():
+    if not _REFS_PATH.exists():
+        return None
+    try:
+        d = np.load(_REFS_PATH)
+        return (
+            d["Ro"].astype(np.float32),
+            d["Lo"].astype(np.int64),
+            d["Rt"].astype(np.float32),
+            d["Lt"].astype(np.int64),
+        )
+    except Exception:  # noqa: BLE001 — 레퍼런스 손상 시 판독 비활성(None)
+        return None
 
 
-def _scale_binary(t: np.ndarray, scale: float) -> np.ndarray:
-    """이진 템플릿을 배율로 리사이즈 후 다시 이진화(캡처도 이진이라 모양만 비교)."""
-    h, w = t.shape[:2]
-    nh, nw = max(2, round(h * scale)), max(2, round(w * scale))
-    r = cv2.resize(t, (nw, nh), interpolation=cv2.INTER_LINEAR)
-    _, b = cv2.threshold(r, 127, 255, cv2.THRESH_BINARY)
+_REFS = _load_refs()
+
+
+def _binarize(v: np.ndarray) -> np.ndarray:
+    """프레임별 적응형: 밝은 글자 속칠만 남긴다(배경 밝기 무관하게 R 위치 찾기용)."""
+    t = int(np.percentile(v, 98) * 0.85)
+    _, b = cv2.threshold(v.astype(np.uint8), t, 255, cv2.THRESH_BINARY)
     return b
 
 
-def _scaled_sets(tmpls: dict[str, np.ndarray]) -> dict[float, dict[str, np.ndarray]]:
-    """배율별 템플릿 세트. scale 1.0은 원본 그대로."""
-    out: dict[float, dict[str, np.ndarray]] = {}
-    for s in _SCALES:
-        out[s] = tmpls if s == 1.0 else {k: _scale_binary(v, s) for k, v in tmpls.items()}
+def _prep(region_bgr: np.ndarray) -> np.ndarray | None:
+    if region_bgr is None or region_bgr.size == 0:
+        return None
+    h, w = region_bgr.shape[:2]
+    if h < 2 or w < 2:
+        return None
+    nw = max(2, round(w * CH / h))
+    im = cv2.resize(region_bgr, (nw, CH))
+    return im.max(axis=2).astype(np.float32)
+
+
+def _cell(v: np.ndarray, r: int, span: tuple[int, int]) -> np.ndarray:
+    a = max(0, r + span[0])
+    b = min(v.shape[1], r + span[1])
+    seg = v[:, a:b] if b > a else v[:, :0]
+    out = np.zeros((CH, CW), np.float32)
+    if seg.shape[1]:
+        out[:, : min(CW, seg.shape[1])] = seg[:, :CW]
     return out
 
 
-_TEMPLATES = _load_templates()
-_SCALED_DEFAULT = _scaled_sets(_TEMPLATES) if _TEMPLATES else {}
+def _norm(cell: np.ndarray) -> np.ndarray:
+    c = cell - cell.mean()
+    s = c.std()
+    return (c / s if s > 1e-5 else c).ravel().astype(np.float32)
 
 
-def _occurrences(strip, label, template, threshold):
-    if template.shape[0] > strip.shape[0] or template.shape[1] > strip.shape[1]:
-        return []
-    result = cv2.matchTemplate(strip, template, cv2.TM_CCOEFF_NORMED)
-    h, w = template.shape[:2]
-    found = []
-    while True:
-        _mn, max_v, _ml, max_l = cv2.minMaxLoc(result)
-        if max_v < threshold:
-            break
-        x, y = max_l
-        found.append((x, float(max_v), label, w))
-        x0, y0 = max(0, x - w // 2), max(0, y - h // 2)
-        result[y0 : y + h // 2 + 1, x0 : x + w // 2 + 1] = -1.0
-    return found
-
-
-def _nms(hits):
-    """x가 겹치는 서로 다른 숫자 후보 중 점수 높은 것만 남긴다."""
-    hits.sort(key=lambda o: -o[1])
-    kept: list = []
-    for x, score, label, w in hits:
-        if all(abs(x - kx) >= max(4, w // 2) for kx, _, _, _ in kept):
-            kept.append((x, score, label, w))
-    kept.sort(key=lambda o: o[0])  # x 순서(왼→오른쪽)
-    return kept
-
-
-def _match_at(binary, tmpls, threshold) -> tuple[int, float] | None:
-    """한 배율 세트로 읽기 시도. (값, peak점수) 또는 None.
-
-    peak = 이 배율에서 가장 강한 숫자 매칭 점수. 정답 배율에서 글자가 가장 또렷이
-    맞아 peak가 제일 높으므로, 여러 배율 중 peak가 최고인 배율의 읽기를 택한다.
-    (평균/자릿수로 고르면 '1' 같은 단순 글자가 엉뚱한 배율에서 오독을 일으킴.)
-    """
-    hits: list = []
-    for label, tmpl in tmpls.items():
-        hits += _occurrences(binary, label, tmpl, threshold)
-    if not hits:
-        return None
-    peak = max(s for _x, s, _l, _w in hits)
-    kept = _nms(hits)[:2]  # 두 자리까지
-    if not kept:
-        return None
-    digits = [label for _x, _s, label, _w in kept]
-    try:
-        value = int("".join(digits))
-    except ValueError:
-        return None
-    return value, peak
+def _classify(vec: np.ndarray, refs: np.ndarray, labels: np.ndarray):
+    """정규화 상관 최근접 이웃. (라벨, 점수) 또는 (None, score)."""
+    if refs.size == 0:
+        return None, -1.0
+    scores = refs @ vec / vec.size  # 정규화돼 있어 내적/표본수 ≈ 상관계수
+    k = int(scores.argmax())
+    return int(labels[k]), float(scores[k])
 
 
 def read_percent(
     region_bgr: np.ndarray,
-    templates: dict[str, np.ndarray] | None = None,
-    threshold: float = GLYPH_THRESHOLD,
+    templates: dict[str, np.ndarray] | None = None,  # 하위호환(무시)
+    threshold: float = NCC_MIN,
 ) -> int | None:
-    """리더 박스 영역에서 % 정수(0~99)를 읽는다. 못 읽으면 None.
+    """리더 박스 영역에서 % 정수(0~100)를 읽는다. 못 읽으면 None.
 
-    여러 배율로 시도해(해상도가 달라 숫자 크기가 템플릿과 다른 경우 대응) 글자가
-    가장 또렷하게 맞는 배율의 결과를 쓴다. 동점이면 1.0(동일 해상도)이 먼저라 이긴다.
+    `templates`는 과거 시그니처 호환용으로 남겨뒀고 더는 쓰지 않는다(레퍼런스 뱅크 사용).
     """
-    if region_bgr is None or region_bgr.size == 0:
+    if _REFS is None:
         return None
-    if templates is None:
-        sets = _SCALED_DEFAULT
-    elif not templates:
+    v = _prep(region_bgr)
+    if v is None:
         return None
-    else:
-        sets = _scaled_sets(templates)
-    if not sets:
+    b = _binarize(v)
+    cols = np.where((b > 0).any(axis=0))[0]
+    if len(cols) == 0:
         return None
-    binary = binarize(region_bgr)
-    best: tuple[float, int] | None = None  # (peak점수, 값)
-    for scale in _SCALES:
-        got = _match_at(binary, sets[scale], threshold)
-        if got is None:
-            continue
-        value, peak = got
-        if best is None or peak > best[0]:  # 엄격한 > → 동점이면 먼저 온 1.0 우선
-            best = (peak, value)
-    return best[1] if best else None
+    r = int(cols[-1])  # '%' 오른쪽 끝
+    Ro, Lo, Rt, Lt = _REFS
+
+    ones_d, ones_s = _classify(_norm(_cell(v, r, _ONES)), Ro, Lo)
+    if ones_d is None or ones_s < threshold:
+        return None
+
+    tens_ink = int((b[:, max(0, r + _TENS[0]) : max(0, r + _TENS[1])] > 0).sum())
+    if tens_ink >= _TENS_INK_MIN:
+        tens_d, tens_s = _classify(_norm(_cell(v, r, _TENS)), Rt, Lt)
+        if tens_d is not None and tens_s >= threshold:
+            value = tens_d * 10 + ones_d
+            return value if 0 <= value <= 100 else None
+    return ones_d

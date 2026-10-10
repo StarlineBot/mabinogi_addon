@@ -78,6 +78,16 @@ def main() -> None:
     if _apply_update_before_launch(splash):
         return  # 교체 + 새 exe 재실행됨 → 이 프로세스는 조용히 종료
 
+    # 단일 인스턴스 가드: 이미 떠 있으면 두 번째는 조용히 종료(트레이 아이콘 둘 방지).
+    # 업데이트 자가-재실행 '이후'에 둬서, 재실행 과도기의 세그먼트 경합을 피한다.
+    from mabinogi_addon.system.single_instance import SingleInstance
+
+    single = SingleInstance()
+    if single.already_running:
+        if splash is not None:
+            splash.close()
+        return
+
     if splash is not None:
         splash.step(45)
     window = MainWindow()  # 가장 무거운 단계(카탈로그·엔진·오버레이 구성)

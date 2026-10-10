@@ -42,18 +42,40 @@ def _load_env() -> None:
 
 
 def _read_local_config(path: Path = LOCAL_CONFIG_PATH) -> dict:
-    if not path.exists():
-        return {}
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (ValueError, OSError):
-        return {}
+    # 본 파일이 깨졌으면(.bak) 백업으로 복구 시도 → 전원차단 등으로 손상돼도 설정 보존.
+    for p in (path, path.with_name(path.name + ".bak")):
+        if not p.exists():
+            continue
+        try:
+            text = p.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        if not text.strip():
+            continue  # 빈 파일(쓰다 중단) → 다음 후보로
+        try:
+            return json.loads(text)
+        except ValueError:
+            continue
+    return {}
 
 
 def _write_local_config(data: dict, path: Path = LOCAL_CONFIG_PATH) -> None:
-    path.write_text(
-        json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
+    """원자적 저장: 임시 파일에 쓰고 flush+fsync 후 os.replace로 교체한다. 쓰는
+    도중 전원이 끊겨도 본 파일은 '이전 정상본' 아니면 '새 완본'이라 절대 깨지지
+    않는다(빈 파일로 초기화되던 문제 방지). 교체 직전 직전본을 .bak로 보존한다."""
+    text = json.dumps(data, ensure_ascii=False, indent=2)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write(text)
+        f.flush()
+        os.fsync(f.fileno())
+    if path.exists():
+        try:
+            os.replace(path, path.with_name(path.name + ".bak"))  # 직전본 백업
+        except OSError:  # 백업 실패해도 본 저장은 진행
+            pass
+    os.replace(tmp, path)  # 원자적 교체
 
 
 # 내보내기에서 제외할 비밀값(공유·이동 시 유출 방지). 가져올 때도 덮어쓰지 않음.
@@ -327,7 +349,6 @@ def save_party_lists(keywords: list[str], excludes: list[str]) -> None:
 class AlertConfig:
     enabled: bool = False  # 기본: 종료 알림 꺼짐(사용자가 필요한 버프만 켬)
     before_sec: int = 30
-    blink: bool = True
     sound: bool = True
     enabled2: bool = False  # 2차 알림(놓침·오독 대비 재알림) 사용 여부
     before_sec2: int = 5  # 2차 알림 기준(만료 N초 전)
@@ -354,7 +375,6 @@ def _settings_from_dict(raw: dict) -> BuffSettings:
         alert=AlertConfig(
             enabled=bool(alert.get("enabled", False)),
             before_sec=int(alert.get("beforeSec", 30)),
-            blink=bool(alert.get("blink", True)),
             sound=bool(alert.get("sound", True)),
             enabled2=bool(alert.get("enabled2", False)),
             before_sec2=int(alert.get("beforeSec2", 5)),
@@ -371,7 +391,6 @@ def _settings_to_dict(s: BuffSettings) -> dict:
         "alert": {
             "enabled": s.alert.enabled,
             "beforeSec": s.alert.before_sec,
-            "blink": s.alert.blink,
             "sound": s.alert.sound,
             "enabled2": s.alert.enabled2,
             "beforeSec2": s.alert.before_sec2,
@@ -491,6 +510,25 @@ def save_general_flag(key: str, value: bool, path: Path = LOCAL_CONFIG_PATH) -> 
     _write_local_config(data, path)
 
 
+def load_window_pos(path: Path = LOCAL_CONFIG_PATH) -> dict | None:
+    """메인 창 위치 {x,y}. 없으면 None(→ 중앙 배치)."""
+    g = _read_local_config(path).get("general") or {}
+    p = g.get("windowPos")
+    if isinstance(p, dict) and "x" in p and "y" in p:
+        return {"x": int(p["x"]), "y": int(p["y"])}
+    return None
+
+
+def save_window_pos(x: int, y: int, path: Path = LOCAL_CONFIG_PATH) -> None:
+    data = _read_local_config(path)
+    g = data.get("general")
+    if not isinstance(g, dict):
+        g = {}
+    g["windowPos"] = {"x": int(x), "y": int(y)}
+    data["general"] = g
+    _write_local_config(data, path)
+
+
 _AUTOSTART_KEY = "autostart"  # general 섹션: Windows 시작 시 자동 실행 '의도'
 
 
@@ -576,10 +614,19 @@ def load_memo(path: Path = LOCAL_CONFIG_PATH) -> dict:
 
 
 def save_memo(
-    text: str, locked: bool, font_size: int, path: Path = LOCAL_CONFIG_PATH
+    text: str,
+    locked: bool,
+    font_size: int,
+    enabled: bool = True,
+    path: Path = LOCAL_CONFIG_PATH,
 ) -> None:
     data = _read_local_config(path)
-    data["memo"] = {"text": text, "locked": locked, "fontSize": font_size}
+    data["memo"] = {
+        "text": text,
+        "locked": locked,
+        "fontSize": font_size,
+        "enabled": enabled,
+    }
     _write_local_config(data, path)
 
 
@@ -613,8 +660,12 @@ def load_tuarim(path: Path = LOCAL_CONFIG_PATH) -> dict:
     sec = sec if isinstance(sec, dict) else {}
     box = sec.get("box") if isinstance(sec.get("box"), dict) else None
     thresholds = sec.get("thresholds")
+    # % 판독이 90% 이상에서만 신뢰 가능(밝은 배경 저대비)하고, 투아림 알림의 목적도
+    # 100% 직전 경고이므로 임계는 90~99로 제한한다(옛 설정값은 90으로 끌어올림).
     thresholds = (
-        [int(x) for x in thresholds] if isinstance(thresholds, list) else [95, 98]
+        [min(99, max(90, int(x))) for x in thresholds]
+        if isinstance(thresholds, list)
+        else [90, 95]
     )
     sounds = sec.get("sounds")
     sounds = [bool(x) for x in sounds] if isinstance(sounds, list) else [True, True]
@@ -633,6 +684,41 @@ def save_tuarim(data: dict, path: Path = LOCAL_CONFIG_PATH) -> None:
         sec = {}
     sec.update(data)
     cfg["tuarim"] = sec
+    _write_local_config(cfg, path)
+
+
+def load_boss_pattern(path: Path = LOCAL_CONFIG_PATH) -> dict:
+    """보스 패턴 경고 설정. (베타 — 디스코드 로그인 게이팅)
+
+    {enabled, box:{x,y,w,h}, showUpcoming, upcomingLocked, upcomingPos:{x,y},
+     warnLocked, warnPos:{x,y}}
+    - showUpcoming: 왼쪽 '다음 패턴 목록' 오버레이 사용
+    - upcomingLocked/upcomingPos: 그 목록의 고정 여부·위치
+    - warnLocked/warnPos: 중앙 경고의 고정 여부·위치(없으면 기본 위치)
+    """
+    sec = _read_local_config(path).get("bossPattern")
+    sec = sec if isinstance(sec, dict) else {}
+    box = sec.get("box") if isinstance(sec.get("box"), dict) else None
+    pos = sec.get("upcomingPos") if isinstance(sec.get("upcomingPos"), dict) else None
+    warn_pos = sec.get("warnPos") if isinstance(sec.get("warnPos"), dict) else None
+    return {
+        "enabled": bool(sec.get("enabled", False)),
+        "box": box,
+        "showUpcoming": bool(sec.get("showUpcoming", False)),
+        "upcomingLocked": bool(sec.get("upcomingLocked", False)),
+        "upcomingPos": pos,
+        "warnLocked": bool(sec.get("warnLocked", True)),
+        "warnPos": warn_pos,
+    }
+
+
+def save_boss_pattern(data: dict, path: Path = LOCAL_CONFIG_PATH) -> None:
+    cfg = _read_local_config(path)
+    sec = cfg.get("bossPattern")
+    if not isinstance(sec, dict):
+        sec = {}
+    sec.update(data)
+    cfg["bossPattern"] = sec
     _write_local_config(cfg, path)
 
 
