@@ -27,6 +27,7 @@ class PartyWorker(QThread):
         get_keywords: Callable[[], list[str]],
         get_excludes: Callable[[], list[str]],
         *,
+        get_server: Callable[[], str] | None = None,
         poll_sec: int = 5,
         parent=None,
     ) -> None:
@@ -34,20 +35,23 @@ class PartyWorker(QThread):
         self._get_api_key = get_api_key
         self._get_keywords = get_keywords
         self._get_excludes = get_excludes
+        self._get_server = get_server
         self._poll_sec = poll_sec
         self._alert_state = AlertState()
         self._running = True
         self._primed = False  # 첫 폴링은 토스트 억제(기존 모집을 '이미 봄'으로 기억)
+        self._wake = False  # 서버 변경 등으로 대기를 깨고 즉시 다시 받기
 
     def run(self) -> None:
         while self._running:
             self._poll_once()
-            # poll_sec 동안 대기하되, 중지 요청이 오면 즉시 깬다
+            # poll_sec 동안 대기하되, 중지·즉시갱신(서버 변경) 요청이 오면 즉시 깬다
             self.msleep(0)
             for _ in range(self._poll_sec * 10):
-                if not self._running:
+                if not self._running or self._wake:
                     break
                 self.msleep(100)
+            self._wake = False
 
     def _poll_once(self) -> None:
         api_key = self._get_api_key()
@@ -57,9 +61,15 @@ class PartyWorker(QThread):
         # HTTP는 데몬 스레드에서 돌려 종료를 막지 않게 한다(요청 중 종료해도 즉시 빠져나감).
         box: dict = {}
 
+        server = self._get_server() if self._get_server is not None else None
+
         def _do() -> None:
             try:
-                box["raw"] = fetch_horn_bugle(api_key)
+                box["raw"] = (
+                    fetch_horn_bugle(api_key, server)
+                    if server
+                    else fetch_horn_bugle(api_key)
+                )
             except Exception as error:  # noqa: BLE001 — 폴링은 어떤 오류에도 계속 돈다
                 box["err"] = error
 
@@ -88,5 +98,17 @@ class PartyWorker(QThread):
         for keyword, recruit in hits:
             self.alerted.emit(keyword, recruit)
 
+    def reprime(self) -> None:
+        """서버 변경 등으로 목록을 처음부터 다시 받는다.
+
+        다음 폴링을 '첫 폴링'처럼 처리해(기존 모집을 '이미 봄'으로만 기록, 토스트 억제)
+        새 서버의 기존 모집이 한꺼번에 토스트로 쏟아지지 않게 하고, 대기를 깨워 즉시
+        다시 받는다.
+        """
+        self._primed = False
+        self._alert_state = AlertState()
+        self._wake = True
+
     def stop(self) -> None:
         self._running = False
+        self._wake = True  # 대기 중이면 즉시 깨워 종료를 앞당긴다

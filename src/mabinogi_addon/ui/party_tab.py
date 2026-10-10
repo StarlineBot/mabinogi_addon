@@ -11,6 +11,7 @@ from PySide6.QtGui import QBrush, QColor
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
+    QComboBox,
     QGroupBox,
     QHBoxLayout,
     QHeaderView,
@@ -29,6 +30,7 @@ from PySide6.QtWidgets import (
 )
 
 from .. import config
+from ..party.client import SERVERS
 from ..party.models import Recruit
 from ..party.service import build_board, humanize_age
 from ..party.worker import PartyWorker
@@ -128,6 +130,7 @@ class PartyTab(QWidget):
     def __init__(self) -> None:
         super().__init__()
         self._keywords, self._excludes = config.load_party_lists()
+        self._server = config.load_party_server()  # 조회 대상 서버(상단 콤보)
         self._worker: PartyWorker | None = None
         self._last_raw: list[dict] = []  # 마지막 거뿔 원본(즉시 재필터용)
         # 파티 알림은 TTS 보이스팩과 무관하게 '기본 소리' 고정(sound_path가 아니라
@@ -150,8 +153,22 @@ class PartyTab(QWidget):
 
     # ---- 현황판 ----
     def _build_board(self) -> QGroupBox:
-        box = QGroupBox("파티모집현황 (하프 서버)")
+        box = QGroupBox("파티모집현황")
         v = QVBoxLayout(box)
+
+        # 서버 선택(현황·알림이 이 서버 기준으로 조회된다)
+        server_row = QHBoxLayout()
+        server_row.setSpacing(6)
+        server_row.addWidget(QLabel("서버"))
+        self.server_combo = QComboBox()
+        self.server_combo.addItems(SERVERS)
+        idx = self.server_combo.findText(self._server)
+        self.server_combo.setCurrentIndex(max(idx, 0))
+        self.server_combo.setToolTip("현황·키워드 알림을 조회할 서버")
+        self.server_combo.currentTextChanged.connect(self._on_server_changed)
+        server_row.addWidget(self.server_combo)
+        server_row.addStretch(1)
+        v.addLayout(server_row)
 
         self.table = QTableWidget(0, 5)
         self.table.setHorizontalHeaderLabels(["채널", "파티장", "제목", "인원", "시간"])
@@ -177,6 +194,19 @@ class PartyTab(QWidget):
         self.status_label = hint_label("대기 중 · 탐지 시작 시 5초마다 갱신")
         v.addWidget(self.status_label)
         return box
+
+    def _on_server_changed(self, server: str) -> None:
+        """서버 변경: 저장하고, 현황을 비운 뒤 새 서버로 즉시 다시 받는다."""
+        if server not in SERVERS or server == self._server:
+            return
+        self._server = server
+        config.save_party_server(server)
+        # 옛 서버의 목록을 즉시 치운다(새 데이터가 올 때까지 빈 상태로).
+        self._last_raw = []
+        self._refresh_board()
+        self.status_label.setText(f"{server} 서버로 전환 중…")
+        if self._worker is not None:
+            self._worker.reprime()  # 첫 폴링처럼 처리 + 대기 깨워 즉시 재조회
 
     def _on_updated(self, raw: list[dict]) -> None:
         """워커가 준 원본을 캐시하고 현재 제외 목록으로 리스트를 그린다."""
@@ -457,6 +487,7 @@ class PartyTab(QWidget):
             get_api_key=config.get_nexon_api_key,
             get_keywords=lambda: list(self._keywords),
             get_excludes=lambda: list(self._excludes),
+            get_server=lambda: self._server,
         )
         self._worker.updated.connect(self._on_updated)
         self._worker.alerted.connect(self._on_alert)

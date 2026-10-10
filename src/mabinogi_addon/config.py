@@ -282,6 +282,28 @@ def load_party_lists() -> tuple[list[str], list[str]]:
     return keywords, excludes
 
 
+def load_party_server(path: Path = LOCAL_CONFIG_PATH) -> str:
+    """파티모집 현황을 조회할 서버(기본 하프). 알 수 없는 값이면 하프로."""
+    from .party.client import DEFAULT_SERVER, SERVERS
+
+    data = _read_local_config(path)
+    party = data.get("party", {}) if isinstance(data.get("party"), dict) else {}
+    v = party.get("server")
+    return v if v in SERVERS else DEFAULT_SERVER
+
+
+def save_party_server(server: str, path: Path = LOCAL_CONFIG_PATH) -> None:
+    from .party.client import DEFAULT_SERVER, SERVERS
+
+    data = _read_local_config(path)
+    party = data.get("party")
+    if not isinstance(party, dict):
+        party = {}
+    party["server"] = server if server in SERVERS else DEFAULT_SERVER
+    data["party"] = party
+    _write_local_config(data, path)
+
+
 def load_party_alert_sound(path: Path = LOCAL_CONFIG_PATH) -> bool:
     """키워드 알림 효과음 사용 여부(기본 켜짐)."""
     data = _read_local_config(path)
