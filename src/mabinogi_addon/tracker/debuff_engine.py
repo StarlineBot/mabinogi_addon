@@ -36,6 +36,7 @@ DEBUFF_THRESHOLD = DEBUFF_DETECT_THRESHOLD  # 진단 스크립트 표시용
 # 하다 — 풀밭 텍스처·채팅 글자는 매끈한 긴 가로런이 없다. 그 최장 매끈런 비율로 판정.
 # 실샘플: 보스 바 0.48~0.53 / 마을·풀밭 ≤0.33 → 0.42로 가른다.
 _BAR_SMOOTH_GAP = 6  # 인접 픽셀 밝기차가 이 미만이면 '매끈'
+_BAR_SAT_MIN = 60  # 이 미만 채도는 '무채색'(돌바닥 등) — 바 채움에서 제외
 _BAR_RUN_RATIO = 0.42  # 한 행의 최장 매끈런 / 영역 폭 이 이상이면 '바다운 행'
 _BAR_MIN_ROWS = 6  # 그런 '바다운 행'이 이만큼(세로로 두꺼운 띠) 있어야 바로 인정
 # (실샘플: 보스 바 22~45행 / 마을·풀밭 0행 → 우연한 매끈 한 줄엔 안 걸림)
@@ -125,18 +126,24 @@ class DebuffEngine:
 
     @staticmethod
     def _bar_present(region: np.ndarray) -> bool:
-        """영역 안에 보스 HP바(길게 매끈한 가로 띠)가 보이는가. 색 무관.
+        """영역 안에 보스 HP바(길게 매끈하고 '색이 있는' 가로 띠)가 보이는가.
 
-        각 행에서 '매끈'(가로 인접차 < gap)한 최장 연속 길이를 재, 가장 긴 행이 영역
-        폭의 _BAR_RUN_RATIO 이상이면 바로 본다. 풀밭·채팅·아이콘은 긴 매끈런이 없다.
+        바 채움은 **채도 높은 색(보라·파랑·초록·노랑·빨강…) + 가로로 매끈**하다. 각
+        행에서 '매끈(인접차<gap)하며 채도도 높은' 픽셀의 최장 연속 길이를 재, 영역 폭의
+        _BAR_RUN_RATIO 이상인 행이 _BAR_MIN_ROWS개 이상이면 바로 본다.
+        - 매끈하지만 **채도 낮은 돌바닥**은 제외(매끈만으로는 바닥을 오인했던 버그 수정).
+        - 채도 높지만 **매끈하지 않은 풀밭·채팅·아이콘**도 제외.
         """
         if region is None or region.shape[0] < 3 or region.shape[1] < 20:
             return False
         g = cv2.cvtColor(region, cv2.COLOR_BGR2GRAY).astype(np.int16)
+        sat = cv2.cvtColor(region, cv2.COLOR_BGR2HSV)[:, :, 1]
         smooth = np.abs(np.diff(g, axis=1)) < _BAR_SMOOTH_GAP  # (h, w-1)
+        colored = sat[:, :-1] > _BAR_SAT_MIN  # 왼쪽 픽셀 채도(바 채움=유채색)
+        ok = smooth & colored
         need = int(region.shape[1] * _BAR_RUN_RATIO)
         bar_rows = 0
-        for row in smooth:
+        for row in ok:
             run = longest = 0
             for v in row:
                 run = run + 1 if v else 0

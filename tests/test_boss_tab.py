@@ -120,6 +120,45 @@ def test_upcoming_list_updates_from_tracker(monkeypatch):
     t.shutdown()
 
 
+def test_upcoming_hides_quickly_after_boss_gone(monkeypatch):
+    """보스가 화면에서 사라지면 '다음 패턴 목록'은 금방 감춰야 한다(#4).
+    트래커·HP는 긴 패턴을 버티려 _GONE_FRAMES(~18초)까지 살아 있지만, 목록은
+    _UPCOMING_GONE_FRAMES(~2초) 뒤면 숨는다 — 보스 떠난 뒤에도 '다가오는 %'가
+    한참 떠 있던 문제 회귀 방지."""
+    _app()
+    from mabinogi_addon.ui import boss_tab as bt_mod
+    from mabinogi_addon.ui.boss_tab import BossTab
+
+    monkeypatch.setattr(config, "load_discord_user", lambda *a, **k: {"name": "x"})
+    t = BossTab(_Watcher())
+    t._region = {"x": 0, "y": 0, "w": 150, "h": 36}
+    t.show_upcoming.setChecked(True)
+    t._upcoming.set_locked(True)  # 고정(게임 위 표시) — 이 상태에서 게이트가 적용됨
+    monkeypatch.setattr(t, "_grab_rect", lambda *a: np.zeros((36, 150, 3), np.uint8))
+    monkeypatch.setattr(t, "_show_preview", lambda *a: None)
+
+    # 레넨 식별 + HP 90 → 목록 표시
+    monkeypatch.setattr(bt_mod, "identify", lambda *a, **k: "lenen_miir")
+    monkeypatch.setattr(bt_mod, "read_percent", lambda *a, **k: 90)
+    for _ in range(4):
+        t._tick()
+    assert t._upcoming.isVisible()
+    assert t._upcoming.items == [80, 40]
+
+    # 보스 사라짐: 짧은 미식별(유예 내)엔 목록 유지
+    monkeypatch.setattr(bt_mod, "identify", lambda *a, **k: None)
+    for _ in range(t._UPCOMING_GONE_FRAMES):
+        t._tick()
+    assert t._upcoming.isVisible()  # 아직 유예 내 → 유지
+
+    # 유예를 넘기면(아직 _GONE_FRAMES 전) 목록은 숨지만 트래커는 살아 있다
+    for _ in range(3):
+        t._tick()
+    assert not t._upcoming.isVisible()
+    assert t._tracker is not None  # 트래커는 _GONE_FRAMES까지 유지(긴 패턴 대비)
+    t.shutdown()
+
+
 def test_warn_lock_toggle_updates_overlay_and_button(monkeypatch):
     """'경고 위치 이동/고정' 버튼이 경고 오버레이 잠금과 버튼 문구를 바꾼다."""
     _app()

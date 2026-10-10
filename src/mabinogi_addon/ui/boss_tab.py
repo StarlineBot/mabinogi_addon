@@ -302,18 +302,35 @@ class BossTab(QWidget):
         config.save_boss_pattern({"upcomingPos": {"x": pos.x(), "y": pos.y()}})
 
     def _update_upcoming(self, hp: int | None) -> None:
-        """남은 패턴 목록을 오버레이에 반영. 고정 상태면 실제 남은 패턴이 있을 때만
-        표시하고, 해제 상태면 위치 지정을 위해 항상 보인다(비면 샘플)."""
+        """남은 패턴 목록을 오버레이에 반영.
+        - 해제(이동) 상태: 위치 지정용으로 항상 보인다(비면 샘플).
+        - 고정 상태: 보스가 **최근에** 식별됐고 남은 패턴이 있을 때만 보인다.
+          트래커·HP는 긴 패턴을 버티려 _GONE_FRAMES(~18초)까지 유지되지만, 목록까지
+          그만큼 남으면 보스가 떠난 뒤에도 '다가오는 %'가 한참 떠 있다(#4). 그래서
+          목록은 보스가 화면에서 사라지면(_UPCOMING_GONE_FRAMES) 금방 감춘다."""
         if not self.show_upcoming.isChecked():
             self._upcoming.hide()
             return
-        items = self._tracker.upcoming(hp) if self._tracker is not None else []
-        self._upcoming.set_items(items)
-        if self._upcoming.locked and not items:
-            self._upcoming.hide()
-        else:
+        if not self._upcoming.locked:
+            # 위치 조정 중 — 항상 보여준다(비면 샘플).
+            items = self._tracker.upcoming(hp) if self._tracker is not None else []
+            self._upcoming.set_items(items)
             self._upcoming.show()
             self._upcoming.raise_()
+            return
+        # 고정: 보스가 최근 식별됐을 때만(짧은 유예로 전투 중 1~2프레임 미식별은 버팀).
+        recent = self._unidentified <= self._UPCOMING_GONE_FRAMES
+        items = (
+            self._tracker.upcoming(hp)
+            if (self._tracker is not None and recent)
+            else []
+        )
+        self._upcoming.set_items(items)
+        if items:
+            self._upcoming.show()
+            self._upcoming.raise_()
+        else:
+            self._upcoming.hide()
 
     # ---- 읽기 루프 ----
     def _tick(self) -> None:
@@ -392,7 +409,10 @@ class BossTab(QWidget):
     _CONFIRM_JUMP = 3  # 큰 점프·첫 확정은 3연속 필요(글리치 차단)
     # 틱 300ms 기준. 보스 바는 '패턴 중'에도 사라지므로, 패턴이 길어도 잠금이
     # 유지되게 넉넉히 둔다. 이보다 오래 미식별이면 전투 종료로 보고 트래커 해제.
-    _GONE_FRAMES = 60  # ~18초
+    _GONE_FRAMES = 60  # ~18초 (트래커 잠금 유지 — 긴 패턴 중 바가 사라져도 버팀)
+    # '다음 패턴 목록'은 보스가 화면에서 사라지면 금방 감춘다. 트래커는 _GONE_FRAMES까지
+    # 살아 있지만 목록까지 그만큼 떠 있으면 보스가 떠난 뒤 한참 남는다(#4). ~2초로 짧게.
+    _UPCOMING_GONE_FRAMES = 6  # ~1.8초 (틱 300ms)
 
     def _reset_hp(self) -> None:
         self._stable_hp = None
