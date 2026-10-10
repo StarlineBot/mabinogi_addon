@@ -67,6 +67,26 @@ def test_refires_next_cycle_after_reset():
     assert t.observe(95) == [95]  # 94→95 완만 교차 → 다음 주기 재발동
 
 
+def test_boundary_jitter_fires_once():
+    """임계 경계(95%)에서 판독값이 흔들려도(94→95→94→95) 한 번만 울린다.
+    (배포판에서 '95%에 두세 번 울리던' 문제 회귀 방지 — 재무장 전까지 억제.)"""
+    t = TuarimTracker([95, 98])
+    fired = []
+    for v in [93, 94, 95, 94, 95, 96, 95, 96, 95]:
+        fired += t.observe(v)
+    assert fired == [95]  # 흔들려도 95는 한 번만
+
+
+def test_small_dip_within_hysteresis_does_not_rearm():
+    """임계 바로 아래로 조금만 내려갔다 다시 오르는 건 재무장 안 됨(같은 주기)."""
+    t = TuarimTracker([95])
+    assert t.observe(94) == []
+    assert t.observe(95) == [95]
+    assert t.observe(90) == []  # 95-10=85보다 위 → 재무장 안 함
+    assert t.observe(94) == []
+    assert t.observe(95) == []  # 여전히 억제
+
+
 def test_none_value_keeps_prev():
     t = TuarimTracker([95])
     assert t.observe(94) == []
