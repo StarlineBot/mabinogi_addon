@@ -115,13 +115,17 @@ def _bar_region(h=40, w=160):
     return r
 
 
-def test_bar_gating_suppresses_when_boss_absent():
+def test_bar_gating_suppresses_after_grace():
     tpl = _bases()
     eng = DebuffEngine(tpl, ["a", "b"])
     # 바가 보이면 정상 탐지(디버프 없음 → 전부 미적용 표시)
     assert _shown(eng.tick(_bar_region(), now=0.0)) == ["a", "b"]
-    # 바를 본 뒤 바가 사라지면(보스 없음) → 아무것도 표시 안 함(오탐 차단)
-    assert _shown(eng.tick(_noise(), now=0.2)) == []
+    # 바가 잠깐 사라져도(유예 안) 깜빡이지 않게 직전처럼 유지
+    assert _shown(eng.tick(_noise(), now=0.3)) == ["a", "b"]
+    # 유예(_BAR_GRACE_SEC)를 넘겨 계속 없으면 → 보스 없음 확정, 숨김
+    assert _shown(eng.tick(_noise(), now=2.0)) == []
+    # 다시 바가 보이면 즉시 복귀
+    assert _shown(eng.tick(_bar_region(), now=2.2)) == ["a", "b"]
 
 
 def test_backward_compat_no_bar_region_always_detects():

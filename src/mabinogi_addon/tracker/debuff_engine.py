@@ -39,6 +39,7 @@ _BAR_SMOOTH_GAP = 6  # 인접 픽셀 밝기차가 이 미만이면 '매끈'
 _BAR_RUN_RATIO = 0.42  # 한 행의 최장 매끈런 / 영역 폭 이 이상이면 '바다운 행'
 _BAR_MIN_ROWS = 6  # 그런 '바다운 행'이 이만큼(세로로 두꺼운 띠) 있어야 바로 인정
 # (실샘플: 보스 바 22~45행 / 마을·풀밭 0행 → 우연한 매끈 한 줄엔 안 걸림)
+_BAR_GRACE_SEC = 1.0  # 바가 잠깐 안 보여도 이 시간까진 유지(보스로 걸어갈 때 깜빡임 방지)
 
 
 def _variant(template: np.ndarray, target_h: int) -> np.ndarray:
@@ -73,6 +74,7 @@ class DebuffEngine:
         # 보스 HP바 앵커: 영역에서 바를 한 번이라도 본 뒤부터 게이팅(버프 앵커와 동일).
         # 한 번도 못 봤으면(= 바를 안 넣은 기존 영역) 게이팅 안 함 → 기존처럼 항상 탐지.
         self._bar_seen = False
+        self._bar_gone_since: float | None = None  # 바 사라진 시각(유예 판정용)
 
     def set_order(self, order: list[str]) -> None:
         self._order = list(order)
@@ -152,8 +154,15 @@ class DebuffEngine:
         bar = self._bar_present(region)
         if bar:
             self._bar_seen = True
-        if self._bar_seen and not bar:
-            return TickResult(entries=[], alerts=[], frame_valid=True)  # 보스 없음 → 숨김
+            self._bar_gone_since = None
+        elif self._bar_seen:
+            # 바가 잠깐 안 보임: 보스로 걸어가는 중엔 바가 간헐적으로만 잡혀 매 틱
+            # 켜졌다 꺼지면 오버레이가 깜빡인다. _BAR_GRACE_SEC 동안 연속으로 없을
+            # 때만 '보스 없음'으로 확정해 숨긴다(그 전엔 직전처럼 탐지 유지).
+            if self._bar_gone_since is None:
+                self._bar_gone_since = now
+            if now - self._bar_gone_since >= _BAR_GRACE_SEC:
+                return TickResult(entries=[], alerts=[], frame_valid=True)  # 보스 없음
 
         small = self._scale(region)
         for bid in self._templates:
