@@ -163,6 +163,19 @@ _TAB_QSS = (
     " border-bottom: 2px solid #00D1A7; }"
 )
 
+# 하위(트래커 내부) 탭: 상위와 확실히 구분되게 더 작고 밋밋하게. 선택 표시는 민트
+# 대신 무채색 밑줄 → '한 단계 아래'로 읽힌다.
+_SUBTAB_QSS = (
+    "QTabWidget::pane { border: none; border-top: 1px solid #2a2f3a; }"
+    "QTabBar { qproperty-drawBase: 0; }"
+    "QTabBar::tab { background: transparent; color: #7d828b; padding: 6px 14px;"
+    " min-width: 0px; border: none; border-bottom: 2px solid transparent;"
+    " font-size: 12px; }"
+    "QTabBar::tab:hover { color: #cfd3da; }"
+    "QTabBar::tab:selected { color: #cfd3da; font-weight: 700;"
+    " border-bottom: 2px solid #5a6270; }"
+)
+
 
 class MainWindow(QMainWindow):
     # 백그라운드 스레드(업데이트 확인/다운로드)에서 UI 스레드로 안전하게 넘기는 신호.
@@ -210,13 +223,20 @@ class MainWindow(QMainWindow):
         self.settings_tab.config_imported.connect(self._on_config_imported)
         self.settings_tab.voice_pack_changed.connect(self._on_voice_pack_changed)
         self.settings_tab.replay_tour.connect(self._run_tour)
+        # 화면을 읽는 트래커들은 '트래커' 상위 탭 하나로 묶고, 그 아래 하위 탭으로 나눈다.
+        # → 상단 탭이 짧아져(트래커·커스텀·파티·메모·설정) 설정이 넘침(<>) 뒤로 안 묻힌다.
+        # 각 탭을 스크롤 영역으로 감싼다 → 창 높이를 고정해도 내용이 잘리지 않고 스크롤.
+        self._tracker_tabs = QTabWidget()
+        self._tracker_tabs.addTab(_scrolled(self.buff_tab), "버프")
+        self._tracker_tabs.addTab(_scrolled(self.debuff_tab), "디버프")
+        self._tracker_tabs.addTab(_scrolled(self.tuarim_tab), "투아림")
+        # 보스만 쓰면 뭘 추적하는지 모호해 풀네임 유지.
+        self._tracker_tabs.addTab(_scrolled(self.boss_tab), "보스 패턴 알림 [BETA]")
+        self._tracker_tabs.setStyleSheet(_SUBTAB_QSS)
+
         tabs = QTabWidget()
         self._tabs = tabs  # 온보딩 투어에서 탭 전환에 사용
-        # 각 탭을 스크롤 영역으로 감싼다 → 창 높이를 고정해도 내용이 잘리지 않고 스크롤.
-        tabs.addTab(_scrolled(self.buff_tab), "버프 트래커")
-        tabs.addTab(_scrolled(self.debuff_tab), "디버프 트래커")
-        tabs.addTab(_scrolled(self.tuarim_tab), "투아림 트래커")
-        tabs.addTab(_scrolled(self.boss_tab), "보스 패턴 알림 [BETA]")
+        tabs.addTab(self._tracker_tabs, "트래커")
         tabs.addTab(_scrolled(self.custom_overlay_tab), "커스텀 오버레이")
         self._party_scroll = _scrolled(self.party_tab)  # 토스트 클릭 시 이 탭으로 전환
         tabs.addTab(self._party_scroll, "파티 모집")
@@ -482,7 +502,8 @@ class MainWindow(QMainWindow):
         from .tour_overlay import TourOverlay, TourStep
 
         def _go_buff() -> None:
-            self._tabs.setCurrentIndex(0)  # 버프 탭(스크롤로 감싸 위젯 기준 전환 불가)
+            self._tabs.setCurrentWidget(self._tracker_tabs)  # 상위 '트래커'
+            self._tracker_tabs.setCurrentIndex(0)  # 하위 '버프'
 
         steps = [
             TourStep(
