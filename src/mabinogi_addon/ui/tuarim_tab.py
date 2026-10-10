@@ -76,8 +76,12 @@ class TuarimTab(QWidget):
         self._prev_raw: int | None = None  # 직전 원시 판독값(2연속 확정용)
         self._stable_value: int | None = None  # 확정된 값(알림·표시에 사용)
         self._last_saved_frame = None  # 수집 모드: 직전 '저장한' 영상(변화 감지 기준)
-        # 개발용: git 추적 폴더에 저장 → 집에서 수집 후 '푸시'하면 클로드가 템플릿을 만든다.
-        self._shot_dir = paths.project_root() / "tests" / "data" / "tuarim_shots"
+        # 수집 영역 저장 폴더. 소스 실행은 git 추적 폴더(수집→푸시→템플릿 생성),
+        # 배포본(exe)은 사용자가 찾아서 보낼 수 있게 %LOCALAPPDATA% 아래 폴더에 저장한다.
+        if paths.is_frozen():
+            self._shot_dir = paths.user_data_dir() / "tuarim_shots"
+        else:
+            self._shot_dir = paths.project_root() / "tests" / "data" / "tuarim_shots"
         self._shot_count = 0
 
         v = QVBoxLayout(self)
@@ -126,9 +130,12 @@ class TuarimTab(QWidget):
         v.addWidget(self.enable)
 
         v.addWidget(self._threshold_group())
-        # 숫자 템플릿 수집은 개발용(수집→git 푸시→템플릿 생성)이라 배포본(exe)에선 숨긴다.
-        if not paths.is_frozen():
-            v.addWidget(self._collect_group())
+        # 숫자 템플릿 수집: 판독이 틀릴 때 실제 캡처를 모아 템플릿을 고치기 위한 제보용
+        # 도구. 디스코드 로그인한 사용자에게만 보인다(일반 사용자 화면은 깔끔하게).
+        # 로그인 상태는 _tick에서 매번 반영한다(보스 탭 게이팅과 동일).
+        self._collect_box = self._collect_group()
+        v.addWidget(self._collect_box)
+        self._apply_collect_gate()
         v.addStretch(1)
 
         self._update_region_label()
@@ -159,17 +166,37 @@ class TuarimTab(QWidget):
         grid.setColumnStretch(3, 1)
         return box
 
+    @staticmethod
+    def _logged_in() -> bool:
+        return config.load_discord_user() is not None
+
+    def _apply_collect_gate(self) -> None:
+        """수집(제보) 도구는 디스코드 로그인 사용자에게만 노출."""
+        box = getattr(self, "_collect_box", None)
+        if box is not None:
+            box.setVisible(self._logged_in())
+
     def _collect_group(self) -> QGroupBox:
-        """숫자 템플릿 수집(개발용). 앱이 이미 캡처 중인 영역을 PNG로 저장만 한다."""
-        box = QGroupBox("숫자 템플릿 수집 (개발용)")
+        """숫자 템플릿 수집. 앱이 이미 캡처 중인 영역을 PNG로 저장만 한다.
+
+        % 판독이 틀릴 때(특히 90%대처럼 배경이 밝은 구간), 실제 캡처를 모아 템플릿을
+        고치는 데 쓴다. 저장 위치는 소스 실행이면 git 폴더, 배포본이면 사용자 폴더다.
+        """
+        box = QGroupBox("숫자 템플릿 수집 (% 오독 제보용)")
         g = QVBoxLayout(box)
-        g.addWidget(
-            hint_label(
+        if paths.is_frozen():
+            how = (
+                "영역 지정 후 '수집 모드'를 켜면, 게이지 값이 바뀔 때마다 그 영역이\n"
+                "PNG로 자동 저장됩니다(타이머 아님 — 숫자가 바뀔 때 1장). 0→100 한 바퀴\n"
+                "(특히 90~99%) 돌린 뒤, 아래 '저장 위치' 폴더의 PNG들을 보내주세요."
+            )
+        else:
+            how = (
                 "영역 지정 후, 지금 캡처된 영역을 PNG로 저장합니다(전체화면 캡처 불필요).\n"
-                "'수집 모드'를 켜면 값이 바뀔 때마다 자동 저장 → 0~100 한 바퀴면 0~9 숫자가 모입니다.\n"
+                "'수집 모드'를 켜면 값이 바뀔 때마다 자동 저장 → 0~100 한 바퀴면 숫자가 모입니다.\n"
                 "저장 후 커밋·푸시하면 저장소에서 숫자 템플릿을 만들 수 있습니다."
             )
-        )
+        g.addWidget(hint_label(how))
         row = QHBoxLayout()
         self.snap_btn = QPushButton("스냅샷 저장")
         self.snap_btn.setToolTip("지금 캡처된 영역 1장 저장")
@@ -263,6 +290,7 @@ class TuarimTab(QWidget):
 
     # ---- 읽기 루프 ----
     def _tick(self) -> None:
+        self._apply_collect_gate()  # 로그인 상태에 따라 수집(제보) 도구 노출/숨김
         # 게임 '또는 우리 앱'이 활성일 때 읽는다. 앱을 보며 영역을 맞추거나 템플릿을
         # 수집할 때도 미리보기가 갱신되게(버프/미러와 동일 기준).
         active = (
