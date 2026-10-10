@@ -14,6 +14,7 @@ from pathlib import Path
 from PySide6.QtCore import Qt, QThread, QTimer, Signal
 from PySide6.QtGui import QPainter, QPainterPath, QPixmap
 from PySide6.QtWidgets import (
+    QButtonGroup,
     QCheckBox,
     QComboBox,
     QFileDialog,
@@ -29,6 +30,17 @@ from PySide6.QtWidgets import (
 from .. import config, discord_auth, paths
 from ..system.window_watcher import WindowWatcher
 from .widgets import checkbox, hint_label
+
+# 테마 스와치 색(동그라미). 시스템=반반 그라데이션(라이트/다크 자동).
+_THEME_SWATCH = {
+    "system": (
+        "qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #f4f4f5, "
+        "stop:0.5 #f4f4f5, stop:0.5 #2b2d31, stop:1 #2b2d31)"
+    ),
+    "light": "#f4f4f5",
+    "dark": "#2b2d31",
+}
+_THEME_ACCENT = "#00C9A2"  # 다크 테마 강조(민트)
 
 # 번들 경로 사용(exe=_MEIPASS/assets). __file__ 기준은 frozen에서 어긋나 이미지가 안 뜬다.
 _ASSETS = paths.resource_dir()
@@ -174,6 +186,7 @@ class SettingsTab(QWidget):
         v.addWidget(self._discord_group())
         v.addWidget(self._backup_group())
         v.addWidget(self._general_group())
+        v.addWidget(self._theme_group())
         v.addWidget(self._game_group())
         v.addStretch(1)
 
@@ -499,6 +512,66 @@ class SettingsTab(QWidget):
                 subprocess.Popen(["xdg-open", str(path)])
         except Exception:  # noqa: BLE001, S110 — 폴더 열기는 부가기능(실패해도 무시)
             pass
+
+    def _theme_group(self) -> QGroupBox:
+        from .theme import THEME_LABELS, THEMES
+
+        box = QGroupBox("테마")
+        v = QVBoxLayout(box)
+        row = QHBoxLayout()
+        row.setSpacing(18)
+        self._theme_btns: dict[str, QPushButton] = {}
+        grp = QButtonGroup(self)
+        grp.setExclusive(True)
+        cur = config.load_theme()
+        for name in THEMES:
+            col = QVBoxLayout()
+            col.setSpacing(4)
+            btn = QPushButton()
+            btn.setCheckable(True)
+            btn.setChecked(name == cur)
+            btn.setFixedSize(46, 46)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.clicked.connect(lambda _c=False, n=name: self._on_theme_pick(n))
+            grp.addButton(btn)
+            self._theme_btns[name] = btn
+            lbl = QLabel(THEME_LABELS[name])
+            lbl.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+            col.addWidget(btn, 0, Qt.AlignmentFlag.AlignHCenter)
+            col.addWidget(lbl)
+            cell = QWidget()
+            cell.setLayout(col)
+            row.addWidget(cell)
+        row.addStretch(1)
+        v.addLayout(row)
+        v.addWidget(hint_label("'시스템'은 Windows 설정을 따라요. 기본은 다크예요."))
+        self._sync_theme_swatches(cur)
+        return box
+
+    def _style_swatch(self, btn: QPushButton, name: str, selected: bool) -> None:
+        bg = _THEME_SWATCH[name]
+        border = (
+            f"3px solid {_THEME_ACCENT}" if selected else "1px solid #6b6e76"
+        )
+        btn.setText("✓" if selected else "")
+        btn.setStyleSheet(
+            "QPushButton {"
+            f" background: {bg}; border: {border}; border-radius: 23px;"
+            f" color: {_THEME_ACCENT}; font-size: 20px; font-weight: 900;"
+            " }"
+        )
+
+    def _sync_theme_swatches(self, selected: str) -> None:
+        for name, btn in self._theme_btns.items():
+            btn.setChecked(name == selected)
+            self._style_swatch(btn, name, name == selected)
+
+    def _on_theme_pick(self, name: str) -> None:
+        from .theme import apply_theme
+
+        config.save_theme(name)
+        apply_theme(name)  # 즉시 적용
+        self._sync_theme_swatches(name)
 
     def _general_group(self) -> QGroupBox:
         from ..system import autostart

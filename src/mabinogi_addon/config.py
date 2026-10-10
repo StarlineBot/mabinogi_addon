@@ -313,6 +313,18 @@ def save_voice_pack(pack: str, path: Path = LOCAL_CONFIG_PATH) -> None:
     _write_local_config(data, path)
 
 
+# 앱 테마: system(시스템 따름) / light / dark. 기본값은 다크(앱 디자인 기준 톤).
+def load_theme(path: Path = LOCAL_CONFIG_PATH) -> str:
+    v = _read_local_config(path).get("theme")
+    return v if v in ("system", "light", "dark") else "dark"
+
+
+def save_theme(name: str, path: Path = LOCAL_CONFIG_PATH) -> None:
+    data = _read_local_config(path)
+    data["theme"] = name if name in ("system", "light", "dark") else "dark"
+    _write_local_config(data, path)
+
+
 # 토스트 표시 모서리: br=우하단(기본) tr=우상단 bl=좌하단 tl=좌상단
 TOAST_CORNERS = ("br", "tr", "bl", "tl")
 
