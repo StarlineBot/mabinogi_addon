@@ -58,6 +58,31 @@ docs/
 - 경로는 `pathlib.Path`로 다룬다 (맥/Windows 공용).
 - 탐지 로직을 바꾸면 `tests/data` 기반 회귀 테스트를 추가하거나 갱신한다.
 
+## 화면(UI) 개발 — 반드시 사용자 피드백을 받을 것
+
+새 탭·오버레이·화면을 만들거나 **레이아웃을 바꾸면**, 코드만 올리지 말고 **먼저 렌더해서
+사용자에게 보여주고 피드백을 받는다.** 사용자는 화면을 직접 돌려보기 전엔 레이아웃을
+판단하기 어렵고, 글로 설명하면 오해가 생긴다. (게임은 Windows에서만 돌지만, 화면 자체는
+맥/리눅스에서도 **오프스크린으로 렌더**해 캡처할 수 있다.)
+
+렌더 방법(맥/리눅스/CI 공용): `QT_QPA_PLATFORM=offscreen` 으로 Qt를 띄우고, 위젯을
+`grab()` 해서 PNG로 저장한 뒤 사용자에게 보낸다. 네트워크·게임이 필요한 값은 **샘플
+데이터를 주입**해 결과 영역까지 채워 보여준다(예: 계산 결과는 순수 계산 함수에 가짜 시세를
+넣어 `_show()`/`_render()` 직접 호출). 예:
+
+```python
+# QT_QPA_PLATFORM=offscreen uv run python shot.py
+import os; os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+from PySide6.QtWidgets import QApplication
+app = QApplication([])
+w = SomeTab(); w.resize(760, 430)
+# ... 샘플 데이터 주입(네트워크 없이 결과 영역까지 채우기) ...
+w.grab().save("out.png")   # 이 PNG를 사용자에게 보여주고 피드백 받기
+```
+
+- 레이아웃은 **스펙을 글로 확정**받고(라벨 정렬·칸 배치 등), 구현 후 **렌더 이미지로 재확인**한다.
+- 피드백 없이 큰 UI를 완성형으로 밀어붙이지 않는다 — 작게 보여주고 고친다.
+
 ## 릴리즈 노트 (중요 — 세션이 바뀌어도 이 규칙을 따를 것)
 
 새 버전을 처음 실행하면 `src/mabinogi_addon/assets/release_notes.md` 의 해당 버전 노트가
