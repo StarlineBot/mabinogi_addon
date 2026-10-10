@@ -234,13 +234,18 @@ class MainWindow(QMainWindow):
         self._tracker_tabs.addTab(_scrolled(self.boss_tab), "보스 패턴 알림 [BETA]")
         self._tracker_tabs.setStyleSheet(_SUBTAB_QSS)
 
+        # 편의기능: 메모 등 보조 기능을 묶는 상위 탭(하위 기능은 계속 추가 예정).
+        self._convenience_tabs = QTabWidget()
+        self._convenience_tabs.addTab(_scrolled(self.memo_tab), "메모")
+        self._convenience_tabs.setStyleSheet(_SUBTAB_QSS)
+
         tabs = QTabWidget()
         self._tabs = tabs  # 온보딩 투어에서 탭 전환에 사용
         tabs.addTab(self._tracker_tabs, "트래커")
         tabs.addTab(_scrolled(self.custom_overlay_tab), "커스텀 오버레이")
         self._party_scroll = _scrolled(self.party_tab)  # 토스트 클릭 시 이 탭으로 전환
         tabs.addTab(self._party_scroll, "파티 모집")
-        tabs.addTab(_scrolled(self.memo_tab), "메모")
+        tabs.addTab(self._convenience_tabs, "편의기능")
         tabs.addTab(_scrolled(self.settings_tab), "설정")
         tabs.setStyleSheet(_TAB_QSS)
 
