@@ -42,6 +42,12 @@ _BAR_MIN_ROWS = 6  # 그런 '바다운 행'이 이만큼(세로로 두꺼운 띠
 # (실샘플: 보스 바 22~45행 / 마을·풀밭 0행 → 우연한 매끈 한 줄엔 안 걸림)
 _BAR_GRACE_SEC = 1.0  # 바가 잠깐 안 보여도 이 시간까진 유지(보스로 걸어갈 때 깜빡임 방지)
 
+# 사라짐 경고: 걸렸던 디버프가 '보스 바 보이는 동안' 이만큼(초) 연속 미검출되면
+# '떨어짐'으로 확정 → 경고(빨간 테두리+X) 노출 + 소리. 노출은 확정 후 이만큼(초).
+# 바가 사라지면(보스 이탈) 확정 대기·경고를 모두 취소해 오탐을 없앤다.
+_GONE_CONFIRM_SEC = 3.0
+_GONE_SHOW_SEC = 3.0
+
 
 def _variant(template: np.ndarray, target_h: int) -> np.ndarray:
     h, w = template.shape[:2]
@@ -76,6 +82,26 @@ class DebuffEngine:
         # 한 번도 못 봤으면(= 바를 안 넣은 기존 영역) 게이팅 안 함 → 기존처럼 항상 탐지.
         self._bar_seen = False
         self._bar_gone_since: float | None = None  # 바 사라진 시각(유예 판정용)
+        self._bar_last = False  # 직전 틱 바 인식 여부(탭 상태 표시용)
+        # 사라짐 경고 상태(디버프가 보스에서 떨어짐)
+        self._warn_gone_ids: set[str] = set()  # '사라짐 경고' 켠 디버프
+        self._applied_prev = {bid: False for bid in templates}  # 직전 틱 '걸림' 여부
+        self._fell_since: dict[str, float] = {}  # 떨어지기 시작한 시각(확정 대기)
+        self._warn_until: dict[str, float] = {}  # 확정 → 경고 노출 종료 시각
+
+    @property
+    def bar_seen(self) -> bool:
+        """영역에서 보스 체력바를 한 번이라도 인식했는지(사라짐 경고 가능 영역인지)."""
+        return self._bar_seen
+
+    @property
+    def bar_present(self) -> bool:
+        """직전 틱에 보스 체력바가 보였는지(현재 보스 존재 추정)."""
+        return self._bar_last
+
+    def set_warn_gone_ids(self, ids: set[str]) -> None:
+        """'사라짐 경고' 켠 디버프 집합 갱신."""
+        self._warn_gone_ids = set(ids)
 
     def set_order(self, order: list[str]) -> None:
         self._order = list(order)
@@ -159,6 +185,7 @@ class DebuffEngine:
         # 프레임엔 탐지를 멈춰(= 보스 없음) 마을·풀밭 오탐을 없앤다. 바를 한 번도 못 본
         # 영역(기존 사용자)은 게이팅하지 않아 지금과 동일하게 동작한다(하위호환).
         bar = self._bar_present(region)
+        self._bar_last = bar
         if bar:
             self._bar_seen = True
             self._bar_gone_since = None
@@ -169,6 +196,10 @@ class DebuffEngine:
             if self._bar_gone_since is None:
                 self._bar_gone_since = now
             if now - self._bar_gone_since >= _BAR_GRACE_SEC:
+                # 보스 없음 확정 → 사라짐 경고 상태 전부 리셋(보스 이탈 오탐 방지).
+                self._applied_prev = {bid: False for bid in self._templates}
+                self._fell_since.clear()
+                self._warn_until.clear()
                 return TickResult(entries=[], alerts=[], frame_valid=True)  # 보스 없음
 
         small = self._scale(region)
@@ -186,9 +217,34 @@ class DebuffEngine:
                     self._absent_since[bid] = None
             # 이미 표시 중(shown)이면 그대로 유지
 
-        entries = [
-            OverlayEntry(bid, None, False)
-            for bid in self._order
-            if self._shown.get(bid, False)
-        ]
-        return TickResult(entries=entries, alerts=[], frame_valid=True)
+            # --- 사라짐 경고(바가 보일 때만, 즉 보스 존재 추정 시만) ---
+            if bar and bid in self._warn_gone_ids:
+                if detected:  # 다시 걸림 → 확정 대기·경고 취소
+                    self._fell_since.pop(bid, None)
+                    self._warn_until.pop(bid, None)
+                elif (
+                    self._applied_prev.get(bid)  # 직전엔 걸려 있었는데 이번에 떨어짐
+                    and bid not in self._fell_since
+                    and bid not in self._warn_until
+                ):
+                    self._fell_since[bid] = now  # 확정 대기 시작
+            # 다음 틱 비교용 '걸림' 기록. 바 안 보이면 비교 의미 없어 False.
+            self._applied_prev[bid] = detected if bar else False
+
+        # 확정: 바 보이는 동안 _GONE_CONFIRM_SEC 연속 미검출 → '떨어짐' 확정(경고+소리).
+        alerts: list[str] = []
+        if bar:
+            for bid, since in list(self._fell_since.items()):
+                if now - since >= _GONE_CONFIRM_SEC:
+                    self._warn_until[bid] = now + _GONE_SHOW_SEC
+                    del self._fell_since[bid]
+                    alerts.append(bid)
+        # 노출 시간 지난 경고 정리
+        self._warn_until = {b: t for b, t in self._warn_until.items() if now < t}
+
+        entries = []
+        for bid in self._order:
+            gone = bid in self._warn_until  # 사라짐 경고 노출 중
+            if self._shown.get(bid, False) or gone:
+                entries.append(OverlayEntry(bid, None, False, gone=gone))
+        return TickResult(entries=entries, alerts=alerts, frame_valid=True)

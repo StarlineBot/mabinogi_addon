@@ -22,19 +22,20 @@ WARN_SEC = 60.0
 
 def overlay_spec(
     entries, show_duration: dict[str, bool]
-) -> list[tuple[str, str | None, bool]]:
-    """엔진 결과(OverlayEntry) → (buff_id, 표시할 시간 문자열|None, 임박여부) 목록.
+) -> list[tuple[str, str | None, bool, bool]]:
+    """엔진 결과(OverlayEntry) → (buff_id, 시간 문자열|None, 임박여부, 사라짐여부) 목록.
 
-    임박여부 = 남은 시간이 1분 미만(<60초)인지. True면 숫자를 빨갛게 그린다.
+    - 임박여부 = 남은 시간이 1분 미만(<60초)인지. True면 숫자를 빨갛게 그린다.
+    - 사라짐여부 = 사라짐 경고 대상(디버프가 보스에서 떨어짐). True면 빨간 테두리+X.
     지속시간 표시를 끈 버프나 판독값 없는 버프는 시간 None(칸만 비움, 임박 False).
     """
-    specs: list[tuple[str, str | None, bool]] = []
+    specs: list[tuple[str, str | None, bool, bool]] = []
     for entry in entries:
         show = show_duration.get(entry.buff_id, True)
         has_time = show and entry.remaining is not None
         text = format_duration(entry.remaining) if has_time else None
         warn = has_time and entry.remaining < WARN_SEC
-        specs.append((entry.buff_id, text, warn))
+        specs.append((entry.buff_id, text, warn, entry.gone))
     return specs
 
 _ICON_BASE = 40  # 100% 기준 아이콘 변

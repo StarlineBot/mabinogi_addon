@@ -428,6 +428,10 @@ class MainWindow(QMainWindow):
     def _update_tracking_status(self) -> None:
         self.buff_tab.set_status(*self._buff_status())
         self.debuff_tab.set_status(*self._debuff_status())
+        # 사라짐 경고 가능 여부(영역에 보스 체력바가 인식됐는지) 안내
+        self.debuff_tab.set_bar_status(
+            self._debuff_engine.bar_seen if self._debuff_engine is not None else False
+        )
         self._update_header_status()
         self._maybe_tick_update_check()
 
@@ -997,11 +1001,13 @@ class MainWindow(QMainWindow):
         # 표시(숨기지 않은) 디버프만 매칭 — 버프와 동일하게 비용 절감.
         tracked = [b for b in catalog if b.id in set(order)]
         self._debuff_engine = DebuffEngine(build_templates(tracked), order)
+        self._debuff_engine.set_warn_gone_ids(self._debuff_warn_gone_ids())
         # 지속시간·알림·점멸 없음 → show_duration 전부 False.
         self.debuff_controller = BuffController(
             self.debuff_overlay,
             catalog_by,
             {b.id: False for b in catalog},
+            on_alert=self._on_debuff_gone,  # 디버프 떨어짐 확정 → 사라짐 경고음
             watcher=self._watcher,
         )
         self.debuff_controller.set_paused(self._paused)  # 재생성 시 일시정지 상태 유지
@@ -1013,6 +1019,17 @@ class MainWindow(QMainWindow):
         if self._debuff_engine is None:
             return
         self._debuff_engine.set_order(self._debuff_order(available_debuff_catalog()))
+        self._debuff_engine.set_warn_gone_ids(self._debuff_warn_gone_ids())
+
+    def _debuff_warn_gone_ids(self) -> set[str]:
+        """'사라짐 경고'를 켠 디버프 id 집합(보스에서 떨어지면 빨간 테두리+X+소리)."""
+        return {s.id for s in config.load_debuff_settings() if s.alert.warn_gone}
+
+    def _on_debuff_gone(self, _ids) -> None:
+        """디버프 떨어짐 확정 → 사라짐 경고음(여러 개 동시 확정돼도 한 번)."""
+        from .notifier import play_warn_gone_sound
+
+        play_warn_gone_sound()
 
     def _on_debuff_catalog_changed(self) -> None:
         self._start_debuff_tracking()

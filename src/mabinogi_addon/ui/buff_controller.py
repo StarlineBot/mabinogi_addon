@@ -187,12 +187,13 @@ class BuffController(QObject):
         return QPixmap(str(buff.display_image or buff.match_icon))
 
     def build_items(self, entries, now: float) -> list[OverlayItem]:
-        # 활성 버프: id -> OverlayItem(숫자 빨강은 warn=남은시간<60s)
+        # 활성 항목: id -> OverlayItem. warn=남은시간<60s(숫자 빨강),
+        # gone=엔진이 표시한 사라짐 경고(디버프가 보스에서 떨어짐) → 빨간 테두리+X.
         active: dict[str, OverlayItem] = {}
-        for buff_id, text, warn in overlay_spec(entries, self._show_duration):
+        for buff_id, text, warn, gone in overlay_spec(entries, self._show_duration):
             pm = self._pixmap(buff_id)
             if pm is not None:
-                active[buff_id] = OverlayItem(pm, text, warn)
+                active[buff_id] = OverlayItem(pm, None if gone else text, warn, gone=gone)
         # 순서대로 활성 + 고스트(사라짐 확정) 병합. 활성이면 고스트보다 우선.
         items: list[OverlayItem] = []
         placed: set[str] = set()

@@ -389,6 +389,15 @@ class DebuffTab(QWidget):
         sv.addWidget(
             hint_label("디버프는 '아직 걸리지 않은 것'만 오버레이에 나열됩니다.")
         )
+        self.warn_gone_check = checkbox("사라짐 경고 (보스에서 떨어지면 알림)")
+        self.warn_gone_check.setToolTip(
+            "걸어둔 디버프가 보스에서 떨어지면 오버레이에 빨간 테두리+X로 표시하고 "
+            "소리로 알려요.\n※ 영역에 보스 체력바가 보여야 작동합니다."
+        )
+        self.warn_gone_check.toggled.connect(self._form_changed)
+        sv.addWidget(self.warn_gone_check)
+        self.bar_status = hint_label("")
+        sv.addWidget(self.bar_status)
         v.addWidget(show_box)
 
         v.addStretch(1)
@@ -406,14 +415,28 @@ class DebuffTab(QWidget):
         self.name_edit.setText(self._display_name(did))
         self._set_slot(self.match_slot, buff.match_icon if buff else None, "▣")
         self.display_check.setChecked(not s.hidden)
+        self.warn_gone_check.setChecked(s.alert.warn_gone)
         self._loading = False
 
     def _form_changed(self) -> None:
         if self._loading or self._current is None:
             return
-        self._settings[self._current].hidden = not self.display_check.isChecked()
+        s = self._settings[self._current]
+        s.hidden = not self.display_check.isChecked()
+        s.alert.warn_gone = self.warn_gone_check.isChecked()
         self._save()
         self.tracking_changed.emit()
+
+    def set_bar_status(self, seen: bool) -> None:
+        """사라짐 경고 가능 여부(영역에 보스 체력바가 인식됐는지)를 안내."""
+        if seen:
+            self.bar_status.setText("✓ 보스 체력바 인식됨 — 사라짐 경고 작동")
+            self.bar_status.setStyleSheet("color:#2ecc71; font-size:12px;")
+        else:
+            self.bar_status.setText(
+                "체력바가 안 보여요 — 사라짐 경고를 쓰려면 영역에 보스 체력바를 포함하세요."
+            )
+            self.bar_status.setStyleSheet("color:#e67e22; font-size:12px;")
 
     def _save_name(self) -> None:
         if self._loading or self._name_id is None:
