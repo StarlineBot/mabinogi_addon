@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QPalette, QPen
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QGridLayout,
@@ -24,6 +25,7 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
     QMessageBox,
     QPushButton,
+    QStyledItemDelegate,
     QVBoxLayout,
     QWidget,
 )
@@ -56,11 +58,12 @@ HELP_HTML = """
 (선택/전체 고정·해제·삭제)</p>
 """
 
-# 밝은 배경 + 또렷한 테두리 + 최소 높이 → 비어 있어도 '여기 리스트가 있다'가 보이게.
+# 외곽 테두리 + 최소 높이 → 비어 있어도 '여기 리스트가 있다'가 보이게.
+# outline:0 → 선택 시 생기는 포커스 박스(버튼처럼 보이던 테두리) 제거해 '리스트' 느낌.
 _LIST_QSS = """
 QListWidget { border:1px solid palette(mid); border-radius:6px; background:palette(base);
-  min-height:72px; }
-QListWidget::item { padding:6px 10px; border:none; }
+  min-height:72px; outline:0; }
+QListWidget::item { padding:7px 10px; border:none; }
 QListWidget::item:hover { background:palette(midlight); }
 QListWidget::item:selected { background:#00B894; color:white; }
 """
@@ -70,10 +73,28 @@ _DANGER_QSS = (
 )
 
 
+class _DashSeparatorDelegate(QStyledItemDelegate):
+    """항목 사이에 점선 구분선을 그린다(줄 폭의 ~80%, 가운데 정렬). 리스트다운 느낌."""
+
+    def paint(self, painter, option, index) -> None:
+        super().paint(painter, option, index)
+        if index.row() >= index.model().rowCount() - 1:
+            return  # 마지막 항목 아래엔 선 없음
+        r = option.rect
+        margin = int(r.width() * 0.05)  # 양쪽 5% 비움 → 90% 폭
+        pen = QPen(option.palette.color(QPalette.ColorRole.Mid), 1, Qt.PenStyle.DashLine)
+        painter.save()
+        painter.setPen(pen)
+        y = r.bottom()
+        painter.drawLine(r.left() + margin, y, r.right() - margin, y)
+        painter.restore()
+
+
 def _name_list() -> QListWidget:
     lst = QListWidget()
     lst.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
     lst.setStyleSheet(_LIST_QSS)
+    lst.setItemDelegate(_DashSeparatorDelegate(lst))
     return lst
 
 
