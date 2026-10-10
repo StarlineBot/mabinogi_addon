@@ -663,8 +663,12 @@ def load_tuarim(path: Path = LOCAL_CONFIG_PATH) -> dict:
     sec = sec if isinstance(sec, dict) else {}
     box = sec.get("box") if isinstance(sec.get("box"), dict) else None
     thresholds = sec.get("thresholds")
+    # % 판독이 90% 이상에서만 신뢰 가능(밝은 배경 저대비)하고, 투아림 알림의 목적도
+    # 100% 직전 경고이므로 임계는 90~99로 제한한다(옛 설정값은 90으로 끌어올림).
     thresholds = (
-        [int(x) for x in thresholds] if isinstance(thresholds, list) else [95, 98]
+        [min(99, max(90, int(x))) for x in thresholds]
+        if isinstance(thresholds, list)
+        else [90, 95]
     )
     sounds = sec.get("sounds")
     sounds = [bool(x) for x in sounds] if isinstance(sounds, list) else [True, True]

@@ -152,7 +152,7 @@ class TuarimTab(QWidget):
         for i, name in enumerate(("1차", "2차")):
             grid.addWidget(QLabel(name), i, 0)
             spin = QSpinBox()
-            spin.setRange(1, 99)
+            spin.setRange(90, 99)  # % 판독은 90%대만 신뢰 가능 + 목적상 100% 직전 경고
             spin.setSuffix(" %")
             spin.setValue(self._thresholds[i] if i < len(self._thresholds) else 95)
             spin.valueChanged.connect(self._save)
