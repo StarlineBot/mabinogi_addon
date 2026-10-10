@@ -41,8 +41,9 @@ class DistributionTab(QWidget):
         v.setSpacing(8)
         v.addWidget(
             hint_label(
-                "경매장 판매가와 분배 인원을 넣으면 수수료·할인쿠폰까지 따져 1인당 "
-                "분배금을 계산해요. 판매가는 만 단위(예: 8890 = 8,890만, 20000 = 2억)."
+                "경매장 판매가와 분배 인원을 넣으면 수수료·할인쿠폰까지 따져 "
+                "1인당 분배금을 계산해요.\n판매가는 만 단위예요 "
+                "(예: 8890 = 8,890만, 20000 = 2억)."
             )
         )
 
@@ -66,17 +67,19 @@ class DistributionTab(QWidget):
         r2 = QHBoxLayout()
         r2.addWidget(QLabel("분배금"))
         self.price_spin = QSpinBox()
-        self.price_spin.setRange(1, 99_999_999)
+        self.price_spin.setRange(0, 99_999_999)
         self.price_spin.setSuffix(" 만")
         self.price_spin.setGroupSeparatorShown(True)
-        self.price_spin.setValue(10000)
+        self.price_spin.setValue(0)
         self.price_spin.setMinimumWidth(140)
+        self.price_spin.lineEdit().returnPressed.connect(self._on_calc)  # 엔터로 계산
         r2.addWidget(self.price_spin)
         r2.addSpacing(18)
         r2.addWidget(QLabel("인원"))
         self.count_spin = QSpinBox()
         self.count_spin.setRange(1, 10)
-        self.count_spin.setValue(4)
+        self.count_spin.setValue(1)
+        self.count_spin.lineEdit().returnPressed.connect(self._on_calc)  # 엔터로 계산
         r2.addWidget(self.count_spin)
         r2.addStretch(1)
         v.addLayout(r2)
@@ -112,6 +115,12 @@ class DistributionTab(QWidget):
         headcount = self.count_spin.value()
         membership = self.rate_membership.isChecked()
         self._clear_grid()
+        if sale <= 0:
+            msg = QLabel("판매가를 입력하세요.")
+            msg.setStyleSheet(_GRAY)
+            self.grid.addWidget(msg, 0, 0, 1, 2)
+            self.note_lbl.setText("")
+            return
         busy = QLabel("경매장에서 수수료 쿠폰 가격 확인 중…")
         busy.setStyleSheet(_GRAY)
         self.grid.addWidget(busy, 0, 0, 1, 2)
