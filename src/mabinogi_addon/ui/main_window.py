@@ -63,14 +63,23 @@ class _VScroll(QScrollArea):
     """세로 스크롤 영역: 가로는 뷰포트 폭에 맞추되, 세로는 내용의 '자연 높이'를 지킨다.
 
     그냥 setWidgetResizable(True)만 쓰면, 내용이 뷰포트보다 크면 눌리고(압축) 작으면
-    늘어나(확대) 버튼 등이 찌그러진다. 내용 위젯의 최소 높이를 그 sizeHint 높이로
-    고정해, 넘칠 때 '압축' 대신 '스크롤'이 생기게 한다.
+    늘어나(확대) 버튼 등이 찌그러진다. 내용 위젯의 최소 높이를 '현재 폭에서 실제로
+    필요한 높이'로 고정해, 넘칠 때 '압축' 대신 '스크롤'이 생기게 한다.
+
+    높이는 폭과 무관한 sizeHint().height() 대신 heightForWidth(현재 폭)로 구한다.
+    sizeHint는 워드랩 라벨을 좁은 기본 폭 기준으로 과대 계산해, 실제 내용이 끝난
+    뒤에도 빈 공간만큼 스크롤이 더 내려가는 문제가 있었다(예: 설정 탭 ~150px).
     """
 
     def resizeEvent(self, event) -> None:
         inner = self.widget()
         if inner is not None:
-            inner.setMinimumHeight(inner.sizeHint().height())
+            w = self.viewport().width()
+            lay = inner.layout()
+            h = lay.heightForWidth(w) if lay is not None and lay.hasHeightForWidth() else -1
+            if h <= 0:
+                h = inner.sizeHint().height()
+            inner.setMinimumHeight(h)
         super().resizeEvent(event)
 
 

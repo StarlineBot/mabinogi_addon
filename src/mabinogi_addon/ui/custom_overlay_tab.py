@@ -15,7 +15,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QPalette, QPen
+from PySide6.QtGui import QColor, QPen
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QGridLayout,
@@ -74,15 +74,20 @@ _DANGER_QSS = (
 
 
 class _DashSeparatorDelegate(QStyledItemDelegate):
-    """항목 사이에 점선 구분선을 그린다(줄 폭의 ~80%, 가운데 정렬). 리스트다운 느낌."""
+    """항목 사이에 점선 구분선을 그린다(줄 폭의 ~95%, 가운데 정렬). 리스트다운 느낌."""
 
     def paint(self, painter, option, index) -> None:
         super().paint(painter, option, index)
         if index.row() >= index.model().rowCount() - 1:
             return  # 마지막 항목 아래엔 선 없음
         r = option.rect
-        margin = int(r.width() * 0.05)  # 양쪽 5% 비움 → 90% 폭
-        pen = QPen(option.palette.color(QPalette.ColorRole.Mid), 1, Qt.PenStyle.DashLine)
+        margin = int(r.width() * 0.025)  # 양쪽 2.5% 비움 → 95% 폭
+        # 다크에선 palette(Mid)가 바탕(base)과 거의 같아 점선이 안 보인다.
+        # 테마별로 바탕과 대비되는 회색을 직접 고른다.
+        from .theme import is_dark
+
+        color = QColor("#6b7078") if is_dark() else QColor("#b8bcc4")
+        pen = QPen(color, 1, Qt.PenStyle.DashLine)
         painter.save()
         painter.setPen(pen)
         y = r.bottom()
@@ -293,8 +298,6 @@ class CustomOverlayTab(QWidget):
         overlays = self._mgr.overlays()
         if not overlays:
             # 비었을 때: 리스트가 비어 '없는 줄' 알기 쉬워, 안내 문구를 회색으로 1줄.
-            from PySide6.QtGui import QColor
-
             hint = QListWidgetItem("표시할 오버레이가 없어요 — 위 '영역 지정'으로 추가하세요")
             hint.setFlags(Qt.ItemFlag.NoItemFlags)  # 선택·호버 안 됨(안내 전용)
             hint.setForeground(QColor("#8a8f98"))
