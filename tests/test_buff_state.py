@@ -165,6 +165,44 @@ def test_trusted_clock_ignores_minute_loss_misread():
     assert sm.check_second_alert(1.2) is False  # 거짓 2차 알림 없음
 
 
+def test_recast_minute_loss_does_not_refire_alert():
+    """임박(1차 울린 뒤) 중 갱신하면, 새 시간이 '1:30'처럼 분 단위로 뜨는데 OCR이
+    분을 놓쳐 '30'으로 두 프레임 읽히면 — 현재 시계가 낮아(27) '급락'이 아니라 소폭
+    상승처럼 보여 하향 가드를 통과해 연장으로 확정된다. 이때 커밋값(30)이 알림
+    기준(30) 이하라 재무장하면 그 즉시 거짓 재알림이 울렸다('30초 알림 → 갱신하며
+    또 울림' 버그). 재무장을 '연장값 > 기준'일 때만 하도록 고쳐 중복이 없어야 한다.
+    단, 다음 정상 프레임이 참값(90)을 읽으면 정상 연장으로 재무장돼, 90→30으로
+    다시 내려올 때는 정상적으로 재알림한다."""
+    sm = BuffStateMachine(appear_frames=1, alert_before=30)
+    now = 0.0
+    fired = []
+
+    def tick(reading, dt=0.1):
+        nonlocal now
+        if sm.observe(detected=True, reading=reading, now=now) is Event.ALERT:
+            fired.append(round(now, 1))
+        now += dt
+
+    # 40 → 30 하강: 1차 1회
+    t = 40.0
+    while t > 27:
+        tick(round(t, 1)); t -= 0.3
+    assert fired == [9.0] or len(fired) == 1  # 1차 정확히 1회
+    assert sm.state is State.EXPIRING
+    # 갱신: 진짜 90초인데 분을 놓쳐 '30'으로 2프레임 읽힘(자기일관)
+    tick(30.0); tick(30.0)
+    # 갱신 직후 몇 프레임 — 거짓 재알림이 울리면 안 된다
+    tick(30.0); tick(29.9)
+    assert len(fired) == 1, f"갱신 순간 중복 알림: {fired}"
+    # 다음 정상 프레임들이 참값(90)을 읽어 정상 연장 확정 → 재무장
+    tick(90.0); tick(89.9)
+    # 90 → 30 하강 시 정상 재알림(재무장됨)
+    t = 89.7
+    while t > 28:
+        tick(round(t, 1)); t -= 0.3
+    assert len(fired) == 2, f"정상 재알림이 빠짐: {fired}"
+
+
 def test_inconsistent_spikes_ignored():
     """서로 다른 오독이 연달아 와도(자기일관 아님) 반영되지 않는다."""
     sm = BuffStateMachine(appear_frames=3)

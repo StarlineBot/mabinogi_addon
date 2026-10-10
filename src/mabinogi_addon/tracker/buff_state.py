@@ -211,11 +211,26 @@ class BuffStateMachine:
                     self.state = State.ACTIVE  # 점멸 해제
                     # 연장 = 버프를 다시 건 것(음악 버프 연장, 상시 유지 버프 갱신 등).
                     # 다음에 다시 임박(≤alert_before)이 되면 "또 갱신해라"를 정상적으로
-                    # 다시 알려야 하므로 알림을 재무장한다. 플리커는 위로 '이어지는'
-                    # 상승 점프를 못 만들어(돌아올 때 값이 더 낮음) 여기 오지 않으므로,
-                    # 같은 순간 중복 알림은 여전히 울리지 않는다.
-                    self._alerted = False
-                    self._alerted2 = False
+                    # 다시 알려야 하므로 알림을 재무장한다.
+                    #
+                    # 단, 재무장은 **연장된 시계가 알림 기준보다 위일 때만** 한다.
+                    # 갱신 순간 새 시간이 '1:30'처럼 분 단위로 뜨는데 OCR이 분을 놓쳐
+                    # '30'으로 읽으면(현재 시계가 낮아 '급락'이 아니라 소폭 상승처럼
+                    # 보여 하향 가드를 통과) 연장으로 확정돼버린다. 이때 커밋된 값이
+                    # 기준 이하라 무조건 재무장하면 그 즉시 _check_alert가 거짓 재알림을
+                    # 낸다('30초 알림 → 갱신하며 또 울림' 버그). 진짜 연장은 기준 위로
+                    # 올라가므로 정상 재무장되고, 분-유실 오독은 기준 이하라 재무장되지
+                    # 않아 중복이 사라진다. (다음 정상 프레임이 참값을 읽으면 시계도
+                    # 조용히 재동기화된다.)
+                    new_rem = self.remaining(now)
+                    if new_rem is not None and new_rem > self.alert_before:
+                        self._alerted = False
+                    if (
+                        self.alert_before2 is not None
+                        and new_rem is not None
+                        and new_rem > self.alert_before2
+                    ):
+                        self._alerted2 = False
                     return True
                 return False
         # 아직 확정 못 함: 후보만 갱신하고 내부 시계는 유지(튐 반영 안 함)
