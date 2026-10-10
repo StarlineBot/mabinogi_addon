@@ -26,8 +26,9 @@ from .widgets import checkbox, hint_label, section_label
 
 # 마크다운 툴바 아이콘 버튼 스타일(hover 시 민트).
 _TOOL_QSS = (
-    "QPushButton { background:#222835; color:#dfe3ea; border:1px solid #333b49;"
-    " border-radius:7px; font-size:14px; font-weight:800; padding:4px 10px; }"
+    "QPushButton { background:palette(button); color:palette(button-text);"
+    " border:1px solid palette(mid); border-radius:7px; font-size:14px;"
+    " font-weight:800; padding:4px 10px; }"
     "QPushButton:hover { background:#00B894; color:#06281e; border-color:#00B894; }"
     "QPushButton:checked { background:#00B894; color:#06281e; border-color:#00B894; }"
 )

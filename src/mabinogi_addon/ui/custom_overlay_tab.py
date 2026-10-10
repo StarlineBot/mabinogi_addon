@@ -58,10 +58,10 @@ HELP_HTML = """
 
 # 밝은 배경 + 또렷한 테두리 + 최소 높이 → 비어 있어도 '여기 리스트가 있다'가 보이게.
 _LIST_QSS = """
-QListWidget { border:1px solid #525866; border-radius:6px; background:#2b2f38;
+QListWidget { border:1px solid palette(mid); border-radius:6px; background:palette(base);
   min-height:72px; }
 QListWidget::item { padding:6px 10px; border:none; }
-QListWidget::item:hover { background:#363b45; }
+QListWidget::item:hover { background:palette(midlight); }
 QListWidget::item:selected { background:#00B894; color:white; }
 """
 _DANGER_QSS = (

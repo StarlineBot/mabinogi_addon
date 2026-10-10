@@ -58,8 +58,14 @@ HELP_HTML = """
 
 _DIM = QColor("#9aa0a6")
 _ACCENT = QColor("#00D1A7")  # 키워드 매칭 강조색(왼쪽 바)
-_MATCH_BG = QColor("#17352f")  # 매칭 행 배경 띠(어두운 초록 틴트)
 _BAR_WIDTH = 4  # 왼쪽 강조 바 두께(px)
+
+
+def _match_bg() -> QColor:
+    """매칭 행 배경(초록 틴트) — 테마에 맞게: 다크는 어둡게, 라이트는 밝게."""
+    from .theme import is_dark
+
+    return QColor("#17352f") if is_dark() else QColor("#d7f3ea")
 
 
 class _AccentBarDelegate(QStyledItemDelegate):
@@ -237,7 +243,7 @@ class PartyTab(QWidget):
             items = [channel, leader, title, count, age]
             for col, item in enumerate(items):
                 if matched:
-                    item.setBackground(QBrush(_MATCH_BG))  # 행 전체 밝은 띠
+                    item.setBackground(QBrush(_match_bg()))  # 행 전체 밝은 띠
                     if col == 2:  # 제목 굵게
                         font = item.font()
                         font.setBold(True)
