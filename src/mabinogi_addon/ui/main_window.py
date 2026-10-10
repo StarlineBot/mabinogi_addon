@@ -245,7 +245,7 @@ class MainWindow(QMainWindow):
         self._convenience_tabs = QTabWidget()
         self._convenience_tabs.addTab(_scrolled(self.memo_tab), "메모")
         self._convenience_tabs.addTab(_scrolled(self.distribution_tab), "분배 계산기")
-        self._convenience_tabs.addTab(_scrolled(self.bead_split_tab), "구슬 분배")
+        self._convenience_tabs.addTab(_scrolled(self.bead_split_tab), "구슬 분배 계산기")
         self._convenience_tabs.addTab(_scrolled(self.exchange_tab), "환전비율 계산기")
         self._convenience_tabs.setStyleSheet(_SUBTAB_QSS)
 
