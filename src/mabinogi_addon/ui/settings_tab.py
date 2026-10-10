@@ -530,7 +530,7 @@ class SettingsTab(QWidget):
             btn = QPushButton()
             btn.setCheckable(True)
             btn.setChecked(name == cur)
-            btn.setFixedSize(46, 46)
+            btn.setFixedSize(24, 24)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.clicked.connect(lambda _c=False, n=name: self._on_theme_pick(n))
             grp.addButton(btn)
@@ -551,13 +551,13 @@ class SettingsTab(QWidget):
     def _style_swatch(self, btn: QPushButton, name: str, selected: bool) -> None:
         bg = _THEME_SWATCH[name]
         border = (
-            f"3px solid {_THEME_ACCENT}" if selected else "1px solid #6b6e76"
+            f"2px solid {_THEME_ACCENT}" if selected else "1px solid #6b6e76"
         )
         btn.setText("✓" if selected else "")
         btn.setStyleSheet(
             "QPushButton {"
-            f" background: {bg}; border: {border}; border-radius: 23px;"
-            f" color: {_THEME_ACCENT}; font-size: 20px; font-weight: 900;"
+            f" background: {bg}; border: {border}; border-radius: 12px;"
+            f" color: {_THEME_ACCENT}; font-size: 12px; font-weight: 900;"
             " }"
         )
 

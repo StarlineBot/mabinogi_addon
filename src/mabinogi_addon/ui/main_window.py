@@ -156,12 +156,12 @@ class _OverlayToggle(QPushButton):
 # 탭 바: 밑줄 스타일 + 균등 고정 너비. 선택 탭은 민트색·굵게 + 민트 밑줄로 또렷하게.
 # (앱은 OS 테마를 따르므로, 무채색 글자 + 민트 강조로 라이트/다크 모두 자연스럽게.)
 _TAB_QSS = (
-    "QTabWidget::pane { border: none; border-top: 1px solid #2a2f3a; }"
+    "QTabWidget::pane { border: none; border-top: 1px solid palette(mid); }"
     "QTabBar { qproperty-drawBase: 0; }"
-    "QTabBar::tab { background: transparent; color: #8a8f98; padding: 9px 4px;"
+    "QTabBar::tab { background: transparent; color: palette(mid); padding: 9px 4px;"
     " min-width: 104px; border: none; border-bottom: 2px solid transparent;"
     " font-size: 13px; }"
-    "QTabBar::tab:hover { color: #cfd3da; }"
+    "QTabBar::tab:hover { color: palette(text); }"
     "QTabBar::tab:selected { color: #00C9A2; font-weight: 800;"
     " border-bottom: 2px solid #00D1A7; }"
 )
@@ -169,14 +169,14 @@ _TAB_QSS = (
 # 하위(트래커 내부) 탭: 상위와 확실히 구분되게 더 작고 밋밋하게. 선택 표시는 민트
 # 대신 무채색 밑줄 → '한 단계 아래'로 읽힌다.
 _SUBTAB_QSS = (
-    "QTabWidget::pane { border: none; border-top: 1px solid #2a2f3a; }"
+    "QTabWidget::pane { border: none; border-top: 1px solid palette(mid); }"
     "QTabBar { qproperty-drawBase: 0; }"
-    "QTabBar::tab { background: transparent; color: #7d828b; padding: 6px 14px;"
+    "QTabBar::tab { background: transparent; color: palette(mid); padding: 6px 14px;"
     " min-width: 0px; border: none; border-bottom: 2px solid transparent;"
     " font-size: 12px; }"
-    "QTabBar::tab:hover { color: #cfd3da; }"
-    "QTabBar::tab:selected { color: #cfd3da; font-weight: 700;"
-    " border-bottom: 2px solid #5a6270; }"
+    "QTabBar::tab:hover { color: palette(text); }"
+    "QTabBar::tab:selected { color: palette(text); font-weight: 700;"
+    " border-bottom: 2px solid palette(text); }"
 )
 
 

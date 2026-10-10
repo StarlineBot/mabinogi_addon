@@ -122,7 +122,7 @@ class BossTab(QWidget):
         self.preview = QLabel()
         self.preview.setFixedHeight(40)
         self.preview.setMinimumWidth(160)
-        self.preview.setStyleSheet("background:#202227; border:1px solid #3a3d44;")
+        self.preview.setStyleSheet("background:palette(base); border:1px solid palette(mid);")
         self.preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
         prev_row.addWidget(self.preview)
         self.status_label = QLabel("식별: —   HP: —")
