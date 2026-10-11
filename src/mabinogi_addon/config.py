@@ -826,6 +826,55 @@ def save_stat_bars(data: dict, path: Path = LOCAL_CONFIG_PATH) -> None:
     _write_local_config(cfg, path)
 
 
+def load_skillbar(path: Path = LOCAL_CONFIG_PATH) -> dict:
+    """단축바 미러 설정(베타).
+
+    {enabled, scale:int(%), anchor:{x,y}|None,
+     chunks:{ "<key>": {show,locked,pos:{x,y}|None, cells:[bool,bool,bool,bool]} }}
+    - anchor: 단축바 첫 아이콘(블록1·윗줄·1번째)의 좌상단 화면 좌표
+    - chunks: 그룹(4칸)별 표시/고정/위치/칸표시
+    """
+    sec = _read_local_config(path).get("skillbar")
+    sec = sec if isinstance(sec, dict) else {}
+    anchor = sec.get("anchor") if isinstance(sec.get("anchor"), dict) else None
+    chunks_in = sec.get("chunks") if isinstance(sec.get("chunks"), dict) else {}
+    chunks: dict[str, dict] = {}
+    for key, c in chunks_in.items():
+        if not isinstance(c, dict):
+            continue
+        pos = c.get("pos") if isinstance(c.get("pos"), dict) else None
+        cells = c.get("cells")
+        cells = (
+            [bool(x) for x in cells][:4]
+            if isinstance(cells, list)
+            else [True, True, True, True]
+        )
+        while len(cells) < 4:
+            cells.append(True)
+        chunks[key] = {
+            "show": bool(c.get("show", True)),
+            "locked": bool(c.get("locked", False)),
+            "pos": pos,
+            "cells": cells,
+        }
+    return {
+        "enabled": bool(sec.get("enabled", False)),
+        "scale": int(sec.get("scale", 130)),
+        "anchor": anchor,
+        "chunks": chunks,
+    }
+
+
+def save_skillbar(data: dict, path: Path = LOCAL_CONFIG_PATH) -> None:
+    cfg = _read_local_config(path)
+    sec = cfg.get("skillbar")
+    if not isinstance(sec, dict):
+        sec = {}
+    sec.update(data)
+    cfg["skillbar"] = sec
+    _write_local_config(cfg, path)
+
+
 def _custom_section(path: Path) -> dict:
     sec = _read_local_config(path).get("customOverlay")
     return sec if isinstance(sec, dict) else {}

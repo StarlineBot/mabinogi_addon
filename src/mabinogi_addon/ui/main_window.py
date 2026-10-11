@@ -44,6 +44,7 @@ from .notifier import SoundNotifier, default_sound_map
 from .overlay import BuffOverlay
 from .party_tab import PartyTab
 from .settings_tab import SettingsTab
+from .skillbar_tab import SkillbarTab
 from .stat_bars_tab import StatBarsTab
 from .tuarim_tab import TuarimTab
 
@@ -250,6 +251,7 @@ class MainWindow(QMainWindow):
         self.boss_tab = BossTab(self._watcher)  # 베타(디스코드 로그인 게이팅)
         self.custom_overlay_tab = CustomOverlayTab(self._watcher)
         self.stat_bars_tab = StatBarsTab(self._watcher)
+        self.skillbar_tab = SkillbarTab(self._watcher)
         self.settings_tab = SettingsTab(self._watcher)
         self.settings_tab.config_imported.connect(self._on_config_imported)
         self.settings_tab.voice_pack_changed.connect(self._on_voice_pack_changed)
@@ -280,6 +282,7 @@ class MainWindow(QMainWindow):
         self._tabs = tabs  # 온보딩 투어에서 탭 전환에 사용
         tabs.addTab(self._tracker_tabs, "트래커")
         tabs.addTab(_scrolled(self.custom_overlay_tab), "커스텀 오버레이")
+        tabs.addTab(_scrolled(self.skillbar_tab), "단축바")
         self._party_scroll = _scrolled(self.party_tab)  # 토스트 클릭 시 이 탭으로 전환
         tabs.addTab(self._party_scroll, "파티 모집")
         tabs.addTab(self._convenience_tabs, "편의기능")
@@ -1211,6 +1214,7 @@ class MainWindow(QMainWindow):
                 c.set_paused(paused)
         self.custom_overlay_tab.set_paused(paused)
         self.stat_bars_tab.set_paused(paused)
+        self.skillbar_tab.set_paused(paused)
         # 트레이 라벨 + 상단 버튼 동기화(어느 쪽에서 눌러도 둘 다 반영, 루프 방지).
         self._pause_act.setText(
             "▶ 전체 오버레이 시작" if paused else "⏸ 전체 오버레이 정지"
@@ -1394,6 +1398,7 @@ class MainWindow(QMainWindow):
             self.tuarim_tab.shutdown(),
             self.boss_tab.shutdown(),
             self.stat_bars_tab.shutdown(),
+            self.skillbar_tab.shutdown(),
         ))
         if self._tray is not None:
             self._tray.hide()
