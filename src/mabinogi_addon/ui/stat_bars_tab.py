@@ -69,6 +69,12 @@ class StatBarsTab(QWidget):
             "'영역 지정'으로 게임 하단의 체력·마나·스태미나 세 바를 감싸세요"
             " (그 아래 경험치 바는 제외). 읽은 비율을 깨끗한 바 3개로 원하는 위치에 띄웁니다."
         ))
+        # 베타 기능 — 디스코드 로그인 사용자에게만. 미로그인 시 안내만 보이고 조작은 잠근다.
+        self._beta_notice = hint_label(
+            "🧪 베타 기능 — 설정 탭에서 Discord 로그인 후 사용할 수 있습니다."
+        )
+        self._beta_notice.setStyleSheet("color:#e67e22; font-weight:600;")
+        v.addWidget(self._beta_notice)
 
         row = QHBoxLayout()
         self.region_btn = QPushButton("영역 지정")
@@ -135,11 +141,29 @@ class StatBarsTab(QWidget):
         v.addLayout(ctl_row)
         v.addStretch(1)
 
+        # 로그인 시에만 조작 가능하게 묶어 두는 컨트롤들.
+        self._gated_widgets = [
+            self.region_btn, self.view_region_btn, self.enable,
+            self.scale_spin, self.lock_all_btn, self.unlock_all_btn,
+            *self._show_checks.values(),
+        ]
         self._update_region_label()
+        self._apply_login_gate()
         self._timer = QTimer(self)
         self._timer.setInterval(200)
         self._timer.timeout.connect(self._tick)
         self._timer.start()
+
+    @staticmethod
+    def _logged_in() -> bool:
+        return config.load_discord_user() is not None
+
+    def _apply_login_gate(self) -> None:
+        """베타 게이팅: 디스코드 로그인 사용자에게만 조작·표시를 허용."""
+        ok = self._logged_in()
+        self._beta_notice.setVisible(not ok)
+        for w in self._gated_widgets:
+            w.setEnabled(ok)
 
     # ---- 오버레이 생성/표시 ----
     def _ensure_overlays(self) -> None:
@@ -166,7 +190,7 @@ class StatBarsTab(QWidget):
         )
 
     def _apply_visibility(self) -> None:
-        if not self._enabled or self._paused:
+        if not self._enabled or self._paused or not self._logged_in():
             for ov in self._overlays.values():
                 ov.hide()
             return
@@ -181,8 +205,15 @@ class StatBarsTab(QWidget):
 
     # ---- 읽기 루프 ----
     def _tick(self) -> None:
+        self._apply_login_gate()
         self._apply_visibility()
-        if not self._enabled or self._paused or not self._region or not self._active():
+        if (
+            not self._enabled
+            or self._paused
+            or not self._logged_in()
+            or not self._region
+            or not self._active()
+        ):
             return
         from .dpi import to_physical
 
