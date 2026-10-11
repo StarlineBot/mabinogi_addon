@@ -1012,18 +1012,10 @@ class MainWindow(QMainWindow):
                 order.append(b.id)
         return order
 
-    # 디버프 아이콘 줄은 보스 HP바 '바로 위'에 있다. 공유 영역(= 보스 HP바)을 위로
-    # 이만큼(바 높이 배수) 넓혀 캡처하면 아이콘 줄까지 함께 읽는다(바닥은 바 게이팅).
-    _DEBUFF_EXTEND_UP = 1.1
-
     def _debuff_capture_region(self) -> dict | None:
-        """디버프 캡처 영역 = 공유 보스 HP바 영역을 위로 확장(아이콘 줄 포함)."""
-        bar = config.load_bar_region()
-        if not bar:
-            return None
-        extra = round(bar["h"] * self._DEBUFF_EXTEND_UP)
-        top = max(0, bar["y"] - extra)
-        return {"x": bar["x"], "y": top, "w": bar["w"], "h": bar["h"] + (bar["y"] - top)}
+        """디버프 캡처 영역 = 공유 보스 HP바 밴드(전체 폭). 밴드가 디버프 아이콘 줄 +
+        보스 HP바를 함께 포함하므로 그대로 쓴다(바 프레임으로 게이팅)."""
+        return config.load_bar_region()
 
     def _start_debuff_tracking(self) -> None:
         """저장된 보스 HP바 영역이 있으면 라이브로 디버프 추적 시작(재시작 포함)."""

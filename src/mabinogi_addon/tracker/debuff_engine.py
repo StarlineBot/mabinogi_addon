@@ -30,17 +30,9 @@ DEBUFF_DETECT_THRESHOLD = 0.68
 DEBUFF_RELEASE_THRESHOLD = 0.58
 DEBUFF_THRESHOLD = DEBUFF_DETECT_THRESHOLD  # 진단 스크립트 표시용
 
-# 보스 HP바 앵커(오탐 게이팅). 영역에 보스 체력바까지 포함해 잡으면, 바가 보일 때만
-# 디버프를 탐지해 마을·풀밭 오탐을 없앤다. 바 색은 HP/보스마다 달라(보라·파랑·초록·
-# 노랑·빨강) 색으로는 못 가르지만, **바 채움은 가로로 길게 '매끈'(인접 픽셀 거의 동일)**
-# 하다 — 풀밭 텍스처·채팅 글자는 매끈한 긴 가로런이 없다. 그 최장 매끈런 비율로 판정.
-# 실샘플: 보스 바 0.48~0.53 / 마을·풀밭 ≤0.33 → 0.42로 가른다.
-_BAR_SMOOTH_GAP = 6  # 인접 픽셀 밝기차가 이 미만이면 '매끈'
-_BAR_HUE_GAP = 3  # 인접 픽셀 색상(hue)차가 이 이하면 '같은 색'(바 채움=단색)
-_BAR_SAT_MIN = 60  # 이 미만 채도는 '무채색'(돌바닥 등) — 바 채움에서 제외
-_BAR_RUN_RATIO = 0.42  # 한 행의 최장 매끈런 / 영역 폭 이 이상이면 '바다운 행'
-_BAR_MIN_ROWS = 6  # 그런 '바다운 행'이 이만큼(세로로 두꺼운 띠) 있어야 바로 인정
-# (실샘플: 보스 바 22~45행 / 마을·풀밭 0행 → 우연한 매끈 한 줄엔 안 걸림)
+# 보스 HP바 앵커(오탐 게이팅). 영역(가로 밴드)에 보스 체력바까지 포함해 잡으면, 바가
+# 보일 때만 디버프를 탐지해 마을·풀밭 오탐을 없앤다. 바 '프레임'(테두리 사각형)은 HP·
+# 보스 색이 달라도 폭·위치가 일정해 색 무관하게 잡힌다(detect.bar_frame).
 _BAR_GRACE_SEC = 1.0  # 바가 잠깐 안 보여도 이 시간까진 유지(보스로 걸어갈 때 깜빡임 방지)
 
 # 사라짐 경고: 걸렸던 디버프가 '보스 바 보이는 동안' 이만큼(초) 연속 미검출되면
@@ -153,36 +145,16 @@ class DebuffEngine:
 
     @staticmethod
     def _bar_present(region: np.ndarray) -> bool:
-        """영역 안에 보스 HP바(길게 매끈하고 '한 색으로' 이어진 가로 띠)가 보이는가.
+        """영역(가로 밴드) 안에 보스 HP바 '프레임'이 보이는가.
 
-        바 채움은 **채도 높은 색 + 가로로 매끈(밝기)하고 + 같은 색상(hue)으로** 길게
-        이어진다. 각 행에서 '밝기 매끈 & 채도 높음 & 색상 연속'인 픽셀의 최장 연속 길이를
-        재, 영역 폭의 _BAR_RUN_RATIO 이상인 행이 _BAR_MIN_ROWS개 이상이면 바로 본다.
-        - 매끈하지만 **채도 낮은 돌바닥**은 제외(채도 조건).
-        - 채도 높지만 **매끈하지 않은 채팅·아이콘**도 제외(밝기 매끈 조건).
-        - 밝기는 매끈하고 채도도 있으나 **색이 얼룩덜룩한 흙바닥·풀밭**도 제외(색상 연속
-          조건 — 바 채움은 단색이라 hue가 길게 일정하지만, 바닥 텍스처는 hue가 들쭉날쭉).
+        HP·보스 색이 달라도 프레임(테두리 사각형)은 폭·위치가 일정하다. 그 프레임을
+        찾으면 보스가 있는 것. 흙·풀바닥엔 그런 길고 곧은 테두리 쌍이 없어 걸러진다.
+        (detect.bar_frame.locate_bar_frame 사용 — 상/하단 가로 테두리가 바 높이 간격으로
+        같은 열에 쌍으로 있는 곳.)
         """
-        if region is None or region.shape[0] < 3 or region.shape[1] < 20:
-            return False
-        g = cv2.cvtColor(region, cv2.COLOR_BGR2GRAY).astype(np.int16)
-        hsv = cv2.cvtColor(region, cv2.COLOR_BGR2HSV)
-        hue = hsv[:, :, 0].astype(np.int16)
-        sat = hsv[:, :, 1]
-        smooth = np.abs(np.diff(g, axis=1)) < _BAR_SMOOTH_GAP  # 밝기 매끈 (h, w-1)
-        hue_diff = np.abs(np.diff(hue, axis=1))
-        hue_diff = np.minimum(hue_diff, 180 - hue_diff)  # 색상환 순환 거리
-        hue_smooth = hue_diff <= _BAR_HUE_GAP  # 같은 색으로 이어짐
-        colored = sat[:, :-1] > _BAR_SAT_MIN  # 왼쪽 픽셀 채도(바 채움=유채색)
-        ok = smooth & colored & hue_smooth
-        need = int(region.shape[1] * _BAR_RUN_RATIO)
-        # 행별 최장 True 연속 길이(열 방향으로만 루프 → 행은 벡터 연산, 빠름).
-        cur = np.zeros(ok.shape[0], dtype=np.int32)
-        longest = np.zeros(ok.shape[0], dtype=np.int32)
-        for col in ok.T:
-            cur = np.where(col, cur + 1, 0)
-            longest = np.maximum(longest, cur)
-        return int((longest >= need).sum()) >= _BAR_MIN_ROWS
+        from ..detect.bar_frame import locate_bar_frame
+
+        return locate_bar_frame(region) is not None
 
     def tick(self, region: np.ndarray, now: float) -> TickResult:
         # 보스 HP바 앵커 게이팅: 보스 HP바가 보일 때만(=보스가 있을 때만) 디버프를

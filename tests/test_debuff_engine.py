@@ -14,20 +14,28 @@ ICON = _ONSCREEN_ICON_PX  # 화면상 디버프 아이콘 크기(px)
 
 
 def _bases():
-    rng = np.random.default_rng(0)
-    a = rng.integers(0, 255, (28, 28, 3), dtype=np.uint8)
-    b = rng.integers(0, 255, (28, 28, 3), dtype=np.uint8)
+    # 뚜렷한 고대비 패턴 아이콘(랜덤 노이즈는 축소·영역폭에 따라 매칭 점수가 불안정).
+    a = np.zeros((28, 28, 3), dtype=np.uint8)
+    a[4:24, 4:24] = (255, 60, 60)  # 파란 사각 블록
+    a[10:18, 10:18] = (40, 230, 230)  # 가운데 노란 점
+    b = np.zeros((28, 28, 3), dtype=np.uint8)
+    b[2:26, 2:26] = (40, 220, 40)  # 초록 테두리 블록
+    b[8:20, 8:20] = (0, 0, 0)  # 가운데 구멍
     return {"a": a, "b": b}
 
 
 # 보스 HP바가 보일 때만 탐지하도록 게이팅하므로, 탐지 로직 테스트 영역에는 항상
-# '보스 HP바'(매끈한 단색 가로 띠)를 포함시킨다. 상단 텍스처 영역에 디버프 아이콘을 둔다.
-_BAR_FILL = (160, 60, 120)  # BGR, 매끈 단색 바 채움(보스 HP바 모의)
+# '보스 HP바 프레임'(테두리 사각형)을 포함시킨다. 상단 텍스처 영역에 디버프 아이콘을 둔다.
+# detect.bar_frame.locate_bar_frame이 찾을 수 있게: 폭 넉넉, 상/하단 어두운 테두리.
+_BAR_FILL = (160, 60, 120)  # BGR, 바 채움
 
 
-def _bar_base(h=40, w=160):
+def _bar_base(h=70, w=420):
+    """상단 텍스처(디버프 영역) + 가운데 보스 HP바 프레임(어두운 테두리 + 채움)."""
     r = np.random.default_rng(8).integers(0, 255, (h, w, 3), dtype=np.uint8)
-    r[22:40, :] = _BAR_FILL  # 폭 전체, 세로로 두꺼운 매끈 단색 띠 = 바
+    r[34:60, 40:380] = _BAR_FILL  # 바 채움
+    r[34:36, 40:380] = (20, 20, 20)  # 상단 테두리(어둡게 → 강한 가로엣지)
+    r[58:60, 40:380] = (20, 20, 20)  # 하단 테두리
     return r
 
 
@@ -35,7 +43,7 @@ def _region_with(base):
     """보스 바가 있는 영역의 상단에 화면 크기(ICON) 디버프 아이콘을 배치(걸린 상태)."""
     region = _bar_base()
     icon = cv2.resize(base, (ICON, ICON), interpolation=cv2.INTER_AREA)
-    region[3 : 3 + ICON, 30 : 30 + ICON] = icon
+    region[6 : 6 + ICON, 60 : 60 + ICON] = icon  # 바 위쪽 텍스처 영역
     return region
 
 
@@ -81,8 +89,11 @@ def test_order_and_no_duration_no_alert():
 def test_works_with_loose_region():
     # 영역을 디버프 줄보다 훨씬 크게 잡아도(여백 많아도) 화면 아이콘 크기로 매칭된다.
     tpl = _bases()
-    region = np.random.default_rng(3).integers(0, 255, (120, 300, 3), dtype=np.uint8)
-    region[96:120, :] = _BAR_FILL  # 보스 HP바(게이팅 통과)
+    region = np.random.default_rng(3).integers(0, 255, (120, 460, 3), dtype=np.uint8)
+    # 보스 HP바 프레임(테두리+채움) — 가장자리 아닌 안쪽에 둬 상/하단 테두리가 잡히게.
+    region[80:106, 50:420] = _BAR_FILL
+    region[80:82, 50:420] = (20, 20, 20)
+    region[104:106, 50:420] = (20, 20, 20)
     icon = cv2.resize(tpl["a"], (ICON, ICON), interpolation=cv2.INTER_AREA)
     region[50 : 50 + ICON, 40 : 40 + ICON] = icon
     eng = DebuffEngine(tpl, ["a", "b"])
@@ -97,35 +108,13 @@ def test_set_order_live():
 
 
 # ---- 보스 HP바 앵커 게이팅(오탐 방지) ----
-from pathlib import Path
-
-_SHOTS = Path(__file__).parent / "data"
-
-
-def _bottom_region(name, y0=0.80, y1=0.905, x0=0.30, x1=0.72):
-    im = cv2.imread(str(_SHOTS / name))
-    assert im is not None, name
-    h, w = im.shape[:2]
-    return im[int(h * y0) : int(h * y1), int(w * x0) : int(w * x1)]
-
-
-def test_bar_present_real_boss_vs_town():
-    """실게임 캡처: 보스 체력바가 있으면 True, 마을(풀밭)은 False(색 무관)."""
-    boss = _bottom_region("스크린샷 2026-10-09 190901.png")
-    town = _bottom_region("스크린샷 2026-10-06 223724.png")
-    assert DebuffEngine._bar_present(boss) is True
-    assert DebuffEngine._bar_present(town) is False
-
-
-def _noise(h=28, w=140):
+def _noise(h=70, w=420):
+    """바(프레임)가 없는 텍스처만 — 보스 없음(마을·필드)."""
     return np.random.default_rng(7).integers(0, 255, (h, w, 3), dtype=np.uint8)
 
 
-def _bar_region(h=40, w=160):
-    """위쪽 텍스처(디버프 영역) + 아래쪽 매끈한 가로 띠(보스 HP바 모의)."""
-    r = np.random.default_rng(8).integers(0, 255, (h, w, 3), dtype=np.uint8)
-    r[22:40, :] = (160, 60, 120)  # 매끈한 바 띠(폭 전체, 세로로 두껍게)
-    return r
+def _bar_region(h=70, w=420):
+    return _bar_base()
 
 
 def test_bar_gating_suppresses_after_grace():
@@ -155,9 +144,9 @@ def test_no_bar_region_shows_nothing():
 # ---- 사라짐 경고(디버프가 보스에서 떨어짐) ----
 def _bar_with_icon(base):
     """바(보스 존재) + 상단 텍스처에 디버프 아이콘(걸린 상태)."""
-    r = _bar_region()
+    r = _bar_base()
     icon = cv2.resize(base, (ICON, ICON), interpolation=cv2.INTER_AREA)
-    r[3 : 3 + ICON, 30 : 30 + ICON] = icon
+    r[6 : 6 + ICON, 60 : 60 + ICON] = icon
     return r
 
 

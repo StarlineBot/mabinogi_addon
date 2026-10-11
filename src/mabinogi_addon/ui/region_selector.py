@@ -148,17 +148,20 @@ class RegionSelector(QWidget):
 
     def _fixed_rect(self, center: QPoint) -> QRect:
         w, h = self._fixed
+        if self._band:
+            # 밴드: 화면 전체 폭의 가로줄. 세로(높이)만 바꾸고 위아래로만 이동.
+            return QRect(0, center.y() - h // 2, self.width(), h)
         return QRect(center.x() - w // 2, center.y() - h // 2, w, h)
 
     def wheelEvent(self, event) -> None:
-        # 고정 박스 모드: 마우스 휠로 박스 크기를 조절(숫자에 딱 맞추기). 비율 유지.
+        # 고정 박스 모드: 마우스 휠로 크기 조절.
         if self._fixed is None:
             return
         w, h = self._fixed
         step = 1.1 if event.angleDelta().y() > 0 else 1 / 1.1
         if self._band:
-            # 밴드 모드: 높이(바 높이) 고정, 너비만 조절.
-            self._fixed = (max(40, min(1600, round(w * step))), h)
+            # 밴드 모드: 전체 폭 고정, 높이(가로줄 두께)만 조절.
+            self._fixed = (w, max(40, min(400, round(h * step))))
         else:
             self._fixed = (
                 max(12, min(400, round(w * step))),
@@ -249,15 +252,43 @@ class RegionSelector(QWidget):
         if self._fixed is not None:
             # 고정 박스 모드: 조작 안내 + '박스가 실제로 잡는 영역' 미리보기(커서 돋보기 X).
             hint = (
-                "보스 HP바에 밴드를 맞추세요   ·   휠: 너비 조절   ·   클릭: 배치   ·   ESC: 취소"
+                "가로줄을 위아래로 움직여 가운데 ⌐¬ 가이드 안에 보스 HP바가 들어오게"
+                "   ·   휠: 두께   ·   클릭: 배치   ·   ESC: 취소"
                 if self._band
                 else "마우스 휠: 박스 크기 조절   ·   클릭: 배치   ·   ESC: 취소"
             )
             self._draw_hint(painter, hint)
-            if not self._rect.isNull() and not self._shot.isNull():
+            if self._band and not self._rect.isNull():
+                self._draw_bar_guide(painter, self._rect)
+            elif not self._rect.isNull() and not self._shot.isNull():
                 self._draw_box_preview(painter, self._rect)
         elif self._cursor is not None and not self._shot.isNull():
             self._draw_loupe(painter, self._cursor)
+
+    def _draw_bar_guide(self, painter: QPainter, band: QRect) -> None:
+        """밴드 가운데에 '보스 HP바가 들어올 자리'를 네 모서리 ㄱ 괄호로 표시.
+
+        가이드는 보스 HP바 크기만큼 콤팩트하게 → 각 모서리에 짧은 ㄱ이 또렷하게 보인다
+        (밴드 높이만큼 길면 [ ] 괄호처럼 보여서 콤팩트하게 유지).
+        """
+        gw = min(560, int(band.width() * 0.42))  # 대략 보스 바 폭
+        gh = min(56, max(28, band.height() - 24))  # 대략 보스 바 높이(콤팩트)
+        gx = band.center().x() - gw // 2
+        gy = band.center().y() - gh // 2
+        guide = QRect(gx, gy, gw, gh)
+        painter.fillRect(guide, QColor(0, 209, 167, 30))
+        arm = 18  # 모서리 팔 길이(변 길이보다 짧아 중앙이 비어 '괄호'가 아닌 'ㄱ')
+        painter.setPen(QPen(QColor(255, 220, 90), 3))  # 눈에 띄는 노란 모서리
+        for cx, cy, dx, dy in (
+            (guide.left(), guide.top(), 1, 1),        # ┌
+            (guide.right(), guide.top(), -1, 1),      # ┐
+            (guide.left(), guide.bottom(), 1, -1),    # └
+            (guide.right(), guide.bottom(), -1, -1),  # ┘
+        ):
+            painter.drawLine(cx, cy, cx + dx * arm, cy)
+            painter.drawLine(cx, cy, cx, cy + dy * arm)
+        painter.setPen(QColor(255, 255, 255))
+        painter.drawText(guide.left(), guide.top() - 8, "여기에 보스 HP바")
 
     def _draw_hint(self, painter: QPainter, text: str) -> None:
         """화면 상단 중앙에 조작 안내 알약(pill)을 그린다."""

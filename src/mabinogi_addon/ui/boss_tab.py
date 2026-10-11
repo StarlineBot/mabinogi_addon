@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
 )
 
 from .. import config, paths
+from ..detect.bar_frame import locate_bar_frame
 from ..detect.boss_hp_reader import read_percent
 from ..detect.boss_name_matcher import identify, load_name_templates
 from ..tracker.boss_catalog import load_bosses, make_tracker
@@ -38,7 +39,10 @@ HIGHLIGHT_SUB = "보스 이름 ~ HP% 가 다 들어오게"
 
 # 기본 영역(2560×1440 기준, 하단 중앙 보스 HP바). 오른쪽 끝 = 바 오른쪽 끝.
 # 다른 해상도면 '영역 수정'으로 바에 맞춘다(판독기가 박스 높이로 스케일 보정).
-DEFAULT_BOX = {"x": 1017, "y": 1248, "w": 523, "h": 36}
+# 공유 영역은 '전체 폭 가로 밴드'(그 안에서 보스 HP바 프레임을 자동 검출). 기본값은
+# 2560×1440 기준 하단(디버프 줄 + 보스 HP바를 포함하는 밴드). 다른 해상도는 재지정.
+DEFAULT_BOX = {"x": 0, "y": 1205, "w": 2560, "h": 95}
+_DEFAULT_BAND_H = 95  # 밴드 기본 두께(디버프 줄+바 포함)
 
 
 class BossTab(QWidget):
@@ -194,11 +198,10 @@ class BossTab(QWidget):
     def _on_region(self) -> None:
         from .region_selector import RegionSelector
 
-        # 보스 HP바 밴드(높이=바 높이 고정)를 커서로 옮겨 클릭 배치. 휠로 너비만 조절.
+        # 전체 폭 가로 밴드를 위아래로 옮겨 보스 HP바가 가운데 가이드에 들게 배치.
         r = self._region or DEFAULT_BOX
-        self._selector = RegionSelector(
-            fixed_size=(int(r["w"]), int(r["h"])), band=True
-        )
+        band_h = int(r["h"]) if int(r.get("h", 0)) >= 60 else _DEFAULT_BAND_H
+        self._selector = RegionSelector(fixed_size=(int(r["w"]), band_h), band=True)
         self._selector.selected.connect(self._on_selected)
         self._selector.start()
 
@@ -341,10 +344,18 @@ class BossTab(QWidget):
         self._show_preview(frame)
         self._last_frame = frame
 
-        w = frame.shape[1]
-        name_reg = frame[:, : int(w * 0.60)]  # 왼쪽=이름
-        pct_reg = frame[:, int(w * 0.58) :]  # 오른쪽=HP%(가운데 빈 띠는 글자 없음)
-        boss_id = identify(name_reg, self._name_templates)
+        # 영역(가로 밴드) 안에서 보스 HP바 '프레임'을 찾아 그 바에서만 이름/%를 읽는다.
+        # (사용자가 바를 정확히 못 맞춰도 됨 — 프레임이 보일 때만 보스로 본다.)
+        fr = locate_bar_frame(frame)
+        if fr is None:
+            boss_id = None  # 바 없음 = 보스 없음
+        else:
+            x0, y0, x1, y1 = fr
+            bar = frame[y0:y1, x0:x1]
+            w = bar.shape[1]
+            name_reg = bar[:, : int(w * 0.60)]  # 왼쪽=이름
+            pct_reg = bar[:, int(w * 0.58) :]  # 오른쪽=HP%
+            boss_id = identify(name_reg, self._name_templates)
 
         # 보스 식별/소멸 관리. **HP 판독·경고는 보스가 '이번 프레임' 식별됐을 때만**
         # 처리한다 — 보스가 없으면 영역이 길바닥/UI라 HP가 garbage로 읽히는데, 그걸

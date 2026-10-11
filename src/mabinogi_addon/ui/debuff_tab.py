@@ -34,8 +34,8 @@ from .widgets import checkbox, hint_label, icon_slot, section_label
 # 영역에 꼭 들어가야 하는 것(앱 힌트 ↔ 화면 점선 라벨이 같은 기준을 공유).
 # 보스 HP바 영역 하나만 지정하면 된다(이름~%). 디버프 아이콘 줄은 그 바 바로 위에
 # 있으므로 앱이 자동으로 함께 읽는다. 이 영역은 '보스 패턴 알림'과 공유된다.
-# 밴드 기본 크기(2560×1440 보스 HP바 기준) — 영역 미지정 시 선택기 초기 크기.
-_DEFAULT_BAR = {"w": 523, "h": 36}
+# 밴드 기본 크기(2560×1440 기준) — 영역 미지정 시 선택기 초기 크기(전체 폭 가로 밴드).
+_DEFAULT_BAR = {"w": 2560, "h": 95}
 REGION_CRITERION = "보스 HP바(이름 ~ HP%)가 점선 안에 들어오게 드래그하세요"
 HIGHLIGHT_TITLE = "보스 HP바 영역"
 HIGHLIGHT_SUB = "보스 이름 ~ HP% 가 점선 안에 다 들어왔나요?"
@@ -228,10 +228,11 @@ class DebuffTab(QWidget):
     def _pick_region(self) -> None:
         from .region_selector import RegionSelector
 
-        # 보스 HP바 밴드(높이=바 높이 고정)를 옮겨 배치. 보스 패턴과 같은 영역.
+        # 전체 폭 가로 밴드를 옮겨 보스 HP바가 가운데 가이드에 들게. 보스 패턴과 공유.
         r = config.load_bar_region() or _DEFAULT_BAR
+        band_h = int(r["h"]) if int(r.get("h", 0)) >= 60 else _DEFAULT_BAR["h"]
         self._selector = RegionSelector(  # 참조 유지(GC 방지)
-            fixed_size=(int(r["w"]), int(r["h"])), band=True
+            fixed_size=(int(r["w"]), band_h), band=True
         )
         self._selector.selected.connect(self._on_region_selected)
         self._selector.start()

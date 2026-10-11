@@ -63,6 +63,7 @@ def test_stale_tracker_cleared_when_boss_gone(monkeypatch):
     t._region = {"x": 0, "y": 0, "w": 150, "h": 36}
     t.enable.setChecked(True)
     monkeypatch.setattr(t, "_grab_rect", lambda *a: np.zeros((36, 150, 3), np.uint8))
+    monkeypatch.setattr(bt_mod, "locate_bar_frame", lambda *a, **k: (0, 0, 150, 36))
     monkeypatch.setattr(t, "_show_preview", lambda *a: None)
     monkeypatch.setattr(t, "_play", lambda *a: None)
     fired: list = []
@@ -104,6 +105,7 @@ def test_upcoming_list_updates_from_tracker(monkeypatch):
     t._region = {"x": 0, "y": 0, "w": 150, "h": 36}
     t.show_upcoming.setChecked(True)
     monkeypatch.setattr(t, "_grab_rect", lambda *a: np.zeros((36, 150, 3), np.uint8))
+    monkeypatch.setattr(bt_mod, "locate_bar_frame", lambda *a, **k: (0, 0, 150, 36))
     monkeypatch.setattr(t, "_show_preview", lambda *a: None)
 
     # 레넨(임계 80,60,40,30) 식별 + HP 90 → 전부 남은 패턴으로 나열
@@ -136,6 +138,7 @@ def test_upcoming_hides_quickly_after_boss_gone(monkeypatch):
     t.show_upcoming.setChecked(True)
     t._upcoming.set_locked(True)  # 고정(게임 위 표시) — 이 상태에서 게이트가 적용됨
     monkeypatch.setattr(t, "_grab_rect", lambda *a: np.zeros((36, 150, 3), np.uint8))
+    monkeypatch.setattr(bt_mod, "locate_bar_frame", lambda *a, **k: (0, 0, 150, 36))
     monkeypatch.setattr(t, "_show_preview", lambda *a: None)
 
     # 레넨 식별 + HP 90 → 목록 표시
@@ -191,6 +194,7 @@ def test_upcoming_hidden_when_option_off(monkeypatch):
     t._region = {"x": 0, "y": 0, "w": 150, "h": 36}
     t.show_upcoming.setChecked(False)
     monkeypatch.setattr(t, "_grab_rect", lambda *a: np.zeros((36, 150, 3), np.uint8))
+    monkeypatch.setattr(bt_mod, "locate_bar_frame", lambda *a, **k: (0, 0, 150, 36))
     monkeypatch.setattr(t, "_show_preview", lambda *a: None)
     monkeypatch.setattr(bt_mod, "identify", lambda *a, **k: "lenen_miir")
     monkeypatch.setattr(bt_mod, "read_percent", lambda *a, **k: 90)
