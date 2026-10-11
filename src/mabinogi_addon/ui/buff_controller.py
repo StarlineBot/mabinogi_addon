@@ -4,8 +4,11 @@ FrameSource에서 버프 패널을 주기적으로 캡처 → BuffEngine.tick �
 캡처·탐지는 백그라운드 스레드(UI 안 막음), 오버레이 갱신은 시그널로 메인 스레드에서.
 FrameSource를 주입받으므로 Windows(dxcam)·개발(File) 모두 같은 코드로 동작.
 
-포그라운드 감지(WindowWatcher): 게임(또는 자기 앱)이 활성일 때만 캡처·표시한다.
-비활성이면 상태를 동결하고 오버레이를 숨긴다(엉뚱한 창을 캡처해 오탐하는 것 방지).
+포그라운드와 무관하게 계속 캡처·판독한다(지속시간이 끊기지 않고 동기화되게 —
+파티 바드 노래처럼 내가 포커스 안 해도 들어오는 버프도 갱신). 엉뚱한 창을 캡처하는
+오탐은 엔진의 앵커(기준 버프) 판정으로 막는다: 버프 바가 다른 창에 가려지면 앵커가
+안 보여 frame_valid=False가 되고, 엔진이 감지·해제를 멈추고 내부 시계만 유지한다.
+포커스가 없을 땐 주기를 늘려(_IDLE_INTERVAL_MS) CPU를 아낀다.
 """
 
 from __future__ import annotations
@@ -27,6 +30,11 @@ from .overlay import BuffOverlay, OverlayItem, overlay_spec
 # 게임이 만료 직전 숫자를 깜빡이면 일부 프레임을 못 읽어 7↔6으로 튀는 걸 막는다.
 # 실제 연장(유의미한 증가)은 이 값보다 크므로 그대로 반영된다.
 _SMOOTH_EPS = 1.5
+
+# 게임이 포그라운드가 아닐 때의 탐지 주기(ms). 포커스가 없어도 지속시간은 계속
+# 읽어야 하지만(파티 버프 등), 포커스가 없는 동안엔 자주 볼 필요가 없어 주기를 늘려
+# CPU를 아낀다(약 0.5초마다 — 카운트다운 표시엔 충분).
+_IDLE_INTERVAL_MS = 500
 
 # 사라짐 경고 타이밍.
 # - 확정 대기: 버프가 목록에서 사라져도 이만큼(초) 연속으로 없어야 '완전히 사라짐'으로
@@ -63,22 +71,27 @@ class _TrackWorker(QThread):
             if (game, selfa) != self._fg:
                 self._fg = (game, selfa)
                 self.foreground_changed.emit(game, selfa)
-            if game:
-                # 캡처·탐지는 게임이 포그라운드일 때만(다른 창을 캡처해 오탐 방지).
-                region = self._source.grab()
-                if region is not None:
-                    result = self._engine.tick(region, time.monotonic())
-                    self.updated.emit(result.entries)
-                    if result.alerts:
-                        self.alerted.emit(result.alerts)
-            self._sleep()
+            # 포그라운드와 무관하게 계속 읽는다 — 지속시간이 끊기지 않고 계속 동기화되게.
+            # (파티 바드 노래 등은 내가 포커스 안 해도 갱신된다.) 라이브 캡처는 게임이
+            # 화면에 보이면 잡히고, 다른 창이 버프 바를 가리면 앵커(기준 버프)가 안 보여
+            # 엔진이 frame_valid=False로 '동결'(감지·해제 멈추고 시계만 유지)하므로,
+            # 비게임 화면을 캡처해도 오탐으로 터지지 않는다.
+            region = self._source.grab()
+            if region is not None:
+                result = self._engine.tick(region, time.monotonic())
+                self.updated.emit(result.entries)
+                if result.alerts:
+                    self.alerted.emit(result.alerts)
+            self._sleep(active=game)
 
-    def _sleep(self) -> None:
-        """주기를 작게 쪼개 자며 _running을 자주 확인(종료 요청 즉시 반응)."""
+    def _sleep(self, active: bool = True) -> None:
+        """주기를 작게 쪼개 자며 _running을 자주 확인(종료 요청 즉시 반응). 게임이
+        포그라운드가 아니면 주기를 늘려 CPU를 아낀다(지속시간 표시엔 충분)."""
+        target = self._interval if active else max(self._interval, _IDLE_INTERVAL_MS)
         step = 30
         waited = 0
-        while self._running and waited < self._interval:
-            self.msleep(min(step, self._interval - waited))
+        while self._running and waited < target:
+            self.msleep(min(step, target - waited))
             waited += step
 
     def stop(self) -> None:
