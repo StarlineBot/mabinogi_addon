@@ -1,6 +1,6 @@
 """시간 판독 throttle 회귀 테스트.
 
-아이콘 존재는 매 틱 보되, 시간 판독은 등장 직후 + _TIME_READ_GAP(3초)마다 +
+아이콘 존재는 매 틱 보되, 시간 판독은 등장 직후 + _TIME_READ_GAP마다 +
 임박 근처(알림기준+margin)엔 매 틱. 내부 시계가 그 사이를 카운트다운·알림한다.
 """
 
@@ -48,13 +48,13 @@ def test_far_from_threshold_throttles_reads(monkeypatch):
     eng = _engine()
     eng.tick(region, now=0.0)  # 등장 → 판독(여기선 카운트 전)
     calls = _count_reads(eng, monkeypatch)
-    # vivace는 121초(기준 30초에서 멀다) → 3초 간격에만 판독
-    eng.tick(region, now=0.5)
-    eng.tick(region, now=1.0)
-    eng.tick(region, now=2.0)
-    assert calls["n"] == 0  # 3초 안 지남 → 판독 생략
-    eng.tick(region, now=3.1)
-    assert calls["n"] >= 1  # 3초 경과 → 재판독
+    gap = eng._TIME_READ_GAP
+    # vivace는 121초(기준 30초에서 멀다) → _TIME_READ_GAP 간격에만 판독
+    eng.tick(region, now=gap * 0.3)
+    eng.tick(region, now=gap * 0.6)
+    assert calls["n"] == 0  # 간격 안 지남 → 판독 생략
+    eng.tick(region, now=gap + 0.1)
+    assert calls["n"] >= 1  # 간격 경과 → 재판독
 
 
 def test_near_threshold_reads_every_tick(monkeypatch):
