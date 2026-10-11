@@ -121,8 +121,8 @@ class SkillbarTab(QWidget):
         pr = QHBoxLayout()
         pr.addWidget(QLabel("프리셋"))
         for label, fn in (
-            ("중앙 하단(기본)", self._preset_center),
-            ("가로 1줄", self._preset_single_row),
+            ("중앙 하단(기본)", self._preset_default),
+            ("중앙 2단", self._preset_two_tier),
             ("블록 분리", self._preset_blocks),
         ):
             b = QPushButton(label)
@@ -169,7 +169,7 @@ class SkillbarTab(QWidget):
             ov.set_locked(bool(c.get("locked", False)))
             self._overlays[key] = ov
         if not any(self._chunks_cfg.get(k, {}).get("pos") for k in self._defs):
-            self._preset_center()  # 첫 사용: 기본(중앙 하단) 배치 한 번 깔기
+            self._preset_default()  # 첫 사용: 기본(중앙 하단, 가로 2줄) 배치
 
     def _cells_on(self, key: str) -> list[bool]:
         return self._chunks_cfg.get(key, {}).get("cells", [True] * 4)
@@ -293,51 +293,65 @@ class SkillbarTab(QWidget):
                 self._chunks_cfg.setdefault(key, {})["pos"] = {"x": x, "y": y}
         self._save()
 
-    def _preset_center(self) -> None:
-        """기본 — 화면 중앙 하단에, 두 블록을 위아래로 쌓아(2단) 각 블록은 3그룹×2줄.
+    def _center_base_y(self, total_h: int) -> int:
+        """중앙 계열 프리셋의 윗줄 top y — 보스 체력바 영역(하단) 위로 clamp.
 
-        원본 단축바(위에 2줄)를 가운데 아래로 가져온 느낌. 블록1(윗단)·블록2(아랫단)이
-        세로로 쌓여 총 4줄, 가로는 3그룹씩 가운데 정렬.
+        하한(최소 높이): 화면 하단 ~16%는 보스 체력바·액션바 영역 → 스택 바닥이 그 위로.
+        사용자가 더 위로 맞춰 둔 값(_center_top_y)이 있으면 그걸 쓰되, 하한보다 아래로는
+        절대 안 내려가게 clamp(보스 체력바 가림 방지).
         """
-        ox, oy, ow, oh = self._screen_origin()
+        _ox, oy, _ow, oh = self._screen_origin()
+        default_top = oy + round(oh * SAFE_BOTTOM_RATIO) - total_h
+        top = default_top if self._center_top_y is None else min(
+            self._center_top_y, default_top
+        )
+        return max(oy + 40, top)
+
+    def _preset_default(self) -> None:
+        """기본 — 상단 단축바 '그대로'(가로 2줄)를 화면 중앙 하단에.
+
+        두 블록을 가로로 나란히(블록1 3그룹 + 블록 간격 + 블록2 3그룹 = 6그룹) 2줄로.
+        """
+        ox, _oy, ow, _oh = self._screen_origin()
         s = self._scale / 100.0
         gw = round(GROUP_W * s)
         gcol = round(10 * s)  # 그룹 사이 가로 간격
+        bcol = round(40 * s)  # 블록 사이 가로 간격(원본처럼 넓게)
         rgap = round((ICON + 8) * s)  # 줄 간격
+        total_h = rgap + round(ICON * s)  # 2줄 높이
+        row_w = 6 * gw + 4 * gcol + bcol
+        x0 = ox + ow // 2 - row_w // 2
+        base_y = self._center_base_y(total_h)
+        pos = {}
+        for bi in range(2):
+            for ci in range(3):
+                col = bi * 3 + ci
+                x = x0 + col * (gw + gcol) + bi * bcol
+                for ri in range(2):
+                    pos[f"b{bi}r{ri}c{ci}"] = (x, base_y + ri * rgap)
+        self._center_top_y = base_y
+        self._place(pos)
+
+    def _preset_two_tier(self) -> None:
+        """중앙 2단 — 두 블록을 위아래로 쌓아(각 블록 3그룹×2줄 → 총 4줄) 중앙 하단에."""
+        ox, _oy, ow, _oh = self._screen_origin()
+        s = self._scale / 100.0
+        gw = round(GROUP_W * s)
+        gcol = round(10 * s)
+        rgap = round((ICON + 8) * s)
         bgap = round(18 * s)  # 블록(단) 사이 세로 간격
-        row_w = 3 * gw + 2 * gcol
-        x0 = ox + ow // 2 - row_w // 2  # 가로 가운데
         total_h = 4 * rgap + bgap
-        # 하한(최소 높이): 화면 하단 ~20%는 보스 체력바·액션바 영역 → 스택 바닥이 그
-        # 위로 오게 한다. 사용자가 더 위로 맞춰 둔 값(_center_top_y)이 있으면 그걸 쓰되,
-        # 하한보다 아래로는 절대 안 내려가게 clamp(보스 체력바 가림 방지).
-        safe_bottom = oy + round(oh * SAFE_BOTTOM_RATIO)
-        default_top = safe_bottom - total_h
-        base_y = default_top if self._center_top_y is None else min(
-            self._center_top_y, default_top
-        )
-        base_y = max(oy + 40, base_y)
+        row_w = 3 * gw + 2 * gcol
+        x0 = ox + ow // 2 - row_w // 2
+        base_y = self._center_base_y(total_h)
         pos = {}
         for bi in range(2):
             for ri in range(2):
-                tier = bi * 2 + ri  # 0,1(블록1) / 2,3(블록2)
+                tier = bi * 2 + ri
                 y = base_y + tier * rgap + (bgap if bi == 1 else 0)
                 for ci in range(3):
                     pos[f"b{bi}r{ri}c{ci}"] = (x0 + ci * (gw + gcol), y)
-        self._center_top_y = base_y  # 적용된 top을 하한 기준으로 기억
-        self._place(pos)
-
-    def _preset_single_row(self) -> None:
-        # 12뭉을 한 줄로 가로로 쭉(가운데 정렬), 화면 하단.
-        ox, oy, ow, oh = self._screen_origin()
-        s = self._scale / 100.0
-        gw = round(GROUP_W * s)
-        gap = round(8 * s)
-        keys = [f"b{bi}r{ri}c{ci}" for bi in range(2) for ri in range(2) for ci in range(3)]
-        total_w = len(keys) * gw + (len(keys) - 1) * gap
-        x0 = ox + ow // 2 - total_w // 2
-        y = oy + round(oh * SAFE_BOTTOM_RATIO) - round(ICON * s)  # 하단 보스바 영역 비우기
-        pos = {k: (x0 + i * (gw + gap), y) for i, k in enumerate(keys)}
+        self._center_top_y = base_y
         self._place(pos)
 
     def _preset_blocks(self) -> None:
