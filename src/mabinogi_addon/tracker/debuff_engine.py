@@ -40,6 +40,9 @@ DEBUFF_THRESHOLD = DEBUFF_DETECT_THRESHOLD  # 진단 스크립트 표시용
 # 실샘플: 보스 바 0.48~0.53 / 마을·풀밭 ≤0.33 → 0.42로 가른다.
 _BAR_SMOOTH_GAP = 6  # 인접 픽셀 밝기차가 이 미만이면 '매끈'
 _BAR_SAT_MIN = 60  # 이 미만 채도는 '무채색'(돌바닥 등) — 바 채움에서 제외
+# 이 미만 밝기는 '어두운 색'(어두운 풀밭 등) — 바 채움에서 제외. 어두운 녹색 풀밭이
+# 채도 높고 균일(매끈)해 바로 오인되던 것 방지(실샘플: 풀밭 V중앙 24~42 / 보스 바 135+).
+_BAR_VAL_MIN = 90
 _BAR_RUN_RATIO = 0.42  # 한 행의 최장 매끈런 / 영역 폭 이 이상이면 '바다운 행'
 _BAR_MIN_ROWS = 6  # 그런 '바다운 행'이 이만큼(세로로 두꺼운 띠) 있어야 바로 인정
 # (실샘플: 보스 바 22~45행 / 마을·풀밭 0행 → 우연한 매끈 한 줄엔 안 걸림)
@@ -187,9 +190,12 @@ class DebuffEngine:
         if region is None or region.shape[0] < 3 or region.shape[1] < 20:
             return False
         g = cv2.cvtColor(region, cv2.COLOR_BGR2GRAY).astype(np.int16)
-        sat = cv2.cvtColor(region, cv2.COLOR_BGR2HSV)[:, :, 1]
+        hsv = cv2.cvtColor(region, cv2.COLOR_BGR2HSV)
+        sat, val = hsv[:, :, 1], hsv[:, :, 2]
         smooth = np.abs(np.diff(g, axis=1)) < _BAR_SMOOTH_GAP  # (h, w-1)
-        colored = sat[:, :-1] > _BAR_SAT_MIN  # 왼쪽 픽셀 채도(바 채움=유채색)
+        # 바 채움 = 유채색(sat) + 밝음(val). 어두운 녹색 풀밭(채도 높고 균일하나 어두움)을
+        # 바로 오인하던 것을 밝기 조건으로 배제한다.
+        colored = (sat[:, :-1] > _BAR_SAT_MIN) & (val[:, :-1] > _BAR_VAL_MIN)
         ok = smooth & colored
         need = int(region.shape[1] * _BAR_RUN_RATIO)
         bar_rows = 0
@@ -214,25 +220,40 @@ class DebuffEngine:
             self._fell_since.clear()
             self._warn_until.clear()
             self._applied_prev = {bid: False for bid in self._templates}
-        # 보스 HP바 인식: 디버프 '오버레이 표시'는 바와 무관하게 **항상** 한다(상시 노출).
-        # 예전엔 바가 안 보이면 오버레이를 통째로 숨겼는데, 바 인식이 완벽하지 않아
-        # (해상도·배경색·영상 캡처 등) 멀쩡히 보여야 할 때 오버레이가 사라지는 게 오히려
-        # 버그처럼 보였다. 그래서 바 게이팅은 걷어내고, 바 인식은 '사라짐 경고'(보스에게
-        # 디버프가 떨어졌는지)와 탭의 안내 표시(bar_seen)용으로만 쓴다.
+        # 보스 HP바 게이팅: 바가 '있을 때만' 매칭한다. 바가 없으면(보스 없음) 매칭을
+        # 멈추고 **전부 '미적용'으로 표시**(오버레이는 사라지지 않음 — 과거 '통째 숨김'이
+        # 버그처럼 보였던 것과 다름). 이렇게 해야 보스 없는 배경(바닥·마을 텍스처)을
+        # 디버프로 오인하지 않고, 이력 임계로 래치됐던 오탐도 풀린다.
+        # 단, 바를 한 번도 못 본 영역(= 바를 안 넣은 사용자)은 게이팅하지 않아 하위호환.
         bar = self._bar_present(region)
         self._bar_last = bar
+        boss_absent = False
         if bar:
             self._bar_seen = True
             self._bar_gone_since = None
         elif self._bar_seen:
-            # 바가 안 보이기 시작: _BAR_GRACE_SEC 넘겨 계속 없으면 '보스 이탈'로 보고
-            # 사라짐 경고 대기·노출만 리셋한다(오버레이는 그대로 계속 표시).
+            # 바가 안 보이기 시작: _BAR_GRACE_SEC 동안은 유지(보스로 걸어갈 때 깜빡임 방지).
             if self._bar_gone_since is None:
                 self._bar_gone_since = now
             if now - self._bar_gone_since >= _BAR_GRACE_SEC:
-                self._applied_prev = {bid: False for bid in self._templates}
-                self._fell_since.clear()
-                self._warn_until.clear()
+                boss_absent = True
+
+        if boss_absent:
+            # 보스 없음 확정 → 매칭 중단, 전부 미적용으로 리셋(래치 해제), 경고 대기 비움.
+            self._applied_prev = {bid: False for bid in self._templates}
+            self._fell_since.clear()
+            self._warn_until.clear()
+            for bid in self._templates:
+                self._shown[bid] = True
+                self._matched[bid] = False
+                self._detect_since[bid] = None
+                self._absent_since[bid] = None
+            entries = [
+                OverlayEntry(bid, None, False, gone=False)
+                for bid in self._order
+                if self._shown.get(bid, False)
+            ]
+            return TickResult(entries=entries, alerts=[], frame_valid=True)
 
         small = self._scale(region)
         for bid in self._templates:

@@ -11,6 +11,7 @@ import numpy as np
 from mabinogi_addon.tracker.debuff_engine import (
     _GONE_SHOW_SEC,
     _ONSCREEN_ICON_PX,
+    DEBUFF_DETECT_THRESHOLD,
     DebuffEngine,
 )
 
@@ -226,6 +227,73 @@ def test_no_bar_region_never_warns():
     eng.tick(_empty(), now=0.2)
     res = eng.tick(_empty(), now=4.0)
     assert res.alerts == [] and _gone_ids(res) == []
+
+
+def _real_debuff_templates():
+    from pathlib import Path as _P
+
+    import cv2 as _cv2
+
+    d = _P("src/mabinogi_addon/assets/debuff/icon")
+    out = {}
+    for name in ("방해 카드", "모모"):
+        t = _cv2.imread(str(d / f"{name}.png"))
+        if t is not None:
+            out[name] = t
+    return out
+
+
+def _user_region(name):
+    im = cv2.imread(str(_SHOTS / name))
+    assert im is not None, name
+    h, w = im.shape[:2]
+    sx, sy = w / 2560.0, h / 1440.0
+    y, x = int(1210 * sy), int(1017 * sx)
+    return im[y : y + int(79 * sy), x : x + int(524 * sx)]
+
+
+def test_bar_present_rejects_dark_grass():
+    """어두운 녹색 풀밭(채도 높고 균일하나 어두움)은 보스 바로 오인하지 않는다.
+
+    예전엔 매끈+유채색만 보고 True가 됐다(들쑥날쑥 오탐). 밝기 조건 추가로 False.
+    """
+    assert DebuffEngine._bar_present(_user_region("스크린샷 2026-10-06 224732.png")) is False
+    # 대조: 실제 보스 바가 있는 영역은 True
+    assert DebuffEngine._bar_present(_user_region("스크린샷 2026-10-09 190901.png")) is True
+
+
+def test_background_not_matched_when_boss_absent():
+    """보스 바가 없으면(빈 바닥) 매칭을 멈춰 배경 오탐을 막는다.
+
+    실게임: 바닥 텍스처가 방해 카드·모모 템플릿에 ≥0.68로 오매칭된다(아래 전제 확인).
+    보스 바가 있는 영역으로 bar_seen을 세운 뒤 빈 바닥으로 가면, 매칭이 중단되고
+    전부 '미적용'으로 표시돼야 한다(이력 임계 래치 오탐도 풀림).
+    """
+    tpl = _real_debuff_templates()
+    if len(tpl) < 2:
+        import pytest
+
+        pytest.skip("디버프 템플릿 없음")
+    order = list(tpl)
+    # 보스 바가 있는 영역(실게임) — bar_seen 설정용
+    boss = cv2.imread(str(_SHOTS / "스크린샷 2026-10-12 000512.png"))
+    floor = cv2.imread(str(_SHOTS / "스크린샷 2026-10-12 024008.png"))
+    assert boss is not None and floor is not None
+    boss_reg = boss[1210:1210 + 79, 1017:1017 + 524]
+    floor_reg = floor[1210:1210 + 79, 1017:1017 + 524]
+    assert DebuffEngine._bar_present(boss_reg) is True
+    assert DebuffEngine._bar_present(floor_reg) is False
+    # 전제: 바닥이 실제로 ≥0.68로 오매칭된다(이 테스트가 막으려는 상황)
+    probe = DebuffEngine(tpl, order).best_scores(floor_reg)
+    assert max(probe.values()) >= DEBUFF_DETECT_THRESHOLD  # 바닥이 실제로 오매칭됨
+
+    eng = DebuffEngine(tpl, order)
+    eng.tick(boss_reg, now=0.0)  # 바 인식 → bar_seen=True
+    eng.tick(floor_reg, now=0.2)  # 바 사라짐(유예 내)
+    res = eng.tick(floor_reg, now=2.0)  # 유예 후 → 보스 없음 → 매칭 중단·리셋
+    shown = [e.buff_id for e in res.entries]
+    assert set(shown) == set(order)  # 바닥 오탐 없이 전부 미적용 표시
+    assert res.alerts == []
 
 
 def test_warn_gone_suppressed_when_not_foreground():
