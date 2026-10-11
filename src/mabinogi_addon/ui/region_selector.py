@@ -44,6 +44,7 @@ class RegionSelector(QWidget):
         save_path: Path | None = None,
         fixed_size: tuple[int, int] | None = None,
         window_hwnd: int | None = None,
+        band: bool = False,
     ) -> None:
         super().__init__(
             None,
@@ -52,6 +53,8 @@ class RegionSelector(QWidget):
         self._save_path = save_path
         # fixed_size가 있으면 '고정 크기 박스를 커서에 붙여 클릭 한 번으로 배치' 모드.
         self._fixed = fixed_size
+        # band=True: 높이는 '바 높이'로 고정하고 휠로 '너비만' 조절(보스 HP바 밴드 지정용).
+        self._band = band
         # window_hwnd가 있으면 그 창(게임) 내용을 스냅샷 위에 합성 → 작업표시줄 등에
         # 가린 부분도 돋보기에 게임 그대로 보인다(커스텀 오버레이 미러 영역 지정용).
         self._window_hwnd = window_hwnd
@@ -153,10 +156,14 @@ class RegionSelector(QWidget):
             return
         w, h = self._fixed
         step = 1.1 if event.angleDelta().y() > 0 else 1 / 1.1
-        self._fixed = (
-            max(12, min(400, round(w * step))),
-            max(8, min(300, round(h * step))),
-        )
+        if self._band:
+            # 밴드 모드: 높이(바 높이) 고정, 너비만 조절.
+            self._fixed = (max(40, min(1600, round(w * step))), h)
+        else:
+            self._fixed = (
+                max(12, min(400, round(w * step))),
+                max(8, min(300, round(h * step))),
+            )
         if self._cursor is not None:
             self._rect = self._fixed_rect(self._cursor)
         self.update()
@@ -241,9 +248,12 @@ class RegionSelector(QWidget):
             painter.drawText(self._rect.adjusted(4, 4, 0, 0), 0, label)
         if self._fixed is not None:
             # 고정 박스 모드: 조작 안내 + '박스가 실제로 잡는 영역' 미리보기(커서 돋보기 X).
-            self._draw_hint(
-                painter, "마우스 휠: 박스 크기 조절   ·   클릭: 배치   ·   ESC: 취소"
+            hint = (
+                "보스 HP바에 밴드를 맞추세요   ·   휠: 너비 조절   ·   클릭: 배치   ·   ESC: 취소"
+                if self._band
+                else "마우스 휠: 박스 크기 조절   ·   클릭: 배치   ·   ESC: 취소"
             )
+            self._draw_hint(painter, hint)
             if not self._rect.isNull() and not self._shot.isNull():
                 self._draw_box_preview(painter, self._rect)
         elif self._cursor is not None and not self._shot.isNull():

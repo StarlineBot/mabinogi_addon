@@ -194,8 +194,11 @@ class BossTab(QWidget):
     def _on_region(self) -> None:
         from .region_selector import RegionSelector
 
-        # 보스 HP바는 넓은 가로 띠 → 자유 드래그로 이름~% 를 감싸게 그린다.
-        self._selector = RegionSelector()
+        # 보스 HP바 밴드(높이=바 높이 고정)를 커서로 옮겨 클릭 배치. 휠로 너비만 조절.
+        r = self._region or DEFAULT_BOX
+        self._selector = RegionSelector(
+            fixed_size=(int(r["w"]), int(r["h"])), band=True
+        )
         self._selector.selected.connect(self._on_selected)
         self._selector.start()
 
