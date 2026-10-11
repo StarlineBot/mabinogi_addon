@@ -20,16 +20,28 @@ def _bases():
     return {"a": a, "b": b}
 
 
+# 보스 HP바가 보일 때만 탐지하도록 게이팅하므로, 탐지 로직 테스트 영역에는 항상
+# '보스 HP바'(매끈한 단색 가로 띠)를 포함시킨다. 상단 텍스처 영역에 디버프 아이콘을 둔다.
+_BAR_FILL = (160, 60, 120)  # BGR, 매끈 단색 바 채움(보스 HP바 모의)
+
+
+def _bar_base(h=40, w=160):
+    r = np.random.default_rng(8).integers(0, 255, (h, w, 3), dtype=np.uint8)
+    r[22:40, :] = _BAR_FILL  # 폭 전체, 세로로 두꺼운 매끈 단색 띠 = 바
+    return r
+
+
 def _region_with(base):
-    """여유 있는(줄보다 큰) 영역에 화면 크기(ICON) 아이콘을 배치."""
-    region = np.zeros((28, 140, 3), np.uint8)
+    """보스 바가 있는 영역의 상단에 화면 크기(ICON) 디버프 아이콘을 배치(걸린 상태)."""
+    region = _bar_base()
     icon = cv2.resize(base, (ICON, ICON), interpolation=cv2.INTER_AREA)
-    region[6 : 6 + ICON, 30 : 30 + ICON] = icon
+    region[3 : 3 + ICON, 30 : 30 + ICON] = icon
     return region
 
 
 def _empty():
-    return np.zeros((28, 140, 3), np.uint8)
+    """보스 바는 있고(= 보스 존재) 디버프 아이콘은 없는 영역."""
+    return _bar_base()
 
 
 def _shown(result):
@@ -69,7 +81,8 @@ def test_order_and_no_duration_no_alert():
 def test_works_with_loose_region():
     # 영역을 디버프 줄보다 훨씬 크게 잡아도(여백 많아도) 화면 아이콘 크기로 매칭된다.
     tpl = _bases()
-    region = np.zeros((120, 300, 3), np.uint8)  # 아주 넉넉한 영역
+    region = np.random.default_rng(3).integers(0, 255, (120, 300, 3), dtype=np.uint8)
+    region[96:120, :] = _BAR_FILL  # 보스 HP바(게이팅 통과)
     icon = cv2.resize(tpl["a"], (ICON, ICON), interpolation=cv2.INTER_AREA)
     region[50 : 50 + ICON, 40 : 40 + ICON] = icon
     eng = DebuffEngine(tpl, ["a", "b"])
@@ -128,12 +141,15 @@ def test_bar_gating_suppresses_after_grace():
     assert _shown(eng.tick(_bar_region(), now=2.2)) == ["a", "b"]
 
 
-def test_backward_compat_no_bar_region_always_detects():
-    # 바를 한 번도 못 본 영역(텍스처만) → 게이팅 안 함 → 기존처럼 전부 표시
+def test_no_bar_region_shows_nothing():
+    # 보스 HP바를 한 번도 못 봤으면(마을·필드 = 전투 전) 아무것도 표시하지 않는다.
+    # (게임 시작 직후 바닥 텍스처에 디버프/모모가 오탐되던 버그 방지)
     tpl = _bases()
     eng = DebuffEngine(tpl, ["a", "b"])
     assert DebuffEngine._bar_present(_noise()) is False
-    assert _shown(eng.tick(_noise(), now=0.0)) == ["a", "b"]
+    assert _shown(eng.tick(_noise(), now=0.0)) == []
+    # 바가 나타나면 그때부터 정상 탐지
+    assert _shown(eng.tick(_bar_base(), now=0.1)) == ["a", "b"]
 
 
 # ---- 사라짐 경고(디버프가 보스에서 떨어짐) ----
@@ -195,12 +211,3 @@ def test_warn_gone_cancelled_if_reapplied():
     assert res.alerts == []  # 직전 대기가 리셋돼 아직 확정 아님
 
 
-def test_no_bar_region_never_warns():
-    tpl = _bases()
-    eng = DebuffEngine(tpl, ["a", "b"])
-    eng.set_warn_gone_ids({"a"})
-    # 바 없는(하위호환) 영역: a가 보였다 안 보여도 경고 안 울림
-    eng.tick(_region_with(tpl["a"]), now=0.0)
-    eng.tick(_empty(), now=0.2)
-    res = eng.tick(_empty(), now=4.0)
-    assert res.alerts == [] and _gone_ids(res) == []
