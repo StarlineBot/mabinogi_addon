@@ -24,10 +24,15 @@ _ONSCREEN_ICON_PX = 16
 _MATCH_ICON_PX = 10
 # 영역과 템플릿을 같은 비율로 축소 → 화면 아이콘이 _MATCH_ICON_PX가 되게.
 _DOWNSCALE = _MATCH_ICON_PX / _ONSCREEN_ICON_PX  # 0.625
-# 이력 임계(hysteresis): 실데이터에서 걸린 것 ≥0.70 / 안 걸린 것 ≤0.61.
-# 감지 시작은 높게(0.68), 해제는 낮게(0.58) 잡아 경계 점수의 프레임별 요동을 없앤다.
-DEBUFF_DETECT_THRESHOLD = 0.68
-DEBUFF_RELEASE_THRESHOLD = 0.58
+# 이력 임계(hysteresis). 실게임 캡처 재측정:
+#  - 실제 걸린 디버프: 0.80~0.94
+#  - 안 걸린 모모(네잎클로버)가 풀·바닥 등 '매끈한 배경'에 0.66~0.67로 오매칭
+#    (10px 축소 매칭이라 초록/매끈 배경과 상관계수가 올라감)
+# 기존 0.68/0.58은 그 오탐(0.67)과 거의 붙어 있어, 라이브에선 모모가 임계를 넘어
+# '걸림'으로 오판 → 오버레이에서 사라지는 버그가 났다. 실제값(0.80+)과 오탐(≤0.67)
+# 사이로 올려 분리한다(감지 0.76 / 해제 0.66).
+DEBUFF_DETECT_THRESHOLD = 0.76
+DEBUFF_RELEASE_THRESHOLD = 0.66
 DEBUFF_THRESHOLD = DEBUFF_DETECT_THRESHOLD  # 진단 스크립트 표시용
 
 # 보스 HP바 앵커(오탐 게이팅). 영역에 보스 체력바까지 포함해 잡으면, 바가 보일 때만
