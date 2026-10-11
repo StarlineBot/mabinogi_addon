@@ -193,26 +193,25 @@ class DebuffEngine:
             self._fell_since.clear()
             self._warn_until.clear()
             self._applied_prev = {bid: False for bid in self._templates}
-        # 보스 HP바 앵커 게이팅: 바를 본 적 있으면(영역에 바 포함), 바가 안 보이는
-        # 프레임엔 탐지를 멈춰(= 보스 없음) 마을·풀밭 오탐을 없앤다. 바를 한 번도 못 본
-        # 영역(기존 사용자)은 게이팅하지 않아 지금과 동일하게 동작한다(하위호환).
+        # 보스 HP바 인식: 디버프 '오버레이 표시'는 바와 무관하게 **항상** 한다(상시 노출).
+        # 예전엔 바가 안 보이면 오버레이를 통째로 숨겼는데, 바 인식이 완벽하지 않아
+        # (해상도·배경색·영상 캡처 등) 멀쩡히 보여야 할 때 오버레이가 사라지는 게 오히려
+        # 버그처럼 보였다. 그래서 바 게이팅은 걷어내고, 바 인식은 '사라짐 경고'(보스에게
+        # 디버프가 떨어졌는지)와 탭의 안내 표시(bar_seen)용으로만 쓴다.
         bar = self._bar_present(region)
         self._bar_last = bar
         if bar:
             self._bar_seen = True
             self._bar_gone_since = None
         elif self._bar_seen:
-            # 바가 잠깐 안 보임: 보스로 걸어가는 중엔 바가 간헐적으로만 잡혀 매 틱
-            # 켜졌다 꺼지면 오버레이가 깜빡인다. _BAR_GRACE_SEC 동안 연속으로 없을
-            # 때만 '보스 없음'으로 확정해 숨긴다(그 전엔 직전처럼 탐지 유지).
+            # 바가 안 보이기 시작: _BAR_GRACE_SEC 넘겨 계속 없으면 '보스 이탈'로 보고
+            # 사라짐 경고 대기·노출만 리셋한다(오버레이는 그대로 계속 표시).
             if self._bar_gone_since is None:
                 self._bar_gone_since = now
             if now - self._bar_gone_since >= _BAR_GRACE_SEC:
-                # 보스 없음 확정 → 사라짐 경고 상태 전부 리셋(보스 이탈 오탐 방지).
                 self._applied_prev = {bid: False for bid in self._templates}
                 self._fell_since.clear()
                 self._warn_until.clear()
-                return TickResult(entries=[], alerts=[], frame_valid=True)  # 보스 없음
 
         small = self._scale(region)
         for bid in self._templates:

@@ -119,21 +119,22 @@ def _bar_region(h=40, w=160):
     return r
 
 
-def test_bar_gating_suppresses_after_grace():
+def test_overlay_always_shown_regardless_of_bar():
+    # 상시 노출: 바가 보이든(보스 존재) 안 보이든(보스 이탈) 오버레이는 계속 표시한다.
+    # 예전엔 바가 유예를 넘겨 안 보이면 통째로 숨겼지만(게이팅), 바 인식이 불완전해
+    # 멀쩡히 보여야 할 때 오버레이가 사라지는 게 버그처럼 보여 게이팅을 걷어냈다.
     tpl = _bases()
     eng = DebuffEngine(tpl, ["a", "b"])
-    # 바가 보이면 정상 탐지(디버프 없음 → 전부 미적용 표시)
     assert _shown(eng.tick(_bar_region(), now=0.0)) == ["a", "b"]
-    # 바가 잠깐 사라져도(유예 안) 깜빡이지 않게 직전처럼 유지
     assert _shown(eng.tick(_noise(), now=0.3)) == ["a", "b"]
-    # 유예(_BAR_GRACE_SEC)를 넘겨 계속 없으면 → 보스 없음 확정, 숨김
-    assert _shown(eng.tick(_noise(), now=2.0)) == []
-    # 다시 바가 보이면 즉시 복귀
+    # 유예(_BAR_GRACE_SEC)를 넘겨 계속 바가 없어도 숨기지 않는다.
+    assert _shown(eng.tick(_noise(), now=2.0)) == ["a", "b"]
+    # 다시 바가 보여도 그대로 표시.
     assert _shown(eng.tick(_bar_region(), now=2.2)) == ["a", "b"]
 
 
-def test_backward_compat_no_bar_region_always_detects():
-    # 바를 한 번도 못 본 영역(텍스처만) → 게이팅 안 함 → 기존처럼 전부 표시
+def test_no_bar_region_always_detects():
+    # 바가 없는 영역(텍스처만)에서도 기존처럼 전부 표시.
     tpl = _bases()
     eng = DebuffEngine(tpl, ["a", "b"])
     assert DebuffEngine._bar_present(_noise()) is False
