@@ -29,6 +29,11 @@ from .help_dialog import tab_header
 from .stat_overlay import STAT_LABELS, StatBarOverlay
 from .widgets import checkbox, hint_label
 
+# 체력·마나·스태미나 세 바를 덮는 고정 박스 기본 크기(px). 바 크기는 해상도와 무관하게
+# 고정(100% UI 배율)이라, 자유 드래그 대신 '고정 박스를 클릭 배치'한다(필요하면 휠로 조절).
+# 세 바 블록 실측 ≈ 180×37 → 여백을 둬 넉넉히(경험치 바는 안 걸리게 가로는 과하지 않게).
+STAT_BOX_SIZE = (200, 46)
+
 HELP_TITLE = "체력바 오버레이 사용법"
 HELP_HTML = """
 <h3>체력바 오버레이란?</h3>
@@ -38,7 +43,8 @@ HELP_HTML = """
 
 <h3>사용 순서</h3>
 <ol>
-<li><b>영역 지정</b> — 게임 하단의 <b>체력·마나·스태미나 세 바</b>를 드래그로 감쌉니다.
+<li><b>영역 지정</b> — <b>고정 크기 박스</b>가 커서를 따라옵니다. 게임 하단의
+<b>체력·마나·스태미나 세 바</b> 위에 올려 클릭해 배치하세요(필요하면 <b>휠로 크기 조절</b>).
 그 <b>아래 파란 경험치(lv) 바는 포함하지 마세요</b>(바가 하나 더 잡혀 어긋납니다).</li>
 <li><b>바 이동</b> — 생긴 바 3개를 드래그로 원하는 곳에 둡니다. 고정하면 위치가 잠기고
 클릭도 통과합니다. 배율로 크기를 바꿀 수 있습니다.</li>
@@ -66,8 +72,9 @@ class StatBarsTab(QWidget):
             "체력·마나·스태미나를 읽어 깨끗한 바로 표시", HELP_TITLE, HELP_HTML, self
         ))
         v.addWidget(hint_label(
-            "'영역 지정'으로 게임 하단의 체력·마나·스태미나 세 바를 감싸세요"
-            " (그 아래 경험치 바는 제외). 읽은 비율을 깨끗한 바 3개로 원하는 위치에 띄웁니다."
+            "'영역 지정'을 누르면 고정 크기 박스가 커서를 따라옵니다. 게임 하단의"
+            " 체력·마나·스태미나 세 바 위에 올려 클릭 배치하세요(그 아래 경험치 바는 제외,"
+            " 필요하면 휠로 크기 조절). 읽은 비율을 깨끗한 바 3개로 원하는 위치에 띄웁니다."
         ))
         # 베타 기능 — 디스코드 로그인 사용자에게만. 미로그인 시 안내만 보이고 조작은 잠근다.
         self._beta_notice = hint_label(
@@ -78,7 +85,9 @@ class StatBarsTab(QWidget):
 
         row = QHBoxLayout()
         self.region_btn = QPushButton("영역 지정")
-        self.region_btn.setToolTip("체력·마나·스태미나 세 바를 드래그로 감싸기(돋보기)")
+        self.region_btn.setToolTip(
+            "고정 크기 박스가 커서를 따라옵니다. 세 바 위에 올려 클릭 배치(휠로 크기 조절)"
+        )
         self.region_btn.clicked.connect(self._on_region)
         row.addWidget(self.region_btn)
         self.region_label = hint_label("")
@@ -245,7 +254,13 @@ class StatBarsTab(QWidget):
             ) or None
         except Exception:  # noqa: BLE001
             hwnd = None
-        self._selector = RegionSelector(window_hwnd=hwnd)
+        # 고정 크기 박스로 '클릭 배치'(바 크기가 해상도 무관 고정이라 자유 드래그 불필요).
+        # 이전에 지정한 적 있으면 그 크기로 시작(사용자가 맞춘 크기 유지).
+        if self._region:
+            size = (int(self._region["w"]), int(self._region["h"]))
+        else:
+            size = STAT_BOX_SIZE
+        self._selector = RegionSelector(fixed_size=size, window_hwnd=hwnd)
         self._selector.selected.connect(self._on_selected)
         self._selector.start()
 

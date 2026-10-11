@@ -65,5 +65,20 @@ def test_maps_top_to_bottom_order_regardless_of_color():
     assert rs[2].ratio >= 0.95
 
 
+def test_nearly_full_snaps_to_100():
+    # 오른쪽 끝 1~2px가 캡/안티앨리어싱으로 덜 밝아도 꽉 참(100%)으로 스냅한다.
+    # (7606/7606 같은 풀 체력이 99%로 읽히던 버그 방지)
+    img = _synthetic([0.985], hues=[163])  # 98.5% 채움 → 사실상 꽉 참
+    rs = read_stat_bars(img)
+    assert rs[0].ratio == 1.0
+
+
+def test_partial_not_snapped():
+    # 뚜렷한 소모 구간이 있으면 스냅하지 않고 실제 비율을 돌려준다.
+    img = _synthetic([0.80], hues=[115])
+    rs = read_stat_bars(img)
+    assert abs(rs[0].ratio - 0.80) <= 0.06
+
+
 def test_empty_region_returns_nothing():
     assert read_stat_bars(np.zeros((4, 10, 3), np.uint8)) == []

@@ -31,6 +31,10 @@ _MIN_ROWS = 3
 # 채움/소모 구분: 그 바 색조(±_HUE_TOL)이며 밝기 V가 _FILL_V 이상이면 '채움'.
 _HUE_TOL = 16
 _FILL_V = 120
+# 꽉 참 스냅: 오른쪽 소모(어두운) 구간이 이 px(또는 폭 비율) 이하면 100%로 본다.
+# (바 오른쪽 끝 둥근 캡·안티앨리어싱으로 꽉 찬 바가 99%로 읽히던 것 방지)
+_FULL_SNAP_PX = 2
+_FULL_SNAP_RATIO = 0.02
 
 
 @dataclass
@@ -84,6 +88,12 @@ def _ratio(region: np.ndarray, r0: int, r1: int) -> tuple[float, int]:
     if filled.size == 0:
         return 0.0, hue
     fill_right = int(filled.max())
+    # 오른쪽 '소모(어두운) 구간'이 거의 없으면 꽉 참(100%)으로 스냅한다. 바 오른쪽 끝의
+    # 둥근 캡·안티앨리어싱 때문에 마지막 1~2px가 덜 밝게 잡혀, 꽉 찬 바가 99%로 읽히던
+    # 것을 막는다(_FULL_SNAP_PX, 또는 폭의 _FULL_SNAP_RATIO 중 큰 값 이내면 100%).
+    depleted = right - fill_right
+    if depleted <= max(_FULL_SNAP_PX, int(span * _FULL_SNAP_RATIO)):
+        return 1.0, hue
     ratio = (fill_right - left + 1) / span
     return float(max(0.0, min(1.0, ratio))), hue
 
