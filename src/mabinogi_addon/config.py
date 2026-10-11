@@ -857,10 +857,13 @@ def load_skillbar(path: Path = LOCAL_CONFIG_PATH) -> dict:
             "pos": pos,
             "cells": cells,
         }
+    ct = sec.get("centerTopY")
+    center_top = int(ct) if isinstance(ct, (int, float)) else None
     return {
         "enabled": bool(sec.get("enabled", False)),
         "scale": int(sec.get("scale", 100)),
         "anchor": anchor,
+        "center_top": center_top,  # 중앙 2단 프리셋의 윗단 top y(사용자가 맞춘 하한)
         "chunks": chunks,
     }
 

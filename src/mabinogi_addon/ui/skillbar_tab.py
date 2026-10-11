@@ -35,6 +35,9 @@ from .skillbar_mirror import (
 from .widgets import checkbox, hint_label
 
 ANCHOR_BOX = (40, 40)  # 첫 아이콘(1칸) 크기 — 이 박스를 첫 아이콘에 맞춰 클릭
+# 프리셋 배치 하한: 화면 높이의 이 비율 지점이 '스택 바닥'의 하한(그 아래 보스 체력바·
+# 액션바 영역은 비운다). 실측 보스 체력바 top ≈ 0.84 → 그 바로 위까지 타이트하게.
+SAFE_BOTTOM_RATIO = 0.84
 
 HELP_TITLE = "단축바 미러 사용법(베타)"
 HELP_HTML = """
@@ -59,6 +62,7 @@ class SkillbarTab(QWidget):
         self._enabled = cfg["enabled"]
         self._scale = cfg["scale"]
         self._anchor = cfg["anchor"]  # {x,y} | None
+        self._center_top_y = cfg["center_top"]  # 중앙 2단 윗단 top y(사용자 하한)
         self._chunks_cfg = cfg["chunks"]  # key -> {show,locked,pos,cells}
         self._paused = False
         self._sct = None
@@ -304,7 +308,15 @@ class SkillbarTab(QWidget):
         row_w = 3 * gw + 2 * gcol
         x0 = ox + ow // 2 - row_w // 2  # 가로 가운데
         total_h = 4 * rgap + bgap
-        base_y = oy + oh - total_h - 70  # 하단에서 살짝 위
+        # 하한(최소 높이): 화면 하단 ~20%는 보스 체력바·액션바 영역 → 스택 바닥이 그
+        # 위로 오게 한다. 사용자가 더 위로 맞춰 둔 값(_center_top_y)이 있으면 그걸 쓰되,
+        # 하한보다 아래로는 절대 안 내려가게 clamp(보스 체력바 가림 방지).
+        safe_bottom = oy + round(oh * SAFE_BOTTOM_RATIO)
+        default_top = safe_bottom - total_h
+        base_y = default_top if self._center_top_y is None else min(
+            self._center_top_y, default_top
+        )
+        base_y = max(oy + 40, base_y)
         pos = {}
         for bi in range(2):
             for ri in range(2):
@@ -312,6 +324,7 @@ class SkillbarTab(QWidget):
                 y = base_y + tier * rgap + (bgap if bi == 1 else 0)
                 for ci in range(3):
                     pos[f"b{bi}r{ri}c{ci}"] = (x0 + ci * (gw + gcol), y)
+        self._center_top_y = base_y  # 적용된 top을 하한 기준으로 기억
         self._place(pos)
 
     def _preset_single_row(self) -> None:
@@ -323,7 +336,7 @@ class SkillbarTab(QWidget):
         keys = [f"b{bi}r{ri}c{ci}" for bi in range(2) for ri in range(2) for ci in range(3)]
         total_w = len(keys) * gw + (len(keys) - 1) * gap
         x0 = ox + ow // 2 - total_w // 2
-        y = oy + oh - round(ICON * s) - 70
+        y = oy + round(oh * SAFE_BOTTOM_RATIO) - round(ICON * s)  # 하단 보스바 영역 비우기
         pos = {k: (x0 + i * (gw + gap), y) for i, k in enumerate(keys)}
         self._place(pos)
 
@@ -334,7 +347,7 @@ class SkillbarTab(QWidget):
         gw = round(GROUP_W * s)
         gap = round(8 * s)
         rg = round((ICON + 8) * s)
-        base_y = oy + oh - rg * 2 - 60
+        base_y = oy + round(oh * SAFE_BOTTOM_RATIO) - rg * 2  # 하단 보스바 영역 비우기
         pos = {}
         for bi in range(2):
             bx = ox + 40 + bi * (3 * (gw + gap) + 60)
@@ -346,15 +359,22 @@ class SkillbarTab(QWidget):
 
     # ---- 저장/캡처 ----
     def _save(self) -> None:
+        tops = []
         for key, ov in self._overlays.items():
             c = self._chunks_cfg.setdefault(key, {})
             c["locked"] = ov.locked
             c["pos"] = {"x": ov.x(), "y": ov.y()}
+            tops.append(ov.y())
+        # 사용자가 드래그로 맞춘 '가장 위 뭉치'의 top을 중앙 2단 하한으로 기억한다
+        # (다음에 '중앙 하단' 눌러도 그 높이보다 아래로 안 내려가게).
+        if tops:
+            self._center_top_y = min(tops)
         config.save_skillbar(
             {
                 "enabled": self._enabled,
                 "scale": self._scale,
                 "anchor": self._anchor,
+                "centerTopY": self._center_top_y,
                 "chunks": self._chunks_cfg,
             }
         )
