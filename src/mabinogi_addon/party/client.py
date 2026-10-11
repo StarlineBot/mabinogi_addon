@@ -14,6 +14,8 @@ import urllib.request
 API_BASE = "https://open.api.nexon.com"
 HORN_BUGLE_PATH = "/mabinogi/v1/horn-bugle-world/history"
 DEFAULT_SERVER = "하프"
+# 선택 가능한 서버(현황판 상단 콤보에 노출). 기본은 하프.
+SERVERS = ("하프", "류트", "만돌린", "울프")
 
 
 def fetch_horn_bugle(

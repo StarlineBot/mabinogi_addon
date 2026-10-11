@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from PySide6.QtCore import QRect, Qt, Signal
-from PySide6.QtGui import QColor, QFont, QPainter, QPixmap
+from PySide6.QtGui import QColor, QFont, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import QWidget
 
 from ..duration import format_duration
@@ -22,19 +22,20 @@ WARN_SEC = 60.0
 
 def overlay_spec(
     entries, show_duration: dict[str, bool]
-) -> list[tuple[str, str | None, bool]]:
-    """엔진 결과(OverlayEntry) → (buff_id, 표시할 시간 문자열|None, 임박여부) 목록.
+) -> list[tuple[str, str | None, bool, bool]]:
+    """엔진 결과(OverlayEntry) → (buff_id, 시간 문자열|None, 임박여부, 사라짐여부) 목록.
 
-    임박여부 = 남은 시간이 1분 미만(<60초)인지. True면 숫자를 빨갛게 그린다.
+    - 임박여부 = 남은 시간이 1분 미만(<60초)인지. True면 숫자를 빨갛게 그린다.
+    - 사라짐여부 = 사라짐 경고 대상(디버프가 보스에서 떨어짐). True면 빨간 테두리+X.
     지속시간 표시를 끈 버프나 판독값 없는 버프는 시간 None(칸만 비움, 임박 False).
     """
-    specs: list[tuple[str, str | None, bool]] = []
+    specs: list[tuple[str, str | None, bool, bool]] = []
     for entry in entries:
         show = show_duration.get(entry.buff_id, True)
         has_time = show and entry.remaining is not None
         text = format_duration(entry.remaining) if has_time else None
         warn = has_time and entry.remaining < WARN_SEC
-        specs.append((entry.buff_id, text, warn))
+        specs.append((entry.buff_id, text, warn, entry.gone))
     return specs
 
 _ICON_BASE = 40  # 100% 기준 아이콘 변
@@ -48,6 +49,7 @@ class OverlayItem:
     pixmap: QPixmap  # 표시 아이콘(원본 — 그릴 때 배율 적용)
     duration_text: str | None  # None=칸만 비움(아이콘 높이 맞춤)
     warn: bool = False  # 남은 시간 1분 미만 → 숫자 빨갛게
+    gone: bool = False  # 사라짐 경고: 아이콘 흐리게 + 빨간 테두리 + X(잠깐 표시)
 
 
 class BuffOverlay(QWidget):
@@ -161,6 +163,8 @@ class BuffOverlay(QWidget):
 
         x = _PAD
         for item in self._items:
+            # 사라짐 경고 칸은 아이콘을 흐리게(어떤 버프였는지 보이게) 그린다.
+            painter.setOpacity(0.3 if item.gone else 1.0)
             scaled = item.pixmap.scaled(
                 icon,
                 icon,
@@ -168,8 +172,11 @@ class BuffOverlay(QWidget):
                 Qt.TransformationMode.FastTransformation,  # Nearest(선명)
             )
             painter.drawPixmap(x, _PAD, scaled)
+            painter.setOpacity(1.0)
 
-            if item.duration_text:
+            if item.gone:
+                self._draw_gone(painter, QRect(x, _PAD, icon, icon))
+            elif item.duration_text:
                 rect = QRect(x, _PAD + icon, icon, text_h)
                 # 1분 미만(warn)이면 빨강, 아니면 흰색
                 self._draw_text(painter, rect, item.duration_text, warn=item.warn)
@@ -200,3 +207,16 @@ class BuffOverlay(QWidget):
             painter.drawText(rect.translated(dx, dy), align, text)
         painter.setPen(QColor(255, 80, 80) if warn else QColor(255, 255, 255))
         painter.drawText(rect, align, text)
+
+    def _draw_gone(self, painter: QPainter, rect: QRect) -> None:
+        """사라짐 경고: 아이콘 칸에 빨간 테두리 + 모서리를 잇는 X."""
+        w = max(2, int(rect.width() * 0.08))  # 배율 따라 선 두께
+        pen = QPen(QColor(255, 60, 60), w)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        painter.setPen(pen)
+        # 테두리(선 두께만큼 안쪽으로 당겨 잘림 방지)
+        inset = rect.adjusted(w // 2, w // 2, -(w // 2 + 1), -(w // 2 + 1))
+        painter.drawRect(inset)
+        # 모서리를 잇는 X
+        painter.drawLine(inset.topLeft(), inset.bottomRight())
+        painter.drawLine(inset.topRight(), inset.bottomLeft())

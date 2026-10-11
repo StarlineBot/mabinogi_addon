@@ -14,6 +14,7 @@ from pathlib import Path
 from PySide6.QtCore import Qt, QThread, QTimer, Signal
 from PySide6.QtGui import QPainter, QPainterPath, QPixmap
 from PySide6.QtWidgets import (
+    QButtonGroup,
     QCheckBox,
     QComboBox,
     QFileDialog,
@@ -29,6 +30,17 @@ from PySide6.QtWidgets import (
 from .. import config, discord_auth, paths
 from ..system.window_watcher import WindowWatcher
 from .widgets import checkbox, hint_label
+
+# 테마 스와치 색(동그라미). 시스템=반반 그라데이션(라이트/다크 자동).
+_THEME_SWATCH = {
+    "system": (
+        "qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #f4f4f5, "
+        "stop:0.5 #f4f4f5, stop:0.5 #2b2d31, stop:1 #2b2d31)"
+    ),
+    "light": "#f4f4f5",
+    "dark": "#2b2d31",
+}
+_THEME_ACCENT = "#00C9A2"  # 다크 테마 강조(민트)
 
 # 번들 경로 사용(exe=_MEIPASS/assets). __file__ 기준은 frozen에서 어긋나 이미지가 안 뜬다.
 _ASSETS = paths.resource_dir()
@@ -157,6 +169,7 @@ class SettingsTab(QWidget):
     voice_pack_changed = Signal()
     # '사용법 투어 다시 보기' → 메인이 온보딩 투어를 다시 실행.
     replay_tour = Signal()
+    theme_changed = Signal()  # 테마 변경 → 메인이 탭 등 테마색 재적용
 
     def __init__(self, watcher: WindowWatcher) -> None:
         super().__init__()
@@ -174,6 +187,7 @@ class SettingsTab(QWidget):
         v.addWidget(self._discord_group())
         v.addWidget(self._backup_group())
         v.addWidget(self._general_group())
+        v.addWidget(self._theme_group())
         v.addWidget(self._game_group())
         v.addStretch(1)
 
@@ -342,6 +356,7 @@ class SettingsTab(QWidget):
             self._login_status.setStyleSheet("color:#8a8f98;")
             self._login_btn.setText("Discord 로그인")
         self._refresh_dm_export()  # 로그인 상태에 맞춰 DM 내보내기 버튼 갱신
+        self._refresh_diag()  # 진단 스냅샷(디버깅)도 로그인 시에만 노출
 
     def _on_login_clicked(self) -> None:
         if config.load_discord_user():
@@ -423,13 +438,21 @@ class SettingsTab(QWidget):
         InquiryDialog(self).exec()
 
     def _diag_button(self) -> QPushButton:
+        # 디버깅용 도구 → 디스코드 로그인 사용자에게만 노출(설명 없이 쓰기 어려움).
         btn = QPushButton("진단 스냅샷 저장 (시간·% 오류 신고용)")
         btn.setToolTip(
             "지금 설정된 버프·디버프·투아림 영역을 그대로 캡처해 PNG로 저장합니다.\n"
             "시간/% 가 틀리게 읽힐 때, 저장된 파일을 제작자에게 보내면 원인을 찾습니다."
         )
         btn.clicked.connect(self._on_diag_snapshot)
+        self._diag_btn = btn
+        self._refresh_diag()
         return btn
+
+    def _refresh_diag(self) -> None:
+        """진단 스냅샷 버튼은 디스코드 로그인 시에만 보인다(디버깅 전용)."""
+        if hasattr(self, "_diag_btn"):
+            self._diag_btn.setVisible(config.load_discord_user() is not None)
 
     def _on_diag_snapshot(self) -> None:
         from PySide6.QtCore import QTimer
@@ -490,6 +513,67 @@ class SettingsTab(QWidget):
                 subprocess.Popen(["xdg-open", str(path)])
         except Exception:  # noqa: BLE001, S110 — 폴더 열기는 부가기능(실패해도 무시)
             pass
+
+    def _theme_group(self) -> QGroupBox:
+        from .theme import THEME_LABELS, THEMES
+
+        box = QGroupBox("테마")
+        v = QVBoxLayout(box)
+        row = QHBoxLayout()
+        row.setSpacing(18)
+        self._theme_btns: dict[str, QPushButton] = {}
+        grp = QButtonGroup(self)
+        grp.setExclusive(True)
+        cur = config.load_theme()
+        for name in THEMES:
+            col = QVBoxLayout()
+            col.setSpacing(4)
+            btn = QPushButton()
+            btn.setCheckable(True)
+            btn.setChecked(name == cur)
+            btn.setFixedSize(24, 24)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.clicked.connect(lambda _c=False, n=name: self._on_theme_pick(n))
+            grp.addButton(btn)
+            self._theme_btns[name] = btn
+            lbl = QLabel(THEME_LABELS[name])
+            lbl.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+            col.addWidget(btn, 0, Qt.AlignmentFlag.AlignHCenter)
+            col.addWidget(lbl)
+            cell = QWidget()
+            cell.setLayout(col)
+            row.addWidget(cell)
+        row.addStretch(1)
+        v.addLayout(row)
+        v.addWidget(hint_label("'시스템'은 Windows 설정을 따라요. 기본은 다크예요."))
+        self._sync_theme_swatches(cur)
+        return box
+
+    def _style_swatch(self, btn: QPushButton, name: str, selected: bool) -> None:
+        bg = _THEME_SWATCH[name]
+        border = (
+            f"2px solid {_THEME_ACCENT}" if selected else "1px solid #6b6e76"
+        )
+        btn.setText("✓" if selected else "")
+        btn.setStyleSheet(
+            "QPushButton {"
+            f" background: {bg}; border: {border}; border-radius: 12px;"
+            f" color: {_THEME_ACCENT}; font-size: 12px; font-weight: 900;"
+            " }"
+        )
+
+    def _sync_theme_swatches(self, selected: str) -> None:
+        for name, btn in self._theme_btns.items():
+            btn.setChecked(name == selected)
+            self._style_swatch(btn, name, name == selected)
+
+    def _on_theme_pick(self, name: str) -> None:
+        from .theme import apply_theme
+
+        config.save_theme(name)
+        apply_theme(name)  # 즉시 적용
+        self._sync_theme_swatches(name)
+        self.theme_changed.emit()  # 메인이 탭 등 테마색 재적용
 
     def _general_group(self) -> QGroupBox:
         from ..system import autostart

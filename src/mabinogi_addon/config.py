@@ -282,6 +282,28 @@ def load_party_lists() -> tuple[list[str], list[str]]:
     return keywords, excludes
 
 
+def load_party_server(path: Path = LOCAL_CONFIG_PATH) -> str:
+    """파티모집 현황을 조회할 서버(기본 하프). 알 수 없는 값이면 하프로."""
+    from .party.client import DEFAULT_SERVER, SERVERS
+
+    data = _read_local_config(path)
+    party = data.get("party", {}) if isinstance(data.get("party"), dict) else {}
+    v = party.get("server")
+    return v if v in SERVERS else DEFAULT_SERVER
+
+
+def save_party_server(server: str, path: Path = LOCAL_CONFIG_PATH) -> None:
+    from .party.client import DEFAULT_SERVER, SERVERS
+
+    data = _read_local_config(path)
+    party = data.get("party")
+    if not isinstance(party, dict):
+        party = {}
+    party["server"] = server if server in SERVERS else DEFAULT_SERVER
+    data["party"] = party
+    _write_local_config(data, path)
+
+
 def load_party_alert_sound(path: Path = LOCAL_CONFIG_PATH) -> bool:
     """키워드 알림 효과음 사용 여부(기본 켜짐)."""
     data = _read_local_config(path)
@@ -310,6 +332,18 @@ def load_voice_pack(path: Path = LOCAL_CONFIG_PATH) -> str:
 def save_voice_pack(pack: str, path: Path = LOCAL_CONFIG_PATH) -> None:
     data = _read_local_config(path)
     data["voice"] = {"pack": pack or ""}
+    _write_local_config(data, path)
+
+
+# 앱 테마: system(시스템 따름) / light / dark. 기본값은 다크(앱 디자인 기준 톤).
+def load_theme(path: Path = LOCAL_CONFIG_PATH) -> str:
+    v = _read_local_config(path).get("theme")
+    return v if v in ("system", "light", "dark") else "dark"
+
+
+def save_theme(name: str, path: Path = LOCAL_CONFIG_PATH) -> None:
+    data = _read_local_config(path)
+    data["theme"] = name if name in ("system", "light", "dark") else "dark"
     _write_local_config(data, path)
 
 
@@ -352,6 +386,9 @@ class AlertConfig:
     sound: bool = True
     enabled2: bool = False  # 2차 알림(놓침·오독 대비 재알림) 사용 여부
     before_sec2: int = 5  # 2차 알림 기준(만료 N초 전)
+    # 사라짐 경고: 추적 중이던 버프가 사라지면 오버레이에 그 자리를 잠깐(3초) 빨간
+    # 테두리+X로 표시. 종료 알림(enabled)과 독립 — 소리 없이 시각으로만 알린다.
+    warn_gone: bool = False
 
 
 @dataclass
@@ -378,6 +415,7 @@ def _settings_from_dict(raw: dict) -> BuffSettings:
             sound=bool(alert.get("sound", True)),
             enabled2=bool(alert.get("enabled2", False)),
             before_sec2=int(alert.get("beforeSec2", 5)),
+            warn_gone=bool(alert.get("warnGone", False)),
         ),
     )
 
@@ -394,6 +432,7 @@ def _settings_to_dict(s: BuffSettings) -> dict:
             "sound": s.alert.sound,
             "enabled2": s.alert.enabled2,
             "beforeSec2": s.alert.before_sec2,
+            "warnGone": s.alert.warn_gone,
         },
     }
 
@@ -422,6 +461,28 @@ def load_buff_settings(path: Path = LOCAL_CONFIG_PATH) -> list[BuffSettings]:
 
 def save_buff_settings(items: list[BuffSettings], path: Path = LOCAL_CONFIG_PATH) -> None:
     _save_settings(items, "buffTracker", "buffs", path)
+
+
+def seed_warn_gone_defaults(
+    sound_ids: set[str], path: Path = LOCAL_CONFIG_PATH
+) -> None:
+    """최초 1회: '기본 음성알림 있는 버프'에 사라짐 경고를 켜 둔다(기존 사용자 이관).
+
+    사라짐 경고는 새 기능이라 기존 설정엔 전부 꺼짐(기본값)으로 로드된다. 사용자가
+    원하는 기본값('소리 있는 버프만 켜짐')을 한 번만 적용하고, 이후엔 사용자가 켜고
+    끈 값을 존중한다(warnGoneSeeded 플래그로 재적용 방지).
+    """
+    data = _read_local_config(path)
+    if data.get("warnGoneSeeded"):
+        return
+    items = load_buff_settings(path)
+    for s in items:
+        if s.id in sound_ids:
+            s.alert.warn_gone = True
+    save_buff_settings(items, path)
+    data = _read_local_config(path)  # 위 저장 이후 파일 상태로 다시 읽어 플래그만 추가
+    data["warnGoneSeeded"] = True
+    _write_local_config(data, path)
 
 
 def load_capture_region(
@@ -685,6 +746,32 @@ def save_tuarim(data: dict, path: Path = LOCAL_CONFIG_PATH) -> None:
     sec.update(data)
     cfg["tuarim"] = sec
     _write_local_config(cfg, path)
+
+
+# 보스 HP바 영역 — 디버프 트래커와 보스 패턴 알림이 '공유'한다. 둘 중 어디서 지정하든
+# 같은 값을 쓰므로, 한쪽만 세팅해도 다른 쪽이 함께 세팅된 상태가 된다. 저장 위치는
+# 공용 키 'bossBar' 하나(중앙 설정 UI 없이 값만 공유). 과거 보스 패턴 box에서 이관한다.
+def load_bar_region(path: Path = LOCAL_CONFIG_PATH) -> dict | None:
+    """공유 보스 HP바 영역 {x,y,w,h} 또는 None. (디버프·보스패턴 공용)"""
+    data = _read_local_config(path)
+    r = data.get("bossBar")
+    if isinstance(r, dict) and all(k in r for k in ("x", "y", "w", "h")):
+        return {k: int(r[k]) for k in ("x", "y", "w", "h")}
+    # 이관: 예전 보스 패턴 영역(box)이 있으면 그걸 공유 영역으로. (디버프의 옛 strip
+    # 영역은 바보다 커서 HP 판독을 깨뜨리므로 이관하지 않는다 — 재지정 안내.)
+    sec = data.get("bossPattern")
+    box = sec.get("box") if isinstance(sec, dict) else None
+    if isinstance(box, dict) and all(k in box for k in ("x", "y", "w", "h")):
+        return {k: int(box[k]) for k in ("x", "y", "w", "h")}
+    return None
+
+
+def save_bar_region(
+    x: int, y: int, w: int, h: int, path: Path = LOCAL_CONFIG_PATH
+) -> None:
+    data = _read_local_config(path)
+    data["bossBar"] = {"x": int(x), "y": int(y), "w": int(w), "h": int(h)}
+    _write_local_config(data, path)
 
 
 def load_boss_pattern(path: Path = LOCAL_CONFIG_PATH) -> dict:

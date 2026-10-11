@@ -26,14 +26,15 @@ class _Watcher:
         return True
 
 
-def test_construct_and_gate(monkeypatch):
+def test_construct_without_login(monkeypatch):
+    """보스 패턴은 로그인 없이도 컨트롤이 보이고 동작한다(BETA·로그인 게이팅 제거)."""
     _app()
     from mabinogi_addon.ui.boss_tab import BossTab
 
     monkeypatch.setattr(config, "load_discord_user", lambda *a, **k: None)
     t = BossTab(_Watcher())
     assert "lenen_miir" in t._bosses  # 번들 보스가 로드됨
-    t._apply_gate()  # 미로그인 → 컨트롤 숨김(예외 없이)
+    assert t._controls.isVisibleTo(t)  # 미로그인이어도 컨트롤 노출
     t._preview_warning()  # 경고 미리보기 — 예외 없이
     t.shutdown()
 
@@ -62,6 +63,7 @@ def test_stale_tracker_cleared_when_boss_gone(monkeypatch):
     t._region = {"x": 0, "y": 0, "w": 150, "h": 36}
     t.enable.setChecked(True)
     monkeypatch.setattr(t, "_grab_rect", lambda *a: np.zeros((36, 150, 3), np.uint8))
+    monkeypatch.setattr(bt_mod, "locate_bar_frame", lambda *a, **k: (0, 0, 150, 36))
     monkeypatch.setattr(t, "_show_preview", lambda *a: None)
     monkeypatch.setattr(t, "_play", lambda *a: None)
     fired: list = []
@@ -103,6 +105,7 @@ def test_upcoming_list_updates_from_tracker(monkeypatch):
     t._region = {"x": 0, "y": 0, "w": 150, "h": 36}
     t.show_upcoming.setChecked(True)
     monkeypatch.setattr(t, "_grab_rect", lambda *a: np.zeros((36, 150, 3), np.uint8))
+    monkeypatch.setattr(bt_mod, "locate_bar_frame", lambda *a, **k: (0, 0, 150, 36))
     monkeypatch.setattr(t, "_show_preview", lambda *a: None)
 
     # 레넨(임계 80,60,40,30) 식별 + HP 90 → 전부 남은 패턴으로 나열
@@ -135,6 +138,7 @@ def test_upcoming_hides_quickly_after_boss_gone(monkeypatch):
     t.show_upcoming.setChecked(True)
     t._upcoming.set_locked(True)  # 고정(게임 위 표시) — 이 상태에서 게이트가 적용됨
     monkeypatch.setattr(t, "_grab_rect", lambda *a: np.zeros((36, 150, 3), np.uint8))
+    monkeypatch.setattr(bt_mod, "locate_bar_frame", lambda *a, **k: (0, 0, 150, 36))
     monkeypatch.setattr(t, "_show_preview", lambda *a: None)
 
     # 레넨 식별 + HP 90 → 목록 표시
@@ -190,6 +194,7 @@ def test_upcoming_hidden_when_option_off(monkeypatch):
     t._region = {"x": 0, "y": 0, "w": 150, "h": 36}
     t.show_upcoming.setChecked(False)
     monkeypatch.setattr(t, "_grab_rect", lambda *a: np.zeros((36, 150, 3), np.uint8))
+    monkeypatch.setattr(bt_mod, "locate_bar_frame", lambda *a, **k: (0, 0, 150, 36))
     monkeypatch.setattr(t, "_show_preview", lambda *a: None)
     monkeypatch.setattr(bt_mod, "identify", lambda *a, **k: "lenen_miir")
     monkeypatch.setattr(bt_mod, "read_percent", lambda *a, **k: 90)

@@ -47,6 +47,10 @@ def main() -> None:
 
     app = QApplication(sys.argv)
     app.setApplicationName(config.APP_NAME)
+    # 저장된 테마(시스템/라이트/다크) 적용
+    from mabinogi_addon.ui.theme import apply_theme
+
+    apply_theme(config.load_theme())
     # setApplicationDisplayName은 쓰지 않는다 — 설정하면 Qt가 모든 창 제목 뒤에
     # " - <이름>"을 자동으로 붙여, 창 제목에 이름이 두 번 나온다(중복).
     app.setWindowIcon(app_icon())  # 작업표시줄/트레이 아이콘

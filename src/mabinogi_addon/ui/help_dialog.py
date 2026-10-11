@@ -124,7 +124,7 @@ def tab_header(
     v.addLayout(row)
     line = QWidget()
     line.setFixedHeight(1)
-    line.setStyleSheet("background:#2a2f3a;")
+    line.setStyleSheet("background:palette(mid);")
     v.addWidget(line)
     return box
 

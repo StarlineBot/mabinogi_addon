@@ -108,6 +108,34 @@ def play_update_sound() -> bool:
         return False
 
 
+# 버프 사라짐 경고 효과음(assets/sounds/에 이 이름으로 두면 재생, 없으면 조용히 생략).
+WARN_GONE_SOUND_FILE = "버프 사라짐.mp3"
+_warn_gone_player = None  # 일회성 재생기(모듈에 보관해 재생 전 GC 방지)
+
+
+def play_warn_gone_sound() -> bool:
+    """사라짐 경고 버프가 사라졌을 때 효과음 재생. 파일/오디오 없으면 False."""
+    global _warn_gone_player
+    path = sound_path(WARN_GONE_SOUND_FILE)
+    if not path.exists():
+        return False
+    try:
+        from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
+
+        if _warn_gone_player is None:
+            audio = QAudioOutput()
+            player = QMediaPlayer()
+            player.setAudioOutput(audio)
+            player._audio = audio  # 오디오 출력도 함께 보관(재생 중 끊김 방지)
+            _warn_gone_player = player
+        _sync_default_device(_warn_gone_player._audio)  # 지금 쓰는 출력 장치로 맞춤
+        _warn_gone_player.setSource(QUrl.fromLocalFile(str(path)))
+        _warn_gone_player.play()
+        return True
+    except Exception:  # noqa: BLE001 — 오디오 없으면 무음(시각 경고는 그대로 뜸)
+        return False
+
+
 class SoundNotifier(QObject):
     """buff_id별 알림 사운드 재생기. 사운드 꺼진 버프는 호출 측에서 걸러준다."""
 

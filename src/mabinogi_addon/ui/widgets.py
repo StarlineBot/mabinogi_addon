@@ -55,8 +55,8 @@ def icon_slot(placeholder: str = "▣") -> QLabel:
     slot.setAlignment(Qt.AlignmentFlag.AlignCenter)
     slot.setFixedSize(44, 44)
     slot.setStyleSheet(
-        "border:1px solid #9aa0a6; border-radius:6px;"
-        "font-size:22px; color:#9aa0a6; background:#2b2d31;"
+        "border:1px solid palette(mid); border-radius:6px;"
+        "font-size:22px; color:palette(mid); background:palette(base);"
     )
     return slot
 

@@ -63,14 +63,23 @@ class _VScroll(QScrollArea):
     """세로 스크롤 영역: 가로는 뷰포트 폭에 맞추되, 세로는 내용의 '자연 높이'를 지킨다.
 
     그냥 setWidgetResizable(True)만 쓰면, 내용이 뷰포트보다 크면 눌리고(압축) 작으면
-    늘어나(확대) 버튼 등이 찌그러진다. 내용 위젯의 최소 높이를 그 sizeHint 높이로
-    고정해, 넘칠 때 '압축' 대신 '스크롤'이 생기게 한다.
+    늘어나(확대) 버튼 등이 찌그러진다. 내용 위젯의 최소 높이를 '현재 폭에서 실제로
+    필요한 높이'로 고정해, 넘칠 때 '압축' 대신 '스크롤'이 생기게 한다.
+
+    높이는 폭과 무관한 sizeHint().height() 대신 heightForWidth(현재 폭)로 구한다.
+    sizeHint는 워드랩 라벨을 좁은 기본 폭 기준으로 과대 계산해, 실제 내용이 끝난
+    뒤에도 빈 공간만큼 스크롤이 더 내려가는 문제가 있었다(예: 설정 탭 ~150px).
     """
 
     def resizeEvent(self, event) -> None:
         inner = self.widget()
         if inner is not None:
-            inner.setMinimumHeight(inner.sizeHint().height())
+            w = self.viewport().width()
+            lay = inner.layout()
+            h = lay.heightForWidth(w) if lay is not None and lay.hasHeightForWidth() else -1
+            if h <= 0:
+                h = inner.sizeHint().height()
+            inner.setMinimumHeight(h)
         super().resizeEvent(event)
 
 
@@ -154,30 +163,43 @@ class _OverlayToggle(QPushButton):
 
 
 # 탭 바: 밑줄 스타일 + 균등 고정 너비. 선택 탭은 민트색·굵게 + 민트 밑줄로 또렷하게.
-# (앱은 OS 테마를 따르므로, 무채색 글자 + 민트 강조로 라이트/다크 모두 자연스럽게.)
-_TAB_QSS = (
-    "QTabWidget::pane { border: none; border-top: 1px solid #2a2f3a; }"
-    "QTabBar { qproperty-drawBase: 0; }"
-    "QTabBar::tab { background: transparent; color: #8a8f98; padding: 9px 4px;"
-    " min-width: 104px; border: none; border-bottom: 2px solid transparent;"
-    " font-size: 13px; }"
-    "QTabBar::tab:hover { color: #cfd3da; }"
-    "QTabBar::tab:selected { color: #00C9A2; font-weight: 800;"
-    " border-bottom: 2px solid #00D1A7; }"
-)
+# 색은 테마별로 분기한다(단일 색으론 라이트/다크를 동시에 못 맞춤):
+# - 다크: 은은한 밝은 회색(원래 룩) / - 라이트: 어두운 회색.
+# 미선택은 중간 회색(#8a8f98) 고정 — 양쪽 다 보임. 호버/선택만 테마로 또렷하게.
 
-# 하위(트래커 내부) 탭: 상위와 확실히 구분되게 더 작고 밋밋하게. 선택 표시는 민트
-# 대신 무채색 밑줄 → '한 단계 아래'로 읽힌다.
-_SUBTAB_QSS = (
-    "QTabWidget::pane { border: none; border-top: 1px solid #2a2f3a; }"
-    "QTabBar { qproperty-drawBase: 0; }"
-    "QTabBar::tab { background: transparent; color: #7d828b; padding: 6px 14px;"
-    " min-width: 0px; border: none; border-bottom: 2px solid transparent;"
-    " font-size: 12px; }"
-    "QTabBar::tab:hover { color: #cfd3da; }"
-    "QTabBar::tab:selected { color: #cfd3da; font-weight: 700;"
-    " border-bottom: 2px solid #5a6270; }"
-)
+
+def _tab_qss(dark: bool) -> str:
+    """상위 탭 스타일. 선택=민트(양쪽 공통), 호버는 테마별."""
+    pane = "#2a2f3a" if dark else "#d5d7dd"
+    hover = "#cfd3da" if dark else "#1f2124"
+    return (
+        f"QTabWidget::pane {{ border: none; border-top: 1px solid {pane}; }}"
+        "QTabBar { qproperty-drawBase: 0; }"
+        "QTabBar::tab { background: transparent; color: #8a8f98; padding: 9px 4px;"
+        " min-width: 104px; border: none; border-bottom: 2px solid transparent;"
+        " font-size: 13px; }"
+        f"QTabBar::tab:hover {{ color: {hover}; }}"
+        "QTabBar::tab:selected { color: #00C9A2; font-weight: 800;"
+        " border-bottom: 2px solid #00D1A7; }"
+    )
+
+
+def _subtab_qss(dark: bool) -> str:
+    """하위(트래커 내부) 탭. 선택 표시는 무채색 밑줄 → '한 단계 아래'. 테마별 색."""
+    pane = "#2a2f3a" if dark else "#d5d7dd"
+    hover = "#cfd3da" if dark else "#1f2124"
+    sel = "#cfd3da" if dark else "#1f2124"  # 다크=은은한 회색(흰색 아님), 라이트=어두움
+    underline = "#5a6270" if dark else "#b2b5bc"
+    return (
+        f"QTabWidget::pane {{ border: none; border-top: 1px solid {pane}; }}"
+        "QTabBar { qproperty-drawBase: 0; }"
+        "QTabBar::tab { background: transparent; color: #7d828b; padding: 6px 14px;"
+        " min-width: 0px; border: none; border-bottom: 2px solid transparent;"
+        " font-size: 12px; }"
+        f"QTabBar::tab:hover {{ color: {hover}; }}"
+        f"QTabBar::tab:selected {{ color: {sel}; font-weight: 700;"
+        f" border-bottom: 2px solid {underline}; }}"
+    )
 
 
 class MainWindow(QMainWindow):
@@ -215,6 +237,9 @@ class MainWindow(QMainWindow):
         self._paused = False  # 오버레이 일시정지(사냥 안 할 때 잠깐 끄기) — 세션 한정
         self._tray = self._build_tray()
 
+        # 최초 1회: 기본 음성알림 있는 버프에 '사라짐 경고' 기본 켜짐(기존 사용자 이관).
+        config.seed_warn_gone_defaults(set(default_sound_map()))
+
         self.buff_tab = BuffTab()
         self.debuff_tab = DebuffTab()
         self.party_tab = PartyTab()
@@ -227,6 +252,7 @@ class MainWindow(QMainWindow):
         self.settings_tab.config_imported.connect(self._on_config_imported)
         self.settings_tab.voice_pack_changed.connect(self._on_voice_pack_changed)
         self.settings_tab.replay_tour.connect(self._run_tour)
+        self.settings_tab.theme_changed.connect(self._apply_tab_styles)
         # 화면을 읽는 트래커들은 '트래커' 상위 탭 하나로 묶고, 그 아래 하위 탭으로 나눈다.
         # → 상단 탭이 짧아져(트래커·커스텀·파티·메모·설정) 설정이 넘침(<>) 뒤로 안 묻힌다.
         # 각 탭을 스크롤 영역으로 감싼다 → 창 높이를 고정해도 내용이 잘리지 않고 스크롤.
@@ -235,8 +261,7 @@ class MainWindow(QMainWindow):
         self._tracker_tabs.addTab(_scrolled(self.debuff_tab), "디버프")
         self._tracker_tabs.addTab(_scrolled(self.tuarim_tab), "투아림")
         # 보스만 쓰면 뭘 추적하는지 모호해 풀네임 유지.
-        self._tracker_tabs.addTab(_scrolled(self.boss_tab), "보스 패턴 알림 [BETA]")
-        self._tracker_tabs.setStyleSheet(_SUBTAB_QSS)
+        self._tracker_tabs.addTab(_scrolled(self.boss_tab), "보스 패턴 알림")
 
         # 편의기능: 메모·계산기 등 보조 기능을 묶는 상위 탭.
         self.distribution_tab = DistributionTab()
@@ -247,7 +272,6 @@ class MainWindow(QMainWindow):
         self._convenience_tabs.addTab(_scrolled(self.distribution_tab), "분배 계산기")
         self._convenience_tabs.addTab(_scrolled(self.bead_split_tab), "구슬 분배 계산기")
         self._convenience_tabs.addTab(_scrolled(self.exchange_tab), "환전비율 계산기")
-        self._convenience_tabs.setStyleSheet(_SUBTAB_QSS)
 
         tabs = QTabWidget()
         self._tabs = tabs  # 온보딩 투어에서 탭 전환에 사용
@@ -257,7 +281,7 @@ class MainWindow(QMainWindow):
         tabs.addTab(self._party_scroll, "파티 모집")
         tabs.addTab(self._convenience_tabs, "편의기능")
         tabs.addTab(_scrolled(self.settings_tab), "설정")
-        tabs.setStyleSheet(_TAB_QSS)
+        self._apply_tab_styles()  # 테마에 맞는 탭 색 적용(테마 변경 시 재적용)
 
         # 중앙: 상단 업데이트 배너(기본 숨김) + 탭
         central = QWidget()
@@ -290,6 +314,9 @@ class MainWindow(QMainWindow):
         self.debuff_tab.lock_toggled.connect(self._on_debuff_lock)
         self.debuff_tab.tracking_changed.connect(self._on_debuff_tracking_changed)
         self.debuff_tab.catalog_changed.connect(self._on_debuff_catalog_changed)
+        # 보스 HP바 영역은 디버프·보스패턴이 공유 — 한쪽에서 바꾸면 다른 쪽도 반영.
+        self.debuff_tab.region_changed.connect(self._on_bar_region_changed)
+        self.boss_tab.region_changed.connect(self._on_bar_region_changed)
         self.debuff_overlay.moved.connect(self._save_debuff_overlay_state)
 
         # 메모 오버레이: 위치·크기는 영역 지정, 고정=클릭통과. 게임 활성 시만 표시.
@@ -422,9 +449,26 @@ class MainWindow(QMainWindow):
     _STATUS_STOP = "#e74c3c"  # 정지중 빨간 ●
     _STATUS_MUTED = "#8a8f98"
 
+    def _apply_tab_styles(self) -> None:
+        """현재 테마(다크/라이트)에 맞춰 상·하위 탭 색을 적용. 테마 변경 시 재호출."""
+        from .theme import is_dark
+
+        dark = is_dark()
+        sub = _subtab_qss(dark)
+        self._tracker_tabs.setStyleSheet(sub)
+        self._convenience_tabs.setStyleSheet(sub)
+        self._tabs.setStyleSheet(_tab_qss(dark))
+        # 파티 현황판은 매칭 행 배경색이 셀에 박혀 있어, 테마가 바뀌면 다시 그려야
+        # 새 테마 색으로 갱신된다(안 그러면 호버 전까지 옛 색으로 보임).
+        self.party_tab.apply_theme()
+
     def _update_tracking_status(self) -> None:
         self.buff_tab.set_status(*self._buff_status())
         self.debuff_tab.set_status(*self._debuff_status())
+        # 사라짐 경고 가능 여부(영역에 보스 체력바가 인식됐는지) 안내
+        self.debuff_tab.set_bar_status(
+            self._debuff_engine.bar_seen if self._debuff_engine is not None else False
+        )
         self._update_header_status()
         self._maybe_tick_update_check()
 
@@ -460,8 +504,8 @@ class MainWindow(QMainWindow):
         return ("● 추적 중 — 지금 표시할 버프 없음", self._STATUS_OK)
 
     def _debuff_status(self) -> tuple[str, str]:
-        if not config.load_capture_region("debuffTracker"):
-            return ("⚠ 영역 미지정 — '디버프 줄 영역 지정'을 먼저 하세요",
+        if not config.load_bar_region():
+            return ("⚠ 영역 미지정 — '보스 HP바 영역 지정'을 먼저 하세요",
                     self._STATUS_WARN)
         if self.debuff_controller is None:
             return ("ℹ 추적 대기 — 이 PC에선 라이브 캡처가 안 됩니다", self._STATUS_MUTED)
@@ -908,6 +952,8 @@ class MainWindow(QMainWindow):
             on_alert=self._on_buff_alert,
             watcher=self._watcher,
         )
+        self.buff_controller.set_order(order)
+        self.buff_controller.set_warn_gone_ids(self._warn_gone_ids())
         self.buff_controller.set_paused(self._paused)  # 재생성 시 일시정지 상태 유지
         # 아이콘 생성/소멸을 빠르게 캐치(50ms=20fps). 시간 판독은 엔진이 throttle하고,
         # 매칭 대상도 표시된 버프만이라 비용이 낮아 이 주기가 감당된다.
@@ -920,6 +966,10 @@ class MainWindow(QMainWindow):
             for s in config.load_buff_settings()
             if s.alert.enabled and s.alert.sound
         }
+
+    def _warn_gone_ids(self) -> set[str]:
+        """'사라짐 경고'를 켠 버프 id 집합(사라지면 빨간 테두리+X+소리)."""
+        return {s.id for s in config.load_buff_settings() if s.alert.warn_gone}
 
     def _on_buff_alert(self, buff_ids) -> None:
         """엔진이 만료임박 알림을 올리면, 소리 켠 버프만 사운드 재생."""
@@ -939,6 +989,8 @@ class MainWindow(QMainWindow):
         self._engine.set_alert_before(alert_before)
         self._engine.set_alert_before2(alert_before2)
         self.buff_controller.set_show_duration(show_duration)
+        self.buff_controller.set_order(order)
+        self.buff_controller.set_warn_gone_ids(self._warn_gone_ids())
         self._sound_ids = self._sound_enabled_ids()
 
     def _on_catalog_changed(self) -> None:
@@ -960,14 +1012,19 @@ class MainWindow(QMainWindow):
                 order.append(b.id)
         return order
 
+    def _debuff_capture_region(self) -> dict | None:
+        """디버프 캡처 영역 = 공유 보스 HP바 밴드(전체 폭). 밴드가 디버프 아이콘 줄 +
+        보스 HP바를 함께 포함하므로 그대로 쓴다(바 프레임으로 게이팅)."""
+        return config.load_bar_region()
+
     def _start_debuff_tracking(self) -> None:
-        """저장된 디버프 영역이 있으면 라이브로 디버프 추적 시작(재시작 포함)."""
+        """저장된 보스 HP바 영역이 있으면 라이브로 디버프 추적 시작(재시작 포함)."""
         if self.debuff_controller is not None:
             self.debuff_controller.stop()
             self.debuff_controller = None
             self._debuff_engine = None
 
-        region = config.load_capture_region("debuffTracker")
+        region = self._debuff_capture_region()
         if not region:
             return
         try:
@@ -986,11 +1043,13 @@ class MainWindow(QMainWindow):
         # 표시(숨기지 않은) 디버프만 매칭 — 버프와 동일하게 비용 절감.
         tracked = [b for b in catalog if b.id in set(order)]
         self._debuff_engine = DebuffEngine(build_templates(tracked), order)
+        self._debuff_engine.set_warn_gone_ids(self._debuff_warn_gone_ids())
         # 지속시간·알림·점멸 없음 → show_duration 전부 False.
         self.debuff_controller = BuffController(
             self.debuff_overlay,
             catalog_by,
             {b.id: False for b in catalog},
+            on_alert=self._on_debuff_gone,  # 디버프 떨어짐 확정 → 사라짐 경고음
             watcher=self._watcher,
         )
         self.debuff_controller.set_paused(self._paused)  # 재생성 시 일시정지 상태 유지
@@ -1002,9 +1061,26 @@ class MainWindow(QMainWindow):
         if self._debuff_engine is None:
             return
         self._debuff_engine.set_order(self._debuff_order(available_debuff_catalog()))
+        self._debuff_engine.set_warn_gone_ids(self._debuff_warn_gone_ids())
+
+    def _debuff_warn_gone_ids(self) -> set[str]:
+        """'사라짐 경고'를 켠 디버프 id 집합(보스에서 떨어지면 빨간 테두리+X+소리)."""
+        return {s.id for s in config.load_debuff_settings() if s.alert.warn_gone}
+
+    def _on_debuff_gone(self, _ids) -> None:
+        """디버프 떨어짐 확정 → 사라짐 경고음(여러 개 동시 확정돼도 한 번)."""
+        from .notifier import play_warn_gone_sound
+
+        play_warn_gone_sound()
 
     def _on_debuff_catalog_changed(self) -> None:
         self._start_debuff_tracking()
+
+    def _on_bar_region_changed(self) -> None:
+        """공유 보스 HP바 영역 변경(어느 탭에서든) → 디버프 재시작 + 두 탭 라벨 동기화."""
+        self._start_debuff_tracking()
+        self.debuff_tab.reload_region()
+        self.boss_tab.reload_region()
 
     # ---- 메모 오버레이 ----
     def _apply_memo_region(self) -> None:

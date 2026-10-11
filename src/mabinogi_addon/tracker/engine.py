@@ -21,7 +21,8 @@ from .buff_state import BuffStateMachine, Event, State
 class OverlayEntry:
     buff_id: str
     remaining: float | None  # 내부 시계 남은 초(판독값 없으면 None)
-    alerting: bool  # 만료임박(점멸)
+    alerting: bool  # 만료임박(과거: 점멸 / 현재 미사용)
+    gone: bool = False  # 사라짐 경고(디버프: 보스에서 떨어짐) → 빨간 테두리+X
 
 
 @dataclass
