@@ -362,3 +362,30 @@ def test_first_alert_rearms_on_extension_and_on_fresh_recast():
     while t > 25:
         tick(True, round(t, 1)); t -= 0.3
     assert len(fired) == 3  # 새 버프에서 1차 다시
+
+
+def test_alert_fires_even_when_icon_missing():
+    """알림은 '화면 감지'가 아니라 '내부 시계'로 판단한다: 알림 구간에서 아이콘이
+    잠깐 안 잡혀도(깜빡임) 시계가 기준(30초) 아래로 내려가면 알림이 울린다."""
+    sm = BuffStateMachine(alert_before=30, appear_frames=1)
+    _appear(sm, reading=40.0, t0=0.0)  # ACTIVE, 40초@0
+    assert sm.observe(detected=False, reading=None, now=11.0) is Event.ALERT
+    assert sm.state is State.EXPIRING
+
+
+def test_alert_fires_even_when_frame_invalid():
+    """화면이 가려져(frame_valid=False) 판독을 못 해도 시계로 알림이 울린다
+    (탭 아웃·창 가림 중에도 만료 임박 통지를 놓치지 않는다)."""
+    sm = BuffStateMachine(alert_before=30, appear_frames=1)
+    _appear(sm, reading=40.0, t0=0.0)
+    ev = sm.observe(detected=False, reading=None, now=11.0, frame_valid=False)
+    assert ev is Event.ALERT
+    assert sm.state is State.EXPIRING
+
+
+def test_alert_not_repeated_after_missing_crossing():
+    """미감지 프레임에서 1회 울린 뒤엔 재감지돼도 중복으로 안 울린다."""
+    sm = BuffStateMachine(alert_before=30, appear_frames=1)
+    _appear(sm, reading=40.0, t0=0.0)
+    assert sm.observe(detected=False, reading=None, now=11.0) is Event.ALERT
+    assert sm.observe(detected=True, reading=28.0, now=11.2) is Event.NONE

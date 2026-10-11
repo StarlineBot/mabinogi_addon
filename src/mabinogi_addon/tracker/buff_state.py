@@ -132,7 +132,9 @@ class BuffStateMachine:
             ):
                 self._reset()
                 return Event.EXPIRED
-            return Event.NONE
+            # 화면을 못 읽어도(가림·탭 아웃 등) 내부 시계가 알림 시점을 지났으면 알림은
+            # 울린다 — 알림은 '화면 감지'가 아니라 '시계'로 판단한다(임박 알림 누락 방지).
+            return self._check_alert(now) or Event.NONE
 
         if detected:
             return self._on_detected(reading, now)
@@ -255,7 +257,9 @@ class BuffStateMachine:
         if now - self._missing_since >= self.disappear_sec:
             self._reset()
             return Event.RELEASED
-        return Event.NONE
+        # 3) 아이콘이 잠깐 안 잡혀도(깜빡임 등), 내부 시계가 알림 시점을 지났으면 알림을
+        #    울린다 — 알림은 '화면 감지'가 아니라 '시계'로 판단한다(임박 알림 누락 방지).
+        return self._check_alert(now) or Event.NONE
 
     def _check_alert(self, now: float) -> Event | None:
         remaining = self.remaining(now)
