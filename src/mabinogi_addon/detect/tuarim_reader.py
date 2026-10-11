@@ -30,6 +30,11 @@ _ONES = (-17, -9)
 _TENS = (-25, -17)
 _TENS_INK_MIN = 5  # 십의 자리 칸에 이만큼 잉크가 있어야 '두 자리'로 본다
 NCC_MIN = 0.30  # 최근접 상관이 이보다 낮으면 판독 포기(None)
+# 십의 자리는 '두 자리냐'를 가르는 자리라 더 엄격히 본다. 실게임 재측정: 진짜 십의
+# 자리는 NCC≈1.0, 한 자리 값(예 5%)에 게이지·배경 잡음이 십의 자리 칸에 끼어 가짜로
+# 분류되는 경우는 ≤0.49. 그 사이로 임계를 올려 '5%→95%' 같은 가짜 두 자리(→거짓 알림)를
+# 막는다. (일의 자리는 NCC_MIN 유지)
+_TENS_NCC_MIN = 0.6
 
 
 def _load_refs():
@@ -121,7 +126,7 @@ def read_percent(
     tens_ink = int((b[:, max(0, r + _TENS[0]) : max(0, r + _TENS[1])] > 0).sum())
     if tens_ink >= _TENS_INK_MIN:
         tens_d, tens_s = _classify(_norm(_cell(v, r, _TENS)), Rt, Lt)
-        if tens_d is not None and tens_s >= threshold:
+        if tens_d is not None and tens_s >= max(threshold, _TENS_NCC_MIN):
             value = tens_d * 10 + ones_d
             return value if 0 <= value <= 100 else None
     return ones_d

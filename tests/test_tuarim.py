@@ -182,3 +182,26 @@ def test_tuarim_config_roundtrip(tmp_path):
     assert d["box"]["w"] == 3
     assert d["thresholds"] == [90, 97]
     assert d["sounds"] == [True, False]
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "v01_124.png",  # 실제 "1%"
+        "v01_151.png",  # 실제 "4%"
+        "v05_155.png",  # 실제 "5%"
+        "v08_172.png",  # 실제 "8%"
+        "v00_113.png",  # 실제 "0%"
+        "v06_159.png",  # 실제 "6%"
+    ],
+)
+def test_single_digit_not_given_spurious_tens(name):
+    """한 자리 값에 게이지·배경 잡음이 '십의 자리'로 붙어 9X처럼 읽혀 거짓 투아림
+    알림이 나던 버그 회귀 방지(예: 5%→95%). 한 자리는 한 자리(<10)로 읽혀야 한다.
+    (십의 자리는 NCC>=0.6을 요구 — 진짜 십의 자리는 ~1.0, 잡음은 <=0.49)"""
+    shots = Path(__file__).parent / "data" / "tuarim_shots"
+    p = shots / name
+    if not p.exists():
+        pytest.skip(f"샘플 없음: {name}")
+    got = read_percent(cv2.imread(str(p)))
+    assert got is None or got < 10, f"{name}: 한 자리인데 {got}로 읽힘(가짜 십의 자리)"
