@@ -270,36 +270,63 @@ class RegionSelector(QWidget):
         )
 
     def _draw_box_preview(self, painter: QPainter, rect: QRect) -> None:
-        """고정 박스가 실제로 캡처할 영역을 확대해 보여준다(지정이 숫자에 맞는지 확인)."""
-        dpr = self._dpr  # 논리 rect → 물리픽셀로 환산해 스냅샷을 자른다(150% 보정)
-        crop = self._shot.copy(
-            round(rect.x() * dpr), round(rect.y() * dpr),
-            round(rect.width() * dpr), round(rect.height() * dpr),
+        """고정 박스가 잡는 영역을 '여백 포함'으로 크게 확대해 보여준다.
+
+        박스만 딱 잘라 보여주면 박스가 바에 꽉 맞았는지(여백이 있는지) 알 수 없다. 그래서
+        박스 주변까지 여유 있게 잘라 더 크게 확대하고, 그 안에 **박스 외곽선(민트)**을 함께
+        그려, 바가 외곽선 안에 딱 맞는지(여백/잘림 없음) 눈으로 확인하게 한다.
+        """
+        dpr = self._dpr  # 논리 → 물리픽셀(150% 보정)
+        # 박스 주변 여유(논리 px): 박스 변의 ~45%(최소 12)만큼 상하좌우로 더 보여준다.
+        m = max(12, round(max(rect.width(), rect.height()) * 0.45))
+        ew, eh = rect.width() + 2 * m, rect.height() + 2 * m
+        # 확대 영역을 물리픽셀로 잘라 검정 캔버스에 붙인다(화면 밖이어도 안 깨지게).
+        sx0, sy0 = round((rect.x() - m) * dpr), round((rect.y() - m) * dpr)
+        cw, ch = round(ew * dpr), round(eh * dpr)
+        canvas = QPixmap(max(1, cw), max(1, ch))
+        canvas.fill(Qt.GlobalColor.black)
+        sw, sh = self._shot.width(), self._shot.height()
+        vx0, vy0 = max(0, sx0), max(0, sy0)
+        vx1, vy1 = min(sw, sx0 + cw), min(sh, sy0 + ch)
+        if vx1 > vx0 and vy1 > vy0:
+            part = self._shot.copy(vx0, vy0, vx1 - vx0, vy1 - vy0)
+            cp = QPainter(canvas)
+            cp.drawPixmap(vx0 - sx0, vy0 - sy0, part)
+            cp.end()
+        # 더 크게: 패널 폭을 키우고(≈340) 그만큼 확대. 세로가 과하면 높이로 제한.
+        panel_w, panel_h_max = 340, 260
+        scale = min(panel_w / max(1, cw), panel_h_max / max(1, ch))
+        zw, zh = max(1, round(cw * scale)), max(1, round(ch * scale))
+        zoomed = canvas.scaled(
+            zw, zh,
+            Qt.AspectRatioMode.IgnoreAspectRatio,
+            Qt.TransformationMode.FastTransformation,  # Nearest → 픽셀 또렷
         )
-        pw = 180
-        ph = max(1, round(pw * rect.height() / max(1, rect.width())))
-        zoomed = crop.scaled(
-            pw, ph,
-            Qt.AspectRatioMode.KeepAspectRatio,
-            Qt.TransformationMode.FastTransformation,
-        )
-        # 박스 아래에 패널 배치, 화면 밖이면 위로/안쪽으로 접기
-        px = rect.x()
-        py = rect.bottom() + 14
-        if py + ph + 6 > self.height():
-            py = rect.y() - ph - 24
-        px = max(8, min(px, self.width() - pw - 8))
-        py = max(24, py)
+        # 패널 배치(박스 아래, 화면 밖이면 위로). 박스와 안 겹치게 충분히 띄운다.
+        px = max(8, min(rect.x(), self.width() - zw - 8))
+        py = rect.bottom() + 20
+        if py + zh + 6 > self.height():
+            py = rect.y() - zh - 30
+        py = max(28, py)
 
         painter.setOpacity(1.0)
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor(0, 0, 0, 190))
-        painter.drawRoundedRect(px - 6, py - 22, pw + 12, ph + 30, 8, 8)
+        painter.setBrush(QColor(0, 0, 0, 200))
+        painter.drawRoundedRect(px - 6, py - 24, zw + 12, zh + 32, 8, 8)
         painter.setPen(QColor(235, 238, 244))
-        painter.drawText(px, py - 7, f"박스 미리보기  {rect.width()}×{rect.height()}")
+        painter.drawText(px, py - 8, f"박스 미리보기(여백 포함)  {rect.width()}×{rect.height()}")
         painter.drawPixmap(px, py, zoomed)
+        # 미리보기 안에 '실제 박스' 외곽선(민트) — 바가 이 선 안에 딱 맞는지 확인.
+        bx = px + round(m * dpr * scale)
+        by = py + round(m * dpr * scale)
+        bw = round(rect.width() * dpr * scale)
+        bh = round(rect.height() * dpr * scale)
         painter.setPen(QPen(QColor(0, 209, 167), 2))
-        painter.drawRect(px, py, zoomed.width(), zoomed.height())
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawRect(bx, by, bw, bh)
+        # 패널 바깥 테두리(옅게)
+        painter.setPen(QPen(QColor(120, 130, 140), 1))
+        painter.drawRect(px, py, zw, zh)
 
     def _draw_loupe(self, painter: QPainter, pos: QPoint) -> None:
         """커서 주변을 _ZOOM배로 확대해 커서 옆 박스에 그린다(중앙 십자선)."""
