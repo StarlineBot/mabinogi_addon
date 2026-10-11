@@ -859,7 +859,7 @@ def load_skillbar(path: Path = LOCAL_CONFIG_PATH) -> dict:
         }
     return {
         "enabled": bool(sec.get("enabled", False)),
-        "scale": int(sec.get("scale", 130)),
+        "scale": int(sec.get("scale", 100)),
         "anchor": anchor,
         "chunks": chunks,
     }

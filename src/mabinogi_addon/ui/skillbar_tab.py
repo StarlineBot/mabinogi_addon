@@ -117,8 +117,8 @@ class SkillbarTab(QWidget):
         pr = QHBoxLayout()
         pr.addWidget(QLabel("프리셋"))
         for label, fn in (
-            ("원래 배치(가로)", self._preset_original),
-            ("2줄 세로", self._preset_two_rows),
+            ("중앙 하단(기본)", self._preset_center),
+            ("가로 1줄", self._preset_single_row),
             ("블록 분리", self._preset_blocks),
         ):
             b = QPushButton(label)
@@ -165,7 +165,7 @@ class SkillbarTab(QWidget):
             ov.set_locked(bool(c.get("locked", False)))
             self._overlays[key] = ov
         if not any(self._chunks_cfg.get(k, {}).get("pos") for k in self._defs):
-            self._preset_original()  # 첫 사용: 기본 배치 한 번 깔기
+            self._preset_center()  # 첫 사용: 기본(중앙 하단) 배치 한 번 깔기
 
     def _cells_on(self, key: str) -> list[bool]:
         return self._chunks_cfg.get(key, {}).get("cells", [True] * 4)
@@ -289,43 +289,42 @@ class SkillbarTab(QWidget):
                 self._chunks_cfg.setdefault(key, {})["pos"] = {"x": x, "y": y}
         self._save()
 
-    def _preset_original(self) -> None:
-        # 원본 배치(가로) 그대로, 큰 간격만 줄여 화면 하단 중앙 근처에.
+    def _preset_center(self) -> None:
+        """기본 — 화면 중앙 하단에, 두 블록을 위아래로 쌓아(2단) 각 블록은 3그룹×2줄.
+
+        원본 단축바(위에 2줄)를 가운데 아래로 가져온 느낌. 블록1(윗단)·블록2(아랫단)이
+        세로로 쌓여 총 4줄, 가로는 3그룹씩 가운데 정렬.
+        """
         ox, oy, ow, oh = self._screen_origin()
         s = self._scale / 100.0
         gw = round(GROUP_W * s)
-        gap = round(14 * s)
-        row_gap = round((ICON + 10) * s)
-        base_x = ox + ow // 2 - (3 * gw + 2 * gap) - gap  # 두 블록 가로로
-        base_y = oy + oh - round((ICON * 2 + 14) * s) - 60
+        gcol = round(10 * s)  # 그룹 사이 가로 간격
+        rgap = round((ICON + 8) * s)  # 줄 간격
+        bgap = round(18 * s)  # 블록(단) 사이 세로 간격
+        row_w = 3 * gw + 2 * gcol
+        x0 = ox + ow // 2 - row_w // 2  # 가로 가운데
+        total_h = 4 * rgap + bgap
+        base_y = oy + oh - total_h - 70  # 하단에서 살짝 위
         pos = {}
-        col_x = 0
         for bi in range(2):
-            for ci in range(3):
-                for ri in range(2):
-                    key = f"b{bi}r{ri}c{ci}"
-                    x = base_x + col_x * (gw + gap) + bi * gap * 2
-                    y = base_y + ri * row_gap
-                    pos[key] = (x, y)
-                col_x += 1
+            for ri in range(2):
+                tier = bi * 2 + ri  # 0,1(블록1) / 2,3(블록2)
+                y = base_y + tier * rgap + (bgap if bi == 1 else 0)
+                for ci in range(3):
+                    pos[f"b{bi}r{ri}c{ci}"] = (x0 + ci * (gw + gcol), y)
         self._place(pos)
 
-    def _preset_two_rows(self) -> None:
-        # 12뭉을 6×2(윗줄 블록1, 아랫줄 블록2)로 세로 두 줄.
-        ox, oy, _ow, oh = self._screen_origin()
+    def _preset_single_row(self) -> None:
+        # 12뭉을 한 줄로 가로로 쭉(가운데 정렬), 화면 하단.
+        ox, oy, ow, oh = self._screen_origin()
         s = self._scale / 100.0
         gw = round(GROUP_W * s)
-        gap = round(10 * s)
-        base_x = ox + 40
-        base_y = oy + oh - round((ICON * 2 + 20) * s) - 60
-        pos = {}
-        for bi in range(2):
-            n = 0
-            for ri in range(2):
-                for ci in range(3):
-                    key = f"b{bi}r{ri}c{ci}"
-                    pos[key] = (base_x + n * (gw + gap), base_y + bi * round((ICON + 12) * s))
-                    n += 1
+        gap = round(8 * s)
+        keys = [f"b{bi}r{ri}c{ci}" for bi in range(2) for ri in range(2) for ci in range(3)]
+        total_w = len(keys) * gw + (len(keys) - 1) * gap
+        x0 = ox + ow // 2 - total_w // 2
+        y = oy + oh - round(ICON * s) - 70
+        pos = {k: (x0 + i * (gw + gap), y) for i, k in enumerate(keys)}
         self._place(pos)
 
     def _preset_blocks(self) -> None:
