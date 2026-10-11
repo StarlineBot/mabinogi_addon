@@ -46,6 +46,7 @@ class StatBarOverlay(QWidget):
         self._scale = scale
         self._ratio: float = 1.0
         self._text: str | None = None  # None이면 "NN%" 자동
+        self._align = "left"  # 퍼센트/수치 가로 정렬: "left" | "center" | "right"
         self._locked = False
         self._drag_offset = None
 
@@ -58,6 +59,12 @@ class StatBarOverlay(QWidget):
         self._ratio = max(0.0, min(1.0, ratio))
         self._text = text
         self.update()
+
+    def set_align(self, align: str) -> None:
+        """퍼센트/수치 가로 정렬: 'left' | 'center' | 'right'."""
+        if align in ("left", "center", "right"):
+            self._align = align
+            self.update()
 
     # ---- 고정/이동(버프 오버레이와 동일) ----
     def set_locked(self, locked: bool) -> None:
@@ -155,8 +162,15 @@ class StatBarOverlay(QWidget):
         painter.end()
 
     def _draw_text(self, painter: QPainter, rect: QRectF, text: str) -> None:
-        align = Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter
-        r = rect.toRect()
+        halign = {
+            "left": Qt.AlignmentFlag.AlignLeft,
+            "center": Qt.AlignmentFlag.AlignHCenter,
+            "right": Qt.AlignmentFlag.AlignRight,
+        }.get(self._align, Qt.AlignmentFlag.AlignHCenter)
+        align = halign | Qt.AlignmentFlag.AlignVCenter
+        # 좌/우 정렬은 바 모서리에 붙지 않게 안쪽 여백을 둔다.
+        pad = max(4, int(rect.height() * 0.35))
+        r = rect.toRect().adjusted(pad, 0, -pad, 0)
         painter.setPen(QColor(0, 0, 0))
         for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
             painter.drawText(r.translated(dx, dy), align, text)

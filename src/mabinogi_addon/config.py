@@ -805,10 +805,13 @@ def load_stat_bars(path: Path = LOCAL_CONFIG_PATH) -> dict:
             "locked": bool(b.get("locked", False)),
             "pos": pos,
         }
+    align = sec.get("align")
+    align = align if align in ("left", "center", "right") else "left"
     return {
         "enabled": bool(sec.get("enabled", False)),
         "box": box,
         "scale": int(sec.get("scale", 150)),
+        "align": align,
         "bars": bars,
     }
 

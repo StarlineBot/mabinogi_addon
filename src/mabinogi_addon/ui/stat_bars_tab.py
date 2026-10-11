@@ -15,6 +15,7 @@ import numpy as np
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QGuiApplication, QImage, QPixmap
 from PySide6.QtWidgets import (
+    QComboBox,
     QHBoxLayout,
     QLabel,
     QPushButton,
@@ -59,6 +60,7 @@ class StatBarsTab(QWidget):
         cfg = config.load_stat_bars()
         self._region = cfg["box"]
         self._scale = cfg["scale"]
+        self._align = cfg["align"]
         self._bars_cfg = cfg["bars"]
         self._enabled = cfg["enabled"]
         self._paused = False
@@ -140,6 +142,15 @@ class StatBarsTab(QWidget):
         self.scale_spin.setValue(self._scale)
         self.scale_spin.valueChanged.connect(self._on_scale)
         ctl_row.addWidget(self.scale_spin)
+        ctl_row.addSpacing(12)
+        ctl_row.addWidget(QLabel("% 정렬"))
+        self.align_combo = QComboBox()
+        for label, key in (("왼쪽", "left"), ("가운데", "center"), ("오른쪽", "right")):
+            self.align_combo.addItem(label, key)
+        idx = max(0, self.align_combo.findData(self._align))
+        self.align_combo.setCurrentIndex(idx)
+        self.align_combo.currentIndexChanged.connect(self._on_align)
+        ctl_row.addWidget(self.align_combo)
         ctl_row.addStretch(1)
         self.lock_all_btn = QPushButton("전체 고정")
         self.lock_all_btn.clicked.connect(lambda: self._set_locked_all(True))
@@ -153,7 +164,7 @@ class StatBarsTab(QWidget):
         # 로그인 시에만 조작 가능하게 묶어 두는 컨트롤들.
         self._gated_widgets = [
             self.region_btn, self.view_region_btn, self.enable,
-            self.scale_spin, self.lock_all_btn, self.unlock_all_btn,
+            self.scale_spin, self.align_combo, self.lock_all_btn, self.unlock_all_btn,
             *self._show_checks.values(),
         ]
         self._update_region_label()
@@ -182,6 +193,7 @@ class StatBarsTab(QWidget):
         geo = screen.geometry() if screen else None
         for i, sid in enumerate(("hp", "mp", "sta")):
             ov = StatBarOverlay(sid, scale=self._scale / 100.0)
+            ov.set_align(self._align)
             ov.moved.connect(self._save)
             pos = self._bars_cfg[sid]["pos"]
             if pos:
@@ -311,6 +323,12 @@ class StatBarsTab(QWidget):
             ov.set_scale(value / 100.0)
         self._save()
 
+    def _on_align(self) -> None:
+        self._align = self.align_combo.currentData()
+        for ov in self._overlays.values():
+            ov.set_align(self._align)
+        self._save()
+
     def _set_locked_all(self, locked: bool) -> None:
         self._ensure_overlays()
         for sid, ov in self._overlays.items():
@@ -327,6 +345,7 @@ class StatBarsTab(QWidget):
                 "enabled": self._enabled,
                 "box": self._region,
                 "scale": self._scale,
+                "align": self._align,
                 "bars": self._bars_cfg,
             }
         )
