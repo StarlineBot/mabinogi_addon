@@ -276,9 +276,10 @@ class RegionSelector(QWidget):
         gx = band.center().x() - gw // 2
         gy = band.center().y() - gh // 2
         guide = QRect(gx, gy, gw, gh)
-        painter.fillRect(guide, QColor(0, 209, 167, 30))
-        arm = 18  # 모서리 팔 길이(변 길이보다 짧아 중앙이 비어 '괄호'가 아닌 'ㄱ')
-        painter.setPen(QPen(QColor(255, 220, 90), 3))  # 눈에 띄는 노란 모서리
+        # 가이드 안쪽을 밴드보다 조금 더 어둡게 → '여기에 바가 들어간다'가 구분된다.
+        painter.fillRect(guide, QColor(0, 0, 0, 70))
+        arm = 11  # 모서리 팔 길이(작게 — 네 귀퉁이에 짧은 ㄱ만)
+        painter.setPen(QPen(QColor(0, 209, 167), 2))  # 앱 톤 민트
         for cx, cy, dx, dy in (
             (guide.left(), guide.top(), 1, 1),        # ┌
             (guide.right(), guide.top(), -1, 1),      # ┐
