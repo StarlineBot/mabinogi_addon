@@ -183,7 +183,16 @@ class DebuffEngine:
                     return True
         return False
 
-    def tick(self, region: np.ndarray, now: float) -> TickResult:
+    def tick(
+        self, region: np.ndarray, now: float, foreground: bool = True
+    ) -> TickResult:
+        # foreground: 사라짐 경고(소리)는 게임이 포그라운드일 때만 낸다. 디버프 탐지·표시는
+        # 계속하되, '떨어짐' 판정·알림은 포커스+화면 확정 시로 제한한다(안 볼 때의 거짓
+        # 사라짐 방지). 비포커스 중엔 대기/노출 상태를 비워, 복귀 시 다시 깨끗이 판정한다.
+        if not foreground:
+            self._fell_since.clear()
+            self._warn_until.clear()
+            self._applied_prev = {bid: False for bid in self._templates}
         # 보스 HP바 앵커 게이팅: 바를 본 적 있으면(영역에 바 포함), 바가 안 보이는
         # 프레임엔 탐지를 멈춰(= 보스 없음) 마을·풀밭 오탐을 없앤다. 바를 한 번도 못 본
         # 영역(기존 사용자)은 게이팅하지 않아 지금과 동일하게 동작한다(하위호환).
@@ -220,8 +229,8 @@ class DebuffEngine:
                     self._absent_since[bid] = None
             # 이미 표시 중(shown)이면 그대로 유지
 
-            # --- 사라짐 경고(바가 보일 때만, 즉 보스 존재 추정 시만) ---
-            if bar and bid in self._warn_gone_ids:
+            # --- 사라짐 경고(바가 보이고 + 포그라운드일 때만) ---
+            if bar and foreground and bid in self._warn_gone_ids:
                 if detected:  # 다시 걸림 → 확정 대기·경고 취소
                     self._fell_since.pop(bid, None)
                     self._warn_until.pop(bid, None)
@@ -231,12 +240,12 @@ class DebuffEngine:
                     and bid not in self._warn_until
                 ):
                     self._fell_since[bid] = now  # 확정 대기 시작
-            # 다음 틱 비교용 '걸림' 기록. 바 안 보이면 비교 의미 없어 False.
-            self._applied_prev[bid] = detected if bar else False
+            # 다음 틱 비교용 '걸림' 기록. 바 안 보이거나 비포커스면 비교 의미 없어 False.
+            self._applied_prev[bid] = detected if (bar and foreground) else False
 
-        # 확정: 바 보이는 동안 _GONE_CONFIRM_SEC 연속 미검출 → '떨어짐' 확정(경고+소리).
+        # 확정: 바 보이고 포그라운드일 때 _GONE_CONFIRM_SEC 연속 미검출 → '떨어짐' 확정.
         alerts: list[str] = []
-        if bar:
+        if bar and foreground:
             for bid, since in list(self._fell_since.items()):
                 if now - since >= _GONE_CONFIRM_SEC:
                     self._warn_until[bid] = now + _GONE_SHOW_SEC

@@ -364,28 +364,53 @@ def test_first_alert_rearms_on_extension_and_on_fresh_recast():
     assert len(fired) == 3  # 새 버프에서 1차 다시
 
 
-def test_alert_fires_even_when_icon_missing():
-    """알림은 '화면 감지'가 아니라 '내부 시계'로 판단한다: 알림 구간에서 아이콘이
-    잠깐 안 잡혀도(깜빡임) 시계가 기준(30초) 아래로 내려가면 알림이 울린다."""
+def test_no_alert_when_icon_missing():
+    """알림은 '지금 화면에서 읽혀 확정'될 때만 운다: 아이콘이 미감지면(깜빡임) 그 프레임
+    자체로는 울리지 않는다(상태는 ACTIVE 유지 → 다시 읽히면 그때 판정). 시계 추정만으로
+    울리지 않는다."""
     sm = BuffStateMachine(alert_before=30, appear_frames=1)
     _appear(sm, reading=40.0, t0=0.0)  # ACTIVE, 40초@0
-    assert sm.observe(detected=False, reading=None, now=11.0) is Event.ALERT
-    assert sm.state is State.EXPIRING
+    assert sm.observe(detected=False, reading=None, now=11.0) is Event.NONE
+    assert sm.state is State.ACTIVE
 
 
-def test_alert_fires_even_when_frame_invalid():
-    """화면이 가려져(frame_valid=False) 판독을 못 해도 시계로 알림이 울린다
-    (탭 아웃·창 가림 중에도 만료 임박 통지를 놓치지 않는다)."""
+def test_no_alert_when_frame_invalid():
+    """화면이 가려지면(frame_valid=False) 시계가 임박이어도 알림을 울리지 않는다
+    (확정 불가 → 추정 알림 금지). 시계가 0에 닿으면 만료만 처리."""
     sm = BuffStateMachine(alert_before=30, appear_frames=1)
     _appear(sm, reading=40.0, t0=0.0)
-    ev = sm.observe(detected=False, reading=None, now=11.0, frame_valid=False)
-    assert ev is Event.ALERT
-    assert sm.state is State.EXPIRING
+    assert (
+        sm.observe(detected=False, reading=None, now=11.0, frame_valid=False)
+        is Event.NONE
+    )
+    assert sm.state is State.ACTIVE
 
 
-def test_alert_not_repeated_after_missing_crossing():
-    """미감지 프레임에서 1회 울린 뒤엔 재감지돼도 중복으로 안 울린다."""
+def test_no_alert_when_not_foreground():
+    """게임이 포그라운드가 아니면, 감지·시계가 임박을 지나도 알림을 울리지 않고
+    '보류'한다(소비 안 함 → 상태 ACTIVE 유지)."""
     sm = BuffStateMachine(alert_before=30, appear_frames=1)
     _appear(sm, reading=40.0, t0=0.0)
-    assert sm.observe(detected=False, reading=None, now=11.0) is Event.ALERT
-    assert sm.observe(detected=True, reading=28.0, now=11.2) is Event.NONE
+    # 30초 교차 시점에 비포커스 → 알림 없음, 상태 유지(소비 안 함)
+    assert (
+        sm.observe(detected=True, reading=None, now=11.0, foreground=False)
+        is Event.NONE
+    )
+    assert sm.state is State.ACTIVE
+
+
+def test_alert_fires_on_return_to_foreground():
+    """비포커스 동안 임박 구간에 진입(알림 보류) → 포커스로 돌아와 아직 임박(≤기준)이면
+    그때 레벨 판정으로 운다(복귀 시 알림)."""
+    sm = BuffStateMachine(alert_before=30, appear_frames=1)
+    _appear(sm, reading=40.0, t0=0.0)
+    # 11초: 비포커스로 30초 교차(보류)
+    assert (
+        sm.observe(detected=True, reading=None, now=11.0, foreground=False)
+        is Event.NONE
+    )
+    # 15초: 포커스 복귀, 화면 25초로 확정 → 그때 알림
+    assert (
+        sm.observe(detected=True, reading=25.0, now=15.0, foreground=True)
+        is Event.ALERT
+    )

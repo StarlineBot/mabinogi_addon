@@ -208,3 +208,14 @@ def test_no_bar_region_never_warns():
     eng.tick(_empty(), now=0.2)
     res = eng.tick(_empty(), now=4.0)
     assert res.alerts == [] and _gone_ids(res) == []
+
+
+def test_warn_gone_suppressed_when_not_foreground():
+    """게임이 포그라운드가 아니면 디버프 '사라짐 경고'를 확정·발동하지 않는다."""
+    tpl = _bases()
+    eng = DebuffEngine(tpl, ["a", "b"])
+    eng.set_warn_gone_ids({"a"})
+    eng.tick(_bar_with_icon(tpl["a"]), now=0.0)  # a 걸림(포그라운드)
+    eng.tick(_bar_region(), now=0.2, foreground=False)  # 떨어짐(비포커스)
+    res = eng.tick(_bar_region(), now=3.2, foreground=False)
+    assert res.alerts == [] and _gone_ids(res) == []  # 비포커스 → 경고/소리 없음

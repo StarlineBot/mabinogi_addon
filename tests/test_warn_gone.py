@@ -115,3 +115,19 @@ def test_unflagged_buff_no_ghost(monkeypatch):
     clock["t"] = 14.0  # 확정 시간이 지나도
     c._on_updated([_entry("march")])
     assert not any(it.gone for it in c._items)
+
+
+def test_warn_gone_suppressed_when_not_foreground(monkeypatch):
+    """게임이 포그라운드가 아니면 '사라짐 경고'를 판정·노출하지 않는다(비포커스 거짓
+    경고 방지). 탐지·표시는 계속되지만 경고(고스트)는 포커스일 때만."""
+    clock = {"t": 0.0}
+    monkeypatch.setattr(bc_mod.time, "monotonic", lambda: clock["t"])
+    c = _controller()
+    c.set_warn_gone_ids({"han_adrenaline"})
+    c._game_active = False  # 비포커스
+    c._on_updated([_entry("march"), _entry("han_adrenaline")])
+    clock["t"] = 10.0
+    c._on_updated([_entry("march")])  # han 사라짐(비포커스)
+    clock["t"] = 14.0  # 확정 시간이 지나도
+    c._on_updated([_entry("march")])
+    assert not any(it.gone for it in c._items)  # 비포커스 → 경고 안 뜸

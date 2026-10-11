@@ -78,7 +78,9 @@ class _TrackWorker(QThread):
             # 비게임 화면을 캡처해도 오탐으로 터지지 않는다.
             region = self._source.grab()
             if region is not None:
-                result = self._engine.tick(region, time.monotonic())
+                # 탐지·시간읽기는 포커스와 무관하게 계속(시간 동기화), 소리 알림은
+                # 포그라운드일 때만(foreground=game) — 엔진이 알림 판정을 게이팅한다.
+                result = self._engine.tick(region, time.monotonic(), foreground=game)
                 self.updated.emit(result.entries)
                 if result.alerts:
                     self.alerted.emit(result.alerts)
@@ -249,6 +251,16 @@ class BuffController(QObject):
         for bid in active_ids:
             self._absent_since.pop(bid, None)
             self._gone_show_until.pop(bid, None)
+        # 사라짐 경고는 '게임이 포그라운드일 때만' 판정·발동한다 — 안 보는 동안(알트탭·
+        # 가림)엔 떨어짐으로 보지 않는다(거짓 경고 방지). 비포커스면 진행 중인 확정 대기도
+        # 비워, 복귀 시 깨끗이 다시 판정한다.
+        if not self._game_active:
+            self._absent_since.clear()
+            self._present_prev = active_ids
+            self._items = self.build_items(entries, now)
+            self._overlay.set_items(self._items)
+            self._apply_visibility()
+            return
         # 사라지기 시작: 직전 틱엔 있었는데 이번엔 없는 '사라짐 경고' 버프 → 확정 대기 시작.
         for bid in (self._present_prev - active_ids):
             if bid in self._warn_gone_ids and bid not in self._gone_show_until:

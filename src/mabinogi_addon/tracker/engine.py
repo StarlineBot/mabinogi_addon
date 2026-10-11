@@ -111,7 +111,12 @@ class BuffEngine:
         for bid, machine in self._machines.items():
             machine.alert_before2 = alert_before2.get(bid)
 
-    def tick(self, region: np.ndarray, now: float) -> TickResult:
+    def tick(
+        self, region: np.ndarray, now: float, foreground: bool = True
+    ) -> TickResult:
+        # foreground: 게임이 포그라운드일 때만 '소리 알림(만료 임박)'을 낸다. 탐지·시간
+        # 읽기는 포커스와 무관하게 계속해 시간을 동기화하되, 알림만 포커스+화면 확정 시로
+        # 제한한다(비포커스 중의 거짓/추정 알림 방지). 복귀하면 아직 임박인 버프는 그때 운다.
         detections = detect_buffs(
             region, self._templates, self._icon_column, self._threshold
         )
@@ -161,12 +166,16 @@ class BuffEngine:
                         reading = float(t)
                         self._last_read_at[bid] = now
             event = machine.observe(
-                detected=detected, reading=reading, now=now, frame_valid=frame_valid
+                detected=detected,
+                reading=reading,
+                now=now,
+                frame_valid=frame_valid,
+                foreground=foreground,
             )
             if event is Event.ALERT:
                 alerts.append(bid)
-            # 2차 알림: 더 가까운 기준 교차 시 1회 더(놓침·오독 대비).
-            if frame_valid and machine.check_second_alert(now):
+            # 2차 알림: 더 가까운 기준 교차 시 1회 더(놓침·오독 대비). 포그라운드일 때만.
+            if foreground and frame_valid and machine.check_second_alert(now):
                 alerts.append(bid)
 
         self._present_prev = set(present)  # 다음 틱의 '방금 등장' 판정용

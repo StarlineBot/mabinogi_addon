@@ -118,11 +118,16 @@ class BuffStateMachine:
         reading: float | None,
         now: float,
         frame_valid: bool = True,
+        foreground: bool = True,
     ) -> Event:
-        # 판정 불가: 화면 기반 판단(감지·연장·해제)은 멈추되(상태 동결), 내부 시계가
-        # 0에 닿으면 만료 처리한다. "시간이 다 됐다"는 화면을 안 읽어도 아는 사실이라
-        # 동결 원칙을 깨지 않는다 → 앵커가 오래 안 보여도 0초면 오버레이에서 사라지고,
-        # 다시 보일 때 버프가 살아 있으면 재감지로 다시 뜬다.
+        # 알림은 'foreground(게임이 눈앞에 있고 지금 화면을 읽는 중)'일 때만 울린다.
+        # 탐지·시간읽기·만료 처리는 포그라운드와 무관하게 계속(시간 동기화 유지)하되,
+        # 소리 알림만 포커스+화면 확정 시로 제한한다. 포커스가 아닐 땐 _check_alert를
+        # '건너뛰고'(소비 안 함) 보류 → 다시 포커스로 돌아와 버프가 아직 임박(≤기준)이면
+        # 그때 레벨 판정으로 울린다(=복귀 시 알림). 안 보는 동안 완전히 꺼지면 못 울린다.
+        #
+        # 판정 불가(frame_valid=False: 앵커 미검출·가림): 화면 기반 판단(감지·연장·해제)은
+        # 멈추되(상태 동결), 내부 시계가 0에 닿으면 만료 처리한다(화면 안 봐도 아는 사실).
         if not frame_valid:
             remaining = self.remaining(now)
             if (
@@ -132,15 +137,15 @@ class BuffStateMachine:
             ):
                 self._reset()
                 return Event.EXPIRED
-            # 화면을 못 읽어도(가림·탭 아웃 등) 내부 시계가 알림 시점을 지났으면 알림은
-            # 울린다 — 알림은 '화면 감지'가 아니라 '시계'로 판단한다(임박 알림 누락 방지).
-            return self._check_alert(now) or Event.NONE
+            return Event.NONE
 
         if detected:
-            return self._on_detected(reading, now)
+            return self._on_detected(reading, now, foreground)
         return self._on_missing(now)
 
-    def _on_detected(self, reading: float | None, now: float) -> Event:
+    def _on_detected(
+        self, reading: float | None, now: float, foreground: bool = True
+    ) -> Event:
         self._missing_since = None
         self._detections += 1
         event = Event.NONE
@@ -167,7 +172,11 @@ class BuffStateMachine:
 
         if extended:
             return Event.EXTENDED
-        return self._check_alert(now) or event
+        # 알림은 포그라운드(지금 화면을 읽는 중)일 때만 판정·발동한다. 포커스가 아니면
+        # 건너뛰어 보류(소비 안 함) → 복귀 시 아직 임박이면 그때 울린다.
+        if foreground:
+            return self._check_alert(now) or event
+        return event
 
     def _commit(self, reading: float, now: float) -> None:
         self._last_read = reading
@@ -257,9 +266,7 @@ class BuffStateMachine:
         if now - self._missing_since >= self.disappear_sec:
             self._reset()
             return Event.RELEASED
-        # 3) 아이콘이 잠깐 안 잡혀도(깜빡임 등), 내부 시계가 알림 시점을 지났으면 알림을
-        #    울린다 — 알림은 '화면 감지'가 아니라 '시계'로 판단한다(임박 알림 누락 방지).
-        return self._check_alert(now) or Event.NONE
+        return Event.NONE
 
     def _check_alert(self, now: float) -> Event | None:
         remaining = self.remaining(now)
