@@ -11,7 +11,7 @@
 from __future__ import annotations
 
 import numpy as np
-from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QGuiApplication, QImage, QPixmap
 from PySide6.QtWidgets import (
     QHBoxLayout,
@@ -22,7 +22,6 @@ from PySide6.QtWidgets import (
 )
 
 from .. import config, paths
-from ..detect.bar_frame import locate_bar_frame
 from ..detect.boss_hp_reader import read_percent
 from ..detect.boss_name_matcher import identify, load_name_templates
 from ..tracker.boss_catalog import load_bosses, make_tracker
@@ -39,22 +38,17 @@ HIGHLIGHT_SUB = "보스 이름 ~ HP% 가 다 들어오게"
 
 # 기본 영역(2560×1440 기준, 하단 중앙 보스 HP바). 오른쪽 끝 = 바 오른쪽 끝.
 # 다른 해상도면 '영역 수정'으로 바에 맞춘다(판독기가 박스 높이로 스케일 보정).
-# 공유 영역은 '전체 폭 가로 밴드'(그 안에서 보스 HP바 프레임을 자동 검출). 기본값은
-# 2560×1440 기준 하단(디버프 줄 + 보스 HP바를 포함하는 밴드). 다른 해상도는 재지정.
-DEFAULT_BOX = {"x": 0, "y": 1205, "w": 2560, "h": 95}
-_DEFAULT_BAND_H = 95  # 밴드 기본 두께(디버프 줄+바 포함)
+DEFAULT_BOX = {"x": 1017, "y": 1248, "w": 523, "h": 36}
 
 
 class BossTab(QWidget):
-    region_changed = Signal()  # 공유 보스 HP바 영역 변경 → 메인이 디버프에도 반영
-
     def __init__(self, watcher) -> None:
         super().__init__()
         self._watcher = watcher
         cfg = config.load_boss_pattern()
-        # 보스 HP바 영역은 디버프 트래커와 공유한다(둘 중 어디서 잡아도 같은 값).
         # 기본으로 바 위치가 이미 잡힌 상태(사용자 해상도 2560×1440면 바로 작동).
-        self._region = config.load_bar_region() or dict(DEFAULT_BOX)
+        # 해상도가 다르면 '영역 수정'으로 맞춘다.
+        self._region = cfg["box"] or dict(DEFAULT_BOX)
         self._sct = None
         self._last_frame = None
         self._bosses = load_bosses()
@@ -198,25 +192,16 @@ class BossTab(QWidget):
     def _on_region(self) -> None:
         from .region_selector import RegionSelector
 
-        # 전체 폭 가로 밴드를 위아래로 옮겨 보스 HP바가 가운데 가이드에 들게 배치.
-        r = self._region or DEFAULT_BOX
-        band_h = int(r["h"]) if int(r.get("h", 0)) >= 60 else _DEFAULT_BAND_H
-        self._selector = RegionSelector(fixed_size=(int(r["w"]), band_h), band=True)
+        # 보스 HP바는 넓은 가로 띠 → 자유 드래그로 이름~% 를 감싸게 그린다.
+        self._selector = RegionSelector()
         self._selector.selected.connect(self._on_selected)
         self._selector.start()
 
     def _on_selected(self, x: int, y: int, w: int, h: int) -> None:
         self._region = {"x": x, "y": y, "w": w, "h": h}
         self._update_region_label()
-        config.save_bar_region(x, y, w, h)  # 디버프와 공유되는 영역
         self._save()
         self._flash_region()
-        self.region_changed.emit()  # 메인이 디버프 추적도 새 영역으로 재시작
-
-    def reload_region(self) -> None:
-        """다른 탭(디버프)에서 공유 영역을 바꾸면 호출 — 라벨·내부값 동기화."""
-        self._region = config.load_bar_region() or dict(DEFAULT_BOX)
-        self._update_region_label()
 
     def _flash_region(self) -> None:
         if not self._region:
@@ -238,7 +223,7 @@ class BossTab(QWidget):
         config.save_boss_pattern(
             {
                 "enabled": self.enable.isChecked(),
-                # 영역(box)은 공유 bossBar에 저장(save_bar_region) — 여기선 안 씀.
+                "box": self._region,
                 "showUpcoming": self.show_upcoming.isChecked(),
                 "upcomingLocked": self._upcoming.locked,
                 "warnLocked": self._overlay.locked,
@@ -344,18 +329,10 @@ class BossTab(QWidget):
         self._show_preview(frame)
         self._last_frame = frame
 
-        # 영역(가로 밴드) 안에서 보스 HP바 '프레임'을 찾아 그 바에서만 이름/%를 읽는다.
-        # (사용자가 바를 정확히 못 맞춰도 됨 — 프레임이 보일 때만 보스로 본다.)
-        fr = locate_bar_frame(frame)
-        if fr is None:
-            boss_id = None  # 바 없음 = 보스 없음
-        else:
-            x0, y0, x1, y1 = fr
-            bar = frame[y0:y1, x0:x1]
-            w = bar.shape[1]
-            name_reg = bar[:, : int(w * 0.60)]  # 왼쪽=이름
-            pct_reg = bar[:, int(w * 0.58) :]  # 오른쪽=HP%
-            boss_id = identify(name_reg, self._name_templates)
+        w = frame.shape[1]
+        name_reg = frame[:, : int(w * 0.60)]  # 왼쪽=이름
+        pct_reg = frame[:, int(w * 0.58) :]  # 오른쪽=HP%(가운데 빈 띠는 글자 없음)
+        boss_id = identify(name_reg, self._name_templates)
 
         # 보스 식별/소멸 관리. **HP 판독·경고는 보스가 '이번 프레임' 식별됐을 때만**
         # 처리한다 — 보스가 없으면 영역이 길바닥/UI라 HP가 garbage로 읽히는데, 그걸

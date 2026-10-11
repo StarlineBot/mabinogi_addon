@@ -95,7 +95,69 @@ def test_returns_none_when_nothing_works(monkeypatch):
     assert (None, None) in fake.created and (1, 3) in fake.created
 
 
-def test_shared_camera_raises_when_unavailable(monkeypatch):
-    _install(monkeypatch, {})  # 어떤 조합도 안 됨
+class _FakeShot:
+    def __init__(self, w: int, h: int) -> None:
+        self.width = w
+        self.height = h
+        self.bgra = bytes(w * h * 4)  # 전부 0(검정) — 모양만 맞으면 됨
+
+
+class _FakeMSS:
+    def __init__(self, grab_fail: bool = False) -> None:
+        self.grab_fail = grab_fail
+        self.closed = False
+        self.monitors = [
+            {"left": 0, "top": 0, "width": 1920, "height": 1080},  # [0] 가상 데스크톱
+            {"left": 0, "top": 0, "width": 1920, "height": 1080},  # [1] 주 모니터
+        ]
+
+    def grab(self, mon):
+        if self.grab_fail:
+            raise RuntimeError("캡처 불가")
+        return _FakeShot(mon["width"], mon["height"])
+
+    def close(self):
+        self.closed = True
+
+
+class _FakeMSSModule:
+    """sys.modules['mss'] 대체. make_fail=True면 mss() 자체가 실패(헤드리스 흉내)."""
+
+    def __init__(self, make_fail: bool = False, grab_fail: bool = False) -> None:
+        self._make_fail = make_fail
+        self._grab_fail = grab_fail
+        self.instances: list[_FakeMSS] = []
+
+    def mss(self):
+        if self._make_fail:
+            raise RuntimeError("디스플레이 없음(헤드리스)")
+        inst = _FakeMSS(self._grab_fail)
+        self.instances.append(inst)
+        return inst
+
+
+def test_raises_when_dxcam_and_mss_both_fail(monkeypatch):
+    _install(monkeypatch, {})  # dxcam 어떤 조합도 안 됨
+    monkeypatch.setitem(sys.modules, "mss", _FakeMSSModule(make_fail=True))
     with pytest.raises(RuntimeError):
         shared_live._SharedLiveCamera()
+
+
+def test_falls_back_to_mss_when_dxcam_unavailable(monkeypatch):
+    """하이브리드 GPU 노트북: dxcam은 전부 실패해도 mss(GDI)로 캡처가 된다."""
+    _install(monkeypatch, {})  # dxcam 전부 실패
+    fake_mss = _FakeMSSModule()
+    monkeypatch.setitem(sys.modules, "mss", fake_mss)
+
+    cam = shared_live._SharedLiveCamera()
+    assert cam._camera is None  # dxcam 없음
+    assert cam._mss is not None  # mss 폴백 사용 중
+
+    frame = cam.full_frame()
+    assert frame is not None
+    assert frame.shape == (1080, 1920, 3)  # BGRA→BGR, 주 모니터 크기
+    assert frame.flags["C_CONTIGUOUS"]  # 탐지 코드가 바로 쓸 수 있게 연속
+
+    inst = fake_mss.instances[0]
+    cam.release()  # _refs 0 → -1 ≤ 0 → 해제
+    assert inst.closed  # mss도 닫힘

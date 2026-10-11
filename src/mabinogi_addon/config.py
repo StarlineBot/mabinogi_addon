@@ -748,32 +748,6 @@ def save_tuarim(data: dict, path: Path = LOCAL_CONFIG_PATH) -> None:
     _write_local_config(cfg, path)
 
 
-# 보스 HP바 영역 — 디버프 트래커와 보스 패턴 알림이 '공유'한다. 둘 중 어디서 지정하든
-# 같은 값을 쓰므로, 한쪽만 세팅해도 다른 쪽이 함께 세팅된 상태가 된다. 저장 위치는
-# 공용 키 'bossBar' 하나(중앙 설정 UI 없이 값만 공유). 과거 보스 패턴 box에서 이관한다.
-def load_bar_region(path: Path = LOCAL_CONFIG_PATH) -> dict | None:
-    """공유 보스 HP바 영역 {x,y,w,h} 또는 None. (디버프·보스패턴 공용)"""
-    data = _read_local_config(path)
-    r = data.get("bossBar")
-    if isinstance(r, dict) and all(k in r for k in ("x", "y", "w", "h")):
-        return {k: int(r[k]) for k in ("x", "y", "w", "h")}
-    # 이관: 예전 보스 패턴 영역(box)이 있으면 그걸 공유 영역으로. (디버프의 옛 strip
-    # 영역은 바보다 커서 HP 판독을 깨뜨리므로 이관하지 않는다 — 재지정 안내.)
-    sec = data.get("bossPattern")
-    box = sec.get("box") if isinstance(sec, dict) else None
-    if isinstance(box, dict) and all(k in box for k in ("x", "y", "w", "h")):
-        return {k: int(box[k]) for k in ("x", "y", "w", "h")}
-    return None
-
-
-def save_bar_region(
-    x: int, y: int, w: int, h: int, path: Path = LOCAL_CONFIG_PATH
-) -> None:
-    data = _read_local_config(path)
-    data["bossBar"] = {"x": int(x), "y": int(y), "w": int(w), "h": int(h)}
-    _write_local_config(data, path)
-
-
 def load_boss_pattern(path: Path = LOCAL_CONFIG_PATH) -> dict:
     """보스 패턴 경고 설정. (베타 — 디스코드 로그인 게이팅)
 

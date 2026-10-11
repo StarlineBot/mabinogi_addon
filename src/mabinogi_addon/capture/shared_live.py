@@ -89,29 +89,80 @@ class _SharedLiveCamera:
     def __init__(self) -> None:
         import dxcam  # Windows 전용 (지연 import)
 
-        t = time.perf_counter()
-        self._camera = _create_working_camera()
-        _log.info("dxcam 카메라 준비 %.0fms", (time.perf_counter() - t) * 1000)
-        # 어떤 GPU/출력 조합으로도 캡처가 안 되면(하이브리드 GPU에서 복제 미지원 등),
-        # 그대로 두면 grab이 영원히 None → '라이브 캡처가 조용히 안 됨'이 된다.
-        # 명시적으로 에러를 내 호출부가 알 수 있게 하고, dxcam이 본 출력 목록을 남긴다.
-        if self._camera is None:
-            try:
-                info = dxcam.output_info()
-            except Exception as exc:  # noqa: BLE001 — 진단 로그용
-                info = f"(output_info 실패: {exc})"
-            _log.error(
-                "dxcam 라이브 캡처 실패(모든 GPU/출력 조합). 출력 목록:\n%s", info
-            )
-            raise RuntimeError(
-                "dxcam 라이브 캡처 카메라를 만들 수 없습니다. "
-                "게임을 '테두리 없는 창(전체 창)' 모드로 두거나, 그래픽 드라이버/"
-                "모니터 설정을 확인하세요."
-            )
         self._frame_lock = threading.Lock()
         self._last_frame: np.ndarray | None = None
         self._last_ts = 0.0
         self._refs = 0
+        self._mss = None  # dxcam 전부 실패 시 폴백(GDI BitBlt). None이면 dxcam 사용 중.
+        self._mss_monitor: dict | None = None
+
+        t = time.perf_counter()
+        self._camera = _create_working_camera()
+        _log.info("dxcam 카메라 준비 %.0fms", (time.perf_counter() - t) * 1000)
+        if self._camera is not None:
+            return
+        # 어떤 GPU/출력 조합으로도 dxcam이 안 됨(하이브리드 GPU에서 Desktop Duplication
+        # 미지원 DXGI_ERROR_UNSUPPORTED 등). 여기서 그냥 에러를 내면 노트북 사용자는
+        # 라이브 캡처 자체를 못 쓴다 → mss(GDI BitBlt)로 폴백한다. Desktop Duplication을
+        # 쓰지 않아 호환성이 넓다(대신 CPU가 다소 높다). mss도 안 되면 그때 에러.
+        try:
+            info = dxcam.output_info()
+        except Exception as exc:  # noqa: BLE001 — 진단 로그용
+            info = f"(output_info 실패: {exc})"
+        _log.warning(
+            "dxcam 라이브 캡처 실패(모든 GPU/출력 조합). 출력 목록:\n%s", info
+        )
+        if self._init_mss_fallback():
+            return
+        _log.error("mss 폴백도 실패 → 라이브 캡처 불가")
+        raise RuntimeError(
+            "라이브 캡처 카메라를 만들 수 없습니다(dxcam·mss 모두 실패). "
+            "게임을 '테두리 없는 창(전체 창)' 모드로 두거나, 그래픽 드라이버/"
+            "모니터 설정을 확인하세요."
+        )
+
+    def _init_mss_fallback(self) -> bool:
+        """dxcam이 전부 실패했을 때 mss(GDI BitBlt)로 전체화면 캡처를 준비한다.
+        Desktop Duplication을 쓰지 않아 하이브리드 GPU 노트북에서도 동작한다.
+        한 번 실제로 grab 해 검증하고, 성공하면 True(이후 full_frame이 mss 사용).
+        mss 미설치/헤드리스 등으로 안 되면 False."""
+        try:
+            import mss
+        except Exception as exc:  # noqa: BLE001 — mss 미설치 등
+            _log.error("mss import 실패: %s", exc)
+            return False
+        try:
+            sct = mss.mss()
+            # monitors[1]=주 모니터(원점 0,0 기준 — dxcam 기본 출력과 좌표계가 같다).
+            # 영역 좌표는 주 모니터 좌상단 기준이라 여기 맞춘다.
+            mons = sct.monitors
+            mon = mons[1] if len(mons) > 1 else mons[0]
+            sct.grab(mon)  # 실제 동작 검증(복제 API를 안 써 여기선 보통 성공)
+        except Exception as exc:  # noqa: BLE001 — 캡처 불가(헤드리스 등)
+            _log.error("mss 캡처 검증 실패: %s", exc)
+            return False
+        self._mss = sct
+        self._mss_monitor = mon
+        _log.warning(
+            "dxcam 대신 mss(GDI) 폴백으로 라이브 캡처 (%dx%d). "
+            "Desktop Duplication 미지원 환경 호환용 — CPU가 다소 높을 수 있습니다.",
+            mon["width"],
+            mon["height"],
+        )
+        return True
+
+    def _grab_mss(self) -> np.ndarray | None:
+        """mss로 주 모니터 전체를 잡아 BGR(연속 배열)로 돌려준다. dxcam grab과 동일한
+        포맷/좌표계라 RegionView·탐지 코드가 그대로 쓴다. (_frame_lock 하에서 호출)"""
+        try:
+            shot = self._mss.grab(self._mss_monitor)
+        except Exception as exc:  # noqa: BLE001 — 일시적 캡처 실패 → 직전 프레임 유지
+            _log.warning("mss grab 실패: %s", exc)
+            return None
+        arr = np.frombuffer(shot.bgra, dtype=np.uint8).reshape(
+            shot.height, shot.width, 4
+        )
+        return np.ascontiguousarray(arr[:, :, :3])  # BGRA → BGR(연속)
 
     @classmethod
     def acquire(cls) -> _SharedLiveCamera:
@@ -123,12 +174,21 @@ class _SharedLiveCamera:
 
     def release(self) -> None:
         camera = None
+        sct = None
         with _SharedLiveCamera._lock:
             self._refs -= 1
             if self._refs <= 0:
                 camera = self._camera
+                sct = self._mss
                 self._camera = None
+                self._mss = None
                 _SharedLiveCamera._instance = None
+        # mss(GDI) 해제는 빠르다 — 바로 닫는다.
+        if sct is not None:
+            try:
+                sct.close()
+            except Exception:  # noqa: BLE001, S110 — 해제 실패는 무시
+                pass
         # dxcam 해제(DXGI)는 느릴 수 있어 데몬 스레드로 → 종료/재시작을 막지 않는다.
         if camera is not None:
             def _rel() -> None:
@@ -142,15 +202,20 @@ class _SharedLiveCamera:
         """전체 프레임. max_age 안에선 캐시 재사용, 새 프레임 없으면 직전 유지."""
         with self._frame_lock:
             now = time.monotonic()
-            if self._camera is not None and now - self._last_ts >= _MAX_AGE:
-                t = time.perf_counter()
-                frame = self._camera.grab()  # 변화 없으면 None
-                dt = (time.perf_counter() - t) * 1000
-                if dt > 50:  # grab이 오래 걸리면(블로킹 의심) 경고
-                    _log.warning("dxcam grab %.0fms (느림)", dt)
+            if now - self._last_ts >= _MAX_AGE:
+                if self._camera is not None:
+                    t = time.perf_counter()
+                    frame = self._camera.grab()  # 변화 없으면 None
+                    dt = (time.perf_counter() - t) * 1000
+                    if dt > 50:  # grab이 오래 걸리면(블로킹 의심) 경고
+                        _log.warning("dxcam grab %.0fms (느림)", dt)
+                    if frame is not None:
+                        self._last_frame = frame
+                elif self._mss is not None:  # dxcam 실패 → mss(GDI) 폴백
+                    frame = self._grab_mss()
+                    if frame is not None:
+                        self._last_frame = frame
                 self._last_ts = now
-                if frame is not None:
-                    self._last_frame = frame
             return self._last_frame
 
 
