@@ -266,16 +266,17 @@ class MainWindow(QMainWindow):
         self._tracker_tabs.addTab(_scrolled(self.tuarim_tab), "투아림")
         # 보스만 쓰면 뭘 추적하는지 모호해 풀네임 유지.
         self._tracker_tabs.addTab(_scrolled(self.boss_tab), "보스 패턴 알림")
-        self._tracker_tabs.addTab(_scrolled(self.stat_bars_tab), "체력바")
 
-        # 편의기능: 메모·계산기 등 보조 기능을 묶는 상위 탭.
+        # 편의기능: 게임 UI를 원하는 위치에 재배치/표시하는 기능과 계산기 등을 묶는다.
+        # 체력바·단축바는 '화면을 읽어 판단·알림'(트래커)이 아니라 '게임 화면을 원하는
+        # 위치에 새로 띄우는' 편의 기능이라, 커스텀 오버레이와 같은 묶음에 둔다.
         self.distribution_tab = DistributionTab()
         self.exchange_tab = ExchangeTab()
         self.bead_split_tab = BeadSplitTab()
-        # 미러 계열(커스텀 오버레이·단축바)은 '화면 복제' 보조 기능이라 편의기능으로 묶는다.
         self._convenience_tabs = QTabWidget()
         self._convenience_tabs.addTab(_scrolled(self.custom_overlay_tab), "커스텀 오버레이")
         self._convenience_tabs.addTab(_scrolled(self.skillbar_tab), "단축바")
+        self._convenience_tabs.addTab(_scrolled(self.stat_bars_tab), "체력바")
         self._convenience_tabs.addTab(_scrolled(self.memo_tab), "메모")
         self._convenience_tabs.addTab(_scrolled(self.distribution_tab), "분배 계산기")
         self._convenience_tabs.addTab(_scrolled(self.bead_split_tab), "구슬 분배 계산기")
