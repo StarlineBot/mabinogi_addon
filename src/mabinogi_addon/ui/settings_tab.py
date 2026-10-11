@@ -342,7 +342,7 @@ class SettingsTab(QWidget):
         v.addWidget(
             hint_label(
                 "로그인하면 문의 답변을 DM으로 받을 수 있어요.\n"
-                "또한 베타 기능(예: 체력바 오버레이)과 디버그 기능을 사용할 수 있습니다."
+                "또한 베타 기능과 디버그 기능을 사용할 수 있습니다."
             )
         )
         self._refresh_login()
