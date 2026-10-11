@@ -272,7 +272,10 @@ class MainWindow(QMainWindow):
         self.distribution_tab = DistributionTab()
         self.exchange_tab = ExchangeTab()
         self.bead_split_tab = BeadSplitTab()
+        # 미러 계열(커스텀 오버레이·단축바)은 '화면 복제' 보조 기능이라 편의기능으로 묶는다.
         self._convenience_tabs = QTabWidget()
+        self._convenience_tabs.addTab(_scrolled(self.custom_overlay_tab), "커스텀 오버레이")
+        self._convenience_tabs.addTab(_scrolled(self.skillbar_tab), "단축바")
         self._convenience_tabs.addTab(_scrolled(self.memo_tab), "메모")
         self._convenience_tabs.addTab(_scrolled(self.distribution_tab), "분배 계산기")
         self._convenience_tabs.addTab(_scrolled(self.bead_split_tab), "구슬 분배 계산기")
@@ -281,8 +284,6 @@ class MainWindow(QMainWindow):
         tabs = QTabWidget()
         self._tabs = tabs  # 온보딩 투어에서 탭 전환에 사용
         tabs.addTab(self._tracker_tabs, "트래커")
-        tabs.addTab(_scrolled(self.custom_overlay_tab), "커스텀 오버레이")
-        tabs.addTab(_scrolled(self.skillbar_tab), "단축바")
         self._party_scroll = _scrolled(self.party_tab)  # 토스트 클릭 시 이 탭으로 전환
         tabs.addTab(self._party_scroll, "파티 모집")
         tabs.addTab(self._convenience_tabs, "편의기능")
