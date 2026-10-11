@@ -783,6 +783,46 @@ def save_boss_pattern(data: dict, path: Path = LOCAL_CONFIG_PATH) -> None:
     _write_local_config(cfg, path)
 
 
+def load_stat_bars(path: Path = LOCAL_CONFIG_PATH) -> dict:
+    """체력/마나/스태미나 바 오버레이 설정.
+
+    {enabled, box:{x,y,w,h}|None, scale:int(%),
+     bars:{hp:{show,locked,pos:{x,y}|None}, mp:{...}, sta:{...}}}
+    - box: 게임 하단 3바를 감싸는 읽기 영역(경험치 바는 제외)
+    - scale: 세 바 공통 표시 배율
+    - bars.*.pos: 각 바 오버레이의 화면 위치(없으면 기본 배치)
+    """
+    sec = _read_local_config(path).get("statBars")
+    sec = sec if isinstance(sec, dict) else {}
+    box = sec.get("box") if isinstance(sec.get("box"), dict) else None
+    bars_in = sec.get("bars") if isinstance(sec.get("bars"), dict) else {}
+    bars: dict[str, dict] = {}
+    for sid in ("hp", "mp", "sta"):
+        b = bars_in.get(sid) if isinstance(bars_in.get(sid), dict) else {}
+        pos = b.get("pos") if isinstance(b.get("pos"), dict) else None
+        bars[sid] = {
+            "show": bool(b.get("show", True)),
+            "locked": bool(b.get("locked", False)),
+            "pos": pos,
+        }
+    return {
+        "enabled": bool(sec.get("enabled", False)),
+        "box": box,
+        "scale": int(sec.get("scale", 150)),
+        "bars": bars,
+    }
+
+
+def save_stat_bars(data: dict, path: Path = LOCAL_CONFIG_PATH) -> None:
+    cfg = _read_local_config(path)
+    sec = cfg.get("statBars")
+    if not isinstance(sec, dict):
+        sec = {}
+    sec.update(data)
+    cfg["statBars"] = sec
+    _write_local_config(cfg, path)
+
+
 def _custom_section(path: Path) -> dict:
     sec = _read_local_config(path).get("customOverlay")
     return sec if isinstance(sec, dict) else {}

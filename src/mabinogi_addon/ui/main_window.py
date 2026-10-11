@@ -44,6 +44,7 @@ from .notifier import SoundNotifier, default_sound_map
 from .overlay import BuffOverlay
 from .party_tab import PartyTab
 from .settings_tab import SettingsTab
+from .stat_bars_tab import StatBarsTab
 from .tuarim_tab import TuarimTab
 
 # 번들 경로 사용(exe=_MEIPASS/assets). __file__ 기준은 frozen에서 어긋난다.
@@ -248,6 +249,7 @@ class MainWindow(QMainWindow):
         self.tuarim_tab = TuarimTab(self._watcher)
         self.boss_tab = BossTab(self._watcher)  # 베타(디스코드 로그인 게이팅)
         self.custom_overlay_tab = CustomOverlayTab(self._watcher)
+        self.stat_bars_tab = StatBarsTab(self._watcher)
         self.settings_tab = SettingsTab(self._watcher)
         self.settings_tab.config_imported.connect(self._on_config_imported)
         self.settings_tab.voice_pack_changed.connect(self._on_voice_pack_changed)
@@ -262,6 +264,7 @@ class MainWindow(QMainWindow):
         self._tracker_tabs.addTab(_scrolled(self.tuarim_tab), "투아림")
         # 보스만 쓰면 뭘 추적하는지 모호해 풀네임 유지.
         self._tracker_tabs.addTab(_scrolled(self.boss_tab), "보스 패턴 알림")
+        self._tracker_tabs.addTab(_scrolled(self.stat_bars_tab), "체력바")
 
         # 편의기능: 메모·계산기 등 보조 기능을 묶는 상위 탭.
         self.distribution_tab = DistributionTab()
@@ -1207,6 +1210,7 @@ class MainWindow(QMainWindow):
             if c is not None:
                 c.set_paused(paused)
         self.custom_overlay_tab.set_paused(paused)
+        self.stat_bars_tab.set_paused(paused)
         # 트레이 라벨 + 상단 버튼 동기화(어느 쪽에서 눌러도 둘 다 반영, 루프 방지).
         self._pause_act.setText(
             "▶ 전체 오버레이 시작" if paused else "⏸ 전체 오버레이 정지"
@@ -1389,6 +1393,7 @@ class MainWindow(QMainWindow):
             self.custom_overlay_tab.shutdown(),
             self.tuarim_tab.shutdown(),
             self.boss_tab.shutdown(),
+            self.stat_bars_tab.shutdown(),
         ))
         if self._tray is not None:
             self._tray.hide()
