@@ -73,13 +73,13 @@ def test_warn_gone_confirms_after_3s_then_shows_and_clears(monkeypatch):
     c._on_updated([_entry("march")])
     assert [it.gone for it in c._items] == [False, True]  # march 정상, han 경고
 
-    # 4) 노출 시간(확정 후 3초) 안엔 유지
-    clock["t"] = 15.9
+    # 4) 노출 시간(확정 후 _GONE_SHOW_SEC) 안엔 유지. 확정 시각 = 13.0.
+    clock["t"] = 13.0 + bc_mod._GONE_SHOW_SEC - 0.1
     c._on_updated([_entry("march")])
     assert any(it.gone for it in c._items)
 
     # 5) 노출 시간 경과 → 사라짐(march만)
-    clock["t"] = 16.1
+    clock["t"] = 13.0 + bc_mod._GONE_SHOW_SEC + 0.1
     c._on_updated([_entry("march")])
     assert not any(it.gone for it in c._items)
     assert len(c._items) == 1

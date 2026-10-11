@@ -163,8 +163,9 @@ class BuffOverlay(QWidget):
 
         x = _PAD
         for item in self._items:
-            # 사라짐 경고 칸은 아이콘을 흐리게(어떤 버프였는지 보이게) 그린다.
-            painter.setOpacity(0.3 if item.gone else 1.0)
+            # 사라짐 경고 칸도 아이콘을 또렷하게(어떤 버프/디버프였는지 보이게) 그린다.
+            # 살짝만 흐리게(0.7) + 가운데 비운 모서리 X로 '떨어짐'을 표시한다.
+            painter.setOpacity(0.7 if item.gone else 1.0)
             scaled = item.pixmap.scaled(
                 icon,
                 icon,
@@ -209,7 +210,8 @@ class BuffOverlay(QWidget):
         painter.drawText(rect, align, text)
 
     def _draw_gone(self, painter: QPainter, rect: QRect) -> None:
-        """사라짐 경고: 아이콘 칸에 빨간 테두리 + 모서리를 잇는 X."""
+        """사라짐 경고: 빨간 테두리 + 네 모서리에만 짧은 X 자국(가운데는 비워 아이콘이
+        보이게). '사라진' 느낌은 주면서 어떤 버프/디버프가 떨어졌는지 바로 알아본다."""
         w = max(2, int(rect.width() * 0.08))  # 배율 따라 선 두께
         pen = QPen(QColor(255, 60, 60), w)
         pen.setCapStyle(Qt.PenCapStyle.RoundCap)
@@ -217,6 +219,14 @@ class BuffOverlay(QWidget):
         # 테두리(선 두께만큼 안쪽으로 당겨 잘림 방지)
         inset = rect.adjusted(w // 2, w // 2, -(w // 2 + 1), -(w // 2 + 1))
         painter.drawRect(inset)
-        # 모서리를 잇는 X
-        painter.drawLine(inset.topLeft(), inset.bottomRight())
-        painter.drawLine(inset.topRight(), inset.bottomLeft())
+        # 네 모서리에서 가운데로 짧게 그은 X 자국(가운데는 비움 → 아이콘이 보인다)
+        arm = int(rect.width() * 0.28)
+        for corner, dx, dy in (
+            (inset.topLeft(), 1, 1),
+            (inset.topRight(), -1, 1),
+            (inset.bottomLeft(), 1, -1),
+            (inset.bottomRight(), -1, -1),
+        ):
+            painter.drawLine(
+                corner.x(), corner.y(), corner.x() + dx * arm, corner.y() + dy * arm
+            )

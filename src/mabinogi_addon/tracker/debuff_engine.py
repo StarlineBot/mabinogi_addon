@@ -51,7 +51,7 @@ _BAR_GRACE_SEC = 1.0  # 바가 잠깐 안 보여도 이 시간까진 유지(보�
 # '떨어짐'으로 확정 → 경고(빨간 테두리+X) 노출 + 소리. 노출은 확정 후 이만큼(초).
 # 바가 사라지면(보스 이탈) 확정 대기·경고를 모두 취소해 오탐을 없앤다.
 _GONE_CONFIRM_SEC = 3.0
-_GONE_SHOW_SEC = 3.0
+_GONE_SHOW_SEC = 5.0
 
 
 def _variant(template: np.ndarray, target_h: int) -> np.ndarray:

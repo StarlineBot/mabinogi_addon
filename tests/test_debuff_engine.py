@@ -8,7 +8,11 @@
 import cv2
 import numpy as np
 
-from mabinogi_addon.tracker.debuff_engine import _ONSCREEN_ICON_PX, DebuffEngine
+from mabinogi_addon.tracker.debuff_engine import (
+    _GONE_SHOW_SEC,
+    _ONSCREEN_ICON_PX,
+    DebuffEngine,
+)
 
 ICON = _ONSCREEN_ICON_PX  # 화면상 디버프 아이콘 크기(px)
 
@@ -163,8 +167,8 @@ def test_warn_gone_fires_after_3s_absence_with_bar():
     res = eng.tick(_bar_region(), now=3.2)
     assert res.alerts == ["a"]
     assert _gone_ids(res) == ["a"]
-    # 노출(확정 후 3초) 지나면 경고 해제(일반 '미적용' 표시로 복귀)
-    res2 = eng.tick(_bar_region(), now=6.3)
+    # 노출(확정 후 _GONE_SHOW_SEC) 지나면 경고 해제(일반 '미적용' 표시로 복귀)
+    res2 = eng.tick(_bar_region(), now=3.2 + _GONE_SHOW_SEC + 0.1)
     assert _gone_ids(res2) == []
     assert "a" in _shown(res2)  # 여전히 미적용 목록엔 있음
 

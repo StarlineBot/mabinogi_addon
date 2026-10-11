@@ -33,7 +33,7 @@ _SMOOTH_EPS = 1.5
 #   확정한다(짧은 미검출·깜빡임 오탐 방지). 이 안에 다시 뜨면 아무 일도 없던 것으로.
 # - 노출: 확정된 순간 빨간 테두리+X를 띄우고 소리를 1회 내며, 이만큼(초) 보여준 뒤 지운다.
 _GONE_CONFIRM_SEC = 3.0
-_GONE_SHOW_SEC = 3.0
+_GONE_SHOW_SEC = 5.0
 
 
 class _TrackWorker(QThread):
