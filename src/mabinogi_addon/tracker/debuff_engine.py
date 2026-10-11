@@ -51,6 +51,12 @@ _BAR_GRACE_SEC = 1.0  # 바가 잠깐 안 보여도 이 시간까진 유지(보�
 _GONE_CONFIRM_SEC = 3.0
 _GONE_SHOW_SEC = 5.0
 
+# 검출 디바운스: '걸림(숨김)'으로 확정하기 전, 검출이 이만큼(초) 연속돼야 한다. 지나가는
+# 스킬 이펙트·섬광이 **한 프레임만** 임계(0.68)를 넘겨 '걸림'으로 래치되던 오탐을 막는다
+# (방해 카드·모모 등 저정보 아이콘이 이펙트에 순간 매칭되던 문제). 실제 디버프는 계속
+# 잡히므로 ~이 시간 뒤 정상 표시된다(해제는 즉시 — 떨어짐/사라짐 경고 지연 없음).
+_DETECT_CONFIRM_SEC = 0.3
+
 
 def _variant(template: np.ndarray, target_h: int) -> np.ndarray:
     h, w = template.shape[:2]
@@ -80,6 +86,8 @@ class DebuffEngine:
         # shown=True면 '안 걸림' → 오버레이 표시. 초기엔 전부 표시(보스 전 상태).
         self._shown = {bid: True for bid in templates}
         self._matched = {bid: False for bid in templates}  # 이력 임계용 직전 판정
+        # 검출 디바운스: 검출이 처음 True가 된 시각(이만큼 연속돼야 '걸림' 확정).
+        self._detect_since: dict[str, float | None] = {bid: None for bid in templates}
         self._absent_since: dict[str, float | None] = {bid: None for bid in templates}
         # 보스 HP바 앵커: 영역에서 바를 한 번이라도 본 뒤부터 게이팅(버프 앵커와 동일).
         # 한 번도 못 봤으면(= 바를 안 넣은 기존 영역) 게이팅 안 함 → 기존처럼 항상 탐지.
@@ -153,6 +161,19 @@ class DebuffEngine:
         self._matched[bid] = matched
         return matched
 
+    def _confirm_detect(self, bid: str, raw: bool, now: float) -> bool:
+        """검출 디바운스: raw(이력 임계 통과)가 _DETECT_CONFIRM_SEC 연속일 때만 True.
+
+        한 프레임짜리 거짓 매칭(지나가는 이펙트)은 확정되지 않아 '걸림' 래치를 막는다.
+        raw가 False가 되면 즉시 리셋 → 해제(떨어짐)는 지연 없이 바로 반영된다.
+        """
+        if raw:
+            if self._detect_since.get(bid) is None:
+                self._detect_since[bid] = now
+            return now - self._detect_since[bid] >= _DETECT_CONFIRM_SEC
+        self._detect_since[bid] = None
+        return False
+
     @staticmethod
     def _bar_present(region: np.ndarray) -> bool:
         """영역 안에 보스 HP바(길게 매끈하고 '색이 있는' 가로 띠)가 보이는가.
@@ -215,7 +236,8 @@ class DebuffEngine:
 
         small = self._scale(region)
         for bid in self._templates:
-            detected = self._detect(small, bid)
+            # 이력 임계 통과(raw) → 디바운스로 확정(detected). 단발 스파이크는 확정 안 됨.
+            detected = self._confirm_detect(bid, self._detect(small, bid), now)
             if detected:
                 self._shown[bid] = False  # 걸림 → 즉시 숨김
                 self._absent_since[bid] = None

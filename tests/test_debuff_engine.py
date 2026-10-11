@@ -40,25 +40,37 @@ def _shown(result):
     return [e.buff_id for e in result.entries]
 
 
-def test_detected_debuff_hidden_immediately():
+def test_detected_debuff_hidden_after_confirm():
+    # 검출 디바운스: 한 프레임만으론 '걸림' 확정 안 함 → _DETECT_CONFIRM_SEC 연속돼야 숨김.
     tpl = _bases()
     eng = DebuffEngine(tpl, ["a", "b"])
-    assert _shown(eng.tick(_region_with(tpl["a"]), now=0.0)) == ["b"]
+    assert _shown(eng.tick(_region_with(tpl["a"]), now=0.0)) == ["a", "b"]  # 아직 확정 전
+    assert _shown(eng.tick(_region_with(tpl["a"]), now=0.4)) == ["b"]  # 확정 → a 숨김
+
+
+def test_single_frame_spike_not_latched():
+    # 지나가는 이펙트처럼 한 프레임만 매칭되면(다음 프레임 사라짐) '걸림'으로 래치되지 않는다.
+    tpl = _bases()
+    eng = DebuffEngine(tpl, ["a", "b"])
+    eng.tick(_region_with(tpl["a"]), now=0.0)  # 단발 매칭
+    assert _shown(eng.tick(_empty(), now=0.1)) == ["a", "b"]  # 사라짐 → 확정 안 돼 그대로 표시
 
 
 def test_reappear_only_after_debounce():
     tpl = _bases()
     eng = DebuffEngine(tpl, ["a", "b"], reappear_sec=1.5)
-    eng.tick(_region_with(tpl["a"]), now=0.0)  # a 숨김
-    assert _shown(eng.tick(_empty(), now=0.5)) == ["b"]  # 아직 재표시 안 함
-    assert _shown(eng.tick(_empty(), now=2.1)) == ["a", "b"]  # 1.5초 경과 → 재표시
+    eng.tick(_region_with(tpl["a"]), now=0.0)
+    eng.tick(_region_with(tpl["a"]), now=0.4)  # a 확정 → 숨김
+    assert _shown(eng.tick(_empty(), now=0.6)) == ["b"]  # 아직 재표시 안 함
+    assert _shown(eng.tick(_empty(), now=2.2)) == ["a", "b"]  # 1.5초 경과 → 재표시
 
 
-def test_redetect_hides_again_immediately():
+def test_redetect_hides_again_after_confirm():
     tpl = _bases()
     eng = DebuffEngine(tpl, ["a", "b"], reappear_sec=1.5)
     eng.tick(_empty(), now=0.0)  # 둘 다 표시
-    assert _shown(eng.tick(_region_with(tpl["b"]), now=0.2)) == ["a"]
+    eng.tick(_region_with(tpl["b"]), now=0.2)
+    assert _shown(eng.tick(_region_with(tpl["b"]), now=0.6)) == ["a"]  # b 확정 → 숨김
 
 
 def test_order_and_no_duration_no_alert():
@@ -77,7 +89,8 @@ def test_works_with_loose_region():
     icon = cv2.resize(tpl["a"], (ICON, ICON), interpolation=cv2.INTER_AREA)
     region[50 : 50 + ICON, 40 : 40 + ICON] = icon
     eng = DebuffEngine(tpl, ["a", "b"])
-    assert _shown(eng.tick(region, now=0.0)) == ["b"]
+    eng.tick(region, now=0.0)
+    assert _shown(eng.tick(region, now=0.4)) == ["b"]  # 확정 후 숨김
 
 
 def test_set_order_live():
@@ -159,17 +172,18 @@ def test_warn_gone_fires_after_3s_absence_with_bar():
     eng = DebuffEngine(tpl, ["a", "b"])
     eng.set_warn_gone_ids({"a"})
     assert DebuffEngine._bar_present(_bar_with_icon(tpl["a"])) is True
-    # a 걸림(바+아이콘) → 적용(숨김), applied 기록
+    # a 걸림(바+아이콘) → 디바운스 확정(2틱)으로 적용, applied 기록
     eng.tick(_bar_with_icon(tpl["a"]), now=0.0)
+    eng.tick(_bar_with_icon(tpl["a"]), now=0.3)
     # a 떨어짐(바만, 아이콘 없음) — 확정 전엔 경고 없음
-    eng.tick(_bar_region(), now=0.2)
-    assert _gone_ids(eng.tick(_bar_region(), now=2.9)) == []
+    eng.tick(_bar_region(), now=0.5)
+    assert _gone_ids(eng.tick(_bar_region(), now=3.4)) == []  # 0.5+3초 전
     # 바 보이는 동안 3초 연속 미검출 → 확정(alert + gone)
-    res = eng.tick(_bar_region(), now=3.2)
+    res = eng.tick(_bar_region(), now=3.6)
     assert res.alerts == ["a"]
     assert _gone_ids(res) == ["a"]
     # 노출(확정 후 _GONE_SHOW_SEC) 지나면 경고 해제(일반 '미적용' 표시로 복귀)
-    res2 = eng.tick(_bar_region(), now=3.2 + _GONE_SHOW_SEC + 0.1)
+    res2 = eng.tick(_bar_region(), now=3.6 + _GONE_SHOW_SEC + 0.1)
     assert _gone_ids(res2) == []
     assert "a" in _shown(res2)  # 여전히 미적용 목록엔 있음
 
@@ -179,9 +193,10 @@ def test_warn_gone_cancelled_if_boss_leaves():
     eng = DebuffEngine(tpl, ["a", "b"])
     eng.set_warn_gone_ids({"a"})
     eng.tick(_bar_with_icon(tpl["a"]), now=0.0)  # a 걸림
-    eng.tick(_bar_region(), now=0.2)  # 떨어지기 시작(확정 대기)
+    eng.tick(_bar_with_icon(tpl["a"]), now=0.3)  # 확정
+    eng.tick(_bar_region(), now=0.5)  # 떨어지기 시작(확정 대기)
     # 보스 이탈(바 없음) 유예 넘김 → 확정 취소, 경고 없음
-    eng.tick(_noise(), now=0.5)
+    eng.tick(_noise(), now=0.8)
     res = eng.tick(_noise(), now=2.0)
     assert res.alerts == [] and _gone_ids(res) == []
     # 그 뒤 바가 다시 와도(확정 대기 리셋됨) 과거 떨어짐으로 울리지 않음
@@ -194,9 +209,11 @@ def test_warn_gone_cancelled_if_reapplied():
     eng = DebuffEngine(tpl, ["a", "b"])
     eng.set_warn_gone_ids({"a"})
     eng.tick(_bar_with_icon(tpl["a"]), now=0.0)  # 걸림
-    eng.tick(_bar_region(), now=0.2)  # 떨어짐(대기)
-    eng.tick(_bar_with_icon(tpl["a"]), now=1.0)  # 3초 전에 다시 걸림 → 취소
-    res = eng.tick(_bar_region(), now=1.2)  # 다시 떨어짐(대기 새로 시작)
+    eng.tick(_bar_with_icon(tpl["a"]), now=0.3)  # 확정
+    eng.tick(_bar_region(), now=0.5)  # 떨어짐(대기)
+    eng.tick(_bar_with_icon(tpl["a"]), now=0.8)  # 다시 걸림
+    eng.tick(_bar_with_icon(tpl["a"]), now=1.1)  # 재확정 → 대기 취소
+    res = eng.tick(_bar_region(), now=1.3)  # 다시 떨어짐(대기 새로 시작)
     assert res.alerts == []  # 직전 대기가 리셋돼 아직 확정 아님
 
 
