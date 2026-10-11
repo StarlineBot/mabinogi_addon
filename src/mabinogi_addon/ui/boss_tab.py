@@ -11,7 +11,7 @@
 from __future__ import annotations
 
 import numpy as np
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QGuiApplication, QImage, QPixmap
 from PySide6.QtWidgets import (
     QHBoxLayout,
@@ -42,13 +42,15 @@ DEFAULT_BOX = {"x": 1017, "y": 1248, "w": 523, "h": 36}
 
 
 class BossTab(QWidget):
+    region_changed = Signal()  # 공유 보스 HP바 영역 변경 → 메인이 디버프에도 반영
+
     def __init__(self, watcher) -> None:
         super().__init__()
         self._watcher = watcher
         cfg = config.load_boss_pattern()
+        # 보스 HP바 영역은 디버프 트래커와 공유한다(둘 중 어디서 잡아도 같은 값).
         # 기본으로 바 위치가 이미 잡힌 상태(사용자 해상도 2560×1440면 바로 작동).
-        # 해상도가 다르면 '영역 수정'으로 맞춘다.
-        self._region = cfg["box"] or dict(DEFAULT_BOX)
+        self._region = config.load_bar_region() or dict(DEFAULT_BOX)
         self._sct = None
         self._last_frame = None
         self._bosses = load_bosses()
@@ -200,8 +202,15 @@ class BossTab(QWidget):
     def _on_selected(self, x: int, y: int, w: int, h: int) -> None:
         self._region = {"x": x, "y": y, "w": w, "h": h}
         self._update_region_label()
+        config.save_bar_region(x, y, w, h)  # 디버프와 공유되는 영역
         self._save()
         self._flash_region()
+        self.region_changed.emit()  # 메인이 디버프 추적도 새 영역으로 재시작
+
+    def reload_region(self) -> None:
+        """다른 탭(디버프)에서 공유 영역을 바꾸면 호출 — 라벨·내부값 동기화."""
+        self._region = config.load_bar_region() or dict(DEFAULT_BOX)
+        self._update_region_label()
 
     def _flash_region(self) -> None:
         if not self._region:
@@ -223,7 +232,7 @@ class BossTab(QWidget):
         config.save_boss_pattern(
             {
                 "enabled": self.enable.isChecked(),
-                "box": self._region,
+                # 영역(box)은 공유 bossBar에 저장(save_bar_region) — 여기선 안 씀.
                 "showUpcoming": self.show_upcoming.isChecked(),
                 "upcomingLocked": self._upcoming.locked,
                 "warnLocked": self._overlay.locked,

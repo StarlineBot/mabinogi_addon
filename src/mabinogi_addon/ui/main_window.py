@@ -314,6 +314,9 @@ class MainWindow(QMainWindow):
         self.debuff_tab.lock_toggled.connect(self._on_debuff_lock)
         self.debuff_tab.tracking_changed.connect(self._on_debuff_tracking_changed)
         self.debuff_tab.catalog_changed.connect(self._on_debuff_catalog_changed)
+        # 보스 HP바 영역은 디버프·보스패턴이 공유 — 한쪽에서 바꾸면 다른 쪽도 반영.
+        self.debuff_tab.region_changed.connect(self._on_bar_region_changed)
+        self.boss_tab.region_changed.connect(self._on_bar_region_changed)
         self.debuff_overlay.moved.connect(self._save_debuff_overlay_state)
 
         # 메모 오버레이: 위치·크기는 영역 지정, 고정=클릭통과. 게임 활성 시만 표시.
@@ -501,8 +504,8 @@ class MainWindow(QMainWindow):
         return ("● 추적 중 — 지금 표시할 버프 없음", self._STATUS_OK)
 
     def _debuff_status(self) -> tuple[str, str]:
-        if not config.load_capture_region("debuffTracker"):
-            return ("⚠ 영역 미지정 — '디버프 줄 영역 지정'을 먼저 하세요",
+        if not config.load_bar_region():
+            return ("⚠ 영역 미지정 — '보스 HP바 영역 지정'을 먼저 하세요",
                     self._STATUS_WARN)
         if self.debuff_controller is None:
             return ("ℹ 추적 대기 — 이 PC에선 라이브 캡처가 안 됩니다", self._STATUS_MUTED)
@@ -1009,14 +1012,27 @@ class MainWindow(QMainWindow):
                 order.append(b.id)
         return order
 
+    # 디버프 아이콘 줄은 보스 HP바 '바로 위'에 있다. 공유 영역(= 보스 HP바)을 위로
+    # 이만큼(바 높이 배수) 넓혀 캡처하면 아이콘 줄까지 함께 읽는다(바닥은 바 게이팅).
+    _DEBUFF_EXTEND_UP = 1.1
+
+    def _debuff_capture_region(self) -> dict | None:
+        """디버프 캡처 영역 = 공유 보스 HP바 영역을 위로 확장(아이콘 줄 포함)."""
+        bar = config.load_bar_region()
+        if not bar:
+            return None
+        extra = round(bar["h"] * self._DEBUFF_EXTEND_UP)
+        top = max(0, bar["y"] - extra)
+        return {"x": bar["x"], "y": top, "w": bar["w"], "h": bar["h"] + (bar["y"] - top)}
+
     def _start_debuff_tracking(self) -> None:
-        """저장된 디버프 영역이 있으면 라이브로 디버프 추적 시작(재시작 포함)."""
+        """저장된 보스 HP바 영역이 있으면 라이브로 디버프 추적 시작(재시작 포함)."""
         if self.debuff_controller is not None:
             self.debuff_controller.stop()
             self.debuff_controller = None
             self._debuff_engine = None
 
-        region = config.load_capture_region("debuffTracker")
+        region = self._debuff_capture_region()
         if not region:
             return
         try:
@@ -1067,6 +1083,12 @@ class MainWindow(QMainWindow):
 
     def _on_debuff_catalog_changed(self) -> None:
         self._start_debuff_tracking()
+
+    def _on_bar_region_changed(self) -> None:
+        """공유 보스 HP바 영역 변경(어느 탭에서든) → 디버프 재시작 + 두 탭 라벨 동기화."""
+        self._start_debuff_tracking()
+        self.debuff_tab.reload_region()
+        self.boss_tab.reload_region()
 
     # ---- 메모 오버레이 ----
     def _apply_memo_region(self) -> None:

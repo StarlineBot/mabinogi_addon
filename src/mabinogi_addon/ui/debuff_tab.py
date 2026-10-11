@@ -32,10 +32,11 @@ from .help_dialog import tab_header
 from .widgets import checkbox, hint_label, icon_slot, section_label
 
 # 영역에 꼭 들어가야 하는 것(앱 힌트 ↔ 화면 점선 라벨이 같은 기준을 공유).
-# 보스 HP바가 보일 때만 탐지하므로, 영역에 '디버프 줄 + 보스 체력바'를 함께 넣어야 한다.
-REGION_CRITERION = "디버프 아이콘 줄 + 그 아래 보스 체력바까지 점선 안에 넣으세요"
-HIGHLIGHT_TITLE = "디버프 영역 확인"
-HIGHLIGHT_SUB = "디버프 아이콘 줄과 보스 체력바가 점선 안에 다 들어왔나요?"
+# 보스 HP바 영역 하나만 지정하면 된다(이름~%). 디버프 아이콘 줄은 그 바 바로 위에
+# 있으므로 앱이 자동으로 함께 읽는다. 이 영역은 '보스 패턴 알림'과 공유된다.
+REGION_CRITERION = "보스 HP바(이름 ~ HP%)가 점선 안에 들어오게 드래그하세요"
+HIGHLIGHT_TITLE = "보스 HP바 영역"
+HIGHLIGHT_SUB = "보스 이름 ~ HP% 가 점선 안에 다 들어왔나요?"
 
 # 디버프 트래커 사용법(? 아이콘 → 새 창).
 HELP_TITLE = "디버프 트래커 사용법"
@@ -46,11 +47,12 @@ HELP_HTML = """
 
 <h3>사용 순서</h3>
 <ol>
-<li><b>디버프 줄 영역 지정</b> — 디버프 줄과 <b>그 아래 보스 체력바까지 함께</b>
-드래그로 잡습니다. (돋보기로 픽셀 단위 조정)
-<br><b>※ 보스 체력바를 꼭 포함</b>해야 합니다. 체력바가 보일 때만(=보스가 있을 때만)
-탐지해 <b>마을·필드 오탐이 사라집니다</b>. 체력바가 안 들어오면 디버프가 뜨지 않으니,
-예전에 체력바 없이 잡아 두셨다면 <b>영역을 다시 지정</b>하세요.</li>
+<li><b>보스 HP바 영역 지정</b> — <b>보스 이름 ~ HP%</b> 가 든 체력바를 드래그로
+잡습니다. (돋보기로 픽셀 단위 조정) 디버프 아이콘 줄은 그 바 바로 위에 있어 앱이
+<b>자동으로 함께</b> 읽습니다.
+<br><b>※ 이 영역은 '보스 패턴 알림'과 공유</b>됩니다 — 한쪽에서 잡으면 양쪽 다
+적용돼요. 체력바가 보일 때만(=보스가 있을 때만) 탐지해 <b>마을·필드 오탐이 없습니다</b>.
+예전에 영역을 잡아 두셨다면 바에 맞춰 <b>다시 지정</b>하세요.</li>
 <li><b>디버프 등록 (＋)</b> — 보고 싶은 디버프를 추가하고, 그 아이콘을
 <b>영역에서 바로 집거나</b> 이미지 파일로 등록합니다.
 (－ 삭제 / ▲▼ 표시 순서)</li>
@@ -68,6 +70,7 @@ class DebuffTab(QWidget):
     tracking_changed = Signal()  # 순서·노출 변경 → 라이브 반영
     catalog_changed = Signal()  # 디버프 추가·삭제·아이콘 변경 → 엔진 재구성
     scale_changed = Signal(int)  # 디버프 오버레이 배율(%) 변경
+    region_changed = Signal()  # 공유 보스 HP바 영역 변경 → 보스 패턴 탭에도 반영
 
     def __init__(self) -> None:
         super().__init__()
@@ -130,7 +133,7 @@ class DebuffTab(QWidget):
 
         top = QHBoxLayout()
         top.setSpacing(6)
-        region_btn = QPushButton("디버프 줄 영역 지정")
+        region_btn = QPushButton("보스 HP바 영역 지정")
         region_btn.clicked.connect(self._pick_region)
         top.addWidget(region_btn, 1)
         self.lock_btn = QPushButton("위치 잠금")
@@ -203,7 +206,7 @@ class DebuffTab(QWidget):
 
     # ---- 영역 지정 / 고정 ----
     def _update_region_hint(self) -> None:
-        region = config.load_capture_region("debuffTracker")
+        region = config.load_bar_region()
         if region:
             self.region_hint.setText(
                 f"영역: {region['x']},{region['y']}  "
@@ -216,6 +219,10 @@ class DebuffTab(QWidget):
             self.region_hint.setStyleSheet("color:#8a8f98;")
             self.view_region_btn.setEnabled(False)
 
+    def reload_region(self) -> None:
+        """다른 탭(보스 패턴)에서 공유 영역을 바꾸면 호출 — 힌트 동기화."""
+        self._update_region_hint()
+
     def _pick_region(self) -> None:
         from .region_selector import RegionSelector
 
@@ -224,14 +231,14 @@ class DebuffTab(QWidget):
         self._selector.start()
 
     def _on_region_selected(self, x: int, y: int, w: int, h: int) -> None:
-        config.save_capture_region(x, y, w, h, "debuffTracker")
+        config.save_bar_region(x, y, w, h)  # 보스 패턴과 공유되는 '보스 HP바' 영역
         self._update_region_hint()
         self._flash_region()  # 잡힌 영역을 화면에 점선으로 바로 확인
-        self.catalog_changed.emit()  # 영역 생기면 추적 (재)시작
+        self.region_changed.emit()  # 메인이 디버프 재시작 + 보스 패턴 라벨 동기화
 
     def _flash_region(self) -> None:
-        """저장된 디버프 영역을 화면에 굵은 점선으로 잠깐 표시(아이콘 확인용)."""
-        region = config.load_capture_region("debuffTracker")
+        """저장된 보스 HP바 영역을 화면에 굵은 점선으로 잠깐 표시."""
+        region = config.load_bar_region()
         if not region:
             return
         from .region_highlight import RegionHighlight
