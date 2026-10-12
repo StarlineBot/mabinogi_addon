@@ -248,7 +248,7 @@ class RegionSelector(QWidget):
             if self._fixed is not None:
                 # 상단 중앙 알약은 박스를 보느라 잘 안 봐서(실사용 피드백), 박스 '바로 위'에
                 # 휠 조절 안내를 붙여 늘 눈에 들어오게 한다.
-                self._draw_box_tip(painter, self._rect, "🖱 휠로 크기 조절 (Shift=크게)")
+                self._draw_box_tip(painter, self._rect, "휠로 크기 조절 · Shift 빠르게")
         if self._fixed is not None:
             # 고정 박스 모드: 조작 안내 + '박스가 실제로 잡는 영역' 미리보기(커서 돋보기 X).
             self._draw_hint(
@@ -345,10 +345,7 @@ class RegionSelector(QWidget):
         # 배율 %: 처음 크기(=100%) 대비 지금 휠로 키운 비율. 숫자에 딱 맞췄는지 가늠용.
         zoom_txt = ""
         if self._fixed is not None and self._fixed_base and self._fixed_base[0]:
-            zoom_txt = (
-                f"  ·  배율 {round(self._fixed[0] / self._fixed_base[0] * 100)}%"
-                "  (휠 5%씩 · Shift+휠 크게)"
-            )
+            zoom_txt = f"  ·  배율 {round(self._fixed[0] / self._fixed_base[0] * 100)}%"
         painter.drawText(
             px, py - 8,
             f"박스 미리보기(여백 포함)  {rect.width()}×{rect.height()}{zoom_txt}",
