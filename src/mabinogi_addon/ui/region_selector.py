@@ -153,10 +153,15 @@ class RegionSelector(QWidget):
         if self._fixed is None:
             return
         w, h = self._fixed
-        step = 1.1 if event.angleDelta().y() > 0 else 1 / 1.1
+        # 5%씩(비율 유지) — 10%는 간격이 커 필요한 크기가 두 단계 사이에 걸려 딱 안 맞을
+        # 수 있어 더 잘게. Shift와 함께 돌리면 더 크게(빠르게).
+        base = 1.15 if (event.modifiers() & Qt.KeyboardModifier.ShiftModifier) else 1.05
+        step = base if event.angleDelta().y() > 0 else 1 / base
+        # 최대 크기는 넉넉히 — 4K·고배율 화면에선 바가 크게 렌더돼 작은 캡(400)에 막혀
+        # 바에 못 맞추던 문제 방지. (작은 화면은 줄이는 방향이라 영향 없음.)
         self._fixed = (
-            max(12, min(400, round(w * step))),
-            max(8, min(300, round(h * step))),
+            max(12, min(600, round(w * step))),
+            max(8, min(400, round(h * step))),
         )
         if self._cursor is not None:
             self._rect = self._fixed_rect(self._cursor)
@@ -318,7 +323,10 @@ class RegionSelector(QWidget):
         # 배율 %: 처음 크기(=100%) 대비 지금 휠로 키운 비율. 숫자에 딱 맞췄는지 가늠용.
         zoom_txt = ""
         if self._fixed is not None and self._fixed_base and self._fixed_base[0]:
-            zoom_txt = f"  ·  배율 {round(self._fixed[0] / self._fixed_base[0] * 100)}%"
+            zoom_txt = (
+                f"  ·  배율 {round(self._fixed[0] / self._fixed_base[0] * 100)}%"
+                "  (휠 5%씩 · Shift+휠 크게)"
+            )
         painter.drawText(
             px, py - 8,
             f"박스 미리보기(여백 포함)  {rect.width()}×{rect.height()}{zoom_txt}",
