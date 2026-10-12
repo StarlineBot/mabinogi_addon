@@ -472,7 +472,41 @@ class MainWindow(QMainWindow):
         # 새 테마 색으로 갱신된다(안 그러면 호버 전까지 옛 색으로 보임).
         self.party_tab.apply_theme()
 
+    def _maybe_retry_live_capture(self) -> None:
+        """라이브 캡처가 시작 실패로 비어 있으면 주기적으로 재시도한다.
+
+        앱이 부팅 직후 자동실행되면 바탕화면 구성(Desktop Duplication)이 아직 준비 안 돼
+        dxcam·mss가 '액세스 거부(0x80070005)'로 실패할 수 있고, 게임이 '전체화면(독점)'
+        이면 캡처가 거부된다. 둘 다 '그 순간만' 안 되는 일시 상태라, 시작 때 한 번만
+        시도하고 포기하면(기존) 나중에 캡처가 가능해져도 '추적 대기'로 영영 멈춘다.
+        그래서 영역은 있는데 컨트롤러가 없으면 일정 간격으로 다시 붙여, 게임이 테두리
+        없는 창으로 바뀌거나 바탕화면이 준비되면 자동으로 추적이 살아나게 한다.
+        (실패 시 _start_*_tracking이 내부에서 로그만 남기고 조용히 되돌아오므로, 간격을
+        충분히 둬 로그 폭주를 막는다.)
+        """
+        import time
+
+        now = time.monotonic()
+        if now - getattr(self, "_last_cap_retry", 0.0) < 5.0:
+            return
+        need_buff = (
+            self.buff_controller is None
+            and bool(config.load_capture_region("buffTracker"))
+        )
+        need_debuff = (
+            self.debuff_controller is None
+            and bool(config.load_capture_region("debuffTracker"))
+        )
+        if not (need_buff or need_debuff):
+            return
+        self._last_cap_retry = now
+        if need_buff:
+            self._start_buff_tracking()
+        if need_debuff:
+            self._start_debuff_tracking()
+
     def _update_tracking_status(self) -> None:
+        self._maybe_retry_live_capture()
         self.buff_tab.set_status(*self._buff_status())
         self.debuff_tab.set_status(*self._debuff_status())
         # 사라짐 경고 가능 여부 안내. 방식과 무관하게 '디버프 영역에서 띠를 한 번이라도
@@ -505,7 +539,11 @@ class MainWindow(QMainWindow):
         if not config.load_capture_region("buffTracker"):
             return ("⚠ 영역 미지정 — '버프 영역 지정'을 먼저 하세요", self._STATUS_WARN)
         if self.buff_controller is None:
-            return ("ℹ 추적 대기 — 이 PC에선 라이브 캡처가 안 됩니다", self._STATUS_MUTED)
+            return (
+                ("ℹ 추적 대기 — 화면 캡처 준비 중 (게임이 '전체화면'이면 '테두리 없는 창'"
+                 "으로 바꿔 주세요 · 자동 재시도 중)"),
+                self._STATUS_MUTED,
+            )
         if not self._watcher.is_game_active():
             return ("⏸ 게임 비활성 — 마비노기 창을 맨 앞으로 두면 추적합니다",
                     self._STATUS_MUTED)
@@ -522,7 +560,11 @@ class MainWindow(QMainWindow):
             return ("⚠ 영역 미지정 — '디버프 줄 영역 지정'을 먼저 하세요",
                     self._STATUS_WARN)
         if self.debuff_controller is None:
-            return ("ℹ 추적 대기 — 이 PC에선 라이브 캡처가 안 됩니다", self._STATUS_MUTED)
+            return (
+                ("ℹ 추적 대기 — 화면 캡처 준비 중 (게임이 '전체화면'이면 '테두리 없는 창'"
+                 "으로 바꿔 주세요 · 자동 재시도 중)"),
+                self._STATUS_MUTED,
+            )
         if not self._watcher.is_game_active():
             return ("⏸ 게임 비활성 — 마비노기 창을 맨 앞으로 두면 추적합니다",
                     self._STATUS_MUTED)
