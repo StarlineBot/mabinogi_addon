@@ -342,7 +342,7 @@ class SettingsTab(QWidget):
         v.addWidget(
             hint_label(
                 "로그인하면 문의 답변을 DM으로 받을 수 있어요.\n"
-                "또한 베타 기능과 디버그 기능을 사용할 수 있습니다."
+                "또한 개발 중인 기능을 가장 먼저 사용해볼 수 있어요."
             )
         )
         self._refresh_login()

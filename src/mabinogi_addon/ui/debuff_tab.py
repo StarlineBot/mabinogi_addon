@@ -181,7 +181,7 @@ class DebuffTab(QWidget):
         self.bar_gating_check.toggled.connect(self._on_bar_gating)
         v.addWidget(self.bar_gating_check)
         self._bar_gating_notice = hint_label(
-            "🧪 베타 — 설정 탭에서 Discord 로그인 후 사용할 수 있습니다."
+            "🧪 개발 중인 기능 — 설정 탭에서 Discord 로그인 후 가장 먼저 써볼 수 있어요."
         )
         self._bar_gating_notice.setStyleSheet("color:#e67e22; font-size:12px;")
         v.addWidget(self._bar_gating_notice)

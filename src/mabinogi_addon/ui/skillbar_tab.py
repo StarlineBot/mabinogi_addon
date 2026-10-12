@@ -76,7 +76,7 @@ class SkillbarTab(QWidget):
             "상단 단축바를 그룹(4칸)별로 떼어 원하는 곳에", HELP_TITLE, HELP_HTML, self
         ))
         self._beta_notice = hint_label(
-            "🧪 베타 기능 — 설정 탭에서 Discord 로그인 후 사용할 수 있습니다."
+            "🧪 개발 중인 기능 — 설정 탭에서 Discord 로그인 후 가장 먼저 써볼 수 있어요."
         )
         self._beta_notice.setStyleSheet("color:#e67e22; font-weight:600;")
         v.addWidget(self._beta_notice)
