@@ -88,8 +88,8 @@ def test_deleting_auto_preset_clears_it(tmp_path):
     assert config.load_auto_preset(p) is None
 
 
-def _mgr_for_mode(monkeypatch, win_size, screen_size):
-    """_desired_dwm 판정용 매니저(게임창 크기·화면크기 주입)."""
+def _mgr(hwnd=123):
+    """_desired_dwm 판정용 매니저(게임창 HWND 주입)."""
     import os
 
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -98,33 +98,25 @@ def _mgr_for_mode(monkeypatch, win_size, screen_size):
     from mabinogi_addon.ui.mirror_manager import MirrorManager
 
     QApplication.instance() or QApplication([])
-    mgr = MirrorManager(source_hwnd=lambda: 123)
+    mgr = MirrorManager(source_hwnd=lambda: hwnd)
     mgr._dwm_cap = True  # DWM 가능 환경으로 가정(비Windows 테스트에서도 로직 검증)
-    ww, wh = win_size
-    monkeypatch.setattr(
-        "mabinogi_addon.system.dwm_thumbnail.window_rect",
-        lambda hwnd: (0, 0, ww, wh),
-    )
-    monkeypatch.setattr(MirrorManager, "_screen_size", staticmethod(lambda: screen_size))
     return mgr
 
 
-def test_desired_dwm_windowed_uses_dwm(monkeypatch):
-    """창 모드(화면보다 작은 창)면 DWM 썸네일을 쓴다."""
-    mgr = _mgr_for_mode(monkeypatch, win_size=(1280, 720), screen_size=(3840, 2160))
-    assert mgr._desired_dwm() is True
+def test_desired_dwm_window_found_uses_dwm():
+    """게임 창을 찾으면 DWM 썸네일(저부하)을 쓴다 — 전체창 여부로 가르지 않는다."""
+    assert _mgr(hwnd=123)._desired_dwm() is True
 
 
-def test_desired_dwm_fullscreen_falls_back(monkeypatch):
-    """전체 창(화면 95%+ 덮음)이면 DWM 불가로 보고 mss/dxcam 폴백."""
-    mgr = _mgr_for_mode(monkeypatch, win_size=(3840, 2160), screen_size=(3840, 2160))
-    assert mgr._desired_dwm() is False
+def test_desired_dwm_no_window_falls_back():
+    """게임 창을 못 찾으면(0) 붙을 소스가 없어 캡처(mss)로 폴백."""
+    assert _mgr(hwnd=0)._desired_dwm() is False
 
 
-def test_desired_dwm_no_window_falls_back(monkeypatch):
-    """게임 창을 못 찾으면(0) DWM 불가 → mss/dxcam 폴백."""
-    mgr = _mgr_for_mode(monkeypatch, win_size=(1280, 720), screen_size=(3840, 2160))
-    mgr._source_hwnd = lambda: 0
+def test_desired_dwm_force_capture_falls_back():
+    """호환 캡처 모드 ON이면 창을 찾아도 항상 캡처(mss)로."""
+    mgr = _mgr(hwnd=123)
+    mgr._force_capture = True
     assert mgr._desired_dwm() is False
 
 

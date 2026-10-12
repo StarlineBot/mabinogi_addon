@@ -112,6 +112,7 @@ class CustomOverlayTab(QWidget):
         # (2) 우리 앱이 포그라운드 '이면서 이 커스텀 오버레이 탭을 보고 있을 때' = 위치
         #     조정(세팅) 중. → 다른 탭·다른 작업 중엔 안 떠서 화면을 가리지 않고 커서
         #     깜빡임도 없다. 이 탭에서 미러를 클릭해 드래그해도 탭이 보이는 상태라 안 숨음.
+        self._game_hwnd = 0  # DWM 미러 소스(게임 창) 캐시
         self._mgr = MirrorManager(
             fps=60,  # mss 폴백 경로에서만 쓰임(Windows는 DWM 썸네일 → fps 무관).
             is_active=lambda: (
@@ -120,6 +121,9 @@ class CustomOverlayTab(QWidget):
             ),
             # Windows: 게임 창을 소스로 DWM 썸네일 미러(CPU ~0%). 못 찾으면 mss 폴백.
             source_hwnd=self._find_game_hwnd,
+            # 호환 캡처 모드: 전체창+특정 GPU(MPO)에서 DWM 미러가 검정/멈춤일 때 켜면
+            # 항상 캡처(mss)로 그린다.
+            force_capture=config.load_mirror_force_capture(),
             parent=self,
         )
         self._mgr.changed.connect(self._refresh_overlays)
@@ -127,7 +131,6 @@ class CustomOverlayTab(QWidget):
         self._mgr.overlay_moved.connect(self._save_current)
         self._pending_name = "화면"
         self._selector = None
-        self._game_hwnd = 0  # DWM 미러 소스(게임 창) 캐시
 
         v = QVBoxLayout(self)
         v.setContentsMargins(12, 12, 12, 12)
@@ -174,6 +177,13 @@ class CustomOverlayTab(QWidget):
                 "해제 상태에서 드래그로 이동 · 마우스 휠로 크기 조절 · 더블클릭 원래 크기."
             )
         )
+
+        # 호환 캡처 모드: 미러가 검정/멈춤(고정)으로 나올 때 켠다. '전체 창 모드' + 특정
+        # GPU(MPO)에서 DWM 미러가 안 그려지는 경우를 캡처 방식으로 우회(CPU 약간↑).
+        self.compat_chk = checkbox("호환 캡처 모드 (미러가 검정·멈춤으로 나올 때 켜세요)")
+        self.compat_chk.setChecked(config.load_mirror_force_capture())
+        self.compat_chk.toggled.connect(self._on_compat_toggled)
+        v.addWidget(self.compat_chk)
 
         # 액션 버튼 (2행, 4열 그리드)
         grid = QGridLayout()
@@ -258,6 +268,10 @@ class CustomOverlayTab(QWidget):
         elif config.load_auto_preset() == name:
             config.save_auto_preset(None)
         self._refresh_presets()
+
+    def _on_compat_toggled(self, checked: bool) -> None:
+        config.save_mirror_force_capture(checked)
+        self._mgr.set_force_capture(checked)
 
     # ---- 영역 지정 → 오버레이 추가 ----
     def _on_region(self) -> None:

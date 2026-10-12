@@ -52,6 +52,7 @@ class RegionSelector(QWidget):
         self._save_path = save_path
         # fixed_size가 있으면 '고정 크기 박스를 커서에 붙여 클릭 한 번으로 배치' 모드.
         self._fixed = fixed_size
+        self._fixed_base = fixed_size  # 휠 배율 % 표시용 기준(처음 크기=100%)
         # window_hwnd가 있으면 그 창(게임) 내용을 스냅샷 위에 합성 → 작업표시줄 등에
         # 가린 부분도 돋보기에 게임 그대로 보인다(커스텀 오버레이 미러 영역 지정용).
         self._window_hwnd = window_hwnd
@@ -314,7 +315,14 @@ class RegionSelector(QWidget):
         painter.setBrush(QColor(0, 0, 0, 200))
         painter.drawRoundedRect(px - 6, py - 24, zw + 12, zh + 32, 8, 8)
         painter.setPen(QColor(235, 238, 244))
-        painter.drawText(px, py - 8, f"박스 미리보기(여백 포함)  {rect.width()}×{rect.height()}")
+        # 배율 %: 처음 크기(=100%) 대비 지금 휠로 키운 비율. 숫자에 딱 맞췄는지 가늠용.
+        zoom_txt = ""
+        if self._fixed is not None and self._fixed_base and self._fixed_base[0]:
+            zoom_txt = f"  ·  배율 {round(self._fixed[0] / self._fixed_base[0] * 100)}%"
+        painter.drawText(
+            px, py - 8,
+            f"박스 미리보기(여백 포함)  {rect.width()}×{rect.height()}{zoom_txt}",
+        )
         painter.drawPixmap(px, py, zoomed)
         # 미리보기 안에 '실제 박스' 외곽선(민트) — 바가 이 선 안에 딱 맞는지 확인.
         bx = px + round(m * dpr * scale)

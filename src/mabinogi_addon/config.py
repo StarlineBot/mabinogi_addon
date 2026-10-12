@@ -813,6 +813,23 @@ def save_debuff_gate_mode(mode: str, path: Path = LOCAL_CONFIG_PATH) -> None:
     _write_local_config(data, path)
 
 
+def load_mirror_force_capture(path: Path = LOCAL_CONFIG_PATH) -> bool:
+    """커스텀 오버레이 '호환 캡처 모드'. True면 DWM 썸네일 대신 항상 캡처(dxcam/mss)로
+    그린다 — 게임이 '전체창 모드'라 DWM 미러가 검정/멈춤으로 나올 때 켠다. 기본 False."""
+    g = _read_local_config(path).get("general") or {}
+    return bool(g.get("mirrorForceCapture", False))
+
+
+def save_mirror_force_capture(on: bool, path: Path = LOCAL_CONFIG_PATH) -> None:
+    data = _read_local_config(path)
+    g = data.get("general")
+    if not isinstance(g, dict):
+        g = {}
+    g["mirrorForceCapture"] = bool(on)
+    data["general"] = g
+    _write_local_config(data, path)
+
+
 def load_boss_bar_region(path: Path = LOCAL_CONFIG_PATH) -> dict | None:
     """보스 HP바 영역(보스패턴알림 ↔ 디버프 3차 '공유'). 소스는 bossPattern.box 하나다.
 
