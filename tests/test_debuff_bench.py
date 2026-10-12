@@ -19,6 +19,7 @@ from pathlib import Path
 import cv2
 import pytest
 
+from mabinogi_addon.detect.boss_hp_reader import read_percent
 from mabinogi_addon.tracker.debuff_engine import DebuffEngine
 
 _SHOTS = Path(__file__).parent / "data"
@@ -70,21 +71,33 @@ def _region(name: str):
     return im[y : y + int(79 * sy), x : x + int(524 * sx)]
 
 
-def _settle_false_positives(sample, boss, templates, order, *, bar_gating) -> list[str]:
+def _bar_box(region):
+    """앵커 영역에서 '보스 바'에 해당하는 아래쪽 절반을 잘라 3차용 바 영역으로 쓴다.
+
+    실앱에선 사용자가 정렬된 바 영역을 따로 지정하지만, 벤치에선 앵커(위=아이콘/아래=바)
+    구조를 이용해 하단 ~절반을 바 박스로 근사한다(read_percent가 이 박스에서 % 판독).
+    """
+    if region is None:
+        return None
+    h = region.shape[0]
+    return region[int(h * 0.52):, :]
+
+
+def _settle_false_positives(sample, boss, templates, order, *, gate_mode) -> list[str]:
     """'보스 → 바닥' 시나리오를 재현해 바닥에서 '걸림'으로 뜬 디버프(=오탐) 목록.
 
-    실제 상황: 보스전(디버프가 걸려 있을 수 있음) → 보스 이탈/사망(바닥). 두 방식에 **같은
-    입력**(보스 프레임 먼저, 그 다음 바닥)을 줘서 공정하게 비교한다(게이팅의 bar_seen도
-    이 보스 프레임으로 확립된다).
+    실제 상황: 보스전(디버프가 걸려 있을 수 있음) → 보스 이탈/사망(바닥). 세 방식에 **같은
+    입력**(보스 프레임 먼저, 그 다음 바닥)을 줘서 공정하게 비교한다. 3차(percent)에는
+    정렬된 바 영역(_bar_box)을 함께 넘긴다.
     """
-    eng = DebuffEngine(templates, order, bar_gating=bar_gating)
+    eng = DebuffEngine(templates, order, gate_mode=gate_mode)
     now = 0.0
     if boss is not None:
-        eng.tick(boss, now=now)  # 보스전(바 인식 + 디버프 걸린 상태 재현)
+        eng.tick(boss, now=now, bar_region=_bar_box(boss))  # 보스전(바 인식 + 디버프 재현)
         now += 0.2
     res = None
     for _ in range(30):  # 디바운스(0.3s)·유예(1.0s)를 넘겨 정착
-        res = eng.tick(sample, now=now)
+        res = eng.tick(sample, now=now, bar_region=_bar_box(sample))
         now += 0.2
     shown = {e.buff_id for e in res.entries}
     return [b for b in order if b not in shown]  # 바닥인데 안 보임 = 걸림 = 오탐
@@ -108,38 +121,45 @@ def test_detection_false_positive_benchmark(capsys):
     if not samples:
         pytest.skip("보스 없음 샘플 이미지 없음")
 
-    modes = {"기존(항상 탐지)": False, "보스 바 인식(베타)": True}
+    # 1차/2차/3차 비교.
+    modes = [
+        ("1차 기존(항상 탐지)", "off"),
+        ("2차 보스 바 인식(띠)", "band"),
+        ("3차 read_percent(바)", "percent"),
+    ]
     totals: dict[str, int] = {}
-    lines = ["", "=== 디버프 '보스 없음' 오탐 비교 ==="]
-    for mode, gating in modes.items():
+    lines = ["", "=== 디버프 '보스 없음' 오탐 비교 (1차/2차/3차) ==="]
+    for label, mode in modes:
         total = 0
         detail = []
         for nm, reg in samples:
-            fp = _settle_false_positives(reg, boss, tpl, order, bar_gating=gating)
+            fp = _settle_false_positives(reg, boss, tpl, order, gate_mode=mode)
             total += len(fp)
             detail.append(f"    {nm.split()[-1]:20} 오탐 {len(fp)}개 {fp if fp else ''}")
-        totals[mode] = total
+        totals[label] = total
         rate = total / (len(samples) * len(order))
-        lines.append(f"  [{mode}] 총 오탐 {total}개 / {len(samples)*len(order)} "
+        lines.append(f"  [{label}] 총 오탐 {total}개 / {len(samples)*len(order)} "
                      f"(오탐율 {rate:.0%})")
         lines.extend(detail)
     with capsys.disabled():
         print("\n".join(lines))
 
-    off, on = totals["기존(항상 탐지)"], totals["보스 바 인식(베타)"]
-    # 새 방식이 오탐을 늘리지 않는다(핵심 불변식).
-    assert on <= off, f"새 방식 오탐({on})이 기존({off})보다 많음"
-    # 적어도 하나의 바닥에선 기존 방식이 실제로 오탐을 낸다(벤치가 신호를 갖는지 확인).
+    off = totals["1차 기존(항상 탐지)"]
+    # 게이팅(2·3차)이 기존(1차)보다 오탐을 늘리지 않는다(핵심 불변식).
+    for label in ("2차 보스 바 인식(띠)", "3차 read_percent(바)"):
+        assert totals[label] <= off, f"{label} 오탐({totals[label]})이 1차({off})보다 많음"
+    # 적어도 하나의 바닥에선 1차가 실제로 오탐을 낸다(벤치가 신호를 갖는지 확인).
     assert off >= 1, "벤치에 오탐 신호가 없음 — 바닥 샘플/템플릿을 점검하세요"
 
 
-def _recognized(region) -> bool:
-    """게이팅이 이 영역을 '보스 있음'으로 인정하는가(= 리셋해 디버프를 가리지 않는가).
-
-    밝은 바가 보이거나(bar_present), 확실한 바닥이 아니면(not is_background → HOLD)
-    매칭을 유지하므로 '인정'이다. 둘 다 아니면 리셋 → 과소인식(위험).
-    """
+def _recognized_band(region) -> bool:
+    """2차(띠): 밝은 바가 보이거나 확실한 바닥이 아니면(HOLD) 보스로 인정."""
     return DebuffEngine._bar_present(region) or not DebuffEngine._is_background(region)
+
+
+def _recognized_percent(region) -> bool:
+    """3차(percent): 정렬된 바 영역에서 read_percent가 숫자를 읽으면 보스로 인정."""
+    return read_percent(_bar_box(region)) is not None
 
 
 def test_boss_recognition_recall(capsys):
@@ -153,10 +173,19 @@ def test_boss_recognition_recall(capsys):
     samples = [(nm, r) for nm, r in samples if r is not None]
     if not samples:
         pytest.skip("보스 스샷 없음")
-    miss = [nm.split()[-1] for nm, r in samples if not _recognized(r)]
-    ok = len(samples) - len(miss)
+    recognizers = [("2차 보스 바 인식(띠)", _recognized_band),
+                   ("3차 read_percent(바)", _recognized_percent)]
+    lines = ["", "=== 보스 인식 재현율(게이팅) ==="]
+    miss_band: list[str] = []
+    for label, fn in recognizers:
+        miss = [nm.split()[-1] for nm, r in samples if not fn(r)]
+        ok = len(samples) - len(miss)
+        lines.append(f"  [{label}] {ok}/{len(samples)} ({ok/len(samples):.0%})"
+                     + (f"  놓침: {miss}" if miss else "  (전부 인식)"))
+        if label.startswith("2차"):
+            miss_band = miss
     with capsys.disabled():
-        print(f"\n=== 보스 인식 재현율(게이팅) === {ok}/{len(samples)} "
-              f"({ok/len(samples):.0%})" + (f"  놓침: {miss}" if miss else "  (전부 인식)"))
+        print("\n".join(lines))
+    miss = miss_band  # 2차 재현율을 회귀 가드로 고정(3차는 수치만 비교, 바 영역 근사라 참고)
     # 보스전에서의 과소인식은 위험하므로 재현율 100%를 요구한다.
     assert not miss, f"보스 과소인식(게이팅이 바닥으로 오판): {miss}"

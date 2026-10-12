@@ -15,7 +15,14 @@ import cv2
 import numpy as np
 
 from ..detect import match_icon
+from ..detect.boss_hp_reader import read_percent
 from .engine import OverlayEntry, TickResult
+
+# 디버프 탐지 방식(게이팅). 사용자가 1차/2차/3차로 따로 골라 비교·테스트할 수 있다.
+GATE_OFF = "off"  # 1차: 게이팅 없음 — 항상 탐지(기존). 바닥 오탐 가능하나 바 인식 비의존.
+GATE_BAND = "band"  # 2차: 디버프 영역 안의 '평평한 띠'로 보스 유무 판정(베타).
+GATE_PERCENT = "percent"  # 3차: 정렬된 '보스 바 영역'에서 read_percent로 판정(베타).
+_GATE_MODES = (GATE_OFF, GATE_BAND, GATE_PERCENT)
 
 # 보스 디버프 줄 아이콘의 실제 화면 높이(px). 2560x1440 기준 실측 ≈16.
 _ONSCREEN_ICON_PX = 16
@@ -76,16 +83,20 @@ class DebuffEngine:
         detect_threshold: float = DEBUFF_DETECT_THRESHOLD,
         release_threshold: float = DEBUFF_RELEASE_THRESHOLD,
         reappear_sec: float = 0.4,
-        bar_gating: bool = False,
+        bar_gating: bool | None = None,
+        gate_mode: str = GATE_OFF,
     ) -> None:
         self._templates = templates
         self._order = list(order)
         self._detect_thr = detect_threshold
         self._release_thr = release_threshold
         self._reappear = reappear_sec
-        # 보스 HP바 게이팅(베타). False(기본) = 기존 방식: 항상 탐지(바닥 오탐 가능하나
-        # 보스 바 인식에 의존하지 않아 예측 가능). True = 바가 있을 때만 매칭 + 빈사 안전.
-        self._bar_gating = bar_gating
+        # 디버프 탐지 방식(1차/2차/3차). 기본 off(1차)=항상 탐지. bar_gating(구버전 불리언)은
+        # 하위호환: True→band(2차), False→off(1차). gate_mode가 우선이지만 bar_gating이
+        # 명시되면 그걸 따른다(기존 호출부 유지).
+        if bar_gating is not None:
+            gate_mode = GATE_BAND if bar_gating else GATE_OFF
+        self._gate_mode = gate_mode if gate_mode in _GATE_MODES else GATE_OFF
         # 템플릿을 매칭 크기(축소 후 화면 아이콘 크기)로 미리 맞춘다.
         self._variants = {
             bid: [_variant(t, _MATCH_ICON_PX)] for bid, t in templates.items()
@@ -122,14 +133,20 @@ class DebuffEngine:
         self._warn_gone_ids = set(ids)
 
     def set_bar_gating(self, on: bool) -> None:
-        """보스 바 게이팅(베타) 켜기/끄기. 끄면(기본) 기존 방식으로 항상 탐지한다."""
-        on = bool(on)
-        if on == self._bar_gating:
+        """하위호환: 2차(band) 게이팅 켜기/끄기(= set_gate_mode(band|off))."""
+        self.set_gate_mode(GATE_BAND if on else GATE_OFF)
+
+    def set_gate_mode(self, mode: str) -> None:
+        """탐지 방식 전환(off=1차 / band=2차 / percent=3차). 전환 시 바 이력 초기화."""
+        if mode not in _GATE_MODES or mode == self._gate_mode:
             return
-        self._bar_gating = on
-        # 모드 전환 시 바 이력·유예를 초기화해 깨끗한 상태에서 다시 판정한다.
+        self._gate_mode = mode
         self._bar_seen = False
         self._bar_gone_since = None
+
+    @property
+    def gate_mode(self) -> str:
+        return self._gate_mode
 
     def set_order(self, order: list[str]) -> None:
         self._order = list(order)
@@ -256,42 +273,70 @@ class DebuffEngine:
                     return False  # 어떤 밝기든 가로 띠가 있음 → 바닥 아님(보스/바 잔존)
         return True  # 매끈한 가로 띠가 없음 → 확실한 바닥/배경
 
+    def _gate_absent(
+        self,
+        region: np.ndarray,
+        bar: bool,
+        bar_region: np.ndarray | None,
+        now: float,
+    ) -> bool:
+        """현재 방식(1/2/3차)에 따라 '보스 없음 확정'인지 판정.
+
+        - 1차(off): 게이팅 안 함 → 항상 False(= 항상 탐지).
+        - 2차(band): 디버프 영역의 '평평한 띠'로 판정. 밝은 바 있으면 보스, 확실한 바닥이면
+          유예 후 없음, 애매(검은 바 등)면 유지(리셋 금지). (빈사 보호)
+        - 3차(percent): 정렬된 바 영역에서 read_percent가 숫자를 읽으면 보스, 못 읽으면
+          유예 후 없음. 바 영역이 없으면(미지정) 게이팅 안 함(= off처럼 안전).
+        공통: 바를 한 번도 본 적 없으면(bar_seen=False) 리셋하지 않는다(하위호환/초기 상태).
+        """
+        mode = self._gate_mode
+        if mode == GATE_OFF:
+            return False
+
+        if mode == GATE_BAND:
+            present = bar
+            confident_absent = (not bar) and self._is_background(region)
+        elif mode == GATE_PERCENT:
+            if bar_region is None:
+                return False  # 바 영역 미지정 → 게이팅 보류(안전)
+            present = read_percent(bar_region) is not None
+            confident_absent = not present
+        else:
+            return False
+
+        if present:
+            self._bar_seen = True
+            self._bar_gone_since = None
+            return False
+        if not self._bar_seen:
+            return False  # 바를 본 적 없음 → 아직 게이팅 안 함
+        if not confident_absent:
+            # 애매(검은 바·전환·이펙트) → 리셋 금지, 유예 재시작, 매칭 유지.
+            self._bar_gone_since = None
+            return False
+        if self._bar_gone_since is None:
+            self._bar_gone_since = now
+        return now - self._bar_gone_since >= _BAR_GRACE_SEC
+
     def tick(
-        self, region: np.ndarray, now: float, foreground: bool = True
+        self,
+        region: np.ndarray,
+        now: float,
+        foreground: bool = True,
+        bar_region: np.ndarray | None = None,
     ) -> TickResult:
         # foreground: 사라짐 경고(소리)는 게임이 포그라운드일 때만 낸다. 디버프 탐지·표시는
         # 계속하되, '떨어짐' 판정·알림은 포커스+화면 확정 시로 제한한다(안 볼 때의 거짓
         # 사라짐 방지). 비포커스 중엔 대기/노출 상태를 비워, 복귀 시 다시 깨끗이 판정한다.
+        # bar_region: 3차(percent)용 '정렬된 보스 바 영역'(없으면 3차는 게이팅 안 함).
         if not foreground:
             self._fell_since.clear()
             self._warn_until.clear()
             self._applied_prev = {bid: False for bid in self._templates}
-        # 보스 HP바 게이팅: 밝은 바가 보이면 매칭한다(보스 있음). 밝은 바가 없더라도
-        # **확실한 바닥/배경일 때만** '보스 없음'으로 보고 매칭을 멈춰 **전부 '미적용'으로
-        # 리셋**한다(배경 오탐 제거 + 래치 해제). 밝은 바가 없고 바닥도 아니면(= 빈사 직전
-        # 검은 바·전환·이펙트) **애매**로 보고 직전 상태를 유지하며 매칭을 이어간다.
-        #   왜: 빈사(검은 바)를 보스 없음으로 오판해 걸린 디버프를 미적용으로 리셋하면,
-        #   재갱신하러 보스에게 다가가다 죽을 수 있다 → 확실할 때만 리셋(보수적).
-        # 단, 바를 한 번도 못 본 영역(= 바를 안 넣은 사용자)은 게이팅하지 않아 하위호환.
+        # 사라짐 경고용 바 인식(디버프 영역 내 '평평한 띠')은 방식과 무관하게 계속 쓴다.
         bar = self._bar_present(region)
         self._bar_last = bar
-        boss_absent = False
-        # 게이팅 OFF(기본·기존 방식): boss_absent 판정을 하지 않아 항상 매칭한다.
-        # bar는 '사라짐 경고'(바 보일 때만 발동)에 계속 쓰이므로 끄지 않는다.
-        if self._bar_gating:
-            if bar:
-                self._bar_seen = True
-                self._bar_gone_since = None
-            elif self._bar_seen:
-                if self._is_background(region):
-                    # 확실한 바닥 → _BAR_GRACE_SEC 유예 후 보스 없음 확정.
-                    if self._bar_gone_since is None:
-                        self._bar_gone_since = now
-                    if now - self._bar_gone_since >= _BAR_GRACE_SEC:
-                        boss_absent = True
-                else:
-                    # 애매(검은 바·전환·이펙트) → 리셋 금지, 유예 재시작, 매칭 유지.
-                    self._bar_gone_since = None
+        boss_absent = self._gate_absent(region, bar, bar_region, now)
 
         if boss_absent:
             # 보스 없음 확정 → 매칭 중단, 전부 미적용으로 리셋(래치 해제), 경고 대기 비움.
