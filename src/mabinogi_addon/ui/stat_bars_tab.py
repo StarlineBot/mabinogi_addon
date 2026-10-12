@@ -16,6 +16,7 @@ from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QGuiApplication, QImage, QPixmap
 from PySide6.QtWidgets import (
     QComboBox,
+    QGroupBox,
     QHBoxLayout,
     QLabel,
     QPushButton,
@@ -24,7 +25,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from .. import config
+from .. import config, image_io, paths
 from ..detect.stat_bars import read_stat_bars
 from .help_dialog import tab_header
 from .stat_overlay import STAT_LABELS, StatBarOverlay
@@ -66,6 +67,14 @@ class StatBarsTab(QWidget):
         self._paused = False
         self._sct = None
         self._overlays: dict[str, StatBarOverlay] = {}
+        # 수집 모드 상태(저HP·전환 프레임 모으기 — 경고 기능 튜닝용 데이터).
+        self._last_frame = None
+        self._last_saved_frame = None
+        self._shot_count = 0
+        if paths.is_frozen():
+            self._shot_dir = paths.user_data_dir() / "stat_bar_shots"
+        else:
+            self._shot_dir = paths.project_root() / "tests" / "data" / "stat_bar_shots"
 
         v = QVBoxLayout(self)
         v.setContentsMargins(12, 12, 12, 12)
@@ -159,12 +168,16 @@ class StatBarsTab(QWidget):
         ctl_row.addWidget(self.lock_all_btn)
         ctl_row.addWidget(self.unlock_all_btn)
         v.addLayout(ctl_row)
+
+        # 수집 모드(저HP·전환 프레임 제보용). 영역이 '눈에 띄게 바뀔 때' PNG로 저장만 한다.
+        v.addWidget(self._collect_group())
         v.addStretch(1)
 
         # 로그인 시에만 조작 가능하게 묶어 두는 컨트롤들.
         self._gated_widgets = [
             self.region_btn, self.view_region_btn, self.enable,
             self.scale_spin, self.align_combo, self.lock_all_btn, self.unlock_all_btn,
+            self.snap_btn, self.collect_chk,
             *self._show_checks.values(),
         ]
         self._update_region_label()
@@ -173,6 +186,61 @@ class StatBarsTab(QWidget):
         self._timer.setInterval(200)
         self._timer.timeout.connect(self._tick)
         self._timer.start()
+
+    # ---- 수집 모드(저HP·전환 프레임 제보) ----
+    def _collect_group(self) -> QGroupBox:
+        box = QGroupBox("체력바 수집 (저HP·전환 프레임 제보용)")
+        g = QVBoxLayout(box)
+        g.addWidget(hint_label(
+            "영역 지정 후 '수집 모드'를 켜면, 바가 바뀔 때마다 그 영역이 자동 저장됩니다.\n"
+            "실제 사냥에서 HP가 낮게 깎일 때·지역이동(가려짐)일 때를 모아 보내주시면,"
+            " 저HP 인식·경고 오작동을 잡는 데 씁니다."
+        ))
+        row = QHBoxLayout()
+        self.snap_btn = QPushButton("스냅샷 저장")
+        self.snap_btn.clicked.connect(self._save_snapshot)
+        row.addWidget(self.snap_btn)
+        self.collect_chk = checkbox("수집 모드(바 바뀔 때 자동 저장)")
+        row.addWidget(self.collect_chk, 1)
+        g.addLayout(row)
+        self.collect_label = hint_label("")
+        self._update_collect_label()
+        g.addWidget(self.collect_label)
+        return box
+
+    def _update_collect_label(self) -> None:
+        self.collect_label.setText(
+            f"저장 위치: {self._shot_dir}  ·  수집 {self._shot_count}장"
+        )
+
+    def _save_snapshot(self) -> None:
+        if self._last_frame is None:
+            self.collect_label.setText("저장할 캡처가 없습니다 — 먼저 영역을 지정하세요")
+            return
+        self._write_shot(self._last_frame)
+
+    def _write_shot(self, frame) -> None:
+        try:
+            self._shot_dir.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            return
+        # 파일명에 측정 비율 태그(hp/mp/sta %) — 저HP 프레임을 바로 골라 분석.
+        rr = {r.stat_id: r.ratio for r in read_stat_bars(frame)}
+        def pct(sid):
+            return f"{int(rr[sid] * 100):03d}" if sid in rr else "xxx"
+        tag = f"hp{pct('hp')}_mp{pct('mp')}_sta{pct('sta')}"
+        path = self._shot_dir / f"{tag}_{self._shot_count:03d}.png"
+        if image_io.imwrite(path, frame):
+            self._shot_count += 1
+            self._update_collect_label()
+
+    def _frame_changed(self, frame, threshold: float = 5.0) -> bool:
+        """직전 저장 영상 대비 평균 밝기차가 threshold 이상이면 '바뀜'."""
+        prev = self._last_saved_frame
+        if prev is None or prev.shape != frame.shape:
+            return True
+        diff = np.abs(frame.astype(np.int16) - prev.astype(np.int16))
+        return float(diff.mean()) >= threshold
 
     @staticmethod
     def _logged_in() -> bool:
@@ -242,7 +310,16 @@ class StatBarsTab(QWidget):
         frame = self._grab_rect(px, py, pw, ph)
         if frame is None:
             return
+        self._last_frame = frame
         self._show_preview(frame)
+        # 수집 모드: 로그인 사용자가 켠 동안, 바가 눈에 띄게 바뀌면 자동 저장(튜닝용 제보).
+        if (
+            self.collect_chk.isChecked()
+            and self._logged_in()
+            and self._frame_changed(frame)
+        ):
+            self._write_shot(frame)
+            self._last_saved_frame = frame
         readings = {r.stat_id: r for r in read_stat_bars(frame)}
         parts = []
         for sid, ov in self._overlays.items():

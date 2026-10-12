@@ -339,7 +339,7 @@ class SkillbarTab(QWidget):
         gw = round(GROUP_W * s)
         gcol = round(10 * s)
         rgap = round((ICON + 8) * s)
-        bgap = round(18 * s)  # 블록(단) 사이 세로 간격
+        bgap = round(6 * s)  # 블록(단) 사이 세로 간격(두 덩이 사이 — 좁게)
         total_h = 4 * rgap + bgap
         row_w = 3 * gw + 2 * gcol
         x0 = ox + ow // 2 - row_w // 2
