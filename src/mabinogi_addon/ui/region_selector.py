@@ -245,10 +245,6 @@ class RegionSelector(QWidget):
             label = f"{self._rect.width()} × {self._rect.height()}"
             painter.setPen(QColor(255, 255, 255))
             painter.drawText(self._rect.adjusted(4, 4, 0, 0), 0, label)
-            if self._fixed is not None:
-                # 상단 중앙 알약은 박스를 보느라 잘 안 봐서(실사용 피드백), 박스 '바로 위'에
-                # 휠 조절 안내를 붙여 늘 눈에 들어오게 한다.
-                self._draw_box_tip(painter, self._rect, "휠로 크기 조절 · Shift 빠르게")
         if self._fixed is not None:
             # 고정 박스 모드: 조작 안내 + '박스가 실제로 잡는 영역' 미리보기(커서 돋보기 X).
             self._draw_hint(
@@ -258,24 +254,6 @@ class RegionSelector(QWidget):
                 self._draw_box_preview(painter, self._rect)
         elif self._cursor is not None and not self._shot.isNull():
             self._draw_loupe(painter, self._cursor)
-
-    def _draw_box_tip(self, painter: QPainter, rect: QRect, text: str) -> None:
-        """고정 박스 '바로 위'(위가 좁으면 아래)에 조작 안내 알약을 붙인다."""
-        painter.setOpacity(1.0)
-        fm = painter.fontMetrics()
-        tw = fm.horizontalAdvance(text)
-        bw, bh = tw + 16, fm.height() + 8
-        bx = rect.left()
-        by = rect.top() - bh - 6
-        if by < 4:  # 위 공간 부족 → 박스 아래로
-            by = rect.bottom() + 6
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor(0, 0, 0, 190))
-        painter.drawRoundedRect(bx, by, bw, bh, bh // 2, bh // 2)
-        painter.setPen(QColor(93, 232, 193))
-        painter.drawText(
-            QRect(bx, by, bw, bh), Qt.AlignmentFlag.AlignCenter, text
-        )
 
     def _draw_hint(self, painter: QPainter, text: str) -> None:
         """화면 상단 중앙에 조작 안내 알약(pill)을 그린다."""
@@ -330,26 +308,39 @@ class RegionSelector(QWidget):
             Qt.AspectRatioMode.IgnoreAspectRatio,
             Qt.TransformationMode.FastTransformation,  # Nearest → 픽셀 또렷
         )
-        # 패널 배치(박스 아래, 화면 밖이면 위로). 박스와 안 겹치게 충분히 띄운다.
+        # 헤더가 이미지 '위'로 차지하는 높이. 2줄(조절 전)이면 한 줄 더 띄워 박스
+        # 라벨("104×32")과 안 겹치게 한다.
+        fm = painter.fontMetrics()
+        lh = fm.height()
+        show_tip = self._fixed is not None and self._fixed == self._fixed_base
+        head_h = 24 + (lh if show_tip else 0)
+        # 패널 배치(박스 아래, 화면 밖이면 위로). 헤더 높이만큼 박스에서 더 띄운다.
         px = max(8, min(rect.x(), self.width() - zw - 8))
-        py = rect.bottom() + 20
+        py = rect.bottom() + 12 + head_h
         if py + zh + 6 > self.height():
-            py = rect.y() - zh - 30
-        py = max(28, py)
+            py = rect.y() - zh - 18 - head_h
+        py = max(8 + head_h, py)
 
+        # 헤더: 1줄=제목+배율%, (아직 조절 전이면) 2줄=휠 안내. 헤더는 이미지 '위'라
+        # 체력바를 안 가린다. 조절 시작하면(배율≠100%) 안내 줄이 사라져 1줄로 준다.
         painter.setOpacity(1.0)
+        header_top = py - head_h
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QColor(0, 0, 0, 200))
-        painter.drawRoundedRect(px - 6, py - 24, zw + 12, zh + 32, 8, 8)
-        painter.setPen(QColor(235, 238, 244))
-        # 배율 %: 처음 크기(=100%) 대비 지금 휠로 키운 비율. 숫자에 딱 맞췄는지 가늠용.
+        painter.drawRoundedRect(
+            px - 6, header_top, zw + 12, (py + zh + 8) - header_top, 8, 8
+        )
         zoom_txt = ""
         if self._fixed is not None and self._fixed_base and self._fixed_base[0]:
             zoom_txt = f"  ·  배율 {round(self._fixed[0] / self._fixed_base[0] * 100)}%"
-        painter.drawText(
-            px, py - 8,
-            f"박스 미리보기(여백 포함)  {rect.width()}×{rect.height()}{zoom_txt}",
-        )
+        title = f"박스 미리보기(여백 포함)  {rect.width()}×{rect.height()}{zoom_txt}"
+        painter.setPen(QColor(235, 238, 244))
+        if show_tip:
+            painter.drawText(px, py - 8 - lh, title)
+            painter.setPen(QColor(93, 232, 193))
+            painter.drawText(px, py - 8, "휠로 크기를 조절하세요 (Shift 빠르게)")
+        else:
+            painter.drawText(px, py - 8, title)
         painter.drawPixmap(px, py, zoomed)
         # 미리보기 안에 '실제 박스' 외곽선(민트) — 바가 이 선 안에 딱 맞는지 확인.
         bx = px + round(m * dpr * scale)
