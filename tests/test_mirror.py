@@ -86,3 +86,43 @@ def test_deleting_auto_preset_clears_it(tmp_path):
     config.save_auto_preset("프리셋1", p)
     config.delete_custom_preset("프리셋1", p)  # 자동 지정 프리셋 삭제
     assert config.load_auto_preset(p) is None
+
+
+def _mgr_for_mode(monkeypatch, win_size, screen_size):
+    """_desired_dwm 판정용 매니저(게임창 크기·화면크기 주입)."""
+    import os
+
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtWidgets import QApplication
+
+    from mabinogi_addon.ui.mirror_manager import MirrorManager
+
+    QApplication.instance() or QApplication([])
+    mgr = MirrorManager(source_hwnd=lambda: 123)
+    mgr._dwm_cap = True  # DWM 가능 환경으로 가정(비Windows 테스트에서도 로직 검증)
+    ww, wh = win_size
+    monkeypatch.setattr(
+        "mabinogi_addon.system.dwm_thumbnail.window_rect",
+        lambda hwnd: (0, 0, ww, wh),
+    )
+    monkeypatch.setattr(MirrorManager, "_screen_size", staticmethod(lambda: screen_size))
+    return mgr
+
+
+def test_desired_dwm_windowed_uses_dwm(monkeypatch):
+    """창 모드(화면보다 작은 창)면 DWM 썸네일을 쓴다."""
+    mgr = _mgr_for_mode(monkeypatch, win_size=(1280, 720), screen_size=(3840, 2160))
+    assert mgr._desired_dwm() is True
+
+
+def test_desired_dwm_fullscreen_falls_back(monkeypatch):
+    """전체 창(화면 95%+ 덮음)이면 DWM 불가로 보고 mss/dxcam 폴백."""
+    mgr = _mgr_for_mode(monkeypatch, win_size=(3840, 2160), screen_size=(3840, 2160))
+    assert mgr._desired_dwm() is False
+
+
+def test_desired_dwm_no_window_falls_back(monkeypatch):
+    """게임 창을 못 찾으면(0) DWM 불가 → mss/dxcam 폴백."""
+    mgr = _mgr_for_mode(monkeypatch, win_size=(1280, 720), screen_size=(3840, 2160))
+    mgr._source_hwnd = lambda: 0
+    assert mgr._desired_dwm() is False

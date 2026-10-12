@@ -9,11 +9,15 @@ crop해서 받는다(미러 개수와 무관하게 캡처 비용 일정). fps �
 
 from __future__ import annotations
 
+import logging
+
 import numpy as np
 from PySide6.QtCore import QObject, QTimer, Signal
 from PySide6.QtGui import QImage
 
 from .mirror_overlay import MirrorOverlay
+
+_log = logging.getLogger("mabinogi_addon.mirror")
 
 
 def crop_region(frame: np.ndarray, left: int, top: int, region: dict) -> np.ndarray | None:
@@ -60,16 +64,22 @@ class MirrorManager(QObject):
         # DWM 썸네일 미러 소스(게임 창 HWND) 공급자. Windows + 공급자 있으면 DWM 모드:
         # 컴포지터가 복사를 맡아 CPU ~0%, mss 전체화면 캡처를 안 한다.
         self._source_hwnd = source_hwnd
-        self._dwm = source_hwnd is not None and self._dwm_available()
+        self._fps = max(1, fps)
+        # DWM 썸네일을 쓸 수 있는 환경인지(Windows + 소스 공급자). 실제 '지금 쓸지'는
+        # _desired_dwm()가 매번 판단한다 — 게임이 '테두리 없는 전체 창'이면 OS가
+        # independent flip로 전환돼 DWM 썸네일이 검정으로 나오므로, 그땐 mss로 그린다.
+        self._dwm_cap = source_hwnd is not None and self._dwm_available()
+        self._dwm = self._desired_dwm()  # 현재 모드(런타임에 mss↔DWM 전환)
+        self._mode_pending = 0  # 모드 전환 히스테리시스(원하는 모드가 몇 틱 지속됐나)
         self._attached_hwnd = 0  # 현재 썸네일이 물린 게임 창(바뀌면 재연결)
         self._shown = True
         self._paused = False  # 사용자 일시정지 → 미러 숨김·캡처 쉼
         self._sct = None
+        self._cam = None  # dxcam 공유 카메라(mss/폴백 모드에서만, 지연 획득)
         self._timer = QTimer(self)
         # DWM 모드는 비트맵 복사가 없어 자주 돌 필요가 없다(연결 확인·활성 토글용 250ms).
         # mss 모드만 fps 기반 주기.
-        interval = 250 if self._dwm else max(1, 1000 // max(1, fps))
-        self._timer.setInterval(interval)
+        self._apply_interval()
         self._timer.timeout.connect(self._tick)
 
     @staticmethod
@@ -77,6 +87,81 @@ class MirrorManager(QObject):
         from ..system import dwm_thumbnail
 
         return dwm_thumbnail.available()
+
+    def _apply_interval(self) -> None:
+        self._timer.setInterval(250 if self._dwm else max(1, 1000 // self._fps))
+
+    @staticmethod
+    def _screen_size() -> tuple[int, int] | None:
+        """주 모니터의 물리 픽셀 크기(게임 창 rect와 같은 좌표계로 비교하려고)."""
+        try:
+            from PySide6.QtGui import QGuiApplication
+
+            scr = QGuiApplication.primaryScreen()
+            if scr is None:
+                return None
+            g = scr.geometry()
+            dpr = scr.devicePixelRatio() or 1.0
+            return (round(g.width() * dpr), round(g.height() * dpr))
+        except Exception:  # noqa: BLE001
+            return None
+
+    def _desired_dwm(self) -> bool:
+        """지금 DWM 썸네일로 그릴 수 있는지. 아니면 mss로 그려야 한다.
+
+        - DWM 환경이 아님(비Windows 등) → 불가.
+        - 게임 창을 못 찾음 → 붙을 소스가 없음 → mss(전체화면 크롭)로 그린다.
+        - 게임 창이 화면을 꽉 채움(테두리 없는 전체 창) → OS가 independent flip로
+          전환돼 DWM 썸네일이 검정으로만 나온다 → mss로 그린다.
+        """
+        if not self._dwm_cap:
+            return False
+        hwnd = self._source_hwnd() if self._source_hwnd else 0
+        if not hwnd:
+            return False
+        from ..system import dwm_thumbnail
+
+        rect = dwm_thumbnail.window_rect(hwnd)
+        if rect is None:
+            return False
+        ww, wh = rect[2] - rect[0], rect[3] - rect[1]
+        scr = self._screen_size()
+        # '전체 창 모드'는 창 크기가 화면과 딱 안 맞을 수 있어(작업표시줄·테두리 등)
+        # 정확히 일치가 아니라 '화면의 95% 이상을 덮으면' 전체창으로 본다. 전체창이면
+        # DWM 썸네일이 검정으로 나오므로(independent flip) mss/dxcam로 그린다.
+        fullscreen = scr is not None and ww >= scr[0] * 0.95 and wh >= scr[1] * 0.95
+        return not fullscreen
+
+    def _maybe_switch_mode(self) -> None:
+        """게임 창 상태 변화(창↔전체창, 찾음↔못찾음)에 맞춰 DWM↔mss를 전환한다.
+        잠깐의 상태 떨림으로 깜빡이지 않게 몇 틱 연속 유지될 때만 전환(히스테리시스)."""
+        if not self._dwm_cap:
+            return  # 애초에 mss 전용 환경 → 전환 없음
+        desired = self._desired_dwm()
+        if desired == self._dwm:
+            self._mode_pending = 0
+            return
+        self._mode_pending += 1
+        if self._mode_pending >= 3:
+            self._mode_pending = 0
+            self._rebuild_overlays(desired)
+
+    def _rebuild_overlays(self, dwm: bool) -> None:
+        """현재 미러들을 새 모드(DWM/mss)로 다시 만든다(위치·고정·배율 유지)."""
+        dicts = self.to_dicts()
+        for o in self._overlays:
+            o.detach_thumbnail()
+            o.close()
+        self._overlays = []
+        self._dwm = dwm
+        if dwm:
+            self._release_cam()  # DWM 모드엔 dxcam 불필요 → 해제
+        self._apply_interval()
+        for d in dicts:
+            self._overlays.append(self._make_overlay(d))
+        self._sync_timer()
+        _log.info("미러 모드 전환: %s (미러 %d개)", "DWM 썸네일" if dwm else "mss 폴백", len(dicts))
+        self.changed.emit()
 
     # ---- 조회 ----
     def overlays(self) -> list[MirrorOverlay]:
@@ -86,13 +171,17 @@ class MirrorManager(QObject):
         return [o.to_dict() for o in self._overlays]
 
     # ---- 추가/삭제 ----
-    def add(self, region: dict) -> MirrorOverlay:
+    def _make_overlay(self, region: dict) -> MirrorOverlay:
         overlay = MirrorOverlay(region, thumbnail_mode=self._dwm)
         overlay.moved.connect(self.overlay_moved)
         overlay.set_locked(bool(region.get("locked", False)))
         overlay.show()
         if self._dwm:
             self._attach(overlay)  # 창이 떠서 winId 유효 → 바로 썸네일 연결 시도
+        return overlay
+
+    def add(self, region: dict) -> MirrorOverlay:
+        overlay = self._make_overlay(region)
         self._overlays.append(overlay)
         self._sync_timer()
         self.changed.emit()
@@ -167,6 +256,9 @@ class MirrorManager(QObject):
                 o.show()
             self._shown = True
 
+        # 게임 창 상태(창↔전체창, 찾음↔못찾음)에 맞춰 DWM↔mss 전환(히스테리시스).
+        self._maybe_switch_mode()
+
         # DWM 모드: 비트맵 복사 없음. 게임 창이 (처음/재실행으로) 생기면 연결하고,
         # 게임 창이 바뀌면(HWND 변경) 재연결만 한다. 이후는 컴포지터가 알아서 그린다.
         if self._dwm:
@@ -196,7 +288,35 @@ class MirrorManager(QObject):
 
     def _grab_full(self):
         if self._grab is not None:
-            return self._grab()
+            return self._grab()  # 테스트 주입
+        # Windows: 전체 창(independent flip)에선 mss(GDI)가 검게 나올 수 있어, 디버프와
+        # 같은 dxcam(공유 카메라)을 우선 쓴다. dxcam 불가/실패 시 mss(GDI)로 폴백.
+        if self._dwm_cap:
+            got = self._grab_dxcam()
+            if got is not None:
+                return got
+        return self._grab_mss()
+
+    def _grab_dxcam(self):
+        """dxcam 공유 카메라로 전체 프레임(BGRA, 원점 0,0). 실패 시 None."""
+        try:
+            if self._cam is None:
+                from ..capture.shared_live import _SharedLiveCamera
+
+                self._cam = _SharedLiveCamera.acquire()
+            frame = self._cam.full_frame()  # BGR HxWx3 (또는 None)
+            if frame is None:
+                return None
+            h, w = frame.shape[:2]
+            bgra = np.empty((h, w, 4), dtype=np.uint8)
+            bgra[:, :, :3] = frame
+            bgra[:, :, 3] = 255
+            return bgra, 0, 0
+        except Exception:  # noqa: BLE001 — dxcam 불가(개발/비Windows)·일시 실패 → mss 폴백
+            self._release_cam()
+            return None
+
+    def _grab_mss(self):
         try:
             if self._sct is None:
                 import mss
@@ -211,8 +331,17 @@ class MirrorManager(QObject):
         except Exception:  # noqa: BLE001 — 캡처 불가(헤드리스 등) → 갱신 생략
             return None
 
+    def _release_cam(self) -> None:
+        if self._cam is not None:
+            try:
+                self._cam.release()
+            except Exception:  # noqa: BLE001, S110 — 해제 실패는 무시
+                pass
+            self._cam = None
+
     def shutdown(self) -> None:
         self._timer.stop()
         for o in self._overlays:
             o.close()
         self._overlays.clear()
+        self._release_cam()
