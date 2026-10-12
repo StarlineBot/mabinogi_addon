@@ -49,6 +49,11 @@ _AGREE_EPS = 2.0
 # (예: 재시전으로 '2분02초'가 떴는데 분을 놓쳐 '02초'로 읽히면 29초→2초로 급락해
 #  거짓 임박·2차 알림이 울리던 문제.) 지터(±2초)보다 넉넉히 크고 1분(60초)보다 작게.
 _TRUSTED_DROP_MAX = 15.0
+# 큰 하향이 이 시간(초) 넘게 '자기일관'으로 계속 읽히면 분 유실 오독이 아니라 진짜
+# 하향(짧은 지속시간으로 덮어쓰기·낮은 랭크 버프·짧은 포션 등)으로 보고 재동기화한다.
+# 분 유실 오독은 재시전 '순간'에만 한 프레임 생겨 바로 끊기므로 이 조건으로 구분된다.
+# (없으면 한 번 높게 확인된 시계가 영영 안 내려가 종료 알림을 놓친다.)
+_DROP_RESYNC_SEC = 2.5
 
 
 class BuffStateMachine:
@@ -77,6 +82,8 @@ class BuffStateMachine:
         # 내부 시계가 판독값으로 한 번이라도 '확인'됐는지. 확인된 시계는 큰 하향 점프를
         # 믿지 않는다(= 분 유실 오독 방어). 첫 기준값(차가운 앵커)은 아직 미확인.
         self._trusted = False
+        # 큰 하향이 자기일관으로 '지속'되기 시작한 시각. _DROP_RESYNC_SEC 넘으면 재동기화.
+        self._drop_since: float | None = None
 
     # ---- 조회 ----
     def remaining(self, now: float) -> float | None:
@@ -195,11 +202,13 @@ class BuffStateMachine:
         prev = self.remaining(now)
         # 첫 기준값(갓 등장 등) → 바로 반영(단, 아직 '확인'된 시계는 아님)
         if prev is None:
+            self._drop_since = None
             self._commit(reading, now)
             return False
         # 내부 시계와 일치 → 정상 반영 + 시계 '확인됨'으로 표시
         if abs(reading - prev) <= _AGREE_EPS:
             self._pending = None
+            self._drop_since = None
             self._commit(reading, now)
             self._trusted = True
             return False
@@ -212,9 +221,17 @@ class BuffStateMachine:
                 # 큰 폭으로 떨어지는 하향 점프는 분 유실 오독이므로 무시하고 더 지켜본다
                 # (거짓 임박/2차 알림 방지). 위로 튐(연장)·작은 보정은 그대로 반영.
                 if self._trusted and reading < prev - _TRUSTED_DROP_MAX:
-                    self._pending = (reading, now)  # 후보만 갱신, 시계 유지
-                    return False
+                    # 단, 이 큰 하향이 _DROP_RESYNC_SEC 넘게 '자기일관으로 지속'되면
+                    # 분 유실 오독이 아니라 진짜 하향(짧게 덮어쓰기 등) → 재동기화한다.
+                    # (분 유실은 한 프레임뿐이라 다음 프레임에서 끊겨 _drop_since가 초기화됨.)
+                    if self._drop_since is None:
+                        self._drop_since = now
+                    if now - self._drop_since < _DROP_RESYNC_SEC:
+                        self._pending = (reading, now)  # 후보만 갱신, 시계 유지(더 지켜봄)
+                        return False
+                    # 지속된 하향 → 진짜로 보고 아래 정상 커밋 경로로 재동기화.
                 self._pending = None
+                self._drop_since = None
                 extended = self.state is State.EXPIRING and reading > prev + _EXTEND_EPS
                 self._commit(reading, now)
                 self._trusted = True
@@ -244,13 +261,16 @@ class BuffStateMachine:
                         self._alerted2 = False
                     return True
                 return False
-        # 아직 확정 못 함: 후보만 갱신하고 내부 시계는 유지(튐 반영 안 함)
+        # 아직 확정 못 함: 후보만 갱신하고 내부 시계는 유지(튐 반영 안 함).
+        # 하향 후보가 이어지지 않고 끊김(분 유실 오독 등) → 지속 하향 집계 초기화.
         self._pending = (reading, now)
+        self._drop_since = None
         return False
 
     def _on_missing(self, now: float) -> Event:
         self._detections = 0
         self._pending = None  # 미감지 프레임은 연장 확인 연쇄를 끊는다
+        self._drop_since = None
         if self.state is State.ABSENT:
             return Event.NONE
 
@@ -289,3 +309,4 @@ class BuffStateMachine:
         self._alerted2 = False  # 소멸 → 2차 알림 재무장
         self._pending = None
         self._trusted = False  # 새 버프는 시계 다시 확인부터
+        self._drop_since = None

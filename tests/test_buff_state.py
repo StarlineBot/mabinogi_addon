@@ -165,6 +165,29 @@ def test_trusted_clock_ignores_minute_loss_misread():
     assert sm.check_second_alert(1.2) is False  # 거짓 2차 알림 없음
 
 
+def test_sustained_genuine_drop_resyncs_and_alerts():
+    """확인된 시계가 실제로 크게 줄면(짧은 지속으로 덮어쓰기·낮은 랭크 버프 등), 그 하향이
+    _DROP_RESYNC_SEC 넘게 자기일관으로 지속되면 재동기화해 종료 알림을 놓치지 않는다.
+
+    회귀: 예전엔 '확인된 시계의 15초 초과 하향'을 기한 없이 무시해, 진짜로 줄어든 경우에도
+    표시가 영영 높게 묶여 30초 알림 기준에 닿기 전에 버프가 사라져 종료 알림을 놓쳤다.
+    (분 유실 오독은 한 프레임뿐이라 지속 조건으로 구분 — 위 ignores_minute_loss 테스트 유지.)
+    """
+    sm = BuffStateMachine(appear_frames=1, alert_before=30)
+    sm.observe(detected=True, reading=120, now=0.0)
+    sm.observe(detected=True, reading=119.8, now=0.2)  # 시계 '확인됨' (~119)
+    alerted = []
+    now = 1.0
+    while now <= 14.0:
+        real = 40.0 - (now - 1.0)  # 실제로 40초로 덮어써진 뒤 실시간 감소
+        if sm.observe(detected=True, reading=real, now=now) is Event.ALERT:
+            alerted.append(round(now, 1))
+        now += 0.2
+    # 재동기화돼 내부 시계가 실제(저)값을 따라감 — 120대에 묶여 있지 않다.
+    assert sm.remaining(14.0) < 30
+    assert alerted, "지속된 진짜 하향인데 종료 알림을 놓침(재동기화 실패)"
+
+
 def test_recast_minute_loss_does_not_refire_alert():
     """임박(1차 울린 뒤) 중 갱신하면, 새 시간이 '1:30'처럼 분 단위로 뜨는데 OCR이
     분을 놓쳐 '30'으로 두 프레임 읽히면 — 현재 시계가 낮아(27) '급락'이 아니라 소폭
