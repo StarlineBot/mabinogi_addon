@@ -128,6 +128,7 @@ class BuffController(QObject):
         self._watcher = watcher or AlwaysActiveWatcher()
         self._worker: _TrackWorker | None = None
         self._source: FrameSource | None = None
+        self._bar_source: FrameSource | None = None  # 3차 보스 바 영역 소스(함께 닫기)
         self._items: list[OverlayItem] = []
         self._game_active = True  # 게임 포그라운드
         self._self_active = False  # 우리 앱 포그라운드
@@ -146,6 +147,7 @@ class BuffController(QObject):
     ) -> None:
         self.stop()
         self._source = source
+        self._bar_source = bar_source
         self._worker = _TrackWorker(
             source, engine, self._watcher, interval_ms, bar_source=bar_source
         )
@@ -175,6 +177,9 @@ class BuffController(QObject):
         if self._worker is None and self._source is not None:
             t = time.perf_counter()
             self._source.close()
+            if self._bar_source is not None:
+                self._bar_source.close()  # 3차 바 소스도 함께 해제(공유 카메라 참조 누수 방지)
+                self._bar_source = None
             _log.info("소스 close %.0fms", (time.perf_counter() - t) * 1000)
             self._source = None
 

@@ -94,6 +94,9 @@ class DebuffTab(QWidget):
         self._rebuild_list()
         if self.debuff_list.count():
             self.debuff_list.setCurrentRow(0)
+        # 메인이 부팅 때 effective_gate_mode()로 엔진을 만드므로, 첫 showEvent가 불필요하게
+        # 재시작하지 않도록 마지막 통지값을 현재 실제 방식으로 맞춰둔다.
+        self._last_effective = self.effective_gate_mode()
 
     # ---- 상태 ----
     def _load_state(self) -> tuple[dict[str, config.BuffSettings], list[str]]:
@@ -177,7 +180,7 @@ class DebuffTab(QWidget):
         for text, mode in (
             ("1차 · 항상 탐지 (기본)", "off"),
             ("2차 · 보스 바 인식 (띠)", "band"),
-            ("3차 · 보스 바 %판독 (추천)", "percent"),
+            ("3차 · 보스 바 %판독 (실험)", "percent"),
         ):
             self.method_combo.addItem(text, mode)
         self.method_combo.setToolTip(
@@ -283,11 +286,16 @@ class DebuffTab(QWidget):
             self.bar_region_status.setText(txt)
             self.bar_region_status.setStyleSheet(f"color:{color}; font-size:12px;")
 
+    def _emit_gate_mode(self) -> None:
+        """현재 실제 방식을 엔진 쪽에 통지(재시작)하고, 마지막 통지값을 기록."""
+        self._last_effective = self.effective_gate_mode()
+        self.gate_mode_changed.emit(self._last_effective)
+
     def _on_method_changed(self, _idx: int) -> None:
         config.save_debuff_gate_mode(self._selected_mode())
         self._apply_login_gate()
         self._refresh_method_ui()
-        self.gate_mode_changed.emit(self.effective_gate_mode())
+        self._emit_gate_mode()
 
     def _pick_bar_region(self) -> None:
         from .region_selector import RegionSelector
@@ -303,15 +311,18 @@ class DebuffTab(QWidget):
 
         self._bar_highlight = RegionHighlight()  # 참조 유지
         self._bar_highlight.flash(x, y, w, h, "보스 HP바 영역", "이름~퍼센트가 다 들어왔나요?")
-        self.gate_mode_changed.emit(self.effective_gate_mode())  # 새 영역으로 재시작
+        self._emit_gate_mode()  # 새 영역으로 재시작(영역이 실제로 바뀜)
 
     def showEvent(self, event) -> None:  # noqa: N802 (Qt 시그니처)
         super().showEvent(event)
-        # 탭이 보일 때마다 로그인 상태·공유 영역을 반영(설정/보스패턴 탭 변경 후 복귀 대비)하고,
-        # 실제 방식을 엔진에 재통지한다(set_gate_mode는 멱등, 재시작도 무해).
+        # 탭이 보일 때 로그인 상태·공유 영역 표시만 갱신한다. 재시작(gate_mode_changed)은
+        # '실제 방식이 바뀌었을 때만' — 매번 재시작하면 디버프가 0.3초 깜빡이고 사라짐 경고
+        # 대기가 취소되며 바 캡처 소스가 새로 열린다(누수·끊김). 로그아웃으로 effective가
+        # 내려간 경우 등 변화가 있을 때만 통지한다.
         self._apply_login_gate()
         self._refresh_method_ui()
-        self.gate_mode_changed.emit(self.effective_gate_mode())
+        if self.effective_gate_mode() != self._last_effective:
+            self._emit_gate_mode()
 
     def set_status(self, text: str, color: str) -> None:
         """진단 상태 한 줄 갱신(메인의 주기 폴링에서 호출)."""

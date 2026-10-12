@@ -67,6 +67,10 @@ _GONE_SHOW_SEC = 5.0
 # 잡히므로 ~이 시간 뒤 정상 표시된다(해제는 즉시 — 떨어짐/사라짐 경고 지연 없음).
 _DETECT_CONFIRM_SEC = 0.3
 
+# 3차(percent) 판독 주기(초). read_percent는 비싸(수십 ms) 매 틱 돌리면 성능 목표를
+# 크게 넘긴다. 보스 유무는 천천히 바뀌므로 이 간격마다만 재판독하고 그 사이엔 캐시 사용.
+_PERCENT_READ_INTERVAL = 0.6
+
 
 def _variant(template: np.ndarray, target_h: int) -> np.ndarray:
     h, w = template.shape[:2]
@@ -112,6 +116,9 @@ class DebuffEngine:
         self._bar_seen = False
         self._bar_gone_since: float | None = None  # 바 사라진 시각(유예 판정용)
         self._bar_last = False  # 직전 틱 바 인식 여부(탭 상태 표시용)
+        # 3차(percent) 판독 캐시: 마지막 판독 시각(None=아직)·결과(throttle용).
+        self._percent_last_t: float | None = None
+        self._percent_present = False
         # 사라짐 경고 상태(디버프가 보스에서 떨어짐)
         self._warn_gone_ids: set[str] = set()  # '사라짐 경고' 켠 디버프
         self._applied_prev = {bid: False for bid in templates}  # 직전 틱 '걸림' 여부
@@ -143,6 +150,8 @@ class DebuffEngine:
         self._gate_mode = mode
         self._bar_seen = False
         self._bar_gone_since = None
+        self._percent_last_t = None  # 다음 틱에 즉시 재판독
+        self._percent_present = False
 
     @property
     def gate_mode(self) -> str:
@@ -299,8 +308,19 @@ class DebuffEngine:
         elif mode == GATE_PERCENT:
             if bar_region is None:
                 return False  # 바 영역 미지정 → 게이팅 보류(안전)
-            present = read_percent(bar_region) is not None
-            confident_absent = not present
+            # 성능: read_percent는 비싸(수십 ms) 매 틱 돌리지 않고 _PERCENT_READ_INTERVAL
+            # 마다만 재판독, 사이엔 캐시 사용(보스 유무는 천천히 바뀜).
+            if (
+                self._percent_last_t is None
+                or now - self._percent_last_t >= _PERCENT_READ_INTERVAL
+            ):
+                self._percent_present = read_percent(bar_region) is not None
+                self._percent_last_t = now
+            present = self._percent_present
+            # 빈사 보호: 퍼센트를 못 읽어도(검은 바·이펙트·가림) 바 영역에 '평평한 띠'가
+            # 남아 있으면 '애매'로 보고 유지한다. 바 영역이 '확실한 바닥'일 때만 보스 없음.
+            # (2차와 같은 철학 — 걸린 디버프를 재갱신하러 다가가다 죽는 사고 방지.)
+            confident_absent = (not present) and self._is_background(bar_region)
         else:
             return False
 

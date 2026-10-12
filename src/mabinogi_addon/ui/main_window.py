@@ -249,6 +249,8 @@ class MainWindow(QMainWindow):
         self.memo_tab = MemoTab()
         self.tuarim_tab = TuarimTab(self._watcher)
         self.boss_tab = BossTab(self._watcher)  # 베타(디스코드 로그인 게이팅)
+        # 보스 HP바 영역은 디버프 3차와 공유 — 보스 탭에서 바꾸면 디버프 추적도 재시작.
+        self.boss_tab.bar_region_changed.connect(self._on_boss_bar_region_changed)
         self.custom_overlay_tab = CustomOverlayTab(self._watcher)
         self.stat_bars_tab = StatBarsTab(self._watcher)
         self.skillbar_tab = SkillbarTab(self._watcher)
@@ -471,9 +473,11 @@ class MainWindow(QMainWindow):
     def _update_tracking_status(self) -> None:
         self.buff_tab.set_status(*self._buff_status())
         self.debuff_tab.set_status(*self._debuff_status())
-        # 사라짐 경고 가능 여부(영역에 보스 체력바가 인식됐는지) 안내
+        # 사라짐 경고 가능 여부 안내. 사라짐 경고는 방식과 무관하게 '디버프 영역 안의 띠'
+        # (_bar_present → bar_present)로 판단하므로, 그걸 그대로 보여준다(방식별 bar_seen이
+        # 아니라). 1차에서도 띠만 보이면 경고가 작동한다.
         self.debuff_tab.set_bar_status(
-            self._debuff_engine.bar_seen if self._debuff_engine is not None else False
+            self._debuff_engine.bar_present if self._debuff_engine is not None else False
         )
         self._update_header_status()
         self._maybe_tick_update_check()
@@ -1084,6 +1088,11 @@ class MainWindow(QMainWindow):
             return
         self._debuff_engine.set_order(self._debuff_order(available_debuff_catalog()))
         self._debuff_engine.set_warn_gone_ids(self._debuff_warn_gone_ids())
+
+    def _on_boss_bar_region_changed(self) -> None:
+        """보스 탭에서 보스 HP바 영역이 바뀜 → 디버프 3차가 쓰면 새 영역으로 재시작."""
+        if not self._booting and self.debuff_tab.effective_gate_mode() == "percent":
+            self._start_debuff_tracking()
 
     def _on_debuff_gate_mode(self, _mode: str) -> None:
         """탐지 방식(1/2/3차) 또는 보스 바 영역 변경 → 디버프 추적 재구성.

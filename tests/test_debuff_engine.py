@@ -8,6 +8,7 @@
 import cv2
 import numpy as np
 
+import mabinogi_addon.tracker.debuff_engine as de
 from mabinogi_addon.tracker.debuff_engine import (
     _GONE_SHOW_SEC,
     _ONSCREEN_ICON_PX,
@@ -382,6 +383,81 @@ def test_set_bar_gating_toggles_behavior():
     # 바가 사라지고 배경(아이콘 있어도 밴드 없음 → 확실한 바닥) → 유예 후 리셋.
     eng.tick(_icon_on_noise(tpl["a"]), now=0.6)
     assert set(_shown(eng.tick(_icon_on_noise(tpl["a"]), now=2.0))) == {"a", "b"}
+
+
+def _percent_feeder(monkeypatch, value_holder):
+    """de.read_percent를 value_holder['v']로 대체(테스트용 가짜 판독)."""
+    monkeypatch.setattr(de, "read_percent", lambda *a, **k: value_holder["v"])
+
+
+def test_percent_mode_hides_when_percent_read(monkeypatch):
+    """3차: 바 영역에서 퍼센트가 읽히면(보스 존재) 걸린 디버프를 숨긴다."""
+    v = {"v": 50}
+    _percent_feeder(monkeypatch, v)
+    tpl = _bases()
+    eng = DebuffEngine(tpl, ["a", "b"], gate_mode="percent")
+    bar = _bar_region()
+    eng.tick(_bar_with_icon(tpl["a"]), now=0.0, bar_region=bar)  # 보스 인식 + a 대기
+    assert _shown(eng.tick(_bar_with_icon(tpl["a"]), now=0.4, bar_region=bar)) == ["b"]
+
+
+def test_percent_mode_holds_on_near_death(monkeypatch):
+    """3차 빈사 보호: 퍼센트를 못 읽어도(검은 바) 바 영역에 띠가 남으면 리셋하지 않는다."""
+    v = {"v": 50}
+    _percent_feeder(monkeypatch, v)
+    tpl = _bases()
+    eng = DebuffEngine(tpl, ["a", "b"], gate_mode="percent")
+    bright = _bar_region()
+    eng.tick(_bar_with_icon(tpl["a"]), now=0.0, bar_region=bright)  # 보스 인식
+    assert _shown(eng.tick(_bar_with_icon(tpl["a"]), now=0.4, bar_region=bright)) == ["b"]
+    # 빈사: 퍼센트 None + 바 영역은 '평평한 검은 띠'(is_background=False) → 유지.
+    v["v"] = None
+    black = _black_bar_region()
+    eng.tick(_bar_with_icon(tpl["a"]), now=0.7, bar_region=black)
+    assert _shown(eng.tick(_bar_with_icon(tpl["a"]), now=3.0, bar_region=black)) == ["b"]
+
+
+def test_percent_mode_resets_on_confident_floor(monkeypatch):
+    """3차: 퍼센트 못 읽고 바 영역도 '확실한 바닥'이면 유예 후 전부 미적용으로 리셋."""
+    v = {"v": 50}
+    _percent_feeder(monkeypatch, v)
+    tpl = _bases()
+    eng = DebuffEngine(tpl, ["a", "b"], gate_mode="percent")
+    bright = _bar_region()
+    eng.tick(_bar_with_icon(tpl["a"]), now=0.0, bar_region=bright)
+    assert _shown(eng.tick(_bar_with_icon(tpl["a"]), now=0.4, bar_region=bright)) == ["b"]
+    # 보스 사라짐: 퍼센트 None + 바 영역이 노이즈(띠 없음=확실한 바닥) → 유예 후 리셋.
+    v["v"] = None
+    floor = _noise(h=40, w=160)
+    eng.tick(_bar_with_icon(tpl["a"]), now=0.7, bar_region=floor)
+    res = eng.tick(_bar_with_icon(tpl["a"]), now=2.0, bar_region=floor)
+    assert set(_shown(res)) == {"a", "b"}
+
+
+def test_percent_mode_throttles_read(monkeypatch):
+    """3차: read_percent를 매 틱이 아니라 _PERCENT_READ_INTERVAL마다만 호출(성능)."""
+    calls = {"n": 0}
+
+    def rp(*a, **k):
+        calls["n"] += 1
+        return 50
+
+    monkeypatch.setattr(de, "read_percent", rp)
+    tpl = _bases()
+    eng = DebuffEngine(tpl, ["a", "b"], gate_mode="percent")
+    bar = _bar_region()
+    for i in range(10):  # 1.0초(0.1초 간격) — 간격 0.6이면 2회 정도만 판독
+        eng.tick(_bar_region(), now=i * 0.1, bar_region=bar)
+    assert calls["n"] <= 3
+
+
+def test_percent_mode_no_bar_region_is_safe(monkeypatch):
+    """3차인데 바 영역 미지정(None)이면 게이팅 보류 → 1차처럼 항상 표시(리셋 없음)."""
+    _percent_feeder(monkeypatch, {"v": None})
+    tpl = _bases()
+    eng = DebuffEngine(tpl, ["a", "b"], gate_mode="percent")
+    assert _shown(eng.tick(_noise(h=40, w=160), now=0.0, bar_region=None)) == ["a", "b"]
+    assert _shown(eng.tick(_noise(h=40, w=160), now=2.0, bar_region=None)) == ["a", "b"]
 
 
 def test_warn_gone_suppressed_when_not_foreground():

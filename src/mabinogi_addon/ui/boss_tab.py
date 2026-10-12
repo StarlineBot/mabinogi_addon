@@ -11,7 +11,7 @@
 from __future__ import annotations
 
 import numpy as np
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QGuiApplication, QImage, QPixmap
 from PySide6.QtWidgets import (
     QHBoxLayout,
@@ -42,13 +42,15 @@ DEFAULT_BOX = {"x": 1017, "y": 1248, "w": 523, "h": 36}
 
 
 class BossTab(QWidget):
+    bar_region_changed = Signal()  # 보스 HP바 영역 변경 → 디버프 3차와 공유(재시작 알림)
+
     def __init__(self, watcher) -> None:
         super().__init__()
         self._watcher = watcher
         cfg = config.load_boss_pattern()
+        # 보스 HP바 영역은 디버프 3차와 '공유'(config.load_boss_bar_region = bossPattern.box).
         # 기본으로 바 위치가 이미 잡힌 상태(사용자 해상도 2560×1440면 바로 작동).
-        # 해상도가 다르면 '영역 수정'으로 맞춘다.
-        self._region = cfg["box"] or dict(DEFAULT_BOX)
+        self._region = config.load_boss_bar_region() or dict(DEFAULT_BOX)
         self._sct = None
         self._last_frame = None
         self._bosses = load_bosses()
@@ -200,8 +202,12 @@ class BossTab(QWidget):
     def _on_selected(self, x: int, y: int, w: int, h: int) -> None:
         self._region = {"x": x, "y": y, "w": w, "h": h}
         self._update_region_label()
-        self._save()
+        # 영역은 '공유 키'(bossPattern.box)에만 저장한다 — _save()가 토글 때마다 box를
+        # 통째로 덮어써 디버프 쪽 변경을 날리던 문제 방지(box는 여기서만 쓴다).
+        config.save_boss_bar_region(x, y, w, h)
+        self._save()  # 나머지 설정(enabled 등). box는 포함하지 않는다.
         self._flash_region()
+        self.bar_region_changed.emit()  # 디버프 3차가 새 영역으로 재시작하도록 알림
 
     def _flash_region(self) -> None:
         if not self._region:
@@ -219,11 +225,20 @@ class BossTab(QWidget):
         else:
             self.region_label.setText("영역 미지정")
 
+    def showEvent(self, event) -> None:  # noqa: N802 (Qt 시그니처)
+        super().showEvent(event)
+        # 공유 영역(디버프 3차에서 지정했을 수도)을 다시 읽어 반영(양방향 공유).
+        shared = config.load_boss_bar_region()
+        if shared and shared != self._region:
+            self._region = shared
+            self._update_region_label()
+
     def _save(self) -> None:
+        # box는 저장하지 않는다 — 공유 영역이라 _on_selected에서 save_boss_bar_region으로만
+        # 쓴다. 여기서 box를 넣으면 토글(enable 등)마다 디버프가 바꾼 영역을 덮어쓴다.
         config.save_boss_pattern(
             {
                 "enabled": self.enable.isChecked(),
-                "box": self._region,
                 "showUpcoming": self.show_upcoming.isChecked(),
                 "upcomingLocked": self._upcoming.locked,
                 "warnLocked": self._overlay.locked,
