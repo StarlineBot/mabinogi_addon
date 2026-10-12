@@ -103,18 +103,38 @@ class MirrorOverlay(QWidget):
             _log.warning("DWM 썸네일 연결 실패: 게임창=%s 소스상대=%s", src_hwnd, self._src_rel)
             return False
         self._thumb = thumb
-        self.refresh_thumbnail()
-        _log.info("DWM 썸네일 연결: 게임창=%s 소스상대=%s", src_hwnd, self._src_rel)
+        updated = self.refresh_thumbnail()
+        # 진단: 게임창 크기 vs 화면 크기(= 화면을 꽉 채우는 '테두리 없는 전체 창'이면
+        # OS가 independent flip로 전환돼 DWM 썸네일이 검정/청록으로만 나올 수 있다).
+        # update 결과(성공/실패)까지 남겨, '등록은 됐는데 안 그려지는' 경우를 식별한다.
+        ww, wh = wr[2] - wr[0], wr[3] - wr[1]
+        try:
+            from PySide6.QtGui import QGuiApplication
+
+            scr = QGuiApplication.primaryScreen()
+            sg = scr.geometry() if scr else None
+            screen = (sg.width(), sg.height()) if sg is not None else None
+        except Exception:  # noqa: BLE001
+            screen = None
+        fullscreen_like = (
+            screen is not None and ww >= screen[0] - 2 and wh >= screen[1] - 2
+        )
+        _log.info(
+            "DWM 썸네일 연결: 게임창=%s rect=%s 창크기=%dx%d 화면=%s 전체창추정=%s "
+            "소스상대=%s update성공=%s",
+            src_hwnd, wr, ww, wh, screen, fullscreen_like, self._src_rel, updated,
+        )
         return True
 
-    def refresh_thumbnail(self) -> None:
-        """현재 크기·고정상태에 맞춰 썸네일 사각형 갱신(저비용: 비트맵 복사 없음)."""
+    def refresh_thumbnail(self) -> bool:
+        """현재 크기·고정상태에 맞춰 썸네일 사각형 갱신(저비용: 비트맵 복사 없음).
+        update 성공 여부를 돌려준다(진단용)."""
         if self._thumb is None or self._src_rel is None:
-            return
+            return False
         inset = 0 if self._locked else 2  # 해제 땐 이동 테두리 보이게 살짝 안쪽
         w, h = self.width(), self.height()
         dest = (inset, inset, max(1, w - 2 * inset), max(1, h - 2 * inset))
-        self._thumb.update(self._src_rel, dest)
+        return self._thumb.update(self._src_rel, dest)
 
     def detach_thumbnail(self) -> None:
         if self._thumb is not None:

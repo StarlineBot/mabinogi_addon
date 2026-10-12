@@ -13,7 +13,10 @@ Windows 전용. 다른 OS에서는 import는 되지만 `available()`이 False이
 
 from __future__ import annotations
 
+import logging
 import sys
+
+_log = logging.getLogger("mabinogi_addon.mirror")
 
 # DWM_TNP_* 플래그(갱신할 속성 선택)
 DWM_TNP_RECTDESTINATION = 0x00000001
@@ -156,6 +159,10 @@ class Thumbnail:
             wintypes.HWND(dest_hwnd), wintypes.HWND(src_hwnd), ctypes.byref(handle)
         )
         if hr != 0 or not handle.value:
+            _log.warning(
+                "DwmRegisterThumbnail 실패: hr=0x%08x handle=%s dest=%s src=%s",
+                hr & 0xFFFFFFFF, handle.value, dest_hwnd, src_hwnd,
+            )
             return False
         self._dwm = dwm
         self._handle = handle
@@ -208,6 +215,11 @@ class Thumbnail:
         props.fVisible = 1 if visible else 0
         props.fSourceClientAreaOnly = 0
         hr = self._dwm.DwmUpdateThumbnailProperties(self._handle, ctypes.byref(props))
+        if hr != 0:
+            _log.warning(
+                "DwmUpdateThumbnailProperties 실패: hr=0x%08x src=(%d,%d,%d,%d) dest=%s",
+                hr & 0xFFFFFFFF, l, t, r, b, dest_rect,
+            )
         return hr == 0
 
     def set_visible(self, visible: bool) -> None:
