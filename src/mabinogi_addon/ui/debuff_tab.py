@@ -11,6 +11,7 @@ from pathlib import Path
 from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
+    QComboBox,
     QFileDialog,
     QGroupBox,
     QHBoxLayout,
@@ -66,7 +67,7 @@ class DebuffTab(QWidget):
     tracking_changed = Signal()  # 순서·노출 변경 → 라이브 반영
     catalog_changed = Signal()  # 디버프 추가·삭제·아이콘 변경 → 엔진 재구성
     scale_changed = Signal(int)  # 디버프 오버레이 배율(%) 변경
-    bar_gating_changed = Signal(bool)  # '보스 바 인식(베타)' 토글 → 엔진 모드 전환
+    gate_mode_changed = Signal(str)  # 탐지 방식(1/2/3차) 변경 또는 바 영역 변경 → 재시작
 
     def __init__(self) -> None:
         super().__init__()
@@ -167,25 +168,55 @@ class DebuffTab(QWidget):
         self.status_label = hint_label("")  # 진단 상태(추적 중/게임 비활성 등)
         v.addWidget(self.status_label)
 
-        # 탐지 방식(베타): 보스 바 인식 게이팅. 기본 꺼짐 = 기존 방식(항상 탐지).
-        self.bar_gating_check = checkbox("보스 바 인식 사용 (베타)")
-        self.bar_gating_check.setToolTip(
-            "켜면 보스 체력바가 보일 때만 디버프를 탐지합니다.\n"
-            "· 빈 바닥·마을을 디버프로 오인하던 오탐이 사라집니다.\n"
-            "· 빈사(체력바가 거의 검어짐) 때도 걸린 디버프를 '안 걸림'으로 되돌리지 않아요.\n"
-            "※ 보스 바 인식에 의존하는 실험 기능입니다. 꺼두면(기본) 기존처럼 항상 탐지합니다."
+        # 탐지 방식: 1차(항상 탐지·기본) / 2차(보스 바 인식·띠) / 3차(보스 바 %판독).
+        # 2·3차는 베타 — 디코 로그인 필요.
+        method_row = QHBoxLayout()
+        method_row.setSpacing(6)
+        method_row.addWidget(section_label("탐지 방식"))
+        self.method_combo = QComboBox()
+        for text, mode in (
+            ("1차 · 항상 탐지 (기본)", "off"),
+            ("2차 · 보스 바 인식 (띠)", "band"),
+            ("3차 · 보스 바 %판독 (추천)", "percent"),
+        ):
+            self.method_combo.addItem(text, mode)
+        self.method_combo.setToolTip(
+            "1차: 항상 탐지(기존). 바닥 오탐이 있을 수 있으나 보스 바 인식에 비의존.\n"
+            "2차: 디버프 영역 안의 '평평한 띠'로 보스가 있을 때만 탐지.\n"
+            "3차: 보스 HP바 영역의 퍼센트 숫자를 읽어 보스가 있을 때만 탐지(가장 정확)."
         )
-        self.bar_gating_check.blockSignals(True)
-        self.bar_gating_check.setChecked(config.load_general_flag("debuffBarGating"))
-        self.bar_gating_check.blockSignals(False)
-        self.bar_gating_check.toggled.connect(self._on_bar_gating)
-        v.addWidget(self.bar_gating_check)
+        cur = config.load_debuff_gate_mode()
+        idx = self.method_combo.findData(cur)
+        self.method_combo.blockSignals(True)
+        self.method_combo.setCurrentIndex(idx if idx >= 0 else 0)
+        self.method_combo.blockSignals(False)
+        self.method_combo.currentIndexChanged.connect(self._on_method_changed)
+        method_row.addWidget(self.method_combo, 1)
+        v.addLayout(method_row)
+
+        # 3차용: 보스 HP바 영역 지정(보스패턴알림과 공유).
+        self._bar_region_row = QWidget()
+        brl = QHBoxLayout(self._bar_region_row)
+        brl.setContentsMargins(0, 0, 0, 0)
+        brl.setSpacing(6)
+        self.bar_region_btn = QPushButton("보스 HP바 영역 지정")
+        self.bar_region_btn.setToolTip(
+            "보스 이름~퍼센트가 다 들어오게 HP바를 가로로 감싸 드래그하세요.\n"
+            "보스패턴알림과 같은 영역을 공유합니다(한쪽에서 지정하면 양쪽이 사용)."
+        )
+        self.bar_region_btn.clicked.connect(self._pick_bar_region)
+        brl.addWidget(self.bar_region_btn)
+        self.bar_region_status = hint_label("")
+        brl.addWidget(self.bar_region_status, 1)
+        v.addWidget(self._bar_region_row)
+
         self._bar_gating_notice = hint_label(
             "🧪 개발 중인 기능 — 설정 탭에서 Discord 로그인 후 가장 먼저 써볼 수 있어요."
         )
         self._bar_gating_notice.setStyleSheet("color:#e67e22; font-size:12px;")
         v.addWidget(self._bar_gating_notice)
         self._apply_login_gate()
+        self._refresh_method_ui()
 
         self.debuff_list = QListWidget()
         self.debuff_list.setIconSize(QSize(28, 28))
@@ -215,31 +246,72 @@ class DebuffTab(QWidget):
         config.set_debuff_scale(pct)
         self.scale_changed.emit(pct)
 
-    # ---- 탐지 방식(베타) ----
+    # ---- 탐지 방식(1/2/3차) ----
     @staticmethod
     def _logged_in() -> bool:
         return config.load_discord_user() is not None
 
-    def effective_bar_gating(self) -> bool:
-        """실제 적용할 게이팅 = 토글 ON + 디코 로그인(베타 자격)."""
-        return self.bar_gating_check.isChecked() and self._logged_in()
+    def _selected_mode(self) -> str:
+        return self.method_combo.currentData() or "off"
+
+    def effective_gate_mode(self) -> str:
+        """실제 적용할 방식. 2·3차는 베타라 디코 로그인 없으면 1차(off)로 내린다."""
+        mode = self._selected_mode()
+        if mode in ("band", "percent") and not self._logged_in():
+            return "off"
+        return mode
 
     def _apply_login_gate(self) -> None:
-        """베타 게이팅: 디코 로그인 사용자만 토글을 조작할 수 있게 한다."""
+        """베타: 디코 로그인 사용자만 2·3차를 고를 수 있게 한다(미로그인=선택 잠금)."""
         ok = self._logged_in()
-        self.bar_gating_check.setEnabled(ok)
-        self._bar_gating_notice.setVisible(not ok)
+        self.method_combo.setEnabled(ok)
+        # 미로그인인데 2·3차가 선택돼 있으면 안내를 띄운다(선택은 보존, 적용은 1차).
+        self._bar_gating_notice.setVisible(not ok and self._selected_mode() != "off")
 
-    def _on_bar_gating(self, on: bool) -> None:
-        config.save_general_flag("debuffBarGating", bool(on))
-        self.bar_gating_changed.emit(self.effective_bar_gating())
+    def _bar_region_status_text(self) -> tuple[str, str]:
+        r = config.load_boss_bar_region()
+        if r:
+            return f"공유됨 ✓  {r['w']}×{r['h']}", "#2ecc71"
+        return "미지정 — 보스 HP바 영역을 지정하세요", "#e67e22"
+
+    def _refresh_method_ui(self) -> None:
+        """선택 방식에 맞게 3차용 바 영역 행 표시/숨김 + 상태 갱신."""
+        is_percent = self._selected_mode() == "percent"
+        self._bar_region_row.setVisible(is_percent and self._logged_in())
+        if is_percent:
+            txt, color = self._bar_region_status_text()
+            self.bar_region_status.setText(txt)
+            self.bar_region_status.setStyleSheet(f"color:{color}; font-size:12px;")
+
+    def _on_method_changed(self, _idx: int) -> None:
+        config.save_debuff_gate_mode(self._selected_mode())
+        self._apply_login_gate()
+        self._refresh_method_ui()
+        self.gate_mode_changed.emit(self.effective_gate_mode())
+
+    def _pick_bar_region(self) -> None:
+        from .region_selector import RegionSelector
+
+        self._bar_selector = RegionSelector()  # 참조 유지(GC 방지)
+        self._bar_selector.selected.connect(self._on_bar_region_selected)
+        self._bar_selector.start()
+
+    def _on_bar_region_selected(self, x: int, y: int, w: int, h: int) -> None:
+        config.save_boss_bar_region(x, y, w, h)  # 보스패턴알림과 공유 저장
+        self._refresh_method_ui()
+        from .region_highlight import RegionHighlight
+
+        self._bar_highlight = RegionHighlight()  # 참조 유지
+        self._bar_highlight.flash(x, y, w, h, "보스 HP바 영역", "이름~퍼센트가 다 들어왔나요?")
+        self.gate_mode_changed.emit(self.effective_gate_mode())  # 새 영역으로 재시작
 
     def showEvent(self, event) -> None:  # noqa: N802 (Qt 시그니처)
         super().showEvent(event)
-        # 탭이 보일 때마다 로그인 상태를 반영(설정 탭에서 로그인/로그아웃 후 복귀 대비)하고,
-        # 실제 게이팅(토글 ON + 로그인)을 엔진에 재통지한다(set_bar_gating은 멱등).
+        # 탭이 보일 때마다 로그인 상태·공유 영역을 반영(설정/보스패턴 탭 변경 후 복귀 대비)하고,
+        # 실제 방식을 엔진에 재통지한다(set_gate_mode는 멱등, 재시작도 무해).
         self._apply_login_gate()
-        self.bar_gating_changed.emit(self.effective_bar_gating())
+        self._refresh_method_ui()
+        self.gate_mode_changed.emit(self.effective_gate_mode())
 
     def set_status(self, text: str, color: str) -> None:
         """진단 상태 한 줄 갱신(메인의 주기 폴링에서 호출)."""

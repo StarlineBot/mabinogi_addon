@@ -322,7 +322,7 @@ class MainWindow(QMainWindow):
         self.debuff_tab.lock_toggled.connect(self._on_debuff_lock)
         self.debuff_tab.tracking_changed.connect(self._on_debuff_tracking_changed)
         self.debuff_tab.catalog_changed.connect(self._on_debuff_catalog_changed)
-        self.debuff_tab.bar_gating_changed.connect(self._on_debuff_bar_gating)
+        self.debuff_tab.gate_mode_changed.connect(self._on_debuff_gate_mode)
         self.debuff_overlay.moved.connect(self._save_debuff_overlay_state)
 
         # 메모 오버레이: 위치·크기는 영역 지정, 고정=클릭통과. 게임 활성 시만 표시.
@@ -1043,12 +1043,27 @@ class MainWindow(QMainWindow):
         order = self._debuff_order(catalog)
         # 표시(숨기지 않은) 디버프만 매칭 — 버프와 동일하게 비용 절감.
         tracked = [b for b in catalog if b.id in set(order)]
+        gate_mode = self.debuff_tab.effective_gate_mode()
         self._debuff_engine = DebuffEngine(
             build_templates(tracked),
             order,
-            bar_gating=self.debuff_tab.effective_bar_gating(),
+            gate_mode=gate_mode,
         )
         self._debuff_engine.set_warn_gone_ids(self._debuff_warn_gone_ids())
+        # 3차(percent): 보스 HP바 영역(보스패턴알림과 공유)을 따로 캡처해 넘긴다.
+        bar_source = None
+        if gate_mode == "percent":
+            bar_region = config.load_boss_bar_region()
+            if bar_region:
+                try:
+                    from .dpi import to_physical
+
+                    bar_source = create_live_source(Region(*to_physical(bar_region)))
+                except ImportError:
+                    bar_source = None  # dxcam 없음(맥/개발)
+                except Exception as exc:  # noqa: BLE001
+                    _cap_log.error("보스 바 라이브 캡처 시작 실패: %s", exc)
+                    bar_source = None
         # 지속시간·알림·점멸 없음 → show_duration 전부 False.
         self.debuff_controller = BuffController(
             self.debuff_overlay,
@@ -1060,7 +1075,9 @@ class MainWindow(QMainWindow):
         self.debuff_controller.set_paused(self._paused)  # 재생성 시 일시정지 상태 유지
         # 보스에서 떨어진 디버프(재적용 필요)를 빨리 캐치하도록 150ms 주기.
         # 표시한 것만 매칭이라 비용은 낮다(시간 판독도 없음).
-        self.debuff_controller.start(source, self._debuff_engine, interval_ms=150)
+        self.debuff_controller.start(
+            source, self._debuff_engine, interval_ms=150, bar_source=bar_source
+        )
 
     def _on_debuff_tracking_changed(self) -> None:
         if self._debuff_engine is None:
@@ -1068,10 +1085,14 @@ class MainWindow(QMainWindow):
         self._debuff_engine.set_order(self._debuff_order(available_debuff_catalog()))
         self._debuff_engine.set_warn_gone_ids(self._debuff_warn_gone_ids())
 
-    def _on_debuff_bar_gating(self, on: bool) -> None:
-        """'보스 바 인식(베타)' 토글 → 라이브 엔진 모드 전환(멱등)."""
-        if self._debuff_engine is not None:
-            self._debuff_engine.set_bar_gating(bool(on))
+    def _on_debuff_gate_mode(self, _mode: str) -> None:
+        """탐지 방식(1/2/3차) 또는 보스 바 영역 변경 → 디버프 추적 재구성.
+
+        3차(percent)는 '보스 바 영역' 캡처 소스를 따로 붙여야 하므로, 라이브 전환이 아니라
+        _start_debuff_tracking으로 재시작한다(엔진·바 소스를 현재 설정으로 다시 만든다).
+        """
+        if not self._booting:
+            self._start_debuff_tracking()
 
     def _debuff_warn_gone_ids(self) -> set[str]:
         """'사라짐 경고'를 켠 디버프 id 집합(보스에서 떨어지면 빨간 테두리+X+소리)."""

@@ -55,6 +55,7 @@ class _TrackWorker(QThread):
         engine: BuffEngine,
         watcher: WindowWatcher,
         interval_ms: int = 200,
+        bar_source: FrameSource | None = None,
     ) -> None:
         super().__init__()
         self._source = source
@@ -63,6 +64,8 @@ class _TrackWorker(QThread):
         self._interval = interval_ms
         self._running = True
         self._fg: tuple[bool, bool] | None = None
+        # 3차(percent)용 '보스 HP바 영역' 소스(있을 때만 grab해 tick에 bar_region으로 전달).
+        self._bar_source = bar_source
 
     def run(self) -> None:
         while self._running:
@@ -80,7 +83,15 @@ class _TrackWorker(QThread):
             if region is not None:
                 # 탐지·시간읽기는 포커스와 무관하게 계속(시간 동기화), 소리 알림은
                 # 포그라운드일 때만(foreground=game) — 엔진이 알림 판정을 게이팅한다.
-                result = self._engine.tick(region, time.monotonic(), foreground=game)
+                if self._bar_source is not None:
+                    # 3차: 보스 HP바 영역을 따로 캡처해 bar_region으로 넘긴다(디버프 엔진만
+                    # 이 인자를 받으므로, 바 소스가 있을 때만 전달).
+                    result = self._engine.tick(
+                        region, time.monotonic(), foreground=game,
+                        bar_region=self._bar_source.grab(),
+                    )
+                else:
+                    result = self._engine.tick(region, time.monotonic(), foreground=game)
                 self.updated.emit(result.entries)
                 if result.alerts:
                     self.alerted.emit(result.alerts)
@@ -130,11 +141,14 @@ class BuffController(QObject):
         self._gone_show_until: dict[str, float] = {}  # 확정된 버프 → 경고 표시 종료 시각
 
     def start(
-        self, source: FrameSource, engine: BuffEngine, interval_ms: int = 200
+        self, source: FrameSource, engine: BuffEngine, interval_ms: int = 200,
+        bar_source: FrameSource | None = None,
     ) -> None:
         self.stop()
         self._source = source
-        self._worker = _TrackWorker(source, engine, self._watcher, interval_ms)
+        self._worker = _TrackWorker(
+            source, engine, self._watcher, interval_ms, bar_source=bar_source
+        )
         self._worker.updated.connect(self._on_updated)
         self._worker.alerted.connect(self._on_alerted)
         self._worker.foreground_changed.connect(self._on_foreground_changed)

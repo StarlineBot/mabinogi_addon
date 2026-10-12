@@ -783,6 +783,56 @@ def save_boss_pattern(data: dict, path: Path = LOCAL_CONFIG_PATH) -> None:
     _write_local_config(cfg, path)
 
 
+_DEBUFF_GATE_MODES = ("off", "band", "percent")
+
+
+def load_debuff_gate_mode(path: Path = LOCAL_CONFIG_PATH) -> str:
+    """디버프 탐지 방식: off(1차)/band(2차)/percent(3차). 기본 off.
+
+    하위호환: 예전 불리언 general.debuffBarGating=True 는 band(2차)로 읽는다.
+    """
+    g = _read_local_config(path).get("general") or {}
+    m = g.get("debuffGateMode")
+    if m in _DEBUFF_GATE_MODES:
+        return m
+    if g.get("debuffBarGating") is True:
+        return "band"
+    return "off"
+
+
+def save_debuff_gate_mode(mode: str, path: Path = LOCAL_CONFIG_PATH) -> None:
+    """디버프 탐지 방식 저장(general.debuffGateMode)."""
+    if mode not in _DEBUFF_GATE_MODES:
+        mode = "off"
+    data = _read_local_config(path)
+    g = data.get("general")
+    if not isinstance(g, dict):
+        g = {}
+    g["debuffGateMode"] = mode
+    data["general"] = g
+    _write_local_config(data, path)
+
+
+def load_boss_bar_region(path: Path = LOCAL_CONFIG_PATH) -> dict | None:
+    """보스 HP바 영역(보스패턴알림 ↔ 디버프 3차 '공유'). 소스는 bossPattern.box 하나다.
+
+    어느 탭에서 지정해도 같은 곳에 저장돼 두 기능이 함께 쓴다. 미지정이면 None.
+    """
+    box = load_boss_pattern(path).get("box")
+    if isinstance(box, dict) and all(k in box for k in ("x", "y", "w", "h")):
+        return {k: int(box[k]) for k in ("x", "y", "w", "h")}
+    return None
+
+
+def save_boss_bar_region(
+    x: int, y: int, w: int, h: int, path: Path = LOCAL_CONFIG_PATH
+) -> None:
+    """보스 HP바 영역을 공용(bossPattern.box)에 저장 — 보스패턴알림·디버프 3차가 공유."""
+    save_boss_pattern(
+        {"box": {"x": int(x), "y": int(y), "w": int(w), "h": int(h)}}, path
+    )
+
+
 def load_stat_bars(path: Path = LOCAL_CONFIG_PATH) -> dict:
     """체력/마나/스태미나 바 오버레이 설정.
 
