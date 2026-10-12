@@ -33,6 +33,21 @@ _NO_BOSS_SHOTS = [
 # 보스 체력바가 보이는 영역(게이팅의 bar_seen 확립용 + 보스일 땐 리셋 안 함 확인용).
 _BOSS_SHOT = "스크린샷 2026-10-12 000512.png"
 
+# 보스 체력바가 '보이는' 장면 모음(재현율 측정용). 게이팅은 이들을 전부 '보스'로 인정해야
+# 한다 — 하나라도 놓치면(과소인식) 실제 보스전에서 걸린 디버프를 '안 걸림'으로 잘못
+# 되돌려 위험하다. 2색 바·HP 다양 포함. 새 보스 스샷은 여기에 파일명만 더하면 된다.
+_BOSS_SHOTS = [
+    "스크린샷 2026-10-12 000512.png",
+    "스크린샷 2026-10-09 190901.png",
+    "스크린샷 2026-10-09 190905.png",
+    "스크린샷 2026-10-09 190909.png",
+    "스크린샷 2026-10-09 190911.png",
+    "스크린샷 2026-10-09 190915.png",
+    "스크린샷 2026-10-09 190926.png",
+    "스크린샷 2026-10-09 191035.png",
+    "스크린샷 2026-10-09 195115.png",
+]
+
 
 def _real_debuff_templates() -> dict:
     d = Path("src/mabinogi_addon/assets/debuff/icon")
@@ -116,3 +131,32 @@ def test_detection_false_positive_benchmark(capsys):
     assert on <= off, f"새 방식 오탐({on})이 기존({off})보다 많음"
     # 적어도 하나의 바닥에선 기존 방식이 실제로 오탐을 낸다(벤치가 신호를 갖는지 확인).
     assert off >= 1, "벤치에 오탐 신호가 없음 — 바닥 샘플/템플릿을 점검하세요"
+
+
+def _recognized(region) -> bool:
+    """게이팅이 이 영역을 '보스 있음'으로 인정하는가(= 리셋해 디버프를 가리지 않는가).
+
+    밝은 바가 보이거나(bar_present), 확실한 바닥이 아니면(not is_background → HOLD)
+    매칭을 유지하므로 '인정'이다. 둘 다 아니면 리셋 → 과소인식(위험).
+    """
+    return DebuffEngine._bar_present(region) or not DebuffEngine._is_background(region)
+
+
+def test_boss_recognition_recall(capsys):
+    """보스 체력바가 '보이는' 장면에서 게이팅이 전부 보스로 인정하는지(재현율) 측정.
+
+    과거 회귀(24ca487): 바 탐지에 'hue 단색' 조건을 AND로 더했더니 2색 보스 바가
+    과소인식돼(바 아님) 디버프가 잘못 가려졌고, 결국 롤백됐다. 그 함정을 막기 위해
+    재현율을 고정한다 — 탐지 방식을 바꿀 때 오탐(FP)뿐 아니라 이 재현율도 함께 봐야 한다.
+    """
+    samples = [(nm, _region(nm)) for nm in _BOSS_SHOTS]
+    samples = [(nm, r) for nm, r in samples if r is not None]
+    if not samples:
+        pytest.skip("보스 스샷 없음")
+    miss = [nm.split()[-1] for nm, r in samples if not _recognized(r)]
+    ok = len(samples) - len(miss)
+    with capsys.disabled():
+        print(f"\n=== 보스 인식 재현율(게이팅) === {ok}/{len(samples)} "
+              f"({ok/len(samples):.0%})" + (f"  놓침: {miss}" if miss else "  (전부 인식)"))
+    # 보스전에서의 과소인식은 위험하므로 재현율 100%를 요구한다.
+    assert not miss, f"보스 과소인식(게이팅이 바닥으로 오판): {miss}"
