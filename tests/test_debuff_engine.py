@@ -386,8 +386,15 @@ def test_set_bar_gating_toggles_behavior():
 
 
 def _percent_feeder(monkeypatch, value_holder):
-    """de.read_percent를 value_holder['v']로 대체(테스트용 가짜 판독)."""
-    monkeypatch.setattr(de, "read_percent", lambda *a, **k: value_holder["v"])
+    """de.read_percent_cached를 value_holder['v']로 대체(테스트용 가짜 판독).
+
+    엔진은 (값, 당첨오프셋)을 받으므로 값이 있으면 오프셋 0을 함께 돌려준다.
+    """
+    def fake(*a, **k):
+        v = value_holder["v"]
+        return (v, 0 if v is not None else None)
+
+    monkeypatch.setattr(de, "read_percent_cached", fake)
 
 
 def test_percent_mode_hides_when_percent_read(monkeypatch):
@@ -440,9 +447,9 @@ def test_percent_mode_throttles_read(monkeypatch):
 
     def rp(*a, **k):
         calls["n"] += 1
-        return 50
+        return (50, 0)
 
-    monkeypatch.setattr(de, "read_percent", rp)
+    monkeypatch.setattr(de, "read_percent_cached", rp)
     tpl = _bases()
     eng = DebuffEngine(tpl, ["a", "b"], gate_mode="percent")
     bar = _bar_region()

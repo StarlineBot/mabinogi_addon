@@ -15,7 +15,7 @@ import cv2
 import numpy as np
 
 from ..detect import match_icon
-from ..detect.boss_hp_reader import read_percent
+from ..detect.boss_hp_reader import read_percent_cached
 from .engine import OverlayEntry, TickResult
 
 # 디버프 탐지 방식(게이팅). 사용자가 1차/2차/3차로 따로 골라 비교·테스트할 수 있다.
@@ -119,9 +119,10 @@ class DebuffEngine:
         # 방식과 무관하게 '디버프 영역에서 띠를 한 번이라도 봤는지'(사라짐 경고 가능 안내용).
         # 보스가 잠깐 없어도 True로 유지 — 영역이 맞는지 안내가 깜빡이지 않게.
         self._bar_ever_seen = False
-        # 3차(percent) 판독 캐시: 마지막 판독 시각(None=아직)·결과(throttle용).
+        # 3차(percent) 판독 캐시: 마지막 판독 시각(None=아직)·결과(throttle용) + 당첨 오프셋.
         self._percent_last_t: float | None = None
         self._percent_present = False
+        self._percent_offset: int | None = None  # 직전 당첨 정렬 오프셋(빠른 재판독 힌트)
         # 사라짐 경고 상태(디버프가 보스에서 떨어짐)
         self._warn_gone_ids: set[str] = set()  # '사라짐 경고' 켠 디버프
         self._applied_prev = {bid: False for bid in templates}  # 직전 틱 '걸림' 여부
@@ -160,6 +161,7 @@ class DebuffEngine:
         self._bar_gone_since = None
         self._percent_last_t = None  # 다음 틱에 즉시 재판독
         self._percent_present = False
+        self._percent_offset = None
 
     @property
     def gate_mode(self) -> str:
@@ -309,19 +311,30 @@ class DebuffEngine:
         elif mode == GATE_PERCENT:
             if bar_region is None:
                 return False  # 바 영역 미지정 → 게이팅 보류(안전)
-            # 성능: read_percent는 비싸(수십 ms) 매 틱 돌리지 않고 _PERCENT_READ_INTERVAL
-            # 마다만 재판독, 사이엔 캐시 사용(보스 유무는 천천히 바뀜).
-            if (
-                self._percent_last_t is None
-                or now - self._percent_last_t >= _PERCENT_READ_INTERVAL
-            ):
-                self._percent_present = read_percent(bar_region) is not None
-                self._percent_last_t = now
-            present = self._percent_present
-            # 빈사 보호: 퍼센트를 못 읽어도(검은 바·이펙트·가림) 바 영역에 '평평한 띠'가
-            # 남아 있으면 '애매'로 보고 유지한다. 바 영역이 '확실한 바닥'일 때만 보스 없음.
-            # (2차와 같은 철학 — 걸린 디버프를 재갱신하러 다가가다 죽는 사고 방지.)
-            confident_absent = (not present) and self._is_background(bar_region)
+            # 보완1: '확실한 바닥'이면 숫자 판독(수십 ms)을 건너뛴다. 보스가 없는 시간이
+            # 대부분이라 이 한 줄이 평균 비용을 가장 크게 줄인다. 바닥이면 어차피 숫자가
+            # 안 읽혀 None이므로 판정 결과는 동일(비용만 큼).
+            if self._is_background(bar_region):
+                present = False
+                confident_absent = True  # 확실한 바닥 → 보스 없음(유예 후 리셋)
+            else:
+                # 바닥 아님(띠 있음=바 존재). 판독해 보스/빈사를 구분한다.
+                # 성능: _PERCENT_READ_INTERVAL마다만 재판독 + 직전 당첨 오프셋 힌트로 가속.
+                if (
+                    self._percent_last_t is None
+                    or now - self._percent_last_t >= _PERCENT_READ_INTERVAL
+                ):
+                    val, off = read_percent_cached(
+                        bar_region, hint=self._percent_offset
+                    )
+                    self._percent_present = val is not None
+                    if off is not None:
+                        self._percent_offset = off  # 당첨 오프셋 기억(다음 판독 가속)
+                    self._percent_last_t = now
+                present = self._percent_present
+                # 빈사 보호: 바닥이 아닌데 퍼센트를 못 읽으면(검은 바·이펙트·가림) '애매'로
+                # 보고 유지(걸린 디버프를 재갱신하다 죽는 사고 방지 — 2차와 같은 철학).
+                confident_absent = False
         else:
             return False
 

@@ -19,7 +19,7 @@ from pathlib import Path
 import cv2
 import pytest
 
-from mabinogi_addon.detect.boss_hp_reader import read_percent
+from mabinogi_addon.detect.boss_hp_reader import read_percent, read_percent_cached
 from mabinogi_addon.tracker.debuff_engine import DebuffEngine
 
 _SHOTS = Path(__file__).parent / "data"
@@ -189,3 +189,44 @@ def test_boss_recognition_recall(capsys):
     miss = miss_band  # 2차 재현율을 회귀 가드로 고정(3차는 수치만 비교, 바 영역 근사라 참고)
     # 보스전에서의 과소인식은 위험하므로 재현율 100%를 요구한다.
     assert not miss, f"보스 과소인식(게이팅이 바닥으로 오판): {miss}"
+
+
+def _box_variants(region):
+    """바 박스 변형(기본/오른쪽 -px/위아래 확장)으로 정렬 민감도까지 커버."""
+    if region is None:
+        return []
+    h, w = region.shape[:2]
+    y0 = int(h * 0.52)
+    return [
+        region[y0:, :],            # 기본
+        region[y0:, : w - 6],      # 오른쪽 끝 -6px
+        region[int(h * 0.45):, :],  # 위아래 확장
+    ]
+
+
+def test_cached_matches_original_presence():
+    """read_percent_cached의 '있음/없음(None 여부)'이 원본 read_percent와 항상 같은지.
+
+    3차 게이팅은 present/absent만 쓰므로, 캐시 경로가 이 판정을 바꾸지 않음을 라벨 스샷 ×
+    박스 변형 × 여러 힌트로 고정한다(캐시는 항상 전체 탐색으로 폴백 → 결과 동일 보장).
+    read_percent가 느려(수십 ms) 전체 스샷 대신 라벨 셋(보스+바닥)만 본다.
+    """
+    names = list(dict.fromkeys(_BOSS_SHOTS + _NO_BOSS_SHOTS))  # 중복 제거
+    regions = [_region(nm) for nm in names]
+    regions = [r for r in regions if r is not None]
+    if not regions:
+        pytest.skip("라벨 스샷 없음")
+    hints = (None, 0, 99)  # 없음 / 맞는값 / 범위밖(무시) — 모두 원본과 같아야
+    checked = 0
+    for reg in regions:
+        for box in _box_variants(reg):
+            if box.size == 0:
+                continue
+            orig = read_percent(box) is not None
+            for hint in hints:
+                cached = read_percent_cached(box, hint=hint)[0] is not None
+                assert cached == orig, (
+                    f"box{box.shape} hint={hint}: cached={cached} orig={orig}"
+                )
+                checked += 1
+    assert checked > 0

@@ -105,15 +105,20 @@ def _read_at(
     return value, min(scores)
 
 
-def read_percent(
-    region_bgr: np.ndarray,
-    templates: dict[str, list[np.ndarray]] | None = None,
-) -> int | None:
-    """보스 HP바 박스(BGR, 오른쪽 끝 ≈ 바 오른쪽 끝)에서 정수 HP%(0~100)를 읽는다.
+def _scan(band, w, scale, pitch, templates, shifts):
+    """주어진 오프셋 후보들에서 가장 확신 높은 판독을 찾는다. (val, score, shift)."""
+    best_val: int | None = None
+    best_score = -2.0
+    best_shift: int | None = None
+    for shift in shifts:
+        val, score = _read_at(band, w, _FIRST * scale + shift, pitch, templates)
+        if val is not None and score > best_score:
+            best_val, best_score, best_shift = val, score, shift
+    return best_val, best_score, best_shift
 
-    못 읽으면 None(틀린 값보다 안전). 정렬 오프셋을 ±탐색해 가장 확신 높은 판독을
-    고르므로, 박스가 몇 px 어긋나도 알아서 맞춰 읽는다.
-    """
+
+def _prep(region_bgr, templates):
+    """공통 전처리. 유효하지 않으면 None."""
     templates = _DIGITS if templates is None else templates
     if region_bgr is None or region_bgr.size == 0 or not templates:
         return None
@@ -124,11 +129,54 @@ def read_percent(
     band = _color_mask(region_bgr)[int(h * _YBAND[0]):int(h * _YBAND[1])]
     pitch = _PITCH * scale
     span = max(1, round(_SEARCH * scale))
+    return templates, w, scale, band, pitch, span
 
-    best_val: int | None = None
-    best_score = -2.0
-    for shift in range(-span, span + 1):
-        val, score = _read_at(band, w, _FIRST * scale + shift, pitch, templates)
-        if val is not None and score > best_score:
-            best_val, best_score = val, score
-    return best_val if best_score >= _ACCEPT else None
+
+def read_percent(
+    region_bgr: np.ndarray,
+    templates: dict[str, list[np.ndarray]] | None = None,
+) -> int | None:
+    """보스 HP바 박스(BGR, 오른쪽 끝 ≈ 바 오른쪽 끝)에서 정수 HP%(0~100)를 읽는다.
+
+    못 읽으면 None(틀린 값보다 안전). 정렬 오프셋을 ±탐색해 가장 확신 높은 판독을
+    고르므로, 박스가 몇 px 어긋나도 알아서 맞춰 읽는다.
+    """
+    prep = _prep(region_bgr, templates)
+    if prep is None:
+        return None
+    templates, w, scale, band, pitch, span = prep
+    val, score, _ = _scan(band, w, scale, pitch, templates, range(-span, span + 1))
+    return val if score >= _ACCEPT else None
+
+
+def read_percent_cached(
+    region_bgr: np.ndarray,
+    templates: dict[str, list[np.ndarray]] | None = None,
+    hint: int | None = None,
+) -> tuple[int | None, int | None]:
+    """read_percent와 '있음/없음(None 여부)'은 동일하되 빠른 버전 — (값, 당첨 오프셋).
+
+    바의 오른쪽 끝은 영역 안에서 고정이라 당첨 오프셋이 매 프레임 거의 같다. 그래서
+    직전 당첨 오프셋(hint)만 먼저 보고, 실패하면 ±1, 그래도 실패하면 전체 탐색으로
+    폴백한다(단계식). 전체 탐색을 항상 포함하므로 '있음/없음' 결과는 read_percent와
+    완전히 같고(폴백 보장), 흔한 경우(힌트 적중)만 17배 빨라진다. 디버프 3차 전용 —
+    보스패턴알림은 값을 쓰므로 read_percent(전체 탐색)를 그대로 쓴다.
+    """
+    prep = _prep(region_bgr, templates)
+    if prep is None:
+        return None, None
+    templates, w, scale, band, pitch, span = prep
+    # 1) 힌트 1곳  2) 힌트±1  — 적중하면 즉시 반환(대부분 여기서 끝).
+    if hint is not None and -span <= hint <= span:
+        val, score, shift = _scan(band, w, scale, pitch, templates, (hint,))
+        if score >= _ACCEPT:
+            return val, shift
+        near = [s for s in (hint - 1, hint + 1) if -span <= s <= span]
+        val, score, shift = _scan(band, w, scale, pitch, templates, near)
+        if score >= _ACCEPT:
+            return val, shift
+    # 3) 전체 탐색(폴백) — read_percent와 동일 결과.
+    val, score, shift = _scan(band, w, scale, pitch, templates, range(-span, span + 1))
+    if score >= _ACCEPT:
+        return val, shift
+    return None, None
