@@ -210,6 +210,38 @@ class DebuffEngine:
                     return True
         return False
 
+    @staticmethod
+    def _is_background(region: np.ndarray) -> bool:
+        """영역이 '확실한 바닥/배경'(보스 바가 통째로 사라진 상태)인가.
+
+        _bar_present(밝은 유채색 띠)가 False여도 **보스가 사라진 것은 아니다**: 빈사
+        직전 보스 바는 '평평한 검은 띠'로 바뀌어 밝기/채도 조건에서 탈락한다. 그런데
+        검은 바도 **가로로 매끈한 띠**다 — 실게임 바닥·마을 텍스처는 '밝기 무관' 매끈
+        가로런이 한 줄도 없다(실측: 바닥/마을 0줄 vs 보스 바 30줄+). 그래서 **색·밝기를
+        전혀 보지 않고** 매끈한 가로 띠(_BAR_MIN_ROWS줄 이상)가 있으면 바닥이 아니다.
+
+        왜 이렇게 보수적으로 가는가: 빈사(검은 바)를 '보스 없음'으로 오판해 걸린 디버프를
+        '미적용'으로 리셋하면, 끝내야 할 보스에게 디버프를 재갱신하러 다가가다 죽을 수
+        있다. 그래서 **확실히 바닥일 때만** 리셋하고, 애매하면(검은 바·전환·이펙트) 직전
+        상태를 유지하며 매칭을 계속한다(디버프 아이콘은 빈사여도 그대로 보인다).
+        """
+        if region is None or region.shape[0] < 3 or region.shape[1] < 20:
+            return False
+        g = cv2.cvtColor(region, cv2.COLOR_BGR2GRAY).astype(np.int16)
+        smooth = np.abs(np.diff(g, axis=1)) < _BAR_SMOOTH_GAP  # (h, w-1), 색·밝기 무관
+        need = int(region.shape[1] * _BAR_RUN_RATIO)
+        band_rows = 0
+        for row in smooth:
+            run = longest = 0
+            for v in row:
+                run = run + 1 if v else 0
+                longest = max(longest, run)
+            if longest >= need:
+                band_rows += 1
+                if band_rows >= _BAR_MIN_ROWS:
+                    return False  # 어떤 밝기든 가로 띠가 있음 → 바닥 아님(보스/바 잔존)
+        return True  # 매끈한 가로 띠가 없음 → 확실한 바닥/배경
+
     def tick(
         self, region: np.ndarray, now: float, foreground: bool = True
     ) -> TickResult:
@@ -220,10 +252,12 @@ class DebuffEngine:
             self._fell_since.clear()
             self._warn_until.clear()
             self._applied_prev = {bid: False for bid in self._templates}
-        # 보스 HP바 게이팅: 바가 '있을 때만' 매칭한다. 바가 없으면(보스 없음) 매칭을
-        # 멈추고 **전부 '미적용'으로 표시**(오버레이는 사라지지 않음 — 과거 '통째 숨김'이
-        # 버그처럼 보였던 것과 다름). 이렇게 해야 보스 없는 배경(바닥·마을 텍스처)을
-        # 디버프로 오인하지 않고, 이력 임계로 래치됐던 오탐도 풀린다.
+        # 보스 HP바 게이팅: 밝은 바가 보이면 매칭한다(보스 있음). 밝은 바가 없더라도
+        # **확실한 바닥/배경일 때만** '보스 없음'으로 보고 매칭을 멈춰 **전부 '미적용'으로
+        # 리셋**한다(배경 오탐 제거 + 래치 해제). 밝은 바가 없고 바닥도 아니면(= 빈사 직전
+        # 검은 바·전환·이펙트) **애매**로 보고 직전 상태를 유지하며 매칭을 이어간다.
+        #   왜: 빈사(검은 바)를 보스 없음으로 오판해 걸린 디버프를 미적용으로 리셋하면,
+        #   재갱신하러 보스에게 다가가다 죽을 수 있다 → 확실할 때만 리셋(보수적).
         # 단, 바를 한 번도 못 본 영역(= 바를 안 넣은 사용자)은 게이팅하지 않아 하위호환.
         bar = self._bar_present(region)
         self._bar_last = bar
@@ -232,11 +266,15 @@ class DebuffEngine:
             self._bar_seen = True
             self._bar_gone_since = None
         elif self._bar_seen:
-            # 바가 안 보이기 시작: _BAR_GRACE_SEC 동안은 유지(보스로 걸어갈 때 깜빡임 방지).
-            if self._bar_gone_since is None:
-                self._bar_gone_since = now
-            if now - self._bar_gone_since >= _BAR_GRACE_SEC:
-                boss_absent = True
+            if self._is_background(region):
+                # 확실한 바닥 → _BAR_GRACE_SEC 유예 후 보스 없음 확정.
+                if self._bar_gone_since is None:
+                    self._bar_gone_since = now
+                if now - self._bar_gone_since >= _BAR_GRACE_SEC:
+                    boss_absent = True
+            else:
+                # 애매(검은 바·전환·이펙트) → 리셋 금지, 유예 재시작, 매칭 유지.
+                self._bar_gone_since = None
 
         if boss_absent:
             # 보스 없음 확정 → 매칭 중단, 전부 미적용으로 리셋(래치 해제), 경고 대기 비움.

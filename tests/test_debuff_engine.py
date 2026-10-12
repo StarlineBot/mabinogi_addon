@@ -133,6 +133,21 @@ def _bar_region(h=40, w=160):
     return r
 
 
+def _black_bar_region(h=40, w=160):
+    """빈사 직전 보스 바: 아래쪽이 '평평한 검은 띠'(어둡지만 가로로 매끈)."""
+    r = np.random.default_rng(8).integers(0, 255, (h, w, 3), dtype=np.uint8)
+    r[22:40, :] = (8, 8, 8)  # 어둡고 매끈한 띠 — 밝은 바 조건엔 탈락하나 '바닥'은 아님
+    return r
+
+
+def _black_bar_with_icon(base):
+    """빈사 검은 바 + 상단에 걸린 디버프 아이콘."""
+    r = _black_bar_region()
+    icon = cv2.resize(base, (ICON, ICON), interpolation=cv2.INTER_AREA)
+    r[3 : 3 + ICON, 30 : 30 + ICON] = icon
+    return r
+
+
 def test_overlay_always_shown_regardless_of_bar():
     # 상시 노출: 바가 보이든(보스 존재) 안 보이든(보스 이탈) 오버레이는 계속 표시한다.
     # 예전엔 바가 유예를 넘겨 안 보이면 통째로 숨겼지만(게이팅), 바 인식이 불완전해
@@ -294,6 +309,41 @@ def test_background_not_matched_when_boss_absent():
     shown = [e.buff_id for e in res.entries]
     assert set(shown) == set(order)  # 바닥 오탐 없이 전부 미적용 표시
     assert res.alerts == []
+
+
+def test_is_background_real_floor_vs_boss():
+    """실게임: 빈 바닥은 '배경'(True), 보스 바가 있으면 '배경 아님'(False)."""
+    boss = cv2.imread(str(_SHOTS / "스크린샷 2026-10-12 000512.png"))
+    floor = cv2.imread(str(_SHOTS / "스크린샷 2026-10-12 024008.png"))
+    assert boss is not None and floor is not None
+    boss_reg = boss[1210:1210 + 79, 1017:1017 + 524]
+    floor_reg = floor[1210:1210 + 79, 1017:1017 + 524]
+    assert DebuffEngine._is_background(floor_reg) is True  # 바닥 → 리셋 허용
+    assert DebuffEngine._is_background(boss_reg) is False  # 보스 바 → 리셋 금지
+
+
+def test_near_death_black_bar_is_not_background():
+    """빈사 직전 '평평한 검은 바'는 밝은 바 조건엔 탈락해도 '배경'이 아니다.
+
+    (검은 바도 가로로 매끈한 띠라, 매끈 가로런이 0줄인 실바닥과 명확히 갈린다.)
+    """
+    r = _black_bar_region()
+    assert DebuffEngine._bar_present(r) is False  # 어두워서 밝은 바로는 안 잡힘
+    assert DebuffEngine._is_background(r) is False  # 그러나 바닥도 아님(띠가 남음)
+
+
+def test_applied_debuff_not_reset_on_near_death_black_bar():
+    """빈사(검은 바)를 '보스 없음'으로 오판해 걸린 디버프를 리셋하지 않는다.
+
+    리셋하면 '안 걸림'으로 떠서 재갱신하러 보스에게 다가가다 죽을 수 있다 — 위험 시나리오.
+    """
+    tpl = _bases()
+    eng = DebuffEngine(tpl, ["a", "b"])
+    eng.tick(_bar_with_icon(tpl["a"]), now=0.0)  # a 걸림(디바운스 대기)
+    assert _shown(eng.tick(_bar_with_icon(tpl["a"]), now=0.4)) == ["b"]  # a 확정 → 숨김
+    # 보스가 빈사 → 검은 바. 유예를 한참 넘겨도 a는 미적용으로 리셋되지 않는다.
+    eng.tick(_black_bar_with_icon(tpl["a"]), now=0.6)
+    assert _shown(eng.tick(_black_bar_with_icon(tpl["a"]), now=3.0)) == ["b"]  # a 계속 숨김
 
 
 def test_warn_gone_suppressed_when_not_foreground():
