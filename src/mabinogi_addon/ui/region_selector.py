@@ -245,6 +245,10 @@ class RegionSelector(QWidget):
             label = f"{self._rect.width()} × {self._rect.height()}"
             painter.setPen(QColor(255, 255, 255))
             painter.drawText(self._rect.adjusted(4, 4, 0, 0), 0, label)
+            if self._fixed is not None:
+                # 상단 중앙 알약은 박스를 보느라 잘 안 봐서(실사용 피드백), 박스 '바로 위'에
+                # 휠 조절 안내를 붙여 늘 눈에 들어오게 한다.
+                self._draw_box_tip(painter, self._rect, "🖱 휠로 크기 조절 (Shift=크게)")
         if self._fixed is not None:
             # 고정 박스 모드: 조작 안내 + '박스가 실제로 잡는 영역' 미리보기(커서 돋보기 X).
             self._draw_hint(
@@ -254,6 +258,24 @@ class RegionSelector(QWidget):
                 self._draw_box_preview(painter, self._rect)
         elif self._cursor is not None and not self._shot.isNull():
             self._draw_loupe(painter, self._cursor)
+
+    def _draw_box_tip(self, painter: QPainter, rect: QRect, text: str) -> None:
+        """고정 박스 '바로 위'(위가 좁으면 아래)에 조작 안내 알약을 붙인다."""
+        painter.setOpacity(1.0)
+        fm = painter.fontMetrics()
+        tw = fm.horizontalAdvance(text)
+        bw, bh = tw + 16, fm.height() + 8
+        bx = rect.left()
+        by = rect.top() - bh - 6
+        if by < 4:  # 위 공간 부족 → 박스 아래로
+            by = rect.bottom() + 6
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(0, 0, 0, 190))
+        painter.drawRoundedRect(bx, by, bw, bh, bh // 2, bh // 2)
+        painter.setPen(QColor(93, 232, 193))
+        painter.drawText(
+            QRect(bx, by, bw, bh), Qt.AlignmentFlag.AlignCenter, text
+        )
 
     def _draw_hint(self, painter: QPainter, text: str) -> None:
         """화면 상단 중앙에 조작 안내 알약(pill)을 그린다."""
