@@ -126,3 +126,26 @@ def test_desired_dwm_no_window_falls_back(monkeypatch):
     mgr = _mgr_for_mode(monkeypatch, win_size=(1280, 720), screen_size=(3840, 2160))
     mgr._source_hwnd = lambda: 0
     assert mgr._desired_dwm() is False
+
+
+def test_custom_overlay_tab_constructs_without_crash():
+    """실제 CustomOverlayTab 생성 경로(MirrorManager가 소스 공급자를 호출)에서
+    __init__ 중 게임창 탐지로 크래시하지 않는지. (유닛 테스트의 lambda가 못 잡는 경로)"""
+    import os
+
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtWidgets import QApplication
+
+    from mabinogi_addon.ui.custom_overlay_tab import CustomOverlayTab
+
+    QApplication.instance() or QApplication([])
+
+    class _W:
+        def is_game_active(self):
+            return False
+
+        def is_self_active(self):
+            return True
+
+    tab = CustomOverlayTab(_W())
+    tab._mgr._tick()  # 첫 틱(_maybe_switch_mode 경로)도 안전해야 함

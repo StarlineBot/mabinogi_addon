@@ -219,8 +219,9 @@ class CustomOverlayTab(QWidget):
         from ..system import dwm_thumbnail
         from ..system.window_watcher import DEFAULT_GAME_TITLES
 
-        if self._game_hwnd and dwm_thumbnail.window_rect(self._game_hwnd):
-            return self._game_hwnd  # 아직 유효 → 재탐색 생략(EnumWindows 비용 회피)
+        cached = getattr(self, "_game_hwnd", 0)  # __init__ 순서와 무관하게 안전
+        if cached and dwm_thumbnail.window_rect(cached):
+            return cached  # 아직 유효 → 재탐색 생략(EnumWindows 비용 회피)
         self._game_hwnd = dwm_thumbnail.find_game_window(
             config.load_game_exe(), DEFAULT_GAME_TITLES
         )

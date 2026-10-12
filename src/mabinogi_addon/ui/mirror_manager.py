@@ -69,7 +69,10 @@ class MirrorManager(QObject):
         # _desired_dwm()가 매번 판단한다 — 게임이 '테두리 없는 전체 창'이면 OS가
         # independent flip로 전환돼 DWM 썸네일이 검정으로 나오므로, 그땐 mss로 그린다.
         self._dwm_cap = source_hwnd is not None and self._dwm_available()
-        self._dwm = self._desired_dwm()  # 현재 모드(런타임에 mss↔DWM 전환)
+        # 현재 모드. 생성자에선 게임 창 탐지를 하지 않는다(소스 공급자가 아직 완전히
+        # 초기화 전일 수 있음 + 게임이 아직 안 떴을 수 있음). DWM 가능이면 일단 DWM로
+        # 시작하고, 첫 _tick의 _maybe_switch_mode가 실제 상태(전체창/못찾음)에 맞춰 전환.
+        self._dwm = self._dwm_cap
         self._mode_pending = 0  # 모드 전환 히스테리시스(원하는 모드가 몇 틱 지속됐나)
         self._attached_hwnd = 0  # 현재 썸네일이 물린 게임 창(바뀌면 재연결)
         self._shown = True
