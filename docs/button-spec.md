@@ -3,6 +3,11 @@
 결론: **일반 버튼 = 중립(민트 없음)**, **민트는 토글 상태(OFF 외곽선 / ON 채움)에만**.
 (민트를 모든 버튼에 쓰면 중요도 위계가 사라져 비추천 — TODO.md 참고.)
 
+- **글로우: 안 씀**(전체 모노톤 통일). 토글 구분은 민트 선 vs 민트 채움만으로 충분.
+- **반전 원칙**: OFF ↔ ON은 채움/선을 맞바꾼 거울상. 즉 **선 색 = 베이스 배경색**.
+  (다크: ON 선=어두움 / 라이트: ON 선=밝음(흰). 확정 라이트는 **흰 채움(B안)**.)
+- **인셋 간격**은 버튼 높이에 비례해 조금 키워 '떠 있는 선'이 보이게(작은 버튼은 좁아 보임).
+
 ## 구조 (중요)
 
 테두리 색은 **위젯 가장자리 테두리가 아니다.** 버튼 배경을 사이에 두고 **버튼 안쪽에 따로
@@ -44,6 +49,34 @@
 | Pressed | #4FD6B6 | #1B1D20 | #0F1110 |
 | Disabled | #365046 | #222624 | #28413B |
 
+## 색값 (라이트 테마 — 확정: B 흰 채움)
+
+ON 선은 **밝은(흰) 선**(반전). 민트 선은 밝은 배경에서 묻히지 않게 **진한 민트**로.
+
+### 일반 버튼
+| 상태 | 배경 | 인셋 테두리 | 텍스트 |
+|---|---|---|---|
+| Default | #FFFFFF | #C9CCD2 | #2A2C30 |
+| Hover | #FBFCFD | #AEB2BB | #161819 |
+| Pressed | #F1F2F4 | #B6BAC2 | #2A2C30 |
+| Disabled | #F7F8FA | #DBDDE1 | #A6A9B0 |
+
+### 토글 OFF (흰 채움 + **진한 민트 선**)
+| 상태 | 배경 | 인셋 테두리(민트) | 텍스트 |
+|---|---|---|---|
+| Default | #FFFFFF | #12A98A | #2A2C30 |
+| Hover | #FBFCFD | #0E9A7E | #161819 |
+| Pressed | #F1F2F4 | #0C8D73 | #2A2C30 |
+| Disabled | #F7F8FA | #AFDCD0 | #A6A9B0 |
+
+### 토글 ON (민트 채움 + **밝은(흰) 선** + 어두운 글자)
+| 상태 | 배경(민트) | 인셋 테두리 | 텍스트 |
+|---|---|---|---|
+| Default | #28CFA8 | #FFFFFF | #09241D |
+| Hover | #1FC29C | #FFFFFF | #09201A |
+| Pressed | #18B48F | #EEF1F3 | #09201A |
+| Disabled | #AADFD2 | #FFFFFF | #5B7A70 |
+
 ## Qt 구현 메모 (검토 필요)
 - **인셋 '떠 있는 선'은 순수 QSS로 불가** — QSS `border`는 위젯 가장자리에만 그려진다.
   → **QPushButton 서브클래스 + 커스텀 paintEvent**로 그린다:
@@ -53,9 +86,8 @@
   (QPainter + Antialiasing + drawRoundedRect. 텍스트는 기본 QPushButton이 그리게 두거나 직접.)
 - 상태(기본/hover/pressed/disabled/checked): `isDown()`·`underMouse()`·`isEnabled()`·
   `isChecked()`로 색 세트를 골라 paint. (토글은 setCheckable(True).)
-- **글로우**: QSS box-shadow 미지원 → `QGraphicsDropShadowEffect`(blur+민트) 또는 paint 시
-  바깥에 반투명 민트 번짐. ON에 강하게.
-- **라이트 테마**: 위 값은 다크 전용. 라이트용 회색 램프가 별도로 필요(민트 램프는 공용 가능).
+- **글로우: 사용 안 함**(모노톤). 드롭섀도 불필요.
+- **테마 전환**: 다크/라이트 색 세트를 `theme.is_dark()`로 골라 적용.
 - 적용 위치: `ui/widgets.py`에 공용 위젯(예: `ToggleButton`, `NeutralButton`) → 흩어진
   `#00B894 checked` 토글 버튼부터 교체.
 - 착수 전 **렌더(3종 × 4상태, 다크·라이트)로 피드백**.
