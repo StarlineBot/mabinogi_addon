@@ -322,6 +322,7 @@ class MainWindow(QMainWindow):
         self.debuff_tab.lock_toggled.connect(self._on_debuff_lock)
         self.debuff_tab.tracking_changed.connect(self._on_debuff_tracking_changed)
         self.debuff_tab.catalog_changed.connect(self._on_debuff_catalog_changed)
+        self.debuff_tab.bar_gating_changed.connect(self._on_debuff_bar_gating)
         self.debuff_overlay.moved.connect(self._save_debuff_overlay_state)
 
         # 메모 오버레이: 위치·크기는 영역 지정, 고정=클릭통과. 게임 활성 시만 표시.
@@ -1042,7 +1043,11 @@ class MainWindow(QMainWindow):
         order = self._debuff_order(catalog)
         # 표시(숨기지 않은) 디버프만 매칭 — 버프와 동일하게 비용 절감.
         tracked = [b for b in catalog if b.id in set(order)]
-        self._debuff_engine = DebuffEngine(build_templates(tracked), order)
+        self._debuff_engine = DebuffEngine(
+            build_templates(tracked),
+            order,
+            bar_gating=self.debuff_tab.effective_bar_gating(),
+        )
         self._debuff_engine.set_warn_gone_ids(self._debuff_warn_gone_ids())
         # 지속시간·알림·점멸 없음 → show_duration 전부 False.
         self.debuff_controller = BuffController(
@@ -1062,6 +1067,11 @@ class MainWindow(QMainWindow):
             return
         self._debuff_engine.set_order(self._debuff_order(available_debuff_catalog()))
         self._debuff_engine.set_warn_gone_ids(self._debuff_warn_gone_ids())
+
+    def _on_debuff_bar_gating(self, on: bool) -> None:
+        """'보스 바 인식(베타)' 토글 → 라이브 엔진 모드 전환(멱등)."""
+        if self._debuff_engine is not None:
+            self._debuff_engine.set_bar_gating(bool(on))
 
     def _debuff_warn_gone_ids(self) -> set[str]:
         """'사라짐 경고'를 켠 디버프 id 집합(보스에서 떨어지면 빨간 테두리+X+소리)."""

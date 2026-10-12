@@ -76,12 +76,16 @@ class DebuffEngine:
         detect_threshold: float = DEBUFF_DETECT_THRESHOLD,
         release_threshold: float = DEBUFF_RELEASE_THRESHOLD,
         reappear_sec: float = 0.4,
+        bar_gating: bool = False,
     ) -> None:
         self._templates = templates
         self._order = list(order)
         self._detect_thr = detect_threshold
         self._release_thr = release_threshold
         self._reappear = reappear_sec
+        # 보스 HP바 게이팅(베타). False(기본) = 기존 방식: 항상 탐지(바닥 오탐 가능하나
+        # 보스 바 인식에 의존하지 않아 예측 가능). True = 바가 있을 때만 매칭 + 빈사 안전.
+        self._bar_gating = bar_gating
         # 템플릿을 매칭 크기(축소 후 화면 아이콘 크기)로 미리 맞춘다.
         self._variants = {
             bid: [_variant(t, _MATCH_ICON_PX)] for bid, t in templates.items()
@@ -116,6 +120,16 @@ class DebuffEngine:
     def set_warn_gone_ids(self, ids: set[str]) -> None:
         """'사라짐 경고' 켠 디버프 집합 갱신."""
         self._warn_gone_ids = set(ids)
+
+    def set_bar_gating(self, on: bool) -> None:
+        """보스 바 게이팅(베타) 켜기/끄기. 끄면(기본) 기존 방식으로 항상 탐지한다."""
+        on = bool(on)
+        if on == self._bar_gating:
+            return
+        self._bar_gating = on
+        # 모드 전환 시 바 이력·유예를 초기화해 깨끗한 상태에서 다시 판정한다.
+        self._bar_seen = False
+        self._bar_gone_since = None
 
     def set_order(self, order: list[str]) -> None:
         self._order = list(order)
@@ -262,19 +276,22 @@ class DebuffEngine:
         bar = self._bar_present(region)
         self._bar_last = bar
         boss_absent = False
-        if bar:
-            self._bar_seen = True
-            self._bar_gone_since = None
-        elif self._bar_seen:
-            if self._is_background(region):
-                # 확실한 바닥 → _BAR_GRACE_SEC 유예 후 보스 없음 확정.
-                if self._bar_gone_since is None:
-                    self._bar_gone_since = now
-                if now - self._bar_gone_since >= _BAR_GRACE_SEC:
-                    boss_absent = True
-            else:
-                # 애매(검은 바·전환·이펙트) → 리셋 금지, 유예 재시작, 매칭 유지.
+        # 게이팅 OFF(기본·기존 방식): boss_absent 판정을 하지 않아 항상 매칭한다.
+        # bar는 '사라짐 경고'(바 보일 때만 발동)에 계속 쓰이므로 끄지 않는다.
+        if self._bar_gating:
+            if bar:
+                self._bar_seen = True
                 self._bar_gone_since = None
+            elif self._bar_seen:
+                if self._is_background(region):
+                    # 확실한 바닥 → _BAR_GRACE_SEC 유예 후 보스 없음 확정.
+                    if self._bar_gone_since is None:
+                        self._bar_gone_since = now
+                    if now - self._bar_gone_since >= _BAR_GRACE_SEC:
+                        boss_absent = True
+                else:
+                    # 애매(검은 바·전환·이펙트) → 리셋 금지, 유예 재시작, 매칭 유지.
+                    self._bar_gone_since = None
 
         if boss_absent:
             # 보스 없음 확정 → 매칭 중단, 전부 미적용으로 리셋(래치 해제), 경고 대기 비움.

@@ -66,6 +66,7 @@ class DebuffTab(QWidget):
     tracking_changed = Signal()  # 순서·노출 변경 → 라이브 반영
     catalog_changed = Signal()  # 디버프 추가·삭제·아이콘 변경 → 엔진 재구성
     scale_changed = Signal(int)  # 디버프 오버레이 배율(%) 변경
+    bar_gating_changed = Signal(bool)  # '보스 바 인식(베타)' 토글 → 엔진 모드 전환
 
     def __init__(self) -> None:
         super().__init__()
@@ -166,6 +167,26 @@ class DebuffTab(QWidget):
         self.status_label = hint_label("")  # 진단 상태(추적 중/게임 비활성 등)
         v.addWidget(self.status_label)
 
+        # 탐지 방식(베타): 보스 바 인식 게이팅. 기본 꺼짐 = 기존 방식(항상 탐지).
+        self.bar_gating_check = checkbox("보스 바 인식 사용 (베타)")
+        self.bar_gating_check.setToolTip(
+            "켜면 보스 체력바가 보일 때만 디버프를 탐지합니다.\n"
+            "· 빈 바닥·마을을 디버프로 오인하던 오탐이 사라집니다.\n"
+            "· 빈사(체력바가 거의 검어짐) 때도 걸린 디버프를 '안 걸림'으로 되돌리지 않아요.\n"
+            "※ 보스 바 인식에 의존하는 실험 기능입니다. 꺼두면(기본) 기존처럼 항상 탐지합니다."
+        )
+        self.bar_gating_check.blockSignals(True)
+        self.bar_gating_check.setChecked(config.load_general_flag("debuffBarGating"))
+        self.bar_gating_check.blockSignals(False)
+        self.bar_gating_check.toggled.connect(self._on_bar_gating)
+        v.addWidget(self.bar_gating_check)
+        self._bar_gating_notice = hint_label(
+            "🧪 베타 — 설정 탭에서 Discord 로그인 후 사용할 수 있습니다."
+        )
+        self._bar_gating_notice.setStyleSheet("color:#e67e22; font-size:12px;")
+        v.addWidget(self._bar_gating_notice)
+        self._apply_login_gate()
+
         self.debuff_list = QListWidget()
         self.debuff_list.setIconSize(QSize(28, 28))
         self.debuff_list.currentRowChanged.connect(self._on_select)
@@ -193,6 +214,32 @@ class DebuffTab(QWidget):
     def _on_scale(self, pct: int) -> None:
         config.set_debuff_scale(pct)
         self.scale_changed.emit(pct)
+
+    # ---- 탐지 방식(베타) ----
+    @staticmethod
+    def _logged_in() -> bool:
+        return config.load_discord_user() is not None
+
+    def effective_bar_gating(self) -> bool:
+        """실제 적용할 게이팅 = 토글 ON + 디코 로그인(베타 자격)."""
+        return self.bar_gating_check.isChecked() and self._logged_in()
+
+    def _apply_login_gate(self) -> None:
+        """베타 게이팅: 디코 로그인 사용자만 토글을 조작할 수 있게 한다."""
+        ok = self._logged_in()
+        self.bar_gating_check.setEnabled(ok)
+        self._bar_gating_notice.setVisible(not ok)
+
+    def _on_bar_gating(self, on: bool) -> None:
+        config.save_general_flag("debuffBarGating", bool(on))
+        self.bar_gating_changed.emit(self.effective_bar_gating())
+
+    def showEvent(self, event) -> None:  # noqa: N802 (Qt 시그니처)
+        super().showEvent(event)
+        # 탭이 보일 때마다 로그인 상태를 반영(설정 탭에서 로그인/로그아웃 후 복귀 대비)하고,
+        # 실제 게이팅(토글 ON + 로그인)을 엔진에 재통지한다(set_bar_gating은 멱등).
+        self._apply_login_gate()
+        self.bar_gating_changed.emit(self.effective_bar_gating())
 
     def set_status(self, text: str, color: str) -> None:
         """진단 상태 한 줄 갱신(메인의 주기 폴링에서 호출)."""

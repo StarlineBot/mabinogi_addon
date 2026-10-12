@@ -302,7 +302,7 @@ def test_background_not_matched_when_boss_absent():
     probe = DebuffEngine(tpl, order).best_scores(floor_reg)
     assert max(probe.values()) >= DEBUFF_DETECT_THRESHOLD  # 바닥이 실제로 오매칭됨
 
-    eng = DebuffEngine(tpl, order)
+    eng = DebuffEngine(tpl, order, bar_gating=True)
     eng.tick(boss_reg, now=0.0)  # 바 인식 → bar_seen=True
     eng.tick(floor_reg, now=0.2)  # 바 사라짐(유예 내)
     res = eng.tick(floor_reg, now=2.0)  # 유예 후 → 보스 없음 → 매칭 중단·리셋
@@ -338,12 +338,50 @@ def test_applied_debuff_not_reset_on_near_death_black_bar():
     리셋하면 '안 걸림'으로 떠서 재갱신하러 보스에게 다가가다 죽을 수 있다 — 위험 시나리오.
     """
     tpl = _bases()
-    eng = DebuffEngine(tpl, ["a", "b"])
+    eng = DebuffEngine(tpl, ["a", "b"], bar_gating=True)
     eng.tick(_bar_with_icon(tpl["a"]), now=0.0)  # a 걸림(디바운스 대기)
     assert _shown(eng.tick(_bar_with_icon(tpl["a"]), now=0.4)) == ["b"]  # a 확정 → 숨김
     # 보스가 빈사 → 검은 바. 유예를 한참 넘겨도 a는 미적용으로 리셋되지 않는다.
     eng.tick(_black_bar_with_icon(tpl["a"]), now=0.6)
     assert _shown(eng.tick(_black_bar_with_icon(tpl["a"]), now=3.0)) == ["b"]  # a 계속 숨김
+
+
+def _icon_on_noise(base):
+    """바 없이 노이즈 배경 + 걸린 디버프 아이콘(바닥처럼 보이나 아이콘은 계속 보임)."""
+    r = _noise(h=40, w=160)
+    icon = cv2.resize(base, (ICON, ICON), interpolation=cv2.INTER_AREA)
+    r[3 : 3 + ICON, 30 : 30 + ICON] = icon
+    return r
+
+
+def test_gating_off_by_default_never_resets():
+    """기본(게이팅 OFF) = 기존 방식: 바가 없어도 매칭을 멈추거나 리셋하지 않는다.
+
+    아이콘이 계속 보이면(=실제로 걸려 있으면) 바가 없다고 '미적용'으로 되돌리지 않는다.
+    바닥 오탐은 감수하되(비치명적) 보스 바 인식에 의존하지 않는 예측 가능한 동작.
+    """
+    tpl = _bases()
+    eng = DebuffEngine(tpl, ["a", "b"])  # bar_gating 기본 False
+    eng.tick(_icon_on_noise(tpl["a"]), now=0.0)
+    assert _shown(eng.tick(_icon_on_noise(tpl["a"]), now=0.4)) == ["b"]  # a 확정 → 숨김
+    # 바가 전혀 없고 배경 같은 영역이어도 아이콘이 보이는 한 리셋하지 않는다.
+    eng.tick(_icon_on_noise(tpl["a"]), now=0.6)
+    assert _shown(eng.tick(_icon_on_noise(tpl["a"]), now=3.0)) == ["b"]  # a 계속 숨김
+
+
+def test_set_bar_gating_toggles_behavior():
+    """set_bar_gating(True)면 바 없는 영역에서 아이콘이 보여도 리셋한다(게이팅 ON).
+
+    같은 입력이라도 게이팅 OFF면 유지(위 테스트), ON이면 보스 없음으로 보고 리셋 — 대비.
+    """
+    tpl = _bases()
+    eng = DebuffEngine(tpl, ["a", "b"])
+    eng.set_bar_gating(True)
+    eng.tick(_bar_with_icon(tpl["a"]), now=0.0)  # 밝은 바 인식 → bar_seen=True
+    assert _shown(eng.tick(_bar_with_icon(tpl["a"]), now=0.4)) == ["b"]  # a 숨김
+    # 바가 사라지고 배경(아이콘 있어도 밴드 없음 → 확실한 바닥) → 유예 후 리셋.
+    eng.tick(_icon_on_noise(tpl["a"]), now=0.6)
+    assert set(_shown(eng.tick(_icon_on_noise(tpl["a"]), now=2.0))) == {"a", "b"}
 
 
 def test_warn_gone_suppressed_when_not_foreground():
