@@ -40,6 +40,14 @@ DEBUFF_DETECT_THRESHOLD = 0.68
 DEBUFF_RELEASE_THRESHOLD = 0.58
 DEBUFF_THRESHOLD = DEBUFF_DETECT_THRESHOLD  # 진단 스크립트 표시용
 
+# 아이콘별 임계 override. 모모(네잎클로버)처럼 정보량이 적은 아이콘은 풀·바닥·스킬
+# 이펙트와 상관계수가 0.67까지 올라가 일괄 임계(0.68)에 거의 붙는다 → 안 걸렸는데
+# '걸림'으로 오판돼 오버레이에서 사라진다. 실제로 걸렸을 땐 0.93로 간격이 크므로,
+# '그 아이콘만' 높은 임계로 가른다. (일괄 상향은 0.76 아래로 떨어지는 '실제' 다른
+# 디버프들을 누락시켜 안 됨 — 위 주석 참고.) 다른 아이콘이 재발하면 여기에 추가한다.
+_PER_ICON_DETECT = {"모모": 0.80, "방해 카드": 0.80}
+_PER_ICON_RELEASE = {"모모": 0.70, "방해 카드": 0.70}
+
 # 보스 HP바 앵커(오탐 게이팅). 영역에 보스 체력바까지 포함해 잡으면, 바가 보일 때만
 # 디버프를 탐지해 마을·풀밭 오탐을 없앤다. 바 색은 HP/보스마다 달라(보라·파랑·초록·
 # 노랑·빨강) 색으로는 못 가르지만, **바 채움은 가로로 길게 '매끈'(인접 픽셀 거의 동일)**
@@ -202,12 +210,22 @@ class DebuffEngine:
                 best = max(best, match_icon(small, variant).score)
         return best
 
+    def detect_threshold_for(self, bid: str) -> float:
+        """아이콘별 감지 임계(모모·방해 카드 등 저정보 아이콘은 더 높게)."""
+        return _PER_ICON_DETECT.get(bid, self._detect_thr)
+
+    def release_threshold_for(self, bid: str) -> float:
+        return _PER_ICON_RELEASE.get(bid, self._release_thr)
+
     def _detect(self, small: np.ndarray, bid: str) -> bool:
-        """이력 임계: 시작은 detect_thr 이상, 해제는 release_thr 미만. 그 사이는 유지."""
+        """이력 임계: 시작은 detect_thr 이상, 해제는 release_thr 미만. 그 사이는 유지.
+        모모·방해 카드처럼 이펙트에 잘 붙는 저정보 아이콘은 아이콘별로 더 높은 임계를 쓴다."""
         score = self._best(small, bid)
-        if score >= self._detect_thr:
+        detect_thr = _PER_ICON_DETECT.get(bid, self._detect_thr)
+        release_thr = _PER_ICON_RELEASE.get(bid, self._release_thr)
+        if score >= detect_thr:
             matched = True
-        elif score < self._release_thr:
+        elif score < release_thr:
             matched = False
         else:
             matched = self._matched.get(bid, False)  # 경계 구간 → 직전 판정 유지

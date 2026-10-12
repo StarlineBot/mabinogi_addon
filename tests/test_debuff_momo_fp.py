@@ -16,10 +16,7 @@ import cv2
 import pytest
 
 from mabinogi_addon.catalog import available_debuff_catalog, build_templates
-from mabinogi_addon.tracker.debuff_engine import (
-    DEBUFF_DETECT_THRESHOLD,
-    DebuffEngine,
-)
+from mabinogi_addon.tracker.debuff_engine import DebuffEngine
 
 _DATA = Path(__file__).parent / "data"
 # 디버프 줄이 들어오는 하단 중앙 영역(실측). 보스 HP바 위 디버프 아이콘 행을 넉넉히 포함.
@@ -53,13 +50,14 @@ def test_momo_detection_matches_reality(engine: DebuffEngine, fname: str, presen
     if not path.exists():
         pytest.skip(f"샘플 없음: {fname}")
     score = _momo_score(engine, path)
+    thr = engine.detect_threshold_for("모모")  # 모모는 아이콘별 높은 임계
     if present:
-        assert score >= DEBUFF_DETECT_THRESHOLD, (
-            f"{fname}: 모모가 실제 걸렸는데 미감지 (점수 {score:.3f} < {DEBUFF_DETECT_THRESHOLD})"
+        assert score >= thr, (
+            f"{fname}: 모모가 실제 걸렸는데 미감지 (점수 {score:.3f} < {thr})"
         )
     else:
-        assert score < DEBUFF_DETECT_THRESHOLD, (
-            f"{fname}: 모모 없는데 오탐 (점수 {score:.3f} ≥ {DEBUFF_DETECT_THRESHOLD})"
+        assert score < thr, (
+            f"{fname}: 모모 없는데 오탐 (점수 {score:.3f} ≥ {thr})"
         )
 
 
