@@ -225,13 +225,20 @@ class BossTab(QWidget):
         else:
             self.region_label.setText("영역 미지정")
 
-    def showEvent(self, event) -> None:  # noqa: N802 (Qt 시그니처)
-        super().showEvent(event)
-        # 공유 영역(디버프 3차에서 지정했을 수도)을 다시 읽어 반영(양방향 공유).
+    def reload_region(self) -> None:
+        """공유 보스 HP바 영역을 다시 읽어 반영(디버프 탭에서 바꿨을 때 메인이 호출).
+
+        300ms 타이머가 메모리의 self._region을 읽으므로, 탭을 안 열어도 즉시 새 영역을
+        쓰게 하려면 이렇게 메모리를 갱신해야 한다(매 틱 파일 I/O는 피한다).
+        """
         shared = config.load_boss_bar_region()
         if shared and shared != self._region:
             self._region = shared
             self._update_region_label()
+
+    def showEvent(self, event) -> None:  # noqa: N802 (Qt 시그니처)
+        super().showEvent(event)
+        self.reload_region()  # 공유 영역(디버프 3차에서 지정했을 수도) 반영(양방향 공유)
 
     def _save(self) -> None:
         # box는 저장하지 않는다 — 공유 영역이라 _on_selected에서 save_boss_bar_region으로만

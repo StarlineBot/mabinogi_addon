@@ -68,6 +68,7 @@ class DebuffTab(QWidget):
     catalog_changed = Signal()  # 디버프 추가·삭제·아이콘 변경 → 엔진 재구성
     scale_changed = Signal(int)  # 디버프 오버레이 배율(%) 변경
     gate_mode_changed = Signal(str)  # 탐지 방식(1/2/3차) 변경 또는 바 영역 변경 → 재시작
+    bar_region_changed = Signal()  # 보스 HP바 영역 지정 → 보스패턴알림도 반영(공유)
 
     def __init__(self) -> None:
         super().__init__()
@@ -311,7 +312,8 @@ class DebuffTab(QWidget):
 
         self._bar_highlight = RegionHighlight()  # 참조 유지
         self._bar_highlight.flash(x, y, w, h, "보스 HP바 영역", "이름~퍼센트가 다 들어왔나요?")
-        self._emit_gate_mode()  # 새 영역으로 재시작(영역이 실제로 바뀜)
+        self._emit_gate_mode()  # 새 영역으로 디버프 3차 재시작(영역이 실제로 바뀜)
+        self.bar_region_changed.emit()  # 보스패턴알림도 새 영역 반영(양방향 공유)
 
     def showEvent(self, event) -> None:  # noqa: N802 (Qt 시그니처)
         super().showEvent(event)

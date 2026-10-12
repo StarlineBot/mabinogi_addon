@@ -116,6 +116,9 @@ class DebuffEngine:
         self._bar_seen = False
         self._bar_gone_since: float | None = None  # 바 사라진 시각(유예 판정용)
         self._bar_last = False  # 직전 틱 바 인식 여부(탭 상태 표시용)
+        # 방식과 무관하게 '디버프 영역에서 띠를 한 번이라도 봤는지'(사라짐 경고 가능 안내용).
+        # 보스가 잠깐 없어도 True로 유지 — 영역이 맞는지 안내가 깜빡이지 않게.
+        self._bar_ever_seen = False
         # 3차(percent) 판독 캐시: 마지막 판독 시각(None=아직)·결과(throttle용).
         self._percent_last_t: float | None = None
         self._percent_present = False
@@ -134,6 +137,11 @@ class DebuffEngine:
     def bar_present(self) -> bool:
         """직전 틱에 보스 체력바가 보였는지(현재 보스 존재 추정)."""
         return self._bar_last
+
+    @property
+    def bar_ever_seen(self) -> bool:
+        """디버프 영역에서 띠를 한 번이라도 봤는지(사라짐 경고 가능 안내용, 방식 무관)."""
+        return self._bar_ever_seen
 
     def set_warn_gone_ids(self, ids: set[str]) -> None:
         """'사라짐 경고' 켠 디버프 집합 갱신."""
@@ -218,6 +226,19 @@ class DebuffEngine:
         return False
 
     @staticmethod
+    def _band_rows(ok: np.ndarray, need: int) -> int:
+        """각 행의 최장 True 가로 연속이 need 이상인 행 수. (numpy 벡터화 — 폭만큼만 루프,
+        각 단계는 행 전체 벡터 연산. 픽셀 단위 Python 이중루프를 대체해 성능 목표를 지킨다.)"""
+        if ok.size == 0:
+            return 0
+        cur = np.zeros(ok.shape[0], dtype=np.int32)
+        longest = np.zeros(ok.shape[0], dtype=np.int32)
+        for col in ok.T:  # 열(폭) 단위 — 각 연산은 행 전체에 벡터 적용
+            cur = np.where(col, cur + 1, 0)
+            longest = np.maximum(longest, cur)
+        return int((longest >= need).sum())
+
+    @staticmethod
     def _bar_present(region: np.ndarray) -> bool:
         """영역 안에 보스 HP바(길게 매끈하고 '색이 있는' 가로 띠)가 보이는가.
 
@@ -236,19 +257,8 @@ class DebuffEngine:
         # 바 채움 = 유채색(sat) + 밝음(val). 어두운 녹색 풀밭(채도 높고 균일하나 어두움)을
         # 바로 오인하던 것을 밝기 조건으로 배제한다.
         colored = (sat[:, :-1] > _BAR_SAT_MIN) & (val[:, :-1] > _BAR_VAL_MIN)
-        ok = smooth & colored
         need = int(region.shape[1] * _BAR_RUN_RATIO)
-        bar_rows = 0
-        for row in ok:
-            run = longest = 0
-            for v in row:
-                run = run + 1 if v else 0
-                longest = max(longest, run)
-            if longest >= need:
-                bar_rows += 1
-                if bar_rows >= _BAR_MIN_ROWS:
-                    return True
-        return False
+        return DebuffEngine._band_rows(smooth & colored, need) >= _BAR_MIN_ROWS
 
     @staticmethod
     def _is_background(region: np.ndarray) -> bool:
@@ -270,17 +280,8 @@ class DebuffEngine:
         g = cv2.cvtColor(region, cv2.COLOR_BGR2GRAY).astype(np.int16)
         smooth = np.abs(np.diff(g, axis=1)) < _BAR_SMOOTH_GAP  # (h, w-1), 색·밝기 무관
         need = int(region.shape[1] * _BAR_RUN_RATIO)
-        band_rows = 0
-        for row in smooth:
-            run = longest = 0
-            for v in row:
-                run = run + 1 if v else 0
-                longest = max(longest, run)
-            if longest >= need:
-                band_rows += 1
-                if band_rows >= _BAR_MIN_ROWS:
-                    return False  # 어떤 밝기든 가로 띠가 있음 → 바닥 아님(보스/바 잔존)
-        return True  # 매끈한 가로 띠가 없음 → 확실한 바닥/배경
+        # 매끈한 가로 띠가 _BAR_MIN_ROWS줄 미만이면 바닥(보스 바 없음).
+        return DebuffEngine._band_rows(smooth, need) < _BAR_MIN_ROWS
 
     def _gate_absent(
         self,
@@ -356,6 +357,8 @@ class DebuffEngine:
         # 사라짐 경고용 바 인식(디버프 영역 내 '평평한 띠')은 방식과 무관하게 계속 쓴다.
         bar = self._bar_present(region)
         self._bar_last = bar
+        if bar:
+            self._bar_ever_seen = True  # 사라짐 경고 안내용(방식 무관, 한 번 보면 유지)
         boss_absent = self._gate_absent(region, bar, bar_region, now)
 
         if boss_absent:

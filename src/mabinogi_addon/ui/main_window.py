@@ -325,6 +325,8 @@ class MainWindow(QMainWindow):
         self.debuff_tab.tracking_changed.connect(self._on_debuff_tracking_changed)
         self.debuff_tab.catalog_changed.connect(self._on_debuff_catalog_changed)
         self.debuff_tab.gate_mode_changed.connect(self._on_debuff_gate_mode)
+        # 디버프 탭에서 보스 HP바 영역을 바꾸면 보스패턴알림(메모리)도 즉시 반영(양방향 공유).
+        self.debuff_tab.bar_region_changed.connect(self.boss_tab.reload_region)
         self.debuff_overlay.moved.connect(self._save_debuff_overlay_state)
 
         # 메모 오버레이: 위치·크기는 영역 지정, 고정=클릭통과. 게임 활성 시만 표시.
@@ -473,11 +475,13 @@ class MainWindow(QMainWindow):
     def _update_tracking_status(self) -> None:
         self.buff_tab.set_status(*self._buff_status())
         self.debuff_tab.set_status(*self._debuff_status())
-        # 사라짐 경고 가능 여부 안내. 사라짐 경고는 방식과 무관하게 '디버프 영역 안의 띠'
-        # (_bar_present → bar_present)로 판단하므로, 그걸 그대로 보여준다(방식별 bar_seen이
-        # 아니라). 1차에서도 띠만 보이면 경고가 작동한다.
+        # 사라짐 경고 가능 여부 안내. 방식과 무관하게 '디버프 영역에서 띠를 한 번이라도
+        # 봤는지'(bar_ever_seen)로 표시한다 — 보스가 잠깐 없어도 "인식됨"을 유지해, 영역이
+        # 맞는데도 "안 보여요"가 깜빡이던 문제를 없앤다. 1차에서도 동일하게 동작.
         self.debuff_tab.set_bar_status(
-            self._debuff_engine.bar_present if self._debuff_engine is not None else False
+            self._debuff_engine.bar_ever_seen
+            if self._debuff_engine is not None
+            else False
         )
         self._update_header_status()
         self._maybe_tick_update_check()
