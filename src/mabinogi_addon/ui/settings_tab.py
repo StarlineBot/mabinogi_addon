@@ -500,22 +500,7 @@ class SettingsTab(QWidget):
         box.addButton("닫기", QMessageBox.ButtonRole.RejectRole)
         box.exec()
         if box.clickedButton() is open_btn:
-            self._open_folder(out)
-
-    @staticmethod
-    def _open_folder(path) -> None:
-        import subprocess
-        import sys
-
-        try:
-            if sys.platform == "win32":
-                subprocess.Popen(["explorer", str(path)])
-            elif sys.platform == "darwin":
-                subprocess.Popen(["open", str(path)])
-            else:
-                subprocess.Popen(["xdg-open", str(path)])
-        except Exception:  # noqa: BLE001, S110 — 폴더 열기는 부가기능(실패해도 무시)
-            pass
+            paths.open_folder(out)
 
     def _theme_group(self) -> QGroupBox:
         from .theme import THEME_LABELS, THEMES

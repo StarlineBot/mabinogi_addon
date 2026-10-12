@@ -177,7 +177,7 @@ class StatBarsTab(QWidget):
         self._gated_widgets = [
             self.region_btn, self.view_region_btn, self.enable,
             self.scale_spin, self.align_combo, self.lock_all_btn, self.unlock_all_btn,
-            self.snap_btn, self.collect_chk,
+            self.snap_btn, self.open_dir_btn, self.collect_chk,
             *self._show_checks.values(),
         ]
         self._update_region_label()
@@ -200,6 +200,10 @@ class StatBarsTab(QWidget):
         self.snap_btn = QPushButton("스냅샷 저장")
         self.snap_btn.clicked.connect(self._save_snapshot)
         row.addWidget(self.snap_btn)
+        self.open_dir_btn = QPushButton("폴더 열기")
+        self.open_dir_btn.setToolTip("수집된 스냅샷이 저장되는 폴더를 탐색기로 엽니다")
+        self.open_dir_btn.clicked.connect(self._open_shot_dir)
+        row.addWidget(self.open_dir_btn)
         self.collect_chk = checkbox("수집 모드(바 바뀔 때 자동 저장)")
         row.addWidget(self.collect_chk, 1)
         g.addLayout(row)
@@ -212,6 +216,9 @@ class StatBarsTab(QWidget):
         self.collect_label.setText(
             f"저장 위치: {self._shot_dir}  ·  수집 {self._shot_count}장"
         )
+
+    def _open_shot_dir(self) -> None:
+        paths.open_folder(self._shot_dir)
 
     def _save_snapshot(self) -> None:
         if self._last_frame is None:

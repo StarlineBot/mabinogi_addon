@@ -68,3 +68,27 @@ def config_path() -> Path:
     if is_frozen():
         return user_data_dir() / "config.local.json"
     return _PROJECT_ROOT / "config.local.json"
+
+
+def open_folder(path: Path | str) -> None:
+    """폴더를 OS 기본 파일 탐색기로 연다(Windows=탐색기/맥=Finder/리눅스=xdg-open).
+
+    첫 저장 전이라 폴더가 없을 수 있으니 먼저 만든 뒤 연다. 부가기능이라 실패해도
+    조용히 무시한다. (스냅샷/진단 저장 폴더를 여는 버튼들이 공용으로 쓴다.)
+    """
+    import subprocess
+
+    p = Path(path)
+    try:
+        p.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        pass
+    try:
+        if sys.platform == "win32":
+            subprocess.Popen(["explorer", str(p)])
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", str(p)])
+        else:
+            subprocess.Popen(["xdg-open", str(p)])
+    except Exception:  # noqa: BLE001, S110 — 폴더 열기는 부가기능(실패해도 무시)
+        pass
