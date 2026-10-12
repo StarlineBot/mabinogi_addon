@@ -14,6 +14,7 @@ import numpy as np
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QGuiApplication, QImage, QPixmap
 from PySide6.QtWidgets import (
+    QGroupBox,
     QHBoxLayout,
     QLabel,
     QPushButton,
@@ -21,7 +22,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from .. import config, paths
+from .. import config, image_io, paths
 from ..detect.boss_hp_reader import read_percent
 from ..detect.boss_name_matcher import identify, load_name_templates
 from ..tracker.boss_catalog import load_bosses, make_tracker
@@ -53,6 +54,14 @@ class BossTab(QWidget):
         self._region = config.load_boss_bar_region() or dict(DEFAULT_BOX)
         self._sct = None
         self._last_frame = None
+        self._last_raw_hp: int | None = None  # 이번 프레임 '원판독'값(수집 태그·진단용)
+        # 보스 HP바 수집(오독 프레임 제보 — 보스별 스샷). 로그인 사용자만.
+        self._last_saved_frame = None
+        self._shot_count = 0
+        if paths.is_frozen():
+            self._shot_dir = paths.user_data_dir() / "boss_hp_shots"
+        else:
+            self._shot_dir = paths.project_root() / "tests" / "data" / "boss_hp_shots"
         self._bosses = load_bosses()
         self._name_templates = load_name_templates()
         self._tracker = None
@@ -166,9 +175,14 @@ class BossTab(QWidget):
         cv.addLayout(up_row)
         self._sync_upcoming_btn()
         v.addWidget(self._controls)
+
+        # 보스 HP바 수집(오독 제보용) — 로그인 사용자만.
+        self._collect_box = self._collect_group()
+        v.addWidget(self._collect_box)
         v.addStretch(1)
 
         self._update_region_label()
+        self._apply_collect_gate()
         self._timer = QTimer(self)
         self._timer.setInterval(300)  # HP는 천천히 변함 — 300ms면 충분
         self._timer.timeout.connect(self._tick)
@@ -236,7 +250,7 @@ class BossTab(QWidget):
             self._region = shared
             self._update_region_label()
 
-    def showEvent(self, event) -> None:  # noqa: N802 (Qt 시그니처)
+    def showEvent(self, event) -> None:
         super().showEvent(event)
         self.reload_region()  # 공유 영역(디버프 3차에서 지정했을 수도) 반영(양방향 공유)
 
@@ -350,6 +364,7 @@ class BossTab(QWidget):
             return
         self._show_preview(frame)
         self._last_frame = frame
+        self._apply_collect_gate()
 
         w = frame.shape[1]
         name_reg = frame[:, : int(w * 0.60)]  # 왼쪽=이름
@@ -371,14 +386,27 @@ class BossTab(QWidget):
                     else None
                 )
                 self._reset_hp()  # 새 보스 → HP 상태 초기화
-            self._accept_hp(read_percent(pct_reg))  # 식별된 프레임만 HP 반영
+            self._last_raw_hp = read_percent(pct_reg)  # 원판독(수집 태그·진단용)
+            self._accept_hp(self._last_raw_hp)  # 식별된 프레임만 HP 반영
         else:
+            self._last_raw_hp = None
             self._unidentified += 1
             if self._unidentified > self._GONE_FRAMES and self._tracker is not None:
                 self._cur_boss = None
                 self._tracker = None
                 self._reset_hp()
         hp = self._stable_hp
+
+        # 수집 모드: 로그인 사용자가 켠 동안, 보스가 식별된 상태에서 바가 눈에 띄게
+        # 바뀌면 자동 저장(오독 프레임 제보). 보스 없는 프레임은 길바닥이라 제외.
+        if (
+            self.collect_chk.isChecked()
+            and self._logged_in()
+            and boss_id is not None
+            and self._frame_changed(frame)
+        ):
+            self._write_shot(frame)
+            self._last_saved_frame = frame
 
         # 실시간 상태 표시(현재 프레임 기준)
         if boss_id in self._bosses:
@@ -413,6 +441,68 @@ class BossTab(QWidget):
     # '다음 패턴 목록'은 보스가 화면에서 사라지면 금방 감춘다. 트래커는 _GONE_FRAMES까지
     # 살아 있지만 목록까지 그만큼 떠 있으면 보스가 떠난 뒤 한참 남는다(#4). ~2초로 짧게.
     _UPCOMING_GONE_FRAMES = 6  # ~1.8초 (틱 300ms)
+
+    # ---- 보스 HP바 수집(오독 제보용) ----
+    def _collect_group(self) -> QGroupBox:
+        box = QGroupBox("보스 HP바 수집 (오독 제보용)")
+        g = QVBoxLayout(box)
+        g.addWidget(hint_label(
+            "'수집 모드'를 켜면 보스 HP바 영역이 바뀔 때마다 자동 저장됩니다(보스별로).\n"
+            "실제와 다른 %가 뜰 때(예: 48%인데 30% 알림)를 모아 보내주시면 오독 원인을 잡습니다."
+        ))
+        row = QHBoxLayout()
+        self.snap_btn = QPushButton("스냅샷 저장")
+        self.snap_btn.clicked.connect(self._save_snapshot)
+        row.addWidget(self.snap_btn)
+        self.open_dir_btn = QPushButton("폴더 열기")
+        self.open_dir_btn.clicked.connect(lambda: paths.open_folder(self._shot_dir))
+        row.addWidget(self.open_dir_btn)
+        self.collect_chk = checkbox("수집 모드(바 바뀔 때 자동 저장)")
+        row.addWidget(self.collect_chk, 1)
+        g.addLayout(row)
+        self.collect_label = hint_label("")
+        self._update_collect_label()
+        g.addWidget(self.collect_label)
+        return box
+
+    @staticmethod
+    def _logged_in() -> bool:
+        return config.load_discord_user() is not None
+
+    def _apply_collect_gate(self) -> None:
+        box = getattr(self, "_collect_box", None)
+        if box is not None:
+            box.setVisible(self._logged_in())
+
+    def _update_collect_label(self) -> None:
+        self.collect_label.setText(
+            f"저장 위치: {self._shot_dir}  ·  수집 {self._shot_count}장"
+        )
+
+    def _save_snapshot(self) -> None:
+        if self._last_frame is None:
+            self.collect_label.setText("저장할 캡처가 없습니다 — 먼저 영역을 지정하세요")
+            return
+        self._write_shot(self._last_frame)
+
+    def _write_shot(self, frame) -> None:
+        try:
+            self._shot_dir.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            return
+        boss = self._cur_boss or "unknown"
+        pct = f"{self._last_raw_hp:03d}" if self._last_raw_hp is not None else "xxx"
+        path = self._shot_dir / f"{boss}_hp{pct}_{self._shot_count:03d}.png"
+        if image_io.imwrite(path, frame):
+            self._shot_count += 1
+            self._update_collect_label()
+
+    def _frame_changed(self, frame, threshold: float = 4.0) -> bool:
+        prev = self._last_saved_frame
+        if prev is None or prev.shape != frame.shape:
+            return True
+        diff = np.abs(frame.astype(np.int16) - prev.astype(np.int16))
+        return float(diff.mean()) >= threshold
 
     def _reset_hp(self) -> None:
         self._stable_hp = None
