@@ -40,16 +40,8 @@ _IDLE_INTERVAL_MS = 500
 # - 확정 대기: 버프가 목록에서 사라져도 이만큼(초) 연속으로 없어야 '완전히 사라짐'으로
 #   확정한다(짧은 미검출·깜빡임 오탐 방지). 이 안에 다시 뜨면 아무 일도 없던 것으로.
 # - 노출: 확정된 순간 빨간 테두리+X를 띄우고 소리를 1회 내며, 이만큼(초) 보여준 뒤 지운다.
-_GONE_CONFIRM_SEC = 3.0  # 기본(견고): 시간 버프·일반 버프 — '진짜 빠졌나'를 충분히 확인
+_GONE_CONFIRM_SEC = 3.0
 _GONE_SHOW_SEC = 5.0
-
-# '즉시 종료형' 버프의 빠른 확정 대기(초). 지속시간은 없지만 끊기는 순간이 곧 위기라
-# (예: 마나실드 — 마나 0이면 즉시 종료) 경고가 빨라야 쓸모가 있다. 종료가 '실제 이벤트'라
-# 깜빡임이 아니고, 앞단 0.4초 미감지 가드도 그대로라 빨라도 비교적 안전. 거짓 경고가 떠도
-# 재시전으로 아이콘이 다시 뜨면 자동 취소된다.
-_GONE_CONFIRM_FAST_SEC = 0.5
-# 위 빠른 확정을 적용할 buff_id(즉시 종료형). 같은 성격 버프가 생기면 여기에 id만 추가.
-_FAST_GONE_IDS = {"manashield"}
 
 
 class _TrackWorker(QThread):
@@ -299,15 +291,11 @@ class BuffController(QObject):
             if bid in self._warn_gone_ids and bid not in self._gone_show_until:
                 self._absent_since.setdefault(bid, now)
         self._present_prev = active_ids
-        # 확정: 확정 대기 시간 연속으로 없으면 '완전히 사라짐' 확정 → 경고 아이콘 노출
-        # 시작 + 소리 1회. (그 전에 다시 뜨면 위에서 취소되어 조용.) 즉시 종료형(마나실드
-        # 등)은 짧은 대기로 빠르게, 그 외는 기본(견고) 대기로 진짜 빠졌는지 충분히 확인.
+        # 확정: 확정 대기 시간(_GONE_CONFIRM_SEC) 연속으로 없으면 '완전히 사라짐' 확정 →
+        # 경고 아이콘 노출 시작 + 소리 1회. (그 전에 다시 뜨면 위에서 취소되어 조용.)
         just_confirmed = []
         for bid, since in list(self._absent_since.items()):
-            window = (
-                _GONE_CONFIRM_FAST_SEC if bid in _FAST_GONE_IDS else _GONE_CONFIRM_SEC
-            )
-            if now - since >= window:
+            if now - since >= _GONE_CONFIRM_SEC:
                 self._gone_show_until[bid] = now + _GONE_SHOW_SEC
                 del self._absent_since[bid]
                 just_confirmed.append(bid)
