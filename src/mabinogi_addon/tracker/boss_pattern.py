@@ -57,8 +57,15 @@ class BossPatternTracker:
         if hp is None:
             return []  # 판독 실패 프레임은 무시(직전 상태 유지)
         prev = self._prev
-        # 급락 가드: 한 프레임에 8%p 넘게 떨어졌으면(50→'5' 오독 등) 판정에 안 쓰고 기준점만.
+        # 급락 가드: 한 프레임에 8%p 넘게 떨어졌으면(50→'5' 오독 등) 판정에 쓰지 않는다.
+        # 단, 한 틱만 건너뛰면 안 된다 — boss_tab이 매 틱 '같은 확정 HP'로 observe()를 부르므로,
+        # 다음 틱엔 prev=오독값이 되어 가드를 통과하고 오독값이 구간 판정을 통과한다. 그래서
+        # '건너뛴 범위'(hp ≤ lo < prev)의 구간을 '이미 지나감'으로 무장 해제해, 그 오독값이
+        # 거기 들어가도 울리지 않게 한다. (HP가 그 구간 위로 다시 오르면 재무장되어 정상 복귀.)
         if prev is not None and prev - hp > _DROP_GUARD:
+            for i, (lo, _hi, _t, _stage) in enumerate(self._bands):
+                if hp <= lo < prev:
+                    self._armed[i] = False
             self._prev = hp
             return []
         self._prev = hp

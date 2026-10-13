@@ -62,13 +62,37 @@ def test_skipped_band_is_omitted():
 
 
 def test_drop_guard_blocks_misread_into_other_band():
-    """50%를 '5'로 오독(낙폭 45>8) → 5% 패턴 임박[6,7] 등에 들어가도 발동 금지."""
+    """50%를 '5'로 오독(낙폭 >8)해도 5% 패턴 구간에 거짓 발동하지 않는다.
+    (급락 가드 + 매 틱 같은 오독값이 반복돼도 — boss_tab 특성 — 울리지 않음.)"""
     t = BossPatternTracker("보스", [5, 50])
-    t.observe(54)  # 준비(50)
-    # 다음 프레임 5로 오독: 54-5=49 > 8 → 판정 제외(기준점만)
-    assert t.observe(5) == []
-    # 복귀(정상 51): 5→51 상승 → 임박(50) 정상
-    assert [(a.threshold, a.stage) for a in t.observe(51)] == [(50, "near")]
+    t.observe(54)  # 50% 준비 발동(이후 _fire엔 안 잡힘)
+    assert _fire(t, [5, 5, 5]) == []  # 5% 패턴 거짓 발동 없음
+
+
+def test_drop_disarms_skipped_bands_repeated_misread():
+    """48 확정 후 '18'로 오독된 값이 매 틱 반복돼도(boss_tab은 같은 확정 HP 반복) 15% 알림 0.
+    (급락 시 건너뛴 구간을 무장 해제 → 2틱째부터 오독값이 구간에 들어가도 안 울림.)"""
+    t = BossPatternTracker("보스", [15])
+    got = _fire(t, [48, 18, 18, 18, 18])  # 48→18 급락, 이후 같은 18 반복
+    assert got == []
+
+
+def test_recovers_after_drop_misread():
+    """48→18 오독으로 15% 구간이 무장 해제됐어도, 48로 복귀(재무장) 후 정상 하강하면
+    15% 준비·임박이 각 1회 정상 발동한다."""
+    t = BossPatternTracker("보스", [15])
+    _fire(t, [48, 18, 18])  # 급락 오독 → 15% 무장 해제
+    got = _fire(t, [48, 40, 32, 24, 20, 17])  # 복귀 재무장 후 ≤8 단계 하강
+    assert got == [(15, "pre"), (15, "near")]
+
+
+def test_big_drop_disarms_only_skipped_not_lower():
+    """40→12 큰 하락: 건너뛴 25·15% 알림 0, 그 아래 5%는 정상 발동."""
+    t = BossPatternTracker("보스", [5, 25, 15])
+    got = _fire(t, [40, 12, 12, 10, 7])  # 40→12 급락(25·15 무장해제), 이후 5% 구간 하강
+    assert (25, "pre") not in got and (25, "near") not in got
+    assert (15, "pre") not in got and (15, "near") not in got
+    assert got == [(5, "pre"), (5, "near")]
 
 
 def test_rearm_above_band():
