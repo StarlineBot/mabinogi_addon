@@ -35,6 +35,9 @@ NCC_MIN = 0.30  # 최근접 상관이 이보다 낮으면 판독 포기(None)
 # 분류되는 경우는 ≤0.49. 그 사이로 임계를 올려 '5%→95%' 같은 가짜 두 자리(→거짓 알림)를
 # 막는다. (일의 자리는 NCC_MIN 유지)
 _TENS_NCC_MIN = 0.6
+# R(‘%’ 끝) 자동정렬 스캔 폭(px, 정규화 폭 기준). 관측된 밀림은 ~3px이고, 자리 피치(~8px)
+# 보다 작아야 옆 자리로 건너뛰지 않는다.
+_R_SCAN = 4
 
 
 def _load_refs():
@@ -116,10 +119,18 @@ def read_percent(
     cols = np.where((b > 0).any(axis=0))[0]
     if len(cols) == 0:
         return None
-    r = int(cols[-1])  # '%' 오른쪽 끝
+    rmax = int(cols[-1])  # '%' 오른쪽 끝(가장 오른쪽 밝은 열) — 후보 시작점
     Ro, Lo, Rt, Lt = _REFS
 
-    ones_d, ones_s = _classify(_norm(_cell(v, r, _ONES)), Ro, Lo)
+    # R 자동정렬: 전투 이펙트로 배경이 밝아지면 '가장 오른쪽 밝은 열'이 진짜 '%' 끝이 아니라
+    # 크롭 가장자리로 몇 px 밀려(관측 3px), 자리 칸이 통째로 어긋나 98을 3으로 오독한다.
+    # rmax에서 좌로 조금(자리 피치보다 작게) 훑어 '일의 자리 NCC가 가장 높은' 열을 R로 쓴다.
+    # 올바른 R은 일의 자리가 또렷해 고점수(≈0.9), 밀린 R은 엉뚱한 칸이라 저점수(≈0.45)다.
+    r, ones_d, ones_s = rmax, None, -1.0
+    for rr in range(rmax, max(rmax - _R_SCAN, 1), -1):
+        od, os_ = _classify(_norm(_cell(v, rr, _ONES)), Ro, Lo)
+        if od is not None and os_ > ones_s:
+            r, ones_d, ones_s = rr, od, os_
     if ones_d is None or ones_s < threshold:
         return None
 

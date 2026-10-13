@@ -26,74 +26,72 @@ def test_read_percent_high_range(value):
     assert read_percent(img) == value
 
 
-# ---- 트래커 (완만한 상승 교차 = edge) ----
-def test_fires_on_gradual_crossing():
+# ---- 트래커 (임계 도달 = level + 리셋 기반 재무장) ----
+# 실게임 데이터상 게이지가 저값→90대로 '점프'하듯 차서(완만한 상승이 캡처에 안 잡힘),
+# 옛 edge 방식은 한 번도 안 울렸다. 그래서 '임계에 FIRE_FRAMES 연속 도달하면 1회' 방식.
+def test_level_fires_on_reaching_threshold():
     t = TuarimTracker([95, 98])
-    assert t.observe(93) == []  # 기준점
     assert t.observe(94) == []
-    assert t.observe(95) == [95]  # 94→95 교차
-    assert t.observe(96) == []
-    assert t.observe(97) == []
-    assert t.observe(98) == [98]  # 97→98 교차
-    assert t.observe(99) == []
+    assert t.observe(95) == []  # 1프레임만으론 아직(단발 오독 방지)
+    assert t.observe(96) == [95]  # 95 이상 2연속 → 95 도달 발화
+    assert t.observe(97) == []  # 95는 이미 울림(재무장 전까지 억제)
+    assert t.observe(98) == []  # 98 1프레임
+    assert t.observe(99) == [98]  # 98 이상 2연속 → 98 발화
 
 
-def test_reentry_jump_does_not_fire():
-    """자리 비웠다 복귀로 값이 점프하면(이미 임계 이상) 울리지 않는다."""
+def test_jump_into_threshold_fires():
+    """게이지가 점프하듯 차올라도(저값→90대) 도달하면 울린다(옛 edge는 못 울렸음)."""
     t = TuarimTracker([90])
-    assert t.observe(85) == []
-    assert t.observe(93) == []  # 85→93 점프 → 교차 아님
-
-
-def test_big_jump_does_not_fire():
-    t = TuarimTracker([95, 98])
     assert t.observe(10) == []
-    assert t.observe(99) == []  # 큰 점프는 교차로 보지 않음
+    assert t.observe(99) == []  # 점프 직후 1프레임
+    assert t.observe(99) == [90]  # 2연속 90+ → 발화
 
 
-def test_misread_drop_recovery_does_not_fire():
-    """90%대에서 한 틱 급락 후 복구돼도(큰 하강→큰 상승) 울리지 않는다."""
+def test_single_spike_does_not_fire():
+    """임계 이상이 단 1프레임(오독 고값)이면 울리지 않는다(FIRE_FRAMES=2)."""
     t = TuarimTracker([90])
-    assert t.observe(91) == []
-    assert t.observe(92) == []
-    assert t.observe(10) == []  # 오탐 급락
-    assert t.observe(92) == []  # 10→92 급등 → 교차 아님
+    assert t.observe(50) == []
+    assert t.observe(99) == []  # 단발 스파이크
+    assert t.observe(50) == []
 
 
-def test_refires_next_cycle_after_reset():
+def test_transient_low_does_not_rearm():
+    """울린 뒤 한두 틱 오독 급락(10)이 끼어도 재무장 안 됨 → 같은 주기에 또 안 울린다."""
+    t = TuarimTracker([90])
+    assert t.observe(95) == []
+    assert t.observe(95) == [90]  # 2연속 → 발화
+    assert t.observe(10) == []  # 오독 급락 1틱(리셋 아님)
+    assert t.observe(95) == []  # 아직 억제(재무장 안 됨)
+    assert t.observe(95) == []
+
+
+def test_refires_next_cycle_after_sustained_reset():
+    """게이지가 실제로 리셋(낮은 값 RESET_FRAMES 연속)되면 다음 주기에 다시 울린다."""
     t = TuarimTracker([95])
-    assert t.observe(94) == []
-    assert t.observe(95) == [95]
-    assert t.observe(1) == []  # 리셋(급락)
-    assert t.observe(94) == []  # 급등 구간은 무음
-    assert t.observe(95) == [95]  # 94→95 완만 교차 → 다음 주기 재발동
-
-
-def test_boundary_jitter_fires_once():
-    """임계 경계(95%)에서 판독값이 흔들려도(94→95→94→95) 한 번만 울린다.
-    (배포판에서 '95%에 두세 번 울리던' 문제 회귀 방지 — 재무장 전까지 억제.)"""
-    t = TuarimTracker([95, 98])
-    fired = []
-    for v in [93, 94, 95, 94, 95, 96, 95, 96, 95]:
-        fired += t.observe(v)
-    assert fired == [95]  # 흔들려도 95는 한 번만
+    t.observe(95)
+    assert t.observe(95) == [95]  # 1주기 발화
+    for v in [1, 1, 1, 1, 1]:  # 리셋(5연속 저값) → 재무장
+        t.observe(v)
+    assert t.observe(96) == []
+    assert t.observe(96) == [95]  # 다음 주기 재발화
 
 
 def test_small_dip_within_hysteresis_does_not_rearm():
-    """임계 바로 아래로 조금만 내려갔다 다시 오르는 건 재무장 안 됨(같은 주기)."""
+    """임계 바로 아래로 조금만 내려갔다 다시 올라도 재무장 안 됨(같은 주기)."""
     t = TuarimTracker([95])
-    assert t.observe(94) == []
+    t.observe(95)
     assert t.observe(95) == [95]
-    assert t.observe(90) == []  # 95-10=85보다 위 → 재무장 안 함
-    assert t.observe(94) == []
+    for v in [90, 90, 90, 90, 90]:  # 95-10=85보다 위 → 리셋 아님
+        assert t.observe(v) == []
+    assert t.observe(95) == []
     assert t.observe(95) == []  # 여전히 억제
 
 
-def test_none_value_keeps_prev():
+def test_none_value_is_skipped():
     t = TuarimTracker([95])
-    assert t.observe(94) == []
-    assert t.observe(None) == []  # 판독 실패는 직전 값 유지
-    assert t.observe(95) == [95]  # 94→95 교차(None 틱 건너뜀)
+    assert t.observe(95) == []
+    assert t.observe(None) == []  # 판독 실패/보류는 상태 변화 없이 건너뜀
+    assert t.observe(95) == [95]  # None 무시, 95 2연속 → 발화
 
 
 # ---- % 리더 ----
@@ -113,6 +111,28 @@ def test_reader_tracker_fires_at_90_and_95():
             continue
         fired += t.observe(read_percent(img))
     assert fired == [90, 95]
+
+
+# ---- 리더 R 자동정렬: 전투 이펙트로 '%' 끝이 밀려 고게이지(98/95)를 한 자릿수(3/5)로
+#      오독하던 회귀. 실프레임 crop(수집모드)에서 이제 두 자리로 바르게 읽혀야 한다. ----
+import zipfile  # noqa: E402
+
+_TUARIM_ZIP = Path(__file__).parent / "data" / "raw_7603.zip"
+# (zip 내 파일, 화면 실제값) — 전투 이펙트로 배경이 밝은 프레임. 옛 리더는 3/5로 오독했다.
+_FLOODED_HIGH = [("v03_6904.png", 98), ("v03_6905.png", 98), ("v05_6823.png", 95)]
+
+
+@pytest.mark.parametrize("entry,real", _FLOODED_HIGH)
+def test_reads_high_gauge_despite_bright_bg(entry, real):
+    if not _TUARIM_ZIP.exists():
+        pytest.skip("데이터 zip 없음")
+    with zipfile.ZipFile(_TUARIM_ZIP) as z:
+        buf = np.frombuffer(z.read(entry), np.uint8)
+    crop = cv2.imdecode(buf, cv2.IMREAD_COLOR)
+    assert crop is not None, entry
+    got = read_percent(crop)
+    # 핵심: 고게이지를 낮은 한 자릿수로 오독하지 않는다(옛 버그 3/5 재발 방지).
+    assert got is not None and got >= 90, f"{entry}: 실제 {real}인데 {got}로 오독"
 
 
 # ---- config ----
