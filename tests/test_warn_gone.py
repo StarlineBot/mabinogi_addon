@@ -36,9 +36,10 @@ def _controller():
         "han_adrenaline": BuffDef(
             "han_adrenaline", "햄 버닝", _ICON / "han_adrenaline.png", None
         ),
+        "manashield": BuffDef("manashield", "마나실드", _ICON / "manashield.png", None),
     }
     c = BuffController(BuffOverlay(), catalog, show_duration={})
-    c.set_order(["march", "han_adrenaline"])
+    c.set_order(["march", "han_adrenaline", "manashield"])
     return c
 
 
@@ -115,6 +116,40 @@ def test_unflagged_buff_no_ghost(monkeypatch):
     clock["t"] = 14.0  # 확정 시간이 지나도
     c._on_updated([_entry("march")])
     assert not any(it.gone for it in c._items)
+
+
+def test_fast_gone_buff_confirms_quickly(monkeypatch):
+    """즉시 종료형(마나실드)은 짧은 확정 대기(_GONE_CONFIRM_FAST_SEC)로 빠르게 경고.
+
+    같은 틱에서 일반 버프(han)는 아직 확정 전이어야 한다(견고 유지)."""
+    clock = {"t": 0.0}
+    monkeypatch.setattr(bc_mod.time, "monotonic", lambda: clock["t"])
+    assert "manashield" in bc_mod._FAST_GONE_IDS
+    c = _controller()
+    c.set_warn_gone_ids({"han_adrenaline", "manashield"})
+
+    # 셋 다 있음(마나실드는 시간 없음 → remaining None)
+    c._on_updated(
+        [_entry("march"), _entry("han_adrenaline"), _entry("manashield", None)]
+    )
+    assert not any(it.gone for it in c._items)
+
+    # han + mana 동시에 사라짐
+    clock["t"] = 10.0
+    c._on_updated([_entry("march")])
+    assert not any(it.gone for it in c._items)  # 아직 아무도 확정 전
+
+    # 빠른 확정 시간만 지남 → 마나실드만 확정, han은 아직 대기 중(견고 3초)
+    clock["t"] = 10.0 + bc_mod._GONE_CONFIRM_FAST_SEC + 0.01
+    c._on_updated([_entry("march")])
+    assert "manashield" in c._gone_show_until  # 확정됨
+    assert "han_adrenaline" not in c._gone_show_until  # 아직
+    assert "han_adrenaline" in c._absent_since  # 여전히 대기 중
+
+    # 견고 확정 시간까지 지나면 han도 확정
+    clock["t"] = 10.0 + bc_mod._GONE_CONFIRM_SEC + 0.01
+    c._on_updated([_entry("march")])
+    assert "han_adrenaline" in c._gone_show_until
 
 
 def test_warn_gone_suppressed_when_not_foreground(monkeypatch):
