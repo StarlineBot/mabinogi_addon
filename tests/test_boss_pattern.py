@@ -1,112 +1,133 @@
-"""보스 패턴 트래커: 하강 교차 2단 경고 + 재무장 (기획서 12)."""
+"""보스 패턴 트래커: 구간(band) 기반 2단 경고 + 급락 가드 + 재무장 (기획서 12).
+
+사양: 준비 [T+3,T+5], 임박 [T+1,T+2]. 구간 안 1회, 구간 밖/판독값 T 이하 0,
+직전−현재 > 8 급락은 판정 제외(오독 방어).
+"""
+
+import os
+import re
+import zipfile
+
+import cv2
+import numpy as np
+import pytest
 
 from mabinogi_addon.tracker.boss_pattern import BossPatternTracker
 
 
 def _fire(tracker, seq):
-    """HP 시퀀스를 흘려보내 (threshold, stage) 발동 목록을 모은다."""
+    """HP 시퀀스를 흘려 (threshold, stage) 발동 목록을 모은다."""
     got = []
     for hp in seq:
         got += [(a.threshold, a.stage) for a in tracker.observe(hp)]
     return got
 
 
-def test_two_stage_fire_on_crossing():
-    t = BossPatternTracker("고목의 페타크", [85])
-    # 95 → ... → 84. 90(=85+5) 통과 시 pre, 86(=85+1) 통과 시 near.
-    got = _fire(t, [95, 91, 89, 87, 85])
-    assert got == [(85, "pre"), (85, "near")]
+def test_pre_fires_within_band():
+    t = BossPatternTracker("보스", [50])
+    assert t.observe(56) == []  # 56 > 55 → 준비 구간[53,55] 위
+    assert [(a.threshold, a.stage) for a in t.observe(54)] == [(50, "pre")]  # 54 ∈ [53,55]
+
+
+def test_near_fires_within_band_not_at_or_below_T():
+    t = BossPatternTracker("보스", [50])
+    t.observe(54)  # 준비
+    assert t.observe(53) == []  # 아직 임박 구간[51,52] 위
+    assert [(a.threshold, a.stage) for a in t.observe(52)] == [(50, "near")]  # 52 ∈ [51,52]
+
+
+def test_no_fire_at_T_or_below():
+    """판독값 T(50) 이하에서는 임박이 울리지 않는다(구간이 T+1부터)."""
+    t = BossPatternTracker("보스", [50])
+    t.observe(54)  # 준비만
+    got = _fire(t, [50, 49, 40])  # T 및 그 이하 — 임박 없음
+    assert got == []
+
+
+def test_band_fires_once_anywhere_inside():
+    """구간 안 여러 프레임이어도 1회만."""
+    t = BossPatternTracker("보스", [50])
+    assert len(t.observe(55)) == 1  # 준비 1회
+    assert t.observe(54) == []  # 같은 구간 재발동 없음
+    assert t.observe(53) == []
+
+
+def test_skipped_band_is_omitted():
+    """준비 구간을 (판독 공백으로) 건너뛰면 준비는 생략되고, 임박 구간만 울린다."""
+    t = BossPatternTracker("보스", [50])
+    assert t.observe(57) == []  # 준비[53,55] 위
+    # 57 → 51 (낙폭 6 ≤ 8, 급락 가드 안 걸림): 준비[53,55]를 건너뜀, 51은 임박[51,52] 안
+    got = [(a.threshold, a.stage) for a in t.observe(51)]
+    assert got == [(50, "near")]  # 준비 생략, 임박만
+
+
+def test_drop_guard_blocks_misread_into_other_band():
+    """50%를 '5'로 오독(낙폭 45>8) → 5% 패턴 임박[6,7] 등에 들어가도 발동 금지."""
+    t = BossPatternTracker("보스", [5, 50])
+    t.observe(54)  # 준비(50)
+    # 다음 프레임 5로 오독: 54-5=49 > 8 → 판정 제외(기준점만)
+    assert t.observe(5) == []
+    # 복귀(정상 51): 5→51 상승 → 임박(50) 정상
+    assert [(a.threshold, a.stage) for a in t.observe(51)] == [(50, "near")]
+
+
+def test_rearm_above_band():
+    t = BossPatternTracker("보스", [50])
+    _fire(t, [54, 51])  # 준비+임박
+    # 페이즈 리셋: 구간 위로 복귀 → 재무장 → 다시 구간 들어오면 또
+    got = _fire(t, [60, 54, 51])
+    assert got == [(50, "pre"), (50, "near")]
+
+
+def test_none_ignored():
+    t = BossPatternTracker("보스", [50])
+    assert t.observe(None) == []
+    assert [(a.threshold, a.stage) for a in t.observe(54)] == [(50, "pre")]
 
 
 def test_message_text_and_sound():
     t = BossPatternTracker("고목의 페타크", [85])
-    t.observe(95)
-    alerts = t.observe(89)  # 90 통과 → pre
-    assert len(alerts) == 1
-    assert alerts[0].text == "고목의 페타크 85% 패턴 준비"
-    assert alerts[0].sound == "pre"
+    a = t.observe(88)  # 88 ∈ [88,90] 준비
+    assert len(a) == 1 and a[0].text == "고목의 페타크 85% 패턴 준비" and a[0].sound == "pre"
 
 
-def test_near_fires_at_threshold_plus_one_not_at_threshold():
-    """임박(near)은 임계+1(예 81)에 도달할 때 떠야 한다 — 임계(80, 패턴 시작점)에서
-    뜨면 늦다. (보스 HP는 임계에서 고정되므로 반드시 '전'에)"""
-    t = BossPatternTracker("레넨의 미이르", [80])  # near 지점 81
-    t.observe(83)
-    assert t.observe(82) == []  # 아직 82 — near 미발동
-    near = t.observe(81)  # 81 도달 → 발동
-    assert [(a.threshold, a.stage) for a in near] == [(80, "near")]
-    assert t.observe(80) == []  # 80(고정점)에선 재발동 없음
-
-
-def test_no_fire_on_first_observe():
-    t = BossPatternTracker("보스", [85])
-    assert t.observe(80) == []  # 직전값 없음 → 교차 판정 불가
-
-
-def test_rearm_after_phase_reset():
-    t = BossPatternTracker("보스", [85])
-    _fire(t, [95, 84])  # 90·86 둘 다 통과 → pre+near 발동
-    # 페이즈 리셋: HP 100으로 복귀 → 재무장 → 다시 하강하면 또 발동
-    got = _fire(t, [100, 84])
-    assert got == [(85, "pre"), (85, "near")]
-
-
-def test_no_double_fire_while_below():
-    t = BossPatternTracker("보스", [85])
-    _fire(t, [95, 84])  # 발동
-    # 계속 아래에서 오르내려도(재무장 지점 위로 안 오르면) 재발동 없음
-    assert _fire(t, [83, 85, 83]) == []
-
-
-def test_multiple_thresholds():
+def test_multiple_thresholds_each_band():
     t = BossPatternTracker("보스", [85, 35])
-    got = _fire(t, [100, 84, 50, 34])
-    # 85: 90·86 통과(위에서) → pre,near / 35: 40·36 통과 → pre,near
+    # 89(준비85) → 86(임박85) → 39(준비35) → 36(임박35). 낙폭은 ≤8로 유지.
+    got = _fire(t, [90, 89, 86, 44, 39, 36])
     assert got == [(85, "pre"), (85, "near"), (35, "pre"), (35, "near")]
 
 
-def test_none_reading_ignored():
-    t = BossPatternTracker("보스", [85])
-    t.observe(95)
-    assert t.observe(None) == []  # 판독 실패 프레임 무시
-    assert _fire(t, [89]) == [(85, "pre")]  # 직전 95 유지 → 정상 교차
-
-
 # ---- 다음 패턴 목록(upcoming) ----
-
-
 def test_upcoming_lists_thresholds_below_hp_descending():
     t = BossPatternTracker("보스", [90, 60, 30])
     t.observe(100)
-    assert t.upcoming(100) == [90, 60, 30]  # 전부 아래 → 내림차순
+    assert t.upcoming(100) == [90, 60, 30]
 
 
 def test_upcoming_drops_threshold_when_pre_fires():
     t = BossPatternTracker("보스", [90, 60, 30])
     t.observe(100)
     assert t.upcoming(100) == [90, 60, 30]
-    # 90의 준비(pre)는 95에서 발동 → 90이 목록에서 빠짐
-    t.observe(94)
+    t.observe(94)  # 94 ∈ [93,95] → 90 준비 발동 → 빠짐
     assert t.upcoming(94) == [60, 30]
-    # 60의 준비는 65에서 발동 → 60도 빠짐
-    t.observe(64)
-    assert t.upcoming(64) == [30]
+    for hp in [86, 78, 70, 64]:  # ≤8 단계로 하강(급락 가드 안 걸리게)
+        t.observe(hp)
+    assert t.upcoming(64) == [30]  # 64 ∈ [63,65] → 60 준비 → 빠짐
 
 
 def test_upcoming_excludes_thresholds_above_current_hp():
-    """중간부터(예 50%) 합류하면 이미 지난 위쪽 임계는 나열하지 않는다."""
     t = BossPatternTracker("보스", [90, 60, 30])
     t.observe(50)
-    assert t.upcoming(50) == [30]  # 90·60은 현재 HP 위 → 제외
+    assert t.upcoming(50) == [30]
 
 
 def test_upcoming_rearms_on_phase_reset():
     t = BossPatternTracker("보스", [90, 60])
     t.observe(100)
-    t.observe(94)  # 90 준비 발동 → 빠짐
+    t.observe(94)
     assert t.upcoming(94) == [60]
-    # 페이즈 리셋(HP 100 복귀) → 90 재무장 → 다시 목록에 등장
-    t.observe(100)
+    t.observe(100)  # 리셋 → 재무장
     assert t.upcoming(100) == [90, 60]
 
 
@@ -114,4 +135,44 @@ def test_upcoming_holds_last_on_none():
     t = BossPatternTracker("보스", [90, 60])
     t.observe(100)
     assert t.upcoming(100) == [90, 60]
-    assert t.upcoming(None) == [90, 60]  # 판독 실패 프레임 → 직전 목록 유지
+    assert t.upcoming(None) == [90, 60]
+
+
+# ---- 실세션 재생 회귀: 모든 알림이 구간 안, 구간 밖 0, T 이하 0 ----
+_ZIP = "tests/data/eotgallin_poinche_hp004_115.zip"
+_THRESHOLDS = [90, 75, 60, 40, 25, 15]
+
+
+def _norm37(im):
+    from mabinogi_addon.detect.boss_bar import normalize_box_height
+
+    th = normalize_box_height((0, 0, im.shape[1], im.shape[0]), 1440)[3]
+    top = (im.shape[0] - th) // 2
+    return im[top : top + th]
+
+
+def test_full_replay_alerts_all_in_band():
+    from mabinogi_addon.detect.boss_hp_reader import read_percent
+
+    if not os.path.exists(_ZIP):
+        pytest.skip("데이터 zip 없음")
+    with zipfile.ZipFile(_ZIP) as z:
+        names = [n for n in z.namelist() if n.endswith(".png")]
+        names.sort(key=lambda n: int(re.search(r"_(\d+)\.png", n).group(1)))
+        reads = []
+        for n in names:
+            im = cv2.imdecode(np.frombuffer(z.read(n), np.uint8), cv2.IMREAD_COLOR)
+            reads.append(read_percent(_norm37(im)))
+    t = BossPatternTracker("포인셰", _THRESHOLDS)
+    bands = {
+        (T, "pre"): (T + 3, T + 5) for T in _THRESHOLDS
+    } | {(T, "near"): (T + 1, T + 2) for T in _THRESHOLDS}
+    fired = []
+    for hp in reads:
+        for a in t.observe(hp):
+            fired.append((a.threshold, a.stage, hp))
+    assert fired, "알림이 하나도 안 울림"
+    for T, stage, hp in fired:
+        lo, hi = bands[(T, stage)]
+        assert lo <= hp <= hi, f"{T}% {stage} 구간[{lo},{hi}] 밖에서 발동: hp={hp}"
+        assert hp > T, f"{T}% {stage}가 판독값 T 이하에서 발동: hp={hp}"
