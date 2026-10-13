@@ -66,31 +66,29 @@ def test_transient_low_does_not_rearm():
 
 
 def test_refires_next_cycle_after_sustained_reset():
-    """게이지가 실제로 리셋(낮은 값 RESET_FRAMES 연속)되면 다음 주기에 다시 울린다."""
-    from mabinogi_addon.tracker.tuarim import RESET_FRAMES
+    """게이지가 실제로 0 근처까지 내려가 리셋되면(저값 연속) 다음 주기에 다시 울린다."""
+    from mabinogi_addon.tracker.tuarim import REARM_FRAMES, REARM_VALUE
 
     t = TuarimTracker([95])
     t.observe(95)
     assert t.observe(95) == [95]  # 1주기 발화
-    for _ in range(RESET_FRAMES):  # 리셋(저값 연속) → 재무장
-        t.observe(1)
+    for _ in range(REARM_FRAMES):  # 0 근처 연속 → 리셋 → 재무장
+        t.observe(REARM_VALUE - 5)
     assert t.observe(96) == []
     assert t.observe(96) == [95]  # 다음 주기 재발화
 
 
 def test_hold_at_100_does_not_refire():
-    """100%에서 영역이 '100'을 잘라 판독이 80/60/4/100으로 요동해도(저값 run이 짧음),
-    같은 주기에 재무장/재발화하지 않는다(릴리즈 전 회귀 — 클립된 100% 거짓 재알림)."""
-    from mabinogi_addon.tracker.tuarim import RESET_FRAMES
+    """100%에서 영역이 '100'을 잘라 판독이 80/60/90/100으로 요동해도(0 근처가 아님),
+    재무장되지 않아 같은 주기에 다시 울리지 않는다(릴리즈 전 회귀 — 클립된 100% 거짓 재알림).
 
+    노이즈에 0 근처(≤REARM_VALUE) 단발이 섞여도 REARM_FRAMES 연속이 아니면 재무장 안 됨."""
     t = TuarimTracker([90, 95])
-    # 완만히 올라 95까지 도달(1주기 발화)
-    for v in range(88, 100):
+    for v in range(88, 100):  # 완만히 올라 90·95 도달(1주기 발화)
         t.observe(v)
     fired_hold = []
-    # 100% 유지 중 클립 요동(짧은 저값 run 포함) — RESET_FRAMES보다 짧게 반복
-    assert RESET_FRAMES >= 7
-    for v in [80, 4, 100, 60, 80, 100, 90, 80, 90, 100, 80, 60, 80, 100] * 3:
+    # 100% 유지 중 클립 요동 — 60·80·90·100 + 단발 저값(4). 0 근처 연속이 아니다.
+    for v in [80, 4, 100, 60, 80, 100, 90, 80, 90, 100, 80, 60, 80, 100] * 5:
         fired_hold += t.observe(v)
     assert fired_hold == [], f"100% 유지 중 재발화: {fired_hold}"
 
@@ -111,6 +109,32 @@ def test_none_value_is_skipped():
     assert t.observe(95) == []
     assert t.observe(None) == []  # 판독 실패/보류는 상태 변화 없이 건너뜀
     assert t.observe(95) == [95]  # None 무시, 95 2연속 → 발화
+
+
+# ---- 리더+트래커 통합 회귀: 실세션 전체 재생(수집 2926장) → 알림은 정확히 2회만 ----
+# (전투 내내 게이지가 여러 번 차고 100% 유지되지만, 진짜로 임계를 '처음 넘는' 2회만 울려야
+#  한다. 100% 클립 요동·빈배경 오독으로 인한 거짓 재알림이 없어야 한다.)
+import re as _re  # noqa: E402
+import zipfile as _zip  # noqa: E402
+
+_TUARIM_SESSION_ZIP = Path(__file__).parent / "data" / "raw_7603.zip"
+
+
+def test_full_session_replay_fires_exactly_twice():
+    if not _TUARIM_SESSION_ZIP.exists():
+        pytest.skip("세션 zip 없음")
+    with _zip.ZipFile(_TUARIM_SESSION_ZIP) as z:
+        names = [n for n in z.namelist() if _re.match(r"(raw|v\d+)_\d+\.png", n)]
+        names.sort(key=lambda n: int(_re.search(r"_(\d+)\.png", n).group(1)))
+        reads = []
+        for n in names:
+            img = cv2.imdecode(np.frombuffer(z.read(n), np.uint8), cv2.IMREAD_COLOR)
+            reads.append(read_percent(img))
+    t = TuarimTracker([90, 95])
+    fired = []
+    for v in reads:
+        fired += t.observe(v)
+    assert fired == [90, 95], f"거짓 알림/누락: {fired}"
 
 
 # ---- % 리더 ----

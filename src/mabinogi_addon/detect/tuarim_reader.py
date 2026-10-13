@@ -136,15 +136,7 @@ def read_percent(
 
     tens_ink = int((b[:, max(0, r + _TENS[0]) : max(0, r + _TENS[1])] > 0).sum())
     if tens_ink >= _TENS_INK_MIN:
-        tens_cell = _norm(_cell(v, r, _TENS))
-        # 십의 자리가 '0' 글자면 100%가 영역에 '1'이 잘려 "00"으로 보이는 것이다('0X%'인 실제
-        # 값은 없다). 십의 자리 뱅크엔 0이 없어 이 '0'을 8/9로 오분류하므로(→80/90 거짓 알림),
-        # 0이 포함된 '일의 자리 뱅크'로 한 번 더 대조해 '0'이면 100으로 본다(실제 80/90은
-        # 십의 자리가 8/9라 여기 안 걸린다).
-        z_d, z_s = _classify(tens_cell, Ro, Lo)
-        if z_d == 0 and z_s >= _TENS_NCC_MIN:
-            return 100
-        tens_d, tens_s = _classify(tens_cell, Rt, Lt)
+        tens_d, tens_s = _classify(_norm(_cell(v, r, _TENS)), Rt, Lt)
         if tens_d is not None and tens_s >= max(threshold, _TENS_NCC_MIN):
             value = tens_d * 10 + ones_d
             return value if 0 <= value <= 100 else None
