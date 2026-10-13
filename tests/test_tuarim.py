@@ -67,13 +67,32 @@ def test_transient_low_does_not_rearm():
 
 def test_refires_next_cycle_after_sustained_reset():
     """게이지가 실제로 리셋(낮은 값 RESET_FRAMES 연속)되면 다음 주기에 다시 울린다."""
+    from mabinogi_addon.tracker.tuarim import RESET_FRAMES
+
     t = TuarimTracker([95])
     t.observe(95)
     assert t.observe(95) == [95]  # 1주기 발화
-    for v in [1, 1, 1, 1, 1]:  # 리셋(5연속 저값) → 재무장
-        t.observe(v)
+    for _ in range(RESET_FRAMES):  # 리셋(저값 연속) → 재무장
+        t.observe(1)
     assert t.observe(96) == []
     assert t.observe(96) == [95]  # 다음 주기 재발화
+
+
+def test_hold_at_100_does_not_refire():
+    """100%에서 영역이 '100'을 잘라 판독이 80/60/4/100으로 요동해도(저값 run이 짧음),
+    같은 주기에 재무장/재발화하지 않는다(릴리즈 전 회귀 — 클립된 100% 거짓 재알림)."""
+    from mabinogi_addon.tracker.tuarim import RESET_FRAMES
+
+    t = TuarimTracker([90, 95])
+    # 완만히 올라 95까지 도달(1주기 발화)
+    for v in range(88, 100):
+        t.observe(v)
+    fired_hold = []
+    # 100% 유지 중 클립 요동(짧은 저값 run 포함) — RESET_FRAMES보다 짧게 반복
+    assert RESET_FRAMES >= 7
+    for v in [80, 4, 100, 60, 80, 100, 90, 80, 90, 100, 80, 60, 80, 100] * 3:
+        fired_hold += t.observe(v)
+    assert fired_hold == [], f"100% 유지 중 재발화: {fired_hold}"
 
 
 def test_small_dip_within_hysteresis_does_not_rearm():
