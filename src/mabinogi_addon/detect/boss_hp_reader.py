@@ -33,6 +33,7 @@ _YBAND = (0.28, 0.82)  # 숫자 세로 밴드(바 테두리 제외)
 _MIN_PX = 8  # 칸에 이 미만이면 빈 칸(자리 없음)
 _SEARCH = 8  # 정렬 오프셋 탐색 범위(±, 기준 해상도 px)
 _ACCEPT = 0.45  # 최고 정렬의 최저 자리 점수가 이 이상이어야 채택
+_STRONG = 0.85  # 자리수를 '확신'으로 셀 최저 자리 점수(이 이상이면 그 자리수를 우선 비교)
 
 
 def _load_digits() -> dict[str, list[np.ndarray]]:
@@ -75,8 +76,8 @@ def _classify(
 def _read_at(
     band: np.ndarray, w: int, first: float, pitch: float,
     templates: dict[str, list[np.ndarray]],
-) -> tuple[int | None, float]:
-    """한 정렬에서 오른쪽 끝 기준 고정 칸으로 최대 3자리 읽기. (값, 최저 자리 점수)."""
+) -> tuple[int | None, float, int]:
+    """한 정렬에서 오른쪽 끝 기준 고정 칸으로 최대 3자리 읽기. (값, 최저 자리 점수, 자리수)."""
     digits: list[str] = []
     scores: list[float] = []
     for k in range(1, 4):
@@ -91,30 +92,40 @@ def _read_at(
         xs = np.where((cell > 127).any(axis=0))[0]
         d, sc = _classify(cell[ys.min():ys.max() + 1, xs.min():xs.max() + 1], templates)
         if d is None:
-            return None, -2.0
+            return None, -2.0, 0
         digits.append(d)
         scores.append(sc)
     if not digits:
-        return None, -2.0
+        return None, -2.0, 0
     try:
         value = int("".join(reversed(digits)))
     except ValueError:
-        return None, -2.0
+        return None, -2.0, 0
     if not 0 <= value <= 100:
-        return None, -2.0
-    return value, min(scores)
+        return None, -2.0, 0
+    return value, min(scores), len(digits)
 
 
 def _scan(band, w, scale, pitch, templates, shifts):
-    """주어진 오프셋 후보들에서 가장 확신 높은 판독을 찾는다. (val, score, shift)."""
+    """주어진 오프셋 후보들에서 최적 판독을 찾는다. (val, score, shift).
+
+    '확신되는 자리수'가 많은 판독을 우선하고, 동률이면 점수로 고른다. 정렬 창이 왼쪽으로
+    밀려 units 자리를 빠뜨린 **1자리 오독**(예: "48.00 %"를 4로)이, 그 1자리 점수가 우연히
+    1.00이 나와 정답 2자리(units 점수 0.99)를 이기던 문제를 막는다. 자리수를 '확신될 때만'
+    세므로(각 자리 점수 ≥ _STRONG), 실제 1자리 값(예: 4%)에서 이름 글자가 10의 자리로 잘못
+    섞이는 것도 막는다(약한 추가 자리는 우선권 없음 → 점수로 폴백)."""
+    best_key = (-1, -2.0)  # (확신 자리수, 점수)
     best_val: int | None = None
-    best_score = -2.0
     best_shift: int | None = None
     for shift in shifts:
-        val, score = _read_at(band, w, _FIRST * scale + shift, pitch, templates)
-        if val is not None and score > best_score:
-            best_val, best_score, best_shift = val, score, shift
-    return best_val, best_score, best_shift
+        val, score, ndig = _read_at(band, w, _FIRST * scale + shift, pitch, templates)
+        if val is None:
+            continue
+        strong_digits = ndig if score >= _STRONG else 0
+        key = (strong_digits, score)
+        if key > best_key:
+            best_key, best_val, best_shift = key, val, shift
+    return best_val, best_key[1], best_shift
 
 
 def _prep(region_bgr, templates):
