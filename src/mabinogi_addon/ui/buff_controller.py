@@ -156,6 +156,9 @@ class BuffController(QObject):
         self._present_prev: set[str] = set()  # 직전 틱에 떠 있던 버프(사라짐 시작 감지)
         self._absent_since: dict[str, float] = {}  # 사라진 버프 → 사라지기 시작한 시각
         self._gone_show_until: dict[str, float] = {}  # 확정된 버프 → 경고 표시 종료 시각
+        # 제때(타임아웃 내) 안 멈춘 워커 보관소. 실행 중인 QThread가 참조를 잃고 파괴되면
+        # Qt가 프로세스를 abort(앱이 그냥 꺼짐)하므로, 끝날 때까지 참조를 붙들어 둔다.
+        self._zombies: set[_TrackWorker] = set()
 
     def start(
         self, source: FrameSource, engine: BuffEngine, interval_ms: int = 200,
@@ -179,26 +182,58 @@ class BuffController(QObject):
             self._worker.stop()
 
     def stop(self, timeout_ms: int = 2000) -> None:
-        if self._worker is not None:
-            self._worker.stop()
+        w = self._worker
+        if w is None:
+            return
+        w.stop()
+        t = time.perf_counter()
+        ok = w.wait(timeout_ms)
+        _log.info(
+            "워커 wait %.0fms (정상종료=%s)", (time.perf_counter() - t) * 1000, ok
+        )
+        # **항상** 참조를 비운다 — start()가 실행 중 스레드를 새 워커로 덮어써 파괴(=Qt abort)
+        # 하지 못하게. 안 멈췄으면 아래에서 좀비로 보관해 파괴를 막는다.
+        self._worker = None
+        src, bsrc = self._source, self._bar_source
+        self._source = None
+        self._bar_source = None
+        if ok:
+            # 깨끗이 멈춤(캡처 중 아님) → 소스를 제어된 시점에 닫는다.
+            self._close_sources(src, bsrc)
+            return
+        # 2초 내 안 멈춤(dxcam grab이 포커스 아웃 등으로 블록). 실행 중 QThread를 파괴하면
+        # Qt가 프로세스를 abort시키므로, 참조를 좀비로 보관해 파괴를 막는다. 워커가 실제로
+        # 끝나면(grab 반환) finished에서 수거하며 그때 소스를 닫는다(소스도 grab 중엔 못 닫음).
+        _log.warning("워커 미정지 → 좀비 보관(앱 abort 방지), 종료 시 수거")
+        for sig in (w.updated, w.alerted, w.alerted2, w.foreground_changed):
+            try:
+                sig.disconnect()  # 죽어가는 워커의 늦은 emit이 오버레이를 흔들지 않게
+            except (RuntimeError, TypeError):
+                pass
+
+        def _reap() -> None:
+            self._zombies.discard(w)
+            self._close_sources(src, bsrc)
+
+        w.finished.connect(_reap)
+        self._zombies.add(w)
+        if w.isFinished():  # wait 타임아웃 직후 끝났을 수 있음(연결 전 발화 대비)
+            _reap()
+
+    def _close_sources(
+        self, src: FrameSource | None, bsrc: FrameSource | None
+    ) -> None:
+        """워커가 멈춘 뒤 캡처 소스를 닫는다(dxcam 카메라 제어 해제). 실패는 무시."""
+        if src is None:
+            return
+        try:
             t = time.perf_counter()
-            ok = self._worker.wait(timeout_ms)
-            _log.info(
-                "워커 wait %.0fms (정상종료=%s)",
-                (time.perf_counter() - t) * 1000, ok,
-            )
-            if ok:
-                self._worker = None  # 정상 종료한 것만 참조 해제(아니면 유지해 파괴 방지)
-        # 워커를 멈춘 뒤(캡처 중 아님) 소스를 닫는다 — dxcam 카메라를 제어된 시점에 해제
-        # (안 닫으면 프로세스 종료 시점에 정리되며 종료가 느려진다).
-        if self._worker is None and self._source is not None:
-            t = time.perf_counter()
-            self._source.close()
-            if self._bar_source is not None:
-                self._bar_source.close()  # 3차 바 소스도 함께 해제(공유 카메라 참조 누수 방지)
-                self._bar_source = None
+            src.close()
+            if bsrc is not None:
+                bsrc.close()
             _log.info("소스 close %.0fms", (time.perf_counter() - t) * 1000)
-            self._source = None
+        except Exception:  # noqa: BLE001 — 종료 정리 실패는 무시(앱 생존 우선)
+            _log.info("소스 close 실패(무시)", exc_info=True)
 
     @property
     def item_count(self) -> int:
