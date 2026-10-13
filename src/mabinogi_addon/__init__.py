@@ -30,7 +30,28 @@ def main() -> None:
 
     logbuffer.install()
 
-    # 처리되지 않은 예외도 로그에 남겨, 버그 신고 로그에서 크래시 원인이 보이게 한다.
+    # 파일 로그: 앱이 꺼진 뒤에도(크래시 등) 원인이 남게 user_data_dir/logs/app.log에 기록한다.
+    # 메모리 링버퍼는 프로세스가 죽으면 사라지므로, 크래시 진단엔 파일이 필요하다(회전 보관).
+    try:
+        from logging.handlers import RotatingFileHandler
+
+        from mabinogi_addon import paths
+
+        log_dir = paths.user_data_dir() / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        file_fmt = logging.Formatter(
+            "%(asctime)s %(levelname)s %(name)s: %(message)s", "%Y-%m-%d %H:%M:%S"
+        )
+        fileh = RotatingFileHandler(
+            log_dir / "app.log", maxBytes=1_000_000, backupCount=3, encoding="utf-8"
+        )
+        fileh.setLevel(logging.DEBUG)
+        fileh.setFormatter(file_fmt)
+        root.addHandler(fileh)
+    except Exception:  # noqa: BLE001 — 파일 로그 실패해도 앱은 돈다
+        logging.getLogger("mabinogi_addon").info("파일 로그 설정 실패(무시)", exc_info=True)
+
+    # 처리되지 않은 예외도 로그에 남겨, 버그 신고 로그·파일에서 크래시 원인이 보이게 한다.
     def _excepthook(exc_type, exc, tb) -> None:
         logging.getLogger("mabinogi_addon").critical(
             "처리되지 않은 예외", exc_info=(exc_type, exc, tb)
@@ -38,6 +59,18 @@ def main() -> None:
         sys.__excepthook__(exc_type, exc, tb)
 
     sys.excepthook = _excepthook
+
+    # 스레드(워커)에서 올라온 미처리 예외도 파일에 남긴다(프로세스 abort 전 원인 포착).
+    import threading
+
+    def _thread_excepthook(args) -> None:
+        logging.getLogger("mabinogi_addon").critical(
+            "처리되지 않은 스레드 예외(%s)",
+            getattr(args.thread, "name", "?"),
+            exc_info=(args.exc_type, args.exc_value, args.exc_traceback),
+        )
+
+    threading.excepthook = _thread_excepthook
 
     from mabinogi_addon import config
     from mabinogi_addon.system import updater

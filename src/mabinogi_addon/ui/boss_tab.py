@@ -209,8 +209,20 @@ class BossTab(QWidget):
         self._apply_collect_gate()
         self._timer = QTimer(self)
         self._timer.setInterval(300)  # HP는 천천히 변함 — 300ms면 충분
-        self._timer.timeout.connect(self._tick)
+        self._timer.timeout.connect(self._safe_tick)
         self._timer.start()
+
+    def _safe_tick(self) -> None:
+        """타이머 틱 가드 — 한 틱의 예외(판독·캡처 등)가 앱 전체를 죽이지 않게 흡수한다.
+        (메인 스레드 QTimer 슬롯의 미처리 예외는 PySide6에서 프로세스를 abort시킬 수 있다.)"""
+        try:
+            self._tick()
+        except Exception:  # noqa: BLE001 — 틱 격리(앱 생존 우선)
+            import logging
+
+            logging.getLogger("mabinogi_addon.capture").exception(
+                "보스 탭 틱 실패 — 이 틱만 건너뜀(앱 유지)"
+            )
 
     def _supported_label(self) -> QLabel:
         lines = ["지원 보스 & 알림 %:"]

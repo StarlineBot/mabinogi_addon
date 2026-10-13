@@ -75,30 +75,41 @@ class _TrackWorker(QThread):
             if (game, selfa) != self._fg:
                 self._fg = (game, selfa)
                 self.foreground_changed.emit(game, selfa)
-            # 포그라운드와 무관하게 계속 읽는다 — 지속시간이 끊기지 않고 계속 동기화되게.
-            # (파티 바드 노래 등은 내가 포커스 안 해도 갱신된다.) 라이브 캡처는 게임이
-            # 화면에 보이면 잡히고, 다른 창이 버프 바를 가리면 앵커(기준 버프)가 안 보여
-            # 엔진이 frame_valid=False로 '동결'(감지·해제 멈추고 시계만 유지)하므로,
-            # 비게임 화면을 캡처해도 오탐으로 터지지 않는다.
-            region = self._source.grab()
-            if region is not None:
-                # 탐지·시간읽기는 포커스와 무관하게 계속(시간 동기화), 소리 알림은
-                # 포그라운드일 때만(foreground=game) — 엔진이 알림 판정을 게이팅한다.
-                if self._bar_source is not None:
-                    # 3차: 보스 HP바 영역을 따로 캡처해 bar_region으로 넘긴다(디버프 엔진만
-                    # 이 인자를 받으므로, 바 소스가 있을 때만 전달).
-                    result = self._engine.tick(
-                        region, time.monotonic(), foreground=game,
-                        bar_region=self._bar_source.grab(),
-                    )
-                else:
-                    result = self._engine.tick(region, time.monotonic(), foreground=game)
-                self.updated.emit(result.entries)
-                if result.alerts:
-                    self.alerted.emit(result.alerts)
-                if result.alerts2:
-                    self.alerted2.emit(result.alerts2)
+            # 한 틱의 캡처·판독 예외가 **앱 전체를 죽이지 않게** 감싼다. QThread.run에서 올라간
+            # 미처리 예외는 PySide6에서 프로세스를 abort시킬 수 있다(자동 찾기로 새 영역을
+            # 지정한 직후 3차 판독 틱이 던지면 앱이 통째로 꺼지던 문제). 이 틱만 로그로 남기고
+            # 건너뛰면 추적은 다음 틱에 스스로 복구된다.
+            try:
+                self._tick_once(game)
+            except Exception:  # noqa: BLE001 — 추적 틱 격리(앱 생존 우선)
+                _log.exception("추적 틱 실패 — 이 틱만 건너뛰고 계속(앱 유지)")
             self._sleep(active=game)
+
+    def _tick_once(self, game: bool) -> None:
+        # 포그라운드와 무관하게 계속 읽는다 — 지속시간이 끊기지 않고 계속 동기화되게.
+        # (파티 바드 노래 등은 내가 포커스 안 해도 갱신된다.) 라이브 캡처는 게임이
+        # 화면에 보이면 잡히고, 다른 창이 버프 바를 가리면 앵커(기준 버프)가 안 보여
+        # 엔진이 frame_valid=False로 '동결'(감지·해제 멈추고 시계만 유지)하므로,
+        # 비게임 화면을 캡처해도 오탐으로 터지지 않는다.
+        region = self._source.grab()
+        if region is None:
+            return
+        # 탐지·시간읽기는 포커스와 무관하게 계속(시간 동기화), 소리 알림은
+        # 포그라운드일 때만(foreground=game) — 엔진이 알림 판정을 게이팅한다.
+        if self._bar_source is not None:
+            # 3차: 보스 HP바 영역을 따로 캡처해 bar_region으로 넘긴다(디버프 엔진만
+            # 이 인자를 받으므로, 바 소스가 있을 때만 전달).
+            result = self._engine.tick(
+                region, time.monotonic(), foreground=game,
+                bar_region=self._bar_source.grab(),
+            )
+        else:
+            result = self._engine.tick(region, time.monotonic(), foreground=game)
+        self.updated.emit(result.entries)
+        if result.alerts:
+            self.alerted.emit(result.alerts)
+        if result.alerts2:
+            self.alerted2.emit(result.alerts2)
 
     def _sleep(self, active: bool = True) -> None:
         """주기를 작게 쪼개 자며 _running을 자주 확인(종료 요청 즉시 반응). 게임이

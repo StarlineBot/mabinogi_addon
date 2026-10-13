@@ -421,6 +421,7 @@ class DebuffTab(QWidget):
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
+        self._highlight.close()  # 확인 끝나면 민트 점선 즉시 닫기(4초 타이머에만 의존 안 함)
         if ans != QMessageBox.StandardButton.Yes:
             return
         # 디버프 영역(띠+바) 저장 + 추적 재시작
