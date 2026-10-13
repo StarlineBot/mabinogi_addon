@@ -11,6 +11,8 @@
 
 from __future__ import annotations
 
+import time
+
 import numpy as np
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QGuiApplication, QImage, QPixmap
@@ -35,6 +37,9 @@ from .widgets import checkbox, hint_label
 # 고정(100% UI 배율)이라, 자유 드래그 대신 '고정 박스를 클릭 배치'한다(필요하면 휠로 조절).
 # 세 바 블록 실측 ≈ 180×37 → 여백을 둬 넉넉히(경험치 바는 안 걸리게 가로는 과하지 않게).
 STAT_BOX_SIZE = (200, 46)
+
+# 저값 경고: 임계 이하가 이만큼(초) 연속돼야 발동(한 프레임 깜빡임 무시). 틱 200ms.
+_ALERT_DEBOUNCE = 0.4
 
 HELP_TITLE = "체력바 오버레이 사용법"
 HELP_HTML = """
@@ -75,6 +80,11 @@ class StatBarsTab(QWidget):
             self._shot_dir = paths.user_data_dir() / "stat_bar_shots"
         else:
             self._shot_dir = paths.project_root() / "tests" / "data" / "stat_bar_shots"
+        # 저값 경고 상태(게이트+디바운스+무장).
+        self._alert_sound_on = cfg["alertSound"]
+        self._alert_armed = {sid: True for sid in ("hp", "mp", "sta")}
+        self._alert_low_since: dict[str, float] = {}
+        self._alert_player = None
 
         v = QVBoxLayout(self)
         v.setContentsMargins(12, 12, 12, 12)
@@ -169,6 +179,8 @@ class StatBarsTab(QWidget):
         ctl_row.addWidget(self.unlock_all_btn)
         v.addLayout(ctl_row)
 
+        # 저값 경고(생/마/스 각각 임계 이하면 알림).
+        v.addWidget(self._alert_group())
         # 수집 모드(저HP·전환 프레임 제보용). 영역이 '눈에 띄게 바뀔 때' PNG로 저장만 한다.
         v.addWidget(self._collect_group())
         v.addStretch(1)
@@ -178,7 +190,10 @@ class StatBarsTab(QWidget):
             self.region_btn, self.view_region_btn, self.enable,
             self.scale_spin, self.align_combo, self.lock_all_btn, self.unlock_all_btn,
             self.snap_btn, self.open_dir_btn, self.collect_chk,
+            self.alert_sound_chk,
             *self._show_checks.values(),
+            *self._alert_checks.values(),
+            *self._alert_spins.values(),
         ]
         self._update_region_label()
         self._apply_login_gate()
@@ -186,6 +201,92 @@ class StatBarsTab(QWidget):
         self._timer.setInterval(200)
         self._timer.timeout.connect(self._tick)
         self._timer.start()
+
+    # ---- 저값 경고 ----
+    def _alert_group(self) -> QGroupBox:
+        box = QGroupBox("저값 경고 (지정 % 이하로 떨어지면 알림)")
+        g = QVBoxLayout(box)
+        g.addWidget(hint_label(
+            "체력·마나·스태미나가 각자 정한 % 이하로 떨어지면 소리로 알립니다. 바 3개가"
+            " 다 보일 때만 판정해(지역이동·가려짐 0% 오탐 방지), 임계 위로 회복하면"
+            " 다시 무장합니다."
+        ))
+        self._alert_checks: dict[str, QWidget] = {}
+        self._alert_spins: dict[str, QSpinBox] = {}
+        for sid in ("hp", "mp", "sta"):
+            row = QHBoxLayout()
+            chk = checkbox(STAT_LABELS[sid])
+            chk.setChecked(self._bars_cfg[sid]["alert"]["on"])
+            chk.toggled.connect(self._on_alert_changed)
+            row.addWidget(chk)
+            row.addWidget(QLabel("≤"))
+            sp = QSpinBox()
+            sp.setRange(1, 99)
+            sp.setSingleStep(5)
+            sp.setSuffix(" %")
+            sp.setValue(self._bars_cfg[sid]["alert"]["pct"])
+            sp.valueChanged.connect(self._on_alert_changed)
+            row.addWidget(sp)
+            row.addStretch(1)
+            g.addLayout(row)
+            self._alert_checks[sid] = chk
+            self._alert_spins[sid] = sp
+        self.alert_sound_chk = checkbox("소리 알림")
+        self.alert_sound_chk.setChecked(self._alert_sound_on)
+        self.alert_sound_chk.toggled.connect(self._on_alert_changed)
+        g.addWidget(self.alert_sound_chk)
+        return box
+
+    def _on_alert_changed(self, *_args) -> None:
+        for sid in ("hp", "mp", "sta"):
+            self._bars_cfg[sid]["alert"] = {
+                "on": self._alert_checks[sid].isChecked(),
+                "pct": self._alert_spins[sid].value(),
+            }
+        self._alert_sound_on = self.alert_sound_chk.isChecked()
+        self._save()
+
+    def _check_alerts(self, readings: dict, now: float) -> None:
+        """임계 이하로 떨어지면(각 바 각자) 경고. 게이트: 바 3개가 다 보일 때만 판정해
+        지역이동·가려짐으로 생기는 0% 오탐을 막는다. 임계 위로 회복하면 재무장."""
+        if len(readings) < 3:  # 바가 다 안 보임(가려짐/전환) → 판정 보류
+            self._alert_low_since.clear()
+            return
+        fired = False
+        for sid in ("hp", "mp", "sta"):
+            al = self._bars_cfg[sid]["alert"]
+            r = readings.get(sid)
+            if r is None:
+                continue
+            low = r.ratio * 100 <= al["pct"]
+            if not al["on"]:
+                if not low:
+                    self._alert_armed[sid] = True
+                self._alert_low_since.pop(sid, None)
+                continue
+            if low:
+                since = self._alert_low_since.setdefault(sid, now)
+                if self._alert_armed[sid] and now - since >= _ALERT_DEBOUNCE:
+                    self._alert_armed[sid] = False  # 1회 발동(회복 전까지 재발동 안 함)
+                    fired = True
+            else:
+                self._alert_low_since.pop(sid, None)
+                self._alert_armed[sid] = True  # 회복 → 재무장
+        if fired and not self._paused and self._alert_sound_on:
+            self._play_alert_sound()
+
+    def _play_alert_sound(self) -> None:
+        from .notifier import SoundNotifier, sound_path
+
+        # 전용 음원(체력바 경고.mp3)이 있으면 쓰고(목소리 팩도 따라감), 없으면 비프.
+        path = sound_path("체력바 경고.mp3")
+        if self._alert_player is None and path.exists():
+            self._alert_player = SoundNotifier({"low": path})
+        if self._alert_player is not None and self._alert_player.play("low"):
+            return
+        from PySide6.QtWidgets import QApplication
+
+        QApplication.beep()
 
     # ---- 수집 모드(저HP·전환 프레임 제보) ----
     def _collect_group(self) -> QGroupBox:
@@ -335,6 +436,7 @@ class StatBarsTab(QWidget):
                 ov.set_value(r.ratio)
                 parts.append(f"{STAT_LABELS[sid]} {int(r.ratio * 100)}%")
         self.value_label.setText("현재 값: " + ("  ".join(parts) if parts else "—"))
+        self._check_alerts(readings, time.monotonic())
 
     # ---- 영역 지정 ----
     def _on_region(self) -> None:
@@ -431,6 +533,7 @@ class StatBarsTab(QWidget):
                 "scale": self._scale,
                 "align": self._align,
                 "bars": self._bars_cfg,
+                "alertSound": self._alert_sound_on,
             }
         )
 

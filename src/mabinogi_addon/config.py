@@ -867,10 +867,18 @@ def load_stat_bars(path: Path = LOCAL_CONFIG_PATH) -> dict:
     for sid in ("hp", "mp", "sta"):
         b = bars_in.get(sid) if isinstance(bars_in.get(sid), dict) else {}
         pos = b.get("pos") if isinstance(b.get("pos"), dict) else None
+        al = b.get("alert") if isinstance(b.get("alert"), dict) else {}
+        pct = al.get("pct", 30)
+        try:
+            pct = int(pct)
+        except (TypeError, ValueError):
+            pct = 30
         bars[sid] = {
             "show": bool(b.get("show", True)),
             "locked": bool(b.get("locked", False)),
             "pos": pos,
+            # 저값 경고: on=켬, pct=임계(이하일 때 알림, 사용자 지정·기본 30).
+            "alert": {"on": bool(al.get("on", False)), "pct": max(1, min(99, pct))},
         }
     align = sec.get("align")
     align = align if align in ("left", "center", "right") else "left"
@@ -880,6 +888,7 @@ def load_stat_bars(path: Path = LOCAL_CONFIG_PATH) -> dict:
         "scale": int(sec.get("scale", 150)),
         "align": align,
         "bars": bars,
+        "alertSound": bool(sec.get("alertSound", True)),
     }
 
 
