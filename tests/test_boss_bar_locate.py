@@ -204,3 +204,48 @@ def test_has_wide_bar_row_rejects_empty():
     """빈/없는 프레임은 넓은 가로 연속이 없어 즉시 False(검증기 호출 안 함)."""
     assert has_wide_bar_row(np.zeros((36, 523, 3), np.uint8)) is False
     assert has_wide_bar_row(None) is False
+
+
+# --- 저HP 사전 컷: 빨간 바(≤13%)는 채움이 짧아 has_wide_bar_row가 놓친다. 숫자 영역
+#     flooded(OR)로 살려야 저HP 보스 막바지에도 존재 판정(→저체력 경고)이 유지된다. ---
+_POINCHE_ZIP = "tests/data/eotgallin_poinche_hp004_115.zip"
+
+
+def _precut(frame) -> bool:
+    """_boss_bar_visible의 값싼 사전 컷과 동일: 넓은 가로연속 OR 숫자영역 flooded."""
+    from mabinogi_addon.detect.boss_hp_reader import number_area_flooded
+
+    return bool(has_wide_bar_row(frame) or number_area_flooded(frame))
+
+
+def _norm37(im):
+    from mabinogi_addon.detect.boss_bar import normalize_box_height
+
+    th = normalize_box_height((0, 0, im.shape[1], im.shape[0]), 1440)[3]
+    top = (im.shape[0] - th) // 2
+    return im[top : top + th]
+
+
+def test_precut_misses_no_readable_lowhp_frame():
+    """포인셰 저HP 재생: 판독되는(검증 통과) 프레임은 사전 컷도 전부 통과해야 한다
+    (사전 컷이 저HP 빨간 바를 걸러 미등록 보스 막바지에 경고가 꺼지던 문제 회귀 방지).
+    13%·5%·1% 프레임이 사전 컷을 통과하는 것도 함께 확인한다."""
+    import zipfile
+
+    if not os.path.exists(_POINCHE_ZIP):
+        pytest.skip("데이터 zip 없음")
+    from mabinogi_addon.detect.boss_hp_reader import read_percent
+
+    v = make_validator()
+    seen_low = {}
+    with zipfile.ZipFile(_POINCHE_ZIP) as z:
+        for n in (x for x in z.namelist() if x.endswith(".png")):
+            im = cv2.imdecode(np.frombuffer(z.read(n), np.uint8), cv2.IMREAD_COLOR)
+            f = _norm37(im)
+            if v(f):  # 보스바로 검증되는(판독 가능) 프레임
+                assert _precut(f), f"{n}: 사전 컷이 판독 가능 프레임을 걸러냄"
+            hp = read_percent(f)
+            if hp in (13, 5, 1):
+                seen_low.setdefault(hp, _precut(f))
+    for hp in (13, 5, 1):
+        assert seen_low.get(hp) is True, f"저HP {hp}% 프레임이 사전 컷 통과 못 함"

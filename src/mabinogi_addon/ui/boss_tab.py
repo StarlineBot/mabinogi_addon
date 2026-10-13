@@ -475,10 +475,13 @@ class BossTab(QWidget):
         자동 찾기와 같은 기준(이름 글자 + % 판독)으로 본다 → 미등록 보스도 존재로 인식.
         검증기는 상태가 없어 캐시해 재사용한다."""
         from ..detect.boss_bar import has_wide_bar_row, make_validator
+        from ..detect.boss_hp_reader import number_area_flooded
 
-        # 값싼 사전 판정(~1ms): 넓은 가로 연속(바 가장자리) 행이 없으면 보스바 아님 → 즉시
-        # False. 평상시(보스 없음) 프레임마다 비싼 make_validator(read_percent ~36ms)를 안 돈다.
-        if not has_wide_bar_row(frame):
+        # 값싼 사전 판정(~1ms): 넓은 가로 연속(고HP 바 가장자리) '또는' 숫자 영역 flooded
+        # (저HP 빨간 바 — 채움이 짧아 가로 연속이 없지만 숫자 영역이 회색으로 꽉 참)가
+        # 아니면 보스바 아님 → 즉시 False. 평상시 프레임마다 비싼 make_validator(~36ms)를
+        # 안 돈다. 저HP 보스 막바지(≤13%)를 걸러 저체력 경고가 꺼지던 문제를 flood OR로 해결.
+        if not (has_wide_bar_row(frame) or number_area_flooded(frame)):
             return False
         if self._bar_validate is None:
             self._bar_validate = make_validator()

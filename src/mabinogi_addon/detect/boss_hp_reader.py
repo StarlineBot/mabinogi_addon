@@ -147,10 +147,32 @@ def _bright_mask(region_bgr: np.ndarray) -> np.ndarray:
     return ((hsv[:, :, 1] < _SAT_MAX) & (hsv[:, :, 2] >= _BRIGHT_V)).astype(np.uint8) * 255
 
 
+def _flooded(band: np.ndarray, w: int) -> bool:
+    """숫자 영역(YBAND 행 band × 오른쪽 20% 열)의 저채도 마스크가 꽉 찼는지.
+
+    저HP(빨간 바)에선 빨간 채움이 짧고 숫자 뒤 배경이 회색이라, 숫자 영역이 저채도로
+    flooded된다. 정상(고HP) 프레임에선 이 비율이 낮다(개입 안 함)."""
+    numcols = band[:, int(w * 0.80):]  # 숫자 영역(오른쪽 20% 열)
+    return bool(numcols.size and float((numcols > 127).mean()) >= _FLOOD_MIN)
+
+
+def number_area_flooded(region_bgr: np.ndarray) -> bool:
+    """보스 HP바 박스에서 숫자 영역이 저HP flooded인지(보스 존재 사전 판정 보조).
+
+    저HP 빨간 바는 채움이 짧아 '넓은 가로 연속'이 없지만, 숫자 영역은 회색으로 flooded돼
+    있다. 존재 사전 컷에서 has_wide_bar_row가 놓치는 저HP 구간을 이걸로 살린다. 저HP 보조
+    판독(_low_hp_value)의 개입 조건과 같은 flood 판정이라, 개입하는 프레임과 정확히 일치한다.
+    """
+    if region_bgr is None or region_bgr.size == 0 or region_bgr.ndim != 3:
+        return False
+    h, w = region_bgr.shape[:2]
+    band = _color_mask(region_bgr)[int(h * _YBAND[0]):int(h * _YBAND[1])]
+    return _flooded(band, w)
+
+
 def _low_hp_value(region_bgr, templates, band, w, scale, pitch, span) -> int | None:
     """기본 판독이 None일 때의 저HP 보조 판독. 해당 없으면 None(정상 경로 불변)."""
-    numcols = band[:, int(w * 0.80):]  # 숫자 영역(오른쪽 20% 열)
-    if numcols.size == 0 or float((numcols > 127).mean()) < _FLOOD_MIN:
+    if not _flooded(band, w):
         return None  # flooded 아님 → 저HP 아님 → 개입 안 함
     h = region_bgr.shape[0]
     bband = _bright_mask(region_bgr)[int(h * _YBAND[0]):int(h * _YBAND[1])]
