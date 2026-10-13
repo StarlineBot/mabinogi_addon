@@ -23,6 +23,13 @@ _SCALES: tuple[int, ...] = (12, 14, 16, 18, 20, 22, 24)
 _THRESHOLD = 0.85
 
 
+def anchor_template() -> np.ndarray | None:
+    """앵커(프리미엄 배틀 멤버십) 아이콘 템플릿을 로드한다(없으면 None)."""
+    from ..catalog import DEFAULT_ICON_DIR
+
+    return cv2.imread(str(DEFAULT_ICON_DIR / "premium_battle.png"))
+
+
 @dataclass(frozen=True)
 class AnchorHit:
     score: float  # 매칭 점수(0~1)
@@ -62,3 +69,28 @@ def find_anchor(
     if best is None or best.score < threshold:
         return None
     return best
+
+
+def locate_status_region(
+    frame: np.ndarray,
+    template: np.ndarray,
+    *,
+    threshold: float = _THRESHOLD,
+) -> tuple[int, int, int, int] | None:
+    """상태목록창 전체 영역 (x,y,w,h)를 앵커 기준으로 유도한다(없으면 None).
+
+    앵커(아이콘 열)를 찾은 뒤: 왼쪽=아이콘 열, 폭=리스트 폭 추정, 위로는 버프들이 쌓인
+    만큼 넉넉히, 아래는 '버프가 더 걸리면 아래로 길어지므로' 화면 끝까지 잡는다. 정확한
+    패널 경계(반투명 박스 상단)는 배경을 타서 어려우므로, 넉넉히 잡고 사용자가 미리보기로
+    확인/조정하는 전제(베타). 앵커가 없으면 None.
+    """
+    hit = find_anchor(frame, template, threshold=threshold)
+    if hit is None:
+        return None
+    H, W = frame.shape[:2]
+    s = hit.size
+    left = max(0, hit.x - int(s * 0.3))
+    width = min(int(s * 26), W - left)  # 아이콘 + 이름 + 남은시간 포함 추정 폭
+    top = max(0, hit.y - int(s * 40))  # 앵커 위 버프들(넉넉히; 왼쪽 위는 보통 게임 월드)
+    height = H - top  # 아래로 길어지는 리스트를 다 덮게 화면 끝까지
+    return (left, top, width, height)

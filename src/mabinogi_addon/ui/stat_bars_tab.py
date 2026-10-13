@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QHBoxLayout,
     QLabel,
+    QMessageBox,
     QPushButton,
     QSpinBox,
     QVBoxLayout,
@@ -28,8 +29,9 @@ from PySide6.QtWidgets import (
 )
 
 from .. import config, image_io, paths
-from ..detect.stat_bars import read_stat_bars
+from ..detect.stat_bars import locate_stat_bars, read_stat_bars
 from .help_dialog import tab_header
+from .screen_grab import grab_primary
 from .stat_overlay import STAT_LABELS, StatBarOverlay
 from .widgets import checkbox, hint_label
 
@@ -116,6 +118,10 @@ class StatBarsTab(QWidget):
         self.view_region_btn = QPushButton("영역 보기")
         self.view_region_btn.clicked.connect(self._flash_region)
         row.addWidget(self.view_region_btn)
+        self.auto_find_btn = QPushButton("🧪 자동 찾기")
+        self.auto_find_btn.setToolTip("체력바(생/마/스)를 화면에서 자동으로 찾아 지정 — Discord 베타")
+        self.auto_find_btn.clicked.connect(self._on_auto_find)
+        row.addWidget(self.auto_find_btn)
         v.addLayout(row)
 
         # 미리보기 + 현재 값
@@ -187,7 +193,7 @@ class StatBarsTab(QWidget):
 
         # 로그인 시에만 조작 가능하게 묶어 두는 컨트롤들.
         self._gated_widgets = [
-            self.region_btn, self.view_region_btn, self.enable,
+            self.region_btn, self.view_region_btn, self.auto_find_btn, self.enable,
             self.scale_spin, self.align_combo, self.lock_all_btn, self.unlock_all_btn,
             self.snap_btn, self.open_dir_btn, self.collect_chk,
             self.alert_sound_chk,
@@ -467,6 +473,43 @@ class StatBarsTab(QWidget):
         self._update_region_label()
         self._save()
         self._flash_region()
+
+    def _on_auto_find(self) -> None:
+        """체력바를 화면에서 자동 검출 → 민트 점선 미리보기 + 확인 후에만 저장."""
+        frame, ox, oy = grab_primary()
+        if frame is None:
+            QMessageBox.warning(self, "자동 찾기", "화면 캡처에 실패했습니다.")
+            return
+        box = locate_stat_bars(frame)
+        if box is None:
+            QMessageBox.information(
+                self,
+                "자동 찾기 — 못 찾음",
+                "체력바(생/마/스)를 찾지 못했습니다.\n\n"
+                "• 체력바가 화면에 보이나요? (하단 메뉴바가 최소화돼 있으면 안 보입니다)\n"
+                "• 세 바(분홍·파랑·노랑)가 가려지지 않았나요?\n\n"
+                "다시 시도하거나 '영역 지정'으로 직접 잡으세요.",
+            )
+            return
+        x, y, w, h = box
+        ax, ay = x + ox, y + oy  # 전역 좌표
+        from .region_highlight import RegionHighlight
+
+        self._highlight = RegionHighlight()
+        self._highlight.flash(
+            ax, ay, w, h, "자동 찾기 결과", "체력바 — 이 영역으로 지정할까요?", msec=4000
+        )
+        ans = QMessageBox.question(
+            self,
+            "자동 찾기 — 확인",
+            "민트 점선으로 표시한 영역으로 체력바를 지정할까요?\n\n"
+            "'아니오'를 누르면 기존 설정이 그대로 유지됩니다.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if ans != QMessageBox.StandardButton.Yes:
+            return
+        self._on_selected(ax, ay, w, h)
 
     def _flash_region(self) -> None:
         if not self._region:

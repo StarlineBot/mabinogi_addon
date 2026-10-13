@@ -12,7 +12,7 @@ import os
 import cv2
 import pytest
 
-from mabinogi_addon.detect.status_panel import find_anchor
+from mabinogi_addon.detect.status_panel import find_anchor, locate_status_region
 
 _TPL_PATH = "src/mabinogi_addon/assets/buff/icon/premium_battle.png"
 
@@ -67,3 +67,21 @@ def test_find_anchor_handles_empty_input():
 
     assert find_anchor(None, _template()) is None
     assert find_anchor(np.zeros((0, 0, 3), np.uint8), _template()) is None
+
+
+@pytest.mark.parametrize("name,ex,ey", _PRESENT)
+def test_locate_status_region_covers_anchor(name, ex, ey):
+    """앵커가 있으면 그 앵커를 포함하는 영역을 돌려준다(아래로 화면 끝까지)."""
+    img = _img(name)
+    reg = locate_status_region(img, _template())
+    assert reg is not None, f"{name}: 영역 유도 실패"
+    rx, ry, rw, rh = reg
+    H, W = img.shape[:2]
+    # 앵커(ex,ey)가 영역 안에 들어오고, 아래로 화면 끝까지 덮는다.
+    assert rx <= ex and ry <= ey, f"{name}: 앵커가 영역 밖 {reg}"
+    assert ry + rh >= H - 2, f"{name}: 아래가 화면 끝까지 아님 {reg}"
+
+
+def test_locate_status_region_absent_none():
+    for name in _ABSENT:
+        assert locate_status_region(_img(name), _template()) is None, name

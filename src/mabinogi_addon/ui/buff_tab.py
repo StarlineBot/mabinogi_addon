@@ -30,6 +30,8 @@ from PySide6.QtWidgets import (
 from .. import catalog as catalog_mod
 from .. import config
 from ..catalog import BuffDef, available_catalog
+from ..detect.status_panel import anchor_template, locate_status_region
+from .screen_grab import grab_primary
 from .widgets import callout, checkbox, hint_label, icon_slot, section_label
 
 # 앵커로 고정 사용할 버프(항상 존재, 지속시간 없음 → 판정 기준)
@@ -231,6 +233,10 @@ class BuffTab(QWidget):
         self.view_region_btn.setToolTip("잡힌 영역을 화면에 점선으로 잠깐 표시")
         self.view_region_btn.clicked.connect(self._flash_region)
         hint_row.addWidget(self.view_region_btn)
+        self.auto_find_btn = QPushButton("🧪 자동 찾기")
+        self.auto_find_btn.setToolTip("상태목록창(버프)을 화면에서 자동으로 찾아 지정 — Discord 베타")
+        self.auto_find_btn.clicked.connect(self._on_auto_find)
+        hint_row.addWidget(self.auto_find_btn)
         self._update_region_hint()
         v.addLayout(hint_row)
 
@@ -319,6 +325,56 @@ class BuffTab(QWidget):
         config.save_capture_region(x, y, w, h, "buffTracker")
         self._update_region_hint()
         self._flash_region()  # 잡힌 영역을 화면에 점선으로 바로 확인
+
+    def _on_auto_find(self) -> None:
+        """상태목록창을 앵커로 자동 검출 → 민트 점선 미리보기 + 확인 후에만 저장(Discord 베타)."""
+        if config.load_discord_user() is None:
+            QMessageBox.information(
+                self,
+                "자동 찾기 — 베타",
+                "자동 찾기는 Discord 로그인 사용자만 쓸 수 있는 베타 기능입니다.\n"
+                "설정 탭에서 로그인한 뒤 사용하세요.",
+            )
+            return
+        frame, ox, oy = grab_primary()
+        if frame is None:
+            QMessageBox.warning(self, "자동 찾기", "화면 캡처에 실패했습니다.")
+            return
+        tpl = anchor_template()
+        box = locate_status_region(frame, tpl) if tpl is not None else None
+        if box is None:
+            QMessageBox.information(
+                self,
+                "자동 찾기 — 못 찾음",
+                "상태목록창을 찾지 못했습니다.\n\n"
+                "• 상태목록창에 '프리미엄 배틀 멤버십'이 떠 있나요? (이 아이콘을 기준으로 찾습니다)\n"
+                "• 상태목록창이 화면에 보이나요?\n\n"
+                "다시 시도하거나 '버프 영역 지정'으로 직접 잡으세요.",
+            )
+            return
+        x, y, w, h = box
+        ax, ay = x + ox, y + oy  # 전역 좌표
+        from .region_highlight import RegionHighlight
+
+        self._highlight = RegionHighlight()
+        self._highlight.flash(
+            ax, ay, w, h,
+            "자동 찾기 결과",
+            "상태목록창(버프) · 넉넉히 잡았어요 — 이 영역으로 지정 후 조정할까요?",
+            msec=4000,
+        )
+        ans = QMessageBox.question(
+            self,
+            "자동 찾기 — 확인",
+            "민트 점선 영역으로 버프 영역을 지정할까요?\n\n"
+            "앵커 기준으로 넉넉히 잡았으니, 지정 후 '버프 영역 지정'으로 미세조정할 수 있어요.\n"
+            "'아니오'를 누르면 기존 설정이 그대로 유지됩니다.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if ans != QMessageBox.StandardButton.Yes:
+            return
+        self._on_region_selected(ax, ay, w, h)
 
     def _flash_region(self) -> None:
         """저장된 버프 영역을 화면에 굵은 점선으로 잠깐 표시(아이콘·시간 확인용)."""
