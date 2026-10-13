@@ -28,6 +28,10 @@ _SAT_MIN = 70
 _V_MIN = 45
 _ROW_RATIO = 0.30
 _MIN_ROWS = 3
+# 색조 전환 분리: 바들이 '어두운 간격 없이 붙어' 있을 때(간격만으론 못 가름), 행 대표
+# 색조가 현재 바 색조에서 이 값 넘게 바뀌면 새 바로 본다. 인접 바 색조 차(분홍↔파랑 ≈49,
+# 파랑↔노랑 ≈91, 분홍↔노랑 ≈40)보다 충분히 작고, 한 바 내부 색조 흔들림(±5)보다 크다.
+_HUE_SPLIT = 20
 # 채움/소모 구분: 그 바 색조(±_HUE_TOL)이며 밝기 V가 _FILL_V 이상이면 '채움'.
 _HUE_TOL = 16
 _FILL_V = 120
@@ -44,23 +48,42 @@ class StatReading:
     hue: int  # 바 색조(그리기용 참고)
 
 
+def _hue_dist(a: int, b: int) -> int:
+    """색조(0~180) 원형 거리."""
+    d = abs(a - b) % 180
+    return min(d, 180 - d)
+
+
 def _bands(region: np.ndarray) -> list[tuple[int, int]]:
-    """영역에서 '바다운 행'이 세로로 이어지는 구간(띠)들을 위에서 아래 순으로."""
+    """영역에서 바 띠 구간들을 위에서 아래 순으로.
+
+    바 경계는 둘 중 하나로 나눈다: (1) 어두운 간격 행(바다운 행이 끊김), 또는 (2) **색조
+    전환**(간격 없이 붙은 바라도 위 바와 색이 달라지면 새 바). 생/마/스 3바가 간격 없이
+    맞붙어 있으면 (1)만으론 한 덩어리로 병합돼 1개만 읽히던 문제를 (2)로 해결한다.
+    매핑은 색조 '값'이 아니라 '전환'만 쓰므로 위→아래 순서 매핑은 그대로다(색 무관).
+    """
     hsv = cv2.cvtColor(region, cv2.COLOR_BGR2HSV)
-    s, v = hsv[:, :, 1], hsv[:, :, 2]
-    barrow = ((s > _SAT_MIN) & (v > _V_MIN)).mean(axis=1) > _ROW_RATIO
-    bands: list[tuple[int, int]] = []
-    y = 0
+    hue, s, v = hsv[:, :, 0], hsv[:, :, 1], hsv[:, :, 2]
+    colored = (s > _SAT_MIN) & (v > _V_MIN)
+    barrow = colored.mean(axis=1) > _ROW_RATIO
     h = region.shape[0]
-    while y < h:
-        if barrow[y]:
-            y0 = y
-            while y < h and barrow[y]:
-                y += 1
-            if y - y0 >= _MIN_ROWS:
-                bands.append((y0, y))
-        else:
-            y += 1
+    bands: list[tuple[int, int]] = []
+    start: int | None = None
+    rep = -1  # 현재 바의 대표 색조
+    for y in range(h):
+        row_hue = int(np.median(hue[y][colored[y]])) if (barrow[y] and colored[y].any()) else -1
+        if row_hue < 0:  # 어두운/무채색 행 → 바 끊김
+            if start is not None and y - start >= _MIN_ROWS:
+                bands.append((start, y))
+            start, rep = None, -1
+        elif start is None:  # 새 바 시작
+            start, rep = y, row_hue
+        elif _hue_dist(row_hue, rep) > _HUE_SPLIT:  # 색조 전환 → 붙은 새 바
+            if y - start >= _MIN_ROWS:
+                bands.append((start, y))
+            start, rep = y, row_hue
+    if start is not None and h - start >= _MIN_ROWS:
+        bands.append((start, h))
     return bands
 
 

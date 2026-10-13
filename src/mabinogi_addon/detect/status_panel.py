@@ -74,18 +74,25 @@ def find_anchor(
     if coarse[0] < threshold * 0.8:  # 1차에서 확실히 없음(반해상도라 임계 약간 완화)
         return None
     # 2차: 원해상도에서 1차 위치 주변 작은 창만 정밀 매칭.
-    cx, cy, size = coarse[1] * 2, coarse[2] * 2, coarse[3]
-    pad = size * 2
+    cx, cy, coarse_size = coarse[1] * 2, coarse[2] * 2, coarse[3]
+    # 1차는 반해상도라 크기 추정이 ±2px 어긋난다(예: 4K에서 1차=14px인데 실제 최적=16px).
+    # 그래서 2차에서는 코어스 크기 주변 정수 크기(±3)를 모두 시도해 최고점을 고른다. 창이
+    # 작아 비용은 미미하다. (지난 커밋은 코어스 크기 하나만 재시도해 4K에서 놓쳤다.)
+    pad = coarse_size * 2
     x0, y0 = max(0, cx - pad), max(0, cy - pad)
-    x1, y1 = min(fw, cx + size + pad), min(fh, cy + size + pad)
-    win = frame[y0:y1, x0:x1]
-    if win.shape[0] <= size or win.shape[1] <= size:
+    best: AnchorHit | None = None
+    for size in range(max(8, coarse_size - 3), coarse_size + 4):
+        x1, y1 = min(fw, cx + size + pad), min(fh, cy + size + pad)
+        win = frame[y0:y1, x0:x1]
+        if win.shape[0] <= size or win.shape[1] <= size:
+            continue
+        t = cv2.resize(template, (size, size), interpolation=cv2.INTER_AREA)
+        _, mx, _, ml = cv2.minMaxLoc(cv2.matchTemplate(win, t, cv2.TM_CCOEFF_NORMED))
+        if best is None or mx > best.score:
+            best = AnchorHit(float(mx), x0 + int(ml[0]), y0 + int(ml[1]), size)
+    if best is None or best.score < threshold:
         return None
-    t = cv2.resize(template, (size, size), interpolation=cv2.INTER_AREA)
-    _, mx, _, ml = cv2.minMaxLoc(cv2.matchTemplate(win, t, cv2.TM_CCOEFF_NORMED))
-    if mx < threshold:
-        return None
-    return AnchorHit(float(mx), x0 + int(ml[0]), y0 + int(ml[1]), size)
+    return best
 
 
 def locate_status_region(
@@ -107,9 +114,14 @@ def locate_status_region(
     H, W = frame.shape[:2]
     s = hit.size
     left = max(0, hit.x - int(s * 0.3))
-    width = min(int(s * 26), W - left)  # 아이콘 + 이름 + 남은시간 포함 추정 폭
-    # 앵커(프리미엄 배틀)는 보통 리스트 하단부라 위로 넉넉히(약 34줄), 아래로 조금(약 8줄).
-    # '화면 끝까지'는 추적 비용이 과해 상한을 둔다(버프 리스트 최대치 + 여유 ≈ 42줄).
+    # 폭은 실측 패널 폭(≈ s*19; s=16이면 ~304px, 실제 스샷 패널 ~290~305px)에 맞춘다.
+    # 지난 커밋의 s*26(416px)은 과하게 넓어 캡처 비용이 늘고 우측 채팅/배경을 포함할 위험이
+    # 있었다. s 상대라 인게임 UI 배율이 바뀌어 아이콘이 커져도 폭이 함께 변한다(=유기적).
+    # (반투명 패널의 '정확한' 좌우 경계를 프레임에서 직접 재는 건 배경을 타서 불안정하므로,
+    #  s 기준 보정값 + 베타 미리보기/확인으로 둔다.)
+    width = min(int(s * 19), W - left)
+    # 앵커(프리미엄 배틀)는 보통 리스트 하단부라 위로 넉넉히(약 34줄) 잡는다. 아래는 '버프가
+    # 더 걸리면 아래로 길어지므로' 화면 끝까지 잡는다(상한 없음). 상한을 두면 버프가 늘어
+    # 앵커가 영역 밖으로 밀려 트래커가 조용히 멈출 수 있다.
     top = max(0, hit.y - int(s * 34))
-    bottom = min(H, hit.y + int(s * 8))
-    return (left, top, width, max(1, bottom - top))
+    return (left, top, width, max(1, H - top))

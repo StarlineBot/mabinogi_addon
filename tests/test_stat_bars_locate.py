@@ -13,7 +13,7 @@ import cv2
 import numpy as np
 import pytest
 
-from mabinogi_addon.detect.stat_bars import locate_stat_bars
+from mabinogi_addon.detect.stat_bars import locate_stat_bars, read_stat_bars
 
 
 def _img(name: str):
@@ -51,3 +51,23 @@ def test_locate_handles_empty():
     assert locate_stat_bars(None) is None
     assert locate_stat_bars(np.zeros((0, 0, 3), np.uint8)) is None
     assert locate_stat_bars(np.zeros((10, 10, 3), np.uint8)) is None
+
+
+# 생/마/스 세 바가 '어두운 간격 없이 맞붙은' 장면들: 간격만으론 한 덩어리로 병합돼 1개만
+# 읽히던 회귀. 색조 전환으로 세 바를 나눠 모두 3개를 읽어야 한다(저값 경고도 이에 의존).
+_TOUCHING = [
+    "2026-10-11_111640.png",  # 4K급
+    "스크린샷 2026-10-09 193901.png",
+    "스크린샷 2026-10-09 195115.png",
+    "스크린샷 2026-10-09 201512.png",
+]
+
+
+@pytest.mark.parametrize("name", _TOUCHING)
+def test_locate_and_read_three_touching_bars(name):
+    img = _img(name)
+    box = locate_stat_bars(img)
+    assert box is not None, f"{name}: 체력바 영역을 못 찾음(바 병합으로 검증 실패했었음)"
+    x, y, w, h = box
+    rs = read_stat_bars(img[y : y + h, x : x + w])
+    assert [r.stat_id for r in rs] == ["hp", "mp", "sta"], f"{name}: 3바 분리 실패 {rs}"

@@ -13,7 +13,7 @@ import cv2
 import numpy as np
 import pytest
 
-from mabinogi_addon.detect.boss_bar import locate_boss_bar
+from mabinogi_addon.detect.boss_bar import locate_boss_bar, make_validator
 
 
 def _img(name: str):
@@ -49,3 +49,35 @@ def test_boss_bar_handles_empty():
     assert locate_boss_bar(None) is None
     assert locate_boss_bar(np.zeros((0, 0, 3), np.uint8)) is None
     assert locate_boss_bar(np.zeros((30, 30, 3), np.uint8)) is None
+
+
+# --- 검증기(make_validator): '이름 글자 + % 판독'이면 모든 보스 통과(등록 여부 무관) ---
+
+
+def test_validator_accepts_unregistered_boss():
+    """이름 템플릿이 없는 보스(글라스 기브넨)도 자동 찾기가 돼야 한다(디버프 트래커는
+    모든 보스에서 쓴다). 지난 커밋은 등록 5개 보스만 식별해 여기서 None으로 회귀했었다."""
+    box = locate_boss_bar(_img("스크린샷 2026-10-09 190901.png"), make_validator())
+    assert box is not None, "미등록 보스에서 검증 실패(회귀)"
+    assert 480 <= box[2] <= 560, f"폭 이상 {box}"
+
+
+@pytest.mark.parametrize(
+    "name", ["스크린샷 2026-10-09 200614.png", "스크린샷 2026-10-09 201512.png"]
+)
+def test_validator_splits_pelrom_upper_bar(name):
+    """펠롬은 보스 HP바 밑에 '어둠의 에르그' 바가 붙어 한 덩어리(h≈66)로 잡힌다.
+    위(보스 HP바)만 분리해 검증을 통과해야 한다(병합 상태면 % 판독 실패로 None이었다)."""
+    box = locate_boss_bar(_img(name), make_validator())
+    assert box is not None, f"{name}: 펠롬 상단 바 분리 실패"
+    assert box[3] <= 50, f"{name}: 2단 병합(h={box[3]}) — 분리 안 됨"
+
+
+def test_locate_trims_attached_chat():
+    """바 왼쪽에 채팅 글자가 붙어 박스가 과하게 넓어지던 것(x=890 폭=649)을
+    열 채움으로 다듬어 실제 바에 가깝게 좁힌다(디버프 영역에 채팅이 섞이지 않도록)."""
+    box = locate_boss_bar(_img("스크린샷 2026-10-09 193901.png"))
+    assert box is not None
+    gx, gy, gw, gh = box
+    assert gx >= 980, f"왼쪽 경계가 여전히 채팅 포함 {box}"
+    assert gw <= 560, f"폭이 여전히 과도(채팅 포함) {box}"

@@ -62,6 +62,34 @@ def test_anchor_absent_returns_none(name):
     assert hit is None, f"{name}: 앵커 없는데 오탐 {hit}"
 
 
+# 4K/고해상도 회귀: 1차(반해상도) 크기 추정이 ±2px 어긋나도 2차에서 주변 크기를 함께
+# 시도해 찾아야 한다. (크기 하나만 재시도하던 커밋에서 4K가 None으로 회귀했었다.)
+_PRESENT_4K = [
+    ("2026-10-11_111640.png", 3541, 919),
+    ("2026-10-11_123333.png", 208, 573),
+]
+
+
+@pytest.mark.parametrize("name,ex,ey", _PRESENT_4K)
+def test_anchor_found_on_4k(name, ex, ey):
+    hit = find_anchor(_img(name), _template())
+    assert hit is not None, f"{name}: 4K 앵커를 못 찾음(회귀)"
+    assert hit.score >= 0.85, f"{name}: 점수 낮음 {hit.score}"
+    assert abs(hit.x - ex) <= 8 and abs(hit.y - ey) <= 8, f"{name}: 위치 {hit}"
+
+
+@pytest.mark.parametrize("name,ex,ey", _PRESENT_4K)
+def test_locate_status_region_bottom_to_screen_end(name, ex, ey):
+    """영역 아래 끝은 화면 하단까지(상한 없음) — 버프가 늘어 앵커가 잘리지 않도록."""
+    img = _img(name)
+    H = img.shape[0]
+    reg = locate_status_region(img, _template())
+    assert reg is not None, name
+    rx, ry, rw, rh = reg
+    assert ry + rh == H, f"{name}: 아래가 화면 끝이 아님 {reg} (H={H})"
+    assert rx <= ex and ry <= ey, f"{name}: 앵커가 영역 밖 {reg}"
+
+
 def test_find_anchor_handles_empty_input():
     import numpy as np
 

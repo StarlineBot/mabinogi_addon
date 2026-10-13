@@ -26,23 +26,37 @@ _FLAT_RATIO = 6  # w > h * 이것 (납작한 가로 바)
 _BOTTOM_FRAC = 0.72  # 이 아래(하단)에서만
 _EDGE_DENSITY_MAX = 0.25  # 내부 세로 경계 밀도 상한(솔리드 바; 그리드는 ↑)
 _FILL_MIN = 0.5  # 밴드 내부 채도 채움 하한(바닥 오탐 제거)
+# 이름 글자(흰색) 판정: 채도 낮고 밝은 픽셀. 바 채움은 고채도라 제외된다.
+_NAME_SAT_MAX = 90
+_NAME_VAL_MIN = 170
+_NAME_COV_MIN = 0.012  # 박스 왼쪽 60%에서 흰 글자 최소 비율(실제 보스 ≥0.027, 여유 둠)
+
+
+def _has_name_text(sub: np.ndarray) -> bool:
+    """보스바 박스 왼쪽에 이름 글자(흰 텍스트)가 있는지 — '누구'인지는 보지 않는다."""
+    w = sub.shape[1]
+    left = sub[:, : int(w * 0.60)]
+    hsv = cv2.cvtColor(left, cv2.COLOR_BGR2HSV)
+    glyph = (hsv[:, :, 1] < _NAME_SAT_MAX) & (hsv[:, :, 2] > _NAME_VAL_MIN)
+    return float(glyph.mean()) >= _NAME_COV_MIN
 
 
 def make_validator():
-    """박스가 진짜 보스바인지 검증하는 콜백 — 그 안에서 HP% 판독과 이름 식별이 둘 다
-    성공할 때만 True. (테두리 포함·채팅 글자 붙음·아래 바 합쳐짐 등 잘못 잡힌 박스를 거름.)"""
-    from .boss_hp_reader import read_percent
-    from .boss_name_matcher import identify, load_name_templates
+    """박스가 진짜 보스바인지 검증하는 콜백 — HP% 판독이 되고(오른쪽에 'XXX.XX%'),
+    왼쪽에 **이름 글자가 있을 때**만 True. (지난 커밋은 등록된 5개 보스만 식별(identify)해
+    통과시켜, 글라스 기브넨 등 미등록 보스에선 자동 찾기가 안 됐다. 디버프 트래커는 모든
+    보스에서 써야 하므로, '누구인지'가 아니라 '이름 글자 + %가 있는 바'인지로 바꾼다.)
 
-    name_templates = load_name_templates()
+    이걸로 거르는 것: 펠롬 2단 바 등 % 판독 실패(read_percent None), 글자 없는 솔리드 밴드.
+    """
+    from .boss_hp_reader import read_percent
 
     def validate(sub: np.ndarray) -> bool:
         if sub is None or sub.size == 0 or sub.shape[1] < 20:
             return False
-        w = sub.shape[1]
         if read_percent(sub) is None:
             return False
-        return identify(sub[:, : int(w * 0.60)], name_templates) is not None
+        return _has_name_text(sub)
 
     return validate
 
@@ -83,6 +97,8 @@ def locate_boss_bar(
             continue
         box = _trim_rows(sat, x, y, w, h)  # 위/아래 테두리 등 비채움 행 제거
         if box is not None:
+            box = _trim_cols(sat, *box)  # 좌/우 비채움 열 제거(채팅 글자 붙음 등)
+        if box is not None:
             cands.append(box)
     cands.sort(key=lambda b: -b[2])  # 넓은 것부터
     if validate is not None:
@@ -106,8 +122,38 @@ def _trim_rows(
     idx = np.flatnonzero(filled)
     if idx.size == 0:
         return (x, y, w, h)
-    top, bot = int(idx[0]), int(idx[-1])
+    # 맨 위 연속 채움 구간만 남긴다. 보스 HP바 밑에 별도 바(예: 펠롬의 '어둠의 에르그')가
+    # 붙어 한 컴포넌트로 잡히면, 둘 사이 얇은 빈 행(채움 급감)에서 끊어 위=보스 HP바만 취한다.
+    # 정상 단일 바는 중간 글자 구간도 ≥0.45라 끊기지 않는다(한 덩어리 그대로).
+    top = int(idx[0])
+    bot = top
+    while bot + 1 < h and filled[bot + 1]:
+        bot += 1
     nh = bot - top + 1
     if nh < 4:
         return None
     return (x, y + top, w, nh)
+
+
+def _trim_cols(
+    sat: np.ndarray, x: int, y: int, w: int, h: int
+) -> tuple[int, int, int, int] | None:
+    """밴드에서 '채움 열'(그 열의 채도 비율이 충분)만 남도록 좌/우를 다듬는다.
+
+    morphology close가 바 왼쪽 채팅 글자를 바에 가로로 이어붙이면 박스가 왼쪽으로
+    과하게 늘어난다(예: x=890 폭 649, 실제 바 x≈1018 폭 521). 실제 바 열은 채움 비율이
+    높고(이름·숫자가 겹쳐도 뒤 채움이 남아 ≥0.6), 채팅/배경 열은 낮다. 채움 비율이 임계
+    이상인 첫/마지막 열로 좁힌다. (실제 바는 첫 열부터 채워져 트림이 거의 없다.)
+    """
+    cols = sat[y : y + h, x : x + w].mean(axis=0)
+    filled = np.flatnonzero(cols >= 0.6)
+    if filled.size == 0:
+        return (x, y, w, h)
+    left, right = int(filled[0]), int(filled[-1])
+    nw = right - left + 1
+    if nw < max(20, int(w * 0.4)):  # 너무 많이 잘리면(진짜 바가 아님) 원본 유지
+        return (x, y, w, h)
+    # 이름·숫자 글자가 겹쳐도 그 뒤 채움이 남아 바 본체 열은 ≥0.6으로 유지된다. 바 바깥
+    # 채팅/배경 열은 채움이 낮아 잘린다. (모폴로지로 바에 바짝 붙어 이어진 몇 px 채팅은
+    # 남을 수 있으나, 큰 과잉 포함은 제거된다 — 예: x890 폭649 → x1000 폭539.)
+    return (x + left, y, nw, h)
