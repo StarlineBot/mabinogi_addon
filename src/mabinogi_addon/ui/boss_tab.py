@@ -79,6 +79,10 @@ class BossTab(QWidget):
         self._hp_cand: int | None = None  # 확정 대기 후보값
         self._hp_cand_n = 0  # 후보 연속 횟수
         self._unidentified = 0  # 이름이 연속으로 안 읽힌 프레임 수(보스 사라짐 판정)
+        # 보스바 존재 신호(체력바 저체력 알림 게이트용) — 등록/미등록 무관, ~2초 유예.
+        self._boss_present = False
+        self._bar_absent = self._UPCOMING_GONE_FRAMES + 1  # 시작은 '없음'
+        self._bar_validate = None  # make_validator 캐시(이름 글자 + % 판독)
         self._overlay = PatternWarningOverlay()
         self._overlay.moved.connect(self._on_warn_moved)
         self._notifier = None
@@ -371,6 +375,7 @@ class BossTab(QWidget):
     def _tick(self) -> None:
         active = self._watcher.is_game_active() or self._watcher.is_self_active()
         if not self._region or not active:
+            self._boss_present = False  # 게임 비활성 → '보스전 아님'(저체력 알림 게이트)
             self._upcoming.hide()
             return
         from .dpi import to_physical
@@ -414,6 +419,15 @@ class BossTab(QWidget):
                 self._reset_hp()
         hp = self._stable_hp
 
+        # 보스바 존재 신호(체력바 저체력 알림 게이트용). 등록 보스는 식별로 당연히 존재,
+        # 미등록 보스는 영역이 '보스바'로 검증(이름 글자+% 판독)되면 존재로 본다. 깜빡임·
+        # 가려짐은 ~2초(_UPCOMING_GONE_FRAMES) 유예로 흡수한다.
+        if boss_id is not None or self._boss_bar_visible(frame):
+            self._bar_absent = 0
+        else:
+            self._bar_absent += 1
+        self._boss_present = self._bar_absent <= self._UPCOMING_GONE_FRAMES
+
         # 수집 모드: 로그인 사용자가 켠 동안, 보스가 식별된 상태에서 바가 눈에 띄게
         # 바뀌면 자동 저장(오독 프레임 제보). 보스 없는 프레임은 길바닥이라 제외.
         if (
@@ -447,6 +461,26 @@ class BossTab(QWidget):
                 self._play(alert.sound)
 
         self._update_upcoming(hp)
+
+    def _boss_bar_visible(self, frame) -> bool:
+        """이 프레임의 보스 영역이 '보스 체력바'로 검증되는지(등록 여부 무관).
+
+        자동 찾기와 같은 기준(이름 글자 + % 판독)으로 본다 → 미등록 보스도 존재로 인식.
+        검증기는 상태가 없어 캐시해 재사용한다."""
+        if self._bar_validate is None:
+            from ..detect.boss_bar import make_validator
+
+            self._bar_validate = make_validator()
+        try:
+            return bool(self._bar_validate(frame))
+        except Exception:  # noqa: BLE001 — 존재 신호라 실패해도 '없음'으로
+            return False
+
+    def is_boss_present(self) -> bool:
+        """보스 체력바가 '지금' 화면에 떠 있는지(등록/미등록 무관, ~2초 유예).
+
+        다른 탭(체력바 저체력 알림)이 '보스전 중일 때만' 울리도록 공유하는 신호다."""
+        return self._boss_present
 
     # 큰 점프(진입 애니메이션·오판독)와 완만한 감소를 구분해 확정.
     _SMALL_STEP = 12  # 이 이하 변화면 '완만' (2연속으로 확정)

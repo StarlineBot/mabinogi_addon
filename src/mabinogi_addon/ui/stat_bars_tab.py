@@ -88,6 +88,9 @@ class StatBarsTab(QWidget):
         self._alert_armed = {sid: True for sid in ("hp", "mp", "sta")}
         self._alert_low_since: dict[str, float] = {}
         self._alert_player = None
+        # 저체력 알림은 '보스전 중'일 때만 울린다 — 보스 체력바가 떠 있는지 묻는 콜백.
+        # main_window가 boss_tab.is_boss_present로 연결한다(미연결 시 종전대로 항상 울림).
+        self._boss_present_fn = None
 
         v = QVBoxLayout(self)
         v.setContentsMargins(12, 12, 12, 12)
@@ -218,6 +221,11 @@ class StatBarsTab(QWidget):
             " 다 보일 때만 판정해(지역이동·가려짐 0% 오탐 방지), 임계 위로 회복하면"
             " 다시 무장합니다."
         ))
+        g.addWidget(hint_label(
+            "⚔️ 보스전 중일 때만 울립니다 — 보스 체력바가 화면에 떠 있어야 알림이 나갑니다"
+            " (평소 사냥·이동 중엔 울리지 않음). 보스 탭의 영역이 보스 체력바에 맞춰져 있어야"
+            " 정확합니다."
+        ))
         self._alert_checks: dict[str, QWidget] = {}
         self._alert_spins: dict[str, QSpinBox] = {}
         for sid in ("hp", "mp", "sta"):
@@ -253,10 +261,19 @@ class StatBarsTab(QWidget):
         self._alert_sound_on = self.alert_sound_chk.isChecked()
         self._save()
 
+    def set_boss_presence_source(self, fn) -> None:
+        """'지금 보스전인가'를 알려줄 콜백을 연결한다(없으면 항상 울림 — 종전 동작)."""
+        self._boss_present_fn = fn
+
     def _check_alerts(self, readings: dict, now: float) -> None:
         """임계 이하로 떨어지면(각 바 각자) 경고. 게이트: 바 3개가 다 보일 때만 판정해
         지역이동·가려짐으로 생기는 0% 오탐을 막는다. 임계 위로 회복하면 재무장."""
         if len(readings) < 3:  # 바가 다 안 보임(가려짐/전환) → 판정 보류
+            self._alert_low_since.clear()
+            return
+        # 보스전일 때만 울린다 — 보스 체력바가 안 떠 있으면 보류(디바운스만 리셋, 무장 유지).
+        # 보스바가 뜨고 그때도 저체력이면 거기서 새로 디바운스 후 발동한다.
+        if self._boss_present_fn is not None and not self._boss_present_fn():
             self._alert_low_since.clear()
             return
         fired = False

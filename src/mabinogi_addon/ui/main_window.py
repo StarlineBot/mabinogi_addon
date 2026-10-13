@@ -255,6 +255,8 @@ class MainWindow(QMainWindow):
         self.boss_tab.debuff_region_changed.connect(self._on_boss_debuff_region_changed)
         self.custom_overlay_tab = CustomOverlayTab(self._watcher)
         self.stat_bars_tab = StatBarsTab(self._watcher)
+        # 체력바 저체력 알림은 '보스전 중'일 때만 울린다 — 보스 탭의 보스바 존재 신호를 연결.
+        self.stat_bars_tab.set_boss_presence_source(self.boss_tab.is_boss_present)
         self.skillbar_tab = SkillbarTab(self._watcher)
         self.settings_tab = SettingsTab(self._watcher)
         self.settings_tab.config_imported.connect(self._on_config_imported)

@@ -2,14 +2,24 @@
 
 보스바는 채움 색이 HP 단계별로 바뀌고(보라>파랑>노랑>빨강 …) 보스마다 이름·폭이 달라서
 '색'으로는 못 잡는다. 대신 **구조**로 구분한다 — 화면 하단 메뉴바 위에 뜨는,
-**하나의 연속된 솔리드 가로 바**(스킬 아이콘 그리드와 달리 내부 세로 경계가 적다)이고
-채도로 꽉 차 있다. 자동 찾기는 설정 시 1회만, 보스 첫 노출(고HP) 때 쓰므로 그걸로 충분하다.
+**하나의 연속된 솔리드 가로 바**다. 자동 찾기는 설정 시 1회만, 보스 첫 노출(고HP) 때
+쓰므로 그걸로 충분하다.
 
-판별:
-- 넓은 가로 밴드(폭 ≥ 화면폭 18%, 납작: w > h*6), 화면 하단(y > 72%).
-- **솔리드**: 내부 세로 경계 밀도가 낮다(스킬 그리드는 아이콘 경계로 높다).
-- **꽉 참**: 밴드 내부 채도 채움 비율이 높다(매끈한 배경 바닥 오탐 제거).
-여러 개면 가장 넓은 것을 고른다. 없으면 None(→ 호출 측은 "보스바가 노출됐는지 확인" 안내).
+왜 '채도 덩어리(연결 컴포넌트)'가 아니라 '행(行) 특징'으로 바꿨나 — 보스바 옆에 추가
+단축바·채팅창·버프 아이콘이 붙으면, 채도 마스크를 가로로 이어(close) 연결 컴포넌트로
+잡는 방식은 그것들이 바와 한 덩어리로 합쳐져 크기 필터에서 탈락한다(제보 화면: 바+단축바가
+h=85로 묶여 None). 그래서 **주변 UI 배치와 무관하게** 바 '자체 특징'으로 찾는다:
+
+1. 화면 하단(y > 72%)에서 **행마다 '채도 픽셀의 최장 가로 연속 길이'**를 구한다.
+2. 그 길이가 화면폭 18% 이상인 행 = 바의 **가장자리 행**(글자가 없어 한 줄로 쭉 이어짐).
+   아이콘·단축바·채팅은 이런 긴 가로 연속이 없어 씨앗이 되지 않는다.
+3. 씨앗 행의 좌우 범위 안에서 **채움 비율 ≥ 0.45 인 연속 행**을 위아래로 확장 = 바 높이
+   (글자 행도 바 색이 비쳐 ≥0.45라 포함, 아래 다른 바(펠롬 에르그)와는 얇은 경계 행에서 끊김).
+4. 그 띠의 가장자리 행들(최장 연속 ≥ 띠 최대의 90%)의 시작/끝 **중앙값**으로 좌우 끝을 정한다
+   (글자·채팅이 섞인 행에 휘둘리지 않음).
+5. 높이·납작 비율 필터 → 높이 정규화 → make_validator(이름 글자 + % 판독) 검증.
+
+여러 개면 폭 큰 것 우선(같으면 위쪽 = 보스 HP바가 에르그 바 위). 없으면 None.
 """
 
 from __future__ import annotations
@@ -19,13 +29,13 @@ import numpy as np
 
 _SAT_MIN = 90
 _VAL_MIN = 80
-_MIN_W_FRAC = 0.18  # 화면 폭 대비 최소 바 폭
+_MIN_W_FRAC = 0.18  # 화면 폭 대비 최소 바 폭(= 가장자리 행 '씨앗' 판정의 최장 연속 하한)
 _MIN_H_FRAC = 0.014  # 화면 높이 대비 최소 바 높이
 _MAX_H_FRAC = 0.06  # 최대(너무 두꺼운 건 바 아님)
 _FLAT_RATIO = 6  # w > h * 이것 (납작한 가로 바)
 _BOTTOM_FRAC = 0.72  # 이 아래(하단)에서만
-_EDGE_DENSITY_MAX = 0.25  # 내부 세로 경계 밀도 상한(솔리드 바; 그리드는 ↑)
-_FILL_MIN = 0.5  # 밴드 내부 채도 채움 하한(바닥 오탐 제거)
+_FILL_ROW = 0.45  # 바 높이 확장: 씨앗 좌우 범위 안 '채움 행' 비율 하한(글자 행도 통과)
+_EDGE_FRAC = 0.90  # 좌우 끝 확정에 쓸 '가장자리 행' 기준(띠 내 최장 연속의 이 비율 이상)
 # 이름 글자(흰색) 판정: 채도 낮고 밝은 픽셀. 바 채움은 고채도라 제외된다.
 _NAME_SAT_MAX = 90
 _NAME_VAL_MIN = 170
@@ -61,46 +71,75 @@ def make_validator():
     return validate
 
 
+def _row_longest_runs(
+    mask: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """각 행의 '1(채도) 픽셀 최장 가로 연속'의 (길이, 시작x, 끝x)를 돌려준다.
+
+    픽셀 반복문을 쓰지 않도록 **열 단위로만 루프**(W회)하고, 매 열에서 모든 행을 동시에
+    갱신한다. run[y]=현재 열에서 끝나는 연속 길이(0에서 리셋), best/끝을 최댓값으로 추적.
+    """
+    r, w = mask.shape
+    run = np.zeros(r, np.int32)  # 지금 열에서 끝나는 연속 길이
+    best = np.zeros(r, np.int32)  # 최장 길이
+    best_end = np.full(r, -1, np.int32)  # 최장 연속이 끝나는 열 x
+    for col in range(w):
+        on = mask[:, col]
+        run = np.where(on, run + 1, 0)
+        upd = run > best
+        best = np.where(upd, run, best)
+        best_end = np.where(upd, col, best_end)
+    best_start = best_end - best + 1
+    return best, best_start, best_end
+
+
 def locate_boss_bar(
     frame: np.ndarray, validate=None
 ) -> tuple[int, int, int, int] | None:
     """전체 화면에서 보스 체력바 영역 (x,y,w,h)를 찾는다(없으면 None).
 
-    색·HP에 의존하지 않고 '연속 솔리드 가로 바' 구조로 찾는다. 보스바가 안 보이면 None.
+    주변 UI(단축바·채팅·버프 아이콘) 배치와 무관하게, 바 '자체 특징'(긴 가로 연속을 갖는
+    가장자리 행 → 채움 행 확장)으로 찾는다(모듈 상단 설명 1~5). 보스바가 안 보이면 None.
     validate(sub_bgr)->bool 을 주면, 그 박스 안에서 검증(퍼센트·이름 판독)이 통과한 후보만
-    채택한다(테두리 포함·채팅 글자 붙음·아래 바 합쳐짐 등 잘못 잡힌 박스를 거른다).
+    채택한다(이름 없는 솔리드 밴드·% 판독 실패 등을 거른다).
     """
     if frame is None or frame.size == 0 or frame.shape[0] < 40 or frame.shape[1] < 80:
         return None
     H, W = frame.shape[:2]
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-    sat = ((hsv[:, :, 1] > _SAT_MIN) & (hsv[:, :, 2] > _VAL_MIN)).astype(np.uint8)
-    closed = cv2.morphologyEx(
-        sat, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_RECT, (35, 1))
-    )
-    n, _, stats, _ = cv2.connectedComponentsWithStats(closed, 8)
-    min_w = int(W * _MIN_W_FRAC)
+    sat = (hsv[:, :, 1] > _SAT_MIN) & (hsv[:, :, 2] > _VAL_MIN)
+    y_off = int(H * _BOTTOM_FRAC)  # 하단 영역에서만 (바는 메뉴바 위)
+    band = sat[y_off:, :]  # (R, W) bool — 하단
+    R = band.shape[0]
+    best, bstart, bend = _row_longest_runs(band)
+    min_run = int(W * _MIN_W_FRAC)
     min_h, max_h = int(H * _MIN_H_FRAC), int(H * _MAX_H_FRAC)
+    seeds = np.flatnonzero(best >= min_run)  # 가장자리 행(긴 가로 연속) — 위→아래
     cands: list[tuple[int, int, int, int]] = []
-    for i in range(1, n):
-        x, y, w, h, _ = stats[i]
-        if not (w >= min_w and min_h <= h <= max_h and w > h * _FLAT_RATIO):
+    consumed = np.zeros(R, bool)  # 한 띠로 쓴 행은 다른 씨앗이 재사용하지 않게
+    for r in seeds:
+        if consumed[r]:
             continue
-        if y <= H * _BOTTOM_FRAC:
+        x0, x1 = int(bstart[r]), int(bend[r])  # 씨앗 행의 바 좌우 범위
+        row_fill = band[:, x0 : x1 + 1].mean(axis=1)  # 그 범위 안 행별 채움 비율
+        top = r
+        while top - 1 >= 0 and row_fill[top - 1] >= _FILL_ROW:
+            top -= 1
+        bot = r
+        while bot + 1 < R and row_fill[bot + 1] >= _FILL_ROW:
+            bot += 1
+        consumed[top : bot + 1] = True
+        # 띠의 '가장자리 행'(최장 연속 ≥ 띠 최대의 90%)들의 시작/끝 중앙값 = 좌우 끝.
+        band_best = best[top : bot + 1]
+        edge = np.flatnonzero(band_best >= _EDGE_FRAC * int(band_best.max()))
+        left = int(np.median(bstart[top : bot + 1][edge]))
+        right = int(np.median(bend[top : bot + 1][edge]))
+        h = bot - top + 1
+        w = right - left + 1
+        if not (w >= min_run and min_h <= h <= max_h and w > h * _FLAT_RATIO):
             continue
-        fill = float(sat[y : y + h, x : x + w].mean())
-        if fill < _FILL_MIN:  # 바닥 등 꽉 안 찬 밴드 제외
-            continue
-        gray = cv2.cvtColor(frame[y : y + h, x : x + w], cv2.COLOR_BGR2GRAY)
-        edges = np.abs(cv2.Sobel(gray, cv2.CV_32F, 1, 0, ksize=3))
-        if float((edges > 60).mean()) >= _EDGE_DENSITY_MAX:  # 그리드(스킬 줄) 제외
-            continue
-        box = _trim_rows(sat, x, y, w, h)  # 위/아래 테두리 등 비채움 행 제거
-        if box is not None:
-            box = _trim_cols(sat, *box)  # 좌/우 비채움 열 제거(채팅 글자 붙음 등)
-        if box is not None:
-            cands.append(normalize_box_height(box, H))  # 높이 정규화(세로 중심 유지)
-    cands.sort(key=lambda b: -b[2])  # 넓은 것부터
+        cands.append(normalize_box_height((left, y_off + top, w, h), H))
+    cands.sort(key=lambda b: (-b[2], b[1]))  # 폭 큰 것 우선, 같으면 위쪽(HP바가 에르그 위)
     if validate is not None:
         for bx, by, bw, bh in cands:
             if validate(frame[by : by + bh, bx : bx + bw]):
@@ -133,53 +172,3 @@ def normalize_box_height(
     ny = round(cy - nh / 2)
     ny = max(0, min(ny, H - nh))
     return (int(x), int(ny), int(w), int(nh))
-
-
-def _trim_rows(
-    sat: np.ndarray, x: int, y: int, w: int, h: int
-) -> tuple[int, int, int, int] | None:
-    """밴드에서 '채움 행'(그 행의 채도 비율이 충분)만 남도록 위/아래를 다듬는다.
-
-    바 위 테두리나 글자 안티앨리어싱이 컴포넌트에 섞여 높이가 부풀면(예: 36→45px) 퍼센트
-    판독이 어긋난다. 채움 비율이 임계 이상인 연속 행 구간으로 좁힌다.
-    """
-    rows = sat[y : y + h, x : x + w].mean(axis=1)
-    filled = rows >= 0.45
-    idx = np.flatnonzero(filled)
-    if idx.size == 0:
-        return (x, y, w, h)
-    # 맨 위 연속 채움 구간만 남긴다. 보스 HP바 밑에 별도 바(예: 펠롬의 '어둠의 에르그')가
-    # 붙어 한 컴포넌트로 잡히면, 둘 사이 얇은 빈 행(채움 급감)에서 끊어 위=보스 HP바만 취한다.
-    # 정상 단일 바는 중간 글자 구간도 ≥0.45라 끊기지 않는다(한 덩어리 그대로).
-    top = int(idx[0])
-    bot = top
-    while bot + 1 < h and filled[bot + 1]:
-        bot += 1
-    nh = bot - top + 1
-    if nh < 4:
-        return None
-    return (x, y + top, w, nh)
-
-
-def _trim_cols(
-    sat: np.ndarray, x: int, y: int, w: int, h: int
-) -> tuple[int, int, int, int] | None:
-    """밴드에서 '채움 열'(그 열의 채도 비율이 충분)만 남도록 좌/우를 다듬는다.
-
-    morphology close가 바 왼쪽 채팅 글자를 바에 가로로 이어붙이면 박스가 왼쪽으로
-    과하게 늘어난다(예: x=890 폭 649, 실제 바 x≈1018 폭 521). 실제 바 열은 채움 비율이
-    높고(이름·숫자가 겹쳐도 뒤 채움이 남아 ≥0.6), 채팅/배경 열은 낮다. 채움 비율이 임계
-    이상인 첫/마지막 열로 좁힌다. (실제 바는 첫 열부터 채워져 트림이 거의 없다.)
-    """
-    cols = sat[y : y + h, x : x + w].mean(axis=0)
-    filled = np.flatnonzero(cols >= 0.6)
-    if filled.size == 0:
-        return (x, y, w, h)
-    left, right = int(filled[0]), int(filled[-1])
-    nw = right - left + 1
-    if nw < max(20, int(w * 0.4)):  # 너무 많이 잘리면(진짜 바가 아님) 원본 유지
-        return (x, y, w, h)
-    # 이름·숫자 글자가 겹쳐도 그 뒤 채움이 남아 바 본체 열은 ≥0.6으로 유지된다. 바 바깥
-    # 채팅/배경 열은 채움이 낮아 잘린다. (모폴로지로 바에 바짝 붙어 이어진 몇 px 채팅은
-    # 남을 수 있으나, 큰 과잉 포함은 제거된다 — 예: x890 폭649 → x1000 폭539.)
-    return (x + left, y, nw, h)

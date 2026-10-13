@@ -118,9 +118,66 @@ def test_normalized_box_height_consistent_across_bosses():
 
 def test_locate_trims_attached_chat():
     """바 왼쪽에 채팅 글자가 붙어 박스가 과하게 넓어지던 것(x=890 폭=649)을
-    열 채움으로 다듬어 실제 바에 가깝게 좁힌다(디버프 영역에 채팅이 섞이지 않도록)."""
+    가장자리 행 중앙값으로 좌우를 정해 실제 바에 맞춘다(디버프 영역에 채팅이 섞이지 않도록)."""
     box = locate_boss_bar(_img("스크린샷 2026-10-09 193901.png"))
     assert box is not None
     gx, gy, gw, gh = box
     assert gx >= 980, f"왼쪽 경계가 여전히 채팅 포함 {box}"
     assert gw <= 560, f"폭이 여전히 과도(채팅 포함) {box}"
+
+
+# --- 주변 UI(추가 단축바 등) 배치와 무관하게 검출 (행 최장연속→채움확장 방식) ---
+# 덩어리(연결 컴포넌트) 방식은 바 옆에 단축바·채팅·버프 아이콘이 붙으면 한 덩어리로 묶여
+# 크기 필터에서 탈락(None)했다. 바 '자체 특징'으로 바꿔 아래 실샷·합성이 모두 검출돼야 한다.
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "스크린샷 2026-10-14 000646.png",  # 레넨 100% — 옆 버프 그리드가 붙어 덩어리 방식은 None이던 제보 샷
+        "스크린샷 2026-10-12 200625.png",  # 레넨 99.45% (이펙트) — 덩어리 방식은 None이던 장면
+    ],
+)
+def test_locate_despite_adjacent_ui(name):
+    box = locate_boss_bar(_img(name), make_validator())
+    assert box is not None, f"{name}: 주변 UI 때문에 못 찾음(회귀)"
+    assert 1006 <= box[0] <= 1030, f"{name}: x 이상 {box}"
+    assert 480 <= box[2] <= 560, f"{name}: 폭 이상 {box}"
+
+
+def _synth_skillbar(w: int, h: int = 40) -> np.ndarray:
+    """현실적 추가 단축바 합성: 채도 높은 아이콘(44×36) + 사방 어두운 테두리/간격.
+
+    아이콘 사이·위아래가 어두워 (1) 긴 가로 연속이 없어 '씨앗'이 안 되고, (2) 바로 옆/위/
+    아래에 붙여도 경계 행의 채움이 낮아 바 높이 확장에 섞이지 않는다 → 검출이 흔들리면 안 됨.
+    """
+    strip = np.zeros((h, w, 3), np.uint8)
+    colors = [(40, 40, 200), (40, 200, 40), (200, 40, 40), (40, 180, 180), (180, 40, 180)]
+    x, ci, cell = 6, 0, 56  # 아이콘 44 + 간격 12
+    while x + 44 <= w:
+        strip[4 : 4 + 36, x : x + 44] = colors[ci % len(colors)]
+        x, ci = x + cell, ci + 1
+    return strip
+
+
+@pytest.mark.parametrize("where", ["right", "left", "above", "below"])
+def test_locate_ignores_adjacent_skillbar(where):
+    """레넨 샷에 추가 단축바를 바 오른쪽/왼쪽(2px 간격)·바로 위·바로 아래에 붙여도,
+    검출 박스가 그대로여야 한다(주변 UI 배치 무관)."""
+    frame = _img("스크린샷 2026-10-14 000646.png")
+    base = locate_boss_bar(frame, make_validator())
+    assert base is not None
+    bx, by, bw, bh = base
+    strip = _synth_skillbar(bw)
+    sh = strip.shape[0]
+    pos = {
+        "right": (bx + bw + 2, by),
+        "left": (bx - 2 - bw, by),
+        "above": (bx, by - 2 - sh),
+        "below": (bx, by + bh + 2),
+    }[where]
+    px, py = pos
+    f = frame.copy()
+    f[py : py + sh, px : px + bw] = strip
+    got = locate_boss_bar(f, make_validator())
+    assert got == base, f"{where}: 단축바 때문에 검출이 바뀜 {got} != {base}"
