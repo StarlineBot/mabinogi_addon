@@ -30,8 +30,9 @@ from PySide6.QtWidgets import (
 
 from .. import config, image_io, paths
 from ..detect.stat_bars import locate_stat_bars, read_stat_bars
+from .dpi import to_logical
 from .help_dialog import tab_header
-from .screen_grab import grab_primary
+from .screen_grab import capture_for_autofind
 from .stat_overlay import STAT_LABELS, StatBarOverlay
 from .widgets import checkbox, hint_label
 
@@ -476,7 +477,7 @@ class StatBarsTab(QWidget):
 
     def _on_auto_find(self) -> None:
         """체력바를 화면에서 자동 검출 → 민트 점선 미리보기 + 확인 후에만 저장."""
-        frame, ox, oy = grab_primary()
+        frame, ox, oy = capture_for_autofind()  # 앱 창 숨기고 캡처
         if frame is None:
             QMessageBox.warning(self, "자동 찾기", "화면 캡처에 실패했습니다.")
             return
@@ -492,12 +493,12 @@ class StatBarsTab(QWidget):
             )
             return
         x, y, w, h = box
-        ax, ay = x + ox, y + oy  # 전역 좌표
+        lx, ly, lw, lh = to_logical(x + ox, y + oy, w, h)  # 물리 → 논리
         from .region_highlight import RegionHighlight
 
         self._highlight = RegionHighlight()
         self._highlight.flash(
-            ax, ay, w, h, "자동 찾기 결과", "체력바 — 이 영역으로 지정할까요?", msec=4000
+            lx, ly, lw, lh, "자동 찾기 결과", "체력바 — 이 영역으로 지정할까요?", msec=4000
         )
         ans = QMessageBox.question(
             self,
@@ -509,7 +510,7 @@ class StatBarsTab(QWidget):
         )
         if ans != QMessageBox.StandardButton.Yes:
             return
-        self._on_selected(ax, ay, w, h)
+        self._on_selected(lx, ly, lw, lh)
 
     def _flash_region(self) -> None:
         if not self._region:

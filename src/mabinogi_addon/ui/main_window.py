@@ -251,6 +251,8 @@ class MainWindow(QMainWindow):
         self.boss_tab = BossTab(self._watcher)  # 베타(디스코드 로그인 게이팅)
         # 보스 HP바 영역은 디버프 3차와 공유 — 보스 탭에서 바꾸면 디버프 추적도 재시작.
         self.boss_tab.bar_region_changed.connect(self._on_boss_bar_region_changed)
+        # 보스 탭 자동 찾기가 디버프 영역도 지정 → 디버프 추적 재시작 + 디버프 탭 표시 갱신.
+        self.boss_tab.debuff_region_changed.connect(self._on_boss_debuff_region_changed)
         self.custom_overlay_tab = CustomOverlayTab(self._watcher)
         self.stat_bars_tab = StatBarsTab(self._watcher)
         self.skillbar_tab = SkillbarTab(self._watcher)
@@ -1169,6 +1171,12 @@ class MainWindow(QMainWindow):
 
     def _on_debuff_catalog_changed(self) -> None:
         self._start_debuff_tracking()
+
+    def _on_boss_debuff_region_changed(self) -> None:
+        """보스 탭 자동 찾기가 디버프 영역을 지정 → 디버프 추적 재시작(모드 무관) + 표시 갱신."""
+        self.debuff_tab.refresh_region_hint()
+        if not self._booting:
+            self._start_debuff_tracking()
 
     # ---- 메모 오버레이 ----
     def _apply_memo_region(self) -> None:

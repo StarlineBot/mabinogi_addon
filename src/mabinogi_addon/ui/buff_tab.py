@@ -31,7 +31,8 @@ from .. import catalog as catalog_mod
 from .. import config
 from ..catalog import BuffDef, available_catalog
 from ..detect.status_panel import anchor_template, locate_status_region
-from .screen_grab import grab_primary
+from .dpi import to_logical
+from .screen_grab import capture_for_autofind
 from .widgets import callout, checkbox, hint_label, icon_slot, section_label
 
 # 앵커로 고정 사용할 버프(항상 존재, 지속시간 없음 → 판정 기준)
@@ -336,7 +337,7 @@ class BuffTab(QWidget):
                 "설정 탭에서 로그인한 뒤 사용하세요.",
             )
             return
-        frame, ox, oy = grab_primary()
+        frame, ox, oy = capture_for_autofind()  # 앱 창 숨기고 캡처
         if frame is None:
             QMessageBox.warning(self, "자동 찾기", "화면 캡처에 실패했습니다.")
             return
@@ -353,12 +354,12 @@ class BuffTab(QWidget):
             )
             return
         x, y, w, h = box
-        ax, ay = x + ox, y + oy  # 전역 좌표
+        lx, ly, lw, lh = to_logical(x + ox, y + oy, w, h)  # 물리 → 논리
         from .region_highlight import RegionHighlight
 
         self._highlight = RegionHighlight()
         self._highlight.flash(
-            ax, ay, w, h,
+            lx, ly, lw, lh,
             "자동 찾기 결과",
             "상태목록창(버프) · 넉넉히 잡았어요 — 이 영역으로 지정 후 조정할까요?",
             msec=4000,
@@ -374,7 +375,7 @@ class BuffTab(QWidget):
         )
         if ans != QMessageBox.StandardButton.Yes:
             return
-        self._on_region_selected(ax, ay, w, h)
+        self._on_region_selected(lx, ly, lw, lh)
 
     def _flash_region(self) -> None:
         """저장된 버프 영역을 화면에 굵은 점선으로 잠깐 표시(아이콘·시간 확인용)."""

@@ -338,6 +338,10 @@ class DebuffTab(QWidget):
         self.status_label.setStyleSheet(f"color:{color};")
 
     # ---- 영역 지정 / 고정 ----
+    def refresh_region_hint(self) -> None:
+        """외부(보스 탭 자동 찾기 등)에서 디버프 영역이 바뀐 뒤 표시를 갱신한다."""
+        self._update_region_hint()
+
     def _update_region_hint(self) -> None:
         region = config.load_capture_region("debuffTracker")
         if region:
@@ -375,14 +379,15 @@ class DebuffTab(QWidget):
                 "설정 탭에서 로그인한 뒤 사용하세요.",
             )
             return
-        from ..detect.boss_bar import locate_boss_bar
-        from .screen_grab import grab_primary
+        from ..detect.boss_bar import locate_boss_bar, make_validator
+        from .dpi import to_logical
+        from .screen_grab import capture_for_autofind
 
-        frame, ox, oy = grab_primary()
+        frame, ox, oy = capture_for_autofind()  # 앱 창 숨기고 캡처
         if frame is None:
             QMessageBox.warning(self, "자동 찾기", "화면 캡처에 실패했습니다.")
             return
-        box = locate_boss_bar(frame)
+        box = locate_boss_bar(frame, make_validator())  # 판독 검증 통과한 박스만
         if box is None:
             QMessageBox.information(
                 self,
@@ -394,15 +399,17 @@ class DebuffTab(QWidget):
             )
             return
         x, y, w, h = box
-        ax, ay = x + ox, y + oy  # 보스바 전역 좌표
-        dh = max(16, int(h * 1.4))  # 디버프 띠 = 보스바 바로 위 같은 폭
-        dy = max(0, ay - dh)
+        # 전역 물리픽셀 → 논리좌표.
+        lx, ly, lw, lh = to_logical(x + ox, y + oy, w, h)
+        strip = max(12, int(lh * 1.4))  # 디버프 띠 높이
+        dy = max(0, ly - strip)
+        # 디버프 영역 = 띠 + 보스바(dy ~ 바 아래). 바 포함해야 사라짐 경고·2차(띠) 동작.
+        db = (lx, dy, lw, (ly + lh) - dy)
         from .region_highlight import RegionHighlight
 
-        # 미리보기: 디버프 띠 + 보스바를 합친 영역(둘 다 지정됨을 보여줌).
         self._highlight = RegionHighlight()
         self._highlight.flash(
-            ax, dy, w, (ay + h) - dy, "자동 찾기 결과",
+            db[0], db[1], db[2], db[3], "자동 찾기 결과",
             "디버프 영역 + 보스 HP바(3차 판독용) — 이 영역으로 지정할까요?", msec=4000,
         )
         ans = QMessageBox.question(
@@ -416,12 +423,12 @@ class DebuffTab(QWidget):
         )
         if ans != QMessageBox.StandardButton.Yes:
             return
-        # 디버프 영역(보스바 위 띠) 저장
-        config.save_capture_region(ax, dy, w, dh, "debuffTracker")
+        # 디버프 영역(띠+바) 저장 + 추적 재시작
+        config.save_capture_region(db[0], db[1], db[2], db[3], "debuffTracker")
         self._update_region_hint()
         self.catalog_changed.emit()
         # 디버프 3차가 쓰는 보스 HP바 영역도 함께 저장(공유) + 3차 재시작
-        config.save_boss_bar_region(ax, ay, w, h)
+        config.save_boss_bar_region(lx, ly, lw, lh)
         self._refresh_method_ui()
         self._emit_gate_mode()
         self.bar_region_changed.emit()

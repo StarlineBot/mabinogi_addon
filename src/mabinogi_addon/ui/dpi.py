@@ -20,6 +20,16 @@ def screen_scale() -> float:
     return float(s.devicePixelRatio()) if s is not None else 1.0
 
 
+def to_logical(x: int, y: int, w: int, h: int) -> tuple[int, int, int, int]:
+    """물리픽셀 (x,y,w,h) → 논리좌표. 자동 찾기가 mss(물리) 결과를 저장·미리보기 전에 쓴다.
+
+    저장 규칙은 '영역은 논리좌표'이므로, 캡처한 물리 좌표를 그대로 저장하면 라이브 때
+    to_physical로 한 번 더 배율이 곱해져 틀어진다. 배율 100%면 그대로.
+    """
+    s = screen_scale() or 1.0
+    return (round(x / s), round(y / s), round(w / s), round(h / s))
+
+
 def to_physical(region: dict) -> tuple[int, int, int, int]:
     """논리좌표 영역 dict(x,y,w,h) → 물리픽셀 (x, y, w, h). 배율 100%면 그대로."""
     s = screen_scale()

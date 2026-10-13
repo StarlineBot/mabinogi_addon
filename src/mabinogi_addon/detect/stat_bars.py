@@ -153,6 +153,12 @@ def locate_stat_bars(frame: np.ndarray) -> tuple[int, int, int, int] | None:
             box = (x, top, w, cy + ch - top)
             if best is None or box[1] > best[1]:  # 더 아래(맨 아래=원본)
                 best = box
+    if best is None:
+        return None
+    # 검증: 그 박스에서 실제로 3개 바를 읽어야 진짜 체력바(디버프 아이콘 줄 오탐 제거).
+    bx, by, bw, bh = best
+    if len(read_stat_bars(frame[by : by + bh, bx : bx + bw])) < 3:
+        return None
     return best
 
 

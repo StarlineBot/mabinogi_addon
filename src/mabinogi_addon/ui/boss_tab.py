@@ -24,8 +24,10 @@ from PySide6.QtWidgets import (
 )
 
 from .. import config, image_io, paths
-from ..detect.boss_bar import locate_boss_bar
+from ..detect.boss_bar import locate_boss_bar, make_validator
 from ..detect.boss_hp_reader import read_percent
+from .dpi import to_logical
+from .screen_grab import capture_for_autofind
 from ..detect.boss_name_matcher import identify, load_name_templates
 from ..tracker.boss_catalog import load_bosses, make_tracker
 from .pattern_overlay import PatternWarningOverlay
@@ -46,6 +48,7 @@ DEFAULT_BOX = {"x": 1017, "y": 1248, "w": 523, "h": 36}
 
 class BossTab(QWidget):
     bar_region_changed = Signal()  # 보스 HP바 영역 변경 → 디버프 3차와 공유(재시작 알림)
+    debuff_region_changed = Signal()  # 자동 찾기가 디버프 영역도 지정 → 디버프 추적 재시작
 
     def __init__(self, watcher) -> None:
         super().__init__()
@@ -487,29 +490,13 @@ class BossTab(QWidget):
         if btn is not None:
             btn.setVisible(self._logged_in())  # 자동 찾기도 Discord 베타
 
-    def _grab_full(self):
-        """주 모니터 전체를 캡처(BGR)하고 전역 오프셋(left, top)을 함께 돌려준다."""
-        try:
-            if self._sct is None:
-                import mss
-
-                self._sct = mss.mss()
-            mon = self._sct.monitors[1]  # 주 모니터
-            shot = self._sct.grab(mon)
-            img = np.frombuffer(shot.bgra, np.uint8).reshape(
-                shot.height, shot.width, 4
-            )[:, :, :3]
-            return np.ascontiguousarray(img), int(mon["left"]), int(mon["top"])
-        except Exception:  # noqa: BLE001 — 캡처 실패 시 호출 측이 안내
-            return None, 0, 0
-
     def _on_auto_find(self) -> None:
         """보스 체력바를 화면에서 자동 검출 → 민트 점선 미리보기 + 확인 후에만 저장."""
-        frame, ox, oy = self._grab_full()
+        frame, ox, oy = capture_for_autofind()  # 앱 창 숨기고 캡처
         if frame is None:
             QMessageBox.warning(self, "자동 찾기", "화면 캡처에 실패했습니다.")
             return
-        box = locate_boss_bar(frame)
+        box = locate_boss_bar(frame, make_validator())  # 판독 검증 통과한 박스만
         if box is None:
             QMessageBox.information(
                 self,
@@ -522,21 +509,21 @@ class BossTab(QWidget):
             )
             return
         x, y, w, h = box
-        ax, ay = x + ox, y + oy  # 전역 좌표
-        # 디버프 영역 = 보스 체력바 바로 위 같은 폭의 띠.
-        dh = max(16, int(h * 1.4))
-        dy = max(0, ay - dh)
-        # 민트 점선으로 '지정할 영역'(보스바 + 위 디버프)을 잠깐 보여준다.
+        # 전역 물리픽셀 → 논리좌표(저장 규칙; 배율 100%면 그대로).
+        lx, ly, lw, lh = to_logical(x + ox, y + oy, w, h)
+        strip = max(12, int(lh * 1.4))  # 디버프 띠 높이
+        dy = max(0, ly - strip)
+        # 디버프 영역 = 띠 + 보스바(dy ~ 바 아래). 바를 포함해야 사라짐 경고·2차(띠)가 동작.
+        db = (lx, dy, lw, (ly + lh) - dy)
         from .region_highlight import RegionHighlight
 
         self._highlight = RegionHighlight()
         self._highlight.flash(
-            ax, dy, w, (ay + h) - dy,
+            db[0], db[1], db[2], db[3],
             "자동 찾기 결과",
             "보스 HP바 + 디버프(위) · 이 영역으로 지정할까요?",
             msec=4000,
         )
-        # 확인 후에만 저장 — '아니오'면 기존 설정 그대로.
         ans = QMessageBox.question(
             self,
             "자동 찾기 — 확인",
@@ -547,12 +534,13 @@ class BossTab(QWidget):
         )
         if ans != QMessageBox.StandardButton.Yes:
             return
-        self._region = {"x": ax, "y": ay, "w": w, "h": h}
-        config.save_boss_bar_region(ax, ay, w, h)
-        config.save_capture_region(ax, dy, w, dh, "debuffTracker")  # 디버프(위 띠)
+        self._region = {"x": lx, "y": ly, "w": lw, "h": lh}
+        config.save_boss_bar_region(lx, ly, lw, lh)  # 보스바(패턴알림·3차 공유)
+        config.save_capture_region(db[0], db[1], db[2], db[3], "debuffTracker")
         self._update_region_label()
         self._save()
-        self.bar_region_changed.emit()
+        self.bar_region_changed.emit()  # 보스바 공유(패턴알림/3차)
+        self.debuff_region_changed.emit()  # 디버프 추적 재시작(1·2차 포함)
         self._flash_region()
 
     def _update_collect_label(self) -> None:

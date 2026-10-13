@@ -56,19 +56,36 @@ def find_anchor(
     """
     if frame is None or template is None or frame.size == 0 or template.size == 0:
         return None
+    # 성능: 전체 컬러 프레임에 멀티스케일 매칭은 ~3초(UI 멈춤)다. 앵커는 '빨간 아이콘'이라
+    # 색 정보가 핵심(흑백은 매칭이 약해짐) → 색은 유지한 채 반해상도로 1차 탐색하고, 그
+    # 주변만 원해상도로 정밀 재탐색한다(수백 ms). 결과 좌표계는 원해상도 그대로.
     fh, fw = frame.shape[:2]
-    best: AnchorHit | None = None
+    small = cv2.resize(frame, (fw // 2, fh // 2), interpolation=cv2.INTER_AREA)
+    sh, sw = small.shape[:2]
+    coarse = (-1.0, 0, 0, scales[0])  # (score, x, y, size) — 반해상도 좌표
     for s in scales:
-        if fh <= s or fw <= s:
+        hs = max(4, s // 2)
+        if sh <= hs or sw <= hs:
             continue
-        t = cv2.resize(template, (s, s), interpolation=cv2.INTER_AREA)
-        res = cv2.matchTemplate(frame, t, cv2.TM_CCOEFF_NORMED)
-        _, mx, _, ml = cv2.minMaxLoc(res)
-        if best is None or mx > best.score:
-            best = AnchorHit(float(mx), int(ml[0]), int(ml[1]), s)
-    if best is None or best.score < threshold:
+        t = cv2.resize(template, (hs, hs), interpolation=cv2.INTER_AREA)
+        _, mx, _, ml = cv2.minMaxLoc(cv2.matchTemplate(small, t, cv2.TM_CCOEFF_NORMED))
+        if mx > coarse[0]:
+            coarse = (float(mx), int(ml[0]), int(ml[1]), s)
+    if coarse[0] < threshold * 0.8:  # 1차에서 확실히 없음(반해상도라 임계 약간 완화)
         return None
-    return best
+    # 2차: 원해상도에서 1차 위치 주변 작은 창만 정밀 매칭.
+    cx, cy, size = coarse[1] * 2, coarse[2] * 2, coarse[3]
+    pad = size * 2
+    x0, y0 = max(0, cx - pad), max(0, cy - pad)
+    x1, y1 = min(fw, cx + size + pad), min(fh, cy + size + pad)
+    win = frame[y0:y1, x0:x1]
+    if win.shape[0] <= size or win.shape[1] <= size:
+        return None
+    t = cv2.resize(template, (size, size), interpolation=cv2.INTER_AREA)
+    _, mx, _, ml = cv2.minMaxLoc(cv2.matchTemplate(win, t, cv2.TM_CCOEFF_NORMED))
+    if mx < threshold:
+        return None
+    return AnchorHit(float(mx), x0 + int(ml[0]), y0 + int(ml[1]), size)
 
 
 def locate_status_region(
@@ -91,6 +108,8 @@ def locate_status_region(
     s = hit.size
     left = max(0, hit.x - int(s * 0.3))
     width = min(int(s * 26), W - left)  # 아이콘 + 이름 + 남은시간 포함 추정 폭
-    top = max(0, hit.y - int(s * 40))  # 앵커 위 버프들(넉넉히; 왼쪽 위는 보통 게임 월드)
-    height = H - top  # 아래로 길어지는 리스트를 다 덮게 화면 끝까지
-    return (left, top, width, height)
+    # 앵커(프리미엄 배틀)는 보통 리스트 하단부라 위로 넉넉히(약 34줄), 아래로 조금(약 8줄).
+    # '화면 끝까지'는 추적 비용이 과해 상한을 둔다(버프 리스트 최대치 + 여유 ≈ 42줄).
+    top = max(0, hit.y - int(s * 34))
+    bottom = min(H, hit.y + int(s * 8))
+    return (left, top, width, max(1, bottom - top))

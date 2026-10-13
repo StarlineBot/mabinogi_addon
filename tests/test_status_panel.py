@@ -76,10 +76,9 @@ def test_locate_status_region_covers_anchor(name, ex, ey):
     reg = locate_status_region(img, _template())
     assert reg is not None, f"{name}: 영역 유도 실패"
     rx, ry, rw, rh = reg
-    H, W = img.shape[:2]
-    # 앵커(ex,ey)가 영역 안에 들어오고, 아래로 화면 끝까지 덮는다.
+    # 앵커(ex,ey)가 영역 안에 들어온다(위로 넉넉, 아래로 앵커보다 더 내려감).
     assert rx <= ex and ry <= ey, f"{name}: 앵커가 영역 밖 {reg}"
-    assert ry + rh >= H - 2, f"{name}: 아래가 화면 끝까지 아님 {reg}"
+    assert ry + rh > ey, f"{name}: 아래가 앵커보다 위 {reg}"
 
 
 def test_locate_status_region_absent_none():

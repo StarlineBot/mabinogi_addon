@@ -28,10 +28,33 @@ _EDGE_DENSITY_MAX = 0.25  # 내부 세로 경계 밀도 상한(솔리드 바; �
 _FILL_MIN = 0.5  # 밴드 내부 채도 채움 하한(바닥 오탐 제거)
 
 
-def locate_boss_bar(frame: np.ndarray) -> tuple[int, int, int, int] | None:
+def make_validator():
+    """박스가 진짜 보스바인지 검증하는 콜백 — 그 안에서 HP% 판독과 이름 식별이 둘 다
+    성공할 때만 True. (테두리 포함·채팅 글자 붙음·아래 바 합쳐짐 등 잘못 잡힌 박스를 거름.)"""
+    from .boss_hp_reader import read_percent
+    from .boss_name_matcher import identify, load_name_templates
+
+    name_templates = load_name_templates()
+
+    def validate(sub: np.ndarray) -> bool:
+        if sub is None or sub.size == 0 or sub.shape[1] < 20:
+            return False
+        w = sub.shape[1]
+        if read_percent(sub) is None:
+            return False
+        return identify(sub[:, : int(w * 0.60)], name_templates) is not None
+
+    return validate
+
+
+def locate_boss_bar(
+    frame: np.ndarray, validate=None
+) -> tuple[int, int, int, int] | None:
     """전체 화면에서 보스 체력바 영역 (x,y,w,h)를 찾는다(없으면 None).
 
     색·HP에 의존하지 않고 '연속 솔리드 가로 바' 구조로 찾는다. 보스바가 안 보이면 None.
+    validate(sub_bgr)->bool 을 주면, 그 박스 안에서 검증(퍼센트·이름 판독)이 통과한 후보만
+    채택한다(테두리 포함·채팅 글자 붙음·아래 바 합쳐짐 등 잘못 잡힌 박스를 거른다).
     """
     if frame is None or frame.size == 0 or frame.shape[0] < 40 or frame.shape[1] < 80:
         return None
@@ -44,7 +67,7 @@ def locate_boss_bar(frame: np.ndarray) -> tuple[int, int, int, int] | None:
     n, _, stats, _ = cv2.connectedComponentsWithStats(closed, 8)
     min_w = int(W * _MIN_W_FRAC)
     min_h, max_h = int(H * _MIN_H_FRAC), int(H * _MAX_H_FRAC)
-    best: tuple[int, int, int, int] | None = None
+    cands: list[tuple[int, int, int, int]] = []
     for i in range(1, n):
         x, y, w, h, _ = stats[i]
         if not (w >= min_w and min_h <= h <= max_h and w > h * _FLAT_RATIO):
@@ -58,6 +81,33 @@ def locate_boss_bar(frame: np.ndarray) -> tuple[int, int, int, int] | None:
         edges = np.abs(cv2.Sobel(gray, cv2.CV_32F, 1, 0, ksize=3))
         if float((edges > 60).mean()) >= _EDGE_DENSITY_MAX:  # 그리드(스킬 줄) 제외
             continue
-        if best is None or w > best[2]:
-            best = (int(x), int(y), int(w), int(h))
-    return best
+        box = _trim_rows(sat, x, y, w, h)  # 위/아래 테두리 등 비채움 행 제거
+        if box is not None:
+            cands.append(box)
+    cands.sort(key=lambda b: -b[2])  # 넓은 것부터
+    if validate is not None:
+        for bx, by, bw, bh in cands:
+            if validate(frame[by : by + bh, bx : bx + bw]):
+                return (bx, by, bw, bh)
+        return None  # 판독 검증을 통과한 후보가 없음
+    return cands[0] if cands else None
+
+
+def _trim_rows(
+    sat: np.ndarray, x: int, y: int, w: int, h: int
+) -> tuple[int, int, int, int] | None:
+    """밴드에서 '채움 행'(그 행의 채도 비율이 충분)만 남도록 위/아래를 다듬는다.
+
+    바 위 테두리나 글자 안티앨리어싱이 컴포넌트에 섞여 높이가 부풀면(예: 36→45px) 퍼센트
+    판독이 어긋난다. 채움 비율이 임계 이상인 연속 행 구간으로 좁힌다.
+    """
+    rows = sat[y : y + h, x : x + w].mean(axis=1)
+    filled = rows >= 0.45
+    idx = np.flatnonzero(filled)
+    if idx.size == 0:
+        return (x, y, w, h)
+    top, bot = int(idx[0]), int(idx[-1])
+    nh = bot - top + 1
+    if nh < 4:
+        return None
+    return (x, y + top, w, nh)
