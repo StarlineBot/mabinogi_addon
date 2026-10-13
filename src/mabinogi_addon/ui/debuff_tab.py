@@ -166,6 +166,12 @@ class DebuffTab(QWidget):
         self.view_region_btn.setToolTip("잡힌 영역을 화면에 점선으로 잠깐 표시")
         self.view_region_btn.clicked.connect(self._flash_region)
         hint_row.addWidget(self.view_region_btn)
+        self.auto_find_btn = QPushButton("🧪 자동 찾기")
+        self.auto_find_btn.setToolTip(
+            "보스 체력바를 찾아 그 위 디버프 영역을 자동 지정 — Discord 베타"
+        )
+        self.auto_find_btn.clicked.connect(self._on_auto_find)
+        hint_row.addWidget(self.auto_find_btn)
         self._update_region_hint()
         v.addLayout(hint_row)
 
@@ -358,6 +364,57 @@ class DebuffTab(QWidget):
         self._update_region_hint()
         self._flash_region()  # 잡힌 영역을 화면에 점선으로 바로 확인
         self.catalog_changed.emit()  # 영역 생기면 추적 (재)시작
+
+    def _on_auto_find(self) -> None:
+        """보스 체력바를 찾아 그 위 디버프 영역을 자동 지정(Discord 베타). 확인 후에만 저장."""
+        if not self._logged_in():
+            QMessageBox.information(
+                self,
+                "자동 찾기 — 베타",
+                "자동 찾기는 Discord 로그인 사용자만 쓸 수 있는 베타 기능입니다.\n"
+                "설정 탭에서 로그인한 뒤 사용하세요.",
+            )
+            return
+        from ..detect.boss_bar import locate_boss_bar
+        from .screen_grab import grab_primary
+
+        frame, ox, oy = grab_primary()
+        if frame is None:
+            QMessageBox.warning(self, "자동 찾기", "화면 캡처에 실패했습니다.")
+            return
+        box = locate_boss_bar(frame)
+        if box is None:
+            QMessageBox.information(
+                self,
+                "자동 찾기 — 못 찾음",
+                "디버프 영역의 기준인 보스 체력바를 찾지 못했습니다.\n\n"
+                "• 보스 체력바가 지금 화면에 노출돼 있나요? (보스전 중 시도)\n"
+                "• 하단 메뉴바가 최소화돼 있지 않나요?\n\n"
+                "다시 시도하거나 '디버프 줄 영역 지정'으로 직접 잡으세요.",
+            )
+            return
+        x, y, w, h = box
+        ax, ay = x + ox, y + oy  # 보스바 전역 좌표
+        dh = max(16, int(h * 1.4))  # 디버프 띠 = 보스바 바로 위 같은 폭
+        dy = max(0, ay - dh)
+        from .region_highlight import RegionHighlight
+
+        self._highlight = RegionHighlight()
+        self._highlight.flash(
+            ax, dy, w, dh, "자동 찾기 결과",
+            "보스 디버프 영역(보스바 위) — 이 영역으로 지정할까요?", msec=4000,
+        )
+        ans = QMessageBox.question(
+            self,
+            "자동 찾기 — 확인",
+            "민트 점선 영역으로 디버프 영역을 지정할까요?\n\n"
+            "'아니오'를 누르면 기존 설정이 그대로 유지됩니다.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if ans != QMessageBox.StandardButton.Yes:
+            return
+        self._on_region_selected(ax, dy, w, dh)
 
     def _flash_region(self) -> None:
         """저장된 디버프 영역을 화면에 굵은 점선으로 잠깐 표시(아이콘 확인용)."""
