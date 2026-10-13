@@ -14,6 +14,7 @@ import numpy as np
 import pytest
 
 from mabinogi_addon.detect.boss_bar import locate_boss_bar, make_validator
+from mabinogi_addon.detect.boss_hp_reader import read_percent
 
 
 def _img(name: str):
@@ -71,6 +72,48 @@ def test_validator_splits_pelrom_upper_bar(name):
     box = locate_boss_bar(_img(name), make_validator())
     assert box is not None, f"{name}: 펠롬 상단 바 분리 실패"
     assert box[3] <= 50, f"{name}: 2단 병합(h={box[3]}) — 분리 안 됨"
+
+
+# --- 박스 높이 정규화: 큰 HP바(글라스 기브넨 45px)로 설정해도 공유 영역이 커져 다른
+#     보스 HP가 1/10로 읽히던 문제. 세로 중심 유지 + 높이 고정으로 어느 보스에서 설정해도
+#     같은 박스가 나와야 한다(= 어느 보스를 읽어도 정확). ---
+
+_GLASS = "스크린샷 2026-10-09 190901.png"  # HP바가 큰(45px) 미등록 보스
+_GOMOK25 = "스크린샷 2026-10-09 200715.png"  # 고목 25% (박스 h=38로 잡히던 장면)
+_LENEN100 = "스크린샷 2026-10-07 013118.png"  # 레넨 100%
+
+
+def _read_with(box, name):
+    img = _img(name)
+    x, y, w, h = box
+    return read_percent(img[y : y + h, x : x + w])
+
+
+def test_glass_box_reads_other_boss_correctly():
+    """큰 HP바(글라스)에서 찾은 박스로 레넨(100%)을 읽어도 100이어야 한다(10 아님)."""
+    box = locate_boss_bar(_img(_GLASS), make_validator())
+    assert box is not None
+    assert _read_with(box, _LENEN100) == 100, f"정규화 전이면 10으로 읽힘 (box={box})"
+
+
+def test_gomok25_box_reads_pelrom_correctly():
+    """고목 25% 장면(h=38) 박스로 펠롬 42%를 읽어도 42여야 한다(4 아님)."""
+    box = locate_boss_bar(_img(_GOMOK25), make_validator())
+    assert box is not None
+    assert _read_with(box, "스크린샷 2026-10-09 201512.png") == 42, f"box={box}"
+
+
+def test_normalized_box_height_consistent_across_bosses():
+    """어느 보스에서 설정하든 박스 y·h가 ±1px 이내로 같아야 한다(세로 중심·고정 높이)."""
+    boxes = [
+        locate_boss_bar(_img(n), make_validator())
+        for n in (_GLASS, _LENEN100, _GOMOK25)
+    ]
+    assert all(b is not None for b in boxes), boxes
+    ys = [b[1] for b in boxes]
+    hs = [b[3] for b in boxes]
+    assert max(ys) - min(ys) <= 1, f"y 불일치 {ys}"
+    assert max(hs) - min(hs) <= 1, f"h 불일치 {hs}"
 
 
 def test_locate_trims_attached_chat():

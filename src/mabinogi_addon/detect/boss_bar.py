@@ -99,7 +99,7 @@ def locate_boss_bar(
         if box is not None:
             box = _trim_cols(sat, *box)  # 좌/우 비채움 열 제거(채팅 글자 붙음 등)
         if box is not None:
-            cands.append(box)
+            cands.append(_normalize_height(box, H))  # 높이 정규화(세로 중심 유지)
     cands.sort(key=lambda b: -b[2])  # 넓은 것부터
     if validate is not None:
         for bx, by, bw, bh in cands:
@@ -107,6 +107,26 @@ def locate_boss_bar(
                 return (bx, by, bw, bh)
         return None  # 판독 검증을 통과한 후보가 없음
     return cands[0] if cands else None
+
+
+# 보스바 높이는 보스마다 다르지만(레넨 37px, 글라스 기브넨 45px) **세로 중심과 이름·% 글자
+# 크기·위치는 같다**. read_percent는 박스 높이(h/36)로 글자 크기를 스케일하므로, 높이가 큰
+# 박스를 '공유 보스바 영역'에 저장하면 **다른 보스 HP가 1/10로 읽혀** 패턴 알림이 오작동한다.
+# 그래서 찾은 바의 세로 중심만 쓰고 높이는 고정 비율로 정규화한다. (기준 2560×1440 → 37px.
+# 비율이라 4K도 비례하나, 4K 보스 스샷이 없어 미검증 — 확보 시 확인할 것.)
+_HEIGHT_FRAC = 0.0257
+
+
+def _normalize_height(
+    box: tuple[int, int, int, int], H: int
+) -> tuple[int, int, int, int]:
+    """박스의 세로 중심은 유지하고 높이를 고정 비율(H×_HEIGHT_FRAC)로 맞춘다. x·w는 그대로."""
+    x, y, w, h = box
+    cy = y + h / 2
+    nh = round(H * _HEIGHT_FRAC)
+    ny = round(cy - nh / 2)
+    ny = max(0, min(ny, H - nh))
+    return (int(x), int(ny), int(w), int(nh))
 
 
 def _trim_rows(
