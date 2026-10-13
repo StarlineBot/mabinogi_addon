@@ -83,6 +83,9 @@ class BossTab(QWidget):
         self._boss_present = False
         self._bar_absent = self._UPCOMING_GONE_FRAMES + 1  # 시작은 '없음'
         self._bar_validate = None  # make_validator 캐시(이름 글자 + % 판독)
+        # 존재 판정이 필요한가(= 저체력 경고가 하나라도 켜져 있나). main_window가 연결한다.
+        # 아무도 안 쓰면 매 틱 비싼 검증을 돌릴 이유가 없어 통째로 건너뛴다.
+        self._presence_wanted_fn = None
         self._overlay = PatternWarningOverlay()
         self._overlay.moved.connect(self._on_warn_moved)
         self._notifier = None
@@ -421,12 +424,16 @@ class BossTab(QWidget):
 
         # 보스바 존재 신호(체력바 저체력 알림 게이트용). 등록 보스는 식별로 당연히 존재,
         # 미등록 보스는 영역이 '보스바'로 검증(이름 글자+% 판독)되면 존재로 본다. 깜빡임·
-        # 가려짐은 ~2초(_UPCOMING_GONE_FRAMES) 유예로 흡수한다.
-        if boss_id is not None or self._boss_bar_visible(frame):
-            self._bar_absent = 0
+        # 가려짐은 ~2초(_UPCOMING_GONE_FRAMES) 유예로 흡수한다. 아무도 이 신호를 안 쓰면
+        # (저체력 경고 전부 꺼짐) 비싼 검증을 돌리지 않고 건너뛴다(UI 스레드 부하 절감).
+        if self._presence_wanted_fn is None or self._presence_wanted_fn():
+            if boss_id is not None or self._boss_bar_visible(frame):
+                self._bar_absent = 0
+            else:
+                self._bar_absent += 1
+            self._boss_present = self._bar_absent <= self._UPCOMING_GONE_FRAMES
         else:
-            self._bar_absent += 1
-        self._boss_present = self._bar_absent <= self._UPCOMING_GONE_FRAMES
+            self._boss_present = False
 
         # 수집 모드: 로그인 사용자가 켠 동안, 보스가 식별된 상태에서 바가 눈에 띄게
         # 바뀌면 자동 저장(오독 프레임 제보). 보스 없는 프레임은 길바닥이라 제외.
@@ -467,9 +474,13 @@ class BossTab(QWidget):
 
         자동 찾기와 같은 기준(이름 글자 + % 판독)으로 본다 → 미등록 보스도 존재로 인식.
         검증기는 상태가 없어 캐시해 재사용한다."""
-        if self._bar_validate is None:
-            from ..detect.boss_bar import make_validator
+        from ..detect.boss_bar import has_wide_bar_row, make_validator
 
+        # 값싼 사전 판정(~1ms): 넓은 가로 연속(바 가장자리) 행이 없으면 보스바 아님 → 즉시
+        # False. 평상시(보스 없음) 프레임마다 비싼 make_validator(read_percent ~36ms)를 안 돈다.
+        if not has_wide_bar_row(frame):
+            return False
+        if self._bar_validate is None:
             self._bar_validate = make_validator()
         try:
             return bool(self._bar_validate(frame))
@@ -481,6 +492,11 @@ class BossTab(QWidget):
 
         다른 탭(체력바 저체력 알림)이 '보스전 중일 때만' 울리도록 공유하는 신호다."""
         return self._boss_present
+
+    def set_presence_consumer(self, wanted_fn) -> None:
+        """'존재 신호가 지금 필요한가'를 알려줄 콜백을 연결한다(저체력 경고가 하나라도
+        켜져 있을 때 True). 아무도 안 쓰면 매 틱 비싼 검증을 건너뛴다."""
+        self._presence_wanted_fn = wanted_fn
 
     # 큰 점프(진입 애니메이션·오판독)와 완만한 감소를 구분해 확정.
     _SMALL_STEP = 12  # 이 이하 변화면 '완만' (2연속으로 확정)

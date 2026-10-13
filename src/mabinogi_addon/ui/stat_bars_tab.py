@@ -265,6 +265,11 @@ class StatBarsTab(QWidget):
         """'지금 보스전인가'를 알려줄 콜백을 연결한다(없으면 항상 울림 — 종전 동작)."""
         self._boss_present_fn = fn
 
+    def has_active_alert(self) -> bool:
+        """저체력 경고가 하나라도 켜져 있는지. 보스 탭이 '존재 판정이 필요한가'를 묻는다
+        (전부 꺼져 있으면 보스바 존재 판정 자체를 건너뛰어 UI 스레드 부하를 아낀다)."""
+        return any(self._bars_cfg[sid]["alert"]["on"] for sid in ("hp", "mp", "sta"))
+
     def _check_alerts(self, readings: dict, now: float) -> None:
         """임계 이하로 떨어지면(각 바 각자) 경고. 게이트: 바 3개가 다 보일 때만 판정해
         지역이동·가려짐으로 생기는 0% 오탐을 막는다. 임계 위로 회복하면 재무장."""

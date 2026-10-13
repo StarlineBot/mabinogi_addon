@@ -93,6 +93,22 @@ def _row_longest_runs(
     return best, best_start, best_end
 
 
+def has_wide_bar_row(frame: np.ndarray, frac: float = 0.70) -> bool:
+    """프레임에 '채도 픽셀 최장 가로 연속 ≥ 폭×frac'인 행이 하나라도 있는지(값싼 사전 판정).
+
+    보스바가 떠 있으면 가장자리 행이 바 폭만큼 쭉 이어진다. 보스바가 없으면(길바닥·UI)
+    이런 긴 가로 연속이 없어 즉시 걸러진다. 보스 존재 판정에서 **비싼 make_validator
+    (read_percent 포함, ~36ms)를 부르기 전** 이 ~1ms 컷으로 평상시 프레임을 빠르게 거른다.
+    """
+    if frame is None or frame.size == 0 or frame.shape[1] < 2:
+        return False
+    _, w = frame.shape[:2]
+    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    sat = (hsv[:, :, 1] > _SAT_MIN) & (hsv[:, :, 2] > _VAL_MIN)
+    best, _, _ = _row_longest_runs(sat)
+    return bool(best.size and int(best.max()) >= w * frac)
+
+
 def locate_boss_bar(
     frame: np.ndarray, validate=None
 ) -> tuple[int, int, int, int] | None:

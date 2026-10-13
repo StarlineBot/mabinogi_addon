@@ -13,7 +13,11 @@ import cv2
 import numpy as np
 import pytest
 
-from mabinogi_addon.detect.boss_bar import locate_boss_bar, make_validator
+from mabinogi_addon.detect.boss_bar import (
+    has_wide_bar_row,
+    locate_boss_bar,
+    make_validator,
+)
 from mabinogi_addon.detect.boss_hp_reader import read_percent
 
 
@@ -181,3 +185,22 @@ def test_locate_ignores_adjacent_skillbar(where):
     f[py : py + sh, px : px + bw] = strip
     got = locate_boss_bar(f, make_validator())
     assert got == base, f"{where}: 단축바 때문에 검출이 바뀜 {got} != {base}"
+
+
+# --- 존재 판정 값싼 사전 컷(has_wide_bar_row): 비싼 make_validator 호출 전 평상시 프레임을
+#     빠르게 거르는 용도. '진짜 보스바는 절대 끊지 않는다'(통과)가 핵심 불변식. ---
+
+
+def test_has_wide_bar_row_passes_real_boss_box():
+    """실제 보스바 박스는 사전 컷을 통과해야 한다(끊으면 보스를 놓침)."""
+    img = _img("스크린샷 2026-10-14 000646.png")
+    box = locate_boss_bar(img, make_validator())
+    assert box is not None
+    x, y, w, h = box
+    assert has_wide_bar_row(img[y : y + h, x : x + w]) is True
+
+
+def test_has_wide_bar_row_rejects_empty():
+    """빈/없는 프레임은 넓은 가로 연속이 없어 즉시 False(검증기 호출 안 함)."""
+    assert has_wide_bar_row(np.zeros((36, 523, 3), np.uint8)) is False
+    assert has_wide_bar_row(None) is False
