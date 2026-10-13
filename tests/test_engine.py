@@ -113,3 +113,31 @@ def test_anchor_gates_after_first_seen(monkeypatch):
     monkeypatch.setattr(engine_mod, "detect_buffs", lambda *a, **k: [])
     res_gone = eng.tick(_region(), now=1.0)
     assert res_gone.frame_valid is False
+
+
+def test_second_alert_routes_to_alerts2():
+    """2차(막차) 알림은 alerts가 아니라 alerts2로 분리되어 나온다.
+
+    vivace(화면 121초)에 1차 임계 100·2차 90을 주고, 임계 위(ACTIVE)로 등장시킨 뒤
+    내부 시계를 흘려 1차→2차를 차례로 교차시킨다. 1차는 alerts, 2차는 alerts2로 담겨야
+    앱이 '연장2.mp3'(막차)를 따로 재생할 수 있다."""
+    region = _region()
+    cat = load_catalog()
+    eng = BuffEngine(
+        build_templates(cat),
+        [b.id for b in cat],
+        appear_frames=1,
+        alert_before={"vivace": 100},
+        alert_before2={"vivace": 90},
+    )
+    # 등장(rem 121 > 100) → 아직 알림 없음
+    res0 = eng.tick(region, now=0.0, foreground=True)
+    assert "vivace" not in res0.alerts and "vivace" not in res0.alerts2
+    # rem 96 ≤ 100 → 1차만
+    res1 = eng.tick(region, now=25.0, foreground=True)
+    assert "vivace" in res1.alerts
+    assert "vivace" not in res1.alerts2
+    # rem 86 ≤ 90 → 2차만(1차는 이미 1회 울려 재발 안 함)
+    res2 = eng.tick(region, now=35.0, foreground=True)
+    assert "vivace" not in res2.alerts
+    assert "vivace" in res2.alerts2

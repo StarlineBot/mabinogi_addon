@@ -43,6 +43,29 @@ F_OVERTURE = "전장의 서곡 연장.mp3"
 F_PARTY = "파티 알림.mp3"
 F_TUARIM = "투아림 부스트 발동 직전.mp3"
 
+# 2차(막차 경고) — 1차 파일명 뒤에 '2'. 앱은 임박이 '더' 가까워지면 이 파일을 재생한다
+# (없으면 1차로 폴백). 1차=여유 안내, 2차=짧고 급한 막차 경고.
+F_VIVACE2 = "비바체 연장2.mp3"
+F_SHARP2 = "상태지원 알림2.mp3"
+F_HAM2 = "햄 버닝 연장2.mp3"
+F_MARCH2 = "행진곡 연장2.mp3"
+F_OVERTURE2 = "전장의 서곡 연장2.mp3"
+
+# --- 2차 급박도(prosody) 오버라이드 ---
+# 2차 파일은 같은 목소리라도 더 빠르고 높게 읽어 다급함을 준다. 들어보고 약하면/과하면
+# 아래 숫자만 바꿔 재생성(--pack 으로 한 팩만 빠르게 비교 가능).
+URGENT_FILES = {F_VIVACE2, F_SHARP2, F_HAM2, F_MARCH2, F_OVERTURE2}
+URGENT_EDGE_RATE_ADD = 12   # edge-tts rate(%)에 가산 (예: -6% → +6%)
+URGENT_EDGE_PITCH_ADD = 15  # edge-tts pitch(Hz)에 가산
+URGENT_GOOGLE_RATE_MULT = 1.15  # Google speakingRate 배수(Chirp3는 pitch 미지원)
+
+
+def _urgent_edge(rate: str, pitch: str) -> tuple[str, str]:
+    """edge-tts용 1차 rate/pitch에 2차 가산을 적용해 돌려준다."""
+    r = int(rate.rstrip("%")) + URGENT_EDGE_RATE_ADD
+    p = int(pitch.rstrip("Hz")) + URGENT_EDGE_PITCH_ADD
+    return f"{r:+d}%", f"{p:+d}Hz"
+
 # 팩 정의 — 성격마다 목소리·말투를 다르게. 자유롭게 추가/수정하세요.
 PACKS: list[dict] = [
     {
@@ -55,10 +78,15 @@ PACKS: list[dict] = [
         # 부드러운: 마침표로 자연스럽게(Chirp3는 ~/!를 어색하게 읽음). 감정은 단어·목소리로.
         "lines": {
             F_VIVACE: "비바체 연장해주세요.",
-            F_SHARP: "상지를 다시 걸어요.",
-            F_HAM: "햄찌를 다시 소환해요.",
+            F_VIVACE2: "비바체 곧 꺼져요.",
+            F_SHARP: "상태지원 잊지 마세요.",
+            F_SHARP2: "상태지원 곧 사라져요.",
+            F_HAM: "햄찌 다시 소환해요.",
+            F_HAM2: "햄찌 사라져요.",
             F_MARCH: "행진곡 연장해주세요.",
-            F_OVERTURE: "전장 연장해주세요.",
+            F_MARCH2: "행진곡 곧 끊겨요.",
+            F_OVERTURE: "전장의서곡 연장해주세요.",
+            F_OVERTURE2: "전장의서곡 꺼져요.",
             F_PARTY: "파티 모집이 올라왔어요.",
             F_TUARIM: "투아림이 곧 다가와요.",
         },
@@ -72,11 +100,16 @@ PACKS: list[dict] = [
         "speaking_rate": 1.0,
         # 자연스러운: 마침표 평서문. 또렷한 안내체.
         "lines": {
-            F_VIVACE: "비바체 연장할 시간이에요.",
-            F_SHARP: "상지 잊지 마세요.",
-            F_HAM: "햄찌 연장할 시간이에요.",
+            F_VIVACE: "비바체를 연장해요.",
+            F_VIVACE2: "비바체 곧 꺼져요!",
+            F_SHARP: "상태지원 잊지 말아요.",
+            F_SHARP2: "상태지원 사라져요!",
+            F_HAM: "햄찌 소환할 시간이에요.",
+            F_HAM2: "햄찌 사라져요!",
             F_MARCH: "행진곡 연장할 시간이에요.",
-            F_OVERTURE: "전장 연장할 시간이에요.",
+            F_MARCH2: "행진곡 곧 끊겨요!",
+            F_OVERTURE: "전장의서곡 연장할 시간이에요.",
+            F_OVERTURE2: "전장의서곡 꺼져요!",
             F_PARTY: "파티 모집이 올라왔어요.",
             F_TUARIM: "투아림 곧 터져요.",
         },
@@ -91,10 +124,15 @@ PACKS: list[dict] = [
         # 차분한: 마침표로 또박또박 안정된 안내체
         "lines": {
             F_VIVACE: "비바체 연장하세요.",
-            F_SHARP: "상태 지원 잊지 마세요.",
+            F_VIVACE2: "비바체 곧 꺼집니다.",
+            F_SHARP: "상태지원 잊지 마세요.",
+            F_SHARP2: "상태지원 사라집니다.",
             F_HAM: "햄 버닝 연장하세요.",
+            F_HAM2: "햄 버닝 사라집니다.",
             F_MARCH: "행진곡 연장하세요.",
-            F_OVERTURE: "전장의 서곡 연장하세요.",
+            F_MARCH2: "행진곡 곧 끊깁니다.",
+            F_OVERTURE: "전장의서곡 연장하세요.",
+            F_OVERTURE2: "전장의서곡 꺼집니다.",
             F_PARTY: "파티 모집이 올라왔습니다.",
             F_TUARIM: "투아림 부스트 발동 직전입니다.",
         },
@@ -110,11 +148,14 @@ async def _gen_edge(pack: dict) -> None:
     out.mkdir(parents=True, exist_ok=True)
     print(f"[edge] {pack['name']}  {pack['edge_voice']} rate={pack['rate']} pitch={pack['pitch']}")
     for filename, text in pack["lines"].items():
-        c = edge_tts.Communicate(
-            text, pack["edge_voice"], rate=pack["rate"], pitch=pack["pitch"]
-        )
+        rate, pitch = pack["rate"], pack["pitch"]
+        tag = ""
+        if filename in URGENT_FILES:  # 2차(막차) → 더 빠르고 높게
+            rate, pitch = _urgent_edge(rate, pitch)
+            tag = f"  [2차 rate={rate} pitch={pitch}]"
+        c = edge_tts.Communicate(text, pack["edge_voice"], rate=rate, pitch=pitch)
         await c.save(str(out / filename))
-        print(f"  ✓ {filename}  ←  “{text}”")
+        print(f"  ✓ {filename}  ←  “{text}”{tag}")
 
 
 # ---- Google Chirp 3 HD 백엔드 (고품질, API 키) ----
@@ -126,13 +167,18 @@ def _gen_google(pack: dict, api_key: str) -> None:
     out.mkdir(parents=True, exist_ok=True)
     print(f"[google] {pack['name']}  {pack['google_voice']} rate={pack['speaking_rate']}")
     for filename, text in pack["lines"].items():
+        rate = float(pack.get("speaking_rate", 1.0))
+        tag = ""
+        if filename in URGENT_FILES:  # 2차(막차) → 더 빠르게(Chirp3는 pitch 미지원)
+            rate = round(rate * URGENT_GOOGLE_RATE_MULT, 3)
+            tag = f"  [2차 rate={rate}]"
         body = {
             "input": {"text": text},
             "voice": {"languageCode": "ko-KR", "name": pack["google_voice"]},
             # Chirp 3 HD는 pitch 미지원 → speakingRate만. mp3로 바로 받음.
             "audioConfig": {
                 "audioEncoding": "MP3",
-                "speakingRate": float(pack.get("speaking_rate", 1.0)),
+                "speakingRate": rate,
             },
         }
         req = urllib.request.Request(
@@ -144,7 +190,7 @@ def _gen_google(pack: dict, api_key: str) -> None:
         with urllib.request.urlopen(req, timeout=20) as resp:
             audio = json.loads(resp.read())["audioContent"]
         (out / filename).write_bytes(base64.b64decode(audio))
-        print(f"  ✓ {filename}  ←  “{text}”")
+        print(f"  ✓ {filename}  ←  “{text}”{tag}")
 
 
 def main() -> None:

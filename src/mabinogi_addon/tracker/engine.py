@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 
@@ -28,8 +28,9 @@ class OverlayEntry:
 @dataclass
 class TickResult:
     entries: list[OverlayEntry]  # 표시 순서대로, 활성/임박 버프만
-    alerts: list[str]  # 이번 틱에 만료임박 알림이 발생한 buff_id
+    alerts: list[str]  # 이번 틱에 만료임박(1차) 알림이 발생한 buff_id
     frame_valid: bool  # 정상 프레임 여부(앵커 보임)
+    alerts2: list[str] = field(default_factory=list)  # 2차(막차) 알림이 발생한 buff_id
 
 
 class BuffEngine:
@@ -133,6 +134,7 @@ class BuffEngine:
         )
 
         alerts: list[str] = []
+        alerts2: list[str] = []
         for bid, machine in self._machines.items():
             det = present.get(bid)
             detected = det is not None
@@ -175,8 +177,9 @@ class BuffEngine:
             if event is Event.ALERT:
                 alerts.append(bid)
             # 2차 알림: 더 가까운 기준 교차 시 1회 더(놓침·오독 대비). 포그라운드일 때만.
+            # 1차와 분리해 alerts2로 — 앱이 '막차' 전용 소리(연장2.mp3)를 재생한다.
             if foreground and frame_valid and machine.check_second_alert(now):
-                alerts.append(bid)
+                alerts2.append(bid)
 
         self._present_prev = set(present)  # 다음 틱의 '방금 등장' 판정용
 
@@ -187,7 +190,9 @@ class BuffEngine:
                 entries.append(
                     OverlayEntry(bid, machine.remaining(now), machine.alerting)
                 )
-        return TickResult(entries=entries, alerts=alerts, frame_valid=frame_valid)
+        return TickResult(
+            entries=entries, alerts=alerts, frame_valid=frame_valid, alerts2=alerts2
+        )
 
     # 세트 고정 기준: 누적 신뢰도(≈ 좋은 판독 몇 회분)가 이만큼 앞서면 고정.
     _SET_LOCK_CONF = 3.0

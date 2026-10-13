@@ -80,6 +80,24 @@ def default_sound_map() -> dict[str, Path]:
     return out
 
 
+def second_sound_map() -> dict[str, Path]:
+    """2차(막차) 알림용 buff_id → 경로.
+
+    각 버프의 'OOO 연장2.mp3'(1차 파일명 뒤에 '2')가 활성 팩/기본에 있으면 그걸,
+    없으면 1차 파일로 폴백한다(2차 녹음 전엔 1차 소리가 그대로 나오게). 둘 다 없으면 제외.
+    """
+    out: dict[str, Path] = {}
+    for bid, name in DEFAULT_SOUNDS.items():
+        p2 = sound_path(name[:-4] + "2.mp3")  # ".mp3"(4글자) → "2.mp3"
+        if p2.exists():
+            out[bid] = p2
+            continue
+        p1 = sound_path(name)
+        if p1.exists():
+            out[bid] = p1
+    return out
+
+
 # 새 버전 감지 알림 효과음(assets/sounds/에 이 이름으로 두면 재생, 없으면 조용히 생략).
 UPDATE_SOUND_FILE = "업데이트 알림.mp3"
 _update_player = None  # 일회성 재생기(모듈에 보관해 재생 전 GC 방지)

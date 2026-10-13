@@ -46,7 +46,8 @@ _GONE_SHOW_SEC = 5.0
 
 class _TrackWorker(QThread):
     updated = Signal(list)  # list[OverlayEntry]
-    alerted = Signal(list)  # list[buff_id]
+    alerted = Signal(list)  # list[buff_id] (1차 만료임박)
+    alerted2 = Signal(list)  # list[buff_id] (2차 막차 경고)
     foreground_changed = Signal(bool, bool)  # (게임 활성, 자기 앱 활성)
 
     def __init__(
@@ -95,6 +96,8 @@ class _TrackWorker(QThread):
                 self.updated.emit(result.entries)
                 if result.alerts:
                     self.alerted.emit(result.alerts)
+                if result.alerts2:
+                    self.alerted2.emit(result.alerts2)
             self._sleep(active=game)
 
     def _sleep(self, active: bool = True) -> None:
@@ -119,12 +122,14 @@ class BuffController(QObject):
         show_duration: dict[str, bool],
         on_alert=None,
         watcher: WindowWatcher | None = None,
+        on_alert2=None,
     ) -> None:
         super().__init__()
         self._overlay = overlay
         self._catalog = catalog  # id -> BuffDef
         self._show_duration = show_duration
         self._on_alert = on_alert
+        self._on_alert2 = on_alert2  # 2차(막차) 알림 콜백(없으면 2차 소리 없음)
         self._watcher = watcher or AlwaysActiveWatcher()
         self._worker: _TrackWorker | None = None
         self._source: FrameSource | None = None
@@ -153,6 +158,7 @@ class BuffController(QObject):
         )
         self._worker.updated.connect(self._on_updated)
         self._worker.alerted.connect(self._on_alerted)
+        self._worker.alerted2.connect(self._on_alerted2)
         self._worker.foreground_changed.connect(self._on_foreground_changed)
         self._worker.start()
 
@@ -327,3 +333,9 @@ class BuffController(QObject):
             return
         if self._on_alert is not None:
             self._on_alert(buff_ids)
+
+    def _on_alerted2(self, buff_ids) -> None:
+        if self._paused:  # 일시정지 중엔 2차(막차) 알림도 울리지 않음
+            return
+        if self._on_alert2 is not None:
+            self._on_alert2(buff_ids)

@@ -40,7 +40,7 @@ from .distribution_tab import DistributionTab
 from .exchange_tab import ExchangeTab
 from .memo_overlay import MemoOverlay
 from .memo_tab import MemoTab
-from .notifier import SoundNotifier, default_sound_map
+from .notifier import SoundNotifier, default_sound_map, second_sound_map
 from .overlay import BuffOverlay
 from .party_tab import PartyTab
 from .settings_tab import SettingsTab
@@ -310,7 +310,8 @@ class MainWindow(QMainWindow):
         self.buff_overlay = BuffOverlay()
         self.buff_controller: BuffController | None = None
         self._engine: BuffEngine | None = None
-        self._notifier = SoundNotifier(default_sound_map())
+        self._notifier = SoundNotifier(default_sound_map())  # 1차
+        self._notifier2 = SoundNotifier(second_sound_map())  # 2차(막차 경고)
         self._sound_ids: set[str] = set()  # 소리 알림 켠 버프(알림 때 재생)
         self.buff_tab.lock_toggled.connect(self._on_overlay_lock)
         self.buff_tab.tracking_changed.connect(self._on_tracking_changed)
@@ -1007,6 +1008,7 @@ class MainWindow(QMainWindow):
             show_duration,
             on_alert=self._on_buff_alert,
             watcher=self._watcher,
+            on_alert2=self._on_buff_alert2,
         )
         self.buff_controller.set_order(order)
         self.buff_controller.set_warn_gone_ids(self._warn_gone_ids())
@@ -1028,10 +1030,16 @@ class MainWindow(QMainWindow):
         return {s.id for s in config.load_buff_settings() if s.alert.warn_gone}
 
     def _on_buff_alert(self, buff_ids) -> None:
-        """엔진이 만료임박 알림을 올리면, 소리 켠 버프만 사운드 재생."""
+        """엔진이 만료임박(1차) 알림을 올리면, 소리 켠 버프만 사운드 재생."""
         to_play = [b for b in buff_ids if b in self._sound_ids]
         if to_play:
             self._notifier.alert(to_play)
+
+    def _on_buff_alert2(self, buff_ids) -> None:
+        """2차(막차) 알림 — 소리 켠 버프만 '연장2.mp3'(없으면 1차 폴백) 재생."""
+        to_play = [b for b in buff_ids if b in self._sound_ids]
+        if to_play:
+            self._notifier2.alert(to_play)
 
     def _on_tracking_changed(self) -> None:
         """순서·노출·지속시간·알림 변경을 실행 중 엔진에 즉시 반영(재시작 없이)."""
@@ -1326,10 +1334,12 @@ class MainWindow(QMainWindow):
 
     def _on_voice_pack_changed(self) -> None:
         """설정에서 알림 목소리 팩이 바뀌면 실행 중 재생기들을 새 팩으로 갱신(바로 적용)."""
-        from .notifier import default_sound_map
+        from .notifier import default_sound_map, second_sound_map
 
         if self._notifier is not None:
-            self._notifier.set_sounds(default_sound_map())  # 버프
+            self._notifier.set_sounds(default_sound_map())  # 버프 1차
+        if self._notifier2 is not None:
+            self._notifier2.set_sounds(second_sound_map())  # 버프 2차(막차)
         self.tuarim_tab.refresh_sound()
         # 파티 알림음은 보이스팩과 무관(기본 소리 고정)이라 갱신 불필요.
 
