@@ -69,12 +69,13 @@ def test_drop_guard_blocks_misread_into_other_band():
     assert _fire(t, [5, 5, 5]) == []  # 5% 패턴 거짓 발동 없음
 
 
-def test_drop_disarms_skipped_bands_repeated_misread():
-    """48 확정 후 '18'로 오독된 값이 매 틱 반복돼도(boss_tab은 같은 확정 HP 반복) 15% 알림 0.
-    (급락 시 건너뛴 구간을 무장 해제 → 2틱째부터 오독값이 구간에 들어가도 안 울림.)"""
-    t = BossPatternTracker("보스", [15])
-    got = _fire(t, [48, 18, 18, 18, 18])  # 48→18 급락, 이후 같은 18 반복
-    assert got == []
+@pytest.mark.parametrize("bad", [6, 7, 8, 9, 10, 16, 17, 18, 19, 20])
+def test_drop_disarms_skipped_bands_repeated_misread(bad):
+    """48 확정 후 오독값이 매 틱 반복돼도(boss_tab은 같은 확정 HP 반복) 15%·5% 알림 0.
+    오독값이 구간 안쪽(예 19∈[18,20])에 떨어져도 막혀야 한다(겹침 기반 무장 해제)."""
+    t = BossPatternTracker("보스", [50, 15, 5])
+    got = _fire(t, [48, bad, bad, bad, bad])  # 48→bad 급락, 이후 같은 값 반복
+    assert got == [], f"오독값 {bad}에서 거짓 발동: {got}"
 
 
 def test_recovers_after_drop_misread():

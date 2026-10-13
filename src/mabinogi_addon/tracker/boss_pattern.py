@@ -63,8 +63,10 @@ class BossPatternTracker:
         # '건너뛴 범위'(hp ≤ lo < prev)의 구간을 '이미 지나감'으로 무장 해제해, 그 오독값이
         # 거기 들어가도 울리지 않게 한다. (HP가 그 구간 위로 다시 오르면 재무장되어 정상 복귀.)
         if prev is not None and prev - hp > _DROP_GUARD:
-            for i, (lo, _hi, _t, _stage) in enumerate(self._bands):
-                if hp <= lo < prev:
+            for i, (lo, hi, _t, _stage) in enumerate(self._bands):
+                # 건너뛴 범위 [hp, prev)와 '겹치는' 구간을 해제. lo만 보면 오독값이 구간
+                # 안쪽(lo < hp ≤ hi)에 떨어졌을 때 못 막는다 → 구간 교집합으로 판정.
+                if lo < prev and hi >= hp:
                     self._armed[i] = False
             self._prev = hp
             return []
