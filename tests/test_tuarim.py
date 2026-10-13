@@ -133,7 +133,8 @@ def test_full_session_replay_fires_exactly_twice():
     t = TuarimTracker([90, 95])
     fired = []
     for v in reads:
-        fired += t.observe(v)
+        for _ in range(2):  # 실제 앱은 프레임당 ~2틱(150ms) — 노이즈 저값 run이 2배로 길어짐
+            fired += t.observe(v)
     assert fired == [90, 95], f"거짓 알림/누락: {fired}"
 
 
