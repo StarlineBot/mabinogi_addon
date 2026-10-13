@@ -24,7 +24,11 @@ from PySide6.QtWidgets import (
 )
 
 from .. import config, image_io, paths
-from ..detect.boss_bar import locate_boss_bar, make_validator
+from ..detect.boss_bar import (
+    locate_boss_bar,
+    make_validator,
+    normalize_box_height,
+)
 from ..detect.boss_hp_reader import read_percent
 from .dpi import to_logical
 from .screen_grab import capture_for_autofind
@@ -201,12 +205,26 @@ class BossTab(QWidget):
         self._timer.timeout.connect(self._tick)
         self._timer.start()
 
+    # 저HP(빨간 바) 구간은 빈 바가 어두운 회색이라 숫자 판독이 아직 불안정하다(다음 버전에
+    # 판독 마스크+템플릿 재작업 예정). 그때까지 이 % 이하 기준은 '현재 미지원'으로 표시해
+    # 사용자가 믿고 놓치지 않게 한다. (기획서/QA: ≤17%)
+    _LOW_HP_UNREADABLE = 17
+
     def _supported_label(self) -> QLabel:
         lines = ["지원 보스 & 알림 %:"]
+        has_low = False
         for b in self._bosses.values():
             if b.thresholds:
-                pct = ", ".join(f"{t}%" for t in b.thresholds)
-                lines.append(f"  • {b.name} — {pct}")
+                parts = []
+                for t in b.thresholds:
+                    if t <= self._LOW_HP_UNREADABLE:
+                        parts.append(f"{t}%(현재 미지원)")
+                        has_low = True
+                    else:
+                        parts.append(f"{t}%")
+                lines.append(f"  • {b.name} — {', '.join(parts)}")
+        if has_low:
+            lines.append("  ※ 17% 이하(빨간 바)는 판독이 불안정해 알림이 안 울릴 수 있습니다.")
         lbl = hint_label("\n".join(lines))
         lbl.setStyleSheet("color:#9aa0aa; font-size:12px;")
         return lbl
@@ -371,7 +389,7 @@ class BossTab(QWidget):
             return
         from .dpi import to_physical
 
-        px, py, pw, ph = to_physical(self._region)
+        px, py, pw, ph = to_physical(self._grab_region())
         frame = self._grab_rect(px, py, pw, ph)
         if frame is None:
             return
@@ -594,6 +612,24 @@ class BossTab(QWidget):
         need = self._CONFIRM_SMALL if gradual else self._CONFIRM_JUMP
         if self._hp_cand_n >= need:
             self._stable_hp = raw
+
+    def _grab_region(self) -> dict:
+        """판독용 영역 — 저장된 박스의 세로 중심은 두고 높이만 화면 비율로 정규화한다.
+
+        손으로 잡은 박스가 바보다 크면(예 40px) read_percent가 글자 크기를 과하게 잡아
+        46%를 4로 읽는다(2자리 '46' 점수↓ → 1자리 '4'가 이김). 자동 찾기와 같은 방식으로
+        높이를 화면 높이 비율(≈0.0257)로 고정해 바 크기에 맞춘다. 화면 내용이 아니라
+        화면 높이 기반 고정 계산이라 프레임마다 결과가 같아 판독이 흔들리지 않는다.
+        """
+        reg = self._region
+        from PySide6.QtGui import QGuiApplication
+
+        s = QGuiApplication.primaryScreen()
+        sh = int(s.geometry().height()) if s is not None else 0
+        if not sh:
+            return reg
+        x, y, w, h = normalize_box_height((reg["x"], reg["y"], reg["w"], reg["h"]), sh)
+        return {"x": x, "y": y, "w": w, "h": h}
 
     def _grab_rect(self, x: int, y: int, w: int, h: int):
         try:

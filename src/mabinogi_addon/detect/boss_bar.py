@@ -99,7 +99,7 @@ def locate_boss_bar(
         if box is not None:
             box = _trim_cols(sat, *box)  # 좌/우 비채움 열 제거(채팅 글자 붙음 등)
         if box is not None:
-            cands.append(_normalize_height(box, H))  # 높이 정규화(세로 중심 유지)
+            cands.append(normalize_box_height(box, H))  # 높이 정규화(세로 중심 유지)
     cands.sort(key=lambda b: -b[2])  # 넓은 것부터
     if validate is not None:
         for bx, by, bw, bh in cands:
@@ -114,13 +114,19 @@ def locate_boss_bar(
 # 박스를 '공유 보스바 영역'에 저장하면 **다른 보스 HP가 1/10로 읽혀** 패턴 알림이 오작동한다.
 # 그래서 찾은 바의 세로 중심만 쓰고 높이는 고정 비율로 정규화한다. (기준 2560×1440 → 37px.
 # 비율이라 4K도 비례하나, 4K 보스 스샷이 없어 미검증 — 확보 시 확인할 것.)
+# 자동 찾기뿐 아니라 **손으로 잡은 박스도 판독 직전 이 함수로 정규화**한다(예: 40px로 잡아
+# 46%가 4로 읽히던 것). 화면 내용이 아니라 H(화면/프레임 높이) 기반 고정 계산이라 프레임마다
+# 결과가 같다 → 판독이 흔들리지 않는다(매 프레임 채움행 트림은 흔들려서 안 쓴다).
 _HEIGHT_FRAC = 0.0257
 
 
-def _normalize_height(
+def normalize_box_height(
     box: tuple[int, int, int, int], H: int
 ) -> tuple[int, int, int, int]:
-    """박스의 세로 중심은 유지하고 높이를 고정 비율(H×_HEIGHT_FRAC)로 맞춘다. x·w는 그대로."""
+    """박스의 세로 중심은 유지하고 높이를 고정 비율(H×_HEIGHT_FRAC)로 맞춘다. x·w는 그대로.
+
+    H는 box와 같은 좌표계의 화면/프레임 높이(자동 찾기는 물리 프레임 높이, 런타임 수동 박스
+    정규화는 논리 화면 높이 — 비율이 같아 어느 쪽이든 같은 바 높이로 수렴)."""
     x, y, w, h = box
     cy = y + h / 2
     nh = round(H * _HEIGHT_FRAC)

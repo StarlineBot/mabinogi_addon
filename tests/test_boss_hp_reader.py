@@ -85,6 +85,25 @@ def test_two_decimal_percent(entry, expected):
     assert read_percent(crop) == expected, f"{entry}: .00 소수 오독 재발"
 
 
+# 손으로 잡은 큰 박스(523×40) 높이 정규화 회귀: 40px 그대로면 46%가 4로 오독되고,
+# 바 높이(화면 비율, 1440→37px)로 세로 중심 크롭하면 46으로 정확히 읽힌다.
+@pytest.mark.parametrize(
+    "entry", ["eotgallin_poinche_hp004_002.png", "eotgallin_poinche_hp004_109.png"]
+)
+def test_manual_box_height_normalized_reads_46(entry):
+    from mabinogi_addon.detect.boss_bar import normalize_box_height
+
+    if not os.path.exists(_POINCHE_ZIP):
+        pytest.skip("데이터 zip 없음")
+    with zipfile.ZipFile(_POINCHE_ZIP) as z:
+        frame = cv2.imdecode(np.frombuffer(z.read(entry), np.uint8), cv2.IMREAD_COLOR)
+    assert frame is not None and frame.shape[0] == 40
+    assert read_percent(frame) == 4  # 40px 그대로면 오독(회귀 재현)
+    th = normalize_box_height((0, 0, frame.shape[1], 40), 1440)[3]  # 바 높이 37
+    top = (frame.shape[0] - th) // 2
+    assert read_percent(frame[top : top + th]) == 46  # 정규화하면 정확
+
+
 def test_empty_region_returns_none():
     assert read_percent(np.zeros((0, 0, 3), dtype=np.uint8)) is None
 
