@@ -104,6 +104,40 @@ def test_manual_box_height_normalized_reads_46(entry):
     assert read_percent(frame[top : top + th]) == 46  # 정규화하면 정확
 
 
+# 저HP(빨간 바) 보조 경로 회귀: 기본 마스크(채도)가 회색 배경에 flooded돼 None이던 저HP
+# 프레임을, 밝기 보조 마스크로 다시 읽어 빨간 바 구간 값(≤20)을 판독한다. 정상 경로엔 개입
+# 안 하고(오독 없음), 못 읽는 프레임은 None(틀린 값보다 안전).
+def _norm37(im):
+    from mabinogi_addon.detect.boss_bar import normalize_box_height
+
+    th = normalize_box_height((0, 0, im.shape[1], im.shape[0]), 1440)[3]
+    top = (im.shape[0] - th) // 2
+    return im[top : top + th]
+
+
+def test_low_hp_fallback_reads_red_bar():
+    if not os.path.exists(_POINCHE_ZIP):
+        pytest.skip("데이터 zip 없음")
+    with zipfile.ZipFile(_POINCHE_ZIP) as z:
+        names = [n for n in z.namelist() if "hpxxx_" in n]
+        vals = []
+        for n in names:
+            im = cv2.imdecode(np.frombuffer(z.read(n), np.uint8), cv2.IMREAD_COLOR)
+            vals.append(read_percent(_norm37(im)))
+    readable = [v for v in vals if v is not None]
+    assert len(readable) >= 20, f"저HP 판독 너무 적음: {len(readable)}/{len(vals)}"
+    assert all(v <= 20 for v in readable), f"빨간 바 구간 밖 오독: {sorted(set(readable))}"
+    assert 15 in readable and 16 in readable, "15·16% 미판독(15% 경고 영향)"
+    assert any(v is None for v in vals)  # 아주 낮은 일부(8·6%대)는 None(안전)
+
+
+def test_low_hp_fallback_does_not_touch_normal_frames():
+    """정상(채도 경로로 읽히는) 프레임은 보조 경로를 타지 않아 결과가 그대로다."""
+    for name, (right, expected) in _CASES.items():
+        got = read_percent(_bar_box(name, right))
+        assert got == expected, f"{name}: 보조 경로 개입으로 바뀜 {got} != {expected}"
+
+
 def test_empty_region_returns_none():
     assert read_percent(np.zeros((0, 0, 3), dtype=np.uint8)) is None
 

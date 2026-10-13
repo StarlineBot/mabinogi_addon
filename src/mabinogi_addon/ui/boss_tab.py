@@ -205,26 +205,12 @@ class BossTab(QWidget):
         self._timer.timeout.connect(self._tick)
         self._timer.start()
 
-    # 저HP(빨간 바) 구간은 빈 바가 어두운 회색이라 숫자 판독이 아직 불안정하다(다음 버전에
-    # 판독 마스크+템플릿 재작업 예정). 그때까지 이 % 이하 기준은 '현재 미지원'으로 표시해
-    # 사용자가 믿고 놓치지 않게 한다. (기획서/QA: ≤17%)
-    _LOW_HP_UNREADABLE = 17
-
     def _supported_label(self) -> QLabel:
         lines = ["지원 보스 & 알림 %:"]
-        has_low = False
         for b in self._bosses.values():
             if b.thresholds:
-                parts = []
-                for t in b.thresholds:
-                    if t <= self._LOW_HP_UNREADABLE:
-                        parts.append(f"{t}%(현재 미지원)")
-                        has_low = True
-                    else:
-                        parts.append(f"{t}%")
-                lines.append(f"  • {b.name} — {', '.join(parts)}")
-        if has_low:
-            lines.append("  ※ 17% 이하(빨간 바)는 판독이 불안정해 알림이 안 울릴 수 있습니다.")
+                pct = ", ".join(f"{t}%" for t in b.thresholds)
+                lines.append(f"  • {b.name} — {pct}")
         lbl = hint_label("\n".join(lines))
         lbl.setStyleSheet("color:#9aa0aa; font-size:12px;")
         return lbl
