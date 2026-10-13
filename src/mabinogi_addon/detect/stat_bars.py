@@ -129,6 +129,10 @@ def _ratio(region: np.ndarray, r0: int, r1: int) -> tuple[float, int]:
 _LOC_HUE = {"hp": (150, 172), "mp": (98, 118), "sta": (16, 34)}  # OpenCV H(0~180)
 _LOC_SAT_MIN = 90
 _LOC_VAL_MIN = 90
+# 체력바는 게임 화면 '하단'에 붙어 있다. 프레임 위쪽(상단 스킬바·버프 아이콘 줄)에서 파랑/
+# 노랑 아이콘이 MP/STA 쌍처럼 잡혀 엉뚱한 곳(예: (765,36))을 체력바로 오검출하던 것을 막기
+# 위해, 바 후보를 프레임 하단 구역(top ≥ H×_LOC_BOTTOM_FRAC)으로만 제한한다.
+_LOC_BOTTOM_FRAC = 0.5
 
 
 def _color_bars(
@@ -162,8 +166,9 @@ def locate_stat_bars(frame: np.ndarray) -> tuple[int, int, int, int] | None:
     close_w = max(8, int(W * 0.012))
     max_h = max(14, int(H * 0.03))
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-    mps = _color_bars(hsv, *_LOC_HUE["mp"], min_w, close_w, max_h)
-    stas = _color_bars(hsv, *_LOC_HUE["sta"], min_w, close_w, max_h)
+    y_min = int(H * _LOC_BOTTOM_FRAC)  # 하단 구역만(상단 스킬바 아이콘 오검출 방지)
+    mps = [b for b in _color_bars(hsv, *_LOC_HUE["mp"], min_w, close_w, max_h) if b[1] >= y_min]
+    stas = [b for b in _color_bars(hsv, *_LOC_HUE["sta"], min_w, close_w, max_h) if b[1] >= y_min]
     best: tuple[int, int, int, int] | None = None
     for bx, by, bw, bh in mps:  # MP(파랑) 위
         for cx, cy, cw, ch in stas:  # STA(노랑) 아래

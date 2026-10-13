@@ -71,3 +71,22 @@ def test_locate_and_read_three_touching_bars(name):
     x, y, w, h = box
     rs = read_stat_bars(img[y : y + h, x : x + w])
     assert [r.stat_id for r in rs] == ["hp", "mp", "sta"], f"{name}: 3바 분리 실패 {rs}"
+
+
+def _synth_stack(top_y: int, W: int = 2560, H: int = 1440) -> np.ndarray:
+    """HP(마젠타)·MP(파랑)·STA(노랑) 3색 바 스택을 top_y에 그린 합성 프레임."""
+    frame = np.zeros((H, W, 3), np.uint8)
+    for i, hue in enumerate((160, 108, 25)):  # HP·MP·STA (OpenCV H)
+        color = cv2.cvtColor(np.uint8([[[hue, 220, 230]]]), cv2.COLOR_HSV2BGR)[0, 0]
+        y = top_y + i * 26
+        frame[y : y + 18, 60:220] = color
+    return frame
+
+
+def test_locate_ignores_top_region_bars():
+    """프레임 상단(상단 스킬바·버프 아이콘 줄)의 색 바는 체력바로 잡지 않는다.
+    (다중 모니터/게임창 캡처에서 상단 아이콘을 (765,36)처럼 오검출하던 것 방지.)"""
+    top = _synth_stack(top_y=40)  # 상단
+    assert locate_stat_bars(top) is None, "상단 색 바를 체력바로 오검출"
+    bottom = _synth_stack(top_y=1340)  # 하단(실제 체력바 위치대)
+    assert locate_stat_bars(bottom) is not None, "하단 체력바는 찾아야 함(합성 기준)"

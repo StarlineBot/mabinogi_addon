@@ -1,38 +1,127 @@
-"""자동 찾기용 전체 화면 1회 캡처 헬퍼 (mss).
+"""자동 찾기용 화면 1회 캡처 헬퍼 (mss).
 
-자동 찾기는 '영역이 아직 없을 때' 화면 전체를 한 번 떠서 검출기에 넘긴다. 주 모니터를
-캡처하고, 검출 좌표를 전역 좌표로 바꿀 오프셋(left, top)을 함께 돌려준다.
+자동 찾기는 '영역이 아직 없을 때' 화면을 한 번 떠서 검출기에 넘긴다. **등록된 게임 창이
+있으면 그 창 사각형만** 캡처하고(다중 모니터에서도 게임 화면을 정확히 집음), 없으면
+**가상 데스크톱 전체(monitors[0])**로 폴백한다. 검출 좌표를 전역(절대) 좌표로 바꿀
+오프셋(left, top)을 함께 돌려준다 — 트래커가 쓰는 좌표계와 같다.
+
+과거엔 `monitors[1]`(mss가 나열한 '첫 모니터')만 떴는데, 그게 주/게임 모니터라는 보장이
+없어 다중 모니터에서 엉뚱한 화면을 찍어 자동 찾기가 전부 실패했다. 그래서 게임 창 기준으로
+바꾸고 monitors[1] 가정을 제거했다.
 """
 
 from __future__ import annotations
 
+import logging
+
 import numpy as np
 
+_log = logging.getLogger("mabinogi_addon.capture")
 _sct = None
 
 
-def grab_primary() -> tuple[np.ndarray | None, int, int]:
-    """주 모니터를 BGR로 캡처하고 (이미지, left, top)을 반환. 실패 시 (None, 0, 0)."""
+def _mss():
+    """mss 인스턴스(재사용)."""
     global _sct
-    try:
-        if _sct is None:
-            import mss
+    if _sct is None:
+        import mss
 
-            _sct = mss.mss()
-        mon = _sct.monitors[1]  # 주 모니터
-        shot = _sct.grab(mon)
+        _sct = mss.mss()
+    return _sct
+
+
+def _grab_mon(mon: dict) -> np.ndarray | None:
+    """mss 모니터/영역 dict({left,top,width,height})를 BGR(연속 배열)로 캡처. 실패 시 None."""
+    try:
+        shot = _mss().grab(mon)
         img = np.frombuffer(shot.bgra, np.uint8).reshape(shot.height, shot.width, 4)
-        return np.ascontiguousarray(img[:, :, :3]), int(mon["left"]), int(mon["top"])
+        return np.ascontiguousarray(img[:, :, :3])
     except Exception:  # noqa: BLE001 — 캡처 실패 시 호출 측이 안내
+        return None
+
+
+def grab_primary() -> tuple[np.ndarray | None, int, int]:
+    """가상 데스크톱 전체(monitors[0])를 BGR로 캡처하고 (이미지, left, top)을 반환.
+
+    monitors[0]은 모든 모니터를 합친 가상 데스크톱이라 모니터 구성·순서와 무관하다(Windows
+    주 모니터는 항상 (0,0)). 오프셋으로 데스크톱 원점(left/top; 왼쪽에 모니터가 있으면 음수)을
+    돌려줘, 검출 좌표 + 오프셋 = 트래커가 쓰는 절대 좌표가 된다. 실패 시 (None, 0, 0)."""
+    try:
+        mon = _mss().monitors[0]  # 0 = 전체(가상) 데스크톱
+    except Exception:  # noqa: BLE001
         return None, 0, 0
+    img = _grab_mon(mon)
+    if img is None:
+        return None, 0, 0
+    return img, int(mon["left"]), int(mon["top"])
+
+
+def _grab_game_window() -> tuple[np.ndarray | None, int, int]:
+    """등록된 게임 창 사각형만 캡처하고 (이미지, left, top). 창을 못 찾으면 (None, 0, 0).
+
+    다중 모니터에서 '주 모니터'가 아니라 '게임이 떠 있는 곳'을 정확히 집기 위해, 포그라운드
+    감지·미러와 같은 창 탐색(find_game_window)을 재사용한다. 좌표는 전역(절대) 물리픽셀."""
+    try:
+        from .. import config
+        from ..system import dwm_thumbnail
+        from ..system.window_watcher import DEFAULT_GAME_TITLES
+
+        hwnd = dwm_thumbnail.find_game_window(config.load_game_exe(), DEFAULT_GAME_TITLES)
+        rect = dwm_thumbnail.window_rect(hwnd) if hwnd else None
+    except Exception:  # noqa: BLE001 — Windows 전용/pywin32 없음 등
+        hwnd, rect = 0, None
+    if not rect:
+        _log.info("자동 찾기 캡처: 게임 창 미발견(hwnd=%s) → 데스크톱 전체로 폴백", hwnd)
+        return None, 0, 0
+    left, top, right, bottom = rect
+    w, h = right - left, bottom - top
+    if w <= 0 or h <= 0:
+        _log.info("자동 찾기 캡처: 게임 창 크기 이상 %s → 데스크톱 전체로 폴백", rect)
+        return None, 0, 0
+    img = _grab_mon({"left": left, "top": top, "width": w, "height": h})
+    if img is None:
+        return None, 0, 0
+    _log.info("자동 찾기 캡처: 게임 창 hwnd=%s rect=%s", hwnd, rect)
+    return img, int(left), int(top)
+
+
+def _save_debug_frame(frame: np.ndarray | None, offset: tuple[int, int]) -> None:
+    """자동 찾기가 실제로 어떤 화면을 떴는지 진단용으로 저장 + mss 모니터 목록 로그.
+
+    '못 찾음'이 재발하면 이 PNG로 '무엇을 캡처했는지'(엉뚱한 모니터·검정 프레임 등)를 바로
+    확인한다. 저장 실패는 조용히 무시(기능엔 영향 없음)."""
+    try:
+        try:
+            mons = _mss().monitors
+        except Exception:  # noqa: BLE001
+            mons = "(unavailable)"
+        _log.info(
+            "자동 찾기 프레임 %s offset=%s monitors=%s",
+            None if frame is None else f"{frame.shape[1]}x{frame.shape[0]}",
+            offset,
+            mons,
+        )
+        if frame is None:
+            return
+        import cv2
+
+        from .. import paths
+
+        d = paths.user_data_dir() / "autofind_debug"
+        d.mkdir(parents=True, exist_ok=True)
+        cv2.imwrite(str(d / "autofind_last.png"), frame)
+    except Exception:  # noqa: BLE001 — 진단용이라 실패해도 무시
+        pass
 
 
 def capture_for_autofind() -> tuple[np.ndarray | None, int, int]:
-    """자동 찾기용 캡처 — 우리 앱 창·오버레이를 잠깐 숨긴 뒤 떠서 게임만 찍는다.
+    """자동 찾기용 캡처 — 우리 앱 창·오버레이를 잠깐 숨긴 뒤 게임만 찍는다.
 
     자동 찾기 버튼은 우리 창에 있어, 그냥 찍으면 앱 창/오버레이가 게임(보스바·상태목록창)을
     가리거나 오버레이가 함께 찍혀 오탐한다. 모든 최상위 위젯을 잠깐 숨기고 조금 기다렸다가
     캡처한 뒤 되돌린다(설정 시 1회성이라 짧은 깜빡임 허용).
+
+    캡처 대상: 등록된 게임 창 사각형(우선) → 없으면 가상 데스크톱 전체. 반환 (이미지, left, top).
     """
     import time
 
@@ -45,7 +134,11 @@ def capture_for_autofind() -> tuple[np.ndarray | None, int, int]:
     time.sleep(0.25)  # 컴포지터가 실제로 지우도록 잠깐 대기
     QApplication.processEvents()
     try:
-        return grab_primary()
+        img, left, top = _grab_game_window()  # 게임 창 우선
+        if img is None:
+            img, left, top = grab_primary()  # 폴백: 가상 데스크톱 전체
+        _save_debug_frame(img, (left, top))
+        return img, left, top
     finally:
         for w in tops:
             w.show()
