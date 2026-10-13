@@ -98,6 +98,64 @@ def _ratio(region: np.ndarray, r0: int, r1: int) -> tuple[float, int]:
     return float(max(0.0, min(1.0, ratio))), hue
 
 
+# ---- 체력바 영역 자동 찾기 (전체 화면에서 위치 검출) ----
+# 체력바는 사용자가 옮길 수 있고 UI 배율에 따라 크기가 변하므로 고정 좌표를 안 쓴다.
+# 색(마젠타 HP / 파랑 MP / 노랑 STA) + 기하(가로로 긴 바가 세로로 근접 스택)로 찾는다.
+# 바 위에 current/max 숫자가 겹쳐 색이 조각나므로, 가로 모폴로지 클로즈로 이어붙인 뒤 찾는다.
+# 보통 꽉 차 있는 MP(파랑)·STA(노랑) 쌍을 앵커로 잡고 HP는 한 피치 위로 유도(HP가 비어도 OK).
+_LOC_HUE = {"hp": (150, 172), "mp": (98, 118), "sta": (16, 34)}  # OpenCV H(0~180)
+_LOC_SAT_MIN = 90
+_LOC_VAL_MIN = 90
+
+
+def _color_bars(
+    hsv: np.ndarray, lo: int, hi: int, min_w: int, close_w: int, max_h: int
+) -> list[tuple[int, int, int, int]]:
+    """주어진 색조대의 '가로로 긴 바' 블롭들(x,y,w,h). 숫자로 끊긴 색은 가로로 이어붙인다."""
+    h, s, v = hsv[:, :, 0], hsv[:, :, 1], hsv[:, :, 2]
+    mask = (h >= lo) & (h <= hi) & (s > _LOC_SAT_MIN) & (v > _LOC_VAL_MIN)
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (close_w, 1))
+    m = cv2.morphologyEx(mask.astype(np.uint8), cv2.MORPH_CLOSE, kernel)
+    n, _, stats, _ = cv2.connectedComponentsWithStats(m, 8)
+    out = []
+    for i in range(1, n):
+        x, y, w, hh, _ = stats[i]
+        if w >= min_w and 2 <= hh <= max_h and w > hh * 1.8:
+            out.append((int(x), int(y), int(w), int(hh)))
+    return out
+
+
+def locate_stat_bars(frame: np.ndarray) -> tuple[int, int, int, int] | None:
+    """전체 화면에서 체력바(생/마/스 3색 스택) 영역을 찾아 (x,y,w,h)로 반환(없으면 None).
+
+    여러 후보가 있으면 화면 **맨 아래** 스택을 고른다(게임 원본 바는 하단 메뉴바에 붙어
+    있다; 앱이 띄운 오버레이는 게임 창 캡처엔 안 잡히지만, 전체 데스크톱 캡처 등에서 섞여도
+    맨 아래가 원본이다). 바가 안 보이면(메뉴바 최소화 등) None → 호출 측은 수동 지정/안내로 폴백.
+    """
+    if frame is None or frame.size == 0 or frame.shape[0] < 20 or frame.shape[1] < 40:
+        return None
+    H, W = frame.shape[:2]
+    min_w = max(12, int(W * 0.012))
+    close_w = max(8, int(W * 0.012))
+    max_h = max(14, int(H * 0.03))
+    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    mps = _color_bars(hsv, *_LOC_HUE["mp"], min_w, close_w, max_h)
+    stas = _color_bars(hsv, *_LOC_HUE["sta"], min_w, close_w, max_h)
+    best: tuple[int, int, int, int] | None = None
+    for bx, by, bw, bh in mps:  # MP(파랑) 위
+        for cx, cy, cw, ch in stas:  # STA(노랑) 아래
+            gap = cy - by
+            if abs(bx - cx) > max(20, int(W * 0.01)) or not (0 < gap < max_h + 20):
+                continue
+            x = min(bx, cx)
+            top = max(0, by - gap)  # HP는 MP 한 피치 위
+            w = max(bx + bw, cx + cw) - x
+            box = (x, top, w, cy + ch - top)
+            if best is None or box[1] > best[1]:  # 더 아래(맨 아래=원본)
+                best = box
+    return best
+
+
 def read_stat_bars(region: np.ndarray) -> list[StatReading]:
     """영역(BGR)에서 위→아래 순으로 최대 3개 바를 읽어 [HP, MP, STA] 순 반환.
 
