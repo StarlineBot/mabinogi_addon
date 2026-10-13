@@ -399,22 +399,32 @@ class DebuffTab(QWidget):
         dy = max(0, ay - dh)
         from .region_highlight import RegionHighlight
 
+        # 미리보기: 디버프 띠 + 보스바를 합친 영역(둘 다 지정됨을 보여줌).
         self._highlight = RegionHighlight()
         self._highlight.flash(
-            ax, dy, w, dh, "자동 찾기 결과",
-            "보스 디버프 영역(보스바 위) — 이 영역으로 지정할까요?", msec=4000,
+            ax, dy, w, (ay + h) - dy, "자동 찾기 결과",
+            "디버프 영역 + 보스 HP바(3차 판독용) — 이 영역으로 지정할까요?", msec=4000,
         )
         ans = QMessageBox.question(
             self,
             "자동 찾기 — 확인",
-            "민트 점선 영역으로 디버프 영역을 지정할까요?\n\n"
+            "민트 점선 영역으로 **디버프 영역 + 보스 HP바 영역**을 지정할까요?\n\n"
+            "(디버프 3차 판독은 보스 HP바 영역도 필요해 함께 지정합니다.)\n"
             "'아니오'를 누르면 기존 설정이 그대로 유지됩니다.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
         if ans != QMessageBox.StandardButton.Yes:
             return
-        self._on_region_selected(ax, dy, w, dh)
+        # 디버프 영역(보스바 위 띠) 저장
+        config.save_capture_region(ax, dy, w, dh, "debuffTracker")
+        self._update_region_hint()
+        self.catalog_changed.emit()
+        # 디버프 3차가 쓰는 보스 HP바 영역도 함께 저장(공유) + 3차 재시작
+        config.save_boss_bar_region(ax, ay, w, h)
+        self._refresh_method_ui()
+        self._emit_gate_mode()
+        self.bar_region_changed.emit()
 
     def _flash_region(self) -> None:
         """저장된 디버프 영역을 화면에 굵은 점선으로 잠깐 표시(아이콘 확인용)."""
