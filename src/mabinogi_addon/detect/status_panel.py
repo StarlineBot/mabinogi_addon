@@ -48,6 +48,7 @@ def find_anchor(
     *,
     threshold: float = _THRESHOLD,
     scales: tuple[int, ...] = _SCALES,
+    diagnostics: dict | None = None,
 ) -> AnchorHit | None:
     """전체 화면에서 앵커 아이콘을 멀티스케일로 찾아 위치를 돌려준다(없으면 None).
 
@@ -60,6 +61,10 @@ def find_anchor(
     # 색 정보가 핵심(흑백은 매칭이 약해짐) → 색은 유지한 채 반해상도로 1차 탐색하고, 그
     # 주변만 원해상도로 정밀 재탐색한다(수백 ms). 결과 좌표계는 원해상도 그대로.
     fh, fw = frame.shape[:2]
+    if diagnostics is not None:
+        diagnostics.update(threshold=threshold, scales=list(scales),
+                           search_region=[0, 0, fw, fh],
+                           transforms=["BGR resize 1/2 INTER_AREA", "local full-resolution TM_CCOEFF_NORMED"])
     small = cv2.resize(frame, (fw // 2, fh // 2), interpolation=cv2.INTER_AREA)
     sh, sw = small.shape[:2]
     coarse = (-1.0, 0, 0, scales[0])  # (score, x, y, size) — 반해상도 좌표
@@ -72,6 +77,9 @@ def find_anchor(
         if mx > coarse[0]:
             coarse = (float(mx), int(ml[0]), int(ml[1]), s)
     if coarse[0] < threshold * 0.8:  # 1차에서 확실히 없음(반해상도라 임계 약간 완화)
+        if diagnostics is not None:
+            diagnostics.update(coarse=list(coarse), coarse_threshold=threshold * 0.8,
+                               rejection="coarse_score_below_threshold")
         return None
     # 2차: 원해상도에서 1차 위치 주변 작은 창만 정밀 매칭.
     cx, cy, coarse_size = coarse[1] * 2, coarse[2] * 2, coarse[3]
@@ -91,7 +99,12 @@ def find_anchor(
         if best is None or mx > best.score:
             best = AnchorHit(float(mx), x0 + int(ml[0]), y0 + int(ml[1]), size)
     if best is None or best.score < threshold:
+        if diagnostics is not None:
+            diagnostics.update(coarse=list(coarse), best=None if best is None else vars(best),
+                               rejection="fine_score_below_threshold")
         return None
+    if diagnostics is not None:
+        diagnostics.update(coarse=list(coarse), best=vars(best), rejection=None)
     return best
 
 
@@ -100,6 +113,7 @@ def locate_status_region(
     template: np.ndarray,
     *,
     threshold: float = _THRESHOLD,
+    diagnostics: dict | None = None,
 ) -> tuple[int, int, int, int] | None:
     """상태목록창 전체 영역 (x,y,w,h)를 앵커 기준으로 유도한다(없으면 None).
 
@@ -108,7 +122,7 @@ def locate_status_region(
     패널 경계(반투명 박스 상단)는 배경을 타서 어려우므로, 넉넉히 잡고 사용자가 미리보기로
     확인/조정하는 전제(베타). 앵커가 없으면 None.
     """
-    hit = find_anchor(frame, template, threshold=threshold)
+    hit = find_anchor(frame, template, threshold=threshold, diagnostics=diagnostics)
     if hit is None:
         return None
     H, W = frame.shape[:2]

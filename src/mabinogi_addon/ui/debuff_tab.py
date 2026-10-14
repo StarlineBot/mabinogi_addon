@@ -379,15 +379,14 @@ class DebuffTab(QWidget):
                 "설정 탭에서 로그인한 뒤 사용하세요.",
             )
             return
-        from ..detect.boss_bar import locate_boss_bar, make_validator
         from .dpi import to_logical
         from .screen_grab import capture_for_autofind
 
-        frame, ox, oy = capture_for_autofind()  # 앱 창 숨기고 캡처
+        from ..autofind_diagnostics import perform_autofind
+        frame, ox, oy, box = perform_autofind("debuff", capture_for_autofind)
         if frame is None:
             QMessageBox.warning(self, "자동 찾기", "화면 캡처에 실패했습니다.")
             return
-        box = locate_boss_bar(frame, make_validator())  # 판독 검증 통과한 박스만
         if box is None:
             QMessageBox.information(
                 self,

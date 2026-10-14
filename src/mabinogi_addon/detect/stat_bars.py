@@ -152,7 +152,7 @@ def _color_bars(
     return out
 
 
-def locate_stat_bars(frame: np.ndarray) -> tuple[int, int, int, int] | None:
+def locate_stat_bars(frame: np.ndarray, *, diagnostics: dict | None = None) -> tuple[int, int, int, int] | None:
     """전체 화면에서 체력바(생/마/스 3색 스택) 영역을 찾아 (x,y,w,h)로 반환(없으면 None).
 
     여러 후보가 있으면 화면 **맨 아래** 스택을 고른다(게임 원본 바는 하단 메뉴바에 붙어
@@ -169,6 +169,13 @@ def locate_stat_bars(frame: np.ndarray) -> tuple[int, int, int, int] | None:
     y_min = int(H * _LOC_BOTTOM_FRAC)  # 하단 구역만(상단 스킬바 아이콘 오검출 방지)
     mps = [b for b in _color_bars(hsv, *_LOC_HUE["mp"], min_w, close_w, max_h) if b[1] >= y_min]
     stas = [b for b in _color_bars(hsv, *_LOC_HUE["sta"], min_w, close_w, max_h) if b[1] >= y_min]
+    if diagnostics is not None:
+        diagnostics.update(transforms=["BGR to HSV", "hue mask", "horizontal morphology close", "connected components"],
+                           search_region=[0, y_min, W, H - y_min],
+                           thresholds={"hue": _LOC_HUE, "saturation_min": _LOC_SAT_MIN,
+                                       "value_min": _LOC_VAL_MIN, "min_width": min_w,
+                                       "close_width": close_w, "max_height": max_h},
+                           mp_candidates=mps, sta_candidates=stas, rejection="no_matching_stack")
     best: tuple[int, int, int, int] | None = None
     for bx, by, bw, bh in mps:  # MP(파랑) 위
         for cx, cy, cw, ch in stas:  # STA(노랑) 아래
@@ -186,7 +193,11 @@ def locate_stat_bars(frame: np.ndarray) -> tuple[int, int, int, int] | None:
     # 검증: 그 박스에서 실제로 3개 바를 읽어야 진짜 체력바(디버프 아이콘 줄 오탐 제거).
     bx, by, bw, bh = best
     if len(read_stat_bars(frame[by : by + bh, bx : bx + bw])) < 3:
+        if diagnostics is not None:
+            diagnostics["rejection"] = "fewer_than_three_readable_bars"
         return None
+    if diagnostics is not None:
+        diagnostics["rejection"] = None
     return best
 
 

@@ -30,7 +30,6 @@ from PySide6.QtWidgets import (
 from .. import catalog as catalog_mod
 from .. import config
 from ..catalog import BuffDef, available_catalog
-from ..detect.status_panel import anchor_template, locate_status_region
 from .dpi import to_logical
 from .screen_grab import capture_for_autofind
 from .widgets import callout, checkbox, hint_label, icon_slot, section_label
@@ -343,12 +342,11 @@ class BuffTab(QWidget):
                 "설정 탭에서 로그인한 뒤 사용하세요.",
             )
             return
-        frame, ox, oy = capture_for_autofind()  # 앱 창 숨기고 캡처
+        from ..autofind_diagnostics import perform_autofind
+        frame, ox, oy, box = perform_autofind("buff", capture_for_autofind)
         if frame is None:
             QMessageBox.warning(self, "자동 찾기", "화면 캡처에 실패했습니다.")
             return
-        tpl = anchor_template()
-        box = locate_status_region(frame, tpl) if tpl is not None else None
         if box is None:
             QMessageBox.information(
                 self,

@@ -9,6 +9,9 @@ from __future__ import annotations
 
 import logging
 from collections import deque
+from contextvars import ContextVar
+
+run_id: ContextVar[str | None] = ContextVar("autofind_run_id", default=None)
 
 _MAX_LINES = 2000  # DEBUG까지 담으므로 넉넉히(최근 맥락 유지)
 _DEFAULT_FMT = "%(asctime)s.%(msecs)03d %(levelname)s %(name)s: %(message)s"
@@ -20,16 +23,19 @@ class RingBufferHandler(logging.Handler):
 
     def __init__(self, capacity: int = _MAX_LINES) -> None:
         super().__init__()
-        self._buf: deque[str] = deque(maxlen=capacity)
+        self._buf: deque[tuple[str | None, str]] = deque(maxlen=capacity)
 
     def emit(self, record: logging.LogRecord) -> None:
         try:
-            self._buf.append(self.format(record))
+            self._buf.append((run_id.get(), self.format(record)))
         except Exception:  # noqa: BLE001 — 로깅 중 예외는 삼킨다(표준 핸들러 관례)
             self.handleError(record)
 
-    def text(self) -> str:
-        return "\n".join(self._buf)
+    def text(self, *, scope: str | None = None, exclude_runs: bool = False) -> str:
+        with self.lock:
+            lines = list(self._buf)
+        return "\n".join(line for tag, line in lines
+                         if (scope is None or tag == scope) and (not exclude_runs or tag is None))
 
 
 _handler: RingBufferHandler | None = None
@@ -48,8 +54,8 @@ def install(
     return _handler
 
 
-def recent_logs(max_chars: int = 150000) -> str:
+def recent_logs(max_chars: int = 150000, *, scope: str | None = None, exclude_runs: bool = False) -> str:
     """보관된 최근 로그(끝에서 max_chars). 미설치면 빈 문자열."""
     if _handler is None:
         return ""
-    return _handler.text()[-max_chars:]
+    return _handler.text(scope=scope, exclude_runs=exclude_runs)[-max_chars:]

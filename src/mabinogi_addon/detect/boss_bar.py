@@ -51,7 +51,7 @@ def _has_name_text(sub: np.ndarray) -> bool:
     return float(glyph.mean()) >= _NAME_COV_MIN
 
 
-def make_validator():
+def make_validator(*, templates=None, diagnostics: dict | None = None):
     """박스가 진짜 보스바인지 검증하는 콜백 — HP% 판독이 되고(오른쪽에 'XXX.XX%'),
     왼쪽에 **이름 글자가 있을 때**만 True. (지난 커밋은 등록된 5개 보스만 식별(identify)해
     통과시켜, 글라스 기브넨 등 미등록 보스에선 자동 찾기가 안 됐다. 디버프 트래커는 모든
@@ -64,9 +64,15 @@ def make_validator():
     def validate(sub: np.ndarray) -> bool:
         if sub is None or sub.size == 0 or sub.shape[1] < 20:
             return False
-        if read_percent(sub) is None:
+        percent = read_percent(sub, templates)
+        if percent is None:
+            if diagnostics is not None:
+                diagnostics.setdefault("validation", []).append({"percent": None, "rejection": "percent_unreadable"})
             return False
-        return _has_name_text(sub)
+        has_name = _has_name_text(sub)
+        if diagnostics is not None:
+            diagnostics.setdefault("validation", []).append({"percent": percent, "rejection": None if has_name else "name_text_missing"})
+        return has_name
 
     return validate
 
@@ -110,7 +116,7 @@ def has_wide_bar_row(frame: np.ndarray, frac: float = 0.70) -> bool:
 
 
 def locate_boss_bar(
-    frame: np.ndarray, validate=None
+    frame: np.ndarray, validate=None, *, diagnostics: dict | None = None
 ) -> tuple[int, int, int, int] | None:
     """전체 화면에서 보스 체력바 영역 (x,y,w,h)를 찾는다(없으면 None).
 
@@ -122,6 +128,14 @@ def locate_boss_bar(
     if frame is None or frame.size == 0 or frame.shape[0] < 40 or frame.shape[1] < 80:
         return None
     H, W = frame.shape[:2]
+    if diagnostics is not None:
+        diagnostics.update(transforms=["BGR to HSV", "saturation mask", "row longest run", "height normalization"],
+                           search_region=[0, int(H * _BOTTOM_FRAC), W, H - int(H * _BOTTOM_FRAC)],
+                           thresholds={"saturation_min": _SAT_MIN, "value_min": _VAL_MIN,
+                                       "min_width_fraction": _MIN_W_FRAC, "fill_row": _FILL_ROW,
+                                       "min_height_fraction": _MIN_H_FRAC, "max_height_fraction": _MAX_H_FRAC,
+                                       "flat_ratio": _FLAT_RATIO, "edge_fraction": _EDGE_FRAC},
+                           candidates=[], rejection="no_geometric_candidate")
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
     sat = (hsv[:, :, 1] > _SAT_MIN) & (hsv[:, :, 2] > _VAL_MIN)
     y_off = int(H * _BOTTOM_FRAC)  # 하단 영역에서만 (바는 메뉴바 위)
@@ -153,12 +167,18 @@ def locate_boss_bar(
         h = bot - top + 1
         w = right - left + 1
         if not (w >= min_run and min_h <= h <= max_h and w > h * _FLAT_RATIO):
+            if diagnostics is not None:
+                diagnostics["candidates"].append({"box": [left, y_off + int(top), w, int(h)], "rejection": "geometry_filter"})
             continue
         cands.append(normalize_box_height((left, y_off + top, w, h), H))
     cands.sort(key=lambda b: (-b[2], b[1]))  # 폭 큰 것 우선, 같으면 위쪽(HP바가 에르그 위)
     if validate is not None:
         for bx, by, bw, bh in cands:
-            if validate(frame[by : by + bh, bx : bx + bw]):
+            accepted = validate(frame[by : by + bh, bx : bx + bw])
+            if diagnostics is not None:
+                diagnostics["candidates"].append({"box": [bx, by, bw, bh], "rejection": None if accepted else "percent_or_name_validation"})
+                diagnostics["rejection"] = None if accepted else "all_candidates_failed_validation"
+            if accepted:
                 return (bx, by, bw, bh)
         return None  # 판독 검증을 통과한 후보가 없음
     return cands[0] if cands else None

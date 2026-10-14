@@ -29,7 +29,7 @@ from PySide6.QtWidgets import (
 )
 
 from .. import config, image_io, paths
-from ..detect.stat_bars import locate_stat_bars, read_stat_bars
+from ..detect.stat_bars import read_stat_bars
 from .dpi import to_logical
 from .help_dialog import tab_header
 from .screen_grab import capture_for_autofind
@@ -499,11 +499,11 @@ class StatBarsTab(QWidget):
 
     def _on_auto_find(self) -> None:
         """체력바를 화면에서 자동 검출 → 민트 점선 미리보기 + 확인 후에만 저장."""
-        frame, ox, oy = capture_for_autofind()  # 앱 창 숨기고 캡처
+        from ..autofind_diagnostics import perform_autofind
+        frame, ox, oy, box = perform_autofind("stat_bars", capture_for_autofind)
         if frame is None:
             QMessageBox.warning(self, "자동 찾기", "화면 캡처에 실패했습니다.")
             return
-        box = locate_stat_bars(frame)
         if box is None:
             QMessageBox.information(
                 self,

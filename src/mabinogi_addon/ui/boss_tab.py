@@ -25,8 +25,6 @@ from PySide6.QtWidgets import (
 
 from .. import config, image_io, paths
 from ..detect.boss_bar import (
-    locate_boss_bar,
-    make_validator,
     normalize_box_height,
 )
 from ..detect.boss_hp_reader import read_percent
@@ -561,11 +559,11 @@ class BossTab(QWidget):
 
     def _on_auto_find(self) -> None:
         """보스 체력바를 화면에서 자동 검출 → 민트 점선 미리보기 + 확인 후에만 저장."""
-        frame, ox, oy = capture_for_autofind()  # 앱 창 숨기고 캡처
+        from ..autofind_diagnostics import perform_autofind
+        frame, ox, oy, box = perform_autofind("boss", capture_for_autofind)
         if frame is None:
             QMessageBox.warning(self, "자동 찾기", "화면 캡처에 실패했습니다.")
             return
-        box = locate_boss_bar(frame, make_validator())  # 판독 검증 통과한 박스만
         if box is None:
             QMessageBox.information(
                 self,

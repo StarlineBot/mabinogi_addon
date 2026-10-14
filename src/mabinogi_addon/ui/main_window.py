@@ -1484,6 +1484,7 @@ class MainWindow(QMainWindow):
             self._memo_timer.stop(),
         ))
         _step("파티 폴링 정지", lambda: self.party_tab.stop_polling(wait_ms=600))
+        _step("진단 UI 정지", self.settings_tab.shutdown)
         # 두 캡처 워커에 먼저 정지 신호를 보내고, '공유 마감시한'으로 대기를 겹친다.
         # (각각 600ms씩 순차로 기다리면 합산 ~1.2초. 둘 다 dxcam grab에 물려도 abandon은
         #  안전하므로, 전체 0.7초 안에서 나눠 기다려 총 종료를 1초 밑으로.)

@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 
 _log = logging.getLogger("mabinogi_addon.discord")
 from pathlib import Path
@@ -23,6 +24,8 @@ from PySide6.QtWidgets import (
     QLabel,
     QMessageBox,
     QPushButton,
+    QStyle,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -178,18 +181,161 @@ class SettingsTab(QWidget):
         self._detect_timer: QTimer | None = None
         self._login_thread: _LoginThread | None = None
         self._export_thread: _ConfigExportThread | None = None
+        self._diag_future = None
+        self._diag_done = None
+        self._diag_closing = False
+        self._diag_minimized = False
+        self._diag_poll = QTimer(self)
+        self._diag_poll.setInterval(100)
+        self._diag_poll.timeout.connect(self._poll_diagnostic)
+        self._diag_countdown = QTimer(self)
+        self._diag_countdown.setSingleShot(True)
+        self._diag_countdown.timeout.connect(self._do_diag_capture)
         v = QVBoxLayout(self)
         v.setContentsMargins(12, 12, 12, 12)
         v.setSpacing(12)
         v.addWidget(self._creator_header())
         v.addWidget(self._inquiry_button())
         v.addWidget(self._diag_button())
+        v.addWidget(self._autofind_diagnostic_group())
         v.addWidget(self._discord_group())
         v.addWidget(self._backup_group())
         v.addWidget(self._general_group())
         v.addWidget(self._theme_group())
         v.addWidget(self._game_group())
         v.addStretch(1)
+
+    def _autofind_diagnostic_group(self) -> QGroupBox:
+        box = QGroupBox("자동 찾기 진단")
+        layout = QVBoxLayout(box)
+        row = QHBoxLayout()
+        self._diag_runs = QComboBox()
+        self._diag_runs.setMinimumWidth(0)
+        self._diag_runs.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        self._diag_runs.currentIndexChanged.connect(self._selected_diagnostic)
+        row.addWidget(self._diag_runs, 1)
+        self._diag_refresh = QToolButton()
+        self._diag_refresh.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_BrowserReload))
+        self._diag_refresh.setToolTip("진단 목록 새로 고침")
+        self._diag_refresh.clicked.connect(self._refresh_diagnostics)
+        row.addWidget(self._diag_refresh)
+        self._diag_zip = QPushButton("ZIP 저장")
+        self._diag_zip.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DialogSaveButton))
+        self._diag_zip.setToolTip("원본 화면이 포함됩니다. 공유 전 개인정보가 보이는지 확인하세요.")
+        self._diag_zip.setEnabled(False)
+        self._diag_zip.clicked.connect(self._export_diagnostic)
+        row.addWidget(self._diag_zip)
+        layout.addLayout(row)
+        self._diag_status = QLabel("기록 없음")
+        self._diag_status.setWordWrap(True)
+        layout.addWidget(self._diag_status)
+        return box
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        if not self._diag_closing and not self._diag_minimized and self._diag_future is None:
+            self._refresh_diagnostics()
+
+    def _diagnostic_job(self, fn, args, done) -> None:
+        from ..autofind_diagnostics import store
+        if self._diag_closing or self._diag_future is not None:
+            raise RuntimeError("진단 작업이 이미 진행 중입니다")
+        self._diag_future = store().io.submit(fn, *args)
+        self._diag_done = done
+        self._diag_btn.setEnabled(False)
+        self._diag_refresh.setEnabled(False)
+        self._diag_zip.setEnabled(False)
+        self._diag_status.setText("처리 중...")
+        self._diag_poll.start()
+
+    def _poll_diagnostic(self) -> None:
+        if self._diag_future is None or not self._diag_future.done():
+            return
+        self._diag_poll.stop()
+        future, done = self._diag_future, self._diag_done
+        self._diag_future = self._diag_done = None
+        self._diag_btn.setEnabled(True)
+        self._diag_refresh.setEnabled(True)
+        self._diag_zip.setEnabled(self._diag_runs.currentData() is not None)
+        self._selected_diagnostic()
+        try:
+            result, error = future.result(), None
+        except Exception as exc:
+            result, error = None, exc
+        done(result, error)
+
+    def _refresh_diagnostics(self) -> None:
+        from ..autofind_diagnostics import store
+        if self._diag_future is None:
+            self._diagnostic_job(store().refresh, (), self._diagnostics_loaded)
+
+    def _diagnostics_loaded(self, records, error) -> None:
+        if error is not None:
+            self._diag_status.setText(f"목록 읽기 실패: {error}")
+            return
+        current = self._diag_runs.currentData()
+        self._diag_runs.blockSignals(True)
+        self._diag_runs.clear()
+        labels = {"buff": "버프", "debuff": "디버프", "boss": "보스", "stat_bars": "체력바",
+                  "tuarim": "투아림", "skillbar": "단축바"}
+        selected = 0
+        for i, record in enumerate(records):
+            meta = record.metadata
+            timestamp = datetime.fromisoformat(meta["started_at"]).astimezone()
+            when = timestamp.strftime("%m-%d %H:%M:%S") + f".{timestamp.microsecond // 1000:03d}"
+            state = "성공" if meta["success"] else "실패"
+            if record.storage_error or meta.get("image_errors") or meta.get("input_error") or meta.get("asset_error"):
+                state += " · 저장 오류"
+            self._diag_runs.addItem(f"{when} · {labels.get(meta['feature'], meta['feature'])} · {state}", record)
+            self._diag_runs.setItemData(i, f"{meta['started_at']}\n{record.id}", Qt.ItemDataRole.ToolTipRole)
+            if current is not None and current.id == record.id:
+                selected = i
+        self._diag_runs.setCurrentIndex(selected)
+        self._diag_runs.blockSignals(False)
+        self._selected_diagnostic()
+
+    def _selected_diagnostic(self) -> None:
+        record = self._diag_runs.currentData()
+        self._diag_zip.setEnabled(record is not None and self._diag_future is None)
+        if record is None:
+            self._diag_status.setText("기록 없음")
+        elif record.storage_error:
+            self._diag_status.setText(f"로컬 저장 실패: {record.storage_error}")
+        elif record.metadata.get("image_errors") or record.metadata.get("input_error") or record.metadata.get("asset_error"):
+            self._diag_status.setText("PNG 누락: " + str(record.metadata.get("input_error") or record.metadata.get("asset_error") or record.metadata["image_errors"]))
+        elif record.metadata["failure_stage"]:
+            stages = {"capture": "화면 캡처", "detector_setup": "검출 준비", "detect": "검출"}
+            stage = record.metadata["failure_stage"]
+            self._diag_status.setText(f"실패 단계: {stages.get(stage, stage)}")
+        else:
+            self._diag_status.setText("검출 성공")
+
+    def _export_diagnostic(self) -> None:
+        from ..autofind_diagnostics import store
+        record = self._diag_runs.currentData()
+        if record is None:
+            return
+        filename, _ = QFileDialog.getSaveFileName(self, "진단 ZIP 저장", f"autofind_{record.id}.zip", "ZIP (*.zip)")
+        if filename:
+            path = Path(filename)
+            if path.suffix.lower() != ".zip":
+                path = path.with_suffix(".zip")
+            self._diagnostic_job(store().export, (record, path), self._diagnostic_exported)
+
+    def _diagnostic_exported(self, path, error) -> None:
+        if error is not None:
+            self._diag_status.setText(f"ZIP 저장 실패: {error}")
+            QMessageBox.warning(self, "진단 ZIP", f"저장하지 못했습니다.\n{error}")
+        else:
+            self._diag_status.setText(f"ZIP 저장 완료: {path}")
+
+    def shutdown(self) -> None:
+        self._diag_closing = True
+        self._diag_countdown.stop()
+        self._diag_poll.stop()
+        if self._diag_future is not None:
+            self._diag_future.cancel()
+        self._diag_future = self._diag_done = None
 
     def _backup_group(self) -> QGroupBox:
         box = QGroupBox("설정 백업")
@@ -461,6 +607,8 @@ class SettingsTab(QWidget):
         from PySide6.QtCore import QTimer
         from PySide6.QtWidgets import QMessageBox
 
+        if self._diag_minimized or self._diag_future is not None:
+            return
         # 바로 캡처하면 앱 창이 게임 영역을 덮어 '어두운 화면'이 찍힌다.
         # 앱을 잠시 최소화하고 몇 초 뒤 캡처해, 그 사이 게임을 맨 앞으로 두게 한다.
         if QMessageBox.question(
@@ -471,36 +619,51 @@ class SettingsTab(QWidget):
             QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel,
         ) != QMessageBox.StandardButton.Ok:
             return
+        self._diag_was_maximized = self.window().isMaximized()
+        self._diag_minimized = True
+        self._diag_btn.setEnabled(False)
         self.window().showMinimized()
-        QTimer.singleShot(5000, self._do_diag_capture)
+        self._diag_countdown.start(5000)
 
     def _do_diag_capture(self) -> None:
-        from PySide6.QtWidgets import QMessageBox
+        from .diag_capture import diagnostic_regions, save_diagnostic
+        try:
+            regions = diagnostic_regions()
+            self._diagnostic_job(save_diagnostic, (regions,), self._diag_captured)
+        except Exception as exc:
+            self._diag_captured(None, exc)
 
-        from .diag_capture import save_diagnostic
-
-        out, saved = save_diagnostic()
+    def _restore_diagnostic_window(self) -> None:
         win = self.window()
-        win.showNormal()
+        if getattr(self, "_diag_was_maximized", False):
+            win.showMaximized()
+        else:
+            win.showNormal()
         win.raise_()
         win.activateWindow()
-        if not saved:
-            QMessageBox.information(
-                self, "진단 스냅샷",
-                "저장할 영역이 없습니다 — 버프/디버프/투아림 영역을 먼저 지정하세요.",
-            )
+        self._diag_minimized = False
+        self._diag_btn.setEnabled(True)
+
+    def _diag_captured(self, result, error) -> None:
+        try:
+            try:
+                message = result.message() if error is None else f"진단 수집에 실패했습니다.\n{type(error).__name__}: {error}"
+            except Exception as exc:
+                error = exc
+                message = f"진단 결과를 읽지 못했습니다.\n{type(exc).__name__}: {exc}"
+        finally:
+            self._restore_diagnostic_window()
+        if error is not None or not result.saved:
+            QMessageBox.warning(self, "진단 스냅샷", message)
             return
         box = QMessageBox(self)
         box.setWindowTitle("진단 스냅샷")
-        box.setText(
-            f"{len(saved)}개 저장했습니다:\n" + "\n".join(saved)
-            + f"\n\n폴더: {out}\n\n이 파일들을 제작자에게 보내 주세요."
-        )
+        box.setText(message)
         open_btn = box.addButton("폴더 열기", QMessageBox.ButtonRole.AcceptRole)
         box.addButton("닫기", QMessageBox.ButtonRole.RejectRole)
         box.exec()
         if box.clickedButton() is open_btn:
-            paths.open_folder(out)
+            paths.open_folder(result.directory)
 
     def _theme_group(self) -> QGroupBox:
         from .theme import THEME_LABELS, THEMES

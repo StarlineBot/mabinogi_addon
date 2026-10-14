@@ -16,6 +16,8 @@ import logging
 
 import numpy as np
 
+from ..autofind_diagnostics import capture_info
+
 _log = logging.getLogger("mabinogi_addon.capture")
 _sct = None
 
@@ -36,7 +38,10 @@ def _grab_mon(mon: dict) -> np.ndarray | None:
         shot = _mss().grab(mon)
         img = np.frombuffer(shot.bgra, np.uint8).reshape(shot.height, shot.width, 4)
         return np.ascontiguousarray(img[:, :, :3])
-    except Exception:  # noqa: BLE001 — 캡처 실패 시 호출 측이 안내
+    except Exception as exc:  # noqa: BLE001 — 캡처 실패 시 호출 측이 안내
+        info = capture_info.get()
+        if info is not None:
+            info.setdefault("errors", []).append(f"mss.grab: {type(exc).__name__}: {exc}")
         return None
 
 
@@ -48,7 +53,10 @@ def grab_primary() -> tuple[np.ndarray | None, int, int]:
     돌려줘, 검출 좌표 + 오프셋 = 트래커가 쓰는 절대 좌표가 된다. 실패 시 (None, 0, 0)."""
     try:
         mon = _mss().monitors[0]  # 0 = 전체(가상) 데스크톱
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
+        info = capture_info.get()
+        if info is not None:
+            info.setdefault("errors", []).append(f"mss.monitors: {type(exc).__name__}: {exc}")
         return None, 0, 0
     img = _grab_mon(mon)
     if img is None:
@@ -66,9 +74,16 @@ def _grab_game_window() -> tuple[np.ndarray | None, int, int]:
         from ..system import dwm_thumbnail
         from ..system.window_watcher import DEFAULT_GAME_TITLES
 
-        hwnd = dwm_thumbnail.find_game_window(config.load_game_exe(), DEFAULT_GAME_TITLES)
+        game_exe = config.load_game_exe()
+        hwnd = dwm_thumbnail.find_game_window(game_exe, DEFAULT_GAME_TITLES)
         rect = dwm_thumbnail.window_rect(hwnd) if hwnd else None
-    except Exception:  # noqa: BLE001 — Windows 전용/pywin32 없음 등
+        info = capture_info.get()
+        if info is not None:
+            info.update(game_exe=game_exe, game_hwnd=int(hwnd or 0), game_window_rect=rect)
+    except Exception as exc:  # noqa: BLE001 — Windows 전용/pywin32 없음 등
+        info = capture_info.get()
+        if info is not None:
+            info.setdefault("errors", []).append(f"game_window: {type(exc).__name__}: {exc}")
         hwnd, rect = 0, None
     if not rect:
         _log.info("자동 찾기 캡처: 게임 창 미발견(hwnd=%s) → 데스크톱 전체로 폴백", hwnd)
@@ -86,10 +101,7 @@ def _grab_game_window() -> tuple[np.ndarray | None, int, int]:
 
 
 def _save_debug_frame(frame: np.ndarray | None, offset: tuple[int, int]) -> None:
-    """자동 찾기가 실제로 어떤 화면을 떴는지 진단용으로 저장 + mss 모니터 목록 로그.
-
-    '못 찾음'이 재발하면 이 PNG로 '무엇을 캡처했는지'(엉뚱한 모니터·검정 프레임 등)를 바로
-    확인한다. 저장 실패는 조용히 무시(기능엔 영향 없음)."""
+    """프레임 정보만 로그로 남긴다. PNG는 실행별 진단 워커가 저장한다."""
     try:
         try:
             mons = _mss().monitors
@@ -101,15 +113,6 @@ def _save_debug_frame(frame: np.ndarray | None, offset: tuple[int, int]) -> None
             offset,
             mons,
         )
-        if frame is None:
-            return
-        import cv2
-
-        from .. import paths
-
-        d = paths.user_data_dir() / "autofind_debug"
-        d.mkdir(parents=True, exist_ok=True)
-        cv2.imwrite(str(d / "autofind_last.png"), frame)
     except Exception:  # noqa: BLE001 — 진단용이라 실패해도 무시
         pass
 
@@ -128,24 +131,43 @@ def capture_for_autofind() -> tuple[np.ndarray | None, int, int]:
     from PySide6.QtWidgets import QApplication
 
     tops = [w for w in QApplication.topLevelWidgets() if w.isVisible()]
-    for w in tops:
-        w.hide()
-    QApplication.processEvents()
-    time.sleep(0.25)  # 컴포지터가 실제로 지우도록 잠깐 대기
-    QApplication.processEvents()
     img = None
     left = top = 0
     used_game = False
     try:
+        for w in tops:
+            w.hide()
+        QApplication.processEvents()
+        time.sleep(0.25)  # 컴포지터가 실제로 지우도록 잠깐 대기
+        QApplication.processEvents()
+        info = capture_info.get()
+        if info is not None:
+            from ..system.display_diagnostics import monitor_info
+            info["backend"] = "mss"
+            try:
+                info.update(monitor_info())
+            except Exception as exc:
+                info["dpi_info_error"] = str(exc)
+            try:
+                info["mss_monitors"] = [dict(m) for m in _mss().monitors]
+            except Exception as exc:
+                info["monitor_error"] = str(exc)
         img, left, top = _grab_game_window()  # 게임 창 우선
         used_game = img is not None
         if img is None:
             img, left, top = grab_primary()  # 폴백: 가상 데스크톱 전체
+        if info is not None:
+            info.update(target="game_window" if used_game else "virtual_desktop",
+                        offset_physical=[left, top],
+                        frame_size=None if img is None else [img.shape[1], img.shape[0]])
         _save_debug_frame(img, (left, top))
     finally:
         for w in tops:
-            w.show()
-            w.raise_()
+            try:
+                w.show()
+                w.raise_()
+            except RuntimeError:  # processEvents 중 이미 닫힌 Qt 객체
+                continue
         QApplication.processEvents()
     # 위젯 복원 뒤에 안내한다(숨긴 상태에서 모달 띄우지 않게). 게임 창을 못 찾아 전체
     # 데스크톱으로 폴백했고 모니터가 여러 개면, 엉뚱한 화면을 찍었을 수 있어 등록을 권한다.
