@@ -66,6 +66,9 @@ class SkillbarTab(QWidget):
         self._chunks_cfg = cfg["chunks"]  # key -> {show,locked,pos,cells}
         self._paused = False
         self._sct = None
+        self._autofind_busy = False
+        self._shutting_down = False
+        self._autofind_highlight = None
         self._overlays: dict[str, ChunkOverlay] = {}
         self._defs = {g.key: g for g in group_defs()}
 
@@ -92,6 +95,10 @@ class SkillbarTab(QWidget):
         row.addWidget(self.anchor_btn)
         self.anchor_label = hint_label("")
         row.addWidget(self.anchor_label, 1)
+        self.auto_find_btn = QPushButton("🧪 자동 찾기")
+        self.auto_find_btn.setToolTip("원본 단축바 전체 격자를 확인해 첫 칸 지정 — Discord 베타")
+        self.auto_find_btn.clicked.connect(self._on_auto_find)
+        row.addWidget(self.auto_find_btn)
         v.addLayout(row)
 
         self.enable = checkbox("단축바 미러 사용")
@@ -133,7 +140,7 @@ class SkillbarTab(QWidget):
         v.addStretch(1)
 
         self._gated = [
-            self.anchor_btn, self.enable, self.scale_spin,
+            self.anchor_btn, self.auto_find_btn, self.enable, self.scale_spin,
             self.lock_all_btn, self.unlock_all_btn, *self._preset_btns,
         ]
         self._update_anchor_label()
@@ -153,6 +160,7 @@ class SkillbarTab(QWidget):
         self._beta_notice.setVisible(not ok)
         for w in self._gated:
             w.setEnabled(ok)
+        self.auto_find_btn.setEnabled(ok and not self._autofind_busy)
 
     # ---- 오버레이 ----
     def _ensure_overlays(self) -> None:
@@ -239,9 +247,15 @@ class SkillbarTab(QWidget):
         self._selector.start()
 
     def _on_anchor_selected(self, x: int, y: int, _w: int, _h: int) -> None:
+        config.save_skillbar({"anchor": {"x": x, "y": y}})
         self._anchor = {"x": x, "y": y}
         self._update_anchor_label()
-        self._save()
+
+    def _on_auto_find(self) -> None:
+        from .autofind_confirm import confirm_autofind
+        confirm_autofind(self, "skillbar", "원본 단축바 12개 그룹",
+                         self._on_anchor_selected,
+                         compatible=lambda box: abs(box[2] - SRC_W) <= 1 and abs(box[3] - SRC_H) <= 1)
 
     def _update_anchor_label(self) -> None:
         if self._anchor:
@@ -412,6 +426,9 @@ class SkillbarTab(QWidget):
         self._apply_visibility()
 
     def shutdown(self) -> None:
+        self._shutting_down = True
+        if self._autofind_highlight is not None:
+            self._autofind_highlight.close()
         self._timer.stop()
         for ov in self._overlays.values():
             ov.close()

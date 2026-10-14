@@ -300,7 +300,8 @@ def store() -> DiagnosticStore:
     return _store
 
 
-def perform_autofind(feature: str, capture, *, detect=None, assets=None, descriptor=None, storage=None):
+def perform_autofind(feature: str, capture, *, detect=None, assets=None, descriptor=None, storage=None,
+                     confirm=None):
     """캡처 1회 + 그 입력으로 검출 + 실행별 진단. 새 검출기도 이 경로를 사용한다."""
     from .autofind_replay import detector_assets, missing_required_assets, run_detector
 
@@ -311,6 +312,8 @@ def perform_autofind(feature: str, capture, *, detect=None, assets=None, descrip
                 "app_version": version.__version__, "platform": platform.platform(),
                 "success": False, "failure_stage": "capture", "capture": {},
                 "detector": deepcopy(descriptor) if descriptor else {"id": feature}, "result": None}
+    if confirm is not None:
+        metadata["confirmation"] = {"status": "not_offered"}
     secrets = []
     try:
         raw = config._read_local_config()
@@ -363,6 +366,12 @@ def perform_autofind(feature: str, capture, *, detect=None, assets=None, descrip
                 metadata["result_global_physical"] = [box[0] + ox, box[1] + oy, box[2], box[3]]
             metadata["success"] = box is not None
             metadata["failure_stage"] = None if box is not None else "detect"
+            if box is not None and confirm is not None:
+                try:
+                    metadata["confirmation"] = confirm(box, ox, oy)
+                except Exception as exc:
+                    metadata["confirmation"] = {"status": "error", "error": f"{type(exc).__name__}: {exc}"}
+                    _log.exception("자동찾기 결과 확인 실패")
         else:
             metadata["error"] = "캡처 백엔드가 이미지를 반환하지 않았습니다"
     except Exception as exc:

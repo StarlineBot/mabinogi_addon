@@ -18,6 +18,9 @@ from . import version
 
 
 def detector_assets(feature: str) -> dict[str, np.ndarray]:
+    if feature in ("tuarim", "skillbar"):
+        from .detect.autofind_anchors import assets
+        return assets(feature)
     if feature == "buff":
         from .detect.status_panel import anchor_template
         template = anchor_template()
@@ -43,6 +46,9 @@ def missing_required_assets(feature: str, assets: dict) -> list[str]:
     if feature == "buff":
         anchor = assets.get("anchor")
         return [] if isinstance(anchor, np.ndarray) and anchor.size else ["anchor"]
+    if feature in ("tuarim", "skillbar"):
+        return [name for name in ("anchor", "mask")
+                if not isinstance(assets.get(name), np.ndarray) or not assets[name].size]
     if feature in ("boss", "debuff"):
         digits = _digit_templates(assets)
         return [f"digit_{digit}" for digit in "0123456789" if digit not in digits]
@@ -72,6 +78,12 @@ def run_detector(feature: str, frame: np.ndarray, assets: dict, trace: dict):
     if feature == "stat_bars":
         from .detect.stat_bars import locate_stat_bars
         return locate_stat_bars(frame, diagnostics=trace)
+    if feature == "tuarim":
+        from .detect.tuarim_anchor import locate_tuarim
+        return locate_tuarim(frame, assets, trace)
+    if feature == "skillbar":
+        from .detect.skillbar_anchor import locate_skillbar
+        return locate_skillbar(frame, assets, trace)
     raise ValueError(f"이 버전에 등록되지 않은 자동찾기 검출기: {feature}")
 
 

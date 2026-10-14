@@ -73,6 +73,9 @@ class TuarimTab(QWidget):
         self._sct = None
         self._tracker = TuarimTracker(self._thresholds)
         self._notifier = None
+        self._autofind_busy = False
+        self._shutting_down = False
+        self._autofind_highlight = None
         # 숫자 템플릿 수집용 상태
         self._last_frame = None  # 마지막으로 캡처한 영역(스냅샷 저장 대상)
         self._last_value: int | None = None  # 마지막 판독값(스냅샷 파일명 태그용)
@@ -112,6 +115,10 @@ class TuarimTab(QWidget):
         self.view_region_btn.setToolTip("잡힌 영역을 화면에 점선으로 잠깐 표시")
         self.view_region_btn.clicked.connect(self._flash_region)
         row.addWidget(self.view_region_btn)
+        self.auto_find_btn = QPushButton("🧪 자동 찾기")
+        self.auto_find_btn.setToolTip("투아림 원형 장식에서 숫자와 % 영역 찾기 — Discord 베타")
+        self.auto_find_btn.clicked.connect(self._on_auto_find)
+        row.addWidget(self.auto_find_btn)
         v.addLayout(row)
 
         # 확인용: 캡처 미리보기 + 현재 값
@@ -175,9 +182,11 @@ class TuarimTab(QWidget):
 
     def _apply_collect_gate(self) -> None:
         """수집(제보) 도구는 디스코드 로그인 사용자에게만 노출."""
+        logged_in = self._logged_in()
         box = getattr(self, "_collect_box", None)
         if box is not None:
-            box.setVisible(self._logged_in())
+            box.setVisible(logged_in)
+        self.auto_find_btn.setEnabled(logged_in and not self._autofind_busy)
 
     def _collect_group(self) -> QGroupBox:
         """숫자 템플릿 수집. 앱이 이미 캡처 중인 영역을 PNG로 저장만 한다.
@@ -252,10 +261,24 @@ class TuarimTab(QWidget):
         self._selector.start()
 
     def _on_selected(self, x: int, y: int, w: int, h: int) -> None:
+        self._apply_region(x, y, w, h)
+        self._flash_region()
+
+    def _apply_region(self, x: int, y: int, w: int, h: int) -> None:
+        config.save_tuarim({"enabled": self.enable.isChecked(),
+                            "box": {"x": x, "y": y, "w": w, "h": h},
+                            "thresholds": self._thresholds, "sounds": self._sounds})
         self._region = {"x": x, "y": y, "w": w, "h": h}
+        self._tracker.reset_observations()
+        self._prev_raw = self._stable_value = self._last_value = None
+        self._last_frame = self._last_saved_frame = None
+        self.preview.clear()
+        self.value_label.setText("현재 값: —")
         self._update_region_label()
-        self._save()
-        self._flash_region()  # 잡힌 영역을 화면에 점선으로 바로 확인
+
+    def _on_auto_find(self) -> None:
+        from .autofind_confirm import confirm_autofind
+        confirm_autofind(self, "tuarim", "투아림 숫자와 % (100%까지 포함)", self._apply_region)
 
     def _flash_region(self) -> None:
         """저장된 투아림 영역을 화면에 굵은 점선으로 잠깐 표시(숫자·% 확인용)."""
@@ -399,4 +422,7 @@ class TuarimTab(QWidget):
             )
 
     def shutdown(self) -> None:
+        self._shutting_down = True
+        if self._autofind_highlight is not None:
+            self._autofind_highlight.close()
         self._timer.stop()

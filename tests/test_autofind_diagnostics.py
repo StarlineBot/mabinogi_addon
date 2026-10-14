@@ -581,11 +581,13 @@ def test_eviction_releases_memory_even_if_ui_holds_record(storage, monkeypatch):
 
 @pytest.mark.parametrize("feature", ["tuarim", "skillbar"])
 def test_new_detector_can_use_common_recording_api(storage, feature):
+    from mabinogi_addon.autofind_replay import detector_assets
     def detector(frame, trace, assets):
         trace.update(search_region=[0, 0, 70, 40], rejection="test-only-no-match")
         return None
     diag.perform_autofind(feature, _capture(np.zeros((40, 70, 3), np.uint8)),
-                          detect=detector, assets={}, descriptor={"id": feature, "transforms": []}, storage=storage)
+                          detect=detector, assets=detector_assets(feature),
+                          descriptor={"id": feature, "transforms": []}, storage=storage)
     storage.io.wait()
     record = storage.recent()[0]
     assert record.metadata["feature"] == feature and record.metadata["failure_stage"] == "detect"

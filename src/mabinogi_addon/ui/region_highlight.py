@@ -51,16 +51,19 @@ class RegionHighlight(QWidget):
         msec: int = 2000,
     ) -> None:
         """전역 좌표 (x, y, w, h) 영역을 점선으로 msec밀리초 동안 표시."""
-        geo = QGuiApplication.primaryScreen().geometry()
+        geo = QGuiApplication.primaryScreen().virtualGeometry()
         self.setGeometry(geo)
         # 저장된 전역 좌표 → 주 화면 로컬 좌표(RegionSelector와 동일한 환산).
         self._rect = QRect(x - geo.x(), y - geo.y(), w, h)
         self._title = title
         self._sub = sub
         self.update()
-        self.showFullScreen()
+        self.show()
         self.raise_()
-        self._timer.start(msec)
+        if msec > 0:
+            self._timer.start(msec)
+        else:
+            self._timer.stop()
 
     def paintEvent(self, _event) -> None:
         if self._rect.isNull():

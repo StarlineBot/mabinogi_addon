@@ -69,3 +69,8 @@ class TuarimTracker:
             else:
                 self._hi[t] = 0
         return crossed
+
+    def reset_observations(self) -> None:
+        """영역 변경 시 이전 영역의 연속 판독 증거만 비우고 주기별 발화는 보존한다."""
+        self._low = 0
+        self._hi = {t: 0 for t in self._thresholds}
