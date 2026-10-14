@@ -84,6 +84,8 @@ HELP_HTML = """
 <p>아이콘이 <b>완전히 같은</b> 버프는 서로 구분할 수 없습니다.
 예) 급소관통(스킬)과 물리공격력증가(물약)는 아이콘이 같아, 함께 떠 있으면
 하나로만 잡힙니다.</p>
+<p><b>🧪 자동 찾기</b>는 <b>게임 창 인식</b>이 돼 있어야 정확합니다(특히 모니터가 여러 개일 때).
+안 돼 있으면 <b>설정 › '게임 창 인식'</b>에서 게임 창을 먼저 등록하세요.</p>
 """
 
 
@@ -359,30 +361,14 @@ class BuffTab(QWidget):
             return
         x, y, w, h = box
         lx, ly, lw, lh = to_logical(x + ox, y + oy, w, h)  # 물리 → 논리
-        from .region_highlight import RegionHighlight
+        # 위 경계만 사용자가 맞추는 오버레이. 좌우(너비)·아래(화면 끝)는 자동값으로 고정하고,
+        # '목록 맨 위'를 찍게 해 상단 고정(즐겨찾기) 버프를 빼도록 유도한다(고정은 꺼져도
+        # 목록에 남아 오탐 위험). 클릭=확정 / Enter=자동값 그대로 / ESC=취소.
+        from .top_edge_selector import TopEdgeSelector
 
-        self._highlight = RegionHighlight()
-        self._highlight.flash(
-            lx, ly, lw, lh,
-            "자동 찾기 결과",
-            "상태목록창(버프) · 넉넉히 잡았어요 — 이 영역으로 지정 후 조정할까요?",
-            msec=4000,
-        )
-        ans = QMessageBox.question(
-            self,
-            "자동 찾기 — 확인",
-            "민트 점선 영역으로 버프 영역을 지정할까요?\n\n"
-            "앵커 기준으로 넉넉히 잡았으니, 지정 후 '버프 영역 지정'으로 미세조정할 수 있어요.\n"
-            "※ 상단에 '고정(즐겨찾기)'해 둔 버프가 있으면, 미세조정으로 그 아래부터 잡으세요.\n"
-            "  (고정 버프는 꺼져도 목록에 남아 오탐할 수 있습니다.)\n"
-            "'아니오'를 누르면 기존 설정이 그대로 유지됩니다.",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No,
-        )
-        self._highlight.close()  # 확인 끝나면 민트 점선 즉시 닫기(4초 타이머에만 의존 안 함)
-        if ans != QMessageBox.StandardButton.Yes:
-            return
-        self._on_region_selected(lx, ly, lw, lh)
+        self._top_sel = TopEdgeSelector(lx, lw, ly)
+        self._top_sel.selected.connect(self._on_region_selected)
+        self._top_sel.start()
 
     def _flash_region(self) -> None:
         """저장된 버프 영역을 화면에 굵은 점선으로 잠깐 표시(아이콘·시간 확인용)."""

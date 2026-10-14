@@ -133,14 +133,43 @@ def capture_for_autofind() -> tuple[np.ndarray | None, int, int]:
     QApplication.processEvents()
     time.sleep(0.25)  # 컴포지터가 실제로 지우도록 잠깐 대기
     QApplication.processEvents()
+    img = None
+    left = top = 0
+    used_game = False
     try:
         img, left, top = _grab_game_window()  # 게임 창 우선
+        used_game = img is not None
         if img is None:
             img, left, top = grab_primary()  # 폴백: 가상 데스크톱 전체
         _save_debug_frame(img, (left, top))
-        return img, left, top
     finally:
         for w in tops:
             w.show()
             w.raise_()
         QApplication.processEvents()
+    # 위젯 복원 뒤에 안내한다(숨긴 상태에서 모달 띄우지 않게). 게임 창을 못 찾아 전체
+    # 데스크톱으로 폴백했고 모니터가 여러 개면, 엉뚱한 화면을 찍었을 수 있어 등록을 권한다.
+    if img is not None and not used_game:
+        _warn_no_game_window()
+    return img, left, top
+
+
+def _warn_no_game_window() -> None:
+    """다중 모니터인데 게임 창을 못 찾아 전체 데스크톱을 캡처한 경우 등록을 안내한다.
+    단일 모니터면 전체=그 화면이라 문제없어 생략."""
+    try:
+        mons = _mss().monitors
+        if len(mons) - 1 < 2:  # [0]=가상 전체 제외 → 실제 모니터 수
+            return
+        from PySide6.QtWidgets import QApplication, QMessageBox
+
+        QMessageBox.information(
+            QApplication.activeWindow(),
+            "자동 찾기 — 게임 창 안내",
+            "게임 창을 인식하지 못해 전체 화면을 캡처했습니다.\n\n"
+            "모니터가 여러 개면 엉뚱한 화면을 잡을 수 있습니다. "
+            "설정 › '게임 창 인식'에서 게임 창을 등록하면, 자동 찾기가 "
+            "게임 화면만 정확히 캡처합니다.",
+        )
+    except Exception:  # noqa: BLE001 — 안내 실패는 무시
+        pass
