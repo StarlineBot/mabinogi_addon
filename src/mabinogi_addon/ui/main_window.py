@@ -661,9 +661,10 @@ class MainWindow(QMainWindow):
         self._tour.start()
 
     def _maybe_prompt_game_window(self) -> None:
-        """게임 창 인식이 안 돼 있으면 시작 시 한 번 선택 팝업을 띄운다(권장).
+        """게임 창 인식이 안 돼 있으면 시작 시 '등록' 팝업을 띄운다(자동 찾기·오버레이에 필수).
 
-        창이 보일 때만(트레이 시작 아님) + 아직 미등록 + '다시 묻지 않기' 안 했을 때.
+        창이 보일 때만(트레이 시작 아님) + Windows + 아직 미등록일 때. 등록되기 전까지는
+        매 실행 안내한다('다시 묻지 않기' 영구 숨김은 없앴다 — 이번 건너뛰기는 팝업의 '나중에').
         """
         import sys
 
@@ -672,9 +673,9 @@ class MainWindow(QMainWindow):
         if sys.platform != "win32":
             return  # 맥/리눅스는 포그라운드 개념이 없어(항상 활성) 불필요
         if config.load_game_exe():
-            return  # 이미 등록됨
-        if config.load_general_flag("suppressGamePrompt", False):
-            return  # 사용자가 '다시 묻지 않기' 선택
+            return  # 이미 등록됨 → 더 안 묻는다
+        # '게임 창 인식'은 자동 찾기·오버레이 정확도에 필요(필수)하므로, 등록되기 전까지는
+        # 매 실행 시 안내한다('다시 묻지 않기' 영구 숨김은 제거). 이번 실행 건너뛰기는 '나중에'.
 
         from .game_window_dialog import GameWindowDialog
 

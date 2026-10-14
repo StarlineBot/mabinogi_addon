@@ -1,8 +1,8 @@
 """시작 시 '게임 창 인식' 안내 팝업.
 
-게임 창 인식이 안 돼 있으면(실행파일 미등록) 앱 시작 때 한 번 띄워, 현재 열린 창
-목록에서 마비노기 창을 바로 고르게 한다. 설정 탭의 '게임 창 인식'은 그대로 유지되며,
-여기서 '나중에'를 눌러도 (권장일 뿐이라) 제목 기반 폴백으로 동작한다.
+게임 창 인식은 자동 찾기·오버레이·포그라운드 판정 정확도에 필요(필수)하다. 미등록이면
+앱 시작 때 띄워 현재 열린 창 목록에서 마비노기 창을 바로 고르게 한다. '나중에'는 이번
+실행만 건너뛰며(영구 숨김 없음), 등록되기 전까진 다음 실행 때 다시 안내한다.
 
 Windows 전용 성격이지만(창 목록이 win32), 다른 OS에서도 생성은 되게 두고 목록이
 비면 안내만 보인다(개발/테스트 안전).
@@ -12,7 +12,6 @@ from __future__ import annotations
 
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import (
-    QCheckBox,
     QComboBox,
     QDialog,
     QHBoxLayout,
@@ -47,14 +46,16 @@ class GameWindowDialog(QDialog):
         v.setContentsMargins(20, 18, 20, 16)
         v.setSpacing(10)
 
-        title = QLabel("놀라셨나요? 아직 게임 화면 인식이 안 돼 있어요! 👀")
-        title.setStyleSheet("font-size:14px; font-weight:700; color:#00D1A7;")
+        title = QLabel("⚠️ 게임 창 인식이 필요합니다")
+        title.setStyleSheet("font-size:14px; font-weight:700; color:#e67e22;")
         title.setWordWrap(True)
         v.addWidget(title)
 
         desc = QLabel(
-            "오버레이가 게임 위에서 제대로 뜨려면, 어떤 창이 '게임'인지 먼저 알려주세요.\n"
-            "아래에서 마비노기 창을 고르면 됩니다. (권장)"
+            "이 앱이 제대로 동작하려면 어떤 창이 '게임'인지 알아야 합니다. "
+            "인식이 안 되면 자동 찾기가 엉뚱한 화면을 잡거나(특히 모니터 여러 개), "
+            "오버레이·포그라운드 판정이 어긋날 수 있습니다.\n"
+            "아래에서 마비노기 창을 골라 '이 창으로 지정'을 눌러 주세요."
         )
         desc.setStyleSheet("color:#c7ccd4; font-size:12px;")
         desc.setWordWrap(True)
@@ -76,9 +77,6 @@ class GameWindowDialog(QDialog):
         row.addStretch(1)
         v.addLayout(row)
 
-        self._dont_ask = QCheckBox("다시 묻지 않기")
-        v.addWidget(self._dont_ask)
-
         btns = QHBoxLayout()
         btns.addStretch(1)
         later = QPushButton("나중에")
@@ -91,8 +89,9 @@ class GameWindowDialog(QDialog):
         v.addLayout(btns)
 
         hint = QLabel(
-            "건너뛰면 창 '제목'으로 대충 판정합니다(같은 이름의 폴더 창 등은 오인 가능).\n"
-            "설정 탭 → '게임 창 인식'에서 나중에 지정할 수도 있어요."
+            "'나중에'를 누르면 이번엔 창 '제목'으로 대충 판정하지만(오인 가능), "
+            "등록 전까진 다음 실행 때 다시 안내합니다.\n"
+            "설정 탭 → '게임 창 인식'에서 언제든 지정할 수 있어요."
         )
         hint.setStyleSheet("color:#8a8f98; font-size:11px;")
         hint.setWordWrap(True)
@@ -148,12 +147,8 @@ class GameWindowDialog(QDialog):
         self._timer.stop()  # 닫히면 폴링 중단
         super().done(result)
 
-    def _save_if_requested(self) -> None:
-        if self._dont_ask.isChecked():
-            config.save_general_flag("suppressGamePrompt", True)
-
     def _on_later(self) -> None:
-        self._save_if_requested()
+        # 이번 실행만 건너뛴다(영구 숨김 없음) — 등록 전까진 다음 실행 때 다시 안내한다.
         self.reject()
 
     def _on_accept(self) -> None:
@@ -161,5 +156,4 @@ class GameWindowDialog(QDialog):
         if exe:
             config.save_game_exe(exe)
             self._watcher.set_game_exe(exe)
-        self._save_if_requested()
         self.accept()
