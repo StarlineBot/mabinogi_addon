@@ -6,7 +6,7 @@ import cv2
 import numpy as np
 import pytest
 
-from mabinogi_addon import config
+from mabinogi_addon import config, image_io
 from mabinogi_addon.detect.tuarim_reader import read_percent
 from mabinogi_addon.tracker import TuarimTracker
 
@@ -21,7 +21,7 @@ def test_read_percent_high_range(value):
     투아림 트래커의 목적이 100% 직전(90%대)에 쿨 초기화 스킬을 터는 것이라,
     90~99 + 89/90 경계 판독이 핵심이다. NCC 레퍼런스 뱅크(refs.npz) 기반.
     """
-    img = cv2.imread(str(_HI / f"{value:02d}.png"))
+    img = image_io.imread(_HI / f"{value:02d}.png")
     assert img is not None
     assert read_percent(img) == value
 
@@ -150,7 +150,7 @@ def test_reader_tracker_fires_at_90_and_95():
     t = TuarimTracker([90, 95])
     fired = []
     for value in [88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99]:
-        img = cv2.imread(str(_HI / f"{value:02d}.png"))
+        img = image_io.imread(_HI / f"{value:02d}.png")
         if img is None:
             continue
         fired += t.observe(read_percent(img))
@@ -267,5 +267,5 @@ def test_single_digit_not_given_spurious_tens(name):
     p = shots / name
     if not p.exists():
         pytest.skip(f"샘플 없음: {name}")
-    got = read_percent(cv2.imread(str(p)))
+    got = read_percent(image_io.imread(p))
     assert got is None or got < 10, f"{name}: 한 자리인데 {got}로 읽힘(가짜 십의 자리)"

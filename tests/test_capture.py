@@ -1,12 +1,12 @@
-import cv2
 import numpy as np
 
+from mabinogi_addon import image_io
 from mabinogi_addon.capture import FileFrameSource, Region
 
 
 def _write_png(path, w, h, color):
     img = np.full((h, w, 3), color, dtype=np.uint8)
-    cv2.imwrite(str(path), img)
+    assert image_io.imwrite(path, img)
 
 
 def test_file_source_yields_frames_in_order(tmp_path):

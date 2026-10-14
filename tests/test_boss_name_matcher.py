@@ -10,6 +10,7 @@ import cv2
 import numpy as np
 import pytest
 
+from mabinogi_addon import image_io
 from mabinogi_addon.detect.boss_name_matcher import identify
 
 _NAME_REGION = (1250, 1290, 1018, 1300)  # y0, y1, x0, x1
@@ -19,7 +20,7 @@ def _region(name: str):
     path = f"tests/data/스크린샷 2026-10-09 {name}.png"
     if not os.path.exists(path):
         pytest.skip("스샷 없음")
-    img = cv2.imread(path, cv2.IMREAD_COLOR)
+    img = image_io.imread(path, cv2.IMREAD_COLOR)
     if img is None or img.shape[0] < 1300:
         pytest.skip("해상도 예상과 다름")
     y0, y1, x0, x1 = _NAME_REGION

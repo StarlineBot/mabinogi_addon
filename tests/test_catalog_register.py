@@ -1,12 +1,12 @@
-import cv2
 import numpy as np
 
+from mabinogi_addon import image_io
 from mabinogi_addon.catalog import delete_buff, load_catalog, register_buff
 
 
 def _png(path, color):
     path.parent.mkdir(parents=True, exist_ok=True)
-    cv2.imwrite(str(path), np.full((16, 16, 3), color, dtype=np.uint8))
+    assert image_io.imwrite(path, np.full((16, 16, 3), color, dtype=np.uint8))
 
 
 def test_register_and_delete(tmp_path):

@@ -9,6 +9,7 @@ import os
 import cv2
 import pytest
 
+from mabinogi_addon import image_io
 from mabinogi_addon.catalog import build_templates, load_catalog
 from mabinogi_addon.tracker import BuffEngine
 
@@ -18,7 +19,7 @@ _SHOT = "tests/data/스크린샷 2026-10-06 224732.png"
 def _region():
     if not os.path.exists(_SHOT):
         pytest.skip("스크린샷 없음")
-    img = cv2.imread(_SHOT, cv2.IMREAD_COLOR)
+    img = image_io.imread(_SHOT, cv2.IMREAD_COLOR)
     if img is None or img.shape[0] < 775:
         pytest.skip("해상도 예상과 다름")
     return img[395:775, 0:380]

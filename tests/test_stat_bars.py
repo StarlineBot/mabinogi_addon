@@ -10,13 +10,14 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+from mabinogi_addon import image_io
 from mabinogi_addon.detect.stat_bars import read_stat_bars
 
 _SHOTS = Path(__file__).parent / "data"
 
 
 def _crop(name, y0, y1, x0, x1):
-    im = cv2.imread(str(_SHOTS / name))
+    im = image_io.imread(_SHOTS / name)
     assert im is not None, name
     h, w = im.shape[:2]
     return im[int(h * y0) : int(h * y1), int(w * x0) : int(w * x1)]

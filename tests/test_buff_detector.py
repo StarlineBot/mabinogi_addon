@@ -6,6 +6,7 @@ import cv2
 import numpy as np
 import pytest
 
+from mabinogi_addon import image_io
 from mabinogi_addon.detect import detect_buffs
 
 # 좌표를 측정한 보정 기준 이미지(2556x1436)로 고정.
@@ -19,8 +20,9 @@ SAMPLE_ROWS = {"buff_top": 24, "buff_mid": 114, "buff_low": 174}
 def _region():
     if not os.path.exists(_SCREENSHOT):
         pytest.skip("tests/data에 스크린샷 PNG가 없음")
-    img = cv2.imread(_SCREENSHOT, cv2.IMREAD_COLOR)
-    if img is None or img.shape[0] < 720:
+    img = image_io.imread(_SCREENSHOT, cv2.IMREAD_COLOR)
+    assert img is not None, f"스샷 로드 실패: {_SCREENSHOT}"
+    if img.shape[0] < 720:
         pytest.skip("스크린샷 해상도가 예상과 다름")
     y0, x0, y1, x1 = REGION
     return img[y0:y1, x0:x1]
@@ -53,7 +55,7 @@ def test_detects_all_registered_in_y_order():
 def test_icon_absent_in_background_region():
     if not os.path.exists(_SCREENSHOT):
         pytest.skip("tests/data에 스크린샷 PNG가 없음")
-    img = cv2.imread(_SCREENSHOT, cv2.IMREAD_COLOR)
+    img = image_io.imread(_SCREENSHOT, cv2.IMREAD_COLOR)
     region = _region()
     template = region[24:54, 8:38]  # 실제 버프 아이콘
 

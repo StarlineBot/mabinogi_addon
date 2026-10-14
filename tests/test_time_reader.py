@@ -5,6 +5,7 @@ import os
 import cv2
 import pytest
 
+from mabinogi_addon import image_io
 from mabinogi_addon.detect.time_reader import read_time
 
 # (스크린샷, y0, y1, 기대 초)  x는 시간 영역을 넉넉히 150~380
@@ -24,7 +25,7 @@ def _strip(name, y0, y1):
     path = f"tests/data/스크린샷 2026-10-06 {name}.png"
     if not os.path.exists(path):
         pytest.skip("스크린샷 없음")
-    img = cv2.imread(path, cv2.IMREAD_COLOR)
+    img = image_io.imread(path, cv2.IMREAD_COLOR)
     return img[y0:y1, 150:380]
 
 
@@ -43,7 +44,7 @@ def test_empty_region_returns_none():
     path = "tests/data/스크린샷 2026-10-06 224732.png"
     if not os.path.exists(path):
         pytest.skip("스크린샷 없음")
-    img = cv2.imread(path, cv2.IMREAD_COLOR)
+    img = image_io.imread(path, cv2.IMREAD_COLOR)
     assert read_time(img[900:950, 700:860]) is None
 
 

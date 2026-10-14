@@ -5,6 +5,7 @@ import os
 import cv2
 import pytest
 
+from mabinogi_addon import image_io
 from mabinogi_addon.catalog import build_templates, load_catalog
 from mabinogi_addon.detect import detect_buffs
 
@@ -30,7 +31,7 @@ def test_catalog_pairs_icon_and_image():
 def test_catalog_detects_present_buff():
     if not os.path.exists(PRESENT_SHOT):
         pytest.skip("스크린샷 없음")
-    img = cv2.imread(PRESENT_SHOT, cv2.IMREAD_COLOR)
+    img = image_io.imread(PRESENT_SHOT, cv2.IMREAD_COLOR)
     y0, y1, x0, x1 = REGION
     region = img[y0:y1, x0:x1]
     templates = build_templates(load_catalog())
@@ -43,7 +44,7 @@ def test_catalog_detects_present_buff():
 def test_catalog_absent_buff_not_detected():
     if not os.path.exists(ABSENT_SHOT):
         pytest.skip("스크린샷 없음")
-    img = cv2.imread(ABSENT_SHOT, cv2.IMREAD_COLOR)
+    img = image_io.imread(ABSENT_SHOT, cv2.IMREAD_COLOR)
     y0, y1, x0, x1 = REGION
     region = img[y0:y1, x0:x1]
     templates = build_templates(load_catalog())

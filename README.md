@@ -24,8 +24,8 @@ uv run mabinogi-addon
   릴리즈 저장소의 `version.json`을 갱신 → 사용자 앱이 자동으로 새 버전을 감지한다.
 - **태그 달기 전에 반드시 `git fetch origin` 먼저.** 로컬 `origin/main`이 오래되면
   엉뚱한(과거) 커밋에 태그가 찍힌다(예전에 한 번 겪음).
-- 윈도우라 `&&`가 안 먹으므로 **줄 단위로** 실행:
-  ```
+- Windows에서도 한 번에 복사할 수 있도록 **세 명령을 하나의 코드 블록**으로 제공한다(`&&` 없이 줄바꿈):
+  ```bash
   git fetch origin
   git tag vX.Y.Z origin/main
   git push origin vX.Y.Z

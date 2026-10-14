@@ -6,6 +6,7 @@ import cv2
 import numpy as np
 import pytest
 
+from mabinogi_addon import image_io
 from mabinogi_addon.detect import match_icon
 
 # 좌표를 측정한 보정 기준 이미지(2556x1436). 여러 스크린샷 중 이 한 장으로 고정.
@@ -17,8 +18,9 @@ FIRST_ICON = (424, 8, 452, 36)  # 환생시 아이콘 (y0, x0, y1, x1)
 def _load():
     if not os.path.exists(_SCREENSHOT):
         pytest.skip("보정 기준 스크린샷이 없음")
-    img = cv2.imread(_SCREENSHOT, cv2.IMREAD_COLOR)
-    if img is None or img.shape[0] < 720:
+    img = image_io.imread(_SCREENSHOT, cv2.IMREAD_COLOR)
+    assert img is not None, f"스샷 로드 실패: {_SCREENSHOT}"
+    if img.shape[0] < 720:
         pytest.skip("스크린샷 해상도가 예상과 다름(좌표 재측정 필요)")
     return img
 

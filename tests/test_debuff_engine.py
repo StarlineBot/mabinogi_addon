@@ -8,6 +8,7 @@
 import cv2
 import numpy as np
 
+from mabinogi_addon import image_io
 import mabinogi_addon.tracker.debuff_engine as de
 from mabinogi_addon.tracker.debuff_engine import (
     _GONE_SHOW_SEC,
@@ -109,7 +110,7 @@ _SHOTS = Path(__file__).parent / "data"
 
 
 def _bottom_region(name, y0=0.80, y1=0.905, x0=0.30, x1=0.72):
-    im = cv2.imread(str(_SHOTS / name))
+    im = image_io.imread(_SHOTS / name)
     assert im is not None, name
     h, w = im.shape[:2]
     return im[int(h * y0) : int(h * y1), int(w * x0) : int(w * x1)]
@@ -248,19 +249,17 @@ def test_no_bar_region_never_warns():
 def _real_debuff_templates():
     from pathlib import Path as _P
 
-    import cv2 as _cv2
-
     d = _P("src/mabinogi_addon/assets/debuff/icon")
     out = {}
     for name in ("방해 카드", "모모"):
-        t = _cv2.imread(str(d / f"{name}.png"))
+        t = image_io.imread(d / f"{name}.png")
         if t is not None:
             out[name] = t
     return out
 
 
 def _user_region(name):
-    im = cv2.imread(str(_SHOTS / name))
+    im = image_io.imread(_SHOTS / name)
     assert im is not None, name
     h, w = im.shape[:2]
     sx, sy = w / 2560.0, h / 1440.0
@@ -292,8 +291,8 @@ def test_background_not_matched_when_boss_absent():
         pytest.skip("디버프 템플릿 없음")
     order = list(tpl)
     # 보스 바가 있는 영역(실게임) — bar_seen 설정용
-    boss = cv2.imread(str(_SHOTS / "스크린샷 2026-10-12 000512.png"))
-    floor = cv2.imread(str(_SHOTS / "스크린샷 2026-10-12 024008.png"))
+    boss = image_io.imread(_SHOTS / "스크린샷 2026-10-12 000512.png")
+    floor = image_io.imread(_SHOTS / "스크린샷 2026-10-12 024008.png")
     assert boss is not None and floor is not None
     boss_reg = boss[1210:1210 + 79, 1017:1017 + 524]
     floor_reg = floor[1210:1210 + 79, 1017:1017 + 524]
@@ -314,8 +313,8 @@ def test_background_not_matched_when_boss_absent():
 
 def test_is_background_real_floor_vs_boss():
     """실게임: 빈 바닥은 '배경'(True), 보스 바가 있으면 '배경 아님'(False)."""
-    boss = cv2.imread(str(_SHOTS / "스크린샷 2026-10-12 000512.png"))
-    floor = cv2.imread(str(_SHOTS / "스크린샷 2026-10-12 024008.png"))
+    boss = image_io.imread(_SHOTS / "스크린샷 2026-10-12 000512.png")
+    floor = image_io.imread(_SHOTS / "스크린샷 2026-10-12 024008.png")
     assert boss is not None and floor is not None
     boss_reg = boss[1210:1210 + 79, 1017:1017 + 524]
     floor_reg = floor[1210:1210 + 79, 1017:1017 + 524]

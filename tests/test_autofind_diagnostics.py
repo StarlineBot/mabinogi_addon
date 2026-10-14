@@ -163,7 +163,7 @@ def test_repeated_runs_do_not_mix_images_or_logs(storage):
     assert len(records) == 8 and len({r.id for r in records}) == 8
     for i, record in enumerate(records):
         assert np.all(image_io.imread(record.directory / "input.png") == i + 20)
-        logs = (record.directory / "logs.txt").read_text()
+        logs = (record.directory / "logs.txt").read_text(encoding="utf-8")
         assert f"unique-execution-{i}" in logs
         assert all(f"unique-execution-{j}" not in logs for j in range(8) if i != j)
 
@@ -385,7 +385,7 @@ def test_export_inside_run_folder_includes_only_manifest(storage):
     _failed(np.zeros((40, 70, 3), np.uint8), storage)
     storage.io.wait()
     record = storage.recent()[0]
-    (record.directory / "config.local.json.bak").write_text('{"token":"never-share-this"}')
+    (record.directory / "config.local.json.bak").write_text('{"token":"never-share-this"}', encoding="utf-8")
     path = storage.export(record, record.directory / "shared.zip")
     with ZipFile(path) as z:
         assert set(z.namelist()) == {"metadata.json", "logs.txt", "input.png"}
@@ -528,7 +528,7 @@ def test_concurrent_runs_have_separate_context_and_images(storage):
     for record in storage.recent():
         frame = image_io.imread(record.directory / "input.png")
         i = int(frame[0, 0, 0]) - 30
-        logs = (record.directory / "logs.txt").read_text()
+        logs = (record.directory / "logs.txt").read_text(encoding="utf-8")
         assert f"parallel-only-{i}" in logs and f"parallel-only-{1 - i}" not in logs
 
 
@@ -538,7 +538,7 @@ def test_restart_ignores_corrupt_records_and_cleans_interrupted_save(storage):
     completed_id = storage.recent()[0].id
     corrupt = storage.root / "corrupt"
     corrupt.mkdir()
-    (corrupt / "metadata.json").write_text('{"run_id":"corrupt", "schema":1}')
+    (corrupt / "metadata.json").write_text('{"run_id":"corrupt", "schema":1}', encoding="utf-8")
     code = '''
 import os, sys
 from pathlib import Path

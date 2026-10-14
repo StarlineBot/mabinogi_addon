@@ -11,9 +11,9 @@
 
 from pathlib import Path
 
-import cv2
 import pytest
 
+from mabinogi_addon import image_io
 from mabinogi_addon.catalog import available_debuff_catalog, build_templates
 from mabinogi_addon.tracker.debuff_engine import DebuffEngine
 
@@ -38,7 +38,7 @@ def test_latched_false_positive_releases(templates, fname: str, icon: str) -> No
     path = _DATA / fname
     if not path.exists():
         pytest.skip(f"샘플 없음: {fname}")
-    img = cv2.imread(str(path))
+    img = image_io.imread(path)
     assert img is not None, f"로드 실패: {fname}"
     x, y, w, h = _REGION
     region = img[y:y + h, x:x + w]

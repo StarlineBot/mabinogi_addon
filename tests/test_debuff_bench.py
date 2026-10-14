@@ -19,6 +19,7 @@ from pathlib import Path
 import cv2
 import pytest
 
+from mabinogi_addon import image_io
 from mabinogi_addon.detect.boss_hp_reader import read_percent, read_percent_cached
 from mabinogi_addon.tracker.debuff_engine import DebuffEngine
 
@@ -54,7 +55,7 @@ def _real_debuff_templates() -> dict:
     d = Path("src/mabinogi_addon/assets/debuff/icon")
     out = {}
     for name in ("방해 카드", "모모"):
-        t = cv2.imread(str(d / f"{name}.png"))
+        t = image_io.imread(d / f"{name}.png")
         if t is not None:
             out[name] = t
     return out
@@ -62,7 +63,7 @@ def _real_debuff_templates() -> dict:
 
 def _region(name: str):
     """앵커 영역(보스 체력바 포함)을 해상도에 맞춰 잘라 반환. 파일 없으면 None."""
-    im = cv2.imread(str(_SHOTS / name))
+    im = image_io.imread(_SHOTS / name)
     if im is None:
         return None
     h, w = im.shape[:2]

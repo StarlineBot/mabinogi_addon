@@ -13,6 +13,7 @@ import cv2
 import numpy as np
 import pytest
 
+from mabinogi_addon import image_io
 from mabinogi_addon.detect.stat_bars import locate_stat_bars, read_stat_bars
 
 
@@ -20,9 +21,8 @@ def _img(name: str):
     path = f"tests/data/{name}"
     if not os.path.exists(path):
         pytest.skip(f"스샷 없음: {name}")
-    img = cv2.imread(path, cv2.IMREAD_COLOR)
-    if img is None:
-        pytest.skip(f"스샷 로드 실패: {name}")
+    img = image_io.imread(path, cv2.IMREAD_COLOR)
+    assert img is not None, f"스샷 로드 실패: {name}"
     return img
 
 

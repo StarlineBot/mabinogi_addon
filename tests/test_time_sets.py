@@ -11,6 +11,7 @@ import os
 import cv2
 import pytest
 
+from mabinogi_addon import image_io
 from mabinogi_addon.detect import score_sets, set_names
 from mabinogi_addon.detect.time_reader import read_time
 
@@ -29,7 +30,7 @@ CASES = [
 def _strip(y0, y1):
     if not os.path.exists(_SHOT):
         pytest.skip("스케일링 샘플 없음")
-    img = cv2.imread(_SHOT, cv2.IMREAD_COLOR)
+    img = image_io.imread(_SHOT, cv2.IMREAD_COLOR)
     return img[y0 - 2 : y1 + 2, 150:]
 
 

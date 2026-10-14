@@ -11,6 +11,7 @@ import cv2
 import numpy as np
 import pytest
 
+from mabinogi_addon import image_io
 from mabinogi_addon.detect.boss_hp_reader import read_percent
 
 # 파일(2026-10-09) → (바 오른쪽 끝 x, 실제 HP 정수%). 바 높이 y 1248~1284.
@@ -37,8 +38,9 @@ def _bar_box(name: str, right: int):
     path = f"tests/data/스크린샷 2026-10-09 {name}.png"
     if not os.path.exists(path):
         pytest.skip("스샷 없음")
-    img = cv2.imread(path, cv2.IMREAD_COLOR)
-    if img is None or img.shape[0] < 1300:
+    img = image_io.imread(path, cv2.IMREAD_COLOR)
+    assert img is not None, f"스샷 로드 실패: {path}"
+    if img.shape[0] < 1300:
         pytest.skip("해상도 예상과 다름")
     return img[_Y0:_Y1, right - _LEFT_PAD:right]
 

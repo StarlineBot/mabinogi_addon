@@ -12,6 +12,7 @@ import os
 import cv2
 import pytest
 
+from mabinogi_addon import image_io
 from mabinogi_addon.detect.status_panel import find_anchor, locate_status_region
 
 _TPL_PATH = "src/mabinogi_addon/assets/buff/icon/premium_battle.png"
@@ -21,14 +22,13 @@ def _img(name: str):
     path = f"tests/data/{name}"
     if not os.path.exists(path):
         pytest.skip(f"스샷 없음: {name}")
-    img = cv2.imread(path, cv2.IMREAD_COLOR)
-    if img is None:
-        pytest.skip(f"스샷 로드 실패: {name}")
+    img = image_io.imread(path, cv2.IMREAD_COLOR)
+    assert img is not None, f"스샷 로드 실패: {name}"
     return img
 
 
 def _template():
-    t = cv2.imread(_TPL_PATH, cv2.IMREAD_COLOR)
+    t = image_io.imread(_TPL_PATH, cv2.IMREAD_COLOR)
     assert t is not None, "앵커 템플릿 로드 실패"
     return t
 

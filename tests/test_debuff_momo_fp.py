@@ -12,9 +12,9 @@
 
 from pathlib import Path
 
-import cv2
 import pytest
 
+from mabinogi_addon import image_io
 from mabinogi_addon.catalog import available_debuff_catalog, build_templates
 from mabinogi_addon.tracker.debuff_engine import DebuffEngine
 
@@ -31,7 +31,7 @@ _CASES = [
 
 
 def _momo_score(engine: DebuffEngine, path: Path) -> float:
-    img = cv2.imread(str(path))
+    img = image_io.imread(path)
     assert img is not None, f"테스트 이미지 없음: {path}"
     y0, y1, x0, x1 = _STRIP
     return engine.best_scores(img[y0:y1, x0:x1])["모모"]

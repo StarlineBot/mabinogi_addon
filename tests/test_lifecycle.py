@@ -96,10 +96,10 @@ from pathlib import Path
 from PySide6.QtWidgets import QApplication
 from mabinogi_addon import config
 _tmp = Path(tempfile.mkdtemp()) / "c.json"
-_tmp.write_text("{}")
-config._read_local_config = lambda path=None: json.loads(_tmp.read_text())
+_tmp.write_text("{}", encoding="utf-8")
+config._read_local_config = lambda path=None: json.loads(_tmp.read_text(encoding="utf-8"))
 config._write_local_config = (
-    lambda data, path=None: _tmp.write_text(json.dumps(data, ensure_ascii=False))
+    lambda data, path=None: _tmp.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
 )
 """
 
