@@ -234,6 +234,42 @@ def test_genuine_crossing_fires_once(monkeypatch):
     assert fired == [70]
 
 
+@pytest.mark.parametrize("uncertain", [None, "alternating"])
+def test_tab_does_not_rearm_from_held_low_value(monkeypatch, uncertain):
+    from mabinogi_addon.tracker.tuarim import REARM_FRAMES
+
+    reads = [89, 89, 90, 90, 91, 95, 95, 96, 98, 98, 98]
+    for _episode in range(2):
+        reads += [5, 5]
+        reads += [None if uncertain is None else (96 if i % 2 else 97)
+                  for i in range(REARM_FRAMES)]
+        reads += [98, 98, 98]
+    tab, fired, n = _make_tab(monkeypatch, reads)
+    tab._tracker = TuarimTracker([90, 95])
+    try:
+        for _ in range(n):
+            tab._tick()
+        assert tab._stable_value == 98
+        assert fired == [90, 95]
+    finally:
+        tab.shutdown()
+
+
+def test_tab_sustained_new_low_reads_rearm_next_cycle(monkeypatch):
+    from mabinogi_addon.tracker.tuarim import REARM_FRAMES
+
+    reads = ([90, 90, 90, 95, 95, 95, 98, 98]
+             + [5] * (REARM_FRAMES + 1) + [98, 98, 98])
+    tab, fired, n = _make_tab(monkeypatch, reads)
+    tab._tracker = TuarimTracker([90, 95])
+    try:
+        for _ in range(n):
+            tab._tick()
+        assert fired == [90, 95, 90, 95]
+    finally:
+        tab.shutdown()
+
+
 def test_tuarim_config_roundtrip(tmp_path):
     p = tmp_path / "config.local.json"
     config.save_tuarim(

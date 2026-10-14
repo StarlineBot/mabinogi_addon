@@ -76,6 +76,34 @@ def test_redetect_hides_again_after_confirm():
     assert _shown(eng.tick(_region_with(tpl["b"]), now=0.6)) == ["a"]  # b 확정 → 숨김
 
 
+def test_short_gap_recovery_keeps_applied_debuff_hidden():
+    tpl = _bases()
+    eng = DebuffEngine(tpl, ["a"])
+    present = _region_with(tpl["a"])
+    for now in (0.0, 0.151, 0.302):
+        eng.tick(present, now=now)
+    for cycle in range(10):
+        start = cycle * 1.0
+        for now in (start + 0.453, start + 0.604):
+            assert _shown(eng.tick(_empty(), now=now)) == []
+        for now in (start + 0.755, start + 0.906, start + 1.057, start + 1.208):
+            assert _shown(eng.tick(present, now=now)) == []
+            assert eng._absent_since["a"] is None
+
+
+def test_new_missing_interval_starts_after_unconfirmed_recovery():
+    tpl = _bases()
+    eng = DebuffEngine(tpl, ["a"])
+    present = _region_with(tpl["a"])
+    eng.tick(present, now=0.0)
+    eng.tick(present, now=0.302)
+    eng.tick(_empty(), now=0.453)
+    eng.tick(present, now=0.755)
+    assert _shown(eng.tick(_empty(), now=0.906)) == []
+    assert _shown(eng.tick(_empty(), now=1.208)) == []
+    assert _shown(eng.tick(_empty(), now=1.359)) == ["a"]
+
+
 def test_order_and_no_duration_no_alert():
     tpl = _bases()
     eng = DebuffEngine(tpl, ["b", "a"])

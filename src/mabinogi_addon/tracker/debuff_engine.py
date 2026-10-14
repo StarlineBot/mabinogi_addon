@@ -412,8 +412,10 @@ class DebuffEngine:
         small = self._scale(region)
         for bid in self._templates:
             # 이력 임계 통과(raw) → 디바운스로 확정(detected). 단발 스파이크는 확정 안 됨.
-            detected = self._confirm_detect(bid, self._detect(small, bid), now)
-            if detected:
+            raw = self._detect(small, bid)
+            detected = self._confirm_detect(bid, raw, now)
+            # 재매칭 대기는 연속 미감지가 아니다. 이미 숨긴 항목의 재표시 대기를 취소한다.
+            if detected or (raw and not self._shown[bid]):
                 self._shown[bid] = False  # 걸림 → 즉시 숨김
                 self._absent_since[bid] = None
             elif not self._shown[bid]:

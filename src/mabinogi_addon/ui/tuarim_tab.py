@@ -77,7 +77,7 @@ class TuarimTab(QWidget):
         self._last_frame = None  # 마지막으로 캡처한 영역(스냅샷 저장 대상)
         self._last_value: int | None = None  # 마지막 판독값(스냅샷 파일명 태그용)
         self._prev_raw: int | None = None  # 직전 원시 판독값(2연속 확정용)
-        self._stable_value: int | None = None  # 확정된 값(알림·표시에 사용)
+        self._stable_value: int | None = None  # 표시용 마지막 확정값(새 관측과 분리)
         self._last_saved_frame = None  # 수집 모드: 직전 '저장한' 영상(변화 감지 기준)
         # 수집 영역 저장 폴더. 소스 실행은 git 추적 폴더(수집→푸시→템플릿 생성),
         # 배포본(exe)은 사용자가 찾아서 보낼 수 있게 %LOCALAPPDATA% 아래 폴더에 저장한다.
@@ -319,9 +319,11 @@ class TuarimTab(QWidget):
         # 안정화: 같은 값이 2번 연속 읽혀야 '확정'으로 채택한다. 게이지는 150ms당
         # 천천히 변하므로, 단발 오탐(한 프레임만 다른 값)은 걸러져 거짓/중복 알림을 막는다.
         value = self._stable_value
+        observation = None
         if raw is not None and raw == self._prev_raw:
             value = raw
             self._stable_value = raw
+            observation = raw
         self._prev_raw = raw
         self.value_label.setText(
             f"현재 값: {value}%" if value is not None else "현재 값: —"
@@ -338,7 +340,8 @@ class TuarimTab(QWidget):
             self._write_shot(frame, raw)
             self._last_saved_frame = frame
         if self.enable.isChecked():
-            for t in self._tracker.observe(value):
+            # 표시용 이전 값은 새 프레임의 발화/재무장 증거로 사용하지 않는다.
+            for t in self._tracker.observe(observation):
                 self._play(t)
 
     def _frame_changed(self, frame, threshold: float = 6.0) -> bool:
