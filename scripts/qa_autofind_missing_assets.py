@@ -117,6 +117,9 @@ def test_absent_required_templates_must_not_claim_replayed(isolated, storage, tm
     storage.io.wait()
     record = storage.recent()[0]
     assert record.metadata['success'] is False
+    assert record.metadata['failure_stage'] == 'detector_setup'
+    expected_missing = ['anchor'] if feature == 'buff' else [f'digit_{d}' for d in '0123456789']
+    assert record.metadata['missing_required_assets'] == expected_missing
     archive = storage.export(record, tmp_path / (feature + '-missing-assets.zip'))
     result = replay(archive)
     print({'feature': feature, 'asset_names': record.metadata.get('asset_names'), 'replayed': result['replayed'],
@@ -124,3 +127,6 @@ def test_absent_required_templates_must_not_claim_replayed(isolated, storage, tm
     assert result['replayed'] is False, (
         'Missing mandatory detector templates are mistaken for a successfully reproduced no-match.'
     )
+    assert result['failure_stage'] == 'detector_setup'
+    assert result['missing_assets'] == expected_missing
+    assert result['error']
