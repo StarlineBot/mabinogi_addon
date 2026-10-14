@@ -222,6 +222,73 @@ def test_replay_does_not_claim_success_with_missing_template(storage, monkeypatc
     assert not result["replayed"] and result["failure_stage"] == "diagnostic_assets"
 
 
+@pytest.mark.parametrize("feature", ["buff", "boss", "debuff"])
+def test_initial_missing_templates_are_setup_failure(storage, monkeypatch, tmp_path, feature):
+    from unittest.mock import Mock
+    from mabinogi_addon import autofind_replay
+    from mabinogi_addon.detect import status_panel, boss_hp_reader
+    if feature == "buff":
+        monkeypatch.setattr(status_panel, "anchor_template", lambda: None)
+    else:
+        monkeypatch.setattr(boss_hp_reader, "_DIGITS", {})
+    detector = Mock()
+    monkeypatch.setattr(autofind_replay, "run_detector", detector)
+    frame = np.full((100, 180, 3), 73, np.uint8)
+    diag.perform_autofind(feature, _capture(frame), storage=storage)
+    detector.assert_not_called()
+    storage.io.wait()
+    record = storage.recent()[0]
+    assert not record.metadata["success"]
+    assert record.metadata["failure_stage"] == "detector_setup"
+    assert record.metadata["missing_required_assets"]
+    assert "필수 검출 템플릿 없음" in record.metadata["error"]
+    np.testing.assert_array_equal(image_io.imread(record.directory / "input.png"), frame)
+    result = replay(storage.export(record, tmp_path / "initially-missing.zip"))
+    assert not result["replayed"] and result["failure_stage"] == "detector_setup"
+    assert result["missing_assets"] == record.metadata["missing_required_assets"]
+    detector.assert_not_called()
+
+
+@pytest.mark.parametrize("feature", ["buff", "boss", "debuff"])
+def test_legacy_empty_asset_list_does_not_bypass_requirements(storage, tmp_path, feature):
+    metadata = {"schema": 1, "run_id": "legacy-empty-assets", "feature": feature,
+                "started_at": "2026-10-14T00:00:00+00:00", "app_version": "0.0.0",
+                "success": False, "failure_stage": "detect", "result": None, "asset_names": []}
+    storage.add(diag.RunRecord(metadata, np.zeros((100, 180, 3), np.uint8)))
+    storage.io.wait()
+    result = replay(storage.export(storage.recent()[0], tmp_path / "legacy.zip"))
+    assert not result["replayed"] and result["failure_stage"] == "detector_setup"
+    assert result["missing_assets"]
+
+
+@pytest.mark.parametrize("feature", ["boss", "debuff"])
+def test_missing_single_digit_template_is_setup_failure(storage, monkeypatch, tmp_path, feature):
+    from mabinogi_addon.detect import boss_hp_reader
+    digits = {k: v for k, v in boss_hp_reader._DIGITS.items() if k != "9"}
+    monkeypatch.setattr(boss_hp_reader, "_DIGITS", digits)
+    diag.perform_autofind(feature, _capture(np.zeros((100, 180, 3), np.uint8)), storage=storage)
+    storage.io.wait()
+    record = storage.recent()[0]
+    assert record.metadata["failure_stage"] == "detector_setup"
+    assert record.metadata["missing_required_assets"] == ["digit_9"]
+    result = replay(storage.export(record, tmp_path / "missing-digit.zip"))
+    assert not result["replayed"] and result["missing_assets"] == ["digit_9"]
+
+
+@pytest.mark.parametrize("feature", ["boss", "debuff"])
+def test_loaded_digit_png_failure_is_not_setup_failure(storage, monkeypatch, tmp_path, feature):
+    write = image_io.imwrite
+    monkeypatch.setattr(image_io, "imwrite", lambda p, f: False if p.name.startswith("digit_9_") else write(p, f))
+    diag.perform_autofind(feature, _capture(np.zeros((100, 180, 3), np.uint8)), storage=storage)
+    storage.io.wait()
+    record = storage.recent()[0]
+    assert record.metadata["failure_stage"] == "detect"
+    assert record.metadata["missing_required_assets"] == []
+    assert record.metadata["image_errors"]
+    result = replay(storage.export(record, tmp_path / "digit-png-failure.zip"))
+    assert not result["replayed"] and result["failure_stage"] == "diagnostic_assets"
+
+
 @pytest.mark.parametrize("feature", ["buff", "boss", "debuff", "stat_bars"])
 def test_failed_zip_alone_replays_all_detectors(storage, tmp_path, monkeypatch, feature):
     frame = np.zeros((100, 180, 3), np.uint8)

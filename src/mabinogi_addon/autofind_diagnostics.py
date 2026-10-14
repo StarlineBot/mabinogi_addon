@@ -302,7 +302,7 @@ def store() -> DiagnosticStore:
 
 def perform_autofind(feature: str, capture, *, detect=None, assets=None, descriptor=None, storage=None):
     """캡처 1회 + 그 입력으로 검출 + 실행별 진단. 새 검출기도 이 경로를 사용한다."""
-    from .autofind_replay import detector_assets, run_detector
+    from .autofind_replay import detector_assets, missing_required_assets, run_detector
 
     logbuffer.install()
     started = datetime.now(timezone.utc)
@@ -349,6 +349,11 @@ def perform_autofind(feature: str, capture, *, detect=None, assets=None, descrip
                 original_assets = {k: v.copy() for k, v in saved_assets.items()}
             except Exception as exc:
                 metadata["asset_error"] = f"템플릿 보관 실패: {type(exc).__name__}: {exc}"
+            missing = missing_required_assets(feature, saved_assets)
+            metadata["missing_required_assets"] = missing
+            if missing:
+                metadata["detector"]["trace"] = {"rejection": "missing_required_templates", "missing_assets": missing}
+                raise ValueError(f"필수 검출 템플릿 없음: {missing}")
             metadata["failure_stage"] = "detect"
             trace = {}
             metadata["detector"]["trace"] = trace
