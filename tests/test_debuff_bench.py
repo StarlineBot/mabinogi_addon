@@ -15,6 +15,8 @@
 from __future__ import annotations
 
 from pathlib import Path
+import io
+import sys
 
 import cv2
 import pytest
@@ -104,6 +106,27 @@ def _settle_false_positives(sample, boss, templates, order, *, gate_mode) -> lis
     return [b for b in order if b not in shown]  # 바닥인데 안 보임 = 걸림 = 오탐
 
 
+def _print_report(lines):
+    # Preserve readable UTF-8 output; escape unsupported characters on legacy consoles.
+    encoding = sys.stdout.encoding or "utf-8"
+    text = "\n".join(lines)
+    print(text.encode(encoding, errors="backslashreplace").decode(encoding))
+
+
+@pytest.mark.parametrize("encoding", ["cp1252", "utf-8"])
+def test_benchmark_report_console_encoding(monkeypatch, encoding):
+    lines = ["모모: 1/8", "보스 인식: 9/9 (100%)"]
+    buffer = io.BytesIO()
+    stream = io.TextIOWrapper(buffer, encoding=encoding, errors="strict", newline="\n")
+    with monkeypatch.context() as patch:
+        patch.setattr(sys, "stdout", stream)
+        _print_report(lines)
+        stream.flush()
+    assert buffer.getvalue() == ("\n".join(lines) + "\n").encode(
+        encoding, errors="backslashreplace"
+    )
+
+
 def test_detection_false_positive_benchmark(capsys):
     """두 방식의 '보스 없음' 오탐 수를 재서 비교하고, 새 방식이 더 나쁘지 않음을 보장.
 
@@ -143,7 +166,7 @@ def test_detection_false_positive_benchmark(capsys):
                      f"(오탐율 {rate:.0%})")
         lines.extend(detail)
     with capsys.disabled():
-        print("\n".join(lines))
+        _print_report(lines)
 
     off = totals["1차 기존(항상 탐지)"]
     # 게이팅(2·3차)이 기존(1차)보다 오탐을 늘리지 않는다(핵심 불변식).
@@ -186,7 +209,7 @@ def test_boss_recognition_recall(capsys):
         if label.startswith("2차"):
             miss_band = miss
     with capsys.disabled():
-        print("\n".join(lines))
+        _print_report(lines)
     miss = miss_band  # 2차 재현율을 회귀 가드로 고정(3차는 수치만 비교, 바 영역 근사라 참고)
     # 보스전에서의 과소인식은 위험하므로 재현율 100%를 요구한다.
     assert not miss, f"보스 과소인식(게이팅이 바닥으로 오판): {miss}"

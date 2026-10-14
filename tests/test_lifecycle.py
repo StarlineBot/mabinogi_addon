@@ -184,7 +184,7 @@ os._exit(99)
 }
 
 
-def _run_scenario(name: str, mutation: str = "") -> subprocess.CompletedProcess:
+def _run_scenario(name: str, mutation: str = "") -> subprocess.CompletedProcess[bytes]:
     script = _SCENARIOS[name]
     if mutation:
         assert script.startswith(_PREAMBLE)
@@ -193,7 +193,6 @@ def _run_scenario(name: str, mutation: str = "") -> subprocess.CompletedProcess:
         [sys.executable, "-c", textwrap.dedent(script)],
         env=dict(os.environ, QT_QPA_PLATFORM="offscreen"),
         capture_output=True,
-        text=True,
         timeout=60,
     )
 
@@ -238,7 +237,7 @@ BuffController.stop = namespace["stop"]
 def test_lifecycle_assertions_detect_broken_behavior(name: str, mutation: str):
     proc = _run_scenario(name, mutation)
     assert proc.returncode != 0, "Injected lifecycle defect passed the scenario"
-    assert "AssertionError" in proc.stderr, proc.stderr[-2000:]
+    assert b"AssertionError" in proc.stderr, proc.stderr[-2000:]
 
 
 def test_delayed_worker_still_enters_blocked_capture():
