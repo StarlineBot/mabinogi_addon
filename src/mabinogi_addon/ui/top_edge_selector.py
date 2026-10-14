@@ -39,6 +39,7 @@ class TopEdgeSelector(QWidget):
         self._w = int(w)
         self._bottom = int(self._geo.height())  # 아래 = 화면 끝(불변)
         self._top = max(0, min(int(initial_top - self._geo.y()), self._bottom - 10))
+        self._auto_top = self._top  # 자동값(Enter로 그대로 확정 — 마우스 이동에 안 흔들림)
 
     def start(self) -> None:
         self.setGeometry(self._geo)
@@ -65,18 +66,30 @@ class TopEdgeSelector(QWidget):
             self.cancelled.emit()
             self.close()
         elif event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
-            self._commit()
+            self._commit_auto()  # Enter = 자동값 그대로(마우스 이동값 아님)
 
     def _commit(self) -> None:
+        """현재 위 경계(마우스로 맞춘 값)로 확정 — 클릭."""
+        self._emit(self._top)
+
+    def _commit_auto(self) -> None:
+        """자동값으로 확정 — Enter(마우스를 움직였어도 자동 찾기 값 그대로)."""
+        self._emit(self._auto_top)
+
+    def _emit(self, top: int) -> None:
         gx = self._x + self._geo.x()
-        gy = self._top + self._geo.y()
-        self.selected.emit(int(gx), int(gy), int(self._w), int(self._bottom - self._top))
+        gy = top + self._geo.y()
+        self.selected.emit(int(gx), int(gy), int(self._w), int(self._bottom - top))
         self.close()
 
     def paintEvent(self, _event) -> None:
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing, False)
-        # 위 경계 '바깥'(제외되는 상단 고정 영역)을 살짝 덮어 '여기는 안 읽음'을 보여준다.
+        # **전체를 아주 옅게 칠한다** — 투명(alpha 0) 픽셀은 Windows에서 클릭·마우스 이동이
+        # 그대로 게임으로 통과해, 오버레이가 입력을 못 받는다(RegionSelector와 같은 처리).
+        # alpha>0이면 전 영역이 히트테스트에 걸려 클릭/드래그가 오버레이로 들어온다.
+        p.fillRect(self.rect(), QColor(0, 0, 0, 12))
+        # 위 경계 '바깥'(제외되는 상단 고정 영역)을 더 덮어 '여기는 안 읽음'을 보여준다.
         if self._top > 0:
             p.fillRect(self._x, 0, self._w, self._top, _DIM)
         # 선택 박스(좌·우 고정, 아래=화면 끝, 위=현재 경계) 점선.

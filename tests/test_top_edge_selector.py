@@ -28,6 +28,21 @@ def test_emits_region_with_bottom_fixed():
     assert out == [(100, 500, 300, 940)], out  # 아래=1440 고정 → h=1440-500
 
 
+def test_enter_commits_auto_not_mouse():
+    """Enter는 '자동값 그대로' — 마우스가 아래로 움직여 _top이 바뀌어도 자동값으로 확정."""
+    QApplication.instance() or QApplication([])
+    w = TopEdgeSelector(x=12, w=304, initial_top=257)
+    w._geo = QRect(0, 0, 2560, 1440)
+    w._bottom = 1440
+    w._x = 12
+    w._auto_top = 257
+    w.set_top_for_preview(900)  # 마우스가 아래로 이동(=_top=900)
+    out = []
+    w.selected.connect(lambda x, y, ww, hh: out.append((x, y, ww, hh)))
+    w._commit_auto()  # Enter
+    assert out == [(12, 257, 304, 1183)], out  # 자동값 257 사용, h=1440-257
+
+
 def test_top_clamped_above_bottom():
     QApplication.instance() or QApplication([])
     w = TopEdgeSelector(x=0, w=100, initial_top=99999)  # 화면 밖으로 줘도

@@ -43,6 +43,11 @@ _IDLE_INTERVAL_MS = 500
 _GONE_CONFIRM_SEC = 3.0
 _GONE_SHOW_SEC = 5.0
 
+# 제때(타임아웃 내) 안 멈춘 워커 보관소 — **모듈 전역**. 컨트롤러가 재시작/교체로 버려져도
+# (예: main_window가 controller=None) 이 전역이 참조를 유지해, 실행 중인 QThread가 파괴돼
+# 프로세스가 abort되는 걸 막는다. 워커가 실제로 끝나면 finished에서 스스로 빠진다.
+_ZOMBIES: set = set()
+
 
 class _TrackWorker(QThread):
     updated = Signal(list)  # list[OverlayEntry]
@@ -156,9 +161,6 @@ class BuffController(QObject):
         self._present_prev: set[str] = set()  # 직전 틱에 떠 있던 버프(사라짐 시작 감지)
         self._absent_since: dict[str, float] = {}  # 사라진 버프 → 사라지기 시작한 시각
         self._gone_show_until: dict[str, float] = {}  # 확정된 버프 → 경고 표시 종료 시각
-        # 제때(타임아웃 내) 안 멈춘 워커 보관소. 실행 중인 QThread가 참조를 잃고 파괴되면
-        # Qt가 프로세스를 abort(앱이 그냥 꺼짐)하므로, 끝날 때까지 참조를 붙들어 둔다.
-        self._zombies: set[_TrackWorker] = set()
 
     def start(
         self, source: FrameSource, engine: BuffEngine, interval_ms: int = 200,
@@ -212,11 +214,11 @@ class BuffController(QObject):
                 pass
 
         def _reap() -> None:
-            self._zombies.discard(w)
+            _ZOMBIES.discard(w)
             self._close_sources(src, bsrc)
 
         w.finished.connect(_reap)
-        self._zombies.add(w)
+        _ZOMBIES.add(w)
         if w.isFinished():  # wait 타임아웃 직후 끝났을 수 있음(연결 전 발화 대비)
             _reap()
 
