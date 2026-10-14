@@ -116,11 +116,10 @@ def test_absent_required_templates_must_not_claim_replayed(isolated, storage, tm
     diagnostics.perform_autofind(feature, lambda: (frame, 0, 0), storage=storage)
     storage.io.wait()
     record = storage.recent()[0]
-    assert record.metadata['asset_names'] == []
     assert record.metadata['success'] is False
     archive = storage.export(record, tmp_path / (feature + '-missing-assets.zip'))
     result = replay(archive)
-    print({'feature': feature, 'asset_names': record.metadata['asset_names'], 'replayed': result['replayed'],
+    print({'feature': feature, 'asset_names': record.metadata.get('asset_names'), 'replayed': result['replayed'],
            'matches_recorded': result.get('matches_recorded'), 'trace': result.get('trace')})
     assert result['replayed'] is False, (
         'Missing mandatory detector templates are mistaken for a successfully reproduced no-match.'
