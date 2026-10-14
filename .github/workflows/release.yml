@@ -24,7 +24,16 @@ jobs:
         run: uv python install 3.12
 
       - name: Sync deps (+ build group)
-        run: uv sync --group build
+        run: uv sync --group build --group dev
+
+      # 테스트 게이트: 실패하면 여기서 잡이 멈춰 '깨진 빌드가 릴리즈로 나가는 것'을 막는다.
+      # 특히 네이티브 abort(실행 중 QThread 파괴 등 rc=134)는 파이썬 예외가 아니라 프로세스를
+      # 통째로 죽여, 사용자 PC에서 '그냥 꺼지는' 증상으로만 보인다 — conftest의 QThread 누수
+      # 가드와 test_lifecycle(서브프로세스 rc==0)로 CI에서 미리 잡는다. 오프스크린 Qt로 실행.
+      - name: Test gate (pytest)
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: uv run pytest -q
 
       - name: Inject bundled secrets
         shell: bash

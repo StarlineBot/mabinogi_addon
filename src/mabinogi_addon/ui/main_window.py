@@ -1515,4 +1515,18 @@ class MainWindow(QMainWindow):
             self._tray.hide()
         _log.info("종료 총 %.0fms", (time.perf_counter() - total) * 1000)
         super().closeEvent(event)
-        QApplication.quit()  # 트레이/오버레이가 남아도 프로세스 확실히 종료
+        # 남은 워커(파티/캡처 좀비)가 grab·HTTP에 막혀 아직 돌고 있으면, 인터프리터 teardown에서
+        # Qt가 '실행 중인 QThread'를 파괴하며 프로세스를 abort(rc=134)시킨다. 상태 저장·정지
+        # 신호는 위에서 끝냈으니, 로그만 flush하고 **정리 없이 즉시 종료**해 abort를 원천 차단한다.
+        # (설정 가져오기는 재실행에 의존하지 않음 — 안전.) 단 테스트 중엔 프로세스를 죽이면
+        # 안 되므로 종전처럼 quit만 한다.
+        import sys as _sys
+
+        if "pytest" in _sys.modules:
+            QApplication.quit()
+            return
+        import logging as _logging
+        import os as _os
+
+        _logging.shutdown()
+        _os._exit(0)

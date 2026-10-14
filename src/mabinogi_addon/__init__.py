@@ -48,6 +48,13 @@ def main() -> None:
         fileh.setLevel(logging.DEBUG)
         fileh.setFormatter(file_fmt)
         root.addHandler(fileh)
+        # 네이티브 abort·접근 위반(파이썬 예외가 아닌 크래시 — 예: 실행 중 QThread 파괴)은
+        # 로깅으로 안 남는다. faulthandler가 그 순간 '모든 스레드 스택'을 crash.log에 덤프해
+        # 원인을 남긴다. 파일은 append로 열어 두고 닫지 않는다(크래시 시점에 써야 하므로).
+        import faulthandler
+
+        _crash_fp = open(log_dir / "crash.log", "a", buffering=1, encoding="utf-8")  # noqa: SIM115
+        faulthandler.enable(_crash_fp, all_threads=True)
     except Exception:  # noqa: BLE001 — 파일 로그 실패해도 앱은 돈다
         logging.getLogger("mabinogi_addon").info("파일 로그 설정 실패(무시)", exc_info=True)
 

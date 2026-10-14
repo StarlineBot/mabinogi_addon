@@ -67,3 +67,8 @@ def test_memo_lock_survives_boot_clobber(monkeypatch) -> None:
     # 부팅 후엔 사용자 변경이 정상 저장된다.
     w.memo_tab.lock_btn.click()  # 해제
     assert json.loads(tmp.read_text())["memo"]["locked"] is False
+
+    # start()가 띄운 워커(파티 폴링)를 정리한다 — 안 하면 프로세스 종료 시 '실행 중 QThread
+    # 파괴'로 abort(rc=134). _force_quit로 트레이 최소화 조기 반환을 건너뛰고 완전 종료 경로로.
+    w._force_quit = True
+    w.close()
