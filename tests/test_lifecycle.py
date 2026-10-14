@@ -1,21 +1,7 @@
-"""프로세스 수명주기 회귀 — 네이티브 abort(rc=134)가 나지 않는지 '서브프로세스'로 검증.
+"""프로세스 생존뿐 아니라 워커 복구·캡처 해제·객체 수거도 검증한다.
 
-실행 중인 QThread가 파괴되면 Qt가 프로세스를 통째로 abort시킨다(파이썬 예외가 아님).
-인프로세스 테스트로는 pytest까지 같이 죽어 못 잡으므로, 각 시나리오를 **별도 파이썬
-프로세스**로 돌려 returncode==0(정상 종료)인지 본다.
-
-핵심: abort는 '컨트롤러를 버린 순간'이 아니라 **막힌 grab이 끝나 워커가 실제로 종료되는
-순간**(=실행 중 QThread 파괴 시점)에 난다. 그래서 각 시나리오는 그 시점을 지나도록
-막힌 시간보다 길게 이벤트 루프를 돌린 뒤 종료한다 — 그래야 '없어진 버그'가 아니라 '있는
-버그'를 잡는다(구버전 buff_controller로 바꾸면 이 테스트들이 abort로 실패함을 확인했다).
-
-시나리오:
-1. 재시작 크래시 회귀 — grab이 막혀 stop()이 타임아웃된 워커를 좀비로 보관한 뒤
-   컨트롤러를 버리고 gc해도, 막힌 grab이 끝날 때 abort하지 않는다(_ZOMBIES가 참조 유지,
-   finished에서 안전 수거).
-2. 틱 예외 생존 — engine.tick이 매번 예외를 던져도 워커가 틱을 격리해 앱이 산다.
-3. 종료 abort 없음 — 막힌 캡처 워커가 있는 상태로 MainWindow.closeEvent를 실제로 타도
-   종료코드 0(정지 신호 후 os._exit로 teardown abort 차단).
+네이티브 QThread abort를 pytest와 격리하기 위해 별도 프로세스에서 실행한다.
+캡처 진입은 Event로 동기화하고, 종료 후에는 Qt 이벤트와 GC를 처리한다.
 """
 
 from __future__ import annotations
@@ -27,24 +13,37 @@ import textwrap
 
 import pytest
 
-# 서브프로세스 스크립트 공통 머리말: Qt + 가짜 의존(오버레이·엔진·소스)으로 BuffController를
-# 최소 구성한다. 가짜는 BuffController/_TrackWorker가 실제로 부르는 메서드만 둔다.
+
 _PREAMBLE = """
-import os, time, gc, numpy as np
+import os, time, gc, threading, weakref, numpy as np
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PySide6.QtWidgets import QApplication
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QCoreApplication, QEvent, QEventLoop, QTimer
+from mabinogi_addon.ui import buff_controller as bc
 from mabinogi_addon.ui.buff_controller import BuffController
 
 app = QApplication([])
 
-def run_loop(ms):  # 이벤트 루프를 ms만큼 돌린다(막힌 워커가 끝나 파괴되는 시점을 지나도록).
-    QTimer.singleShot(ms, app.quit)
-    app.exec()
+def run_loop(ms):
+    loop = QEventLoop()
+    QTimer.singleShot(ms, loop.quit)
+    loop.exec()
+
+def wait_until(predicate, timeout_ms=3000):
+    deadline = time.monotonic() + timeout_ms / 1000
+    while not predicate():
+        assert time.monotonic() < deadline, "Condition was not reached"
+        run_loop(5)
+
+def collect_objects():
+    app.processEvents()
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    gc.collect()
 
 class FakeOverlay:
     locked = True
-    def set_items(self, *a): pass
+    def __init__(self): self.updates = 0
+    def set_items(self, *a): self.updates += 1
     def show(self): pass
     def hide(self): pass
 
@@ -59,27 +58,42 @@ class OkEngine:
     def tick(self, region, now, foreground=True, bar_region=None): return _R()
 
 class ThrowEngine:
-    def tick(self, *a, **k): raise RuntimeError("boom in tick")
+    def __init__(self, recover=False):
+        self.calls = 0
+        self.recover = recover
+    def tick(self, *a, **k):
+        self.calls += 1
+        if not self.recover or self.calls == 1:
+            raise RuntimeError("boom in tick")
+        return _R()
 
-class BlockSrc:  # grab이 1초 막힘(포커스 아웃 중 dxcam 블록 흉내)
-    def grab(self): time.sleep(1.0); return None
-    def close(self): pass
-
-class FrameSrc:  # grab이 바로 프레임을 돌려줌
+class FrameSrc:
+    def __init__(self): self.closes = 0
     def grab(self): return np.zeros((20, 20, 3), np.uint8)
-    def close(self): pass
+    def close(self): self.closes += 1
 
-def make_ctrl():
-    return BuffController(FakeOverlay(), {}, {}, watcher=FakeWatcher())
+class BlockSrc(FrameSrc):
+    def __init__(self):
+        super().__init__()
+        self.entered = threading.Event()
+        self.release = threading.Event()
+        self.returned = threading.Event()
+    def grab(self):
+        self.entered.set()
+        assert self.release.wait(10), "Capture was not released"
+        self.returned.set()
+        return None
+
+def make_ctrl(overlay=None):
+    return BuffController(overlay or FakeOverlay(), {}, {}, watcher=FakeWatcher())
 """
 
-# MainWindow(실제 종료 경로)용 머리말: config를 임시 파일로 돌려 devdata를 안 건드린다.
+
 _MW_PREAMBLE = """
-import os, time, json, tempfile
+import os, json, tempfile
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from pathlib import Path
 from PySide6.QtWidgets import QApplication
-
 from mabinogi_addon import config
 _tmp = Path(tempfile.mkdtemp()) / "c.json"
 _tmp.write_text("{}")
@@ -87,84 +101,156 @@ config._read_local_config = lambda path=None: json.loads(_tmp.read_text())
 config._write_local_config = (
     lambda data, path=None: _tmp.write_text(json.dumps(data, ensure_ascii=False))
 )
-
-app = QApplication([])
-from mabinogi_addon.ui.main_window import MainWindow
-from mabinogi_addon.ui.buff_controller import BuffController
-
-class _R:
-    entries = []; alerts = []; alerts2 = []
-
-class OkEngine:
-    def tick(self, region, now, foreground=True, bar_region=None): return _R()
-
-class BlockSrc:
-    def grab(self): time.sleep(3); return None
-    def close(self): pass
-
-class FakeOverlay:
-    locked = True
-    def set_items(self, *a): pass
-    def show(self): pass
-    def hide(self): pass
-    def close(self): pass
-
-class FakeWatcher:
-    def is_game_active(self): return True
-    def is_self_active(self): return False
 """
 
+
 _SCENARIOS = {
-    # 1) 재시작 크래시: 막힌 워커 → stop 타임아웃 → 좀비 → 컨트롤러 버리고 gc → 막힌 grab이
-    #    끝나 워커가 파괴되는 시점(약 1초)을 지나도록 루프를 돌려도 abort 없어야.
     "restart_drop": _PREAMBLE + """
-ctrl = make_ctrl()
-ctrl.start(BlockSrc(), OkEngine(), interval_ms=10)
-time.sleep(0.3)                 # 워커가 grab(1초)에 진입
-ctrl.stop(timeout_ms=300)       # 타임아웃 → 좀비로 보관
-ctrl = None; gc.collect()       # 컨트롤러 버림(구버전은 여기 워커가 컨트롤러에만 매달림)
-run_loop(1800)                  # 막힌 grab 종료(≈1초) 시점 통과 — 실행 중 QThread 파괴 순간
-print("SURVIVED")
-os._exit(0)
+refs = []
+for _ in range(30):
+    source, bar_source, engine = BlockSrc(), FrameSrc(), OkEngine()
+    ctrl = make_ctrl()
+    ctrl.start(source, engine, interval_ms=10, bar_source=bar_source)
+    assert source.entered.wait(5), "Capture was not entered"
+    worker = ctrl._worker
+    refs.append(tuple(weakref.ref(obj) for obj in (ctrl, worker, engine)))
+    ctrl.stop(timeout_ms=1)
+    assert worker.isRunning(), "Stop did not time out"
+    assert worker in bc._ZOMBIES
+    del ctrl, worker, engine
+    collect_objects()
+    source.release.set()
+    wait_until(lambda: source.closes and bar_source.closes and not bc._ZOMBIES)
+    assert source.returned.is_set()
+    assert source.closes == bar_source.closes == 1
+    del source, bar_source
+    collect_objects()
+run_loop(50)
+collect_objects()
+assert not bc._ZOMBIES
+assert all(ref() is None for row in refs for ref in row), "Finished objects retained"
 """,
-    # 2) 틱 예외 생존: tick이 매 틱 예외를 던져도 워커가 격리 → 앱 생존.
     "tick_throws": _PREAMBLE + """
+source, engine = FrameSrc(), ThrowEngine()
 ctrl = make_ctrl()
-ctrl.start(FrameSrc(), ThrowEngine(), interval_ms=5)
-time.sleep(0.4)                 # 수십 틱 — 전부 예외(격리 안 되면 여기서 abort)
-ctrl.stop(timeout_ms=1000)      # grab이 빨라 깨끗이 정지
-print("SURVIVED")
-os._exit(0)
+ctrl.start(source, engine, interval_ms=5)
+try:
+    wait_until(lambda: engine.calls >= 5)
+    assert ctrl._worker.isRunning(), "Worker stopped after tick exception"
+finally:
+    ctrl.stop(timeout_ms=1000)
+assert source.closes == 1
 """,
-    # 3) 종료 abort 없음: 막힌 캡처 워커가 있는 채로 '실제 MainWindow.closeEvent'를 탄다.
-    #    closeEvent가 정지 신호 후 os._exit(0) → rc 0. stop()이 막힌 워커를 파괴하면 그 전에
-    #    abort(rc=134). closeEvent에 도달만 하고 os._exit를 못 부르면 rc 99(드러나게).
-    "shutdown_blocked": _MW_PREAMBLE + """
+    "tick_recovers": _PREAMBLE + """
+source, engine, overlay = FrameSrc(), ThrowEngine(recover=True), FakeOverlay()
+ctrl = make_ctrl(overlay)
+ctrl.start(source, engine, interval_ms=5)
+try:
+    wait_until(lambda: engine.calls >= 5 and overlay.updates >= 4)
+    assert ctrl._worker.isRunning()
+finally:
+    ctrl.stop(timeout_ms=1000)
+assert source.closes == 1
+""",
+    "reap_race": _PREAMBLE + """
+source, bar_source = BlockSrc(), FrameSrc()
+ctrl = make_ctrl()
+ctrl.start(source, OkEngine(), bar_source=bar_source)
+assert source.entered.wait(5)
+worker = ctrl._worker
+original_wait = worker.wait
+def finish_before_check():
+    source.release.set()
+    assert original_wait(2000)
+    return True
+worker.isFinished = finish_before_check
+ctrl.stop(timeout_ms=1)
+run_loop(50)  # queued finished delivery follows the synchronous isFinished fallback
+assert source.closes == bar_source.closes == 1, "Sources closed more than once"
+assert not bc._ZOMBIES
+""",
+    "shutdown_blocked": _MW_PREAMBLE + _PREAMBLE + """
+from mabinogi_addon.ui.main_window import MainWindow
 w = MainWindow()
-# 막힌 캡처 워커를 가진 컨트롤러를 주입 — closeEvent가 이걸 request_stop/stop 하며 탄다.
-# (컨트롤러는 실제 소스가 있어야 생겨 평소 lazy 생성이므로, 종료 경로 검증용으로 직접 주입.)
-ctrl = BuffController(FakeOverlay(), {}, {}, watcher=FakeWatcher())
-ctrl.start(BlockSrc(), OkEngine(), interval_ms=10)
+source = BlockSrc()
+ctrl = make_ctrl()
+ctrl.start(source, OkEngine(), interval_ms=10)
 w.buff_controller = ctrl
-time.sleep(0.3)                 # 워커가 grab(막힘)에 진입
-w._force_quit = True            # 트레이 최소화 건너뛰고 완전 종료 경로로
-w.close()                       # closeEvent → 정지(막힌 워커→좀비) → os._exit(0)
-os._exit(99)                    # 여기 오면 os._exit(0)가 안 불린 것 — 실패로 표시
+assert source.entered.wait(5), "Capture was not entered"
+w._force_quit = True
+w.close()  # actual closeEvent must reach its final process exit
+os._exit(99)
 """,
 }
 
 
-@pytest.mark.parametrize("name", list(_SCENARIOS))
-def test_no_native_abort(name: str):
-    env = dict(os.environ, QT_QPA_PLATFORM="offscreen")
-    proc = subprocess.run(
-        [sys.executable, "-c", textwrap.dedent(_SCENARIOS[name])],
-        env=env,
+def _run_scenario(name: str, mutation: str = "") -> subprocess.CompletedProcess:
+    script = _SCENARIOS[name]
+    if mutation:
+        assert script.startswith(_PREAMBLE)
+        script = _PREAMBLE + mutation + script[len(_PREAMBLE):]
+    return subprocess.run(
+        [sys.executable, "-c", textwrap.dedent(script)],
+        env=dict(os.environ, QT_QPA_PLATFORM="offscreen"),
         capture_output=True,
         text=True,
         timeout=60,
     )
-    # rc 0 = 정상. rc -6/134 = abort(QThread 파괴 등). rc 99 = 종료 경로 미도달. 스택은 stderr.
+
+
+@pytest.mark.parametrize("name", list(_SCENARIOS))
+def test_no_native_abort(name: str):
+    proc = _run_scenario(name)
     assert proc.returncode == 0, (
-        f"[{name}] returncode={proc.returncode}\n--- stderr ---\n{proc.stderr[-2000:]}"
+        f"[{name}] returncode={proc.returncode}\n{proc.stderr[-2000:]}"
     )
+
+
+@pytest.mark.parametrize("name, mutation", [
+    ("tick_throws", "bc._TrackWorker.run = lambda self: self._tick_once(True)\n"),
+    ("restart_drop", "BuffController._close_sources = lambda *a: None\n"),
+    ("restart_drop", """
+class KeepFinished(set):
+    def discard(self, value): pass
+bc._ZOMBIES = KeepFinished()
+"""),
+    ("restart_drop", """
+import ast, inspect, textwrap
+tree = ast.parse(textwrap.dedent(inspect.getsource(BuffController.stop)))
+class KeepFinishedConnection(ast.NodeTransformer):
+    def visit_Try(self, node):
+        if any(
+            isinstance(call, ast.Call)
+            and isinstance(call.func, ast.Attribute)
+            and call.func.attr == "disconnect"
+            and any(isinstance(arg, ast.Name) and arg.id == "_reap" for arg in call.args)
+            for statement in node.body for call in ast.walk(statement)
+        ):
+            return []
+        return self.generic_visit(node)
+tree = KeepFinishedConnection().visit(tree)
+ast.fix_missing_locations(tree)
+namespace = {}
+exec(compile(tree, "<qa-retain-finished-connection>", "exec"), bc.__dict__, namespace)
+BuffController.stop = namespace["stop"]
+"""),
+], ids=["tick_guard_removed", "source_close_omitted", "zombie_retained", "connection_retained"])
+def test_lifecycle_assertions_detect_broken_behavior(name: str, mutation: str):
+    proc = _run_scenario(name, mutation)
+    assert proc.returncode != 0, "Injected lifecycle defect passed the scenario"
+    assert "AssertionError" in proc.stderr, proc.stderr[-2000:]
+
+
+def test_delayed_worker_still_enters_blocked_capture():
+    proc = _run_scenario("restart_drop", """
+original_run = bc._TrackWorker.run
+delayed_once = False
+def delayed_run(self):
+    global delayed_once
+    if not delayed_once:
+        delayed_once = True
+        time.sleep(0.45)
+    original_run(self)
+bc._TrackWorker.run = delayed_run
+""")
+    assert proc.returncode == 0, proc.stderr[-2000:]

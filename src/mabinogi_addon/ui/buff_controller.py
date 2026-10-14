@@ -214,6 +214,12 @@ class BuffController(QObject):
                 pass
 
         def _reap() -> None:
+            if w not in _ZOMBIES:
+                return  # isFinished 폴백과 대기 중인 finished 콜백이 겹칠 수 있음
+            try:
+                w.finished.disconnect(_reap)
+            except (RuntimeError, TypeError):
+                pass
             _ZOMBIES.discard(w)
             self._close_sources(src, bsrc)
 
