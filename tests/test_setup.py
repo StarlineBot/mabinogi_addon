@@ -621,7 +621,7 @@ def test_capture_cancellation_restores_other_widgets_but_respects_tray_hide(flow
 
 @pytest.mark.parametrize("skip", [False, True])
 @pytest.mark.parametrize("logged_in", [False, True])
-def test_settings_replay_opens_setup_guide_without_changing_configuration(app, settings, monkeypatch, skip, logged_in):
+def test_settings_replay_opens_app_tour_without_changing_configuration(app, settings, monkeypatch, skip, logged_in):
     from mabinogi_addon import version
     from mabinogi_addon.ui.main_window import MainWindow
 
@@ -642,10 +642,11 @@ def test_settings_replay_opens_setup_guide_without_changing_configuration(app, s
         window.settings_tab.replay_tour.emit()
         tour = window._tour
         assert tour.isVisible()
-        assert window._pages.currentWidget() is window.setup_page
-        assert tour._steps[0].target is window.setup_page.selection
-        assert len(tour._steps) == (6 if logged_in else 5)
-        assert (window.setup_page.run_btn in [step.target for step in tour._steps]) is logged_in
+        assert window._pages.currentWidget() is window._tabs
+        assert tour._steps[0].target is window._tracker_tabs.tabBar()
+        assert len(tour._steps) == 7
+        assert all(step.target not in (window.setup_page.run_btn, window.buff_tab.add_btn)
+                   for step in tour._steps)
         tour._finish()
         assert config._read_local_config() == before
         assert not window.setup_page.busy
@@ -676,6 +677,433 @@ def test_settings_replay_does_not_interrupt_work_or_shutdown(app, settings, monk
         assert window._pages.currentWidget() is window._tabs
         assert getattr(window, "_tour", None) is None
         assert config._read_local_config() == before
+    finally:
+        window._force_quit = True
+        window.close()
+
+
+@pytest.mark.parametrize("stage, expected", [(1, ["boss", "buff", "debuff"]),
+                                            (2, ["skillbar", "tuarim", "stat_bars"])])
+def test_guide_scopes_existing_flow_and_preserves_check_order(flow, stage, expected):
+    from mabinogi_addon.ui.setup_guide import SetupGuide, GUIDE_KEYS
+
+    run, home, applied, detections, _, storage, _ = flow
+    for key in ("skillbar", "boss", "buff", "tuarim", "debuff", "stat_bars"):
+        state.save_enabled(key, True)
+        state.remember_order(key, True)
+    page = SetupGuide()
+    page.reset()
+    page.stage = stage
+    page.refresh()
+    try:
+        run.run(page=page, feature_keys=page.feature_keys, on_result=page.record_result)
+        assert [key for key, _ in detections] == expected
+        assert [item[0] for item in applied] == expected
+        assert page.outcomes == {key: "등록됨" for key in expected}
+        assert all(state.missing(key) for key in GUIDE_KEYS if key not in expected)
+        assert not run.running and not page.busy and run.page is home
+        assert page.run_btn.text() == "자동설정"
+        storage.io.wait()
+        assert {r.metadata["feature"] for r in storage.recent()} == set(expected)
+        run.run(page=page, feature_keys=page.feature_keys, on_result=page.record_result)
+        assert len(detections) == 3
+    finally:
+        page.close()
+
+
+def test_guide_shared_boss_dependency_does_not_enable_boss_feature(flow):
+    from mabinogi_addon.ui.setup_guide import SetupGuide
+
+    run, _, applied, detections, _, _, _ = flow
+    update("statBars", enabled=True, bars={"hp": {"alert": {"on": True}}})
+    update("tuarim", enabled=True)
+    page = SetupGuide()
+    page.stage = 2
+    page.refresh()
+    try:
+        assert "보스 체력바" in page.status_text("stat_bars", config._read_local_config())
+        run.run(page=page, feature_keys=page.feature_keys, on_result=page.record_result)
+        assert [key for key, _ in detections] == ["tuarim", "stat_bars", "boss"]
+        assert not state.enabled("boss")
+        assert not state.missing("stat_bars")
+        assert [item[0] for item in applied] == ["tuarim", "stat_bars", "boss"]
+    finally:
+        page.close()
+
+
+def test_empty_current_stage_does_not_search_other_selected_stage(flow):
+    from mabinogi_addon.ui.setup_guide import SetupGuide
+
+    run, _, applied, detections, captures, _, _ = flow
+    state.save_enabled("tuarim", True)
+    page = SetupGuide()
+    page.stage = 1
+    before = deepcopy(config._read_local_config())
+    try:
+        run.run(page=page, feature_keys=page.feature_keys, on_result=page.record_result)
+        assert page.progress.text() == "사용할 기능을 선택하세요."
+        assert not applied and not detections and not captures and not page.outcomes
+        assert config._read_local_config() == before
+        page.move(1)
+        assert page.stage == 2
+    finally:
+        page.close()
+
+
+@pytest.mark.parametrize("failure", ["capture", "decline", "save", "detect"])
+def test_guide_failures_keep_unattempted_separate_and_allow_next_stage(flow, monkeypatch, failure):
+    from mabinogi_addon.ui.setup_guide import SetupGuide
+
+    run, _, applied, detections, _, _, _ = flow
+    for key in ("buff", "debuff", "boss"):
+        state.save_enabled(key, True)
+    page = SetupGuide()
+    page.stage = 1
+    page.refresh()
+    if failure == "capture":
+        monkeypatch.setattr(setup_flow, "capture_for_autofind", lambda **kw: (None, 0, 0))
+    elif failure == "decline":
+        monkeypatch.setattr(run, "_approve", lambda key, box: None if key == "buff" else box)
+    elif failure == "save":
+        original = run.apply
+        def apply(key, box):
+            if key == "buff":
+                raise PermissionError("read-only")
+            original(key, box)
+        run.apply = apply
+    else:
+        original = setup_flow.run_detector
+        monkeypatch.setattr(setup_flow, "run_detector", lambda key, *args:
+                            None if key == "buff" else original(key, *args))
+    try:
+        run.run(page=page, feature_keys=page.feature_keys, on_result=page.record_result)
+        expected = {"capture": "게임창 미발견 또는 캡처 실패", "decline": "등록하지 않음",
+                    "save": "저장 실패", "detect": "찾지 못함"}[failure]
+        assert page.outcomes["buff"] == expected
+        assert state.missing("buff")
+        if failure == "capture":
+            assert page.outcomes == {"buff": expected}
+            assert page.status_text("debuff", config._read_local_config()) == "아직 시도하지 않음"
+            assert not applied and not detections
+        else:
+            assert [item[0] for item in applied] == ["debuff", "boss"]
+        assert not page.busy
+        page.move(1)
+        assert page.stage == 2
+    finally:
+        page.close()
+
+
+def test_guide_defer_back_and_reset_never_change_saved_configuration(app, settings):
+    from mabinogi_addon.ui.setup_guide import SetupGuide
+
+    update("buffTracker", enabled=True, captureRegion=BOX)
+    update("bossPattern", enabled=True)
+    before = deepcopy(config._read_local_config())
+    page = SetupGuide()
+    try:
+        page.reset()
+        page.move(1)
+        page.defer()
+        assert page.stage == 2
+        page.move(-1)
+        assert page.status_text("buff", before) == "등록됨"
+        assert page.status_text("boss", before) == "나중에 설정"
+        page.reset()
+        assert page.stage == 0 and not page.outcomes
+        assert config._read_local_config() == before
+        assert set(page.checks) == {"buff", "debuff", "boss", "tuarim", "stat_bars", "skillbar"}
+    finally:
+        page.close()
+
+
+@pytest.mark.parametrize("logged_in", [False, True])
+def test_guide_actual_window_navigation_and_resume_preserve_step(app, settings, monkeypatch, logged_in):
+    from mabinogi_addon.ui.main_window import MainWindow
+
+    monkeypatch.setattr(QApplication, "quit", lambda: None)
+    monkeypatch.setattr(config, "load_discord_user", lambda: {"id": "test", "name": "테스트"} if logged_in else None)
+    window = MainWindow()
+    window.show()
+    try:
+        window.settings_tab.reopen_guide.emit()
+        guide = window.setup_guide
+        if not logged_in:
+            before = deepcopy(config._read_local_config())
+            window._resume_guide()
+            window._run_guide_setup()
+            assert window._pages.currentWidget() is not guide
+            assert not guide.active and window.settings_tab.guide_btn.isHidden()
+            assert window._setup_flow.future is None
+            assert config._read_local_config() == before
+            return
+        assert window._pages.currentWidget() is guide and guide.stage == 0
+        guide.move(1)
+        guide.feature_changed.emit("buff", True)
+        assert window.buff_tab.enable.isChecked() and guide.checks["buff"].isChecked()
+        window._open_setup_feature("buff")
+        assert window._guide_return_btn.isVisible()
+        update("buffTracker", captureRegion=BOX)
+        window._guide_return_btn.click()
+        assert window._pages.currentWidget() is guide and guide.stage == 1
+        assert guide.statuses["buff"].text() == "등록됨"
+        assert not config.load_general_flag("firstUseGuideShown")
+        window._open_setup_login()
+        assert window._tabs.currentIndex() == 3
+        assert window.settings_tab._login_thread is None
+        window._guide_return_btn.click()
+        assert guide.stage == 1
+        guide.move(1)
+        guide.feature_changed.emit("stat_bars", True)
+        assert state.enabled("stat_bars") is logged_in
+        for stage in range(3):
+            guide.stage = stage
+            guide.refresh()
+            app.processEvents()
+            app.processEvents()
+            assert window.width() == 790 and window.height() == 800
+            assert window.rect().contains(guide.next_btn.mapTo(window, guide.next_btn.rect().bottomRight()))
+            assert guide.selection.horizontalScrollBar().maximum() == 0
+            for key in guide.feature_keys:
+                assert guide.checks[key].width() >= guide.checks[key].sizeHint().width()
+            assert not hasattr(guide, "beta_note") and not hasattr(guide, "login_btn")
+            for key, widget in guide.feature_rows.items():
+                assert widget.isVisible() is (key in guide.feature_keys and stage in (1, 2))
+            assert not any(button.text() == "개별 설정" for button in guide.findChildren(type(guide.next_btn)))
+            assert not any(button.text() in ("앱으로 이동", "Discord 로그인")
+                           for button in guide.findChildren(type(guide.next_btn)))
+            assert not hasattr(guide, "result")
+        guide.next_btn.click()
+        assert config.load_general_flag("firstUseGuideShown")
+        assert not guide.active and not window._guide_return_btn.isVisible()
+        assert window._tour.isVisible()
+        assert "4 / 4" in window._tour._step_lbl.text()
+        window._tour._finish()
+        window.settings_tab.reopen_setup.emit()
+        assert window._pages.currentWidget() is window.setup_page
+        window.settings_tab.reopen_guide.emit()
+        assert guide.stage == 0
+        assert state.missing("buff") == []
+    finally:
+        window._force_quit = True
+        window.close()
+
+
+@pytest.mark.parametrize("skip, seen, expected", [(False, False, True), (True, False, False), (False, True, False)])
+@pytest.mark.parametrize("logged_in", [False, True])
+def test_first_show_guide_respects_beta_skip_and_previous_tour(app, settings, monkeypatch, skip, seen, expected, logged_in):
+    from mabinogi_addon.ui.main_window import MainWindow
+
+    monkeypatch.setattr(QApplication, "quit", lambda: None)
+    monkeypatch.setattr(MainWindow, "_maybe_show_release_notes", lambda self: None)
+    monkeypatch.setattr(MainWindow, "_maybe_check_update", lambda *a, **k: None)
+    monkeypatch.setattr(config, "load_discord_user", lambda: {"id": "test", "name": "QA"} if logged_in else None)
+    update("general", skipSetup=skip, tourShown=seen)
+    window = MainWindow()
+    window._booting = False
+    try:
+        window.show()
+        app.processEvents()
+        assert (window._pages.currentWidget() is window.setup_guide) is (expected and logged_in)
+        assert getattr(window, "_tour", None) is None
+        assert not config.load_general_flag("firstUseGuideShown")
+    finally:
+        window._force_quit = True
+        window.close()
+
+
+def test_guide_cancel_and_reentrant_navigation_do_not_escape_busy_stage(flow, monkeypatch):
+    from mabinogi_addon.ui.setup_guide import SetupGuide
+
+    run, _, applied, detections, _, _, _ = flow
+    update("tuarim", enabled=True)
+    update("skillbar", enabled=True)
+    page = SetupGuide()
+    page.stage = 2
+    def approve(key, box):
+        assert run.running and page.busy
+        page.move(1)
+        page.defer()
+        assert page.stage == 2
+        run.run(feature_keys=("skillbar",))
+        run.cancel()
+        return box
+    monkeypatch.setattr(run, "_approve", approve)
+    try:
+        run.run(page=page, feature_keys=page.feature_keys, on_result=page.record_result)
+        assert not applied
+        assert [key for key, _ in detections] == ["tuarim"]
+        assert page.outcomes == {"tuarim": "중단됨"}
+        assert page.status_text("skillbar", config._read_local_config()) == "아직 시도하지 않음"
+        assert not page.busy and not run.running
+        monkeypatch.setattr(run, "_approve", lambda key, box: box)
+        run.run(page=page, feature_keys=page.feature_keys, on_result=page.record_result)
+        assert page.outcomes == {"tuarim": "등록됨", "skillbar": "등록됨"}
+    finally:
+        page.close()
+
+
+def test_guide_shutdown_discards_worker_result_and_does_not_touch_page_after_shutdown(flow, monkeypatch):
+    from mabinogi_addon.ui.setup_guide import SetupGuide
+
+    run, _, applied, _, _, _, _ = flow
+    page = SetupGuide()
+    page.stage = 2
+    state.save_enabled("tuarim", True)
+    ready = Event()
+    def slow(*args):
+        ready.set()
+        time.sleep(0.1)
+        return (10, 20, 42, 16)
+    monkeypatch.setattr(setup_flow, "run_detector", slow)
+    QTimer.singleShot(20, run.shutdown)
+    try:
+        run.run(page=page, feature_keys=page.feature_keys, on_result=page.record_result)
+        assert ready.is_set() and not applied and not page.outcomes
+        assert not run.running and run.closed
+        run.future.result(timeout=2)
+        assert state.missing("tuarim")
+    finally:
+        page.close()
+
+
+def test_guide_restart_restores_saved_areas_but_starts_at_first_step(app, settings, monkeypatch):
+    from mabinogi_addon.ui.main_window import MainWindow
+
+    monkeypatch.setattr(QApplication, "quit", lambda: None)
+    first = MainWindow()
+    first._open_guide()
+    first.setup_guide.move(1)
+    first.setup_guide.feature_changed.emit("buff", True)
+    first._apply_setup_region("buff", tuple(BOX[k] for k in ("x", "y", "w", "h")))
+    first.setup_guide.move(1)
+    first._force_quit = True
+    first.close()
+    second = MainWindow()
+    try:
+        second._open_guide()
+        assert second.setup_guide.stage == 0
+        assert config.load_capture_region() == BOX
+        assert second.setup_guide.checks["buff"].isChecked()
+        assert not config.load_general_flag("firstUseGuideShown")
+        assert second.setup_guide.status_text("buff", config._read_local_config()) == "등록됨"
+    finally:
+        second._force_quit = True
+        second.close()
+
+
+def test_app_tour_can_be_replaced_and_closed_without_marking_registration(app, settings, monkeypatch):
+    from mabinogi_addon.ui.main_window import MainWindow
+
+    monkeypatch.setattr(QApplication, "quit", lambda: None)
+    window = MainWindow()
+    try:
+        window.show()
+        window._run_tour()
+        first = window._tour
+        window._open_guide()
+        assert not first.isVisible() and window._tour is None
+        assert not config.load_general_flag("tourShown")
+        window._run_tour()
+        tour = window._tour
+        for index in range(len(tour._steps)):
+            tour._i = index
+            tour._show_step()
+            app.processEvents()
+            step = tour._steps[index]
+            if step.target is not None:
+                assert step.target.isVisible()
+                assert tour._target_rect() is not None
+        tour._finish()
+        app.processEvents()
+        assert window._tour is None and config.load_general_flag("tourShown")
+        assert not config.load_general_flag("firstUseGuideShown")
+        window._run_tour()
+        last = window._tour
+        window._force_quit = True
+        window.close()
+        assert not last.isVisible() and window._tour is None
+    finally:
+        window._force_quit = True
+        window.close()
+
+
+def test_guide_approval_updates_current_stage_before_next_candidate(flow, monkeypatch):
+    from mabinogi_addon.ui.setup_guide import SetupGuide
+
+    run, _, applied, _, _, _, _ = flow
+    for key in ("buff", "debuff"):
+        state.save_enabled(key, True)
+    page = SetupGuide()
+    page.stage = 1
+    page.refresh()
+    seen = []
+    def approve(key, box):
+        if key == "debuff":
+            assert page.statuses["buff"].text() == "등록됨"
+            assert page.feature_rows["buff"].parentWidget() is page.groups["done"][1].widget()
+            assert page.feature_rows["debuff"].parentWidget() is page.groups["need"][1].widget()
+        seen.append(key)
+        return box
+    monkeypatch.setattr(run, "_approve", approve)
+    try:
+        run.run(page=page, feature_keys=page.feature_keys, on_result=page.record_result)
+        assert seen == ["buff", "debuff"]
+        assert len(applied) == 2 and page.stage == 1
+        assert page.statuses["debuff"].text() == "등록됨"
+    finally:
+        page.close()
+
+
+@pytest.mark.parametrize("during_tour", [False, True])
+def test_logout_hides_beta_guide_and_closes_guide_tour(app, settings, monkeypatch, during_tour):
+    from mabinogi_addon.ui.main_window import MainWindow
+
+    monkeypatch.setattr(QApplication, "quit", lambda: None)
+    window = MainWindow()
+    try:
+        window.show()
+        window._open_guide()
+        if during_tour:
+            window.setup_guide.stage = 2
+            window.setup_guide.move(1)
+            assert window._tour.isVisible()
+        before = deepcopy(config._read_local_config())
+        monkeypatch.setattr(config, "load_discord_user", lambda: None)
+        window.settings_tab.login_changed.emit()
+        assert not window.setup_guide.active
+        assert not window.setup_guide.isVisible()
+        assert window.settings_tab.guide_btn.isHidden()
+        assert not window._guide_return_btn.isVisible()
+        assert getattr(window, "_tour", None) is None
+        window._open_guide()
+        window._resume_guide()
+        assert window._pages.currentWidget() is not window.setup_guide
+        assert config._read_local_config() == before
+    finally:
+        window._force_quit = True
+        window.close()
+
+
+def test_logout_during_guide_approval_cancels_without_saving(flow, monkeypatch):
+    from mabinogi_addon.ui.main_window import MainWindow
+
+    monkeypatch.setattr(QApplication, "quit", lambda: None)
+    window = MainWindow()
+    try:
+        window._open_guide()
+        window.setup_guide.move(1)
+        window.setup_guide.feature_changed.emit("buff", True)
+        def approve(key, box):
+            monkeypatch.setattr(config, "load_discord_user", lambda: None)
+            window.settings_tab.login_changed.emit()
+            return box
+        monkeypatch.setattr(window._setup_flow, "_approve", approve)
+        window._run_guide_setup()
+        assert window._setup_flow.cancelled and not window._setup_flow.running
+        assert state.missing("buff") == ["buff"]
+        assert not window.setup_guide.active
+        assert window._pages.currentWidget() is not window.setup_guide
     finally:
         window._force_quit = True
         window.close()

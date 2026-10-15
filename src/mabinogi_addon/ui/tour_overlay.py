@@ -43,6 +43,7 @@ class TourOverlay(QWidget):
         host: QWidget,
         steps: list[TourStep],
         on_done: Callable[[], None] | None = None,
+        section_title: str = "",
     ) -> None:
         # 화면 전체를 덮는 최상위 반투명 창. (자식 위젯이면 앱 영역만 덮고, 게다가
         # Clear로 뚫은 구멍이 부모를 비추지 못해 '검게' 나온다.) 최상위라야 바탕화면까지
@@ -56,6 +57,7 @@ class TourOverlay(QWidget):
         self._host = host
         self._steps = steps
         self._on_done = on_done
+        self._section_title = section_title
         self._i = 0
         self._screen_geo = QRect()
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
@@ -146,7 +148,8 @@ class TourOverlay(QWidget):
             step.before()
         self._title.setText(step.title)
         self._body.setText(step.body)
-        self._step_lbl.setText(f"{self._i + 1} / {len(self._steps)}")
+        self._step_lbl.setText((self._section_title + " · " if self._section_title else "")
+                               + f"{self._i + 1} / {len(self._steps)}")
         self._prev.setVisible(self._i > 0)
         self._next.setText("시작하기" if self._i == len(self._steps) - 1 else "다음")
         self._card.adjustSize()
@@ -198,8 +201,13 @@ class TourOverlay(QWidget):
             self._show_step()
 
     def _finish(self) -> None:
+        try:
+            if self._on_done is not None:
+                self._on_done()
+        finally:
+            self.dismiss()
+
+    def dismiss(self) -> None:
         self._host.removeEventFilter(self)
-        if self._on_done is not None:
-            self._on_done()
         self.close()
         self.deleteLater()

@@ -317,11 +317,19 @@ class MainWindow(QMainWindow):
         cv.addWidget(self._build_status_bar())  # 탭 위 최상단: 재생/일시정지 + 상태
         from .setup_page import SetupPage
         from .setup_flow import SetupFlow
+        from .setup_guide import SetupGuide
         self.setup_page = SetupPage()
+        self.setup_guide = SetupGuide()
         self._pages = QStackedWidget()
         self._pages.addWidget(tabs)
         self._pages.addWidget(self.setup_page)
+        self._pages.addWidget(self.setup_guide)
         cv.addWidget(self._pages)
+        self._guide_return_btn = QPushButton("첫 사용 안내로 돌아가기")
+        self._guide_return_btn.clicked.connect(self._resume_guide)
+        self._guide_return_btn.hide()
+        cv.addWidget(self._guide_return_btn)
+        self._pages.currentChanged.connect(self._refresh_guide_return)
         self._setup_flow = SetupFlow(self.setup_page, self._apply_setup_region)
         self.setup_page.leave_requested.connect(self._leave_setup)
         self.setup_page.open_feature.connect(self._open_setup_feature)
@@ -329,7 +337,14 @@ class MainWindow(QMainWindow):
         self.setup_page.login_requested.connect(self._open_setup_login)
         self.setup_page.feature_changed.connect(self._set_feature_enabled)
         self.settings_tab.reopen_setup.connect(self._open_setup)
+        self.settings_tab.reopen_guide.connect(self._open_guide)
+        self.setup_guide.feature_changed.connect(self._set_feature_enabled)
+        self.setup_guide.register_game.connect(self._register_setup_game)
+        self.setup_guide.run_requested.connect(self._run_guide_setup)
+        self.setup_guide.cancel_requested.connect(self._setup_flow.cancel)
+        self.setup_guide.finished.connect(self._finish_guide)
         self.settings_tab.login_changed.connect(self.setup_page.refresh)
+        self.settings_tab.login_changed.connect(self._guide_login_changed)
         self.settings_tab.game_registered.connect(self.setup_page.refresh)
         self.settings_tab.game_registration_finished.connect(self._setup_game_finished)
         self.setCentralWidget(central)
@@ -397,20 +412,20 @@ class MainWindow(QMainWindow):
             self._open_setup()
 
     def _open_setup(self):
-        if self._config_pending_restart:
+        if self._config_pending_restart or self._setup_busy():
             return
         self.setup_page.refresh()
         self._pages.setCurrentWidget(self.setup_page)
 
     def _leave_setup(self):
-        if self.setup_page.busy:
+        if self._setup_busy():
             return
         self._tabs.setCurrentWidget(self._tracker_tabs)
         self._tracker_tabs.setCurrentIndex(0)
         self._pages.setCurrentWidget(self._tabs)
 
     def _open_setup_feature(self, key):
-        if self.setup_page.busy:
+        if self._setup_busy():
             return
         self._pages.setCurrentWidget(self._tabs)
         tracker = {"buff": 0, "debuff": 1, "tuarim": 2, "boss": 3}
@@ -425,10 +440,13 @@ class MainWindow(QMainWindow):
     def _register_setup_game(self):
         self.settings_tab._start_detect()
         self.setup_page.game_btn.setEnabled(False)
+        self.setup_guide.game_btn.setEnabled(False)
         self.setup_page.progress.setText("3초 안에 게임창을 선택하세요. 등록 결과는 이 화면에 반영됩니다.")
+        self.setup_guide.progress.setText(self.setup_page.progress.text())
+        self.setup_guide.refresh()
 
     def _open_setup_login(self):
-        if self.setup_page.busy or self._config_pending_restart or self._setup_flow.closed:
+        if self._setup_busy() or self._config_pending_restart or self._setup_flow.closed:
             return
         self._pages.setCurrentWidget(self._tabs)
         scroll = self._tabs.widget(self._tabs.count() - 1)
@@ -441,11 +459,15 @@ class MainWindow(QMainWindow):
         self.setup_page.refresh()
         self.setup_page.progress.setText("게임창을 등록했습니다. 사용할 기능을 선택하세요." if success else
                                          "게임창을 등록하지 못했습니다. 게임창을 선택한 뒤 다시 시도하세요.")
+        self.setup_guide.refresh()
+        self.setup_guide.progress.setText(self.setup_page.progress.text())
+        self.setup_guide.refresh()
 
     def _set_feature_enabled(self, key, value):
         from ..setup_state import BY_KEY
         if value and BY_KEY[key].beta and config.load_discord_user() is None:
             self.setup_page.refresh()
+            self.setup_guide.refresh()
             return
         self._feature_checks[key].setChecked(value)
 
@@ -461,6 +483,73 @@ class MainWindow(QMainWindow):
             elif key == "debuff":
                 self._start_debuff_tracking()
         self.setup_page.refresh()
+        self.setup_guide.refresh()
+
+    def _setup_busy(self):
+        return self.setup_page.busy or self.setup_guide.busy or self._setup_flow.running
+
+    def _refresh_guide_return(self):
+        self._guide_return_btn.setVisible(self.setup_guide.active and config.load_discord_user() is not None
+                                          and self._pages.currentWidget() is not self.setup_guide)
+
+    def _guide_login_changed(self):
+        logged_in = config.load_discord_user() is not None
+        self.settings_tab.guide_btn.setVisible(logged_in)
+        if not logged_in:
+            if self._setup_flow.running and self._setup_flow.page is self.setup_guide:
+                self._setup_flow.cancel()
+            self.setup_guide.active = False
+            if self._pages.currentWidget() is self.setup_guide:
+                self._pages.setCurrentWidget(self._tabs)
+            if getattr(self, "_tour_from_guide", False) and getattr(self, "_tour", None) is not None:
+                self._tour.dismiss()
+                self._tour = None
+                self._tour_from_guide = False
+        self.setup_guide.refresh()
+        self._refresh_guide_return()
+
+    def _open_guide(self, *, first_run=False):
+        if config.load_discord_user() is None:
+            return
+        if self._setup_busy() or self._config_pending_restart or self._setup_flow.closed:
+            return
+        previous = getattr(self, "_tour", None)
+        if previous is not None:
+            previous.dismiss()
+            self._tour = None
+        self.setup_guide.reset(first_run=first_run)
+        self._pages.setCurrentWidget(self.setup_guide)
+        self._refresh_guide_return()
+
+    def _resume_guide(self):
+        if config.load_discord_user() is None:
+            return
+        if self._setup_busy() or self._config_pending_restart or self._setup_flow.closed:
+            return
+        self.setup_guide.refresh()
+        self._pages.setCurrentWidget(self.setup_guide)
+
+    def _run_guide_setup(self):
+        if config.load_discord_user() is None:
+            return
+        self._setup_flow.run(page=self.setup_guide, feature_keys=self.setup_guide.feature_keys,
+                             on_result=self.setup_guide.record_result)
+        if not self._setup_flow.closed:
+            self.setup_guide.refresh()
+            if config.load_discord_user() is None:
+                self._guide_login_changed()
+
+    def _finish_guide(self):
+        if config.load_discord_user() is None:
+            self._guide_login_changed()
+            return
+        try:
+            config.save_general_flag("firstUseGuideShown", True)
+        except OSError:
+            _log.warning("첫 사용 안내 표시 기록을 저장하지 못했습니다")
+        self._leave_setup()
+        self._refresh_guide_return()
+        self._run_tour(from_guide=True)
 
     def _apply_setup_region(self, key, box):
         if self._config_pending_restart or self._setup_flow.closed:
@@ -716,9 +805,11 @@ class MainWindow(QMainWindow):
         """첫 실행 때 한 번, 사용 순서를 노란 점선 강조로 안내(코치마크)."""
         if not self.isVisible():
             return
-        if config.load_general_flag("tourShown", False):
+        if (config.load_general_flag("tourShown", False)
+                or config.load_general_flag("firstUseGuideShown", False)
+                or config.load_general_flag("skipSetup", False)):
             return
-        self._run_tour()
+        self._open_guide(first_run=True)
 
     def _maybe_show_release_notes(self) -> None:
         """버전이 바뀌었으면(마지막 본 버전 != 현재) 업데이트 노트를 띄운다.
@@ -750,82 +841,65 @@ class MainWindow(QMainWindow):
             ReleaseNotesDialog(body, __version__, self).exec()
 
     def _replay_tour(self) -> None:
-        if self.setup_page.busy or self._config_pending_restart or self._setup_flow.closed:
+        if self._setup_busy() or self._config_pending_restart or self._setup_flow.closed:
             return
-        self._open_setup()
         self._run_tour()
 
-    def _run_tour(self) -> None:
-        """온보딩 투어 실행(첫 실행 + '다시 보기' 공용)."""
-        if not self.isVisible():
-            self.show()  # 트레이 상태에서 '다시 보기' 누르면 창을 띄운다
-        if self.setup_page.busy:
+    def _run_tour(self, *, from_guide=False) -> None:
+        """단계별 설정과 구별되는 앱 둘러보기."""
+        if from_guide and config.load_discord_user() is None:
             return
+        if self._setup_busy() or self._config_pending_restart or self._setup_flow.closed:
+            return
+        if not self.isVisible():
+            self.show()
         previous = getattr(self, "_tour", None)
-        if previous is not None and previous.isVisible():
-            previous.close()
+        if previous is not None:
+            previous.dismiss()
+            self._tour = None
         from .tour_overlay import TourOverlay, TourStep
 
-        def _go_buff() -> None:
+        def go_tracker():
             self._pages.setCurrentWidget(self._tabs)
-            self._tabs.setCurrentWidget(self._tracker_tabs)  # 상위 '트래커'
-            self._tracker_tabs.setCurrentIndex(0)  # 하위 '버프'
+            self._tabs.setCurrentWidget(self._tracker_tabs)
+
+        def go_convenience():
+            self._pages.setCurrentWidget(self._tabs)
+            self._tabs.setCurrentWidget(self._convenience_tabs)
+
+        def go_settings():
+            self._pages.setCurrentWidget(self._tabs)
+            scroll = self._tabs.widget(3)
+            self._tabs.setCurrentWidget(scroll)
+            scroll.ensureWidgetVisible(self.settings_tab.setup_btn)
 
         steps = [
-            TourStep(
-                target=self.buff_tab.region_btn,
-                title="① 영역 지정",
-                body="먼저 게임에서 버프가 모여 있는 곳을 드래그로 잡아요.\n"
-                     "⚓ 기준 버프(프리미엄 배틀 멤버십)도 영역 안에 꼭 포함하세요.",
-                before=_go_buff,
-            ),
-            TourStep(
-                target=self.buff_tab.add_btn,
-                title="② 버프 추가 (선택)",
-                body="기본 버프가 제공됩니다. 다른 버프가 필요하면 ＋로 추가하고 아이콘을 지정하세요.",
-            ),
-            TourStep(
-                target=self.buff_tab.lock_btn,
-                title="③ 위치 잠금",
-                body="오버레이를 원하는 위치로 옮긴 뒤 '위치 잠금'을 누르면\n"
-                     "위치가 고정되고 클릭도 통과해 게임에 방해되지 않아요.",
-            ),
-            TourStep(
-                target=None,
-                title="사용 안내 종료",
-                body="안내를 마쳤습니다. 실제 등록 여부는 사용 준비 화면에서 확인하세요.\n"
-                     "기능마다 설정 방법이 다릅니다. 자세한 설명은 각 탭의 도움말에서 확인하세요.",
-            ),
+            TourStep(self._tracker_tabs.tabBar(), "트래커",
+                     "선택한 트래킹 기능은 여기서 조절할 수 있어요.", before=go_tracker),
+            TourStep(self._convenience_tabs.tabBar(), "편의기능",
+                     "체력바·단축바와 메모·커스텀 오버레이·계산기를 사용할 수 있어요. 투아림은 트래커 탭에 있어요.",
+                     before=go_convenience),
+            TourStep(None, "개별 기능 설정",
+                     "아직 등록하지 못한 영역은 해당 탭에서 다시 찾거나 직접 지정하세요. 기능 자체가 베타인 항목은 로그인이 필요합니다."),
+            TourStep(None, "오버레이 위치 잠금",
+                     "오버레이를 옮긴 뒤 잠그면 클릭이 게임으로 통과해요. 잠금 방식은 기능별 설정에서 확인하세요."),
+            TourStep(self._pause_btn, "전체 일시정지",
+                     "오버레이를 잠시 멈췄다가 다시 사용할 수 있어요."),
+            TourStep(self.settings_tab.setup_btn, "설정에서 다시 열기",
+                     "설정 현황·재시도 화면과 앱 둘러보기를 다시 열 수 있어요.",
+                     before=go_settings),
+            TourStep(None, "사용 안내 종료",
+                     "사용 안내를 마쳤습니다. 남은 설정은 각 기능의 설정에서 이어서 진행할 수 있어요."),
         ]
 
-        if self._pages.currentWidget() is self.setup_page:
-            steps = [
-                TourStep(self.setup_page.selection, "사용할 기능 선택",
-                         "사용할 기능을 선택하면 필요한 설정을 모아서 보여줍니다."),
-                TourStep(self.setup_page.need_title, "설정 필요",
-                         "아직 등록하지 않은 항목입니다. 보스 체력바처럼 화면에 떠 있어야 찾을 수 있는 대상도 있습니다."),
-            ]
-            if config.load_discord_user() is not None:
-                steps.extend([
-                    TourStep(self.setup_page.run_btn, "자동설정",
-                             "미등록 영역만 순서대로 찾습니다. 기존에 등록된 영역은 유지합니다."),
-                    TourStep(None, "찾은 영역 확인",
-                             "후보와 설명을 확인하고 '이 영역으로 등록'을 누르세요. 등록하지 않고 다음 항목으로 넘어갈 수도 있습니다."),
-                ])
-            else:
-                steps.append(TourStep(None, "직접 지정",
-                    "각 항목의 개별 설정에서 영역을 지정하세요. 자동설정은 Discord 로그인 후 사용할 수 있는 베타 기능입니다."))
-            steps.extend([
-                TourStep(self.setup_page.need_title, "개별 설정",
-                         "못 찾았거나 위치가 맞지 않는 항목은 개별 설정에서 다시 찾거나 직접 지정할 수 있습니다."),
-                TourStep(None, "사용 안내 종료",
-                         "안내를 마쳤습니다. 영역이 자동으로 등록된 것은 아닙니다. 등록 상태를 확인하고 각 기능에서 세부 동작을 설정하세요."),
-            ])
-
-        def _done() -> None:
+        def done():
+            self._tour = None
+            self._tour_from_guide = False
             config.save_general_flag("tourShown", True)
 
-        self._tour = TourOverlay(self, steps, on_done=_done)
+        self._tour_from_guide = from_guide
+        self._tour = TourOverlay(self, steps, on_done=done,
+                                 section_title="첫 사용 안내 4 / 4" if from_guide else "")
         self._tour.start()
 
     def _maybe_prompt_game_window(self) -> None:
@@ -1638,6 +1712,10 @@ class MainWindow(QMainWindow):
             event.accept()
             return
         self._setup_flow.cancel(hide=True)
+        tour = getattr(self, "_tour", None)
+        if tour is not None:
+            self._tour = None
+            tour.dismiss()
         self._save_window_pos()  # 트레이 최소화·완전 종료 모두에서 현재 위치 기억
 
         # 트레이 최소화: X를 눌러도 종료하지 않고 트레이로 숨긴다(백그라운드 계속 동작).

@@ -24,6 +24,8 @@ from .top_edge_selector import TopEdgeSelector
 class SetupFlow:
     def __init__(self, page, apply):
         self.page = page
+        self.home_page = page
+        self.running = False
         self.apply = apply
         self.closed = False
         self.cancelled = False
@@ -132,11 +134,12 @@ class SetupFlow:
             self.dialog.deleteLater()
             self.dialog = None
 
-    def run(self):
-        page = self.page
-        if self.closed or page.busy or (self.future is not None and not self.future.done()):
+    def run(self, *, page=None, feature_keys=None, on_result=None):
+        page = self.home_page if page is None else page
+        scope = tuple(feature_keys) if feature_keys is not None else tuple(f.key for f in FEATURES)
+        if self.closed or self.running or page.busy or (self.future is not None and not self.future.done()):
             return
-        if not any(enabled(feature.key) for feature in FEATURES):
+        if not any(enabled(key) for key in scope):
             page.progress.setText("사용할 기능을 선택하세요.")
             return
         if config.load_discord_user() is None:
@@ -145,11 +148,14 @@ class SetupFlow:
         if not section(config._read_local_config(), "general").get("gameExe"):
             page.progress.setText("게임창을 먼저 등록한 뒤 자동설정을 실행하세요.")
             return
-        keys = pending(automatic_only=True)
+        keys = pending(automatic_only=True, feature_keys=scope)
         if not keys:
             page.progress.setText("자동으로 찾을 미등록 영역이 없습니다. 직접 지정할 항목은 개별 설정에서 등록하세요.")
             return
         self.cancelled = False
+        self.running = True
+        self.page = page
+        button_text = page.run_btn.text()
         results = {"등록 완료": [], "등록하지 않음": [], "찾지 못함": [], "저장 실패": []}
         page.set_busy(True)
         try:
@@ -159,7 +165,7 @@ class SetupFlow:
                 if self.closed or self.cancelled:
                     break
                 # 앞선 승인이 공유 영역을 등록했다면 다음 시도에서 건너뛴다.
-                if key not in pending(automatic_only=True):
+                if key not in pending(automatic_only=True, feature_keys=scope):
                     continue
                 feature = BY_KEY[key]
                 page.run_btn.setText(f"{feature.name} 찾는 중… ({index}/{len(keys)})")
@@ -199,7 +205,7 @@ class SetupFlow:
                         self.cancel()
                     if self.closed or self.cancelled or approved is None:
                         outcome.update(status="cancelled_shutdown" if self.closed else "cancelled")
-                    elif key not in pending(automatic_only=True):
+                    elif key not in pending(automatic_only=True, feature_keys=scope):
                         outcome.update(status="already_registered")
                     else:
                         try:
@@ -214,12 +220,18 @@ class SetupFlow:
                     detect=lambda frame, trace, assets: self._detect(key, frame, trace, assets),
                     confirm=confirm)
                 if self.closed or self.cancelled:
+                    if not self.closed and on_result is not None:
+                        on_result(key, "중단됨")
                     break
                 status = outcome["status"]
                 if status in ("applied", "already_registered"):
                     results["등록 완료"].append(feature.name)
+                    if on_result is not None:
+                        on_result(key, "등록됨")
                 elif status == "cancelled":
                     results["등록하지 않음"].append(feature.name)
+                    if on_result is not None:
+                        on_result(key, "등록하지 않음")
                 else:
                     reason = ("게임창 미발견 또는 캡처 실패" if frame is None else
                               "저장 실패" if status == "save_failed" else
@@ -228,6 +240,8 @@ class SetupFlow:
                         reason += ": " + outcome.get("error", "")
                     label = "저장 실패" if status == "save_failed" else "찾지 못함"
                     results[label].append(feature.name + f" ({reason})")
+                    if on_result is not None:
+                        on_result(key, reason if frame is None else label)
                     self._notice(feature.name + " · 등록하지 못함",
                         reason + "\n" + (
                             "보스 체력바가 보이는 상태에서 다시 시도하세요." if key in ("boss", "debuff") else
@@ -237,8 +251,10 @@ class SetupFlow:
                     # 전체 캡처 실패는 같은 화면의 나머지 항목에 반복하지 않는다.
                     break
         finally:
+            self.running = False
+            self.page = self.home_page
             if not self.closed:
-                page.run_btn.setText("자동설정")
+                page.run_btn.setText(button_text)
                 page.set_busy(False)
                 summary = " / ".join(f"{label} {len(names)}" for label, names in results.items())
                 details = "\n".join(label + ": " + ", ".join(names) for label, names in results.items() if names)

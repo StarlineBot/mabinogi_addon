@@ -173,6 +173,7 @@ class SettingsTab(QWidget):
     # '사용법 투어 다시 보기' → 메인이 온보딩 투어를 다시 실행.
     replay_tour = Signal()
     reopen_setup = Signal()
+    reopen_guide = Signal()
     game_registered = Signal()
     game_registration_finished = Signal(bool)
     theme_changed = Signal()  # 테마 변경 → 메인이 탭 등 테마색 재적용
@@ -499,6 +500,8 @@ class SettingsTab(QWidget):
 
     def _refresh_login(self) -> None:
         user = config.load_discord_user()
+        if hasattr(self, "guide_btn"):
+            self.guide_btn.setVisible(user is not None)
         if user:
             self._login_status.setText(f"로그인됨: {user['name']}")
             self._login_status.setStyleSheet("color:#2ecc71;")
@@ -835,10 +838,16 @@ class SettingsTab(QWidget):
 
         tour_row = QHBoxLayout()
         setup_btn = QPushButton("자동설정 다시 열기")
+        self.setup_btn = setup_btn
         setup_btn.clicked.connect(self.reopen_setup.emit)
         v.addWidget(setup_btn)
+        self.guide_btn = QPushButton("첫 사용 안내 다시 보기 (베타)")
+        self.guide_btn.setToolTip("게임창 등록부터 단계별 기능 선택과 영역 등록 안내를 엽니다.")
+        self.guide_btn.clicked.connect(self.reopen_guide.emit)
+        self.guide_btn.setVisible(config.load_discord_user() is not None)
+        v.addWidget(self.guide_btn)
         tour_btn = QPushButton("사용법 투어 다시 보기")
-        tour_btn.setToolTip("사용 준비 화면을 열어 기능 선택과 영역 등록 안내를 다시 봅니다")
+        tour_btn.setToolTip("트래커·편의기능·잠금·일시정지의 하이라이트 안내를 다시 봅니다")
         tour_btn.clicked.connect(self.replay_tour.emit)
         tour_row.addWidget(tour_btn)
         notes_btn = QPushButton("업데이트 노트 보기")

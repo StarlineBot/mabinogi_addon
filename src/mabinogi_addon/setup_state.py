@@ -116,13 +116,15 @@ def missing(key, raw=None):
     return result
 
 
-def pending(raw=None, *, automatic_only=False):
+def pending(raw=None, *, automatic_only=False, feature_keys=None):
     raw = config._read_local_config() if raw is None else raw
     result = []
     saved_order = section(raw, "general").get("setupOrder")
     order = [key for key in saved_order if isinstance(key, str) and key in BY_KEY] if isinstance(saved_order, list) else []
     order += [feature.key for feature in FEATURES if feature.key not in order]
     for key in order:
+        if feature_keys is not None and key not in feature_keys:
+            continue
         feature = BY_KEY[key]
         if enabled(feature.key, raw):
             for key in missing(feature.key, raw):
