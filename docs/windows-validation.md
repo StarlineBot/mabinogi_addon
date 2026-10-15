@@ -121,3 +121,18 @@ quota/전송 오류는 경고이며 테스트나 빌드 실패를 성공으로 �
   해석하지 않고 수정본의 자동 실행 결과로 재검증한다.
 - 회귀와 통합 명령에 `-ra`를 추가해 기존 플랫폼별 skip 사유도 실제 Windows 로그에 남긴다.
   새 skip을 추가하거나 기존 실패를 제외하지 않는다.
+
+### 수정본 Windows 최종 성공
+
+- 검증 소스: `7688dc1ece1cb2248d5d8a37e22f8b72bd4d115f`.
+- [Windows validation 38710588941](https://github.com/StarlineBot/mabinogi_addon/actions/runs/38710588941)
+  전체 실행 **success**. Windows 작업은 2026-10-15 09:07:17~09:12:40 UTC에 실행됐다.
+- `Isolated regression`, `Native Windows integration`, `Verify exe build`가 모두 **success**였다.
+  `scripts/windows_ci.py wait --sha ... --require-build`가 정확한 SHA와 세 필수 단계의 성공을
+  확인한 뒤 exit 0으로 종료했다. exe 검증은 공통 빌드 명령 실행과 비어 있지 않은 파일 생성을 포함한다.
+- `Optional exe upload`는 기본 비활성화 정책에 따라 skipped다. 테스트/빌드 skip이나 quota 실패가 아니다.
+- 기능 QA 수정과 노트 분리도 이 소스에 포함된다. Linux 전체 720개 및 원본 기능 QA 10개 결과와
+  별개로 실제 Windows 게이트를 확인했다. 독립 재QA·실게임·혼합 DPI·장시간 라이브 검증은 별도다.
+- 성공 결과 확인 직후 상세 로그 통계를 추가 조회하는 중 GitHub API가 `401 Bad credentials`로,
+  Git fetch도 인증 오류로 바뀌었다. 위 성공 판정은 이미 반환된 정확한 SHA/전체 단계 결과를
+  근거로 한다. 최종 Windows pass/skip 개수와 exe 파일 크기는 재다운로드로 확인하지 못해 추정하지 않는다.

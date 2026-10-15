@@ -117,3 +117,7 @@ QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest -q -p scripts.qa_setup_audi
 - Windows 테스트 경계의 모듈 복원 오류 및 노트 분리까지 포함한 최종 Linux 전체 회귀는
   **720 passed, 3 deselected in 135.06s**다. 제외한 3개는 별도 네이티브 Windows 검사다.
   이 결과를 Windows 실행이나 exe 빌드 통과로 대신하지 않는다.
+- 이후 같은 제품 수정이 포함된 `7688dc1`의 실제 Windows 실행
+  [38710588941](https://github.com/StarlineBot/mabinogi_addon/actions/runs/38710588941)에서
+  격리 회귀·네이티브 통합·exe 빌드가 모두 성공했다. 개발 세션에서 정확한 SHA의 필수 단계와
+  전체 success를 확인했다. 독립 QA 통과나 실게임 라이브 테스트 완료를 뜻하지 않는다.
