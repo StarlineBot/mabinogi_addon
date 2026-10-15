@@ -43,3 +43,52 @@ Windows의 게임창 선택, 포커스/z-order, 혼합 DPI·다중 모니터, Ex
 장시간 자원 사용은 이 Linux 환경에서 검증하지 않았다. 기존 좌표 변환/선택기의
 혼합 DPI 제약이 해결되었다고 주장하지 않는다. 시작 화면·캡처·스레드 경로가 바뀌므로
 독립 QA와 Windows 사전 CI/실게임 확인 후 배포 판단이 필요하다.
+
+## 첫 사용자 안내 보완 (2026-10-15)
+
+기준: `app-usability-spec.md` 1.2.1절 및 U-13~U-16. 베타 시작 화면은 등록 완료 여부와
+관계없이 표시하고 명시적으로 다시 보지 않기를 선택한 경우만 건너뛰는 현재 정책을 유지한다.
+
+- 기존 기능 순서와 베타 표시는 유지하며, 체크박스를 지정된 '선택 문구 - 기능명' 한 줄로 바꿨다.
+- 기능 목록 위 안내, 목록 아래 전체 너비 자동설정, 그 아래 베타 안내와 Discord 로그인
+  이동 버튼을 배치했다. 로그인 상태에서도 테스트 중인 베타라는 안내는 유지한다.
+- Discord 로그인 버튼은 기존 설정의 계정 위치로 이동하고 해당 버튼에 포커스를 준다.
+  버튼을 누르는 것만으로 OAuth, 브라우저 열기나 외부 전송을 시작하지 않는다.
+  체력바/단축바의 기존 기능 자체 로그인 제한도 유지한다.
+- 기능 목록은 동일한 행 높이 기준 4.5행과 넘칠 때 세로 스크롤바를 표시한다.
+  기존 창 크기에서 등록 상태 세 구역과 하단 체크박스를 유지하도록 세로 간격을 조절했다.
+- MainWindow가 탭과 기본 설정을 만들기 전에 최초 선택을 초기화한다. 설정 파일과 .bak이
+  모두 없고 읽을 설정도 없을 때만 8개 기능의 기존 enabled 값을 false로 저장한다.
+  기존 파일이 비어 있거나 사용 여부가 누락돼도 신규 사용자로 취급하지 않는다.
+  손상된 본 파일과 백업만 남은 경우도 기존 복구/기본값 해석을 유지한다.
+- 기능 미선택 시 안내를 표시하며 자동설정은 로그인/게임창 검사보다 먼저 반환한다.
+  캡처, 탐색, 진단 생성이나 설정 저장을 하지 않는다. 선택한 뒤에는 종전 순서와
+  승인/거절, 등록된 항목 건너뛰기, 개별 탭과 동일한 사용 설정 동기화를 유지한다.
+
+검증 기록:
+
+```bash
+QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest -q -p scripts.qa_setup_audio_boundary tests/test_setup.py scripts/qa_setup_tour.py scripts/qa_setup_independent.py tests/test_settings_preserve.py tests/test_settings_sync.py tests/test_release_notes_trigger.py
+QT_QPA_PLATFORM=offscreen .venv/bin/python -c 'from scripts.render_setup_page import main; main()'
+```
+
+- 관련 회귀: **89 passed, 7 warnings in 15.56s**. 경고는 기존 mss API 사용 중단 안내다.
+- 전체 제품 회귀는 `QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest -q -p scripts.qa_setup_audio_boundary`로
+  **669 passed, 10 warnings in 132.48s**를 확인했다. 생명주기 테스트의 로컬 IPC/콜백 소켓을
+  허용한 Linux 실행이며 위 관련 집합과 중복되므로 합산하지 않는다. 이후 초기화 함수의
+  명시적 경로 인자도 읽기/쓰기에 동일하게 전달하도록 보완하고 관련 집합을 재검증했다.
+- 최종 관련 집합은 위 명령에 `tests/test_release_notes.py`, `tests/test_config_atomic.py`,
+  `tests/test_config_bundle.py`, `tests/test_config_buffs.py`를 추가해
+  **118 passed, 7 warnings in 18.59s**다. 명시적 한글 경로에 신규 설정을 저장하는 시험과
+  실제 790x800 MainWindow의 하단 체크박스, 로그인 이동 후 버튼이 뷰포트 안에 들어오는
+  시험도 포함한다. 이전 전체 회귀 뒤의 최종 관련 재검증이며 전체 재실행 결과와 구분한다.
+- 최초 MainWindow의 양쪽 체크 상태, 이후 선택 보존, 기존 파일/누락 값/손상 파일/백업,
+  미선택 실행의 무캡처·무저장, 베타 권한, 로그인 이동의 무인증 실행을 확인했다.
+- 렌더는 `/tmp/setup-preview/`의 `new-user.png`, `new-user-scrolled.png`,
+  `existing-logged-out.png`, `ready.png`, `registered.png`다. 신규/기존, 로그인/미로그인,
+  등록 상태 세 구역이 모두 있는 경우를 포함한다. 가장 긴 기능 문구와 베타 표시의 폭,
+  가로 스크롤 없음, 744px 준비 화면과 하단 체크박스 접근성을 테스트했다.
+- 사용자가 위 렌더의 현재 배치로 진행하도록 확인했다. 사용자 원본 설정이나 실제 게임
+  화면은 렌더 입력으로 사용하지 않았다.
+- 개발 검증이며 후속 독립 QA 또는 실제 Windows 게임/DPI/오디오 검증의 통과가 아니다.
+  네이티브 오디오는 기존 QA 대체 경계를 사용했다. 릴리즈/태그는 실행하지 않는다.

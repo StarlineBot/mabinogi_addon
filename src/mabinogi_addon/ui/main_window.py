@@ -224,6 +224,8 @@ class MainWindow(QMainWindow):
         # 파티(≈612)·커스텀(≈718)이 스크롤 없이 들어오고, 길이가 압도적인 설정 탭
         # (≈1265)만 세로 스크롤로 본다(_VScroll이 눌림 방지).
         self.setFixedSize(790, 800)
+        from ..setup_state import initialize_new_user
+        initialize_new_user()
         self._restore_window_pos()  # 저장된 창 위치 복원(없으면 화면 중앙)
 
         # 포그라운드 감지(맥=항상 활성). 저장된 게임 실행파일로 판정(없으면 제목 폴백).
@@ -321,6 +323,7 @@ class MainWindow(QMainWindow):
         self.setup_page.leave_requested.connect(self._leave_setup)
         self.setup_page.open_feature.connect(self._open_setup_feature)
         self.setup_page.register_game.connect(self._register_setup_game)
+        self.setup_page.login_requested.connect(self._open_setup_login)
         self.setup_page.feature_changed.connect(self._set_feature_enabled)
         self.settings_tab.reopen_setup.connect(self._open_setup)
         self.settings_tab.login_changed.connect(self.setup_page.refresh)
@@ -420,6 +423,15 @@ class MainWindow(QMainWindow):
         self.settings_tab._start_detect()
         self.setup_page.game_btn.setEnabled(False)
         self.setup_page.progress.setText("3초 안에 게임창을 선택하세요. 등록 결과는 이 화면에 반영됩니다.")
+
+    def _open_setup_login(self):
+        if self.setup_page.busy or self._config_pending_restart or self._setup_flow.closed:
+            return
+        self._pages.setCurrentWidget(self._tabs)
+        scroll = self._tabs.widget(self._tabs.count() - 1)
+        self._tabs.setCurrentWidget(scroll)
+        scroll.ensureWidgetVisible(self.settings_tab._login_btn)
+        self.settings_tab._login_btn.setFocus()
 
     def _setup_game_finished(self, success):
         self.setup_page.game_btn.setEnabled(not self.setup_page.busy)

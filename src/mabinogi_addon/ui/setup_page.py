@@ -1,6 +1,6 @@
 """탭을 추가하지 않는 사용 준비 화면. 후보 확인은 기존 화면 위에서 진행한다."""
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox, QFrame, QHBoxLayout, QLabel, QPushButton, QScrollArea,
     QVBoxLayout, QWidget,
@@ -8,6 +8,18 @@ from PySide6.QtWidgets import (
 
 from .. import config
 from ..setup_state import FEATURES, enabled, missing, section
+
+
+CHOICE_TEXT = {
+    "buff": "버프가 끝나기 전에 알림을 받고 싶어요",
+    "debuff": "보스에게 아직 걸지 않은 디버프를 확인하고 싶어요",
+    "tuarim": "투아림이 차면 알림을 받고 싶어요",
+    "boss": "보스 패턴이 다가오면 알림을 받고 싶어요",
+    "stat_bars": "체력·마나·스태미나를 보기 편한 곳에 표시하고 싶어요",
+    "skillbar": "단축바를 원하는 위치에서 보고 싶어요",
+    "custom": "게임 화면 일부를 다른 위치에도 띄우고 싶어요",
+    "memo": "게임을 보면서 메모를 확인하고 싶어요",
+}
 
 
 def _label(text, *, bold=False):
@@ -22,6 +34,7 @@ class SetupPage(QWidget):
     feature_changed = Signal(str, bool)
     open_feature = Signal(str)
     register_game = Signal()
+    login_requested = Signal()
     run_requested = Signal()
     leave_requested = Signal()
     cancel_requested = Signal()
@@ -31,7 +44,7 @@ class SetupPage(QWidget):
         self.busy = False
         layout = QVBoxLayout(self)
         layout.setContentsMargins(18, 16, 18, 16)
-        layout.setSpacing(10)
+        layout.setSpacing(7)
         header = QHBoxLayout()
         title = _label("사용 준비", bold=True)
         title.setStyleSheet("font-size:20px; font-weight:600;")
@@ -58,25 +71,36 @@ class SetupPage(QWidget):
         layout.addWidget(self.game_row)
 
         layout.addWidget(_label("사용할 기능", bold=True))
+        layout.addWidget(_label("사용할 기능만 선택하세요. 선택한 기능에 필요한 설정을 안내합니다."))
         self.selection = QScrollArea()
         self.selection.setWidgetResizable(True)
+        self.selection.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         choices = QWidget()
         choose = QVBoxLayout(choices)
         choose.setContentsMargins(10, 0, 10, 0)
         choose.setSpacing(0)
         self.checks = {}
         for feature in FEATURES:
-            check = QCheckBox(feature.name + (" (베타)" if feature.beta else ""))
+            check = QCheckBox(CHOICE_TEXT[feature.key] + " - " + feature.name
+                              + (" (베타)" if feature.beta else ""))
             check.toggled.connect(lambda value, key=feature.key: self.feature_changed.emit(key, value))
             check.setFixedHeight(max(30, check.sizeHint().height() + 8))
             self.checks[feature.key] = check
             choose.addWidget(check)
         choose.addStretch(1)
         self.selection.setWidget(choices)
-        self.selection.setFixedHeight(4 * check.height() + 2 * self.selection.frameWidth())
+        self.selection.setFixedHeight(9 * check.height() // 2 + 2 * self.selection.frameWidth())
         layout.addWidget(self.selection)
         self.run_btn.setMinimumHeight(34)
         layout.addWidget(self.run_btn)
+        beta_row = QHBoxLayout()
+        self.beta_note = _label("")
+        beta_row.addWidget(self.beta_note, 1)
+        self.login_btn = QPushButton("Discord 로그인")
+        self.login_btn.setToolTip("설정의 Discord 계정으로 이동합니다. 로그인은 직접 시작할 수 있습니다.")
+        self.login_btn.clicked.connect(self.login_requested.emit)
+        beta_row.addWidget(self.login_btn)
+        layout.addLayout(beta_row)
 
         self.need_title = _label("설정 필요", bold=True)
         self.done_title = _label("등록된 설정", bold=True)
@@ -129,6 +153,12 @@ class SetupPage(QWidget):
     def refresh(self):
         raw = config._read_local_config()
         logged_in = config.load_discord_user() is not None
+        self.beta_note.setText("자동설정은 테스트 중인 베타 기능입니다. "
+                               + ("직접 지정도 가능합니다." if logged_in else
+                                  "Discord 로그인 후 먼저 사용해 볼 수 있어요. 직접 지정은 로그인 없이 가능합니다.\n"
+                                  "기능 자체가 베타인 체력바·단축바는 로그인이 필요합니다."))
+        self.login_btn.setVisible(not logged_in)
+        self.login_btn.setEnabled(not self.busy)
         self.game_status.setText("등록된 게임: " + str(section(raw, "general").get("gameExe"))
                                  if section(raw, "general").get("gameExe") else "게임창 등록 필요")
         need, done, unused = [], [], []
@@ -138,7 +168,7 @@ class SetupPage(QWidget):
             check.setChecked(enabled(feature.key, raw))
             check.blockSignals(False)
             check.setEnabled(not self.busy and (logged_in or not feature.beta or check.isChecked()))
-            check.setToolTip("Discord 로그인 후 사용할 수 있는 베타 기능입니다." if feature.beta else "")
+            check.setToolTip("기능 자체가 베타인 항목은 로그인이 필요합니다." if feature.beta else "")
             widget, status, button = self.feature_rows[feature.key]
             is_enabled = enabled(feature.key, raw)
             needed = missing(feature.key, raw)
@@ -159,6 +189,10 @@ class SetupPage(QWidget):
         self.need_title.setVisible(bool(need))
         self.done_title.setVisible(bool(done))
         self.unused_title.setVisible(bool(unused))
+        if not any(enabled(feature.key, raw) for feature in FEATURES) and not self.busy:
+            self.progress.setText("사용할 기능을 선택하세요.")
+        elif self.progress.text() == "사용할 기능을 선택하세요.":
+            self.progress.clear()
 
     def set_busy(self, busy):
         self.busy = busy

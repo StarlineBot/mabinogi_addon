@@ -36,6 +36,27 @@ def main():
         app.processEvents()
         page.grab().save(str(out / "registered.png"))
         page.close()
+    from mabinogi_addon.setup_state import FEATURES
+    empty = {feature.section: {"enabled": False} for feature in FEATURES}
+    with patch.object(config, "_read_local_config", return_value=empty), \
+            patch.object(config, "load_discord_user", return_value=None):
+        page = SetupPage()
+        page.resize(790, 744)
+        page.show()
+        app.processEvents()
+        page.grab().save(str(out / "new-user.png"))
+        page.selection.verticalScrollBar().setValue(page.selection.verticalScrollBar().maximum())
+        app.processEvents()
+        page.grab().save(str(out / "new-user-scrolled.png"))
+        page.close()
+    with patch.object(config, "_read_local_config", return_value=raw), \
+            patch.object(config, "load_discord_user", return_value=None):
+        page = SetupPage()
+        page.resize(790, 744)
+        page.show()
+        app.processEvents()
+        page.grab().save(str(out / "existing-logged-out.png"))
+        page.close()
     print(out)
 
 

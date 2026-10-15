@@ -14,7 +14,7 @@ from PySide6.QtWidgets import QMessageBox
 from .. import config
 from ..autofind_diagnostics import perform_autofind
 from ..autofind_replay import run_detector
-from ..setup_state import BY_KEY, pending, section
+from ..setup_state import BY_KEY, FEATURES, enabled, pending, section
 from .dpi import to_logical
 from .screen_grab import capture_for_autofind
 from .region_highlight import RegionHighlight
@@ -135,6 +135,9 @@ class SetupFlow:
     def run(self):
         page = self.page
         if self.closed or page.busy or (self.future is not None and not self.future.done()):
+            return
+        if not any(enabled(feature.key) for feature in FEATURES):
+            page.progress.setText("사용할 기능을 선택하세요.")
             return
         if config.load_discord_user() is None:
             page.progress.setText("자동설정은 베타 기능입니다. 설정 > Discord 계정에서 로그인하면 사용할 수 있습니다.")

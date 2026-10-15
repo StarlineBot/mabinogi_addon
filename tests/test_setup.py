@@ -362,7 +362,9 @@ def test_four_visible_feature_rows_and_independent_scroll_boxes(app, settings):
         app.processEvents()
         area = page.selection.viewport()
         checks = list(page.checks.values())
-        assert page.selection.height() == 4 * checks[0].height() + 2 * page.selection.frameWidth()
+        assert page.selection.height() == 9 * checks[0].height() // 2 + 2 * page.selection.frameWidth()
+        assert checks[3].geometry().bottom() < area.height()
+        assert checks[4].y() < area.height() < checks[4].geometry().bottom()
         assert page.run_btn.width() == page.selection.width()
         assert len({id(group[0]) for group in page.groups.values()}) == 3
         state.save_enabled("tuarim", True)
@@ -374,6 +376,126 @@ def test_four_visible_feature_rows_and_independent_scroll_boxes(app, settings):
         assert page.selection.verticalScrollBar().maximum() > 0
     finally:
         page.close()
+
+
+def test_new_user_selection_is_seeded_once_before_main_window_tabs(app, settings, monkeypatch):
+    from mabinogi_addon.ui.main_window import MainWindow
+
+    settings.unlink()
+    monkeypatch.setattr(config, "LOCAL_CONFIG_PATH", settings)
+    monkeypatch.setattr(QApplication, "quit", lambda: None)
+    window = MainWindow()
+    try:
+        assert all(not check.isChecked() for check in window._feature_checks.values())
+        assert all(not check.isChecked() for check in window.setup_page.checks.values())
+        assert state.pending() == []
+        assert window.setup_page.progress.text() == "사용할 기능을 선택하세요."
+        window.setup_page.feature_changed.emit("buff", True)
+        before = deepcopy(config._read_local_config())
+        state.initialize_new_user()
+        assert config._read_local_config() == before
+        assert state.pending(automatic_only=True) == ["buff"]
+    finally:
+        window._force_quit = True
+        window.close()
+
+
+@pytest.mark.parametrize("raw", [{}, {"general": {"theme": "dark"}},
+                                {"memo": {"text": "기존 메모", "locked": True}},
+                                {"buffTracker": {"captureRegion": BOX}}])
+def test_existing_file_without_enabled_keeps_legacy_defaults(settings, raw):
+    config._write_local_config(raw)
+    before = settings.read_bytes()
+    state.initialize_new_user(settings)
+    assert settings.read_bytes() == before
+    assert state.enabled("buff") and state.enabled("debuff")
+    assert state.enabled("memo") and state.enabled("custom")
+
+
+def test_new_user_initialization_uses_supplied_path_only(tmp_path):
+    path = tmp_path / "한글 새 설정" / "설정.json"
+    state.initialize_new_user(path)
+    raw = config._read_local_config(path)
+    assert set(raw) == {feature.section for feature in state.FEATURES}
+    assert all(not state.enabled(feature.key, raw) for feature in state.FEATURES)
+
+
+@pytest.mark.parametrize("backup_only", [False, True])
+def test_corrupt_or_backup_config_is_not_treated_as_new(settings, backup_only):
+    backup = settings.with_name(settings.name + ".bak")
+    settings.rename(backup)
+    if not backup_only:
+        settings.write_text("{broken", encoding="utf-8")
+    before = backup.read_bytes()
+    state.initialize_new_user(settings)
+    assert backup.read_bytes() == before
+    assert settings.exists() is (not backup_only)
+    assert not state.enabled("buff")
+
+
+@pytest.mark.parametrize("logged_in", [False, True])
+def test_empty_selection_does_not_capture_or_save(flow, monkeypatch, logged_in):
+    run, page, applied, detections, captures, _, _ = flow
+    monkeypatch.setattr(config, "load_discord_user", lambda: {"id": "test"} if logged_in else None)
+    before = deepcopy(config._read_local_config())
+    run.run()
+    assert page.progress.text() == "사용할 기능을 선택하세요."
+    assert config._read_local_config() == before
+    assert not captures and not detections and not applied
+
+
+@pytest.mark.parametrize("logged_in", [False, True])
+def test_selection_copy_and_beta_guidance_fit_current_window(app, settings, monkeypatch, logged_in):
+    monkeypatch.setattr(config, "load_discord_user", lambda: {"id": "test"} if logged_in else None)
+    update("buffTracker", enabled=True, captureRegion=BOX)
+    update("tuarim", enabled=True)
+    page = SetupPage()
+    page.resize(790, 744)
+    page.show()
+    try:
+        app.processEvents()
+        for feature in state.FEATURES:
+            check = page.checks[feature.key]
+            assert " - " + feature.name in check.text()
+            assert "\n" not in check.text()
+            assert check.sizeHint().width() <= check.width()
+        assert page.selection.horizontalScrollBar().maximum() == 0
+        assert page.height() == 744
+        assert page.skip.geometry().bottom() < page.height()
+        assert "테스트 중인 베타" in page.beta_note.text()
+        assert page.login_btn.isVisible() is (not logged_in)
+        assert page.checks["stat_bars"].isEnabled() is logged_in
+        page.set_busy(True)
+        assert not page.login_btn.isEnabled()
+    finally:
+        page.close()
+
+
+def test_setup_login_opens_existing_account_without_starting_auth(app, settings, monkeypatch):
+    from mabinogi_addon.ui.main_window import MainWindow
+
+    monkeypatch.setattr(QApplication, "quit", lambda: None)
+    monkeypatch.setattr(config, "load_discord_user", lambda: None)
+    window = MainWindow()
+    try:
+        window.show()
+        app.processEvents()
+        assert window.width() == 790 and window.height() == 800
+        assert window.rect().contains(window.setup_page.skip.mapTo(
+            window, window.setup_page.skip.rect().bottomRight()))
+        before = deepcopy(config._read_local_config())
+        window.setup_page.login_btn.click()
+        app.processEvents()
+        assert window._pages.currentWidget() is window._tabs
+        assert window._tabs.currentIndex() == 3
+        viewport = window._tabs.currentWidget().viewport()
+        button = window.settings_tab._login_btn
+        assert viewport.rect().contains(button.mapTo(viewport, button.rect().center()))
+        assert window.settings_tab._login_thread is None
+        assert config._read_local_config() == before
+    finally:
+        window._force_quit = True
+        window.close()
 
 
 def test_batch_capture_never_falls_back_to_desktop(app, monkeypatch):

@@ -37,6 +37,14 @@ FEATURES = (
 BY_KEY = {feature.key: feature for feature in FEATURES}
 
 
+def initialize_new_user(path=None):
+    path = config.LOCAL_CONFIG_PATH if path is None else path
+    # 누락된 enabled 값이나 손상된 본 파일을 신규 사용자로 해석하지 않는다.
+    if path.exists() or path.with_name(path.name + ".bak").exists() or config._read_local_config(path):
+        return
+    config._write_local_config({feature.section: {"enabled": False} for feature in FEATURES}, path)
+
+
 def section(raw, name):
     value = raw.get(name)
     return value if isinstance(value, dict) else {}
