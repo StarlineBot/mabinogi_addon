@@ -8,7 +8,8 @@
 최근접 이웃으로 각 자리 숫자를 고른다. 대비 정규화(평균 빼고 표준편차로 나눔) 덕에
 배경 밝기가 변해도 글자 모양만 비교된다.
 
-- 입력 영역은 높이를 13px로 맞춰(해상도 차 흡수) V=max(B,G,R) 채널로 본다.
+- 일반 입력은 높이를 13px로 맞춰 V=max(B,G,R) 채널로 본다.
+  여백이 포함된 넓은 입력은 % 기호로 13px 글자 행을 정렬한 뒤 판독한다.
 - 숫자는 오른쪽 정렬이고 맨 오른쪽이 '%'. '%' 오른쪽 끝(R)을 기준으로 일/십의 자리
   칸을 고정 오프셋으로 자른다(실측값).
 - 레퍼런스: detect/templates/tuarim/refs.npz (Ro/Lo=일의 자리, Rt/Lt=십의 자리).
@@ -20,7 +21,7 @@ from __future__ import annotations
 import cv2
 import numpy as np
 
-from .. import paths
+from .. import image_io, paths
 
 _REFS_PATH = paths.detect_templates_dir() / "tuarim" / "refs.npz"
 
@@ -56,6 +57,9 @@ def _load_refs():
 
 
 _REFS = _load_refs()
+_PERCENT = image_io.imread(_REFS_PATH.parent / "percent.png", cv2.IMREAD_GRAYSCALE)
+_PERCENT_PLAIN = image_io.imread(_REFS_PATH.parent / "percent_plain.png", cv2.IMREAD_GRAYSCALE)
+_PERCENT_MIN = 0.65
 
 
 def _binarize(v: np.ndarray) -> np.ndarray:
@@ -101,17 +105,69 @@ def _classify(vec: np.ndarray, refs: np.ndarray, labels: np.ndarray):
     return int(labels[k]), float(scores[k])
 
 
+def _read_padded(region: np.ndarray, threshold: float) -> int | None:
+    """넓은 입력은 % 기호로 원래 글자 행을 찾는다. 불확실하면 저값으로 폴백하지 않는다."""
+    templates = [p for p in (_PERCENT, _PERCENT_PLAIN) if p is not None and p.shape == (CH, 10)]
+    if not templates:
+        return None
+    h, w = region.shape[:2]
+    legacy = _prep(region)
+    if legacy is None:
+        return None
+    prepared = [legacy]
+    # 16px 확인 박스에 13px 글자 행이 들어간 배치도 검색한다. 확대 배율은 같은 기준으로 환산한다.
+    padded = cv2.resize(region, (max(2, round(w * 16 / h)), 16))
+    prepared.append(padded.max(axis=2).astype(np.float32))
+    best_score, best = -1.0, None
+    for v in prepared:
+        if v.shape[1] < 10:
+            continue
+        for template in templates:
+            scores = cv2.matchTemplate(v, template.astype(np.float32), cv2.TM_CCOEFF_NORMED)
+            _, score, _, point = cv2.minMaxLoc(scores)
+            if score > best_score:
+                best_score, best = score, (v, point)
+    if best is None or best_score < _PERCENT_MIN:
+        return None
+    image, (px, py) = best
+    v = image[py:py + CH]
+    Ro, Lo, Rt, Lt = _REFS
+    readings = []
+    right = px + 9
+    for r in range(right - 2, right + 3):
+        if r < 0 or r >= v.shape[1]:
+            continue
+        od, os = _classify(_norm(_cell(v, r, _ONES)), Ro, Lo)
+        if od is None or os < max(threshold, _TENS_NCC_MIN):
+            continue
+        # 십의 자리 0은 기존 Rt 뱅크에 없다. 전체 숫자 뱅크와 7/8px 피치로 100 흔적을 검사한다.
+        for pitch in (7, 8):
+            td, ts = _classify(_norm(_cell(v, r, (_ONES[0] - pitch, _ONES[1] - pitch))), Ro, Lo)
+            hd, hs = _classify(_norm(_cell(v, r, (_ONES[0] - 2 * pitch, _ONES[1] - 2 * pitch))), Ro, Lo)
+            if od == 0 and td == 0 and hd == 1 and min(os, ts) >= 0.65 and hs >= 0.60:
+                return None
+        td, ts = _classify(_norm(_cell(v, r, _TENS)), Rt, Lt)
+        if td is not None and ts >= max(threshold, _TENS_NCC_MIN):
+            readings.append((os, td * 10 + od))
+        else:
+            readings.append((os, od))
+    return max(readings)[1] if readings else None
+
+
 def read_percent(
     region_bgr: np.ndarray,
     templates: dict[str, np.ndarray] | None = None,  # 하위호환(무시)
     threshold: float = NCC_MIN,
 ) -> int | None:
-    """리더 박스 영역에서 % 정수(0~100)를 읽는다. 못 읽으면 None.
+    """리더 박스 영역에서 % 정수(0~99)를 읽는다. 불확실하거나 100% 증거가 있으면 None.
 
     `templates`는 과거 시그니처 호환용으로 남겨뒀고 더는 쓰지 않는다(레퍼런스 뱅크 사용).
     """
     if _REFS is None:
         return None
+    if (region_bgr is not None and region_bgr.ndim == 3 and region_bgr.size
+            and region_bgr.shape[1] / region_bgr.shape[0] >= 2.5):
+        return _read_padded(region_bgr, threshold)
     v = _prep(region_bgr)
     if v is None:
         return None

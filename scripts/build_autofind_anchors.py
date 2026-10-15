@@ -40,6 +40,12 @@ def main():
     for name, pixels in (("tuarim_anchor", anchor), ("tuarim_mask", mask),
                          ("skillbar_anchor", controls), ("skillbar_mask", controls_mask)):
         assert image_io.imwrite(target / f"{name}.png", pixels)
+    reference = image_io.imread(ROOT / "tests/data/tuarim_hi/95.png")
+    assert reference is not None
+    assert image_io.imwrite(target.parent / "tuarim/percent.png", reference.max(axis=2)[:, -10:])
+    plain = image_io.imread(ROOT / "tests/data/tuarim_samples/00.png")
+    assert plain is not None
+    assert image_io.imwrite(target.parent / "tuarim/percent_plain.png", plain.max(axis=2)[:, -10:])
 
 
 if __name__ == "__main__":

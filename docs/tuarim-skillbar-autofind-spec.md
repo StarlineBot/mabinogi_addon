@@ -357,6 +357,12 @@
   테스트를 skip하거나 검출 assertion을 약화해 통과시키지 않았다.
 - 이 결과는 개발 세션 검증이며 후속 독립 QA 또는 Windows 테스트/실게임 통과가 아니다.
 
+후속 독립 QA에서 다른 원본의 55% 오독과 100%의 거짓 재무장(TUARIM-AUTO-01/02)이
+확인되어 위 최초 통과를 판독 안전성의 최종 판정으로 사용하지 않는다. 기존 합성 고값 시험과
+한 장의 100% 보류만으로 원본 호환성을 검증하지 못했다. 개발 수정은 자동 영역 좌표를
+유지하고 넓은 입력의 `%` 기호 정렬·100% 저값 오독 보류를 추가했다. 세부 원인·원본 재현과
+재검증은 [투아림 판독 회귀](qa/투아림_자동찾기_판독회귀_검토.md)를 따른다.
+
 ```bash
 QT_QPA_PLATFORM=offscreen PYTHONUTF8=0 PYTHONIOENCODING=cp1252:strict PYTHONPATH="$(pwd)/scripts/qa_windows_io_probe" uv run pytest -q tests scripts/qa_debuff_flicker.py scripts/qa_tuarim_repeat_alert.py scripts/qa_autofind_missing_assets.py
 ```
