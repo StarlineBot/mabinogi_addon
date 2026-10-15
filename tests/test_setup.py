@@ -50,16 +50,25 @@ def test_broken_region_is_unregistered(bad):
 
 
 def test_empty_existing_skip_and_unchecked(settings):
-    assert not state.needs_start_screen()
+    assert state.needs_start_screen()
     state.save_enabled("tuarim", True)
     assert state.needs_start_screen()
     update("tuarim", box=BOX)
-    assert not state.needs_start_screen()
+    assert not state.pending()
+    assert state.needs_start_screen()
     update("general", gameExe=None)
     assert state.needs_start_screen()
     update("general", skipSetup=True)
     assert not state.needs_start_screen()
     assert config.load_tuarim()["box"] == BOX
+
+
+@pytest.mark.parametrize("skip", [False, True, None, "true", 1])
+def test_beta_start_screen_requires_explicit_opt_out(settings, skip):
+    update("tuarim", enabled=True, box=BOX)
+    update("general", skipSetup=skip)
+    assert state.pending() == []
+    assert state.needs_start_screen() is (skip is not True)
 
 
 @pytest.mark.parametrize("value", [True, False, None, "false", 0, 1, []])
@@ -247,12 +256,15 @@ def test_login_and_game_registration_required(flow, monkeypatch):
     assert not applied and not detections
 
 
-def test_main_window_setup_navigation_and_bidirectional_use(app, settings, monkeypatch):
+@pytest.mark.parametrize("skip", [False, True])
+def test_main_window_setup_navigation_and_bidirectional_use(app, settings, monkeypatch, skip):
     from mabinogi_addon.ui.main_window import MainWindow
     monkeypatch.setattr(QApplication, "quit", lambda: None)
+    update("general", skipSetup=skip)
     window = MainWindow()
     try:
         assert window._tabs.count() == 4
+        assert window._pages.currentWidget() is (window._tabs if skip else window.setup_page)
         window._open_setup()
         assert not window.setup_page.busy
         window.setup_page.feature_changed.emit("buff", True)

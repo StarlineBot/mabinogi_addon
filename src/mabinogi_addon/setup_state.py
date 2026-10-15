@@ -125,8 +125,5 @@ def pending(raw=None, *, automatic_only=False):
 
 def needs_start_screen(raw=None):
     raw = config._read_local_config() if raw is None else raw
-    if section(raw, "general").get("skipSetup") is True:
-        return False
-    return bool(pending(raw) or (
-        any(enabled(f.key, raw) for f in FEATURES)
-        and not section(raw, "general").get("gameExe")))
+    # 베타 검증 중에는 등록 완료 여부와 무관하게 명시적으로 숨긴 경우만 건너뛴다.
+    return section(raw, "general").get("skipSetup") is not True
