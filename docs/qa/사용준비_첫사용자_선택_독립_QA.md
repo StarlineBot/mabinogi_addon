@@ -28,10 +28,9 @@
   이 경우에도 OS 캡처만 배열 소스로 대체했으며 제품 워커/타이머/종료 경로는 실제 코드를 사용했다.
 - Linux 네이티브 오디오 생성은 기존 QA 경계로 대체했다. 이전 Linux 오디오 제한을
   Windows 통과의 근거로 사용하지 않으며 기존 누수 검사나 제품 테스트는 변경하지 않았다.
-- **독립 로컬 재현 기준으로 기존 문제 해결 확인. 수정본 Windows 사전 검증 대기.**
-  최신 조회까지 수정본의 새 Actions 실행은 없었다. 이전 실패 run을 재실행하는 대신
-  `release`의 `Run workflow` → `main`으로 수정본의 전체 테스트와 exe 빌드를 확인해야 한다.
-  종료/타이머 변경과 미해결 Windows 실패가 있어, 이 결과가 확인되기 전 릴리즈 명령은 보류한다.
+- **독립 로컬 재현과 수정본 Windows 테스트·exe 빌드로 기존 문제 해결 확인. 제한된 베타 릴리즈 가능.**
+  아래 수동 실행에서 원래 누수 게이트가 통과했다. 실제 Windows exe 실행/실게임 및 장시간 계측은
+  별도 미검증 범위로 남기며, 이 CI 결과만으로 실게임 안정성을 보증하지 않는다.
 - 최신 원격 태그는 `v0.4.68`, 앱 내부 다음 노트는 `v0.4.69`다. 태그는 생성/푸시하지 않았다.
 - 이번 후속 QA에서 새 Confirmed Bug / Highly Likely Bug / Potential Risk는 찾지 못했다.
   아래 최초 실패와 개발자의 자체 검증 기록은 이력으로 보존하며, 후속 독립 결과와 구분한다.
@@ -40,6 +39,25 @@
 QT_QPA_PLATFORM=offscreen PYTHONPATH=src uv run pytest -q -p scripts.qa_setup_audio_boundary scripts/qa_setup_closed_retry.py tests/test_main_shutdown.py scripts/qa_setup_first_user.py scripts/qa_setup_tour.py scripts/qa_setup_independent.py tests/test_setup.py tests/test_memo_lock_persist.py tests/test_settings_preserve.py tests/test_settings_sync.py tests/test_release_notes_trigger.py tests/test_release_notes.py tests/test_config_atomic.py tests/test_config_bundle.py tests/test_config_buffs.py
 QT_QPA_PLATFORM=offscreen PYTHONPATH=src uv run pytest -q -p scripts.qa_setup_audio_boundary scripts/qa_shutdown_followup.py
 ```
+
+## 수정본 Windows 사전 검증 완료
+
+- 실행: https://github.com/StarlineBot/mabinogi_addon/actions/runs/38704888111
+- 검증 SHA: `1897687ac5c826e9419d103e2e02c11bac055716`, 수동 `workflow_dispatch`.
+  제품 수정본 `f02cb23`과의 원격 트리 차이는 QA 보고서와 독립 스크립트뿐이며,
+  제품·제품 테스트·패키징·CI 소스는 동일함을 확인했다.
+- 테스트: **672 passed, 1 skipped, 4 warnings in 175.99s**. 이전의 QThread 누수 오류 없음.
+  skip은 기존 Windows용 DWM fallback 분기 검사이며 누수 assertion/게이트는 유지됐다.
+- exe: PyInstaller `Building EXE from EXE-00.toc completed successfully`, `Build complete!` 확인.
+- run 전체 결론은 failure다. 실패 단계는 **Upload build artifact** 하나이며,
+  원문은 `Failed to CreateArtifact: Artifact storage quota has been hit. Unable to upload any new artifacts.`다.
+  테스트/빌드 실패 또는 exe 실행 크래시로 해석하지 않는다. 수동 아티팩트는 받지 못했다.
+- `.github/workflows/release.yml:105`의 업로드 조건은 `workflow_dispatch`다.
+  태그 릴리즈는 이 수동 아티팩트를 건너뛰고 빌드한 exe를 Release 자산으로 직접 게시하므로,
+  저장 용량만을 이유로 릴리즈를 보류하지 않는 기존 베타 기준을 충족한다.
+- 이 결과 갱신은 문서만 바꾼다. 동일 제품 소스의 Windows 사전 검증을 재사용하며 재실행은 요구하지 않는다.
+- 다음 미사용 태그 `v0.4.69`와 앱 노트 상단 버전이 일치하고, v0.4.68 이하 앱 노트 보존도 확인했다.
+  릴리즈 명령만 사용자에게 제공하며 태그 생성/푸시·배포는 대신 수행하지 않는다.
 
 ## 최초 판정 (53d473c)
 
