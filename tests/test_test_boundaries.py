@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from PySide6.QtCore import QUrl
 from PySide6.QtWidgets import QApplication
 
 from test_support.boundaries import AudioOutput, ExternalBoundaries, MediaPlayer
@@ -22,7 +23,7 @@ def test_audio_boundary_keeps_real_notifier_selection_logic(tmp_path):
         assert notifier._audio._volume == 0.25
         assert not notifier.play("missing")
         assert notifier.play("one")
-        assert notifier._player.source().toLocalFile() == str(clip)
+        assert notifier._player.source() == QUrl.fromLocalFile(str(clip))
         notifier.set_sounds({})
         assert not notifier.play("one")
     finally:
