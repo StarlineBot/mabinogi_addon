@@ -10,7 +10,8 @@
   아래 최초 재현 결과는 보존하며, 개발 검증을 후속 독립 QA 완료로 보지 않는다.
 - 후속 독립 QA: 수정본 `8cedbc2`에서 SETUP-QA-01/02의 수정을 확인했다.
   관련 회귀 137개가 통과했다. 사용자가 현재 베타의 준비 화면 기본 표시 정책을 직접
-  확인했으므로 SETUP-QA-03은 현재 버그가 아니다. Windows 사전 CI가 남아 배포 승인은 보류한다.
+  확인했으므로 SETUP-QA-03은 현재 버그가 아니다. 이후 Windows 사전 테스트·exe 빌드도
+  통과해 제한된 베타 배포 조건을 충족했다. 아래 **Windows 사전 검증 완료**를 따른다.
   아래 **수정 후 독립 재검증**을 현재 판정으로 우선하며 최초 실패 기록은 유지한다.
 
 ## 범위 및 소스 일치
@@ -253,12 +254,11 @@ QT_QPA_PLATFORM=offscreen PYTHONPATH=src python -m pytest -q -p scripts.qa_setup
   이전 U-02 기반 재현의 실패 기록은 보존하지만 현재 구현 결함이나 배포 차단 문제로
   계산하지 않는다. 베타의 한시적 정책과 이후 안정화 단계의 자동 건너뛰기 목표를 구분한다.
   별도 기획 문서나 앱 구현은 이 정책 확인 작업에서 변경하지 않았다.
-- **Windows 사전 CI 대기.** 검증 시 최신 성공은 v0.4.66 (`5a3a0b7`, run `38665882059`)이며
-  `8cedbc2`의 실행은 아직 확인되지 않았다. 시작/캡처/표시 경로 변경이므로 기존에 합의한
-  고위험 변경 기준에 따라 release workflow의 main 수동 실행을 요청했다.
-  이 실행은 Release를 게시하지 않는다. 테스트/빌드와 수동 아티팩트 quota 실패는 구분한다.
-- Windows 사전 검증 확인 전에는 새 릴리즈 명령을 제공하지 않는다. QA 결과 공유는 미루지 않고
-  이 문서만 푸시·원격 확인한다. 실제 태그와 Release 실행은 사용자가 직접 한다.
+- **Windows 사전 테스트·빌드 확인 완료.** 아래 run `38684704595`의 테스트와 exe 빌드가
+  성공했다. 수동 아티팩트 저장 한도 실패는 코드 검증 실패와 구분하며,
+  태그 릴리즈에서 해당 단계가 실행되지 않음을 확인했다.
+- 제한된 베타 릴리즈 명령을 제공한다. QA 문서만 푸시·원격 확인하며,
+  실제 태그와 Release 실행은 사용자가 직접 한다.
 - 기존 공개 노트 혼입과 일반 밝기/DPI/고정 격자 한계는 여전히 별개 미해결 범위다.
 
 ### 정책 확인에 따른 판정 갱신
@@ -266,4 +266,31 @@ QT_QPA_PLATFORM=offscreen PYTHONPATH=src python -m pytest -q -p scripts.qa_setup
 이번 확인은 요구사항 분류와 QA 문서만 변경하며 제품 소스는 검증한 `8cedbc2`와 같다.
 관련 137개 통과 및 현재 베타 시작 정책 False/True/None 검증을 재사용한다.
 단순 정책 확인 때문에 같은 테스트나 Windows 빌드를 새로 실행하도록 요구하지 않는다.
-아직 확인하지 않은 이번 기능 변경의 Windows 사전 CI 요청만 남는다.
+정책 확인 당시에는 이번 기능 변경의 Windows 사전 CI만 남아 있었으며, 아래 실행으로 확인했다.
+
+## Windows 사전 검증 완료 (2026-10-15)
+
+- 실행: `38684704595`, job `116256794223`, release workflow의 main 수동 실행.
+- 대상: `63f686b4842887ae20850c06bf9fc4200b1c020d`.
+- 독립 QA 제품 소스 `8cedbc2`와 파일 tree를 비교했다. 달라진 파일은 이 QA 문서뿐이며
+  실제 제품 소스·테스트·자산·workflow는 동일하다. 커밋 이력/메시지는 조회하지 않았다.
+- GitHub job 단계와 실제 로그를 확인했다. **Test gate (pytest): success**,
+  **649 passed, 1 skipped, 4 warnings in 163.54s**다. Linux 137개와 합산하지 않는다.
+- 소스의 `tests/test_dwm_thumbnail.py:34`에는 Windows에서 비-Windows mss fallback
+  시험을 건너뛰는 기존 skip 조건이 있다. 새 skip/약화 변경은 없으며 skip 수와 구분해 확인했다.
+- **Build exe (PyInstaller): success**. EXE 생성 완료와 dist 출력 로그를 확인했다.
+  새 exe를 실제 게임과 실행하거나 음성/포커스/DWM을 라이브 검증했다는 뜻은 아니다.
+- 전체 run 표시는 failure지만 실패 단계는 **Upload build artifact** 하나다.
+  실제 오류는 `Artifact storage quota has been hit. Unable to upload any new artifacts.`다.
+  수동 빌드 결과물의 저장 공간 한도 문제이며 pytest/패키징 실패가 아니다.
+- `.github/workflows/release.yml:105`의 업로드 조건은
+  `github.event_name == 'workflow_dispatch'`다. v* 태그 실행은 이 수동 업로드를 건너뛰고
+  기존 Release 첨부 경로를 사용한다. workflow 자체는 변경하지 않았다.
+- 수동 실행의 Release 게시 단계는 skipped다. 이번 검증으로 배포나 업데이트가 이뤄졌다고
+  보고하지 않는다. 태그 CI의 전체 pytest·exe 빌드 게이트도 그대로 유지한다.
+- 두 동작 오류의 독립 재현 통과, 사용자 확인된 베타 시작 정책, Windows 사전 테스트·
+  빌드 조건을 충족해 **v0.4.67의 제한된 베타 릴리즈를 권고한다**.
+- 명령 제공 전 원격 태그와 앱 노트 v0.4.67, 최종 main의 제품 소스 동일성을 확인한다.
+  QA 문서 갱신만으로 같은 제품 소스의 수동 Windows CI를 반복 요청하지 않는다.
+- 실제 게임·혼합 DPI·장시간 자원·음성·입력/포커스 및 기존 공개 노트 혼입 문제는
+  앞서 기록한 범위 그대로 남는다. 이 한계를 모든 환경의 무결함 보장으로 바꾸지 않는다.
