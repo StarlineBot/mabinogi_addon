@@ -495,3 +495,65 @@ def test_capture_cancellation_restores_other_widgets_but_respects_tray_hide(flow
         assert len(applied) == 1
     finally:
         other.close()
+
+
+@pytest.mark.parametrize("skip", [False, True])
+@pytest.mark.parametrize("logged_in", [False, True])
+def test_settings_replay_opens_setup_guide_without_changing_configuration(app, settings, monkeypatch, skip, logged_in):
+    from mabinogi_addon import version
+    from mabinogi_addon.ui.main_window import MainWindow
+
+    monkeypatch.setattr(QApplication, "quit", lambda: None)
+    monkeypatch.setattr(MainWindow, "_maybe_check_update", lambda *a, **k: None)
+    monkeypatch.setattr(version, "__version__", "0.0.0")
+    monkeypatch.setattr(config, "load_discord_user", lambda:
+                        {"id": "test", "name": "테스트"} if logged_in else None)
+    update("general", skipSetup=skip, tourShown=True)
+    window = MainWindow()
+    window._booting = False
+    try:
+        window.show()
+        app.processEvents()
+        window._leave_setup()
+        window._tabs.setCurrentIndex(3)
+        before = deepcopy(config._read_local_config())
+        window.settings_tab.replay_tour.emit()
+        tour = window._tour
+        assert tour.isVisible()
+        assert window._pages.currentWidget() is window.setup_page
+        assert tour._steps[0].target is window.setup_page.selection
+        assert len(tour._steps) == (6 if logged_in else 5)
+        assert (window.setup_page.run_btn in [step.target for step in tour._steps]) is logged_in
+        tour._finish()
+        assert config._read_local_config() == before
+        assert not window.setup_page.busy
+    finally:
+        tour = getattr(window, "_tour", None)
+        if tour is not None:
+            tour.close()
+        window._force_quit = True
+        window.close()
+
+
+@pytest.mark.parametrize("blocked", ["busy", "restart", "closing"])
+def test_settings_replay_does_not_interrupt_work_or_shutdown(app, settings, monkeypatch, blocked):
+    from mabinogi_addon.ui.main_window import MainWindow
+
+    monkeypatch.setattr(QApplication, "quit", lambda: None)
+    window = MainWindow()
+    window._leave_setup()
+    before = deepcopy(config._read_local_config())
+    if blocked == "busy":
+        window.setup_page.set_busy(True)
+    elif blocked == "restart":
+        window._config_pending_restart = True
+    else:
+        window._setup_flow.shutdown()
+    try:
+        window.settings_tab.replay_tour.emit()
+        assert window._pages.currentWidget() is window._tabs
+        assert getattr(window, "_tour", None) is None
+        assert config._read_local_config() == before
+    finally:
+        window._force_quit = True
+        window.close()

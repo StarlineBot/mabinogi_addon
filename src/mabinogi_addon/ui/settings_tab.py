@@ -838,7 +838,7 @@ class SettingsTab(QWidget):
         setup_btn.clicked.connect(self.reopen_setup.emit)
         v.addWidget(setup_btn)
         tour_btn = QPushButton("사용법 투어 다시 보기")
-        tour_btn.setToolTip("처음 실행 때 나온 단계별 사용법 안내를 다시 봅니다")
+        tour_btn.setToolTip("사용 준비 화면을 열어 기능 선택과 영역 등록 안내를 다시 봅니다")
         tour_btn.clicked.connect(self.replay_tour.emit)
         tour_row.addWidget(tour_btn)
         notes_btn = QPushButton("업데이트 노트 보기")

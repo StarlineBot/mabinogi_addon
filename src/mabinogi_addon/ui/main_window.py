@@ -264,7 +264,7 @@ class MainWindow(QMainWindow):
         self.settings_tab = SettingsTab(self._watcher)
         self.settings_tab.config_imported.connect(self._on_config_imported)
         self.settings_tab.voice_pack_changed.connect(self._on_voice_pack_changed)
-        self.settings_tab.replay_tour.connect(self._run_tour)
+        self.settings_tab.replay_tour.connect(self._replay_tour)
         self.settings_tab.theme_changed.connect(self._apply_tab_styles)
         # 화면을 읽는 트래커들은 '트래커' 상위 탭 하나로 묶고, 그 아래 하위 탭으로 나눈다.
         # → 상단 탭이 짧아져(트래커·커스텀·파티·메모·설정) 설정이 넘침(<>) 뒤로 안 묻힌다.
@@ -729,6 +729,12 @@ class MainWindow(QMainWindow):
         )
         if body:
             ReleaseNotesDialog(body, __version__, self).exec()
+
+    def _replay_tour(self) -> None:
+        if self.setup_page.busy or self._config_pending_restart or self._setup_flow.closed:
+            return
+        self._open_setup()
+        self._run_tour()
 
     def _run_tour(self) -> None:
         """온보딩 투어 실행(첫 실행 + '다시 보기' 공용)."""
