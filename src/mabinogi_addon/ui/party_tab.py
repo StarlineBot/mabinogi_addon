@@ -141,7 +141,7 @@ class PartyTab(QWidget):
         root.setContentsMargins(12, 12, 12, 12)
         root.setSpacing(10)
         root.addWidget(tab_header(
-            "파티모집 현황 모아 보기 + 키워드 알림", HELP_TITLE, HELP_HTML, self
+            "선택한 서버의 파티 모집을 보고 등록한 키워드가 포함되면 알림을 받습니다.", HELP_TITLE, HELP_HTML, self
         ))
         root.addWidget(self._build_board(), 1)
 

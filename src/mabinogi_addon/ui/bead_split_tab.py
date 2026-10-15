@@ -48,8 +48,7 @@ class BeadSplitTab(QWidget):
         v.setSpacing(8)
         v.addWidget(
             hint_label(
-                "던전에서 먹은 구슬 갯수와 구슬금액·분배 인원을 넣으면 1인당 분배금을 "
-                "바로 계산해요.\n구슬은 개수를 입력하면 2배로 계산해요."
+                "구슬 개수·개당 가격·인원을 입력하면 1인당 분배금을 계산합니다."
             )
         )
 
@@ -71,7 +70,7 @@ class BeadSplitTab(QWidget):
 
         # 구슬금액 · 분배 인원
         top = QHBoxLayout()
-        top.addWidget(QLabel("구슬금액"))
+        top.addWidget(QLabel("구슬 1개 가격"))
         self.price_spin = _spin(99_999_999, width=140, suffix=" 만")
         top.addWidget(self.price_spin)
         top.addSpacing(18)
@@ -111,7 +110,7 @@ class BeadSplitTab(QWidget):
         v.addWidget(self.talagah_box)
 
         # 입력 칸 바로 아래 안내(상단 설명을 안 읽는 사람 대비)
-        note = hint_label("구슬은 2배로 계산하니 등장 개수만 적어요.")
+        note = hint_label("등장한 개수를 입력하세요. 계산에는 2배가 반영됩니다.")
         note.setStyleSheet(_GRAY)
         v.addWidget(note)
 
@@ -168,7 +167,7 @@ class BeadSplitTab(QWidget):
         price_man = self.price_spin.value()
         price = price_man * 10000  # 만 단위 입력 → 실제 금액(원)
         people = self.people_spin.value()
-        self.result_total.setText(f"총 구슬 {total}개")
+        self.result_total.setText(f"계산에 반영한 구슬 {total}개")
         each = bead_split.per_person(total, price, people)
         if each <= 0:
             self.result_main.setText("1인당 —")

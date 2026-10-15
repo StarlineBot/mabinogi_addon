@@ -48,8 +48,7 @@ class ExchangeTab(QWidget):
         v.setContentsMargins(12, 12, 12, 12)
         v.addWidget(
             hint_label(
-                "던전 구슬로 어떤 재료를 바꿔 팔아야 이득인지, 던전을 고르면 경매장 "
-                "현재가 기준 '구슬당 가격' 순위를 보여줘요."
+                "던전을 선택하면 구슬당 판매금액이 높은 재료부터 보여줍니다."
             )
         )
 
@@ -162,7 +161,7 @@ class ExchangeTab(QWidget):
         self.title.setText(region)
         at = self._cache.get(region, (time.time(), None))[0]
         hhmm = time.strftime("%H:%M", time.localtime(at))
-        self.asof.setText(f"기준 {hhmm} · 경매 시세는 넥슨 API 특성상 10분가량 지연돼요.")
+        self.asof.setText(f"조회 시각 {hhmm} · 경매 시세는 약 10분 지연됩니다.")
         best = next((r for r in rows if r["efficiency"] is not None), None)
         self.table.setRowCount(len(rows))
         for i, r in enumerate(rows):

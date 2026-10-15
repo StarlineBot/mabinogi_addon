@@ -144,6 +144,9 @@ class BuffTab(QWidget):
         outer.addWidget(tab_header(
             "등록한 버프의 남은 시간을 오버레이로 표시", HELP_TITLE, HELP_HTML, self
         ))
+        from .widgets import feature_checkbox
+        self.enable = feature_checkbox("buff", "버프 트래커 사용")
+        outer.addWidget(self.enable)
         body = QHBoxLayout()
         body.setSpacing(14)
         body.addWidget(self._build_list_panel(), 1)
@@ -206,7 +209,7 @@ class BuffTab(QWidget):
 
         top = QHBoxLayout()
         top.setSpacing(6)
-        region_btn = QPushButton("버프 영역 지정")
+        region_btn = QPushButton("버프 영역 직접 지정")
         region_btn.clicked.connect(self._pick_region)
         self.region_btn = region_btn  # 온보딩 투어가 강조 대상으로 참조
         top.addWidget(region_btn, 1)
@@ -235,7 +238,7 @@ class BuffTab(QWidget):
         hint_row.setSpacing(6)
         self.region_hint = hint_label("")
         hint_row.addWidget(self.region_hint, 1)
-        self.view_region_btn = QPushButton("영역 보기")
+        self.view_region_btn = QPushButton("지정 영역 보기")
         self.view_region_btn.setToolTip("잡힌 영역을 화면에 점선으로 잠깐 표시")
         self.view_region_btn.clicked.connect(self._flash_region)
         hint_row.addWidget(self.view_region_btn)
@@ -501,7 +504,7 @@ class BuffTab(QWidget):
         self.name_edit.editingFinished.connect(self._save_name)  # 포커스 아웃·엔터 시 저장
         iv.addWidget(self.name_edit)
 
-        iv.addWidget(section_label("매칭 아이콘"))
+        iv.addWidget(section_label("찾을 아이콘"))
         match_row = QHBoxLayout()
         self.match_slot = icon_slot()
         match_row.addWidget(self.match_slot)
@@ -517,7 +520,7 @@ class BuffTab(QWidget):
         match_row.addStretch(1)
         iv.addLayout(match_row)
 
-        iv.addWidget(section_label("보여줄 아이콘"))
+        iv.addWidget(section_label("오버레이 아이콘"))
         show_row = QHBoxLayout()
         self.display_slot = icon_slot("—")
         show_row.addWidget(self.display_slot)
@@ -529,7 +532,7 @@ class BuffTab(QWidget):
         show_row.addWidget(self.display_clear_btn)
         show_row.addStretch(1)
         iv.addLayout(show_row)
-        iv.addWidget(hint_label("└ 비워두면 매칭 아이콘 사용"))
+        iv.addWidget(hint_label("└ 비워 두면 찾을 아이콘을 사용합니다."))
         v.addWidget(icon_box)
 
         # --- 그룹 2: 표시(오버레이 노출·지속시간) ---

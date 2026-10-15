@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QMenu,
     QPushButton,
     QScrollArea,
+    QStackedWidget,
     QSystemTrayIcon,
     QTabWidget,
     QVBoxLayout,
@@ -309,7 +310,22 @@ class MainWindow(QMainWindow):
         self._update_found.connect(self._on_update_found)
         cv.addWidget(self._update_banner)
         cv.addWidget(self._build_status_bar())  # 탭 위 최상단: 재생/일시정지 + 상태
-        cv.addWidget(tabs)
+        from .setup_page import SetupPage
+        from .setup_flow import SetupFlow
+        self.setup_page = SetupPage()
+        self._pages = QStackedWidget()
+        self._pages.addWidget(tabs)
+        self._pages.addWidget(self.setup_page)
+        cv.addWidget(self._pages)
+        self._setup_flow = SetupFlow(self.setup_page, self._apply_setup_region)
+        self.setup_page.leave_requested.connect(self._leave_setup)
+        self.setup_page.open_feature.connect(self._open_setup_feature)
+        self.setup_page.register_game.connect(self._register_setup_game)
+        self.setup_page.feature_changed.connect(self._set_feature_enabled)
+        self.settings_tab.reopen_setup.connect(self._open_setup)
+        self.settings_tab.login_changed.connect(self.setup_page.refresh)
+        self.settings_tab.game_registered.connect(self.setup_page.refresh)
+        self.settings_tab.game_registration_finished.connect(self._setup_game_finished)
         self.setCentralWidget(central)
 
         # 버프 오버레이
@@ -361,6 +377,98 @@ class MainWindow(QMainWindow):
         self.debuff_tab.scale_changed.connect(
             lambda pct: self.debuff_overlay.set_scale(pct / 100)
         )
+
+        self._feature_checks = {
+            "buff": self.buff_tab.enable, "debuff": self.debuff_tab.enable,
+            "tuarim": self.tuarim_tab.enable, "boss": self.boss_tab.enable,
+            "stat_bars": self.stat_bars_tab.enable, "skillbar": self.skillbar_tab.enable,
+            "custom": self.custom_overlay_tab.enable, "memo": self.memo_tab.enable_chk,
+        }
+        for key, check in self._feature_checks.items():
+            check.toggled.connect(lambda _value, key=key: self._feature_changed(key))
+        from ..setup_state import needs_start_screen
+        if needs_start_screen():
+            self._open_setup()
+
+    def _open_setup(self):
+        if self._config_pending_restart:
+            return
+        self.setup_page.refresh()
+        self._pages.setCurrentWidget(self.setup_page)
+
+    def _leave_setup(self):
+        if self.setup_page.busy:
+            return
+        self._tabs.setCurrentWidget(self._tracker_tabs)
+        self._tracker_tabs.setCurrentIndex(0)
+        self._pages.setCurrentWidget(self._tabs)
+
+    def _open_setup_feature(self, key):
+        if self.setup_page.busy:
+            return
+        self._pages.setCurrentWidget(self._tabs)
+        tracker = {"buff": 0, "debuff": 1, "tuarim": 2, "boss": 3}
+        convenience = {"custom": 0, "skillbar": 1, "stat_bars": 2, "memo": 3}
+        if key in tracker:
+            self._tabs.setCurrentWidget(self._tracker_tabs)
+            self._tracker_tabs.setCurrentIndex(tracker[key])
+        else:
+            self._tabs.setCurrentWidget(self._convenience_tabs)
+            self._convenience_tabs.setCurrentIndex(convenience[key])
+
+    def _register_setup_game(self):
+        self.settings_tab._start_detect()
+        self.setup_page.game_btn.setEnabled(False)
+        self.setup_page.progress.setText("3초 안에 게임창을 선택하세요. 등록 결과는 이 화면에 반영됩니다.")
+
+    def _setup_game_finished(self, success):
+        self.setup_page.game_btn.setEnabled(not self.setup_page.busy)
+        self.setup_page.refresh()
+        self.setup_page.progress.setText("게임창을 등록했습니다. 사용할 기능을 선택하세요." if success else
+                                         "게임창을 등록하지 못했습니다. 게임창을 선택한 뒤 다시 시도하세요.")
+
+    def _set_feature_enabled(self, key, value):
+        from ..setup_state import BY_KEY
+        if value and BY_KEY[key].beta and config.load_discord_user() is None:
+            self.setup_page.refresh()
+            return
+        self._feature_checks[key].setChecked(value)
+
+    def _feature_changed(self, key):
+        from ..setup_state import remember_order
+        try:
+            remember_order(key, self._feature_checks[key].isChecked())
+        except OSError:
+            _log.warning("기능 선택 순서를 저장하지 못했습니다")
+        if not self._booting:
+            if key == "buff":
+                self._start_buff_tracking()
+            elif key == "debuff":
+                self._start_debuff_tracking()
+        self.setup_page.refresh()
+
+    def _apply_setup_region(self, key, box):
+        if self._config_pending_restart or self._setup_flow.closed:
+            raise RuntimeError("종료 또는 설정 재시작 대기 중에는 등록할 수 없습니다")
+        if key in ("buff", "debuff"):
+            section = "buffTracker" if key == "buff" else "debuffTracker"
+            config.save_capture_region(*box, section)
+            if key == "buff":
+                self.buff_tab._update_region_hint()
+                self._start_buff_tracking()
+            else:
+                self.debuff_tab.refresh_region_hint()
+                self._start_debuff_tracking()
+        elif key == "boss":
+            config.save_boss_bar_region(*box)
+            self.boss_tab.reload_region()
+            self._on_boss_bar_region_changed()
+        elif key == "tuarim":
+            self.tuarim_tab._apply_region(*box)
+        elif key == "stat_bars":
+            self.stat_bars_tab._on_selected(*box)
+        elif key == "skillbar":
+            self.skillbar_tab._on_anchor_selected(*box)
 
     # ---- 상단 업데이트 배너(새 버전 있을 때만) ----
     def _build_update_banner(self) -> QWidget:
@@ -417,11 +525,10 @@ class MainWindow(QMainWindow):
         h.setContentsMargins(12, 6, 12, 6)
         h.setSpacing(10)
         h.addStretch(1)  # 오른쪽 정렬: 상태·버튼을 우상단에 모은다.
-        self._status_label = QLabel("● 전체 오버레이 동작중")
+        self._status_label = QLabel("● 전체 오버레이: 켜짐")
         self._status_label.setObjectName("statusText")
         self._status_label.setToolTip(
-            "오버레이 동작 여부입니다. '동작중'이어도 실제 표시는 "
-            "마비노기가 맨 앞일 때만 — 자세한 추적 상태는 각 탭 안내를 보세요."
+            "각 기능의 사용 설정과 게임 활성 상태에 따라 표시됩니다. 영역 등록 여부는 각 탭에서 확인하세요."
         )
         h.addWidget(self._status_label)
         # 재생/일시정지 토글: 감지 중이면 ❚❚(누르면 멈춤), 멈추면 ▶(누르면 재개).
@@ -449,8 +556,8 @@ class MainWindow(QMainWindow):
         if self._paused:
             # 정지중은 빨간 ●로(동작중 초록 ●과 대비). 앞 글리프는 ⏸ 이모지가 아니라
             # 일반 원(●)이라 OS 이모지 폰트의 네모 박스 artifact가 없다.
-            return ("● 전체 오버레이 정지중", self._STATUS_STOP)
-        return ("● 전체 오버레이 동작중", self._STATUS_OK)
+            return ("● 전체 오버레이: 일시정지", self._STATUS_STOP)
+        return ("● 전체 오버레이: 켜짐", self._STATUS_OK)
 
     def _update_header_status(self) -> None:
         text, color = self._overlay_status()
@@ -498,10 +605,12 @@ class MainWindow(QMainWindow):
             return
         need_buff = (
             self.buff_controller is None
+            and self.buff_tab.enable.isChecked()
             and bool(config.load_capture_region("buffTracker"))
         )
         need_debuff = (
             self.debuff_controller is None
+            and self.debuff_tab.enable.isChecked()
             and bool(config.load_capture_region("debuffTracker"))
         )
         if not (need_buff or need_debuff):
@@ -543,6 +652,8 @@ class MainWindow(QMainWindow):
             self._maybe_check_update("주기")
 
     def _buff_status(self) -> tuple[str, str]:
+        if not self.buff_tab.enable.isChecked():
+            return ("버프 트래커: 사용 안 함", self._STATUS_MUTED)
         if not config.load_capture_region("buffTracker"):
             return ("⚠ 영역 미지정 — '버프 영역 지정'을 먼저 하세요", self._STATUS_WARN)
         if self.buff_controller is None:
@@ -563,6 +674,8 @@ class MainWindow(QMainWindow):
         return ("● 추적 중 — 지금 표시할 버프 없음", self._STATUS_OK)
 
     def _debuff_status(self) -> tuple[str, str]:
+        if not self.debuff_tab.enable.isChecked():
+            return ("디버프 트래커: 사용 안 함", self._STATUS_MUTED)
         if not config.load_capture_region("debuffTracker"):
             return ("⚠ 영역 미지정 — '디버프 줄 영역 지정'을 먼저 하세요",
                     self._STATUS_WARN)
@@ -621,9 +734,15 @@ class MainWindow(QMainWindow):
         """온보딩 투어 실행(첫 실행 + '다시 보기' 공용)."""
         if not self.isVisible():
             self.show()  # 트레이 상태에서 '다시 보기' 누르면 창을 띄운다
+        if self.setup_page.busy:
+            return
+        previous = getattr(self, "_tour", None)
+        if previous is not None and previous.isVisible():
+            previous.close()
         from .tour_overlay import TourOverlay, TourStep
 
         def _go_buff() -> None:
+            self._pages.setCurrentWidget(self._tabs)
             self._tabs.setCurrentWidget(self._tracker_tabs)  # 상위 '트래커'
             self._tracker_tabs.setCurrentIndex(0)  # 하위 '버프'
 
@@ -637,8 +756,8 @@ class MainWindow(QMainWindow):
             ),
             TourStep(
                 target=self.buff_tab.add_btn,
-                title="② 버프 등록",
-                body="＋로 추적할 버프를 추가하고, 그 아이콘을 상태창에서 바로 집어요.",
+                title="② 버프 추가 (선택)",
+                body="기본 버프가 제공됩니다. 다른 버프가 필요하면 ＋로 추가하고 아이콘을 지정하세요.",
             ),
             TourStep(
                 target=self.buff_tab.lock_btn,
@@ -648,11 +767,35 @@ class MainWindow(QMainWindow):
             ),
             TourStep(
                 target=None,
-                title="준비 끝! 🎉",
-                body="디버프·투아림 탭도 같은 순서로 쓰면 됩니다.\n"
-                     "자세한 설명은 각 탭의 ? 버튼, 세부 설정은 ⚙️ 설정 탭에서.",
+                title="사용 안내 종료",
+                body="안내를 마쳤습니다. 실제 등록 여부는 사용 준비 화면에서 확인하세요.\n"
+                     "기능마다 설정 방법이 다릅니다. 자세한 설명은 각 탭의 도움말에서 확인하세요.",
             ),
         ]
+
+        if self._pages.currentWidget() is self.setup_page:
+            steps = [
+                TourStep(self.setup_page.selection, "사용할 기능 선택",
+                         "사용할 기능을 선택하면 필요한 설정을 모아서 보여줍니다."),
+                TourStep(self.setup_page.need_title, "설정 필요",
+                         "아직 등록하지 않은 항목입니다. 보스 체력바처럼 화면에 떠 있어야 찾을 수 있는 대상도 있습니다."),
+            ]
+            if config.load_discord_user() is not None:
+                steps.extend([
+                    TourStep(self.setup_page.run_btn, "자동설정",
+                             "미등록 영역만 순서대로 찾습니다. 기존에 등록된 영역은 유지합니다."),
+                    TourStep(None, "찾은 영역 확인",
+                             "후보와 설명을 확인하고 '이 영역으로 등록'을 누르세요. 등록하지 않고 다음 항목으로 넘어갈 수도 있습니다."),
+                ])
+            else:
+                steps.append(TourStep(None, "직접 지정",
+                    "각 항목의 개별 설정에서 영역을 지정하세요. 자동설정은 Discord 로그인 후 사용할 수 있는 베타 기능입니다."))
+            steps.extend([
+                TourStep(self.setup_page.need_title, "개별 설정",
+                         "못 찾았거나 위치가 맞지 않는 항목은 개별 설정에서 다시 찾거나 직접 지정할 수 있습니다."),
+                TourStep(None, "사용 안내 종료",
+                         "안내를 마쳤습니다. 영역이 자동으로 등록된 것은 아닙니다. 등록 상태를 확인하고 각 기능에서 세부 동작을 설정하세요."),
+            ])
 
         def _done() -> None:
             config.save_general_flag("tourShown", True)
@@ -900,7 +1043,6 @@ class MainWindow(QMainWindow):
         # update_check)가 60초마다 확인한다. 전용 타이머 대신 '항상 도는' 상태 타이머에
         # 얹어, 시작 중 무엇이 막아도 백그라운드 감지가 보장되게 한다(캐시무효화로 최신 수신).
         # 모달 안내는 타이머 시작 '뒤'에(위 이유). 이게 떠 있어도 감지는 계속 돈다.
-        self._maybe_prompt_game_window()
         # 노트·투어는 창이 '실제로 처음 보일 때'(showEvent) 띄운다. start()는 window.show()
         # '전'에 불리고(진입점 순서), 트레이로 시작하거나 업데이트 후 재실행되는 등 경로가
         # 다양해, start() 시점에 쏘면 isVisible=False라 놓친다. showEvent 로 옮겨 어느
@@ -973,6 +1115,11 @@ class MainWindow(QMainWindow):
             self.buff_controller.stop()
             self.buff_controller = None
             self._engine = None
+
+        from ..setup_state import enabled
+        if not enabled("buff"):
+            self.buff_overlay.hide()
+            return
 
         region = config.load_capture_region("buffTracker")
         if not region:
@@ -1089,6 +1236,11 @@ class MainWindow(QMainWindow):
             self.debuff_controller.stop()
             self.debuff_controller = None
             self._debuff_engine = None
+
+        from ..setup_state import enabled
+        if not enabled("debuff"):
+            self.debuff_overlay.hide()
+            return
 
         region = config.load_capture_region("debuffTracker")
         if not region:
@@ -1365,6 +1517,8 @@ class MainWindow(QMainWindow):
         멈춘 뒤 사용자가 직접 종료→재실행하면 바뀐 설정·자산이 깨끗이 반영된다.
         """
         self._config_pending_restart = True
+        self._setup_flow.shutdown()
+        self.setup_page.setEnabled(False)
 
     def _minimize_to_tray_enabled(self) -> bool:
         return self._tray is not None and config.load_general_flag(
@@ -1446,6 +1600,7 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event) -> None:
         import time
 
+        self._setup_flow.cancel()
         self._save_window_pos()  # 트레이 최소화·완전 종료 모두에서 현재 위치 기억
 
         # 트레이 최소화: X를 눌러도 종료하지 않고 트레이로 숨긴다(백그라운드 계속 동작).
@@ -1477,6 +1632,7 @@ class MainWindow(QMainWindow):
             _log.info("종료 단계 '%s' %.0fms", name, (time.perf_counter() - t) * 1000)
 
         total = time.perf_counter()
+        self._setup_flow.shutdown()
         _step("상태 저장", lambda: (
             self._save_overlay_state(),
             self._save_debuff_overlay_state(),

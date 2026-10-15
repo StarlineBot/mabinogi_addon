@@ -112,13 +112,13 @@ class BossTab(QWidget):
         v.addWidget(title)
         v.addWidget(
             hint_label(
-                "보스 HP%가 패턴 진입점에 다가오면 화면 중앙에 크게 알립니다. "
-                "각 %의 5% 전(예고)과 1% 전(진입), 두 번 알려요."
+                "보스 체력이 패턴 기준에 가까워지면 화면과 소리로 알립니다. "
+                "보스 체력바가 보이는 상태에서 자동 찾기를 실행하세요."
             )
         )
         v.addWidget(self._supported_label())
 
-        prev_btn = QPushButton("경고 위치 미리보기")
+        prev_btn = QPushButton("패턴 알림 미리보기")
         prev_btn.setToolTip("경고가 화면 어디에 어떻게 뜨는지 한 번 띄워 봅니다")
         prev_btn.clicked.connect(self._preview_warning)
         v.addWidget(prev_btn)
@@ -129,7 +129,7 @@ class BossTab(QWidget):
         cv.setContentsMargins(0, 0, 0, 0)
 
         row = QHBoxLayout()
-        self.region_btn = QPushButton("보스 영역 수정")
+        self.region_btn = QPushButton("보스 체력바 직접 지정")
         self.region_btn.setToolTip(
             "기본 위치(2560×1440)로 이미 잡혀 있습니다. 해상도가 다르거나 안 맞으면 "
             "눌러서 보스 HP바(이름~%)에 박스를 맞춥니다."
@@ -138,7 +138,7 @@ class BossTab(QWidget):
         row.addWidget(self.region_btn)
         self.region_label = hint_label("")
         row.addWidget(self.region_label, 1)
-        self.view_region_btn = QPushButton("영역 보기")
+        self.view_region_btn = QPushButton("지정 영역 보기")
         self.view_region_btn.clicked.connect(self._flash_region)
         row.addWidget(self.view_region_btn)
         # 자동 찾기(🧪 Discord 베타) — 로그인 사용자만 보임. 보스 체력바를 화면에서 찾아
@@ -183,7 +183,8 @@ class BossTab(QWidget):
         self._sync_warn_btn()
 
         # 다음 패턴 목록(왼쪽에 남은 패턴 % 나열) — 준비(5% 전) 알림이 뜨면 그 %가 빠짐.
-        self.show_upcoming = checkbox("다음 패턴 보기 (왼쪽에 남은 패턴 % 나열)")
+        self.show_upcoming = checkbox("남은 패턴 목록 표시")
+        self.show_upcoming.setToolTip("남은 패턴의 체력 비율을 별도 목록으로 표시합니다.")
         self.show_upcoming.setChecked(cfg["showUpcoming"])
         self.show_upcoming.toggled.connect(self._on_show_upcoming)
         cv.addWidget(self.show_upcoming)
@@ -214,6 +215,13 @@ class BossTab(QWidget):
         """타이머 틱 가드 — 한 틱의 예외(판독·캡처 등)가 앱 전체를 죽이지 않게 흡수한다.
         (메인 스레드 QTimer 슬롯의 미처리 예외는 PySide6에서 프로세스를 abort시킬 수 있다.)"""
         try:
+            self._apply_collect_gate()
+            if not self.enable.isChecked() and not (
+                self._logged_in() and self._presence_wanted_fn is not None and self._presence_wanted_fn()
+            ):
+                self._boss_present = False
+                self._upcoming.hide()
+                return
             self._tick()
         except Exception:  # noqa: BLE001 — 틱 격리(앱 생존 우선)
             import logging

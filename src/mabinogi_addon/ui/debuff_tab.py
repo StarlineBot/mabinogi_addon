@@ -86,6 +86,9 @@ class DebuffTab(QWidget):
         outer.addWidget(tab_header(
             "아직 안 걸린 디버프만 오버레이로 표시", HELP_TITLE, HELP_HTML, self
         ))
+        from .widgets import feature_checkbox
+        self.enable = feature_checkbox("debuff", "디버프 트래커 사용")
+        outer.addWidget(self.enable)
         body = QHBoxLayout()
         body.setSpacing(14)
         body.addWidget(self._build_list_panel(), 1)
@@ -134,7 +137,7 @@ class DebuffTab(QWidget):
 
         top = QHBoxLayout()
         top.setSpacing(6)
-        region_btn = QPushButton("디버프 줄 영역 지정")
+        region_btn = QPushButton("디버프 영역 직접 지정")
         region_btn.clicked.connect(self._pick_region)
         top.addWidget(region_btn, 1)
         self.lock_btn = QPushButton("위치 잠금")
@@ -162,7 +165,7 @@ class DebuffTab(QWidget):
         hint_row.setSpacing(6)
         self.region_hint = hint_label("")
         hint_row.addWidget(self.region_hint, 1)
-        self.view_region_btn = QPushButton("영역 보기")
+        self.view_region_btn = QPushButton("지정 영역 보기")
         self.view_region_btn.setToolTip("잡힌 영역을 화면에 점선으로 잠깐 표시")
         self.view_region_btn.clicked.connect(self._flash_region)
         hint_row.addWidget(self.view_region_btn)
@@ -182,18 +185,18 @@ class DebuffTab(QWidget):
         # 2·3차는 베타 — 디코 로그인 필요.
         method_row = QHBoxLayout()
         method_row.setSpacing(6)
-        method_row.addWidget(section_label("탐지 방식"))
+        method_row.addWidget(section_label("보스 확인 방식"))
         self.method_combo = QComboBox()
         for text, mode in (
-            ("1차 · 항상 탐지 (기본)", "off"),
-            ("2차 · 보스 바 인식 (띠)", "band"),
-            ("3차 · 보스 바 %판독 (실험)", "percent"),
+            ("보스 확인 없이 탐지 (기본)", "off"),
+            ("체력바 모양으로 보스 확인 (베타)", "band"),
+            ("체력 %로 보스 확인 (베타)", "percent"),
         ):
             self.method_combo.addItem(text, mode)
         self.method_combo.setToolTip(
             "1차: 항상 탐지(기존). 바닥 오탐이 있을 수 있으나 보스 바 인식에 비의존.\n"
             "2차: 디버프 영역 안의 '평평한 띠'로 보스가 있을 때만 탐지.\n"
-            "3차: 보스 HP바 영역의 퍼센트 숫자를 읽어 보스가 있을 때만 탐지(가장 정확)."
+            "체력 %: 별도로 지정한 보스 체력바 숫자가 읽히는 동안 탐지합니다."
         )
         cur = config.load_debuff_gate_mode()
         idx = self.method_combo.findData(cur)
@@ -568,7 +571,7 @@ class DebuffTab(QWidget):
         self.name_edit.editingFinished.connect(self._save_name)
         iv.addWidget(self.name_edit)
 
-        iv.addWidget(section_label("매칭 아이콘"))
+        iv.addWidget(section_label("찾을 아이콘"))
         match_row = QHBoxLayout()
         self.match_slot = icon_slot()
         match_row.addWidget(self.match_slot)

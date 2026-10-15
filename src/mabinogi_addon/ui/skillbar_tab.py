@@ -76,7 +76,7 @@ class SkillbarTab(QWidget):
         v.setContentsMargins(12, 12, 12, 12)
         v.setSpacing(10)
         v.addWidget(tab_header(
-            "상단 단축바를 그룹(4칸)별로 떼어 원하는 곳에", HELP_TITLE, HELP_HTML, self
+            "게임 원본 단축바를 그룹별로 복제해 원하는 위치에 표시합니다.", HELP_TITLE, HELP_HTML, self
         ))
         self._beta_notice = hint_label(
             "🧪 개발 중인 기능 — 설정 탭에서 Discord 로그인 후 가장 먼저 써볼 수 있어요."
@@ -84,12 +84,12 @@ class SkillbarTab(QWidget):
         self._beta_notice.setStyleSheet("color:#e67e22; font-weight:600;")
         v.addWidget(self._beta_notice)
         v.addWidget(hint_label(
-            "'앵커 지정'으로 단축바 맨 왼쪽 위 첫 아이콘에 박스를 맞춰 클릭하세요."
-            " 그 자리를 기준으로 12뭉(그룹)을 잘라 띄웁니다. 빈 칸은 뭉치에서 우클릭으로 숨김."
+            "원본 단축바를 보이게 한 뒤 자동 찾기를 실행하세요."
+            " 직접 지정할 때는 맨 왼쪽 위 첫 칸에 맞추세요. 빈 칸은 오버레이에서 우클릭해 숨길 수 있습니다."
         ))
 
         row = QHBoxLayout()
-        self.anchor_btn = QPushButton("앵커 지정")
+        self.anchor_btn = QPushButton("첫 칸 직접 지정")
         self.anchor_btn.setToolTip("단축바 첫 아이콘에 박스를 맞춰 클릭(돋보기)")
         self.anchor_btn.clicked.connect(self._on_anchor)
         row.addWidget(self.anchor_btn)
@@ -107,7 +107,7 @@ class SkillbarTab(QWidget):
         v.addWidget(self.enable)
 
         ctl = QHBoxLayout()
-        ctl.addWidget(QLabel("배율"))
+        ctl.addWidget(QLabel("오버레이 배율"))
         self.scale_spin = QSpinBox()
         self.scale_spin.setRange(50, 300)
         self.scale_spin.setSingleStep(10)

@@ -172,6 +172,9 @@ class SettingsTab(QWidget):
     voice_pack_changed = Signal()
     # '사용법 투어 다시 보기' → 메인이 온보딩 투어를 다시 실행.
     replay_tour = Signal()
+    reopen_setup = Signal()
+    game_registered = Signal()
+    game_registration_finished = Signal(bool)
     theme_changed = Signal()  # 테마 변경 → 메인이 탭 등 테마색 재적용
 
     def __init__(self, watcher: WindowWatcher) -> None:
@@ -831,6 +834,9 @@ class SettingsTab(QWidget):
         )
 
         tour_row = QHBoxLayout()
+        setup_btn = QPushButton("자동설정 다시 열기")
+        setup_btn.clicked.connect(self.reopen_setup.emit)
+        v.addWidget(setup_btn)
         tour_btn = QPushButton("사용법 투어 다시 보기")
         tour_btn.setToolTip("처음 실행 때 나온 단계별 사용법 안내를 다시 봅니다")
         tour_btn.clicked.connect(self.replay_tour.emit)
@@ -907,14 +913,14 @@ class SettingsTab(QWidget):
 
     # ---- 게임 창 인식(포그라운드 판정 대상) ----
     def _game_group(self) -> QGroupBox:
-        box = QGroupBox("게임 창 인식")
+        box = QGroupBox("게임창 등록")
         v = QVBoxLayout(box)
         self._game_hint = hint_label("")
         self._update_game_label()
         v.addWidget(self._game_hint)
 
         row = QHBoxLayout()
-        self._detect_btn = QPushButton("게임 창 자동 찾기")
+        self._detect_btn = QPushButton("게임창 등록 시작")
         self._detect_btn.clicked.connect(self._start_detect)
         row.addWidget(self._detect_btn)
         row.addStretch(1)
@@ -922,8 +928,7 @@ class SettingsTab(QWidget):
 
         v.addWidget(
             hint_label(
-                "버튼을 누르고 3초 안에 마비노기 창을 클릭해 맨 앞으로 두세요.\n"
-                "제목이 아니라 '실행파일'로 인식 → 이름이 같은 폴더 창 등과 헷갈리지 않습니다."
+                "버튼을 누른 뒤 3초 안에 게임창을 선택하세요. 실행 파일명으로 등록합니다."
             )
         )
         return box
@@ -935,7 +940,7 @@ class SettingsTab(QWidget):
     def _update_game_label(self) -> None:
         exe = config.load_game_exe()
         if exe:
-            self._game_hint.setText(f"인식 대상(실행파일): {exe}")
+            self._game_hint.setText(f"등록된 게임: {exe}")
             self._game_hint.setStyleSheet("color:#2ecc71;")
         else:
             self._game_hint.setText(
@@ -944,6 +949,8 @@ class SettingsTab(QWidget):
             self._game_hint.setStyleSheet("color:#8a8f98;")
 
     def _start_detect(self) -> None:
+        if self._detect_timer is not None and self._detect_timer.isActive():
+            return
         self._detect_count = 3
         self._detect_btn.setEnabled(False)
         self._detect_btn.setText("3초 후 현재 창 등록…")
@@ -959,13 +966,24 @@ class SettingsTab(QWidget):
             return
         if self._detect_timer is not None:
             self._detect_timer.stop()
-        _title, exe = self._watcher.foreground_info()
+            self._detect_timer.deleteLater()
+            self._detect_timer = None
+        try:
+            _title, exe = self._watcher.foreground_info()
+        except Exception:
+            exe = None
         self._detect_btn.setEnabled(True)
-        self._detect_btn.setText("게임 창 자동 찾기")
+        self._detect_btn.setText("게임창 등록 시작")
         if exe:
-            config.save_game_exe(exe)
-            self._watcher.set_game_exe(exe)
-            self._update_game_label()
+            try:
+                config.save_game_exe(exe)
+                self._watcher.set_game_exe(exe)
+                self._update_game_label()
+                self.game_registered.emit()
+            except Exception:
+                exe = None
+                self._game_hint.setText("게임창 등록을 저장하지 못했습니다. 쓰기 권한과 창 정보를 확인하세요.")
         else:
             self._game_hint.setText("자동 찾기 실패(창 정보를 못 읽음). Windows에서 시도하세요.")
             self._game_hint.setStyleSheet("color:#e67e22;")
+        self.game_registration_finished.emit(bool(exe))

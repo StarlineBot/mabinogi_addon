@@ -94,24 +94,23 @@ class TuarimTab(QWidget):
         v.setContentsMargins(12, 12, 12, 12)
         v.setSpacing(10)
         v.addWidget(tab_header(
-            "투아림 게이지(%)를 읽어 지정 %에서 알림", HELP_TITLE, HELP_HTML, self
+            "투아림이 설정한 비율에 도달하면 소리로 알립니다.", HELP_TITLE, HELP_HTML, self
         ))
         v.addWidget(
             hint_label(
-                "'영역 지정'을 누르면 박스가 커서를 따라옵니다. 마우스 휠로 크기를 숫자에"
-                " 맞게 조절하고, 투아림 %(숫자 두 자리) 위에 올려 클릭해 배치하세요. 그 자리를"
-                " 읽어 지정 %에 소리로 알립니다. (읽기만 하며 화면을 가리지 않음)"
+                "보라색 원과 오른쪽 아래 숫자·%가 보이는 상태에서 자동 찾기를 실행하세요."
+                " 직접 지정할 때는 100%까지 숫자와 %가 잘리지 않게 맞추세요."
             )
         )
 
         row = QHBoxLayout()
-        self.region_btn = QPushButton("영역 지정")
+        self.region_btn = QPushButton("직접 지정")
         self.region_btn.setToolTip("% 숫자에 휠로 크기 맞춰 클릭 배치(돋보기). 다시 누르면 재지정.")
         self.region_btn.clicked.connect(self._on_region)
         row.addWidget(self.region_btn)
         self.region_label = hint_label("")
         row.addWidget(self.region_label, 1)
-        self.view_region_btn = QPushButton("영역 보기")
+        self.view_region_btn = QPushButton("지정 영역 보기")
         self.view_region_btn.setToolTip("잡힌 영역을 화면에 점선으로 잠깐 표시")
         self.view_region_btn.clicked.connect(self._flash_region)
         row.addWidget(self.view_region_btn)
@@ -151,7 +150,7 @@ class TuarimTab(QWidget):
         self._update_region_label()
         self._timer = QTimer(self)
         self._timer.setInterval(150)
-        self._timer.timeout.connect(self._tick)
+        self._timer.timeout.connect(self._tick_enabled)
         self._timer.start()
 
     def _threshold_group(self) -> QGroupBox:
@@ -159,7 +158,7 @@ class TuarimTab(QWidget):
         grid = QGridLayout(box)
         self._spins: list[QSpinBox] = []
         self._sound_checks: list[QCheckBox] = []
-        for i, name in enumerate(("1차", "2차")):
+        for i, name in enumerate(("첫 알림", "추가 알림")):
             grid.addWidget(QLabel(name), i, 0)
             spin = QSpinBox()
             spin.setRange(90, 99)  # % 판독은 90%대만 신뢰 가능 + 목적상 100% 직전 경고
@@ -319,6 +318,11 @@ class TuarimTab(QWidget):
         )
 
     # ---- 읽기 루프 ----
+    def _tick_enabled(self) -> None:
+        self._apply_collect_gate()
+        if self.enable.isChecked():
+            self._tick()
+
     def _tick(self) -> None:
         self._apply_collect_gate()  # 로그인 상태에 따라 수집(제보) 도구 노출/숨김
         # 게임 '또는 우리 앱'이 활성일 때 읽는다. 앱을 보며 영역을 맞추거나 템플릿을

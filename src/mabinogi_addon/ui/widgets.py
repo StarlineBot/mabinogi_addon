@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFocusEvent
-from PySide6.QtWidgets import QCheckBox, QLabel, QSizePolicy, QSpinBox
+from PySide6.QtWidgets import QCheckBox, QLabel, QMessageBox, QSizePolicy, QSpinBox
 
 
 class SuffixSpinBox(QSpinBox):
@@ -46,6 +46,25 @@ def checkbox(text: str = "") -> QCheckBox:
     """
     cb = QCheckBox(text)
     cb.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
+    return cb
+
+
+def feature_checkbox(key: str, text: str) -> QCheckBox:
+    from ..setup_state import enabled, save_enabled
+
+    cb = checkbox(text)
+    cb.setChecked(enabled(key))
+
+    def save(value):
+        try:
+            save_enabled(key, value)
+        except OSError:
+            cb.blockSignals(True)
+            cb.setChecked(enabled(key))
+            cb.blockSignals(False)
+            QMessageBox.warning(cb, "설정 저장 실패", "사용 설정을 저장하지 못했습니다. 쓰기 권한을 확인하세요.")
+
+    cb.toggled.connect(save)
     return cb
 
 

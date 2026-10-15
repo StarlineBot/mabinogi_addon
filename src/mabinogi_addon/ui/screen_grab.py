@@ -117,7 +117,7 @@ def _save_debug_frame(frame: np.ndarray | None, offset: tuple[int, int]) -> None
         pass
 
 
-def capture_for_autofind() -> tuple[np.ndarray | None, int, int]:
+def capture_for_autofind(*, require_game=False, restore_allowed=None) -> tuple[np.ndarray | None, int, int]:
     """자동 찾기용 캡처 — 우리 앱 창·오버레이를 잠깐 숨긴 뒤 게임만 찍는다.
 
     자동 찾기 버튼은 우리 창에 있어, 그냥 찍으면 앱 창/오버레이가 게임(보스바·상태목록창)을
@@ -154,15 +154,17 @@ def capture_for_autofind() -> tuple[np.ndarray | None, int, int]:
                 info["monitor_error"] = str(exc)
         img, left, top = _grab_game_window()  # 게임 창 우선
         used_game = img is not None
-        if img is None:
+        if img is None and not require_game:
             img, left, top = grab_primary()  # 폴백: 가상 데스크톱 전체
         if info is not None:
-            info.update(target="game_window" if used_game else "virtual_desktop",
+            info.update(target="game_window" if used_game else "game_window_unavailable" if require_game else "virtual_desktop",
                         offset_physical=[left, top],
                         frame_size=None if img is None else [img.shape[1], img.shape[0]])
         _save_debug_frame(img, (left, top))
     finally:
         for w in tops:
+            if restore_allowed is not None and not restore_allowed():
+                break
             try:
                 w.show()
                 w.raise_()
@@ -171,7 +173,7 @@ def capture_for_autofind() -> tuple[np.ndarray | None, int, int]:
         QApplication.processEvents()
     # 위젯 복원 뒤에 안내한다(숨긴 상태에서 모달 띄우지 않게). 게임 창을 못 찾아 전체
     # 데스크톱으로 폴백했고 모니터가 여러 개면, 엉뚱한 화면을 찍었을 수 있어 등록을 권한다.
-    if img is not None and not used_game:
+    if img is not None and not used_game and not require_game:
         _warn_no_game_window()
     return img, left, top
 

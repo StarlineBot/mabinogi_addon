@@ -72,7 +72,7 @@ class MemoTab(QWidget):
         v.setContentsMargins(12, 12, 12, 12)
         v.setSpacing(10)
         v.addWidget(tab_header(
-            "게임 위에 마크다운 메모 띄우기", HELP_TITLE, HELP_HTML, self
+            "게임 위에 표시할 메모를 작성합니다.", HELP_TITLE, HELP_HTML, self
         ))
 
         # 메모 오버레이 표시 on/off (끄면 영역·내용은 그대로 두고 화면에만 안 띄움)
@@ -86,7 +86,7 @@ class MemoTab(QWidget):
 
         top = QHBoxLayout()
         top.setSpacing(6)
-        region_btn = QPushButton("메모 영역 지정")
+        region_btn = QPushButton("표시 위치·너비 지정")
         region_btn.clicked.connect(self._pick_region)
         top.addWidget(region_btn, 1)
         self.lock_btn = QPushButton("위치 잠금")

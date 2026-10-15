@@ -65,7 +65,7 @@ class DistributionTab(QWidget):
 
         # 2줄: 분배금 [입력]  인원 [입력] (라벨 왼쪽정렬)
         r2 = QHBoxLayout()
-        r2.addWidget(QLabel("분배금"))
+        r2.addWidget(QLabel("판매가"))
         self.price_spin = SuffixSpinBox()
         self.price_spin.setRange(0, 99_999_999)
         self.price_spin.setSuffix(" 만")
@@ -85,7 +85,7 @@ class DistributionTab(QWidget):
         v.addLayout(r2)
 
         # 전체폭 결과 보기 버튼
-        self.calc_btn = QPushButton("결과 보기")
+        self.calc_btn = QPushButton("분배금 계산")
         self.calc_btn.clicked.connect(self._on_calc)
         v.addWidget(self.calc_btn)
 
@@ -97,7 +97,7 @@ class DistributionTab(QWidget):
         self.grid.setVerticalSpacing(8)
         self.grid.setColumnStretch(0, 1)
         self.grid.setColumnStretch(1, 1)
-        self._placeholder = QLabel("판매가·인원을 넣고 [결과 보기]를 눌러요.")
+        self._placeholder = QLabel("판매가·인원을 입력하세요.")
         self._placeholder.setStyleSheet(_GRAY)
         self.grid.addWidget(self._placeholder, 0, 0, 1, 2)
         v.addWidget(self.result_area)

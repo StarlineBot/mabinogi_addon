@@ -139,10 +139,16 @@ class CustomOverlayTab(QWidget):
         v.setSpacing(8)
 
         v.addWidget(tab_header(
-            "화면 일부를 다른 위치에 미러링 — 특정 스킬 쿨타임 등을 눈에 편한 곳에",
+            "게임 화면의 일부를 복제해 원하는 위치에 표시합니다.",
             HELP_TITLE, HELP_HTML, self
         ))
-        self.region_btn = QPushButton("영역 지정")
+        from .widgets import feature_checkbox
+        self._paused = False
+        self.enable = feature_checkbox("custom", "커스텀 오버레이 사용")
+        self.enable.toggled.connect(self._on_enable)
+        v.addWidget(self.enable)
+        self._mgr.set_paused(not self.enable.isChecked())
+        self.region_btn = QPushButton("복제할 영역 추가")
         self.region_btn.setToolTip("드래그로 화면 일부를 잘라 오버레이로 복제(돋보기)")
         self.region_btn.clicked.connect(self._on_region)
         v.addWidget(self.region_btn)
@@ -154,7 +160,7 @@ class CustomOverlayTab(QWidget):
         preset_row = QHBoxLayout()
         self.preset_load_btn = QPushButton("불러오기")
         self.preset_load_btn.clicked.connect(self._on_preset_load)
-        self.preset_delete_btn = QPushButton("삭제")
+        self.preset_delete_btn = QPushButton("선택 프리셋 삭제")
         self.preset_delete_btn.setStyleSheet(_DANGER_QSS)
         self.preset_delete_btn.clicked.connect(self._on_preset_delete)
         preset_row.addWidget(self.preset_load_btn)
@@ -196,11 +202,11 @@ class CustomOverlayTab(QWidget):
             "QPushButton { background:#00B894; color:white; font-weight:600; }"
         )
         self.save_btn.clicked.connect(self._on_preset_save)
-        self.sel_lock_btn = QPushButton("선택 고정")
+        self.sel_lock_btn = QPushButton("선택 잠금")
         self.sel_lock_btn.clicked.connect(lambda: self._lock_selected(True))
-        self.sel_unlock_btn = QPushButton("선택 해제")
+        self.sel_unlock_btn = QPushButton("선택 잠금 해제")
         self.sel_unlock_btn.clicked.connect(lambda: self._lock_selected(False))
-        self.del_sel_btn = QPushButton("선택 삭제")
+        self.del_sel_btn = QPushButton("선택 오버레이 삭제")
         self.del_sel_btn.setStyleSheet(_DANGER_QSS)
         self.del_sel_btn.clicked.connect(self._on_delete_selected)
         self.del_all_btn = QPushButton("전체 삭제")
@@ -415,7 +421,11 @@ class CustomOverlayTab(QWidget):
 
     def set_paused(self, paused: bool) -> None:
         """사용자 일시정지 → 미러 오버레이 숨김·캡처 쉼(메인 윈도우가 호출)."""
-        self._mgr.set_paused(paused)
+        self._paused = paused
+        self._mgr.set_paused(paused or not self.enable.isChecked())
+
+    def _on_enable(self, value):
+        self._mgr.set_paused(self._paused or not self.enable.isChecked())
 
     def shutdown(self) -> None:
         self._mgr.shutdown()

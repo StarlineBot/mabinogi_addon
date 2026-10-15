@@ -96,12 +96,11 @@ class StatBarsTab(QWidget):
         v.setContentsMargins(12, 12, 12, 12)
         v.setSpacing(10)
         v.addWidget(tab_header(
-            "체력·마나·스태미나를 읽어 깨끗한 바로 표시", HELP_TITLE, HELP_HTML, self
+            "생명력·마나·스태미나를 별도 오버레이로 표시합니다.", HELP_TITLE, HELP_HTML, self
         ))
         v.addWidget(hint_label(
-            "'영역 지정'을 누르면 고정 크기 박스가 커서를 따라옵니다. 게임 하단의"
-            " 체력·마나·스태미나 세 바 위에 올려 클릭 배치하세요(그 아래 경험치 바는 제외,"
-            " 필요하면 휠로 크기 조절). 읽은 비율을 깨끗한 바 3개로 원하는 위치에 띄웁니다."
+            "게임의 세 바가 보이는 상태에서 자동 찾기를 실행하세요."
+            " 직접 지정할 때는 생명력·마나·스태미나를 포함하고 경험치 바는 제외하세요."
         ))
         # 베타 기능 — 디스코드 로그인 사용자에게만. 미로그인 시 안내만 보이고 조작은 잠근다.
         self._beta_notice = hint_label(
@@ -111,7 +110,7 @@ class StatBarsTab(QWidget):
         v.addWidget(self._beta_notice)
 
         row = QHBoxLayout()
-        self.region_btn = QPushButton("영역 지정")
+        self.region_btn = QPushButton("직접 지정")
         self.region_btn.setToolTip(
             "고정 크기 박스가 커서를 따라옵니다. 세 바 위에 올려 클릭 배치(휠로 크기 조절)"
         )
@@ -119,7 +118,7 @@ class StatBarsTab(QWidget):
         row.addWidget(self.region_btn)
         self.region_label = hint_label("")
         row.addWidget(self.region_label, 1)
-        self.view_region_btn = QPushButton("영역 보기")
+        self.view_region_btn = QPushButton("지정 영역 보기")
         self.view_region_btn.clicked.connect(self._flash_region)
         row.addWidget(self.view_region_btn)
         self.auto_find_btn = QPushButton("🧪 자동 찾기")
@@ -214,7 +213,7 @@ class StatBarsTab(QWidget):
 
     # ---- 저값 경고 ----
     def _alert_group(self) -> QGroupBox:
-        box = QGroupBox("저값 경고 (지정 % 이하로 떨어지면 알림)")
+        box = QGroupBox("낮은 체력·마나·스태미나 알림")
         g = QVBoxLayout(box)
         g.addWidget(hint_label(
             "체력·마나·스태미나가 각자 정한 % 이하로 떨어지면 소리로 알립니다. 바 3개가"
@@ -268,7 +267,8 @@ class StatBarsTab(QWidget):
     def has_active_alert(self) -> bool:
         """저체력 경고가 하나라도 켜져 있는지. 보스 탭이 '존재 판정이 필요한가'를 묻는다
         (전부 꺼져 있으면 보스바 존재 판정 자체를 건너뛰어 UI 스레드 부하를 아낀다)."""
-        return any(self._bars_cfg[sid]["alert"]["on"] for sid in ("hp", "mp", "sta"))
+        return (self._enabled and not self._paused and self._logged_in()
+                and any(self._bars_cfg[sid]["alert"]["on"] for sid in ("hp", "mp", "sta")))
 
     def _check_alerts(self, readings: dict, now: float) -> None:
         """임계 이하로 떨어지면(각 바 각자) 경고. 게이트: 바 3개가 다 보일 때만 판정해
@@ -492,9 +492,10 @@ class StatBarsTab(QWidget):
         self._selector.start()
 
     def _on_selected(self, x: int, y: int, w: int, h: int) -> None:
-        self._region = {"x": x, "y": y, "w": w, "h": h}
+        region = {"x": x, "y": y, "w": w, "h": h}
+        config.save_stat_bars({"box": region})
+        self._region = region
         self._update_region_label()
-        self._save()
         self._flash_region()
 
     def _on_auto_find(self) -> None:
