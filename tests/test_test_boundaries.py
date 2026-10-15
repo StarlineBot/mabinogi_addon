@@ -1,4 +1,7 @@
 import socket
+import subprocess
+import sys
+from pathlib import Path
 
 import pytest
 from PySide6.QtWidgets import QApplication
@@ -51,3 +54,30 @@ def test_explicit_fake_capture_can_replace_the_boundary(monkeypatch):
     sentinel = object()
     monkeypatch.setattr(mss, "mss", lambda: sentinel)
     assert mss.mss() is sentinel
+
+
+def test_boundary_preserves_native_modules_imported_inside_it():
+    script = """
+import sys
+from types import ModuleType
+from test_support.boundaries import ExternalBoundaries
+
+assert 'numpy' not in sys.modules
+with ExternalBoundaries():
+    import numpy
+    import cv2
+assert sys.modules['numpy'] is numpy
+assert sys.modules['cv2'] is cv2
+assert 'dxcam' not in sys.modules
+import numpy as again
+assert again is numpy
+
+original = ModuleType('dxcam')
+sys.modules['dxcam'] = original
+with ExternalBoundaries():
+    assert sys.modules['dxcam'] is not original
+assert sys.modules['dxcam'] is original
+"""
+    result = subprocess.run([sys.executable, "-c", script], cwd=Path(__file__).resolve().parents[1],
+                            capture_output=True, text=True, timeout=20)
+    assert result.returncode == 0, result.stdout + result.stderr

@@ -89,3 +89,22 @@ quota/전송 오류는 경고이며 테스트나 빌드 실패를 성공으로 �
   기존 기대값, 누수 assertion과 종료 subprocess의 실제 제품 종료 분기는 유지했다.
 - 현재 클라우드의 Actions API 조회는 `Forbidden`이다. 따라서 Windows 테스트·exe 빌드의
   실제 원격 성공은 아직 확인하지 못했으며 QA 요청 조건을 충족했다고 판단하지 않는다.
+
+### 기능 QA와 함께 진행한 후속 검증
+
+- `ceb429c`에는 Windows 자동화와 SETUP-V2-QA-01 수정이 함께 포함되어 있다.
+  해당 소스 전체 격리 회귀 재확인은 **718 passed, 3 deselected in 135.97s**다.
+  독립 V2 QA 재확인은 **10 passed in 5.02s**다.
+- 노트/시작 표시 테스트를 단독 실행하자 **1 failed, 8 passed, 3 errors**가 발생했다.
+  원인은 장치 경계의 `patch.dict(sys.modules, ...)`가 테스트 중 새로 import한 NumPy/OpenCV까지
+  제거한 것이다. 큰 전체 집합에서는 미리 import되어 드러나지 않던 순서 의존 오류였다.
+- 이제 가짜 dxcam 항목만 원래 상태로 복원한다. 깨끗한 subprocess에서 경계 내부에
+  NumPy/OpenCV를 처음 import하고 경계 종료 뒤에도 동일 객체가 유지되는지 확인한다.
+  기존 dxcam 항목의 유무도 각각 검증한다. 노트/시작 표시/장치 경계 **17 passed**로 재확인했다.
+- 두 수정과 새 회귀 테스트를 포함한 최종 전체 격리 회귀는
+  **720 passed, 3 deselected, 3 warnings in 135.06s**다. 경고는 기존 Qt 마우스 이벤트 API다.
+- 기능 QA의 릴리즈 노트 지적도 반영했다. 배포된 v0.4.69 본문을 보존하고 새 설명은
+  v0.4.70으로 분리했다. 앱 릴리즈나 태그 실행은 하지 않았다.
+- 클라우드 설정 초안에는 api.github.com 허용과 최신 시작 지침을 저장했다.
+  오래된 개별 파일 ignore 명령은 제거했다. 초안 저장은 실행 환경 적용이나 게시가 아니며,
+  실제 적용과 API 조회 성공 전까지 Windows 검증은 대기 상태다.

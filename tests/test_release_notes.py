@@ -71,3 +71,18 @@ def test_bundled_notes_file_parses():
     sections = release_notes._parse_sections(text)
     assert sections, "번들 release_notes.md 에 버전 섹션이 없음"
     assert all(body.strip() for _v, body in sections)
+
+
+def test_v2_guide_notes_are_new_and_do_not_rewrite_published_069():
+    text = Path(release_notes.RELEASE_NOTES_FILE).read_text(encoding="utf-8")
+    published = text.split("## v0.4.69\n", 1)[1].split("## v0.4.68\n", 1)[0]
+    assert published.strip() == """**처음 사용할 기능을 고르고 자동설정을 준비하는 안내를 다듬었습니다.**
+
+- 앱을 완전히 종료한 뒤 남은 상태 갱신이 화면 캡처를 다시 시작하지 않도록 종료 정리를 보강했습니다.
+- 기능 목록에 사용 목적을 함께 표시하고, 다음 항목이 이어지는 것을 볼 수 있도록 스크롤 높이를 조절했습니다.
+- 신규 사용자는 필요한 기능을 직접 선택해 시작합니다. 기존 사용자의 기능 사용 여부와 저장된 설정은 유지합니다.
+- 자동설정의 베타 안내와 Discord 로그인 이동 버튼을 가까이 배치했습니다. 로그인 없이 직접 지정할 수 있는 기능은 그대로 사용할 수 있습니다."""
+    upgrade = release_notes.notes_since("0.4.69", "0.4.70")
+    assert "로그인 사용자용 베타" in upgrade
+    assert "다시 보지 않기" in upgrade
+    assert "종료 정리를 보강" not in upgrade

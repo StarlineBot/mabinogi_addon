@@ -99,3 +99,21 @@ QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest -q -p scripts.qa_setup_audi
   `tests/test_release_notes.py`, `scripts/qa_setup_closed_retry.py`를 포함해
   **119 passed, 6 warnings in 26.61s**. 앞선 688개 전체 결과는 재배치 전이며 이번 최종
   소스의 전체 재실행 결과로 바꾸어 표현하지 않는다. Windows 실측도 별도다.
+
+## 2차 QA 수정과 Windows 자동 검증 병행
+
+- `docs/qa/자동설정_2차_독립_QA.md`의 SETUP-V2-QA-01은 Windows 자동화와 함께
+  `ceb429c`에 수정해 main에 반영했다. `SetupPage.refresh()`가 공용 skipSetup을 다시 읽고,
+  신호를 막아 화면 갱신만으로 설정을 재저장하지 않는다. 별도의 의향 설정을 만들지 않았다.
+- 양방향 ON/OFF·새 화면 생성·갱신 중 무저장을 회귀 테스트에 포함했다.
+  원본 독립 QA의 실패 1건을 수정 전 재현했고 수정 후 원본 전체 10개가 통과했다.
+  최신 재확인도 **10 passed in 5.02s**이며 원본 QA 보고서와 assertion은 수정하지 않았다.
+- 같은 QA의 노트 혼입 지적에 따라 새 V2 안내와 체크 상태 수정 설명은 미사용 `v0.4.70`으로
+  분리했다. 원격 `v0.4.69` 태그의 노트 원문은 보존하고 해당 버전 사용자에게 새 노트가
+  선택되는지 회귀 테스트로 확인한다. 태그 생성/이동이나 릴리즈는 수행하지 않는다.
+- 제품·테스트 변경은 이제 main의 Windows 자동 검증과 필요한 exe 빌드를 거친다.
+  개발자가 정확한 SHA의 결과를 확인하기 전에는 후속 QA 준비 완료로 판단하지 않는다.
+  절차와 원격 조회 제약은 [Windows 개발 완료 게이트](windows-validation.md)를 따른다.
+- Windows 테스트 경계의 모듈 복원 오류 및 노트 분리까지 포함한 최종 Linux 전체 회귀는
+  **720 passed, 3 deselected in 135.06s**다. 제외한 3개는 별도 네이티브 Windows 검사다.
+  이 결과를 Windows 실행이나 exe 빌드 통과로 대신하지 않는다.

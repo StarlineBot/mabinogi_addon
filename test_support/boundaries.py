@@ -95,7 +95,16 @@ class ExternalBoundaries:
                 self.stack.enter_context(patch.object(mss, name, self.deny("desktop capture")))
             dxcam = ModuleType("dxcam")
             dxcam.create = self.deny("DXGI capture")
-            self.stack.enter_context(patch.dict(sys.modules, dxcam=dxcam))
+            # 전체 모듈 표를 되돌리면 범위 안에서 로드된 NumPy 같은 확장이 제거된다.
+            missing = object()
+            previous = sys.modules.get("dxcam", missing)
+            def restore_dxcam():
+                if previous is missing:
+                    sys.modules.pop("dxcam", None)
+                else:
+                    sys.modules["dxcam"] = previous
+            self.stack.callback(restore_dxcam)
+            sys.modules["dxcam"] = dxcam
             for name in ("_task_enabled", "_reg_enabled"):
                 self.stack.enter_context(patch.object(autostart, name, lambda: False))
             for name in ("_task_set", "_task_delete", "_reg_set", "_reg_delete"):
