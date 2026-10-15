@@ -10,7 +10,38 @@
 - 소스·테스트·기존 QA 스크립트 804개 파일의 Git blob 해시가 원격과 일치함을 확인했다.
 - 제품 구현과 기존 제품 테스트는 수정하지 않았다. 이 보고서와 독립 QA 코드만 공유한다.
 
-## 판정
+## 최신 후속 QA 판정 (2026-10-15)
+
+- 검증 제품 소스: `f02cb238a027500c9b54da5aaf4cd246b71b3257`.
+- `FIRST-USER-QA-01`의 원본 재현 코드와 기대값을 바꾸지 않고 관련 회귀와 함께 실행했다.
+  **143 passed, 6 warnings in 26.15s**. 원래 실패했던 종료 후 캡처 재생성은 재현되지 않았다.
+- 소스·테스트·기존 QA 코드 807개 파일의 Git blob 해시가 해당 원격 트리와 일치했다.
+- 새 독립 `scripts/qa_shutdown_followup.py`: **4 passed in 9.78s**.
+  시작 전/후 설정 가져오기의 실제 콜백을 실행한 뒤 start, 버프/디버프 시작, 상태 재시도,
+  최초 표시 콜백을 반복 호출하고 Qt 이벤트를 처리해도 새 캡처나 설정 쓰기가 없었다.
+- 시작 → 중복 시작 → 완전 종료 → 중복 종료를 20회 반복했다.
+  중복 시작 시 QTimer 자식 목록과 상태 타이머 객체가 같았고 파티 시작은 1회였다.
+  종료 뒤 영역을 제공하고 뒤늦은 콜백을 실행해도 캡처 생성이 없었다.
+  이는 제한된 반복 검증이며 장시간 메모리/Windows 핸들 누수 측정을 뜻하지 않는다.
+- 트레이 숨김에서는 타이머를 유지했고, 이후 등록한 버프/디버프 영역에 대해 실제
+  `BuffController`의 `_TrackWorker` 두 개가 실행됨을 확인했다. 완전 종료 후에는 재생성하지 않았다.
+  이 경우에도 OS 캡처만 배열 소스로 대체했으며 제품 워커/타이머/종료 경로는 실제 코드를 사용했다.
+- Linux 네이티브 오디오 생성은 기존 QA 경계로 대체했다. 이전 Linux 오디오 제한을
+  Windows 통과의 근거로 사용하지 않으며 기존 누수 검사나 제품 테스트는 변경하지 않았다.
+- **독립 로컬 재현 기준으로 기존 문제 해결 확인. 수정본 Windows 사전 검증 대기.**
+  최신 조회까지 수정본의 새 Actions 실행은 없었다. 이전 실패 run을 재실행하는 대신
+  `release`의 `Run workflow` → `main`으로 수정본의 전체 테스트와 exe 빌드를 확인해야 한다.
+  종료/타이머 변경과 미해결 Windows 실패가 있어, 이 결과가 확인되기 전 릴리즈 명령은 보류한다.
+- 최신 원격 태그는 `v0.4.68`, 앱 내부 다음 노트는 `v0.4.69`다. 태그는 생성/푸시하지 않았다.
+- 이번 후속 QA에서 새 Confirmed Bug / Highly Likely Bug / Potential Risk는 찾지 못했다.
+  아래 최초 실패와 개발자의 자체 검증 기록은 이력으로 보존하며, 후속 독립 결과와 구분한다.
+
+```bash
+QT_QPA_PLATFORM=offscreen PYTHONPATH=src uv run pytest -q -p scripts.qa_setup_audio_boundary scripts/qa_setup_closed_retry.py tests/test_main_shutdown.py scripts/qa_setup_first_user.py scripts/qa_setup_tour.py scripts/qa_setup_independent.py tests/test_setup.py tests/test_memo_lock_persist.py tests/test_settings_preserve.py tests/test_settings_sync.py tests/test_release_notes_trigger.py tests/test_release_notes.py tests/test_config_atomic.py tests/test_config_bundle.py tests/test_config_buffs.py
+QT_QPA_PLATFORM=offscreen PYTHONPATH=src uv run pytest -q -p scripts.qa_setup_audio_boundary scripts/qa_shutdown_followup.py
+```
+
+## 최초 판정 (53d473c)
 
 **릴리즈 보류.** 첫 사용자 UX의 관련 검사와 독립 시나리오는 통과했지만,
 Windows 테스트 게이트에서 종료 후 워커 누수가 확인되어 exe 빌드에 도달하지 못했다.
@@ -53,7 +84,8 @@ Windows 테스트 게이트에서 종료 후 워커 누수가 확인되어 exe �
 QT_QPA_PLATFORM=offscreen PYTHONPATH=src uv run pytest -q -p scripts.qa_setup_audio_boundary scripts/qa_setup_closed_retry.py
 ```
 
-현재 소스에서는 위 명령의 실패가 예상된다. 제품 구현은 QA에서 수정하지 않았다.
+최초 `53d473c`에서는 위 명령이 실패했다. 후속 수정본은 위 최신 판정처럼 통과했다.
+제품 구현은 QA에서 수정하지 않았다.
 
 ## 독립 실행
 
@@ -99,7 +131,7 @@ QT_QPA_PLATFORM=offscreen PYTHONPATH=src uv run pytest -q -p scripts.qa_setup_au
 QT_QPA_PLATFORM=offscreen PYTHONPATH=src uv run pytest -q -p scripts.qa_setup_audio_boundary tests/test_setup.py scripts/qa_setup_tour.py scripts/qa_setup_independent.py tests/test_settings_preserve.py tests/test_settings_sync.py tests/test_release_notes_trigger.py tests/test_release_notes.py tests/test_config_atomic.py tests/test_config_bundle.py tests/test_config_buffs.py
 ```
 
-## Windows 사전 검증
+## 최초 Windows 사전 검증 (53d473c)
 
 - 실행: https://github.com/StarlineBot/mabinogi_addon/actions/runs/38699991207
 - 고정 소스: `53d473c7550cc03f2cc730ef3ad4f6b6efec09e2` (`workflow_dispatch`).
