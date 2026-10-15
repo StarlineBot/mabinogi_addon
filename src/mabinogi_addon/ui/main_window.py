@@ -238,6 +238,9 @@ class MainWindow(QMainWindow):
         # 설정 가져오기/초기화 후: 이 세션의 (가져오기 전) 낡은 오버레이·메모 상태가
         # 종료 시 방금 가져온 설정을 덮어쓰지 않도록 저장을 막는다. 다음 실행에서 반영.
         self._config_pending_restart = False
+        self._closing = False
+        self._started = False
+        self._status_timer = None
         self._force_quit = False  # 트레이 '종료'로 진짜 종료할 때만 True
         self._paused = False  # 오버레이 일시정지(사냥 안 할 때 잠깐 끄기) — 세션 한정
         self._tray = self._build_tray()
@@ -612,6 +615,8 @@ class MainWindow(QMainWindow):
         """
         import time
 
+        if self._closing or self._config_pending_restart:
+            return
         now = time.monotonic()
         if now - getattr(self, "_last_cap_retry", 0.0) < 5.0:
             return
@@ -634,6 +639,8 @@ class MainWindow(QMainWindow):
             self._start_debuff_tracking()
 
     def _update_tracking_status(self) -> None:
+        if self._closing or self._config_pending_restart:
+            return
         self._maybe_retry_live_capture()
         self.buff_tab.set_status(*self._buff_status())
         self.debuff_tab.set_status(*self._debuff_status())
@@ -1031,6 +1038,9 @@ class MainWindow(QMainWindow):
 
     def start(self) -> None:
         """탐지/폴링 시작. 실제 앱 실행(main)에서만 호출한다(스크린샷 렌더 땐 미호출)."""
+        if self._closing or self._config_pending_restart or self._started:
+            return
+        self._started = True
         from ..system import autostart
 
         # 자동실행: 저장된 '의도'대로 현재 exe에 강제 동기화(신버전 실행=자동실행 대상).
@@ -1080,6 +1090,8 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(0, self._on_first_shown)
 
     def _on_first_shown(self) -> None:
+        if self._closing or self._config_pending_restart:
+            return
         self._maybe_show_release_notes()  # 버전 바뀌었으면 업데이트 노트
         self._maybe_run_tour()  # 신규 사용자 온보딩 투어
 
@@ -1129,6 +1141,8 @@ class MainWindow(QMainWindow):
 
     def _start_buff_tracking(self) -> None:
         """저장된 영역이 있으면 라이브 캡처(dxcam)로 버프 추적 시작(재시작 포함)."""
+        if self._closing or self._config_pending_restart:
+            return
         if self.buff_controller is not None:
             self.buff_controller.stop()
             self.buff_controller = None
@@ -1250,6 +1264,8 @@ class MainWindow(QMainWindow):
 
     def _start_debuff_tracking(self) -> None:
         """저장된 디버프 영역이 있으면 라이브로 디버프 추적 시작(재시작 포함)."""
+        if self._closing or self._config_pending_restart:
+            return
         if self.debuff_controller is not None:
             self.debuff_controller.stop()
             self.debuff_controller = None
@@ -1618,6 +1634,9 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event) -> None:
         import time
 
+        if self._closing:
+            event.accept()
+            return
         self._setup_flow.cancel(hide=True)
         self._save_window_pos()  # 트레이 최소화·완전 종료 모두에서 현재 위치 기억
 
@@ -1639,6 +1658,11 @@ class MainWindow(QMainWindow):
                     2000,
                 )
             return
+
+        # 종료 정리 중 Qt 이벤트가 처리되어도 새 캡처/워커를 만들지 않는다.
+        self._closing = True
+        if self._status_timer is not None:
+            self._status_timer.stop()
 
         def _step(name, fn):
             # 한 단계가 실패해도 나머지(특히 '오버레이 닫기')는 반드시 실행되게 감싼다.

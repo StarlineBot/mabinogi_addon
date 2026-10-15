@@ -118,3 +118,35 @@ QT_QPA_PLATFORM=offscreen PYTHONPATH=src uv run pytest -q -p scripts.qa_setup_au
 - 앱 내부 노트는 `v0.4.69`의 한국어 사용자 설명이다. 과거 v0.4.68 이하 본문은 원격 기준으로 보존한다.
 - 기존 `NOTES-QA-01`: `.github/workflows/release.yml:151`의 공개 노트 생성은 여전히 원시 커밋 제목을 사용한다.
   영어·내부 작업 제목이 공개 노트에 섞일 가능성은 이번 수정으로 해결되지 않았다. 앱 내부 수동 노트와 별개다.
+
+## 개발 후속: FIRST-USER-QA-01 수정 (2026-10-15)
+
+- 원본 독립 재현은 수정 전에 **1 failed in 1.55s**, 수정 후 **1 passed in 1.54s**였다.
+  `scripts/qa_setup_closed_retry.py`의 assertion과 정리 코드는 변경하지 않았다.
+- 완전 종료 분기에 진입하면 종료 상태를 먼저 설정하고 상태 타이머를 정지한다.
+  캡처 재시도, 버프/디버프 추적 시작, 상태 갱신, 뒤늦은 최초 표시 콜백과 start()는
+  종료 또는 설정 가져오기 후 재시작 대기 상태에서 새 작업을 시작하지 않는다.
+- start()는 중복 호출해도 폴링/상태 타이머를 추가하지 않는다. 트레이 숨김은 완전 종료와
+  구별해 기존 상태 타이머와 캡처 재시도를 유지한다.
+- `tests/test_main_shutdown.py`에 늦은 직접 콜백 및 900ms 이벤트 처리, 중복 start(),
+  트레이 숨김의 타이머·캡처 재시도 유지 시험 3건을 추가했다.
+- 관련 실행: `tests/test_main_shutdown.py scripts/qa_setup_closed_retry.py tests/test_memo_lock_persist.py`
+  (offscreen 및 기존 오디오 경계 대체): **5 passed in 3.77s**.
+- 화면 검토 중인 자동설정 V2 작업은 이 배포 차단 수정과 분리한다. 이 수정의 검증/푸시는
+  기존 main 제품 구조를 기준으로 하며, V2 구현/문서/테스트를 몰래 포함하지 않는다.
+- 검증할 index를 `/tmp/qa-shutdown-verification/`에 내보내고 해당 `src`를 PYTHONPATH로
+  지정해 원래 전체 제품 테스트를 실행했다. 메인 파일 blob은 실제 staged 파일과 같은
+  `abef8b4a8ac79ffc098700005a500520cba721b9`임을 확인했다.
+  분리용 스냅샷의 초기 구성 오류로 수집이 중단된 시도는 통과로 세지 않으며,
+  구성을 바로잡은 뒤 전체 명령을 다시 실행했다.
+- 최종 전체 제품 회귀: **673 passed, 7 warnings in 140.72s**.
+  생명주기 테스트의 로컬 IPC/콜백 소켓을 허용한 Linux 실행이며 기존 오디오 경계 대체를
+  사용했다. QThread 누수 검사나 assertion을 제거하지 않았다.
+- 같은 분리 소스에서 원본 독립 스크립트 `qa_setup_closed_retry.py`, `qa_setup_first_user.py`,
+  `qa_setup_tour.py`, `qa_setup_independent.py`를 함께 실행해
+  **35 passed, 1 warning in 13.85s**를 확인했다. 독립 QA 스크립트의 기존 기대값은 보존했다.
+  경고는 기존 mss/Qt API 사용 중단 안내다.
+- Linux 검증과 수정 자체가 후속 독립 QA 또는 수정본 Windows 테스트·exe 빌드 성공을
+  의미하지 않는다. 이 환경에서는 수정본의 Windows 워크플로를 실행하지 않았으며,
+  실패했던 Windows 전체 테스트와 exe 빌드는 후속 재검증이 필요하다.
+  릴리즈 명령/태그는 실행하지 않는다.
