@@ -1600,7 +1600,7 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event) -> None:
         import time
 
-        self._setup_flow.cancel()
+        self._setup_flow.cancel(hide=True)
         self._save_window_pos()  # 트레이 최소화·완전 종료 모두에서 현재 위치 기억
 
         # 트레이 최소화: X를 눌러도 종료하지 않고 트레이로 숨긴다(백그라운드 계속 동작).

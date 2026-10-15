@@ -32,6 +32,7 @@ class SetupFlow:
         self.choice = False
         self.dialog = None
         self.selector = None
+        self._restore_generation = 0  # 캡처용 hide와 사용자가 요청한 창 숨김을 구분
         page.run_requested.connect(self.run)
         page.cancel_requested.connect(self.cancel)
 
@@ -40,7 +41,9 @@ class SetupFlow:
         if self.loop is not None:
             self.loop.quit()
 
-    def cancel(self):
+    def cancel(self, *, hide=False):
+        if hide:
+            self._restore_generation += 1
         self.cancelled = True
         self.decide(False)
         if self.dialog is not None:
@@ -161,8 +164,11 @@ class SetupFlow:
                 outcome = {"status": "not_offered"}
 
                 def capture():
+                    generation = self._restore_generation
+                    window = page.window()
                     current["frame"], ox, oy = capture_for_autofind(
-                        require_game=True, restore_allowed=lambda: not self.closed)
+                        require_game=True, restore_allowed=lambda: not self.closed,
+                        restore_widget_allowed=lambda widget: widget is not window or generation == self._restore_generation)
                     from ..autofind_diagnostics import capture_info
                     current["capture"] = dict(capture_info.get() or {})
                     if self.closed or self.cancelled:

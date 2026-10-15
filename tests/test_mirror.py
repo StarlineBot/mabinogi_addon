@@ -1,6 +1,7 @@
 """미러 크롭 + 커스텀 오버레이 프리셋 config 테스트."""
 
 import numpy as np
+import pytest
 
 from mabinogi_addon import config
 from mabinogi_addon.ui.mirror_manager import crop_region
@@ -141,3 +142,65 @@ def test_custom_overlay_tab_constructs_without_crash():
 
     tab = CustomOverlayTab(_W())
     tab._mgr._tick()  # 첫 틱(_maybe_switch_mode 경로)도 안전해야 함
+
+
+@pytest.mark.parametrize("active", [False, True])
+@pytest.mark.parametrize("paused", [False, True])
+@pytest.mark.parametrize("operation", ["add", "load", "rebuild"])
+def test_new_overlays_respect_visibility_and_resume(active, paused, operation):
+    from PySide6.QtWidgets import QApplication
+    from mabinogi_addon.ui.mirror_manager import MirrorManager
+
+    app = QApplication.instance() or QApplication([])
+    activity = {"active": active}
+    captures = []
+    manager = MirrorManager(grab=lambda: captures.append(True), is_active=lambda: activity["active"])
+    manager.set_paused(paused)
+    box = {"x": 10, "y": 20, "w": 40, "h": 20}
+    try:
+        if operation == "load":
+            manager.load([box])
+        else:
+            manager.add(box)
+            if operation == "rebuild":
+                manager._rebuild_overlays(True)
+        overlay = manager.overlays()[0]
+        assert overlay.isVisible() is (active and not paused)
+        for _ in range(5):
+            manager._tick()
+            app.processEvents()
+        assert overlay.isVisible() is (active and not paused)
+        if paused or not active:
+            assert not captures
+        activity["active"] = True
+        manager.set_paused(False)
+        manager._tick()
+        assert overlay.isVisible()
+        assert manager._shown
+        manager.set_paused(True)
+        assert not overlay.isVisible()
+    finally:
+        manager.shutdown()
+
+
+def test_add_while_activity_changes_updates_existing_windows():
+    from PySide6.QtWidgets import QApplication
+    from mabinogi_addon.ui.mirror_manager import MirrorManager
+
+    app = QApplication.instance() or QApplication([])
+    activity = {"active": True}
+    manager = MirrorManager(grab=lambda: None, is_active=lambda: activity["active"])
+    box = {"x": 10, "y": 20, "w": 40, "h": 20}
+    try:
+        first = manager.add(box)
+        assert first.isVisible()
+        activity["active"] = False
+        second = manager.add(box)
+        assert not first.isVisible() and not second.isVisible()
+        activity["active"] = True
+        third = manager.add(box)
+        assert all(window.isVisible() for window in (first, second, third))
+        manager._tick()
+        assert all(window.isVisible() for window in manager.overlays())
+    finally:
+        manager.shutdown()

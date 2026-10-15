@@ -464,3 +464,34 @@ def test_game_countdown_reports_result_and_releases_timer(app, settings, monkeyp
         assert tab._detect_btn.isEnabled()
     finally:
         tab.shutdown()
+
+
+@pytest.mark.parametrize("hide", [False, True])
+def test_capture_cancellation_restores_other_widgets_but_respects_tray_hide(flow, monkeypatch, hide):
+    from mabinogi_addon.ui import screen_grab
+
+    run, page, applied, *_ = flow
+    state.save_enabled("tuarim", True)
+    other = SetupPage()
+    page.show()
+    other.show()
+    monkeypatch.setattr(QApplication, "topLevelWidgets", lambda: [page, other])
+    monkeypatch.setattr(screen_grab, "_grab_game_window", lambda: (np.zeros((100, 200, 3), np.uint8), 0, 0))
+    monkeypatch.setattr(screen_grab, "_save_debug_frame", lambda *a: None)
+    monkeypatch.setattr(time, "sleep", lambda *a: None)
+    monkeypatch.setattr(setup_flow, "capture_for_autofind", screen_grab.capture_for_autofind)
+    QTimer.singleShot(0, lambda: run.cancel(hide=hide))
+    try:
+        run.run()
+        assert run.cancelled
+        assert not run.closed
+        assert page.isVisible() is not hide
+        assert other.isVisible()
+        assert not applied
+        page.show()
+        run.run()
+        assert page.isVisible()
+        assert not run.cancelled
+        assert len(applied) == 1
+    finally:
+        other.close()

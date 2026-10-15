@@ -74,13 +74,16 @@ def test_disabled_custom_overlays_stay_hidden(app, settings, operation):
         tab.deleteLater()
 
 
-def test_fully_configured_user_keeps_existing_start_screen(app, settings):
-    # U-02: all enabled required regions are registered, no explicit opt-out needed.
+@pytest.mark.parametrize("skip", [False, True, None])
+def test_fully_configured_beta_user_requires_explicit_opt_out(app, settings, skip):
+    # 최신 사용자 지시: 베타 검증 중에는 등록 완료와 무관하게 명시적 숨김만 적용한다.
     update("tuarim", enabled=True, box={"x": 10, "y": 20, "w": 42, "h": 16})
+    update("general", skipSetup=skip)
     assert state.pending() == []
     window = MainWindow()
     try:
-        assert window._pages.currentWidget() is window._tabs
+        expected = window._tabs if skip is True else window.setup_page
+        assert window._pages.currentWidget() is expected
     finally:
         window._force_quit = True
         window.close()

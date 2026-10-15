@@ -163,8 +163,13 @@ class MirrorManager(QObject):
         overlay = MirrorOverlay(region, thumbnail_mode=self._dwm)
         overlay.moved.connect(self.overlay_moved)
         overlay.set_locked(bool(region.get("locked", False)))
-        overlay.show()
-        if self._dwm:
+        shown = not self._paused and self._is_active()
+        if shown != self._shown:
+            for existing in self._overlays:
+                existing.setVisible(shown)
+            self._shown = shown
+        overlay.setVisible(shown)
+        if self._dwm and shown:
             self._attach(overlay)  # 창이 떠서 winId 유효 → 바로 썸네일 연결 시도
         return overlay
 

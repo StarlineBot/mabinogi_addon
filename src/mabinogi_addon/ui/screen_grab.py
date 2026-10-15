@@ -117,7 +117,8 @@ def _save_debug_frame(frame: np.ndarray | None, offset: tuple[int, int]) -> None
         pass
 
 
-def capture_for_autofind(*, require_game=False, restore_allowed=None) -> tuple[np.ndarray | None, int, int]:
+def capture_for_autofind(*, require_game=False, restore_allowed=None,
+                         restore_widget_allowed=None) -> tuple[np.ndarray | None, int, int]:
     """자동 찾기용 캡처 — 우리 앱 창·오버레이를 잠깐 숨긴 뒤 게임만 찍는다.
 
     자동 찾기 버튼은 우리 창에 있어, 그냥 찍으면 앱 창/오버레이가 게임(보스바·상태목록창)을
@@ -125,6 +126,7 @@ def capture_for_autofind(*, require_game=False, restore_allowed=None) -> tuple[n
     캡처한 뒤 되돌린다(설정 시 1회성이라 짧은 깜빡임 허용).
 
     캡처 대상: 등록된 게임 창 사각형(우선) → 없으면 가상 데스크톱 전체. 반환 (이미지, left, top).
+    종료 시 전체 복원 차단과 사용자가 숨긴 개별 창의 복원 차단은 각각 판단한다.
     """
     import time
 
@@ -165,6 +167,8 @@ def capture_for_autofind(*, require_game=False, restore_allowed=None) -> tuple[n
         for w in tops:
             if restore_allowed is not None and not restore_allowed():
                 break
+            if restore_widget_allowed is not None and not restore_widget_allowed(w):
+                continue
             try:
                 w.show()
                 w.raise_()
