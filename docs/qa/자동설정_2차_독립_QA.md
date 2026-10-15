@@ -7,7 +7,61 @@
 - 제품/테스트/기존 QA 코드 809개 파일의 Git blob 해시가 원격 트리와 일치했다.
 - 제품 구현·기존 테스트·기획은 수정하지 않았다. 이 보고서와 `scripts/qa_setup_v2.py`만 추가한다.
 
-## 판정
+## 후속 독립 QA 판정 (2026-10-15)
+
+- 소스: `7688dc1ece1cb2248d5d8a37e22f8b72bd4d115f`.
+- **SETUP-V2-QA-01 해결 확인. 검증 범위에서 새 배포 차단 문제 없음. 제한된 베타 릴리즈 가능.**
+  원본 `scripts/qa_setup_v2.py`의 blob `2878751958417f8a675dffe1f52fc7bafc6067fb`와
+  기존 assertion을 바꾸지 않고 **10 passed, 4 warnings in 7.32s**를 확인했다.
+  실제 안내 종료 → 설정 → 기존 준비 화면의 체크 상태도 이제 저장값과 일치한다.
+- V2 안내/공용 흐름/투어 구현은 앞서 검증한 상태를 유지하며, 이번 제품 수정의 핵심은
+  `SetupPage.refresh()`가 저장된 skipSetup을 신호 없이 다시 읽는 것이다.
+  원본 독립 QA는 전체 4단계와 현재 단계 탐색/저장/거절/실패/로그아웃/재진입도 다시 실행했다.
+- 소스·테스트·테스트 경계·기존 QA 및 변경된 검증/패키징 파일 827개의 원격 blob 일치를 확인했다.
+- 관련 로컬 검사 첫 실행은 **193 passed / 1 failed in 52.07s**였다.
+  실패는 QA 가상환경에 새 개발 의존성 PyYAML이 없어서 YAML 검사 import가 중단된 것이었다.
+  pyproject/uv.lock에 선언된 **PyYAML 6.0.3**을 설치한 뒤 CI/장치 경계/노트 집합을
+  **26 passed in 1.66s**로 재실행했다. 두 집합은 중복이며 합산하지 않는다.
+  제품 테스트를 수정/skip하거나 실패 assertion을 약화하지 않았다.
+- 새 제품 회귀의 양방향 ON/OFF·refresh 무저장·새 화면 복원 검사도 실행했다.
+  원본 종료 후 캡처 재생성 및 반복 종료 재현 스크립트는 원격과 동일하게 보존했다.
+- 패키징을 YAML 파서와 shlex로 독립 비교해 기존 PyInstaller 인자 **68개 전부 동일**함을 확인했다.
+  main 자동 검증과 태그 릴리즈는 같은 `packaging/build_windows.py`를 호출하며,
+  버전 생성 단계는 실제 태그 버전을 앱 version.py와 exe 버전 리소스에 주입한다.
+- 태그 v0.4.69의 앱 노트와 현재 v0.4.69 이하 본문을 전체 문자열로 비교해 동일함을 확인했다.
+  새 V2 설명과 체크 수정은 미사용 `v0.4.70`으로 분리되어 있다.
+- 아래 자동 Windows 성공을 정확한 SHA로 확인했다. 수동 Run workflow를 요청하지 않았다.
+  이 결과 갱신은 QA 문서만 바꾸므로 동일 제품 소스의 성공을 재사용한다.
+- 실제 배포 exe 실행, 게임/혼합 DPI/장시간 핸들·메모리 계측은 별도 미검증 범위다.
+  이번 CI 성공만으로 모든 Windows 환경과 실게임 정확도를 보증하지 않는다.
+
+후속 실행 명령(저장소 루트, 제품/QA 원본 수정 없음):
+
+```bash
+QT_QPA_PLATFORM=offscreen PYTHONPATH=src uv run pytest -q -p scripts.qa_setup_audio_boundary scripts/qa_setup_v2.py
+QT_QPA_PLATFORM=offscreen PYTHONPATH=src uv run pytest -q tests/test_setup.py tests/test_main_shutdown.py tests/test_lifecycle.py tests/test_memo_lock_persist.py tests/test_release_notes.py tests/test_release_notes_trigger.py tests/test_settings_preserve.py tests/test_settings_sync.py tests/test_config_atomic.py tests/test_config_bundle.py tests/test_test_boundaries.py tests/test_windows_ci.py tests/test_tuarim.py
+QT_QPA_PLATFORM=offscreen PYTHONPATH=src uv run pytest -q tests/test_windows_ci.py tests/test_test_boundaries.py tests/test_release_notes.py
+```
+
+## 자동 Windows 검증 결과
+
+- 실행: https://github.com/StarlineBot/mabinogi_addon/actions/runs/38710588941
+- SHA: `7688dc1ece1cb2248d5d8a37e22f8b72bd4d115f`, `push` / `main` / **success**.
+- Isolated regression: **719 passed, 1 skipped, 3 deselected, 3 warnings in 166.33s**.
+- Native Windows integration: **3 passed, 720 deselected, 1 warning in 1.44s**.
+- Verify exe build: **success**, `mabinogi-addon.exe` **123561999 bytes**.
+- Optional exe upload: **skipped**(기본 OFF), 테스트/빌드 실패가 아니다.
+- 네이티브 3개는 작은 MSS 데스크톱 캡처, 실제 무음 오디오 객체 생성/해제,
+  실제 HWND 생성/파괴를 검사했다. dxcam import 확인은 실제 DXGI 캡처 초기화가 아니며,
+  실게임·모든 장치 전환·생성된 exe의 직접 실행은 검증하지 않았다.
+- 일반 회귀에서는 장치/네트워크를 명시적 경계로 격리한다. 누수 fixture가 공통 창 정리보다
+  먼저 실행되는 의존성을 확인했으므로 공통 cleanup으로 QThread 누수를 숨기는 구조는 아니다.
+- 새 파이프라인은 main 푸시에서 자동 실행하고 이전/다른 SHA 성공이나 required step의
+  skipped/cancelled를 완료로 받지 않는다. unit/native/build의 실패는 여전히 gate 실패다.
+  선택 업로드만 continue-on-error이며 보관 1일·기본 OFF로 quota와 코드 검증을 분리했다.
+- 기존 플랫폼 skip 1개와 네이티브 단계 분리 deselected는 실패 검사를 삭제한 결과가 아니다.
+
+## 최초 판정 (08b4143)
 
 **설정 표시 불일치 1건 확인. QA 통과 및 릴리즈 명령은 보류한다.**
 현재 검증에서 크래시나 기존 종료 후 워커 재생성의 회귀는 발견하지 못했다.
@@ -36,7 +90,7 @@
   화면을 열거나 갱신하는 것만으로 설정을 재저장하거나 초기화하지 않아야 한다.
   양방향 ON/OFF 및 재실행을 확인한다. 별도의 중복 사용자 의향 설정으로 분리하지 않는다.
 
-저장소 루트에서 원래 실패를 재현한다. 현재 소스에서는 실패가 예상된다.
+저장소 루트에서 원래 실패를 재현한다. 최초 08b4143에서는 실패했고, 후속 수정본은 통과했다.
 
 ```bash
 QT_QPA_PLATFORM=offscreen PYTHONPATH=src uv run pytest -q -p scripts.qa_setup_audio_boundary scripts/qa_setup_v2.py::test_skip_checkbox_is_synchronized_when_returning_to_existing_setup
@@ -87,7 +141,7 @@ QT_QPA_PLATFORM=offscreen PYTHONPATH=src uv run pytest -q -p scripts.qa_setup_au
 설정 불일치는 `skip-in-guide.png`, `skip-in-existing-setup.png`에 남겼다.
 사용자 원본 화면·설정·진단 ZIP은 업로드하지 않는다.
 
-## Windows 및 배포 준비
+## 최초 검증 당시 Windows 및 배포 준비
 
 - 조회한 새 V2 소스의 Actions 실행은 없다. `release.yml`은 기존 blob
   `92a1fc9516c9ee397898240316465eed2fcb7abd` 그대로이고 main 푸시 자동 검증은 이번 변경에 포함되지 않았다.
