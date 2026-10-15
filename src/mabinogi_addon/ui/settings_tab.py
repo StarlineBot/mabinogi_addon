@@ -837,16 +837,15 @@ class SettingsTab(QWidget):
         )
 
         tour_row = QHBoxLayout()
-        setup_btn = QPushButton("자동설정 다시 열기")
+        setup_btn = QPushButton("자동설정 다시 열기 (베타)")
         self.setup_btn = setup_btn
         setup_btn.clicked.connect(self.reopen_setup.emit)
         v.addWidget(setup_btn)
-        self.guide_btn = QPushButton("첫 사용 안내 다시 보기 (베타)")
+        self.guide_btn = setup_btn
         self.guide_btn.setToolTip("게임창 등록부터 단계별 기능 선택과 영역 등록 안내를 엽니다.")
-        self.guide_btn.clicked.connect(self.reopen_guide.emit)
         self.guide_btn.setVisible(config.load_discord_user() is not None)
-        v.addWidget(self.guide_btn)
         tour_btn = QPushButton("사용법 투어 다시 보기")
+        self.tour_btn = tour_btn
         tour_btn.setToolTip("트래커·편의기능·잠금·일시정지의 하이라이트 안내를 다시 봅니다")
         tour_btn.clicked.connect(self.replay_tour.emit)
         tour_row.addWidget(tour_btn)

@@ -408,14 +408,12 @@ class MainWindow(QMainWindow):
         for key, check in self._feature_checks.items():
             check.toggled.connect(lambda _value, key=key: self._feature_changed(key))
         from ..setup_state import needs_start_screen
-        if needs_start_screen():
-            self._open_setup()
+        if needs_start_screen() and config.load_discord_user() is not None:
+            # 실제 첫 표시에 노트를 먼저 처리하고 안내를 활성화한다.
+            self._pages.setCurrentWidget(self.setup_guide)
 
     def _open_setup(self):
-        if self._config_pending_restart or self._setup_busy():
-            return
-        self.setup_page.refresh()
-        self._pages.setCurrentWidget(self.setup_page)
+        self._open_guide()
 
     def _leave_setup(self):
         if self._setup_busy():
@@ -802,14 +800,16 @@ class MainWindow(QMainWindow):
         return ("● 추적 중 — 표시할 디버프 없음", self._STATUS_OK)
 
     def _maybe_run_tour(self) -> None:
-        """첫 실행 때 한 번, 사용 순서를 노란 점선 강조로 안내(코치마크)."""
+        """시청 기록과 무관하게 명시적 숨김만 존중하는 베타 시작 안내."""
+        from ..setup_state import needs_start_screen
+
         if not self.isVisible():
             return
-        if (config.load_general_flag("tourShown", False)
-                or config.load_general_flag("firstUseGuideShown", False)
-                or config.load_general_flag("skipSetup", False)):
+        if not needs_start_screen():
             return
-        self._open_guide(first_run=True)
+        first_run = not (config.load_general_flag("tourShown", False)
+                         or config.load_general_flag("firstUseGuideShown", False))
+        self._open_guide(first_run=first_run)
 
     def _maybe_show_release_notes(self) -> None:
         """버전이 바뀌었으면(마지막 본 버전 != 현재) 업데이트 노트를 띄운다.
@@ -871,7 +871,15 @@ class MainWindow(QMainWindow):
             self._pages.setCurrentWidget(self._tabs)
             scroll = self._tabs.widget(3)
             self._tabs.setCurrentWidget(scroll)
-            scroll.ensureWidgetVisible(self.settings_tab.setup_btn)
+            logged_in = config.load_discord_user() is not None
+            settings_step.target = self.settings_tab.setup_btn if logged_in else self.settings_tab.tour_btn
+            settings_step.body = ("단계별 자동설정과 앱 둘러보기를 설정에서 다시 열 수 있어요." if logged_in else
+                                  "설정에서 앱 둘러보기를 다시 열 수 있어요.")
+            scroll.ensureWidgetVisible(settings_step.target)
+
+        settings_step = TourStep(self.settings_tab.setup_btn, "설정에서 다시 열기",
+                                 "단계별 자동설정과 앱 둘러보기를 설정에서 다시 열 수 있어요.",
+                                 before=go_settings)
 
         steps = [
             TourStep(self._tracker_tabs.tabBar(), "트래커",
@@ -885,9 +893,7 @@ class MainWindow(QMainWindow):
                      "오버레이를 옮긴 뒤 잠그면 클릭이 게임으로 통과해요. 잠금 방식은 기능별 설정에서 확인하세요."),
             TourStep(self._pause_btn, "전체 일시정지",
                      "오버레이를 잠시 멈췄다가 다시 사용할 수 있어요."),
-            TourStep(self.settings_tab.setup_btn, "설정에서 다시 열기",
-                     "설정 현황·재시도 화면과 앱 둘러보기를 다시 열 수 있어요.",
-                     before=go_settings),
+            settings_step,
             TourStep(None, "사용 안내 종료",
                      "사용 안내를 마쳤습니다. 남은 설정은 각 기능의 설정에서 이어서 진행할 수 있어요."),
         ]
@@ -1167,7 +1173,7 @@ class MainWindow(QMainWindow):
         if self._closing or self._config_pending_restart:
             return
         self._maybe_show_release_notes()  # 버전 바뀌었으면 업데이트 노트
-        self._maybe_run_tour()  # 신규 사용자 온보딩 투어
+        self._maybe_run_tour()  # 단계별 베타 준비 안내
 
     def _compute_tracking(
         self, catalog

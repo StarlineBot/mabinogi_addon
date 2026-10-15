@@ -297,8 +297,9 @@ def test_main_window_setup_navigation_and_bidirectional_use(app, settings, monke
     window = MainWindow()
     try:
         assert window._tabs.count() == 4
-        assert window._pages.currentWidget() is (window._tabs if skip else window.setup_page)
+        assert window._pages.currentWidget() is (window._tabs if skip else window.setup_guide)
         window._open_setup()
+        assert window._pages.currentWidget() is window.setup_guide
         assert not window.setup_page.busy
         window.setup_page.feature_changed.emit("buff", True)
         assert window.buff_tab.enable.isChecked()
@@ -420,6 +421,9 @@ def test_new_user_selection_is_seeded_once_before_main_window_tabs(app, settings
     window = MainWindow()
     try:
         assert all(not check.isChecked() for check in window._feature_checks.values())
+        assert window._pages.currentWidget() is window.setup_guide
+        assert window.setup_guide.game_status.text() == "게임창 등록 필요"
+        assert all(not check.isChecked() for check in window.setup_guide.checks.values())
         assert all(not check.isChecked() for check in window.setup_page.checks.values())
         assert state.pending() == []
         assert window.setup_page.progress.text() == "사용할 기능을 선택하세요."
@@ -514,8 +518,9 @@ def test_setup_login_opens_existing_account_without_starting_auth(app, settings,
         window.show()
         app.processEvents()
         assert window.width() == 790 and window.height() == 800
-        assert window.rect().contains(window.setup_page.skip.mapTo(
-            window, window.setup_page.skip.rect().bottomRight()))
+        assert window._pages.currentWidget() is window._tabs
+        window._open_setup()
+        assert window._pages.currentWidget() is window._tabs
         before = deepcopy(config._read_local_config())
         window.setup_page.login_btn.click()
         app.processEvents()
@@ -680,6 +685,10 @@ def test_settings_replay_opens_app_tour_without_changing_configuration(app, sett
         assert len(tour._steps) == 7
         assert all(step.target not in (window.setup_page.run_btn, window.buff_tab.add_btn)
                    for step in tour._steps)
+        settings_step = tour._steps[-2]
+        settings_step.before()
+        assert settings_step.target is (window.settings_tab.setup_btn if logged_in else window.settings_tab.tour_btn)
+        assert settings_step.target.isVisible()
         tour._finish()
         assert config._read_local_config() == before
         assert not window.setup_page.busy
@@ -913,7 +922,7 @@ def test_guide_actual_window_navigation_and_resume_preserve_step(app, settings, 
         assert "4 / 4" in window._tour._step_lbl.text()
         window._tour._finish()
         window.settings_tab.reopen_setup.emit()
-        assert window._pages.currentWidget() is window.setup_page
+        assert window._pages.currentWidget() is guide
         window.settings_tab.reopen_guide.emit()
         assert guide.stage == 0
         assert state.missing("buff") == []
@@ -922,24 +931,106 @@ def test_guide_actual_window_navigation_and_resume_preserve_step(app, settings, 
         window.close()
 
 
-@pytest.mark.parametrize("skip, seen, expected", [(False, False, True), (True, False, False), (False, True, False)])
+@pytest.mark.parametrize("skip", [False, True])
+@pytest.mark.parametrize("seen", [False, True])
+@pytest.mark.parametrize("guide_seen", [False, True])
+@pytest.mark.parametrize("registered", [False, True])
 @pytest.mark.parametrize("logged_in", [False, True])
-def test_first_show_guide_respects_beta_skip_and_previous_tour(app, settings, monkeypatch, skip, seen, expected, logged_in):
+def test_first_show_guide_ignores_seen_and_registered_but_respects_skip_and_login(
+        app, settings, monkeypatch, skip, seen, guide_seen, registered, logged_in):
     from mabinogi_addon.ui.main_window import MainWindow
 
     monkeypatch.setattr(QApplication, "quit", lambda: None)
-    monkeypatch.setattr(MainWindow, "_maybe_show_release_notes", lambda self: None)
+    notes = []
+    def show_notes(self):
+        assert not self.setup_guide.active
+        assert self._pages.currentWidget() is not self.setup_page
+        notes.append(True)
+    monkeypatch.setattr(MainWindow, "_maybe_show_release_notes", show_notes)
     monkeypatch.setattr(MainWindow, "_maybe_check_update", lambda *a, **k: None)
     monkeypatch.setattr(config, "load_discord_user", lambda: {"id": "test", "name": "QA"} if logged_in else None)
-    update("general", skipSetup=skip, tourShown=seen)
+    update("general", skipSetup=skip, tourShown=seen, firstUseGuideShown=guide_seen)
+    if registered:
+        for name in ("buffTracker", "debuffTracker"):
+            update(name, captureRegion=BOX)
+        for name in ("tuarim", "bossPattern", "statBars"):
+            update(name, box=BOX)
+        update("skillbar", anchor={"x": 10, "y": 20})
     window = MainWindow()
     window._booting = False
     try:
+        before = deepcopy(config._read_local_config())
+        pages = []
+        window._pages.currentChanged.connect(lambda _: pages.append(window._pages.currentWidget()))
         window.show()
         app.processEvents()
-        assert (window._pages.currentWidget() is window.setup_guide) is (expected and logged_in)
+        expected = logged_in and not skip
+        assert (window._pages.currentWidget() is window.setup_guide) is expected
+        assert window.setup_page not in pages
+        assert window.setup_guide.active is expected
+        assert window.setup_guide.stage == 0
+        assert notes == [True]
         assert getattr(window, "_tour", None) is None
-        assert not config.load_general_flag("firstUseGuideShown")
+        assert config._read_local_config() == before
+        window._leave_setup()
+        window._tabs.setCurrentIndex(3)
+        assert window.settings_tab.setup_btn is window.settings_tab.guide_btn
+        assert window.settings_tab.setup_btn.isHidden() is (not logged_in)
+        window.settings_tab.setup_btn.click()
+        assert (window._pages.currentWidget() is window.setup_guide) is logged_in
+        assert window._pages.currentWidget() is not window.setup_page
+        assert config._read_local_config() == before
+    finally:
+        window._force_quit = True
+        window.close()
+
+
+def test_tray_restore_and_relogin_never_reveal_legacy_setup(app, settings, monkeypatch):
+    from mabinogi_addon.ui.main_window import MainWindow
+
+    account = {"logged_in": True}
+    monkeypatch.setattr(config, "load_discord_user", lambda:
+                        {"id": "test", "name": "테스트"} if account["logged_in"] else None)
+    monkeypatch.setattr(QApplication, "quit", lambda: None)
+    monkeypatch.setattr(MainWindow, "_maybe_check_update", lambda *args: None)
+    notes = []
+    monkeypatch.setattr(MainWindow, "_maybe_show_release_notes", lambda self: notes.append(True))
+    update("general", skipSetup=False, tourShown=True, firstUseGuideShown=True, startInTray=True)
+    window = MainWindow()
+    monkeypatch.setattr(window.party_tab, "start_polling", lambda: None)
+    try:
+        window.start()
+        before = deepcopy(config._read_local_config())
+        app.processEvents()
+        assert not window.isVisible() and not notes
+        assert not window.setup_guide.active
+        window.show()
+        app.processEvents()
+        assert notes == [True]
+        assert window._pages.currentWidget() is window.setup_guide
+        assert window.setup_guide.stage == 0 and window.setup_guide.active
+        window.setup_guide.move(1)
+        monkeypatch.setattr(window, "_minimize_to_tray_enabled", lambda: True)
+        before["general"]["windowPos"] = {"x": window.pos().x(), "y": window.pos().y()}
+        window.close()
+        assert not window.isVisible() and not window._closing
+        window.show()
+        app.processEvents()
+        assert window.setup_guide.stage == 1 and notes == [True]
+        account["logged_in"] = False
+        window.settings_tab.login_changed.emit()
+        window._open_setup()
+        window._resume_guide()
+        assert window._pages.currentWidget() is window._tabs
+        assert window.settings_tab.setup_btn.isHidden()
+        account["logged_in"] = True
+        window.settings_tab.login_changed.emit()
+        window._tabs.setCurrentIndex(3)
+        assert window.settings_tab.setup_btn.isVisible()
+        window.settings_tab.setup_btn.click()
+        assert window._pages.currentWidget() is window.setup_guide
+        assert window.setup_guide.stage == 0
+        assert config._read_local_config() == before
     finally:
         window._force_quit = True
         window.close()
