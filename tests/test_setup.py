@@ -2,6 +2,7 @@
 
 from copy import deepcopy
 from threading import Event, get_ident
+from types import SimpleNamespace
 import time
 
 import numpy as np
@@ -34,6 +35,34 @@ def settings(monkeypatch, tmp_path):
     config._write_local_config(raw)
     monkeypatch.setattr(config, "load_discord_user", lambda: {"id": "test", "name": "테스트"})
     return path
+
+
+@pytest.mark.parametrize("origin", ["guide", "page"])
+def test_skip_setting_refresh_is_bidirectional_read_only_and_survives_reopen(app, settings, monkeypatch, origin):
+    from mabinogi_addon.ui.setup_guide import SetupGuide
+
+    screens = {"guide": SetupGuide(), "page": SetupPage()}
+    other = screens["page" if origin == "guide" else "guide"]
+    try:
+        for value in (True, False, True):
+            screens[origin].skip.setChecked(value)
+            assert config.load_general_flag("skipSetup") is value
+            before = settings.read_bytes()
+            with monkeypatch.context() as patch:
+                def unexpected_write(*args, **kwargs):
+                    pytest.fail("refresh must not save settings")
+                patch.setattr(config, "_write_local_config", unexpected_write)
+                other.refresh()
+                assert other.skip.isChecked() is value
+            assert settings.read_bytes() == before
+        reopened = SetupPage() if origin == "guide" else SetupGuide()
+        try:
+            assert reopened.skip.isChecked()
+        finally:
+            reopened.close()
+    finally:
+        for screen in screens.values():
+            screen.close()
 
 
 def update(section, **values):
@@ -112,7 +141,11 @@ def test_manual_areas_and_shared_prerequisites(settings):
 
 @pytest.fixture
 def flow(app, settings, monkeypatch, tmp_path):
+    from mabinogi_addon.ui import screen_grab
+
     page = SetupPage()
+    monitor = {"left": -1500, "top": 50, "width": 1300, "height": 150}
+    monkeypatch.setattr(screen_grab, "_mss", lambda: SimpleNamespace(monitors=[monitor]))
     storage = diag.DiagnosticStore(tmp_path / "진단")
     monkeypatch.setattr(diag, "store", lambda: storage)
     capture_threads = []
@@ -969,6 +1002,17 @@ def test_guide_shutdown_discards_worker_result_and_does_not_touch_page_after_shu
 
 def test_guide_restart_restores_saved_areas_but_starts_at_first_step(app, settings, monkeypatch):
     from mabinogi_addon.ui.main_window import MainWindow
+    from mabinogi_addon.ui import main_window
+
+    class Source:
+        closed = False
+        def grab(self):
+            return np.zeros((BOX["h"], BOX["w"], 3), np.uint8)
+        def close(self):
+            self.closed = True
+
+    source = Source()
+    monkeypatch.setattr(main_window, "create_live_source", lambda region: source)
 
     monkeypatch.setattr(QApplication, "quit", lambda: None)
     first = MainWindow()
@@ -979,6 +1023,7 @@ def test_guide_restart_restores_saved_areas_but_starts_at_first_step(app, settin
     first.setup_guide.move(1)
     first._force_quit = True
     first.close()
+    assert source.closed
     second = MainWindow()
     try:
         second._open_guide()

@@ -209,8 +209,8 @@ def _make_tab(monkeypatch, reads):
     tab = mod.TuarimTab(W())
     tab._region = {"x": 0, "y": 0, "w": 28, "h": 13}
     tab._grab_rect = lambda *a: np.zeros((13, 28, 3), np.uint8)
-    tab._tracker = TuarimTracker([70])
     tab.enable.setChecked(True)
+    tab._tracker = TuarimTracker([70])
     fired = []
     tab._play = lambda t: fired.append(t)
     return tab, fired, len(reads)

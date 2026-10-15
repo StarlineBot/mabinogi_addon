@@ -152,6 +152,9 @@ class SetupPage(QWidget):
 
     def refresh(self):
         raw = config._read_local_config()
+        blocked = self.skip.blockSignals(True)
+        self.skip.setChecked(section(raw, "general").get("skipSetup") is True)
+        self.skip.blockSignals(blocked)
         logged_in = config.load_discord_user() is not None
         self.beta_note.setText("자동설정은 테스트 중인 베타 기능입니다. "
                                + ("직접 지정도 가능합니다." if logged_in else

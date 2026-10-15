@@ -1,0 +1,75 @@
+name: Windows validation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'test_support/**'
+      - 'packaging/**'
+      - 'scripts/**'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - 'pytest.ini'
+      - '.github/workflows/**'
+  workflow_dispatch:
+    inputs:
+      upload_exe:
+        description: 'Optional exe download (does not gate validation)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v5
+      - name: Set up Python
+        run: uv python install 3.12
+      - name: Frozen dependencies
+        run: uv sync --frozen --group dev --group build
+      - name: Determine exe requirement
+        id: plan
+        run: uv run --frozen python scripts/windows_ci.py plan --base '${{ github.event.before || '0000000000000000000000000000000000000000' }}' --head '${{ github.sha }}'
+      - name: Isolated regression
+        id: unit
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: uv run --frozen pytest -q -m 'not windows_integration' --junitxml=unit-results.xml
+      - name: Native Windows integration
+        id: native
+        env:
+          QT_QPA_PLATFORM: windows
+        run: uv run --frozen pytest -q -m windows_integration --junitxml=windows-results.xml
+      - name: Verify exe build
+        id: build
+        if: steps.plan.outputs.build_required == 'true'
+        run: uv run --frozen --group build python packaging/build_windows.py --version 0.0.0
+      - name: Optional exe upload
+        id: upload
+        if: github.event_name == 'workflow_dispatch' && inputs.upload_exe && steps.build.outcome == 'success'
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-exe-${{ github.sha }}-${{ github.run_attempt }}
+          path: dist/mabinogi-addon.exe
+          retention-days: 1
+          if-no-files-found: error
+      - name: Verification summary
+        if: always()
+        run: >-
+          uv run --frozen python scripts/windows_ci.py summary
+          --unit '${{ steps.unit.outcome }}' --native '${{ steps.native.outcome }}'
+          --build '${{ steps.build.outcome }}' --upload '${{ steps.upload.outcome }}'

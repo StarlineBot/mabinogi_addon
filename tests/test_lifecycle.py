@@ -10,6 +10,7 @@ import os
 import subprocess
 import sys
 import textwrap
+from pathlib import Path
 
 import pytest
 
@@ -102,6 +103,11 @@ config._write_local_config = (
     lambda data, path=None: _tmp.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
 )
 """
+_MW_PREAMBLE += (
+    f"import sys; sys.path.insert(0, {str(Path(__file__).resolve().parents[1])!r})\n"
+    "from test_support.boundaries import audio_boundary\n"
+    "_audio_boundary = audio_boundary()\n"
+)
 
 
 _SCENARIOS = {

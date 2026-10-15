@@ -12,8 +12,62 @@
 from __future__ import annotations
 
 import gc
+from pathlib import Path
+import sys
 
 import pytest
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+
+@pytest.fixture(autouse=True)
+def _isolated_runtime(request, tmp_path):
+    from PySide6.QtWidgets import QApplication
+    from PySide6.QtCore import QCoreApplication, QEvent, QTimer
+    from shiboken6 import isValid
+    from unittest.mock import patch
+    from mabinogi_addon import config, paths
+    from test_support.boundaries import ExternalBoundaries
+
+    app = QApplication.instance()
+    before = set(app.topLevelWidgets()) if app is not None else set()
+    native = request.node.get_closest_marker("windows_integration") is not None
+    original_path = config.LOCAL_CONFIG_PATH
+    read, write = config._read_local_config, config._write_local_config
+    target = tmp_path / "app" / "config.local.json"
+    user_dir = tmp_path / "app" / "data"
+    user_dir.mkdir(parents=True)
+
+    def redirect(path):
+        return target if path == original_path else path
+
+    with ExternalBoundaries(devices=not native) as boundary, \
+            patch.object(config, "LOCAL_CONFIG_PATH", target), \
+            patch.object(config, "ENV_PATH", tmp_path / ".env"), \
+            patch.object(config, "_read_local_config", lambda path=original_path: read(redirect(path))), \
+            patch.object(config, "_write_local_config", lambda data, path=original_path: write(data, redirect(path))), \
+            patch.object(paths, "user_data_dir", lambda: user_dir):
+        yield boundary
+        app = QApplication.instance()
+        if app is not None:
+            # 누수 검사는 먼저 실행된다. 이후 소유한 창을 정리해 다음 테스트 오염을 막는다.
+            for widget in set(app.topLevelWidgets()) - before:
+                if not isValid(widget):
+                    continue
+                if hasattr(widget, "_force_quit"):
+                    widget._force_quit = True
+                if hasattr(widget, "shutdown"):
+                    widget.shutdown()
+                if hasattr(widget, "dismiss"):
+                    widget.dismiss()
+                else:
+                    widget.close()
+                for timer in widget.findChildren(QTimer):
+                    timer.stop()
+                widget.deleteLater()
+            QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+            app.processEvents()
+        assert not boundary.violations, f"unisolated external operations: {boundary.violations}"
 
 
 def _running_qthreads() -> list[str]:
@@ -34,7 +88,7 @@ def _running_qthreads() -> list[str]:
 
 
 @pytest.fixture(autouse=True)
-def _no_leaked_qthreads():
+def _no_leaked_qthreads(_isolated_runtime):
     """테스트 종료 시 실행 중인 QThread가 남아 있으면 실패(이름 표시)."""
     yield
     leaked = _running_qthreads()
