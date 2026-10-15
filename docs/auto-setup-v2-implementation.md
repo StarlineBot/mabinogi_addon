@@ -147,7 +147,7 @@ QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest -q -p scripts.qa_setup_audi
   신규 사용자/트레이 추가 재확인은 **2 passed in 1.61s**다. 집합은 중복이므로 합산하지 않는다.
 - 렌더는 `/tmp/setup-guide-preview/default-start.png`, `settings-entry.png` 및 기존 단계별 이미지다.
   기존 단계 배치를 재사용하며 시작 1단계와 설정 단일 버튼의 실제 MainWindow 렌더를 공유했다.
-  자동설정/게임 화면 대신 샘플 설정을 사용했다. 사용자 추가 배치 피드백은 별도 반영한다.
+  자동설정/게임 화면 대신 샘플 설정을 사용했다. 사용자가 이미지 재확인 후 '조아'로 배치를 확정했다.
 - 새 코드의 Windows 검증은 이전 `7688dc1`의 성공으로 대신하지 않는다. 푸시 후 정확한 SHA의
   회귀·네이티브 통합·exe 빌드를 확인해야 한다. 현재 실행 인스턴스는 api.github.com을 차단하지만
   저장된 환경 설정에는 API/로그 호스트가 있어 최신 환경 설정 적용이 필요하다.

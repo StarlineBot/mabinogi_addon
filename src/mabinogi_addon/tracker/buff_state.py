@@ -54,6 +54,7 @@ _TRUSTED_DROP_MAX = 15.0
 # 분 유실 오독은 재시전 '순간'에만 한 프레임 생겨 바로 끊기므로 이 조건으로 구분된다.
 # (없으면 한 번 높게 확인된 시계가 영영 안 내려가 종료 알림을 놓친다.)
 _DROP_RESYNC_SEC = 2.5
+_EXTENSION_ALERT_GRACE_SEC = 0.2
 
 
 class BuffStateMachine:
@@ -84,6 +85,7 @@ class BuffStateMachine:
         self._trusted = False
         # 큰 하향이 자기일관으로 '지속'되기 시작한 시각. _DROP_RESYNC_SEC 넘으면 재동기화.
         self._drop_since: float | None = None
+        self._alert_hold_since: float | None = None
 
     # ---- 조회 ----
     def remaining(self, now: float) -> float | None:
@@ -105,6 +107,8 @@ class BuffStateMachine:
         같은 순간 중복은 연장으로 확정되지 않아 재무장되지 않는다.
         """
         if self.alert_before2 is None or self._alerted2:
+            return False
+        if self._defer_extension_alert(now):
             return False
         remaining = self.remaining(now)
         if remaining is None:
@@ -188,6 +192,19 @@ class BuffStateMachine:
     def _commit(self, reading: float, now: float) -> None:
         self._last_read = reading
         self._last_read_at = now
+        self._alert_hold_since = None
+
+    def _defer_extension_alert(self, now: float) -> bool:
+        remaining = self.remaining(now)
+        pending = self._pending
+        if (pending is None or remaining is None
+                or pending[0] - (now - pending[1]) <= remaining + _EXTEND_EPS):
+            self._alert_hold_since = None
+            return False
+        # 후보가 바뀌어도 기한은 갱신하지 않는다. 판독 지연으로 정상 알림을 계속 막지 않는다.
+        if self._alert_hold_since is None:
+            self._alert_hold_since = pending[1]
+        return remaining > 0 and now < self._alert_hold_since + _EXTENSION_ALERT_GRACE_SEC
 
     def _anchor(self, reading: float, now: float) -> bool:
         """판독값을 내부 시계에 반영할지 결정한다. 연장으로 확정됐으면 True.
@@ -264,12 +281,18 @@ class BuffStateMachine:
         # 아직 확정 못 함: 후보만 갱신하고 내부 시계는 유지(튐 반영 안 함).
         # 하향 후보가 이어지지 않고 끊김(분 유실 오독 등) → 지속 하향 집계 초기화.
         self._pending = (reading, now)
+        if reading > prev + _EXTEND_EPS:
+            if self._alert_hold_since is None:
+                self._alert_hold_since = now
+        else:
+            self._alert_hold_since = None
         self._drop_since = None
         return False
 
     def _on_missing(self, now: float) -> Event:
         self._detections = 0
         self._pending = None  # 미감지 프레임은 연장 확인 연쇄를 끊는다
+        self._alert_hold_since = None
         self._drop_since = None
         if self.state is State.ABSENT:
             return Event.NONE
@@ -289,6 +312,8 @@ class BuffStateMachine:
         return Event.NONE
 
     def _check_alert(self, now: float) -> Event | None:
+        if self._defer_extension_alert(now):
+            return None
         remaining = self.remaining(now)
         if remaining is None:
             return None  # 무기한 버프는 알림 없음
@@ -310,3 +335,4 @@ class BuffStateMachine:
         self._pending = None
         self._trusted = False  # 새 버프는 시계 다시 확인부터
         self._drop_since = None
+        self._alert_hold_since = None

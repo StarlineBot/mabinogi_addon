@@ -24,6 +24,7 @@ import pytest
 from mabinogi_addon import image_io
 from mabinogi_addon.detect.boss_hp_reader import read_percent, read_percent_cached
 from mabinogi_addon.tracker.debuff_engine import DebuffEngine
+from test_support.debuff_baseline import LegacyScaledEngine
 
 _SHOTS = Path(__file__).parent / "data"
 
@@ -86,14 +87,14 @@ def _bar_box(region):
     return region[int(h * 0.52):, :]
 
 
-def _settle_false_positives(sample, boss, templates, order, *, gate_mode) -> list[str]:
+def _settle_false_positives(sample, boss, templates, order, *, gate_mode, engine_class=DebuffEngine) -> list[str]:
     """'보스 → 바닥' 시나리오를 재현해 바닥에서 '걸림'으로 뜬 디버프(=오탐) 목록.
 
     실제 상황: 보스전(디버프가 걸려 있을 수 있음) → 보스 이탈/사망(바닥). 세 방식에 **같은
     입력**(보스 프레임 먼저, 그 다음 바닥)을 줘서 공정하게 비교한다. 3차(percent)에는
     정렬된 바 영역(_bar_box)을 함께 넘긴다.
     """
-    eng = DebuffEngine(templates, order, gate_mode=gate_mode)
+    eng = engine_class(templates, order, gate_mode=gate_mode)
     now = 0.0
     if boss is not None:
         eng.tick(boss, now=now, bar_region=_bar_box(boss))  # 보스전(바 인식 + 디버프 재현)
@@ -172,8 +173,12 @@ def test_detection_false_positive_benchmark(capsys):
     # 게이팅(2·3차)이 기존(1차)보다 오탐을 늘리지 않는다(핵심 불변식).
     for label in ("2차 보스 바 인식(띠)", "3차 read_percent(바)"):
         assert totals[label] <= off, f"{label} 오탐({totals[label]})이 1차({off})보다 많음"
-    # 적어도 하나의 바닥에선 1차가 실제로 오탐을 낸다(벤치가 신호를 갖는지 확인).
-    assert off >= 1, "벤치에 오탐 신호가 없음 — 바닥 샘플/템플릿을 점검하세요"
+    # 과거 결함이 재현되는 샘플인지 유지하며, 수정한 제품의 오탐은 늘지 않아야 한다.
+    legacy = sum(len(_settle_false_positives(reg, boss, tpl, order, gate_mode="off",
+                                            engine_class=LegacyScaledEngine)) for _, reg in samples)
+    assert legacy >= 1, "벤치에 과거 오탐 신호가 없음 — 바닥 샘플/템플릿을 점검하세요"
+    assert off <= legacy
+    assert off == 0, "기존 바닥 샘플에서 오탐이 재발했습니다"
 
 
 def _recognized_band(region) -> bool:

@@ -116,7 +116,7 @@ def test_anchor_gates_after_first_seen(monkeypatch):
     assert res_gone.frame_valid is False
 
 
-def test_second_alert_routes_to_alerts2():
+def test_second_alert_routes_to_alerts2(monkeypatch):
     """2차(막차) 알림은 alerts가 아니라 alerts2로 분리되어 나온다.
 
     vivace(화면 121초)에 1차 임계 100·2차 90을 주고, 임계 위(ACTIVE)로 등장시킨 뒤
@@ -134,6 +134,8 @@ def test_second_alert_routes_to_alerts2():
     # 등장(rem 121 > 100) → 아직 알림 없음
     res0 = eng.tick(region, now=0.0, foreground=True)
     assert "vivace" not in res0.alerts and "vivace" not in res0.alerts2
+    # 이후에는 내부 시계만 흘린다. 같은 과거 121초 이미지는 새 연장 관측이 아니다.
+    monkeypatch.setattr(eng, "_read_row_time", lambda *args: None)
     # rem 96 ≤ 100 → 1차만
     res1 = eng.tick(region, now=25.0, foreground=True)
     assert "vivace" in res1.alerts

@@ -26,11 +26,9 @@ _GATE_MODES = (GATE_OFF, GATE_BAND, GATE_PERCENT)
 
 # 보스 디버프 줄 아이콘의 실제 화면 높이(px). 2560x1440 기준 실측 ≈16.
 _ONSCREEN_ICON_PX = 16
-# 매칭은 이 높이로 축소해서 한다: 비용↓(영역을 크게 잡아도 됨) + 숫자 겹침 노이즈 완화.
-# 너무 작으면(8px) 아이콘이 뭉개져 서로 점수가 겹치므로 10px로.
-_MATCH_ICON_PX = 10
-# 영역과 템플릿을 같은 비율로 축소 → 화면 아이콘이 _MATCH_ICON_PX가 되게.
-_DOWNSCALE = _MATCH_ICON_PX / _ONSCREEN_ICON_PX  # 0.625
+# 캡처는 재샘플링하지 않는다. 영역 경계에 따라 아이콘 픽셀이 바뀌는 것을 막는다.
+_MATCH_ICON_PX = _ONSCREEN_ICON_PX
+_CANDIDATES = 4
 # 이력 임계(hysteresis): 실데이터에서 걸린 것 ≥0.70 / 안 걸린 것 ≤0.61.
 # 감지 시작은 높게(0.68), 해제는 낮게(0.58) 잡아 경계 점수의 프레임별 요동을 없앤다.
 # (주의) 모모만 잡겠다고 이 값을 0.76으로 올렸더니, 라이브에서 0.76 아래로 떨어지는
@@ -109,9 +107,13 @@ class DebuffEngine:
         if bar_gating is not None:
             gate_mode = GATE_BAND if bar_gating else GATE_OFF
         self._gate_mode = gate_mode if gate_mode in _GATE_MODES else GATE_OFF
-        # 템플릿을 매칭 크기(축소 후 화면 아이콘 크기)로 미리 맞춘다.
+        # 템플릿만 실제 화면 아이콘 크기로 미리 맞춘다.
         self._variants = {
             bid: [_variant(t, _MATCH_ICON_PX)] for bid, t in templates.items()
+        }
+        self._gray_variants = {
+            bid: [cv2.cvtColor(t, cv2.COLOR_BGR2GRAY) for t in variants]
+            for bid, variants in self._variants.items()
         }
         # shown=True면 '안 걸림' → 오버레이 표시. 초기엔 전부 표시(보스 전 상태).
         self._shown = {bid: True for bid in templates}
@@ -180,34 +182,40 @@ class DebuffEngine:
 
     @staticmethod
     def _scale(region: np.ndarray) -> np.ndarray:
-        """영역을 _DOWNSCALE로 축소 — 화면 아이콘이 _MATCH_ICON_PX가 되도록."""
-        if region.shape[0] == 0 or region.shape[1] == 0:
-            return region
-        return cv2.resize(
-            region,
-            (
-                max(1, round(region.shape[1] * _DOWNSCALE)),
-                max(1, round(region.shape[0] * _DOWNSCALE)),
-            ),
-            interpolation=cv2.INTER_AREA,
-        )
+        """기존 진단 호출부용: 원본 픽셀을 그대로 반환한다."""
+        return region
 
     def best_scores(self, region: np.ndarray) -> dict[str, float]:
-        """각 디버프의 최고 매칭 점수(진단용). 임계 판정 없이 점수만."""
+        """각 디버프의 후보 중 최고 컬러 점수(진단용). 임계 판정 없이 점수만."""
         small = self._scale(region)
+        gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY) if small.size else None
         out: dict[str, float] = {}
         for bid in self._variants:
-            out[bid] = self._best(small, bid)
+            out[bid] = self._best(small, bid, gray)
         return out
 
-    def _best(self, small: np.ndarray, bid: str) -> float:
+    def _best(self, small: np.ndarray, bid: str, gray: np.ndarray | None = None) -> float:
         best = -1.0
-        for variant in self._variants.get(bid, ()):
+        if small.size == 0:
+            return best
+        if gray is None:
+            gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
+        for variant, gray_variant in zip(self._variants.get(bid, ()), self._gray_variants.get(bid, ())):
             if (
                 variant.shape[0] <= small.shape[0]
                 and variant.shape[1] <= small.shape[1]
             ):
-                best = max(best, match_icon(small, variant).score)
+                # 위치 후보만 단일 채널로 찾고 최종 점수는 원본 컬러로 검증한다.
+                # 컬러 검증 횟수는 영역 크기와 무관하게 제한한다.
+                scores = cv2.matchTemplate(gray, gray_variant, cv2.TM_CCOEFF_NORMED)
+                h, w = variant.shape[:2]
+                for _ in range(_CANDIDATES):
+                    _, peak, _, (x, y) = cv2.minMaxLoc(scores)
+                    if peak < 0:
+                        break
+                    best = max(best, match_icon(small[y:y + h, x:x + w], variant).score)
+                    scores[max(0, y - h // 2):y + h // 2 + 1,
+                           max(0, x - w // 2):x + w // 2 + 1] = -1
         return best
 
     def detect_threshold_for(self, bid: str) -> float:
@@ -217,10 +225,10 @@ class DebuffEngine:
     def release_threshold_for(self, bid: str) -> float:
         return _PER_ICON_RELEASE.get(bid, self._release_thr)
 
-    def _detect(self, small: np.ndarray, bid: str) -> bool:
+    def _detect(self, small: np.ndarray, bid: str, gray: np.ndarray | None = None) -> bool:
         """이력 임계: 시작은 detect_thr 이상, 해제는 release_thr 미만. 그 사이는 유지.
         모모·방해 카드처럼 이펙트에 잘 붙는 저정보 아이콘은 아이콘별로 더 높은 임계를 쓴다."""
-        score = self._best(small, bid)
+        score = self._best(small, bid, gray)
         detect_thr = _PER_ICON_DETECT.get(bid, self._detect_thr)
         release_thr = _PER_ICON_RELEASE.get(bid, self._release_thr)
         if score >= detect_thr:
@@ -410,9 +418,10 @@ class DebuffEngine:
             return TickResult(entries=entries, alerts=[], frame_valid=True)
 
         small = self._scale(region)
+        gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY) if small.size else None
         for bid in self._templates:
             # 이력 임계 통과(raw) → 디바운스로 확정(detected). 단발 스파이크는 확정 안 됨.
-            raw = self._detect(small, bid)
+            raw = self._detect(small, bid, gray)
             detected = self._confirm_detect(bid, raw, now)
             # 재매칭 대기는 연속 미감지가 아니다. 이미 숨긴 항목의 재표시 대기를 취소한다.
             if detected or (raw and not self._shown[bid]):

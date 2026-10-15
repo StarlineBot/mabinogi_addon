@@ -1,3 +1,5 @@
+import pytest
+
 from mabinogi_addon.tracker import BuffStateMachine, Event, State
 
 
@@ -437,3 +439,63 @@ def test_alert_fires_on_return_to_foreground():
         sm.observe(detected=True, reading=25.0, now=15.0, foreground=True)
         is Event.ALERT
     )
+
+
+def _extension_boundary(second):
+    machine = BuffStateMachine(appear_frames=1, alert_before=30, alert_before2=10)
+    machine.observe(detected=True, reading=40, now=0)
+    machine.observe(detected=True, reading=39.8, now=0.2)
+    if second:
+        assert machine.observe(detected=True, reading=30, now=10) is Event.ALERT
+        machine.observe(detected=True, reading=10.2, now=29.8)
+    return machine, 30.0 if second else 10.0
+
+
+@pytest.mark.parametrize("second", [False, True])
+@pytest.mark.parametrize("readings", ["unreadable", "inconsistent"])
+def test_extension_alert_hold_never_exceeds_200ms(second, readings):
+    machine, start = _extension_boundary(second)
+    for index in range(5):
+        now = start + index * 0.05
+        reading = (None if index and readings == "unreadable" else 100 + index * 10)
+        event = machine.observe(detected=True, reading=reading, now=now)
+        secondary = machine.check_second_alert(now)
+        assert (event is Event.ALERT) is (not second and index == 4)
+        assert secondary is (second and index == 4)
+    event = machine.observe(detected=True, reading=None, now=start + 0.25)
+    assert event is not Event.ALERT and not machine.check_second_alert(start + 0.25)
+
+
+@pytest.mark.parametrize("second", [False, True])
+def test_single_upward_misread_releases_hold_on_next_normal_reading(second):
+    machine, start = _extension_boundary(second)
+    assert machine.observe(detected=True, reading=100, now=start) is Event.NONE
+    assert not machine.check_second_alert(start)
+    reading = (10 if second else 30) - 0.05
+    event = machine.observe(detected=True, reading=reading, now=start + 0.05)
+    assert (event is Event.ALERT) is (not second)
+    assert machine.check_second_alert(start + 0.05) is second
+
+
+@pytest.mark.parametrize("second", [False, True])
+def test_confirmed_extension_clears_hold_and_preserves_next_threshold(second):
+    machine, start = _extension_boundary(second)
+    assert machine.observe(detected=True, reading=100, now=start) is Event.NONE
+    assert not machine.check_second_alert(start)
+    event = machine.observe(detected=True, reading=99.95, now=start + 0.05)
+    assert event is not Event.ALERT and not machine.check_second_alert(start + 0.05)
+    assert machine._alert_hold_since is None
+    assert machine.remaining(start + 0.05) == 99.95
+    assert machine.observe(detected=True, reading=None, now=start + 70) is Event.ALERT
+    assert not machine.check_second_alert(start + 70)
+    assert machine.observe(detected=True, reading=None, now=start + 90) is Event.NONE
+    assert machine.check_second_alert(start + 90)
+
+
+@pytest.mark.parametrize("second", [False, True])
+def test_return_to_foreground_does_not_restart_old_extension_hold(second):
+    machine, start = _extension_boundary(second)
+    assert machine.observe(detected=True, reading=100, now=start, foreground=False) is Event.NONE
+    event = machine.observe(detected=True, reading=None, now=start + 0.25, foreground=True)
+    assert (event is Event.ALERT) is (not second)
+    assert machine.check_second_alert(start + 0.25) is second
