@@ -175,9 +175,14 @@ jobs:
             ../packaging/releases_README.md > README.md
           # 3) version.json 갱신(앱 자동 업데이트가 raw 로 확인).
           cp ../version.json version.json
+          # 최초 등록만 수행. 작성자가 수정한 공개 대사는 이후 배포에서 보존한다.
+          mkdir -p data
+          if [ ! -e data/dialogues.json ]; then
+            cp ../src/mabinogi_addon/assets/dialogues.json data/dialogues.json
+          fi
           git config user.name "github-actions"
           git config user.email "github-actions@users.noreply.github.com"
-          git add version.json README.md CHANGELOG.md
+          git add version.json README.md CHANGELOG.md data/dialogues.json
           git commit -m "release: v${APP_VERSION}" || echo "변경 없음"
           git push -u origin main
 

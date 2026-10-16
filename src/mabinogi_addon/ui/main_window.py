@@ -411,9 +411,21 @@ class MainWindow(QMainWindow):
         if needs_start_screen() and config.load_discord_user() is not None:
             # 실제 첫 표시에 노트를 먼저 처리하고 안내를 활성화한다.
             self._pages.setCurrentWidget(self.setup_guide)
+        from .creator_dialogue import CreatorDialogue
+        self.creator_dialogue = CreatorDialogue(self)
 
     def _open_setup(self):
         self._open_guide()
+
+    def nativeEvent(self, event_type, message):
+        import sys
+        dialogue = getattr(self, "creator_dialogue", None)
+        if sys.platform == "win32" and dialogue is not None:
+            import ctypes
+            from ctypes import wintypes
+            msg = ctypes.cast(int(message), ctypes.POINTER(wintypes.MSG)).contents
+            dialogue.system_message(msg.message, msg.wParam)
+        return super().nativeEvent(event_type, message)
 
     def _leave_setup(self):
         if self._setup_busy():
@@ -851,6 +863,7 @@ class MainWindow(QMainWindow):
             return
         if self._setup_busy() or self._config_pending_restart or self._setup_flow.closed:
             return
+        self.creator_dialogue.dismiss()
         if not self.isVisible():
             self.show()
         previous = getattr(self, "_tour", None)
@@ -1121,6 +1134,7 @@ class MainWindow(QMainWindow):
         if self._closing or self._config_pending_restart or self._started:
             return
         self._started = True
+        self.creator_dialogue.start()
         from ..system import autostart
 
         # 자동실행: 저장된 '의도'대로 현재 exe에 강제 동기화(신버전 실행=자동실행 대상).
@@ -1745,6 +1759,7 @@ class MainWindow(QMainWindow):
 
         # 종료 정리 중 Qt 이벤트가 처리되어도 새 캡처/워커를 만들지 않는다.
         self._closing = True
+        self.creator_dialogue.shutdown()
         if self._status_timer is not None:
             self._status_timer.stop()
 

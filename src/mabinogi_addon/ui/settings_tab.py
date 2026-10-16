@@ -12,8 +12,8 @@ from datetime import datetime
 _log = logging.getLogger("mabinogi_addon.discord")
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QThread, QTimer, Signal
-from PySide6.QtGui import QPainter, QPainterPath, QPixmap
+from PySide6.QtCore import Qt, QSize, QThread, QTimer, Signal
+from PySide6.QtGui import QIcon, QPainter, QPainterPath, QPixmap
 from PySide6.QtWidgets import (
     QButtonGroup,
     QCheckBox,
@@ -199,6 +199,9 @@ class SettingsTab(QWidget):
         v.setContentsMargins(12, 12, 12, 12)
         v.setSpacing(12)
         v.addWidget(self._creator_header())
+        self.dialogue_enabled = _checked("제작자 잡담 사용", config.load_general_flag("creatorDialogue", True))
+        self.dialogue_enabled.toggled.connect(lambda on: config.save_general_flag("creatorDialogue", on))
+        v.addWidget(self.dialogue_enabled)
         v.addWidget(self._inquiry_button())
         v.addWidget(self._diag_button())
         v.addWidget(self._autofind_diagnostic_group())
@@ -550,15 +553,19 @@ class SettingsTab(QWidget):
         row.setContentsMargins(4, 4, 4, 0)
         row.setSpacing(10)
 
-        avatar = QLabel()
+        avatar = QToolButton()
+        self.creator_avatar = avatar
+        avatar.setAutoRaise(True)
+        avatar.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        avatar.setToolTip("잡담")
         avatar.setFixedSize(48, 48)
-        avatar.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        avatar.setIconSize(QSize(48, 48))
         # 제작자 아이콘: 굵은 테두리(RGB 58,7,41 = #3A0729).
         pm = _circular(PROFILE_IMAGE, 48, 3, "#3A0729") or _circular(
             LOGO_IMAGE, 48, 3, "#3A0729"
         )
         if pm is not None:
-            avatar.setPixmap(pm)
+            avatar.setIcon(QIcon(pm))
         else:
             avatar.setText("👤")
             avatar.setStyleSheet("font-size:28px;")

@@ -94,3 +94,31 @@ def test_release_and_validation_use_same_build_command():
     command = runpy.run_path(str(ROOT / "packaging/build_windows.py"))["build_command"]()
     assert "--uac-admin" in command and "--collect-all" in command
     assert "dxcam" in command and "comtypes" in command
+
+
+@pytest.mark.parametrize("existing", [None, b"author custom data\n", b"malformed but preserve"])
+def test_public_dialogue_seed_never_replaces_author_file(tmp_path, existing):
+    import shutil
+    import subprocess
+    import sys
+    import yaml
+
+    release = yaml.load((ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
+    step = next(s for s in release["jobs"]["build-windows"]["steps"]
+                if s.get("name") == "Commit to public repo main (version.json + CHANGELOG + README)")
+    script = step["run"]
+    seed = script[script.index("mkdir -p data"):script.index("git config user.name")]
+    source = tmp_path / "src/mabinogi_addon/assets/dialogues.json"
+    source.parent.mkdir(parents=True)
+    source.write_bytes(b"bundled initial data\n")
+    public = tmp_path / "pub"
+    (public / "data").mkdir(parents=True)
+    target = public / "data/dialogues.json"
+    if existing is not None:
+        target.write_bytes(existing)
+    bash = "bash"
+    if sys.platform == "win32":
+        bash = str(Path(shutil.which("git")).parents[1] / "bin/bash.exe")
+    subprocess.run([bash, "-e", "-c", seed], cwd=public, check=True)
+    assert target.read_bytes() == (existing if existing is not None else source.read_bytes())
+    assert "git add version.json README.md CHANGELOG.md data/dialogues.json" in script

@@ -517,7 +517,8 @@ def test_setup_login_opens_existing_account_without_starting_auth(app, settings,
     try:
         window.show()
         app.processEvents()
-        assert window.width() == 790 and window.height() == 800
+        expected_height = min(864, window.screen().availableGeometry().height() - 32)
+        assert window.width() == 790 and window.height() == expected_height
         assert window._pages.currentWidget() is window._tabs
         window._open_setup()
         assert window._pages.currentWidget() is window._tabs
@@ -903,7 +904,8 @@ def test_guide_actual_window_navigation_and_resume_preserve_step(app, settings, 
             guide.refresh()
             app.processEvents()
             app.processEvents()
-            assert window.width() == 790 and window.height() == 800
+            expected_height = min(800, window.screen().availableGeometry().height() - 32)
+            assert window.width() == 790 and window.height() == expected_height
             assert window.rect().contains(guide.next_btn.mapTo(window, guide.next_btn.rect().bottomRight()))
             assert guide.selection.horizontalScrollBar().maximum() == 0
             for key in guide.feature_keys:
