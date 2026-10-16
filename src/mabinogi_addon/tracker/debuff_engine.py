@@ -46,6 +46,10 @@ DEBUFF_THRESHOLD = DEBUFF_DETECT_THRESHOLD  # 진단 스크립트 표시용
 _PER_ICON_DETECT = {"모모": 0.80, "방해 카드": 0.80}
 _PER_ICON_RELEASE = {"모모": 0.70, "방해 카드": 0.70}
 
+# 색이 다른 같은 무늬가 동일 슬롯을 중복 점유하지 않도록 후보 위치에서 구분한다.
+_IDENTITY_PEERS = {"프라가라흐(마법)": "프라가라흐(물리)",
+                   "프라가라흐(물리)": "프라가라흐(마법)"}
+
 # 보스 HP바 앵커(오탐 게이팅). 영역에 보스 체력바까지 포함해 잡으면, 바가 보일 때만
 # 디버프를 탐지해 마을·풀밭 오탐을 없앤다. 바 색은 HP/보스마다 달라(보라·파랑·초록·
 # 노랑·빨강) 색으로는 못 가르지만, **바 채움은 가로로 길게 '매끈'(인접 픽셀 거의 동일)**
@@ -186,7 +190,7 @@ class DebuffEngine:
         return region
 
     def best_scores(self, region: np.ndarray) -> dict[str, float]:
-        """각 디버프의 후보 중 최고 컬러 점수(진단용). 임계 판정 없이 점수만."""
+        """각 디버프의 원시 최고 컬러 점수. 식별 경쟁/이력 임계 적용 전 진단값."""
         small = self._scale(region)
         gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY) if small.size else None
         out: dict[str, float] = {}
@@ -195,6 +199,10 @@ class DebuffEngine:
         return out
 
     def _best(self, small: np.ndarray, bid: str, gray: np.ndarray | None = None) -> float:
+        return self._candidate_best(small, bid, gray, identify=False)
+
+    def _candidate_best(self, small: np.ndarray, bid: str, gray: np.ndarray | None,
+                        *, identify: bool) -> float:
         best = -1.0
         if small.size == 0:
             return best
@@ -213,7 +221,15 @@ class DebuffEngine:
                     _, peak, _, (x, y) = cv2.minMaxLoc(scores)
                     if peak < 0:
                         break
-                    best = max(best, match_icon(small[y:y + h, x:x + w], variant).score)
+                    patch = small[y:y + h, x:x + w]
+                    score = match_icon(patch, variant).score
+                    peers = self._variants.get(_IDENTITY_PEERS.get(bid), ()) if identify else ()
+                    # 전체 화면의 최고점끼리 경쟁시키면 서로 다른 슬롯의 동시 적용을 놓친다.
+                    ambiguous = any(peer.shape == patch.shape
+                                    and match_icon(patch, peer).score >= score - 1e-6
+                                    for peer in peers)
+                    if not ambiguous:
+                        best = max(best, score)
                     scores[max(0, y - h // 2):y + h // 2 + 1,
                            max(0, x - w // 2):x + w // 2 + 1] = -1
         return best
@@ -228,7 +244,9 @@ class DebuffEngine:
     def _detect(self, small: np.ndarray, bid: str, gray: np.ndarray | None = None) -> bool:
         """이력 임계: 시작은 detect_thr 이상, 해제는 release_thr 미만. 그 사이는 유지.
         모모·방해 카드처럼 이펙트에 잘 붙는 저정보 아이콘은 아이콘별로 더 높은 임계를 쓴다."""
-        score = self._best(small, bid, gray)
+        peer = _IDENTITY_PEERS.get(bid)
+        score = (self._candidate_best(small, bid, gray, identify=True)
+                 if peer in self._variants else self._best(small, bid, gray))
         detect_thr = _PER_ICON_DETECT.get(bid, self._detect_thr)
         release_thr = _PER_ICON_RELEASE.get(bid, self._release_thr)
         if score >= detect_thr:
