@@ -362,7 +362,7 @@ class StatBarsTab(QWidget):
         except OSError:
             return
         # 파일명에 측정 비율 태그(hp/mp/sta %) — 저HP 프레임을 바로 골라 분석.
-        rr = {r.stat_id: r.ratio for r in read_stat_bars(frame)}
+        rr = {r.stat_id: r.ratio for r in read_stat_bars(frame, require_complete=True)}
         def pct(sid):
             return f"{int(rr[sid] * 100):03d}" if sid in rr else "xxx"
         tag = f"hp{pct('hp')}_mp{pct('mp')}_sta{pct('sta')}"
@@ -440,12 +440,14 @@ class StatBarsTab(QWidget):
             or not self._region
             or not self._active()
         ):
+            self._alert_low_since.clear()
             return
         from .dpi import to_physical
 
         px, py, pw, ph = to_physical(self._region)
         frame = self._grab_rect(px, py, pw, ph)
         if frame is None:
+            self._alert_low_since.clear()
             return
         self._last_frame = frame
         self._show_preview(frame)
@@ -457,7 +459,10 @@ class StatBarsTab(QWidget):
         ):
             self._write_shot(frame)
             self._last_saved_frame = frame
-        readings = {r.stat_id: r for r in read_stat_bars(frame)}
+        readings = {r.stat_id: r for r in read_stat_bars(frame, require_complete=True)}
+        if not readings:
+            for ov in self._overlays.values():
+                ov.hide()
         parts = []
         for sid, ov in self._overlays.items():
             r = readings.get(sid)
@@ -495,6 +500,7 @@ class StatBarsTab(QWidget):
         region = {"x": x, "y": y, "w": w, "h": h}
         config.save_stat_bars({"box": region})
         self._region = region
+        self._alert_low_since.clear()
         self._update_region_label()
         self._flash_region()
 
@@ -562,6 +568,8 @@ class StatBarsTab(QWidget):
     # ---- 설정 변경 ----
     def _on_enable(self, checked: bool) -> None:
         self._enabled = checked
+        if not checked:
+            self._alert_low_since.clear()
         self._apply_visibility()
         self._save()
 
@@ -631,9 +639,12 @@ class StatBarsTab(QWidget):
     # ---- 메인 윈도우 연동 ----
     def set_paused(self, paused: bool) -> None:
         self._paused = paused
+        if paused:
+            self._alert_low_since.clear()
         self._apply_visibility()
 
     def shutdown(self) -> None:
         self._timer.stop()
+        self._alert_low_since.clear()
         for ov in self._overlays.values():
             ov.close()

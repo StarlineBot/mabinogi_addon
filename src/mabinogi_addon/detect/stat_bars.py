@@ -192,7 +192,7 @@ def locate_stat_bars(frame: np.ndarray, *, diagnostics: dict | None = None) -> t
         return None
     # 검증: 그 박스에서 실제로 3개 바를 읽어야 진짜 체력바(디버프 아이콘 줄 오탐 제거).
     bx, by, bw, bh = best
-    if len(read_stat_bars(frame[by : by + bh, bx : bx + bw])) < 3:
+    if len(read_stat_bars(frame[by : by + bh, bx : bx + bw], require_complete=True)) < 3:
         if diagnostics is not None:
             diagnostics["rejection"] = "fewer_than_three_readable_bars"
         return None
@@ -201,14 +201,18 @@ def locate_stat_bars(frame: np.ndarray, *, diagnostics: dict | None = None) -> t
     return best
 
 
-def read_stat_bars(region: np.ndarray) -> list[StatReading]:
+def read_stat_bars(region: np.ndarray, *, require_complete: bool = False) -> list[StatReading]:
     """영역(BGR)에서 위→아래 순으로 최대 3개 바를 읽어 [HP, MP, STA] 순 반환.
 
-    띠가 3개 미만이면 찾은 수만큼(순서대로 hp, mp, sta) 돌려준다 — 영역이 덜 맞은 것.
+    기본 모드의 불완전한 띠 이름은 진단용 잠정 순서일 뿐 실제 자원 정체가 아니다.
+    표시/알림/자동찾기는 require_complete=True로 정확히 세 띠일 때만 이름을 확정한다.
     """
     if region is None or region.shape[0] < 6 or region.shape[1] < 20:
         return []
-    bands = _bands(region)[:3]
+    bands = _bands(region)
+    if require_complete and len(bands) != 3:
+        return []
+    bands = bands[:3]
     out: list[StatReading] = []
     for i, (r0, r1) in enumerate(bands):
         ratio, hue = _ratio(region, r0, r1)
