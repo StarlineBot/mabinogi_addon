@@ -14,7 +14,7 @@ from __future__ import annotations
 import time
 
 import numpy as np
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import QPoint, Qt, QTimer
 from PySide6.QtGui import QGuiApplication, QImage, QPixmap
 from PySide6.QtWidgets import (
     QComboBox,
@@ -33,7 +33,7 @@ from ..detect.stat_bars import read_stat_bars
 from .dpi import to_logical
 from .help_dialog import tab_header
 from .screen_grab import capture_for_autofind
-from .stat_overlay import STAT_LABELS, StatBarOverlay
+from .stat_overlay import STAT_LABELS, WARNING_SAMPLE_MAX_AGE, StatBarOverlay
 from .widgets import checkbox, hint_label
 
 # 체력·마나·스태미나 세 바를 덮는 고정 박스 기본 크기(px). 바 크기는 해상도와 무관하게
@@ -87,6 +87,9 @@ class StatBarsTab(QWidget):
         self._alert_sound_on = cfg["alertSound"]
         self._alert_armed = {sid: True for sid in ("hp", "mp", "sta")}
         self._alert_low_since: dict[str, float] = {}
+        self._visual_low_since: dict[str, float] = {}
+        self._visual_readings: dict = {}
+        self._visual_sample_at: float | None = None
         self._alert_player = None
         # 저체력 알림은 '보스전 중'일 때만 울린다 — 보스 체력바가 떠 있는지 묻는 콜백.
         # main_window가 boss_tab.is_boss_present로 연결한다(미연결 시 종전대로 항상 울림).
@@ -216,7 +219,7 @@ class StatBarsTab(QWidget):
         box = QGroupBox("낮은 체력·마나·스태미나 알림")
         g = QVBoxLayout(box)
         g.addWidget(hint_label(
-            "체력·마나·스태미나가 각자 정한 % 이하로 떨어지면 소리로 알립니다. 바 3개가"
+            "체력·마나·스태미나가 각자 정한 % 이하로 떨어지면 흔들림과 소리로 알립니다. 바 3개가"
             " 다 보일 때만 판정해(지역이동·가려짐 0% 오탐 방지), 임계 위로 회복하면"
             " 다시 무장합니다."
         ))
@@ -258,7 +261,43 @@ class StatBarsTab(QWidget):
                 "pct": self._alert_spins[sid].value(),
             }
         self._alert_sound_on = self.alert_sound_chk.isChecked()
+        self._update_visual_alerts(time.monotonic())
         self._save()
+
+    def _clear_visual_bar(self, sid: str) -> None:
+        self._visual_low_since.pop(sid, None)
+        overlay = self._overlays.get(sid)
+        if overlay is not None:
+            overlay.set_warning(False)
+
+    def _reset_visual_alerts(self) -> None:
+        self._visual_readings = {}
+        self._visual_sample_at = None
+        for sid in ("hp", "mp", "sta"):
+            self._clear_visual_bar(sid)
+
+    def _update_visual_alerts(self, now: float, readings: dict | None = None) -> None:
+        if readings is not None:
+            if self._visual_sample_at is not None and now - self._visual_sample_at >= WARNING_SAMPLE_MAX_AGE:
+                self._reset_visual_alerts()
+            self._visual_readings = dict(readings)
+            self._visual_sample_at = now
+        if (self._visual_sample_at is None
+                or not 0 <= now - self._visual_sample_at < WARNING_SAMPLE_MAX_AGE
+                or not self._enabled or self._paused or not self._logged_in()
+                or not self._region or not self._active()
+                or (self._boss_present_fn is not None and not self._boss_present_fn())):
+            self._reset_visual_alerts()
+            return
+        for sid, overlay in self._overlays.items():
+            alert = self._bars_cfg[sid]["alert"]
+            reading = self._visual_readings.get(sid)
+            if (not overlay.isVisible() or not self._bars_cfg[sid]["show"] or not alert["on"]
+                    or reading is None or reading.ratio * 100 > alert["pct"]):
+                self._clear_visual_bar(sid)
+                continue
+            since = self._visual_low_since.setdefault(sid, now)
+            overlay.set_warning(now - since >= _ALERT_DEBOUNCE, self._visual_sample_at)
 
     def set_boss_presence_source(self, fn) -> None:
         """'지금 보스전인가'를 알려줄 콜백을 연결한다(없으면 항상 울림 — 종전 동작)."""
@@ -273,14 +312,18 @@ class StatBarsTab(QWidget):
     def _check_alerts(self, readings: dict, now: float) -> None:
         """임계 이하로 떨어지면(각 바 각자) 경고. 게이트: 바 3개가 다 보일 때만 판정해
         지역이동·가려짐으로 생기는 0% 오탐을 막는다. 임계 위로 회복하면 재무장."""
-        if len(readings) < 3:  # 바가 다 안 보임(가려짐/전환) → 판정 보류
+        if not all(sid in readings and np.isfinite(readings[sid].ratio)
+                   and 0 <= readings[sid].ratio <= 1 for sid in ("hp", "mp", "sta")):
             self._alert_low_since.clear()
+            self._reset_visual_alerts()
             return
         # 보스전일 때만 울린다 — 보스 체력바가 안 떠 있으면 보류(디바운스만 리셋, 무장 유지).
         # 보스바가 뜨고 그때도 저체력이면 거기서 새로 디바운스 후 발동한다.
         if self._boss_present_fn is not None and not self._boss_present_fn():
             self._alert_low_since.clear()
+            self._reset_visual_alerts()
             return
+        self._update_visual_alerts(now, readings)
         fired = False
         for sid in ("hp", "mp", "sta"):
             al = self._bars_cfg[sid]["alert"]
@@ -400,12 +443,13 @@ class StatBarsTab(QWidget):
             ov = StatBarOverlay(sid, scale=self._scale / 100.0)
             ov.set_align(self._align)
             ov.moved.connect(self._save)
+            ov.warning_interrupted.connect(lambda sid=sid: self._clear_visual_bar(sid))
             pos = self._bars_cfg[sid]["pos"]
             if pos:
-                ov.move(int(pos["x"]), int(pos["y"]))
+                ov.move_base(QPoint(int(pos["x"]), int(pos["y"])))
             elif geo is not None:
                 # 기본: 화면 좌측 1/4 지점에 세로로 쌓아 분명히 보이게(사용자가 옮김).
-                ov.move(geo.x() + geo.width() // 4, geo.y() + geo.height() // 3 + i * 30)
+                ov.move_base(QPoint(geo.x() + geo.width() // 4, geo.y() + geo.height() // 3 + i * 30))
             ov.set_locked(self._bars_cfg[sid]["locked"])
             self._overlays[sid] = ov
 
@@ -417,6 +461,7 @@ class StatBarsTab(QWidget):
 
     def _apply_visibility(self) -> None:
         if not self._enabled or self._paused or not self._logged_in():
+            self._reset_visual_alerts()
             for ov in self._overlays.values():
                 ov.hide()
             return
@@ -427,7 +472,10 @@ class StatBarsTab(QWidget):
                 if not ov.isVisible():
                     ov.show()
             else:
+                self._clear_visual_bar(sid)
                 ov.hide()
+        if not show:
+            self._reset_visual_alerts()
 
     # ---- 읽기 루프 ----
     def _tick(self) -> None:
@@ -441,6 +489,7 @@ class StatBarsTab(QWidget):
             or not self._active()
         ):
             self._alert_low_since.clear()
+            self._reset_visual_alerts()
             return
         from .dpi import to_physical
 
@@ -448,6 +497,7 @@ class StatBarsTab(QWidget):
         frame = self._grab_rect(px, py, pw, ph)
         if frame is None:
             self._alert_low_since.clear()
+            self._reset_visual_alerts()
             return
         self._last_frame = frame
         self._show_preview(frame)
@@ -501,6 +551,7 @@ class StatBarsTab(QWidget):
         config.save_stat_bars({"box": region})
         self._region = region
         self._alert_low_since.clear()
+        self._reset_visual_alerts()
         self._update_region_label()
         self._flash_region()
 
@@ -601,7 +652,8 @@ class StatBarsTab(QWidget):
     def _save(self) -> None:
         for sid, ov in self._overlays.items():
             self._bars_cfg[sid]["locked"] = ov.locked
-            self._bars_cfg[sid]["pos"] = {"x": ov.x(), "y": ov.y()}
+            pos = ov.base_position
+            self._bars_cfg[sid]["pos"] = {"x": pos.x(), "y": pos.y()}
         config.save_stat_bars(
             {
                 "enabled": self._enabled,
@@ -646,5 +698,6 @@ class StatBarsTab(QWidget):
     def shutdown(self) -> None:
         self._timer.stop()
         self._alert_low_since.clear()
+        self._reset_visual_alerts()
         for ov in self._overlays.values():
             ov.close()

@@ -9,7 +9,10 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QRectF, Qt, Signal
+import math
+import time
+
+from PySide6.QtCore import QPoint, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QWidget
 
@@ -27,10 +30,22 @@ _BORDER = QColor(0, 0, 0, 180)
 _BAR_W = 150
 _BAR_H = 16
 _PAD = 4
+_SHAKE_AMPLITUDE = 3
+_SHAKE_BURST = 0.4
+_SHAKE_REST = 1.4
+WARNING_SAMPLE_MAX_AGE = 0.65
+
+
+def shake_offset(elapsed: float, scale: float) -> float:
+    phase = max(0.0, elapsed) % (_SHAKE_BURST + _SHAKE_REST)
+    if phase >= _SHAKE_BURST:
+        return 0.0
+    return math.sin(phase / _SHAKE_BURST * 4 * math.pi) * _SHAKE_AMPLITUDE * scale
 
 
 class StatBarOverlay(QWidget):
     moved = Signal()  # 드래그로 위치 바뀜 → 저장
+    warning_interrupted = Signal()
 
     def __init__(self, stat_id: str, scale: float = 1.5) -> None:
         super().__init__(
@@ -49,6 +64,68 @@ class StatBarOverlay(QWidget):
         self._align = "left"  # 퍼센트/수치 가로 정렬: "left" | "center" | "right"
         self._locked = False
         self._drag_offset = None
+        self._shake_margin = 0
+        self._shake_offset = 0.0
+        self._warning = False
+        self._warning_started = 0.0
+        self._warning_sample_at = 0.0
+        self._warning_timer = QTimer(self)
+        self._warning_timer.setSingleShot(True)
+        self._warning_timer.setTimerType(Qt.TimerType.PreciseTimer)
+        self._warning_timer.timeout.connect(self._advance_warning)
+
+    @property
+    def base_position(self) -> QPoint:
+        """Original saved window origin, excluding the transparent shake gutter."""
+        return self.pos() + QPoint(self._shake_margin, 0)
+
+    def move_base(self, pos: QPoint) -> None:
+        self.move(pos - QPoint(self._shake_margin, 0))
+
+    @property
+    def warning_active(self) -> bool:
+        return self._warning
+
+    def set_warning(self, active: bool, sample_at: float = 0.0) -> None:
+        if not active or not self.isVisible():
+            self._warning = False
+            self._warning_timer.stop()
+            if self._shake_offset:
+                self._shake_offset = 0.0
+                self.update()
+            return
+        self._warning_sample_at = sample_at
+        if not self._warning:
+            self._warning = True
+            self._warning_started = time.monotonic()
+            self._advance_warning()
+
+    def _advance_warning(self) -> None:
+        now = time.monotonic()
+        age = now - self._warning_sample_at
+        if not self._warning or not self.isVisible() or age >= WARNING_SAMPLE_MAX_AGE or age < 0:
+            self.set_warning(False)
+            self.warning_interrupted.emit()
+            return
+        elapsed = now - self._warning_started
+        offset = shake_offset(elapsed, self._scale)
+        if offset != self._shake_offset:
+            self._shake_offset = offset
+            self.update()
+        phase = elapsed % (_SHAKE_BURST + _SHAKE_REST)
+        # No frame-rate wake-ups during the rest; fresh samples renew the lease.
+        delay = 1 / 30 if phase < _SHAKE_BURST else _SHAKE_BURST + _SHAKE_REST - phase
+        delay = min(delay, WARNING_SAMPLE_MAX_AGE - age)
+        self._warning_timer.start(max(1, math.ceil(delay * 1000)))
+
+    def hideEvent(self, event) -> None:
+        self.set_warning(False)
+        self.warning_interrupted.emit()
+        super().hideEvent(event)
+
+    def closeEvent(self, event) -> None:
+        self.set_warning(False)
+        super().closeEvent(event)
 
     @property
     def stat_id(self) -> str:
@@ -82,7 +159,7 @@ class StatBarOverlay(QWidget):
     def mousePressEvent(self, event) -> None:
         if not self._locked and event.button() == Qt.MouseButton.LeftButton:
             self._drag_offset = (
-                event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+                event.globalPosition().toPoint() - self.base_position
             )
             from . import grid
 
@@ -99,7 +176,7 @@ class StatBarOverlay(QWidget):
                 from . import grid
 
                 target = grid.snap(target, getattr(self, "_grid_size", None))
-            self.move(target)
+            self.move_base(target)
             event.accept()
 
     def mouseReleaseEvent(self, event) -> None:
@@ -114,6 +191,8 @@ class StatBarOverlay(QWidget):
     def set_scale(self, scale: float) -> None:
         self._scale = max(0.5, min(3.0, scale))
         self._relayout()
+        if self._warning:
+            self._advance_warning()
 
     # ---- 레이아웃 ----
     def _metrics(self) -> tuple[int, int]:
@@ -121,7 +200,10 @@ class StatBarOverlay(QWidget):
 
     def _relayout(self) -> None:
         bw, bh = self._metrics()
-        self.resize(bw + 2 * _PAD, bh + 2 * _PAD)
+        base = self.base_position
+        self._shake_margin = math.ceil(_SHAKE_AMPLITUDE * self._scale)
+        self.resize(bw + 2 * _PAD + 2 * self._shake_margin, bh + 2 * _PAD)
+        self.move_base(base)
         self.update()
 
     # ---- 그리기 ----
@@ -134,6 +216,8 @@ class StatBarOverlay(QWidget):
         font.setBold(True)
         painter.setFont(font)
 
+        painter.save()
+        painter.translate(self._shake_margin + self._shake_offset, 0)
         track = QRectF(_PAD, _PAD, bw, bh)
         radius = bh * 0.35
         # 트랙(빈 구간)
@@ -153,12 +237,13 @@ class StatBarOverlay(QWidget):
         # 수치(외곽선 → 어떤 배경에서도 읽힘)
         txt = self._text if self._text is not None else f"{int(self._ratio * 100)}%"
         self._draw_text(painter, track, txt)
+        painter.restore()
 
         # 고정 해제 중엔 '드래그 가능' 느낌으로 옅은 테두리(어느 바인지 라벨도).
         if not self._locked:
             painter.setPen(QPen(QColor(0, 209, 167), 1, Qt.PenStyle.DashLine))
             painter.setBrush(Qt.BrushStyle.NoBrush)
-            painter.drawRect(self.rect().adjusted(0, 0, -1, -1))
+            painter.drawRect(self.rect().adjusted(self._shake_margin, 0, -self._shake_margin - 1, -1))
         painter.end()
 
     def _draw_text(self, painter: QPainter, rect: QRectF, text: str) -> None:
