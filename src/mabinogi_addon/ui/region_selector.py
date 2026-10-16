@@ -64,12 +64,14 @@ class RegionSelector(QWidget):
         self.setGeometry(self._screen_geo)
 
         self._origin: QPoint | None = None
+        self._finished = False
         self._rect = QRect()
         self._cursor: QPoint | None = None
         self._shot = QPixmap()  # 선택창 띄우기 전 화면 스냅샷(돋보기 원본)
         self._dpr = 1.0  # 스냅샷 배율(물리픽셀=논리×dpr). start()에서 실제값으로 채움
 
     def start(self) -> None:
+        self._finished = False
         self._origin = None
         self._rect = QRect()
         self._cursor = None
@@ -127,11 +129,12 @@ class RegionSelector(QWidget):
         return total == 0 or lit <= total * 0.02  # 2% 이하만 밝으면 '검은 화면'
 
     def mousePressEvent(self, event) -> None:
-        if event.button() != Qt.MouseButton.LeftButton:
+        if self._finished or event.button() != Qt.MouseButton.LeftButton:
             return
         if self._fixed is not None:
             # 고정 크기 모드: 클릭 지점에 중심을 둔 박스를 확정.
             rect = self._fixed_rect(event.position().toPoint())
+            self._finished = True
             self.close()
             self.selected.emit(
                 self._screen_geo.x() + rect.x(),
@@ -177,9 +180,10 @@ class RegionSelector(QWidget):
         self.update()
 
     def mouseReleaseEvent(self, event) -> None:
-        if self._origin is None:
+        if self._finished or self._origin is None:
             return
         rect = self._rect
+        self._finished = True
         self.close()
         big_enough = rect.width() >= 4 and rect.height() >= 4
         if self._save_path is not None:
@@ -214,7 +218,16 @@ class RegionSelector(QWidget):
     def keyPressEvent(self, event) -> None:
         if event.key() == Qt.Key.Key_Escape:
             self.close()
-            self.cancelled.emit()
+
+    def closeEvent(self, event) -> None:
+        super().closeEvent(event)
+        if event.isAccepted() and not self._finished:
+            self._finished = True
+            # Selection closes the window too; only an unfinished close is cancellation.
+            if self._save_path is not None:
+                self.captured.emit(False)
+            else:
+                self.cancelled.emit()
 
     def paintEvent(self, _event) -> None:
         painter = QPainter(self)

@@ -12,7 +12,7 @@ from PySide6.QtWidgets import QApplication, QHBoxLayout, QLabel, QToolButton, QW
 from ..creator_dialogue import DialogueSession, MAX_CHARS
 from ..system.dialogue_visibility import exposed
 from .dialogue_feed import DialogueFeed
-from .settings_tab import LOGO_IMAGE, PROFILE_IMAGE, _circular
+from .settings_tab import AVATAR_STYLE, LOGO_IMAGE, PROFILE_IMAGE, _circular
 
 _log = logging.getLogger(__name__)
 
@@ -125,6 +125,7 @@ class CreatorDialogue(QObject):
         row.addStretch()
         self.face = QToolButton()
         self.face.setAutoRaise(True)
+        self.face.setStyleSheet(AVATAR_STYLE)
         self.face.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.face.setFixedSize(48, 48)
         self.face.setIconSize(QSize(48, 48))

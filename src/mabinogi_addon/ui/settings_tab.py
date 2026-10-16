@@ -49,6 +49,7 @@ _THEME_ACCENT = "#00C9A2"  # 다크 테마 강조(민트)
 _ASSETS = paths.resource_dir()
 PROFILE_IMAGE = _ASSETS / "profile.png"  # 제작자 프로필(없으면 로고로 폴백)
 LOGO_IMAGE = _ASSETS / "logo.png"
+AVATAR_STYLE = "QToolButton { background: transparent; border: none; padding: 0; }"
 
 
 def _circular(
@@ -556,6 +557,7 @@ class SettingsTab(QWidget):
         avatar = QToolButton()
         self.creator_avatar = avatar
         avatar.setAutoRaise(True)
+        avatar.setStyleSheet(AVATAR_STYLE)
         avatar.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         avatar.setToolTip("잡담")
         avatar.setFixedSize(48, 48)
@@ -568,7 +570,7 @@ class SettingsTab(QWidget):
             avatar.setIcon(QIcon(pm))
         else:
             avatar.setText("👤")
-            avatar.setStyleSheet("font-size:28px;")
+            avatar.setStyleSheet(AVATAR_STYLE + "QToolButton { font-size:28px; }")
         row.addWidget(avatar)
 
         col = QVBoxLayout()

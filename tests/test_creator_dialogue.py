@@ -11,6 +11,51 @@ from mabinogi_addon.creator_dialogue import DialogueSession, MAX_BYTES, parse, r
 from mabinogi_addon.system.dialogue_visibility import subtract, exposed
 from mabinogi_addon.ui.dialogue_feed import DialogueFeed
 
+
+@pytest.mark.parametrize("location", ["footer", "settings"])
+def test_avatar_has_no_panel_on_hover_press_or_focus(window, app, location):
+    import numpy as np
+    from PySide6.QtCore import QPoint, Qt
+    from PySide6.QtGui import QImage
+    from PySide6.QtTest import QSignalSpy, QTest
+
+    app.setStyle("Fusion")
+    if location == "settings":
+        window._tabs.setCurrentIndex(3)
+        button = window.settings_tab.creator_avatar
+    else:
+        window.creator_dialogue.refresh()
+        button = window.creator_dialogue.face
+    app.processEvents()
+
+    def pixels():
+        image = button.grab().toImage().convertToFormat(QImage.Format.Format_RGBA8888)
+        return np.frombuffer(image.constBits(), np.uint8).reshape(
+            image.height(), image.bytesPerLine()
+        )[:, :image.width() * 4].reshape(image.height(), image.width(), 4).copy()
+
+    QTest.mouseMove(window, QPoint(1, 1))
+    app.processEvents()
+    assert not button.underMouse()
+    before = pixels()
+    yy, xx = np.indices(before.shape[:2])
+    outside = ((xx + .5 - before.shape[1] / 2) / (before.shape[1] / 2)) ** 2 + (
+        (yy + .5 - before.shape[0] / 2) / (before.shape[0] / 2)) ** 2 > 1
+    clicked = QSignalSpy(button.clicked)
+    QTest.mouseMove(button, button.rect().center())
+    app.processEvents()
+    assert button.underMouse()
+    assert np.array_equal(before[outside], pixels()[outside])
+    QTest.mousePress(button, Qt.MouseButton.LeftButton, pos=button.rect().center())
+    app.processEvents()
+    assert np.array_equal(before[outside], pixels()[outside])
+    QTest.mouseRelease(button, Qt.MouseButton.LeftButton, pos=button.rect().center())
+    button.setFocus()
+    app.processEvents()
+    assert np.array_equal(before[outside], pixels()[outside])
+    assert clicked.count() == 1
+    assert button.toolTip() == "잡담"
+
 START_FEED = DialogueFeed.start
 
 
