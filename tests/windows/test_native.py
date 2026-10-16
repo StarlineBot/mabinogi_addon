@@ -61,3 +61,44 @@ def test_real_hwnd_is_destroyed_after_widget_cleanup():
         window.deleteLater()
         QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
     assert not win32gui.IsWindow(hwnd)
+
+
+def test_game_target_cache_revalidates_real_window_move_and_close(monkeypatch):
+    import os
+    from pathlib import Path
+    import win32gui
+    from PySide6.QtCore import QCoreApplication, QEvent, Qt
+    from PySide6.QtWidgets import QApplication, QWidget
+    from mabinogi_addon import config
+    from mabinogi_addon.system import dwm_thumbnail, window_capture
+
+    app = QApplication.instance() or QApplication([])
+    window = QWidget()
+    window.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
+    monkeypatch.setattr(config,"load_game_exe",lambda:Path(sys.executable).name)
+    def unexpected_enumeration(*args):
+        pytest.fail("valid cached HWND triggered EnumWindows")
+    monkeypatch.setattr(dwm_thumbnail,"find_game_window",unexpected_enumeration)
+    try:
+        window.setGeometry(100,100,200,120)
+        window.show()
+        app.processEvents()
+        hwnd = int(window.winId())
+        previous = (hwnd,os.getpid(),0,0,1,1)
+        first = window_capture.registered_game_target(previous)
+        assert first is not None and first[:2] == previous[:2]
+        window.move(250,220)
+        app.processEvents()
+        current = window_capture.registered_game_target(first)
+        left,top,right,bottom = win32gui.GetWindowRect(hwnd)
+        assert current == (hwnd,os.getpid(),left,top,right-left,bottom-top)
+        assert current[2:4] != first[2:4]
+        window.close()
+        app.processEvents()
+        monkeypatch.setattr(dwm_thumbnail,"find_game_window",lambda *a:0)
+        assert window_capture.registered_game_target(current) is None
+    finally:
+        window.close()
+        window.deleteLater()
+        QCoreApplication.sendPostedEvents(None,QEvent.Type.DeferredDelete)
+        app.processEvents()

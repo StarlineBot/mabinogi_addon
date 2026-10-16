@@ -16,7 +16,7 @@ import sys
 _PW_RENDERFULLCONTENT = 0x00000002  # 가려지거나 D3D로 그려진 내용까지 렌더 시도
 
 
-def registered_game_target():
+def registered_game_target(previous=None):
     """Return (hwnd, pid, left, top, width, height) in physical pixels, or None."""
     if sys.platform != "win32":
         return None
@@ -29,7 +29,17 @@ def registered_game_target():
         exe = config.load_game_exe()
         if not exe:
             return None
-        hwnd = dwm_thumbnail.find_game_window(exe, DEFAULT_GAME_TITLES)
+        hwnd = 0
+        if previous is not None:
+            import win32gui
+            from .window_watcher import _exe_basename_of_pid
+            candidate, previous_pid = previous[:2]
+            if win32gui.IsWindow(candidate) and win32gui.IsWindowVisible(candidate):
+                _, pid = win32process.GetWindowThreadProcessId(candidate)
+                if pid == previous_pid and _exe_basename_of_pid(pid) == exe.lower():
+                    hwnd = candidate
+        if not hwnd:
+            hwnd = dwm_thumbnail.find_game_window(exe, DEFAULT_GAME_TITLES)
         rect = dwm_thumbnail.window_rect(hwnd) if hwnd else None
         if rect is None:
             return None

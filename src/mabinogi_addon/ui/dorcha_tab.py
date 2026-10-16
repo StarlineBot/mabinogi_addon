@@ -34,6 +34,8 @@ class DorchaTab(QWidget):
         self._save_failed = False
         self._overlay = None
         self._live_box = None
+        self._live_target = None
+        self._tracking_lost = False
         self._search_worker = None
         self._search_epoch = 0
         self._next_search = 0.0
@@ -144,8 +146,23 @@ class DorchaTab(QWidget):
             return
         from .dpi import to_physical
         self._ensure_overlay()
-        frame = self._grab_rect(*(self._live_box or to_physical(self._region)))
-        value = read_dorcha(frame)
+        box = self._live_box or to_physical(self._region)
+        target = None if self._tracking_lost else self._search_target()
+        if not self._tracking_lost and (
+                (self._live_target is not None and target != self._live_target)
+                or (target is not None and not self._inside_target(box,target))):
+            self._invalidate_search()
+            self._tracking_lost = True
+        value = None
+        if not self._tracking_lost:
+            frame = self._grab_rect(*box)
+            if target is not None and self._search_target() != target:
+                self._invalidate_search()
+                self._tracking_lost = True
+            else:
+                value = read_dorcha(frame)
+                if value is not None and target is not None:
+                    self._live_box, self._live_target = box, target
         self._set_value(value)
         if value is None:
             self._start_search()
@@ -160,7 +177,9 @@ class DorchaTab(QWidget):
 
     def _invalidate_search(self):
         self._search_epoch += 1
+        self._tracking_lost = self._tracking_lost or self._live_target is not None
         self._live_box = None
+        self._live_target = None
         self._next_search = 0.0
         self._search_backoff = 2.0
         if self._search_worker is not None:
@@ -168,7 +187,13 @@ class DorchaTab(QWidget):
 
     def _search_target(self):
         from ..system.window_capture import registered_game_target
-        return registered_game_target()
+        return registered_game_target(self._live_target)
+
+    @staticmethod
+    def _inside_target(box,target):
+        x,y,w,h = box
+        _,_,left,top,width,height = target
+        return w > 0 and h > 0 and left <= x and top <= y and x+w <= left+width and y+h <= top+height
 
     def _start_search(self):
         if (self._search_worker is not None or monotonic() < self._next_search
@@ -212,11 +237,15 @@ class DorchaTab(QWidget):
             _, _, ox, oy, _, _ = worker.target
             x,y,w,h = worker.box
             box = (x+ox,y+oy,w,h)
+            if not self._inside_target(box,worker.target):
+                return
             # Re-read current pixels: the worker's old screenshot is never displayed.
             value = read_dorcha(self._grab_rect(*box))
-            if value is None:
+            if value is None or self._search_target() != worker.target:
                 return
             self._live_box = box
+            self._live_target = worker.target
+            self._tracking_lost = False
             self._set_value(value)
             self._next_search = 0.0
             self._search_backoff = 2.0
@@ -277,6 +306,7 @@ class DorchaTab(QWidget):
         config.save_dorcha({"box":region})
         self._cfg["box"] = self._region = region
         self._hide()
+        self._tracking_lost = False
         self._apply_gate()
 
     def _on_region(self):
