@@ -1399,11 +1399,14 @@ class MainWindow(QMainWindow):
         order = self._debuff_order(catalog)
         # 표시(숨기지 않은) 디버프만 매칭 — 버프와 동일하게 비용 절감.
         tracked = [b for b in catalog if b.id in set(order)]
+        reference_ids = DebuffEngine.reference_ids(order)
+        references = [b for b in catalog if b.id in reference_ids]
         gate_mode = self.debuff_tab.effective_gate_mode()
         self._debuff_engine = DebuffEngine(
             build_templates(tracked),
             order,
             gate_mode=gate_mode,
+            reference_templates=build_templates(references),
         )
         self._debuff_engine.set_warn_gone_ids(self._debuff_warn_gone_ids())
         # 3차(percent): 보스 HP바 영역(보스패턴알림과 공유)을 따로 캡처해 넘긴다.
@@ -1438,7 +1441,11 @@ class MainWindow(QMainWindow):
     def _on_debuff_tracking_changed(self) -> None:
         if self._debuff_engine is None:
             return
-        self._debuff_engine.set_order(self._debuff_order(available_debuff_catalog()))
+        order = self._debuff_order(available_debuff_catalog())
+        if not self._debuff_engine.can_track(order):
+            self._start_debuff_tracking()
+            return
+        self._debuff_engine.set_order(order)
         self._debuff_engine.set_warn_gone_ids(self._debuff_warn_gone_ids())
 
     def _on_boss_bar_region_changed(self) -> None:

@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -105,3 +106,81 @@ def test_identity_verification_has_bounded_color_work(library, monkeypatch):
     engine.tick(frame, 0)
     assert 0 < len(calls) <= len(PAIR) * 4 * 2
     assert all(shape == (16, 16, 3) for shape in calls)
+
+
+@pytest.fixture
+def startup(library, monkeypatch):
+    from mabinogi_addon import config, setup_state
+    from mabinogi_addon.ui import main_window as module
+
+    directory = (ASSETS if library[PAIR[0]].shape[0] == 16
+                 else ROOT / "src/mabinogi_addon/assets/debuff/icon")
+    catalog = [SimpleNamespace(id=bid, match_icon=directory / f"{bid}.png") for bid in PAIR]
+    settings = [SimpleNamespace(id=bid, hidden=False) for bid in PAIR]
+    monkeypatch.setattr(config, "load_debuff_settings", lambda: settings)
+    monkeypatch.setattr(config, "load_capture_region", lambda *a: {"x": 0, "y": 0, "w": 16, "h": 16})
+    monkeypatch.setattr(setup_state, "enabled", lambda *a: True)
+    monkeypatch.setattr(module, "available_debuff_catalog", lambda: catalog)
+    monkeypatch.setattr(module, "create_live_source", lambda *a: object())
+    controllers = []
+    class Controller:
+        def __init__(self, *a, **k):
+            self.stopped = 0
+            controllers.append(self)
+        def stop(self):
+            self.stopped += 1
+        def set_paused(self, value):
+            pass
+        def start(self, source, engine, **kwargs):
+            self.engine = engine
+    monkeypatch.setattr(module, "BuffController", Controller)
+    w = SimpleNamespace(_closing=False, _config_pending_restart=False, debuff_controller=None,
+                        _debuff_engine=None, _paused=False, _watcher=None,
+                        debuff_overlay=object(), debuff_tab=SimpleNamespace(effective_gate_mode=lambda: "off"),
+                        _debuff_warn_gone_ids=lambda: set(), _on_debuff_gone=lambda *a: None)
+    w._debuff_order = lambda entries: module.MainWindow._debuff_order(w, entries)
+    w._start_debuff_tracking = lambda: module.MainWindow._start_debuff_tracking(w)
+    return w, settings, controllers, module
+
+
+@pytest.mark.parametrize("tracked", PAIR)
+def test_real_startup_keeps_hidden_peer_reference_across_rebuilds(startup, tracked):
+    w, settings, controllers, module = startup
+    actual = next(bid for bid in PAIR if bid != tracked)
+    pixels = image_io.imread(ASSETS / f"{actual}.png")
+    w._start_debuff_tracking()
+    next(item for item in settings if item.id == actual).hidden = True
+    module.MainWindow._on_debuff_tracking_changed(w)
+    assert run(w._debuff_engine, pixels) == {tracked}
+    for _ in range(3):
+        previous = w.debuff_controller
+        w._start_debuff_tracking()
+        engine = w._debuff_engine
+        assert previous.stopped == 1
+        assert set(engine._templates) == {tracked}
+        assert set(engine._gray_variants) == {tracked}
+        assert engine.reference_ids([tracked]) == {actual}
+        assert run(engine, pixels) == {tracked}
+        assert set(engine._matched) == {tracked}
+    next(item for item in settings if item.id == actual).hidden = False
+    previous = w.debuff_controller
+    module.MainWindow._on_debuff_tracking_changed(w)
+    assert previous.stopped == 1
+    assert w._debuff_engine.can_track(list(PAIR))
+    assert run(w._debuff_engine, pixels) == {tracked}
+
+
+@pytest.mark.parametrize("tracked", PAIR)
+def test_hidden_peer_is_never_globally_searched_or_returned(library, tracked, monkeypatch):
+    engine = DebuffEngine({tracked: library[tracked]}, [tracked], reference_templates=library)
+    actual = next(bid for bid in PAIR if bid != tracked)
+    pixels = image_io.imread(ASSETS / f"{actual}.png")
+    original = engine._candidate_best
+    searched = []
+    def record(frame, bid, gray, **kwargs):
+        searched.append(bid)
+        return original(frame, bid, gray, **kwargs)
+    monkeypatch.setattr(engine, "_candidate_best", record)
+    assert run(engine, pixels) == {tracked}
+    assert set(searched) == {tracked}
+    assert set(engine.best_scores(pixels)) == {tracked}

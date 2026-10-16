@@ -99,6 +99,7 @@ class DebuffEngine:
         reappear_sec: float = 0.4,
         bar_gating: bool | None = None,
         gate_mode: str = GATE_OFF,
+        reference_templates: dict[str, np.ndarray] | None = None,
     ) -> None:
         self._templates = templates
         self._order = list(order)
@@ -119,6 +120,12 @@ class DebuffEngine:
             bid: [cv2.cvtColor(t, cv2.COLOR_BGR2GRAY) for t in variants]
             for bid, variants in self._variants.items()
         }
+        # 보조 이미지는 후보 패치 비교에만 사용하며 검색/표시/상태 사전에 넣지 않는다.
+        self._identity_variants = dict(self._variants)
+        for bid in templates:
+            peer = _IDENTITY_PEERS.get(bid)
+            if peer not in self._identity_variants and peer in (reference_templates or {}):
+                self._identity_variants[peer] = [_variant(reference_templates[peer], _MATCH_ICON_PX)]
         # shown=True면 '안 걸림' → 오버레이 표시. 초기엔 전부 표시(보스 전 상태).
         self._shown = {bid: True for bid in templates}
         self._matched = {bid: False for bid in templates}  # 이력 임계용 직전 판정
@@ -184,6 +191,13 @@ class DebuffEngine:
     def set_order(self, order: list[str]) -> None:
         self._order = list(order)
 
+    def can_track(self, order: list[str]) -> bool:
+        return all(bid in self._templates for bid in order)
+
+    @staticmethod
+    def reference_ids(order: list[str]) -> set[str]:
+        return {_IDENTITY_PEERS[bid] for bid in order if bid in _IDENTITY_PEERS} - set(order)
+
     @staticmethod
     def _scale(region: np.ndarray) -> np.ndarray:
         """기존 진단 호출부용: 원본 픽셀을 그대로 반환한다."""
@@ -223,7 +237,7 @@ class DebuffEngine:
                         break
                     patch = small[y:y + h, x:x + w]
                     score = match_icon(patch, variant).score
-                    peers = self._variants.get(_IDENTITY_PEERS.get(bid), ()) if identify else ()
+                    peers = self._identity_variants.get(_IDENTITY_PEERS.get(bid), ()) if identify else ()
                     # 전체 화면의 최고점끼리 경쟁시키면 서로 다른 슬롯의 동시 적용을 놓친다.
                     ambiguous = any(peer.shape == patch.shape
                                     and match_icon(patch, peer).score >= score - 1e-6
@@ -246,7 +260,7 @@ class DebuffEngine:
         모모·방해 카드처럼 이펙트에 잘 붙는 저정보 아이콘은 아이콘별로 더 높은 임계를 쓴다."""
         peer = _IDENTITY_PEERS.get(bid)
         score = (self._candidate_best(small, bid, gray, identify=True)
-                 if peer in self._variants else self._best(small, bid, gray))
+                 if peer in self._identity_variants else self._best(small, bid, gray))
         detect_thr = _PER_ICON_DETECT.get(bid, self._detect_thr)
         release_thr = _PER_ICON_RELEASE.get(bid, self._release_thr)
         if score >= detect_thr:
