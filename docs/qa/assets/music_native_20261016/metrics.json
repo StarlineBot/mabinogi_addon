@@ -1,0 +1,76 @@
+{
+  "source": "tests/data/스크린샷 2026-10-16 214902.png",
+  "source_git_blob": "9755f8239fd29a9c1306a2df4fb230e704fed92b",
+  "samples": {
+    "dissonance": {
+      "xywh": [
+        1061,
+        1214,
+        16,
+        16
+      ],
+      "current_to_new": 0.9423823952674866,
+      "current_to_old_counter": 0.8410364985466003,
+      "new_to_old_counter": 0.9050314426422119,
+      "current_to_new_top10_rows": 0.9421017169952393
+    },
+    "crescendo": {
+      "xywh": [
+        1079,
+        1214,
+        16,
+        16
+      ],
+      "current_to_new": 0.3256393074989319,
+      "current_to_old_counter": 0.2692902982234955,
+      "new_to_old_counter": 0.9095191359519958,
+      "current_to_new_top10_rows": 0.24403469264507294
+    }
+  },
+  "runtime": {
+    "off": {
+      "scores": {
+        "불협화음": 0.9423823952674866,
+        "크레센도": 0.5964470505714417
+      },
+      "matched": {
+        "불협화음": true,
+        "크레센도": false
+      },
+      "missing_overlay_shown": {
+        "불협화음": false,
+        "크레센도": true
+      }
+    },
+    "auto": {
+      "scores": {
+        "불협화음": 0.9423823952674866,
+        "크레센도": 0.5964470505714417
+      },
+      "matched": {
+        "불협화음": true,
+        "크레센도": false
+      },
+      "missing_overlay_shown": {
+        "불협화음": false,
+        "크레센도": true
+      }
+    }
+  },
+  "candidate_probe": {
+    "off": {
+      "matched": {
+        "불협화음": true,
+        "크레센도": true
+      },
+      "scope": "Same-source feasibility only, not accuracy proof."
+    },
+    "auto": {
+      "matched": {
+        "불협화음": true,
+        "크레센도": true
+      },
+      "scope": "Same-source feasibility only, not accuracy proof."
+    }
+  }
+}
