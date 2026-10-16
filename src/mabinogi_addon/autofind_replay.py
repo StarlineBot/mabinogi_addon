@@ -18,6 +18,9 @@ from . import version
 
 
 def detector_assets(feature: str) -> dict[str, np.ndarray]:
+    if feature == "dorcha":
+        from .detect.dorcha_anchor import assets
+        return assets()
     if feature in ("tuarim", "skillbar"):
         from .detect.autofind_anchors import assets
         return assets(feature)
@@ -46,7 +49,7 @@ def missing_required_assets(feature: str, assets: dict) -> list[str]:
     if feature == "buff":
         anchor = assets.get("anchor")
         return [] if isinstance(anchor, np.ndarray) and anchor.size else ["anchor"]
-    if feature in ("tuarim", "skillbar"):
+    if feature in ("tuarim", "skillbar", "dorcha"):
         return [name for name in ("anchor", "mask")
                 if not isinstance(assets.get(name), np.ndarray) or not assets[name].size]
     if feature in ("boss", "debuff"):
@@ -81,6 +84,9 @@ def run_detector(feature: str, frame: np.ndarray, assets: dict, trace: dict):
     if feature == "tuarim":
         from .detect.tuarim_anchor import locate_tuarim
         return locate_tuarim(frame, assets, trace)
+    if feature == "dorcha":
+        from .detect.dorcha_anchor import locate_dorcha
+        return locate_dorcha(frame, assets, trace)
     if feature == "skillbar":
         from .detect.skillbar_anchor import locate_skillbar
         return locate_skillbar(frame, assets, trace)

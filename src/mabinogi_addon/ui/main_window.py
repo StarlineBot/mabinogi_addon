@@ -47,6 +47,7 @@ from .party_tab import PartyTab
 from .settings_tab import SettingsTab
 from .skillbar_tab import SkillbarTab
 from .stat_bars_tab import StatBarsTab
+from .dorcha_tab import DorchaTab
 from .tuarim_tab import TuarimTab
 
 # 번들 경로 사용(exe=_MEIPASS/assets). __file__ 기준은 frozen에서 어긋난다.
@@ -272,6 +273,7 @@ class MainWindow(QMainWindow):
         self.boss_tab.debuff_region_changed.connect(self._on_boss_debuff_region_changed)
         self.custom_overlay_tab = CustomOverlayTab(self._watcher)
         self.stat_bars_tab = StatBarsTab(self._watcher)
+        self.dorcha_tab = DorchaTab(self._watcher)
         # 체력바 저체력 알림은 '보스전 중'일 때만 울린다 — 보스 탭의 보스바 존재 신호를 연결.
         self.stat_bars_tab.set_boss_presence_source(self.boss_tab.is_boss_present)
         # 반대로, 저체력 경고가 하나라도 켜져 있을 때만 보스 탭이 존재 판정을 돌리게 연결.
@@ -306,6 +308,7 @@ class MainWindow(QMainWindow):
         self._convenience_tabs.addTab(_scrolled(self.distribution_tab), "분배 계산기")
         self._convenience_tabs.addTab(_scrolled(self.bead_split_tab), "구슬 분배 계산기")
         self._convenience_tabs.addTab(_scrolled(self.exchange_tab), "환전비율 계산기")
+        self._convenience_tabs.addTab(_scrolled(self.dorcha_tab), "도르카 (베타)")
 
         tabs = QTabWidget()
         self._tabs = tabs  # 온보딩 투어에서 탭 전환에 사용
@@ -1623,6 +1626,7 @@ class MainWindow(QMainWindow):
                 c.set_paused(paused)
         self.custom_overlay_tab.set_paused(paused)
         self.stat_bars_tab.set_paused(paused)
+        self.dorcha_tab.set_paused(paused)
         self.skillbar_tab.set_paused(paused)
         # 트레이 라벨 + 상단 버튼 동기화(어느 쪽에서 눌러도 둘 다 반영, 루프 방지).
         self._pause_act.setText(
@@ -1827,6 +1831,7 @@ class MainWindow(QMainWindow):
             self.tuarim_tab.shutdown(),
             self.boss_tab.shutdown(),
             self.stat_bars_tab.shutdown(),
+            self.dorcha_tab.shutdown(),
             self.skillbar_tab.shutdown(),
         ))
         if self._tray is not None:

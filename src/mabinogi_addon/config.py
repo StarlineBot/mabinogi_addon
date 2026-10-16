@@ -872,6 +872,31 @@ def save_boss_bar_region(
     )
 
 
+def load_dorcha(path: Path = LOCAL_CONFIG_PATH) -> dict:
+    sec = _read_local_config(path).get("dorcha")
+    sec = sec if isinstance(sec, dict) else {}
+    box = sec.get("box")
+    if not (isinstance(box, dict) and all(type(box.get(k)) is int for k in ("x", "y", "w", "h"))
+            and box["w"] > 0 and box["h"] > 0):
+        box = None
+    pos = sec.get("pos")
+    if not (isinstance(pos, dict) and all(type(pos.get(k)) is int for k in ("x", "y"))):
+        pos = None
+    scale = sec.get("scale", 150)
+    scale = scale if type(scale) is int and 50 <= scale <= 300 else 150
+    return {"enabled": sec.get("enabled") is True, "box": box, "pos": pos, "scale": scale,
+            "locked": sec["locked"] if type(sec.get("locked")) is bool else True}
+
+
+def save_dorcha(data: dict, path: Path = LOCAL_CONFIG_PATH) -> None:
+    cfg = _read_local_config(path)
+    sec = cfg.get("dorcha")
+    sec = dict(sec) if isinstance(sec, dict) else {}
+    sec.update(data)
+    cfg["dorcha"] = sec
+    _write_local_config(cfg, path)
+
+
 def load_stat_bars(path: Path = LOCAL_CONFIG_PATH) -> dict:
     """체력/마나/스태미나 바 오버레이 설정.
 

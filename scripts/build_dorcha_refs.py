@@ -1,0 +1,50 @@
+"""Build full-word references from visually labeled native screenshots."""
+
+import hashlib
+import json
+from pathlib import Path
+
+import numpy as np
+
+from mabinogi_addon import image_io
+from mabinogi_addon.detect.dorcha_reader import prepare, _normalize
+
+ROOT = Path(__file__).resolve().parents[1]
+# Coordinates refer to original pixels, not resized chat previews.
+SOURCES = [
+    (0, "스크린샷 2026-10-06 223724.png", (714, 890, 28, 23)),
+    (0, "2026-10-11_111640.png", (1333, 36, 28, 23)),
+    *[(value, f"스크린샷 2026-10-16 {stamp}.png", None) for value, stamp in (
+        (1, "211435"), (2, "211426"), (3, "211420"), (4, "212007"),
+        (5, "211352"), (6, "211343"), (7, "210815"), (8, "210805"),
+        (9, "211332"), (10, "210734"), (11, "210757"), (12, "210747"),
+        (13, "211456"), (14, "211458"), (15, "211914"),
+    )],
+]
+
+
+def main():
+    refs, labels, provenance = [], [], []
+    target = ROOT / "src/mabinogi_addon/detect/templates/dorcha"
+    target.mkdir(parents=True, exist_ok=True)
+    for value, name, box in SOURCES:
+        path = ROOT / "tests/data" / name
+        frame = image_io.imread(path)
+        assert frame is not None
+        if box is None:
+            x, y = (931, 929) if frame.shape[0] == 1436 else (933, 931)
+            box = (x + 8, y + 17, 28, 23)
+        x, y, w, h = box
+        ink = prepare(frame[y:y+h, x:x+w])
+        assert ink is not None, name
+        refs.append(_normalize(ink))
+        labels.append(value)
+        provenance.append(dict(value=value, file=name, box=list(box),
+                               sha256=hashlib.sha256(path.read_bytes()).hexdigest()))
+    np.savez_compressed(target / "refs.npz", refs=np.stack(refs), labels=np.array(labels))
+    (target / "sources.json").write_text(json.dumps(provenance, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    print(f"Built {len(refs)} full-word references, values 0..15")
+
+
+if __name__ == "__main__":
+    main()
