@@ -366,3 +366,15 @@
 ```bash
 QT_QPA_PLATFORM=offscreen PYTHONUTF8=0 PYTHONIOENCODING=cp1252:strict PYTHONPATH="$(pwd)/scripts/qa_windows_io_probe" uv run pytest -q tests scripts/qa_debuff_flicker.py scripts/qa_tuarim_repeat_alert.py scripts/qa_autofind_missing_assets.py
 ```
+
+## 2026-10-17 공용 장식 탐색 보완
+
+새 원본에서 축소 상위 3개 배경 후보가 탈락한 뒤 참 장식을 놓치는 P2를 수정했다.
+투아림은 도르카와 `detect/resource_anchor.py`의 원점/배율 탐색을 공유하고,
+오른쪽 버튼 구조와 % 영역 잘림은 별도로 확인한다. 공용 기준 0.97은 유지한다.
+도르카 숫자 판독/기능 ON/등록/숫자 참조는 투아림 찾기의 전제 조건이 아니다.
+투아림의 100% 안전 보류·기존 알림 설정과 발화 이력도 유지한다.
+투아림 상시 추종을 추가한 범위로 확대하지 않는다.
+
+새 진단 ZIP은 공용 장식 자료도 보존하며 과거 두 자산 ZIP은 저장된 전체 장식에서
+원형을 유도한다. 재현, 비용과 실행 결과는 [개발 검증](tuarim-shared-ornament-fix.md)을 따른다.

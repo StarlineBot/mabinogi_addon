@@ -164,7 +164,10 @@ def test_new_detectors_roundtrip_original_zip(frames, tmp_path, monkeypatch, fea
         assert (ox, oy) == (-1920, 120) and box is not None
         storage.io.wait()
         record = storage.recent()[0]
-        assert set(record.metadata["asset_names"]) == {"anchor", "mask"}
+        expected = {"anchor", "mask"}
+        if feature == "tuarim":
+            expected |= {"circle_anchor", "circle_mask", "circle_anchor_alt"}
+        assert set(record.metadata["asset_names"]) == expected
         np.testing.assert_array_equal(image_io.imread(record.directory / "input.png"), frame)
         result = replay(storage.export(record, tmp_path / "공유.zip"))
         assert result["replayed"] and result["matches_recorded"]

@@ -21,7 +21,10 @@ def detector_assets(feature: str) -> dict[str, np.ndarray]:
     if feature == "dorcha":
         from .detect.dorcha_anchor import assets
         return assets()
-    if feature in ("tuarim", "skillbar"):
+    if feature == "tuarim":
+        from .detect.tuarim_anchor import assets
+        return assets()
+    if feature == "skillbar":
         from .detect.autofind_anchors import assets
         return assets(feature)
     if feature == "buff":
@@ -56,6 +59,9 @@ def missing_required_assets(feature: str, assets: dict) -> list[str]:
             from .detect.dorcha_reader import references_from_assets
             if references_from_assets(assets) is None:
                 missing.append("word_references")
+        if feature == "tuarim" and any(key.startswith("circle_") for key in assets):
+            missing.extend(f"circle_{key}" for key in ("anchor","mask")
+                           if not isinstance(assets.get(f"circle_{key}"),np.ndarray) or not assets[f"circle_{key}"].size)
         return missing
     if feature in ("boss", "debuff"):
         digits = _digit_templates(assets)

@@ -271,7 +271,7 @@ def test_full_frame_capture_failure_does_not_spawn_or_retry_each_tick(moving,mon
 
 @pytest.mark.parametrize("kind", ["missing","damaged"])
 def test_invalid_word_assets_fail_before_expensive_search(monkeypatch,kind):
-    from mabinogi_addon.detect import dorcha_anchor
+    from mabinogi_addon.detect import resource_anchor
     data = assets()
     for key in list(data):
         if key.startswith("word_0_"):
@@ -279,7 +279,7 @@ def test_invalid_word_assets_fail_before_expensive_search(monkeypatch,kind):
                 del data[key]
             else:
                 data[key] = np.zeros((1,1),np.uint8)
-    monkeypatch.setattr(dorcha_anchor,"candidates",lambda *a,**k:pytest.fail("invalid references reached detector"))
+    monkeypatch.setattr(resource_anchor,"candidates",lambda *a,**k:pytest.fail("invalid references reached detector"))
     trace = {}
     assert locate_dorcha(np.zeros((180,260,3),np.uint8),templates=data,diagnostics=trace) is None
     assert trace["rejection"] == "missing_word_references"
