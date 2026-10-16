@@ -184,6 +184,8 @@ def layout_state(w, tab):
         "viewport_width": scroll.viewport().width(),
         "horizontal_range": scroll.horizontalScrollBar().maximum(),
         "horizontal_value": scroll.horizontalScrollBar().value(),
+        "vertical_range": scroll.verticalScrollBar().maximum(),
+        "vertical_value": scroll.verticalScrollBar().value(),
     }
 
 
@@ -209,6 +211,29 @@ def assert_form_controls_within_viewport(w, tab, output):
         assert w.grab().save(str(screenshot)), state
         state["screenshot"] = str(screenshot)
     assert not clipped, f"clipped controls: {state}"
+
+
+def assert_form_controls_reachable(w, tab, app, output):
+    scroll = w._tracker_tabs.currentWidget()
+    state = layout_state(w, tab)
+    if state["needed"] <= state["viewport"]:
+        assert state["vertical_range"] == 0, state
+    else:
+        assert state["vertical_range"] > 0, state
+    controls = [control for control in tab.form_panel.findChildren(QWidget)
+                if isinstance(control, (QAbstractButton, QAbstractSpinBox, QComboBox, QLineEdit))
+                and control.isVisible()]
+    assert controls, state
+    for control in controls:
+        scroll.ensureWidgetVisible(control, 50, 50)
+        for _ in range(8):
+            app.processEvents()
+        rect = QRect(control.mapTo(scroll.viewport(), QPoint()), control.size())
+        details = {**layout_state(w, tab), "control": type(control).__name__,
+                   "rect": rect.getRect(),
+                   "visible_region": control.visibleRegion().boundingRect().getRect()}
+        assert scroll.viewport().rect().contains(rect), f"unreachable control: {details}"
+    assert_form_controls_within_viewport(w, tab, output)
 
 
 @pytest.mark.parametrize("font_pixels", [9, 13, 18])
@@ -270,6 +295,12 @@ def test_overwide_columns_stack_and_restore_without_clipping(window, tmp_path, i
     assert not columns.stacked
     original = (left.minimumWidth(), right.minimumWidth())
     items = tab.buff_list if index == 0 else tab.debuff_list
+    notice = tab.status_label.text()
+    # QLabel 양쪽 내용의 배치가 확정된 뒤 복원의 기준 높이를 측정한다.
+    for text in ("status\n" * 80, notice):
+        tab.status_label.setText(text)
+        for _ in range(8):
+            app.processEvents()
     height = items.height()
     for _ in range(4):
         # Windows QA의 inner 946px에 해당하는 최소 폭을 플랫폼 독립적으로 공급한다.
@@ -280,11 +311,18 @@ def test_overwide_columns_stack_and_restore_without_clipping(window, tmp_path, i
         assert columns.stacked
         assert not w.creator_dialogue._floating_footer
         assert scroll.widget().width() == scroll.viewport().width()
-        assert scroll.verticalScrollBar().maximum() > 0
-        assert_form_controls_within_viewport(w, tab, tmp_path)
-        scroll.verticalScrollBar().setValue(scroll.verticalScrollBar().maximum())
-        app.processEvents()
-        assert_form_controls_within_viewport(w, tab, tmp_path)
+        assert_form_controls_reachable(w, tab, app, tmp_path)
+        tab.status_label.setText("status\n" * 80)
+        for _ in range(8):
+            app.processEvents()
+        state = layout_state(w, tab)
+        assert state["needed"] > state["viewport"], state
+        assert state["vertical_range"] > 0, state
+        assert_form_controls_reachable(w, tab, app, tmp_path)
+        tab.status_label.setText(notice)
+        for _ in range(8):
+            app.processEvents()
+        assert_form_controls_reachable(w, tab, app, tmp_path)
         left.setMinimumWidth(original[0])
         right.setMinimumWidth(original[1])
         for _ in range(8):
@@ -292,6 +330,24 @@ def test_overwide_columns_stack_and_restore_without_clipping(window, tmp_path, i
         assert not columns.stacked
         assert w.creator_dialogue._floating_footer
         assert items.height() == height
+
+
+def test_reachability_check_rejects_controls_left_below_viewport(window, tmp_path, monkeypatch):
+    w, app = window
+    tab = w.buff_tab
+    tab._columns.itemAt(0).widget().setMinimumWidth(518)
+    tab.form_panel.setMinimumWidth(404)
+    tab.status_label.setText("status\n" * 80)
+    for _ in range(8):
+        app.processEvents()
+    scroll = w._tracker_tabs.currentWidget()
+    state = layout_state(w, tab)
+    assert state["needed"] > state["viewport"] and state["vertical_range"] > 0, state
+    assert_form_controls_reachable(w, tab, app, tmp_path)
+    scroll.verticalScrollBar().setValue(0)
+    monkeypatch.setattr(scroll, "ensureWidgetVisible", lambda *a: None)
+    with pytest.raises(AssertionError, match="unreachable control"):
+        assert_form_controls_reachable(w, tab, app, tmp_path)
 
 
 def test_bubble_does_not_resize_expanded_list_or_expand_visibility_region(window):
