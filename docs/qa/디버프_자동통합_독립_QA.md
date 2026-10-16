@@ -1,5 +1,8 @@
 # 디버프 자동 통합 독립 QA
 
+> 최신 판정: 아래 최초 QA의 `DEBUFF-AUTO-QA-01`은 수정본 `bbdb4bd`에서 해결을 독립
+> 확인했다. 후속 검증의 실행 결과와 배포 판단은 문서 마지막 절을 따른다.
+
 - 검증일: 2026-10-16
 - 제품 소스: `e60f67cb54a95dd33ff12a5f485f7cba81d3848f`
 - 제품 트리: `bd01338f838678b0179c75cd9ce6d78dc8a4470a`
@@ -115,3 +118,69 @@ Windows 게임 동시 실행, 실게임 연속 보스 전환, 혼합 DPI·모니
 포커스·전체화면, 절전 복귀와 수시간 CPU·메모리·핸들·스레드 변화는 직접 확인하지 않았다.
 반복 컨트롤러 교체는 수명주기 호출 검증이며 실제 장시간 스레드 누수 측정을 대신하지 않는다.
 새 독립 QA 코드와 보고서만 추가하는 공유 푸시로 제품 소스는 변경되지 않는다.
+
+## 수정 후 독립 재검증 (2026-10-16)
+
+### 대상과 판정
+
+- 제품 소스: `bbdb4bdfa0f1c0abc4639f91ecbfc21d7d300be9`.
+- 제품 트리: `4e186aca7f5d07df1e60296ceb2b1a2cd788b2a6`.
+- 이전 QA 공유본 `6767b26`의 트리와 파일 내용을 비교했다. 커밋 이력은 읽지 않았다.
+- 변경은 `setup_state.py`, `tests/test_setup.py`, 자동 통합 사양·수정 설명·공개 노트 5개 파일이다.
+  디버프 엔진, 작업자, UI 구현과 캡처 소스는 이전 검증본과 동일하다.
+- **DEBUFF-AUTO-QA-01 해결 확인. 검증 가능한 범위에서 새 버그나 배포 차단 문제를 찾지 못했다.**
+- `setup_state.py:95`에서 literal False인 자동 플래그와 진단 percent를 함께 확인한다.
+  전달된 설정만 사용하고 기본 설정 경로 재조회, 저장 또는 기존 선택값 삭제를 하지 않는다.
+  최초 QA의 실패 기록은 당시 결과로 보존하며 현재 미해결 결함을 뜻하지 않는다.
+
+### 실제 실행
+
+원래 미해결 재현 코드를 변경하지 않고 다시 실행했다.
+
+```sh
+PYTHONPATH=src QT_QPA_PLATFORM=offscreen python -m pytest scripts/qa_debuff_auto_setup_prerequisite.py -q --tb=short
+```
+
+- 수정 전 **6 failed, 3 passed**에서 수정 후 **9 passed**로 바뀌었다.
+- 자동 플래그 없음/True 및 로그인/비로그인 실제 준비 화면에서 등록 완료로 표시한다.
+- 명시적 진단 percent의 HP 필수 조건은 계속 검사하며 통과했다.
+
+관련 회귀와 이전 독립 자동 통합 검사도 함께 실행했다.
+
+```sh
+PYTHONPATH=src QT_QPA_PLATFORM=offscreen python -m pytest scripts/qa_debuff_auto_setup_prerequisite.py docs/qa/assets/debuff_auto_20261016/probes.py tests/test_setup.py tests/test_debuff_auto.py tests/test_release_notes.py tests/test_release_notes_trigger.py -q --tb=short
+```
+
+- **195 passed (30.48초)**. 원래 재현 9건은 이 집계에도 포함되어 중복 합산하지 않는다.
+- 준비 단계/시작 안내/취소/재진입, 자동 엔진과 실제 시작 팩토리, 보조 캡처 실패 복구,
+  프라가라흐 원본 판독, 공개 노트 회귀를 포함한다.
+- 추가 독립 설정 검사: 자동 플래그 7종(없음/True/False/0/1/문자열/null), 과거 방식 4종
+  (off/band/percent/잘못된 값), 디버프 영역 유무, HP 영역 유무의 **112조합 통과**.
+  `missing`과 `pending`이 동일한 필수 항목을 반환하며, 전달한 설정을 변경하거나
+  다른 경로에서 설정을 다시 읽지 않는 것을 확인했다. 실행 가능한 코드는
+  `docs/qa/assets/debuff_auto_20261016/setup_probes.py`에 보관한다.
+- 로컬 변경 파일 5개의 Git blob 해시가 원격 제품 트리와 일치하는 것을 확인했다.
+- 기존 제품 테스트의 percent 사례는 명시적 진단 플래그를 추가해 원래 필수 영역 검사를
+  유지했으며, 자동 전환 회귀를 추가했다. 실패를 skip하거나 assertion을 약화한 변경은 아니다.
+
+### 정확한 수정 SHA의 Windows 검증
+
+[Windows validation 38867035469](https://github.com/StarlineBot/mabinogi_addon/actions/runs/38867035469),
+job `116862129639`, 대상 SHA `bbdb4bdfa0f1c0abc4639f91ecbfc21d7d300be9`.
+API의 단계별 결과와 실제 job 로그를 확인했다.
+
+- 전체 실행: **success**.
+- 격리 회귀: **976 passed, 1 skipped, 4 deselected**.
+- Windows 네이티브: **4 passed, 977 deselected**.
+- exe 빌드 성공: **123,611,029 bytes**.
+- 선택적 exe 업로드는 정상 생략됐다. 다른 SHA의 성공으로 대신하지 않았고 수동 재실행을 요구하지 않았다.
+
+### 배포 판단과 잔여 범위
+
+제한된 베타 기준으로 릴리즈 명령 제공 가능하다. 원격 최신 태그는 `v0.4.74`,
+다음 `v0.4.75`는 미사용이며 공개 노트 맨 위 버전도 `v0.4.75`다.
+이번 후속 QA는 보고서와 독립 검사만 푸시하며 제품 소스·공개 노트를 추가 수정하지 않는다.
+동일 제품의 위 Windows 검증을 재사용한다. 태그 생성과 릴리즈는 사용자가 직접 한다.
+
+앞서 명시한 실게임·Windows 혼합 DPI·장시간 리소스 측정 제약은 유지된다.
+전체 앱의 무결함이나 실제 Release 게시 성공을 보증하는 판정은 아니다.
