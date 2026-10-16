@@ -1,0 +1,33 @@
+{
+  "source": "tests/data/스크린샷 2026-10-16 213335.png",
+  "source_git_blob": "1de6717c568cbcb9a90f21bb40c8a4940b1bca18",
+  "native_boxes_xywh": {
+    "boss": [
+      1023,
+      1212,
+      16,
+      16
+    ],
+    "center": [
+      1366,
+      379,
+      16,
+      16
+    ]
+  },
+  "existing_template_scores": {
+    "boss": 0.9764692187309265,
+    "center": 0.9471663236618042
+  },
+  "runtime": {
+    "off": {
+      "matched": true,
+      "missing_overlay_shown": false
+    },
+    "auto": {
+      "matched": true,
+      "missing_overlay_shown": false
+    }
+  },
+  "scope": "Two locations in one screenshot, not broad accuracy or replacement approval."
+}
