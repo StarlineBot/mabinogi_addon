@@ -7,6 +7,44 @@
 로컬 Git blob과 대조했다. 기존 비교 PNG 2개는 실행에 필요하지 않아 새로 동기화하지 않았으며,
 현재 제품 렌더를 직접 실행하여 실제 결과를 확인했다.
 
+## 2026-10-16 스크롤 필요 조건 수정 최종 후속 QA
+
+후속 기준: `1c0c8747ee6cd75e198b4b691fceffc814782edd`.
+직전 QA `1877773` 대비 제품 배치 테스트와 개발 기록 2개만 바뀌었다. 제품 전체와
+원래 독립 QA 스크립트는 동일한 Git blob이다. 아래 과거 실패 증거는 보존한다.
+
+- `TRACKER-LAYOUT-CI-03`: 조건 구성 수정 확인. 정상 안내에서는 실제 필요 높이와
+  viewport를 비교한 뒤 스크롤 0/양수를 판정하고, 모든 표시 중인 설정 컨트롤을 이동시켜
+  전체 사각형이 viewport 안에 들어가는지 확인한다. 세로 배치만으로 넘침을 단정하지 않는다.
+- 긴 안내 분기는 실제 높이 초과와 양수 스크롤을 선행 검증한 뒤 동일 접근성을 확인한다.
+  안내 복구/폭 제약 해제/원래 두 열/목록 높이 정확한 복원도 두 탭에서 4회 반복한다.
+  스크롤 이동을 막은 역검증이 접근 불가 컨트롤을 실제 assertion 실패로 잡는 것도 확인했다.
+- 기존 Windows 18px/실제 가로 경계/강제 잘림 역검증과 워커 누수 가드는 유지됐다.
+  QA가 제품/제품 테스트/원본 독립 스크립트를 수정하거나 실패를 skip하지 않았다.
+- Linux 집중 검증 **35 passed (23.04초)**. 제품 배치 22개와 원래 독립 입력·가로·세로
+  접근성 13개다. 150% Qt 배율 모사도 **35 passed (24.73초)**.
+  명령은 `pytest tests/test_tracker_layout.py scripts/qa_tracker_layout.py
+  scripts/qa_tracker_horizontal_extent.py scripts/qa_tracker_stack_visibility.py -q --tb=short`이며,
+  `PYTHONPATH=src QT_QPA_PLATFORM=offscreen`, 배율 모사는 추가 `QT_SCALE_FACTOR=1.5`를 사용했다.
+- 제품이 같아 이전 전체 Linux **884 passed**와 렌더·입력 결과를 재사용했다.
+  이번 턴에서 전체 Linux 회귀나 실제 게임 장시간 검증을 새로 실행했다고 하지 않는다.
+
+### 최종 Windows 및 배포 판단
+
+- 정확한 수정 SHA의 [자동 실행 38846458828](https://github.com/StarlineBot/mabinogi_addon/actions/runs/38846458828),
+  job `116797991566` 전체 success. Windows 회귀 **884 passed, 1 skipped, 4 deselected,
+  3 warnings (160.45초)**, 네이티브 통합 **4 passed, 885 deselected, 1 warning (1.52초)**.
+  기존 플랫폼 조건 DWM skip과 deprecation 경고를 구분했고 실패를 숨기는 skip은 추가하지 않았다.
+- exe 빌드 성공, `mabinogi-addon.exe` **123,605,918 bytes** 확인. 선택적 수동 업로드는
+  자동 push에서 원래 skipped이며 필수 빌드가 생략된 것이 아니다.
+- `TRACKER-LAYOUT-CI-03` 해결 확인. 이전 가로 잘림과 조건 구성 실패의 재현도 포함해
+  이번 수정 범위에서 새 배포 차단 문제를 발견하지 못했다. 제한 베타 릴리즈 명령 제공 가능.
+  이 QA 문서만 추가하는 최종 커밋에는 같은 제품/테스트 소스의 위 검증을 재사용한다.
+원격 최신 태그 `v0.4.72`, 미사용 다음 버전/앱 노트 상단 `v0.4.73` 확인. 태그는 만들지 않았다.
+실제 게임 장시간/혼합 DPI/잠금·절전·모니터 전환 및 기존 공개 노트 혼입의 잔여 범위는 유지한다.
+
+---
+
 ## 2026-10-16 폭 부족 세로 배치 수정 후속 QA
 
 후속 기준: `a3adbd0560b33972ae67e63e4c33f37473ac84e2`.
