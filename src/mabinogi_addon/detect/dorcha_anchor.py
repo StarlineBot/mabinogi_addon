@@ -2,8 +2,11 @@
 
 import cv2
 import numpy as np
+from pathlib import Path
 
+from .. import image_io
 from .autofind_anchors import ACCEPT, SCALES, assets as tuarim_assets, candidates
+from .dorcha_reader import read_dorcha, reference_assets, references_from_assets
 
 
 def assets():
@@ -12,11 +15,16 @@ def assets():
         return {}
     circle = source["anchor"][:, :45].copy()
     gray = cv2.cvtColor(circle, cv2.COLOR_BGR2GRAY)
-    return {"anchor": cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR),
-            "mask": source["mask"][:, :45].copy()}
+    result = {"anchor": cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR),
+              "mask": source["mask"][:, :45].copy()}
+    alternate = image_io.imread(Path(__file__).parent / "templates/autofind/dorcha_anchor_alt.png")
+    if alternate is not None:
+        result["anchor_alt"] = alternate
+    result.update(reference_assets())
+    return result
 
 
-def locate_dorcha(frame, templates=None, diagnostics=None):
+def locate_dorcha(frame, templates=None, diagnostics=None, cancelled=None):
     trace = diagnostics if diagnostics is not None else {}
     templates = assets() if templates is None else templates
     if (not templates or not isinstance(frame, np.ndarray) or frame.dtype != np.uint8
@@ -30,16 +38,40 @@ def locate_dorcha(frame, templates=None, diagnostics=None):
             or not anchor.size or not np.any(mask)):
         trace["rejection"] = "invalid_assets"
         return None
+    references = references_from_assets(templates)
+    if references is None:
+        trace["rejection"] = "missing_word_references"
+        return None
+    anchors = [anchor]
+    alternate = templates.get("anchor_alt")
+    if alternate is not None:
+        if not isinstance(alternate, np.ndarray) or alternate.dtype != np.uint8 or alternate.shape != anchor.shape:
+            trace["rejection"] = "invalid_assets"
+            return None
+        anchors.append(alternate)
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    matches = candidates(cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR), templates, trace)
+    search_frame = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+    matches = []
+    searches = []
+    for source in anchors:
+        if cancelled is not None and cancelled():
+            trace["rejection"] = "cancelled"
+            return None
+        search = {}
+        matches.extend(candidates(search_frame, {"anchor":source,"mask":mask}, search, cancelled))
+        searches.append(search)
+    trace.update(searches[0])
+    trace["anchor_searches"] = searches
     trace.setdefault("transforms", []).append("grayscale circle only; inner digits and percent excluded")
     if not matches and trace.get("rejection") != "invalid_mask":
         # Bright backgrounds can hide the ornament in the downsampled search.
         # Retry native pixels with the same strict score, not a weaker threshold.
         trace["transforms"].append("native grayscale fallback; unchanged acceptance score")
-        anchor = cv2.cvtColor(templates["anchor"], cv2.COLOR_BGR2GRAY)
-        mask = templates["mask"]
-        for scale in SCALES:
+        for source, scale in ((source, scale) for source in anchors for scale in SCALES):
+            if cancelled is not None and cancelled():
+                trace["rejection"] = "cancelled"
+                return None
+            anchor = cv2.cvtColor(source, cv2.COLOR_BGR2GRAY)
             w,h = round(anchor.shape[1]*scale),round(anchor.shape[0]*scale)
             if w > gray.shape[1] or h > gray.shape[0]:
                 continue
@@ -58,6 +90,13 @@ def locate_dorcha(frame, templates=None, diagnostics=None):
                            for other in matches):
                     matches.append(item)
                 scores[max(0,y-h//2):y+h//2+1,max(0,x-w//2):x+w//2+1] = 0
+    unique = []
+    for item in sorted(matches, key=lambda candidate: candidate["score"], reverse=True):
+        x,y,w,h = item["anchor"]
+        if not any(abs(x-other["anchor"][0]) < w/2 and abs(y-other["anchor"][1]) < h/2
+                   for other in unique):
+            unique.append(item)
+    matches = unique
     if len(matches) != 1:
         trace["rejection"] = "ambiguous_candidates" if matches else "anchor_not_found"
         return None
@@ -68,5 +107,10 @@ def locate_dorcha(frame, templates=None, diagnostics=None):
     if box[0] + box[2] > frame.shape[1] or box[1] + box[3] > frame.shape[0]:
         trace["rejection"] = "digit_region_clipped"
         return None
+    value = read_dorcha(frame[box[1]:box[1]+box[3], box[0]:box[0]+box[2]], references=references)
+    if value is None:
+        trace["rejection"] = "unreadable_digits"
+        return None
+    trace["value"] = value
     trace["result"] = list(box)
     return box

@@ -16,6 +16,32 @@ import sys
 _PW_RENDERFULLCONTENT = 0x00000002  # 가려지거나 D3D로 그려진 내용까지 렌더 시도
 
 
+def registered_game_target():
+    """Return (hwnd, pid, left, top, width, height) in physical pixels, or None."""
+    if sys.platform != "win32":
+        return None
+    try:
+        import win32process
+        from .. import config
+        from . import dwm_thumbnail
+        from .window_watcher import DEFAULT_GAME_TITLES
+
+        exe = config.load_game_exe()
+        if not exe:
+            return None
+        hwnd = dwm_thumbnail.find_game_window(exe, DEFAULT_GAME_TITLES)
+        rect = dwm_thumbnail.window_rect(hwnd) if hwnd else None
+        if rect is None:
+            return None
+        _, pid = win32process.GetWindowThreadProcessId(hwnd)
+        left, top, right, bottom = rect
+        if not pid or right <= left or bottom <= top:
+            return None
+        return int(hwnd), int(pid), left, top, right-left, bottom-top
+    except Exception:
+        return None
+
+
 def capture_window_bgra(hwnd: int) -> tuple[bytes, int, int, int, int] | None:
     """창 내용을 (bgra, left, top, w, h)로. 실패/비Windows면 None.
 

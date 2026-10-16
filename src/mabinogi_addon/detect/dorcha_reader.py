@@ -2,6 +2,7 @@
 
 import cv2
 import numpy as np
+import re
 from zipfile import BadZipFile
 
 from .. import paths
@@ -46,13 +47,39 @@ def _load():
 _REFS = _load()
 
 
-def read_dorcha(region, diagnostics=None):
+def reference_assets():
+    if _REFS is None:
+        return {}
+    refs, labels = _REFS
+    return {f"word_{int(label)}_{index}": (ref.reshape(15,22)>0).astype(np.uint8)*255
+            for index,(ref,label) in enumerate(zip(refs,labels))}
+
+
+def references_from_assets(assets):
+    refs, labels = [], []
+    for name,image in sorted(assets.items()):
+        match = re.fullmatch(r"word_([0-9]+)_([0-9]+)",name)
+        if match is None:
+            continue
+        if (not isinstance(image,np.ndarray) or image.dtype != np.uint8
+                or image.shape != (15,22) or not np.isin(image,[0,255]).all()
+                or not image.any() or image.all()):
+            return None
+        labels.append(int(match[1]))
+        refs.append(_normalize((image>0).astype(np.float32)))
+    if set(labels) != set(range(16)):
+        return None
+    return np.asarray(refs,np.float32), np.asarray(labels,np.int64)
+
+
+def read_dorcha(region, diagnostics=None, *, references=None):
     trace = diagnostics if diagnostics is not None else {}
+    references = _REFS if references is None else references
     ink = prepare(region)
-    if ink is None or _REFS is None:
+    if ink is None or references is None:
         trace["rejection"] = "invalid_input" if ink is None else "missing_references"
         return None
-    refs, labels = _REFS
+    refs, labels = references
     scores = refs @ _normalize(ink) / ink.size
     by_value = sorted(((float(scores[labels == value].max()), value) for value in range(16)), reverse=True)
     score, value = by_value[0]

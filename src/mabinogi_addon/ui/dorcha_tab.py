@@ -1,6 +1,7 @@
 """Independent opt-in beta display; no Tuarim alerts or saved values."""
 
 import logging
+from time import monotonic
 
 import numpy as np
 from PySide6.QtCore import Qt, QTimer
@@ -32,6 +33,11 @@ class DorchaTab(QWidget):
         self._capture_failed = False
         self._save_failed = False
         self._overlay = None
+        self._live_box = None
+        self._search_worker = None
+        self._search_epoch = 0
+        self._next_search = 0.0
+        self._search_backoff = 2.0
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12,12,12,12)
         layout.setSpacing(14)
@@ -106,6 +112,7 @@ class DorchaTab(QWidget):
             self._overlay.set_value(value)
 
     def _hide(self):
+        self._invalidate_search()
         self._set_value(None)
         if self._overlay is not None:
             self._overlay.hide()
@@ -128,16 +135,93 @@ class DorchaTab(QWidget):
     def _tick(self):
         if self._shutting_down or self._autofind_busy:
             return
+        if self._selector is not None and self._selector.isVisible():
+            self._hide()
+            return
         self._apply_gate()
         if not self._cfg["enabled"] or self._paused or not self._logged_in() or not self._region or not self._active():
             self._hide()
             return
         from .dpi import to_physical
         self._ensure_overlay()
-        frame = self._grab_rect(*to_physical(self._region))
-        self._set_value(read_dorcha(frame))
+        frame = self._grab_rect(*(self._live_box or to_physical(self._region)))
+        value = read_dorcha(frame)
+        self._set_value(value)
+        if value is None:
+            self._start_search()
+        else:
+            self._search_epoch += 1
+            if self._search_worker is not None:
+                self._search_worker.requestInterruption()
+            self._next_search = 0.0
+            self._search_backoff = 2.0
         if not self._overlay.isVisible():
             self._overlay.show()
+
+    def _invalidate_search(self):
+        self._search_epoch += 1
+        self._live_box = None
+        self._next_search = 0.0
+        self._search_backoff = 2.0
+        if self._search_worker is not None:
+            self._search_worker.requestInterruption()
+
+    def _search_target(self):
+        from ..system.window_capture import registered_game_target
+        return registered_game_target()
+
+    def _start_search(self):
+        if (self._search_worker is not None or monotonic() < self._next_search
+                or not self._watcher.is_game_active()):
+            return
+        self._next_search = monotonic() + self._search_backoff
+        self._search_backoff = min(10.0, self._search_backoff * 2)
+        target = self._search_target()
+        if target is None:
+            return
+        _, _, x, y, w, h = target
+        # A single full-frame job is allowed; no queue or unbounded image allocation.
+        if w*h > 16_777_216:
+            return
+        frame = self._grab_rect(x,y,w,h)
+        if frame is None or frame.shape[:2] != (h,w):
+            return
+        from .dorcha_search import DorchaSearch
+        worker = DorchaSearch(np.array(frame, copy=True, order="C"), target, self._search_epoch)
+        self._search_worker = worker
+        worker.finished.connect(self._finish_search)
+        worker.start()
+
+    def _finish_search(self):
+        worker = self._search_worker
+        if worker is None:
+            return
+        worker.wait()
+        self._search_worker = None
+        try:
+            if (worker.epoch != self._search_epoch or worker.isInterruptionRequested()
+                    or self._shutting_down or self._autofind_busy or self._paused
+                    or not self._cfg["enabled"] or not self._logged_in() or not self._region
+                    or not self._watcher.is_game_active() or self._search_target() != worker.target):
+                return
+            self._next_search = max(self._next_search, monotonic() + worker.elapsed*20)
+            if worker.error:
+                _log.warning("도르카 재탐색 실패: %s", worker.error)
+            if worker.box is None:
+                return
+            _, _, ox, oy, _, _ = worker.target
+            x,y,w,h = worker.box
+            box = (x+ox,y+oy,w,h)
+            # Re-read current pixels: the worker's old screenshot is never displayed.
+            value = read_dorcha(self._grab_rect(*box))
+            if value is None:
+                return
+            self._live_box = box
+            self._set_value(value)
+            self._next_search = 0.0
+            self._search_backoff = 2.0
+        finally:
+            worker.deleteLater()
 
     def _grab_rect(self,x,y,w,h):
         try:
@@ -240,7 +324,10 @@ class DorchaTab(QWidget):
             self._highlight.close()
             self._highlight.deleteLater()
         self._highlight = RegionHighlight()
-        self._highlight.flash(*(self._region[key] for key in ("x","y","w","h")),
+        from .dpi import to_logical
+        box = (to_logical(*self._live_box) if self._live_box is not None else
+               tuple(self._region[key] for key in ("x","y","w","h")))
+        self._highlight.flash(*box,
                               "도르카 영역 확인","원 안의 숫자 0~15가 모두 들어가야 합니다.")
 
     def set_paused(self, paused):
@@ -252,6 +339,12 @@ class DorchaTab(QWidget):
         self._shutting_down = True
         self._timer.stop()
         self._hide()
+        if self._search_worker is not None:
+            worker = self._search_worker
+            worker.requestInterruption()
+            worker.wait()
+            self._search_worker = None
+            worker.deleteLater()
         for widget in (self._overlay,self._selector,self._highlight,self._autofind_highlight):
             if widget is not None:
                 widget.close()

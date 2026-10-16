@@ -50,8 +50,13 @@ def missing_required_assets(feature: str, assets: dict) -> list[str]:
         anchor = assets.get("anchor")
         return [] if isinstance(anchor, np.ndarray) and anchor.size else ["anchor"]
     if feature in ("tuarim", "skillbar", "dorcha"):
-        return [name for name in ("anchor", "mask")
-                if not isinstance(assets.get(name), np.ndarray) or not assets[name].size]
+        missing = [name for name in ("anchor", "mask")
+                   if not isinstance(assets.get(name), np.ndarray) or not assets[name].size]
+        if feature == "dorcha":
+            from .detect.dorcha_reader import references_from_assets
+            if references_from_assets(assets) is None:
+                missing.append("word_references")
+        return missing
     if feature in ("boss", "debuff"):
         digits = _digit_templates(assets)
         return [f"digit_{digit}" for digit in "0123456789" if digit not in digits]

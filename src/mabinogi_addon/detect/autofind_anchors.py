@@ -23,7 +23,7 @@ def assets(feature):
     return result
 
 
-def candidates(frame, templates, trace):
+def candidates(frame, templates, trace, cancelled=None):
     anchor, mask = templates["anchor"], templates["mask"]
     if frame is None or frame.ndim != 3 or frame.shape[2] != 3 or frame.dtype != np.uint8:
         trace["rejection"] = "invalid_frame"
@@ -38,6 +38,8 @@ def candidates(frame, templates, trace):
                  coarse_ratio=ratio, candidates=[])
     found = []
     for scale in SCALES:
+        if cancelled is not None and cancelled():
+            return []
         w, h = round(anchor.shape[1] * scale), round(anchor.shape[0] * scale)
         cw, ch = max(2, round(w * ratio)), max(2, round(h * ratio))
         if cw > small.shape[1] or ch > small.shape[0]:

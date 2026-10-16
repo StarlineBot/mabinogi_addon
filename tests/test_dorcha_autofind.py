@@ -63,7 +63,7 @@ def test_confirmation_only_saves_after_approval(runtime,monkeypatch,accept):
     assert tab._region == (dict(x=20,y=30,w=28,h=23) if accept else previous)
 
 
-def test_diagnostic_zip_replays_same_inputs_and_assets(tmp_path):
+def test_diagnostic_zip_replays_same_inputs_and_assets(tmp_path,monkeypatch):
     store = diag.DiagnosticStore(tmp_path/"진단")
     try:
         frame = small_scene()
@@ -72,6 +72,8 @@ def test_diagnostic_zip_replays_same_inputs_and_assets(tmp_path):
         store.io.wait()
         record = store.recent()[0]
         zip_path = store.export(record,tmp_path/"도르카.zip")
+        from mabinogi_addon.detect import dorcha_reader
+        monkeypatch.setattr(dorcha_reader,"_REFS",None)
         result = replay(zip_path)
         assert result["matches_recorded"] and result["result"] == list(box)
     finally:
