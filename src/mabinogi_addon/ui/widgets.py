@@ -8,7 +8,32 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFocusEvent
-from PySide6.QtWidgets import QCheckBox, QLabel, QMessageBox, QSizePolicy, QSpinBox
+from PySide6.QtWidgets import QBoxLayout, QCheckBox, QLabel, QMessageBox, QSizePolicy, QSpinBox
+
+
+class TrackerColumns(QBoxLayout):
+    """기본 두 열을 유지하고 실제 최소 폭이 넘칠 때만 세로로 배치한다."""
+
+    def __init__(self, left, right):
+        super().__init__(QBoxLayout.Direction.LeftToRight)
+        self.setSpacing(14)
+        self.addWidget(left, 1)
+        self.addWidget(right, 1)
+
+    @property
+    def stacked(self):
+        return self.direction() == QBoxLayout.Direction.TopToBottom
+
+    def fit_width(self, width):
+        margins = self.parentWidget().layout().contentsMargins()
+        available = width - margins.left() - margins.right()
+        required = self.spacing() + sum(
+            max(self.itemAt(i).widget().minimumSizeHint().width(), self.itemAt(i).widget().minimumWidth())
+            for i in range(2))
+        direction = (QBoxLayout.Direction.TopToBottom if required > available
+                     else QBoxLayout.Direction.LeftToRight)
+        if direction != self.direction():
+            self.setDirection(direction)
 
 
 class SuffixSpinBox(QSpinBox):

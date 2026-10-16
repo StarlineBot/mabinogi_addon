@@ -30,7 +30,7 @@ from .. import config
 from ..catalog import USER_DEBUFF_ICON_DIR, BuffDef, available_debuff_catalog
 from .buff_tab import _capture_icon_to, _pixmap
 from .help_dialog import tab_header
-from .widgets import checkbox, hint_label, icon_slot, section_label
+from .widgets import TrackerColumns, checkbox, hint_label, icon_slot, section_label
 
 # 영역에 꼭 들어가야 하는 것(앱 힌트 ↔ 화면 점선 라벨이 같은 기준을 공유).
 REGION_CRITERION = "디버프 아이콘 줄이 점선 안에 들어오게 드래그하세요"
@@ -89,12 +89,10 @@ class DebuffTab(QWidget):
         from .widgets import feature_checkbox
         self.enable = feature_checkbox("debuff", "디버프 트래커 사용")
         outer.addWidget(self.enable)
-        body = QHBoxLayout()
-        body.setSpacing(14)
-        body.addWidget(self._build_list_panel(), 1)
+        list_panel = self._build_list_panel()
         self.form_panel = self._build_form_panel()
-        body.addWidget(self.form_panel, 1)
-        outer.addLayout(body, 1)
+        self._columns = TrackerColumns(list_panel, self.form_panel)
+        outer.addLayout(self._columns, 1)
 
         self._rebuild_list()
         if self.debuff_list.count():
@@ -114,6 +112,9 @@ class DebuffTab(QWidget):
             if did not in order:
                 order.append(did)
         return settings, order
+
+    def fit_width(self, width):
+        self._columns.fit_width(width)
 
     def _save(self) -> None:
         shown = [self._settings[i] for i in self._order]

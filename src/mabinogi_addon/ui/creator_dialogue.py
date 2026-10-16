@@ -195,6 +195,8 @@ class CreatorDialogue(QObject):
                 and self.window._tracker_tabs.currentIndex() in (0, 1)):
             return False
         tab = self._tracker_panels[self.window._tracker_tabs.currentIndex()]
+        if tab._columns.stacked:
+            return False
         scroll = self.window._tracker_tabs.currentWidget()
         reserved = self._central.layout().indexOf(self.footer) >= 0 and not self.footer.isHidden()
         available = scroll.viewport().height() + height - self.window.height() + (64 if reserved else 0)

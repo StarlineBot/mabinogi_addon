@@ -83,6 +83,24 @@ def main():
                 d.bubble.show()
                 d.bubble.raise_()
                 window.grab().save(str(out / "settings-speaking.png"))
+                d.dismiss()
+                window.setStyleSheet(window.styleSheet() + "\nQWidget {font-size:18px;}")
+                window._tabs.setCurrentIndex(0)
+                for index, name in ((0, "buff"), (1, "debuff")):
+                    window._tracker_tabs.setCurrentIndex(index)
+                    tab = (window.buff_tab, window.debuff_tab)[index]
+                    # Windows QA의 최소 폭 초과를 Linux 렌더에서도 동일하게 구성한다.
+                    tab._columns.itemAt(0).widget().setMinimumWidth(518)
+                    tab.form_panel.setMinimumWidth(404)
+                    for _ in range(8):
+                        app.processEvents()
+                    scroll = window._tracker_tabs.currentWidget()
+                    scroll.verticalScrollBar().setValue(0)
+                    app.processEvents()
+                    window.grab().save(str(out / f"{name}-stacked-top.png"))
+                    scroll.verticalScrollBar().setValue(scroll.verticalScrollBar().maximum())
+                    app.processEvents()
+                    window.grab().save(str(out / f"{name}-stacked-settings.png"))
         finally:
             window._force_quit = True
             window.close()

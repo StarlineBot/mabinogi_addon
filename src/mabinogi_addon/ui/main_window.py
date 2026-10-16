@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import logging
 
-from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtCore import QEvent, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import (
     QApplication,
@@ -74,16 +74,27 @@ class _VScroll(QScrollArea):
     뒤에도 빈 공간만큼 스크롤이 더 내려가는 문제가 있었다(예: 설정 탭 ~150px).
     """
 
-    def resizeEvent(self, event) -> None:
+    def _fit_content(self):
         inner = self.widget()
         if inner is not None:
             w = self.viewport().width()
+            if hasattr(inner, "fit_width"):
+                inner.fit_width(w)
             lay = inner.layout()
             h = lay.heightForWidth(w) if lay is not None and lay.hasHeightForWidth() else -1
             if h <= 0:
                 h = inner.sizeHint().height()
             inner.setMinimumHeight(h)
+
+    def resizeEvent(self, event) -> None:
+        self._fit_content()
         super().resizeEvent(event)
+
+    def eventFilter(self, watched, event):
+        if (watched is self.widget() and event.type() == QEvent.Type.LayoutRequest
+                and hasattr(watched, "fit_width")):
+            self._fit_content()
+        return super().eventFilter(watched, event)
 
 
 def _scrolled(widget: QWidget) -> QScrollArea:

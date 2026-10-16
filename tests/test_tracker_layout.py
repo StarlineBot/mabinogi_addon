@@ -132,7 +132,7 @@ def test_small_buff_uses_reserved_footer_and_restores_without_drift(window, monk
     w.setStyleSheet(w.styleSheet() + "\nQWidget {font-size: %dpx;}" % font_pixels)
     for _ in range(8):
         app.processEvents()
-    assert d._floating_footer
+    assert d._floating_footer == (not w.buff_tab._columns.stacked)
     notice = w.buff_tab.status_label.text()
     # QLabel의 양쪽 내용 배치가 처리된 뒤 반복 전환의 기준 높이를 잰다.
     w.buff_tab.status_label.setText("status\n" * 80)
@@ -141,7 +141,8 @@ def test_small_buff_uses_reserved_footer_and_restores_without_drift(window, monk
     w.buff_tab.status_label.setText(notice)
     for _ in range(8):
         app.processEvents()
-    assert d._floating_footer
+    baseline_floating = not w.buff_tab._columns.stacked
+    assert d._floating_footer == baseline_floating
     height = w.buff_tab.buff_list.height()
     for _ in range(4):
         # 글꼴에 관계없이 실제 내용이 작은 viewport에 들어가지 않는 조건을 만든다.
@@ -166,7 +167,7 @@ def test_small_buff_uses_reserved_footer_and_restores_without_drift(window, monk
         d.refresh()
         for _ in range(8):
             app.processEvents()
-        assert d._floating_footer, layout_state(w, w.buff_tab)
+        assert d._floating_footer == baseline_floating, layout_state(w, w.buff_tab)
         assert w.buff_tab.buff_list.height() == height
 
 
@@ -253,6 +254,44 @@ def test_hidden_scrollbar_does_not_hide_a_clipped_control_from_test(window, tmp_
         assert (tmp_path / "tracker-horizontal-clipping.png").is_file()
     finally:
         control.move(original)
+
+
+@pytest.mark.parametrize("index", [0, 1])
+def test_overwide_columns_stack_and_restore_without_clipping(window, tmp_path, index):
+    w, app = window
+    w._tracker_tabs.setCurrentIndex(index)
+    for _ in range(8):
+        app.processEvents()
+    tab = (w.buff_tab, w.debuff_tab)[index]
+    columns = tab._columns
+    left = columns.itemAt(0).widget()
+    right = tab.form_panel
+    scroll = w._tracker_tabs.currentWidget()
+    assert not columns.stacked
+    original = (left.minimumWidth(), right.minimumWidth())
+    items = tab.buff_list if index == 0 else tab.debuff_list
+    height = items.height()
+    for _ in range(4):
+        # Windows QA의 inner 946px에 해당하는 최소 폭을 플랫폼 독립적으로 공급한다.
+        left.setMinimumWidth(518)
+        right.setMinimumWidth(404)
+        for _ in range(8):
+            app.processEvents()
+        assert columns.stacked
+        assert not w.creator_dialogue._floating_footer
+        assert scroll.widget().width() == scroll.viewport().width()
+        assert scroll.verticalScrollBar().maximum() > 0
+        assert_form_controls_within_viewport(w, tab, tmp_path)
+        scroll.verticalScrollBar().setValue(scroll.verticalScrollBar().maximum())
+        app.processEvents()
+        assert_form_controls_within_viewport(w, tab, tmp_path)
+        left.setMinimumWidth(original[0])
+        right.setMinimumWidth(original[1])
+        for _ in range(8):
+            app.processEvents()
+        assert not columns.stacked
+        assert w.creator_dialogue._floating_footer
+        assert items.height() == height
 
 
 def test_bubble_does_not_resize_expanded_list_or_expand_visibility_region(window):

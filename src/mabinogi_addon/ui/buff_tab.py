@@ -32,7 +32,7 @@ from .. import config
 from ..catalog import BuffDef, available_catalog
 from .dpi import to_logical
 from .screen_grab import capture_for_autofind
-from .widgets import callout, checkbox, hint_label, icon_slot, section_label
+from .widgets import TrackerColumns, callout, checkbox, hint_label, icon_slot, section_label
 
 # 앵커로 고정 사용할 버프(항상 존재, 지속시간 없음 → 판정 기준)
 ANCHOR_ID = "premium_battle"
@@ -147,12 +147,10 @@ class BuffTab(QWidget):
         from .widgets import feature_checkbox
         self.enable = feature_checkbox("buff", "버프 트래커 사용")
         outer.addWidget(self.enable)
-        body = QHBoxLayout()
-        body.setSpacing(14)
-        body.addWidget(self._build_list_panel(), 1)
+        list_panel = self._build_list_panel()
         self.form_panel = self._build_form_panel()
-        body.addWidget(self.form_panel, 1)
-        outer.addLayout(body, 1)
+        self._columns = TrackerColumns(list_panel, self.form_panel)
+        outer.addLayout(self._columns, 1)
 
         self._rebuild_list()
         self.buff_list.setCurrentRow(0)
@@ -189,6 +187,9 @@ class BuffTab(QWidget):
             if bid != ANCHOR_ID and bid not in order and not settings[bid].hidden:
                 order.append(bid)
         return settings, order
+
+    def fit_width(self, width):
+        self._columns.fit_width(width)
 
     def _save(self) -> None:
         shown = [self._settings[i] for i in self._order]
