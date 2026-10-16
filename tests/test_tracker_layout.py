@@ -2,7 +2,7 @@ from copy import deepcopy
 from types import SimpleNamespace
 
 import pytest
-from PySide6.QtCore import QPoint, QRect
+from PySide6.QtCore import QPoint, QRect, Qt
 from PySide6.QtWidgets import QApplication
 
 from mabinogi_addon import config
@@ -125,16 +125,34 @@ def test_footer_does_not_intercept_lower_left_and_shutdown_removes_filters(windo
     assert d.closed
 
 
-def test_small_buff_uses_reserved_footer_and_restores_without_drift(window, monkeypatch):
+@pytest.mark.parametrize("font_pixels", [9, 13, 18])
+def test_small_buff_uses_reserved_footer_and_restores_without_drift(window, monkeypatch, font_pixels):
     w, app = window
     d = w.creator_dialogue
+    w.setStyleSheet(w.styleSheet() + "\nQWidget {font-size: %dpx;}" % font_pixels)
+    for _ in range(8):
+        app.processEvents()
+    assert d._floating_footer
+    notice = w.buff_tab.status_label.text()
+    # QLabel의 양쪽 내용 배치가 처리된 뒤 반복 전환의 기준 높이를 잰다.
+    w.buff_tab.status_label.setText("status\n" * 80)
+    for _ in range(8):
+        app.processEvents()
+    w.buff_tab.status_label.setText(notice)
+    for _ in range(8):
+        app.processEvents()
     assert d._floating_footer
     height = w.buff_tab.buff_list.height()
     for _ in range(4):
+        # 글꼴에 관계없이 실제 내용이 작은 viewport에 들어가지 않는 조건을 만든다.
+        w.buff_tab.status_label.setText("status\n" * 80)
         monkeypatch.setattr(w, "screen", lambda: SimpleNamespace(availableGeometry=lambda: QRect(0, 0, 1100, 730)))
         d.refresh()
         app.processEvents()
-        assert not d._floating_footer
+        app.processEvents()
+        state = layout_state(w, w.buff_tab)
+        assert state["needed"] > state["viewport"] + 64, state
+        assert not d._floating_footer, state
         assert w.centralWidget().layout().indexOf(d.footer) >= 0
         assert d.footer.width() == w.centralWidget().width()
         assert w._pages.geometry().bottom() < d.footer.y()
@@ -143,11 +161,54 @@ def test_small_buff_uses_reserved_footer_and_restores_without_drift(window, monk
         scroll.verticalScrollBar().setValue(scroll.verticalScrollBar().maximum())
         app.processEvents()
         assert d.face.mapTo(w, QPoint()).y() > scroll.mapTo(w, scroll.rect().bottomLeft()).y()
+        w.buff_tab.status_label.setText(notice)
         monkeypatch.setattr(w, "screen", lambda: SimpleNamespace(availableGeometry=lambda: QRect(0, 0, 1600, 1100)))
         d.refresh()
-        app.processEvents()
-        assert d._floating_footer
+        for _ in range(8):
+            app.processEvents()
+        assert d._floating_footer, layout_state(w, w.buff_tab)
         assert w.buff_tab.buff_list.height() == height
+
+
+def layout_state(w, tab):
+    scroll = w._tracker_tabs.currentWidget()
+    return {
+        "needed": tab.layout().heightForWidth(scroll.viewport().width()),
+        "viewport": scroll.viewport().height(),
+        "frame": w.frameGeometry().height() - w.height(),
+        "font": tab.font().toString(),
+        "floating": w.creator_dialogue._floating_footer,
+        "footer": w.creator_dialogue.footer.geometry().getRect(),
+    }
+
+
+@pytest.mark.parametrize("font_pixels", [9, 13, 18])
+@pytest.mark.parametrize("index", [0, 1])
+def test_small_area_layout_is_safe_for_measured_content(window, monkeypatch, font_pixels, index):
+    w, app = window
+    d = w.creator_dialogue
+    w._tracker_tabs.setCurrentIndex(index)
+    w.setStyleSheet(w.styleSheet() + "\nQWidget {font-size: %dpx;}" % font_pixels)
+    monkeypatch.setattr(w, "screen", lambda: SimpleNamespace(availableGeometry=lambda: QRect(0, 0, 1100, 730)))
+    d.refresh()
+    for _ in range(8):
+        app.processEvents()
+    tab = (w.buff_tab, w.debuff_tab)[index]
+    scroll = w._tracker_tabs.currentWidget()
+    state = layout_state(w, tab)
+    assert w.height() <= 698, state
+    assert scroll.horizontalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAlwaysOff, state
+    assert not scroll.horizontalScrollBar().isVisible(), state
+    assert w.rect().contains(d.face.mapTo(w, d.face.rect().bottomRight())), state
+    if d._floating_footer:
+        assert scroll.verticalScrollBar().maximum() == 0, state
+        for item_index in range(tab.form_panel.layout().count()):
+            widget = tab.form_panel.layout().itemAt(item_index).widget()
+            if widget is not None and widget.isVisible():
+                rect = QRect(widget.mapTo(w.centralWidget(), QPoint()), widget.size())
+                assert not rect.intersects(d.footer.geometry()), (state, rect.getRect())
+    else:
+        assert w._pages.geometry().bottom() < d.footer.y(), state
 
 
 def test_bubble_does_not_resize_expanded_list_or_expand_visibility_region(window):
