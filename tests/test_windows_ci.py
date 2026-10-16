@@ -14,13 +14,15 @@ SHA = "a" * 40
 @pytest.mark.parametrize("path", ["src/mabinogi_addon/ui/main_window.py", "src/mabinogi_addon/ui/notifier.py",
                                  "packaging/build_windows.py", "uv.lock", "pyproject.toml",
                                  ".github/workflows/release.yml", "test_support/boundaries.py",
-                                 "scripts/windows_ci.py"])
+                                 "scripts/windows_ci.py", "tests/test_tracker_layout.py",
+                                 "scripts/qa_tracker_horizontal_extent.py", "pytest.ini"])
 def test_risky_changes_require_exe(path):
     assert ci.needs_build([path])
 
 
-def test_tests_only_still_run_but_do_not_require_exe():
-    assert not ci.needs_build(["tests/test_setup.py"])
+def test_test_fix_retries_previously_unverified_exe_without_building_docs():
+    assert ci.needs_build(["tests/test_setup.py"])
+    assert not ci.needs_build(["docs/windows-validation.md"])
     assert ci.changed_paths("0" * 40, SHA) is None
 
 

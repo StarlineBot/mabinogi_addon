@@ -13,12 +13,13 @@
 4. 빌드 대상 변경이면 릴리즈와 동일한 PyInstaller 명령으로 exe를 생성하고 파일을 확인한다.
 
 빌드 대상은 보수적으로 `src/`, `packaging/`, `.github/workflows/`, `test_support/`,
-`pyproject.toml`, `uv.lock`, `scripts/windows_ci.py` 변경 전체다. 따라서 시작·종료·네이티브
+`tests/`, `scripts/`, `pytest.ini`, `pyproject.toml`, `uv.lock` 변경 전체다. 따라서 시작·종료·네이티브
 의존성·패키징 변경을 포함한다. 비교 기준이 없는 수동 실행/첫 푸시도 빌드한다.
-테스트만 변경한 푸시는 회귀·통합 검사를 실행하되 exe 빌드는 생략할 수 있다.
+테스트만 변경한 푸시도 exe를 빌드한다. 이전 제품 변경에서 회귀가 실패해 빌드가 생략된 경우,
+테스트 수정 후에도 빌드 검증 공백이 남지 않도록 한다. 문서만 바뀌면 자동 실행하지 않는다.
 
 푸시 후 개발 세션에서 다음을 실행한다. SHA는 실제 전체 커밋 해시로 치환한다.
-빌드 대상 변경이 없을 때만 `--require-build`를 빼도 된다.
+자동 Windows 검증 대상 변경에서는 `--require-build`를 생략하지 않는다.
 
 ```bash
 uv run python scripts/windows_ci.py wait --sha FULL_PUSHED_SHA --require-build

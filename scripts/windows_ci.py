@@ -10,12 +10,12 @@ import time
 
 
 WORKFLOW = "windows.yml"
-BUILD_PATHS = ("src/", "packaging/", ".github/workflows/", "test_support/")
+BUILD_PATHS = ("src/", "packaging/", ".github/workflows/", "test_support/", "tests/", "scripts/")
 
 
 def needs_build(paths):
-    # 소스 전체를 보수적으로 포함해 생명주기/네이티브 의존성의 간접 변경도 놓치지 않는다.
-    return any(path.startswith(BUILD_PATHS) or path in ("pyproject.toml", "uv.lock", "scripts/windows_ci.py")
+    # 앞선 회귀 실패로 생략된 빌드를 테스트 수정 푸시에서도 다시 검증한다.
+    return any(path.startswith(BUILD_PATHS) or path in ("pyproject.toml", "uv.lock", "pytest.ini")
                for path in paths)
 
 

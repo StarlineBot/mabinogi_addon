@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 from PySide6.QtCore import QPoint, QRect, Qt
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QAbstractButton, QAbstractSpinBox, QApplication, QComboBox, QLineEdit, QWidget
 
 from mabinogi_addon import config
 from mabinogi_addon.ui.main_window import MainWindow
@@ -126,7 +126,7 @@ def test_footer_does_not_intercept_lower_left_and_shutdown_removes_filters(windo
 
 
 @pytest.mark.parametrize("font_pixels", [9, 13, 18])
-def test_small_buff_uses_reserved_footer_and_restores_without_drift(window, monkeypatch, font_pixels):
+def test_small_buff_uses_reserved_footer_and_restores_without_drift(window, monkeypatch, font_pixels, tmp_path):
     w, app = window
     d = w.creator_dialogue
     w.setStyleSheet(w.styleSheet() + "\nQWidget {font-size: %dpx;}" % font_pixels)
@@ -157,7 +157,7 @@ def test_small_buff_uses_reserved_footer_and_restores_without_drift(window, monk
         assert d.footer.width() == w.centralWidget().width()
         assert w._pages.geometry().bottom() < d.footer.y()
         scroll = w._tracker_tabs.widget(0)
-        assert scroll.horizontalScrollBar().maximum() == 0
+        assert_form_controls_within_viewport(w, w.buff_tab, tmp_path)
         scroll.verticalScrollBar().setValue(scroll.verticalScrollBar().maximum())
         app.processEvents()
         assert d.face.mapTo(w, QPoint()).y() > scroll.mapTo(w, scroll.rect().bottomLeft()).y()
@@ -179,12 +179,40 @@ def layout_state(w, tab):
         "font": tab.font().toString(),
         "floating": w.creator_dialogue._floating_footer,
         "footer": w.creator_dialogue.footer.geometry().getRect(),
+        "inner_width": scroll.widget().width(),
+        "viewport_width": scroll.viewport().width(),
+        "horizontal_range": scroll.horizontalScrollBar().maximum(),
+        "horizontal_value": scroll.horizontalScrollBar().value(),
     }
+
+
+def assert_form_controls_within_viewport(w, tab, output):
+    viewport = w._tracker_tabs.currentWidget().viewport()
+    controls = []
+    clipped = []
+    for control in tab.form_panel.findChildren(QWidget):
+        if not isinstance(control, (QAbstractButton, QAbstractSpinBox, QComboBox, QLineEdit)):
+            continue
+        if not control.isVisible():
+            continue
+        rect = QRect(control.mapTo(viewport, QPoint()), control.size())
+        entry = {"type": type(control).__name__, "rect": rect.getRect(),
+                 "visible_region": control.visibleRegion().boundingRect().getRect()}
+        controls.append(entry)
+        if rect.left() < 0 or rect.right() >= viewport.width():
+            clipped.append(entry)
+    state = {**layout_state(w, tab), "controls": controls, "clipped": clipped}
+    assert controls, state
+    if clipped:
+        screenshot = output / "tracker-horizontal-clipping.png"
+        assert w.grab().save(str(screenshot)), state
+        state["screenshot"] = str(screenshot)
+    assert not clipped, f"clipped controls: {state}"
 
 
 @pytest.mark.parametrize("font_pixels", [9, 13, 18])
 @pytest.mark.parametrize("index", [0, 1])
-def test_small_area_layout_is_safe_for_measured_content(window, monkeypatch, font_pixels, index):
+def test_small_area_layout_is_safe_for_measured_content(window, monkeypatch, font_pixels, index, tmp_path):
     w, app = window
     d = w.creator_dialogue
     w._tracker_tabs.setCurrentIndex(index)
@@ -199,6 +227,7 @@ def test_small_area_layout_is_safe_for_measured_content(window, monkeypatch, fon
     assert w.height() <= 698, state
     assert scroll.horizontalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAlwaysOff, state
     assert not scroll.horizontalScrollBar().isVisible(), state
+    assert_form_controls_within_viewport(w, tab, tmp_path)
     assert w.rect().contains(d.face.mapTo(w, d.face.rect().bottomRight())), state
     if d._floating_footer:
         assert scroll.verticalScrollBar().maximum() == 0, state
@@ -209,6 +238,21 @@ def test_small_area_layout_is_safe_for_measured_content(window, monkeypatch, fon
                 assert not rect.intersects(d.footer.geometry()), (state, rect.getRect())
     else:
         assert w._pages.geometry().bottom() < d.footer.y(), state
+
+
+def test_hidden_scrollbar_does_not_hide_a_clipped_control_from_test(window, tmp_path):
+    w, app = window
+    scroll = w._tracker_tabs.currentWidget()
+    control = w.buff_tab.form_panel.findChildren(QLineEdit)[0]
+    original = control.pos()
+    control.move(original.x() + scroll.viewport().width(), original.y())
+    try:
+        assert not scroll.horizontalScrollBar().isVisible()
+        with pytest.raises(AssertionError, match="clipped"):
+            assert_form_controls_within_viewport(w, w.buff_tab, tmp_path)
+        assert (tmp_path / "tracker-horizontal-clipping.png").is_file()
+    finally:
+        control.move(original)
 
 
 def test_bubble_does_not_resize_expanded_list_or_expand_visibility_region(window):
