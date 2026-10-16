@@ -150,7 +150,8 @@ class BuffTab(QWidget):
         body = QHBoxLayout()
         body.setSpacing(14)
         body.addWidget(self._build_list_panel(), 1)
-        body.addWidget(self._build_form_panel(), 1)
+        self.form_panel = self._build_form_panel()
+        body.addWidget(self.form_panel, 1)
         outer.addLayout(body, 1)
 
         self._rebuild_list()

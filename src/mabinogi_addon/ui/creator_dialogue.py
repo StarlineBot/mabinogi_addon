@@ -104,6 +104,7 @@ class CreatorDialogue(QObject):
     def __init__(self, window, *, visibility=exposed, clock=time.monotonic, sound=None):
         super().__init__(window)
         self.window = window
+        self._central = window.centralWidget()
         self.visibility = visibility
         self.clock = clock
         self.sound = sound  # 선택적 비동기 재생 콜백. 파일/재생기가 없어도 무음으로 동작.
@@ -112,6 +113,7 @@ class CreatorDialogue(QObject):
         self.session_unavailable = self.suspended = False
         self.session_registered = False
         self.previous_tick = None
+        self._floating_footer = False
         self.bubble = SpeechBubble(window.centralWidget())
         self.feed = DialogueFeed(self, validate=self._usable_entries)
         self.session = DialogueSession(self.feed.entries)
@@ -148,6 +150,10 @@ class CreatorDialogue(QObject):
             tabs.currentChanged.connect(self.refresh)
         window._tabs.widget(3).verticalScrollBar().valueChanged.connect(self._scrolled)
         window.installEventFilter(self)
+        window.centralWidget().installEventFilter(self)
+        self._tracker_panels = (window.buff_tab, window.debuff_tab)
+        for panel in self._tracker_panels:
+            panel.installEventFilter(self)
         self.refresh()
 
     def _updated(self, entries):
@@ -179,22 +185,58 @@ class CreatorDialogue(QObject):
     def _scrolled(self, *_):
         self.dismiss()
 
+    def _footer_visible(self):
+        normal = self.window._pages.currentWidget() is self.window._tabs
+        return (normal and self.window._tabs.currentIndex() != 3
+                and not self.window._guide_return_btn.isVisible())
+
+    def _can_expand(self, footer, height):
+        if not (footer and self.window._tabs.currentIndex() == 0
+                and self.window._tracker_tabs.currentIndex() in (0, 1)):
+            return False
+        tab = self._tracker_panels[self.window._tracker_tabs.currentIndex()]
+        scroll = self.window._tracker_tabs.currentWidget()
+        reserved = self._central.layout().indexOf(self.footer) >= 0 and not self.footer.isHidden()
+        available = scroll.viewport().height() + height - self.window.height() + (64 if reserved else 0)
+        needed = tab.layout().heightForWidth(scroll.viewport().width())
+        if needed < 0:
+            needed = tab.sizeHint().height()
+        needed += 64 - tab.form_panel.layout().contentsMargins().bottom()
+        return needed <= available
+
     def refresh(self, *_):
         self.dismiss()
-        normal = self.window._pages.currentWidget() is self.window._tabs
-        footer = (normal and self.window._tabs.currentIndex() != 3
-                  and not self.window._guide_return_btn.isVisible())
-        self.footer.setVisible(footer)
+        footer = self._footer_visible()
+        central = self.window.centralWidget()
+        layout = central.layout()
         height = 864 if footer else 800
         screen = self.window.screen()
         if screen is not None:
             frame = max(32, self.window.frameGeometry().height() - self.window.height())
             height = min(height, max(200, screen.availableGeometry().height() - frame))
+        self._floating_footer = self._can_expand(footer, height)
+        for tab in (self.window.buff_tab, self.window.debuff_tab):
+            tab.form_panel.layout().setContentsMargins(0, 0, 0, 64 if self._floating_footer else 0)
+        if self._floating_footer:
+            layout.removeWidget(self.footer)
+            self.footer.setFixedWidth(76)
+        else:
+            self.footer.setFixedWidth(central.width())
+            if layout.indexOf(self.footer) < 0:
+                layout.addWidget(self.footer)
+        self.footer.setVisible(footer)
         if self.window.height() != height:
             self.window.setFixedHeight(height)
         if screen is not None and self.window.isVisible():
             area = screen.availableGeometry()
             self.window.move(self.window.x(), max(area.top(), min(self.window.y(), area.bottom() - height - frame + 1)))
+        self._place_footer()
+
+    def _place_footer(self):
+        if self._floating_footer:
+            area = self.window.centralWidget().rect()
+            self.footer.move(area.width() - self.footer.width(), area.height() - self.footer.height())
+            self.footer.raise_()
 
     def _anchor(self):
         return self.window.settings_tab.creator_avatar if self.window._tabs.currentIndex() == 3 else self.face
@@ -298,7 +340,18 @@ class CreatorDialogue(QObject):
         self.deadline = None
 
     def eventFilter(self, watched, event):
+        if self.closed:
+            return False
         kind = event.type()
+        if watched is self._central:
+            if kind == QEvent.Type.Resize:
+                self._place_footer()
+            return False
+        if any(watched is panel for panel in self._tracker_panels):
+            if (kind == QEvent.Type.LayoutRequest
+                    and self._can_expand(self._footer_visible(), self.window.height()) != self._floating_footer):
+                self.refresh()
+            return False
         if kind in (QEvent.Type.Hide, QEvent.Type.WindowStateChange, QEvent.Type.Move,
                     QEvent.Type.Resize, QEvent.Type.ScreenChangeInternal):
             self.dismiss()
@@ -314,6 +367,10 @@ class CreatorDialogue(QObject):
 
     def shutdown(self):
         self.closed = True
+        self.window.removeEventFilter(self)
+        self._central.removeEventFilter(self)
+        for panel in self._tracker_panels:
+            panel.removeEventFilter(self)
         self.timer.stop()
         self.dismiss()
         self.feed.shutdown()
