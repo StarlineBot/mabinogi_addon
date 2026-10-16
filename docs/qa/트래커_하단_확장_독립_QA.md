@@ -7,6 +7,89 @@
 로컬 Git blob과 대조했다. 기존 비교 PNG 2개는 실행에 필요하지 않아 새로 동기화하지 않았으며,
 현재 제품 렌더를 직접 실행하여 실제 결과를 확인했다.
 
+## 2026-10-16 실제 가로 경계 검사 후속 QA
+
+최신 후속 기준: `8c5cb90671f1dc46de9eab81cd98c3f77dbb9eda`.
+직전 QA 반영본 `ed5b5dd` 대비 변경은 테스트/CI 계획/개발 지침·문서 6개다.
+제품 소스와 기존 독립 재현은 그대로이며 변경 파일 6개의 Git blob을 대조했다.
+아래 과거 검증의 추정/미확인 상태는 당시 증거로 보존한다. 최신 판단은 이 절을 따른다.
+
+### Confirmed Bug / P2 / TRACKER-LAYOUT-WINDOWS-01
+
+**Windows 18px 글꼴·작은 작업 영역에서 버프/디버프 오른쪽 설정이 실제로 잘린다.**
+
+이전에 Potential Risk였던 같은 항목을 실제 실행 좌표와 visibleRegion으로 확정했다.
+이번에는 내부 가로 range가 양수라는 사실만으로 결론 내린 것이 아니다.
+
+- 요구사항: `docs/tracker-layout-spec.md` TL-08 및 5절은 글꼴/작은 작업 영역 변화에서도
+  필수 조작을 화면 밖으로 보내지 않도록 한다. 스크롤바를 단순히 숨기는 것은 해결이 아니다.
+- 발생 조건: 실제 Windows CI의 Qt offscreen, 본창 폭 790, 작업 영역 1100×730,
+  `QWidget {font-size:18px;}` 입력이다. 버프의 긴 안내뿐 아니라 일반 작은 화면 사례와
+  디버프 사례에서도 실패한다. 기본 배포 글꼴의 모든 사용자에게 발생한다고 주장하지 않는다.
+- 사용자 영향: 해당 조건에서 이름 입력칸 일부와 아이콘 관련 버튼/체크 항목 등이
+  오른쪽으로 잘린다. 버튼 전체가 뷰포트 밖에 있는 경우는 마우스로 접근할 수 없다.
+  실제 게임 판독 중단/크래시/사용자 설정 손상이 확인된 문제는 아니다.
+- 기술적 원인: 내용의 최소 필요 폭이 실제 뷰포트보다 커져도 본창은 790 고정 폭이고,
+  `_scrolled`는 가로 스크롤을 AlwaysOff로 숨긴다. `CreatorDialogue._can_expand`는
+  높이만 검증하며, 전용 하단으로 복귀한 버프에서도 가로 초과 자체는 해소되지 않는다.
+  따라서 부유 얼굴만 끄거나 가로 range assertion을 없애는 것으로 해결되지 않는다.
+- 실제 재현: [Windows 실행 38841214020](https://github.com/StarlineBot/mabinogi_addon/actions/runs/38841214020),
+  job `116781491639`. 수정된 검사는 각 컨트롤의 뷰포트 상대 좌표와 실제 visibleRegion을
+  기록한다. 검사 구현을 읽고 좌표계/범위 비교와 강제 잘림 역검증도 확인했다.
+- 버프 긴 안내 사례: inner=946, viewport=776, range=170. 이름 QLineEdit은
+  `(568,145,354,27)`인데 실제 보이는 폭은 **208**이다. 버튼 하나는
+  `(818,211,104,26)`으로 뷰포트 오른쪽 밖이며 visibleRegion은 **(0,0,0,0)**이다.
+  이 버튼은 y=211로 세로 가시 범위 안에 있어 단순 세로 스크롤 아래에 있는 상태와 다르다.
+- 디버프 일반 작은 화면 사례: inner=1012, viewport=790, range=222. 입력칸은
+  `(586,145,402,27)` 중 폭 **204**만 보인다. 버튼 `(818,211,104,26)` 역시 표시 영역 0.
+  이때 floating=True였지만, 버프의 floating=False 실패도 있어 한 모드만의 문제는 아니다.
+- 실패 3개는 `test_small_buff_uses_reserved_footer_and_restores_without_drift[18]`,
+  `test_small_area_layout_is_safe_for_measured_content[0-18]`, 같은 테스트 `[1-18]`이다.
+  서로 다른 제품 버그 3개로 부풀리지 않고 같은 가로 적응 문제의 세 재현으로 취급한다.
+- 검증 결과: **3 failed, 878 passed, 1 skipped, 4 deselected, 3 warnings (197.97초)**.
+  네이티브 통합과 exe 빌드는 skipped. 테스트 임시 폴더의 PNG 저장 성공도 로그에 있으나
+  해당 Windows 임시 파일을 여기서 열어 본 것은 아니다. 위 결론은 실제 위젯 경계 증거다.
+- 관련 코드: `src/mabinogi_addon/ui/main_window.py:91`의 가로 스크롤 정책 및 `:226`의
+  본창 고정 폭, `ui/creator_dialogue.py:193`의 높이 판정,
+  `ui/buff_tab.py:493`, `ui/debuff_tab.py:560`의 오른쪽 폼 배치.
+- 재현 명령: Windows에서 아래 명령으로 일반 작은 화면 두 탭과 긴 안내를 함께 실행한다.
+
+```bash
+uv run pytest tests/test_tracker_layout.py -q -k 'small_buff_uses_reserved_footer_and_restores_without_drift or small_area_layout_is_safe_for_measured_content'
+```
+
+수정 확인 기준은 18px 사례를 유지하면서 실제 컨트롤이 모두 가로로 들어가는 것이다.
+기본 글꼴의 승인된 배치와 목록/얼굴 위치도 회귀 확인한다. 테스트의 경계 assertion을
+삭제하거나 18px을 skip/축소해 통과시키지 않는다. 고정 폭·배치 요구와 충돌하는 변경이
+필요하면 요구를 먼저 협의하며 QA가 제품을 임의 수정하지 않는다.
+
+### 이번에 확인한 개선과 실행 범위
+
+- 실제 오른쪽 버튼·입력·체크·콤보·수치 컨트롤 경계를 검사하도록 테스트가 강화됐다.
+  숨은 스크롤바의 정책만 확인하지 않는다. 입력칸을 강제로 밖으로 옮기는 역검증이
+  assertion 실패와 진단 PNG 생성을 확인한다. Windows 실패는 이 유효한 검사가 잡은 것이며
+  단순 잘못된 테스트라고 다시 단정하지 않는다.
+- CI 계획은 `tests/`, `scripts/`, `pytest.ini` 변경도 exe 빌드 대상으로 포함한다.
+  관련 단위 테스트와 지침을 대조했다. 다음 수정 push에서 테스트가 통과하면 빌드까지
+  자동 진행되므로, 이전 공백을 이유로 수동 실행을 다시 요청할 필요가 없다.
+  이번 실행은 테스트가 실제로 실패했으므로 후속 빌드가 건너뛰어진 것이 맞다.
+- Linux 집중 실행 **50 passed (15.46초)**:
+  `tests/test_tracker_layout.py`, `tests/test_windows_ci.py`,
+  `scripts/qa_tracker_layout.py`, `scripts/qa_tracker_horizontal_extent.py`.
+- 150% Qt 배율 모사 **30 passed (14.31초)**: 위 집합 중 CI 계획 테스트만 제외했다.
+  기존 독립 재현은 수정하지 않았다. Linux 통과로 Windows 실패를 덮지 않는다.
+- 제품이 직전과 동일하여 기존 전체 Linux 제품/렌더 검증을 재사용했다. 이번 턴에 전체
+  Linux 회귀를 새로 실행하거나 실제 Windows 게임/혼합 DPI/기본 배포 글꼴을 실측하지 않았다.
+
+### 최신 배포 판단
+
+제품 배치의 확정 결함과 정확한 SHA의 Windows 회귀 실패가 남아 있어 릴리즈 보류다.
+QA는 이 문서만 갱신하고 제품/테스트/워크플로/릴리즈 노트/태그는 바꾸지 않는다.
+개발 세션은 위 실제 잘림을 수정한 뒤 push하고 자동 Windows 회귀·네이티브·exe 결과를
+확인해야 한다. 사용자 설정 초기화나 같은 실패본의 수동 재실행은 필요하지 않다.
+
+---
+
 ## 2026-10-16 테스트 수정 후속 QA
 
 후속 기준: `61a28a97ee26a6b0bbf410c3e6a55314904b897d`.
