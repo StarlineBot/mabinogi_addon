@@ -1,0 +1,107 @@
+{
+  "sources": {
+    "213733": "863ce53400b060e421e227c709e2d9aba5586cac",
+    "213830": "8194b92c120fb93e52bffe1cf1ca31c037e04c86"
+  },
+  "roi_xywh": [
+    1016,
+    1195,
+    521,
+    88
+  ],
+  "scenes": {
+    "213733": {
+      "off": {
+        "scores": {
+          "방해 카드": 0.966386616230011,
+          "붕괴의 파동": 0.9198389649391174
+        },
+        "matched": {
+          "방해 카드": true,
+          "붕괴의 파동": true
+        },
+        "missing_overlay_shown": {
+          "방해 카드": false,
+          "붕괴의 파동": false
+        }
+      },
+      "auto": {
+        "scores": {
+          "방해 카드": 0.966386616230011,
+          "붕괴의 파동": 0.9198389649391174
+        },
+        "matched": {
+          "방해 카드": true,
+          "붕괴의 파동": true
+        },
+        "missing_overlay_shown": {
+          "방해 카드": false,
+          "붕괴의 파동": false
+        }
+      }
+    },
+    "213830": {
+      "off": {
+        "scores": {
+          "방해 카드": 0.44386884570121765,
+          "붕괴의 파동": 0.9191941618919373
+        },
+        "matched": {
+          "방해 카드": false,
+          "붕괴의 파동": true
+        },
+        "missing_overlay_shown": {
+          "방해 카드": true,
+          "붕괴의 파동": false
+        }
+      },
+      "auto": {
+        "scores": {
+          "방해 카드": 0.44386884570121765,
+          "붕괴의 파동": 0.9191941618919373
+        },
+        "matched": {
+          "방해 카드": false,
+          "붕괴의 파동": true
+        },
+        "missing_overlay_shown": {
+          "방해 카드": true,
+          "붕괴의 파동": false
+        }
+      }
+    }
+  },
+  "crops": {
+    "card": {
+      "scene": "213733",
+      "name": "방해 카드",
+      "xywh": [
+        1113,
+        1212,
+        16,
+        16
+      ]
+    },
+    "wave_multi": {
+      "scene": "213733",
+      "name": "붕괴의 파동",
+      "xywh": [
+        1077,
+        1212,
+        16,
+        16
+      ]
+    },
+    "wave_solo": {
+      "scene": "213830",
+      "name": "붕괴의 파동",
+      "xywh": [
+        1023,
+        1212,
+        16,
+        16
+      ]
+    }
+  },
+  "scope": "Two positive scenes and one card-absent control, not overall accuracy."
+}
