@@ -1,0 +1,36 @@
+{
+  "source": "tests/data/스크린샷 2026-10-16 210734.png",
+  "source_git_blob": "baec4d9cbbbb415a6e36927e136cc05a417c7cea",
+  "native_boxes_xywh": {
+    "boss": [
+      1043,
+      1214,
+      16,
+      16
+    ],
+    "center": [
+      1317,
+      475,
+      16,
+      16
+    ]
+  },
+  "registered_shape": [
+    28,
+    28,
+    3
+  ],
+  "runtime_variant_shape": [
+    16,
+    16,
+    3
+  ],
+  "existing_template_scores": {
+    "boss": 0.9181244373321533,
+    "center": 0.8938267230987549
+  },
+  "detect_threshold": 0.68,
+  "boss_center_score": 0.9682158827781677,
+  "same_pixels": false,
+  "scope": "Two positions in one screenshot; not cross-scene accuracy or replacement approval."
+}
