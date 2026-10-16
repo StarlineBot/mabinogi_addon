@@ -124,7 +124,7 @@ def test_selection_order_and_disabled_items(settings):
 
 def test_manual_areas_and_shared_prerequisites(settings):
     update("debuffTracker", enabled=True, captureRegion=BOX)
-    update("general", debuffGateMode="percent")
+    update("general", debuffAutoGate=False, debuffGateMode="percent")
     assert state.pending(automatic_only=True) == ["boss"]
     update("bossPattern", box=BOX)
     assert state.pending() == []
@@ -137,6 +137,52 @@ def test_manual_areas_and_shared_prerequisites(settings):
     update("statBars", enabled=True, box=BOX, bars={"hp": {"alert": {"on": True}}})
     update("bossPattern", box=None)
     assert state.missing("stat_bars") == ["boss"]
+
+
+@pytest.mark.parametrize("flag", [None, True, False, 0, "false"])
+@pytest.mark.parametrize("legacy", ["off", "band", "percent"])
+def test_debuff_setup_uses_runtime_mode_from_supplied_settings(settings, monkeypatch, flag, legacy):
+    raw = config._read_local_config()
+    raw["general"]["debuffGateMode"] = legacy
+    if flag is not None:
+        raw["general"]["debuffAutoGate"] = flag
+    raw["debuffTracker"].update(enabled=True, captureRegion=BOX)
+    config._write_local_config(raw)
+    mode = config.load_debuff_runtime_mode()
+    before = deepcopy(raw)
+
+    def unexpected_read(*args, **kwargs):
+        pytest.fail("supplied setup state must not read a different configuration")
+
+    monkeypatch.setattr(config, "_read_local_config", unexpected_read)
+    expected = ["boss"] if mode == "percent" else []
+    assert state.missing("debuff", raw) == expected
+    assert state.pending(raw, automatic_only=True, feature_keys=("debuff",)) == expected
+    assert raw == before
+    raw["bossPattern"]["box"] = BOX
+    assert state.missing("debuff", raw) == []
+
+
+@pytest.mark.parametrize("logged_in", [False, True])
+@pytest.mark.parametrize("flag", [None, True, False])
+def test_setup_page_debuff_hp_is_optional_only_in_auto(app, settings, monkeypatch, logged_in, flag):
+    update("general", debuffGateMode="percent")
+    if flag is not None:
+        update("general", debuffAutoGate=flag)
+    update("debuffTracker", enabled=True, captureRegion=BOX)
+    monkeypatch.setattr(config, "load_discord_user", lambda: {"id": "test"} if logged_in else None)
+    before = settings.read_bytes()
+    page = SetupPage()
+    try:
+        page.show()
+        app.processEvents()
+        _, label, _ = page.feature_rows["debuff"]
+        expected = "영역 미등록 · 보스 체력바 표시 필요" if flag is False else "영역 등록됨"
+        assert label.text() == expected
+        assert settings.read_bytes() == before
+    finally:
+        page.close()
+        app.processEvents()
 
 
 @pytest.fixture

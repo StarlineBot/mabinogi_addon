@@ -91,7 +91,9 @@ def missing(key, raw=None):
     target = section(raw, BY_KEY[key].section)
     if key in ("buff", "debuff"):
         result = [] if valid_box(target.get("captureRegion")) else [key]
-        if key == "debuff" and section(raw, "general").get("debuffGateMode") == "percent":
+        general = section(raw, "general")
+        if (key == "debuff" and general.get("debuffAutoGate") is False
+                and general.get("debuffGateMode") == "percent"):
             if not valid_box(section(raw, "bossPattern").get("box")):
                 result.append("boss")
         return result
