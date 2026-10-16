@@ -44,6 +44,11 @@ STAT_BOX_SIZE = (200, 46)
 # 저값 경고: 임계 이하가 이만큼(초) 연속돼야 발동(한 프레임 깜빡임 무시). 틱 200ms.
 _ALERT_DEBOUNCE = 0.4
 
+
+def _complete_readings(readings: dict) -> bool:
+    return all(sid in readings and np.isfinite(readings[sid].ratio)
+               and 0 <= readings[sid].ratio <= 1 for sid in ("hp", "mp", "sta"))
+
 HELP_TITLE = "체력바 오버레이 사용법"
 HELP_HTML = """
 <h3>체력바 오버레이란?</h3>
@@ -75,6 +80,7 @@ class StatBarsTab(QWidget):
         self._paused = False
         self._sct = None
         self._overlays: dict[str, StatBarOverlay] = {}
+        self._display_valid = False
         # 수집 모드 상태(저HP·전환 프레임 모으기 — 경고 기능 튜닝용 데이터).
         self._last_frame = None
         self._last_saved_frame = None
@@ -312,8 +318,7 @@ class StatBarsTab(QWidget):
     def _check_alerts(self, readings: dict, now: float) -> None:
         """임계 이하로 떨어지면(각 바 각자) 경고. 게이트: 바 3개가 다 보일 때만 판정해
         지역이동·가려짐으로 생기는 0% 오탐을 막는다. 임계 위로 회복하면 재무장."""
-        if not all(sid in readings and np.isfinite(readings[sid].ratio)
-                   and 0 <= readings[sid].ratio <= 1 for sid in ("hp", "mp", "sta")):
+        if not _complete_readings(readings):
             self._alert_low_since.clear()
             self._reset_visual_alerts()
             return
@@ -460,13 +465,15 @@ class StatBarsTab(QWidget):
         )
 
     def _apply_visibility(self) -> None:
-        if not self._enabled or self._paused or not self._logged_in():
+        if (not self._enabled or self._paused or not self._logged_in()
+                or not self._region or not self._active()):
+            self._display_valid = False
             self._reset_visual_alerts()
             for ov in self._overlays.values():
                 ov.hide()
             return
         self._ensure_overlays()
-        show = self._active()
+        show = self._display_valid
         for sid, ov in self._overlays.items():
             if show and self._bars_cfg[sid]["show"]:
                 if not ov.isVisible():
@@ -480,7 +487,6 @@ class StatBarsTab(QWidget):
     # ---- 읽기 루프 ----
     def _tick(self) -> None:
         self._apply_login_gate()
-        self._apply_visibility()
         if (
             not self._enabled
             or self._paused
@@ -489,13 +495,17 @@ class StatBarsTab(QWidget):
             or not self._active()
         ):
             self._alert_low_since.clear()
+            self._apply_visibility()
             self._reset_visual_alerts()
             return
+        self._ensure_overlays()
         from .dpi import to_physical
 
         px, py, pw, ph = to_physical(self._region)
         frame = self._grab_rect(px, py, pw, ph)
         if frame is None:
+            self._display_valid = False
+            self._apply_visibility()
             self._alert_low_since.clear()
             self._reset_visual_alerts()
             return
@@ -510,16 +520,16 @@ class StatBarsTab(QWidget):
             self._write_shot(frame)
             self._last_saved_frame = frame
         readings = {r.stat_id: r for r in read_stat_bars(frame, require_complete=True)}
-        if not readings:
-            for ov in self._overlays.values():
-                ov.hide()
+        self._display_valid = _complete_readings(readings)
         parts = []
         for sid, ov in self._overlays.items():
             r = readings.get(sid)
-            if r is not None:
+            if self._display_valid:
                 ov.set_value(r.ratio)
                 parts.append(f"{STAT_LABELS[sid]} {int(r.ratio * 100)}%")
         self.value_label.setText("현재 값: " + ("  ".join(parts) if parts else "—"))
+        # Values must be applied before the first Show; invalid input never shows a window.
+        self._apply_visibility()
         self._check_alerts(readings, time.monotonic())
 
     # ---- 영역 지정 ----
@@ -550,6 +560,8 @@ class StatBarsTab(QWidget):
         region = {"x": x, "y": y, "w": w, "h": h}
         config.save_stat_bars({"box": region})
         self._region = region
+        self._display_valid = False
+        self._apply_visibility()
         self._alert_low_since.clear()
         self._reset_visual_alerts()
         self._update_region_label()
@@ -697,6 +709,7 @@ class StatBarsTab(QWidget):
 
     def shutdown(self) -> None:
         self._timer.stop()
+        self._display_valid = False
         self._alert_low_since.clear()
         self._reset_visual_alerts()
         for ov in self._overlays.values():

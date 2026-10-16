@@ -24,8 +24,13 @@ def readings(hp=30, mp=85, sta=85):
 def sample(pipeline, now, **values):
     tab, state, _ = pipeline
     state.now = now
+    tab._ensure_overlays()
+    current = readings(**values)
+    for sid, ov in tab._overlays.items():
+        ov.set_value(current[sid].ratio)
+    tab._display_valid = True
     tab._apply_visibility()
-    tab._check_alerts(readings(**values), now)
+    tab._check_alerts(current, now)
     return tab._overlays
 
 
