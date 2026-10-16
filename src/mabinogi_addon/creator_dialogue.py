@@ -72,7 +72,7 @@ class DialogueSession:
             self.shown.popleft()
         return self.rng.random() < (0.2 if len(self.shown) >= 3 else 0.4)
 
-    def choose(self, fits=lambda text: True) -> str | None:
+    def choose(self, fits=lambda text: True, *, fallback=None) -> str | None:
         if not self.entries:
             return None
         for _ in range(32):
@@ -80,6 +80,11 @@ class DialogueSession:
             text = "".join(self.rng.choice(choices) for choices in parts)
             if text != self.last_text and text.strip() and fits(text):
                 return text
+        if fallback is not None:
+            for parts in self.entries:
+                text = fallback(parts)
+                if text != self.last_text and text.strip() and fits(text):
+                    return text
         return None
 
     def displayed(self, text: str, now: float, *, automatic: bool):

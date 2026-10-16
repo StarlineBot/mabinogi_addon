@@ -14,17 +14,18 @@ _log = logging.getLogger(__name__)
 class DialogueFeed(QObject):
     updated = Signal(object)
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, *, validate=None):
         super().__init__(parent)
+        self.validate = validate or (lambda entries: entries)
         self.entries = ()
         try:
-            self.entries = read(paths.resource_dir() / "dialogues.json")
+            self.entries = self._accepted(read(paths.resource_dir() / "dialogues.json"))
         except (OSError, ValueError, UnicodeError):
             _log.debug("내장 제작자 대사 읽기 실패", exc_info=True)
         self.cache = None
         try:
             self.cache = paths.user_data_dir() / "creator-dialogues.json"
-            self.entries = read(self.cache)
+            self.entries = self._accepted(read(self.cache))
         except (OSError, ValueError, UnicodeError):
             pass
         self.network = QNetworkAccessManager(self)
@@ -35,6 +36,12 @@ class DialogueFeed(QObject):
         self.timer = QTimer(self)
         self.timer.setSingleShot(True)
         self.timer.timeout.connect(self._abort)
+
+    def _accepted(self, entries):
+        usable = self.validate(entries)
+        if not usable:
+            raise ValueError("no renderable dialogue entries")
+        return usable
 
     def start(self):
         if self.started or self.closed:
@@ -78,7 +85,7 @@ class DialogueFeed(QObject):
             status = reply.attribute(QNetworkRequest.Attribute.HttpStatusCodeAttribute)
             if self.closed or reply.error() != QNetworkReply.NetworkError.NoError or status != 200:
                 return
-            entries = parse(bytes(self.buffer))
+            entries = self._accepted(parse(bytes(self.buffer)))
             self.entries = entries
             self.updated.emit(entries)
             if self.cache is not None:

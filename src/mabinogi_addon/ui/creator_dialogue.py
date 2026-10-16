@@ -112,7 +112,8 @@ class CreatorDialogue(QObject):
         self.session_unavailable = self.suspended = False
         self.session_registered = False
         self.previous_tick = None
-        self.feed = DialogueFeed(self)
+        self.bubble = SpeechBubble(window.centralWidget())
+        self.feed = DialogueFeed(self, validate=self._usable_entries)
         self.session = DialogueSession(self.feed.entries)
         self.feed.updated.connect(self._updated)
         self.footer = QWidget(window.centralWidget())
@@ -132,7 +133,6 @@ class CreatorDialogue(QObject):
         self.face.clicked.connect(self.request)
         row.addWidget(self.face)
         window.centralWidget().layout().addWidget(self.footer)
-        self.bubble = SpeechBubble(window.centralWidget())
         self.bubble.dismissed.connect(self.dismiss)
         self.expiry = QTimer(self)
         self.expiry.setTimerType(Qt.TimerType.PreciseTimer)
@@ -153,6 +153,23 @@ class CreatorDialogue(QObject):
     def _updated(self, entries):
         if not self.closed:
             self.session.entries = entries
+
+    def _shortest(self, parts):
+        self.bubble.text.ensurePolished()
+        metrics = self.bubble.text.fontMetrics()
+        selected = [min(choices, key=metrics.horizontalAdvance) for choices in parts]
+        if not "".join(selected).strip():
+            alternatives = [(metrics.horizontalAdvance(value) - metrics.horizontalAdvance(selected[index]), index, value)
+                            for index, choices in enumerate(parts) for value in choices if value.strip()]
+            if alternatives:
+                _, index, value = min(alternatives)
+                selected[index] = value
+        return "".join(selected)
+
+    def _usable_entries(self, entries):
+        # 조합 전체를 전개하지 않고 표시 가능한 짧은 완성 문장을 가진 항목만 받는다.
+        return tuple(parts for parts in entries
+                     if (text := self._shortest(parts)).strip() and self.bubble.measure(text)[2])
 
     def set_enabled(self, enabled):
         self.enabled = enabled
@@ -254,9 +271,13 @@ class CreatorDialogue(QObject):
 
     def request(self, *, automatic=False):
         if not self._eligible():
+            self.dismiss()
             return False
-        text = self.session.choose(lambda value: self.bubble.measure(value)[2])
-        if text is None or not self._position(text) or not self._eligible():
+        text = self.session.choose(lambda value: self.bubble.measure(value)[2], fallback=self._shortest)
+        if text is None:
+            return False
+        if not self._position(text) or not self._eligible():
+            self.dismiss()
             return False
         self.bubble.show()
         self.bubble.raise_()

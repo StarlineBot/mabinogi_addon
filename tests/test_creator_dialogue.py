@@ -47,7 +47,8 @@ def test_invalid_data_rejected(modify):
         parse(encode(raw))
 
 
-@pytest.mark.parametrize("raw", [b"broken", b"x" * (MAX_BYTES + 1), b"[" * 10000 + b"]" * 10000])
+@pytest.mark.parametrize("raw", [b"broken", b"x" * (MAX_BYTES + 1), b"[" * 10000 + b"]" * 10000],
+                         ids=["invalid-json", "over-size-limit", "deeply-nested-json"])
 def test_bad_encoding_size_nesting(raw):
     with pytest.raises(ValueError):
         parse(raw)
@@ -164,7 +165,7 @@ def test_receive_once_and_atomic_cache(app):
     (encode(data()), 302, QNetworkReply.NetworkError.NoError),
     (b"x" * (MAX_BYTES + 1), 200, QNetworkReply.NetworkError.NoError),
     (encode(data()), 200, QNetworkReply.NetworkError.TimeoutError),
-])
+], ids=["invalid-json", "http-404", "redirect", "over-size-limit", "network-timeout"])
 def test_receive_failure_keeps_last_good(app, payload, status, error):
     cache = paths.user_data_dir() / "creator-dialogues.json"
     good = encode(data("저장된 대사"))
@@ -420,3 +421,129 @@ def test_first_show_clamps_restored_position_and_tour_dismisses(window, app):
     window._run_tour()
     assert not d.bubble.isVisible()
     assert not d.request()
+
+
+def test_rejected_replacement_closes_without_recording_or_sound(window):
+    d = window.creator_dialogue
+    d.clock = lambda: 10
+    d.session.entries = parse(encode(data("first message")))
+    assert d.request()
+    old_draws = list(d.session.shown)
+    d.session.entries = parse(encode(data("second message")))
+    calls = iter([True, False])
+    d.visibility = lambda *args: next(calls)
+    d.sound = Mock()
+    assert not d.request(automatic=True)
+    assert not d.bubble.isVisible() and not d.expiry.isActive()
+    assert d.deadline is None
+    assert d.session.last_text == "first message"
+    assert list(d.session.shown) == old_draws
+    d.sound.assert_not_called()
+    d.visibility = lambda *args: True
+    d.clock = lambda: 20
+    assert d.request()
+    assert d.session.last_text == "second message"
+    assert d.deadline == 23
+    d.sound.assert_called_once_with("second message")
+
+
+def deliver(feed, payload):
+    reply = Reply(payload)
+    feed.network = Mock(get=Mock(return_value=reply))
+    START_FEED(feed)
+    reply.finished.emit()
+
+
+def test_remote_unrenderable_data_does_not_emit_or_replace_cache(window):
+    d = window.creator_dialogue
+    good = encode(data("cached message"))
+    d.feed.entries = d.session.entries = parse(good)
+    d.feed.cache.write_bytes(good)
+    received = Mock()
+    d.feed.updated.connect(received)
+    assert not d.bubble.measure("W" * 60)[2]
+    deliver(d.feed, encode(data("W" * 60)))
+    received.assert_not_called()
+    assert d.feed.entries == d.session.entries == parse(good)
+    assert d.feed.cache.read_bytes() == good
+    assert d.request()
+
+
+def test_mixed_remote_list_retains_renderable_entry_and_reloads(window):
+    d = window.creator_dialogue
+    payload = encode(data("W" * 60, "usable message"))
+    deliver(d.feed, payload)
+    assert d.feed.entries == d.session.entries == parse(encode(data("usable message")))
+    assert d.feed.cache.read_bytes() == payload
+    assert d.request()
+    reloaded = DialogueFeed(validate=d._usable_entries)
+    try:
+        assert reloaded.entries == d.feed.entries
+    finally:
+        reloaded.shutdown()
+        reloaded.deleteLater()
+
+
+@pytest.mark.parametrize("family", ["DejaVu Sans", "DejaVu Serif", "monospace"])
+def test_cache_is_validated_using_current_font(window, family):
+    from PySide6.QtGui import QFont
+    d = window.creator_dialogue
+    d.bubble.text.setFont(QFont(family, 13))
+    payload = encode(data("W" * 60))
+    d.feed.cache.write_bytes(payload)
+    fits = d.bubble.measure("W" * 60)[2]
+    reloaded = DialogueFeed(validate=d._usable_entries)
+    try:
+        assert reloaded.entries
+        expected = parse(payload) if fits else d._usable_entries(read(paths.resource_dir() / "dialogues.json"))
+        assert reloaded.entries == expected
+        d.session.entries = reloaded.entries
+        assert d.request()
+    finally:
+        reloaded.shutdown()
+        reloaded.deleteLater()
+
+
+def test_choice_entry_keeps_variants_with_bounded_renderable_fallback(window):
+    from types import SimpleNamespace
+    d = window.creator_dialogue
+    raw = data()
+    raw["entries"] = [{"id": "choice", "parts": [["W" * 60, "short message"]]}]
+    payload = encode(raw)
+    deliver(d.feed, payload)
+    assert d.feed.entries == parse(payload)  # 원래 선택형 데이터를 고정 대사로 바꾸지 않는다.
+    choose = Mock(side_effect=lambda values: values[0])
+    d.session.rng = SimpleNamespace(choice=choose)
+    assert d.request()
+    assert d.session.last_text == "short message"
+    assert choose.call_count == 64  # 32회 추첨 후 사용 가능한 짧은 조합 1회 확인
+
+
+def test_pytest_ids_stay_below_windows_environment_limit(request):
+    ids = [item.nodeid for item in request.session.items
+           if item.path.name == "test_creator_dialogue.py"]
+    assert ids
+    assert max(map(len, ids)) < 1024
+
+
+def test_whitespace_remote_list_preserves_cache(window):
+    d = window.creator_dialogue
+    good = encode(data("usable cached message"))
+    d.feed.entries = d.session.entries = parse(good)
+    d.feed.cache.write_bytes(good)
+    deliver(d.feed, encode(data("   ")))
+    assert d.feed.entries == d.session.entries == parse(good)
+    assert d.feed.cache.read_bytes() == good
+    assert d.request()
+
+
+def test_whitespace_choices_do_not_hide_nonempty_completion(window):
+    d = window.creator_dialogue
+    raw = data()
+    raw["entries"] = [{"id": "spaces", "parts": [[" ", "W" * 58], [" ", "A"]]}]
+    payload = encode(raw)
+    deliver(d.feed, payload)
+    assert d.feed.entries == parse(payload)
+    assert d._shortest(d.feed.entries[0]).strip() == "A"
+    assert d.request()
+    assert d.session.last_text.strip()
