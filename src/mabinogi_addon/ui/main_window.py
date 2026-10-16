@@ -762,6 +762,8 @@ class MainWindow(QMainWindow):
             if self._debuff_engine is not None
             else False
         )
+        if self._debuff_engine is not None:
+            self.debuff_tab.set_gate_status(self._debuff_engine.gate_diagnostics)
         self._update_header_status()
         self._maybe_tick_update_check()
 
@@ -1411,7 +1413,7 @@ class MainWindow(QMainWindow):
         self._debuff_engine.set_warn_gone_ids(self._debuff_warn_gone_ids())
         # 3차(percent): 보스 HP바 영역(보스패턴알림과 공유)을 따로 캡처해 넘긴다.
         bar_source = None
-        if gate_mode == "percent":
+        if gate_mode in ("percent", "auto"):
             bar_region = config.load_boss_bar_region()
             if bar_region:
                 try:
@@ -1450,7 +1452,7 @@ class MainWindow(QMainWindow):
 
     def _on_boss_bar_region_changed(self) -> None:
         """보스 탭에서 보스 HP바 영역이 바뀜 → 디버프 3차가 쓰면 새 영역으로 재시작."""
-        if not self._booting and self.debuff_tab.effective_gate_mode() == "percent":
+        if not self._booting and self.debuff_tab.effective_gate_mode() in ("percent", "auto"):
             self._start_debuff_tracking()
 
     def _on_debuff_gate_mode(self, _mode: str) -> None:

@@ -72,6 +72,9 @@ class _TrackWorker(QThread):
         self._fg: tuple[bool, bool] | None = None
         # 3차(percent)용 '보스 HP바 영역' 소스(있을 때만 grab해 tick에 bar_region으로 전달).
         self._bar_source = bar_source
+        self._bar_capture_failed = False
+        self._bar_last_capture = None
+        self._bar_frame = None
 
     def run(self) -> None:
         while self._running:
@@ -104,9 +107,21 @@ class _TrackWorker(QThread):
         if self._bar_source is not None:
             # 3차: 보스 HP바 영역을 따로 캡처해 bar_region으로 넘긴다(디버프 엔진만
             # 이 인자를 받으므로, 바 소스가 있을 때만 전달).
+            now = time.monotonic()
+            period = getattr(self._engine, "bar_capture_interval", 0)
+            if self._bar_last_capture is None or now - self._bar_last_capture >= period:
+                self._bar_last_capture = now
+                try:
+                    self._bar_frame = self._bar_source.grab()
+                    self._bar_capture_failed = False
+                except Exception:
+                    if not self._bar_capture_failed:
+                        _log.exception("보스 바 캡처 실패 — 아이콘 감시 유지")
+                    self._bar_capture_failed = True
+                    self._bar_frame = None
             result = self._engine.tick(
-                region, time.monotonic(), foreground=game,
-                bar_region=self._bar_source.grab(),
+                region, now, foreground=game,
+                bar_region=self._bar_frame,
             )
         else:
             result = self._engine.tick(region, time.monotonic(), foreground=game)

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import cv2
 import numpy as np
+import logging
 
 from ..detect import match_icon
 from ..detect.boss_hp_reader import read_percent_cached
@@ -22,7 +23,9 @@ from .engine import OverlayEntry, TickResult
 GATE_OFF = "off"  # 1차: 게이팅 없음 — 항상 탐지(기존). 바닥 오탐 가능하나 바 인식 비의존.
 GATE_BAND = "band"  # 2차: 디버프 영역 안의 '평평한 띠'로 보스 유무 판정(베타).
 GATE_PERCENT = "percent"  # 3차: 정렬된 '보스 바 영역'에서 read_percent로 판정(베타).
-_GATE_MODES = (GATE_OFF, GATE_BAND, GATE_PERCENT)
+GATE_AUTO = "auto"
+_GATE_MODES = (GATE_OFF, GATE_BAND, GATE_PERCENT, GATE_AUTO)
+_log = logging.getLogger(__name__)
 
 # 보스 디버프 줄 아이콘의 실제 화면 높이(px). 2560x1440 기준 실측 ≈16.
 _ONSCREEN_ICON_PX = 16
@@ -144,6 +147,8 @@ class DebuffEngine:
         self._percent_last_t: float | None = None
         self._percent_present = False
         self._percent_offset: int | None = None  # 직전 당첨 정렬 오프셋(빠른 재판독 힌트)
+        self._auto_roi_seen = self._auto_hp_seen = False
+        self._gate_diagnostics: dict = {}
         # 사라짐 경고 상태(디버프가 보스에서 떨어짐)
         self._warn_gone_ids: set[str] = set()  # '사라짐 경고' 켠 디버프
         self._applied_prev = {bid: False for bid in templates}  # 직전 틱 '걸림' 여부
@@ -183,6 +188,71 @@ class DebuffEngine:
         self._percent_last_t = None  # 다음 틱에 즉시 재판독
         self._percent_present = False
         self._percent_offset = None
+        self._auto_roi_seen = self._auto_hp_seen = False
+        self._gate_diagnostics = {}
+
+    @property
+    def gate_diagnostics(self) -> dict:
+        return dict(self._gate_diagnostics)
+
+    @property
+    def bar_capture_interval(self) -> float:
+        return _PERCENT_READ_INTERVAL if self._gate_mode == GATE_AUTO else 0
+
+    def _auto_absent(self, region, bar, bar_region, now, icons_present):
+        # 존재를 확인한 소스만 부재 근거로 사용하고, 충돌/불명은 아이콘 감시로 되돌린다.
+        roi = "present" if bar else "unknown"
+        if bar:
+            self._auto_roi_seen = True
+        elif self._auto_roi_seen and self._is_background(region):
+            roi = "absent"
+        hp = "unknown"
+        hp_reason = "capture_missing"
+        if bar_region is not None and bar_region.size:
+            if self._is_background(bar_region):
+                hp_reason = "background_unvalidated"
+                if self._auto_hp_seen:
+                    hp = "absent"
+                    hp_reason = "background"
+            elif bar:
+                hp_reason = "roi_sufficient"
+            else:
+                hp_reason = "unreadable"
+                try:
+                    if self._percent_last_t is None or now - self._percent_last_t >= _PERCENT_READ_INTERVAL:
+                        value, offset = read_percent_cached(bar_region, hint=self._percent_offset)
+                        self._percent_present = value is not None and 0 <= value <= 100
+                        self._percent_last_t = now
+                        if offset is not None:
+                            self._percent_offset = offset
+                    if self._percent_present:
+                        hp = "present"
+                        hp_reason = "percent"
+                        self._auto_hp_seen = True
+                except Exception:
+                    hp_reason = "read_error"
+                    self._percent_present = False
+                    self._percent_last_t = now
+        present = icons_present or roi == "present" or hp == "present"
+        evidence = ([roi] if self._auto_roi_seen else []) + ([hp] if self._auto_hp_seen else [])
+        absent = not present and bool(evidence) and all(item == "absent" for item in evidence)
+        if roi == "present" or hp == "present":
+            self._bar_seen = True
+        if not absent:
+            self._bar_gone_since = None
+        elif self._bar_gone_since is None:
+            self._bar_gone_since = now
+        reset = absent and now - self._bar_gone_since >= _BAR_GRACE_SEC
+        reason = ("boss_absent" if reset else "absence_pending" if absent else
+                  "conflicting_evidence" if present and "absent" in (roi, hp) else
+                  "boss_present" if roi == "present" or hp == "present" else
+                  "icon_monitoring")
+        diagnostics = {"mode": GATE_AUTO, "roi": roi, "hp": hp,
+                       "hp_reason": hp_reason, "icons_present": icons_present, "reason": reason}
+        if diagnostics != self._gate_diagnostics:
+            self._gate_diagnostics = diagnostics
+            _log.debug("디버프 자동 판단: %s", diagnostics)
+        return reset
 
     @property
     def gate_mode(self) -> str:
@@ -349,6 +419,7 @@ class DebuffEngine:
         bar: bool,
         bar_region: np.ndarray | None,
         now: float,
+        icons_present: bool = False,
     ) -> bool:
         """현재 방식(1/2/3차)에 따라 '보스 없음 확정'인지 판정.
 
@@ -360,6 +431,8 @@ class DebuffEngine:
         공통: 바를 한 번도 본 적 없으면(bar_seen=False) 리셋하지 않는다(하위호환/초기 상태).
         """
         mode = self._gate_mode
+        if mode == GATE_AUTO:
+            return self._auto_absent(region, bar, bar_region, now, icons_present)
         if mode == GATE_OFF:
             return False
 
@@ -430,7 +503,13 @@ class DebuffEngine:
         self._bar_last = bar
         if bar:
             self._bar_ever_seen = True  # 사라짐 경고 안내용(방식 무관, 한 번 보면 유지)
-        boss_absent = self._gate_absent(region, bar, bar_region, now)
+        small = self._scale(region)
+        gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY) if small.size else None
+        # 자동 판단의 충돌 확인도 같은 검색 결과를 재사용한다.
+        raw_matches = ({bid: self._detect(small, bid, gray) for bid in self._templates}
+                       if self._gate_mode == GATE_AUTO else None)
+        boss_absent = self._gate_absent(region, bar, bar_region, now,
+                                        any(raw_matches.values()) if raw_matches is not None else False)
 
         if boss_absent:
             # 보스 없음 확정 → 매칭 중단, 전부 미적용으로 리셋(래치 해제), 경고 대기 비움.
@@ -449,11 +528,9 @@ class DebuffEngine:
             ]
             return TickResult(entries=entries, alerts=[], frame_valid=True)
 
-        small = self._scale(region)
-        gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY) if small.size else None
         for bid in self._templates:
             # 이력 임계 통과(raw) → 디바운스로 확정(detected). 단발 스파이크는 확정 안 됨.
-            raw = self._detect(small, bid, gray)
+            raw = raw_matches[bid] if raw_matches is not None else self._detect(small, bid, gray)
             detected = self._confirm_detect(bid, raw, now)
             # 재매칭 대기는 연속 미감지가 아니다. 이미 숨긴 항목의 재표시 대기를 취소한다.
             if detected or (raw and not self._shown[bid]):

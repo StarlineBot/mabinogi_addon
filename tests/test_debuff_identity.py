@@ -133,6 +133,7 @@ def startup(library, monkeypatch):
             pass
         def start(self, source, engine, **kwargs):
             self.engine = engine
+            self.bar_source = kwargs.get("bar_source")
     monkeypatch.setattr(module, "BuffController", Controller)
     w = SimpleNamespace(_closing=False, _config_pending_restart=False, debuff_controller=None,
                         _debuff_engine=None, _paused=False, _watcher=None,
@@ -184,3 +185,24 @@ def test_hidden_peer_is_never_globally_searched_or_returned(library, tracked, mo
     assert run(engine, pixels) == {tracked}
     assert set(searched) == {tracked}
     assert set(engine.best_scores(pixels)) == {tracked}
+
+
+@pytest.mark.parametrize("hp_region", [None, {"x": 0, "y": 0, "w": 160, "h": 32}])
+def test_auto_start_is_independent_of_boss_pattern_feature(startup, monkeypatch, hp_region):
+    from mabinogi_addon import config, setup_state
+
+    w, settings, controllers, module = startup
+    w.debuff_tab.effective_gate_mode = lambda: "auto"
+    monkeypatch.setattr(setup_state, "enabled", lambda feature: feature == "debuff")
+    monkeypatch.setattr(config, "load_boss_pattern", lambda: {"enabled": False})
+    monkeypatch.setattr(config, "load_boss_bar_region", lambda: hp_region)
+    captures = []
+    def capture(region):
+        result = object()
+        captures.append(result)
+        return result
+    monkeypatch.setattr(module, "create_live_source", capture)
+    w._start_debuff_tracking()
+    assert w._debuff_engine.gate_mode == "auto"
+    assert len(captures) == (2 if hp_region else 1)
+    assert w.debuff_controller.bar_source is (captures[1] if hp_region else None)

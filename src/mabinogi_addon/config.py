@@ -786,12 +786,34 @@ def save_boss_pattern(data: dict, path: Path = LOCAL_CONFIG_PATH) -> None:
 _DEBUFF_GATE_MODES = ("off", "band", "percent")
 
 
+def load_debuff_runtime_mode(path: Path = LOCAL_CONFIG_PATH) -> str:
+    """새 기본값은 자동. 기존 강제 방식은 덮어쓰지 않고 진단 선택으로 보존한다."""
+    general = _read_local_config(path).get("general")
+    if not isinstance(general, dict) or general.get("debuffAutoGate") is not False:
+        return "auto"
+    return load_debuff_gate_mode(path)
+
+
+def save_debuff_runtime_mode(mode: str, path: Path = LOCAL_CONFIG_PATH) -> None:
+    data = _read_local_config(path)
+    general = data.get("general")
+    if not isinstance(general, dict):
+        general = {}
+    general["debuffAutoGate"] = mode == "auto"
+    if mode != "auto":
+        general["debuffGateMode"] = mode if mode in _DEBUFF_GATE_MODES else "off"
+    data["general"] = general
+    _write_local_config(data, path)
+
+
 def load_debuff_gate_mode(path: Path = LOCAL_CONFIG_PATH) -> str:
     """디버프 탐지 방식: off(1차)/band(2차)/percent(3차). 기본 off.
 
     하위호환: 예전 불리언 general.debuffBarGating=True 는 band(2차)로 읽는다.
     """
-    g = _read_local_config(path).get("general") or {}
+    g = _read_local_config(path).get("general")
+    if not isinstance(g, dict):
+        g = {}
     m = g.get("debuffGateMode")
     if m in _DEBUFF_GATE_MODES:
         return m

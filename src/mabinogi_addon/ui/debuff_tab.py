@@ -16,11 +16,13 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QHBoxLayout,
     QLineEdit,
+    QLabel,
     QListWidget,
     QListWidgetItem,
     QMessageBox,
     QPushButton,
     QSpinBox,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -183,13 +185,26 @@ class DebuffTab(QWidget):
         self.status_label = hint_label("")  # 진단 상태(추적 중/게임 비활성 등)
         v.addWidget(self.status_label)
 
-        # 탐지 방식: 1차(항상 탐지·기본) / 2차(보스 바 인식·띠) / 3차(보스 바 %판독).
-        # 2·3차는 베타 — 디코 로그인 필요.
-        method_row = QHBoxLayout()
+        # 일반 화면은 자동 판단. 기존 강제 방식은 접힌 진단 설정에 보존한다.
+        auto_row = QHBoxLayout()
+        self.mode_status = QLabel("보스 확인 · 자동")
+        self.mode_status.setStyleSheet("font-weight:600;")
+        auto_row.addWidget(self.mode_status, 1)
+        self.diagnostic_button = QToolButton()
+        self.diagnostic_button.setText("⚙")
+        self.diagnostic_button.setToolTip("진단 방식 선택")
+        self.diagnostic_button.setCheckable(True)
+        self.diagnostic_button.setFixedSize(26, 26)
+        auto_row.addWidget(self.diagnostic_button)
+        v.addLayout(auto_row)
+        self._method_row = QWidget()
+        method_row = QHBoxLayout(self._method_row)
+        method_row.setContentsMargins(0, 0, 0, 0)
         method_row.setSpacing(6)
-        method_row.addWidget(section_label("보스 확인 방식"))
+        method_row.addWidget(section_label("진단 방식"))
         self.method_combo = QComboBox()
         for text, mode in (
+            ("자동", "auto"),
             ("보스 확인 없이 탐지 (기본)", "off"),
             ("체력바 모양으로 보스 확인 (베타)", "band"),
             ("체력 %로 보스 확인 (베타)", "percent"),
@@ -200,14 +215,16 @@ class DebuffTab(QWidget):
             "2차: 디버프 영역 안의 '평평한 띠'로 보스가 있을 때만 탐지.\n"
             "체력 %: 별도로 지정한 보스 체력바 숫자가 읽히는 동안 탐지합니다."
         )
-        cur = config.load_debuff_gate_mode()
+        cur = config.load_debuff_runtime_mode()
         idx = self.method_combo.findData(cur)
         self.method_combo.blockSignals(True)
         self.method_combo.setCurrentIndex(idx if idx >= 0 else 0)
         self.method_combo.blockSignals(False)
         self.method_combo.currentIndexChanged.connect(self._on_method_changed)
         method_row.addWidget(self.method_combo, 1)
-        v.addLayout(method_row)
+        v.addWidget(self._method_row)
+        self._method_row.hide()
+        self.diagnostic_button.toggled.connect(self._method_row.setVisible)
 
         # 3차용: 보스 HP바 영역 지정(보스패턴알림과 공유).
         self._bar_region_row = QWidget()
@@ -267,36 +284,39 @@ class DebuffTab(QWidget):
         return config.load_discord_user() is not None
 
     def _selected_mode(self) -> str:
-        return self.method_combo.currentData() or "off"
+        return self.method_combo.currentData() or "auto"
 
     def effective_gate_mode(self) -> str:
-        """실제 적용할 방식. 2·3차는 베타라 디코 로그인 없으면 1차(off)로 내린다."""
+        """자동은 로그인 비의존. 과거 강제 2·3차의 베타 접근 조건은 유지한다."""
         mode = self._selected_mode()
         if mode in ("band", "percent") and not self._logged_in():
             return "off"
         return mode
 
     def _apply_login_gate(self) -> None:
-        """베타: 디코 로그인 사용자만 2·3차를 고를 수 있게 한다(미로그인=선택 잠금)."""
+        """과거 강제 2·3차의 실제 적용이 제한되는 경우만 안내한다."""
         ok = self._logged_in()
-        self.method_combo.setEnabled(ok)
+        self.method_combo.setEnabled(True)
         # 미로그인인데 2·3차가 선택돼 있으면 안내를 띄운다(선택은 보존, 적용은 1차).
-        self._bar_gating_notice.setVisible(not ok and self._selected_mode() != "off")
+        self._bar_gating_notice.setVisible(not ok and self._selected_mode() in ("band", "percent"))
 
     def _bar_region_status_text(self) -> tuple[str, str]:
         r = config.load_boss_bar_region()
         if r:
             return f"공유됨 ✓  {r['w']}×{r['h']}", "#2ecc71"
-        return "미지정 — 보스 HP바 영역을 지정하세요", "#e67e22"
+        return "미지정 · 아이콘 감시", "#8a8f98"
 
     def _refresh_method_ui(self) -> None:
-        """선택 방식에 맞게 3차용 바 영역 행 표시/숨김 + 상태 갱신."""
-        is_percent = self._selected_mode() == "percent"
-        self._bar_region_row.setVisible(is_percent and self._logged_in())
+        """자동/퍼센트에서 선택적인 공유 HP 영역 상태를 갱신한다."""
+        is_percent = self._selected_mode() in ("auto", "percent")
+        self._bar_region_row.setVisible(is_percent and (self._selected_mode() == "auto" or self._logged_in()))
         if is_percent:
             txt, color = self._bar_region_status_text()
             self.bar_region_status.setText(txt)
             self.bar_region_status.setStyleSheet(f"color:{color}; font-size:12px;")
+        names = {"auto": "자동", "off": "아이콘 감시", "band": "체력바 모양", "percent": "체력 %"}
+        self.mode_status.setText("보스 확인 · " + ("자동" if self._selected_mode() == "auto"
+                                                else "진단 / " + names[self._selected_mode()]))
 
     def _emit_gate_mode(self) -> None:
         """현재 실제 방식을 엔진 쪽에 통지(재시작)하고, 마지막 통지값을 기록."""
@@ -304,7 +324,7 @@ class DebuffTab(QWidget):
         self.gate_mode_changed.emit(self._last_effective)
 
     def _on_method_changed(self, _idx: int) -> None:
-        config.save_debuff_gate_mode(self._selected_mode())
+        config.save_debuff_runtime_mode(self._selected_mode())
         self._apply_login_gate()
         self._refresh_method_ui()
         self._emit_gate_mode()
@@ -341,6 +361,14 @@ class DebuffTab(QWidget):
         """진단 상태 한 줄 갱신(메인의 주기 폴링에서 호출)."""
         self.status_label.setText(text)
         self.status_label.setStyleSheet(f"color:{color};")
+
+    def set_gate_status(self, diagnostics: dict) -> None:
+        if self._selected_mode() != "auto":
+            return
+        names = {"boss_absent": "보스 부재 확인", "absence_pending": "부재 확인 중",
+                 "conflicting_evidence": "근거 불일치 · 아이콘 감시", "boss_present": "보스 확인"}
+        self.mode_status.setText("자동 · " + names.get(diagnostics.get("reason"), "아이콘 감시"))
+        self.mode_status.setToolTip(str(diagnostics))
 
     # ---- 영역 지정 / 고정 ----
     def refresh_region_hint(self) -> None:
