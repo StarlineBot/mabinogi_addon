@@ -498,7 +498,7 @@ class DebuffTab(QWidget):
             item.setData(Qt.ItemDataRole.UserRole, did)
             buff = self._catalog.get(did)
             if buff is not None:
-                pm = _pixmap(buff.match_icon, 28)
+                pm = _pixmap(buff.display_image or buff.match_icon, 28)
                 if pm is not None:
                     item.setIcon(QIcon(pm))
             self.debuff_list.addItem(item)
