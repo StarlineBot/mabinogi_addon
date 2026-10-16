@@ -1,0 +1,1299 @@
+{
+  "format_version": 1,
+  "baseline_main": "589ddfc4afccc1e3e080bbacab7b4775a05b232a",
+  "coordinate_convention": "Original PNG pixels; zero-based x,y,width,height; no DPI conversion.",
+  "icons": [
+    {
+      "id": "D00",
+      "name": "마법 방어력 보호 감소",
+      "path": "src/mabinogi_addon/assets/debuff/icon/마법 방어력 보호 감소.png"
+    },
+    {
+      "id": "D01",
+      "name": "모모",
+      "path": "src/mabinogi_addon/assets/debuff/icon/모모.png"
+    },
+    {
+      "id": "D02",
+      "name": "물리 방어력 보호 감소",
+      "path": "src/mabinogi_addon/assets/debuff/icon/물리 방어력 보호 감소.png"
+    },
+    {
+      "id": "D03",
+      "name": "물풍선",
+      "path": "src/mabinogi_addon/assets/debuff/icon/물풍선.png"
+    },
+    {
+      "id": "D04",
+      "name": "받는 대미지 증가",
+      "path": "src/mabinogi_addon/assets/debuff/icon/받는 대미지 증가.png"
+    },
+    {
+      "id": "D05",
+      "name": "방해 카드",
+      "path": "src/mabinogi_addon/assets/debuff/icon/방해 카드.png"
+    },
+    {
+      "id": "D06",
+      "name": "불협화음",
+      "path": "src/mabinogi_addon/assets/debuff/icon/불협화음.png"
+    },
+    {
+      "id": "D07",
+      "name": "붕괴의 파동",
+      "path": "src/mabinogi_addon/assets/debuff/icon/붕괴의 파동.png"
+    },
+    {
+      "id": "D08",
+      "name": "야옹이",
+      "path": "src/mabinogi_addon/assets/debuff/icon/야옹이.png"
+    },
+    {
+      "id": "D09",
+      "name": "이면을 보는 눈",
+      "path": "src/mabinogi_addon/assets/debuff/icon/이면을 보는 눈.png"
+    },
+    {
+      "id": "D10",
+      "name": "케라",
+      "path": "src/mabinogi_addon/assets/debuff/icon/케라.png"
+    },
+    {
+      "id": "D11",
+      "name": "쿤",
+      "path": "src/mabinogi_addon/assets/debuff/icon/쿤.png"
+    },
+    {
+      "id": "D12",
+      "name": "크레센도",
+      "path": "src/mabinogi_addon/assets/debuff/icon/크레센도.png"
+    },
+    {
+      "id": "D13",
+      "name": "프라가라흐(마법)",
+      "path": "src/mabinogi_addon/assets/debuff/icon/프라가라흐(마법).png"
+    },
+    {
+      "id": "D14",
+      "name": "프라가라흐(물리)",
+      "path": "src/mabinogi_addon/assets/debuff/icon/프라가라흐(물리).png"
+    },
+    {
+      "id": "D15",
+      "name": "공격력 감소",
+      "path": "devdata/debuff/icon/공격력 감소.png"
+    },
+    {
+      "id": "D16",
+      "name": "마기그래프",
+      "path": "devdata/debuff/icon/마기그래프.png"
+    },
+    {
+      "id": "D17",
+      "name": "슈터스 아이",
+      "path": "devdata/debuff/icon/슈터스 아이.png"
+    },
+    {
+      "id": "D18",
+      "name": "와이어 웹",
+      "path": "devdata/debuff/icon/와이어 웹.png"
+    },
+    {
+      "id": "D19",
+      "name": "이동속도 감소",
+      "path": "devdata/debuff/icon/이동속도 감소.png"
+    },
+    {
+      "id": "D20",
+      "name": "집중 도발",
+      "path": "devdata/debuff/icon/집중 도발.png"
+    }
+  ],
+  "scanned_sources": [
+    {
+      "index": 0,
+      "path": "tests/data/2026-10-11_111640.png",
+      "shape": [
+        2138,
+        3830,
+        3
+      ],
+      "git_blob_sha": "f269563b31479c6449e8dd7befce6fede647bab7"
+    },
+    {
+      "index": 1,
+      "path": "tests/data/2026-10-11_123333.png",
+      "shape": [
+        2160,
+        3840,
+        3
+      ],
+      "git_blob_sha": "fb42133f5a47aa637590f4a06d2a062b9668c5e2"
+    },
+    {
+      "index": 2,
+      "path": "tests/data/스크린샷 2026-10-06 223724.png",
+      "shape": [
+        1436,
+        2556,
+        3
+      ],
+      "git_blob_sha": "94d930d95ce6603b282009c55310c144eb6cdcbc"
+    },
+    {
+      "index": 3,
+      "path": "tests/data/스크린샷 2026-10-06 224732.png",
+      "shape": [
+        1440,
+        2560,
+        3
+      ],
+      "git_blob_sha": "3bb8129a804c97b4a978e072689bdf4d6eab47bd"
+    },
+    {
+      "index": 4,
+      "path": "tests/data/스크린샷 2026-10-06 224922.png",
+      "shape": [
+        1436,
+        2556,
+        3
+      ],
+      "git_blob_sha": "69520c62c6471c9fd537444617060fefd4a0f87c"
+    },
+    {
+      "index": 5,
+      "path": "tests/data/스크린샷 2026-10-06 224927.png",
+      "shape": [
+        1440,
+        2560,
+        3
+      ],
+      "git_blob_sha": "f4bfe3924e381ed0d103f4cf7c0fd86b223e9e1d"
+    },
+    {
+      "index": 6,
+      "path": "tests/data/스크린샷 2026-10-06 225225.png",
+      "shape": [
+        1440,
+        2560,
+        3
+      ],
+      "git_blob_sha": "1c15bc4af73962860beca90e453b02311a888397"
+    },
+    {
+      "index": 7,
+      "path": "tests/data/스크린샷 2026-10-06 225315.png",
+      "shape": [
+        1436,
+        2556,
+        3
+      ],
+      "git_blob_sha": "4a0c7d82fdd9ff7c047f394cf82c340020079f04"
+    },
+    {
+      "index": 8,
+      "path": "tests/data/스크린샷 2026-10-07 013118.png",
+      "shape": [
+        1440,
+        2560,
+        3
+      ],
+      "git_blob_sha": "9ffd5ab7d11c7a407d6757b204db9cb0941b830b"
+    },
+    {
+      "index": 9,
+      "path": "tests/data/스크린샷 2026-10-09 185117.png",
+      "shape": [
+        1440,
+        2560,
+        3
+      ],
+      "git_blob_sha": "6ed529dbbdd5ff496ca284d93f0982a6bfdb7dc3"
+    },
+    {
+      "index": 10,
+      "path": "tests/data/스크린샷 2026-10-09 185152.png",
+      "shape": [
+        1436,
+        2556,
+        3
+      ],
+      "git_blob_sha": "b2a6cb74058a5c672abc3d2c4861d28d4997263b"
+    },
+    {
+      "index": 11,
+      "path": "tests/data/스크린샷 2026-10-09 185217.png",
+      "shape": [
+        1440,
+        2560,
+        3
+      ],
+      "git_blob_sha": "987884e6eacefcf524e77ba0df83d3622d24f317"
+    },
+    {
+      "index": 12,
+      "path": "tests/data/스크린샷 2026-10-09 185247.png",
+      "shape": [
+        1440,
+        2560,
+        3
+      ],
+      "git_blob_sha": "9850e2480f9bb1221b5a0b3e87b09ede20f546fc"
+    },
+    {
+      "index": 13,
+      "path": "tests/data/스크린샷 2026-10-09 190901.png",
+      "shape": [
+        1440,
+        2560,
+        3
+      ],
+      "git_blob_sha": "87fc3493e4f2752da316e2321e42ce6dd62d2bab"
+    },
+    {
+      "index": 14,
+      "path": "tests/data/스크린샷 2026-10-09 190905.png",
+      "shape": [
+        1440,
+        2560,
+        3
+      ],
+      "git_blob_sha": "e6bde56b0dbb23e347a3648aabcecaf0d31fd223"
+    },
+    {
+      "index": 15,
+      "path": "tests/data/스크린샷 2026-10-09 190909.png",
+      "shape": [
+        1440,
+        2560,
+        3
+      ],
+      "git_blob_sha": "05a18e81700726d29cb2cb520a25892dae90ede4"
+    },
+    {
+      "index": 16,
+      "path": "tests/data/스크린샷 2026-10-09 190911.png",
+      "shape": [
+        1440,
+        2560,
+        3
+      ],
+      "git_blob_sha": "25b411bb0762d61ebae7bb733c08b41afffaedfc"
+    },
+    {
+      "index": 17,
+      "path": "tests/data/스크린샷 2026-10-09 190915.png",
+      "shape": [
+        1440,
+        2560,
+        3
+      ],
+      "git_blob_sha": "def385a339d1c94a918ff8140e8ca9b09873d1fb"
+    },
+    {
+      "index": 18,
+      "path": "tests/data/스크린샷 2026-10-09 190926.png",
+      "shape": [
+        1440,
+        2560,
+        3
+      ],
+      "git_blob_sha": "9786195864ff6d0439b9602791664fea59029325"
+    },
+    {
+      "index": 19,
+      "path": "tests/data/스크린샷 2026-10-09 191035.png",
+      "shape": [
+        1436,
+        2556,
+        3
+      ],
+      "git_blob_sha": "3ecbe1ac3a379b2970da5ef7b3c9a59a69a737c9"
+    },
+    {
+      "index": 20,
+      "path": "tests/data/스크린샷 2026-10-09 193901.png",
+      "shape": [
+        1440,
+        2560,
+        3
+      ],
+      "git_blob_sha": "7bd99453d60f3a521929244ddd861319935a8239"
+    },
+    {
+      "index": 21,
+      "path": "tests/data/스크린샷 2026-10-09 195115.png",
+      "shape": [
+        1440,
+        2560,
+        3
+      ],
+      "git_blob_sha": "ed6b05cbc495cb14652b828e0269a1e36b33f78d"
+    },
+    {
+      "index": 22,
+      "path": "tests/data/스크린샷 2026-10-09 200614.png",
+      "shape": [
+        1440,
+        2560,
+        3
+      ],
+      "git_blob_sha": "3ac857df60ba1cae802e3a5e626a455acc4c6c57"
+    },
+    {
+      "index": 23,
+      "path": "tests/data/스크린샷 2026-10-09 200715.png",
+      "shape": [
+        1440,
+        2560,
+        3
+      ],
+      "git_blob_sha": "6d59e8d809d189127905139632f5e0e13ed0e497"
+    },
+    {
+      "index": 24,
+      "path": "tests/data/스크린샷 2026-10-09 200724.png",
+      "shape": [
+        1440,
+        2560,
+        3
+      ],
+      "git_blob_sha": "2fc4c7beb31f182e8ed84bac0a12daf179441ad7"
+    },
+    {
+      "index": 25,
+      "path": "tests/data/스크린샷 2026-10-09 201512.png",
+      "shape": [
+        1440,
+        2560,
+        3
+      ],
+      "git_blob_sha": "6b528c2b290402a3913305225633e96542731899"
+    },
+    {
+      "index": 26,
+      "path": "tests/data/스크린샷 2026-10-10 190116.png",
+      "shape": [
+        1440,
+        2560,
+        3
+      ],
+      "git_blob_sha": "d78d2d828b8c7554984adf4159fce9280992f5bb"
+    },
+    {
+      "index": 27,
+      "path": "tests/data/스크린샷 2026-10-11 095841.png",
+      "shape": [
+        1436,
+        2556,
+        3
+      ],
+      "git_blob_sha": "91c4eff4134a019351cedbea4f7215d93ee75eeb"
+    },
+    {
+      "index": 28,
+      "path": "tests/data/스크린샷 2026-10-12 000512.png",
+      "shape": [
+        1436,
+        2556,
+        3
+      ],
+      "git_blob_sha": "f5263a778fe616cb83abbfca31b3f5406f5f4049"
+    },
+    {
+      "index": 29,
+      "path": "tests/data/스크린샷 2026-10-12 023752.png",
+      "shape": [
+        1436,
+        2556,
+        3
+      ],
+      "git_blob_sha": "f616694efdb9b8720382e980259cea6d83cc4b99"
+    },
+    {
+      "index": 30,
+      "path": "tests/data/스크린샷 2026-10-12 024008.png",
+      "shape": [
+        1440,
+        2560,
+        3
+      ],
+      "git_blob_sha": "b3ba41d7fbfb3d0ed321ef64f20417c365d80553"
+    },
+    {
+      "index": 31,
+      "path": "tests/data/스크린샷 2026-10-12 024144.png",
+      "shape": [
+        1436,
+        2556,
+        3
+      ],
+      "git_blob_sha": "76157e45bb51cea6fcd6f18afef8a837ca709fa4"
+    },
+    {
+      "index": 32,
+      "path": "tests/data/스크린샷 2026-10-12 200511.png",
+      "shape": [
+        1436,
+        2556,
+        3
+      ],
+      "git_blob_sha": "741ab7258702b7bd6b5106c212904ff119f61e88"
+    },
+    {
+      "index": 33,
+      "path": "tests/data/스크린샷 2026-10-12 200625.png",
+      "shape": [
+        1436,
+        2556,
+        3
+      ],
+      "git_blob_sha": "2d36c45190000a26071d681214117e30f7ed2c92"
+    },
+    {
+      "index": 34,
+      "path": "tests/data/스크린샷 2026-10-14 000646.png",
+      "shape": [
+        1440,
+        2560,
+        3
+      ],
+      "git_blob_sha": "61ed16f3c656052c70dd51f4428c96d083e7de4c"
+    },
+    {
+      "index": 35,
+      "path": "tests/data/스크린샷 2026-10-15 213313.png",
+      "shape": [
+        1436,
+        2556,
+        3
+      ],
+      "git_blob_sha": "ba46fe07e3d463a57e263c02368f24314f5d32bb"
+    },
+    {
+      "index": 36,
+      "path": "tests/data/스크린샷 2026-10-15 213734.png",
+      "shape": [
+        1436,
+        2556,
+        3
+      ],
+      "git_blob_sha": "2919347c748fc7a99addff5ba1835d5f48a023f1"
+    }
+  ],
+  "baseline_blobs": [
+    {
+      "path": "tests/data/스크린샷 2026-10-12 023752.png",
+      "sha": "f616694efdb9b8720382e980259cea6d83cc4b99"
+    },
+    {
+      "path": "tests/data/스크린샷 2026-10-09 190926.png",
+      "sha": "9786195864ff6d0439b9602791664fea59029325"
+    },
+    {
+      "path": "tests/data/스크린샷 2026-10-06 224732.png",
+      "sha": "3bb8129a804c97b4a978e072689bdf4d6eab47bd"
+    },
+    {
+      "path": "tests/data/voice_of_vitality.png",
+      "sha": "7742f8c742cb3bb9425de83e590575f5fcd4ae7f"
+    },
+    {
+      "path": "tests/data/스크린샷 2026-10-09 190905.png",
+      "sha": "e6bde56b0dbb23e347a3648aabcecaf0d31fd223"
+    },
+    {
+      "path": "tests/data/스크린샷 2026-10-09 200715.png",
+      "sha": "6d59e8d809d189127905139632f5e0e13ed0e497"
+    },
+    {
+      "path": "tests/data/스크린샷 2026-10-09 201512.png",
+      "sha": "6b528c2b290402a3913305225633e96542731899"
+    },
+    {
+      "path": "tests/data/스크린샷 2026-10-12 200511.png",
+      "sha": "741ab7258702b7bd6b5106c212904ff119f61e88"
+    },
+    {
+      "path": "tests/data/스크린샷 2026-10-06 225225.png",
+      "sha": "1c15bc4af73962860beca90e453b02311a888397"
+    },
+    {
+      "path": "tests/data/magi_enable.png",
+      "sha": "9ee933140ab602790cf11c11b3e7bd0a15b0a138"
+    },
+    {
+      "path": "tests/data/스크린샷 2026-10-12 000512.png",
+      "sha": "f5263a778fe616cb83abbfca31b3f5406f5f4049"
+    },
+    {
+      "path": "tests/data/스크린샷 2026-10-06 224927.png",
+      "sha": "f4bfe3924e381ed0d103f4cf7c0fd86b223e9e1d"
+    },
+    {
+      "path": "tests/data/스크린샷 2026-10-09 200614.png",
+      "sha": "3ac857df60ba1cae802e3a5e626a455acc4c6c57"
+    },
+    {
+      "path": "tests/data/voice_of_vitality_enable.png",
+      "sha": "7b7028d25e89c7ec75e40b430f7c7544c2a0f483"
+    },
+    {
+      "path": "tests/data/스크린샷 2026-10-09 185217.png",
+      "sha": "987884e6eacefcf524e77ba0df83d3622d24f317"
+    },
+    {
+      "path": "tests/data/스크린샷 2026-10-15 213734.png",
+      "sha": "2919347c748fc7a99addff5ba1835d5f48a023f1"
+    },
+    {
+      "path": "tests/data/스크린샷 2026-10-09 200724.png",
+      "sha": "2fc4c7beb31f182e8ed84bac0a12daf179441ad7"
+    },
+    {
+      "path": "tests/data/스크린샷 2026-10-11 095841.png",
+      "sha": "91c4eff4134a019351cedbea4f7215d93ee75eeb"
+    },
+    {
+      "path": "tests/data/스크린샷 2026-10-06 225315.png",
+      "sha": "4a0c7d82fdd9ff7c047f394cf82c340020079f04"
+    },
+    {
+      "path": "tests/data/스크린샷 2026-10-09 190915.png",
+      "sha": "def385a339d1c94a918ff8140e8ca9b09873d1fb"
+    },
+    {
+      "path": "tests/data/스크린샷 2026-10-09 185152.png",
+      "sha": "b2a6cb74058a5c672abc3d2c4861d28d4997263b"
+    },
+    {
+      "path": "tests/data/magi.png",
+      "sha": "857d65c99f135abf6babce4787e58cf6e996ca69"
+    },
+    {
+      "path": "tests/data/스크린샷 2026-10-06 224922.png",
+      "sha": "69520c62c6471c9fd537444617060fefd4a0f87c"
+    },
+    {
+      "path": "tests/data/2026-10-11_111640.png",
+      "sha": "f269563b31479c6449e8dd7befce6fede647bab7"
+    },
+    {
+      "path": "tests/data/스크린샷 2026-10-14 000646.png",
+      "sha": "61ed16f3c656052c70dd51f4428c96d083e7de4c"
+    },
+    {
+      "path": "tests/data/buff_scaled.png",
+      "sha": "902805061830c0398a048c15372a64375175e1d4"
+    },
+    {
+      "path": "tests/data/스크린샷 2026-10-09 193901.png",
+      "sha": "7bd99453d60f3a521929244ddd861319935a8239"
+    },
+    {
+      "path": "tests/data/스크린샷 2026-10-07 013118.png",
+      "sha": "9ffd5ab7d11c7a407d6757b204db9cb0941b830b"
+    },
+    {
+      "path": "tests/data/스크린샷 2026-10-12 024144.png",
+      "sha": "76157e45bb51cea6fcd6f18afef8a837ca709fa4"
+    },
+    {
+      "path": "tests/data/스크린샷 2026-10-09 185247.png",
+      "sha": "9850e2480f9bb1221b5a0b3e87b09ede20f546fc"
+    },
+    {
+      "path": "tests/data/스크린샷 2026-10-09 195115.png",
+      "sha": "ed6b05cbc495cb14652b828e0269a1e36b33f78d"
+    },
+    {
+      "path": "tests/data/스크린샷 2026-10-09 185117.png",
+      "sha": "6ed529dbbdd5ff496ca284d93f0982a6bfdb7dc3"
+    },
+    {
+      "path": "tests/data/스크린샷 2026-10-09 190901.png",
+      "sha": "87fc3493e4f2752da316e2321e42ce6dd62d2bab"
+    },
+    {
+      "path": "tests/data/스크린샷 2026-10-09 190911.png",
+      "sha": "25b411bb0762d61ebae7bb733c08b41afffaedfc"
+    },
+    {
+      "path": "tests/data/스크린샷 2026-10-12 200625.png",
+      "sha": "2d36c45190000a26071d681214117e30f7ed2c92"
+    },
+    {
+      "path": "tests/data/스크린샷 2026-10-15 213313.png",
+      "sha": "ba46fe07e3d463a57e263c02368f24314f5d32bb"
+    },
+    {
+      "path": "tests/data/스크린샷 2026-10-06 223724.png",
+      "sha": "94d930d95ce6603b282009c55310c144eb6cdcbc"
+    },
+    {
+      "path": "tests/data/2026-10-11_123333.png",
+      "sha": "fb42133f5a47aa637590f4a06d2a062b9668c5e2"
+    },
+    {
+      "path": "tests/data/스크린샷 2026-10-09 190909.png",
+      "sha": "05a18e81700726d29cb2cb520a25892dae90ede4"
+    },
+    {
+      "path": "tests/data/스크린샷 2026-10-12 024008.png",
+      "sha": "b3ba41d7fbfb3d0ed321ef64f20417c365d80553"
+    },
+    {
+      "path": "tests/data/스크린샷 2026-10-10 190116.png",
+      "sha": "d78d2d828b8c7554984adf4159fce9280992f5bb"
+    },
+    {
+      "path": "tests/data/스크린샷 2026-10-09 191035.png",
+      "sha": "3ecbe1ac3a379b2970da5ef7b3c9a59a69a737c9"
+    },
+    {
+      "path": "src/mabinogi_addon/assets/debuff/icon/마법 방어력 보호 감소.png",
+      "sha": "f89a78bf8dd27d88ceed090fb1472de0981316e8"
+    },
+    {
+      "path": "src/mabinogi_addon/assets/debuff/icon/쿤.png",
+      "sha": "c13675f67a0f60f8c7942f3c9d7d784d7a01460a"
+    },
+    {
+      "path": "src/mabinogi_addon/assets/debuff/icon/붕괴의 파동.png",
+      "sha": "7f818046c7b4f8edbc55aad7f62e46bf1f2d1730"
+    },
+    {
+      "path": "src/mabinogi_addon/assets/debuff/icon/야옹이.png",
+      "sha": "681bd3b296412141e37076e11ea2f28816a465fb"
+    },
+    {
+      "path": "src/mabinogi_addon/assets/debuff/icon/불협화음.png",
+      "sha": "432933fb331febb1a264f5f9cf286f30ba1bd955"
+    },
+    {
+      "path": "src/mabinogi_addon/assets/debuff/icon/크레센도.png",
+      "sha": "4897f486059403742327ef754104862d7254b7ba"
+    },
+    {
+      "path": "src/mabinogi_addon/assets/debuff/icon/방해 카드.png",
+      "sha": "1428de0a148a20860b45a54da4baed5acc6c33a3"
+    },
+    {
+      "path": "src/mabinogi_addon/assets/debuff/icon/프라가라흐(물리).png",
+      "sha": "5059e75ab861fdb639568190883d67e7942f38c6"
+    },
+    {
+      "path": "src/mabinogi_addon/assets/debuff/icon/모모.png",
+      "sha": "42fee9a1695da6710a85b5a84e4aee0ca8625afc"
+    },
+    {
+      "path": "src/mabinogi_addon/assets/debuff/icon/케라.png",
+      "sha": "a8f39357796f740c7b3706b3cdbb91c8ce87deb4"
+    },
+    {
+      "path": "src/mabinogi_addon/assets/debuff/icon/받는 대미지 증가.png",
+      "sha": "fb43371422b2a2d04a3d410cb74359234a93a6fb"
+    },
+    {
+      "path": "src/mabinogi_addon/assets/debuff/icon/이면을 보는 눈.png",
+      "sha": "de9beade349a725c8af175cd7377e20b1c35d46c"
+    },
+    {
+      "path": "src/mabinogi_addon/assets/debuff/icon/프라가라흐(마법).png",
+      "sha": "d85e54b45fee6c4d2dc140db7ceeff8de0ca75ea"
+    },
+    {
+      "path": "src/mabinogi_addon/assets/debuff/icon/물풍선.png",
+      "sha": "9eb5c8754924b982628c758e024e52e270b3fb3e"
+    },
+    {
+      "path": "src/mabinogi_addon/assets/debuff/icon/물리 방어력 보호 감소.png",
+      "sha": "fc955df93058ee4bb0d51bef064884aabad9064a"
+    },
+    {
+      "path": "devdata/debuff/icon/마기그래프.png",
+      "sha": "c5d0465c6a22d4ff16ae6d1bb5cfd61770d1abea"
+    },
+    {
+      "path": "devdata/debuff/icon/공격력 감소.png",
+      "sha": "537fe852c085b7afa11e3aa95543a5dafe1211d2"
+    },
+    {
+      "path": "devdata/debuff/icon/집중 도발.png",
+      "sha": "52634ea367a21ec1e51845e2c2e400b402585c90"
+    },
+    {
+      "path": "devdata/debuff/icon/이동속도 감소.png",
+      "sha": "6baf986c31393eaa3068108bb8f111584c7234c7"
+    },
+    {
+      "path": "devdata/debuff/icon/슈터스 아이.png",
+      "sha": "d844443fd25ce4a8fd9b750e55df6226296ef6eb"
+    },
+    {
+      "path": "devdata/debuff/icon/와이어 웹.png",
+      "sha": "72ab942f42114f507e008e10bf09015d19b68c9c"
+    }
+  ],
+  "scenes": [
+    {
+      "id": "S08",
+      "source": "tests/data/스크린샷 2026-10-07 013118.png",
+      "row_xy": [
+        1025,
+        1214
+      ],
+      "stride": 18,
+      "labels": [
+        "D02",
+        "D00",
+        "D04",
+        "U01",
+        "D10",
+        "D03",
+        "D08",
+        "D15",
+        "U02",
+        "D01"
+      ]
+    },
+    {
+      "id": "S09",
+      "source": "tests/data/스크린샷 2026-10-09 185117.png",
+      "row_xy": [
+        1025,
+        1214
+      ],
+      "stride": 18,
+      "labels": [
+        "U02"
+      ]
+    },
+    {
+      "id": "S10",
+      "source": "tests/data/스크린샷 2026-10-09 185152.png",
+      "row_xy": [
+        1023,
+        1212
+      ],
+      "stride": 18,
+      "labels": [
+        "U03"
+      ]
+    },
+    {
+      "id": "S12",
+      "source": "tests/data/스크린샷 2026-10-09 185247.png",
+      "row_xy": [
+        1025,
+        1214
+      ],
+      "stride": 18,
+      "labels": [
+        "U02"
+      ]
+    },
+    {
+      "id": "S20",
+      "source": "tests/data/스크린샷 2026-10-09 193901.png",
+      "row_xy": [
+        1025,
+        1214
+      ],
+      "stride": 18,
+      "labels": [
+        "D02",
+        "D00",
+        "D04",
+        "D10",
+        "U01",
+        "U05",
+        "U06",
+        "U07",
+        "U08",
+        "D03",
+        "D08",
+        "D14",
+        "D13",
+        "U02",
+        "D01",
+        "D06",
+        "U04",
+        "U09",
+        "U10",
+        "U11"
+      ]
+    },
+    {
+      "id": "S21",
+      "source": "tests/data/스크린샷 2026-10-09 195115.png",
+      "row_xy": [
+        1025,
+        1214
+      ],
+      "stride": 18,
+      "labels": [
+        "D02",
+        "D00",
+        "D04",
+        "U13",
+        "U01",
+        "D10",
+        "D03",
+        "D08",
+        "unknown",
+        "D14",
+        "D13",
+        "U02",
+        "D01",
+        "D06",
+        "U04"
+      ]
+    },
+    {
+      "id": "S22",
+      "source": "tests/data/스크린샷 2026-10-09 200614.png",
+      "row_xy": [
+        1025,
+        1214
+      ],
+      "stride": 18,
+      "labels": [
+        "D02",
+        "D04",
+        "D10",
+        "U01",
+        "D08",
+        "U02",
+        "D01",
+        "D06"
+      ]
+    },
+    {
+      "id": "S25",
+      "source": "tests/data/스크린샷 2026-10-09 201512.png",
+      "row_xy": [
+        1025,
+        1214
+      ],
+      "stride": 18,
+      "labels": [
+        "D02",
+        "D00",
+        "D04",
+        "U13",
+        "U01",
+        "D10",
+        "U12",
+        "D03",
+        "D08",
+        "D15",
+        "D05",
+        "D14",
+        "D13",
+        "U02",
+        "D01",
+        "D06",
+        "U04"
+      ]
+    },
+    {
+      "id": "S26",
+      "source": "tests/data/스크린샷 2026-10-10 190116.png",
+      "row_xy": [
+        1025,
+        1214
+      ],
+      "stride": 18,
+      "labels": [
+        "D00",
+        "D04",
+        "U01",
+        "D10",
+        "D08",
+        "U02",
+        "D01"
+      ]
+    },
+    {
+      "id": "S28",
+      "source": "tests/data/스크린샷 2026-10-12 000512.png",
+      "row_xy": [
+        1023,
+        1212
+      ],
+      "stride": 18,
+      "labels": [
+        "D00",
+        "D04",
+        "U01",
+        "D10",
+        "D03",
+        "D08",
+        "D14",
+        "D13",
+        "U02",
+        "D01"
+      ]
+    },
+    {
+      "id": "S32",
+      "source": "tests/data/스크린샷 2026-10-12 200511.png",
+      "row_xy": [
+        1023,
+        1212
+      ],
+      "stride": 18,
+      "labels": [
+        "D00",
+        "U02"
+      ]
+    },
+    {
+      "id": "S33",
+      "source": "tests/data/스크린샷 2026-10-12 200625.png",
+      "row_xy": [
+        1023,
+        1212
+      ],
+      "stride": 18,
+      "labels": [
+        "D00",
+        "D04",
+        "U01",
+        "D10",
+        "D08",
+        "U02",
+        "D01"
+      ]
+    },
+    {
+      "id": "S34",
+      "source": "tests/data/스크린샷 2026-10-14 000646.png",
+      "row_xy": [
+        1025,
+        1214
+      ],
+      "stride": 18,
+      "labels": [
+        "U02"
+      ]
+    },
+    {
+      "id": "S35",
+      "source": "tests/data/스크린샷 2026-10-15 213313.png",
+      "row_xy": [
+        1023,
+        1212
+      ],
+      "stride": 18,
+      "labels": [
+        "D00",
+        "D04",
+        "D10",
+        "U01",
+        "D03",
+        "D08",
+        "D14",
+        "D13",
+        "D01",
+        "D06",
+        "U04",
+        "U14"
+      ]
+    },
+    {
+      "id": "S36",
+      "source": "tests/data/스크린샷 2026-10-15 213734.png",
+      "row_xy": [
+        1023,
+        1212
+      ],
+      "stride": 18,
+      "labels": [
+        "D00",
+        "D04",
+        "D10",
+        "U01",
+        "D03",
+        "D07",
+        "D08",
+        "D14",
+        "D13",
+        "U03",
+        "D01",
+        "D06",
+        "U04",
+        "U14",
+        "D09",
+        "D16",
+        "D16",
+        "D16"
+      ]
+    }
+  ],
+  "negative_sources": [
+    "tests/data/스크린샷 2026-10-06 223724.png",
+    "tests/data/스크린샷 2026-10-06 224732.png",
+    "tests/data/스크린샷 2026-10-12 024008.png",
+    "tests/data/스크린샷 2026-10-12 024144.png"
+  ],
+  "candidates": [
+    {
+      "id": "D00",
+      "name": "마법 방어력 보호 감소",
+      "template": "src/mabinogi_addon/assets/debuff/icon/마법 방어력 보호 감소.png",
+      "scene": "S35",
+      "slot": 0,
+      "output": "candidates/마법 방어력 보호 감소.png",
+      "status": "evaluation_candidate"
+    },
+    {
+      "id": "D01",
+      "name": "모모",
+      "template": "src/mabinogi_addon/assets/debuff/icon/모모.png",
+      "scene": "S35",
+      "slot": 8,
+      "output": "candidates/모모.png",
+      "status": "evaluation_candidate"
+    },
+    {
+      "id": "D02",
+      "name": "물리 방어력 보호 감소",
+      "template": "src/mabinogi_addon/assets/debuff/icon/물리 방어력 보호 감소.png",
+      "scene": "S08",
+      "slot": 0,
+      "output": "candidates/물리 방어력 보호 감소.png",
+      "status": "evaluation_candidate"
+    },
+    {
+      "id": "D03",
+      "name": "물풍선",
+      "template": "src/mabinogi_addon/assets/debuff/icon/물풍선.png",
+      "scene": "S35",
+      "slot": 4,
+      "output": "candidates/물풍선.png",
+      "status": "evaluation_candidate"
+    },
+    {
+      "id": "D04",
+      "name": "받는 대미지 증가",
+      "template": "src/mabinogi_addon/assets/debuff/icon/받는 대미지 증가.png",
+      "scene": "S35",
+      "slot": 1,
+      "output": "candidates/받는 대미지 증가.png",
+      "status": "evaluation_candidate"
+    },
+    {
+      "id": "D05",
+      "name": "방해 카드",
+      "template": "src/mabinogi_addon/assets/debuff/icon/방해 카드.png",
+      "scene": "S25",
+      "slot": 10,
+      "output": "candidates/방해 카드.png",
+      "status": "evaluation_candidate"
+    },
+    {
+      "id": "D06",
+      "name": "불협화음",
+      "template": "src/mabinogi_addon/assets/debuff/icon/불협화음.png",
+      "scene": "S35",
+      "slot": 9,
+      "output": "candidates/불협화음.png",
+      "status": "evaluation_candidate"
+    },
+    {
+      "id": "D07",
+      "name": "붕괴의 파동",
+      "template": "src/mabinogi_addon/assets/debuff/icon/붕괴의 파동.png",
+      "scene": "S36",
+      "slot": 5,
+      "output": "candidates/붕괴의 파동.png",
+      "status": "evaluation_candidate"
+    },
+    {
+      "id": "D08",
+      "name": "야옹이",
+      "template": "src/mabinogi_addon/assets/debuff/icon/야옹이.png",
+      "scene": "S35",
+      "slot": 5,
+      "output": "candidates/야옹이.png",
+      "status": "evaluation_candidate"
+    },
+    {
+      "id": "D10",
+      "name": "케라",
+      "template": "src/mabinogi_addon/assets/debuff/icon/케라.png",
+      "scene": "S35",
+      "slot": 2,
+      "output": "candidates/케라.png",
+      "status": "evaluation_candidate"
+    },
+    {
+      "id": "D13",
+      "name": "프라가라흐(마법)",
+      "template": "src/mabinogi_addon/assets/debuff/icon/프라가라흐(마법).png",
+      "scene": "S35",
+      "slot": 7,
+      "output": "candidates/프라가라흐(마법).png",
+      "status": "evaluation_candidate"
+    },
+    {
+      "id": "D14",
+      "name": "프라가라흐(물리)",
+      "template": "src/mabinogi_addon/assets/debuff/icon/프라가라흐(물리).png",
+      "scene": "S35",
+      "slot": 6,
+      "output": "candidates/프라가라흐(물리).png",
+      "status": "evaluation_candidate"
+    },
+    {
+      "id": "D15",
+      "name": "공격력 감소",
+      "template": "devdata/debuff/icon/공격력 감소.png",
+      "scene": "S08",
+      "slot": 7,
+      "output": "candidates/공격력 감소.png",
+      "status": "evaluation_candidate"
+    },
+    {
+      "id": "D16",
+      "name": "마기그래프",
+      "template": "devdata/debuff/icon/마기그래프.png",
+      "scene": "S36",
+      "slot": 15,
+      "output": "candidates/마기그래프.png",
+      "status": "evaluation_candidate"
+    }
+  ],
+  "references": [
+    {
+      "id": "R01",
+      "identity": "D09",
+      "scene": "S36",
+      "slot": 14,
+      "status": "semi_transparent",
+      "output": "references/R01.png"
+    },
+    {
+      "id": "U01",
+      "identity": null,
+      "scene": "S35",
+      "slot": 3,
+      "status": "unidentified",
+      "output": "references/U01.png"
+    },
+    {
+      "id": "U02",
+      "identity": null,
+      "scene": "S34",
+      "slot": 0,
+      "status": "unidentified",
+      "output": "references/U02.png"
+    },
+    {
+      "id": "U03",
+      "identity": null,
+      "scene": "S36",
+      "slot": 9,
+      "status": "unidentified",
+      "output": "references/U03.png"
+    },
+    {
+      "id": "U04",
+      "identity": null,
+      "scene": "S35",
+      "slot": 10,
+      "status": "unidentified",
+      "output": "references/U04.png"
+    },
+    {
+      "id": "U05",
+      "identity": null,
+      "scene": "S20",
+      "slot": 5,
+      "status": "unidentified",
+      "output": "references/U05.png"
+    },
+    {
+      "id": "U06",
+      "identity": null,
+      "scene": "S20",
+      "slot": 6,
+      "status": "unidentified",
+      "output": "references/U06.png"
+    },
+    {
+      "id": "U07",
+      "identity": null,
+      "scene": "S20",
+      "slot": 7,
+      "status": "unidentified",
+      "output": "references/U07.png"
+    },
+    {
+      "id": "U08",
+      "identity": null,
+      "scene": "S20",
+      "slot": 8,
+      "status": "unidentified",
+      "output": "references/U08.png"
+    },
+    {
+      "id": "U09",
+      "identity": null,
+      "scene": "S20",
+      "slot": 17,
+      "status": "unidentified",
+      "output": "references/U09.png"
+    },
+    {
+      "id": "U10",
+      "identity": null,
+      "scene": "S20",
+      "slot": 18,
+      "status": "unidentified",
+      "output": "references/U10.png"
+    },
+    {
+      "id": "U11",
+      "identity": null,
+      "scene": "S20",
+      "slot": 19,
+      "status": "unidentified",
+      "output": "references/U11.png"
+    },
+    {
+      "id": "U12",
+      "identity": null,
+      "scene": "S25",
+      "slot": 6,
+      "status": "unidentified",
+      "output": "references/U12.png"
+    },
+    {
+      "id": "U13",
+      "identity": null,
+      "scene": "S25",
+      "slot": 3,
+      "status": "unidentified",
+      "output": "references/U13.png"
+    },
+    {
+      "id": "U14",
+      "identity": null,
+      "scene": "S35",
+      "slot": 11,
+      "status": "semi_transparent_unidentified",
+      "output": "references/U14.png"
+    },
+    {
+      "id": "R02",
+      "identity": "D06",
+      "scene": "S36",
+      "slot": 11,
+      "status": "counter_variant",
+      "output": "references/R02.png"
+    }
+  ]
+}
