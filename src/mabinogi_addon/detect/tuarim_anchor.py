@@ -18,6 +18,10 @@ def locate_tuarim(frame, templates=None, diagnostics=None):
     templates = assets() if templates is None else templates
     if not resource_anchor.valid_inputs(frame,templates,trace):
         return None
+    # Only the opaque button interior is invariant; the old mask also includes
+    # game background below the button and beside the circle. Clip before scaling.
+    button_mask = np.zeros_like(templates["mask"])
+    button_mask[33:44,47:71] = templates["mask"][33:44,47:71]
     matches = candidates(frame,templates,trace)
     circle = {key.removeprefix("circle_"):image for key,image in templates.items() if key.startswith("circle_")}
     if not circle:
@@ -34,10 +38,11 @@ def locate_tuarim(frame, templates=None, diagnostics=None):
         if x+w > frame.shape[1] or y+h > frame.shape[0]:
             continue
         native = cv2.resize(templates["anchor"],(w,h),interpolation=cv2.INTER_AREA)
-        mask = cv2.resize(templates["mask"],(w,h),interpolation=cv2.INTER_NEAREST)
+        # Fractional scales must not include a pixel blended with scenery.
+        coverage = cv2.resize(button_mask,(w,h),interpolation=cv2.INTER_AREA)
+        mask = np.where(coverage == 255,255,0).astype(np.uint8)
         # The shared detector already validated the circle using all supported models.
         # Verify the independent right-hand structure, not the old circle a second time.
-        mask[:,:round(45*scale)] = 0
         if not mask.any():
             continue
         score = float(cv2.matchTemplate(frame[y:y+h,x:x+w],native,cv2.TM_CCORR_NORMED,mask=mask)[0,0])
