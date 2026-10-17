@@ -87,7 +87,7 @@ def test_stable_game_reuses_roi_without_full_frame_search(moving):
     place(state,20,20)
     for _ in range(100):
         tab._tick()
-    assert state.captures == [(20,20,28,23)]*100
+    assert state.captures == [(6,0,56,66)]+[(20,20,28,23)]*100
     assert tab._search_worker is None and tab._overlay.value == 15
 
 

@@ -39,6 +39,7 @@ class DorchaTab(QWidget):
         self._percent = None
         self._live_box = None
         self._live_target = None
+        self._approved_target = None
         self._tracking_lost = False
         self._search_worker = None
         self._search_epoch = 0
@@ -235,6 +236,13 @@ class DorchaTab(QWidget):
             self._invalidate_search()
             self._tracking_lost = True
         value = None
+        if (not self._tracking_lost and target is not None and self._live_target is None
+                and self._approved_target != target):
+            verified = self._verify_registered_region(box,target)
+            if verified is None:
+                self._tracking_lost = True
+            else:
+                box = verified
         if not self._tracking_lost:
             frame = self._grab_rect(*box)
             if target is not None and self._search_target() != target:
@@ -255,11 +263,37 @@ class DorchaTab(QWidget):
             self._search_backoff = 2.0
         self._sync_overlay()
 
+    def _verify_registered_region(self, box, target):
+        """A saved rectangle is a hint, not proof of the current resource UI."""
+        x,y,w,h = box
+        _,_,tx,ty,tw,th = target
+        pad_x,pad_y = max(8,w//2),max(17,h)
+        left,top = max(tx,x-pad_x),max(ty,y-pad_y)
+        right,bottom = min(tx+tw,x+w+pad_x),min(ty+th,y+h+pad_y)
+        frame = self._grab_rect(left,top,right-left,bottom-top)
+        if frame is None or frame.shape[:2] != (bottom-top,right-left) or self._search_target() != target:
+            return None
+        from ..detect.dorcha_anchor import locate_dorcha
+        try:
+            found = locate_dorcha(frame)
+        except Exception:
+            _log.warning("도르카 초기 영역 검증 실패",exc_info=True)
+            return None
+        if found is None:
+            return None
+        fx,fy,fw,fh = found
+        current = (left+fx,top+fy,fw,fh)
+        if (not self._inside_target(current,target)
+                or not (x <= current[0]+fw/2 < x+w and y <= current[1]+fh/2 < y+h)):
+            return None
+        return current
+
     def _invalidate_search(self):
         self._search_epoch += 1
         self._tracking_lost = self._tracking_lost or self._live_target is not None
         self._live_box = None
         self._live_target = None
+        self._approved_target = None
         self._next_search = 0.0
         self._search_backoff = 2.0
         if self._search_worker is not None:
@@ -392,6 +426,7 @@ class DorchaTab(QWidget):
         self._set_value(None)
         self._sync_overlay()
         self._tracking_lost = False
+        self._approved_target = self._search_target()
         self._apply_gate()
 
     def _on_region(self):

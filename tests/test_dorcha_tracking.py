@@ -202,7 +202,7 @@ def test_missing_or_oversized_game_target_never_captures_full_desktop(moving,tar
     _,tab,state,_ = moving
     state.target = target
     tab._tick()
-    assert state.captures == [(20,20,28,23)]
+    assert state.captures == ([(20,20,28,23)] if target is None else [(6,0,56,66)])
     assert tab._search_worker is None
 
 
