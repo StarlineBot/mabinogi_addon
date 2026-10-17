@@ -99,8 +99,9 @@ class ExternalBoundaries:
         self.stack.enter_context(patch.object(dialogue_feed.DialogueFeed, "start", lambda self: None))
         if self.devices:
             import mss
-            from mabinogi_addon.system import autostart
+            from mabinogi_addon.system import autostart, capture_exclusion
 
+            self.stack.enter_context(patch.object(capture_exclusion, "available", lambda: False))
             self.stack.enter_context(audio_boundary())
             for name in ("mss", "MSS"):
                 self.stack.enter_context(patch.object(mss, name, self.deny("desktop capture")))

@@ -2,6 +2,7 @@
 
 import logging
 from time import monotonic
+import weakref
 
 import numpy as np
 from PySide6.QtCore import Qt, QTimer
@@ -30,6 +31,7 @@ class DorchaTab(QWidget):
         self._selector_timer_was_running = False
         self._highlight = None
         self._sct = None
+        self._capture_restore = {}
         self._capture_failed = False
         self._save_failed = False
         self._overlay = None
@@ -184,6 +186,7 @@ class DorchaTab(QWidget):
         self.value_label.setText("현재 판독  " + text)
 
     def _hide(self):
+        self._restore_capture_windows()
         self._invalidate_search()
         self._set_value(None)
         self._percent = None
@@ -212,6 +215,7 @@ class DorchaTab(QWidget):
         self._update_elements()
 
     def _tick(self):
+        self._restore_capture_windows()
         if self._shutting_down or self._autofind_busy:
             return
         if self._selector is not None and self._selector.isVisible():
@@ -244,7 +248,7 @@ class DorchaTab(QWidget):
             else:
                 box = verified
         if not self._tracking_lost:
-            frame = self._grab_rect(*box)
+            frame = self._grab_tracking_rect(*box)
             if target is not None and self._search_target() != target:
                 self._invalidate_search()
                 self._tracking_lost = True
@@ -270,7 +274,7 @@ class DorchaTab(QWidget):
         pad_x,pad_y = max(8,w//2),max(17,h)
         left,top = max(tx,x-pad_x),max(ty,y-pad_y)
         right,bottom = min(tx+tw,x+w+pad_x),min(ty+th,y+h+pad_y)
-        frame = self._grab_rect(left,top,right-left,bottom-top)
+        frame = self._grab_tracking_rect(left,top,right-left,bottom-top)
         if frame is None or frame.shape[:2] != (bottom-top,right-left) or self._search_target() != target:
             return None
         from ..detect.dorcha_anchor import locate_dorcha
@@ -322,7 +326,7 @@ class DorchaTab(QWidget):
         # A single full-frame job is allowed; no queue or unbounded image allocation.
         if w*h > 16_777_216:
             return
-        frame = self._grab_rect(x,y,w,h)
+        frame = self._grab_tracking_rect(x,y,w,h)
         if frame is None or frame.shape[:2] != (h,w):
             return
         from .dorcha_search import DorchaSearch
@@ -354,7 +358,7 @@ class DorchaTab(QWidget):
             if not self._inside_target(box,worker.target):
                 return
             # Re-read current pixels: the worker's old screenshot is never displayed.
-            value = read_dorcha(self._grab_rect(*box))
+            value = read_dorcha(self._grab_tracking_rect(*box))
             if value is None or self._search_target() != worker.target:
                 return
             self._live_box = box
@@ -365,6 +369,38 @@ class DorchaTab(QWidget):
             self._search_backoff = 2.0
         finally:
             worker.deleteLater()
+
+    def _grab_tracking_rect(self, x, y, w, h):
+        from ..system import capture_exclusion
+
+        self._restore_capture_windows()
+        if not capture_exclusion.available():
+            return self._grab_rect(x,y,w,h)
+        from PySide6.QtWidgets import QApplication
+
+        widgets = {int(widget.winId()): weakref.ref(widget)
+                   for widget in QApplication.topLevelWidgets() if widget.isVisible()}
+        pending = []
+        try:
+            with capture_exclusion.excluding_windows(widgets, (x,y,w,h)) as pending:
+                return self._grab_rect(x,y,w,h)
+        finally:
+            for hwnd, previous in pending:
+                self._capture_restore.setdefault(hwnd, (widgets[hwnd], previous))
+
+    def _restore_capture_windows(self):
+        if not self._capture_restore:
+            return
+        from shiboken6 import isValid
+        from ..system.capture_exclusion import restore_window
+
+        for hwnd, (reference, previous) in list(self._capture_restore.items()):
+            widget = reference()
+            # Do not restore an affinity onto a recycled HWND, even in this process.
+            if (widget is None or not isValid(widget)
+                    or not widget.testAttribute(Qt.WidgetAttribute.WA_WState_Created)
+                    or int(widget.winId()) != hwnd or restore_window(hwnd, previous)):
+                del self._capture_restore[hwnd]
 
     def _grab_rect(self,x,y,w,h):
         try:

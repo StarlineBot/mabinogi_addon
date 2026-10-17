@@ -75,6 +75,18 @@ def test_accidental_capture_is_blocked_before_hardware_access():
         assert boundary.violations == ["desktop capture"]
 
 
+def test_capture_exclusion_native_state_requires_explicit_boundary(monkeypatch):
+    from mabinogi_addon.system import capture_exclusion
+
+    monkeypatch.setattr(capture_exclusion, "available", lambda: True)
+    monkeypatch.setattr(capture_exclusion, "_api", lambda: pytest.fail("unisolated native affinity API"))
+    with ExternalBoundaries():
+        assert not capture_exclusion.available()
+        with capture_exclusion.excluding_windows([1], (0, 0, 10, 10)):
+            pass
+    assert capture_exclusion.available()
+
+
 def test_explicit_fake_capture_can_replace_the_boundary(monkeypatch):
     import mss
 
