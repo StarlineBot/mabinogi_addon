@@ -18,7 +18,8 @@ class DorchaOverlay(QWidget):
         flags = (Qt.WindowType.Widget if parent is not None else
                  Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.Tool)
         super().__init__(parent, flags)
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, parent is None)
+        self.setAutoFillBackground(parent is not None)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
         self._scale = scale
         self._value = None

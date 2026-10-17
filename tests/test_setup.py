@@ -355,7 +355,8 @@ def test_main_window_setup_navigation_and_bidirectional_use(app, settings, monke
         assert not state.enabled("buff")
         window._open_setup_feature("skillbar")
         assert window._pages.currentWidget() is window._tabs
-        assert window._convenience_tabs.currentIndex() == 1
+        assert window._tabs.currentWidget() is window._tracker_tabs
+        assert window._tracker_tabs.currentWidget().widget() is window.skillbar_tab
         window._open_setup()
         window._leave_setup()
         assert window._tracker_tabs.currentIndex() == 0

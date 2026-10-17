@@ -138,9 +138,12 @@ class TourOverlay(QWidget):
         step = self._steps[self._i]
         if step.target is None or not step.target.isVisible():
             return None
-        gtl = step.target.mapToGlobal(QPoint(0, 0))  # 전역(스크린) 좌표
-        tl = gtl - self._screen_geo.topLeft()  # 화면 오버레이 로컬 좌표
-        return QRect(tl, step.target.size()).adjusted(-_PAD, -_PAD, _PAD, _PAD)
+        visible = step.target.visibleRegion().boundingRect()
+        if visible.isEmpty():
+            return None
+        gtl = step.target.mapToGlobal(visible.topLeft())
+        tl = gtl - self._screen_geo.topLeft()
+        return QRect(tl, visible.size()).adjusted(-_PAD, -_PAD, _PAD, _PAD).intersected(self.rect())
 
     def _show_step(self) -> None:
         step = self._steps[self._i]

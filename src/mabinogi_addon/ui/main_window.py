@@ -8,7 +8,7 @@ from __future__ import annotations
 import logging
 
 from PySide6.QtCore import QEvent, Qt, QTimer, Signal
-from PySide6.QtGui import QAction, QIcon
+from PySide6.QtGui import QAction, QIcon, QPainter, QPen
 from PySide6.QtWidgets import (
     QApplication,
     QFrame,
@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QScrollArea,
     QStackedWidget,
     QSystemTrayIcon,
+    QTabBar,
     QTabWidget,
     QVBoxLayout,
     QWidget,
@@ -199,6 +200,17 @@ def _tab_qss(dark: bool) -> str:
     )
 
 
+class _CombatTabBar(QTabBar):
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        painter = QPainter(self)
+        painter.setPen(QPen(self.palette().mid().color(), 1))
+        for index in (4, 6):
+            rect = self.tabRect(index)
+            painter.drawLine(rect.left() + 1, rect.top() + 9, rect.left() + 1, rect.bottom() - 9)
+        painter.end()
+
+
 def _subtab_qss(dark: bool) -> str:
     """하위(트래커 내부) 탭. 선택 표시는 무채색 밑줄 → '한 단계 아래'. 테마별 색."""
     pane = "#2a2f3a" if dark else "#d5d7dd"
@@ -284,35 +296,32 @@ class MainWindow(QMainWindow):
         self.settings_tab.voice_pack_changed.connect(self._on_voice_pack_changed)
         self.settings_tab.replay_tour.connect(self._replay_tour)
         self.settings_tab.theme_changed.connect(self._apply_tab_styles)
-        # 화면을 읽는 트래커들은 '트래커' 상위 탭 하나로 묶고, 그 아래 하위 탭으로 나눈다.
-        # → 상단 탭이 짧아져(트래커·커스텀·파티·메모·설정) 설정이 넘침(<>) 뒤로 안 묻힌다.
-        # 각 탭을 스크롤 영역으로 감싼다 → 창 높이를 고정해도 내용이 잘리지 않고 스크롤.
+        # Keep the full editor width: one combat tab row, without a sidebar.
         self._tracker_tabs = QTabWidget()
-        self._tracker_tabs.addTab(_scrolled(self.buff_tab), "버프")
-        self._tracker_tabs.addTab(_scrolled(self.debuff_tab), "디버프")
-        self._tracker_tabs.addTab(_scrolled(self.tuarim_tab), "투아림")
-        # 보스만 쓰면 뭘 추적하는지 모호해 풀네임 유지.
-        self._tracker_tabs.addTab(_scrolled(self.boss_tab), "보스 패턴 알림")
+        self._tracker_tabs.setTabBar(_CombatTabBar())
+        self._combat_pages = {}
+        for key, title, panel in (
+            ("buff", "버프", self.buff_tab), ("debuff", "디버프", self.debuff_tab),
+            ("tuarim", "투아림", self.tuarim_tab), ("boss", "보스 패턴 알림", self.boss_tab),
+            ("stat_bars", "체력바", self.stat_bars_tab), ("dorcha", "도르카", self.dorcha_tab),
+            ("custom", "커스텀 오버레이", self.custom_overlay_tab),
+            ("skillbar", "단축바", self.skillbar_tab), ("memo", "메모", self.memo_tab),
+        ):
+            scroll = _scrolled(panel)
+            self._combat_pages[key] = scroll
+            self._tracker_tabs.addTab(scroll, title)
 
-        # 편의기능: 게임 UI를 원하는 위치에 재배치/표시하는 기능과 계산기 등을 묶는다.
-        # 체력바·단축바는 '화면을 읽어 판단·알림'(트래커)이 아니라 '게임 화면을 원하는
-        # 위치에 새로 띄우는' 편의 기능이라, 커스텀 오버레이와 같은 묶음에 둔다.
         self.distribution_tab = DistributionTab()
         self.exchange_tab = ExchangeTab()
         self.bead_split_tab = BeadSplitTab()
         self._convenience_tabs = QTabWidget()
-        self._convenience_tabs.addTab(_scrolled(self.custom_overlay_tab), "커스텀 오버레이")
-        self._convenience_tabs.addTab(_scrolled(self.skillbar_tab), "단축바")
-        self._convenience_tabs.addTab(_scrolled(self.stat_bars_tab), "체력바")
-        self._convenience_tabs.addTab(_scrolled(self.memo_tab), "메모")
         self._convenience_tabs.addTab(_scrolled(self.distribution_tab), "분배 계산기")
         self._convenience_tabs.addTab(_scrolled(self.bead_split_tab), "구슬 분배 계산기")
         self._convenience_tabs.addTab(_scrolled(self.exchange_tab), "환전비율 계산기")
-        self._convenience_tabs.addTab(_scrolled(self.dorcha_tab), "도르카 (베타)")
 
         tabs = QTabWidget()
         self._tabs = tabs  # 온보딩 투어에서 탭 전환에 사용
-        tabs.addTab(self._tracker_tabs, "트래커")
+        tabs.addTab(self._tracker_tabs, "전투 보조")
         self._party_scroll = _scrolled(self.party_tab)  # 토스트 클릭 시 이 탭으로 전환
         tabs.addTab(self._party_scroll, "파티 모집")
         tabs.addTab(self._convenience_tabs, "편의기능")
@@ -449,17 +458,14 @@ class MainWindow(QMainWindow):
         self._pages.setCurrentWidget(self._tabs)
 
     def _open_setup_feature(self, key):
-        if self._setup_busy():
-            return
+        page = self._combat_pages.get(key)
+        if (page is None or self._setup_busy() or self._closing
+                or self._config_pending_restart or self._setup_flow.closed):
+            return False
         self._pages.setCurrentWidget(self._tabs)
-        tracker = {"buff": 0, "debuff": 1, "tuarim": 2, "boss": 3}
-        convenience = {"custom": 0, "skillbar": 1, "stat_bars": 2, "memo": 3}
-        if key in tracker:
-            self._tabs.setCurrentWidget(self._tracker_tabs)
-            self._tracker_tabs.setCurrentIndex(tracker[key])
-        else:
-            self._tabs.setCurrentWidget(self._convenience_tabs)
-            self._convenience_tabs.setCurrentIndex(convenience[key])
+        self._tabs.setCurrentWidget(self._tracker_tabs)
+        self._tracker_tabs.setCurrentWidget(page)
+        return True
 
     def _register_setup_game(self):
         self.settings_tab._start_detect()
@@ -707,7 +713,7 @@ class MainWindow(QMainWindow):
 
         dark = is_dark()
         sub = _subtab_qss(dark)
-        self._tracker_tabs.setStyleSheet(sub)
+        self._tracker_tabs.setStyleSheet(sub + "QTabBar::tab { padding:6px 9px; }")
         self._convenience_tabs.setStyleSheet(sub)
         self._tabs.setStyleSheet(_tab_qss(dark))
         # 파티 현황판은 매칭 행 배경색이 셀에 박혀 있어, 테마가 바뀌면 다시 그려야
@@ -888,9 +894,15 @@ class MainWindow(QMainWindow):
             self._tour = None
         from .tour_overlay import TourOverlay, TourStep
 
+        entry = (self._tabs.currentWidget(), self._tracker_tabs.currentWidget(),
+                 self._convenience_tabs.currentWidget())
+
         def go_tracker():
-            self._pages.setCurrentWidget(self._tabs)
-            self._tabs.setCurrentWidget(self._tracker_tabs)
+            self._open_setup_feature("buff")
+
+        def go_buff_control(control):
+            go_tracker()
+            self._combat_pages["buff"].ensureWidgetVisible(control)
 
         def go_convenience():
             self._pages.setCurrentWidget(self._tabs)
@@ -911,26 +923,36 @@ class MainWindow(QMainWindow):
                                  before=go_settings)
 
         steps = [
-            TourStep(self._tracker_tabs.tabBar(), "트래커",
-                     "선택한 트래킹 기능은 여기서 조절할 수 있어요.", before=go_tracker),
+            TourStep(self._tracker_tabs.tabBar(), "전투 보조",
+                     "버프·디버프·투아림과 자원 표시, 화면 배치 기능을 아래 탭에서 선택할 수 있어요.", before=go_tracker),
             TourStep(self._convenience_tabs.tabBar(), "편의기능",
-                     "체력바·단축바와 메모·커스텀 오버레이·계산기를 사용할 수 있어요. 투아림은 트래커 탭에 있어요.",
+                     "분배금과 구슬 분배금, 구슬 교환 효율을 계산할 수 있어요.",
                      before=go_convenience),
-            TourStep(None, "개별 기능 설정",
-                     "아직 등록하지 못한 영역은 해당 탭에서 다시 찾거나 직접 지정하세요. 기능 자체가 베타인 항목은 로그인이 필요합니다."),
-            TourStep(None, "오버레이 위치 잠금",
-                     "오버레이를 옮긴 뒤 잠그면 클릭이 게임으로 통과해요. 잠금 방식은 기능별 설정에서 확인하세요."),
+            TourStep(self.buff_tab.region_btn, "개별 기능 설정",
+                     "아직 등록하지 않은 영역은 각 기능에서 찾거나 직접 지정할 수 있어요.",
+                     before=lambda: go_buff_control(self.buff_tab.region_btn)),
+            TourStep(self.buff_tab.lock_btn, "오버레이 위치 잠금",
+                     "오버레이를 옮긴 뒤 잠그면 클릭이 게임으로 통과해요.",
+                     before=lambda: go_buff_control(self.buff_tab.lock_btn)),
             TourStep(self._pause_btn, "전체 일시정지",
-                     "오버레이를 잠시 멈췄다가 다시 사용할 수 있어요."),
+                     "사용 중인 오버레이를 잠시 멈췄다가 다시 사용할 수 있어요.", before=go_tracker),
             settings_step,
             TourStep(None, "사용 안내 종료",
-                     "사용 안내를 마쳤습니다. 남은 설정은 각 기능의 설정에서 이어서 진행할 수 있어요."),
+                     "남은 설정은 각 기능에서 이어서 진행할 수 있어요.", before=go_tracker),
         ]
 
         def done():
             self._tour = None
             self._tour_from_guide = False
             config.save_general_flag("tourShown", True)
+            if self._closing or self._config_pending_restart or not self.isVisible():
+                return
+            if from_guide:
+                self._open_setup_feature("buff")
+            else:
+                self._tracker_tabs.setCurrentWidget(entry[1])
+                self._convenience_tabs.setCurrentWidget(entry[2])
+                self._tabs.setCurrentWidget(entry[0])
 
         self._tour_from_guide = from_guide
         self._tour = TourOverlay(self, steps, on_done=done,
@@ -1748,6 +1770,14 @@ class MainWindow(QMainWindow):
             return
         p = self.pos()
         config.save_window_pos(p.x(), p.y())
+
+    def hideEvent(self, event) -> None:
+        tour = getattr(self, "_tour", None)
+        if tour is not None:
+            self._tour = None
+            self._tour_from_guide = False
+            tour.dismiss()
+        super().hideEvent(event)
 
     def closeEvent(self, event) -> None:
         import time

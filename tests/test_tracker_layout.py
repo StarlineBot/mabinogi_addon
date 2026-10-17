@@ -75,7 +75,8 @@ def test_other_pages_keep_reserved_space_and_switches_do_not_drift(window):
     height = w.buff_tab.buff_list.height()
     face = d.face.mapTo(w, QPoint())
     for _ in range(12):
-        for top, sub in ((0, 2), (0, 3), (1, 0), (2, 0), (2, 3), (2, 6), (3, 0)):
+        for top, sub in ((0, 2), (0, 3), (0, 4), (0, 5), (0, 6), (0, 7), (0, 8),
+                         (1, 0), (2, 0), (2, 1), (2, 2), (3, 0)):
             w._tabs.setCurrentIndex(top)
             if top == 0:
                 w._tracker_tabs.setCurrentIndex(sub)

@@ -855,7 +855,7 @@ class SettingsTab(QWidget):
         self.guide_btn.setVisible(config.load_discord_user() is not None)
         tour_btn = QPushButton("사용법 투어 다시 보기")
         self.tour_btn = tour_btn
-        tour_btn.setToolTip("트래커·편의기능·잠금·일시정지의 하이라이트 안내를 다시 봅니다")
+        tour_btn.setToolTip("전투 보조·편의기능·잠금·일시정지의 하이라이트 안내를 다시 봅니다")
         tour_btn.clicked.connect(self.replay_tour.emit)
         tour_row.addWidget(tour_btn)
         notes_btn = QPushButton("업데이트 노트 보기")
