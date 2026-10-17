@@ -39,13 +39,13 @@ jobs:
         id: unit
         env:
           QT_QPA_PLATFORM: offscreen
-        run: uv run --frozen pytest -q -ra -m 'not windows_integration' --junitxml=unit-results.xml
+        run: uv run --frozen pytest -vv -ra -m 'not windows_integration' --junitxml=unit-results.xml
 
       - name: Native Windows integration
         id: native
         env:
           QT_QPA_PLATFORM: windows
-        run: uv run --frozen pytest -q -ra -m windows_integration --junitxml=windows-results.xml
+        run: uv run --frozen pytest -vv -ra -m windows_integration --junitxml=windows-results.xml
 
       - name: Inject bundled secrets
         shell: bash

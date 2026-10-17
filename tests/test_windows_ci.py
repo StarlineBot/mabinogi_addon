@@ -87,6 +87,7 @@ def test_release_and_validation_use_same_build_command():
         native = next(step for step in steps if step.get("id") == "native")
         assert "not windows_integration" in unit["run"]
         assert "-m windows_integration" in native["run"]
+        assert "-vv" in unit["run"] and "-vv" in native["run"]
         assert unit["env"]["QT_QPA_PLATFORM"] == "offscreen"
         assert native["env"]["QT_QPA_PLATFORM"] == "windows"
         assert "continue-on-error" not in unit and "continue-on-error" not in native

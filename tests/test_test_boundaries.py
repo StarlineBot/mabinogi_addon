@@ -40,6 +40,32 @@ def test_network_guard_records_even_if_product_catches_exception():
         assert boundary.violations == ["external DNS lookup"]
 
 
+def test_dialogue_boundary_does_not_initialize_native_network(monkeypatch):
+    from mabinogi_addon.ui import dialogue_feed
+
+    app = QApplication.instance() or QApplication([])
+    constructed = []
+    original = dialogue_feed.QNetworkAccessManager
+
+    def tracked(parent):
+        constructed.append(parent)
+        return original(parent)
+
+    monkeypatch.setattr(dialogue_feed, "QNetworkAccessManager", tracked)
+    with ExternalBoundaries() as boundary:
+        feed = dialogue_feed.DialogueFeed()
+        try:
+            assert not constructed, "isolated feed constructed a native network manager"
+            assert feed.entries
+            with pytest.raises(AssertionError, match="Qt network request"):
+                feed.network.get(None)
+            assert boundary.violations == ["Qt network request"]
+        finally:
+            feed.shutdown()
+            feed.deleteLater()
+            app.processEvents()
+
+
 def test_accidental_capture_is_blocked_before_hardware_access():
     import mss
 

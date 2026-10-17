@@ -51,9 +51,17 @@ uv run --frozen pytest -q -m windows_integration
 
 네이티브 검사는 Windows의 `QT_QPA_PLATFORM=windows`에서 별도로 실행한다.
 실제 네이티브 의존성 로딩, 8x8 화면 캡처, 음소거 오디오 객체 생성/해제,
-실제 HWND 생성/해제를 확인한다. 외부 네트워크 차단은 유지한다.
-Linux에서 이 세 검사는 OS 제약으로 skip되며 Windows 통과 근거가 아니다.
+실제 HWND 생성/해제를 확인한다. 대사 네트워크는 일반 회귀에서 다운로드 시작뿐 아니라
+Qt 네트워크 관리자 생성도 대체한다. 실제 관리자는 별도 통합 검사에서 루프백 HTTP 서버와
+200회 생성/응답/진행 중 취소/반복 종료/해제를 검증한다. 외부 네트워크 차단은 유지한다.
+실제 메인 창 내부의 Qt 네트워크 관리자 생성/해제도 캡처·오디오와 분리해 20회 반복한다.
+이 Qt 수명 검사는 Linux에서도 명시적으로 실행할 수 있으나 Windows 통과 근거가 아니다.
+Windows API를 사용하는 통합 검사는 Linux에서 OS 제약으로 skip된다.
 게임·혼합 DPI·절전 복귀·실제 exe 실행/업데이트는 이 smoke 검사의 범위 밖이다.
+
+main/태그 CI는 `-vv -ra`로 각 테스트 ID와 실행 순서를 남긴다. 네이티브 크래시로
+최종 요약/XML 작성에 도달하지 못해도 마지막 실행 테스트를 확인할 수 있게 한다.
+이전 Windows 접근 위반 조사와 검증 상태는 [네트워크 경계 보완](qt-network-boundary-fix.md)에 기록한다.
 
 각 테스트의 기존 QThread 누수 assertion을 먼저 실행하고 그 뒤 새로 만든 창을
 shutdown/close하며 자식 타이머를 정지하고 DeferredDelete를 처리한다.

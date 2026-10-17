@@ -86,9 +86,17 @@ class ExternalBoundaries:
         self.stack.enter_context(patch.object(socket.socket, "connect_ex", connect(original_connect_ex)))
         self.stack.enter_context(patch.object(socket, "getaddrinfo", resolve))
         self.stack.enter_context(patch.object(webbrowser, "open", self.deny("browser launch")))
-        from mabinogi_addon.ui.dialogue_feed import DialogueFeed
+        from mabinogi_addon.ui import dialogue_feed
+
+        deny_request = self.deny("Qt network request")
+
+        class NetworkManager(QObject):
+            def get(self, request):
+                return deny_request(request)
+
         # 실제 Qt 네트워크는 Python socket 대체를 우회하므로 명시적으로 분리한다.
-        self.stack.enter_context(patch.object(DialogueFeed, "start", lambda self: None))
+        self.stack.enter_context(patch.object(dialogue_feed, "QNetworkAccessManager", NetworkManager))
+        self.stack.enter_context(patch.object(dialogue_feed.DialogueFeed, "start", lambda self: None))
         if self.devices:
             import mss
             from mabinogi_addon.system import autostart
