@@ -161,7 +161,7 @@ def test_malformed_settings_use_only_own_defaults(bad,tmp_path):
     raw = {"tuarim":{"enabled":True},"dorcha":bad}
     config._write_local_config(raw,path)
     before = path.read_bytes()
-    assert config.load_dorcha(path) == dict(enabled=False,box=None,pos=None,scale=150,locked=True)
+    assert config.load_dorcha(path) == dict(enabled=False,showTuarim=False,box=None,pos=None,scale=150,locked=True)
     assert path.read_bytes() == before
 
 

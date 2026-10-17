@@ -884,7 +884,8 @@ def load_dorcha(path: Path = LOCAL_CONFIG_PATH) -> dict:
         pos = None
     scale = sec.get("scale", 150)
     scale = scale if type(scale) is int and 50 <= scale <= 300 else 150
-    return {"enabled": sec.get("enabled") is True, "box": box, "pos": pos, "scale": scale,
+    return {"enabled": sec.get("enabled") is True, "showTuarim": sec.get("showTuarim") is True,
+            "box": box, "pos": pos, "scale": scale,
             "locked": sec["locked"] if type(sec.get("locked")) is bool else True}
 
 

@@ -18,6 +18,7 @@ def test_all_controls_accessible_with_non_ascii_deep_windows_path(window, regist
     path = PureWindowsPath("C:/Users/한글 사용자/AppData/Local") / ("아주 긴 폴더 이름 " * 12) / "투아림 수집"
     w._open_setup_feature("tuarim")
     tab = w.tuarim_tab
+    w.resource_tab.diagnostics_btn.setChecked(True)
     for widget in w.findChildren(QWidget):
         font = widget.font()
         font.setPixelSize(20)

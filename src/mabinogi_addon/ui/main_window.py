@@ -49,6 +49,7 @@ from .settings_tab import SettingsTab
 from .skillbar_tab import SkillbarTab
 from .stat_bars_tab import StatBarsTab
 from .dorcha_tab import DorchaTab
+from .resource_tab import ResourceTab
 from .tuarim_tab import TuarimTab
 
 # 번들 경로 사용(exe=_MEIPASS/assets). __file__ 기준은 frozen에서 어긋난다.
@@ -205,7 +206,7 @@ class _CombatTabBar(QTabBar):
         super().paintEvent(event)
         painter = QPainter(self)
         painter.setPen(QPen(self.palette().mid().color(), 1))
-        for index in (4, 6):
+        for index in (3, 5):
             rect = self.tabRect(index)
             painter.drawLine(rect.left() + 1, rect.top() + 9, rect.left() + 1, rect.bottom() - 9)
         painter.end()
@@ -286,6 +287,7 @@ class MainWindow(QMainWindow):
         self.custom_overlay_tab = CustomOverlayTab(self._watcher)
         self.stat_bars_tab = StatBarsTab(self._watcher)
         self.dorcha_tab = DorchaTab(self._watcher)
+        self.resource_tab = ResourceTab(self.dorcha_tab, self.tuarim_tab)
         # 체력바 저체력 알림은 '보스전 중'일 때만 울린다 — 보스 탭의 보스바 존재 신호를 연결.
         self.stat_bars_tab.set_boss_presence_source(self.boss_tab.is_boss_present)
         # 반대로, 저체력 경고가 하나라도 켜져 있을 때만 보스 탭이 존재 판정을 돌리게 연결.
@@ -302,14 +304,17 @@ class MainWindow(QMainWindow):
         self._combat_pages = {}
         for key, title, panel in (
             ("buff", "버프", self.buff_tab), ("debuff", "디버프", self.debuff_tab),
-            ("tuarim", "투아림", self.tuarim_tab), ("boss", "보스 패턴 알림", self.boss_tab),
-            ("stat_bars", "체력바", self.stat_bars_tab), ("dorcha", "도르카", self.dorcha_tab),
+            ("boss", "보스 패턴 알림", self.boss_tab),
+            ("stat_bars", "체력바", self.stat_bars_tab), ("dorcha", "도르카·투아림", self.resource_tab),
             ("custom", "커스텀 오버레이", self.custom_overlay_tab),
             ("skillbar", "단축바", self.skillbar_tab), ("memo", "메모", self.memo_tab),
         ):
             scroll = _scrolled(panel)
             self._combat_pages[key] = scroll
             self._tracker_tabs.addTab(scroll, title)
+
+        # Legacy setup requests keep addressing the same page, not a second tab.
+        self._combat_pages["tuarim"] = self._combat_pages["dorcha"]
 
         self.distribution_tab = DistributionTab()
         self.exchange_tab = ExchangeTab()
@@ -458,13 +463,15 @@ class MainWindow(QMainWindow):
         self._pages.setCurrentWidget(self._tabs)
 
     def _open_setup_feature(self, key):
-        page = self._combat_pages.get(key)
+        page = self._combat_pages.get("dorcha" if key == "tuarim" else key)
         if (page is None or self._setup_busy() or self._closing
                 or self._config_pending_restart or self._setup_flow.closed):
             return False
         self._pages.setCurrentWidget(self._tabs)
         self._tabs.setCurrentWidget(self._tracker_tabs)
         self._tracker_tabs.setCurrentWidget(page)
+        if key == "tuarim":
+            page.ensureWidgetVisible(self.tuarim_tab.threshold_box)
         return True
 
     def _register_setup_game(self):
@@ -1594,7 +1601,7 @@ class MainWindow(QMainWindow):
         # 글자가 상태를 말하므로 체크표시 대신 라벨을 토글(⏸ 정지 ↔ ▶ 다시 시작).
         self._pause_act = QAction("⏸ 전체 오버레이 정지", self)
         self._pause_act.setToolTip(
-            "버프·디버프·커스텀 오버레이를 한 번에 끕니다(메모·투아림은 따로)"
+            "추적·자원·복제 오버레이를 일시정지합니다(메모·투아림 소리 알림은 유지)"
         )
         self._pause_act.triggered.connect(lambda: self._set_paused(not self._paused))
         quit_act = QAction("종료", self)

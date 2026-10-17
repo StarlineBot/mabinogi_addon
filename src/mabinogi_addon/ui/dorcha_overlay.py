@@ -23,6 +23,9 @@ class DorchaOverlay(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
         self._scale = scale
         self._value = None
+        self._percent = None
+        self._show_dorcha = True
+        self._show_tuarim = False
         self._locked = True
         self._drag_offset = None
         self.set_scale(scale)
@@ -47,6 +50,22 @@ class DorchaOverlay(QWidget):
         self.setFixedSize(round(BAR_WIDTH * self._scale) + PAD * 2,
                           round((LABEL_HEIGHT + LABEL_GAP + BAR_HEIGHT) * self._scale) + PAD * 2)
         self.update()
+
+    @property
+    def percent(self):
+        return self._percent
+
+    def set_percent(self, value):
+        value = value if type(value) is int and 0 <= value < 100 else None
+        if value != self._percent:
+            self._percent = value
+            self.update()
+
+    def set_elements(self, dorcha, tuarim):
+        elements = bool(dorcha), bool(tuarim)
+        if elements != (self._show_dorcha,self._show_tuarim):
+            self._show_dorcha, self._show_tuarim = elements
+            self.update()
 
     def set_locked(self, locked):
         from ..system.clickthrough import set_click_through
@@ -75,7 +94,7 @@ class DorchaOverlay(QWidget):
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        for index, rect in enumerate(self.cell_rects()):
+        for index, rect in enumerate(self.cell_rects() if self._show_dorcha else []):
             painter.setPen(QPen(QColor(0, 0, 0, 220), 1))
             painter.setBrush(QColor(170, 85, 218) if self._value is not None and index < self._value
                              else QColor(42, 42, 49, 225))
@@ -85,13 +104,18 @@ class DorchaOverlay(QWidget):
         font.setBold(True)
         painter.setFont(font)
         rect = QRectF(PAD, PAD, BAR_WIDTH * self._scale, LABEL_HEIGHT * self._scale).toRect()
-        text = f"{self._value}/15" if self._value is not None else "--/15"
-        alignment = Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
-        painter.setPen(QColor(0, 0, 0))
-        for x, y in ((-1,0),(1,0),(0,-1),(0,1)):
-            painter.drawText(rect.translated(x,y), alignment, text)
-        painter.setPen(QColor(255,255,255))
-        painter.drawText(rect, alignment, text)
+        labels = []
+        if self._show_dorcha:
+            labels.append((f"{self._value}/15" if self._value is not None else "--/15",Qt.AlignmentFlag.AlignRight))
+        if self._show_tuarim:
+            labels.append((f"{self._percent}%" if self._percent is not None else "--%",Qt.AlignmentFlag.AlignLeft))
+        for text,side in labels:
+            alignment = side | Qt.AlignmentFlag.AlignVCenter
+            painter.setPen(QColor(0, 0, 0))
+            for x, y in ((-1,0),(1,0),(0,-1),(0,1)):
+                painter.drawText(rect.translated(x,y), alignment, text)
+            painter.setPen(QColor(255,255,255))
+            painter.drawText(rect, alignment, text)
         if not self._locked:
             painter.setPen(QPen(QColor(0,209,167), 1, Qt.PenStyle.DashLine))
             painter.setBrush(Qt.BrushStyle.NoBrush)

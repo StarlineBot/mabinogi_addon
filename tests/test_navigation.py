@@ -12,7 +12,7 @@ from mabinogi_addon.ui.main_window import MainWindow
 
 
 KEYS = ('buff', 'debuff', 'tuarim', 'boss', 'stat_bars', 'dorcha', 'custom', 'skillbar', 'memo')
-LABELS = ['버프', '디버프', '투아림', '보스 패턴 알림', '체력바', '도르카', '커스텀 오버레이', '단축바', '메모']
+LABELS = ['버프', '디버프', '보스 패턴 알림', '체력바', '도르카·투아림', '커스텀 오버레이', '단축바', '메모']
 
 
 @pytest.fixture
@@ -40,10 +40,11 @@ def window(monkeypatch):
 def test_structure_and_default_editor_space(window):
     w, app = window
     assert [w._tabs.tabText(i) for i in range(4)] == ['전투 보조','파티 모집','편의기능','설정']
-    assert [w._tracker_tabs.tabText(i) for i in range(9)] == LABELS
+    assert [w._tracker_tabs.tabText(i) for i in range(w._tracker_tabs.count())] == LABELS
     assert [w._convenience_tabs.tabText(i) for i in range(3)] == ['분배 계산기','구슬 분배 계산기','환전비율 계산기']
     bar = w._tracker_tabs.tabBar()
-    assert all(bar.rect().contains(bar.tabRect(i)) for i in range(9))
+    assert all(bar.rect().contains(bar.tabRect(i)) for i in range(8))
+    assert w._combat_pages['tuarim'] is w._combat_pages['dorcha']
     for key in ('buff','debuff'):
         w._open_setup_feature(key)
         app.processEvents()
@@ -90,7 +91,7 @@ def test_selection_drives_only_the_visible_editing_feature(window, monkeypatch):
         w._open_setup_feature(key)
         app.processEvents()
         for candidate, tab in tabs.items():
-            assert tab._active() == (candidate == key)
+            assert tab._active() == (candidate == key or (candidate == 'dorcha' and key == 'tuarim'))
     w._tabs.setCurrentIndex(2)
     assert not any(tab._active() for tab in tabs.values())
 

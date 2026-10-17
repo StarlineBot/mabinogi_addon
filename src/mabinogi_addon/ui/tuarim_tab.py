@@ -11,7 +11,7 @@
 from __future__ import annotations
 
 import numpy as np
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -47,7 +47,7 @@ HELP_HTML = """
 <h3>투아림 트래커란?</h3>
 <p>화면의 투아림 <b>% 게이지</b>(작은 원 안 숫자 아래 %)를 읽어, 지정한 %(예: 95·98)
 이상이 되면 소리로 알립니다. 100%가 되면 다시 0%부터 시작합니다.
-오버레이로 화면을 가리지 않고 <b>읽기만</b> 합니다.</p>
+게임 화면을 <b>읽기만</b> 합니다. 도르카·투아림 탭에서 % 표시와 소리 알림을 따로 선택합니다.</p>
 <p><b>영역은 100%일 때 "100%"가 다 들어가게</b> 넉넉히 잡으세요. 앞 숫자가 잘리면
 100%를 잘못 읽을 수 있습니다.</p>
 
@@ -64,6 +64,8 @@ HELP_HTML = """
 
 
 class TuarimTab(QWidget):
+    observed = Signal(object)
+
     def __init__(self, watcher) -> None:
         super().__init__()
         self._watcher = watcher
@@ -77,6 +79,9 @@ class TuarimTab(QWidget):
         self._autofind_busy = False
         self._shutting_down = False
         self._autofind_highlight = None
+        self._display_requested = lambda: False
+        self._selector = None
+        self._save_failed = False
         # 숫자 템플릿 수집용 상태
         self._last_frame = None  # 마지막으로 캡처한 영역(스냅샷 저장 대상)
         self._last_value: int | None = None  # 마지막 판독값(스냅샷 파일명 태그용)
@@ -129,7 +134,7 @@ class TuarimTab(QWidget):
         self.preview.setStyleSheet("background:palette(base); border:1px solid palette(mid);")
         self.preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
         prev_row.addWidget(self.preview)
-        self.value_label = QLabel("현재 값: —")
+        self.value_label = QLabel("최근 확정: —")
         self.value_label.setStyleSheet("font-size:14px; font-weight:600;")
         prev_row.addWidget(self.value_label, 1)
         v.addLayout(prev_row)
@@ -139,7 +144,8 @@ class TuarimTab(QWidget):
         self.enable.toggled.connect(self._save)
         v.addWidget(self.enable)
 
-        v.addWidget(self._threshold_group())
+        self.threshold_box = self._threshold_group()
+        v.addWidget(self.threshold_box)
         # 숫자 템플릿 수집: 판독이 틀릴 때 실제 캡처를 모아 템플릿을 고치기 위한 제보용
         # 도구. 디스코드 로그인한 사용자에게만 보인다(일반 사용자 화면은 깔끔하게).
         # 로그인 상태는 _tick에서 매번 반영한다(보스 탭 게이팅과 동일).
@@ -184,8 +190,11 @@ class TuarimTab(QWidget):
         """수집(제보) 도구는 디스코드 로그인 사용자에게만 노출."""
         logged_in = self._logged_in()
         box = getattr(self, "_collect_box", None)
+        toggle = getattr(self, "_diagnostics_toggle", None)
         if box is not None:
-            box.setVisible(logged_in)
+            box.setVisible(logged_in and (toggle is None or toggle.isChecked()))
+        if toggle is not None:
+            toggle.setVisible(logged_in)
         self.auto_find_btn.setEnabled(logged_in and not self._autofind_busy)
 
     def _collect_group(self) -> QGroupBox:
@@ -251,6 +260,13 @@ class TuarimTab(QWidget):
     def _on_region(self) -> None:
         from .region_selector import RegionSelector
 
+        if self._shutting_down or self._autofind_busy:
+            return
+        if self._selector is not None:
+            self._selector.close()
+            self._selector.deleteLater()
+        self.observed.emit(None)
+
         # 고정 크기 박스를 커서에 붙여 % 위에 클릭 한 번으로 배치(돋보기, 휠로 크기 조절).
         # 이전에 지정한 적 있으면 그 크기로 시작(사용자가 맞춰 둔 크기 유지).
         if self._region:
@@ -262,7 +278,12 @@ class TuarimTab(QWidget):
         self._selector.start()
 
     def _on_selected(self, x: int, y: int, w: int, h: int) -> None:
-        self._apply_region(x, y, w, h)
+        try:
+            self._apply_region(x, y, w, h)
+        except OSError:
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.warning(self,"영역 저장 실패","기존 등록 영역을 유지합니다.")
+            return
         self._flash_region()
 
     def _apply_region(self, x: int, y: int, w: int, h: int) -> None:
@@ -271,10 +292,11 @@ class TuarimTab(QWidget):
                             "thresholds": self._thresholds, "sounds": self._sounds})
         self._region = {"x": x, "y": y, "w": w, "h": h}
         self._tracker.reset_observations()
+        self.observed.emit(None)
         self._prev_raw = self._stable_value = self._last_value = None
         self._last_frame = self._last_saved_frame = None
         self.preview.clear()
-        self.value_label.setText("현재 값: —")
+        self.value_label.setText("최근 확정: —")
         self._update_region_label()
 
     def _on_auto_find(self) -> None:
@@ -310,20 +332,33 @@ class TuarimTab(QWidget):
         self._thresholds = [s.value() for s in self._spins]
         self._sounds = [c.isChecked() for c in self._sound_checks]
         self._tracker.set_thresholds(self._thresholds)
-        config.save_tuarim(
-            {
-                "enabled": self.enable.isChecked(),
-                "box": self._region,
-                "thresholds": self._thresholds,
-                "sounds": self._sounds,
-            }
-        )
+        try:
+            config.save_tuarim(
+                {
+                    "enabled": self.enable.isChecked(),
+                    "box": self._region,
+                    "thresholds": self._thresholds,
+                    "sounds": self._sounds,
+                }
+            )
+            self._save_failed = False
+        except OSError:
+            if not self._save_failed:
+                from PySide6.QtWidgets import QMessageBox
+                self._save_failed = True
+                QMessageBox.warning(self,"설정 저장 실패","현재 설정을 저장하지 못했습니다. 재실행하면 이전 설정으로 돌아갈 수 있습니다.")
 
     # ---- 읽기 루프 ----
     def _tick_enabled(self) -> None:
         self._apply_collect_gate()
-        if self.enable.isChecked():
+        if self._shutting_down or self._autofind_busy or (self._selector is not None and self._selector.isVisible()):
+            self.observed.emit(None)
+            return
+        if self.enable.isChecked() or self._display_requested():
             self._tick()
+        else:
+            self._prev_raw = None
+            self.observed.emit(None)
 
     def _tick(self) -> None:
         self._apply_collect_gate()  # 로그인 상태에 따라 수집(제보) 도구 노출/숨김
@@ -333,6 +368,8 @@ class TuarimTab(QWidget):
             self._watcher.is_game_active() or self._watcher.is_self_active()
         )
         if not self._region or not active:
+            self._prev_raw = None
+            self.observed.emit(None)
             return
         # 캡처(mss)는 물리픽셀 → 저장된 논리좌표를 배율만큼 변환(150% 등에서 어긋남 방지).
         from .dpi import to_physical
@@ -340,6 +377,8 @@ class TuarimTab(QWidget):
         px, py, pw, ph = to_physical(self._region)
         frame = self._grab_rect(px, py, pw, ph)
         if frame is None:
+            self._prev_raw = None
+            self.observed.emit(None)
             return
         self._show_preview(frame)
         self._last_frame = frame  # 스냅샷 저장 대상
@@ -354,8 +393,9 @@ class TuarimTab(QWidget):
             self._stable_value = raw
             observation = raw
         self._prev_raw = raw
+        self.observed.emit(observation)
         self.value_label.setText(
-            f"현재 값: {value}%" if value is not None else "현재 값: —"
+            f"최근 확정: {value}%" if value is not None else "최근 확정: —"
         )
         # 수집 모드: 영상이 '눈에 띄게 바뀌면' 저장(중복 방지). 값(read_percent) 기준이
         # 아니라 영상 변화 기준이라, 템플릿이 아직 없어(value=None) 판독이 안 돼도 숫자가
@@ -432,3 +472,16 @@ class TuarimTab(QWidget):
         if self._autofind_highlight is not None:
             self._autofind_highlight.close()
         self._timer.stop()
+        self.observed.emit(None)
+        for name in ("_selector", "_highlight"):
+            widget = getattr(self,name,None)
+            if widget is not None:
+                widget.close()
+        if self._sct is not None:
+            try:
+                self._sct.close()
+            except Exception:
+                import logging
+                logging.getLogger(__name__).warning("투아림 캡처 정리 실패",exc_info=True)
+            finally:
+                self._sct = None

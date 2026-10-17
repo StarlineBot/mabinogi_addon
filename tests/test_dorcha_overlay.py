@@ -5,6 +5,7 @@ from PySide6.QtGui import QImage
 from PySide6.QtWidgets import QApplication
 
 from mabinogi_addon.ui.dorcha_overlay import DorchaOverlay, BAR_WIDTH
+from PySide6.QtGui import QFont, QFontMetrics
 
 
 @pytest.mark.parametrize("scale", [.5,1,1.5,3])
@@ -32,3 +33,33 @@ def test_fifteen_cells_and_values_share_fixed_geometry(scale):
         overlay.close()
         overlay.deleteLater()
         app.processEvents()
+
+
+@pytest.mark.parametrize('scale',[.5,1,1.25,1.5,2,3])
+def test_display_modes_keep_geometry_and_hide_dorcha_pixels_for_percent_only(scale):
+    app = QApplication.instance() or QApplication([])
+    overlay = DorchaOverlay(scale)
+    overlay.move(-400,120)
+    size,position,cells = overlay.size(),overlay.pos(),overlay.cell_rects()
+    try:
+        font = QFont()
+        font.setPixelSize(max(9,round(18*scale)))
+        font.setBold(True)
+        metrics = QFontMetrics(font)
+        assert max(metrics.horizontalAdvance(t) for t in ('99%','--%','15/15','--/15'))+4 < BAR_WIDTH*scale/2
+        for show_d,show_t in ((True,False),(False,True),(True,True),(False,False)):
+            overlay.set_elements(show_d,show_t)
+            for value in (0,95,99,None,100):
+                overlay.set_percent(value)
+                overlay.set_value(13)
+                assert overlay.percent == (value if value is not None and value < 100 else None)
+                assert overlay.size() == size and overlay.pos() == position and overlay.cell_rects() == cells
+                assert overlay.locked
+                image = QImage(size,QImage.Format.Format_RGBA8888)
+                image.fill(Qt.GlobalColor.transparent)
+                overlay.render(image)
+                pixels = np.frombuffer(image.constBits(),np.uint8).reshape(size.height(),size.width(),4)
+                alpha = [pixels[int(rect.center().y()),int(rect.center().x()),3] for rect in cells]
+                assert all(a > 0 for a in alpha) if show_d else not any(alpha)
+    finally:
+        overlay.close();overlay.deleteLater();app.processEvents()

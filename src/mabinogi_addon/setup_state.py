@@ -22,7 +22,7 @@ FEATURES = (
     Feature("debuff", "디버프 트래커", "debuffTracker", True,
             "보스바 위 디버프 줄이 들어오는지 확인하세요. 아이콘이 없어도 등록할 수 있습니다."),
     Feature("tuarim", "투아림", "tuarim", False,
-            "숫자와 %가 모두 들어오는지 확인하세요. 판독값은 적용 후 투아림 탭에서 확인하세요."),
+            "숫자와 %가 모두 들어오는지 확인하세요. 판독값은 적용 후 도르카·투아림 탭에서 확인하세요."),
     Feature("boss", "보스 패턴 알림", "bossPattern", False,
             "보스 이름과 체력 비율이 모두 들어오는지 확인하세요."),
     Feature("stat_bars", "체력바", "statBars", False,

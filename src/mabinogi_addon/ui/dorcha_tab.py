@@ -33,6 +33,10 @@ class DorchaTab(QWidget):
         self._capture_failed = False
         self._save_failed = False
         self._overlay = None
+        self._view = self
+        self._tuarim_source = None
+        self._percent_control = None
+        self._percent = None
         self._live_box = None
         self._live_target = None
         self._tracking_lost = False
@@ -97,26 +101,95 @@ class DorchaTab(QWidget):
         return bool(config.load_discord_user())
 
     def _active(self):
-        return self._watcher.is_game_active() or (self._watcher.is_self_active() and self.isVisible())
+        return self._watcher.is_game_active() or (self._watcher.is_self_active() and self._view.isVisible())
+
+    def bind_tuarim(self, source, control):
+        self._tuarim_source = source
+        self._percent_control = control
+        source._display_requested = self.percent_requested
+        source.observed.connect(self._set_percent)
+        control.toggled.connect(self._on_percent_enabled)
+        self._update_elements()
+
+    def percent_requested(self):
+        return (self._cfg["showTuarim"] and self._tuarim_source is not None
+                and not self._render_suspended() and not self._paused and self._logged_in() and self._active())
+
+    def _render_suspended(self):
+        for controller in (self,self._tuarim_source):
+            if controller is not None and (controller._shutting_down or controller._autofind_busy
+                    or (controller._selector is not None and controller._selector.isVisible())):
+                return True
+        return False
+
+    def _on_percent_enabled(self, checked):
+        self._cfg["showTuarim"] = checked
+        self._set_percent(None)
+        self._update_value_label()
+        self._update_elements()
+        self._sync_overlay()
+        self._save()
+
+    def _set_percent(self, value):
+        if not self._cfg["showTuarim"] and self._percent is None:
+            return
+        self._percent = value if self.percent_requested() and type(value) is int and 0 <= value < 100 else None
+        self.preview.set_percent(self._percent)
+        self._update_value_label()
+        if self._overlay is not None:
+            self._overlay.set_percent(self._percent)
+        self._sync_overlay()
+
+    def _update_elements(self):
+        for overlay in (self.preview,self._overlay):
+            if overlay is not None:
+                overlay.set_elements(self._cfg["enabled"],self._cfg["showTuarim"])
+
+    def _sync_overlay(self):
+        visible = (not self._render_suspended() and not self._paused and self._logged_in() and self._active()
+                   and ((self._cfg["enabled"] and self._region is not None) or self.percent_requested()))
+        if visible:
+            self._ensure_overlay()
+            self._update_elements()
+            if not self._overlay.isVisible():
+                self._overlay.show()
+        elif self._overlay is not None:
+            self._overlay.hide()
 
     def _apply_gate(self):
         logged = self._logged_in()
         for control in (self.enable,self.scale_spin,self.lock_chk,self.region_btn,self.auto_find_btn):
             control.setEnabled(logged and not self._shutting_down and not self._autofind_busy)
+        if self._percent_control is not None:
+            self._percent_control.setEnabled(logged and not self._shutting_down)
         self.view_region_btn.setEnabled(logged and self._region is not None and not self._shutting_down)
         self.region_label.setText("영역 미등록" if self._region is None else
                                  "등록 영역  {x}, {y}  /  {w} × {h}".format(**self._region))
 
     def _set_value(self, value):
         self.preview.set_value(value)
-        self.value_label.setText(f"현재 판독  {value}/15" if value is not None else "현재 판독  --/15")
+        self._update_value_label()
         if self._overlay is not None:
             self._overlay.set_value(value)
+
+    def _update_value_label(self):
+        value = self.preview.value
+        dorcha = f"{value}/15" if value is not None else "--/15"
+        percent = f"{self._percent}%" if self._percent is not None else "--%"
+        if self._cfg["showTuarim"]:
+            text = f"도르카 {dorcha} · 투아림 {percent}" if self._cfg["enabled"] else f"투아림 {percent}"
+        else:
+            text = dorcha
+        self.value_label.setText("현재 판독  " + text)
 
     def _hide(self):
         self._invalidate_search()
         self._set_value(None)
+        self._percent = None
+        self.preview.set_percent(None)
+        self._update_value_label()
         if self._overlay is not None:
+            self._overlay.set_percent(None)
             self._overlay.hide()
 
     def _ensure_overlay(self):
@@ -132,7 +205,10 @@ class DorchaTab(QWidget):
             rect = screen.availableGeometry()
             overlay.move(rect.center().x()-overlay.width()-40, rect.center().y()-overlay.height()//2)
         overlay.moved.connect(self._save)
+        overlay.set_value(self.preview.value)
+        overlay.set_percent(self._percent)
         self._overlay = overlay
+        self._update_elements()
 
     def _tick(self):
         if self._shutting_down or self._autofind_busy:
@@ -141,8 +217,13 @@ class DorchaTab(QWidget):
             self._hide()
             return
         self._apply_gate()
-        if not self._cfg["enabled"] or self._paused or not self._logged_in() or not self._region or not self._active():
+        if self._paused or not self._logged_in() or not self._active():
             self._hide()
+            return
+        if not self._cfg["enabled"] or not self._region:
+            self._invalidate_search()
+            self._set_value(None)
+            self._sync_overlay()
             return
         from .dpi import to_physical
         self._ensure_overlay()
@@ -172,8 +253,7 @@ class DorchaTab(QWidget):
                 self._search_worker.requestInterruption()
             self._next_search = 0.0
             self._search_backoff = 2.0
-        if not self._overlay.isVisible():
-            self._overlay.show()
+        self._sync_overlay()
 
     def _invalidate_search(self):
         self._search_epoch += 1
@@ -282,7 +362,10 @@ class DorchaTab(QWidget):
 
     def _on_enabled(self, checked):
         self._cfg["enabled"] = checked
-        self._hide()
+        self._invalidate_search()
+        self._set_value(None)
+        self._update_elements()
+        self._sync_overlay()
         self._save()
 
     def _on_scale(self, value):
@@ -305,7 +388,9 @@ class DorchaTab(QWidget):
         region = dict(x=x,y=y,w=w,h=h)
         config.save_dorcha({"box":region})
         self._cfg["box"] = self._region = region
-        self._hide()
+        self._invalidate_search()
+        self._set_value(None)
+        self._sync_overlay()
         self._tracking_lost = False
         self._apply_gate()
 
