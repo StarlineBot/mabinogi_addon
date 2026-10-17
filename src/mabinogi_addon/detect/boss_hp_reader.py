@@ -36,20 +36,22 @@ _ACCEPT = 0.45  # 최고 정렬의 최저 자리 점수가 이 이상이어야 �
 _STRONG = 0.85  # 자리수를 '확신'으로 셀 최저 자리 점수(이 이상이면 그 자리수를 우선 비교)
 
 
-def _load_digits() -> dict[str, list[np.ndarray]]:
+def _load_digits(pattern="d*_*.png") -> dict[str, list[np.ndarray]]:
     out: dict[str, list[np.ndarray]] = {}
     if not _DIGIT_DIR.exists():
         return out
-    for p in sorted(_DIGIT_DIR.glob("d*_*.png")):
+    for p in sorted(_DIGIT_DIR.glob(pattern)):
         img = imread(p, cv2.IMREAD_GRAYSCALE)
         if img is None:
             continue
         _, b = cv2.threshold(img, 127, 255, cv2.THRESH_BINARY)
-        out.setdefault(p.name[1], []).append(b)
+        out.setdefault(p.stem.removeprefix("bright_")[1], []).append(b)
     return out
 
 
 _DIGITS = _load_digits()
+# Bright-only glyphs never compete with normal saturation-mask samples.
+_BRIGHT_SAMPLES = _load_digits("bright_d*_*.png")
 
 
 def _color_mask(region_bgr: np.ndarray) -> np.ndarray:
@@ -170,7 +172,7 @@ def number_area_flooded(region_bgr: np.ndarray) -> bool:
     return _flooded(band, w)
 
 
-def _low_hp_value(region_bgr, templates, band, w, scale, pitch, span) -> int | None:
+def _low_hp_value(region_bgr, templates, band, w, scale, pitch, span, bright_samples=None) -> int | None:
     """기본 판독이 None일 때의 저HP 보조 판독. 해당 없으면 None(정상 경로 불변)."""
     if not _flooded(band, w):
         return None  # flooded 아님 → 저HP 아님 → 개입 안 함
@@ -179,9 +181,14 @@ def _low_hp_value(region_bgr, templates, band, w, scale, pitch, span) -> int | N
     val, score, _ = _scan(
         bband, w, scale, pitch, templates, range(-span, span + 1), strong=_ACCEPT
     )
-    if val is None or score < _ACCEPT or val > _LOW_HP_MAX:
-        return None
-    return val
+    if val is not None and score >= _ACCEPT and val <= _LOW_HP_MAX:
+        return val
+    if bright_samples:
+        val, score, _ = _scan(bband, w, scale, pitch, bright_samples,
+                             range(-span, span + 1), strong=_STRONG)
+        if val is not None and score >= _STRONG and val <= _LOW_HP_MAX:
+            return val
+    return None
 
 
 def _prep(region_bgr, templates):
@@ -202,12 +209,14 @@ def _prep(region_bgr, templates):
 def read_percent(
     region_bgr: np.ndarray,
     templates: dict[str, list[np.ndarray]] | None = None,
+    *, bright_samples: dict[str, list[np.ndarray]] | None = None,
 ) -> int | None:
     """보스 HP바 박스(BGR, 오른쪽 끝 ≈ 바 오른쪽 끝)에서 정수 HP%(0~100)를 읽는다.
 
     못 읽으면 None(틀린 값보다 안전). 정렬 오프셋을 ±탐색해 가장 확신 높은 판독을
     고르므로, 박스가 몇 px 어긋나도 알아서 맞춰 읽는다.
     """
+    bright_samples = (_BRIGHT_SAMPLES if templates is None else {}) if bright_samples is None else bright_samples
     prep = _prep(region_bgr, templates)
     if prep is None:
         return None
@@ -215,13 +224,14 @@ def read_percent(
     val, score, _ = _scan(band, w, scale, pitch, templates, range(-span, span + 1))
     if val is not None and score >= _ACCEPT:
         return val
-    return _low_hp_value(region_bgr, templates, band, w, scale, pitch, span)
+    return _low_hp_value(region_bgr, templates, band, w, scale, pitch, span, bright_samples)
 
 
 def read_percent_cached(
     region_bgr: np.ndarray,
     templates: dict[str, list[np.ndarray]] | None = None,
     hint: int | None = None,
+    *, bright_samples: dict[str, list[np.ndarray]] | None = None,
 ) -> tuple[int | None, int | None]:
     """read_percent와 '있음/없음(None 여부)'은 동일하되 빠른 버전 — (값, 당첨 오프셋).
 
@@ -231,6 +241,7 @@ def read_percent_cached(
     완전히 같고(폴백 보장), 흔한 경우(힌트 적중)만 17배 빨라진다. 디버프 3차 전용 —
     보스패턴알림은 값을 쓰므로 read_percent(전체 탐색)를 그대로 쓴다.
     """
+    bright_samples = (_BRIGHT_SAMPLES if templates is None else {}) if bright_samples is None else bright_samples
     prep = _prep(region_bgr, templates)
     if prep is None:
         return None, None
@@ -249,5 +260,5 @@ def read_percent_cached(
     if score >= _ACCEPT:
         return val, shift
     # 4) 저HP 보조 경로(read_percent와 동일 조건). 밝기 마스크라 당첨 오프셋은 재사용 불가(None).
-    low = _low_hp_value(region_bgr, templates, band, w, scale, pitch, span)
+    low = _low_hp_value(region_bgr, templates, band, w, scale, pitch, span, bright_samples)
     return (low, None) if low is not None else (None, None)

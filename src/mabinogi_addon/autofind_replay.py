@@ -32,9 +32,14 @@ def detector_assets(feature: str) -> dict[str, np.ndarray]:
         template = anchor_template()
         return {} if template is None else {"anchor": template}
     if feature in ("boss", "debuff"):
-        from .detect.boss_hp_reader import _DIGITS
-        return {f"digit_{digit}_{i}": template for digit, samples in _DIGITS.items()
-                for i, template in enumerate(samples)}
+        from .detect.boss_hp_reader import _DIGITS, _BRIGHT_SAMPLES
+        from .detect.boss_bar import _AUXILIARY_NAMES
+        assets = {f"digit_{digit}_{i}": template for digit, samples in _DIGITS.items()
+                  for i, template in enumerate(samples)}
+        assets.update({f"auxiliary_name_{name}": template for name, template in _AUXILIARY_NAMES.items()})
+        assets.update({f"bright_digit_{digit}_{i}": template for digit, samples in _BRIGHT_SAMPLES.items()
+                       for i, template in enumerate(samples)})
+        return assets
     return {}
 
 
@@ -65,7 +70,14 @@ def missing_required_assets(feature: str, assets: dict) -> list[str]:
         return missing
     if feature in ("boss", "debuff"):
         digits = _digit_templates(assets)
-        return [f"digit_{digit}" for digit in "0123456789" if digit not in digits]
+        missing = [f"digit_{digit}" for digit in "0123456789" if digit not in digits]
+        auxiliary = assets.get("auxiliary_name_erg")
+        if not isinstance(auxiliary, np.ndarray) or not auxiliary.size:
+            missing.append("auxiliary_name_erg")
+        if not any(name.startswith("bright_digit_8_") and isinstance(image, np.ndarray) and image.size
+                   for name, image in assets.items()):
+            missing.append("bright_digit_8")
+        return missing
     return []
 
 
@@ -81,14 +93,21 @@ def run_detector(feature: str, frame: np.ndarray, assets: dict, trace: dict):
         from .detect.boss_bar import locate_boss_bar, make_validator
         from .detect import boss_hp_reader
         digits = _digit_templates(assets)
+        auxiliary_names = {name.removeprefix("auxiliary_name_"): image for name, image in assets.items()
+                           if name.startswith("auxiliary_name_")}
+        bright_samples = _digit_templates({name.removeprefix("bright_"): image for name, image in assets.items()
+                                           if name.startswith("bright_digit_")})
         trace["percent_validation"] = {"transforms": ["height-scaled right-aligned glyph crop", "low-saturation mask", "low-HP bright-mask fallback"],
                                        "accept_score": boss_hp_reader._ACCEPT,
                                        "strong_digit_score": boss_hp_reader._STRONG,
+                                       "additional_bright_accept_score": boss_hp_reader._STRONG,
                                        "saturation_max": boss_hp_reader._SAT_MAX,
                                        "reference_height": boss_hp_reader._REF_H,
                                        "y_band": boss_hp_reader._YBAND,
                                        "alignment_search": boss_hp_reader._SEARCH}
-        return locate_boss_bar(frame, make_validator(templates=digits, diagnostics=trace), diagnostics=trace)
+        return locate_boss_bar(frame, make_validator(templates=digits, diagnostics=trace, auxiliary_names=auxiliary_names,
+                                                    bright_samples=bright_samples),
+                               diagnostics=trace, auxiliary_names=auxiliary_names)
     if feature == "stat_bars":
         from .detect.stat_bars import locate_stat_bars
         return locate_stat_bars(frame, diagnostics=trace)

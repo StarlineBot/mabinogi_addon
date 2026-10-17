@@ -48,28 +48,51 @@ def load_name_templates() -> dict[str, np.ndarray]:
 _TEMPLATES = load_name_templates()
 
 
+def load_name_variants() -> dict[str, list[np.ndarray]]:
+    """Additional observed glyph renderings, retaining the original primary samples."""
+    out = {}
+    if _BOSS_DIR.exists():
+        for sub in sorted(p for p in _BOSS_DIR.iterdir() if p.is_dir()):
+            samples = []
+            for path in sorted(sub.glob("name_*.png")):
+                image = imread(path, cv2.IMREAD_GRAYSCALE)
+                if image is not None:
+                    samples.append(cv2.threshold(image, 127, 255, cv2.THRESH_BINARY)[1])
+            if samples:
+                out[sub.name] = samples
+    return out
+
+
+_VARIANTS = load_name_variants()
+
+
 def identify(
     region_bgr: np.ndarray,
     templates: dict[str, np.ndarray] | None = None,
     threshold: float = MATCH_THRESHOLD,
+    *, variants: dict[str, list[np.ndarray]] | None = None,
 ) -> str | None:
     """이름 영역(BGR)에서 보스 id를 식별. 못 찾으면 None.
 
     임계 이상 후보 중 (점수, 템플릿 폭)이 가장 큰 것 — 즉 점수가 비슷하면 더 긴 이름을
     택해 접두어 혼동(레넨의 미이르 vs 레넨의 미이르:회한)을 막는다.
     """
-    templates = _TEMPLATES if templates is None else templates
+    if templates is None:
+        templates = _TEMPLATES
+        variants = _VARIANTS if variants is None else variants
+    variants = {} if variants is None else variants
     if region_bgr is None or region_bgr.size == 0 or not templates:
         return None
     binary = _binary(region_bgr)
     best: str | None = None
     best_key = (-2.0, -1)
     for bid, t in templates.items():
-        if t.shape[0] > binary.shape[0] or t.shape[1] > binary.shape[1]:
-            continue
-        score = float(cv2.matchTemplate(binary, t, cv2.TM_CCOEFF_NORMED).max())
-        if score >= threshold:
-            key = (round(score, 2), t.shape[1])  # 점수 → 폭(더 긴 이름 우선)
-            if key > best_key:
-                best_key, best = key, bid
+        for sample in (t, *variants.get(bid, ())):
+            if sample.shape[0] > binary.shape[0] or sample.shape[1] > binary.shape[1]:
+                continue
+            score = float(cv2.matchTemplate(binary, sample, cv2.TM_CCOEFF_NORMED).max())
+            if score >= threshold:
+                key = (round(score, 2), sample.shape[1])
+                if key > best_key:
+                    best_key, best = key, bid
     return best

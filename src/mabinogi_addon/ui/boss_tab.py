@@ -30,7 +30,7 @@ from ..detect.boss_bar import (
 from ..detect.boss_hp_reader import read_percent
 from .dpi import to_logical
 from .screen_grab import capture_for_autofind
-from ..detect.boss_name_matcher import identify, load_name_templates
+from ..detect.boss_name_matcher import identify, load_name_templates, load_name_variants
 from ..tracker.boss_catalog import load_bosses, make_tracker
 from .pattern_overlay import PatternWarningOverlay
 from .upcoming_overlay import UpcomingPatternsOverlay
@@ -71,6 +71,7 @@ class BossTab(QWidget):
             self._shot_dir = paths.project_root() / "tests" / "data" / "boss_hp_shots"
         self._bosses = load_bosses()
         self._name_templates = load_name_templates()
+        self._name_variants = load_name_variants()
         self._tracker = None
         self._cur_boss: str | None = None
         self._stable_hp: int | None = None
@@ -415,7 +416,7 @@ class BossTab(QWidget):
         w = frame.shape[1]
         name_reg = frame[:, : int(w * 0.60)]  # 왼쪽=이름
         pct_reg = frame[:, int(w * 0.58) :]  # 오른쪽=HP%(가운데 빈 띠는 글자 없음)
-        boss_id = identify(name_reg, self._name_templates)
+        boss_id = identify(name_reg, self._name_templates, variants=self._name_variants)
 
         # 보스 식별/소멸 관리. **HP 판독·경고는 보스가 '이번 프레임' 식별됐을 때만**
         # 처리한다 — 보스가 없으면 영역이 길바닥/UI라 HP가 garbage로 읽히는데, 그걸

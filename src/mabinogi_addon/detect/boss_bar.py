@@ -27,6 +27,27 @@ from __future__ import annotations
 import cv2
 import numpy as np
 
+from .. import paths
+from ..image_io import imread
+
+
+def auxiliary_name_templates() -> dict[str, np.ndarray]:
+    image = imread(paths.resource_dir() / "boss_auxiliary/erg.png", cv2.IMREAD_GRAYSCALE)
+    return {} if image is None else {"erg": cv2.threshold(image, 127, 255, cv2.THRESH_BINARY)[1]}
+
+
+_AUXILIARY_NAMES = auxiliary_name_templates()
+_AUXILIARY_NAME_THRESHOLD = .8
+_AUXILIARY_STEP = 34 / 1440
+
+
+def _is_auxiliary_bar(sub, names) -> bool:
+    gray = cv2.cvtColor(sub[:, :int(sub.shape[1] * .60)], cv2.COLOR_BGR2GRAY)
+    binary = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY)[1]
+    return any(template.shape[0] <= binary.shape[0] and template.shape[1] <= binary.shape[1]
+               and float(cv2.matchTemplate(binary, template, cv2.TM_CCOEFF_NORMED).max()) >= _AUXILIARY_NAME_THRESHOLD
+               for template in names.values())
+
 _SAT_MIN = 90
 _VAL_MIN = 80
 _MIN_W_FRAC = 0.18  # 화면 폭 대비 최소 바 폭(= 가장자리 행 '씨앗' 판정의 최장 연속 하한)
@@ -51,7 +72,7 @@ def _has_name_text(sub: np.ndarray) -> bool:
     return float(glyph.mean()) >= _NAME_COV_MIN
 
 
-def make_validator(*, templates=None, diagnostics: dict | None = None):
+def make_validator(*, templates=None, diagnostics: dict | None = None, auxiliary_names=None, bright_samples=None):
     """박스가 진짜 보스바인지 검증하는 콜백 — HP% 판독이 되고(오른쪽에 'XXX.XX%'),
     왼쪽에 **이름 글자가 있을 때**만 True. (지난 커밋은 등록된 5개 보스만 식별(identify)해
     통과시켜, 글라스 기브넨 등 미등록 보스에선 자동 찾기가 안 됐다. 디버프 트래커는 모든
@@ -60,11 +81,16 @@ def make_validator(*, templates=None, diagnostics: dict | None = None):
     이걸로 거르는 것: 펠롬 2단 바 등 % 판독 실패(read_percent None), 글자 없는 솔리드 밴드.
     """
     from .boss_hp_reader import read_percent
+    auxiliary_names = _AUXILIARY_NAMES if auxiliary_names is None else auxiliary_names
 
     def validate(sub: np.ndarray) -> bool:
         if sub is None or sub.size == 0 or sub.shape[1] < 20:
             return False
-        percent = read_percent(sub, templates)
+        if _is_auxiliary_bar(sub, auxiliary_names):
+            if diagnostics is not None:
+                diagnostics.setdefault("validation", []).append({"percent": None, "rejection": "auxiliary_bar"})
+            return False
+        percent = read_percent(sub, templates, bright_samples=bright_samples)
         if percent is None:
             if diagnostics is not None:
                 diagnostics.setdefault("validation", []).append({"percent": None, "rejection": "percent_unreadable"})
@@ -116,7 +142,7 @@ def has_wide_bar_row(frame: np.ndarray, frac: float = 0.70) -> bool:
 
 
 def locate_boss_bar(
-    frame: np.ndarray, validate=None, *, diagnostics: dict | None = None
+    frame: np.ndarray, validate=None, *, diagnostics: dict | None = None, auxiliary_names=None,
 ) -> tuple[int, int, int, int] | None:
     """전체 화면에서 보스 체력바 영역 (x,y,w,h)를 찾는다(없으면 None).
 
@@ -129,12 +155,15 @@ def locate_boss_bar(
         return None
     H, W = frame.shape[:2]
     if diagnostics is not None:
-        diagnostics.update(transforms=["BGR to HSV", "saturation mask", "row longest run", "height normalization"],
+        diagnostics.update(transforms=["BGR to HSV", "saturation mask", "row longest run", "height normalization",
+                                       "auxiliary name exclusion", "validated upper companion strip"],
                            search_region=[0, int(H * _BOTTOM_FRAC), W, H - int(H * _BOTTOM_FRAC)],
                            thresholds={"saturation_min": _SAT_MIN, "value_min": _VAL_MIN,
                                        "min_width_fraction": _MIN_W_FRAC, "fill_row": _FILL_ROW,
                                        "min_height_fraction": _MIN_H_FRAC, "max_height_fraction": _MAX_H_FRAC,
-                                       "flat_ratio": _FLAT_RATIO, "edge_fraction": _EDGE_FRAC},
+                                       "flat_ratio": _FLAT_RATIO, "edge_fraction": _EDGE_FRAC,
+                                       "auxiliary_name_score": _AUXILIARY_NAME_THRESHOLD,
+                                       "companion_step_fraction": _AUXILIARY_STEP},
                            candidates=[], rejection="no_geometric_candidate")
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
     sat = (hsv[:, :, 1] > _SAT_MIN) & (hsv[:, :, 2] > _VAL_MIN)
@@ -171,7 +200,21 @@ def locate_boss_bar(
                 diagnostics["candidates"].append({"box": [left, y_off + int(top), w, int(h)], "rejection": "geometry_filter"})
             continue
         cands.append(normalize_box_height((left, y_off + top, w, h), H))
-    cands.sort(key=lambda b: (-b[2], b[1]))  # 폭 큰 것 우선, 같으면 위쪽(HP바가 에르그 위)
+    auxiliary_names = _AUXILIARY_NAMES if auxiliary_names is None else auxiliary_names
+    filtered = []
+    for bx, by, bw, bh in cands:
+        if _is_auxiliary_bar(frame[by:by + bh, bx:bx + bw], auxiliary_names):
+            # Pellom's auxiliary strip is a separate, fixed row below the HP strip.
+            # It can supply geometry when low HP leaves no long saturated seed above.
+            above = (bx, by - round(H * _AUXILIARY_STEP), bw, bh)
+            ax, ay, aw, ah = above
+            if validate is not None and ay >= 0 and validate(frame[ay:ay + ah, ax:ax + aw]):
+                filtered.append(above)
+            if diagnostics is not None:
+                diagnostics["candidates"].append({"box": [bx, by, bw, bh], "rejection": "auxiliary_bar"})
+            continue
+        filtered.append((bx, by, bw, bh))
+    cands = sorted(set(filtered), key=lambda b: (-b[2], b[1]))
     if validate is not None:
         for bx, by, bw, bh in cands:
             accepted = validate(frame[by : by + bh, bx : bx + bw])
