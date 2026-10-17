@@ -36,6 +36,7 @@ NCC_MIN = 0.30  # 최근접 상관이 이보다 낮으면 판독 포기(None)
 # 분류되는 경우는 ≤0.49. 그 사이로 임계를 올려 '5%→95%' 같은 가짜 두 자리(→거짓 알림)를
 # 막는다. (일의 자리는 NCC_MIN 유지)
 _TENS_NCC_MIN = 0.6
+_THIN_ONES_NCC_MIN = 0.85
 # R(‘%’ 끝) 자동정렬 스캔 폭(px, 정규화 폭 기준). 관측된 밀림은 ~3px이고, 자리 피치(~8px)
 # 보다 작아야 옆 자리로 건너뛰지 않는다.
 _R_SCAN = 4
@@ -204,4 +205,16 @@ def read_percent(
         if tens_d is not None and tens_s >= max(threshold, _TENS_NCC_MIN):
             value = tens_d * 10 + ones_d
             return value if 0 <= value <= 100 else None
+    elif tens_ink > 0:
+        # A thin low-contrast 1 can leave only three bright pixels. Require
+        # both digits at the same alignment; never promote background to 9x.
+        for rr in (r, r - 1, r + 1):
+            if not 0 <= rr < v.shape[1]:
+                continue
+            od, os_ = _classify(_norm(_cell(v, rr, _ONES)), Ro, Lo)
+            td, ts = _classify(_norm(_cell(v, rr, _TENS)), Rt, Lt)
+            if (od == ones_d and os_ >= max(threshold, _THIN_ONES_NCC_MIN)
+                    and td == 1 and ts >= max(threshold, _TENS_NCC_MIN)):
+                return 10 + od
+        return None
     return ones_d
