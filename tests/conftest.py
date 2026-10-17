@@ -17,6 +17,44 @@ import sys
 
 import pytest
 
+
+@pytest.fixture
+def tuarim_width_diagnostics(monkeypatch):
+    """Capture real geometry at the width assertion, without changing its result."""
+    import json
+    from PySide6.QtCore import QPoint
+    from PySide6.QtGui import QFontInfo
+    from mabinogi_addon.ui.main_window import _VScroll
+
+    original = _VScroll.horizontalScrollBar
+    snapshot = {}
+
+    def measured(scroll):
+        bar = original(scroll)
+        tab = scroll.widget()
+        if tab is not None and type(tab).__name__ == "TuarimTab" and tab.isVisible():
+            view = scroll.viewport()
+            font = QFontInfo(tab.font())
+            controls = {}
+            for name in ("auto_find_btn", "region_btn", "view_region_btn", "collect_chk",
+                         "snap_btn", "open_dir_btn", "collect_label"):
+                widget = getattr(tab, name)
+                point = widget.mapTo(view, QPoint())
+                control_font = QFontInfo(widget.font())
+                controls[name] = {"rect": [point.x(),point.y(),widget.width(),widget.height()],
+                                  "minimum_hint": widget.minimumSizeHint().width(),
+                                  "font": {"family":control_font.family(),"pixel_size":control_font.pixelSize()}}
+            snapshot.update(viewport=[view.width(),view.height()], content=[tab.width(),tab.height()],
+                            minimum_hint=tab.minimumSizeHint().width(), horizontal_range=bar.maximum(),
+                            font={"family":font.family(),"pixel_size":font.pixelSize()},
+                            path=str(tab._shot_dir), controls=controls)
+        return bar
+
+    monkeypatch.setattr(_VScroll, "horizontalScrollBar", measured)
+    yield snapshot
+    if snapshot:
+        print("TUARIM_WIDTH_DIAGNOSTICS " + json.dumps(snapshot, ensure_ascii=False))
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 

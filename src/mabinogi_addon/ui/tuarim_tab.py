@@ -10,9 +10,10 @@
 
 from __future__ import annotations
 
+import math
 import numpy as np
-from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QImage, QPixmap
+from PySide6.QtCore import QPointF, Qt, QTimer
+from PySide6.QtGui import QImage, QPainter, QPalette, QPixmap, QTextLayout, QTextOption
 from PySide6.QtWidgets import (
     QCheckBox,
     QGridLayout,
@@ -20,6 +21,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QSizePolicy,
     QSpinBox,
     QVBoxLayout,
     QWidget,
@@ -30,6 +32,45 @@ from ..detect.tuarim_reader import read_percent
 from ..tracker import TuarimTracker
 from .help_dialog import tab_header
 from .widgets import checkbox, hint_label
+
+
+class _CapturePathLabel(QLabel):
+    """Wrap unbroken Windows paths without imposing their minimum word width."""
+
+    def __init__(self):
+        super().__init__()
+        self.setWordWrap(True)
+        self.setTextFormat(Qt.TextFormat.PlainText)
+        self.setStyleSheet("color:#8a8f98;")
+        policy = self.sizePolicy()
+        policy.setHorizontalPolicy(QSizePolicy.Policy.Ignored)
+        self.setSizePolicy(policy)
+
+    def _text_layout(self, width):
+        layout = QTextLayout(self.text(), self.font())
+        option = QTextOption()
+        option.setWrapMode(QTextOption.WrapMode.WrapAtWordBoundaryOrAnywhere)
+        layout.setTextOption(option)
+        height = 0
+        layout.beginLayout()
+        while True:
+            line = layout.createLine()
+            if not line.isValid():
+                break
+            line.setLineWidth(max(1, width))
+            line.setPosition(QPointF(0, height))
+            height += line.height()
+        layout.endLayout()
+        return layout, math.ceil(height)
+
+    def heightForWidth(self, width):
+        return self._text_layout(width)[1]
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setPen(self.palette().color(QPalette.ColorRole.WindowText))
+        self._text_layout(self.width())[0].draw(painter, QPointF())
+        painter.end()
 
 # 숫자 두 자리+% 를 덮는 고정 박스 크기(px). 스샷 측정: 한 글자 ~16px, '0%'=32×19.
 # 2자리+% ≈ 48×19 → 여유를 둔 기본값. (해상도/UI 배율 다르면 추후 조정)
@@ -220,13 +261,14 @@ class TuarimTab(QWidget):
         self.collect_chk = checkbox("수집 모드(값 바뀔 때 자동 저장)")
         row.addWidget(self.collect_chk, 1)
         g.addLayout(row)
-        self.collect_label = hint_label("")
+        self.collect_label = _CapturePathLabel()
         self._update_collect_label()
         g.addWidget(self.collect_label)
         return box
 
     def _update_collect_label(self) -> None:
         self.collect_label.setText(f"저장 위치: {self._shot_dir}  ·  수집 {self._shot_count}장")
+        self.collect_label.setToolTip(str(self._shot_dir))
 
     def _save_snapshot(self) -> None:
         if self._last_frame is None:

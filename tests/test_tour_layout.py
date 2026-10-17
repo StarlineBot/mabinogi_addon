@@ -1,10 +1,13 @@
 """Settled layout and cancelled geometry updates must agree with the highlight."""
 
+import pytest
 from PySide6.QtCore import QCoreApplication, QEvent, QEventLoop, QTimer
 from shiboken6 import isValid
 
 from scripts.qa_navigation_tour_layout import test_seeded_navigation_and_tour
 from test_navigation import window
+
+pytestmark = pytest.mark.usefixtures("tuarim_width_diagnostics")
 
 
 def settle(app):

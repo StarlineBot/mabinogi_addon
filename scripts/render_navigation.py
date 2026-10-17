@@ -2,7 +2,7 @@
 
 from contextlib import ExitStack
 from copy import deepcopy
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from unittest.mock import patch
 import argparse
 import os
@@ -22,6 +22,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", type=Path, default=Path("/tmp/navigation-implemented"))
     parser.add_argument("--large-tour", action="store_true")
+    parser.add_argument("--tuarim-path")
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
     app = QApplication.instance() or QApplication([])
@@ -44,6 +45,9 @@ def main():
         stack.enter_context(patch.object(screen, "availableGeometry", lambda self: QRect(0, 0, 900, 1000)))
         stack.enter_context(patch.object(screen, "geometry", lambda self: QRect(0, 0, 900, 1000)))
         window = MainWindow()
+        if args.tuarim_path:
+            window.tuarim_tab._shot_dir = PureWindowsPath(args.tuarim_path)
+            window.tuarim_tab._update_collect_label()
         window._post_show_done = True
         try:
             window.move(0, 0)
@@ -64,7 +68,7 @@ def main():
                 font = QFont(original)
                 font.setPixelSize(20)
                 widget.setFont(font)
-            for key in ("buff", "debuff"):
+            for key in ("buff", "debuff", "tuarim"):
                 window._open_setup_feature(key)
                 settle()
                 assert window.grab().save(str(args.out / f"large-font-{key}.png"))
