@@ -14,7 +14,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from PySide6.QtCore import QEvent, QObject, QPoint, QRect, Qt
+from PySide6.QtCore import QEvent, QObject, QPoint, QRect, Qt, QTimer
 from PySide6.QtGui import QColor, QGuiApplication, QPainter, QPen
 from PySide6.QtWidgets import (
     QFrame,
@@ -60,6 +60,11 @@ class TourOverlay(QWidget):
         self._section_title = section_title
         self._i = 0
         self._screen_geo = QRect()
+        self._dismissed = False
+        self._watched = []
+        self._layout_timer = QTimer(self)
+        self._layout_timer.setSingleShot(True)
+        self._layout_timer.timeout.connect(self._refresh_geometry)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground)
 
@@ -130,9 +135,38 @@ class TourOverlay(QWidget):
             QEvent.Type.Move,
         ):
             self._fit_to_screen()
+            self._schedule_geometry()
+        elif obj in self._watched and event.type() in (
+            QEvent.Type.Move, QEvent.Type.Resize, QEvent.Type.LayoutRequest,
+            QEvent.Type.Show, QEvent.Type.Hide,
+        ):
+            self._schedule_geometry()
+        return super().eventFilter(obj, event)
+
+    def _schedule_geometry(self):
+        if not self._dismissed and not self._layout_timer.isActive():
+            self._layout_timer.start(0)
+
+    def _refresh_geometry(self):
+        if not self._dismissed and self.isVisible():
             self._place_card()
             self.update()
-        return super().eventFilter(obj, event)
+
+    def _clear_target_watchers(self):
+        for widget in self._watched:
+            try:
+                widget.removeEventFilter(self)
+            except RuntimeError:
+                pass  # The target may already have been destroyed during shutdown.
+        self._watched.clear()
+
+    def _watch_target(self):
+        # Scroll offsets move an ancestor, not necessarily the target itself.
+        widget = self._steps[self._i].target
+        while widget is not None and widget is not self._host:
+            widget.installEventFilter(self)
+            self._watched.append(widget)
+            widget = widget.parentWidget()
 
     def _target_rect(self) -> QRect | None:
         step = self._steps[self._i]
@@ -146,6 +180,10 @@ class TourOverlay(QWidget):
         return QRect(tl, visible.size()).adjusted(-_PAD, -_PAD, _PAD, _PAD).intersected(self.rect())
 
     def _show_step(self) -> None:
+        if self._dismissed:
+            return
+        self._layout_timer.stop()
+        self._clear_target_watchers()
         step = self._steps[self._i]
         if step.before is not None:
             step.before()
@@ -156,8 +194,10 @@ class TourOverlay(QWidget):
         self._prev.setVisible(self._i > 0)
         self._next.setText("시작하기" if self._i == len(self._steps) - 1 else "다음")
         self._card.adjustSize()
+        self._watch_target()
         self._place_card()
         self.update()
+        self._schedule_geometry()
 
     def _place_card(self) -> None:
         r = self._target_rect()
@@ -211,6 +251,11 @@ class TourOverlay(QWidget):
             self.dismiss()
 
     def dismiss(self) -> None:
+        if self._dismissed:
+            return
+        self._dismissed = True
+        self._layout_timer.stop()
+        self._clear_target_watchers()
         self._host.removeEventFilter(self)
         self.close()
         self.deleteLater()

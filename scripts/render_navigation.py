@@ -21,6 +21,7 @@ from test_support.boundaries import ExternalBoundaries
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", type=Path, default=Path("/tmp/navigation-implemented"))
+    parser.add_argument("--large-tour", action="store_true")
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
     app = QApplication.instance() or QApplication([])
@@ -67,8 +68,9 @@ def main():
                 window._open_setup_feature(key)
                 settle()
                 assert window.grab().save(str(args.out / f"large-font-{key}.png"))
-            for widget, original in fonts.items():
-                widget.setFont(original)
+            if not args.large_tour:
+                for widget, original in fonts.items():
+                    widget.setFont(original)
             window._run_tour(from_guide=True)
             tour = window._tour
             for index in range(7):
