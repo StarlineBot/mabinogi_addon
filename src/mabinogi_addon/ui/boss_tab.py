@@ -34,7 +34,7 @@ from ..detect.boss_name_matcher import identify, load_name_templates
 from ..tracker.boss_catalog import load_bosses, make_tracker
 from .pattern_overlay import PatternWarningOverlay
 from .upcoming_overlay import UpcomingPatternsOverlay
-from .widgets import CapturePathLabel, checkbox, hint_label
+from .widgets import CapturePathLabel, checkbox, hint_label, wrapping_row
 
 _SOUND_DIR = paths.resource_dir() / "sounds"
 _PRE_SOUND = _SOUND_DIR / "보스패턴 예고.mp3"
@@ -150,10 +150,13 @@ class BossTab(QWidget):
             "보스 체력바(+디버프 영역)를 화면에서 자동으로 찾아 지정합니다 — Discord 베타"
         )
         self.auto_find_btn.clicked.connect(self._on_auto_find)
-        row.addWidget(self.auto_find_btn)
-        row.addWidget(self.region_btn)
-        row.addWidget(self.view_region_btn)
-        cv.addLayout(row)
+        commands = QHBoxLayout()
+        commands.addStretch(1)
+        commands.addWidget(self.auto_find_btn)
+        commands.addWidget(self.region_btn)
+        commands.addWidget(self.view_region_btn)
+        self.region_row = wrapping_row(row, commands)
+        cv.addLayout(self.region_row)
 
         cv.addWidget(QLabel("원본 미리보기 · 현재 판독"))
         prev_row = QHBoxLayout()

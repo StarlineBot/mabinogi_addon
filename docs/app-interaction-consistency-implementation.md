@@ -126,3 +126,34 @@ QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest tests/test_custom_autosave.
 - 제품 변경 범위는 커스텀 저장 수명과 메인 창의 설정 교체 연결이다. 판독/알림/자동 찾기나
   설정 파일 포맷은 바꾸지 않는다. 새 수정 SHA의 Windows 회귀·네이티브 통합·exe 빌드는 별도 확인 대상이며,
   이 개발 재현 통과는 후속 독립 QA나 릴리즈 승인이 아니다.
+
+## Windows 큰 글꼴 화면 폭 후속 QA 수정
+
+- 근거: [설정 교체 및 Windows 폭 독립 QA](qa/설정교체_자동저장수정_및_Windows폭_독립QA_20261017.md)의
+  `INTERACTION-WINDOWS-WIDTH-QA-01` (P2). 같은 보고서에서 설정 교체 P1은 실제 Windows에서도 수정 확인됐다.
+- 검증 SHA `cc511d3`의 Windows는 큰 글꼴 20px에서 viewport 776px 대비 보스 850px,
+  체력바 831px의 최소 폭으로 기존 폭/투어 assertion 9개가 실패했다. native/빌드는 실행되지 않았으므로
+  해당 실행을 성공으로 재사용하지 않는다. 실게임 혼합 DPI 전체의 실패를 뜻하지도 않는다.
+- 보스/체력바의 영역 제목·상태와 세 명령을 두 그룹으로 분리하고 Qt `QFormLayout.WrapLongRows`를
+  사용한다. 실제 최소 폭이 부족할 때 명령 그룹이 다음 줄로 내려간다. 새 임계 px값, 글꼴 축소,
+  고정 창 확대나 가로 스크롤 숨김으로 결함을 우회하지 않는다.
+- 체력바의 배율·정렬/전체 잠금 그룹과 세 알림 항목도 동일한 네이티브 줄바꿈을 사용한다.
+  기본 배치는 한 줄을 유지하고 버튼/입력은 불필요하게 늘리지 않는다. 컨트롤 객체와 신호를 재생성하거나
+  판독/알림/잠금/설정 값을 변경하지 않는다. 높이가 늘면 기존 세로 스크롤로 접근한다.
+- 원래 실패한 폭/투어 파일과 제품 렌더: **34 passed (45.29초)**. 기존 assertion/입력은 그대로다.
+- 새 `tests/test_wrapping_controls.py`는 20px 글꼴과 Windows에서 측정한 174px 버튼 최소 폭,
+  넓은 알림 입력을 주입해 실제 줄바꿈, 모든 버튼/입력/콤보의 viewport 포함, 글꼴 유지와
+  기본 폭 복귀/같은 컨트롤 유지/설정 파일 불변을 검사한다. 최종 추가 검사 **2 passed (10.20초)**.
+  이 최소 폭 주입은 Linux의 Qt 기하 검사이며 실제 Windows 실행으로 표현하지 않는다.
+- 제품 렌더/폭 모사/보스/체력바 판독 안정성·출력·흔들림/탐색/설정 교체 관련 묶음은
+  **132 passed (83.37초)**. 후속 간격 조정 전 결과이며 최종 폭/투어/렌더 재검증을 별도로 남긴다.
+- 최종 간격을 반영한 폭 모사/기존 전체 탭 폭/투어/제품 렌더 묶음은
+  **36 passed (48.32초)**다. 반복 실행을 고유 테스트 총계로 합산하지 않는다. `git diff --check` 통과.
+- 기본 화면과 20px/174px 조건의 보스·체력바 PNG를 실제 확인했다. 재생성:
+
+```bash
+QT_QPA_PLATFORM=offscreen INTERACTION_RENDER_DIR=/tmp/interaction-width .venv/bin/python -m pytest tests/test_wrapping_controls.py tests/test_interaction_consistency.py -q --tb=short
+```
+
+- 정확한 새 수정 SHA의 Windows 격리 회귀·네이티브·exe 빌드가 성공해야 Windows 폭 수정 확인과
+  후속 QA 준비로 판정할 수 있다. 기존 Windows 실패나 API 접근 제한을 숨기지 않으며 태그/릴리즈는 하지 않는다.

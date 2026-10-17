@@ -36,7 +36,7 @@ from .dpi import to_logical
 from .help_dialog import tab_header
 from .screen_grab import capture_for_autofind
 from .stat_overlay import WARNING_SAMPLE_MAX_AGE, StatBarOverlay
-from .widgets import checkbox, hint_label, section_label
+from .widgets import checkbox, hint_label, section_label, wrapping_row
 
 STAT_LABELS = {"hp": "생명력", "mp": "마나", "sta": "스태미나"}
 
@@ -137,10 +137,13 @@ class StatBarsTab(QWidget):
         self.auto_find_btn = QPushButton("자동 찾기")
         self.auto_find_btn.setToolTip("체력바(생/마/스)를 화면에서 자동으로 찾아 지정 — Discord 베타")
         self.auto_find_btn.clicked.connect(self._on_auto_find)
-        row.addWidget(self.auto_find_btn)
-        row.addWidget(self.region_btn)
-        row.addWidget(self.view_region_btn)
-        v.addLayout(row)
+        commands = QHBoxLayout()
+        commands.addStretch(1)
+        commands.addWidget(self.auto_find_btn)
+        commands.addWidget(self.region_btn)
+        commands.addWidget(self.view_region_btn)
+        self.region_row = wrapping_row(row, commands)
+        v.addLayout(self.region_row)
 
         # 미리보기 + 현재 값
         v.addWidget(QLabel("원본 미리보기"))
@@ -192,14 +195,16 @@ class StatBarsTab(QWidget):
         self.align_combo.setCurrentIndex(idx)
         self.align_combo.currentIndexChanged.connect(self._on_align)
         ctl_row.addWidget(self.align_combo)
-        ctl_row.addStretch(1)
         self.lock_all_btn = QPushButton("전체 잠금")
         self.lock_all_btn.clicked.connect(lambda: self._set_locked_all(True))
         self.unlock_all_btn = QPushButton("전체 잠금 해제")
         self.unlock_all_btn.clicked.connect(lambda: self._set_locked_all(False))
-        ctl_row.addWidget(self.lock_all_btn)
-        ctl_row.addWidget(self.unlock_all_btn)
-        v.addLayout(ctl_row)
+        locks = QHBoxLayout()
+        locks.addStretch(1)
+        locks.addWidget(self.lock_all_btn)
+        locks.addWidget(self.unlock_all_btn)
+        self.placement_row = wrapping_row(ctl_row, locks)
+        v.addLayout(self.placement_row)
 
         v.addWidget(QLabel("표시 미리보기"))
         self.display_preview = QScrollArea()
@@ -264,10 +269,11 @@ class StatBarsTab(QWidget):
     def _alert_group(self) -> QGroupBox:
         box = QGroupBox("낮은 수치 알림 · 보스전")
         g = QVBoxLayout(box)
-        row = QHBoxLayout()
+        groups = []
         self._alert_checks: dict[str, QWidget] = {}
         self._alert_spins: dict[str, QSpinBox] = {}
         for sid in ("hp", "mp", "sta"):
+            row = QHBoxLayout()
             chk = checkbox(STAT_LABELS[sid])
             chk.setChecked(self._bars_cfg[sid]["alert"]["on"])
             chk.toggled.connect(self._on_alert_changed)
@@ -280,10 +286,14 @@ class StatBarsTab(QWidget):
             sp.setValue(self._bars_cfg[sid]["alert"]["pct"])
             sp.valueChanged.connect(self._on_alert_changed)
             row.addWidget(sp)
+            row.addStretch(1)
             self._alert_checks[sid] = chk
             self._alert_spins[sid] = sp
-        row.addStretch(1)
-        g.addLayout(row)
+            groups.append(row)
+        remaining = QVBoxLayout()
+        remaining.addLayout(wrapping_row(groups[1], groups[2]))
+        self.alert_row = wrapping_row(groups[0], remaining)
+        g.addLayout(self.alert_row)
         self.alert_sound_chk = checkbox("소리 알림")
         self.alert_sound_chk.setChecked(self._alert_sound_on)
         self.alert_sound_chk.toggled.connect(self._on_alert_changed)

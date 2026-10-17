@@ -9,7 +9,23 @@ from __future__ import annotations
 import math
 from PySide6.QtCore import QPointF, Qt
 from PySide6.QtGui import QFocusEvent, QPainter, QPalette, QTextLayout, QTextOption
-from PySide6.QtWidgets import QBoxLayout, QCheckBox, QLabel, QMessageBox, QSizePolicy, QSpinBox
+from PySide6.QtWidgets import QBoxLayout, QCheckBox, QFormLayout, QLabel, QMessageBox, QSizePolicy, QSpinBox, QWidget
+
+
+def wrapping_row(left, right):
+    """Keep two control groups inline, wrapping the second at its native minimum width."""
+    form = QFormLayout()
+    form.setContentsMargins(0, 0, 0, 0)
+    form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+    form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
+    groups = []
+    for layout in (left, right):
+        body = QWidget()
+        layout.setContentsMargins(0, 0, 0, 0)
+        body.setLayout(layout)
+        groups.append(body)
+    form.addRow(*groups)
+    return form
 
 
 class CapturePathLabel(QLabel):
