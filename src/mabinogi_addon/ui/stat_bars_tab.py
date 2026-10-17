@@ -23,7 +23,9 @@ from PySide6.QtWidgets import (
     QLabel,
     QMessageBox,
     QPushButton,
+    QScrollArea,
     QSpinBox,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -33,8 +35,10 @@ from ..detect.stat_bars import read_stat_bars
 from .dpi import to_logical
 from .help_dialog import tab_header
 from .screen_grab import capture_for_autofind
-from .stat_overlay import STAT_LABELS, WARNING_SAMPLE_MAX_AGE, StatBarOverlay
-from .widgets import checkbox, hint_label
+from .stat_overlay import WARNING_SAMPLE_MAX_AGE, StatBarOverlay
+from .widgets import checkbox, hint_label, section_label
+
+STAT_LABELS = {"hp": "생명력", "mp": "마나", "sta": "스태미나"}
 
 # 체력·마나·스태미나 세 바를 덮는 고정 박스 기본 크기(px). 바 크기는 해상도와 무관하게
 # 고정(100% UI 배율)이라, 자유 드래그 대신 '고정 박스를 클릭 배치'한다(필요하면 휠로 조절).
@@ -107,10 +111,10 @@ class StatBarsTab(QWidget):
         v.addWidget(tab_header(
             "생명력·마나·스태미나를 별도 오버레이로 표시합니다.", HELP_TITLE, HELP_HTML, self
         ))
-        v.addWidget(hint_label(
-            "게임의 세 바가 보이는 상태에서 자동 찾기를 실행하세요."
-            " 직접 지정할 때는 생명력·마나·스태미나를 포함하고 경험치 바는 제외하세요."
-        ))
+        self.enable = checkbox("체력바 오버레이 사용")
+        self.enable.setChecked(self._enabled)
+        self.enable.toggled.connect(self._on_enable)
+        v.addWidget(self.enable)
         # 베타 기능 — 디스코드 로그인 사용자에게만. 미로그인 시 안내만 보이고 조작은 잠근다.
         self._beta_notice = hint_label(
             "🧪 개발 중인 기능 — 설정 탭에서 Discord 로그인 후 가장 먼저 써볼 수 있어요."
@@ -118,25 +122,28 @@ class StatBarsTab(QWidget):
         self._beta_notice.setStyleSheet("color:#e67e22; font-weight:600;")
         v.addWidget(self._beta_notice)
 
+        v.addWidget(section_label("판독 영역"))
         row = QHBoxLayout()
         self.region_btn = QPushButton("직접 지정")
         self.region_btn.setToolTip(
             "고정 크기 박스가 커서를 따라옵니다. 세 바 위에 올려 클릭 배치(휠로 크기 조절)"
         )
         self.region_btn.clicked.connect(self._on_region)
-        row.addWidget(self.region_btn)
+        row.addWidget(QLabel("생명력·마나·스태미나"))
         self.region_label = hint_label("")
         row.addWidget(self.region_label, 1)
         self.view_region_btn = QPushButton("지정 영역 보기")
         self.view_region_btn.clicked.connect(self._flash_region)
-        row.addWidget(self.view_region_btn)
-        self.auto_find_btn = QPushButton("🧪 자동 찾기")
+        self.auto_find_btn = QPushButton("자동 찾기")
         self.auto_find_btn.setToolTip("체력바(생/마/스)를 화면에서 자동으로 찾아 지정 — Discord 베타")
         self.auto_find_btn.clicked.connect(self._on_auto_find)
         row.addWidget(self.auto_find_btn)
+        row.addWidget(self.region_btn)
+        row.addWidget(self.view_region_btn)
         v.addLayout(row)
 
         # 미리보기 + 현재 값
+        v.addWidget(QLabel("원본 미리보기"))
         prev_row = QHBoxLayout()
         self.preview = QLabel()
         self.preview.setFixedHeight(40)
@@ -146,19 +153,16 @@ class StatBarsTab(QWidget):
         )
         self.preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
         prev_row.addWidget(self.preview)
-        self.value_label = QLabel("현재 값: —")
+        self.value_label = QLabel("현재 판독: —")
+        self.value_label.setWordWrap(True)
         self.value_label.setStyleSheet("font-size:13px; font-weight:600;")
         prev_row.addWidget(self.value_label, 1)
         v.addLayout(prev_row)
 
-        self.enable = checkbox("체력바 오버레이 사용")
-        self.enable.setChecked(self._enabled)
-        self.enable.toggled.connect(self._on_enable)
-        v.addWidget(self.enable)
-
+        v.addWidget(section_label("표시·배치"))
         # 바별 표시 토글
         show_row = QHBoxLayout()
-        show_row.addWidget(QLabel("표시:"))
+        show_row.addWidget(QLabel("표시할 바"))
         self._show_checks: dict[str, QWidget] = {}
         for sid in ("hp", "mp", "sta"):
             chk = checkbox(STAT_LABELS[sid])
@@ -171,7 +175,7 @@ class StatBarsTab(QWidget):
 
         # 배율 + 고정/해제
         ctl_row = QHBoxLayout()
-        ctl_row.addWidget(QLabel("배율"))
+        ctl_row.addWidget(QLabel("표시 배율"))
         self.scale_spin = QSpinBox()
         self.scale_spin.setRange(50, 300)
         self.scale_spin.setSingleStep(10)
@@ -189,18 +193,54 @@ class StatBarsTab(QWidget):
         self.align_combo.currentIndexChanged.connect(self._on_align)
         ctl_row.addWidget(self.align_combo)
         ctl_row.addStretch(1)
-        self.lock_all_btn = QPushButton("전체 고정")
+        self.lock_all_btn = QPushButton("전체 잠금")
         self.lock_all_btn.clicked.connect(lambda: self._set_locked_all(True))
-        self.unlock_all_btn = QPushButton("전체 해제")
+        self.unlock_all_btn = QPushButton("전체 잠금 해제")
         self.unlock_all_btn.clicked.connect(lambda: self._set_locked_all(False))
         ctl_row.addWidget(self.lock_all_btn)
         ctl_row.addWidget(self.unlock_all_btn)
         v.addLayout(ctl_row)
 
+        v.addWidget(QLabel("표시 미리보기"))
+        self.display_preview = QScrollArea()
+        self.display_preview.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        preview_body = QWidget()
+        preview_row = QHBoxLayout(preview_body)
+        preview_row.setContentsMargins(0, 0, 0, 0)
+        self._preview_bars = {}
+        self._preview_groups = {}
+        for sid in ("hp", "mp", "sta"):
+            group = QWidget()
+            column = QVBoxLayout(group)
+            column.setContentsMargins(0, 0, 0, 0)
+            column.addWidget(QLabel(STAT_LABELS[sid]))
+            bar = StatBarOverlay(sid, self._scale / 100, parent=group)
+            bar.set_locked(True)
+            bar.set_align(self._align)
+            bar.set_value(0, "--%")
+            column.addWidget(bar)
+            preview_row.addWidget(group)
+            self._preview_bars[sid] = bar
+            self._preview_groups[sid] = group
+            group.setVisible(self._bars_cfg[sid]["show"])
+        preview_row.addStretch()
+        self.display_preview.setWidget(preview_body)
+        self._resize_display_preview()
+        v.addWidget(self.display_preview)
+
         # 저값 경고(생/마/스 각각 임계 이하면 알림).
         v.addWidget(self._alert_group())
         # 수집 모드(저HP·전환 프레임 제보용). 영역이 '눈에 띄게 바뀔 때' PNG로 저장만 한다.
-        v.addWidget(self._collect_group())
+        self.diagnostics_btn = QToolButton()
+        self.diagnostics_btn.setText("진단 · 체력바 판독 / 수집")
+        self.diagnostics_btn.setCheckable(True)
+        self.diagnostics_btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.diagnostics_btn.setArrowType(Qt.ArrowType.RightArrow)
+        self._collect_box = self._collect_group()
+        self._collect_box.hide()
+        self.diagnostics_btn.toggled.connect(self._show_diagnostics)
+        v.addWidget(self.diagnostics_btn)
+        v.addWidget(self._collect_box)
         v.addStretch(1)
 
         # 로그인 시에만 조작 가능하게 묶어 두는 컨트롤들.
@@ -222,22 +262,12 @@ class StatBarsTab(QWidget):
 
     # ---- 저값 경고 ----
     def _alert_group(self) -> QGroupBox:
-        box = QGroupBox("낮은 체력·마나·스태미나 알림")
+        box = QGroupBox("낮은 수치 알림 · 보스전")
         g = QVBoxLayout(box)
-        g.addWidget(hint_label(
-            "체력·마나·스태미나가 각자 정한 % 이하로 떨어지면 흔들림과 소리로 알립니다. 바 3개가"
-            " 다 보일 때만 판정해(지역이동·가려짐 0% 오탐 방지), 임계 위로 회복하면"
-            " 다시 무장합니다."
-        ))
-        g.addWidget(hint_label(
-            "⚔️ 보스전 중일 때만 울립니다 — 보스 체력바가 화면에 떠 있어야 알림이 나갑니다"
-            " (평소 사냥·이동 중엔 울리지 않음). 보스 탭의 영역이 보스 체력바에 맞춰져 있어야"
-            " 정확합니다."
-        ))
+        row = QHBoxLayout()
         self._alert_checks: dict[str, QWidget] = {}
         self._alert_spins: dict[str, QSpinBox] = {}
         for sid in ("hp", "mp", "sta"):
-            row = QHBoxLayout()
             chk = checkbox(STAT_LABELS[sid])
             chk.setChecked(self._bars_cfg[sid]["alert"]["on"])
             chk.toggled.connect(self._on_alert_changed)
@@ -250,15 +280,37 @@ class StatBarsTab(QWidget):
             sp.setValue(self._bars_cfg[sid]["alert"]["pct"])
             sp.valueChanged.connect(self._on_alert_changed)
             row.addWidget(sp)
-            row.addStretch(1)
-            g.addLayout(row)
             self._alert_checks[sid] = chk
             self._alert_spins[sid] = sp
+        row.addStretch(1)
+        g.addLayout(row)
         self.alert_sound_chk = checkbox("소리 알림")
         self.alert_sound_chk.setChecked(self._alert_sound_on)
         self.alert_sound_chk.toggled.connect(self._on_alert_changed)
         g.addWidget(self.alert_sound_chk)
+        self.boss_region_status = hint_label("")
+        self.refresh_boss_region()
+        g.addWidget(self.boss_region_status)
         return box
+
+    def _resize_display_preview(self):
+        body = self.display_preview.widget()
+        body.adjustSize()
+        self.display_preview.setFixedHeight(body.sizeHint().height() + 24)
+
+    def _show_diagnostics(self, checked, logged_in=None):
+        self.diagnostics_btn.setArrowType(Qt.ArrowType.DownArrow if checked else Qt.ArrowType.RightArrow)
+        self._collect_box.setVisible(checked and (self._logged_in() if logged_in is None else logged_in))
+
+    def refresh_boss_region(self):
+        registered = config.load_boss_bar_region() is not None
+        self.boss_region_status.setText("보스 체력바 · " + ("등록됨" if registered else "미등록"))
+
+    def _clear_current_preview(self):
+        self.preview.clear()
+        self.value_label.setText("현재 판독: —")
+        for bar in self._preview_bars.values():
+            bar.set_value(0, "--%")
 
     def _on_alert_changed(self, *_args) -> None:
         for sid in ("hp", "mp", "sta"):
@@ -436,6 +488,8 @@ class StatBarsTab(QWidget):
     def _apply_login_gate(self) -> None:
         """베타 게이팅: 디스코드 로그인 사용자에게만 조작·표시를 허용."""
         ok = self._logged_in()
+        self._show_diagnostics(self.diagnostics_btn.isChecked(), ok)
+        self.diagnostics_btn.setVisible(ok)
         self._beta_notice.setVisible(not ok)
         for w in self._gated_widgets:
             w.setEnabled(ok)
@@ -496,6 +550,7 @@ class StatBarsTab(QWidget):
             or not self._region
             or not self._active()
         ):
+            self._clear_current_preview()
             self._alert_low_since.clear()
             self._apply_visibility()
             self._reset_visual_alerts()
@@ -506,6 +561,7 @@ class StatBarsTab(QWidget):
         px, py, pw, ph = to_physical(self._region)
         frame = self._grab_rect(px, py, pw, ph)
         if frame is None:
+            self._clear_current_preview()
             self._display_valid = False
             self._apply_visibility()
             self._alert_low_since.clear()
@@ -529,7 +585,9 @@ class StatBarsTab(QWidget):
             if self._display_valid:
                 ov.set_value(r.ratio)
                 parts.append(f"{STAT_LABELS[sid]} {int(r.ratio * 100)}%")
-        self.value_label.setText("현재 값: " + ("  ".join(parts) if parts else "—"))
+            self._preview_bars[sid].set_value(r.ratio if self._display_valid else 0,
+                                             None if self._display_valid else "--%")
+        self.value_label.setText("현재 판독: " + ("  ".join(parts) if parts else "—"))
         # Values must be applied before the first Show; invalid input never shows a window.
         self._apply_visibility()
         self._check_alerts(readings, time.monotonic())
@@ -622,7 +680,7 @@ class StatBarsTab(QWidget):
     def _update_region_label(self) -> None:
         if self._region:
             r = self._region
-            self.region_label.setText(f"영역: {r['x']},{r['y']}  {r['w']}×{r['h']}  ✔")
+            self.region_label.setText(f"등록됨 · {r['x']},{r['y']}  {r['w']}×{r['h']}")
             self.region_label.setStyleSheet("color:#2ecc71;")
             self.view_region_btn.setEnabled(True)
         else:
@@ -641,6 +699,8 @@ class StatBarsTab(QWidget):
     def _on_show_toggle(self) -> None:
         for sid, chk in self._show_checks.items():
             self._bars_cfg[sid]["show"] = chk.isChecked()
+            self._preview_groups[sid].setVisible(chk.isChecked())
+        self._resize_display_preview()
         self._apply_visibility()
         self._save()
 
@@ -648,11 +708,16 @@ class StatBarsTab(QWidget):
         self._scale = value
         for ov in self._overlays.values():
             ov.set_scale(value / 100.0)
+        for ov in self._preview_bars.values():
+            ov.set_scale(value / 100.0)
+        self._resize_display_preview()
         self._save()
 
     def _on_align(self) -> None:
         self._align = self.align_combo.currentData()
         for ov in self._overlays.values():
+            ov.set_align(self._align)
+        for ov in self._preview_bars.values():
             ov.set_align(self._align)
         self._save()
 

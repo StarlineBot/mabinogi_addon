@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -72,7 +73,9 @@ def _write_local_config(data: dict, path: Path = LOCAL_CONFIG_PATH) -> None:
         os.fsync(f.fileno())
     if path.exists():
         try:
-            os.replace(path, path.with_name(path.name + ".bak"))  # 직전본 백업
+            backup_tmp = path.with_name(path.name + ".bak.tmp")
+            shutil.copyfile(path, backup_tmp)
+            os.replace(backup_tmp, path.with_name(path.name + ".bak"))
         except OSError:  # 백업 실패해도 본 저장은 진행
             pass
     os.replace(tmp, path)  # 원자적 교체
@@ -1023,6 +1026,24 @@ def save_custom_overlays(items: list[dict], path: Path = LOCAL_CONFIG_PATH) -> N
     _write_local_config(data, path)
 
 
+def save_custom_edit(
+    items: list[dict], preset: str | None = None,
+    previous_preset: str | None = None, path: Path = LOCAL_CONFIG_PATH,
+) -> None:
+    """Commit the current composition and explicit edit targets in one replacement."""
+    data = _read_local_config(path)
+    sec = data.get("customOverlay")
+    sec = dict(sec) if isinstance(sec, dict) else {}
+    presets = sec.get("presets")
+    presets = dict(presets) if isinstance(presets, dict) else {}
+    for name in (previous_preset, preset):
+        if name is not None:
+            presets[name] = items
+    sec.update(overlays=items, presets=presets)
+    data["customOverlay"] = sec
+    _write_local_config(data, path)
+
+
 def load_custom_presets(path: Path = LOCAL_CONFIG_PATH) -> dict[str, list[dict]]:
     """저장된 프리셋 {이름: [오버레이...]}."""
     presets = _custom_section(path).get("presets")
@@ -1060,13 +1081,11 @@ def delete_custom_preset(name: str, path: Path = LOCAL_CONFIG_PATH) -> None:
     if isinstance(presets, dict) and name in presets:
         del presets[name]
         sec["presets"] = presets
-        data["customOverlay"] = sec
-        _write_local_config(data, path)
     # 자동 불러오기로 지정된 프리셋이 삭제되면 지정도 해제한다.
     if sec.get("autoPreset") == name:
         sec.pop("autoPreset", None)
-        data["customOverlay"] = sec
-        _write_local_config(data, path)
+    data["customOverlay"] = sec
+    _write_local_config(data, path)
 
 
 def load_auto_preset(path: Path = LOCAL_CONFIG_PATH) -> str | None:

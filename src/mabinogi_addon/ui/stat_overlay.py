@@ -47,13 +47,14 @@ class StatBarOverlay(QWidget):
     moved = Signal()  # 드래그로 위치 바뀜 → 저장
     warning_interrupted = Signal()
 
-    def __init__(self, stat_id: str, scale: float = 1.5) -> None:
+    def __init__(self, stat_id: str, scale: float = 1.5, parent: QWidget | None = None) -> None:
         super().__init__(
-            None,
-            Qt.WindowType.FramelessWindowHint
+            parent,
+            Qt.WindowType.Widget if parent is not None else Qt.WindowType.FramelessWindowHint
             | Qt.WindowType.WindowStaysOnTopHint
             | Qt.WindowType.Tool,
         )
+        self._embedded = parent is not None
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
         self._stat_id = stat_id
@@ -87,7 +88,7 @@ class StatBarOverlay(QWidget):
         return self._warning
 
     def set_warning(self, active: bool, sample_at: float = 0.0) -> None:
-        if not active or not self.isVisible():
+        if self._embedded or not active or not self.isVisible():
             self._warning = False
             self._warning_timer.stop()
             if self._shake_offset:
@@ -149,7 +150,8 @@ class StatBarOverlay(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, locked)
         from ..system.clickthrough import set_click_through
 
-        set_click_through(self, locked)
+        if not self._embedded:
+            set_click_through(self, locked)
         self._relayout()
 
     @property
@@ -157,7 +159,7 @@ class StatBarOverlay(QWidget):
         return self._locked
 
     def mousePressEvent(self, event) -> None:
-        if not self._locked and event.button() == Qt.MouseButton.LeftButton:
+        if not self._embedded and not self._locked and event.button() == Qt.MouseButton.LeftButton:
             self._drag_offset = (
                 event.globalPosition().toPoint() - self.base_position
             )
@@ -202,8 +204,12 @@ class StatBarOverlay(QWidget):
         bw, bh = self._metrics()
         base = self.base_position
         self._shake_margin = math.ceil(_SHAKE_AMPLITUDE * self._scale)
-        self.resize(bw + 2 * _PAD + 2 * self._shake_margin, bh + 2 * _PAD)
-        self.move_base(base)
+        size = (bw + 2 * _PAD + 2 * self._shake_margin, bh + 2 * _PAD)
+        if self._embedded:
+            self.setFixedSize(*size)
+        else:
+            self.resize(*size)
+            self.move_base(base)
         self.update()
 
     # ---- 그리기 ----

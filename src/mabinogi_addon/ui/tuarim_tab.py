@@ -166,20 +166,21 @@ class TuarimTab(QWidget):
         self._spins: list[QSpinBox] = []
         self._sound_checks: list[QCheckBox] = []
         for i, name in enumerate(("첫 알림", "추가 알림")):
-            grid.addWidget(QLabel(name), i, 0)
+            grid.addWidget(QLabel(name), 0, i * 4)
             spin = QSpinBox()
             spin.setRange(90, 99)  # % 판독은 90%대만 신뢰 가능 + 목적상 100% 직전 경고
             spin.setSuffix(" %")
             spin.setValue(self._thresholds[i] if i < len(self._thresholds) else 95)
             spin.valueChanged.connect(self._save)
-            grid.addWidget(spin, i, 1)
+            grid.addWidget(spin, 0, i * 4 + 1)
             chk = checkbox("소리")
             chk.setChecked(self._sounds[i] if i < len(self._sounds) else True)
             chk.toggled.connect(self._save)
-            grid.addWidget(chk, i, 2)
+            grid.addWidget(chk, 0, i * 4 + 2)
             self._spins.append(spin)
             self._sound_checks.append(chk)
         grid.setColumnStretch(3, 1)
+        grid.setColumnStretch(7, 1)
         return box
 
     @staticmethod
@@ -319,7 +320,7 @@ class TuarimTab(QWidget):
     def _update_region_label(self) -> None:
         if self._region:
             r = self._region
-            self.region_label.setText(f"영역: {r['x']},{r['y']}  {r['w']}×{r['h']}  ✔")
+            self.region_label.setText(f"등록됨 · {r['x']},{r['y']}  {r['w']}×{r['h']}")
             self.region_label.setStyleSheet("color:#2ecc71;")
             self.view_region_btn.setEnabled(True)
         else:

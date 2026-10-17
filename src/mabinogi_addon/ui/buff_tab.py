@@ -211,10 +211,9 @@ class BuffTab(QWidget):
 
         top = QHBoxLayout()
         top.setSpacing(6)
-        region_btn = QPushButton("버프 영역 직접 지정")
+        region_btn = QPushButton("직접 지정")
         region_btn.clicked.connect(self._pick_region)
         self.region_btn = region_btn  # 온보딩 투어가 강조 대상으로 참조
-        top.addWidget(region_btn, 1)
         self.lock_btn = QPushButton("위치 잠금")
         self.lock_btn.setCheckable(True)
         self.lock_btn.setToolTip(
@@ -229,12 +228,11 @@ class BuffTab(QWidget):
         self.scale_spin = QSpinBox()
         self.scale_spin.setRange(50, 300)
         self.scale_spin.setSingleStep(10)
-        self.scale_spin.setPrefix("배율 ")
+        self.scale_spin.setPrefix("표시 배율 ")
         self.scale_spin.setSuffix(" %")
         self.scale_spin.setValue(config.load_overlay_scales()[0])
         self.scale_spin.valueChanged.connect(self._on_scale)
         top.addWidget(self.scale_spin, 1)
-        v.addLayout(top)
 
         hint_row = QHBoxLayout()
         hint_row.setSpacing(6)
@@ -243,13 +241,19 @@ class BuffTab(QWidget):
         self.view_region_btn = QPushButton("지정 영역 보기")
         self.view_region_btn.setToolTip("잡힌 영역을 화면에 점선으로 잠깐 표시")
         self.view_region_btn.clicked.connect(self._flash_region)
-        hint_row.addWidget(self.view_region_btn)
-        self.auto_find_btn = QPushButton("🧪 자동 찾기")
+        self.auto_find_btn = QPushButton("자동 찾기")
         self.auto_find_btn.setToolTip("상태목록창(버프)을 화면에서 자동으로 찾아 지정 — Discord 베타")
         self.auto_find_btn.clicked.connect(self._on_auto_find)
         hint_row.addWidget(self.auto_find_btn)
+        hint_row.addWidget(region_btn)
+        hint_row.addWidget(self.view_region_btn)
         self._update_region_hint()
+        v.addWidget(section_label("판독 영역 · 버프 목록"))
+        v.addWidget(self.region_hint)
+        hint_row.removeWidget(self.region_hint)
+        hint_row.addStretch()
         v.addLayout(hint_row)
+        v.addLayout(top)
 
         self.status_label = hint_label("")  # 진단 상태(추적 중/게임 비활성 등)
         v.addWidget(self.status_label)
@@ -315,8 +319,8 @@ class BuffTab(QWidget):
         region = config.load_capture_region("buffTracker")
         if region:
             self.region_hint.setText(
-                f"영역: {region['x']},{region['y']}  "
-                f"{region['w']}×{region['h']}  ✔"
+                f"등록됨 · {region['x']},{region['y']}  "
+                f"{region['w']}×{region['h']}"
             )
             self.region_hint.setStyleSheet("color:#2ecc71;")
             self.view_region_btn.setEnabled(True)
@@ -359,7 +363,7 @@ class BuffTab(QWidget):
                 "상태목록창을 찾지 못했습니다.\n\n"
                 "• 상태목록창에 '프리미엄 배틀 멤버십'이 떠 있나요? (이 아이콘을 기준으로 찾습니다)\n"
                 "• 상태목록창이 화면에 보이나요?\n\n"
-                "다시 시도하거나 '버프 영역 지정'으로 직접 잡으세요.",
+                "다시 시도하거나 버프 판독 영역의 '직접 지정'으로 잡으세요.",
             )
             return
         x, y, w, h = box

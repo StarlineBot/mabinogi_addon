@@ -137,6 +137,7 @@ class ExchangeTab(QWidget):
         region, message = payload
         if region == self._pending:
             self.title.setText(region)
+            self.asof.setText("시세 조회 실패")
             self.table.setRowCount(0)
             self.table.setRowCount(1)
             cell = QTableWidgetItem(message)

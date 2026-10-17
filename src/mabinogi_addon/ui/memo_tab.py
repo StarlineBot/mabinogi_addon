@@ -137,7 +137,7 @@ class MemoTab(QWidget):
             b.clicked.connect(lambda _c=False, s=snippet: self._insert(s))
             tools.addWidget(b)
         tools.addStretch(1)
-        self.preview_btn = QPushButton("👁 미리보기")
+        self.preview_btn = QPushButton("표시 미리보기")
         self.preview_btn.setCheckable(True)
         self.preview_btn.setStyleSheet(_TOOL_QSS)
         self.preview_btn.toggled.connect(self._on_preview_toggled)

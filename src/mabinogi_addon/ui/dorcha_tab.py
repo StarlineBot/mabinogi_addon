@@ -6,7 +6,7 @@ import weakref
 
 import numpy as np
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QGuiApplication
+from PySide6.QtGui import QGuiApplication, QImage, QPixmap
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QMessageBox, QPushButton, QScrollArea, QSpinBox, QVBoxLayout, QWidget
 
 from .. import config
@@ -57,7 +57,7 @@ class DorchaTab(QWidget):
         self.auto_find_btn.clicked.connect(self._on_auto_find)
         self.region_btn = QPushButton("직접 지정")
         self.region_btn.clicked.connect(self._on_region)
-        self.view_region_btn = QPushButton("영역 보기")
+        self.view_region_btn = QPushButton("지정 영역 보기")
         self.view_region_btn.clicked.connect(self._flash_region)
         for button in (self.auto_find_btn,self.region_btn,self.view_region_btn):
             row.addWidget(button)
@@ -72,14 +72,14 @@ class DorchaTab(QWidget):
         self.enable.toggled.connect(self._on_enabled)
         row.addWidget(self.enable)
         row.addStretch()
-        row.addWidget(QLabel("전체 배율"))
+        row.addWidget(QLabel("표시 배율"))
         self.scale_spin = QSpinBox()
         self.scale_spin.setRange(50,300)
         self.scale_spin.setSuffix(" %")
         self.scale_spin.setValue(self._cfg["scale"])
         self.scale_spin.valueChanged.connect(self._on_scale)
         row.addWidget(self.scale_spin)
-        self.lock_chk = checkbox("위치 고정")
+        self.lock_chk = checkbox("위치 잠금")
         self.lock_chk.setChecked(self._cfg["locked"])
         self.lock_chk.toggled.connect(self._on_locked)
         row.addWidget(self.lock_chk)
@@ -93,6 +93,11 @@ class DorchaTab(QWidget):
         layout.addWidget(self.preview_scroll)
         self.value_label = QLabel("현재 판독  --/15")
         layout.addWidget(self.value_label)
+        self.source_preview = QLabel()
+        self.source_preview.setFixedSize(80, 40)
+        self.source_preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.source_preview.setStyleSheet("background:palette(base); border:1px solid palette(mid);")
+        layout.addWidget(self.source_preview)
         layout.addStretch()
         self._timer = QTimer(self)
         self._timer.setInterval(200)
@@ -170,6 +175,8 @@ class DorchaTab(QWidget):
                                  "등록 영역  {x}, {y}  /  {w} × {h}".format(**self._region))
 
     def _set_value(self, value):
+        if value is None:
+            self.source_preview.clear()
         self.preview.set_value(value)
         self._update_value_label()
         if self._overlay is not None:
@@ -184,6 +191,17 @@ class DorchaTab(QWidget):
         else:
             text = dorcha
         self.value_label.setText("현재 판독  " + text)
+
+    def _show_source(self, frame):
+        if frame is None or frame.size == 0:
+            self.source_preview.clear()
+            return
+        rgb = np.ascontiguousarray(frame[:, :, :3][:, :, ::-1])
+        h, w = rgb.shape[:2]
+        image = QImage(rgb.data, w, h, rgb.strides[0], QImage.Format.Format_RGB888).copy()
+        self.source_preview.setPixmap(QPixmap.fromImage(image).scaled(
+            self.source_preview.size(), Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.FastTransformation))
 
     def _hide(self):
         self._restore_capture_windows()
@@ -240,6 +258,7 @@ class DorchaTab(QWidget):
             self._invalidate_search()
             self._tracking_lost = True
         value = None
+        frame = None
         if (not self._tracking_lost and target is not None and self._live_target is None
                 and self._approved_target != target):
             verified = self._verify_registered_region(box,target)
@@ -257,6 +276,7 @@ class DorchaTab(QWidget):
                 if value is not None and target is not None:
                     self._live_box, self._live_target = box, target
         self._set_value(value)
+        self._show_source(frame)
         if value is None:
             self._start_search()
         else:
@@ -358,13 +378,15 @@ class DorchaTab(QWidget):
             if not self._inside_target(box,worker.target):
                 return
             # Re-read current pixels: the worker's old screenshot is never displayed.
-            value = read_dorcha(self._grab_tracking_rect(*box))
+            frame = self._grab_tracking_rect(*box)
+            value = read_dorcha(frame)
             if value is None or self._search_target() != worker.target:
                 return
             self._live_box = box
             self._live_target = worker.target
             self._tracking_lost = False
             self._set_value(value)
+            self._show_source(frame)
             self._next_search = 0.0
             self._search_backoff = 2.0
         finally:

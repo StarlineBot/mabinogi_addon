@@ -48,7 +48,7 @@ HELP_HTML = """
 
 <h3>사용 순서</h3>
 <ol>
-<li><b>디버프 줄 영역 지정</b> — 보스 체력바 위, 디버프가 표시되는 영역을 먼저
+<li><b>판독 영역 · 직접 지정</b> — 보스 체력바 위, 디버프가 표시되는 영역을 먼저
 드래그로 잡습니다. (돋보기로 픽셀 단위 조정)
 <br><b>※ 영역을 아래로 넓혀 보스 체력바까지 포함</b>하면, 체력바가 보일 때만
 탐지해 <b>마을·풀밭 오탐이 사라집니다</b>(선택). 안 넣으면 지금처럼 동작합니다.</li>
@@ -141,9 +141,9 @@ class DebuffTab(QWidget):
 
         top = QHBoxLayout()
         top.setSpacing(6)
-        region_btn = QPushButton("디버프 영역 직접 지정")
+        region_btn = QPushButton("직접 지정")
+        self.region_btn = region_btn
         region_btn.clicked.connect(self._pick_region)
-        top.addWidget(region_btn, 1)
         self.lock_btn = QPushButton("위치 잠금")
         self.lock_btn.setCheckable(True)
         self.lock_btn.setToolTip(
@@ -158,12 +158,11 @@ class DebuffTab(QWidget):
         self.scale_spin = QSpinBox()
         self.scale_spin.setRange(50, 300)
         self.scale_spin.setSingleStep(10)
-        self.scale_spin.setPrefix("배율 ")
+        self.scale_spin.setPrefix("표시 배율 ")
         self.scale_spin.setSuffix(" %")
         self.scale_spin.setValue(config.load_overlay_scales()[1])
         self.scale_spin.valueChanged.connect(self._on_scale)
         top.addWidget(self.scale_spin, 1)
-        v.addLayout(top)
 
         hint_row = QHBoxLayout()
         hint_row.setSpacing(6)
@@ -172,15 +171,21 @@ class DebuffTab(QWidget):
         self.view_region_btn = QPushButton("지정 영역 보기")
         self.view_region_btn.setToolTip("잡힌 영역을 화면에 점선으로 잠깐 표시")
         self.view_region_btn.clicked.connect(self._flash_region)
-        hint_row.addWidget(self.view_region_btn)
-        self.auto_find_btn = QPushButton("🧪 자동 찾기")
+        self.auto_find_btn = QPushButton("자동 찾기")
         self.auto_find_btn.setToolTip(
             "보스 체력바를 찾아 그 위 디버프 영역을 자동 지정 — Discord 베타"
         )
         self.auto_find_btn.clicked.connect(self._on_auto_find)
         hint_row.addWidget(self.auto_find_btn)
+        hint_row.addWidget(region_btn)
+        hint_row.addWidget(self.view_region_btn)
         self._update_region_hint()
+        v.addWidget(section_label("판독 영역 · 디버프 줄"))
+        v.addWidget(self.region_hint)
+        hint_row.removeWidget(self.region_hint)
+        hint_row.addStretch()
         v.addLayout(hint_row)
+        v.addLayout(top)
 
         self.status_label = hint_label("")  # 진단 상태(추적 중/게임 비활성 등)
         v.addWidget(self.status_label)
@@ -379,8 +384,8 @@ class DebuffTab(QWidget):
         region = config.load_capture_region("debuffTracker")
         if region:
             self.region_hint.setText(
-                f"영역: {region['x']},{region['y']}  "
-                f"{region['w']}×{region['h']}  ✔"
+                f"등록됨 · {region['x']},{region['y']}  "
+                f"{region['w']}×{region['h']}"
             )
             self.region_hint.setStyleSheet("color:#2ecc71;")
             self.view_region_btn.setEnabled(True)
@@ -427,7 +432,7 @@ class DebuffTab(QWidget):
                 "디버프 영역의 기준인 보스 체력바를 찾지 못했습니다.\n\n"
                 "• 보스 체력바가 지금 화면에 노출돼 있나요? (보스전 중 시도)\n"
                 "• 하단 메뉴바가 최소화돼 있지 않나요?\n\n"
-                "다시 시도하거나 '디버프 줄 영역 지정'으로 직접 잡으세요.",
+                "다시 시도하거나 디버프 판독 영역의 '직접 지정'으로 잡으세요.",
             )
             return
         x, y, w, h = box

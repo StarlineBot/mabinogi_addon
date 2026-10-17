@@ -89,16 +89,17 @@ class SkillbarTab(QWidget):
         ))
 
         row = QHBoxLayout()
-        self.anchor_btn = QPushButton("첫 칸 직접 지정")
+        self.anchor_btn = QPushButton("직접 지정")
         self.anchor_btn.setToolTip("단축바 첫 아이콘에 박스를 맞춰 클릭(돋보기)")
         self.anchor_btn.clicked.connect(self._on_anchor)
-        row.addWidget(self.anchor_btn)
+        row.addWidget(QLabel("판독 영역 · 원본 첫 칸"))
         self.anchor_label = hint_label("")
         row.addWidget(self.anchor_label, 1)
-        self.auto_find_btn = QPushButton("🧪 자동 찾기")
+        self.auto_find_btn = QPushButton("자동 찾기")
         self.auto_find_btn.setToolTip("원본 단축바 전체 격자를 확인해 첫 칸 지정 — Discord 베타")
         self.auto_find_btn.clicked.connect(self._on_auto_find)
         row.addWidget(self.auto_find_btn)
+        row.addWidget(self.anchor_btn)
         v.addLayout(row)
 
         self.enable = checkbox("단축바 미러 사용")
@@ -107,7 +108,7 @@ class SkillbarTab(QWidget):
         v.addWidget(self.enable)
 
         ctl = QHBoxLayout()
-        ctl.addWidget(QLabel("오버레이 배율"))
+        ctl.addWidget(QLabel("표시 배율"))
         self.scale_spin = QSpinBox()
         self.scale_spin.setRange(50, 300)
         self.scale_spin.setSingleStep(10)
@@ -116,9 +117,9 @@ class SkillbarTab(QWidget):
         self.scale_spin.valueChanged.connect(self._on_scale)
         ctl.addWidget(self.scale_spin)
         ctl.addStretch(1)
-        self.lock_all_btn = QPushButton("전체 고정")
+        self.lock_all_btn = QPushButton("전체 잠금")
         self.lock_all_btn.clicked.connect(lambda: self._set_locked_all(True))
-        self.unlock_all_btn = QPushButton("전체 해제")
+        self.unlock_all_btn = QPushButton("전체 잠금 해제")
         self.unlock_all_btn.clicked.connect(lambda: self._set_locked_all(False))
         ctl.addWidget(self.lock_all_btn)
         ctl.addWidget(self.unlock_all_btn)
@@ -260,7 +261,7 @@ class SkillbarTab(QWidget):
     def _update_anchor_label(self) -> None:
         if self._anchor:
             self.anchor_label.setText(
-                f"앵커: {self._anchor['x']},{self._anchor['y']}  ✔"
+                f"등록됨 · {self._anchor['x']},{self._anchor['y']}"
             )
             self.anchor_label.setStyleSheet("color:#2ecc71;")
         else:

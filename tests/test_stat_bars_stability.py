@@ -60,7 +60,7 @@ def test_each_missing_band_cannot_rename_other_resources(pipeline, index):
     state.now = 10
     tab._tick()
     assert {sid: ov._ratio for sid, ov in tab._overlays.items()} == before
-    assert tab.value_label.text() == "현재 값: —"
+    assert tab.value_label.text() == "현재 판독: —"
     assert state.sounds == [] and not tab._alert_low_since
     state.frame = original
     state.now = 10.01
@@ -85,7 +85,7 @@ def test_first_partial_capture_does_not_show_default_full_hp(pipeline):
     state.frame[start:end] = 0
     tab._tick()
     assert all(not overlay.isVisible() for overlay in tab._overlays.values())
-    assert tab.value_label.text() == "현재 값: —"
+    assert tab.value_label.text() == "현재 판독: —"
 
 
 @pytest.mark.parametrize("interruption", ["capture", "inactive", "paused", "disabled", "no_region", "boss"])

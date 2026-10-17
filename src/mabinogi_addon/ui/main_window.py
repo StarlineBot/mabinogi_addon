@@ -286,6 +286,8 @@ class MainWindow(QMainWindow):
         self.boss_tab.debuff_region_changed.connect(self._on_boss_debuff_region_changed)
         self.custom_overlay_tab = CustomOverlayTab(self._watcher)
         self.stat_bars_tab = StatBarsTab(self._watcher)
+        self.boss_tab.bar_region_changed.connect(self.stat_bars_tab.refresh_boss_region)
+        self.debuff_tab.bar_region_changed.connect(self.stat_bars_tab.refresh_boss_region)
         self.dorcha_tab = DorchaTab(self._watcher)
         self.resource_tab = ResourceTab(self.dorcha_tab, self.tuarim_tab)
         # 체력바 저체력 알림은 '보스전 중'일 때만 울린다 — 보스 탭의 보스바 존재 신호를 연결.
@@ -802,7 +804,7 @@ class MainWindow(QMainWindow):
         if not self.buff_tab.enable.isChecked():
             return ("버프 트래커: 사용 안 함", self._STATUS_MUTED)
         if not config.load_capture_region("buffTracker"):
-            return ("⚠ 영역 미지정 — '버프 영역 지정'을 먼저 하세요", self._STATUS_WARN)
+            return ("⚠ 영역 미지정 — 버프 판독 영역의 '직접 지정'을 먼저 하세요", self._STATUS_WARN)
         if self.buff_controller is None:
             return (
                 ("ℹ 추적 대기 — 화면 캡처 준비 중 (게임이 '전체화면'이면 '테두리 없는 창'"
@@ -824,7 +826,7 @@ class MainWindow(QMainWindow):
         if not self.debuff_tab.enable.isChecked():
             return ("디버프 트래커: 사용 안 함", self._STATUS_MUTED)
         if not config.load_capture_region("debuffTracker"):
-            return ("⚠ 영역 미지정 — '디버프 줄 영역 지정'을 먼저 하세요",
+            return ("⚠ 영역 미지정 — 디버프 판독 영역의 '직접 지정'을 먼저 하세요",
                     self._STATUS_WARN)
         if self.debuff_controller is None:
             return (
@@ -1791,6 +1793,14 @@ class MainWindow(QMainWindow):
 
         if self._closing:
             event.accept()
+            return
+        if not self.custom_overlay_tab.flush_pending():
+            event.ignore()
+            self._force_quit = False
+            self._pages.setCurrentWidget(self._tabs)
+            self._tabs.setCurrentWidget(self._tracker_tabs)
+            self._tracker_tabs.setCurrentWidget(self._combat_pages["custom"])
+            self.show()
             return
         self._setup_flow.cancel(hide=True)
         tour = getattr(self, "_tour", None)

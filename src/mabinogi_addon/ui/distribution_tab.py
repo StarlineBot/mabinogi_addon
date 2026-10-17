@@ -32,10 +32,13 @@ _GRAY = "color:#9aa0aa; font-size:12px;"
 
 
 class DistributionTab(QWidget):
-    _done = Signal(object)  # (result, sale, headcount, membership, note)
+    _done = Signal(object)  # (request id, result, sale, headcount, membership, note)
 
     def __init__(self) -> None:
         super().__init__()
+        self._request_id = 0
+        self._result_input = None
+        self._query_input = None
         v = QVBoxLayout(self)
         v.setContentsMargins(12, 12, 12, 12)
         v.setSpacing(8)
@@ -88,6 +91,8 @@ class DistributionTab(QWidget):
         self.calc_btn = QPushButton("분배금 계산")
         self.calc_btn.clicked.connect(self._on_calc)
         v.addWidget(self.calc_btn)
+        self.result_status = hint_label("")
+        v.addWidget(self.result_status)
 
         # 결과: 2열 카드 그리드
         self.result_area = QWidget()
@@ -109,27 +114,46 @@ class DistributionTab(QWidget):
         v.addStretch(1)
 
         self._done.connect(self._show)
+        self.price_spin.valueChanged.connect(self._inputs_changed)
+        self.count_spin.valueChanged.connect(self._inputs_changed)
+        self.rate_membership.toggled.connect(self._inputs_changed)
+
+    def _inputs(self):
+        return (self.price_spin.value() * 10000, self.count_spin.value(), self.rate_membership.isChecked())
+
+    def _inputs_changed(self, *_args):
+        if self._query_input is not None:
+            text = "조회 중" if self._inputs() == self._query_input else "조회 중 · 입력이 변경됨"
+        elif self._result_input is not None:
+            text = "계산 완료" if self._inputs() == self._result_input else "입력 변경됨 · 아래는 이전 계산 결과"
+        else:
+            text = ""
+        self.result_status.setText(text)
 
     def _on_calc(self) -> None:
-        sale = self.price_spin.value() * 10000
-        headcount = self.count_spin.value()
-        membership = self.rate_membership.isChecked()
+        sale, headcount, membership = self._inputs()
+        self._request_id += 1
+        self._result_input = None
+        self._query_input = None
         self._clear_grid()
         if sale <= 0:
             msg = QLabel("판매가를 입력하세요.")
             msg.setStyleSheet(_GRAY)
             self.grid.addWidget(msg, 0, 0, 1, 2)
             self.note_lbl.setText("")
+            self._inputs_changed()
             return
+        self._query_input = (sale, headcount, membership)
+        self._inputs_changed()
         busy = QLabel("경매장에서 수수료 쿠폰 가격 확인 중…")
         busy.setStyleSheet(_GRAY)
         self.grid.addWidget(busy, 0, 0, 1, 2)
         self.note_lbl.setText("")
         threading.Thread(
-            target=self._work, args=(sale, headcount, membership), daemon=True
+            target=self._work, args=(self._request_id, sale, headcount, membership), daemon=True
         ).start()
 
-    def _work(self, sale: int, headcount: int, membership: bool) -> None:
+    def _work(self, request_id: int, sale: int, headcount: int, membership: bool) -> None:
         key = config.get_nexon_api_key()
         prices: dict[str, int | None] = {}
         note = ""
@@ -141,7 +165,7 @@ class DistributionTab(QWidget):
             except Exception as exc:  # noqa: BLE001 — 조회 실패해도 기본 계산은 보여줌
                 note = f"쿠폰 시세 조회 실패: {exc}"
         result = fee.calc_distribution(sale, headcount, membership, prices)
-        self._done.emit((result, sale, headcount, membership, note))
+        self._done.emit((request_id, result, sale, headcount, membership, note))
 
     def _clear_grid(self) -> None:
         while self.grid.count():
@@ -186,7 +210,12 @@ class DistributionTab(QWidget):
         return f
 
     def _show(self, payload) -> None:
-        result, sale, headcount, membership, note = payload
+        request_id, result, sale, headcount, membership, note = payload
+        if request_id != self._request_id:
+            return
+        self._query_input = None
+        self._result_input = (sale, headcount, membership)
+        self._inputs_changed()
         kg = auction.korean_gold
         self._clear_grid()
         rate_txt = "멤버십 4%" if membership else "기본 5%"

@@ -118,10 +118,13 @@ class BossTab(QWidget):
         )
         v.addWidget(self._supported_label())
 
-        prev_btn = QPushButton("패턴 알림 미리보기")
+        self.enable = checkbox("보스 패턴 경고 사용")
+        self.enable.setChecked(cfg["enabled"])
+        self.enable.toggled.connect(self._save)
+        v.addWidget(self.enable)
+        prev_btn = QPushButton("알림 미리보기")
         prev_btn.setToolTip("경고가 화면 어디에 어떻게 뜨는지 한 번 띄워 봅니다")
         prev_btn.clicked.connect(self._preview_warning)
-        v.addWidget(prev_btn)
 
         # 실제 컨트롤 묶음(항상 표시 — 로그인 불필요)
         self._controls = QWidget()
@@ -129,28 +132,30 @@ class BossTab(QWidget):
         cv.setContentsMargins(0, 0, 0, 0)
 
         row = QHBoxLayout()
-        self.region_btn = QPushButton("보스 체력바 직접 지정")
+        row.addWidget(QLabel("판독 영역 · 보스 체력바"))
+        self.region_btn = QPushButton("직접 지정")
         self.region_btn.setToolTip(
             "기본 위치(2560×1440)로 이미 잡혀 있습니다. 해상도가 다르거나 안 맞으면 "
             "눌러서 보스 HP바(이름~%)에 박스를 맞춥니다."
         )
         self.region_btn.clicked.connect(self._on_region)
-        row.addWidget(self.region_btn)
         self.region_label = hint_label("")
         row.addWidget(self.region_label, 1)
         self.view_region_btn = QPushButton("지정 영역 보기")
         self.view_region_btn.clicked.connect(self._flash_region)
-        row.addWidget(self.view_region_btn)
         # 자동 찾기(🧪 Discord 베타) — 로그인 사용자만 보임. 보스 체력바를 화면에서 찾아
         # 디버프 영역(바로 위)까지 함께 지정. 저장은 반드시 확인 후에만.
-        self.auto_find_btn = QPushButton("🧪 자동 찾기")
+        self.auto_find_btn = QPushButton("자동 찾기")
         self.auto_find_btn.setToolTip(
             "보스 체력바(+디버프 영역)를 화면에서 자동으로 찾아 지정합니다 — Discord 베타"
         )
         self.auto_find_btn.clicked.connect(self._on_auto_find)
         row.addWidget(self.auto_find_btn)
+        row.addWidget(self.region_btn)
+        row.addWidget(self.view_region_btn)
         cv.addLayout(row)
 
+        cv.addWidget(QLabel("원본 미리보기 · 현재 판독"))
         prev_row = QHBoxLayout()
         self.preview = QLabel()
         self.preview.setFixedHeight(40)
@@ -163,19 +168,17 @@ class BossTab(QWidget):
         prev_row.addWidget(self.status_label, 1)
         cv.addLayout(prev_row)
 
-        self.enable = checkbox("보스 패턴 경고 사용")
-        self.enable.setChecked(cfg["enabled"])
-        self.enable.toggled.connect(self._save)
-        cv.addWidget(self.enable)
         cv.addWidget(
             hint_label("영역을 맞춘 뒤 위의 '식별'과 'HP'가 실제와 맞는지 먼저 확인하세요.")
         )
 
         # 경고 위치 이동/고정(다음 패턴 목록과 동일 구조).
         warn_row = QHBoxLayout()
-        self.warn_lock_btn = QPushButton()
+        self.warn_lock_btn = QPushButton("경고 위치 잠금")
+        self.warn_lock_btn.setCheckable(True)
         self.warn_lock_btn.clicked.connect(self._toggle_warn_lock)
         warn_row.addWidget(self.warn_lock_btn)
+        warn_row.addWidget(prev_btn)
         warn_row.addWidget(
             hint_label("해제=끌어서 경고 위치 이동 · 고정=게임 위 표시(클릭 통과)"), 1
         )
@@ -189,7 +192,8 @@ class BossTab(QWidget):
         self.show_upcoming.toggled.connect(self._on_show_upcoming)
         cv.addWidget(self.show_upcoming)
         up_row = QHBoxLayout()
-        self.upcoming_lock_btn = QPushButton()
+        self.upcoming_lock_btn = QPushButton("목록 위치 잠금")
+        self.upcoming_lock_btn.setCheckable(True)
         self.upcoming_lock_btn.clicked.connect(self._toggle_upcoming_lock)
         up_row.addWidget(self.upcoming_lock_btn)
         up_row.addWidget(
@@ -277,7 +281,7 @@ class BossTab(QWidget):
     def _update_region_label(self) -> None:
         if self._region:
             r = self._region
-            self.region_label.setText(f"영역: {r['w']}×{r['h']}  ✓")
+            self.region_label.setText(f"등록됨 · {r['w']}×{r['h']}")
         else:
             self.region_label.setText("영역 미지정")
 
@@ -320,9 +324,7 @@ class BossTab(QWidget):
         self._overlay.move(max(0, x), int(g.height() * 0.14))
 
     def _sync_warn_btn(self) -> None:
-        self.warn_lock_btn.setText(
-            "경고 위치 이동" if self._overlay.locked else "경고 위치 고정"
-        )
+        self.warn_lock_btn.setChecked(self._overlay.locked)
 
     def _toggle_warn_lock(self) -> None:
         self._overlay.set_locked(not self._overlay.locked)
@@ -343,9 +345,7 @@ class BossTab(QWidget):
         self._upcoming.move(int(g.width() * 0.25), int(g.height() * 0.40))
 
     def _sync_upcoming_btn(self) -> None:
-        self.upcoming_lock_btn.setText(
-            "목록 위치 이동" if self._upcoming.locked else "목록 위치 고정"
-        )
+        self.upcoming_lock_btn.setChecked(self._upcoming.locked)
 
     def _on_show_upcoming(self, checked: bool) -> None:
         self._save()

@@ -161,22 +161,25 @@ def test_upcoming_hides_quickly_after_boss_gone(monkeypatch):
 
 
 def test_warn_lock_toggle_updates_overlay_and_button(monkeypatch):
-    """'경고 위치 이동/고정' 버튼이 경고 오버레이 잠금과 버튼 문구를 바꾼다."""
+    """위치 잠금 토글이 실제 오버레이와 같은 상태를 표시한다."""
     _app()
     from mabinogi_addon.ui.boss_tab import BossTab
 
     monkeypatch.setattr(config, "load_discord_user", lambda *a, **k: {"name": "x"})
     t = BossTab(_Watcher())
-    # 알려진 상태(고정)에서 시작 — 토글이 잠금과 버튼 문구를 뒤집는지 본다.
+    # 알려진 상태에서 시작해 양방향 전환과 checked 상태를 모두 검사한다.
     t._overlay.set_locked(True)
     t._sync_warn_btn()
-    assert t.warn_lock_btn.text() == "경고 위치 이동"
-    t._toggle_warn_lock()
+    assert t.warn_lock_btn.text() == "경고 위치 잠금"
+    assert t.warn_lock_btn.isChecked()
+    t.warn_lock_btn.click()
     assert t._overlay.locked is False  # 해제 → 위치 조정(샘플 표시)
-    assert t.warn_lock_btn.text() == "경고 위치 고정"
-    t._toggle_warn_lock()
+    assert t.warn_lock_btn.text() == "경고 위치 잠금"
+    assert not t.warn_lock_btn.isChecked()
+    t.warn_lock_btn.click()
     assert t._overlay.locked is True  # 고정 → 경고만 표시(클릭 통과)
-    assert t.warn_lock_btn.text() == "경고 위치 이동"
+    assert t.warn_lock_btn.text() == "경고 위치 잠금"
+    assert t.warn_lock_btn.isChecked()
     t.shutdown()
 
 
