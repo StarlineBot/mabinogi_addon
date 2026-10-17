@@ -1700,6 +1700,7 @@ class MainWindow(QMainWindow):
         멈춘 뒤 사용자가 직접 종료→재실행하면 바뀐 설정·자산이 깨끗이 반영된다.
         """
         self._config_pending_restart = True
+        self.custom_overlay_tab.suspend_for_config_replacement()
         self._setup_flow.shutdown()
         self.setup_page.setEnabled(False)
 

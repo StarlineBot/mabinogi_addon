@@ -137,6 +137,7 @@ class CustomOverlayTab(QWidget):
             parent=self,
         )
         self._active_preset: str | None = None
+        self._writes_suspended = False
         self._changing_preset = False
         self._editing_lock = False
         self._dirty = False
@@ -326,6 +327,8 @@ class CustomOverlayTab(QWidget):
         self.preset_delete_btn.setEnabled(bool(rows))
 
     def _on_auto_changed(self) -> None:
+        if self._writes_suspended:
+            return
         try:
             config.save_auto_preset(self.auto_combo.currentData())
         except OSError:
@@ -333,11 +336,15 @@ class CustomOverlayTab(QWidget):
         self._refresh_presets()
 
     def _on_compat_toggled(self, checked: bool) -> None:
+        if self._writes_suspended:
+            return
         config.save_mirror_force_capture(checked)
         self._mgr.set_force_capture(checked)
 
     # ---- 영역 지정 → 오버레이 추가 ----
     def _on_region(self) -> None:
+        if self._writes_suspended:
+            return
         # 선택창을 띄우기 전 포그라운드 프로그램명을 라벨로 기록.
         try:
             _title, exe = self._watcher.foreground_info()
@@ -353,6 +360,8 @@ class CustomOverlayTab(QWidget):
         self._selector.start()
 
     def _on_selected(self, x: int, y: int, w: int, h: int) -> None:
+        if self._writes_suspended:
+            return
         # 새 미러는 원본 위에 겹쳐 뜨면 "된 건가?" 헷갈리므로, 화면 좌측 1/4 지점에
         # 띄워 분명히 보이게 한다(사용자가 원하는 위치로 드래그).
         from PySide6.QtGui import QGuiApplication
@@ -432,7 +441,7 @@ class CustomOverlayTab(QWidget):
         return sorted(row(i) for i in lst.selectedItems())
 
     def _save_current(self) -> None:
-        if self._changing_preset:
+        if self._writes_suspended or self._changing_preset:
             return
         self._refresh_overlays()
         if self._mgr.to_dicts() == self._last_saved and not self._save_error:
@@ -442,6 +451,13 @@ class CustomOverlayTab(QWidget):
         self._update_save_status()
 
     def _update_save_status(self):
+        if self._writes_suspended:
+            self.active_label.setText("설정이 교체되었습니다")
+            self.overlays_title.setText("적용 중인 오버레이 · 재시작 대기")
+            self.save_status.setText("재시작 필요")
+            self.save_status.setStyleSheet("")
+            self.error_box.hide()
+            return
         name = self._active_preset or "없음"
         self.active_label.setText(f"적용 중: {name}")
         self.overlays_title.setText("적용 중인 오버레이 · " + name)
@@ -461,6 +477,8 @@ class CustomOverlayTab(QWidget):
 
     def flush_pending(self) -> bool:
         self._save_timer.stop()
+        if self._writes_suspended:
+            return True
         if not self._dirty:
             return True
         items = self._mgr.to_dicts()
@@ -492,23 +510,31 @@ class CustomOverlayTab(QWidget):
 
     # ---- 프리셋 버튼 ----
     def _on_preset_save(self) -> None:
+        if self._writes_suspended:
+            return
         # Stop the debounce across the modal dialog so cancellation cannot write a preset.
         pending = self._save_timer.isActive()
         self._save_timer.stop()
         name, ok = QInputDialog.getText(self, "다른 이름으로 저장",
                                        f"새 프리셋 이름 (현재 적용: {self._active_preset or '없음'})")
         name = name.strip()
+        if self._writes_suspended:
+            return
         if not ok or not name:
             if pending:
                 self._save_timer.start()
             return
-        if name in config.load_custom_presets() and not self._confirm(
-            "프리셋 덮어쓰기", f"'{name}' 프리셋을 덮어쓸까요?"
-        ):
-            if pending:
-                self._save_timer.start()
-            return
+        if name in config.load_custom_presets():
+            confirmed = self._confirm("프리셋 덮어쓰기", f"'{name}' 프리셋을 덮어쓸까요?")
+            if self._writes_suspended:
+                return
+            if not confirmed:
+                if pending:
+                    self._save_timer.start()
+                return
         items = self._mgr.to_dicts()
+        if self._writes_suspended:
+            return
         try:
             config.save_custom_edit(items, name, self._active_preset)
         except OSError as error:
@@ -528,6 +554,8 @@ class CustomOverlayTab(QWidget):
         self._apply_preset(self._preset_name(rows[0]))
 
     def _apply_preset(self, name) -> bool:
+        if self._writes_suspended:
+            return False
         if not self.flush_pending():
             return False
         items = config.load_custom_presets().get(name)
@@ -555,11 +583,15 @@ class CustomOverlayTab(QWidget):
         return True
 
     def _on_preset_delete(self) -> None:
+        if self._writes_suspended:
+            return
         rows = self._selected_rows(self.preset_list)
         if not rows:
             return
         name = self._preset_name(rows[0])
         if self._confirm("프리셋 삭제", f"'{name}' 프리셋을 삭제할까요?"):
+            if self._writes_suspended:
+                return
             if not self.flush_pending():
                 return
             try:
@@ -589,10 +621,25 @@ class CustomOverlayTab(QWidget):
     def set_paused(self, paused: bool) -> None:
         """사용자 일시정지 → 미러 오버레이 숨김·캡처 쉼(메인 윈도우가 호출)."""
         self._paused = paused
-        self._mgr.set_paused(paused or not self.enable.isChecked())
+        self._mgr.set_paused(self._writes_suspended or paused or not self.enable.isChecked())
 
     def _on_enable(self, value):
-        self._mgr.set_paused(self._paused or not self.enable.isChecked())
+        self._mgr.set_paused(self._writes_suspended or self._paused or not self.enable.isChecked())
+
+    def suspend_for_config_replacement(self) -> None:
+        """A successful import/reset supersedes this session's pending composition."""
+        self._writes_suspended = True
+        self._save_timer.stop()
+        self._dirty = False
+        self._save_error = ""
+        self._active_preset = None
+        if self._selector is not None:
+            self._selector.close()
+        self._mgr.set_paused(True)
+        self._mgr.shutdown()
+        self._refresh_overlays()
+        self.setEnabled(False)
+        self._update_save_status()
 
     def shutdown(self) -> None:
         if not self.flush_pending():
