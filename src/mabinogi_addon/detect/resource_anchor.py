@@ -19,6 +19,9 @@ def assets():
     alternate = image_io.imread(Path(__file__).parent / "templates/autofind/dorcha_anchor_alt.png")
     if alternate is not None:
         result["anchor_alt"] = alternate
+    live = image_io.imread(Path(__file__).parent / "templates/autofind/dorcha_anchor_live.png")
+    if live is not None:
+        result["anchor_live"] = live
     return result
 
 
@@ -42,8 +45,10 @@ def ornament_candidates(frame,templates,trace,cancelled=None):
         return []
     anchor,mask = templates["anchor"],templates["mask"]
     anchors = [anchor]
-    alternate = templates.get("anchor_alt")
-    if alternate is not None:
+    for name in ("anchor_alt", "anchor_live"):
+        alternate = templates.get(name)
+        if alternate is None:
+            continue
         if not isinstance(alternate,np.ndarray) or alternate.dtype != np.uint8 or alternate.shape != anchor.shape:
             trace["rejection"] = "invalid_assets"
             return []

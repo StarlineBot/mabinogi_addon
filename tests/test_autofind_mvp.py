@@ -166,7 +166,7 @@ def test_new_detectors_roundtrip_original_zip(frames, tmp_path, monkeypatch, fea
         record = storage.recent()[0]
         expected = {"anchor", "mask"}
         if feature == "tuarim":
-            expected |= {"circle_anchor", "circle_mask", "circle_anchor_alt"}
+            expected |= {"circle_anchor", "circle_mask", "circle_anchor_alt", "circle_anchor_live", "structure_live"}
         assert set(record.metadata["asset_names"]) == expected
         np.testing.assert_array_equal(image_io.imread(record.directory / "input.png"), frame)
         result = replay(storage.export(record, tmp_path / "공유.zip"))

@@ -385,12 +385,14 @@ class StatBarsTab(QWidget):
         self.collect_chk = checkbox("수집 모드(바 바뀔 때 자동 저장)")
         row.addWidget(self.collect_chk, 1)
         g.addLayout(row)
-        self.collect_label = hint_label("")
+        from .widgets import CapturePathLabel
+        self.collect_label = CapturePathLabel()
         self._update_collect_label()
         g.addWidget(self.collect_label)
         return box
 
     def _update_collect_label(self) -> None:
+        self.collect_label.setToolTip(str(self._shot_dir))
         self.collect_label.setText(
             f"저장 위치: {self._shot_dir}  ·  수집 {self._shot_count}장"
         )

@@ -10,13 +10,29 @@ from scripts.qa_tuarim_right_structure_background import (
     diagnostic,
     single_opencv_thread,
     test_live_original_must_locate_visible_tuarim,
-    test_saved_failure_records_current_assets_and_right_structure_rejection,
     test_opaque_button_pixels_are_exact_and_score_one,
     test_only_38_outside_pixels_change_rejection_to_acceptance,
     test_visible_zero_percent_is_independently_readable,
     test_same_original_dorcha_locates_and_reads_five,
     test_missing_right_button_is_still_rejected,
 )
+
+
+def test_recorded_failure_preserves_original_assets_and_adds_explicit_live_model(diagnostic):
+    metadata, _, saved = diagnostic
+    current = detector_assets("tuarim")
+    assert set(current) == set(saved) | {"circle_anchor_live", "structure_live"}
+    for name, image in saved.items():
+        np.testing.assert_array_equal(image, current[name])
+    assert current["circle_anchor_live"].shape == current["circle_anchor"].shape
+    assert metadata["app_version"] == "0.4.80"
+    assert metadata["failure_stage"] == "detect"
+    assert not metadata["missing_required_assets"]
+    assert metadata["result"] is None
+    assert metadata["detector"]["trace"]["rejection"] == "anchor_not_found"
+    candidate = metadata["detector"]["trace"]["candidates"][-1]
+    assert candidate["anchor"][:2] == [569,106]
+    assert candidate["ornament_score"] > .99 and candidate["structure_score"] < .97
 
 
 @pytest.mark.parametrize("scale", [0.75, 1.0, 1.25, 1.5, 2.0])

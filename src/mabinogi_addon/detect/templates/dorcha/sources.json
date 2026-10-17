@@ -185,5 +185,17 @@
       23
     ],
     "sha256": "9fb7d423d07ae21812d507b1acff7686b760fe4a9dbea1504e6d9f551a8fda68"
+  },
+  {
+    "value": 0,
+    "file": "tests/data/autofind_20261016T192204168176Z_e70b6c5c.zip",
+    "member": "input.png",
+    "box": [
+      534,
+      122,
+      28,
+      23
+    ],
+    "sha256": "da9c3370e0f8c60b94e4ea33ab09c83faa6e186861d08d637abccf7c231b7f5a"
   }
 ]

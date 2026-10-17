@@ -165,6 +165,14 @@ def read_percent(
     """
     if _REFS is None:
         return None
+    if (isinstance(region_bgr,np.ndarray) and region_bgr.dtype == np.uint8
+            and region_bgr.ndim == 3 and region_bgr.shape[2] == 3 and region_bgr.size):
+        from .tuarim_small import read_small
+        matched,value = read_small(region_bgr,threshold)
+        if matched:
+            return value
+        if region_bgr.shape[0] >= 20:
+            return _read_padded(region_bgr,threshold)
     if (region_bgr is not None and region_bgr.ndim == 3 and region_bgr.size
             and region_bgr.shape[1] / region_bgr.shape[0] >= 2.5):
         return _read_padded(region_bgr, threshold)

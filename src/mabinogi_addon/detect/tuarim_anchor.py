@@ -1,14 +1,20 @@
 """Locate the movable Tuarim decoration, not its changing inner number."""
 
+from pathlib import Path
+
 import cv2
 import numpy as np
 
+from .. import image_io
 from .autofind_anchors import ACCEPT, assets as load_anchors, candidates
 from . import resource_anchor
 
 
 def assets():
     result = load_anchors("tuarim")
+    live = image_io.imread(Path(__file__).parent / "templates/autofind/tuarim_structure_live.png")
+    if live is not None:
+        result["structure_live"] = live
     result.update({f"circle_{key}":image for key,image in resource_anchor.assets().items()})
     return result
 
@@ -37,7 +43,6 @@ def locate_tuarim(frame, templates=None, diagnostics=None):
         w,h = round(templates["anchor"].shape[1]*scale),round(templates["anchor"].shape[0]*scale)
         if x+w > frame.shape[1] or y+h > frame.shape[0]:
             continue
-        native = cv2.resize(templates["anchor"],(w,h),interpolation=cv2.INTER_AREA)
         # Fractional scales must not include a pixel blended with scenery.
         coverage = cv2.resize(button_mask,(w,h),interpolation=cv2.INTER_AREA)
         mask = np.where(coverage == 255,255,0).astype(np.uint8)
@@ -45,10 +50,17 @@ def locate_tuarim(frame, templates=None, diagnostics=None):
         # Verify the independent right-hand structure, not the old circle a second time.
         if not mask.any():
             continue
-        score = float(cv2.matchTemplate(frame[y:y+h,x:x+w],native,cv2.TM_CCORR_NORMED,mask=mask)[0,0])
-        score = score if np.isfinite(score) else 0.0
+        scores = []
+        for name in ("anchor", "structure_live"):
+            model = templates.get(name)
+            if not isinstance(model,np.ndarray) or model.shape != templates["anchor"].shape or model.dtype != np.uint8:
+                continue
+            native = cv2.resize(model,(w,h),interpolation=cv2.INTER_AREA)
+            score = float(cv2.matchTemplate(frame[y:y+h,x:x+w],native,cv2.TM_CCORR_NORMED,mask=mask)[0,0])
+            scores.append((score if np.isfinite(score) else 0.0, name))
+        score, model_name = max(scores)
         item = {**item,"ornament_score":item["score"],"structure_score":score,
-                "score":score,"anchor":[x,y,w,h],"method":"shared_circle_right_structure"}
+                "structure_model":model_name,"score":score,"anchor":[x,y,w,h],"method":"shared_circle_right_structure"}
         trace["candidates"].append(item)
         if np.isfinite(score) and score >= ACCEPT and not any(
                 abs(x-other["anchor"][0]) < w/2 and abs(y-other["anchor"][1]) < h/2 for other in matches):

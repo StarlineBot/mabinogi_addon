@@ -6,9 +6,49 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QFocusEvent
+import math
+from PySide6.QtCore import QPointF, Qt
+from PySide6.QtGui import QFocusEvent, QPainter, QPalette, QTextLayout, QTextOption
 from PySide6.QtWidgets import QBoxLayout, QCheckBox, QLabel, QMessageBox, QSizePolicy, QSpinBox
+
+
+class CapturePathLabel(QLabel):
+    """Wrap unbroken paths without imposing their minimum word width."""
+
+    def __init__(self):
+        super().__init__()
+        self.setWordWrap(True)
+        self.setTextFormat(Qt.TextFormat.PlainText)
+        self.setStyleSheet("color:#8a8f98;")
+        policy = self.sizePolicy()
+        policy.setHorizontalPolicy(QSizePolicy.Policy.Ignored)
+        self.setSizePolicy(policy)
+
+    def _text_layout(self, width):
+        layout = QTextLayout(self.text(), self.font())
+        option = QTextOption()
+        option.setWrapMode(QTextOption.WrapMode.WrapAtWordBoundaryOrAnywhere)
+        layout.setTextOption(option)
+        height = 0
+        layout.beginLayout()
+        while True:
+            line = layout.createLine()
+            if not line.isValid():
+                break
+            line.setLineWidth(max(1, width))
+            line.setPosition(QPointF(0, height))
+            height += line.height()
+        layout.endLayout()
+        return layout, math.ceil(height)
+
+    def heightForWidth(self, width):
+        return self._text_layout(width)[1]
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setPen(self.palette().color(QPalette.ColorRole.WindowText))
+        self._text_layout(self.width())[0].draw(painter, QPointF())
+        painter.end()
 
 
 class TrackerColumns(QBoxLayout):

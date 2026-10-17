@@ -34,7 +34,7 @@ from ..detect.boss_name_matcher import identify, load_name_templates
 from ..tracker.boss_catalog import load_bosses, make_tracker
 from .pattern_overlay import PatternWarningOverlay
 from .upcoming_overlay import UpcomingPatternsOverlay
-from .widgets import checkbox, hint_label
+from .widgets import CapturePathLabel, checkbox, hint_label
 
 _SOUND_DIR = paths.resource_dir() / "sounds"
 _PRE_SOUND = _SOUND_DIR / "보스패턴 예고.mp3"
@@ -548,7 +548,7 @@ class BossTab(QWidget):
         self.collect_chk = checkbox("수집 모드(바 바뀔 때 자동 저장)")
         row.addWidget(self.collect_chk, 1)
         g.addLayout(row)
-        self.collect_label = hint_label("")
+        self.collect_label = CapturePathLabel()
         self._update_collect_label()
         g.addWidget(self.collect_label)
         return box
@@ -619,6 +619,7 @@ class BossTab(QWidget):
         self._flash_region()
 
     def _update_collect_label(self) -> None:
+        self.collect_label.setToolTip(str(self._shot_dir))
         self.collect_label.setText(
             f"저장 위치: {self._shot_dir}  ·  수집 {self._shot_count}장"
         )
