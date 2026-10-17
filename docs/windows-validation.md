@@ -1,25 +1,30 @@
-# Windows 개발 완료 게이트
+# Windows 선택 검증과 릴리즈 게이트
 
-## 자동 실행과 완료 조건
+## 현재 정책 (2026-10-18)
 
-제품 소스, 테스트, 의존성, 패키징, CI 관련 변경을 main에 푸시하면
-`.github/workflows/windows.yml`이 Windows에서 자동 실행된다. 문서만 바뀌면 실행하지 않는다.
-개발자는 **푸시한 정확한 SHA**의 결과를 확인한 뒤 QA를 요청한다.
-이전 커밋의 성공이나 Linux 테스트 통과로 대신하지 않는다.
+Actions 무료 한도에 맞춰 **일반 main 푸시의 Windows 자동 실행은 중단**한다.
+`.github/workflows/windows.yml`은 `workflow_dispatch`로만 실행한다. 일반 개발은 로컬 관련
+회귀를 수행하고 Windows 미실행 범위를 명시해 QA로 전달한다. 아래 과거 자동 실행 기록은
+당시 결과이며 현재 트리거 정책이 아니다.
+
+시작/종료·Qt 수명/스레드·네이티브 의존성·캡처/오디오/입력·패키징/업데이트 등 위험한
+변경은 영향과 남은 한도를 고려해 선택적으로 사전 검증한다. 일반 푸시마다 수동 실행을
+요청하거나 실행이 없는 SHA를 기다리지 않는다. 선택 실행은 다음을 수행한다.
 
 1. frozen lockfile로 Python 3.12 의존성을 설치한다.
 2. 외부 장치를 격리한 전체 회귀 테스트를 실행한다.
 3. 별도 프로세스에서 실제 Windows 통합 검사를 실행한다.
-4. 빌드 대상 변경이면 릴리즈와 동일한 PyInstaller 명령으로 exe를 생성하고 파일을 확인한다.
+4. `build_exe=true`일 때 릴리즈와 동일한 PyInstaller 명령으로 exe를 생성한다.
+   기본 OFF다. 실행·의존성·패키징 위험에는 선택하며 `upload_exe=true`도 빌드를 수반한다.
 
-빌드 대상은 보수적으로 `src/`, `packaging/`, `.github/workflows/`, `test_support/`,
-`tests/`, `scripts/`, `pytest.ini`, `pyproject.toml`, `uv.lock` 변경 전체다. 따라서 시작·종료·네이티브
-의존성·패키징 변경을 포함한다. 비교 기준이 없는 수동 실행/첫 푸시도 빌드한다.
-테스트만 변경한 푸시도 exe를 빌드한다. 이전 제품 변경에서 회귀가 실패해 빌드가 생략된 경우,
-테스트 수정 후에도 빌드 검증 공백이 남지 않도록 한다. 문서만 바뀌면 자동 실행하지 않는다.
+선택 실행 예시(태그가 아닌 main의 대상 커밋을 확인한 뒤 실행):
 
-푸시 후 개발 세션에서 다음을 실행한다. SHA는 실제 전체 커밋 해시로 치환한다.
-자동 Windows 검증 대상 변경에서는 `--require-build`를 생략하지 않는다.
+```bash
+gh workflow run windows.yml --ref main -f build_exe=true -f upload_exe=false
+```
+
+선택 실행을 시작한 경우에만 정확한 전체 SHA로 아래 결과 조회를 수행한다.
+빌드를 선택하지 않은 검사에서는 `--require-build`를 생략한다.
 
 ```bash
 uv run python scripts/windows_ci.py wait --sha FULL_PUSHED_SHA --require-build
@@ -27,13 +32,16 @@ uv run python scripts/windows_ci.py wait --sha FULL_PUSHED_SHA --require-build
 
 이 명령은 해당 SHA의 `windows.yml` 실행만 조회하고 완료까지 기다린다.
 실패·취소·시간 초과·필수 단계 누락/skip·API 접근 실패는 완료로 인정하지 않는다.
-네트워크나 권한 때문에 조회하지 못하면 **Windows 검증 대기**로 보고하며 QA 준비 완료로
-표현하지 않는다. Git 푸시 권한과 Actions API 조회 권한은 별개다.
+네트워크/권한/한도/러너 문제로 실행·조회하지 못하면 **Windows 미검증**으로 명시한다.
+이는 로컬 QA 전달을 금지하지 않지만 Windows 통과나 배포 성공을 뜻하지 않는다.
+Git 푸시 권한과 Actions API 조회 권한은 별개다.
 클라우드에서 조회가 차단되면 환경 설정의 네트워크 허용 목록에 `api.github.com`이 필요하다.
 인증값을 채팅에 올리지 않는다.
 
-main 검증은 태그·Release·자동 업데이트·Discord 공지를 만들지 않는다.
-독립 QA 통과 후 릴리즈는 기존 태그 절차로 별도 진행하며, 태그 CI도 같은 테스트와 빌드를 반복한다.
+선택 검증은 태그·Release·자동 업데이트·Discord 공지를 만들지 않는다.
+릴리즈 `v*` 태그에서는 `release.yml`의 **전체 격리 회귀 → 네이티브 검사 → exe 빌드**가
+모두 필수다. 실패/취소/skip/한도 차단이면 게시하지 않는다. 게시/공개 업데이트/공지 단계는
+세 단계의 성공을 명시적으로 요구한다. 선택적 업로드 quota 경고만 이 게이트와 별개다.
 
 ## 테스트 경계와 정리
 
@@ -59,7 +67,7 @@ Qt 네트워크 관리자 생성도 대체한다. 실제 관리자는 별도 통
 Windows API를 사용하는 통합 검사는 Linux에서 OS 제약으로 skip된다.
 게임·혼합 DPI·절전 복귀·실제 exe 실행/업데이트는 이 smoke 검사의 범위 밖이다.
 
-main/태그 CI는 `-vv -ra`로 각 테스트 ID와 실행 순서를 남긴다. 네이티브 크래시로
+선택 검증/태그 CI는 `-vv -ra`로 각 테스트 ID와 실행 순서를 남긴다. 네이티브 크래시로
 최종 요약/XML 작성에 도달하지 못해도 마지막 실행 테스트를 확인할 수 있게 한다.
 이전 Windows 접근 위반 조사와 검증 상태는 [네트워크 경계 보완](qt-network-boundary-fix.md)에 기록한다.
 
@@ -71,11 +79,31 @@ shutdown/close하며 자식 타이머를 정지하고 DeferredDelete를 처리�
 
 ## 업로드와 검증 결과 분리
 
-exe 생성은 다운로드 업로드와 독립적인 필수 검증이다. Actions 아티팩트는 기본 비활성화다.
+릴리즈의 exe 생성은 다운로드 업로드와 독립적인 필수 검증이다. 사전 검증에서는
+exe 생성도 선택 사항이며, Actions 아티팩트는 기본 비활성화다.
 수동 실행에서 `upload_exe`를 선택한 경우에만 1일 보관하며 SHA/시도별 이름을 사용한다.
 업로드 단계만 `continue-on-error`로 두고 summary에 테스트·통합·빌드·업로드 결과를 각각 남긴다.
 quota/전송 오류는 경고이며 테스트나 빌드 실패를 성공으로 바꾸지 않는다.
 태그 릴리즈의 Release 자산은 이 선택 업로드와 별도 경로다.
+
+## 무료 한도 정책 변경 검증
+
+- 2026-10-18: 일반 푸시 트리거 제거, 수동 build_exe 기본 OFF,
+  upload_exe 선택 시 빌드 수행, 릴리즈 필수 게이트 및 모든 게시 조건을 로컬 YAML 검사로 검증했다.
+- `tests/test_windows_ci.py`: 기존 정확한 SHA/필수 단계 누락·실패·취소 검사,
+  업로드 quota 분리와 공개 데이터 보존 검사를 유지한다. 테스트 경계·정리·누수 assertion은
+  변경하지 않았다. 이번 로컬 실행은 21개 통과했다.
+- 최종 관련 검사: `QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest
+  tests/test_windows_ci.py tests/test_release_notes.py tests/test_release_notes_trigger.py -q --tb=short`
+  결과 **33 passed (6.27초)**. `git diff --check`도 통과했다.
+- 사용자에게 전달된 Actions 무료 한도 차단 때문에 이번 변경의 실제 Windows 회귀,
+  네이티브 검사 및 PyInstaller exe 빌드는 실행하지 않았다. 워크플로 구조 검사는 실제
+  GitHub 실행이나 Windows 통과의 증거가 아니다. 한도 소비를 위한 수동 실행도 하지 않았다.
+- 앞선 제품 `5a452fd`의 실행 `39052932417`은 QA 기준 runner_id=0, steps=[]였다.
+  이전 로컬 검사나 펠롬 제품의 성공을 해당 제품의 Windows 성공으로 대신하지 않는다.
+- 한도 차단은 릴리즈 게이트를 우회하지 않는다. 복구 전에도 로컬 QA는 진행할 수 있지만
+  태그 릴리즈의 필수 테스트/네이티브/빌드가 실행·성공하지 않으면 게시되지 않는다.
+  이번 작업에서 태그 생성·푸시·릴리즈는 하지 않았다.
 
 기존 아티팩트는 임의로 삭제하지 않는다. 기존 quota를 비우려면 저장소 소유자가 필요 여부를
 확인해 정리하며 GitHub 사용량 재계산까지 지연될 수 있다. 재계산을 기다리기 위해

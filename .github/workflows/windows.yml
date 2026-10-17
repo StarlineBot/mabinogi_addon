@@ -1,20 +1,12 @@
 name: Windows validation
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'src/**'
-      - 'tests/**'
-      - 'test_support/**'
-      - 'packaging/**'
-      - 'scripts/**'
-      - 'pyproject.toml'
-      - 'uv.lock'
-      - 'pytest.ini'
-      - '.github/workflows/**'
   workflow_dispatch:
     inputs:
+      build_exe:
+        description: 'Verify exe for startup/native/packaging changes'
+        type: boolean
+        default: false
       upload_exe:
         description: 'Optional exe download (does not gate validation)'
         type: boolean
@@ -40,9 +32,6 @@ jobs:
         run: uv python install 3.12
       - name: Frozen dependencies
         run: uv sync --frozen --group dev --group build
-      - name: Determine exe requirement
-        id: plan
-        run: uv run --frozen python scripts/windows_ci.py plan --base '${{ github.event.before || '0000000000000000000000000000000000000000' }}' --head '${{ github.sha }}'
       - name: Isolated regression
         id: unit
         env:
@@ -55,7 +44,7 @@ jobs:
         run: uv run --frozen pytest -vv -ra -m windows_integration --junitxml=windows-results.xml
       - name: Verify exe build
         id: build
-        if: steps.plan.outputs.build_required == 'true'
+        if: inputs.build_exe || inputs.upload_exe
         run: uv run --frozen --group build python packaging/build_windows.py --version 0.0.0
       - name: Optional exe upload
         id: upload

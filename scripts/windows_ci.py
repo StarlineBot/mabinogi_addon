@@ -14,7 +14,7 @@ BUILD_PATHS = ("src/", "packaging/", ".github/workflows/", "test_support/", "tes
 
 
 def needs_build(paths):
-    # 앞선 회귀 실패로 생략된 빌드를 테스트 수정 푸시에서도 다시 검증한다.
+    # 수동 사전 검증의 보수적인 빌드 권고다. 푸시 자동 실행 조건은 아니다.
     return any(path.startswith(BUILD_PATHS) or path in ("pyproject.toml", "uv.lock", "pytest.ini")
                for path in paths)
 

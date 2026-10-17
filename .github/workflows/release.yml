@@ -95,7 +95,7 @@ jobs:
           --build '${{ steps.build.outcome }}' --upload '${{ steps.upload.outcome }}'
 
       - name: Attach to Release
-        if: startsWith(github.ref, 'refs/tags/')
+        if: success() && startsWith(github.ref, 'refs/tags/') && steps.unit.outcome == 'success' && steps.native.outcome == 'success' && steps.build.outcome == 'success'
         uses: softprops/action-gh-release@v2
         with:
           files: dist/mabinogi-addon.exe
@@ -150,7 +150,7 @@ jobs:
       # main 에 version.json + CHANGELOG + README 를 커밋.(빈 저장소여도 커밋 1개 보장 →
       # 다음 Release(태그) 생성 안전). CHANGELOG 는 릴리즈마다 맨 위에 누적된다.
       - name: Commit to public repo main (version.json + CHANGELOG + README)
-        if: startsWith(github.ref, 'refs/tags/')
+        if: success() && startsWith(github.ref, 'refs/tags/') && steps.unit.outcome == 'success' && steps.native.outcome == 'success' && steps.build.outcome == 'success'
         shell: bash
         env:
           RELEASES_TOKEN: ${{ secrets.RELEASES_TOKEN }}
@@ -187,7 +187,7 @@ jobs:
           git push -u origin main
 
       - name: Publish exe + version.json to public repo (Release)
-        if: startsWith(github.ref, 'refs/tags/')
+        if: success() && startsWith(github.ref, 'refs/tags/') && steps.unit.outcome == 'success' && steps.native.outcome == 'success' && steps.build.outcome == 'success'
         uses: softprops/action-gh-release@v2
         with:
           repository: StarlineBot/mabinogi_addon-releases
@@ -202,7 +202,7 @@ jobs:
       # exe(약 117MB)는 Discord 업로드 한도를 넘어 첨부 불가 → 링크로 안내.
       # 웹훅 시크릿(RELEASE_WEBHOOK_URL)이 없으면 이 단계는 통째로 건너뛴다.
       - name: Announce release to Discord forum (webhook)
-        if: startsWith(github.ref, 'refs/tags/') && env.RELEASE_WEBHOOK_URL != ''
+        if: success() && startsWith(github.ref, 'refs/tags/') && steps.unit.outcome == 'success' && steps.native.outcome == 'success' && steps.build.outcome == 'success' && env.RELEASE_WEBHOOK_URL != ''
         shell: bash
         env:
           RELEASE_WEBHOOK_URL: ${{ secrets.RELEASE_WEBHOOK_URL }}
