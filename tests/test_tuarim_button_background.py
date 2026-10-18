@@ -21,7 +21,7 @@ from scripts.qa_tuarim_right_structure_background import (
 def test_recorded_failure_preserves_original_assets_and_adds_explicit_live_model(diagnostic):
     metadata, _, saved = diagnostic
     current = detector_assets("tuarim")
-    assert set(current) == set(saved) | {"circle_anchor_live", "structure_live"}
+    assert set(current) == set(saved) | {"circle_anchor_live", "circle_anchor_seven", "structure_live"}
     for name, image in saved.items():
         np.testing.assert_array_equal(image, current[name])
     assert current["circle_anchor_live"].shape == current["circle_anchor"].shape

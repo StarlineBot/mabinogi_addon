@@ -22,6 +22,9 @@ def assets():
     live = image_io.imread(Path(__file__).parent / "templates/autofind/dorcha_anchor_live.png")
     if live is not None:
         result["anchor_live"] = live
+    seven = image_io.imread(Path(__file__).parent / "templates/autofind/dorcha_anchor_seven.png")
+    if seven is not None:
+        result["anchor_seven"] = seven
     return result
 
 
@@ -45,7 +48,7 @@ def ornament_candidates(frame,templates,trace,cancelled=None):
         return []
     anchor,mask = templates["anchor"],templates["mask"]
     anchors = [anchor]
-    for name in ("anchor_alt", "anchor_live"):
+    for name in ("anchor_alt", "anchor_live", "anchor_seven"):
         alternate = templates.get(name)
         if alternate is None:
             continue

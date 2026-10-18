@@ -89,11 +89,13 @@ def test_invalid_frame_does_not_enter_template_matching(bad):
 
 def test_native_fallback_can_be_cancelled_between_scales():
     calls = []
-    def cancelled():
-        calls.append(1)
-        return len(calls) > 13
     trace = {}
+    def cancelled():
+        if "native grayscale fallback; unchanged acceptance score" in trace.get("transforms", ()):
+            calls.append(1)
+        return len(calls) == 3
     assert resource_anchor.ornament_candidates(np.zeros((180,260,3),np.uint8),resource_anchor.assets(),trace,cancelled) == []
+    assert len(calls) == 3
     assert trace["rejection"] == "cancelled"
     assert "native grayscale fallback; unchanged acceptance score" in trace["transforms"]
 
