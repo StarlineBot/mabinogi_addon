@@ -10,6 +10,8 @@
   해당 시점에는 도르카/투아림 화면이 분리되어 있었다. 이후 작업본 전체나 Windows 실게임을 검증한 결과가 아니다.
 - 관련 명세: [탐색 구조](navigation-structure-spec.md), [도르카·투아림 통합](dorcha-tuarim-integration-spec.md).
   이 문서는 공통 조작과 커스텀 저장 정책에 우선 적용하며, 개별 기능의 판독·알림·권한 정책은 보존한다.
+- 2026-10-18 화면별 그룹/영역 줄/미리보기 크기 및 공통 자원 설정은
+  [설정 화면 그룹화 및 공통 영역 설정](settings-grouping-common-resource-spec.md)을 우선 적용한다.
 
 ## 1. 목적과 적용 원칙
 
