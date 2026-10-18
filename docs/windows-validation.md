@@ -82,7 +82,9 @@ shutdown/close하며 자식 타이머를 정지하고 DeferredDelete를 처리�
 그룹/스크롤/위젯 재부모화와 공통 명령 변경에는 새 화면 검사뿐 아니라 기존 탐색·안내·
 폭 검사를 포함한다. `tests/test_wrapping_controls.py`, `tests/test_tuarim_settings_width.py`,
 `tests/test_navigation_all_widths.py`, `tests/test_tour_layout.py`와 체력바 미리보기 변경 시
-`tests/test_stat_preview_width.py`를 함께 실행한다. 기본/큰 글꼴, 좁고 짧은 작업 영역,
+`tests/test_stat_preview_width.py`, `tests/test_stat_preview_transition.py`를 함께 실행한다.
+배율 300→50→150→300, 세 항목→하나→세 항목과 다른 탭 복귀도 포함한다.
+기본/큰 글꼴, 좁고 짧은 작업 영역,
 좌측 모니터, 진단 펼침, 큰 출력 배율과 설정 불변성을 확인한다.
 접힌 개별 컨트롤은 펼친 뒤 검사하되 실제 기본 공통 명령의 가시성도 반드시 검사한다.
 Linux 통과를 실제 Windows 글꼴/DPI 통과로 대신하지 않으며 일반 푸시 자동 실행 정책은 바꾸지 않는다.

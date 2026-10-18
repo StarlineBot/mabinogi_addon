@@ -14,7 +14,7 @@ from __future__ import annotations
 import time
 
 import numpy as np
-from PySide6.QtCore import QPoint, QSize, Qt, QTimer
+from PySide6.QtCore import QEvent, QPoint, QSize, Qt, QTimer
 from PySide6.QtGui import QGuiApplication, QImage, QPixmap
 from PySide6.QtWidgets import (
     QComboBox,
@@ -74,6 +74,13 @@ HELP_HTML = """
 class _DisplayPreview(QScrollArea):
     """Keep the actual output size, but let the surrounding group constrain the viewport."""
 
+    def __init__(self):
+        super().__init__()
+        self._content_size = QSize()
+        self._fit_timer = QTimer(self)
+        self._fit_timer.setSingleShot(True)
+        self._fit_timer.timeout.connect(self.fit_content)
+
     def sizeHint(self):
         body = self.widget()
         if body is None:
@@ -87,12 +94,34 @@ class _DisplayPreview(QScrollArea):
         body = self.widget()
         if body is None:
             return
-        body.adjustSize()
-        height = body.sizeHint().height()
+        body.layout().activate()
+        size = body.sizeHint()
+        body.resize(size)
+        height = size.height()
         if body.width() > self.viewport().width():
             height += self.horizontalScrollBar().sizeHint().height()
-        self.setFixedHeight(height)
-        self.updateGeometry()
+        if self.height() != height:
+            self.setFixedHeight(height)
+        if size != self._content_size:
+            self._content_size = QSize(size)
+            self.updateGeometry()
+
+    def _schedule_fit(self):
+        if self.isVisible() and not self._fit_timer.isActive():
+            self._fit_timer.start(0)
+
+    def eventFilter(self, watched, event):
+        if watched is self.widget() and event.type() == QEvent.Type.LayoutRequest:
+            self._schedule_fit()
+        return super().eventFilter(watched, event)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self._schedule_fit()
+
+    def hideEvent(self, event):
+        self._fit_timer.stop()
+        super().hideEvent(event)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
