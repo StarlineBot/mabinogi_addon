@@ -57,8 +57,8 @@ class BossTab(QWidget):
         self._watcher = watcher
         cfg = config.load_boss_pattern()
         # 보스 HP바 영역은 디버프 3차와 '공유'(config.load_boss_bar_region = bossPattern.box).
-        # 기본으로 바 위치가 이미 잡힌 상태(사용자 해상도 2560×1440면 바로 작동).
-        self._region = config.load_boss_bar_region() or dict(DEFAULT_BOX)
+        # 미등록/지정 해제는 기본 위치로 복원하지 않는다.
+        self._region = config.load_boss_bar_region()
         self._sct = None
         self._last_frame = None
         self._last_raw_hp: int | None = None  # 이번 프레임 '원판독'값(수집 태그·진단용)
@@ -119,10 +119,6 @@ class BossTab(QWidget):
         )
         v.addWidget(self._supported_label())
 
-        self.enable = checkbox("보스 패턴 경고 사용")
-        self.enable.setChecked(cfg["enabled"])
-        self.enable.toggled.connect(self._save)
-        v.addWidget(self.enable)
         prev_btn = QPushButton("알림 미리보기")
         prev_btn.setToolTip("경고가 화면 어디에 어떻게 뜨는지 한 번 띄워 봅니다")
         prev_btn.clicked.connect(self._preview_warning)
@@ -156,6 +152,9 @@ class BossTab(QWidget):
         commands.addWidget(self.auto_find_btn)
         commands.addWidget(self.region_btn)
         commands.addWidget(self.view_region_btn)
+        from .region_registration import clear_button
+        self.clear_region_btn = clear_button(self, "boss", self._region_cleared)
+        commands.addWidget(self.clear_region_btn)
         self.region_row = wrapping_row(row, commands)
         cv.addLayout(self.region_row)
 
@@ -224,9 +223,7 @@ class BossTab(QWidget):
         (메인 스레드 QTimer 슬롯의 미처리 예외는 PySide6에서 프로세스를 abort시킬 수 있다.)"""
         try:
             self._apply_collect_gate()
-            if not self.enable.isChecked() and not (
-                self._logged_in() and self._presence_wanted_fn is not None and self._presence_wanted_fn()
-            ):
+            if not self._region:
                 self._boss_present = False
                 self._upcoming.hide()
                 return
@@ -260,16 +257,16 @@ class BossTab(QWidget):
 
         # 보스 HP바는 넓은 가로 띠 → 자유 드래그로 이름~% 를 감싸게 그린다.
         self._selector = RegionSelector()
-        self._selector.selected.connect(self._on_selected)
+        from .region_registration import connect_selection
+        connect_selection(self, self._selector, self._on_selected)
         self._selector.start()
 
     def _on_selected(self, x: int, y: int, w: int, h: int) -> None:
-        self._region = {"x": x, "y": y, "w": w, "h": h}
-        self._update_region_label()
         # 영역은 '공유 키'(bossPattern.box)에만 저장한다 — _save()가 토글 때마다 box를
         # 통째로 덮어써 디버프 쪽 변경을 날리던 문제 방지(box는 여기서만 쓴다).
         config.save_boss_bar_region(x, y, w, h)
-        self._save()  # 나머지 설정(enabled 등). box는 포함하지 않는다.
+        self._region = {"x": x, "y": y, "w": w, "h": h}
+        self._update_region_label()
         self._flash_region()
         self.bar_region_changed.emit()  # 디버프 3차가 새 영역으로 재시작하도록 알림
 
@@ -296,9 +293,29 @@ class BossTab(QWidget):
         쓰게 하려면 이렇게 메모리를 갱신해야 한다(매 틱 파일 I/O는 피한다).
         """
         shared = config.load_boss_bar_region()
-        if shared and shared != self._region:
+        if shared != self._region:
+            if shared is None:
+                self._region_cleared()
+                return
             self._region = shared
             self._update_region_label()
+
+    def _region_cleared(self):
+        self._region = None
+        self._tracker = None
+        self._cur_boss = None
+        self._reset_hp()
+        self._last_raw_hp = self._last_frame = self._last_saved_frame = None
+        self._unidentified = 0
+        self._bar_absent = self._UPCOMING_GONE_FRAMES + 1
+        self._boss_present = False
+        self._upcoming.set_items([])
+        self._upcoming.hide()
+        self._overlay.hide()
+        self.preview.clear()
+        self.status_label.setText("영역 지정 필요")
+        self._update_region_label()
+        self.bar_region_changed.emit()
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
@@ -309,7 +326,6 @@ class BossTab(QWidget):
         # 쓴다. 여기서 box를 넣으면 토글(enable 등)마다 디버프가 바꾼 영역을 덮어쓴다.
         config.save_boss_pattern(
             {
-                "enabled": self.enable.isChecked(),
                 "showUpcoming": self.show_upcoming.isChecked(),
                 "upcomingLocked": self._upcoming.locked,
                 "warnLocked": self._overlay.locked,
@@ -484,7 +500,7 @@ class BossTab(QWidget):
         alerts = []
         if boss_id is not None and self._tracker is not None and hp is not None:
             alerts = self._tracker.observe(hp)
-        if self.enable.isChecked():
+        if self._region:
             for alert in alerts:
                 self._overlay.show_message(alert.text, 3000)
                 self._play(alert.sound)
@@ -570,6 +586,8 @@ class BossTab(QWidget):
             btn.setVisible(self._logged_in())  # 자동 찾기도 Discord 베타
 
     def _on_auto_find(self) -> None:
+        from .region_registration import generation, save_boxes, editing_allowed
+        stamp = generation(self)
         """보스 체력바를 화면에서 자동 검출 → 민트 점선 미리보기 + 확인 후에만 저장."""
         from ..autofind_diagnostics import perform_autofind
         frame, ox, oy, box = perform_autofind("boss", capture_for_autofind)
@@ -611,13 +629,12 @@ class BossTab(QWidget):
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
-        if ans != QMessageBox.StandardButton.Yes:
+        if ans != QMessageBox.StandardButton.Yes or generation(self) != stamp or not editing_allowed(self):
+            return
+        if not save_boxes(self, {"boss": (lx, ly, lw, lh), "debuff": db}):
             return
         self._region = {"x": lx, "y": ly, "w": lw, "h": lh}
-        config.save_boss_bar_region(lx, ly, lw, lh)  # 보스바(패턴알림·3차 공유)
-        config.save_capture_region(db[0], db[1], db[2], db[3], "debuffTracker")
         self._update_region_label()
-        self._save()
         self.bar_region_changed.emit()  # 보스바 공유(패턴알림/3차)
         self.debuff_region_changed.emit()  # 디버프 추적 재시작(1·2차 포함)
         self._flash_region()

@@ -9,6 +9,8 @@ from .screen_grab import capture_for_autofind
 
 
 def confirm_autofind(tab, feature, label, apply, compatible=None):
+    from .region_registration import generation, editing_allowed
+    stamp = generation(tab)
     if tab._autofind_busy or tab._shutting_down or not tab._logged_in():
         return
     tab._autofind_busy = True
@@ -18,7 +20,7 @@ def confirm_autofind(tab, feature, label, apply, compatible=None):
     highlight = None
     def confirm(box, ox, oy):
         nonlocal highlight
-        if tab._shutting_down:
+        if tab._shutting_down or generation(tab) != stamp:
             return {"status": "cancelled_shutdown"}
         x, y, w, h = box
         logical = to_logical(x + ox, y + oy, w, h)
@@ -34,7 +36,7 @@ def confirm_autofind(tab, feature, label, apply, compatible=None):
             "아니오를 누르면 기존 설정을 유지합니다.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No)
-        if answer == QMessageBox.StandardButton.Yes and not tab._shutting_down:
+        if answer == QMessageBox.StandardButton.Yes and editing_allowed(tab) and generation(tab) == stamp:
             try:
                 apply(*logical)
             except Exception as exc:

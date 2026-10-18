@@ -80,7 +80,6 @@ class StatBarsTab(QWidget):
         self._scale = cfg["scale"]
         self._align = cfg["align"]
         self._bars_cfg = cfg["bars"]
-        self._enabled = cfg["enabled"]
         self._paused = False
         self._sct = None
         self._overlays: dict[str, StatBarOverlay] = {}
@@ -111,10 +110,6 @@ class StatBarsTab(QWidget):
         v.addWidget(tab_header(
             "생명력·마나·스태미나를 별도 오버레이로 표시합니다.", HELP_TITLE, HELP_HTML, self
         ))
-        self.enable = checkbox("체력바 오버레이 사용")
-        self.enable.setChecked(self._enabled)
-        self.enable.toggled.connect(self._on_enable)
-        v.addWidget(self.enable)
         # 베타 기능 — 디스코드 로그인 사용자에게만. 미로그인 시 안내만 보이고 조작은 잠근다.
         self._beta_notice = hint_label(
             "🧪 개발 중인 기능 — 설정 탭에서 Discord 로그인 후 가장 먼저 써볼 수 있어요."
@@ -142,6 +137,9 @@ class StatBarsTab(QWidget):
         commands.addWidget(self.auto_find_btn)
         commands.addWidget(self.region_btn)
         commands.addWidget(self.view_region_btn)
+        from .region_registration import clear_button
+        self.clear_region_btn = clear_button(self, "stat_bars", self._region_cleared)
+        commands.addWidget(self.clear_region_btn)
         self.region_row = wrapping_row(row, commands)
         v.addLayout(self.region_row)
 
@@ -250,7 +248,7 @@ class StatBarsTab(QWidget):
 
         # 로그인 시에만 조작 가능하게 묶어 두는 컨트롤들.
         self._gated_widgets = [
-            self.region_btn, self.view_region_btn, self.auto_find_btn, self.enable,
+            self.region_btn, self.view_region_btn, self.auto_find_btn,
             self.scale_spin, self.align_combo, self.lock_all_btn, self.unlock_all_btn,
             self.snap_btn, self.open_dir_btn, self.collect_chk,
             self.alert_sound_chk,
@@ -315,6 +313,9 @@ class StatBarsTab(QWidget):
     def refresh_boss_region(self):
         registered = config.load_boss_bar_region() is not None
         self.boss_region_status.setText("보스 체력바 · " + ("등록됨" if registered else "미등록"))
+        if not registered:
+            self._alert_low_since.clear()
+            self._reset_visual_alerts()
 
     def _clear_current_preview(self):
         self.preview.clear()
@@ -352,7 +353,7 @@ class StatBarsTab(QWidget):
             self._visual_sample_at = now
         if (self._visual_sample_at is None
                 or not 0 <= now - self._visual_sample_at < WARNING_SAMPLE_MAX_AGE
-                or not self._enabled or self._paused or not self._logged_in()
+                or self._paused or not self._logged_in()
                 or not self._region or not self._active()
                 or (self._boss_present_fn is not None and not self._boss_present_fn())):
             self._reset_visual_alerts()
@@ -374,7 +375,7 @@ class StatBarsTab(QWidget):
     def has_active_alert(self) -> bool:
         """저체력 경고가 하나라도 켜져 있는지. 보스 탭이 '존재 판정이 필요한가'를 묻는다
         (전부 꺼져 있으면 보스바 존재 판정 자체를 건너뛰어 UI 스레드 부하를 아낀다)."""
-        return (self._enabled and not self._paused and self._logged_in()
+        return (self._region is not None and not self._paused and self._logged_in()
                 and any(self._bars_cfg[sid]["alert"]["on"] for sid in ("hp", "mp", "sta")))
 
     def _check_alerts(self, readings: dict, now: float) -> None:
@@ -531,7 +532,7 @@ class StatBarsTab(QWidget):
         )
 
     def _apply_visibility(self) -> None:
-        if (not self._enabled or self._paused or not self._logged_in()
+        if (self._paused or not self._logged_in()
                 or not self._region or not self._active()):
             self._display_valid = False
             self._reset_visual_alerts()
@@ -554,8 +555,7 @@ class StatBarsTab(QWidget):
     def _tick(self) -> None:
         self._apply_login_gate()
         if (
-            not self._enabled
-            or self._paused
+            self._paused
             or not self._logged_in()
             or not self._region
             or not self._active()
@@ -623,7 +623,8 @@ class StatBarsTab(QWidget):
         else:
             size = STAT_BOX_SIZE
         self._selector = RegionSelector(fixed_size=size, window_hwnd=hwnd)
-        self._selector.selected.connect(self._on_selected)
+        from .region_registration import connect_selection
+        connect_selection(self, self._selector, self._on_selected)
         self._selector.start()
 
     def _on_selected(self, x: int, y: int, w: int, h: int) -> None:
@@ -637,7 +638,19 @@ class StatBarsTab(QWidget):
         self._update_region_label()
         self._flash_region()
 
+    def _region_cleared(self):
+        self._region = None
+        self._display_valid = False
+        self._last_frame = self._last_saved_frame = None
+        self._alert_low_since.clear()
+        self._reset_visual_alerts()
+        self._clear_current_preview()
+        self._update_region_label()
+        self._apply_visibility()
+
     def _on_auto_find(self) -> None:
+        from .region_registration import generation, editing_allowed
+        stamp = generation(self)
         """체력바를 화면에서 자동 검출 → 민트 점선 미리보기 + 확인 후에만 저장."""
         from ..autofind_diagnostics import perform_autofind
         frame, ox, oy, box = perform_autofind("stat_bars", capture_for_autofind)
@@ -671,9 +684,12 @@ class StatBarsTab(QWidget):
             QMessageBox.StandardButton.No,
         )
         self._highlight.close()  # 확인 끝나면 민트 점선 즉시 닫기(4초 타이머에만 의존 안 함)
-        if ans != QMessageBox.StandardButton.Yes:
+        if ans != QMessageBox.StandardButton.Yes or generation(self) != stamp or not editing_allowed(self):
             return
-        self._on_selected(lx, ly, lw, lh)
+        try:
+            self._on_selected(lx, ly, lw, lh)
+        except OSError:
+            QMessageBox.warning(self, "영역 저장 실패", "기존 등록 영역을 유지합니다.")
 
     def _flash_region(self) -> None:
         if not self._region:
@@ -699,13 +715,6 @@ class StatBarsTab(QWidget):
             self.view_region_btn.setEnabled(False)
 
     # ---- 설정 변경 ----
-    def _on_enable(self, checked: bool) -> None:
-        self._enabled = checked
-        if not checked:
-            self._alert_low_since.clear()
-        self._apply_visibility()
-        self._save()
-
     def _on_show_toggle(self) -> None:
         for sid, chk in self._show_checks.items():
             self._bars_cfg[sid]["show"] = chk.isChecked()
@@ -745,7 +754,6 @@ class StatBarsTab(QWidget):
             self._bars_cfg[sid]["pos"] = {"x": pos.x(), "y": pos.y()}
         config.save_stat_bars(
             {
-                "enabled": self._enabled,
                 "box": self._region,
                 "scale": self._scale,
                 "align": self._align,

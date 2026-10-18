@@ -89,6 +89,16 @@ def exposed(hwnd: int, local_rects: list, logical_size: tuple[int, int]) -> bool
                      else win32gui.GetWindowRect(other))
             blocked = any(max(t[0], cover[0]) < min(t[2], cover[2])
                           and max(t[1], cover[1]) < min(t[3], cover[3]) for t in targets)
+            if blocked:
+                # Flags alone do not prove transparency. Unknown/per-pixel
+                # alpha stays conservative; only global alpha zero is ignored.
+                try:
+                    if win32gui.GetWindowLong(other, -20) & 0x80000:
+                        _, alpha, flags = win32gui.GetLayeredWindowAttributes(other)
+                        if flags & 2 and alpha == 0:
+                            blocked = False
+                except Exception:
+                    pass
             return True
 
         win32gui.EnumWindows(visit, None)

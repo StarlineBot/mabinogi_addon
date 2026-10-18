@@ -82,9 +82,6 @@ def test_tray_hide_keeps_status_and_capture_retry_alive(window, monkeypatch):
     assert not window._closing and not window._setup_flow.closed
     assert window._status_timer.isActive()
     provide_regions()
-    window.buff_tab.enable.blockSignals(True)
-    window.buff_tab.enable.setChecked(True)
-    window.buff_tab.enable.blockSignals(False)
     calls = []
     def unavailable(region):
         calls.append(region)

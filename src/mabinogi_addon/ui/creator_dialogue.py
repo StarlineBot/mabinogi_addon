@@ -258,6 +258,7 @@ class CreatorDialogue(QObject):
 
     def _eligible(self):
         w = self.window
+        self._ineligible_reason = "창/설정/세션 또는 모달 상태"
         if (self.closed or not self.enabled or self.session_unavailable or self.suspended
                 or not w.isVisible() or w.isMinimized()
                 or w._pages.currentWidget() is not w._tabs
@@ -269,19 +270,25 @@ class CreatorDialogue(QObject):
         if any(widget.isVisible() and type(widget).__name__ in
                {"RegionSelector", "TopEdgeSelector", "TourOverlay"}
                for widget in QApplication.topLevelWidgets()):
+            self._ineligible_reason = "영역 지정 또는 투어 진행 중"
             return False
         anchor = self._anchor()
         if not anchor.isVisible() or not anchor.visibleRegion().contains(anchor.rect()):
+            self._ineligible_reason = "제작자 얼굴이 가려짐"
             return False
         if not self._position(self.bubble.text.text() or "...방금 무슨 생각 하고 있었지?"):
+            self._ineligible_reason = "말풍선 배치 공간 부족"
             return False
         rects = []
         for widget in (anchor, self.bubble):
             point = widget.mapTo(w, QPoint())
             rects.append((point.x(), point.y(), widget.width(), widget.height()))
         try:
-            return self.visibility(int(w.winId()), rects, (w.width(), w.height()))
-        except Exception:
+            visible = self.visibility(int(w.winId()), rects, (w.width(), w.height()))
+            self._ineligible_reason = "" if visible else "Windows 가림/잠금/화면 또는 API 확인 불가"
+            return visible
+        except Exception as exc:
+            self._ineligible_reason = "노출 판정 예외: " + type(exc).__name__
             return False
 
     def start(self):
@@ -316,10 +323,15 @@ class CreatorDialogue(QObject):
 
     def request(self, *, automatic=False):
         if not self._eligible():
+            if not automatic:
+                _log.info("제작자 잡담 클릭 보류: %s (유효 대사 %d개)",
+                          self._ineligible_reason, len(self.session.entries))
             self.dismiss()
             return False
         text = self.session.choose(lambda value: self.bubble.measure(value)[2], fallback=self._shortest)
         if text is None:
+            if not automatic:
+                _log.info("제작자 잡담 클릭 보류: 선택 가능한 대사 없음 (유효 대사 %d개)", len(self.session.entries))
             return False
         if not self._position(text) or not self._eligible():
             self.dismiss()

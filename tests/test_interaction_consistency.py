@@ -57,11 +57,11 @@ def test_embedded_stat_preview_has_no_native_window_or_motion(window):
 
 def test_shared_boss_registration_status_updates_without_polling(window, monkeypatch):
     w, _ = window
-    before = w.boss_tab.enable.isChecked()
+    before = config.load_boss_pattern()["enabled"]
     config.save_boss_bar_region(10, 20, 523, 36)
     w.boss_tab.bar_region_changed.emit()
     assert w.stat_bars_tab.boss_region_status.text() == "보스 체력바 · 등록됨"
-    assert w.boss_tab.enable.isChecked() is before
+    assert config.load_boss_pattern()["enabled"] is before
     monkeypatch.setattr(config, "load_boss_bar_region", lambda: pytest.fail("registration status must not poll config"))
     w.stat_bars_tab._apply_login_gate()
 

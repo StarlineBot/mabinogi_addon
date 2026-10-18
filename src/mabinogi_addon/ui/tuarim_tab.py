@@ -124,6 +124,9 @@ class TuarimTab(QWidget):
         self.auto_find_btn.setToolTip("투아림 원형 장식에서 숫자와 % 영역 찾기 — Discord 베타")
         self.auto_find_btn.clicked.connect(self._on_auto_find)
         row.addWidget(self.auto_find_btn)
+        from .region_registration import clear_button
+        self.clear_region_btn = clear_button(self, "tuarim", self._region_cleared)
+        row.addWidget(self.clear_region_btn)
         v.addLayout(row)
 
         # 확인용: 캡처 미리보기 + 현재 값
@@ -275,7 +278,8 @@ class TuarimTab(QWidget):
         else:
             size = TUARIM_BOX_SIZE
         self._selector = RegionSelector(fixed_size=size)
-        self._selector.selected.connect(self._on_selected)
+        from .region_registration import connect_selection
+        connect_selection(self, self._selector, self._on_selected)
         self._selector.start()
 
     def _on_selected(self, x: int, y: int, w: int, h: int) -> None:
@@ -298,6 +302,16 @@ class TuarimTab(QWidget):
         self._last_frame = self._last_saved_frame = None
         self.preview.clear()
         self.value_label.setText("최근 확정: —")
+        self._update_region_label()
+
+    def _region_cleared(self):
+        self._region = None
+        self._tracker.reset_observations()
+        self._prev_raw = self._stable_value = self._last_value = None
+        self._last_frame = self._last_saved_frame = None
+        self.preview.clear()
+        self.value_label.setText("영역 지정 필요")
+        self.observed.emit(None)
         self._update_region_label()
 
     def _on_auto_find(self) -> None:

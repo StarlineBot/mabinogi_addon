@@ -430,9 +430,7 @@ class MainWindow(QMainWindow):
         )
 
         self._feature_checks = {
-            "buff": self.buff_tab.enable, "debuff": self.debuff_tab.enable,
-            "tuarim": self.tuarim_tab.enable, "boss": self.boss_tab.enable,
-            "stat_bars": self.stat_bars_tab.enable, "skillbar": self.skillbar_tab.enable,
+            "tuarim": self.tuarim_tab.enable,
             "custom": self.custom_overlay_tab.enable, "memo": self.memo_tab.enable_chk,
         }
         for key, check in self._feature_checks.items():
@@ -508,14 +506,15 @@ class MainWindow(QMainWindow):
             self.setup_page.refresh()
             self.setup_guide.refresh()
             return
-        self._feature_checks[key].setChecked(value)
+        from ..setup_state import save_selection
+        try:
+            save_selection(key, value)
+        except OSError:
+            QMessageBox.warning(self, "설정 저장 실패", "자동설정 대상 선택을 저장하지 못했습니다.")
+        self.setup_page.refresh()
+        self.setup_guide.refresh()
 
     def _feature_changed(self, key):
-        from ..setup_state import remember_order
-        try:
-            remember_order(key, self._feature_checks[key].isChecked())
-        except OSError:
-            _log.warning("기능 선택 순서를 저장하지 못했습니다")
         if not self._booting:
             if key == "buff":
                 self._start_buff_tracking()
@@ -750,12 +749,10 @@ class MainWindow(QMainWindow):
             return
         need_buff = (
             self.buff_controller is None
-            and self.buff_tab.enable.isChecked()
             and bool(config.load_capture_region("buffTracker"))
         )
         need_debuff = (
             self.debuff_controller is None
-            and self.debuff_tab.enable.isChecked()
             and bool(config.load_capture_region("debuffTracker"))
         )
         if not (need_buff or need_debuff):
@@ -801,8 +798,6 @@ class MainWindow(QMainWindow):
             self._maybe_check_update("주기")
 
     def _buff_status(self) -> tuple[str, str]:
-        if not self.buff_tab.enable.isChecked():
-            return ("버프 트래커: 사용 안 함", self._STATUS_MUTED)
         if not config.load_capture_region("buffTracker"):
             return ("⚠ 영역 미지정 — 버프 판독 영역의 '직접 지정'을 먼저 하세요", self._STATUS_WARN)
         if self.buff_controller is None:
@@ -823,8 +818,6 @@ class MainWindow(QMainWindow):
         return ("● 추적 중 — 지금 표시할 버프 없음", self._STATUS_OK)
 
     def _debuff_status(self) -> tuple[str, str]:
-        if not self.debuff_tab.enable.isChecked():
-            return ("디버프 트래커: 사용 안 함", self._STATUS_MUTED)
         if not config.load_capture_region("debuffTracker"):
             return ("⚠ 영역 미지정 — 디버프 판독 영역의 '직접 지정'을 먼저 하세요",
                     self._STATUS_WARN)
@@ -1486,6 +1479,7 @@ class MainWindow(QMainWindow):
 
     def _on_boss_bar_region_changed(self) -> None:
         """보스 탭에서 보스 HP바 영역이 바뀜 → 디버프 3차가 쓰면 새 영역으로 재시작."""
+        self.debuff_tab._refresh_method_ui()
         if not self._booting and self.debuff_tab.effective_gate_mode() in ("percent", "auto"):
             self._start_debuff_tracking()
 

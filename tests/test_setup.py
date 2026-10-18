@@ -25,6 +25,21 @@ def app():
 
 @pytest.fixture
 def settings(monkeypatch, tmp_path):
+    from mabinogi_addon.ui.boss_tab import BossTab
+    from mabinogi_addon.ui.stat_bars_tab import StatBarsTab
+    from mabinogi_addon.ui.skillbar_tab import SkillbarTab
+    for cls in (BossTab, StatBarsTab, SkillbarTab):
+        monkeypatch.setattr(cls, "_grab_rect", lambda *args: None)
+    from mabinogi_addon.ui import main_window
+
+    class NoFrames:
+        def grab(self):
+            return None
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(main_window, "create_live_source", lambda region: NoFrames())
     path = tmp_path / "한글 경로" / "설정.json"
     path.parent.mkdir()
     read, write = config._read_local_config, config._write_local_config
@@ -80,7 +95,7 @@ def test_broken_region_is_unregistered(bad):
 
 def test_empty_existing_skip_and_unchecked(settings):
     assert state.needs_start_screen()
-    state.save_enabled("tuarim", True)
+    state.save_selection("tuarim", True)
     assert state.needs_start_screen()
     update("tuarim", box=BOX)
     assert not state.pending()
@@ -105,17 +120,22 @@ def test_enabled_interpretation_matches_existing_tabs(settings, value):
     for key, loader in (("tuarim", config.load_tuarim), ("boss", config.load_boss_pattern),
                         ("skillbar", config.load_skillbar), ("stat_bars", config.load_stat_bars)):
         update(state.BY_KEY[key].section, enabled=value)
-        assert state.enabled(key) == loader()["enabled"]
+        if key == "tuarim":
+            assert state.enabled(key) == loader()["enabled"]
+        else:
+            assert not state.enabled(key)
+            update(state.BY_KEY[key].section, box=BOX, anchor={"x": 1, "y": 2})
+            assert state.enabled(key)
 
 
 def test_selection_order_and_disabled_items(settings):
     for key in ("skillbar", "tuarim", "buff"):
-        state.save_enabled(key, True)
+        state.save_selection(key, True)
         state.remember_order(key, True)
     assert state.pending(automatic_only=True) == ["skillbar", "tuarim", "buff"]
-    state.save_enabled("tuarim", False)
+    state.save_selection("tuarim", False)
     state.remember_order("tuarim", False)
-    state.save_enabled("tuarim", True)
+    state.save_selection("tuarim", True)
     state.remember_order("tuarim", True)
     assert state.pending(automatic_only=True) == ["skillbar", "buff", "tuarim"]
     update("skillbar", anchor={"x": -1000, "y": 20})
@@ -123,6 +143,8 @@ def test_selection_order_and_disabled_items(settings):
 
 
 def test_manual_areas_and_shared_prerequisites(settings):
+    for key in ("debuff",):
+        state.save_selection(key, True)
     update("debuffTracker", enabled=True, captureRegion=BOX)
     update("general", debuffAutoGate=False, debuffGateMode="percent")
     assert state.pending(automatic_only=True) == ["boss"]
@@ -130,11 +152,14 @@ def test_manual_areas_and_shared_prerequisites(settings):
     assert state.pending() == []
     update("customOverlay", enabled=True, overlays=[BOX])
     update("memo", enabled=True)
+    state.save_selection("custom", True)
+    state.save_selection("memo", True)
     assert state.pending() == ["memo"]
     assert state.pending(automatic_only=True) == []
     update("memoTracker", captureRegion=BOX)
     assert state.pending() == []
     update("statBars", enabled=True, box=BOX, bars={"hp": {"alert": {"on": True}}})
+    state.save_selection("stat_bars", True)
     update("bossPattern", box=None)
     assert state.missing("stat_bars") == ["boss"]
 
@@ -147,6 +172,7 @@ def test_debuff_setup_uses_runtime_mode_from_supplied_settings(settings, monkeyp
     if flag is not None:
         raw["general"]["debuffAutoGate"] = flag
     raw["debuffTracker"].update(enabled=True, captureRegion=BOX)
+    raw["general"]["setupSelection"] = {"debuff": True}
     config._write_local_config(raw)
     mode = config.load_debuff_runtime_mode()
     before = deepcopy(raw)
@@ -177,7 +203,7 @@ def test_setup_page_debuff_hp_is_optional_only_in_auto(app, settings, monkeypatc
         page.show()
         app.processEvents()
         _, label, _ = page.feature_rows["debuff"]
-        expected = "영역 미등록 · 보스 체력바 표시 필요" if flag is False else "영역 등록됨"
+        expected = "영역 지정 필요 · 보스 체력바 표시 필요" if flag is False else "영역 등록됨"
         assert label.text() == expected
         assert settings.read_bytes() == before
     finally:
@@ -231,7 +257,7 @@ def flow(app, settings, monkeypatch, tmp_path):
 def test_batch_order_real_json_approval_worker_and_diagnostics(flow):
     run, page, applied, detections, captures, storage, notices = flow
     for key in ("skillbar", "tuarim", "boss"):
-        state.save_enabled(key, True)
+        state.save_selection(key, True)
         state.remember_order(key, True)
     before = config._read_local_config()
     update("tuarim", thresholds=[92, 97], sounds=[False, True])
@@ -259,6 +285,8 @@ def test_decline_keeps_settings_and_moves_to_next(flow, monkeypatch):
     run, page, applied, detections, _, storage, _ = flow
     update("tuarim", enabled=True, thresholds=[90, 95])
     update("skillbar", enabled=True, scale=175)
+    state.save_selection("tuarim", True)
+    state.save_selection("skillbar", True)
     before = deepcopy(config._read_local_config())
     monkeypatch.setattr(run, "_approve", lambda key, box: None if key == "tuarim" else box)
     run.run()
@@ -275,7 +303,7 @@ def test_decline_keeps_settings_and_moves_to_next(flow, monkeypatch):
 def test_failures_report_and_restore_controls(flow, monkeypatch, failure):
     run, page, applied, _, _, _, notices = flow
     key = "skillbar" if failure == "grid" else "tuarim"
-    state.save_enabled(key, True)
+    state.save_selection(key, True)
     if failure == "capture":
         monkeypatch.setattr(setup_flow, "capture_for_autofind", lambda **kw: (None, 0, 0))
     elif failure == "detect":
@@ -296,7 +324,7 @@ def test_failures_report_and_restore_controls(flow, monkeypatch, failure):
 
 def test_shutdown_during_detection_never_applies_late_result(flow, monkeypatch):
     run, page, applied, _, _, storage, _ = flow
-    state.save_enabled("tuarim", True)
+    state.save_selection("tuarim", True)
     release = Event()
     monkeypatch.setattr(setup_flow, "run_detector", lambda *a: (release.wait(2), (10, 20, 42, 16))[1])
     QTimer.singleShot(20, run.shutdown)
@@ -311,7 +339,7 @@ def test_shutdown_during_detection_never_applies_late_result(flow, monkeypatch):
 
 def test_cancel_approval_does_not_save_and_restores(flow, monkeypatch):
     run, page, applied, _, _, _, _ = flow
-    state.save_enabled("tuarim", True)
+    state.save_selection("tuarim", True)
     def approve(*args):
         run.cancel()
         return args[1]
@@ -324,7 +352,7 @@ def test_cancel_approval_does_not_save_and_restores(flow, monkeypatch):
 
 def test_login_and_game_registration_required(flow, monkeypatch):
     run, page, applied, detections, _, _, _ = flow
-    state.save_enabled("tuarim", True)
+    state.save_selection("tuarim", True)
     monkeypatch.setattr(config, "load_discord_user", lambda: None)
     run.run()
     assert "Discord" in page.progress.text()
@@ -348,9 +376,9 @@ def test_main_window_setup_navigation_and_bidirectional_use(app, settings, monke
         assert window._pages.currentWidget() is window.setup_guide
         assert not window.setup_page.busy
         window.setup_page.feature_changed.emit("buff", True)
-        assert window.buff_tab.enable.isChecked()
-        assert state.enabled("buff")
-        window.buff_tab.enable.setChecked(False)
+        assert state.selected("buff")
+        assert not state.enabled("buff")
+        window.setup_page.feature_changed.emit("buff", False)
         assert not window.setup_page.checks["buff"].isChecked()
         assert not state.enabled("buff")
         window._open_setup_feature("skillbar")
@@ -399,6 +427,7 @@ def test_native_input_batch_zip_replay_and_separate_runs(flow, monkeypatch, tmp_
 
     run, _, applied, *_rest = flow
     storage = flow[5]
+    state.save_selection("tuarim", True)
     originals = [image_io.imread("tests/data/스크린샷 2026-10-12 000512.png"),
                  image_io.imread("tests/data/스크린샷 2026-10-10 190116.png")]
     monkeypatch.setattr(setup_flow, "run_detector", run_detector)
@@ -448,7 +477,7 @@ def test_four_visible_feature_rows_and_independent_scroll_boxes(app, settings):
         assert checks[4].y() < area.height() < checks[4].geometry().bottom()
         assert page.run_btn.width() == page.selection.width()
         assert len({id(group[0]) for group in page.groups.values()}) == 3
-        state.save_enabled("tuarim", True)
+        state.save_selection("tuarim", True)
         page.refresh()
         assert page.feature_rows["tuarim"][0].parentWidget() is page.groups["need"][0].widget()
         update("tuarim", box=BOX)
@@ -473,7 +502,7 @@ def test_new_user_selection_is_seeded_once_before_main_window_tabs(app, settings
         assert all(not check.isChecked() for check in window.setup_guide.checks.values())
         assert all(not check.isChecked() for check in window.setup_page.checks.values())
         assert state.pending() == []
-        assert window.setup_page.progress.text() == "사용할 기능을 선택하세요."
+        assert window.setup_page.progress.text() == "설정할 기능을 선택하세요."
         window.setup_page.feature_changed.emit("buff", True)
         before = deepcopy(config._read_local_config())
         state.initialize_new_user()
@@ -492,7 +521,8 @@ def test_existing_file_without_enabled_keeps_legacy_defaults(settings, raw):
     before = settings.read_bytes()
     state.initialize_new_user(settings)
     assert settings.read_bytes() == before
-    assert state.enabled("buff") and state.enabled("debuff")
+    assert state.enabled("buff") == state.valid_box(state.section(raw, "buffTracker").get("captureRegion"))
+    assert state.enabled("debuff") == state.valid_box(state.section(raw, "debuffTracker").get("captureRegion"))
     assert state.enabled("memo") and state.enabled("custom")
 
 
@@ -523,7 +553,7 @@ def test_empty_selection_does_not_capture_or_save(flow, monkeypatch, logged_in):
     monkeypatch.setattr(config, "load_discord_user", lambda: {"id": "test"} if logged_in else None)
     before = deepcopy(config._read_local_config())
     run.run()
-    assert page.progress.text() == "사용할 기능을 선택하세요."
+    assert page.progress.text() == "설정할 기능을 선택하세요."
     assert config._read_local_config() == before
     assert not captures and not detections and not applied
 
@@ -633,7 +663,7 @@ def test_capture_shutdown_does_not_restore_closed_windows(app, monkeypatch):
 
 def test_logout_during_approval_never_saves(flow, monkeypatch):
     run, page, applied, *_ = flow
-    state.save_enabled("tuarim", True)
+    state.save_selection("tuarim", True)
     def approve(key, box):
         monkeypatch.setattr(config, "load_discord_user", lambda: None)
         return box
@@ -679,7 +709,7 @@ def test_capture_cancellation_restores_other_widgets_but_respects_tray_hide(flow
     from mabinogi_addon.ui import screen_grab
 
     run, page, applied, *_ = flow
-    state.save_enabled("tuarim", True)
+    state.save_selection("tuarim", True)
     other = SetupPage()
     page.show()
     other.show()
@@ -779,7 +809,7 @@ def test_guide_scopes_existing_flow_and_preserves_check_order(flow, stage, expec
 
     run, home, applied, detections, _, storage, _ = flow
     for key in ("skillbar", "boss", "buff", "tuarim", "debuff", "stat_bars"):
-        state.save_enabled(key, True)
+        state.save_selection(key, True)
         state.remember_order(key, True)
     page = SetupGuide()
     page.reset()
@@ -807,6 +837,8 @@ def test_guide_shared_boss_dependency_does_not_enable_boss_feature(flow):
     run, _, applied, detections, _, _, _ = flow
     update("statBars", enabled=True, bars={"hp": {"alert": {"on": True}}})
     update("tuarim", enabled=True)
+    state.save_selection("tuarim", True)
+    state.save_selection("stat_bars", True)
     page = SetupGuide()
     page.stage = 2
     page.refresh()
@@ -814,7 +846,7 @@ def test_guide_shared_boss_dependency_does_not_enable_boss_feature(flow):
         assert "보스 체력바" in page.status_text("stat_bars", config._read_local_config())
         run.run(page=page, feature_keys=page.feature_keys, on_result=page.record_result)
         assert [key for key, _ in detections] == ["tuarim", "stat_bars", "boss"]
-        assert not state.enabled("boss")
+        assert state.enabled("boss") and not state.selected("boss")
         assert not state.missing("stat_bars")
         assert [item[0] for item in applied] == ["tuarim", "stat_bars", "boss"]
     finally:
@@ -825,13 +857,13 @@ def test_empty_current_stage_does_not_search_other_selected_stage(flow):
     from mabinogi_addon.ui.setup_guide import SetupGuide
 
     run, _, applied, detections, captures, _, _ = flow
-    state.save_enabled("tuarim", True)
+    state.save_selection("tuarim", True)
     page = SetupGuide()
     page.stage = 1
     before = deepcopy(config._read_local_config())
     try:
         run.run(page=page, feature_keys=page.feature_keys, on_result=page.record_result)
-        assert page.progress.text() == "사용할 기능을 선택하세요."
+        assert page.progress.text() == "설정할 기능을 선택하세요."
         assert not applied and not detections and not captures and not page.outcomes
         assert config._read_local_config() == before
         page.move(1)
@@ -846,7 +878,7 @@ def test_guide_failures_keep_unattempted_separate_and_allow_next_stage(flow, mon
 
     run, _, applied, detections, _, _, _ = flow
     for key in ("buff", "debuff", "boss"):
-        state.save_enabled(key, True)
+        state.save_selection(key, True)
     page = SetupGuide()
     page.stage = 1
     page.refresh()
@@ -889,6 +921,7 @@ def test_guide_defer_back_and_reset_never_change_saved_configuration(app, settin
 
     update("buffTracker", enabled=True, captureRegion=BOX)
     update("bossPattern", enabled=True)
+    state.save_selection("boss", True)
     before = deepcopy(config._read_local_config())
     page = SetupGuide()
     try:
@@ -930,7 +963,7 @@ def test_guide_actual_window_navigation_and_resume_preserve_step(app, settings, 
         assert window._pages.currentWidget() is guide and guide.stage == 0
         guide.move(1)
         guide.feature_changed.emit("buff", True)
-        assert window.buff_tab.enable.isChecked() and guide.checks["buff"].isChecked()
+        assert guide.checks["buff"].isChecked() and state.selected("buff")
         window._open_setup_feature("buff")
         assert window._guide_return_btn.isVisible()
         update("buffTracker", captureRegion=BOX)
@@ -945,7 +978,7 @@ def test_guide_actual_window_navigation_and_resume_preserve_step(app, settings, 
         assert guide.stage == 1
         guide.move(1)
         guide.feature_changed.emit("stat_bars", True)
-        assert state.enabled("stat_bars") is logged_in
+        assert state.selected("stat_bars") is logged_in
         for stage in range(3):
             guide.stage = stage
             guide.refresh()
@@ -1091,6 +1124,8 @@ def test_guide_cancel_and_reentrant_navigation_do_not_escape_busy_stage(flow, mo
     run, _, applied, detections, _, _, _ = flow
     update("tuarim", enabled=True)
     update("skillbar", enabled=True)
+    state.save_selection("tuarim", True)
+    state.save_selection("skillbar", True)
     page = SetupGuide()
     page.stage = 2
     def approve(key, box):
@@ -1122,7 +1157,7 @@ def test_guide_shutdown_discards_worker_result_and_does_not_touch_page_after_shu
     run, _, applied, _, _, _, _ = flow
     page = SetupGuide()
     page.stage = 2
-    state.save_enabled("tuarim", True)
+    state.save_selection("tuarim", True)
     ready = Event()
     def slow(*args):
         ready.set()
@@ -1218,7 +1253,7 @@ def test_guide_approval_updates_current_stage_before_next_candidate(flow, monkey
 
     run, _, applied, _, _, _, _ = flow
     for key in ("buff", "debuff"):
-        state.save_enabled(key, True)
+        state.save_selection(key, True)
     page = SetupGuide()
     page.stage = 1
     page.refresh()

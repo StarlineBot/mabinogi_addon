@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
 )
 
 from .. import config
-from ..setup_state import FEATURES, enabled, missing, section
+from ..setup_state import FEATURES, selected as enabled, missing, section
 
 
 CHOICE_TEXT = {
@@ -70,8 +70,8 @@ class SetupPage(QWidget):
         row.addWidget(self.game_btn)
         layout.addWidget(self.game_row)
 
-        layout.addWidget(_label("사용할 기능", bold=True))
-        layout.addWidget(_label("사용할 기능만 선택하세요. 선택한 기능에 필요한 설정을 안내합니다."))
+        layout.addWidget(_label("설정할 기능", bold=True))
+        layout.addWidget(_label("이번 자동설정에 포함할 기능을 선택하세요."))
         self.selection = QScrollArea()
         self.selection.setWidgetResizable(True)
         self.selection.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
@@ -104,7 +104,7 @@ class SetupPage(QWidget):
 
         self.need_title = _label("설정 필요", bold=True)
         self.done_title = _label("등록된 설정", bold=True)
-        self.unused_title = _label("사용 안 함", bold=True)
+        self.unused_title = _label("이번 설정에서 제외", bold=True)
         self.groups = {}
         for key, title in (("need", self.need_title), ("done", self.done_title), ("unused", self.unused_title)):
             layout.addWidget(title)
@@ -175,12 +175,11 @@ class SetupPage(QWidget):
             widget, status, button = self.feature_rows[feature.key]
             is_enabled = enabled(feature.key, raw)
             needed = missing(feature.key, raw)
-            status.setText("사용 안 함" if not is_enabled else (
-                "영역 등록됨" if not needed else "영역 미등록" + (
+            status.setText("영역 등록됨" if not needed else "영역 지정 필요" + (
                     " · 보스 체력바 표시 필요" if feature.key in ("boss", "debuff") else
-                    " · 직접 지정 필요" if not feature.automatic else "")))
+                    " · 직접 지정 필요" if not feature.automatic else ""))
             button.setEnabled(not self.busy)
-            (unused if not is_enabled else need if needed else done).append(widget)
+            (done if not needed else need if is_enabled else unused).append(widget)
         for key, widgets in (("need", need), ("done", done), ("unused", unused)):
             rows = self.groups[key][1]
             for index, widget in enumerate(widgets):
@@ -193,8 +192,8 @@ class SetupPage(QWidget):
         self.done_title.setVisible(bool(done))
         self.unused_title.setVisible(bool(unused))
         if not any(enabled(feature.key, raw) for feature in FEATURES) and not self.busy:
-            self.progress.setText("사용할 기능을 선택하세요.")
-        elif self.progress.text() == "사용할 기능을 선택하세요.":
+            self.progress.setText("설정할 기능을 선택하세요.")
+        elif self.progress.text() == "설정할 기능을 선택하세요.":
             self.progress.clear()
 
     def set_busy(self, busy):

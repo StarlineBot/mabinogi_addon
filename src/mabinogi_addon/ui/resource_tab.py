@@ -36,12 +36,15 @@ class ResourceTab(QWidget):
         layout.addWidget(section_label("판독 영역"))
         grid = QGridLayout()
         for index,(name,controller) in enumerate((("도르카 숫자",dorcha),("투아림 %",tuarim))):
-            grid.addWidget(QLabel(name),index,0)
-            grid.addWidget(controller.region_label,index,1)
+            grid.addWidget(QLabel(name),index*2,0)
+            grid.addWidget(controller.region_label,index*2,1,1,3)
             controller.auto_find_btn.setText("자동 찾기")
             controller.view_region_btn.setText("지정 영역 보기")
-            for column,button in enumerate((controller.auto_find_btn,controller.region_btn,controller.view_region_btn),2):
-                grid.addWidget(button,index,column)
+            commands = QHBoxLayout()
+            for button in (controller.auto_find_btn,controller.region_btn,controller.view_region_btn,controller.clear_region_btn):
+                commands.addWidget(button)
+            commands.addStretch()
+            grid.addLayout(commands,index*2+1,0,1,4)
         grid.setColumnStretch(1,1)
         layout.addLayout(grid)
         layout.addWidget(QLabel("원본 미리보기"))

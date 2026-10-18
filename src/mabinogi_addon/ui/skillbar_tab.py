@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 from .. import config
 from .help_dialog import tab_header
 from .skillbar_mirror import (
+    CELLS,
     GROUP_W,
     ICON,
     SRC_H,
@@ -59,7 +60,6 @@ class SkillbarTab(QWidget):
         super().__init__()
         self._watcher = watcher
         cfg = config.load_skillbar()
-        self._enabled = cfg["enabled"]
         self._scale = cfg["scale"]
         self._anchor = cfg["anchor"]  # {x,y} | None
         self._center_top_y = cfg["center_top"]  # 중앙 2단 윗단 top y(사용자 하한)
@@ -100,12 +100,11 @@ class SkillbarTab(QWidget):
         self.auto_find_btn.clicked.connect(self._on_auto_find)
         row.addWidget(self.auto_find_btn)
         row.addWidget(self.anchor_btn)
+        from .region_registration import clear_button
+        self.clear_region_btn = clear_button(self, "skillbar", self._region_cleared)
+        row.addWidget(self.clear_region_btn)
         v.addLayout(row)
 
-        self.enable = checkbox("단축바 미러 사용")
-        self.enable.setChecked(self._enabled)
-        self.enable.toggled.connect(self._on_enable)
-        v.addWidget(self.enable)
 
         ctl = QHBoxLayout()
         ctl.addWidget(QLabel("표시 배율"))
@@ -141,7 +140,7 @@ class SkillbarTab(QWidget):
         v.addStretch(1)
 
         self._gated = [
-            self.anchor_btn, self.auto_find_btn, self.enable, self.scale_spin,
+            self.anchor_btn, self.auto_find_btn, self.scale_spin,
             self.lock_all_btn, self.unlock_all_btn, *self._preset_btns,
         ]
         self._update_anchor_label()
@@ -178,7 +177,11 @@ class SkillbarTab(QWidget):
             ov.set_locked(bool(c.get("locked", False)))
             self._overlays[key] = ov
         if not any(self._chunks_cfg.get(k, {}).get("pos") for k in self._defs):
-            self._preset_default()  # 첫 사용: 기본(중앙 하단, 가로 2줄) 배치
+            self._initializing_layout = True
+            try:
+                self._preset_default()
+            finally:
+                self._initializing_layout = False
 
     def _cells_on(self, key: str) -> list[bool]:
         return self._chunks_cfg.get(key, {}).get("cells", [True] * 4)
@@ -189,7 +192,7 @@ class SkillbarTab(QWidget):
         )
 
     def _apply_visibility(self) -> None:
-        if not self._enabled or self._paused or not self._logged_in():
+        if self._anchor is None or self._paused or not self._logged_in():
             for ov in self._overlays.values():
                 ov.hide()
             return
@@ -207,7 +210,7 @@ class SkillbarTab(QWidget):
         self._apply_login_gate()
         self._apply_visibility()
         if (
-            not self._enabled or self._paused or not self._logged_in()
+            self._paused or not self._logged_in()
             or self._anchor is None or not self._active()
         ):
             return
@@ -244,13 +247,21 @@ class SkillbarTab(QWidget):
         except Exception:  # noqa: BLE001
             hwnd = None
         self._selector = RegionSelector(fixed_size=ANCHOR_BOX, window_hwnd=hwnd)
-        self._selector.selected.connect(self._on_anchor_selected)
+        from .region_registration import connect_selection
+        connect_selection(self, self._selector, self._on_anchor_selected)
         self._selector.start()
 
     def _on_anchor_selected(self, x: int, y: int, _w: int, _h: int) -> None:
         config.save_skillbar({"anchor": {"x": x, "y": y}})
         self._anchor = {"x": x, "y": y}
         self._update_anchor_label()
+
+    def _region_cleared(self):
+        self._anchor = None
+        for overlay in self._overlays.values():
+            overlay.set_cells([None] * CELLS)
+        self._update_anchor_label()
+        self._apply_visibility()
 
     def _on_auto_find(self) -> None:
         from .autofind_confirm import confirm_autofind
@@ -269,11 +280,6 @@ class SkillbarTab(QWidget):
             self.anchor_label.setStyleSheet("color:#8a8f98;")
 
     # ---- 설정 변경 ----
-    def _on_enable(self, checked: bool) -> None:
-        self._enabled = checked
-        self._apply_visibility()
-        self._save()
-
     def _on_scale(self, value: int) -> None:
         self._scale = value
         for ov in self._overlays.values():
@@ -388,6 +394,8 @@ class SkillbarTab(QWidget):
 
     # ---- 저장/캡처 ----
     def _save(self) -> None:
+        if getattr(self, "_initializing_layout", False):
+            return
         tops = []
         for key, ov in self._overlays.items():
             c = self._chunks_cfg.setdefault(key, {})
@@ -400,7 +408,6 @@ class SkillbarTab(QWidget):
             self._center_top_y = min(tops)
         config.save_skillbar(
             {
-                "enabled": self._enabled,
                 "scale": self._scale,
                 "anchor": self._anchor,
                 "centerTopY": self._center_top_y,

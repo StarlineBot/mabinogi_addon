@@ -144,9 +144,6 @@ class BuffTab(QWidget):
         outer.addWidget(tab_header(
             "등록한 버프의 남은 시간을 오버레이로 표시", HELP_TITLE, HELP_HTML, self
         ))
-        from .widgets import feature_checkbox
-        self.enable = feature_checkbox("buff", "버프 트래커 사용")
-        outer.addWidget(self.enable)
         list_panel = self._build_list_panel()
         self.form_panel = self._build_form_panel()
         self._columns = TrackerColumns(list_panel, self.form_panel)
@@ -247,6 +244,9 @@ class BuffTab(QWidget):
         hint_row.addWidget(self.auto_find_btn)
         hint_row.addWidget(region_btn)
         hint_row.addWidget(self.view_region_btn)
+        from .region_registration import clear_button
+        self.clear_region_btn = clear_button(self, "buff", self._region_cleared)
+        hint_row.addWidget(self.clear_region_btn)
         self._update_region_hint()
         v.addWidget(section_label("판독 영역 · 버프 목록"))
         v.addWidget(self.region_hint)
@@ -333,15 +333,23 @@ class BuffTab(QWidget):
         from .region_selector import RegionSelector
 
         self._selector = RegionSelector()  # 참조 유지(GC 방지)
-        self._selector.selected.connect(self._on_region_selected)
+        from .region_registration import connect_selection
+        connect_selection(self, self._selector, self._on_region_selected)
         self._selector.start()
 
     def _on_region_selected(self, x: int, y: int, w: int, h: int) -> None:
         config.save_capture_region(x, y, w, h, "buffTracker")
         self._update_region_hint()
         self._flash_region()  # 잡힌 영역을 화면에 점선으로 바로 확인
+        self.catalog_changed.emit()
+
+    def _region_cleared(self):
+        self._update_region_hint()
+        self.catalog_changed.emit()
 
     def _on_auto_find(self) -> None:
+        from .region_registration import generation, connect_selection
+        stamp = generation(self)
         """상태목록창을 앵커로 자동 검출 → 민트 점선 미리보기 + 확인 후에만 저장(Discord 베타)."""
         if config.load_discord_user() is None:
             QMessageBox.information(
@@ -374,7 +382,9 @@ class BuffTab(QWidget):
         from .top_edge_selector import TopEdgeSelector
 
         self._top_sel = TopEdgeSelector(lx, lw, ly)
-        self._top_sel.selected.connect(self._on_region_selected)
+        if generation(self) != stamp:
+            return
+        connect_selection(self, self._top_sel, self._on_region_selected)
         self._top_sel.start()
 
     def _flash_region(self) -> None:

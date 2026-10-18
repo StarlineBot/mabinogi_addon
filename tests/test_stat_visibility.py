@@ -77,7 +77,7 @@ def test_invalid_frames_never_redisplay_and_recovery_sets_values_before_show(vis
     assert not trace.events
 
 
-@pytest.mark.parametrize("action", ["show", "pause", "enable", "login", "focus", "region", "unlock"])
+@pytest.mark.parametrize("action", ["show", "pause", "unregister", "login", "focus", "region", "unlock"])
 def test_callbacks_cannot_show_invalid_cached_bars(visibility, monkeypatch, action):
     tab, state, good, trace = visibility
     tab._tick()
@@ -90,9 +90,11 @@ def test_callbacks_cannot_show_invalid_cached_bars(visibility, monkeypatch, acti
     elif action == "pause":
         tab.set_paused(True)
         tab.set_paused(False)
-    elif action == "enable":
-        tab._on_enable(False)
-        tab._on_enable(True)
+    elif action == "unregister":
+        region = dict(tab._region)
+        monkeypatch.setattr(tab, "_flash_region", lambda: None)
+        tab._region_cleared()
+        tab._on_selected(*(region[k] for k in ("x", "y", "w", "h")))
     elif action == "login":
         monkeypatch.setattr(config, "load_discord_user", lambda: None)
         tab._apply_visibility()
@@ -118,16 +120,18 @@ def test_callbacks_cannot_show_invalid_cached_bars(visibility, monkeypatch, acti
     assert all(ov.isVisible() for ov in tab._overlays.values())
 
 
-@pytest.mark.parametrize("action", ["pause", "disable", "focus", "region"])
+@pytest.mark.parametrize("action", ["pause", "unregister", "focus", "region"])
 def test_interruption_requires_new_capture_even_if_last_frame_was_valid(visibility, monkeypatch, action):
     tab, state, good, trace = visibility
     tab._tick()
     if action == "pause":
         tab.set_paused(True)
         tab.set_paused(False)
-    elif action == "disable":
-        tab._on_enable(False)
-        tab._on_enable(True)
+    elif action == "unregister":
+        region = dict(tab._region)
+        monkeypatch.setattr(tab, "_flash_region", lambda: None)
+        tab._region_cleared()
+        tab._on_selected(*(region[k] for k in ("x", "y", "w", "h")))
     elif action == "focus":
         state.active = False
         tab._apply_visibility()

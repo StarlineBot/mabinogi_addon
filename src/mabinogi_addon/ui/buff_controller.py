@@ -169,6 +169,7 @@ class BuffController(QObject):
         self._game_active = True  # 게임 포그라운드
         self._self_active = False  # 우리 앱 포그라운드
         self._paused = False  # 사용자 일시정지(사냥 안 할 때) → 숨김·알림 억제
+        self._generation = 0
         self._last_remaining: dict[str, float] = {}  # 표시 평활용 직전 표시값
         # 사라짐 경고용 상태
         self._order: list[str] = []  # 표시 순서(고스트를 제자리에 끼우기 위함)
@@ -187,10 +188,13 @@ class BuffController(QObject):
         self._worker = _TrackWorker(
             source, engine, self._watcher, interval_ms, bar_source=bar_source
         )
-        self._worker.updated.connect(self._on_updated)
-        self._worker.alerted.connect(self._on_alerted)
-        self._worker.alerted2.connect(self._on_alerted2)
-        self._worker.foreground_changed.connect(self._on_foreground_changed)
+        generation = self._generation
+        for signal, callback in ((self._worker.updated, self._on_updated),
+                                 (self._worker.alerted, self._on_alerted),
+                                 (self._worker.alerted2, self._on_alerted2),
+                                 (self._worker.foreground_changed, self._on_foreground_changed)):
+            signal.connect(lambda *args, callback=callback: callback(*args)
+                           if self._generation == generation else None)
         self._worker.start()
 
     def request_stop(self) -> None:
@@ -199,9 +203,15 @@ class BuffController(QObject):
             self._worker.stop()
 
     def stop(self, timeout_ms: int = 2000) -> None:
+        self._generation += 1
         w = self._worker
         if w is None:
             return
+        for signal in (w.updated, w.alerted, w.alerted2, w.foreground_changed):
+            try:
+                signal.disconnect()
+            except (RuntimeError, TypeError):
+                pass
         w.stop()
         t = time.perf_counter()
         ok = w.wait(timeout_ms)

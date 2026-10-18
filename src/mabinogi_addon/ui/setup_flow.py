@@ -14,7 +14,7 @@ from PySide6.QtWidgets import QMessageBox
 from .. import config
 from ..autofind_diagnostics import perform_autofind
 from ..autofind_replay import run_detector
-from ..setup_state import BY_KEY, FEATURES, enabled, pending, section
+from ..setup_state import BY_KEY, FEATURES, selected as enabled, pending, section
 from .dpi import to_logical
 from .screen_grab import capture_for_autofind
 from .region_highlight import RegionHighlight
@@ -140,7 +140,7 @@ class SetupFlow:
         if self.closed or self.running or page.busy or (self.future is not None and not self.future.done()):
             return
         if not any(enabled(key) for key in scope):
-            page.progress.setText("사용할 기능을 선택하세요.")
+            page.progress.setText("설정할 기능을 선택하세요.")
             return
         if config.load_discord_user() is None:
             page.progress.setText("자동설정은 베타 기능입니다. 설정 > Discord 계정에서 로그인하면 사용할 수 있습니다.")
@@ -168,6 +168,8 @@ class SetupFlow:
                 if key not in pending(automatic_only=True, feature_keys=scope):
                     continue
                 feature = BY_KEY[key]
+                from .region_registration import region_generation
+                stamp = region_generation(key)
                 page.run_btn.setText(f"{feature.name} 찾는 중… ({index}/{len(keys)})")
                 current = {}
                 outcome = {"status": "not_offered"}
@@ -180,7 +182,7 @@ class SetupFlow:
                         restore_widget_allowed=lambda widget: widget is not window or generation == self._restore_generation)
                     from ..autofind_diagnostics import capture_info
                     current["capture"] = dict(capture_info.get() or {})
-                    if self.closed or self.cancelled:
+                    if self.closed or self.cancelled or region_generation(key) != stamp:
                         return None, ox, oy
                     return current["frame"], ox, oy
 
@@ -203,7 +205,7 @@ class SetupFlow:
                     approved = self._approve(key, logical)
                     if config.load_discord_user() is None:
                         self.cancel()
-                    if self.closed or self.cancelled or approved is None:
+                    if self.closed or self.cancelled or approved is None or region_generation(key) != stamp:
                         outcome.update(status="cancelled_shutdown" if self.closed else "cancelled")
                     elif key not in pending(automatic_only=True, feature_keys=scope):
                         outcome.update(status="already_registered")

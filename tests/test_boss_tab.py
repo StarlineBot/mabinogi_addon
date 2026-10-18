@@ -61,7 +61,6 @@ def test_stale_tracker_cleared_when_boss_gone(monkeypatch):
     monkeypatch.setattr(config, "load_discord_user", lambda *a, **k: {"name": "x"})
     t = BossTab(_Watcher())
     t._region = {"x": 0, "y": 0, "w": 150, "h": 36}
-    t.enable.setChecked(True)
     monkeypatch.setattr(t, "_grab_rect", lambda *a: np.zeros((36, 150, 3), np.uint8))
     monkeypatch.setattr(t, "_show_preview", lambda *a: None)
     monkeypatch.setattr(t, "_play", lambda *a: None)

@@ -88,9 +88,6 @@ class DebuffTab(QWidget):
         outer.addWidget(tab_header(
             "아직 안 걸린 디버프만 오버레이로 표시", HELP_TITLE, HELP_HTML, self
         ))
-        from .widgets import feature_checkbox
-        self.enable = feature_checkbox("debuff", "디버프 트래커 사용")
-        outer.addWidget(self.enable)
         list_panel = self._build_list_panel()
         self.form_panel = self._build_form_panel()
         self._columns = TrackerColumns(list_panel, self.form_panel)
@@ -179,6 +176,9 @@ class DebuffTab(QWidget):
         hint_row.addWidget(self.auto_find_btn)
         hint_row.addWidget(region_btn)
         hint_row.addWidget(self.view_region_btn)
+        from .region_registration import clear_button
+        self.clear_region_btn = clear_button(self, "debuff", self._region_cleared)
+        hint_row.addWidget(self.clear_region_btn)
         self._update_region_hint()
         v.addWidget(section_label("판독 영역 · 디버프 줄"))
         v.addWidget(self.region_hint)
@@ -242,6 +242,9 @@ class DebuffTab(QWidget):
             "보스패턴알림과 같은 영역을 공유합니다(한쪽에서 지정하면 양쪽이 사용)."
         )
         self.bar_region_btn.clicked.connect(self._pick_bar_region)
+        from .region_registration import clear_button
+        self.clear_bar_region_btn = clear_button(self, "boss", self._bar_region_cleared)
+        brl.addWidget(self.clear_bar_region_btn)
         brl.addWidget(self.bar_region_btn)
         self.bar_region_status = hint_label("")
         brl.addWidget(self.bar_region_status, 1)
@@ -338,7 +341,8 @@ class DebuffTab(QWidget):
         from .region_selector import RegionSelector
 
         self._bar_selector = RegionSelector()  # 참조 유지(GC 방지)
-        self._bar_selector.selected.connect(self._on_bar_region_selected)
+        from .region_registration import connect_selection
+        connect_selection(self, self._bar_selector, self._on_bar_region_selected)
         self._bar_selector.start()
 
     def _on_bar_region_selected(self, x: int, y: int, w: int, h: int) -> None:
@@ -350,6 +354,11 @@ class DebuffTab(QWidget):
         self._bar_highlight.flash(x, y, w, h, "보스 HP바 영역", "이름~퍼센트가 다 들어왔나요?")
         self._emit_gate_mode()  # 새 영역으로 디버프 3차 재시작(영역이 실제로 바뀜)
         self.bar_region_changed.emit()  # 보스패턴알림도 새 영역 반영(양방향 공유)
+
+    def _bar_region_cleared(self):
+        self._refresh_method_ui()
+        self._emit_gate_mode()
+        self.bar_region_changed.emit()
 
     def showEvent(self, event) -> None:  # noqa: N802 (Qt 시그니처)
         super().showEvent(event)
@@ -398,7 +407,8 @@ class DebuffTab(QWidget):
         from .region_selector import RegionSelector
 
         self._selector = RegionSelector()  # 참조 유지(GC 방지)
-        self._selector.selected.connect(self._on_region_selected)
+        from .region_registration import connect_selection
+        connect_selection(self, self._selector, self._on_region_selected)
         self._selector.start()
 
     def _on_region_selected(self, x: int, y: int, w: int, h: int) -> None:
@@ -407,7 +417,13 @@ class DebuffTab(QWidget):
         self._flash_region()  # 잡힌 영역을 화면에 점선으로 바로 확인
         self.catalog_changed.emit()  # 영역 생기면 추적 (재)시작
 
+    def _region_cleared(self):
+        self._update_region_hint()
+        self.catalog_changed.emit()
+
     def _on_auto_find(self) -> None:
+        from .region_registration import generation, save_boxes, editing_allowed
+        stamp = generation(self)
         """보스 체력바를 찾아 그 위 디버프 영역을 자동 지정(Discord 베타). 확인 후에만 저장."""
         if not self._logged_in():
             QMessageBox.information(
@@ -459,14 +475,14 @@ class DebuffTab(QWidget):
             QMessageBox.StandardButton.No,
         )
         self._highlight.close()  # 확인 끝나면 민트 점선 즉시 닫기(4초 타이머에만 의존 안 함)
-        if ans != QMessageBox.StandardButton.Yes:
+        if ans != QMessageBox.StandardButton.Yes or generation(self) != stamp or not editing_allowed(self):
+            return
+        if not save_boxes(self, {"boss": (lx, ly, lw, lh), "debuff": db}):
             return
         # 디버프 영역(띠+바) 저장 + 추적 재시작
-        config.save_capture_region(db[0], db[1], db[2], db[3], "debuffTracker")
         self._update_region_hint()
         self.catalog_changed.emit()
         # 디버프 3차가 쓰는 보스 HP바 영역도 함께 저장(공유) + 3차 재시작
-        config.save_boss_bar_region(lx, ly, lw, lh)
         self._refresh_method_ui()
         self._emit_gate_mode()
         self.bar_region_changed.emit()

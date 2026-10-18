@@ -98,7 +98,7 @@ def test_interruptions_clear_effect_timer_and_require_new_debounce(pipeline, mon
     elif reason == "paused":
         tab.set_paused(True)
     elif reason == "disabled":
-        tab._on_enable(False)
+        tab._region_cleared()
     elif reason == "no_region":
         tab._region = None
     elif reason == "boss":

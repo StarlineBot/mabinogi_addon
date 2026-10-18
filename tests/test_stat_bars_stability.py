@@ -107,7 +107,7 @@ def test_interruption_breaks_debounce_without_rearming(pipeline, interruption, a
     elif interruption == "paused":
         tab.set_paused(True)
     elif interruption == "disabled":
-        tab._on_enable(False)
+        tab._region_cleared()
     elif interruption == "no_region":
         tab._region = None
     else:

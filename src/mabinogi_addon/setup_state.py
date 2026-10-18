@@ -59,7 +59,36 @@ def valid_box(value):
 def enabled(key, raw=None):
     raw = config._read_local_config() if raw is None else raw
     feature = BY_KEY[key]
+    if key in ("buff", "debuff", "boss", "stat_bars", "skillbar"):
+        target = section(raw, feature.section)
+        if key == "skillbar":
+            anchor = target.get("anchor")
+            return isinstance(anchor, dict) and all(type(anchor.get(k)) is int for k in ("x", "y"))
+        return valid_box(target.get("captureRegion" if key in ("buff", "debuff") else "box"))
     return bool(section(raw, feature.section).get("enabled", feature.default_enabled))
+
+
+def selected(key, raw=None):
+    raw = config._read_local_config() if raw is None else raw
+    choices = section(section(raw, "general"), "setupSelection")
+    return choices.get(key) is True
+
+
+def save_selection(key, value):
+    if key not in BY_KEY:
+        raise KeyError(key)
+    raw = config._read_local_config()
+    general = dict(section(raw, "general"))
+    choices = dict(section(general, "setupSelection"))
+    choices[key] = bool(value)
+    general["setupSelection"] = choices
+    previous = general.get("setupOrder", [])
+    order = [k for k in previous if isinstance(k, str) and k in BY_KEY and k != key] if isinstance(previous, list) else []
+    if value:
+        order.append(key)
+    general["setupOrder"] = order
+    raw["general"] = general
+    config._write_local_config(raw)
 
 
 def save_enabled(key, value):
@@ -128,7 +157,7 @@ def pending(raw=None, *, automatic_only=False, feature_keys=None):
         if feature_keys is not None and key not in feature_keys:
             continue
         feature = BY_KEY[key]
-        if enabled(feature.key, raw):
+        if selected(feature.key, raw):
             for key in missing(feature.key, raw):
                 if key not in result and (not automatic_only or BY_KEY[key].automatic):
                     result.append(key)

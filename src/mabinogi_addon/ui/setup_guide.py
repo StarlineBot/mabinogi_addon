@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (
 )
 
 from .. import config
-from ..setup_state import BY_KEY, enabled, missing, section
+from ..setup_state import BY_KEY, selected as enabled, missing, section
 from .setup_page import CHOICE_TEXT, _label
 
 
@@ -76,7 +76,7 @@ class SetupGuide(QWidget):
         self.run_btn.clicked.connect(self.run_requested.emit)
         layout.addWidget(self.run_btn)
         self.groups = {}
-        for key, name in (("need", "설정 필요"), ("done", "등록된 설정"), ("unused", "사용 안 함")):
+        for key, name in (("need", "설정 필요"), ("done", "등록된 설정"), ("unused", "이번 설정에서 제외")):
             title = _label(name, bold=True)
             layout.addWidget(title)
             scroll = QScrollArea()
@@ -169,11 +169,11 @@ class SetupGuide(QWidget):
         self.refresh()
 
     def status_text(self, key, raw):
-        if not enabled(key, raw):
-            return "사용 안 함"
         needed = missing(key, raw)
         if not needed:
             return "등록됨"
+        if not enabled(key, raw):
+            return "영역 지정 필요 · 이번 설정에서 제외"
         fallback = "나중에 설정" if key in self.deferred else "아직 시도하지 않음"
         if needed == [key]:
             return self.outcomes.get(key, fallback)
@@ -184,13 +184,13 @@ class SetupGuide(QWidget):
         raw = config._read_local_config()
         logged_in = config.load_discord_user() is not None
         self.step_label.setText(f"첫 사용 안내 · {self.stage + 1} / 4   게임창 등록 → 전투 기능 → 추가 기능 → 앱 둘러보기")
-        self.title.setText(("게임창 등록", "전투에서 사용할 기능", "이런 기능도 있어요")[self.stage])
+        self.title.setText(("게임창 등록", "전투 기능 설정", "추가 기능 설정")[self.stage])
         self.description.setText((
             ("처음 오셨군요. 사용할 기능을 골라 나에게 맞게 설정해 보세요.\n" if self.first_run else
              "사용할 기능과 등록된 설정을 확인해 보세요.\n")
             + "게임 화면과 활성 상태를 구별하기 위해 게임창을 등록합니다. 게임이 없다면 나중에 설정할 수 있습니다.",
-            "전투에서 도움받고 싶은 기능을 선택하세요.\n하나만 선택하거나, 이 단계를 건너뛰어도 됩니다.",
-            "더 편하게 사용할 수 있는 기능도 있어요.\n필요한 것만 선택하고, 지금 필요하지 않으면 건너뛰세요.",
+            "이번 자동설정에 포함할 전투 기능을 선택하세요.\n선택하지 않아도 이미 등록한 영역과 세부 옵션은 유지됩니다.",
+            "추가로 설정할 기능을 선택하세요.\n필요한 것만 선택하거나 이 단계를 건너뛰어도 됩니다.",
         )[self.stage])
         game = section(raw, "general").get("gameExe")
         self.game_status.setText("등록된 게임: " + str(game) if game else "게임창 등록 필요")
@@ -212,7 +212,7 @@ class SetupGuide(QWidget):
             text = self.status_text(key, raw)
             self.statuses[key].setText(text)
             if key in self.feature_keys:
-                group = "unused" if not enabled(key, raw) else "need" if missing(key, raw) else "done"
+                group = "done" if not missing(key, raw) else "need" if enabled(key, raw) else "unused"
                 groups[group].append(self.feature_rows[key])
         for key, widgets in groups.items():
             title, scroll, lines = self.groups[key]

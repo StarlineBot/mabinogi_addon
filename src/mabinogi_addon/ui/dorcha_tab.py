@@ -60,7 +60,9 @@ class DorchaTab(QWidget):
         self.region_btn.clicked.connect(self._on_region)
         self.view_region_btn = QPushButton("지정 영역 보기")
         self.view_region_btn.clicked.connect(self._flash_region)
-        for button in (self.auto_find_btn,self.region_btn,self.view_region_btn):
+        from .region_registration import clear_button
+        self.clear_region_btn = clear_button(self, "dorcha", self._region_cleared)
+        for button in (self.auto_find_btn,self.region_btn,self.view_region_btn,self.clear_region_btn):
             row.addWidget(button)
         row.addStretch()
         layout.addLayout(row)
@@ -503,6 +505,14 @@ class DorchaTab(QWidget):
         self._approved_target = self._search_target()
         self._apply_gate()
 
+    def _region_cleared(self):
+        self._cfg["box"] = self._region = None
+        self._invalidate_search()
+        self._set_value(None)
+        self._show_source(None)
+        self._update_region_label()
+        self._sync_overlay()
+
     def _on_region(self):
         if not self._logged_in() or self._shutting_down or self._autofind_busy:
             return
@@ -515,7 +525,8 @@ class DorchaTab(QWidget):
         self._timer.stop()
         self._hide()
         self._selector = RegionSelector(fixed_size=size)
-        self._selector.selected.connect(self._on_selected)
+        from .region_registration import connect_selection
+        connect_selection(self, self._selector, self._on_selected)
         self._selector.cancelled.connect(self._resume_after_selector)
         self._selector.start()
 
