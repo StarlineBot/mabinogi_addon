@@ -46,7 +46,56 @@ def desktop_unlocked():
         user.CloseDesktop(desktop)
 
 
-def exposed(hwnd: int, local_rects: list, logical_size: tuple[int, int], *, diagnostic=None) -> bool:
+def _region_overlap(gui, hwnd, targets, detail):
+    """Return None without positive region evidence; always release the temporary GDI region."""
+    region = None
+    try:
+        region = gui.CreateRectRgn(0, 0, 0, 0)
+        kind = gui.GetWindowRgn(hwnd, region)
+        detail["region_type"] = kind
+        if kind == 1:  # NULLREGION: explicitly empty, unlike ERROR (no region information).
+            return False
+        if kind not in (2, 3):
+            return None
+        x, y, _, _ = gui.GetWindowRect(hwnd)
+        # Window regions are relative to GetWindowRect, not the DWM extended frame.
+        return any(gui.RectInRegion(region, (l-x, t-y, r-x, b-y)) for l, t, r, b in targets)
+    except Exception as exc:
+        detail["region_error"] = type(exc).__name__
+        return None
+    finally:
+        if region is not None:
+            try:
+                gui.DeleteObject(region)
+            except Exception as exc:
+                detail["region_cleanup_error"] = type(exc).__name__
+
+
+def _blocker_identity(gui, hwnd, detail):
+    """Best-effort manual-click diagnostics; no title, full path, cache or process IPC."""
+    try:
+        import win32api
+        import win32process
+        from pathlib import PureWindowsPath
+        _, pid = win32process.GetWindowThreadProcessId(hwnd)
+        detail["blocker_pid"] = pid
+        handle = win32api.OpenProcess(0x1000, False, pid)
+        try:
+            basename = PureWindowsPath(win32process.QueryFullProcessImageName(handle, 0)).name
+            same_pid = win32process.GetWindowThreadProcessId(hwnd)[1] == pid
+        finally:
+            handle.Close()
+        if same_pid:
+            detail["blocker_exe"] = basename[:128]
+        else:
+            detail.pop("blocker_pid", None)
+            detail["identity_changed"] = True
+    except Exception as exc:
+        detail["identity_error"] = type(exc).__name__
+
+
+def exposed(hwnd: int, local_rects: list, logical_size: tuple[int, int], *, diagnostic=None,
+            diagnose=False) -> bool:
     # A caller-owned record avoids shared state between windows and automatic ticks.
     detail = diagnostic if diagnostic is not None else {}
     detail.clear()
@@ -117,6 +166,7 @@ def exposed(hwnd: int, local_rects: list, logical_size: tuple[int, int], *, diag
                 # alpha stays conservative; only global alpha zero is ignored.
                 try:
                     style = win32gui.GetWindowLong(other, -20)
+                    detail["extended_style"] = style
                     detail["layered"] = bool(style & 0x80000)
                     if style & 0x80000:
                         _, alpha, flags = win32gui.GetLayeredWindowAttributes(other)
@@ -125,6 +175,8 @@ def exposed(hwnd: int, local_rects: list, logical_size: tuple[int, int], *, diag
                             blocked = False
                 except Exception as exc:
                     detail["alpha_error"] = type(exc).__name__
+                if blocked and _region_overlap(win32gui, other, targets, detail) is False:
+                    blocked = False
             return True
 
         detail["stage"] = "window_enumeration"
@@ -134,6 +186,8 @@ def exposed(hwnd: int, local_rects: list, logical_size: tuple[int, int], *, diag
                 detail["window_class"] = win32gui.GetClassName(detail["other_hwnd"])[:128]
             except Exception:
                 pass
+            if diagnose:
+                _blocker_identity(win32gui, detail["other_hwnd"], detail)
         if not blocked:
             detail.clear()
             detail.update(stage="exposed" if found else "owner_not_enumerated", hwnd=hwnd)

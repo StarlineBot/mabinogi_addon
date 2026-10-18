@@ -316,7 +316,10 @@ def test_final_display_denial_is_logged_only_for_manual_request(window, monkeypa
     d = window.creator_dialogue
     checks = iter((True, False))
     d._ineligible_reason = "Windows 가림/잠금/화면 또는 API 확인 불가"
-    monkeypatch.setattr(d, "_eligible", lambda: next(checks))
+    def eligible(*, diagnose=False):
+        assert diagnose is (not automatic)
+        return next(checks)
+    monkeypatch.setattr(d, "_eligible", eligible)
     monkeypatch.setattr(d, "_position", lambda text: stage != "position")
     displayed = Mock()
     monkeypatch.setattr(d.session, "displayed", displayed)

@@ -256,7 +256,7 @@ class CreatorDialogue(QObject):
             self.bubble.move(point.x() + 48 - self.bubble.width(), point.y() - self.bubble.height() - 3)
         return self.window.centralWidget().rect().contains(self.bubble.geometry())
 
-    def _eligible(self):
+    def _eligible(self, *, diagnose=False):
         w = self.window
         self._ineligible_reason = "창/설정/세션 또는 모달 상태"
         if (self.closed or not self.enabled or self.session_unavailable or self.suspended
@@ -286,7 +286,8 @@ class CreatorDialogue(QObject):
         try:
             detail = {}
             if self.visibility is exposed:
-                visible = self.visibility(int(w.winId()), rects, (w.width(), w.height()), diagnostic=detail)
+                visible = self.visibility(int(w.winId()), rects, (w.width(), w.height()),
+                                          diagnostic=detail, diagnose=diagnose)
             else:
                 visible = self.visibility(int(w.winId()), rects, (w.width(), w.height()))
             self._ineligible_reason = "" if visible else "Windows 가림/잠금/화면 또는 API 확인 불가"
@@ -328,7 +329,7 @@ class CreatorDialogue(QObject):
             self.request(automatic=True)
 
     def request(self, *, automatic=False):
-        if not self._eligible():
+        if not self._eligible(diagnose=not automatic):
             if not automatic:
                 _log.info("제작자 잡담 클릭 보류: %s (유효 대사 %d개)",
                           self._ineligible_reason, len(self.session.entries))
@@ -344,7 +345,7 @@ class CreatorDialogue(QObject):
                 _log.info("제작자 잡담 클릭 보류: 말풍선 배치 공간 부족 (유효 대사 %d개)", len(self.session.entries))
             self.dismiss()
             return False
-        if not self._eligible():
+        if not self._eligible(diagnose=not automatic):
             if not automatic:
                 _log.info("제작자 잡담 클릭 보류: %s (유효 대사 %d개)",
                           self._ineligible_reason, len(self.session.entries))
