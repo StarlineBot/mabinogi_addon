@@ -285,7 +285,7 @@ class SettingsTab(QWidget):
         self._diag_runs.blockSignals(True)
         self._diag_runs.clear()
         labels = {"buff": "버프", "debuff": "디버프", "boss": "보스", "stat_bars": "체력바",
-                  "tuarim": "투아림", "skillbar": "단축바"}
+                  "tuarim": "투아림", "skillbar": "단축바", "resources": "도르카·투아림 공통"}
         selected = 0
         for i, record in enumerate(records):
             meta = record.metadata

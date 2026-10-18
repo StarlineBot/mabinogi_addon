@@ -523,7 +523,7 @@ def test_existing_file_without_enabled_keeps_legacy_defaults(settings, raw):
     assert settings.read_bytes() == before
     assert state.enabled("buff") == state.valid_box(state.section(raw, "buffTracker").get("captureRegion"))
     assert state.enabled("debuff") == state.valid_box(state.section(raw, "debuffTracker").get("captureRegion"))
-    assert state.enabled("memo") and state.enabled("custom")
+    assert not state.enabled("memo") and state.enabled("custom")
 
 
 def test_new_user_initialization_uses_supplied_path_only(tmp_path):
@@ -935,7 +935,7 @@ def test_guide_defer_back_and_reset_never_change_saved_configuration(app, settin
         page.reset()
         assert page.stage == 0 and not page.outcomes
         assert config._read_local_config() == before
-        assert set(page.checks) == {"buff", "debuff", "boss", "tuarim", "stat_bars", "skillbar"}
+        assert set(page.checks) == {"buff", "debuff", "boss", "tuarim", "dorcha", "stat_bars", "skillbar"}
     finally:
         page.close()
 

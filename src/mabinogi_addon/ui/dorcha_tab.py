@@ -82,7 +82,8 @@ class DorchaTab(QWidget):
         self.scale_spin.setValue(self._cfg["scale"])
         self.scale_spin.valueChanged.connect(self._on_scale)
         row.addWidget(self.scale_spin)
-        self.lock_chk = checkbox("위치 잠금")
+        self.lock_chk = QPushButton("위치 잠금됨" if self._cfg["locked"] else "위치 잠금")
+        self.lock_chk.setCheckable(True)
         self.lock_chk.setChecked(self._cfg["locked"])
         self.lock_chk.toggled.connect(self._on_locked)
         row.addWidget(self.lock_chk)
@@ -90,6 +91,7 @@ class DorchaTab(QWidget):
         layout.addWidget(QLabel("표시 미리보기"))
         self.preview = DorchaOverlay(self._cfg["scale"]/100, parent=self)
         self.preview_scroll = QScrollArea()
+        self.preview_scroll.setFrameShape(QScrollArea.Shape.NoFrame)
         self.preview_scroll.setWidget(self.preview)
         self.preview_scroll.setFixedHeight(self.preview.height()+24)
         self.preview_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -176,6 +178,8 @@ class DorchaTab(QWidget):
         self.view_region_btn.setEnabled(logged and self._region is not None and not self._shutting_down)
         self.region_label.setText("영역 미등록" if self._region is None else
                                  "등록 영역  {x}, {y}  /  {w} × {h}".format(**self._region))
+        if (reference:=getattr(self,"_resource_view",None)) is not None and (view:=reference()) is not None:
+            view.refresh_registration()
 
     def _set_value(self, value):
         if value is None:
@@ -481,28 +485,43 @@ class DorchaTab(QWidget):
     def _on_scale(self, value):
         self._cfg["scale"] = value
         self.preview.set_scale(value/100)
-        self.preview_scroll.setFixedHeight(self.preview.height()+24)
+        self._resize_preview()
         if self._overlay is not None:
             self._overlay.set_scale(value/100)
         self._save()
 
     def _on_locked(self, checked):
+        self.lock_chk.setText("위치 잠금됨" if checked else "위치 잠금")
         self._cfg["locked"] = checked
         if self._overlay is not None:
             self._overlay.set_locked(checked)
         self._save()
+
+    def _resize_preview(self):
+        view = getattr(self,"_view",self)
+        width = min(self.preview.width(),max(120,view.width()-48))
+        self.preview_scroll.setFixedWidth(width)
+        self.preview_scroll.setFixedHeight(self.preview.height()+
+            (self.preview_scroll.horizontalScrollBar().sizeHint().height() if self.preview.width()>width else 0))
 
     def _apply_region(self,x,y,w,h):
         if self._shutting_down:
             return
         region = dict(x=x,y=y,w=w,h=h)
         config.save_dorcha({"box":region})
+        self._accept_region(x,y,w,h)
+
+    def _accept_region(self,x,y,w,h):
+        region = dict(x=x,y=y,w=w,h=h)
         self._cfg["box"] = self._region = region
         self._invalidate_search()
         self._set_value(None)
         self._sync_overlay()
         self._tracking_lost = False
         self._approved_target = self._search_target()
+        self._apply_gate()
+
+    def _update_region_label(self):
         self._apply_gate()
 
     def _region_cleared(self):

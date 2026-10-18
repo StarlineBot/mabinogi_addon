@@ -18,6 +18,9 @@ from . import version
 
 
 def detector_assets(feature: str) -> dict[str, np.ndarray]:
+    if feature == "resources":
+        from .detect.resource_pair import assets
+        return assets()
     if feature == "dorcha":
         from .detect.dorcha_anchor import assets
         return assets()
@@ -54,6 +57,10 @@ def _digit_templates(assets: dict) -> dict[str, list[np.ndarray]]:
 
 def missing_required_assets(feature: str, assets: dict) -> list[str]:
     """필수 입력은 실제 로드 목록과 독립적으로 정의한다."""
+    if feature == "resources":
+        missing = {key:missing_required_assets(key,{n.removeprefix(key+'_'):v for n,v in assets.items() if n.startswith(key+'_')})
+                   for key in ("dorcha","tuarim")}
+        return [] if any(not values for values in missing.values()) else [f"{key}_{name}" for key,values in missing.items() for name in values]
     if feature == "buff":
         anchor = assets.get("anchor")
         return [] if isinstance(anchor, np.ndarray) and anchor.size else ["anchor"]
@@ -86,6 +93,9 @@ def run_detector(feature: str, frame: np.ndarray, assets: dict, trace: dict):
     if missing:
         trace.update(rejection="missing_required_templates", missing_assets=missing)
         return None
+    if feature == "resources":
+        from .detect.resource_pair import locate_resources
+        return locate_resources(frame,assets,trace)
     if feature == "buff":
         from .detect.status_panel import locate_status_region
         return locate_status_region(frame, assets["anchor"], diagnostics=trace)

@@ -26,6 +26,7 @@ def panels(app, settings):
     from mabinogi_addon.ui.skillbar_tab import SkillbarTab
     from mabinogi_addon.ui.dorcha_tab import DorchaTab
     from mabinogi_addon.ui.tuarim_tab import TuarimTab
+    from mabinogi_addon.ui.memo_tab import MemoTab
     raw = config._read_local_config()
     for key, (name, field, _) in REGIONS.items():
         raw.setdefault(name, {}).update({field: dict(x=10, y=20) if key == "skillbar" else dict(BOX),
@@ -34,7 +35,7 @@ def panels(app, settings):
     watcher = SimpleNamespace(is_game_active=lambda: False, is_self_active=lambda: False)
     tabs = SimpleNamespace(buff_tab=BuffTab(), debuff_tab=DebuffTab(), boss_tab=BossTab(watcher),
         stat_bars_tab=StatBarsTab(watcher), skillbar_tab=SkillbarTab(watcher),
-        dorcha_tab=DorchaTab(watcher), tuarim_tab=TuarimTab(watcher))
+        dorcha_tab=DorchaTab(watcher), tuarim_tab=TuarimTab(watcher),memo_tab=MemoTab())
     for tab in vars(tabs).values():
         for timer in tab.findChildren(QTimer):
             timer.stop()

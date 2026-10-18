@@ -10,7 +10,7 @@ from ..setup_state import BY_KEY, selected as enabled, missing, section
 from .setup_page import CHOICE_TEXT, _label
 
 
-STAGES = ((), ("buff", "debuff", "boss"), ("tuarim", "stat_bars", "skillbar"))
+STAGES = ((), ("buff", "debuff", "boss"), ("tuarim", "dorcha", "stat_bars", "skillbar"))
 GUIDE_KEYS = STAGES[1] + STAGES[2]
 
 

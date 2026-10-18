@@ -107,6 +107,7 @@ class StatBarsTab(QWidget):
         v = QVBoxLayout(self)
         v.setContentsMargins(12, 12, 12, 12)
         v.setSpacing(10)
+        v.addWidget(QLabel("체력바"))
         v.addWidget(tab_header(
             "생명력·마나·스태미나를 별도 오버레이로 표시합니다.", HELP_TITLE, HELP_HTML, self
         ))
@@ -117,16 +118,15 @@ class StatBarsTab(QWidget):
         self._beta_notice.setStyleSheet("color:#e67e22; font-weight:600;")
         v.addWidget(self._beta_notice)
 
-        v.addWidget(section_label("판독 영역"))
         row = QHBoxLayout()
         self.region_btn = QPushButton("직접 지정")
         self.region_btn.setToolTip(
             "고정 크기 박스가 커서를 따라옵니다. 세 바 위에 올려 클릭 배치(휠로 크기 조절)"
         )
         self.region_btn.clicked.connect(self._on_region)
-        row.addWidget(QLabel("생명력·마나·스태미나"))
+        v.addWidget(QLabel("판독 영역 · 생명력·마나·스태미나"))
         self.region_label = hint_label("")
-        row.addWidget(self.region_label, 1)
+        v.addWidget(self.region_label)
         self.view_region_btn = QPushButton("지정 영역 보기")
         self.view_region_btn.clicked.connect(self._flash_region)
         self.auto_find_btn = QPushButton("자동 찾기")
@@ -134,9 +134,9 @@ class StatBarsTab(QWidget):
         self.auto_find_btn.clicked.connect(self._on_auto_find)
         commands = QHBoxLayout()
         commands.addStretch(1)
-        commands.addWidget(self.auto_find_btn)
-        commands.addWidget(self.region_btn)
-        commands.addWidget(self.view_region_btn)
+        row.addWidget(self.auto_find_btn)
+        row.addWidget(self.region_btn)
+        row.addWidget(self.view_region_btn)
         from .region_registration import clear_button
         self.clear_region_btn = clear_button(self, "stat_bars", self._region_cleared)
         commands.addWidget(self.clear_region_btn)
@@ -144,7 +144,8 @@ class StatBarsTab(QWidget):
         v.addLayout(self.region_row)
 
         # 미리보기 + 현재 값
-        v.addWidget(QLabel("원본 미리보기"))
+        source_group = QGroupBox("판독 미리보기")
+        source_layout = QVBoxLayout(source_group)
         prev_row = QHBoxLayout()
         self.preview = QLabel()
         self.preview.setFixedHeight(40)
@@ -158,9 +159,12 @@ class StatBarsTab(QWidget):
         self.value_label.setWordWrap(True)
         self.value_label.setStyleSheet("font-size:13px; font-weight:600;")
         prev_row.addWidget(self.value_label, 1)
-        v.addLayout(prev_row)
+        source_layout.addLayout(prev_row)
+        v.addWidget(source_group)
 
-        v.addWidget(section_label("표시·배치"))
+        display_group = QGroupBox("표시")
+        display_layout = QVBoxLayout(display_group)
+        v.addWidget(display_group)
         # 바별 표시 토글
         show_row = QHBoxLayout()
         show_row.addWidget(QLabel("표시할 바"))
@@ -172,7 +176,7 @@ class StatBarsTab(QWidget):
             show_row.addWidget(chk)
             self._show_checks[sid] = chk
         show_row.addStretch(1)
-        v.addLayout(show_row)
+        display_layout.addLayout(show_row)
 
         # 배율 + 고정/해제
         ctl_row = QHBoxLayout()
@@ -185,7 +189,7 @@ class StatBarsTab(QWidget):
         self.scale_spin.valueChanged.connect(self._on_scale)
         ctl_row.addWidget(self.scale_spin)
         ctl_row.addSpacing(12)
-        ctl_row.addWidget(QLabel("% 정렬"))
+        ctl_row.addWidget(QLabel("수치 정렬"))
         self.align_combo = QComboBox()
         for label, key in (("왼쪽", "left"), ("가운데", "center"), ("오른쪽", "right")):
             self.align_combo.addItem(label, key)
@@ -202,10 +206,11 @@ class StatBarsTab(QWidget):
         locks.addWidget(self.lock_all_btn)
         locks.addWidget(self.unlock_all_btn)
         self.placement_row = wrapping_row(ctl_row, locks)
-        v.addLayout(self.placement_row)
+        display_layout.addLayout(self.placement_row)
 
-        v.addWidget(QLabel("표시 미리보기"))
+        display_layout.addWidget(QLabel("표시 미리보기"))
         self.display_preview = QScrollArea()
+        self.display_preview.setFrameShape(QScrollArea.Shape.NoFrame)
         self.display_preview.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         preview_body = QWidget()
         preview_row = QHBoxLayout(preview_body)
@@ -229,7 +234,7 @@ class StatBarsTab(QWidget):
         preview_row.addStretch()
         self.display_preview.setWidget(preview_body)
         self._resize_display_preview()
-        v.addWidget(self.display_preview)
+        display_layout.addWidget(self.display_preview,0,Qt.AlignmentFlag.AlignLeft)
 
         # 저값 경고(생/마/스 각각 임계 이하면 알림).
         v.addWidget(self._alert_group())
@@ -304,7 +309,15 @@ class StatBarsTab(QWidget):
     def _resize_display_preview(self):
         body = self.display_preview.widget()
         body.adjustSize()
-        self.display_preview.setFixedHeight(body.sizeHint().height() + 24)
+        width = min(body.sizeHint().width(),max(120,self.width()-48))
+        self.display_preview.setFixedWidth(width)
+        self.display_preview.setFixedHeight(body.sizeHint().height()+
+            (self.display_preview.horizontalScrollBar().sizeHint().height() if body.width()>width else 0))
+
+    def resizeEvent(self,event):
+        super().resizeEvent(event)
+        if hasattr(self,"display_preview"):
+            self._resize_display_preview()
 
     def _show_diagnostics(self, checked, logged_in=None):
         self.diagnostics_btn.setArrowType(Qt.ArrowType.DownArrow if checked else Qt.ArrowType.RightArrow)

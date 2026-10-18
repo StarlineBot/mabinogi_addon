@@ -158,6 +158,7 @@ class SetupFlow:
         button_text = page.run_btn.text()
         results = {"등록 완료": [], "등록하지 않음": [], "찾지 못함": [], "저장 실패": []}
         page.set_busy(True)
+        resource_attempted = False
         try:
             for index, key in enumerate(keys, 1):
                 if config.load_discord_user() is None:
@@ -166,6 +167,30 @@ class SetupFlow:
                     break
                 # 앞선 승인이 공유 영역을 등록했다면 다음 시도에서 건너뛴다.
                 if key not in pending(automatic_only=True, feature_keys=scope):
+                    continue
+                if key in ("dorcha","tuarim") and "dorcha" in keys and "tuarim" in keys:
+                    if resource_attempted:
+                        continue
+                    resource_attempted = True
+                    targets = tuple(k for k in ("dorcha","tuarim") if k in pending(automatic_only=True,feature_keys=scope))
+                    view = page.window().resource_tab
+                    page.run_btn.setText("도르카·투아림 찾는 중…")
+                    def capture_resources():
+                        stamp = self._restore_generation
+                        window = page.window()
+                        return capture_for_autofind(require_game=True,restore_allowed=lambda:not self.closed,
+                            restore_widget_allowed=lambda widget:widget is not window or stamp==self._restore_generation)
+                    applied = view.find_regions(keys=targets,capture=capture_resources,
+                        allowed=lambda:not self.closed and not self.cancelled and config.load_discord_user() is not None)
+                    if self.closed or self.cancelled:
+                        break
+                    for target in targets:
+                        category = ("등록 완료" if target in applied else "저장 실패" if view.last_status == "save_failed"
+                                    else "등록하지 않음" if view.last_status == "cancelled" else "찾지 못함")
+                        results[category].append(BY_KEY[target].name)
+                        if on_result is not None:
+                            on_result(target,"등록됨" if target in applied else category)
+                    page.refresh()
                     continue
                 feature = BY_KEY[key]
                 from .region_registration import region_generation

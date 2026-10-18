@@ -33,6 +33,7 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QVBoxLayout,
     QWidget,
+    QGroupBox,
 )
 
 from .. import config
@@ -157,6 +158,7 @@ class CustomOverlayTab(QWidget):
         # 세로 여유가 뷰포트와 거의 딱 맞아(≈9px) Windows 글꼴/DPI에선 아주 얇은
         # 스크롤바가 생겼다. 위젯 간격을 살짝 줄여 그만큼의 여유를 확보한다.
         v.setSpacing(8)
+        v.addWidget(QLabel("커스텀 오버레이"))
 
         v.addWidget(tab_header(
             "게임 화면의 일부를 복제해 원하는 위치에 표시합니다.",
@@ -168,13 +170,18 @@ class CustomOverlayTab(QWidget):
         self.enable.toggled.connect(self._on_enable)
         v.addWidget(self.enable)
         self._mgr.set_paused(not self.enable.isChecked())
+        overlay_group = QGroupBox("오버레이")
+        overlay_layout = QVBoxLayout(overlay_group)
+        v.addWidget(overlay_group)
+        preset_group = QGroupBox("프리셋")
+        preset_layout = QVBoxLayout(preset_group)
         self.region_btn = QPushButton("복제할 영역 추가")
         self.region_btn.setToolTip("드래그로 화면 일부를 잘라 오버레이로 복제(돋보기)")
         self.region_btn.clicked.connect(self._on_region)
         row = QHBoxLayout()
         row.addWidget(self.region_btn)
         row.addStretch()
-        v.addLayout(row)
+        add_row = row
 
         row = QHBoxLayout()
         self.active_label = CapturePathLabel()
@@ -185,7 +192,7 @@ class CustomOverlayTab(QWidget):
         row.addWidget(self.active_label, 1)
         row.addWidget(self.save_status)
         row.addWidget(self.save_btn)
-        v.addLayout(row)
+        overlay_layout.addLayout(row)
         self.error_box = QWidget()
         error_row = QHBoxLayout(self.error_box)
         self.error_label = CapturePathLabel()
@@ -195,15 +202,15 @@ class CustomOverlayTab(QWidget):
         error_row.addWidget(self.error_label, 1)
         error_row.addWidget(self.retry_btn)
         self.error_box.setStyleSheet("color:#c0392b; background:#fdecea;")
-        v.addWidget(self.error_box)
+        overlay_layout.addWidget(self.error_box)
         self.error_box.hide()
+        overlay_layout.addLayout(add_row)
 
         # 프리셋
-        v.addWidget(section_label("프리셋"))
         self.preset_list = _name_list()
         self.preset_list.setMaximumHeight(128)
         self.preset_list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-        v.addWidget(self.preset_list, 1)
+        preset_layout.addWidget(self.preset_list)
         preset_row = QHBoxLayout()
         self.preset_load_btn = QPushButton("불러오기")
         self.preset_load_btn.clicked.connect(self._on_preset_load)
@@ -215,7 +222,7 @@ class CustomOverlayTab(QWidget):
         self.selection_label = CapturePathLabel()
         self.selection_label.setText("선택: 없음")
         preset_row.addWidget(self.selection_label, 1)
-        v.addLayout(preset_row)
+        preset_layout.addLayout(preset_row)
 
         # 시작 대상은 적용 대상이나 목록 선택과 별도로 저장한다.
         row = QHBoxLayout()
@@ -225,14 +232,14 @@ class CustomOverlayTab(QWidget):
         self.auto_combo.setMinimumContentsLength(12)
         self.auto_combo.currentIndexChanged.connect(self._on_auto_changed)
         row.addWidget(self.auto_combo, 1)
-        v.addLayout(row)
+        preset_layout.addLayout(row)
         self.preset_list.itemSelectionChanged.connect(self._selection_changed)
 
         # 오버레이 목록(선택만)
         self.overlays_title = CapturePathLabel()
         self.overlays_title.setStyleSheet("font-weight:600; color:#c8ccd4;")
         self.overlays_title.setText("적용 중인 오버레이")
-        v.addWidget(self.overlays_title)
+        overlay_layout.addWidget(self.overlays_title)
         self.overlay_list = QTreeWidget()
         self.overlay_list.setRootIsDecorated(False)
         self.overlay_list.setMinimumHeight(100)
@@ -244,7 +251,7 @@ class CustomOverlayTab(QWidget):
         self.overlay_list.header().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
         self.overlay_list.header().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         self.overlay_list.itemChanged.connect(self._on_item_lock)
-        v.addWidget(self.overlay_list, 2)
+        overlay_layout.addWidget(self.overlay_list)
 
         # 호환 캡처 모드: 미러가 검정/멈춤(고정)으로 나올 때 켠다. '전체 창 모드' + 특정
         # GPU(MPO)에서 DWM 미러가 안 그려지는 경우를 캡처 방식으로 우회(CPU 약간↑).
@@ -278,7 +285,8 @@ class CustomOverlayTab(QWidget):
         grid.addWidget(self.lock_all_btn, 1, 0)
         grid.addWidget(self.unlock_all_btn, 1, 1)
         grid.addWidget(self.del_all_btn, 1, 2)
-        v.addLayout(grid)
+        overlay_layout.addLayout(grid)
+        v.addWidget(preset_group)
         self.advanced_btn = QToolButton()
         self.advanced_btn.setText("고급 · 캡처 호환성")
         self.advanced_btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
@@ -391,10 +399,9 @@ class CustomOverlayTab(QWidget):
                 item = QTreeWidgetItem([
                     data.get("name") or f"오버레이{i + 1}",
                     "{x}, {y} · {w} × {h}".format(**data),
-                    f"{round(data.get('scale', 1) * 100)}%", "",
+                    f"{round(data.get('scale', 1) * 100)}%", "잠금됨" if data.get("locked") else "잠금 해제",
                 ])
-                item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
-                item.setCheckState(3, Qt.CheckState.Checked if data.get("locked") else Qt.CheckState.Unchecked)
+                item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsUserCheckable)
                 self.overlay_list.addTopLevelItem(item)
                 item.setToolTip(0, item.text(0))
                 item.setToolTip(1, item.text(1))
@@ -458,8 +465,8 @@ class CustomOverlayTab(QWidget):
             self.save_status.setStyleSheet("")
             self.error_box.hide()
             return
-        name = self._active_preset or "없음"
-        self.active_label.setText(f"적용 중: {name}")
+        name = self._active_preset or "이름 없는 구성"
+        self.active_label.setText(f"현재 프리셋: {name}")
         self.overlays_title.setText("적용 중인 오버레이 · " + name)
         self.save_status.setText("저장 실패" if self._save_error else "저장 대기 중" if self._dirty else "자동 저장됨")
         self.save_status.setStyleSheet("color:#c0392b;" if self._save_error else "")

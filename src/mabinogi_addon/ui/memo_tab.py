@@ -17,12 +17,14 @@ from PySide6.QtWidgets import (
     QTextEdit,
     QVBoxLayout,
     QWidget,
+    QGroupBox,
+    QLabel,
 )
 
 from .. import config
 from .help_dialog import tab_header
 from .markdown_highlighter import MarkdownHighlighter
-from .widgets import checkbox, hint_label, section_label
+from .widgets import hint_label, section_label
 
 # 마크다운 툴바 아이콘 버튼 스타일(hover 시 민트).
 _TOOL_QSS = (
@@ -64,31 +66,38 @@ class MemoTab(QWidget):
     region_changed = Signal()  # 메모 영역(위치·크기) 변경
     font_changed = Signal(int)  # 글자 크기 변경
     text_changed = Signal(str)  # 메모(마크다운) 내용 변경 → 오버레이 렌더·저장
-    enabled_toggled = Signal(bool)  # 메모 오버레이 표시 on/off
 
     def __init__(self) -> None:
         super().__init__()
+        self._selector = None
+        self._shutting_down = False
         v = QVBoxLayout(self)
         v.setContentsMargins(12, 12, 12, 12)
         v.setSpacing(10)
+        v.addWidget(QLabel("메모"))
         v.addWidget(tab_header(
             "게임 위에 표시할 메모를 작성합니다.", HELP_TITLE, HELP_HTML, self
         ))
 
-        # 메모 오버레이 표시 on/off (끄면 영역·내용은 그대로 두고 화면에만 안 띄움)
-        self.enable_chk = checkbox("메모 오버레이 사용")
-        self.enable_chk.setToolTip(
-            "끄면 영역·내용은 그대로 두고 게임 화면에 메모를 띄우지 않습니다."
-        )
-        self.enable_chk.setChecked(bool(config.load_memo().get("enabled", True)))
-        self.enable_chk.toggled.connect(self.enabled_toggled.emit)
-        v.addWidget(self.enable_chk)
-
+        v.addWidget(section_label("표시 영역 · 메모 위치·너비"))
+        self.region_hint = hint_label("")
+        self._update_region_hint()
+        v.addWidget(self.region_hint)
         top = QHBoxLayout()
         top.setSpacing(6)
-        region_btn = QPushButton("표시 위치·너비 지정")
+        region_btn = QPushButton("직접 지정")
+        region_btn.setToolTip("메모의 표시 위치와 너비를 지정합니다. 높이는 내용에 맞춥니다.")
         region_btn.clicked.connect(self._pick_region)
-        top.addWidget(region_btn, 1)
+        self.region_btn = region_btn
+        top.addWidget(region_btn)
+        top.addStretch()
+        from .region_registration import clear_button
+        self.clear_region_btn = clear_button(self,"memo",self._region_cleared)
+        top.addWidget(self.clear_region_btn)
+        v.addLayout(top)
+        display = QGroupBox("표시")
+        display_layout = QVBoxLayout(display)
+        v.addWidget(display)
         self.lock_btn = QPushButton("위치 잠금")
         self.lock_btn.setCheckable(True)
         self.lock_btn.setToolTip(
@@ -99,26 +108,24 @@ class MemoTab(QWidget):
             "QPushButton:checked { background:#00B894; color:white; font-weight:600; }"
         )
         self.lock_btn.toggled.connect(self._on_lock_toggled)
-        top.addWidget(self.lock_btn, 1)
-        v.addLayout(top)
-
-        self.region_hint = hint_label("")
-        self._update_region_hint()
-        v.addWidget(self.region_hint)
-
-        v.addWidget(section_label("글자 크기"))
         font_row = QHBoxLayout()
+        display_layout.addLayout(font_row)
+        font_row.addWidget(section_label("글자 크기"))
         self.font_spin = QSpinBox()
         self.font_spin.setRange(8, 48)
         self.font_spin.setValue(int(config.load_memo().get("fontSize", 16)))
         self.font_spin.setSuffix(" px")
         self.font_spin.valueChanged.connect(self.font_changed.emit)
         font_row.addWidget(self.font_spin)
+        font_row.addWidget(self.lock_btn)
         font_row.addStretch(1)
-        v.addLayout(font_row)
+        self.lock_hint = hint_label("잠금 해제됨 · 메모 테두리를 드래그해 위치를 변경할 수 있습니다.")
+        display_layout.addWidget(self.lock_hint)
 
         # ---- 메모 입력(마크다운): 아이콘 툴바 + 하이라이팅 편집 + 미리보기 토글 ----
-        v.addWidget(section_label("메모 내용 (마크다운)"))
+        content = QGroupBox("메모 내용")
+        content_layout = QVBoxLayout(content)
+        v.addWidget(content,1)
         tools = QHBoxLayout()
         tools.setSpacing(6)
         _TABLE = "| 구분 | 값 |\n| --- | --- |\n| 1관 | 85, 35 |\n"
@@ -142,7 +149,7 @@ class MemoTab(QWidget):
         self.preview_btn.setStyleSheet(_TOOL_QSS)
         self.preview_btn.toggled.connect(self._on_preview_toggled)
         tools.addWidget(self.preview_btn)
-        v.addLayout(tools)
+        content_layout.addLayout(tools)
 
         # 편집(좌) | 미리보기(우) — 가운데 손잡이로 좌우 너비 조절. 미리보기 기본 숨김.
         self.editor = QPlainTextEdit()
@@ -169,7 +176,7 @@ class MemoTab(QWidget):
         self._split.addWidget(self.editor)
         self._split.addWidget(self.preview)
         self._split.setSizes([600, 0])
-        v.addWidget(self._split, 1)
+        content_layout.addWidget(self._split, 1)
 
         v.addWidget(
             hint_label(
@@ -217,10 +224,14 @@ class MemoTab(QWidget):
             self.region_hint.setStyleSheet("color:#8a8f98;")
 
     def _pick_region(self) -> None:
+        from .region_registration import editing_allowed
+        if not editing_allowed(self):
+            return
         from .region_selector import RegionSelector
 
         self._selector = RegionSelector()  # 참조 유지(GC 방지)
-        self._selector.selected.connect(self._on_region_selected)
+        from .region_registration import connect_selection
+        connect_selection(self,self._selector,self._on_region_selected)
         self._selector.start()
 
     def _on_region_selected(self, x: int, y: int, w: int, h: int) -> None:
@@ -228,8 +239,20 @@ class MemoTab(QWidget):
         self._update_region_hint()
         self.region_changed.emit()
 
+    def _region_cleared(self):
+        self._update_region_hint()
+        self.region_changed.emit()
+
+    def shutdown(self):
+        from shiboken6 import isValid
+        self._shutting_down = True
+        if self._selector is not None and isValid(self._selector):
+            self._selector.close()
+
     def _on_lock_toggled(self, locked: bool) -> None:
         self.lock_btn.setText("위치 잠금됨" if locked else "위치 잠금")
+        self.lock_hint.setText("잠금됨 · 메모 창은 클릭을 통과합니다." if locked else
+                              "잠금 해제됨 · 메모 테두리를 드래그해 위치를 변경할 수 있습니다.")
         self.lock_toggled.emit(locked)
 
     def set_lock_state(self, locked: bool) -> None:

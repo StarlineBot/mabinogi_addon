@@ -117,7 +117,6 @@ class BossTab(QWidget):
                 "보스 체력바가 보이는 상태에서 자동 찾기를 실행하세요."
             )
         )
-        v.addWidget(self._supported_label())
 
         prev_btn = QPushButton("알림 미리보기")
         prev_btn.setToolTip("경고가 화면 어디에 어떻게 뜨는지 한 번 띄워 봅니다")
@@ -129,15 +128,14 @@ class BossTab(QWidget):
         cv.setContentsMargins(0, 0, 0, 0)
 
         row = QHBoxLayout()
-        row.addWidget(QLabel("판독 영역 · 보스 체력바"))
+        cv.addWidget(QLabel("판독 영역 · 보스 체력바"))
         self.region_btn = QPushButton("직접 지정")
         self.region_btn.setToolTip(
-            "기본 위치(2560×1440)로 이미 잡혀 있습니다. 해상도가 다르거나 안 맞으면 "
-            "눌러서 보스 HP바(이름~%)에 박스를 맞춥니다."
+            "보스 HP바의 이름과 체력 비율이 들어오도록 지정합니다."
         )
         self.region_btn.clicked.connect(self._on_region)
         self.region_label = hint_label("")
-        row.addWidget(self.region_label, 1)
+        cv.addWidget(self.region_label)
         self.view_region_btn = QPushButton("지정 영역 보기")
         self.view_region_btn.clicked.connect(self._flash_region)
         # 자동 찾기(🧪 Discord 베타) — 로그인 사용자만 보임. 보스 체력바를 화면에서 찾아
@@ -149,16 +147,17 @@ class BossTab(QWidget):
         self.auto_find_btn.clicked.connect(self._on_auto_find)
         commands = QHBoxLayout()
         commands.addStretch(1)
-        commands.addWidget(self.auto_find_btn)
-        commands.addWidget(self.region_btn)
-        commands.addWidget(self.view_region_btn)
+        row.addWidget(self.auto_find_btn)
+        row.addWidget(self.region_btn)
+        row.addWidget(self.view_region_btn)
         from .region_registration import clear_button
         self.clear_region_btn = clear_button(self, "boss", self._region_cleared)
         commands.addWidget(self.clear_region_btn)
         self.region_row = wrapping_row(row, commands)
         cv.addLayout(self.region_row)
 
-        cv.addWidget(QLabel("원본 미리보기 · 현재 판독"))
+        preview_group = QGroupBox("판독 미리보기")
+        preview_layout = QVBoxLayout(preview_group)
         prev_row = QHBoxLayout()
         self.preview = QLabel()
         self.preview.setFixedHeight(40)
@@ -169,7 +168,8 @@ class BossTab(QWidget):
         self.status_label = QLabel("식별: —   HP: —")
         self.status_label.setStyleSheet("font-size:14px; font-weight:600;")
         prev_row.addWidget(self.status_label, 1)
-        cv.addLayout(prev_row)
+        preview_layout.addLayout(prev_row)
+        cv.addWidget(preview_group)
 
         cv.addWidget(
             hint_label("영역을 맞춘 뒤 위의 '식별'과 'HP'가 실제와 맞는지 먼저 확인하세요.")
@@ -182,10 +182,13 @@ class BossTab(QWidget):
         self.warn_lock_btn.clicked.connect(self._toggle_warn_lock)
         warn_row.addWidget(self.warn_lock_btn)
         warn_row.addWidget(prev_btn)
-        warn_row.addWidget(
-            hint_label("해제=끌어서 경고 위치 이동 · 고정=게임 위 표시(클릭 통과)"), 1
-        )
-        cv.addLayout(warn_row)
+        warn_row.addStretch()
+        self.warn_lock_hint = hint_label("")
+        warning_group = QGroupBox("패턴 경고")
+        warning_layout = QVBoxLayout(warning_group)
+        warning_layout.addLayout(warn_row)
+        warning_layout.addWidget(self.warn_lock_hint)
+        cv.addWidget(warning_group)
         self._sync_warn_btn()
 
         # 다음 패턴 목록(왼쪽에 남은 패턴 % 나열) — 준비(5% 전) 알림이 뜨면 그 %가 빠짐.
@@ -193,22 +196,28 @@ class BossTab(QWidget):
         self.show_upcoming.setToolTip("남은 패턴의 체력 비율을 별도 목록으로 표시합니다.")
         self.show_upcoming.setChecked(cfg["showUpcoming"])
         self.show_upcoming.toggled.connect(self._on_show_upcoming)
-        cv.addWidget(self.show_upcoming)
+        upcoming_group = QGroupBox("남은 패턴 목록")
+        upcoming_layout = QVBoxLayout(upcoming_group)
+        upcoming_layout.addWidget(self.show_upcoming)
         up_row = QHBoxLayout()
         self.upcoming_lock_btn = QPushButton("목록 위치 잠금")
         self.upcoming_lock_btn.setCheckable(True)
         self.upcoming_lock_btn.clicked.connect(self._toggle_upcoming_lock)
         up_row.addWidget(self.upcoming_lock_btn)
-        up_row.addWidget(
-            hint_label("해제=끌어서 위치 이동 · 고정=게임 위 표시(클릭 통과)"), 1
-        )
-        cv.addLayout(up_row)
+        up_row.addStretch()
+        self.upcoming_lock_hint = hint_label("")
+        upcoming_layout.addLayout(up_row)
+        upcoming_layout.addWidget(self.upcoming_lock_hint)
+        cv.addWidget(upcoming_group)
         self._sync_upcoming_btn()
         v.addWidget(self._controls)
 
         # 보스 HP바 수집(오독 제보용) — 로그인 사용자만.
         self._collect_box = self._collect_group()
-        v.addWidget(self._collect_box)
+        from .settings_layout import disclosure
+        self.diagnostics_btn = disclosure("진단 · 보스 HP바 수집",self._collect_box,v)
+        self.diagnostics_btn.toggled.connect(self._apply_collect_gate)
+        v.addWidget(self._supported_label())
         v.addStretch(1)
 
         self._update_region_label()
@@ -345,6 +354,9 @@ class BossTab(QWidget):
 
     def _sync_warn_btn(self) -> None:
         self.warn_lock_btn.setChecked(self._overlay.locked)
+        self.warn_lock_btn.setText("경고 위치 잠금됨" if self._overlay.locked else "경고 위치 잠금")
+        self.warn_lock_hint.setText("잠금됨 · 경고 창은 클릭을 통과합니다." if self._overlay.locked
+                                   else "잠금 해제됨 · 경고 창을 드래그해 위치를 변경할 수 있습니다.")
 
     def _toggle_warn_lock(self) -> None:
         self._overlay.set_locked(not self._overlay.locked)
@@ -366,6 +378,9 @@ class BossTab(QWidget):
 
     def _sync_upcoming_btn(self) -> None:
         self.upcoming_lock_btn.setChecked(self._upcoming.locked)
+        self.upcoming_lock_btn.setText("목록 위치 잠금됨" if self._upcoming.locked else "목록 위치 잠금")
+        self.upcoming_lock_hint.setText("잠금됨 · 목록은 클릭을 통과합니다." if self._upcoming.locked
+                                       else "잠금 해제됨 · 목록을 드래그해 위치를 변경할 수 있습니다.")
 
     def _on_show_upcoming(self, checked: bool) -> None:
         self._save()
@@ -580,7 +595,8 @@ class BossTab(QWidget):
     def _apply_collect_gate(self) -> None:
         box = getattr(self, "_collect_box", None)
         if box is not None:
-            box.setVisible(self._logged_in())
+            box.setVisible(self._logged_in() and self.diagnostics_btn.isChecked())
+            self.diagnostics_btn.setVisible(self._logged_in())
         btn = getattr(self, "auto_find_btn", None)
         if btn is not None:
             btn.setVisible(self._logged_in())  # 자동 찾기도 Discord 베타

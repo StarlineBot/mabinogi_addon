@@ -17,6 +17,7 @@ REGIONS = {
     "skillbar": ("skillbar", "anchor", "단축바 원본"),
     "dorcha": ("dorcha", "box", "도르카 숫자 판독"),
     "tuarim": ("tuarim", "box", "투아림 % 판독"),
+    "memo": ("memoTracker", "captureRegion", "메모 표시 위치·너비"),
 }
 
 
@@ -44,6 +45,10 @@ def warn(owner, title, text):
 
 def region_generation(key):
     return _epochs.get(REGIONS[key][:2], 0)
+
+
+def invalidate_region(key):
+    _epochs[REGIONS[key][:2]] = region_generation(key) + 1
 
 
 def generation(owner):
@@ -78,7 +83,7 @@ def clear_button(owner, key, changed):
     owner._region_keys = tuple(dict.fromkeys((*getattr(owner, "_region_keys", ()), key)))
     button.setToolTip(label + " 영역만 지웁니다. 세부 설정은 유지합니다.")
     reference = weakref.ref(owner)
-    callback = weakref.WeakMethod(changed)
+    method_name = changed.__name__
 
     def remove():
         owner = reference()
@@ -118,14 +123,11 @@ def clear_button(owner, key, changed):
             warn(owner, "지정 해제 실패", "영역을 저장하지 못했습니다. 기존 영역과 동작을 유지합니다.")
             return
         owner._region_generation = getattr(owner, "_region_generation", 0) + 1
-        identity = REGIONS[key][:2]
-        _epochs[identity] = region_generation(key) + 1
+        invalidate_region(key)
         selector = getattr(owner, "_selector", None)
-        if selector is not None:
+        if selector is not None and isValid(selector):
             selector.close()
-        handler = callback()
-        if handler is not None:
-            handler()
+        getattr(owner,method_name)()
 
     button.clicked.connect(remove)
     return button
@@ -141,6 +143,6 @@ def save_boxes(owner, boxes):
     try:
         config._write_local_config(raw)
     except OSError:
-        QMessageBox.warning(owner, "영역 저장 실패", "기존 등록 영역을 유지합니다.")
+        warn(owner, "영역 저장 실패", "기존 등록 영역을 유지합니다.")
         return False
     return True

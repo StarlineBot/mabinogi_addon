@@ -295,6 +295,9 @@ class TuarimTab(QWidget):
         config.save_tuarim({"enabled": self.enable.isChecked(),
                             "box": {"x": x, "y": y, "w": w, "h": h},
                             "thresholds": self._thresholds, "sounds": self._sounds})
+        self._accept_region(x,y,w,h)
+
+    def _accept_region(self,x,y,w,h):
         self._region = {"x": x, "y": y, "w": w, "h": h}
         self._tracker.reset_observations()
         self.observed.emit(None)
@@ -341,6 +344,9 @@ class TuarimTab(QWidget):
             self.region_label.setText("영역 미지정 — 숫자 두 자리와 % 가 보이게 지정하세요")
             self.region_label.setStyleSheet("color:#8a8f98;")
             self.view_region_btn.setEnabled(False)
+
+        if (reference:=getattr(self,"_resource_view",None)) is not None and (view:=reference()) is not None:
+            view.refresh_registration()
 
     # ---- 저장 ----
     def _save(self) -> None:
@@ -441,7 +447,7 @@ class TuarimTab(QWidget):
         rgb = np.ascontiguousarray(frame[:, :, ::-1])  # BGR→RGB
         img = QImage(rgb.tobytes(), w, h, 3 * w, QImage.Format.Format_RGB888)
         pm = QPixmap.fromImage(img).scaledToHeight(
-            38, Qt.TransformationMode.FastTransformation
+            max(1,self.preview.height()-2), Qt.TransformationMode.FastTransformation
         )
         self.preview.setPixmap(pm)
 

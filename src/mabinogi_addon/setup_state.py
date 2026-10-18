@@ -23,6 +23,8 @@ FEATURES = (
             "보스바 위 디버프 줄이 들어오는지 확인하세요. 아이콘이 없어도 등록할 수 있습니다."),
     Feature("tuarim", "투아림", "tuarim", False,
             "숫자와 %가 모두 들어오는지 확인하세요. 판독값은 적용 후 도르카·투아림 탭에서 확인하세요."),
+    Feature("dorcha", "도르카", "dorcha", False,
+            "도르카 숫자가 들어오는지 확인하세요. 투아림과 함께 선택하면 한 번에 찾습니다.",beta=True),
     Feature("boss", "보스 패턴 알림", "bossPattern", False,
             "보스 이름과 체력 비율이 모두 들어오는지 확인하세요."),
     Feature("stat_bars", "체력바", "statBars", False,
@@ -59,6 +61,8 @@ def valid_box(value):
 def enabled(key, raw=None):
     raw = config._read_local_config() if raw is None else raw
     feature = BY_KEY[key]
+    if key == "memo":
+        return valid_box(section(raw,"memoTracker").get("captureRegion"))
     if key in ("buff", "debuff", "boss", "stat_bars", "skillbar"):
         target = section(raw, feature.section)
         if key == "skillbar":

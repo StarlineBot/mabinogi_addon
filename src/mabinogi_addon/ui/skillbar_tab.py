@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QSpinBox,
     QVBoxLayout,
     QWidget,
+    QGroupBox,
 )
 
 from .. import config
@@ -74,6 +75,7 @@ class SkillbarTab(QWidget):
 
         v = QVBoxLayout(self)
         v.setContentsMargins(12, 12, 12, 12)
+        v.addWidget(QLabel("단축바"))
         v.setSpacing(10)
         v.addWidget(tab_header(
             "게임 원본 단축바를 그룹별로 복제해 원하는 위치에 표시합니다.", HELP_TITLE, HELP_HTML, self
@@ -92,20 +94,27 @@ class SkillbarTab(QWidget):
         self.anchor_btn = QPushButton("직접 지정")
         self.anchor_btn.setToolTip("단축바 첫 아이콘에 박스를 맞춰 클릭(돋보기)")
         self.anchor_btn.clicked.connect(self._on_anchor)
-        row.addWidget(QLabel("판독 영역 · 원본 첫 칸"))
+        v.addWidget(QLabel("판독 영역 · 원본 첫 칸"))
         self.anchor_label = hint_label("")
-        row.addWidget(self.anchor_label, 1)
+        v.addWidget(self.anchor_label)
         self.auto_find_btn = QPushButton("자동 찾기")
         self.auto_find_btn.setToolTip("원본 단축바 전체 격자를 확인해 첫 칸 지정 — Discord 베타")
         self.auto_find_btn.clicked.connect(self._on_auto_find)
         row.addWidget(self.auto_find_btn)
         row.addWidget(self.anchor_btn)
+        self.view_region_btn = QPushButton("지정 영역 보기")
+        self.view_region_btn.clicked.connect(self._flash_source)
+        row.addWidget(self.view_region_btn)
         from .region_registration import clear_button
         self.clear_region_btn = clear_button(self, "skillbar", self._region_cleared)
+        row.addStretch()
         row.addWidget(self.clear_region_btn)
         v.addLayout(row)
 
 
+        display_group = QGroupBox("표시")
+        display_layout = QVBoxLayout(display_group)
+        v.addWidget(display_group)
         ctl = QHBoxLayout()
         ctl.addWidget(QLabel("표시 배율"))
         self.scale_spin = QSpinBox()
@@ -122,11 +131,11 @@ class SkillbarTab(QWidget):
         self.unlock_all_btn.clicked.connect(lambda: self._set_locked_all(False))
         ctl.addWidget(self.lock_all_btn)
         ctl.addWidget(self.unlock_all_btn)
-        v.addLayout(ctl)
+        display_layout.addLayout(ctl)
 
         # 프리셋(기본 배치)
         pr = QHBoxLayout()
-        pr.addWidget(QLabel("프리셋"))
+        display_layout.addWidget(QLabel("기본 배치"))
         for label, fn in (
             ("중앙 하단(기본)", self._preset_default),
             ("중앙 2단", self._preset_two_tier),
@@ -135,12 +144,12 @@ class SkillbarTab(QWidget):
             b = QPushButton(label)
             b.clicked.connect(fn)
             pr.addWidget(b)
-        v.addLayout(pr)
-        self._preset_btns = [pr.itemAt(i).widget() for i in range(1, pr.count())]
+        display_layout.addLayout(pr)
+        self._preset_btns = [pr.itemAt(i).widget() for i in range(pr.count())]
         v.addStretch(1)
 
         self._gated = [
-            self.anchor_btn, self.auto_find_btn, self.scale_spin,
+            self.anchor_btn, self.auto_find_btn, self.view_region_btn, self.scale_spin,
             self.lock_all_btn, self.unlock_all_btn, *self._preset_btns,
         ]
         self._update_anchor_label()
@@ -161,6 +170,7 @@ class SkillbarTab(QWidget):
         for w in self._gated:
             w.setEnabled(ok)
         self.auto_find_btn.setEnabled(ok and not self._autofind_busy)
+        self.view_region_btn.setEnabled(ok and self._anchor is not None and not self._shutting_down)
 
     # ---- 오버레이 ----
     def _ensure_overlays(self) -> None:
@@ -258,10 +268,26 @@ class SkillbarTab(QWidget):
 
     def _region_cleared(self):
         self._anchor = None
+        for mark in getattr(self,"_source_marks",[]):
+            mark.close()
         for overlay in self._overlays.values():
             overlay.set_cells([None] * CELLS)
         self._update_anchor_label()
         self._apply_visibility()
+
+    def _flash_source(self):
+        if not self._anchor or self._shutting_down or not self._logged_in():
+            return
+        from .region_highlight import RegionHighlight
+        for mark in getattr(self,"_source_marks",[]):
+            mark.close()
+            mark.deleteLater()
+        x,y = self._anchor["x"],self._anchor["y"]
+        self._source_marks = []
+        for w,h,title in ((SRC_W,SRC_H,"복제 원본 전체 · 12개 그룹"),(ICON,ICON,"기준 첫 칸")):
+            mark = RegionHighlight()
+            mark.flash(x,y,w,h,"단축바 원본",title)
+            self._source_marks.append(mark)
 
     def _on_auto_find(self) -> None:
         from .autofind_confirm import confirm_autofind
@@ -435,6 +461,9 @@ class SkillbarTab(QWidget):
 
     def shutdown(self) -> None:
         self._shutting_down = True
+        for mark in getattr(self,"_source_marks",[]):
+            mark.close()
+            mark.deleteLater()
         if self._autofind_highlight is not None:
             self._autofind_highlight.close()
         self._timer.stop()
