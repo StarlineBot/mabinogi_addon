@@ -309,6 +309,30 @@ def test_approved_geometry_and_tail_and_no_focus(window, app):
     assert not d.request()
 
 
+@pytest.mark.parametrize("automatic", [False, True])
+@pytest.mark.parametrize("stage", ["position", "visibility"])
+def test_final_display_denial_is_logged_only_for_manual_request(window, monkeypatch, caplog, stage, automatic):
+    import logging
+    d = window.creator_dialogue
+    checks = iter((True, False))
+    d._ineligible_reason = "Windows 가림/잠금/화면 또는 API 확인 불가"
+    monkeypatch.setattr(d, "_eligible", lambda: next(checks))
+    monkeypatch.setattr(d, "_position", lambda text: stage != "position")
+    displayed = Mock()
+    monkeypatch.setattr(d.session, "displayed", displayed)
+    caplog.set_level(logging.INFO, logger="mabinogi_addon.ui.creator_dialogue")
+    assert not d.request(automatic=automatic)
+    assert not d.bubble.isVisible()
+    assert not d.expiry.isActive()
+    displayed.assert_not_called()
+    records = [r for r in caplog.records if r.name == "mabinogi_addon.ui.creator_dialogue"]
+    assert len(records) == (0 if automatic else 1)
+    if not automatic:
+        reason = "말풍선 배치 공간 부족" if stage == "position" else d._ineligible_reason
+        assert reason in records[0].getMessage()
+        assert f"유효 대사 {len(d.session.entries)}개" in records[0].getMessage()
+
+
 @pytest.mark.parametrize("sound", [None, Mock(), Mock(side_effect=FileNotFoundError), Mock(side_effect=RuntimeError)])
 def test_optional_sound_never_required(window, sound):
     d = window.creator_dialogue

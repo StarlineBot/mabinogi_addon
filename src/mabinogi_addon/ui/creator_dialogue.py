@@ -333,7 +333,15 @@ class CreatorDialogue(QObject):
             if not automatic:
                 _log.info("제작자 잡담 클릭 보류: 선택 가능한 대사 없음 (유효 대사 %d개)", len(self.session.entries))
             return False
-        if not self._position(text) or not self._eligible():
+        if not self._position(text):
+            if not automatic:
+                _log.info("제작자 잡담 클릭 보류: 말풍선 배치 공간 부족 (유효 대사 %d개)", len(self.session.entries))
+            self.dismiss()
+            return False
+        if not self._eligible():
+            if not automatic:
+                _log.info("제작자 잡담 클릭 보류: %s (유효 대사 %d개)",
+                          self._ineligible_reason, len(self.session.entries))
             self.dismiss()
             return False
         self.bubble.show()
