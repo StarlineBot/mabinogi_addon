@@ -284,8 +284,14 @@ class CreatorDialogue(QObject):
             point = widget.mapTo(w, QPoint())
             rects.append((point.x(), point.y(), widget.width(), widget.height()))
         try:
-            visible = self.visibility(int(w.winId()), rects, (w.width(), w.height()))
+            detail = {}
+            if self.visibility is exposed:
+                visible = self.visibility(int(w.winId()), rects, (w.width(), w.height()), diagnostic=detail)
+            else:
+                visible = self.visibility(int(w.winId()), rects, (w.width(), w.height()))
             self._ineligible_reason = "" if visible else "Windows 가림/잠금/화면 또는 API 확인 불가"
+            if not visible and detail:
+                self._ineligible_reason += " " + repr(detail)
             return visible
         except Exception as exc:
             self._ineligible_reason = "노출 판정 예외: " + type(exc).__name__

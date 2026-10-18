@@ -10,6 +10,7 @@ from shiboken6 import isValid
 from PySide6.QtWidgets import (QGroupBox,QHBoxLayout,QLabel,QMessageBox,QPushButton,
                               QToolButton,QVBoxLayout,QWidget)
 from .. import config
+from ..setup_state import section
 from ..autofind_diagnostics import perform_autofind
 from . import region_registration as registration
 from .dpi import to_logical,to_physical
@@ -269,7 +270,7 @@ class ResourceTab(QWidget):
             latest = config._read_local_config()
             for k in keys:
                 name,field,_ = registration.REGIONS[k]
-                if latest.get(name,{}).get(field) != before.get(name,{}).get(field):
+                if section(latest,name).get(field) != section(before,name).get(field):
                     registration.warn(self,"영역 변경됨","확인 중 영역이 변경됐습니다. 다시 시도하세요.")
                     return {"status":"cancelled"}
             if not registration.save_boxes(self,regions):
@@ -338,10 +339,11 @@ class ResourceTab(QWidget):
         latest = config._read_local_config()
         for k in self._region_keys:
             name,field,_ = registration.REGIONS[k]
-            if latest.get(name,{}).get(field) != before.get(name,{}).get(field):
+            if section(latest,name).get(field) != section(before,name).get(field):
                 registration.warn(self,"영역 변경됨","확인 중 영역이 변경됐습니다. 다시 시도하세요.")
                 return
-            latest.setdefault(name,{})[field] = None
+            latest[name] = dict(section(latest,name))
+            latest[name][field] = None
         try:
             config._write_local_config(latest)
         except OSError:
