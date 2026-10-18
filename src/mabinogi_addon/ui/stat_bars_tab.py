@@ -14,7 +14,7 @@ from __future__ import annotations
 import time
 
 import numpy as np
-from PySide6.QtCore import QPoint, Qt, QTimer
+from PySide6.QtCore import QPoint, QSize, Qt, QTimer
 from PySide6.QtGui import QGuiApplication, QImage, QPixmap
 from PySide6.QtWidgets import (
     QComboBox,
@@ -69,6 +69,34 @@ HELP_HTML = """
 클릭도 통과합니다. 배율로 크기를 바꿀 수 있습니다.</li>
 </ol>
 """
+
+
+class _DisplayPreview(QScrollArea):
+    """Keep the actual output size, but let the surrounding group constrain the viewport."""
+
+    def sizeHint(self):
+        body = self.widget()
+        if body is None:
+            return super().sizeHint()
+        return QSize(body.sizeHint().width(), self.height())
+
+    def minimumSizeHint(self):
+        return QSize(0, self.height())
+
+    def fit_content(self):
+        body = self.widget()
+        if body is None:
+            return
+        body.adjustSize()
+        height = body.sizeHint().height()
+        if body.width() > self.viewport().width():
+            height += self.horizontalScrollBar().sizeHint().height()
+        self.setFixedHeight(height)
+        self.updateGeometry()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.fit_content()
 
 
 class StatBarsTab(QWidget):
@@ -209,7 +237,7 @@ class StatBarsTab(QWidget):
         display_layout.addLayout(self.placement_row)
 
         display_layout.addWidget(QLabel("표시 미리보기"))
-        self.display_preview = QScrollArea()
+        self.display_preview = _DisplayPreview()
         self.display_preview.setFrameShape(QScrollArea.Shape.NoFrame)
         self.display_preview.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         preview_body = QWidget()
@@ -307,12 +335,7 @@ class StatBarsTab(QWidget):
         return box
 
     def _resize_display_preview(self):
-        body = self.display_preview.widget()
-        body.adjustSize()
-        width = min(body.sizeHint().width(),max(120,self.width()-48))
-        self.display_preview.setFixedWidth(width)
-        self.display_preview.setFixedHeight(body.sizeHint().height()+
-            (self.display_preview.horizontalScrollBar().sizeHint().height() if body.width()>width else 0))
+        self.display_preview.fit_content()
 
     def resizeEvent(self,event):
         super().resizeEvent(event)

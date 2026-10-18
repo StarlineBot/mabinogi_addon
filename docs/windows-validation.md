@@ -77,6 +77,16 @@ shutdown/close하며 자식 타이머를 정지하고 DeferredDelete를 처리�
 오디오 경계만 사용해 제품의 실제 종료 분기를 그대로 실행한다.
 실패를 없애기 위한 assertion 완화나 Windows 테스트 skip 추가는 금지한다.
 
+## 설정 레이아웃 변경의 로컬 회귀
+
+그룹/스크롤/위젯 재부모화와 공통 명령 변경에는 새 화면 검사뿐 아니라 기존 탐색·안내·
+폭 검사를 포함한다. `tests/test_wrapping_controls.py`, `tests/test_tuarim_settings_width.py`,
+`tests/test_navigation_all_widths.py`, `tests/test_tour_layout.py`와 체력바 미리보기 변경 시
+`tests/test_stat_preview_width.py`를 함께 실행한다. 기본/큰 글꼴, 좁고 짧은 작업 영역,
+좌측 모니터, 진단 펼침, 큰 출력 배율과 설정 불변성을 확인한다.
+접힌 개별 컨트롤은 펼친 뒤 검사하되 실제 기본 공통 명령의 가시성도 반드시 검사한다.
+Linux 통과를 실제 Windows 글꼴/DPI 통과로 대신하지 않으며 일반 푸시 자동 실행 정책은 바꾸지 않는다.
+
 ## 업로드와 검증 결과 분리
 
 릴리즈의 exe 생성은 다운로드 업로드와 독립적인 필수 검증이다. 사전 검증에서는

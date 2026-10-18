@@ -33,9 +33,14 @@ def test_windows_minimum_widths_wrap_and_restore_without_state_changes(window, k
     scroll = w._combat_pages[key]
     for _ in range(8):
         app.processEvents()
-    label = panel.region_row.itemAt(0, QFormLayout.ItemRole.LabelRole).widget()
-    commands = panel.region_row.itemAt(0, QFormLayout.ItemRole.FieldRole).widget()
-    assert commands.y() >= label.y() + label.height()
+    primary = panel.region_row.itemAt(0, QFormLayout.ItemRole.LabelRole).widget()
+    auxiliary = panel.region_row.itemAt(0, QFormLayout.ItemRole.FieldRole).widget()
+    # Registration information is a separate row; these are now two command groups.
+    assert panel.region_label.y() + panel.region_label.height() <= primary.y()
+    panel.clear_region_btn.setMinimumWidth(300)
+    for _ in range(8):
+        app.processEvents()
+    assert auxiliary.y() >= primary.y() + primary.height()
     assert scroll.horizontalScrollBar().maximum() == 0
     for control in panel.findChildren(QAbstractButton) + panel.findChildren(QAbstractSpinBox) + panel.findChildren(QComboBox):
         if not control.isVisible():
@@ -53,6 +58,7 @@ def test_windows_minimum_widths_wrap_and_restore_without_state_changes(window, k
     assert w.grab().save(str(out / f"{key}-windows-width.png"))
     for control in before:
         control.setMinimumWidth(0)
+    panel.clear_region_btn.setMinimumWidth(0)
     if key == "stat_bars":
         for control in (panel.lock_all_btn, panel.unlock_all_btn, *panel._alert_checks.values(), *panel._alert_spins.values()):
             control.setMinimumWidth(0)
@@ -62,6 +68,7 @@ def test_windows_minimum_widths_wrap_and_restore_without_state_changes(window, k
         widget.setFont(font)
     for _ in range(8):
         app.processEvents()
-    assert commands.y() == label.y()
+    assert auxiliary.y() == primary.y()
+    assert panel.region_label.y() + panel.region_label.height() <= primary.y()
     assert (panel.region_btn, panel.auto_find_btn, panel.view_region_btn) == before
     assert config._read_local_config() == saved

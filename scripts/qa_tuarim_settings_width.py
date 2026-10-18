@@ -4,7 +4,7 @@ from pathlib import Path, PureWindowsPath
 import sys
 
 import pytest
-from PySide6.QtCore import QPoint
+from PySide6.QtCore import QPoint, QRect
 from PySide6.QtWidgets import QWidget
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -36,13 +36,20 @@ def test_auto_find_button_remains_inside_viewport(window, path, registered, tmp_
     print({"path":str(tab._shot_dir), "registered":registered, "viewport":view.width(), "tab":tab.width(),
            "min_hint":tab.minimumSizeHint().width(), "range":scroll.horizontalScrollBar().maximum(),
            "label_width":tab.collect_label.width(), "label_min_hint":tab.collect_label.minimumSizeHint().width()})
-    for name in ("auto_find_btn", "collect_chk", "open_dir_btn", "region_btn"):
-        widget = getattr(tab,name)
-        point = widget.mapTo(view,QPoint())
-        print(name, point.x(),widget.width(),"right",point.x()+widget.width(),"visible",widget.isVisible())
-    button = tab.auto_find_btn
-    if button.mapTo(view, QPoint()).x() + button.width() > view.width():
-        target = tmp_path / "tuarim-width.png"
-        assert w.grab().save(str(target))
-        print({"failure_image": str(target)})
-    assert button.mapTo(view, QPoint()).x() + button.width() <= view.width()
+    resource = w.resource_tab
+    for expanded in (False, True):
+        resource.individual_btn.setChecked(expanded)
+        controls = [getattr(resource, name) for name in
+                    ("auto_find_btn", "region_btn", "view_region_btn", "clear_region_btn")]
+        if expanded:
+            controls += [getattr(tab, name) for name in
+                         ("region_btn", "view_region_btn", "clear_region_btn")]
+        for button in controls:
+            assert button.isVisible()
+            scroll.ensureWidgetVisible(button)
+            for _ in range(8):
+                app.processEvents()
+            rect = QRect(button.mapTo(view, QPoint()), button.size())
+            assert view.rect().contains(rect), (button.text(), rect, view.rect())
+            assert button.visibleRegion().contains(button.rect())
+        assert scroll.horizontalScrollBar().maximum() == 0
