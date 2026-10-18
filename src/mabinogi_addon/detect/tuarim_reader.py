@@ -61,6 +61,7 @@ _REFS = _load_refs()
 _PERCENT = image_io.imread(_REFS_PATH.parent / "percent.png", cv2.IMREAD_GRAYSCALE)
 _PERCENT_PLAIN = image_io.imread(_REFS_PATH.parent / "percent_plain.png", cv2.IMREAD_GRAYSCALE)
 _PERCENT_MIN = 0.65
+_THIN_ONE = image_io.imread(_REFS_PATH.parent / "thin_one.png", cv2.IMREAD_GRAYSCALE)
 
 
 def _binarize(v: np.ndarray) -> np.ndarray:
@@ -147,12 +148,30 @@ def _read_padded(region: np.ndarray, threshold: float) -> int | None:
             hd, hs = _classify(_norm(_cell(v, r, (_ONES[0] - 2 * pitch, _ONES[1] - 2 * pitch))), Ro, Lo)
             if od == 0 and td == 0 and hd == 1 and min(os, ts) >= 0.65 and hs >= 0.60:
                 return None
-        td, ts = _classify(_norm(_cell(v, r, _TENS)), Rt, Lt)
-        if td is not None and ts >= max(threshold, _TENS_NCC_MIN):
-            readings.append((os, td * 10 + od))
-        else:
-            readings.append((os, od))
-    return max(readings)[1] if readings else None
+        readings.append((os, r, od))
+    if not readings:
+        return None
+    os, r, od = max(readings)
+    binary = _binarize(v)
+    tens_binary = _cell(binary, r, _TENS)
+    ink = int(np.count_nonzero(tens_binary))
+    # Border-only highlights belong to scenery/gauge edges, not a digit body.
+    if ink == 0 or not np.any(tens_binary[2:-2,1:-1]):
+        return od
+    cell = _cell(v, r, _TENS)
+    td, ts = _classify(_norm(cell), Rt, Lt)
+    if ink >= _TENS_INK_MIN:
+        return td * 10 + od if td is not None and ts >= max(threshold,_TENS_NCC_MIN) else None
+    # Sparse ink can be a faint 1, not proof that the tens digit is absent.
+    if os < max(threshold,_THIN_ONES_NCC_MIN):
+        return None
+    if td == 1 and ts >= max(threshold,_TENS_NCC_MIN):
+        return 10 + od
+    if _THIN_ONE is not None and _THIN_ONE.shape == (CH,CW):
+        score = float(_norm(cell) @ _norm(_THIN_ONE) / (CH * CW))
+        if score >= max(threshold,0.90):
+            return 10 + od
+    return None
 
 
 def read_percent(
