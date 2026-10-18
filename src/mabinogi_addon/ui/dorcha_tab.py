@@ -46,6 +46,7 @@ class DorchaTab(QWidget):
         self._search_worker = None
         self._search_epoch = 0
         self._next_search = 0.0
+        self._next_region_probe = 0.0
         self._search_backoff = 2.0
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12,12,12,12)
@@ -251,7 +252,20 @@ class DorchaTab(QWidget):
         from .dpi import to_physical
         self._ensure_overlay()
         box = self._live_box or to_physical(self._region)
-        target = None if self._tracking_lost else self._search_target()
+        probe_due = (self._tracking_lost and self._search_worker is None
+                     and self._watcher.is_game_active() and monotonic() >= self._next_region_probe)
+        target = self._search_target() if not self._tracking_lost or probe_due else None
+        recovered = None
+        if probe_due:
+            self._next_region_probe = monotonic() + 2.0
+            registered = to_physical(self._region)
+            # Recovery must remain a small ROI check, not a second full search.
+            if (target is not None and registered[2]*registered[3] <= 16_384
+                    and self._inside_target(registered,target)):
+                recovered = self._verify_registered_region(registered,target)
+                if recovered is not None:
+                    box = recovered
+                    self._tracking_lost = False
         if not self._tracking_lost and (
                 (self._live_target is not None and target != self._live_target)
                 or (target is not None and not self._inside_target(box,target))):
@@ -259,11 +273,12 @@ class DorchaTab(QWidget):
             self._tracking_lost = True
         value = None
         frame = None
-        if (not self._tracking_lost and target is not None and self._live_target is None
+        if (recovered is None and not self._tracking_lost and target is not None and self._live_target is None
                 and self._approved_target != target):
             verified = self._verify_registered_region(box,target)
             if verified is None:
                 self._tracking_lost = True
+                self._next_region_probe = monotonic() + 2.0
             else:
                 box = verified
         if not self._tracking_lost:
@@ -318,6 +333,7 @@ class DorchaTab(QWidget):
         self._live_box = None
         self._live_target = None
         self._approved_target = None
+        self._next_region_probe = 0.0
         self._next_search = 0.0
         self._search_backoff = 2.0
         if self._search_worker is not None:
