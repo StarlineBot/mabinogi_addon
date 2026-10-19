@@ -40,8 +40,9 @@ def test_qt_display_and_real_coverage_remain_separate(window, app, region_model,
     monkeypatch.setattr(api, "OpenProcess", open_process, raising=False)
     monkeypatch.setitem(sys.modules, "win32process", SimpleNamespace(
         GetWindowThreadProcessId=lambda hwnd: (1, 818),
-        QueryFullProcessImageName=lambda *args: r"C:\private\overlay.exe",
     ))
+    # Native query signatures/exports are checked separately, not invented here.
+    monkeypatch.setattr(visibility, '_process_basename', lambda handle:'overlay.exe')
     dialogue = window.creator_dialogue
     dialogue.timer.stop()
     dialogue.visibility = visibility.exposed

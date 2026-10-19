@@ -80,7 +80,13 @@ def registered(app, settings, monkeypatch):
 
 
 def controller(w, key):
+    if key == 'halo_timer':
+        return w.boss_tab.halo_capture
     return getattr(w, {"stat_bars": "stat_bars_tab"}.get(key, key + "_tab"))
+
+
+def clear_control(tab, key):
+    return tab.clear_btn if key == 'halo_timer' else tab.clear_region_btn
 
 
 @pytest.mark.parametrize("key", REGIONS)
@@ -90,13 +96,17 @@ def test_clear_only_removes_its_region_and_preserves_options(panels, monkeypatch
     before = deepcopy(config._read_local_config())
     name, field, _ = REGIONS[key]
     monkeypatch.setattr(region_registration, "confirm_clear", lambda *args: QMessageBox.StandardButton.Yes)
-    tab.clear_region_btn.click()
+    if key == 'halo_timer':
+        tab._clock.arm()
+        tab.warn_lock.click()
+        assert tab._warning.isVisible()
+    clear_control(tab, key).click()
     expected = deepcopy(before)
     expected[name][field] = None
     assert config._read_local_config() == expected
-    if key in ("buff", "debuff", "boss", "stat_bars", "skillbar"):
+    if key in ("buff", "debuff", "boss", "halo_timer", "stat_bars", "skillbar"):
         assert not setup_state.enabled(key)
-    if key in ("dorcha", "tuarim", "stat_bars", "boss"):
+    if key in ("dorcha", "tuarim", "stat_bars", "boss", 'halo_timer'):
         assert tab._region is None
     if key == "skillbar":
         assert tab._anchor is None
@@ -107,6 +117,9 @@ def test_clear_only_removes_its_region_and_preserves_options(panels, monkeypatch
     if key == "boss":
         assert not w.boss_tab.is_boss_present()
         assert not w.boss_tab._overlay.isVisible()
+    if key == 'halo_timer':
+        assert not tab._clock.armed and not tab._warning.isVisible()
+        assert not tab._countdown.isVisible()
 
 
 @pytest.mark.parametrize("key", REGIONS)
@@ -119,14 +132,20 @@ def test_failed_or_cancelled_clear_preserves_disk_and_memory(panels, monkeypatch
     warnings = []
     monkeypatch.setattr(region_registration, "confirm_clear", lambda *a: QMessageBox.StandardButton.No if failure == "cancel" else QMessageBox.StandardButton.Yes)
     monkeypatch.setattr(region_registration, "warn", lambda *a: warnings.append(a))
+    monkeypatch.setattr(QMessageBox, "warning", lambda *a: warnings.append(a))
     if failure == "permission":
         def denied(*a, **k):
             raise PermissionError("read only")
         monkeypatch.setattr(config, "_write_local_config", denied)
-    tab.clear_region_btn.click()
+    clear_control(tab, key).click()
     assert config._read_local_config() == before
     assert getattr(tab, "_region", getattr(tab, "_anchor", None)) == region
-    assert bool(warnings) == (failure == "permission")
+    if key == 'halo_timer':
+        assert not warnings
+        if failure == 'permission':
+            assert '저장하지 못' in tab.state.text() and '기존 영역' in tab.state.text()
+    else:
+        assert bool(warnings) == (failure == "permission")
 
 
 def test_selection_changes_no_execution_option_or_region(registered):

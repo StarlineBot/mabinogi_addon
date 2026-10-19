@@ -50,16 +50,20 @@ def _region_overlap(gui, hwnd, targets, detail):
     """Return None without positive region evidence; always release the temporary GDI region."""
     region = None
     try:
-        region = gui.CreateRectRgn(0, 0, 0, 0)
+        region = gui.CreateRectRgnIndirect((0, 0, 0, 0))
         kind = gui.GetWindowRgn(hwnd, region)
         detail["region_type"] = kind
         if kind == 1:  # NULLREGION: explicitly empty, unlike ERROR (no region information).
+            detail['region_evidence'] = 'empty'
             return False
         if kind not in (2, 3):
+            detail['region_evidence'] = 'unavailable'
             return None
         x, y, _, _ = gui.GetWindowRect(hwnd)
         # Window regions are relative to GetWindowRect, not the DWM extended frame.
-        return any(gui.RectInRegion(region, (l-x, t-y, r-x, b-y)) for l, t, r, b in targets)
+        overlap = any(gui.RectInRegion(region, (l-x, t-y, r-x, b-y)) for l, t, r, b in targets)
+        detail['region_evidence'] = 'intersects' if overlap else 'outside'
+        return overlap
     except Exception as exc:
         detail["region_error"] = type(exc).__name__
         return None
@@ -71,17 +75,40 @@ def _region_overlap(gui, hwnd, targets, detail):
                 detail["region_cleanup_error"] = type(exc).__name__
 
 
+def _process_basename(handle):
+    """Query a limited-information process handle without exposing its full path."""
+    import ctypes
+    from ctypes import wintypes
+    from pathlib import PureWindowsPath
+
+    if not hasattr(ctypes, 'WinDLL'):
+        raise OSError('Windows process query unavailable')
+    kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+    query = kernel.QueryFullProcessImageNameW
+    query.argtypes = [wintypes.HANDLE, wintypes.DWORD, wintypes.LPWSTR,
+                      ctypes.POINTER(wintypes.DWORD)]
+    query.restype = wintypes.BOOL
+    buffer = ctypes.create_unicode_buffer(32768)
+    length = wintypes.DWORD(len(buffer))
+    if not query(wintypes.HANDLE(int(handle)), 0, buffer, ctypes.byref(length)):
+        raise ctypes.WinError(ctypes.get_last_error())
+    return PureWindowsPath(buffer.value).name
+
+
 def _blocker_identity(gui, hwnd, detail):
     """Best-effort manual-click diagnostics; no title, full path, cache or process IPC."""
+    stage = 'window_pid'
     try:
         import win32api
         import win32process
-        from pathlib import PureWindowsPath
         _, pid = win32process.GetWindowThreadProcessId(hwnd)
         detail["blocker_pid"] = pid
+        stage = 'open_process'
         handle = win32api.OpenProcess(0x1000, False, pid)
         try:
-            basename = PureWindowsPath(win32process.QueryFullProcessImageName(handle, 0)).name
+            stage = 'query_image'
+            basename = _process_basename(handle)
+            stage = 'recheck_pid'
             same_pid = win32process.GetWindowThreadProcessId(hwnd)[1] == pid
         finally:
             handle.Close()
@@ -92,6 +119,10 @@ def _blocker_identity(gui, hwnd, detail):
             detail["identity_changed"] = True
     except Exception as exc:
         detail["identity_error"] = type(exc).__name__
+        detail['identity_stage'] = stage
+        code = getattr(exc,'winerror',None)
+        if isinstance(code,int):
+            detail['identity_winerror'] = code
 
 
 def exposed(hwnd: int, local_rects: list, logical_size: tuple[int, int], *, diagnostic=None,

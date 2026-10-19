@@ -16,7 +16,8 @@ def region_model(native_model, monkeypatch):
     state.rectangles = [(1000, 1000, 1100, 1100)]
     state.live = set()
     state.next_handle = 0
-    def create(*args):
+    def create(rect):
+        assert rect == (0,0,0,0)
         state.next_handle += 1
         state.live.add(state.next_handle)
         return state.next_handle
@@ -27,7 +28,7 @@ def region_model(native_model, monkeypatch):
         assert handle in state.live
         return any(max(rect[0], c[0]) < min(rect[2], c[2]) and
                    max(rect[1], c[1]) < min(rect[3], c[3]) for c in state.rectangles)
-    monkeypatch.setattr(gui, "CreateRectRgn", create, raising=False)
+    monkeypatch.setattr(gui, "CreateRectRgnIndirect", create, raising=False)
     monkeypatch.setattr(gui, "GetWindowRgn", region, raising=False)
     monkeypatch.setattr(gui, "RectInRegion", intersects, raising=False)
     monkeypatch.setattr(gui, "DeleteObject", lambda handle: state.live.remove(handle), raising=False)
@@ -115,7 +116,8 @@ def test_process_identity_only_on_explicit_diagnostic_and_handles_close(region_m
     monkeypatch.setattr(sys.modules["win32api"], "OpenProcess", open_process, raising=False)
     monkeypatch.setitem(sys.modules, "win32process", SimpleNamespace(
         GetWindowThreadProcessId=lambda hwnd: (1, 123),
-        QueryFullProcessImageName=lambda *args: r"C:\Users\private\overlay.exe"))
+    ))
+    monkeypatch.setattr(visibility, '_process_basename', lambda handle:'overlay.exe')
     assert not visibility.exposed(11, [(20, 20, 48, 48)], (800, 800))
     assert not handles
     detail = {}
@@ -135,11 +137,12 @@ def test_identity_failure_does_not_escape_or_misattribute(region_model, monkeypa
     def query(*args):
         if failure == "query":
             raise OSError("private path")
-        return r"C:\private\old.exe"
+        return 'old.exe'
     monkeypatch.setattr(sys.modules["win32api"], "OpenProcess",
                         lambda *args: SimpleNamespace(Close=lambda: closed.append(True)), raising=False)
     monkeypatch.setitem(sys.modules, "win32process", SimpleNamespace(
-        GetWindowThreadProcessId=lambda hwnd: (1, next(pids)), QueryFullProcessImageName=query))
+        GetWindowThreadProcessId=lambda hwnd: (1, next(pids))))
+    monkeypatch.setattr(visibility, '_process_basename', query)
     detail = {}
     assert not visibility.exposed(11, [(20, 20, 48, 48)], (800, 800),
                                   diagnostic=detail, diagnose=True)
@@ -150,3 +153,34 @@ def test_identity_failure_does_not_escape_or_misattribute(region_model, monkeypa
         assert "blocker_pid" not in detail and detail["identity_changed"]
     else:
         assert detail["identity_error"] == "OSError"
+
+
+def test_region_creator_uses_only_the_real_export():
+    calls,closed=[],[]
+    gui=SimpleNamespace(CreateRectRgnIndirect=lambda rect:calls.append(rect) or 7,
+                        GetWindowRgn=lambda hwnd,region:1,DeleteObject=lambda region:closed.append(region))
+    assert visibility._region_overlap(gui,22,[(20,20,68,68)],{}) is False
+    assert calls==[(0,0,0,0)] and closed==[7]
+
+
+@pytest.mark.parametrize('success',[True,False])
+def test_query_image_native_signature_and_64bit_handle(monkeypatch,success):
+    import ctypes
+    from ctypes import wintypes
+    calls=[]
+    class Query:
+        def __call__(self,handle,flags,buffer,length):
+            calls.append((handle.value,flags))
+            assert self.argtypes==[wintypes.HANDLE,wintypes.DWORD,wintypes.LPWSTR,ctypes.POINTER(wintypes.DWORD)]
+            assert self.restype is wintypes.BOOL
+            buffer.value=r'C:\Users\private\가림.exe'
+            return success
+    query=Query()
+    monkeypatch.setattr(ctypes,'WinDLL',lambda name,**kw:SimpleNamespace(QueryFullProcessImageNameW=query),raising=False)
+    monkeypatch.setattr(ctypes,'get_last_error',lambda:5,raising=False)
+    monkeypatch.setattr(ctypes,'WinError',lambda code:OSError(code,'controlled'),raising=False)
+    if success:
+        assert visibility._process_basename(0x1234567887654321)=='가림.exe'
+    else:
+        with pytest.raises(OSError): visibility._process_basename(0x1234567887654321)
+    assert calls==[(0x1234567887654321,0)]

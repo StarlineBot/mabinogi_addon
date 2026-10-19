@@ -15,7 +15,7 @@ from ..version import __version__
 from ..detect.halo_timer import read_seconds
 from ..tracker.halo import HaloTracker
 from .dpi import to_physical
-from .region_registration import connect_selection, confirm_clear
+from .region_registration import connect_selection
 from .settings_layout import disclosure
 from .widgets import CapturePathLabel, checkbox, wrapping_row
 
@@ -473,6 +473,7 @@ class HaloCaptureSection(QWidget):
         if not self._allowed() or not self._region:
             return
         from PySide6.QtWidgets import QMessageBox
+        from .region_registration import confirm_clear
         stamp = self._region_generation
         if (confirm_clear(self, "시간 영역 지정 해제", "시간 영역만 해제합니다. 기존 수집 파일과 보스 체력바 설정은 유지합니다.")
                 != QMessageBox.StandardButton.Yes or not self._allowed() or stamp != self._region_generation):
