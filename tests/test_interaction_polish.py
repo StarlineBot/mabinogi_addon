@@ -2,10 +2,11 @@
 
 from copy import deepcopy
 import pytest
-from PySide6.QtCore import QPoint, QRect, Qt, QTimer
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QColor, QPalette
 from PySide6.QtWidgets import QApplication, QAbstractButton, QPushButton, QWidget
 from test_navigation import window
+from test_support.scroll_visibility import assert_control_reachable
 from mabinogi_addon import config
 from mabinogi_addon.ui.buff_tab import ANCHOR_ID
 from mabinogi_addon.ui.settings_layout import LOCK_STYLE
@@ -213,10 +214,7 @@ def test_eight_actual_pages_render_without_overflow_or_writes(window, font_size,
             for control in page.widget().findChildren(QAbstractButton):
                 if not control.isVisible():
                     continue
-                page.ensureWidgetVisible(control)
-                settle(app)
-                rect = QRect(control.mapTo(page.viewport(), QPoint()), control.size())
-                assert page.viewport().rect().contains(rect), (key, control.text(), rect)
+                assert_control_reachable(control, app, key)
             page.verticalScrollBar().setValue(0)
             settle(app)
             assert w.grab().save(str(tmp_path / f"{key}-{font_size}-{'dark' if dark else 'light'}.png"))

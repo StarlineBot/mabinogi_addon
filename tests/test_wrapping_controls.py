@@ -5,10 +5,10 @@ from copy import deepcopy
 from pathlib import Path
 
 import pytest
-from PySide6.QtCore import QPoint, QRect
 from PySide6.QtWidgets import QAbstractButton, QAbstractSpinBox, QComboBox, QFormLayout, QWidget
 
 from test_navigation import window
+from test_support.scroll_visibility import assert_control_reachable
 from mabinogi_addon import config
 
 
@@ -45,11 +45,7 @@ def test_windows_minimum_widths_wrap_and_restore_without_state_changes(window, k
     for control in panel.findChildren(QAbstractButton) + panel.findChildren(QAbstractSpinBox) + panel.findChildren(QComboBox):
         if not control.isVisible():
             continue
-        scroll.ensureWidgetVisible(control)
-        for _ in range(3):
-            app.processEvents()
-        rect = QRect(control.mapTo(scroll.viewport(), QPoint()), control.size())
-        assert scroll.viewport().rect().contains(rect), (key, control, rect)
+        assert_control_reachable(control, app, key)
         assert control.font().pixelSize() == 20
     out = Path(os.environ.get("INTERACTION_RENDER_DIR", str(tmp_path)))
     out.mkdir(exist_ok=True)

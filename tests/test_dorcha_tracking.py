@@ -85,9 +85,22 @@ def moving(monkeypatch):
 def drain(app,tab):
     deadline = monotonic()+5
     while tab._search_worker is not None and monotonic()<deadline:
-        QTest.qWait(10)
-        app.processEvents()
+        loop = QEventLoop()
+        QTimer.singleShot(10,loop.quit)
+        loop.exec()
     assert tab._search_worker is None
+
+
+def test_drain_dispatches_worker_without_qtest_busy_wait(moving,monkeypatch):
+    app,tab,state,_ = moving
+    release = held_worker(monkeypatch)
+    place(state,150,90)
+    tab._tick()
+    assert tab._search_worker is not None
+    monkeypatch.setattr(QTest,'qWait',lambda *a:pytest.fail('worker wait must use the Qt event loop'))
+    release.set()
+    drain(app,tab)
+    assert tab._overlay.value == 15
 
 
 def place(state,x,y):
