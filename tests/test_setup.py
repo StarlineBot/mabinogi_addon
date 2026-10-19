@@ -936,7 +936,7 @@ def test_guide_defer_back_and_reset_never_change_saved_configuration(app, settin
         page.reset()
         assert page.stage == 0 and not page.outcomes
         assert config._read_local_config() == before
-        assert set(page.checks) == {"buff", "debuff", "boss", "tuarim", "dorcha", "stat_bars", "skillbar"}
+        assert set(page.checks) == {"buff", "debuff", "boss", 'halo_timer', "tuarim", "dorcha", "stat_bars", "skillbar"}
     finally:
         page.close()
 

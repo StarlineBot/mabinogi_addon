@@ -84,7 +84,7 @@ def test_editing_overlays_are_cleaned_on_lifecycle_boundary(window, monkeypatch,
     s.countdown_lock.click()
     assert s._warning.isVisible() and s._countdown.isVisible()
     if stop_reason == 'access':
-        monkeypatch.setattr(config, 'load_discord_user', lambda: {'id':'ordinary'})
+        monkeypatch.setattr(config, 'load_discord_user', lambda: None)
         s._tick()
     elif stop_reason == 'clear':
         s._persist(None)

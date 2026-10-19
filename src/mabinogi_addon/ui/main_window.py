@@ -466,13 +466,15 @@ class MainWindow(QMainWindow):
         self._pages.setCurrentWidget(self._tabs)
 
     def _open_setup_feature(self, key):
-        page = self._combat_pages.get("dorcha" if key == "tuarim" else key)
+        page = self._combat_pages.get('boss' if key == 'halo_timer' else "dorcha" if key == "tuarim" else key)
         if (page is None or self._setup_busy() or self._closing
                 or self._config_pending_restart or self._setup_flow.closed):
             return False
         self._pages.setCurrentWidget(self._tabs)
         self._tabs.setCurrentWidget(self._tracker_tabs)
         self._tracker_tabs.setCurrentWidget(page)
+        if key in ('boss','halo_timer'):
+            self.boss_tab.pattern_tabs.setCurrentIndex(1 if key == 'halo_timer' else 0)
         if key == "tuarim":
             page.ensureWidgetVisible(self.tuarim_tab.threshold_box)
         return True
@@ -589,6 +591,8 @@ class MainWindow(QMainWindow):
             config.save_boss_bar_region(*box)
             self.boss_tab.reload_region()
             self._on_boss_bar_region_changed()
+        elif key == 'halo_timer':
+            self.boss_tab.halo_capture._save_region(*box)
         elif key == "tuarim":
             self.tuarim_tab._apply_region(*box)
         elif key == "dorcha":
@@ -908,7 +912,7 @@ class MainWindow(QMainWindow):
 
         steps = [
             TourStep(self._tracker_tabs.tabBar(), "전투 보조",
-                     "버프·디버프·투아림과 자원 표시, 화면 배치 기능을 아래 탭에서 선택할 수 있어요.", before=go_tracker),
+                     "버프·디버프·투아림과 자원 표시, 보스 패턴·헤일로 알림을 아래 탭에서 선택할 수 있어요.", before=go_tracker),
             TourStep(self._convenience_tabs.tabBar(), "편의기능",
                      "분배금과 구슬 분배금, 구슬 교환 효율을 계산할 수 있어요.",
                      before=go_convenience),
@@ -1751,7 +1755,10 @@ class MainWindow(QMainWindow):
         if self._restoring or self._booting or self._config_pending_restart:
             return
         p = self.pos()
-        config.save_window_pos(p.x(), p.y())
+        try:
+            config.save_window_pos(p.x(), p.y())
+        except OSError:
+            _log.warning('창 위치를 저장하지 못했습니다. 종료 정리를 계속합니다.', exc_info=True)
 
     def hideEvent(self, event) -> None:
         tour = getattr(self, "_tour", None)

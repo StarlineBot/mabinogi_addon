@@ -117,8 +117,30 @@ def _save_debug_frame(frame: np.ndarray | None, offset: tuple[int, int]) -> None
         pass
 
 
-def capture_for_autofind(*, require_game=False, restore_allowed=None,
-                         restore_widget_allowed=None) -> tuple[np.ndarray | None, int, int]:
+def _grab_foreground_game():
+    """Strict opt-in capture: one registered foreground window, checked before/after."""
+    try:
+        import win32gui
+        from ..system.window_capture import registered_game_target
+        target = registered_game_target()
+        if target is None or win32gui.GetForegroundWindow()!=target[0] or win32gui.IsIconic(target[0]):
+            return None,0,0
+        hwnd,pid,left,top,width,height = target
+        image = _grab_mon(dict(left=left,top=top,width=width,height=height))
+        if (image is None or image.shape[:2]!=(height,width)
+                or registered_game_target(target)!=target or win32gui.GetForegroundWindow()!=hwnd
+                or win32gui.IsIconic(hwnd)):
+            return None,0,0
+        info = capture_info.get()
+        if info is not None:
+            info.update(game_target=list(target),game_hwnd=hwnd,game_pid=pid)
+        return image,left,top
+    except Exception:
+        return None,0,0
+
+
+def capture_for_autofind(*, require_game=False, strict_game=False, restore_allowed=None,
+                         restore_widget_allowed=None, capture_allowed=None) -> tuple[np.ndarray | None, int, int]:
     """자동 찾기용 캡처 — 우리 앱 창·오버레이를 잠깐 숨긴 뒤 게임만 찍는다.
 
     자동 찾기 버튼은 우리 창에 있어, 그냥 찍으면 앱 창/오버레이가 게임(보스바·상태목록창)을
@@ -154,9 +176,13 @@ def capture_for_autofind(*, require_game=False, restore_allowed=None,
                 info["mss_monitors"] = [dict(m) for m in _mss().monitors]
             except Exception as exc:
                 info["monitor_error"] = str(exc)
-        img, left, top = _grab_game_window()  # 게임 창 우선
+        require_game = require_game or strict_game
+        allowed = capture_allowed is None or capture_allowed()
+        img, left, top = None,0,0
+        if allowed:
+            img, left, top = _grab_foreground_game() if strict_game else _grab_game_window()
         used_game = img is not None
-        if img is None and not require_game:
+        if img is None and not require_game and allowed:
             img, left, top = grab_primary()  # 폴백: 가상 데스크톱 전체
         if info is not None:
             info.update(target="game_window" if used_game else "game_window_unavailable" if require_game else "virtual_desktop",

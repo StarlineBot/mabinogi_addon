@@ -14,6 +14,7 @@ REGIONS = {
     "buff": ("buffTracker", "captureRegion", "버프 판독"),
     "debuff": ("debuffTracker", "captureRegion", "디버프 판독"),
     "boss": ("bossPattern", "box", "공유 보스 체력바"),
+    'halo_timer': ('haloTimer','box','전투 제한 시간'),
     "stat_bars": ("statBars", "box", "체력·마나·스태미나 판독"),
     "skillbar": ("skillbar", "anchor", "단축바 원본"),
     "dorcha": ("dorcha", "box", "도르카 숫자 판독"),

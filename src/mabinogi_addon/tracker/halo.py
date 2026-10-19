@@ -27,6 +27,7 @@ class HaloTracker:
         self.confirm=[]
         self.fired=set()
         self.checked_at=None
+        self.restart_confirm=[]
 
     def arm(self):
         self.stop()
@@ -50,9 +51,19 @@ class HaloTracker:
         remaining=None if self.anchor is None else self.anchor[0]-(now-self.anchor[1])
         valid=eligible and type(raw) is int and 0<=raw<=900
         if remaining is not None and valid and raw>remaining+5:
-            # A restarted/foreign timer must not silently become a new battle.
-            self.stop()
-            return HaloState('stopped')
+            # One bad glyph must not rewind the battle or erase fired rounds.
+            if (self.restart_confirm and
+                    abs((self.restart_confirm[-1][0]-raw)-(now-self.restart_confirm[-1][1]))>1.25):
+                self.restart_confirm=[]
+            self.restart_confirm.append((raw,now))
+            self.restart_confirm=self.restart_confirm[-3:]
+            self.last_remaining=None
+            if (len(self.restart_confirm)==3 and now-self.restart_confirm[0][1]>=.75
+                    and self.restart_confirm[0][0]>raw):
+                self.stop()
+                return HaloState('stopped')
+            return HaloState('uncertain')
+        self.restart_confirm=[]
         if not valid or gap>5:
             self.confirm=[]
             self.last_remaining=None

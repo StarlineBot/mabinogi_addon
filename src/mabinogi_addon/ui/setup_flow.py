@@ -203,7 +203,11 @@ class SetupFlow:
                     window = page.window()
                     current["frame"], ox, oy = capture_for_autofind(
                         require_game=True, restore_allowed=lambda: not self.closed,
-                        restore_widget_allowed=lambda widget: widget is not window or generation == self._restore_generation)
+                        restore_widget_allowed=lambda widget: (widget is not window or generation == self._restore_generation)
+                            and (key != 'halo_timer' or widget not in
+                                 (window.boss_tab.halo_capture._warning,window.boss_tab.halo_capture._countdown)),
+                        **({'strict_game':True,'capture_allowed':lambda:not self.closed and not self.cancelled
+                            and config.load_discord_user() is not None} if key == 'halo_timer' else {}))
                     from ..autofind_diagnostics import capture_info
                     current["capture"] = dict(capture_info.get() or {})
                     if self.closed or self.cancelled or region_generation(key) != stamp:
@@ -227,9 +231,14 @@ class SetupFlow:
                         top = max(0, y - strip)
                         logical = to_logical(x + ox, top + oy, w, y + h - top)
                     approved = self._approve(key, logical)
+                    target_current = True
+                    if key == 'halo_timer':
+                        from ..system.window_capture import registered_game_target
+                        target = current.get('capture',{}).get('game_target')
+                        target_current = bool(target) and registered_game_target(tuple(target))==tuple(target)
                     if config.load_discord_user() is None:
                         self.cancel()
-                    if self.closed or self.cancelled or approved is None or region_generation(key) != stamp:
+                    if self.closed or self.cancelled or approved is None or region_generation(key) != stamp or not target_current:
                         outcome.update(status="cancelled_shutdown" if self.closed else "cancelled")
                     elif key not in pending(automatic_only=True, feature_keys=scope):
                         outcome.update(status="already_registered")

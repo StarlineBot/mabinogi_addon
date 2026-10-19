@@ -18,6 +18,10 @@ from . import version
 
 
 def detector_assets(feature: str) -> dict[str, np.ndarray]:
+    if feature == 'halo_timer':
+        from .detect.halo_timer import references
+        images,labels,_ = references()
+        return {f'digit_{int(label)}_{index}':image for index,(image,label) in enumerate(zip(images,labels))}
     if feature == "resources":
         from .detect.resource_pair import assets
         return assets()
@@ -57,6 +61,9 @@ def _digit_templates(assets: dict) -> dict[str, list[np.ndarray]]:
 
 def missing_required_assets(feature: str, assets: dict) -> list[str]:
     """필수 입력은 실제 로드 목록과 독립적으로 정의한다."""
+    if feature == 'halo_timer':
+        digits = _digit_templates(assets)
+        return [f'digit_{digit}' for digit in '0123456789' if digit not in digits]
     if feature == "resources":
         missing = {key:missing_required_assets(key,{n.removeprefix(key+'_'):v for n,v in assets.items() if n.startswith(key+'_')})
                    for key in ("dorcha","tuarim")}
@@ -93,6 +100,11 @@ def run_detector(feature: str, frame: np.ndarray, assets: dict, trace: dict):
     if missing:
         trace.update(rejection="missing_required_templates", missing_assets=missing)
         return None
+    if feature == 'halo_timer':
+        from .detect.halo_timer import locate_timer
+        digits = _digit_templates(assets)
+        images,labels = zip(*((image,int(digit)) for digit,refs in digits.items() for image in refs))
+        return locate_timer(frame,(np.stack(images),np.array(labels),None),trace)
     if feature == "resources":
         from .detect.resource_pair import locate_resources
         return locate_resources(frame,assets,trace)

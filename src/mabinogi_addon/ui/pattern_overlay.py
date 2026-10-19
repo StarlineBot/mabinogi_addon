@@ -36,7 +36,8 @@ _SAMPLE = "고목의 페타크 85% 패턴 준비"
 class PatternWarningOverlay(QWidget):
     moved = Signal()  # 드래그로 위치가 바뀜 → 저장
 
-    def __init__(self, *, sample: str = _SAMPLE) -> None:
+    def __init__(self, *, sample: str = _SAMPLE, font_scale: float = 1.0,
+                 bold: bool = True, text_color: str = '#FFD54A') -> None:
         super().__init__(
             None,
             Qt.WindowType.FramelessWindowHint
@@ -50,7 +51,9 @@ class PatternWarningOverlay(QWidget):
         self._sample = sample
         self._text = ""
         self._drag_offset = None
-        self._font_px = self._default_font_px()
+        self._font_px = max(1, round(self._default_font_px() * font_scale))
+        self._bold = bold
+        self._text_color = text_color
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)
         self._timer.timeout.connect(self._on_timeout)
@@ -111,7 +114,7 @@ class PatternWarningOverlay(QWidget):
     def _relayout(self) -> None:
         font = QFont()
         font.setPixelSize(self._font_px)
-        font.setBold(True)
+        font.setBold(self._bold)
         fm = QFontMetrics(font)
         text = self._display_text()
         tw = fm.horizontalAdvance(text) if text else fm.horizontalAdvance(self._sample)
@@ -160,7 +163,7 @@ class PatternWarningOverlay(QWidget):
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         font = QFont()
         font.setPixelSize(self._font_px)
-        font.setBold(True)
+        font.setBold(self._bold)
         fm = QFontMetrics(font)
         header = 0 if self._locked else _HEADER_H
 
@@ -194,6 +197,6 @@ class PatternWarningOverlay(QWidget):
         p.setBrush(Qt.BrushStyle.NoBrush)
         p.drawPath(path)
         p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(QColor("#FFD54A"))
+        p.setBrush(QColor(self._text_color))
         p.drawPath(path)
         p.end()

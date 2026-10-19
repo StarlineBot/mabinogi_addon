@@ -58,8 +58,22 @@ def test_missing_warning_is_not_replayed_on_recovery(reason):
 def test_jump_back_requires_new_battle_arming():
     clock=HaloTracker()
     sync(clock,800)
-    assert clock.observe(900,2).phase=='stopped'
+    assert clock.observe(900,2).phase=='uncertain'
+    assert clock.observe(900,2.5).phase=='uncertain'
+    assert clock.observe(899,3).phase=='stopped'
     assert not clock.armed
+
+
+def test_single_upward_misread_preserves_battle_and_fired_rounds():
+    clock=HaloTracker()
+    sync(clock)
+    assert clock.observe(898,2).warning==1
+    anchor=clock.anchor
+    assert clock.observe(900,8).phase=='uncertain'
+    assert clock.anchor==anchor and 1 in clock.fired and clock.armed
+    for now,raw in ((8.5,892),(9,891),(9.5,891)):
+        assert clock.observe(raw,now).warning is None
+    assert clock.armed and 1 in clock.fired
 
 
 def test_new_target_and_clock_reversal_stop_old_session():

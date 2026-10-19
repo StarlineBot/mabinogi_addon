@@ -27,6 +27,8 @@ FEATURES = (
             "도르카 숫자가 들어오는지 확인하세요. 투아림과 함께 선택하면 한 번에 찾습니다.",beta=True),
     Feature("boss", "보스 패턴 알림", "bossPattern", False,
             "보스 이름과 체력 비율이 모두 들어오는지 확인하세요."),
+    Feature('halo_timer', '1분 헤일로 알림', 'haloTimer', False,
+            '상단 타임어택의 분:초가 모두 들어오는지 확인하세요. 회한 보스 식별 후 안내합니다.', beta=True),
     Feature("stat_bars", "체력바", "statBars", False,
             "생명력·마나·스태미나가 들어오고 경험치 바는 빠졌는지 확인하세요.", beta=True),
     Feature("skillbar", "단축바", "skillbar", False,
@@ -63,7 +65,7 @@ def enabled(key, raw=None):
     feature = BY_KEY[key]
     if key == "memo":
         return valid_box(section(raw,"memoTracker").get("captureRegion"))
-    if key in ("buff", "debuff", "boss", "stat_bars", "skillbar"):
+    if key in ("buff", "debuff", "boss", "halo_timer", "stat_bars", "skillbar"):
         target = section(raw, feature.section)
         if key == "skillbar":
             anchor = target.get("anchor")
@@ -122,6 +124,9 @@ def remember_order(key, checked):
 def missing(key, raw=None):
     raw = config._read_local_config() if raw is None else raw
     target = section(raw, BY_KEY[key].section)
+    if key == 'halo_timer':
+        return ([] if valid_box(section(raw,'bossPattern').get('box')) else ['boss']) + (
+                [] if valid_box(target.get('box')) else ['halo_timer'])
     if key in ("buff", "debuff"):
         result = [] if valid_box(target.get("captureRegion")) else [key]
         general = section(raw, "general")

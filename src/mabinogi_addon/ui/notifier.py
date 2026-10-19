@@ -180,6 +180,14 @@ class SoundNotifier(QObject):
     def set_sounds(self, sounds: dict[str, Path]) -> None:
         self._sounds = dict(sounds)
 
+    def stop(self) -> None:
+        """Stop owned playback before feature revocation or shutdown."""
+        if self._player is not None:
+            try:
+                self._player.stop()
+            except Exception:
+                pass
+
     def play(self, buff_id: str) -> bool:
         """해당 버프 사운드 재생. 재생 시도하면 True."""
         if self._player is None:

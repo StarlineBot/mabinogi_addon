@@ -75,11 +75,11 @@ def references():
         return archive['images'].copy(),archive['labels'].copy(),archive['slots'].copy()
 
 
-def read_seconds(frame):
+def read_seconds(frame, *, templates=None):
     """Return a raw 0..900 second observation, or None on ambiguity/missing glyphs."""
     found = []
     try:
-        images,labels,slots = references()
+        images,labels,slots = references() if templates is None else templates
         for glyphs,box in cells(frame):
             digits = []
             for slot,glyph in enumerate(glyphs):
@@ -103,3 +103,32 @@ def read_seconds(frame):
     except (OSError,ValueError,KeyError,cv2.error):
         return None
     return found[0][0] if len(found)==1 else None
+
+
+def locate_timer(frame, templates, trace):
+    """One-shot search of the registered game's upper central quarter."""
+    if (not isinstance(frame,np.ndarray) or frame.ndim!=3 or frame.shape[2]!=3
+            or frame.dtype!=np.uint8 or not frame.size):
+        trace['rejection']='invalid_frame'
+        return None
+    height,width=frame.shape[:2]
+    left,right=width//4,3*width//4
+    bottom=min(max(1,height//4),1024*1024//max(1,right-left))
+    roi=frame[:bottom,left:right]
+    trace.update(search_region=[left,0,right-left,bottom],accept_score=.55,margin=.08,
+                 transforms=['upper-central game crop','bright-neutral mask','colon geometry','glyph IoU'],candidates=[])
+    found=[]
+    for glyphs,(x,y,w,h) in cells(roi):
+        pad=max(3,round(h/10))
+        x0,y0=max(0,x-pad),max(0,y-pad)
+        x1,y1=min(roi.shape[1],x+w+pad),min(bottom,y+h+pad)
+        value=read_seconds(roi[y0:y1,x0:x1],templates=templates)
+        box=(left+x0,y0,x1-x0,y1-y0)
+        trace['candidates'].append(dict(box=list(box),raw_seconds=value,
+                                        rejection=None if value is not None else 'unreadable_or_ambiguous'))
+        if value is not None:
+            found.append(box)
+    if len(found)!=1:
+        trace['rejection']='multiple_candidates' if len(found)>1 else 'no_readable_timer'
+        return None
+    return found[0]

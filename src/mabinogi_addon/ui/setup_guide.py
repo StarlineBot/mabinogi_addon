@@ -10,7 +10,7 @@ from ..setup_state import BY_KEY, selected as enabled, missing, section
 from .setup_page import CHOICE_TEXT, _label
 
 
-STAGES = ((), ("buff", "debuff", "boss"), ("tuarim", "dorcha", "stat_bars", "skillbar"))
+STAGES = ((), ("buff", "debuff", "boss", "halo_timer"), ("tuarim", "dorcha", "stat_bars", "skillbar"))
 GUIDE_KEYS = STAGES[1] + STAGES[2]
 
 
@@ -69,7 +69,7 @@ class SetupGuide(QWidget):
             self.checks[key] = check
         rows.addStretch(1)
         self.selection.setWidget(content)
-        self.selection.setFixedHeight(3 * check.height() + 2 * self.selection.frameWidth())
+        self.selection.setFixedHeight(4 * check.height() + 2 * self.selection.frameWidth())
         layout.addWidget(self.selection)
         self.run_btn = QPushButton("자동설정")
         self.run_btn.setMinimumHeight(34)

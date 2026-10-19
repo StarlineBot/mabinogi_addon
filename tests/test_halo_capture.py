@@ -51,7 +51,8 @@ def test_identified_hoehan_arms_automatically_and_other_boss_resets(window, monk
     section.set_boss_context(None)
     section._monitor(898)
     assert not section._warning.isVisible()
-    assert section._clock.last_remaining is None
+    assert section._clock.last_remaining == 898
+    assert section._countdown.isVisible()
     section.set_boss_context('lenen_miir')
     assert not section._clock.armed and section._clock.anchor is None
 
@@ -184,14 +185,15 @@ def test_creator_only_region_capture_and_stop(window,monkeypatch,tmp_path):
     session = section._session
     assert finish(session) == ''
     assert session.count == 1
-    user['id'] = 'ordinary'
+    user.clear()
     section._tick()
     assert section.isHidden() and not section.collect.isChecked()
     assert session.cancelled.is_set()
     assert section.preview.pixmap().isNull()
     assert not section._timer.isActive()  # fixture stops owned timers before test
     after = config._read_local_config()
-    assert {k:v for k,v in after.items() if k != 'haloTimer'} == before
+    assert {k:v for k,v in after.items() if k != 'haloTimer'} == {k:v for k,v in before.items() if k != 'haloTimer'}
+    assert after['haloTimer'].get('enabled') == before.get('haloTimer',{}).get('enabled')
     assert (session.path/'0001'/'frame.png').exists()
     section.shutdown()
     assert not section._timer.isActive()
@@ -268,9 +270,9 @@ def test_twenty_writes_leave_no_worker_and_metadata_stays_paired(tmp_path):
         assert session.thread is None
 
 
-def test_noncreator_never_captures_saved_region(window,monkeypatch):
+def test_logged_out_user_never_captures_saved_region(window,monkeypatch):
     w,_ = window
-    monkeypatch.setattr(config,'load_discord_user',lambda:{'id':'ordinary'})
+    monkeypatch.setattr(config,'load_discord_user',lambda:None)
     section = w.boss_tab.halo_capture
     section._region = dict(x=0,y=0,w=100,h=20)
     section._watcher = SimpleNamespace(is_game_active=lambda:True)
@@ -342,10 +344,11 @@ def test_creator_halo_layout_has_no_horizontal_scroll(window,monkeypatch,pixels)
     scroll = w._combat_pages['boss']
     scroll.ensureWidgetVisible(section)
     assert scroll.horizontalScrollBar().maximum() == 0
+    assert w.boss_tab.pattern_tabs.widget(1).horizontalScrollBar().maximum() == 0
     assert section.region_btn.isEnabled()
 
 
-def test_third_tabs_follow_creator_access_without_resetting_settings(window,monkeypatch):
+def test_third_tabs_follow_beta_access_without_resetting_settings(window,monkeypatch):
     w,app = window
     user = {'id':feature_access.CREATOR_DISCORD_ID}
     monkeypatch.setattr(config,'load_discord_user',lambda:user or None)
@@ -365,8 +368,11 @@ def test_third_tabs_follow_creator_access_without_resetting_settings(window,monk
     tabs.setCurrentIndex(1)
     user['id'] = 'ordinary'
     boss.halo_capture._tick()
-    assert not tabs.isTabVisible(1) and tabs.currentIndex() == 0
+    assert tabs.isTabVisible(1)
+    assert not boss.halo_capture.disclosure.isVisible()
     user.clear()
+    boss.halo_capture._tick()
+    assert not tabs.isTabVisible(1) and tabs.currentIndex() == 0
     boss._apply_collect_gate()
     assert not tabs.isTabVisible(1)
     assert config._read_local_config() == before

@@ -318,7 +318,7 @@ def perform_autofind(feature: str, capture, *, detect=None, assets=None, descrip
     try:
         raw = config._read_local_config()
         secrets = _secret_values(raw) + [v for k, v in os.environ.items() if _SECRET.search(k) and v]
-        related = ("buffTracker", "debuffTracker", "tuarim", "dorcha", "bossPattern", "statBars", "skillbar", "general")
+        related = ("buffTracker", "debuffTracker", "tuarim", "dorcha", "haloTimer", "bossPattern", "statBars", "skillbar", "general")
         metadata["settings"] = sanitize({k: raw[k] for k in related if k in raw}, secrets)
     except Exception as exc:
         metadata["settings_error"] = sanitize(str(exc), secrets)

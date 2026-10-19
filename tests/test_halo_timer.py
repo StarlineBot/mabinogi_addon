@@ -19,8 +19,8 @@ TIMES='''14:41 14:39 14:38 14:37 14:36 14:35 14:34 14:33 14:32 14:31
 ROOT=Path(__file__).resolve().parents[1]
 
 
-def frame(index):
-    with ZipFile(ROOT/'tests/data/0058.zip') as archive:
+def frame(index, filename='0058.zip'):
+    with ZipFile(ROOT/'tests/data'/filename) as archive:
         return cv2.imdecode(np.frombuffer(archive.read(f'{index:04}/frame.png'),np.uint8),cv2.IMREAD_COLOR)
 
 
@@ -50,3 +50,10 @@ def test_ambiguous_two_timers_are_rejected():
 @pytest.mark.parametrize('bad',[None,np.zeros((3,3),np.uint8),np.zeros((42,119,4),np.uint8)])
 def test_malformed_input_is_held(bad):
     assert read_seconds(bad) is None
+
+
+@pytest.mark.parametrize('index,expected',[(1,812),(28,779),(126,601),(533,76),
+                                         (534,74),(581,14),(582,13),(583,12),(589,5)])
+def test_live_timer_qa_visually_checked_samples(index,expected):
+    # Human-checked originals in the live QA; stored metadata is not used as truth.
+    assert read_seconds(frame(index,'0008.zip'))==expected

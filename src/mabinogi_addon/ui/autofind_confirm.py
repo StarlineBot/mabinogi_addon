@@ -8,7 +8,7 @@ from .region_highlight import RegionHighlight
 from .screen_grab import capture_for_autofind
 
 
-def confirm_autofind(tab, feature, label, apply, compatible=None):
+def confirm_autofind(tab, feature, label, apply, compatible=None, *, capture=None, allowed=None):
     from .region_registration import generation, editing_allowed
     stamp = generation(tab)
     if tab._autofind_busy or tab._shutting_down or not tab._logged_in():
@@ -36,7 +36,8 @@ def confirm_autofind(tab, feature, label, apply, compatible=None):
             "아니오를 누르면 기존 설정을 유지합니다.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No)
-        if answer == QMessageBox.StandardButton.Yes and editing_allowed(tab) and generation(tab) == stamp:
+        if (answer == QMessageBox.StandardButton.Yes and editing_allowed(tab) and generation(tab) == stamp
+                and (allowed is None or allowed())):
             try:
                 apply(*logical)
             except Exception as exc:
@@ -45,7 +46,7 @@ def confirm_autofind(tab, feature, label, apply, compatible=None):
             return {"status": "applied", "region_logical": list(logical)}
         return {"status": "cancelled", "region_logical": list(logical)}
     try:
-        frame, ox, oy, box = perform_autofind(feature, capture_for_autofind, confirm=confirm)
+        frame, ox, oy, box = perform_autofind(feature, capture or capture_for_autofind, confirm=confirm)
         if tab._shutting_down:
             return
         if frame is None:
