@@ -20,19 +20,13 @@ uv run mabinogi-addon
 ## 잊어버리기 쉬운 운영 규칙 (메인테이너용)
 
 ### 릴리즈 / 배포
-- **배포는 태그로 트리거된다.** `vX.Y.Z` 태그를 push하면 `release.yml`이 exe를 빌드하고
-  릴리즈 저장소의 `version.json`을 갱신 → 사용자 앱이 자동으로 새 버전을 감지한다.
-- **태그 달기 전에 반드시 `git fetch origin` 먼저.** 로컬 `origin/main`이 오래되면
-  엉뚱한(과거) 커밋에 태그가 찍힌다(예전에 한 번 겪음).
-- Windows에서도 한 번에 복사할 수 있도록 **세 명령을 하나의 코드 블록**으로 제공한다(`&&` 없이 줄바꿈):
-  ```bash
-  git fetch origin
-  git tag vX.Y.Z origin/main
-  git push origin vX.Y.Z
-  ```
-- **최신 태그 확인**: `git tag -l "v*" | sort -V | tail` → 그 다음 번호로 올린다.
-- 버전 문자열은 `src/mabinogi_addon/version.py`에 있지만 **개발 중엔 `0.0.0`**이고,
-  릴리즈 빌드가 태그에서 실제 버전을 주입한다. 직접 손대지 않는다.
+- 일반 main/태그 푸시는 Windows 검사·배포를 자동 실행하지 않는다.
+- `windows.yml` 수동 실행에서 확정 버전으로 전체 Windows 테스트·네이티브 검사·exe 빌드를 완료한다.
+- 독립 QA 뒤 사용자가 검증 SHA에 태그를 붙이고 `release.yml`을 수동 승인하면 **동일 exe**를 승격한다.
+  실행 ID·attempt·SHA·버전·해시가 다르거나 후보가 없거나 만료되면 게시하지 않는다.
+- 후보는 1일·최대 2개·각 200MiB 이하로 보관한다. 제품 변경 뒤에는 재검증한다.
+- 개발 소스의 `version.py`는 0.0.0을 유지하며 후보 빌드 때 확정 버전을 주입한다.
+- 한 번에 복사할 수 있는 사용자 명령과 실패 복구: [배포 절차](docs/windows-validation.md).
 
 ### 업데이트 노트
 - 새 버전 첫 실행 시 뜨는 노트는 `src/mabinogi_addon/assets/release_notes.md`에 있다.
@@ -50,7 +44,7 @@ uv run mabinogi-addon
 ## 시크릿 관리
 
 GitHub Actions 시크릿은 리포 **Settings → Secrets and variables → Actions**에서 넣는다.
-`release.yml`이 사용하며, 크게 **(A) exe에 구워 넣는 번들 시크릿**과 **(B) CI에서만 쓰는
+검증 `windows.yml`과 승격 `release.yml`이 나누어 사용하며, **(A) exe에 구워 넣는 번들 시크릿**과 **(B) CI에서만 쓰는
 배포 시크릿**으로 나뉜다.
 
 | 시크릿 | 분류 | 무엇을 하나 | 언제 쓰나 |
@@ -58,8 +52,8 @@ GitHub Actions 시크릿은 리포 **Settings → Secrets and variables → Acti
 | `NEXON_API_KEY` | A·번들 | 넥슨 오픈 API 호출 키 (**파티 모집** 조회) | 빌드 시 `_bundled.py`에 주입 → 배포 exe 런타임 |
 | `INQUIRY_WEBHOOK_URL` | A·번들 | **문의하기**를 Discord 웹훅으로 전송(모드메일 봇이 받아 작성자에게 DM relay) | 빌드 번들 |
 | `CONFIG_WEBHOOK_URL` | A·번들 | **설정 백업**(Discord DM 릴레이)용 웹훅 — 봇이 첨부된 설정을 작성자에게 DM | 빌드 번들 |
-| `RELEASES_TOKEN` | B·배포 | 공개 릴리즈 저장소 `mabinogi_addon-releases`에 push + GitHub Release 생성 | 태그(`vX.Y.Z`) push 시 |
-| `RELEASE_WEBHOOK_URL` | B·배포 | 새 릴리즈를 Discord **포럼에 새 글**로 공지 | 태그 push 후. **없으면 그 단계만 건너뜀**(릴리즈는 계속) |
+| `RELEASES_TOKEN` | B·배포 | 공개 릴리즈 저장소 `mabinogi_addon-releases`에 push + GitHub Release 생성 | 사용자 수동 승격 승인 시 |
+| `RELEASE_WEBHOOK_URL` | B·배포 | 새 릴리즈를 Discord **포럼에 새 글**로 공지 | 승격 완료 후. **없으면 공지만 생략** |
 
 **앱 런타임 탐색 순서**(번들 시크릿 A): `.env`/환경변수 → `config.local.json` → 번들값.
 즉 개발 중엔 `.env`에 넣고, 배포본은 번들값을 쓴다.

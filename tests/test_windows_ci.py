@@ -33,7 +33,8 @@ def report(**steps):
 
 def test_only_exact_sha_and_actual_required_steps_are_accepted():
     valid = report(**{"Isolated regression": "success", "Native Windows integration": "success",
-                      "Verify exe build": "success"})
+                      "Verify exe build": "success", "Seal verified candidate": "success",
+                      "Store verified candidate": "success"})
     assert ci.verify_report(valid, SHA, True) == 0
     with pytest.raises(RuntimeError, match="SHA"):
         ci.verify_report(valid, "b" * 40)
@@ -62,105 +63,77 @@ def test_wait_reads_details_and_reports_api_failure(monkeypatch):
         ci.wait(SHA, "owner/repo", timeout=1)
 
 
-def test_optional_upload_failure_is_visible_and_separate(tmp_path, monkeypatch, capsys):
+def test_storage_failure_is_visible_separate_and_blocks_deployment(tmp_path, monkeypatch, capsys):
     dest = tmp_path / "summary.md"
     monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(dest))
     ci.summary("success", "success", "success", "failure")
-    assert "Optional artifact upload" in dest.read_text(encoding="utf-8")
-    assert "::warning::" in capsys.readouterr().out
+    assert "Verified candidate storage" in dest.read_text(encoding="utf-8")
+    assert "deployment is blocked" in capsys.readouterr().out
 
 
-def test_release_and_validation_use_same_build_command():
+def workflow(name):
     import yaml
+    return yaml.load((ROOT / ".github/workflows" / name).read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
 
-    def workflow(name):
-        return yaml.load((ROOT / ".github/workflows" / name).read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
+
+def test_validation_is_manual_full_gate_with_mandatory_bounded_storage():
     main = workflow("windows.yml")
-    release = workflow("release.yml")
     assert set(main["on"]) == {"workflow_dispatch"}
-    inputs = main["on"]["workflow_dispatch"]["inputs"]
-    assert inputs["build_exe"]["type"] == "boolean"
-    assert inputs["build_exe"]["default"] == "false"
-    assert inputs["upload_exe"]["default"] == "false"
-    assert release["on"]["push"] == {"tags": ["v*"]}
-    main_steps = main["jobs"]["validate"]["steps"]
-    release_steps = release["jobs"]["build-windows"]["steps"]
-    assert "continue-on-error" not in release["jobs"]["build-windows"]
-    for steps in (main_steps, release_steps):
-        builds = [step for step in steps if step.get("id") == "build"]
-        assert len(builds) == 1 and "packaging/build_windows.py" in builds[0]["run"]
-        unit = next(step for step in steps if step.get("id") == "unit")
-        native = next(step for step in steps if step.get("id") == "native")
-        assert "not windows_integration" in unit["run"]
-        assert "-m windows_integration" in native["run"]
-        assert "-vv" in unit["run"] and "-vv" in native["run"]
-        assert unit["env"]["QT_QPA_PLATFORM"] == "offscreen"
-        assert native["env"]["QT_QPA_PLATFORM"] == "windows"
-        assert "continue-on-error" not in unit and "continue-on-error" not in native
-        assert "if" not in unit and "if" not in native
-        assert "continue-on-error" not in builds[0]
-        upload = next(step for step in steps if step.get("id") == "upload")
-        assert upload["continue-on-error"] == "true"
-        assert upload["with"]["retention-days"] == "1"
-    manual_build = next(s for s in main_steps if s.get("id") == "build")
-    assert manual_build["if"] == "inputs.build_exe || inputs.upload_exe"
-    assert not any(s.get("id") == "plan" for s in main_steps)
-    release_build = next(s for s in release_steps if s.get("id") == "build")
-    assert "if" not in release_build
-    stage_ids = [s.get("id") for s in release_steps]
-    assert stage_ids.index("unit") < stage_ids.index("native") < stage_ids.index("build")
+    assert main["on"]["workflow_dispatch"]["inputs"]["version"]["required"] == "true"
+    assert main["permissions"]["contents"] == "read"
+    job = main["jobs"]["validate"]
+    assert job["if"] == "github.ref == 'refs/heads/main'"
+    steps = job["steps"]
+    names = [step.get("name") for step in steps]
+    required = ("Isolated regression", "Native Windows integration", "Verify exe build",
+                "Seal verified candidate", "Store verified candidate")
+    assert [names.index(name) for name in required] == sorted(names.index(name) for name in required)
+    for name in required:
+        step = next(s for s in steps if s.get("name") == name)
+        assert "if" not in step and "continue-on-error" not in step
+    unit = next(s for s in steps if s.get("id") == "unit")
+    native = next(s for s in steps if s.get("id") == "native")
+    assert "not windows_integration" in unit["run"] and "-m windows_integration" in native["run"]
+    assert "-vv" in unit["run"] and "-vv" in native["run"]
+    assert "--regression-group" not in unit["run"] + native["run"]
+    assert unit["env"]["QT_QPA_PLATFORM"] == "offscreen"
+    assert native["env"]["QT_QPA_PLATFORM"] == "windows"
+    build = next(s for s in steps if s.get("id") == "build")
+    assert "packaging/build_windows.py" in build["run"] and "APP_VERSION" in build["run"]
+    upload = next(s for s in steps if s.get("id") == "upload")
+    assert upload["with"]["retention-days"] == "1"
+    assert "github.run_id" in upload["with"]["name"] and "github.run_attempt" in upload["with"]["name"]
+    assert names.index("Enforce candidate retention") < names.index("Store verified candidate")
+    clean = next(s for s in steps if s.get("name") == "Verify clean checkout after tests")
+    assert "git diff --quiet HEAD" in clean["run"] and "throw" in clean["run"]
+    assert "git ls-files --others" in clean["run"]
+    assert "if" not in clean and "continue-on-error" not in clean
+    assert names.index("Native Windows integration") < names.index(clean["name"]) < names.index("Inject bundled secrets")
+    text = json.dumps(main)
+    assert "release_delivery" not in text and "RELEASES_TOKEN" not in text
     command = runpy.run_path(str(ROOT / "packaging/build_windows.py"))["build_command"]()
     assert "--uac-admin" in command and "--collect-all" in command
     assert "dxcam" in command and "comtypes" in command
 
 
-def test_every_release_publication_requires_all_three_successes():
-    import yaml
-
-    release = yaml.load((ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
-    steps = release["jobs"]["build-windows"]["steps"]
-    publications = {
-        "Attach to Release",
-        "Commit to public repo main (version.json + CHANGELOG + README)",
-        "Publish exe + version.json to public repo (Release)",
-        "Announce release to Discord forum (webhook)",
-    }
-    gate = ("success() && startsWith(github.ref, 'refs/tags/') && "
-            "steps.unit.outcome == 'success' && steps.native.outcome == 'success' && steps.build.outcome == 'success'")
-    found = set()
-    build_index = next(i for i, step in enumerate(steps) if step.get("id") == "build")
-    for index, step in enumerate(steps):
-        if step.get("name") in publications:
-            found.add(step["name"])
-            assert index > build_index
-            assert step["if"] in (gate, gate + " && env.RELEASE_WEBHOOK_URL != ''")
-            assert "continue-on-error" not in step
-    assert found == publications
-
-
-@pytest.mark.parametrize("existing", [None, b"author custom data\n", b"malformed but preserve"])
-def test_public_dialogue_seed_never_replaces_author_file(tmp_path, existing):
-    import shutil
-    import subprocess
-    import sys
-    import yaml
-
-    release = yaml.load((ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
-    step = next(s for s in release["jobs"]["build-windows"]["steps"]
-                if s.get("name") == "Commit to public repo main (version.json + CHANGELOG + README)")
-    script = step["run"]
-    seed = script[script.index("mkdir -p data"):script.index("git config user.name")]
-    source = tmp_path / "src/mabinogi_addon/assets/dialogues.json"
-    source.parent.mkdir(parents=True)
-    source.write_bytes(b"bundled initial data\n")
-    public = tmp_path / "pub"
-    (public / "data").mkdir(parents=True)
-    target = public / "data/dialogues.json"
-    if existing is not None:
-        target.write_bytes(existing)
-    bash = "bash"
-    if sys.platform == "win32":
-        bash = str(Path(shutil.which("git")).parents[1] / "bin/bash.exe")
-    subprocess.run([bash, "-e", "-c", seed], cwd=public, check=True)
-    assert target.read_bytes() == (existing if existing is not None else source.read_bytes())
-    assert "git add version.json README.md CHANGELOG.md data/dialogues.json" in script
+def test_publication_is_manual_download_and_promotion_without_rebuild_or_retest():
+    release = workflow("release.yml")
+    assert set(release["on"]) == {"workflow_dispatch"}
+    inputs = release["on"]["workflow_dispatch"]["inputs"]
+    assert set(inputs) == {"run_id", "attempt", "source_sha", "version"}
+    assert all(value["required"] == "true" for value in inputs.values())
+    job = release["jobs"]["promote"]
+    assert job["if"] == "github.ref == 'refs/heads/main'"
+    assert "windows" not in job["runs-on"]
+    assert release["concurrency"] == workflow("windows.yml")["concurrency"]
+    steps = job["steps"]
+    download = next(s for s in steps if s.get("uses", "").startswith("actions/download-artifact@"))
+    assert download["with"]["run-id"] == "${{ inputs.run_id }}"
+    assert download["with"]["name"] == "${{ steps.gate.outputs.artifact_name }}"
+    publish = next(s for s in steps if s.get("name") == "Publish exact verified files")
+    assert steps.index(next(s for s in steps if s.get("id") == "gate")) < steps.index(download) < steps.index(publish)
+    assert steps.index(next(s for s in steps if s.get("name") == "Verify candidate bytes and lifetime")) < steps.index(publish)
+    assert all("continue-on-error" not in s for s in steps)
+    text = json.dumps(release)
+    assert "pytest" not in text and "build_windows.py" not in text and "pyinstaller" not in text.lower()
+    assert "scripts.release_delivery" in publish["run"]

@@ -20,10 +20,10 @@
 저장소 이름은 `mabinogi_addon-release`가 아니라 **`mabinogi_addon-releases`**이다.
 현재 앱의 배포 워크플로와 업데이트 주소가 참조하는 이름을 기준으로 한다.
 
-현재 `.github/workflows/release.yml`은 공개 저장소를 받은 뒤 `version.json`, `README.md`,
-`CHANGELOG.md`를 갱신하고 이 세 파일만 커밋한다. 현재 소스에는 `data/`를 삭제하거나
-저장소 전체를 대체하는 처리가 없다. 향후 배포 자동화를 바꿀 때도 수동 관리하는
-`data/dialogues.json`을 보존한다.
+현재 수동 승격 `release.yml`의 `scripts/release_delivery.py`는 공개 저장소의
+`version.json`, `README.md`, `CHANGELOG.md`를 갱신한다. `data/dialogues.json`은
+없을 때만 내장 초기 자료로 생성하며, 기존 파일은 손상 여부와 관계없이 덮어쓰지 않는다.
+작성자가 관리하는 대사는 exe 승격과 별도로 보존한다.
 
 ## 2. GitHub 웹에서 처음 등록하기
 

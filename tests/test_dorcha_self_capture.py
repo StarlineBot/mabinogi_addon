@@ -7,7 +7,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
 from mabinogi_addon.system import capture_exclusion
-from scripts.qa_dorcha_restart_after_move import (
+from test_support.regressions.dorcha_restart import (
     moved,
     test_restart_must_reacquire_visible_moved_resource,
     test_one_shot_autofind_approval_recovers_the_same_input,

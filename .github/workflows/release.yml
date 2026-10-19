@@ -1,229 +1,67 @@
-name: release
-
-# 태그(vX.Y.Z) 푸시 → Windows exe 빌드 후 GitHub Release에 첨부.
-# main 수동 실행은 검증만 수행한다. exe 다운로드 업로드는 명시적으로 선택한다.
+name: Promote verified Windows candidate
+# Only the user's explicit dispatch publishes. A tag alone does nothing.
 on:
-  push:
-    tags: ["v*"]
   workflow_dispatch:
     inputs:
-      upload_exe:
-        description: 'Optional exe download (does not gate validation)'
-        type: boolean
-        default: false
-
+      run_id:
+        description: 'Successful Windows validation run ID'
+        required: true
+        type: string
+      attempt:
+        description: 'Successful run attempt'
+        required: true
+        default: '1'
+        type: string
+      source_sha:
+        description: 'Full validated source SHA (tag must point here)'
+        required: true
+        type: string
+      version:
+        description: 'Exact verified X.Y.Z version'
+        required: true
+        type: string
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: verified-windows-candidate
+  cancel-in-progress: false
 jobs:
-  build-windows:
-    runs-on: windows-latest
-    permissions:
-      contents: write # 릴리스에 exe 업로드
+  promote:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CANDIDATE_SHA: ${{ inputs.source_sha }}
+      CANDIDATE_VERSION: ${{ inputs.version }}
+      CANDIDATE_RUN: ${{ inputs.run_id }}
+      CANDIDATE_ATTEMPT: ${{ inputs.attempt }}
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # 릴리스 노트 생성에 직전 태그·커밋 이력이 필요(얕은 체크아웃이면 없음)
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
-
-      - name: Set up Python 3.12
-        run: uv python install 3.12
-
-      - name: Sync deps (+ build group)
-        run: uv sync --frozen --group build --group dev
-
-      # 테스트 게이트: 실패하면 여기서 잡이 멈춰 '깨진 빌드가 릴리즈로 나가는 것'을 막는다.
-      # 특히 네이티브 abort(실행 중 QThread 파괴 등 rc=134)는 파이썬 예외가 아니라 프로세스를
-      # 통째로 죽여, 사용자 PC에서 '그냥 꺼지는' 증상으로만 보인다 — conftest의 QThread 누수
-      # 가드와 test_lifecycle(서브프로세스 rc==0)로 CI에서 미리 잡는다. 오프스크린 Qt로 실행.
-      - name: Test gate (pytest)
-        id: unit
-        env:
-          QT_QPA_PLATFORM: offscreen
-        run: uv run --frozen pytest -vv -ra -m 'not windows_integration' --junitxml=unit-results.xml
-
-      - name: Native Windows integration
-        id: native
-        env:
-          QT_QPA_PLATFORM: windows
-        run: uv run --frozen pytest -vv -ra -m windows_integration --junitxml=windows-results.xml
-
-      - name: Inject bundled secrets
-        shell: bash
-        env:
-          NEXON_API_KEY: ${{ secrets.NEXON_API_KEY }}
-          INQUIRY_WEBHOOK_URL: ${{ secrets.INQUIRY_WEBHOOK_URL }}
-          CONFIG_WEBHOOK_URL: ${{ secrets.CONFIG_WEBHOOK_URL }}
-        run: |
-          uv run python - <<'PY'
-          import os
-          open("src/mabinogi_addon/_bundled.py", "w", encoding="utf-8").write(
-              f'NEXON_API_KEY = {os.environ.get("NEXON_API_KEY", "")!r}\n'
-              f'INQUIRY_WEBHOOK_URL = {os.environ.get("INQUIRY_WEBHOOK_URL", "")!r}\n'
-              f'CONFIG_WEBHOOK_URL = {os.environ.get("CONFIG_WEBHOOK_URL", "")!r}\n'
-          )
-          PY
-
-      - name: Set version from tag
-        shell: bash
-        run: |
-          # 태그(vX.Y.Z)면 그 버전, 아니면(수동 실행) 0.0.0.
-          if [[ "$GITHUB_REF" == refs/tags/* ]]; then VER="${GITHUB_REF_NAME#v}"; else VER="0.0.0"; fi
-          echo "APP_VERSION=$VER" >> "$GITHUB_ENV"   # 이후 단계(파일명)에서 사용
-
-      - name: Build exe (PyInstaller)
-        id: build
-        run: uv run --frozen --group build python packaging/build_windows.py --version '${{ env.APP_VERSION }}'
-
-      # 다운로드가 필요한 수동 검증에서만 선택한다. quota 오류는 경고로 별도 기록하며
-      # 테스트/빌드 실패를 무시하지 않는다. 태그 게시의 Release 자산과 다른 저장소다.
-      - name: Upload build artifact
-        id: upload
-        if: github.event_name == 'workflow_dispatch' && inputs.upload_exe
-        continue-on-error: true
-        uses: actions/upload-artifact@v4
-        with:
-          name: mabinogi-addon-exe-${{ github.sha }}-${{ github.run_attempt }}
-          path: dist/mabinogi-addon.exe
-          retention-days: 1
-          if-no-files-found: error
-
-      - name: Verification summary
-        if: always()
+          fetch-depth: 0
+      - name: Verify successful run and unchanged inputs
+        id: gate
         run: >-
-          uv run --frozen python scripts/windows_ci.py summary
-          --unit '${{ steps.unit.outcome }}' --native '${{ steps.native.outcome }}'
-          --build '${{ steps.build.outcome }}' --upload '${{ steps.upload.outcome }}'
-
-      - name: Attach to Release
-        if: success() && startsWith(github.ref, 'refs/tags/') && steps.unit.outcome == 'success' && steps.native.outcome == 'success' && steps.build.outcome == 'success'
-        uses: softprops/action-gh-release@v2
+          python -m scripts.release_candidate gate --sha "$CANDIDATE_SHA" --version "$CANDIDATE_VERSION"
+          --run-id "$CANDIDATE_RUN" --attempt "$CANDIDATE_ATTEMPT"
+      - uses: actions/download-artifact@v4
         with:
-          files: dist/mabinogi-addon.exe
-
-      # --- 공개 저장소(릴리스 창고)로 배포: 앱 자동 업데이트가 여기를 확인/다운로드 ---
-      - name: Build version.json (sha256 + size)
-        if: startsWith(github.ref, 'refs/tags/')
-        shell: bash
-        run: |
-          EXE="dist/mabinogi-addon.exe"
-          SHA=$(sha256sum "$EXE" | awk '{print $1}')
-          SIZE=$(stat -c%s "$EXE")
-          URL="https://github.com/StarlineBot/mabinogi_addon-releases/releases/download/v${APP_VERSION}/mabinogi-addon.exe"
-          cat > version.json <<EOF
-          {
-            "version": "${APP_VERSION}",
-            "url": "${URL}",
-            "sha256": "${SHA}",
-            "size": ${SIZE}
-          }
-          EOF
-          cat version.json
-
-      # 릴리스 노트(notes.md) 생성 — README 업데이트 내역과 Discord 공지가 공용으로 쓴다.
-      #  1) 앱 코드(src/)가 바뀌었으면 → 직전 태그 이후 커밋 제목 목록
-      #  2) 아니면(배포/내부 정비만) → 위트 있는 "내부 정비" 문구 랜덤
-      - name: Build release notes (notes.md)
-        if: startsWith(github.ref, 'refs/tags/')
-        shell: bash
-        run: |
-          CUR="v${APP_VERSION}"
-          PREV=$(git describe --tags --abbrev=0 "${CUR}^" 2>/dev/null || echo "")
-          SRC_CHANGED=""
-          if [ -n "$PREV" ]; then
-            SRC_CHANGED=$(git diff --name-only "$PREV" "$CUR" -- src/mabinogi_addon/)
-          fi
-          if [ -n "$SRC_CHANGED" ]; then
-            NOTES=$(git log --no-merges --pretty='- %s' "${PREV}..${CUR}")
-            [ -z "$NOTES" ] && NOTES="- 소소한 개선이 있었어요."
-          else
-            MSGS=(
-              "- 섯다라인이 애드온 내부를 청소했어요 🧹"
-              "- 겉은 그대로지만 속을 손봤어요 🔧"
-              "- 보이지 않는 곳을 조용히 정리했어요"
-              "- 다음 업데이트를 위한 밑작업을 해뒀어요"
-            )
-            NOTES="${MSGS[$RANDOM % ${#MSGS[@]}]}"
-          fi
-          printf "%s\n" "$NOTES" > notes.md
-          echo "---- notes.md ----"; cat notes.md
-
-      # main 에 version.json + CHANGELOG + README 를 커밋.(빈 저장소여도 커밋 1개 보장 →
-      # 다음 Release(태그) 생성 안전). CHANGELOG 는 릴리즈마다 맨 위에 누적된다.
-      - name: Commit to public repo main (version.json + CHANGELOG + README)
-        if: success() && startsWith(github.ref, 'refs/tags/') && steps.unit.outcome == 'success' && steps.native.outcome == 'success' && steps.build.outcome == 'success'
-        shell: bash
-        env:
-          RELEASES_TOKEN: ${{ secrets.RELEASES_TOKEN }}
-        run: |
-          git clone --depth 1 \
-            "https://x-access-token:${RELEASES_TOKEN}@github.com/StarlineBot/mabinogi_addon-releases.git" pub || \
-          git clone \
-            "https://x-access-token:${RELEASES_TOKEN}@github.com/StarlineBot/mabinogi_addon-releases.git" pub
-          cd pub
-          git checkout -B main           # 비어 있는 저장소여도 main 생성
-          # 1) CHANGELOG: 없으면 시드(packaging/CHANGELOG.md)로 시작.
-          [ -f CHANGELOG.md ] || cp ../packaging/CHANGELOG.md CHANGELOG.md
-          # 이번 버전 항목이 아직 없으면 notes.md 를 맨 위에 추가(재실행 시 중복 방지).
-          if ! grep -qE "^### v${APP_VERSION}( |\$)" CHANGELOG.md; then
-            DATE=$(date +%Y-%m-%d)
-            { printf '### v%s (%s)\n' "$APP_VERSION" "$DATE"; cat ../notes.md; printf '\n'; \
-              cat CHANGELOG.md; } > CHANGELOG.new
-            mv CHANGELOG.new CHANGELOG.md
-          fi
-          # 2) README = 템플릿의 <!-- CHANGELOG --> 자리에 CHANGELOG 내용을 끼워 렌더(awk).
-          awk '/<!-- CHANGELOG -->/ { while ((getline line < "CHANGELOG.md") > 0) print line; next } { print }' \
-            ../packaging/releases_README.md > README.md
-          # 3) version.json 갱신(앱 자동 업데이트가 raw 로 확인).
-          cp ../version.json version.json
-          # 최초 등록만 수행. 작성자가 수정한 공개 대사는 이후 배포에서 보존한다.
-          mkdir -p data
-          if [ ! -e data/dialogues.json ]; then
-            cp ../src/mabinogi_addon/assets/dialogues.json data/dialogues.json
-          fi
-          git config user.name "github-actions"
-          git config user.email "github-actions@users.noreply.github.com"
-          git add version.json README.md CHANGELOG.md data/dialogues.json
-          git commit -m "release: v${APP_VERSION}" || echo "변경 없음"
-          git push -u origin main
-
-      - name: Publish exe + version.json to public repo (Release)
-        if: success() && startsWith(github.ref, 'refs/tags/') && steps.unit.outcome == 'success' && steps.native.outcome == 'success' && steps.build.outcome == 'success'
-        uses: softprops/action-gh-release@v2
+          name: ${{ steps.gate.outputs.artifact_name }}
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ github.token }}
+          path: candidate
+      - name: Verify candidate bytes and lifetime
+        run: python -m scripts.release_candidate check
+      - uses: actions/checkout@v4
         with:
           repository: StarlineBot/mabinogi_addon-releases
+          ref: main
           token: ${{ secrets.RELEASES_TOKEN }}
-          tag_name: v${{ env.APP_VERSION }}
-          files: |
-            dist/mabinogi-addon.exe
-            version.json
-
-      # 배포가 끝난 뒤(위 단계들 성공 시에만) Discord 포럼에 새 글 작성.
-      # 제목 = vX.Y.Z, 내용 = notes.md(위에서 만든 것, README 와 공용) + 다운로드 링크.
-      # exe(약 117MB)는 Discord 업로드 한도를 넘어 첨부 불가 → 링크로 안내.
-      # 웹훅 시크릿(RELEASE_WEBHOOK_URL)이 없으면 이 단계는 통째로 건너뛴다.
-      - name: Announce release to Discord forum (webhook)
-        if: success() && startsWith(github.ref, 'refs/tags/') && steps.unit.outcome == 'success' && steps.native.outcome == 'success' && steps.build.outcome == 'success' && env.RELEASE_WEBHOOK_URL != ''
-        shell: bash
+          path: pub
+      - name: Publish exact verified files
         env:
+          RELEASES_TOKEN: ${{ secrets.RELEASES_TOKEN }}
           RELEASE_WEBHOOK_URL: ${{ secrets.RELEASE_WEBHOOK_URL }}
-        run: |
-          NOTES=$(cat notes.md)
-          DL="https://github.com/StarlineBot/mabinogi_addon-releases/releases/download/v${APP_VERSION}/mabinogi-addon.exe"
-          LINK="https://github.com/StarlineBot/mabinogi_addon-releases/releases/tag/v${APP_VERSION}"
-          BODY=$(printf "%s\n\n📥 다운로드: %s\n🔗 릴리스: %s" "$NOTES" "$DL" "$LINK")
-
-          # Discord 포럼 웹훅: thread_name 이 새 포럼 글의 제목이 된다.
-          # jq 로 안전하게 JSON 이스케이프. content 2000자 제한 대비 자른다.
-          jq -n \
-            --arg tn "v${APP_VERSION}" \
-            --arg c "$(printf "%s" "$BODY" | cut -c1-1900)" \
-            '{thread_name: $tn, content: $c}' > payload.json
-
-          # 성공/실패를 로그에 남기되, 공지 실패로 릴리스 전체를 깨뜨리진 않는다.
-          code=$(curl -sS -o resp.txt -w "%{http_code}" \
-            -X POST -H "Content-Type: application/json" \
-            -d @payload.json "${RELEASE_WEBHOOK_URL}?wait=true" || echo "000")
-          echo "webhook HTTP $code"; cat resp.txt || true
-          if [ "$code" != "200" ] && [ "$code" != "204" ]; then
-            echo "::warning::Discord 공지 실패(HTTP $code) — 릴리스 자체는 정상입니다."
-          fi
+        run: python -m scripts.release_delivery

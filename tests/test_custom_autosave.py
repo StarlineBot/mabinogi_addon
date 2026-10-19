@@ -7,7 +7,6 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication, QInputDialog
-from PySide6.QtTest import QTest
 
 from mabinogi_addon import config
 from mabinogi_addon.ui.custom_overlay_tab import CustomOverlayTab
@@ -227,7 +226,8 @@ def test_debounce_batches_edits_and_per_row_mixed_lock_is_preserved(tab, monkeyp
     assert tab.overlay_list.topLevelItem(1).isSelected()
     assert [o.locked for o in tab._mgr.overlays()] == [True, False]
     assert not calls
-    QTest.qWait(450)
+    from test_support.qt_wait import until
+    until(lambda: bool(calls) and not tab._save_timer.isActive(), timeout_ms=1000)
     assert len(calls) == 1
     assert not tab._save_timer.isActive()
     assert config.load_custom_presets()["A"][0]["posX"] == 129

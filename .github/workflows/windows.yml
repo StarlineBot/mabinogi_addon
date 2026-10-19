@@ -1,64 +1,88 @@
 name: Windows validation
-
 on:
   workflow_dispatch:
     inputs:
-      build_exe:
-        description: 'Verify exe for startup/native/packaging changes'
-        type: boolean
-        default: false
-      upload_exe:
-        description: 'Optional exe download (does not gate validation)'
-        type: boolean
-        default: false
-
+      version:
+        description: 'Exact release version X.Y.Z (top bundled notes must match)'
+        required: true
+        type: string
 permissions:
   contents: read
-
+  actions: write
 concurrency:
-  group: windows-validation-${{ github.ref }}
-  cancel-in-progress: true
-
+  group: verified-windows-candidate
+  cancel-in-progress: false
 jobs:
   validate:
+    if: github.ref == 'refs/heads/main'
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
+    env:
+      APP_VERSION: ${{ inputs.version }}
+      OPENCV_FOR_THREADS_NUM: '1'
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - uses: astral-sh/setup-uv@v5
-      - name: Set up Python
-        run: uv python install 3.12
-      - name: Frozen dependencies
-        run: uv sync --frozen --group dev --group build
+        with:
+          enable-cache: false
+      - run: uv python install 3.12
+      - run: uv sync --frozen --group dev --group build
+      - name: Validate candidate version
+        run: >-
+          uv run python -m scripts.release_candidate preflight --sha "$env:GITHUB_SHA" --version "$env:APP_VERSION"
       - name: Isolated regression
         id: unit
         env:
           QT_QPA_PLATFORM: offscreen
-        run: uv run --frozen pytest -vv -ra -m 'not windows_integration' --junitxml=unit-results.xml
+        run: uv run --frozen pytest -vv -ra -m 'not windows_integration' --durations=30 --junitxml=unit-results.xml
       - name: Native Windows integration
         id: native
         env:
           QT_QPA_PLATFORM: windows
-        run: uv run --frozen pytest -vv -ra -m windows_integration --junitxml=windows-results.xml
+        run: uv run --frozen pytest -vv -ra -m windows_integration --durations=30 --junitxml=windows-results.xml
+      - name: Verify clean checkout after tests
+        run: |
+          git diff --quiet HEAD
+          if ($LASTEXITCODE -ne 0) { throw 'Tests changed tracked source inputs' }
+          $extra = git ls-files --others --exclude-standard -- src packaging
+          if ($LASTEXITCODE -ne 0 -or $extra) { throw 'Unexpected untracked build inputs' }
+      # Only controlled version/secret generation follows the clean-source check.
+      - name: Inject bundled secrets
+        shell: python
+        env:
+          NEXON_API_KEY: ${{ secrets.NEXON_API_KEY }}
+          INQUIRY_WEBHOOK_URL: ${{ secrets.INQUIRY_WEBHOOK_URL }}
+          CONFIG_WEBHOOK_URL: ${{ secrets.CONFIG_WEBHOOK_URL }}
+        run: |
+          import os
+          from pathlib import Path
+          names = ('NEXON_API_KEY', 'INQUIRY_WEBHOOK_URL', 'CONFIG_WEBHOOK_URL')
+          Path('src/mabinogi_addon/_bundled.py').write_text(''.join(f'{n} = {os.environ.get(n, "")!r}\n' for n in names), encoding='utf-8')
       - name: Verify exe build
         id: build
-        if: inputs.build_exe || inputs.upload_exe
-        run: uv run --frozen --group build python packaging/build_windows.py --version 0.0.0
-      - name: Optional exe upload
+        run: uv run --frozen --group build python packaging/build_windows.py --version "$env:APP_VERSION"
+      - name: Seal verified candidate
+        run: >-
+          uv run python -m scripts.release_candidate seal --version "$env:APP_VERSION"
+          --sha "$env:GITHUB_SHA" --run-id $env:GITHUB_RUN_ID --attempt $env:GITHUB_RUN_ATTEMPT
+      - name: Enforce candidate retention
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: uv run python -m scripts.release_candidate prune
+      - name: Store verified candidate
         id: upload
-        if: github.event_name == 'workflow_dispatch' && inputs.upload_exe && steps.build.outcome == 'success'
-        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
-          name: windows-exe-${{ github.sha }}-${{ github.run_attempt }}
-          path: dist/mabinogi-addon.exe
+          name: verified-windows-${{ github.run_id }}-${{ github.run_attempt }}
+          path: candidate/*
           retention-days: 1
+          compression-level: 0
           if-no-files-found: error
       - name: Verification summary
         if: always()
         run: >-
-          uv run --frozen python scripts/windows_ci.py summary
-          --unit '${{ steps.unit.outcome }}' --native '${{ steps.native.outcome }}'
-          --build '${{ steps.build.outcome }}' --upload '${{ steps.upload.outcome }}'
+          uv run python scripts/windows_ci.py summary --unit '${{ steps.unit.outcome }}'
+          --native '${{ steps.native.outcome }}' --build '${{ steps.build.outcome }}'
+          --upload '${{ steps.upload.outcome }}'

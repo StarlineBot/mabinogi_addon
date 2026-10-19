@@ -44,14 +44,14 @@ def plan(base, head):
 
 def summary(unit, native, build, upload):
     rows = {"Isolated regression": unit, "Native Windows integration": native,
-            "Exe build": build, "Optional artifact upload (non-gating)": upload}
+            "Exe build": build, "Verified candidate storage (deployment gate)": upload}
     output = "\n| Stage | Result |\n| --- | --- |\n"
     output += "\n".join(f"| {name} | {state} |" for name, state in rows.items())
     append(os.environ.get("GITHUB_STEP_SUMMARY"), output)
     print(output)
     if upload == "failure":
-        print("::warning::Optional artifact upload failed; see upload logs for quota/transport errors. "
-              "This does not change test or exe build results.")
+        print("::warning::Candidate storage failed; deployment is blocked. See upload logs for quota/transport errors. "
+              "Test and exe build results are listed separately.")
 
 
 def find_run(runs, sha):
@@ -68,7 +68,7 @@ def verify_report(report, sha, require_build=False):
              for job in report.get("jobs", []) for step in job.get("steps", [])}
     required = ["Isolated regression", "Native Windows integration"]
     if require_build:
-        required.append("Verify exe build")
+        required.extend(("Verify exe build", "Seal verified candidate", "Store verified candidate"))
     if any(steps.get(name) != "success" for name in required):
         raise RuntimeError("Required Windows verification step did not pass: " + json.dumps(steps))
     return 0

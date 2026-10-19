@@ -7,7 +7,7 @@ from PySide6.QtWidgets import QFileDialog, QInputDialog, QMessageBox
 from mabinogi_addon import config
 from test_navigation import window
 from test_custom_autosave import box, select
-from scripts.qa_custom_autosave_import_reset import (
+from test_support.regressions.custom_replacement import (
     test_import_or_reset_wins_over_previous_session_custom_autosave,
     test_clean_custom_save_control_preserves_replacement,
 )

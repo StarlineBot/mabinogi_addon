@@ -61,6 +61,8 @@ def tuarim_width_diagnostics(monkeypatch):
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+pytest_plugins = ['test_support.inventory']
+
 
 @pytest.fixture(autouse=True)
 def _isolated_runtime(request, tmp_path):

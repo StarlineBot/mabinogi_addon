@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from mabinogi_addon import config, feature_access, image_io
-from scripts.qa_tuarim_low_range_display import pipeline, sample, hundred
+from test_support.regressions.tuarim_low_range import pipeline, sample, hundred
 
 
 @pytest.mark.parametrize('user',[None, {'id':'ordinary'}])

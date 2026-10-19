@@ -3,8 +3,8 @@
 import pytest
 
 from mabinogi_addon.detect import tuarim_reader as reader
-from scripts.qa_tuarim_low_range_display import sample
-from scripts.qa_tuarim_low_range_display import (
+from test_support.regressions.tuarim_low_range import sample
+from test_support.regressions.tuarim_low_range import (
     pipeline,
     test_existing_full_percent_contract_remains_safe,
     test_low_range_word_keeps_visible_tens,
