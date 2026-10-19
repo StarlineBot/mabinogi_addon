@@ -27,6 +27,8 @@ class CaptureSession:
         self.path = root / (datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S") + "-" + uuid.uuid4().hex)
         self.count = self.bytes = 0
         self.last_mask = None
+        self.last_raw = None
+        self._pending_raw = None
         self.last_at = float("-inf")
         self.thread = None
         self.results = queue.Queue(maxsize=1)
@@ -41,20 +43,24 @@ class CaptureSession:
                 or frame.shape[0] * frame.shape[1] > MAX_PIXELS):
             raise ValueError("invalid timer capture")
         mask = digit_mask(frame)
-        if (not force and self.last_mask is not None and mask.shape == self.last_mask.shape
+        raw_time = metadata.get('raw_time')
+        if type(raw_time) is not int or not 0 <= raw_time <= 900:
+            raw_time = None
+        if not force and raw_time is not None and raw_time == self.last_raw:
+            return False
+        if (not force and (raw_time is None or self.last_raw is None)
+                and self.last_mask is not None and mask.shape == self.last_mask.shape
                 and np.count_nonzero(mask != self.last_mask) < max(2, min(mask.sum(), self.last_mask.sum()) * .04)):
             return False
         if self.count >= MAX_SHOTS or self.bytes >= MAX_BYTES:
             raise ValueError("수집 한도에 도달했습니다.")
         self.last_at = now
         pixels = frame.copy()
-        raw_time = metadata.get('raw_time')
-        if type(raw_time) is not int or not 0 <= raw_time <= 900:
-            raw_time = None
+        self._pending_raw = raw_time
         read_status = ('recognized' if raw_time is not None else 'uncertain') if 'read_status' in metadata else 'not_implemented'
         metadata = dict(metadata, captured_at=datetime.now(timezone.utc).isoformat(),
                         raw_time=raw_time, read_status=read_status, sequence=self.count + 1,
-                        change_method="bright-neutral-mask-v1", shape=list(frame.shape))
+                        change_method="recognized-time-or-bright-neutral-mask-v2", shape=list(frame.shape))
         self.thread = threading.Thread(target=self._write, args=(pixels, mask, metadata), daemon=True,
                                        name="halo-png-write")
         self.thread.start()
@@ -96,6 +102,7 @@ class CaptureSession:
             self.count += 1
             self.bytes += size
             self.last_mask = mask
+            self.last_raw = self._pending_raw
         return error
 
     def stop(self):

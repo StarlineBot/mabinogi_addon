@@ -110,6 +110,21 @@ def test_lossless_unique_sessions_rate_and_change(tmp_path):
     assert other.path != session.path
 
 
+def test_same_reading_ignores_background_change_and_changed_reading_saves(tmp_path):
+    session = core.CaptureSession(tmp_path)
+    frame = np.zeros((20,100,3),np.uint8)
+    assert session.submit(frame, {'raw_time':881}, now=0)
+    assert finish(session) == ''
+    background = np.full_like(frame,255)
+    assert not session.submit(background, {'raw_time':881}, now=1)
+    assert session.submit(background, {'raw_time':880}, now=1)
+    assert finish(session) == ''
+    assert session.count == 2
+    assert session.submit(frame, {'raw_time':None}, now=2)
+    assert finish(session) == ''
+    assert session.last_raw is None
+
+
 @pytest.mark.parametrize('failure',['mkdir','png','metadata'])
 def test_storage_failure_never_counts_or_overwrites(tmp_path,monkeypatch,failure):
     session = core.CaptureSession(tmp_path)
@@ -164,6 +179,7 @@ def test_creator_only_region_capture_and_stop(window,monkeypatch,tmp_path):
     assert not section.isHidden() and not section.collect.isChecked()
     assert not section.preview.pixmap().isNull()
     section.collect.setChecked(True)
+    section.set_boss_context('lenen_miir_hoehan')
     section._tick()
     session = section._session
     assert finish(session) == ''
@@ -208,6 +224,7 @@ def test_write_failure_stops_collection(window,monkeypatch):
     monkeypatch.setattr(s,'_grab',lambda *a:np.zeros((20,100,3),np.uint8))
     monkeypatch.setattr(cv2,'imencode',lambda *a:(False,None))
     s.collect.setChecked(True)
+    s.set_boss_context('lenen_miir_hoehan')
     s._tick()
     s._session.thread.join(timeout=3)
     s._tick()
@@ -271,6 +288,7 @@ def test_outside_game_or_target_change_never_saves(window,monkeypatch):
     s = w.boss_tab.halo_capture
     s._watcher = SimpleNamespace(is_game_active=lambda:True)
     s._save_region(0,0,100,20)
+    s.set_boss_context('lenen_miir_hoehan')
     monkeypatch.setattr(s,'_foreground_target',lambda:(11,22,200,200,100,100))
     monkeypatch.setattr(s,'_grab',lambda *a:pytest.fail('outside game'))
     s._snapshot()
@@ -278,6 +296,22 @@ def test_outside_game_or_target_change_never_saves(window,monkeypatch):
     targets = iter([(11,22,0,0,1920,1080),None])
     monkeypatch.setattr(s,'_foreground_target',lambda:next(targets))
     monkeypatch.setattr(s,'_grab',lambda *a:np.zeros((20,100,3),np.uint8))
+    s._snapshot()
+    assert s._session is None
+
+
+@pytest.mark.parametrize('boss_id', [None, 'lenen_miir', 'petach', 'lenen_miir_hoehan'])
+def test_collection_requires_fresh_target_boss(window,monkeypatch,boss_id):
+    import mabinogi_addon.ui.halo_capture_section as module
+    s = window[0].boss_tab.halo_capture
+    monkeypatch.setattr(config,'load_discord_user',lambda:{'id':feature_access.CREATOR_DISCORD_ID})
+    s._save_region(0,0,100,20)
+    now = [0.0]
+    monkeypatch.setattr(module.time,'monotonic',lambda:now[0])
+    s.set_boss_context(boss_id)
+    if boss_id == 'lenen_miir_hoehan':
+        now[0] = 2.0
+    s._store(np.zeros((20,100,3),np.uint8))
     s._snapshot()
     assert s._session is None
 

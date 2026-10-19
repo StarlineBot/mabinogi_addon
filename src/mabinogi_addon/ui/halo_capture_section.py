@@ -115,7 +115,7 @@ class HaloCaptureSection(QWidget):
         self.saved = QLabel()
         self.saved.setWordWrap(True)
         box.addWidget(self.saved)
-        hint = QLabel("원본 PNG와 캡처 정보를 저장합니다. 초당 최대 1장, 세션당 900장 또는 100MB까지 수집합니다. 밝은 숫자 모양 변화를 기준으로 수집하므로 배경 변화가 포함될 수 있습니다.")
+        hint = QLabel("레넨의 미이르 : 회한 식별 중 시간 값이 바뀌면 원본 PNG와 캡처 정보를 저장합니다. 판독 불가 시 숫자 모양 변화를 기준으로 수집하므로 배경 변화가 포함될 수 있습니다. 초당 최대 1장, 세션당 900장 또는 100MB까지 수집합니다.")
         hint.setWordWrap(True)
         box.addWidget(hint)
         self.disclosure = disclosure("시간 자료 수집", tools, v)
@@ -132,6 +132,10 @@ class HaloCaptureSection(QWidget):
         if boss_id is not None and boss_id != 'lenen_miir_hoehan':
             self._clock.stop()
             self._warning.hide()
+
+    def _target_boss_active(self):
+        return (self._boss_id == 'lenen_miir_hoehan'
+                and time.monotonic() - self._boss_seen <= 1.5)
 
     def _stop_monitoring(self):
         self._clock.stop()
@@ -175,7 +179,7 @@ class HaloCaptureSection(QWidget):
 
     def _monitor(self, raw):
         now = time.monotonic()
-        context = (self._boss_id == 'lenen_miir_hoehan' and now - self._boss_seen <= 1.5)
+        context = self._target_boss_active()
         if context and not self._clock.armed:
             self._clock.arm()
         result = self._clock.observe(raw, now, eligible=context,
@@ -321,6 +325,8 @@ class HaloCaptureSection(QWidget):
         return None
 
     def _store(self, frame, force=False):
+        if not self._allowed() or not self._target_boss_active():
+            return
         if self._session is None or self._session.cancelled.is_set():
             if self._session is not None and self._session.thread is not None:
                 return
@@ -332,6 +338,9 @@ class HaloCaptureSection(QWidget):
 
     def _snapshot(self):
         if not self._allowed():
+            return
+        if not self._target_boss_active():
+            self.state.setText('수집 대기 · 레넨의 미이르 : 회한 식별 필요')
             return
         try:
             frame = self._capture()
