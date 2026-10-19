@@ -40,6 +40,7 @@ from .custom_overlay_tab import CustomOverlayTab
 from .debuff_tab import DebuffTab
 from .distribution_tab import DistributionTab
 from .exchange_tab import ExchangeTab
+from .dungeon_cost_tab import DungeonCostTab
 from .memo_overlay import MemoOverlay
 from .memo_tab import MemoTab
 from .notifier import SoundNotifier, default_sound_map, second_sound_map
@@ -325,6 +326,8 @@ class MainWindow(QMainWindow):
         self._convenience_tabs.addTab(_scrolled(self.distribution_tab), "분배 계산기")
         self._convenience_tabs.addTab(_scrolled(self.bead_split_tab), "구슬 분배 계산기")
         self._convenience_tabs.addTab(_scrolled(self.exchange_tab), "환전비율 계산기")
+        self.dungeon_cost_tab = DungeonCostTab()
+        self._convenience_tabs.addTab(_scrolled(self.dungeon_cost_tab), "던전 입장 계산기")
 
         tabs = QTabWidget()
         self._tabs = tabs  # 온보딩 투어에서 탭 전환에 사용
@@ -1822,6 +1825,7 @@ class MainWindow(QMainWindow):
         # 종료 정리 중 Qt 이벤트가 처리되어도 새 캡처/워커를 만들지 않는다.
         self._closing = True
         self.creator_dialogue.shutdown()
+        self.dungeon_cost_tab.shutdown()
         if self._status_timer is not None:
             self._status_timer.stop()
 

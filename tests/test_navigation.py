@@ -41,7 +41,7 @@ def test_structure_and_default_editor_space(window):
     w, app = window
     assert [w._tabs.tabText(i) for i in range(4)] == ['전투 보조','파티 모집','편의기능','설정']
     assert [w._tracker_tabs.tabText(i) for i in range(w._tracker_tabs.count())] == LABELS
-    assert [w._convenience_tabs.tabText(i) for i in range(3)] == ['분배 계산기','구슬 분배 계산기','환전비율 계산기']
+    assert [w._convenience_tabs.tabText(i) for i in range(w._convenience_tabs.count())] == ['분배 계산기','구슬 분배 계산기','환전비율 계산기','던전 입장 계산기']
     bar = w._tracker_tabs.tabBar()
     assert all(bar.rect().contains(bar.tabRect(i)) for i in range(8))
     assert w._combat_pages['tuarim'] is w._combat_pages['dorcha']
