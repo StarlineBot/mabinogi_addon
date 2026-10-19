@@ -1,6 +1,6 @@
 """Live battle continuity, role split and isolated halo sound regressions."""
 
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 import hashlib
 
 import pytest
@@ -177,13 +177,26 @@ def test_dedicated_notifier_does_not_interrupt_other_sound(window,monkeypatch):
         s.sound.setChecked(True)
         s.preview_alert.click()
         assert s._notifier is not other
-        assert s._notifier._player.source().toLocalFile()==str(source)
+        actual = Path(s._notifier._player.source().toLocalFile())
+        assert actual == source
+        assert actual != source.with_name('other.mp3')
+        assert actual != source.parent.parent/source.name
         assert other._player._playing
         s.sound.setChecked(False)
         assert other._player._playing
     finally:
         other.stop()
         other.deleteLater()
+
+
+def test_windows_sound_path_representation_preserves_full_identity():
+    source = PureWindowsPath('D:/a/app/assets/sounds/헤일로 알림.mp3')
+    qt_path = source.as_posix()
+    assert qt_path != str(source)
+    actual = PureWindowsPath(qt_path)
+    assert actual == source
+    assert actual != source.with_name('other.mp3')
+    assert actual != source.parent.parent/source.name
 
 
 def test_uploaded_sound_is_bundled_losslessly():
