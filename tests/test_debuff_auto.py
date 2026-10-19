@@ -183,6 +183,9 @@ def test_auto_ui_is_default_logged_out_and_diagnostics_do_not_save(monkeypatch):
         app.processEvents()
         assert tab.effective_gate_mode() == "auto"
         assert tab._method_row.isHidden()
+        assert tab.bar_adjust_btn.isVisible()
+        assert not tab._bar_region_row.isVisible()
+        tab.bar_adjust_btn.click()
         assert tab._bar_region_row.isVisible()
         assert not tab._bar_gating_notice.isVisible()
         tab.diagnostic_button.click()

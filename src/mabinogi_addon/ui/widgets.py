@@ -170,7 +170,7 @@ def hint_label(text: str) -> QLabel:
 
 def section_label(text: str) -> QLabel:
     lbl = QLabel(text)
-    lbl.setStyleSheet("font-weight:600; color:#c8ccd4;")
+    lbl.setStyleSheet("font-weight:600;")
     return lbl
 
 

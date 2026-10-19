@@ -37,8 +37,10 @@ def test_preview_fits_group_not_page_width(window, monkeypatch, font_size, scale
             assert preview.width() <= group_layout.contentsRect().width()
             body = preview.widget()
             assert body.width() == body.sizeHint().width()
-            if scale == 300:
-                assert preview.horizontalScrollBar().maximum() > 0
-            assert all(bar._scale == scale / 100 for bar in tab._preview_bars.values())
+            assert preview.horizontalScrollBar().maximum() == 0
+            assert not preview.horizontalScrollBar().isVisible()
+            assert all(.5 <= bar._scale <= scale / 100 for bar in tab._preview_bars.values())
+            assert tab._scale == scale
+            assert config.load_stat_bars()["scale"] == scale
     assert config._read_local_config() == saved
     assert w.grab().save(str(tmp_path / f"stat-preview-{font_size}-{scale}.png"))

@@ -335,6 +335,7 @@ class TuarimTab(QWidget):
         )
 
     def _update_region_label(self) -> None:
+        self.clear_region_btn.setEnabled(self._region is not None)
         if self._region:
             r = self._region
             self.region_label.setText(f"등록됨 · {r['x']},{r['y']}  {r['w']}×{r['h']}")

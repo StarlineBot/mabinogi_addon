@@ -18,6 +18,9 @@ def window(monkeypatch):
     monkeypatch.setattr(config, "load_discord_user", lambda: {"id": "test", "name": "테스트"})
     monkeypatch.setattr(QApplication, "quit", lambda: None)
     w = MainWindow()
+    # These tests measure the editable form. The anchor now intentionally shows guidance instead.
+    w.buff_tab.buff_list.setCurrentRow(1)
+    assert w.buff_tab.name_edit.isEnabled()
     monkeypatch.setattr(w, "screen", lambda: SimpleNamespace(availableGeometry=lambda: QRect(0, 0, 1600, 1100)))
     w.show()
     app.processEvents()
@@ -133,7 +136,10 @@ def test_small_buff_uses_reserved_footer_and_restores_without_drift(window, monk
     w.setStyleSheet(w.styleSheet() + "\nQWidget {font-size: %dpx;}" % font_pixels)
     for _ in range(8):
         app.processEvents()
-    assert d._floating_footer == (not w.buff_tab._columns.stacked)
+    state = layout_state(w, w.buff_tab)
+    reserved = w.centralWidget().layout().indexOf(d.footer) >= 0
+    fits = state["needed"] + 64 - w.buff_tab.form_panel.layout().contentsMargins().bottom() <= state["viewport"] + (64 if reserved else 0)
+    assert d._floating_footer == (not w.buff_tab._columns.stacked and fits)
     notice = w.buff_tab.status_label.text()
     # QLabel의 양쪽 내용 배치가 처리된 뒤 반복 전환의 기준 높이를 잰다.
     w.buff_tab.status_label.setText("status\n" * 80)
@@ -142,7 +148,10 @@ def test_small_buff_uses_reserved_footer_and_restores_without_drift(window, monk
     w.buff_tab.status_label.setText(notice)
     for _ in range(8):
         app.processEvents()
-    baseline_floating = not w.buff_tab._columns.stacked
+    state = layout_state(w, w.buff_tab)
+    reserved = w.centralWidget().layout().indexOf(d.footer) >= 0
+    fits = state["needed"] + 64 - w.buff_tab.form_panel.layout().contentsMargins().bottom() <= state["viewport"] + (64 if reserved else 0)
+    baseline_floating = not w.buff_tab._columns.stacked and fits
     assert d._floating_footer == baseline_floating
     height = w.buff_tab.buff_list.height()
     for _ in range(4):

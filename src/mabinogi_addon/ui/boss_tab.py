@@ -155,6 +155,7 @@ class BossTab(QWidget):
         commands.addWidget(self.clear_region_btn)
         self.region_row = wrapping_row(row, commands)
         cv.addLayout(self.region_row)
+        cv.addWidget(hint_label("이름과 체력 수치가 보이는 보스 체력바를 지정하세요."))
 
         preview_group = QGroupBox("판독 미리보기")
         preview_layout = QVBoxLayout(preview_group)
@@ -179,6 +180,8 @@ class BossTab(QWidget):
         warn_row = QHBoxLayout()
         self.warn_lock_btn = QPushButton("경고 위치 잠금")
         self.warn_lock_btn.setCheckable(True)
+        from .settings_layout import LOCK_STYLE
+        self.warn_lock_btn.setStyleSheet(LOCK_STYLE)
         self.warn_lock_btn.clicked.connect(self._toggle_warn_lock)
         warn_row.addWidget(self.warn_lock_btn)
         warn_row.addWidget(prev_btn)
@@ -202,6 +205,7 @@ class BossTab(QWidget):
         up_row = QHBoxLayout()
         self.upcoming_lock_btn = QPushButton("목록 위치 잠금")
         self.upcoming_lock_btn.setCheckable(True)
+        self.upcoming_lock_btn.setStyleSheet(LOCK_STYLE)
         self.upcoming_lock_btn.clicked.connect(self._toggle_upcoming_lock)
         up_row.addWidget(self.upcoming_lock_btn)
         up_row.addStretch()
@@ -289,6 +293,8 @@ class BossTab(QWidget):
         self._highlight.flash(r["x"], r["y"], r["w"], r["h"], HIGHLIGHT_TITLE, HIGHLIGHT_SUB)
 
     def _update_region_label(self) -> None:
+        self.clear_region_btn.setEnabled(self._region is not None)
+        self.view_region_btn.setEnabled(self._region is not None)
         if self._region:
             r = self._region
             self.region_label.setText(f"등록됨 · {r['w']}×{r['h']}")

@@ -83,6 +83,7 @@ class MemoTab(QWidget):
         self.region_hint = hint_label("")
         self._update_region_hint()
         v.addWidget(self.region_hint)
+        v.addWidget(hint_label("이 영역은 메모의 표시 위치와 너비입니다. 높이는 내용에 따라 정해집니다."))
         top = QHBoxLayout()
         top.setSpacing(6)
         region_btn = QPushButton("직접 지정")
@@ -104,9 +105,8 @@ class MemoTab(QWidget):
             "잠그면 메모 위치가 고정되고, 클릭이 통과돼 게임을 가리지 않습니다.\n"
             "해제하면 테두리를 끌어 위치를 옮길 수 있어요."
         )
-        self.lock_btn.setStyleSheet(
-            "QPushButton:checked { background:#00B894; color:white; font-weight:600; }"
-        )
+        from .settings_layout import LOCK_STYLE
+        self.lock_btn.setStyleSheet(LOCK_STYLE)
         self.lock_btn.toggled.connect(self._on_lock_toggled)
         font_row = QHBoxLayout()
         display_layout.addLayout(font_row)
@@ -177,6 +177,7 @@ class MemoTab(QWidget):
         self._split.addWidget(self.preview)
         self._split.setSizes([600, 0])
         content_layout.addWidget(self._split, 1)
+        content_layout.addWidget(hint_label("작성 내용은 자동 저장되며 메모 오버레이에 반영됩니다."))
 
         v.addWidget(
             hint_label(
@@ -211,6 +212,8 @@ class MemoTab(QWidget):
 
     def _update_region_hint(self) -> None:
         region = config.load_capture_region("memoTracker")
+        if hasattr(self, "clear_region_btn"):
+            self.clear_region_btn.setEnabled(region is not None)
         if region:
             self.region_hint.setText(
                 f"위치 {region['x']},{region['y']}  ·  너비 {region['w']}px  "

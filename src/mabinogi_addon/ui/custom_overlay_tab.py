@@ -41,6 +41,7 @@ from ..system.window_watcher import WindowWatcher
 from .help_dialog import tab_header
 from .mirror_manager import MirrorManager
 from .widgets import CapturePathLabel, checkbox, section_label
+from .settings_layout import DANGER_STYLE, disclosure
 
 _log = logging.getLogger(__name__)
 
@@ -79,10 +80,7 @@ QListWidget::item { padding:7px 10px; border:none; }
 QListWidget::item:hover { background:palette(midlight); }
 QListWidget::item:selected { background:#00B894; color:white; }
 """
-_DANGER_QSS = (
-    "QPushButton { background:#e74c3c; color:white; font-weight:600; }"
-    "QPushButton:hover { background:#c0392b; }"
-)
+_DANGER_QSS = DANGER_STYLE
 
 
 class _DashSeparatorDelegate(QStyledItemDelegate):
@@ -170,6 +168,20 @@ class CustomOverlayTab(QWidget):
         self.enable.toggled.connect(self._on_enable)
         v.addWidget(self.enable)
         self._mgr.set_paused(not self.enable.isChecked())
+        preset_row = QHBoxLayout()
+        preset_row.addWidget(QLabel("프리셋"))
+        self.preset_combo = QComboBox()
+        self.preset_combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        self.preset_combo.setMinimumContentsLength(8)
+        preset_row.addWidget(self.preset_combo, 1)
+        self.preset_load_btn = QPushButton("불러오기")
+        self.preset_load_btn.clicked.connect(self._on_preset_load)
+        preset_row.addWidget(self.preset_load_btn)
+        self.preset_manage_btn = QToolButton()
+        self.preset_manage_btn.setText("프리셋 관리")
+        self.preset_manage_btn.setCheckable(True)
+        preset_row.addWidget(self.preset_manage_btn)
+        v.addLayout(preset_row)
         overlay_group = QGroupBox("오버레이")
         overlay_layout = QVBoxLayout(overlay_group)
         v.addWidget(overlay_group)
@@ -204,20 +216,16 @@ class CustomOverlayTab(QWidget):
         self.error_box.setStyleSheet("color:#c0392b; background:#fdecea;")
         overlay_layout.addWidget(self.error_box)
         self.error_box.hide()
+        guidance = CapturePathLabel()
+        guidance.setText("변경은 현재 프리셋에 자동 저장됩니다. 원본을 남기려면 먼저 다른 이름으로 저장하세요.")
+        overlay_layout.addWidget(guidance)
         overlay_layout.addLayout(add_row)
 
         # 프리셋
-        self.preset_list = _name_list()
-        self.preset_list.setMaximumHeight(128)
-        self.preset_list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-        preset_layout.addWidget(self.preset_list)
         preset_row = QHBoxLayout()
-        self.preset_load_btn = QPushButton("불러오기")
-        self.preset_load_btn.clicked.connect(self._on_preset_load)
         self.preset_delete_btn = QPushButton("선택 프리셋 삭제")
         self.preset_delete_btn.setStyleSheet(_DANGER_QSS)
         self.preset_delete_btn.clicked.connect(self._on_preset_delete)
-        preset_row.addWidget(self.preset_load_btn)
         preset_row.addWidget(self.preset_delete_btn)
         self.selection_label = CapturePathLabel()
         self.selection_label.setText("선택: 없음")
@@ -233,11 +241,11 @@ class CustomOverlayTab(QWidget):
         self.auto_combo.currentIndexChanged.connect(self._on_auto_changed)
         row.addWidget(self.auto_combo, 1)
         preset_layout.addLayout(row)
-        self.preset_list.itemSelectionChanged.connect(self._selection_changed)
+        self.preset_combo.currentIndexChanged.connect(self._selection_changed)
 
         # 오버레이 목록(선택만)
         self.overlays_title = CapturePathLabel()
-        self.overlays_title.setStyleSheet("font-weight:600; color:#c8ccd4;")
+        self.overlays_title.setStyleSheet("font-weight:600;")
         self.overlays_title.setText("적용 중인 오버레이")
         overlay_layout.addWidget(self.overlays_title)
         self.overlay_list = QTreeWidget()
@@ -249,8 +257,10 @@ class CustomOverlayTab(QWidget):
         self.overlay_list.setHeaderLabels(["이름", "원본 영역", "표시 배율", "위치 잠금"])
         self.overlay_list.setStyleSheet(_LIST_QSS.replace("QListWidget", "QTreeWidget"))
         self.overlay_list.header().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        self.overlay_list.header().setMinimumSectionSize(85)
         self.overlay_list.header().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         self.overlay_list.itemChanged.connect(self._on_item_lock)
+        self.overlay_list.itemSelectionChanged.connect(self._update_commands)
         overlay_layout.addWidget(self.overlay_list)
 
         # 호환 캡처 모드: 미러가 검정/멈춤(고정)으로 나올 때 켠다. '전체 창 모드' + 특정
@@ -287,6 +297,8 @@ class CustomOverlayTab(QWidget):
         grid.addWidget(self.del_all_btn, 1, 2)
         overlay_layout.addLayout(grid)
         v.addWidget(preset_group)
+        preset_group.hide()
+        self.preset_manage_btn.toggled.connect(preset_group.setVisible)
         self.advanced_btn = QToolButton()
         self.advanced_btn.setText("고급 · 캡처 호환성")
         self.advanced_btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
@@ -329,10 +341,18 @@ class CustomOverlayTab(QWidget):
             self._apply_preset(name)
 
     def _selection_changed(self) -> None:
-        rows = self._selected_rows(self.preset_list)
-        self.selection_label.setText("선택: " + (self._preset_name(rows[0]) if rows else "없음"))
-        self.preset_load_btn.setEnabled(bool(rows))
-        self.preset_delete_btn.setEnabled(bool(rows))
+        name = self.preset_combo.currentData()
+        self.selection_label.setText("선택 프리셋: " + (name or "없음"))
+        self.preset_load_btn.setEnabled(bool(name))
+        self.preset_delete_btn.setEnabled(bool(name))
+
+    def _update_commands(self):
+        selected = bool(self.overlay_list.selectedItems())
+        populated = self.overlay_list.topLevelItemCount() > 0
+        for button in (self.sel_lock_btn, self.sel_unlock_btn, self.del_sel_btn):
+            button.setEnabled(selected)
+        for button in (self.lock_all_btn, self.unlock_all_btn, self.del_all_btn):
+            button.setEnabled(populated)
 
     def _on_auto_changed(self) -> None:
         if self._writes_suspended:
@@ -406,6 +426,7 @@ class CustomOverlayTab(QWidget):
                 item.setToolTip(0, item.text(0))
                 item.setToolTip(1, item.text(1))
                 item.setSelected(i in selected)
+        self._update_commands()
 
     def _on_item_lock(self, item, column):
         if column == 3:
@@ -417,11 +438,11 @@ class CustomOverlayTab(QWidget):
                 self._editing_lock = False
 
     def _refresh_presets(self) -> None:
-        rows = self._selected_rows(self.preset_list)
-        selected = self._preset_name(rows[0]) if rows else None
+        selected = self.preset_combo.currentData()
         auto = config.load_auto_preset()
-        with QSignalBlocker(self.preset_list), QSignalBlocker(self.auto_combo):
-            self.preset_list.clear()
+        with QSignalBlocker(self.preset_combo), QSignalBlocker(self.auto_combo):
+            self.preset_combo.clear()
+            self.preset_combo.addItem("선택 안 함", None)
             self.auto_combo.clear()
             self.auto_combo.addItem("사용 안 함", None)
             for name in sorted(config.load_custom_presets()):
@@ -430,18 +451,14 @@ class CustomOverlayTab(QWidget):
                     tags.append("적용 중")
                 if name == auto:
                     tags.append("시작 시 자동 불러오기")
-                item = QListWidgetItem(" · ".join([name, *tags]))
-                item.setData(Qt.ItemDataRole.UserRole, name)
-                item.setToolTip(item.text())
-                self.preset_list.addItem(item)
-                if name == selected:
-                    item.setSelected(True)
+                self.preset_combo.addItem(" · ".join([name, *tags]), name)
                 self.auto_combo.addItem(name, name)
             self.auto_combo.setCurrentIndex(max(0, self.auto_combo.findData(auto)))
+            self.preset_combo.setCurrentIndex(max(0, self.preset_combo.findData(selected)))
         self._selection_changed()
 
     def _preset_name(self, row: int) -> str:
-        return self.preset_list.item(row).data(Qt.ItemDataRole.UserRole)
+        return self.preset_combo.itemData(row)
 
     def _selected_rows(self, lst) -> list[int]:
         row = lst.indexOfTopLevelItem if isinstance(lst, QTreeWidget) else lst.row
@@ -467,7 +484,7 @@ class CustomOverlayTab(QWidget):
             return
         name = self._active_preset or "이름 없는 구성"
         self.active_label.setText(f"현재 프리셋: {name}")
-        self.overlays_title.setText("적용 중인 오버레이 · " + name)
+        self.overlays_title.setText("현재 오버레이 목록")
         self.save_status.setText("저장 실패" if self._save_error else "저장 대기 중" if self._dirty else "자동 저장됨")
         self.save_status.setStyleSheet("color:#c0392b;" if self._save_error else "")
         self.error_box.setVisible(bool(self._save_error))
@@ -506,13 +523,21 @@ class CustomOverlayTab(QWidget):
 
     def _on_delete_selected(self) -> None:
         rows = self._selected_rows(self.overlay_list)
-        if rows:
+        names = [self.overlay_list.topLevelItem(i).text(0) for i in rows]
+        summary = "\n".join(name[:80] for name in names[:8])
+        if len(names) > 8:
+            summary += f"\n외 {len(names)-8}개"
+        if rows and self._confirm("선택 오버레이 삭제", "다음 오버레이를 삭제할까요?\n" + summary):
             self._mgr.remove_indices(rows)
 
     def _on_delete_all(self) -> None:
         if not self._mgr.overlays():
             return
-        if self._confirm("오버레이 전체 삭제", "모든 오버레이를 삭제할까요?"):
+        names = [self.overlay_list.topLevelItem(i).text(0) for i in range(self.overlay_list.topLevelItemCount())]
+        summary = "\n".join(name[:80] for name in names[:8])
+        if len(names) > 8:
+            summary += f"\n외 {len(names)-8}개"
+        if self._confirm("오버레이 전체 삭제", "현재 목록의 모든 오버레이를 삭제할까요?\n" + summary):
             self._mgr.clear()
 
     # ---- 프리셋 버튼 ----
@@ -555,10 +580,10 @@ class CustomOverlayTab(QWidget):
         self._refresh_presets()
 
     def _on_preset_load(self) -> None:
-        rows = self._selected_rows(self.preset_list)
-        if not rows:
+        name = self.preset_combo.currentData()
+        if not name:
             return
-        self._apply_preset(self._preset_name(rows[0]))
+        self._apply_preset(name)
 
     def _apply_preset(self, name) -> bool:
         if self._writes_suspended:
@@ -592,10 +617,9 @@ class CustomOverlayTab(QWidget):
     def _on_preset_delete(self) -> None:
         if self._writes_suspended:
             return
-        rows = self._selected_rows(self.preset_list)
-        if not rows:
+        name = self.preset_combo.currentData()
+        if not name:
             return
-        name = self._preset_name(rows[0])
         if self._confirm("프리셋 삭제", f"'{name}' 프리셋을 삭제할까요?"):
             if self._writes_suspended:
                 return

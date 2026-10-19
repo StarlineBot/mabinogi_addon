@@ -8,6 +8,7 @@ from shiboken6 import isValid
 
 from .. import config
 from ..setup_state import section, valid_box
+from .settings_layout import DANGER_STYLE
 
 REGIONS = {
     "buff": ("buffTracker", "captureRegion", "버프 판독"),
@@ -80,6 +81,8 @@ def connect_selection(owner, selector, callback):
 def clear_button(owner, key, changed):
     name, field, label = REGIONS[key]
     button = QPushButton("지정 해제", owner)
+    button.setStyleSheet(DANGER_STYLE)
+    button.setEnabled(section(config._read_local_config(), name).get(field) is not None)
     owner._region_keys = tuple(dict.fromkeys((*getattr(owner, "_region_keys", ()), key)))
     button.setToolTip(label + " 영역만 지웁니다. 세부 설정은 유지합니다.")
     reference = weakref.ref(owner)

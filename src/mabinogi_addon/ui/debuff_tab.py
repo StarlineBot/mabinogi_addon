@@ -33,9 +33,10 @@ from ..catalog import USER_DEBUFF_ICON_DIR, BuffDef, available_debuff_catalog
 from .buff_tab import _capture_icon_to, _pixmap
 from .help_dialog import tab_header
 from .widgets import TrackerColumns, checkbox, hint_label, icon_slot, section_label
+from .settings_layout import LOCK_STYLE, DANGER_STYLE, disclosure
 
 # 영역에 꼭 들어가야 하는 것(앱 힌트 ↔ 화면 점선 라벨이 같은 기준을 공유).
-REGION_CRITERION = "디버프 아이콘 줄이 점선 안에 들어오게 드래그하세요"
+REGION_CRITERION = "디버프 아이콘 줄과 보스 체력바가 함께 들어오게 지정하세요"
 HIGHLIGHT_TITLE = "디버프 영역 확인"
 HIGHLIGHT_SUB = "디버프 아이콘이 점선 안에 다 들어왔나요?"
 
@@ -147,9 +148,7 @@ class DebuffTab(QWidget):
             "잠그면 오버레이 위치가 고정되고, 클릭이 통과돼 게임을 가리지 않습니다.\n"
             "해제하면 드래그로 위치를 옮길 수 있어요."
         )
-        self.lock_btn.setStyleSheet(
-            "QPushButton:checked { background:#00B894; color:white; font-weight:600; }"
-        )
+        self.lock_btn.setStyleSheet(LOCK_STYLE)
         self.lock_btn.toggled.connect(self._on_lock_toggled)
         top.addWidget(self.lock_btn, 1)
         self.scale_spin = QSpinBox()
@@ -180,11 +179,14 @@ class DebuffTab(QWidget):
         self.clear_region_btn = clear_button(self, "debuff", self._region_cleared)
         hint_row.addWidget(self.clear_region_btn)
         self._update_region_hint()
-        v.addWidget(section_label("판독 영역 · 디버프 줄"))
+        v.addWidget(section_label("판독 영역 · 디버프 줄과 보스 체력바"))
         v.addWidget(self.region_hint)
         hint_row.removeWidget(self.region_hint)
         hint_row.addStretch()
         v.addLayout(hint_row)
+        v.addWidget(hint_label("보스 체력바가 보일 때 자동 찾기를 실행하면 디버프와 공유 보스 영역을 함께 등록합니다. 직접 지정·보기·해제는 디버프 영역만 조작합니다."))
+        self.shared_region_hint = hint_label("")
+        v.addWidget(self.shared_region_hint)
         v.addLayout(top)
 
         self.status_label = hint_label("")  # 진단 상태(추적 중/게임 비활성 등)
@@ -248,7 +250,15 @@ class DebuffTab(QWidget):
         brl.addWidget(self.bar_region_btn)
         self.bar_region_status = hint_label("")
         brl.addWidget(self.bar_region_status, 1)
-        v.addWidget(self._bar_region_row)
+        self._bar_region_container = QWidget()
+        bar_layout = QVBoxLayout(self._bar_region_container)
+        bar_layout.setContentsMargins(0, 0, 0, 0)
+        bar_layout.addWidget(hint_label("공유 보스 체력바는 보스 패턴 알림과 디버프 보스 판단에 사용합니다. 변경·해제 시 공유 기능에도 반영됩니다."))
+        bar_layout.addWidget(self._bar_region_row)
+        self.bar_view_btn = QPushButton("지정 영역 보기")
+        self.bar_view_btn.clicked.connect(self._flash_bar_region)
+        bar_layout.addWidget(self.bar_view_btn)
+        self.bar_adjust_btn = disclosure("공유 보스 영역 개별 조정", self._bar_region_container, v)
 
         self._bar_gating_notice = hint_label(
             "🧪 개발 중인 기능 — 설정 탭에서 Discord 로그인 후 가장 먼저 써볼 수 있어요."
@@ -318,6 +328,11 @@ class DebuffTab(QWidget):
         """자동/퍼센트에서 선택적인 공유 HP 영역 상태를 갱신한다."""
         is_percent = self._selected_mode() in ("auto", "percent")
         self._bar_region_row.setVisible(is_percent and (self._selected_mode() == "auto" or self._logged_in()))
+        self.bar_adjust_btn.setVisible(is_percent and (self._selected_mode() == "auto" or self._logged_in()))
+        self._bar_region_container.setVisible(self.bar_adjust_btn.isVisibleTo(self) and self.bar_adjust_btn.isChecked())
+        self.bar_view_btn.setEnabled(bool(config.load_boss_bar_region()))
+        self.clear_bar_region_btn.setEnabled(bool(config.load_boss_bar_region()))
+        self.shared_region_hint.setText("공유 보스 영역 · " + self._bar_region_status_text()[0])
         if is_percent:
             txt, color = self._bar_region_status_text()
             self.bar_region_status.setText(txt)
@@ -344,6 +359,17 @@ class DebuffTab(QWidget):
         from .region_registration import connect_selection
         connect_selection(self, self._bar_selector, self._on_bar_region_selected)
         self._bar_selector.start()
+
+    def _flash_bar_region(self):
+        region = config.load_boss_bar_region()
+        if region:
+            from .region_highlight import RegionHighlight
+            from shiboken6 import isValid
+            previous = getattr(self, "_bar_highlight", None)
+            if previous is not None and isValid(previous):
+                previous.close()
+            self._bar_highlight = RegionHighlight()
+            self._bar_highlight.flash(region["x"], region["y"], region["w"], region["h"], "공유 보스 체력바")
 
     def _on_bar_region_selected(self, x: int, y: int, w: int, h: int) -> None:
         config.save_boss_bar_region(x, y, w, h)  # 보스패턴알림과 공유 저장
@@ -391,6 +417,7 @@ class DebuffTab(QWidget):
 
     def _update_region_hint(self) -> None:
         region = config.load_capture_region("debuffTracker")
+        self.clear_region_btn.setEnabled(region is not None)
         if region:
             self.region_hint.setText(
                 f"등록됨 · {region['x']},{region['y']}  "

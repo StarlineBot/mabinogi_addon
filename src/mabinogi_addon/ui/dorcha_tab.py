@@ -84,6 +84,8 @@ class DorchaTab(QWidget):
         row.addWidget(self.scale_spin)
         self.lock_chk = QPushButton("위치 잠금됨" if self._cfg["locked"] else "위치 잠금")
         self.lock_chk.setCheckable(True)
+        from .settings_layout import LOCK_STYLE
+        self.lock_chk.setStyleSheet(LOCK_STYLE)
         self.lock_chk.setChecked(self._cfg["locked"])
         self.lock_chk.toggled.connect(self._on_locked)
         row.addWidget(self.lock_chk)
@@ -171,6 +173,7 @@ class DorchaTab(QWidget):
 
     def _apply_gate(self):
         logged = self._logged_in()
+        self.clear_region_btn.setEnabled(self._region is not None and not self._shutting_down)
         for control in (self.enable,self.scale_spin,self.lock_chk,self.region_btn,self.auto_find_btn):
             control.setEnabled(logged and not self._shutting_down and not self._autofind_busy)
         if self._percent_control is not None:

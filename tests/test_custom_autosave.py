@@ -41,12 +41,9 @@ def tab():
 
 
 def select(tab, name):
-    for i in range(tab.preset_list.count()):
-        item = tab.preset_list.item(i)
-        if item.data(Qt.ItemDataRole.UserRole) == name:
-            tab.preset_list.setCurrentItem(item)
-            return
-    raise AssertionError(name)
+    index = tab.preset_combo.findData(name)
+    assert index >= 0, name
+    tab.preset_combo.setCurrentIndex(index)
 
 
 def test_selected_and_startup_targets_do_not_redirect_edits(tab):

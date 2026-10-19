@@ -17,7 +17,7 @@ from .dpi import to_logical,to_physical
 from .region_highlight import RegionHighlight
 from .screen_grab import capture_for_autofind
 from .widgets import checkbox
-from .settings_layout import disclosure
+from .settings_layout import disclosure, DANGER_STYLE
 
 
 def notice(owner,title,text):
@@ -51,12 +51,16 @@ class ResourceTab(QWidget):
         self.region_status = QLabel()
         self.region_status.setWordWrap(True)
         layout.addWidget(self.region_status)
+        guide = QLabel("원형 자원 UI와 오른쪽 아래 퍼센트를 함께 설정합니다.")
+        guide.setWordWrap(True)
+        layout.addWidget(guide)
         row = QHBoxLayout()
         for attr,text in (("auto_find_btn","자동 찾기"),("region_btn","직접 지정"),
                           ("view_region_btn","지정 영역 보기"),("clear_region_btn","지정 해제")):
             button = QPushButton(text)
             setattr(self,attr,button)
             if attr == "clear_region_btn": row.addStretch()
+            if attr == "clear_region_btn": button.setStyleSheet(DANGER_STYLE)
             row.addWidget(button)
         layout.addLayout(row)
         self.auto_find_btn.clicked.connect(self._auto_find)
@@ -137,7 +141,8 @@ class ResourceTab(QWidget):
                  else "투아림만 등록됨" if regions["tuarim"] else "영역 미등록")
         details = [f"{name} {b['x']},{b['y']} / {b['w']}×{b['h']}"
                    for k,name in (("dorcha","도르카"),("tuarim","투아림")) if (b:=regions[k])]
-        self.region_status.setText(state+(" · "+" · ".join(details) if details else ""))
+        self.region_status.setText(state)
+        self.region_status.setToolTip("\n".join(details))
         available = (not self._busy and not self._shutting_down
                      and (self._future is None or self._future.done())
                      and not any(c._shutting_down or c._autofind_busy for c in self._controllers().values()))

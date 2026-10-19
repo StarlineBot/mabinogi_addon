@@ -136,6 +136,7 @@ class SkillbarTab(QWidget):
         # 프리셋(기본 배치)
         pr = QHBoxLayout()
         display_layout.addWidget(QLabel("기본 배치"))
+        display_layout.addWidget(hint_label("빈칸은 오버레이에서 우클릭해 숨길 수 있습니다."))
         for label, fn in (
             ("중앙 하단(기본)", self._preset_default),
             ("중앙 2단", self._preset_two_tier),
@@ -296,6 +297,7 @@ class SkillbarTab(QWidget):
                          compatible=lambda box: abs(box[2] - SRC_W) <= 1 and abs(box[3] - SRC_H) <= 1)
 
     def _update_anchor_label(self) -> None:
+        self.clear_region_btn.setEnabled(self._anchor is not None)
         if self._anchor:
             self.anchor_label.setText(
                 f"등록됨 · {self._anchor['x']},{self._anchor['y']}"

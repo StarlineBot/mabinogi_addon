@@ -23,6 +23,8 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QSpinBox,
+    QStackedWidget,
+    QLabel,
     QVBoxLayout,
     QWidget,
 )
@@ -33,6 +35,7 @@ from ..catalog import BuffDef, available_catalog
 from .dpi import to_logical
 from .screen_grab import capture_for_autofind
 from .widgets import TrackerColumns, callout, checkbox, hint_label, icon_slot, section_label
+from .settings_layout import LOCK_STYLE, DANGER_STYLE
 
 # 앵커로 고정 사용할 버프(항상 존재, 지속시간 없음 → 판정 기준)
 ANCHOR_ID = "premium_battle"
@@ -145,7 +148,32 @@ class BuffTab(QWidget):
             "등록한 버프의 남은 시간을 오버레이로 표시", HELP_TITLE, HELP_HTML, self
         ))
         list_panel = self._build_list_panel()
-        self.form_panel = self._build_form_panel()
+        self._buff_editor = self._build_form_panel()
+        self.form_panel = QWidget()
+        form_layout = QVBoxLayout(self.form_panel)
+        form_layout.setContentsMargins(0, 0, 0, 0)
+        self._form_stack = QStackedWidget()
+        form_layout.addWidget(self._form_stack)
+        self._form_stack.addWidget(self._buff_editor)
+        self.anchor_panel = QWidget()
+        anchor_layout = QVBoxLayout(self.anchor_panel)
+        anchor_layout.setContentsMargins(0, 0, 0, 0)
+        anchor_layout.addWidget(section_label("기준 버프"))
+        self.anchor_icon = icon_slot()
+        anchor_layout.addWidget(self.anchor_icon)
+        self.anchor_name = QLabel()
+        self.anchor_name.setWordWrap(True)
+        anchor_layout.addWidget(self.anchor_name)
+        anchor_layout.addWidget(hint_label(
+            "버프 트래커가 상태목록 위치를 찾을 때 사용하는 기준 버프입니다.\n\n"
+            "판독 영역 안에 이 버프가 포함되어야 합니다.\n\n"
+            "기준 버프 자체는 오버레이에 표시하거나 개별 알림을 설정하지 않습니다.\n\n"
+            "표시·알림을 설정하려면 왼쪽 목록에서 일반 버프를 선택하세요."))
+        anchor_layout.addStretch()
+        self._form_stack.addWidget(self.anchor_panel)
+        self._empty_panel = QLabel("설정할 버프를 선택하세요.")
+        self._empty_panel.setWordWrap(True)
+        self._form_stack.addWidget(self._empty_panel)
         self._columns = TrackerColumns(list_panel, self.form_panel)
         outer.addLayout(self._columns, 1)
 
@@ -217,9 +245,7 @@ class BuffTab(QWidget):
             "잠그면 오버레이 위치가 고정되고, 클릭이 통과돼 게임을 가리지 않습니다.\n"
             "해제하면 드래그로 위치를 옮길 수 있어요."
         )
-        self.lock_btn.setStyleSheet(
-            "QPushButton:checked { background:#00B894; color:white; font-weight:600; }"
-        )
+        self.lock_btn.setStyleSheet(LOCK_STYLE)
         self.lock_btn.toggled.connect(self._on_lock_toggled)
         top.addWidget(self.lock_btn, 1)
         self.scale_spin = QSpinBox()
@@ -253,6 +279,7 @@ class BuffTab(QWidget):
         hint_row.removeWidget(self.region_hint)
         hint_row.addStretch()
         v.addLayout(hint_row)
+        v.addWidget(hint_label("기준 버프가 포함된 상태목록을 지정하세요. 상단의 고정 즐겨찾기 영역은 제외합니다."))
         v.addLayout(top)
 
         self.status_label = hint_label("")  # 진단 상태(추적 중/게임 비활성 등)
@@ -270,6 +297,7 @@ class BuffTab(QWidget):
         self.add_btn.setToolTip("새 버프 등록")
         self.add_btn.clicked.connect(self._on_register)
         self.del_btn = QPushButton("－ 삭제")
+        self.del_btn.setStyleSheet(DANGER_STYLE)
         self.del_btn.setToolTip("선택한 버프 삭제")
         self.del_btn.clicked.connect(self._on_delete)
         self.up_btn = QPushButton("▲")
@@ -317,6 +345,7 @@ class BuffTab(QWidget):
     # ---- 영역 지정 ----
     def _update_region_hint(self) -> None:
         region = config.load_capture_region("buffTracker")
+        self.clear_region_btn.setEnabled(region is not None)
         if region:
             self.region_hint.setText(
                 f"등록됨 · {region['x']},{region['y']}  "
@@ -615,10 +644,16 @@ class BuffTab(QWidget):
         bid = self._current_id()
         self._current = bid
         if bid is None:
+            self._name_id = None
+            self._form_stack.setCurrentWidget(self._empty_panel)
             return
         buff = self._catalog.get(bid)
         s = self._settings[bid]
         is_anchor = bid == ANCHOR_ID
+        self._form_stack.setCurrentWidget(self.anchor_panel if is_anchor else self._buff_editor)
+        if is_anchor:
+            self.anchor_name.setText(self._display_name(bid))
+            self._set_slot(self.anchor_icon, buff.match_icon if buff else None, "")
 
         self._loading = True
         self._name_id = bid  # name_edit이 편집 중인 버프(포커스 아웃 저장 기준)

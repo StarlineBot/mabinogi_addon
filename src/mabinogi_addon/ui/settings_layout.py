@@ -5,6 +5,14 @@ from PySide6.QtWidgets import QToolButton
 from shiboken6 import isValid
 import weakref
 
+LOCK_STYLE = (
+    "QPushButton { padding:4px 10px; border:1px solid palette(mid); border-radius:3px;"
+    " background:palette(button); color:palette(button-text); font-weight:600; }"
+    "QPushButton:disabled { color:palette(mid); }"
+    "QPushButton:checked:enabled { background:#00b894; color:#062f28; border-color:#00856b; }"
+)
+DANGER_STYLE = "QPushButton:enabled { color:#d35b58; }"
+
 
 def disclosure(title,body,layout):
     button = QToolButton()

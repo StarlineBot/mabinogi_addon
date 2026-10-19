@@ -35,8 +35,9 @@ from ..detect.stat_bars import read_stat_bars
 from .dpi import to_logical
 from .help_dialog import tab_header
 from .screen_grab import capture_for_autofind
-from .stat_overlay import WARNING_SAMPLE_MAX_AGE, StatBarOverlay
+from .stat_overlay import WARNING_SAMPLE_MAX_AGE, StatBarOverlay, _BAR_W, _PAD, _SHAKE_AMPLITUDE
 from .widgets import checkbox, hint_label, section_label, wrapping_row
+from .settings_layout import LOCK_STYLE
 
 STAT_LABELS = {"hp": "생명력", "mp": "마나", "sta": "스태미나"}
 
@@ -72,11 +73,12 @@ HELP_HTML = """
 
 
 class _DisplayPreview(QScrollArea):
-    """Keep the actual output size, but let the surrounding group constrain the viewport."""
+    """Fit sample bars to the settings viewport without changing live overlay scale."""
 
     def __init__(self):
         super().__init__()
         self._content_size = QSize()
+        self._fit_bars = None
         self._fit_timer = QTimer(self)
         self._fit_timer.setSingleShot(True)
         self._fit_timer.timeout.connect(self.fit_content)
@@ -94,6 +96,8 @@ class _DisplayPreview(QScrollArea):
         body = self.widget()
         if body is None:
             return
+        if self._fit_bars is not None:
+            self._fit_bars(self.viewport().width())
         body.layout().activate()
         size = body.sizeHint()
         body.resize(size)
@@ -199,6 +203,7 @@ class StatBarsTab(QWidget):
         commands.addWidget(self.clear_region_btn)
         self.region_row = wrapping_row(row, commands)
         v.addLayout(self.region_row)
+        v.addWidget(hint_label("생명력·마나·스태미나 세 바를 포함하고, 아래 경험치 바는 제외하세요."))
 
         # 미리보기 + 현재 값
         source_group = QGroupBox("판독 미리보기")
@@ -269,11 +274,13 @@ class StatBarsTab(QWidget):
         self.display_preview = _DisplayPreview()
         self.display_preview.setFrameShape(QScrollArea.Shape.NoFrame)
         self.display_preview.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.display_preview.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         preview_body = QWidget()
         preview_row = QHBoxLayout(preview_body)
         preview_row.setContentsMargins(0, 0, 0, 0)
         self._preview_bars = {}
         self._preview_groups = {}
+        self.bar_lock_buttons = {}
         for sid in ("hp", "mp", "sta"):
             group = QWidget()
             column = QVBoxLayout(group)
@@ -284,14 +291,22 @@ class StatBarsTab(QWidget):
             bar.set_align(self._align)
             bar.set_value(0, "--%")
             column.addWidget(bar)
+            lock = QPushButton("위치 잠금됨" if self._bars_cfg[sid]["locked"] else "위치 잠금")
+            lock.setCheckable(True)
+            lock.setChecked(self._bars_cfg[sid]["locked"])
+            lock.setStyleSheet(LOCK_STYLE)
+            lock.toggled.connect(lambda checked, sid=sid: self._set_bar_locked(sid, checked))
+            column.addWidget(lock, 0, Qt.AlignmentFlag.AlignLeft)
+            self.bar_lock_buttons[sid] = lock
             preview_row.addWidget(group)
             self._preview_bars[sid] = bar
             self._preview_groups[sid] = group
             group.setVisible(self._bars_cfg[sid]["show"])
         preview_row.addStretch()
         self.display_preview.setWidget(preview_body)
+        self.display_preview._fit_bars = self._fit_preview_bars
         self._resize_display_preview()
-        display_layout.addWidget(self.display_preview,0,Qt.AlignmentFlag.AlignLeft)
+        display_layout.addWidget(self.display_preview)
 
         # 저값 경고(생/마/스 각각 임계 이하면 알림).
         v.addWidget(self._alert_group())
@@ -314,6 +329,7 @@ class StatBarsTab(QWidget):
             self.scale_spin, self.align_combo, self.lock_all_btn, self.unlock_all_btn,
             self.snap_btn, self.open_dir_btn, self.collect_chk,
             self.alert_sound_chk,
+            *self.bar_lock_buttons.values(),
             *self._show_checks.values(),
             *self._alert_checks.values(),
             *self._alert_spins.values(),
@@ -329,6 +345,7 @@ class StatBarsTab(QWidget):
     def _alert_group(self) -> QGroupBox:
         box = QGroupBox("낮은 수치 알림 · 보스전")
         g = QVBoxLayout(box)
+        g.addWidget(hint_label("보스전 중 설정한 수치 이하가 되면 해당 바의 흔들림과 선택한 소리로 알립니다."))
         groups = []
         self._alert_checks: dict[str, QWidget] = {}
         self._alert_spins: dict[str, QSpinBox] = {}
@@ -362,6 +379,17 @@ class StatBarsTab(QWidget):
         self.refresh_boss_region()
         g.addWidget(self.boss_region_status)
         return box
+
+    def _fit_preview_bars(self, available):
+        visible = [sid for sid, cfg in self._bars_cfg.items() if cfg["show"]]
+        if not visible:
+            return
+        spacing = max(0, self.display_preview.widget().layout().spacing())
+        per_bar = max(1, (available - spacing * (len(visible) + 1)) / len(visible))
+        fitted = max(.5, min(self._scale / 100, (per_bar - 2*_PAD - 2) / (_BAR_W + 2*_SHAKE_AMPLITUDE)))
+        for bar in self._preview_bars.values():
+            if abs(bar._scale - fitted) > .0001:
+                bar.set_scale(fitted)
 
     def _resize_display_preview(self):
         self.display_preview.fit_content()
@@ -769,6 +797,7 @@ class StatBarsTab(QWidget):
         )
 
     def _update_region_label(self) -> None:
+        self.clear_region_btn.setEnabled(self._region is not None)
         if self._region:
             r = self._region
             self.region_label.setText(f"등록됨 · {r['x']},{r['y']}  {r['w']}×{r['h']}")
@@ -810,13 +839,29 @@ class StatBarsTab(QWidget):
         for sid, ov in self._overlays.items():
             ov.set_locked(locked)
             self._bars_cfg[sid]["locked"] = locked
+        self._sync_bar_locks()
         self._save()
+
+    def _set_bar_locked(self, sid, locked):
+        self._ensure_overlays()
+        self._overlays[sid].set_locked(locked)
+        self._bars_cfg[sid]["locked"] = locked
+        self._sync_bar_locks()
+        self._save()
+
+    def _sync_bar_locks(self):
+        for sid, button in self.bar_lock_buttons.items():
+            button.blockSignals(True)
+            button.setChecked(self._bars_cfg[sid]["locked"])
+            button.setText("위치 잠금됨" if button.isChecked() else "위치 잠금")
+            button.blockSignals(False)
 
     def _save(self) -> None:
         for sid, ov in self._overlays.items():
             self._bars_cfg[sid]["locked"] = ov.locked
             pos = ov.base_position
             self._bars_cfg[sid]["pos"] = {"x": pos.x(), "y": pos.y()}
+        self._sync_bar_locks()
         config.save_stat_bars(
             {
                 "box": self._region,
