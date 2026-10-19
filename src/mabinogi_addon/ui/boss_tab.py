@@ -256,6 +256,7 @@ class BossTab(QWidget):
     def _safe_tick(self) -> None:
         """타이머 틱 가드 — 한 틱의 예외(판독·캡처 등)가 앱 전체를 죽이지 않게 흡수한다.
         (메인 스레드 QTimer 슬롯의 미처리 예외는 PySide6에서 프로세스를 abort시킬 수 있다.)"""
+        self.halo_capture.set_boss_context(None)
         try:
             self._apply_collect_gate()
             if not self._region:
@@ -338,6 +339,8 @@ class BossTab(QWidget):
             self._update_region_label()
 
     def _region_cleared(self):
+        self.halo_capture.set_boss_context(None)
+        self.halo_capture._stop_monitoring()
         self._region = None
         self._tracker = None
         self._cur_boss = None
@@ -457,6 +460,7 @@ class BossTab(QWidget):
 
     # ---- 읽기 루프 ----
     def _tick(self) -> None:
+        self.halo_capture.set_boss_context(None)
         active = self._watcher.is_game_active() or self._watcher.is_self_active()
         if not self._region or not active:
             self._boss_present = False  # 게임 비활성 → '보스전 아님'(저체력 알림 게이트)
@@ -476,6 +480,7 @@ class BossTab(QWidget):
         name_reg = frame[:, : int(w * 0.60)]  # 왼쪽=이름
         pct_reg = frame[:, int(w * 0.58) :]  # 오른쪽=HP%(가운데 빈 띠는 글자 없음)
         boss_id = identify(name_reg, self._name_templates, variants=self._name_variants)
+        self.halo_capture.set_boss_context(boss_id)
 
         # 보스 식별/소멸 관리. **HP 판독·경고는 보스가 '이번 프레임' 식별됐을 때만**
         # 처리한다 — 보스가 없으면 영역이 길바닥/UI라 HP가 garbage로 읽히는데, 그걸

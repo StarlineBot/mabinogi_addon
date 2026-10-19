@@ -48,8 +48,12 @@ class CaptureSession:
             raise ValueError("수집 한도에 도달했습니다.")
         self.last_at = now
         pixels = frame.copy()
+        raw_time = metadata.get('raw_time')
+        if type(raw_time) is not int or not 0 <= raw_time <= 900:
+            raw_time = None
+        read_status = ('recognized' if raw_time is not None else 'uncertain') if 'read_status' in metadata else 'not_implemented'
         metadata = dict(metadata, captured_at=datetime.now(timezone.utc).isoformat(),
-                        raw_time=None, read_status="not_implemented", sequence=self.count + 1,
+                        raw_time=raw_time, read_status=read_status, sequence=self.count + 1,
                         change_method="bright-neutral-mask-v1", shape=list(frame.shape))
         self.thread = threading.Thread(target=self._write, args=(pixels, mask, metadata), daemon=True,
                                        name="halo-png-write")

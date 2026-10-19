@@ -1,5 +1,7 @@
-"""Creator-only first-stage timer collection; no clock or alert inference."""
+"""Creator-only halo timer, gated by the existing boss identification."""
 
+import math
+import time
 from PySide6.QtCore import QSignalBlocker, QTimer, QUrl, Qt, Signal
 from PySide6.QtGui import QDesktopServices, QImage, QPixmap
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
@@ -10,6 +12,8 @@ from ..feature_access import is_creator
 from ..halo_capture import CaptureSession, MAX_PIXELS, MAX_SHOTS, MAX_BYTES
 from ..setup_state import valid_box
 from ..version import __version__
+from ..detect.halo_timer import read_seconds
+from ..tracker.halo import HaloTracker
 from .dpi import to_physical
 from .region_registration import connect_selection, confirm_clear
 from .settings_layout import disclosure
@@ -22,15 +26,26 @@ class HaloCaptureSection(QWidget):
     def __init__(self, watcher, grab, parent=None):
         super().__init__(parent)
         self._watcher, self._grab = watcher, grab
+        self._pattern_warning = getattr(parent, '_overlay', None)
         self._shutting_down = False
         self._selector = self._highlight = None
         self._session = None
         self._region_generation = 0
         self._last_frame = None
         self._target = None
+        self._clock = HaloTracker()
+        self._boss_id = None
+        self._boss_seen = float('-inf')
+        from .pattern_overlay import PatternWarningOverlay
+        self._warning = PatternWarningOverlay()
+        self._warning.moved.connect(self._save_warning_position)
         self._root = paths.user_data_dir() / "halo_timer_shots"
         raw = config._read_local_config().get("haloTimer", {})
         self._region = raw.get("box") if isinstance(raw, dict) and valid_box(raw.get("box")) else None
+        pos = raw.get('warnPos') if isinstance(raw, dict) else None
+        self._warning_positioned = isinstance(pos, dict) and all(type(pos.get(k)) is int for k in ('x', 'y'))
+        if self._warning_positioned:
+            self._warning.move(pos['x'], pos['y'])
         v = QVBoxLayout(self)
         v.setContentsMargins(0, 0, 0, 0)
         title = QLabel("믿음의 균열 헤일로 알림")
@@ -39,9 +54,23 @@ class HaloCaptureSection(QWidget):
         description = QLabel("게임의 남은 시간을 기준으로 다음 헤일로까지 표시하고, 발생 5초 전에 알립니다.")
         description.setWordWrap(True)
         v.addWidget(description)
-        self.state = QLabel("현재 원본 시간 자료 수집 단계입니다. 시간 판독·카운트다운·알림은 아직 동작하지 않습니다.")
+        self.state = QLabel("레넨의 미이르 : 회한 식별 대기")
         self.state.setWordWrap(True)
         v.addWidget(self.state)
+        options = QHBoxLayout()
+        self.warn_lock = QPushButton('경고 위치 잠금됨')
+        self.warn_lock.setCheckable(True)
+        self.warn_lock.setChecked(True)
+        from .settings_layout import LOCK_STYLE
+        self.warn_lock.setStyleSheet(LOCK_STYLE)
+        self.warn_lock.clicked.connect(self._toggle_warning_lock)
+        options.addWidget(self.warn_lock)
+        self.sound = checkbox('소리 알림')
+        self.sound.setEnabled(False)
+        self.sound.setToolTip('알림음 연결 전입니다.')
+        options.addWidget(self.sound)
+        options.addStretch()
+        v.addLayout(options)
         v.addWidget(QLabel("판독 영역 · 전투 제한 시간"))
         self.region_label = QLabel()
         self.region_label.setWordWrap(True)
@@ -59,7 +88,16 @@ class HaloCaptureSection(QWidget):
         self.clear_btn.clicked.connect(self._clear)
         self.preview = QLabel("원본 미리보기 대기")
         self.preview.setFixedHeight(52)
-        v.addWidget(self.preview)
+        self.preview.setFixedWidth(120)
+        self.preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.preview.setStyleSheet('background:palette(base);border:1px solid palette(mid);')
+        preview_row = QHBoxLayout()
+        preview_row.addWidget(self.preview)
+        self.reading = QLabel('판독 시간: —')
+        self.reading.setStyleSheet('font-size:14px;font-weight:600;')
+        preview_row.addWidget(self.reading)
+        preview_row.addStretch()
+        v.addLayout(preview_row)
         tools = QWidget()
         box = QVBoxLayout(tools)
         self.collect = checkbox("수집 모드")
@@ -77,7 +115,7 @@ class HaloCaptureSection(QWidget):
         self.saved = QLabel()
         self.saved.setWordWrap(True)
         box.addWidget(self.saved)
-        hint = QLabel("원본 PNG와 캡처 정보를 저장합니다. 초당 최대 1장, 세션당 900장 또는 100MB까지 수집합니다. 시간 판독 전이며 밝은 숫자 모양 변화를 기준으로 수집하므로 배경 변화가 포함될 수 있습니다.")
+        hint = QLabel("원본 PNG와 캡처 정보를 저장합니다. 초당 최대 1장, 세션당 900장 또는 100MB까지 수집합니다. 밝은 숫자 모양 변화를 기준으로 수집하므로 배경 변화가 포함될 수 있습니다.")
         hint.setWordWrap(True)
         box.addWidget(hint)
         self.disclosure = disclosure("시간 자료 수집", tools, v)
@@ -86,6 +124,75 @@ class HaloCaptureSection(QWidget):
         self._timer.timeout.connect(self._tick)
         self._timer.start()
         self._refresh()
+
+    def set_boss_context(self, boss_id):
+        """Only the existing name matcher supplies this context, never the timer OCR."""
+        self._boss_id = boss_id
+        self._boss_seen = time.monotonic()
+        if boss_id is not None and boss_id != 'lenen_miir_hoehan':
+            self._clock.stop()
+            self._warning.hide()
+
+    def _stop_monitoring(self):
+        self._clock.stop()
+        self._warning.hide()
+        self.reading.setText('판독 시간: —')
+
+    def _place_warning(self):
+        if self._warning_positioned:
+            return
+        reference = self._pattern_warning
+        if reference is not None:
+            reference._relayout()
+            self._warning.move(reference.x(), reference.y() + reference.height() + 8)
+
+    def _toggle_warning_lock(self):
+        self._place_warning()
+        self._warning.set_locked(not self._warning.locked)
+        if not self._warning.locked:
+            self._warning._text = '헤일로 5초 전'
+            self._warning._relayout()
+            self._warning.update()
+        self.warn_lock.setChecked(self._warning.locked)
+        self.warn_lock.setText('경고 위치 잠금됨' if self._warning.locked else '경고 위치 잠금')
+
+    def _save_warning_position(self):
+        raw = config._read_local_config()
+        section = raw.get('haloTimer')
+        section = dict(section) if isinstance(section, dict) else {}
+        section['warnPos'] = dict(x=self._warning.x(), y=self._warning.y())
+        raw['haloTimer'] = section
+        try:
+            config._write_local_config(raw)
+            self._warning_positioned = True
+        except OSError:
+            self.state.setText('경고 위치를 저장하지 못했습니다.')
+
+    @staticmethod
+    def _time_text(seconds):
+        value = max(0, math.ceil(seconds))
+        return f'{value // 60:02}:{value % 60:02}'
+
+    def _monitor(self, raw):
+        now = time.monotonic()
+        context = (self._boss_id == 'lenen_miir_hoehan' and now - self._boss_seen <= 1.5)
+        if context and not self._clock.armed:
+            self._clock.arm()
+        result = self._clock.observe(raw, now, eligible=context,
+                                     target=self._target[:2] if self._target else None)
+        if not context:
+            self._warning.hide()
+            self.state.setText('레넨의 미이르 : 회한 식별 대기')
+        elif result.phase == 'synced':
+            following = ('다음 헤일로 없음' if result.until_halo is None else
+                         f'다음 헤일로까지 {self._time_text(result.until_halo)}')
+            self.state.setText(f'감시 중 · {following}')
+            self._place_warning()
+            if result.warning is not None:
+                self._warning.show_message('헤일로 5초 전', 5000)
+        else:
+            self._warning.hide()
+            self.state.setText('시간 판독 확인 중 · 경고 보류')
 
     def _allowed(self):
         window = self.window()
@@ -123,7 +230,7 @@ class HaloCaptureSection(QWidget):
             self.state.setText("이전 저장 작업이 끝난 뒤 다시 시작하세요.")
             return
         self._session = CaptureSession(self._root)
-        self.state.setText("시간 원본 수집 중 · 시간 판독과 알림은 아직 동작하지 않습니다.")
+        self.state.setText("시간 원본 수집 중")
         self._refresh()
 
     def _save_region(self, x, y, w, h):
@@ -143,6 +250,7 @@ class HaloCaptureSection(QWidget):
         raw["haloTimer"] = section
         config._write_local_config(raw)
         self._stop()
+        self._stop_monitoring()
         self._region = box
         self._region_generation += 1
         self.preview.clear()
@@ -219,7 +327,8 @@ class HaloCaptureSection(QWidget):
             self._session = CaptureSession(self._root)
         self._session.submit(frame, {"region_logical": dict(self._region),
             "region_physical": list(to_physical(self._region)), "source":"foreground_game_region",
-            "game_target":self._target, "backend":"mss", "app_version":__version__}, force=force)
+            "game_target":self._target, "backend":"mss", "app_version":__version__,
+            "raw_time":read_seconds(frame), "read_status":"observed"}, force=force)
 
     def _snapshot(self):
         if not self._allowed():
@@ -239,6 +348,7 @@ class HaloCaptureSection(QWidget):
             self._refresh()
             if not self._allowed():
                 self._stop()
+                self._stop_monitoring()
                 self._close_marks()
                 self.preview.clear()
                 return
@@ -254,23 +364,32 @@ class HaloCaptureSection(QWidget):
                     self.state.setText("수집 한도에 도달해 중단했습니다.")
                     self._refresh()
                     return
-            if not self.collect.isChecked() and not self.isVisible():
+            if (not self.collect.isChecked() and not self.isVisible()
+                    and not self._clock.armed and self._boss_id != 'lenen_miir_hoehan'):
                 return
             frame = self._capture()
             if frame is None:
                 self.preview.clear()
+                self.reading.setText('판독 시간: —')
+                self._monitor(None)
                 self.state.setText("캡처 대기 · 게임창이 활성 상태인지 확인하세요.")
                 return
             self._last_frame = frame
+            raw_time = read_seconds(frame)
+            self.reading.setText('판독 시간: ' + ('—' if raw_time is None else self._time_text(raw_time)))
+            self._monitor(raw_time)
             rgb = np.ascontiguousarray(frame[:,:,::-1])
             h,w = rgb.shape[:2]
             img = QImage(rgb.data,w,h,rgb.strides[0],QImage.Format.Format_RGB888).copy()
-            self.preview.setPixmap(QPixmap.fromImage(img).scaled(360,48,Qt.AspectRatioMode.KeepAspectRatio))
+            pixmap = QPixmap.fromImage(img).scaled(360,48,Qt.AspectRatioMode.KeepAspectRatio)
+            self.preview.setFixedSize(pixmap.width() + 2, pixmap.height() + 2)
+            self.preview.setPixmap(pixmap)
             if self.collect.isChecked():
                 self._store(frame)
             self._refresh()
         except Exception:
             self._stop()
+            self._stop_monitoring()
             self.state.setText("캡처 또는 저장 실패로 수집을 중단했습니다.")
 
     def _open_folder(self):
@@ -291,6 +410,8 @@ class HaloCaptureSection(QWidget):
         self._selector = self._highlight = None
 
     def shutdown(self):
+        self._stop_monitoring()
+        self._warning.close()
         self._shutting_down = True
         self._timer.stop()
         self._stop()

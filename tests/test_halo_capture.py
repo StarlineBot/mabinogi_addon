@@ -17,6 +17,65 @@ from PySide6.QtWidgets import QWidget
 native_target = HaloCaptureSection._foreground_target
 
 
+@pytest.mark.parametrize('boss_id', [None, 'lenen_miir', 'petach'])
+def test_timer_alone_never_arms_halo(window, monkeypatch, boss_id):
+    section = window[0].boss_tab.halo_capture
+    monkeypatch.setattr(config, 'load_discord_user', lambda: {'id': feature_access.CREATOR_DISCORD_ID})
+    section.set_boss_context(boss_id)
+    section._monitor(900)
+    assert not section._clock.armed
+    assert not section._warning.isVisible()
+
+
+def test_identified_hoehan_arms_automatically_and_other_boss_resets(window, monkeypatch):
+    import mabinogi_addon.ui.halo_capture_section as module
+    section = window[0].boss_tab.halo_capture
+    monkeypatch.setattr(config, 'load_discord_user', lambda: {'id': feature_access.CREATOR_DISCORD_ID})
+    now = [100.0]
+    monkeypatch.setattr(module.time, 'monotonic', lambda: now[0])
+    section._target = (11,22,0,0,1920,1080)
+    for seconds, raw in [(0,900), (.5,900), (1,899)]:
+        now[0] = 100 + seconds
+        section.set_boss_context('lenen_miir_hoehan')
+        section._monitor(raw)
+    assert section._clock.anchor == (899,101)
+    assert '감시 중' in section.state.text()
+    warnings = []
+    monkeypatch.setattr(section._warning, 'show_message', lambda *args: warnings.append(args))
+    now[0] = 102
+    section.set_boss_context('lenen_miir_hoehan')
+    section._monitor(898)
+    assert warnings == [('헤일로 5초 전', 5000)]
+    section._monitor(898)
+    assert len(warnings) == 1
+    section.set_boss_context(None)
+    section._monitor(898)
+    assert not section._warning.isVisible()
+    assert section._clock.last_remaining is None
+    section.set_boss_context('lenen_miir')
+    assert not section._clock.armed and section._clock.anchor is None
+
+
+def test_stale_boss_context_cannot_arm_or_warn(window, monkeypatch):
+    import mabinogi_addon.ui.halo_capture_section as module
+    section = window[0].boss_tab.halo_capture
+    now = [0.0]
+    monkeypatch.setattr(module.time, 'monotonic', lambda: now[0])
+    section.set_boss_context('lenen_miir_hoehan')
+    now[0] = 2
+    section._monitor(900)
+    assert not section._clock.armed
+
+
+def test_collection_records_raw_ocr_without_clock_substitution(tmp_path):
+    session = core.CaptureSession(tmp_path)
+    assert session.submit(np.zeros((10,20,3),np.uint8),
+                          {'raw_time': None, 'read_status': 'observed'}, now=0)
+    assert finish(session) == ''
+    metadata = json.loads((session.path/'0001'/'metadata.json').read_text(encoding='utf-8'))
+    assert metadata['raw_time'] is None and metadata['read_status'] == 'uncertain'
+
+
 @pytest.fixture(autouse=True)
 def game_boundary(monkeypatch):
     monkeypatch.setattr(HaloCaptureSection,'_foreground_target',lambda self:(11,22,0,0,1920,1080))
