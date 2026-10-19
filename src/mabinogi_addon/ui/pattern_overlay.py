@@ -36,7 +36,7 @@ _SAMPLE = "고목의 페타크 85% 패턴 준비"
 class PatternWarningOverlay(QWidget):
     moved = Signal()  # 드래그로 위치가 바뀜 → 저장
 
-    def __init__(self) -> None:
+    def __init__(self, *, sample: str = _SAMPLE) -> None:
         super().__init__(
             None,
             Qt.WindowType.FramelessWindowHint
@@ -47,6 +47,7 @@ class PatternWarningOverlay(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self._locked = True
+        self._sample = sample
         self._text = ""
         self._drag_offset = None
         self._font_px = self._default_font_px()
@@ -98,14 +99,14 @@ class PatternWarningOverlay(QWidget):
         else:
             # 위치 조정 모드: 샘플을 계속 띄워 끌어 옮기게 한다(미리보기 겸용).
             self._timer.stop()
-            self._text = _SAMPLE
+            self._text = self._sample
             self._relayout()
             self.show()
             self.raise_()
         self.update()
 
     def _display_text(self) -> str:
-        return self._text or (_SAMPLE if not self._locked else "")
+        return self._text or (self._sample if not self._locked else "")
 
     def _relayout(self) -> None:
         font = QFont()
@@ -113,7 +114,7 @@ class PatternWarningOverlay(QWidget):
         font.setBold(True)
         fm = QFontMetrics(font)
         text = self._display_text()
-        tw = fm.horizontalAdvance(text) if text else fm.horizontalAdvance(_SAMPLE)
+        tw = fm.horizontalAdvance(text) if text else fm.horizontalAdvance(self._sample)
         th = fm.height()
         header = 0 if self._locked else _HEADER_H
         self.resize(tw + _PAD_X * 2, th + _PAD_Y * 2 + header)

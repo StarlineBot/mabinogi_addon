@@ -37,8 +37,10 @@ class HaloCaptureSection(QWidget):
         self._boss_id = None
         self._boss_seen = float('-inf')
         from .pattern_overlay import PatternWarningOverlay
-        self._warning = PatternWarningOverlay()
+        self._warning = PatternWarningOverlay(sample='헤일로 5초 전')
         self._warning.moved.connect(self._save_warning_position)
+        self._countdown = PatternWarningOverlay(sample='다음 헤일로 00:51')
+        self._countdown.moved.connect(self._save_countdown_position)
         self._root = paths.user_data_dir() / "halo_timer_shots"
         raw = config._read_local_config().get("haloTimer", {})
         self._region = raw.get("box") if isinstance(raw, dict) and valid_box(raw.get("box")) else None
@@ -46,6 +48,10 @@ class HaloCaptureSection(QWidget):
         self._warning_positioned = isinstance(pos, dict) and all(type(pos.get(k)) is int for k in ('x', 'y'))
         if self._warning_positioned:
             self._warning.move(pos['x'], pos['y'])
+        pos = raw.get('countdownPos') if isinstance(raw, dict) else None
+        self._countdown_positioned = isinstance(pos, dict) and all(type(pos.get(k)) is int for k in ('x', 'y'))
+        if self._countdown_positioned:
+            self._countdown.move(pos['x'], pos['y'])
         v = QVBoxLayout(self)
         v.setContentsMargins(0, 0, 0, 0)
         title = QLabel("믿음의 균열 헤일로 알림")
@@ -71,6 +77,15 @@ class HaloCaptureSection(QWidget):
         options.addWidget(self.sound)
         options.addStretch()
         v.addLayout(options)
+        countdown_options = QHBoxLayout()
+        self.countdown_lock = QPushButton('카운트다운 위치 잠금됨')
+        self.countdown_lock.setCheckable(True)
+        self.countdown_lock.setChecked(True)
+        self.countdown_lock.setStyleSheet(LOCK_STYLE)
+        self.countdown_lock.clicked.connect(self._toggle_countdown_lock)
+        countdown_options.addWidget(self.countdown_lock)
+        countdown_options.addStretch()
+        v.addLayout(countdown_options)
         v.addWidget(QLabel("판독 영역 · 전투 제한 시간"))
         self.region_label = QLabel()
         self.region_label.setWordWrap(True)
@@ -131,7 +146,13 @@ class HaloCaptureSection(QWidget):
         self._boss_seen = time.monotonic()
         if boss_id is not None and boss_id != 'lenen_miir_hoehan':
             self._clock.stop()
-            self._warning.hide()
+            self._hide_live_overlays()
+
+    def _hide_live_overlays(self):
+        for overlay in (self._warning, self._countdown):
+            if overlay.locked:
+                overlay._timer.stop()
+                overlay.hide()
 
     def _target_boss_active(self):
         return (self._boss_id == 'lenen_miir_hoehan'
@@ -139,7 +160,9 @@ class HaloCaptureSection(QWidget):
 
     def _stop_monitoring(self):
         self._clock.stop()
-        self._warning.hide()
+        for overlay in (self._warning, self._countdown):
+            overlay._timer.stop()
+            overlay.hide()
         self.reading.setText('판독 시간: —')
 
     def _place_warning(self):
@@ -151,24 +174,47 @@ class HaloCaptureSection(QWidget):
             self._warning.move(reference.x(), reference.y() + reference.height() + 8)
 
     def _toggle_warning_lock(self):
+        if not self._allowed():
+            return
         self._place_warning()
         self._warning.set_locked(not self._warning.locked)
-        if not self._warning.locked:
-            self._warning._text = '헤일로 5초 전'
-            self._warning._relayout()
-            self._warning.update()
         self.warn_lock.setChecked(self._warning.locked)
         self.warn_lock.setText('경고 위치 잠금됨' if self._warning.locked else '경고 위치 잠금')
 
+    def _place_countdown(self):
+        if not self._countdown_positioned:
+            self._place_warning()
+            self._warning._relayout()
+            self._countdown.move(self._warning.x(), self._warning.y() + self._warning.height() + 8)
+
+    def _toggle_countdown_lock(self):
+        if not self._allowed():
+            return
+        self._place_countdown()
+        self._countdown.set_locked(not self._countdown.locked)
+        self.countdown_lock.setChecked(self._countdown.locked)
+        self.countdown_lock.setText('카운트다운 위치 잠금됨' if self._countdown.locked else '카운트다운 위치 잠금')
+
+    def _save_countdown_position(self):
+        self._save_overlay_position(self._countdown, 'countdownPos')
+
     def _save_warning_position(self):
+        self._save_overlay_position(self._warning, 'warnPos')
+
+    def _save_overlay_position(self, overlay, key):
+        if not self._allowed():
+            return
         raw = config._read_local_config()
         section = raw.get('haloTimer')
         section = dict(section) if isinstance(section, dict) else {}
-        section['warnPos'] = dict(x=self._warning.x(), y=self._warning.y())
+        section[key] = dict(x=overlay.x(), y=overlay.y())
         raw['haloTimer'] = section
         try:
             config._write_local_config(raw)
-            self._warning_positioned = True
+            if key == 'warnPos':
+                self._warning_positioned = True
+            else:
+                self._countdown_positioned = True
         except OSError:
             self.state.setText('경고 위치를 저장하지 못했습니다.')
 
@@ -185,17 +231,22 @@ class HaloCaptureSection(QWidget):
         result = self._clock.observe(raw, now, eligible=context,
                                      target=self._target[:2] if self._target else None)
         if not context:
-            self._warning.hide()
+            self._hide_live_overlays()
             self.state.setText('레넨의 미이르 : 회한 식별 대기')
         elif result.phase == 'synced':
             following = ('다음 헤일로 없음' if result.until_halo is None else
                          f'다음 헤일로까지 {self._time_text(result.until_halo)}')
             self.state.setText(f'감시 중 · {following}')
             self._place_warning()
+            if result.until_halo is not None:
+                self._place_countdown()
+                self._countdown.show_message('다음 헤일로 ' + self._time_text(result.until_halo), 1500)
+            elif self._countdown.locked:
+                self._countdown.hide()
             if result.warning is not None:
                 self._warning.show_message('헤일로 5초 전', 5000)
         else:
-            self._warning.hide()
+            self._hide_live_overlays()
             self.state.setText('시간 판독 확인 중 · 경고 보류')
 
     def _allowed(self):
@@ -421,6 +472,7 @@ class HaloCaptureSection(QWidget):
     def shutdown(self):
         self._stop_monitoring()
         self._warning.close()
+        self._countdown.close()
         self._shutting_down = True
         self._timer.stop()
         self._stop()
