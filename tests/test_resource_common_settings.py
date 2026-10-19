@@ -157,13 +157,14 @@ def test_clear_common_is_atomic_and_preserves_all_options(common,monkeypatch,fai
 
 def test_cleared_region_cannot_be_restored_by_pending_detection(common,monkeypatch):
     w,view,_,approvals,_ = common
-    raw = config._read_local_config()
-    raw.setdefault("dorcha",{})["box"] = dict(w.dorcha_tab._region)
-    config._write_local_config(raw)
+    assert config.load_dorcha()["box"] == w.dorcha_tab._region
+    assert w.dorcha_tab.clear_region_btn.isEnabled()
     monkeypatch.setattr(reg,"confirm_clear",lambda *args:QMessageBox.StandardButton.Yes)
     QTimer.singleShot(0,w.dorcha_tab.clear_region_btn.click)
     assert view.find_regions() == {}
     assert config._read_local_config()["dorcha"]["box"] is None
+    assert w.dorcha_tab._region is None
+    assert not w.dorcha_tab.clear_region_btn.isEnabled()
     assert not approvals
 
 

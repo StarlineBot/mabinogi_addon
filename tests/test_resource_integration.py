@@ -14,6 +14,7 @@ from mabinogi_addon.ui import dorcha_tab, tuarim_tab
 from mabinogi_addon.ui.dorcha_tab import DorchaTab
 from mabinogi_addon.ui.tuarim_tab import TuarimTab
 from mabinogi_addon.ui.resource_tab import ResourceTab
+from mabinogi_addon.ui import region_registration as registration
 from test_navigation import window
 
 
@@ -25,8 +26,6 @@ def runtime(window,monkeypatch):
                             percent_captures=0,dorcha_captures=0,frame=True,fired=[])
     watcher = SimpleNamespace(is_game_active=lambda:state.game,is_self_active=lambda:state.own)
     t._watcher = d._watcher = watcher
-    t._region = dict(x=560,y=150,w=42,h=16)
-    d._region = d._cfg['box'] = dict(x=534,y=122,w=28,h=23)
     monkeypatch.setattr(config,'load_discord_user',lambda:{'id':'test'} if state.logged else None)
     monkeypatch.setattr(tuarim_tab,'read_percent',lambda frame:state.raw)
     monkeypatch.setattr(dorcha_tab,'read_dorcha',lambda frame:state.dorcha if frame is not None else None)
@@ -40,11 +39,22 @@ def runtime(window,monkeypatch):
         return np.zeros((23,28,3),np.uint8)
     monkeypatch.setattr(t,'_grab_rect',percent_capture)
     monkeypatch.setattr(d,'_grab_rect',dorcha_capture)
+    boxes = {"dorcha": (534,122,28,23), "tuarim": (560,150,42,16)}
+    assert registration.save_boxes(d, boxes)
+    d._accept_region(*boxes["dorcha"])
+    t._accept_region(*boxes["tuarim"])
     def pump(count=3):
         for _ in range(count):
             t._tick_enabled()
             d._tick()
     return w,state,pump
+
+
+def test_runtime_registration_matches_persisted_regions_and_ui(runtime):
+    w, _, _ = runtime
+    for key, controller in (("dorcha", w.dorcha_tab), ("tuarim", w.tuarim_tab)):
+        assert controller._region == config._read_local_config()[key]["box"]
+        assert controller.clear_region_btn.isEnabled()
 
 
 @pytest.mark.parametrize('dorcha,percent,alert',list(product((False,True),repeat=3)))
