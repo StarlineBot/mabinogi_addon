@@ -1,0 +1,279 @@
+import json
+import threading
+import sys
+from pathlib import Path
+from types import SimpleNamespace
+
+import cv2
+import numpy as np
+import pytest
+
+from mabinogi_addon import config, feature_access, halo_capture as core, image_io
+from test_navigation import window
+from mabinogi_addon.ui.halo_capture_section import HaloCaptureSection
+from PySide6.QtGui import QFont
+from PySide6.QtWidgets import QWidget
+
+native_target = HaloCaptureSection._foreground_target
+
+
+@pytest.fixture(autouse=True)
+def game_boundary(monkeypatch):
+    monkeypatch.setattr(HaloCaptureSection,'_foreground_target',lambda self:(11,22,0,0,1920,1080))
+
+
+def finish(session):
+    if session.thread is not None:
+        session.thread.join(timeout=3)
+        assert not session.thread.is_alive()
+    return session.poll()
+
+
+def test_lossless_unique_sessions_rate_and_change(tmp_path):
+    frame = np.zeros((30,100,3),np.uint8)
+    frame[4:20,20:30] = 255
+    session = core.CaptureSession(tmp_path / '한글 수집')
+    assert session.submit(frame,{'test':'샘플'},now=0)
+    assert not session.submit(frame,{},now=.5,force=True)
+    assert finish(session) == ''
+    original = frame.copy()
+    assert not session.submit(frame,{},now=1)
+    frame[4:20,35:40] = 255
+    assert session.submit(frame,{},now=1)
+    assert finish(session) == ''
+    assert session.count == 2
+    assert np.array_equal(image_io.imread(session.path/'0001'/'frame.png'),original)
+    assert np.array_equal(image_io.imread(session.path/'0002'/'frame.png'),frame)
+    metadata = json.loads((session.path/'0001'/'metadata.json').read_text(encoding='utf-8'))
+    assert metadata['raw_time'] is None and metadata['read_status'] == 'not_implemented'
+    assert metadata['sequence'] == 1 and metadata['captured_at']
+    other = core.CaptureSession(tmp_path / '한글 수집')
+    assert other.path != session.path
+
+
+@pytest.mark.parametrize('failure',['mkdir','png','metadata'])
+def test_storage_failure_never_counts_or_overwrites(tmp_path,monkeypatch,failure):
+    session = core.CaptureSession(tmp_path)
+    frame = np.zeros((10,20,3),np.uint8)
+    if failure == 'mkdir':
+        def denied(*a,**k): raise PermissionError('controlled')
+        monkeypatch.setattr(Path,'mkdir',denied)
+    elif failure == 'png':
+        monkeypatch.setattr(cv2,'imencode',lambda *a:(False,None))
+    else:
+        original = Path.write_bytes
+        def write(path,data):
+            if path.name == 'metadata.json': raise OSError('disk full')
+            return original(path,data)
+        monkeypatch.setattr(Path,'write_bytes',write)
+    assert session.submit(frame,{},now=0)
+    assert finish(session)
+    assert session.count == session.bytes == 0
+    assert not (session.path/'0001').exists()
+
+
+def test_limits_and_cancellation(tmp_path,monkeypatch):
+    frame = np.zeros((10,20,3),np.uint8)
+    session = core.CaptureSession(tmp_path)
+    monkeypatch.setattr(core,'MAX_SHOTS',1)
+    assert session.submit(frame,{},now=0)
+    assert finish(session) == ''
+    with pytest.raises(ValueError): session.submit(frame,{},now=1,force=True)
+    other = core.CaptureSession(tmp_path)
+    monkeypatch.setattr(core,'MAX_BYTES',1)
+    assert other.submit(frame,{},now=0)
+    assert finish(other)
+    assert other.count == other.bytes == 0
+    other.stop()
+    assert not other.submit(frame,{},now=2,force=True)
+
+
+def test_creator_only_region_capture_and_stop(window,monkeypatch,tmp_path):
+    w,app = window
+    user = {'id':feature_access.CREATOR_DISCORD_ID}
+    monkeypatch.setattr(config,'load_discord_user',lambda:user)
+    section = w.boss_tab.halo_capture
+    section._root = tmp_path / '수집'
+    section._watcher = SimpleNamespace(is_game_active=lambda:True)
+    frame = np.zeros((20,100,3),np.uint8)
+    monkeypatch.setattr(section,'_grab',lambda *a:frame)
+    before = config._read_local_config()
+    section._save_region(0,0,100,20)
+    w._open_setup_feature('boss')
+    w.boss_tab.pattern_tabs.setCurrentIndex(1)
+    section._tick()
+    assert not section.isHidden() and not section.collect.isChecked()
+    assert not section.preview.pixmap().isNull()
+    section.collect.setChecked(True)
+    section._tick()
+    session = section._session
+    assert finish(session) == ''
+    assert session.count == 1
+    user['id'] = 'ordinary'
+    section._tick()
+    assert section.isHidden() and not section.collect.isChecked()
+    assert session.cancelled.is_set()
+    assert section.preview.pixmap().isNull()
+    assert not section._timer.isActive()  # fixture stops owned timers before test
+    after = config._read_local_config()
+    assert {k:v for k,v in after.items() if k != 'haloTimer'} == before
+    assert (session.path/'0001'/'frame.png').exists()
+    section.shutdown()
+    assert not section._timer.isActive()
+
+
+def test_capture_failure_and_region_change_do_not_mix_sessions(window,monkeypatch):
+    w,_ = window
+    monkeypatch.setattr(config,'load_discord_user',lambda:{'id':feature_access.CREATOR_DISCORD_ID})
+    s = w.boss_tab.halo_capture
+    s._watcher = SimpleNamespace(is_game_active=lambda:True)
+    s._save_region(0,0,100,20)
+    monkeypatch.setattr(s,'_grab',lambda *a:None)
+    s.collect.setChecked(True)
+    session = s._session
+    s._tick()
+    assert session.count == 0 and '대기' in s.state.text()
+    s._save_region(10,10,100,20)
+    assert not s.collect.isChecked() and session.cancelled.is_set()
+    s.collect.setChecked(True)
+    assert s._session.path != session.path
+    s.shutdown()
+
+
+def test_write_failure_stops_collection(window,monkeypatch):
+    w,_ = window
+    monkeypatch.setattr(config,'load_discord_user',lambda:{'id':feature_access.CREATOR_DISCORD_ID})
+    s = w.boss_tab.halo_capture
+    s._watcher = SimpleNamespace(is_game_active=lambda:True)
+    s._save_region(0,0,100,20)
+    monkeypatch.setattr(s,'_grab',lambda *a:np.zeros((20,100,3),np.uint8))
+    monkeypatch.setattr(cv2,'imencode',lambda *a:(False,None))
+    s.collect.setChecked(True)
+    s._tick()
+    s._session.thread.join(timeout=3)
+    s._tick()
+    assert not s.collect.isChecked()
+    assert s._session.count == 0
+    assert '저장하지 못' in s.state.text()
+
+
+def test_cancel_during_encode_has_no_queue_or_new_files(tmp_path,monkeypatch):
+    entered,release = threading.Event(),threading.Event()
+    original = cv2.imencode
+    def encode(*args):
+        entered.set()
+        assert release.wait(timeout=3)
+        return original(*args)
+    monkeypatch.setattr(cv2,'imencode',encode)
+    session = core.CaptureSession(tmp_path)
+    frame = np.zeros((20,100,3),np.uint8)
+    assert session.submit(frame,{},now=0)
+    try:
+        assert entered.wait(timeout=3)
+        for n in range(1,20):
+            assert not session.submit(frame,{},now=n,force=True)
+        session.stop()
+    finally:
+        release.set()
+    assert finish(session) == 'cancelled'
+    assert session.count == 0 and not session.path.exists()
+
+
+def test_twenty_writes_leave_no_worker_and_metadata_stays_paired(tmp_path):
+    session = core.CaptureSession(tmp_path)
+    for n in range(20):
+        frame = np.full((10,20,3),n,np.uint8)
+        assert session.submit(frame,{'sample':n},now=n,force=True)
+        assert finish(session) == ''
+        assert session.count == n+1
+        target = session.path/f'{n+1:04d}'
+        assert np.array_equal(image_io.imread(target/'frame.png'),frame)
+        assert json.loads((target/'metadata.json').read_text())['sample'] == n
+        assert session.thread is None
+
+
+def test_noncreator_never_captures_saved_region(window,monkeypatch):
+    w,_ = window
+    monkeypatch.setattr(config,'load_discord_user',lambda:{'id':'ordinary'})
+    section = w.boss_tab.halo_capture
+    section._region = dict(x=0,y=0,w=100,h=20)
+    section._watcher = SimpleNamespace(is_game_active=lambda:True)
+    monkeypatch.setattr(section,'_grab',lambda *a:pytest.fail('unauthorized capture'))
+    section._tick()
+    section._snapshot()
+    section.collect.setChecked(True)
+    assert section.isHidden() and not section.collect.isChecked()
+    assert section._session is None
+
+
+def test_outside_game_or_target_change_never_saves(window,monkeypatch):
+    w,_ = window
+    monkeypatch.setattr(config,'load_discord_user',lambda:{'id':feature_access.CREATOR_DISCORD_ID})
+    s = w.boss_tab.halo_capture
+    s._watcher = SimpleNamespace(is_game_active=lambda:True)
+    s._save_region(0,0,100,20)
+    monkeypatch.setattr(s,'_foreground_target',lambda:(11,22,200,200,100,100))
+    monkeypatch.setattr(s,'_grab',lambda *a:pytest.fail('outside game'))
+    s._snapshot()
+    assert s._session is None
+    targets = iter([(11,22,0,0,1920,1080),None])
+    monkeypatch.setattr(s,'_foreground_target',lambda:next(targets))
+    monkeypatch.setattr(s,'_grab',lambda *a:np.zeros((20,100,3),np.uint8))
+    s._snapshot()
+    assert s._session is None
+
+
+@pytest.mark.parametrize('foreground,minimized,allowed',[(11,False,True),(99,False,False),(11,True,False)])
+def test_native_target_requires_real_foreground_window(window,monkeypatch,foreground,minimized,allowed):
+    from mabinogi_addon.system import window_capture
+    target = (11,22,0,0,1920,1080)
+    monkeypatch.setattr(window_capture,'registered_game_target',lambda *a:target)
+    monkeypatch.setitem(sys.modules,'win32gui',SimpleNamespace(GetForegroundWindow=lambda:foreground,IsIconic=lambda hwnd:minimized))
+    assert native_target(window[0].boss_tab.halo_capture) == (target if allowed else None)
+
+
+@pytest.mark.parametrize('pixels',[12,20])
+def test_creator_halo_layout_has_no_horizontal_scroll(window,monkeypatch,pixels):
+    w,app = window
+    monkeypatch.setattr(config,'load_discord_user',lambda:{'id':feature_access.CREATOR_DISCORD_ID})
+    section = w.boss_tab.halo_capture
+    section._refresh()
+    section.disclosure.setChecked(True)
+    w._open_setup_feature('boss')
+    w.boss_tab.pattern_tabs.setCurrentIndex(1)
+    for widget in w.boss_tab.findChildren(QWidget):
+        font = QFont(widget.font())
+        font.setPixelSize(pixels)
+        widget.setFont(font)
+    for _ in range(10): app.processEvents()
+    scroll = w._combat_pages['boss']
+    scroll.ensureWidgetVisible(section)
+    assert scroll.horizontalScrollBar().maximum() == 0
+    assert section.region_btn.isEnabled()
+
+
+def test_third_tabs_follow_creator_access_without_resetting_settings(window,monkeypatch):
+    w,app = window
+    user = {'id':feature_access.CREATOR_DISCORD_ID}
+    monkeypatch.setattr(config,'load_discord_user',lambda:user or None)
+    boss = w.boss_tab
+    tabs = boss.pattern_tabs
+    before = config._read_local_config()
+    boss.halo_capture._refresh()
+    assert [tabs.tabText(i) for i in range(tabs.count())] == ['체력별패턴','1분 헤일로']
+    assert tabs.isTabVisible(1)
+    w._open_setup_feature('boss')
+    for _ in range(10):
+        tabs.setCurrentIndex(1)
+        app.processEvents()
+        assert boss.halo_capture.isVisible()
+        tabs.setCurrentIndex(0)
+        assert not boss.halo_capture.isVisible()
+    tabs.setCurrentIndex(1)
+    user['id'] = 'ordinary'
+    boss.halo_capture._tick()
+    assert not tabs.isTabVisible(1) and tabs.currentIndex() == 0
+    user.clear()
+    boss._apply_collect_gate()
+    assert not tabs.isTabVisible(1)
+    assert config._read_local_config() == before

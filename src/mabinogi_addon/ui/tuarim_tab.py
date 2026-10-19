@@ -120,8 +120,8 @@ class TuarimTab(QWidget):
         self.view_region_btn.setToolTip("잡힌 영역을 화면에 점선으로 잠깐 표시")
         self.view_region_btn.clicked.connect(self._flash_region)
         row.addWidget(self.view_region_btn)
-        self.auto_find_btn = QPushButton("🧪 자동 찾기")
-        self.auto_find_btn.setToolTip("투아림 원형 장식에서 숫자와 % 영역 찾기 — Discord 베타")
+        self.auto_find_btn = QPushButton("자동 찾기")
+        self.auto_find_btn.setToolTip("투아림 원형 장식에서 숫자와 % 영역 찾기")
         self.auto_find_btn.clicked.connect(self._on_auto_find)
         row.addWidget(self.auto_find_btn)
         from .region_registration import clear_button

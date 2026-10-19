@@ -355,7 +355,8 @@ def test_login_and_game_registration_required(flow, monkeypatch):
     state.save_selection("tuarim", True)
     monkeypatch.setattr(config, "load_discord_user", lambda: None)
     run.run()
-    assert "Discord" in page.progress.text()
+    assert not applied and not detections
+    assert "Discord" not in page.progress.text()
     monkeypatch.setattr(config, "load_discord_user", lambda: {"id": "test"})
     update("general", gameExe=None)
     run.run()
@@ -576,9 +577,9 @@ def test_selection_copy_and_beta_guidance_fit_current_window(app, settings, monk
         assert page.selection.horizontalScrollBar().maximum() == 0
         assert page.height() == 744
         assert page.skip.geometry().bottom() < page.height()
-        assert "테스트 중인 베타" in page.beta_note.text()
+        assert not page.beta_note.text() and page.beta_note.isHidden()
         assert page.login_btn.isVisible() is (not logged_in)
-        assert page.checks["stat_bars"].isEnabled() is logged_in
+        assert page.checks["stat_bars"].isEnabled()
         page.set_busy(True)
         assert not page.login_btn.isEnabled()
     finally:
@@ -596,9 +597,9 @@ def test_setup_login_opens_existing_account_without_starting_auth(app, settings,
         app.processEvents()
         expected_height = min(864, window.screen().availableGeometry().height() - 32)
         assert window.width() == 790 and window.height() == expected_height
-        assert window._pages.currentWidget() is window._tabs
+        assert window._pages.currentWidget() is window.setup_guide
         window._open_setup()
-        assert window._pages.currentWidget() is window._tabs
+        assert window._pages.currentWidget() is window.setup_guide
         before = deepcopy(config._read_local_config())
         window.setup_page.login_btn.click()
         app.processEvents()
@@ -765,7 +766,7 @@ def test_settings_replay_opens_app_tour_without_changing_configuration(app, sett
                    for step in tour._steps)
         settings_step = tour._steps[-2]
         settings_step.before()
-        assert settings_step.target is (window.settings_tab.setup_btn if logged_in else window.settings_tab.tour_btn)
+        assert settings_step.target is window.settings_tab.setup_btn
         assert settings_step.target.isVisible()
         tour._finish()
         assert config._read_local_config() == before
@@ -955,11 +956,10 @@ def test_guide_actual_window_navigation_and_resume_preserve_step(app, settings, 
             before = deepcopy(config._read_local_config())
             window._resume_guide()
             window._run_guide_setup()
-            assert window._pages.currentWidget() is not guide
-            assert not guide.active and window.settings_tab.guide_btn.isHidden()
+            assert window._pages.currentWidget() is guide
+            assert guide.active and not window.settings_tab.guide_btn.isHidden()
             assert window._setup_flow.future is None
             assert config._read_local_config() == before
-            return
         assert window._pages.currentWidget() is guide and guide.stage == 0
         guide.move(1)
         guide.feature_changed.emit("buff", True)
@@ -978,7 +978,7 @@ def test_guide_actual_window_navigation_and_resume_preserve_step(app, settings, 
         assert guide.stage == 1
         guide.move(1)
         guide.feature_changed.emit("stat_bars", True)
-        assert state.selected("stat_bars") is logged_in
+        assert state.selected("stat_bars")
         for stage in range(3):
             guide.stage = stage
             guide.refresh()
@@ -1046,7 +1046,7 @@ def test_first_show_guide_ignores_seen_and_registered_but_respects_skip_and_logi
         window._pages.currentChanged.connect(lambda _: pages.append(window._pages.currentWidget()))
         window.show()
         app.processEvents()
-        expected = logged_in and not skip
+        expected = not skip
         assert (window._pages.currentWidget() is window.setup_guide) is expected
         assert window.setup_page not in pages
         assert window.setup_guide.active is expected
@@ -1057,9 +1057,9 @@ def test_first_show_guide_ignores_seen_and_registered_but_respects_skip_and_logi
         window._leave_setup()
         window._tabs.setCurrentIndex(3)
         assert window.settings_tab.setup_btn is window.settings_tab.guide_btn
-        assert window.settings_tab.setup_btn.isHidden() is (not logged_in)
+        assert not window.settings_tab.setup_btn.isHidden()
         window.settings_tab.setup_btn.click()
-        assert (window._pages.currentWidget() is window.setup_guide) is logged_in
+        assert window._pages.currentWidget() is window.setup_guide
         assert window._pages.currentWidget() is not window.setup_page
         assert config._read_local_config() == before
     finally:
@@ -1103,11 +1103,11 @@ def test_tray_restore_and_relogin_never_reveal_legacy_setup(app, settings, monke
         window.settings_tab.login_changed.emit()
         window._open_setup()
         window._resume_guide()
-        assert window._pages.currentWidget() is window._tabs
-        assert window.settings_tab.setup_btn.isHidden()
+        assert window._pages.currentWidget() is window.setup_guide
+        assert not window.settings_tab.setup_btn.isHidden()
         account["logged_in"] = True
         window.settings_tab.login_changed.emit()
-        window._tabs.setCurrentIndex(3)
+        window._open_setup_login()
         assert window.settings_tab.setup_btn.isVisible()
         window.settings_tab.setup_btn.click()
         assert window._pages.currentWidget() is window.setup_guide
@@ -1276,7 +1276,7 @@ def test_guide_approval_updates_current_stage_before_next_candidate(flow, monkey
 
 
 @pytest.mark.parametrize("during_tour", [False, True])
-def test_logout_hides_beta_guide_and_closes_guide_tour(app, settings, monkeypatch, during_tour):
+def test_logout_preserves_public_guide_and_tour(app, settings, monkeypatch, during_tour):
     from mabinogi_addon.ui.main_window import MainWindow
 
     monkeypatch.setattr(QApplication, "quit", lambda: None)
@@ -1291,14 +1291,14 @@ def test_logout_hides_beta_guide_and_closes_guide_tour(app, settings, monkeypatc
         before = deepcopy(config._read_local_config())
         monkeypatch.setattr(config, "load_discord_user", lambda: None)
         window.settings_tab.login_changed.emit()
-        assert not window.setup_guide.active
-        assert not window.setup_guide.isVisible()
-        assert window.settings_tab.guide_btn.isHidden()
+        assert window.setup_guide.active is (not during_tour)
+        assert window.setup_guide.isVisible() is (not during_tour)
+        assert not window.settings_tab.guide_btn.isHidden()
         assert not window._guide_return_btn.isVisible()
-        assert getattr(window, "_tour", None) is None
+        assert (getattr(window, "_tour", None) is not None) is during_tour
         window._open_guide()
         window._resume_guide()
-        assert window._pages.currentWidget() is not window.setup_guide
+        assert window._pages.currentWidget() is window.setup_guide
         assert config._read_local_config() == before
     finally:
         window._force_quit = True
@@ -1322,8 +1322,8 @@ def test_logout_during_guide_approval_cancels_without_saving(flow, monkeypatch):
         window._run_guide_setup()
         assert window._setup_flow.cancelled and not window._setup_flow.running
         assert state.missing("buff") == ["buff"]
-        assert not window.setup_guide.active
-        assert window._pages.currentWidget() is not window.setup_guide
+        assert window.setup_guide.active
+        assert window._pages.currentWidget() is window.setup_guide
     finally:
         window._force_quit = True
         window.close()

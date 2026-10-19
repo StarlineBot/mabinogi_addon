@@ -50,7 +50,8 @@ def test_original_motion_with_explicit_registered_game_boundary(monkeypatch):
 @pytest.fixture
 def moving(monkeypatch):
     app = QApplication.instance() or QApplication([])
-    raw = {"dorcha": {"enabled": True, "box": dict(x=20,y=20,w=28,h=23)}}
+    raw = {"dorcha": {"enabled": True, "box": dict(x=20,y=20,w=28,h=23),
+                      "showTuarim": False, "tuarimAlphaReset": 1}}
     monkeypatch.setattr(config, "_read_local_config", lambda *a, **k: deepcopy(raw))
     writes = []
     monkeypatch.setattr(config, "_write_local_config", lambda *a, **k: writes.append(a))
@@ -158,6 +159,12 @@ def test_late_result_never_restores_interrupted_tracking(moving,monkeypatch,chan
     else: tab.shutdown()
     release.set()
     drain(app,tab)
+    if change == "logout":
+        assert tab._live_box == (150,90,28,23) and tab._overlay.value == 15
+        assert not writes
+        tab._apply_gate()
+        assert not tab.auto_find_btn.isEnabled()
+        return
     assert tab._live_box is None and tab._overlay.value is None
 
 

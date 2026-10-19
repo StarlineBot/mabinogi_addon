@@ -875,6 +875,18 @@ def save_boss_bar_region(
     )
 
 
+def migrate_tuarim_alpha(path: Path = LOCAL_CONFIG_PATH) -> None:
+    """Persist the one-time display reset and its marker in the same write."""
+    data = _read_local_config(path)
+    section = data.get("dorcha")
+    section = dict(section) if isinstance(section, dict) else {}
+    if type(section.get("tuarimAlphaReset")) is int and section["tuarimAlphaReset"] == 1:
+        return
+    section.update(showTuarim=False, tuarimAlphaReset=1)
+    data["dorcha"] = section
+    _write_local_config(data, path)
+
+
 def load_dorcha(path: Path = LOCAL_CONFIG_PATH) -> dict:
     sec = _read_local_config(path).get("dorcha")
     sec = sec if isinstance(sec, dict) else {}

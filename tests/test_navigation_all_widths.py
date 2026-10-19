@@ -3,7 +3,7 @@
 from pathlib import PureWindowsPath
 import pytest
 from PySide6.QtCore import QPoint, QRect
-from PySide6.QtWidgets import QAbstractButton, QWidget
+from PySide6.QtWidgets import QAbstractButton, QWidget, QScrollArea
 from test_navigation import window
 
 pytestmark = pytest.mark.usefixtures('tuarim_width_diagnostics')
@@ -30,9 +30,13 @@ def test_all_pages_and_controls_large_font(window,monkeypatch,area):
             failures.append((key,'horizontal_range',extent,scroll.viewport().width(),scroll.widget().minimumSizeHint().width()))
         for widget in scroll.widget().findChildren(QAbstractButton):
             if not widget.isVisible(): continue
-            scroll.ensureWidgetVisible(widget)
+            owner = widget.parentWidget()
+            while owner is not None and not isinstance(owner,QScrollArea):
+                owner = owner.parentWidget()
+            owner = owner if owner is not None else scroll
+            owner.ensureWidgetVisible(widget)
             for _ in range(4): app.processEvents()
-            rect = QRect(widget.mapTo(scroll.viewport(),QPoint()),widget.size())
-            if not scroll.viewport().rect().contains(rect):
-                failures.append((key,widget.text(),str(rect),str(scroll.viewport().rect())))
+            rect = QRect(widget.mapTo(owner.viewport(),QPoint()),widget.size())
+            if owner.horizontalScrollBar().maximum() or not owner.viewport().rect().contains(rect):
+                failures.append((key,widget.text(),str(rect),str(owner.viewport().rect())))
     assert not failures, failures

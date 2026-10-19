@@ -15,6 +15,9 @@ from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QGuiApplication, QImage, QPixmap
 from PySide6.QtWidgets import (
     QGroupBox,
+    QTabWidget,
+    QScrollArea,
+    QFrame,
     QHBoxLayout,
     QLabel,
     QMessageBox,
@@ -105,7 +108,8 @@ class BossTab(QWidget):
             self._place_warn_default()
         self._overlay.set_locked(cfg["warnLocked"])
 
-        v = QVBoxLayout(self)
+        hp_page = QWidget()
+        v = QVBoxLayout(hp_page)
         v.setContentsMargins(12, 12, 12, 12)
 
         title = QLabel("보스 패턴 알림")
@@ -142,7 +146,7 @@ class BossTab(QWidget):
         # 디버프 영역(바로 위)까지 함께 지정. 저장은 반드시 확인 후에만.
         self.auto_find_btn = QPushButton("자동 찾기")
         self.auto_find_btn.setToolTip(
-            "보스 체력바(+디버프 영역)를 화면에서 자동으로 찾아 지정합니다 — Discord 베타"
+            "보스 체력바(+디버프 영역)를 화면에서 자동으로 찾아 지정합니다"
         )
         self.auto_find_btn.clicked.connect(self._on_auto_find)
         commands = QHBoxLayout()
@@ -222,7 +226,25 @@ class BossTab(QWidget):
         self.diagnostics_btn = disclosure("진단 · 보스 HP바 수집",self._collect_box,v)
         self.diagnostics_btn.toggled.connect(self._apply_collect_gate)
         v.addWidget(self._supported_label())
+        from .halo_capture_section import HaloCaptureSection
+        self.halo_capture = HaloCaptureSection(watcher, self._grab_rect, self)
         v.addStretch(1)
+        halo_page = QWidget()
+        halo_layout = QVBoxLayout(halo_page)
+        halo_layout.setContentsMargins(12,12,12,12)
+        halo_layout.addWidget(self.halo_capture)
+        halo_layout.addStretch(1)
+        self.pattern_tabs = QTabWidget()
+        for page, label in ((hp_page,"체력별패턴"),(halo_page,"1분 헤일로")):
+            scroll = QScrollArea()
+            scroll.setWidgetResizable(True)
+            scroll.setFrameShape(QFrame.Shape.NoFrame)
+            scroll.setWidget(page)
+            self.pattern_tabs.addTab(scroll,label)
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0,0,0,0)
+        root.addWidget(self.pattern_tabs)
+        self.halo_capture.access_changed.connect(self._set_halo_access)
 
         self._update_region_label()
         self._apply_collect_gate()
@@ -599,6 +621,7 @@ class BossTab(QWidget):
         return config.load_discord_user() is not None
 
     def _apply_collect_gate(self) -> None:
+        self._set_halo_access(self.halo_capture._allowed())
         box = getattr(self, "_collect_box", None)
         if box is not None:
             box.setVisible(self._logged_in() and self.diagnostics_btn.isChecked())
@@ -606,6 +629,11 @@ class BossTab(QWidget):
         btn = getattr(self, "auto_find_btn", None)
         if btn is not None:
             btn.setVisible(self._logged_in())  # 자동 찾기도 Discord 베타
+
+    def _set_halo_access(self, allowed):
+        if not allowed and self.pattern_tabs.currentIndex() == 1:
+            self.pattern_tabs.setCurrentIndex(0)
+        self.pattern_tabs.setTabVisible(1,allowed)
 
     def _on_auto_find(self) -> None:
         from .region_registration import generation, save_boxes, editing_allowed
@@ -766,6 +794,7 @@ class BossTab(QWidget):
             QApplication.beep()
 
     def shutdown(self) -> None:
+        self.halo_capture.shutdown()
         self._timer.stop()
         self._upcoming.close()
         self._overlay.close()

@@ -10,6 +10,7 @@ from PySide6.QtCore import QPoint, QTimer
 from PySide6.QtWidgets import QApplication
 
 from mabinogi_addon import config
+from mabinogi_addon.feature_access import CREATOR_DISCORD_ID
 from mabinogi_addon.ui import dorcha_tab, tuarim_tab
 from mabinogi_addon.ui.dorcha_tab import DorchaTab
 from mabinogi_addon.ui.tuarim_tab import TuarimTab
@@ -26,7 +27,7 @@ def runtime(window,monkeypatch):
                             percent_captures=0,dorcha_captures=0,frame=True,fired=[])
     watcher = SimpleNamespace(is_game_active=lambda:state.game,is_self_active=lambda:state.own)
     t._watcher = d._watcher = watcher
-    monkeypatch.setattr(config,'load_discord_user',lambda:{'id':'test'} if state.logged else None)
+    monkeypatch.setattr(config,'load_discord_user',lambda:{'id':CREATOR_DISCORD_ID} if state.logged else None)
     monkeypatch.setattr(tuarim_tab,'read_percent',lambda frame:state.raw)
     monkeypatch.setattr(dorcha_tab,'read_dorcha',lambda frame:state.dorcha if frame is not None else None)
     monkeypatch.setattr(t,'_play',state.fired.append)
@@ -180,7 +181,7 @@ def test_percent_cannot_keep_stale_value(runtime,reason):
 def test_construction_and_recreation_preserve_all_existing_settings(existing_percent,monkeypatch):
     app = QApplication.instance() or QApplication([])
     raw = {'tuarim':dict(enabled=True,box=dict(x=-100,y=40,w=58,h=28),thresholds=[92,98],sounds=[False,True]),
-           'dorcha':dict(enabled=True,box=dict(x=50,y=70,w=28,h=23),pos=dict(x=-900,y=180),scale=175,locked=False),
+           'dorcha':dict(enabled=True,box=dict(x=50,y=70,w=28,h=23),pos=dict(x=-900,y=180),scale=175,locked=False,tuarimAlphaReset=1),
            'unknown':{'preserve':[1,2,3]}}
     if existing_percent is not None:
         raw['dorcha']['showTuarim'] = existing_percent

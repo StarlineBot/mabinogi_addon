@@ -377,6 +377,8 @@ class MainWindow(QMainWindow):
         self.setup_guide.cancel_requested.connect(self._setup_flow.cancel)
         self.setup_guide.finished.connect(self._finish_guide)
         self.settings_tab.login_changed.connect(self.setup_page.refresh)
+        self.settings_tab.login_changed.connect(self.dorcha_tab._apply_gate)
+        self.settings_tab.login_changed.connect(self.boss_tab.halo_capture._tick)
         self.settings_tab.login_changed.connect(self._guide_login_changed)
         self.settings_tab.game_registered.connect(self.setup_page.refresh)
         self.settings_tab.game_registration_finished.connect(self._setup_game_finished)
@@ -437,7 +439,7 @@ class MainWindow(QMainWindow):
         for key, check in self._feature_checks.items():
             check.toggled.connect(lambda _value, key=key: self._feature_changed(key))
         from ..setup_state import needs_start_screen
-        if needs_start_screen() and config.load_discord_user() is not None:
+        if needs_start_screen():
             # 실제 첫 표시에 노트를 먼저 처리하고 안내를 활성화한다.
             self._pages.setCurrentWidget(self.setup_guide)
         from .creator_dialogue import CreatorDialogue
@@ -502,11 +504,6 @@ class MainWindow(QMainWindow):
         self.setup_guide.refresh()
 
     def _set_feature_enabled(self, key, value):
-        from ..setup_state import BY_KEY
-        if value and BY_KEY[key].beta and config.load_discord_user() is None:
-            self.setup_page.refresh()
-            self.setup_guide.refresh()
-            return
         from ..setup_state import save_selection
         try:
             save_selection(key, value)
@@ -528,28 +525,19 @@ class MainWindow(QMainWindow):
         return self.setup_page.busy or self.setup_guide.busy or self._setup_flow.running
 
     def _refresh_guide_return(self):
-        self._guide_return_btn.setVisible(self.setup_guide.active and config.load_discord_user() is not None
+        self._guide_return_btn.setVisible(self.setup_guide.active
                                           and self._pages.currentWidget() is not self.setup_guide)
 
     def _guide_login_changed(self):
         logged_in = config.load_discord_user() is not None
-        self.settings_tab.guide_btn.setVisible(logged_in)
+        self.settings_tab.guide_btn.setVisible(True)
         if not logged_in:
             if self._setup_flow.running and self._setup_flow.page is self.setup_guide:
                 self._setup_flow.cancel()
-            self.setup_guide.active = False
-            if self._pages.currentWidget() is self.setup_guide:
-                self._pages.setCurrentWidget(self._tabs)
-            if getattr(self, "_tour_from_guide", False) and getattr(self, "_tour", None) is not None:
-                self._tour.dismiss()
-                self._tour = None
-                self._tour_from_guide = False
         self.setup_guide.refresh()
         self._refresh_guide_return()
 
     def _open_guide(self, *, first_run=False):
-        if config.load_discord_user() is None:
-            return
         if self._setup_busy() or self._config_pending_restart or self._setup_flow.closed:
             return
         previous = getattr(self, "_tour", None)
@@ -561,8 +549,6 @@ class MainWindow(QMainWindow):
         self._refresh_guide_return()
 
     def _resume_guide(self):
-        if config.load_discord_user() is None:
-            return
         if self._setup_busy() or self._config_pending_restart or self._setup_flow.closed:
             return
         self.setup_guide.refresh()
@@ -579,9 +565,6 @@ class MainWindow(QMainWindow):
                 self._guide_login_changed()
 
     def _finish_guide(self):
-        if config.load_discord_user() is None:
-            self._guide_login_changed()
-            return
         try:
             config.save_general_flag("firstUseGuideShown", True)
         except OSError:
@@ -886,8 +869,6 @@ class MainWindow(QMainWindow):
 
     def _run_tour(self, *, from_guide=False) -> None:
         """단계별 설정과 구별되는 앱 둘러보기."""
-        if from_guide and config.load_discord_user() is None:
-            return
         if self._setup_busy() or self._config_pending_restart or self._setup_flow.closed:
             return
         self.creator_dialogue.dismiss()
@@ -917,10 +898,8 @@ class MainWindow(QMainWindow):
             self._pages.setCurrentWidget(self._tabs)
             scroll = self._tabs.widget(3)
             self._tabs.setCurrentWidget(scroll)
-            logged_in = config.load_discord_user() is not None
-            settings_step.target = self.settings_tab.setup_btn if logged_in else self.settings_tab.tour_btn
-            settings_step.body = ("단계별 자동설정과 앱 둘러보기를 설정에서 다시 열 수 있어요." if logged_in else
-                                  "설정에서 앱 둘러보기를 다시 열 수 있어요.")
+            settings_step.target = self.settings_tab.setup_btn
+            settings_step.body = "단계별 자동설정과 앱 둘러보기를 설정에서 다시 열 수 있어요."
             scroll.ensureWidgetVisible(settings_step.target)
 
         settings_step = TourStep(self.settings_tab.setup_btn, "설정에서 다시 열기",

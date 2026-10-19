@@ -4,7 +4,7 @@
 각각 독립 오버레이(간격 투명)로 띄운다. 프리셋으로 기본 배치를 제공하고, 각 뭉치는
 드래그로 옮기고 고정할 수 있다. 빈 칸은 우클릭으로 숨긴다.
 
-베타 기능이라 디스코드 로그인 사용자에게만 보인다.
+기본 복제는 일반 공개하며 자동찾기만 기존 로그인 조건을 따른다.
 """
 
 from __future__ import annotations
@@ -41,7 +41,7 @@ ANCHOR_BOX = (40, 40)  # 첫 아이콘(1칸) 크기 — 이 박스를 첫 아이
 # 액션바 영역은 비운다). 실측 보스 체력바 top ≈ 0.84 → 그 바로 위까지 타이트하게.
 SAFE_BOTTOM_RATIO = 0.84
 
-HELP_TITLE = "단축바 미러 사용법(베타)"
+HELP_TITLE = "단축바 미러 사용법"
 HELP_HTML = """
 <h3>단축바 미러란?</h3>
 <p>게임 상단 단축바를 <b>그룹(4칸) 단위로 떼어</b> 원하는 위치(캐릭터 근처 등)에
@@ -80,11 +80,8 @@ class SkillbarTab(QWidget):
         v.addWidget(tab_header(
             "게임 원본 단축바를 그룹별로 복제해 원하는 위치에 표시합니다.", HELP_TITLE, HELP_HTML, self
         ))
-        self._beta_notice = hint_label(
-            "🧪 개발 중인 기능 — 설정 탭에서 Discord 로그인 후 가장 먼저 써볼 수 있어요."
-        )
-        self._beta_notice.setStyleSheet("color:#e67e22; font-weight:600;")
-        v.addWidget(self._beta_notice)
+        self._beta_notice = hint_label("")
+        self._beta_notice.hide()
         v.addWidget(hint_label(
             "원본 단축바를 보이게 한 뒤 자동 찾기를 실행하세요."
             " 직접 지정할 때는 맨 왼쪽 위 첫 칸에 맞추세요. 빈 칸은 오버레이에서 우클릭해 숨길 수 있습니다."
@@ -98,7 +95,7 @@ class SkillbarTab(QWidget):
         self.anchor_label = hint_label("")
         v.addWidget(self.anchor_label)
         self.auto_find_btn = QPushButton("자동 찾기")
-        self.auto_find_btn.setToolTip("원본 단축바 전체 격자를 확인해 첫 칸 지정 — Discord 베타")
+        self.auto_find_btn.setToolTip("원본 단축바 전체 격자를 확인해 첫 칸 지정")
         self.auto_find_btn.clicked.connect(self._on_auto_find)
         row.addWidget(self.auto_find_btn)
         row.addWidget(self.anchor_btn)
@@ -167,11 +164,11 @@ class SkillbarTab(QWidget):
 
     def _apply_login_gate(self) -> None:
         ok = self._logged_in()
-        self._beta_notice.setVisible(not ok)
+        self._beta_notice.hide()
         for w in self._gated:
-            w.setEnabled(ok)
+            w.setEnabled(not self._shutting_down)
         self.auto_find_btn.setEnabled(ok and not self._autofind_busy)
-        self.view_region_btn.setEnabled(ok and self._anchor is not None and not self._shutting_down)
+        self.view_region_btn.setEnabled(self._anchor is not None and not self._shutting_down)
 
     # ---- 오버레이 ----
     def _ensure_overlays(self) -> None:
@@ -203,7 +200,7 @@ class SkillbarTab(QWidget):
         )
 
     def _apply_visibility(self) -> None:
-        if self._anchor is None or self._paused or not self._logged_in():
+        if self._anchor is None or self._paused or self._shutting_down:
             for ov in self._overlays.values():
                 ov.hide()
             return
@@ -221,7 +218,7 @@ class SkillbarTab(QWidget):
         self._apply_login_gate()
         self._apply_visibility()
         if (
-            self._paused or not self._logged_in()
+            self._paused or self._shutting_down
             or self._anchor is None or not self._active()
         ):
             return
@@ -277,7 +274,7 @@ class SkillbarTab(QWidget):
         self._apply_visibility()
 
     def _flash_source(self):
-        if not self._anchor or self._shutting_down or not self._logged_in():
+        if not self._anchor or self._shutting_down:
             return
         from .region_highlight import RegionHighlight
         for mark in getattr(self,"_source_marks",[]):

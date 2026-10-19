@@ -142,6 +142,7 @@ class StatBarsTab(QWidget):
         self._align = cfg["align"]
         self._bars_cfg = cfg["bars"]
         self._paused = False
+        self._shutting_down = False
         self._sct = None
         self._overlays: dict[str, StatBarOverlay] = {}
         self._display_valid = False
@@ -172,12 +173,8 @@ class StatBarsTab(QWidget):
         v.addWidget(tab_header(
             "생명력·마나·스태미나를 별도 오버레이로 표시합니다.", HELP_TITLE, HELP_HTML, self
         ))
-        # 베타 기능 — 디스코드 로그인 사용자에게만. 미로그인 시 안내만 보이고 조작은 잠근다.
-        self._beta_notice = hint_label(
-            "🧪 개발 중인 기능 — 설정 탭에서 Discord 로그인 후 가장 먼저 써볼 수 있어요."
-        )
-        self._beta_notice.setStyleSheet("color:#e67e22; font-weight:600;")
-        v.addWidget(self._beta_notice)
+        self._beta_notice = hint_label("")
+        self._beta_notice.hide()
 
         row = QHBoxLayout()
         self.region_btn = QPushButton("직접 지정")
@@ -191,7 +188,7 @@ class StatBarsTab(QWidget):
         self.view_region_btn = QPushButton("지정 영역 보기")
         self.view_region_btn.clicked.connect(self._flash_region)
         self.auto_find_btn = QPushButton("자동 찾기")
-        self.auto_find_btn.setToolTip("체력바(생/마/스)를 화면에서 자동으로 찾아 지정 — Discord 베타")
+        self.auto_find_btn.setToolTip("체력바(생/마/스)를 화면에서 자동으로 찾아 지정")
         self.auto_find_btn.clicked.connect(self._on_auto_find)
         commands = QHBoxLayout()
         commands.addStretch(1)
@@ -323,7 +320,7 @@ class StatBarsTab(QWidget):
         v.addWidget(self._collect_box)
         v.addStretch(1)
 
-        # 로그인 시에만 조작 가능하게 묶어 두는 컨트롤들.
+        # Basic controls are public; auto-find and collection retain their gate.
         self._gated_widgets = [
             self.region_btn, self.view_region_btn, self.auto_find_btn,
             self.scale_spin, self.align_combo, self.lock_all_btn, self.unlock_all_btn,
@@ -446,7 +443,7 @@ class StatBarsTab(QWidget):
             self._visual_sample_at = now
         if (self._visual_sample_at is None
                 or not 0 <= now - self._visual_sample_at < WARNING_SAMPLE_MAX_AGE
-                or self._paused or not self._logged_in()
+                or self._paused
                 or not self._region or not self._active()
                 or (self._boss_present_fn is not None and not self._boss_present_fn())):
             self._reset_visual_alerts()
@@ -468,7 +465,7 @@ class StatBarsTab(QWidget):
     def has_active_alert(self) -> bool:
         """저체력 경고가 하나라도 켜져 있는지. 보스 탭이 '존재 판정이 필요한가'를 묻는다
         (전부 꺼져 있으면 보스바 존재 판정 자체를 건너뛰어 UI 스레드 부하를 아낀다)."""
-        return (self._region is not None and not self._paused and self._logged_in()
+        return (self._region is not None and not self._paused
                 and any(self._bars_cfg[sid]["alert"]["on"] for sid in ("hp", "mp", "sta")))
 
     def _check_alerts(self, readings: dict, now: float) -> None:
@@ -554,9 +551,13 @@ class StatBarsTab(QWidget):
         )
 
     def _open_shot_dir(self) -> None:
+        if not self._logged_in() or self._shutting_down:
+            return
         paths.open_folder(self._shot_dir)
 
     def _save_snapshot(self) -> None:
+        if not self._logged_in() or self._shutting_down:
+            return
         if self._last_frame is None:
             self.collect_label.setText("저장할 캡처가 없습니다 — 먼저 영역을 지정하세요")
             return
@@ -590,13 +591,16 @@ class StatBarsTab(QWidget):
         return config.load_discord_user() is not None
 
     def _apply_login_gate(self) -> None:
-        """베타 게이팅: 디스코드 로그인 사용자에게만 조작·표시를 허용."""
+        """Keep login restrictions only on auto-find and diagnostic tools."""
         ok = self._logged_in()
         self._show_diagnostics(self.diagnostics_btn.isChecked(), ok)
         self.diagnostics_btn.setVisible(ok)
-        self._beta_notice.setVisible(not ok)
+        self._beta_notice.hide()
         for w in self._gated_widgets:
-            w.setEnabled(ok)
+            w.setEnabled(not self._shutting_down)
+        for w in (self.auto_find_btn, self.snap_btn, self.open_dir_btn, self.collect_chk):
+            w.setEnabled(ok and not self._shutting_down)
+        self.view_region_btn.setEnabled(self._region is not None and not self._shutting_down)
 
     # ---- 오버레이 생성/표시 ----
     def _ensure_overlays(self) -> None:
@@ -625,7 +629,7 @@ class StatBarsTab(QWidget):
         )
 
     def _apply_visibility(self) -> None:
-        if (self._paused or not self._logged_in()
+        if (self._paused or self._shutting_down
                 or not self._region or not self._active()):
             self._display_valid = False
             self._reset_visual_alerts()
@@ -649,7 +653,7 @@ class StatBarsTab(QWidget):
         self._apply_login_gate()
         if (
             self._paused
-            or not self._logged_in()
+            or self._shutting_down
             or not self._region
             or not self._active()
         ):
@@ -742,6 +746,8 @@ class StatBarsTab(QWidget):
         self._apply_visibility()
 
     def _on_auto_find(self) -> None:
+        if not self._logged_in() or self._shutting_down:
+            return
         from .region_registration import generation, editing_allowed
         stamp = generation(self)
         """체력바를 화면에서 자동 검출 → 민트 점선 미리보기 + 확인 후에만 저장."""
@@ -777,7 +783,7 @@ class StatBarsTab(QWidget):
             QMessageBox.StandardButton.No,
         )
         self._highlight.close()  # 확인 끝나면 민트 점선 즉시 닫기(4초 타이머에만 의존 안 함)
-        if ans != QMessageBox.StandardButton.Yes or generation(self) != stamp or not editing_allowed(self):
+        if ans != QMessageBox.StandardButton.Yes or generation(self) != stamp or not editing_allowed(self) or not self._logged_in():
             return
         try:
             self._on_selected(lx, ly, lw, lh)
@@ -903,6 +909,7 @@ class StatBarsTab(QWidget):
         self._apply_visibility()
 
     def shutdown(self) -> None:
+        self._shutting_down = True
         self._timer.stop()
         self._display_valid = False
         self._alert_low_since.clear()

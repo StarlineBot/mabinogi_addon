@@ -87,6 +87,11 @@ def test_interruption_drops_value_and_reuses_one_window(runtime,reason):
     elif reason == "region": tab._region = None
     else: tab.shutdown()
     tab._tick()
+    if reason == "logout":
+        assert overlay.isVisible() and overlay.value == 13
+        assert tab.enable.isEnabled() and tab.region_btn.isEnabled()
+        assert not tab.auto_find_btn.isEnabled()
+        return
     assert not overlay.isVisible() and overlay.value is None
     if reason != "shutdown":
         tab.set_paused(False)

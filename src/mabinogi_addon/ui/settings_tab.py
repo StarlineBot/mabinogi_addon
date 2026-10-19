@@ -495,8 +495,7 @@ class SettingsTab(QWidget):
         v.addLayout(row)
         v.addWidget(
             hint_label(
-                "로그인하면 문의 답변을 DM으로 받을 수 있어요.\n"
-                "또한 개발 중인 기능을 가장 먼저 사용해볼 수 있어요."
+                "베타 기능을 먼저 사용해 볼 수 있습니다."
             )
         )
         self._refresh_login()
@@ -505,7 +504,7 @@ class SettingsTab(QWidget):
     def _refresh_login(self) -> None:
         user = config.load_discord_user()
         if hasattr(self, "guide_btn"):
-            self.guide_btn.setVisible(user is not None)
+            self.guide_btn.setVisible(True)
         if user:
             self._login_status.setText(f"로그인됨: {user['name']}")
             self._login_status.setStyleSheet("color:#2ecc71;")
@@ -846,13 +845,13 @@ class SettingsTab(QWidget):
         )
 
         tour_row = QHBoxLayout()
-        setup_btn = QPushButton("자동설정 다시 열기 (베타)")
+        setup_btn = QPushButton("자동설정 다시 열기")
         self.setup_btn = setup_btn
         setup_btn.clicked.connect(self.reopen_setup.emit)
         v.addWidget(setup_btn)
         self.guide_btn = setup_btn
         self.guide_btn.setToolTip("게임창 등록부터 단계별 기능 선택과 영역 등록 안내를 엽니다.")
-        self.guide_btn.setVisible(config.load_discord_user() is not None)
+        self.guide_btn.setVisible(True)
         tour_btn = QPushButton("사용법 투어 다시 보기")
         self.tour_btn = tour_btn
         tour_btn.setToolTip("전투 보조·편의기능·잠금·일시정지의 하이라이트 안내를 다시 봅니다")

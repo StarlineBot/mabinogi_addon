@@ -10,6 +10,7 @@ from PySide6.QtGui import QGuiApplication, QImage, QPixmap
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QMessageBox, QPushButton, QScrollArea, QSpinBox, QVBoxLayout, QWidget
 
 from .. import config
+from ..feature_access import is_creator
 from ..detect.dorcha_reader import read_dorcha
 from .dorcha_overlay import DorchaOverlay
 from .widgets import checkbox, hint_label
@@ -21,6 +22,12 @@ class DorchaTab(QWidget):
     def __init__(self, watcher):
         super().__init__()
         self._watcher = watcher
+        self._alpha_ready = False
+        try:
+            config.migrate_tuarim_alpha()
+            self._alpha_ready = True
+        except OSError:
+            _log.warning("투아림 표시 설정 전환 저장 실패; 표시를 보류합니다.")
         self._cfg = config.load_dorcha()
         self._region = self._cfg["box"]
         self._paused = False
@@ -51,8 +58,8 @@ class DorchaTab(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12,12,12,12)
         layout.setSpacing(14)
-        self._beta_notice = hint_label("베타 · Discord 로그인 사용자")
-        layout.addWidget(self._beta_notice)
+        self._beta_notice = hint_label("")
+        self._beta_notice.hide()
         row = QHBoxLayout()
         self.auto_find_btn = QPushButton("자동 찾기")
         self.auto_find_btn.clicked.connect(self._on_auto_find)
@@ -128,7 +135,8 @@ class DorchaTab(QWidget):
 
     def percent_requested(self):
         return (self._cfg["showTuarim"] and self._tuarim_source is not None
-                and not self._render_suspended() and not self._paused and self._logged_in() and self._active())
+                and self._alpha_ready and is_creator()
+                and not self._render_suspended() and not self._paused and self._active())
 
     def _render_suspended(self):
         for controller in (self,self._tuarim_source):
@@ -138,6 +146,11 @@ class DorchaTab(QWidget):
         return False
 
     def _on_percent_enabled(self, checked):
+        if not (self._alpha_ready and is_creator()):
+            from PySide6.QtCore import QSignalBlocker
+            with QSignalBlocker(self._percent_control):
+                self._percent_control.setChecked(self._cfg["showTuarim"])
+            return
         self._cfg["showTuarim"] = checked
         self._set_percent(None)
         self._update_value_label()
@@ -158,10 +171,10 @@ class DorchaTab(QWidget):
     def _update_elements(self):
         for overlay in (self.preview,self._overlay):
             if overlay is not None:
-                overlay.set_elements(self._cfg["enabled"],self._cfg["showTuarim"])
+                overlay.set_elements(self._cfg["enabled"],self._cfg["showTuarim"] and self._alpha_ready and is_creator())
 
     def _sync_overlay(self):
-        visible = (not self._render_suspended() and not self._paused and self._logged_in() and self._active()
+        visible = (not self._render_suspended() and not self._paused and self._active()
                    and ((self._cfg["enabled"] and self._region is not None) or self.percent_requested()))
         if visible:
             self._ensure_overlay()
@@ -174,11 +187,21 @@ class DorchaTab(QWidget):
     def _apply_gate(self):
         logged = self._logged_in()
         self.clear_region_btn.setEnabled(self._region is not None and not self._shutting_down)
-        for control in (self.enable,self.scale_spin,self.lock_chk,self.region_btn,self.auto_find_btn):
-            control.setEnabled(logged and not self._shutting_down and not self._autofind_busy)
+        for control in (self.enable,self.scale_spin,self.lock_chk,self.region_btn):
+            control.setEnabled(not self._shutting_down and not self._autofind_busy)
+        self.auto_find_btn.setEnabled(logged and not self._shutting_down and not self._autofind_busy)
         if self._percent_control is not None:
-            self._percent_control.setEnabled(logged and not self._shutting_down)
-        self.view_region_btn.setEnabled(logged and self._region is not None and not self._shutting_down)
+            self._percent_control.setVisible(self._alpha_ready and is_creator())
+            self._percent_control.setEnabled(self._alpha_ready and is_creator() and not self._shutting_down)
+        if not (self._alpha_ready and is_creator()):
+            self._percent = None
+            self.preview.set_percent(None)
+            if self._overlay is not None:
+                self._overlay.set_percent(None)
+        self._update_elements()
+        self.view_region_btn.setEnabled(self._region is not None and not self._shutting_down)
+        self._update_value_label()
+        self._sync_overlay()
         self.region_label.setText("영역 미등록" if self._region is None else
                                  "등록 영역  {x}, {y}  /  {w} × {h}".format(**self._region))
         if (reference:=getattr(self,"_resource_view",None)) is not None and (view:=reference()) is not None:
@@ -196,7 +219,7 @@ class DorchaTab(QWidget):
         value = self.preview.value
         dorcha = f"{value}/15" if value is not None else "--/15"
         percent = f"{self._percent}%" if self._percent is not None else "--%"
-        if self._cfg["showTuarim"]:
+        if self._cfg["showTuarim"] and self._alpha_ready and is_creator():
             text = f"도르카 {dorcha} · 투아림 {percent}" if self._cfg["enabled"] else f"투아림 {percent}"
         else:
             text = dorcha
@@ -250,7 +273,7 @@ class DorchaTab(QWidget):
             self._hide()
             return
         self._apply_gate()
-        if self._paused or not self._logged_in() or not self._active():
+        if self._paused or not self._active():
             self._hide()
             return
         if not self._cfg["enabled"] or not self._region:
@@ -389,7 +412,7 @@ class DorchaTab(QWidget):
         try:
             if (worker.epoch != self._search_epoch or worker.isInterruptionRequested()
                     or self._shutting_down or self._autofind_busy or self._paused
-                    or not self._cfg["enabled"] or not self._logged_in() or not self._region
+                    or not self._cfg["enabled"] or not self._region
                     or not self._watcher.is_game_active() or self._search_target() != worker.target):
                 return
             self._next_search = max(self._next_search, monotonic() + worker.elapsed*20)
@@ -536,7 +559,7 @@ class DorchaTab(QWidget):
         self._sync_overlay()
 
     def _on_region(self):
-        if not self._logged_in() or self._shutting_down or self._autofind_busy:
+        if self._shutting_down or self._autofind_busy:
             return
         from .region_selector import RegionSelector
         size = (self._region["w"],self._region["h"]) if self._region else (28,23)

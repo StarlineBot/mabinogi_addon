@@ -143,7 +143,6 @@ class SetupFlow:
             page.progress.setText("설정할 기능을 선택하세요.")
             return
         if config.load_discord_user() is None:
-            page.progress.setText("자동설정은 베타 기능입니다. 설정 > Discord 계정에서 로그인하면 사용할 수 있습니다.")
             return
         if not section(config._read_local_config(), "general").get("gameExe"):
             page.progress.setText("게임창을 먼저 등록한 뒤 자동설정을 실행하세요.")

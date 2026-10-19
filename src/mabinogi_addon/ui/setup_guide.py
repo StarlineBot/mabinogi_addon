@@ -62,7 +62,7 @@ class SetupGuide(QWidget):
         self.checks, self.feature_rows, self.statuses = {}, {}, {}
         for key in GUIDE_KEYS:
             feature = BY_KEY[key]
-            check = QCheckBox(CHOICE_TEXT[key] + " - " + feature.name + (" (베타)" if feature.beta else ""))
+            check = QCheckBox(CHOICE_TEXT[key] + " - " + feature.name)
             check.toggled.connect(lambda value, key=key: self.feature_changed.emit(key, value))
             check.setFixedHeight(max(30, check.sizeHint().height() + 8))
             rows.addWidget(check)
@@ -205,9 +205,9 @@ class SetupGuide(QWidget):
             check.blockSignals(True)
             check.setChecked(enabled(key, raw))
             check.blockSignals(False)
-            check.setEnabled(not self.busy and (logged_in or not feature.beta or check.isChecked()))
+            check.setEnabled(not self.busy)
             check.setVisible(key in self.feature_keys)
-            check.setToolTip("테스트 중인 베타 기능입니다." if feature.beta else "")
+            check.setToolTip(feature.guidance)
             self.feature_rows[key].setVisible(key in self.feature_keys)
             text = self.status_text(key, raw)
             self.statuses[key].setText(text)

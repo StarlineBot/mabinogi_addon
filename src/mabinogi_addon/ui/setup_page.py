@@ -51,7 +51,7 @@ class SetupPage(QWidget):
         title.setStyleSheet("font-size:20px; font-weight:600;")
         header.addWidget(title, 1)
         self.run_btn = QPushButton("자동설정")
-        self.run_btn.setToolTip("사용할 기능 중 미등록 영역만 순서대로 찾습니다. Discord 로그인 후 사용할 수 있습니다.")
+        self.run_btn.setToolTip("사용할 기능 중 미등록 영역만 순서대로 찾습니다.")
         self.run_btn.clicked.connect(self.run_requested.emit)
         self.leave_btn = QPushButton("트래커로 이동")
         self.leave_btn.clicked.connect(self.leave_requested.emit)
@@ -82,8 +82,7 @@ class SetupPage(QWidget):
         choose.setSpacing(0)
         self.checks = {}
         for feature in FEATURES:
-            check = QCheckBox(CHOICE_TEXT[feature.key] + " - " + feature.name
-                              + (" (베타)" if feature.beta else ""))
+            check = QCheckBox(CHOICE_TEXT[feature.key] + " - " + feature.name)
             check.toggled.connect(lambda value, key=feature.key: self.feature_changed.emit(key, value))
             check.setFixedHeight(max(30, check.sizeHint().height() + 8))
             self.checks[feature.key] = check
@@ -157,10 +156,8 @@ class SetupPage(QWidget):
         self.skip.setChecked(section(raw, "general").get("skipSetup") is True)
         self.skip.blockSignals(blocked)
         logged_in = config.load_discord_user() is not None
-        self.beta_note.setText("자동설정은 테스트 중인 베타 기능입니다. "
-                               + ("직접 지정도 가능합니다." if logged_in else
-                                  "Discord 로그인 후 먼저 사용해 볼 수 있어요. 직접 지정은 로그인 없이 가능합니다.\n"
-                                  "기능 자체가 베타인 체력바·단축바는 로그인이 필요합니다."))
+        self.beta_note.setText("")
+        self.beta_note.hide()
         self.login_btn.setVisible(not logged_in)
         self.login_btn.setEnabled(not self.busy)
         self.game_status.setText("등록된 게임: " + str(section(raw, "general").get("gameExe"))
@@ -171,8 +168,8 @@ class SetupPage(QWidget):
             check.blockSignals(True)
             check.setChecked(enabled(feature.key, raw))
             check.blockSignals(False)
-            check.setEnabled(not self.busy and (logged_in or not feature.beta or check.isChecked()))
-            check.setToolTip("기능 자체가 베타인 항목은 로그인이 필요합니다." if feature.beta else "")
+            check.setEnabled(not self.busy)
+            check.setToolTip(feature.guidance)
             widget, status, button = self.feature_rows[feature.key]
             is_enabled = enabled(feature.key, raw)
             needed = missing(feature.key, raw)

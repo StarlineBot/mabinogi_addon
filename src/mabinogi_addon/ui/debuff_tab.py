@@ -169,7 +169,7 @@ class DebuffTab(QWidget):
         self.view_region_btn.clicked.connect(self._flash_region)
         self.auto_find_btn = QPushButton("자동 찾기")
         self.auto_find_btn.setToolTip(
-            "보스 체력바를 찾아 그 위 디버프 영역을 자동 지정 — Discord 베타"
+            "보스 체력바를 찾아 그 위 디버프 영역을 자동 지정"
         )
         self.auto_find_btn.clicked.connect(self._on_auto_find)
         hint_row.addWidget(self.auto_find_btn)
@@ -213,8 +213,8 @@ class DebuffTab(QWidget):
         for text, mode in (
             ("자동", "auto"),
             ("보스 확인 없이 탐지 (기본)", "off"),
-            ("체력바 모양으로 보스 확인 (베타)", "band"),
-            ("체력 %로 보스 확인 (베타)", "percent"),
+            ("체력바 모양으로 보스 확인", "band"),
+            ("체력 %로 보스 확인", "percent"),
         ):
             self.method_combo.addItem(text, mode)
         self.method_combo.setToolTip(
@@ -260,9 +260,7 @@ class DebuffTab(QWidget):
         bar_layout.addWidget(self.bar_view_btn)
         self.bar_adjust_btn = disclosure("공유 보스 영역 개별 조정", self._bar_region_container, v)
 
-        self._bar_gating_notice = hint_label(
-            "🧪 개발 중인 기능 — 설정 탭에서 Discord 로그인 후 가장 먼저 써볼 수 있어요."
-        )
+        self._bar_gating_notice = hint_label("")
         self._bar_gating_notice.setStyleSheet("color:#e67e22; font-size:12px;")
         v.addWidget(self._bar_gating_notice)
         self._apply_login_gate()
@@ -316,7 +314,7 @@ class DebuffTab(QWidget):
         ok = self._logged_in()
         self.method_combo.setEnabled(True)
         # 미로그인인데 2·3차가 선택돼 있으면 안내를 띄운다(선택은 보존, 적용은 1차).
-        self._bar_gating_notice.setVisible(not ok and self._selected_mode() in ("band", "percent"))
+        self._bar_gating_notice.hide()
 
     def _bar_region_status_text(self) -> tuple[str, str]:
         r = config.load_boss_bar_region()
@@ -453,12 +451,6 @@ class DebuffTab(QWidget):
         stamp = generation(self)
         """보스 체력바를 찾아 그 위 디버프 영역을 자동 지정(Discord 베타). 확인 후에만 저장."""
         if not self._logged_in():
-            QMessageBox.information(
-                self,
-                "자동 찾기 — 베타",
-                "자동 찾기는 Discord 로그인 사용자만 쓸 수 있는 베타 기능입니다.\n"
-                "설정 탭에서 로그인한 뒤 사용하세요.",
-            )
             return
         from .dpi import to_logical
         from .screen_grab import capture_for_autofind

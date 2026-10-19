@@ -93,8 +93,6 @@ class ResourceTab(QWidget):
         for control in (QLabel("표시 배율"),dorcha.scale_spin,dorcha.lock_chk): row.addWidget(control)
         row.addStretch()
         box.addLayout(row)
-        dorcha._beta_notice.setText("표시 기능 · Discord 로그인 베타")
-        box.addWidget(dorcha._beta_notice)
         box.addWidget(QLabel("원본·판독 확인"))
         dorcha.source_preview.setFixedSize(56,28)
         tuarim.preview.setFixedSize(72,28)
@@ -192,7 +190,7 @@ class ResourceTab(QWidget):
                 info["source_capture_offset"] = [ox,oy]
                 info["source_capture_shape"] = [frame.shape[1],frame.shape[0]]
             return frame[top-oy:top-oy+height,left-ox:left-ox+width].copy(),left,top
-        keys = ("dorcha","tuarim") if self.dorcha._logged_in() else ("tuarim",)
+        keys = ("dorcha","tuarim")
         self.find_regions(keys=keys,capture=capture)
 
     def find_regions(self,*,keys=("dorcha","tuarim"),capture=None,allowed=lambda:True):
@@ -201,7 +199,7 @@ class ResourceTab(QWidget):
                 or any(c._shutting_down or c._autofind_busy for c in self._controllers().values())): return {}
         if capture is None and not self.dorcha._logged_in(): return {}
         caller_allowed = allowed
-        require_login = capture is None or "dorcha" in keys
+        require_login = capture is None
         allowed = lambda:caller_allowed() and (not require_login or self.dorcha._logged_in())
         self._approval_allowed = allowed
         stamp = registration.generation(self)

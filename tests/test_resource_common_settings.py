@@ -196,14 +196,16 @@ def test_logout_during_approval_keeps_existing_regions(common,monkeypatch):
     assert config._read_local_config() == before
 
 
-def test_public_manual_percent_only_does_not_require_dorcha_login(common,monkeypatch):
+def test_public_manual_registers_both_resources_without_login(common,monkeypatch):
     _,view,*_ = common
     monkeypatch.setattr(config,"load_discord_user",lambda:None)
     monkeypatch.setattr(resource_tab,"to_physical",lambda box:tuple(box[k] for k in ("x","y","w","h")))
     monkeypatch.setattr(resource_tab,"capture_for_autofind",lambda **kwargs:(np.zeros((150,160,3),np.uint8),0,0))
     before = deepcopy(config._read_local_config().get("dorcha"))
     view._manual_region(10,20,90,70)
-    assert config._read_local_config().get("dorcha") == before
+    expected = deepcopy(before)
+    expected["box"] = dict(x=24,y=43,w=28,h=23)
+    assert config._read_local_config().get("dorcha") == expected
     assert config._read_local_config()["tuarim"]["box"] == dict(x=50,y=71,w=42,h=16)
 
 

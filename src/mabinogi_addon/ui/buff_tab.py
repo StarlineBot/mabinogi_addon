@@ -86,7 +86,7 @@ HELP_HTML = """
 <p>아이콘이 <b>완전히 같은</b> 버프는 서로 구분할 수 없습니다.
 예) 급소관통(스킬)과 물리공격력증가(물약)는 아이콘이 같아, 함께 떠 있으면
 하나로만 잡힙니다.</p>
-<p><b>🧪 자동 찾기</b>는 <b>게임 창 인식</b>이 돼 있어야 정확합니다(특히 모니터가 여러 개일 때).
+<p><b>자동 찾기</b>는 <b>게임 창 인식</b>이 돼 있어야 정확합니다(특히 모니터가 여러 개일 때).
 안 돼 있으면 <b>설정 › '게임 창 인식'</b>에서 게임 창을 먼저 등록하세요.</p>
 """
 
@@ -265,7 +265,7 @@ class BuffTab(QWidget):
         self.view_region_btn.setToolTip("잡힌 영역을 화면에 점선으로 잠깐 표시")
         self.view_region_btn.clicked.connect(self._flash_region)
         self.auto_find_btn = QPushButton("자동 찾기")
-        self.auto_find_btn.setToolTip("상태목록창(버프)을 화면에서 자동으로 찾아 지정 — Discord 베타")
+        self.auto_find_btn.setToolTip("상태목록창(버프)을 화면에서 자동으로 찾아 지정")
         self.auto_find_btn.clicked.connect(self._on_auto_find)
         hint_row.addWidget(self.auto_find_btn)
         hint_row.addWidget(region_btn)
@@ -381,12 +381,6 @@ class BuffTab(QWidget):
         stamp = generation(self)
         """상태목록창을 앵커로 자동 검출 → 민트 점선 미리보기 + 확인 후에만 저장(Discord 베타)."""
         if config.load_discord_user() is None:
-            QMessageBox.information(
-                self,
-                "자동 찾기 — 베타",
-                "자동 찾기는 Discord 로그인 사용자만 쓸 수 있는 베타 기능입니다.\n"
-                "설정 탭에서 로그인한 뒤 사용하세요.",
-            )
             return
         from ..autofind_diagnostics import perform_autofind
         frame, ox, oy, box = perform_autofind("buff", capture_for_autofind)

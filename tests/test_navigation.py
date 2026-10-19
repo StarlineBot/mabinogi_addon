@@ -161,15 +161,16 @@ def test_logged_out_dorcha_and_tour_settings_keep_access_rules(window, monkeypat
     monkeypatch.setattr(config,'load_discord_user',lambda:None)
     w.dorcha_tab._apply_gate()
     w._open_setup_feature('dorcha')
-    assert not w.dorcha_tab.enable.isEnabled()
+    assert w.dorcha_tab.enable.isEnabled()
+    assert not w.dorcha_tab.auto_find_btn.isEnabled()
     w._run_tour(from_guide=True)
-    assert getattr(w,'_tour',None) is None
+    assert getattr(w,'_tour',None) is not None
     w._run_tour()
     tour = w._tour
     tour._i = 5
     tour._show_step()
     app.processEvents()
-    assert tour._steps[5].target is w.settings_tab.tour_btn
+    assert tour._steps[5].target is w.settings_tab.setup_btn
     assert tour._target_rect() is not None
 
 

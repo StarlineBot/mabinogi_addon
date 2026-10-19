@@ -141,13 +141,14 @@ def test_resource_both_displays_off_keeps_preview_and_independent_alert(window):
     assert not w.resource_tab.percent_chk.isChecked()
 
 
-def test_stat_individual_locks_follow_existing_login_gate_without_saving(window, monkeypatch):
+def test_stat_individual_locks_are_public_without_saving_on_logout(window, monkeypatch):
     w, app = window
     tab = w.stat_bars_tab
     before = deepcopy(config._read_local_config())
     monkeypatch.setattr(config, "load_discord_user", lambda: None)
     tab._apply_login_gate()
-    assert not any(button.isEnabled() for button in tab.bar_lock_buttons.values())
+    assert all(button.isEnabled() for button in tab.bar_lock_buttons.values())
+    assert not tab.collect_chk.isEnabled() and not tab.auto_find_btn.isEnabled()
     assert config._read_local_config() == before
 
 
