@@ -27,3 +27,13 @@
 결과: **53 passed in 25.39s**. 별도로 초기 관련 회귀는 44 passed였다(중복 포함이며 합산하지 않는다).
 Windows·실제 경매 API·한글 Windows 경로·혼합 DPI·장시간 게임 병행은 미검증이다.
 일반 푸시의 Windows Actions와 태그·릴리즈는 실행하지 않는다.
+
+## 독립 QA 후 업데이트 안내 보완
+
+- QA 대상 `7ddcb6d`: 기능 관련 회귀 90개와 독립 검증 5개 통과가 보고됐다.
+- 공개 노트에 계산기 안내가 빠져 최초 실행·0.4.90 이후 업데이트 안내에서 누락되는 P3를 확인했다.
+- 수정 전 QA 재현 스크립트를 직접 실행해 동일한 2개 실패를 확인했다.
+- 원격 최신 태그가 v0.4.90임을 확인하고 미공개 v0.4.91 노트에 기능 위치·계산 내용을 추가했다. 과거 공개 노트와 제품 동작은 변경하지 않았다.
+- 일반 수집 회귀 `tests/test_dungeon_release_note.py`에 두 진입 조건을 추가했다.
+- 수정 후 노트 관련 일반 회귀와 QA 재현 스크립트 실행: **16 passed in 4.28s**. 명령은 `env QT_QPA_PLATFORM=offscreen .venv/bin/python -m pytest tests/test_dungeon_release_note.py tests/test_release_notes.py tests/test_release_notes_trigger.py scripts/qa_dungeon_release_note_20261019.py -q --tb=short`이다.
+- 이번 수정에서 기능 95개 검증은 재실행하지 않았다. 제품 동작이 동일하므로 기존 독립 QA 결과와 구분해 기록한다. Windows/API 미검증 범위는 그대로다.
