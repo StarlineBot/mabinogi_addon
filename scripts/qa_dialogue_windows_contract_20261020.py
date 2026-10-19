@@ -58,7 +58,8 @@ def api_model(window, monkeypatch):
         x, y, r, b = region.shape
         return max(x, rect[0]) < min(r, rect[2]) and max(y, rect[1]) < min(b, rect[3])
 
-    gui = SimpleNamespace(CreateRectRgnIndirect=Region, SetWindowRgn=set_region,
+    gui = SimpleNamespace(error=Win32APIError,
+                          CreateRectRgnIndirect=Region, SetWindowRgn=set_region,
                           GetWindowRect=lambda hwnd: (0, 0, 200, 160),
                           GetWindowRgn=get_region, RectInRegion=intersects,
                           DeleteObject=lambda region: region.Detach())

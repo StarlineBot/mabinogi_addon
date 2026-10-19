@@ -27,7 +27,9 @@ def test_real_window_region_export_and_gdi_cleanup(shape,expected):
         region=win32gui.CreateRectRgnIndirect(shape) if shape is not None else None
         try:
             win32gui.SetWindowRgn(hwnd,region,False)
-            region=None  # Ownership transfers to the window only after success.
+            if region is not None:
+                region.Detach()  # The HWND now owns it; prevent PyGdiHANDLE auto-deletion.
+            region=None
         finally:
             if region is not None:
                 win32gui.DeleteObject(region)
@@ -35,7 +37,13 @@ def test_real_window_region_export_and_gdi_cleanup(shape,expected):
         targets=[(left+20,top+20,left+68,top+68)]
         detail={}
         assert _region_overlap(win32gui,hwnd,targets,detail) is expected
-        assert 'region_error' not in detail and 'region_cleanup_error' not in detail
+        if shape is None:
+            # pywin32 raises for GetWindowRgn's ERROR (no explicit region).
+            assert detail.get('region_error') == win32gui.error.__name__
+            assert 'region_type' not in detail
+        else:
+            assert 'region_error' not in detail
+        assert 'region_cleanup_error' not in detail
         kernel=ctypes.WinDLL('kernel32')
         kernel.GetCurrentProcess.restype=wintypes.HANDLE
         current=kernel.GetCurrentProcess()
