@@ -278,9 +278,11 @@ def window(app, monkeypatch):
     from mabinogi_addon.ui.main_window import MainWindow
     monkeypatch.setattr(config, "load_discord_user", lambda: None)
     monkeypatch.setattr(QApplication, "quit", lambda: None)
+    config.save_general_flag("skipSetup", True)
     w = MainWindow()
     w.show()
     app.processEvents()
+    assert w._pages.currentWidget() is w._tabs
     w.creator_dialogue.visibility = lambda *args: True
     yield w
     w._force_quit = True

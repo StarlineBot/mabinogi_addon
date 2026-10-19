@@ -188,7 +188,7 @@ def test_twenty_writes_leave_no_worker_and_metadata_stays_paired(tmp_path):
         assert session.count == n+1
         target = session.path/f'{n+1:04d}'
         assert np.array_equal(image_io.imread(target/'frame.png'),frame)
-        assert json.loads((target/'metadata.json').read_text())['sample'] == n
+        assert json.loads((target/'metadata.json').read_text(encoding='utf-8'))['sample'] == n
         assert session.thread is None
 
 

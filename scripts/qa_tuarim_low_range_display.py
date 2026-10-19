@@ -68,7 +68,8 @@ def pipeline(monkeypatch):
     from mabinogi_addon.ui.resource_tab import ResourceTab
 
     app = QApplication.instance() or QApplication([])
-    monkeypatch.setattr(config, "load_discord_user", lambda: {"id": "qa"})
+    from mabinogi_addon.feature_access import CREATOR_DISCORD_ID
+    monkeypatch.setattr(config, "load_discord_user", lambda: {"id": CREATOR_DISCORD_ID})
     watcher = SimpleNamespace(is_game_active=lambda: True, is_self_active=lambda: False)
     t, d = TuarimTab(watcher), DorchaTab(watcher)
     panel = ResourceTab(d, t)
@@ -76,7 +77,9 @@ def pipeline(monkeypatch):
     d._timer.stop()
     t.enable.setChecked(False)
     d.enable.setChecked(False)
+    assert d._alpha_ready and not panel.percent_chk.isChecked()
     panel.percent_chk.setChecked(True)
+    assert panel.percent_chk.isChecked() and d.percent_requested()
     current = [None]
     monkeypatch.setattr(dpi, "to_physical", lambda region: tuple(region[k] for k in ("x", "y", "w", "h")))
     monkeypatch.setattr(t, "_grab_rect", lambda *args: current[0])
