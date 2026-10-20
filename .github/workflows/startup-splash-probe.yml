@@ -1,0 +1,40 @@
+name: Startup splash proof (manual, no release)
+on:
+  workflow_dispatch:
+    inputs:
+      payload_files:
+        description: Extraction workload (increase only if the runner finishes before a dialogue replacement)
+        type: choice
+        default: '80000'
+        options:
+          - '80000'
+          - '250000'
+permissions:
+  contents: read
+concurrency:
+  group: startup-splash-proof
+  cancel-in-progress: false
+jobs:
+  probe:
+    if: github.ref == 'refs/heads/main'
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned bootloader tooling
+        run: python -m pip install pyinstaller==6.22.3
+      - name: Build and run pre-extraction proof
+        env:
+          PROBE_FILES: ${{ inputs.payload_files }}
+        run: python -m scripts.build_startup_probe --output startup-probe-results --files $env:PROBE_FILES
+      - name: Store proof records
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: startup-splash-proof-${{ github.run_id }}-${{ github.run_attempt }}
+          path: startup-probe-results/*
+          retention-days: 1
+          if-no-files-found: warn

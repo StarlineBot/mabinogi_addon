@@ -1,0 +1,13 @@
+{
+  "platform": "linux",
+  "source_sha": "local-working-tree",
+  "payload_files": 250000,
+  "pyinstaller": "6.22.3",
+  "duration": 10.079235792160034,
+  "pre_python_frames": 29,
+  "unique_windows": 1,
+  "pre_python_replacement": true,
+  "measured_dialogues": 16,
+  "geometry": "440x240+420+280",
+  "events": 62
+}

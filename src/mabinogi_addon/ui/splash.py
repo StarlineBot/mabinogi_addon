@@ -23,31 +23,11 @@ from PySide6.QtWidgets import (
 )
 
 from .. import paths
+from ..startup_content import MESSAGES
 
 _LOGO = paths.resource_dir() / "logo.png"
 _PROFILE = paths.resource_dir() / "profile.png"  # 제작자 아이콘(없으면 로고로 폴백)
 _CREATOR = "섯다라인"  # 캐릭터가 말하는 것처럼 "섯다라인 : <문구>"
-
-# 로딩 문구(마비노기 상황극) — discord_bot modules/loading.js 의 FLAVORS에서 가져옴.
-MESSAGES = [
-    "브리레흐 3관 도는 중",
-    "크롬바스에서 보상상자 까는 중",
-    "볼트 마법 조합 준비 중",
-    "비바체 연주 하는 중",
-    "스노우 스톰 시전 중",
-    "익스플로전 런지 시전 중",
-    "80 헤일로 어떻게 한 번에 깰지 고민 중",
-    "브리레흐 2관 줄넘기 중",
-    "크롬바스 심연에서 회오리 피하는 중",
-    "잔흔 부족으로 레이턴트 이그니션 사용 못하는 중",
-    "잘못 나간 라이트닝 체인 줍는 중",
-    "브리레흐 1관 도는 중",
-    "크롬바스에서 100버스트 중",
-    "스노우 스톰 아끼는 중",
-    "레이턴트 이그니션 사용 중",
-    "크롬바스 심연에서 레이저 맞는 중",
-]
-
 
 def _round_pixmap(path, size: int) -> QPixmap | None:
     """이미지를 정사각 중앙 크롭 후 원형으로."""
