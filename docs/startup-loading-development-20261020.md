@@ -6,7 +6,58 @@
 제품 패키징·실제 업데이트 상태·앱 진입·종료 경로를 연결했다. 선행 EXE 검증과 연결 후 제품의
 Windows 통합 검증은 별개이며, 후자는 아직 실행하지 않았다.
 
-## 제품 연결 후 수동 업데이트 회귀 수정
+## 수동 업데이트 A안 공통 화면 구현
+
+최신 독립 QA 소스 `afedbd5`의 진행률 복구 **77 passed**와 사용자 추가 확정을 확인한 뒤
+명세 11절을 구현했다. 아래는 구현자의 개발 검증이며 새 독립 QA 통과 판정이 아니다.
+
+- `Splash(typing=False, status=...)`가 일반 시작과 동일한 화면 초기화·배경·로고·문구 표시를
+  사용한다. 상태 전용 모드는 대사를 선택하거나 QTimer를 만들지 않으며, 최초 프레임부터
+  실제 대상 버전의 `0%`를 완성형으로 표시한다. 일반 시작은 기존 단일 타이머를 유지한다.
+- `UpdateSplash`는 이 공통 화면의 얇은 상태 모드다. `440×240` 고정 배치에서 얼굴·별도 이름·
+  진행바를 제거하고 실제 콜백의 0/10/37/90/100%를 표시한다. 긴 버전명은 같은 상태 영역에서
+  글꼴을 13~9px 범위로 맞추며, 검사한 52자 prerelease/build 버전은 11px 두 줄에 들어온다.
+- 기존 다운로드 워커 하나가 다운로드 반환 뒤 `prepare_apply()`를 호출한다. GUI 스레드에
+  `BlockingQueuedConnection`으로 적용 문구 갱신·페인트를 전달해 완료한 뒤 실제 `apply_update()`를
+  실행한다. 작업 스레드는 위젯을 직접 조작하지 않는다. 스레드 간 상태 전달의 완료 동기화이며
+  연출을 위한 대기·타이머·폴링·추가 워커는 없다. GUI 스레드에서 호출하면 직접 갱신해 자기 자신에
+  대한 blocking queued 호출을 피한다. 적용 상태 이후 다운로드 콜백은 표시를 덮지 않는다.
+- 승인/거절, 다운로드/적용 실패, 성공 종료, 메인 복원, 실패 후 다른 대상 버전으로 재시도,
+  신호 해제와 닫힌 화면의 늦은 갱신을 검사했다. 진행 중 중복 호출은 새 창·워커를 만들지 않는다.
+  실제 Python 스레드에서도 UI 갱신이 GUI 스레드에서 완료된 뒤 적용 함수에 진입하는지 검사한다.
+- 기존 QA 재현 진입점은 현재 수동 화면을 사용하도록 이관했다. 10/90% 렌더가 달라야 한다는
+  원래 assertion과 생명주기·실패 처리 검사는 유지하며, 옛 크기·진행바 assertion만 새 승인 요구로 교체했다.
+- 공통 Qt 수정 후 일반 시작·트레이 시작의 실제 앱 소스 smoke를 다시 확인했다. 부트로더 Tcl,
+  패키징, 시작 시 자동 업데이트 IPC와 다운로드/검증/교체/재실행 정책은 변경하지 않았다.
+
+실제 `_on_update_clicked`와 진행 콜백으로 만든 Linux Qt 오프스크린 렌더다.
+네트워크·다운로드 워커·파일 교체 경계만 대체했으며 실제 다운로드나 Windows 실행 증거는 아니다.
+
+![수동 A안 37%](qa/assets/startup_loading_20261020/manual-a-37.png)
+![수동 A안 적용 중](qa/assets/startup_loading_20261020/manual-a-applying.png)
+![수동 A안 긴 버전명](qa/assets/startup_loading_20261020/manual-a-long-version.png)
+
+렌더 재현:
+
+```bash
+QT_QPA_PLATFORM=offscreen python docs/qa/assets/startup_loading_20261020/manual_shared_render.py
+QT_QPA_PLATFORM=offscreen QT_SCALE_FACTOR=1.5 python docs/qa/assets/startup_loading_20261020/manual_shared_render.py /tmp/manual-a-dpi150
+QT_QPA_PLATFORM=offscreen QT_SCALE_FACTOR=2 python docs/qa/assets/startup_loading_20261020/manual_shared_render.py /tmp/manual-a-dpi200
+```
+
+- 관련 검사 **74 passed / 9.40초**. 공통 화면·실제 스레드/재시도 회귀, 기존 시작/부트로더/
+  빌드/업데이터/재실행/중복 실행, Unicode IO와 원본 QA 진행률 재현을 포함한다.
+- 전체 Linux 검사 **2,250 passed / 402.09초**, 기존 Qt MouseEvent 폐기 예정 경고 3개다.
+  로컬 소켓을 허용하고 `pytest -n 2 -q -m 'not windows_integration'`로 실행했다.
+  Windows 전용 15개는 실행하지 않았다. 테스트 수는 기존 2,246개에 새 경계 사례 4개를 보강한 결과다.
+- 실제 소스 smoke: 일반 시작은 로더 `1→0`, 메인 표시를 확인했다. 트레이 시작은 로더와
+  메인 모두 숨김을 유지했다. 두 경로 모두 종료 뒤 실행 중인 QThread `[]`다.
+- Linux 100/150/200% 렌더와 2개 글꼴 계열의 긴 버전명 영역 검사를 실행했다.
+Windows 실제 Malgun Gothic·DPI/모니터 전환·EXE 다운로드/교체/재실행은 미검증이며,
+이전 소스의 Windows 선행 검증으로 이번 변경의 검증을 대신하지 않는다.
+미공개 `0.8.0` 노트만 갱신하며 Windows workflow·태그·게시 작업은 실행하지 않는다.
+
+## 제품 연결 후 수동 업데이트 회귀 수정 (이전 단계 기록)
 
 - 독립 QA 소스 `ee46922`에서 기존 '지금 업데이트'의 진행률 소실(P2)을 확인했다.
   시작 화면의 `Splash.step()`에서 진행바·pct 표시를 없앴지만 수동 다운로드도 같은 클래스를

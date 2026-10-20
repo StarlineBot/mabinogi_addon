@@ -3,7 +3,7 @@
 from pathlib import Path
 
 import pytest
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QObject, QThread, QTimer, Signal
 from PySide6.QtWidgets import QApplication, QMessageBox, QProgressBar
 
 from mabinogi_addon.system import updater
@@ -37,16 +37,16 @@ def app():
 
 
 @pytest.mark.parametrize("outcome", ["success", "download_failure", "apply_failure"])
-def test_manual_update_keeps_bar_numbers_and_existing_success_failure_lifetime(
+def test_manual_update_shares_layout_numbers_and_existing_success_failure_lifetime(
     app, monkeypatch, outcome
 ):
     import threading
 
     jobs, warnings, quits, applications = [], [], [], []
     monkeypatch.setattr(
-        splash,
-        "Splash",
-        lambda: pytest.fail("manual update used startup dialogue screen"),
+        splash.Splash,
+        "_choose",
+        lambda self: pytest.fail("manual update selected dialogue"),
     )
     monkeypatch.setattr(
         QMessageBox, "question", lambda *a, **k: QMessageBox.StandardButton.Yes
@@ -67,12 +67,13 @@ def test_manual_update_keeps_bar_numbers_and_existing_success_failure_lifetime(
     owner = Owner()
 
     def download(info, progress_cb):
-        for percent in (10, 90):
+        for percent in (0, 10, 37, 90, 100):
             progress_cb(percent)
             app.processEvents()
             screen = owner._update_splash
-            assert screen.bar.value() == percent
-            assert f"{percent}%" in screen.msg.text()
+            assert screen.msg.text() == f"새 버전 v0.8.0 받는 중 {percent}%"
+            assert screen.geometry() == geometry
+            assert not screen.findChildren(QTimer)
             image = screen.grab().toImage()
             frames.append(bytes(image.constBits()))
         if outcome == "download_failure":
@@ -80,6 +81,9 @@ def test_manual_update_keeps_bar_numbers_and_existing_success_failure_lifetime(
         return Path("new.exe")
 
     def apply(path):
+        assert screen.msg.text() == "업데이트 적용 중"
+        owner._update_progress.emit(90)
+        assert screen.msg.text() == "업데이트 적용 중"
         applications.append(path)
         if outcome == "apply_failure":
             raise OSError("apply failed")
@@ -92,13 +96,18 @@ def test_manual_update_keeps_bar_numbers_and_existing_success_failure_lifetime(
     assert (
         screen.isVisible()
         and screen.size().width() == 440
-        and screen.size().height() == 208
+        and screen.size().height() == 240
     )
-    assert len(screen.findChildren(QProgressBar)) == 1 and screen.bar.value() == 0
+    assert isinstance(screen, splash.Splash)
+    assert not screen.findChildren(QProgressBar)
+    assert not screen.findChildren(QTimer) and screen._timer is None
+    assert screen.msg.text() == "새 버전 v0.8.0 받는 중 0%"
+    assert screen._mode == "status"
+    geometry = screen.geometry()
     assert owner.events == ["hide"]
     assert len(jobs) == 1
     jobs[0]()
-    assert len(frames) == 2 and frames[0] != frames[1]
+    assert len(frames) == 5 and len(set(frames)) == 5
     assert owner._update_splash is None and not screen.isVisible()
     assert applications == ([] if outcome == "download_failure" else [Path("new.exe")])
     if outcome == "success":
@@ -109,6 +118,10 @@ def test_manual_update_keeps_bar_numbers_and_existing_success_failure_lifetime(
     # All connections must be removed before retry/late worker notifications.
     owner._update_progress.emit(30)
     owner._update_result.emit(True, "")
+    closed_text = screen.msg.text()
+    screen.download_progress(37)
+    screen.step(37, "late")
+    assert not screen.isVisible() and screen.msg.text() == closed_text
     assert len(quits) == (1 if outcome == "success" else 0)
     assert len(warnings) == (0 if outcome == "success" else 1)
 
@@ -130,3 +143,115 @@ def test_declined_manual_update_does_not_open_screen_or_start_worker(app, monkey
     owner = Owner()
     MainWindow._on_update_clicked(owner)
     assert owner._update_splash is None and owner.events == []
+
+
+def test_real_worker_dispatch_and_failure_retry(app, monkeypatch):
+    import threading
+    import time
+
+    from PySide6.QtTest import QTest
+
+    owner = Owner()
+    workers, displays, warnings, applied = [], [], [], []
+    real_thread = threading.Thread
+    original_show = splash.Splash._show_text
+
+    def show(screen, text):
+        assert QThread.isMainThread()
+        displays.append(text)
+        original_show(screen, text)
+
+    def worker(**kwargs):
+        thread = real_thread(**kwargs)
+        workers.append(thread)
+        return thread
+
+    def download(info, progress_cb):
+        for percent in (0, 10, 37, 90, 100):
+            progress_cb(percent)
+        return Path("new.exe")
+
+    def apply(path):
+        # A synchronous GUI dispatch must have completed before actual file apply.
+        assert displays[-1] == "업데이트 적용 중"
+        applied.append(path)
+        raise OSError("retryable apply failure")
+
+    monkeypatch.setattr(splash.Splash, "_show_text", show)
+    monkeypatch.setattr(threading, "Thread", worker)
+    monkeypatch.setattr(updater, "download", download)
+    monkeypatch.setattr(updater, "apply_update", apply)
+    monkeypatch.setattr(
+        QMessageBox, "question", lambda *a: QMessageBox.StandardButton.Yes
+    )
+    monkeypatch.setattr(QMessageBox, "warning", lambda *a: warnings.append(a[2]))
+    screens = []
+    for attempt in range(2):
+        owner._pending_update = {"version": f"0.8.{attempt}"}
+        MainWindow._on_update_clicked(owner)
+        screen = owner._update_splash
+        screens.append(screen)
+        # Repeated clicks while active must not create another worker/window.
+        MainWindow._on_update_clicked(owner)
+        assert len(workers) == attempt + 1
+        deadline = time.monotonic() + 5
+        while (
+            workers[-1].is_alive() or owner._update_splash is not None
+        ) and time.monotonic() < deadline:
+            app.processEvents()
+            QTest.qWait(1)
+        workers[-1].join(timeout=0)
+        assert not workers[-1].is_alive()
+        assert owner._update_splash is None
+        assert len(warnings) == attempt + 1
+        assert not screen.isVisible() and not screen.findChildren(QTimer)
+        assert f"새 버전 v0.8.{attempt} 받는 중 37%" in displays
+        previous = list(displays)
+        owner._update_progress.emit(37)
+        app.processEvents()
+        assert displays == previous
+    assert screens[0] is not screens[1]
+    assert applied == [Path("new.exe")] * 2
+    assert owner.events == ["hide", "show"] * 2
+
+
+def test_status_only_cannot_resume_dialogue_or_reopen_after_close(app):
+    screen = update_splash.UpdateSplash("0.8.0")
+    try:
+        screen.step(1)
+        screen._tick()
+        assert screen.msg.text() == "새 버전 v0.8.0 받는 중 0%"
+        assert screen._mode == "status" and not screen.findChildren(QTimer)
+        screen.close()
+        screen.prepare_apply()
+        screen.download_progress(90)
+        assert screen._mode == "closed" and not screen.isVisible()
+        assert screen.msg.text() == "새 버전 v0.8.0 받는 중 0%"
+    finally:
+        screen.close()
+
+
+@pytest.mark.parametrize("family", ["Malgun Gothic", "sans-serif"])
+def test_long_target_version_fits_fixed_status_slot(app, family):
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QFont, QFontMetrics
+
+    version = "0.8.0-beta.20261020+0123456789abcdef0123456789abcdef"
+    screen = update_splash.UpdateSplash(version)
+    try:
+        font = QFont(family)
+        font.setPixelSize(13)
+        screen.msg.setFont(font)
+        geometry = screen.geometry()
+        for text in (f"새 버전 v{version} 받는 중 100%", "업데이트 적용 중"):
+            screen.step(100, text)
+            bounds = QFontMetrics(screen.msg.font()).boundingRect(
+                screen.msg.rect(), int(Qt.TextFlag.TextWordWrap), text
+            )
+            assert bounds.width() <= screen.msg.width()
+            assert bounds.height() <= screen.msg.height()
+            assert screen.msg.text() == text
+            assert screen.geometry() == geometry
+        assert screen.msg.font().pixelSize() == 13
+    finally:
+        screen.close()

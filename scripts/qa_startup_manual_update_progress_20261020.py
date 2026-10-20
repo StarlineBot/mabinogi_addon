@@ -4,7 +4,7 @@ Run: QT_QPA_PLATFORM=offscreen PYTHONPATH=src:. python -m pytest
      scripts/qa_startup_manual_update_progress_20261020.py -q -s
 Original failure: real progress callbacks produced identical rendered screens.
 Retained as a callback regression; the actual manual screen and its lifecycle are
-covered by tests/test_manual_update_progress.py after the shared screen was split.
+covered by tests/test_manual_update_progress.py using the shared layout in status-only mode.
 No download, update application, live capture or real MainWindow is started.
 """
 
@@ -18,12 +18,12 @@ sys.path[:0] = [str(ROOT), str(ROOT / "src")]
 
 from PySide6.QtWidgets import QApplication, QProgressBar
 from mabinogi_addon.ui.main_window import MainWindow
-from mabinogi_addon.ui.splash import Splash
+from mabinogi_addon.ui.update_splash import UpdateSplash
 
 
 def test_manual_update_download_progress_remains_visible():
     app = QApplication.instance() or QApplication([])
-    screen = Splash()
+    screen = UpdateSplash("0.8.0")
     owner = SimpleNamespace(_update_splash=screen)
     frames = []
     screen.show()
@@ -44,7 +44,7 @@ def test_manual_update_download_progress_remains_visible():
         )
     finally:
         screen.close()
-        assert not screen._timer.isActive()
+        assert screen._timer is None
 
 
 if __name__ == "__main__":

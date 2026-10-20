@@ -1033,11 +1033,10 @@ class MainWindow(QMainWindow):
             play_update_sound()
 
     def _on_update_clicked(self) -> None:
-        """[지금 업데이트] → 다운로드(진행바) → B안 교체 → 재실행.
+        """A안 상태 화면에서 비동기 다운로드·교체 후 재실행한다.
 
-        교체 도중 사용자가 본 창을 건드려 상태를 바꾸면 위험해, 본 창을 숨기고(=뒤에서
-        못 누르게) 수동 다운로드 전용 스플래시(기존 로고+프로그레스바)로 진행률을 보인다.
-        성공하면 새 exe가 이미 떠 있으니 그대로 종료, 실패하면 본 창을 다시 띄워 안내한다.
+        성공 시 종료하고 실패 시 본 창을 복원한다. 일반 시작과 화면은 공유하지만
+        수동 업데이트에서는 대사 타이핑 없이 실제 상태·퍼센트만 표시한다.
         """
         import threading
 
@@ -1047,7 +1046,7 @@ class MainWindow(QMainWindow):
         from .update_splash import UpdateSplash
 
         info = self._pending_update
-        if not info:
+        if not info or getattr(self, "_update_splash", None) is not None:
             return
 
         ver = info.get("version", "?")
@@ -1057,10 +1056,8 @@ class MainWindow(QMainWindow):
         ) != QMessageBox.StandardButton.Yes:
             return
 
-        # 시작 화면의 무진행바/타이핑 정책과 별개인 기존 수동 다운로드 화면.
-        splash = UpdateSplash()
+        splash = UpdateSplash(ver)
         splash.center_on_screen()
-        splash.step(0, f"새 버전 v{ver} 받는 중…")
         splash.show()
         self._update_splash = splash  # 재생 중 GC 방지(모듈 아닌 self에 보관)
         self.hide()
@@ -1073,6 +1070,7 @@ class MainWindow(QMainWindow):
                 new_path = updater.download(
                     info, progress_cb=lambda p: self._update_progress.emit(p)
                 )
+                splash.prepare_apply()
                 updater.apply_update(new_path)  # 교체 + 새 exe 실행
             except Exception as exc:  # noqa: BLE001 — 사용자에게 사유 표시
                 self._update_result.emit(False, str(exc))
@@ -1084,7 +1082,7 @@ class MainWindow(QMainWindow):
     def _on_update_progress(self, pct: int) -> None:
         splash = getattr(self, "_update_splash", None)
         if splash is not None:
-            splash.step(pct, f"새 버전 받는 중… {pct}%")
+            splash.download_progress(pct)
 
     def _on_update_result(self, ok: bool, msg: str) -> None:
         from PySide6.QtWidgets import QMessageBox
