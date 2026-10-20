@@ -30,6 +30,8 @@ jobs:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    outputs:
+      version: ${{ steps.freeze.outputs.version }}
     env:
       GH_TOKEN: ${{ github.token }}
       REQUEST_VERSION: ${{ inputs.version }}
@@ -41,6 +43,7 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 0
       - name: Freeze release request
+        id: freeze
         run: python -m scripts.release_automation prepare
       - name: Store release request
         uses: actions/upload-artifact@v4
@@ -55,7 +58,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 45
     env:
-      APP_VERSION: ${{ inputs.version }}
+      APP_VERSION: ${{ needs.request.outputs.version }}
       RELEASE_MODE: ${{ inputs.mode }}
       OPENCV_FOR_THREADS_NUM: '1'
     steps:

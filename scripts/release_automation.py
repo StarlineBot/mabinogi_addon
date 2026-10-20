@@ -101,6 +101,8 @@ def select_existing(repository, sha, version, candidate_run=''):
 
 
 def prepare(root, output, repository, sha, version, run_id, attempt, mode, candidate_run=''):
+    # Normalize only user input; candidate identity and approval checks stay strict.
+    version = version.strip()
     c.require(mode in MODES, 'invalid release mode')
     c.require(run_id > 0 and attempt > 0, 'invalid request identity')
     c.require(repository == os.environ['GITHUB_REPOSITORY'] and
@@ -229,10 +231,12 @@ def main():
     args = parser.parse_args()
     repository = os.environ['GITHUB_REPOSITORY']
     if args.command == 'prepare':
-        prepare(Path.cwd(), Path('release-request'), repository, os.environ['GITHUB_SHA'],
+        request = prepare(Path.cwd(), Path('release-request'), repository, os.environ['GITHUB_SHA'],
                 os.environ['REQUEST_VERSION'], int(os.environ['GITHUB_RUN_ID']),
                 int(os.environ['GITHUB_RUN_ATTEMPT']), os.environ['REQUEST_MODE'],
                 os.environ.get('REQUEST_CANDIDATE_RUN', ''))
+        with Path(os.environ['GITHUB_OUTPUT']).open('a', encoding='utf-8') as output:
+            output.write(f'version={request["version"]}\n')
     else:
         c.require(os.environ['GITHUB_EVENT_NAME'] == 'workflow_run', 'wrong publisher trigger')
         event = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text(encoding='utf-8'))

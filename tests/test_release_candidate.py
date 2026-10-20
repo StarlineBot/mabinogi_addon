@@ -372,7 +372,7 @@ def automation(bundle, tmp_path, monkeypatch):
     monkeypatch.setattr(d, 'gh', gh)
     monkeypatch.setattr(d, 'prepare_public', lambda *args: None)
 
-    def prepare(mode='validate-and-publish', candidate_run=''):
+    def prepare(mode='validate-and-publish', candidate_run='', version='0.6.0'):
         run_id, attempt = (900, 3) if mode == 'publish-existing' else (123, 2)
         runs[123] = run_data(123, 2)
         jobs[123] = [dict(name='validate', conclusion='success',
@@ -385,7 +385,7 @@ def automation(bundle, tmp_path, monkeypatch):
         if run_id not in jobs:
             jobs[run_id] = []
         receipt = tmp_path/f'request-{run_id}-{attempt}'
-        request = a.prepare(root, receipt, REPO, SHA, '0.6.0', run_id, attempt, mode, candidate_run)
+        request = a.prepare(root, receipt, REPO, SHA, version, run_id, attempt, mode, candidate_run)
         jobs[run_id].append(dict(name='request', conclusion='success', steps=[
             dict(name=n, conclusion='success') for n in (a.REQUEST_STEP, a.REQUEST_UPLOAD)]))
         artifacts.setdefault(run_id, []).append(artifact_data(789, a.request_name(run_id, attempt), run_id))
@@ -704,3 +704,42 @@ def test_selection_api_failure_is_not_treated_as_an_old_attempt(automation, monk
     with pytest.raises(RuntimeError, match='API unavailable'):
         a.select_existing(REPO, SHA, '0.6.0')
     assert not any(event[0] in ('tag', 'release', 'download') for event in env['events'])
+
+
+@pytest.mark.parametrize('mode', a.MODES)
+@pytest.mark.parametrize('version', [' 0.6.0', '0.6.0 ', '\t0.6.0\r\n'])
+def test_dispatch_trims_version_once_and_preserves_receipt_and_approval(automation, mode, version):
+    env = automation
+    request = env['prepare'](mode, version=version)
+    recorded = json.loads((env['state']['receipt']/'release-request.json').read_text(encoding='utf-8'))
+    assert recorded['version'] == request['version'] == '0.6.0'
+    a.complete(env['state']['event'], REPO, env['root'])
+    assert env['state']['tag'] is (mode != 'verify-only')
+    # Internal identities remain exact even though the user-facing boundary trims.
+    with pytest.raises(ValueError, match='X.Y.Z'):
+        c.identity(SHA, version)
+
+
+@pytest.mark.parametrize('version', [' ', 'v0.6.0', '0. 6.0', '0.6.0\nversion=0.7.0'])
+def test_dispatch_trimming_does_not_accept_invalid_version_bodies(automation, version):
+    env = automation
+    output = env['root']/'bad-version-request'
+    with pytest.raises(ValueError, match='X.Y.Z'):
+        a.prepare(env['root'], output, REPO, SHA, version, 123, 2, 'verify-only')
+    assert not output.exists()
+    assert not env['state']['tag']
+
+
+def test_prepare_cli_exports_the_same_canonical_version(automation, tmp_path, monkeypatch):
+    env = automation
+    output = tmp_path/'github-output'
+    for key, value in {'REQUEST_VERSION': ' 0.6.0 ', 'REQUEST_MODE': 'verify-only',
+                       'GITHUB_RUN_ID': '123', 'GITHUB_RUN_ATTEMPT': '2',
+                       'GITHUB_OUTPUT': str(output)}.items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.delenv('REQUEST_CANDIDATE_RUN', raising=False)
+    monkeypatch.setattr('sys.argv', ['release_automation', 'prepare'])
+    a.main()
+    receipt = json.loads((env['root']/'release-request/release-request.json').read_text(encoding='utf-8'))
+    assert receipt['version'] == '0.6.0'
+    assert output.read_text(encoding='utf-8') == 'version=0.6.0\n'

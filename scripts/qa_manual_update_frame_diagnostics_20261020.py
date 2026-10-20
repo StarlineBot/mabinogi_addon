@@ -1,7 +1,8 @@
 """Run the original failing test with compact pixel/state diagnostics.
 
 No network download or file replacement is performed by this test. It retains
-the original assertions and capture timing, without adding repaint or sleeps.
+the five distinct-frame requirement; compares native grab with controlled Qt
+rendering without adding repaint or sleeps.
 Use --full-suite only to investigate order-dependent state across the suite.
 """
 
@@ -22,17 +23,19 @@ def main():
     parser.add_argument("--full-suite", action="store_true")
     args = parser.parse_args()
     import pytest
+    from PySide6.QtGui import QFontInfo, QRawFont
     from PySide6.QtWidgets import QApplication
-    from mabinogi_addon.ui.update_splash import UpdateSplash
 
     app = QApplication.instance() or QApplication([])
-    original = UpdateSplash.grab
+    import test_manual_update_progress as regression
+
+    original = regression.render_frame
     sequence = 0
 
-    def capture(screen, *a, **k):
+    def capture(screen):
         nonlocal sequence
-        pixmap = original(screen, *a, **k)
-        image = pixmap.toImage()
+        native = screen.grab().toImage()
+        image = original(screen)
         sequence += 1
         print("UPDATE_FRAME_DIAG " + json.dumps(dict(
             sequence=sequence, platform=sys.platform, clock=time.monotonic(),
@@ -41,16 +44,23 @@ def main():
             geometry=[screen.x(), screen.y(), screen.width(), screen.height()],
             label=[screen.msg.x(), screen.msg.y(), screen.msg.width(), screen.msg.height()],
             font_pixels=screen.msg.font().pixelSize(), visible=screen.isVisible(),
+            resolved_font=QFontInfo(screen.msg.font()).family(),
+            digit_glyphs=[QRawFont.fromFont(screen.msg.font()).supportsCharacter(ord(c))
+                          for c in "01379"],
             rendered_sha256=sha256(bytes(image.constBits())).hexdigest(),
+            native_grab_sha256=sha256(bytes(native.constBits())).hexdigest(),
+            native_size=[native.width(), native.height()],
+            native_dpr=native.devicePixelRatio(),
+            render_format=image.format().name, native_format=native.format().name,
         ), ensure_ascii=True), flush=True)
-        return pixmap
+        return image
 
     target = "tests" if args.full_suite else (
         "tests/test_manual_update_progress.py::"
         "test_manual_update_shares_layout_numbers_and_existing_success_failure_lifetime[success]"
     )
     # Plain assertions preserve the verdict without dumping full RGBA buffers.
-    with patch.object(UpdateSplash, "grab", capture):
+    with patch.object(regression, "render_frame", capture):
         return pytest.main([target, "-q", "-s", "-m", "not windows_integration",
                             "--assert=plain", "--tb=short", "--show-capture=no"])
 

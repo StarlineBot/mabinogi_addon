@@ -83,6 +83,11 @@ def test_validation_is_manual_full_gate_with_mandatory_bounded_storage():
     assert main["permissions"]["contents"] == "read"
     job = main["jobs"]["validate"]
     assert job["needs"] == "request"
+    request = main["jobs"]["request"]
+    freeze = next(s for s in request["steps"] if s.get("name") == "Freeze release request")
+    assert freeze["id"] == "freeze"
+    assert request["outputs"]["version"] == "${{ steps.freeze.outputs.version }}"
+    assert job["env"]["APP_VERSION"] == "${{ needs.request.outputs.version }}"
     assert "inputs.mode != 'publish-existing'" in job["if"]
     steps = job["steps"]
     names = [step.get("name") for step in steps]

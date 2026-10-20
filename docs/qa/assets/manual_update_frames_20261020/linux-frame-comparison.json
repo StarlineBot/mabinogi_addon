@@ -1,0 +1,218 @@
+{
+  "schemaVersion": 1,
+  "base_source": "25f4310",
+  "qt": "6.11.2",
+  "platform": "linux",
+  "frames": [
+    {
+      "sequence": 1,
+      "platform": "linux",
+      "text": "새 버전 v0.8.0 받는 중 0%",
+      "mode": "status",
+      "image": [
+        440,
+        240
+      ],
+      "dpr": 1.0,
+      "geometry": [
+        180,
+        280,
+        440,
+        240
+      ],
+      "label": [
+        24,
+        198,
+        392,
+        34
+      ],
+      "font_pixels": 13,
+      "visible": true,
+      "resolved_font": "OpenAI Sans",
+      "digit_glyphs": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "rendered_sha256": "9f318ba66e09ee33eb05273497f0650f28e1b95f4665b2f80238c4de2a3adb82",
+      "native_grab_sha256": "9f318ba66e09ee33eb05273497f0650f28e1b95f4665b2f80238c4de2a3adb82",
+      "native_size": [
+        440,
+        240
+      ],
+      "native_dpr": 1.0,
+      "render_format": "Format_ARGB32_Premultiplied",
+      "native_format": "Format_ARGB32_Premultiplied"
+    },
+    {
+      "sequence": 2,
+      "platform": "linux",
+      "text": "새 버전 v0.8.0 받는 중 10%",
+      "mode": "status",
+      "image": [
+        440,
+        240
+      ],
+      "dpr": 1.0,
+      "geometry": [
+        180,
+        280,
+        440,
+        240
+      ],
+      "label": [
+        24,
+        198,
+        392,
+        34
+      ],
+      "font_pixels": 13,
+      "visible": true,
+      "resolved_font": "OpenAI Sans",
+      "digit_glyphs": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "rendered_sha256": "ca74cadd3a7a7950baeeed23c1bd8337d48a74ff8647c9e9446e5dfb81707e98",
+      "native_grab_sha256": "ca74cadd3a7a7950baeeed23c1bd8337d48a74ff8647c9e9446e5dfb81707e98",
+      "native_size": [
+        440,
+        240
+      ],
+      "native_dpr": 1.0,
+      "render_format": "Format_ARGB32_Premultiplied",
+      "native_format": "Format_ARGB32_Premultiplied"
+    },
+    {
+      "sequence": 3,
+      "platform": "linux",
+      "text": "새 버전 v0.8.0 받는 중 37%",
+      "mode": "status",
+      "image": [
+        440,
+        240
+      ],
+      "dpr": 1.0,
+      "geometry": [
+        180,
+        280,
+        440,
+        240
+      ],
+      "label": [
+        24,
+        198,
+        392,
+        34
+      ],
+      "font_pixels": 13,
+      "visible": true,
+      "resolved_font": "OpenAI Sans",
+      "digit_glyphs": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "rendered_sha256": "bf3447788beb84cffabb28ae1677fdffc392b02f00be4f3de90ef9aa41592e83",
+      "native_grab_sha256": "bf3447788beb84cffabb28ae1677fdffc392b02f00be4f3de90ef9aa41592e83",
+      "native_size": [
+        440,
+        240
+      ],
+      "native_dpr": 1.0,
+      "render_format": "Format_ARGB32_Premultiplied",
+      "native_format": "Format_ARGB32_Premultiplied"
+    },
+    {
+      "sequence": 4,
+      "platform": "linux",
+      "text": "새 버전 v0.8.0 받는 중 90%",
+      "mode": "status",
+      "image": [
+        440,
+        240
+      ],
+      "dpr": 1.0,
+      "geometry": [
+        180,
+        280,
+        440,
+        240
+      ],
+      "label": [
+        24,
+        198,
+        392,
+        34
+      ],
+      "font_pixels": 13,
+      "visible": true,
+      "resolved_font": "OpenAI Sans",
+      "digit_glyphs": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "rendered_sha256": "bb1987795225404692b34cba681e6077a42ab9f26a3239249399998782d0256b",
+      "native_grab_sha256": "bb1987795225404692b34cba681e6077a42ab9f26a3239249399998782d0256b",
+      "native_size": [
+        440,
+        240
+      ],
+      "native_dpr": 1.0,
+      "render_format": "Format_ARGB32_Premultiplied",
+      "native_format": "Format_ARGB32_Premultiplied"
+    },
+    {
+      "sequence": 5,
+      "platform": "linux",
+      "text": "새 버전 v0.8.0 받는 중 100%",
+      "mode": "status",
+      "image": [
+        440,
+        240
+      ],
+      "dpr": 1.0,
+      "geometry": [
+        180,
+        280,
+        440,
+        240
+      ],
+      "label": [
+        24,
+        198,
+        392,
+        34
+      ],
+      "font_pixels": 13,
+      "visible": true,
+      "resolved_font": "OpenAI Sans",
+      "digit_glyphs": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "rendered_sha256": "85f777fa7c62fd5de6bcf767688bc19dc8a27bdd139d9ffaa68724cf91d7d32e",
+      "native_grab_sha256": "85f777fa7c62fd5de6bcf767688bc19dc8a27bdd139d9ffaa68724cf91d7d32e",
+      "native_size": [
+        440,
+        240
+      ],
+      "native_dpr": 1.0,
+      "render_format": "Format_ARGB32_Premultiplied",
+      "native_format": "Format_ARGB32_Premultiplied"
+    }
+  ]
+}

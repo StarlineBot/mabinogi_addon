@@ -1,14 +1,26 @@
 """Exercise the actual manual download screen through MainWindow callbacks."""
 
+from hashlib import sha256
 from pathlib import Path
 
 import pytest
-from PySide6.QtCore import QObject, QThread, QTimer, Signal
+from PySide6.QtCore import QObject, QThread, QTimer, Qt, Signal
+from PySide6.QtGui import QFontInfo, QImage
 from PySide6.QtWidgets import QApplication, QMessageBox, QProgressBar
 
 from mabinogi_addon.system import updater
 from mabinogi_addon.ui.main_window import MainWindow
 from mabinogi_addon.ui import splash, update_splash
+
+
+def render_frame(screen):
+    """Paint the actual widget synchronously, independent of native grab caches."""
+    ratio = screen.devicePixelRatioF()
+    image = QImage(screen.size() * ratio, QImage.Format.Format_ARGB32_Premultiplied)
+    image.setDevicePixelRatio(ratio)
+    image.fill(Qt.GlobalColor.transparent)
+    screen.render(image)
+    return image
 
 
 class Owner(QObject):
@@ -63,7 +75,7 @@ def test_manual_update_shares_layout_numbers_and_existing_success_failure_lifeti
             pass  # Drive the worker at its boundary, with real Qt signal owners/widgets.
 
     monkeypatch.setattr(threading, "Thread", Worker)
-    frames = []
+    frames, diagnostics = [], []
     owner = Owner()
 
     def download(info, progress_cb):
@@ -74,8 +86,15 @@ def test_manual_update_shares_layout_numbers_and_existing_success_failure_lifeti
             assert screen.msg.text() == f"새 버전 v0.8.0 받는 중 {percent}%"
             assert screen.geometry() == geometry
             assert not screen.findChildren(QTimer)
-            image = screen.grab().toImage()
-            frames.append(bytes(image.constBits()))
+            image = render_frame(screen)
+            frame = bytes(image.constBits())
+            frames.append(sha256(frame).hexdigest())
+            diagnostics.append(dict(percent=percent, text=screen.msg.text(),
+                                    sha256=frames[-1],
+                                    size=[image.width(), image.height()],
+                                    dpr=image.devicePixelRatio(),
+                                    font_pixels=screen.msg.font().pixelSize(),
+                                    resolved_font=QFontInfo(screen.msg.font()).family()))
         if outcome == "download_failure":
             raise OSError("download failed")
         return Path("new.exe")
@@ -107,7 +126,7 @@ def test_manual_update_shares_layout_numbers_and_existing_success_failure_lifeti
     assert owner.events == ["hide"]
     assert len(jobs) == 1
     jobs[0]()
-    assert len(frames) == 5 and len(set(frames)) == 5
+    assert len(frames) == 5 and len(set(frames)) == 5, diagnostics
     assert owner._update_splash is None and not screen.isVisible()
     assert applications == ([] if outcome == "download_failure" else [Path("new.exe")])
     if outcome == "success":
@@ -248,10 +267,16 @@ def test_long_target_version_fits_fixed_status_slot(app, family):
             bounds = QFontMetrics(screen.msg.font()).boundingRect(
                 screen.msg.rect(), int(Qt.TextFlag.TextWordWrap), text
             )
-            assert bounds.width() <= screen.msg.width()
-            assert bounds.height() <= screen.msg.height()
+            diagnostics = dict(text=text, requested_font=family,
+                               resolved_font=QFontInfo(screen.msg.font()).family(),
+                               font_pixels=screen.msg.font().pixelSize(),
+                               bounds=[bounds.width(), bounds.height()],
+                               slot=[screen.msg.width(), screen.msg.height()],
+                               dpr=screen.devicePixelRatioF())
+            assert bounds.width() <= screen.msg.width(), diagnostics
+            assert bounds.height() <= screen.msg.height(), diagnostics
             assert screen.msg.text() == text
             assert screen.geometry() == geometry
-        assert screen.msg.font().pixelSize() == 13
+        assert screen.msg.font().pixelSize() == 13, diagnostics
     finally:
         screen.close()
