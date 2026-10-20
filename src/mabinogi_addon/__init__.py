@@ -5,6 +5,17 @@ from __future__ import annotations
 
 def main() -> None:
     """메인 창을 띄운다. (개발 중 실행: `uv run mabinogi-addon`)"""
+    from mabinogi_addon.system.startup import StartupScreen
+
+    startup = StartupScreen()
+    try:
+        _main(startup)
+    finally:
+        # Includes import/configuration errors, duplicate launch and update relaunch.
+        startup.close()
+
+
+def _main(startup) -> None:
     import logging
     import os
     import sys
@@ -98,24 +109,10 @@ def main() -> None:
     app.setQuitOnLastWindowClosed(False)
 
     start_in_tray = config.load_general_flag("startInTray", False)
-    # Qt 스플래시: 압축 해제 구간의 정적 스플래시(packaging/splash.png, 같은 디자인)에
-    # 이어, 초기화·업데이트 구간을 아바타+진행바+문구로 덮는다. '트레이로 시작'이면 생략.
-    splash = None
-    if not start_in_tray:
-        from mabinogi_addon.ui.splash import Splash
-
-        splash = Splash()
-        splash.center_on_screen()
-        splash.show()
-        splash.step(8, "시작하는 중")
-
-    # 정적 스플래시(압축해제)는 Qt 스플래시를 띄운 '뒤'에 닫는다(검은 틈 방지).
-    try:
-        import pyi_splash  # type: ignore
-
-        pyi_splash.close()
-    except Exception:  # noqa: BLE001, S110 — 개발(uv)엔 pyi_splash 없음(정상)
-        pass
+    # Keep the bootloader's actual window through Python initialization. Source
+    # runs use the same-design Qt fallback; tray startup opens no follow-up screen.
+    startup.configure(start_in_tray=start_in_tray)
+    splash = None if start_in_tray else startup
 
     # 실행 전 업데이트 선적용: 새 버전이 있으면 스플래시에서 받아 교체·재실행한다.
     # (옛 버전 창을 먼저 보여준 뒤 배너로 안내하던 흐름을 대체)

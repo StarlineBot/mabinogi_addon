@@ -1,0 +1,16 @@
+{
+  "run_url": "https://github.com/StarlineBot/mabinogi_addon/actions/runs/39397334268",
+  "job_id": 118543216069,
+  "source": "GitHub job log result JSON",
+  "platform": "win32",
+  "source_sha": "3748666fccf8e338f7344d9ed11d09e8d0870e8e",
+  "payload_files": 80000,
+  "pyinstaller": "6.22.3",
+  "duration": 73.73393535614014,
+  "pre_python_frames": 233,
+  "unique_windows": 1,
+  "pre_python_replacement": true,
+  "measured_dialogues": 16,
+  "geometry": "440x240+292+264",
+  "events": 277
+}

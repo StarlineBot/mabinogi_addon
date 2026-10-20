@@ -1,61 +1,23 @@
-"""시작 스플래시 (로딩 화면).
-
-onefile exe는 실행 직후 압축 해제 + Python/Qt 로딩 때문에 바로 안 뜬다. 그 사이를
-로고 + 프로그레스바 + (로딩 문구 자리에) 랜덤 위트 메시지로 덮는다.
-
-- 압축 해제 구간: PyInstaller --splash(정적, frozen 전용)가 먼저 덮고(entry에서 닫음),
-- 초기화 구간: 이 Qt 스플래시가 진행률을 보여준다.
-"""
+"""Source-run loading screen, matching the bootloader layout without replacing it."""
 
 from __future__ import annotations
 
+import logging
 import random
+import unicodedata
 
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QPainter, QPainterPath, QPixmap
-from PySide6.QtWidgets import (
-    QApplication,
-    QHBoxLayout,
-    QLabel,
-    QProgressBar,
-    QVBoxLayout,
-    QWidget,
-)
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QFont, QPainter, QPixmap
+from PySide6.QtWidgets import QApplication, QLabel, QWidget
 
 from .. import paths
 from ..startup_content import MESSAGES
 
-_LOGO = paths.resource_dir() / "logo.png"
-_PROFILE = paths.resource_dir() / "profile.png"  # 제작자 아이콘(없으면 로고로 폴백)
-_CREATOR = "섯다라인"  # 캐릭터가 말하는 것처럼 "섯다라인 : <문구>"
-
-def _round_pixmap(path, size: int) -> QPixmap | None:
-    """이미지를 정사각 중앙 크롭 후 원형으로."""
-    src = QPixmap(str(path))
-    if src.isNull():
-        return None
-    src = src.scaled(
-        size, size,
-        Qt.AspectRatioMode.KeepAspectRatioByExpanding,
-        Qt.TransformationMode.SmoothTransformation,
-    )
-    x = (src.width() - size) // 2
-    y = (src.height() - size) // 2
-    src = src.copy(x, y, size, size)
-    out = QPixmap(size, size)
-    out.fill(Qt.GlobalColor.transparent)
-    p = QPainter(out)
-    p.setRenderHint(QPainter.RenderHint.Antialiasing)
-    clip = QPainterPath()
-    clip.addEllipse(0, 0, size, size)
-    p.setClipPath(clip)
-    p.drawPixmap(0, 0, src)
-    p.end()
-    return out
+_log = logging.getLogger("mabinogi_addon.startup")
 
 
 class Splash(QWidget):
-    """로고 + 프로그레스바 + 위트 메시지. step()으로 진행률·문구 갱신."""
+    """Fixed slots and one single-shot timer; no minimum startup duration."""
 
     def __init__(self) -> None:
         super().__init__(
@@ -64,83 +26,98 @@ class Splash(QWidget):
             | Qt.WindowType.WindowStaysOnTopHint
             | Qt.WindowType.SplashScreen,
         )
-        self.setFixedSize(440, 208)
-
-        card = QWidget(self)
-        card.setObjectName("card")
-        card.setFixedSize(440, 208)
-        v = QVBoxLayout(card)
-        v.setContentsMargins(24, 18, 24, 16)
-        v.setSpacing(0)
-
-        # 위: 매듭 로고(가운데) — 정적 스플래시(packaging/splash.png)와 같은 배치.
-        logo = QLabel()
-        lp = QPixmap(str(_LOGO))
-        if not lp.isNull():
-            lp = lp.scaled(
-                80, 80,
-                Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation,
-            )
-            logo.setPixmap(lp)
-        logo.setAlignment(Qt.AlignmentFlag.AlignHCenter)
-        v.addWidget(logo)
-        v.addSpacing(14)
-
-        # 아래: [캐릭터 얼굴] + [이름 / 문구] — 왼쪽 정렬(캐릭터가 일하는 느낌)
-        row = QHBoxLayout()
-        row.setSpacing(12)
-        avatar = QLabel()
-        avatar.setFixedSize(46, 46)
-        pm = _round_pixmap(_PROFILE, 46) or _round_pixmap(_LOGO, 46)
-        if pm is not None:
-            avatar.setPixmap(pm)
-        row.addWidget(avatar)
-
-        col = QVBoxLayout()
-        col.setSpacing(2)
-        col.addStretch(1)
-        name = QLabel(_CREATOR)
-        name.setObjectName("name")
-        col.addWidget(name)
-        self.msg = QLabel()
-        self.msg.setObjectName("msg")
-        col.addWidget(self.msg)
-        col.addStretch(1)
-        row.addLayout(col)
-        row.addStretch(1)  # 왼쪽 정렬(오른쪽 여백)
-        v.addLayout(row)
-        v.addSpacing(10)  # 캐릭터와 로딩바 간격 좁게
-
-        self.bar = QProgressBar()
-        self.bar.setRange(0, 100)
-        self.bar.setValue(0)
-        self.bar.setTextVisible(False)
-        self.bar.setFixedHeight(7)
-        v.addWidget(self.bar)
-        v.addStretch(1)
-
-        self._set_msg(random.choice(MESSAGES))
-
-        self.setStyleSheet(
-            "#card { background:#1f2937; border:1px solid #00B894; border-radius:14px; }"
-            "#name { color:#00D1A7; font-size:14px; font-weight:700; }"
-            "#msg { color:#e5e7eb; font-size:13px; }"
-            "QProgressBar { background:#111827; border:none; border-radius:3px; }"
-            "QProgressBar::chunk { background:#00D1A7; border-radius:3px; }"
+        self.setFixedSize(440, 240)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self._background = QPixmap(str(paths.resource_dir() / "startup_background.png"))
+        self.msg = QLabel(self)
+        self.msg.setGeometry(24, 198, 392, 34)
+        self.msg.setWordWrap(True)
+        self.msg.setTextFormat(Qt.TextFormat.PlainText)
+        self.msg.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop)
+        font = QFont("Malgun Gothic")
+        font.setPixelSize(13)
+        self.msg.setFont(font)
+        self.msg.setStyleSheet("color:#e5e7eb; background:transparent;")
+        self._messages = tuple(
+            unicodedata.normalize("NFC", message.strip())
+            for message in MESSAGES
+            if isinstance(message, str) and message.strip()
         )
+        self._previous = None
+        self._text = ""
+        self._index = 0
+        self._mode = "dialogue"
+        self._timer = QTimer(self)
+        self._timer.setSingleShot(True)
+        self._timer.setTimerType(Qt.TimerType.PreciseTimer)
+        self._timer.timeout.connect(self._tick)
+        self._choose()
+        if self._mode == "dialogue":
+            self._timer.start(60)
 
-    def _set_msg(self, text: str) -> None:
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.drawPixmap(self.rect(), self._background)
+
+    def _show_text(self, text: str) -> None:
         self.msg.setText(text)
 
+    def _safe_show(self, text: str) -> None:
+        try:
+            self._show_text(text)
+        except Exception:
+            self._timer.stop()
+            self._mode = "fallback"
+            _log.info("시작 대사 표시 실패(기본 문구 사용)", exc_info=True)
+            try:
+                self._show_text("시작하는 중")
+            except Exception:
+                pass
+
+    def _choose(self) -> None:
+        if not self._messages:
+            self._mode = "fallback"
+            self._safe_show("시작하는 중")
+            return
+        options = [text for text in self._messages if text != self._previous]
+        self._text = random.choice(options or self._messages)
+        self._previous = self._text
+        self._index = 0
+        self._safe_show("")
+
+    def _tick(self) -> None:
+        # A queued timeout after a status/close must not overwrite that state.
+        if self._mode != "dialogue":
+            return
+        if self._index == len(self._text):
+            self._choose()
+        else:
+            self._index += 1
+            self._safe_show(self._text[: self._index])
+        if self._mode == "dialogue":
+            self._timer.start(2000 if self._index == len(self._text) else 60)
+
     def step(self, pct: int, msg: str | None = None) -> None:
-        """진행률(%)과 문구 갱신. 문구 생략 시 랜덤 상황 문구."""
-        self.bar.setValue(max(0, min(100, pct)))
-        self._set_msg(msg or random.choice(MESSAGES))
-        QApplication.processEvents()  # 스플래시가 바로 다시 그려지게
+        if self._mode == "closed":
+            return
+        if msg:
+            self._timer.stop()
+            self._mode = "status"
+            self._safe_show(msg)
+        elif self._mode == "status":
+            self._mode = "dialogue"
+            self._choose()
+            if self._mode == "dialogue":
+                self._timer.start(60)
+        # Internal stages neither pick another dialogue nor restart its timer.
+        QApplication.processEvents()
+
+    def closeEvent(self, event) -> None:
+        self._mode = "closed"
+        self._timer.stop()
+        super().closeEvent(event)
 
     def center_on_screen(self) -> None:
         screen = QApplication.primaryScreen()
         if screen is not None:
-            geo = screen.availableGeometry()
-            self.move(geo.center() - self.rect().center())
+            self.move(screen.availableGeometry().center() - self.rect().center())

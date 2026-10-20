@@ -1,0 +1,34 @@
+[
+  {
+    "tray": false,
+    "events": [
+      {
+        "phase": "started",
+        "visible_loaders": 1
+      },
+      {
+        "phase": "entered",
+        "main_visible": true,
+        "visible_loaders": 0
+      }
+    ],
+    "running_threads": [],
+    "sample_frames": 3
+  },
+  {
+    "tray": true,
+    "events": [
+      {
+        "phase": "started",
+        "visible_loaders": 0
+      },
+      {
+        "phase": "entered",
+        "main_visible": false,
+        "visible_loaders": 0
+      }
+    ],
+    "running_threads": [],
+    "sample_frames": 3
+  }
+]
