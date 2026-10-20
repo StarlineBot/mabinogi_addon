@@ -372,6 +372,7 @@ class MainWindow(QMainWindow):
         self.setup_page.feature_changed.connect(self._set_feature_enabled)
         self.settings_tab.reopen_setup.connect(self._open_setup)
         self.settings_tab.reopen_guide.connect(self._open_guide)
+        self.setup_guide.open_feature.connect(self._open_setup_feature)
         self.setup_guide.feature_changed.connect(self._set_feature_enabled)
         self.setup_guide.register_game.connect(self._register_setup_game)
         self.setup_guide.run_requested.connect(self._run_guide_setup)
@@ -532,11 +533,7 @@ class MainWindow(QMainWindow):
                                           and self._pages.currentWidget() is not self.setup_guide)
 
     def _guide_login_changed(self):
-        logged_in = config.load_discord_user() is not None
         self.settings_tab.guide_btn.setVisible(True)
-        if not logged_in:
-            if self._setup_flow.running and self._setup_flow.page is self.setup_guide:
-                self._setup_flow.cancel()
         self.setup_guide.refresh()
         self._refresh_guide_return()
 
@@ -558,8 +555,6 @@ class MainWindow(QMainWindow):
         self._pages.setCurrentWidget(self.setup_guide)
 
     def _run_guide_setup(self):
-        if config.load_discord_user() is None:
-            return
         self._setup_flow.run(page=self.setup_guide, feature_keys=self.setup_guide.feature_keys,
                              on_result=self.setup_guide.record_result)
         if not self._setup_flow.closed:

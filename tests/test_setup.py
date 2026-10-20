@@ -350,18 +350,19 @@ def test_cancel_approval_does_not_save_and_restores(flow, monkeypatch):
     assert "중단" in page.progress.text()
 
 
-def test_login_and_game_registration_required(flow, monkeypatch):
+def test_public_batch_requires_game_registration_but_not_login(flow, monkeypatch):
     run, page, applied, detections, _, _, _ = flow
-    state.save_selection("tuarim", True)
-    monkeypatch.setattr(config, "load_discord_user", lambda: None)
+    state.save_selection('tuarim', True)
+    monkeypatch.setattr(config, 'load_discord_user', lambda: None)
+    update('general', gameExe=None)
     run.run()
+    assert '게임창' in page.progress.text()
     assert not applied and not detections
-    assert "Discord" not in page.progress.text()
-    monkeypatch.setattr(config, "load_discord_user", lambda: {"id": "test"})
-    update("general", gameExe=None)
+    update('general', gameExe='Client.exe')
     run.run()
-    assert "게임창" in page.progress.text()
-    assert not applied and not detections
+    assert [key for key, *_ in applied] == ['tuarim']
+    assert state.missing('tuarim') == []
+    assert not run.cancelled
 
 
 @pytest.mark.parametrize("skip", [False, True])
@@ -662,16 +663,33 @@ def test_capture_shutdown_does_not_restore_closed_windows(app, monkeypatch):
     screen_grab.capture_for_autofind(require_game=True, restore_allowed=lambda: False)
 
 
-def test_logout_during_approval_never_saves(flow, monkeypatch):
+@pytest.mark.parametrize('phase', ['capture', 'detect', 'approval'])
+@pytest.mark.parametrize('login', [False, True])
+def test_account_change_during_public_setup_preserves_registration(flow, monkeypatch, phase, login):
     run, page, applied, *_ = flow
-    state.save_selection("tuarim", True)
-    def approve(key, box):
-        monkeypatch.setattr(config, "load_discord_user", lambda: None)
-        return box
-    monkeypatch.setattr(run, "_approve", approve)
+    user = {'id': 'test'}
+    monkeypatch.setattr(config, 'load_discord_user', lambda: None if login else user)
+    state.save_selection('tuarim', True)
+    def change():
+        monkeypatch.setattr(config, 'load_discord_user', lambda: user if login else None)
+    if phase == 'capture':
+        original = setup_flow.capture_for_autofind
+        def capture(**kwargs):
+            change()
+            return original(**kwargs)
+        monkeypatch.setattr(setup_flow, 'capture_for_autofind', capture)
+    elif phase == 'detect':
+        original = run._detect
+        def detect(*args):
+            change()
+            return original(*args)
+        monkeypatch.setattr(run, '_detect', detect)
+    else:
+        monkeypatch.setattr(run, '_approve', lambda key, box: (change(), box)[1])
     run.run()
-    assert not applied
-    assert not page.busy
+    assert [key for key, *_ in applied] == ['tuarim']
+    assert state.missing('tuarim') == []
+    assert not run.cancelled and not page.busy
 
 
 @pytest.mark.parametrize("failure", ["window", "save", None])
@@ -964,7 +982,7 @@ def test_guide_actual_window_navigation_and_resume_preserve_step(app, settings, 
         guide.move(1)
         guide.feature_changed.emit("buff", True)
         assert guide.checks["buff"].isChecked() and state.selected("buff")
-        window._open_setup_feature("buff")
+        guide.manual_buttons["buff"].click()
         assert window._guide_return_btn.isVisible()
         update("buffTracker", captureRegion=BOX)
         window._guide_return_btn.click()
@@ -992,7 +1010,7 @@ def test_guide_actual_window_navigation_and_resume_preserve_step(app, settings, 
                 assert guide.checks[key].width() >= guide.checks[key].sizeHint().width()
             assert not hasattr(guide, "beta_note") and not hasattr(guide, "login_btn")
             for key, widget in guide.feature_rows.items():
-                assert widget.isVisible() is (key in guide.feature_keys and stage in (1, 2))
+                assert widget.isVisible() is (key in guide.feature_keys and stage in (1, 2) and state.batch_allowed(key))
             assert not any(button.text() == "개별 설정" for button in guide.findChildren(type(guide.next_btn)))
             assert not any(button.text() in ("앱으로 이동", "Discord 로그인")
                            for button in guide.findChildren(type(guide.next_btn)))
@@ -1305,7 +1323,7 @@ def test_logout_preserves_public_guide_and_tour(app, settings, monkeypatch, duri
         window.close()
 
 
-def test_logout_during_guide_approval_cancels_without_saving(flow, monkeypatch):
+def test_logout_during_guide_public_approval_preserves_registration(flow, monkeypatch):
     from mabinogi_addon.ui.main_window import MainWindow
 
     monkeypatch.setattr(QApplication, "quit", lambda: None)
@@ -1320,10 +1338,116 @@ def test_logout_during_guide_approval_cancels_without_saving(flow, monkeypatch):
             return box
         monkeypatch.setattr(window._setup_flow, "_approve", approve)
         window._run_guide_setup()
-        assert window._setup_flow.cancelled and not window._setup_flow.running
-        assert state.missing("buff") == ["buff"]
+        assert not window._setup_flow.cancelled and not window._setup_flow.running
+        assert state.missing("buff") == []
         assert window.setup_guide.active
         assert window._pages.currentWidget() is window.setup_guide
     finally:
         window._force_quit = True
         window.close()
+
+
+@pytest.mark.parametrize('key', ['buff','debuff','boss','dorcha','tuarim','stat_bars','skillbar'])
+def test_each_public_batch_target_is_registered_without_login(flow, monkeypatch, key):
+    run, page, applied, detections, *_ = flow
+    monkeypatch.setattr(config, 'load_discord_user', lambda: None)
+    state.save_selection(key, True)
+    before = deepcopy(config._read_local_config())
+    run.run(feature_keys=(key,))
+    assert [item[0] for item in applied] == [key]
+    assert [item[0] for item in detections] == [key]
+    assert state.missing(key) == []
+    after = config._read_local_config()
+    assert after['general'] == before['general']
+    assert after[state.BY_KEY[key].section]['enabled'] == before[state.BY_KEY[key].section]['enabled']
+    assert not run.cancelled and '등록 완료 1' in page.progress.text()
+
+
+def test_restricted_selection_does_not_block_public_targets_or_gain_access(flow, monkeypatch):
+    run, page, applied, detections, *_ = flow
+    for key in ('halo_timer', 'buff'):
+        state.save_selection(key, True)
+    monkeypatch.setattr(config, 'load_discord_user', lambda: None)
+    before = deepcopy(config._read_local_config())
+    run.run()
+    assert [item[0] for item in applied] == ['buff']
+    assert [item[0] for item in detections] == ['buff']
+    assert config._read_local_config()['haloTimer'] == before['haloTimer']
+    assert '권한으로 제외 1' in page.progress.text()
+    assert not state.batch_allowed('halo_timer') and not run.cancelled
+
+
+@pytest.mark.parametrize('phase', ['capture', 'detect', 'approval'])
+def test_restricted_access_loss_rejects_only_that_candidate(flow, monkeypatch, phase):
+    from mabinogi_addon.system import window_capture
+    run, page, applied, detections, *_ = flow
+    update('bossPattern', box=BOX)
+    for key in ('halo_timer','buff'):
+        state.save_selection(key, True)
+    before = deepcopy(config._read_local_config()['haloTimer'])
+    monkeypatch.setattr(window_capture, 'registered_game_target', lambda target: target)
+    capture = setup_flow.capture_for_autofind
+    def wrapped_capture(**kwargs):
+        result = capture(**kwargs)
+        diag.capture_info.set({'game_target': [123, 456]})
+        if phase == 'capture':
+            monkeypatch.setattr(config, 'load_discord_user', lambda: None)
+        return result
+    monkeypatch.setattr(setup_flow, 'capture_for_autofind', wrapped_capture)
+    detect = run._detect
+    def wrapped_detect(key, *args):
+        if phase == 'detect' and key == 'halo_timer':
+            monkeypatch.setattr(config, 'load_discord_user', lambda: None)
+        return detect(key, *args)
+    monkeypatch.setattr(run, '_detect', wrapped_detect)
+    def approve(key, box):
+        if phase == 'approval' and key == 'halo_timer':
+            monkeypatch.setattr(config, 'load_discord_user', lambda: None)
+        return box
+    monkeypatch.setattr(run, '_approve', approve)
+    run.run()
+    assert [item[0] for item in applied] == ['buff']
+    assert config._read_local_config()['haloTimer'] == before
+    assert '권한으로 제외 1' in page.progress.text()
+    assert not run.cancelled
+
+
+@pytest.mark.parametrize('selected,boxes,expected', [
+    (('debuff',), (), True), (('boss',), (), True), (('halo_timer',), (), True),
+    (('buff',), (), False), ((), (), False),
+    (('debuff',), ('bossPattern',), False),
+    (('debuff',), ('debuffTracker',), False),
+    (('boss',), ('bossPattern',), False),
+])
+def test_boss_preparation_follows_actual_pending_regions(settings, selected, boxes, expected):
+    for key in selected:
+        state.save_selection(key, True)
+    for name in boxes:
+        update(name, **{'captureRegion' if name == 'debuffTracker' else 'box': BOX})
+    assert state.needs_boss_preparation() is expected
+
+
+def test_manual_result_button_preserves_stage_and_disables_while_running(app, settings):
+    from mabinogi_addon.ui.setup_guide import SetupGuide
+    guide = SetupGuide()
+    state.save_selection('buff', True)
+    guide.stage = 1
+    guide.refresh()
+    guide.show()
+    app.processEvents()
+    opened = []
+    guide.open_feature.connect(opened.append)
+    try:
+        guide.record_result('buff', '찾지 못함')
+        guide.manual_buttons['buff'].click()
+        assert opened == ['buff'] and guide.stage == 1
+        guide.set_busy(True)
+        guide.manual_buttons['buff'].click()
+        assert opened == ['buff']
+        guide.set_busy(False)
+        update('buffTracker', captureRegion=BOX)
+        guide.refresh()
+        assert guide.statuses['buff'].text() == '등록됨'
+        assert guide.manual_buttons['buff'].isHidden()
+    finally:
+        guide.close()

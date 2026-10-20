@@ -8,9 +8,11 @@ from mabinogi_addon import config,setup_state
 from mabinogi_addon.ui import region_registration as reg
 
 
+@pytest.mark.parametrize("logged_in", [False, True])
 @pytest.mark.parametrize("found",[("dorcha","tuarim"),("dorcha",),("tuarim",)])
-def test_setup_two_selected_resources_share_one_request_and_preserve_options(window,monkeypatch,found):
+def test_setup_two_selected_resources_share_one_request_and_preserve_options(window,monkeypatch,found,logged_in):
     w,app = window
+    monkeypatch.setattr(config, "load_discord_user", lambda: {"id":"test"} if logged_in else None)
     raw = config._read_local_config()
     raw.setdefault("general",{})["gameExe"] = "client.exe"
     config._write_local_config(raw)

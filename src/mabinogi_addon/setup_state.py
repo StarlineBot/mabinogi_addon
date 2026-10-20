@@ -177,3 +177,25 @@ def needs_start_screen(raw=None):
     raw = config._read_local_config() if raw is None else raw
     # 베타 검증 중에는 등록 완료 여부와 무관하게 명시적으로 숨긴 경우만 건너뛴다.
     return section(raw, "general").get("skipSetup") is not True
+
+
+# 일괄 자동설정만의 공개 정책. 개별 자동찾기/수집 버튼은 각 기능의 기존 정책을 사용한다.
+def batch_allowed(key):
+    return key != 'halo_timer' or config.load_discord_user() is not None
+
+
+def batch_pending(raw=None, *, feature_keys=None):
+    scope = tuple(f.key for f in FEATURES) if feature_keys is None else tuple(feature_keys)
+    return pending(raw, automatic_only=True, feature_keys=tuple(k for k in scope if batch_allowed(k)))
+
+
+def needs_boss_preparation(raw=None, *, feature_keys=None):
+    raw = config._read_local_config() if raw is None else raw
+    if valid_box(section(raw, 'bossPattern').get('box')):
+        return False
+    # 디버프 탐색도 공유 보스 체력바를 기준으로 줄 위치를 찾는다.
+    return bool(set(batch_pending(raw, feature_keys=feature_keys)) & {'boss', 'debuff'})
+
+
+BOSS_PREPARATION = ('보스 체력바를 찾으려면 연습 모드에 입장해 체력바가 보이는 상태에서 자동설정해 주세요. '
+                    '지금 준비하기 어렵다면 다른 기능부터 설정하고 나중에 다시 시도할 수 있습니다.')

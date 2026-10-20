@@ -14,7 +14,7 @@ from PySide6.QtWidgets import QMessageBox
 from .. import config
 from ..autofind_diagnostics import perform_autofind
 from ..autofind_replay import run_detector
-from ..setup_state import BY_KEY, FEATURES, selected as enabled, pending, section
+from ..setup_state import BY_KEY, FEATURES, selected as enabled, batch_pending as pending, batch_allowed, section
 from .dpi import to_logical
 from .screen_grab import capture_for_autofind
 from .region_highlight import RegionHighlight
@@ -114,11 +114,15 @@ class SetupFlow:
         self.dialog.setDefaultButton(QMessageBox.StandardButton.No)
         self.dialog.button(QMessageBox.StandardButton.Yes).setText("이 영역으로 등록")
         self.dialog.button(QMessageBox.StandardButton.No).setText("등록하지 않기")
+        poll = QTimer(self.dialog)
+        poll.timeout.connect(lambda: self.dialog.reject() if not batch_allowed(key) else None)
+        poll.start(30)
         try:
             highlight.flash(*logical, feature.name, feature.guidance, msec=0)
             answer = self.dialog.exec()
             return logical if answer == QMessageBox.StandardButton.Yes and not self.closed and not self.cancelled else None
         finally:
+            poll.stop()
             highlight.close()
             highlight.deleteLater()
             self.dialog.deleteLater()
@@ -142,36 +146,42 @@ class SetupFlow:
         if not any(enabled(key) for key in scope):
             page.progress.setText("설정할 기능을 선택하세요.")
             return
-        if config.load_discord_user() is None:
-            return
         if not section(config._read_local_config(), "general").get("gameExe"):
             page.progress.setText("게임창을 먼저 등록한 뒤 자동설정을 실행하세요.")
             return
-        keys = pending(automatic_only=True, feature_keys=scope)
+        keys = pending(feature_keys=scope)
+        excluded = [key for key in scope if enabled(key) and not batch_allowed(key)]
         if not keys:
-            page.progress.setText("자동으로 찾을 미등록 영역이 없습니다. 직접 지정할 항목은 개별 설정에서 등록하세요.")
+            page.progress.setText(('이번 설정에서 제외 · 접근 권한 없음: ' + ', '.join(BY_KEY[k].name for k in excluded))
+                                  if excluded else "자동으로 찾을 미등록 영역이 없습니다. 직접 지정할 항목은 개별 설정에서 등록하세요.")
             return
         self.cancelled = False
         self.running = True
         self.page = page
         button_text = page.run_btn.text()
-        results = {"등록 완료": [], "등록하지 않음": [], "찾지 못함": [], "저장 실패": []}
+        results = {"등록 완료": [], "등록하지 않음": [], "찾지 못함": [], "저장 실패": [], "권한으로 제외": [BY_KEY[k].name for k in excluded]}
         page.set_busy(True)
+        if on_result is not None:
+            for key in excluded:
+                on_result(key, '이번 설정에서 제외 · 접근 권한 없음')
         resource_attempted = False
         try:
             for index, key in enumerate(keys, 1):
-                if config.load_discord_user() is None:
-                    self.cancel()
                 if self.closed or self.cancelled:
                     break
+                if not batch_allowed(key):
+                    results['권한으로 제외'].append(BY_KEY[key].name)
+                    if on_result is not None:
+                        on_result(key, '이번 설정에서 제외 · 접근 권한 없음')
+                    continue
                 # 앞선 승인이 공유 영역을 등록했다면 다음 시도에서 건너뛴다.
-                if key not in pending(automatic_only=True, feature_keys=scope):
+                if key not in pending(feature_keys=scope):
                     continue
                 if key in ("dorcha","tuarim") and "dorcha" in keys and "tuarim" in keys:
                     if resource_attempted:
                         continue
                     resource_attempted = True
-                    targets = tuple(k for k in ("dorcha","tuarim") if k in pending(automatic_only=True,feature_keys=scope))
+                    targets = tuple(k for k in ("dorcha","tuarim") if k in pending(feature_keys=scope))
                     view = page.window().resource_tab
                     page.run_btn.setText("도르카·투아림 찾는 중…")
                     def capture_resources():
@@ -180,7 +190,7 @@ class SetupFlow:
                         return capture_for_autofind(require_game=True,restore_allowed=lambda:not self.closed,
                             restore_widget_allowed=lambda widget:widget is not window or stamp==self._restore_generation)
                     applied = view.find_regions(keys=targets,capture=capture_resources,
-                        allowed=lambda:not self.closed and not self.cancelled and config.load_discord_user() is not None)
+                        allowed=lambda:not self.closed and not self.cancelled)
                     if self.closed or self.cancelled:
                         break
                     for target in targets:
@@ -207,7 +217,7 @@ class SetupFlow:
                             and (key != 'halo_timer' or widget not in
                                  (window.boss_tab.halo_capture._warning,window.boss_tab.halo_capture._countdown)),
                         **({'strict_game':True,'capture_allowed':lambda:not self.closed and not self.cancelled
-                            and config.load_discord_user() is not None} if key == 'halo_timer' else {}))
+                            and batch_allowed(key)} if key == 'halo_timer' else {}))
                     from ..autofind_diagnostics import capture_info
                     current["capture"] = dict(capture_info.get() or {})
                     if self.closed or self.cancelled or region_generation(key) != stamp:
@@ -215,8 +225,9 @@ class SetupFlow:
                     return current["frame"], ox, oy
 
                 def confirm(box, ox, oy):
-                    if config.load_discord_user() is None:
-                        self.cancel()
+                    if not batch_allowed(key):
+                        outcome.update(status='access_denied')
+                        return dict(outcome)
                     if self.closed or self.cancelled:
                         return {"status": "cancelled_shutdown" if self.closed else "cancelled"}
                     logical = to_logical(box[0] + ox, box[1] + oy, box[2], box[3])
@@ -236,11 +247,12 @@ class SetupFlow:
                         from ..system.window_capture import registered_game_target
                         target = current.get('capture',{}).get('game_target')
                         target_current = bool(target) and registered_game_target(tuple(target))==tuple(target)
-                    if config.load_discord_user() is None:
-                        self.cancel()
+                    if not batch_allowed(key):
+                        outcome.update(status='access_denied')
+                        return dict(outcome)
                     if self.closed or self.cancelled or approved is None or region_generation(key) != stamp or not target_current:
                         outcome.update(status="cancelled_shutdown" if self.closed else "cancelled")
-                    elif key not in pending(automatic_only=True, feature_keys=scope):
+                    elif key not in pending(feature_keys=scope):
                         outcome.update(status="already_registered")
                     else:
                         try:
@@ -263,6 +275,10 @@ class SetupFlow:
                     results["등록 완료"].append(feature.name)
                     if on_result is not None:
                         on_result(key, "등록됨")
+                elif status == 'access_denied' or not batch_allowed(key):
+                    results['권한으로 제외'].append(feature.name)
+                    if on_result is not None:
+                        on_result(key, '이번 설정에서 제외 · 접근 권한 없음')
                 elif status == "cancelled":
                     results["등록하지 않음"].append(feature.name)
                     if on_result is not None:

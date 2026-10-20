@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
 )
 
 from .. import config
-from ..setup_state import FEATURES, selected as enabled, missing, section
+from ..setup_state import FEATURES, selected as enabled, missing, section, batch_allowed, needs_boss_preparation, BOSS_PREPARATION
 
 
 CHOICE_TEXT = {
@@ -92,6 +92,8 @@ class SetupPage(QWidget):
         self.selection.setWidget(choices)
         self.selection.setFixedHeight(9 * check.height() // 2 + 2 * self.selection.frameWidth())
         layout.addWidget(self.selection)
+        self.boss_preparation = _label(BOSS_PREPARATION)
+        layout.addWidget(self.boss_preparation)
         self.run_btn.setMinimumHeight(34)
         layout.addWidget(self.run_btn)
         beta_row = QHBoxLayout()
@@ -169,7 +171,8 @@ class SetupPage(QWidget):
             check.blockSignals(True)
             check.setChecked(enabled(feature.key, raw))
             check.blockSignals(False)
-            check.setEnabled(not self.busy)
+            check.setEnabled(not self.busy and batch_allowed(feature.key))
+            check.setVisible(batch_allowed(feature.key))
             check.setToolTip(feature.guidance)
             widget, status, button = self.feature_rows[feature.key]
             is_enabled = enabled(feature.key, raw)
@@ -178,7 +181,9 @@ class SetupPage(QWidget):
                     " · 보스 체력바 표시 필요" if feature.key in ("boss", "debuff") else
                     " · 직접 지정 필요" if not feature.automatic else ""))
             button.setEnabled(not self.busy)
-            (done if not needed else need if is_enabled else unused).append(widget)
+            widget.setVisible(batch_allowed(feature.key))
+            if batch_allowed(feature.key):
+                (done if not needed else need if is_enabled else unused).append(widget)
         for key, widgets in (("need", need), ("done", done), ("unused", unused)):
             rows = self.groups[key][1]
             for index, widget in enumerate(widgets):
@@ -190,6 +195,7 @@ class SetupPage(QWidget):
         self.need_title.setVisible(bool(need))
         self.done_title.setVisible(bool(done))
         self.unused_title.setVisible(bool(unused))
+        self.boss_preparation.setVisible(needs_boss_preparation(raw))
         if not any(enabled(feature.key, raw) for feature in FEATURES) and not self.busy:
             self.progress.setText("설정할 기능을 선택하세요.")
         elif self.progress.text() == "설정할 기능을 선택하세요.":

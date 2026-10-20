@@ -40,7 +40,7 @@ from .. import config
 from ..system.window_watcher import WindowWatcher
 from .help_dialog import tab_header
 from .mirror_manager import MirrorManager
-from .widgets import CapturePathLabel, checkbox, section_label
+from .widgets import CapturePathLabel, checkbox, section_label, hint_label
 from .settings_layout import DANGER_STYLE, disclosure
 
 _log = logging.getLogger(__name__)
@@ -248,6 +248,7 @@ class CustomOverlayTab(QWidget):
         self.overlays_title.setStyleSheet("font-weight:600;")
         self.overlays_title.setText("적용 중인 오버레이")
         overlay_layout.addWidget(self.overlays_title)
+        overlay_layout.addWidget(hint_label("잠금을 해제한 오버레이에서 마우스 휠로 크기를 조절할 수 있습니다."))
         self.overlay_list = QTreeWidget()
         self.overlay_list.setRootIsDecorated(False)
         self.overlay_list.setMinimumHeight(100)

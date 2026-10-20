@@ -83,7 +83,6 @@ class MemoTab(QWidget):
         self.region_hint = hint_label("")
         self._update_region_hint()
         v.addWidget(self.region_hint)
-        v.addWidget(hint_label("이 영역은 메모의 표시 위치와 너비입니다. 높이는 내용에 따라 정해집니다."))
         top = QHBoxLayout()
         top.setSpacing(6)
         region_btn = QPushButton("직접 지정")
@@ -96,6 +95,7 @@ class MemoTab(QWidget):
         self.clear_region_btn = clear_button(self,"memo",self._region_cleared)
         top.addWidget(self.clear_region_btn)
         v.addLayout(top)
+        v.addWidget(hint_label("위치와 너비를 지정하세요. 높이는 내용에 맞춰 자동으로 조절됩니다."))
         display = QGroupBox("표시")
         display_layout = QVBoxLayout(display)
         v.addWidget(display)
@@ -177,15 +177,7 @@ class MemoTab(QWidget):
         self._split.addWidget(self.preview)
         self._split.setSizes([600, 0])
         content_layout.addWidget(self._split, 1)
-        content_layout.addWidget(hint_label("작성 내용은 자동 저장되며 메모 오버레이에 반영됩니다."))
-
-        v.addWidget(
-            hint_label(
-                "여기서 적으면 오버레이에 표·리스트·강조로 바로 나타납니다. "
-                "👁 미리보기로 결과를 미리 보고, 가운데를 끌어 좌우 너비를 조절하세요.\n"
-                "오버레이는 잠그기 전에 끌어 위치를 옮기고, 위치 잠금하면 클릭이 통과돼요."
-            )
-        )
+        content_layout.addWidget(hint_label("작성 내용은 자동 저장됩니다. 표시 미리보기에서 실제 모양을 확인할 수 있습니다."))
 
     def _insert(self, snippet: str) -> None:
         """커서 위치에 마크다운 조각 삽입(선택 영역이 있으면 '굵게'는 감싼다)."""
@@ -222,7 +214,7 @@ class MemoTab(QWidget):
             self.region_hint.setStyleSheet("color:#2ecc71;")
         else:
             self.region_hint.setText(
-                "영역 미지정 — 버튼으로 메모 위치·너비를 지정하세요 (높이는 자동)"
+                "영역 미지정"
             )
             self.region_hint.setStyleSheet("color:#8a8f98;")
 

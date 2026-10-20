@@ -1,12 +1,13 @@
 """단계별 첫 사용 안내. 저장된 사용 설정과 기존 자동찾기를 공유한다."""
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Signal, Qt, QEvent, QTimer
+from PySide6.QtGui import QTextLayout, QTextOption
 from PySide6.QtWidgets import (
     QCheckBox, QFrame, QHBoxLayout, QPushButton, QScrollArea, QVBoxLayout, QWidget,
 )
 
 from .. import config
-from ..setup_state import BY_KEY, selected as enabled, missing, section
+from ..setup_state import BY_KEY, selected as enabled, missing, section, batch_allowed, needs_boss_preparation, BOSS_PREPARATION
 from .setup_page import CHOICE_TEXT, _label
 
 
@@ -16,6 +17,7 @@ GUIDE_KEYS = STAGES[1] + STAGES[2]
 
 class SetupGuide(QWidget):
     feature_changed = Signal(str, bool)
+    open_feature = Signal(str)
     register_game = Signal()
     run_requested = Signal()
     cancel_requested = Signal()
@@ -32,26 +34,42 @@ class SetupGuide(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(18, 16, 18, 16)
         layout.setSpacing(7)
-        self.step_label = _label("")
-        layout.addWidget(self.step_label)
+        self._fit_pending = False
+        self._fit_timer = QTimer(self)
+        self._fit_timer.setSingleShot(True)
+        self._fit_timer.timeout.connect(self._fit_content)
+        self.body_scroll = QScrollArea()
+        self.body_scroll.setWidgetResizable(True)
+        self.body_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self.body_scroll.setMinimumSize(0, 0)
+        self.body_scroll.viewport().installEventFilter(self)
+        content = QWidget()
+        self.body_scroll.setWidget(content)
+        layout.addWidget(self.body_scroll, 1)
+        footer_layout = layout
+        layout = QVBoxLayout(content)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(7)
+        self.header = _label('첫 사용 안내', bold=True)
+        self.header.setStyleSheet('font-size:20px; font-weight:600;')
+        layout.addWidget(self.header)
         self.title = _label("", bold=True)
-        self.title.setStyleSheet("font-size:20px; font-weight:600;")
         layout.addWidget(self.title)
         self.description = _label("")
         layout.addWidget(self.description)
 
         self.game_row = QWidget()
-        row = QHBoxLayout(self.game_row)
+        row = QVBoxLayout(self.game_row)
         row.setContentsMargins(0, 0, 0, 0)
         self.game_status = _label("")
-        row.addWidget(self.game_status, 1)
+        row.addWidget(self.game_status)
         self.game_btn = QPushButton("게임창 등록 시작")
         self.game_btn.setToolTip("버튼을 누른 뒤 3초 안에 게임창을 선택하세요.")
         self.game_btn.clicked.connect(self.register_game.emit)
-        row.addWidget(self.game_btn)
+        row.addWidget(self.game_btn, 0, Qt.AlignmentFlag.AlignLeft)
         layout.addWidget(self.game_row)
         self.game_space = QWidget()
-        layout.addWidget(self.game_space, 1)
+        layout.addWidget(self.game_space)
 
         self.selection = QScrollArea()
         self.selection.setWidgetResizable(True)
@@ -59,18 +77,21 @@ class SetupGuide(QWidget):
         rows = QVBoxLayout(content)
         rows.setContentsMargins(10, 0, 10, 0)
         rows.setSpacing(0)
-        self.checks, self.feature_rows, self.statuses = {}, {}, {}
+        self.checks, self.feature_rows, self.statuses, self.manual_buttons = {}, {}, {}, {}
         for key in GUIDE_KEYS:
             feature = BY_KEY[key]
             check = QCheckBox(CHOICE_TEXT[key] + " - " + feature.name)
             check.toggled.connect(lambda value, key=key: self.feature_changed.emit(key, value))
-            check.setFixedHeight(max(30, check.sizeHint().height() + 8))
+            check.setMinimumHeight(max(30, check.sizeHint().height() + 8))
             rows.addWidget(check)
             self.checks[key] = check
         rows.addStretch(1)
         self.selection.setWidget(content)
-        self.selection.setFixedHeight(4 * check.height() + 2 * self.selection.frameWidth())
+        self.selection.setMinimumSize(0, 0)
         layout.addWidget(self.selection)
+        self.boss_preparation = _label(BOSS_PREPARATION)
+        self.boss_preparation.setStyleSheet('color:#c78c32; padding:8px; border:1px solid #806837; border-radius:3px;')
+        layout.addWidget(self.boss_preparation)
         self.run_btn = QPushButton("자동설정")
         self.run_btn.setMinimumHeight(34)
         self.run_btn.clicked.connect(self.run_requested.emit)
@@ -88,7 +109,7 @@ class SetupGuide(QWidget):
             lines.setSpacing(0)
             lines.addStretch(1)
             scroll.setWidget(content)
-            layout.addWidget(scroll, 1)
+            layout.addWidget(scroll)
             self.groups[key] = (title, scroll, lines)
         for key in GUIDE_KEYS:
             widget = QWidget()
@@ -99,6 +120,10 @@ class SetupGuide(QWidget):
             line.addWidget(name)
             status = _label("")
             line.addWidget(status, 1)
+            button = QPushButton('직접 설정')
+            button.clicked.connect(lambda _=False, key=key: self.open_feature.emit(key))
+            line.addWidget(button)
+            self.manual_buttons[key] = button
             self.feature_rows[key], self.statuses[key] = widget, status
             self.groups["unused"][2].insertWidget(0, widget)
 
@@ -109,6 +134,11 @@ class SetupGuide(QWidget):
         self.progress_area.setWidget(self.progress)
         self.progress_area.setFixedHeight(85)
         layout.addWidget(self.progress_area)
+        layout.addStretch(1)
+        layout = footer_layout
+        self.step_label = _label('')
+        self.step_label.setTextFormat(Qt.TextFormat.RichText)
+        layout.addWidget(self.step_label)
         self.skip = QCheckBox("시작할 때 이 화면 다시 보지 않기")
         self.skip.toggled.connect(lambda value: config.save_general_flag("skipSetup", value))
         layout.addWidget(self.skip)
@@ -182,8 +212,9 @@ class SetupGuide(QWidget):
 
     def refresh(self):
         raw = config._read_local_config()
-        logged_in = config.load_discord_user() is not None
-        self.step_label.setText(f"첫 사용 안내 · {self.stage + 1} / 4   게임창 등록 → 전투 기능 → 추가 기능 → 앱 둘러보기")
+        stages = ('게임창 등록', '전투 기능', '추가 기능', '앱 둘러보기')
+        trail = ' → '.join(f'<b>{name}</b>' if i == self.stage else name for i, name in enumerate(stages))
+        self.step_label.setText(f'<b>{self.stage + 1} / 4 단계</b> · {trail}')
         self.title.setText(("게임창 등록", "전투 기능 설정", "추가 기능 설정")[self.stage])
         self.description.setText((
             ("처음 오셨군요. 사용할 기능을 골라 나에게 맞게 설정해 보세요.\n" if self.first_run else
@@ -205,13 +236,15 @@ class SetupGuide(QWidget):
             check.blockSignals(True)
             check.setChecked(enabled(key, raw))
             check.blockSignals(False)
-            check.setEnabled(not self.busy)
-            check.setVisible(key in self.feature_keys)
+            check.setEnabled(not self.busy and batch_allowed(key))
+            check.setVisible(key in self.feature_keys and batch_allowed(key))
             check.setToolTip(feature.guidance)
-            self.feature_rows[key].setVisible(key in self.feature_keys)
+            self.feature_rows[key].setVisible(key in self.feature_keys and batch_allowed(key))
             text = self.status_text(key, raw)
             self.statuses[key].setText(text)
-            if key in self.feature_keys:
+            self.manual_buttons[key].setVisible(bool(missing(key, raw)) and enabled(key, raw))
+            self.manual_buttons[key].setEnabled(not self.busy and batch_allowed(key))
+            if key in self.feature_keys and batch_allowed(key):
                 group = "done" if not missing(key, raw) else "need" if enabled(key, raw) else "unused"
                 groups[group].append(self.feature_rows[key])
         for key, widgets in groups.items():
@@ -222,6 +255,9 @@ class SetupGuide(QWidget):
             scroll.setVisible(bool(widgets) and self.stage in (1, 2))
             if key != "unused":
                 title.setText(("설정 필요" if key == "need" else "등록된 설정") + f" · {len(widgets)}")
+        self.boss_preparation.setVisible(self.stage in (1, 2) and
+                                         needs_boss_preparation(raw, feature_keys=self.feature_keys))
+        self._queue_fit()
         self.skip.blockSignals(True)
         self.skip.setChecked(section(raw, "general").get("skipSetup") is True)
         self.skip.blockSignals(False)
@@ -236,3 +272,53 @@ class SetupGuide(QWidget):
     def set_busy(self, busy):
         self.busy = busy
         self.refresh()
+
+    def _queue_fit(self):
+        if self._fit_pending:
+            return
+        self._fit_pending = True
+        self._fit_timer.start(0)
+
+    def eventFilter(self, watched, event):
+        if watched is self.body_scroll.viewport() and event.type() == QEvent.Type.Resize:
+            self._queue_fit()
+        return super().eventFilter(watched, event)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._queue_fit()
+
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if event.type() in (QEvent.Type.FontChange, QEvent.Type.StyleChange):
+            self._queue_fit()
+
+    def _fit_content(self):
+        self._fit_pending = False
+        if not hasattr(self, 'selection'):
+            return
+        width = max(80, self.body_scroll.viewport().width() - 32)
+        height = 0
+        for key, check in self.checks.items():
+            text = CHOICE_TEXT[key] + ' - ' + BY_KEY[key].name
+            lines = QTextLayout(text, check.font())
+            option = QTextOption()
+            option.setWrapMode(QTextOption.WrapMode.WrapAtWordBoundaryOrAnywhere)
+            lines.setTextOption(option)
+            lines.beginLayout()
+            wrapped = []
+            while (line := lines.createLine()).isValid():
+                line.setLineWidth(max(40, width - check.style().pixelMetric(check.style().PixelMetric.PM_IndicatorWidth) - 12))
+                wrapped.append(text[line.textStart():line.textStart()+line.textLength()].rstrip())
+            lines.endLayout()
+            check.setText('\n'.join(wrapped))
+            row_height = max(30, check.sizeHint().height() + 8)
+            check.setMinimumHeight(row_height)
+            if key in self.feature_keys and batch_allowed(key):
+                height += row_height
+        self.selection.setFixedHeight(height + 2*self.selection.frameWidth())
+        for title, scroll, rows in self.groups.values():
+            rows.invalidate()
+            row_width = max(80, scroll.viewport().width() - 20)
+            height = rows.totalHeightForWidth(row_width) if rows.hasHeightForWidth() else rows.sizeHint().height()
+            scroll.setFixedHeight(max(40, height + 2*scroll.frameWidth()))

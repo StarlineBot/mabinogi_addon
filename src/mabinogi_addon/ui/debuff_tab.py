@@ -179,18 +179,16 @@ class DebuffTab(QWidget):
         self.clear_region_btn = clear_button(self, "debuff", self._region_cleared)
         hint_row.addWidget(self.clear_region_btn)
         self._update_region_hint()
-        v.addWidget(section_label("판독 영역 · 디버프 줄과 보스 체력바"))
+        v.addWidget(section_label("판독 영역 · 디버프 줄"))
         v.addWidget(self.region_hint)
         hint_row.removeWidget(self.region_hint)
         hint_row.addStretch()
         v.addLayout(hint_row)
-        v.addWidget(hint_label("보스 체력바가 보일 때 자동 찾기를 실행하면 디버프와 공유 보스 영역을 함께 등록합니다. 직접 지정·보기·해제는 디버프 영역만 조작합니다."))
+        v.addWidget(hint_label("자동 찾기: 디버프 줄과 보스 체력바를 함께 등록\n직접 지정·보기·해제: 디버프 줄만 변경"))
         self.shared_region_hint = hint_label("")
-        v.addWidget(self.shared_region_hint)
         v.addLayout(top)
 
         self.status_label = hint_label("")  # 진단 상태(추적 중/게임 비활성 등)
-        v.addWidget(self.status_label)
 
         # 일반 화면은 자동 판단. 기존 강제 방식은 접힌 진단 설정에 보존한다.
         auto_row = QHBoxLayout()
@@ -204,6 +202,8 @@ class DebuffTab(QWidget):
         self.diagnostic_button.setFixedSize(26, 26)
         auto_row.addWidget(self.diagnostic_button)
         v.addLayout(auto_row)
+        v.addWidget(self.shared_region_hint)
+        v.addWidget(self.status_label)
         self._method_row = QWidget()
         method_row = QHBoxLayout(self._method_row)
         method_row.setContentsMargins(0, 0, 0, 0)
@@ -424,7 +424,7 @@ class DebuffTab(QWidget):
             self.region_hint.setStyleSheet("color:#2ecc71;")
             self.view_region_btn.setEnabled(True)
         else:
-            self.region_hint.setText(f"영역 미지정 — {REGION_CRITERION}")
+            self.region_hint.setText("디버프 영역 미등록")
             self.region_hint.setStyleSheet("color:#8a8f98;")
             self.view_region_btn.setEnabled(False)
 
@@ -665,9 +665,6 @@ class DebuffTab(QWidget):
         self.display_check = checkbox("오버레이에 표시")
         self.display_check.toggled.connect(self._form_changed)
         sv.addWidget(self.display_check)
-        sv.addWidget(
-            hint_label("디버프는 '아직 걸리지 않은 것'만 오버레이에 나열됩니다.")
-        )
         self.warn_gone_check = checkbox("사라짐 경고 (보스에서 떨어지면 알림)")
         self.warn_gone_check.setToolTip(
             "걸어둔 디버프가 보스에서 떨어지면 오버레이에 빨간 테두리+X로 표시하고 "

@@ -40,7 +40,7 @@ class DungeonCostTab(QWidget):
     def __init__(self):
         super().__init__()
         self._price = None
-        self._status = "시세를 조회해 주세요."
+        self._status = "오른쪽 위 새로고침 버튼을 눌러 편린 시세를 조회하세요."
         self._pending = None
         self._cancelled = threading.Event()
         self._poll = QTimer(self)

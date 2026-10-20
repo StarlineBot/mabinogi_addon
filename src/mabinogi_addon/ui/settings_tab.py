@@ -32,7 +32,7 @@ from PySide6.QtWidgets import (
 
 from .. import config, discord_auth, paths
 from ..system.window_watcher import WindowWatcher
-from .widgets import checkbox, hint_label
+from .widgets import checkbox, hint_label, section_label
 
 # 테마 스와치 색(동그라미). 시스템=반반 그라데이션(라이트/다크 자동).
 _THEME_SWATCH = {
@@ -374,7 +374,10 @@ class SettingsTab(QWidget):
             )
         )
 
+        v.addSpacing(12)
         reset_btn = QPushButton("설정 초기화")
+        from .settings_layout import DANGER_STYLE
+        reset_btn.setStyleSheet(DANGER_STYLE)
         reset_btn.clicked.connect(self._on_reset_config)
         v.addWidget(reset_btn)
         v.addWidget(
@@ -745,6 +748,7 @@ class SettingsTab(QWidget):
 
         box = QGroupBox("일반")
         v = QVBoxLayout(box)
+        v.addWidget(section_label("실행·종료"))
         # 체크 상태는 저장된 '의도' 기준(없으면 현재 작업 상태를 이어받음).
         intent = config.load_autostart_intent()
         if intent is None:
@@ -773,6 +777,8 @@ class SettingsTab(QWidget):
         )
         v.addWidget(self._min_tray)
 
+        v.addSpacing(8)
+        v.addWidget(section_label("오버레이 배치"))
         self._grid_snap = _checked(
             "오버레이 격자 맞춤 (이동 시 칸에 딱 맞춤)",
             config.load_general_flag(_GRID_SNAP, False),
@@ -800,6 +806,8 @@ class SettingsTab(QWidget):
             hint_label("작을수록 미세, 클수록 큼직하게 칸칸 이동. (기본 32px)")
         )
 
+        v.addSpacing(8)
+        v.addWidget(section_label("알림"))
         toast_row = QHBoxLayout()
         toast_row.addWidget(QLabel("토스트 알림 위치"))
         self._toast_corner = QComboBox()
@@ -840,10 +848,12 @@ class SettingsTab(QWidget):
         v.addLayout(voice_row)
         v.addWidget(
             hint_label(
-                "버프·투아림·파티 알림에 쓸 목소리 팩. 고르면 미리듣기가 재생되고 바로 적용돼요."
+                "버프·투아림 알림에 쓸 목소리 팩입니다. 고르면 미리듣기가 재생되고 바로 적용됩니다."
             )
         )
 
+        v.addSpacing(8)
+        v.addWidget(section_label("안내 다시 보기"))
         tour_row = QHBoxLayout()
         setup_btn = QPushButton("자동설정 다시 열기")
         self.setup_btn = setup_btn
