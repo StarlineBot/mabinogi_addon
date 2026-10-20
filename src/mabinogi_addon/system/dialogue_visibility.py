@@ -1,6 +1,7 @@
-"""잡담 대상 영역만 Windows Z-order/모니터/입력 데스크톱으로 확인한다.
+"""잡담의 모니터/입력 데스크톱 조건과 기존 Z-order 진단을 제공한다.
 
-이미지 캡처나 포커스 이동은 하지 않는다. 판정 실패는 노출 불가다.
+현재 잡담은 display_available을 사용하고 실제 창 겹침은 Windows 합성에 맡긴다.
+exposed는 이전 가림 판정의 진단/회귀 진입점이다. 캡처나 포커스 이동은 하지 않는다.
 """
 
 import sys
@@ -125,8 +126,15 @@ def _blocker_identity(gui, hwnd, detail):
             detail['identity_winerror'] = code
 
 
+def display_available(hwnd: int, local_rects: list, logical_size: tuple[int, int], *,
+                      diagnostic=None, diagnose=False) -> bool:
+    """Check desktop/owner/monitor bounds without vetoing other windows' composition."""
+    return exposed(hwnd, local_rects, logical_size, diagnostic=diagnostic,
+                   diagnose=diagnose, check_occlusion=False)
+
+
 def exposed(hwnd: int, local_rects: list, logical_size: tuple[int, int], *, diagnostic=None,
-            diagnose=False) -> bool:
+            diagnose=False, check_occlusion=True) -> bool:
     # A caller-owned record avoids shared state between windows and automatic ticks.
     detail = diagnostic if diagnostic is not None else {}
     detail.clear()
@@ -146,7 +154,14 @@ def exposed(hwnd: int, local_rects: list, logical_size: tuple[int, int], *, diag
         if not win32gui.IsWindowVisible(hwnd) or win32gui.IsIconic(hwnd):
             return False
         detail["stage"] = "target_geometry"
+        if (logical_size[0] <= 0 or logical_size[1] <= 0 or not local_rects
+                or any(x < 0 or y < 0 or w <= 0 or h <= 0
+                       or x + w > logical_size[0] or y + h > logical_size[1]
+                       for x, y, w, h in local_rects)):
+            return False
         client = win32gui.GetClientRect(hwnd)
+        if client[2] <= 0 or client[3] <= 0:
+            return False
         origin = win32gui.ClientToScreen(hwnd, (0, 0))
         sx, sy = client[2] / logical_size[0], client[3] / logical_size[1]
         targets = [(origin[0] + int(x * sx), origin[1] + int(y * sy),
@@ -159,6 +174,10 @@ def exposed(hwnd: int, local_rects: list, logical_size: tuple[int, int], *, diag
                 remaining = [piece for item in remaining for piece in subtract(item, screen)]
             if remaining:
                 return False
+        if not check_occlusion:
+            detail.clear()
+            detail.update(stage='display_available', hwnd=hwnd)
+            return True
         found, blocked = False, False
 
         def visit(other, _):

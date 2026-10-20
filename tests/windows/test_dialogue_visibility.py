@@ -108,7 +108,7 @@ def test_real_window_occlusion_without_foreground_requirement():
     import win32gui
     from PySide6.QtCore import Qt
     from PySide6.QtWidgets import QApplication, QWidget
-    from mabinogi_addon.system.dialogue_visibility import exposed
+    from mabinogi_addon.system.dialogue_visibility import display_available, exposed
 
     app = QApplication.instance() or QApplication([])
     owner = QWidget()
@@ -134,12 +134,15 @@ def test_real_window_occlusion_without_foreground_requirement():
                              win32con.SWP_NOMOVE | win32con.SWP_NOSIZE | win32con.SWP_NOACTIVATE)
         ctypes.windll.dwmapi.DwmFlush()
         assert not exposed(hwnd, target, (owner.width(), owner.height()))
+        # Current policy leaves overlap to native composition; no activation or Z-order changes.
+        assert display_available(hwnd, target, (owner.width(), owner.height()))
         blocker.hide()
         app.processEvents()
         ctypes.windll.dwmapi.DwmFlush()
         assert exposed(hwnd, target, (owner.width(), owner.height()))
         owner.hide()
         assert not exposed(hwnd, target, (owner.width(), owner.height()))
+        assert not display_available(hwnd, target, (owner.width(), owner.height()))
     finally:
         blocker.close()
         owner.close()

@@ -108,13 +108,14 @@ def test_tour_both_directions_and_approved_return(window, from_guide, finish):
     w._run_tour(from_guide=from_guide)
     tour = w._tour
     assert len(tour._steps) == 7
-    assert tour._section_title == ('첫 사용 안내 4 / 4' if from_guide else '')
+    assert tour._section_title == ''
     expected = [w._tracker_tabs,w._convenience_tabs,w._tracker_tabs,w._tracker_tabs,
                 w._tracker_tabs,w._tabs.widget(3),w._tracker_tabs]
     for index in list(range(7)) + list(reversed(range(7))) + list(range(7)):
         tour._i = index
         tour._show_step()
         app.processEvents()
+        assert tour._step_lbl.text() == f'{index + 1} / {len(tour._steps)}'
         assert w._tabs.currentWidget() is expected[index]
         if tour._steps[index].target is not None:
             rect = tour._target_rect()

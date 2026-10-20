@@ -1,7 +1,9 @@
 """Settled layout and cancelled geometry updates must agree with the highlight."""
 
 import pytest
-from PySide6.QtCore import QCoreApplication, QEvent, QEventLoop, QTimer
+from PySide6.QtCore import QCoreApplication, QEvent, QEventLoop, QTimer, Qt
+from PySide6.QtGui import QFont
+from PySide6.QtTest import QTest
 from shiboken6 import isValid
 
 from scripts.qa_navigation_tour_layout import test_seeded_navigation_and_tour
@@ -16,6 +18,57 @@ def settle(app):
     loop.exec()
     for _ in range(8):
         app.processEvents()
+
+
+@pytest.mark.parametrize('from_guide', [False, True])
+@pytest.mark.parametrize('font_profile', ['default', 'korean', 'large'])
+def test_tour_text_and_buttons_fit_through_real_forward_and_back_clicks(
+        window, from_guide, font_profile):
+    w, app = window
+    w._run_tour(from_guide=from_guide)
+    tour = w._tour
+    original_font, original_style = QFont(tour.font()), tour.styleSheet()
+    if font_profile != 'default':
+        font = QFont(tour.font())
+        font.setFamily('Noto Sans CJK KR')
+        if font_profile == 'large':
+            font.setPixelSize(20)
+            tour.setStyleSheet(tour.styleSheet() + '\n'
+                              '#tourTitle { font-size:24px; } '
+                              '#tourBody { font-size:20px; } '
+                              '#tourStep { font-size:18px; }')
+        tour.setFont(font)
+    count = len(tour._steps)
+    traversal = list(range(count)) + list(reversed(range(count - 1)))
+    for position, index in enumerate(traversal):
+        settle(app)
+        assert tour._i == index
+        assert tour._step_lbl.text() == f'{index + 1} / {count}'
+        for label in (tour._title, tour._body):
+            assert label.heightForWidth(label.contentsRect().width()) <= label.contentsRect().height()
+        label = tour._step_lbl
+        assert label.fontMetrics().horizontalAdvance(label.text()) <= label.contentsRect().width()
+        assert tour.rect().contains(tour._card.geometry())
+        target = tour._target_rect()
+        assert target is None or not target.intersects(tour._card.geometry())
+        for button in (tour._prev, tour._skip, tour._next):
+            if button.isVisible():
+                assert button.width() >= button.sizeHint().width()
+                assert button.height() >= button.sizeHint().height()
+                point = button.mapTo(tour, button.rect().center())
+                assert tour.childAt(point) is button
+        assert not tour._layout_timer.isActive()
+        if position < len(traversal) - 1:
+            button = tour._next if position < count - 1 else tour._prev
+            QTest.mouseClick(button, Qt.MouseButton.LeftButton)
+    if font_profile == 'large':
+        large_height = tour._card.height()
+        tour.setStyleSheet(original_style)
+        tour.setFont(original_font)
+        settle(app)
+        assert tour._card.height() < large_height
+        for label in (tour._title, tour._body):
+            assert label.heightForWidth(label.contentsRect().width()) <= label.contentsRect().height()
 
 
 def test_scroll_updates_card_without_host_move_or_resize(window):

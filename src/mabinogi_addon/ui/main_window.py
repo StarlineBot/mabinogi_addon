@@ -943,8 +943,7 @@ class MainWindow(QMainWindow):
                 self._tabs.setCurrentWidget(entry[0])
 
         self._tour_from_guide = from_guide
-        self._tour = TourOverlay(self, steps, on_done=done,
-                                 section_title="첫 사용 안내 4 / 4" if from_guide else "")
+        self._tour = TourOverlay(self, steps, on_done=done)
         self._tour.start()
 
     def _maybe_prompt_game_window(self) -> None:

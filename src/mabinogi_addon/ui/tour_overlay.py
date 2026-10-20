@@ -82,6 +82,7 @@ class TourOverlay(QWidget):
         self._body.setWordWrap(True)
         cv.addWidget(self._body)
         row = QHBoxLayout()
+        self._footer = row
         self._step_lbl = QLabel()
         self._step_lbl.setObjectName("tourStep")
         row.addWidget(self._step_lbl)
@@ -99,6 +100,8 @@ class TourOverlay(QWidget):
         row.addWidget(self._next)
         cv.addLayout(row)
         self._card.setFixedWidth(320)
+        for label in (self._title, self._body, self._step_lbl):
+            label.installEventFilter(self)
 
         self.setStyleSheet(
             "#tourCard { background:#1f2937; border:1px solid #FFD54A; border-radius:12px; }"
@@ -129,6 +132,10 @@ class TourOverlay(QWidget):
             self.setGeometry(self._screen_geo)
 
     def eventFilter(self, obj: QObject, event: QEvent) -> bool:
+        if obj in (self._title, self._body, self._step_lbl) and event.type() in (
+            QEvent.Type.FontChange, QEvent.Type.StyleChange,
+        ):
+            self._schedule_geometry()
         # 앱이 움직이거나 크기가 바뀌면 대상 위치가 달라지므로 다시 맞춘다.
         if obj is self._host and event.type() in (
             QEvent.Type.Resize,
@@ -149,6 +156,7 @@ class TourOverlay(QWidget):
 
     def _refresh_geometry(self):
         if not self._dismissed and self.isVisible():
+            self._size_card()
             self._place_card()
             self.update()
 
@@ -193,11 +201,31 @@ class TourOverlay(QWidget):
                                + f"{self._i + 1} / {len(self._steps)}")
         self._prev.setVisible(self._i > 0)
         self._next.setText("시작하기" if self._i == len(self._steps) - 1 else "다음")
-        self._card.adjustSize()
+        self._size_card()
         self._watch_target()
         self._place_card()
         self.update()
         self._schedule_geometry()
+
+    def _size_card(self) -> None:
+        """Measure wrapped text at the final width, including the widest footer."""
+        self._card.ensurePolished()
+        layout = self._card.layout()
+        margins = layout.contentsMargins()
+        frame = self._card.frameWidth() * 2
+        width = max(320, self._footer.sizeHint().width()
+                    + margins.left() + margins.right() + frame)
+        self._card.setFixedWidth(width)
+        text_width = width - margins.left() - margins.right() - frame
+        for label in (self._title, self._body):
+            label.ensurePolished()
+            label.setMinimumHeight(0)
+            height = label.heightForWidth(text_width)
+            label.setMinimumHeight(height if height >= 0 else label.sizeHint().height())
+        layout.invalidate()
+        height = max(layout.totalMinimumSize().height(), layout.totalHeightForWidth(width))
+        self._card.resize(width, height)
+        layout.activate()
 
     def _place_card(self) -> None:
         r = self._target_rect()

@@ -1001,7 +1001,7 @@ def test_guide_actual_window_navigation_and_resume_preserve_step(app, settings, 
         assert config.load_general_flag("firstUseGuideShown")
         assert not guide.active and not window._guide_return_btn.isVisible()
         assert window._tour.isVisible()
-        assert "4 / 4" in window._tour._step_lbl.text()
+        assert window._tour._step_lbl.text() == f"1 / {len(window._tour._steps)}"
         window._tour._finish()
         window.settings_tab.reopen_setup.emit()
         assert window._pages.currentWidget() is guide

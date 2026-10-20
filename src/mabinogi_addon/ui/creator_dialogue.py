@@ -10,7 +10,7 @@ from PySide6.QtGui import QColor, QIcon, QPainter, QPainterPath, QPen, QTextLayo
 from PySide6.QtWidgets import QApplication, QHBoxLayout, QLabel, QToolButton, QWidget
 
 from ..creator_dialogue import DialogueSession, MAX_CHARS
-from ..system.dialogue_visibility import exposed
+from ..system.dialogue_visibility import display_available, exposed
 from .dialogue_feed import DialogueFeed
 from .settings_tab import AVATAR_STYLE, LOGO_IMAGE, PROFILE_IMAGE, _circular
 
@@ -101,7 +101,7 @@ class SpeechBubble(QWidget):
 
 
 class CreatorDialogue(QObject):
-    def __init__(self, window, *, visibility=exposed, clock=time.monotonic, sound=None):
+    def __init__(self, window, *, visibility=display_available, clock=time.monotonic, sound=None):
         super().__init__(window)
         self.window = window
         self._central = window.centralWidget()
@@ -285,12 +285,12 @@ class CreatorDialogue(QObject):
             rects.append((point.x(), point.y(), widget.width(), widget.height()))
         try:
             detail = {}
-            if self.visibility is exposed:
+            if self.visibility in (display_available, exposed):
                 visible = self.visibility(int(w.winId()), rects, (w.width(), w.height()),
                                           diagnostic=detail, diagnose=diagnose)
             else:
                 visible = self.visibility(int(w.winId()), rects, (w.width(), w.height()))
-            self._ineligible_reason = "" if visible else "Windows 가림/잠금/화면 또는 API 확인 불가"
+            self._ineligible_reason = "" if visible else "Windows 잠금/창/화면 또는 API 확인 불가"
             if not visible and detail:
                 self._ineligible_reason += " " + repr(detail)
             return visible
