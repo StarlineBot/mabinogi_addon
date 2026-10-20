@@ -1,4 +1,4 @@
-"""Promote a verified candidate, never build it. Manual release entry point."""
+"""Promote a verified candidate, never build it. Called only after explicit dispatch authorization."""
 
 import json
 import os
@@ -33,19 +33,25 @@ def prepare_public(root, public, candidate, version):
         shutil.copyfile(root/'src/mabinogi_addon/assets/dialogues.json', target)
 
 
+def ensure_unpublished(context):
+    tag = 'v'+context['version']
+    targets = [(context['repository'], os.environ['GH_TOKEN']),
+               (PUBLIC_REPO, os.environ['RELEASES_TOKEN'])]
+    # An earlier partial publication requires inspection, not an overwrite.
+    for repo, token in targets:
+        pages = json.loads(gh('api', '--paginate', '--slurp', f'repos/{repo}/releases?per_page=100', token=token))
+        releases = [release for page in pages for release in page]
+        require(not any(r['tag_name'] == tag for r in releases), 'release already exists; inspect partial publication')
+    return targets
+
+
 def promote(root=Path('.'), folder=Path('candidate'), public=Path('pub')):
     context = json.loads(Path('verified-run.json').read_text(encoding='utf-8'))
     require(gate(context['repository'], context['run_id'], context['run_attempt'],
                  context['source_sha'], context['version']) == context, 'provenance changed')
     verify_bundle(folder, context)
     version, tag = context['version'], 'v'+context['version']
-    targets = [(context['repository'], os.environ['GH_TOKEN']),
-               (PUBLIC_REPO, os.environ['RELEASES_TOKEN'])]
-    # An earlier partial publication requires inspection, not an automatic overwrite.
-    for repo, token in targets:
-        pages = json.loads(gh('api', '--paginate', '--slurp', f'repos/{repo}/releases?per_page=100', token=token))
-        releases = [release for page in pages for release in page]
-        require(not any(r['tag_name'] == tag for r in releases), 'release already exists; inspect partial publication')
+    targets = ensure_unpublished(context)
     prepare_public(root, public, folder, version)
     assets = [str(folder/name) for name in ('mabinogi-addon.exe','version.json','candidate.json')]
     for repo, token in targets:

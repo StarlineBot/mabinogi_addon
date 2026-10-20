@@ -6,6 +6,19 @@ on:
         description: 'Exact release version X.Y.Z (top bundled notes must match)'
         required: true
         type: string
+      mode:
+        description: '검증만 / 성공 시 동일 exe 배포 / 기존 후보 배포 (조건부 게시 승인)'
+        required: true
+        default: verify-only
+        type: choice
+        options:
+          - verify-only
+          - validate-and-publish
+          - publish-existing
+      candidate_run:
+        description: '기존 후보가 여러 개인 경우에만 검증 실행 ID 지정 (보통 비움)'
+        required: false
+        type: string
 permissions:
   contents: read
   actions: write
@@ -13,16 +26,42 @@ concurrency:
   group: verified-windows-candidate
   cancel-in-progress: false
 jobs:
-  validate:
+  request:
     if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REQUEST_VERSION: ${{ inputs.version }}
+      REQUEST_MODE: ${{ inputs.mode }}
+      REQUEST_CANDIDATE_RUN: ${{ inputs.candidate_run }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Freeze release request
+        run: python -m scripts.release_automation prepare
+      - name: Store release request
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-request-${{ github.run_id }}-${{ github.run_attempt }}
+          path: release-request/release-request.json
+          retention-days: 1
+          if-no-files-found: error
+  validate:
+    needs: request
+    if: github.ref == 'refs/heads/main' && inputs.mode != 'publish-existing'
     runs-on: windows-latest
     timeout-minutes: 45
     env:
       APP_VERSION: ${{ inputs.version }}
+      RELEASE_MODE: ${{ inputs.mode }}
       OPENCV_FOR_THREADS_NUM: '1'
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.sha }}
           fetch-depth: 0
       - uses: astral-sh/setup-uv@v5
         with:
@@ -67,6 +106,7 @@ jobs:
         run: >-
           uv run python -m scripts.release_candidate seal --version "$env:APP_VERSION"
           --sha "$env:GITHUB_SHA" --run-id $env:GITHUB_RUN_ID --attempt $env:GITHUB_RUN_ATTEMPT
+          --mode "$env:RELEASE_MODE"
       - name: Enforce candidate retention
         env:
           GH_TOKEN: ${{ github.token }}

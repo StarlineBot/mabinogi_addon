@@ -90,13 +90,15 @@ def notes_for(root, version):
 def preflight(root, sha, version):
     identity(sha, version)
     notes_for(root, version)
-    # Reserve the version only after validation, when the user creates its tag.
+    # Reserve the version only after validation and explicit publication approval.
     tags = subprocess.check_output(['git','tag','--list',f'v{version}'],cwd=root,text=True)
     require(not tags.strip(), 'version tag already used; select an unused version')
 
 
-def seal(root, output, sha, version, run_id, attempt, repository, now=None, read_version=exe_version):
+def seal(root, output, sha, version, run_id, attempt, repository, now=None, read_version=exe_version,
+         mode="verify-only"):
     identity(sha,version)
+    require(mode in ("verify-only", "validate-and-publish"), "invalid validation mode")
     require(run_id > 0 and attempt > 0, 'invalid run identity')
     require(subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip() == sha,
             'checkout/source mismatch')
@@ -117,6 +119,8 @@ def seal(root, output, sha, version, run_id, attempt, repository, now=None, read
     now = now or utcnow()
     manifest = dict(schema=1,source_sha=sha,source_fingerprint=fingerprint(sha,root=root),version=version,
         run_id=run_id,run_attempt=attempt,repository=repository,workflow=WORKFLOW,
+        authorization=dict(mode=mode, source_sha=sha, version=version, run_id=run_id,
+                           run_attempt=attempt, repository=repository),
         created_at=now.isoformat(),expires_at=(now+TTL).isoformat(),exe_version=version,
         files={p.name:dict(sha256=digest(p),size=p.stat().st_size) for p in sorted(output.iterdir())})
     require(sum(f['size'] for f in manifest['files'].values()) <= MAX_BYTES,'candidate oversized')
@@ -125,11 +129,12 @@ def seal(root, output, sha, version, run_id, attempt, repository, now=None, read
     return manifest
 
 
-def api(path, method='GET'):
+def api(path, method='GET', data=None):
     token = os.environ['GH_TOKEN']
     request = urllib.request.Request('https://api.github.com/'+path,
+        data=None if data is None else json.dumps(data).encode('utf-8'),
         headers={'Authorization':'Bearer '+token,'Accept':'application/vnd.github+json',
-                 'X-GitHub-Api-Version':'2022-11-28'},method=method)
+                 'X-GitHub-Api-Version':'2022-11-28','Content-Type':'application/json'},method=method)
     with urllib.request.urlopen(request,timeout=30) as response:
         return json.loads(response.read().decode('utf-8')) if response.status != 204 else None
 
@@ -145,13 +150,18 @@ def pages(path, field):
     raise ValueError('API pagination limit exceeded')
 
 
-def check_context(run, jobs, artifact, workflow_id, repository, sha, version, attempt, now=None):
-    identity(sha,version)
+def check_dispatch(run, workflow_id, repository, sha, attempt):
     require(run.get('repository',{}).get('full_name') == repository, 'run repository mismatch')
+    require(run.get('head_repository',{}).get('full_name') == repository, 'fork source rejected')
     require(run.get('head_sha') == sha and run.get('run_attempt') == attempt, 'run source/attempt mismatch')
     require(run.get('workflow_id') == workflow_id and run.get('path') == WORKFLOW, 'wrong validation workflow')
     require(run.get('head_branch') == 'main' and run.get('event') == 'workflow_dispatch', 'wrong validation trigger')
     require(run.get('status') == 'completed' and run.get('conclusion') == 'success', 'validation not successful')
+
+
+def check_context(run, jobs, artifact, workflow_id, repository, sha, version, attempt, now=None):
+    identity(sha,version)
+    check_dispatch(run, workflow_id, repository, sha, attempt)
     required_jobs = [job for job in jobs if job.get('name') == 'validate']
     require(len(required_jobs) == 1 and required_jobs[0].get('conclusion') == 'success', 'validation job missing')
     steps = {s['name']:s.get('conclusion') for s in required_jobs[0].get('steps',[])}
@@ -165,7 +175,7 @@ def check_context(run, jobs, artifact, workflow_id, repository, sha, version, at
     require(expiry > (now or utcnow()), 'artifact expired')
 
 
-def gate(repository, run_id, attempt, sha, version):
+def gate(repository, run_id, attempt, sha, version, *, require_tag=True):
     identity(sha, version)
     require(run_id > 0 and attempt > 0, 'invalid run identity')
     require(repository == os.environ['GITHUB_REPOSITORY'], 'repository mismatch')
@@ -177,9 +187,10 @@ def gate(repository, run_id, attempt, sha, version):
     require(len(matches) == 1, 'candidate artifact missing or ambiguous')
     artifact = matches[0]
     check_context(run,jobs,artifact,workflow['id'],repository,sha,version,attempt)
-    tag_sha = subprocess.check_output(['git','rev-parse',f'refs/tags/v{version}^{{commit}}'],text=True).strip()
-    require(tag_sha == sha,'tag must point to validated source SHA')
     subprocess.run(['git','fetch','origin','main','--tags'],check=True)
+    if require_tag:
+        tag_sha = subprocess.check_output(['git','rev-parse',f'refs/tags/v{version}^{{commit}}'],text=True).strip()
+        require(tag_sha == sha,'tag must point to validated source SHA')
     require(fingerprint('origin/main') == fingerprint(sha),'validation inputs changed after validation')
     return dict(source_sha=sha,version=version,repository=repository,run_id=run_id,run_attempt=attempt,
                 artifact_id=artifact['id'],artifact_name=artifact['name'])
@@ -232,6 +243,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('command',choices=['preflight','seal','gate','check','prune'])
     parser.add_argument('--version')
+    parser.add_argument('--mode', default='verify-only')
     parser.add_argument('--sha')
     parser.add_argument('--run-id',type=int)
     parser.add_argument('--attempt',type=int,default=1)
@@ -243,7 +255,7 @@ def main():
     elif args.command == 'prune':
         prune(args.repository)
     elif args.command == 'seal':
-        seal(Path.cwd(),args.folder,args.sha,args.version,args.run_id,args.attempt,args.repository)
+        seal(Path.cwd(),args.folder,args.sha,args.version,args.run_id,args.attempt,args.repository,mode=args.mode)
     elif args.command == 'gate':
         context = gate(args.repository,args.run_id,args.attempt,args.sha,args.version)
         Path('verified-run.json').write_text(json.dumps(context),encoding='utf-8')

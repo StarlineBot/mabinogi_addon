@@ -1,25 +1,11 @@
-name: Promote verified Windows candidate
-# Only the user's explicit dispatch publishes. A tag alone does nothing.
+name: Publish approved Windows candidate
+# Ordinary pushes and tag pushes never publish. The user's dispatch receipt
+# binds the approval to a source/version/run/attempt; success alone is insufficient.
 on:
-  workflow_dispatch:
-    inputs:
-      run_id:
-        description: 'Successful Windows validation run ID'
-        required: true
-        type: string
-      attempt:
-        description: 'Successful run attempt'
-        required: true
-        default: '1'
-        type: string
-      source_sha:
-        description: 'Full validated source SHA (tag must point here)'
-        required: true
-        type: string
-      version:
-        description: 'Exact verified X.Y.Z version'
-        required: true
-        type: string
+  workflow_run:
+    workflows: [Windows validation]
+    types: [completed]
+    branches: [main]
 permissions:
   contents: write
   actions: read
@@ -28,40 +14,33 @@ concurrency:
   cancel-in-progress: false
 jobs:
   promote:
-    if: github.ref == 'refs/heads/main'
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'workflow_dispatch' &&
+      github.event.workflow_run.repository.full_name == github.repository &&
+      github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
       GH_TOKEN: ${{ github.token }}
-      CANDIDATE_SHA: ${{ inputs.source_sha }}
-      CANDIDATE_VERSION: ${{ inputs.version }}
-      CANDIDATE_RUN: ${{ inputs.run_id }}
-      CANDIDATE_ATTEMPT: ${{ inputs.attempt }}
     steps:
+      # Privileged code always comes from the trusted default branch, never an artifact.
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Verify successful run and unchanged inputs
-        id: gate
-        run: >-
-          python -m scripts.release_candidate gate --sha "$CANDIDATE_SHA" --version "$CANDIDATE_VERSION"
-          --run-id "$CANDIDATE_RUN" --attempt "$CANDIDATE_ATTEMPT"
-      - uses: actions/download-artifact@v4
-        with:
-          name: ${{ steps.gate.outputs.artifact_name }}
-          run-id: ${{ inputs.run_id }}
-          github-token: ${{ github.token }}
-          path: candidate
-      - name: Verify candidate bytes and lifetime
-        run: python -m scripts.release_candidate check
+      - name: Check dispatch approval
+        id: approval
+        run: python -m scripts.release_automation authorize
       - uses: actions/checkout@v4
+        if: steps.approval.outputs.publish == 'true'
         with:
           repository: StarlineBot/mabinogi_addon-releases
           ref: main
           token: ${{ secrets.RELEASES_TOKEN }}
           path: pub
-      - name: Publish exact verified files
+      - name: Verify approval and publish exact verified files
+        if: steps.approval.outputs.publish == 'true'
         env:
           RELEASES_TOKEN: ${{ secrets.RELEASES_TOKEN }}
           RELEASE_WEBHOOK_URL: ${{ secrets.RELEASE_WEBHOOK_URL }}
-        run: python -m scripts.release_delivery
+        run: python -m scripts.release_automation complete

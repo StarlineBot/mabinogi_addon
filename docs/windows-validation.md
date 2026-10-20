@@ -2,16 +2,24 @@
 
 ## 흐름과 실행 조건
 
-기존: 수동 검증은 0.0.0 exe, 태그 릴리즈는 전체 테스트와 태그 버전 exe를 다시 만들었다.
-변경: 개발 완료 → 확정 버전 Windows 전체 회귀 → 네이티브 검사 → exe 빌드 → 증명/보관
-→ 독립 QA → 사용자 승인 → 동일 파일 게시. 검증은 Release·업데이트 정보·공지를 만들지 않는다.
-게시는 테스트/빌드를 재실행하지 않는다. 태그 푸시만으로 게시되지 않는다.
+소스 개발과 후속 독립 QA를 마친 뒤 사용자가 GitHub Actions의 **Windows validation**에서
+main·버전·모드를 선택해 한 번 실행한다. PC에 gh가 없어도 웹의 Run workflow로 실행할 수 있다.
 
-일반 main/태그 푸시에는 Windows 실행이 없다. 위험한 변경이나 배포 준비 때만 main의
-`windows.yml`을 수동 실행한다. 배포 후보 검증은 전체 테스트·네이티브·빌드가 필수다.
-한도/러너/API 차단은 **Windows 미검증**으로 남기며 Linux 통과로 대신하지 않는다.
-정책 전환 시 이전 정의로 실행 중인 태그 게시가 있다면 소유자가 중단/종료를 확인한다.
-이미 시작된 옛 Actions 실행을 이 파일 변경이 소급해서 바꾸지는 않는다.
+| 모드 | 동작 | 게시 승인 |
+| --- | --- | --- |
+| `verify-only` (기본) | 전체 격리 회귀 → 네이티브 → exe 빌드 → 증명/보관 | 없음 |
+| `validate-and-publish` | 위 검증 전체 성공 후 자동 조건 확인 → 태그 생성 → 같은 exe 게시 | 해당 실행 소스/버전에 한정한 조건부 승인 |
+| `publish-existing` | 현재 승인 소스의 중요 입력/버전과 맞는 기존 후보 고정 → 조건 확인 → 태그/게시 | 선택된 기존 후보만 승인; 검사/빌드 0회 |
+
+일반 main/태그 푸시는 Windows 검사나 게시를 시작하지 않는다. 검증만 성공도 게시하지 않는다.
+검증 run이 **완전히 completed/success로 끝난 뒤** `workflow_run`이 게시 workflow를 시작한다.
+같은 run 안에서 완료 검사를 생략하지 않으며, 검증 workflow가 게시 workflow를 기다리지 않는다.
+필수 단계 실패/skip/취소, 업로드 실패는 게시를 차단한다. Linux 통과로 Windows 통과를 대신하지 않는다.
+
+게시 workflow는 기본 브랜치의 신뢰한 코드만 실행한다. 실행 이벤트/API/승인 기록/후보를 대조하고,
+원래 실행의 SHA·ID·실제 attempt를 사용한다. 후행 workflow 자신의 SHA나 attempt를 후보로 쓰지 않는다.
+첫 자동화 배포는 **새 workflow/scripts로 검증한 후보**가 필요하다. 기존 0.7.1은 이미 배포됐으며,
+과거 검증만 실행을 소급해서 자동 게시 승인으로 취급하지 않는다. 내부 개선만으로 앱 번호를 올리지 않는다.
 
 ## 무료 한도와 보관
 
@@ -19,51 +27,60 @@
   삭제 대상은 `verified-windows-` 이름의 후보뿐이다. 다른 아티팩트는 삭제하지 않는다.
 - 최대 약 400MiB + ZIP 오버헤드다. 다른 산출물/캐시는 별도여서 계정 전체 무료 사용량은
   보장하지 않는다. GitHub 저장 사용량 재계산에도 지연이 있을 수 있다.
+- 작은 승인 기록 `release-request-*`도 1일 보관한다(후보 payload와 별도, 수 KiB).
 - 두 워크플로는 같은 concurrency 그룹에서 직렬 실행한다. GitHub 대기 실행은 영구 큐가
   아니므로 여러 실행을 동시에 예약하지 않는다. 새 후보는 이전 후보를 퇴출시킬 수 있다.
 - 저장/quota 실패는 테스트·빌드 결과와 구분하되 **승격 가능한 후보 없음**으로 게시를 차단한다.
   저장소의 더 짧은 보관 정책, 수동 삭제, 만료 역시 재검증이 필요하다.
 
-## 사용자 명령
+## 사용자 실행
 
-사용하지 않은 버전을 정해 `assets/release_notes.md` 첫 버전과 맞추고 main에 반영한다.
-이미 실패한 v0.5.0도 재사용하지 않는다. 대문자는 확인한 실제 값으로 대체한다.
+사용하지 않은 버전을 정해 `src/mabinogi_addon/assets/release_notes.md` 첫 버전과 맞추고 main에
+반영한다. 사용한 태그는 실패한 태그도 재사용하지 않는다. 아래 X.Y.Z는 실제 새 버전으로 바꾼다.
+소스 독립 QA를 마친 뒤 다음 중 **하나**를 실행한다. gh가 없으면 웹에서 같은 값을 선택한다.
 
-검증 시작/조회(게시 승인 아님):
-
-```bash
-gh workflow run windows.yml --ref main -f version=X.Y.Z
-uv run python scripts/windows_ci.py wait --sha FULL_VALIDATED_SHA --require-build
-```
-
-성공 실행의 SHA·run ID·attempt·버전·candidate.json 만료 시각을 기록한다. 같은 SHA라도
-재실행한 attempt가 다르면 다른 후보이며 최신 시도의 성공만 사용한다.
-후보 exe는 이미 실제 버전이므로 업데이트 확인/노트도 실제 버전 동작이다.
-실행한다면 정식 exe와 같은 사용자 설정 폴더를 쓰므로 라이브 설정을 주의한다.
-
-후속 독립 QA 후 **사용자가 최종 배포를 결정했을 때만** 다음을 실행한다.
-태그 대상은 새 main이 아니라 검증된 전체 SHA다. 문서만 추가된 main은 허용한다.
+검증만(기본, 게시 승인 아님):
 
 ```bash
-git fetch origin --tags
-git tag vX.Y.Z FULL_VALIDATED_SHA
-git push origin vX.Y.Z
-gh workflow run release.yml --ref main -f run_id=VALIDATION_RUN_ID -f attempt=ATTEMPT -f source_sha=FULL_VALIDATED_SHA -f version=X.Y.Z
+gh workflow run windows.yml --ref main -f version=X.Y.Z -f mode=verify-only
 ```
 
-명령 실패 시 이후 명령을 중단하고 원인을 확인한다. 태그만으로는 게시되지 않는다.
-에이전트는 태그/게시를 대신 실행하지 않는다. 현행 최종 승인은 사용자 workflow_dispatch다.
-저장소 관리자가 별도 required reviewer를 설정하지 않았다면 그런 승인 정책이 있다고 가정하지 않는다.
+검증 성공 시 배포까지 승인:
+
+```bash
+gh workflow run windows.yml --ref main -f version=X.Y.Z -f mode=validate-and-publish
+```
+
+이미 검증만으로 확인한 유효 후보 배포(재검사/재빌드 없음):
+
+```bash
+gh workflow run windows.yml --ref main -f version=X.Y.Z -f mode=publish-existing
+```
+
+기존 후보는 dispatch 시작 SHA의 중요 입력 fingerprint와 버전이 일치해야 한다. 일반 Markdown만
+추가된 main은 허용한다. 후보 선택 시 정확한 run/최신 attempt/아티팩트 ID/manifest 해시를 고정한다.
+여러 개가 일치하면 임의의 최신 성공을 고르지 않고 중단한다. 이때만 원래 검증 실행 ID 하나를
+`candidate_run`으로 지정해 다시 실행한다. attempt/SHA 등 네 값을 복사할 필요는 없다.
+후보 없음·만료·퇴출은 새 검증을 자동 실행하지 않는다. 버전/입력을 준비해 검증 모드를 직접 선택한다.
+
+사용자는 Actions에서 **Windows validation**, 이어지는 **Publish approved Windows candidate**의
+결과를 확인한다. 초록색 검증만으로 공개 게시까지 성공했다고 판단하지 않는다. 실패 뒤 사용한
+태그를 다시 밀지 않는다. 실제 게시 모드 실행은 사용자 최종 결정이며 에이전트가 대신 실행하지 않는다.
 
 ## 증명·동일성·차단
 
 `candidate.json`: 소스 SHA, 중요 입력 Git tree fingerprint, 버전, run ID/attempt,
-저장소/워크플로, 생성/만료 시각, PE 버전, 각 파일 SHA256/크기를 기록한다.
+저장소/워크플로, 생성/만료 시각, PE 버전, 각 파일 SHA256/크기와 원래 검증 모드/승인 출처를 기록한다.
+별도 `release-request.json`은 실행 SHA/fingerprint·버전·모드·run/attempt를 묶으며, 기존 후보 배포는
+선택한 후보 context와 manifest SHA256까지 고정한다. 두 자료 모두 같은 저장소 main/dispatch의
+정확한 workflow/실행/회차에서 나온 보관 자료인지 검사한다. artifact의 Python/shell 코드는 실행하지 않는다.
 원본 exe·일반/네이티브 JUnit·해당 버전 한국어 notes.md·version.json을 함께 보관한다.
 
 게시 전 GitHub API에서 정확한 workflow/run/attempt/job/필수 단계 성공과 해당 산출물
 ID/이름/원본 SHA/만료를 확인한다. 실패·취소·skip·누락은 거부한다.
-태그 SHA가 다르거나 원격 main의 중요 입력이 달라도 거부한다. fingerprint에는
+태그 전에도 동일 게이트와 바이트 검사를 수행한다. 승인 확인 뒤 create-only API로 검증 SHA에
+새 태그를 만들며 원격 ref를 다시 확인한다. 기존 태그는 같은 SHA라도 거부하므로 중복 이벤트가
+이중 게시를 하지 않는다. 태그 SHA가 다르거나 원격 main의 중요 입력이 달라도 거부한다. fingerprint에는
 `src/`, `packaging/`, 워크플로, 의존성/설정, `tests/`, `test_support/`, `scripts/`를 포함한다.
 테스트가 읽는 `docs/qa/assets/`, `docs/examples/`, docs의 Python 코드도 포함한다.
 일반 Markdown 문서는 제외한다. QA 코드·원본 이미지/샘플은 단순 문서가 아니다.
@@ -78,6 +95,8 @@ ID/이름/원본 SHA/만료를 확인한다. 실패·취소·skip·누락은 거
 - 테스트/네이티브/빌드 실패: 원인 수정 후 전체 재검증. 실패를 제외하거나 assertion을 완화하지 않는다.
 - 저장/quota/만료/누락: 새 후보 전체 검증. 태그를 이미 만들었다면 새 버전/노트를 준비한다.
   이미 사용한 태그는 실패한 태그도 이동·삭제·재사용하지 않는다.
+- 태그 생성 권한/정책 오류: 게시 중단. 보호 우회나 강제 태그 생성은 하지 않는다. 실제 Actions 권한은
+  최초 사용자 승인 배포에서 확인해야 하며 개발 중 태그 생성은 실행하지 않는다.
 - SHA/버전/해시/태그/실행 불일치: 중단. 입력 값이나 manifest만 바꿔 우회하지 않는다.
 - 초안 업로드/해시 확인 실패: 초안만 남을 수 있으며 공개 업데이트/공지는 실행하지 않는다.
 - 다중 저장소 게시와 Git push는 원자적이지 않다. 중간 외부 실패로 일부 Release만 공개될 수 있다.
@@ -115,5 +134,6 @@ resources, combat, dialogue, configuration, capture, navigation, delivery, calcu
 - `tests/test_dialogue_network_lifecycle.py`: 루프백 HTTP 응답/취소/해제 200회, 메인 창 20회.
 
 실게임·혼합 DPI·절전·장시간 Windows 자원 계측·빌드 exe 실행은 별도다.
-이번 실행과 이관 근거는 [개발 검증](validation-promotion-development.md),
+원버튼 구현/검증은 [개발 기록](one-button-release-development-20261020.md),
+앞선 검증 이관 근거는 [개발 검증](validation-promotion-development.md),
 과거 결과는 [역사 기록](windows-validation-history.md)에 둔다. 과거 통과를 현재 통과로 쓰지 않는다.

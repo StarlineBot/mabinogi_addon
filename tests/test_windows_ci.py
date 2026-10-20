@@ -82,7 +82,8 @@ def test_validation_is_manual_full_gate_with_mandatory_bounded_storage():
     assert main["on"]["workflow_dispatch"]["inputs"]["version"]["required"] == "true"
     assert main["permissions"]["contents"] == "read"
     job = main["jobs"]["validate"]
-    assert job["if"] == "github.ref == 'refs/heads/main'"
+    assert job["needs"] == "request"
+    assert "inputs.mode != 'publish-existing'" in job["if"]
     steps = job["steps"]
     names = [step.get("name") for step in steps]
     required = ("Isolated regression", "Native Windows integration", "Verify exe build",
@@ -116,24 +117,49 @@ def test_validation_is_manual_full_gate_with_mandatory_bounded_storage():
     assert "dxcam" in command and "comtypes" in command
 
 
-def test_publication_is_manual_download_and_promotion_without_rebuild_or_retest():
+def test_completion_publication_uses_trusted_main_without_rebuild_or_retest():
     release = workflow("release.yml")
-    assert set(release["on"]) == {"workflow_dispatch"}
-    inputs = release["on"]["workflow_dispatch"]["inputs"]
-    assert set(inputs) == {"run_id", "attempt", "source_sha", "version"}
-    assert all(value["required"] == "true" for value in inputs.values())
+    assert set(release["on"]) == {"workflow_run"}
+    event = release["on"]["workflow_run"]
+    assert event == {"workflows": ["Windows validation"], "types": ["completed"], "branches": ["main"]}
     job = release["jobs"]["promote"]
-    assert job["if"] == "github.ref == 'refs/heads/main'"
+    assert "conclusion == 'success'" in job["if"]
+    assert "event == 'workflow_dispatch'" in job["if"]
+    assert "head_repository.full_name == github.repository" in job["if"]
     assert "windows" not in job["runs-on"]
     assert release["concurrency"] == workflow("windows.yml")["concurrency"]
     steps = job["steps"]
-    download = next(s for s in steps if s.get("uses", "").startswith("actions/download-artifact@"))
-    assert download["with"]["run-id"] == "${{ inputs.run_id }}"
-    assert download["with"]["name"] == "${{ steps.gate.outputs.artifact_name }}"
-    publish = next(s for s in steps if s.get("name") == "Publish exact verified files")
-    assert steps.index(next(s for s in steps if s.get("id") == "gate")) < steps.index(download) < steps.index(publish)
-    assert steps.index(next(s for s in steps if s.get("name") == "Verify candidate bytes and lifetime")) < steps.index(publish)
+    checkout = steps[0]
+    assert checkout["uses"] == "actions/checkout@v4"
+    assert "ref" not in checkout["with"]  # default-branch snapshot, never triggering code
+    approval = steps[1]
+    assert approval["id"] == "approval"
+    assert approval["run"] == "python -m scripts.release_automation authorize"
+    assert "RELEASES_TOKEN" not in json.dumps(approval)
+    public = steps[2]
+    assert public["with"]["repository"] == "StarlineBot/mabinogi_addon-releases"
+    assert public["if"] == "steps.approval.outputs.publish == 'true'"
+    publish = steps[-1]
+    assert publish["if"] == public["if"]
     assert all("continue-on-error" not in s for s in steps)
     text = json.dumps(release)
     assert "pytest" not in text and "build_windows.py" not in text and "pyinstaller" not in text.lower()
-    assert "scripts.release_delivery" in publish["run"]
+    assert publish["run"] == "python -m scripts.release_automation complete"
+
+
+def test_dispatch_defaults_to_verification_and_freezes_request_before_heavy_job():
+    main = workflow("windows.yml")
+    inputs = main["on"]["workflow_dispatch"]["inputs"]
+    assert inputs["mode"]["default"] == "verify-only"
+    assert inputs["mode"]["options"] == ["verify-only", "validate-and-publish", "publish-existing"]
+    assert inputs["candidate_run"]["required"] == "false"
+    request = main["jobs"]["request"]
+    assert request["runs-on"] == "ubuntu-latest"
+    assert request["if"] == "github.ref == 'refs/heads/main'"
+    assert request["steps"][0]["with"]["ref"] == "${{ github.sha }}"
+    assert main["jobs"]["validate"]["steps"][0]["with"]["ref"] == "${{ github.sha }}"
+    store = request["steps"][-1]
+    assert store["with"]["retention-days"] == "1"
+    assert "github.run_attempt" in store["with"]["name"]
+    assert all("continue-on-error" not in s for s in request["steps"])
+    assert "workflow run" not in json.dumps(main) + json.dumps(workflow("release.yml"))
