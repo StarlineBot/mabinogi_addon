@@ -11,6 +11,7 @@ from PySide6.QtWidgets import QApplication, QHBoxLayout, QLabel, QToolButton, QW
 
 from ..creator_dialogue import DialogueSession, MAX_CHARS
 from ..system.dialogue_visibility import display_available, exposed
+from ..system.window_watcher import is_main_window_foreground
 from .dialogue_feed import DialogueFeed
 from .settings_tab import AVATAR_STYLE, LOGO_IMAGE, PROFILE_IMAGE, _circular
 
@@ -109,6 +110,10 @@ class CreatorDialogue(QObject):
         self.clock = clock
         self._notifier = None
         self._sound_allowed = False
+        self._sound_reason = "display_blocked"
+        self._audio_stage = "not_requested"
+        self._visibility_state = "unavailable"
+        self._foreground_detail = {}
         self.sound = sound if sound is not None else self._play_sound
         self.enabled = window.settings_tab.dialogue_enabled.isChecked()
         self.started = self.closed = False
@@ -189,11 +194,22 @@ class CreatorDialogue(QObject):
     def _play_sound(self, text):
         from .notifier import CREATOR_DIALOGUE_SOUND_FILE, SoundNotifier
 
+        self._audio_stage = "asset_check"
+        if not CREATOR_DIALOGUE_SOUND_FILE.exists():
+            self._audio_stage = "missing_asset"
+            return False
         if self._notifier is None:
+            self._audio_stage = "player_preparation"
             self._notifier = SoundNotifier(
                 {"dialogue": CREATOR_DIALOGUE_SOUND_FILE}, parent=self, volume=0.5
             )
-        self._notifier.play("dialogue")
+        if self._notifier._player is None:
+            self._audio_stage = "backend_unavailable"
+            return False
+        self._audio_stage = "play_request"
+        result = self._notifier.play("dialogue")
+        self._audio_stage = "submitted" if result else "not_submitted"
+        return result
 
     def set_sound_enabled(self, enabled):
         if not enabled and self._notifier is not None:
@@ -277,6 +293,9 @@ class CreatorDialogue(QObject):
 
     def _eligible(self, *, diagnose=False):
         self._sound_allowed = False
+        self._sound_reason = "display_blocked"
+        self._visibility_state = "unavailable"
+        self._foreground_detail = {}
         w = self.window
         self._ineligible_reason = "창/설정/세션 또는 모달 상태"
         if (self.closed or not self.enabled or self.session_unavailable or self.suspended
@@ -310,7 +329,13 @@ class CreatorDialogue(QObject):
                                           diagnostic=detail, diagnose=diagnose)
             else:
                 visible = self.visibility(int(w.winId()), rects, (w.width(), w.height()))
-            self._sound_allowed = visible and detail.get("visibility") != "unknown"
+            self._visibility_state = detail.get("visibility", "exposed" if visible else "blocked")
+            if visible and self._visibility_state == "unknown":
+                self._sound_allowed = is_main_window_foreground(int(w.winId()), diagnostic=self._foreground_detail)
+                self._sound_reason = "main_foreground" if self._sound_allowed else "unknown_without_main_foreground"
+            elif visible:
+                self._sound_allowed = True
+                self._sound_reason = "exposed"
             if visible and not self._sound_allowed and self._notifier is not None:
                 self._notifier.stop()
             self._ineligible_reason = "" if visible else "Windows 잠금/창/화면 또는 API 확인 불가"
@@ -352,26 +377,21 @@ class CreatorDialogue(QObject):
             self.request(automatic=True)
 
     def request(self, *, automatic=False):
+        self._audio_stage = "not_requested"
         if not self._eligible(diagnose=not automatic):
-            if not automatic:
-                _log.info("제작자 잡담 클릭 보류: %s (유효 대사 %d개)",
-                          self._ineligible_reason, len(self.session.entries))
+            self._log_request(automatic, "display_blocked")
             self.dismiss()
             return False
         text = self.session.choose(lambda value: self.bubble.measure(value)[2], fallback=self._shortest)
         if text is None:
-            if not automatic:
-                _log.info("제작자 잡담 클릭 보류: 선택 가능한 대사 없음 (유효 대사 %d개)", len(self.session.entries))
+            self._log_request(automatic, "no_text")
             return False
         if not self._position(text):
-            if not automatic:
-                _log.info("제작자 잡담 클릭 보류: 말풍선 배치 공간 부족 (유효 대사 %d개)", len(self.session.entries))
+            self._log_request(automatic, "no_space")
             self.dismiss()
             return False
         if not self._eligible(diagnose=not automatic):
-            if not automatic:
-                _log.info("제작자 잡담 클릭 보류: %s (유효 대사 %d개)",
-                          self._ineligible_reason, len(self.session.entries))
+            self._log_request(automatic, "display_blocked")
             self.dismiss()
             return False
         self.bubble.show()
@@ -380,12 +400,29 @@ class CreatorDialogue(QObject):
         self.deadline = now + 3
         self.expiry.start(3000)
         self.session.displayed(text, now, automatic=automatic)
-        if self._sound_allowed and self.sound is not None and self.window.settings_tab.dialogue_sound_enabled.isChecked():
+        outcome = "muted"
+        if not self.window.settings_tab.dialogue_sound_enabled.isChecked():
+            outcome = "sound_disabled"
+        elif self._sound_allowed and self.sound is not None:
             try:
-                self.sound(text)
+                self._audio_stage = "callback"
+                outcome = "unavailable" if self.sound(text) is False else "requested"
             except Exception:
+                outcome = "failed"
                 _log.debug("선택적 잡담 소리 재생 실패", exc_info=True)
+        self._log_request(automatic, outcome)
         return True
+
+    def _log_request(self, automatic, outcome):
+        # One record per actual request, never per eligibility/timer poll. No
+        # dialogue text, external titles, paths or screen contents are collected.
+        reason = {"no_space": "말풍선 배치 공간 부족", "no_text": "선택 가능한 대사 없음",
+                  "display_blocked": self._ineligible_reason}.get(outcome, "")
+        _log.info("제작자 잡담 요청: mode=%s visibility=%s foreground=%s sound_allowed=%s reason=%s audio_stage=%s result=%s foreground_error=%s %s (유효 대사 %d개)",
+                  "automatic" if automatic else "click", self._visibility_state,
+                  self._foreground_detail.get("foreground", "not_required"),
+                  self._sound_allowed, self._sound_reason, self._audio_stage, outcome,
+                  self._foreground_detail.get("foreground_error", "none"), reason, len(self.session.entries))
 
     def dismiss(self):
         if self._notifier is not None:

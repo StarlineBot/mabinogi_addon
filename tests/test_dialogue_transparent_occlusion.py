@@ -100,7 +100,7 @@ def test_api_exception_diagnostic_and_next_call_recovery(native_model, monkeypat
     assert detail == {"stage": "exposed", "hwnd": 11}
 
 
-def test_manual_click_logs_native_failure_but_automatic_tick_does_not(
+def test_requests_log_native_failure_without_logging_automatic_polls(
         window, app, native_model, monkeypatch, caplog):
     import ctypes
     import logging
@@ -121,4 +121,12 @@ def test_manual_click_logs_native_failure_but_automatic_tick_does_not(
         assert not dialogue.bubble.isVisible()
         caplog.clear()
         assert not dialogue.request(automatic=True)
+        assert len(caplog.records) == 1
+        assert 'mode=automatic' in caplog.text and 'result=display_blocked' in caplog.text
+        assert 'window_cloak' in caplog.text and 'cloak_hresult' in caplog.text
+        caplog.clear()
+        dialogue.clock = lambda: 100.0
+        for _ in range(20):
+            dialogue.tick()
         assert not caplog.records
+        assert not dialogue.bubble.isVisible()

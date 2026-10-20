@@ -1,11 +1,21 @@
 """계산기의 지역/던전 선택 목록에 같은 밀도와 기본 Qt 상태 표시를 적용한다."""
 
-from PySide6.QtCore import QEvent, Qt
+from PySide6.QtCore import QEvent, QSize, Qt
 from PySide6.QtGui import QStandardItemModel
-from PySide6.QtWidgets import QListWidget, QStyleOptionViewItem
+from PySide6.QtWidgets import QListWidget, QPushButton, QStyle, QStyleOptionViewItem
 
 from ..market.dungeon_cost import NAMES
 from ..market.exchange import REGION_NAMES
+
+
+def refresh_button(tooltip):
+    button = QPushButton()
+    button.setIcon(button.style().standardIcon(QStyle.StandardPixmap.SP_BrowserReload))
+    button.setIconSize(QSize(16, 16))
+    button.setFixedSize(32, 32)
+    button.setToolTip(tooltip)
+    button.setAccessibleName("시세 새로고침")
+    return button
 
 
 def calculator_sidebar(names):

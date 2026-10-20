@@ -1,0 +1,189 @@
+{
+  "theme": "dark",
+  "native_font": true,
+  "pages": {
+    "buff": [
+      {
+        "title": "버프 트래커",
+        "family": "OpenAI Sans",
+        "pixels": 14,
+        "weight": 700,
+        "title_height": 26,
+        "metrics_height": 16,
+        "description_y": 34,
+        "divider_y": 60,
+        "header_height": 61,
+        "device_pixel_ratio": 1.0
+      }
+    ],
+    "boss": [
+      {
+        "title": "보스 패턴 알림",
+        "family": "OpenAI Sans",
+        "pixels": 14,
+        "weight": 700,
+        "title_height": 26,
+        "metrics_height": 16,
+        "description_y": 34,
+        "divider_y": 60,
+        "header_height": 61,
+        "device_pixel_ratio": 1.0
+      }
+    ],
+    "resource": [
+      {
+        "title": "도르카·투아림",
+        "family": "OpenAI Sans",
+        "pixels": 14,
+        "weight": 700,
+        "title_height": 26,
+        "metrics_height": 16,
+        "description_y": 34,
+        "divider_y": 60,
+        "header_height": 61,
+        "device_pixel_ratio": 1.0
+      }
+    ],
+    "custom": [
+      {
+        "title": "커스텀 오버레이",
+        "family": "OpenAI Sans",
+        "pixels": 14,
+        "weight": 700,
+        "title_height": 26,
+        "metrics_height": 16,
+        "description_y": 34,
+        "divider_y": 60,
+        "header_height": 61,
+        "device_pixel_ratio": 1.0
+      }
+    ],
+    "distribution": [
+      {
+        "title": "분배 계산기",
+        "family": "OpenAI Sans",
+        "pixels": 14,
+        "weight": 700,
+        "title_height": 26,
+        "metrics_height": 16,
+        "description_y": 34,
+        "divider_y": 78,
+        "header_height": 79,
+        "device_pixel_ratio": 1.0
+      }
+    ],
+    "bead": [
+      {
+        "title": "구슬 분배 계산기",
+        "family": "OpenAI Sans",
+        "pixels": 14,
+        "weight": 700,
+        "title_height": 26,
+        "metrics_height": 16,
+        "description_y": 34,
+        "divider_y": 60,
+        "header_height": 61,
+        "device_pixel_ratio": 1.0
+      }
+    ],
+    "exchange": [
+      {
+        "title": "환전비율 계산기",
+        "family": "OpenAI Sans",
+        "pixels": 14,
+        "weight": 700,
+        "title_height": 26,
+        "metrics_height": 16,
+        "description_y": 34,
+        "divider_y": 60,
+        "header_height": 61,
+        "device_pixel_ratio": 1.0
+      }
+    ],
+    "dungeon": [
+      {
+        "title": "던전 입장 계산기",
+        "family": "OpenAI Sans",
+        "pixels": 14,
+        "weight": 700,
+        "title_height": 26,
+        "metrics_height": 16,
+        "description_y": 34,
+        "divider_y": 60,
+        "header_height": 61,
+        "device_pixel_ratio": 1.0
+      }
+    ],
+    "party": [
+      {
+        "title": "파티 모집",
+        "family": "OpenAI Sans",
+        "pixels": 14,
+        "weight": 700,
+        "title_height": 26,
+        "metrics_height": 16,
+        "description_y": 34,
+        "divider_y": 60,
+        "header_height": 61,
+        "device_pixel_ratio": 1.0
+      }
+    ],
+    "debuff": [
+      {
+        "title": "디버프 트래커",
+        "family": "OpenAI Sans",
+        "pixels": 14,
+        "weight": 700,
+        "title_height": 26,
+        "metrics_height": 16,
+        "description_y": 34,
+        "divider_y": 60,
+        "header_height": 61,
+        "device_pixel_ratio": 1.0
+      }
+    ],
+    "stat-bars": [
+      {
+        "title": "체력바 오버레이",
+        "family": "OpenAI Sans",
+        "pixels": 14,
+        "weight": 700,
+        "title_height": 26,
+        "metrics_height": 16,
+        "description_y": 34,
+        "divider_y": 60,
+        "header_height": 61,
+        "device_pixel_ratio": 1.0
+      }
+    ],
+    "skillbar": [
+      {
+        "title": "단축바 미러",
+        "family": "OpenAI Sans",
+        "pixels": 14,
+        "weight": 700,
+        "title_height": 26,
+        "metrics_height": 16,
+        "description_y": 34,
+        "divider_y": 60,
+        "header_height": 61,
+        "device_pixel_ratio": 1.0
+      }
+    ],
+    "memo": [
+      {
+        "title": "메모",
+        "family": "OpenAI Sans",
+        "pixels": 14,
+        "weight": 700,
+        "title_height": 26,
+        "metrics_height": 16,
+        "description_y": 34,
+        "divider_y": 60,
+        "header_height": 61,
+        "device_pixel_ratio": 1.0
+      }
+    ],
+    "halo": []
+  }
+}

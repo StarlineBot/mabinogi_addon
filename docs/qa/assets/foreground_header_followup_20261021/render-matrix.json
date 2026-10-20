@@ -1,0 +1,234 @@
+[
+  {
+    "theme": "light",
+    "scale": "1",
+    "pages": 14,
+    "resource": {
+      "title": "도르카·투아림",
+      "family": "OpenAI Sans",
+      "pixels": 14,
+      "weight": 700,
+      "title_height": 26,
+      "metrics_height": 16,
+      "description_y": 34,
+      "divider_y": 60,
+      "header_height": 61,
+      "device_pixel_ratio": 1.0
+    },
+    "custom": {
+      "title": "커스텀 오버레이",
+      "family": "OpenAI Sans",
+      "pixels": 14,
+      "weight": 700,
+      "title_height": 26,
+      "metrics_height": 16,
+      "description_y": 34,
+      "divider_y": 60,
+      "header_height": 61,
+      "device_pixel_ratio": 1.0
+    }
+  },
+  {
+    "theme": "dark",
+    "scale": "1",
+    "pages": 14,
+    "resource": {
+      "title": "도르카·투아림",
+      "family": "OpenAI Sans",
+      "pixels": 14,
+      "weight": 700,
+      "title_height": 26,
+      "metrics_height": 16,
+      "description_y": 34,
+      "divider_y": 60,
+      "header_height": 61,
+      "device_pixel_ratio": 1.0
+    },
+    "custom": {
+      "title": "커스텀 오버레이",
+      "family": "OpenAI Sans",
+      "pixels": 14,
+      "weight": 700,
+      "title_height": 26,
+      "metrics_height": 16,
+      "description_y": 34,
+      "divider_y": 60,
+      "header_height": 61,
+      "device_pixel_ratio": 1.0
+    }
+  },
+  {
+    "theme": "light",
+    "scale": "1.25",
+    "pages": 14,
+    "resource": {
+      "title": "도르카·투아림",
+      "family": "OpenAI Sans",
+      "pixels": 14,
+      "weight": 700,
+      "title_height": 26,
+      "metrics_height": 16,
+      "description_y": 34,
+      "divider_y": 60,
+      "header_height": 61,
+      "device_pixel_ratio": 1.25
+    },
+    "custom": {
+      "title": "커스텀 오버레이",
+      "family": "OpenAI Sans",
+      "pixels": 14,
+      "weight": 700,
+      "title_height": 26,
+      "metrics_height": 16,
+      "description_y": 34,
+      "divider_y": 60,
+      "header_height": 61,
+      "device_pixel_ratio": 1.25
+    }
+  },
+  {
+    "theme": "dark",
+    "scale": "1.25",
+    "pages": 14,
+    "resource": {
+      "title": "도르카·투아림",
+      "family": "OpenAI Sans",
+      "pixels": 14,
+      "weight": 700,
+      "title_height": 26,
+      "metrics_height": 16,
+      "description_y": 34,
+      "divider_y": 60,
+      "header_height": 61,
+      "device_pixel_ratio": 1.25
+    },
+    "custom": {
+      "title": "커스텀 오버레이",
+      "family": "OpenAI Sans",
+      "pixels": 14,
+      "weight": 700,
+      "title_height": 26,
+      "metrics_height": 16,
+      "description_y": 34,
+      "divider_y": 60,
+      "header_height": 61,
+      "device_pixel_ratio": 1.25
+    }
+  },
+  {
+    "theme": "light",
+    "scale": "1.5",
+    "pages": 14,
+    "resource": {
+      "title": "도르카·투아림",
+      "family": "OpenAI Sans",
+      "pixels": 14,
+      "weight": 700,
+      "title_height": 26,
+      "metrics_height": 16,
+      "description_y": 34,
+      "divider_y": 60,
+      "header_height": 61,
+      "device_pixel_ratio": 1.5
+    },
+    "custom": {
+      "title": "커스텀 오버레이",
+      "family": "OpenAI Sans",
+      "pixels": 14,
+      "weight": 700,
+      "title_height": 26,
+      "metrics_height": 16,
+      "description_y": 34,
+      "divider_y": 60,
+      "header_height": 61,
+      "device_pixel_ratio": 1.5
+    }
+  },
+  {
+    "theme": "dark",
+    "scale": "1.5",
+    "pages": 14,
+    "resource": {
+      "title": "도르카·투아림",
+      "family": "OpenAI Sans",
+      "pixels": 14,
+      "weight": 700,
+      "title_height": 26,
+      "metrics_height": 16,
+      "description_y": 34,
+      "divider_y": 60,
+      "header_height": 61,
+      "device_pixel_ratio": 1.5
+    },
+    "custom": {
+      "title": "커스텀 오버레이",
+      "family": "OpenAI Sans",
+      "pixels": 14,
+      "weight": 700,
+      "title_height": 26,
+      "metrics_height": 16,
+      "description_y": 34,
+      "divider_y": 60,
+      "header_height": 61,
+      "device_pixel_ratio": 1.5
+    }
+  },
+  {
+    "theme": "light",
+    "scale": "2",
+    "pages": 14,
+    "resource": {
+      "title": "도르카·투아림",
+      "family": "OpenAI Sans",
+      "pixels": 14,
+      "weight": 700,
+      "title_height": 26,
+      "metrics_height": 16,
+      "description_y": 34,
+      "divider_y": 60,
+      "header_height": 61,
+      "device_pixel_ratio": 2.0
+    },
+    "custom": {
+      "title": "커스텀 오버레이",
+      "family": "OpenAI Sans",
+      "pixels": 14,
+      "weight": 700,
+      "title_height": 26,
+      "metrics_height": 16,
+      "description_y": 34,
+      "divider_y": 60,
+      "header_height": 61,
+      "device_pixel_ratio": 2.0
+    }
+  },
+  {
+    "theme": "dark",
+    "scale": "2",
+    "pages": 14,
+    "resource": {
+      "title": "도르카·투아림",
+      "family": "OpenAI Sans",
+      "pixels": 14,
+      "weight": 700,
+      "title_height": 26,
+      "metrics_height": 16,
+      "description_y": 34,
+      "divider_y": 60,
+      "header_height": 61,
+      "device_pixel_ratio": 2.0
+    },
+    "custom": {
+      "title": "커스텀 오버레이",
+      "family": "OpenAI Sans",
+      "pixels": 14,
+      "weight": 700,
+      "title_height": 26,
+      "metrics_height": 16,
+      "description_y": 34,
+      "divider_y": 60,
+      "header_height": 61,
+      "device_pixel_ratio": 2.0
+    }
+  }
+]

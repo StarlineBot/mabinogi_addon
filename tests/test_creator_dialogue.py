@@ -313,7 +313,7 @@ def test_approved_geometry_and_tail_and_no_focus(window, app):
 
 @pytest.mark.parametrize("automatic", [False, True])
 @pytest.mark.parametrize("stage", ["position", "visibility"])
-def test_final_display_denial_is_logged_only_for_manual_request(window, monkeypatch, caplog, stage, automatic):
+def test_final_display_denial_is_logged_once_per_actual_request(window, monkeypatch, caplog, stage, automatic):
     import logging
     d = window.creator_dialogue
     checks = iter((True, False))
@@ -331,11 +331,11 @@ def test_final_display_denial_is_logged_only_for_manual_request(window, monkeypa
     assert not d.expiry.isActive()
     displayed.assert_not_called()
     records = [r for r in caplog.records if r.name == "mabinogi_addon.ui.creator_dialogue"]
-    assert len(records) == (0 if automatic else 1)
-    if not automatic:
-        reason = "말풍선 배치 공간 부족" if stage == "position" else d._ineligible_reason
-        assert reason in records[0].getMessage()
-        assert f"유효 대사 {len(d.session.entries)}개" in records[0].getMessage()
+    assert len(records) == 1
+    reason = "말풍선 배치 공간 부족" if stage == "position" else d._ineligible_reason
+    assert reason in records[0].getMessage()
+    assert f"유효 대사 {len(d.session.entries)}개" in records[0].getMessage()
+    assert f"mode={'automatic' if automatic else 'click'}" in records[0].getMessage()
 
 
 @pytest.mark.parametrize("sound", [None, Mock(), Mock(side_effect=FileNotFoundError), Mock(side_effect=RuntimeError)])
@@ -703,16 +703,25 @@ def test_dialogue_sound_preference_is_loaded_and_saved(window, enabled):
         restored.close()
 
 
-@pytest.mark.parametrize('failure', ['construction', 'play', 'missing'])
-def test_dialogue_default_sound_failures_keep_the_bubble(window, monkeypatch, failure, tmp_path):
+@pytest.mark.parametrize('failure', ['construction', 'play', 'missing', 'backend'])
+def test_dialogue_default_sound_failures_keep_the_bubble(window, monkeypatch, failure, tmp_path, caplog):
+    import logging
+    caplog.set_level(logging.INFO, logger="mabinogi_addon.ui.creator_dialogue")
     from mabinogi_addon.ui import notifier
     if failure == 'construction':
         monkeypatch.setattr(notifier, 'SoundNotifier', Mock(side_effect=RuntimeError('no audio')))
     elif failure == 'play':
         monkeypatch.setattr(notifier.SoundNotifier, 'play', Mock(side_effect=RuntimeError('no backend')))
+    elif failure == 'backend':
+        from PySide6 import QtMultimedia
+        monkeypatch.setattr(QtMultimedia, 'QMediaPlayer', Mock(side_effect=RuntimeError('no backend')))
     else:
         monkeypatch.setattr(notifier, 'CREATOR_DIALOGUE_SOUND_FILE', tmp_path / 'missing.mp3')
     d = window.creator_dialogue
     assert d.request() and d.bubble.isVisible()
     assert d.expiry.isActive()
     assert d.session.last_text
+    stage = {'construction': 'player_preparation', 'play': 'play_request',
+             'missing': 'missing_asset', 'backend': 'backend_unavailable'}[failure]
+    assert f'audio_stage={stage}' in caplog.text
+    assert f"result={'failed' if failure in ('construction', 'play') else 'unavailable'}" in caplog.text

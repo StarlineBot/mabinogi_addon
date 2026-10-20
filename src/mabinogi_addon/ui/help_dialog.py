@@ -18,6 +18,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from .widgets import FEATURE_HEADER_ACTION_SIZE
+
 _ICON_PX = 22  # 도움말 아이콘 크기
 
 
@@ -57,7 +59,7 @@ class _HelpButton(QPushButton):
         self._hover = _help_icon("#00B894")
         self.setIcon(self._normal)
         self.setIconSize(QSize(_ICON_PX, _ICON_PX))
-        self.setFixedSize(_ICON_PX + 4, _ICON_PX + 4)
+        self.setFixedSize(FEATURE_HEADER_ACTION_SIZE, FEATURE_HEADER_ACTION_SIZE)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setToolTip("사용법 보기")
         self.setStyleSheet("QPushButton { border:none; background:transparent; }")

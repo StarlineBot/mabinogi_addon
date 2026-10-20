@@ -79,7 +79,7 @@ def test_default_dialogue_displays_under_confirmed_transparency_without_changing
 @pytest.mark.parametrize('condition', ['locked', 'desktop_error', 'offscreen', 'minimized', 'hidden'])
 @pytest.mark.parametrize('automatic', [False, True])
 def test_display_boundaries_still_block_without_spending_draws(
-        dialogue, native_model, monkeypatch, condition, automatic):
+        dialogue, native_model, main_foreground, monkeypatch, condition, automatic):
     w, _, d = dialogue
     if condition == 'locked':
         monkeypatch.setattr(visibility, 'desktop_unlocked', lambda: False)
@@ -272,3 +272,104 @@ def test_unknown_cover_does_not_bypass_failed_owner_or_native_boundaries(native_
         old = ctypes.windll.dwmapi.DwmGetWindowAttribute
         monkeypatch.setattr(ctypes.windll.dwmapi, 'DwmGetWindowAttribute', lambda hwnd, key, ptr, size: -1 if key == 14 else old(hwnd, key, ptr, size))
     assert not visibility.display_available(native_model.owner, [(20, 20, 48, 48)], (800, 800))
+
+
+@pytest.fixture
+def main_foreground(dialogue, monkeypatch):
+    import os
+    from types import SimpleNamespace
+    from mabinogi_addon.system import window_watcher
+    w, app, d = dialogue
+    state = SimpleNamespace(hwnd=int(w.winId()))
+    gui = sys.modules['win32gui']
+    monkeypatch.setattr(window_watcher, 'sys', SimpleNamespace(platform='win32'))
+    monkeypatch.setattr(gui, 'GetForegroundWindow', lambda: state.hwnd, raising=False)
+    monkeypatch.setattr(gui, 'IsWindow', lambda hwnd: bool(hwnd), raising=False)
+    monkeypatch.setitem(sys.modules, 'win32process', SimpleNamespace(GetWindowThreadProcessId=lambda hwnd: (1, os.getpid())))
+    return state
+
+
+@pytest.mark.parametrize('automatic', [False, True])
+@pytest.mark.parametrize('cover', ['clear', 'unknown', 'opaque'])
+@pytest.mark.parametrize('foreground', ['main', 'overlay', 'unavailable'])
+def test_sound_uses_cover_and_exact_main_foreground(dialogue, native_model, main_foreground, monkeypatch, automatic, cover, foreground):
+    w, app, d = dialogue
+    gui = sys.modules['win32gui']
+    if cover == 'unknown':
+        monkeypatch.setattr(gui, 'GetLayeredWindowAttributes', lambda *a: (0, 0, 0))
+    else:
+        native_model.alpha = 255 if cover == 'opaque' else 0
+    main_foreground.hwnd = int(w.winId()) if foreground == 'main' else 33 if foreground == 'overlay' else 0
+    calls = []
+    d.sound = calls.append
+    focus = QApplication.focusWidget()
+    if automatic:
+        d.tick()
+    else:
+        assert d.request() is (cover != 'opaque')
+    assert d.bubble.isVisible() is (cover != 'opaque')
+    assert len(calls) == int(cover == 'clear' or (cover == 'unknown' and foreground == 'main'))
+    assert len(d.session.shown) == int(automatic and cover != 'opaque')
+    assert QApplication.focusWidget() is focus
+
+
+def test_unknown_sound_stops_on_main_deactivation_and_does_not_resume(dialogue, native_model, main_foreground, monkeypatch):
+    w, app, d = dialogue
+    monkeypatch.setattr(sys.modules['win32gui'], 'GetLayeredWindowAttributes', lambda *a: (0, 0, 0))
+    d.tick()
+    player = d._notifier
+    assert player._player._playing and player._audio._volume == 0.5
+    main_foreground.hwnd = 33
+    d.clock = lambda: 101.0
+    d.tick()
+    assert d.bubble.isVisible() and not player._player._playing
+    main_foreground.hwnd = int(w.winId())
+    d.clock = lambda: 102.0
+    d.tick()
+    assert not player._player._playing and len(d.session.shown) == 1
+    assert d.request() and player._player._playing
+    assert len(d.session.shown) == 1
+    w.settings_tab.dialogue_sound_enabled.setChecked(False)
+    assert d.request() and not player._player._playing
+    w.settings_tab.dialogue_sound_enabled.setChecked(True)
+    assert not player._player._playing
+    for timestamp in range(103, 221):
+        d.clock = lambda t=timestamp: float(t)
+        d.tick()
+    assert player._player._playing and len(d.session.shown) == 2
+
+
+@pytest.mark.parametrize('last_main', [False, True])
+def test_final_foreground_read_controls_sound_before_display(dialogue, main_foreground, monkeypatch, last_main):
+    w, app, d = dialogue
+    gui = sys.modules['win32gui']
+    reads = []
+    def alpha(*args):
+        reads.append(1)
+        main = last_main if len(reads) > 1 else not last_main
+        main_foreground.hwnd = int(w.winId()) if main else 33
+        return 0, 0, 0
+    monkeypatch.setattr(gui, 'GetLayeredWindowAttributes', alpha)
+    calls = []
+    d.sound = calls.append
+    assert d.request() and len(reads) == 2
+    assert len(calls) == int(last_main)
+
+
+def test_request_diagnostics_distinguish_muting_and_audio_submission_without_poll_logs(dialogue, main_foreground, monkeypatch, caplog):
+    import logging
+    w, app, d = dialogue
+    monkeypatch.setattr(sys.modules['win32gui'], 'GetLayeredWindowAttributes', lambda *a: (0, 0, 0))
+    caplog.set_level(logging.INFO, logger='mabinogi_addon.ui.creator_dialogue')
+    main_foreground.hwnd = 33
+    for _ in range(50):
+        assert d._eligible()
+    assert not caplog.records
+    assert d.request()
+    assert 'visibility=unknown' in caplog.text and 'result=muted' in caplog.text
+    assert 'foreground=other' in caplog.text
+    caplog.clear()
+    main_foreground.hwnd = int(w.winId())
+    assert d.request()
+    assert 'foreground=main' in caplog.text and 'audio_stage=submitted' in caplog.text
+    assert 'result=requested' in caplog.text

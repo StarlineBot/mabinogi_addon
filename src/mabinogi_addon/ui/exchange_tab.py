@@ -27,7 +27,7 @@ from PySide6.QtWidgets import (
 
 from .. import config
 from ..market import auction, exchange
-from .calculator_sidebar import calculator_sidebar
+from .calculator_sidebar import calculator_sidebar, refresh_button
 from .widgets import FeatureHeader, hint_label
 
 _CACHE_TTL = 10 * 60  # 경매 데이터가 ~10분 지연이라 던전별 10분 캐시
@@ -63,8 +63,7 @@ class ExchangeTab(QWidget):
         self.title.setStyleSheet("font-size:15px; font-weight:800;")
         title_row.addWidget(self.title)
         title_row.addStretch(1)
-        self.refresh_btn = QPushButton("↻ 새로고침")
-        self.refresh_btn.setToolTip("경매 시세를 지금 다시 불러와요")
+        self.refresh_btn = refresh_button("경매 시세를 지금 다시 불러와요")
         self.refresh_btn.clicked.connect(self._on_refresh)
         self.refresh_btn.setEnabled(False)
         title_row.addWidget(self.refresh_btn)

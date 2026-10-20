@@ -20,6 +20,40 @@ from abc import ABC, abstractmethod
 DEFAULT_GAME_TITLES = ("mabinogi", "마비노기")
 
 
+def is_main_window_foreground(hwnd: int, *, diagnostic=None) -> bool:
+    """Read exact foreground HWND and ownership; never use the game-active fallback.
+
+    Same-process editor overlays are intentionally excluded. Recheck current
+    foreground and PID instead of retaining a process/window identity cache.
+    """
+    detail = {} if diagnostic is None else diagnostic
+    detail.clear()
+    detail["foreground"] = "unavailable"
+    if sys.platform != "win32":
+        return False
+    try:
+        import win32gui
+        import win32process
+
+        foreground = win32gui.GetForegroundWindow()
+        if not hwnd or not foreground or not win32gui.IsWindow(hwnd) or not win32gui.IsWindow(foreground):
+            return False
+        if foreground != hwnd:
+            detail["foreground"] = "other"
+            return False
+        own = os.getpid()
+        if win32process.GetWindowThreadProcessId(hwnd)[1] != own:
+            return False
+        if (win32gui.GetForegroundWindow() != hwnd or not win32gui.IsWindow(hwnd)
+                or win32process.GetWindowThreadProcessId(hwnd)[1] != own):
+            return False
+        detail["foreground"] = "main"
+        return True
+    except Exception as exc:
+        detail["foreground_error"] = type(exc).__name__
+        return False
+
+
 class WindowWatcher(ABC):
     def is_active(self) -> bool:
         """게임 또는 자기 앱이 포그라운드인지(기존 호환)."""

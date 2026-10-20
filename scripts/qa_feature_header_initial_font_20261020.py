@@ -6,32 +6,14 @@ scripts/qa_feature_header_initial_font_20261020.py -q -s --tb=short.
 
 import json
 
-from PySide6.QtGui import QFontInfo
 
 from tests.conftest import _isolated_runtime, _no_leaked_qthreads  # noqa: F401
 from tests.test_navigation import window  # noqa: F401
-from mabinogi_addon.ui.widgets import FeatureHeader
+from test_support.regressions.feature_header import initial_header_metrics
 
 
 def observe(window):
-    w, app = window
-    observed = {}
-    for key in ("dorcha", "custom"):
-        w._open_setup_feature(key)
-        app.processEvents()
-        panel = w._combat_pages[key].widget()
-        header = next(h for h in panel.findChildren(FeatureHeader) if h.isVisible())
-        observed[key] = {}
-        for name, widget in (("header", header), ("title", header.title),
-                             ("description", header.description)):
-            font = widget.font()
-            actual = QFontInfo(font)
-            observed[key][name] = {
-                "font": font.toString(), "family": actual.family(),
-                "pixels": actual.pixelSize(), "points": actual.pointSizeF(),
-                "weight": actual.weight(), "height": widget.height(),
-                "metrics_height": widget.fontMetrics().height(),
-            }
+    observed = initial_header_metrics(window)
     print("FIRST_SHOW_HEADER_FONTS " + json.dumps(observed, ensure_ascii=False))
     return observed
 

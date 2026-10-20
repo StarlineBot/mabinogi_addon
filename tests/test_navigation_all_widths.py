@@ -99,3 +99,13 @@ def test_shared_headers_wrap_without_losing_controls_or_saved_state(window, them
     finally:
         app.styleHints().setColorScheme(old_scheme)
         app.setPalette(old_palette)
+
+
+def test_initial_header_font_and_title_row_do_not_depend_on_help_button(window):
+    from test_support.regressions.feature_header import initial_header_metrics
+    observed = initial_header_metrics(window)
+    resource, custom = observed['dorcha'], observed['custom']
+    for key in ('pixels', 'family', 'weight', 'height'):
+        assert resource['title'][key] == custom['title'][key]
+    assert resource['title']['height'] >= resource['title']['metrics_height']
+    assert resource['header']['height'] == custom['header']['height']

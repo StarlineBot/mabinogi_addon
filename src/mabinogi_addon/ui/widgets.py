@@ -12,6 +12,9 @@ from PySide6.QtGui import QFontInfo, QFocusEvent, QPainter, QPalette, QTextLayou
 from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout, QBoxLayout, QCheckBox, QFormLayout, QLabel, QMessageBox, QSizePolicy, QSpinBox, QWidget
 
 
+FEATURE_HEADER_ACTION_SIZE = 26  # logical pixels; shared with the help action
+
+
 def wrapping_row(left, right):
     """Keep two control groups inline, wrapping the second at its native minimum width."""
     form = QFormLayout()
@@ -196,6 +199,7 @@ class FeatureHeader(QWidget):
 
     def __init__(self, title, description, help_widget=None, parent=None):
         super().__init__(parent)
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
@@ -222,6 +226,7 @@ class FeatureHeader(QWidget):
         font.setPixelSize(round(QFontInfo(font).pixelSize() * 7 / 6))
         font.setBold(True)
         self.title.setFont(font)
+        self.title.setMinimumHeight(max(FEATURE_HEADER_ACTION_SIZE, self.title.fontMetrics().height()))
 
     def changeEvent(self, event):
         super().changeEvent(event)

@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
 
 from .. import config
 from ..market import auction, dungeon_cost as calc
-from .calculator_sidebar import calculator_sidebar
+from .calculator_sidebar import calculator_sidebar, refresh_button
 from .widgets import FeatureHeader
 
 
@@ -64,10 +64,7 @@ class DungeonCostTab(QWidget):
         self.title.setStyleSheet("font-size:15px;font-weight:800;")
         head.addWidget(self.title)
         head.addStretch()
-        head.addWidget(QLabel("단위: 골드"))
-        self.refresh = QPushButton("↻")
-        self.refresh.setToolTip("편린 시세 새로고침")
-        self.refresh.setFixedWidth(32)
+        self.refresh = refresh_button("편린 시세 새로고침")
         self.refresh.clicked.connect(self._request)
         head.addWidget(self.refresh)
         right.addLayout(head)
