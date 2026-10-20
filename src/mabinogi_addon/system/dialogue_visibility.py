@@ -1,7 +1,7 @@
-"""잡담의 모니터/입력 데스크톱 조건과 기존 Z-order 진단을 제공한다.
+"""Check desktop, target bounds and native cover evidence without capturing pixels.
 
-현재 잡담은 display_available을 사용하고 실제 창 겹침은 Windows 합성에 맡긴다.
-exposed는 이전 가림 판정의 진단/회귀 진입점이다. 캡처나 포커스 이동은 하지 않는다.
+Opaque/clear evidence and unknown composition are distinguished in diagnostics.
+Unknown per-pixel composition cannot safely authorize an unseen sound.
 """
 
 import sys
@@ -128,9 +128,23 @@ def _blocker_identity(gui, hwnd, detail):
 
 def display_available(hwnd: int, local_rects: list, logical_size: tuple[int, int], *,
                       diagnostic=None, diagnose=False) -> bool:
-    """Check desktop/owner/monitor bounds without vetoing other windows' composition."""
-    return exposed(hwnd, local_rects, logical_size, diagnostic=diagnostic,
-                   diagnose=diagnose, check_occlusion=False)
+    """Authorize only evidenced exposure; ambiguous composition stays silent."""
+    detail = {} if diagnostic is None else diagnostic
+    allowed = exposed(hwnd, local_rects, logical_size, diagnostic=detail,
+                      diagnose=diagnose, check_occlusion=True)
+    if allowed:
+        detail["visibility"] = "exposed"
+    else:
+        style = detail.get("extended_style", 0)
+        opaque = (detail.get("stage") == "occluded"
+                  and not style & 0x200000  # NOREDIRECTIONBITMAP: composition may be per-pixel.
+                  and "extended_style" in detail
+                  and "alpha_error" not in detail and "region_error" not in detail
+                  and (not style & 0x80000 or
+                       (detail.get("alpha") == 255 and detail.get("alpha_flags", 0) & 2
+                        and not detail.get("alpha_flags", 0) & 1)))
+        detail["visibility"] = "occluded" if opaque else "unknown"
+    return allowed
 
 
 def exposed(hwnd: int, local_rects: list, logical_size: tuple[int, int], *, diagnostic=None,

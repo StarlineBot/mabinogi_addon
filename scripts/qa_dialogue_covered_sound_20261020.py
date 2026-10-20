@@ -1,6 +1,6 @@
 """Observe current covered-window sound requests with a modeled Windows boundary.
 
-This records the pre-fix behavior, not the desired acceptance criteria. It does
+This retains the original opaque/clear model with the latest acceptance criteria. It does
 not test actual Windows composition or audio-device playback.
 """
 
@@ -14,7 +14,7 @@ from mabinogi_addon.system import dialogue_visibility as visibility
 
 @pytest.mark.parametrize("automatic", [False, True])
 @pytest.mark.parametrize("covered", [False, True])
-def test_observe_current_sound_request_under_modeled_cover(window, native_model,
+def test_covered_dialogue_stays_silent_under_modeled_cover(window, native_model,
                                                          automatic, covered):
     w, app = window
     state = native_model
@@ -33,15 +33,15 @@ def test_observe_current_sound_request_under_modeled_cover(window, native_model,
     assert visibility.exposed(state.owner, [(20, 20, 48, 48)],
                               (w.width(), w.height())) is not covered
     assert visibility.display_available(state.owner, [(20, 20, 48, 48)],
-                                        (w.width(), w.height()))
-    assert dialogue._eligible()
+                                        (w.width(), w.height())) is not covered
+    assert dialogue._eligible() is not covered
     if automatic:
         dialogue.tick()
     else:
-        assert dialogue.request()
+        assert dialogue.request() is not covered
 
-    assert dialogue.bubble.isVisible()
-    assert calls == [dialogue.session.last_text]
-    assert len(dialogue.session.shown) == int(automatic)
+    assert dialogue.bubble.isVisible() is not covered
+    assert calls == ([] if covered else [dialogue.session.last_text])
+    assert len(dialogue.session.shown) == int(automatic and not covered)
     dialogue.dismiss()
     app.processEvents()

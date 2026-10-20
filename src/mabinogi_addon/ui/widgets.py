@@ -7,9 +7,9 @@
 from __future__ import annotations
 
 import math
-from PySide6.QtCore import QPointF, Qt
-from PySide6.QtGui import QFocusEvent, QPainter, QPalette, QTextLayout, QTextOption
-from PySide6.QtWidgets import QBoxLayout, QCheckBox, QFormLayout, QLabel, QMessageBox, QSizePolicy, QSpinBox, QWidget
+from PySide6.QtCore import QEvent, QPointF, Qt
+from PySide6.QtGui import QFontInfo, QFocusEvent, QPainter, QPalette, QTextLayout, QTextOption
+from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout, QBoxLayout, QCheckBox, QFormLayout, QLabel, QMessageBox, QSizePolicy, QSpinBox, QWidget
 
 
 def wrapping_row(left, right):
@@ -189,3 +189,41 @@ def callout(text: str, icon: str = "⚠") -> QLabel:
         " border-radius:7px; padding:8px 10px; color:#d98a1a; }"
     )
     return lbl
+
+
+class FeatureHeader(QWidget):
+    """Shared feature title, muted summary and divider; settings keep their own header."""
+
+    def __init__(self, title, description, help_widget=None, parent=None):
+        super().__init__(parent)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 0, 0, 0)
+        self.title = QLabel(title)
+        self.title.setWordWrap(True)
+        row.addWidget(self.title, 1)
+        if help_widget is not None:
+            row.addWidget(help_widget, 0, Qt.AlignmentFlag.AlignTop)
+        layout.addLayout(row)
+        self.description = QLabel(description)
+        self.description.setWordWrap(True)
+        self.description.setForegroundRole(QPalette.ColorRole.PlaceholderText)
+        layout.addWidget(self.description)
+        self.divider = QWidget()
+        self.divider.setFixedHeight(1)
+        self.divider.setStyleSheet("background:palette(mid);")
+        layout.addWidget(self.divider)
+        self._fit_title()
+
+    def _fit_title(self):
+        font = self.font()
+        font.setPixelSize(round(QFontInfo(font).pixelSize() * 7 / 6))
+        font.setBold(True)
+        self.title.setFont(font)
+
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if event.type() == QEvent.Type.FontChange and hasattr(self, "title"):
+            self._fit_title()

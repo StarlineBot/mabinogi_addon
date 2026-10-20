@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 from .. import config
 from ..market import auction, dungeon_cost as calc
 from .calculator_sidebar import calculator_sidebar
+from .widgets import FeatureHeader
 
 
 def _fetch(result, key, cancelled):
@@ -40,14 +41,19 @@ class DungeonCostTab(QWidget):
     def __init__(self):
         super().__init__()
         self._price = None
-        self._status = "오른쪽 위 새로고침 버튼을 눌러 편린 시세를 조회하세요."
+        self._clock = time.monotonic
+        self._cache = None  # (monotonic receipt time, price or normal empty result, status)
+        self._status = "믿음의 균열을 선택하면 편린 시세를 조회합니다."
         self._pending = None
         self._cancelled = threading.Event()
         self._poll = QTimer(self)
         self._poll.setInterval(100)
         self._poll.timeout.connect(self._receive)
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(12, 12, 12, 12)
+        root = QVBoxLayout(self)
+        root.setContentsMargins(12, 12, 12, 12)
+        root.addWidget(FeatureHeader("던전 입장 계산기", "던전별 입장 비용과 누적 이익을 비교합니다. 믿음의 균열을 선택하면 편린 시세를 조회합니다."))
+        layout = QHBoxLayout()
+        root.addLayout(layout, 1)
         self.dungeons = calculator_sidebar(calc.NAMES)
         layout.addWidget(self.dungeons)
         right = QVBoxLayout()
@@ -80,8 +86,24 @@ class DungeonCostTab(QWidget):
         self.note = QLabel()
         self.note.setWordWrap(True)
         right.addWidget(self.note)
-        self.dungeons.currentTextChanged.connect(self._render)
+        self.dungeons.currentTextChanged.connect(self._select)
+        self.dungeons.itemClicked.connect(self._select)
         self.dungeons.setCurrentRow(0)
+
+    def _select(self, *_):
+        if self._cancelled.is_set() or self.dungeons.currentItem() is None:
+            return
+        if self.dungeons.currentItem().text() != calc.NAMES[2]:
+            self._render()
+            return
+        if self._pending is not None:
+            self._render()
+            return
+        if self._cache is not None and self._clock() - self._cache[0] < 600:
+            _, self._price, self._status = self._cache
+            self._render()
+            return
+        self._request()
 
     def _render(self, *_):
         name = self.dungeons.currentItem().text()
@@ -134,6 +156,7 @@ class DungeonCostTab(QWidget):
         if self._pending is not None or self._cancelled.is_set():
             return
         self._price = None
+        self._cache = None  # A forced refresh must not revive an earlier success on error.
         key = config.get_nexon_api_key()
         if not key:
             self._status = "넥슨 API 키가 없어 시세를 조회할 수 없습니다."
@@ -146,7 +169,7 @@ class DungeonCostTab(QWidget):
         self._render()
 
     def _receive(self):
-        if self._pending is None:
+        if self._cancelled.is_set() or self._pending is None:
             return
         try:
             price, error = self._pending.get_nowait()
@@ -157,6 +180,8 @@ class DungeonCostTab(QWidget):
         self._price = price
         self._status = error or ("매물이 없습니다." if price is None else
             f"조회 {time.strftime('%H:%M')} · 경매 시세는 약 10분 지연됩니다.")
+        if not error:
+            self._cache = (self._clock(), self._price, self._status)
         self._render()
 
     def closeEvent(self, event):

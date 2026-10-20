@@ -78,7 +78,7 @@ jobs:
         id: unit
         env:
           QT_QPA_PLATFORM: offscreen
-        run: uv run --frozen pytest -vv -ra -m 'not windows_integration' --durations=30 --junitxml=unit-results.xml
+        run: uv run --frozen pytest -n 2 -vv -ra -m 'not windows_integration' --durations=30 --junitxml=unit-results.xml
       - name: Native Windows integration
         id: native
         env:

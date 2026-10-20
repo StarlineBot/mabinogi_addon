@@ -1,0 +1,23 @@
+{
+  "scope": "related Linux development suite; not a Windows time guarantee",
+  "files": [
+    "tests/test_dungeon_cost.py",
+    "tests/test_dialogue_display_policy.py",
+    "tests/test_navigation_all_widths.py",
+    "tests/test_windows_ci.py"
+  ],
+  "runs": [
+    {
+      "workers": 0,
+      "seconds": 18.64,
+      "cases": 85,
+      "identity_sha256": "a8151610c0e036649d2196a9a97c23375c3307f87bf30ada486f91c5fc4ed2ea"
+    },
+    {
+      "workers": 2,
+      "seconds": 11.06,
+      "cases": 85,
+      "identity_sha256": "a8151610c0e036649d2196a9a97c23375c3307f87bf30ada486f91c5fc4ed2ea"
+    }
+  ]
+}

@@ -169,7 +169,6 @@ class StatBarsTab(QWidget):
         v = QVBoxLayout(self)
         v.setContentsMargins(12, 12, 12, 12)
         v.setSpacing(10)
-        v.addWidget(QLabel("체력바"))
         v.addWidget(tab_header(
             "생명력·마나·스태미나를 별도 오버레이로 표시합니다.", HELP_TITLE, HELP_HTML, self
         ))

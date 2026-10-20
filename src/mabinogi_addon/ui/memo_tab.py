@@ -74,7 +74,6 @@ class MemoTab(QWidget):
         v = QVBoxLayout(self)
         v.setContentsMargins(12, 12, 12, 12)
         v.setSpacing(10)
-        v.addWidget(QLabel("메모"))
         v.addWidget(tab_header(
             "게임 위에 표시할 메모를 작성합니다.", HELP_TITLE, HELP_HTML, self
         ))

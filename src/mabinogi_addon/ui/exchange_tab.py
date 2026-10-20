@@ -28,7 +28,7 @@ from PySide6.QtWidgets import (
 from .. import config
 from ..market import auction, exchange
 from .calculator_sidebar import calculator_sidebar
-from .widgets import hint_label
+from .widgets import FeatureHeader, hint_label
 
 _CACHE_TTL = 10 * 60  # 경매 데이터가 ~10분 지연이라 던전별 10분 캐시
 _ACCENT = QColor("#00C9A2")
@@ -47,7 +47,7 @@ class ExchangeTab(QWidget):
         v = QVBoxLayout(self)
         v.setContentsMargins(12, 12, 12, 12)
         v.addWidget(
-            hint_label(
+            FeatureHeader("환전비율 계산기",
                 "던전을 선택하면 구슬당 판매금액이 높은 재료부터 보여줍니다."
             )
         )

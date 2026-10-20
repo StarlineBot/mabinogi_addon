@@ -16,7 +16,7 @@ from . import region_registration as registration
 from .dpi import to_logical,to_physical
 from .region_highlight import RegionHighlight
 from .screen_grab import capture_for_autofind
-from .widgets import checkbox
+from .widgets import FeatureHeader, checkbox
 from .settings_layout import disclosure, DANGER_STYLE
 
 
@@ -43,10 +43,7 @@ class ResourceTab(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12,12,12,12)
         layout.setSpacing(10)
-        layout.addWidget(QLabel("도르카·투아림"))
-        description = QLabel("도르카와 투아림을 오버레이로 표시하고 투아림 충전 상태를 알려줍니다.")
-        description.setWordWrap(True)
-        layout.addWidget(description)
+        layout.addWidget(FeatureHeader("도르카·투아림", "도르카와 투아림을 오버레이로 표시하고 투아림 충전 상태를 알려줍니다."))
         layout.addWidget(QLabel("판독 영역 · 도르카 / 투아림"))
         self.region_status = QLabel()
         self.region_status.setWordWrap(True)

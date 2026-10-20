@@ -26,7 +26,7 @@ from PySide6.QtWidgets import (
 
 from .. import config
 from ..market import auction, fee
-from .widgets import SuffixSpinBox, hint_label
+from .widgets import FeatureHeader, SuffixSpinBox, hint_label
 
 _GRAY = "color:#9aa0aa; font-size:12px;"
 
@@ -43,7 +43,7 @@ class DistributionTab(QWidget):
         v.setContentsMargins(12, 12, 12, 12)
         v.setSpacing(8)
         v.addWidget(
-            hint_label(
+            FeatureHeader("분배 계산기",
                 "경매장 판매가와 분배 인원을 넣으면 수수료·할인쿠폰까지 따져 "
                 "1인당 분배금을 계산해요.\n판매가는 만 단위예요 "
                 "(예: 8890 = 8,890만, 20000 = 2억)."

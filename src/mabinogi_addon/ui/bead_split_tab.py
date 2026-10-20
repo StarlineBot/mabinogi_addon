@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (
 
 from .. import bead_split
 from ..market.auction import korean_gold
-from .widgets import SuffixSpinBox, hint_label
+from .widgets import FeatureHeader, SuffixSpinBox, hint_label
 
 _GRAY = "color:#9aa0aa; font-size:12px;"
 _ACCENT = "#00C9A2"
@@ -47,7 +47,7 @@ class BeadSplitTab(QWidget):
         v.setContentsMargins(12, 12, 12, 12)
         v.setSpacing(8)
         v.addWidget(
-            hint_label(
+            FeatureHeader("구슬 분배 계산기",
                 "구슬 개수·개당 가격·인원을 입력하면 1인당 분배금을 계산합니다."
             )
         )

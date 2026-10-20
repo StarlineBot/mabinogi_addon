@@ -1,0 +1,10 @@
+{
+  "collected": 2315,
+  "native_deferred": 15,
+  "isolated_passed": 2300,
+  "isolated_seconds": 453.72,
+  "duplicates": 0,
+  "missing": 0,
+  "extra": 0,
+  "platform": "Linux offscreen; Windows native not executed"
+}

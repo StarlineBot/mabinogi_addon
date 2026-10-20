@@ -102,6 +102,10 @@ def test_validation_is_manual_full_gate_with_mandatory_bounded_storage():
     assert "not windows_integration" in unit["run"] and "-m windows_integration" in native["run"]
     assert "-vv" in unit["run"] and "-vv" in native["run"]
     assert "--regression-group" not in unit["run"] + native["run"]
+    assert "-n 2" in unit["run"] and "-n " not in native["run"]
+    import tomllib
+    project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    assert any(dep.startswith("pytest-xdist") for dep in project["dependency-groups"]["dev"])
     assert unit["env"]["QT_QPA_PLATFORM"] == "offscreen"
     assert native["env"]["QT_QPA_PLATFORM"] == "windows"
     build = next(s for s in steps if s.get("id") == "build")

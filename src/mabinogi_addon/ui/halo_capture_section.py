@@ -17,7 +17,7 @@ from ..tracker.halo import HaloTracker
 from .dpi import to_physical
 from .region_registration import connect_selection
 from .settings_layout import disclosure
-from .widgets import CapturePathLabel, checkbox, wrapping_row
+from .widgets import FeatureHeader, CapturePathLabel, checkbox, wrapping_row
 
 
 class HaloCaptureSection(QWidget):
@@ -63,12 +63,7 @@ class HaloCaptureSection(QWidget):
             self._countdown.move(pos['x'], pos['y'])
         v = QVBoxLayout(self)
         v.setContentsMargins(0, 0, 0, 0)
-        title = QLabel("믿음의 균열의 1분 헤일로 알림")
-        title.setStyleSheet("font-weight:700;font-size:14px;")
-        v.addWidget(title)
-        description = QLabel("게임의 남은 시간을 기준으로 다음 헤일로까지 표시하고, 발생 5초 전에 알립니다.")
-        description.setWordWrap(True)
-        v.addWidget(description)
+        v.addWidget(FeatureHeader("믿음의 균열의 1분 헤일로 알림", "게임의 남은 시간을 기준으로 다음 헤일로까지 표시하고, 발생 5초 전에 알립니다."))
         self.state = QLabel("레넨의 미이르 : 회한 식별 대기")
         self.state.setWordWrap(True)
         warning_group = QGroupBox('헤일로 경고')

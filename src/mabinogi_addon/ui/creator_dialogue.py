@@ -239,7 +239,10 @@ class CreatorDialogue(QObject):
             layout.removeWidget(self.footer)
             self.footer.setFixedWidth(76)
         else:
-            self.footer.setFixedWidth(central.width())
+            # Let the layout follow width changes. A fixed snapshot taken during
+            # header/column reflow can otherwise pin the central widget too wide.
+            self.footer.setMinimumWidth(0)
+            self.footer.setMaximumWidth(16777215)
             if layout.indexOf(self.footer) < 0:
                 layout.addWidget(self.footer)
         self.footer.setVisible(footer)

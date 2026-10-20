@@ -36,3 +36,66 @@ def test_all_pages_and_controls_large_font(window,monkeypatch,area):
             except AssertionError as exc:
                 failures.append((key,widget.text(),str(exc)))
     assert not failures, failures
+
+
+@pytest.mark.parametrize('theme', ['light', 'dark'])
+@pytest.mark.parametrize('pixels', [12, 20])
+def test_shared_headers_wrap_without_losing_controls_or_saved_state(window, theme, pixels):
+    from copy import deepcopy
+    from PySide6.QtGui import QColor, QFontInfo, QPalette
+    from mabinogi_addon import config
+    from mabinogi_addon.ui.theme import apply_theme
+    from mabinogi_addon.ui.widgets import FeatureHeader
+    w, app = window
+    old_scheme = app.styleHints().colorScheme()
+    old_palette = QPalette(app.palette())
+    apply_theme(theme)
+    # The offscreen plugin need not implement OS scheme switching. Exercise
+    # actual dark/light palette roles as well as the requested scheme.
+    palette = QPalette(app.style().standardPalette())
+    if theme == 'dark':
+        for role, color in ((QPalette.Window, '#202020'), (QPalette.WindowText, '#eeeeee'),
+                            (QPalette.Base, '#272727'), (QPalette.Text, '#eeeeee'),
+                            (QPalette.Button, '#333333'), (QPalette.ButtonText, '#eeeeee'),
+                            (QPalette.PlaceholderText, '#aaaaaa'), (QPalette.Mid, '#555555')):
+            palette.setColor(role, QColor(color))
+    app.setPalette(palette)
+    for widget in [w] + w.findChildren(QWidget):
+        widget.setPalette(palette)
+        font = widget.font()
+        font.setPixelSize(pixels)
+        widget.setFont(font)
+    for header in w.findChildren(FeatureHeader):
+        header._fit_title()
+    before = deepcopy(config._read_local_config())
+    try:
+        pages = [(0, i) for i in range(w._tracker_tabs.count())]
+        pages += [(2, i) for i in range(w._convenience_tabs.count())] + [(1, 0)]
+        for main, sub in pages:
+            w._tabs.setCurrentIndex(main)
+            if main != 1:
+                (w._tracker_tabs if main == 0 else w._convenience_tabs).setCurrentIndex(sub)
+            app.processEvents()
+            scroll = w._tabs.widget(1) if main == 1 else (w._tracker_tabs if main == 0 else w._convenience_tabs).currentWidget()
+            headers = [h for h in scroll.widget().findChildren(FeatureHeader) if h.isVisible()]
+            assert headers, (main, sub)
+            for header in headers:
+                assert QFontInfo(header.description.font()).pixelSize() == pixels
+                assert QFontInfo(header.title.font()).pixelSize() > pixels
+                assert header.description.foregroundRole() == QPalette.PlaceholderText
+                assert header.description.palette().color(QPalette.Window).lightness() < 128 if theme == 'dark' else header.description.palette().color(QPalette.Window).lightness() >= 128
+                assert header.description.y() > header.title.y() + header.title.height() - 1
+                assert header.divider.y() >= header.description.y() + header.description.height()
+                assert header.title.width() > 0 and header.description.width() > 0
+            assert scroll.horizontalScrollBar().maximum() == 0, (main, sub)
+        # Both nested boss pages use the shared path.
+        w._tabs.setCurrentIndex(0)
+        w._tracker_tabs.setCurrentIndex(2)
+        w.boss_tab.pattern_tabs.setCurrentIndex(1)
+        app.processEvents()
+        assert w.boss_tab.halo_capture.findChildren(FeatureHeader)
+        assert not w.settings_tab.findChildren(FeatureHeader)
+        assert config._read_local_config() == before
+    finally:
+        app.styleHints().setColorScheme(old_scheme)
+        app.setPalette(old_palette)

@@ -105,28 +105,11 @@ def help_button(title: str, html: str, parent=None) -> QPushButton:
 def tab_header(
     desc_text: str, help_title: str, html: str, parent=None
 ) -> QWidget:
-    """탭 상단 전체 폭 헤더: 왼쪽 한 줄 설명 + 오른쪽 '?' + 아래 구분선.
+    """Feature title, muted summary, divider and the existing help action."""
+    from .widgets import FeatureHeader
 
-    탭 이름이 풀네임(예: '버프 트래커')이라 큰 제목은 중복 → 제목 대신 한 줄 설명만
-    두고, ? 는 탭 전체 폭의 맨 오른쪽에 둔다.
-    """
-    box = QWidget()
-    v = QVBoxLayout(box)
-    v.setContentsMargins(0, 0, 0, 0)
-    v.setSpacing(6)
-    row = QHBoxLayout()
-    row.setContentsMargins(0, 0, 0, 0)
-    desc = QLabel(desc_text)
-    desc.setStyleSheet("color:#8a8f98; font-size:13px;")
-    row.addWidget(desc)
-    row.addStretch(1)
-    row.addWidget(help_button(help_title, html, parent))
-    v.addLayout(row)
-    line = QWidget()
-    line.setFixedHeight(1)
-    line.setStyleSheet("background:palette(mid);")
-    v.addWidget(line)
-    return box
+    return FeatureHeader(help_title.removesuffix(" 사용법"), desc_text,
+                         help_button(help_title, html, parent))
 
 
 def help_title_row(

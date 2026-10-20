@@ -75,7 +75,6 @@ class SkillbarTab(QWidget):
 
         v = QVBoxLayout(self)
         v.setContentsMargins(12, 12, 12, 12)
-        v.addWidget(QLabel("단축바"))
         v.setSpacing(10)
         v.addWidget(tab_header(
             "게임 원본 단축바를 그룹별로 복제해 원하는 위치에 표시합니다.", HELP_TITLE, HELP_HTML, self

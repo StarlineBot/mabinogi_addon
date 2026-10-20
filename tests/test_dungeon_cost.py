@@ -66,8 +66,10 @@ def test_result_never_overwrites_selected_dungeon(tab, price, error, message):
     assert tab.title.text() == calc.NAMES[1]
     assert tab.table.item(1,2).text() == '+2,300,000'
     assert not tab._poll.isActive()
+    assert message in tab._status
     tab.dungeons.setCurrentRow(2)
-    assert message in tab.status.text()
+    # Failed requests are not cached: reselect retries, reporting the missing key.
+    assert ("API 키" if error else message) in tab.status.text()
     assert tab.table.item(0,3).text() == ('—' if price is None else '10,000')
 
 
@@ -150,3 +152,107 @@ def test_worker_network_failure_does_not_expose_exception(monkeypatch):
     price,error = result.get_nowait()
     assert price is None and '실패' in error
     assert 'secret' not in error
+
+
+@pytest.fixture
+def market(tab, monkeypatch):
+    jobs, clock = [], [0.0]
+    monkeypatch.setattr(ui.config, 'get_nexon_api_key', lambda: 'test-key')
+    tab._clock = lambda: clock[0]
+
+    class Worker:
+        def __init__(self, *, target, args, daemon):
+            assert target is ui._fetch and daemon
+            jobs.append(args)
+
+        def start(self):
+            pass
+
+    monkeypatch.setattr(ui.threading, 'Thread', Worker)
+    return tab, jobs, clock
+
+
+def complete(tab, price=10000, error=''):
+    tab._pending.put((price, error))
+    tab._receive()
+
+
+def test_auto_selection_reuses_one_request_cache_and_respects_exact_expiry(market):
+    tab, jobs, clock = market
+    for row in (0, 1, 3):
+        tab.dungeons.setCurrentRow(row)
+    assert not jobs and tab._pending is None
+    tab.dungeons.setCurrentRow(2)
+    assert len(jobs) == 1 and tab._price is None and '조회 중' in tab.status.text()
+    tab.dungeons.itemClicked.emit(tab.dungeons.currentItem())
+    tab._request()
+    tab.dungeons.setCurrentRow(0)
+    tab.dungeons.setCurrentRow(2)
+    assert len(jobs) == 1
+    tab.dungeons.setCurrentRow(1)
+    complete(tab)
+    assert tab.title.text() == calc.NAMES[1]
+    assert tab.table.item(1, 2).text() == '+2,300,000'
+    tab.dungeons.setCurrentRow(2)
+    assert tab.table.item(5, 3).text() == '160,000'
+    clock[0] = 599.999
+    tab.dungeons.itemClicked.emit(tab.dungeons.currentItem())
+    assert len(jobs) == 1
+    clock[0] = 600
+    tab.dungeons.itemClicked.emit(tab.dungeons.currentItem())
+    assert len(jobs) == 2 and tab._price is None
+    complete(tab, 20000)
+    assert tab.table.item(5, 3).text() == '320,000'
+    assert not tab._poll.isActive()
+
+
+def test_explicit_refresh_bypasses_cache_and_failure_does_not_revive_old_price(market):
+    tab, jobs, clock = market
+    tab.dungeons.setCurrentRow(2)
+    complete(tab)
+    tab._request()
+    assert len(jobs) == 2 and tab._cache is None and tab._price is None
+    complete(tab, None, '조회 실패')
+    assert tab._cache is None and tab.table.item(5, 3).text() == '—'
+    for _ in range(20):
+        tab._render()
+        tab._receive()
+    assert len(jobs) == 2
+    tab.dungeons.setCurrentRow(0)
+    tab.dungeons.setCurrentRow(2)
+    assert len(jobs) == 3
+    complete(tab, 30000)
+    assert tab.table.item(5, 3).text() == '480,000'
+
+
+def test_empty_listing_is_cached_but_missing_key_is_not(market, monkeypatch):
+    tab, jobs, clock = market
+    monkeypatch.setattr(ui.config, 'get_nexon_api_key', lambda: '')
+    tab.dungeons.setCurrentRow(2)
+    assert not jobs and tab._cache is None and 'API 키' in tab.status.text()
+    monkeypatch.setattr(ui.config, 'get_nexon_api_key', lambda: 'test-key')
+    tab.dungeons.itemClicked.emit(tab.dungeons.currentItem())
+    assert len(jobs) == 1
+    complete(tab, None)
+    assert '매물이 없습니다' in tab.status.text()
+    assert tab.table.item(5, 1).text() == '5' and tab.table.item(5, 3).text() == '—'
+    clock[0] = 599
+    tab.dungeons.setCurrentRow(0)
+    tab.dungeons.setCurrentRow(2)
+    assert len(jobs) == 1 and '매물이 없습니다' in tab.status.text()
+    clock[0] = 600
+    tab.dungeons.itemClicked.emit(tab.dungeons.currentItem())
+    assert len(jobs) == 2
+
+
+def test_shutdown_drops_late_result_and_never_restarts_selection(market):
+    tab, jobs, clock = market
+    tab.dungeons.setCurrentRow(2)
+    pending = tab._pending
+    text = tab.status.text()
+    tab.shutdown()
+    pending.put((10000, ''))
+    tab._receive()
+    tab.dungeons.itemClicked.emit(tab.dungeons.currentItem())
+    assert len(jobs) == 1 and tab._cache is None and tab._price is None
+    assert not tab._poll.isActive() and tab.status.text() == text

@@ -37,7 +37,7 @@ from ..detect.boss_name_matcher import identify, load_name_templates, load_name_
 from ..tracker.boss_catalog import load_bosses, make_tracker
 from .pattern_overlay import PatternWarningOverlay
 from .upcoming_overlay import UpcomingPatternsOverlay
-from .widgets import CapturePathLabel, checkbox, hint_label, wrapping_row
+from .widgets import FeatureHeader, CapturePathLabel, checkbox, hint_label, wrapping_row
 
 _SOUND_DIR = paths.resource_dir() / "sounds"
 _PRE_SOUND = _SOUND_DIR / "보스패턴 예고.mp3"
@@ -112,15 +112,7 @@ class BossTab(QWidget):
         v = QVBoxLayout(hp_page)
         v.setContentsMargins(12, 12, 12, 12)
 
-        title = QLabel("보스 패턴 알림")
-        title.setStyleSheet("font-size:14px; font-weight:700;")
-        v.addWidget(title)
-        v.addWidget(
-            hint_label(
-                "보스 체력이 패턴 기준에 가까워지면 화면과 소리로 알립니다. "
-                "보스 체력바가 보이는 상태에서 자동 찾기를 실행하세요."
-            )
-        )
+        v.addWidget(FeatureHeader("보스 패턴 알림", "보스 체력이 패턴 기준에 가까워지면 화면과 소리로 알립니다. 보스 체력바가 보이는 상태에서 자동 찾기를 실행하세요."))
 
         prev_btn = QPushButton("알림 미리보기")
         prev_btn.setToolTip("경고가 화면 어디에 어떻게 뜨는지 한 번 띄워 봅니다")
