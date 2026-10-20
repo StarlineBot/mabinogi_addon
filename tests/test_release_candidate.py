@@ -640,3 +640,67 @@ def test_tag_or_prior_release_failure_never_publishes(automation, monkeypatch, f
         a.complete(env['state']['event'], REPO, env['root'])
     assert not any(e[0] == 'release' for e in env['events'])
     assert not any(e[0] == 'tag' for e in env['events']) or failure == 'wrong-created-source'
+
+
+def _retain_prior_attempt(env, old_first=False):
+    from copy import deepcopy
+    import shutil
+    old = deepcopy(env['artifacts'][123][0])
+    old.update(id=457, name='verified-windows-123-1')
+    old_folder = env['root'] / 'prior-attempt'
+    shutil.copytree(env['folder'], old_folder)
+    manifest = deepcopy(env['manifest'])
+    manifest['run_attempt'] = 1
+    manifest['authorization']['run_attempt'] = 1
+    (old_folder / 'candidate.json').write_text(json.dumps(manifest), encoding='utf-8')
+    env['sources'][457] = old_folder
+    if old_first:
+        env['artifacts'][123].insert(0, old)
+    else:
+        env['artifacts'][123].append(old)
+
+
+@pytest.mark.parametrize('candidate_run', ['', '123'])
+@pytest.mark.parametrize('old_first', [False, True])
+def test_latest_valid_attempt_is_selectable_with_retained_prior_attempt(
+        automation, candidate_run, old_first):
+    env = automation
+    env['prepare']('verify-only')
+    _retain_prior_attempt(env, old_first)
+    try:
+        selected = a.select_existing(REPO, SHA, '0.6.0', candidate_run=candidate_run)
+    finally:
+        assert not any(event[0] in ('tag', 'release') for event in env['events'])
+    assert selected['context']['run_id'] == 123
+    assert selected['context']['run_attempt'] == 2
+    assert selected['context']['artifact_id'] == 456
+    assert not any(event[0] in ('tag', 'release') for event in env['events'])
+
+
+@pytest.mark.parametrize('status,conclusion', [
+    ('completed', 'failure'), ('completed', 'cancelled'), ('in_progress', None)])
+@pytest.mark.parametrize('latest_artifact', [False, True])
+def test_latest_unsuccessful_attempt_never_falls_back_to_retained_success(
+        automation, status, conclusion, latest_artifact):
+    env = automation
+    env['prepare']('verify-only')
+    _retain_prior_attempt(env)
+    env['runs'][123].update(status=status, conclusion=conclusion)
+    if not latest_artifact:
+        env['artifacts'][123] = [a for a in env['artifacts'][123] if a['id'] == 457]
+    with pytest.raises(ValueError):
+        a.select_existing(REPO, SHA, '0.6.0')
+    assert not any(event[0] in ('tag', 'release') for event in env['events'])
+    assert not any(event == ('download', 457) for event in env['events'])
+
+
+def test_selection_api_failure_is_not_treated_as_an_old_attempt(automation, monkeypatch):
+    env = automation
+    env['prepare']('verify-only')
+    _retain_prior_attempt(env)
+    def unavailable(path):
+        raise RuntimeError('GitHub API unavailable')
+    monkeypatch.setattr(c, 'api', unavailable)
+    with pytest.raises(RuntimeError, match='API unavailable'):
+        a.select_existing(REPO, SHA, '0.6.0')
+    assert not any(event[0] in ('tag', 'release', 'download') for event in env['events'])

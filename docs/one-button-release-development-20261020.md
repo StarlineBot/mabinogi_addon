@@ -78,3 +78,33 @@ artifact 다운로드 리다이렉트, Actions 태그 생성 권한/정책과 �
 실게임·혼합 DPI·장시간 자원 계측은 자동 배포 게이트가 대신하는 범위가 아니다.
 
 사용법과 실패 복구는 [Windows 검증 문서](windows-validation.md)를 따른다.
+
+## 독립 QA 후속 수정: 이전 회차가 최신 후보 선택을 막는 결함
+
+- 전달 기준: `5e33837`의 통합 QA. 같은 run의 이전/최신 artifact가 함께 남으면
+  `select_existing`이 이전 회차에도 곧바로 gate를 호출해 전체 선택을 중단했다.
+- 수정 전 QA 재현: **4 failed / 0.33초**. 최신/이전 artifact 순서와 candidate_run 생략/지정의
+  네 조건에서 같은 `run source/attempt mismatch`를 확인했다.
+- 최소 수정: 탐색 중 run별 live 최신 attempt를 조회·캐시하고, 다른 회차는 후보 집합에서 제외한다.
+  적격한 최신 회차는 기존 gate를 그대로 호출하므로 완료/성공·필수 단계·출처/입력/수명을 모두
+  다시 검사한다. 필터 직후 회차가 바뀌어도 gate가 차단한다. API 실패를 catch/무시하지 않는다.
+- QA 네 사례는 `tests/test_release_candidate.py`로 이관했다. 역사 스크립트는 해당 함수를
+  import하는 호환 진입점이며 일반 CI에서 중복 수집하지 않는다. 최신 실패/취소/진행 중의
+  옛 성공 fallback 방지(최신 artifact 존재/부재 모두), API 실패 전파 경계도 추가했다.
+- 선택 이후 회차 변경·퇴출·바이트 변조 거부와 복수 유효 후보 모호성 차단은 기존 회귀를 유지했다.
+  비용 드는 검사/빌드나 실제 태그/게시 실행은 하지 않았다.
+
+```bash
+UV_CACHE_DIR=/tmp/deployment-uv-cache uv run pytest scripts/qa_auto_release_selection_20261020.py -q --tb=short --show-capture=no
+UV_CACHE_DIR=/tmp/deployment-uv-cache uv run pytest -q tests/test_release_candidate.py tests/test_windows_ci.py
+UV_CACHE_DIR=/tmp/deployment-uv-cache uv run pytest -q --regression-group=delivery -m 'not windows_integration' --junitxml=/tmp/deployment-delivery-followup.xml
+/tmp/actionlint .github/workflows/windows.yml .github/workflows/release.yml
+git diff --check
+```
+
+- QA 호환 재현: **4 passed / 0.26초**.
+- 후보/게시/workflow 회귀: **159 passed / 3.09초**.
+- delivery 기능 묶음: **206 passed, 1989 deselected / 19.55초**.
+- 위 실행은 겹치는 사례를 포함하며 수를 합산하지 않는다. 새 고유 회귀는 11개다.
+- actionlint 1.7.7과 diff 공백 검사 통과. workflow 자체는 이번 수정에서 변경하지 않았다.
+- 개발 검증 완료 상태이며 **후속 독립 QA 대기**다. 실제 Actions 전달/권한/게시 미검증 범위는 유지한다.

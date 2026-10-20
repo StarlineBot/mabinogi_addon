@@ -63,12 +63,22 @@ def select_existing(repository, sha, version, candidate_run=''):
     c.require(not candidate_run or re.fullmatch(r'[1-9]\d*', candidate_run), 'invalid candidate run ID')
     artifacts = c.pages(f'repos/{repository}/actions/artifacts', 'artifacts')
     matches = []
+    live_runs = {}
     for artifact in artifacts:
         match = re.fullmatch(r'verified-windows-([1-9]\d*)-([1-9]\d*)', artifact['name'])
         if not match or artifact.get('expired'):
             continue
         run_id, attempt = map(int, match.groups())
         if candidate_run and run_id != int(candidate_run):
+            continue
+        # Retention can leave prior attempts beside the latest candidate. Exclude
+        # those before the strict gate; never turn their rejection into a failure
+        # of an otherwise unique latest candidate. API failures remain fatal.
+        if run_id not in live_runs:
+            live_runs[run_id] = c.api(f'repos/{repository}/actions/runs/{run_id}')
+        latest_attempt = live_runs[run_id].get('run_attempt')
+        c.require(type(latest_attempt) is int and latest_attempt > 0, 'invalid live run attempt')
+        if attempt != latest_attempt:
             continue
         candidate_sha = artifact.get('workflow_run', {}).get('head_sha', '')
         c.identity(candidate_sha, version)
