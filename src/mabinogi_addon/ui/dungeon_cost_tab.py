@@ -8,12 +8,13 @@ import urllib.request
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
-    QAbstractItemView, QHBoxLayout, QHeaderView, QLabel, QListWidget,
+    QAbstractItemView, QHBoxLayout, QHeaderView, QLabel,
     QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
 from .. import config
 from ..market import auction, dungeon_cost as calc
+from .calculator_sidebar import calculator_sidebar
 
 
 def _fetch(result, key, cancelled):
@@ -47,10 +48,7 @@ class DungeonCostTab(QWidget):
         self._poll.timeout.connect(self._receive)
         layout = QHBoxLayout(self)
         layout.setContentsMargins(12, 12, 12, 12)
-        self.dungeons = QListWidget()
-        self.dungeons.addItems(calc.NAMES)
-        self.dungeons.setFixedWidth(152)
-        self.dungeons.setStyleSheet("QListWidget::item { padding:14px 8px; }")
+        self.dungeons = calculator_sidebar(calc.NAMES)
         layout.addWidget(self.dungeons)
         right = QVBoxLayout()
         right.setSpacing(12)

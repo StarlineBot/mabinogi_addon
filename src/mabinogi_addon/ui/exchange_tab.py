@@ -18,7 +18,6 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLabel,
-    QListWidget,
     QPushButton,
     QTableWidget,
     QTableWidgetItem,
@@ -28,6 +27,7 @@ from PySide6.QtWidgets import (
 
 from .. import config
 from ..market import auction, exchange
+from .calculator_sidebar import calculator_sidebar
 from .widgets import hint_label
 
 _CACHE_TTL = 10 * 60  # 경매 데이터가 ~10분 지연이라 던전별 10분 캐시
@@ -53,9 +53,7 @@ class ExchangeTab(QWidget):
         )
 
         body = QHBoxLayout()
-        self.region_list = QListWidget()
-        self.region_list.addItems(exchange.REGION_NAMES)
-        self.region_list.setFixedWidth(120)
+        self.region_list = calculator_sidebar(exchange.REGION_NAMES)
         self.region_list.currentTextChanged.connect(self._on_region)
         body.addWidget(self.region_list)
 
