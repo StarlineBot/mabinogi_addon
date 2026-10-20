@@ -1036,7 +1036,7 @@ class MainWindow(QMainWindow):
         """[지금 업데이트] → 다운로드(진행바) → B안 교체 → 재실행.
 
         교체 도중 사용자가 본 창을 건드려 상태를 바꾸면 위험해, 본 창을 숨기고(=뒤에서
-        못 누르게) 시작 때와 같은 스플래시(로고+프로그레스바)를 재활용해 진행률만 보인다.
+        못 누르게) 수동 다운로드 전용 스플래시(기존 로고+프로그레스바)로 진행률을 보인다.
         성공하면 새 exe가 이미 떠 있으니 그대로 종료, 실패하면 본 창을 다시 띄워 안내한다.
         """
         import threading
@@ -1044,7 +1044,7 @@ class MainWindow(QMainWindow):
         from PySide6.QtWidgets import QMessageBox
 
         from ..system import updater
-        from .splash import Splash
+        from .update_splash import UpdateSplash
 
         info = self._pending_update
         if not info:
@@ -1057,8 +1057,8 @@ class MainWindow(QMainWindow):
         ) != QMessageBox.StandardButton.Yes:
             return
 
-        # 시작 스플래시 재활용: 본 창을 숨기고 그 자리에 진행률 스플래시만 띄운다.
-        splash = Splash()
+        # 시작 화면의 무진행바/타이핑 정책과 별개인 기존 수동 다운로드 화면.
+        splash = UpdateSplash()
         splash.center_on_screen()
         splash.step(0, f"새 버전 v{ver} 받는 중…")
         splash.show()
@@ -1084,7 +1084,7 @@ class MainWindow(QMainWindow):
     def _on_update_progress(self, pct: int) -> None:
         splash = getattr(self, "_update_splash", None)
         if splash is not None:
-            splash.step(pct, "새 버전 받는 중…")
+            splash.step(pct, f"새 버전 받는 중… {pct}%")
 
     def _on_update_result(self, ok: bool, msg: str) -> None:
         from PySide6.QtWidgets import QMessageBox

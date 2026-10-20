@@ -2,7 +2,9 @@
 
 Run: QT_QPA_PLATFORM=offscreen PYTHONPATH=src:. python -m pytest
      scripts/qa_startup_manual_update_progress_20261020.py -q -s
-Current source fails: real progress callbacks produce identical rendered screens.
+Original failure: real progress callbacks produced identical rendered screens.
+Retained as a callback regression; the actual manual screen and its lifecycle are
+covered by tests/test_manual_update_progress.py after the shared screen was split.
 No download, update application, live capture or real MainWindow is started.
 """
 

@@ -6,6 +6,36 @@
 제품 패키징·실제 업데이트 상태·앱 진입·종료 경로를 연결했다. 선행 EXE 검증과 연결 후 제품의
 Windows 통합 검증은 별개이며, 후자는 아직 실행하지 않았다.
 
+## 제품 연결 후 수동 업데이트 회귀 수정
+
+- 독립 QA 소스 `ee46922`에서 기존 '지금 업데이트'의 진행률 소실(P2)을 확인했다.
+  시작 화면의 `Splash.step()`에서 진행바·pct 표시를 없앴지만 수동 다운로드도 같은 클래스를
+  사용하고 있었다. 10%와 90%가 같은 문구·같은 렌더 해시가 되는 원본 QA 재현을 실행해 실패를 확인했다.
+- 수동 경로를 `ui/update_splash.py::UpdateSplash`로 분리하고 기존 `440×208` 로고·아바타·
+  진행바 배치를 복원했다. 실제 `pct`를 문구에도 넣는다. 시작 화면의 `440×240` A안과
+  무진행바·타이핑·부트로더 IPC 경로는 유지한다. 수동 화면에는 대사 타이머나 IPC를 넣지 않는다.
+- 원본 QA 재현은 assertion 변경 없이 **1 passed**로 바뀌었다. 이 역사 재현은 공용 시작 화면에
+  실제 진행 콜백을 보내는 검사이므로, 실제 수동 화면의 선택·진행바·종료 경로는 별도 정식 회귀로 보강했다.
+- `tests/test_manual_update_progress.py`는 실제 `_on_update_clicked/_on_update_progress/_on_update_result`와
+  실제 Qt 수동 화면·시그널을 사용한다. 워커/네트워크/EXE 교체 경계만 대체하고 다운로드 10/90%,
+  서로 다른 렌더 픽셀, 진행바 값·숫자, 성공·다운로드 실패·적용 실패·사용자 취소,
+  실패 후 메인 복귀와 늦은 시그널 차단을 검사한다.
+- 수동 업데이트와 시작 화면/업데이터/Unicode IO 관련 **44 passed / 3.23초**.
+  전체 Linux 재검증은 **2,246 passed / 400.88초**, 기존 Qt 폐기 예정 API 경고 3개다.
+  로컬 소켓 허용 환경에서 `pytest -n 2 -m 'not windows_integration'`로 실행했으며
+  Windows 전용 15개는 실행하지 않았다. 실제 Windows 다운로드·교체·재실행은 미검증이다.
+  독립 QA 통과나 게시 완료로 보고하지 않는다.
+
+![수동 다운로드 10%](qa/assets/startup_loading_20261020/manual-update-10.png)
+![수동 다운로드 90%](qa/assets/startup_loading_20261020/manual-update-90.png)
+
+재현과 관련 검사:
+
+```bash
+QT_QPA_PLATFORM=offscreen python scripts/qa_startup_manual_update_progress_20261020.py
+QT_QPA_PLATFORM=offscreen python -m pytest -q tests/test_manual_update_progress.py tests/test_startup_integration.py tests/test_startup_splash.py tests/test_updater.py tests/test_updater_relaunch_env.py tests/test_unicode_io_contract.py
+```
+
 ## 확인한 QA와 Windows 선행 검증
 
 - [독립 QA 추가분](qa/헤일로개발과_잡담로그_통합QA_20261020.md)의 시작 화면 절을 먼저 확인했다.
@@ -42,7 +72,7 @@ Windows 통합 검증은 별개이며, 후자는 아직 실행하지 않았다.
   고정 대사 영역을 사용하며 상태/종료 시 취소한다. 배포본의 IPC 실패 시 Qt 창을 새로 띄우지 않는다.
   화면 연결·표시·정리 실패는 로그를 남기고 앱 시작을 계속한다.
 
-## 제품 연결 후 검증
+## 최초 제품 연결 직후 검증 기록
 
 - 관련 검사 **65 passed / 6.48초**: Tcl 12개, 제품 시작/대체 화면 18개, 빌드 연결 4개,
   기존 Windows 정책·업데이터·재실행·중복 실행 26개, Unicode IO 계약 5개.
