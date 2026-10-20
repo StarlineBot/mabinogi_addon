@@ -70,7 +70,7 @@ def main():
         try:
             for name in exchange_calc.REGION_NAMES:
                 exchange._cache[name] = (time.time(), exchange_calc.calc_region(name, lambda material: 1000000))
-            for pixels in (12, 20):
+            for pixels in (12, 20, 28, 12):
                 for widget in (cost, exchange):
                     for child in [widget, *widget.findChildren(QWidget)]:
                         font = QFont(child.font())

@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import shutil
 from dataclasses import dataclass, field
@@ -42,22 +43,27 @@ def _load_env() -> None:
                 os.environ.setdefault(key.strip(), value.strip())
 
 
-def _read_local_config(path: Path = LOCAL_CONFIG_PATH) -> dict:
+def _read_local_config_document(path: Path) -> dict | None:
     # 본 파일이 깨졌으면(.bak) 백업으로 복구 시도 → 전원차단 등으로 손상돼도 설정 보존.
     for p in (path, path.with_name(path.name + ".bak")):
-        if not p.exists():
-            continue
         try:
             text = p.read_text(encoding="utf-8")
-        except OSError:
+        except (OSError, UnicodeError):
             continue
         if not text.strip():
             continue  # 빈 파일(쓰다 중단) → 다음 후보로
         try:
-            return json.loads(text)
+            data = json.loads(text)
         except ValueError:
             continue
-    return {}
+        if isinstance(data, dict):
+            return data
+    return None
+
+
+def _read_local_config(path: Path = LOCAL_CONFIG_PATH) -> dict:
+    data = _read_local_config_document(path)
+    return data if data is not None else {}
 
 
 def _write_local_config(data: dict, path: Path = LOCAL_CONFIG_PATH) -> None:
@@ -73,10 +79,12 @@ def _write_local_config(data: dict, path: Path = LOCAL_CONFIG_PATH) -> None:
         os.fsync(f.fileno())
     if path.exists():
         try:
-            backup_tmp = path.with_name(path.name + ".bak.tmp")
-            shutil.copyfile(path, backup_tmp)
-            os.replace(backup_tmp, path.with_name(path.name + ".bak"))
-        except OSError:  # 백업 실패해도 본 저장은 진행
+            # Never replace a good recovery copy with the corrupt primary being repaired.
+            if isinstance(json.loads(path.read_text(encoding="utf-8")), dict):
+                backup_tmp = path.with_name(path.name + ".bak.tmp")
+                shutil.copyfile(path, backup_tmp)
+                os.replace(backup_tmp, path.with_name(path.name + ".bak"))
+        except (OSError, ValueError):  # 백업 실패해도 본 저장은 진행
             pass
     os.replace(tmp, path)  # 원자적 교체
 
@@ -464,6 +472,35 @@ def load_buff_settings(path: Path = LOCAL_CONFIG_PATH) -> list[BuffSettings]:
 
 def save_buff_settings(items: list[BuffSettings], path: Path = LOCAL_CONFIG_PATH) -> None:
     _save_settings(items, "buffTracker", "buffs", path)
+
+
+def migrate_default_buff_names(path: Path | None = None) -> bool:
+    """Rename exact legacy IDs once; preserve the raw document and commit the marker atomically."""
+    from .catalog import DEFAULT_BUFF_NAMES
+
+    path = LOCAL_CONFIG_PATH if path is None else path
+    data = _read_local_config_document(path)
+    if data is None:
+        return False  # Do not replace unreadable settings with a marker-only document.
+    marker = "defaultBuffNamesKoreanMigrated"
+    if data.get(marker) is True:
+        return True
+    section = data.get("buffTracker")
+    buffs = section.get("buffs") if isinstance(section, dict) else None
+    if isinstance(buffs, list):
+        for item in buffs:
+            if not isinstance(item, dict):
+                continue
+            bid = item.get("id")
+            if isinstance(bid, str) and bid in DEFAULT_BUFF_NAMES and item.get("name") == bid:
+                item["name"] = DEFAULT_BUFF_NAMES[bid]
+    data[marker] = True
+    try:
+        _write_local_config(data, path)
+    except OSError:
+        logging.getLogger(__name__).warning("기본 버프 이름 이관 저장 실패; 다음 실행에서 재시도")
+        return False
+    return True
 
 
 def seed_warn_gone_defaults(

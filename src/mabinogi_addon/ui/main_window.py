@@ -252,6 +252,7 @@ class MainWindow(QMainWindow):
         self.setFixedSize(790, 800)
         from ..setup_state import initialize_new_user
         initialize_new_user()
+        config.migrate_default_buff_names()
         self._restore_window_pos()  # 저장된 창 위치 복원(없으면 화면 중앙)
 
         # 포그라운드 감지(맥=항상 활성). 저장된 게임 실행파일로 판정(없으면 제목 폴백).
