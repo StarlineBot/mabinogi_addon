@@ -3,8 +3,8 @@
 - 기준: `creator-dialogue-spec.md`, `creator-dialogue-publishing.md`.
 - 2026-10-16 사용자 승인: 현재 배치, 문장에 맞춘 작은 말풍선, 얼굴을 가리키는 꼬리.
   꼬리 너비는 첫 삼각형 시안에서 30% 축소하고 길이는 유지했다.
-- 추가 요청: 나중에 소리를 붙일 수 있는 선택적 연동만 준비한다. 이번에는 소리 파일,
-  재생기, 음량 설정이나 소리 재생을 추가하지 않는다.
+- 최초 개발 범위는 선택적 소리 연동만 준비했다. 2026-10-20 사용자 요청으로 아래 전용
+  알림음·50% 음량·소리 체크를 추가했다.
 
 ## 구현
 
@@ -37,10 +37,9 @@
   데이터가 지정한 코드/URL/함수를 실행하지 않으며 사진·설정·게임 정보를 전송하지 않는다.
 - 정상 데이터만 `QSaveFile`로 원자 저장한다. 손상/권한/통신 오류는 마지막 정상 캐시 또는
   내장 데이터로 복구한다. 실행 중 주기 갱신과 클릭별 요청은 없다.
-- `CreatorDialogue(..., sound=None)`은 표시 성공 뒤 `sound(text)`를 선택적으로 호출한다.
-  기본은 `None`이며 소리는 나지 않는다. 나중에 연결하는 콜백은 UI를 막지 않는 비동기
-  재생 시작 함수여야 한다. 누락된 파일/재생 실패 예외도 말풍선/기존 알림으로 전파하지 않는다.
-  버프/디버프 알림 재생기를 공유하거나 변경하지 않는다.
+- `CreatorDialogue`는 표시 성공 뒤에만 `sound(text)`를 호출한다. 최초 기본값은 무음이었으며,
+  현재 기본 콜백은 소리 옵션에 따라 전용 비동기 재생기를 사용한다. 테스트/확장용 콜백 주입과
+  누락된 파일/재생 실패의 무음 처리를 유지하고, 버프/디버프 알림 재생기는 공유하지 않는다.
 
 ## 검증 및 배포 준비
 
@@ -67,3 +66,47 @@
 - 정확한 새 SHA의 Windows 회귀/통합/exe 빌드와 실제 혼합 DPI·세션 전환은 아직 대기다.
 - 렌더 재현: `QT_QPA_PLATFORM=offscreen uv run python -m scripts.render_creator_dialogue`.
   산출물 `/tmp/creator-dialogue-preview/`의 일반/설정/줄바꿈 화면을 확인한다.
+
+
+## 잡담 알림음 추가 (2026-10-20)
+
+- tests/data의 MP3 5개와 제품 sounds의 SHA256을 비교했다. 05는 버프 사라짐, 010은 보스 예고,
+  014는 헤일로, 026은 보스 진입에 이미 쓰이며 bright만 미사용이었다. bright 원본(약 3.072초)을
+  `sounds/제작자 잡담.mp3`로 손실 없이 복사했다. 기존 Windows 패키징은 전체 assets를 포함한다.
+- `CreatorDialogue._play_sound()`가 최초 표시 때만 `SoundNotifier`를 만들고 이후 재사용한다.
+  부모는 잡담 QObject, 볼륨은 `0.5`이며 다른 버프/헤일로/보스 알림과 독립된 재생기다.
+  정상 표시 후에만 호출하고, 실패는 기존 예외 경계에서 시각 표시로 전파하지 않는다.
+- 설정 두 체크는 같은 줄에 배치했다. `creatorDialogueSound` 기본 True/저장/복원,
+  잡담 사용 OFF 시 소리 체크 비활성화·선호 보존을 적용했다. 소리 OFF는 즉시 정지하지만
+  말풍선은 유지하며, ON 전환은 다음 표시부터 적용한다. `dismiss()`와 `shutdown()`은
+  잡담 재생을 정지한다. 추가 타이머·스레드는 만들지 않았다.
+- 실제 설정 렌더를 공유해 사용자에게 '이 배치 유지'로 승인받았다.
+
+![실제 설정의 잡담 소리 체크](qa/assets/creator_sound_20261020/settings-dialogue-sound.png)
+
+검증:
+
+- 기존 잡담/표시 정책/설정 그룹 **94 passed / 29.50초**.
+- 전용 재생 추가 회귀를 포함한 잡담 검사 **75 passed / 20.90초**.
+  하단/설정 클릭·자동 표시, 50% 음량, 반복 요청 시 재생기 1개, 다른 알림 재생 유지,
+  OFF/ON·선호 저장/재로드·종료 중단, 파일 누락·재생기 생성/재생 실패를 확인했다.
+  기존 거절 시 콜백 금지·선택적 콜백 실패·생명주기 검사는 유지했다.
+- 잡담 표시/데스크톱/네트워크 생명주기, 헤일로, 종료, 설정 그룹·백업·동기화, 공개 노트 관련
+  148개를 추가 확인했다. 첫 실행은 **147 passed / 1 failed / 87.90초**로, 실패 1개는
+  로컬 QTcpServer listen 권한을 빠뜨린 실행 환경 문제였다. 해당 사례를 로컬 소켓 허용 후
+  다시 실행해 **1 passed / 1.69초**, Qt 연결·완료/취소·파괴 200회를 확인했다.
+  이 재검사는 Windows API가 아닌 Linux에서 실행 가능한 Qt 네트워크 사례다.
+- 전체 Linux 회귀 **2,260 passed / 399.44초**, 기존 Qt MouseEvent 폐기 예정 경고 3개다.
+  `pytest -n 2 -q -m 'not windows_integration'`를 로컬 소켓 허용 환경에서 실행했다.
+  직전 전체 2,250개에 새 소리 경계 사례 10개를 추가했으며 기존 회귀를 제거하지 않았다.
+- 실행은 Qt 오프스크린과 프로젝트 공통 오디오/네트워크 격리 경계를 사용한다. 소스 파일과
+  선택된 재생 경로·출력 볼륨·정지 동작을 검증한 것이며 실제 Windows 청취·장치 전환·
+  게임 실행 중 체감 음량은 미검증이다. 선형 출력 50%를 체감 음량 절반이라고 단정하지 않는다.
+
+재현(네트워크 생명주기 검사에는 로컬 소켓 허용이 필요):
+
+```bash
+QT_QPA_PLATFORM=offscreen python -m pytest tests/test_creator_dialogue.py tests/test_dialogue_display_policy.py tests/test_dialogue_network_lifecycle.py tests/test_dialogue_desktop_failure.py tests/test_halo_live.py tests/test_main_shutdown.py tests/test_settings_grouping.py tests/test_config_bundle.py tests/test_settings_sync.py tests/test_release_notes.py -q
+```
+
+미공개 `0.8.0`에 묶으며 Windows workflow·태그·게시 작업은 실행하지 않는다.

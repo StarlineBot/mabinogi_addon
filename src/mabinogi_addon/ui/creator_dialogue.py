@@ -1,4 +1,4 @@
-"""본창 내부 제작자 얼굴/말풍선. 게임 오버레이와 재생기는 소유하지 않는다."""
+"""본창 내부 제작자 얼굴/말풍선과 독립 알림음. 게임 오버레이는 변경하지 않는다."""
 
 import logging
 import math
@@ -107,7 +107,8 @@ class CreatorDialogue(QObject):
         self._central = window.centralWidget()
         self.visibility = visibility
         self.clock = clock
-        self.sound = sound  # 선택적 비동기 재생 콜백. 파일/재생기가 없어도 무음으로 동작.
+        self._notifier = None
+        self.sound = sound if sound is not None else self._play_sound
         self.enabled = window.settings_tab.dialogue_enabled.isChecked()
         self.started = self.closed = False
         self.session_unavailable = self.suspended = False
@@ -147,6 +148,7 @@ class CreatorDialogue(QObject):
         self.deadline = None
         window.settings_tab.creator_avatar.clicked.connect(self.request)
         window.settings_tab.dialogue_enabled.toggled.connect(self.set_enabled)
+        window.settings_tab.dialogue_sound_enabled.toggled.connect(self.set_sound_enabled)
         for tabs in (window._tabs, window._tracker_tabs, window._convenience_tabs, window._pages):
             tabs.currentChanged.connect(self.refresh)
         window._tabs.widget(3).verticalScrollBar().valueChanged.connect(self._scrolled)
@@ -182,6 +184,19 @@ class CreatorDialogue(QObject):
         self.enabled = enabled
         if not enabled:
             self.dismiss()
+
+    def _play_sound(self, text):
+        from .notifier import CREATOR_DIALOGUE_SOUND_FILE, SoundNotifier
+
+        if self._notifier is None:
+            self._notifier = SoundNotifier(
+                {"dialogue": CREATOR_DIALOGUE_SOUND_FILE}, parent=self, volume=0.5
+            )
+        self._notifier.play("dialogue")
+
+    def set_sound_enabled(self, enabled):
+        if not enabled and self._notifier is not None:
+            self._notifier.stop()
 
     def _scrolled(self, *_):
         self.dismiss()
@@ -357,7 +372,7 @@ class CreatorDialogue(QObject):
         self.deadline = now + 3
         self.expiry.start(3000)
         self.session.displayed(text, now, automatic=automatic)
-        if self.sound is not None:
+        if self.sound is not None and self.window.settings_tab.dialogue_sound_enabled.isChecked():
             try:
                 self.sound(text)
             except Exception:
@@ -365,6 +380,8 @@ class CreatorDialogue(QObject):
         return True
 
     def dismiss(self):
+        if self._notifier is not None:
+            self._notifier.stop()
         self.bubble.hide()
         self.expiry.stop()
         self.deadline = None

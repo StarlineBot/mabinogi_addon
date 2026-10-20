@@ -621,3 +621,98 @@ def test_whitespace_choices_do_not_hide_nonempty_completion(window):
     assert d._shortest(d.feed.entries[0]).strip() == "A"
     assert d.request()
     assert d.session.last_text.strip()
+
+
+def test_dialogue_uses_the_only_unused_uploaded_sound():
+    from mabinogi_addon.ui.notifier import CREATOR_DIALOGUE_SOUND_FILE
+    source = paths.project_root() / 'tests/data/universfield-bright-notification-352449.mp3'
+    assert CREATOR_DIALOGUE_SOUND_FILE.read_bytes() == source.read_bytes()
+
+
+@pytest.mark.parametrize('trigger', ['footer', 'settings', 'automatic'])
+def test_dialogue_notification_is_half_volume_reused_and_independent(window, app, trigger):
+    from pathlib import Path
+    from mabinogi_addon.ui.notifier import CREATOR_DIALOGUE_SOUND_FILE, SoundNotifier
+    d = window.creator_dialogue
+    other = SoundNotifier({'other': CREATOR_DIALOGUE_SOUND_FILE}, parent=window)
+    assert other.play('other')
+    try:
+        assert d._notifier is None
+        if trigger == 'settings':
+            window._tabs.setCurrentIndex(3)
+            app.processEvents()
+        if trigger == 'automatic':
+            d.clock = lambda: 100.0
+            d.session.rng.random = lambda: 0.0
+            d.tick()
+        else:
+            d._anchor().click()
+        assert d.bubble.isVisible()
+        player = d._notifier
+        assert player is not None and player is not other
+        assert player._audio._volume == 0.5
+        assert Path(player._player.source().toLocalFile()) == CREATOR_DIALOGUE_SOUND_FILE
+        assert player._player._playing and other._player._playing
+        for _ in range(10):
+            assert d.request()
+            assert d._notifier is player
+        assert len(d.findChildren(SoundNotifier)) == 1
+        d.dismiss()
+        assert not player._player._playing and other._player._playing
+    finally:
+        other.stop()
+
+
+def test_dialogue_sound_option_stops_playback_and_preserves_preference(window):
+    d, settings = window.creator_dialogue, window.settings_tab
+    assert settings.dialogue_sound_enabled.text() == '잡담 소리 사용'
+    assert settings.dialogue_sound_enabled.isChecked()
+    assert d.request()
+    player = d._notifier
+    settings.dialogue_sound_enabled.setChecked(False)
+    assert not player._player._playing and d.bubble.isVisible()
+    assert not config.load_general_flag('creatorDialogueSound', True)
+    assert d.request() and not player._player._playing
+    settings.dialogue_sound_enabled.setChecked(True)
+    assert not player._player._playing  # Toggling on does not repeat an old sound.
+    assert d.request() and player._player._playing
+    settings.dialogue_enabled.setChecked(False)
+    assert not player._player._playing and not d.bubble.isVisible()
+    assert not settings.dialogue_sound_enabled.isEnabled()
+    assert settings.dialogue_sound_enabled.isChecked()
+    settings.dialogue_enabled.setChecked(True)
+    assert settings.dialogue_sound_enabled.isEnabled()
+    assert not player._player._playing
+    assert d.request() and player._player._playing
+    d.shutdown()
+    assert not player._player._playing
+    assert not d.request()
+
+
+@pytest.mark.parametrize('enabled', [False, True])
+def test_dialogue_sound_preference_is_loaded_and_saved(window, enabled):
+    from mabinogi_addon.ui.settings_tab import SettingsTab
+    config.save_general_flag('creatorDialogueSound', enabled)
+    restored = SettingsTab(window._watcher)
+    try:
+        assert restored.dialogue_sound_enabled.isChecked() is enabled
+        restored.dialogue_sound_enabled.setChecked(not enabled)
+        assert config.load_general_flag('creatorDialogueSound') is (not enabled)
+    finally:
+        restored.shutdown()
+        restored.close()
+
+
+@pytest.mark.parametrize('failure', ['construction', 'play', 'missing'])
+def test_dialogue_default_sound_failures_keep_the_bubble(window, monkeypatch, failure, tmp_path):
+    from mabinogi_addon.ui import notifier
+    if failure == 'construction':
+        monkeypatch.setattr(notifier, 'SoundNotifier', Mock(side_effect=RuntimeError('no audio')))
+    elif failure == 'play':
+        monkeypatch.setattr(notifier.SoundNotifier, 'play', Mock(side_effect=RuntimeError('no backend')))
+    else:
+        monkeypatch.setattr(notifier, 'CREATOR_DIALOGUE_SOUND_FILE', tmp_path / 'missing.mp3')
+    d = window.creator_dialogue
+    assert d.request() and d.bubble.isVisible()
+    assert d.expiry.isActive()
+    assert d.session.last_text
