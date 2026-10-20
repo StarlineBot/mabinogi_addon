@@ -61,8 +61,8 @@ PyInstaller **6.22.3**의 `SplashWriter`는 스크립트 길이에 `len(str)`를
 
 ![실제 Tcl 시작 화면](qa/assets/startup_loading_20261020/tcl-longest.png)
 
-이미지는 배치 확인 자료이며 Windows EXE 실행 증거는 아니다. 사용자에게 실제 렌더를 공유했으며
-추가 배치 피드백은 대기 중이다.
+이미지는 배치 확인 자료이며 Windows EXE 실행 증거는 아니다. 사용자에게 실제 렌더를 공유했고
+2026-10-20 “이 배치 유지”로 승인받았다. 이 승인은 배치 확정이며 Windows 실행 검증과는 별개다.
 
 ## Windows에서 다음으로 실행할 검증
 
