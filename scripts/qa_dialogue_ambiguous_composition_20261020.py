@@ -1,6 +1,6 @@
-"""Record the unresolved flags-zero native-cover branch on the default UI path.
+"""Verify approved muted text attempts for flags-zero native composition.
 
-Passing records conservative rejection, not successful transparency detection.
+This checks display/sound policy, not actual Windows compositor transparency.
 Run with PYTHONPATH=src:.:tests QT_QPA_PLATFORM=offscreen python -m pytest
 scripts/qa_dialogue_ambiguous_composition_20261020.py -q --tb=short.
 """
@@ -16,7 +16,7 @@ from mabinogi_addon.system import dialogue_visibility as visibility
 
 
 @pytest.mark.parametrize("automatic", [False, True])
-def test_record_unknown_composition_blocks_default_dialogue_until_evidence_changes(
+def test_unknown_composition_allows_muted_text_until_evidence_changes(
         window, native_model, monkeypatch, automatic):
     w, app = window
     state = native_model
@@ -39,23 +39,22 @@ def test_record_unknown_composition_blocks_default_dialogue_until_evidence_chang
     assert d.enabled and d.session.entries
     assert d.visibility is visibility.display_available
     detail = {}
-    assert not visibility.display_available(state.owner, [(20, 20, 48, 48)],
+    assert visibility.display_available(state.owner, [(20, 20, 48, 48)],
                                             (w.width(), w.height()), diagnostic=detail)
     assert detail["visibility"] == "unknown"
     assert detail["alpha_flags"] == 0 and detail["region_type"] == 0
     if automatic:
         d.tick()
     else:
-        assert not d.request()
-    assert not d.bubble.isVisible() and not sounds
-    assert not d.session.shown and d.session.last_draw is None
-
-    # Change only native evidence, not dialogue data, settings or foreground.
-    state.present = False
-    if automatic:
-        d.tick()
-    else:
         assert d.request()
+    assert d.bubble.isVisible() and not sounds
+    assert len(d.session.shown) == int(automatic)
+    assert (d.session.last_draw is not None) is automatic
+
+    # Clear the native cover and make a fresh request; data/settings/focus stay intact.
+    state.present = False
+    d.dismiss()
+    assert d.request()  # New visible manual dialogue may play; no queued sound resumes.
     assert d.bubble.isVisible() and len(sounds) == 1
     assert len(d.session.shown) == int(automatic)
     d.dismiss()

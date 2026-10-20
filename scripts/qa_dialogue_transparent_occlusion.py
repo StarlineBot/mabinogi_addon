@@ -46,6 +46,9 @@ def native_model(monkeypatch):
         GetWindowLong=lambda hwnd, key: 0x80000 if state.layered else 0,
         GetLayeredWindowAttributes=lambda hwnd: (0, state.alpha, 2),
         EnumWindows=enumerate_windows,
+        CreateRectRgnIndirect=lambda rect: object(),
+        GetWindowRgn=lambda *args: 0,
+        DeleteObject=lambda *args: None,
     )
     monkeypatch.setattr(visibility, "sys", SimpleNamespace(platform="win32"))
     monkeypatch.setattr(visibility, "desktop_unlocked", lambda: True)

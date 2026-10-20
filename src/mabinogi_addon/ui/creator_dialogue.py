@@ -108,6 +108,7 @@ class CreatorDialogue(QObject):
         self.visibility = visibility
         self.clock = clock
         self._notifier = None
+        self._sound_allowed = False
         self.sound = sound if sound is not None else self._play_sound
         self.enabled = window.settings_tab.dialogue_enabled.isChecked()
         self.started = self.closed = False
@@ -275,6 +276,7 @@ class CreatorDialogue(QObject):
         return self.window.centralWidget().rect().contains(self.bubble.geometry())
 
     def _eligible(self, *, diagnose=False):
+        self._sound_allowed = False
         w = self.window
         self._ineligible_reason = "창/설정/세션 또는 모달 상태"
         if (self.closed or not self.enabled or self.session_unavailable or self.suspended
@@ -308,6 +310,9 @@ class CreatorDialogue(QObject):
                                           diagnostic=detail, diagnose=diagnose)
             else:
                 visible = self.visibility(int(w.winId()), rects, (w.width(), w.height()))
+            self._sound_allowed = visible and detail.get("visibility") != "unknown"
+            if visible and not self._sound_allowed and self._notifier is not None:
+                self._notifier.stop()
             self._ineligible_reason = "" if visible else "Windows 잠금/창/화면 또는 API 확인 불가"
             if not visible and detail:
                 self._ineligible_reason += " " + repr(detail)
@@ -375,7 +380,7 @@ class CreatorDialogue(QObject):
         self.deadline = now + 3
         self.expiry.start(3000)
         self.session.displayed(text, now, automatic=automatic)
-        if self.sound is not None and self.window.settings_tab.dialogue_sound_enabled.isChecked():
+        if self._sound_allowed and self.sound is not None and self.window.settings_tab.dialogue_sound_enabled.isChecked():
             try:
                 self.sound(text)
             except Exception:

@@ -1,7 +1,7 @@
 """Check desktop, target bounds and native cover evidence without capturing pixels.
 
 Opaque/clear evidence and unknown composition are distinguished in diagnostics.
-Unknown per-pixel composition cannot safely authorize an unseen sound.
+Unknown composition permits a muted display attempt, never an unseen sound.
 """
 
 import sys
@@ -126,29 +126,31 @@ def _blocker_identity(gui, hwnd, detail):
             detail['identity_winerror'] = code
 
 
+def _cover_visibility(detail):
+    style = detail.get("extended_style", 0)
+    opaque = (detail.get("stage") == "occluded"
+              and not style & 0x200000  # NOREDIRECTIONBITMAP may use per-pixel composition.
+              and "extended_style" in detail
+              and "alpha_error" not in detail and "region_error" not in detail
+              and (not style & 0x80000 or
+                   (detail.get("alpha") == 255 and detail.get("alpha_flags", 0) & 2
+                    and not detail.get("alpha_flags", 0) & 1)))
+    return "occluded" if opaque else "unknown"
+
+
 def display_available(hwnd: int, local_rects: list, logical_size: tuple[int, int], *,
                       diagnostic=None, diagnose=False) -> bool:
-    """Authorize only evidenced exposure; ambiguous composition stays silent."""
+    """Allow unknown cover composition for text; diagnostics must gate sound."""
     detail = {} if diagnostic is None else diagnostic
     allowed = exposed(hwnd, local_rects, logical_size, diagnostic=detail,
-                      diagnose=diagnose, check_occlusion=True)
-    if allowed:
-        detail["visibility"] = "exposed"
-    else:
-        style = detail.get("extended_style", 0)
-        opaque = (detail.get("stage") == "occluded"
-                  and not style & 0x200000  # NOREDIRECTIONBITMAP: composition may be per-pixel.
-                  and "extended_style" in detail
-                  and "alpha_error" not in detail and "region_error" not in detail
-                  and (not style & 0x80000 or
-                       (detail.get("alpha") == 255 and detail.get("alpha_flags", 0) & 2
-                        and not detail.get("alpha_flags", 0) & 1)))
-        detail["visibility"] = "occluded" if opaque else "unknown"
+                      diagnose=diagnose, check_occlusion=True, allow_unknown=True)
+    detail["visibility"] = ("unknown" if detail.get("stage") == "composition_unknown"
+                            else "exposed" if allowed else _cover_visibility(detail))
     return allowed
 
 
 def exposed(hwnd: int, local_rects: list, logical_size: tuple[int, int], *, diagnostic=None,
-            diagnose=False, check_occlusion=True) -> bool:
+            diagnose=False, check_occlusion=True, allow_unknown=False) -> bool:
     # A caller-owned record avoids shared state between windows and automatic ticks.
     detail = diagnostic if diagnostic is not None else {}
     detail.clear()
@@ -193,9 +195,10 @@ def exposed(hwnd: int, local_rects: list, logical_size: tuple[int, int], *, diag
             detail.update(stage='display_available', hwnd=hwnd)
             return True
         found, blocked = False, False
+        uncertain = None
 
         def visit(other, _):
-            nonlocal found, blocked
+            nonlocal found, blocked, uncertain
             if found or blocked:
                 return True
             if other == hwnd:
@@ -225,9 +228,14 @@ def exposed(hwnd: int, local_rects: list, logical_size: tuple[int, int], *, diag
                 if cloaked.value:
                     blocked = False
                     return True
+                # Each candidate owns its evidence; a preceding unknown overlay
+                # must not taint a later known opaque window in the Z order.
+                for key in ("extended_style", "layered", "alpha", "alpha_flags", "alpha_error",
+                            "region_type", "region_evidence", "region_error", "region_cleanup_error"):
+                    detail.pop(key, None)
                 detail["stage"] = "occluded"
-                # Flags alone do not prove transparency. Unknown/per-pixel
-                # alpha stays conservative; only global alpha zero is ignored.
+                # Only enabled global alpha zero proves transparency here.
+                # Strict exposed() continues to reject unknown composition.
                 try:
                     style = win32gui.GetWindowLong(other, -20)
                     detail["extended_style"] = style
@@ -241,6 +249,9 @@ def exposed(hwnd: int, local_rects: list, logical_size: tuple[int, int], *, diag
                     detail["alpha_error"] = type(exc).__name__
                 if blocked and _region_overlap(win32gui, other, targets, detail) is False:
                     blocked = False
+                if blocked and allow_unknown and _cover_visibility(detail) == "unknown":
+                    uncertain = dict(detail)
+                    blocked = False  # Continue: another window may still prove occlusion.
             return True
 
         detail["stage"] = "window_enumeration"
@@ -254,7 +265,11 @@ def exposed(hwnd: int, local_rects: list, logical_size: tuple[int, int], *, diag
                 _blocker_identity(win32gui, detail["other_hwnd"], detail)
         if not blocked:
             detail.clear()
-            detail.update(stage="exposed" if found else "owner_not_enumerated", hwnd=hwnd)
+            if found and uncertain is not None:
+                detail.update(uncertain)
+                detail["stage"] = "composition_unknown"
+            else:
+                detail.update(stage="exposed" if found else "owner_not_enumerated", hwnd=hwnd)
         return found and not blocked
     except Exception as exc:  # 부가기능 판정 실패를 기존 트래커로 전파하지 않는다.
         detail["error"] = type(exc).__name__
