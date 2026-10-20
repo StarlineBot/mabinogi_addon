@@ -140,3 +140,25 @@ resources, combat, dialogue, configuration, capture, navigation, delivery, calcu
 원버튼 구현/검증은 [개발 기록](one-button-release-development-20261020.md),
 앞선 검증 이관 근거는 [개발 검증](validation-promotion-development.md),
 과거 결과는 [역사 기록](windows-validation-history.md)에 둔다. 과거 통과를 현재 통과로 쓰지 않는다.
+
+
+## Windows 오프스크린 글꼴
+
+격리 회귀의 `QT_QPA_PLATFORM=offscreen`은 Windows 네이티브 Qt와 다른 글꼴 검색 경로를 쓴다.
+Qt 기본 `lib/fonts`가 비어 있으면 `QFontDatabase: Cannot find font directory`와 빈 resolved font가
+나오며, 숫자를 대체 glyph로 그려 10/37/90%가 같은 이미지가 되고 문구 폭 계산도 틀릴 수 있다.
+
+`tests/conftest.py`는 QApplication 생성 전에 공통 `test_support.qt_runtime`을 호출한다.
+Windows offscreen일 때만 `QT_QPA_FONTDIR`에 `%WINDIR%/Fonts`(또는 `%SystemRoot%/Fonts`)를
+지정한다. 사용자가 지정한 글꼴 폴더와 네이티브 `windows` 플랫폼·Linux/macOS 설정은 보존한다.
+시스템 글꼴 경로가 없으면 원인을 명시해 실패하며 검사를 skip하거나 수치를 완화하지 않는다.
+독립 프레임 진단 스크립트도 자체 QApplication 생성 전에 같은 초기화를 한다.
+
+이 문제의 표적 재검증:
+
+```powershell
+$env:QT_QPA_PLATFORM = 'offscreen'
+uv run pytest tests/test_manual_update_progress.py -q --tb=short
+```
+
+이 8개 검사의 통과는 전체 Windows 격리·네이티브·exe 빌드/후보 검증을 대신하지 않는다.

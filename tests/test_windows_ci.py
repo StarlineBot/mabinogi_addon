@@ -168,3 +168,42 @@ def test_dispatch_defaults_to_verification_and_freezes_request_before_heavy_job(
     assert "github.run_attempt" in store["with"]["name"]
     assert all("continue-on-error" not in s for s in request["steps"])
     assert "workflow run" not in json.dumps(main) + json.dumps(workflow("release.yml"))
+
+
+@pytest.mark.parametrize("backend", ["offscreen", "offscreen:custom-options"])
+@pytest.mark.parametrize("root_key", ["WINDIR", "SystemRoot"])
+def test_windows_offscreen_uses_system_fonts_before_application(tmp_path, backend, root_key):
+    from test_support.qt_runtime import configure_offscreen_fonts
+    fonts = tmp_path / "Windows" / "Fonts"
+    fonts.mkdir(parents=True)
+    env = {"QT_QPA_PLATFORM": backend, root_key: str(fonts.parent)}
+    configure_offscreen_fonts(platform="win32", environ=env)
+    assert env["QT_QPA_FONTDIR"] == str(fonts)
+
+
+@pytest.mark.parametrize("platform,backend", [
+    ("win32", "windows"), ("win32", ""), ("linux", "offscreen"), ("darwin", "offscreen")
+])
+def test_native_and_other_platform_font_setup_is_preserved(platform, backend):
+    from test_support.qt_runtime import configure_offscreen_fonts
+    env = {"QT_QPA_PLATFORM": backend}
+    configure_offscreen_fonts(platform=platform, environ=env)
+    assert env == {"QT_QPA_PLATFORM": backend}
+
+
+def test_explicit_offscreen_font_directory_is_preserved():
+    from test_support.qt_runtime import configure_offscreen_fonts
+    env = {"QT_QPA_PLATFORM": "offscreen", "QT_QPA_FONTDIR": "custom-fonts"}
+    configure_offscreen_fonts(platform="win32", environ=env)
+    assert env["QT_QPA_FONTDIR"] == "custom-fonts"
+
+
+@pytest.mark.parametrize("root", [None, "missing-windows-directory"])
+def test_missing_windows_fonts_fail_with_actionable_error(root):
+    from test_support.qt_runtime import configure_offscreen_fonts
+    env = {"QT_QPA_PLATFORM": "offscreen"}
+    if root:
+        env["WINDIR"] = root
+    with pytest.raises(RuntimeError, match="QT_QPA_FONTDIR"):
+        configure_offscreen_fonts(platform="win32", environ=env)
+    assert "QT_QPA_FONTDIR" not in env

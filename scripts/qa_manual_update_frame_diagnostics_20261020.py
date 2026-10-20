@@ -22,6 +22,9 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--full-suite", action="store_true")
     args = parser.parse_args()
+    from test_support.qt_runtime import configure_offscreen_fonts
+
+    configure_offscreen_fonts()  # This script constructs QApplication before pytest.
     import pytest
     from PySide6.QtGui import QFontInfo, QRawFont
     from PySide6.QtWidgets import QApplication

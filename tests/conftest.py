@@ -61,6 +61,11 @@ def tuarim_width_diagnostics(monkeypatch):
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from test_support.qt_runtime import configure_offscreen_fonts
+
+# Must precede test-module imports and their first QApplication.
+configure_offscreen_fonts()
+
 pytest_plugins = ['test_support.inventory']
 
 
