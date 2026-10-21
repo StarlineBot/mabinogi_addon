@@ -1,5 +1,7 @@
 # Windows 진단 저널 파일 교체 실패 QA
 
+> 후속 수정 소스 `7993e1f`에서 원본 일회성 교체 거부 재현이 통과했다. [2026-10-22 독립 QA](Windows진단저널_교체수정_후속독립QA_20261022.md)의 확인 범위·비차단 복합 장애 제약·Windows 미검증을 우선한다. 아래 실제 실패 기록은 보존한다.
+
 - 날짜: 2026-10-21 (한국 시간).
 - 실제 실행: [39617505288](https://github.com/StarlineBot/mabinogi_addon/actions/runs/39617505288), attempt 1, SHA `4dbea247b6d21b9ea5390f79d915f3dfdd21ca93`.
 - 실패 job: `119282385060`. 현재 main `0ac60525f829a78deb982cc5d8604ac1c4cd5307`에서도 아래 두 코드 경로가 동일함을 확인했다.
