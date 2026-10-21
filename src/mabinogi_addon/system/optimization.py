@@ -271,7 +271,10 @@ class WindowsOptimization:
                 return value
         return self._ps("[Console]::OutputEncoding=[Text.Encoding]::UTF8; "+self._adapter(target)+"Get-NetAdapterRss -Name $a.Name | Select-Object Enabled,BaseProcessorGroup,BaseProcessorNumber,MaxProcessorGroup,MaxProcessorNumber,MaxProcessors,NumberOfReceiveQueues,@{N='Profile';E={[string]$_.Profile}} | ConvertTo-Json -Compress")
 
-    def write(self, kind, target, value):
+    def guarded_write(self, kind, target, value, guard):
+        self.write(kind,target,value,guard=guard)
+
+    def write(self, kind, target, value, *, guard=None):
         self._windows()
         self.validate(kind,target,value)
         if kind == 'cpu':
@@ -279,6 +282,7 @@ class WindowsOptimization:
                 if not kernel.SetProcessAffinityMask(handle,value): raise ctypes.WinError(ctypes.get_last_error())
             return
         if kind == 'autotuning':
+            if guard is not None: guard()
             self._ps("& netsh interface tcp set global autotuninglevel="+value+" | Out-Null; if($LASTEXITCODE -ne 0){throw 'netsh failed'}")
             return
         if kind in ('ack','nodelay'):
@@ -287,18 +291,25 @@ class WindowsOptimization:
             key = r'SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces\{'+str(uuid.UUID(target)).upper()+'}'
             with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,key,0,winreg.KEY_SET_VALUE) as handle:
                 name = 'TcpAckFrequency' if kind=='ack' else 'TCPNoDelay'
+                if guard is not None: guard()
                 if value is None:
                     try: winreg.DeleteValue(handle,name)
                     except FileNotFoundError: pass
                 else: winreg.SetValueEx(handle,name,0,winreg.REG_DWORD,value)
         else:
             fields = ' '.join('-'+key+' '+str(value[key]) for key in value if key!='Enabled')
+            if guard is not None: guard()
             self._ps(self._adapter(target)+"Set-NetAdapterRss -Name $a.Name "+fields+" -NoRestart; "+
                      ('Enable' if value['Enabled'] else 'Disable')+"-NetAdapterRss -Name $a.Name -NoRestart -Confirm:$false")
         self.restarts.add(str(uuid.UUID(target)))
 
-    def restart_network(self, target):
-        self._ps(self._adapter(target)+"Restart-NetAdapter -Name $a.Name -Confirm:$false")
+    def guarded_restart(self, target, guard):
+        self.restart_network(target,guard=guard)
+
+    def restart_network(self, target, *, guard=None):
+        script=self._adapter(target)+"Restart-NetAdapter -Name $a.Name -Confirm:$false"
+        if guard is not None: guard()
+        self._ps(script)
         self.restarts.discard(str(uuid.UUID(target)))
 
     def flush_network(self):

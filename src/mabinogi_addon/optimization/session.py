@@ -7,6 +7,10 @@ import threading
 import uuid
 
 
+class ChangeDeferred(RuntimeError):
+    """A mutation was withheld; durable originals must remain available."""
+
+
 @dataclass(frozen=True)
 class Core:
     index: int
@@ -86,11 +90,12 @@ class Recovery:
         finally:
             temporary.unlink(missing_ok=True)
 
-    def apply(self, kind, target, value):
+    def apply(self, kind, target, value, *, guard=None):
         with self.lock:
             if not self.allowed() or self.corrupt:
                 raise PermissionError('제작자 접근 또는 복구 기록을 확인해 주세요.')
             self.backend.validate(kind, target, value)
+            if guard is not None: guard()
             existing = next((i for i in self.items if i['kind'] == kind and i['target'] == target and i['state'] != 'restored'), None)
             if existing:
                 current = self.backend.read(kind, target)
@@ -98,6 +103,7 @@ class Recovery:
                     raise RuntimeError('다른 도구가 값을 바꿨어요. 재적용을 보류해요.')
                 return
             current = self.backend.read(kind, target)
+            if guard is not None: guard()
             if current == value:
                 return
             if len(self.items) >= self.MAX_ITEMS:
@@ -113,14 +119,22 @@ class Recovery:
                 self.items.pop()
                 self.restart_targets = restarts_before
                 raise
+            write_started=False
             try:
+                if guard is not None: guard()
                 if not self.allowed():
                     raise PermissionError('제작자 접근이 해제됐어요.')
-                self.backend.write(kind, target, value)
+                write_started=True
+                guarded_write=getattr(self.backend,'guarded_write',None)
+                if guard is not None and guarded_write is not None:
+                    guarded_write(kind,target,value,guard)
+                else:
+                    self.backend.write(kind, target, value)
                 if self.backend.read(kind, target) != value:
                     raise RuntimeError('적용값을 확인하지 못했어요.')
                 item['state'] = 'applied'
-            except Exception:
+            except Exception as exc:
+                if not write_started or isinstance(exc,ChangeDeferred): self.restart_targets=restarts_before
                 item['state'] = 'failed'
                 self._save()
                 raise
@@ -158,11 +172,16 @@ class Recovery:
                 self._save()
             return errors
 
-    def flush_network(self):
+    def flush_network(self, *, guard=None):
         with self.lock:
             if self.corrupt: raise RuntimeError('복구 기록을 확인해 주세요.')
             for target in tuple(self.restart_targets):
-                self.backend.restart_network(target)
+                if guard is not None: guard()
+                guarded_restart=getattr(self.backend,'guarded_restart',None)
+                if guard is not None and guarded_restart is not None:
+                    guarded_restart(target,guard)
+                else:
+                    self.backend.restart_network(target)
                 self.restart_targets.remove(target)
                 self._save()
 

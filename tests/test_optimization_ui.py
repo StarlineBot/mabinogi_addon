@@ -151,3 +151,17 @@ def test_config_restart_blocks_new_alpha_operations_and_stops_capture(window,mon
     c._start_optimization();c.start_frames()
     assert not c.frames and not c.engine.busy
     w._config_pending_restart=False
+
+
+def test_collector_csv_reaches_app_parser_in_fragmented_chunks(window,monkeypatch):
+    from pathlib import Path
+    from collections import deque
+    c=window[0].optimization_tools
+    data=(Path(__file__).parent/'data'/'presentmon-v2.3.1-v1-qpc.csv').read_bytes()
+    chunks=deque((data[:17],data[17:213],data[213:]))
+    monkeypatch.setattr(c.collector,'process',SimpleNamespace(readAllStandardOutput=lambda:chunks.popleft()))
+    monkeypatch.setattr(module.presentmon,'clock',lambda:(100.52,1000))
+    c.frames=True;c.stream=FrameStream(123,1000);c.collector.active=True
+    for _ in range(3): c.collector._read()
+    assert c.frames and c.stream.snapshot(100.52)['fps']==pytest.approx(50)
+    c.stop_frames()

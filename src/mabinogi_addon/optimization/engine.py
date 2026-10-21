@@ -1,5 +1,6 @@
 """One explicit optimization session; all blocking OS calls run off the UI thread."""
 import threading
+from .session import ChangeDeferred
 
 
 class Engine:
@@ -59,6 +60,16 @@ class Engine:
             plan = self.backend.topology().plan(options['count']) if options['cpu'] or options['rss'] else None
             game = self.backend.game()
             notices = []
+            def network_guard():
+                nonlocal game
+                if self.cancel.is_set() or not self.allowed():
+                    raise ChangeDeferred('중단 요청·접근 해제로 남은 네트워크 적용과 재연결을 보류해요.')
+                try: current=self.backend.game()
+                except Exception as exc:
+                    raise ChangeDeferred('게임 상태를 확인하지 못해 네트워크 변경과 재연결을 보류해요.') from exc
+                if current is not None:
+                    game=current
+                    raise ChangeDeferred('게임 실행 중: 남은 TCP·RSS 적용과 네트워크 재연결을 보류했어요.')
             processes = self.backend.processes()
             governor = self.backend.governor_running()
             if governor and (options['cpu'] or options['rss']): notices.append('Process Lasso Governor 실행 중: CPU·RSS 적용 보류')
@@ -73,10 +84,14 @@ class Engine:
                     except Exception as exc: notices.append('RSS 미적용: '+str(exc))
                 for kind, target, value in changes:
                     if self.cancel.is_set() or not self.allowed(): break
-                    try: self.recovery.apply(kind,target,value)
+                    try: self.recovery.apply(kind,target,value,guard=network_guard)
+                    except ChangeDeferred as exc:
+                        notices.append(str(exc))
+                        break
                     except Exception as exc: notices.append(f'{kind} 미적용·확인 필요: {exc}')
                 # Explicit start confirmation covered this one batch reconnect.
-                try: self.recovery.flush_network()
+                try: self.recovery.flush_network(guard=network_guard)
+                except ChangeDeferred as exc: notices.append(str(exc))
                 except Exception as exc: notices.append('네트워크 재연결 확인 필요: '+str(exc))
             seen = set()
             observed = game

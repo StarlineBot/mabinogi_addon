@@ -16,6 +16,7 @@ class FrameStream:
             raise ValueError('Invalid process/clock')
         self.pid, self.frequency = pid, frequency
         self.header = None
+        self.time_column = self.interval_column = None
         self.sources = {}
         self.selected = None
         self.cutoff = 0.0
@@ -36,7 +37,18 @@ class FrameStream:
         row = next(csv.reader([line]))
         if row and row[0].lstrip('\ufeff') == 'Application':
             self.header = [x.lstrip('\ufeff') for x in row]
-            if not {'ProcessID','SwapChainAddress','TimeInQPC','MsBetweenPresents'} <= set(self.header):
+            columns=set(self.header)
+            v1={'QPCTime','msBetweenPresents'} <= columns
+            modern={'TimeInQPC','MsBetweenPresents'} <= columns
+            if v1 == modern:
+                raise ValueError('지원하지 않는 프레임 데이터 형식이에요.')
+            if v1:
+                self.time_column,self.interval_column='QPCTime','msBetweenPresents'
+            elif modern:
+                self.time_column,self.interval_column='TimeInQPC','MsBetweenPresents'
+            else:
+                raise ValueError('지원하지 않는 프레임 데이터 형식이에요.')
+            if len(columns)!=len(self.header) or not {'ProcessID','SwapChainAddress'} <= columns:
                 raise ValueError('지원하지 않는 프레임 데이터 형식이에요.')
             return
         if not row or all(not field.strip() for field in row):
@@ -51,8 +63,8 @@ class FrameStream:
         source = data['SwapChainAddress']
         if not 0 < int(source, 16) < 2**64:
             raise ValueError('렌더링 대상 식별값이 잘못됐어요.')
-        stamp = int(data['TimeInQPC']) / self.frequency
-        interval = float(data['MsBetweenPresents']) / 1000
+        stamp = int(data[self.time_column]) / self.frequency
+        interval = float(data[self.interval_column]) / 1000
         if not math.isfinite(stamp) or not math.isfinite(interval) or interval < 0 or stamp > now + .1:
             raise ValueError('프레임 시각이 잘못됐어요.')
         if stamp <= self.cutoff or now - stamp > self.STALE:
