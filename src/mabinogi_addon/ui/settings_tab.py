@@ -183,7 +183,6 @@ class _ConfigExportThread(QThread):
 
 class SettingsTab(QWidget):
     # 로그인 상태가 바뀌면 메인이 받아 기능 노출(게이팅)을 갱신할 수 있게 알린다.
-    optimization_requested = Signal()
     login_changed = Signal()
     # 설정 가져오기/초기화 직후 메인에 알려, 종료 시 낡은 상태로 덮어쓰지 않게 한다.
     config_imported = Signal()
@@ -233,10 +232,6 @@ class SettingsTab(QWidget):
         dialogue_row.addWidget(self.dialogue_sound_enabled)
         dialogue_row.addStretch()
         v.addLayout(dialogue_row)
-        self.optimization_button = QPushButton('게임 최적화 · FPS 측정')
-        self.optimization_button.setVisible(False)
-        self.optimization_button.clicked.connect(self.optimization_requested)
-        v.addWidget(self.optimization_button)
         v.addWidget(self._inquiry_button())
         v.addWidget(self._diag_button())
         v.addWidget(self._autofind_diagnostic_group())

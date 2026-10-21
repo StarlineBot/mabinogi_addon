@@ -78,12 +78,24 @@ jobs:
         id: unit
         env:
           QT_QPA_PLATFORM: offscreen
-        run: uv run --frozen pytest -n 2 -vv -ra -m 'not windows_integration' --durations=30 --junitxml=unit-results.xml
+        run: uv run --frozen python -m scripts.run_regressions --diagnostics test-diagnostics/unit --case-timeout 180 --session-timeout 1500 -- -n 2 -vv -ra -m 'not windows_integration' --durations=30 --junitxml=unit-results.xml
       - name: Native Windows integration
         id: native
         env:
           QT_QPA_PLATFORM: windows
-        run: uv run --frozen pytest -vv -ra -m windows_integration --durations=30 --junitxml=windows-results.xml
+        run: uv run --frozen python -m scripts.run_regressions --diagnostics test-diagnostics/native --case-timeout 180 --session-timeout 600 -- -vv -ra -m windows_integration --durations=30 --junitxml=windows-results.xml
+      - name: Collect regression diagnostics
+        if: always()
+        run: uv run --frozen python -m scripts.run_regressions --diagnostics test-diagnostics --collect-only
+      - name: Store regression diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: regression-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-diagnostics/**/public/*
+          retention-days: 1
+          if-no-files-found: warn
+          compression-level: 6
       - name: Verify clean checkout after tests
         run: |
           git diff --quiet HEAD

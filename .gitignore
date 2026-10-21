@@ -40,3 +40,6 @@ scripts/_tts_preview/
 
 # Machine-local write-ahead recovery; never sync across machines.
 StarlineMabinogiAddonRuntime/
+
+# Local bounded regression watchdog diagnostics (CI uploads only sanitized public files).
+test-diagnostics/

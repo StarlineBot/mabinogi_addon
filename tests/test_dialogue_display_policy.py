@@ -37,9 +37,9 @@ def test_default_dialogue_displays_under_confirmed_transparency_without_changing
         dialogue, automatic, location):
     w, app, d = dialogue
     if location == 'settings':
-        w._tabs.setCurrentIndex(3)
+        w._tabs.setCurrentWidget(w._settings_scroll)
         app.processEvents()
-        w._tabs.widget(3).ensureWidgetVisible(w.settings_tab.creator_avatar)
+        w._settings_scroll.ensureWidgetVisible(w.settings_tab.creator_avatar)
         app.processEvents()
     other = None
     if automatic:

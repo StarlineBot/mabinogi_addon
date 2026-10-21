@@ -211,3 +211,19 @@ def test_missing_windows_fonts_fail_with_actionable_error(root):
     with pytest.raises(RuntimeError, match="QT_QPA_FONTDIR"):
         configure_offscreen_fonts(platform="win32", environ=env)
     assert "QT_QPA_FONTDIR" not in env
+
+
+def test_watchdog_bounds_keep_full_gate_and_publish_only_safe_diagnostics():
+    job=workflow('windows.yml')['jobs']['validate']
+    assert job['timeout-minutes']=='45'
+    steps=job['steps']
+    for name,session in [('unit','1500'),('native','600')]:
+        step=next(s for s in steps if s.get('id')==name)
+        assert 'scripts.run_regressions' in step['run'] and '--case-timeout 180' in step['run']
+        assert '--session-timeout '+session in step['run']
+    collect=next(s for s in steps if s.get('name')=='Collect regression diagnostics')
+    store=next(s for s in steps if s.get('name')=='Store regression diagnostics')
+    assert collect['if']=='always()' and store['if']=='always()'
+    assert store['with']['path']=='test-diagnostics/**/public/*'
+    assert store['with']['retention-days']=='1'
+    assert '.raw' not in store['with']['path'] and 'continue-on-error' not in store

@@ -772,7 +772,7 @@ def test_settings_replay_opens_app_tour_without_changing_configuration(app, sett
         window.show()
         app.processEvents()
         window._leave_setup()
-        window._tabs.setCurrentIndex(3)
+        window._tabs.setCurrentWidget(window._settings_scroll)
         before = deepcopy(config._read_local_config())
         window.settings_tab.replay_tour.emit()
         tour = window._tour
@@ -1073,7 +1073,7 @@ def test_first_show_guide_ignores_seen_and_registered_but_respects_skip_and_logi
         assert getattr(window, "_tour", None) is None
         assert config._read_local_config() == before
         window._leave_setup()
-        window._tabs.setCurrentIndex(3)
+        window._tabs.setCurrentWidget(window._settings_scroll)
         assert window.settings_tab.setup_btn is window.settings_tab.guide_btn
         assert not window.settings_tab.setup_btn.isHidden()
         window.settings_tab.setup_btn.click()

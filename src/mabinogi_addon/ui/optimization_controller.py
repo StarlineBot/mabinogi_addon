@@ -12,7 +12,7 @@ from ..optimization.engine import Engine
 from ..optimization.frames import FrameStream
 from ..system.optimization import WindowsOptimization
 from ..system import presentmon
-from .optimization_dialog import OptimizationDialog
+from .optimization_panel import OptimizationPanel
 from .frame_overlay import FrameOverlay
 
 
@@ -25,7 +25,7 @@ class OptimizationController(QObject):
         self.recovery = Recovery(paths.user_data_dir().parent / 'StarlineMabinogiAddonRuntime' / 'recovery.json',
                                  self.backend, lambda: self._can_start() and not self.engine.cancel.is_set())
         self.engine = Engine(self.backend,self.recovery,self._can_start)
-        self.dialog = None
+        self.panel = OptimizationPanel(window)
         section = config._read_local_config().get('frameMeter')
         section = section if isinstance(section,dict) else {}
         scale = section.get('scale',100)
@@ -41,7 +41,6 @@ class OptimizationController(QObject):
         self.stream = None
         self.paused = False
         self.closing = False
-        self.close_prompted = False
         self.context = None
         self.last_tick = time.monotonic()
         self.frame_status = '이전 FPS 세션 정리 필요 · 측정 중단을 눌러 주세요.' if self.collector.pending else '중단됨 · 측정값 없음'
@@ -50,6 +49,7 @@ class OptimizationController(QObject):
         self.timer.setInterval(250)
         self.timer.timeout.connect(self._tick)
         self.timer.start()
+        self._wire_panel()
         self.refresh_access()
 
     def _can_start(self):
@@ -79,38 +79,46 @@ class OptimizationController(QObject):
 
     def refresh_access(self):
         allowed = self._can_start()
-        button = self.window.settings_tab.optimization_button
-        button.setVisible(allowed or bool(self.recovery.pending or self.recovery.restart_targets) or self.recovery.corrupt or self.collector.pending)
-        button.setText('게임 최적화 · FPS 측정' if allowed else '게임 최적화 복구')
+        needed = is_creator()
+        if hasattr(self.window,'_tabs'):
+            tabs=self.window._tabs;index=tabs.indexOf(self.panel)
+            if needed and index<0:
+                index=tabs.insertTab(tabs.indexOf(self.window._settings_scroll),self.panel,'최적화')
+            elif not needed and index>=0:
+                if tabs.currentWidget() is self.panel: tabs.setCurrentWidget(self.window._settings_scroll)
+                tabs.removeTab(index)
+            if needed: tabs.setTabText(index,'최적화')
         if not allowed:
             if self.frames: self.stop_frames('제작자 접근이 해제돼 측정을 중단했어요.')
             if self.engine.busy: self.engine.cancel.set()
 
+    def _wire_panel(self):
+        d=self.panel
+        d.inspect.clicked.connect(self.engine.inspect)
+        d.start.clicked.connect(self._start_optimization)
+        d.stop.clicked.connect(self.engine.stop)
+        d.restore.clicked.connect(self._restore_network)
+        d.frames_start.clicked.connect(self.start_frames)
+        d.frames_stop.clicked.connect(lambda: self.stop_frames())
+        d.lock.setChecked(bool((config.load_overlay_state('frameMeter') or {}).get('locked',True)))
+        d.lock.toggled.connect(self._lock)
+        d.scale.setValue(self._scale)
+        d.scale.valueChanged.connect(self._set_scale)
+        d.source.currentIndexChanged.connect(self._select_source)
+
     def open(self):
-        if not is_creator() and not (self.recovery.pending or self.recovery.restart_targets) and not self.recovery.corrupt and not self.collector.pending: return
-        if self.dialog is None:
-            d = self.dialog = OptimizationDialog(self.window)
-            d.inspect.clicked.connect(self.engine.inspect)
-            d.start.clicked.connect(self._start_optimization)
-            d.stop.clicked.connect(self.engine.stop)
-            d.restore.clicked.connect(self._restore_network)
-            d.frames_start.clicked.connect(self.start_frames)
-            d.frames_stop.clicked.connect(lambda: self.stop_frames())
-            d.lock.setChecked(self._overlay.locked if self._overlay is not None else bool((config.load_overlay_state('frameMeter') or {}).get('locked',True)))
-            d.lock.toggled.connect(self._lock)
-            d.scale.setValue(self._scale)
-            d.scale.valueChanged.connect(self._set_scale)
-            d.source.currentIndexChanged.connect(self._select_source)
+        self.refresh_access()
+        if self.window._tabs.indexOf(self.panel)<0: return
+        self.window._pages.setCurrentWidget(self.window._tabs)
+        self.window._tabs.setCurrentWidget(self.panel)
         self.apply_theme()
-        self.dialog.show()
-        self.dialog.raise_()
         self._tick()
 
     def apply_theme(self):
-        if self.dialog is not None:
-            from .main_window import _tab_qss
+        if self.panel is not None:
+            from .main_window import _subtab_qss
             from .theme import is_dark
-            self.dialog.tabs.setStyleSheet(_tab_qss(is_dark()))
+            self.panel.tabs.setStyleSheet(_subtab_qss(is_dark()))
 
     def _save_overlay(self):
         if self._overlay is None: return
@@ -134,14 +142,14 @@ class OptimizationController(QObject):
         self._save_overlay()
 
     def _network_confirmation(self):
-        return QMessageBox.question(self.dialog or self.window,'네트워크 재연결',
+        return QMessageBox.question(self.panel or self.window,'네트워크 재연결',
             '선택한 어댑터의 연결이 잠시 끊길 수 있어요. 통신 중인 다른 앱에도 영향을 줄 수 있어요. 지금 진행할까요?',
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes
 
     def _start_optimization(self):
         if not self._can_start() or self.engine.busy: return
-        d = self.dialog
+        d = self.panel
         options = dict(cpu=d.cpu.isChecked(),count=d.split.currentData(),adapter=d.adapter.currentData(),
                        tcp=d.tcp.isChecked(),rss=d.rss.isChecked())
         if not any(options[k] for k in ('cpu','tcp','rss')):
@@ -157,7 +165,7 @@ class OptimizationController(QObject):
         self.engine.start(options)
 
     def _restore_network(self):
-        if self.engine.busy: return
+        if not self._can_start() or self.engine.busy: return
         if self._network_confirmation(): self.engine.restore_network()
 
     def start_frames(self):
@@ -178,7 +186,7 @@ class OptimizationController(QObject):
         self.target, self.stream, self.context = None, None, None
         self._hide_overlay()
         self.frame_status = message
-        if self.dialog is not None: self.dialog.frames_status.setText(message)
+        if self.panel is not None: self.panel.frames_status.setText(message)
 
     def _collector_ended(self, code):
         if not self.frames: return
@@ -203,7 +211,7 @@ class OptimizationController(QObject):
     def _select_source(self):
         if self.stream is not None:
             now, _ = presentmon.clock()
-            source=self.dialog.source.currentData()
+            source=self.panel.source.currentData()
             _log.info('FPS 대상 수동 선택: %s',source)
             self.stream.select(source,now)
             self._hide_overlay()
@@ -258,8 +266,8 @@ class OptimizationController(QObject):
             self.overlay.set_text(f"{result['fps']:.1f} FPS")
             self.overlay.show()
         else: self._hide_overlay()
-        if self.dialog is not None:
-            d = self.dialog
+        if self.panel is not None:
+            d = self.panel
             sources = result['sources']
             signature=(tuple(sources),self.stream.selected)
             if signature != getattr(d,'_source_signature',None):
@@ -281,17 +289,15 @@ class OptimizationController(QObject):
         if self.frames:
             try: self._frame_tick(gap)
             except Exception as exc: self._failed(str(exc))
-        if self.engine.recovery_requested and not self.engine.busy and not self.closing:
+        if self.engine.recovery_requested and not self.engine.busy:
             self.engine.recovery_requested = False
-            if self.recovery.restart_targets or any(i['kind']!='cpu' for i in self.recovery.pending):
-                if self._network_confirmation(): self.engine.restore_network()
-        if self.dialog is None: return
-        d = self.dialog
+        if self.panel is None: return
+        d = self.panel
         allowed, busy = self._can_start(), self.engine.busy
         for w in (d.cpu,d.tcp,d.rss,d.split,d.adapter,d.inspect,d.start): w.setEnabled(allowed and not busy)
         d.start.setEnabled(allowed and not busy and not self.recovery.corrupt and not (self.recovery.pending or self.recovery.restart_targets))
-        d.stop.setEnabled(busy or bool(self.recovery.pending or self.recovery.restart_targets))
-        d.restore.setEnabled(not busy and bool(self.recovery.pending or self.recovery.restart_targets))
+        d.stop.setEnabled(busy or any(i['kind']=='cpu' for i in self.recovery.pending))
+        d.restore.setEnabled(allowed and not busy and bool(self.recovery.pending or self.recovery.restart_targets))
         for control in (d.lock,d.scale,d.source): control.setEnabled(allowed)
         d.frames_start.setEnabled(allowed and not self.frames)
         d.frames_stop.setEnabled(self.frames or self.collector.pending)
@@ -327,13 +333,7 @@ class OptimizationController(QObject):
             self.stop_frames()
             self.engine.stop()
         if self.engine.busy: return False
-        network = bool(self.recovery.restart_targets) or any(i['kind']!='cpu' for i in self.recovery.pending)
-        if network and not self.close_prompted:
-            self.close_prompted = True
-            if self._network_confirmation():
-                self.engine.restore_network()
-                return False
         self.timer.stop()
-        if self.dialog is not None: self.dialog.close()
+        if self.panel is not None: self.panel.close()
         if self._overlay is not None: self._overlay.close()
         return True

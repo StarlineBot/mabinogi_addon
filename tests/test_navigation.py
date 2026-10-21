@@ -110,7 +110,7 @@ def test_tour_both_directions_and_approved_return(window, from_guide, finish):
     assert len(tour._steps) == 7
     assert tour._section_title == ''
     expected = [w._tracker_tabs,w._convenience_tabs,w._tracker_tabs,w._tracker_tabs,
-                w._tracker_tabs,w._tabs.widget(3),w._tracker_tabs]
+                w._tracker_tabs,w._settings_scroll,w._tracker_tabs]
     for index in list(range(7)) + list(reversed(range(7))) + list(range(7)):
         tour._i = index
         tour._show_step()

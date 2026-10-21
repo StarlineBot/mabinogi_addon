@@ -300,7 +300,6 @@ class MainWindow(QMainWindow):
         self.settings_tab = SettingsTab(self._watcher)
         from .optimization_controller import OptimizationController
         self.optimization_tools = OptimizationController(self)
-        self.settings_tab.optimization_requested.connect(self.optimization_tools.open)
         self.settings_tab.theme_changed.connect(self.optimization_tools.apply_theme)
         self.settings_tab.login_changed.connect(self.optimization_tools.refresh_access)
         self.settings_tab.config_imported.connect(self._on_config_imported)
@@ -341,7 +340,10 @@ class MainWindow(QMainWindow):
         self._party_scroll = _scrolled(self.party_tab)  # 토스트 클릭 시 이 탭으로 전환
         tabs.addTab(self._party_scroll, "파티 모집")
         tabs.addTab(self._convenience_tabs, "편의기능")
-        tabs.addTab(_scrolled(self.settings_tab), "설정")
+        self._settings_scroll = _scrolled(self.settings_tab)
+        tabs.addTab(self._settings_scroll, "설정")
+        self.optimization_tools.refresh_access()
+        self.optimization_tools.apply_theme()
         self._apply_tab_styles()  # 테마에 맞는 탭 색 적용(테마 변경 시 재적용)
 
         # 중앙: 상단 업데이트 배너(기본 숨김) + 탭
@@ -713,6 +715,7 @@ class MainWindow(QMainWindow):
         sub = _subtab_qss(dark)
         self._tracker_tabs.setStyleSheet(sub + "QTabBar::tab { padding:6px 9px; }")
         self._convenience_tabs.setStyleSheet(sub)
+        self.optimization_tools.panel.tabs.setStyleSheet(sub)
         self._tabs.setStyleSheet(_tab_qss(dark))
         # 파티 현황판은 매칭 행 배경색이 셀에 박혀 있어, 테마가 바뀌면 다시 그려야
         # 새 테마 색으로 갱신된다(안 그러면 호버 전까지 옛 색으로 보임).
@@ -900,7 +903,7 @@ class MainWindow(QMainWindow):
 
         def go_settings():
             self._pages.setCurrentWidget(self._tabs)
-            scroll = self._tabs.widget(3)
+            scroll = self._settings_scroll
             self._tabs.setCurrentWidget(scroll)
             settings_step.target = self.settings_tab.setup_btn
             settings_step.body = "‘설정 > 일반 > 안내 다시 보기’에서 첫 사용 안내와 앱 둘러보기를 다시 열 수 있어요."

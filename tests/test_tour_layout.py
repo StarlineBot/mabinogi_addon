@@ -79,7 +79,7 @@ def test_scroll_updates_card_without_host_move_or_resize(window):
     tour._show_step()
     settle(app)
     old_host = w.geometry()
-    scroll = w._tabs.widget(3)
+    scroll = w._settings_scroll
     target = tour._steps[5].target
     old = tour._target_rect()
     value = scroll.verticalScrollBar().value()

@@ -12,16 +12,18 @@ def test_creator_entry_no_automatic_measurement_and_access_revocation(window,mon
     c=w.optimization_tools
     monkeypatch.setattr(module,'is_creator',lambda:False)
     c.refresh_access()
-    assert c.window.settings_tab.optimization_button.isHidden()
+    assert w._tabs.indexOf(c.panel)==-1
     assert not c.frames and not c.collector.active and not c.engine.busy
     c.start_frames()
     assert not c.frames
     monkeypatch.setattr(module,'is_creator',lambda:True)
     c.refresh_access()
-    assert not c.window.settings_tab.optimization_button.isHidden()
+    assert w._tabs.tabText(w._tabs.indexOf(c.panel))=='최적화'
+    assert [w._tabs.tabText(i) for i in range(w._tabs.count())]==['전투 보조','파티 모집','편의기능','최적화','설정']
+    assert not hasattr(w.settings_tab,'optimization_button')
     c.open()
-    assert c.dialog is not None and not c.frames
-    assert not hasattr(c.dialog,'collector_path')
+    assert c.panel is not None and not c.frames
+    assert not hasattr(c.panel,'collector_path')
     monkeypatch.setattr(module.presentmon,'clock',lambda:(100,1000))
     monkeypatch.setattr(module.presentmon,'executable',lambda:object())
     monkeypatch.setattr(module.config,'load_game_exe',lambda:'Client.exe')
@@ -127,12 +129,12 @@ def test_fps_scale_and_lock_save_without_enabling_measurement(window,monkeypatch
     c=w.optimization_tools
     monkeypatch.setattr(module,'is_creator',lambda:True)
     c.open()
-    c.dialog.scale.setValue(200)
+    c.panel.scale.setValue(200)
     assert c.overlay.width()==420 and not c.frames and not c.overlay.isVisible()
-    c.dialog.lock.setChecked(False)
+    c.panel.lock.setChecked(False)
     stored=module.config._read_local_config()['frameMeter']
     assert stored['scale']==200 and stored['overlay']['locked'] is False
-    assert c.dialog.scale.value()==200
+    assert c.panel.scale.value()==200
     monkeypatch.setattr(module,'is_creator',lambda:False)
     c._set_scale(300)
     assert c._scale==200 and not c.frames
@@ -165,3 +167,48 @@ def test_collector_csv_reaches_app_parser_in_fragmented_chunks(window,monkeypatc
     for _ in range(3): c.collector._read()
     assert c.frames and c.stream.snapshot(100.52)['fps']==pytest.approx(50)
     c.stop_frames()
+
+
+@pytest.mark.parametrize('recovery',['corrupt','pending','restart','none'])
+def test_embedded_creator_and_recovery_tabs_preserve_single_lifetime(window,monkeypatch,recovery):
+    from PySide6.QtCore import QTimer
+    from PySide6.QtWidgets import QDialog
+    w,app=window;c=w.optimization_tools
+    panel,engine,collector,timer=c.panel,c.engine,c.collector,c.timer
+    timers=set(w.findChildren(QTimer))
+    calls=[]
+    monkeypatch.setattr(c.engine,'inspect',lambda:calls.append('inspect'))
+    monkeypatch.setattr(c.engine,'start',lambda *a:calls.append('start'))
+    monkeypatch.setattr(c,'start_frames',lambda:calls.append('frames'))
+    monkeypatch.setattr(module,'is_creator',lambda:True)
+    for _ in range(5):
+        c.refresh_access();w._tabs.setCurrentWidget(panel);panel.tabs.setCurrentIndex(1)
+        w._tabs.setCurrentWidget(w._settings_scroll);panel.tabs.setCurrentIndex(0)
+    assert not isinstance(panel,QDialog) and panel.window() is w
+    assert not calls and (c.panel,c.engine,c.collector,c.timer)==(panel,engine,collector,timer)
+    assert set(w.findChildren(QTimer))==timers
+    if recovery=='corrupt': c.recovery.corrupt=True
+    elif recovery=='pending': c.recovery.items=[dict(kind='ack',target='12345678-1234-1234-1234-123456789abc',old=None,applied=1,state='failed')]
+    elif recovery=='restart': c.recovery.restart_targets={'12345678-1234-1234-1234-123456789abc'}
+    monkeypatch.setattr(module,'is_creator',lambda:False)
+    c.refresh_access();c._tick()
+    assert w._tabs.indexOf(panel)==-1
+    assert not panel.start.isEnabled() and not panel.frames_start.isEnabled() and not panel.restore.isEnabled()
+    monkeypatch.setattr(c,'_network_confirmation',lambda:pytest.fail('hidden alpha must not prompt'))
+    c._restore_network()
+    c.engine.recovery_requested=True;c._tick()
+    monkeypatch.setattr(module,'is_creator',lambda:True)
+    c.refresh_access()
+    assert w._tabs.indexOf(panel)==3 and w._tabs.widget(4) is w._settings_scroll
+    # Avoid an actual recovery prompt/OS action in window fixture cleanup.
+    c.recovery.items=[];c.recovery.restart_targets.clear();c.recovery.corrupt=False
+
+
+def test_creator_tour_settings_target_is_stable_when_optimization_is_inserted(window,monkeypatch):
+    w,app=window;c=w.optimization_tools
+    monkeypatch.setattr(module,'is_creator',lambda:True);c.refresh_access()
+    assert w._tabs.indexOf(w._settings_scroll)==4
+    w._run_tour();tour=w._tour;tour._i=5;tour._show_step();app.processEvents()
+    assert w._tabs.currentWidget() is w._settings_scroll
+    assert tour._steps[5].target is w.settings_tab.setup_btn
+    tour.dismiss()

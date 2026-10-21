@@ -157,7 +157,7 @@ class CreatorDialogue(QObject):
         window.settings_tab.dialogue_sound_enabled.toggled.connect(self.set_sound_enabled)
         for tabs in (window._tabs, window._tracker_tabs, window._convenience_tabs, window._pages):
             tabs.currentChanged.connect(self.refresh)
-        window._tabs.widget(3).verticalScrollBar().valueChanged.connect(self._scrolled)
+        window._settings_scroll.verticalScrollBar().valueChanged.connect(self._scrolled)
         window.installEventFilter(self)
         window.centralWidget().installEventFilter(self)
         self._tracker_panels = (window.buff_tab, window.debuff_tab)

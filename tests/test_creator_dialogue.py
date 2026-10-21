@@ -21,7 +21,7 @@ def test_avatar_has_no_panel_on_hover_press_or_focus(window, app, location):
 
     app.setStyle("Fusion")
     if location == "settings":
-        window._tabs.setCurrentIndex(3)
+        window._tabs.setCurrentWidget(window._settings_scroll)
         button = window.settings_tab.creator_avatar
     else:
         window.creator_dialogue.refresh()
@@ -299,13 +299,13 @@ def test_approved_geometry_and_tail_and_no_focus(window, app):
     assert QApplication.focusWidget() is before
     assert d.bubble.geometry().bottom() < d.face.mapTo(window.centralWidget(), d.face.rect().topLeft()).y()
     assert d.footer.isVisible()
-    window._tabs.setCurrentIndex(3)
+    window._tabs.setCurrentWidget(window._settings_scroll)
     app.processEvents()
     assert not d.footer.isVisible()
     assert not d.bubble.isVisible()
     assert d.request()
     assert d.bubble.side == "left"
-    window._tabs.widget(3).verticalScrollBar().setValue(100)
+    window._settings_scroll.verticalScrollBar().setValue(100)
     app.processEvents()
     assert not d.bubble.isVisible()
     assert not d.request()
@@ -639,7 +639,7 @@ def test_dialogue_notification_is_half_volume_reused_and_independent(window, app
     try:
         assert d._notifier is None
         if trigger == 'settings':
-            window._tabs.setCurrentIndex(3)
+            window._tabs.setCurrentWidget(window._settings_scroll)
             app.processEvents()
         if trigger == 'automatic':
             d.clock = lambda: 100.0
