@@ -12,13 +12,13 @@ from ..setup_state import FEATURES, selected as enabled, missing, section, batch
 
 CHOICE_TEXT = {
     "buff": "버프가 끝나기 전에 알림을 받고 싶어요",
-    "debuff": "보스에게 아직 걸지 않은 디버프를 확인하고 싶어요",
-    "tuarim": "투아림이 차면 알림을 받고 싶어요",
-    "dorcha": "도르카 수치를 보기 편한 곳에 표시하고 싶어요",
+    "debuff": "보스에게 아직 걸리지 않은 디버프를 확인하고 싶어요",
+    "tuarim": "투아림이 설정한 비율에 도달하면 알림을 받고 싶어요",
+    "dorcha": "도르카 수치를 보기 편한 위치에 표시하고 싶어요",
     "boss": "보스 패턴이 다가오면 알림을 받고 싶어요",
-    'halo_timer': '헤일로가 나오기 전에 알림을 받고 싶어요',
-    "stat_bars": "체력·마나·스태미나를 보기 편한 곳에 표시하고 싶어요",
-    "skillbar": "단축바를 원하는 위치에서 보고 싶어요",
+    'halo_timer': '믿음의 균열에서 헤일로가 나오기 전에 알림을 받고 싶어요',
+    "stat_bars": "생명력·마나·스태미나를 보기 편한 위치에 표시하고 싶어요",
+    "skillbar": "단축바를 보기 편한 위치에 표시하고 싶어요",
     "custom": "게임 화면 일부를 다른 위치에도 띄우고 싶어요",
     "memo": "게임을 보면서 메모를 확인하고 싶어요",
 }
@@ -67,7 +67,7 @@ class SetupPage(QWidget):
         self.game_status = _label("")
         row.addWidget(self.game_status, 1)
         self.game_btn = QPushButton("게임창 등록 시작")
-        self.game_btn.setToolTip("버튼을 누른 뒤 3초 안에 게임창을 선택하세요.")
+        self.game_btn.setToolTip("‘게임창 등록 시작’을 누른 뒤 3초 안에 마비노기 창을 선택해 주세요.")
         self.game_btn.clicked.connect(self.register_game.emit)
         row.addWidget(self.game_btn)
         layout.addWidget(self.game_row)
@@ -197,8 +197,8 @@ class SetupPage(QWidget):
         self.unused_title.setVisible(bool(unused))
         self.boss_preparation.setVisible(needs_boss_preparation(raw))
         if not any(enabled(feature.key, raw) for feature in FEATURES) and not self.busy:
-            self.progress.setText("설정할 기능을 선택하세요.")
-        elif self.progress.text() == "설정할 기능을 선택하세요.":
+            self.progress.setText("이번에 자동설정할 기능을 골라주세요.")
+        elif self.progress.text() == "이번에 자동설정할 기능을 골라주세요.":
             self.progress.clear()
 
     def set_busy(self, busy):

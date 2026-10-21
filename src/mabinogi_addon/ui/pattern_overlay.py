@@ -54,6 +54,7 @@ class PatternWarningOverlay(QWidget):
         self._font_px = max(1, round(self._default_font_px() * font_scale))
         self._bold = bold
         self._text_color = text_color
+        self._paused = False
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)
         self._timer.timeout.connect(self._on_timeout)
@@ -70,7 +71,7 @@ class PatternWarningOverlay(QWidget):
 
     # ---- 경고 표시(고정 상태에서만) ----
     def show_message(self, text: str, duration_ms: int = 3000) -> None:
-        if not self._locked:
+        if self._paused or not self._locked:
             return  # 위치 조정 중엔 샘플 유지
         self._text = text
         self._relayout()
@@ -104,9 +105,16 @@ class PatternWarningOverlay(QWidget):
             self._timer.stop()
             self._text = self._sample
             self._relayout()
-            self.show()
-            self.raise_()
+            if not self._paused:
+                self.show()
+                self.raise_()
         self.update()
+
+    def set_paused(self, paused):
+        self._paused = paused
+        self._timer.stop()
+        self._text = ""
+        self.hide()
 
     def _display_text(self) -> str:
         return self._text or (self._sample if not self._locked else "")

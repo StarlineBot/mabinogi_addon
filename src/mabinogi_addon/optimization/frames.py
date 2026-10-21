@@ -1,0 +1,90 @@
+"""Present-event FPS, independent of Qt repaint/capture rates."""
+from collections import deque
+import csv
+import math
+
+
+class FrameStream:
+    WINDOW = 1.0
+    MIN_SPAN = 0.25
+    STALE = 2.0
+    MAX_FRAMES = 16384
+    MAX_SOURCES = 8
+
+    def __init__(self, pid, frequency):
+        if pid <= 0 or frequency <= 0:
+            raise ValueError('Invalid process/clock')
+        self.pid, self.frequency = pid, frequency
+        self.header = None
+        self.sources = {}
+        self.selected = None
+        self.cutoff = 0.0
+        self.problem = ''
+
+    def boundary(self, now):
+        self.cutoff = now
+        self.sources.clear()
+        self.problem = ''
+
+    def select(self, source, now):
+        self.selected = source
+        self.boundary(now)
+
+    def feed(self, line, now):
+        if len(line) > 16384:
+            raise ValueError('프레임 데이터 한도를 초과했어요.')
+        row = next(csv.reader([line]))
+        if row and row[0].lstrip('\ufeff') == 'Application':
+            self.header = [x.lstrip('\ufeff') for x in row]
+            if not {'ProcessID','SwapChainAddress','TimeInQPC','MsBetweenPresents'} <= set(self.header):
+                raise ValueError('지원하지 않는 프레임 데이터 형식이에요.')
+            return
+        if not row or all(not field.strip() for field in row):
+            return
+        if self.header is None:
+            raise ValueError('프레임 데이터 헤더를 확인하지 못했어요.')
+        if len(row) != len(self.header):
+            raise ValueError('프레임 데이터가 손상됐어요.')
+        data = dict(zip(self.header, row))
+        if int(data['ProcessID']) != self.pid:
+            raise ValueError('등록한 게임 이외의 프레임이 감지됐어요.')
+        source = data['SwapChainAddress']
+        if not 0 < int(source, 16) < 2**64:
+            raise ValueError('렌더링 대상 식별값이 잘못됐어요.')
+        stamp = int(data['TimeInQPC']) / self.frequency
+        interval = float(data['MsBetweenPresents']) / 1000
+        if not math.isfinite(stamp) or not math.isfinite(interval) or interval < 0 or stamp > now + .1:
+            raise ValueError('프레임 시각이 잘못됐어요.')
+        if stamp <= self.cutoff or now - stamp > self.STALE:
+            return  # Queued events from before a focus/sleep/target boundary.
+        if source not in self.sources:
+            if len(self.sources) >= self.MAX_SOURCES:
+                raise ValueError('렌더링 대상이 너무 많아 측정을 중단했어요.')
+            self.sources[source] = deque(maxlen=self.MAX_FRAMES)
+        events = self.sources[source]
+        if events:
+            delta = stamp - events[-1]
+            if delta <= 0 or delta > self.STALE or abs(delta - interval) > .0002:
+                events.clear()
+                self.problem = '프레임 순서·누락을 감지해 새 구간을 기다려요.'
+            elif len(events) == self.MAX_FRAMES and stamp - events[0] < self.WINDOW:
+                raise ValueError('프레임 버퍼 한도를 초과했어요. 값을 추정하지 않아요.')
+        events.append(stamp)
+        while len(events) > 2 and stamp - events[0] > self.WINDOW:
+            events.popleft()
+
+    def snapshot(self, now):
+        available = sorted(key for key, events in self.sources.items() if events and now-events[-1] <= self.STALE)
+        source = self.selected
+        if source is None and len(available) == 1:
+            source = available[0]
+        status = '렌더링 대상을 선택해 주세요.' if len(available)>1 and source is None else '측정 준비 중 · 최신 프레임을 기다려요.'
+        events = self.sources.get(source, ())
+        fps = None
+        if len(events) >= 2 and now-events[-1] <= self.STALE:
+            span = events[-1]-events[0]
+            if span >= self.MIN_SPAN:
+                fps = (len(events)-1)/span
+                status = f'{fps:.1f} FPS · 게임 제출 프레임'
+                self.problem = ''
+        return dict(fps=fps, sources=available, source=source, status=self.problem or status)

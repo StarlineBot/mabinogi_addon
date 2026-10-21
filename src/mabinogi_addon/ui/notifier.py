@@ -132,6 +132,14 @@ WARN_GONE_SOUND_FILE = "버프 사라짐.mp3"
 _warn_gone_player = None  # 일회성 재생기(모듈에 보관해 재생 전 GC 방지)
 
 
+def stop_warn_gone_sound():
+    if _warn_gone_player is not None:
+        try:
+            _warn_gone_player.stop()
+        except Exception:
+            pass
+
+
 def play_warn_gone_sound() -> bool:
     """사라짐 경고 버프가 사라졌을 때 효과음 재생. 파일/오디오 없으면 False."""
     global _warn_gone_player

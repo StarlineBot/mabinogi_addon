@@ -278,7 +278,7 @@ def test_tuarim_new_region_clears_evidence_but_keeps_fired_policy(tabs):
     assert tab._prev_raw is None and tab._stable_value is None
 
 
-def test_reentry_shutdown_and_beta_gate(tabs, monkeypatch):
+def test_reentry_shutdown_and_public_autofind(tabs, monkeypatch):
     tab = tabs[0]
     calls = []
     def perform(*a, **k):
@@ -295,7 +295,7 @@ def test_reentry_shutdown_and_beta_gate(tabs, monkeypatch):
     assert not tab._timer.isActive()
     monkeypatch.setattr(config, "load_discord_user", lambda: None)
     tabs[1]._on_auto_find()
-    assert len(calls) == 1
+    assert len(calls) == 2 and tabs[2] == before
 
 
 def test_unsupported_mirror_size_keeps_anchor(tabs, monkeypatch):

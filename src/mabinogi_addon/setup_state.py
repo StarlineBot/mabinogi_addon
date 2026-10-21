@@ -21,7 +21,7 @@ FEATURES = (
             "기준 버프와 추적할 버프의 아이콘·남은 시간이 들어오는지 확인하세요."),
     Feature("debuff", "디버프 트래커", "debuffTracker", True,
             "보스바 위 디버프 줄이 들어오는지 확인하세요. 아이콘이 없어도 등록할 수 있습니다."),
-    Feature("tuarim", "투아림", "tuarim", False,
+    Feature("tuarim", "투아림 알림", "tuarim", False,
             "숫자와 %가 모두 들어오는지 확인하세요. 판독값은 적용 후 도르카·투아림 탭에서 확인하세요."),
     Feature("dorcha", "도르카", "dorcha", False,
             "도르카 숫자가 들어오는지 확인하세요. 투아림과 함께 선택하면 한 번에 찾습니다.",beta=True),
@@ -197,5 +197,5 @@ def needs_boss_preparation(raw=None, *, feature_keys=None):
     return bool(set(batch_pending(raw, feature_keys=feature_keys)) & {'boss', 'debuff'})
 
 
-BOSS_PREPARATION = ('보스 체력바를 찾으려면 연습 모드에 입장해 체력바가 보이는 상태에서 자동설정해 주세요. '
-                    '지금 준비하기 어렵다면 다른 기능부터 설정하고 나중에 다시 시도할 수 있습니다.')
+BOSS_PREPARATION = ('보스 체력바를 찾으려면 연습 모드에 들어가 체력바가 보이는 상태에서 자동설정을 눌러주세요. '
+                    '지금 준비하기 어렵다면 다른 기능부터 설정하고 나중에 다시 시도해도 돼요.')

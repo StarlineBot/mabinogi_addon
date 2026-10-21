@@ -121,7 +121,7 @@ def test_interruptions_clear_effect_timer_and_require_new_debounce(pipeline, mon
         assert ov.warning_active and ov._warning_timer.isActive()
         assert "hp" in tab._visual_low_since
         assert state.sounds == [.4]
-        assert not tab.collect_chk.isEnabled() and not tab.auto_find_btn.isEnabled()
+        assert not tab.collect_chk.isEnabled() and tab.auto_find_btn.isEnabled()
         return
     assert not ov.warning_active and not ov._warning_timer.isActive()
     assert ov._shake_offset == 0 and "hp" not in tab._visual_low_since

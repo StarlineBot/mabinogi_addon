@@ -4,7 +4,7 @@
 각각 독립 오버레이(간격 투명)로 띄운다. 프리셋으로 기본 배치를 제공하고, 각 뭉치는
 드래그로 옮기고 고정할 수 있다. 빈 칸은 우클릭으로 숨긴다.
 
-기본 복제는 일반 공개하며 자동찾기만 기존 로그인 조건을 따른다.
+기본 복제와 자동 찾기는 로그인 없이 사용할 수 있다.
 """
 
 from __future__ import annotations
@@ -41,19 +41,10 @@ ANCHOR_BOX = (40, 40)  # 첫 아이콘(1칸) 크기 — 이 박스를 첫 아이
 # 액션바 영역은 비운다). 실측 보스 체력바 top ≈ 0.84 → 그 바로 위까지 타이트하게.
 SAFE_BOTTOM_RATIO = 0.84
 
-HELP_TITLE = "단축바 미러 사용법"
-HELP_HTML = """
-<h3>단축바 미러란?</h3>
-<p>게임 상단 단축바를 <b>그룹(4칸) 단위로 떼어</b> 원하는 위치(캐릭터 근처 등)에
-띄웁니다. 아이콘만 복제하고 <b>사이 간격은 투명</b>이라 깔끔합니다. (읽기만 함)</p>
-<h3>사용 순서</h3>
-<ol>
-<li><b>앵커 지정</b> — 단축바 <b>맨 왼쪽 위 첫 아이콘</b>에 박스를 맞춰 클릭하세요.
-그 자리를 기준으로 12뭉이 자동으로 잘립니다.</li>
-<li><b>프리셋</b>으로 기본 배치를 깔고, 각 뭉치를 드래그로 옮깁니다. 고정하면 잠기고
-클릭도 통과합니다. <b>빈 칸은 우클릭으로 숨김</b>.</li>
-</ol>
-"""
+from .feature_copy import HELP
+
+HELP_TITLE = '단축바 사용법'
+HELP_HTML = HELP['단축바']
 
 
 class SkillbarTab(QWidget):
@@ -166,7 +157,7 @@ class SkillbarTab(QWidget):
         self._beta_notice.hide()
         for w in self._gated:
             w.setEnabled(not self._shutting_down)
-        self.auto_find_btn.setEnabled(ok and not self._autofind_busy)
+        self.auto_find_btn.setEnabled(not self._autofind_busy)
         self.view_region_btn.setEnabled(self._anchor is not None and not self._shutting_down)
 
     # ---- 오버레이 ----

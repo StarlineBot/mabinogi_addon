@@ -189,7 +189,7 @@ class DorchaTab(QWidget):
         self.clear_region_btn.setEnabled(self._region is not None and not self._shutting_down)
         for control in (self.enable,self.scale_spin,self.lock_chk,self.region_btn):
             control.setEnabled(not self._shutting_down and not self._autofind_busy)
-        self.auto_find_btn.setEnabled(logged and not self._shutting_down and not self._autofind_busy)
+        self.auto_find_btn.setEnabled(not self._shutting_down and not self._autofind_busy)
         if self._percent_control is not None:
             self._percent_control.setVisible(self._alpha_ready and is_creator())
             self._percent_control.setEnabled(self._alpha_ready and is_creator() and not self._shutting_down)

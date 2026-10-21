@@ -64,7 +64,7 @@ class SetupGuide(QWidget):
         self.game_status = _label("")
         row.addWidget(self.game_status)
         self.game_btn = QPushButton("게임창 등록 시작")
-        self.game_btn.setToolTip("버튼을 누른 뒤 3초 안에 게임창을 선택하세요.")
+        self.game_btn.setToolTip("‘게임창 등록 시작’을 누른 뒤 3초 안에 마비노기 창을 선택해 주세요.")
         self.game_btn.clicked.connect(self.register_game.emit)
         row.addWidget(self.game_btn, 0, Qt.AlignmentFlag.AlignLeft)
         layout.addWidget(self.game_row)
@@ -212,16 +212,18 @@ class SetupGuide(QWidget):
 
     def refresh(self):
         raw = config._read_local_config()
-        stages = ('게임창 등록', '전투 기능', '추가 기능', '앱 둘러보기')
+        stages = ('게임창 등록', '전투 보조', '추가 설정', '앱 둘러보기')
         trail = ' → '.join(f'<b>{name}</b>' if i == self.stage else name for i, name in enumerate(stages))
         self.step_label.setText(f'<b>{self.stage + 1} / 4 단계</b> · {trail}')
-        self.title.setText(("게임창 등록", "전투 기능 설정", "추가 기능 설정")[self.stage])
+        self.title.setText(("게임창 등록", "전투 보조 설정", "전투 보조 추가 설정")[self.stage])
         self.description.setText((
-            ("처음 오셨군요. 사용할 기능을 골라 나에게 맞게 설정해 보세요.\n" if self.first_run else
-             "사용할 기능과 등록된 설정을 확인해 보세요.\n")
-            + "게임 화면과 활성 상태를 구별하기 위해 게임창을 등록합니다. 게임이 없다면 나중에 설정할 수 있습니다.",
-            "이번 자동설정에 포함할 전투 기능을 선택하세요.\n선택하지 않아도 이미 등록한 영역과 세부 옵션은 유지됩니다.",
-            "추가로 설정할 기능을 선택하세요.\n필요한 것만 선택하거나 이 단계를 건너뛰어도 됩니다.",
+            ("처음 오셨군요. 필요한 기능만 골라 함께 설정해 봐요.\n"
+             "게임창을 등록하면 앱이 마비노기 창을 찾을 수 있어요.\n"
+             "게임이 실행 중이지 않다면 나중에 등록해도 돼요." if self.first_run else
+             "등록한 영역을 확인하고, 추가로 설정할 기능을 골라봐요.\n"
+             "게임창을 바꿔야 한다면 여기서 다시 등록할 수 있어요."),
+            "이번 자동설정에 포함할 전투 보조 기능을 골라주세요.\n선택하지 않아도 이미 등록한 영역과 세부 설정은 그대로 유지해요.",
+            "도르카·투아림·체력바·단축바도 함께 설정할 수 있어요.\n이 기능들도 ‘전투 보조’ 탭에 있어요. 필요한 것만 고르거나 이 단계를 넘어가도 돼요.",
         )[self.stage])
         game = section(raw, "general").get("gameExe")
         self.game_status.setText("등록된 게임: " + str(game) if game else "게임창 등록 필요")

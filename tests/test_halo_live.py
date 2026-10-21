@@ -65,7 +65,10 @@ def test_live_battle_stops_or_suspends_at_real_boundaries(window,monkeypatch,bou
         monkeypatch.setattr(config,'load_discord_user',lambda:None)
     s._monitor(raw)
     assert not s._countdown.isVisible() and not s._warning.isVisible()
-    if boundary != 'missing':
+    if boundary == 'pause':
+        assert s._battle_target is not None and s._clock.armed
+        assert s._clock.last_remaining == raw  # Keep observing; pause must not shift the clock.
+    elif boundary != 'missing':
         assert s._battle_target is None and not s._clock.armed
     else:
         assert s._clock.last_remaining is None

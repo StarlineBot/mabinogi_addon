@@ -176,7 +176,7 @@ def test_late_result_never_restores_interrupted_tracking(moving,monkeypatch,chan
         assert tab._live_box == (150,90,28,23) and tab._overlay.value == 15
         assert not writes
         tab._apply_gate()
-        assert not tab.auto_find_btn.isEnabled()
+        assert tab.auto_find_btn.isEnabled()
         return
     assert tab._live_box is None and tab._overlay.value is None
 

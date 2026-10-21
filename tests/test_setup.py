@@ -504,7 +504,7 @@ def test_new_user_selection_is_seeded_once_before_main_window_tabs(app, settings
         assert all(not check.isChecked() for check in window.setup_guide.checks.values())
         assert all(not check.isChecked() for check in window.setup_page.checks.values())
         assert state.pending() == []
-        assert window.setup_page.progress.text() == "설정할 기능을 선택하세요."
+        assert window.setup_page.progress.text() == "이번에 자동설정할 기능을 골라주세요."
         window.setup_page.feature_changed.emit("buff", True)
         before = deepcopy(config._read_local_config())
         state.initialize_new_user()
@@ -555,7 +555,7 @@ def test_empty_selection_does_not_capture_or_save(flow, monkeypatch, logged_in):
     monkeypatch.setattr(config, "load_discord_user", lambda: {"id": "test"} if logged_in else None)
     before = deepcopy(config._read_local_config())
     run.run()
-    assert page.progress.text() == "설정할 기능을 선택하세요."
+    assert page.progress.text() == "이번에 자동설정할 기능을 골라주세요."
     assert config._read_local_config() == before
     assert not captures and not detections and not applied
 
@@ -882,7 +882,7 @@ def test_empty_current_stage_does_not_search_other_selected_stage(flow):
     before = deepcopy(config._read_local_config())
     try:
         run.run(page=page, feature_keys=page.feature_keys, on_result=page.record_result)
-        assert page.progress.text() == "설정할 기능을 선택하세요."
+        assert page.progress.text() == "이번에 자동설정할 기능을 골라주세요."
         assert not applied and not detections and not captures and not page.outcomes
         assert config._read_local_config() == before
         page.move(1)

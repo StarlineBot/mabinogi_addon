@@ -21,7 +21,12 @@ from mabinogi_addon.system import dialogue_visibility as visibility  # noqa: E40
 
 @pytest.fixture
 def native_model(monkeypatch):
-    state = SimpleNamespace(owner=11, present=True, alpha=0, layered=True,
+    class WindowState(SimpleNamespace):
+        @property
+        def blocker(self):
+            return 23 if self.owner == 22 else 22
+
+    state = WindowState(owner=11, present=True, alpha=0, layered=True,
                             visible=True, cloaked=False, cover=(0, 0, 1920, 1080),
                             origin=(0, 0), client=(0, 0, 800, 800))
 
@@ -33,12 +38,12 @@ def native_model(monkeypatch):
         return 0
 
     def enumerate_windows(callback, arg):
-        for hwnd in ([22, state.owner] if state.present else [state.owner]):
+        for hwnd in ([state.blocker, state.owner] if state.present else [state.owner]):
             if not callback(hwnd, arg):
                 break
 
     gui = SimpleNamespace(
-        IsWindowVisible=lambda hwnd: state.visible if hwnd == 22 else True,
+        IsWindowVisible=lambda hwnd: state.visible if hwnd == state.blocker else True,
         IsIconic=lambda hwnd: False,
         GetClientRect=lambda hwnd: state.client,
         ClientToScreen=lambda hwnd, point: state.origin,

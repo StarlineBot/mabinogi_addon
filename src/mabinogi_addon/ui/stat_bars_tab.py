@@ -54,22 +54,10 @@ def _complete_readings(readings: dict) -> bool:
     return all(sid in readings and np.isfinite(readings[sid].ratio)
                and 0 <= readings[sid].ratio <= 1 for sid in ("hp", "mp", "sta"))
 
-HELP_TITLE = "체력바 오버레이 사용법"
-HELP_HTML = """
-<h3>체력바 오버레이란?</h3>
-<p>게임 하단의 <b>체력·마나·스태미나</b> 바를 읽어, 원하는 위치에 <b>우리가 그린 깨끗한
-바</b>로 보여줍니다. 게임 화면을 복사(미러링)하는 게 아니라 <b>채움 비율만 읽어</b> 새로
-그리므로, 버프로 최대치가 늘거나 체력이 깎여도 바로 반영됩니다. (읽기만 함)</p>
+from .feature_copy import HELP
 
-<h3>사용 순서</h3>
-<ol>
-<li><b>영역 지정</b> — <b>고정 크기 박스</b>가 커서를 따라옵니다. 게임 하단의
-<b>체력·마나·스태미나 세 바</b> 위에 올려 클릭해 배치하세요(필요하면 <b>휠로 크기 조절</b>).
-그 <b>아래 파란 경험치(lv) 바는 포함하지 마세요</b>(바가 하나 더 잡혀 어긋납니다).</li>
-<li><b>바 이동</b> — 생긴 바 3개를 드래그로 원하는 곳에 둡니다. 고정하면 위치가 잠기고
-클릭도 통과합니다. 배율로 크기를 바꿀 수 있습니다.</li>
-</ol>
-"""
+HELP_TITLE = '체력바 사용법'
+HELP_HTML = HELP['체력바']
 
 
 class _DisplayPreview(QScrollArea):
@@ -597,7 +585,8 @@ class StatBarsTab(QWidget):
         self._beta_notice.hide()
         for w in self._gated_widgets:
             w.setEnabled(not self._shutting_down)
-        for w in (self.auto_find_btn, self.snap_btn, self.open_dir_btn, self.collect_chk):
+        self.auto_find_btn.setEnabled(not self._shutting_down)
+        for w in (self.snap_btn, self.open_dir_btn, self.collect_chk):
             w.setEnabled(ok and not self._shutting_down)
         self.view_region_btn.setEnabled(self._region is not None and not self._shutting_down)
 
@@ -745,7 +734,7 @@ class StatBarsTab(QWidget):
         self._apply_visibility()
 
     def _on_auto_find(self) -> None:
-        if not self._logged_in() or self._shutting_down:
+        if self._shutting_down:
             return
         from .region_registration import generation, editing_allowed
         stamp = generation(self)
@@ -782,7 +771,7 @@ class StatBarsTab(QWidget):
             QMessageBox.StandardButton.No,
         )
         self._highlight.close()  # 확인 끝나면 민트 점선 즉시 닫기(4초 타이머에만 의존 안 함)
-        if ans != QMessageBox.StandardButton.Yes or generation(self) != stamp or not editing_allowed(self) or not self._logged_in():
+        if ans != QMessageBox.StandardButton.Yes or generation(self) != stamp or not editing_allowed(self):
             return
         try:
             self._on_selected(lx, ly, lw, lh)
@@ -905,6 +894,9 @@ class StatBarsTab(QWidget):
         self._paused = paused
         if paused:
             self._alert_low_since.clear()
+            self._reset_visual_alerts()
+            if self._alert_player is not None:
+                self._alert_player.stop()
         self._apply_visibility()
 
     def shutdown(self) -> None:

@@ -1,0 +1,61 @@
+"""Read topology and change only an owned disposable child's affinity on Windows."""
+import os
+import subprocess
+import sys
+import pytest
+from mabinogi_addon.optimization.session import Recovery
+from mabinogi_addon.system.optimization import WindowsOptimization
+from mabinogi_addon.system.presentmon import executable
+
+pytestmark = [pytest.mark.windows_integration,
+              pytest.mark.skipif(sys.platform!='win32',reason='Requires Windows native APIs')]
+
+
+def test_owned_child_affinity_write_verify_and_restore(tmp_path):
+    backend=WindowsOptimization()
+    child=subprocess.Popen([sys.executable,'-c','import sys; sys.stdin.readline()'],stdin=subprocess.PIPE,
+                           stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+    recovery=None
+    try:
+        info=backend.process_info(child.pid)
+        assert info['same_user'] and info['same_session'] and not info['protected']
+        target=info['target']
+        original=backend.read('cpu',target)
+        first=original & -original
+        recovery=Recovery(tmp_path/'child.json',backend,lambda:True)
+        recovery.apply('cpu',target,first)
+        assert backend.read('cpu',target)==first
+        assert recovery.restore()==[]
+        assert backend.read('cpu',target)==original
+    finally:
+        if recovery is not None: recovery.restore()
+        if child.stdin: child.stdin.close()
+        try: child.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            child.kill();child.wait(timeout=3)
+
+
+def test_bundled_collector_exposes_pinned_cli_without_install():
+    result=subprocess.run([str(executable()),'--help'],capture_output=True,timeout=5,
+                          creationflags=0x08000000)
+    assert result.returncode==1  # Upstream PrintUsage exits via ParseCommandLine(false).
+    assert b'--process_id' in result.stderr
+    assert b'--session_name' in result.stderr
+
+
+def test_job_close_terminates_only_the_owned_child():
+    from mabinogi_addon.system.process_job import ProcessJob
+    child=subprocess.Popen([sys.executable,'-c','import sys; sys.stdin.readline()'],stdin=subprocess.PIPE,
+                           stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+    job=None
+    try:
+        job=ProcessJob(child.pid)
+        assert child.poll() is None
+        job.close()
+        child.wait(timeout=3)
+        assert child.returncode is not None
+    finally:
+        if job is not None: job.close()
+        if child.stdin: child.stdin.close()
+        if child.poll() is None:
+            child.kill();child.wait(timeout=3)

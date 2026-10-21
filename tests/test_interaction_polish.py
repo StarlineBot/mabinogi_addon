@@ -149,7 +149,7 @@ def test_stat_individual_locks_are_public_without_saving_on_logout(window, monke
     monkeypatch.setattr(config, "load_discord_user", lambda: None)
     tab._apply_login_gate()
     assert all(button.isEnabled() for button in tab.bar_lock_buttons.values())
-    assert not tab.collect_chk.isEnabled() and not tab.auto_find_btn.isEnabled()
+    assert not tab.collect_chk.isEnabled() and tab.auto_find_btn.isEnabled()
     assert config._read_local_config() == before
 
 

@@ -11,7 +11,7 @@ from .screen_grab import capture_for_autofind
 def confirm_autofind(tab, feature, label, apply, compatible=None, *, capture=None, allowed=None):
     from .region_registration import generation, editing_allowed
     stamp = generation(tab)
-    if tab._autofind_busy or tab._shutting_down or not tab._logged_in():
+    if tab._autofind_busy or tab._shutting_down:
         return
     tab._autofind_busy = True
     tab.auto_find_btn.setEnabled(False)
@@ -66,6 +66,6 @@ def confirm_autofind(tab, feature, label, apply, compatible=None, *, capture=Non
         tab._autofind_highlight = None
         tab._autofind_busy = False
         if not tab._shutting_down:
-            tab.auto_find_btn.setEnabled(tab._logged_in())
+            tab.auto_find_btn.setEnabled(True)
         if running and not tab._shutting_down:
             tab._timer.start()

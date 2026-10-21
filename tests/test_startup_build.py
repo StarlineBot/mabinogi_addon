@@ -24,7 +24,7 @@ assets = [('C:/app/assets', 'assets')]
 a = Analysis(['C:/app/entry.py'], datas=assets, hiddenimports=['pyi_splash', 'win32gui'])
 splash = Splash('C:/app/startup.png', binaries=a.binaries, datas=a.datas)
 exe = EXE(a.scripts, splash, splash.binaries, a.binaries, a.datas,
-          name='mabinogi-addon', console=False, uac_admin=True,
+          name='mabinogi-addon', console=False, uac_admin=False,
           version='C:/app/version.txt', icon=['C:/app/logo.ico'])
 """
     path = tmp_path / "test.spec"
@@ -90,7 +90,7 @@ def test_build_uses_temporary_spec_with_absolute_assets_and_preserves_existing_f
     assert (
         "--onefile" in generated
         and "--windowed" in generated
-        and "--uac-admin" in generated
+        and "--uac-admin" not in generated
     )
     assert generated[generated.index("--splash") + 1] == str(
         root / "src/mabinogi_addon/assets/startup_background.png"

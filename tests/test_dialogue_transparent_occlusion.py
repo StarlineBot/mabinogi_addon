@@ -61,7 +61,7 @@ def test_overlapping_cloak_failure_is_conservative_and_diagnosed(native_model, m
     detail = {}
     assert not visibility.exposed(11, [(20,20,48,48)], (800,800), diagnostic=detail)
     assert detail["stage"] == "window_cloak"
-    assert detail["other_hwnd"] == 22
+    assert detail["other_hwnd"] == native_model.blocker
     assert detail["cloak_hresult"] == -1
     assert detail["cover"] == native_model.cover
     assert detail["targets"] == [(20,20,68,68)]

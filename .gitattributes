@@ -8,3 +8,6 @@
 *.webp binary
 *.wav binary
 *.mp4 binary
+
+# Preserve the pinned upstream executable byte-for-byte on every platform.
+src/mabinogi_addon/assets/presentmon/PresentMon.exe -text

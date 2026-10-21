@@ -98,7 +98,7 @@ def help_button(title: str, html: str, parent=None) -> QPushButton:
     btn = _HelpButton(parent)
 
     def _open() -> None:
-        HelpDialog(title, html, parent).exec()
+        HelpDialog(title, html() if callable(html) else html, parent).exec()
 
     btn.clicked.connect(_open)
     return btn

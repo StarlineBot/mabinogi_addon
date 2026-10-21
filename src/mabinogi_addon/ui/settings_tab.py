@@ -166,12 +166,13 @@ class _ConfigExportThread(QThread):
 
 class SettingsTab(QWidget):
     # 로그인 상태가 바뀌면 메인이 받아 기능 노출(게이팅)을 갱신할 수 있게 알린다.
+    optimization_requested = Signal()
     login_changed = Signal()
     # 설정 가져오기/초기화 직후 메인에 알려, 종료 시 낡은 상태로 덮어쓰지 않게 한다.
     config_imported = Signal()
     # 알림 목소리 팩 변경 → 메인이 실행 중 재생기들을 새 팩으로 갱신(바로 적용).
     voice_pack_changed = Signal()
-    # '사용법 투어 다시 보기' → 메인이 온보딩 투어를 다시 실행.
+    # '앱 둘러보기 다시 열기' → 메인이 온보딩 투어를 다시 실행.
     replay_tour = Signal()
     reopen_setup = Signal()
     reopen_guide = Signal()
@@ -213,6 +214,10 @@ class SettingsTab(QWidget):
         dialogue_row.addWidget(self.dialogue_sound_enabled)
         dialogue_row.addStretch()
         v.addLayout(dialogue_row)
+        self.optimization_button = QPushButton('게임 최적화 · FPS 측정')
+        self.optimization_button.setVisible(False)
+        self.optimization_button.clicked.connect(self.optimization_requested)
+        v.addWidget(self.optimization_button)
         v.addWidget(self._inquiry_button())
         v.addWidget(self._diag_button())
         v.addWidget(self._autofind_diagnostic_group())
@@ -508,7 +513,7 @@ class SettingsTab(QWidget):
         v.addLayout(row)
         v.addWidget(
             hint_label(
-                "베타 기능을 먼저 사용해 볼 수 있습니다."
+                "베타 기능을 먼저 사용해 볼 수 있어요."
             )
         )
         self._refresh_login()
@@ -723,7 +728,7 @@ class SettingsTab(QWidget):
             row.addWidget(cell)
         row.addStretch(1)
         v.addLayout(row)
-        v.addWidget(hint_label("'시스템'은 Windows 설정을 따라요. 기본은 다크예요."))
+        v.addWidget(hint_label("‘시스템’을 선택하면 Windows 테마 설정을 따라가요. 기본 테마는 다크예요."))
         self._sync_theme_swatches(cur)
         return box
 
@@ -813,7 +818,7 @@ class SettingsTab(QWidget):
         size_row.addStretch(1)
         v.addLayout(size_row)
         v.addWidget(
-            hint_label("작을수록 미세, 클수록 큼직하게 칸칸 이동. (기본 32px)")
+            hint_label("격자가 작을수록 촘촘하게, 클수록 큰 간격으로 이동해요. 기본 크기는 32px이에요.")
         )
 
         v.addSpacing(8)
@@ -858,21 +863,21 @@ class SettingsTab(QWidget):
         v.addLayout(voice_row)
         v.addWidget(
             hint_label(
-                "버프·투아림 알림에 쓸 목소리 팩입니다. 고르면 미리듣기가 재생되고 바로 적용됩니다."
+                "버프·투아림 알림에 사용할 목소리를 골라주세요. 선택하면 미리듣기가 재생되고 바로 적용돼요."
             )
         )
 
         v.addSpacing(8)
         v.addWidget(section_label("안내 다시 보기"))
         tour_row = QHBoxLayout()
-        setup_btn = QPushButton("자동설정 다시 열기")
+        setup_btn = QPushButton("첫 사용 안내 다시 열기")
         self.setup_btn = setup_btn
         setup_btn.clicked.connect(self.reopen_setup.emit)
         v.addWidget(setup_btn)
         self.guide_btn = setup_btn
         self.guide_btn.setToolTip("게임창 등록부터 단계별 기능 선택과 영역 등록 안내를 엽니다.")
         self.guide_btn.setVisible(True)
-        tour_btn = QPushButton("사용법 투어 다시 보기")
+        tour_btn = QPushButton("앱 둘러보기 다시 열기")
         self.tour_btn = tour_btn
         tour_btn.setToolTip("전투 보조·편의기능·잠금·일시정지의 하이라이트 안내를 다시 봅니다")
         tour_btn.clicked.connect(self.replay_tour.emit)
@@ -964,7 +969,7 @@ class SettingsTab(QWidget):
 
         v.addWidget(
             hint_label(
-                "버튼을 누른 뒤 3초 안에 게임창을 선택하세요. 실행 파일명으로 등록합니다."
+                "‘게임창 등록 시작’을 누른 뒤 3초 안에 마비노기 창을 선택해 주세요. 실행 파일명으로 등록합니다."
             )
         )
         return box

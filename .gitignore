@@ -37,3 +37,6 @@ config.local.json.tmp
 
 # TTS 음성 오디션 결과물 (개발용)
 scripts/_tts_preview/
+
+# Machine-local write-ahead recovery; never sync across machines.
+StarlineMabinogiAddonRuntime/

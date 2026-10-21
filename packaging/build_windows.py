@@ -12,7 +12,7 @@ import tempfile
 
 
 OPTIONS = shlex.split("""
---noconfirm --clean --onefile --windowed --name mabinogi-addon --uac-admin
+--noconfirm --clean --onefile --windowed --name mabinogi-addon
 --splash src/mabinogi_addon/assets/startup_background.png --icon packaging/logo.ico
 --version-file packaging/version_info.txt --paths src
 --add-data "src/mabinogi_addon/assets;assets"

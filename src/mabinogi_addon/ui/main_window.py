@@ -298,6 +298,11 @@ class MainWindow(QMainWindow):
         self.boss_tab.set_presence_consumer(self.stat_bars_tab.has_active_alert)
         self.skillbar_tab = SkillbarTab(self._watcher)
         self.settings_tab = SettingsTab(self._watcher)
+        from .optimization_controller import OptimizationController
+        self.optimization_tools = OptimizationController(self)
+        self.settings_tab.optimization_requested.connect(self.optimization_tools.open)
+        self.settings_tab.theme_changed.connect(self.optimization_tools.apply_theme)
+        self.settings_tab.login_changed.connect(self.optimization_tools.refresh_access)
         self.settings_tab.config_imported.connect(self._on_config_imported)
         self.settings_tab.voice_pack_changed.connect(self._on_voice_pack_changed)
         self.settings_tab.replay_tour.connect(self._replay_tour)
@@ -501,8 +506,8 @@ class MainWindow(QMainWindow):
     def _setup_game_finished(self, success):
         self.setup_page.game_btn.setEnabled(not self.setup_page.busy)
         self.setup_page.refresh()
-        self.setup_page.progress.setText("게임창을 등록했습니다. 사용할 기능을 선택하세요." if success else
-                                         "게임창을 등록하지 못했습니다. 게임창을 선택한 뒤 다시 시도하세요.")
+        self.setup_page.progress.setText("게임창을 등록했어요. 이번에 자동설정할 기능을 골라주세요." if success else
+                                         "게임창을 등록하지 못했어요. 마비노기 창을 선택한 뒤 다시 시도해 주세요.")
         self.setup_guide.refresh()
         self.setup_guide.progress.setText(self.setup_page.progress.text())
         self.setup_guide.refresh()
@@ -653,7 +658,7 @@ class MainWindow(QMainWindow):
         h.setContentsMargins(12, 6, 12, 6)
         h.setSpacing(10)
         h.addStretch(1)  # 오른쪽 정렬: 상태·버튼을 우상단에 모은다.
-        self._status_label = QLabel("● 전체 오버레이: 켜짐")
+        self._status_label = QLabel("● 전투 보조: 켜짐")
         self._status_label.setObjectName("statusText")
         self._status_label.setToolTip(
             "각 기능의 사용 설정과 게임 활성 상태에 따라 표시됩니다. 영역 등록 여부는 각 탭에서 확인하세요."
@@ -664,8 +669,7 @@ class MainWindow(QMainWindow):
         # 앱 민트 기조와 달리 이 버튼만 모노톤으로.
         self._pause_btn = _OverlayToggle()
         self._pause_btn.setToolTip(
-            "사냥 안 할 때 오버레이를 잠깐 끄고/켭니다 "
-            "(앱이 앞에 있을 때 Space로도 토글)"
+            "전투 보조의 오버레이와 소리 알림을 잠시 멈춰요. 파티 모집 알림은 계속 받을 수 있어요."
         )
         self._pause_btn.toggled.connect(self._set_paused)
         h.addWidget(self._pause_btn)
@@ -684,8 +688,8 @@ class MainWindow(QMainWindow):
         if self._paused:
             # 정지중은 빨간 ●로(동작중 초록 ●과 대비). 앞 글리프는 ⏸ 이모지가 아니라
             # 일반 원(●)이라 OS 이모지 폰트의 네모 박스 artifact가 없다.
-            return ("● 전체 오버레이: 일시정지", self._STATUS_STOP)
-        return ("● 전체 오버레이: 켜짐", self._STATUS_OK)
+            return ("● 전투 보조: 일시정지", self._STATUS_STOP)
+        return ("● 전투 보조: 켜짐", self._STATUS_OK)
 
     def _update_header_status(self) -> None:
         text, color = self._overlay_status()
@@ -899,30 +903,30 @@ class MainWindow(QMainWindow):
             scroll = self._tabs.widget(3)
             self._tabs.setCurrentWidget(scroll)
             settings_step.target = self.settings_tab.setup_btn
-            settings_step.body = "단계별 자동설정과 앱 둘러보기를 설정에서 다시 열 수 있어요."
+            settings_step.body = "‘설정 > 일반 > 안내 다시 보기’에서 첫 사용 안내와 앱 둘러보기를 다시 열 수 있어요."
             scroll.ensureWidgetVisible(settings_step.target)
 
         settings_step = TourStep(self.settings_tab.setup_btn, "설정에서 다시 열기",
-                                 "단계별 자동설정과 앱 둘러보기를 설정에서 다시 열 수 있어요.",
+                                 "‘설정 > 일반 > 안내 다시 보기’에서 첫 사용 안내와 앱 둘러보기를 다시 열 수 있어요.",
                                  before=go_settings)
 
         steps = [
             TourStep(self._tracker_tabs.tabBar(), "전투 보조",
-                     "버프·디버프·투아림과 자원 표시, 보스 패턴·헤일로 알림을 아래 탭에서 선택할 수 있어요.", before=go_tracker),
+                     "버프·디버프·보스 패턴 알림부터 수치 표시·단축바·메모까지, 아래 탭에서 설정할 수 있어요.", before=go_tracker),
             TourStep(self._convenience_tabs.tabBar(), "편의기능",
-                     "분배금과 구슬 분배금, 구슬 교환 효율을 계산할 수 있어요.",
+                     "게임 중 번거로웠던 일을 도와주는 편의 도구를 모아뒀어요. 필요한 도구를 골라 사용해 보세요.",
                      before=go_convenience),
             TourStep(self.buff_tab.region_btn, "개별 기능 설정",
-                     "아직 등록하지 않은 영역은 각 기능에서 찾거나 직접 지정할 수 있어요.",
+                     "아직 등록하지 않은 영역은 해당 기능 화면에서 직접 지정할 수 있어요.",
                      before=lambda: go_buff_control(self.buff_tab.region_btn)),
             TourStep(self.buff_tab.lock_btn, "오버레이 위치 잠금",
-                     "오버레이를 옮긴 뒤 잠그면 클릭이 게임으로 통과해요.",
+                     "오버레이를 원하는 위치로 옮긴 뒤 잠그면 클릭이 게임으로 통과해요.",
                      before=lambda: go_buff_control(self.buff_tab.lock_btn)),
             TourStep(self._pause_btn, "전체 일시정지",
-                     "사용 중인 오버레이를 잠시 멈췄다가 다시 사용할 수 있어요.", before=go_tracker),
+                     "잠시 쉬고 싶다면 상단의 일시정지 버튼을 눌러주세요. 전투 보조의 오버레이와 소리 알림만 멈추고, 다시 누르면 이어서 사용할 수 있어요.", before=go_tracker),
             settings_step,
             TourStep(None, "사용 안내 종료",
-                     "남은 설정은 각 기능에서 이어서 진행할 수 있어요.", before=go_tracker),
+                     "준비됐어요. 남은 설정은 각 기능 화면에서 이어서 할 수 있어요.", before=go_tracker),
         ]
 
         def done():
@@ -1330,12 +1334,16 @@ class MainWindow(QMainWindow):
 
     def _on_buff_alert(self, buff_ids) -> None:
         """엔진이 만료임박(1차) 알림을 올리면, 소리 켠 버프만 사운드 재생."""
+        if self._paused:
+            return
         to_play = [b for b in buff_ids if b in self._sound_ids]
         if to_play:
             self._notifier.alert(to_play)
 
     def _on_buff_alert2(self, buff_ids) -> None:
         """2차(막차) 알림 — 소리 켠 버프만 '연장2.mp3'(없으면 1차 폴백) 재생."""
+        if self._paused:
+            return
         to_play = [b for b in buff_ids if b in self._sound_ids]
         if to_play:
             self._notifier2.alert(to_play)
@@ -1568,9 +1576,9 @@ class MainWindow(QMainWindow):
         open_act = QAction("열기", self)
         open_act.triggered.connect(self._show_from_tray)
         # 글자가 상태를 말하므로 체크표시 대신 라벨을 토글(⏸ 정지 ↔ ▶ 다시 시작).
-        self._pause_act = QAction("⏸ 전체 오버레이 정지", self)
+        self._pause_act = QAction("전투 보조 일시정지", self)
         self._pause_act.setToolTip(
-            "추적·자원·복제 오버레이를 일시정지합니다(메모·투아림 소리 알림은 유지)"
+            "전투 보조의 오버레이와 소리 알림을 잠시 멈춰요. 파티 모집 알림은 계속 받을 수 있어요."
         )
         self._pause_act.triggered.connect(lambda: self._set_paused(not self._paused))
         quit_act = QAction("종료", self)
@@ -1616,9 +1624,10 @@ class MainWindow(QMainWindow):
 
         추적 스레드는 그대로 두고 표시·알림만 토글하므로, 다시 켜면 재시작 없이
         즉시 현재 상태가 보인다. 세션 한정(저장 안 함) — 재실행하면 항상 켜진 상태.
-        투아림(소리 알림)·메모(직접 띄운 참고 노트)는 성격이 달라 영향받지 않는다.
+        모든 전투 표시·소리를 멈추고, FPS는 수집을 이어가며 표시만 숨긴다.
         """
         self._paused = paused
+        self.optimization_tools.set_paused(paused)
         for c in (self.buff_controller, self.debuff_controller):
             if c is not None:
                 c.set_paused(paused)
@@ -1626,11 +1635,23 @@ class MainWindow(QMainWindow):
         self.stat_bars_tab.set_paused(paused)
         self.dorcha_tab.set_paused(paused)
         self.skillbar_tab.set_paused(paused)
+        self.boss_tab.set_paused(paused)
+        self.tuarim_tab.set_paused(paused)
+        if paused:
+            for player in (self._notifier, self._notifier2):
+                if player is not None:
+                    player.stop()
+            from .notifier import stop_warn_gone_sound
+            stop_warn_gone_sound()
+        tip = ("기존 설정에 따라 전투 보조의 표시와 알림을 다시 켜요." if paused else
+               "전투 보조의 오버레이와 소리 알림을 잠시 멈춰요. 파티 모집 알림은 계속 받을 수 있어요.")
+        self._pause_btn.setToolTip(tip)
+        if getattr(self,'_pause_act',None) is not None:
+            self._pause_act.setToolTip(tip)
         self._tick_memo_visibility()
         # 트레이 라벨 + 상단 버튼 동기화(어느 쪽에서 눌러도 둘 다 반영, 루프 방지).
-        self._pause_act.setText(
-            "▶ 전체 오버레이 시작" if paused else "⏸ 전체 오버레이 정지"
-        )
+        if getattr(self,'_pause_act',None) is not None:
+            self._pause_act.setText("전투 보조 재개" if paused else "전투 보조 일시정지")
         if self._pause_btn.isChecked() != paused:
             self._pause_btn.blockSignals(True)
             self._pause_btn.setChecked(paused)
@@ -1644,9 +1665,9 @@ class MainWindow(QMainWindow):
         from .toast import show_toast
 
         if paused:
-            show_toast("전체 오버레이 정지", "버프·디버프·커스텀을 껐어요. 다시 시작하려면 ▶", 2500)
+            show_toast("전투 보조 일시정지", "전투 보조의 오버레이와 소리 알림을 잠시 껐어요.", 2500)
         else:
-            show_toast("전체 오버레이 시작", "버프·디버프·커스텀 오버레이가 다시 동작합니다", 2000)
+            show_toast("전투 보조 재개", "전투 보조를 재개했어요. 기존 설정에 따라 표시와 알림이 동작해요.", 2000)
 
     def _on_voice_pack_changed(self) -> None:
         """설정에서 알림 목소리 팩이 바뀌면 실행 중 재생기들을 새 팩으로 갱신(바로 적용)."""
@@ -1799,6 +1820,12 @@ class MainWindow(QMainWindow):
                     app_icon(),
                     2000,
                 )
+            return
+
+        if not self.optimization_tools.prepare_close():
+            event.ignore()
+            self._force_quit = True
+            QTimer.singleShot(200, self.close)
             return
 
         # 종료 정리 중 Qt 이벤트가 처리되어도 새 캡처/워커를 만들지 않는다.

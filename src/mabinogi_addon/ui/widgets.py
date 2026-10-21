@@ -211,7 +211,8 @@ class FeatureHeader(QWidget):
         if help_widget is not None:
             row.addWidget(help_widget, 0, Qt.AlignmentFlag.AlignTop)
         layout.addLayout(row)
-        self.description = QLabel(description)
+        from .feature_copy import DESCRIPTIONS
+        self.description = QLabel(DESCRIPTIONS.get(title, description))
         self.description.setWordWrap(True)
         self.description.setForegroundRole(QPalette.ColorRole.PlaceholderText)
         layout.addWidget(self.description)

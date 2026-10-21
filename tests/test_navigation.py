@@ -163,7 +163,7 @@ def test_logged_out_dorcha_and_tour_settings_keep_access_rules(window, monkeypat
     w.dorcha_tab._apply_gate()
     w._open_setup_feature('dorcha')
     assert w.dorcha_tab.enable.isEnabled()
-    assert not w.dorcha_tab.auto_find_btn.isEnabled()
+    assert w.dorcha_tab.auto_find_btn.isEnabled()  # 일반 자동 찾기는 로그아웃 상태에서도 제공
     w._run_tour(from_guide=True)
     assert getattr(w,'_tour',None) is not None
     w._run_tour()

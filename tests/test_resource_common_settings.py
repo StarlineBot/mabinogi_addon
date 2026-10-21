@@ -185,15 +185,18 @@ def test_shutdown_while_detecting_never_approves(common):
     assert not view.dorcha._timer.isActive() or view.dorcha._shutting_down
 
 
-def test_logout_during_approval_keeps_existing_regions(common,monkeypatch):
+def test_logout_during_approval_still_registers_public_regions(common,monkeypatch):
     _,view,*_ = common
     before = deepcopy(config._read_local_config())
     def approve(title):
         monkeypatch.setattr(config,"load_discord_user",lambda:None)
         return QMessageBox.StandardButton.Yes
     monkeypatch.setattr(view,"_approve",approve)
-    assert view.find_regions() == {}
-    assert config._read_local_config() == before
+    applied=view.find_regions()
+    assert applied == {"dorcha":(-86,43,28,23),"tuarim":(-60,71,42,16)}
+    expected=deepcopy(before)
+    for key,box in applied.items(): expected.setdefault(key,{})['box']=dict(zip(('x','y','w','h'),box))
+    assert config._read_local_config() == expected
 
 
 def test_public_manual_registers_both_resources_without_login(common,monkeypatch):

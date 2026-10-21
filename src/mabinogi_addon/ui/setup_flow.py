@@ -109,7 +109,7 @@ class SetupFlow:
         highlight = RegionHighlight()
         self.dialog = QMessageBox(self.page)
         self.dialog.setWindowTitle(feature.name + " · 찾은 영역 확인")
-        self.dialog.setText(feature.guidance + "\n이 영역으로 등록할까요?")
+        self.dialog.setText(feature.guidance + "\n표시한 영역이 설명에 맞는지 확인해 주세요. 이 영역으로 등록할까요?")
         self.dialog.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         self.dialog.setDefaultButton(QMessageBox.StandardButton.No)
         self.dialog.button(QMessageBox.StandardButton.Yes).setText("이 영역으로 등록")
@@ -144,16 +144,16 @@ class SetupFlow:
         if self.closed or self.running or page.busy or (self.future is not None and not self.future.done()):
             return
         if not any(enabled(key) for key in scope):
-            page.progress.setText("설정할 기능을 선택하세요.")
+            page.progress.setText("이번에 자동설정할 기능을 골라주세요.")
             return
         if not section(config._read_local_config(), "general").get("gameExe"):
-            page.progress.setText("게임창을 먼저 등록한 뒤 자동설정을 실행하세요.")
+            page.progress.setText("게임창을 먼저 등록한 뒤 자동설정을 눌러주세요.")
             return
         keys = pending(feature_keys=scope)
         excluded = [key for key in scope if enabled(key) and not batch_allowed(key)]
         if not keys:
             page.progress.setText(('이번 설정에서 제외 · 접근 권한 없음: ' + ', '.join(BY_KEY[k].name for k in excluded))
-                                  if excluded else "자동으로 찾을 미등록 영역이 없습니다. 직접 지정할 항목은 개별 설정에서 등록하세요.")
+                                  if excluded else "선택한 기능의 영역은 이미 등록되어 있어요. 다시 지정하려면 해당 기능 화면을 열어주세요.")
             return
         self.cancelled = False
         self.running = True

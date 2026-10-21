@@ -91,6 +91,7 @@ class BossTab(QWidget):
         self._overlay = PatternWarningOverlay()
         self._overlay.moved.connect(self._on_warn_moved)
         self._notifier = None
+        self._paused = False
         # 다음 패턴 목록 오버레이(왼쪽에 남은 패턴 % 나열). 위치/고정은 설정에 저장.
         self._upcoming = UpcomingPatternsOverlay()
         self._upcoming.moved.connect(self._on_upcoming_moved)
@@ -112,7 +113,9 @@ class BossTab(QWidget):
         v = QVBoxLayout(hp_page)
         v.setContentsMargins(12, 12, 12, 12)
 
-        v.addWidget(FeatureHeader("보스 패턴 알림", "보스 체력이 패턴 기준에 가까워지면 화면과 소리로 알립니다. 보스 체력바가 보이는 상태에서 자동 찾기를 실행하세요."))
+        from .feature_copy import HELP
+        from .help_dialog import help_button
+        v.addWidget(FeatureHeader("보스 패턴 알림", "보스 체력이 패턴 기준에 가까워지면 화면과 소리로 알립니다. 보스 체력바가 보이는 상태에서 자동 찾기를 실행하세요.", help_button("보스 패턴 알림 사용법", HELP["보스 패턴 알림"], self)))
 
         prev_btn = QPushButton("알림 미리보기")
         prev_btn.setToolTip("경고가 화면 어디에 어떻게 뜨는지 한 번 띄워 봅니다")
@@ -134,7 +137,7 @@ class BossTab(QWidget):
         cv.addWidget(self.region_label)
         self.view_region_btn = QPushButton("지정 영역 보기")
         self.view_region_btn.clicked.connect(self._flash_region)
-        # 자동 찾기(🧪 Discord 베타) — 로그인 사용자만 보임. 보스 체력바를 화면에서 찾아
+        # 자동 찾기 — 로그인 없이 사용 가능. 보스 체력바를 화면에서 찾아
         # 디버프 영역(바로 위)까지 함께 지정. 저장은 반드시 확인 후에만.
         self.auto_find_btn = QPushButton("자동 찾기")
         self.auto_find_btn.setToolTip(
@@ -151,7 +154,7 @@ class BossTab(QWidget):
         commands.addWidget(self.clear_region_btn)
         self.region_row = wrapping_row(row, commands)
         cv.addLayout(self.region_row)
-        cv.addWidget(hint_label("이름과 체력 수치가 보이는 보스 체력바를 지정하세요."))
+        cv.addWidget(hint_label("이름과 체력 비율이 보이는 보스 체력바를 지정해 주세요."))
 
         preview_group = QGroupBox("판독 미리보기")
         preview_layout = QVBoxLayout(preview_group)
@@ -169,7 +172,7 @@ class BossTab(QWidget):
         cv.addWidget(preview_group)
 
         cv.addWidget(
-            hint_label("영역을 맞춘 뒤 위의 '식별'과 'HP'가 실제와 맞는지 먼저 확인하세요.")
+            hint_label("판독 미리보기의 식별 결과와 HP가 게임 화면과 같은지 확인해 주세요.")
         )
 
         # 경고 위치 이동/고정(다음 패턴 목록과 동일 구조).
@@ -274,6 +277,8 @@ class BossTab(QWidget):
         return lbl
 
     def _preview_warning(self) -> None:
+        if self._paused:
+            return
         # 실제 경고처럼 소리까지 같이 내 어떻게 보이고 들리는지 보여준다. 위치 조정(해제)
         # 중이면 샘플이 이미 떠 있으므로 소리만 난다(show_message는 고정 상태에서만).
         self._overlay.show_message("고목의 페타크 85% 패턴 준비  (미리보기)", 2500)
@@ -426,7 +431,7 @@ class BossTab(QWidget):
           트래커·HP는 긴 패턴을 버티려 _GONE_FRAMES(~18초)까지 유지되지만, 목록까지
           그만큼 남으면 보스가 떠난 뒤에도 '다가오는 %'가 한참 떠 있다(#4). 그래서
           목록은 보스가 화면에서 사라지면(_UPCOMING_GONE_FRAMES) 금방 감춘다."""
-        if not self.show_upcoming.isChecked():
+        if self._paused or not self.show_upcoming.isChecked():
             self._upcoming.hide()
             return
         if not self._upcoming.locked:
@@ -540,7 +545,7 @@ class BossTab(QWidget):
         alerts = []
         if boss_id is not None and self._tracker is not None and hp is not None:
             alerts = self._tracker.observe(hp)
-        if self._region:
+        if self._region and not self._paused:
             for alert in alerts:
                 self._overlay.show_message(alert.text, 3000)
                 self._play(alert.sound)
@@ -625,7 +630,7 @@ class BossTab(QWidget):
             self.diagnostics_btn.setVisible(self._logged_in())
         btn = getattr(self, "auto_find_btn", None)
         if btn is not None:
-            btn.setVisible(self._logged_in())  # 자동 찾기도 Discord 베타
+            btn.setVisible(True)  # 일반 기능의 자동 찾기는 비로그인 공개
 
     def _set_halo_access(self, allowed):
         if not allowed and self.pattern_tabs.currentIndex() == 1:
@@ -779,6 +784,8 @@ class BossTab(QWidget):
         )
 
     def _play(self, stage: str) -> None:
+        if self._paused:
+            return
         from .notifier import SoundNotifier
 
         if self._notifier is None:
@@ -789,6 +796,17 @@ class BossTab(QWidget):
             from PySide6.QtWidgets import QApplication
 
             QApplication.beep()
+
+    def set_paused(self, paused):
+        self._paused = paused
+        self._overlay.set_paused(paused)
+        self.halo_capture.set_paused(paused)
+        if not paused and not self._overlay.locked and not getattr(self.window(),'_closing',False):
+            self._overlay.set_locked(False)  # Restore placement sample, never a queued warning.
+        if paused:
+            self._upcoming.hide()
+            if self._notifier is not None:
+                self._notifier.stop()
 
     def shutdown(self) -> None:
         self.halo_capture.shutdown()

@@ -77,9 +77,9 @@ def test_basic_controls_and_alpha_are_independent(window,monkeypatch,user):
     assert w.stat_bars_tab.region_btn.isEnabled() and w.stat_bars_tab.alert_sound_chk.isEnabled()
     assert w.skillbar_tab.anchor_btn.isEnabled() and w.skillbar_tab.scale_spin.isEnabled()
     assert w.resource_tab.percent_chk.isHidden() is (not feature_access.is_creator())
-    assert d.auto_find_btn.isEnabled() is (user is not None)
+    assert d.auto_find_btn.isEnabled()
     assert w.stat_bars_tab.collect_chk.isEnabled() is (user is not None)
-    assert w.skillbar_tab.auto_find_btn.isEnabled() is (user is not None)
+    assert w.skillbar_tab.auto_find_btn.isEnabled()
 
 
 def test_account_revocation_removes_only_percent(runtime_policy):
@@ -114,12 +114,17 @@ def test_logged_out_stat_capture_sound_and_shake_continue(pipeline,monkeypatch):
     assert state.sounds == [.41]
     assert tab.has_active_alert()
     assert not tab.collect_chk.isEnabled()
-    assert not tab.auto_find_btn.isEnabled()
+    assert tab.auto_find_btn.isEnabled()
     monkeypatch.setattr(tab, '_write_shot', lambda *a:pytest.fail('unauthorized snapshot'))
     tab._save_snapshot()
     from mabinogi_addon import autofind_diagnostics
-    monkeypatch.setattr(autofind_diagnostics,'perform_autofind',lambda *a,**k:pytest.fail('unauthorized auto-find'))
+    calls=[]
+    from PySide6.QtWidgets import QMessageBox
+    warnings=[]
+    monkeypatch.setattr(QMessageBox,'warning',lambda *a,**k:warnings.append(a))
+    monkeypatch.setattr(autofind_diagnostics,'perform_autofind',lambda *a,**k:(calls.append(a) or (None,0,0,None)))
     tab._on_auto_find()
+    assert len(calls)==1 and len(warnings)==1  # Capture failure is reported; snapshots remain gated.
 
 
 def test_logged_out_skillbar_still_slices_twelve_groups(window,monkeypatch):
@@ -136,4 +141,4 @@ def test_logged_out_skillbar_still_slices_twelve_groups(window,monkeypatch):
     assert all(overlay.isVisible() for overlay in tab._overlays.values())
     assert all(len(overlay._cells) == 4 and all(cell is not None for cell in overlay._cells)
                for overlay in tab._overlays.values())
-    assert not tab.auto_find_btn.isEnabled()
+    assert tab.auto_find_btn.isEnabled()

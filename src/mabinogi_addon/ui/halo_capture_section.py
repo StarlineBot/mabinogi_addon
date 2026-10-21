@@ -115,6 +115,9 @@ class HaloCaptureSection(QWidget):
         commands.addWidget(self.clear_btn)
         self.region_row = wrapping_row(row, commands)
         v.addLayout(self.region_row)
+        guide = QLabel('게임 상단의 남은 시간이 분·초까지 모두 들어오도록 지정해 주세요.\n보스 이름을 확인한 뒤 남은 시간을 기준으로 안내해요.')
+        guide.setWordWrap(True)
+        v.addWidget(guide)
         self.region_btn.clicked.connect(self._pick)
         self.view_btn.clicked.connect(self._view)
         self.clear_btn.clicked.connect(self._clear)
@@ -303,7 +306,11 @@ class HaloCaptureSection(QWidget):
         return f'{value // 60:02}:{value % 60:02}'
 
     def _monitor(self, raw):
-        if not self._allowed() or getattr(self.window(), '_paused', False):
+        paused = getattr(self.window(),'_paused',False)
+        for overlay in (self._warning,self._countdown):
+            if overlay._paused != paused: overlay.set_paused(paused)
+        if paused: self._stop_audio()
+        if not self._allowed():
             self._stop_monitoring()
             return
         now = time.monotonic()
@@ -342,6 +349,15 @@ class HaloCaptureSection(QWidget):
                 self._boss_seen = float('-inf')
             self._hide_live_overlays()
             self.state.setText('시간 판독 확인 중 · 경고 보류')
+
+    def set_paused(self, paused):
+        for overlay in (self._warning, self._countdown):
+            overlay.set_paused(paused)
+            if not paused and not overlay.locked and self._allowed():
+                overlay.set_locked(False)
+        if paused:
+            self._preview_until = float('-inf')
+            self._stop_audio()
 
     def _allowed(self):
         window = self.window()
@@ -481,7 +497,6 @@ class HaloCaptureSection(QWidget):
 
     def _capture(self):
         if (not self._allowed() or not self._region or not self._watcher.is_game_active()
-                or getattr(self.window(), "_paused", False)
                 or self._selector is not None and self._selector.isVisible()):
             return None
         rect = to_physical(self._region)

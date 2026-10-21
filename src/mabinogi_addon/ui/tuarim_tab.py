@@ -76,6 +76,7 @@ class TuarimTab(QWidget):
         self._sct = None
         self._tracker = TuarimTracker(self._thresholds)
         self._notifier = None
+        self._paused = False
         self._autofind_busy = False
         self._shutting_down = False
         self._autofind_highlight = None
@@ -199,7 +200,7 @@ class TuarimTab(QWidget):
             box.setVisible(logged_in and (toggle is None or toggle.isChecked()))
         if toggle is not None:
             toggle.setVisible(logged_in)
-        self.auto_find_btn.setEnabled(logged_in and not self._autofind_busy)
+        self.auto_find_btn.setEnabled(not self._autofind_busy)
 
     def _collect_group(self) -> QGroupBox:
         """숫자 템플릿 수집. 앱이 이미 캡처 중인 영역을 PNG로 저장만 한다.
@@ -466,6 +467,8 @@ class TuarimTab(QWidget):
             return None
 
     def _play(self, threshold: int) -> None:
+        if self._paused:
+            return
         idx = self._thresholds.index(threshold) if threshold in self._thresholds else 0
         if idx < len(self._sounds) and not self._sounds[idx]:
             return
@@ -479,6 +482,11 @@ class TuarimTab(QWidget):
             from PySide6.QtWidgets import QApplication
 
             QApplication.beep()
+
+    def set_paused(self, paused):
+        self._paused = paused
+        if paused and self._notifier is not None:
+            self._notifier.stop()
 
     def refresh_sound(self) -> None:
         """목소리 팩이 바뀌면 재생기 소스를 새 팩으로 갱신(바로 적용)."""

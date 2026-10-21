@@ -43,12 +43,14 @@ class ResourceTab(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12,12,12,12)
         layout.setSpacing(10)
-        layout.addWidget(FeatureHeader("도르카·투아림", "도르카와 투아림을 오버레이로 표시하고 투아림 충전 상태를 알려줍니다."))
+        from .feature_copy import resource_help
+        from .help_dialog import help_button
+        layout.addWidget(FeatureHeader("도르카·투아림", "도르카와 투아림을 오버레이로 표시하고 투아림 충전 상태를 알려줍니다.", help_button("도르카·투아림 사용법", lambda: resource_help(self.dorcha._percent_control is not None and self.dorcha._percent_control.isVisibleTo(self)), self)))
         layout.addWidget(QLabel("판독 영역 · 도르카 / 투아림"))
         self.region_status = QLabel()
         self.region_status.setWordWrap(True)
         layout.addWidget(self.region_status)
-        guide = QLabel("원형 자원 UI와 오른쪽 아래 퍼센트를 함께 설정합니다.")
+        guide = QLabel("보라색 원과 오른쪽 아래의 투아림 숫자·%가 함께 들어오도록 지정해 주세요.\n두 영역은 함께 찾고, 필요한 경우 ‘개별 영역 조정’에서 따로 맞출 수 있어요.")
         guide.setWordWrap(True)
         layout.addWidget(guide)
         row = QHBoxLayout()
@@ -143,7 +145,7 @@ class ResourceTab(QWidget):
         available = (not self._busy and not self._shutting_down
                      and (self._future is None or self._future.done())
                      and not any(c._shutting_down or c._autofind_busy for c in self._controllers().values()))
-        self.auto_find_btn.setEnabled(available and self.dorcha._logged_in())
+        self.auto_find_btn.setEnabled(available)
         self.region_btn.setEnabled(available)
         for b in (self.view_region_btn,self.clear_region_btn): b.setEnabled(available and any(regions.values()))
 
@@ -196,10 +198,8 @@ class ResourceTab(QWidget):
         if (self._busy or not registration.editing_allowed(self)
                 or self._future is not None and not self._future.done()
                 or any(c._shutting_down or c._autofind_busy for c in self._controllers().values())): return {}
-        if capture is None and not self.dorcha._logged_in(): return {}
         caller_allowed = allowed
-        require_login = capture is None
-        allowed = lambda:caller_allowed() and (not require_login or self.dorcha._logged_in())
+        allowed = caller_allowed
         self._approval_allowed = allowed
         stamp = registration.generation(self)
         before = deepcopy(config._read_local_config())
