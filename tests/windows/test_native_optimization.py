@@ -59,3 +59,38 @@ def test_job_close_terminates_only_the_owned_child():
         if child.stdin: child.stdin.close()
         if child.poll() is None:
             child.kill();child.wait(timeout=3)
+
+
+@pytest.mark.parametrize('raw',[
+    '12345678-1234-1234-1234-123456789abc',
+    '12345678-1234-1234-1234-123456789ABC',
+    '{12345678-1234-1234-1234-123456789ABC}',
+])
+def test_adapter_structural_lookup_executes_in_powershell(raw):
+    """Run the production predicate with synthetic objects; never change a NIC."""
+    import uuid
+    backend=WindowsOptimization();guid='12345678-1234-1234-1234-123456789abc'
+    fake="@([pscustomobject]@{InterfaceGuid='"+raw+"';Name='selected'},[pscustomobject]@{InterfaceGuid='22345678-1234-1234-1234-123456789abc';Name='other'},[pscustomobject]@{InterfaceGuid='bad';Name='invalid'})"
+    script=backend._adapter(guid).replace('Get-NetAdapter -Physical',fake)
+    result=backend._ps(script+"$a.InterfaceGuid | ConvertTo-Json -Compress",'읽기 전용/식별 계약')
+    assert uuid.UUID(result)==uuid.UUID(guid)
+
+
+@pytest.mark.parametrize('ids',[[],['12345678-1234-1234-1234-123456789abc']*2,
+    ['22345678-1234-1234-1234-123456789abc'],['not a guid']])
+def test_adapter_missing_duplicate_or_replaced_fails_closed_in_powershell(ids):
+    from mabinogi_addon.system.optimization import WindowsCommandError
+    backend=WindowsOptimization();guid='12345678-1234-1234-1234-123456789abc'
+    fake='@('+','.join("[pscustomobject]@{InterfaceGuid='"+g+"'}" for g in ids)+')'
+    script=backend._adapter(guid).replace('Get-NetAdapter -Physical',fake)
+    with pytest.raises(WindowsCommandError) as caught: backend._ps(script,'읽기 전용/식별 계약')
+    assert caught.value.category==('AdapterAmbiguous' if len(ids)==2 else 'AdapterMissing')
+
+
+def test_real_adapter_enumeration_and_selected_guid_lookup_are_read_only():
+    import uuid
+    backend=WindowsOptimization()
+    for row in backend.adapters():
+        result=backend._ps(backend._adapter(row['InterfaceGuid'])+
+            '$a.InterfaceGuid | ConvertTo-Json -Compress','읽기 전용/실제 장치 식별')
+        assert uuid.UUID(result)==uuid.UUID(row['InterfaceGuid'])

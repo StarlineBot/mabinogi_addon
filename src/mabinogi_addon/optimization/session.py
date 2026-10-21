@@ -90,6 +90,12 @@ class Recovery:
         finally:
             temporary.unlink(missing_ok=True)
 
+    def _read(self, kind, target, phase):
+        try: return self.backend.read(kind,target)
+        except OSError as exc:
+            if kind=='cpu': raise  # Preserve process-lifecycle exception types.
+            raise OSError(exc.errno, f'{phase}/{kind}: {exc}') from None
+
     def apply(self, kind, target, value, *, guard=None):
         with self.lock:
             if not self.allowed() or self.corrupt:
@@ -98,14 +104,14 @@ class Recovery:
             if guard is not None: guard()
             existing = next((i for i in self.items if i['kind'] == kind and i['target'] == target and i['state'] != 'restored'), None)
             if existing:
-                current = self.backend.read(kind, target)
+                current = self._read(kind,target,'원본·현재 조회')
                 if current != existing['applied']:
                     raise RuntimeError('다른 도구가 값을 바꿨어요. 재적용을 보류해요.')
-                return
-            current = self.backend.read(kind, target)
+                return 'unchanged'
+            current = self._read(kind,target,'원본·현재 조회')
             if guard is not None: guard()
             if current == value:
-                return
+                return 'unchanged'
             if len(self.items) >= self.MAX_ITEMS:
                 raise RuntimeError('변경 기록 한도에 도달했어요. 먼저 원복해 주세요.')
             self.backend.validate(kind, target, current)
@@ -130,7 +136,7 @@ class Recovery:
                     guarded_write(kind,target,value,guard)
                 else:
                     self.backend.write(kind, target, value)
-                if self.backend.read(kind, target) != value:
+                if self._read(kind,target,'적용값 확인') != value:
                     raise RuntimeError('적용값을 확인하지 못했어요.')
                 item['state'] = 'applied'
             except Exception as exc:
@@ -139,6 +145,7 @@ class Recovery:
                 self._save()
                 raise
             self._save()
+            return 'applied'
 
     def restore(self, *, network=False):
         with self.lock:
@@ -149,7 +156,7 @@ class Recovery:
                 if item['kind'] != 'cpu' and not network:
                     continue
                 try:
-                    current = self.backend.read(item['kind'], item['target'])
+                    current = self._read(item['kind'],item['target'],'원복 전 확인')
                     if current == item['old']:
                         pass
                     elif current == item['applied']:
@@ -157,7 +164,7 @@ class Recovery:
                             self.restart_targets.add(item['target'])
                             self._save()
                         self.backend.write(item['kind'], item['target'], item['old'])
-                        if self.backend.read(item['kind'], item['target']) != item['old']:
+                        if self._read(item['kind'],item['target'],'원복값 확인') != item['old']:
                             raise RuntimeError('원복값 확인 실패')
                     else:
                         raise RuntimeError('외부 변경이 있어 원복을 보류해요.')
@@ -168,7 +175,7 @@ class Recovery:
                     else:
                         errors.append('원래 어댑터를 찾지 못했어요.')
                 except Exception as exc:
-                    errors.append(f"{item['kind']}: {exc}")
+                    errors.append(f"원복/{item['kind']}: {exc}")
                 self._save()
             return errors
 

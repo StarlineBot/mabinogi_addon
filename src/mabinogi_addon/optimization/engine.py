@@ -60,6 +60,7 @@ class Engine:
             plan = self.backend.topology().plan(options['count']) if options['cpu'] or options['rss'] else None
             game = self.backend.game()
             notices = []
+            results = []
             def network_guard():
                 nonlocal game
                 if self.cancel.is_set() or not self.allowed():
@@ -84,7 +85,9 @@ class Engine:
                     except Exception as exc: notices.append('RSS 미적용: '+str(exc))
                 for kind, target, value in changes:
                     if self.cancel.is_set() or not self.allowed(): break
-                    try: self.recovery.apply(kind,target,value,guard=network_guard)
+                    try:
+                        result=self.recovery.apply(kind,target,value,guard=network_guard)
+                        results.append(f'{kind}: '+('기존 값 일치·변경 없음' if result=='unchanged' else '적용값 확인 완료'))
                     except ChangeDeferred as exc:
                         notices.append(str(exc))
                         break
@@ -99,11 +102,11 @@ class Engine:
                 if observed is None:
                     observed = self.backend.game()
                     if observed is None:
-                        self.status = '\n'.join(notices + ['게임 실행 대기 · CPU는 아직 적용하지 않았어요.'])
+                        self.status = '\n'.join(results + notices + ['게임 실행 대기 · CPU는 아직 적용하지 않았어요.'])
                         self.cancel.wait(1)
                         continue
                 if not self.backend.alive(observed):
-                    self.status = '\n'.join(notices + ['게임 종료 · CPU를 원복해요. 다음 게임에는 자동 적용하지 않아요.'])
+                    self.status = '\n'.join(results + notices + ['게임 종료 · CPU를 원복해요. 다음 게임에는 자동 적용하지 않아요.'])
                     return
                 processes = self.backend.processes()
                 governor = self.backend.governor_running()
@@ -132,9 +135,9 @@ class Engine:
                             if self.backend.read('cpu',item['target']) != item['applied']:
                                 raise RuntimeError('다른 도구가 CPU 배치를 바꿨어요. 새 적용을 중단해요.')
                         except ProcessLookupError: continue
-                self.status = '\n'.join(notices + ['게임 세션 사용 중 · 항목별 적용값 확인 완료' if not notices else '게임 세션 사용 중 · 일부 항목은 미적용/확인 필요'])
+                self.status = '\n'.join(results + notices + ['게임 세션 사용 중 · 항목별 적용값 확인 완료' if not notices else '게임 세션 사용 중 · 일부 항목은 미적용/확인 필요'])
                 self.cancel.wait(2)
-            self.status = '세션을 중단하고 CPU를 원복해요.'
+            self.status = '\n'.join(results + notices + ['세션을 중단하고 CPU를 원복해요.'])
         return self._launch(work, restore_cpu=True)
 
     def stop(self):

@@ -6,6 +6,7 @@ from contextlib import contextmanager
 from pathlib import PureWindowsPath
 import base64
 import ctypes
+import hashlib
 from ctypes import wintypes
 import json
 import os
@@ -17,6 +18,41 @@ import uuid
 from functools import lru_cache
 
 from ..optimization.session import Core, Topology
+
+class WindowsCommandError(OSError):
+    """Bounded, non-identifying diagnostics; never expose shell text or scripts."""
+    def __init__(self, operation, code, stderr=b'', category=None):
+        raw=stderr[:65536]
+        encoding='utf-16' if raw.startswith((b'\xff\xfe',b'\xfe\xff')) else 'utf-16le' if b'\x00' in raw[:80] else 'utf-8-sig'
+        text=raw.decode(encoding,errors='replace')
+        categories={'PermissionDenied':'권한 부족', 'ObjectNotFound':'장치·명령 없음',
+                    'NotImplemented':'미지원', 'InvalidOperation':'지원 상태 확인 필요',
+                    'AdapterMissing':'선택 장치 없음', 'AdapterAmbiguous':'장치 식별 중복', 'CommandMissing':'명령·모듈 없음', 'InvalidArgument':'잘못된 인자',
+                    'InvalidData':'잘못된 응답', 'ResourceUnavailable':'장치 사용 불가',
+                    'ReadError':'읽기 실패', 'WriteError':'쓰기 실패', 'DeviceError':'장치 오류',
+                    'NotEnabled':'비활성 상태', 'ParserError':'명령 구문 오류'}
+        if category is None:
+            if 'MABI_OPT_ADAPTER:missing' in text: category='AdapterMissing'
+            elif 'MABI_OPT_ADAPTER:ambiguous' in text: category='AdapterAmbiguous'
+            elif 'MABI_OPT_COMMAND:missing' in text: category='CommandMissing'
+        if category is None:
+            for key in categories:
+                if key in text: category=key; break
+        if category is None:
+            lower=text.lower()
+            if 'access is denied' in lower or 'unauthorizedaccess' in lower: category='PermissionDenied'
+            elif 'adapter unavailable' in lower: category='ObjectNotFound'
+            elif 'not supported' in lower: category='NotImplemented'
+        self.operation,self.category,self.returncode=operation,category or 'CommandFailed',code
+        native=re.search(r'MABI_OPT_NATIVE:(-?\d{1,10})',text)
+        self.nativecode=int(native.group(1)) if native else None
+        hresult=re.search(r'MABI_OPT_HRESULT:(-?\d{1,10})',text)
+        self.hresult=int(hresult.group(1)) if hresult else None
+        self.evidence=hashlib.sha256(raw).hexdigest()[:12] if raw else 'empty'
+        label=categories.get(self.category,{'Timeout':'시간 초과','OutputInvalid':'응답 형식 오류',
+            'LaunchFailed':'명령 실행 실패'}.get(self.category,'명령 실패'))
+        super().__init__(code,f'{operation}: {label} (분류 {self.category}, 반환 코드 {code}, 네이티브 {self.nativecode}, HRESULT {self.hresult}, 진단 {self.evidence})')
+
 
 AUTOTUNING = {'disabled','highlyrestricted','restricted','normal','experimental'}
 EXCLUDED = re.compile(r'(?:system|idle|registry|smss|csrss|wininit|winlogon|services|lsass|svchost|'
@@ -223,34 +259,53 @@ class WindowsOptimization:
             name = winreg.QueryValueEx(key,'ProcessorNameString')[0]
         return Topology(name, tuple(Core(i,cpus,eff == max(classes)) for i,(eff,cpus) in enumerate(records)))
 
-    def _ps(self, script):
+    def _ps(self, script, operation='Windows 명령'):
         self._windows()
         executable = os.path.join(os.environ.get('SystemRoot','C:\\Windows'),'System32','WindowsPowerShell','v1.0','powershell.exe')
-        script = "$ErrorActionPreference='Stop'; " + script
+        # Emit only an invariant error category; Python never publishes raw shell output.
+        script = ("$ErrorActionPreference='Stop'; [Console]::OutputEncoding=[Text.Encoding]::UTF8; "
+                  "$OutputEncoding=[Text.Encoding]::UTF8; try { "+script+
+                  " } catch { if($_.Exception -is [System.Management.Automation.CommandNotFoundException]){[Console]::Error.WriteLine('MABI_OPT_COMMAND:missing')}; [Console]::Error.WriteLine('MABI_OPT_ERROR:'+ [string]$_.CategoryInfo.Category); [Console]::Error.WriteLine('MABI_OPT_HRESULT:'+ $_.Exception.HResult); exit 1 }")
         encoded = base64.b64encode(script.encode('utf-16le')).decode('ascii')
-        result = subprocess.run([executable,'-NoProfile','-NonInteractive','-EncodedCommand',encoded],
-            stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=15,creationflags=0x08000000)
-        if result.returncode or len(result.stdout)>1024*1024: raise OSError('Windows 설정 명령에 실패했어요. 권한·장치 상태를 확인해 주세요.')
-        text = result.stdout.decode('utf-8-sig',errors='replace').strip()
-        return json.loads(text) if text else None
+        try:
+            result = subprocess.run([executable,'-NoProfile','-NonInteractive','-EncodedCommand',encoded],
+                stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=15,creationflags=0x08000000)
+        except subprocess.TimeoutExpired as exc:
+            raise WindowsCommandError(operation,-1,category='Timeout') from None
+        except OSError as exc:
+            raise WindowsCommandError(operation,exc.errno or -1,category='LaunchFailed') from None
+        if result.returncode:
+            raise WindowsCommandError(operation,result.returncode,result.stderr)
+        if len(result.stdout)>1024*1024:
+            raise WindowsCommandError(operation,0,category='OutputInvalid')
+        try:
+            text = result.stdout.decode('utf-8-sig').strip()
+            return json.loads(text) if text else None
+        except (UnicodeError,ValueError):
+            raise WindowsCommandError(operation,0,category='OutputInvalid') from None
 
     def adapters(self):
-        result = self._ps("[Console]::OutputEncoding=[Text.Encoding]::UTF8; @(Get-NetAdapter -Physical | Where-Object {$_.Status -eq 'Up'} | Select-Object Name,InterfaceGuid,ifIndex) | ConvertTo-Json -Compress")
+        result = self._ps("[Console]::OutputEncoding=[Text.Encoding]::UTF8; @(Get-NetAdapter -Physical | Where-Object {$_.Status -eq 'Up'} | Select-Object Name,InterfaceGuid,ifIndex) | ConvertTo-Json -Compress", '환경 조회/어댑터')
         rows = result if isinstance(result,list) else [result] if result else []
         if len(rows)>64: raise ValueError('네트워크 어댑터 목록 한도를 초과했어요.')
+        seen=set()
         for row in rows:
             if not isinstance(row,dict) or not isinstance(row.get('Name'),str) or not row['Name']:
                 raise ValueError('네트워크 어댑터 정보를 확인하지 못했어요.')
             row['InterfaceGuid']=str(uuid.UUID(row.get('InterfaceGuid')))
+            if row['InterfaceGuid'] in seen: raise ValueError('네트워크 장치 식별자가 중복됐어요.')
+            seen.add(row['InterfaceGuid'])
         return rows
 
     def _adapter(self, guid):
         guid = str(uuid.UUID(guid))
-        return "$a=Get-NetAdapter -Physical | Where-Object {[string]$_.InterfaceGuid -eq '"+guid+"'}; if(@($a).Count -ne 1){throw 'adapter unavailable'}; "
+        return ("$wanted=[guid]'"+guid+"'; $a=@(Get-NetAdapter -Physical | Where-Object {"
+                "$parsed=[guid]::Empty; [guid]::TryParse([string]$_.InterfaceGuid,[ref]$parsed) -and $parsed -eq $wanted}); "
+                "if($a.Count -ne 1){[Console]::Error.WriteLine('MABI_OPT_ADAPTER:'+$(if($a.Count -eq 0){'missing'}else{'ambiguous'})); Write-Error -Message 'adapter unavailable' -Category ObjectNotFound -ErrorAction Stop}; $a=$a[0]; ")
 
     def _tcp_level(self):
         # Netsh's values are invariant; refuse unknown/localized field names rather than guessing.
-        return self._ps("[Console]::OutputEncoding=[Text.Encoding]::UTF8; $s=(& netsh interface tcp show global | Where-Object {$_ -match 'Receive Window Auto-Tuning Level|수신 창 자동 조정 수준'}); if(@($s).Count -ne 1){throw 'unsupported locale'}; (($s -split ':',2)[1].Trim().ToLowerInvariant()) | ConvertTo-Json -Compress")
+        return self._ps("[Console]::OutputEncoding=[Text.Encoding]::UTF8; $s=(& netsh interface tcp show global | Where-Object {$_ -match 'Receive Window Auto-Tuning Level|수신 창 자동 조정 수준'}); if(@($s).Count -ne 1){Write-Error -Message 'unsupported locale' -Category NotImplemented -ErrorAction Stop}; (($s -split ':',2)[1].Trim().ToLowerInvariant()) | ConvertTo-Json -Compress", '조회/autotuning')
 
     def read(self, kind, target):
         self._windows()
@@ -262,14 +317,18 @@ class WindowsOptimization:
         if kind == 'autotuning': return self._tcp_level()
         if kind in ('ack','nodelay'):
             import winreg
-            self._ps(self._adapter(target))
+            self._ps(self._adapter(target), '장치 확인/'+kind)
             key = r'SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces\{'+str(uuid.UUID(target)).upper()+'}'
-            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,key) as handle:
-                try: value,typ = winreg.QueryValueEx(handle,'TcpAckFrequency' if kind=='ack' else 'TCPNoDelay')
-                except FileNotFoundError: return None
-                if typ != winreg.REG_DWORD: raise ValueError('이 레지스트리 값 형식은 지원하지 않아요.')
-                return value
-        return self._ps("[Console]::OutputEncoding=[Text.Encoding]::UTF8; "+self._adapter(target)+"Get-NetAdapterRss -Name $a.Name | Select-Object Enabled,BaseProcessorGroup,BaseProcessorNumber,MaxProcessorGroup,MaxProcessorNumber,MaxProcessors,NumberOfReceiveQueues,@{N='Profile';E={[string]$_.Profile}} | ConvertTo-Json -Compress")
+            try:
+                with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,key) as handle:
+                    try: value,typ = winreg.QueryValueEx(handle,'TcpAckFrequency' if kind=='ack' else 'TCPNoDelay')
+                    except FileNotFoundError: return None
+                    if typ != winreg.REG_DWORD: raise ValueError('이 레지스트리 값 형식은 지원하지 않아요.')
+                    return value
+            except OSError as exc:
+                raise WindowsCommandError('조회/'+kind,getattr(exc,'winerror',None) or exc.errno or -1,
+                    category='PermissionDenied' if isinstance(exc,PermissionError) else 'ObjectNotFound' if isinstance(exc,FileNotFoundError) else 'CommandFailed') from None
+        return self._ps("[Console]::OutputEncoding=[Text.Encoding]::UTF8; "+self._adapter(target)+"Get-NetAdapterRss -Name $a.Name | Select-Object Enabled,BaseProcessorGroup,BaseProcessorNumber,MaxProcessorGroup,MaxProcessorNumber,MaxProcessors,NumberOfReceiveQueues,@{N='Profile';E={[string]$_.Profile}} | ConvertTo-Json -Compress", '조회/rss')
 
     def guarded_write(self, kind, target, value, guard):
         self.write(kind,target,value,guard=guard)
@@ -283,24 +342,28 @@ class WindowsOptimization:
             return
         if kind == 'autotuning':
             if guard is not None: guard()
-            self._ps("& netsh interface tcp set global autotuninglevel="+value+" | Out-Null; if($LASTEXITCODE -ne 0){throw 'netsh failed'}")
+            self._ps("& netsh interface tcp set global autotuninglevel="+value+" | Out-Null; if($LASTEXITCODE -ne 0){[Console]::Error.WriteLine('MABI_OPT_NATIVE:'+$LASTEXITCODE); throw 'netsh failed'}", '적용·원복/autotuning')
             return
         if kind in ('ack','nodelay'):
             import winreg
-            self._ps(self._adapter(target))
+            self._ps(self._adapter(target), '장치 확인/'+kind)
             key = r'SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces\{'+str(uuid.UUID(target)).upper()+'}'
-            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,key,0,winreg.KEY_SET_VALUE) as handle:
-                name = 'TcpAckFrequency' if kind=='ack' else 'TCPNoDelay'
-                if guard is not None: guard()
-                if value is None:
-                    try: winreg.DeleteValue(handle,name)
-                    except FileNotFoundError: pass
-                else: winreg.SetValueEx(handle,name,0,winreg.REG_DWORD,value)
+            try:
+                with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,key,0,winreg.KEY_SET_VALUE) as handle:
+                    name = 'TcpAckFrequency' if kind=='ack' else 'TCPNoDelay'
+                    if guard is not None: guard()
+                    if value is None:
+                        try: winreg.DeleteValue(handle,name)
+                        except FileNotFoundError: pass
+                    else: winreg.SetValueEx(handle,name,0,winreg.REG_DWORD,value)
+            except OSError as exc:
+                raise WindowsCommandError('적용·원복/'+kind,getattr(exc,'winerror',None) or exc.errno or -1,
+                    category='PermissionDenied' if isinstance(exc,PermissionError) else 'ObjectNotFound' if isinstance(exc,FileNotFoundError) else 'CommandFailed') from None
         else:
             fields = ' '.join('-'+key+' '+str(value[key]) for key in value if key!='Enabled')
             if guard is not None: guard()
             self._ps(self._adapter(target)+"Set-NetAdapterRss -Name $a.Name "+fields+" -NoRestart; "+
-                     ('Enable' if value['Enabled'] else 'Disable')+"-NetAdapterRss -Name $a.Name -NoRestart -Confirm:$false")
+                     ('Enable' if value['Enabled'] else 'Disable')+"-NetAdapterRss -Name $a.Name -NoRestart -Confirm:$false", '적용·원복/rss')
         self.restarts.add(str(uuid.UUID(target)))
 
     def guarded_restart(self, target, guard):
@@ -309,13 +372,12 @@ class WindowsOptimization:
     def restart_network(self, target, *, guard=None):
         script=self._adapter(target)+"Restart-NetAdapter -Name $a.Name -Confirm:$false"
         if guard is not None: guard()
-        self._ps(script)
+        self._ps(script, '재연결/어댑터')
         self.restarts.discard(str(uuid.UUID(target)))
 
     def flush_network(self):
         for target in tuple(self.restarts):
-            self._ps(self._adapter(target)+"Restart-NetAdapter -Name $a.Name -Confirm:$false")
-            self.restarts.remove(target)
+            self.restart_network(target)
 
     def rss_plan(self, target, cpus):
         old = self.read('rss',target)
