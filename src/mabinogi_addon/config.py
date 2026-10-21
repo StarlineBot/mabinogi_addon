@@ -90,7 +90,7 @@ def _write_local_config(data: dict, path: Path = LOCAL_CONFIG_PATH) -> None:
 
 
 # 내보내기에서 제외할 비밀값(공유·이동 시 유출 방지). 가져올 때도 덮어쓰지 않음.
-_SECRET_KEYS = ("nexonApiKey", "inquiryWebhookUrl")
+_SECRET_KEYS = ("nexonApiKey", "inquiryWebhookUrl", "configWebhookUrl")
 
 
 def config_json_for_export(path: Path = LOCAL_CONFIG_PATH) -> str:
@@ -124,41 +124,163 @@ _BUNDLE_CONFIG_NAME = "config.json"
 _BUNDLE_USERDATA_PREFIX = "userdata/"
 
 
-def _iter_user_files(user_dir: Path, config_name: str):
-    """사용자 데이터 폴더의 모든 파일(비밀 담긴 config.local.json은 제외)."""
-    if not user_dir.exists():
-        return
-    for p in sorted(user_dir.rglob("*")):
-        if not p.is_file():
-            continue
-        if p.parent == user_dir and p.name == config_name:
-            continue  # 비밀값 유출 방지(별도 sanitized config.json으로만 포함)
-        yield p
+# Explicit restoration assets. Diagnostic captures, logs, local settings copies and
+# future recordings are deliberately outside this list; do not walk the data root.
+_BUNDLE_ASSET_DIRS = ('buff/icon', 'buff/image', 'debuff/icon')
 
 
-def export_bundle_bytes(
-    path: Path = LOCAL_CONFIG_PATH, user_dir: Path | None = None
-) -> bytes:
-    """설정 + 사용자 자산을 zip 바이트로. 파일 저장·디스코드 DM 공용."""
-    import io
+@dataclass(frozen=True)
+class BundleLimits:
+    max_files: int = 4096
+    max_config_bytes: int = 1024 * 1024
+    max_source_bytes: int = 64 * 1024 * 1024
+    max_zip_bytes: int = 64 * 1024 * 1024
+    max_seconds: float = 30.0
+
+
+class BundleCancelled(RuntimeError):
+    pass
+
+
+class _BundleBudget:
+    def __init__(self, limits, cancelled):
+        import time
+        self.limits, self.cancelled = limits, cancelled
+        self.deadline = time.monotonic() + limits.max_seconds
+
+    def check(self):
+        import time
+        if self.cancelled and self.cancelled(): raise BundleCancelled('설정 내보내기를 취소했어요.')
+        if time.monotonic() > self.deadline: raise ValueError('설정 백업 준비 시간 한도를 넘었어요.')
+
+
+def _is_link(path):
+    import stat
+    st = path.lstat()
+    return stat.S_ISLNK(st.st_mode) or bool(getattr(st, 'st_file_attributes', 0) & 0x400)
+
+
+def _iter_user_files(user_dir: Path, config_name: str, *, budget=None):
+    """Only direct PNG catalog assets; never follow symlinks or Windows reparse points."""
+    import stat
+    budget = budget or _BundleBudget(BundleLimits(), None)
+    if not user_dir.exists(): return
+    if _is_link(user_dir): raise ValueError('연결된 사용자 폴더는 백업하지 않아요.')
+    visited = 0
+    for rel in _BUNDLE_ASSET_DIRS:
+        directory = user_dir
+        for part in rel.split('/'):
+            budget.check()
+            directory = directory / part
+            try:
+                if _is_link(directory): raise ValueError('연결된 자산 폴더는 백업하지 않아요.')
+            except FileNotFoundError:
+                break
+        else:
+            with os.scandir(directory) as entries:
+                for entry in entries:
+                    budget.check()
+                    visited += 1
+                    if visited > budget.limits.max_files * 2:
+                        raise ValueError('설정 자산 폴더의 항목 수 한도를 넘었어요.')
+                    if not entry.name.endswith('.png'): continue
+                    path = Path(entry.path)
+                    st = path.lstat()
+                    if _is_link(path) or st.st_nlink > 1:
+                        raise ValueError('연결된 자산 파일은 백업하지 않아요.')
+                    if stat.S_ISREG(st.st_mode): yield path
+
+
+class _BundleSink:
+    def __init__(self, raw, budget): self.raw, self.budget = raw, budget
+    def write(self, data):
+        self.budget.check()
+        if self.raw.tell() + len(data) > self.budget.limits.max_zip_bytes:
+            raise ValueError('설정 ZIP 크기 한도를 넘었어요.')
+        return self.raw.write(data)
+    def __getattr__(self, name): return getattr(self.raw, name)
+
+
+def _write_bundle(raw, path, user_dir, limits, cancelled):
+    import stat
     import zipfile
+    budget = _BundleBudget(limits, cancelled)
+    budget.check()
+    # Atomic settings writes make this a coherent document. No settings are read on UI.
+    for candidate in (path, path.with_name(path.name + '.bak')):
+        if candidate.exists() and candidate.stat().st_size > min(limits.max_config_bytes,limits.max_source_bytes):
+            raise ValueError('설정 원본 크기 한도를 넘었어요.')
+    document = config_json_for_export(path).encode('utf-8')
+    files = []
+    total = len(document)
+    for asset in _iter_user_files(user_dir, path.name, budget=budget):
+        budget.check()
+        st = asset.lstat()
+        total += st.st_size
+        if len(files) >= limits.max_files or total > limits.max_source_bytes:
+            raise ValueError('설정 자산의 개수·원본 크기 한도를 넘었어요.')
+        files.append((asset, st))
+    if total > limits.max_source_bytes: raise ValueError('설정 원본 크기 한도를 넘었어요.')
+    sink = _BundleSink(raw, budget)
+    with zipfile.ZipFile(sink, 'w', zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr(_BUNDLE_CONFIG_NAME, document)
+        for asset, before in files:
+            budget.check()
+            flags = os.O_RDONLY | getattr(os, 'O_BINARY', 0) | getattr(os, 'O_NOFOLLOW', 0)
+            with os.fdopen(os.open(asset, flags), 'rb') as source:
+                opened = os.fstat(source.fileno())
+                identity = lambda st: (st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns)
+                if (not stat.S_ISREG(opened.st_mode) or identity(opened) != identity(before)
+                        or opened.st_nlink > 1):
+                    raise ValueError('백업 준비 중 자산 파일이 바뀌었어요. 다시 시도해 주세요.')
+                name = _BUNDLE_USERDATA_PREFIX + asset.relative_to(user_dir).as_posix()
+                read = 0
+                with archive.open(name, 'w') as dest:
+                    while True:
+                        budget.check()
+                        chunk = source.read(64 * 1024)
+                        if not chunk: break
+                        read += len(chunk)
+                        if read > before.st_size: raise ValueError('백업 중 자산 크기가 바뀌었어요.')
+                        dest.write(chunk)
+                if read != before.st_size or identity(os.fstat(source.fileno())) != identity(before):
+                    raise ValueError('백업 중 자산 내용이 바뀌었어요.')
+    budget.check()
 
-    if user_dir is None:
-        user_dir = paths.user_data_dir()
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
-        z.writestr(_BUNDLE_CONFIG_NAME, config_json_for_export(path))
-        for f in _iter_user_files(user_dir, path.name):
-            rel = f.relative_to(user_dir).as_posix()
-            z.write(f, _BUNDLE_USERDATA_PREFIX + rel)
-    return buf.getvalue()
+
+def export_bundle_bytes(path: Path = LOCAL_CONFIG_PATH, user_dir: Path | None = None,
+                        *, limits: BundleLimits | None = None, cancelled=None) -> bytes:
+    """Bounded compatibility API; production file/DM exports use disk ZIPs."""
+    import tempfile
+    user_dir = paths.user_data_dir() if user_dir is None else Path(user_dir)
+    limits = limits or BundleLimits()
+    with tempfile.SpooledTemporaryFile(max_size=1024*1024) as raw:
+        _write_bundle(raw, Path(path), user_dir, limits, cancelled)
+        raw.seek(0)
+        return raw.read(limits.max_zip_bytes + 1)
 
 
-def export_bundle(
-    dest: Path, path: Path = LOCAL_CONFIG_PATH, user_dir: Path | None = None
-) -> None:
-    """현재 설정 + 사용자 자산을 zip 파일로 저장(비밀값 제외)."""
-    Path(dest).write_bytes(export_bundle_bytes(path, user_dir))
+def export_bundle(dest: Path, path: Path = LOCAL_CONFIG_PATH, user_dir: Path | None = None,
+                  *, limits: BundleLimits | None = None, cancelled=None) -> None:
+    """Write a temporary bounded ZIP beside the destination, then atomically replace."""
+    import tempfile
+    dest, path = Path(dest), Path(path)
+    if any(dest.resolve() == path.with_name(path.name + suffix).resolve()
+           for suffix in ('','.bak','.tmp','.bak.tmp')):
+        raise ValueError('설정 원본이나 복구 파일에 ZIP을 덮어쓰지 않아요.')
+    user_dir = paths.user_data_dir() if user_dir is None else Path(user_dir)
+    limits = limits or BundleLimits()
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(dir=dest.parent, prefix='.settings-export-',suffix='.tmp',delete=False) as raw:
+            temporary = Path(raw.name)
+            _write_bundle(raw, path, user_dir, limits, cancelled)
+            raw.flush()
+            os.fsync(raw.fileno())
+        if cancelled and cancelled(): raise BundleCancelled('설정 내보내기를 취소했어요.')
+        os.replace(temporary, dest)
+    finally:
+        if temporary is not None: temporary.unlink(missing_ok=True)
 
 
 def _safe_extract_path(base: Path, rel: str) -> Path | None:
@@ -193,6 +315,12 @@ def import_bundle(
                 config_text = z.read(name).decode("utf-8")
             elif name.startswith(_BUNDLE_USERDATA_PREFIX):
                 rel = name[len(_BUNDLE_USERDATA_PREFIX):]
+                # Legacy ZIPs may contain diagnostics or raw config recovery copies.
+                # Restore only the same catalog assets exported by current versions.
+                from pathlib import PurePosixPath
+                member = PurePosixPath(rel)
+                if member.parent.as_posix() not in _BUNDLE_ASSET_DIRS or member.suffix != '.png':
+                    continue
                 dest = _safe_extract_path(user_dir, rel)
                 if dest is None:
                     continue  # 경로 탈출 시도 멤버는 건너뛴다

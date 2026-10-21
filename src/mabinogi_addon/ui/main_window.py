@@ -1822,6 +1822,12 @@ class MainWindow(QMainWindow):
                 )
             return
 
+        if not self.settings_tab.prepare_close():
+            event.ignore()
+            self._force_quit = True
+            QTimer.singleShot(200, self.close)
+            return
+
         if not self.optimization_tools.prepare_close():
             event.ignore()
             self._force_quit = True

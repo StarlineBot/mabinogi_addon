@@ -15,6 +15,7 @@ from pathlib import Path
 from PySide6.QtCore import Qt, QSize, QThread, QTimer, Signal
 from PySide6.QtGui import QIcon, QPainter, QPainterPath, QPixmap
 from PySide6.QtWidgets import (
+    QApplication,
     QButtonGroup,
     QCheckBox,
     QComboBox,
@@ -139,29 +140,45 @@ class _LoginThread(QThread):
 
 
 class _ConfigExportThread(QThread):
-    """설정을 디스코드 릴레이 웹훅으로 전송(백그라운드)."""
+    """Own enumeration, compression, atomic save and optional relay transport."""
+    progress = Signal(str)
+    done = Signal(bool, str)
 
-    done = Signal(bool, str)  # (성공, 메시지)
-
-    def __init__(self, webhook: str, user: dict, payload: bytes, parent=None) -> None:
+    def __init__(self, destination, *, webhook=None, user=None, parent=None):
         super().__init__(parent)
-        self._webhook = webhook
-        self._user = user
-        self._payload = payload
+        self.destination, self.webhook = destination, webhook
+        self.user = dict(user) if user else None
+        self.config_path = config.LOCAL_CONFIG_PATH
 
-    def run(self) -> None:
+    def run(self):
+        import tempfile
         from .. import settings_sync
-
         try:
-            settings_sync.send_config_backup(
-                self._webhook,
-                self._user["id"],
-                self._payload,
-                username=self._user.get("name"),
-            )
-            self.done.emit(True, "설정을 DM으로 보냈습니다. 디스코드를 확인하세요.")
-        except Exception as exc:  # noqa: BLE001 — 네트워크/웹훅 오류 UI로
-            self.done.emit(False, f"전송 실패: {exc}")
+            self.progress.emit('ZIP 준비 중…')
+            if self.destination is not None:
+                config.export_bundle(self.destination, path=self.config_path,
+                                     cancelled=self.isInterruptionRequested)
+                self.done.emit(True, '설정을 저장했습니다.')
+            else:
+                limit = settings_sync.BACKUP_UPLOAD_BUDGET
+                limits = config.BundleLimits(max_source_bytes=limit, max_zip_bytes=limit)
+                with tempfile.TemporaryDirectory(prefix='mabi-settings-') as folder:
+                    bundle = Path(folder) / 'settings.zip'
+                    config.export_bundle(bundle, path=self.config_path, limits=limits,
+                                         cancelled=self.isInterruptionRequested)
+                    if self.isInterruptionRequested(): raise config.BundleCancelled('설정 내보내기를 취소했어요.')
+                    self.progress.emit('릴레이 전송 중…')
+                    settings_sync.send_config_backup_file(self.webhook, self.user['id'], bundle,
+                        username=self.user.get('name'), cancelled=self.isInterruptionRequested,
+                        upload_budget=limit)
+                self.done.emit(True, '백업 릴레이가 파일을 접수했어요. 실제 DM 도착은 디스코드에서 확인해 주세요.')
+        except config.BundleCancelled:
+            self.done.emit(False, '설정 내보내기를 취소했어요.')
+        except (OSError, ValueError) as exc:
+            self.done.emit(False, f'설정 내보내기 실패: {exc}')
+        except Exception as exc:
+            _log.warning('설정 내보내기 실패 유형: %s', type(exc).__name__)
+            self.done.emit(False, '설정 내보내기를 완료하지 못했어요.')
 
 
 class SettingsTab(QWidget):
@@ -187,6 +204,8 @@ class SettingsTab(QWidget):
         self._detect_timer: QTimer | None = None
         self._login_thread: _LoginThread | None = None
         self._export_thread: _ConfigExportThread | None = None
+        self._export_closing = False
+        self._export_result = None
         self._diag_future = None
         self._diag_done = None
         self._diag_closing = False
@@ -353,6 +372,9 @@ class SettingsTab(QWidget):
             self._diag_status.setText(f"ZIP 저장 완료: {path}")
 
     def shutdown(self) -> None:
+        self._export_closing = True
+        if self._export_thread is not None:
+            self._export_thread.requestInterruption()
         self._diag_closing = True
         self._diag_countdown.stop()
         self._diag_poll.stop()
@@ -364,9 +386,9 @@ class SettingsTab(QWidget):
         box = QGroupBox("설정 백업")
         v = QVBoxLayout(box)
         row = QHBoxLayout()
-        export_btn = QPushButton("설정 내보내기")
+        export_btn = self._file_export_btn = QPushButton("설정 내보내기")
         export_btn.clicked.connect(self._on_export_config)
-        import_btn = QPushButton("설정 가져오기")
+        import_btn = self._import_btn = QPushButton("설정 가져오기")
         import_btn.clicked.connect(self._on_import_config)
         row.addWidget(export_btn)
         row.addWidget(import_btn)
@@ -390,7 +412,7 @@ class SettingsTab(QWidget):
         )
 
         v.addSpacing(12)
-        reset_btn = QPushButton("설정 초기화")
+        reset_btn = self._reset_btn = QPushButton("설정 초기화")
         from .settings_layout import DANGER_STYLE
         reset_btn.setStyleSheet(DANGER_STYLE)
         reset_btn.clicked.connect(self._on_reset_config)
@@ -405,56 +427,83 @@ class SettingsTab(QWidget):
         """로그인 상태에 따라 'DM 내보내기' 버튼 활성/비활성."""
         if hasattr(self, "_dm_export_btn"):
             logged_in = config.load_discord_user() is not None
-            self._dm_export_btn.setEnabled(logged_in)
+            self._dm_export_btn.setEnabled(logged_in and not self._export_busy() and not self._export_closing)
             self._dm_export_btn.setToolTip(
                 "" if logged_in else "먼저 Discord 로그인이 필요합니다"
             )
 
-    def _on_export_discord(self) -> None:
+    def _export_busy(self):
+        return self._export_thread is not None
+
+    def prepare_close(self):
+        self._export_closing = True
+        worker = self._export_thread
+        if worker is not None and worker.isRunning():
+            worker.requestInterruption()
+            return False
+        return True
+
+    def _start_export(self, destination, *, webhook=None, user=None):
+        if self._export_busy() or self._export_closing: return
+        self._export_result = None
+        worker = self._export_thread = _ConfigExportThread(destination, webhook=webhook,user=user,parent=QApplication.instance())
+        for button in (self._file_export_btn,self._dm_export_btn,self._import_btn,self._reset_btn):
+            button.setEnabled(False)
+        self._export_progress('ZIP 준비 중…')
+        worker.progress.connect(self._export_progress)
+        worker.done.connect(self._export_done)
+        worker.finished.connect(self._export_finished)
+        worker.finished.connect(worker.deleteLater)
+        self.destroyed.connect(worker.requestInterruption)
+        worker.start()
+
+    def _export_progress(self, text):
+        worker = self._export_thread
+        if worker is None or self._export_closing: return
+        button = self._file_export_btn if worker.destination is not None else self._dm_export_btn
+        button.setText(text)
+
+    def _export_done(self, ok, message):
+        self._export_result = (ok,message)
+
+    def _export_finished(self):
+        worker = self._export_thread
+        if worker is None: return
+        self._export_thread = None
+        result, self._export_result = self._export_result, None
+        if self._export_closing: return
+        self._file_export_btn.setText('설정 내보내기')
+        self._dm_export_btn.setText('디스코드로 내보내기 (DM)')
+        for button in (self._file_export_btn,self._import_btn,self._reset_btn): button.setEnabled(True)
+        self._refresh_dm_export()
+        if worker.user is not None:
+            current = config.load_discord_user()
+            if current is None or current.get('id') != worker.user.get('id'): return
+        if result is not None:
+            ok, message = result
+            title = '설정 내보내기' if worker.destination is not None else '디스코드로 내보내기'
+            (QMessageBox.information if ok else QMessageBox.warning)(self,title,message)
+
+    def _on_export_discord(self):
+        if self._export_busy() or self._export_closing: return
         user = config.load_discord_user()
         if user is None:
-            QMessageBox.information(
-                self, "디스코드로 내보내기", "먼저 Discord 로그인을 해주세요."
-            )
+            QMessageBox.information(self,'디스코드로 내보내기','먼저 Discord 로그인을 해주세요.')
             return
         webhook = config.get_config_webhook_url()
         if not webhook:
-            QMessageBox.warning(
-                self, "디스코드로 내보내기", "설정 백업 채널이 구성되지 않았습니다."
-            )
+            QMessageBox.warning(self,'디스코드로 내보내기','설정 백업 채널이 구성되지 않았습니다.')
             return
-        payload = config.export_bundle_bytes()
-        self._dm_export_btn.setEnabled(False)
-        self._dm_export_btn.setText("보내는 중…")
-        self._export_thread = _ConfigExportThread(webhook, user, payload, self)
-        self._export_thread.done.connect(self._on_dm_result)
-        self._export_thread.start()
+        self._start_export(None,webhook=webhook,user=user)
 
-    def _on_dm_result(self, ok: bool, msg: str) -> None:
-        self._dm_export_btn.setText("디스코드로 내보내기 (DM)")
-        self._refresh_dm_export()
-        if ok:
-            QMessageBox.information(self, "디스코드로 내보내기", msg)
-        else:
-            QMessageBox.warning(self, "디스코드로 내보내기", msg)
-
-    def _on_export_config(self) -> None:
-        path, _ = QFileDialog.getSaveFileName(
-            self,
-            "설정 내보내기",
-            "섯다라인_애드온_설정.zip",
-            "설정 백업 (*.zip)",
-        )
-        if not path:
-            return
-        try:
-            config.export_bundle(Path(path))
-        except OSError as exc:
-            QMessageBox.warning(self, "설정 내보내기", f"저장 실패: {exc}")
-            return
-        QMessageBox.information(self, "설정 내보내기", "설정을 저장했습니다.")
+    def _on_export_config(self):
+        if self._export_busy() or self._export_closing: return
+        path, _ = QFileDialog.getSaveFileName(self,'설정 내보내기','섯다라인_애드온_설정.zip','설정 백업 (*.zip)')
+        if path and not self._export_busy() and not self._export_closing:
+            self._start_export(Path(path))
 
     def _on_import_config(self) -> None:
+        if self._export_busy() or self._export_closing: return
         path, _ = QFileDialog.getOpenFileName(
             self, "설정 가져오기", "", "설정 백업 (*.zip *.json)"
         )
@@ -468,6 +517,7 @@ class SettingsTab(QWidget):
         self._offer_restart("설정 가져오기", "설정을 가져왔습니다.")
 
     def _on_reset_config(self) -> None:
+        if self._export_busy() or self._export_closing: return
         if (
             QMessageBox.question(
                 self,
@@ -521,6 +571,9 @@ class SettingsTab(QWidget):
 
     def _refresh_login(self) -> None:
         user = config.load_discord_user()
+        worker = self._export_thread
+        if worker is not None and worker.user is not None and (user is None or user.get('id') != worker.user.get('id')):
+            worker.requestInterruption()
         if hasattr(self, "guide_btn"):
             self.guide_btn.setVisible(True)
         if user:

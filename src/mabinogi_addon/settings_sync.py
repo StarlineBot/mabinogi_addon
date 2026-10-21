@@ -34,6 +34,8 @@ def send_config_backup(
         raise ValueError("설정 백업 채널(웹훅)이 설정되지 않았습니다")
     if not user_id:
         raise ValueError("디스코드 로그인이 필요합니다")
+    if len(payload_bytes) > BACKUP_UPLOAD_BUDGET:
+        raise ValueError('앱의 전송 크기 한도를 넘었어요. 파일로 저장해 주세요.')
     payload: dict = {"content": f"[설정백업] <@{user_id}>"}
     if username:
         payload["username"] = username[:80]
@@ -45,3 +47,62 @@ def send_config_backup(
         timeout,
         urlopen,
     )
+
+
+# Application upload budget, not a claim about every Discord/guild attachment limit.
+# Keep source and ZIP below this budget before compression/transport. Server 413 is
+# still authoritative; callers can change the budget when transport policy changes.
+BACKUP_UPLOAD_BUDGET = 8 * 1024 * 1024
+
+
+def send_config_backup_file(webhook_url, user_id, path, *, filename='섯다라인_설정.zip',
+                            username=None, timeout=5.0, cancelled=None,
+                            upload_budget=BACKUP_UPLOAD_BUDGET, urlopen=urllib.request.urlopen):
+    """Stream a bounded disk multipart request; relay acceptance is not DM delivery."""
+    import json
+    import tempfile
+    import uuid
+    import urllib.error
+    from pathlib import Path
+    from .config import BundleCancelled
+    if not webhook_url or not user_id: raise ValueError('설정 백업 채널과 Discord 로그인이 필요해요.')
+    path = Path(path)
+    if path.stat().st_size > upload_budget: raise ValueError('앱의 전송 크기 한도를 넘었어요. 파일로 저장해 주세요.')
+    boundary = '----mabi' + uuid.uuid4().hex
+    payload = {'content': f'[설정백업] <@{user_id}>'}
+    if username: payload['username'] = username[:80]
+    def check():
+        if cancelled and cancelled(): raise BundleCancelled('설정 내보내기를 취소했어요.')
+    check()
+    with tempfile.TemporaryFile() as body:
+        body.write((f'--{boundary}\r\nContent-Disposition: form-data; name="payload_json"\r\n'
+                    'Content-Type: application/json\r\n\r\n').encode())
+        body.write(json.dumps(payload).encode())
+        body.write((f'\r\n--{boundary}\r\nContent-Disposition: form-data; name="files[0]"; '
+                    f'filename="{filename}"\r\nContent-Type: application/zip\r\n\r\n').encode())
+        count = 0
+        with path.open('rb') as source:
+            while chunk := source.read(64*1024):
+                check()
+                count += len(chunk)
+                if count > upload_budget: raise ValueError('앱의 전송 크기 한도를 넘었어요.')
+                body.write(chunk)
+        body.write(f'\r\n--{boundary}--\r\n'.encode())
+        length = body.tell()
+        body.seek(0)
+        check()
+        request = urllib.request.Request(webhook_url, data=body, method='POST', headers={
+            'Content-Type': f'multipart/form-data; boundary={boundary}',
+            'Content-Length': str(length), 'User-Agent': inquiry._USER_AGENT,
+        })
+        try:
+            with urlopen(request, timeout=timeout) as response:
+                status = getattr(response, 'status', None)
+                if status is not None and status not in (200,204):
+                    raise ValueError(f'설정 백업 릴레이 응답 오류 ({status})')
+        except urllib.error.HTTPError as exc:
+            if exc.code == 413:
+                raise ValueError('서버의 첨부 크기 한도를 넘었어요. 파일로 저장해 주세요.') from None
+            raise ValueError(f'설정 백업 릴레이 응답 오류 ({exc.code})') from None
+        except (urllib.error.URLError, OSError):
+            raise ValueError('설정 백업 릴레이에 연결하지 못했어요.') from None
