@@ -127,3 +127,152 @@ def test_public_diagnostic_budget_reports_truncation(tmp_path):
     status=json.loads((run/'public/collection-status.json').read_text(encoding='utf-8'))
     assert status['limited_files']>0 and status['unavailable_files']==0
     assert all('/home/private' not in p.read_text(encoding='utf-8') for p in published)
+
+
+def test_transient_replace_denial_recovers_through_actual_report_hook(tmp_path,monkeypatch):
+    from types import SimpleNamespace
+    from test_support import progress
+    monkeypatch.setenv('MABINOGI_TEST_DIAGNOSTICS',str(tmp_path))
+    monkeypatch.setattr(progress.Journal,'arm',lambda self:None)
+    journal=progress.Journal(SimpleNamespace());attempts=[];replace=progress._REPLACE
+    def transient(source,target):
+        attempts.append(1)
+        if len(attempts)==1: raise PermissionError(13,'denied')
+        return replace(source,target)
+    monkeypatch.setattr(progress,'_REPLACE',transient)
+    monkeypatch.setattr(progress,'_state',journal)
+    try:
+        progress.pytest_runtest_logreport(SimpleNamespace(outcome='passed'))
+        assert len(attempts)==2 and not journal.failed
+        assert json.loads(journal.path.read_text(encoding='utf-8'))['outcome']=='passed'
+        assert not list(tmp_path.glob('*.error'))
+    finally: journal.raw.close()
+
+
+@pytest.mark.parametrize('operation',['snapshot','snapshot-write','append','rotate-read','rotate-write','stack','all-writes'])
+def test_permanent_journal_io_failure_is_bounded_and_explicit(tmp_path,monkeypatch,operation):
+    from types import SimpleNamespace
+    from test_support import progress
+    monkeypatch.setenv('MABINOGI_TEST_DIAGNOSTICS',str(tmp_path))
+    original_arm=progress.Journal.arm
+    monkeypatch.setattr(progress.Journal,'arm',lambda self:None)
+    journal=progress.Journal(SimpleNamespace())
+    sleeps=[];monkeypatch.setattr(progress,'_SLEEP',sleeps.append)
+    original_open=progress._OPEN
+    def deny(*args,**kwargs): raise PermissionError(13,'private path must never enter the error channel')
+    if operation=='snapshot': monkeypatch.setattr(progress,'_REPLACE',deny)
+    else:
+        if operation.startswith('rotate'): journal.events.write_bytes(b'x'*(2*1024*1024+1))
+        def opened(path,mode='r',*args,**kwargs):
+            if (operation=='all-writes' or (operation=='snapshot-write' and Path(path).suffix=='.tmp') or
+                (Path(path)==journal.events and mode=={'append':'a','rotate-read':'rb','rotate-write':'wb'}.get(operation))):
+                return deny()
+            return original_open(path,mode,*args,**kwargs)
+        monkeypatch.setattr(progress,'_OPEN',opened)
+    try:
+        if operation=='stack':
+            class Broken:
+                def seek(self,*args): deny()
+            raw=journal.raw;journal.raw=Broken()
+            try: original_arm(journal)
+            finally: journal.raw=raw
+        else: journal.emit(outcome='passed')
+        assert journal.failed and len(sleeps)==7 and sum(sleeps)<1
+        assert journal.failed['error']=='PermissionError'
+        if operation=='all-writes': assert not list(tmp_path.glob('*.error'))
+        else:
+            marker=next(tmp_path.glob('*.error')).read_text(encoding='utf-8')
+            assert 'private path' not in marker and len(marker)<512
+        previous=journal.path.read_bytes()
+        journal.emit(phase='fake-progress')
+        assert journal.path.read_bytes()==previous and len(sleeps)==7
+        monkeypatch.setattr(progress,'_state',journal)
+        session=SimpleNamespace(exitstatus=0)
+        progress.pytest_sessionfinish(session,0)
+        assert session.exitstatus==3
+        session.exitstatus=1;progress.pytest_sessionfinish(session,1)
+        assert session.exitstatus==1
+    finally: journal.raw.close()
+
+
+@pytest.mark.parametrize('marker_available',[True,False])
+def test_writer_error_stops_owned_suite_as_infrastructure_failure(tmp_path,marker_available):
+    suite=tmp_path/'suite';suite.mkdir()
+    (suite/'test_broken.py').write_text('''import threading
+from test_support import progress
+def test_broken():
+    def denied(*args,**kwargs): raise PermissionError(13, 'denied')
+    progress._REPLACE=denied
+    if not MARKER_AVAILABLE:
+        progress._OPEN=denied
+    progress._state.emit(outcome='passed')
+    threading.Event().wait()
+'''.replace('MARKER_AVAILABLE',repr(marker_available)),encoding='utf-8')
+    diagnostics=tmp_path/'diagnostics'
+    result=subprocess.run([sys.executable,'-m','scripts.run_regressions','--diagnostics',str(diagnostics),
+        '--case-timeout','30','--session-timeout','40','--','-q','-s',str(suite)],
+        cwd=ROOT,capture_output=True,text=True,timeout=12)
+    assert result.returncode==3,result.stdout+result.stderr
+    assert 'diagnostic infrastructure failure' in result.stdout
+    assert bool(list(diagnostics.glob('run-*/public/*.error')))==marker_available
+
+
+@pytest.mark.parametrize('original_code',[0,1,124])
+def test_collection_failure_preserves_test_or_timeout_exit(tmp_path,monkeypatch,original_code,capsys):
+    from types import SimpleNamespace
+    from scripts import run_regressions as runner
+    class Process:
+        pid=123
+        stderr=None
+        def poll(self): return original_code
+        def wait(self,**kwargs): return original_code
+    monkeypatch.setattr(runner.subprocess,'Popen',lambda *a,**k:Process())
+    monkeypatch.setattr(runner,'_stop',lambda *a:None)
+    monkeypatch.setattr(runner,'relay_errors',lambda *a:None)
+    monkeypatch.setattr(runner,'collect',lambda *a:False)
+    # Do not allocate a real Windows Job for a synthetic process.
+    if sys.platform=='win32':
+        from mabinogi_addon.system import process_job
+        monkeypatch.setattr(process_job,'ProcessJob',lambda *a:None)
+    args=SimpleNamespace(diagnostics=str(tmp_path),stack_interval=30,pytest_args=[],case_timeout=180,session_timeout=1500)
+    assert runner.supervise(args)==(original_code or 3)
+
+
+def test_collector_retains_other_evidence_on_output_failure(tmp_path,monkeypatch):
+    run=tmp_path/'run-example';run.mkdir()
+    (run/'a.json').write_text('{}',encoding='utf-8');(run/'b.json').write_text('{}',encoding='utf-8')
+    original=Path.write_bytes
+    def write(path,data):
+        if path.name=='a.json' and path.parent.name=='public': raise PermissionError(13,'denied')
+        return original(path,data)
+    monkeypatch.setattr(Path,'write_bytes',write)
+    assert collect(tmp_path) is False
+    assert (run/'public/b.json').read_text(encoding='utf-8')=='{}'
+    assert json.loads((run/'public/collection-status.json').read_text(encoding='utf-8'))['unavailable_files']==1
+
+
+def test_persistent_reader_failure_is_infrastructure_error_without_fake_progress(tmp_path,monkeypatch):
+    from types import SimpleNamespace
+    from scripts import run_regressions as runner
+    class Process:
+        pid=123;stderr=None
+        def poll(self): return None
+    def start(*args,**kwargs):
+        (Path(kwargs['env']['MABINOGI_TEST_DIAGNOSTICS'])/'worker.json').write_text('{}',encoding='utf-8')
+        return Process()
+    original=Path.read_text
+    def read(path,*args,**kwargs):
+        if path.name=='worker.json': raise PermissionError(13,'denied')
+        return original(path,*args,**kwargs)
+    monkeypatch.setattr(Path,'read_text',read)
+    monkeypatch.setattr(runner.subprocess,'Popen',start)
+    monkeypatch.setattr(runner,'relay_errors',lambda *a:None)
+    monkeypatch.setattr(runner,'_stop',lambda *a:None)
+    monkeypatch.setattr(runner,'collect',lambda *a:True)
+    if sys.platform=='win32':
+        from mabinogi_addon.system import process_job
+        monkeypatch.setattr(process_job,'ProcessJob',lambda *a:None)
+    args=SimpleNamespace(diagnostics=str(tmp_path),stack_interval=30,pytest_args=[],case_timeout=30,session_timeout=40)
+    assert runner.supervise(args)==3
+    failure=json.loads(next(tmp_path.glob('run-*/failure.json')).read_text(encoding='utf-8'))
+    assert failure['failure']=='diagnostic infrastructure failure: snapshot read'

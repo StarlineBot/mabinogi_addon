@@ -8,6 +8,7 @@ import re
 import signal
 import subprocess
 import sys
+import threading
 import time
 import uuid
 
@@ -24,13 +25,21 @@ def public_trace(data,root):
 
 def collect(root):
     """Only bounded safe journals/stacks are published; never upload raw dump files."""
-    root=Path(root)
-    runs=list(root.glob('run-*'))+list((root/'unit').glob('run-*'))+list((root/'native').glob('run-*'))
+    root=Path(root);success=True
+    try: runs=list(root.glob('run-*'))+list((root/'unit').glob('run-*'))+list((root/'native').glob('run-*'))
+    except OSError:
+        print('[watchdog] diagnostic collection failed: discovery',flush=True)
+        return False
     for run in sorted(runs)[-4:]:
-        public=run/'public';public.mkdir(exist_ok=True)
+        public=run/'public'
+        try:
+            public.mkdir(exist_ok=True)
+            paths=sorted(run.iterdir())[:48]
+        except OSError:
+            success=False;continue
         unavailable=0;remaining=2*1024*1024;limited=0
-        for path in sorted(run.iterdir())[:48]:
-            if path.suffix not in ('.raw','.json','.jsonl'): continue
+        for path in paths:
+            if path.suffix not in ('.raw','.json','.jsonl','.error'): continue
             try:
                 with path.open('rb') as stream:
                     size=path.stat().st_size;stream.seek(max(0,size-256*1024));data=stream.read(256*1024)
@@ -45,9 +54,41 @@ def collect(root):
                 text=data.decode('utf-8',errors='replace');name=path.name
             data=text.encode('utf-8')
             if len(data)>remaining: limited+=1;data=data[-remaining:] if remaining else b''
-            if data: (public/name).write_bytes(data)
+            if data:
+                try: (public/name).write_bytes(data)
+                except OSError: unavailable+=1
             remaining-=len(data)
-        (public/'collection-status.json').write_text(json.dumps({'unavailable_files':unavailable,'limited_files':limited}),encoding='utf-8')
+        try: (public/'collection-status.json').write_text(json.dumps({'unavailable_files':unavailable,'limited_files':limited}),encoding='utf-8')
+        except OSError: unavailable+=1
+        if unavailable: success=False
+    if not success: print('[watchdog] diagnostic collection failed: bounded files unavailable',flush=True)
+    return success
+
+
+def diagnostic_failure(run):
+    # Marker contents are fixed-schema/sanitized by the writer. Existence alone
+    # is sufficient; a reader can never lock a destination being replaced here.
+    return next(run.glob('*.error'),None) is not None
+
+
+def failure_record(run,reason):
+    print('[watchdog] '+reason,flush=True)
+    try: (run/'failure.json').write_text(json.dumps({'failure':reason}),encoding='utf-8')
+    except OSError: print('[watchdog] diagnostic failure record unavailable',flush=True)
+
+
+def relay_errors(stream,failed):
+    """An independent notification channel still works when the disk is unwritable."""
+    prefix=b'[watchdog] diagnostic infrastructure failure: '
+    tail=b''
+    try:
+        while data:=os.read(stream.fileno(),4096):
+            if prefix in tail+data: failed.set()
+            tail=(tail+data)[-len(prefix):]
+            sys.stderr.write(data.decode('utf-8',errors='replace'));sys.stderr.flush()
+    except OSError:
+        failed.set()
+    finally: stream.close()
 
 
 def _stop(process,job):
@@ -70,8 +111,11 @@ def supervise(arguments):
     env['MABINOGI_TEST_STACK_SECONDS']=str(arguments.stack_interval)
     command=[sys.executable,'-u','-m','scripts.run_regressions','--child','--gate',str(gate),
              '--diagnostics',str(root),'--',*arguments.pytest_args]
-    process=subprocess.Popen(command,env=env,start_new_session=sys.platform!='win32')
-    job=None;reason=None;states={};began=last_change=last_print=time.monotonic();signatures={}
+    process=subprocess.Popen(command,env=env,start_new_session=sys.platform!='win32',stderr=subprocess.PIPE)
+    io_failed=threading.Event()
+    relay=threading.Thread(target=relay_errors,args=(process.stderr,io_failed),daemon=True)
+    relay.start()
+    job=None;reason=None;states={};began=last_change=last_print=time.monotonic();signatures={};read_errors={};result=3
     try:
         if sys.platform=='win32':
             from mabinogi_addon.system.process_job import ProcessJob
@@ -85,28 +129,39 @@ def supervise(arguments):
                     stat=path.stat()
                     if stat.st_size>16384: reason='journal size limit';break
                     if signatures.get(path)!=stat.st_mtime_ns:
-                        signatures[path]=stat.st_mtime_ns;last_change=now
                         state=json.loads(path.read_text(encoding='utf-8'));states[path]=state
+                        signatures[path]=stat.st_mtime_ns;last_change=now
+                        read_errors.pop(path,None)
                     state=states[path]
                     if state.get('status')=='running' and now-state['started']>arguments.case_timeout:
                         reason='case timeout: '+json.dumps({k:state.get(k) for k in ('worker','pid','node','case_hash','phase')});break
-                except (OSError,ValueError,KeyError): continue
+                except (OSError,ValueError,KeyError):
+                    if now-read_errors.setdefault(path,now)>1:
+                        reason='diagnostic infrastructure failure: snapshot read';break
             if any(path.stat().st_size>8*1024*1024 for path in run.glob('*.raw')): reason='stack size limit'
             if now-began>arguments.session_timeout: reason='session timeout'
             if now-last_change>arguments.case_timeout: reason=reason or 'no test progress timeout'
+            if (io_failed.is_set() or diagnostic_failure(run)) and reason is None: reason='diagnostic infrastructure failure: journal writer'
             if reason:
-                print('[watchdog] '+reason,flush=True)
-                (run/'failure.json').write_text(json.dumps({'failure':reason}),encoding='utf-8')
+                failure_record(run,reason)
                 break
             if now-last_print>=30:
                 active=[{k:s.get(k) for k in ('worker','pid','node','case_hash','phase')} for s in states.values() if s.get('status')=='running']
                 print('[watchdog] active '+json.dumps(active),flush=True);last_print=now
             time.sleep(.1)
-        result=124 if reason else process.wait()
-        return result
+        result=(3 if reason.startswith('diagnostic infrastructure') else 124) if reason else process.wait()
+        if not reason and diagnostic_failure(run):
+            failure_record(run,'diagnostic infrastructure failure: journal writer')
+            result=result or 3
     finally:
-        _stop(process,job)
-        collect(root)
+        try: _stop(process,job)
+        except (OSError,subprocess.SubprocessError):
+            print('[watchdog] owned process cleanup failed',flush=True)
+            result=result or 3
+        relay.join(timeout=1)
+        if io_failed.is_set(): result=result or 3
+        if not collect(root): result=result or 3
+    return result
 
 
 def main(argv=None):
@@ -121,14 +176,16 @@ def main(argv=None):
     args.pytest_args=extra[1:] if extra[:1]==['--'] else extra
     if any(not math.isfinite(value) or value<=0 for value in (args.case_timeout,args.session_timeout,args.stack_interval)):
         parser.error('timeouts must be finite and positive')
-    if args.collect_only: collect(args.diagnostics);return 0
+    if args.collect_only: return 0 if collect(args.diagnostics) else 3
     if args.child:
         deadline=time.monotonic()+30
         while not Path(args.gate).exists():
             if time.monotonic()>deadline: return 125
             time.sleep(.05)
         import pytest
-        return pytest.main(['-p','test_support.progress',*args.pytest_args])
+        result=pytest.main(['-p','test_support.progress',*args.pytest_args])
+        from test_support import progress
+        return result or (3 if progress._state is not None and progress._state.failed else 0)
     return supervise(args)
 
 
