@@ -13,7 +13,7 @@ from ..optimization.frames import FrameStream
 from ..system.optimization import WindowsOptimization
 from ..system import presentmon
 from .optimization_dialog import OptimizationDialog
-from .memo_overlay import MemoOverlay
+from .frame_overlay import FrameOverlay
 
 
 class OptimizationController(QObject):
@@ -60,7 +60,7 @@ class OptimizationController(QObject):
     @property
     def overlay(self):
         if self._overlay is None:
-            overlay = self._overlay = MemoOverlay(round(20*self._scale/100))
+            overlay = self._overlay = FrameOverlay(round(20*self._scale/100))
             overlay.resize(round(210*self._scale/100),80)
             overlay.move(30,90)
             state = config.load_overlay_state('frameMeter') or {}
@@ -255,7 +255,7 @@ class OptimizationController(QObject):
             _log.info('FPS 대상 확인: pid=%s source=%s candidates=%s',game['pid'],result['source'],len(result['sources']))
         self.frame_status = result['status']
         if result['fps'] is not None and not self.paused:
-            self.overlay.set_text(f"{result['fps']:.1f} FPS\n\n제출 프레임")
+            self.overlay.set_text(f"{result['fps']:.1f} FPS")
             self.overlay.show()
         else: self._hide_overlay()
         if self.dialog is not None:
