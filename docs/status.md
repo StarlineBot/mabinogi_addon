@@ -112,6 +112,11 @@
 
 ## 마지막 작업
 
+### 0.11.4 검증 실패 수정 — 헤더 CRLF 체크아웃 (0a51073 대응)
+
+- `_git_checkout` clone에 `--config core.autocrlf=false`. 전역 autocrlf=true 재현 회귀(로컬 저장소, 수정 전 실패 확인)와
+  실제 nv·AMF 저장소 해시 일치 확인. 로컬 0.11.4 변경 검사 통과. Windows FFmpeg configure/빌드·nvenc/amf는 여전히 미검증.
+
 ### 0.11.4 독립 QA 후속 수정 (1939d63 기록 대응)
 
 - 원복 거절 시 CPU만 원복·네트워크 '원복 대기'(명세 6절). RSS 재연결 전 원복은 원본 재기록 →
