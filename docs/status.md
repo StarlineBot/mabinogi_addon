@@ -43,6 +43,10 @@
   - Confirmed(코드): `_run`의 예외 처리가 status를 덮어 results/notices(RSS 미적용 이유 포함)를 버린다.
   - UX: 정규화 원복이 2회 클릭 구조, 새 작업 시작 시 이전 '원복 완료' 문구가 그대로 남아 진행 중 표시 없음.
   - 미확정: 실제로 배치를 바꾼 주체, RSS 14/1 확인 실패 이유(위 두 결함으로 정보 소실).
+  - 재시도(CPU 끔, TCP+RSS): ack/nodelay/autotuning 변경 없음, "rss 미적용·확인 필요: 적용값을 확인하지
+    못했어요" → 새 계획 14/1도 재시작 전 즉시 확인 실패. apply 실패 문구에 필드별 현재/적용 차이가 없어
+    원인 미상(restore의 `_difference`처럼 표시 필요). CPU를 끄고도 "게임 실행 대기 · CPU는 아직…"으로
+    세션이 게임을 기다리는 표시도 혼동 요인. 이 NIC에서는 RSS 두 계획 모두 확인 실패.
 - 0.11.2 validate-and-publish [39807034177](https://github.com/StarlineBot/mabinogi_addon/actions/runs/39807034177)
   실패: Linux `Install Qt runtime libraries`의 apt install 120초 상한 초과(exit 124). 124MB 중 49개
   패키지(약 35MB)만 받음, archive.ubuntu.com 약 0.3MB/s(이전 성공 실행은 124MB/19초). 테스트·DLL 빌드·게시 미실행.
