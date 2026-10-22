@@ -155,7 +155,13 @@
     MFT나 다른 GPU를 시도하지 않는다. D3D 장치 관리자(`MFT_MESSAGE_SET_D3D_MANAGER`)는 입력이 D3D11 프레임일
     때만 설정되며, 앱은 파이프로 시스템 메모리 BGRA→nv12를 넣으므로 설정되지 않는다. 실패 지점은 `SetOutputType`.
   - Highly Likely: 선택된 하드웨어 MFT가 D3D 관리자 없는 상태의 출력 형식을 거부(일부 제조사 MFT의 알려진 동작).
-    9800X3D는 내장 Radeon이 있어, 내장 GPU가 켜져 있으면 게임 GPU와 다른 MFT가 먼저 잡힐 수 있음(GPU 구성 확인 대기).
+    9800X3D는 내장 Radeon이 있어, 내장 GPU가 켜져 있으면 게임 GPU와 다른 MFT가 먼저 잡힐 수 있음
+    사용자 GPU 구성 확인: GPU 0 AMD Radeon(TM) Graphics(내장, 사용 0%), GPU 1 NVIDIA RTX 5070 Ti(게임, 24%).
+    하드웨어 H.264 MFT가 2개(AMD·NVIDIA) 등록된 구성이며, AMD MFT가 먼저 선택돼 D3D 관리자 없이 거부한 것으로
+    판단(MFT 목록 로그가 없어 Confirmed 아님). 이 경우 ②(D3D11 업로드)는 장치를 NVIDIA로 줘도 AMD MFT가 먼저
+    잡혀 해결되지 않을 수 있으므로 ①(게임 GPU 제조사 전용 인코더 선택, 이 PC는 h264_nvenc) 권장.
+    Potential Risk: native 캡처 장치가 `D3D11CreateDevice(nullptr, …)` 기본 어댑터라 게임 GPU와 다르면
+    어댑터 간 복사 비용이 생길 수 있음(실측 대상).
     비트레이트·1920×1080 nv12 파라미터 문제는 가능성 낮음(문구는 FFmpeg 일반 안내).
   - Confirmed: Actions 러너에는 GPU가 없어 배포 전 검사로는 잡을 수 없고, 실제 하드웨어 인코딩 성공은 아직 한 번도 없음.
   - 수정 방향(결정 필요, 명세는 소프트웨어 자동 전환 금지): ① 번들 FFmpeg에 `h264_nvenc`/`h264_amf` 추가 후 시작 시
