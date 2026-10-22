@@ -24,6 +24,12 @@ main·버전·모드를 선택해 한 번 실행한다. PC에 gh가 없어도 �
 
 ## 격리 회귀 실행 방식
 
+Linux 러너에는 Qt 화면/DBus 라이브러리와 `libpulse0`을 명시적으로 설치한다.
+오디오 장치는 테스트에서 대체하지만 `QtMultimedia`를 로딩할 때 필요한 `libpulse.so.0`까지
+제거되는 것은 아니다. 회귀 시작 전에 `Check Qt runtime imports`가 QtCore/QtGui/QtWidgets/
+QtNetwork/QtMultimedia를 실제로 import한다. 누락된 라이브러리는 이 필수 단계에서 실패하며,
+skip이나 대체 성공으로 처리하지 않는다. 오디오 서버/실제 장치를 실행하는 검사가 아니다.
+
 ### 첫 오류와 러너 자원 진단
 
 Linux 회귀는 `--maxfail=3 --tb=short`로 실행한다. 정상일 때 전체 대상을 실행하는 정책은
@@ -34,8 +40,9 @@ Linux 회귀는 `--maxfail=3 --tb=short`로 실행한다. 정상일 때 전체 �
   setup/call/teardown·collection·pytest 내부 오류를 구분하고, `[ci-first-error]`에 테스트 위치와
   traceback을 남긴다. worker의 pytest 캡처에만 남기거나 세션 종료 요약을 기다리지 않는다.
 - traceback은 처음/끝을 합쳐 약 32KiB로 제한하며 출력은 기존 유한 큐/짧은 flush를 사용한다.
-  지역 변수·환경 변수·캡처 stdout/stderr를 추가 수집하지 않는다. 오류 원문은 비공개 Actions
+  지역 변수·환경 변수·캡처 stdout/stderr를 추가 수집하지 않는다. 오류 원문은 Actions
   콘솔에만 내보내고, 가공된 공개 진단 아티팩트의 파일 목록/내용으로 추가하지 않는다.
+  공개 저장소에서는 콘솔도 공개되므로 원문에 비밀값이 포함되지 않도록 주의한다.
 - 같은 회귀 단계에서 `scripts.ci_resources`를 별도 Linux 프로세스 그룹으로 먼저 시작한다.
   즉시 및 약 30초 간격으로 UTC·`free -m`·`df -h /tmp .`·RSS 상위 15개 프로세스와
   cgroup v2 `memory.current`/`memory.max`/`memory.events`를 출력한다. 프로세스는 PID/PPID/RSS/

@@ -76,6 +76,21 @@ def workflow(name):
     return yaml.load((ROOT / ".github/workflows" / name).read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
 
 
+def test_linux_qt_runtime_is_installed_and_checked_before_regression():
+    steps = workflow("windows.yml")["jobs"]["regression"]["steps"]
+    install = next(s for s in steps if s.get("name") == "Install Qt runtime libraries")
+    assert "libpulse0" in install["run"].split()
+    check = next(s for s in steps if s.get("name") == "Check Qt runtime imports")
+    unit = next(s for s in steps if s.get("id") == "unit")
+    assert steps.index(install) < steps.index(check) < steps.index(unit)
+    assert check["timeout-minutes"] == "1"
+    assert check["run"].startswith("uv run --frozen python -c ")
+    for module in ("QtCore", "QtGui", "QtWidgets", "QtNetwork", "QtMultimedia"):
+        assert module in check["run"]
+    for step in (install, check):
+        assert "if" not in step and "continue-on-error" not in step
+
+
 def test_validation_is_manual_full_gate_with_mandatory_bounded_storage():
     main = workflow("windows.yml")
     assert set(main["on"]) == {"workflow_dispatch"}
