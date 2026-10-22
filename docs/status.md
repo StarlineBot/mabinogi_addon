@@ -146,6 +146,13 @@
   - Potential Risk(낮음): 바쁜 작업이 '환경 확인'(restore_cpu=False)일 때 '중단 · 원복'을 누르면 그 작업 끝에 네트워크만
     원복하고 CPU 원복은 생략될 수 있음(`_run` finally 구조). 업데이터 runas는 작업 스레드에서 COM 초기화 없이 호출.
   - 렌더 확인: '최적화 시작'/'중단 · 원복' 2버튼 배치 정상(오프스크린).
+- 0.11.4 validate-and-publish [39873383337](https://github.com/StarlineBot/mabinogi_addon/actions/runs/39873383337) 실패
+  (회귀 1분24초·Windows 기동 통과, exe 빌드 1분23초에 중단, 게시 skipped, 태그·후보 없음).
+  원인 Confirmed(재현): `stage_hardware_headers`의 `nv-codec-headers content SHA256 mismatch`. 외부 저장소에
+  .gitattributes가 없어 Windows Git 기본 `core.autocrlf=true`가 헤더를 CRLF로 체크아웃 → 내용 해시 불일치
+  (커밋 SHA 확인은 통과). Linux에서 전역 autocrlf=true로 동일 오류 재현, `git clone --config core.autocrlf=false`로
+  nv·AMF 모두 통과 확인. 수정: `_git_checkout`에 `--config core.autocrlf=false`(sparse-checkout에도 유지).
+  'refs/tags/n12.1.14.0 … is not a commit' 경고는 주석 태그 표시로 무해.
 
 ### 0.11.3 추가 — 항상 관리자 실행 복원, 블랙박스 종료 확인 흐름 시안
 
