@@ -81,7 +81,7 @@ class Engine:
                 if not guid: raise ValueError('적용할 물리 네트워크 어댑터를 선택해 주세요.')
                 changes = [('ack',guid,1),('nodelay',guid,1),('autotuning','global','normal')] if options['tcp'] else []
                 if options['rss'] and not governor:
-                    try: changes.append(('rss',guid,self.backend.rss_plan(guid,plan['background_cpus'])))
+                    try: changes.append(('rss',guid,self.backend.rss_plan(guid,plan['background_cores'])))
                     except Exception as exc: notices.append('RSS 미적용: '+str(exc))
                 for kind, target, value in changes:
                     if self.cancel.is_set() or not self.allowed(): break
@@ -145,9 +145,9 @@ class Engine:
         if not self.busy and any(i['kind']=='cpu' for i in self.recovery.pending):
             self._launch(lambda: setattr(self,'status','CPU 원복을 확인했어요.'), restore_cpu=True)
 
-    def restore_network(self):
+    def restore_network(self, accept_normalized=False):
         def work():
-            errors = self.recovery.restore(network=True)
+            errors = self.recovery.restore(network=True, accept_normalized=accept_normalized)
             try: self.recovery.flush_network(verify_restored=True)
             except Exception as exc: errors.append(str(exc))
             self.status = '원복 완료' if not errors and not self.recovery.pending else '원복 확인 필요: '+'; '.join(errors[:4])

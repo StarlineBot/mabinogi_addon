@@ -38,8 +38,30 @@ class Topology:
         game_cores = performance[:count]
         game = {n for c in game_cores for n in c.cpus}
         background = set(cpus) - game
+        # RSS는 물리 코어 단위로 계획한다(SMT 형제 포함 범위는 장치가 재시작 때 줄여 원복이 막힘).
+        background_cores = sorted(tuple(sorted(c.cpus)) for c in self.cores if c not in game_cores)
         return dict(count=count, game=sum(1 << n for n in game),
-                    background=sum(1 << n for n in background), background_cpus=sorted(background))
+                    background=sum(1 << n for n in background), background_cpus=sorted(background),
+                    background_cores=background_cores)
+
+
+_RSS_RANGE = ('MaxProcessorNumber', 'MaxProcessors')
+
+
+def rss_normalized(applied, current):
+    """현재 RSS 값이 '앱이 쓴 적용값을 장치가 자체 규칙(SMT 형제 제외 등)으로 줄인 결과'인지.
+
+    범위 필드(최대 CPU 번호·개수)만 적용 범위 안에서 줄었고 나머지 필드는 적용값과 같을 때만
+    인정한다. 다른 도구의 임의 변경까지 원복하지 않도록 범위를 좁게 둔다."""
+    if not isinstance(current, dict) or set(current) != set(applied):
+        return False
+    if any(current[k] != applied[k] for k in applied if k not in _RSS_RANGE):
+        return False
+    top, count = current['MaxProcessorNumber'], current['MaxProcessors']
+    return (type(top) is int and type(count) is int
+            and applied['BaseProcessorNumber'] <= top <= applied['MaxProcessorNumber']
+            and 1 <= count <= applied['MaxProcessors']
+            and (top, count) != (applied['MaxProcessorNumber'], applied['MaxProcessors']))
 
 
 class Recovery:
@@ -53,6 +75,8 @@ class Recovery:
         self.items = []
         self.corrupt = False
         self.restart_targets = set()
+        # 마지막 원복 시도에서 '장치 정규화'로 보인 RSS 항목(사용자 확인 후 원본 재기록 대상).
+        self.normalized_review = []
         if self.path.exists():
             try:
                 if self.path.stat().st_size > 4 * 1024 * 1024:
@@ -160,19 +184,29 @@ class Recovery:
             message += ' 비교 시점 차이: ' + '; '.join(fields)
         return message
 
-    def restore(self, *, network=False):
+    def restore(self, *, network=False, accept_normalized=False):
+        """기록된 원본으로 되돌린다. accept_normalized: 사용자가 확인한 경우에만 '장치가 앱 적용값을
+        정규화한' RSS 항목도 원본으로 다시 쓴다(확인 전에는 차이를 알리고 보류)."""
         with self.lock:
             if self.corrupt:
                 return ['복구 기록이 손상돼 추정값으로 변경하지 않아요.']
             errors = []
+            if network:
+                self.normalized_review = []
             for item in reversed(self.pending):
                 if item['kind'] != 'cpu' and not network:
                     continue
                 try:
                     current = self._read(item['kind'],item['target'],'원복 전 확인')
+                    normalized = item['kind'] == 'rss' and rss_normalized(item['applied'], current)
                     if current == item['old']:
                         pass
-                    elif current == item['applied']:
+                    elif normalized and not accept_normalized:
+                        self.normalized_review.append(dict(target=item['target'], current=current, old=item['old']))
+                        raise RuntimeError(self._difference(item, current) + ' — 장치가 앱이 쓴 RSS 값을 자체 '
+                                           "규칙으로 조정한 것으로 확인돼요. '네트워크 원복'을 다시 누르면 원본으로 "
+                                           '되돌릴지 확인해요.')
+                    elif current == item['applied'] or normalized:
                         if item['kind'] in ('ack','nodelay','rss'):
                             self.restart_targets.add(item['target'])
                             self._save()

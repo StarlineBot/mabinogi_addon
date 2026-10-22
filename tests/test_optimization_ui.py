@@ -286,3 +286,26 @@ def test_start_from_app_preserves_collector_header_before_game_focus(window, mon
     assert not c.panel.frames_start.isEnabled() and c.panel.frames_stop.isEnabled()
     assert c.stream.snapshot(now[0])['fps'] == pytest.approx(50)
     c.stop_frames()
+
+
+def test_rss_normalized_restore_asks_specific_confirmation(window, monkeypatch):
+    w, app = window; c = w.optimization_tools
+    monkeypatch.setattr(module, 'is_creator', lambda: True); c.refresh_access()
+    calls = []
+    monkeypatch.setattr(c.engine, 'restore_network', lambda **k: calls.append(k))
+    monkeypatch.setattr(c, '_network_confirmation', lambda: calls.append('generic') or True)
+    c._restore_network()
+    assert calls == ['generic', {'accept_normalized': False}]
+    calls.clear()
+    old = dict(MaxProcessorNumber=14, MaxProcessors=8); cur = dict(MaxProcessorNumber=14, MaxProcessors=1)
+    c.recovery.normalized_review = [dict(target='g', current=cur, old=old)]
+    asked = []
+    def question(parent, title, text, *a):
+        asked.append(text); return module.QMessageBox.StandardButton.No
+    monkeypatch.setattr(module.QMessageBox, 'question', question)
+    c._restore_network()
+    assert not calls and '14 · 1개' in asked[0] and '14 · 8개' in asked[0]
+    monkeypatch.setattr(module.QMessageBox, 'question', lambda *a: module.QMessageBox.StandardButton.Yes)
+    c._restore_network()
+    assert calls == [{'accept_normalized': True}]
+    c.recovery.normalized_review = []

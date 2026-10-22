@@ -391,10 +391,19 @@ class WindowsOptimization:
         for target in tuple(self.restarts):
             self.restart_network(target)
 
-    def rss_plan(self, target, cpus):
+    def rss_plan(self, target, cores):
+        """백그라운드 물리 코어에 RSS를 둔다. cores: 코어별 논리 CPU 묶음(정수면 코어당 1개).
+
+        Windows RSS는 SMT 형제를 쓰지 않고 물리 코어당 대표 논리 CPU 하나만 쓴다. 형제까지 넣은
+        범위(예: 14~15/2개)를 쓰면 어댑터 재시작 때 장치가 14/1로 줄여, 앱 기록(적용값)과도
+        원본과도 달라져 원복이 보류됐다. 처음부터 대표 CPU 기준 값을 써 정규화와 일치시킨다."""
         old = self.read('rss',target)
         self.validate('rss',target,old)
-        if not cpus or cpus != list(range(min(cpus),max(cpus)+1)) or len(cpus)>old['MaxProcessors']:
+        groups = [tuple(sorted(c)) if isinstance(c,(tuple,list)) else (c,) for c in (cores or ())]
+        cpus = sorted(n for g in groups for n in g)
+        if (not groups or any(not g or any(type(n) is not int for n in g) for g in groups)
+                or cpus != list(range(min(cpus),max(cpus)+1)) or len(groups)>old['MaxProcessors']):
             raise ValueError('이 장치는 선택한 백그라운드 CPU만 표현할 수 없어요.')
+        leads = sorted(g[0] for g in groups)
         return dict(old,Enabled=True,BaseProcessorGroup=0,MaxProcessorGroup=0,
-                    BaseProcessorNumber=min(cpus),MaxProcessorNumber=max(cpus),MaxProcessors=len(cpus),Profile='ClosestStatic')
+                    BaseProcessorNumber=leads[0],MaxProcessorNumber=leads[-1],MaxProcessors=len(groups),Profile='ClosestStatic')

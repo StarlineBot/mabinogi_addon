@@ -191,14 +191,29 @@ class OptimizationController(QObject):
             self.stream.boundary(presentmon.clock()[0], 'optimization_stop_request')
         self.engine.stop()
 
+    def _normalized_confirmation(self):
+        """장치가 앱 적용값을 정규화한 RSS 항목을 원본으로 다시 쓸지 묻는다(값을 보여주고 확인)."""
+        lines = []
+        for entry in self.recovery.normalized_review[:4]:
+            cur, old = entry['current'], entry['old']
+            lines.append(f"현재 최대 CPU {cur['MaxProcessorNumber']} · {cur['MaxProcessors']}개 → "
+                         f"원본 최대 CPU {old['MaxProcessorNumber']} · {old['MaxProcessors']}개")
+        return QMessageBox.question(self.panel or self.window,'RSS 원본으로 되돌리기',
+            '장치가 앱이 쓴 RSS 값을 자체 규칙으로 조정해 기록과 달라졌어요. 앱이 쓴 값이 조정된 것으로 '
+            '확인돼요.\n\n' + '\n'.join(lines) + '\n\n원본 값으로 다시 기록할까요? 선택한 어댑터의 연결이 '
+            '잠시 끊길 수 있어요.',
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes
+
     def _restore_network(self):
         if not self._can_start() or self.engine.busy: return
-        if self._network_confirmation():
+        normalized = bool(self.recovery.normalized_review)
+        if self._normalized_confirmation() if normalized else self._network_confirmation():
             self._summary_requested = dict(action='restore_network')
             self._summary_state = None
             if self.stream is not None:
                 self.stream.boundary(presentmon.clock()[0], 'network_restore_request')
-            self.engine.restore_network()
+            self.engine.restore_network(accept_normalized=normalized)
 
     def start_frames(self):
         if self.frames or not self._can_start(): return

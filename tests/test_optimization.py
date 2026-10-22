@@ -308,3 +308,86 @@ def test_unsupported_cpu_inspection_still_lists_network_without_invalid_plan(rec
     e.inspect();e.thread.join(2)
     assert not e.busy and e.inspection==(None,[{'Name':'Ethernet','InterfaceGuid':GUID}])
     assert '코어' in e.status and not b.writes
+
+
+# --- 0.11.1 라이브 제보: RSS 복구 잠김 ------------------------------------------------
+# 사용자 화면값: 원본 14/8, 적용 15/2, 재시작 후 현재 14/1. Windows RSS는 SMT 형제를 쓰지 않아
+# 어댑터 재시작 때 물리 코어당 대표 논리 CPU만 남긴다(아래 장치 모형).
+RSS_ORIGINAL = dict(Enabled=True, BaseProcessorGroup=0, BaseProcessorNumber=0, MaxProcessorGroup=0,
+                    MaxProcessorNumber=14, MaxProcessors=8, NumberOfReceiveQueues=8, Profile='NUMAStatic')
+
+
+class SmtNic(Backend):
+    def __init__(self):
+        super().__init__()
+        self.values[('rss', json.dumps(GUID))] = copy.deepcopy(RSS_ORIGINAL)
+
+    def restart_network(self, target):
+        super().restart_network(target)
+        v = self.values[('rss', json.dumps(GUID))]
+        evens = [n for n in range(v['BaseProcessorNumber'], v['MaxProcessorNumber'] + 1) if n % 2 == 0]
+        v['MaxProcessorNumber'] = max(evens)
+        v['MaxProcessors'] = min(v['MaxProcessors'], len(evens))
+
+
+def test_rss_plan_uses_one_logical_cpu_per_physical_core():
+    t = Topology('AMD Ryzen 7 9800X3D', tuple(Core(i, (i * 2, i * 2 + 1)) for i in range(8)))
+    assert t.plan(7)['background_cores'] == [(14, 15)]
+    assert t.plan(6)['background_cores'] == [(12, 13), (14, 15)]
+    b = SmtNic()
+    plan = WindowsOptimization.rss_plan(b, GUID, t.plan(7)['background_cores'])
+    assert (plan['BaseProcessorNumber'], plan['MaxProcessorNumber'], plan['MaxProcessors']) == (14, 14, 1)
+    plan = WindowsOptimization.rss_plan(b, GUID, t.plan(6)['background_cores'])
+    assert (plan['BaseProcessorNumber'], plan['MaxProcessorNumber'], plan['MaxProcessors']) == (12, 14, 2)
+    # 물리 코어가 끊긴 묶음은 하나의 범위로 표현할 수 없다.
+    with pytest.raises(ValueError):
+        WindowsOptimization.rss_plan(b, GUID, [(10, 11), (14, 15)])
+
+
+def test_rss_smt_plan_survives_adapter_restart_and_restores(tmp_path):
+    b = SmtNic()
+    cores = Topology('AMD Ryzen 7 9800X3D', tuple(Core(i, (i * 2, i * 2 + 1)) for i in range(8))).plan(7)['background_cores']
+    r = Recovery(tmp_path / 'journal.json', b, lambda: True)
+    plan = WindowsOptimization.rss_plan(b, GUID, cores)
+    assert r.apply('rss', GUID, plan) == 'applied'
+    r.flush_network()
+    assert b.read('rss', GUID) == plan  # 정규화 결과가 적용값과 같다
+    assert r.restore(network=True) == []
+    r.flush_network(verify_restored=True)
+    assert b.read('rss', GUID) == RSS_ORIGINAL and not r.pending
+    r.finish()
+
+
+def _legacy_locked(tmp_path):
+    """0.11.1에서 이미 잠긴 기록: 14~15/2를 쓴 뒤 장치가 14/1로 줄인 상태(파일에서 다시 연다)."""
+    b = SmtNic()
+    applied = dict(RSS_ORIGINAL, BaseProcessorNumber=14, MaxProcessorNumber=15, MaxProcessors=2,
+                   Profile='ClosestStatic')
+    Recovery(tmp_path / 'journal.json', b, lambda: True).apply('rss', GUID, applied)
+    Recovery(tmp_path / 'journal.json', b, lambda: True).flush_network()
+    assert b.read('rss', GUID)['MaxProcessors'] == 1
+    return b, Recovery(tmp_path / 'journal.json', b, lambda: True)
+
+
+def test_rss_legacy_locked_journal_needs_confirmation_then_restores(tmp_path):
+    b, r = _legacy_locked(tmp_path)
+    writes = len(b.writes)
+    errors = r.restore(network=True)
+    assert errors and '자체 규칙' in errors[0] and r.pending and len(b.writes) == writes  # 확인 전엔 쓰지 않음
+    assert r.normalized_review and r.normalized_review[0]['old'] == RSS_ORIGINAL
+    with pytest.raises(RuntimeError): r.finish()
+    assert r.restore(network=True, accept_normalized=True) == []
+    r.flush_network(verify_restored=True)
+    assert b.read('rss', GUID) == RSS_ORIGINAL and not r.pending and not r.restart_targets
+    r.finish()
+
+
+@pytest.mark.parametrize('change', [dict(Profile='Closest'), dict(NumberOfReceiveQueues=2),
+                                    dict(MaxProcessorNumber=12, MaxProcessors=1), dict(MaxProcessors=3)])
+def test_rss_other_changes_are_not_treated_as_normalization(tmp_path, change):
+    b, r = _legacy_locked(tmp_path)
+    b.values[('rss', json.dumps(GUID))].update(change)  # 다른 도구·범위 밖 변경
+    writes = len(b.writes)
+    errors = r.restore(network=True, accept_normalized=True)
+    assert errors and '보류' in errors[0] and not r.normalized_review
+    assert len(b.writes) == writes and r.pending

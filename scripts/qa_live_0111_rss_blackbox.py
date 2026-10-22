@@ -14,7 +14,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
 
-from mabinogi_addon.optimization.session import Recovery  # noqa: E402
+from mabinogi_addon.optimization.session import Core, Recovery, Topology  # noqa: E402
 from mabinogi_addon.system.optimization import WindowsOptimization  # noqa: E402
 
 GUID = '12345678-1234-1234-1234-123456789abc'
@@ -44,26 +44,47 @@ class SmtNormalizingNic(WindowsOptimization):
         v['MaxProcessors'] = min(v['MaxProcessors'], len(evens))
 
 
+def _locked(nic, plan, folder, *, legacy=False):
+    """적용 → 재시작(정규화) → 원복 시도. 사용자가 풀 수 없는 잠김이면 True."""
+    recovery = Recovery(Path(folder) / 'recovery.json', nic, lambda: True)
+    recovery.apply('rss', GUID, plan)
+    recovery.flush_network()
+    # Engine.restore_network와 같은 순서: 원복 → 재연결 후 원본 확인.
+    errors = recovery.restore(network=True)
+    recovery.flush_network(verify_restored=True)
+    if recovery.pending and recovery.normalized_review:
+        # 앱이 제공하는 해소 경로: 사용자 확인 후 원본 재기록 → 재연결 후 원본 확인.
+        errors = recovery.restore(network=True, accept_normalized=True)
+        recovery.flush_network(verify_restored=True)
+    try:
+        recovery.finish()
+        start_blocked = False
+    except RuntimeError:
+        start_blocked = True
+    restored = nic.value == ORIGINAL
+    tag = '기존 기록(15/2)' if legacy else '현재 계획'
+    print(f'[RSS] {tag} 원복 결과:', errors or '정상', '/ 원본 복귀:', restored, '/ 시작 차단:', start_blocked)
+    return start_blocked or not restored
+
+
 def rss_deadlock():
+    # 엔진과 같은 경로: 9800X3D 7+1 → 백그라운드 물리 코어 7(논리 14,15) 묶음으로 계획.
+    topology = Topology('AMD Ryzen 7 9800X3D', tuple(Core(i, (i * 2, i * 2 + 1)) for i in range(8)))
+    cores = topology.plan(7)['background_cores']
     nic = SmtNormalizingNic()
-    plan = nic.rss_plan(GUID, [14, 15])  # 9800X3D 7+1: 백그라운드 물리 코어 7 = 논리 14,15
-    with tempfile.TemporaryDirectory() as folder:
-        recovery = Recovery(Path(folder) / 'recovery.json', nic, lambda: True)
-        recovery.apply('rss', GUID, plan)
-        recovery.flush_network()
-        errors = recovery.restore(network=True)
-        blocked = bool(recovery.pending)
-        try:
-            recovery.finish()
-            start_blocked = False
-        except RuntimeError:
-            start_blocked = True
+    plan = nic.rss_plan(GUID, cores)
     print('[RSS] 적용 계획:', {k: plan[k] for k in ('BaseProcessorNumber', 'MaxProcessorNumber', 'MaxProcessors')})
-    print('[RSS] 재시작 후 장치값:', {k: nic.value[k] for k in ('MaxProcessorNumber', 'MaxProcessors')})
-    print('[RSS] 원복 결과:', errors)
-    reproduced = blocked and start_blocked and errors
+    with tempfile.TemporaryDirectory() as folder:
+        current = _locked(nic, plan, folder)
+    # 0.11.1 사용자에게 이미 남은 기록: SMT 형제 포함 14~15/2개를 쓴 뒤 장치가 14/1로 줄인 상태.
+    nic = SmtNormalizingNic()
+    legacy_plan = dict(nic.read('rss', GUID), Enabled=True, BaseProcessorNumber=14, MaxProcessorNumber=15,
+                       MaxProcessors=2, Profile='ClosestStatic')
+    with tempfile.TemporaryDirectory() as folder:
+        legacy = _locked(nic, legacy_plan, folder, legacy=True)
+    reproduced = current or legacy
     print('[RSS]', 'REPRODUCED: 원복 보류 + 새 시작 차단(사용자 해소 경로 없음)' if reproduced else 'not reproduced')
-    return bool(reproduced)
+    return reproduced
 
 
 def blackbox_input_limit():
