@@ -187,18 +187,20 @@ class OptimizationController(QObject):
 
     def _restore_all(self):
         """'중단 · 원복': 세션을 멈추고 적용했던 CPU·네트워크를 모두 되돌린다. 네트워크가 포함되면
-        시작할 때처럼 연결 끊김 확인을 한 번 받는다(거절하면 아무것도 바꾸지 않음).
+        시작할 때처럼 연결 끊김 확인을 한 번 받는다. 거절하면 CPU만 되돌리고 네트워크는 '원복 대기'로
+        남긴다(명세 6절: 게임 중 연결을 끊지 않고 CPU만 멈추는 경로).
         제작자 접근이 없으면 CPU만 원복한다(네트워크 원복은 기존처럼 접근 필요)."""
         network = (any(i['kind'] != 'cpu' for i in self.recovery.pending) or bool(self.recovery.restart_targets))
         network = network and self._can_start()
         normalized = network and bool(self.recovery.normalized_review)
+        deferred = False
         if network and not (self._normalized_confirmation() if normalized else self._network_confirmation()):
-            return
+            network, normalized, deferred = False, False, True
         self._summary_requested = dict(action='restore_all' if network else 'stop_cpu')
         self._summary_state = None
         if self.stream is not None:
             self.stream.boundary(presentmon.clock()[0], 'optimization_stop_request')
-        self.engine.stop_and_restore(network=network, accept_normalized=normalized)
+        self.engine.stop_and_restore(network=network, accept_normalized=normalized, network_deferred=deferred)
 
     def _normalized_confirmation(self):
         """장치가 앱 적용값을 정규화한 RSS 항목을 원본으로 다시 쓸지 묻는다(값을 보여주고 확인)."""

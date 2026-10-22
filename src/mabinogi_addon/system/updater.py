@@ -256,8 +256,15 @@ def _launch_elevated(exe: Path) -> None:
     shell = ctypes.WinDLL("shell32", use_last_error=True)
     shell.ShellExecuteExW.argtypes = [ctypes.POINTER(ShellExecuteInfo)]
     shell.ShellExecuteExW.restype = W.BOOL
-    if not shell.ShellExecuteExW(ctypes.byref(info)):
-        raise ctypes.WinError(ctypes.get_last_error())  # 1223 = 사용자가 UAC 승인을 취소
+    # ShellExecuteEx는 셸 확장을 쓸 수 있어 호출 스레드에 COM(STA) 초기화를 권장한다(작업 스레드에서 호출됨).
+    ole = ctypes.WinDLL("ole32")
+    initialized = ole.CoInitializeEx(None, 0x2 | 0x4) in (0, 1)  # APARTMENTTHREADED|DISABLE_OLE1DDE, S_OK/S_FALSE
+    try:
+        if not shell.ShellExecuteExW(ctypes.byref(info)):
+            raise ctypes.WinError(ctypes.get_last_error())  # 1223 = 사용자가 UAC 승인을 취소
+    finally:
+        if initialized:
+            ole.CoUninitialize()
 
 
 def _relaunch_env() -> dict[str, str]:

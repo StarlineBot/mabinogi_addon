@@ -17,6 +17,8 @@ class Engine:
         self.lock = threading.Lock()
         self._partial = None  # 진행 중 작업의 결과/안내 줄(예외로 끝나도 버리지 않게)
         self._restore_network_after = None  # '중단 · 원복': CPU 원복 뒤 이어서 할 네트워크 원복(accept_normalized,)
+        self._restore_cpu_after = False  # '중단 · 원복'을 누른 시점에 돌던 작업이 무엇이든 끝에서 CPU를 원복
+        self._network_deferred = False  # 사용자가 네트워크 원복을 미룸 → '네트워크 원복 대기' 안내
 
     @property
     def busy(self):
@@ -41,6 +43,8 @@ class Engine:
             lines = self._partial() if self._partial is not None else []
             self.status = '\n'.join([*lines, f'작업을 완료하지 못했어요: {exc}'])
         finally:
+            restore_cpu = restore_cpu or self._restore_cpu_after
+            self._restore_cpu_after = False
             errors = self.recovery.restore() if restore_cpu else []
             if restore_cpu: self.recovery_requested = True
             if errors: self.status += '\nCPU 원복 확인 필요: ' + '; '.join(errors[:4])
@@ -50,7 +54,10 @@ class Engine:
                 net_errors = self._network_restore(*network)
                 self.status += ('\n네트워크 원복 완료' if not net_errors and not self.recovery.pending
                                 else '\n네트워크 원복 확인 필요: ' + '; '.join(net_errors[:4]))
-            if self.recovery.corrupt or self.recovery.pending or self.recovery.restart_targets:
+            deferred, self._network_deferred = self._network_deferred, False
+            if deferred and (any(i['kind'] != 'cpu' for i in self.recovery.pending) or self.recovery.restart_targets):
+                self.status += ("\n네트워크 원복 대기 · 연결을 끊어도 될 때 '중단 · 원복'을 다시 눌러 주세요.")
+            elif self.recovery.corrupt or self.recovery.pending or self.recovery.restart_targets:
                 self.status += '\n복구 기록이 남아 있어요. 원복 상태를 확인해 주세요.'
 
     def inspect(self):
@@ -196,12 +203,14 @@ class Engine:
             self.status = '원복 완료' if not errors and not self.recovery.pending else '원복 확인 필요: '+'; '.join(errors[:4])
         return self._launch(work, status='네트워크 원복 중…')
 
-    def stop_and_restore(self, network=False, accept_normalized=False):
+    def stop_and_restore(self, network=False, accept_normalized=False, network_deferred=False):
         """'중단 · 원복' 한 번으로 적용했던 것을 모두 되돌린다: 세션 중단 → CPU 원복 → (network면) 네트워크 원복.
 
         세션이 돌고 있으면 그 작업이 끝나며 CPU를 원복하고 이어서 네트워크를 원복한다(같은 작업 스레드)."""
         if network:
             self._restore_network_after = (accept_normalized,)
+        self._network_deferred = network_deferred and not network
+        self._restore_cpu_after = True
         self.cancel.set()
         if self.busy:
             self.status = '중단 · 원복 중…'

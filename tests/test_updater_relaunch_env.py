@@ -70,6 +70,9 @@ def test_relaunch_failure_after_install_is_reported_as_restart_needed(monkeypatc
 def test_launch_elevated_uses_runas_and_strips_pyinstaller_env(monkeypatch, tmp_path):
     seen = {}
     class Shell:
+        CoInitializeEx = staticmethod(lambda *a: seen.setdefault('com', 'init') and 0)
+        CoUninitialize = staticmethod(lambda: seen.update(com_done=True))
+
         class ShellExecuteExW:
             argtypes = restype = None
             def __new__(cls, info):
@@ -83,3 +86,4 @@ def test_launch_elevated_uses_runas_and_strips_pyinstaller_env(monkeypatch, tmp_
     assert seen["verb"] == "runas" and seen["file"] == str(tmp_path / "app.exe")
     assert "_MEIPASS2" not in seen["env"] and not any(k.startswith("_PYI") for k in seen["env"])
     assert seen["env"]["KEEP"] == "1"
+    assert seen["com"] == "init" and seen["com_done"]  # STA 초기화 후 해제

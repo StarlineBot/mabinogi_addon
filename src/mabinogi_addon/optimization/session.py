@@ -229,7 +229,13 @@ class Recovery:
                 try:
                     current = self._read(item['kind'],item['target'],'원복 전 확인')
                     normalized = item['kind'] == 'rss' and rss_normalized(item['applied'], current)
-                    if current == item['old']:
+                    if item['kind'] == 'rss' and item['state'] == 'prepared':
+                        # 재연결 전에 끝난 RSS 적용: 조회(실행값)는 아직 원본이지만 저장값은 적용값이라,
+                        # 쓰기를 생략하면 재연결 때 적용값이 반영된다. 원본을 다시 쓰고 재연결 후 확인한다.
+                        self.restart_targets.add(item['target'])
+                        self._save()
+                        self.backend.write('rss', item['target'], item['old'])
+                    elif current == item['old']:
                         pass
                     elif normalized and not accept_normalized:
                         self.normalized_review.append(dict(target=item['target'], current=current, old=item['old']))

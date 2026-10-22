@@ -562,3 +562,53 @@ def test_stop_and_restore_reverts_cpu_then_network_in_one_action(recovery):
     assert not e.busy and not r.pending and not r.restart_targets
     assert b.read('cpu', TARGET) == 15 and b.read('ack', GUID) is None and b.read('nodelay', GUID) is None
     assert '네트워크 원복 완료' in e.status
+
+
+def test_rss_restore_before_reconnect_rewrites_original(tmp_path):
+    """0.11.4 QA: 적용('prepared') 뒤 재연결 전에 원복하면 실행값은 아직 원본이라 쓰기를 생략했고,
+    재연결 때 저장값(적용값)이 반영돼 한 번의 원복으로 돌아가지 못했다."""
+    class StoredRunningNic(SmtNic):
+        def __init__(self):
+            super().__init__(); self.stored = copy.deepcopy(RSS_ORIGINAL)
+        def write(self, kind, target, value):
+            self.writes.append((kind, target, value)); self.stored = copy.deepcopy(value)
+        def restart_network(self, target):
+            self.restarts.append(target); self.values[('rss', json.dumps(GUID))] = copy.deepcopy(self.stored)
+    b = StoredRunningNic()
+    r = Recovery(tmp_path / 'journal.json', b, lambda: True)
+    plan = dict(RSS_ORIGINAL, BaseProcessorNumber=14, MaxProcessorNumber=14, MaxProcessors=1, Profile='ClosestStatic')
+    assert r.apply('rss', GUID, plan) == 'written'  # 재연결 전에 세션이 끝난 경우
+    assert r.restore(network=True) == []
+    r.flush_network(verify_restored=True)
+    assert b.stored == RSS_ORIGINAL and b.read('rss', GUID) == RSS_ORIGINAL and not r.pending
+    r.finish()
+
+
+def test_declined_network_restore_still_restores_cpu_and_keeps_network_pending(recovery):
+    """0.11.4 QA: 네트워크 확인을 거절하면 CPU만 되돌리고 네트워크는 '원복 대기'(명세 6절)."""
+    r, b, _ = recovery
+    b.values[('ack', json.dumps(GUID))] = None
+    assert r.apply('ack', GUID, 1) == 'applied'
+    r.flush_network()
+    b.values[('cpu', json.dumps(TARGET, sort_keys=True))] = 15
+    assert r.apply('cpu', TARGET, 3) == 'applied'
+    e = Engine(b, r, lambda: True)
+    assert e.stop_and_restore(network=False, network_deferred=True)
+    e.thread.join(3)
+    assert b.read('cpu', TARGET) == 15 and b.read('ack', GUID) == 1
+    assert [i['kind'] for i in r.pending] == ['ack'] and '네트워크 원복 대기' in e.status
+
+
+def test_stop_and_restore_during_inspect_still_restores_cpu(recovery):
+    """참고(QA): 돌던 작업이 CPU 원복을 하지 않는 '환경 확인'이어도 '중단 · 원복'이면 끝에서 CPU를 되돌린다."""
+    r, b, _ = recovery
+    b.values[('cpu', json.dumps(TARGET, sort_keys=True))] = 15
+    assert r.apply('cpu', TARGET, 3) == 'applied'
+    gate = threading.Event()
+    b.topology = lambda: gate.wait(3) and Topology('cpu', (Core(0, (0, 1)), Core(1, (2, 3))))
+    b.adapters = lambda: []
+    e = Engine(b, r, lambda: True)
+    assert e.inspect()
+    assert e.stop_and_restore()
+    gate.set(); e.thread.join(3)
+    assert b.read('cpu', TARGET) == 15 and not r.pending

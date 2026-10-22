@@ -201,7 +201,7 @@ def test_embedded_creator_and_recovery_tabs_preserve_single_lifetime(window,monk
     restores=[]
     monkeypatch.setattr(c.engine,'stop_and_restore',lambda **k:restores.append(k))
     c._restore_all()
-    assert restores==[dict(network=False,accept_normalized=False)]
+    assert restores==[dict(network=False,accept_normalized=False,network_deferred=False)]
     c.engine.recovery_requested=True;c._tick()
     monkeypatch.setattr(module,'is_creator',lambda:True)
     c.refresh_access()
@@ -300,7 +300,7 @@ def test_rss_normalized_restore_asks_specific_confirmation(window, monkeypatch):
     monkeypatch.setattr(c.engine, 'stop_and_restore', lambda **k: calls.append(k))
     monkeypatch.setattr(c, '_network_confirmation', lambda: calls.append('generic') or True)
     c._restore_all()
-    assert calls == ['generic', {'network': True, 'accept_normalized': False}]
+    assert calls == ['generic', {'network': True, 'accept_normalized': False, 'network_deferred': False}]
     calls.clear()
     old = dict(MaxProcessorNumber=14, MaxProcessors=8); cur = dict(MaxProcessorNumber=14, MaxProcessors=1)
     c.recovery.normalized_review = [dict(target='g', current=cur, old=old)]
@@ -309,10 +309,12 @@ def test_rss_normalized_restore_asks_specific_confirmation(window, monkeypatch):
         asked.append(text); return module.QMessageBox.StandardButton.No
     monkeypatch.setattr(module.QMessageBox, 'question', question)
     c._restore_all()
-    assert not calls and '14 · 1개' in asked[0] and '14 · 8개' in asked[0]  # 거절 → 아무것도 안 함
+    assert '14 · 1개' in asked[0] and '14 · 8개' in asked[0]
+    assert calls == [{'network': False, 'accept_normalized': False, 'network_deferred': True}]  # 거절 → CPU만
+    calls.clear()
     monkeypatch.setattr(module.QMessageBox, 'question', lambda *a: module.QMessageBox.StandardButton.Yes)
     c._restore_all()
-    assert calls == [{'network': True, 'accept_normalized': True}]
+    assert calls == [{'network': True, 'accept_normalized': True, 'network_deferred': False}]
     c.recovery.normalized_review = []
     c.recovery.restart_targets.clear()
 
@@ -348,10 +350,17 @@ def test_single_restore_button_restores_cpu_only_without_network_prompt(window, 
     c._tick()
     assert c.panel.stop.isEnabled()
     c._restore_all()
-    assert calls == [dict(network=False, accept_normalized=False)]
-    calls.clear()
-    monkeypatch.setattr(c, '_network_confirmation', lambda: False)  # 네트워크 포함, 확인 거절
-    c.recovery.items.append(dict(kind='ack', target='12345678-1234-1234-1234-123456789abc', old=None, applied=1, state='applied'))
+    assert calls == [dict(network=False, accept_normalized=False, network_deferred=False)]
+    c.recovery.items = []
+
+
+def test_declining_network_prompt_restores_cpu_only(window, monkeypatch):
+    w, app = window; c = w.optimization_tools
+    monkeypatch.setattr(module, 'is_creator', lambda: True); c.refresh_access()
+    calls = []
+    monkeypatch.setattr(c.engine, 'stop_and_restore', lambda **k: calls.append(k))
+    monkeypatch.setattr(c, '_network_confirmation', lambda: False)
+    c.recovery.items = [dict(kind='ack', target='12345678-1234-1234-1234-123456789abc', old=None, applied=1, state='applied')]
     c._restore_all()
-    assert not calls
+    assert calls == [dict(network=False, accept_normalized=False, network_deferred=True)]
     c.recovery.items = []

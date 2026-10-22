@@ -35,7 +35,7 @@ def test_audio_budget_and_closed_timeline():
 
 def test_real_synthetic_video_audio_encoding_trim_and_decode(tmp_path):
     settings = CodecSettings(*codec_tools(),
-        'libx264', 100000, 10, 10, 100000, audio_bitrate=64000, host=codec_host())
+        'libx264', 100000, 10, 30, 100000, audio_bitrate=64000, host=codec_host())  # 시한: 부하 시 여유
     audio = tmp_path / 'synthetic.wav'
     with wave.open(str(audio), 'wb') as stream:
         stream.setnchannels(1); stream.setsampwidth(2); stream.setframerate(48000)
