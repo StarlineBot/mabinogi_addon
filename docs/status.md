@@ -130,6 +130,11 @@
   수정 방향: 비관리자이거나 740이면 ShellExecuteEx(runas/open)로 재실행(_PYI·_MEIPASS2 환경 제거 후),
   실패 문구에 '앱을 다시 실행해 주세요' 안내. updater 주석의 '현재 프로세스도 관리자' 전제 수정.
   이미 배포된 ≤0.11.2 업데이터에는 소급 적용 불가 → 0.11.3 노트/안내로 1회 수동 재실행 안내 검토.
+- 0.11.3 RSS 적용 실사용(새 필드 차이 표시): 차이 BaseProcessorNumber 현재0/적용14, MaxProcessors 현재8/적용1,
+  Profile 현재NUMAStatic/적용ClosestStatic, MaxProcessorNumber 일치(14) → 현재값이 원본과 동일(미반영).
+  Confirmed(코드+실측): `Set-NetAdapterRss -NoRestart` 직후 재시작 전에 `Get-NetAdapterRss`(실행 중 값)로 확인해
+  항상 실패. 이후 flush 재시작에서 실제로는 적용되나 item은 failed로 남아 다음 시작 차단·원복 필요(0.11.1 잠김과 동일 흐름).
+  수정 방향: RSS는 재시작 후 확인(정규화 허용)하거나 재시작 전엔 저장 설정(고급 속성 *RssBaseProcNumber 등)으로 확인.
 
 - 관리자 실행(사용자 결정 A): `--uac-admin` 복원, 자동실행 등록·해제 실패를 시작 토스트/설정 문구로 안내,
   주석·구현 문서·공개 README·노트 갱신. 로컬 변경 검사 398건, 노트·CI 정책 256건 통과. exe UAC 동작은 Windows 미검증.
