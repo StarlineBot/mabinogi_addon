@@ -42,8 +42,8 @@ def plan(base, head):
     return build
 
 
-def summary(unit, native, build, upload):
-    rows = {"Isolated regression": unit, "Native Windows integration": native,
+def summary(unit, smoke, build, upload):
+    rows = {"Linux isolated regression": unit, "Windows startup smoke": smoke,
             "Exe build": build, "Verified candidate storage (deployment gate)": upload}
     output = "\n| Stage | Result |\n| --- | --- |\n"
     output += "\n".join(f"| {name} | {state} |" for name, state in rows.items())
@@ -66,7 +66,7 @@ def verify_report(report, sha, require_build=False):
         return 1
     steps = {step["name"]: step.get("conclusion")
              for job in report.get("jobs", []) for step in job.get("steps", [])}
-    required = ["Isolated regression", "Native Windows integration"]
+    required = ["Isolated regression", "Windows startup smoke"]
     if require_build:
         required.extend(("Verify exe build", "Seal verified candidate", "Store verified candidate"))
     if any(steps.get(name) != "success" for name in required):
@@ -105,7 +105,7 @@ def main():
     planning.add_argument("--base", default="")
     planning.add_argument("--head", required=True)
     reporting = sub.add_parser("summary")
-    for name in ("unit", "native", "build", "upload"):
+    for name in ("unit", "smoke", "build", "upload"):
         reporting.add_argument("--" + name, required=True)
     waiting = sub.add_parser("wait")
     waiting.add_argument("--sha", required=True)
@@ -116,7 +116,7 @@ def main():
     if args.command == "plan":
         plan(args.base, args.head)
     elif args.command == "summary":
-        summary(args.unit, args.native, args.build, args.upload)
+        summary(args.unit, args.smoke, args.build, args.upload)
     else:
         return wait(args.sha, args.repo, args.timeout, require_build=args.require_build)
     return 0

@@ -1,0 +1,41 @@
+name: Optional Windows integration
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: optional-windows-integration
+  cancel-in-progress: false
+jobs:
+  native:
+    if: github.ref == 'refs/heads/main'
+    runs-on: windows-2022
+    timeout-minutes: 15
+    env:
+      QT_QPA_PLATFORM: windows
+      OPENCV_FOR_THREADS_NUM: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: false
+      - run: uv python install 3.12
+      - run: uv sync --frozen --group dev --group build
+      - name: Native Windows integration
+        timeout-minutes: 12
+        run: uv run --frozen python -m scripts.run_regressions --diagnostics test-diagnostics/native --case-timeout 180 --session-timeout 600 -- -vv -ra -m windows_integration --durations=30 --junitxml=windows-results.xml
+      - name: Collect regression diagnostics
+        if: always()
+        run: uv run --frozen python -m scripts.run_regressions --diagnostics test-diagnostics --collect-only
+      - name: Store native results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            test-diagnostics/**/public/*
+            windows-results.xml
+          retention-days: 1
+          if-no-files-found: warn

@@ -32,7 +32,7 @@ def report(**steps):
 
 
 def test_only_exact_sha_and_actual_required_steps_are_accepted():
-    valid = report(**{"Isolated regression": "success", "Native Windows integration": "success",
+    valid = report(**{"Isolated regression": "success", "Windows startup smoke": "success",
                       "Verify exe build": "success", "Seal verified candidate": "success",
                       "Store verified candidate": "success"})
     assert ci.verify_report(valid, SHA, True) == 0
@@ -54,7 +54,7 @@ def test_old_success_run_never_matches_new_push():
 
 def test_wait_reads_details_and_reports_api_failure(monkeypatch):
     run = {"headSha": SHA, "databaseId": 12, "status": "completed", "conclusion": "success", "url": "test"}
-    valid = report(**{"Isolated regression": "success", "Native Windows integration": "success"})
+    valid = report(**{"Isolated regression": "success", "Windows startup smoke": "success"})
     replies = iter([CompletedProcess([], 0, json.dumps([run]), ""), CompletedProcess([], 0, json.dumps(valid), "")])
     monkeypatch.setattr(ci.subprocess, "run", lambda *a, **k: next(replies))
     assert ci.wait(SHA, "owner/repo", timeout=1) == 0
@@ -82,7 +82,11 @@ def test_validation_is_manual_full_gate_with_mandatory_bounded_storage():
     assert main["on"]["workflow_dispatch"]["inputs"]["version"]["required"] == "true"
     assert main["permissions"]["contents"] == "read"
     job = main["jobs"]["validate"]
-    assert job["needs"] == "request"
+    assert job["needs"] == ["request", "regression"]
+    regression = main["jobs"]["regression"]
+    assert regression["needs"] == "request"
+    assert regression["runs-on"] == "ubuntu-24.04"
+    assert job["runs-on"] == "windows-2022"
     request = main["jobs"]["request"]
     freeze = next(s for s in request["steps"] if s.get("name") == "Freeze release request")
     assert freeze["id"] == "freeze"
@@ -91,23 +95,33 @@ def test_validation_is_manual_full_gate_with_mandatory_bounded_storage():
     assert "inputs.mode != 'publish-existing'" in job["if"]
     steps = job["steps"]
     names = [step.get("name") for step in steps]
-    required = ("Isolated regression", "Native Windows integration", "Verify exe build",
+    required = ("Fetch regression report", "Windows startup smoke", "Verify exe build",
                 "Seal verified candidate", "Store verified candidate")
     assert [names.index(name) for name in required] == sorted(names.index(name) for name in required)
     for name in required:
         step = next(s for s in steps if s.get("name") == name)
         assert "if" not in step and "continue-on-error" not in step
-    unit = next(s for s in steps if s.get("id") == "unit")
-    native = next(s for s in steps if s.get("id") == "native")
-    assert "not windows_integration" in unit["run"] and "-m windows_integration" in native["run"]
-    assert "-vv" in unit["run"] and "-vv" in native["run"]
-    assert "--regression-group" not in unit["run"] + native["run"]
-    assert "-n 2" in unit["run"] and "-n " not in native["run"]
+    unit = next(s for s in regression["steps"] if s.get("id") == "unit")
+    smoke = next(s for s in steps if s.get("id") == "smoke")
+    assert "not windows_integration" in unit["run"]
+    assert "tests/test_startup_smoke.py" in smoke["run"]
+    assert "-vv" in unit["run"] and "-vv" in smoke["run"]
+    assert "--regression-group" not in unit["run"] + smoke["run"]
+    assert "-n 2" in unit["run"] and "-n " not in smoke["run"]
     import tomllib
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     assert any(dep.startswith("pytest-xdist") for dep in project["dependency-groups"]["dev"])
-    assert unit["env"]["QT_QPA_PLATFORM"] == "offscreen"
-    assert native["env"]["QT_QPA_PLATFORM"] == "windows"
+    assert regression["env"]["QT_QPA_PLATFORM"] == "offscreen"
+    assert smoke["env"]["QT_QPA_PLATFORM"] == "windows"
+    assert "Native Windows integration" not in names
+    report_upload = next(s for s in regression["steps"] if s.get("name") == "Store regression report")
+    report_download = next(s for s in steps if s.get("name") == "Fetch regression report")
+    assert report_upload["with"]["name"] == report_download["with"]["name"]
+    assert "github.run_id" in report_download["with"]["name"]
+    assert "github.run_attempt" in report_download["with"]["name"]
+    assert "run-id" not in report_download["with"]  # only this run, never an older success
+    assert "if" not in report_upload and "continue-on-error" not in report_upload
+    assert report_upload["with"]["retention-days"] == "1"
     build = next(s for s in steps if s.get("id") == "build")
     assert "packaging/build_windows.py" in build["run"] and "APP_VERSION" in build["run"]
     upload = next(s for s in steps if s.get("id") == "upload")
@@ -118,7 +132,7 @@ def test_validation_is_manual_full_gate_with_mandatory_bounded_storage():
     assert "git diff --quiet HEAD" in clean["run"] and "throw" in clean["run"]
     assert "git ls-files --others" in clean["run"]
     assert "if" not in clean and "continue-on-error" not in clean
-    assert names.index("Native Windows integration") < names.index(clean["name"]) < names.index("Inject bundled secrets")
+    assert names.index("Windows startup smoke") < names.index(clean["name"]) < names.index("Inject bundled secrets")
     text = json.dumps(main)
     assert "release_delivery" not in text and "RELEASES_TOKEN" not in text
     command = runpy.run_path(str(ROOT / "packaging/build_windows.py"))["build_command"]()
@@ -214,17 +228,54 @@ def test_missing_windows_fonts_fail_with_actionable_error(root):
 
 
 def test_watchdog_bounds_keep_full_gate_and_publish_only_safe_diagnostics():
-    job=workflow('windows.yml')['jobs']['validate']
-    assert job['timeout-minutes']=='45'
-    steps=job['steps']
-    for name,session in [('unit','1500'),('native','600')]:
-        step=next(s for s in steps if s.get('id')==name)
-        assert 'scripts.run_regressions' in step['run'] and '--case-timeout 180' in step['run']
-        assert '--session-timeout '+session in step['run']
-        assert step['timeout-minutes']==('28' if name=='unit' else '12')
-    collect=next(s for s in steps if s.get('name')=='Collect regression diagnostics')
-    store=next(s for s in steps if s.get('name')=='Store regression diagnostics')
-    assert collect['if']=='always()' and store['if']=='always()'
-    assert store['with']['path']=='test-diagnostics/**/public/*'
-    assert store['with']['retention-days']=='1'
-    assert '.raw' not in store['with']['path'] and 'continue-on-error' not in store
+    jobs=workflow('windows.yml')['jobs']
+    for job_name, step_id, case, session, limit, collect_name, store_name in [
+        ('regression','unit','180','900','17','Collect regression diagnostics','Store regression diagnostics'),
+        ('validate','smoke','60','90','3','Collect startup diagnostics','Store startup diagnostics'),
+    ]:
+        job=jobs[job_name]
+        steps=job['steps']
+        step=next(s for s in steps if s.get('id')==step_id)
+        assert 'scripts.run_regressions' in step['run'] and '--case-timeout '+case in step['run']
+        assert '--session-timeout '+session in step['run'] and step['timeout-minutes']==limit
+        collect=next(s for s in steps if s.get('name')==collect_name)
+        store=next(s for s in steps if s.get('name')==store_name)
+        assert collect['if']=='always()' and store['if']=='always()'
+        assert store['with']['path']=='test-diagnostics/**/public/*'
+        assert store['with']['retention-days']=='1'
+        assert '.raw' not in store['with']['path'] and 'continue-on-error' not in store
+    assert jobs['regression']['timeout-minutes']=='20'
+    assert jobs['validate']['timeout-minutes']=='30'
+    build=next(s for s in jobs['validate']['steps'] if s.get('id')=='build')
+    assert build['timeout-minutes']=='20'
+
+
+def test_optional_native_workflow_preserves_all_cases_without_publishing():
+    native=workflow('windows-native.yml')
+    assert set(native['on'])=={'workflow_dispatch'}
+    assert native['permissions']=={'contents':'read'}
+    job=native['jobs']['native']
+    assert job['runs-on']=='windows-2022' and job['timeout-minutes']=='15'
+    assert job['env']['QT_QPA_PLATFORM']=='windows'
+    step=next(s for s in job['steps'] if s.get('name')=='Native Windows integration')
+    assert '-m windows_integration' in step['run'] and '--regression-group' not in step['run']
+    assert '--session-timeout 600' in step['run'] and step['timeout-minutes']=='12'
+    assert 'continue-on-error' not in step and 'if' not in step
+    assert 'release_automation' not in json.dumps(native) and 'RELEASES_TOKEN' not in json.dumps(native)
+
+
+def test_publication_contract_matches_each_workflow_job_and_cannot_skip_stages():
+    from scripts.release_candidate import REQUIRED_JOBS
+    main=workflow('windows.yml')
+    for job_name, required in REQUIRED_JOBS.items():
+        job=main['jobs'][job_name]
+        assert "inputs.mode != 'publish-existing'" in job['if']
+        assert job['steps'][0]['with']['ref']=='${{ github.sha }}'
+        assert 'continue-on-error' not in job
+        steps={s.get('name'):s for s in job['steps'] if s.get('name')}
+        for name in required:
+            assert name in steps
+            assert 'if' not in steps[name] and 'continue-on-error' not in steps[name]
+    assert main['jobs']['regression']['needs']=='request'
+    assert main['jobs']['validate']['needs']==['request','regression']
+    assert workflow('release.yml')['on']['workflow_run']['workflows']==['Windows validation']

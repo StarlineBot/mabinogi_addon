@@ -81,14 +81,53 @@ def test_failed_empty_or_all_skipped_reports_block(tmp_path,xml):
 def provenance():
     run = dict(id=123,repository=dict(full_name=REPO),head_repository=dict(full_name=REPO),head_sha=SHA,run_attempt=2,workflow_id=7,
                path=c.WORKFLOW,head_branch='main',event='workflow_dispatch',status='completed',conclusion='success')
-    jobs = [dict(name='validate',conclusion='success',steps=[dict(name=n,conclusion='success') for n in c.REQUIRED])]
+    jobs = successful_jobs()
     artifact = dict(id=456,name='verified-windows-123-2',expired=False,size_in_bytes=100,
                     workflow_run=dict(id=123,head_sha=SHA),expires_at=(NOW+c.TTL).isoformat())
     return run,jobs,artifact
 
 
+def successful_jobs():
+    return [dict(name=name, conclusion='success',
+                 steps=[dict(name=stage, conclusion='success') for stage in stages])
+            for name, stages in c.REQUIRED_JOBS.items()]
+
+
 def test_successful_exact_run_and_artifact(provenance):
     c.check_context(*provenance,7,REPO,SHA,'0.6.0',2,now=NOW)
+
+
+@pytest.mark.parametrize('job_name', c.REQUIRED_JOBS)
+@pytest.mark.parametrize('damage', ['missing', 'duplicate', 'failed', 'stage-in-other-job'])
+def test_split_gate_cannot_borrow_success_from_another_job(provenance, job_name, damage):
+    import copy
+    run, jobs, artifact = provenance
+    job = next(j for j in jobs if j['name'] == job_name)
+    if damage == 'missing':
+        jobs.remove(job)
+    elif damage == 'duplicate':
+        jobs.append(copy.deepcopy(job))
+    elif damage == 'failed':
+        job['conclusion'] = 'failure'
+    else:
+        other = next(j for j in jobs if j is not job)
+        other['steps'].append(job['steps'].pop())
+    with pytest.raises(ValueError, match='stage'):
+        c.check_context(run, jobs, artifact, 7, REPO, SHA, '0.6.0', 2, now=NOW)
+
+
+@pytest.mark.parametrize('damage', ['legacy-schema', 'wrong-profile', 'missing-profile'])
+def test_legacy_or_unidentified_validation_cannot_promote(bundle, damage):
+    _, folder, manifest, context = bundle
+    if damage == 'legacy-schema':
+        manifest['schema'] = 1
+    elif damage == 'wrong-profile':
+        manifest['validation_profile'] = 'all-windows'
+    else:
+        del manifest['validation_profile']
+    (folder/'candidate.json').write_text(json.dumps(manifest), encoding='utf-8')
+    with pytest.raises(ValueError, match='format'):
+        c.verify_bundle(folder, context, now=NOW)
 
 
 @pytest.mark.parametrize('field,value', [('head_sha','b'*40),('run_attempt',1),('workflow_id',8),
@@ -106,7 +145,7 @@ def test_wrong_or_failed_run_blocks(provenance,field,value):
 @pytest.mark.parametrize('outcome',['failure','skipped','cancelled'])
 def test_each_required_stage_must_actually_pass(provenance,stage,outcome):
     run,jobs,artifact = provenance
-    next(step for step in jobs[0]['steps'] if step['name']==stage)['conclusion'] = outcome
+    next(step for job in jobs for step in job['steps'] if step['name']==stage)['conclusion'] = outcome
     with pytest.raises(ValueError,match='stage'):
         c.check_context(run,jobs,artifact,7,REPO,SHA,'0.6.0',2,now=NOW)
 
@@ -375,8 +414,7 @@ def automation(bundle, tmp_path, monkeypatch):
     def prepare(mode='validate-and-publish', candidate_run='', version='0.6.0'):
         run_id, attempt = (900, 3) if mode == 'publish-existing' else (123, 2)
         runs[123] = run_data(123, 2)
-        jobs[123] = [dict(name='validate', conclusion='success',
-                          steps=[dict(name=n, conclusion='success') for n in c.REQUIRED])]
+        jobs[123] = successful_jobs()
         artifacts[123] = [artifact_data(456, 'verified-windows-123-2', 123)]
         sources[456] = folder
         manifest['authorization']['mode'] = 'verify-only' if mode == 'publish-existing' else mode
@@ -430,7 +468,7 @@ def test_one_dispatch_completes_same_bytes_or_preserves_verify_only(automation, 
     'request-provenance', 'request-expired', 'request-sha', 'request-version', 'request-attempt',
     'request-mode', 'forged-approval', 'candidate-mode', 'candidate-expired', 'candidate-evicted',
     'candidate-corrupt', 'candidate-source', 'inputs-changed', 'checkout-changed', 'tag-collision',
-    'native-skipped', 'artifact-attempt',
+    'smoke-skipped', 'regression-skipped', 'artifact-attempt',
 ])
 def test_completion_failure_creates_no_tag_or_publication(automation, monkeypatch, damage):
     env = automation
@@ -490,8 +528,9 @@ def test_completion_failure_creates_no_tag_or_publication(automation, monkeypatc
         monkeypatch.setattr(c, 'fingerprint', lambda sha, **kw: 'changed' if sha == 'HEAD' else 'fingerprint')
     elif damage == 'tag-collision':
         state['tag'] = True
-    elif damage == 'native-skipped':
-        env['jobs'][123][0]['steps'][1]['conclusion'] = 'skipped'
+    elif damage in ('smoke-skipped', 'regression-skipped'):
+        stage = 'Windows startup smoke' if damage == 'smoke-skipped' else 'Isolated regression'
+        next(s for job in env['jobs'][123] for s in job['steps'] if s['name'] == stage)['conclusion'] = 'skipped'
     elif damage == 'artifact-attempt':
         env['artifacts'][123][0]['name'] = 'verified-windows-123-1'
     receipt.write_text(json.dumps(request), encoding='utf-8')

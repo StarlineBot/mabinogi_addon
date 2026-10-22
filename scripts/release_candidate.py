@@ -14,8 +14,14 @@ import xml.etree.ElementTree as ET
 
 MAX_BYTES = 200 * 1024 * 1024
 TTL = timedelta(days=1)
-REQUIRED = ('Isolated regression', 'Native Windows integration', 'Verify exe build',
-            'Seal verified candidate', 'Store verified candidate')
+PROFILE = 'linux-regression-windows-smoke-v1'
+REQUIRED_JOBS = {
+    'regression': ('Isolated regression', 'Verify clean regression checkout', 'Store regression report'),
+    'validate': ('Fetch regression report', 'Windows startup smoke',
+                 'Verify clean checkout after tests', 'Verify exe build',
+                 'Seal verified candidate', 'Store verified candidate'),
+}
+REQUIRED = tuple(stage for stages in REQUIRED_JOBS.values() for stage in stages)
 WORKFLOW = '.github/workflows/windows.yml'
 PUBLIC_REPO = 'StarlineBot/mabinogi_addon-releases'
 
@@ -117,7 +123,8 @@ def seal(root, output, sha, version, run_id, attempt, repository, now=None, read
                   sha256=digest(exe),size=exe.stat().st_size)
     (output/'version.json').write_text(json.dumps(update,indent=2)+'\n',encoding='utf-8')
     now = now or utcnow()
-    manifest = dict(schema=1,source_sha=sha,source_fingerprint=fingerprint(sha,root=root),version=version,
+    manifest = dict(schema=2,validation_profile=PROFILE,
+        source_sha=sha,source_fingerprint=fingerprint(sha,root=root),version=version,
         run_id=run_id,run_attempt=attempt,repository=repository,workflow=WORKFLOW,
         authorization=dict(mode=mode, source_sha=sha, version=version, run_id=run_id,
                            run_attempt=attempt, repository=repository),
@@ -162,10 +169,12 @@ def check_dispatch(run, workflow_id, repository, sha, attempt):
 def check_context(run, jobs, artifact, workflow_id, repository, sha, version, attempt, now=None):
     identity(sha,version)
     check_dispatch(run, workflow_id, repository, sha, attempt)
-    required_jobs = [job for job in jobs if job.get('name') == 'validate']
-    require(len(required_jobs) == 1 and required_jobs[0].get('conclusion') == 'success', 'validation job missing')
-    steps = {s['name']:s.get('conclusion') for s in required_jobs[0].get('steps',[])}
-    require(all(steps.get(name) == 'success' for name in REQUIRED), 'required stage did not pass')
+    for job_name, stages in REQUIRED_JOBS.items():
+        matches = [job for job in jobs if job.get('name') == job_name]
+        require(len(matches) == 1 and matches[0].get('conclusion') == 'success',
+                f'required stage job missing or unsuccessful: {job_name}')
+        steps = {s['name']:s.get('conclusion') for s in matches[0].get('steps',[])}
+        require(all(steps.get(name) == 'success' for name in stages), 'required stage did not pass')
     require(artifact.get('name') == f'verified-windows-{run["id"]}-{attempt}' and not artifact.get('expired'),
             'artifact missing, wrong attempt, or expired')
     require(artifact.get('workflow_run',{}).get('id') == run['id'] and
@@ -200,7 +209,8 @@ def verify_bundle(folder, context, now=None):
     require((folder/'candidate.json').is_file() and not (folder/'candidate.json').is_symlink(),
             'manifest missing or unsafe')
     manifest = json.loads((folder/'candidate.json').read_text(encoding='utf-8'))
-    require(manifest.get('schema') == 1 and manifest.get('workflow') == WORKFLOW,'unknown candidate format')
+    require(manifest.get('schema') == 2 and manifest.get('workflow') == WORKFLOW and
+            manifest.get('validation_profile') == PROFILE, 'unknown candidate format')
     for key in ('source_sha','version','repository','run_id','run_attempt'):
         require(manifest.get(key) == context[key],f'candidate {key} mismatch')
     identity(manifest['source_sha'],manifest['version'])
