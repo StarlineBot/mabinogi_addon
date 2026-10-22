@@ -47,8 +47,9 @@ def test_xdist_healthy_suite_retains_all_cases_and_nonzero_assertion(tmp_path):
     assert not list(diagnostics.glob('run-*/public/*.raw'))
 
 
-def test_public_artifacts_are_bounded_and_remove_absolute_paths(tmp_path):
-    run=tmp_path/'run-example';run.mkdir()
+@pytest.mark.parametrize('scope',['','unit','native','smoke'])
+def test_public_artifacts_are_bounded_and_remove_absolute_paths(tmp_path,scope):
+    run=tmp_path/scope/'run-example';run.mkdir(parents=True)
     (run/'gw0-1.raw').write_text('Thread 0x123:\n  File "C:\\Users\\PRIVATE\\secret.py", line 1 in wait\n'+
         '  File "'+str(ROOT/'tests/test_example.py')+'", line 2 in test_example\n',encoding='utf-8')
     collect(tmp_path)

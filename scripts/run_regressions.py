@@ -67,7 +67,7 @@ def public_trace(data,root):
 def collect(root):
     """Only bounded safe journals/stacks are published; never upload raw dump files."""
     root=Path(root);success=True
-    try: runs=list(root.glob('run-*'))+list((root/'unit').glob('run-*'))+list((root/'native').glob('run-*'))
+    try: runs=[run for scope in ('','unit','native','smoke') for run in (root/scope).glob('run-*')]
     except OSError:
         notice('[watchdog] diagnostic collection failed: discovery')
         return False
