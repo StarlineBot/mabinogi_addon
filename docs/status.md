@@ -115,11 +115,13 @@
 ### 0.11.4 개발 — 인코더 진단/후보 선택, 저장 키, RSS 확인 시점, 업데이트 재실행 권한
 
 - 인코더: 후보 시험 선택(캐시)·실패 후보 `-v verbose` 진단 로그·후보별 오류 표시(소프트웨어 대체 없음).
-  제품 후보는 현재 빌드의 h264_mf만. **NVENC/AMF 빌드(사용자 승인 ①)는 보류**: 이 세션 네트워크가 GitHub
-  다운로드(codeload/github.com 아카이브)를 403으로 막아 nv-codec-headers·AMF 헤더 버전 확인과 sha256 고정 불가.
+  NVENC/AMF 빌드(사용자 승인 ①) 반영: nv-codec-headers n12.1.14.0·AMF v1.4.36을 커밋 SHA+내용 sha256으로 고정,
+  후보 h264_nvenc→h264_amf→h264_mf. 로컬 Linux에서 이 레시피 configure 통과(LGPL 2.1+)·nvenc/amf 객체 컴파일 확인.
+  Windows MSYS/llvm-mingw 빌드(cygpath·pkgconf 경로)와 실제 NVENC/AMF 인코딩은 미검증.
 - 저장 키 Ctrl+Alt+PrintScreen. RSS 적용·원복은 재연결 후 확인(정규화 인정 시 적용값 갱신).
   업데이트 재실행은 비관리자/740이면 ShellExecuteEx(runas), 실패 시 다시 실행 안내(≤0.11.3 업데이터엔 소급 불가).
-- 원복 1버튼(5번): 시안 3장 사용자 확인 대기, 미구현. CP3.exe(6번) 조치 보류.
+- 원복 1버튼(사용자 결정): '중단 · 원복' 하나로 CPU·네트워크 일괄 원복(네트워크 포함 시 확인 1회), 네트워크 원복
+  버튼 제거. CP3.exe(6번) 조치 보류. 최종 로컬 0.11.4 변경 검사 431건.
 - 로컬 0.11.4 변경 검사 427건, 노트·CI·시작 통합 275건, 재현 스크립트 2종 종료 0. 기존 실패 4건
   (`test_manual_update_progress` 하네스 누락) 수정. 실제 UAC 재실행·RSS 장치·인코더 진단은 Windows 미검증.
 
