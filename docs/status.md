@@ -119,6 +119,10 @@
   `clean_leftovers` 안전 시험: 임시 `segment-*`·영상 폴더 `.blackbox-*.partial`만 삭제, 저장 영상
   `blackbox-*.mp4`·사용자 파일·링크 대상은 보존. Improvement: 실행 폴더에 알 수 없는 파일이 있으면 매 실행
   '지우지 못했어요' 안내가 반복될 수 있음(발생 가능성 낮음). 배포 차단 없음. Windows UAC·실게임은 미검증.
+- v0.11.3 게시 완료: [39815495235](https://github.com/StarlineBot/mabinogi_addon/actions/runs/39815495235)
+  (apt 33초, 변경 검사 22초, exe 빌드 4분51초) → 게시 성공. 태그 `13606b1`, exe sha256 `9e2747e2…1124`/
+  162,541,818 bytes가 후보 manifest·version.json과 일치. 실행 중 회귀 job API가 잠시 queued로 늦게 표시됐으나
+  보고서 artifact는 정상 생성. 실게임(UAC·단축키·인코더 실제 오류) 확인 남음.
 
 - 관리자 실행(사용자 결정 A): `--uac-admin` 복원, 자동실행 등록·해제 실패를 시작 토스트/설정 문구로 안내,
   주석·구현 문서·공개 README·노트 갱신. 로컬 변경 검사 398건, 노트·CI 정책 256건 통과. exe UAC 동작은 Windows 미검증.
