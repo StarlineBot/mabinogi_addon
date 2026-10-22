@@ -115,6 +115,8 @@ class WindowsOptimization:
         kernel.GetProcessTimes.argtypes = [wintypes.HANDLE] + [ctypes.POINTER(wintypes.FILETIME)]*4
         kernel.GetProcessAffinityMask.argtypes = [wintypes.HANDLE,ctypes.POINTER(ctypes.c_size_t),ctypes.POINTER(ctypes.c_size_t)]
         kernel.SetProcessAffinityMask.argtypes = [wintypes.HANDLE,ctypes.c_size_t]
+        kernel.GetActiveProcessorGroupCount.argtypes = []
+        kernel.GetActiveProcessorGroupCount.restype = wintypes.WORD
         kernel.QueryFullProcessImageNameW.argtypes = [wintypes.HANDLE,wintypes.DWORD,wintypes.LPWSTR,ctypes.POINTER(wintypes.DWORD)]
         return kernel
 
@@ -328,7 +330,17 @@ class WindowsOptimization:
             except OSError as exc:
                 raise WindowsCommandError('조회/'+kind,getattr(exc,'winerror',None) or exc.errno or -1,
                     category='PermissionDenied' if isinstance(exc,PermissionError) else 'ObjectNotFound' if isinstance(exc,FileNotFoundError) else 'CommandFailed') from None
-        return self._ps("[Console]::OutputEncoding=[Text.Encoding]::UTF8; "+self._adapter(target)+"Get-NetAdapterRss -Name $a.Name | Select-Object Enabled,BaseProcessorGroup,BaseProcessorNumber,MaxProcessorGroup,MaxProcessorNumber,MaxProcessors,NumberOfReceiveQueues,@{N='Profile';E={[string]$_.Profile}} | ConvertTo-Json -Compress", '조회/rss')
+        value = self._ps("[Console]::OutputEncoding=[Text.Encoding]::UTF8; "+self._adapter(target)+"Get-NetAdapterRss -Name $a.Name | Select-Object Enabled,BaseProcessorGroup,BaseProcessorNumber,MaxProcessorGroup,MaxProcessorNumber,MaxProcessors,NumberOfReceiveQueues,@{N='Profile';E={[string]$_.Profile}} | ConvertTo-Json -Compress", '조회/rss')
+        groups = ('BaseProcessorGroup','MaxProcessorGroup')
+        if isinstance(value,dict) and any(key in value and value[key] is None for key in groups):
+            # A single active group makes an unreported group unambiguously zero.
+            if self._kernel().GetActiveProcessorGroupCount() != 1:
+                raise ValueError('RSS 프로세서 그룹을 확인하지 못했어요.')
+            value = dict(value)
+            for key in groups:
+                if key in value and value[key] is None: value[key] = 0
+        self.validate('rss',target,value)
+        return value
 
     def guarded_write(self, kind, target, value, guard):
         self.write(kind,target,value,guard=guard)

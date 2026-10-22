@@ -151,6 +151,74 @@ def test_recovery_failure_reports_stage_and_keeps_originals(tmp_path,phase):
         assert Recovery(r.path,b,lambda:False).pending==r.pending
 
 
+@pytest.mark.parametrize('base,maximum,count',[
+    (None,None,1),(None,0,1),(0,None,1),(None,None,2),(None,None,0),
+])
+def test_rss_unreported_groups_require_one_active_group(monkeypatch,base,maximum,count):
+    b=WindowsOptimization()
+    raw=dict(Enabled=True,BaseProcessorGroup=base,BaseProcessorNumber=14,
+             MaxProcessorGroup=maximum,MaxProcessorNumber=15,MaxProcessors=2,
+             NumberOfReceiveQueues=2,Profile='ClosestStatic')
+    monkeypatch.setattr(b,'_windows',lambda:None)
+    monkeypatch.setattr(b,'_ps',lambda *a:raw)
+    monkeypatch.setattr(b,'_kernel',lambda:SimpleNamespace(GetActiveProcessorGroupCount=lambda:count))
+    if count!=1:
+        with pytest.raises(ValueError,match='RSS 프로세서 그룹'): b.read('rss',GUID)
+    else:
+        assert b.read('rss',GUID)==dict(raw,BaseProcessorGroup=0,MaxProcessorGroup=0)
+    assert raw['BaseProcessorGroup'] is base and raw['MaxProcessorGroup'] is maximum
+
+
+def test_rss_explicit_groups_and_other_missing_fields_are_not_overridden(monkeypatch):
+    b=WindowsOptimization()
+    raw=dict(Enabled=True,BaseProcessorGroup=0,BaseProcessorNumber=14,
+             MaxProcessorGroup=1,MaxProcessorNumber=15,MaxProcessors=2,
+             NumberOfReceiveQueues=2,Profile='ClosestStatic')
+    monkeypatch.setattr(b,'_windows',lambda:None)
+    monkeypatch.setattr(b,'_ps',lambda *a:raw)
+    def no_fallback(): raise AssertionError('explicit groups must be preserved')
+    monkeypatch.setattr(b,'_kernel',no_fallback)
+    assert b.read('rss',GUID)==raw
+    raw['MaxProcessors']=None
+    with pytest.raises(ValueError,match='RSS 설정 형식'): b.read('rss',GUID)
+
+
+def test_rss_null_readback_verifies_and_restores_legacy_failed_journal(monkeypatch,tmp_path):
+    b=WindowsOptimization();writes=[]
+    old=dict(Enabled=True,BaseProcessorGroup=0,BaseProcessorNumber=0,
+             MaxProcessorGroup=0,MaxProcessorNumber=14,MaxProcessors=8,
+             NumberOfReceiveQueues=2,Profile='NUMAStatic')
+    planned=dict(old,BaseProcessorNumber=14,MaxProcessorNumber=15,
+                 MaxProcessors=2,Profile='ClosestStatic')
+    current=dict(old)
+    def ps(script,*a):
+        nonlocal current
+        if 'Get-NetAdapterRss -Name' in script: return dict(current)
+        if 'Set-NetAdapterRss -Name' in script:
+            expected=planned if not writes else old
+            for key,value in expected.items():
+                if key!='Enabled': assert f'-{key} {value}' in script
+            writes.append(dict(expected))
+            current=dict(expected,BaseProcessorGroup=None,MaxProcessorGroup=None)
+    monkeypatch.setattr(b,'_windows',lambda:None)
+    monkeypatch.setattr(b,'_ps',ps)
+    monkeypatch.setattr(b,'_kernel',lambda:SimpleNamespace(GetActiveProcessorGroupCount=lambda:1))
+    r=Recovery(tmp_path/'recovery.json',b,lambda:True)
+    assert r.apply('rss',GUID,planned)=='applied'
+    assert r.items[0]['old']==old and r.items[0]['state']=='applied'
+    current['MaxProcessors']=1
+    errors=r.restore(network=True)
+    assert len(errors)==1 and '외부 변경' in errors[0]
+    assert r.items[0]['state']=='applied' and writes==[planned]
+    current=dict(planned,BaseProcessorGroup=None,MaxProcessorGroup=None)
+    r.items[0]['state']='failed'
+    r._save()
+    recovered=Recovery(r.path,b,lambda:False)
+    assert not recovered.corrupt and recovered.restore(network=True)==[]
+    assert writes==[planned,old] and not recovered.pending
+    assert b.read('rss',GUID)==old
+
+
 @pytest.mark.parametrize('kind',['ack','nodelay','rss'])
 def test_selected_guid_shared_by_read_write_restart_and_existing_journal(monkeypatch,tmp_path,kind):
     import json
