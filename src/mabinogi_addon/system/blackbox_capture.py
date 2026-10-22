@@ -39,6 +39,20 @@ def target_identity(hwnd: int, pid: int) -> Target:
         k.CloseHandle(handle)
 
 
+ERROR_NOT_SUPPORTED = 0x80070032  # 입력 상한 초과(네이티브가 입력 크기를 보고)
+BB_E_GPU_SCALE = 0x80040201       # GPU 축소 실패(CPU 축소로 대체하지 않음)
+
+
+def fit_output(width: int, height: int, max_width: int, max_height: int) -> tuple[int, int]:
+    """네이티브 fit_output과 같은 정수 계산. 상한 이하는 원본 그대로(확대 없음), 축소는 비율 유지·짝수."""
+    if width <= max_width and height <= max_height:
+        return width, height
+    out_w, out_h = max_width, height * max_width // width
+    if out_h > max_height:
+        out_w, out_h = width * max_height // height, max_height
+    return max(2, out_w & ~1), max(2, out_h & ~1)
+
+
 class NativeTransition(OSError):
     """대상 비활성/크기 변경. 새 활성 epoch에서 재생성해야 한다."""
 
@@ -48,9 +62,19 @@ class NativeCapture:
     def __init__(self, library: Path, *, max_frame_bytes: int, cursor: bool,
                  audio_rate: int | None = None, audio_channels: int | None = None,
                  max_audio_bytes: int | None = None, activation_timeout_ms: int | None = None,
-                 audio_buffer_bytes: int | None = None):
+                 audio_buffer_bytes: int | None = None,
+                 max_output: tuple[int, int] | None = None, max_input: tuple[int, int] | None = None):
         if type(max_frame_bytes) is not int or max_frame_bytes <= 0 or type(cursor) is not bool:
             raise ValueError('explicit frame limit and cursor policy required')
+        if (max_output is None) != (max_input is None):
+            raise ValueError('explicit paired output and input bounds required')
+        if max_output is not None:
+            if any(type(v) is not int or v < 2 for v in (*max_output, *max_input)) or len(max_output) != 2 \
+                    or len(max_input) != 2 or max_input[0] < max_output[0] or max_input[1] < max_output[1]:
+                raise ValueError('invalid output/input bounds')
+            if max_output[0] * max_output[1] * 4 > max_frame_bytes:
+                raise ValueError('output bound exceeds frame buffer')
+        self.max_output, self.max_input = max_output, max_input
         if audio_rate is not None and any(type(v) is not int or v <= 0 for v in
                 (audio_rate, audio_channels, max_audio_bytes, activation_timeout_ms, audio_buffer_bytes)):
             raise ValueError('explicit audio format, capacity and timeout required')
@@ -79,8 +103,8 @@ class NativeCapture:
         # Load only the explicit absolute build artifact. No DLL search/PATH fallback.
         dll = C.CDLL(str(self.path))
         p, u32, u64, i32 = C.c_void_p, C.c_uint32, C.c_uint64, C.c_int32
-        dll.bb_open.argtypes = [p, u32, u64, i32, C.POINTER(p)]
-        dll.bb_open.restype = i32
+        dll.bb_open_fit.argtypes = [p, u32, u64, i32, i32, i32, i32, i32, C.POINTER(p)]
+        dll.bb_open_fit.restype = i32
         dll.bb_read.argtypes = [p, p, u64, C.POINTER(i32), C.POINTER(i32), C.POINTER(C.c_int64)]
         dll.bb_read.restype = i32
         dll.bb_close.argtypes = [p]
@@ -99,7 +123,10 @@ class NativeCapture:
         self._check(apartment.RoInitialize(1), "COM 초기화")  # RO_INIT_MULTITHREADED
         self._apartment, self._dll = apartment, dll
         try:
-            self._check(dll.bb_open(target.hwnd, target.pid, target.created, self.cursor, C.byref(self._video)), "게임 영상 시작")
+            out_w, out_h = self.max_output or (0, 0)
+            in_w, in_h = self.max_input or (0, 0)
+            self._check(dll.bb_open_fit(target.hwnd, target.pid, target.created, self.cursor,
+                                        out_w, out_h, in_w, in_h, C.byref(self._video)), "게임 영상 시작")
             self._buffer = C.create_string_buffer(self.limit)
             rate, channels, capacity, timeout = self.audio
             if rate is not None:
@@ -116,6 +143,16 @@ class NativeCapture:
         w, h, stamp = C.c_int32(), C.c_int32(), C.c_int64()
         hr = self._dll.bb_read(self._video, self._buffer, self.limit,
                                C.byref(w), C.byref(h), C.byref(stamp))
+        code = hr & 0xffffffff
+        if code == ERROR_NOT_SUPPORTED and self.max_input is not None and w.value > 0 and h.value > 0:
+            raise OSError(f'게임 창 {w.value}×{h.value}은 블랙박스 최대 입력 '
+                          f'{self.max_input[0]}×{self.max_input[1]}보다 커서 녹화를 중단했어요. 창 크기를 줄여 주세요.')
+        if code == BB_E_GPU_SCALE:
+            raise OSError('GPU에서 게임 영상을 '
+                          f'{self.max_output[0]}×{self.max_output[1]} 안으로 줄이지 못해 녹화를 중단했어요. '
+                          '그래픽 드라이버의 영상 처리 기능이 필요해요(CPU 축소로 대신하지 않아요). '
+                          f'(HRESULT 0x{code:08x})' if self.max_output else
+                          f'blackbox native 게임 영상 읽기: HRESULT 0x{code:08x}')
         if (hr & 0xffffffff == 0x8007007a and w.value > 0 and h.value > 0
                 and w.value * h.value * 4 > self.limit):
             raise OSError(f'게임 영상 입력 {w.value}×{h.value}: '

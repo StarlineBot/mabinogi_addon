@@ -192,8 +192,12 @@ class BlackboxService:
                 self.current = self._runtime(target)
                 self.current.session.update_context(CaptureContext(target.session, foreground=True, ready=True))
                 self._permit = self.current.session.capture_permit()
-                native = self._native_factory(self.settings.library, max_frame_bytes=self.settings.producer.max_frame_bytes,
-                                               cursor=self.settings.cursor, **(self.settings.audio or {}))
+                limits = self.settings.producer
+                bounds = {} if limits.max_input_width is None else dict(
+                    max_output=(limits.max_width, limits.max_height),
+                    max_input=(limits.max_input_width, limits.max_input_height))
+                native = self._native_factory(self.settings.library, max_frame_bytes=limits.max_frame_bytes,
+                                               cursor=self.settings.cursor, **bounds, **(self.settings.audio or {}))
                 producer = self._producer_factory(target, native, self.codec, self.spool,
                                                    self.settings.producer, allowed=self._allowed)
                 self.producer, self._producer_target = producer, target

@@ -59,7 +59,8 @@ def test_complete_product_profile_resolves_paths_without_device_access(tmp_path)
     policy = dict(max_bytes=1000000, min_free_bytes=0, max_entries=20,
         max_buffer_bytes=100000, max_segments=10, max_output_bytes=200000, cursor=False,
         producer=dict(segment_frames=2, queued_segments=2, max_frame_bytes=64,
-            max_raw_bytes=1024, max_segment_bytes=10000, frame_tolerance_us=1000, max_width=1920, max_height=1080),
+            max_raw_bytes=1024, max_segment_bytes=10000, frame_tolerance_us=1000, max_width=1920, max_height=1080,
+            max_input_width=3840, max_input_height=2160),
         codec=dict(encoder='h264_mf', bitrate=100000, fps=60, timeout=10,
             tolerance_us=100000, audio_bitrate=64000), hotkey_modifiers=3, hotkey_vk=0x75,
         audio='process', audio_settings=dict(audio_rate=48000, audio_channels=2,
@@ -175,3 +176,24 @@ def test_native_failure_prevents_ffmpeg_download(tmp_path, monkeypatch, failed_c
         packager.prepare(root, tmp_path/'bundle')
     assert error.value.returncode==7
     assert len(calls)==failed_call
+
+
+@pytest.mark.parametrize('change', [dict(max_input_width=None, max_input_height=None),
+                                    dict(max_input_width=2560, max_input_height=1440),
+                                    dict(max_width=2560, max_height=1440)])
+def test_product_profile_requires_1080p_output_and_4k_input(tmp_path, change):
+    """사용자 결정: 출력 1080p 고정, 입력 최대 3840×2160(큰 창은 GPU 축소)."""
+    policy = json.loads((Path(__file__).resolve().parents[1] / 'packaging' / 'blackbox-product.json').read_text(encoding='utf-8'))
+    for key, value in change.items():
+        if value is None:
+            policy['producer'].pop(key)
+        else:
+            policy['producer'][key] = value
+    names = ['product.json','mabinogi_blackbox.dll','blackbox_codec_host.exe','ffmpeg.exe','ffprobe.exe',
+             'redistribution.json','THIRD-PARTY-NOTICES.txt','corresponding-source.zip','FFmpeg-LICENSE.txt',
+             'avcodec-62.dll','avformat-62.dll','avutil-60.dll','avfilter-11.dll','swscale-9.dll','swresample-6.dll']
+    for name in names: (tmp_path/name).write_bytes(b'{}')
+    (tmp_path/'product.json').write_text(json.dumps(policy))
+    (tmp_path/'manifest.json').write_text(json.dumps({n: hashlib.sha256((tmp_path/n).read_bytes()).hexdigest() for n in names}))
+    with pytest.raises(ValueError, match='1920×1080|3840×2160'):
+        load_product_profile(bundle=tmp_path, data=tmp_path/'user', videos=tmp_path/'v')

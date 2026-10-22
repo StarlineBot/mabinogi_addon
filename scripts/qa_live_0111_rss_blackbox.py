@@ -1,7 +1,8 @@
 """0.11.1 라이브 제보 재현: RSS 복구 잠김, 블랙박스 1440p 입력 중단, 단축키 표시.
 
 실행: uv run python -m scripts.qa_live_0111_rss_blackbox
-예상(미수정 상태): 세 항목 모두 'REPRODUCED'를 출력하고 종료 코드 1.
+예상(미수정 상태): 세 항목 모두 'REPRODUCED'를 출력하고 종료 코드 1. 0.11.2 수정 후: 모두 not reproduced, 종료 코드 0.
+블랙박스 항목은 정책·버퍼 계산까지만 본다. 실제 GPU 축소(네이티브 DLL)는 Windows 실장치에서 확인해야 한다.
 Windows 장치/게임 없이 앱의 실제 Recovery·rss_plan·제품 설정·표시 형식만 사용한다.
 RSS 정규화 모형은 사용자 화면의 값(원본 MaxProcessorNumber 14/MaxProcessors 8,
 현재 14/1, 적용 15/2)에 맞춘 가설이다: Windows RSS가 SMT 형제(홀수 논리 CPU)를 쓰지 않는다.
@@ -88,13 +89,18 @@ def rss_deadlock():
 
 
 def blackbox_input_limit():
+    from mabinogi_addon.system.blackbox_capture import fit_output  # 네이티브와 같은 축소 계산
     product = json.loads((Path(__file__).resolve().parents[1] / 'packaging' / 'blackbox-product.json')
                          .read_text(encoding='utf-8'))
-    limit = product['producer']['max_frame_bytes']
-    need = 2560 * 1440 * 4  # 기획서 12.1 실측 게임창
-    reproduced = need > limit
-    print(f'[블랙박스] 2560×1440 프레임 {need} bytes, 제품 한도 {limit} bytes '
-          f"(max {product['producer']['max_width']}×{product['producer']['max_height']})")
+    p = product['producer']
+    limit = p['max_frame_bytes']
+    game = (2560, 1440)  # 기획서 12.1 실측 게임창(사용자 제보)
+    accepted = 'max_input_width' in p and game[0] <= p['max_input_width'] and game[1] <= p['max_input_height']
+    out = fit_output(*game, p['max_width'], p['max_height']) if accepted else game
+    need = out[0] * out[1] * 4
+    reproduced = not accepted or need > limit
+    print(f'[블랙박스] 게임창 {game[0]}×{game[1]} → GPU 축소 출력 {out[0]}×{out[1]} = {need} bytes, '
+          f"CPU 버퍼 한도 {limit} bytes (입력 최대 {p.get('max_input_width')}×{p.get('max_input_height')})")
     print('[블랙박스]', 'REPRODUCED: 사용자 해상도에서 녹화 시작 즉시 중단' if reproduced else 'not reproduced')
     return reproduced
 

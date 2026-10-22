@@ -163,3 +163,88 @@ def test_native_read_success_checks_bounds_and_preserves_timestamps():
         capture.read()
     with pytest.raises(OSError, match='invalid native audio bounds'):
         capture.read_audio()
+
+
+# --- 0.11.2: 고해상도 게임 창은 GPU에서 1080p 안으로 축소 (사용자 결정 2026-10-23) ---------------
+import pytest as _pytest
+
+
+@_pytest.mark.parametrize('size, expected', [
+    ((2560, 1440), (1920, 1080)),   # 사용자 제보 해상도
+    ((3840, 2160), (1920, 1080)),   # 입력 상한
+    ((1920, 1080), (1920, 1080)),   # 그대로
+    ((1280, 720), (1280, 720)),     # 1080p 미만: 확대 없음
+    ((3440, 1440), (1920, 802)),    # 21:9: 비율 유지, 짝수
+    ((1600, 1200), (1440, 1080)),   # 4:3: 높이 기준
+    ((1919, 1081), (1916, 1080)),   # 홀수 → 짝수
+])
+def test_fit_output_keeps_aspect_even_and_never_upscales(size, expected):
+    from mabinogi_addon.system.blackbox_capture import fit_output
+    out = fit_output(*size, 1920, 1080)
+    assert out == expected
+    assert out[0] <= 1920 and out[1] <= 1080
+    if size != out:
+        assert out[0] % 2 == 0 and out[1] % 2 == 0
+        assert abs(out[0] / out[1] - size[0] / size[1]) < 0.01  # 왜곡 없음(검은 띠 없이 맞춤)
+
+
+def _bounded_capture(video):
+    import ctypes as C
+    from types import SimpleNamespace
+    from mabinogi_addon.system.blackbox_capture import NativeCapture
+    capture = NativeCapture(Path('unused.dll'), max_frame_bytes=1920 * 1080 * 4, cursor=False,
+                            max_output=(1920, 1080), max_input=(3840, 2160))
+    capture._dll = SimpleNamespace(bb_read=video)
+    capture._video = C.c_void_p(1)
+    capture._buffer = C.create_string_buffer(64)
+    return capture
+
+
+def test_native_input_over_4k_and_gpu_scale_failure_stop_with_guidance():
+    def too_large(handle, output, capacity, width, height, stamp):
+        width._obj.value, height._obj.value = 5120, 2880
+        return -2147024846  # HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED)
+    with _pytest.raises(OSError, match='5120×2880은 블랙박스 최대 입력 3840×2160'):
+        _bounded_capture(too_large).read()
+    with _pytest.raises(OSError, match='GPU에서 게임 영상을 1920×1080 안으로 줄이지 못해.*CPU 축소로 대신하지 않아요'):
+        _bounded_capture(lambda *a: -2147220991).read()  # 0x80040201
+
+
+@_pytest.mark.parametrize('kwargs', [dict(max_output=(1920, 1080)), dict(max_input=(3840, 2160)),
+                                     dict(max_output=(1920, 1080), max_input=(1280, 720)),
+                                     dict(max_output=(3840, 2160), max_input=(3840, 2160))])
+def test_native_bounds_must_be_explicit_pairs_within_frame_buffer(kwargs):
+    from mabinogi_addon.system.blackbox_capture import NativeCapture
+    with _pytest.raises(ValueError):
+        NativeCapture(Path('unused.dll'), max_frame_bytes=1920 * 1080 * 4, cursor=False, **kwargs)
+
+
+def test_python_and_native_use_the_same_open_abi_and_fit_formula():
+    """Python이 부르는 내보내기 이름·인자 수와 DLL 정의가 어긋나면 실행 시에만 드러난다."""
+    import re
+    root = Path(__file__).resolve().parents[1]
+    native = (root / 'native/blackbox/capture.cpp').read_text(encoding='utf-8')
+    python = (root / 'src/mabinogi_addon/system/blackbox_capture.py').read_text(encoding='utf-8')
+    signature = re.search(r'BB HRESULT __cdecl bb_open_fit\(([^)]*)\)', native, re.S)
+    assert signature and len(signature.group(1).split(',')) == 9
+    argtypes = re.search(r'bb_open_fit\.argtypes = \[([^\]]*)\]', python)
+    assert argtypes and len(argtypes.group(1).split(',')) == 9
+    assert 'bb_open(' not in native and 'dll.bb_open.' not in python
+    # 축소 계산: 너비 기준 → 높이 초과 시 높이 기준, 짝수 내림(양쪽 동일).
+    assert '(long long)h * max_w / w' in native and '(long long)w * max_h / h' in native
+    assert 'height * max_width // width' in python and 'width * max_height // height' in python
+
+
+def test_service_passes_product_output_and_input_bounds_to_native(tmp_path):
+    from test_blackbox_service import make_service
+    from mabinogi_addon.blackbox_producer import ProducerLimits
+    from mabinogi_addon.system.blackbox_capture import Target
+    import dataclasses
+    service = make_service(tmp_path)
+    calls = []
+    service._native_factory = lambda *a, **k: calls.append(k) or object()
+    service.settings = dataclasses.replace(service.settings, producer=ProducerLimits(
+        2, 2, 1920 * 1080 * 4, 1920 * 1080 * 4 * 2 * 4, 10000, 1000, 1920, 1080, 3840, 2160))
+    service.tick(Target(1, 2, 3), active=True)
+    assert calls[0]['max_output'] == (1920, 1080) and calls[0]['max_input'] == (3840, 2160)
+    service.producer.request_stop()

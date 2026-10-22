@@ -37,8 +37,11 @@ def load_product_profile(*, bundle=None, data=None, videos=None):
         raise ValueError('product codec paths must come from verified bundle')
     if codec.get('encoder') not in ('h264_mf',):
         raise ValueError('제품용 하드웨어 인코더 선택이 필요해요.')
-    if profile.get('producer', {}).get('max_width') != 1920 or profile.get('producer', {}).get('max_height') != 1080:
-        raise ValueError('알파 입력 게임창 제한은 1920×1080이어야 해요.')
+    producer = profile.get('producer', {})
+    if producer.get('max_width') != 1920 or producer.get('max_height') != 1080:
+        raise ValueError('블랙박스 출력은 1920×1080 고정이어야 해요.')
+    if producer.get('max_input_width') != 3840 or producer.get('max_input_height') != 2160:
+        raise ValueError('블랙박스 입력 게임창 상한은 3840×2160이어야 해요(큰 창은 GPU에서 축소).')
     if codec.get('fps') != 60:
         raise ValueError('제품 녹화 FPS는 확정된 60이어야 해요.')
     if profile.get('audio') != 'process':

@@ -22,15 +22,23 @@ class ProducerLimits:
     max_raw_bytes: int
     max_segment_bytes: int
     frame_tolerance_us: int
-    max_width: int | None = None
+    max_width: int | None = None   # 출력(인코더 입력) 최대 크기 — 큰 게임 창은 GPU에서 이 안으로 축소
     max_height: int | None = None
+    max_input_width: int | None = None   # 받아들일 게임 창 최대 크기
+    max_input_height: int | None = None
 
     def __post_init__(self):
-        if any(type(v) is not int or v <= 0 for key, v in vars(self).items() if key not in ('max_width', 'max_height')):
+        optional = ('max_width', 'max_height', 'max_input_width', 'max_input_height')
+        if any(type(v) is not int or v <= 0 for key, v in vars(self).items() if key not in optional):
             raise ValueError('explicit positive producer bounds required')
         if (self.max_width is None) != (self.max_height is None) or any(
                 v is not None and (type(v) is not int or v <= 0) for v in (self.max_width, self.max_height)):
             raise ValueError('explicit paired source dimensions required')
+        if (self.max_input_width is None) != (self.max_input_height is None) or (
+                self.max_input_width is not None and (self.max_width is None or any(
+                    type(v) is not int for v in (self.max_input_width, self.max_input_height))
+                    or self.max_input_width < self.max_width or self.max_input_height < self.max_height)):
+            raise ValueError('explicit paired input bounds at least the output bounds required')
         if self.max_frame_bytes * self.segment_frames * (self.queued_segments + 2) > self.max_raw_bytes:
             raise ValueError('raw frame queues exceed explicit RAM budget')
 
@@ -114,7 +122,8 @@ class CaptureProducer:
                 if self._stop.is_set() or self.allowed() is not True:
                     break
                 if self.limits.max_width is not None and (width > self.limits.max_width or height > self.limits.max_height):
-                    raise ValueError(f'게임창 입력은 최대 {self.limits.max_width}×{self.limits.max_height}이에요. 창 크기를 줄여 주세요.')
+                    raise ValueError(f'블랙박스 영상 {width}×{height}이 출력 한도 '
+                                     f'{self.limits.max_width}×{self.limits.max_height}를 넘었어요(축소 결과 확인 실패).')
                 if len(data) > self.limits.max_frame_bytes or len(data) != width * height * 4:
                     raise ValueError('native frame exceeds bound')
                 if dimensions is not None and dimensions != (width, height):
