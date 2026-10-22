@@ -11,9 +11,9 @@
 #include <memory>
 #include <cstring>
 using namespace winrt;
-using namespace Windows::Graphics::Capture;
-using namespace Windows::Graphics::DirectX;
-using namespace Windows::Graphics::DirectX::Direct3D11;
+using namespace winrt::Windows::Graphics::Capture;
+using namespace winrt::Windows::Graphics::DirectX;
+using namespace winrt::Windows::Graphics::DirectX::Direct3D11;
 #define BB extern "C" __declspec(dllexport)
 
 struct Capture;
@@ -115,7 +115,7 @@ BB HRESULT __cdecl bb_read(void* handle, BYTE* destination, UINT64 capacity,
         if (size.Width != c.width || size.Height != c.height) return HRESULT_FROM_WIN32(ERROR_RETRY);
         UINT64 bytes = UINT64(c.width) * UINT64(c.height) * 4;
         if (bytes > capacity) return HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER);
-        auto access = frame.Surface().as<IDirect3DDxgiInterfaceAccess>();
+        auto access = frame.Surface().as<::Windows::Graphics::DirectX::Direct3D11::IDirect3DDxgiInterfaceAccess>();
         com_ptr<ID3D11Texture2D> texture;
         check_hresult(access->GetInterface(guid_of<ID3D11Texture2D>(), texture.put_void()));
         D3D11_TEXTURE2D_DESC desc{};

@@ -42,6 +42,31 @@
 - 동시 개발된 원격 main의 블랙박스/FPS 변경을 보존해 0.11.0 노트에 함께 반영했다.
   이 작업에서는 workflow/감독기/배포 게이트를 변경하거나 Actions·태그·게시를 실행하지 않았다.
 
+### 0.11.0 세 번째 후보 검증 및 네이티브 이름 충돌 수정
+
+- 추가1회 승인으로 main `b32510034ca1f452269fde5d15bf30f6517b1338`/0.11.0에
+  [verify-only #39765171693](https://github.com/StarlineBot/mabinogi_addon/actions/runs/39765171693)를 정확히1회 실행했다.
+  실행 전 공개 표준러너/main SHA 일치/중복0건을 확인했다.
+- 직접 확인: request11초 성공, Linux regression1분5초 성공, Windows 최소 기동 성공.
+  CLI 상태추적이 HTTP401 Bad credentials로 종료돼 조회를 중단했으며 재시도/우회하지 않았다.
+- **부모의 정상 GitHub connector 조회 근거**: validate job119779279869는10:50:46 UTC failure.
+  FFmpeg `INSTALL ffmpeg.exe`10:48:43 완료 후 native capture.cpp14~16행에서 C2872 `Windows` ambiguous.
+  SDK의 `::Windows`와 C++/WinRT의 `winrt::Windows`가 충돌했다. audio.cpp 오류는 해당 로그에 없었다.
+  최종 exe/후보는 생성되지 않았다. FFmpeg 경로 수정 후 빌드는 진전됐지만 전체 성공은 아니다.
+- capture.cpp의 using namespace3개를 `winrt::Windows`로 명시하고 DXGI interop 접근은
+  SDK 헤더에 정의된 `::Windows::Graphics::DirectX::Direct3D11::IDirect3DDxgiInterfaceAccess`로 명시했다.
+  native 나머지 파일에는 같은 모호한 Windows 참조가 없다. 캡처 동작·권한·오디오 정책은 변경하지 않는다.
+- 개발 producer/windowprobe/bundle/startup 회귀24건/12.16초 통과. 추출된 실제 using 선언과
+  두 Windows namespace 타입 모형의 g++ C++20 syntax 검사는 수정 전 ambiguous 실패/수정 후 성공.
+  재현 파일 `/tmp/blackbox-namespace-{before,after}.cpp`. 독립 QA도 실제 선언/as표현식 추출 모형의
+  수정 전 실패/수정 후 성공과 네이티브 전수참조를 확인했고 관련22건/1.35초 통과했다.
+  독립 재현 `/tmp/blackbox_namespace_qa.py`. 실제 MSVC/Windows SDK 전체 컴파일은 미검증이다.
+- 최초 수정 푸시는 원격 선행 변경 때문에 fetch-first 거부됐다. 정상 git fetch로 원격224ef70의
+  RSS 그룹 수정5파일을 확인해 보존하고 rebase했다. status 기록 충돌만 양쪽 보존으로 해결했으며
+  앱 코드 충돌은 없었다. 통합 실제 릴리스 검사318건/18.03초 통과(`/tmp/blackbox-rss-integrated-results.xml`).
+  독립 QA는 RSS 코드/테스트/노트/명세 보존과 변경범위를 확인하고 관련69건/1.74초 통과했다.
+- 네 번째 Actions/태그/게시/배포는 미승인으로 실행하지 않는다. CLI401 조회는 재시도하지 않는다.
+
 ### 0.11.0 두 번째 후보 검증 및 빌드 진단 보완 — 2026-10-22
 
 - FFmpeg 검사 의존성 수정 `b19849ce91d5fb77d7cf9fcb786052f9331ef69a`의 main 반영 후,
