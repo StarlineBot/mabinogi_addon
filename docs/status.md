@@ -47,6 +47,15 @@
     못했어요" → 새 계획 14/1도 재시작 전 즉시 확인 실패. apply 실패 문구에 필드별 현재/적용 차이가 없어
     원인 미상(restore의 `_difference`처럼 표시 필요). CPU를 끄고도 "게임 실행 대기 · CPU는 아직…"으로
     세션이 게임을 기다리는 표시도 혼동 요인. 이 NIC에서는 RSS 두 계획 모두 확인 실패.
+- 0.11.2 블랙박스 실사용: 입력 크기 오류는 사라졌으나 "BrokenPipeError: [Errno 32] Broken pipe"로 녹화 오류,
+  확보 0초. 단축키는 Ctrl+Alt+F10으로 표시되나 사용자 체감상 무반응.
+  - Confirmed(재현): `blackbox_codec.stream_process`가 인코더 비정상 종료 시 입력 스레드의 BrokenPipe를
+    returncode/stderr 진단보다 먼저 raise한다. stderr에 실제 오류를 쓰고 exit 1 하는 가짜 인코더+1080p
+    15프레임 입력으로 3/3회 BrokenPipeError만 표시됨. 실제 ffmpeg/h264_mf 실패 원인이 가려진다.
+    수정 방향: 프로세스 종료 코드가 0이 아니면 stdin 쓰기 실패(BrokenPipe/ConnectionReset)보다
+    `encoder exited N: <stderr>`를 우선 표시하고 app.log에도 남길 것. 그 뒤 실제 원인 재확인.
+  - 단축키: 반응 문구가 6초만 표시돼 게임에서 누르고 앱으로 전환하면 이미 사라질 수 있다. 훅 수신 여부
+    미확정. 앱 창을 앞에 둔 채 누르면 '게임 창이 앞에 있을 때만 저장해요' 문구로 수신 확인 가능.
 - 0.11.2 validate-and-publish [39807034177](https://github.com/StarlineBot/mabinogi_addon/actions/runs/39807034177)
   실패: Linux `Install Qt runtime libraries`의 apt install 120초 상한 초과(exit 124). 124MB 중 49개
   패키지(약 35MB)만 받음, archive.ubuntu.com 약 0.3MB/s(이전 성공 실행은 124MB/19초). 테스트·DLL 빌드·게시 미실행.
