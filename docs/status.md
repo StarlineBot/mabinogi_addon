@@ -32,6 +32,28 @@
 
 ## 마지막 작업
 
+### 0.11.0 네 번째 후보 검증 및 projection 헤더 보완
+
+- 정상 제공된 CLI 인증이 `gh auth status`로 복구됐음을 먼저 확인하고 공개/main SHA/중복0건을 점검했다.
+  승인된 [verify-only #39767008861](https://github.com/StarlineBot/mabinogi_addon/actions/runs/39767008861)을
+  `629253976e16a029921b2f518da3ef0c9a1e26f6`/0.11.0으로 정확히1회 실행했다. RSS 수정224ef70 포함 확인.
+- 실제 Linux 변경검사 **318건/16.30초**, Windows 최소 기동 **2건/11.10초** 통과.
+  FFmpeg/ffprobe 설치 및 `blackbox_codec_host.exe` 생성 성공. 이전 namespace 오류는 사라졌다.
+  capture.cpp37행 session/pool.Close에서 C3779 `Windows_Foundation_IClosable::Close` 정의 누락으로
+  native DLL 빌드 실패. 최종 앱 exe/verified candidate는 생성되지 않았다.
+- 전체10:57:52~11:06:02 UTC 약8분10초로5분 목표 미달. request26초/Linux2분59초/Windows4분32초.
+  시간제한이나 게이트를 변경하지 않았다. 로그 `/tmp/blackbox-verify-39767008861-{full,failed}.log`.
+- `winrt/Windows.Foundation.h`를 명시적으로 포함해 IClosable.Close/TimeSpan 정의를 가져오고,
+  직접 사용하는 SizeInt32의 `winrt/Windows.Graphics.h`도 명시했다. 나머지 Capture/DirectX/Direct3D11
+  projection과 SDK interop 헤더를 전수 점검했다. audio/host는 C++/WinRT projection을 사용하지 않는다.
+  근거: [Microsoft C++/WinRT C3779 안내](https://learn.microsoft.com/en-us/windows/uwp/cpp-and-winrt-apis/faq),
+  [명시적 projection 헤더 규칙](https://learn.microsoft.com/en-us/windows/apps/develop/cpp-winrt/get-started).
+- 개발 관련24건/2.96초, 독립 QA24건/2.60초 통과. 독립 QA는 모든 projection 메소드/반환형,
+  COM interop 구분, audio/host 헤더 및 CMake 링크 라이브러리를 검토했고 추가 확정 누락은 없었다.
+  이 수정 후 실제 Windows SDK/MSVC 컴파일은 아직 미검증이다.
+  다섯 번째 Actions/태그/릴리스/배포는 미승인으로 실행하지 않는다.
+
+
 ### RSS 그룹 누락 조회 보완 — 2026-10-22
 
 - 사용자 조회와 같은 null 그룹 입력으로 기존 코드의 적용 확인 오류를 재현했다.
