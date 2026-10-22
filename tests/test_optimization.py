@@ -532,3 +532,33 @@ def test_engine_reports_rss_written_then_verified_after_reconnect(recovery):
     e.thread.join(3)
     assert 'rss: 적용 · 재연결 후 확인' in e.status and 'rss: 재연결 후 적용값 확인 완료' in e.status
     assert r.items[0]['state'] == 'applied' and not r.restart_targets
+
+
+
+def test_stop_and_restore_reverts_cpu_then_network_in_one_action(recovery):
+    """원버튼 원복: 실행 중 세션(TCP 적용 → 게임 실행 → CPU 적용)을 멈추고, CPU를 되돌린 뒤
+    같은 작업에서 네트워크까지 되돌린다."""
+    r, b, _ = recovery
+    b.values[('ack', json.dumps(GUID))] = None
+    b.values[('nodelay', json.dumps(GUID))] = None
+    b.values[('autotuning', json.dumps('global'))] = 'normal'
+    entered = threading.Event()
+    b.topology = lambda: Topology('cpu', (Core(0, (0, 1)), Core(1, (2, 3))))
+    b.game = lambda: TARGET if b.restarts else None  # 네트워크 적용·재연결이 끝난 뒤 게임 실행
+    b.processes = lambda: []
+    b.governor_running = lambda: False
+    b.alive = lambda target: True
+    original = b.write
+    def write(kind, target, value):
+        original(kind, target, value)
+        if kind == 'cpu' and value == 3: entered.set()
+    b.write = write
+    e = Engine(b, r, lambda: True)
+    assert e.start(dict(cpu=True, count=1, adapter=GUID, tcp=True, rss=False))
+    assert entered.wait(5), e.status
+    assert e.busy and {i['kind'] for i in r.pending} == {'cpu', 'ack', 'nodelay'}, e.status
+    assert e.stop_and_restore(network=True) and e.status == '중단 · 원복 중…'
+    e.thread.join(5)
+    assert not e.busy and not r.pending and not r.restart_targets
+    assert b.read('cpu', TARGET) == 15 and b.read('ack', GUID) is None and b.read('nodelay', GUID) is None
+    assert '네트워크 원복 완료' in e.status

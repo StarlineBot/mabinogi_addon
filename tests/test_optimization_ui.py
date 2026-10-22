@@ -195,9 +195,13 @@ def test_embedded_creator_and_recovery_tabs_preserve_single_lifetime(window,monk
     monkeypatch.setattr(module,'is_creator',lambda:False)
     c.refresh_access();c._tick()
     assert w._tabs.indexOf(panel)==-1
-    assert not panel.start.isEnabled() and not panel.frames_start.isEnabled() and not panel.restore.isEnabled()
+    assert not panel.start.isEnabled() and not panel.frames_start.isEnabled()
+    # 접근이 없으면 네트워크 원복을 묻거나 실행하지 않는다(CPU 원복 경로만 남음).
     monkeypatch.setattr(c,'_network_confirmation',lambda:pytest.fail('hidden alpha must not prompt'))
-    c._restore_network()
+    restores=[]
+    monkeypatch.setattr(c.engine,'stop_and_restore',lambda **k:restores.append(k))
+    c._restore_all()
+    assert restores==[dict(network=False,accept_normalized=False)]
     c.engine.recovery_requested=True;c._tick()
     monkeypatch.setattr(module,'is_creator',lambda:True)
     c.refresh_access()
@@ -292,10 +296,11 @@ def test_rss_normalized_restore_asks_specific_confirmation(window, monkeypatch):
     w, app = window; c = w.optimization_tools
     monkeypatch.setattr(module, 'is_creator', lambda: True); c.refresh_access()
     calls = []
-    monkeypatch.setattr(c.engine, 'restore_network', lambda **k: calls.append(k))
+    c.recovery.restart_targets = {'12345678-1234-1234-1234-123456789abc'}  # 네트워크 원복 대상 있음
+    monkeypatch.setattr(c.engine, 'stop_and_restore', lambda **k: calls.append(k))
     monkeypatch.setattr(c, '_network_confirmation', lambda: calls.append('generic') or True)
-    c._restore_network()
-    assert calls == ['generic', {'accept_normalized': False}]
+    c._restore_all()
+    assert calls == ['generic', {'network': True, 'accept_normalized': False}]
     calls.clear()
     old = dict(MaxProcessorNumber=14, MaxProcessors=8); cur = dict(MaxProcessorNumber=14, MaxProcessors=1)
     c.recovery.normalized_review = [dict(target='g', current=cur, old=old)]
@@ -303,12 +308,13 @@ def test_rss_normalized_restore_asks_specific_confirmation(window, monkeypatch):
     def question(parent, title, text, *a):
         asked.append(text); return module.QMessageBox.StandardButton.No
     monkeypatch.setattr(module.QMessageBox, 'question', question)
-    c._restore_network()
-    assert not calls and '14 · 1개' in asked[0] and '14 · 8개' in asked[0]
+    c._restore_all()
+    assert not calls and '14 · 1개' in asked[0] and '14 · 8개' in asked[0]  # 거절 → 아무것도 안 함
     monkeypatch.setattr(module.QMessageBox, 'question', lambda *a: module.QMessageBox.StandardButton.Yes)
-    c._restore_network()
-    assert calls == [{'accept_normalized': True}]
+    c._restore_all()
+    assert calls == [{'network': True, 'accept_normalized': True}]
     c.recovery.normalized_review = []
+    c.recovery.restart_targets.clear()
 
 
 def test_rss_normalization_detected_asks_once_without_second_click(window, monkeypatch):
@@ -327,3 +333,25 @@ def test_rss_normalization_detected_asks_once_without_second_click(window, monke
     c._tick(); c._tick()
     assert asked == [1, 2] and len(calls) == 1  # 거절하면 같은 감지로 다시 묻지 않음
     c.recovery.normalized_review = []
+
+
+
+def test_single_restore_button_restores_cpu_only_without_network_prompt(window, monkeypatch):
+    """원버튼: 네트워크 변경이 없으면 확인 없이 CPU만, 있으면 확인 1회 후 함께 원복. 별도 버튼 없음."""
+    w, app = window; c = w.optimization_tools
+    monkeypatch.setattr(module, 'is_creator', lambda: True); c.refresh_access()
+    assert c.panel.stop.text() == '중단 · 원복' and not hasattr(c.panel, 'restore')
+    calls = []
+    monkeypatch.setattr(c.engine, 'stop_and_restore', lambda **k: calls.append(k))
+    monkeypatch.setattr(c, '_network_confirmation', lambda: pytest.fail('CPU만 되돌릴 땐 묻지 않음'))
+    c.recovery.items = [dict(kind='cpu', target={'pid': 1, 'birth': '1'}, old=15, applied=3, state='applied')]
+    c._tick()
+    assert c.panel.stop.isEnabled()
+    c._restore_all()
+    assert calls == [dict(network=False, accept_normalized=False)]
+    calls.clear()
+    monkeypatch.setattr(c, '_network_confirmation', lambda: False)  # 네트워크 포함, 확인 거절
+    c.recovery.items.append(dict(kind='ack', target='12345678-1234-1234-1234-123456789abc', old=None, applied=1, state='applied'))
+    c._restore_all()
+    assert not calls
+    c.recovery.items = []

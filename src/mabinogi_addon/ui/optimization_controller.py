@@ -109,8 +109,7 @@ class OptimizationController(QObject):
         d=self.panel
         d.inspect.clicked.connect(self.engine.inspect)
         d.start.clicked.connect(self._start_optimization)
-        d.stop.clicked.connect(self._stop_optimization)
-        d.restore.clicked.connect(self._restore_network)
+        d.stop.clicked.connect(self._restore_all)
         d.frames_start.clicked.connect(self.start_frames)
         d.frames_stop.clicked.connect(lambda: self.stop_frames())
         d.lock.setChecked(bool((config.load_overlay_state('frameMeter') or {}).get('locked',True)))
@@ -186,12 +185,20 @@ class OptimizationController(QObject):
             self.stream.boundary(presentmon.clock()[0], 'optimization_start_request')
         self.engine.start(options)
 
-    def _stop_optimization(self):
-        self._summary_requested = dict(action='stop_cpu')
+    def _restore_all(self):
+        """'중단 · 원복': 세션을 멈추고 적용했던 CPU·네트워크를 모두 되돌린다. 네트워크가 포함되면
+        시작할 때처럼 연결 끊김 확인을 한 번 받는다(거절하면 아무것도 바꾸지 않음).
+        제작자 접근이 없으면 CPU만 원복한다(네트워크 원복은 기존처럼 접근 필요)."""
+        network = (any(i['kind'] != 'cpu' for i in self.recovery.pending) or bool(self.recovery.restart_targets))
+        network = network and self._can_start()
+        normalized = network and bool(self.recovery.normalized_review)
+        if network and not (self._normalized_confirmation() if normalized else self._network_confirmation()):
+            return
+        self._summary_requested = dict(action='restore_all' if network else 'stop_cpu')
         self._summary_state = None
         if self.stream is not None:
             self.stream.boundary(presentmon.clock()[0], 'optimization_stop_request')
-        self.engine.stop()
+        self.engine.stop_and_restore(network=network, accept_normalized=normalized)
 
     def _normalized_confirmation(self):
         """장치가 앱 적용값을 정규화한 RSS 항목을 원본으로 다시 쓸지 묻는다(값을 보여주고 확인)."""
@@ -214,7 +221,7 @@ class OptimizationController(QObject):
                 or self.panel is None or not self._can_start()):
             return
         self._offering = True
-        self._offered_review = review  # 거절하면 같은 감지로 다시 묻지 않는다('네트워크 원복'으로 재시도 가능)
+        self._offered_review = review  # 거절하면 같은 감지로 다시 묻지 않는다('중단 · 원복'으로 재시도 가능)
         try:
             if self._normalized_confirmation():
                 self._summary_requested = dict(action='restore_network')
@@ -224,16 +231,6 @@ class OptimizationController(QObject):
                 self.engine.restore_network(accept_normalized=True)
         finally:
             self._offering = False
-
-    def _restore_network(self):
-        if not self._can_start() or self.engine.busy: return
-        normalized = bool(self.recovery.normalized_review)
-        if self._normalized_confirmation() if normalized else self._network_confirmation():
-            self._summary_requested = dict(action='restore_network')
-            self._summary_state = None
-            if self.stream is not None:
-                self.stream.boundary(presentmon.clock()[0], 'network_restore_request')
-            self.engine.restore_network(accept_normalized=normalized)
 
     def start_frames(self):
         if self.frames or not self._can_start(): return
@@ -389,8 +386,7 @@ class OptimizationController(QObject):
         allowed, busy = self._can_start(), self.engine.busy
         for w in (d.cpu,d.tcp,d.rss,d.split,d.adapter,d.inspect,d.start): w.setEnabled(allowed and not busy)
         d.start.setEnabled(allowed and not busy and not self.recovery.corrupt and not (self.recovery.pending or self.recovery.restart_targets))
-        d.stop.setEnabled(busy or any(i['kind']=='cpu' for i in self.recovery.pending))
-        d.restore.setEnabled(allowed and not busy and bool(self.recovery.pending or self.recovery.restart_targets))
+        d.stop.setEnabled(busy or bool(self.recovery.pending or self.recovery.restart_targets))
         for control in (d.lock,d.scale,d.source): control.setEnabled(allowed)
         d.frames_start.setEnabled(allowed and not self.frames)
         d.frames_stop.setEnabled(self.frames or self.collector.pending)
