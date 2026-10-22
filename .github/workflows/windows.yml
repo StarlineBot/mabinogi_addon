@@ -87,8 +87,17 @@ jobs:
               exit "$result"
             fi
           }
+          # Keep the runner's signed Ubuntu sources; only swap its existing priorities.
+          sudo sed -i \
+            -e 's|^http://azure.archive.ubuntu.com/ubuntu/[[:space:]]*priority:1$|http://azure.archive.ubuntu.com/ubuntu/\tpriority:2|' \
+            -e 's|^https://archive.ubuntu.com/ubuntu/[[:space:]]*priority:2$|https://archive.ubuntu.com/ubuntu/\tpriority:1|' \
+            /etc/apt/apt-mirrors.txt
+          grep -Eq '^https://archive.ubuntu.com/ubuntu/[[:space:]]+priority:1$' /etc/apt/apt-mirrors.txt || {
+            echo '::error::Expected Ubuntu archive mirror entry was not found; stopping without changing package sources.'
+            exit 1
+          }
           run_apt update 60s update
-          run_apt install 120s install -y libegl1 libopengl0 libxkbcommon0 libdbus-1-3 libpulse0 fonts-noto-cjk ffmpeg
+          run_apt install 120s install --no-install-recommends -y libegl1 libopengl0 libxkbcommon0 libdbus-1-3 libpulse0 fonts-noto-cjk ffmpeg
       - name: Check Qt runtime imports
         timeout-minutes: 1
         run: >-

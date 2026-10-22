@@ -340,6 +340,12 @@ def test_apt_failure_stops_before_install_with_diagnostics(tmp_path, result):
     import subprocess
     command=next(s['run'] for s in workflow('windows.yml')['jobs']['regression']['steps']
                  if s.get('name')=='Install Qt runtime libraries')
+    mirrors=tmp_path/'mirrors'
+    mirrors.write_text('http://azure.archive.ubuntu.com/ubuntu/\tpriority:1\nhttps://archive.ubuntu.com/ubuntu/\tpriority:2\nhttps://security.ubuntu.com/ubuntu/\tpriority:3\n')
+    command=command.replace('/etc/apt/apt-mirrors.txt',str(mirrors))
+    sudo=tmp_path/'sudo'
+    sudo.write_text('#!/bin/sh\nexec "$@"\n')
+    sudo.chmod(0o755)
     fake=tmp_path/'timeout'
     fake.write_text('#!/bin/sh\necho "synthetic download failure"\nexit '+str(result)+'\n')
     fake.chmod(0o755)
@@ -350,3 +356,29 @@ def test_apt_failure_stops_before_install_with_diagnostics(tmp_path, result):
     assert 'limit=60s' in completed.stdout
     assert 'apt install failed' not in completed.stdout
     assert 'Acquire::Retries=1' in command and 'APT::Update::Error-Mode=any' in command
+
+
+def test_apt_priority_and_required_packages_preserved(tmp_path):
+    import os
+    import subprocess
+    command=next(s['run'] for s in workflow('windows.yml')['jobs']['regression']['steps']
+                 if s.get('name')=='Install Qt runtime libraries')
+    mirrors=tmp_path/'mirrors'
+    mirrors.write_text('http://azure.archive.ubuntu.com/ubuntu/\tpriority:1\nhttps://archive.ubuntu.com/ubuntu/\tpriority:2\nhttps://security.ubuntu.com/ubuntu/\tpriority:3\n')
+    command=command.replace('/etc/apt/apt-mirrors.txt',str(mirrors))
+    for name, body in [('sudo', 'exec "$@"'), ('timeout', 'printf "%s\\n" "$*" >> calls')]:
+        path=tmp_path/name
+        path.write_text('#!/bin/sh\n'+body+'\n')
+        path.chmod(0o755)
+    result=subprocess.run(['bash','-e','-c',command],cwd=tmp_path,
+        env={**os.environ,'PATH':str(tmp_path)+os.pathsep+os.environ['PATH']},capture_output=True,text=True)
+    assert result.returncode==0, result.stderr
+    assert mirrors.read_text()==('http://azure.archive.ubuntu.com/ubuntu/\tpriority:2\n'
+        'https://archive.ubuntu.com/ubuntu/\tpriority:1\nhttps://security.ubuntu.com/ubuntu/\tpriority:3\n')
+    calls=(tmp_path/'calls').read_text().splitlines()
+    assert len(calls)==2
+    assert '--kill-after=10s 60s' in calls[0] and calls[0].endswith(' update')
+    assert '--kill-after=10s 120s' in calls[1]
+    assert 'install --no-install-recommends -y libegl1 libopengl0 libxkbcommon0 libdbus-1-3 libpulse0 fonts-noto-cjk ffmpeg' in calls[1]
+    assert all('Acquire::Retries=1' in call and 'APT::Update::Error-Mode=any' in call for call in calls)
+    assert 'allow-unauthenticated' not in command and 'trusted=yes' not in command

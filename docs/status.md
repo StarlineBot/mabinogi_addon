@@ -32,6 +32,18 @@
 
 ## 마지막 작업
 
+### 승인된 최소 apt 설치 개선
+
+- 사용자 승인 범위로 기존 runner 미러의 Ubuntu 공식 archive 우선순위를1로, Azure를2로
+  교체하고 install에 --no-install-recommends만 추가했다. security3과기존fallback목록은그대로다.
+  예상archive항목이없으면명확히실패하며알수없는sources로진행하지않는다.
+- 필수7패키지와의존성,서명검증,update60초/install120초/kill10초/retry1,테스트/배포gate유지.
+  캐시·미러순환재시도·시간연장·검사skip은없다. 실제다운로드속도개선은후보실행에서확인한다.
+- 개발 workflow/release-checks 최종검사53건/3.95초통과. 설치명령은mock으로검사했고
+  로컬호스트패키지/미러는변경하지않았다. 외부네트워크속도성공을뜻하지않는다.
+  독립QA workflow40건/1.72초및정상/공백/이미교환/항목누락4모형통과.
+  `/tmp/apt_mirror_independent_qa.py`. 설치shell외workflow/gate동일확인.
+
 ### 0.11.1 단축키 포함 후보 검증 — 다운로드 제한 재실패
 
 - 사용자 승인 1회 [39793252768](https://github.com/StarlineBot/mabinogi_addon/actions/runs/39793252768),
