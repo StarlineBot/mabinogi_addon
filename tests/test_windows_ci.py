@@ -151,7 +151,7 @@ def test_validation_is_manual_feature_gate_with_mandatory_bounded_storage():
     text = json.dumps(main)
     assert "release_delivery" not in text and "RELEASES_TOKEN" not in text
     command = runpy.run_path(str(ROOT / "packaging/build_windows.py"))["build_command"]()
-    assert "--uac-admin" not in command and "--collect-all" in command
+    assert "--uac-admin" in command and "--collect-all" in command
     assert "dxcam" in command and "comtypes" in command
 
 

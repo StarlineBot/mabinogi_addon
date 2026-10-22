@@ -1183,7 +1183,16 @@ class MainWindow(QMainWindow):
         if intent is None:
             intent = autostart.is_enabled()
             config.save_autostart_intent(intent)
-        autostart.reconcile(intent)
+        if autostart.reconcile(intent) is False:
+            # 등록·해제 실패를 로그에만 남기면 사용자는 자동 실행이 왜 안 되는지 알 수 없다.
+            from .toast import show_toast
+
+            show_toast(
+                "자동 실행 설정 실패",
+                "관리자 권한이 없어 Windows 시작 시 자동 실행을 맞추지 못했어요. "
+                "앱을 관리자 권한으로 다시 실행해 주세요.",
+                8000,
+            )
         self.party_tab.start_polling()
         self._restore_overlay(self.buff_overlay, self.buff_tab, "buffTracker")
         self._restore_overlay(self.debuff_overlay, self.debuff_tab, "debuffTracker")

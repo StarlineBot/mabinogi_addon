@@ -186,7 +186,8 @@ def apply_update(new_path: Path) -> None:
         os.replace(old, exe)  # 롤백: 원래 exe 복구
         raise
 
-    # 새 exe 실행(현재 프로세스는 이미 관리자 → 새 exe도 UAC 창 없이 승격 유지).
+    # 새 exe 실행. 배포본은 항상 관리자(--uac-admin)로 실행되므로 현재 프로세스도 관리자이고,
+    # 새 exe는 그 권한을 이어받아 UAC 창 없이 관리자로 뜬다(권한 불일치로 단축키 훅이 끊기지 않게).
     creationflags = 0x00000008 if sys.platform == "win32" else 0  # DETACHED_PROCESS
     subprocess.Popen(  # 고정 경로(자기 자신), 사용자 입력 없음
         [str(exe)],

@@ -1,10 +1,11 @@
 """Windows 시작 시 자동 실행 (기획서 5.3 / 4.x).
 
-exe는 관리자 권한(--uac-admin)으로 실행되므로, 레지스트리 Run 키로는 로그온 시
-자동 실행이 안 된다(Windows가 Run 키 항목을 UAC 승격해 주지 않음). 그래서 배포본
-(frozen)은 **작업 스케줄러**에 "로그온 시 / 최고 권한" 작업을 만든다 → UAC 창 없이
-관리자 권한으로 자동 실행. 작업 생성/삭제엔 관리자 권한이 필요한데, 앱이 이미 관리자라
-가능하다.
+배포본 exe는 항상 관리자 권한(--uac-admin, 0.11.3 복원)으로 실행된다. 게임이 관리자 권한으로
+돌기 때문에 앱이 일반 권한이면 UIPI로 블랙박스 단축키(저수준 키보드 훅)를 게임 포커스 중에 받지
+못한다(0.11.2 실기 확인). 레지스트리 Run 키는 UAC 승격을 해 주지 않아 로그온 자동 실행이 안
+되므로, 배포본(frozen)은 **작업 스케줄러**에 "로그온 시 / 최고 권한" 작업을 만든다 → UAC 창 없이
+관리자 권한으로 자동 실행. 작업 생성/삭제엔 관리자 권한이 필요하다. 관리자 승인을 거부하는 등
+권한이 부족하면 등록이 실패하며, reconcile/set_enabled가 False를 돌려 화면에서 안내한다.
 
 개발(uv)은 수동 실행이라 자동 실행이 필요 없지만, 동작은 유지하려고 기존 레지스트리
 Run 키 방식을 그대로 쓴다(관리자 아님).
@@ -155,15 +156,16 @@ def set_enabled(enabled: bool) -> bool:
     return ok
 
 
-def reconcile(intent: bool) -> None:
+def reconcile(intent: bool) -> bool:
     """저장된 '의도'(config)대로 작업을 현재 exe에 강제 동기화. 매 시작 호출.
 
     이전 refresh()는 '작업이 켜져 있나?'(schtasks 조회)가 실패하면 재지정을 통째로
     건너뛰어, 작업이 낡은(구버전) exe를 계속 가리키는 문제가 있었다. reconcile은
     조회에 의존하지 않고 의도대로 무조건 맞춘다: True면 현재 exe로 재등록(self-heal),
     False면 제거. 그래서 '신버전을 실행하면 그게 자동 실행 대상'이 항상 보장된다.
+    실패(권한 부족 등)면 False — 호출자가 사용자에게 안내한다(로그에만 남기지 않음).
     """
     if not available():
-        return
+        return True
     _log.info("자동실행 reconcile: 의도=%s, 현재exe=%s", intent, sys.executable)
-    set_enabled(intent)  # _task_set이 등록/삭제 경로·성패를 로그로 남긴다
+    return set_enabled(intent)  # _task_set이 등록/삭제 경로·성패를 로그로 남긴다

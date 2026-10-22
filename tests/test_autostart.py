@@ -55,3 +55,33 @@ def test_dev_enable_cleans_stale_task(monkeypatch):
     monkeypatch.setattr(autostart, "_task_delete", lambda: calls.append(("task_del",)) or True)
     assert autostart.set_enabled(True) is True
     assert calls == [("reg", True), ("task_del",)]
+
+
+def test_reconcile_reports_registration_failure(monkeypatch):
+    """0.11.3: 일반 권한 실행에서 schtasks /RL HIGHEST 등록 실패가 로그에만 남던 문제 — 결과를 돌려준다."""
+    _patch_common(monkeypatch, frozen=True)
+    monkeypatch.setattr(autostart, "_reg_delete", lambda: None)
+    monkeypatch.setattr(autostart, "_task_set", lambda e: False)
+    assert autostart.reconcile(True) is False
+    monkeypatch.setattr(autostart, "_task_set", lambda e: True)
+    assert autostart.reconcile(True) is True
+
+
+def test_startup_shows_notice_when_autostart_cannot_be_synced(monkeypatch):
+    from PySide6.QtWidgets import QApplication
+    from mabinogi_addon import config
+    from mabinogi_addon.ui import main_window, toast
+    app = QApplication.instance() or QApplication([])
+    shown = []
+    monkeypatch.setattr(QApplication, "quit", lambda: None)
+    monkeypatch.setattr(autostart, "reconcile", lambda intent: False)
+    monkeypatch.setattr(toast, "show_toast", lambda title, body, *a, **k: shown.append((title, body)))
+    monkeypatch.setattr(main_window.MainWindow, "_maybe_check_update", lambda self, *a: None)
+    config._write_local_config({"general": {"skipSetup": True, "tourShown": True, "firstUseGuideShown": True}})
+    w = main_window.MainWindow()
+    try:
+        w.start()
+        assert any(title == "자동 실행 설정 실패" and "관리자 권한" in body for title, body in shown)
+    finally:
+        w._force_quit = True
+        w.close()

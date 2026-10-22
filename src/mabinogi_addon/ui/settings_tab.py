@@ -980,7 +980,9 @@ class SettingsTab(QWidget):
             self._autostart.setChecked(autostart.is_enabled())
             self._autostart.blockSignals(False)
             QMessageBox.warning(
-                self, "자동 실행", "자동 실행 설정을 변경하지 못했습니다."
+                self, "자동 실행",
+                "자동 실행 설정을 변경하지 못했습니다.\n"
+                "작업 스케줄러 등록에는 관리자 권한이 필요해요. 앱을 관리자 권한으로 다시 실행해 주세요."
             )
             return
         config.save_autostart_intent(on)  # 의도 저장 → 다음 시작부터 reconcile이 유지

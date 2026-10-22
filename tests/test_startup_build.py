@@ -90,7 +90,7 @@ def test_build_uses_temporary_spec_with_absolute_assets_and_preserves_existing_f
     assert (
         "--onefile" in generated
         and "--windowed" in generated
-        and "--uac-admin" not in generated
+        and "--uac-admin" in generated  # 항상 관리자 실행(UIPI 단축키 수신, 0.11.3 사용자 결정)
     )
     assert generated[generated.index("--splash") + 1] == str(
         root / "src/mabinogi_addon/assets/startup_background.png"
