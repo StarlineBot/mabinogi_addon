@@ -204,7 +204,9 @@ def test_rss_null_readback_verifies_and_restores_legacy_failed_journal(monkeypat
     monkeypatch.setattr(b,'_ps',ps)
     monkeypatch.setattr(b,'_kernel',lambda:SimpleNamespace(GetActiveProcessorGroupCount=lambda:1))
     r=Recovery(tmp_path/'recovery.json',b,lambda:True)
-    assert r.apply('rss',GUID,planned)=='applied'
+    # -NoRestart 쓰기는 재시작 후에야 반영되므로 재연결 직후 확인한다(그룹 null 보완 포함).
+    assert r.apply('rss',GUID,planned)=='written' and r.items[0]['state']=='prepared'
+    r.flush_network()
     assert r.items[0]['old']==old and r.items[0]['state']=='applied'
     current['MaxProcessors']=1
     errors=r.restore(network=True)

@@ -1092,6 +1092,10 @@ class MainWindow(QMainWindow):
                 )
                 splash.prepare_apply()
                 updater.apply_update(new_path)  # 교체 + 새 exe 실행
+            except updater.RelaunchError as exc:
+                # 설치는 끝났다. 새 버전을 자동으로 띄우지 못했을 뿐이라 다시 실행 안내 후 종료.
+                self._update_result.emit(True, str(exc))
+                return
             except Exception as exc:  # noqa: BLE001 — 사용자에게 사유 표시
                 self._update_result.emit(False, str(exc))
                 return
@@ -1118,6 +1122,11 @@ class MainWindow(QMainWindow):
             splash.close()
             self._update_splash = None
         if ok:
+            if msg:  # 설치는 됐지만 새 버전을 자동으로 시작하지 못함(관리자 승인 거부 등)
+                QMessageBox.information(
+                    self, "업데이트 설치 완료",
+                    f"새 버전을 설치했어요. {msg}\n앱을 다시 실행해 주세요.",
+                )
             # 새 exe 가 이미 떠 있으니 현재(구버전) 프로세스는 완전히 종료.
             self._force_quit = True
             QApplication.quit()

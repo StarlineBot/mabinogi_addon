@@ -289,3 +289,20 @@ def test_fallback_display_and_cleanup_failure_cannot_block_startup(app, monkeypa
     screen.step(45)
     screen.close()
     assert screen._fallback is None
+
+
+def test_installed_update_with_failed_relaunch_asks_restart_instead_of_running_old(monkeypatch):
+    import mabinogi_addon
+    from PySide6.QtWidgets import QMessageBox
+    from mabinogi_addon.system import updater
+    shown = []
+    screen = type("Splash", (), {"step": lambda *a: None, "close": lambda self: shown.append("close")})()
+    monkeypatch.setattr(updater, "can_update", lambda: True)
+    monkeypatch.setattr(updater, "check_latest", lambda: {"version": "9.9.9"})
+    monkeypatch.setattr(updater, "download", lambda info, progress_cb=None: "new.exe")
+    def relaunch_failed(path):
+        raise updater.RelaunchError("새 버전을 자동으로 시작하지 못했어요(취소).")
+    monkeypatch.setattr(updater, "apply_update", relaunch_failed)
+    monkeypatch.setattr(QMessageBox, "information", lambda parent, title, text: shown.append(text))
+    assert mabinogi_addon._apply_update_before_launch(screen) is True  # 옛 버전으로 계속 띄우지 않음
+    assert shown[0] == "close" and "앱을 다시 실행해 주세요" in shown[1]

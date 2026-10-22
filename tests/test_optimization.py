@@ -351,9 +351,10 @@ def test_rss_smt_plan_survives_adapter_restart_and_restores(tmp_path):
     cores = Topology('AMD Ryzen 7 9800X3D', tuple(Core(i, (i * 2, i * 2 + 1)) for i in range(8))).plan(7)['background_cores']
     r = Recovery(tmp_path / 'journal.json', b, lambda: True)
     plan = WindowsOptimization.rss_plan(b, GUID, cores)
-    assert r.apply('rss', GUID, plan) == 'applied'
+    assert r.apply('rss', GUID, plan) == 'written'
     r.flush_network()
     assert b.read('rss', GUID) == plan  # 정규화 결과가 적용값과 같다
+    assert r.items[0]['state'] == 'applied'
     assert r.restore(network=True) == []
     r.flush_network(verify_restored=True)
     assert b.read('rss', GUID) == RSS_ORIGINAL and not r.pending
@@ -365,9 +366,10 @@ def _legacy_locked(tmp_path):
     b = SmtNic()
     applied = dict(RSS_ORIGINAL, BaseProcessorNumber=14, MaxProcessorNumber=15, MaxProcessors=2,
                    Profile='ClosestStatic')
-    Recovery(tmp_path / 'journal.json', b, lambda: True).apply('rss', GUID, applied)
-    Recovery(tmp_path / 'journal.json', b, lambda: True).flush_network()
-    assert b.read('rss', GUID)['MaxProcessors'] == 1
+    # 0.11.1이 남긴 기록 형식 그대로 만든다(당시엔 적용값 15/2가 'applied'로 기록되고 장치가 14/1로 줄임).
+    (tmp_path / 'journal.json').write_text(json.dumps(dict(schema=1, restart_targets=[], items=[
+        dict(kind='rss', target=GUID, old=RSS_ORIGINAL, applied=applied, state='applied')])), encoding='utf-8')
+    b.values[('rss', json.dumps(GUID))] = dict(applied, MaxProcessorNumber=14, MaxProcessors=1)
     return b, Recovery(tmp_path / 'journal.json', b, lambda: True)
 
 
@@ -484,7 +486,49 @@ def test_apply_verification_failure_shows_field_differences(tmp_path):
         b.values[('rss', json.dumps(GUID))]['NumberOfReceiveQueues'] = 1  # 드라이버가 즉시 다른 값으로 저장
     b.write = write
     r = Recovery(tmp_path / 'journal.json', b, lambda: True)
+    assert r.apply('rss', GUID, plan) == 'written'
     with pytest.raises(RuntimeError) as caught:
-        r.apply('rss', GUID, plan)
-    assert '적용값을 확인하지 못했어요' in str(caught.value)
+        r.flush_network()  # 재연결 직후 확인에서 실패
+    assert r.items[0]['state'] == 'failed' and not r.restart_targets
+    assert '재연결 후 확인/rss: 적용값을 확인하지 못했어요' in str(caught.value)
     assert 'NumberOfReceiveQueues: 현재=1, 적용=8' in str(caught.value) and GUID not in str(caught.value)
+
+
+def test_rss_is_verified_after_restart_not_before(tmp_path):
+    """0.11.3 실측: -NoRestart 직후 조회는 이전(실행 중) 값이라 항상 확인 실패 → failed로 남아 다음 시작이 막혔다."""
+    class StagedNic(SmtNic):
+        def __init__(self):
+            super().__init__(); self.staged = None
+        def write(self, kind, target, value):
+            self.writes.append((kind, target, value)); self.staged = copy.deepcopy(value)  # 재시작 전엔 반영 안 됨
+        def restart_network(self, target):
+            if self.staged is not None:
+                self.values[('rss', json.dumps(GUID))] = self.staged; self.staged = None
+            super().restart_network(target)
+    b = StagedNic()
+    r = Recovery(tmp_path / 'journal.json', b, lambda: True)
+    plan = dict(RSS_ORIGINAL, BaseProcessorNumber=14, MaxProcessorNumber=15, MaxProcessors=2, Profile='ClosestStatic')
+    assert r.apply('rss', GUID, plan) == 'written' and b.read('rss', GUID) == RSS_ORIGINAL
+    r.flush_network()
+    item = r.items[0]
+    # 장치가 14/1로 정규화해도 적용 성공으로 인정하고, 그 값을 적용값으로 기록한다.
+    assert item['state'] == 'applied' and (item['applied']['MaxProcessorNumber'], item['applied']['MaxProcessors']) == (14, 1)
+    assert r.restore(network=True) == [] and not r.normalized_review
+    r.flush_network(verify_restored=True)
+    assert b.read('rss', GUID) == RSS_ORIGINAL and not r.pending
+    r.finish()
+
+
+def test_engine_reports_rss_written_then_verified_after_reconnect(recovery):
+    r, b, _ = recovery
+    b.values[('rss', json.dumps(GUID))] = copy.deepcopy(RSS_ORIGINAL)
+    b.topology = lambda: Topology('AMD Ryzen 7 9800X3D', tuple(Core(i, (i * 2, i * 2 + 1)) for i in range(8)))
+    b.rss_plan = lambda guid, cores: WindowsOptimization.rss_plan(b, guid, cores)
+    b.game = lambda: None
+    b.processes = lambda: []
+    b.governor_running = lambda: False
+    e = Engine(b, r, lambda: True)
+    assert e.start(dict(cpu=False, count=7, adapter=GUID, tcp=False, rss=True))
+    e.thread.join(3)
+    assert 'rss: 적용 · 재연결 후 확인' in e.status and 'rss: 재연결 후 적용값 확인 완료' in e.status
+    assert r.items[0]['state'] == 'applied' and not r.restart_targets

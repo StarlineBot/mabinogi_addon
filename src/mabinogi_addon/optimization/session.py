@@ -170,6 +170,12 @@ class Recovery:
                     guarded_write(kind,target,value,guard)
                 else:
                     self.backend.write(kind, target, value)
+                if kind == 'rss':
+                    # -NoRestart로 쓴 RSS는 어댑터를 다시 시작해야 반영돼, 지금 조회하면 이전 값이 나온다
+                    # (0.11.3 실측: 항상 확인 실패 → failed로 남아 다음 시작이 막힘). 'prepared'로 두고
+                    # flush_network가 재시작 직후 확인한다. 원본은 이미 기록돼 있다.
+                    self._save()
+                    return 'written'
                 applied = self._read(kind,target,'적용값 확인')
                 if applied != value:
                     raise RuntimeError('적용값을 확인하지 못했어요. ' + self._apply_difference(kind, target, value, applied))
@@ -235,7 +241,9 @@ class Recovery:
                             self.restart_targets.add(item['target'])
                             self._save()
                         self.backend.write(item['kind'], item['target'], item['old'])
-                        if self._read(item['kind'],item['target'],'원복값 확인') != item['old']:
+                        # RSS(-NoRestart)는 재시작 전 조회가 이전 값이라 여기서 비교하지 않는다.
+                        # flush_network(verify_restored=True)가 재연결 직후 원본과 비교한다.
+                        if item['kind'] != 'rss' and self._read(item['kind'],item['target'],'원복값 확인') != item['old']:
                             raise RuntimeError('원복값 확인 실패')
                     else:
                         raise RuntimeError(self._difference(item, current))
@@ -260,6 +268,7 @@ class Recovery:
                     guarded_restart(target,guard)
                 else:
                     self.backend.restart_network(target)
+                verified = self._verify_after_restart(target)
                 if verify_restored:
                     for item in self.items:
                         if item['target'] != target or item['kind'] == 'cpu' or item['state'] != 'restored':
@@ -274,6 +283,28 @@ class Recovery:
                             raise RuntimeError(f"재연결 후 확인/{item['kind']}: {exc}") from None
                 self.restart_targets.remove(target)
                 self._save()
+                if verified:
+                    raise RuntimeError('; '.join(verified))
+
+    def _verify_after_restart(self, target):
+        """재시작 직후 RSS 적용값을 확인한다. 장치 정규화(범위만 줄어듦)는 적용으로 인정하고 그 값을
+        적용값으로 기록한다(이후 원복이 '현재=적용'으로 바로 맞게). 실패 문구 목록을 돌려준다."""
+        failures = []
+        for item in self.items:
+            if item['target'] != target or item['kind'] != 'rss' or item['state'] != 'prepared':
+                continue
+            try:
+                current = self._read('rss', target, '재연결 후 적용값 확인')
+                if current != item['applied'] and not rss_normalized(item['applied'], current):
+                    raise RuntimeError('적용값을 확인하지 못했어요. '
+                                       + self._apply_difference('rss', target, item['applied'], current))
+                item['applied'] = current
+                item['state'] = 'applied'
+            except Exception as exc:
+                item['state'] = 'failed'
+                failures.append(f'재연결 후 확인/rss: {exc}')
+            self._save()
+        return failures
 
     def finish(self):
         with self.lock:

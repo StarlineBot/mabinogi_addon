@@ -168,6 +168,10 @@ def download(info: dict, progress_cb=None) -> Path:
     return dest
 
 
+class RelaunchError(OSError):
+    """교체는 끝났지만 새 exe를 띄우지 못했다(관리자 승인 거부 등). 사용자가 앱을 다시 실행해야 한다."""
+
+
 def apply_update(new_path: Path) -> None:
     """B안(이름 트릭)으로 교체하고 새 exe 를 재실행한다. 호출 측은 곧 앱을 종료.
 
@@ -186,15 +190,74 @@ def apply_update(new_path: Path) -> None:
         os.replace(old, exe)  # 롤백: 원래 exe 복구
         raise
 
-    # 새 exe 실행. 배포본은 항상 관리자(--uac-admin)로 실행되므로 현재 프로세스도 관리자이고,
-    # 새 exe는 그 권한을 이어받아 UAC 창 없이 관리자로 뜬다(권한 불일치로 단축키 훅이 끊기지 않게).
+    try:
+        _relaunch(exe)
+    except Exception as exc:  # noqa: BLE001 — 설치는 끝났으니 다시 실행 안내로 바꾼다
+        raise RelaunchError(f"새 버전을 자동으로 시작하지 못했어요({exc}).") from exc
+
+
+def _relaunch(exe: Path) -> None:
+    """새 exe를 띄운다. 새 exe는 관리자 권한 필요(requireAdministrator)라, 일반 권한 부모의
+    CreateProcess(Popen)는 ERROR_ELEVATION_REQUIRED(740)로 실패한다(0.11.3 실측: 업데이트 후
+    재실행 안 됨 — 0.11.2 이하 일반 권한으로 실행 중이던 앱이 업데이트한 경우). 관리자가 아니거나
+    740이면 ShellExecuteEx(runas)로 UAC 승인을 받아 띄운다. 관리자면 그대로 권한을 이어받는다."""
+    import subprocess
+
+    if sys.platform == "win32" and not _is_admin():
+        _launch_elevated(exe)
+        return
     creationflags = 0x00000008 if sys.platform == "win32" else 0  # DETACHED_PROCESS
-    subprocess.Popen(  # 고정 경로(자기 자신), 사용자 입력 없음
-        [str(exe)],
-        close_fds=True,
-        creationflags=creationflags,
-        env=_relaunch_env(),
-    )
+    try:
+        subprocess.Popen(  # 고정 경로(자기 자신), 사용자 입력 없음
+            [str(exe)],
+            close_fds=True,
+            creationflags=creationflags,
+            env=_relaunch_env(),
+        )
+    except OSError as exc:
+        if getattr(exc, "winerror", None) != 740:
+            raise
+        _launch_elevated(exe)
+
+
+def _is_admin() -> bool:
+    try:
+        import ctypes
+
+        return bool(ctypes.windll.shell32.IsUserAnAdmin())
+    except Exception:  # noqa: BLE001 — 판정 불가면 승격 경로로(안전한 쪽)
+        return False
+
+
+def _launch_elevated(exe: Path) -> None:
+    """ShellExecuteEx(runas). 환경을 따로 넘길 수 없어, 자식이 옛 _MEI 폴더를 재사용하지 않도록
+    현재 프로세스 환경에서 PyInstaller 내부 변수를 먼저 지운다(이 프로세스는 곧 종료한다)."""
+    import ctypes
+    from ctypes import wintypes as W
+
+    for key in list(os.environ):
+        if key == "_MEIPASS2" or key.startswith("_PYI"):
+            os.environ.pop(key, None)
+
+    class ShellExecuteInfo(ctypes.Structure):
+        _fields_ = [("cbSize", W.DWORD), ("fMask", ctypes.c_ulong), ("hwnd", W.HWND),
+                    ("lpVerb", W.LPCWSTR), ("lpFile", W.LPCWSTR), ("lpParameters", W.LPCWSTR),
+                    ("lpDirectory", W.LPCWSTR), ("nShow", ctypes.c_int), ("hInstApp", W.HINSTANCE),
+                    ("lpIDList", ctypes.c_void_p), ("lpClass", W.LPCWSTR), ("hkeyClass", W.HKEY),
+                    ("dwHotKey", W.DWORD), ("hIconOrMonitor", W.HANDLE), ("hProcess", W.HANDLE)]
+
+    info = ShellExecuteInfo()
+    info.cbSize = ctypes.sizeof(info)
+    info.fMask = 0x00000100  # SEE_MASK_NOASYNC: 반환 전에 실행 요청을 끝낸다(곧 종료하므로)
+    info.lpVerb = "runas"
+    info.lpFile = str(exe)
+    info.lpDirectory = str(exe.parent)
+    info.nShow = 1  # SW_SHOWNORMAL
+    shell = ctypes.WinDLL("shell32", use_last_error=True)
+    shell.ShellExecuteExW.argtypes = [ctypes.POINTER(ShellExecuteInfo)]
+    shell.ShellExecuteExW.restype = W.BOOL
+    if not shell.ShellExecuteExW(ctypes.byref(info)):
+        raise ctypes.WinError(ctypes.get_last_error())  # 1223 = 사용자가 UAC 승인을 취소
 
 
 def _relaunch_env() -> dict[str, str]:

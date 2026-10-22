@@ -171,6 +171,14 @@ def _apply_update_before_launch(splash) -> bool:
         splash.step(92, "업데이트 적용 중")
         updater.apply_update(new_path)  # 교체 + 새 exe 재실행
         return True
+    except updater.RelaunchError as exc:
+        # 설치는 끝났다(디스크 exe가 새 버전). 이 옛 프로세스로 계속 띄우지 않고 다시 실행을 안내한다.
+        logging.getLogger("mabinogi_addon").warning("업데이트 후 재실행 실패: %s", exc)
+        from PySide6.QtWidgets import QMessageBox
+
+        splash.close()
+        QMessageBox.information(None, "업데이트 설치 완료", f"새 버전을 설치했어요. {exc}\n앱을 다시 실행해 주세요.")
+        return True
     except Exception:
         logging.getLogger("mabinogi_addon").info(
             "실행 전 업데이트 생략(실패/무시)", exc_info=True

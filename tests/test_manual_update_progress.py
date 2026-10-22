@@ -1,4 +1,5 @@
 """Exercise the actual manual download screen through MainWindow callbacks."""
+from types import SimpleNamespace
 
 from hashlib import sha256
 from pathlib import Path
@@ -35,6 +36,9 @@ class Owner(QObject):
         self.events = []
         self._update_splash = None
         self._force_quit = False
+        # 업데이트 전 블랙박스 저장/정리를 마치는 단계(MainWindow.blackbox_tools)를 흉내 낸다.
+        self.blackbox_tools = SimpleNamespace(prepare_close=lambda: True, close_error=None,
+                                              resume_after_update_failure=lambda: None)
 
     def hide(self):
         self.events.append("hide")
@@ -280,3 +284,15 @@ def test_long_target_version_fits_fixed_status_slot(app, family):
         assert screen.msg.font().pixelSize() == 13, diagnostics
     finally:
         screen.close()
+
+
+def test_installed_but_not_relaunched_shows_restart_notice_and_quits(app, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+    owner = Owner()
+    shown, quits = [], []
+    monkeypatch.setattr(QMessageBox, "information", lambda parent, title, text: shown.append((title, text)))
+    monkeypatch.setattr(QMessageBox, "warning", lambda *a: pytest.fail("설치 성공을 실패로 표시하면 안 됨"))
+    monkeypatch.setattr(QApplication, "quit", lambda: quits.append(1))
+    owner._on_update_result(True, "새 버전을 자동으로 시작하지 못했어요(취소).")
+    assert shown and shown[0][0] == "업데이트 설치 완료" and "앱을 다시 실행해 주세요" in shown[0][1]
+    assert quits and owner._force_quit

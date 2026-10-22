@@ -98,13 +98,16 @@ class Engine:
                     if self.cancel.is_set() or not self.allowed(): break
                     try:
                         result=self.recovery.apply(kind,target,value,guard=network_guard)
-                        results.append(f'{kind}: '+('기존 값 일치·변경 없음' if result=='unchanged' else '적용값 확인 완료'))
+                        results.append(f'{kind}: '+{'unchanged':'기존 값 일치·변경 없음','written':'적용 · 재연결 후 확인'}.get(result,'적용값 확인 완료'))
                     except ChangeDeferred as exc:
                         notices.append(str(exc))
                         break
                     except Exception as exc: notices.append(f'{kind} 미적용·확인 필요: {exc}')
                 # Explicit start confirmation covered this one batch reconnect.
-                try: self.recovery.flush_network(guard=network_guard)
+                try:
+                    self.recovery.flush_network(guard=network_guard)
+                    if any(i['kind']=='rss' and i['state']=='applied' for i in self.recovery.items):
+                        results.append('rss: 재연결 후 적용값 확인 완료')
                 except ChangeDeferred as exc: notices.append(str(exc))
                 except Exception as exc: notices.append('네트워크 재연결 확인 필요: '+str(exc))
             if not options['cpu']:
