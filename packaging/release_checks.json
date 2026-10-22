@@ -1,11 +1,26 @@
 {
-  "version": "0.10.1",
+  "version": "0.11.0",
   "tests": [
-    "tests/test_config_bundle.py",
-    "tests/test_settings_export.py",
+    "tests/test_blackbox.py",
+    "tests/test_blackbox_access.py",
+    "tests/test_blackbox_audio_codec.py",
+    "tests/test_blackbox_bundle.py",
+    "tests/test_blackbox_export.py",
+    "tests/test_blackbox_lifecycle.py",
+    "tests/test_blackbox_producer.py",
+    "tests/test_blackbox_queue.py",
+    "tests/test_blackbox_runtime.py",
+    "tests/test_blackbox_service.py",
+    "tests/test_blackbox_session.py",
+    "tests/test_blackbox_ui_connection.py",
+    "tests/test_blackbox_window_probe.py",
+    "tests/test_frame_summary.py",
     "tests/test_optimization.py",
     "tests/test_optimization_network.py",
     "tests/test_optimization_contract.py",
-    "tests/test_optimization_ui.py"
+    "tests/test_optimization_ui.py",
+    "tests/test_config_atomic.py",
+    "tests/test_config_bundle.py",
+    "tests/test_startup_build.py"
   ]
 }

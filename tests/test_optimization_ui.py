@@ -163,7 +163,9 @@ def test_collector_csv_reaches_app_parser_in_fragmented_chunks(window,monkeypatc
     chunks=deque((data[:17],data[17:213],data[213:]))
     monkeypatch.setattr(c.collector,'process',SimpleNamespace(readAllStandardOutput=lambda:chunks.popleft()))
     monkeypatch.setattr(module.presentmon,'clock',lambda:(100.52,1000))
+    monkeypatch.setattr(module,'is_creator',lambda:True)
     c.frames=True;c.stream=FrameStream(123,1000);c.collector.active=True
+    c._sync_summary_context(100.0)  # 실제 시작 tick처럼 수집 전에 관측 조건 확정
     for _ in range(3): c.collector._read()
     assert c.frames and c.stream.snapshot(100.52)['fps']==pytest.approx(50)
     c.stop_frames()
@@ -212,3 +214,39 @@ def test_creator_tour_settings_target_is_stable_when_optimization_is_inserted(wi
     assert w._tabs.currentWidget() is w._settings_scroll
     assert tour._steps[5].target is w.settings_tab.setup_btn
     tour.dismiss()
+
+
+def test_summary_collection_shares_parser_preserves_pause_and_exports_without_raw_events(window,monkeypatch,tmp_path):
+    import json,time
+    from mabinogi_addon.optimization.frame_summary_store import SummaryStore
+    c=window[0].optimization_tools;c.timer.stop()
+    monkeypatch.setattr(module,'is_creator',lambda:True)
+    now=[100.0]
+    monkeypatch.setattr(module.presentmon,'clock',lambda:(now[0],1000000))
+    c.summary_store=SummaryStore(tmp_path/'summaries')
+    c.frames=True;c.target={'pid':123,'birth':'run-1'};c.context=(True,(1,123))
+    c.stream=FrameStream(123,1000000,c.summary)
+    c._sync_summary_context(now[0])
+    c._line('Application,ProcessID,SwapChainAddress,QPCTime,msBetweenPresents')
+    c._toggle_summary_collection(True)
+    c.set_paused(True)  # 전투 보조 일시정지는 표시만 숨기고 집계는 계속
+    for n in range(201):
+        now[0]=100.02+n*.02
+        c._line(f'game,123,0x1,{round(now[0]*1000000)},20')
+    assert c.summary.current()['valid_intervals']==200
+    assert c.summary.current()['max_1s_fps']==50
+    c._toggle_summary_collection(False)
+    deadline=time.monotonic()+3
+    while time.monotonic()<deadline:
+        c._poll_summary_store()
+        if c._summary_saved:break
+        time.sleep(.005)
+    assert c._summary_saved==1
+    saved,=list((tmp_path/'summaries').glob('*.json'))
+    report=json.loads(saved.read_text())
+    assert report['raw_events_saved'] is False
+    assert report['segments'][0]['context']['target']==c.target
+    assert report['segments'][0]['context']['qpc_frequency']==1000000
+    assert report['segments'][0]['low_1pct_fps']==pytest.approx(50)
+    c.stop_frames();c._poll_summary_store()
+    assert c.summary.records and c.summary_store.close_ready()

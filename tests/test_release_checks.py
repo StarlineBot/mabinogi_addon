@@ -52,5 +52,11 @@ def test_current_plan_matches_bundled_release_and_changed_features():
     notes = (root / 'src/mabinogi_addon/assets/release_notes.md').read_text(encoding='utf-8')
     version = notes.splitlines()[0].removeprefix('## v')
     paths = checks.release_tests(root, version)
-    assert 'tests/test_config_bundle.py' in paths and 'tests/test_settings_export.py' in paths
-    assert 'tests/test_optimization_network.py' in paths and 'tests/test_optimization_ui.py' in paths
+    expected = {path.relative_to(root).as_posix() for path in (root / 'tests').glob('test_blackbox*.py')}
+    expected.update({
+        'tests/test_frame_summary.py', 'tests/test_optimization.py',
+        'tests/test_optimization_network.py', 'tests/test_optimization_contract.py',
+        'tests/test_optimization_ui.py', 'tests/test_config_atomic.py',
+        'tests/test_config_bundle.py', 'tests/test_startup_build.py',
+    })
+    assert set(paths) == expected

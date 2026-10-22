@@ -64,13 +64,13 @@ def extend_spec(spec: Path, root: Path) -> None:
     spec.write_text(preamble + ast.unparse(tree) + "\n", encoding="utf-8")
 
 
-def build(root: Path) -> None:
+def build(root: Path, *, blackbox_options=()) -> None:
     # Use PyInstaller's own CLI-to-spec conversion for data/hooks/UAC/version flags.
     # The only extension is our spec-local Splash subclass; no global monkeypatch.
     with tempfile.TemporaryDirectory(prefix="mabinogi-spec-") as temporary:
         options = [
             option
-            for option in build_command()[3:]
+            for option in [*build_command()[3:-1], *blackbox_options, build_command()[-1]]
             if option not in {"--noconfirm", "--clean"}
         ]
         # Analysis resolves data sources relative to the spec directory. The spec
@@ -117,7 +117,10 @@ def main():
         cwd=root,
         check=True,
     )
-    build(root)
+    from blackbox_bundle import prepare
+    with tempfile.TemporaryDirectory(prefix="mabinogi-blackbox-") as temporary:
+        extra = prepare(root, Path(temporary) / "blackbox")
+        build(root, blackbox_options=extra)
     exe = root / "dist" / "mabinogi-addon.exe"
     if not exe.is_file() or exe.stat().st_size == 0:
         raise RuntimeError("PyInstaller did not produce a non-empty exe")

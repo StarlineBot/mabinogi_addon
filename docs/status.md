@@ -28,7 +28,319 @@
 
 ## 마지막 작업
 
-- 사용자 승인 1~3(근거 우선 조사·결과 한 곳 갱신·CI 동결)을 `AGENTS.md`에 반영했다.
-  `CLAUDE.md`의 중복 절차를 참조로 줄이고 현행 문서 진입점을 연결했다. 과거 기록은 보존했다.
-- 문서 차이 검사와 실행 코드 미변경을 확인했다. 앱/CI 코드·기존 배포는 그대로이며,
-  문서만 수정했으므로 런타임 테스트나 Actions는 실행하지 않았다.
+### 공동 후보 0.11.0 로컬 준비 — 2026-10-22
+
+- 사용자가 공개 main 소스 푸시를 명시 승인했다. 푸시 직전 원격 main은 기준 `86efafc4`와 같고,
+  API는 저장소 `public`을 반환했다. 공개 설정은 변경하지 않았다. 비용 조회 API는 권한 부족403으로
+  현재 예산을 확인하지 못했으며 재시도/우회하지 않았다. 과거 사용량을 현재 잔액으로 사용하지 않는다.
+- 릴리스 노트 맨 위와 `packaging/release_checks.json`을 `0.11.0`으로 준비했다.
+  블랙박스13모듈, FPS/최적화5모듈, 설정2모듈, 빌드1모듈의 명시 목록이다. 전체회귀 필수화나
+  workflow 변경은 없다. 버전 고정은 기존 `build_windows.py --version` 경로를 사용한다.
+- 개발: `UV_CACHE_DIR=/tmp/mabinogi-uv-cache QT_QPA_PLATFORM=offscreen uv run python -m scripts.run_release_checks --version 0.11.0`
+  **304건/20.27초** 통과. 결과 `/tmp/blackbox-fps-release-0.11.0-results.xml`.
+  `uv run python -m pytest tests/test_release_checks.py tests/test_release_candidate.py tests/test_windows_ci.py -q --tb=short`
+  **228건/8.59초** 통과. 이전 버전의 settings_export 필수 기대를 이번 변경21모듈의 정확집합으로 갱신했다.
+  독립 QA는 관련251건 통과/과거 기대1건 실패를 확인했고, Windows 경로 구분자 문제도 발견했다.
+  기대값 및 `as_posix()` 수정 후 최종 해당 검사13건/0.50초 재통과. 노트/버전/21모듈 범위 정합성 확인 완료.
+  로컬 candidate preflight도 통과했지만 이는 원격 후보 SHA 확정이나 Windows 실행이 아니다.
+- 원격 반영 직전 `v0.11.0` 미사용 여부를 다시 확인해야 한다. 노트/검사목록을 포함한 최종커밋의
+  SHA로 검증해야 하며 현재는 미커밋이다. Windows native/exe/WGC/WASAPI/하드웨어 실측은 미실행이다.
+  푸시/Actions/태그/게시/소스 Library 업로드는 하지 않았다.
+
+
+### FPS 구간 요약·수집 모드 개발 — 2026-10-22
+
+- 기준 커밋 `86efafc4adacf4a5c3fc991881cadfa6fdc9fa57`의 로컬 미커밋 변경이다. 기존 블랙박스 변경은 보존했다.
+  최신 범위/정의는 [FPS 구간 요약 명세](game-frame-recording-stage1-spec.md). 기존 PresentMon 제출 이벤트를
+  재사용해 유한 메모리 집계와 요약 JSON 저장을 연결했다. 매 프레임 디스크 로그/새 수집기/자동 최적화는 없다.
+- 평균=N/유효 간격 합, 1% low=느린 ceil(N/100)개 간격 평균의 역수(N≥100), 최대=완성된 고정1초 창
+  이벤트 개수 최댓값이다. 표본·시간·꼬리 개수·변동계수·긴 간격·설정 요청과 journal 적용 확인을 함께 남긴다.
+  CPU 제한으로 평균/최대가 낮아지며 일정해진 합성 사례는 개선이 아닌 성능/변동 절충으로 표시한다.
+- PID/생성 식별자·swapchain·비활성·누락/역순·측정 재시작·최적화 전환에서 구간을 분리한다.
+  오류/자료 부족은 안정 상태로 표시하지 않는다. 수집 중 요약 쓰기는 유한 worker 큐, 고유 파일 원자적 완료,
+  결과 인수 후 종료로 연결했다. 저장 실패는 자동수집을 멈추고 메모리 요약과 기존 파일을 보존한다.
+- 기존 stat_bars/boss/tuarim 수집모드의 저장→폴더→체크박스→경로 패턴을 재사용했다.
+  FPS 아래 `요약 저장 / 폴더 열기 / 수집 모드(구간 요약 자동 저장)` 추가 영역의 **렌더 배치 승인 완료**다(2026-10-22 사용자 “1: 이대로 진행”).
+  합성 샘플 렌더: `/tmp/fps-summary-preview/fps-summary-tradeoff.png`, `fps-summary-insufficient.png`.
+  Library ID: `libfile_049f3b15f4b48191ada061c92445a4b7`, `libfile_e564e8ffa43c81918e014bf5ae3824b5`.
+  FPS 배치는 별도로 승인받았으며 동일 내용으로 재확인하지 않는다. 현재 변경은 보존한다.
+  패키징 변경과 알파 초기값은 후속 승인됐다. 원격 푸시/Actions/배포 실행 승인은 별도이며 실행하지 않았다.
+- 개발 최종 검사는 실제 controller 수집 시작/중지/표시 일시정지/JSON 연결, 완료 후 partial 정리 실패와
+  결과 인수 전 종료 방지 회귀 포함 **125건/29.22초** 통과했다.
+  명령: `UV_CACHE_DIR=/tmp/mabinogi-uv-cache QT_QPA_PLATFORM=offscreen uv run python -m pytest tests/test_frame_summary.py tests/test_optimization.py tests/test_optimization_ui.py tests/test_optimization_network.py tests/test_optimization_contract.py -q --tb=short --junitxml=/tmp/fps-summary-results.xml`.
+- 구현에 참여하지 않은 독립 QA: 수학/파일 완료3건, 설정 경계/큐3건, 권한 해제/종료/표시 일시정지4건 통과.
+  1% ceil 경계와 불완전1초 창, 32개 변동계수 참조 벡터도 확인했다. QA가 찾은 완료 후 partial 정리 실패의
+  성공 경로 유실과 종료 직전 미인수 결과 문제는 수정 후 재검증했다. 최종 명세 대조에서 정의/수집 UI 일치를 확인했으며, 독립 관련 검사 **125건/41.38초**,
+  별도 경계10건 재통과. 추가 확인된 결함은 없다.
+- 합성 비용 검사 `UV_CACHE_DIR=/tmp/mabinogi-uv-cache uv run python scripts/probe_frame_summary.py`:
+  CSV 50,000개 기존3.79µs/이벤트→집계6.50µs/이벤트, 200,000개 집계 tracemalloc 현재341,793B/
+  최대2,017,249B, 최대16,000개 요약 평균8.85ms(10회). 화면 요약은 최대초당1회다.
+  ETW/전체UI/Windows 실제 게임 비용을 측정한 결과가 아니다.
+- 변경 파일: `optimization/frame_summary.py`, `frame_summary_store.py`, `frames.py`, `session.py`,
+  `ui/optimization_controller.py`, `optimization_panel.py`, `tests/test_frame_summary.py`, `test_optimization_ui.py`,
+  `scripts/probe_frame_summary.py`, `render_frame_summary_preview.py`, 기존 FPS 명세/상태/Windows 문서.
+  tracked diff는 `git diff HEAD`, 새 파일까지 포함한 목록은 `git status --short`로 확인한다.
+  구현 완료 시점 전체 로컬 diff는 `/tmp/mabinogi-combined-local.patch`이며 기준 SHA archive에 apply --check 통과.
+  패치는 마지막 로컬 인계 시점에 갱신하며 외부 전송하지 않는다.
+  기존 `/tmp/mabinogi-blackbox.patch`는 FPS 추가 전 체크포인트다. 두 패치 모두 외부 전송하지 않는다.
+- 남은 검증: 실제 Windows PresentMon 이벤트/포커스 경계/장시간 수집·저장/CPU·메모리 비용,
+  동일 게임 장면에서 평균·최대·1% low와 변동을 함께 확인한다. 합성 통과를 실게임 검증으로 대체하지 않는다.
+  공동 릴리스의 블랙박스 번들·제품 설정 준비는 아래 최신 상태를 따른다.
+  승인된 패키징만 수정했고 CI 게이트는 유지했다.  푸시/PR/Actions/태그/배포/실제 캡처/소스 업로드는 하지 않았다.
+
+### 블랙박스 개발·독립 QA·최상위 탭 승인 — 2026-10-22
+
+- **최신 인계 상태**: 빌드/패키징 수정과 알파 초기값 묶음 승인 완료. 원격 푸시/PR/Actions/태그/Release는
+  실행하지 않았다. 기준 SHA `86efafc4adacf4a5c3fc991881cadfa6fdc9fa57`의 미커밋 변경이다.
+- 승인 제품 설정 `packaging/blackbox-product.json`: 1080p60/기본10분/1처리+1대기 유지,
+  영상12Mbps·AAC192kbps, 임시8GiB·여유4GiB·최근버퍼2GiB, 원시큐512MiB,
+  입력 최대1920×1080, 오차50ms, Ctrl+Alt+F10, 커서 제외, 게임오디오 분리 실패 시 중단.
+  입력 가로·세로를 각각 검사하며 초과 시 전체화면/해상도 변경/무음으로 몰래 대체하지 않는다.
+- 기존 Actions → `packaging/build_windows.py` → `blackbox_bundle.prepare`가 자동 연결된다.
+  공식 소스 해시 확인·최소 FFmpeg 공유 빌드 → CMake x64 Release DLL/codec host → 제품 설정/대응소스/고지
+  → 버전/인코더/manifest 검사 → 기존 PyInstaller onefile 순서다. `.github`, pyproject/lock은 변경하지 않았다.
+  사용자는 개발도구·수동 소스 패치 없이 기존 앱 업데이트를 받는 구조다. 빌드 기계에만 도구가 필요하다.
+- BtbN LGPL3 후보는 제품에서 제외했다. 공식 FFmpeg n8.1.3 최소 공유 빌드(LGPL2.1+)로 줄였다.
+  GPL/nonfree/version3/libx264/외부 코덱 SDK는 제외하고 하드웨어 `h264_mf`와 내장 AAC를 사용한다.
+  FFmpeg 소스 SHA256 `09f990289327d3ebfedf4fc15cae3f884a65dab7a5aac7bbb5b01ff83900efd9`.
+  Windows LLVM-MinGW 20261020 SHA256 `fd5462b7f5d93b2ff981fcd3f9c7e427e47f3203c64ea91c27bcc444eebd74cd`.
+  정확한 MinGW 소스·컴파일러 출처/해시와 실행 명령은 [Windows 검증](windows-validation.md)에 기록했다.
+- Linux→Windows FFmpeg PE 교차 빌드 성공: runtime8파일/6,300,160B. PE import는 번들 FFmpeg DLL6개와
+  Windows/UCRT이며 GPU/MFT 런타임 지원을 검증한 것은 아니다. `/tmp/blackbox-minimal-build/review-bundle`에
+  실제 바이너리/소스/고지 준비. 대응소스 zip SHA256 `66f63a3947fd4823e74f32188c8c6bc242f65c999c5fcbb22d803edc4ec6ef04`.
+  FFmpeg·MinGW 대응소스/정확한 recipe/config/LLVM 고지를 포함하고 앱은 사용자 데이터의
+  `third_party/ffmpeg-<source hash>`에 일반 파일로 제공한다. 기존 수정 파일은 덮어쓰지 않는다.
+  LGPL/LLVM/MinGW 고지와 소스 제공 조건은 확인했지만 법적 적합성·영상 특허 권리 보증은 아니다.
+- 긴 저장은 입력별 거대 명령행 대신 제한된 concat manifest/순차 디코딩을 사용한다. 중단 시간을 제외하고
+  선택 구간만 재인코딩한다. 명시적 출력60fps로 저비트레이트 합성 영상 첫 프레임 회색 손실을 수정했다.
+  독립 QA 실제 합성 인코딩: 3,001구간→600초/36,000프레임,24.592초; 완전 디코딩·오디오·5초 중단 제외,
+  한글/작은따옴표 경로·취소0.112초 확인. 실제 게임/Windows 하드웨어 인코딩 측정이 아니다.
+- 개발 최종 회귀 **203건/19.90초** 통과. 명령: `UV_CACHE_DIR=/tmp/mabinogi-uv-cache QT_QPA_PLATFORM=offscreen uv run python -m pytest tests/test_blackbox*.py tests/test_startup_build.py tests/test_windows_ci.py -q --tb=short --junitxml=/tmp/blackbox-packaging-source-results.xml`.
+  최종 독립 QA 패키징·기동·Windows CI 모형 **48건/1.44초** 통과. 명세/제품값/빌드 경로 정합성을 확인했고,
+  QA가 지적한 Windows 문서의 과거 미승인 표기를 이전 단계 기록으로 명확히 수정했다.
+  앞선 독립 QA 관련23건/4.29초 통과와 별도 입력크기 경계,
+  KnownFolder 성공/실패/메모리 해제, 소스 고지 기존 파일 보호/부분 실패 정리/해시 검증을 완료했다.
+  독립 QA에서 확인된 제품 결함은 수정·재검증했고 현재 추가 확인된 결함은 없다.
+- 변경 핵심: `packaging/{build_windows.py,blackbox_bundle.py,ffmpeg_source.py,ffmpeg_minimal.sh,blackbox-product.json}`,
+  `native/blackbox/CMakeLists.txt`, 제품 `blackbox_bundle.py`, `blackbox_codec.py`, `blackbox_producer.py`,
+  `system/known_folders.py`, config/controller, probe·관련 테스트·명세/실행 문서다.
+- 남은 환경 검증: Windows SDK/MSVC 네이티브 빌드와 PyInstaller exe, WGC 합성창, WASAPI 프로세스 분리,
+  Media Foundation 하드웨어 지원/A-V 동기/실게임1080p60/장시간 부하/전역 단축키/업데이트 설치.
+  이 환경은 Linux로 해당 실행을 하지 않았다. 수치 승인과 소스 작성/PE 교차 빌드는 실제 Windows 성공이 아니다.
+  앱 비정상 종료 후 manifest 자동 복원은 미구현이며 현재 앱 세션의 실패 재시도/명시적 폐기와 구분한다.
+  다음은 원격 반영·Windows 후보 검증 실행의 별도 승인 및 기존 절차에 따른 후보 SHA/버전 확정이다.
+  실제 게시 실행은 사용자 최종 배포 절차를 유지한다.
+
+#### 이전 단계 기록 — 아래 미구현/승인 대기 표기는 당시 상태이며 최신 상태는 위 항목을 따른다
+
+- **Windows 검증 도구 보완·패키징 읽기 확인(최신)**: `test_support/blackbox_codec.py`의 명시적
+  `BLACKBOX_CODEC_HOST`를 producer/audio 합성 fixture에 연결했다. Windows에서 누락/상대/없는 경로는
+  실패하며 skip/자동 다운로드하지 않는다. `scripts/probe_blackbox_window.py`는 자기 Qt 합성창 HWND+
+  현재 PID만 사용해 WGC→무음MP4→완전디코딩/원자적완료를 검사한다. 임의창/게임창 입력과 오디오는 없다.
+  실제 실행은 안 했고, Linux에서는 모형 프레임과 실제 FFmpeg만 사용했다.
+- 개발 관련12건/2.90초 통과(`/tmp/blackbox-windows-tools-results.xml`):
+  `UV_CACHE_DIR=/tmp/mabinogi-uv-cache QT_QPA_PLATFORM=offscreen uv run python -m pytest tests/test_blackbox_window_probe.py tests/test_blackbox_producer.py tests/test_blackbox_audio_codec.py -q --tb=short --junitxml=/tmp/blackbox-windows-tools-results.xml`.
+  독립 QA6건/0.764초+관련회귀8건 통과. QA가 찾은 초기화실패 창/진단 정리 누락 수정 후
+  identity/worker.start 실패 독립2건/0.036초 통과(`/tmp/blackbox_probe_setup_qa.py`).
+  `--help`/import는 장치를 열지 않음을 확인. Windows C++ 빌드/WGC 실행은 여전히 미검증이다.
+- 복구 화면 구현은 승인됐다. 사용자가 먼저 사용해보고 판단하는 승인으로 피드백에 따라 조정한다.
+  실제 자료 삭제 승인은 아니며 작업별 폐기 확인을 유지한다. 사용자는 별도 소스/exe 전달 대신
+  기존 앱 업데이트 후 직접 Windows 확인을 기대한다. 소스 Library 업로드는 승인되지 않았고 하지 않았다.
+- **릴리스 준비는 미완료**: `packaging/build_windows.py`/`.github/workflows/windows.yml`은 새 DLL/host/
+  FFmpeg를 빌드·포함하지 않는다. 이 파일들과 pyproject/lock은 `git diff --exit-code HEAD -- packaging .github pyproject.toml uv.lock`로 변경없음을 확인했다.
+  최소 변경은 빌드 쪽 네이티브 생성/의존성 묶음, 승인된 FFmpeg 정확한 바이너리·라이선스·대응 소스,
+  앱의 번들 경로/제품 설정 연결, frozen exe 기동 검증이다. 사용자가 Python/MSVC/FFmpeg를 따로
+  설치할 필요 없는 기존 onefile 업데이트 방식으로 준비할 수 있으나 아직 구현/승인하지 않았다.
+  동봉 권장 검토안은 GPL/nonfree/libx264 제외 LGPL 하드웨어 인코더 빌드의 버전/해시 고정이며,
+  실제 빌드 라이선스·GPU 지원·고지/소스 제공 확인이 선행된다. 정책/게이트를 임의 변경하지 않는다.
+  정확한 개발자 Windows 명령·필수 도구·최소 패키징 변경은 `docs/windows-validation.md`에 기록했다.
+  원격/Actions/배포/실제녹화/소스전송 없음.
+
+- **최신 검증/인계 체크포인트**: 개발 관련 `tests/test_blackbox*.py` + `test_config_atomic.py` +
+  `test_startup_smoke.py` **154건/15.95초** 통과(`/tmp/blackbox-results.xml`).
+  실행: `UV_CACHE_DIR=/tmp/mabinogi-uv-cache QT_QPA_PLATFORM=offscreen uv run python -m pytest tests/test_blackbox*.py tests/test_config_atomic.py tests/test_startup_smoke.py -q --tb=short --junitxml=/tmp/blackbox-results.xml`. 저장 예약 후 권한 해제,
+  원본 보호·취소·정리, 합성 PCM+실제 FFmpeg 파일 생성/완전 디코딩, Qt 설정·업데이트 보호를 포함한다.
+  producer 통합 fixture는 합성 프레임 전달 전에 저장을 누르는 경쟁이 있어 완료 조건 대기를 추가했다.
+  기존 끝점·성공 assertion은 유지했다. 이후 영상/오디오/service 10건/2.33초 통과.
+- **독립 QA**: 정상 중단 시 PCM이 마지막 영상 프레임 전체를 덮지 못하면 오류가 재개를 막는 결함을
+  수정했다. `/tmp/blackbox_audio_transition_real_qa.py`에서 합성 PCM/영상+실제 코덱으로 완결0.1초만
+  보존/정상 transition/예산0 정리를 확인했다. 최신 연결 독립5건/0.031초는 업데이트 교체 전 저장대기,
+  업데이트 실패 복구, preferences 보존, 접근해제 후 예약취소/늦은flush, 실제 worker 취소와
+  partial 보존/명시폐기를 확인했다(`/tmp/blackbox_final_connections_qa.py`). 관련 독립 회귀20건/4.87초도 통과했다. 앱 코드 수정 없는 QA다.
+- 마지막 UI 결과 보완: 열린 복구 화면의 ticket/session 선택을 유지하며 worker 결과를 갱신한다.
+  독립 QA가 찾은 예약취소 후 진행문구 잔존을 취소 알림으로 수정했다.
+  `/tmp/blackbox_ui_results_qa.py` 독립3건/0.262초 통과. 최종 개발 관련 service/UI8건/1.00초,
+  직전 access/lifecycle/UI13건/2.88초 통과. `git diff --check` 통과.
+- 앱 연결 추가: 보관 시간·저장 폴더 기억, Qt 결과 전달·중단/재시도/명시폐기·이전 게임 버퍼 저장,
+  업데이트 재시작 전 저장 보호와 실패 후 runtime 재생성. OS 전용 구현은 기존 규칙대로 `system/`에 둔다.
+  제작자 접근을 확대하거나 외부 캡처를 실행하지 않았다.
+- 새 복구 UI는 샘플이며 별도 배치 피드백 대기다. 렌더 `/tmp/blackbox-recovery-preview/blackbox-recovery-preview.png`,
+  Library `libfile_f1c4ec9746f081919cf3e61bd4acd7e4` 버전0. 기존 승인된 주 탭 배치 재확인은 불필요하다.
+- **정확한 미완료**: Windows DLL/codec host는 소스만 작성했고 SDK가 없어 빌드도 하지 않았다.
+  WGC/WASAPI/하드웨어 인코더/전역 단축키/실게임1080p60/오디오 분리·동기화/부하·장시간 실행은 미검증.
+  Media Foundation 인코더와 앱 비정상 종료 manifest 복원은 미구현이다. 제품은 완전한 명시적
+  validationProfile과 외부 바이너리 없이는 녹화를 열지 않는다. 수치·배포 의존성을 몰래 확정하지 않았다.
+  다음 로컬 Windows 빌드/합성 검사/승인 후 대상 한정 검증 순서는 `docs/windows-validation.md`에 기록했다.
+
+- **최신 구현 체크포인트(후속 QA 진행 중)**: `native/blackbox/{capture.cpp,audio.cpp,codec_host.cpp,CMakeLists.txt}`,
+  `blackbox_native.py`, `blackbox_codec.py`, `blackbox_producer.py`, `blackbox_audio.py`, `blackbox_service.py`,
+  `ui/blackbox_events.py`, `ui/blackbox_recovery.py`를 추가했다. 아래 이전 단계의 "네이티브 미구현" 기록은
+  이 후속 소스 작성으로 대체되며 **Windows 빌드/실행은 여전히 미검증**이다. 바이너리/의존성 동봉·CI 변경 없음.
+  WGC는 HWND/PID/프로세스 생성 시각과 foreground epoch를 검증한다. 오디오는 해당 프로세스 트리 PCM만 받는다.
+  전체 화면/마이크/전체 시스템 소리 fallback은 없다. FFmpeg는 명시적 절대 경로 바이너리만 실행한다.
+  네이티브 worker→제한된 raw/PCM 큐→디스크 구간→1처리/1대기 큐→Qt 결과/복구·종료를 연결했다.
+  명시적 validationProfile이 완전할 때만 runtime을 생성하며 제품 용량/품질/키 기본값은 넣지 않았다.
+- 최신 부분 검증: 기존 관련 **136건/11.25초**, 예약 변경 후 관련 **128건/3.78초**,
+  audio/service **8건/1.07초**, fake native+실제codec 영상/PCM 통합 **2건/2.11초** 통과.
+  독립 QA의 서비스 준비상태/Alt+Tab재개/접수후접근해제/정리재시도 4결함은 수정 후 별도7건 통과.
+  제출 실패+정리 실패의 이중예외도 수정 후 독립 재검증을 통과했다. 아직 이번 변경 전체 QA 완료를 뜻하지 않는다.
+- 오디오 합성 경계: B-frame/empty_moov가 영상 초기 PTS를 이동시키는 문제를 -bf0/delay_moov로 수정했다.
+  작은 합성 0.6초 요청은 영상0.6초/오디오0.621333초였고 명시적 테스트 오차50ms 안에서 검증했다.
+  이는 AAC 프레임 꼬리·허용 오차를 Windows에서 확인해야 한다는 근거이며 제품 오차 수치를 승인한 것이 아니다.
+  손상 입력은 -xerror/-err_detect explode로 거부한다. 실제 게임 A/V 동기화 검증은 아니다.
+
+
+- 기준 `86efafc4adacf4a5c3fc991881cadfa6fdc9fa57`: 시작 시 원격 main과 일치하는 깨끗한 `work`
+  체크아웃이었다. 로컬 수정만 수행했다. 커밋·푸시·PR·태그·Release·Actions·CI 변경은 없다.
+- `AGENTS.md`, `CLAUDE.md`, 블랙박스 명세와 연결된 기획서·프레임 계측 0단계·Windows 지침을
+  확인했다. 체크아웃에 `.agents/skills`는 없다. 기존 inventory 2,624건에서 블랙박스 검사/구현은 없었다.
+  초기 uv 기본 캐시 읽기 전용 오류는 `/tmp/mabinogi-uv-cache`로 해결했다.
+- `blackbox.py`: 기본 10분 실제 녹화 길이, 중단 시간 제외, 저장 시점 불변 계획, 원본 pin,
+  시간/바이트/개수 한도, 세션 혼합 거부. `blackbox_session.py`: 제작자 요청별 재확인,
+  사용 해제/게임 종료 후 저장 기회, 접근 회수 후 신규 요청 차단과 기존 pin 보호, 늦은 캡처 결과 거부,
+  준비/녹화/오류 구분, 저장 중 종료 정리 거부. `config.py`의 체크 저장은 기존 원자적 경로를 사용한다.
+- `blackbox_export.py`: 수락된 계획 하나를 worker에서 실행하는 코덱 독립 경계다. 주입된 인코더가
+  쓰기 전용 sink에 출력하고 상한을 넘기면 실패한다. 목적지 폴더의 독립 `.partial`에 기록·fsync·
+  주입 검증 후 `os.link`로 create-only 확정한다. 기존/경쟁 클립은 덮어쓰지 않고, 실패 partial과
+  원본 pin은 보존한다. 검증된 파일만 소유 inode/해시 재확인 후 명시적으로 확정 재시도할 수 있다.
+  소유 partial의 명시적 폐기와 완료 뒤 partial 정리 실패도 별도 결과로 알린다. 같은 job의 중복/동시 실행은 거부한다.
+- 제한: hard link 미지원 파일시스템은 안전하게 실패하며 복사/덮어쓰기로 폴백하지 않는다.
+  일반 코덱 콜백의 시간 제한·취소·실제 디코딩 검증은 어댑터 계약이다. 본 모듈이 임의 콜백을 강제 종료하지 않는다.
+  `blackbox_queue.py`/`blackbox_budget.py`에 유한 worker/결과 슬롯·협력적 취소·합산 임시 예산과
+  볼륨 여유 공간 검사를 추가했다. 원본은 저장소 어댑터가 명시적으로 등록해야 하며 자동 디스크 전체 탐색은 없다.
+  실패/정리 대기 파일은 예산과 결과 슬롯에 남는다. 완료 클립은 임시 예산에서 제외하되 실제 여유 공간에 반영된다.
+  큐 정상 종료는 신규 요청을 막고 수락된 작업·결과 인수·복구 결정을 기다린다. 접근 회수도 기존 복구를 막지 않는다.
+  취소는 협력적이며 임의 Python 콜백을 강제 중단하지 않는다. 디스크 저장소와 제어 연결은 아래 최신 항목을 따른다. 재시작 복구는 미구현이다.
+  원본 pin 해제는 worker가 아닌 제어 스레드에서 결과를 보고 결정한다. 전원 손실 시 파일 내구성/완전 복구는 보증하지 않는다.
+- 후속 사용자 `1` 회신으로 디스크 임시 폴더·1개 처리+1개 대기·실패 보존/재시도/명시적 폐기·
+  필요한 경계 재인코딩을 승인했다. 명세9절에 반영했다. 용량/품질 숫자·최종 코덱·Windows 기술 채택은 미승인이다.
+- `blackbox_spool.py`: 앱 실행마다 새 전용 디스크 폴더를 만들고 제한된 sink로 완결 구간을 기록/fsync한다.
+  원본·실패 쓰기를 합산 예산에 등록한다. inode가 일치하는 소유 파일만 읽기/폐기하고 다른 파일·교체된 폴더는 보호한다.
+  실패 삭제는 예산/자료를 유지한다. 실패 쓰기 자료는 sources에 남으며 임의 자동 삭제/재시작 혼합은 없다.
+- `blackbox_runtime.py`: session의 고정 plan/pin → 1worker/2slot 큐 → 성공 인수/실패 복구 → 원본 retire를 연결했다.
+  기존 요청은 접근 해제/종료 대기 중에도 복구할 수 있다. 미검증 인코딩 실패는 같은 plan으로 재인코딩하며
+  새 출력 예약을 먼저 확보하고 이전 실패 partial도 명시적 정리까지 보존한다. 정리 실패 원본은 재시도 목록에 남는다.
+  독립 QA가 완료 인수 후 원본 삭제 실패로 완료 결과를 잃는 결함을 발견했다. 개발 수정으로 성공 결과와
+  cleanup_error를 함께 반환하고 retry_cleanup으로 정리를 다시 시도한다.
+  후속 독립 QA에서 다른 ticket에 대기 중인 동일 ExportJob을 retry_encode에 중복 접수할 수 있음을 재현했다.
+  개발자가 예산 예약 전 기존 모든 entry.job 동일성 검사로 거부하도록 수정했고 독립 재현으로 재확인했다.
+  DiskSpool write는 UI에서 실행하지 않는 어댑터 경계이며 실제 Windows 캡처/인코더 worker는 아직 없다.
+- 제품 연결 범위: `ui/blackbox_controller.py`를 main_window에 연결했다. 사용자 후속 결정에 따라
+  **제작자에게만 최상위 블랙박스 탭**을 생성하고, 접근 회수 시 제거/파괴한다. 이전 편의기능 내부 탭 안은 대체됐다.
+  controller의 직접 명령과 session의 실행 경계 모두 권한을 검사한다. UI 제거는 별도로 소유한 저장 pin을 건드리지 않는다.
+  현재 제품에는 Windows 캡처·인코더·단축키와 runtime의 앱 수명주기 연결이 없어 5개 UI 조작은 비활성이다.
+  새 접근 권한을 발급하거나 일반 공개하지 않았다. 앱 시작으로 녹화하지 않는다.
+- 최신 개발 회귀: 모델50+세션25+내보내기22+큐20+runtime/디스크7+접근7+기존 설정 원자성5+기존 최소 기동2 = **138 passed / 16.54초**.
+  Linux 명령:
+  `UV_CACHE_DIR=/tmp/mabinogi-uv-cache QT_QPA_PLATFORM=offscreen uv run python -m pytest tests/test_blackbox.py tests/test_blackbox_session.py tests/test_blackbox_export.py tests/test_blackbox_queue.py tests/test_blackbox_runtime.py tests/test_blackbox_access.py tests/test_config_atomic.py tests/test_startup_smoke.py -q --tb=short --junitxml=/tmp/blackbox-results.xml`.
+  전체 회귀·Windows 최소 기동·exe는 미실행이다. 최초 새 검사 1건은 공통 fixture의 app 디렉터리를
+  신규 산출물로 잘못 판정해 실패했고, 실행 전후 파일 집합이 동일한지 검사하도록 고쳤다.
+- 독립 QA는 구현에 참여하지 않은 `blackbox_independent_qa`가 원 명세/현재 소스와 직접 재현으로 수행했다.
+  모델 별도5건/0.279초(무작위 전환20,000회, 저장 중999회 추가), 모델 회귀50건/1.76초 통과.
+  세션의 이전 worker 오류가 새 상태를 덮는 결함은 개발자가 permit 식별을 추가해 수정했다.
+  수정 후 별도7건/0.003초와 백엔드 회귀75건/1.94초 통과.
+- 내보내기 독립 QA는 바이트 수 대신 원소 수/재정의된 len을 믿는 상한 우회와, 교체된 partial을
+  여전히 validated로 반환하는 결함을 발견했다. 개발 수정으로 정확한 bytes 타입만 쓰기 전에 허용하고,
+  재검증 시작 시 검증 상태를 무효화했다. 수정 후 **독립6건/0.004초, 기존20건/0.75초** 통과.
+  이후 큐 추가에 따른 최신 exporter 검증은 아래 결과를 따른다.
+- 큐 독립 QA가 fsync 도중 취소 뒤 validator가 실행되는 결함과 외부 삭제 partial 때문에 종료가 막히는 결함을 재현했다.
+  개발자가 validate 직전 취소 검사와 동일 부모 inode에서 파일 부재를 확인한 명시적 정리 경로를 추가했다.
+  부모 부재/교체는 실패로 유지한다. ExportJob의 plan/output/한도는 공개 속성 재할당을 막아 예약 후 변경을 차단한다.
+  수정 후 독립 `/tmp/blackbox_queue_independent_qa.py` **6건/0.138초**, 큐·내보내기 회귀 **41건/1.15초** 통과.
+  3worker/4slot, 성공·실패 240작업 후 슬롯/예산 회수와 스레드 종료도 확인했다.
+  증거 `/tmp/blackbox-queue-independent-results.xml`; exporter SHA256
+  `67a26daf11100ec199bdb4cb5d8eec3d6d6071352d02d9c653c1d52766930eff`.
+  자원 한도는 필수 인자이며 테스트 fixture 수치를 제품 기본값으로 채택하지 않았다.
+- 접근 독립 QA: **7건/2.23초** 및 별도 200회 권한 전환에서 중복 탭 없음·설정 탭 직전 배치·
+  제거 page 파괴·일반 사용자 명령 차단·기존 저장 보호·늦은 허가 거부·종료 중 차단을 확인했다.
+  검증한 백엔드/접근 범위에서 남은 차단 결함 없음이며 전체 녹화 기능 QA 통과가 아니다.
+  독립 재현은 `/tmp/blackbox_independent_qa.py`, `blackbox_session_independent_qa.py`,
+  `blackbox_export_independent_qa.py`, `blackbox_access_independent_qa.py`를
+  `UV_CACHE_DIR=/tmp/mabinogi-uv-cache uv run python /tmp/<파일>`로 실행한다.
+  증거 XML: `/tmp/blackbox-independent-session-results.xml`, `/tmp/blackbox-export-independent-results.xml`,
+  `/tmp/blackbox-access-independent-results.xml`.
+- `scripts/probe_blackbox_export.py`는 외부 소스를 받지 않고 새 출력 폴더에 고정 합성 영상만 만든다.
+  설치된 FFmpeg7.1.5 소프트웨어 인코딩은 실험 전용이며 제품 fallback/의존성으로 채택하지 않았다.
+  `UV_CACHE_DIR=/tmp/mabinogi-uv-cache uv run python -m scripts.probe_blackbox_export /tmp/<새폴더>`.
+  개발 `/tmp/blackbox-export-probe-v1`과 독립 `/tmp/blackbox-export-probe-independent` 모두 exit0.
+  실제 ExportJob을 거쳐 320×180/60FPS 무음 MP4 **3.5초/210프레임** 생성·완전 디코딩, 중복 경로 거부,
+  실패 partial 보존을 확인했다. 독립 색 검사에서 빨강90+파랑120프레임으로 중단5초의 삽입이 없었다.
+  concat/inpoint+copy 비교 결과는 **4초/240프레임**으로 정확한 자르기를 대신하지 못했다.
+  각 폴더 `results.json`에 명령·ffprobe 결과가 있다. 제품 경계 오차/파일 형식의 승인이나 1080p 성능 검증이 아니다.
+  최신 probe는 실제 ExportQueue와 DiskBudget을 경유한다. 개발 `/tmp/blackbox-export-queue-probe-v1`,
+  독립 `/tmp/blackbox-queue-probe-independent` 모두 exit0이며 같은 3.5초/210프레임·색 순서와
+  큐 종료/예산 회수를 확인했다. 합성 원본/결과는 증거로 남기며 회계 항목 회수를 파일 삭제로 표현하지 않는다.
+  최신 `/tmp/blackbox-runtime-probe-v1`은 DiskSpool→session→Runtime→실제 MP4 저장→정상종료를 추가해 exit0.
+  이 전용 spool 원본/폴더는 실제 정리됐고 fixture 원본과 성공 클립은 남아 있다. 같은 3.5초/210프레임 출력이다.
+  독립 `/tmp/blackbox-runtime-probe-independent`도 exit0. 별도 디코딩으로 빨강90+파랑120과 임시폴더 정리·
+  성공 클립 보존을 확인했다. 독립 runtime 재현 `/tmp/blackbox_runtime_independent_qa.py` 5건(0.013초),
+  중복 retry 재현 `/tmp/blackbox_retry_identity_qa.py` 통과. runtime/queue/export 독립 회귀 **49건/4.40초** 통과
+  (`/tmp/blackbox-runtime-independent-results.xml`). 현재 해당 검사 범위의 미해결 차단 결함 없음.
+  실제 Windows/하드웨어/음성 검사는 아니다.
+- UI 렌더는 `scripts/render_blackbox_preview.py`로 실제 제작자 최상위 탭에 샘플 상태만 넣는다.
+  `UV_CACHE_DIR=/tmp/mabinogi-uv-cache QT_QPA_PLATFORM=offscreen uv run python -m scripts.render_blackbox_preview /tmp/blackbox-top-preview`.
+  최초 투아림 타이머 캡처 시도는 경계에서 차단됐고 소유 QTimer 중단으로 수정/독립 재검증했다.
+  최상위 전환 후 샘플 로그인 name 누락도 수정했다. 최신 개발/독립 렌더 모두 exit0이며,
+  독립 경로 `/tmp/blackbox-top-independent-fixed`의 이미지에서 최상위 탭과 예시/녹화 미동작 표시를 확인했다.
+  실제 개인 화면/오디오 캡처는 없었다.
+- Library 기존 이미지의 **버전1**로 교체했다. 보관 중:
+  `libfile_35fd1e6dd8e881918614f744e10779d1` / `file_00000000f81082309a3ef1452bce86ce`.
+  일시정지: `libfile_97d2901f538481919f993479efe04d3b` / `file_0000000049908230ae5a5fe4ccbaebaa`.
+  부모가 전달한 렌더를 보고 사용자가 `이대로진행`으로 최상위 배치·문구를 승인했다. 재확인하지 않는다.
+  탭 접근 연결은 완료했으며 실제 캡처/저장 조작 활성화는 정책과 Windows 어댑터 검증에 의존한다.
+- 실제 캡처/인코딩 다음 검토안은 등록 HWND의 WGC + 하드웨어 Media Foundation과,
+  WGC + 검증한 FFmpeg 하드웨어 인코더/내보내기를 비교하는 것이다. 전자는 네이티브 연동,
+  후자는 바이너리 구성/재배포 조건/작업 프로세스 관리 검증이 필요하다. 어느 것도 제품 채택으로 확정하지 않았다.
+  근거: [WGC CreateForWindow](https://learn.microsoft.com/en-us/windows/win32/api/windows.graphics.capture.interop/nf-windows-graphics-capture-interop-igraphicscaptureiteminterop-createforwindow)는 단일 HWND·Windows10 1903 이상,
+  [MFTEnumEx](https://learn.microsoft.com/en-us/windows/win32/api/mfapi/nf-mfapi-mftenumex)는 하드웨어/기본 소프트웨어 필터를 구분한다.
+  [프로세스 오디오 샘플](https://learn.microsoft.com/en-us/samples/microsoft/windows-classic-samples/applicationloopbackaudio-sample/)은 지정 프로세스 트리와 build20348 이상 조건,
+  [FFmpeg 라이선스](https://ffmpeg.org/legal.html)는 빌드별 LGPL/GPL 조건을 설명한다.
+- 다음 확정 필요: 용량/여유 공간 한도, 보관 범위, 파일 형식/품질/폴더명, 허용 구간 오차,
+  커서/오버레이 포함, 무음 안내, 단축키 기본 키는 명세9절대로 기술 검토/확인 대상이다.
+  네 가지 저장 방식은 후속 승인됐으므로 다시 묻지 않는다. 용량/품질의 정확한 값은 Windows 실측 근거와 함께
+  후속 제시한다. 임의 제품 기본값을 넣지 않았다. 다음 실제 앱 연결은 이 수치와 Windows 어댑터 검증에 의존한다.
+- 이전 보고의 정정: Windows 환경 부재는 실행 검증의 제약이지 네이티브 코드 작성 자체의 불가능 사유가 아니다.
+  WGC 게임창 캡처, Media Foundation/제품 FFmpeg 인코더, 프로세스 오디오, 게임 전역 단축키,
+  foreground/잠금/절전 네이티브 이벤트 어댑터는 **미구현**이다. 코드가 있는데 Windows에서만 미검증인 상태가 아니다.
+  기존 dxcam/mss는 화면 영역 기능, PrintWindow는 별도 창 스냅샷 유틸리티이며 블랙박스 연결이 없다.
+  FFmpeg probe는 고정된 작은 무음 합성 영상 전용이고 제품 인코더/취소 스트리밍 어댑터가 아니다.
+- Windows 없이 가능한 종료 연결을 추가했다. `blackbox_lifecycle.py`는 생산자 request_stop/is_stopped 계약과
+  permit 폐기→생산자 완전 정지 확인→저장 결과/복구 확인→원본/폴더 정리를 연결한다.
+  stop 실패여도 나머지 생산자 stop을 요청하고, 실패/지연은 종료 완료로 위장하지 않는다.
+  main_window의 실제 종료 경로가 controller.prepare_close를 확인하며 트레이 숨김에서는 중지하지 않는다.
+  기본 제품 controller에는 lifecycle이 아직 주입되지 않는다. 테스트용 구현만 있으며 네이티브 worker,
+  시작/재개/flush 계약의 구체 구현, Qt 결과 전달·성공 인수/실패 복구 UI·종료 재시도 동선은 남은 개발이다.
+  이 항목들은 실측 없이는 코드를 쓸 수 없는 것이 아니다. 용량·품질 값은 외부 필수 입력으로 구현 가능하다.
+  개발 lifecycle/access/startup 검사 **12건/4.86초** 통과. 독립 lifecycle/access **10건/3.09초**와
+  `/tmp/blackbox_lifecycle_independent_qa.py` **3건/1.962초** 통과. 실제 MainWindow의 트레이/종료대기/
+  비제작자 탭 제거 뒤 보호와 runtime+spool 종료 순서를 확인했다. 네이티브 API 실행 검증이 아니다.
+  독립 명령: `PYTHONPATH=/workspace/mabinogi_addon UV_CACHE_DIR=/tmp/mabinogi-uv-cache QT_QPA_PLATFORM=offscreen uv run python /tmp/blackbox_lifecycle_independent_qa.py`.
+- Windows 요청 전 남은 개발: WGC/인코더 연동의 ABI·Python/네이티브 패키징 검토 및 최소 어댑터 작성,
+  생산자 callback/flush/stop 구현과 fake 검증, 앱 runtime 생성·결과 전달·복구 UI 연결.
+  기술 후보를 최종 채택하거나 배포 의존성을 추가하지 않은 상태이므로 당장 사용자가 실행할 캡처 명령은 없다.
+  Windows에서만 확정 가능한 것은 API/드라이버 호환, 실제 창 분리·성능·소리 동기화·키 수신이다.
+- 다음 Windows 최소 과제(아직 실행 요청 아님): 먼저 합성 전용 테스트 창으로 native 창 캡처→인코딩→
+  정지/저장 검증, 이후 별도 허용 범위에서 마비노기 HWND 하나만 영상 캡처하며 Alt+Tab/최소화 때 중단·
+  복귀·요청 끝점·저장 중 종료를 확인한다. 1차는 무음이고 시스템 전체 소리/마이크는 수집하지 않는다.
+  게임 소리는 프로세스별 오디오 어댑터 구현과 별도 검증 범위를 정한 뒤 진행한다.
+  준비 정보는 Windows 빌드·GPU/드라이버·테스트 폴더 여유 공간, 기존 제작자 계정, 로컬 개발 실행 환경이다.
+  계정 비밀값·개인 화면 제공은 필요 없다. 아직 사용자가 장치 연결/녹화를 시작할 단계가 아니다.
+- Windows 미검증: 게임 단축키·IME/권한/충돌, 등록 게임만 캡처·비활성/최소화/잠금/절전·게임 재실행,
+  1080p60/장시간 부하/하드웨어 인코더, 게임 소리·A/V 동기화, 동영상 폴더, NTFS/기타 볼륨의 원자적 확정,
+  디스크 부족/분리/권한/강제 종료 복구와 실파일 재생. Linux의 작은 무음 합성 검증으로 대체하지 않는다.
+  현재 사용자 PC에서 실행할 조작은 없으며 전체 개발 목표 완료 상태도 아니다.
+- 변경 파일은 `git status --short`로 확인한다. 새 파일을 포함한 전체 diff는 `/tmp/mabinogi-blackbox.patch`.
+  tracked diff와 각 새 파일의 `git diff --no-index /dev/null <파일>`을 합쳤다(no-index exit1은 정상 차이 반환).
+  주요 파일: `blackbox.py`, `blackbox_session.py`, `blackbox_export.py`, `blackbox_budget.py`, `blackbox_queue.py`, `blackbox_spool.py`, `blackbox_runtime.py`, `blackbox_lifecycle.py`, `config.py`,
+  `ui/blackbox_tab.py`, `ui/blackbox_controller.py`, `ui/main_window.py`, `tests/test_blackbox*.py`,
+  두 렌더/합성 검증 scripts, `docs/game-blackbox-spec.md`, 이 문서. 제품 기능 미완성이므로 배포 버전/검사 목록은 정하지 않았다.

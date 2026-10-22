@@ -114,3 +114,29 @@ def test_build_uses_temporary_spec_with_absolute_assets_and_preserves_existing_f
     assert "pyi_splash" in generated and "win32gui" in generated
     assert generated[-1] == str(root / "packaging/entry.py")
     assert not Path(commands[1][-1]).exists()
+
+
+def test_existing_main_build_entry_calls_bundle_preparation_before_pyinstaller(builder, tmp_path, monkeypatch):
+    import sys
+    from types import SimpleNamespace
+    root = tmp_path / 'repo'
+    root.mkdir()
+    events = []
+    def prepare(actual_root, output):
+        assert actual_root == root
+        events.append('prepare-native-and-codec')
+        return ['--add-data', str(output) + ';blackbox']
+    def build(actual_root, *, blackbox_options):
+        assert actual_root == root and blackbox_options[-1].endswith(';blackbox')
+        events.append('pyinstaller')
+        (root/'dist').mkdir()
+        (root/'dist/mabinogi-addon.exe').write_bytes(b'mocked exe')
+    namespace = builder['main'].__globals__
+    monkeypatch.setitem(namespace, '__file__', str(root/'packaging/build_windows.py'))
+    monkeypatch.setitem(namespace, 'build', build)
+    monkeypatch.setitem(sys.modules, 'blackbox_bundle', SimpleNamespace(prepare=prepare))
+    monkeypatch.setattr(sys, 'platform', 'win32')
+    monkeypatch.setattr(sys, 'argv', ['build_windows.py', '--version', '0.11.0'])
+    monkeypatch.setattr(builder['subprocess'], 'run', lambda *a, **k: events.append('version'))
+    builder['main']()
+    assert events == ['version', 'prepare-native-and-codec', 'pyinstaller']

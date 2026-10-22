@@ -1290,7 +1290,65 @@ def load_debuff_settings(path: Path = LOCAL_CONFIG_PATH) -> list[BuffSettings]:
     return _load_settings("debuffTracker", "debuffs", path)
 
 
+def load_blackbox_enabled(path: Path = LOCAL_CONFIG_PATH) -> bool:
+    """녹화 상태와 별개인 사용자 체크. 손상/문자열 값으로 자동 활성화하지 않는다."""
+    section = _read_local_config(path).get("blackbox")
+    return isinstance(section, dict) and section.get("enabled") is True
+
+
+def save_blackbox_enabled(enabled: bool, path: Path = LOCAL_CONFIG_PATH) -> None:
+    if type(enabled) is not bool:
+        raise ValueError("enabled must be a boolean")
+    data = _read_local_config(path)
+    section = data.get("blackbox")
+    section = dict(section) if isinstance(section, dict) else {}
+    section["enabled"] = enabled
+    data["blackbox"] = section
+    _write_local_config(data, path)
+
+
 def save_debuff_settings(
     items: list[BuffSettings], path: Path = LOCAL_CONFIG_PATH
 ) -> None:
     _save_settings(items, "debuffTracker", "debuffs", path)
+
+
+def load_blackbox_profile(path: Path = LOCAL_CONFIG_PATH) -> dict | None:
+    """알파 검증용 명시적 설정. 미정 수치를 자동 생성하지 않는다."""
+    section = _read_local_config(path).get('blackbox')
+    profile = section.get('validationProfile') if isinstance(section, dict) else None
+    from .paths import is_frozen
+    if is_frozen():
+        from .blackbox_bundle import load_product_profile
+        return load_product_profile()
+    return dict(profile) if isinstance(profile, dict) else None
+
+
+def load_blackbox_preferences(path: Path = LOCAL_CONFIG_PATH) -> dict:
+    section = _read_local_config(path).get('blackbox')
+    section = section if isinstance(section, dict) else {}
+    result = {}
+    minutes = section.get('retentionMinutes')
+    if type(minutes) is int and minutes > 0:
+        result['retentionMinutes'] = minutes
+    folder = section.get('outputFolder')
+    if isinstance(folder, str) and folder and Path(folder).is_absolute():
+        result['outputFolder'] = folder
+    return result
+
+
+def save_blackbox_preference(key, value, path: Path = LOCAL_CONFIG_PATH) -> None:
+    if key == 'retentionMinutes':
+        if type(value) is not int or value <= 0:
+            raise ValueError('positive whole minutes required')
+    elif key == 'outputFolder':
+        if not isinstance(value, str) or not Path(value).is_absolute():
+            raise ValueError('absolute output folder required')
+    else:
+        raise ValueError('unknown blackbox preference')
+    data = _read_local_config(path)
+    section = data.get('blackbox')
+    section = dict(section) if isinstance(section, dict) else {}
+    section[key] = value
+    data['blackbox'] = section
+    _write_local_config(data, path)

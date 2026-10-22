@@ -344,6 +344,9 @@ class MainWindow(QMainWindow):
         tabs.addTab(self._settings_scroll, "설정")
         self.optimization_tools.refresh_access()
         self.optimization_tools.apply_theme()
+        from .blackbox_controller import BlackboxController
+        self.blackbox_tools = BlackboxController(self)
+        self.settings_tab.login_changed.connect(self.blackbox_tools.refresh_access)
         self._apply_tab_styles()  # 테마에 맞는 탭 색 적용(테마 변경 시 재적용)
 
         # 중앙: 상단 업데이트 배너(기본 숨김) + 탭
@@ -465,6 +468,9 @@ class MainWindow(QMainWindow):
             from ctypes import wintypes
             msg = ctypes.cast(int(message), ctypes.POINTER(wintypes.MSG)).contents
             dialogue.system_message(msg.message, msg.wParam)
+            blackbox = getattr(self, "blackbox_tools", None)
+            if blackbox is not None:
+                blackbox.system_message(msg.message, msg.wParam)
         return super().nativeEvent(event_type, message)
 
     def _leave_setup(self):
@@ -1063,6 +1069,13 @@ class MainWindow(QMainWindow):
         ) != QMessageBox.StandardButton.Yes:
             return
 
+        # 교체 helper를 시작하기 전에 접수된 저장/복구를 마친다.
+        # 다운로드 thread에서 Qt/blackbox 상태를 만지지 않는다.
+        if not self.blackbox_tools.prepare_close():
+            QMessageBox.information(self, '업데이트 대기',
+                '블랙박스 저장·정리가 끝난 뒤 지금 업데이트를 다시 눌러 주세요.')
+            return
+
         splash = UpdateSplash(ver)
         splash.center_on_screen()
         splash.show()
@@ -1109,7 +1122,8 @@ class MainWindow(QMainWindow):
             self._force_quit = True
             QApplication.quit()
             return
-        # 실패 → 숨겼던 본 창을 다시 띄우고 사유 안내.
+        # 실패 → 저장된 설정으로 새 녹화 실행을 준비하고 본 창을 복원.
+        self.blackbox_tools.resume_after_update_failure()
         self.show()
         QMessageBox.warning(
             self, "업데이트 실패",
@@ -1823,6 +1837,12 @@ class MainWindow(QMainWindow):
                     app_icon(),
                     2000,
                 )
+            return
+
+        if not self.blackbox_tools.prepare_close():
+            event.ignore()
+            self._force_quit = True
+            # 저장/복구 결정을 자동으로 대신하거나 앱을 강제 종료하지 않는다.
             return
 
         if not self.settings_tab.prepare_close():

@@ -280,3 +280,169 @@ uv run pytest tests/test_manual_update_progress.py -q --tb=short
 
 이 8개 검사의 통과는 배포 필수 변경 기능 검사·Windows 최소 기동·exe 빌드/후보 검증이나
 선택 네이티브 검사의 통과를 대신하지 않는다.
+
+
+## 블랙박스 로컬 네이티브 검증 (아직 미실행)
+
+이 절은 준비 절차이며 캡처·Actions·배포 실행 승인이 아니다. 현재 소스는 Linux의 합성/모형 테스트만
+실행했다. 다음 단계에는 Windows x64, Visual Studio C++ 도구, 최신 Windows SDK(프로세스 루프백 API 헤더),
+CMake, Python/uv, 별도로 확인한 FFmpeg/ffprobe 바이너리가 필요하다. DLL/host 바이너리는 아직 만들지 않았다.
+
+장치 접근 없이 먼저 로컬 빌드한다(저장소 루트, Developer PowerShell):
+
+```powershell
+cmake -S native/blackbox -B "$env:TEMP/mabinogi-blackbox-build" -A x64
+cmake --build "$env:TEMP/mabinogi-blackbox-build" --config Release
+$env:BLACKBOX_CODEC_HOST = "$env:TEMP/mabinogi-blackbox-build/Release/blackbox_codec_host.exe"
+$env:QT_QPA_PLATFORM = 'offscreen'
+uv run python -m pytest tests/test_blackbox_producer.py tests/test_blackbox_audio_codec.py tests/test_blackbox_window_probe.py tests/test_blackbox_ui_connection.py -q
+```
+
+빌드 로그·Windows/SDK 버전·DLL/host 경로와 SHA256을 남긴다. 이 합성 검사는 FFmpeg libx264/AAC를 사용하며
+실제 장치에 접근하지 않는다. 하드웨어 인코더 성능이나 실게임 검증으로 보고하지 않는다.
+
+알파 앱 연결은 로컬 설정 `blackbox.validationProfile`이 완전할 때만 켜진다.
+필수 키는 `temp_parent`, `output_folder`, `library`, `max_bytes`, `min_free_bytes`, `max_entries`,
+`max_buffer_bytes`, `max_segments`, `max_output_bytes`, `cursor`, `hotkey_modifiers`, `hotkey_vk`다.
+`producer`에는 `segment_frames`, `queued_segments`, `max_frame_bytes`, `max_raw_bytes`,
+`max_segment_bytes`, `frame_tolerance_us`가 필요하다. `codec`에는 `ffmpeg`, `ffprobe`, `host`,
+`encoder`, `bitrate`, `fps`, `timeout`, `tolerance_us`가 필요하고 오디오 사용 시 `audio_bitrate`도 필요하다.
+폴더와 바이너리는 실제 절대 경로를 지정한다. `audio`는 `process` 또는 명시적 영상 전용 검증인
+`disabled-for-validation`이다. `process`일 때 `audio_settings`의 `audio_rate`, `audio_channels`,
+`max_audio_bytes`, `activation_timeout_ms`, `audio_buffer_bytes`를 모두 지정한다.
+수치는 검증자가 실험 조건으로 명시하고 기록한다. 제품 기본값 승인이 아니다.
+
+실제 캡처는 별도 승인된 Windows 검증 세션에서만 진행한다. 먼저 합성 시험 창/시험 프로세스 소리로
+대상 식별·포커스 전환·프로세스 종료/재사용·A/V 타임스탬프·Job 종료를 확인한다. 그 다음 사용자가
+허용한 게임창만 대상으로 단축키 수신, Alt+Tab, 최소화/잠금/절전, DPI/창 크기/화면 모드 변경,
+게임 재실행, 저장 중 녹화 지속·접근 해제·앱 종료와 CPU/GPU/메모리/디스크를 측정한다.
+오디오는 게임 프로세스 트리만 대상이다. 다른 앱·마이크·전체 화면 fallback은 금지하며 지원 실패는
+그대로 실패로 남긴다. 영상 전용 결과와 게임 오디오 포함 결과를 분리한다.
+
+현재 남은 제품 결정은 실측에 근거한 용량·비트레이트·구간 오차·기본 단축키와 변경 UI,
+커서/오버레이·작은 창 처리, 기본 폴더명 및 무음 진행 안내다. 바이너리 동봉을 선택할 때는
+FFmpeg 빌드 옵션에 따른 재배포 라이선스/크기/업데이트 책임을 확인해야 한다.
+복구 dialog도 사용자 승인됐다. 기존 최상위 탭과 복구 화면 배치를 다시 묻지 않는다.
+
+
+### 개발자용 자기 합성창 WGC 검사
+
+아래는 개발자 검증 명령이며 사용자에게 소스/개발 도구 설치를 요구하는 배포 절차가 아니다.
+사용자는 기존 앱 업데이트로 확인하기를 기대한다. 별도 exe/소스 업로드는 요청되지 않았다.
+`BLACKBOX_CODEC_HOST`가 없거나 파일이 잘못되면 Windows 합성 테스트는 skip하지 않고 실패한다.
+
+`probe_blackbox_window`는 자기 Qt 합성창의 HWND와 현재 PID만 만든다. 임의 HWND/게임창 입력을 받지 않고
+오디오 API도 열지 않는다. 실제 WGC를 사용하므로 별도 허용된 Windows 검증에서만 아래 명령을 실행한다.
+이 개발 세션에서는 실행하지 않았다. 창을 닫거나 포커스를 바꾸면 실패하며 다른 창으로 전환하지 않는다.
+
+```powershell
+Remove-Item Env:QT_QPA_PLATFORM -ErrorAction SilentlyContinue
+uv run python -m scripts.probe_blackbox_window --run-owned-window-capture `
+  --library "$env:TEMP/mabinogi-blackbox-build/Release/mabinogi_blackbox.dll" `
+  --host "$env:BLACKBOX_CODEC_HOST" `
+  --ffmpeg (Get-Command ffmpeg.exe).Source --ffprobe (Get-Command ffprobe.exe).Source `
+  --output "$env:TEMP/blackbox-window-$([guid]::NewGuid().ToString('N'))"
+```
+
+대상 창은 빨강/파랑으로 바뀌는 320×240 합성창이다. 최대12프레임·프레임당4MiB·읽기10초 상한을 사용한다.
+타임스탬프 증가/크기/중앙 패턴 변경, 무음 MP4 생성·완전 디코딩·원자적 확정을 확인하고 출력 폴더에
+`result.json`을 남긴다. 10fps 출력은 작은 시험 조건이며 원본 프레임 타이밍 정확도/1080p60/게임 성공을
+검증하지 않는다. 실패 partial은 자동 삭제하지 않는다. native API 자체의 OS 내부 정체를 Python
+스레드 timeout으로 강제 종료할 수 있다는 보장은 없다.
+
+### 이전 단계 기록: 업데이트 전달 변경안
+
+이 절은 패키징 승인 전 조사 기록이다. 아래의 미구현·미승인 표기는 당시 상태이며, 현재 구현/승인/검증 범위는 뒤의 **승인 후 블랙박스 패키징·공식 소스 구성** 절을 따른다.
+
+읽기 확인: `packaging/build_windows.py`는 PyInstaller onefile 빌드이며 현재 `--add-binary`/블랙박스
+CMake 호출/FFmpeg 포함이 없다. `.github/workflows/windows.yml`은 기존 빌드 스크립트를 호출하지만
+이 의존성을 준비하지 않는다. 동적 절대 경로 DLL과 subprocess exe는 Python import만으로 포함되지 않는다.
+또한 현재 앱은 validationProfile에 명시된 개발 경로·수치를 요구해 exe에 파일만 넣어도 활성화되지 않는다.
+
+기존 앱 업데이트 방식에 필요한 최소 범위는 다음과 같다. 현재 패키징/워크플로는 읽기만 했으며 변경하지 않았다.
+
+1. 빌드 단계에서 동일 소스로 DLL/codec host를 만들고 MSVC 런타임 의존성까지 확인한다.
+2. 배포용 FFmpeg/ffprobe의 정확한 버전·빌드 옵션·해시·의존 DLL·라이선스/대응 소스를 확정한다.
+   승인된 바이너리와 고지를 exe 번들에 포함한다. 사용자 설치/PATH/개발 도구에 의존하지 않는다.
+3. 앱에서 번들 상대 경로를 절대 경로로 해석하고, 승인된 제품 설정/Windows 동영상 폴더 경로를
+   구성한다. validationProfile 수동 편집을 최종 사용자 필수 과정으로 만들지 않는다.
+4. frozen exe에서 파일 존재·실제 helper 기동·종료·일반 사용자 접근 차단을 검증한 뒤 기존
+   후보 검증/동일 산출물 게시 경로를 사용한다. 게이트/워크플로/의존성 배포 정책 변경은 별도 승인 대상이다.
+
+권장 검토안은 GPL/nonfree 옵션 및 libx264를 제외한 하드웨어 인코더용 LGPL FFmpeg 빌드를
+정확히 고정해 기존 exe 안에 동봉하는 것이다. 지원 GPU/기능과 해당 빌드의 실제 라이선스를 확인해야 하며,
+미지원 시 소프트웨어 인코딩으로 자동 대체하지 않는다. libx264를 사용한 이번 합성 테스트용 바이너리를
+제품에 그대로 넣는 선택은 하지 않았다. GPL 구성 선택 시 재배포 의무를 별도로 검토한다.
+외부 프로세스로 실행한다는 이유만으로 재배포 라이선스 의무가 없어지는 것은 아니다.
+대응 소스·빌드 옵션/패치·라이선스 고지 제공 범위를 정확한 배포물 기준으로 정한다.
+
+근거: [FFmpeg 공식 라이선스 안내](https://ffmpeg.org/legal.html),
+[PyInstaller binary 포함](https://pyinstaller.org/en/stable/spec-files.html#adding-binary-files),
+[번들 런타임 경로](https://pyinstaller.org/en/stable/runtime-information.html).
+
+
+## FPS 구간 요약 후속 실측 범위 (아직 실행하지 않음)
+
+로컬 합성 CSV/Qt 검사는 실제 PresentMon 수집 성공을 뜻하지 않는다. FPS UI 확인 및 기존 릴리스
+절차로 준비된 앱을 사용자가 업데이트한 뒤, 제작자 FPS 탭에서 측정/수집 모드를 사용한다.
+사용자에게 Python/MSVC 설치나 별도 소스 패치 실행을 요구하는 전달 방식이 아니다.
+
+- 동일 게임 장면에서 측정 전/측정/자동 요약 저장의 CPU·메모리·프레임타임 비용을 비교한다.
+- 평균·완전한1초 최대·1% low·유효 표본/시간·긴 간격을 함께 확인한다. CPU 제한으로 최대/평균이
+  낮아진 결과를 안정성 개선만으로 성공이라 해석하지 않는다.
+- Alt+Tab/최소화/복귀, 게임 재실행/swapchain 변경, 측정 재시작, 최적화 적용/원복 때 구간이 분리되는지
+  확인한다. 실제 포커스 관측 주기/전달 지연과 PresentMon 이벤트 손실은 모형 테스트의 미검증 범위다.
+- 수집 중단·권한 해제·앱 종료에서 완료된 JSON을 보존하는지, 장시간 수집이 자원 한도에서 명확히
+  멈추는지 확인한다. 화면/오디오 녹화는 이 FPS 검증에 포함하지 않는다.
+- 문제가 있으면 선택한 구간의 요약 JSON과 재현 조작/앱 버전을 이 대화에 전달한다. 자동 업로드는 없다.
+  에이전트는 요약의 정의·경계/설정 근거와 실제 조작을 비교해 조사한다.
+
+
+### 승인 후 블랙박스 패키징·공식 소스 구성
+
+패키징 수정과 알파 제품 초기값은 승인됐다. 원격 푸시/Actions/태그/게시 실행은 별도 미승인이다.
+`windows.yml`의 기존 명령은 `packaging/build_windows.py` → `blackbox_bundle.prepare` →
+`ffmpeg_source.build` → native CMake → manifest/정책 검사 → PyInstaller를 호출한다.
+workflow/gate/후보 SHA·해시·사람의 최종 게시 절차는 바꾸지 않았다. 모형 main 진입 검사도 이 순서를 확인한다.
+
+제품 정책은 `packaging/blackbox-product.json`이며 별도 사용자 JSON 입력이 필요 없다.
+영상12Mbps/AAC192kbps, 임시8GiB/최소여유4GiB/버퍼2GiB, 원시큐512MiB와입력1920×1080,
+오차50ms, Ctrl+Alt+F10, 커서제외/게임소리 실패시중단을 승인했다. 상세 정의는 블랙박스 명세9절을 따른다.
+입력 초과/오디오 미지원/하드웨어 MFT 부재는 오류로 중단하며 전체화면·다른 소리·소프트웨어 인코딩으로 대체하지 않는다.
+
+**BtbN 후보는 사용하지 않는다.** 그 후보는 LGPL v3·다수 외부 의존성을 포함해 대응소스 추적 범위가 컸다.
+현재는 [공식 FFmpeg8.1.3 소스](https://github.com/FFmpeg/FFmpeg/tree/n8.1.3)를 최소 shared 구성으로 직접 빌드한다.
+소스 tar SHA256 `09f990289327d3ebfedf4fc15cae3f884a65dab7a5aac7bbb5b01ff83900efd9`.
+`--disable-autodetect --disable-gpl --disable-nonfree --disable-version3`이며 외부 codec library와
+네트워크/장치 입력은 제외한다. `h264_mf`/AAC와 MP4, 원시 프레임·WAV·concat 및 필요한 필터만 포함한다.
+하드웨어 `hw_encoding=1`을 강제하며 별도GPU SDK DLL/유료 코덱/시험용 libx264는 번들하지 않는다.
+하드웨어 MF는 GPU/드라이버별 제공 여부가 다를 수 있으므로 Windows 실검증이 필요하다.
+
+[LLVM-MinGW20261020](https://github.com/mstorsjo/llvm-mingw/releases/tag/20261020) Windows compiler zip SHA256은
+`fd5462b7f5d93b2ff981fcd3f9c7e427e47f3203c64ea91c27bcc444eebd74cd`.
+MinGW-w64 소스 commit `0d6dfbc348dfad714761c0a7151615767f96bcb5`, tar SHA256
+`03f717ddb9005d6519e38434359af281d0819d5d468a42578e28bd0fd8e31d0c`도 고정했다.
+프로젝트의 소스/컴파일러는 build machine에서만 내려받고 해시를 검사한다. MSYS2 bash/GNU make와
+MSVC/CMake/Windows SDK는 개발자·Actions 빌드 환경 도구다. 사용자에게 설치를 요구하지 않는다.
+
+확인한 라이선스는 FFmpeg LGPL-2.1-or-later, LLVM Apache-2.0 with LLVM exceptions,
+MinGW-w64의 ZPL/개별 파일 고지다. 소스 수정은 없으며 구성에 GPL/nonfree/version3가 활성화되지 않았음을
+실제 generated config에서 확인했다. FFmpeg/MinGW 완전 소스 tar, 실제 빌드 설정/recipe·재빌드 안내와
+고지를 `corresponding-source.zip`으로 exe에 함께 넣고, 처음 기능을 연결할 때
+`%LOCALAPPDATA%/StarlineMabinogiAddon/third_party/ffmpeg-<묶음해시>/`에 일반파일로 보존한다.
+앱 전체 소스를 공개해야 한다는 결론은 내리지 않았다. [FFmpeg 공식 법적 안내](https://www.ffmpeg.org/legal.html)와
+[소스 LICENSE](https://github.com/FFmpeg/FFmpeg/blob/n8.1.3/LICENSE.md)의 의무를 구분한다.
+코덱 특허/지역별 권리·별도 계약 필요 여부까지 자동 검증됐다고 주장하지 않으며, source/notice hash는 법률 판단의 대체가 아니다.
+
+Linux에서 LLVM-MinGW Linux 도구로 Windows PE 인코더/ffprobe/6DLL 크로스 빌드는 성공했다.
+공식 Linux toolchain SHA256 `55064b60b991a1e1e8090b8c2f84e82b22cfe5903d12c159d65064cf5e8ae335`.
+이것은 WGC/native DLL의 MSVC 빌드나 Windows에서의 인코더 실행 성공이 아니다.
+원래 Docker 검토는 컨테이너 DNS 실패로 중단했고, 공식 해시고정 compiler를 로컬에서 사용했다. 접근 거부 우회는 하지 않았다.
+
+다음 Windows 개발자 검증은 위 CMake 명령으로 WGC DLL/host 빌드, 자기 합성창 무음 probe(`--encoder h264_mf`),
+프로세스 오디오 모형/합성 경계와 실제 지원 여부 확인이다. 실제 게임/오디오는 별도 허용 범위만 검증한다.
+승인된 원격 검증 단계에서는 기존 `uv run --frozen --group build python packaging/build_windows.py --version <확정버전>`을
+사용한다. 최소 FFmpeg 소스 빌드가 포함되므로 첫 Windows 실행에서 기존13분 빌드 상한/전체5분 목표와
+실제 시간을 확인하며 임의로 제한을 늘리지 않는다. frozen exe의 번들 DLL/설정/저장 위치/제작자 접근과
+기동을 확인한 후 기존 후보 절차로 인계한다. 지금은 원격 명령을 실행하지 않는다.
+사용자는 최종 기존 앱 업데이트로 확인하며 수동 소스 패치나 개발도구 설치가 필요한 흐름이 아니다.

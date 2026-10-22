@@ -49,6 +49,7 @@ class Recovery:
     def __init__(self, path: Path, backend, allowed):
         self.path, self.backend, self.allowed = Path(path), backend, allowed
         self.lock = threading.RLock()
+        self.measurement_revision = 0
         self.items = []
         self.corrupt = False
         self.restart_targets = set()
@@ -78,6 +79,7 @@ class Recovery:
         return [i for i in self.items if i['state'] != 'restored']
 
     def _save(self):
+        self.measurement_revision += 1
         self.path.parent.mkdir(parents=True, exist_ok=True)
         temporary = self.path.with_name(self.path.name + '.' + uuid.uuid4().hex + '.tmp')
         try:
