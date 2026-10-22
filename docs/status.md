@@ -153,6 +153,9 @@
   (커밋 SHA 확인은 통과). Linux에서 전역 autocrlf=true로 동일 오류 재현, `git clone --config core.autocrlf=false`로
   nv·AMF 모두 통과 확인. 수정: `_git_checkout`에 `--config core.autocrlf=false`(sparse-checkout에도 유지).
   'refs/tags/n12.1.14.0 … is not a commit' 경고는 주석 태그 표시로 무해.
+- 독립 QA(`2ca991c`): 원복 거절 시 CPU만 원복·'네트워크 원복 대기' 안내, RSS prepared 원복 시 원본 재기록 확인.
+  `qa_0114_rss_prepared_restore` 종료 0(1회 원복으로 원본 복귀), 0.11.4 변경 검사 435건/25.47초 통과.
+  **autocrlf 빌드 수정은 아직 미반영**(`_git_checkout`에 `--config core.autocrlf=false` 없음) → 배포 재실행 전 필요.
 
 ### 0.11.3 추가 — 항상 관리자 실행 복원, 블랙박스 종료 확인 흐름 시안
 
