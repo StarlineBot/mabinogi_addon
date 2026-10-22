@@ -208,7 +208,9 @@ def test_rss_null_readback_verifies_and_restores_legacy_failed_journal(monkeypat
     assert r.items[0]['old']==old and r.items[0]['state']=='applied'
     current['MaxProcessors']=1
     errors=r.restore(network=True)
-    assert len(errors)==1 and '외부 변경' in errors[0]
+    assert len(errors)==1 and '복구 기록과 달라' in errors[0]
+    assert 'MaxProcessors: 현재=1, 적용=2, 원본=8' in errors[0]
+    assert GUID not in errors[0]
     assert r.items[0]['state']=='applied' and writes==[planned]
     current=dict(planned,BaseProcessorGroup=None,MaxProcessorGroup=None)
     r.items[0]['state']='failed'
@@ -253,3 +255,47 @@ def test_selected_guid_shared_by_read_write_restart_and_existing_journal(monkeyp
     recovery.flush_network()
     assert not recovery.restart_targets
     assert all(b._adapter(GUID) in script for script in scripts)
+
+
+@pytest.mark.parametrize('after_restart', ['changed', 'query_failed', 'unchanged'])
+def test_restore_rechecks_rss_after_adapter_restart(tmp_path, after_restart):
+    import copy
+    from test_optimization import Backend
+    import json
+    old = dict(Enabled=True, BaseProcessorGroup=0, BaseProcessorNumber=0,
+               MaxProcessorGroup=0, MaxProcessorNumber=14, MaxProcessors=8,
+               NumberOfReceiveQueues=2, Profile='NUMAStatic')
+    applied = dict(old, BaseProcessorNumber=14, MaxProcessorNumber=15,
+                   MaxProcessors=2, Profile='ClosestStatic')
+    b = Backend()
+    key = ('rss', json.dumps(GUID))
+    b.values[key] = copy.deepcopy(applied)
+    r = Recovery(tmp_path/'recovery.json', b, lambda: True)
+    r.items = [dict(kind='rss', target=GUID, old=old, applied=applied, state='failed')]
+    r.restart_targets.add(GUID)
+    r._save()
+    def restart(target):
+        b.restarts.append(target)
+        if after_restart == 'changed':
+            b.values[key] = copy.deepcopy(applied)  # driver changes settings on restart
+        elif after_restart == 'query_failed':
+            def fail(*args):
+                raise OSError('read unavailable')
+            b.read = fail
+    b.restart_network = restart
+    e = Engine(b, r, lambda: True)
+    assert e.restore_network()
+    e.thread.join(3)
+    assert not e.busy
+    if after_restart == 'unchanged':
+        assert e.status == '원복 완료'
+        assert not r.pending and not r.restart_targets
+        assert b.values[key] == old and len(b.writes) == 1
+        return
+    assert '원복 완료' not in e.status
+    assert '재연결 후 확인/rss' in e.status
+    assert r.restart_targets == {GUID}
+    assert r.pending and r.pending[0]['old'] == old
+    assert len(b.writes) == 1  # no forced retry after restart
+    reloaded = Recovery(r.path, b, lambda: True)
+    assert reloaded.pending and reloaded.pending[0]['old'] == old

@@ -148,7 +148,7 @@ class Engine:
     def restore_network(self):
         def work():
             errors = self.recovery.restore(network=True)
-            try: self.recovery.flush_network()
+            try: self.recovery.flush_network(verify_restored=True)
             except Exception as exc: errors.append(str(exc))
             self.status = '원복 완료' if not errors and not self.recovery.pending else '원복 확인 필요: '+'; '.join(errors[:4])
         return self._launch(work)

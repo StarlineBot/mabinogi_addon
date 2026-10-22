@@ -149,6 +149,17 @@ class Recovery:
             self._save()
             return 'applied'
 
+    def _difference(self, item, current, *, expected='applied'):
+        message = '현재값이 복구 기록과 달라 원복 확인을 보류해요.'
+        if item['kind'] == 'rss':
+            # Only validated RSS scalar fields; never include adapter IDs or shell text.
+            for value in (current, item['old'], item['applied']):
+                self.backend.validate('rss', item['target'], value)
+            fields = [f"{key}: 현재={current[key]}, 적용={item['applied'][key]}, 원본={item['old'][key]}"
+                      for key in sorted(current) if current[key] != item[expected][key]]
+            message += ' 비교 시점 차이: ' + '; '.join(fields)
+        return message
+
     def restore(self, *, network=False):
         with self.lock:
             if self.corrupt:
@@ -169,7 +180,7 @@ class Recovery:
                         if self._read(item['kind'],item['target'],'원복값 확인') != item['old']:
                             raise RuntimeError('원복값 확인 실패')
                     else:
-                        raise RuntimeError('외부 변경이 있어 원복을 보류해요.')
+                        raise RuntimeError(self._difference(item, current))
                     item['state'] = 'restored'
                 except ProcessLookupError:
                     if item['kind'] == 'cpu':
@@ -181,7 +192,7 @@ class Recovery:
                 self._save()
             return errors
 
-    def flush_network(self, *, guard=None):
+    def flush_network(self, *, guard=None, verify_restored=False):
         with self.lock:
             if self.corrupt: raise RuntimeError('복구 기록을 확인해 주세요.')
             for target in tuple(self.restart_targets):
@@ -191,6 +202,18 @@ class Recovery:
                     guarded_restart(target,guard)
                 else:
                     self.backend.restart_network(target)
+                if verify_restored:
+                    for item in self.items:
+                        if item['target'] != target or item['kind'] == 'cpu' or item['state'] != 'restored':
+                            continue
+                        try:
+                            current = self._read(item['kind'], target, '재연결 후 확인')
+                            if current != item['old']:
+                                raise RuntimeError(self._difference(item, current, expected='old'))
+                        except Exception as exc:
+                            item['state'] = 'failed'
+                            self._save()  # Keep originals and the restart marker on failure/crash.
+                            raise RuntimeError(f"재연결 후 확인/{item['kind']}: {exc}") from None
                 self.restart_targets.remove(target)
                 self._save()
 
