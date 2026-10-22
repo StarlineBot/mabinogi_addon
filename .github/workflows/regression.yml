@@ -1,0 +1,55 @@
+name: Development regression
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      QT_QPA_PLATFORM: offscreen
+      OPENCV_FOR_THREADS_NUM: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: false
+      - run: uv python install 3.12
+      - run: uv sync --frozen --group dev --group build
+      - name: Install Qt runtime libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libopengl0 libxkbcommon0 libdbus-1-3 libpulse0 fonts-noto-cjk
+      - name: Check Qt runtime imports
+        timeout-minutes: 1
+        run: >-
+          uv run --frozen python -c "from PySide6 import QtCore, QtGui, QtWidgets, QtNetwork, QtMultimedia; print('Qt runtime imports OK')"
+      - name: Full development regression
+        timeout-minutes: 17
+        run: |
+          set -Eeuo pipefail
+          setsid .venv/bin/python -u -m scripts.ci_resources &
+          sampler=$!
+          cleanup() {
+            result=$?
+            trap - EXIT
+            kill -TERM -- "-$sampler" 2>/dev/null || true
+            wait "$sampler" 2>/dev/null || true
+            exit "$result"
+          }
+          trap cleanup EXIT
+          trap 'exit 130' INT
+          trap 'exit 143' TERM
+          uv run --frozen python -m scripts.run_regressions --diagnostics test-diagnostics/unit --case-timeout 180 --session-timeout 900 -- -n 2 -vv -ra --maxfail=3 --tb=short -m 'not windows_integration' --durations=30 --junitxml=development-results.xml
+      - name: Collect regression diagnostics
+        if: always()
+        run: uv run --frozen python -m scripts.run_regressions --diagnostics test-diagnostics --collect-only
+      - name: Store regression diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: development-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-diagnostics/**/public/*
+          retention-days: 1
+          if-no-files-found: warn

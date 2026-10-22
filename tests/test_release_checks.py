@@ -1,0 +1,56 @@
+import json
+from pathlib import Path
+
+import pytest
+
+from scripts import run_release_checks as checks
+
+
+def plan(root, tests=None, version='0.10.1'):
+    (root / 'packaging').mkdir()
+    (root / 'tests').mkdir()
+    (root / 'tests/test_feature.py').write_text('def test_ok(): pass\n', encoding='utf-8')
+    (root / 'packaging/release_checks.json').write_text(json.dumps({
+        'version': version, 'tests': tests if tests is not None else ['tests/test_feature.py'],
+    }), encoding='utf-8')
+
+
+@pytest.mark.parametrize('tests', [[], ['tests/missing.py'], ['../outside.py'], ['-q'],
+                                  ['tests/test_feature.py'] * 2, ['tests/windows/test_native.py'],
+                                  [1], 'tests'])
+def test_invalid_plan_fails_instead_of_collecting_whole_suite(tmp_path, tests):
+    plan(tmp_path, tests)
+    with pytest.raises(ValueError):
+        checks.release_tests(tmp_path, '0.10.1')
+
+
+def test_new_version_requires_its_own_explicit_plan(tmp_path):
+    plan(tmp_path)
+    with pytest.raises(ValueError, match='release version'):
+        checks.release_tests(tmp_path, '0.11.0')
+
+
+@pytest.mark.parametrize('result', [0, 1, 124])
+def test_runner_keeps_result_and_never_falls_back_to_all_tests(tmp_path, monkeypatch, result):
+    plan(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    calls = []
+    def run(args):
+        calls.append(args)
+        return result
+    monkeypatch.setattr(checks.run_regressions, 'main', run)
+    assert checks.main(['--version', '0.10.1']) == result
+    assert len(calls) == 1 and calls[0][-1] == 'tests/test_feature.py'
+    assert '--session-timeout' in calls[0] and '150' in calls[0]
+    assert '--case-timeout' in calls[0] and '60' in calls[0]
+    assert '-n' in calls[0] and '2' in calls[0] and '--maxfail=3' in calls[0]
+    assert '--junitxml=unit-results.xml' in calls[0]
+
+
+def test_current_plan_matches_bundled_release_and_changed_features():
+    root = Path(__file__).resolve().parents[1]
+    notes = (root / 'src/mabinogi_addon/assets/release_notes.md').read_text(encoding='utf-8')
+    version = notes.splitlines()[0].removeprefix('## v')
+    paths = checks.release_tests(root, version)
+    assert 'tests/test_config_bundle.py' in paths and 'tests/test_settings_export.py' in paths
+    assert 'tests/test_optimization_network.py' in paths and 'tests/test_optimization_ui.py' in paths

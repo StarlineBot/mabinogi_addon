@@ -56,7 +56,7 @@ jobs:
     needs: request
     if: github.ref == 'refs/heads/main' && inputs.mode != 'publish-existing'
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 5
     env:
       APP_VERSION: ${{ needs.request.outputs.version }}
       OPENCV_FOR_THREADS_NUM: '1'
@@ -82,9 +82,9 @@ jobs:
       - name: Validate candidate version
         run: >-
           uv run --frozen python -m scripts.release_candidate preflight --sha "$GITHUB_SHA" --version "$APP_VERSION"
-      - name: Isolated regression
+      - name: Release feature checks
         id: unit
-        timeout-minutes: 17
+        timeout-minutes: 3
         run: |
           set -Eeuo pipefail
           setsid .venv/bin/python -u -m scripts.ci_resources &
@@ -99,7 +99,7 @@ jobs:
           trap cleanup EXIT
           trap 'exit 130' INT
           trap 'exit 143' TERM
-          uv run --frozen python -m scripts.run_regressions --diagnostics test-diagnostics/unit --case-timeout 180 --session-timeout 900 -- -n 2 -vv -ra --maxfail=3 --tb=short -m 'not windows_integration' --durations=30 --junitxml=unit-results.xml
+          uv run --frozen python -m scripts.run_release_checks --version "$APP_VERSION"
       - name: Verify clean regression checkout
         run: |
           git diff --quiet HEAD

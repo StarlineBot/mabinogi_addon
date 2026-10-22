@@ -32,7 +32,7 @@ def report(**steps):
 
 
 def test_only_exact_sha_and_actual_required_steps_are_accepted():
-    valid = report(**{"Isolated regression": "success", "Windows startup smoke": "success",
+    valid = report(**{"Release feature checks": "success", "Windows startup smoke": "success",
                       "Verify exe build": "success", "Seal verified candidate": "success",
                       "Store verified candidate": "success"})
     assert ci.verify_report(valid, SHA, True) == 0
@@ -54,7 +54,7 @@ def test_old_success_run_never_matches_new_push():
 
 def test_wait_reads_details_and_reports_api_failure(monkeypatch):
     run = {"headSha": SHA, "databaseId": 12, "status": "completed", "conclusion": "success", "url": "test"}
-    valid = report(**{"Isolated regression": "success", "Windows startup smoke": "success"})
+    valid = report(**{"Release feature checks": "success", "Windows startup smoke": "success"})
     replies = iter([CompletedProcess([], 0, json.dumps([run]), ""), CompletedProcess([], 0, json.dumps(valid), "")])
     monkeypatch.setattr(ci.subprocess, "run", lambda *a, **k: next(replies))
     assert ci.wait(SHA, "owner/repo", timeout=1) == 0
@@ -91,7 +91,7 @@ def test_linux_qt_runtime_is_installed_and_checked_before_regression():
         assert "if" not in step and "continue-on-error" not in step
 
 
-def test_validation_is_manual_full_gate_with_mandatory_bounded_storage():
+def test_validation_is_manual_feature_gate_with_mandatory_bounded_storage():
     main = workflow("windows.yml")
     assert set(main["on"]) == {"workflow_dispatch"}
     assert main["on"]["workflow_dispatch"]["inputs"]["version"]["required"] == "true"
@@ -118,11 +118,11 @@ def test_validation_is_manual_full_gate_with_mandatory_bounded_storage():
         assert "if" not in step and "continue-on-error" not in step
     unit = next(s for s in regression["steps"] if s.get("id") == "unit")
     smoke = next(s for s in steps if s.get("id") == "smoke")
-    assert "not windows_integration" in unit["run"]
+    assert 'scripts.run_release_checks --version "$APP_VERSION"' in unit["run"]
     assert "tests/test_startup_smoke.py" in smoke["run"]
-    assert "-vv" in unit["run"] and "-vv" in smoke["run"]
+    assert "-vv" in smoke["run"]
     assert "--regression-group" not in unit["run"] + smoke["run"]
-    assert "-n 2" in unit["run"] and "-n " not in smoke["run"]
+    assert "-n " not in smoke["run"]
     import tomllib
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     assert any(dep.startswith("pytest-xdist") for dep in project["dependency-groups"]["dev"])
@@ -242,10 +242,9 @@ def test_missing_windows_fonts_fail_with_actionable_error(root):
     assert "QT_QPA_FONTDIR" not in env
 
 
-def test_watchdog_bounds_keep_full_gate_and_publish_only_safe_diagnostics():
+def test_watchdog_bounds_keep_feature_gate_and_publish_only_safe_diagnostics():
     jobs=workflow('windows.yml')['jobs']
     for job_name, step_id, case, session, limit, collect_name, store_name in [
-        ('regression','unit','180','900','17','Collect regression diagnostics','Store regression diagnostics'),
         ('validate','smoke','60','90','3','Collect startup diagnostics','Store startup diagnostics'),
     ]:
         job=jobs[job_name]
@@ -259,7 +258,12 @@ def test_watchdog_bounds_keep_full_gate_and_publish_only_safe_diagnostics():
         assert store['with']['path']=='test-diagnostics/**/public/*'
         assert store['with']['retention-days']=='1'
         assert '.raw' not in store['with']['path'] and 'continue-on-error' not in store
-    assert jobs['regression']['timeout-minutes']=='20'
+    assert jobs['regression']['timeout-minutes']=='5'
+    feature=next(s for s in jobs['regression']['steps'] if s.get('id')=='unit')
+    assert feature['timeout-minutes']=='3'
+    assert 'scripts.run_release_checks' in feature['run']
+    for name in ('Collect regression diagnostics', 'Store regression diagnostics'):
+        assert next(s for s in jobs['regression']['steps'] if s.get('name')==name)['if']=='always()'
     assert jobs['validate']['timeout-minutes']=='30'
     build=next(s for s in jobs['validate']['steps'] if s.get('id')=='build')
     assert build['timeout-minutes']=='20'
@@ -300,9 +304,23 @@ def test_regression_reports_first_errors_and_owns_read_only_resource_sampler():
     job=workflow('windows.yml')['jobs']['regression']
     step=next(s for s in job['steps'] if s.get('id')=='unit')
     command=step['run']
-    assert '--maxfail=3 --tb=short' in command
+    assert 'scripts.run_release_checks' in command
     assert 'setsid .venv/bin/python -u -m scripts.ci_resources &' in command
     assert 'trap cleanup EXIT' in command and 'kill -TERM -- "-$sampler"' in command
     assert 'wait "$sampler"' in command and 'exit "$result"' in command
-    assert command.index('scripts.ci_resources') < command.index('scripts.run_regressions')
+    assert command.index('scripts.ci_resources') < command.index('scripts.run_release_checks')
     assert 'continue-on-error' not in step
+
+
+def test_full_regression_is_optional_development_work_not_a_release_prerequisite():
+    development=workflow('regression.yml')
+    assert set(development['on'])=={'workflow_dispatch'}
+    assert development['permissions']=={'contents':'read'}
+    steps=development['jobs']['regression']['steps']
+    full=next(s for s in steps if s.get('name')=='Full development regression')
+    assert 'scripts.run_regressions' in full['run'] and '-n 2' in full['run']
+    assert "not windows_integration" in full['run']
+    assert '--regression-group' not in full['run'] and 'run_release_checks' not in full['run']
+    assert 'libpulse0' in next(s for s in steps if s.get('name')=='Install Qt runtime libraries')['run']
+    assert 'release_automation' not in json.dumps(development)
+    assert 'Development regression' not in json.dumps(workflow('release.yml')['on'])

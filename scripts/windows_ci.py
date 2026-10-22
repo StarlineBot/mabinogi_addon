@@ -43,7 +43,7 @@ def plan(base, head):
 
 
 def summary(unit, smoke, build, upload):
-    rows = {"Linux isolated regression": unit, "Windows startup smoke": smoke,
+    rows = {"Release feature checks": unit, "Windows startup smoke": smoke,
             "Exe build": build, "Verified candidate storage (deployment gate)": upload}
     output = "\n| Stage | Result |\n| --- | --- |\n"
     output += "\n".join(f"| {name} | {state} |" for name, state in rows.items())
@@ -66,7 +66,7 @@ def verify_report(report, sha, require_build=False):
         return 1
     steps = {step["name"]: step.get("conclusion")
              for job in report.get("jobs", []) for step in job.get("steps", [])}
-    required = ["Isolated regression", "Windows startup smoke"]
+    required = ["Release feature checks", "Windows startup smoke"]
     if require_build:
         required.extend(("Verify exe build", "Seal verified candidate", "Store verified candidate"))
     if any(steps.get(name) != "success" for name in required):

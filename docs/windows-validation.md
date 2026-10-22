@@ -7,14 +7,14 @@ main·버전·모드를 선택해 한 번 실행한다. PC에 gh가 없어도 �
 
 | 모드 | 동작 | 게시 승인 |
 | --- | --- | --- |
-| `verify-only` (기본) | Linux 전체 격리 회귀 → Windows 최소 창 기동/종료 → exe 빌드 → 증명/보관 | 없음 |
+| `verify-only` (기본) | 버전별 변경 기능 검사 → Windows 최소 창 기동/종료 → exe 빌드 → 증명/보관 | 없음 |
 | `validate-and-publish` | 위 검증 전체 성공 후 자동 조건 확인 → 태그 생성 → 같은 exe 게시 | 해당 실행 소스/버전에 한정한 조건부 승인 |
 | `publish-existing` | 현재 승인 소스의 중요 입력/버전과 맞는 기존 후보 고정 → 조건 확인 → 태그/게시 | 선택된 기존 후보만 승인; 검사/빌드 0회 |
 
 일반 main/태그 푸시는 Windows 검사나 게시를 시작하지 않는다. 검증만 성공도 게시하지 않는다.
 검증 run이 **완전히 completed/success로 끝난 뒤** `workflow_run`이 게시 workflow를 시작한다.
 같은 run 안에서 완료 검사를 생략하지 않으며, 검증 workflow가 게시 workflow를 기다리지 않는다.
-필수 단계 실패/skip/취소, 업로드 실패는 게시를 차단한다. Linux 회귀와 Windows 최소 기동/빌드의
+필수 단계 실패/skip/취소, 업로드 실패는 게시를 차단한다. 변경 기능 검사와 Windows 최소 기동/빌드의
 각 필수 단계를 같은 run/SHA/attempt에서 확인한다. Linux 통과를 네이티브 전체 검사 통과로 부르지 않는다.
 
 게시 workflow는 기본 브랜치의 신뢰한 코드만 실행한다. 실행 이벤트/API/승인 기록/후보를 대조하고,
@@ -24,6 +24,24 @@ main·버전·모드를 선택해 한 번 실행한다. PC에 gh가 없어도 �
 
 ## 격리 회귀 실행 방식
 
+### 배포 범위와 5분 목표
+
+2026-10-22 사용자 재지시로 **전체 회귀를 매 배포의 필수 경로에서 제외**했다.
+목표는 검증부터 게시까지 5분이며 실제 Actions/Windows 빌드 실측으로 확인한다.
+5분 timeout으로 작업을 잘라 성공 처리하거나 배포 뒤로 필수 검사를 숨겨 옮기는 정책이 아니다.
+
+- `packaging/release_checks.json`에 이번 버전과 관련 검사 파일만 명시한다. 개발자가 버전/노트와
+  함께 관리하며 사용자가 매번 검사 범위를 입력하지 않는다. 현재 0.10.1은 백업/설정과
+  최적화/네트워크/FPS/UI 관련 6개 파일, 155개 사례다. 원래 파일이나 assertion을 삭제하지 않았다.
+- `scripts.run_release_checks`는 이 목록만 실행한다. 버전 불일치·빈 목록·중복·없는 파일·외부/네이티브
+  경로는 실패한다. 잘못된 목록을 전체 수집이나 검사 생략으로 바꾸지 않는다.
+- 전체 회귀는 로컬 개발 또는 별도 수동 `Development regression` (`regression.yml`)에서 필요할 때
+  실행한다. 배포 workflow가 이를 기다리지 않고, 이 성공을 매번 먼저 제출할 필요도 없다.
+- Windows 최소 창 기동/종료와 실제 exe 빌드·버전/해시·출처 검증 및 사용자 승인 조건은 유지한다.
+  배포 후보의 `unit-results.xml`은 이제 변경 기능 결과이지 전체 회귀 결과가 아니다.
+- 새로운 정책은 `release-features-windows-smoke-v2`로 식별한다. 기존 전체 회귀 프로필 후보를
+  새 정책 후보로 소급 승격하지 않는다. 진행 중인 이전 SHA 실행의 검사 목록도 바꾸지 않는다.
+
 Linux 러너에는 Qt 화면/DBus 라이브러리와 `libpulse0`을 명시적으로 설치한다.
 오디오 장치는 테스트에서 대체하지만 `QtMultimedia`를 로딩할 때 필요한 `libpulse.so.0`까지
 제거되는 것은 아니다. 회귀 시작 전에 `Check Qt runtime imports`가 QtCore/QtGui/QtWidgets/
@@ -32,8 +50,8 @@ skip이나 대체 성공으로 처리하지 않는다. 오디오 서버/실제 �
 
 ### 첫 오류와 러너 자원 진단
 
-Linux 회귀는 `--maxfail=3 --tb=short`로 실행한다. 정상일 때 전체 대상을 실행하는 정책은
-유지하며, 실패가 발생한 후보는 오류 3건에서 중단한다(xdist의 진행 중 사례는 더 끝날 수 있다).
+선택된 배포 검사 및 별도 개발 전체 회귀는 `--maxfail=3 --tb=short`로 실행한다.
+실패가 발생한 후보는 오류 3건에서 중단한다(xdist의 진행 중 사례는 더 끝날 수 있다).
 이 옵션만으로 첫 오류가 즉시 보이는 것은 아니므로 다음 실시간 진단을 함께 사용한다.
 
 - `test_support.progress`가 xdist controller에서 첫 실패 보고 3건을 중복 없이 출력한다.
@@ -55,8 +73,8 @@ Linux 회귀는 `--maxfail=3 --tb=short`로 실행한다. 정상일 때 전체 �
 상태를 함께 해석한다. 러너 자체가 사라지거나 SIGKILL되면 마지막 로그의 전송/정리를 보장할 수
 없다. 이 변경은 원인 수집 보완이며, 과거 정체나 연속 ERROR의 근본 원인 수정 완료를 뜻하지 않는다.
 
-일반 격리 회귀는 Ubuntu 24.04·Python 3.12·uv 잠금 의존성에서 pytest-xdist 2개 worker(`-n 2`)로
-전체 대상을 실행한다. 외부 캡처·오디오·통신과 설정은 기존 경계 대체를 유지하며 기능 묶음 선택은 없다.
+배포 기능 검사는 Ubuntu 24.04·Python 3.12·uv 잠금 의존성에서 pytest-xdist 2개 worker(`-n 2`)로
+버전별 명시 목록만 실행한다. 외부 캡처·오디오·통신과 설정은 기존 경계 대체를 유지한다.
 같은 실행/attempt 이름의 `unit-results.xml`을 1일 보관해 후속 Windows 작업이 가져온다.
 Linux 소스 변경 여부 검사도 통과해야 보고서를 저장한다. 다른 실행의 성공 보고서를 대신 쓰지 않는다.
 
@@ -66,7 +84,7 @@ Windows 2022 작업은 그 성공에 의존한다. 실제 `windows` Qt로 `tests
 실제 게임·모니터·오디오·권한에 의존하는 검사는 `windows-native.yml`로 분리해 그대로 보존한다.
 완성 exe·실게임 동작은 사용자의 라이브 확인 범위이며, OS/API 관련 변경에는 선택 통합 검사를 함께 권고한다.
 
-후보 manifest는 schema 2와 `linux-regression-windows-smoke-v1` 프로필을 명시한다.
+후보 manifest는 schema 2와 `release-features-windows-smoke-v2` 프로필을 명시한다.
 `windows-results.xml`은 이 프로필에서 최소 창 기동 검사 결과이며 네이티브 전체 결과를 뜻하지 않는다.
 게시 시 `regression`과 `validate` 두 작업의 실제 필수 단계 성공을 각각 확인한다.
 이전 schema 1 후보를 새 검증 후보로 소급 승인하지 않으며 새 구조에서 후보를 만들어야 한다.
@@ -74,7 +92,7 @@ Windows 2022 작업은 그 성공에 의존한다. 실제 `windows` Qt로 `tests
 
 ### 감시와 출력 정체
 
-`scripts.run_regressions`는 사례 전체(setup/call/teardown)·무진행 180초, Linux 전체 회귀 900초,
+`scripts.run_regressions`는 배포 기능 검사 사례·무진행 60초/전체 150초, 개발 전체 회귀 사례 180초/전체 900초,
 선택 네이티브 600초, 최소 기동 60초/전체 90초의 상한을 둔다. 감시 자체의 콘솔 출력은 유한 큐/daemon 전달로 분리한다.
 콘솔 소비가 멈춰도 감시 루프가 출력 완료를 기다리지 않으며 실패 이유를 파일에 먼저 기록하고
 소유 검사 트리를 종료한다. 콘솔이 포화된 동안의 진행 문구는 일부 생략될 수 있지만, 필수 검사나
@@ -86,10 +104,10 @@ Windows 2022 작업은 그 성공에 의존한다. 실제 `windows` Qt로 `tests
 중단하지 않도록 한다. 토큰/주소는 공개 진단에 기록하지 않는다. 소켓 생성 실패는 감시 없는
 검사를 시작하지 않고 코드 3으로 실패한다. 기존 파일·stderr·시간 제한도 유지한다.
 
-Python 감독 바깥에도 Linux 회귀 17분·선택 네이티브 12분·최소 기동 3분·빌드 20분의 Actions 제한을 둔다.
-작업 전체 제한은 Linux 20분·Windows 빌드 30분·선택 네이티브 15분이다. 러너 대기/취소 전파 시간까지
+Python 감독 바깥에도 배포 기능 검사 3분·개발 전체 회귀 17분·선택 네이티브 12분·최소 기동 3분·빌드 20분의 Actions 제한을 둔다.
+작업 전체 제한은 배포 기능 검사 5분·개발 전체 회귀 20분·Windows 빌드 30분·선택 네이티브 15분이다. 러너 대기/취소 전파 시간까지
 이 제한 안에 끝난다고 보장하지 않는다. 장기 정체를 정상 진행으로 안내하거나 같은 소스를 반복 실행하지 않는다.
-현재 배포 작업 제한은 Linux 회귀 20분·Windows 기동/빌드 30분이며 정상 검사가 이 시간만큼 반드시 걸린다는 뜻은 아니다.
+이 상한은 실패 시 회수 제한이지 정상 소요 시간 목표가 아니다. 정상 검증/게시 목표는 5분이다.
 러너 자체가 끊기거나 강제 종료되면 진단 업로드까지 보장하지는 못한다.
 실제 Windows 결과와 과거 정체의 원인 미확정은 [직접 수정 기록](qa/CI감시출력정체_직접수정_20261022.md)을 따른다.
 
@@ -213,7 +231,7 @@ uv run python -m scripts.test_audit inventory.json results.xml
 ```
 
 resources, combat, dialogue, configuration, capture, navigation, delivery, calculator, windows, core로
-각 사례를 한 묶음에 배정한다. Linux 전체 회귀 게이트는 묶음을 선택하지 않는다.
+각 사례를 한 묶음에 배정한다. 별도 개발 전체 회귀는 묶음을 선택하지 않으며 배포 필수 경로가 아니다.
 동일 함수도 fixture/매개변수가 다르면 유지한다. QA 호환 진입점과 `tests/`를 CI에서 중복 실행하지 않는다.
 
 유지한 선택 네이티브 검사 (`gh workflow run windows-native.yml --repo StarlineBot/mabinogi_addon --ref main`, 게시 없음):
@@ -251,5 +269,5 @@ $env:QT_QPA_PLATFORM = 'offscreen'
 uv run pytest tests/test_manual_update_progress.py -q --tb=short
 ```
 
-이 8개 검사의 통과는 배포 필수 Linux 전체 회귀·Windows 최소 기동·exe 빌드/후보 검증이나
+이 8개 검사의 통과는 배포 필수 변경 기능 검사·Windows 최소 기동·exe 빌드/후보 검증이나
 선택 네이티브 검사의 통과를 대신하지 않는다.

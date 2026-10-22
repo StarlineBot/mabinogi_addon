@@ -1,0 +1,11 @@
+{
+  "version": "0.10.1",
+  "tests": [
+    "tests/test_config_bundle.py",
+    "tests/test_settings_export.py",
+    "tests/test_optimization.py",
+    "tests/test_optimization_network.py",
+    "tests/test_optimization_contract.py",
+    "tests/test_optimization_ui.py"
+  ]
+}

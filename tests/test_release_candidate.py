@@ -116,13 +116,15 @@ def test_split_gate_cannot_borrow_success_from_another_job(provenance, job_name,
         c.check_context(run, jobs, artifact, 7, REPO, SHA, '0.6.0', 2, now=NOW)
 
 
-@pytest.mark.parametrize('damage', ['legacy-schema', 'wrong-profile', 'missing-profile'])
+@pytest.mark.parametrize('damage', ['legacy-schema', 'wrong-profile', 'missing-profile', 'old-full-profile'])
 def test_legacy_or_unidentified_validation_cannot_promote(bundle, damage):
     _, folder, manifest, context = bundle
     if damage == 'legacy-schema':
         manifest['schema'] = 1
     elif damage == 'wrong-profile':
         manifest['validation_profile'] = 'all-windows'
+    elif damage == 'old-full-profile':
+        manifest['validation_profile'] = 'linux-regression-windows-smoke-v1'
     else:
         del manifest['validation_profile']
     (folder/'candidate.json').write_text(json.dumps(manifest), encoding='utf-8')
@@ -529,7 +531,7 @@ def test_completion_failure_creates_no_tag_or_publication(automation, monkeypatc
     elif damage == 'tag-collision':
         state['tag'] = True
     elif damage in ('smoke-skipped', 'regression-skipped'):
-        stage = 'Windows startup smoke' if damage == 'smoke-skipped' else 'Isolated regression'
+        stage = 'Windows startup smoke' if damage == 'smoke-skipped' else 'Release feature checks'
         next(s for job in env['jobs'][123] for s in job['steps'] if s['name'] == stage)['conclusion'] = 'skipped'
     elif damage == 'artifact-attempt':
         env['artifacts'][123][0]['name'] = 'verified-windows-123-1'

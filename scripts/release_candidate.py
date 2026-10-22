@@ -14,9 +14,9 @@ import xml.etree.ElementTree as ET
 
 MAX_BYTES = 200 * 1024 * 1024
 TTL = timedelta(days=1)
-PROFILE = 'linux-regression-windows-smoke-v1'
+PROFILE = 'release-features-windows-smoke-v2'
 REQUIRED_JOBS = {
-    'regression': ('Isolated regression', 'Verify clean regression checkout', 'Store regression report'),
+    'regression': ('Release feature checks', 'Verify clean regression checkout', 'Store regression report'),
     'validate': ('Fetch regression report', 'Windows startup smoke',
                  'Verify clean checkout after tests', 'Verify exe build',
                  'Seal verified candidate', 'Store verified candidate'),

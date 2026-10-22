@@ -83,6 +83,7 @@ def test_workflow_trap_reaps_sampler_group_and_preserves_regression_result(tmp_p
                                  f'setsid "{sys.executable}" -u "{producer}" &')
     env = os.environ.copy()
     env['PATH'] = str(tmp_path) + os.pathsep + env['PATH']
+    env['APP_VERSION'] = workflow['on']['workflow_dispatch']['inputs']['version'].get('default', '0.10.1')
     result = subprocess.run(['bash', '-c', script], env=env, cwd=ROOT,
                             capture_output=True, text=True, timeout=8)
     assert result.returncode == exit_code, result.stdout+result.stderr
