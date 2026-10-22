@@ -81,7 +81,21 @@ jobs:
       - name: Isolated regression
         id: unit
         timeout-minutes: 17
-        run: uv run --frozen python -m scripts.run_regressions --diagnostics test-diagnostics/unit --case-timeout 180 --session-timeout 900 -- -n 2 -vv -ra -m 'not windows_integration' --durations=30 --junitxml=unit-results.xml
+        run: |
+          set -Eeuo pipefail
+          setsid .venv/bin/python -u -m scripts.ci_resources &
+          sampler=$!
+          cleanup() {
+            result=$?
+            trap - EXIT
+            kill -TERM -- "-$sampler" 2>/dev/null || true
+            wait "$sampler" 2>/dev/null || true
+            exit "$result"
+          }
+          trap cleanup EXIT
+          trap 'exit 130' INT
+          trap 'exit 143' TERM
+          uv run --frozen python -m scripts.run_regressions --diagnostics test-diagnostics/unit --case-timeout 180 --session-timeout 900 -- -n 2 -vv -ra --maxfail=3 --tb=short -m 'not windows_integration' --durations=30 --junitxml=unit-results.xml
       - name: Verify clean regression checkout
         run: |
           git diff --quiet HEAD

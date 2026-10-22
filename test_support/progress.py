@@ -10,6 +10,7 @@ import pytest
 from .diagnostic_signal import notify_failure
 
 _state=None
+_live_errors=None
 _CLOCK=time.monotonic
 _REPLACE=os.replace
 _OPEN=open
@@ -88,8 +89,15 @@ class Journal:
 
 
 def pytest_configure(config):
-    global _state
-    if os.environ.get('MABINOGI_TEST_DIAGNOSTICS'): _state=Journal(config)
+    global _state, _live_errors
+    _state=None
+    _live_errors=None
+    if os.environ.get('MABINOGI_TEST_DIAGNOSTICS'):
+        _state=Journal(config)
+        if not hasattr(config, 'workerinput'):
+            from scripts.run_regressions import Console
+            from .live_errors import LiveErrors
+            _live_errors=LiveErrors(Console())
 
 
 @pytest.hookimpl(hookwrapper=True,tryfirst=True)
@@ -131,7 +139,19 @@ def pytest_runtest_teardown(item,nextitem):
 
 
 def pytest_runtest_logreport(report):
+    if _live_errors is not None and report.failed:
+        _live_errors.report(report.nodeid, report.when, report.longrepr)
     if _state: _state.emit(outcome=report.outcome)
+
+
+def pytest_collectreport(report):
+    if _live_errors is not None and report.failed:
+        _live_errors.report(report.nodeid, 'collection', report.longrepr)
+
+
+def pytest_internalerror(excrepr, excinfo):
+    if _live_errors is not None:
+        _live_errors.report('pytest', 'internal', excrepr)
 
 
 def pytest_sessionfinish(session,exitstatus):
@@ -141,6 +161,8 @@ def pytest_sessionfinish(session,exitstatus):
 
 
 def pytest_unconfigure(config):
+    if _live_errors is not None:
+        _live_errors.console.flush()
     if _state:
         _state.emit(phase='interpreter-exit',status='idle')
         # Keep the C timer alive through threading._shutdown: a Python thread

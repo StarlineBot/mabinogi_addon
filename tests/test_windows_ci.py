@@ -279,3 +279,15 @@ def test_publication_contract_matches_each_workflow_job_and_cannot_skip_stages()
     assert main['jobs']['regression']['needs']=='request'
     assert main['jobs']['validate']['needs']==['request','regression']
     assert workflow('release.yml')['on']['workflow_run']['workflows']==['Windows validation']
+
+
+def test_regression_reports_first_errors_and_owns_read_only_resource_sampler():
+    job=workflow('windows.yml')['jobs']['regression']
+    step=next(s for s in job['steps'] if s.get('id')=='unit')
+    command=step['run']
+    assert '--maxfail=3 --tb=short' in command
+    assert 'setsid .venv/bin/python -u -m scripts.ci_resources &' in command
+    assert 'trap cleanup EXIT' in command and 'kill -TERM -- "-$sampler"' in command
+    assert 'wait "$sampler"' in command and 'exit "$result"' in command
+    assert command.index('scripts.ci_resources') < command.index('scripts.run_regressions')
+    assert 'continue-on-error' not in step
