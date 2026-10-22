@@ -33,8 +33,9 @@ def prepare(root, output):
         raise ValueError('unexpected FFmpeg version')
     encoders = subprocess.run([str(output / 'ffmpeg.exe'), '-hide_banner', '-encoders'],
         check=True, capture_output=True, text=True, timeout=15).stdout
-    if not any(' h264_mf ' in line for line in encoders.splitlines()):
-        raise ValueError('required hardware MF encoder was not built')
+    for name in ('h264_nvenc', 'h264_amf', 'h264_mf'):  # 제품 후보 인코더가 모두 빌드됐는지
+        if not any(f' {name} ' in line for line in encoders.splitlines()):
+            raise ValueError(f'required hardware encoder {name} was not built')
     (output / 'ffmpeg-build.txt').write_text(info + '\n' + encoders, encoding='utf-8')
     (output / 'manifest.json').write_text(json.dumps({p.name: digest(p) for p in output.iterdir()
         if p.is_file()}, indent=2), encoding='utf-8')

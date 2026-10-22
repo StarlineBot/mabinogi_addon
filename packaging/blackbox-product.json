@@ -20,7 +20,7 @@
   },
   "codec": {
     "encoder": "h264_mf",
-    "candidates": ["h264_mf"],
+    "candidates": ["h264_nvenc", "h264_amf", "h264_mf"],
     "bitrate": 12000000,
     "fps": 60,
     "timeout": 1200,

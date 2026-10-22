@@ -110,7 +110,7 @@ def test_prepare_builds_and_validates_complete_bundle_from_approved_policy(tmp_p
             return SimpleNamespace(stdout='')
         assert command[1] in ('-version','-hide_banner')
         return SimpleNamespace(stdout='ffmpeg version 8.1.3 --disable-gpl' if command[1]=='-version'
-                               else ' V..... h264_mf hardware encoder')
+                               else ' V..... h264_nvenc NVIDIA\n V..... h264_amf AMD\n V..... h264_mf hardware encoder')
     monkeypatch.setattr(ffmpeg_source,'build',build)
     monkeypatch.setattr(packager.subprocess,'run',run)
     output=tmp_path/'bundle'
@@ -214,3 +214,33 @@ def test_product_encoder_candidates_are_hardware_only(tmp_path, codec):
     (tmp_path/'manifest.json').write_text(json.dumps({n: hashlib.sha256((tmp_path/n).read_bytes()).hexdigest() for n in names}))
     with pytest.raises(ValueError, match='하드웨어 인코더'):
         load_product_profile(bundle=tmp_path, data=tmp_path/'user', videos=tmp_path/'v')
+
+
+def test_hardware_headers_are_pinned_by_commit_and_content(tmp_path, monkeypatch):
+    """NVENC/AMF 헤더: 다른 커밋이나 바뀐 내용이면 빌드 전에 거부한다(압축 파일 바이트와 무관한 내용 해시)."""
+    spec = importlib.util.spec_from_file_location('source_builder', ROOT/'packaging/ffmpeg_source.py')
+    builder = importlib.util.module_from_spec(spec); spec.loader.exec_module(builder)
+    def fake_checkout(repo, tag, commit, dest, sparse=()):
+        dest = Path(dest)
+        if 'nv-codec' in repo:
+            (dest/'include/ffnvcodec').mkdir(parents=True)
+            (dest/'include/ffnvcodec/nvEncodeAPI.h').write_text('tampered')
+        return dest
+    monkeypatch.setattr(builder, '_git_checkout', fake_checkout)
+    with pytest.raises(ValueError, match='nv-codec-headers content SHA256 mismatch'):
+        builder.stage_hardware_headers(tmp_path, tmp_path/'deps')
+    assert not (tmp_path/'deps').exists()
+    a, b = tmp_path/'a', tmp_path/'b'
+    for d, text in ((a, 'x'), (b, 'y')):
+        (d/'sub').mkdir(parents=True); (d/'sub/h.h').write_text(text)
+    assert builder.tree_digest(a) != builder.tree_digest(b) and len(builder.tree_digest(a)) == 64
+    # 요구 버전(FFmpeg 8.1.3 configure): ffnvcodec >= 12.1.14.0, AMF >= 1.4.36
+    assert builder.NVCODEC_TAG == 'n12.1.14.0' and builder.AMF_TAG == 'v1.4.36'
+
+
+def test_build_recipe_enables_vendor_encoders_only_with_pinned_headers():
+    recipe = (ROOT/'packaging/ffmpeg_minimal.sh').read_text(encoding='utf-8')
+    assert '--disable-nonfree' in recipe and '--disable-gpl' in recipe  # 라이선스 설정 유지
+    assert '--enable-nvenc --enable-amf' in recipe and 'encoders="h264_nvenc,h264_amf,$encoders"' in recipe
+    product = json.loads((ROOT/'packaging/blackbox-product.json').read_text(encoding='utf-8'))
+    assert product['codec']['candidates'] == ['h264_nvenc', 'h264_amf', 'h264_mf']
