@@ -32,6 +32,27 @@
 
 ## 마지막 작업
 
+### 0.11.0 다섯 번째 후보 검증 — Linux 설치 시간 초과
+
+- 승인된 [verify-only #39768567858](https://github.com/StarlineBot/mabinogi_addon/actions/runs/39768567858)을
+  `23bb753ffa6a2cad5fd87f3a6b9047e3ea84f193`/0.11.0 대상으로 중복 없이 1회 실행했다.
+  request 성공, regression cancelled(11:10:36~11:25:56 UTC, 15분20초), Windows validate skipped.
+  Check annotations에서 `The job has exceeded the maximum execution time of 15m0s`를 확인했다.
+- Install Qt runtime libraries는 11:10:52~11:25:51 동안 실행됐다. Linux 변경 기능 검사는 미실행이며
+  Windows native DLL/codec host/앱 exe/verified candidate도 이번 실행에서 생성되지 않았다.
+  아티팩트 목록에는 release-request만 있다. 실게임/장치 검증과 게시도 수행하지 않았다.
+- 해당 job 로그 다운로드가 Azure 전송 단계에서 Forbidden으로 거부되어 재시도/우회하지 않았다.
+  설치 내부의 정확한 지연 원인은 미확인이다. 기존 4차 로그의 Ubuntu 미러 Ign 재시도는
+  별도 관측이며 이번 지연의 원인으로 확정하지 않는다. 6차 실행은 미승인이다.
+- 시간 개선 읽기 검토 및 독립 QA: 4차 apt는 인덱스12.5MB/17초, 패키지156MB/1분46초,
+  전체 설치 약2분14초였다. 네이티브는 FFmpeg 의존성이 없지만 FFmpeg 다음에 실행되어
+  빌드 시작 약3분17초 후 컴파일 오류가 발견됐다. 선행 컴파일은 실패 발견을 앞당기며
+  정상 빌드 총시간 단축을 보장하지 않는다. FFmpeg는 매회 새 임시 폴더에서 빌드한다.
+- 최소 개선 후보는 native 선행 컴파일, apt 권장 패키지 제외의 영향 검토 및 연결/재시도 제한,
+  원본 압축파일 캐시와 매회 고정 SHA 재검증이다. apt update 무조건 생략이나 미검증 바이너리
+  재사용을 권하지 않는다. 빌드 산출물 캐시는 recipe/컴파일러/소스/고지까지 검증해야 한다.
+  CI 동결에 따라 개선안은 승인 전 적용하지 않았으며 시간 상한·검사·게이트를 유지했다.
+
 ### 0.11.0 네 번째 후보 검증 및 projection 헤더 보완
 
 - 정상 제공된 CLI 인증이 `gh auth status`로 복구됐음을 먼저 확인하고 공개/main SHA/중복0건을 점검했다.
@@ -51,7 +72,7 @@
 - 개발 관련24건/2.96초, 독립 QA24건/2.60초 통과. 독립 QA는 모든 projection 메소드/반환형,
   COM interop 구분, audio/host 헤더 및 CMake 링크 라이브러리를 검토했고 추가 확정 누락은 없었다.
   이 수정 후 실제 Windows SDK/MSVC 컴파일은 아직 미검증이다.
-  다섯 번째 Actions/태그/릴리스/배포는 미승인으로 실행하지 않는다.
+  이후 승인된 다섯 번째 검증 결과는 위 항목에 기록했다. 태그/릴리스/배포는 실행하지 않았다.
 
 
 ### RSS 그룹 누락 조회 보완 — 2026-10-22
