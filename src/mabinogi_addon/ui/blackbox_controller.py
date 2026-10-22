@@ -151,7 +151,7 @@ class BlackboxController(QObject):
         for control in (panel.enabled, panel.retention, panel.save, panel.change_folder, panel.open_folder, panel.recovery):
             control.setEnabled(True)
         panel.enabled.toggled.connect(lambda value: self._action(lambda: self.service.set_enabled(value)))
-        panel.save.clicked.connect(self._request_save)
+        panel.save.clicked.connect(lambda checked=False: self._request_save())
         panel.retention.editingFinished.connect(lambda: self._action(self._set_retention))
         panel.change_folder.clicked.connect(self._change_folder)
         panel.open_folder.clicked.connect(self._open_folder)
@@ -165,10 +165,11 @@ class BlackboxController(QObject):
                 self.panel.save_result.setText(str(exc))
             self.close_error = str(exc)
 
-    def _request_save(self):
+    def _request_save(self, request_us=None):
         import time
         if self._allowed() and self.service is not None:
-            self._action(lambda: self.service.request_save(time.perf_counter_ns() // 1000))
+            self._action(lambda: self.service.request_save(
+                time.perf_counter_ns() // 1000 if request_us is None else request_us))
 
     def _tick(self):
         if self.service is None:
@@ -179,6 +180,14 @@ class BlackboxController(QObject):
             target, active = None, False
             self.service.error = str(exc)
         self._action(lambda: self.service.tick(target, active=active))
+        try:
+            shortcut = self.events.consume_hotkey()
+            if (shortcut is not None and active and target is not None
+                    and shortcut[1] == target.hwnd):
+                self._request_save(shortcut[0])
+        except Exception as exc:
+            self.close_error = str(exc)
+            self.service.error = str(exc)
         if self.panel is not None:
             states = {'recording': '보관 중', 'preparing': '녹화 준비 중', 'paused': '일시정지',
                       'pausing': '중단 구간 정리 중', 'disabled': '사용 안 함', 'error': '녹화 오류'}
@@ -207,14 +216,8 @@ class BlackboxController(QObject):
             self._recovery_dialog.refresh()
 
     def system_message(self, message, wparam):
-        if self.events is not None and self.events.message(message, wparam):
-            # 글로벌 키는 게임 포그라운드에서만 접수한다.
-            try:
-                _, active = self.events.sample()
-                if active:
-                    self._request_save()
-            except Exception as exc:
-                self.close_error = str(exc)
+        if self.events is not None:
+            self.events.message(message, wparam)
 
     def show_recovery(self):
         if self.service is None:

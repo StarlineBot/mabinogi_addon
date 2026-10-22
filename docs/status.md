@@ -32,6 +32,43 @@
 
 ## 마지막 작업
 
+### 블랙박스 지정 단축키 관찰 방식 전환
+
+- 사용자가 기존 실패 방식의 재검증보다 참고 앱 방식 우선 구현을 지시했다.
+  참고 저장소는 기존 기획에 명시된 rubystarashe/nogirem, 조사 SHA는
+  `4b68b4e7f481761a61121c37bf7ded37519f078e`다. 외부 소스 복사/실행 없이 공식 API 기반 자체 구현했다.
+- 기존 폐기 커밋5caead7은 GameGuard와 양쪽 High 권한을 이유로 기록했지만,
+  당시 thread 등록 필터가 windows_generic_MSG만 수락해 dispatcher 메시지를 제외할 수 있었다.
+  따라서 과거 원인을 GameGuard 하나로 확정하지 않는다. 이번 선택은 사용자 우선순위를 따른다.
+- RegisterHotKey를 WH_KEYBOARD_LL 전용 메시지 스레드로 대체한다. 지정 조합 상태만 유지하고
+  키 로그 없이 항상 CallNextHookEx로 전달한다. 주입 입력/자동 반복을 제외하고 key-up을 반영한다.
+  수신시각/foreground HWND를 최대2개 보존하고 GUI 소비 시 게임 foreground와 제작자 권한을
+  재확인한다. GUI 처리시각으로 저장 끝점을 늦추지 않는다. 넘침/등록/루프/해제 실패를 표시한다.
+- 키 훅에서 UI를 호출하거나 게임 입력을 생성/소비하지 않는다. 권한 상승·게임 주입·보안 우회는 없다.
+  Ctrl+Alt+F10, 녹화/저장 조건과 세션 잠금·절전 처리는 유지한다.
+- 개발 모형 12건 통과. 독립 QA에서 잠금 중 key-up 누락 뒤 수식 키 상태가 남아 단독 F10이
+  접수되는 결함을 재현했고, 입력 세대를 경계마다 무효화해 수정했다. 지연 콜백도 이전 세대로 폐기한다.
+  수정 후 공동 검사 `uv run python -m scripts.run_release_checks --version 0.11.1`는
+  347건/38.49초 통과(`UV_CACHE_DIR=/tmp/mabinogi-uv-cache QT_QPA_PLATFORM=offscreen`).
+  로그 `/tmp/hook-0.11.1-final-checks.log`, XML `/tmp/hook-0.11.1-final-results.xml`.
+  수정 후 독립 QA 관련27건/3.30초 및 별도4모형 통과. 잠금/절전 키 상태 잔존과 지연 콜백,
+  CallNextHookEx 반환, 수신 끝점, 비활성/다른 HWND/권한 해제, 해제/종료 경계를 재검증했다.
+  독립 재현 `/tmp/blackbox_hotkey_independent_qa.py`. 검사 범위의 추가 결함은 발견하지 못했다.
+- 실제 Windows 훅 등록/게임 수신은 미검증이다. OS가 느린 훅을 조용히 해제할 수 있으므로
+  등록 또는 모형 성공을 게임 지원 완료로 보고하지 않는다. 이 변경의 Actions는 미승인·미실행이다.
+
+
+### 0.11.1 비게시 검증의 의존성 설치 실패
+
+- 사용자 승인 1회 실행 [39790964211](https://github.com/StarlineBot/mabinogi_addon/actions/runs/39790964211),
+  SHA `626f50844481212c96ca6706bb78b9cd3b6844e4`, version0.11.1, mode verify-only.
+  request 성공, regression 의존성 설치 실패, Windows validate skipped. 후보는 생성되지 않았다.
+- apt update는 12.5MB/1초로 성공. install은 156MB 다운로드 요청 후 120초 제한으로 exit124.
+  마지막 다운로드 항목은 fonts-noto-cjk 61.2MB이며 단독 원인으로 단정하지 않는다.
+  테스트/네이티브/exe 빌드 전 실패다. 로그 `/tmp/verify-39790964211-failed.log`.
+  추가 실행·CI 변경·태그·게시를 하지 않았다. 진행 중 요청된 단축키 전환은 이 SHA에 포함되지 않는다.
+
+
 ### 블랙박스 녹화 오류 진단 및 버퍼 경계 보완 — 0.11.1 준비
 
 - 사용자 화면의 `0x8007007a`는 확인했지만 발생 단계는 기존 메시지로 구분할 수 없다.

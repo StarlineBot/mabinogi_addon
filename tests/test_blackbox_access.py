@@ -123,3 +123,44 @@ def test_real_main_window_uses_top_level_tab_only_for_creator(monkeypatch):
         host.close()
         host.deleteLater()
         QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+
+@pytest.mark.parametrize('active, received_hwnd, allowed, expected', [
+    (True, 42, True, [123456]), (False, 42, True, []),
+    (True, 99, True, []), (True, 42, False, []),
+])
+def test_hook_request_keeps_received_endpoint_and_requires_game_and_access(
+        monkeypatch, active, received_hwnd, allowed, expected):
+    from types import SimpleNamespace
+    monkeypatch.setattr(config, 'load_discord_user', lambda: None)
+    app, host = window()
+    tools = BlackboxController(host)
+    saved = []
+    tools.service = SimpleNamespace(tick=lambda *a, **kw: None,
+        request_save=saved.append, completed=[], error=None)
+    pending = [(123456, received_hwnd)]
+    tools.events = SimpleNamespace(sample=lambda: (SimpleNamespace(hwnd=42), active),
+        consume_hotkey=lambda: pending.pop() if pending else None)
+    monkeypatch.setattr(tools, '_allowed', lambda: allowed)
+    tools._tick()
+    tools._tick()
+    assert saved == expected
+    host.close()
+
+
+def test_hook_failure_is_visible_without_submitting_a_save(monkeypatch):
+    from types import SimpleNamespace
+    monkeypatch.setattr(config, 'load_discord_user', lambda: None)
+    app, host = window()
+    tools = BlackboxController(host)
+    saved = []
+    tools.service = SimpleNamespace(tick=lambda *a, **kw: None,
+        request_save=saved.append, completed=[], error=None)
+    def failed():
+        raise OSError('keyboard hook message loop failed')
+    tools.events = SimpleNamespace(sample=lambda: (SimpleNamespace(hwnd=42), True),
+        consume_hotkey=failed)
+    tools._tick()
+    assert not saved
+    assert 'message loop failed' in tools.service.error
+    host.close()

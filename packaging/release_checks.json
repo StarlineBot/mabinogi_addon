@@ -21,6 +21,7 @@
     "tests/test_optimization_ui.py",
     "tests/test_config_atomic.py",
     "tests/test_config_bundle.py",
-    "tests/test_startup_build.py"
+    "tests/test_startup_build.py",
+    "tests/test_blackbox_hotkey.py"
   ]
 }

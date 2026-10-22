@@ -1,8 +1,9 @@
-"""Windows 전역 단축키·세션/절전 메시지. 입력 생성/키보드 훅은 사용하지 않는다."""
+"""Windows 지정 단축키 관찰·세션/절전 메시지. 입력을 생성하거나 소비하지 않는다."""
 import ctypes as C
 import sys
 
 from ..blackbox_native import target_identity
+from .blackbox_hotkey import HotkeyObserver
 
 
 class WindowsEvents:
@@ -15,22 +16,17 @@ class WindowsEvents:
         from ctypes import wintypes as W
         self.hwnd = hwnd
         self.locked = self.suspended = False
-        self.user = C.WinDLL('user32', use_last_error=True)
         self.wts = C.WinDLL('wtsapi32', use_last_error=True)
-        self.user.RegisterHotKey.argtypes = [W.HWND, C.c_int, W.UINT, W.UINT]
-        self.user.RegisterHotKey.restype = W.BOOL
-        self.user.UnregisterHotKey.argtypes = [W.HWND, C.c_int]
         self.wts.WTSRegisterSessionNotification.argtypes = [W.HWND, W.DWORD]
         self.wts.WTSRegisterSessionNotification.restype = W.BOOL
         self.wts.WTSUnRegisterSessionNotification.argtypes = [W.HWND]
-        self.registered = self.notified = False
+        self.observer = None
+        self.notified = False
         try:
             if not self.wts.WTSRegisterSessionNotification(hwnd, 0):
                 raise C.WinError(C.get_last_error())
             self.notified = True
-            if not self.user.RegisterHotKey(hwnd, self.ID, modifiers | 0x4000, vk):
-                raise C.WinError(C.get_last_error())
-            self.registered = True
+            self.observer = HotkeyObserver(modifiers, vk)
         except BaseException:
             self.close()
             raise
@@ -46,7 +42,13 @@ class WindowsEvents:
                 self.suspended = True
             elif wparam in (7, 18):
                 self.suspended = False
-        return kind == 0x312 and wparam == self.ID and not self.locked and not self.suspended
+        if kind in (0x2B1, 0x218) and self.observer is not None:
+            self.observer.discard()
+        return False
+
+    def consume_hotkey(self):
+        event = self.observer.consume()
+        return None if self.locked or self.suspended else event
 
     def sample(self):
         import win32gui
@@ -66,9 +68,10 @@ class WindowsEvents:
         return target, active
 
     def close(self):
-        if self.registered:
-            self.user.UnregisterHotKey(self.hwnd, self.ID)
-            self.registered = False
-        if self.notified:
-            self.wts.WTSUnRegisterSessionNotification(self.hwnd)
-            self.notified = False
+        try:
+            if self.observer is not None:
+                self.observer.close()
+        finally:
+            if self.notified:
+                self.wts.WTSUnRegisterSessionNotification(self.hwnd)
+                self.notified = False
