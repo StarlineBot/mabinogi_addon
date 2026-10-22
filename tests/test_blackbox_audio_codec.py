@@ -1,7 +1,6 @@
-from test_support.blackbox_codec import codec_host
+from test_support.blackbox_codec import codec_host, codec_tools
 import io
 from pathlib import Path
-import shutil
 import wave
 
 import pytest
@@ -35,7 +34,7 @@ def test_audio_budget_and_closed_timeline():
 
 
 def test_real_synthetic_video_audio_encoding_trim_and_decode(tmp_path):
-    settings = CodecSettings(Path(shutil.which('ffmpeg')), Path(shutil.which('ffprobe')),
+    settings = CodecSettings(*codec_tools(),
         'libx264', 100000, 10, 10, 100000, audio_bitrate=64000, host=codec_host())
     audio = tmp_path / 'synthetic.wav'
     with wave.open(str(audio), 'wb') as stream:
@@ -60,7 +59,7 @@ def test_real_synthetic_video_audio_encoding_trim_and_decode(tmp_path):
 
 def test_trimmed_bitrate_export_preserves_first_frame_and_fixed_fps(tmp_path):
     import subprocess
-    settings = CodecSettings(Path(shutil.which('ffmpeg')), Path(shutil.which('ffprobe')),
+    settings = CodecSettings(*codec_tools(),
         'libx264', 100000, 60, 10, 25000, host=codec_host())
     source = tmp_path / "한글 clip's #1.mp4"
     codec = FFmpegEncoder(settings, lambda key: source)
@@ -79,3 +78,19 @@ def test_trimmed_bitrate_export_preserves_first_frame_and_fixed_fps(tmp_path):
     colors = ['red' if raw[n] > raw[n+2] + 100 else 'blue' if raw[n+2] > raw[n] + 100
               else 'other' for n in range(0, len(raw), 48)]
     assert colors == ['red'] * 15 + ['blue'] * 15 + ['red'] * 24
+
+
+@pytest.mark.parametrize('missing', [('ffmpeg',), ('ffprobe',), ('ffmpeg', 'ffprobe')])
+def test_missing_synthetic_tools_report_required_dependencies(monkeypatch, missing):
+    import test_support.blackbox_codec as support
+    monkeypatch.setattr(support.shutil, 'which', lambda name: None if name in missing else '/tools/' + name)
+    with pytest.raises(RuntimeError, match='synthetic tests require') as error:
+        codec_tools()
+    assert ', '.join(missing) + ' on PATH' in str(error.value)
+    assert 'Ubuntu install the ffmpeg package' in str(error.value)
+
+
+def test_synthetic_tools_preserve_resolved_paths(monkeypatch):
+    import test_support.blackbox_codec as support
+    monkeypatch.setattr(support.shutil, 'which', lambda name: '/tools with spaces/' + name)
+    assert codec_tools() == (Path('/tools with spaces/ffmpeg'), Path('/tools with spaces/ffprobe'))

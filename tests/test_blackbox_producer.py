@@ -1,6 +1,5 @@
-from test_support.blackbox_codec import codec_host
+from test_support.blackbox_codec import codec_host, codec_tools
 from pathlib import Path
-import shutil
 import time
 
 from mabinogi_addon.blackbox_codec import CodecSettings
@@ -28,7 +27,7 @@ class Native:
 
 
 def run_pipeline(tmp_path, audio):
-    codec = CodecSettings(Path(shutil.which('ffmpeg')), Path(shutil.which('ffprobe')), 'libx264',
+    codec = CodecSettings(*codec_tools(), 'libx264',
                           100000, 10, 10, 50000, audio_bitrate=64000 if audio else None, host=codec_host())
     audio_settings = dict(audio_rate=48000, audio_channels=1, max_audio_bytes=96000,
                           activation_timeout_ms=100, audio_buffer_bytes=100000) if audio else None

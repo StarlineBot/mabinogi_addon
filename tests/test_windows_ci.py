@@ -324,3 +324,11 @@ def test_full_regression_is_optional_development_work_not_a_release_prerequisite
     assert 'libpulse0' in next(s for s in steps if s.get('name')=='Install Qt runtime libraries')['run']
     assert 'release_automation' not in json.dumps(development)
     assert 'Development regression' not in json.dumps(workflow('release.yml')['on'])
+
+
+def test_release_linux_installs_synthetic_codec_dependency():
+    from pathlib import Path
+    import yaml
+    workflow = yaml.safe_load((Path(__file__).resolve().parents[1] / '.github/workflows/windows.yml').read_text())
+    installs = [step.get('run', '') for step in workflow['jobs']['regression']['steps']]
+    assert any('apt-get install' in command and 'ffmpeg' in command.split() for command in installs)

@@ -1,10 +1,9 @@
 from pathlib import Path
 from threading import Event
 from types import SimpleNamespace
-import shutil
 import pytest
 
-from test_support.blackbox_codec import codec_host
+from test_support.blackbox_codec import codec_host, codec_tools
 from scripts.probe_blackbox_window import collect_frames, save_frames, run, FRAME_COUNT
 from mabinogi_addon.blackbox_codec import CodecSettings
 from mabinogi_addon.blackbox_native import NativeTransition
@@ -44,7 +43,7 @@ def test_owned_pattern_mock_and_real_encode(tmp_path):
     native = Native(frames())
     data, size, stamps = collect_frames(native, object(), Event())
     assert native.closed and len(data) == FRAME_COUNT and stamps == [f[3] for f in frames()]
-    settings = CodecSettings(Path(shutil.which('ffmpeg')), Path(shutil.which('ffprobe')),
+    settings = CodecSettings(*codec_tools(),
         'libx264', 100000, 10, 10, 50000, host=codec_host())
     result = save_frames(data, size, tmp_path / 'synthetic.mp4', settings)
     assert result.completed and result.validated and result.output.is_file()

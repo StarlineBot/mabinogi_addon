@@ -1,6 +1,6 @@
+from test_support.blackbox_codec import codec_tools
 from pathlib import Path
 from queue import Queue
-import shutil
 import time
 
 import pytest
@@ -30,7 +30,7 @@ class Producer:
 
 def make_service(tmp_path, access=None):
     access = access if access is not None else [True]
-    codec = CodecSettings(Path(shutil.which('ffmpeg')), Path(shutil.which('ffprobe')), 'libx264',
+    codec = CodecSettings(*codec_tools(), 'libx264',
                           100000, 10, 10, 100000)
     settings = ServiceSettings(tmp_path, tmp_path, tmp_path / 'test.dll', 1000000, 0, 20,
         100000, 10, 200000, ProducerLimits(2, 2, 64, 1024, 10000, 1000), codec, False)

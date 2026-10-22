@@ -28,6 +28,38 @@
 
 ## 마지막 작업
 
+### 0.11.0 첫 Windows 후보 검증 — 2026-10-22
+
+- **후속 수정**: 부모가 기존 패키징 승인에 포함되는 최소 통합임을 확인해 Linux apt 목록에
+  ffmpeg1패키지만 추가했다. test_support.codec_tools는 ffmpeg/ffprobe 누락 시 필요한 설치 항목을
+  명시적으로 실패로 알린다. 자동 다운로드/skip/검사완화/제품용 번들 변경은 없다.
+  같은 검사목록의 외부 실행 도구를 확인했으며 실제 합성검사는 FFmpeg/ffprobe를 쓰고,
+  네이티브/CMake/패키징 검사는 모형으로 격리돼 Linux에서 Windows 도구를 요구하지 않는다.
+- 개발 실제 릴리스 검사308건/18.567초(실패·skip0), CI/검사목록50건/1.41초 통과.
+  실행 서버 연결 단절로 스트리밍 세션이 유실됐으나 저장된 완결 XML로308건 결과를 확인했다.
+  결과 `/tmp/blackbox-fps-release-0.11.0-ffmpeg-results.xml`.
+  독립 QA59건/5.34초 통과. 도구 개별/전체 누락 및 Windows host 조건 유지, 추가 외부 도구 누락 없음 확인.
+  사용자가 수정 후 verify-only 추가1회도 승인했으며 푸시 후 새 SHA로 실행한다.
+
+
+- 공개 main `f96770d61e8391b80a4db504d92fd3936414fd20`에 공동 변경67파일 푸시 및 원격 반영 확인 완료.
+  사용자의 별도 승인으로 [verify-only #39762819006](https://github.com/StarlineBot/mabinogi_addon/actions/runs/39762819006)을 정확히1회 실행했다.
+  공개 저장소/표준 ubuntu·windows 러너와 중복실행없음을 확인했다. 비용API403은 재시도하지 않았다.
+- 결과 **failure**: request14초 성공, Linux regression62초 중 변경검사 **107통과/6실패(5.10초)**.
+  `shutil.which('ffmpeg')`가 None인 상태에서 `Path(None)` TypeError. Ubuntu 준비 단계가 Qt 라이브러리만
+  설치하고 합성검사에 필요한 ffmpeg/ffprobe를 설치하지 않은 원격 테스트 준비 누락이다.
+  독립 QA도 ffmpeg/ffprobe 탐색 실패 모형에서 같은 TypeError6건을 재현했다(6실패/2통과,0.45초).
+  제품 bundle 접근 전 fixture 실패이며 제품 MF 번들 결함을 입증한 결과는 아니다.
+  Windows validate는 skipped: Windows 기동/네이티브·FFmpeg·exe 빌드/후보 생성 모두 미실행.
+- 진단 아티팩트10,992B와 요청기록401B만 존재하며 배포 후보는 없다. 오류 로그는
+  `/tmp/blackbox-verify-39762819006-failed.log`에 보존했다. 요청 아티팩트 다운로드는 Azure 배포URL에서
+  Forbidden으로 거부돼 중단했으며 우회/재시도하지 않았다. GitHub 로그 조회는 성공했다.
+- 최소 수정안은 windows.yml Linux apt 설치 목록에 테스트용 ffmpeg 패키지 추가다. 제품용 LGPL 최소
+  Windows 번들과 구분하며 시험용 libx264를 제품에 동봉하지 않는다. CI 동결에 따라 해당 변경 승인 전
+  workflow는 수정하지 않았다. 추가 Actions는 최초1회 승인 범위 밖이라 실행하지 않았다.
+  태그/게시/배포도 없으며 원격 main은 위 SHA 유지, v0.11.0 태그는 미사용이다.
+
+
 ### 공동 후보 0.11.0 로컬 준비 — 2026-10-22
 
 - 사용자가 공개 main 소스 푸시를 명시 승인했다. 푸시 직전 원격 main은 기준 `86efafc4`와 같고,
