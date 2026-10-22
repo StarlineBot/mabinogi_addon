@@ -35,6 +35,14 @@
     0.11.2 배포 검사 382건/31.73초, 최적화·블랙박스 관련 116건/9.91초 통과. 코드 검토상 배포 차단 없음.
     남은 점: 재현 스크립트 단축키 판정이 `startswith('VK ')`라 'Ctrl+Alt+VK 79' 형태 회귀를 못 잡음
     (`'VK ' in label`이 맞음, 테스트 보완 대상). native DLL 빌드·GPU 축소·RSS 실장치는 Windows 미검증.
+- 0.11.2 실사용(독립 QA, 2026-10-23): 기존 RSS 잠김은 '네트워크 원복' 2회(정규화 확인)로 해소, '원복 완료' 확인.
+  이어 '최적화 시작'(7+1, TCP는 기존 값과 같아 변경 없음) 결과 CPU 131개 적용 후 세션 중단·전부 원복,
+  상태 "다른 도구가 CPU 배치를 바꿨어요", RSS 새 계획(14/1) 적용 1건 미적용·확인 필요.
+  - Confirmed(코드): `engine.py` 소유 확인 루프는 적용한 프로세스 중 1개만 값이 달라도 세션 전체를 중단하고,
+    어떤 프로세스인지 상태·로그 어디에도 남기지 않는다. 원인 프로세스(게임 자신 포함) 식별 불가.
+  - Confirmed(코드): `_run`의 예외 처리가 status를 덮어 results/notices(RSS 미적용 이유 포함)를 버린다.
+  - UX: 정규화 원복이 2회 클릭 구조, 새 작업 시작 시 이전 '원복 완료' 문구가 그대로 남아 진행 중 표시 없음.
+  - 미확정: 실제로 배치를 바꾼 주체, RSS 14/1 확인 실패 이유(위 두 결함으로 정보 소실).
 - 0.11.2 validate-and-publish [39807034177](https://github.com/StarlineBot/mabinogi_addon/actions/runs/39807034177)
   실패: Linux `Install Qt runtime libraries`의 apt install 120초 상한 초과(exit 124). 124MB 중 49개
   패키지(약 35MB)만 받음, archive.ubuntu.com 약 0.3MB/s(이전 성공 실행은 124MB/19초). 테스트·DLL 빌드·게시 미실행.
