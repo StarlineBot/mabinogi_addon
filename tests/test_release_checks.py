@@ -41,7 +41,7 @@ def test_runner_keeps_result_and_never_falls_back_to_all_tests(tmp_path, monkeyp
     monkeypatch.setattr(checks.run_regressions, 'main', run)
     assert checks.main(['--version', '0.10.1']) == result
     assert len(calls) == 1 and calls[0][-1] == 'tests/test_feature.py'
-    assert '--session-timeout' in calls[0] and '150' in calls[0]
+    assert '--session-timeout' in calls[0] and '780' in calls[0]
     assert '--case-timeout' in calls[0] and '60' in calls[0]
     assert '-n' in calls[0] and '2' in calls[0] and '--maxfail=3' in calls[0]
     assert '--junitxml=unit-results.xml' in calls[0]

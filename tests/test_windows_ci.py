@@ -258,15 +258,15 @@ def test_watchdog_bounds_keep_feature_gate_and_publish_only_safe_diagnostics():
         assert store['with']['path']=='test-diagnostics/**/public/*'
         assert store['with']['retention-days']=='1'
         assert '.raw' not in store['with']['path'] and 'continue-on-error' not in store
-    assert jobs['regression']['timeout-minutes']=='5'
+    assert all(jobs[name]['timeout-minutes']=='15' for name in ('request','regression','validate'))
     feature=next(s for s in jobs['regression']['steps'] if s.get('id')=='unit')
-    assert feature['timeout-minutes']=='3'
+    assert feature['timeout-minutes']=='14'
     assert 'scripts.run_release_checks' in feature['run']
     for name in ('Collect regression diagnostics', 'Store regression diagnostics'):
         assert next(s for s in jobs['regression']['steps'] if s.get('name')==name)['if']=='always()'
-    assert jobs['validate']['timeout-minutes']=='30'
+    assert workflow('release.yml')['jobs']['promote']['timeout-minutes']=='15'
     build=next(s for s in jobs['validate']['steps'] if s.get('id')=='build')
-    assert build['timeout-minutes']=='20'
+    assert build['timeout-minutes']=='13'
 
 
 def test_optional_native_workflow_preserves_all_cases_without_publishing():

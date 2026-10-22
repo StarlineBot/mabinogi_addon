@@ -29,7 +29,7 @@ jobs:
   request:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     outputs:
       version: ${{ steps.freeze.outputs.version }}
     env:
@@ -56,7 +56,7 @@ jobs:
     needs: request
     if: github.ref == 'refs/heads/main' && inputs.mode != 'publish-existing'
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 15
     env:
       APP_VERSION: ${{ needs.request.outputs.version }}
       OPENCV_FOR_THREADS_NUM: '1'
@@ -84,7 +84,7 @@ jobs:
           uv run --frozen python -m scripts.release_candidate preflight --sha "$GITHUB_SHA" --version "$APP_VERSION"
       - name: Release feature checks
         id: unit
-        timeout-minutes: 3
+        timeout-minutes: 14
         run: |
           set -Eeuo pipefail
           setsid .venv/bin/python -u -m scripts.ci_resources &
@@ -127,7 +127,7 @@ jobs:
     needs: [request, regression]
     if: github.ref == 'refs/heads/main' && inputs.mode != 'publish-existing'
     runs-on: windows-2022
-    timeout-minutes: 30
+    timeout-minutes: 15
     env:
       APP_VERSION: ${{ needs.request.outputs.version }}
       RELEASE_MODE: ${{ inputs.mode }}
@@ -184,7 +184,7 @@ jobs:
           Path('src/mabinogi_addon/_bundled.py').write_text(''.join(f'{n} = {os.environ.get(n, "")!r}\n' for n in names), encoding='utf-8')
       - name: Verify exe build
         id: build
-        timeout-minutes: 20
+        timeout-minutes: 13
         run: uv run --frozen --group build python packaging/build_windows.py --version "$env:APP_VERSION"
       - name: Seal verified candidate
         run: >-

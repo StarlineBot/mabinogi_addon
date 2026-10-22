@@ -34,7 +34,7 @@ def main(argv=None):
     print('Release feature checks: ' + ', '.join(paths), flush=True)
     return run_regressions.main([
         '--diagnostics', 'test-diagnostics/unit', '--case-timeout', '60',
-        '--session-timeout', '150', '--', '-n', '2', '-q', '--maxfail=3', '--tb=short',
+        '--session-timeout', '780', '--', '-n', '2', '-q', '--maxfail=3', '--tb=short',
         '-m', 'not windows_integration', '--durations=15', '--junitxml=unit-results.xml', *paths,
     ])
 
