@@ -64,11 +64,11 @@ class NativeCapture:
         self._apartment = None
 
     @staticmethod
-    def _check(hr):
+    def _check(hr, operation="capture"):
         if hr & 0xffffffff in (0x80070005, 0x800704D5):
             raise NativeTransition(f'capture target changed: 0x{hr & 0xffffffff:08x}')
         if hr < 0:
-            raise OSError(f'blackbox native HRESULT 0x{hr & 0xffffffff:08x}')
+            raise OSError(f'blackbox native {operation}: HRESULT 0x{hr & 0xffffffff:08x}')
         return hr
 
     def open(self, target: Target):
@@ -96,15 +96,15 @@ class NativeCapture:
         apartment.RoInitialize.restype = i32
         apartment.RoUninitialize.argtypes = []
         apartment.RoUninitialize.restype = None
-        self._check(apartment.RoInitialize(1))  # RO_INIT_MULTITHREADED
+        self._check(apartment.RoInitialize(1), "COM 초기화")  # RO_INIT_MULTITHREADED
         self._apartment, self._dll = apartment, dll
         try:
-            self._check(dll.bb_open(target.hwnd, target.pid, target.created, self.cursor, C.byref(self._video)))
+            self._check(dll.bb_open(target.hwnd, target.pid, target.created, self.cursor, C.byref(self._video)), "게임 영상 시작")
             self._buffer = C.create_string_buffer(self.limit)
             rate, channels, capacity, timeout = self.audio
             if rate is not None:
                 self._check(dll.bb_audio_open(target.hwnd, target.pid, target.created, rate, channels,
-                                             timeout, C.byref(self._audio)))
+                                             timeout, C.byref(self._audio)), "게임 오디오 시작")
                 self._audio_buffer = C.create_string_buffer(capacity)
         except BaseException:
             self.close()
@@ -114,8 +114,14 @@ class NativeCapture:
         if not self._video.value:
             raise RuntimeError('capture not open')
         w, h, stamp = C.c_int32(), C.c_int32(), C.c_int64()
-        hr = self._check(self._dll.bb_read(self._video, self._buffer, self.limit,
-                                         C.byref(w), C.byref(h), C.byref(stamp)))
+        hr = self._dll.bb_read(self._video, self._buffer, self.limit,
+                               C.byref(w), C.byref(h), C.byref(stamp))
+        if (hr & 0xffffffff == 0x8007007a and w.value > 0 and h.value > 0
+                and w.value * h.value * 4 > self.limit):
+            raise OSError(f'게임 영상 입력 {w.value}×{h.value}: '
+                          f'필요 {w.value * h.value * 4} bytes, 버퍼 한도 {self.limit} bytes '
+                          '(HRESULT 0x8007007a). 입력 크기 제한을 초과해 녹화를 중단했어요.')
+        self._check(hr, "게임 영상 읽기")
         if hr == 1:
             return None
         size = w.value * h.value * 4
@@ -127,8 +133,12 @@ class NativeCapture:
         if not self._audio.value:
             raise RuntimeError('game audio not enabled')
         size, stamp = C.c_uint32(), C.c_uint64()
-        hr = self._check(self._dll.bb_audio_read(self._audio, self._audio_buffer, self.audio[2],
-                                               C.byref(size), C.byref(stamp)))
+        hr = self._dll.bb_audio_read(self._audio, self._audio_buffer, self.audio[2],
+                                     C.byref(size), C.byref(stamp))
+        if hr & 0xffffffff == 0x8007007a and size.value > self.audio[2]:
+            raise OSError(f'게임 오디오 패킷: 필요 {size.value} bytes, '
+                          f'버퍼 한도 {self.audio[2]} bytes (HRESULT 0x8007007a)')
+        self._check(hr, "게임 오디오 읽기")
         if hr == 1:
             return None
         if size.value > self.audio[2]:

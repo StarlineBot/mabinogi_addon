@@ -32,6 +32,24 @@
 
 ## 마지막 작업
 
+### 블랙박스 녹화 오류 진단 및 버퍼 경계 보완 — 0.11.1 준비
+
+- 사용자 화면의 `0x8007007a`는 확인했지만 발생 단계는 기존 메시지로 구분할 수 없다.
+  영상 용량 초과, 오디오 패킷 용량 초과 또는 하위 API 반환이 가능하다. 사용자 해상도나
+  오디오를 원인으로 단정하지 않으며, 실제 녹화 오류 해결로 보고하지 않는다.
+- 영상 용량 초과 시 실제 너비·높이를 반환하고 COM/영상/오디오의 시작·읽기 오류를 구분한다.
+  오디오 GetBuffer의 실제 크기를 64비트로 다시 검사하고 초과하면 복사 없이 버퍼를 반환한다.
+  기존 입력 1920×1080, 메모리 한도와 게임창/프로세스 오디오 범위는 유지한다.
+- 개발 producer/service/window-probe 19건/2.56초 통과. 독립 QA 관련 22건/5.03초 및
+  실제 bb_audio_read를 추출한 C++ 모형 7개 경계 통과. signed HRESULT, 반환 실패,
+  실제 패킷 초과, 32비트 크기 초과와 출력 경계 보존을 확인했다.
+  독립 재현 `/tmp/blackbox_audio_bounds_qa.py`. Windows SDK 컴파일·실제 캡처는 미검증이다.
+- FPS/RSS/블랙박스 보완 공동 후보 0.11.1로 기존 21개 변경 검사 목록의 버전만 맞췄다.
+  `UV_CACHE_DIR=/tmp/mabinogi-uv-cache QT_QPA_PLATFORM=offscreen uv run python -m scripts.run_release_checks --version 0.11.1`
+  공동 변경 검사 330건/23.94초 통과. 로그 `/tmp/combined-0.11.1-checks.log`,
+  XML `/tmp/combined-0.11.1-results.xml`. 검사 약화/게이트 변경, Actions 실행, 태그·릴리스·배포는 하지 않았다.
+
+
 ### RSS 원복 실제 제보 조사 및 재연결 후 검증 보완
 
 - 사용자0.11.0 제보는 RSS failed 기록과 원복 보류/시작 차단이다. 제공된 숫자값은 applied와 같고

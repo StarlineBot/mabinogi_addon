@@ -107,6 +107,7 @@ BB HRESULT __cdecl bb_open(HWND hwnd, DWORD pid, ULONGLONG created, int cursor, 
 BB HRESULT __cdecl bb_read(void* handle, BYTE* destination, UINT64 capacity,
                           int* width, int* height, INT64* timestamp100ns) {
     if (!handle || !destination || !width || !height || !timestamp100ns) return E_POINTER;
+    *width = 0; *height = 0; *timestamp100ns = 0;
     try {
         auto& c = *static_cast<Capture*>(handle);
         pump_capture_events();
@@ -116,7 +117,11 @@ BB HRESULT __cdecl bb_read(void* handle, BYTE* destination, UINT64 capacity,
         auto size = frame.ContentSize();
         if (size.Width != c.width || size.Height != c.height) return HRESULT_FROM_WIN32(ERROR_RETRY);
         UINT64 bytes = UINT64(c.width) * UINT64(c.height) * 4;
-        if (bytes > capacity) return HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER);
+        if (bytes > capacity) {
+            // Report required geometry without writing any pixel data.
+            *width = c.width; *height = c.height;
+            return HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER);
+        }
         auto access = frame.Surface().as<::Windows::Graphics::DirectX::Direct3D11::IDirect3DDxgiInterfaceAccess>();
         com_ptr<ID3D11Texture2D> texture;
         check_hresult(access->GetInterface(guid_of<ID3D11Texture2D>(), texture.put_void()));

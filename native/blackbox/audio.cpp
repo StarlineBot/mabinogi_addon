@@ -1,3 +1,4 @@
+#include <climits>
 // Process-tree loopback only. No default device, microphone or system-wide fallback.
 #include <windows.h>
 #include <audioclient.h>
@@ -91,16 +92,27 @@ BB HRESULT __cdecl bb_audio_open(HWND hwnd, DWORD pid, ULONGLONG created, UINT r
 BB HRESULT __cdecl bb_audio_read(void* handle, BYTE* output, UINT capacity, UINT* bytes, UINT64* qpc100ns) {
     if (!handle || !output || !bytes || !qpc100ns) return E_POINTER;
     auto& a = *static_cast<Audio*>(handle);
-    *bytes = 0;
+    *bytes = 0; *qpc100ns = 0;
     if (!a.valid()) return E_ACCESSDENIED;
     UINT frames{};
     HRESULT hr = a.capture->GetNextPacketSize(&frames);
     if (FAILED(hr) || frames == 0) return FAILED(hr) ? hr : S_FALSE;
-    if (UINT64(frames) * a.block > capacity) return HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER);
+    UINT64 required = UINT64(frames) * a.block;
+    if (required > capacity) {
+        if (required <= UINT_MAX) *bytes = UINT(required);
+        return HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER);
+    }
     BYTE* data{}; DWORD flags{}; UINT64 position{};
     hr = a.capture->GetBuffer(&data, &frames, &flags, &position, qpc100ns);
     if (FAILED(hr)) return hr;
-    UINT count = frames * a.block;
+    // Check the authoritative packet size again before touching the destination.
+    required = UINT64(frames) * a.block;
+    if (required > capacity) {
+        if (required <= UINT_MAX) *bytes = UINT(required);
+        hr = a.capture->ReleaseBuffer(frames);
+        return FAILED(hr) ? hr : HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER);
+    }
+    UINT count = UINT(required);
     if ((flags & AUDCLNT_BUFFERFLAGS_TIMESTAMP_ERROR) || (a.seen && (flags & AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY))) {
         a.capture->ReleaseBuffer(frames);
         return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
