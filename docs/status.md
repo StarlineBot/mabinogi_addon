@@ -56,6 +56,13 @@
     `encoder exited N: <stderr>`를 우선 표시하고 app.log에도 남길 것. 그 뒤 실제 원인 재확인.
   - 단축키: 반응 문구가 6초만 표시돼 게임에서 누르고 앱으로 전환하면 이미 사라질 수 있다. 훅 수신 여부
     미확정. 앱 창을 앞에 둔 채 누르면 '게임 창이 앞에 있을 때만 저장해요' 문구로 수신 확인 가능.
+  - 저장 내역·복구 창: 세션 `28508:…`과 '미완성 캡처 자료' 1건 → 캡처·GPU 축소 후 프레임이 인코더까지
+    도달했고 첫 구간 인코딩에서 실패한 것으로 좁혀짐(축소 결과 화면은 미확인).
+  - Confirmed(재현): '선택한 실패 자료 폐기' 무반응. 컨트롤러 100ms 타이머가 창 표시 중 매번 `refresh()`하고,
+    목록을 비웠다 다시 채우며 폐기 버튼을 잠깐 비활성화해 누르는 중 클릭이 취소된다.
+    `QT_QPA_PLATFORM=offscreen uv run python -m scripts.qa_blackbox_recovery_click`(미수정 시 REPRODUCED/종료 1).
+    '원본 정리 다시 시도'는 runtime 정리만 하고 미완성 캡처 자료(orphan)는 처리하지 않으며 결과 안내도 없다.
+    수정 방향: 내용이 바뀔 때만 갱신(또는 버튼 상태 유지), 정리 결과를 문구로 표시.
 - 0.11.2 validate-and-publish [39807034177](https://github.com/StarlineBot/mabinogi_addon/actions/runs/39807034177)
   실패: Linux `Install Qt runtime libraries`의 apt install 120초 상한 초과(exit 124). 124MB 중 49개
   패키지(약 35MB)만 받음, archive.ubuntu.com 약 0.3MB/s(이전 성공 실행은 124MB/19초). 테스트·DLL 빌드·게시 미실행.
