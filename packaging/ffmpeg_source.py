@@ -67,7 +67,10 @@ def tree_digest(base):
 
 
 def _git_checkout(repo, tag, commit, dest, sparse=()):
-    command = ['git', '-c', 'advice.detachedHead=false', 'clone', '-q', '--depth', '1', '--branch', tag]
+    # 외부 헤더 저장소엔 .gitattributes가 없어 Windows Git 기본값(core.autocrlf=true)이 CRLF로 체크아웃해
+    # 내용 해시가 달라진다(0.11.4 검증 실패). 저장소 설정으로 남겨 이어지는 sparse-checkout에도 적용한다.
+    command = ['git', '-c', 'advice.detachedHead=false', 'clone', '--config', 'core.autocrlf=false',
+               '-q', '--depth', '1', '--branch', tag]
     if sparse:
         command += ['--filter=blob:none', '--sparse']
     env = dict(os.environ, GIT_LFS_SKIP_SMUDGE='1')

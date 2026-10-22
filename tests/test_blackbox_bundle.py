@@ -244,3 +244,30 @@ def test_build_recipe_enables_vendor_encoders_only_with_pinned_headers():
     assert '--enable-nvenc --enable-amf' in recipe and 'encoders="h264_nvenc,h264_amf,$encoders"' in recipe
     product = json.loads((ROOT/'packaging/blackbox-product.json').read_text(encoding='utf-8'))
     assert product['codec']['candidates'] == ['h264_nvenc', 'h264_amf', 'h264_mf']
+
+
+def test_header_checkout_keeps_lf_even_with_global_autocrlf(tmp_path, monkeypatch):
+    """0.11.4 검증 실패: Windows Git 기본값 core.autocrlf=true가 .gitattributes 없는 헤더를 CRLF로 받아
+    내용 해시가 달라졌다. 전역 autocrlf=true 환경을 만들어 로컬 저장소로 같은 경로를 재현한다(네트워크 없음)."""
+    import shutil, subprocess
+    if not shutil.which('git'):
+        pytest.skip('git 필요')
+    spec = importlib.util.spec_from_file_location('source_builder', ROOT/'packaging/ffmpeg_source.py')
+    builder = importlib.util.module_from_spec(spec); spec.loader.exec_module(builder)
+    origin = tmp_path/'origin'
+    (origin/'include/AMF').mkdir(parents=True)
+    (origin/'include/AMF/Version.h').write_bytes(b'#define A 1\n#define B 2\n')
+    (origin/'LICENSE.txt').write_bytes(b'MIT\n')
+    git = lambda *a, cwd=origin: subprocess.run(['git', *a], cwd=cwd, check=True, capture_output=True, text=True).stdout.strip()
+    git('init', '-q'); git('-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '--allow-empty', '-m', 'init')
+    git('add', '.'); git('-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', 'headers'); git('tag', 'v1')
+    commit = git('rev-parse', 'HEAD')
+    expected = builder.tree_digest(origin/'include')
+    config = tmp_path/'gitconfig'
+    config.write_text('[core]\n\tautocrlf = true\n[protocol "file"]\n\tallow = always\n')
+    monkeypatch.setenv('GIT_CONFIG_GLOBAL', str(config))
+    for sparse in ((), ('/include', '/LICENSE.txt')):  # nv(일반)·AMF(sparse) 두 경로 모두
+        dest = tmp_path/('clone-sparse' if sparse else 'clone')
+        builder._git_checkout(origin.as_uri(), 'v1', commit, dest, sparse=sparse)
+        assert b'\r\n' not in (dest/'include/AMF/Version.h').read_bytes()
+        assert builder.tree_digest(dest/'include') == expected
