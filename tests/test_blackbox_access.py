@@ -164,3 +164,50 @@ def test_hook_failure_is_visible_without_submitting_a_save(monkeypatch):
     assert not saved
     assert 'message loop failed' in tools.service.error
     host.close()
+
+
+@pytest.mark.parametrize('modifiers, vk, text', [
+    (3, 0x79, 'Ctrl+Alt+F10'), (2, 0x41, 'Ctrl+A'), (4, 0x31, 'Shift+1'), (8, 0x70, 'Win+F1'),
+    (0, 0x87, 'F24'), (1, 0x2E, 'Alt+Delete'), (0, 0xFF, '키 코드 0xFF')])
+def test_hotkey_is_shown_with_key_names_not_vk_codes(modifiers, vk, text):
+    from mabinogi_addon.ui.blackbox_controller import hotkey_text
+    assert hotkey_text(modifiers, vk) == text
+
+
+@pytest.mark.parametrize('active, received_hwnd, refuse, expected', [
+    (True, 42, True, '지금은 저장할 수 없어요: video buffer limit'),
+    (False, 42, False, '게임 창이 앞에 있을 때만'),
+    (True, 42, False, '저장 요청을 접수했어요'),
+])
+def test_hotkey_feedback_stays_visible_over_recording_error(monkeypatch, active, received_hwnd, refuse, expected):
+    """녹화 오류 중에도 단축키를 누른 결과가 매 틱 오류 문구에 덮이지 않고 보인다."""
+    from types import SimpleNamespace
+    from mabinogi_addon.ui import blackbox_controller as module
+    from mabinogi_addon.ui.blackbox_tab import BlackboxTab
+    monkeypatch.setattr(config, 'load_discord_user', lambda: None)
+    app, host = window()
+    tools = BlackboxController(host)
+    tools.panel = BlackboxTab()
+    error = 'video buffer limit' if refuse else None
+    def request_save(us):
+        if refuse:
+            raise PermissionError('save unavailable')
+    def tick(*a, **kw):
+        tools.service.error = error  # 실제 서비스처럼 매 틱 오류를 다시 기록
+    tools.service = SimpleNamespace(tick=tick, request_save=request_save, completed=[], error=error,
+        status='error' if refuse else 'recording', current=None, _retention=600_000_000,
+        settings=SimpleNamespace(output_folder='out'), recoveries=lambda: [])
+    pending = [(123456, received_hwnd)]
+    tools.events = SimpleNamespace(sample=lambda: (SimpleNamespace(hwnd=42), active),
+        consume_hotkey=lambda: pending.pop() if pending else None)
+    monkeypatch.setattr(tools, '_allowed', lambda: True)
+    for _ in range(3):
+        tools._tick()
+        assert expected in tools.panel.save_result.text()
+    clock = [module._HOTKEY_NOTE_SEC + 10**6]
+    monkeypatch.setattr('time.monotonic', lambda: clock[0])
+    tools._tick()
+    if refuse:  # 표시 시간이 지나면 다시 녹화 오류 문구가 보인다.
+        assert tools.panel.save_result.text() == error
+    tools.panel.deleteLater()
+    host.close()

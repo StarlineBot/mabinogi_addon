@@ -102,10 +102,11 @@ def blackbox_input_limit():
 def hotkey_label():
     product = json.loads((Path(__file__).resolve().parents[1] / 'packaging' / 'blackbox-product.json')
                          .read_text(encoding='utf-8'))
-    label = f"VK {product['hotkey_vk']:02X}"  # ui/blackbox_controller.py 와 같은 형식
-    reproduced = label == 'VK 79' and product['hotkey_vk'] == 0x79
+    from mabinogi_addon.ui.blackbox_controller import hotkey_text  # 제품 화면 표시 함수
+    label = hotkey_text(product['hotkey_modifiers'], product['hotkey_vk'])
+    reproduced = label.startswith('VK ') or '0x' in label
     print(f"[단축키] 설정 vk={product['hotkey_vk']}(F10) → 화면 표시 '{label}'")
-    print('[단축키]', 'REPRODUCED: F10이 VK 79로 표시돼 사용자가 실제 키를 알 수 없음' if reproduced else 'not reproduced')
+    print('[단축키]', 'REPRODUCED: 키 코드로 표시돼 사용자가 실제 키를 알 수 없음' if reproduced else 'not reproduced')
     return reproduced
 
 

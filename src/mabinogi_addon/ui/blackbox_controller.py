@@ -6,6 +6,33 @@ from ..feature_access import is_creator
 from .blackbox_tab import BlackboxTab
 
 
+# 가상 키 코드 → 사용자가 아는 키 이름. 'VK 79'처럼 16진 코드로 보이면 실제 키(F10)를 알 수 없다.
+_KEY_NAMES = {0x08: 'Backspace', 0x09: 'Tab', 0x0D: 'Enter', 0x13: 'Pause', 0x14: 'CapsLock',
+              0x1B: 'Esc', 0x20: 'Space', 0x21: 'PageUp', 0x22: 'PageDown', 0x23: 'End',
+              0x24: 'Home', 0x25: '←', 0x26: '↑', 0x27: '→', 0x28: '↓', 0x2C: 'PrintScreen',
+              0x2D: 'Insert', 0x2E: 'Delete', 0x6A: 'Num *', 0x6B: 'Num +', 0x6D: 'Num -',
+              0x6E: 'Num .', 0x6F: 'Num /', 0x90: 'NumLock', 0x91: 'ScrollLock', 0xBA: ';',
+              0xBB: '=', 0xBC: ',', 0xBD: '-', 0xBE: '.', 0xBF: '/', 0xC0: '`', 0xDB: '[',
+              0xDC: '\\', 0xDD: ']', 0xDE: "'"}
+_HOTKEY_NOTE_SEC = 6.0
+
+
+def key_name(vk):
+    if 0x70 <= vk <= 0x87:
+        return f'F{vk - 0x6F}'
+    if 0x30 <= vk <= 0x39 or 0x41 <= vk <= 0x5A:
+        return chr(vk)
+    if 0x60 <= vk <= 0x69:
+        return f'Num {vk - 0x60}'
+    return _KEY_NAMES.get(vk, f'키 코드 0x{vk:02X}')
+
+
+def hotkey_text(modifiers, vk):
+    """RegisterHotKey 수식 마스크(Alt=1, Ctrl=2, Shift=4, Win=8)와 키 코드를 'Ctrl+Alt+F10' 형식으로."""
+    keys = [name for mask, name in ((2, 'Ctrl'), (1, 'Alt'), (4, 'Shift'), (8, 'Win')) if modifiers & mask]
+    return '+'.join(keys + [key_name(vk)])
+
+
 class BlackboxController(QObject):
     def __init__(self, window, *, session=None, lifecycle=None):
         super().__init__(window)
@@ -23,6 +50,7 @@ class BlackboxController(QObject):
         self._timer = None
         self._recovery_dialog = None
         self._profile_error = None
+        self._hotkey_note = None  # (문구, 표시 종료 monotonic) — 단축키 반응을 오류 문구에 묻히지 않게
         self.panel = None
         self._page = None
         self.refresh_access()
@@ -143,11 +171,9 @@ class BlackboxController(QObject):
                                  else '게임 소리: 영상 전용 검증 설정 · 소리는 저장하지 않아요.')
         panel.enabled.setChecked(self.service.enabled)
         panel.retention.setText(str(self.service._retention // 60_000_000))
-        modifiers = profile.get('hotkey_modifiers', 0) if profile else 0
-        keys = [name for mask, name in ((2, 'Ctrl'), (1, 'Alt'), (4, 'Shift'), (8, 'Win')) if modifiers & mask]
         if profile:
-            keys.append(f"VK {profile['hotkey_vk']:02X}")
-            panel.hotkey.setText('검증용 단축키: ' + '+'.join(keys) + ' · 실게임 미검증')
+            panel.hotkey.setText('검증용 단축키: ' + hotkey_text(profile.get('hotkey_modifiers', 0),
+                                                              profile['hotkey_vk']) + ' · 실게임 미검증')
         for control in (panel.enabled, panel.retention, panel.save, panel.change_folder, panel.open_folder, panel.recovery):
             control.setEnabled(True)
         panel.enabled.toggled.connect(lambda value: self._action(lambda: self.service.set_enabled(value)))
@@ -171,6 +197,25 @@ class BlackboxController(QObject):
             self._action(lambda: self.service.request_save(
                 time.perf_counter_ns() // 1000 if request_us is None else request_us))
 
+    def _note_hotkey(self, text):
+        import time
+        self._hotkey_note = (text, time.monotonic() + _HOTKEY_NOTE_SEC)
+
+    def _hotkey_pressed(self, shortcut, target, active):
+        """단축키 입력마다 결과를 남긴다(저장 불가 상태 포함). 게임 창에서 받은 입력만 저장한다."""
+        if not self._allowed():
+            return
+        if not (active and target is not None and shortcut[1] == target.hwnd):
+            self._note_hotkey('단축키 입력을 받았어요 · 게임 창이 앞에 있을 때만 저장해요.')
+            return
+        try:
+            self.service.request_save(shortcut[0])
+        except Exception as exc:
+            reason = self.service.error or str(exc)
+            self._note_hotkey(f'단축키 입력을 받았지만 지금은 저장할 수 없어요: {reason}')
+            return
+        self._note_hotkey('단축키 입력을 받았어요 · 저장 요청을 접수했어요.')
+
     def _tick(self):
         if self.service is None:
             return
@@ -182,9 +227,8 @@ class BlackboxController(QObject):
         self._action(lambda: self.service.tick(target, active=active))
         try:
             shortcut = self.events.consume_hotkey()
-            if (shortcut is not None and active and target is not None
-                    and shortcut[1] == target.hwnd):
-                self._request_save(shortcut[0])
+            if shortcut is not None:
+                self._hotkey_pressed(shortcut, target, active)
         except Exception as exc:
             self.close_error = str(exc)
             self.service.error = str(exc)
@@ -205,6 +249,14 @@ class BlackboxController(QObject):
                 self.panel.save_result.setText(f'저장 처리·대기 {running}건 · 녹화 상태는 위에서 확인하세요.')
             if self.service.error:
                 self.panel.save_result.setText(self.service.error)
+            note = self._hotkey_note
+            if note is not None:
+                import time
+                if time.monotonic() < note[1]:
+                    # 녹화 오류 문구가 매 틱 덮어써도 단축키를 눌렀다는 반응은 잠시 보이게 한다.
+                    self.panel.save_result.setText(note[0])
+                else:
+                    self._hotkey_note = None
             for kind, result in self.service.completed:
                 if kind == 'saved':
                     self.panel.save_result.setText(f'저장 완료: {result.output}' +
