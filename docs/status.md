@@ -32,6 +32,22 @@
 
 ## 마지막 작업
 
+### 0.11.1 설치 개선 후보 — 모든 job 성공, run 상태 갱신 대기
+
+- [39797107299](https://github.com/StarlineBot/mabinogi_addon/actions/runs/39797107299),
+  SHA `de4178a69a9b64368392c0b8db2ed8ec2614ac52`, version0.11.1, verify-only, attempt1.
+- Linux 공식archive다운로드124MB/19초(기존156MB보다32MB감소),347건/18.48초통과.
+  Windows기동2건/6.61초,codec host14:40:12,DLL14:40:23,FFmpeg14:43:43,
+  exe14:45:10(162520572bytes)빌드성공. validate job은14:45:23completed/success확인.
+- 후보artifact12434910896, verified-windows-39797107299-1,163619539bytes,
+  만료2026-10-23T14:45:15Z. APIarchive digest
+  `ebc0f48189198fcaa042fc86d313531fe0fef2cc3ae73a9a4d1572ce10f0fffb`(exe해시아님).
+- 개별job/단계성공에도run및attempt전체API는in_progress/conclusionnull이어서최종갱신확인대기.
+  성공후사용자수동입력은windows.yml/main/version0.11.1/modepublish-existing/candidate_run39797107299.
+  현재게시실행하지않음. 후보manifest다운로드/로컬exe해시대조는미수행이며게시gate가재검증한다.
+- 증거 `/tmp/verify-39797107299-linux.log`, `/tmp/verify-39797107299-windows-excerpt.log`.
+  실게임단축키/RSS최초차단/실제녹화오류해결은미검증. 추가run/태그/Release/배포없음.
+
 ### 승인된 최소 apt 설치 개선
 
 - 사용자 승인 범위로 기존 runner 미러의 Ubuntu 공식 archive 우선순위를1로, Azure를2로
