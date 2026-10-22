@@ -32,6 +32,22 @@
 
 ## 마지막 작업
 
+### 0.11.1 단축키 포함 후보 검증 — 다운로드 제한 재실패
+
+- 사용자 승인 1회 [39793252768](https://github.com/StarlineBot/mabinogi_addon/actions/runs/39793252768),
+  SHA `531474fed8554e1f004fe76dcf4a1e31c0197638`, version0.11.1, verify-only.
+  run 최종 completed/failure 확인(updated14:18:11UTC). 요청 준비 성공, Linux 의존성 설치 실패.
+- update는12.5MB/1초로 성공했으나 install120초/exit124가 재발했다. 이번 마지막 실제
+  다운로드 항목은14:12:03의libavformat60(1153kB),14:12:05에시간초과. 폰트까지도달하지
+  않았으므로 fonts-noto-cjk 하나의 문제로 분류하지 않는다. 상세 로그는
+  `/tmp/verify-39793252768-job.log`, 상태 추적은 `/tmp/verify-39793252768-watch.log`.
+- 검사/Windows기동/native/FFmpeg/exe빌드 미실행. 아티팩트는 release-request-39793252768-1
+  (12430919845,402bytes)뿐이며 verified candidate가 없으므로 게시 입력을 제공하지 않는다.
+  개별job상태API는로그완료후에도늦게갱신됐으며run최종실패와설치실패원문을구분확인했다.
+- 추가 Actions/설치방식·시간제한 변경/태그/게시/배포는 하지 않았다. 단축키 로컬347건과
+  독립QA결과는 유효하지만 실제 Windows게임 단축키/RSS최초차단/녹화오류 해결은 미확정이다.
+
+
 ### 블랙박스 지정 단축키 관찰 방식 전환
 
 - 사용자가 기존 실패 방식의 재검증보다 참고 앱 방식 우선 구현을 지시했다.
