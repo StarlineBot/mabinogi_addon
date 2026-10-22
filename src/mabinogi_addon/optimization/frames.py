@@ -34,16 +34,16 @@ class FrameStream:
         self.selected = source
         self.boundary(now, "manual_swapchain_selection")
 
-    def feed(self, line, now):
+    def feed(self, line, now, *, accept_events=True):
         try:
-            return self._feed(line, now)
+            return self._feed(line, now, accept_events=accept_events)
         except Exception:
             if self.summary is not None:
                 self.summary.reject('invalid_event', now)
                 self.summary.boundary(now, 'collector_error')
             raise
 
-    def _feed(self, line, now):
+    def _feed(self, line, now, *, accept_events=True):
         if len(line) > 16384:
             raise ValueError('프레임 데이터 한도를 초과했어요.')
         row = next(csv.reader([line]))
@@ -64,6 +64,9 @@ class FrameStream:
                 raise ValueError('지원하지 않는 프레임 데이터 형식이에요.')
             if len(columns)!=len(self.header) or not {'ProcessID','SwapChainAddress'} <= columns:
                 raise ValueError('지원하지 않는 프레임 데이터 형식이에요.')
+            return
+        # Headers describe the stream even while frame samples are paused.
+        if not accept_events:
             return
         if not row or all(not field.strip() for field in row):
             return

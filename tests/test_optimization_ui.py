@@ -250,3 +250,39 @@ def test_summary_collection_shares_parser_preserves_pause_and_exports_without_ra
     assert report['segments'][0]['low_1pct_fps']==pytest.approx(50)
     c.stop_frames();c._poll_summary_store()
     assert c.summary.records and c.summary_store.close_ready()
+
+
+@pytest.mark.parametrize('header', [
+    'Application,ProcessID,SwapChainAddress,TimeInQPC,MsBetweenPresents',
+    '\ufeffApplication,ProcessID,SwapChainAddress,QPCTime,msBetweenPresents',
+])
+def test_start_from_app_preserves_collector_header_before_game_focus(window, monkeypatch, header):
+    """App-focused start must keep the one-time CSV header for later game frames."""
+    c = window[0].optimization_tools
+    c.timer.stop()
+    now = [100.0]
+    game = {'pid': 123, 'birth': '999'}
+    active = [False]
+    monkeypatch.setattr(module, 'is_creator', lambda: True)
+    monkeypatch.setattr(module.config, 'load_game_exe', lambda: 'game.exe')
+    monkeypatch.setattr(module.presentmon, 'clock', lambda: (now[0], 1000))
+    monkeypatch.setattr(module.presentmon, 'executable', lambda: object())
+    monkeypatch.setattr(module.presentmon, 'game_context', lambda *a: (active[0], (11, 123)))
+    monkeypatch.setattr(c.backend, 'game', lambda: game)
+    monkeypatch.setattr(c.collector, 'start', lambda pid: None)
+    c.start_frames()
+    c._line(header)
+    c._line('game.exe,123,0xabc,100010,10')
+    assert not c.stream.sources and not c.summary.samples
+    active[0] = True
+    now[0] = 101.0
+    c._frame_tick(.25)
+    for n in range(1, 28):
+        now[0] = 101 + n * .02
+        c._line(f'game.exe,123,0xabc,{round(now[0]*1000)},20')
+    c._tick()
+    assert c.frames, c.frame_status
+    assert c.overlay.isVisible()
+    assert not c.panel.frames_start.isEnabled() and c.panel.frames_stop.isEnabled()
+    assert c.stream.snapshot(now[0])['fps'] == pytest.approx(50)
+    c.stop_frames()

@@ -264,11 +264,11 @@ class OptimizationController(QObject):
             if not self._can_start():
                 self.stop_frames('제작자 접근 해제 · 측정 중단')
                 return
-            if self.context is not None and not self.context[0]:
-                return
-            if not self._sync_summary_context(now):
-                return
-            self.stream.feed(line,now)
+            active = self.context is None or self.context[0]
+            accept_events = active and self._sync_summary_context(now)
+            # PresentMon sends its header once, often while our app has focus.
+            # Preserve protocol metadata even when focus/transition excludes samples.
+            self.stream.feed(line, now, accept_events=accept_events)
             if self.summary.full:
                 self.stop_frames('구간/전환 요약 한도 · 기존 자료를 보존하고 측정을 중단했어요.')
         except Exception as exc: self._failed(str(exc))
