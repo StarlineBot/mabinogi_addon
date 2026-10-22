@@ -39,6 +39,9 @@
   실패: Linux `Install Qt runtime libraries`의 apt install 120초 상한 초과(exit 124). 124MB 중 49개
   패키지(약 35MB)만 받음, archive.ubuntu.com 약 0.3MB/s(이전 성공 실행은 124MB/19초). 테스트·DLL 빌드·게시 미실행.
   코드 원인 아님. 반복 재발(0.11.1 다운로드 제한 실패 포함) → 근본 대책은 CI 동결 해제 승인 필요(.deb 캐시 등).
+  재실행 [39808027057](https://github.com/StarlineBot/mabinogi_addon/actions/runs/39808027057) 성공(apt 1분50초,
+  배포검사 23초, Windows 기동 13초, exe·DLL 빌드 6분2초) → 게시 성공. v0.11.2 태그 `d41298a`, Release exe
+  sha256 `94091c7c…728f`/162,530,922 bytes가 후보 manifest·version.json과 일치. 실게임 확인은 남음.
 - v0.10.1 RSS: 사용자 조회의 CPU 범위 14~15·MaxProcessors 2·큐 2·ClosestStatic은
   요청값과 일치했지만 두 그룹 값이 null이었다. 이 입력은 기존 코드에서 동일한 적용 확인
   오류를 재현했다. 단일 활성 그룹을 Windows API로 확인한 경우에만 null을 0으로 보완했다.
