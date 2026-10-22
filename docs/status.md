@@ -63,6 +63,8 @@
     `QT_QPA_PLATFORM=offscreen uv run python -m scripts.qa_blackbox_recovery_click`(미수정 시 REPRODUCED/종료 1).
     '원본 정리 다시 시도'는 runtime 정리만 하고 미완성 캡처 자료(orphan)는 처리하지 않으며 결과 안내도 없다.
     수정 방향: 내용이 바뀔 때만 갱신(또는 버튼 상태 유지), 정리 결과를 문구로 표시.
+    사용자 실기 관찰로 확정: 폐기를 누르면 포커스가 '원본 정리 다시 시도'로 넘어가며 클릭이 사라지고,
+    빠르게 두 번 누르면 확인 창이 떠서 삭제된다(갱신 사이에 누르고 떼기가 끝난 경우).
 - 0.11.2 validate-and-publish [39807034177](https://github.com/StarlineBot/mabinogi_addon/actions/runs/39807034177)
   실패: Linux `Install Qt runtime libraries`의 apt install 120초 상한 초과(exit 124). 124MB 중 49개
   패키지(약 35MB)만 받음, archive.ubuntu.com 약 0.3MB/s(이전 성공 실행은 124MB/19초). 테스트·DLL 빌드·게시 미실행.
