@@ -35,6 +35,10 @@
     0.11.2 배포 검사 382건/31.73초, 최적화·블랙박스 관련 116건/9.91초 통과. 코드 검토상 배포 차단 없음.
     남은 점: 재현 스크립트 단축키 판정이 `startswith('VK ')`라 'Ctrl+Alt+VK 79' 형태 회귀를 못 잡음
     (`'VK ' in label`이 맞음, 테스트 보완 대상). native DLL 빌드·GPU 축소·RSS 실장치는 Windows 미검증.
+- 0.11.2 validate-and-publish [39807034177](https://github.com/StarlineBot/mabinogi_addon/actions/runs/39807034177)
+  실패: Linux `Install Qt runtime libraries`의 apt install 120초 상한 초과(exit 124). 124MB 중 49개
+  패키지(약 35MB)만 받음, archive.ubuntu.com 약 0.3MB/s(이전 성공 실행은 124MB/19초). 테스트·DLL 빌드·게시 미실행.
+  코드 원인 아님. 반복 재발(0.11.1 다운로드 제한 실패 포함) → 근본 대책은 CI 동결 해제 승인 필요(.deb 캐시 등).
 - v0.10.1 RSS: 사용자 조회의 CPU 범위 14~15·MaxProcessors 2·큐 2·ClosestStatic은
   요청값과 일치했지만 두 그룹 값이 null이었다. 이 입력은 기존 코드에서 동일한 적용 확인
   오류를 재현했다. 단일 활성 그룹을 Windows API로 확인한 경우에만 null을 0으로 보완했다.
