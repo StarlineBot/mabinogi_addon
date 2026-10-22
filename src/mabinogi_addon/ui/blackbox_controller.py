@@ -51,6 +51,8 @@ class BlackboxController(QObject):
         self._recovery_dialog = None
         self._profile_error = None
         self._hotkey_note = None  # (문구, 표시 종료 monotonic) — 단축키 반응을 오류 문구에 묻히지 않게
+        self._hotkey_base = None  # '검증용 단축키: …' 줄
+        self._hotkey_last = None  # '마지막 단축키 입력 HH:MM:SS · 결과' — 앱으로 돌아와도 남아 있게
         self.panel = None
         self._page = None
         self.refresh_access()
@@ -172,8 +174,9 @@ class BlackboxController(QObject):
         panel.enabled.setChecked(self.service.enabled)
         panel.retention.setText(str(self.service._retention // 60_000_000))
         if profile:
-            panel.hotkey.setText('검증용 단축키: ' + hotkey_text(profile.get('hotkey_modifiers', 0),
+            self._hotkey_base = ('검증용 단축키: ' + hotkey_text(profile.get('hotkey_modifiers', 0),
                                                               profile['hotkey_vk']) + ' · 실게임 미검증')
+            self._show_hotkey()
         for control in (panel.enabled, panel.retention, panel.save, panel.change_folder, panel.open_folder, panel.recovery):
             control.setEnabled(True)
         panel.enabled.toggled.connect(lambda value: self._action(lambda: self.service.set_enabled(value)))
@@ -197,24 +200,33 @@ class BlackboxController(QObject):
             self._action(lambda: self.service.request_save(
                 time.perf_counter_ns() // 1000 if request_us is None else request_us))
 
-    def _note_hotkey(self, text):
+    def _show_hotkey(self):
+        if self.panel is None or self._hotkey_base is None:
+            return
+        self.panel.hotkey.setText(self._hotkey_base + ('\n' + self._hotkey_last if self._hotkey_last else ''))
+
+    def _note_hotkey(self, text, result):
         import time
         self._hotkey_note = (text, time.monotonic() + _HOTKEY_NOTE_SEC)
+        # 게임→앱 전환 사이에 6초 강조가 사라져도 마지막 입력 시각·결과는 계속 남긴다.
+        self._hotkey_last = f"마지막 단축키 입력 {time.strftime('%H:%M:%S')} · {result}"
+        self._show_hotkey()
 
     def _hotkey_pressed(self, shortcut, target, active):
         """단축키 입력마다 결과를 남긴다(저장 불가 상태 포함). 게임 창에서 받은 입력만 저장한다."""
         if not self._allowed():
             return
         if not (active and target is not None and shortcut[1] == target.hwnd):
-            self._note_hotkey('단축키 입력을 받았어요 · 게임 창이 앞에 있을 때만 저장해요.')
+            self._note_hotkey('단축키 입력을 받았어요 · 게임 창이 앞에 있을 때만 저장해요.',
+                              '게임 창이 앞에 있지 않아 저장 안 함')
             return
         try:
             self.service.request_save(shortcut[0])
         except Exception as exc:
             reason = self.service.error or str(exc)
-            self._note_hotkey(f'단축키 입력을 받았지만 지금은 저장할 수 없어요: {reason}')
+            self._note_hotkey(f'단축키 입력을 받았지만 지금은 저장할 수 없어요: {reason}', f'저장 불가: {reason}')
             return
-        self._note_hotkey('단축키 입력을 받았어요 · 저장 요청을 접수했어요.')
+        self._note_hotkey('단축키 입력을 받았어요 · 저장 요청을 접수했어요.', '저장 요청 접수')
 
     def _tick(self):
         if self.service is None:

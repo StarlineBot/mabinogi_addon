@@ -209,5 +209,15 @@ def test_hotkey_feedback_stays_visible_over_recording_error(monkeypatch, active,
     tools._tick()
     if refuse:  # 표시 시간이 지나면 다시 녹화 오류 문구가 보인다.
         assert tools.panel.save_result.text() == error
+    # 강조가 사라져도 마지막 단축키 입력 시각·결과는 계속 남는다(게임→앱 전환 대비).
+    import re
+    tools._hotkey_base = '검증용 단축키: Ctrl+Alt+F10 · 실게임 미검증'
+    tools._show_hotkey()
+    lines = tools.panel.hotkey.text().split('\n')
+    assert lines[0] == tools._hotkey_base
+    assert re.fullmatch(r'마지막 단축키 입력 \d\d:\d\d:\d\d · .+', lines[1])
+    assert {'지금은 저장할 수 없어요': '저장 불가: video buffer limit', '게임 창이 앞에': '게임 창이 앞에 있지 않아',
+            '접수했어요': '저장 요청 접수'}[next(k for k in ('지금은 저장할 수 없어요', '게임 창이 앞에', '접수했어요')
+                                          if k in expected)] in lines[1]
     tools.panel.deleteLater()
     host.close()

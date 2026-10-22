@@ -247,9 +247,9 @@ class BlackboxService:
                 runtime.cancel_reserved(reservation)
             self.completed.append(('rejected', str(exc)))
 
-    def retry_cleanup(self):
-        for runtime in self.runtimes.values():
-            runtime.retry_cleanup()
+    def retry_cleanup(self) -> int:
+        """정리 대기 원본을 다시 지운다(미완성 캡처 자료는 명시적 폐기 대상이라 건드리지 않음)."""
+        return sum(runtime.retry_cleanup() or 0 for runtime in self.runtimes.values())
 
     def orphan_sources(self):
         if self.producer is not None:

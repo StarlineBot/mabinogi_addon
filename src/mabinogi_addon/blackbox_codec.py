@@ -6,6 +6,7 @@
 from dataclasses import dataclass
 import io
 import json
+import logging
 import math
 import os
 import signal
@@ -16,6 +17,8 @@ import threading
 import time
 
 from .blackbox_export import ByteSink
+
+_log = logging.getLogger(__name__)
 
 
 def stream_process(command, sink, *, timeout: float, chunks=(), host=None):
@@ -59,13 +62,29 @@ def stream_process(command, sink, *, timeout: float, chunks=(), host=None):
             errors.append(exc)
     threads = [threading.Thread(target=fn, name='blackbox-codec-pipe') for fn in (output, input_, stderr)]
     deadline = time.monotonic() + timeout
+    def exited():
+        """인코더가 비정상 종료했으면 종료 코드·stderr 오류를 만든다(파이프 오류보다 우선).
+
+        인코더가 먼저 죽으면 입력 스레드는 BrokenPipe를 받는다. 그 오류만 보이면 실제 원인
+        (예: 하드웨어 인코더 초기화 실패)이 가려지므로 종료 코드와 진단을 먼저 확인한다."""
+        try:
+            process.wait(min(1.0, max(0.0, deadline - time.monotonic())))
+        except subprocess.TimeoutExpired:
+            return None
+        if not process.returncode:
+            return None
+        threads[2].join(min(1.0, max(0.0, deadline - time.monotonic())))  # stderr 수집 마무리
+        with lock:
+            text = diagnostic.decode(errors='replace').strip()
+        _log.error('blackbox encoder exited %s: %s', process.returncode, text)
+        return OSError(f'encoder exited {process.returncode}: {text}')
     try:
         for thread in threads:
             thread.start()
         while process.poll() is None:
             sink.check_cancelled()
             if errors:
-                raise errors[0]
+                raise exited() or errors[0]
             if time.monotonic() >= deadline:
                 raise TimeoutError('encoder deadline exceeded')
             time.sleep(0.02)
@@ -74,10 +93,10 @@ def stream_process(command, sink, *, timeout: float, chunks=(), host=None):
         if any(thread.is_alive() for thread in threads):
             raise TimeoutError('encoder pipe did not finish')
         sink.check_cancelled()
+        if process.returncode:
+            raise exited()
         if errors:
             raise errors[0]
-        if process.returncode:
-            raise OSError(f'encoder exited {process.returncode}: {diagnostic.decode(errors="replace")}')
     finally:
         if sys.platform != 'win32':
             try:

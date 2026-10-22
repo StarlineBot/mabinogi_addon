@@ -116,10 +116,14 @@ class BlackboxRuntime:
         self._pending_retired.extend(segments)
         self.retry_cleanup()
 
-    def retry_cleanup(self):
+    def retry_cleanup(self) -> int:
+        """정리 대기 원본을 다시 지운다. 정리한 개수를 돌려준다."""
+        cleaned = 0
         while self._pending_retired:
             self._retire((self._pending_retired[0],))
             self._pending_retired.pop(0)
+            cleaned += 1
+        return cleaned
 
     def begin_close(self):
         self.session.begin_close()

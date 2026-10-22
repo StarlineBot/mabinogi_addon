@@ -248,3 +248,19 @@ def test_service_passes_product_output_and_input_bounds_to_native(tmp_path):
     service.tick(Target(1, 2, 3), active=True)
     assert calls[0]['max_output'] == (1920, 1080) and calls[0]['max_input'] == (3840, 2160)
     service.producer.request_stop()
+
+
+def test_encoder_crash_reports_exit_code_and_stderr_instead_of_broken_pipe(caplog):
+    """0.11.2 실사용: 인코더가 먼저 죽으면 BrokenPipe만 보여 실제 원인이 가려졌다."""
+    import io, sys, logging
+    from mabinogi_addon.blackbox_codec import stream_process
+    from mabinogi_addon.blackbox_export import ByteSink
+    fake = [sys.executable, '-c', "import sys; sys.stderr.write('h264_mf: device init failed\\n'); sys.exit(1)"]
+    frames = (bytes(1920 * 1080 * 4),) * 15
+    caplog.set_level(logging.ERROR)
+    for _ in range(3):
+        with _pytest.raises(OSError) as caught:
+            stream_process(fake, ByteSink(io.BytesIO(), 1 << 20), timeout=20, chunks=frames)
+        assert not isinstance(caught.value, BrokenPipeError)
+        assert 'encoder exited 1: h264_mf: device init failed' in str(caught.value)
+    assert 'h264_mf: device init failed' in caplog.text

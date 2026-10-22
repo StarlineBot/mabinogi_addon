@@ -58,3 +58,53 @@ def test_update_waits_before_download_or_apply(monkeypatch):
     monkeypatch.setattr(updater, 'apply_update', lambda *a: pytest.fail('apply before drain'))
     MainWindow._on_update_clicked(host)
     assert calls == ['drain', 'notice']
+
+
+def _recovery_service(entries, orphans, cleaned=0):
+    return SimpleNamespace(runtimes={'1:2': object()}, _closing=False, _allowed=lambda: True,
+        recoveries=lambda: list(entries), orphan_sources=lambda: tuple(orphans),
+        retry_cleanup=lambda: cleaned, spool=SimpleNamespace(discard=lambda t: None))
+
+
+def test_periodic_refresh_does_not_cancel_a_pressed_discard_click():
+    """0.11.2 실사용: 100ms 갱신이 폐기 버튼을 껐다 켜 누르는 중 클릭이 취소됐다."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    app = QApplication.instance() or QApplication([])
+    orphans = ['0236988e' + 'f' * 24]
+    dialog = BlackboxRecovery(_recovery_service([], orphans))
+    try:
+        dialog.show()
+        clicked = []
+        dialog.discard.clicked.disconnect()
+        dialog.discard.clicked.connect(lambda: clicked.append(True))
+        center = dialog.discard.rect().center()
+        QTest.mousePress(dialog.discard, Qt.MouseButton.LeftButton, pos=center)
+        for _ in range(3):
+            dialog.refresh()
+        QTest.mouseRelease(dialog.discard, Qt.MouseButton.LeftButton, pos=center)
+        assert clicked == [True]
+        # 내용이 바뀌면 다시 그리고 선택은 유지한다.
+        orphans.append('a' * 32)
+        dialog.refresh()
+        assert dialog.items.count() == 2 and dialog.items.currentIndex() == 0
+    finally:
+        dialog.close(); dialog.deleteLater(); app.processEvents()
+
+
+@pytest.mark.parametrize('cleaned, orphans, expected', [
+    (2, ['o' * 32], ['원본 2건을 정리했어요.', '미완성 캡처 자료 1건은 자동으로 지우지 않아요', '선택한 실패 자료 폐기']),
+    (0, [], ['정리 대기 중인 원본이 없어요.']),
+])
+def test_cleanup_retry_reports_result_and_orphan_path(monkeypatch, cleaned, orphans, expected):
+    app = QApplication.instance() or QApplication([])
+    shown = []
+    monkeypatch.setattr(QMessageBox, 'information', lambda parent, title, text: shown.append(text))
+    dialog = BlackboxRecovery(_recovery_service([], orphans, cleaned))
+    try:
+        dialog._cleanup()
+        assert len(shown) == 1 and all(part in shown[0] for part in expected)
+        if not orphans:
+            assert '미완성' not in shown[0]
+    finally:
+        dialog.close(); dialog.deleteLater(); app.processEvents()

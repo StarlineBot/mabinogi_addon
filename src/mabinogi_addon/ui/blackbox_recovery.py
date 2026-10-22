@@ -29,7 +29,30 @@ class BlackboxRecovery(QDialog):
         self.items.currentIndexChanged.connect(self._detail)
         self.refresh()
 
+    @staticmethod
+    def _label(runtime, ticket, result):
+        if runtime is None:
+            return f'{ticket[:8]} · 미완성 캡처 자료'
+        return f'{ticket[:8]} · ' + ('저장 진행 중' if result is None else
+            ('저장 완료 · 정리 대기' if result.completed else '저장 실패'))
+
+    def _view(self, sessions, entries, allowed):
+        """화면에 보이는 내용(바뀔 때만 다시 그린다)."""
+        return (sessions, allowed, tuple(
+            (self._label(*entry), entry[1], entry[0] is None, None if entry[2] is None else
+             (entry[2].completed, entry[2].error, entry[2].cleanup_error)) for entry in entries))
+
     def refresh(self):
+        """컨트롤러 타이머가 창이 보이는 동안 100ms마다 부른다. 매번 목록을 비우고 버튼을 껐다 켜면
+        누르는 중 클릭이 취소돼(폐기 무반응) 내용이 바뀔 때만 다시 그린다."""
+        sessions = tuple(self.service.runtimes)
+        entries = self.service.recoveries() + [(None, source, None) for source in self.service.orphan_sources()]
+        allowed = self.service._allowed() and not self.service._closing
+        view = self._view(sessions, entries, allowed)
+        if view == getattr(self, '_shown', None):
+            self.entries = entries  # 최신 객체 참조만 갱신(버튼·선택 상태는 그대로)
+            return
+        self._shown = view
         previous = self.items.currentIndex()
         previous_ticket = self.entries[previous][1] if hasattr(self, 'entries') and 0 <= previous < len(self.entries) else None
         previous_session = self.sessions.currentText()
@@ -38,15 +61,13 @@ class BlackboxRecovery(QDialog):
             self.sessions.addItem(session_id)
         if previous_session:
             self.sessions.setCurrentText(previous_session)
-        self.save_previous.setEnabled(self.service._allowed() and not self.service._closing)
-        self.entries = self.service.recoveries() + [(None, source, None) for source in self.service.orphan_sources()]
+        self.save_previous.setEnabled(allowed)
+        self.entries = entries
+        self.items.blockSignals(True)
         self.items.clear()
-        for runtime, ticket, result in self.entries:
-            if runtime is None:
-                self.items.addItem(f'{ticket[:8]} · 미완성 캡처 자료')
-                continue
-            self.items.addItem(f'{ticket[:8]} · ' + ('저장 진행 중' if result is None else
-                ('저장 완료 · 정리 대기' if result.completed else '저장 실패')))
+        for entry in self.entries:
+            self.items.addItem(self._label(*entry))
+        self.items.blockSignals(False)
         for index, (_, ticket, _) in enumerate(self.entries):
             if ticket == previous_ticket:
                 self.items.setCurrentIndex(index)
@@ -123,9 +144,17 @@ class BlackboxRecovery(QDialog):
 
     def _cleanup(self):
         try:
-            self.service.retry_cleanup()
+            cleaned = self.service.retry_cleanup()
         except Exception as exc:
             QMessageBox.warning(self, '정리 실패', str(exc))
+            self.refresh()
+            return
+        orphans = len(self.service.orphan_sources())
+        lines = [f'원본 {cleaned}건을 정리했어요.' if cleaned else '정리 대기 중인 원본이 없어요.']
+        if orphans:
+            lines.append(f"미완성 캡처 자료 {orphans}건은 자동으로 지우지 않아요. 목록에서 선택한 뒤 "
+                         "'선택한 실패 자료 폐기'로 지울 수 있어요.")
+        QMessageBox.information(self, '원본 정리', '\n'.join(lines))
         self.refresh()
 
     def _save_previous(self):
