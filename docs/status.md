@@ -32,6 +32,29 @@
 
 ## 마지막 작업
 
+### 0.11.0 여섯 번째 비게시 후보 검증 성공
+
+- [verify-only #39771240282](https://github.com/StarlineBot/mabinogi_addon/actions/runs/39771240282),
+  소스 `3d8e9a8c2c5583b67799aefbb7848118937326cc`, 버전0.11.0, attempt1 성공.
+  Linux 변경검사320건/19.05초, Windows 최소 기동2건/9.08초 통과.
+- 실제 Windows에서 codec host(11:34:14), native DLL(11:34:27), FFmpeg(11:37:24),
+  앱 exe(11:38:47, 162,512,589바이트) 생성 확인. candidate seal/업로드까지 성공했다.
+  이전 namespace/projection 컴파일 오류는 이 SHA에서 해소됐다. 실제 게임 캡처/프로세스 오디오/
+  하드웨어 인코딩/게임 부하 및 RSS 실제 장치 적용은 미검증이며 빌드 성공과 구분한다.
+- request16초/Linux1분1초/Windows5분52초, 전체11:31:41~11:38:56 UTC 7분15초로5분 목표 미달.
+  apt 약21초(156MB/8초), exe 빌드 약4분57초. 네이티브는 빌드 시작37초 이내 완료했고
+  이후 FFmpeg 준비/빌드 약3분, 최종 패키징 약1분20초가 남았다. 이번 다운로드는 빨랐으므로
+  속도 차이를 timeout 수정의 효과로 단정하지 않는다. 캐시는 승인/도입하지 않았다.
+- 후보 `verified-windows-39771240282-1`, artifact12422911841, 163,608,231바이트,
+  만료2026-10-23 11:38:49 UTC. API 아티팩트 SHA256:
+  `9fc367e5c47fcc4a055754f2866b99e9b9205401b31ee3761f6ec15e98b0bc02`.
+  이는 아티팩트 해시이며 exe 해시가 아니다. 후보 다운로드는 Azure Forbidden으로 거부되어
+  재시도/우회하지 않았고 로컬 manifest/파일 해시 대조는 수행하지 못했다.
+  정상 완료 로그는 `/tmp/blackbox-verify-39771240282-full.log`에서 확인했다.
+- 수동 게시 입력은 windows.yml/main, version0.11.0, mode publish-existing이며 후보 run은39771240282.
+  기존 게시 절차가 후보 출처/manifest/해시/유효기간을 다시 검증한다. 사용자만 게시를 실행한다.
+  v0.11.0 미사용 확인. 7차 실행/태그/Release/배포는 수행하지 않았다.
+
 ### 0.11.0 설치 대기 제한 및 네이티브 선행 컴파일
 
 - 사용자가 최소 두 개선과 수정 후 여섯 번째 verify-only 1회를 승인했다. apt update60초/
