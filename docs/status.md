@@ -123,6 +123,13 @@
   (apt 33초, 변경 검사 22초, exe 빌드 4분51초) → 게시 성공. 태그 `13606b1`, exe sha256 `9e2747e2…1124`/
   162,541,818 bytes가 후보 manifest·version.json과 일치. 실행 중 회귀 job API가 잠시 queued로 늦게 표시됐으나
   보고서 artifact는 정상 생성. 실게임(UAC·단축키·인코더 실제 오류) 확인 남음.
+- 0.11.2→0.11.3 업데이트 실사용: '업데이트 시 관리자 권한으로 실행 안 됨' 제보.
+  Highly Likely(코드+Windows 규칙): 업데이트를 수행한 0.11.2 프로세스는 일반 권한이고, `updater.apply_update`가
+  교체 후 `subprocess.Popen`(CreateProcess)으로 requireAdministrator exe(0.11.3, makespec `uac_admin=True` 확인)를
+  실행 → UAC 없이 ERROR_ELEVATION_REQUIRED(740)로 실패. exe는 이미 교체돼 다음 수동 실행부터 관리자.
+  수정 방향: 비관리자이거나 740이면 ShellExecuteEx(runas/open)로 재실행(_PYI·_MEIPASS2 환경 제거 후),
+  실패 문구에 '앱을 다시 실행해 주세요' 안내. updater 주석의 '현재 프로세스도 관리자' 전제 수정.
+  이미 배포된 ≤0.11.2 업데이터에는 소급 적용 불가 → 0.11.3 노트/안내로 1회 수동 재실행 안내 검토.
 
 - 관리자 실행(사용자 결정 A): `--uac-admin` 복원, 자동실행 등록·해제 실패를 시작 토스트/설정 문구로 안내,
   주석·구현 문서·공개 README·노트 갱신. 로컬 변경 검사 398건, 노트·CI 정책 256건 통과. exe UAC 동작은 Windows 미검증.
