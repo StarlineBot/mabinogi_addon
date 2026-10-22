@@ -161,6 +161,8 @@
 - 독립 QA(`2ca991c`): 원복 거절 시 CPU만 원복·'네트워크 원복 대기' 안내, RSS prepared 원복 시 원본 재기록 확인.
   `qa_0114_rss_prepared_restore` 종료 0(1회 원복으로 원본 복귀), 0.11.4 변경 검사 435건/25.47초 통과.
   **autocrlf 빌드 수정은 아직 미반영**(`_git_checkout`에 `--config core.autocrlf=false` 없음) → 배포 재실행 전 필요.
+- 독립 QA(`fb9d5e6`): autocrlf 수정 반영 확인. 전역 core.autocrlf=true 조건에서 실제 코드로 nv·AMF 해시 일치,
+  0.11.4 변경 검사 436건/21.26초 통과. 배포 차단 없음. Windows FFmpeg(nvenc/amf) 빌드·실녹화는 재실행에서 확인.
 
 ### 0.11.3 추가 — 항상 관리자 실행 복원, 블랙박스 종료 확인 흐름 시안
 
