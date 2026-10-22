@@ -5,6 +5,7 @@
 """
 from pathlib import Path
 from dataclasses import replace
+import time
 
 from .blackbox_export import ExportJob
 from .blackbox_queue import ExportQueue
@@ -24,6 +25,7 @@ class BlackboxRuntime:
         self._validate = validate
         self._retire = retire
         self._plans = {}
+        self.requested_at = {}  # ticket → 저장 요청 시각(벽시계, 화면 표시용)
         self._pending = {}
         self._pending_retired = []
 
@@ -36,6 +38,7 @@ class BlackboxRuntime:
             self._retire_segments(self.session.release_save(plan))
             raise
         self._plans[ticket] = plan
+        self.requested_at[ticket] = time.time()
         return ticket
 
     def reserve_save(self, request_us, output):
@@ -69,6 +72,7 @@ class BlackboxRuntime:
             raise
         del self._pending[token]
         self._plans[ticket] = plan
+        self.requested_at[ticket] = time.time()
         return ticket
 
     def cancel_reserved(self, token):

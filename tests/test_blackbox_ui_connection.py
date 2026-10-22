@@ -93,7 +93,7 @@ def test_periodic_refresh_does_not_cancel_a_pressed_discard_click():
 
 
 @pytest.mark.parametrize('cleaned, orphans, expected', [
-    (2, ['o' * 32], ['원본 2건을 정리했어요.', '미완성 캡처 자료 1건은 자동으로 지우지 않아요', '선택한 실패 자료 폐기']),
+    (2, ['o' * 32], ['원본 2건을 정리했어요.', '미완성 캡처 자료 1건은 앱을 닫을 때 자동으로 정리해요', '선택한 실패 자료 폐기']),
     (0, [], ['정리 대기 중인 원본이 없어요.']),
 ])
 def test_cleanup_retry_reports_result_and_orphan_path(monkeypatch, cleaned, orphans, expected):
@@ -106,5 +106,30 @@ def test_cleanup_retry_reports_result_and_orphan_path(monkeypatch, cleaned, orph
         assert len(shown) == 1 and all(part in shown[0] for part in expected)
         if not orphans:
             assert '미완성' not in shown[0]
+    finally:
+        dialog.close(); dialog.deleteLater(); app.processEvents()
+
+
+def test_recovery_labels_use_times_not_internal_ids():
+    from datetime import datetime
+    from mabinogi_addon.ui.blackbox_recovery import clock_text, session_text
+    now = datetime(2026, 10, 23, 18, 0)
+    assert clock_text(datetime(2026, 10, 23, 15, 42).timestamp(), now) == '오후 3:42'
+    assert clock_text(datetime(2026, 10, 23, 0, 5).timestamp(), now) == '오전 12:05'
+    assert clock_text(datetime(2026, 10, 22, 9, 7).timestamp(), now) == '10월 22일 오전 9:07'
+    created = int(datetime(2026, 10, 23, 15, 10).timestamp() * 10_000_000) + 116444736000000000
+    assert session_text(f'28508:{created}', now) == '오후 3:10에 시작한 게임 실행'
+    app = QApplication.instance() or QApplication([])
+    runtime = SimpleNamespace(requested_at={'0236988e' + 'f' * 24: datetime.now().timestamp()})
+    failed = SimpleNamespace(completed=False, error='encoder exited 1', cleanup_error=None)
+    service = SimpleNamespace(runtimes={f'28508:{created}': runtime}, _closing=False, _allowed=lambda: True,
+        recoveries=lambda: [(runtime, '0236988e' + 'f' * 24, failed)], orphan_sources=lambda: ('a' * 32,),
+        spool=SimpleNamespace(created=lambda source: datetime.now().timestamp()))
+    dialog = BlackboxRecovery(service)
+    try:
+        texts = [dialog.items.itemText(i) for i in range(dialog.items.count())] + [dialog.sessions.itemText(0)]
+        assert texts[0].endswith('녹화 · 저장 실패') and texts[1].endswith('녹화 · 미완성 캡처 자료')
+        assert not any('0236988e' in t or 'aaaa' in t or '28508' in t for t in texts)
+        assert dialog.sessions.itemData(0) == f'28508:{created}'  # 저장 요청은 실행 ID로
     finally:
         dialog.close(); dialog.deleteLater(); app.processEvents()

@@ -1,5 +1,29 @@
 """실패 자료 복구/명시적 폐기 전용 대화상자. 기존 클립은 삭제하지 않는다."""
+from datetime import datetime
+
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel, QComboBox, QPushButton, QMessageBox
+
+
+def clock_text(timestamp, now=None):
+    """'오후 3:42'(오늘) / '10월 23일 오후 3:42'. 내부 ID 대신 사용자가 알아볼 시각으로 표시한다."""
+    if timestamp is None:
+        return '시각 확인 불가'
+    try:
+        t = datetime.fromtimestamp(timestamp)
+    except (OverflowError, OSError, ValueError):
+        return '시각 확인 불가'
+    now = now or datetime.now()
+    text = f"{'오전' if t.hour < 12 else '오후'} {t.hour % 12 or 12}:{t.minute:02d}"
+    return text if t.date() == now.date() else f'{t.month}월 {t.day}일 {text}'
+
+
+def session_text(session_id, now=None):
+    """'PID:프로세스 생성 FILETIME' 실행 ID를 '오후 3:10에 시작한 게임 실행'으로."""
+    try:
+        created = int(str(session_id).split(':', 1)[1])
+        return f'{clock_text((created - 116444736000000000) / 10_000_000, now)}에 시작한 게임 실행'
+    except (IndexError, ValueError):
+        return '게임 실행'
 
 
 class BlackboxRecovery(QDialog):
@@ -9,7 +33,8 @@ class BlackboxRecovery(QDialog):
         self.setWindowTitle('블랙박스 저장 내역·복구')
         self.resize(570, 340)
         layout = QVBoxLayout(self)
-        label = QLabel('실패 자료와 원본은 자동으로 삭제하지 않아요.\n재시도는 처음 요청한 구간을 사용해요.')
+        label = QLabel('저장하지 못한 자료는 앱을 닫을 때 자동으로 정리해요.\n'
+                       '그 전까지는 같은 구간을 다시 저장하거나 직접 폐기할 수 있어요.')
         label.setWordWrap(True); layout.addWidget(label)
         self.items = QComboBox(); layout.addWidget(self.items)
         self.detail = QLabel(); self.detail.setWordWrap(True); layout.addWidget(self.detail)
@@ -29,11 +54,12 @@ class BlackboxRecovery(QDialog):
         self.items.currentIndexChanged.connect(self._detail)
         self.refresh()
 
-    @staticmethod
-    def _label(runtime, ticket, result):
+    def _label(self, runtime, ticket, result):
         if runtime is None:
-            return f'{ticket[:8]} · 미완성 캡처 자료'
-        return f'{ticket[:8]} · ' + ('저장 진행 중' if result is None else
+            created = getattr(getattr(self.service, 'spool', None), 'created', lambda source: None)
+            return f'{clock_text(created(ticket))} 녹화 · 미완성 캡처 자료'
+        when = clock_text(getattr(runtime, 'requested_at', {}).get(ticket))
+        return f'{when} 녹화 · ' + ('저장 진행 중' if result is None else
             ('저장 완료 · 정리 대기' if result.completed else '저장 실패'))
 
     def _view(self, sessions, entries, allowed):
@@ -55,12 +81,12 @@ class BlackboxRecovery(QDialog):
         self._shown = view
         previous = self.items.currentIndex()
         previous_ticket = self.entries[previous][1] if hasattr(self, 'entries') and 0 <= previous < len(self.entries) else None
-        previous_session = self.sessions.currentText()
+        previous_session = self.sessions.currentData()
         self.sessions.clear()
         for session_id in self.service.runtimes:
-            self.sessions.addItem(session_id)
-        if previous_session:
-            self.sessions.setCurrentText(previous_session)
+            self.sessions.addItem(session_text(session_id), session_id)  # 표시는 시각, 데이터는 실행 ID
+        if previous_session is not None and self.sessions.findData(previous_session) >= 0:
+            self.sessions.setCurrentIndex(self.sessions.findData(previous_session))
         self.save_previous.setEnabled(allowed)
         self.entries = entries
         self.items.blockSignals(True)
@@ -152,15 +178,15 @@ class BlackboxRecovery(QDialog):
         orphans = len(self.service.orphan_sources())
         lines = [f'원본 {cleaned}건을 정리했어요.' if cleaned else '정리 대기 중인 원본이 없어요.']
         if orphans:
-            lines.append(f"미완성 캡처 자료 {orphans}건은 자동으로 지우지 않아요. 목록에서 선택한 뒤 "
-                         "'선택한 실패 자료 폐기'로 지울 수 있어요.")
+            lines.append(f"미완성 캡처 자료 {orphans}건은 앱을 닫을 때 자동으로 정리해요. 지금 지우려면 "
+                         "목록에서 선택한 뒤 '선택한 실패 자료 폐기'를 누르세요.")
         QMessageBox.information(self, '원본 정리', '\n'.join(lines))
         self.refresh()
 
     def _save_previous(self):
         import time
         try:
-            self.service.request_saved_session(self.sessions.currentText(), time.perf_counter_ns() // 1000)
+            self.service.request_saved_session(self.sessions.currentData(), time.perf_counter_ns() // 1000)
         except Exception as exc:
             QMessageBox.warning(self, '저장 요청 실패', str(exc))
         self.refresh()

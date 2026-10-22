@@ -90,18 +90,20 @@ def test_restarts_share_queue_keep_prior_buffer_and_allow_older_save(tmp_path):
     close(service)
 
 
-def test_revoked_inflight_source_is_recovery_not_automatically_deleted(tmp_path):
+def test_revoked_inflight_source_is_kept_while_running_and_cleaned_on_app_close(tmp_path):
+    """실행 중에는 미완성 자료를 자동 삭제하지 않는다(복구 창에서 처리). 앱을 닫으면 원본 버퍼가
+    사라져 쓸 수 없으므로 묻지 않고 지우며, 그 자료 때문에 종료가 막히지 않는다(2026-10-23 결정)."""
     access = [True]
     service = make_service(tmp_path, access)
     target = Target(1, 2, 3)
     service.tick(target, active=True)
     source = add_segment(service)
+    path = service.spool._files[source].path
     access[0] = False
     service.tick(target, active=True)
-    assert source in service.orphan_sources()
-    assert not service.prepare_close()
-    service.spool.discard(source)  # explicit discard after user decision
+    assert source in service.orphan_sources() and path.exists()
     assert service.prepare_close()
+    assert not path.exists() and not service.spool.directory.exists()
 
 
 def test_profile_does_not_silently_disable_audio(tmp_path):
@@ -134,4 +136,43 @@ def test_save_reserved_before_revoke_includes_only_requested_part(tmp_path):
     assert plan.request_us == 75 and plan.duration_us == 75
     assert len([value for kind, value in service.completed if kind == 'accepted']) == 1
     service.tick(target, active=False)
+    close(service)
+
+
+def test_failed_save_is_cleaned_on_app_close_without_blocking(tmp_path):
+    """저장 실패 자료가 있어도 앱 종료가 막히지 않고, 실패 partial은 지워진다(저장한 영상은 없음)."""
+    service = make_service(tmp_path)
+    def broken(plan, sink):
+        sink.write(b'half')
+        raise OSError('encoder exited 1: h264_mf failed')
+    service.codec.encode = broken
+    target = Target(1, 2, 3)
+    service.tick(target, active=True)
+    add_segment(service, 0, 100)
+    token = service.request_save(75)
+    service.producer.results.put(('flush', (token, 75)))
+    service.tick(target, active=True)
+    assert service.queue.wait_idle(5)
+    ticket, = service.current.tickets
+    assert service.current.queue.result(ticket).completed is False
+    assert list(tmp_path.glob('.blackbox-*.partial'))  # 실행 중에는 재시도를 위해 보존
+    close(service)
+    assert not list(tmp_path.glob('.blackbox-*.partial')) and not list(tmp_path.glob('blackbox-*.mp4'))
+    assert not service.spool.directory.exists() and service.budget.accounted_bytes == 0
+
+
+def test_next_start_cleans_leftovers_from_previous_run(tmp_path):
+    old = tmp_path / 'blackbox-oldrun'
+    old.mkdir()
+    (old / 'segment-1.partial').write_bytes(b'x')
+    foreign = tmp_path / 'blackbox-foreign'
+    foreign.mkdir()
+    (foreign / 'notes.txt').write_text('keep')  # 우리가 만든 이름이 아니면 지우지 않는다
+    (tmp_path / '.blackbox-abc.partial').write_bytes(b'y')
+    (tmp_path / 'clip.mp4').write_bytes(b'saved')
+    service = make_service(tmp_path)
+    assert not old.exists() and not (tmp_path / '.blackbox-abc.partial').exists()
+    assert (foreign / 'notes.txt').read_text() == 'keep' and (tmp_path / 'clip.mp4').exists()
+    assert len(service.leftover_failures) == 2  # 알 수 없는 파일 + 그 폴더를 비우지 못함
+    assert service.spool.directory.exists() and service.spool.directory != old
     close(service)

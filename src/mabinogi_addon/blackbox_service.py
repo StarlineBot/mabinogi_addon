@@ -4,6 +4,7 @@
 게임 재실행은 별도 ReplayBuffer로 보존하며 모든 실행이 하나의 1worker/2slot 큐를 공유한다.
 """
 from dataclasses import dataclass
+import logging
 from pathlib import Path
 from queue import Empty
 import time
@@ -17,8 +18,10 @@ from .blackbox_producer import CaptureProducer, ProducerLimits
 from .blackbox_queue import ExportQueue
 from .blackbox_runtime import BlackboxRuntime
 from .blackbox_session import BlackboxSession, CaptureContext
-from .blackbox_spool import DiskSpool
+from .blackbox_spool import DiskSpool, clean_leftovers
 from .feature_access import is_creator
+
+_log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -82,6 +85,12 @@ class BlackboxService:
         self.allowed = allowed
         self.budget = DiskBudget(max_bytes=settings.max_bytes, min_free_bytes=settings.min_free_bytes,
                                  max_entries=settings.max_entries)
+        # 이전 실행이 남긴 임시 자료(종료 시 정리 실패·비정상 종료)를 새 저장소를 만들기 전에 정리한다.
+        removed, self.leftover_failures = clean_leftovers(settings.temp_parent, settings.output_folder)
+        if removed:
+            _log.info('지난 실행의 블랙박스 임시 자료 %d개를 정리했어요.', removed)
+        if self.leftover_failures:
+            _log.warning('지난 실행의 블랙박스 임시 자료 일부를 지우지 못했어요: %s', self.leftover_failures)
         self.spool = DiskSpool(settings.temp_parent, self.budget)
         self.queue = ExportQueue(self.budget, max_workers=1, max_jobs=2, creator_check=allowed)
         self.codec = FFmpegEncoder(settings.codec, self.spool.resolve)
@@ -296,20 +305,41 @@ class BlackboxService:
             return False  # tick이 유효한 기존 segment/flush 결과를 먼저 인수
         if self._closed:
             return True
-        if self._pending or any(r.tickets for r in self.runtimes.values()):
+        # 진행 중인 저장은 결과가 나올 때까지 기다린다(성공할 수 있는 영상을 버리지 않는다).
+        if self._pending or any(r.queue.result(t) is None for r in self.runtimes.values() for t in r.tickets):
             return False
+        # 앱을 닫으면 다시 저장할 원본 버퍼가 사라지므로, 실패·미완성 자료는 묻지 않고 지운다
+        # (2026-10-23 사용자 결정). 이미 저장한 영상은 지우지 않는다. 지우기 실패는 종료를 막지 않고
+        # 다음 실행 시작 때 clean_leftovers가 다시 정리한다.
+        leftover = []
+        for runtime in self.runtimes.values():
+            for ticket in runtime.tickets:
+                try:
+                    if runtime.queue.result(ticket).completed:
+                        runtime.queue.discard_partial(ticket)  # 저장 완료·정리 대기
+                        runtime.accept_completed(ticket)
+                    else:
+                        runtime.discard_failed(ticket)
+                except Exception as exc:
+                    leftover.append(f'저장 자료: {exc}')
         try:
             for runtime in self.runtimes.values():
                 runtime.begin_close()
             self.queue.begin_close()
             for runtime in self.runtimes.values():
                 if not runtime.finish_close():
-                    return False
+                    leftover.append('저장 큐 정리 대기')
             if not self.queue.finish_close():
-                return False
+                leftover.append('저장 큐 정리 대기')
+            for source in self.spool.sources:  # 남은 미완성 캡처 자료(영상으로 쓸 수 없음)
+                try:
+                    self.spool.discard(source)
+                except Exception as exc:
+                    leftover.append(f'미완성 자료: {exc}')
             self.spool.close()
         except Exception as exc:
-            self.error = f'cleanup pending: {exc}'
-            return False
+            leftover.append(str(exc))
+        if leftover:
+            _log.warning('블랙박스 임시 자료 일부를 지우지 못했어요(다음 실행에서 다시 정리): %s', leftover)
         self._closed = True
         return True

@@ -20,6 +20,39 @@ class _File:
     complete: bool = False
 
 
+def clean_leftovers(temp_parent: Path, output_folder: Path | None = None) -> tuple[int, list[str]]:
+    """이전 실행이 남긴 블랙박스 임시 자료를 정리한다(앱 시작 시, 새 저장소를 만들기 전에 호출).
+
+    앱 종료 시 자동 정리가 실패했거나(파일 잠김) 비정상 종료로 남은 자료다. 영상으로 쓸 수 없는
+    자료라 지운다. 우리가 만든 이름(임시 폴더 'blackbox-*' 안의 'segment-*', 영상 폴더의
+    '.blackbox-*.partial')의 일반 파일만 지우고, 링크나 알 수 없는 파일은 건드리지 않고 보고한다.
+    단일 인스턴스 가드가 있어 다른 실행이 쓰는 중인 폴더는 없다. 반환: (지운 파일 수, 실패 목록)."""
+    removed, failures = 0, []
+    def unlink(path):
+        nonlocal removed
+        try:
+            path.unlink(); removed += 1
+        except OSError as exc:
+            failures.append(f'{path.name}: {exc}')
+    for folder in sorted(Path(temp_parent).glob('blackbox-*')):
+        if folder.is_symlink() or not folder.is_dir():
+            continue
+        for entry in folder.iterdir():
+            if entry.is_symlink() or not entry.is_file() or not entry.name.startswith('segment-'):
+                failures.append(f'{folder.name}/{entry.name}: 알 수 없는 항목이라 남겨 둠')
+                continue
+            unlink(entry)
+        try:
+            folder.rmdir()
+        except OSError as exc:
+            failures.append(f'{folder.name}: {exc}')
+    if output_folder is not None and Path(output_folder).is_dir():
+        for entry in Path(output_folder).glob('.blackbox-*.partial'):
+            if entry.is_file() and not entry.is_symlink():
+                unlink(entry)
+    return removed, failures
+
+
 class DiskSpool:
     def __init__(self, parent: Path, budget):
         # 사용자 선택 parent 밑에 새 전용 폴더만 생성. 기존 폴더를 소유했다고 간주하지 않는다.
@@ -73,6 +106,13 @@ class DiskSpool:
         if record.path.is_symlink() or (stat.st_dev, stat.st_ino) != record.identity:
             raise OSError('spool file replaced')
         return record.path
+
+    def created(self, source: str) -> float | None:
+        """자료 파일의 수정 시각(표시용). 확인할 수 없으면 None."""
+        try:
+            return self._owned(self._files[source]).stat().st_mtime
+        except (KeyError, OSError):
+            return None
 
     def resolve(self, source: str) -> Path:
         record = self._files[source]

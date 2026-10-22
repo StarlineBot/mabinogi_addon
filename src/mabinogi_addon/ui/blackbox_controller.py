@@ -169,6 +169,11 @@ class BlackboxController(QObject):
             return
         panel = self.panel
         panel.preview_notice.setText('제작자 알파 · Windows 실게임 검증 전이에요.')
+        failures = getattr(self.service, 'leftover_failures', None)
+        if failures:
+            # 지난 실행이 남긴 임시 자료를 자동 정리하지 못했을 때만 안내한다(정리 성공은 조용히).
+            panel.save_result.setText(f'지난 실행에서 남은 블랙박스 임시 자료 {len(failures)}건을 지우지 못했어요. '
+                                      '다음 실행 때 다시 정리해요.')
         panel.audio_info.setText('게임 소리: 대상 프로세스만 · 동기화 검증 전' if self.service.settings.audio
                                  else '게임 소리: 영상 전용 검증 설정 · 소리는 저장하지 않아요.')
         panel.enabled.setChecked(self.service.enabled)
