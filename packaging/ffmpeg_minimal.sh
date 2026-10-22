@@ -16,6 +16,11 @@ fi
   --enable-decoder=h264,aac,pcm_s16le,rawvideo \
   --enable-parser=h264,aac --enable-demuxer=mov,rawvideo,wav,concat \
   --enable-muxer=mp4,null,rawvideo,wav --enable-protocol=file,pipe \
-  --enable-filter=scale,format,trim,setpts,concat,atrim,asetpts,anull,aresample,aformat,select,aselect,null
+  --enable-filter=scale,format,trim,setpts,concat,atrim,asetpts,anull,aresample,aformat,select,aselect,null || {
+    result=$?
+    # Preserve the compiler failure in CI output before the temporary tree is removed.
+    if [[ -f ffbuild/config.log ]]; then tail -n 80 ffbuild/config.log >&2 || true; fi
+    exit "$result"
+  }
 make -j2
 make install

@@ -118,3 +118,38 @@ def test_prepare_builds_and_validates_complete_bundle_from_approved_policy(tmp_p
     assert 'mabinogi_blackbox.dll' in manifest and 'corresponding-source.zip' in manifest
     assert json.loads((output/'product.json').read_text())['codec']['bitrate']==12000000
     assert events==['source-build','native-build','native-build']
+
+
+def test_msys_native_compiler_path_conversion_is_enabled():
+    spec = importlib.util.spec_from_file_location('source_builder', ROOT/'packaging/ffmpeg_source.py')
+    builder = importlib.util.module_from_spec(spec); spec.loader.exec_module(builder)
+    original = {'PATH': 'existing-tools', 'MSYS2_ARG_CONV_EXCL': '*'}
+    env = builder.msys_build_env(Path('C:/msys64/usr/bin/bash.exe'), original)
+    assert env['MSYS2_ARG_CONV_EXCL'] == ''
+    assert env['PATH'].endswith('existing-tools')
+    assert original['MSYS2_ARG_CONV_EXCL'] == '*'
+
+
+@pytest.mark.parametrize("diagnostic_fails", [False, True])
+def test_configure_failure_keeps_compiler_diagnostic_and_exit_status(tmp_path, diagnostic_fails):
+    import shutil
+    import subprocess
+    bash = shutil.which('bash')
+    assert bash, 'recipe diagnostic test requires bash'
+    (tmp_path/'ffbuild').mkdir()
+    configure = tmp_path/'configure'
+    configure.write_text('#!/usr/bin/env bash\nprintf "compiler probe failed\\n" > ffbuild/config.log\nexit 7\n')
+    configure.chmod(0o755)
+    import os
+    env = dict(os.environ)
+    if diagnostic_fails:
+        tail = tmp_path/'tail'
+        tail.write_text('#!/usr/bin/env bash\nexit 9\n')
+        tail.chmod(0o755)
+        env['PATH'] = str(tmp_path) + os.pathsep + env['PATH']
+    result = subprocess.run([bash, str(ROOT/'packaging/ffmpeg_minimal.sh'), str(tmp_path/'out')],
+                            cwd=tmp_path, capture_output=True, text=True, env=env)
+    assert result.returncode == 7
+    if not diagnostic_fails:
+        assert 'compiler probe failed' in result.stderr
+    assert not (tmp_path/'out').exists()

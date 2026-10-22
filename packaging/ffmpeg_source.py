@@ -107,6 +107,14 @@ def package_sources(root, work, install, compiler):
         binaries={name:digest(install/name) for name in BINARIES}), indent=2), encoding='utf-8')
 
 
+def msys_build_env(bash, environ=None):
+    env = dict(os.environ if environ is None else environ)
+    env['PATH'] = str(bash.parent) + os.pathsep + env.get('PATH', '')
+    # Native LLVM needs MSYS POSIX temporary paths converted to Windows paths.
+    env['MSYS2_ARG_CONV_EXCL'] = ''
+    return env
+
+
 def build(root, work, output):
     work.mkdir(parents=True, exist_ok=False)
     _, _, source = source_materials(root, work)
@@ -114,8 +122,7 @@ def build(root, work, output):
     bash = Path('C:/msys64/usr/bin/bash.exe')
     if not bash.is_file():
         raise RuntimeError('Build machine requires MSYS2 bash/make (GitHub windows-2022 provides MSYS2)')
-    env = dict(os.environ, PATH=str(bash.parent) + os.pathsep + os.environ.get('PATH', ''),
-               MSYS2_ARG_CONV_EXCL='*')
+    env = msys_build_env(bash)
     # Build tools only, never installed on the user's machine or shipped with the app.
     subprocess.run([str(bash), '--noprofile', '--norc', '-c',
         'command -v make >/dev/null || pacman -Sy --needed --noconfirm make'], check=True, env=env)

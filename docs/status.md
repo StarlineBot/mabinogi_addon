@@ -28,6 +28,28 @@
 
 ## 마지막 작업
 
+### 0.11.0 두 번째 후보 검증 및 빌드 진단 보완 — 2026-10-22
+
+- FFmpeg 검사 의존성 수정 `b19849ce91d5fb77d7cf9fcb786052f9331ef69a`의 main 반영 후,
+  추가1회 승인에 따라 [verify-only #39763839419](https://github.com/StarlineBot/mabinogi_addon/actions/runs/39763839419)를 실행했다.
+- 실제 Linux 변경검사 **308건/16.12초**, Windows 최소 기동 **2건/8.37초** 통과.
+  request14초, Linux작업2분36초, Windows작업1분54초. 결과는 **failure**다.
+  Windows FFmpeg configure에서 `C compiler test failed`로 중단됐으며 native CMake/DLL/codec host,
+  PyInstaller exe/후보 생성은 미실행이다. 실게임/장치 검증도 없다.
+- 당시 `MSYS2_ARG_CONV_EXCL='*'`가 native LLVM의 POSIX 임시 파일 경로 변환을 막고 있었다.
+  [MSYS2 공식 경로 문서](https://www.msys2.org/docs/filesystem-paths/)와 FFmpeg configure 임시 파일
+  전달 경로상 유력 원인이지만 실제 config.log가 없어 이번 실패의 확정 원인은 아니다.
+  빌드 전용 환경에서 상속된 차단값까지 해제하고, configure 실패 시 config.log 마지막80줄을
+  출력한 뒤 원래 종료코드를 유지하도록 최소 수정했다. 컴파일러 pin/제품정책/CI 게이트는 유지한다.
+- 개발 bundle/startup/WindowsCI 최종 **52건/1.68초** 통과. 경로변환 설정/원본환경 보호 및 합성
+  configure 실패진단·종료코드 보존을 검사했다. 독립 QA가 찾은 tail 실패 시 원래 종료코드 덮임을
+  수정하고 별도 재현 및 관련15건/0.82초 재통과했다. Linux 모형 통과는 Windows 빌드 성공이 아니다.
+- 로그 `/tmp/blackbox-verify-39763839419-{full,failed}.log`. 이전 거부 아티팩트 다운로드는 재시도하지 않았다.
+  기존 `/tmp/blackbox-minimal-build/review-bundle`은 이전 recipe의 교차 빌드 참고물이며 이번 수정의
+  검증된 Windows 산출물이 아니다. 다음 실제 빌드는 현행 recipe/대응소스/해시를 새로 생성한다.
+  세 번째 Actions는 미승인으로 실행하지 않는다. 태그/게시/배포도 실행하지 않았다.
+
+
 ### 0.11.0 첫 Windows 후보 검증 — 2026-10-22
 
 - **후속 수정**: 부모가 기존 패키징 승인에 포함되는 최소 통합임을 확인해 Linux apt 목록에
