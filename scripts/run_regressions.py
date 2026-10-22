@@ -4,6 +4,7 @@ import json
 import math
 import os
 from pathlib import Path
+import queue
 import re
 import signal
 import subprocess
@@ -11,6 +12,46 @@ import sys
 import threading
 import time
 import uuid
+from test_support.diagnostic_signal import ENVIRONMENT, FailureChannel
+
+_console = None
+
+
+class Console:
+    """Console backpressure must never block deadlines or owned-process cleanup."""
+    def __init__(self):
+        self.messages = queue.Queue(maxsize=32)
+        self.thread = threading.Thread(target=self._write, daemon=True)
+        self.thread.start()
+
+    def send(self, data, descriptor=1):
+        try: self.messages.put_nowait((descriptor, data[:8192]))
+        except queue.Full: pass
+
+    def _write(self):
+        while True:
+            descriptor, data = self.messages.get()
+            if descriptor is None:
+                data.set()
+                continue
+            try:
+                while data:
+                    data = data[os.write(descriptor, data):]
+            except OSError:
+                pass
+
+    def flush(self):
+        finished = threading.Event()
+        try: self.messages.put_nowait((None, finished))
+        except queue.Full: return
+        finished.wait(.2)
+
+
+def notice(message):
+    if _console is None:
+        print(message, flush=True)
+    else:
+        _console.send((message+'\n').encode('utf-8', errors='replace'))
 
 
 def public_trace(data,root):
@@ -28,7 +69,7 @@ def collect(root):
     root=Path(root);success=True
     try: runs=list(root.glob('run-*'))+list((root/'unit').glob('run-*'))+list((root/'native').glob('run-*'))
     except OSError:
-        print('[watchdog] diagnostic collection failed: discovery',flush=True)
+        notice('[watchdog] diagnostic collection failed: discovery')
         return False
     for run in sorted(runs)[-4:]:
         public=run/'public'
@@ -61,7 +102,7 @@ def collect(root):
         try: (public/'collection-status.json').write_text(json.dumps({'unavailable_files':unavailable,'limited_files':limited}),encoding='utf-8')
         except OSError: unavailable+=1
         if unavailable: success=False
-    if not success: print('[watchdog] diagnostic collection failed: bounded files unavailable',flush=True)
+    if not success: notice('[watchdog] diagnostic collection failed: bounded files unavailable')
     return success
 
 
@@ -72,9 +113,9 @@ def diagnostic_failure(run):
 
 
 def failure_record(run,reason):
-    print('[watchdog] '+reason,flush=True)
     try: (run/'failure.json').write_text(json.dumps({'failure':reason}),encoding='utf-8')
-    except OSError: print('[watchdog] diagnostic failure record unavailable',flush=True)
+    except OSError: notice('[watchdog] diagnostic failure record unavailable')
+    notice('[watchdog] '+reason)
 
 
 def relay_errors(stream,failed):
@@ -85,7 +126,8 @@ def relay_errors(stream,failed):
         while data:=os.read(stream.fileno(),4096):
             if prefix in tail+data: failed.set()
             tail=(tail+data)[-len(prefix):]
-            sys.stderr.write(data.decode('utf-8',errors='replace'));sys.stderr.flush()
+            if _console is None: os.write(2,data)
+            else: _console.send(data,2)
     except OSError:
         failed.set()
     finally: stream.close()
@@ -109,10 +151,20 @@ def supervise(arguments):
     gate=run/'start'
     env=os.environ.copy();env['MABINOGI_TEST_DIAGNOSTICS']=str(run)
     env['MABINOGI_TEST_STACK_SECONDS']=str(arguments.stack_interval)
+    io_failed=threading.Event()
+    try: channel=FailureChannel(io_failed,run)
+    except OSError:
+        failure_record(run,'diagnostic infrastructure failure: notification channel')
+        collect(root)
+        return 3
+    env[ENVIRONMENT]=channel.endpoint
     command=[sys.executable,'-u','-m','scripts.run_regressions','--child','--gate',str(gate),
              '--diagnostics',str(root),'--',*arguments.pytest_args]
-    process=subprocess.Popen(command,env=env,start_new_session=sys.platform!='win32',stderr=subprocess.PIPE)
-    io_failed=threading.Event()
+    try:
+        process=subprocess.Popen(command,env=env,start_new_session=sys.platform!='win32',stderr=subprocess.PIPE)
+    except BaseException:
+        channel.close()
+        raise
     relay=threading.Thread(target=relay_errors,args=(process.stderr,io_failed),daemon=True)
     relay.start()
     job=None;reason=None;states={};began=last_change=last_print=time.monotonic();signatures={};read_errors={};result=3
@@ -147,7 +199,7 @@ def supervise(arguments):
                 break
             if now-last_print>=30:
                 active=[{k:s.get(k) for k in ('worker','pid','node','case_hash','phase')} for s in states.values() if s.get('status')=='running']
-                print('[watchdog] active '+json.dumps(active),flush=True);last_print=now
+                notice('[watchdog] active '+json.dumps(active));last_print=now
             time.sleep(.1)
         result=(3 if reason.startswith('diagnostic infrastructure') else 124) if reason else process.wait()
         if not reason and diagnostic_failure(run):
@@ -156,9 +208,10 @@ def supervise(arguments):
     finally:
         try: _stop(process,job)
         except (OSError,subprocess.SubprocessError):
-            print('[watchdog] owned process cleanup failed',flush=True)
+            notice('[watchdog] owned process cleanup failed')
             result=result or 3
         relay.join(timeout=1)
+        channel.close()
         if io_failed.is_set(): result=result or 3
         if not collect(root): result=result or 3
     return result
@@ -189,4 +242,7 @@ def main(argv=None):
     return supervise(args)
 
 
-if __name__=='__main__': raise SystemExit(main())
+if __name__=='__main__':
+    _console=Console()
+    try: raise SystemExit(main())
+    finally: _console.flush()

@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import time
 import pytest
+from .diagnostic_signal import notify_failure
 
 _state=None
 _CLOCK=time.monotonic
@@ -42,6 +43,7 @@ class Journal:
         self.failed=dict(worker=self.record['worker'],pid=os.getpid(),operation=operation,
                          error=type(error).__name__,errno=error.errno,winerror=getattr(error,'winerror',None))
         notice=json.dumps(self.failed)+'\n'
+        notify_failure(self.root)
         try: _WRITE(2,('[watchdog] diagnostic infrastructure failure: '+notice).encode())
         except OSError: pass
         try:

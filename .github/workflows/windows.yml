@@ -76,11 +76,13 @@ jobs:
           uv run python -m scripts.release_candidate preflight --sha "$env:GITHUB_SHA" --version "$env:APP_VERSION"
       - name: Isolated regression
         id: unit
+        timeout-minutes: 28
         env:
           QT_QPA_PLATFORM: offscreen
         run: uv run --frozen python -m scripts.run_regressions --diagnostics test-diagnostics/unit --case-timeout 180 --session-timeout 1500 -- -n 2 -vv -ra -m 'not windows_integration' --durations=30 --junitxml=unit-results.xml
       - name: Native Windows integration
         id: native
+        timeout-minutes: 12
         env:
           QT_QPA_PLATFORM: windows
         run: uv run --frozen python -m scripts.run_regressions --diagnostics test-diagnostics/native --case-timeout 180 --session-timeout 600 -- -vv -ra -m windows_integration --durations=30 --junitxml=windows-results.xml

@@ -221,6 +221,7 @@ def test_watchdog_bounds_keep_full_gate_and_publish_only_safe_diagnostics():
         step=next(s for s in steps if s.get('id')==name)
         assert 'scripts.run_regressions' in step['run'] and '--case-timeout 180' in step['run']
         assert '--session-timeout '+session in step['run']
+        assert step['timeout-minutes']==('28' if name=='unit' else '12')
     collect=next(s for s in steps if s.get('name')=='Collect regression diagnostics')
     store=next(s for s in steps if s.get('name')=='Store regression diagnostics')
     assert collect['if']=='always()' and store['if']=='always()'

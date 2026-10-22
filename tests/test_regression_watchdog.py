@@ -196,7 +196,8 @@ def test_permanent_journal_io_failure_is_bounded_and_explicit(tmp_path,monkeypat
 
 
 @pytest.mark.parametrize('marker_available',[True,False])
-def test_writer_error_stops_owned_suite_as_infrastructure_failure(tmp_path,marker_available):
+@pytest.mark.parametrize('capture_enabled',[True,False])
+def test_writer_error_stops_owned_suite_as_infrastructure_failure(tmp_path,marker_available,capture_enabled):
     suite=tmp_path/'suite';suite.mkdir()
     (suite/'test_broken.py').write_text('''import threading
 from test_support import progress
@@ -209,12 +210,45 @@ def test_broken():
     threading.Event().wait()
 '''.replace('MARKER_AVAILABLE',repr(marker_available)),encoding='utf-8')
     diagnostics=tmp_path/'diagnostics'
+    capture=[] if capture_enabled else ['-s']
     result=subprocess.run([sys.executable,'-m','scripts.run_regressions','--diagnostics',str(diagnostics),
-        '--case-timeout','30','--session-timeout','40','--','-q','-s',str(suite)],
+        '--case-timeout','3','--session-timeout','15','--','-q',*capture,str(suite)],
         cwd=ROOT,capture_output=True,text=True,timeout=12)
     assert result.returncode==3,result.stdout+result.stderr
     assert 'diagnostic infrastructure failure' in result.stdout
     assert bool(list(diagnostics.glob('run-*/public/*.error')))==marker_available
+
+
+@pytest.mark.parametrize('descriptor',[1,2])
+def test_blocked_console_does_not_block_deadline_or_cleanup(tmp_path,descriptor):
+    suite=tmp_path/'suite';suite.mkdir()
+    suffix=''
+    if descriptor==2:
+        suffix=('    from test_support import progress\n'
+                '    def denied(*a,**k): raise PermissionError(13,"denied")\n'
+                '    progress._REPLACE=progress._OPEN=denied\n'
+                '    progress._state.emit(outcome="passed")\n'
+                '    threading.Event().wait()\n')
+    (suite/'test_output.py').write_text(
+        f'import os,threading\ndef test_output():\n    os.write({descriptor},b"x"*(4*1024*1024))\n'+suffix,encoding='utf-8')
+    diagnostics=tmp_path/'diagnostics'
+    process=subprocess.Popen([sys.executable,'-m','scripts.run_regressions',
+        '--diagnostics',str(diagnostics),'--case-timeout','3','--session-timeout','15',
+        '--stack-interval','.25','--','-q','-s',str(suite)],
+        cwd=ROOT,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+    expired=False
+    try:
+        try: code=process.wait(timeout=6)
+        except subprocess.TimeoutExpired:
+            expired=True;process.kill()
+        # Read only after the watchdog must already have stopped its owned suite.
+        process.communicate(timeout=10)
+        assert not expired,'watchdog deadline blocked on a full console pipe'
+        assert code==(124 if descriptor==1 else 3)
+        record=json.loads(next(diagnostics.glob('run-*/public/failure.json')).read_text(encoding='utf-8'))
+        assert ('timeout' if descriptor==1 else 'diagnostic infrastructure') in record['failure']
+    finally:
+        if process.poll() is None: process.kill();process.communicate(timeout=10)
 
 
 @pytest.mark.parametrize('original_code',[0,1,124])
