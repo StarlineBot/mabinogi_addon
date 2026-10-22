@@ -56,6 +56,8 @@ class OptimizationController(QObject):
         self.last_tick = time.monotonic()
         self.frame_status = '이전 FPS 세션 정리 필요 · 측정 중단을 눌러 주세요.' if self.collector.pending else '중단됨 · 측정값 없음'
         self.last_health = 0.0
+        self._offered_review = None
+        self._offering = False
         self.timer = QTimer(self)
         self.timer.setInterval(250)
         self.timer.timeout.connect(self._tick)
@@ -204,6 +206,24 @@ class OptimizationController(QObject):
             '잠시 끊길 수 있어요.',
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes
+
+    def _offer_normalized_restore(self):
+        """원복 중 '장치 정규화'가 감지되면 다시 누르게 하지 않고 바로 확인 창을 띄운다(감지당 1회)."""
+        review = self.recovery.normalized_review
+        if (not review or review is self._offered_review or self._offering or self.engine.busy
+                or self.panel is None or not self._can_start()):
+            return
+        self._offering = True
+        self._offered_review = review  # 거절하면 같은 감지로 다시 묻지 않는다('네트워크 원복'으로 재시도 가능)
+        try:
+            if self._normalized_confirmation():
+                self._summary_requested = dict(action='restore_network')
+                self._summary_state = None
+                if self.stream is not None:
+                    self.stream.boundary(presentmon.clock()[0], 'network_restore_request')
+                self.engine.restore_network(accept_normalized=True)
+        finally:
+            self._offering = False
 
     def _restore_network(self):
         if not self._can_start() or self.engine.busy: return
@@ -361,6 +381,7 @@ class OptimizationController(QObject):
                 self.stop_frames('구간/전환 요약 한도 · 기존 자료를 보존하고 측정을 중단했어요.')
         if self.engine.recovery_requested and not self.engine.busy:
             self.engine.recovery_requested = False
+        self._offer_normalized_restore()
         if self.panel is None: return
         self._poll_summary_store()
         self._render_summary()
@@ -379,7 +400,8 @@ class OptimizationController(QObject):
         from collections import Counter
         counts=Counter((item['kind'],item['state']) for item in self.recovery.items)
         kinds={'cpu':'CPU 배치','ack':'TcpAckFrequency','nodelay':'TCPNoDelay','autotuning':'TCP 자동 조정','rss':'RSS'}
-        states={'prepared':'적용 확인 필요','applied':'적용됨','failed':'미적용·확인 필요','restored':'원복됨'}
+        states={'prepared':'적용 확인 필요','applied':'적용됨','failed':'미적용·확인 필요','restored':'원복됨',
+                'released':'외부 변경·관리 제외'}
         lines=[f'{kinds[kind]} · {states[state]} {count}개' for (kind,state),count in counts.items()]
         if self.recovery.restart_targets: lines.append(f'네트워크 재연결 대기: {len(self.recovery.restart_targets)}개 어댑터')
         d.results.setText('\n'.join(lines))

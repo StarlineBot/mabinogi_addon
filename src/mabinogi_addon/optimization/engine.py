@@ -1,6 +1,9 @@
 """One explicit optimization session; all blocking OS calls run off the UI thread."""
+import logging
 import threading
 from .session import ChangeDeferred
+
+_log = logging.getLogger(__name__)
 
 
 class Engine:
@@ -12,15 +15,19 @@ class Engine:
         self.inspection = None
         self.recovery_requested = False
         self.lock = threading.Lock()
+        self._partial = None  # 진행 중 작업의 결과/안내 줄(예외로 끝나도 버리지 않게)
 
     @property
     def busy(self):
         return self.thread is not None and self.thread.is_alive()
 
-    def _launch(self, function, restore_cpu=False):
+    def _launch(self, function, restore_cpu=False, status=None):
         with self.lock:
             if self.busy: return False
             self.cancel.clear()
+            self._partial = None
+            if status is not None:
+                self.status = status  # 이전 결과('원복 완료' 등)가 진행 중에 남지 않게 즉시 교체
             self.thread = threading.Thread(target=self._run, args=(function,restore_cpu), daemon=True, name='optimization-alpha')
             self.thread.start()
             return True
@@ -29,7 +36,9 @@ class Engine:
         try:
             function()
         except Exception as exc:
-            self.status = f'작업을 완료하지 못했어요: {exc}'
+            # 지금까지의 적용 결과·미적용 이유(RSS 등)를 버리지 않고 이어 붙인다.
+            lines = self._partial() if self._partial is not None else []
+            self.status = '\n'.join([*lines, f'작업을 완료하지 못했어요: {exc}'])
         finally:
             errors = self.recovery.restore() if restore_cpu else []
             if restore_cpu: self.recovery_requested = True
@@ -51,7 +60,7 @@ class Engine:
             except Exception as exc: errors.append(str(exc))
             self.inspection = (topology, adapters)
             self.status = '\n'.join(errors) if errors else '환경을 확인했어요. 시작을 누르기 전에는 적용하지 않아요.'
-        return self._launch(work)
+        return self._launch(work, status='환경 확인 중…')
 
     def start(self, options):
         def work():
@@ -61,6 +70,8 @@ class Engine:
             game = self.backend.game()
             notices = []
             results = []
+            self._partial = lambda: results + notices
+            names = {}  # (pid, birth) → 프로세스 이름: 소유 확인 실패 시 어떤 프로세스인지 남긴다
             def network_guard():
                 nonlocal game
                 if self.cancel.is_set() or not self.allowed():
@@ -96,6 +107,10 @@ class Engine:
                 try: self.recovery.flush_network(guard=network_guard)
                 except ChangeDeferred as exc: notices.append(str(exc))
                 except Exception as exc: notices.append('네트워크 재연결 확인 필요: '+str(exc))
+            if not options['cpu']:
+                # CPU를 끈 세션은 게임을 기다릴 이유가 없다(네트워크 설정은 원복 전까지 유지).
+                self.status = '\n'.join(results + notices + ['네트워크 설정 작업을 마쳤어요. CPU 배치는 사용하지 않아요.'])
+                return
             seen = set()
             observed = game
             while not self.cancel.is_set() and self.allowed():
@@ -115,7 +130,9 @@ class Engine:
                     self.status = 'Process Lasso Governor가 실행돼 CPU를 원복하고 세션을 종료해요.'
                     return
                 if options['cpu']:
-                    targets = [(observed,plan['game'])] + [(p['target'],plan['background']) for p in processes if self.backend.background_candidate(p,observed)]
+                    candidates = [p for p in processes if self.backend.background_candidate(p,observed)]
+                    for p in candidates: names[(p['target']['pid'],p['target']['birth'])] = p['name']
+                    targets = [(observed,plan['game'])] + [(p['target'],plan['background']) for p in candidates]
                     for target, mask in targets:
                         if self.cancel.is_set() or not self.allowed(): break
                         identity = (target['pid'],target['birth'])
@@ -128,22 +145,34 @@ class Engine:
                         except ProcessLookupError: pass
                         except Exception as exc: notices.append('CPU 일부 미적용: '+str(exc))
                         notices = notices[-12:]
-                    # Verify existing ownership without overwriting external changes.
+                    # Verify ownership without overwriting external changes. 한 프로세스가 달라져도
+                    # 세션 전체를 끝내지 않고 그 프로세스만 관리에서 뺀다(원복도 하지 않음 — 바꾼 쪽의 값을 존중).
                     for item in self.recovery.pending:
                         if item['kind'] != 'cpu' or item['state'] != 'applied': continue
                         try:
-                            if self.backend.read('cpu',item['target']) != item['applied']:
-                                raise RuntimeError('다른 도구가 CPU 배치를 바꿨어요. 새 적용을 중단해요.')
+                            current = self.backend.read('cpu',item['target'])
                         except ProcessLookupError: continue
+                        if current == item['applied']: continue
+                        identity = (item['target']['pid'],item['target']['birth'])
+                        is_game = observed is not None and identity == (observed['pid'],observed['birth'])
+                        label = '게임 프로세스' if is_game else names.get(identity,'이름 확인 불가')
+                        self.recovery.release(item)
+                        message = (f"{'게임 프로세스가 직접' if is_game else '다른 도구가'} CPU 배치를 바꿨어요 · "
+                                   f"{label} (PID {identity[0]}): 적용=0x{item['applied']:X}, 현재=0x{current:X}. "
+                                   '이 프로세스는 관리에서 빼고 계속해요(원복하지 않음).')
+                        _log.warning(message)
+                        notices.append(message)
+                        notices = notices[-12:]
                 self.status = '\n'.join(results + notices + ['게임 세션 사용 중 · 항목별 적용값 확인 완료' if not notices else '게임 세션 사용 중 · 일부 항목은 미적용/확인 필요'])
                 self.cancel.wait(2)
             self.status = '\n'.join(results + notices + ['세션을 중단하고 CPU를 원복해요.'])
-        return self._launch(work, restore_cpu=True)
+        return self._launch(work, restore_cpu=True, status='적용 중…')
 
     def stop(self):
         self.cancel.set()
         if not self.busy and any(i['kind']=='cpu' for i in self.recovery.pending):
-            self._launch(lambda: setattr(self,'status','CPU 원복을 확인했어요.'), restore_cpu=True)
+            self._launch(lambda: setattr(self,'status','CPU 원복을 확인했어요.'), restore_cpu=True,
+                         status='CPU 원복 중…')
 
     def restore_network(self, accept_normalized=False):
         def work():
@@ -151,4 +180,4 @@ class Engine:
             try: self.recovery.flush_network(verify_restored=True)
             except Exception as exc: errors.append(str(exc))
             self.status = '원복 완료' if not errors and not self.recovery.pending else '원복 확인 필요: '+'; '.join(errors[:4])
-        return self._launch(work)
+        return self._launch(work, status='네트워크 원복 중…')

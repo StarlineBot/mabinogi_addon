@@ -243,7 +243,9 @@ def test_existing_game_defers_network_and_does_not_write_on_just_waiting(recover
     e=Engine(b,r,lambda:True)
     assert e.start(dict(cpu=False,count=None,adapter=GUID,tcp=True,rss=False))
     e.thread.join(2)
-    assert observed.is_set() and not b.writes and not b.restarts
+    # CPU를 끈 세션은 게임을 기다리지 않고 끝난다(네트워크 보류 안내는 남김).
+    assert not e.busy and not observed.is_set() and not b.writes and not b.restarts
+    assert '게임 실행 중: TCP·RSS 적용을 보류' in e.status and '게임 실행 대기' not in e.status
     assert not r.pending
 
 
@@ -391,3 +393,98 @@ def test_rss_other_changes_are_not_treated_as_normalization(tmp_path, change):
     errors = r.restore(network=True, accept_normalized=True)
     assert errors and '보류' in errors[0] and not r.normalized_review
     assert len(b.writes) == writes and r.pending
+
+
+# --- 0.11.2 최적화 실사용 결과(2026-10-23) -------------------------------------------------------
+CHAT = {'pid': 200, 'birth': '1'}
+TOOL = {'pid': 201, 'birth': '2'}
+
+
+def _wait(predicate, timeout=3):
+    import time
+    end = time.monotonic() + timeout
+    while time.monotonic() < end:
+        if predicate(): return True
+        time.sleep(0.01)
+    return False
+
+
+def test_external_cpu_change_releases_only_that_process_and_names_it(recovery):
+    r, b, _ = recovery
+    for target in (CHAT, TOOL):
+        b.values[('cpu', json.dumps(target, sort_keys=True))] = 15
+    alive = [True]
+    b.topology = lambda: Topology('cpu', (Core(0, (0, 1)), Core(1, (2, 3))))
+    b.game = lambda: TARGET
+    b.processes = lambda: [dict(target=CHAT, name='chat.exe'), dict(target=TOOL, name='tool.exe')]
+    b.background_candidate = lambda info, game: True
+    b.governor_running = lambda: False
+    b.alive = lambda target: alive[0]
+    e = Engine(b, r, lambda: True)
+    assert e.start(dict(cpu=True, count=1, adapter=None, tcp=False, rss=False))
+    assert _wait(lambda: len(b.writes) == 3)
+    b.values[('cpu', json.dumps(CHAT, sort_keys=True))] = 1  # 다른 도구가 변경
+    assert _wait(lambda: 'chat.exe (PID 200)' in e.status)
+    assert e.busy and '다른 도구가 CPU 배치를 바꿨어요' in e.status and '현재=0x1' in e.status
+    states = {item['target']['pid']: item['state'] for item in r.items}
+    assert states == {123: 'applied', 200: 'released', 201: 'applied'}
+    b.values[('cpu', json.dumps(TARGET, sort_keys=True))] = 2  # 게임 자신이 변경
+    assert _wait(lambda: '게임 프로세스가 직접' in e.status)
+    assert e.busy
+    alive[0] = False
+    e.thread.join(4)
+    assert not e.busy and not r.pending
+    # 관리에서 뺀 프로세스는 원복하지 않고, 남은 항목만 원복한다.
+    assert b.read('cpu', CHAT) == 1 and b.read('cpu', TARGET) == 2 and b.read('cpu', TOOL) == 15
+    r.finish()
+
+
+def test_session_exception_keeps_earlier_results_and_notices(recovery):
+    r, b, _ = recovery
+    b.topology = lambda: Topology('cpu', (Core(0, (0, 1)), Core(1, (2, 3))))
+    b.game = lambda: TARGET
+    b.processes = lambda: []
+    b.governor_running = lambda: False
+    def alive(target): raise RuntimeError('boom')
+    b.alive = alive
+    e = Engine(b, r, lambda: True)
+    assert e.start(dict(cpu=True, count=1, adapter=GUID, tcp=True, rss=False))
+    e.thread.join(2)
+    assert '게임 실행 중: TCP·RSS 적용을 보류' in e.status and '작업을 완료하지 못했어요: boom' in e.status
+
+
+def test_status_is_replaced_immediately_when_work_starts(recovery):
+    r, b, _ = recovery
+    gate = threading.Event()
+    b.topology = lambda: Topology('cpu', (Core(0, (0, 1)), Core(1, (2, 3))))
+    b.game = lambda: gate.wait(2) and None
+    b.processes = lambda: []
+    b.governor_running = lambda: False
+    e = Engine(b, r, lambda: True)
+    e.status = '원복 완료'
+    assert e.start(dict(cpu=True, count=1, adapter=None, tcp=False, rss=False))
+    assert e.status == '적용 중…'
+    e.cancel.set(); gate.set(); e.thread.join(3)
+    e.status = '원복 완료'
+    hold = threading.Event()
+    original = r.restore
+    r.restore = lambda **k: hold.wait(2) and original(**k)
+    assert e.restore_network() and e.status == '네트워크 원복 중…'
+    hold.set(); e.thread.join(2)
+    assert e.status == '원복 완료'
+
+
+
+def test_apply_verification_failure_shows_field_differences(tmp_path):
+    b = SmtNic()
+    plan = dict(RSS_ORIGINAL, BaseProcessorNumber=14, MaxProcessorNumber=14, MaxProcessors=1, Profile='ClosestStatic')
+    original_write = b.write
+    def write(kind, target, value):
+        original_write(kind, target, value)
+        b.values[('rss', json.dumps(GUID))]['NumberOfReceiveQueues'] = 1  # 드라이버가 즉시 다른 값으로 저장
+    b.write = write
+    r = Recovery(tmp_path / 'journal.json', b, lambda: True)
+    with pytest.raises(RuntimeError) as caught:
+        r.apply('rss', GUID, plan)
+    assert '적용값을 확인하지 못했어요' in str(caught.value)
+    assert 'NumberOfReceiveQueues: 현재=1, 적용=8' in str(caught.value) and GUID not in str(caught.value)

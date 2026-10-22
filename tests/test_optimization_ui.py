@@ -309,3 +309,21 @@ def test_rss_normalized_restore_asks_specific_confirmation(window, monkeypatch):
     c._restore_network()
     assert calls == [{'accept_normalized': True}]
     c.recovery.normalized_review = []
+
+
+def test_rss_normalization_detected_asks_once_without_second_click(window, monkeypatch):
+    w, app = window; c = w.optimization_tools
+    monkeypatch.setattr(module, 'is_creator', lambda: True); c.refresh_access()
+    calls, asked = [], []
+    monkeypatch.setattr(c.engine, 'restore_network', lambda **k: calls.append(k))
+    monkeypatch.setattr(c, '_normalized_confirmation', lambda: asked.append(1) or True)
+    c._tick()
+    assert not asked  # 감지 전에는 묻지 않음
+    c.recovery.normalized_review = [dict(target='g', current={}, old={})]
+    c._tick(); c._tick()
+    assert asked == [1] and calls == [{'accept_normalized': True}]
+    c.recovery.normalized_review = [dict(target='g', current={}, old={})]  # 새 감지
+    monkeypatch.setattr(c, '_normalized_confirmation', lambda: asked.append(2) or False)
+    c._tick(); c._tick()
+    assert asked == [1, 2] and len(calls) == 1  # 거절하면 같은 감지로 다시 묻지 않음
+    c.recovery.normalized_review = []

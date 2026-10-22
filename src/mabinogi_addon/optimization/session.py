@@ -85,7 +85,7 @@ class Recovery:
                 if not isinstance(data,dict) or data.get('schema') != 1 or not isinstance(data.get('items'), list) or len(data['items']) > self.MAX_ITEMS:
                     raise ValueError('journal schema')
                 for item in data['items']:
-                    if not isinstance(item,dict) or item.get('state') not in ('prepared','applied','failed','restored') or set(item) != {'kind', 'target', 'old', 'applied', 'state'} or item['kind'] not in ('cpu','ack','nodelay','autotuning','rss'):
+                    if not isinstance(item,dict) or item.get('state') not in ('prepared','applied','failed','restored','released') or set(item) != {'kind', 'target', 'old', 'applied', 'state'} or item['kind'] not in ('cpu','ack','nodelay','autotuning','rss'):
                         raise ValueError('journal item')
                     backend.validate(item['kind'], item['target'], item['old'])
                     backend.validate(item['kind'], item['target'], item['applied'])
@@ -100,7 +100,15 @@ class Recovery:
 
     @property
     def pending(self):
-        return [i for i in self.items if i['state'] != 'restored']
+        return [i for i in self.items if i['state'] not in ('restored', 'released')]
+
+    def release(self, item):
+        """외부(다른 도구·게임 자신)가 바꾼 CPU 항목을 관리에서 뺀다. 그쪽 값을 덮어쓰거나 원복하지 않는다."""
+        with self.lock:
+            if item['kind'] != 'cpu' or item not in self.items:
+                raise ValueError('CPU 적용 항목만 관리에서 뺄 수 있어요.')
+            item['state'] = 'released'
+            self._save()
 
     def _save(self):
         self.measurement_revision += 1
@@ -162,8 +170,9 @@ class Recovery:
                     guarded_write(kind,target,value,guard)
                 else:
                     self.backend.write(kind, target, value)
-                if self._read(kind,target,'적용값 확인') != value:
-                    raise RuntimeError('적용값을 확인하지 못했어요.')
+                applied = self._read(kind,target,'적용값 확인')
+                if applied != value:
+                    raise RuntimeError('적용값을 확인하지 못했어요. ' + self._apply_difference(kind, target, value, applied))
                 item['state'] = 'applied'
             except Exception as exc:
                 if not write_started or isinstance(exc,ChangeDeferred): self.restart_targets=restarts_before
@@ -172,6 +181,21 @@ class Recovery:
                 raise
             self._save()
             return 'applied'
+
+    def _apply_difference(self, kind, target, value, current):
+        """적용 직후 조회값이 요청값과 다를 때 어떤 값이 다른지(현재/적용) 보여준다."""
+        if kind == 'rss' and isinstance(current, dict):
+            # Only validated RSS scalar fields; never include adapter IDs or shell text.
+            try: self.backend.validate('rss', target, current)
+            except Exception: return '현재 RSS 값 형식을 확인하지 못했어요.'
+            keys = sorted(set(current) | set(value))
+            return '차이: ' + '; '.join(f'{k}: 현재={current.get(k)}, 적용={value.get(k)}'
+                                       for k in keys if current.get(k) != value.get(k))
+        if kind == 'cpu':
+            return f'현재=0x{current:X}, 적용=0x{value:X}' if isinstance(current, int) else ''
+        if isinstance(current, (int, str, type(None))):
+            return f'현재={current}, 적용={value}'
+        return ''
 
     def _difference(self, item, current, *, expected='applied'):
         message = '현재값이 복구 기록과 달라 원복 확인을 보류해요.'
