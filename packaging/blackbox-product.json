@@ -20,6 +20,7 @@
   },
   "codec": {
     "encoder": "h264_mf",
+    "candidates": ["h264_mf"],
     "bitrate": 12000000,
     "fps": 60,
     "timeout": 1200,
@@ -27,7 +28,7 @@
     "audio_bitrate": 192000
   },
   "hotkey_modifiers": 3,
-  "hotkey_vk": 121,
+  "hotkey_vk": 44,
   "audio": "process",
   "audio_settings": {
     "audio_rate": 48000,

@@ -94,3 +94,75 @@ def test_synthetic_tools_preserve_resolved_paths(monkeypatch):
     import test_support.blackbox_codec as support
     monkeypatch.setattr(support.shutil, 'which', lambda name: '/tools with spaces/' + name)
     assert codec_tools() == (Path('/tools with spaces/ffmpeg'), Path('/tools with spaces/ffprobe'))
+
+
+# --- 0.11.4: 하드웨어 인코더 후보 시험 선택 (가짜 ffmpeg) -----------------------------------------
+import sys as _sys
+import io as _io
+import logging as _logging
+import pytest as _pytest
+from pathlib import Path as _Path
+
+
+def _fake_ffmpeg(tmp_path, failing):
+    """-c:v 값이 failing에 있으면 h264_mf 실패처럼 stderr를 쓰고 exit 1. 호출 인자를 기록한다."""
+    log = tmp_path / 'calls.txt'
+    script = tmp_path / 'ffmpeg'
+    script.write_text(f'''#!{_sys.executable}
+import sys
+args = sys.argv[1:]
+with open({str(log)!r}, 'a') as f: f.write(' '.join(args) + '\\n')
+encoder = args[args.index('-c:v') + 1]
+if encoder in {sorted(failing)!r}:
+    if 'verbose' in args: sys.stderr.write('[h264_mf] MFT name: AMD H.264 Encoder MFT\\n')
+    sys.stderr.write('[' + encoder + '] could not set output type (MF_E_UNSUPPORTED_D3D_TYPE)\\n')
+    sys.exit(1)
+sys.stdin.buffer.read(); sys.stdout.buffer.write(b'mp4')
+''')
+    script.chmod(0o755)
+    probe = tmp_path / 'ffprobe'; probe.write_text('#!/bin/sh\n'); probe.chmod(0o755)
+    return script, probe, log
+
+
+def _encoder(tmp_path, failing, candidates=('h264_nvenc', 'h264_amf', 'h264_mf')):
+    from mabinogi_addon.blackbox_codec import CodecSettings, FFmpegEncoder
+    ffmpeg, ffprobe, log = _fake_ffmpeg(tmp_path, failing)
+    settings = CodecSettings(ffmpeg, ffprobe, candidates[-1], 1_000_000, 60, 10, 50_000, candidates=candidates)
+    return FFmpegEncoder(settings, lambda source: source), log
+
+
+@_pytest.mark.skipif(_sys.platform == 'win32', reason='가짜 ffmpeg는 POSIX 스크립트')
+def test_first_working_hardware_encoder_is_selected_and_cached(tmp_path, caplog):
+    from mabinogi_addon.blackbox_export import ByteSink
+    caplog.set_level(_logging.INFO)
+    encoder, log = _encoder(tmp_path, {'h264_nvenc'})
+    frames = (bytes(4 * 4 * 4),) * 2
+    for _ in range(2):
+        encoder.encode_frames(frames, 4, 4, ByteSink(_io.BytesIO(), 1 << 20))
+    calls = log.read_text().splitlines()
+    assert [c.split('-c:v ')[1].split()[0] for c in calls] == ['h264_nvenc', 'h264_nvenc', 'h264_amf', 'h264_amf', 'h264_amf']
+    assert sum('-v verbose' in c for c in calls) == 1  # 실패한 후보만 1회 진단 재실행
+    assert encoder.selected == 'h264_amf' and 'h264_nvenc' in encoder.attempts
+    assert '블랙박스 인코더 선택: h264_amf' in caplog.text and 'could not set output type' in caplog.text
+
+
+@_pytest.mark.skipif(_sys.platform == 'win32', reason='가짜 ffmpeg는 POSIX 스크립트')
+def test_all_hardware_encoders_failing_reports_each_without_software_fallback(tmp_path, caplog):
+    from mabinogi_addon.blackbox_export import ByteSink
+    caplog.set_level(_logging.WARNING)
+    encoder, log = _encoder(tmp_path, {'h264_nvenc', 'h264_amf', 'h264_mf'})
+    with _pytest.raises(OSError) as caught:
+        encoder.encode_frames((bytes(64),), 4, 4, ByteSink(_io.BytesIO(), 1 << 20))
+    message = str(caught.value)
+    assert '소프트웨어 인코더로 대신하지 않아요' in message
+    assert all(f'{name}: encoder exited 1: [{name}] could not set output type' in message for name in ('h264_nvenc', 'h264_amf', 'h264_mf'))
+    assert 'libx264' not in log.read_text() and encoder.selected is None
+    assert 'MFT name: AMD H.264 Encoder MFT' in caplog.text  # verbose 진단이 app.log로
+
+
+@_pytest.mark.parametrize('candidates', [('h264_mf', 'libx264'), ('h264_nvenc',), ('h264_mf', 'h264_mf')])
+def test_candidates_must_be_hardware_and_end_with_encoder(tmp_path, candidates):
+    from mabinogi_addon.blackbox_codec import CodecSettings
+    ffmpeg = tmp_path / 'ffmpeg'; ffmpeg.write_text(''); probe = tmp_path / 'ffprobe'; probe.write_text('')
+    with _pytest.raises(ValueError):
+        CodecSettings(ffmpeg, probe, 'h264_mf', 1_000_000, 60, 10, 50_000, candidates=candidates)

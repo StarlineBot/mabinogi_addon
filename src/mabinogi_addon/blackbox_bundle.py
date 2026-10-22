@@ -35,7 +35,11 @@ def load_product_profile(*, bundle=None, data=None, videos=None):
     codec = profile.get('codec', {})
     if any(key in codec for key in ('ffmpeg', 'ffprobe', 'host')):
         raise ValueError('product codec paths must come from verified bundle')
-    if codec.get('encoder') not in ('h264_mf',):
+    hardware = ('h264_nvenc', 'h264_amf', 'h264_mf')
+    candidates = codec.get('candidates', [codec.get('encoder')])
+    if (codec.get('encoder') not in hardware or not isinstance(candidates, list) or not candidates
+            or any(c not in hardware for c in candidates) or candidates[-1] != codec.get('encoder')):
+        # 소프트웨어 인코더 자동 전환 금지(명세): 후보는 하드웨어 인코더만, 마지막이 기본 encoder.
         raise ValueError('제품용 하드웨어 인코더 선택이 필요해요.')
     producer = profile.get('producer', {})
     if producer.get('max_width') != 1920 or producer.get('max_height') != 1080:

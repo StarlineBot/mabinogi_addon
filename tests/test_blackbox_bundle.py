@@ -197,3 +197,20 @@ def test_product_profile_requires_1080p_output_and_4k_input(tmp_path, change):
     (tmp_path/'manifest.json').write_text(json.dumps({n: hashlib.sha256((tmp_path/n).read_bytes()).hexdigest() for n in names}))
     with pytest.raises(ValueError, match='1920×1080|3840×2160'):
         load_product_profile(bundle=tmp_path, data=tmp_path/'user', videos=tmp_path/'v')
+
+
+@pytest.mark.parametrize('codec', [dict(encoder='libx264', candidates=['libx264']),
+                                   dict(encoder='h264_mf', candidates=['h264_mf', 'libx264']),
+                                   dict(encoder='h264_mf', candidates=['h264_mf', 'h264_nvenc'])])
+def test_product_encoder_candidates_are_hardware_only(tmp_path, codec):
+    """소프트웨어 인코더 자동 전환 금지: 후보는 하드웨어 인코더만, 마지막이 기본 encoder."""
+    policy = json.loads((Path(__file__).resolve().parents[1] / 'packaging' / 'blackbox-product.json').read_text(encoding='utf-8'))
+    policy['codec'].update(codec)
+    names = ['product.json','mabinogi_blackbox.dll','blackbox_codec_host.exe','ffmpeg.exe','ffprobe.exe',
+             'redistribution.json','THIRD-PARTY-NOTICES.txt','corresponding-source.zip','FFmpeg-LICENSE.txt',
+             'avcodec-62.dll','avformat-62.dll','avutil-60.dll','avfilter-11.dll','swscale-9.dll','swresample-6.dll']
+    for name in names: (tmp_path/name).write_bytes(b'{}')
+    (tmp_path/'product.json').write_text(json.dumps(policy))
+    (tmp_path/'manifest.json').write_text(json.dumps({n: hashlib.sha256((tmp_path/n).read_bytes()).hexdigest() for n in names}))
+    with pytest.raises(ValueError, match='하드웨어 인코더'):
+        load_product_profile(bundle=tmp_path, data=tmp_path/'user', videos=tmp_path/'v')

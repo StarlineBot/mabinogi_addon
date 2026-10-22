@@ -214,3 +214,17 @@ def test_inflight_pre_boundary_chord_cannot_append_a_valid_request():
         assert observer.consume() is None
     finally:
         observer.close()
+
+
+def test_product_hotkey_is_ctrl_alt_printscreen():
+    """0.11.4 사용자 요청: Ctrl+Alt+PrintScreen. Alt가 눌린 상태라 WM_SYSKEYDOWN(0x104)으로 들어온다."""
+    import json
+    from pathlib import Path
+    from mabinogi_addon.ui.blackbox_controller import hotkey_text
+    product = json.loads((Path(__file__).resolve().parents[1] / 'packaging/blackbox-product.json').read_text(encoding='utf-8'))
+    assert (product['hotkey_modifiers'], product['hotkey_vk']) == (3, 0x2C)
+    assert hotkey_text(product['hotkey_modifiers'], product['hotkey_vk']) == 'Ctrl+Alt+PrintScreen'
+    chord = Chord(3, 0x2C)
+    assert chord.feed(0xA2, 0x104, 0) is False and chord.feed(0xA4, 0x104, 0) is False  # 왼쪽 Ctrl, Alt
+    assert chord.feed(0x2C, 0x104, 0)
+    assert not chord.feed(0x2C, 0x104, 0)  # 자동 반복 제외

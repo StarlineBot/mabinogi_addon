@@ -127,10 +127,18 @@ class CodecSettings:
     tolerance_us: int
     host: Path | None = None
     audio_bitrate: int | None = None
+    # 하드웨어 인코더 후보(순서대로 시험 인코딩해 처음 열리는 것을 쓴다). 비우면 encoder 하나만 쓴다.
+    candidates: tuple[str, ...] = ()
 
     def __post_init__(self):
         if self.encoder not in ('h264_nvenc', 'h264_qsv', 'h264_amf', 'h264_mf', 'libx264'):
             raise ValueError('explicit supported H.264 encoder required')
+        object.__setattr__(self, 'candidates', tuple(self.candidates))
+        if self.candidates and (any(c not in HARDWARE_ENCODERS for c in self.candidates)
+                                or len(set(self.candidates)) != len(self.candidates)
+                                or self.candidates[-1] != self.encoder):
+            # 소프트웨어 인코더로 자동 전환하지 않는다(명세). 마지막 후보가 기본 encoder.
+            raise ValueError('hardware encoder candidates ending with the configured encoder required')
         if any(type(v) is not int or v <= 0 for v in (self.bitrate, self.fps)):
             raise ValueError('positive bitrate/fps required')
         if type(self.tolerance_us) is not int or self.tolerance_us < 0:
@@ -141,6 +149,15 @@ class CodecSettings:
             raise ValueError('explicit existing absolute codec binaries required')
 
 
+HARDWARE_ENCODERS = ('h264_nvenc', 'h264_amf', 'h264_qsv', 'h264_mf')
+_PROBE_SIZE = (320, 240)  # 하드웨어 인코더 최소 크기(NVENC 등)보다 큰 작은 시험 입력
+
+
+def _last_line(text):
+    lines = [line.strip() for line in str(text).splitlines() if line.strip()]
+    return lines[-1] if lines else str(text)
+
+
 def seconds(us):
     return f'{us // 1_000_000}.{us % 1_000_000:06d}'
 
@@ -148,17 +165,64 @@ def seconds(us):
 class FFmpegEncoder:
     def __init__(self, settings: CodecSettings, resolve):
         self.settings, self.resolve = settings, resolve
+        self._lock = threading.Lock()
+        self.selected = None if settings.candidates else settings.encoder
+        self.attempts = {}  # 후보 → 실패 사유(마지막 시험 기준, 진단 표시용)
 
-    def _output(self, audio=False):
+    def encoder(self):
+        """사용할 인코더. 후보가 있으면 처음 한 번 시험 인코딩으로 고르고 실행 중 캐시한다.
+
+        AMD 내장+NVIDIA 같은 다중 GPU에서 h264_mf(MFT 열거 첫 항목만 사용)가 엉뚱한 GPU의
+        MFT를 골라 'could not set output type'으로 실패했다(0.11.3 실사용). 게임 GPU 제조사의
+        전용 인코더를 먼저 시험한다(NVENC → AMF → MF). 모두 실패하면 후보별 오류로 중단한다."""
+        with self._lock:
+            if self.selected is not None:
+                return self.selected
+            for candidate in self.settings.candidates:
+                try:
+                    self._probe(candidate)
+                except Exception as exc:  # noqa: BLE001 — 후보별 실패를 모아 보여준다
+                    self.attempts[candidate] = _last_line(exc)
+                    self._diagnose(candidate)
+                    continue
+                self.selected = candidate
+                _log.info('블랙박스 인코더 선택: %s (시험 실패: %s)', candidate, self.attempts or '없음')
+                return candidate
+            detail = '; '.join(f'{name}: {reason}' for name, reason in self.attempts.items())
+            raise OSError('하드웨어 H.264 인코더를 열지 못했어요(소프트웨어 인코더로 대신하지 않아요) · ' + detail)
+
+    def _probe_command(self, encoder, verbosity):
+        width, height = _PROBE_SIZE
+        return [str(self.settings.ffmpeg), '-v', verbosity, '-nostdin', '-xerror', '-f', 'rawvideo',
+                '-pix_fmt', 'bgra', '-video_size', f'{width}x{height}', '-framerate', str(self.settings.fps),
+                '-i', 'pipe:0', '-an', *self._output(encoder=encoder)]
+
+    def _probe(self, encoder, verbosity='error'):
+        width, height = _PROBE_SIZE
+        frames = (bytes(width * height * 4),) * 2
+        stream_process(self._probe_command(encoder, verbosity), ByteSink(io.BytesIO(), 1 << 20),
+                       timeout=min(self.settings.timeout, 30), chunks=frames, host=self.settings.host)
+
+    def _diagnose(self, encoder):
+        """인코더 열기 실패 시 -v verbose로 1회 다시 돌려 MFT/장치 선택 로그를 app.log에 남긴다."""
+        try:
+            self._probe(encoder, 'verbose')
+        except Exception as exc:  # noqa: BLE001
+            _log.warning('블랙박스 인코더 %s 열기 실패 진단(-v verbose):\n%s', encoder, exc)
+        else:
+            _log.warning('블랙박스 인코더 %s: 첫 시험은 실패했지만 진단 재실행은 성공(일시 오류 가능)', encoder)
+
+    def _output(self, audio=False, encoder=None):
         s = self.settings
+        encoder = encoder or self.encoder()
         audio_args = []
         if audio:
             if type(s.audio_bitrate) is not int or s.audio_bitrate <= 0:
                 raise ValueError('explicit audio bitrate required')
             audio_args = ['-c:a', 'aac', '-b:a', str(s.audio_bitrate)]
-        hardware = ['-hw_encoding', '1'] if s.encoder == 'h264_mf' else []
-        pixel_format = 'nv12' if s.encoder == 'h264_mf' else 'yuv420p'
-        return [*audio_args, '-r', str(s.fps), '-c:v', s.encoder, *hardware, '-b:v', str(s.bitrate), '-threads', '1', '-bf', '0',
+        hardware = ['-hw_encoding', '1'] if encoder == 'h264_mf' else []
+        pixel_format = 'nv12' if encoder in HARDWARE_ENCODERS else 'yuv420p'
+        return [*audio_args, '-r', str(s.fps), '-c:v', encoder, *hardware, '-b:v', str(s.bitrate), '-threads', '1', '-bf', '0',
                 '-pix_fmt', pixel_format, '-movflags', 'frag_keyframe+delay_moov+default_base_moof',
                 '-f', 'mp4', 'pipe:1']
 
