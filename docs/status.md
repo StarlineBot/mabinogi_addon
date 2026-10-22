@@ -138,6 +138,33 @@
 - 0.11.3 CPU 실사용: 150개 적용, 게임 세션 유지. `CP3.exe`(PID 10580)가 적용값 0xC000→0xFFFF로 스스로 되돌려
   해당 프로세스만 관리 제외(원복 안 함)하고 계속 — 0.11.3 수정 의도대로 동작 확인. CP3.exe 정체(경로)는 사용자 확인 대기:
   게임 보안·게임 관련이면 EXCLUDED/PROTECTED 목록 추가 검토.
+- 0.11.3 실사용 추가(독립 QA, 2026-10-23): 앱 종료 정상, 종료 후 수동 재실행 시 UAC 표시(관리자 실행 확인),
+  업데이트 후 자동 재실행은 UAC 미표시(위 740 항목과 일치, 업데이터를 쓰는 모든 PC 동일 예상). Windows 재부팅
+  자동실행은 미검증. 게임 포커스 중 단축키 수신 확인('마지막 단축키 입력 01:54:13').
+- 0.11.3 원복 실사용: '원복 완료' · RSS 원복됨 1 · CPU 원복됨 156 · 외부 변경·관리 제외 1(CP3.exe).
+  TCP 항목이 없는 것은 시작 때 기존 값과 같아 기록을 만들지 않은 것(`Recovery.apply` unchanged, 코드 확인).
+  RSS '원복됨'은 재연결 후 재조회값이 원본과 같을 때만 표시(`flush_network(verify_restored=True)`).
+  UX(Improvement): 시작은 1버튼인데 원복은 'CPU 원복'/'네트워크 원복'으로 나뉨. 기획(cpu-tcp-rss 명세 6)은
+  'CPU 자동 복구, TCP·RSS는 연결 끊김 안내 후 확인받아 복구, 미루면 복구 대기'로, 확인 단계를 별도 상시 버튼으로
+  구현한 것이 차이. 제안: '중단 · 원복' 1버튼 → CPU 즉시 원복 → 네트워크 변경이 있으면 확인 창(지금/나중에),
+  나중에면 '네트워크 원복 대기' 버튼만 남김. 레이아웃 변경이므로 렌더 확인 필요.
+- 0.11.3 블랙박스 실사용: 'encoder exited 3752568763: [h264_mf] could not set output type
+  (MF_E_UNSUPPORTED_D3D_TYPE) … Error while opening encoder … Nothing was written', 확보 0초.
+  - Confirmed(FFmpeg n8.1.3 `mfenc.c`/`mf_utils.c`): 3752568763 = AVERROR_EXTERNAL. `hw_encoding=1`은
+    `MFTEnumEx(HARDWARE|SORTANDFILTER)`에서 처음 생성되는 하드웨어 MFT 하나만 쓰고, 출력 형식 설정 실패 시 다음
+    MFT나 다른 GPU를 시도하지 않는다. D3D 장치 관리자(`MFT_MESSAGE_SET_D3D_MANAGER`)는 입력이 D3D11 프레임일
+    때만 설정되며, 앱은 파이프로 시스템 메모리 BGRA→nv12를 넣으므로 설정되지 않는다. 실패 지점은 `SetOutputType`.
+  - Highly Likely: 선택된 하드웨어 MFT가 D3D 관리자 없는 상태의 출력 형식을 거부(일부 제조사 MFT의 알려진 동작).
+    9800X3D는 내장 Radeon이 있어, 내장 GPU가 켜져 있으면 게임 GPU와 다른 MFT가 먼저 잡힐 수 있음(GPU 구성 확인 대기).
+    비트레이트·1920×1080 nv12 파라미터 문제는 가능성 낮음(문구는 FFmpeg 일반 안내).
+  - Confirmed: Actions 러너에는 GPU가 없어 배포 전 검사로는 잡을 수 없고, 실제 하드웨어 인코딩 성공은 아직 한 번도 없음.
+  - 수정 방향(결정 필요, 명세는 소프트웨어 자동 전환 금지): ① 번들 FFmpeg에 `h264_nvenc`/`h264_amf` 추가 후 시작 시
+    짧은 시험 인코딩으로 선택, ② `-init_hw_device d3d11va` + `hwupload`로 D3D11 프레임을 넣어 h264_mf에 D3D 관리자
+    설정(필터 추가 빌드 필요, 어댑터·MFT 불일치 가능성은 실측), ③ 소프트웨어 MFT 허용(CPU 부하·명세 변경).
+    어느 쪽이든 실패 시 `-v verbose` 1회 재실행으로 MFT 목록(제조사·이름)을 app.log에 남기는 진단 추가 권장.
+- 단축키 변경 요청(사용자, 2026-10-23): Ctrl+Alt+PrintScreen(`hotkey_modifiers` 3 유지, `hotkey_vk` 121→0x2C=44).
+  코드상 표시('Ctrl+Alt+PrintScreen')·`Chord`(WM_SYSKEYDOWN 처리) 모두 지원. 앱은 입력을 소비하지 않으므로
+  Windows(Alt+PrtSc 창 캡처·'PrtSc로 캡처 도구 열기')나 다른 캡처 도구에도 같이 전달될 수 있어 실게임 확인 필요.
 
 - 관리자 실행(사용자 결정 A): `--uac-admin` 복원, 자동실행 등록·해제 실패를 시작 토스트/설정 문구로 안내,
   주석·구현 문서·공개 README·노트 갱신. 로컬 변경 검사 398건, 노트·CI 정책 256건 통과. exe UAC 동작은 Windows 미검증.

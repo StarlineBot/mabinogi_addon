@@ -111,7 +111,7 @@ def hotkey_label():
     from mabinogi_addon.ui.blackbox_controller import hotkey_text  # 제품 화면 표시 함수
     label = hotkey_text(product['hotkey_modifiers'], product['hotkey_vk'])
     reproduced = 'VK ' in label or '0x' in label  # 'Ctrl+Alt+VK 79' 형태 회귀도 잡는다
-    print(f"[단축키] 설정 vk={product['hotkey_vk']}(F10) → 화면 표시 '{label}'")
+    print(f"[단축키] 설정 modifiers={product['hotkey_modifiers']} vk=0x{product['hotkey_vk']:02X} → 화면 표시 '{label}'")
     print('[단축키]', 'REPRODUCED: 키 코드로 표시돼 사용자가 실제 키를 알 수 없음' if reproduced else 'not reproduced')
     return reproduced
 
