@@ -14,12 +14,13 @@ def reviewed_inputs(root):
 def prepare(root, output):
     policy = reviewed_inputs(root)
     from ffmpeg_source import build as build_ffmpeg, digest, VERSION
-    build_ffmpeg(root, output.parent / 'ffmpeg-work', output)
     native = output.parent / 'blackbox-native-build'
     subprocess.run(['cmake', '-S', str(root / 'native/blackbox'), '-B', str(native),
                     '-A', 'x64'], check=True, cwd=root)
     subprocess.run(['cmake', '--build', str(native), '--config', 'Release', '--parallel', '2'],
                    check=True, cwd=root)
+    # Fail on SDK/compiler errors before downloading and building FFmpeg.
+    build_ffmpeg(root, output.parent / 'ffmpeg-work', output)
     for name in ('mabinogi_blackbox.dll', 'blackbox_codec_host.exe'):
         shutil.copyfile(native / 'Release' / name, output / name)
     shutil.copyfile(policy, output / 'product.json')

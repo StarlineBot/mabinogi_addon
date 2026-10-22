@@ -32,6 +32,17 @@
 
 ## 마지막 작업
 
+### 0.11.0 설치 대기 제한 및 네이티브 선행 컴파일
+
+- 사용자가 최소 두 개선과 수정 후 여섯 번째 verify-only 1회를 승인했다. apt update60초/
+  install120초, 종료 유예10초, HTTP/HTTPS 연결15초·재시도1회로 제한했다. 실패 시 단계/종료코드/
+  제한시간과 마지막80행을 출력하며 update 일부 실패도 오류 처리한다. 필수7패키지는 그대로다.
+- native configure/build를 FFmpeg 다운로드·빌드 앞으로 옮겼다. 실패 시 FFmpeg에 진입하지 않는다.
+  캐시 도입·검사 생략·게이트 변경·시간 상한 증가는 하지 않았다. 실제 성공 소요시간은 미측정이다.
+- 개발 관련51건/1.71초, 실제 변경 기능 검사320건/21.14초 통과. 독립 QA 관련56건/2.08초 및
+  설치 성공/update·install 실패·시간초과·강제종료 6개 모형 경계 통과. 실제 미러/Windows는 별도다.
+  개발 로그 `/tmp/blackbox-sixth-local-checks.log`, 독립 재현 `/tmp/blackbox_apt_boundaries_qa.py`.
+
 ### 0.11.0 다섯 번째 후보 검증 — Linux 설치 시간 초과
 
 - 승인된 [verify-only #39768567858](https://github.com/StarlineBot/mabinogi_addon/actions/runs/39768567858)을

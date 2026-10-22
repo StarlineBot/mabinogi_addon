@@ -117,7 +117,7 @@ def test_prepare_builds_and_validates_complete_bundle_from_approved_policy(tmp_p
     manifest=json.loads((output/'manifest.json').read_text())
     assert 'mabinogi_blackbox.dll' in manifest and 'corresponding-source.zip' in manifest
     assert json.loads((output/'product.json').read_text())['codec']['bitrate']==12000000
-    assert events==['source-build','native-build','native-build']
+    assert events==['native-build','native-build','source-build']
 
 
 def test_msys_native_compiler_path_conversion_is_enabled():
@@ -153,3 +153,25 @@ def test_configure_failure_keeps_compiler_diagnostic_and_exit_status(tmp_path, d
     if not diagnostic_fails:
         assert 'compiler probe failed' in result.stderr
     assert not (tmp_path/'out').exists()
+
+
+@pytest.mark.parametrize("failed_call", [1, 2])
+def test_native_failure_prevents_ffmpeg_download(tmp_path, monkeypatch, failed_call):
+    import subprocess
+    monkeypatch.syspath_prepend(str(ROOT/'packaging'))
+    import ffmpeg_source
+    root=tmp_path/'repo'; (root/'packaging').mkdir(parents=True)
+    (root/'packaging/blackbox-product.json').write_text('{}')
+    calls=[]
+    def run(command, **kwargs):
+        calls.append(command)
+        if len(calls)==failed_call:
+            raise subprocess.CalledProcessError(7, command)
+    def forbidden(*args):
+        pytest.fail('FFmpeg must not download/build after native failure')
+    monkeypatch.setattr(packager.subprocess, 'run', run)
+    monkeypatch.setattr(ffmpeg_source, 'build', forbidden)
+    with pytest.raises(subprocess.CalledProcessError) as error:
+        packager.prepare(root, tmp_path/'bundle')
+    assert error.value.returncode==7
+    assert len(calls)==failed_call

@@ -331,4 +331,22 @@ def test_release_linux_installs_synthetic_codec_dependency():
     import yaml
     workflow = yaml.safe_load((Path(__file__).resolve().parents[1] / '.github/workflows/windows.yml').read_text())
     installs = [step.get('run', '') for step in workflow['jobs']['regression']['steps']]
-    assert any('apt-get install' in command and 'ffmpeg' in command.split() for command in installs)
+    assert any('run_apt install 120s install' in command and 'ffmpeg' in command.split() for command in installs)
+
+
+@pytest.mark.parametrize('result', [100, 124])
+def test_apt_failure_stops_before_install_with_diagnostics(tmp_path, result):
+    import os
+    import subprocess
+    command=next(s['run'] for s in workflow('windows.yml')['jobs']['regression']['steps']
+                 if s.get('name')=='Install Qt runtime libraries')
+    fake=tmp_path/'timeout'
+    fake.write_text('#!/bin/sh\necho "synthetic download failure"\nexit '+str(result)+'\n')
+    fake.chmod(0o755)
+    completed=subprocess.run(['bash','-e','-c',command],cwd=tmp_path,
+        env={**os.environ,'PATH':str(tmp_path)+os.pathsep+os.environ['PATH']},capture_output=True,text=True)
+    assert completed.returncode==result
+    assert 'apt update failed' in completed.stdout
+    assert 'limit=60s' in completed.stdout
+    assert 'apt install failed' not in completed.stdout
+    assert 'Acquire::Retries=1' in command and 'APT::Update::Error-Mode=any' in command
