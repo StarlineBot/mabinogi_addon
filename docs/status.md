@@ -134,6 +134,16 @@
 
 ## 마지막 작업
 
+### 0.14.0 블랙박스 뒤에 있어도 녹화·짧은 공백 반복 채움 (ab47591·28a1f9f 사용자 결정), 녹화 방식은 렌더 확인 대기
+
+- native `capture.cpp`: 열기·읽기에서 전경 조건 제거(최소화·식별 변경만 E_ACCESSDENIED), 전경 변경 훅 → 최소화 시작 훅.
+  `WindowsEvents.sample`의 active = 잠금·절전·최소화 아님, `foreground`는 단축키 저장 조건으로만 사용. **DLL 빌드·실게임 미검증.**
+- 생산자: 프레임 공백 250ms(`FILL_LIMIT_US`) 이하는 직전 프레임 반복으로 60FPS 칸을 채워 실제 시간 유지(`filled` 수), 초과만 구간 끊음.
+  재현 `qa_0137_blackbox_playback_speed` 종료 0(30~60FPS 모두 1.00배), `qa_0130` backpressure 종료 0.
+- 명세 63·111행·제외 목록 갱신, 12절(12.1 결정, 12.2 녹화 방식: 평소/전투, 보스바 사라진 뒤 60초 유예) 추가.
+- 녹화 방식 UI 시안은 세션 브랜치에 보관, 사용자 렌더 확인 후 로직 구현.
+- 회귀: 반복 채움 구간 길이, 뒤에서 녹화·단축키는 앞에서만(정적·컨트롤러), 블랙박스 258건 통과.
+
 ### 0.13.7 블랙박스 소리 제외, 영상만 저장 (bde54c6·8ecac45, 사용자 결정)
 
 - `packaging/blackbox-product.json`: `audio`=`disabled-for-validation`, `audio_settings` 제거 → `ServiceSettings.audio is None`,

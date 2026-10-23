@@ -16,6 +16,7 @@ class WindowsEvents:
         from ctypes import wintypes as W
         self.hwnd = hwnd
         self.locked = self.suspended = False
+        self.foreground = False  # 마지막 sample 기준 게임 창이 앞에 있는지(단축키 저장 조건)
         self.wts = C.WinDLL('wtsapi32', use_last_error=True)
         self.wts.WTSRegisterSessionNotification.argtypes = [W.HWND, W.DWORD]
         self.wts.WTSRegisterSessionNotification.restype = W.BOOL
@@ -63,8 +64,9 @@ class WindowsEvents:
         if _exe_basename_of_pid(pid) != (config.load_game_exe() or '').lower():
             return None, False
         target = target_identity(hwnd, pid)
-        active = (not self.locked and not self.suspended and not win32gui.IsIconic(hwnd)
-                  and win32gui.GetForegroundWindow() == hwnd)
+        # 녹화는 게임 창이 뒤에 있어도(최소화 아님) 계속한다(2026-10-23 사용자 결정). 단축키 저장은 앞에 있을 때만.
+        self.foreground = win32gui.GetForegroundWindow() == hwnd
+        active = not self.locked and not self.suspended and not win32gui.IsIconic(hwnd)
         return target, active
 
     def close(self):

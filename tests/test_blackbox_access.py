@@ -221,3 +221,19 @@ def test_hotkey_feedback_stays_visible_over_recording_error(monkeypatch, active,
                                           if k in expected)] in lines[1]
     tools.panel.deleteLater()
     host.close()
+
+
+def test_hotkey_is_ignored_while_game_records_in_background(monkeypatch):
+    from types import SimpleNamespace
+    monkeypatch.setattr(config, 'load_discord_user', lambda: None)
+    app, host = window()
+    tools = BlackboxController(host)
+    saved = []
+    tools.service = SimpleNamespace(tick=lambda *a, **kw: None, request_save=saved.append, completed=[], error=None)
+    pending = [(123456, 42)]
+    tools.events = SimpleNamespace(sample=lambda: (SimpleNamespace(hwnd=42), True), foreground=False,
+                                   consume_hotkey=lambda: pending.pop() if pending else None)
+    monkeypatch.setattr(tools, '_allowed', lambda: True)
+    tools._tick()
+    assert saved == []  # 뒤에서 녹화 중(active)이어도 게임이 앞에 없으면 단축키로 저장하지 않음
+    host.close()

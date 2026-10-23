@@ -462,3 +462,38 @@ def test_border_note_logs_once_and_is_silent_when_removed(caplog):
     assert '노란 테두리' in capture.border_note(2)
     assert '노란 테두리' in capture.border_note(3)
     assert sum('테두리 끄기 불가' in r.getMessage() for r in caplog.records) == 1
+
+
+def test_short_frame_gaps_are_filled_with_previous_frame_to_keep_real_time():
+    # 2026-10-23 사용자 결정: 60FPS 미만이면 영상이 빨리 재생되던 문제 → 250ms 이하 공백은 직전 프레임 반복.
+    a, b = b'\x01' * 64, b'\x02' * 64
+    stamps = [1_000_000, 1_100_000, 1_300_000, 1_400_000, 1_500_000, 1_600_000]   # 1.2초 프레임 누락(100ms 공백)
+    frames = [(a if n < 2 else b, 4, 4, t) for n, t in enumerate(stamps)]
+    calls = []
+    producer = _direct_producer(frames, calls)
+    producer.start()
+    segments = []
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline and len(segments) < 2:
+        while not producer.results.empty():
+            kind, item = producer.results.get_nowait()
+            if kind == 'segment': segments.append(item)
+        time.sleep(.005)
+    producer.request_stop()
+    while not producer.is_stopped():
+        while not producer.results.empty(): producer.results.get_nowait()
+        time.sleep(.005)
+    assert producer.error is None and producer.gaps == 0 and producer.filled == 1
+    # 1.0~1.3초(3칸: a, a, a 반복) + 1.3~1.6초 — 실제 시간과 같은 길이, 구간 끊김 없음
+    assert [(s.start_us, s.end_us) for s in segments] == [(1_000_000, 1_300_000), (1_300_000, 1_600_000)]
+
+
+def test_recording_continues_in_background_but_hotkey_needs_foreground():
+    # 2026-10-23 사용자 결정: 게임 창이 뒤에 있어도(최소화 아님) 녹화, 단축키 저장은 앞에 있을 때만.
+    root = Path(__file__).resolve().parents[1]
+    native = (root / 'native/blackbox/capture.cpp').read_text(encoding='utf-8')
+    body = native[native.index('bb_open_fit('):]
+    assert 'GetForegroundWindow()' not in body and 'IsIconic' in body
+    assert 'EVENT_SYSTEM_MINIMIZESTART' in native
+    events = (root / 'src/mabinogi_addon/system/blackbox_events.py').read_text(encoding='utf-8')
+    assert 'active = not self.locked and not self.suspended and not win32gui.IsIconic(hwnd)' in events

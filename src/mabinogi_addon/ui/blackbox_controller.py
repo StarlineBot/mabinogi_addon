@@ -297,7 +297,8 @@ class BlackboxController(QObject):
         """단축키 입력마다 결과를 남긴다(저장 불가 상태 포함). 게임 창에서 받은 입력만 저장한다."""
         if not self._allowed():
             return
-        if not (active and target is not None and shortcut[1] == target.hwnd):
+        foreground = getattr(self.events, 'foreground', active)  # 녹화는 뒤에서도 하지만 단축키는 게임이 앞에 있을 때만
+        if not (active and foreground and target is not None and shortcut[1] == target.hwnd):
             self._note_hotkey('단축키 입력을 받았어요 · 게임 창이 앞에 있을 때만 저장해요.',
                               '게임 창이 앞에 있지 않아 저장 안 함')
             self._react('저장하지 못했어요 · 게임 창이 앞에 있을 때만 저장해요', 'failed', target)

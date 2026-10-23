@@ -18,6 +18,7 @@ import wave
 _log = logging.getLogger(__name__)
 _TIMING_FIRST = 3        # 처음 몇 구간은 인코딩 시간을 하나씩 남긴다
 _TIMING_EVERY = 240      # 이후에는 이만큼(60FPS·15프레임 기준 약 60초)마다 요약
+FILL_LIMIT_US = 250_000  # 이 안의 프레임 공백은 직전 프레임 반복으로 채우고, 넘으면 구간을 끊는다
 AUDIO_WAIT_S = 3.0       # 한 묶음이 소리를 기다리는 상한. 넘으면 소리가 있는 만큼만 쓰고 이어 녹화(무음 채움 없음)
 
 
@@ -63,6 +64,7 @@ class CaptureProducer:
         self._ready = Event()  # 인코더 후보 시험을 마친 뒤 캡처를 시작한다(첫 구간 지연이 캡처를 막지 않게)
         self.gaps = 0  # 프레임 시각이 크게 밀려 새 구간으로 이어 간 횟수
         self.segments = 0  # 완료한 구간 수(오류 로그용)
+        self.filled = 0  # 직전 프레임 반복으로 채운 칸 수
         self._timing = []
         self._flush = []
         self._flush_lock = Lock()
@@ -124,6 +126,7 @@ class CaptureProducer:
             self.native.open(self.target)
             period = 1_000_000 / self.codec.settings.fps
             previous = None
+            last = None  # 반복 채움에 쓸 직전 프레임(같은 bytes 참조, 복사 없음)
             origin, count = None, 0
             while not self._stop.is_set():
                 if self.allowed() is not True:
@@ -161,19 +164,29 @@ class CaptureProducer:
                         continue
                 if origin is None:
                     origin = stamp
-                if abs(stamp - (origin + count * period)) > self.limits.frame_tolerance_us:
-                    # 게임 끊김(로딩·장면 전환)이나 인코딩 지연으로 캡처가 밀렸다. 녹화를 멈추지 않고
-                    # 지금까지를 한 구간으로 닫은 뒤 이 프레임부터 새 시각 기준으로 이어 간다(빈 시간은 저장 영상에서 빠짐).
-                    lag = stamp - (origin + count * period)
+                lag = stamp - (origin + count * period)
+                if lag > FILL_LIMIT_US or lag < -self.limits.frame_tolerance_us:
+                    # 긴 공백(로딩·멈춤·인코딩 지연): 녹화를 멈추지 않고 지금까지를 한 구간으로 닫은 뒤
+                    # 이 프레임부터 새 시각 기준으로 이어 간다(빈 시간은 저장 영상에서 빠짐).
                     flush()
                     origin, count = stamp, 0
                     self.gaps += 1
                     if self.gaps <= 3 or self.gaps % 100 == 0:
                         _log.info('블랙박스 프레임 공백 %.0fms · 새 구간으로 이어서 녹화(누적 %d회)', lag / 1000, self.gaps)
+                elif lag >= period / 2 and last is not None:
+                    # 게임이 60FPS보다 느리게 그리거나 화면이 멈춰 프레임이 덜 왔다: 직전 프레임을 반복해 빈 칸을 채워
+                    # 실제 시간과 같은 속도로 재생되게 한다(2026-10-23 사용자 결정, 일반 녹화 프로그램 방식).
+                    for _ in range(round(lag / period)):
+                        frames.append(last); stamps.append(round(origin + count * period))
+                        count += 1
+                        self.filled += 1
+                        if len(frames) >= self.limits.segment_frames:
+                            flush()
                 normalized = round(origin + count * period)
                 count += 1
                 previous = stamp
                 frames.append(data); stamps.append(normalized)
+                last = data
                 if len(frames) >= self.limits.segment_frames:
                     flush()
             flush()

@@ -46,7 +46,7 @@ class BlackboxTab(QWidget):
         form = QFormLayout()
         form.addRow('최근 보관 시간', row)
         group.addLayout(form)
-        group.addWidget(_label('게임이 비활성화되면 잠시 멈추고, 돌아오면 이어서 보관해요.\n'
+        group.addWidget(_label('게임 창이 뒤에 있어도 보관해요. 최소화하면 잠시 멈추고, 복원하면 이어서 보관해요.\n'
                                '보관 시간에는 실제로 녹화한 게임 영상만 포함해요.', muted=True))
         body.addWidget(box)
 
