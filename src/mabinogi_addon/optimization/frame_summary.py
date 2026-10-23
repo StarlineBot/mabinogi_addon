@@ -248,30 +248,43 @@ def condition_summary(reports):
 
     원본 간격을 저장하지 않으므로 조건 전체 1% low를 재계산하지 않는다. 구간 1% low를 평균해 전체 1% low로
     부르지 않는다(3절). 측정 1회 전체 1% low는 저장된 측정 집계가 있을 때 그 값들의 범위만 따로 보인다.
-    수집 모드 파일과 '요약 저장' 파일이 같은 구간을 담을 수 있어 (측정 id, 구간 번호)로 중복을 뺀다."""
-    groups, seen, measurements = {}, set(), {}
+    수집 모드 파일과 '요약 저장' 파일이 같은 구간을 담을 수 있어 (측정 id, 구간 번호)로 중복을 뺀다.
+
+    결과는 파일을 읽는 순서와 무관해야 한다(수집 모드 파일명은 무작위): 구간은 구간 기록의 조건 이름으로
+    묶고(이전 형식은 요약 조건), 측정 전체 값은 측정마다 가장 많이 진행된 집계 하나만 쓴다."""
+    def label(value):
+        return ' '.join(str(value or '').split()) or '(조건 이름 없음)'
+
+    groups, seen, best = {}, set(), {}
     for report in reports:
         if not isinstance(report, dict) or not isinstance(report.get('segments'), list):
             continue
-        name = ' '.join(str(report.get('condition') or '').split()) or '(조건 이름 없음)'
-        group = groups.setdefault(name, dict(low=[], long=[], seconds=0.0, sessions=set()))
+        session = report.get('session')
         for record in report['segments']:
             try:
-                key = (report.get('session'), record['index'])
+                key = (session, record['index'])
                 if key in seen or record.get('end_reason') == 'collecting' or record.get('quality') != 'observed':
                     continue
                 if record.get('end_reason') in INTERRUPTED:
                     continue
                 seen.add(key)
+                group = groups.setdefault(label(record.get('condition', report.get('condition'))),
+                                          dict(low=[], long=[], seconds=0.0, sessions=set()))
                 group['low'].append(record['low_1pct_fps'])
                 group['long'].append(_long_per_minute(record))
                 group['seconds'] += record['measured_seconds']
-                group['sessions'].add(report.get('session'))
+                group['sessions'].add(session)
             except (KeyError, TypeError, ZeroDivisionError):
                 continue
         whole = report.get('measurement')
         if isinstance(whole, dict) and whole.get('low_1pct_fps') is not None:
-            measurements.setdefault(name, {})[report.get('session')] = whole['low_1pct_fps']
+            # 같은 측정의 집계가 여러 파일에 있으면 구간 수(같으면 유효 간격)가 가장 큰 것 = 마지막 집계
+            rank = (whole.get('segments') or 0, whole.get('valid_intervals') or 0)
+            if session not in best or rank > best[session][0]:
+                best[session] = (rank, label(whole.get('condition', report.get('condition'))), whole['low_1pct_fps'])
+    measurements = {}
+    for _rank, name, low in best.values():
+        measurements.setdefault(name, []).append(low)
     result = []
     for name, group in groups.items():
         if not group['low']:
@@ -279,7 +292,7 @@ def condition_summary(reports):
         result.append(dict(condition=name, segments=len(group['low']), measurements=len(group['sessions']),
             measured_seconds=group['seconds'], segment_low_1pct_fps=_spread(group['low']),
             segment_long_per_minute=_spread(group['long']),
-            measurement_low_1pct_fps=_spread(measurements.get(name, {}).values())))
+            measurement_low_1pct_fps=_spread(measurements.get(name, []))))
     return sorted(result, key=lambda item: item['condition'])
 
 

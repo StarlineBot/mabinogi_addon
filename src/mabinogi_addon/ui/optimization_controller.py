@@ -236,7 +236,7 @@ class OptimizationController(QObject):
         d.summary_save.clicked.connect(self._save_summary)
         d.summary_folder.clicked.connect(self._open_summary_folder)
         d.summary_conditions.clicked.connect(self._show_conditions)
-        d.condition.textChanged.connect(lambda text: self.summary.set_condition(text))
+        d.condition.textChanged.connect(self._condition_changed)
         d.summary_select.currentIndexChanged.connect(lambda: self._render_summary(force=True))
 
     def open(self):
@@ -605,6 +605,14 @@ class OptimizationController(QObject):
             self._summary_message = '요약 저장 중…'
         except Exception as exc: self._summary_message = str(exc)
         self._render_summary(force=True)
+
+    def _condition_changed(self, text):
+        """측정 조건 이름은 측정 1회에 하나: 측정 중 바꾸면 다음 측정부터 적용해 한 측정에 이름이 섞이지 않게 한다."""
+        if self.frames:
+            self._summary_message = '측정 조건 변경은 다음 측정부터 적용돼요(현재 측정: ' + (self.summary.condition or '조건 이름 없음') + ').'
+            self._render_summary(force=True)
+        elif not self.summary.records and not self.summary.samples:
+            self.summary.set_condition(text)  # 아직 자료가 없는 측정. 끝난 측정의 이름은 바꾸지 않는다(시작 때 반영).
 
     def _show_conditions(self):
         """저장된 요약을 조건 이름별로 묶어 구간 값의 중앙값·범위를 보여준다(FPS 7절)."""

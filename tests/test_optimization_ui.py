@@ -480,3 +480,17 @@ def test_condition_name_measurement_view_and_condition_summary(window, monkeypat
     shown = c.panel.condition_result.text()
     assert not c.panel.condition_result.isHidden()
     assert '■ 기본' in shown and '■ 7+1 SMT끔' in shown and '평균해 조건 전체 1% low로 쓰지 않아요' in shown
+
+
+def test_condition_change_during_measurement_applies_to_next_measurement(window, monkeypatch):
+    # 0.12.0 QA 선택 2: 측정 중 조건 이름을 바꿔도 한 측정에 이름이 섞이지 않는다.
+    w, app = window; c = w.optimization_tools
+    monkeypatch.setattr(module, 'is_creator', lambda: True); c.refresh_access()
+    c.panel.condition.setText('기본')
+    assert c.summary.condition == '기본'
+    c.frames = True
+    try:
+        c.panel.condition.setText('7+1')
+        assert c.summary.condition == '기본' and '다음 측정부터' in c._summary_message
+    finally:
+        c.frames = False

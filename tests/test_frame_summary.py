@@ -208,3 +208,29 @@ def test_condition_summary_groups_segment_values_with_median_and_range(tmp_path)
     assert base['segment_low_1pct_fps']['maximum']==pytest.approx(lows[1])
     assert base['segment_low_1pct_fps']['median']==pytest.approx(sum(lows)/2)
     assert base['measurement_low_1pct_fps']['count']==2
+
+
+def test_condition_summary_is_independent_of_file_order():
+    # 0.12.0 QA: 수집 모드는 구간마다 파일(구간 1개 + 그 시점 측정 집계)을 남기고 이름이 무작위라 읽는 순서가 바뀐다.
+    from itertools import permutations
+    from mabinogi_addon.optimization.frame_summary import condition_summary
+    book=FrameSummary();book.activate('a',0);files=[]
+    def closed(record):
+        report=book.report();report['segments']=[record];files.append(json.loads(json.dumps(report)))
+    book.closed_callback=closed
+    stamp=0
+    for minute,(gap,name) in enumerate(((.05,''),(.03,'7+1'),(.04,'7+1'))):
+        book.set_condition(name)
+        for n in range(5000):
+            value=gap if n%100==0 else .01
+            stamp+=value;book.interval('a',stamp,value)
+        book.boundary(stamp+.001,'measurement_stop' if minute==2 else 'collection_toggle')
+    assert len(files)>=3
+    final=book.measurement()['low_1pct_fps']
+    shapes=set()
+    for order in permutations(files):
+        result={g['condition']:g for g in condition_summary(list(order))}
+        assert result['7+1']['measurement_low_1pct_fps']['median']==pytest.approx(final)
+        shapes.add(tuple((k,g['segments']) for k,g in sorted(result.items())))
+    assert len(shapes)==1
+    assert dict(next(iter(shapes)))['(조건 이름 없음)']>=1  # 이름 입력 전 구간은 그 구간 기록의 조건으로 묶임
