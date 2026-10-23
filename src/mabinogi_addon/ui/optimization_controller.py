@@ -10,12 +10,31 @@ from ..feature_access import is_creator
 from ..optimization.session import Recovery
 from ..optimization.engine import Engine
 from ..optimization.frames import FrameStream
-from ..optimization.frame_summary import FrameSummary, compare, REASONS
+from ..optimization.frame_summary import FrameSummary, compare, REASONS, condition_summary, load_reports
 from ..optimization.frame_summary_store import SummaryStore
 from ..system.optimization import WindowsOptimization
 from ..system import presentmon
 from .optimization_panel import OptimizationPanel
 from .frame_overlay import FrameOverlay
+
+
+def optimization_badge(recovery, engine, split=None):
+    """상단 최적화 상태 한 줄(명세 13.2). (문구, 등급) 또는 None(아무 작업도 없으면 숨김).
+
+    상태만 보여주며 성능 개선을 뜻하지 않는다. 환경 확인(읽기 전용)은 표시하지 않는다."""
+    if recovery.corrupt:
+        return '최적화: 오류', 'error'
+    if engine.busy and engine.task != 'inspect':
+        if engine.cancel.is_set() or engine.task == 'restore':
+            return '최적화: 원복 중', 'neutral'
+        if any(i['kind'] == 'cpu' and i['state'] == 'applied' for i in recovery.pending):
+            return ('최적화: 적용 중 ' + split if split else '최적화: 적용 중'), 'neutral'
+        return '최적화: 게임 대기', 'neutral'
+    if any(i['state'] == 'failed' for i in recovery.pending):
+        return '최적화: 오류', 'error'
+    if recovery.pending or recovery.restart_targets:
+        return '최적화: 원복 대기', 'warn'
+    return None
 
 
 class OptimizationController(QObject):
@@ -47,6 +66,11 @@ class OptimizationController(QObject):
         self._summary_render_at = 0.0
         self._summary_saved = 0
         self._summary_message = '아직 저장한 요약이 없어요.'
+        self._previous_measurement = None  # 직전 측정 1회(시작~중단) 집계: 측정 단위 비교 기준(FPS 7절)
+        self._condition_text = None  # '조건별 정리'를 누른 뒤 표시하는 저장 요약 묶음
+        self._core_total = None
+        self._badge_split = None
+        self._badge_wired = False
         self.frames = False
         self.target = None
         self.stream = None
@@ -112,6 +136,25 @@ class OptimizationController(QObject):
             if self.frames: self.stop_frames('제작자 접근이 해제돼 측정을 중단했어요.')
             if self.engine.busy: self.engine.cancel.set()
 
+    def _update_badge(self):
+        badge = getattr(self.window, '_optimization_badge', None)
+        if badge is None: return
+        if not self._badge_wired:
+            self._badge_wired = True
+            badge.clicked.connect(self._open_tab)
+        state = optimization_badge(self.recovery, self.engine, self._badge_split) if is_creator() else None
+        badge.setVisible(state is not None)
+        if state is not None:
+            text, level = state
+            color = {'error': '#e74c3c', 'warn': '#e67e22'}.get(level)
+            badge.setText(text)
+            badge.setStyleSheet(f'color:{color};' if color else '')
+
+    def _open_tab(self):
+        tabs = getattr(self.window, '_tabs', None)
+        if tabs is not None and tabs.indexOf(self.panel) >= 0:
+            tabs.setCurrentWidget(self.panel)
+
     # ---- 선택값 저장·환경 확인 자동 실행(명세 13.1) -------------------------------------------
     def _restore_selection(self):
         d, saved = self.panel, config.load_optimization_selection()
@@ -148,6 +191,7 @@ class OptimizationController(QObject):
             if topology is not None:
                 d.cpu_info.setText(f'CPU: {topology.name} · 물리 {len(topology.cores)}개 / 논리 {sum(len(c.cpus) for c in topology.cores)}개')
                 count = len([c for c in topology.cores if c.performance])
+                self._core_total = len(topology.cores)
                 for n in range(1,count):
                     d.split.addItem(f'게임 {n}개 + 백그라운드 물리 코어 {len(topology.cores)-n}개',n)
                 index = d.split.findData(saved.get('count')) if 'count' in saved else -1
@@ -191,6 +235,8 @@ class OptimizationController(QObject):
         d.summary_collect.toggled.connect(self._toggle_summary_collection)
         d.summary_save.clicked.connect(self._save_summary)
         d.summary_folder.clicked.connect(self._open_summary_folder)
+        d.summary_conditions.clicked.connect(self._show_conditions)
+        d.condition.textChanged.connect(lambda text: self.summary.set_condition(text))
         d.summary_select.currentIndexChanged.connect(lambda: self._render_summary(force=True))
 
     def open(self):
@@ -249,6 +295,8 @@ class OptimizationController(QObject):
             self.engine.status='적용할 물리 네트워크 어댑터를 선택해 주세요.'
             return
         if (options['tcp'] or options['rss']) and not self._network_confirmation(): return
+        self._badge_split = (f"{options['count']}+{self._core_total-options['count']}"
+                             if options['cpu'] and self._core_total else None)
         self._summary_requested = {key: options[key] for key in ('cpu','count','tcp','rss')}
         self._summary_requested['adapter_selected'] = bool(options['adapter'])
         self._summary_state = None
@@ -311,8 +359,11 @@ class OptimizationController(QObject):
             presentmon.clock()
             presentmon.executable()
             if not config.load_game_exe(): raise ValueError('설정에서 게임창을 먼저 등록해 주세요.')
+            if self.summary.measurement() is not None:
+                self._previous_measurement = self.summary.measurement()  # 새 측정의 비교 기준
             self.summary = FrameSummary()
             self.summary.closed_callback = self._summary_closed
+            if self.panel is not None: self.summary.set_condition(self.panel.condition.text())
             self._summary_state = None
             self.frames = True
             self.context = None
@@ -452,6 +503,7 @@ class OptimizationController(QObject):
         if self.engine.recovery_requested and not self.engine.busy:
             self.engine.recovery_requested = False
         self._offer_normalized_restore()
+        self._update_badge()
         if self.panel is None: return
         self._poll_summary_store()
         self._render_summary()
@@ -554,6 +606,29 @@ class OptimizationController(QObject):
         except Exception as exc: self._summary_message = str(exc)
         self._render_summary(force=True)
 
+    def _show_conditions(self):
+        """저장된 요약을 조건 이름별로 묶어 구간 값의 중앙값·범위를 보여준다(FPS 7절)."""
+        if not self._can_start(): return
+        reports = load_reports(self.summary_store.folder)
+        groups = condition_summary(reports)
+        if not groups:
+            self._condition_text = '조건별 정리 · 비교할 저장 요약이 없어요. 수집 모드나 요약 저장으로 남겨 주세요.'
+        else:
+            lines = [f'조건별 정리 · 저장 요약 {len(reports)}개 · 구간 값의 중앙값 [최소~최대]']
+            for g in groups:
+                low, long = g['segment_low_1pct_fps'], g['segment_long_per_minute']
+                line = (f"■ {g['condition']} (구간 {g['segments']}개 · 측정 {g['measurements']}회)\n"
+                        f"    1% low {low['median']:.1f} [{low['minimum']:.1f}~{low['maximum']:.1f}] FPS · "
+                        f"긴 간격 분당 {long['median']:.1f} [{long['minimum']:.1f}~{long['maximum']:.1f}]회")
+                whole = g['measurement_low_1pct_fps']
+                if whole:
+                    line += (f" · 측정 전체 1% low {whole['minimum']:.1f}~{whole['maximum']:.1f} FPS"
+                             if whole['count'] > 1 else f" · 측정 전체 1% low {whole['median']:.1f} FPS")
+                lines.append(line)
+            lines.append('구간 1% low를 평균해 조건 전체 1% low로 쓰지 않아요. 같은 장면에서 여러 번 측정해 범위를 비교해 주세요.')
+            self._condition_text = '\n'.join(lines)
+        self._render_summary(force=True)
+
     def _open_summary_folder(self):
         if self._can_start(): paths.open_folder(self.summary_store.folder)
 
@@ -581,12 +656,19 @@ class OptimizationController(QObject):
             selected = d.summary_select.currentData()
             d.summary_select.blockSignals(True)
             d.summary_select.clear();d.summary_select.addItem('현재 구간',None)
+            d.summary_select.addItem(f'측정 전체 · 완료 구간 {len(self.summary.records)}개 기준','measurement')
             for index, record in enumerate(self.summary.records):
                 d.summary_select.addItem(f"구간 {index+1} · {record['measured_seconds']:.1f}초 · {REASONS.get(record['end_reason'], '구간 종료')}",index)
             d.summary_select.setCurrentIndex(max(0,d.summary_select.findData(selected)))
             d.summary_select.blockSignals(False)
             d._summary_signature = signature
         index = d.summary_select.currentData()
+        d.condition_result.setText(self._condition_text or '')
+        d.condition_result.setVisible(bool(self._condition_text))
+        if index == 'measurement':
+            d.summary_result.setText(self._measurement_text())
+            d.summary_path.setText(f'저장 위치: {self.summary_store.folder} · {self._summary_message}')
+            return
         record = self.summary.current() if index is None else self.summary.records[index]
         if record is None:
             text = '현재 유효 표본 없음 · 중단/대기 구간은 안정 상태로 판정하지 않아요.'
@@ -617,6 +699,30 @@ class OptimizationController(QObject):
         d.summary_result.setText(text)
         d.summary_path.setText(f'저장 위치: {self.summary_store.folder} · {self._summary_message}')
         d.summary_path.setToolTip(str(self.summary_store.folder))
+
+    def _measurement_text(self):
+        """측정 1회(시작~중단) 전체 집계와 직전 측정 비교(FPS 7절). 진행 중이면 완료 구간까지만."""
+        whole = self.summary.measurement()
+        name = self.summary.condition or '조건 이름 없음'
+        if whole is None:
+            return f'측정 전체 · {name}\n완료된 구간이 아직 없어요. 측정을 중단하거나 60초 구간이 끝나면 표시해요.'
+        low = '자료 부족(100개 미만)' if whole['low_1pct_fps'] is None else f"{whole['low_1pct_fps']:.1f} FPS"
+        text = (f"측정 전체 · {name}{' (측정 중 · 완료 구간까지)' if self.frames else ''}\n"
+                f"구간 {whole['segments']}개 · 측정 {whole['measured_seconds']:.1f}초 · 유효 간격 {whole['valid_intervals']:,}개\n"
+                f"평균 {whole['average_fps']:.1f} FPS · 1% low {low} (구간 평균이 아닌 전체 간격으로 계산)\n"
+                f"간격 변동계수 {whole['variation_percent']:.1f}% · 긴 간격 분당 {whole['relative_long_per_minute']:.1f}회"
+                f" (총 {whole['relative_long_count']}회)")
+        if whole['conditions_recorded'] > 1:
+            text += f"\n측정 중 설정·대상 변경 {whole['conditions_recorded']-1}회 포함 · 조건이 섞인 측정이에요."
+        previous = self._previous_measurement
+        if previous is None:
+            return text + '\n이전 측정 없음 · 다음 측정부터 직전 측정과 비교해요.'
+        comparison = compare(previous, whole)
+        text += f"\n직전 측정({previous['condition'] or '조건 이름 없음'}) 대비"
+        if comparison['status'] != 'insufficient':
+            text += (f" 평균 {comparison['average_fps_delta']:+.1f} · 1% low {comparison['low_1pct_fps_delta']:+.1f} FPS"
+                     f" · 긴 간격 분당 {comparison['long_per_minute_delta']:+.1f}회")
+        return text + '\n' + comparison['message']
 
     def prepare_close(self):
         if not self.closing:

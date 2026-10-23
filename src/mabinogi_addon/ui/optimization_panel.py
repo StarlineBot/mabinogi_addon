@@ -1,6 +1,6 @@
 """Embedded creator alpha pages using the application's shared form sections."""
 from PySide6.QtWidgets import (QCheckBox,QComboBox,QFormLayout,QGroupBox,QHBoxLayout,
-    QLabel,QPushButton,QSpinBox,QTabWidget,QVBoxLayout,QWidget)
+    QLabel,QLineEdit,QPushButton,QSpinBox,QTabWidget,QVBoxLayout,QWidget)
 from .widgets import FeatureHeader
 
 
@@ -69,14 +69,20 @@ class OptimizationPanel(QWidget):
         row=QHBoxLayout()
         self.summary_save=QPushButton('요약 저장');row.addWidget(self.summary_save)
         self.summary_folder=QPushButton('폴더 열기');row.addWidget(self.summary_folder)
+        self.summary_conditions=QPushButton('조건별 정리');row.addWidget(self.summary_conditions)
         from .widgets import checkbox, CapturePathLabel
         self.summary_collect=checkbox('수집 모드(구간 요약 자동 저장)');row.addWidget(self.summary_collect,1)
         group.addLayout(row)
         self.summary_path=CapturePathLabel();group.addWidget(self.summary_path)
+        # 앱이 알 수 없는 조건(FPS 제한·렌더링 엔진·외부 도구·장면)을 측정마다 남긴다(FPS 7절).
+        self.condition=QLineEdit();self.condition.setMaxLength(48)
+        self.condition.setPlaceholderText('예: 7+1 SMT끔 · Vulkan · 제한없음')
+        form=QFormLayout();form.addRow('측정 조건',self.condition);group.addLayout(form)
         self.summary_select=QComboBox();self.summary_select.addItem('현재 구간',None)
         group.addWidget(self.summary_select)
         self.summary_result=_label('측정값 없음 · 1% low는 유효 간격 100개부터 표시해요.')
         group.addWidget(self.summary_result)
+        self.condition_result=_label('');self.condition_result.hide();group.addWidget(self.condition_result)
         group.addWidget(_label('1% low: 느린 상위 1% 간격의 평균을 FPS로 환산해요(P99 아님).\n긴 간격: 해당 구간 중앙값의 2배 초과. 최적화 효과 판정이 아니며 같은 장면·조건에서 비교해 주세요.'))
         body.addStretch();self.tabs.addTab(_scrolled(page),'FPS 측정')
         for combo in (self.split,self.adapter,self.source):

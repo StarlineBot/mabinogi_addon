@@ -19,14 +19,16 @@ class Engine:
         self._restore_network_after = None  # '중단 · 원복': CPU 원복 뒤 이어서 할 네트워크 원복(accept_normalized,)
         self._restore_cpu_after = False  # '중단 · 원복'을 누른 시점에 돌던 작업이 무엇이든 끝에서 CPU를 원복
         self._network_deferred = False  # 사용자가 네트워크 원복을 미룸 → '네트워크 원복 대기' 안내
+        self.task = None  # 진행 중 작업 종류: 'inspect' | 'session' | 'restore' (busy일 때만 의미)
 
     @property
     def busy(self):
         return self.thread is not None and self.thread.is_alive()
 
-    def _launch(self, function, restore_cpu=False, status=None):
+    def _launch(self, function, restore_cpu=False, status=None, task='restore'):
         with self.lock:
             if self.busy: return False
+            self.task = task
             self.cancel.clear()
             self._partial = None
             if status is not None:
@@ -74,7 +76,7 @@ class Engine:
             except Exception as exc: errors.append(str(exc))
             self.inspection = (topology, adapters)
             self.status = '\n'.join(errors) if errors else '환경을 확인했어요. 시작을 누르기 전에는 적용하지 않아요.'
-        return self._launch(work, status='환경 확인 중…')
+        return self._launch(work, status='환경 확인 중…', task='inspect')
 
     def start(self, options):
         def work():
@@ -189,7 +191,7 @@ class Engine:
                 self.status = '\n'.join(results + notices + ['게임 세션 사용 중 · 항목별 적용값 확인 완료' if not notices else '게임 세션 사용 중 · 일부 항목은 미적용/확인 필요'])
                 self.cancel.wait(2)
             self.status = '\n'.join(results + notices + ['세션을 중단하고 CPU를 원복해요.'])
-        return self._launch(work, restore_cpu=True, status='적용 중…')
+        return self._launch(work, restore_cpu=True, status='적용 중…', task='session')
 
     def stop(self):
         self.cancel.set()

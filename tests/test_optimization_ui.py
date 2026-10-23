@@ -412,3 +412,71 @@ def test_saved_selection_is_restored_and_unusable_values_are_explained(window, m
     # 사용자가 다시 고르면 저장된다(자동 적용은 하지 않음).
     c.panel.adapter.setCurrentIndex(1)
     assert config.load_optimization_selection()['adapter'] == 'AAAA-1'
+
+
+def test_top_badge_is_creator_only_hidden_when_idle_and_opens_tab(window, monkeypatch):
+    # 최적화 명세 13.2: 상단 상태는 제작자 전용, 작업이 없으면 숨김, 누르면 최적화 탭.
+    from types import SimpleNamespace as NS
+    w, app = window; c = w.optimization_tools
+    badge = w._optimization_badge
+    monkeypatch.setattr(module, 'is_creator', lambda: True); c.refresh_access()
+    c._update_badge()
+    assert badge.isHidden()  # 작업 없음
+    c.recovery.items.append(dict(kind='ack', state='applied', target='x', old=1, applied=0))
+    try:
+        c._update_badge()
+        assert not badge.isHidden() and badge.text() == '최적화: 원복 대기'
+        w._tabs.setCurrentWidget(w._settings_scroll)
+        badge.click()
+        assert w._tabs.currentWidget() is c.panel
+        monkeypatch.setattr(module, 'is_creator', lambda: False)
+        c._update_badge()
+        assert badge.isHidden()
+    finally:
+        c.recovery.items.clear()
+    # 상태 문구: 세션 중 CPU 적용 / 게임 대기 / 환경 확인은 표시 안 함 / 손상은 오류
+    def engine(task, busy=True, cancel=False):
+        return NS(busy=busy, task=task, cancel=NS(is_set=lambda: cancel))
+    cpu = [dict(kind='cpu', state='applied')]
+    rec = lambda pending, corrupt=False: NS(pending=pending, restart_targets=set(), corrupt=corrupt)
+    assert module.optimization_badge(rec(cpu), engine('session'), '7+1') == ('최적화: 적용 중 7+1', 'neutral')
+    assert module.optimization_badge(rec([]), engine('session'))[0] == '최적화: 게임 대기'
+    assert module.optimization_badge(rec(cpu), engine('session', cancel=True))[0] == '최적화: 원복 중'
+    assert module.optimization_badge(rec([]), engine('inspect')) is None
+    assert module.optimization_badge(rec([], corrupt=True), engine(None, busy=False))[0] == '최적화: 오류'
+    assert module.optimization_badge(rec([dict(kind='rss', state='failed')]), engine(None, busy=False))[0] == '최적화: 오류'
+
+
+def test_condition_name_measurement_view_and_condition_summary(window, monkeypatch, tmp_path):
+    # FPS 명세 7절: 측정 조건 이름, 측정 단위 비교, 조건별 정리(구간 중앙값·범위).
+    import json
+    from mabinogi_addon.optimization.frame_summary import FrameSummary
+    w, app = window; c = w.optimization_tools
+    monkeypatch.setattr(module, 'is_creator', lambda: True); c.refresh_access()
+
+    def measure(gap_every, condition):
+        book = FrameSummary(); book.set_condition(condition); book.activate('a', 0); t = 0
+        for n in range(3000):
+            value = .04 if n % gap_every == 0 else .01
+            t += value; book.interval('a', t, value)
+        book.boundary(t + .001, 'measurement_stop')
+        return book
+
+    c.panel.condition.setText('7+1 SMT끔')
+    assert c.summary.condition == '7+1 SMT끔'
+    before, after = measure(50, '기본'), measure(500, '7+1 SMT끔')
+    c.summary, c._previous_measurement = after, before.measurement()
+    c.panel._summary_signature = None
+    c._render_summary(force=True)
+    index = c.panel.summary_select.findData('measurement')
+    assert index >= 0
+    c.panel.summary_select.setCurrentIndex(index)
+    text = c.panel.summary_result.text()
+    assert '측정 전체 · 7+1 SMT끔' in text and '직전 측정(기본) 대비' in text and '긴 간격 분당' in text
+    monkeypatch.setattr(c.summary_store, 'folder', tmp_path)
+    for n, book in enumerate((before, after)):
+        (tmp_path / f'frames-{n}.json').write_text(json.dumps(book.report()), encoding='utf-8')
+    c.panel.summary_conditions.click()
+    shown = c.panel.condition_result.text()
+    assert not c.panel.condition_result.isHidden()
+    assert '■ 기본' in shown and '■ 7+1 SMT끔' in shown and '평균해 조건 전체 1% low로 쓰지 않아요' in shown
