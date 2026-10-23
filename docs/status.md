@@ -204,6 +204,10 @@
   `qa_0130_blackbox_encode_backpressure` 종료 0(0.40초/구간에서도 중단 없이 6구간, 공백 구간은 영상에서 빠짐),
   0.13.1 변경 검사 470건/41.99초 통과. 배포 차단 없음. 인코딩이 계속 실시간보다 느리면 끊김(공백)이 많은 영상이 되므로
   구간 인코딩 시간 로그로 실측 필요.
+- v0.13.1 게시 완료: [39927900873](https://github.com/StarlineBot/mabinogi_addon/actions/runs/39927900873) (apt 23초, 변경 검사
+  28초, Windows 기동 10초, exe 빌드 5분34초 — bsf 포함 FFmpeg 빌드·필수 구성 검사 통과, 전체 7분54초) → 게시
+  [39928861651](https://github.com/StarlineBot/mabinogi_addon/actions/runs/39928861651) 성공(1분). 태그 `8e9bf96`.
+  Release exe 162,851,569 bytes, sha256 `560970d8…4a8a`가 version.json과 일치(직접 다운로드 확인). 실게임 저장 확인 남음.
   - QA 후속 수정: 조회기 생성 실패는 지표 조합별 30초 뒤 재시도·경고 1회, CPU/GPU 카운터 지표별 추가(하나만 실패해도 나머지 표시).
     저장 반응은 마지막으로 관측한 게임 창(hwnd)으로 완료·실패도 같은 모니터에 띄우고, `GetWindowRect`를 `dpi.to_logical`로 변환 후
     화면 탐색. 참고 항목도 반영: GPU%는 엔진(eng_N)별 합의 최댓값, 지표 변경 시 UI 스레드가 조회 스레드를 기다리지 않음.
