@@ -126,6 +126,13 @@
 
 ## 마지막 작업
 
+### 0.13.3 FPS 표시 켜짐 유지 (35ed410 대응)
+
+- 사용자가 토글로 바꾼 표시 켜짐만 `frameMeter.display`에 저장(앱 종료·접근 해제로 꺼질 때는 저장 안 함).
+  재실행 시 접근이 확인된 첫 틱에 1회 켬(게임 대기부터), 이전 세션 정리(pending)면 켜지 않음. 수집 모드는 매번 꺼짐.
+  안내 문구 갱신, FPS 명세 28행에 결정 한 줄. 함께 수정: 오버레이를 만들기 전 바꾼 배율·표시 항목도 저장되도록.
+- 0.13.3 노트를 요청 형식(조용히 다듬은 것들 3줄)으로 정리. 회귀 1건(켬/끔 저장·복원·pending·수집 꺼짐).
+
 ### 0.13.3 블랙박스 캡처 노란 테두리 끄기 (63ed613 대응)
 
 - `capture.cpp`: `CreateCaptureSession` 뒤 `StartCapture` 전에 `ApiInformation.IsPropertyPresent(IsBorderRequired)` 확인 →

@@ -72,7 +72,7 @@ class OptimizationPanel(QWidget):
                                '메모리: 게임 전용 메모리\n1초마다 읽기만 해요. 실제 Windows 수치 확인 전이라 정확도를 보증하지 않아요.'))
         group=_group('상태 · 수집 품질',body)
         self.frames_status=_label('꺼짐 · 표시 안 함');group.addWidget(self.frames_status)
-        group.addWidget(_label('앱을 다시 실행하면 자동으로 켜지지 않아요. 전투 보조 일시정지는 FPS 표시만 숨겨요.'))
+        group.addWidget(_label('앱을 다시 실행해도 FPS 표시 설정은 유지돼요. 수집 모드는 매번 꺼진 상태로 시작해요.\n전투 보조 일시정지는 FPS 표시만 숨겨요.'))
         group=_group('프레임 수집(베타)',body)
         group.addWidget(_label('FPS 표시가 켜져 있을 때만 동작해요. 수집 모드를 켜면 구간 요약을 파일로 남겨요.\n'
                                '매 프레임 원본은 저장하지 않아요.'))

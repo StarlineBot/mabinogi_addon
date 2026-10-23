@@ -57,6 +57,8 @@ class OptimizationController(QObject):
         saved = saved if isinstance(saved,dict) else {}
         self._metrics = {key: (saved[key] if type(saved.get(key)) is bool else key == 'fps') for key in METRICS}
         self.sampler = PerfSampler()
+        # 'FPS 표시' 켜짐은 재실행 후에도 유지(수집 모드는 매번 꺼짐으로 시작). 접근이 확인된 첫 틱에 1회 복원.
+        self._restore_display = section.get('display') is True
         self._reported_source = None
         self._overlay = None
         self.collector = presentmon.Collector(self)
@@ -261,13 +263,13 @@ class OptimizationController(QObject):
             from .theme import is_dark
             self.panel.tabs.setStyleSheet(_subtab_qss(is_dark()))
 
-    def _save_overlay(self):
-        if self._overlay is None: return
+    def _save_overlay(self, **extra):
         raw=config._read_local_config()
         section=raw.get('frameMeter')
         section=section if isinstance(section,dict) else {}
-        section.update(scale=self._scale,overlay=dict(x=self.overlay.x(),y=self.overlay.y(),locked=self.overlay.locked),
-                       metrics=dict(self._metrics))
+        section.update(scale=self._scale,metrics=dict(self._metrics),**extra)
+        if self._overlay is not None:  # 오버레이를 아직 만들지 않았어도 배율·표시 항목·표시 켜짐은 저장한다
+            section.update(overlay=dict(x=self.overlay.x(),y=self.overlay.y(),locked=self.overlay.locked))
         raw['frameMeter']=section
         config._write_local_config(raw)
 
@@ -404,6 +406,9 @@ class OptimizationController(QObject):
         else:
             self.stop_frames()
         self._sync_frames_toggle()
+        if self._can_start():
+            self._restore_display = False
+            self._save_overlay(display=bool(on and self.frames))  # 사용자가 바꾼 표시 켜짐만 저장(종료·접근 해제는 저장 안 함)
 
     def _sync_frames_toggle(self):
         if self.panel is None: return
@@ -522,6 +527,11 @@ class OptimizationController(QObject):
         now = time.monotonic()
         gap, self.last_tick = now-self.last_tick, now
         self.refresh_access()
+        if self._restore_display and self._can_start():
+            self._restore_display = False
+            # 이전 FPS 세션 정리가 남아 있으면 켜지 않고 기존 정리 안내를 둔다.
+            if not self.collector.pending and not self.frames:
+                self.start_frames()
         if self.frames:
             try: self._frame_tick(gap)
             except Exception as exc: self._failed(str(exc))

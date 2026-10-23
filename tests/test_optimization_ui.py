@@ -530,3 +530,29 @@ def test_collection_mode_does_not_start_display_or_write_files_when_display_is_o
     c._tick()
     assert not (tmp_path / 'summaries').exists() or not any((tmp_path / 'summaries').iterdir())
     c.panel.summary_collect.setChecked(False)
+
+
+def test_fps_display_setting_is_restored_after_restart_but_collection_is_not(window, monkeypatch):
+    # 0.13.3: 'FPS 표시' 켜짐은 재실행 후 유지, 수집 모드는 매번 꺼짐. 이전 세션 정리가 남으면 켜지 않음.
+    w, app = window; c = w.optimization_tools
+    monkeypatch.setattr(module, 'is_creator', lambda: True); c.refresh_access()
+    calls = []
+    monkeypatch.setattr(c, 'start_frames', lambda: calls.append('start') or setattr(c, 'frames', True))
+    monkeypatch.setattr(c, 'stop_frames', lambda message=None: calls.append('stop') or setattr(c, 'frames', False))
+    c.panel.frames_toggle.click()
+    assert module.config._read_local_config()['frameMeter']['display'] is True
+    c.panel.frames_toggle.click()
+    assert module.config._read_local_config()['frameMeter']['display'] is False
+    # 재실행: 저장값이 켜짐이면 접근이 확인된 첫 틱에 한 번 켠다.
+    calls.clear(); c._restore_display = True
+    c._tick(); c._tick()
+    assert calls == ['start'] and not c.panel.summary_collect.isChecked()
+    # 끔 저장 → 켜지 않음
+    calls.clear(); c.frames = False; c._restore_display = False
+    c._tick()
+    assert calls == []
+    # 이전 FPS 세션 정리 필요(pending)면 자동으로 켜지 않는다.
+    monkeypatch.setattr(type(c.collector), 'pending', property(lambda self: True), raising=False)
+    c._restore_display = True
+    c._tick()
+    assert calls == [] and not c._restore_display
