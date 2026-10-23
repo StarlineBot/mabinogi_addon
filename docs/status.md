@@ -162,7 +162,7 @@
   '네트워크는 게임 종료 후 시작해야 적용' 같은 안내형 문구로 구분 권장.
 - 0.13.0 블랙박스 실사용: 인코더 열기 오류는 사라졌으나 `저장 불가: ValueError: frame clock drift exceeds bound`, 확보 0초,
   영상 폴더에 `.blackbox-*.partial` 2개(실패한 저장 자료, IE 아이콘은 Windows의 .partial 확장자 연결일 뿐 HTML 아님).
-  - Highly Likely(재현 `qa_0130_blackbox_encode_backpressure` REPRODUCED, 실제 구간 인코딩 시간은 미측정): 캡처와 인코딩 사이
+  - Potential(재현 `qa_0130_blackbox_encode_backpressure` REPRODUCED, 실제 구간 인코딩 시간은 미측정, 아래 log 분석으로 하향): 캡처와 인코딩 사이
     대기열이 1구간(`queued_segments` 1)이라, 구간(15프레임=0.25초) 인코딩이 0.25초를 넘으면 캡처 스레드가 `_put`에서 막히고
     다음 프레임 시각이 60FPS 격자보다 33.3ms 넘게 밀려 `frame clock drift`로 녹화 전체가 중단된다. 끊김 없는 60FPS 가짜 게임 +
     인코딩 0.10초는 3초간 정상(11구간), 0.40초는 2구간 뒤 같은 오류. 구간마다 ffmpeg·codec host를 새로 띄우고 하드웨어
@@ -175,6 +175,17 @@
 - 0.13.0 FPS 오버레이 격자 이동 회귀(Confirmed, 코드): 0.12까지 `FrameOverlay`는 `MemoOverlay`를 상속해 `grid.snap`·드래그 중
   격자 안내선을 썼으나, 0.13.0 전용 그리기로 바꾸며 이동 코드가 단순 `move`만 남아 설정의 격자 맞춤이 적용되지 않음.
   수정: 다른 오버레이와 같이 press에서 `grid.enabled()/size()/show_guide()`, move에서 `grid.snap`, release에서 `hide_guide()`.
+- 0.13.0 app.log 분석(사용자 제공, 2026-10-23 17:29~17:38):
+  - 확인: 0.11.3→0.13.0 업데이트 후 자동 재실행 정상(17:29:22 새 프로세스가 `.old` 정리). `블랙박스 인코더 선택: h264_nvenc
+    (시험 실패: 없음)`(17:30:42) — NVENC 경로 동작, 이후 약 1분 반 녹화되어 저장 요청까지 도달.
+  - **Confirmed(재현) 저장 항상 실패**: 17:32:09·17:32:25 `encoder exited 3115105544`(=AVERROR_BSF_NOT_FOUND) ·
+    `h264_mp4toannexb bitstream filter required for H.264 streams`. 내보내기는 concat demuxer로 구간 mp4를 읽는데, concat의
+    auto_convert가 H.264(avcC)에 `h264_mp4toannexb`를 요구하고, `ffmpeg_minimal.sh`는 `--disable-everything` 뒤 bsf를 하나도
+    켜지 않음. 같은 최소 구성(Windows 전용 인코더 제외)을 Linux에서 빌드해 같은 오류 재현, `--enable-bsf=h264_mp4toannexb`
+    추가 빌드로 concat(+segment_time_metadata·select) 성공 확인. 테스트는 시스템 전체 ffmpeg를 써서 못 잡았고, 번들 검증은
+    인코더만 확인. 수정: bsf 활성화 + `blackbox_bundle.prepare`에서 `-bsfs`에 필수 bsf 확인. 실패 저장이 `.partial` 2개를 남김.
+  - 정정: 위 'frame clock drift'는 녹화 시작 즉시가 아니라 일정 시간 녹화 뒤 발생(간헐). 생산자 오류가 app.log에 남지 않아 발생
+    시각·원인 판정 불가 → 인코딩 대기 막힘 가설은 '가능한 원인'으로 낮추고, 생산자 오류·구간 인코딩 시간 로그 추가 요청.
   - QA 후속 수정: 조회기 생성 실패는 지표 조합별 30초 뒤 재시도·경고 1회, CPU/GPU 카운터 지표별 추가(하나만 실패해도 나머지 표시).
     저장 반응은 마지막으로 관측한 게임 창(hwnd)으로 완료·실패도 같은 모니터에 띄우고, `GetWindowRect`를 `dpi.to_logical`로 변환 후
     화면 탐색. 참고 항목도 반영: GPU%는 엔진(eng_N)별 합의 최댓값, 지표 변경 시 UI 스레드가 조회 스레드를 기다리지 않음.
