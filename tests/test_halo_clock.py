@@ -11,7 +11,9 @@ def sync(clock,raw=900,start=0):
 
 
 def test_schedule_and_early_first_warning():
-    assert EVENTS==(893,830,767,704,641,578,515,452,389,326,263,200,137,74,11)
+    # 14:53 13:50 12:47 11:44 10:41 09:38 08:35 | 07:33 06:30 05:27 04:24 03:21 02:18 01:15 00:12 (7→8회차만 62초)
+    assert EVENTS==(893,830,767,704,641,578,515,453,390,327,264,201,138,75,12)
+    assert [a-b for a,b in zip(EVENTS,EVENTS[1:])]==[63]*6+[62]+[63]*7
     clock=HaloTracker()
     assert sync(clock).until_halo==6
     assert clock.observe(898,2).warning==1
@@ -36,6 +38,8 @@ def test_complete_battle_fires_each_warning_once_without_accumulated_drift():
         if state.warning:
             warnings.append((state.warning,now))
     assert warnings==[(k,900-(event+5)) for k,event in enumerate(EVENTS,1)]
+    # 2026-10-23 보정: 8회차 경고는 07:38(남은 458초), 9회차는 06:35(395초)에 한 번씩
+    assert [w for w in warnings if w[0] in (8,9)]==[(8,900-458),(9,900-395)]
     assert not clock.armed
 
 

@@ -3,7 +3,9 @@
 from dataclasses import dataclass
 import math
 
-EVENTS=tuple(893-63*k for k in range(15))
+# 1~7회차는 14:53부터 63초 간격, 7회차 다음 간격만 62초(8회차부터 1초 당김). 2026-10-23 제작자 실측·결정:
+# 9~11회차가 계산보다 연속 1초 빨랐고(사람 확인 지연은 늦음 쪽 오차만 만든다) 9→10→11 간격은 63초 그대로였다.
+EVENTS=tuple(893-63*k+(1 if k>=7 else 0) for k in range(15))
 
 
 @dataclass(frozen=True)
