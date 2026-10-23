@@ -126,6 +126,15 @@
 
 ## 마지막 작업
 
+### 0.13.3 블랙박스 캡처 노란 테두리 끄기 (63ed613 대응)
+
+- `capture.cpp`: `CreateCaptureSession` 뒤 `StartCapture` 전에 `ApiInformation.IsPropertyPresent(IsBorderRequired)` 확인 →
+  `GraphicsCaptureAccess::RequestAccessAsync(Borderless)`(결과 캐시, MTA라 동기 대기)가 Allowed면 `IsBorderRequired(false)`.
+  API 없음·거부·예외는 녹화를 계속하고 상태만 기록(`bb_border_status`: 1 끔/2 API 없음/3 거부/4 예외).
+- Python: 열기 뒤 상태를 읽어 실패 사유를 app.log에 1회('블랙박스 테두리 끄기 불가'), 블랙박스 탭 캡처 정보 줄에 짧은 안내.
+- 회귀: 네이티브 소스 정적 검사(StartCapture 전 호출·실패가 오류로 이어지지 않음), 안내·로그 1회. **windows-2022 SDK 빌드와
+  실게임 테두리 사라짐은 미검증**(다음 검증 실행·사용자 확인 필요).
+
 ### 0.13.3 FPS 저FPS 구간 stale_delivery 끊김 수정 (9a84a02 대응)
 
 - `FrameStream`: 도착 지연(now-stamp)만으로는 이벤트를 버리거나 구간을 끊지 않음. 포커스·대상 경계(cutoff) 이전 이벤트만 버리고,

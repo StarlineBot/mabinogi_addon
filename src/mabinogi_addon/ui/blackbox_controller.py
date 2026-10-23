@@ -347,6 +347,9 @@ class BlackboxController(QObject):
                 self._react('저장하지 못했어요 · 앱에서 확인해 주세요', 'failed', self._last_target)
         if self.panel is not None:
             self.panel.status.setText(_STATES.get(self.service.status, '게임 실행 대기'))
+            native = getattr(getattr(self.service, 'producer', None), 'native', None)
+            border = getattr(native, 'border_note', None)  # Windows 11 캡처 테두리를 끄지 못했을 때만
+            self.panel.capture_info.setText('게임 화면만 · 목표 1080p / 60FPS' + ('\n' + border if border else ''))
             self.panel.available.setText(f'확보한 영상 {duration // 1_000_000}초 / 설정 {self.service._retention // 60_000_000}분')
             self.panel.folder.setText(str(self.service.settings.output_folder))
             entries = self.service.recoveries()

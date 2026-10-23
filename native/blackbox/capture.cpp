@@ -10,6 +10,9 @@
 #include <winrt/Windows.Graphics.Capture.h>
 #include <winrt/Windows.Graphics.DirectX.h>
 #include <winrt/Windows.Graphics.DirectX.Direct3D11.h>
+#include <winrt/Windows.Foundation.Metadata.h>
+#include <winrt/Windows.Security.Authorization.AppCapabilityAccess.h>
+#include <atomic>
 #include <memory>
 #include <cstring>
 using namespace winrt;
@@ -43,6 +46,34 @@ struct Scaler {
     com_ptr<ID3D11VideoProcessorInputView> input_view;
     com_ptr<ID3D11VideoProcessorOutputView> output_view;
 };
+
+// Windows 11 캡처 노란 테두리 끄기 결과(영상에는 안 찍히지만 게임 창에 계속 보임).
+// 0 미확인, 1 끔, 2 API 없음(구버전 Windows), 3 권한 거부, 4 예외. 실패해도 녹화는 계속한다.
+static std::atomic<int> g_border_status{0};
+static std::atomic<int> g_border_access{-1};  // RequestAccessAsync 결과 캐시(AppCapabilityAccessStatus)
+
+static void disable_capture_border(GraphicsCaptureSession const& session) {
+    using winrt::Windows::Foundation::Metadata::ApiInformation;
+    using winrt::Windows::Security::Authorization::AppCapabilityAccess::AppCapabilityAccessStatus;
+    try {
+        if (!ApiInformation::IsPropertyPresent(L"Windows.Graphics.Capture.GraphicsCaptureSession", L"IsBorderRequired")) {
+            g_border_status = 2;
+            return;
+        }
+        if (g_border_access < 0)  // 호출 스레드는 MTA(RoInitialize 1)라 동기 대기해도 된다
+            g_border_access = int(GraphicsCaptureAccess::RequestAccessAsync(GraphicsCaptureAccessKind::Borderless).get());
+        if (g_border_access != int(AppCapabilityAccessStatus::Allowed)) {
+            g_border_status = 3;
+            return;
+        }
+        session.IsBorderRequired(false);
+        g_border_status = 1;
+    } catch (...) {
+        g_border_status = 4;
+    }
+}
+
+BB int __cdecl bb_border_status() { return g_border_status.load(); }
 
 struct Capture;
 thread_local Capture* active_capture = nullptr;
@@ -189,6 +220,7 @@ BB HRESULT __cdecl bb_open_fit(HWND hwnd, DWORD pid, ULONGLONG created, int curs
         c->session = c->pool.CreateCaptureSession(item);
         // Unsupported cursor control fails; do not silently adopt a different policy.
         c->session.IsCursorCaptureEnabled(cursor != 0);
+        disable_capture_border(c->session);  // 실패해도 녹화는 계속(표시 문제)
         if (active_capture) return E_UNEXPECTED;
         active_capture = c.get();
         c->hook = SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND, nullptr,

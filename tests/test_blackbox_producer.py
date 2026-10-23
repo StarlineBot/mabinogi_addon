@@ -438,3 +438,27 @@ def test_sound_wait_is_bounded_and_uses_what_was_captured():
     import pytest
     with pytest.raises(TimeoutError):
         timeline.covered_end(1_500_000, timeout=.05)
+
+
+def test_capture_border_is_disabled_without_making_it_a_recording_failure():
+    # 0.13.3: Windows 11 캡처 노란 테두리. 끄기를 시도하되 API 없음·거부·예외에도 녹화는 계속한다.
+    root = Path(__file__).resolve().parents[1]
+    native = (root / 'native/blackbox/capture.cpp').read_text(encoding='utf-8')
+    assert 'IsPropertyPresent(L"Windows.Graphics.Capture.GraphicsCaptureSession", L"IsBorderRequired")' in native
+    assert 'GraphicsCaptureAccessKind::Borderless' in native and 'session.IsBorderRequired(false)' in native
+    open_body = native[native.index('bb_open_fit('):native.index('BB HRESULT __cdecl bb_read')]
+    assert 'disable_capture_border(c->session);' in open_body
+    assert open_body.index('disable_capture_border') < open_body.index('StartCapture()')
+    helper = native[native.index('static void disable_capture_border'):native.index('BB int __cdecl bb_border_status')]
+    assert 'return E_' not in helper and 'check_hresult' not in helper and 'catch (...)' in helper
+
+
+def test_border_note_logs_once_and_is_silent_when_removed(caplog):
+    import logging
+    from mabinogi_addon.system import blackbox_capture as capture
+    caplog.set_level(logging.INFO)
+    capture._border_logged = False
+    assert capture.border_note(1) is None and capture.border_note(0) is None
+    assert '노란 테두리' in capture.border_note(2)
+    assert '노란 테두리' in capture.border_note(3)
+    assert sum('테두리 끄기 불가' in r.getMessage() for r in caplog.records) == 1

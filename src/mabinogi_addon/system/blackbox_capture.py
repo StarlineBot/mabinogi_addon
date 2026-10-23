@@ -1,8 +1,28 @@
 """Windows DLL의 명시적 HWND/PID 실행 식별 캡처 ABI. import/생성만으로 캡처하지 않는다."""
 import ctypes as C
 from dataclasses import dataclass
+import logging
 from pathlib import Path
 import sys
+
+_log = logging.getLogger(__name__)
+# bb_border_status 결과 → (로그 사유, 블랙박스 탭 안내). 1(끔)은 안내 없음.
+BORDER_NOTES = {
+    2: ('이 Windows 버전은 캡처 테두리 끄기를 지원하지 않음', '녹화 중 게임 창에 노란 테두리가 보일 수 있어요(Windows 버전 제한, 영상에는 안 찍혀요).'),
+    3: ('Windows가 테두리 없는 캡처 권한을 허용하지 않음', '녹화 중 게임 창에 노란 테두리가 보일 수 있어요(Windows 권한, 영상에는 안 찍혀요).'),
+    4: ('테두리 끄기 중 오류', '녹화 중 게임 창에 노란 테두리가 보일 수 있어요(영상에는 안 찍혀요).'),
+}
+_border_logged = False
+
+
+def border_note(status):
+    """캡처 테두리 끄기 결과를 처음 1회 로그로 남기고, 탭에 보일 짧은 안내(없으면 None)를 돌려준다."""
+    global _border_logged
+    note = BORDER_NOTES.get(status)
+    if note is not None and not _border_logged:
+        _border_logged = True
+        _log.info('블랙박스 테두리 끄기 불가: %s (상태 %d) · 녹화는 계속해요', note[0], status)
+    return note[1] if note else None
 
 
 @dataclass(frozen=True)
@@ -64,6 +84,7 @@ class NativeCapture:
                  max_audio_bytes: int | None = None, activation_timeout_ms: int | None = None,
                  audio_buffer_bytes: int | None = None,
                  max_output: tuple[int, int] | None = None, max_input: tuple[int, int] | None = None):
+        self.border_note = None  # 캡처 테두리를 끄지 못했을 때 탭에 보일 안내
         if type(max_frame_bytes) is not int or max_frame_bytes <= 0 or type(cursor) is not bool:
             raise ValueError('explicit frame limit and cursor policy required')
         if (max_output is None) != (max_input is None):
@@ -127,6 +148,10 @@ class NativeCapture:
             in_w, in_h = self.max_input or (0, 0)
             self._check(dll.bb_open_fit(target.hwnd, target.pid, target.created, self.cursor,
                                         out_w, out_h, in_w, in_h, C.byref(self._video)), "게임 영상 시작")
+            status = getattr(dll, 'bb_border_status', None)
+            if status is not None:  # Windows 11 캡처 노란 테두리 끄기 결과(실패해도 녹화는 계속)
+                status.restype = i32
+                self.border_note = border_note(status())
             self._buffer = C.create_string_buffer(self.limit)
             rate, channels, capacity, timeout = self.audio
             if rate is not None:
