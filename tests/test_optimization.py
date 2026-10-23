@@ -612,3 +612,38 @@ def test_stop_and_restore_during_inspect_still_restores_cpu(recovery):
     assert e.stop_and_restore()
     gate.set(); e.thread.join(3)
     assert b.read('cpu', TARGET) == 15 and not r.pending
+
+
+def test_short_lived_processes_do_not_exhaust_journal_limit(recovery):
+    """명세 13.3: 0.25초마다 새로 뜨는 블랙박스 인코더 같은 단명 프로세스가 기록·관측 한도를 채워
+    장시간 세션이 끝나지 않는다. 종료한 프로세스의 CPU 기록은 지우고 관측 목록도 살아 있는 것만 둔다."""
+    r, b, _ = recovery
+    r.MAX_ITEMS = 6
+    spawned = [0]
+    def processes():
+        spawned[0] += 1
+        target = {'pid': 1000 + spawned[0], 'birth': str(spawned[0])}
+        b.values[('cpu', json.dumps(target, sort_keys=True))] = 15
+        return [dict(target=target, name='ffmpeg.exe')]
+    real_read = b.read
+    def read(kind, target):
+        if kind == 'cpu' and target['pid'] >= 1000 and target['pid'] < 1000 + spawned[0]:
+            raise ProcessLookupError  # 이전 주기의 인코더는 이미 종료
+        return real_read(kind, target)
+    b.read = read
+    b.topology = lambda: Topology('cpu', (Core(0, (0, 1)), Core(1, (2, 3))))
+    b.game = lambda: TARGET
+    b.processes = processes
+    b.background_candidate = lambda info, game: True
+    b.governor_running = lambda: False
+    b.alive = lambda target: True
+    class Fast(threading.Event):
+        def wait(self, timeout=None): return super().wait(0.005)
+    e = Engine(b, r, lambda: True)
+    e.cancel = Fast()
+    assert e.start(dict(cpu=True, count=1, adapter=None, tcp=False, rss=False))
+    assert _wait(lambda: spawned[0] > 3 * r.MAX_ITEMS, 10), e.status
+    assert e.busy and '한도' not in e.status
+    assert len(r.items) <= 3  # 게임 + 현재 인코더(+직전 1개)만 남는다
+    e.cancel.set(); e.thread.join(3)
+    assert not r.pending
