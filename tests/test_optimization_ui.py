@@ -430,7 +430,7 @@ def test_top_badge_is_creator_only_hidden_when_idle_and_opens_tab(window, monkey
     c.recovery.items.append(dict(kind='ack', state='applied', target='x', old=1, applied=0))
     try:
         c._update_badge()
-        assert not badge.isHidden() and badge.text() == '최적화: 원복 대기'
+        assert not badge.isHidden() and badge.text() == '최적화: 적용 중'  # 13.5 보정: 원복 요청 전은 정상 적용
         w._tabs.setCurrentWidget(w._settings_scroll)
         badge.click()
         assert w._tabs.currentWidget() is c.panel
@@ -585,9 +585,14 @@ def test_single_optimization_toggle_follows_spec_13_5(window, monkeypatch):
     c.recovery.items = [dict(kind='ack', target='12345678-1234-1234-1234-123456789abc', old=0, applied=1, state='applied')]
     try:
         c._tick()
-        assert toggle.isChecked() and toggle.text() == '최적화 적용 중 · 네트워크 원복 대기'
-        toggle.click()
-        assert restored == [1]
+        # 13.5 보정: 원복을 요청하지 않은 네트워크 변경은 정상 '적용 중'(경고 아님)
+        assert toggle.isChecked() and toggle.text() == '최적화 적용 중'
+        assert w._optimization_badge.text() == '최적화: 적용 중'
+        toggle.click()  # 원복 요청(가짜 _restore_all) → 끝났는데 남음 = 거절·실패 → 원복 대기
+        c._restore_requested = True
+        c._tick()
+        assert restored == [1] and toggle.text() == '최적화 적용 중 · 네트워크 원복 대기'
+        assert w._optimization_badge.text() == '최적화: 원복 대기'
     finally:
         c.recovery.items = []
     c._tick()
@@ -599,3 +604,27 @@ def test_result_wording_states_facts_not_performance():
     assert result_headline([], set()) == '최적화 적용 완료 · 설정이 목표 상태로 맞춰졌어요'
     assert '일부 미적용' in result_headline(['x'], {'x'})
     assert '좋아' not in result_headline([], set()) and '줄었' not in result_headline([], set())
+
+
+
+def test_badge_separates_applied_from_restore_wait():
+    from types import SimpleNamespace as NS
+    idle = NS(busy=False, task=None, cancel=NS(is_set=lambda: False))
+    net = NS(pending=[dict(kind='ack', state='applied')], restart_targets=set(), corrupt=False)
+    none = NS(pending=[], restart_targets=set(), corrupt=False)
+    assert module.optimization_badge(net, idle) == ('최적화: 적용 중', 'neutral')
+    assert module.optimization_badge(net, idle, restore_wait=True) == ('최적화: 원복 대기', 'warn')
+    assert module.optimization_badge(none, idle, kept_on=True) == ('최적화: 적용 중', 'neutral')  # 바꾼 것 없이 켜짐
+    assert module.optimization_badge(none, idle) is None
+
+
+def test_previous_run_records_start_as_restore_wait_and_session_end_is_not_alarming():
+    from mabinogi_addon.optimization.engine import Engine, NETWORK_APPLIED
+    from types import SimpleNamespace as NS
+    import threading
+    recovery = NS(pending=[dict(kind='ack', state='applied')], restart_targets=set(), corrupt=False,
+                  restore=lambda *a, **k: [])
+    engine = Engine(NS(), recovery, lambda: True)
+    engine._launch(lambda: setattr(engine, 'status', '최적화 적용 완료'), restore_cpu=True, task='session')
+    engine.thread.join(2)
+    assert engine.status.endswith(NETWORK_APPLIED) and '복구 기록이 남아' not in engine.status

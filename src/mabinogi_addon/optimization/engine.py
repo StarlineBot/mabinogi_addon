@@ -6,6 +6,9 @@ from .session import ChangeDeferred
 _log = logging.getLogger(__name__)
 
 
+NETWORK_APPLIED = '네트워크 설정 적용 중 · 끄면 원래 값으로 되돌려요'
+
+
 def result_headline(notices, failures):
     """결과 첫 줄(명세 13.5): 설정이 목표 상태인 사실만 말한다. 성능 향상은 측정 근거 전 단정하지 않는다.
     선택한 항목이 이미 목표값이라 바꾼 것이 없어도 '적용 완료'다(항목별 상세에서 '이미 목표값 · 그대로 둠')."""
@@ -81,8 +84,12 @@ class Engine:
             deferred, self._network_deferred = self._network_deferred, False
             if deferred and (any(i['kind'] != 'cpu' for i in self.recovery.pending) or self.recovery.restart_targets):
                 self.status += ("\n네트워크 원복 대기 · 연결을 끊어도 될 때 '최적화 적용 중' 버튼을 다시 눌러 주세요.")
-            elif self.recovery.corrupt or self.recovery.pending or self.recovery.restart_targets:
+            elif self.recovery.corrupt or any(i['kind'] == 'cpu' for i in self.recovery.pending) or (
+                    network is not None and (self.recovery.pending or self.recovery.restart_targets)):
                 self.status += '\n복구 기록이 남아 있어요. 원복 상태를 확인해 주세요.'
+            elif self.recovery.pending or self.recovery.restart_targets:
+                # 원복을 요청하지 않은 네트워크 변경은 정상 적용 상태다(13.5: '적용 중'과 '원복 대기' 구분).
+                self.status += '\n' + NETWORK_APPLIED
 
     def inspect(self):
         def work():

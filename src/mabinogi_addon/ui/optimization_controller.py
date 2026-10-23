@@ -19,10 +19,12 @@ from .frame_overlay import FrameOverlay
 from ..system.perf_metrics import METRICS, PerfSampler
 
 
-def optimization_badge(recovery, engine, split=None):
+def optimization_badge(recovery, engine, split=None, *, restore_wait=False, kept_on=False):
     """상단 최적화 상태 한 줄(명세 13.2). (문구, 등급) 또는 None(아무 작업도 없으면 숨김).
 
-    상태만 보여주며 성능 개선을 뜻하지 않는다. 환경 확인(읽기 전용)은 표시하지 않는다."""
+    상태만 보여주며 성능 개선을 뜻하지 않는다. 환경 확인(읽기 전용)은 표시하지 않는다.
+    13.5 보정: 원복을 요청하지 않은 네트워크 변경·바꾼 것 없이 켜진 상태는 '적용 중'(기본색),
+    원복을 미뤘거나 실패했거나 지난 실행 기록이 남은 경우만 '원복 대기'(경고색)."""
     if recovery.corrupt:
         return '최적화: 오류', 'error'
     if engine.busy and engine.task != 'inspect':
@@ -34,7 +36,9 @@ def optimization_badge(recovery, engine, split=None):
     if any(i['state'] == 'failed' for i in recovery.pending):
         return '최적화: 오류', 'error'
     if recovery.pending or recovery.restart_targets:
-        return '최적화: 원복 대기', 'warn'
+        return ('최적화: 원복 대기', 'warn') if restore_wait else ('최적화: 적용 중', 'neutral')
+    if kept_on:
+        return '최적화: 적용 중', 'neutral'
     return None
 
 
@@ -60,6 +64,9 @@ class OptimizationController(QObject):
         # 'FPS 표시' 켜짐은 재실행 후에도 유지(수집 모드는 매번 꺼짐으로 시작). 접근이 확인된 첫 틱에 1회 복원.
         self._restore_display = section.get('display') is True
         self._kept_on = False  # 바꾼 것 없이 켜진 상태는 기록이 없어 재실행하면 꺼짐(13.5)
+        # '원복 대기'(확인 필요): 원복을 미뤘거나 실패했거나, 지난 실행에서 되돌리지 못한 기록이 남아 시작한 경우.
+        self._restore_wait = bool(self.recovery.pending or self.recovery.restart_targets)
+        self._restore_requested = False
         self._reported_source = None
         self._overlay = None
         self.collector = presentmon.Collector(self)
@@ -152,7 +159,8 @@ class OptimizationController(QObject):
         if not self._badge_wired:
             self._badge_wired = True
             badge.clicked.connect(self._open_tab)
-        state = optimization_badge(self.recovery, self.engine, self._badge_split) if is_creator() else None
+        state = (optimization_badge(self.recovery, self.engine, self._badge_split,
+                                    restore_wait=self._restore_wait, kept_on=self._kept_on) if is_creator() else None)
         badge.setVisible(state is not None)
         if state is not None:
             text, level = state
@@ -354,9 +362,21 @@ class OptimizationController(QObject):
             self.engine.status = '원래부터 같은 값이라 되돌릴 것이 없어요.'
         self._sync_optimization_toggle()
 
+    def _update_restore_wait(self):
+        """'원복 대기'(확인 필요) 여부 갱신. 남은 변경이 있는지 돌려준다. 상단 상태·토글이 같은 값을 쓴다."""
+        remaining = bool(self.recovery.pending or self.recovery.restart_targets)
+        if not remaining:
+            self._restore_wait = False
+        elif self._restore_requested and not self.engine.busy:
+            self._restore_wait = True  # 원복을 요청했는데(거절·실패) 아직 남음 → 확인 필요
+        if not self.engine.busy:
+            self._restore_requested = False
+        return remaining
+
     def _sync_optimization_toggle(self):
         if self.panel is None: return
         engine = self.engine
+        remaining = self._update_restore_wait()
         if not engine.busy and engine.session_end is not None:
             # 게임 종료·Governor·중단·오류로 끝난 세션은 남은 변경이 없으면 꺼진다. 네트워크만 한 세션은 켜짐 유지.
             if engine.session_end != 'network_only':
@@ -366,8 +386,7 @@ class OptimizationController(QObject):
         toggle = self.panel.toggle
         if toggle.isChecked() != on:
             toggle.blockSignals(True); toggle.setChecked(on); toggle.blockSignals(False)
-        waiting = on and not engine.busy and bool(
-            any(i['kind'] != 'cpu' for i in self.recovery.pending) or self.recovery.restart_targets)
+        waiting = on and not engine.busy and self._restore_wait and remaining
         toggle.setText('최적화 적용 중 · 네트워크 원복 대기' if waiting else '최적화 적용 중' if on else '최적화 시작')
         allowed = self._can_start()
         toggle.setEnabled(True if on and (engine.busy or self.recovery.pending or self.recovery.restart_targets)
@@ -378,6 +397,7 @@ class OptimizationController(QObject):
         시작할 때처럼 연결 끊김 확인을 한 번 받는다. 거절하면 CPU만 되돌리고 네트워크는 '원복 대기'로
         남긴다(명세 6절: 게임 중 연결을 끊지 않고 CPU만 멈추는 경로).
         제작자 접근이 없으면 CPU만 원복한다(네트워크 원복은 기존처럼 접근 필요)."""
+        self._restore_requested = True  # 끝난 뒤 남으면 '원복 대기'(13.5)
         network = (any(i['kind'] != 'cpu' for i in self.recovery.pending) or bool(self.recovery.restart_targets))
         network = network and self._can_start()
         normalized = network and bool(self.recovery.normalized_review)
@@ -581,6 +601,7 @@ class OptimizationController(QObject):
         if self.engine.recovery_requested and not self.engine.busy:
             self.engine.recovery_requested = False
         self._offer_normalized_restore()
+        self._update_restore_wait()
         self._update_badge()
         if self.panel is None: return
         self._poll_summary_store()
