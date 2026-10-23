@@ -112,6 +112,13 @@
 
 ## 마지막 작업
 
+### 0.11.4 3차 검증 실패 수정 — 헤더 해시 정렬 (71f36c8 대응)
+
+- `tree_digest` 정렬 키를 POSIX 상대경로 문자열로 고정(WindowsPath 대소문자 무시 비교 회피). 고정 해시 불변·일치,
+  Windows 정렬 흉내 회귀(수정 전 실패 확인), 로컬 0.11.4 변경 검사 통과.
+- 다음 실행에서 처음 Windows FFmpeg configure/빌드(nvenc/amf)에 들어간다. 미검증 위험: MSYS pkgconf 설치·
+  `PKG_CONFIG_PATH`(cygpath)·`.pc`의 `D:/` 경로를 llvm-mingw clang이 받는지. Linux에선 같은 레시피 configure 통과.
+
 ### 업데이트 작업 스레드 테스트 보강 (6bbace9 대응)
 
 - `test_real_worker_dispatch_and_failure_retry`: 시한 15초, 초과 시 상태+전체 스레드 스택을 실제 stderr로 출력
