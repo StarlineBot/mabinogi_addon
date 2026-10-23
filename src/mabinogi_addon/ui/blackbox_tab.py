@@ -37,6 +37,25 @@ class BlackboxTab(QWidget):
         self.enabled.toggled.connect(lambda on: self.enabled.setText('블랙박스 사용 중' if on else '블랙박스 사용'))
         group.addWidget(self.enabled, 0, Qt.AlignmentFlag.AlignLeft)
         group.addWidget(_label('녹화 중에는 시스템 자원을 사용해요.', muted=True))
+        # 녹화 방식(명세 12.2): 평소 녹화(기본) / 전투 녹화(보스 체력바가 보이는 동안)
+        from PySide6.QtWidgets import QButtonGroup, QRadioButton
+        self.mode_always = QRadioButton('평소 녹화')
+        self.mode_combat = QRadioButton('전투 녹화')
+        self.mode_always.setChecked(True)
+        self.mode_group = QButtonGroup(self)
+        self.mode_group.addButton(self.mode_always); self.mode_group.addButton(self.mode_combat)
+        row = QHBoxLayout()
+        row.addWidget(self.mode_always); row.addWidget(self.mode_combat); row.addStretch()
+        form = QFormLayout()
+        form.addRow('녹화 방식', row)
+        group.addLayout(form)
+        self.mode_help = _label('평소 녹화: 게임 창이 최소화되지 않았으면 항상 보관해요.\n'
+                                '전투 녹화: 보스 체력바가 보이는 동안 보관하고, 사라지면 60초 뒤 멈춰요.', muted=True)
+        group.addWidget(self.mode_help)
+        self.mode_notice = _label('')
+        self.mode_notice.setStyleSheet('color:#e67e22;')
+        self.mode_notice.hide()
+        group.addWidget(self.mode_notice)
         self.retention = QLineEdit('10')
         self.retention.setMaximumWidth(100)
         row = QHBoxLayout()
@@ -92,5 +111,6 @@ class BlackboxTab(QWidget):
         group.addWidget(_label('게임 종료나 사용 해제 후에도 앱을 닫기 전까지 최근 영상을 저장할 수 있어요.', muted=True))
         body.addWidget(box)
         body.addStretch()
-        for control in (self.enabled, self.retention, self.save, self.change_folder, self.open_folder):
+        for control in (self.enabled, self.retention, self.save, self.change_folder, self.open_folder,
+                        self.mode_always, self.mode_combat):
             control.setEnabled(False)

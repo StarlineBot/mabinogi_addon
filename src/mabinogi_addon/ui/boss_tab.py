@@ -579,6 +579,10 @@ class BossTab(QWidget):
         다른 탭(체력바 저체력 알림)이 '보스전 중일 때만' 울리도록 공유하는 신호다."""
         return self._boss_present
 
+    def has_region(self) -> bool:
+        """보스 체력바 영역이 등록돼 있는지(블랙박스 전투 녹화의 전제)."""
+        return bool(self._region)
+
     def set_presence_consumer(self, wanted_fn) -> None:
         """'존재 신호가 지금 필요한가'를 알려줄 콜백을 연결한다(저체력 경고가 하나라도
         켜져 있을 때 True). 아무도 안 쓰면 매 틱 비싼 검증을 건너뛴다."""

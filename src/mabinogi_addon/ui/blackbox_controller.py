@@ -35,10 +35,26 @@ def _toast_duration(us):
     return format_duration(us)
 
 
-def blackbox_badge(service, available_us=0):
-    """상단 블랙박스 상태(명세 11.2). '블랙박스 사용'이 꺼져 있으면 None(숨김)."""
+def combat_text(gate):
+    """전투 녹화 상태 문구(명세 12.2)."""
+    return {'unregistered': '전투 대기 · 보스 체력바 영역 미등록',
+            'waiting': '전투 대기 · 보스 체력바가 보이면 녹화해요',
+            'recording': '보관 중 · 전투',
+            'grace': f'보관 중 · 전투 종료 대기 {gate.grace_left}초'}[gate.state]
+
+
+def blackbox_badge(service, available_us=0, combat=None):
+    """상단 블랙박스 상태(명세 11.2). '블랙박스 사용'이 꺼져 있으면 None(숨김). combat: 전투 녹화 판정(CombatGate)."""
     if service is None or not getattr(service, 'enabled', False) or getattr(service, 'status', None) == 'disabled':
         return None
+    if combat is not None and service.status != 'error':
+        if combat.state in ('waiting', 'unregistered'):
+            return '블랙박스: 전투 대기', 'neutral'
+        if combat.state == 'grace':
+            return f'블랙박스: 전투 종료 대기 {combat.grace_left}초', 'neutral'
+        if service.status == 'recording':
+            seconds = max(0, int(available_us) // 1_000_000)
+            return f'블랙박스: 보관 중 · 전투 {seconds // 60}:{seconds % 60:02d}', 'neutral'
     if service.status == 'recording':
         seconds = max(0, int(available_us) // 1_000_000)
         return f'블랙박스: 보관 중 {seconds // 60}:{seconds % 60:02d}', 'neutral'
@@ -84,6 +100,10 @@ class BlackboxController(QObject):
         self._hotkey_base = None  # '검증용 단축키: …' 줄
         self._hotkey_last = None  # '마지막 단축키 입력 HH:MM:SS · 결과' — 앱으로 돌아와도 남아 있게
         self._toast = None  # 게임 화면 위 저장 반응(명세 11.1)
+        from ..blackbox_combat import CombatGate
+        from .. import config as _config
+        self._mode = _config.load_blackbox_preferences().get('recordMode', 'always')  # 녹화 방식(명세 12.2)
+        self._gate = CombatGate()
         self._last_target = None  # 마지막으로 관측한 게임 창: 완료·실패 반응도 게임 모니터에 띄운다
         self._toasted_failures = set()
         self._badge_wired = False
@@ -219,9 +239,14 @@ class BlackboxController(QObject):
             self._hotkey_base = ('검증용 단축키: ' + hotkey_text(profile.get('hotkey_modifiers', 0),
                                                               profile['hotkey_vk']) + ' · 실게임 미검증')
             self._show_hotkey()
-        for control in (panel.enabled, panel.retention, panel.save, panel.change_folder, panel.open_folder, panel.recovery):
+        for control in (panel.enabled, panel.retention, panel.save, panel.change_folder, panel.open_folder, panel.recovery,
+                        panel.mode_always, panel.mode_combat):
             control.setEnabled(True)
         panel.enabled.toggled.connect(lambda value: self._action(lambda: self.service.set_enabled(value)))
+        (panel.mode_combat if self._mode == 'combat' else panel.mode_always).setChecked(True)
+        panel.mode_always.toggled.connect(lambda on: on and self._set_mode('always'))
+        panel.mode_combat.toggled.connect(lambda on: on and self._set_mode('combat'))
+        self._show_mode_notice()
         panel.save.clicked.connect(lambda checked=False: self._request_save())
         panel.retention.editingFinished.connect(lambda: self._action(self._set_retention))
         panel.change_folder.clicked.connect(self._change_folder)
@@ -313,6 +338,39 @@ class BlackboxController(QObject):
         self._note_hotkey('단축키 입력을 받았어요 · 저장 요청을 접수했어요.', '저장 요청 접수')
         self._react('영상 저장 중…', 'pending', target)
 
+    def wants_boss_presence(self):
+        """보스 탭이 보스바 존재 판정을 돌려야 하는지(전투 녹화 + 블랙박스 사용 중)."""
+        return self._mode == 'combat' and self.service is not None and bool(getattr(self.service, 'enabled', False))
+
+    def _combat_record(self, active):
+        """전투 녹화면 보스바 판정으로 녹화 여부를 정한다. 평소 녹화면 항상 True."""
+        if self._mode != 'combat':
+            return True
+        import time
+        boss = getattr(self.window, 'boss_tab', None)
+        registered = bool(boss is not None and boss.has_region())
+        foreground = getattr(self.events, 'foreground', active)
+        # 게임이 뒤에 있으면 보스바를 볼 수 없어 판정 불가(None) → 직전 전투 상태 유지
+        present = bool(boss.is_boss_present()) if (boss is not None and foreground) else None
+        return self._gate.update(time.monotonic(), present, registered)
+
+    def _set_mode(self, mode):
+        from .. import config
+        if mode == self._mode:
+            return
+        self._mode = mode
+        self._action(lambda: config.save_blackbox_preference('recordMode', mode))
+        self._show_mode_notice()
+
+    def _show_mode_notice(self):
+        if self.panel is None:
+            return
+        boss = getattr(self.window, 'boss_tab', None)
+        missing = self._mode == 'combat' and not (boss is not None and boss.has_region())
+        self.panel.mode_notice.setText('보스 체력바 영역을 먼저 등록해 주세요. 등록 전에는 녹화하지 않아요(평소 녹화로 바꾸지 않아요).'
+                                       if missing else '')
+        self.panel.mode_notice.setVisible(missing)
+
     def _tick(self):
         if self.service is None:
             return
@@ -323,7 +381,7 @@ class BlackboxController(QObject):
             self.service.error = str(exc)
         if target is not None:
             self._last_target = target
-        self._action(lambda: self.service.tick(target, active=active))
+        self._action(lambda: self.service.tick(target, active=active and self._combat_record(active)))
         try:
             shortcut = self.events.consume_hotkey()
             if shortcut is not None:
@@ -347,7 +405,11 @@ class BlackboxController(QObject):
                 self._toasted_failures.add(ticket)
                 self._react('저장하지 못했어요 · 앱에서 확인해 주세요', 'failed', self._last_target)
         if self.panel is not None:
-            self.panel.status.setText(_STATES.get(self.service.status, '게임 실행 대기'))
+            text = _STATES.get(self.service.status, '게임 실행 대기')
+            if self._mode == 'combat' and self.service.enabled and self.service.status not in ('error', 'disabled'):
+                text = combat_text(self._gate)
+            self.panel.status.setText(text)
+            self._show_mode_notice()
             native = getattr(getattr(self.service, 'producer', None), 'native', None)
             border = getattr(native, 'border_note', None)  # Windows 11 캡처 테두리를 끄지 못했을 때만
             self.panel.capture_info.setText('게임 화면만 · 목표 1080p / 60FPS' + ('\n' + border if border else ''))
@@ -387,7 +449,8 @@ class BlackboxController(QObject):
         if not self._badge_wired:
             self._badge_wired = True
             badge.clicked.connect(self._open_tab)
-        state = blackbox_badge(self.service, available_us) if self._allowed() else None
+        state = (blackbox_badge(self.service, available_us, self._gate if self._mode == 'combat' else None)
+                 if self._allowed() else None)
         badge.setVisible(state is not None)
         if state is not None:
             badge.setText(state[0])

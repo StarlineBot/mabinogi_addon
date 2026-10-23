@@ -295,7 +295,10 @@ class MainWindow(QMainWindow):
         # 체력바 저체력 알림은 '보스전 중'일 때만 울린다 — 보스 탭의 보스바 존재 신호를 연결.
         self.stat_bars_tab.set_boss_presence_source(self.boss_tab.is_boss_present)
         # 반대로, 저체력 경고가 하나라도 켜져 있을 때만 보스 탭이 존재 판정을 돌리게 연결.
-        self.boss_tab.set_presence_consumer(self.stat_bars_tab.has_active_alert)
+        # 블랙박스 '전투 녹화'가 켜져 있을 때도 존재 판정이 필요하다(명세 12.2).
+        self.boss_tab.set_presence_consumer(
+            lambda: self.stat_bars_tab.has_active_alert()
+            or bool(getattr(getattr(self, "blackbox_tools", None), "wants_boss_presence", lambda: False)()))
         self.skillbar_tab = SkillbarTab(self._watcher)
         self.settings_tab = SettingsTab(self._watcher)
         from .optimization_controller import OptimizationController

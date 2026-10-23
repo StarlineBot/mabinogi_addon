@@ -1358,6 +1358,8 @@ def load_blackbox_preferences(path: Path = LOCAL_CONFIG_PATH) -> dict:
     folder = section.get('outputFolder')
     if isinstance(folder, str) and folder and Path(folder).is_absolute():
         result['outputFolder'] = folder
+    if section.get('recordMode') in ('always', 'combat'):
+        result['recordMode'] = section['recordMode']  # 녹화 방식(명세 12.2): 평소 / 전투
     return result
 
 
@@ -1368,6 +1370,9 @@ def save_blackbox_preference(key, value, path: Path = LOCAL_CONFIG_PATH) -> None
     elif key == 'outputFolder':
         if not isinstance(value, str) or not Path(value).is_absolute():
             raise ValueError('absolute output folder required')
+    elif key == 'recordMode':
+        if value not in ('always', 'combat'):
+            raise ValueError('record mode must be always or combat')
     else:
         raise ValueError('unknown blackbox preference')
     data = _read_local_config(path)
