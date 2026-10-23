@@ -204,3 +204,23 @@ def test_device_clock_drift_keeps_recording(ppm):
     for n in range(400):                                          # 4초
         timeline.push(packet, 1_000_000 + round(n * 10_000 * (1 - ppm / 1_000_000)))
     assert (timeline.trimmed > 0) if ppm > 0 else (timeline.gaps > 0)
+
+
+
+def test_validate_failure_reports_video_audio_plan_durations_and_slices(monkeypatch, tmp_path):
+    # 0.13.6 실사용: 'audio duration exceeds explicit tolerance'만 남아 원인 판정 불가 → 길이·구간 수를 함께 남긴다.
+    import json
+    from types import SimpleNamespace as NS
+    from mabinogi_addon import blackbox_codec as codec
+    def fake(command, sink, **kwargs):
+        sink.write(json.dumps({'streams': [dict(codec_type='video', start_time='0', duration='9.000', width=1920, height=1080)]}).encode())
+    monkeypatch.setattr(codec, 'stream_process', fake)
+    encoder = codec.FFmpegEncoder.__new__(codec.FFmpegEncoder)
+    encoder.settings = NS(ffprobe='ffprobe', ffmpeg='ffmpeg', timeout=5, host=None, tolerance_us=50_000)
+    segment = NS(format_key='1920x1080:60:video')
+    plan = NS(slices=(NS(segment=segment), NS(segment=segment)), duration_us=11_000_000)
+    with pytest.raises(ValueError) as error:
+        encoder.validate(tmp_path / 'x.mp4', plan)
+    message = str(error.value)
+    assert 'encoded duration exceeds' in message and '영상 9.000초' in message and '계획 11.000초' in message
+    assert '구간 2개' in message and '소리 없음' in message

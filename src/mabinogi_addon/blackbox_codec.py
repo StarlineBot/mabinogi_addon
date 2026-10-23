@@ -280,19 +280,24 @@ class FFmpegEncoder:
         videos = [s for s in streams if s.get('codec_type') == 'video']
         audios = [s for s in streams if s.get('codec_type') == 'audio']
         expects_audio = plan.slices[0].segment.format_key.endswith(':audio')
+        def detail():  # 실패 원인 판정용(0.13.6 실사용: 길이 없이 '초과'만 남아 판정 불가)
+            def seconds_of(items):
+                return ', '.join(f"{float(s.get('duration', 'nan')):.3f}초" for s in items) or '없음'
+            return (f' (영상 {seconds_of(videos)} · 소리 {seconds_of(audios)} · 계획 {plan.duration_us / 1_000_000:.3f}초'
+                    f' · 구간 {len(plan.slices)}개 · 허용 {self.settings.tolerance_us / 1000:.0f}ms)')
         if len(videos) != 1 or len(audios) != int(expects_audio) or len(streams) != 1 + int(expects_audio):
-            raise ValueError('encoded video/audio streams differ from requested format')
+            raise ValueError('encoded video/audio streams differ from requested format' + detail())
         if int(videos[0]['width']) > 1920 or int(videos[0]['height']) > 1080:
             raise ValueError('video exceeds 1080p bounds')
         if any(abs(float(s.get('start_time', 0))) * 1_000_000 > self.settings.tolerance_us for s in streams):
-            raise ValueError('stream start offset exceeds explicit tolerance')
+            raise ValueError('stream start offset exceeds explicit tolerance' + detail())
         if expects_audio:
             audio_duration = float(audios[0]['duration']) * 1_000_000
             if not math.isfinite(audio_duration) or abs(audio_duration - plan.duration_us) > self.settings.tolerance_us:
-                raise ValueError('audio duration exceeds explicit tolerance')
+                raise ValueError('audio duration exceeds explicit tolerance' + detail())
         actual = float(videos[0]['duration']) * 1_000_000
         if not math.isfinite(actual) or abs(actual - plan.duration_us) > self.settings.tolerance_us:
-            raise ValueError('encoded duration exceeds explicit tolerance')
+            raise ValueError('encoded duration exceeds explicit tolerance' + detail())
         # 실제 디코딩 실패도 완료로 표시하지 않는다.
         stream_process([str(self.settings.ffmpeg), '-v', 'error', '-nostdin', '-xerror', '-err_detect', 'explode', '-i', str(path),
             '-map', '0:v:0', '-map', '0:a?', '-f', 'null', '-'], ByteSink(io.BytesIO(), 1), timeout=self.settings.timeout, host=self.settings.host)

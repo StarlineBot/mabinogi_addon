@@ -20,7 +20,11 @@
   },
   "codec": {
     "encoder": "h264_mf",
-    "candidates": ["h264_nvenc", "h264_amf", "h264_mf"],
+    "candidates": [
+      "h264_nvenc",
+      "h264_amf",
+      "h264_mf"
+    ],
     "bitrate": 12000000,
     "fps": 60,
     "timeout": 1200,
@@ -29,12 +33,5 @@
   },
   "hotkey_modifiers": 3,
   "hotkey_vk": 44,
-  "audio": "process",
-  "audio_settings": {
-    "audio_rate": 48000,
-    "audio_channels": 2,
-    "max_audio_bytes": 192000,
-    "activation_timeout_ms": 5000,
-    "audio_buffer_bytes": 8388608
-  }
+  "audio": "disabled-for-validation"
 }

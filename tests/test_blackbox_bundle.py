@@ -47,7 +47,7 @@ def test_product_paths_are_bundled_and_missing_policy_is_not_defaulted(tmp_path)
            'redistribution.json','THIRD-PARTY-NOTICES.txt','corresponding-source.zip','FFmpeg-LICENSE.txt', 'avcodec-62.dll','avformat-62.dll',
            'avutil-60.dll','avfilter-11.dll','swscale-9.dll','swresample-6.dll']
     for name in names:(tmp_path/name).write_bytes(b'{}')
-    (tmp_path/'product.json').write_text(json.dumps({'codec':{'encoder':'libx264'},'audio':'process'}), encoding="utf-8")
+    (tmp_path/'product.json').write_text(json.dumps({'codec':{'encoder':'libx264'},'audio':'disabled-for-validation'}), encoding="utf-8")
     manifest={n:hashlib.sha256((tmp_path/n).read_bytes()).hexdigest() for n in names}
     (tmp_path/'manifest.json').write_text(json.dumps(manifest), encoding="utf-8")
     with pytest.raises(ValueError,match='하드웨어'):load_product_profile(bundle=tmp_path,data=tmp_path/'user')
@@ -63,8 +63,7 @@ def test_complete_product_profile_resolves_paths_without_device_access(tmp_path)
             max_input_width=3840, max_input_height=2160),
         codec=dict(encoder='h264_mf', bitrate=100000, fps=60, timeout=10,
             tolerance_us=100000, audio_bitrate=64000), hotkey_modifiers=3, hotkey_vk=0x75,
-        audio='process', audio_settings=dict(audio_rate=48000, audio_channels=2,
-            max_audio_bytes=1024, activation_timeout_ms=1000, audio_buffer_bytes=4096))
+        audio='disabled-for-validation')
     names=['product.json','mabinogi_blackbox.dll','blackbox_codec_host.exe','ffmpeg.exe','ffprobe.exe',
            'redistribution.json','THIRD-PARTY-NOTICES.txt','corresponding-source.zip','FFmpeg-LICENSE.txt', 'avcodec-62.dll','avformat-62.dll',
            'avutil-60.dll','avfilter-11.dll','swscale-9.dll','swresample-6.dll']
@@ -314,3 +313,17 @@ def test_tree_digest_order_does_not_depend_on_windows_case_insensitive_paths(tmp
     assert sorted([WindowsLikePath(tmp_path/'AB.h'), WindowsLikePath(tmp_path/'Aa.h')])[0].name == 'Aa.h'
     monkeypatch.setattr(builder, 'Path', WindowsLikePath)
     assert builder.tree_digest(tmp_path) == linux
+
+
+
+def test_product_blackbox_is_video_only(tmp_path):
+    # 2026-10-23 사용자 결정: 원인 분석 우선 — 소리 없이 화면만. 소리 경로가 녹화·저장 실패의 원인이었다.
+    from mabinogi_addon.blackbox_service import ServiceSettings
+    product = json.loads((ROOT/'packaging/blackbox-product.json').read_text(encoding='utf-8'))
+    assert product['audio'] == 'disabled-for-validation' and 'audio_settings' not in product
+    for name in ('ffmpeg.exe', 'ffprobe.exe', 'host.exe', 'x.dll'):
+        (tmp_path/name).write_bytes(b'x')
+    profile = dict(product, temp_parent=str(tmp_path), output_folder=str(tmp_path), library=str(tmp_path/'x.dll'))
+    profile['codec'] = dict(product['codec'], ffmpeg=str(tmp_path/'ffmpeg.exe'), ffprobe=str(tmp_path/'ffprobe.exe'),
+                            host=str(tmp_path/'host.exe'))
+    assert ServiceSettings.from_dict(profile).audio is None  # 생산자는 소리 경로(PcmTimeline·소리 길이 검증)를 타지 않음

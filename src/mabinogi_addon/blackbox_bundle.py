@@ -48,8 +48,10 @@ def load_product_profile(*, bundle=None, data=None, videos=None):
         raise ValueError('블랙박스 입력 게임창 상한은 3840×2160이어야 해요(큰 창은 GPU에서 축소).')
     if codec.get('fps') != 60:
         raise ValueError('제품 녹화 FPS는 확정된 60이어야 해요.')
-    if profile.get('audio') != 'process':
-        raise ValueError('제품 설정에서 무음 검증 모드를 사용할 수 없어요.')
+    if profile.get('audio') != 'disabled-for-validation' or 'audio_settings' in profile:
+        # 2026-10-23 사용자 결정: 블랙박스는 실수 원인 분석이 우선이라 소리 없이 화면만 저장한다.
+        # 소리 경로(루프백·공백 처리·소리 길이 검증)가 녹화·저장 실패의 원인이었다. 소리는 추후 선택 기능으로 검토.
+        raise ValueError('제품 블랙박스는 영상만 저장해야 해요(소리 제외 결정).')
     if data is None:
         from .paths import user_data_dir
         data = user_data_dir()

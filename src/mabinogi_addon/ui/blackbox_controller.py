@@ -212,7 +212,7 @@ class BlackboxController(QObject):
             panel.save_result.setText(f'지난 실행에서 남은 블랙박스 임시 자료 {len(failures)}건을 지우지 못했어요. '
                                       '다음 실행 때 다시 정리해요.')
         panel.audio_info.setText('게임 소리: 대상 프로세스만 · 동기화 검증 전' if self.service.settings.audio
-                                 else '게임 소리: 영상 전용 검증 설정 · 소리는 저장하지 않아요.')
+                                 else '게임 소리: 저장하지 않아요 · 화면만 보관해요(실수 확인용)')
         panel.enabled.setChecked(self.service.enabled)
         panel.retention.setText(str(self.service._retention // 60_000_000))
         if profile:
