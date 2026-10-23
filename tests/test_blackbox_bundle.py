@@ -271,3 +271,21 @@ def test_header_checkout_keeps_lf_even_with_global_autocrlf(tmp_path, monkeypatc
         builder._git_checkout(origin.as_uri(), 'v1', commit, dest, sparse=sparse)
         assert b'\r\n' not in (dest/'include/AMF/Version.h').read_bytes()
         assert builder.tree_digest(dest/'include') == expected
+
+
+def test_tree_digest_order_does_not_depend_on_windows_case_insensitive_paths(tmp_path, monkeypatch):
+    """0.11.4 3차 검증 실패: Windows의 Path 비교(대소문자 무시)로 파일 순서가 바뀌어 AMF 해시가 달랐다."""
+    import pathlib
+    spec = importlib.util.spec_from_file_location('source_builder', ROOT/'packaging/ffmpeg_source.py')
+    builder = importlib.util.module_from_spec(spec); spec.loader.exec_module(builder)
+    for name in ('AB.h', 'Aa.h', 'sub/AMFXInput.h', 'sub/Ambisonic2SRenderer.h'):
+        (tmp_path/name).parent.mkdir(parents=True, exist_ok=True); (tmp_path/name).write_text(name)
+    linux = builder.tree_digest(tmp_path)
+
+    class WindowsLikePath(type(pathlib.Path())):
+        """WindowsPath처럼 대소문자를 무시해 비교하는 Path(Linux에서 Windows 정렬을 흉내)."""
+        def __lt__(self, other):
+            return str(self).lower() < str(other).lower()
+    assert sorted([WindowsLikePath(tmp_path/'AB.h'), WindowsLikePath(tmp_path/'Aa.h')])[0].name == 'Aa.h'
+    monkeypatch.setattr(builder, 'Path', WindowsLikePath)
+    assert builder.tree_digest(tmp_path) == linux

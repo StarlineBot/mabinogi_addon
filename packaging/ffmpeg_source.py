@@ -61,7 +61,9 @@ def tree_digest(base):
     """디렉터리 파일 내용 해시(상대 경로 + 각 파일 sha256, 경로순). 압축 형식과 무관하다."""
     base = Path(base)
     h = hashlib.sha256()
-    for p in sorted(x for x in base.rglob('*') if x.is_file()):
+    # 순서는 POSIX 상대경로 문자열로 고정한다. WindowsPath 비교는 대소문자를 무시해 'AMFXInput.h'와
+    # 'Ambisonic2SRenderer.h' 순서가 Linux와 반대가 됐다(0.11.4 3차 검증 AMF 해시 불일치).
+    for p in sorted((x for x in base.rglob('*') if x.is_file()), key=lambda x: x.relative_to(base).as_posix()):
         h.update(p.relative_to(base).as_posix().encode() + b'\0' + hashlib.sha256(p.read_bytes()).digest())
     return h.hexdigest()
 
