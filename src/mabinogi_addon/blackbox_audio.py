@@ -6,8 +6,11 @@ WASAPI 루프백 묶음의 시각(QPC)은 수 ms 흔들린다. 허용 오차 안
 """
 from collections import deque
 from threading import Condition
+import logging
 import math
 import time
+
+_log = logging.getLogger(__name__)
 
 
 JITTER_US = 3000  # 루프백 시각 흔들림 허용(약 3ms). 이 안이면 연속으로 이어 붙인다
@@ -23,6 +26,7 @@ class PcmTimeline:
         self._end = None
         self._runs = []  # [시작, 끝] 연속 구간. 큰 공백마다 새 구간
         self.gaps = 0
+        self.max_jitter_us = 0  # 허용 범위 안에서 관측한 가장 큰 시각 차이(실측 판단용)
         self._closed = False
         self._condition = Condition()
 
@@ -41,8 +45,10 @@ class PcmTimeline:
             if self._end is not None:
                 delta = stamp_us - self._end
                 if delta < -JITTER_US:
+                    _log.warning('블랙박스 소리 겹침 %+.0fµs로 녹화 중단(허용 ±%dµs)', delta, JITTER_US)
                     raise ValueError('audio overlap; refusing to merge or synthesize sound')
                 if delta <= JITTER_US:
+                    self.max_jitter_us = max(self.max_jitter_us, round(abs(delta)))
                     stamp_us, continuing = self._end, True  # 지터: 샘플 수 기준으로 연속 배치
             if self._bytes + len(data) > self.limit:
                 raise BufferError('audio timeline capacity exhausted')
@@ -54,6 +60,9 @@ class PcmTimeline:
             else:
                 if self._end is not None:
                     self.gaps += 1  # 큰 공백: 채우지 않고 새 연속 구간
+                    if self.gaps <= 5 or self.gaps % 100 == 0:
+                        _log.info('블랙박스 소리 공백 %+.0fµs · 새 연속 구간(누적 %d회, 허용 범위 최대 지터 %dµs)',
+                                  stamp_us - self._end, self.gaps, self.max_jitter_us)
                 self._runs.append([stamp_us, end])
             self._end = end
             self._condition.notify_all()
@@ -71,13 +80,15 @@ class PcmTimeline:
             self._closed = True
             self._condition.notify_all()
 
-    def covered_end(self, requested_end, *, timeout):
-        """종료 때만 실제 확보한 끝을 반환한다. 실행 중 누락은 시간 제한 오류다."""
+    def covered_end(self, requested_end, *, timeout, partial=False):
+        """확보한 소리의 끝. 종료 때(또는 partial이면 시간 제한 때) 실제 확보한 만큼만 반환한다."""
         deadline = time.monotonic() + timeout
         with self._condition:
             while (self._end is None or self._end < requested_end) and not self._closed:
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
+                    if partial:
+                        break  # 게임 무음: 기다리지 않고 지금까지 확보한 소리만 쓴다
                     raise TimeoutError('audio coverage deadline exceeded')
                 self._condition.wait(remaining)
             return min(requested_end, self._end) if self._end is not None else None

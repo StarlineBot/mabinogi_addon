@@ -398,3 +398,43 @@ def test_audio_gap_starts_new_segment_instead_of_stopping_recording():
         time.sleep(.005)
     assert producer.error is None and producer.audio.gaps == 1
     assert segments == [(1_000_000, 1_300_000), (1_400_000, 1_600_000), (1_600_000, 1_800_000)]
+
+
+def test_capture_keeps_reading_sound_while_waiting_for_full_queue():
+    # 0.13.2 QA: 인코딩은 소리를 기다리고 캡처는 가득 찬 대기열에서 막혀 재개된 소리를 못 읽던 교착.
+    import threading
+    from types import SimpleNamespace
+    from mabinogi_addon.blackbox_producer import CaptureProducer
+    sound = [(b'\x01\x00' * 100, 1_000_000 + n * 100_000) for n in range(3)]
+
+    class Device:
+        audio = (1000, 1)
+        audio_buffer_bytes = 1 << 16
+        def read_audio(self): return sound.pop(0) if sound else None
+
+    codec = SimpleNamespace(settings=SimpleNamespace(fps=10, timeout=5))
+    producer = CaptureProducer(SimpleNamespace(session='s'), Device(), codec, None,
+                               ProducerLimits(3, 1, 64, 64 * 3 * 3, 1000, 50_000), allowed=lambda: True)
+    producer._batches.put('occupied')  # 인코딩 스레드가 아직 비우지 못한 대기열
+    worker = threading.Thread(target=producer._put, args=(producer._batches, 'next'), kwargs=dict(pump=True))
+    worker.start()
+    deadline = time.monotonic() + 2
+    while sound and time.monotonic() < deadline:
+        time.sleep(.01)
+    assert not sound and producer.audio.covered_end(1_300_000, timeout=.1) == 1_300_000
+    producer._batches.get()
+    worker.join(2)
+    assert producer._batches.get_nowait() == 'next'
+
+
+def test_sound_wait_is_bounded_and_uses_what_was_captured():
+    # 0.13.2 QA: 게임 무음 동안 codec timeout(1200초)까지 오류 없이 멈춰 있지 않는다.
+    from mabinogi_addon.blackbox_audio import PcmTimeline
+    timeline = PcmTimeline(1000, 1, 1 << 16)
+    timeline.push(b'\x01\x00' * 100, 1_000_000)
+    started = time.monotonic()
+    assert timeline.covered_end(1_500_000, timeout=.2, partial=True) == 1_100_000
+    assert time.monotonic() - started < 1
+    import pytest
+    with pytest.raises(TimeoutError):
+        timeline.covered_end(1_500_000, timeout=.05)

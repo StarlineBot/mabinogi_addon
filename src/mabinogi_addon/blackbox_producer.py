@@ -18,6 +18,7 @@ import wave
 _log = logging.getLogger(__name__)
 _TIMING_FIRST = 3        # 처음 몇 구간은 인코딩 시간을 하나씩 남긴다
 _TIMING_EVERY = 240      # 이후에는 이만큼(60FPS·15프레임 기준 약 60초)마다 요약
+AUDIO_WAIT_S = 3.0       # 한 묶음이 소리를 기다리는 상한. 넘으면 소리가 있는 만큼만 쓰고 이어 녹화(무음 채움 없음)
 
 
 @dataclass(frozen=True)
@@ -90,7 +91,13 @@ class CaptureProducer:
                 raise RuntimeError('capture flush unavailable')
             self._flush.append((token, request_us))
 
-    def _put(self, queue, item):
+    def _pump_audio(self):
+        """도착한 소리 묶음을 모두 타임라인에 넣는다(캡처 스레드 전용)."""
+        if self.audio is not None:
+            while packet := self.native.read_audio():
+                self.audio.push(*packet)
+
+    def _put(self, queue, item, pump=False):
         # bounded backpressure; controller drains results while shutdown is pending
         while True:
             try:
@@ -99,13 +106,16 @@ class CaptureProducer:
             except Full:
                 if self._error is not None:
                     raise RuntimeError('producer failed while queue was full')
+                if pump:
+                    # 인코딩 스레드가 소리를 기다리는 동안 캡처가 대기열에서 막혀 소리를 못 읽으면 교착된다(0.13.2 QA).
+                    self._pump_audio()
 
     def _capture_loop(self):
         frames, stamps, dimensions = [], [], None
         def flush():
             nonlocal frames, stamps
             if frames:
-                self._put(self._batches, (tuple(frames), tuple(stamps), dimensions))
+                self._put(self._batches, (tuple(frames), tuple(stamps), dimensions), pump=True)
                 frames, stamps = [], []
         try:
             while not self._ready.is_set():
@@ -123,10 +133,8 @@ class CaptureProducer:
                 if requests:
                     flush()
                     for request in requests:
-                        self._put(self._batches, ('flush', request))
-                if self.audio is not None:
-                    while packet := self.native.read_audio():
-                        self.audio.push(*packet)
+                        self._put(self._batches, ('flush', request), pump=True)
+                self._pump_audio()
                 frame = self.native.read()
                 if frame is None:
                     self._stop.wait(0.002)
@@ -229,7 +237,8 @@ class CaptureProducer:
                 duration = round(len(frames) * 1_000_000 / self.codec.settings.fps)
                 audio_source = None
                 if self.audio is not None:
-                    covered = self.audio.covered_end(stamps[0] + duration, timeout=self.codec.settings.timeout)
+                    # 소리가 멈춘(게임 무음) 동안 무한정 기다리지 않는다. 상한 뒤에는 확보한 만큼만 쓴다.
+                    covered = self.audio.covered_end(stamps[0] + duration, timeout=AUDIO_WAIT_S, partial=True)
                     # 소리가 연속인 구간에서만 영상을 만든다. 소리 공백에 걸친 프레임은 빼고(무음으로 채우지 않음)
                     # 공백 뒤 프레임은 다음 구간으로 넘어가지 않으므로 이 묶음에서 버린다.
                     run = self.audio.run_within(stamps[0], covered or stamps[0])
@@ -242,7 +251,7 @@ class CaptureProducer:
                         continue  # 종료 경계·소리 공백의 불완전 A/V 프레임을 영상이나 무음으로 꾸미지 않는다.
                     frames, stamps = frames[first:first + count], stamps[first:first + count]
                     duration = round(count * 1_000_000 / self.codec.settings.fps)
-                    pcm = self.audio.slice(stamps[0], stamps[0] + duration, timeout=self.codec.settings.timeout)
+                    pcm = self.audio.slice(stamps[0], stamps[0] + duration, timeout=AUDIO_WAIT_S)
                     wav = io.BytesIO()
                     with wave.open(wav, 'wb') as writer:
                         writer.setnchannels(self.native.audio[1]); writer.setsampwidth(2)
