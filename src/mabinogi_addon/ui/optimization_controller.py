@@ -16,6 +16,7 @@ from ..system.optimization import WindowsOptimization
 from ..system import presentmon
 from .optimization_panel import OptimizationPanel
 from .frame_overlay import FrameOverlay
+from ..system.perf_metrics import METRICS, PerfSampler
 
 
 def optimization_badge(recovery, engine, split=None):
@@ -51,6 +52,11 @@ class OptimizationController(QObject):
         section = section if isinstance(section,dict) else {}
         scale = section.get('scale',100)
         self._scale = scale if type(scale) is int and 50<=scale<=300 else 100
+        # 오버레이 표시 항목(FPS 명세 8.4). 기본은 FPS만. 표시만 바꾸며 구간 요약·수집에는 영향 없음.
+        saved = section.get('metrics')
+        saved = saved if isinstance(saved,dict) else {}
+        self._metrics = {key: (saved[key] if type(saved.get(key)) is bool else key == 'fps') for key in METRICS}
+        self.sampler = PerfSampler()
         self._reported_source = None
         self._overlay = None
         self.collector = presentmon.Collector(self)
@@ -101,8 +107,7 @@ class OptimizationController(QObject):
     @property
     def overlay(self):
         if self._overlay is None:
-            overlay = self._overlay = FrameOverlay(round(20*self._scale/100))
-            overlay.resize(round(210*self._scale/100),80)
+            overlay = self._overlay = FrameOverlay(self._scale)
             overlay.move(30,90)
             state = config.load_overlay_state('frameMeter') or {}
             if type(state.get('x')) is int and type(state.get('y')) is int:
@@ -231,7 +236,9 @@ class OptimizationController(QObject):
         d.lock.toggled.connect(self._lock)
         d.scale.setValue(self._scale)
         d.scale.valueChanged.connect(self._set_scale)
-        d.source.currentIndexChanged.connect(self._select_source)
+        for key, box in d.metric_boxes.items():
+            box.setChecked(self._metrics[key])
+            box.toggled.connect(lambda on, key=key: self._set_metric(key, on))
         d.summary_collect.toggled.connect(self._toggle_summary_collection)
         d.summary_save.clicked.connect(self._save_summary)
         d.summary_folder.clicked.connect(self._open_summary_folder)
@@ -258,16 +265,34 @@ class OptimizationController(QObject):
         raw=config._read_local_config()
         section=raw.get('frameMeter')
         section=section if isinstance(section,dict) else {}
-        section.update(scale=self._scale,overlay=dict(x=self.overlay.x(),y=self.overlay.y(),locked=self.overlay.locked))
+        section.update(scale=self._scale,overlay=dict(x=self.overlay.x(),y=self.overlay.y(),locked=self.overlay.locked),
+                       metrics=dict(self._metrics))
         raw['frameMeter']=section
         config._write_local_config(raw)
 
     def _set_scale(self, percent):
         if not self._can_start(): return
         self._scale=max(50,min(300,int(percent)))
-        self.overlay.resize(round(210*self._scale/100),self.overlay.height())
-        self.overlay.set_font_size(round(20*self._scale/100))
+        self.overlay.set_scale(self._scale)
         self._save_overlay()
+
+    def _set_metric(self, key, on):
+        if not self._can_start(): return
+        self._metrics[key] = bool(on)
+        self._save_overlay()
+
+    def overlay_items(self, fps, values):
+        """켠 항목만 (이름, 값, 단위)로. 값을 아직 못 읽었으면 '—'."""
+        def percent(value):
+            return ('—', '') if value is None else (f'{value:.0f}', '%')
+        items = []
+        if self._metrics['fps']: items.append(('FPS', f'{fps:.0f}', ''))
+        if self._metrics['cpu']: items.append(('CPU', *percent(values.get('cpu'))))
+        if self._metrics['gpu']: items.append(('GPU', *percent(values.get('gpu'))))
+        if self._metrics['memory']:
+            memory = values.get('memory')
+            items.append(('메모리', '—', '') if memory is None else ('메모리', f'{memory/1024**3:.1f}', 'GB'))
+        return items
 
     def _lock(self, locked):
         if not self._can_start(): return
@@ -377,6 +402,7 @@ class OptimizationController(QObject):
         self.frames = False
         if not self.collector.stop(): message += "\n" + self.collector.cleanup_problem
         self.target, self.stream, self.context = None, None, None
+        self.sampler.update((), None)
         self._hide_overlay()
         self.frame_status = message
         if self.panel is not None: self.panel.frames_status.setText(message)
@@ -404,14 +430,6 @@ class OptimizationController(QObject):
     def set_paused(self, paused):
         self.paused = paused
         if paused: self._hide_overlay()
-
-    def _select_source(self):
-        if self.stream is not None:
-            now, _ = presentmon.clock()
-            source=self.panel.source.currentData()
-            _log.info('FPS 대상 수동 선택: %s',source)
-            self.stream.select(source,now)
-            self._hide_overlay()
 
     def _line(self, line):
         if not self.frames or self.stream is None: return
@@ -458,6 +476,7 @@ class OptimizationController(QObject):
             self._hide_overlay()
         if not active:
             self.stream.boundary(now, 'inactive')
+            self.sampler.update((), None)  # 게임 밖에서는 지표 조회도 쉰다
             self._hide_overlay()
             self.frame_status = '게임 비활성 · 표시를 쉬고 있어요.'
             return
@@ -471,25 +490,13 @@ class OptimizationController(QObject):
             self._reported_source=result['source']
             _log.info('FPS 대상 확인: pid=%s source=%s candidates=%s',game['pid'],result['source'],len(result['sources']))
         self.frame_status = result['status']
-        if result['fps'] is not None and not self.paused:
-            self.overlay.set_text(f"{result['fps']:.1f} FPS")
+        # 추가 지표는 작업 스레드에서 1초마다 읽은 최신 값만 쓴다(UI 스레드에서 OS 조회 없음).
+        self.sampler.update([k for k, on in self._metrics.items() if on and k != 'fps'], game['pid'])
+        items = self.overlay_items(result['fps'], self.sampler.latest) if result['fps'] is not None else []
+        if items and not self.paused:
+            self.overlay.set_items(items)
             self.overlay.show()
         else: self._hide_overlay()
-        if self.panel is not None:
-            d = self.panel
-            sources = result['sources']
-            signature=(tuple(sources),self.stream.selected)
-            if signature != getattr(d,'_source_signature',None):
-                d._source_signature=signature
-                selected = self.stream.selected
-                d.source.blockSignals(True)
-                d.source.clear()
-                d.source.addItem('렌더링 대상 자동 확인 (단일 대상일 때)',None)
-                for source in sources: d.source.addItem('렌더링 대상 '+source,source)
-                if selected is not None and selected not in sources:
-                    d.source.addItem('선택한 대상 '+selected+' · 최근 프레임 없음',selected)
-                d.source.setCurrentIndex(max(0,d.source.findData(selected)))
-                d.source.blockSignals(False)
 
     def _tick(self):
         now = time.monotonic()
@@ -512,7 +519,7 @@ class OptimizationController(QObject):
         for w in (d.cpu,d.tcp,d.rss,d.split,d.adapter,d.inspect,d.start): w.setEnabled(allowed and not busy)
         d.start.setEnabled(allowed and not busy and not self.recovery.corrupt and not (self.recovery.pending or self.recovery.restart_targets))
         d.stop.setEnabled(busy or bool(self.recovery.pending or self.recovery.restart_targets))
-        for control in (d.lock,d.scale,d.source): control.setEnabled(allowed)
+        for control in (d.lock,d.scale,*d.metric_boxes.values()): control.setEnabled(allowed)
         d.frames_start.setEnabled(allowed and not self.frames)
         d.frames_stop.setEnabled(self.frames or self.collector.pending)
         for control in (d.summary_collect,d.summary_save,d.summary_folder): control.setEnabled(allowed)
@@ -736,6 +743,7 @@ class OptimizationController(QObject):
         if not self.closing:
             self.closing = True
             self.stop_frames()
+            self.sampler.stop()
             self.engine.stop()
         if self.engine.busy: return False
         self._poll_summary_store()

@@ -214,3 +214,32 @@ class SoundNotifier(QObject):
         for bid in buff_ids:
             if self.play(bid):
                 return
+
+
+# 블랙박스 저장 반응 효과음(블랙박스 명세 11.1). 접수 즉시 1회, 실패는 구분되는 소리. 완료는 문구만.
+# 파일은 검토 후 assets/sounds/에 이 이름으로 추가한다. 없으면 조용히 생략(문구 오버레이는 그대로).
+BLACKBOX_SOUND_FILES = {"accepted": "블랙박스 저장 접수.mp3", "failed": "블랙박스 저장 실패.mp3"}
+_blackbox_player = None
+
+
+def play_blackbox_sound(kind: str) -> bool:
+    global _blackbox_player
+    name = BLACKBOX_SOUND_FILES.get(kind)
+    path = sound_path(name) if name else None
+    if path is None or not path.exists():
+        return False
+    try:
+        from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
+
+        if _blackbox_player is None:
+            audio = QAudioOutput()
+            player = QMediaPlayer()
+            player.setAudioOutput(audio)
+            player._audio = audio
+            _blackbox_player = player
+        _sync_default_device(_blackbox_player._audio)
+        _blackbox_player.setSource(QUrl.fromLocalFile(str(path)))
+        _blackbox_player.play()
+        return True
+    except Exception:  # noqa: BLE001 — 오디오 없으면 무음(문구 오버레이는 뜸)
+        return False

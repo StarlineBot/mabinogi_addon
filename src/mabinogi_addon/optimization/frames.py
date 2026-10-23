@@ -124,7 +124,8 @@ class FrameStream:
         source = self.selected
         if source is None and len(available) == 1:
             source = available[0]
-        status = '렌더링 대상을 선택해 주세요.' if len(available)>1 and source is None else '측정 준비 중 · 최신 프레임을 기다려요.'
+        status = ('렌더링 대상이 여러 개라 FPS를 고르지 못했어요. 게임 화면이 하나만 남으면 자동으로 측정해요.'
+                  if len(available)>1 and source is None else '측정 준비 중 · 최신 프레임을 기다려요.')
         events = self.sources.get(source, ())
         fps = None
         if len(events) >= 2 and now-events[-1] <= self.STALE:

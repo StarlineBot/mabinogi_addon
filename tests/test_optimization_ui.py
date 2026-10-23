@@ -129,8 +129,10 @@ def test_fps_scale_and_lock_save_without_enabling_measurement(window,monkeypatch
     c=w.optimization_tools
     monkeypatch.setattr(module,'is_creator',lambda:True)
     c.open()
+    base=c.overlay.width()
     c.panel.scale.setValue(200)
-    assert c.overlay.width()==420 and not c.frames and not c.overlay.isVisible()
+    # 전용 그리기 오버레이(FPS 8.1): 크기는 내용에 맞춰지고 배율에 비례한다.
+    assert abs(c.overlay.width()-2*base)<=4 and not c.frames and not c.overlay.isVisible()
     c.panel.lock.setChecked(False)
     stored=module.config._read_local_config()['frameMeter']
     assert stored['scale']==200 and stored['overlay']['locked'] is False

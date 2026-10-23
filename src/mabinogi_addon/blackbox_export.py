@@ -68,6 +68,7 @@ class ExportResult:
     validated: bool
     error: str | None = None
     cleanup_error: str | None = None
+    duration_us: int | None = None  # 저장한 영상 길이(계획 기준). 완료 알림 문구용
 
 
 def _validate_plan(plan: SavePlan) -> None:

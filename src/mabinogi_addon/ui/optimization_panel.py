@@ -52,14 +52,19 @@ class OptimizationPanel(QWidget):
         body.addWidget(FeatureHeader('FPS 측정','마비노기의 프레임을 측정해 현재 FPS를 보여줘요.'))
         group=_group('대상 · 측정',body)
         group.addWidget(_label('측정 시작을 누르면 등록한 게임창을 대상으로 프레임을 수집해요.\n게임의 제출 프레임 기준이며, 모니터에 실제 표시된 FPS·통신 지연과는 달라요.'))
-        self.source=QComboBox();self.source.addItem('렌더링 대상: 측정 준비 중',None)
-        form=QFormLayout();form.addRow('렌더링 대상',self.source);group.addLayout(form)
         self.frames_start=QPushButton('FPS 측정 시작');self.frames_stop=QPushButton('측정 중단')
         row=QHBoxLayout();row.addWidget(self.frames_start);row.addWidget(self.frames_stop);row.addStretch();group.addLayout(row)
         group=_group('오버레이',body)
         self.lock=QCheckBox('위치 잠금');self.lock.setChecked(True);group.addWidget(self.lock)
         self.scale=QSpinBox();self.scale.setRange(50,300);self.scale.setValue(100);self.scale.setSuffix(' %')
         form=QFormLayout();form.addRow('표시 배율',self.scale);group.addLayout(form)
+        # 표시 항목(FPS 명세 8.4): 기본은 FPS만. 표시만 바꾸며 구간 요약·수집에는 영향 없음.
+        row=QHBoxLayout();self.metric_boxes={}
+        for key, text in (('fps','FPS'),('cpu','CPU'),('gpu','GPU'),('memory','메모리')):
+            self.metric_boxes[key]=QCheckBox(text);row.addWidget(self.metric_boxes[key])
+        row.addStretch();form.addRow('표시 항목',row)
+        group.addWidget(_label('CPU: 가장 바쁜 논리 코어 사용률 · GPU: 작업 관리자와 같은 엔진 사용률 · '
+                               '메모리: 게임 전용 메모리\n1초마다 읽기만 해요. 실제 Windows 수치 확인 전이라 정확도를 보증하지 않아요.'))
         group=_group('상태 · 수집 품질',body)
         self.frames_status=_label('중단됨 · 측정값 없음');group.addWidget(self.frames_status)
         group.addWidget(_label('Windows 권한이 부족하면 측정을 시작하지 못할 수 있어요. 자동으로 관리자 권한을 요청하지 않아요.'))
@@ -85,6 +90,6 @@ class OptimizationPanel(QWidget):
         self.condition_result=_label('');self.condition_result.hide();group.addWidget(self.condition_result)
         group.addWidget(_label('1% low: 느린 상위 1% 간격의 평균을 FPS로 환산해요(P99 아님).\n긴 간격: 해당 구간 중앙값의 2배 초과. 최적화 효과 판정이 아니며 같은 장면·조건에서 비교해 주세요.'))
         body.addStretch();self.tabs.addTab(_scrolled(page),'FPS 측정')
-        for combo in (self.split,self.adapter,self.source):
+        for combo in (self.split,self.adapter):
             combo.setMinimumContentsLength(16)
             combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)

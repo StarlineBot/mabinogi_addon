@@ -674,6 +674,14 @@ class MainWindow(QMainWindow):
         self._optimization_badge.setToolTip("최적화 상태(제작자 전용)예요. 성능 개선을 뜻하지 않아요. 누르면 최적화 탭으로 이동해요.")
         self._optimization_badge.hide()
         h.addWidget(self._optimization_badge)
+        # 블랙박스 상태(블랙박스 명세 11.2, 제작자 전용). '블랙박스 사용'이 꺼져 있으면 숨긴다.
+        self._blackbox_badge = QPushButton()
+        self._blackbox_badge.setObjectName("blackboxBadge")
+        self._blackbox_badge.setFlat(True)
+        self._blackbox_badge.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._blackbox_badge.setToolTip("블랙박스 상태(제작자 전용)예요. 누르면 블랙박스 탭으로 이동해요.")
+        self._blackbox_badge.hide()
+        h.addWidget(self._blackbox_badge)
         self._status_label = QLabel("● 전투 보조: 켜짐")
         self._status_label.setObjectName("statusText")
         self._status_label.setToolTip(
@@ -692,7 +700,7 @@ class MainWindow(QMainWindow):
         bar.setStyleSheet(
             "#statusBar { border-bottom:1px solid rgba(128,128,128,0.25); }"
             "#statusText { font-size:12px; }"
-            "#optimizationBadge { font-size:12px; border:none; padding:0 2px; text-decoration:underline; }"
+            "#optimizationBadge, #blackboxBadge { font-size:12px; border:none; padding:0 2px; text-decoration:underline; }"
         )
         return bar
 

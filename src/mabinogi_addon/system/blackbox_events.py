@@ -75,3 +75,12 @@ class WindowsEvents:
             if self.notified:
                 self.wts.WTSUnRegisterSessionNotification(self.hwnd)
                 self.notified = False
+
+
+def window_rect(hwnd):
+    """게임 창 화면 좌표 (left, top, right, bottom). 실패하면 None(저장 반응 오버레이 위치용)."""
+    try:
+        import win32gui
+        return win32gui.GetWindowRect(int(hwnd))
+    except Exception:
+        return None

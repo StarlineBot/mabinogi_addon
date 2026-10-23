@@ -1,7 +1,7 @@
 """제작자 블랙박스 패널. 캡처 어댑터 연결 전 조작은 비활성 상태다."""
 
 from PySide6.QtGui import QPalette
-from PySide6.QtWidgets import (QCheckBox, QFormLayout, QGroupBox, QHBoxLayout,
+from PySide6.QtWidgets import (QFormLayout, QGroupBox, QHBoxLayout,
                                QLabel, QLineEdit, QPushButton, QVBoxLayout, QWidget)
 
 from .widgets import FeatureHeader
@@ -28,8 +28,14 @@ class BlackboxTab(QWidget):
 
         box = QGroupBox('최근 영상 보관')
         group = QVBoxLayout(box)
-        self.enabled = QCheckBox('블랙박스 사용')
-        group.addWidget(self.enabled)
+        # 사용 켜기/끄기는 '위치 잠금'과 같은 토글 버튼(명세 11.3): 꺼짐 '블랙박스 사용', 켜짐 '블랙박스 사용 중'(민트).
+        from PySide6.QtCore import Qt
+        from .settings_layout import LOCK_STYLE
+        self.enabled = QPushButton('블랙박스 사용')
+        self.enabled.setCheckable(True)
+        self.enabled.setStyleSheet(LOCK_STYLE)
+        self.enabled.toggled.connect(lambda on: self.enabled.setText('블랙박스 사용 중' if on else '블랙박스 사용'))
+        group.addWidget(self.enabled, 0, Qt.AlignmentFlag.AlignLeft)
         group.addWidget(_label('녹화 중에는 시스템 자원을 사용해요.', muted=True))
         self.retention = QLineEdit('10')
         self.retention.setMaximumWidth(100)

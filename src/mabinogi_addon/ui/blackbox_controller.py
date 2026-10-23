@@ -15,6 +15,34 @@ _KEY_NAMES = {0x08: 'Backspace', 0x09: 'Tab', 0x0D: 'Enter', 0x13: 'Pause', 0x14
               0xBB: '=', 0xBC: ',', 0xBD: '-', 0xBE: '.', 0xBF: '/', 0xC0: '`', 0xDB: '[',
               0xDC: '\\', 0xDD: ']', 0xDE: "'"}
 _HOTKEY_NOTE_SEC = 6.0
+_STATES = {'recording': '보관 중', 'preparing': '녹화 준비 중', 'paused': '일시정지',
+           'pausing': '중단 구간 정리 중', 'disabled': '사용 안 함', 'error': '녹화 오류'}
+
+
+def save_failure_reason(exc) -> str:
+    """저장 요청 거부의 짧은 이유(게임 화면 오버레이용). 자세한 문구는 앱 탭에 남는다."""
+    if isinstance(exc, PermissionError):
+        return '확보한 영상 없음'
+    if isinstance(exc, RuntimeError) and 'already reserved' in str(exc):
+        return '이미 저장 중이에요'
+    return '앱에서 확인해 주세요'
+
+
+def _toast_duration(us):
+    from .blackbox_toast import format_duration
+    return format_duration(us)
+
+
+def blackbox_badge(service, available_us=0):
+    """상단 블랙박스 상태(명세 11.2). '블랙박스 사용'이 꺼져 있으면 None(숨김)."""
+    if service is None or not getattr(service, 'enabled', False) or getattr(service, 'status', None) == 'disabled':
+        return None
+    if service.status == 'recording':
+        seconds = max(0, int(available_us) // 1_000_000)
+        return f'블랙박스: 보관 중 {seconds // 60}:{seconds % 60:02d}', 'neutral'
+    if service.status == 'error':
+        return '블랙박스: 녹화 오류', 'error'
+    return '블랙박스: ' + _STATES.get(service.status, '게임 대기'), 'neutral'
 
 
 def key_name(vk):
@@ -53,6 +81,9 @@ class BlackboxController(QObject):
         self._hotkey_note = None  # (문구, 표시 종료 monotonic) — 단축키 반응을 오류 문구에 묻히지 않게
         self._hotkey_base = None  # '검증용 단축키: …' 줄
         self._hotkey_last = None  # '마지막 단축키 입력 HH:MM:SS · 결과' — 앱으로 돌아와도 남아 있게
+        self._toast = None  # 게임 화면 위 저장 반응(명세 11.1)
+        self._toasted_failures = set()
+        self._badge_wired = False
         self.panel = None
         self._page = None
         self.refresh_access()
@@ -157,6 +188,9 @@ class BlackboxController(QObject):
                     events.close()
                     raise
                 self.events, self.service = events, service
+                # 지난 실행에서 남은 실패 자료는 게임 화면에 다시 알리지 않는다(앱 탭·복구 창에서 확인).
+                self._toasted_failures = {ticket for _r, ticket, result in service.recoveries()
+                                          if result is not None and not result.completed}
                 self._timer = QTimer(self)
                 self._timer.setInterval(100)
                 self._timer.timeout.connect(self._tick)
@@ -202,8 +236,45 @@ class BlackboxController(QObject):
     def _request_save(self, request_us=None):
         import time
         if self._allowed() and self.service is not None:
-            self._action(lambda: self.service.request_save(
-                time.perf_counter_ns() // 1000 if request_us is None else request_us))
+            try:
+                self.service.request_save(time.perf_counter_ns() // 1000 if request_us is None else request_us)
+            except Exception as exc:
+                if self.panel is not None:
+                    self.panel.save_result.setText(str(exc))
+                self.close_error = str(exc)
+                self._react('저장하지 못했어요 · ' + save_failure_reason(exc), 'failed')
+                return
+            self._react('영상 저장 중…', 'pending')
+
+    def _react(self, text, kind, target=None):
+        """게임 화면 오버레이 문구 + 효과음(접수·실패만). 전투 보조 일시정지와 무관하게 표시한다(저장 확인)."""
+        if not self._allowed():
+            return
+        from .blackbox_toast import BlackboxToast
+        from .notifier import play_blackbox_sound
+        if self._toast is None:
+            self._toast = BlackboxToast()
+        self._toast.show_message(text, kind, self._screen_rect(target))
+        if kind in ('pending', 'failed'):
+            play_blackbox_sound('accepted' if kind == 'pending' else 'failed')
+
+    @staticmethod
+    def _screen_rect(target):
+        hwnd = getattr(target, 'hwnd', None)
+        if hwnd is None:
+            return None
+        from ..system.blackbox_events import window_rect
+        rect = window_rect(hwnd)  # 게임 창이 있는 모니터의 상단 중앙에 띄운다
+        if rect is None:
+            return None
+        from PySide6.QtCore import QPoint
+        from PySide6.QtGui import QGuiApplication
+        try:
+            left, top, right, bottom = rect
+            screen = QGuiApplication.screenAt(QPoint((left + right) // 2, (top + bottom) // 2))
+        except Exception:
+            return None
+        return screen.geometry() if screen is not None else None
 
     def _show_hotkey(self):
         if self.panel is None or self._hotkey_base is None:
@@ -224,14 +295,17 @@ class BlackboxController(QObject):
         if not (active and target is not None and shortcut[1] == target.hwnd):
             self._note_hotkey('단축키 입력을 받았어요 · 게임 창이 앞에 있을 때만 저장해요.',
                               '게임 창이 앞에 있지 않아 저장 안 함')
+            self._react('저장하지 못했어요 · 게임 창이 앞에 있을 때만 저장해요', 'failed', target)
             return
         try:
             self.service.request_save(shortcut[0])
         except Exception as exc:
             reason = self.service.error or str(exc)
             self._note_hotkey(f'단축키 입력을 받았지만 지금은 저장할 수 없어요: {reason}', f'저장 불가: {reason}')
+            self._react('저장하지 못했어요 · ' + save_failure_reason(exc), 'failed', target)
             return
         self._note_hotkey('단축키 입력을 받았어요 · 저장 요청을 접수했어요.', '저장 요청 접수')
+        self._react('영상 저장 중…', 'pending', target)
 
     def _tick(self):
         if self.service is None:
@@ -249,12 +323,22 @@ class BlackboxController(QObject):
         except Exception as exc:
             self.close_error = str(exc)
             self.service.error = str(exc)
+        runtime = getattr(self.service, 'current', None)
+        duration = runtime.session._replay.available_us if runtime else 0
+        self._update_badge(duration)
+        # 저장 결과 반응(명세 11.1): 완료는 검증을 마친 결과에서만, 실패는 작업마다 한 번.
+        for kind, result in self.service.completed:
+            if kind == 'saved':
+                self._react('영상 저장 완료' + (' · ' + _toast_duration(result.duration_us)
+                                                if getattr(result, 'duration_us', None) else ''), 'done')
+            elif kind == 'rejected':
+                self._react('저장하지 못했어요 · 앱에서 확인해 주세요', 'failed')
+        for _runtime, ticket, result in getattr(self.service, 'recoveries', list)():
+            if result is not None and not result.completed and ticket not in self._toasted_failures:
+                self._toasted_failures.add(ticket)
+                self._react('저장하지 못했어요 · 앱에서 확인해 주세요', 'failed')
         if self.panel is not None:
-            states = {'recording': '보관 중', 'preparing': '녹화 준비 중', 'paused': '일시정지',
-                      'pausing': '중단 구간 정리 중', 'disabled': '사용 안 함', 'error': '녹화 오류'}
-            self.panel.status.setText(states.get(self.service.status, '게임 실행 대기'))
-            runtime = self.service.current
-            duration = runtime.session._replay.available_us if runtime else 0
+            self.panel.status.setText(_STATES.get(self.service.status, '게임 실행 대기'))
             self.panel.available.setText(f'확보한 영상 {duration // 1_000_000}초 / 설정 {self.service._retention // 60_000_000}분')
             self.panel.folder.setText(str(self.service.settings.output_folder))
             entries = self.service.recoveries()
@@ -283,6 +367,23 @@ class BlackboxController(QObject):
         self.service.completed.clear()
         if self._recovery_dialog is not None and self._recovery_dialog.isVisible():
             self._recovery_dialog.refresh()
+
+    def _update_badge(self, available_us):
+        badge = getattr(self.window, '_blackbox_badge', None)
+        if badge is None:
+            return
+        if not self._badge_wired:
+            self._badge_wired = True
+            badge.clicked.connect(self._open_tab)
+        state = blackbox_badge(self.service, available_us) if self._allowed() else None
+        badge.setVisible(state is not None)
+        if state is not None:
+            badge.setText(state[0])
+            badge.setStyleSheet('color:#e74c3c;' if state[1] == 'error' else '')
+
+    def _open_tab(self):
+        if self._page is not None and self.window._tabs.indexOf(self._page) >= 0:
+            self.window._tabs.setCurrentWidget(self._page)
 
     def system_message(self, message, wparam):
         if self.events is not None:

@@ -90,8 +90,10 @@ class BlackboxRuntime:
             raise RuntimeError('successful completed export required')
         # 정리 실패 partial은 명시적 정리 뒤 인수한다. 원본 pin은 그 전까지 유지.
         result = self.queue.acknowledge(ticket)
+        plan = self._plans.pop(ticket)
+        result = replace(result, duration_us=plan.duration_us)
         try:
-            self._retire_segments(self.session.release_save(self._plans.pop(ticket)))
+            self._retire_segments(self.session.release_save(plan))
         except OSError as exc:
             # 저장/결과 인수는 완료됐다. 정리 실패 때문에 그 결과를 잃지 않는다.
             result = replace(result, cleanup_error=f'source cleanup pending: {exc}')
