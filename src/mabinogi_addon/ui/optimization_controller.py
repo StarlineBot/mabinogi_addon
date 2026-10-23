@@ -58,11 +58,15 @@ class OptimizationController(QObject):
         self.last_health = 0.0
         self._offered_review = None
         self._offering = False
+        self._auto_inspected = False  # 탭을 처음 열 때 환경 확인 1회 자동 실행(13.1)
+        self._restoring_selection = False
         self.timer = QTimer(self)
         self.timer.setInterval(250)
         self.timer.timeout.connect(self._tick)
         self.timer.start()
         self._wire_panel()
+        self._restore_selection()
+        self._tabs_watched = False
         self.refresh_access()
 
     def _can_start(self):
@@ -95,6 +99,9 @@ class OptimizationController(QObject):
         needed = is_creator()
         if hasattr(self.window,'_tabs'):
             tabs=self.window._tabs;index=tabs.indexOf(self.panel)
+            if not self._tabs_watched:  # 메인 창 탭은 컨트롤러보다 늦게 생길 수 있어 여기서 한 번 연결
+                self._tabs_watched = True
+                tabs.currentChanged.connect(lambda _index: self._maybe_auto_inspect())
             if needed and index<0:
                 index=tabs.insertTab(tabs.indexOf(self.window._settings_scroll),self.panel,'최적화')
             elif not needed and index>=0:
@@ -105,8 +112,72 @@ class OptimizationController(QObject):
             if self.frames: self.stop_frames('제작자 접근이 해제돼 측정을 중단했어요.')
             if self.engine.busy: self.engine.cancel.set()
 
+    # ---- 선택값 저장·환경 확인 자동 실행(명세 13.1) -------------------------------------------
+    def _restore_selection(self):
+        d, saved = self.panel, config.load_optimization_selection()
+        self._restoring_selection = True
+        try:
+            for key, box in (('cpu', d.cpu), ('tcp', d.tcp), ('rss', d.rss)):
+                if key in saved: box.setChecked(saved[key])
+        finally:
+            self._restoring_selection = False
+
+    def _save_selection(self, *_):
+        if self._restoring_selection or self.panel is None: return
+        d = self.panel
+        selection = dict(cpu=d.cpu.isChecked(), tcp=d.tcp.isChecked(), rss=d.rss.isChecked())
+        saved = config.load_optimization_selection()
+        # 환경 확인 전(목록이 비어 있음)에는 저장된 배분·어댑터를 지우지 않는다.
+        selection['count'] = d.split.currentData() if d.split.currentData() is not None else saved.get('count')
+        selection['adapter'] = (d.adapter.currentData() if d.adapter.count() > 1 else saved.get('adapter'))
+        config.save_optimization_selection(selection)
+
+    def _maybe_auto_inspect(self):
+        if (self._auto_inspected or not hasattr(self.window, '_tabs')
+                or self.window._tabs.currentWidget() is not self.panel or not self._can_start() or self.engine.busy):
+            return
+        self._auto_inspected = True
+        self.engine.inspect()  # 읽기 전용(Windows API·PowerShell 조회), 작업 스레드에서 실행
+
+    def _apply_inspection(self, topology, adapters):
+        d, saved = self.panel, config.load_optimization_selection()
+        notes = []
+        self._restoring_selection = True
+        try:
+            d.split.clear()
+            if topology is not None:
+                d.cpu_info.setText(f'CPU: {topology.name} · 물리 {len(topology.cores)}개 / 논리 {sum(len(c.cpus) for c in topology.cores)}개')
+                count = len([c for c in topology.cores if c.performance])
+                for n in range(1,count):
+                    d.split.addItem(f'게임 {n}개 + 백그라운드 물리 코어 {len(topology.cores)-n}개',n)
+                index = d.split.findData(saved.get('count')) if 'count' in saved else -1
+                if 'count' in saved and index < 0:
+                    notes.append(f"저장한 배분(게임 {saved['count']}개)을 이 CPU에서 쓸 수 없어 구조별 기본 배분을 표시해요.")
+                d.split.setCurrentIndex(index if index >= 0 else d.split.findData(topology.plan()['count']))
+            else:
+                d.cpu_info.setText('CPU 구조를 확인하지 못했어요. CPU·RSS 배치를 적용하지 않아요.')
+            d.adapter.clear()
+            d.adapter.addItem('직접 사용할 물리 어댑터를 선택해 주세요.',None)
+            for adapter in adapters:
+                d.adapter.addItem(str(adapter['Name']),str(adapter['InterfaceGuid']).strip('{}'))
+            wanted = saved.get('adapter')
+            if wanted:
+                index = next((i for i in range(1, d.adapter.count())
+                              if str(d.adapter.itemData(i)).lower() == wanted.lower()), -1)
+                if index > 0:
+                    d.adapter.setCurrentIndex(index)
+                else:
+                    notes.append('저장한 네트워크 어댑터를 찾지 못해 선택을 비웠어요. 네트워크 항목을 쓰려면 어댑터를 다시 골라 주세요.')
+        finally:
+            self._restoring_selection = False
+        if notes:
+            d.cpu_info.setText(d.cpu_info.text() + '\n' + '\n'.join(notes))
+
     def _wire_panel(self):
         d=self.panel
+        for box in (d.cpu, d.tcp, d.rss): box.toggled.connect(self._save_selection)
+        d.split.currentIndexChanged.connect(self._save_selection)
+        d.adapter.currentIndexChanged.connect(self._save_selection)
         d.inspect.clicked.connect(self.engine.inspect)
         d.start.clicked.connect(self._start_optimization)
         d.stop.clicked.connect(self._restore_all)
@@ -406,19 +477,7 @@ class OptimizationController(QObject):
         if self.engine.inspection is not None:
             topology, adapters = self.engine.inspection
             self.engine.inspection = None
-            d.split.clear()
-            if topology is not None:
-                d.cpu_info.setText(f'CPU: {topology.name} · 물리 {len(topology.cores)}개 / 논리 {sum(len(c.cpus) for c in topology.cores)}개')
-                count = len([c for c in topology.cores if c.performance])
-                for n in range(1,count):
-                    d.split.addItem(f'게임 {n}개 + 백그라운드 물리 코어 {len(topology.cores)-n}개',n)
-                d.split.setCurrentIndex(d.split.findData(topology.plan()['count']))
-            else:
-                d.cpu_info.setText('CPU 구조를 확인하지 못했어요. CPU·RSS 배치를 적용하지 않아요.')
-            d.adapter.clear()
-            d.adapter.addItem('직접 사용할 물리 어댑터를 선택해 주세요.',None)
-            for adapter in adapters:
-                d.adapter.addItem(str(adapter['Name']),str(adapter['InterfaceGuid']).strip('{}'))
+            self._apply_inspection(topology, adapters)
 
     def _summary_now(self):
         try: return presentmon.clock()[0]

@@ -187,7 +187,9 @@ def test_embedded_creator_and_recovery_tabs_preserve_single_lifetime(window,monk
         c.refresh_access();w._tabs.setCurrentWidget(panel);panel.tabs.setCurrentIndex(1)
         w._tabs.setCurrentWidget(w._settings_scroll);panel.tabs.setCurrentIndex(0)
     assert not isinstance(panel,QDialog) and panel.window() is w
-    assert not calls and (c.panel,c.engine,c.collector,c.timer)==(panel,engine,collector,timer)
+    # 명세 13.1: 처음 열 때 읽기 전용 환경 확인만 1회 자동 실행. 적용·측정은 자동으로 시작하지 않는다.
+    assert calls in ([], ['inspect']) and 'start' not in calls and 'frames' not in calls
+    assert (c.panel,c.engine,c.collector,c.timer)==(panel,engine,collector,timer)
     assert set(w.findChildren(QTimer))==timers
     if recovery=='corrupt': c.recovery.corrupt=True
     elif recovery=='pending': c.recovery.items=[dict(kind='ack',target='12345678-1234-1234-1234-123456789abc',old=None,applied=1,state='failed')]
@@ -364,3 +366,49 @@ def test_declining_network_prompt_restores_cpu_only(window, monkeypatch):
     c._restore_all()
     assert calls == [dict(network=False, accept_normalized=False, network_deferred=True)]
     c.recovery.items = []
+
+
+# --- 명세 13.1: 선택값 저장·환경 확인 자동 실행 ----------------------------------------------------
+def test_selection_is_machine_local_and_not_exported(tmp_path):
+    import json as _json
+    from mabinogi_addon import config
+    path = tmp_path / 'c.json'
+    config.save_optimization_selection(dict(cpu=True, count=6, adapter='ABC-1', tcp=True, rss=False), path)
+    assert config.load_optimization_selection(path) == dict(cpu=True, tcp=True, rss=False, count=6, adapter='ABC-1')
+    assert 'optimizationSelection' not in _json.loads(config.config_json_for_export(path))
+    incoming = tmp_path / 'other.json'
+    incoming.write_text(_json.dumps({'optimizationSelection': {'count': 1, 'adapter': 'OTHER-PC'}}), encoding='utf-8')
+    config.import_config(incoming, path)  # 다른 PC 설정을 가져와도 이 PC 장치 값은 유지
+    assert config.load_optimization_selection(path)['adapter'] == 'ABC-1'
+
+
+def test_first_open_runs_inspection_once_in_background(window, monkeypatch):
+    w, app = window; c = w.optimization_tools
+    monkeypatch.setattr(module, 'is_creator', lambda: True); c.refresh_access()
+    calls = []
+    monkeypatch.setattr(c.engine, 'inspect', lambda: calls.append(1) or True)
+    c._auto_inspected = False
+    w._tabs.setCurrentWidget(w._settings_scroll); w._tabs.setCurrentWidget(c.panel)
+    w._tabs.setCurrentWidget(w._settings_scroll); w._tabs.setCurrentWidget(c.panel)
+    assert calls == [1] and c.panel.inspect.text() == '다시 확인'
+
+
+def test_saved_selection_is_restored_and_unusable_values_are_explained(window, monkeypatch):
+    from mabinogi_addon import config
+    from mabinogi_addon.optimization.session import Core, Topology
+    w, app = window; c = w.optimization_tools
+    topology = Topology('AMD Ryzen 7 9800X3D', tuple(Core(i, (i * 2, i * 2 + 1)) for i in range(8)))
+    adapters = [dict(Name='Realtek 2.5GbE', InterfaceGuid='{AAAA-1}'), dict(Name='Wi-Fi', InterfaceGuid='{BBBB-2}')]
+    config.save_optimization_selection(dict(cpu=False, count=6, adapter='bbbb-2', tcp=True, rss=False))
+    c._restore_selection()
+    assert not c.panel.cpu.isChecked() and c.panel.tcp.isChecked()
+    c._apply_inspection(topology, adapters)
+    assert c.panel.split.currentData() == 6 and c.panel.adapter.currentText() == 'Wi-Fi'
+    config.save_optimization_selection(dict(cpu=True, count=20, adapter='GONE', tcp=False, rss=False))
+    c._apply_inspection(topology, adapters)
+    assert c.panel.split.currentData() == 7  # 9800X3D 구조별 기본 7+1
+    assert c.panel.adapter.currentData() is None
+    assert '저장한 배분(게임 20개)' in c.panel.cpu_info.text() and '저장한 네트워크 어댑터를 찾지 못해' in c.panel.cpu_info.text()
+    # 사용자가 다시 고르면 저장된다(자동 적용은 하지 않음).
+    c.panel.adapter.setCurrentIndex(1)
+    assert config.load_optimization_selection()['adapter'] == 'AAAA-1'
