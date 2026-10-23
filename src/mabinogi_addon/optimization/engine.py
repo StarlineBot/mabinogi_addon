@@ -6,6 +6,14 @@ from .session import ChangeDeferred
 _log = logging.getLogger(__name__)
 
 
+def result_headline(notices, failures):
+    """결과 첫 줄(명세 13.5): 설정이 목표 상태인 사실만 말한다. 성능 향상은 측정 근거 전 단정하지 않는다.
+    선택한 항목이 이미 목표값이라 바꾼 것이 없어도 '적용 완료'다(항목별 상세에서 '이미 목표값 · 그대로 둠')."""
+    if any(message in failures for message in notices):
+        return '최적화 일부 미적용 · 아래 항목을 확인해 주세요'
+    return '최적화 적용 완료 · 설정이 목표 상태로 맞춰졌어요'
+
+
 def session_line(notices, failures):
     """세션 상태 마지막 줄: 실제 실패만 '확인 필요'로, 보류·관리 제외 안내만 있으면 안내로 구분한다."""
     failed = sum(1 for message in notices if message in failures)
@@ -30,6 +38,8 @@ class Engine:
         self._restore_cpu_after = False  # '중단 · 원복'을 누른 시점에 돌던 작업이 무엇이든 끝에서 CPU를 원복
         self._network_deferred = False  # 사용자가 네트워크 원복을 미룸 → '네트워크 원복 대기' 안내
         self.task = None  # 진행 중 작업 종류: 'inspect' | 'session' | 'restore' (busy일 때만 의미)
+        # 세션이 끝난 이유: 'network_only'(네트워크만 하고 정상 종료) | 'game_exit' | 'governor' | 'cancel' | 'error'
+        self.session_end = None
 
     @property
     def busy(self):
@@ -54,6 +64,8 @@ class Engine:
             # 지금까지의 적용 결과·미적용 이유(RSS 등)를 버리지 않고 이어 붙인다.
             lines = self._partial() if self._partial is not None else []
             self.status = '\n'.join([*lines, f'작업을 완료하지 못했어요: {exc}'])
+            if self.task == 'session':
+                self.session_end = 'error'
         finally:
             restore_cpu = restore_cpu or self._restore_cpu_after
             self._restore_cpu_after = False
@@ -68,7 +80,7 @@ class Engine:
                                 else '\n네트워크 원복 확인 필요: ' + '; '.join(net_errors[:4]))
             deferred, self._network_deferred = self._network_deferred, False
             if deferred and (any(i['kind'] != 'cpu' for i in self.recovery.pending) or self.recovery.restart_targets):
-                self.status += ("\n네트워크 원복 대기 · 연결을 끊어도 될 때 '중단 · 원복'을 다시 눌러 주세요.")
+                self.status += ("\n네트워크 원복 대기 · 연결을 끊어도 될 때 '최적화 적용 중' 버튼을 다시 눌러 주세요.")
             elif self.recovery.corrupt or self.recovery.pending or self.recovery.restart_targets:
                 self.status += '\n복구 기록이 남아 있어요. 원복 상태를 확인해 주세요.'
 
@@ -89,6 +101,7 @@ class Engine:
         return self._launch(work, status='환경 확인 중…', task='inspect')
 
     def start(self, options):
+        self.session_end = None
         def work():
             if not self.allowed(): raise PermissionError('제작자 접근이 필요해요.')
             self.recovery.finish()
@@ -128,7 +141,7 @@ class Engine:
                     if self.cancel.is_set() or not self.allowed(): break
                     try:
                         result=self.recovery.apply(kind,target,value,guard=network_guard)
-                        results.append(f'{kind}: '+{'unchanged':'기존 값 일치·변경 없음','written':'적용 · 재연결 후 확인'}.get(result,'적용값 확인 완료'))
+                        results.append(f'{kind}: '+{'unchanged':'이미 목표값 · 그대로 둠','written':'적용 · 재연결 후 확인'}.get(result,'적용값 확인 완료'))
                     except ChangeDeferred as exc:
                         notices.append(str(exc))
                         break
@@ -142,7 +155,9 @@ class Engine:
                 except Exception as exc: fail('네트워크 재연결 확인 필요: '+str(exc))
             if not options['cpu']:
                 # CPU를 끈 세션은 게임을 기다릴 이유가 없다(네트워크 설정은 원복 전까지 유지).
-                self.status = '\n'.join(results + notices + ['네트워크 설정 작업을 마쳤어요. CPU 배치는 사용하지 않아요.'])
+                self.status = '\n'.join([result_headline(notices, failures)] + results + notices
+                                         + ['네트워크 설정 작업을 마쳤어요. CPU 배치는 사용하지 않아요.'])
+                self.session_end = 'network_only'
                 return
             seen = set()
             observed = game
@@ -155,12 +170,14 @@ class Engine:
                         continue
                 if not self.backend.alive(observed):
                     self.status = '\n'.join(results + notices + ['게임 종료 · CPU를 원복해요. 다음 게임에는 자동 적용하지 않아요.'])
+                    self.session_end = 'game_exit'
                     return
                 processes = self.backend.processes()
                 governor = self.backend.governor_running()
                 if governor and (options['cpu'] or options['rss']):
                     # Never fight the governor, including if it starts mid-session.
                     self.status = 'Process Lasso Governor가 실행돼 CPU를 원복하고 세션을 종료해요.'
+                    self.session_end = 'governor'
                     return
                 if options['cpu']:
                     # 관측 목록은 살아 있는 프로세스로만 유지한다(짧게 뜨고 끝나는 프로세스 누적 방지, 13.3).
@@ -202,9 +219,10 @@ class Engine:
                         _log.warning(message)
                         notices.append(message)
                         notices = notices[-12:]
-                self.status = '\n'.join(results + notices + [session_line(notices, failures)])
+                self.status = '\n'.join([result_headline(notices, failures)] + results + notices + [session_line(notices, failures)])
                 self.cancel.wait(2)
             self.status = '\n'.join(results + notices + ['세션을 중단하고 CPU를 원복해요.'])
+            self.session_end = 'cancel'
         return self._launch(work, restore_cpu=True, status='적용 중…', task='session')
 
     def stop(self):

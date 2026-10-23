@@ -40,11 +40,11 @@ class OptimizationPanel(QWidget):
         self.notice=_label('TCP·RSS는 다른 앱의 통신에도 영향을 줄 수 있고 관리자 권한·재연결이 필요해요.\n게임 실행 중 시작하면 네트워크는 미루고 CPU만 적용해요.\n성능이 좋아졌다는 의미는 아니에요. 효과는 별도 계측으로 비교해 주세요.')
         group.addWidget(self.notice)
         group=_group('적용 · 복구',body)
-        # 원복은 버튼 하나: 적용했던 CPU·네트워크를 한 번에 되돌린다(네트워크가 있으면 연결 끊김 확인 1회).
-        self.start=QPushButton('최적화 시작');self.stop=QPushButton('중단 · 원복')
-        row=QHBoxLayout()
-        for button in (self.start,self.stop): row.addWidget(button)
-        group.addLayout(row)
+        # 토글 하나(명세 13.5, 렌더 2안): 꺼짐 '최적화 시작' → 켜짐 '최적화 적용 중'(민트). 켜진 상태에서 누르면 중단·원복.
+        from PySide6.QtCore import Qt
+        from .settings_layout import LOCK_STYLE
+        self.toggle=QPushButton('최적화 시작');self.toggle.setCheckable(True);self.toggle.setStyleSheet(LOCK_STYLE)
+        group.addWidget(self.toggle,0,Qt.AlignmentFlag.AlignLeft)
         self.status=_label('시작 전 · 시스템 설정을 변경하지 않았어요.');group.addWidget(self.status)
         self.results=_label('');group.addWidget(self.results);body.addStretch()
         self.tabs.addTab(_scrolled(page),'최적화')

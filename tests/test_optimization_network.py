@@ -120,7 +120,7 @@ def test_partial_tcp_failure_does_not_hide_autotuning_result(tmp_path,normal):
         e.stop();e.thread.join(3)
     assert not e.busy
     assert 'ack 미적용' in e.status and 'nodelay 미적용' in e.status
-    assert 'autotuning: '+('기존 값 일치·변경 없음' if normal else '적용값 확인 완료') in e.status
+    assert 'autotuning: '+('이미 목표값 · 그대로 둠' if normal else '적용값 확인 완료') in e.status
     assert b.values['autotuning']=='normal'
 
 

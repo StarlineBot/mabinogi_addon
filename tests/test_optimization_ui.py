@@ -199,7 +199,9 @@ def test_embedded_creator_and_recovery_tabs_preserve_single_lifetime(window,monk
     monkeypatch.setattr(module,'is_creator',lambda:False)
     c.refresh_access();c._tick()
     assert w._tabs.indexOf(panel)==-1
-    assert not panel.start.isEnabled() and not panel.frames_toggle.isEnabled()
+    # 새 시작은 막는다. 되돌릴 기록이 남아 있으면 토글은 켜짐(원복 경로)으로 남는다(13.5, 이전 '중단 · 원복'과 같음).
+    assert not panel.frames_toggle.isEnabled()
+    assert panel.toggle.isEnabled() == (recovery in ('pending','restart')) and panel.toggle.isChecked() == (recovery in ('pending','restart'))
     # 접근이 없으면 네트워크 원복을 묻거나 실행하지 않는다(CPU 원복 경로만 남음).
     monkeypatch.setattr(c,'_network_confirmation',lambda:pytest.fail('hidden alpha must not prompt'))
     restores=[]
@@ -347,14 +349,14 @@ def test_single_restore_button_restores_cpu_only_without_network_prompt(window, 
     """원버튼: 네트워크 변경이 없으면 확인 없이 CPU만, 있으면 확인 1회 후 함께 원복. 별도 버튼 없음."""
     w, app = window; c = w.optimization_tools
     monkeypatch.setattr(module, 'is_creator', lambda: True); c.refresh_access()
-    assert c.panel.stop.text() == '중단 · 원복' and not hasattr(c.panel, 'restore')
+    assert not hasattr(c.panel, 'stop') and not hasattr(c.panel, 'restore')  # 13.5: 토글 하나
     calls = []
     monkeypatch.setattr(c.engine, 'stop_and_restore', lambda **k: calls.append(k))
     monkeypatch.setattr(c, '_network_confirmation', lambda: pytest.fail('CPU만 되돌릴 땐 묻지 않음'))
     c.recovery.items = [dict(kind='cpu', target={'pid': 1, 'birth': '1'}, old=15, applied=3, state='applied')]
     c._tick()
-    assert c.panel.stop.isEnabled()
-    c._restore_all()
+    assert c.panel.toggle.isEnabled() and c.panel.toggle.isChecked() and c.panel.toggle.text() == '최적화 적용 중'
+    c.panel.toggle.click()  # 켜진 상태에서 누르면 중단·원복
     assert calls == [dict(network=False, accept_normalized=False, network_deferred=False)]
     c.recovery.items = []
 
@@ -556,3 +558,44 @@ def test_fps_display_setting_is_restored_after_restart_but_collection_is_not(win
     c._restore_display = True
     c._tick()
     assert calls == [] and not c._restore_display
+
+
+
+def test_single_optimization_toggle_follows_spec_13_5(window, monkeypatch):
+    # 13.5: 꺼짐 '최적화 시작' → 켜짐 '최적화 적용 중'. 바꾼 것이 없어도 켜짐, 되돌릴 게 없으면 바로 꺼짐+안내.
+    w, app = window; c = w.optimization_tools
+    monkeypatch.setattr(module, 'is_creator', lambda: True); c.refresh_access()
+    toggle = c.panel.toggle
+    started, restored = [], []
+    def start():
+        started.append(1); c._kept_on = True; c.engine.session_end = 'network_only'
+    monkeypatch.setattr(c, '_start_optimization', start)
+    monkeypatch.setattr(c, '_restore_all', lambda: restored.append(1))
+    c._tick()
+    assert toggle.text() == '최적화 시작' and not toggle.isChecked()
+    toggle.click()  # 네트워크만, 모든 항목이 이미 목표값 → 바꾼 기록 없음
+    c._tick()
+    assert started == [1] and toggle.isChecked() and toggle.text() == '최적화 적용 중'
+    toggle.click()  # 되돌릴 변경 없음 → 원복 호출 없이 바로 꺼짐
+    assert restored == [] and not toggle.isChecked() and '되돌릴 것이 없어요' in c.engine.status
+    # 게임 종료로 끝난 세션은 남은 변경이 없으면 꺼지고, 네트워크 변경이 남으면 원복 대기로 켜짐 유지.
+    c._kept_on, c.engine.session_end = True, 'game_exit'
+    c._tick()
+    assert not toggle.isChecked()
+    c.recovery.items = [dict(kind='ack', target='12345678-1234-1234-1234-123456789abc', old=0, applied=1, state='applied')]
+    try:
+        c._tick()
+        assert toggle.isChecked() and toggle.text() == '최적화 적용 중 · 네트워크 원복 대기'
+        toggle.click()
+        assert restored == [1]
+    finally:
+        c.recovery.items = []
+    c._tick()
+    assert not toggle.isChecked()  # 재실행 시와 같이 기록이 없으면 꺼짐
+
+
+def test_result_wording_states_facts_not_performance():
+    from mabinogi_addon.optimization.engine import result_headline
+    assert result_headline([], set()) == '최적화 적용 완료 · 설정이 목표 상태로 맞춰졌어요'
+    assert '일부 미적용' in result_headline(['x'], {'x'})
+    assert '좋아' not in result_headline([], set()) and '줄었' not in result_headline([], set())

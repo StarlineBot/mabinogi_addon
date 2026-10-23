@@ -59,6 +59,7 @@ class OptimizationController(QObject):
         self.sampler = PerfSampler()
         # 'FPS 표시' 켜짐은 재실행 후에도 유지(수집 모드는 매번 꺼짐으로 시작). 접근이 확인된 첫 틱에 1회 복원.
         self._restore_display = section.get('display') is True
+        self._kept_on = False  # 바꾼 것 없이 켜진 상태는 기록이 없어 재실행하면 꺼짐(13.5)
         self._reported_source = None
         self._overlay = None
         self.collector = presentmon.Collector(self)
@@ -232,8 +233,7 @@ class OptimizationController(QObject):
         d.split.currentIndexChanged.connect(self._save_selection)
         d.adapter.currentIndexChanged.connect(self._save_selection)
         d.inspect.clicked.connect(self.engine.inspect)
-        d.start.clicked.connect(self._start_optimization)
-        d.stop.clicked.connect(self._restore_all)
+        d.toggle.clicked.connect(self._toggle_optimization)
         d.frames_toggle.clicked.connect(self._toggle_frames)
         d.lock.setChecked(bool((config.load_overlay_state('frameMeter') or {}).get('locked',True)))
         d.lock.toggled.connect(self._lock)
@@ -325,12 +325,53 @@ class OptimizationController(QObject):
         if (options['tcp'] or options['rss']) and not self._network_confirmation(): return
         self._badge_split = (f"{options['count']}+{self._core_total-options['count']}"
                              if options['cpu'] and self._core_total else None)
+        self._kept_on = True  # 이미 목표값이라 바꾼 것이 없어도 켜짐으로 보여준다(13.5)
         self._summary_requested = {key: options[key] for key in ('cpu','count','tcp','rss')}
         self._summary_requested['adapter_selected'] = bool(options['adapter'])
         self._summary_state = None
         if self.stream is not None:
             self.stream.boundary(presentmon.clock()[0], 'optimization_start_request')
         self.engine.start(options)
+
+    # ---- 토글 하나(명세 13.5) -------------------------------------------------------------------
+    def _optimization_on(self):
+        """켜짐: 세션 진행 중, 되돌릴 변경(원복 대기 포함)이 남음, 또는 바꾼 것 없이 목표 상태로 시작한 뒤 아직 끄지 않음."""
+        if self.engine.busy and self.engine.task == 'session':
+            return True
+        if self.recovery.pending or self.recovery.restart_targets:
+            return True
+        return self._kept_on
+
+    def _toggle_optimization(self, _checked=False):
+        if not self._optimization_on():
+            self._start_optimization()
+        elif self.engine.busy or self.recovery.pending or self.recovery.restart_targets:
+            self._kept_on = False
+            self._restore_all()
+        else:
+            # 바꾼 것 없이 켜졌던 상태: 되돌릴 기록이 없으니 바로 끄고, 원복 실패로 오해하지 않게 알린다.
+            self._kept_on = False
+            self.engine.status = '원래부터 같은 값이라 되돌릴 것이 없어요.'
+        self._sync_optimization_toggle()
+
+    def _sync_optimization_toggle(self):
+        if self.panel is None: return
+        engine = self.engine
+        if not engine.busy and engine.session_end is not None:
+            # 게임 종료·Governor·중단·오류로 끝난 세션은 남은 변경이 없으면 꺼진다. 네트워크만 한 세션은 켜짐 유지.
+            if engine.session_end != 'network_only':
+                self._kept_on = False
+            engine.session_end = None
+        on = self._optimization_on()
+        toggle = self.panel.toggle
+        if toggle.isChecked() != on:
+            toggle.blockSignals(True); toggle.setChecked(on); toggle.blockSignals(False)
+        waiting = on and not engine.busy and bool(
+            any(i['kind'] != 'cpu' for i in self.recovery.pending) or self.recovery.restart_targets)
+        toggle.setText('최적화 적용 중 · 네트워크 원복 대기' if waiting else '최적화 적용 중' if on else '최적화 시작')
+        allowed = self._can_start()
+        toggle.setEnabled(True if on and (engine.busy or self.recovery.pending or self.recovery.restart_targets)
+                          else allowed and not engine.busy and not self.recovery.corrupt)
 
     def _restore_all(self):
         """'중단 · 원복': 세션을 멈추고 적용했던 CPU·네트워크를 모두 되돌린다. 네트워크가 포함되면
@@ -546,9 +587,8 @@ class OptimizationController(QObject):
         self._render_summary()
         d = self.panel
         allowed, busy = self._can_start(), self.engine.busy
-        for w in (d.cpu,d.tcp,d.rss,d.split,d.adapter,d.inspect,d.start): w.setEnabled(allowed and not busy)
-        d.start.setEnabled(allowed and not busy and not self.recovery.corrupt and not (self.recovery.pending or self.recovery.restart_targets))
-        d.stop.setEnabled(busy or bool(self.recovery.pending or self.recovery.restart_targets))
+        for w in (d.cpu,d.tcp,d.rss,d.split,d.adapter,d.inspect): w.setEnabled(allowed and not busy)
+        self._sync_optimization_toggle()
         for control in (d.lock,d.scale,*d.metric_boxes.values()): control.setEnabled(allowed)
         d.frames_toggle.setEnabled((allowed and not self.closing) or self.frames or self.collector.pending)
         self._sync_frames_toggle()
