@@ -33,6 +33,9 @@ def test_gpu_matches_task_manager_engine_aggregation():
     assert pm.gpu_utilization(values) == 90.0
     del values['pid_400_luid_0x0_0x2_phys_0_eng_0_engtype_3D']
     assert pm.gpu_utilization(values) == pytest.approx(35.0)
+    # 같은 종류 엔진이 여럿이면(예: VideoDecode eng_6·eng_7) 작업 관리자처럼 엔진별로 본다.
+    assert pm.gpu_utilization({'pid_1_luid_0x0_0x1_phys_0_eng_6_engtype_VideoDecode': 30.0,
+                               'pid_1_luid_0x0_0x1_phys_0_eng_7_engtype_VideoDecode': 30.0}) == 30.0
     assert pm.gpu_utilization({'garbage': 1}) is None
 
 
@@ -62,8 +65,11 @@ def test_sampler_reads_only_enabled_metrics_off_ui_thread_and_stops():
             break
         threading.Event().wait(.01)
     assert sampler.latest == {'cpu': 41.0}
-    sampler.update([], None)
-    assert 'closed' in calls and sampler._thread is None
+    thread = sampler._thread
+    sampler.update([], None)  # UI 스레드는 기다리지 않고, 조회 스레드는 다음 대기에서 끝난다
+    assert sampler._thread is None
+    thread.join(2)
+    assert 'closed' in calls
 
 
 def test_overlay_items_follow_toggles_and_default_is_fps_only(app, tmp_path, monkeypatch):
@@ -140,6 +146,7 @@ def test_blackbox_reactions_toast_and_sound_slots(app, monkeypatch):
 
     controller = module.BlackboxController.__new__(module.BlackboxController)
     controller.window, controller.panel, controller._toast = NS(_closing=False), None, None
+    controller._last_target = None
     controller.service, controller.close_error = Service(), None
     controller._request_save(1)
     assert controller._toast.text() == '영상 저장 중…' and played == ['accepted']
@@ -155,3 +162,75 @@ def test_blackbox_sound_slot_is_silent_without_files(app):
     if not any(notifier.sound_path(n).exists() for n in notifier.BLACKBOX_SOUND_FILES.values()):
         assert notifier.play_blackbox_sound('accepted') is False
     assert notifier.play_blackbox_sound('unknown') is False
+
+
+def test_failed_reader_is_retried_only_after_interval_and_warned_once(caplog):
+    # 0.13.0 QA 2: 조회기 생성이 실패하는 PC에서 0.25초마다 다시 만들고 경고를 반복하지 않는다.
+    now, calls = [0.0], []
+
+    def failing(metrics):
+        calls.append(now[0])
+        raise OSError('PDH 실패')
+
+    sampler = pm.PerfSampler(failing, interval=.01, clock=lambda: now[0])
+    for step in range(40):  # 10초 동안 0.25초 간격
+        now[0] = step * .25
+        sampler.update(['cpu'], 1)
+        if sampler._thread is not None:
+            sampler._thread.join(2)
+    assert len(calls) == 1
+    now[0] = pm.PerfSampler.RETRY_SECONDS + 1
+    sampler.update(['cpu'], 1)
+    sampler._thread.join(2)
+    assert len(calls) == 2
+    assert sum('시작하지 못했어요' in r.getMessage() for r in caplog.records) == 1
+    sampler.stop()
+
+
+def test_one_missing_counter_keeps_the_other(monkeypatch):
+    # 0.13.0 QA 2: CPU/GPU 카운터를 따로 추가해 하나가 없어도 나머지를 표시한다.
+    import sys
+    from types import ModuleType
+    fake = ModuleType('win32pdh')
+    fake.PDH_FMT_DOUBLE, fake.PDH_FMT_NOCAP100 = 0x200, 0x8000
+    fake.OpenQuery = lambda: 'q'
+    fake.CloseQuery = lambda q: None
+    fake.CollectQueryData = lambda q: None
+
+    def add(query, path):
+        if 'GPU' in path:
+            raise OSError('GPU Engine 카운터 없음')
+        return 'cpu-counter'
+    fake.AddEnglishCounter = add
+    fake.GetFormattedCounterArray = lambda counter, fmt: {'_Total': 9, '0': 55.0}
+    monkeypatch.setitem(sys.modules, 'win32pdh', fake)
+    reader = pm.WindowsPerfReader({'cpu', 'gpu'})
+    assert reader.read(None, {'cpu', 'gpu'}) == {'cpu': 55.0}
+    fake.AddEnglishCounter = lambda q, p: (_ for _ in ()).throw(OSError('없음'))
+    with pytest.raises(OSError):
+        pm.WindowsPerfReader({'cpu', 'gpu'})
+
+
+def test_save_results_toast_on_game_monitor_using_logical_coordinates(app, monkeypatch):
+    # 0.13.0 QA 1: 완료·실패 반응도 게임 창이 있는 모니터에. GetWindowRect(물리) → 논리 좌표로 화면 찾기.
+    from mabinogi_addon.ui import blackbox_controller as module, notifier, dpi
+    from mabinogi_addon.system import blackbox_events
+    monkeypatch.setattr(notifier, 'play_blackbox_sound', lambda kind: False)
+    monkeypatch.setattr(module, 'is_creator', lambda: True)
+    monkeypatch.setattr(blackbox_events, 'window_rect', lambda hwnd: (0, 0, 2000, 1000))
+    logical = []
+    monkeypatch.setattr(dpi, 'to_logical', lambda *a: logical.append(a) or (0, 0, 1000, 500))
+    shown = []
+    controller = module.BlackboxController.__new__(module.BlackboxController)
+    controller.window, controller.panel = NS(_closing=False), None
+    controller._toasted_failures, controller._badge_wired = set(), True
+    result = NS(duration_us=5_000_000, output='x')
+    controller.service = NS(completed=[('saved', result)], status='recording', enabled=True,
+                            tick=lambda *a, **k: None, error=None, recoveries=list,
+                            _retention=600_000_000, settings=NS(output_folder='f'), current=None)
+    controller.events = NS(sample=lambda: (NS(hwnd=42), True), consume_hotkey=lambda: None)
+    controller._toast = NS(show_message=lambda text, kind, rect: shown.append((text, rect)))
+    controller._recovery_dialog = None
+    controller._tick()
+    assert shown[0][0] == '영상 저장 완료 · 5초'
+    assert logical == [(0, 0, 2000, 1000)] and shown[0][1] is not None

@@ -82,6 +82,7 @@ class BlackboxController(QObject):
         self._hotkey_base = None  # '검증용 단축키: …' 줄
         self._hotkey_last = None  # '마지막 단축키 입력 HH:MM:SS · 결과' — 앱으로 돌아와도 남아 있게
         self._toast = None  # 게임 화면 위 저장 반응(명세 11.1)
+        self._last_target = None  # 마지막으로 관측한 게임 창: 완료·실패 반응도 게임 모니터에 띄운다
         self._toasted_failures = set()
         self._badge_wired = False
         self.panel = None
@@ -242,9 +243,9 @@ class BlackboxController(QObject):
                 if self.panel is not None:
                     self.panel.save_result.setText(str(exc))
                 self.close_error = str(exc)
-                self._react('저장하지 못했어요 · ' + save_failure_reason(exc), 'failed')
+                self._react('저장하지 못했어요 · ' + save_failure_reason(exc), 'failed', self._last_target)
                 return
-            self._react('영상 저장 중…', 'pending')
+            self._react('영상 저장 중…', 'pending', self._last_target)
 
     def _react(self, text, kind, target=None):
         """게임 화면 오버레이 문구 + 효과음(접수·실패만). 전투 보조 일시정지와 무관하게 표시한다(저장 확인)."""
@@ -270,8 +271,10 @@ class BlackboxController(QObject):
         from PySide6.QtCore import QPoint
         from PySide6.QtGui import QGuiApplication
         try:
-            left, top, right, bottom = rect
-            screen = QGuiApplication.screenAt(QPoint((left + right) // 2, (top + bottom) // 2))
+            from .dpi import to_logical
+            # GetWindowRect는 물리 픽셀: 다른 오버레이처럼 논리 좌표로 바꾼 뒤 화면을 찾는다(혼합 배율 대응).
+            left, top, width, height = to_logical(rect[0], rect[1], rect[2] - rect[0], rect[3] - rect[1])
+            screen = QGuiApplication.screenAt(QPoint(left + width // 2, top + height // 2))
         except Exception:
             return None
         return screen.geometry() if screen is not None else None
@@ -315,6 +318,8 @@ class BlackboxController(QObject):
         except Exception as exc:
             target, active = None, False
             self.service.error = str(exc)
+        if target is not None:
+            self._last_target = target
         self._action(lambda: self.service.tick(target, active=active))
         try:
             shortcut = self.events.consume_hotkey()
@@ -330,13 +335,14 @@ class BlackboxController(QObject):
         for kind, result in self.service.completed:
             if kind == 'saved':
                 self._react('영상 저장 완료' + (' · ' + _toast_duration(result.duration_us)
-                                                if getattr(result, 'duration_us', None) else ''), 'done')
+                                                if getattr(result, 'duration_us', None) else ''), 'done',
+                            self._last_target)
             elif kind == 'rejected':
-                self._react('저장하지 못했어요 · 앱에서 확인해 주세요', 'failed')
+                self._react('저장하지 못했어요 · 앱에서 확인해 주세요', 'failed', self._last_target)
         for _runtime, ticket, result in getattr(self.service, 'recoveries', list)():
             if result is not None and not result.completed and ticket not in self._toasted_failures:
                 self._toasted_failures.add(ticket)
-                self._react('저장하지 못했어요 · 앱에서 확인해 주세요', 'failed')
+                self._react('저장하지 못했어요 · 앱에서 확인해 주세요', 'failed', self._last_target)
         if self.panel is not None:
             self.panel.status.setText(_STATES.get(self.service.status, '게임 실행 대기'))
             self.panel.available.setText(f'확보한 영상 {duration // 1_000_000}초 / 설정 {self.service._retention // 60_000_000}분')

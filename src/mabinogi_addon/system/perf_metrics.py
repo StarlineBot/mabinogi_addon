@@ -3,7 +3,7 @@
 - CPU: **가장 바쁜 논리 코어 사용률**(Processor(*)\\% Processor Time 최댓값). 마비노기처럼 한 스레드에 몰리는
   게임은 전체 CPU%가 낮게 나온다(16스레드 중 1개 100% → 약 6%). 게임 프로세스 기준 값도 같은 이유로
   코어 수로 나누면 낮고, 코어 1개 기준으로 두면 100%를 넘을 수 있어 '병목 코어'를 바로 보여주지 못한다.
-- GPU: 작업 관리자와 같은 방식. GPU Engine(*)\\Utilization Percentage를 (물리 GPU, 엔진 종류)별로 더하고
+- GPU: 작업 관리자와 같은 방식. GPU Engine(*)\\Utilization Percentage를 엔진(물리 GPU·eng_N)별로 프로세스 합을 내고
   그중 최댓값(보통 3D). 제조사와 무관하다.
 - 메모리: 게임 프로세스의 전용 메모리(PrivateUsage, 커밋). 장시간 증가(누수 주장) 확인에 쓴다.
 
@@ -15,11 +15,12 @@ import logging
 import re
 import sys
 import threading
+import time
 
 _log = logging.getLogger(__name__)
 
 METRICS = ('fps', 'cpu', 'gpu', 'memory')
-_ENGINE = re.compile(r'phys_(?P<phys>\d+).*?engtype_(?P<type>.+)$', re.IGNORECASE)
+_ENGINE = re.compile(r'phys_(?P<phys>\d+)_eng_(?P<eng>\d+)', re.IGNORECASE)
 _LUID = re.compile(r'luid_(0x[0-9a-f]+_0x[0-9a-f]+)', re.IGNORECASE)
 
 
@@ -30,14 +31,14 @@ def busiest_core(values: dict) -> float | None:
 
 
 def gpu_utilization(values: dict) -> float | None:
-    """GPU 엔진 인스턴스(pid_..._luid_..._phys_0_eng_0_engtype_3D)별 사용률 → 작업 관리자식 GPU%."""
+    """GPU 엔진 인스턴스(pid_..._luid_..._phys_0_eng_0_engtype_3D)별 사용률 → 작업 관리자식 GPU%(엔진별 합의 최댓값)."""
     totals = {}
     for name, value in values.items():
         engine = _ENGINE.search(str(name))
         if engine is None:
             continue
         luid = _LUID.search(str(name))
-        key = (luid.group(1).lower() if luid else '', engine['phys'], engine['type'].lower())
+        key = (luid.group(1).lower() if luid else '', engine['phys'], engine['eng'])
         totals[key] = totals.get(key, 0.0) + float(value)
     return max(0.0, min(100.0, max(totals.values()))) if totals else None
 
@@ -52,9 +53,19 @@ class WindowsPerfReader:
         self._pdh = win32pdh
         self._query = win32pdh.OpenQuery()
         self._counters = {}
+        errors = []
+        # 지표별로 따로 추가한다: 한 카운터가 없는 PC에서도 나머지는 표시한다(없는 값은 '—').
         for key, path in (('cpu', self.CPU), ('gpu', self.GPU)):
             if key in metrics:
-                self._counters[key] = win32pdh.AddEnglishCounter(self._query, path)
+                try:
+                    self._counters[key] = win32pdh.AddEnglishCounter(self._query, path)
+                except Exception as exc:
+                    errors.append(f'{key}: {exc}')
+        if errors:
+            _log.warning('오버레이 지표 카운터 일부를 쓸 수 없어요: %s', '; '.join(errors))
+            if not self._counters and 'memory' not in metrics:
+                self.close()
+                raise OSError('; '.join(errors))
         if self._counters:
             win32pdh.CollectQueryData(self._query)  # 비율 카운터는 두 번째 수집부터 값이 나온다
 
@@ -99,7 +110,9 @@ def process_private_bytes(pid) -> int | None:
 class PerfSampler:
     """작업 스레드에서 1초마다 읽고 최신 값만 남긴다. UI 스레드는 `latest`만 읽는다(OS 호출 없음)."""
 
-    def __init__(self, reader_factory=None, interval=1.0):
+    RETRY_SECONDS = 30.0  # 조회기 생성 실패 뒤 같은 지표 조합을 다시 시도하기까지
+
+    def __init__(self, reader_factory=None, interval=1.0, clock=time.monotonic):
         self._factory = reader_factory or (WindowsPerfReader if sys.platform == 'win32' else None)
         self._interval = interval
         self._lock = threading.Lock()
@@ -108,6 +121,9 @@ class PerfSampler:
         self._latest = {}
         self._stop = threading.Event()
         self._thread = None
+        self._clock = clock
+        self._retry_at = {}  # 지표 조합 → 다시 시도할 시각(생성 실패 시)
+        self._warned = set()  # 경고는 조합마다 처음 1회만
 
     @property
     def latest(self):
@@ -124,26 +140,39 @@ class PerfSampler:
             if changed:
                 self._latest = {}
         if not wanted or self._factory is None:
-            self.stop()
+            self.stop(join=False)
         elif changed or self._thread is None or not self._thread.is_alive():
-            self.stop()
+            with self._lock:
+                retry = self._retry_at.get(wanted)
+            if retry is not None and self._clock() < retry:
+                if changed:
+                    self.stop(join=False)
+                return  # 최근에 생성이 실패한 조합: 매 틱 다시 만들지 않는다
+            self.stop(join=False)  # UI 스레드에서 이전 조회 스레드를 기다리지 않는다(다음 대기에서 스스로 끝남)
             self._stop = threading.Event()
             self._thread = threading.Thread(target=self._run, args=(wanted, self._stop), daemon=True,
                                             name='overlay-metrics')
             self._thread.start()
 
-    def stop(self):
+    def stop(self, join=True):
         self._stop.set()
         thread, self._thread = self._thread, None
-        if thread is not None and thread is not threading.current_thread():
+        if join and thread is not None and thread is not threading.current_thread():
             thread.join(timeout=2)
 
     def _run(self, metrics, stop):
         try:
             reader = self._factory(metrics)
         except Exception as exc:
-            _log.warning('오버레이 지표 조회를 시작하지 못했어요: %s', exc)
+            with self._lock:
+                self._retry_at[metrics] = self._clock() + self.RETRY_SECONDS
+                first = metrics not in self._warned
+                self._warned.add(metrics)
+            if first:
+                _log.warning('오버레이 지표 조회를 시작하지 못했어요(%d초 뒤 다시 시도): %s', self.RETRY_SECONDS, exc)
             return
+        with self._lock:
+            self._retry_at.pop(metrics, None)
         try:
             while not stop.wait(self._interval):
                 with self._lock:
