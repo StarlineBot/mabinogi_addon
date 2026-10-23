@@ -217,12 +217,21 @@ def test_real_worker_dispatch_and_failure_retry(app, monkeypatch):
         # Repeated clicks while active must not create another worker/window.
         MainWindow._on_update_clicked(owner)
         assert len(workers) == attempt + 1
-        deadline = time.monotonic() + 5
+        # 시한 15초(CI에서 5초 초과 1회 관찰, 39878848624 · 원인 미확정). 검증 조건은 그대로다.
+        deadline = time.monotonic() + 15
         while (
             workers[-1].is_alive() or owner._update_splash is not None
         ) and time.monotonic() < deadline:
             app.processEvents()
             QTest.qWait(1)
+        if workers[-1].is_alive() or owner._update_splash is not None:
+            # 재발 시 작업 스레드가 어디서 막혔는지 남긴다(BlockingQueuedConnection 안의 중첩
+            # processEvents 등). pytest fd 캡처가 받아 실패 보고의 'Captured stderr'에 나온다.
+            import faulthandler
+            import sys
+            print(f"[update worker timeout] attempt={attempt} alive={workers[-1].is_alive()} "
+                  f"splash={owner._update_splash is not None} displays={displays[-3:]}", file=sys.__stderr__, flush=True)
+            faulthandler.dump_traceback(file=sys.__stderr__, all_threads=True)
         workers[-1].join(timeout=0)
         assert not workers[-1].is_alive()
         assert owner._update_splash is None
