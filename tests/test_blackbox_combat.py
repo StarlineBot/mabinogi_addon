@@ -83,3 +83,23 @@ def test_combat_badge_and_status_text():
     assert combat_text(gate) == '보관 중 · 전투 종료 대기 59초'
     assert blackbox_badge(service, 0, gate)[0] == '블랙박스: 전투 종료 대기 59초'
     assert blackbox_badge(NS(enabled=True, status='recording'), 60_000_000)[0] == '블랙박스: 보관 중 1:00'  # 평소 녹화 불변
+
+
+
+def test_grace_does_not_run_out_while_game_is_behind(monkeypatch):
+    # 0.14.0 보정: 녹화는 앞에 있을 때만. 뒤에 있는 동안 매 틱 판정 불가(None)로 갱신해 유예 시간이 흐르지 않는다.
+    from mabinogi_addon.ui import blackbox_controller as module
+    clock = [0.0]
+    monkeypatch.setattr('time.monotonic', lambda: clock[0])
+    boss = NS(has_region=lambda: True, is_boss_present=lambda: True)
+    c = _controller(monkeypatch, 'combat', boss)
+    c.events = NS(foreground=True)
+    assert c._combat_record(True)
+    boss.is_boss_present = lambda: False
+    clock[0] = 10; c._combat_record(True)            # 유예 50초 남음
+    c.events.foreground = False
+    for n in range(1, 301):                          # 5분 동안 게임이 뒤에 있음
+        clock[0] = 10 + n; c._combat_record(False)
+    c.events.foreground = True
+    clock[0] = 311
+    assert c._combat_record(True) and c._gate.grace_left == 49

@@ -381,7 +381,8 @@ class BlackboxController(QObject):
             self.service.error = str(exc)
         if target is not None:
             self._last_target = target
-        self._action(lambda: self.service.tick(target, active=active and self._combat_record(active)))
+        record = self._combat_record(active)  # 매 틱 갱신해야 뒤에 있는 동안 유예 시간이 멈춰 있다
+        self._action(lambda: self.service.tick(target, active=active and record))
         try:
             shortcut = self.events.consume_hotkey()
             if shortcut is not None:

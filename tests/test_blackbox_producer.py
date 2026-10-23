@@ -488,12 +488,13 @@ def test_short_frame_gaps_are_filled_with_previous_frame_to_keep_real_time():
     assert [(s.start_us, s.end_us) for s in segments] == [(1_000_000, 1_300_000), (1_300_000, 1_600_000)]
 
 
-def test_recording_continues_in_background_but_hotkey_needs_foreground():
-    # 2026-10-23 사용자 결정: 게임 창이 뒤에 있어도(최소화 아님) 녹화, 단축키 저장은 앞에 있을 때만.
+def test_recording_only_while_game_is_in_front():
+    # 2026-10-23 보정: '뒤에 있어도 녹화'는 부하 때문에 되돌림 → 앞에 있을 때만 녹화(최소화 조건 유지).
     root = Path(__file__).resolve().parents[1]
     native = (root / 'native/blackbox/capture.cpp').read_text(encoding='utf-8')
     body = native[native.index('bb_open_fit('):]
-    assert 'GetForegroundWindow()' not in body and 'IsIconic' in body
-    assert 'EVENT_SYSTEM_MINIMIZESTART' in native
+    assert body.count('GetForegroundWindow() != ') >= 3 and 'IsIconic' in body
+    assert 'EVENT_SYSTEM_FOREGROUND' in native and 'EVENT_SYSTEM_MINIMIZESTART' not in native
+    assert 'disable_capture_border(c->session);' in native  # 0.13.3 노란 테두리 끄기는 유지
     events = (root / 'src/mabinogi_addon/system/blackbox_events.py').read_text(encoding='utf-8')
-    assert 'active = not self.locked and not self.suspended and not win32gui.IsIconic(hwnd)' in events
+    assert 'not win32gui.IsIconic(hwnd) and self.foreground' in events
