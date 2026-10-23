@@ -49,7 +49,7 @@ class BlackboxTab(QWidget):
         form = QFormLayout()
         form.addRow('녹화 방식', row)
         group.addLayout(form)
-        self.mode_help = _label('평소 녹화: 게임 창이 앞에 있으면 항상 보관해요.\n'
+        self.mode_help = _label('평소 녹화: 게임 창이 최소화되지 않았으면 항상 보관해요.\n'
                                 '전투 녹화: 보스 체력바가 보이는 동안 보관하고, 사라지면 60초 뒤 멈춰요.', muted=True)
         group.addWidget(self.mode_help)
         self.mode_notice = _label('')
@@ -65,7 +65,7 @@ class BlackboxTab(QWidget):
         form = QFormLayout()
         form.addRow('최근 보관 시간', row)
         group.addLayout(form)
-        group.addWidget(_label('게임이 비활성화되면 잠시 멈추고, 돌아오면 이어서 보관해요.\n'
+        group.addWidget(_label('게임 창이 뒤에 있어도 보관해요. 최소화하면 잠시 멈추고, 복원하면 이어서 보관해요.\n'
                                '보관 시간에는 실제로 녹화한 게임 영상만 포함해요.', muted=True))
         body.addWidget(box)
 

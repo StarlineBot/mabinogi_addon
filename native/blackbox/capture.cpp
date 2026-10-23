@@ -111,8 +111,10 @@ struct Capture {
     }
 };
 
+// 게임 창이 뒤에 있어도(최소화 아님) 녹화한다(2026-10-23 사용자 결정). WGC 창 캡처는 그 창 내용만 받으므로
+// 위에 겹친 다른 창은 영상에 섞이지 않는다. 최소화되면 이 캡처를 닫고 복원 때 새로 연다.
 void CALLBACK foreground_event(HWINEVENTHOOK, DWORD, HWND hwnd, LONG, LONG, DWORD, DWORD) {
-    if (active_capture && hwnd != active_capture->hwnd) active_capture->invalidated = true;
+    if (active_capture && hwnd == active_capture->hwnd) active_capture->invalidated = true;
 }
 void pump_capture_events() {
     MSG message{};
@@ -199,7 +201,7 @@ BB HRESULT __cdecl bb_open_fit(HWND hwnd, DWORD pid, ULONGLONG created, int curs
         c->max_out_w = max_out_w; c->max_out_h = max_out_h;
         c->max_in_w = max_in_w; c->max_in_h = max_in_h;
         c->process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE, FALSE, pid);
-        if (!c->process || !c->valid() || GetForegroundWindow() != hwnd || IsIconic(hwnd))
+        if (!c->process || !c->valid() || IsIconic(hwnd))
             return E_ACCESSDENIED;
         if (!GraphicsCaptureSession::IsSupported()) return E_NOTIMPL;
         auto factory = get_activation_factory<GraphicsCaptureItem, IGraphicsCaptureItemInterop>();
@@ -223,7 +225,7 @@ BB HRESULT __cdecl bb_open_fit(HWND hwnd, DWORD pid, ULONGLONG created, int curs
         disable_capture_border(c->session);  // 실패해도 녹화는 계속(표시 문제)
         if (active_capture) return E_UNEXPECTED;
         active_capture = c.get();
-        c->hook = SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND, nullptr,
+        c->hook = SetWinEventHook(EVENT_SYSTEM_MINIMIZESTART, EVENT_SYSTEM_MINIMIZESTART, nullptr,
                                  foreground_event, 0, 0, WINEVENT_OUTOFCONTEXT);
         if (!c->hook) return HRESULT_FROM_WIN32(GetLastError());
         c->session.StartCapture();
@@ -232,7 +234,7 @@ BB HRESULT __cdecl bb_open_fit(HWND hwnd, DWORD pid, ULONGLONG created, int curs
     } catch (...) { return to_hresult(); }
 }
 
-// S_FALSE: no frame. E_ACCESSDENIED: foreground/identity changed; caller closes and recreates.
+// S_FALSE: no frame. E_ACCESSDENIED: minimized/identity changed; caller closes and recreates.
 // 축소 모드: 출력은 첫 프레임에서 정한 크기로 고정한다. 창 크기가 바뀌면 프레임 풀만 새 크기로
 // 다시 만들고 같은 출력 크기로 계속 축소한다. 입력 상한 초과는 ERROR_NOT_SUPPORTED(크기 보고),
 // GPU 축소 실패는 BB_E_GPU_SCALE. 축소 없음 모드는 기존대로 크기 변경 시 ERROR_RETRY.
@@ -243,7 +245,7 @@ BB HRESULT __cdecl bb_read(void* handle, BYTE* destination, UINT64 capacity,
     try {
         auto& c = *static_cast<Capture*>(handle);
         pump_capture_events();
-        if (!c.valid() || GetForegroundWindow() != c.hwnd || IsIconic(c.hwnd)) return E_ACCESSDENIED;
+        if (!c.valid() || IsIconic(c.hwnd)) return E_ACCESSDENIED;
         auto frame = c.pool.TryGetNextFrame();
         if (!frame) return S_FALSE;
         auto size = frame.ContentSize();
@@ -296,7 +298,7 @@ BB HRESULT __cdecl bb_read(void* handle, BYTE* destination, UINT64 capacity,
         c.context->Unmap(staging.get(), 0);
         pump_capture_events();
         // Recheck after copying; a late frame across Alt+Tab must be discarded.
-        if (!c.valid() || GetForegroundWindow() != c.hwnd || IsIconic(c.hwnd)) return E_ACCESSDENIED;
+        if (!c.valid() || IsIconic(c.hwnd)) return E_ACCESSDENIED;
         *width = c.out_w; *height = c.out_h; *timestamp100ns = frame.SystemRelativeTime().count();
         return S_OK;
     } catch (...) { return to_hresult(); }

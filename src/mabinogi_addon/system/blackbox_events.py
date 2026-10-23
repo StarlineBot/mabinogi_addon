@@ -64,9 +64,9 @@ class WindowsEvents:
         if _exe_basename_of_pid(pid) != (config.load_game_exe() or '').lower():
             return None, False
         target = target_identity(hwnd, pid)
-        # 녹화는 게임 창이 앞에 있을 때만(2026-10-23 보정: 뒤에 있을 때 녹화는 부하 때문에 되돌림). foreground는 단축키 조건.
+        # 녹화는 게임 창이 뒤에 있어도(최소화 아님) 계속한다(2026-10-23 사용자 결정). 단축키 저장은 앞에 있을 때만.
         self.foreground = win32gui.GetForegroundWindow() == hwnd
-        active = not self.locked and not self.suspended and not win32gui.IsIconic(hwnd) and self.foreground
+        active = not self.locked and not self.suspended and not win32gui.IsIconic(hwnd)
         return target, active
 
     def close(self):

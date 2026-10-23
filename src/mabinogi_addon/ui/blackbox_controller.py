@@ -344,7 +344,7 @@ class BlackboxController(QObject):
 
     def _combat_record(self, active):
         """전투 녹화면 보스바 판정으로 녹화 여부를 정한다. 평소 녹화면 항상 True."""
-        if getattr(self, '_mode', 'always') != 'combat':
+        if self._mode != 'combat':
             return True
         import time
         boss = getattr(self.window, 'boss_tab', None)
@@ -381,8 +381,7 @@ class BlackboxController(QObject):
             self.service.error = str(exc)
         if target is not None:
             self._last_target = target
-        record = self._combat_record(active)  # 매 틱 갱신해야 뒤에 있는 동안 유예 시간이 멈춰 있다
-        self._action(lambda: self.service.tick(target, active=active and record))
+        self._action(lambda: self.service.tick(target, active=active and self._combat_record(active)))
         try:
             shortcut = self.events.consume_hotkey()
             if shortcut is not None:
@@ -407,8 +406,7 @@ class BlackboxController(QObject):
                 self._react('저장하지 못했어요 · 앱에서 확인해 주세요', 'failed', self._last_target)
         if self.panel is not None:
             text = _STATES.get(self.service.status, '게임 실행 대기')
-            if (getattr(self, '_mode', 'always') == 'combat' and self.service.enabled
-                    and self.service.status not in ('error', 'disabled')):
+            if self._mode == 'combat' and self.service.enabled and self.service.status not in ('error', 'disabled'):
                 text = combat_text(self._gate)
             self.panel.status.setText(text)
             self._show_mode_notice()
@@ -451,7 +449,7 @@ class BlackboxController(QObject):
         if not self._badge_wired:
             self._badge_wired = True
             badge.clicked.connect(self._open_tab)
-        state = (blackbox_badge(self.service, available_us, self._gate if getattr(self, '_mode', 'always') == 'combat' else None)
+        state = (blackbox_badge(self.service, available_us, self._gate if self._mode == 'combat' else None)
                  if self._allowed() else None)
         badge.setVisible(state is not None)
         if state is not None:
