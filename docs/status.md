@@ -187,6 +187,8 @@
   무시해 `components/AMFXInput.h`와 `components/Ambisonic2SRenderer.h` 순서가 Linux와 뒤바뀜 → 같은 파일·같은 내용인데
   해시가 다름(NV 헤더는 이름 순서가 같아 통과). Windows식 정렬로 계산 시 불일치, Linux식 일치, LICENSE는 일치 확인.
   수정: 정렬 키를 `p.relative_to(base).as_posix()` 문자열로 고정(고정 해시값 변경 불필요).
+- 독립 QA(`e75aa16`): 정렬 수정 확인. autocrlf=true + Path 비교 대소문자 무시 흉내 조건에서 nv·AMF 해시 일치,
+  0.11.4 변경 검사 437건/23.39초, 번들 검사 22건 통과. 다음 실행에서 처음 FFmpeg Windows configure/빌드 단계 진입.
 
 ### 0.11.3 추가 — 항상 관리자 실행 복원, 블랙박스 종료 확인 흐름 시안
 
