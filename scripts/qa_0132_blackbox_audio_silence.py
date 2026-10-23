@@ -38,7 +38,7 @@ class Game:
 
     def __init__(self, jitter_us=0, silence=None, drift_ppm=0):
         self.audio = (RATE, CHANNELS)
-        self.audio_buffer_bytes = PRODUCT['audio_settings']['audio_buffer_bytes']
+        self.audio_buffer_bytes = PRODUCT.get('audio_settings', {}).get('audio_buffer_bytes', 8_388_608)  # 0.13.7부터 제품은 영상만(소리 코드 단독 검증)
         self.jitter_us, self.silence, self.drift = jitter_us, silence, drift_ppm / 1_000_000
         self.start = None
         self.sent = self.packets = 0
