@@ -63,6 +63,9 @@ class OptimizationController(QObject):
         self.sampler = PerfSampler()
         # 'FPS 표시' 켜짐은 재실행 후에도 유지(수집 모드는 매번 꺼짐으로 시작). 접근이 확인된 첫 틱에 1회 복원.
         self._restore_display = section.get('display') is True
+        # 수집기 오류로 꺼진 'FPS 표시'의 자동 재시작(0.13.5): 약 5초 뒤, 10분에 3회까지. 저장된 표시 설정은 바꾸지 않는다.
+        self._restart_at = None
+        self._restarts = []
         self._kept_on = False  # 바꾼 것 없이 켜진 상태는 기록이 없어 재실행하면 꺼짐(13.5)
         # '원복 대기'(확인 필요): 원복을 미뤘거나 실패했거나, 지난 실행에서 되돌리지 못한 기록이 남아 시작한 경우.
         self._restore_wait = bool(self.recovery.pending or self.recovery.restart_targets)
@@ -461,9 +464,14 @@ class OptimizationController(QObject):
         except Exception as exc: self._failed(str(exc))
 
     def _toggle_frames(self, on):
-        """'FPS 표시' 토글: 켜기 = 기존 측정 시작, 끄기 = 측정 중단(동작 변경 없음). 이전 세션 정리도 끄기로 처리."""
-        if on and not self.collector.pending:
-            self.start_frames()
+        """'FPS 표시' 토글: 켜기 = 기존 측정 시작, 끄기 = 측정 중단(동작 변경 없음).
+        이전 세션 정리가 남아 있으면 켜기 한 번으로 정리 → 성공하면 바로 시작한다(0.13.5: 두 번 눌러야 켜지던 문제)."""
+        self._restart_at = None  # 사용자가 직접 켜거나 끄면 자동 재시작 예약을 취소
+        if on:
+            if self.collector.pending:
+                self.stop_frames()  # 정리 시도. 실패하면 꺼진 채 정리 안내가 상태 줄에 남는다
+            if not self.collector.pending:
+                self.start_frames()
         else:
             self.stop_frames()
         self._sync_frames_toggle()
@@ -479,10 +487,16 @@ class OptimizationController(QObject):
         toggle.setText('FPS 표시 중' if self.frames else 'FPS 표시')
 
     def stop_frames(self, message='꺼짐 · 표시 안 함'):
+        user = message == '꺼짐 · 표시 안 함'
         if self.stream is not None:
             self.stream.boundary(self._summary_now(), 'measurement_stop')
-        self.frames = False
-        if not self.collector.stop(): message += "\n" + self.collector.cleanup_problem
+        was_running, self.frames = self.frames, False
+        cleaned = self.collector.stop()
+        if not cleaned: message += "\n" + self.collector.cleanup_problem
+        if not user and was_running:
+            # 사용자가 끄지 않았는데 꺼진 경우는 사후 판정을 위해 사유·정리 결과를 남긴다(0.13.5).
+            _log.warning('FPS 표시 중단: %s · 수집기 정리 %s', message.replace('\n', ' / '),
+                         '완료' if cleaned else '실패')
         self.target, self.stream, self.context = None, None, None
         self.sampler.update((), None)
         self._hide_overlay()
@@ -504,9 +518,22 @@ class OptimizationController(QObject):
             pass
         self._failed('FPS 수집기가 종료됐어요. 권한·계측 상태를 확인하고 다시 시작해 주세요.')
 
+    RESTART_DELAY = 5.0
+    RESTART_LIMIT = 3          # 10분 동안 자동 재시작 최대 횟수
+    RESTART_WINDOW = 600.0
+
     def _failed(self, message):
+        running = self.frames  # 시작 실패(게임 미등록 등)는 다시 시도하지 않는다
         if self.stream is not None:
-            self.stream.boundary(self._summary_now(), 'collector_error')
+            self.stream.boundary(self._summary_now(), 'collector_error')  # 중단 구간은 비교에서 제외
+        now = time.monotonic()
+        self._restarts = [t for t in self._restarts if now - t < self.RESTART_WINDOW]
+        if running and not self.closing and self._can_start():
+            if len(self._restarts) < self.RESTART_LIMIT:
+                self._restart_at = now + self.RESTART_DELAY
+                message += f'\n잠시 뒤 FPS 표시를 다시 켜요({len(self._restarts) + 1}/{self.RESTART_LIMIT}).'
+            else:
+                message += '\n자동 재시작 한도(10분에 3회)에 도달해 꺼졌어요. 다시 켜려면 FPS 표시를 눌러 주세요.'
         self.stop_frames(message)
 
     def set_paused(self, paused):
@@ -568,8 +595,9 @@ class OptimizationController(QObject):
             if report: _log.info('FPS 이벤트 도착 지연(최근 약 60초): %s', report)  # PresentMon 출력 묶임 실측(0.13.3)
         if self.stream.header is not None and self.collector.active and time.monotonic()-self.last_health > 1:
             self.last_health = time.monotonic()
-            if presentmon.session_losses(self.collector.session):
-                raise RuntimeError('Windows 프레임 이벤트 손실을 감지해 측정을 중단했어요. 값을 추정하지 않아요.')
+            if lost := presentmon.session_losses(self.collector.session):
+                raise RuntimeError(f'Windows 프레임 이벤트 손실({lost}건)을 '
+                                   '감지해 측정을 중단했어요. 값을 추정하지 않아요.')
         self._sync_summary_context(now)
         result = self.stream.snapshot(now)
         if result['source'] != self._reported_source:
@@ -588,6 +616,15 @@ class OptimizationController(QObject):
         now = time.monotonic()
         gap, self.last_tick = now-self.last_tick, now
         self.refresh_access()
+        if self._restart_at is not None and now >= self._restart_at:
+            self._restart_at = None
+            if not self.frames and self._can_start() and not self.closing:
+                self._restarts.append(now)
+                _log.info('FPS 표시 자동 재시작 %d/%d', len(self._restarts), self.RESTART_LIMIT)
+                if self.collector.pending:
+                    self.stop_frames()
+                if not self.collector.pending:
+                    self.start_frames()
         if self._restore_display and self._can_start():
             self._restore_display = False
             # 이전 FPS 세션 정리가 남아 있으면 켜지 않고 기존 정리 안내를 둔다.

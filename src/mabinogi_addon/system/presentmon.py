@@ -205,5 +205,5 @@ class Collector(QObject):
                 self.session = None
                 self.cleanup_problem = ''
             except Exception:
-                self.cleanup_problem = '이전 FPS 수집 세션을 정리하지 못했어요. 측정 중단을 다시 눌러 주세요.'
+                self.cleanup_problem = '이전 FPS 수집 세션을 정리하지 못했어요. FPS 표시를 다시 눌러 주세요.'
         return not self.pending

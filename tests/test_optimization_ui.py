@@ -628,3 +628,52 @@ def test_previous_run_records_start_as_restore_wait_and_session_end_is_not_alarm
     engine._launch(lambda: setattr(engine, 'status', '최적화 적용 완료'), restore_cpu=True, task='session')
     engine.thread.join(2)
     assert engine.status.endswith(NETWORK_APPLIED) and '복구 기록이 남아' not in engine.status
+
+
+def test_pending_cleanup_and_start_in_one_click(window, monkeypatch):
+    # 0.13.5: 이전 세션 정리가 남아 있으면 첫 클릭은 정리만 하고 두 번째에 켜지던 문제.
+    w, app = window; c = w.optimization_tools
+    monkeypatch.setattr(module, 'is_creator', lambda: True); c.refresh_access()
+    state = {'pending': True}
+    monkeypatch.setattr(type(c.collector), 'pending', property(lambda self: state['pending']), raising=False)
+    monkeypatch.setattr(c.collector, 'stop', lambda: state.update(pending=False) or True)
+    started = []
+    monkeypatch.setattr(c, 'start_frames', lambda: started.append(1) or setattr(c, 'frames', True))
+    c.panel.frames_toggle.click()
+    assert started == [1] and c.panel.frames_toggle.isChecked()
+    # 정리에 실패하면 꺼진 채 안내만
+    c.frames = False; state['pending'] = True; started.clear()
+    monkeypatch.setattr(c.collector, 'stop', lambda: False)
+    c._toggle_frames(True)
+    assert started == [] and not c.panel.frames_toggle.isChecked()
+
+
+def test_collector_error_is_logged_and_restarted_at_most_three_times(window, monkeypatch, caplog):
+    import logging
+    caplog.set_level(logging.INFO)
+    w, app = window; c = w.optimization_tools
+    monkeypatch.setattr(module, 'is_creator', lambda: True); c.refresh_access()
+    clock = [1000.0]
+    monkeypatch.setattr(module.time, 'monotonic', lambda: clock[0])
+    monkeypatch.setattr(c.collector, 'stop', lambda: True)
+    started = []
+    monkeypatch.setattr(c, 'start_frames', lambda: started.append(clock[0]) or setattr(c, 'frames', True))
+    for n in range(4):
+        c.frames = True
+        c._failed('FPS 수집기가 종료됐어요.')
+        assert not c.frames
+        clock[0] += c.RESTART_DELAY + .1
+        c._tick()
+    assert len(started) == 3  # 10분에 3회까지
+    assert '자동 재시작 한도' in c.frame_status and c._restart_at is None
+    assert sum('FPS 표시 중단' in r.getMessage() for r in caplog.records) == 4
+    assert sum('자동 재시작' in r.getMessage() for r in caplog.records if r.levelno == logging.INFO) == 3
+    # 사용자가 끄면 재시작하지 않는다. 저장된 표시 설정도 바꾸지 않는다(오류 경로는 저장하지 않음).
+    c._restarts = []; c.frames = True
+    c._failed('수집 오류')
+    c._toggle_frames(False)
+    clock[0] += 10; started.clear(); c._tick()
+    assert started == []
+    # 시작 자체가 실패(게임 미등록 등)하면 재시작 예약을 하지 않는다.
+    c.frames = False; c._failed('설정에서 게임창을 먼저 등록해 주세요.')
+    assert c._restart_at is None
