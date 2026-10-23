@@ -597,7 +597,8 @@ class OptimizationController(QObject):
             text = (f"평균 {record['average_fps']:.1f} FPS · 최대(완전한 1초 창) {maximum}\n1% low {low}\n"
                     f"유효 간격 {record['valid_intervals']:,}개 · 측정 {record['measured_seconds']:.2f}초\n"
                     f"간격 변동계수 {record['variation_percent']:.1f}% · 최장 {record['max_ms']:.1f}ms\n"
-                    f"중앙값 2배 초과 {record['relative_long_count']}회 · 설정/대상 전환은 별도 구간")
+                    f"중앙값 2배 초과 {record['relative_long_count']}회 (분당 {record['relative_long_per_minute']:.1f}회)"
+                    " · 설정/대상 전환은 별도 구간")
             if index is None and self.summary.samples and self._summary_now()-self.summary.samples[-1][0] > 2:
                 text += '\n최근 이벤트 없음 · 과거 표본이며 현재 안정 상태를 뜻하지 않아요.'
             if record['end_reason'] != 'collecting': text += '\n종료: ' + REASONS.get(record['end_reason'],'구간 종료')
