@@ -358,6 +358,11 @@
     여부 포함 — 거부면 탭에 안내가 보임).
   - Potential: 표시용 `snapshot`은 여전히 마지막 이벤트가 2초 넘게 지나면 FPS를 비움. 출력이 묶여 오는 간격이 2초를 넘으면 무거운 장면에서
     오버레이 FPS가 깜빡이거나 '준비 중'으로 보일 수 있음. 새 'FPS 이벤트 도착 지연' 로그의 최대값으로 판단.
+- v0.13.3 게시 완료: 검증 [39936261626](https://github.com/StarlineBot/mabinogi_addon/actions/runs/39936261626)(변경 검사 1분26초,
+  validate 6분27초 — 캡처 테두리 코드 포함 DLL 빌드 통과) → 게시 [39937280542](https://github.com/StarlineBot/mabinogi_addon/actions/runs/39937280542)
+  성공. 태그 `v0.13.3`=`10e9f1e`(게시 실행의 head가 `c58ad0d`로 보이는 건 그 사이 올라온 기획 문서 커밋 때문, 태그는 검증 SHA).
+  exe 162,861,936 bytes, sha256 `285876ff…940f`가 version.json과 일치(공개 저장소 URL 직접 다운로드 확인).
+  실게임 확인 남음: 노란 테두리 사라짐, FPS 표시 재실행 유지, 무거운 장면 FPS 표시 깜빡임 여부.
 
 ### 0.12.0 개발 — 최적화 13.1~13.3, FPS 7절 (실험 준비)
 
