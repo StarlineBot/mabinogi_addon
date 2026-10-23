@@ -258,3 +258,17 @@ def test_fps_overlay_drag_snaps_to_grid_like_other_overlays(app, monkeypatch):
     overlay.mouseReleaseEvent(mouse(QEvent.Type.MouseButtonRelease, 70, 100))
     assert guides == ['show', 'hide'] and snapped and snapped[0][1] == 32
     assert overlay.pos() == QPoint(64, 96)
+
+
+def test_too_short_recording_is_not_saved_as_zero_second_file():
+    # 0.13.1 실사용: 녹화가 멈춰 보관분이 0초인데 저장이 '성공'해 0초 mp4가 생겼다.
+    from mabinogi_addon.blackbox_service import BlackboxService, MIN_SAVE_US, TooShortToSave
+    from mabinogi_addon.ui.blackbox_controller import save_failure_reason
+    service = BlackboxService.__new__(BlackboxService)
+    service._allowed, service._closing = (lambda: True), False
+    service.settings = NS(min_save_us=MIN_SAVE_US)
+    service.current = NS(session=NS(_replay=NS(available_us=400_000)))
+    with pytest.raises(TooShortToSave) as error:
+        service.request_save(1)
+    assert save_failure_reason(error.value) == '저장할 영상이 너무 짧아요'
+    assert MIN_SAVE_US == 1_000_000

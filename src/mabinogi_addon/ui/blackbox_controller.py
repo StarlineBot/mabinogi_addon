@@ -23,6 +23,8 @@ def save_failure_reason(exc) -> str:
     """저장 요청 거부의 짧은 이유(게임 화면 오버레이용). 자세한 문구는 앱 탭에 남는다."""
     if isinstance(exc, PermissionError):
         return '확보한 영상 없음'
+    if type(exc).__name__ == 'TooShortToSave':
+        return '저장할 영상이 너무 짧아요'
     if isinstance(exc, RuntimeError) and 'already reserved' in str(exc):
         return '이미 저장 중이에요'
     return '앱에서 확인해 주세요'

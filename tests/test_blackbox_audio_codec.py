@@ -16,11 +16,26 @@ def test_audio_slice_across_packets_and_missing_audio_is_not_filled():
     timeline.push(b'\x01\x00' * 10, 0)
     timeline.push(b'\x02\x00' * 10, 10000)
     assert timeline.slice(5000, 15000, timeout=1) == b'\x01\x00' * 5 + b'\x02\x00' * 5
-    with pytest.raises(ValueError, match='gap'):
-        timeline.push(b'\x00\x00', 25000)
+    # 0.13.1 실사용: 큰 공백은 녹화 중단 대신 새 연속 구간. 공백을 무음으로 채우지 않는다.
+    timeline.push(b'\x00\x00', 25000)
+    assert timeline.gaps == 1 and timeline.run_within(15000, 26000) == (15000, 20000)
+    with pytest.raises(ValueError, match='overlap'):
+        timeline.push(b'\x00\x00', 20000)  # 겹침은 계속 거부
     timeline.close()
     with pytest.raises(ValueError, match='incomplete'):
         timeline.slice(15000, 25000, timeout=1)
+
+
+def test_loopback_jitter_within_tolerance_is_joined_sample_continuously():
+    # 0.13.1 실사용: 루프백 QPC 지터(±1ms)로 'audio gap or overlap' 녹화 중단 → 0초 저장.
+    timeline = PcmTimeline(48000, 1, 1 << 20)
+    stamp = 1_000_000
+    for n in range(50):  # 10ms 묶음, 시각은 ±1ms 흔들림
+        timeline.push(b'\x01\x00' * 480, stamp + (1000 if n % 2 else -1000) * (n > 0))
+        stamp += 10_000
+    assert timeline.gaps == 0
+    pcm = timeline.slice(1_000_000, 1_400_000, timeout=1)
+    assert len(pcm) // 2 == 19200  # 400ms × 48kHz, 빈 샘플·중복 없음
 
 
 def test_audio_budget_and_closed_timeline():

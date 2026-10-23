@@ -24,6 +24,13 @@ from .feature_access import is_creator
 _log = logging.getLogger(__name__)
 
 
+MIN_SAVE_US = 1_000_000  # 이보다 짧은 보관분은 저장하지 않는다
+
+
+class TooShortToSave(ValueError):
+    """보관한 영상이 너무 짧아 저장하지 않음."""
+
+
 @dataclass(frozen=True)
 class ServiceSettings:
     temp_parent: Path
@@ -39,6 +46,7 @@ class ServiceSettings:
     codec: CodecSettings
     cursor: bool
     audio: dict | None = None
+    min_save_us: int = 0  # 제품 설정은 from_dict에서 MIN_SAVE_US(1초). 직접 만든 설정(검사용)은 제한 없음
 
     def __post_init__(self):
         if self.audio is not None and (type(self.codec.audio_bitrate) is not int or self.codec.audio_bitrate <= 0):
@@ -66,6 +74,7 @@ class ServiceSettings:
         else:
             raise ValueError('explicit process audio or video-only validation mode required')
         p['audio'] = audio
+        p.setdefault('min_save_us', MIN_SAVE_US)
         p.pop('hotkey_modifiers'); p.pop('hotkey_vk')
         p['producer'] = ProducerLimits(**p['producer'])
         c = dict(p['codec'])
@@ -230,6 +239,9 @@ class BlackboxService:
     def request_save(self, request_us, output=None):
         if not self._allowed() or self._closing or self.current is None:
             raise PermissionError('save unavailable')
+        if self.current.session._replay.available_us < self.settings.min_save_us:
+            # 녹화가 막 시작됐거나 중단돼 보관분이 거의 없을 때 0초짜리 파일을 만들지 않는다(0.13.1 실사용).
+            raise TooShortToSave('저장할 영상이 너무 짧아요 · 1초 이상 보관된 뒤 다시 저장해 주세요.')
         if len(self._pending) + sum(len(r.tickets) for r in self.runtimes.values()) >= 2:
             raise RuntimeError('one active and one queued save already reserved')
         output = Path(output) if output else self.settings.output_folder / f'blackbox-{uuid.uuid4().hex}.mp4'

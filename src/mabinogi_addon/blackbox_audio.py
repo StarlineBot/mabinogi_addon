@@ -1,8 +1,16 @@
-"""게임 프로세스 PCM16 타임라인. 누락 구간을 무음/다른 소리로 채우지 않는다."""
+"""게임 프로세스 PCM16 타임라인. 누락 구간을 무음/다른 소리로 채우지 않는다.
+
+WASAPI 루프백 묶음의 시각(QPC)은 수 ms 흔들린다. 허용 오차 안의 차이는 지터로 보고 직전 끝에 샘플 단위로
+이어 붙인다. 그보다 큰 공백(게임 무음으로 묶음이 끊겼다 재개 등)은 새 '연속 구간(run)'으로 기록하고,
+영상은 소리가 연속인 구간에서만 만든다(공백 시간은 저장 영상에서 빠짐). 겹침은 계속 거부한다.
+"""
 from collections import deque
 from threading import Condition
 import math
 import time
+
+
+JITTER_US = 3000  # 루프백 시각 흔들림 허용(약 3ms). 이 안이면 연속으로 이어 붙인다
 
 
 class PcmTimeline:
@@ -13,6 +21,8 @@ class PcmTimeline:
         self._packets = deque()
         self._bytes = 0
         self._end = None
+        self._runs = []  # [시작, 끝] 연속 구간. 큰 공백마다 새 구간
+        self.gaps = 0
         self._closed = False
         self._condition = Condition()
 
@@ -27,15 +37,34 @@ class PcmTimeline:
         with self._condition:
             if self._closed:
                 raise RuntimeError('audio timeline closed')
-            if self._end is not None and abs(stamp_us - self._end) > 1_000_000 / self.rate + 1:
-                raise ValueError('audio gap or overlap; refusing to synthesize missing sound')
+            continuing = False
+            if self._end is not None:
+                delta = stamp_us - self._end
+                if delta < -JITTER_US:
+                    raise ValueError('audio overlap; refusing to merge or synthesize sound')
+                if delta <= JITTER_US:
+                    stamp_us, continuing = self._end, True  # 지터: 샘플 수 기준으로 연속 배치
             if self._bytes + len(data) > self.limit:
                 raise BufferError('audio timeline capacity exhausted')
             end = stamp_us + len(data) / self.block * 1_000_000 / self.rate
             self._packets.append((stamp_us, end, data))
             self._bytes += len(data)
+            if continuing:
+                self._runs[-1][1] = end
+            else:
+                if self._end is not None:
+                    self.gaps += 1  # 큰 공백: 채우지 않고 새 연속 구간
+                self._runs.append([stamp_us, end])
             self._end = end
             self._condition.notify_all()
+
+    def run_within(self, start_us, end_us):
+        """[start, end)와 겹치는 첫 연속 소리 구간의 교집합 (시작, 끝). 없으면 None."""
+        with self._condition:
+            for run_start, run_end in self._runs:
+                if run_end > start_us and run_start < end_us:
+                    return max(start_us, run_start), min(end_us, run_end)
+            return None
 
     def close(self):
         with self._condition:
@@ -63,8 +92,9 @@ class PcmTimeline:
                 if remaining <= 0:
                     raise TimeoutError('audio did not cover the video interval')
                 self._condition.wait(remaining)
-            if not self._packets or self._packets[0][0] > start_us or self._end < end_us:
-                raise ValueError('audio interval incomplete; no silent fallback')
+            if (not self._packets or self._packets[0][0] > start_us or self._end < end_us
+                    or not any(r[0] <= start_us and end_us <= r[1] for r in self._runs)):
+                raise ValueError('audio interval incomplete; no silent fallback')  # 소리 공백에 걸친 구간 포함
             parts = []
             for start, end, data in self._packets:
                 if end <= start_us or start >= end_us:
@@ -78,4 +108,6 @@ class PcmTimeline:
                 raise ValueError('audio sample count differs from interval')
             while self._packets and self._packets[0][1] <= end_us:
                 self._bytes -= len(self._packets.popleft()[2])
+            while len(self._runs) > 1 and self._runs[0][1] <= end_us:
+                self._runs.pop(0)
             return result

@@ -350,3 +350,51 @@ def test_producer_error_is_logged_with_target_and_segment_count(caplog):
         time.sleep(.005)
     assert 'out-of-order' in producer.error
     assert any('녹화 중단' in r.getMessage() and '완료 구간 0개' in r.getMessage() for r in caplog.records)
+
+
+def test_audio_gap_starts_new_segment_instead_of_stopping_recording():
+    # 0.13.1 실사용: 소리 묶음이 끊겼다 재개되면 'audio gap or overlap'으로 녹화가 멈춰 0초 저장이 됐다.
+    # 50ms 소리 공백: 녹화는 계속하고, 소리가 연속인 프레임만 구간으로 만든다(공백은 무음으로 채우지 않음).
+    from types import SimpleNamespace
+    from mabinogi_addon.blackbox_producer import CaptureProducer
+    frame = b'\x00' * 64
+    sound = [(b'\x01\x00' * 100, 1_000_000 + n * 100_000) for n in range(3)]           # 1.00~1.30초
+    sound += [(b'\x01\x00' * 100, 1_350_000 + n * 100_000) for n in range(5)]          # 1.35~1.85초
+    video = [(frame, 4, 4, 1_000_000 + n * 100_000) for n in range(9)]                  # 1.0~1.8초
+
+    class Device:
+        audio = (1000, 1)
+        audio_buffer_bytes = 1 << 16
+        def __init__(self): self.video, self.sound = list(video), list(sound)
+        def open(self, target): pass
+        def read(self): return self.video.pop(0) if self.video else None
+        def read_audio(self): return self.sound.pop(0) if self.sound else None
+        def close(self): pass
+
+    class Codec:
+        settings = SimpleNamespace(fps=10, timeout=5)
+        def encode_frames(self, frames, width, height, sink, audio_path=None): sink.write(b'x')
+
+    class Spool:
+        def __init__(self): self.n = 0
+        def write(self, produce, max_bytes=None):
+            import io
+            self.n += 1; produce(io.BytesIO()); return str(self.n)
+        def resolve(self, key): return SimpleNamespace(stat=lambda: SimpleNamespace(st_size=1))
+        def discard(self, key): pass
+
+    producer = CaptureProducer(SimpleNamespace(session='s'), Device(), Codec(), Spool(),
+                               ProducerLimits(3, 1, 64, 64 * 3 * 3, 1000, 50_000), allowed=lambda: True)
+    producer.start()
+    deadline = time.monotonic() + 3
+    while producer.native.video and time.monotonic() < deadline:
+        time.sleep(.005)
+    producer.request_stop()
+    segments = []
+    while not producer.is_stopped() or not producer.results.empty():
+        while not producer.results.empty():
+            kind, item = producer.results.get_nowait()
+            if kind == 'segment': segments.append((item.start_us, item.end_us))
+        time.sleep(.005)
+    assert producer.error is None and producer.audio.gaps == 1
+    assert segments == [(1_000_000, 1_300_000), (1_400_000, 1_600_000), (1_600_000, 1_800_000)]

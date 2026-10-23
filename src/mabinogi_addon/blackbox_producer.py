@@ -192,8 +192,9 @@ class CaptureProducer:
 
     def _log_error(self, stage):
         # 화면에만 보이던 생산자 오류를 app.log에 남긴다(발생 시각·원인 판단용, 0.13.0 실사용 로그 QA).
-        _log.warning('블랙박스 %s 오류로 녹화 중단: %s · 대상 %s · 완료 구간 %d개 · 프레임 공백 %d회',
-                     stage, self._error, self.target, self.segments, self.gaps)
+        _log.warning('블랙박스 %s 오류로 녹화 중단: %s · 대상 %s · 완료 구간 %d개 · 프레임 공백 %d회 · 소리 공백 %d회',
+                     stage, self._error, self.target, self.segments, self.gaps,
+                     self.audio.gaps if self.audio is not None else 0)
 
     def _segment_timing(self, seconds, frames):
         budget = frames / self.codec.settings.fps
@@ -203,8 +204,9 @@ class CaptureProducer:
             _log.info('블랙박스 구간 인코딩 %.3f초(구간 길이 %.3f초)', seconds, budget)
         if count % _TIMING_EVERY == 0:
             recent = self._timing[-_TIMING_EVERY:]
-            _log.info('블랙박스 구간 인코딩 최근 %d개: 평균 %.3f초 · 최대 %.3f초 · 구간 길이 초과 %d개 · 프레임 공백 누적 %d회',
-                      len(recent), sum(recent) / len(recent), max(recent), sum(t > budget for t in recent), self.gaps)
+            _log.info('블랙박스 구간 인코딩 최근 %d개: 평균 %.3f초 · 최대 %.3f초 · 구간 길이 초과 %d개 · 프레임 공백 누적 %d회'
+                      ' · 소리 공백 누적 %d회', len(recent), sum(recent) / len(recent), max(recent),
+                      sum(t > budget for t in recent), self.gaps, self.audio.gaps if self.audio is not None else 0)
             del self._timing[:-_TIMING_EVERY]
 
     def _encode_loop(self):
@@ -228,10 +230,17 @@ class CaptureProducer:
                 audio_source = None
                 if self.audio is not None:
                     covered = self.audio.covered_end(stamps[0] + duration, timeout=self.codec.settings.timeout)
-                    count = min(len(frames), max(0, int(((covered or stamps[0]) - stamps[0]) * self.codec.settings.fps / 1_000_000 + 1e-6)))
-                    if not count:
-                        continue  # 종료 경계의 불완전 A/V 프레임을 영상이나 무음으로 꾸미지 않는다.
-                    frames = frames[:count]
+                    # 소리가 연속인 구간에서만 영상을 만든다. 소리 공백에 걸친 프레임은 빼고(무음으로 채우지 않음)
+                    # 공백 뒤 프레임은 다음 구간으로 넘어가지 않으므로 이 묶음에서 버린다.
+                    run = self.audio.run_within(stamps[0], covered or stamps[0])
+                    if run is None:
+                        continue
+                    first = next((i for i, stamp in enumerate(stamps) if stamp >= run[0] - 1), len(stamps))
+                    count = min(len(frames) - first, max(0, int((run[1] - stamps[first]) * self.codec.settings.fps / 1_000_000 + 1e-6))
+                                if first < len(stamps) else 0)
+                    if count <= 0:
+                        continue  # 종료 경계·소리 공백의 불완전 A/V 프레임을 영상이나 무음으로 꾸미지 않는다.
+                    frames, stamps = frames[first:first + count], stamps[first:first + count]
                     duration = round(count * 1_000_000 / self.codec.settings.fps)
                     pcm = self.audio.slice(stamps[0], stamps[0] + duration, timeout=self.codec.settings.timeout)
                     wav = io.BytesIO()
