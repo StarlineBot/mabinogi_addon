@@ -174,6 +174,12 @@
   직전 CI 39873383337에서는 통과, 로컬 단독 12회·CPU 과부하 8회·빈 폰트 캐시 2회 모두 통과(0.6~1.9초) → 간헐 시한 초과로
   판단, 근본 원인 미확정(CI 진단 artifact는 이 환경에서 다운로드 차단). 0.11.4에서 배포 검사 목록에 새로 편입된 테스트.
   후속: 시한 초과 시 전체 스레드 스택(faulthandler) 기록·시한 여유 확대로 다음 재발 시 원인 확보.
+- 0.11.4 3차 [39879442733](https://github.com/StarlineBot/mabinogi_addon/actions/runs/39879442733)(`6bbace9`) 실패: Linux 검사 통과
+  (업데이트 테스트 재발 없음), Windows 기동 통과, exe 빌드에서 `AMF header content SHA256 mismatch`(NV는 통과). 게시 skipped.
+  원인 Confirmed(재현): `tree_digest`가 `sorted(Path들)`로 순서를 정하는데 Windows의 WindowsPath 비교는 대소문자를
+  무시해 `components/AMFXInput.h`와 `components/Ambisonic2SRenderer.h` 순서가 Linux와 뒤바뀜 → 같은 파일·같은 내용인데
+  해시가 다름(NV 헤더는 이름 순서가 같아 통과). Windows식 정렬로 계산 시 불일치, Linux식 일치, LICENSE는 일치 확인.
+  수정: 정렬 키를 `p.relative_to(base).as_posix()` 문자열로 고정(고정 해시값 변경 불필요).
 
 ### 0.11.3 추가 — 항상 관리자 실행 복원, 블랙박스 종료 확인 흐름 시안
 
