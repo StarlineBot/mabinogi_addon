@@ -264,3 +264,89 @@ def test_encoder_crash_reports_exit_code_and_stderr_instead_of_broken_pipe(caplo
         assert not isinstance(caught.value, BrokenPipeError)
         assert 'encoder exited 1: h264_mf: device init failed' in str(caught.value)
     assert 'h264_mf: device init failed' in caplog.text
+
+
+def _direct_producer(frames, codec_calls):
+    """CaptureProducer를 가짜 장치·코덱으로 직접 돌린다(0.13.0 실사용 회귀)."""
+    from types import SimpleNamespace
+    from mabinogi_addon.blackbox_producer import CaptureProducer
+
+    class Device:
+        audio = (None, None)
+        def __init__(self): self.frames = list(frames)
+        def open(self, target): codec_calls.append('open')
+        def read(self): return self.frames.pop(0) if self.frames else None
+        def read_audio(self): return None
+        def close(self): pass
+
+    class Codec:
+        settings = SimpleNamespace(fps=10, timeout=5)
+        def encoder(self):
+            codec_calls.append('probe')
+            return 'h264_test'
+        def encode_frames(self, frames, width, height, sink, audio_path=None):
+            sink.write(b'x')
+
+    class Spool:
+        def __init__(self): self.n = 0
+        def write(self, produce, max_bytes=None):
+            import io
+            self.n += 1; produce(io.BytesIO()); return str(self.n)
+        def resolve(self, key):
+            return SimpleNamespace(stat=lambda: SimpleNamespace(st_size=1))
+        def discard(self, key): pass
+
+    limits = ProducerLimits(3, 1, 64, 64 * 3 * 3, 1000, 50_000)
+    return CaptureProducer(SimpleNamespace(session='s'), Device(), Codec(), Spool(), limits, allowed=lambda: True)
+
+
+def test_frame_gap_starts_new_segment_instead_of_stopping_recording():
+    # 0.13.0 실사용: 게임 끊김·인코딩 지연으로 프레임 시각이 허용 오차를 넘게 밀리면 녹화 전체가 중단됐다.
+    frame = b'\x00' * 64
+    stamps = [1_000_000 + n * 100_000 for n in range(3)] + [2_000_000 + n * 100_000 for n in range(3)]
+    calls = []
+    producer = _direct_producer([(frame, 4, 4, t) for t in stamps], calls)
+    producer.start()
+    segments = []
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline and len(segments) < 2:
+        while not producer.results.empty():
+            kind, item = producer.results.get_nowait()
+            if kind == 'segment': segments.append(item)
+        time.sleep(.005)
+    producer.request_stop()
+    while not producer.is_stopped():
+        while not producer.results.empty(): producer.results.get_nowait()
+        time.sleep(.005)
+    assert producer.error is None and producer.gaps == 1
+    assert [(s.start_us, s.end_us) for s in segments] == [(1_000_000, 1_300_000), (2_000_000, 2_300_000)]
+    assert calls[:2] == ['probe', 'open']  # 후보 시험 인코딩은 캡처 시작 전에
+
+
+def test_app_bundled_tools_are_not_cpu_affinity_targets(monkeypatch):
+    # 0.13.0 실사용: 7+1에서 앱의 ffmpeg·codec host가 백그라운드 1코어로 묶여 녹화가 밀렸다.
+    import sys
+    from mabinogi_addon.system.optimization import WindowsOptimization
+    game = {'pid': 1, 'birth': '1'}
+    base = dict(target={'pid': 456, 'birth': '2'}, same_user=True, same_session=True, protected=False)
+    monkeypatch.setattr(sys, '_MEIPASS', 'C:/Users/me/AppData/Local/Temp/_MEI1234', raising=False)
+    bundled = dict(base, name='ffmpeg.exe', path='C:/Users/me/AppData/Local/Temp/_MEI1234/blackbox/ffmpeg.exe')
+    host = dict(base, name='blackbox_codec_host.exe', path='D:/dev/blackbox_codec_host.exe')
+    other = dict(base, name='ffmpeg.exe', path='C:/Tools/ffmpeg.exe')  # 사용자가 따로 쓰는 ffmpeg는 대상
+    assert not WindowsOptimization.background_candidate(bundled, game)
+    assert not WindowsOptimization.background_candidate(host, game)
+    assert WindowsOptimization.background_candidate(other, game)
+
+
+def test_producer_error_is_logged_with_target_and_segment_count(caplog):
+    # 0.13.0 실사용 로그 QA: 화면에만 보이던 생산자 오류를 app.log에 남긴다.
+    frame = b'\x00' * 64
+    calls = []
+    producer = _direct_producer([(frame, 4, 4, 1_000_000), (frame, 4, 4, 900_000)], calls)  # 역순 프레임
+    producer.start()
+    deadline = time.monotonic() + 5
+    while not producer.is_stopped() and time.monotonic() < deadline:
+        producer.request_stop() if producer.error else None
+        time.sleep(.005)
+    assert 'out-of-order' in producer.error
+    assert any('녹화 중단' in r.getMessage() and '완료 구간 0개' in r.getMessage() for r in caplog.records)

@@ -60,6 +60,7 @@ EXCLUDED = re.compile(r'(?:system|idle|registry|smss|csrss|wininit|winlogon|serv
     r'msmpeng|mpsigstub|securityhealthservice|securityhealthsystray|nissrv|'
     r'audiodg|spoolsv|searchindexer|searchhost|ctfmon|conhost|wmiprvse|dllhost|'
     r'mabinogi-addon|presentmon|powershell|pwsh|processgovernor|processlasso)(?:\.exe)?$', re.I)
+APP_CHILD_NAMES = {'blackbox_codec_host.exe'}  # 앱 전용 도구 이름(경로와 함께 판정)
 PROTECTED = re.compile(r'anti.?cheat|blackcipher|nexon|ngs|xigncode|gameguard|easyanticheat|'
                        r'battleye|vgc|vgtray|defender|avast|avp|antivirus|faceit', re.I)
 
@@ -220,7 +221,17 @@ class WindowsOptimization:
                 and info['same_user'] and info['same_session'] and not info.get('protected',True)
                 and not path.is_relative_to(windows) and not EXCLUDED.fullmatch(name)
                 and not PROTECTED.search(str(path))
-                and name.lower() != PureWindowsPath(sys.executable).name.lower())
+                and name.lower() != PureWindowsPath(sys.executable).name.lower()
+                and not WindowsOptimization.app_child(info))
+
+    @staticmethod
+    def app_child(info):
+        """앱이 번들로 실행하는 도구(블랙박스 ffmpeg·codec host 등): CPU 배치 대상이 아니다.
+        7+1에서 백그라운드 1코어로 묶이면 녹화 인코딩이 밀려 블랙박스가 끊긴다(0.13.0 실사용)."""
+        bundle = getattr(sys, '_MEIPASS', None)
+        path = PureWindowsPath(info['path'])
+        return (info['name'].lower() in APP_CHILD_NAMES
+                or (bundle is not None and path.is_relative_to(PureWindowsPath(bundle))))
 
     def game(self):
         from .window_capture import registered_game_target

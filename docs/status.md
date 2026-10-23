@@ -126,6 +126,18 @@
 
 ## 마지막 작업
 
+### 0.13.1 실사용 QA 수정 — 저장 실패(bsf), 녹화 중단(drift), 격자 이동, 최적화 문구 (036457c·840dafe 대응)
+
+- 저장 실패(Confirmed): 번들 FFmpeg에 `h264_mp4toannexb` 추가(`ffmpeg_minimal.sh`). 필수 구성(인코더·bsf·demuxer·muxer)을
+  `blackbox_bundle.REQUIRED_COMPONENTS` 한곳에 두고 `prepare`가 `ffmpeg -encoders/-bsfs/-demuxers/-muxers`로 검사,
+  빌드 레시피가 목록을 모두 켜는지 정적 회귀. 이 환경에선 Windows 번들 빌드·실저장 미검증(다음 검증 실행에서 확인).
+- 녹화 중단(1단계): (a) 구간 인코딩 시간(처음 3개·이후 240개마다 평균/최대/초과 수)과 후보 시험 시간을 app.log에,
+  (b) 후보 시험을 캡처 시작 전에, (c) 번들 도구(`_MEIPASS` 경로·`blackbox_codec_host.exe`)를 CPU 배치 대상에서 제외,
+  (d) 프레임 시각 밀림은 녹화 중단 대신 구간 경계로 처리(공백 시간은 영상에서 빠짐). 생산자 오류는 app.log에 경고(대상·완료 구간·공백 수).
+  재현 `qa_0130_blackbox_encode_backpressure` 종료 0. 단 인코딩이 계속 0.25초를 넘으면 공백이 잦아짐 → 2단계(상주 인코더) 결정은 1단계 로그 후.
+- FPS 오버레이 격자 이동(memo_overlay와 같은 안내선·snap) 복구, 최적화 마지막 줄을 실패/안내로 구분(렌더 확인 요청).
+- 회귀 추가: drift 이어 녹화·시험 순서, 번들 도구 제외, 오류 로그, 번들 필수 구성, 격자 이동, 세션 문구.
+
 ### 0.13.0 개발 — 블랙박스 11절, FPS 8절 (렌더 승인)
 
 - 블랙박스 11.3 사용 토글 버튼(LOCK_STYLE, `블랙박스 사용`/`블랙박스 사용 중`). 11.1 게임 화면 저장 반응 오버레이

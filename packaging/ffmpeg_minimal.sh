@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # Run inside the pristine pinned FFmpeg source directory. No external codec libs.
+# Required runtime components are listed once in blackbox_bundle.REQUIRED_COMPONENTS (checked after build).
+# concat demuxer auto-inserts h264_mp4toannexb for H.264 MP4 segments, so the bsf is mandatory for saves.
 # Optional 3rd argument: prefix with pinned NVENC(ffnvcodec)/AMF headers (MIT, runtime-loaded driver DLLs).
 set -euo pipefail
 prefix=$1
@@ -26,6 +28,7 @@ fi
   --enable-encoder="$encoders" \
   --enable-decoder=h264,aac,pcm_s16le,rawvideo \
   --enable-parser=h264,aac --enable-demuxer=mov,rawvideo,wav,concat \
+  --enable-bsf=h264_mp4toannexb \
   --enable-muxer=mp4,null,rawvideo,wav --enable-protocol=file,pipe \
   --enable-filter=scale,format,trim,setpts,concat,atrim,asetpts,anull,aresample,aformat,select,aselect,null || {
     result=$?

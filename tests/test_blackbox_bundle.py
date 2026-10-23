@@ -109,8 +109,9 @@ def test_prepare_builds_and_validates_complete_bundle_from_approved_policy(tmp_p
                     (release/name).write_bytes(b'synthetic native input')
             return SimpleNamespace(stdout='')
         assert command[1] in ('-version','-hide_banner')
-        return SimpleNamespace(stdout='ffmpeg version 8.1.3 --disable-gpl' if command[1]=='-version'
-                               else ' V..... h264_nvenc NVIDIA\n V..... h264_amf AMD\n V..... h264_mf hardware encoder')
+        if command[1]=='-version':
+            return SimpleNamespace(stdout='ffmpeg version 8.1.3 --disable-gpl')
+        return SimpleNamespace(stdout=LISTINGS[command[2]])
     monkeypatch.setattr(ffmpeg_source,'build',build)
     monkeypatch.setattr(packager.subprocess,'run',run)
     output=tmp_path/'bundle'
@@ -119,6 +120,30 @@ def test_prepare_builds_and_validates_complete_bundle_from_approved_policy(tmp_p
     assert 'mabinogi_blackbox.dll' in manifest and 'corresponding-source.zip' in manifest
     assert json.loads((output/'product.json').read_text(encoding="utf-8"))['codec']['bitrate']==12000000
     assert events==['native-build','native-build','source-build']
+
+
+LISTINGS = {
+    '-encoders': ' V..... h264_nvenc NVIDIA\n V..... h264_amf AMD\n V..... h264_mf hardware encoder\n A..... aac AAC',
+    '-bsfs': 'Bitstream filters:\nh264_mp4toannexb\nnull',
+    '-demuxers': ' D  concat  Virtual concatenation script\n D  mov,mp4,m4a  QuickTime\n D  rawvideo raw\n D  wav WAV',
+    '-muxers': '  E mp4  MP4 (MPEG-4 Part 14)',
+}
+
+
+def test_bundle_requires_concat_bitstream_filter_and_build_enables_every_component():
+    # 0.13.0 실사용: 번들 FFmpeg에 h264_mp4toannexb가 없어 concat 저장이 항상 실패했다.
+    spec = importlib.util.spec_from_file_location('bundle_checks', ROOT/'packaging/blackbox_bundle.py')
+    checks = importlib.util.module_from_spec(spec); spec.loader.exec_module(checks)
+    full = {kind.lstrip('-'): text for kind, text in LISTINGS.items()}
+    assert checks.missing_components(full) == []
+    broken = dict(full, bsfs='Bitstream filters:\nnull')
+    assert checks.missing_components(broken) == [('bsfs', 'h264_mp4toannexb')]
+    recipe = (ROOT/'packaging/ffmpeg_minimal.sh').read_text(encoding='utf-8')
+    flags = {'encoders': 'encoders', 'bsfs': '--enable-bsf=', 'demuxers': '--enable-demuxer=', 'muxers': '--enable-muxer='}
+    for kind, names in checks.REQUIRED_COMPONENTS.items():
+        line = next(l for l in recipe.splitlines() if flags[kind] in l)
+        for name in names:
+            assert name in line or (kind == 'encoders' and name in recipe), (kind, name)
 
 
 def test_msys_native_compiler_path_conversion_is_enabled():

@@ -234,3 +234,27 @@ def test_save_results_toast_on_game_monitor_using_logical_coordinates(app, monke
     controller._tick()
     assert shown[0][0] == '영상 저장 완료 · 5초'
     assert logical == [(0, 0, 2000, 1000)] and shown[0][1] is not None
+
+
+def test_fps_overlay_drag_snaps_to_grid_like_other_overlays(app, monkeypatch):
+    # 0.13.0 실사용 회귀: 전용 그리기로 바꾸며 격자 이동·안내선이 빠졌다.
+    from PySide6.QtCore import QPoint, QPointF, Qt, QEvent
+    from PySide6.QtGui import QMouseEvent
+    from mabinogi_addon.ui import grid
+    from mabinogi_addon.ui.frame_overlay import FrameOverlay
+    guides = []
+    monkeypatch.setattr(grid, 'enabled', lambda: True)
+    monkeypatch.setattr(grid, 'size', lambda: 32)
+    monkeypatch.setattr(grid, 'show_guide', lambda: guides.append('show'))
+    monkeypatch.setattr(grid, 'hide_guide', lambda: guides.append('hide'))
+    snapped = []
+    monkeypatch.setattr(grid, 'snap', lambda point, size: snapped.append((point, size)) or QPoint(64, 96))
+    overlay = FrameOverlay(100); overlay.set_locked(False); overlay.move(0, 0)
+    def mouse(kind, x, y):
+        return QMouseEvent(kind, QPointF(x, y), QPointF(x, y), QPointF(x, y), Qt.MouseButton.LeftButton,
+                           Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+    overlay.mousePressEvent(mouse(QEvent.Type.MouseButtonPress, 5, 5))
+    overlay.mouseMoveEvent(mouse(QEvent.Type.MouseMove, 70, 100))
+    overlay.mouseReleaseEvent(mouse(QEvent.Type.MouseButtonRelease, 70, 100))
+    assert guides == ['show', 'hide'] and snapped and snapped[0][1] == 32
+    assert overlay.pos() == QPoint(64, 96)

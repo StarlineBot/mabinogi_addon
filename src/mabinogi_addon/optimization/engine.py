@@ -6,6 +6,16 @@ from .session import ChangeDeferred
 _log = logging.getLogger(__name__)
 
 
+def session_line(notices, failures):
+    """세션 상태 마지막 줄: 실제 실패만 '확인 필요'로, 보류·관리 제외 안내만 있으면 안내로 구분한다."""
+    failed = sum(1 for message in notices if message in failures)
+    if failed:
+        return f'게임 세션 사용 중 · 미적용/확인 필요 {failed}건(위 내용 확인)'
+    if notices:
+        return '게임 세션 사용 중 · 적용한 항목은 확인 완료 · 보류·관리 제외 안내는 위를 확인하세요'
+    return '게임 세션 사용 중 · 항목별 적용값 확인 완료'
+
+
 class Engine:
     def __init__(self, backend, recovery, allowed):
         self.backend, self.recovery, self.allowed = backend, recovery, allowed
@@ -86,6 +96,10 @@ class Engine:
             game = self.backend.game()
             notices = []
             results = []
+            failures = set()  # notices 중 실제 미적용·확인 필요(의도된 보류·관리 제외 안내와 구분)
+            def fail(message):
+                failures.add(message)
+                notices.append(message)
             self._partial = lambda: results + notices
             names = {}  # (pid, birth) → 프로세스 이름: 소유 확인 실패 시 어떤 프로세스인지 남긴다
             def network_guard():
@@ -109,7 +123,7 @@ class Engine:
                 changes = [('ack',guid,1),('nodelay',guid,1),('autotuning','global','normal')] if options['tcp'] else []
                 if options['rss'] and not governor:
                     try: changes.append(('rss',guid,self.backend.rss_plan(guid,plan['background_cores'])))
-                    except Exception as exc: notices.append('RSS 미적용: '+str(exc))
+                    except Exception as exc: fail('RSS 미적용: '+str(exc))
                 for kind, target, value in changes:
                     if self.cancel.is_set() or not self.allowed(): break
                     try:
@@ -118,14 +132,14 @@ class Engine:
                     except ChangeDeferred as exc:
                         notices.append(str(exc))
                         break
-                    except Exception as exc: notices.append(f'{kind} 미적용·확인 필요: {exc}')
+                    except Exception as exc: fail(f'{kind} 미적용·확인 필요: {exc}')
                 # Explicit start confirmation covered this one batch reconnect.
                 try:
                     self.recovery.flush_network(guard=network_guard)
                     if any(i['kind']=='rss' and i['state']=='applied' for i in self.recovery.items):
                         results.append('rss: 재연결 후 적용값 확인 완료')
                 except ChangeDeferred as exc: notices.append(str(exc))
-                except Exception as exc: notices.append('네트워크 재연결 확인 필요: '+str(exc))
+                except Exception as exc: fail('네트워크 재연결 확인 필요: '+str(exc))
             if not options['cpu']:
                 # CPU를 끈 세션은 게임을 기다릴 이유가 없다(네트워크 설정은 원복 전까지 유지).
                 self.status = '\n'.join(results + notices + ['네트워크 설정 작업을 마쳤어요. CPU 배치는 사용하지 않아요.'])
@@ -167,7 +181,7 @@ class Engine:
                         try:
                             self.recovery.apply('cpu',target,mask)
                         except ProcessLookupError: pass
-                        except Exception as exc: notices.append('CPU 일부 미적용: '+str(exc))
+                        except Exception as exc: fail('CPU 일부 미적용: '+str(exc))
                         notices = notices[-12:]
                     # Verify ownership without overwriting external changes. 한 프로세스가 달라져도
                     # 세션 전체를 끝내지 않고 그 프로세스만 관리에서 뺀다(원복도 하지 않음 — 바꾼 쪽의 값을 존중).
@@ -188,7 +202,7 @@ class Engine:
                         _log.warning(message)
                         notices.append(message)
                         notices = notices[-12:]
-                self.status = '\n'.join(results + notices + ['게임 세션 사용 중 · 항목별 적용값 확인 완료' if not notices else '게임 세션 사용 중 · 일부 항목은 미적용/확인 필요'])
+                self.status = '\n'.join(results + notices + [session_line(notices, failures)])
                 self.cancel.wait(2)
             self.status = '\n'.join(results + notices + ['세션을 중단하고 CPU를 원복해요.'])
         return self._launch(work, restore_cpu=True, status='적용 중…', task='session')

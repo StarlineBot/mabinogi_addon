@@ -6,12 +6,18 @@
 from dataclasses import dataclass
 from queue import Queue, Empty, Full
 from threading import Event, Thread, Lock
+import logging
+import time
 
 from .blackbox import Segment
 from .blackbox_native import NativeTransition
 from .blackbox_audio import PcmTimeline
 import io
 import wave
+
+_log = logging.getLogger(__name__)
+_TIMING_FIRST = 3        # 처음 몇 구간은 인코딩 시간을 하나씩 남긴다
+_TIMING_EVERY = 240      # 이후에는 이만큼(60FPS·15프레임 기준 약 60초)마다 요약
 
 
 @dataclass(frozen=True)
@@ -53,6 +59,10 @@ class CaptureProducer:
         self.results = Queue(maxsize=limits.queued_segments + 2)
         self._batches = Queue(maxsize=limits.queued_segments)
         self._stop, self._captured, self._encoded = Event(), Event(), Event()
+        self._ready = Event()  # 인코더 후보 시험을 마친 뒤 캡처를 시작한다(첫 구간 지연이 캡처를 막지 않게)
+        self.gaps = 0  # 프레임 시각이 크게 밀려 새 구간으로 이어 간 횟수
+        self.segments = 0  # 완료한 구간 수(오류 로그용)
+        self._timing = []
         self._flush = []
         self._flush_lock = Lock()
         self._error = None
@@ -98,6 +108,9 @@ class CaptureProducer:
                 self._put(self._batches, (tuple(frames), tuple(stamps), dimensions))
                 frames, stamps = [], []
         try:
+            while not self._ready.is_set():
+                if self._stop.wait(0.02):
+                    return
             self.native.open(self.target)
             period = 1_000_000 / self.codec.settings.fps
             previous = None
@@ -141,7 +154,14 @@ class CaptureProducer:
                 if origin is None:
                     origin = stamp
                 if abs(stamp - (origin + count * period)) > self.limits.frame_tolerance_us:
-                    raise ValueError('frame clock drift exceeds bound')
+                    # 게임 끊김(로딩·장면 전환)이나 인코딩 지연으로 캡처가 밀렸다. 녹화를 멈추지 않고
+                    # 지금까지를 한 구간으로 닫은 뒤 이 프레임부터 새 시각 기준으로 이어 간다(빈 시간은 저장 영상에서 빠짐).
+                    lag = stamp - (origin + count * period)
+                    flush()
+                    origin, count = stamp, 0
+                    self.gaps += 1
+                    if self.gaps <= 3 or self.gaps % 100 == 0:
+                        _log.info('블랙박스 프레임 공백 %.0fms · 새 구간으로 이어서 녹화(누적 %d회)', lag / 1000, self.gaps)
                 normalized = round(origin + count * period)
                 count += 1
                 previous = stamp
@@ -160,6 +180,7 @@ class CaptureProducer:
                 pass
             self.transition = isinstance(exc, NativeTransition)
             self._error = f'{type(exc).__name__}: {exc}'
+            self._log_error('캡처')
         finally:
             try:
                 self.native.close()
@@ -169,8 +190,31 @@ class CaptureProducer:
                 self.audio.close()
             self._captured.set()
 
+    def _log_error(self, stage):
+        # 화면에만 보이던 생산자 오류를 app.log에 남긴다(발생 시각·원인 판단용, 0.13.0 실사용 로그 QA).
+        _log.warning('블랙박스 %s 오류로 녹화 중단: %s · 대상 %s · 완료 구간 %d개 · 프레임 공백 %d회',
+                     stage, self._error, self.target, self.segments, self.gaps)
+
+    def _segment_timing(self, seconds, frames):
+        budget = frames / self.codec.settings.fps
+        self._timing.append(seconds)
+        count = len(self._timing)
+        if count <= _TIMING_FIRST:
+            _log.info('블랙박스 구간 인코딩 %.3f초(구간 길이 %.3f초)', seconds, budget)
+        if count % _TIMING_EVERY == 0:
+            recent = self._timing[-_TIMING_EVERY:]
+            _log.info('블랙박스 구간 인코딩 최근 %d개: 평균 %.3f초 · 최대 %.3f초 · 구간 길이 초과 %d개 · 프레임 공백 누적 %d회',
+                      len(recent), sum(recent) / len(recent), max(recent), sum(t > budget for t in recent), self.gaps)
+            del self._timing[:-_TIMING_EVERY]
+
     def _encode_loop(self):
         try:
+            select = getattr(self.codec, 'encoder', None)
+            if select is not None:
+                started = time.perf_counter()
+                encoder = select()  # 후보 시험 인코딩은 캡처 시작 전에(첫 구간이 밀리지 않게)
+                _log.info('블랙박스 인코더 준비 %.2f초: %s', time.perf_counter() - started, encoder)
+            self._ready.set()
             while not self._captured.is_set() or not self._batches.empty():
                 try:
                     batch = self._batches.get(timeout=0.05)
@@ -197,16 +241,21 @@ class CaptureProducer:
                     audio_source = self.spool.write(lambda sink: sink.write(wav.getvalue()),
                                                    max_bytes=len(pcm) + 44)
                 audio_path = self.spool.resolve(audio_source) if audio_source else None
+                started = time.perf_counter()
                 source = self.spool.write(lambda sink: self.codec.encode_frames(frames, width, height, sink,
                                           audio_path=audio_path), max_bytes=self.limits.max_segment_bytes)
+                self._segment_timing(time.perf_counter() - started, len(frames))
                 segment = Segment(self.target.session, source, stamps[0], stamps[0] + duration,
                     self.spool.resolve(source).stat().st_size, f'{width}x{height}:{self.codec.settings.fps}:' + ('audio' if self.audio is not None else 'video'))
                 self._put(self.results, ('segment', segment))
+                self.segments += 1
                 if audio_source is not None:
                     self.spool.discard(audio_source)
         except BaseException as exc:
             self.transition = False
             self._error = f'{type(exc).__name__}: {exc}'
+            self._log_error('인코딩')
             self._stop.set()
         finally:
+            self._ready.set()
             self._encoded.set()

@@ -11,6 +11,26 @@ def reviewed_inputs(root):
     return policy
 
 
+# 블랙박스가 실행 중에 쓰는 FFmpeg 구성 요소(한곳에서 관리). ffmpeg_minimal.sh가 모두 켜고, prepare가 빌드 결과를
+# `ffmpeg -<종류>` 목록으로 확인한다. 시스템 ffmpeg를 쓰는 회귀 테스트로는 번들 누락을 잡지 못한다(0.13.0 저장 실패:
+# concat 저장이 h264_mp4toannexb를 자동 삽입하는데 --disable-everything으로 빠져 있었다).
+REQUIRED_COMPONENTS = {
+    'encoders': ('h264_nvenc', 'h264_amf', 'h264_mf', 'aac'),
+    'bsfs': ('h264_mp4toannexb',),
+    'demuxers': ('concat', 'mov', 'rawvideo', 'wav'),
+    'muxers': ('mp4',),
+}
+
+
+def missing_components(listings):
+    """{'encoders': `ffmpeg -encoders` 출력, ...} → 빠진 (종류, 이름) 목록."""
+    missing = []
+    for kind, names in REQUIRED_COMPONENTS.items():
+        tokens = {token for line in listings.get(kind, '').splitlines() for token in line.replace(',', ' ').split()}  # 'mov,mp4,m4a'
+        missing += [(kind, name) for name in names if name not in tokens]
+    return missing
+
+
 def prepare(root, output):
     policy = reviewed_inputs(root)
     from ffmpeg_source import build as build_ffmpeg, digest, VERSION
@@ -31,12 +51,14 @@ def prepare(root, output):
         raise ValueError('non-approved FFmpeg license configuration')
     if VERSION not in info:
         raise ValueError('unexpected FFmpeg version')
-    encoders = subprocess.run([str(output / 'ffmpeg.exe'), '-hide_banner', '-encoders'],
-        check=True, capture_output=True, text=True, timeout=15).stdout
-    for name in ('h264_nvenc', 'h264_amf', 'h264_mf'):  # 제품 후보 인코더가 모두 빌드됐는지
-        if not any(f' {name} ' in line for line in encoders.splitlines()):
-            raise ValueError(f'required hardware encoder {name} was not built')
-    (output / 'ffmpeg-build.txt').write_text(info + '\n' + encoders, encoding='utf-8')
+    listings = {kind: subprocess.run([str(output / 'ffmpeg.exe'), '-hide_banner', '-' + kind],
+                                     check=True, capture_output=True, text=True, timeout=15).stdout
+                for kind in REQUIRED_COMPONENTS}
+    missing = missing_components(listings)
+    if missing:
+        raise ValueError('required FFmpeg components were not built: '
+                         + ', '.join(f'{kind[:-1]} {name}' for kind, name in missing))
+    (output / 'ffmpeg-build.txt').write_text(info + '\n' + '\n'.join(listings.values()), encoding='utf-8')
     (output / 'manifest.json').write_text(json.dumps({p.name: digest(p) for p in output.iterdir()
         if p.is_file()}, indent=2), encoding='utf-8')
     # Validate all required policy fields before producing an app candidate.

@@ -179,14 +179,17 @@ class FFmpegEncoder:
             if self.selected is not None:
                 return self.selected
             for candidate in self.settings.candidates:
+                started = time.perf_counter()
                 try:
                     self._probe(candidate)
                 except Exception as exc:  # noqa: BLE001 — 후보별 실패를 모아 보여준다
                     self.attempts[candidate] = _last_line(exc)
+                    _log.info('블랙박스 인코더 시험 %s 실패 %.2f초', candidate, time.perf_counter() - started)
                     self._diagnose(candidate)
                     continue
                 self.selected = candidate
-                _log.info('블랙박스 인코더 선택: %s (시험 실패: %s)', candidate, self.attempts or '없음')
+                _log.info('블랙박스 인코더 선택: %s · 시험 %.2f초 (시험 실패: %s)', candidate,
+                          time.perf_counter() - started, self.attempts or '없음')
                 return candidate
             detail = '; '.join(f'{name}: {reason}' for name, reason in self.attempts.items())
             raise OSError('하드웨어 H.264 인코더를 열지 못했어요(소프트웨어 인코더로 대신하지 않아요) · ' + detail)

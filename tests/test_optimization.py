@@ -647,3 +647,13 @@ def test_short_lived_processes_do_not_exhaust_journal_limit(recovery):
     assert len(r.items) <= 3  # 게임 + 현재 인코더(+직전 1개)만 남는다
     e.cancel.set(); e.thread.join(3)
     assert not r.pending
+
+
+def test_session_line_separates_intended_notices_from_failures():
+    # 0.13.0 실사용: 게임 중 TCP·RSS 보류·관리 제외 안내만 있어도 '일부 항목은 미적용/확인 필요'로 보였다.
+    from mabinogi_addon.optimization.engine import session_line
+    assert session_line([], set()) == '게임 세션 사용 중 · 항목별 적용값 확인 완료'
+    info = ['게임 실행 중: TCP·RSS 적용을 보류했어요.', '다른 도구가 CPU 배치를 바꿨어요 · CP3.exe …']
+    assert '확인 필요' not in session_line(info, set()) and '안내' in session_line(info, set())
+    failure = 'CPU 일부 미적용: 액세스 거부'
+    assert session_line(info + [failure], {failure}) == '게임 세션 사용 중 · 미적용/확인 필요 1건(위 내용 확인)'
