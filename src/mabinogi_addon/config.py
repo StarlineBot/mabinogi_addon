@@ -93,9 +93,13 @@ def _write_local_config(data: dict, path: Path = LOCAL_CONFIG_PATH) -> None:
 _SECRET_KEYS = ("nexonApiKey", "inquiryWebhookUrl", "configWebhookUrl")
 
 
+# 이 PC의 장치에 묶인 값(다른 PC로 옮기면 뜻이 달라짐). 내보내기에서 빼고 가져올 때도 덮어쓰지 않는다.
+_MACHINE_KEYS = ("optimizationSelection",)
+
+
 def config_json_for_export(path: Path = LOCAL_CONFIG_PATH) -> str:
-    """내보낼 설정 JSON 문자열(비밀값 제외). 파일 저장·디스코드 전송 공용."""
-    data = {k: v for k, v in _read_local_config(path).items() if k not in _SECRET_KEYS}
+    """내보낼 설정 JSON 문자열(비밀값·장치 고유 값 제외). 파일 저장·디스코드 전송 공용."""
+    data = {k: v for k, v in _read_local_config(path).items() if k not in _SECRET_KEYS + _MACHINE_KEYS}
     return json.dumps(data, ensure_ascii=False, indent=2)
 
 
@@ -106,7 +110,7 @@ def _merge_config_text(text: str, path: Path) -> None:
         raise ValueError("설정 파일 형식이 올바르지 않습니다")  # noqa: TRY004
     data = _read_local_config(path)
     for key, value in incoming.items():
-        if key not in _SECRET_KEYS:
+        if key not in _SECRET_KEYS + _MACHINE_KEYS:
             data[key] = value
     _write_local_config(data, path)
 
@@ -1288,6 +1292,26 @@ def save_auto_preset(name: str | None, path: Path = LOCAL_CONFIG_PATH) -> None:
 def load_debuff_settings(path: Path = LOCAL_CONFIG_PATH) -> list[BuffSettings]:
     """디버프 설정(이름·노출 여부·순서). 지속시간·알림은 쓰지 않는다."""
     return _load_settings("debuffTracker", "debuffs", path)
+
+
+def load_optimization_selection(path: Path = LOCAL_CONFIG_PATH) -> dict:
+    """최적화 탭 선택값(명세 13.1). 기억만 하며 자동 적용하지 않는다. 형식이 틀린 값은 버린다."""
+    raw = _read_local_config(path).get("optimizationSelection")
+    raw = raw if isinstance(raw, dict) else {}
+    result = {key: raw[key] for key in ("cpu", "tcp", "rss") if type(raw.get(key)) is bool}
+    if type(raw.get("count")) is int and raw["count"] > 0:
+        result["count"] = raw["count"]
+    adapter = raw.get("adapter")
+    if isinstance(adapter, str) and 0 < len(adapter) <= 64:
+        result["adapter"] = adapter
+    return result
+
+
+def save_optimization_selection(selection: dict, path: Path = LOCAL_CONFIG_PATH) -> None:
+    data = _read_local_config(path)
+    data["optimizationSelection"] = {k: v for k, v in selection.items()
+                                     if k in ("cpu", "tcp", "rss", "count", "adapter") and v is not None}
+    _write_local_config(data, path)
 
 
 def load_blackbox_enabled(path: Path = LOCAL_CONFIG_PATH) -> bool:

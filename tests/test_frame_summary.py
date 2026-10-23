@@ -90,20 +90,20 @@ def test_summary_store_atomic_json_no_raw_frames_or_overwrites(tmp_path):
         time.sleep(.005)
     assert len(results)==2 and all(error is None for _,error in results)
     assert results[0][0]!=results[1][0]
-    data=json.loads(Path(results[0][0]).read_text())
+    data=json.loads(Path(results[0][0]).read_text(encoding="utf-8"))
     assert data['raw_events_saved'] is False and data['schema']==1
     assert data['segments'][0]['low_1pct_fps']==pytest.approx(50)
     assert store.close_ready()
 
 
 def test_store_limit_is_error_and_preserves_existing_data(tmp_path):
-    tmp_path.joinpath('existing.json').write_text('keep')
+    tmp_path.joinpath('existing.json').write_text('keep', encoding="utf-8")
     store=SummaryStore(tmp_path);store.MAX_FILES=1
     store.submit(summary([.02]*100).report())
     store.thread.join(3)
     result,=store.poll()
     assert result[0] is None and result[1]
-    assert tmp_path.joinpath('existing.json').read_text()=='keep'
+    assert tmp_path.joinpath('existing.json').read_text(encoding="utf-8")=='keep'
 
 
 def test_published_file_survives_cleanup_failure_and_close_waits_for_result(tmp_path, monkeypatch):
@@ -121,5 +121,116 @@ def test_published_file_survives_cleanup_failure_and_close_waits_for_result(tmp_
     (published, warning), = store.poll()
     assert published and Path(published).is_file()
     assert '정리 실패' in warning
-    assert json.loads(Path(published).read_text())['schema'] == 1
+    assert json.loads(Path(published).read_text(encoding="utf-8"))['schema'] == 1
     assert store.close_ready()
+
+
+def test_same_condition_noise_is_not_reported_as_tradeoff():
+    # FPS 7절: 같은 조건의 평균 -0.2FPS 같은 흔들림에는 절충 문구를 띄우지 않는다.
+    before=summary([.01,.01,.01,.03]*300).current()
+    after=summary([.0101,.0101,.0101,.0301]*300).current()
+    result=compare(before,after)
+    # 기준 0이던 이전 판정이라면 '평균 하락 + 변동 감소'로 절충이 떴을 조합
+    assert -1 < result['average_fps_delta'] < 0 and result['variation_percentage_points_delta'] < 0
+    assert result['status']=='within_noise' and '절충' not in result['message']
+    assert '잡음 기준 안' in result['message']
+
+
+def test_long_gaps_are_reported_per_minute_for_unequal_lengths():
+    # 약 26초와 52초 구간: 긴 간격 횟수는 다르지만 분당 횟수는 같다.
+    short=summary(([.01]*99+[.05])*25).current()
+    long=summary(([.01]*99+[.05])*50).current()
+    assert long['relative_long_count']==2*short['relative_long_count']
+    assert long['relative_long_per_minute']==pytest.approx(short['relative_long_per_minute'])
+
+
+def test_condition_name_is_kept_in_report_and_segments():
+    book=FrameSummary();book.set_condition('  7+1 SMT끔 ·  Vulkan · 제한없음 '+'x'*80)
+    book.activate('a',10)
+    for n in range(120): book.interval('a',10+(n+1)*.01,.01)
+    report=book.report()
+    assert report['condition'].startswith('7+1 SMT끔 · Vulkan · 제한없음') and len(report['condition'])==48
+    assert report['segments'][0]['condition']==report['condition']
+    json.dumps(report,allow_nan=False)
+
+
+def test_measurement_recomputes_one_percent_low_from_all_intervals():
+    # 90초 측정 → 60초 + 30초 구간. 측정 전체 1% low는 구간 1% low의 평균이 아니라 전체 간격으로 계산.
+    book=FrameSummary();book.activate('a',0)
+    stamp=0
+    for n in range(9000):
+        value=.05 if n<6000 and n%100==0 else .01
+        stamp+=value;book.interval('a',stamp,value)
+    book.boundary(stamp+.001,'measurement_stop')
+    assert len(book.records)==2
+    whole=book.measurement()
+    values=sorted(([.05 if n<6000 and n%100==0 else .01 for n in range(9000)]),reverse=True)
+    assert whole['valid_intervals']==9000 and whole['tail_count']==90
+    assert whole['low_1pct_fps']==pytest.approx(90/math.fsum(values[:90]))
+    segment_mean=sum(r['low_1pct_fps'] for r in book.records)/2
+    assert whole['low_1pct_fps']!=pytest.approx(segment_mean)
+    assert whole['relative_long_count']==sum(r['relative_long_count'] for r in book.records)
+    assert whole['relative_long_per_minute']==pytest.approx(whole['relative_long_count']/whole['measured_seconds']*60)
+    assert whole['end_reason']=='measurement_complete' and whole['conditions_recorded']==1
+    assert book.report()['measurement']==whole
+
+
+def test_measurement_comparison_uses_measurements_not_fragments():
+    def measure(values, condition):
+        book=summary(values);book.set_condition(condition)
+        book.boundary(1e6,'measurement_stop')
+        return book.measurement()
+    before=measure([.01,.01,.01,.04]*1500,'A')
+    after=measure([.0125]*6000,'B')
+    result=compare(before,after)
+    assert result['status'] in ('tradeoff','descriptive_only')
+    assert result['low_1pct_fps_delta']>0 and result['long_per_minute_delta']<0
+
+
+def test_condition_summary_groups_segment_values_with_median_and_range(tmp_path):
+    from mabinogi_addon.optimization.frame_summary import condition_summary, load_reports
+    reports=[]
+    for condition, gap in (('기본',.05),('기본',.04),('7+1',.02)):
+        book=summary(([.01]*99+[gap])*50);book.set_condition(condition)
+        book.boundary(1e6,'measurement_stop')
+        reports.append(book.report())
+    reports.append(dict(reports[0]))  # 수집 모드 파일과 요약 저장이 같은 구간을 담은 경우
+    for n, report in enumerate(reports):
+        (tmp_path/f'frames-{n}.json').write_text(json.dumps(report),encoding='utf-8')
+    (tmp_path/'frames-x.partial').write_text('{',encoding='utf-8')
+    (tmp_path/'broken.json').write_text('{',encoding='utf-8')
+    result={item['condition']:item for item in condition_summary(load_reports(tmp_path))}
+    assert set(result)=={'기본','7+1'}
+    base=result['기본']
+    assert base['segments']==2 and base['measurements']==2
+    lows=sorted(r['segments'][0]['low_1pct_fps'] for r in reports[:2])
+    assert base['segment_low_1pct_fps']['minimum']==pytest.approx(lows[0])
+    assert base['segment_low_1pct_fps']['maximum']==pytest.approx(lows[1])
+    assert base['segment_low_1pct_fps']['median']==pytest.approx(sum(lows)/2)
+    assert base['measurement_low_1pct_fps']['count']==2
+
+
+def test_condition_summary_is_independent_of_file_order():
+    # 0.12.0 QA: 수집 모드는 구간마다 파일(구간 1개 + 그 시점 측정 집계)을 남기고 이름이 무작위라 읽는 순서가 바뀐다.
+    from itertools import permutations
+    from mabinogi_addon.optimization.frame_summary import condition_summary
+    book=FrameSummary();book.activate('a',0);files=[]
+    def closed(record):
+        report=book.report();report['segments']=[record];files.append(json.loads(json.dumps(report)))
+    book.closed_callback=closed
+    stamp=0
+    for minute,(gap,name) in enumerate(((.05,''),(.03,'7+1'),(.04,'7+1'))):
+        book.set_condition(name)
+        for n in range(5000):
+            value=gap if n%100==0 else .01
+            stamp+=value;book.interval('a',stamp,value)
+        book.boundary(stamp+.001,'measurement_stop' if minute==2 else 'collection_toggle')
+    assert len(files)>=3
+    final=book.measurement()['low_1pct_fps']
+    shapes=set()
+    for order in permutations(files):
+        result={g['condition']:g for g in condition_summary(list(order))}
+        assert result['7+1']['measurement_low_1pct_fps']['median']==pytest.approx(final)
+        shapes.add(tuple((k,g['segments']) for k,g in sorted(result.items())))
+    assert len(shapes)==1
+    assert dict(next(iter(shapes)))['(조건 이름 없음)']>=1  # 이름 입력 전 구간은 그 구간 기록의 조건으로 묶임

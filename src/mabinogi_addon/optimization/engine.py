@@ -19,14 +19,16 @@ class Engine:
         self._restore_network_after = None  # '중단 · 원복': CPU 원복 뒤 이어서 할 네트워크 원복(accept_normalized,)
         self._restore_cpu_after = False  # '중단 · 원복'을 누른 시점에 돌던 작업이 무엇이든 끝에서 CPU를 원복
         self._network_deferred = False  # 사용자가 네트워크 원복을 미룸 → '네트워크 원복 대기' 안내
+        self.task = None  # 진행 중 작업 종류: 'inspect' | 'session' | 'restore' (busy일 때만 의미)
 
     @property
     def busy(self):
         return self.thread is not None and self.thread.is_alive()
 
-    def _launch(self, function, restore_cpu=False, status=None):
+    def _launch(self, function, restore_cpu=False, status=None, task='restore'):
         with self.lock:
             if self.busy: return False
+            self.task = task
             self.cancel.clear()
             self._partial = None
             if status is not None:
@@ -74,7 +76,7 @@ class Engine:
             except Exception as exc: errors.append(str(exc))
             self.inspection = (topology, adapters)
             self.status = '\n'.join(errors) if errors else '환경을 확인했어요. 시작을 누르기 전에는 적용하지 않아요.'
-        return self._launch(work, status='환경 확인 중…')
+        return self._launch(work, status='환경 확인 중…', task='inspect')
 
     def start(self, options):
         def work():
@@ -147,6 +149,11 @@ class Engine:
                     self.status = 'Process Lasso Governor가 실행돼 CPU를 원복하고 세션을 종료해요.'
                     return
                 if options['cpu']:
+                    # 관측 목록은 살아 있는 프로세스로만 유지한다(짧게 뜨고 끝나는 프로세스 누적 방지, 13.3).
+                    alive = {(p['target']['pid'],p['target']['birth']) for p in processes}
+                    alive.add((observed['pid'],observed['birth']))
+                    seen &= alive
+                    names = {k: v for k, v in names.items() if k in alive}
                     candidates = [p for p in processes if self.backend.background_candidate(p,observed)]
                     for p in candidates: names[(p['target']['pid'],p['target']['birth'])] = p['name']
                     targets = [(observed,plan['game'])] + [(p['target'],plan['background']) for p in candidates]
@@ -164,12 +171,13 @@ class Engine:
                         notices = notices[-12:]
                     # Verify ownership without overwriting external changes. 한 프로세스가 달라져도
                     # 세션 전체를 끝내지 않고 그 프로세스만 관리에서 뺀다(원복도 하지 않음 — 바꾼 쪽의 값을 존중).
-                    for item in self.recovery.pending:
-                        if item['kind'] != 'cpu' or item['state'] != 'applied': continue
+                    for item in [i for i in self.recovery.items if i['kind'] == 'cpu' and i['state'] in ('applied','released')]:
                         try:
                             current = self.backend.read('cpu',item['target'])
-                        except ProcessLookupError: continue
-                        if current == item['applied']: continue
+                        except ProcessLookupError:
+                            self.recovery.forget_exited(item)  # 종료한 프로세스: 되돌릴 대상 없음
+                            continue
+                        if item['state'] != 'applied' or current == item['applied']: continue
                         identity = (item['target']['pid'],item['target']['birth'])
                         is_game = observed is not None and identity == (observed['pid'],observed['birth'])
                         label = '게임 프로세스' if is_game else names.get(identity,'이름 확인 불가')
@@ -183,7 +191,7 @@ class Engine:
                 self.status = '\n'.join(results + notices + ['게임 세션 사용 중 · 항목별 적용값 확인 완료' if not notices else '게임 세션 사용 중 · 일부 항목은 미적용/확인 필요'])
                 self.cancel.wait(2)
             self.status = '\n'.join(results + notices + ['세션을 중단하고 CPU를 원복해요.'])
-        return self._launch(work, restore_cpu=True, status='적용 중…')
+        return self._launch(work, restore_cpu=True, status='적용 중…', task='session')
 
     def stop(self):
         self.cancel.set()

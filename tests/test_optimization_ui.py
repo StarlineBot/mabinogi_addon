@@ -187,7 +187,9 @@ def test_embedded_creator_and_recovery_tabs_preserve_single_lifetime(window,monk
         c.refresh_access();w._tabs.setCurrentWidget(panel);panel.tabs.setCurrentIndex(1)
         w._tabs.setCurrentWidget(w._settings_scroll);panel.tabs.setCurrentIndex(0)
     assert not isinstance(panel,QDialog) and panel.window() is w
-    assert not calls and (c.panel,c.engine,c.collector,c.timer)==(panel,engine,collector,timer)
+    # 명세 13.1: 처음 열 때 읽기 전용 환경 확인만 1회 자동 실행. 적용·측정은 자동으로 시작하지 않는다.
+    assert calls in ([], ['inspect']) and 'start' not in calls and 'frames' not in calls
+    assert (c.panel,c.engine,c.collector,c.timer)==(panel,engine,collector,timer)
     assert set(w.findChildren(QTimer))==timers
     if recovery=='corrupt': c.recovery.corrupt=True
     elif recovery=='pending': c.recovery.items=[dict(kind='ack',target='12345678-1234-1234-1234-123456789abc',old=None,applied=1,state='failed')]
@@ -247,7 +249,7 @@ def test_summary_collection_shares_parser_preserves_pause_and_exports_without_ra
         time.sleep(.005)
     assert c._summary_saved==1
     saved,=list((tmp_path/'summaries').glob('*.json'))
-    report=json.loads(saved.read_text())
+    report=json.loads(saved.read_text(encoding="utf-8"))
     assert report['raw_events_saved'] is False
     assert report['segments'][0]['context']['target']==c.target
     assert report['segments'][0]['context']['qpc_frequency']==1000000
@@ -364,3 +366,131 @@ def test_declining_network_prompt_restores_cpu_only(window, monkeypatch):
     c._restore_all()
     assert calls == [dict(network=False, accept_normalized=False, network_deferred=True)]
     c.recovery.items = []
+
+
+# --- 명세 13.1: 선택값 저장·환경 확인 자동 실행 ----------------------------------------------------
+def test_selection_is_machine_local_and_not_exported(tmp_path):
+    import json as _json
+    from mabinogi_addon import config
+    path = tmp_path / 'c.json'
+    config.save_optimization_selection(dict(cpu=True, count=6, adapter='ABC-1', tcp=True, rss=False), path)
+    assert config.load_optimization_selection(path) == dict(cpu=True, tcp=True, rss=False, count=6, adapter='ABC-1')
+    assert 'optimizationSelection' not in _json.loads(config.config_json_for_export(path))
+    incoming = tmp_path / 'other.json'
+    incoming.write_text(_json.dumps({'optimizationSelection': {'count': 1, 'adapter': 'OTHER-PC'}}), encoding='utf-8')
+    config.import_config(incoming, path)  # 다른 PC 설정을 가져와도 이 PC 장치 값은 유지
+    assert config.load_optimization_selection(path)['adapter'] == 'ABC-1'
+
+
+def test_first_open_runs_inspection_once_in_background(window, monkeypatch):
+    w, app = window; c = w.optimization_tools
+    monkeypatch.setattr(module, 'is_creator', lambda: True); c.refresh_access()
+    calls = []
+    monkeypatch.setattr(c.engine, 'inspect', lambda: calls.append(1) or True)
+    c._auto_inspected = False
+    w._tabs.setCurrentWidget(w._settings_scroll); w._tabs.setCurrentWidget(c.panel)
+    w._tabs.setCurrentWidget(w._settings_scroll); w._tabs.setCurrentWidget(c.panel)
+    assert calls == [1] and c.panel.inspect.text() == '다시 확인'
+
+
+def test_saved_selection_is_restored_and_unusable_values_are_explained(window, monkeypatch):
+    from mabinogi_addon import config
+    from mabinogi_addon.optimization.session import Core, Topology
+    w, app = window; c = w.optimization_tools
+    topology = Topology('AMD Ryzen 7 9800X3D', tuple(Core(i, (i * 2, i * 2 + 1)) for i in range(8)))
+    adapters = [dict(Name='Realtek 2.5GbE', InterfaceGuid='{AAAA-1}'), dict(Name='Wi-Fi', InterfaceGuid='{BBBB-2}')]
+    config.save_optimization_selection(dict(cpu=False, count=6, adapter='bbbb-2', tcp=True, rss=False))
+    c._restore_selection()
+    assert not c.panel.cpu.isChecked() and c.panel.tcp.isChecked()
+    c._apply_inspection(topology, adapters)
+    assert c.panel.split.currentData() == 6 and c.panel.adapter.currentText() == 'Wi-Fi'
+    config.save_optimization_selection(dict(cpu=True, count=20, adapter='GONE', tcp=False, rss=False))
+    c._apply_inspection(topology, adapters)
+    assert c.panel.split.currentData() == 7  # 9800X3D 구조별 기본 7+1
+    assert c.panel.adapter.currentData() is None
+    assert '저장한 배분(게임 20개)' in c.panel.cpu_info.text() and '저장한 네트워크 어댑터를 찾지 못해' in c.panel.cpu_info.text()
+    # 사용자가 다시 고르면 저장된다(자동 적용은 하지 않음).
+    c.panel.adapter.setCurrentIndex(1)
+    assert config.load_optimization_selection()['adapter'] == 'AAAA-1'
+
+
+def test_top_badge_is_creator_only_hidden_when_idle_and_opens_tab(window, monkeypatch):
+    # 최적화 명세 13.2: 상단 상태는 제작자 전용, 작업이 없으면 숨김, 누르면 최적화 탭.
+    from types import SimpleNamespace as NS
+    w, app = window; c = w.optimization_tools
+    badge = w._optimization_badge
+    monkeypatch.setattr(module, 'is_creator', lambda: True); c.refresh_access()
+    c._update_badge()
+    assert badge.isHidden()  # 작업 없음
+    c.recovery.items.append(dict(kind='ack', state='applied', target='x', old=1, applied=0))
+    try:
+        c._update_badge()
+        assert not badge.isHidden() and badge.text() == '최적화: 원복 대기'
+        w._tabs.setCurrentWidget(w._settings_scroll)
+        badge.click()
+        assert w._tabs.currentWidget() is c.panel
+        monkeypatch.setattr(module, 'is_creator', lambda: False)
+        c._update_badge()
+        assert badge.isHidden()
+    finally:
+        c.recovery.items.clear()
+    # 상태 문구: 세션 중 CPU 적용 / 게임 대기 / 환경 확인은 표시 안 함 / 손상은 오류
+    def engine(task, busy=True, cancel=False):
+        return NS(busy=busy, task=task, cancel=NS(is_set=lambda: cancel))
+    cpu = [dict(kind='cpu', state='applied')]
+    rec = lambda pending, corrupt=False: NS(pending=pending, restart_targets=set(), corrupt=corrupt)
+    assert module.optimization_badge(rec(cpu), engine('session'), '7+1') == ('최적화: 적용 중 7+1', 'neutral')
+    assert module.optimization_badge(rec([]), engine('session'))[0] == '최적화: 게임 대기'
+    assert module.optimization_badge(rec(cpu), engine('session', cancel=True))[0] == '최적화: 원복 중'
+    assert module.optimization_badge(rec([]), engine('inspect')) is None
+    assert module.optimization_badge(rec([], corrupt=True), engine(None, busy=False))[0] == '최적화: 오류'
+    assert module.optimization_badge(rec([dict(kind='rss', state='failed')]), engine(None, busy=False))[0] == '최적화: 오류'
+
+
+def test_condition_name_measurement_view_and_condition_summary(window, monkeypatch, tmp_path):
+    # FPS 명세 7절: 측정 조건 이름, 측정 단위 비교, 조건별 정리(구간 중앙값·범위).
+    import json
+    from mabinogi_addon.optimization.frame_summary import FrameSummary
+    w, app = window; c = w.optimization_tools
+    monkeypatch.setattr(module, 'is_creator', lambda: True); c.refresh_access()
+
+    def measure(gap_every, condition):
+        book = FrameSummary(); book.set_condition(condition); book.activate('a', 0); t = 0
+        for n in range(3000):
+            value = .04 if n % gap_every == 0 else .01
+            t += value; book.interval('a', t, value)
+        book.boundary(t + .001, 'measurement_stop')
+        return book
+
+    c.panel.condition.setText('7+1 SMT끔')
+    assert c.summary.condition == '7+1 SMT끔'
+    before, after = measure(50, '기본'), measure(500, '7+1 SMT끔')
+    c.summary, c._previous_measurement = after, before.measurement()
+    c.panel._summary_signature = None
+    c._render_summary(force=True)
+    index = c.panel.summary_select.findData('measurement')
+    assert index >= 0
+    c.panel.summary_select.setCurrentIndex(index)
+    text = c.panel.summary_result.text()
+    assert '측정 전체 · 7+1 SMT끔' in text and '직전 측정(기본) 대비' in text and '긴 간격 분당' in text
+    monkeypatch.setattr(c.summary_store, 'folder', tmp_path)
+    for n, book in enumerate((before, after)):
+        (tmp_path / f'frames-{n}.json').write_text(json.dumps(book.report()), encoding='utf-8')
+    c.panel.summary_conditions.click()
+    shown = c.panel.condition_result.text()
+    assert not c.panel.condition_result.isHidden()
+    assert '■ 기본' in shown and '■ 7+1 SMT끔' in shown and '평균해 조건 전체 1% low로 쓰지 않아요' in shown
+
+
+def test_condition_change_during_measurement_applies_to_next_measurement(window, monkeypatch):
+    # 0.12.0 QA 선택 2: 측정 중 조건 이름을 바꿔도 한 측정에 이름이 섞이지 않는다.
+    w, app = window; c = w.optimization_tools
+    monkeypatch.setattr(module, 'is_creator', lambda: True); c.refresh_access()
+    c.panel.condition.setText('기본')
+    assert c.summary.condition == '기본'
+    c.frames = True
+    try:
+        c.panel.condition.setText('7+1')
+        assert c.summary.condition == '기본' and '다음 측정부터' in c._summary_message
+    finally:
+        c.frames = False

@@ -118,9 +118,9 @@ if encoder in {sorted(failing)!r}:
     sys.stderr.write('[' + encoder + '] could not set output type (MF_E_UNSUPPORTED_D3D_TYPE)\\n')
     sys.exit(1)
 sys.stdin.buffer.read(); sys.stdout.buffer.write(b'mp4')
-''')
+''', encoding="utf-8")
     script.chmod(0o755)
-    probe = tmp_path / 'ffprobe'; probe.write_text('#!/bin/sh\n'); probe.chmod(0o755)
+    probe = tmp_path / 'ffprobe'; probe.write_text('#!/bin/sh\n', encoding="utf-8"); probe.chmod(0o755)
     return script, probe, log
 
 
@@ -139,7 +139,7 @@ def test_first_working_hardware_encoder_is_selected_and_cached(tmp_path, caplog)
     frames = (bytes(4 * 4 * 4),) * 2
     for _ in range(2):
         encoder.encode_frames(frames, 4, 4, ByteSink(_io.BytesIO(), 1 << 20))
-    calls = log.read_text().splitlines()
+    calls = log.read_text(encoding="utf-8").splitlines()
     assert [c.split('-c:v ')[1].split()[0] for c in calls] == ['h264_nvenc', 'h264_nvenc', 'h264_amf', 'h264_amf', 'h264_amf']
     assert sum('-v verbose' in c for c in calls) == 1  # 실패한 후보만 1회 진단 재실행
     assert encoder.selected == 'h264_amf' and 'h264_nvenc' in encoder.attempts
@@ -156,13 +156,13 @@ def test_all_hardware_encoders_failing_reports_each_without_software_fallback(tm
     message = str(caught.value)
     assert '소프트웨어 인코더로 대신하지 않아요' in message
     assert all(f'{name}: encoder exited 1: [{name}] could not set output type' in message for name in ('h264_nvenc', 'h264_amf', 'h264_mf'))
-    assert 'libx264' not in log.read_text() and encoder.selected is None
+    assert 'libx264' not in log.read_text(encoding="utf-8") and encoder.selected is None
     assert 'MFT name: AMD H.264 Encoder MFT' in caplog.text  # verbose 진단이 app.log로
 
 
 @_pytest.mark.parametrize('candidates', [('h264_mf', 'libx264'), ('h264_nvenc',), ('h264_mf', 'h264_mf')])
 def test_candidates_must_be_hardware_and_end_with_encoder(tmp_path, candidates):
     from mabinogi_addon.blackbox_codec import CodecSettings
-    ffmpeg = tmp_path / 'ffmpeg'; ffmpeg.write_text(''); probe = tmp_path / 'ffprobe'; probe.write_text('')
+    ffmpeg = tmp_path / 'ffmpeg'; ffmpeg.write_text('', encoding="utf-8"); probe = tmp_path / 'ffprobe'; probe.write_text('', encoding="utf-8")
     with _pytest.raises(ValueError):
         CodecSettings(ffmpeg, probe, 'h264_mf', 1_000_000, 60, 10, 50_000, candidates=candidates)

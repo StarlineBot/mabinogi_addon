@@ -102,6 +102,15 @@ class Recovery:
     def pending(self):
         return [i for i in self.items if i['state'] not in ('restored', 'released')]
 
+    def forget_exited(self, item):
+        """종료한 프로세스의 CPU 기록을 지운다(되돌릴 대상이 없다). 블랙박스 인코더처럼 짧게 뜨고 끝나는
+        프로세스가 계속 쌓여 기록 한도(MAX_ITEMS)에 닿아 세션이 끝나지 않게 한다(명세 13.3)."""
+        with self.lock:
+            if item['kind'] != 'cpu' or item not in self.items:
+                raise ValueError('CPU 적용 항목만 정리할 수 있어요.')
+            self.items.remove(item)
+            self._save()
+
     def release(self, item):
         """외부(다른 도구·게임 자신)가 바꾼 CPU 항목을 관리에서 뺀다. 그쪽 값을 덮어쓰거나 원복하지 않는다."""
         with self.lock:

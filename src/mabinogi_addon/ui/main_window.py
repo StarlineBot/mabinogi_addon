@@ -666,6 +666,14 @@ class MainWindow(QMainWindow):
         h.setContentsMargins(12, 6, 12, 6)
         h.setSpacing(10)
         h.addStretch(1)  # 오른쪽 정렬: 상태·버튼을 우상단에 모은다.
+        # 최적화 상태(명세 13.2, 제작자 전용). 작업이 없으면 숨기고, 누르면 최적화 탭으로 이동한다.
+        self._optimization_badge = QPushButton()
+        self._optimization_badge.setObjectName("optimizationBadge")
+        self._optimization_badge.setFlat(True)
+        self._optimization_badge.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._optimization_badge.setToolTip("최적화 상태(제작자 전용)예요. 성능 개선을 뜻하지 않아요. 누르면 최적화 탭으로 이동해요.")
+        self._optimization_badge.hide()
+        h.addWidget(self._optimization_badge)
         self._status_label = QLabel("● 전투 보조: 켜짐")
         self._status_label.setObjectName("statusText")
         self._status_label.setToolTip(
@@ -684,6 +692,7 @@ class MainWindow(QMainWindow):
         bar.setStyleSheet(
             "#statusBar { border-bottom:1px solid rgba(128,128,128,0.25); }"
             "#statusText { font-size:12px; }"
+            "#optimizationBadge { font-size:12px; border:none; padding:0 2px; text-decoration:underline; }"
         )
         return bar
 

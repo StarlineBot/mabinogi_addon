@@ -167,12 +167,12 @@ def test_next_start_cleans_leftovers_from_previous_run(tmp_path):
     (old / 'segment-1.partial').write_bytes(b'x')
     foreign = tmp_path / 'blackbox-foreign'
     foreign.mkdir()
-    (foreign / 'notes.txt').write_text('keep')  # 우리가 만든 이름이 아니면 지우지 않는다
+    (foreign / 'notes.txt').write_text('keep', encoding="utf-8")  # 우리가 만든 이름이 아니면 지우지 않는다
     (tmp_path / '.blackbox-abc.partial').write_bytes(b'y')
     (tmp_path / 'clip.mp4').write_bytes(b'saved')
     service = make_service(tmp_path)
     assert not old.exists() and not (tmp_path / '.blackbox-abc.partial').exists()
-    assert (foreign / 'notes.txt').read_text() == 'keep' and (tmp_path / 'clip.mp4').exists()
+    assert (foreign / 'notes.txt').read_text(encoding="utf-8") == 'keep' and (tmp_path / 'clip.mp4').exists()
     assert len(service.leftover_failures) == 2  # 알 수 없는 파일 + 그 폴더를 비우지 못함
     assert service.spool.directory.exists() and service.spool.directory != old
     close(service)
