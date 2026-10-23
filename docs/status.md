@@ -163,6 +163,12 @@
   **autocrlf 빌드 수정은 아직 미반영**(`_git_checkout`에 `--config core.autocrlf=false` 없음) → 배포 재실행 전 필요.
 - 독립 QA(`fb9d5e6`): autocrlf 수정 반영 확인. 전역 core.autocrlf=true 조건에서 실제 코드로 nv·AMF 해시 일치,
   0.11.4 변경 검사 436건/21.26초 통과. 배포 차단 없음. Windows FFmpeg(nvenc/amf) 빌드·실녹화는 재실행에서 확인.
+- 0.11.4 재실행 [39878848624](https://github.com/StarlineBot/mabinogi_addon/actions/runs/39878848624) 실패: Linux 배포 검사
+  435/436, `test_manual_update_progress::test_real_worker_dispatch_and_failure_retry`가 5초 대기 후에도 작업 스레드
+  생존(5.57초). Windows·빌드·게시 미실행. 같은 테스트·같은 업데이트 코드(main_window/update_splash/splash 변경 없음)가
+  직전 CI 39873383337에서는 통과, 로컬 단독 12회·CPU 과부하 8회·빈 폰트 캐시 2회 모두 통과(0.6~1.9초) → 간헐 시한 초과로
+  판단, 근본 원인 미확정(CI 진단 artifact는 이 환경에서 다운로드 차단). 0.11.4에서 배포 검사 목록에 새로 편입된 테스트.
+  후속: 시한 초과 시 전체 스레드 스택(faulthandler) 기록·시한 여유 확대로 다음 재발 시 원인 확보.
 
 ### 0.11.3 추가 — 항상 관리자 실행 복원, 블랙박스 종료 확인 흐름 시안
 
