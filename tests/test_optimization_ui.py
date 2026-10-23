@@ -199,7 +199,7 @@ def test_embedded_creator_and_recovery_tabs_preserve_single_lifetime(window,monk
     monkeypatch.setattr(module,'is_creator',lambda:False)
     c.refresh_access();c._tick()
     assert w._tabs.indexOf(panel)==-1
-    assert not panel.start.isEnabled() and not panel.frames_start.isEnabled()
+    assert not panel.start.isEnabled() and not panel.frames_toggle.isEnabled()
     # 접근이 없으면 네트워크 원복을 묻거나 실행하지 않는다(CPU 원복 경로만 남음).
     monkeypatch.setattr(c,'_network_confirmation',lambda:pytest.fail('hidden alpha must not prompt'))
     restores=[]
@@ -291,7 +291,8 @@ def test_start_from_app_preserves_collector_header_before_game_focus(window, mon
     c._tick()
     assert c.frames, c.frame_status
     assert c.overlay.isVisible()
-    assert not c.panel.frames_start.isEnabled() and c.panel.frames_stop.isEnabled()
+    assert c.panel.frames_toggle.isEnabled() and c.panel.frames_toggle.isChecked()
+    assert c.panel.frames_toggle.text() == 'FPS 표시 중' and c.frame_status.startswith('표시 중 · ')
     assert c.stream.snapshot(now[0])['fps'] == pytest.approx(50)
     c.stop_frames()
 
@@ -496,3 +497,36 @@ def test_condition_change_during_measurement_applies_to_next_measurement(window,
         assert c.summary.condition == '기본' and '다음 측정부터' in c._summary_message
     finally:
         c.frames = False
+
+
+def test_fps_display_toggle_starts_and_stops_measurement(window, monkeypatch):
+    # FPS 탭 표시/수집 분리: 'FPS 표시' 토글 하나가 기존 측정 시작·중단과 같은 동작.
+    w, app = window; c = w.optimization_tools
+    monkeypatch.setattr(module, 'is_creator', lambda: True); c.refresh_access()
+    calls = []
+    monkeypatch.setattr(c, 'start_frames', lambda: calls.append('start') or setattr(c, 'frames', True))
+    monkeypatch.setattr(c, 'stop_frames', lambda message=None: calls.append('stop') or setattr(c, 'frames', False))
+    toggle = c.panel.frames_toggle
+    assert toggle.text() == 'FPS 표시' and not toggle.isChecked()
+    toggle.click()
+    assert calls == ['start'] and toggle.isChecked() and toggle.text() == 'FPS 표시 중'
+    toggle.click()
+    assert calls == ['start', 'stop'] and not toggle.isChecked() and toggle.text() == 'FPS 표시'
+    # 시작이 실패하면(게임 미등록 등) 토글은 다시 꺼짐으로 돌아간다.
+    monkeypatch.setattr(c, 'start_frames', lambda: calls.append('start-failed'))
+    toggle.click()
+    assert not toggle.isChecked() and toggle.text() == 'FPS 표시'
+
+
+def test_collection_mode_does_not_start_display_or_write_files_when_display_is_off(window, monkeypatch, tmp_path):
+    from mabinogi_addon.optimization.frame_summary_store import SummaryStore
+    w, app = window; c = w.optimization_tools
+    monkeypatch.setattr(module, 'is_creator', lambda: True); c.refresh_access()
+    monkeypatch.setattr(c, 'start_frames', lambda: pytest.fail('collection must not start the display'))
+    c.summary_store = SummaryStore(tmp_path / 'summaries')
+    c.panel.summary_collect.setChecked(True)
+    assert c._summary_collecting and not c.frames
+    assert 'FPS 표시가 꺼져 있어 수집하지 않아요' in c.panel.summary_path.text()
+    c._tick()
+    assert not (tmp_path / 'summaries').exists() or not any((tmp_path / 'summaries').iterdir())
+    c.panel.summary_collect.setChecked(False)

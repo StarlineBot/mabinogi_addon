@@ -50,10 +50,15 @@ class OptimizationPanel(QWidget):
         self.tabs.addTab(_scrolled(page),'최적화')
         page=QWidget();body=QVBoxLayout(page)
         body.addWidget(FeatureHeader('FPS 측정','마비노기의 프레임을 측정해 현재 FPS를 보여줘요.'))
-        group=_group('대상 · 측정',body)
-        group.addWidget(_label('측정 시작을 누르면 등록한 게임창을 대상으로 프레임을 수집해요.\n게임의 제출 프레임 기준이며, 모니터에 실제 표시된 FPS·통신 지연과는 달라요.'))
-        self.frames_start=QPushButton('FPS 측정 시작');self.frames_stop=QPushButton('측정 중단')
-        row=QHBoxLayout();row.addWidget(self.frames_start);row.addWidget(self.frames_stop);row.addStretch();group.addLayout(row)
+        # 표시와 수집 분리(FPS 명세 8.3, 2026-10-23 지금 적용): 위는 게임에 FPS 표시 켜기·끄기 하나, 파일 수집은 아래 베타 묶음.
+        group=_group('게임에 FPS 표시',body)
+        group.addWidget(_label('켜 두면 게임 화면에 FPS를 보여줘요. 파일로 남기지 않아요.\n'
+                               '게임의 제출 프레임 기준이며, 모니터에 실제 표시된 FPS·통신 지연과는 달라요.'))
+        from PySide6.QtCore import Qt
+        from .settings_layout import LOCK_STYLE
+        self.frames_toggle=QPushButton('FPS 표시');self.frames_toggle.setCheckable(True);self.frames_toggle.setStyleSheet(LOCK_STYLE)
+        self.frames_toggle.toggled.connect(lambda on: self.frames_toggle.setText('FPS 표시 중' if on else 'FPS 표시'))
+        group.addWidget(self.frames_toggle,0,Qt.AlignmentFlag.AlignLeft)
         group=_group('오버레이',body)
         self.lock=QCheckBox('위치 잠금');self.lock.setChecked(True);group.addWidget(self.lock)
         self.scale=QSpinBox();self.scale.setRange(50,300);self.scale.setValue(100);self.scale.setSuffix(' %')
@@ -66,11 +71,11 @@ class OptimizationPanel(QWidget):
         group.addWidget(_label('CPU: 가장 바쁜 논리 코어 사용률 · GPU: 작업 관리자와 같은 엔진 사용률 · '
                                '메모리: 게임 전용 메모리\n1초마다 읽기만 해요. 실제 Windows 수치 확인 전이라 정확도를 보증하지 않아요.'))
         group=_group('상태 · 수집 품질',body)
-        self.frames_status=_label('중단됨 · 측정값 없음');group.addWidget(self.frames_status)
-        group.addWidget(_label('Windows 권한이 부족하면 측정을 시작하지 못할 수 있어요. 자동으로 관리자 권한을 요청하지 않아요.'))
-        group.addWidget(_label('앱을 다시 실행하면 자동으로 측정하지 않아요. 전투 보조 일시정지는 FPS 표시만 숨겨요.'))
-        group=_group('프레임 수집 · 구간 요약',body)
-        group.addWidget(_label('FPS 측정 중 자동으로 집계해요. 수집 모드를 켜면 구간 요약을 파일로 남겨요. 매 프레임 원본은 저장하지 않아요.'))
+        self.frames_status=_label('꺼짐 · 표시 안 함');group.addWidget(self.frames_status)
+        group.addWidget(_label('앱을 다시 실행하면 자동으로 켜지지 않아요. 전투 보조 일시정지는 FPS 표시만 숨겨요.'))
+        group=_group('프레임 수집(베타)',body)
+        group.addWidget(_label('FPS 표시가 켜져 있을 때만 동작해요. 수집 모드를 켜면 구간 요약을 파일로 남겨요.\n'
+                               '매 프레임 원본은 저장하지 않아요.'))
         row=QHBoxLayout()
         self.summary_save=QPushButton('요약 저장');row.addWidget(self.summary_save)
         self.summary_folder=QPushButton('폴더 열기');row.addWidget(self.summary_folder)

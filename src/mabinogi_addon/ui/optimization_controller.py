@@ -84,7 +84,8 @@ class OptimizationController(QObject):
         self.closing = False
         self.context = None
         self.last_tick = time.monotonic()
-        self.frame_status = '이전 FPS 세션 정리 필요 · 측정 중단을 눌러 주세요.' if self.collector.pending else '중단됨 · 측정값 없음'
+        self.frame_status = ("이전 FPS 세션 정리 필요 · 'FPS 표시'를 한 번 눌러 정리해 주세요." if self.collector.pending
+                             else '꺼짐 · 표시 안 함')
         self.last_health = 0.0
         self._offered_review = None
         self._offering = False
@@ -230,8 +231,7 @@ class OptimizationController(QObject):
         d.inspect.clicked.connect(self.engine.inspect)
         d.start.clicked.connect(self._start_optimization)
         d.stop.clicked.connect(self._restore_all)
-        d.frames_start.clicked.connect(self.start_frames)
-        d.frames_stop.clicked.connect(lambda: self.stop_frames())
+        d.frames_toggle.clicked.connect(self._toggle_frames)
         d.lock.setChecked(bool((config.load_overlay_state('frameMeter') or {}).get('locked',True)))
         d.lock.toggled.connect(self._lock)
         d.scale.setValue(self._scale)
@@ -392,11 +392,26 @@ class OptimizationController(QObject):
             self._summary_state = None
             self.frames = True
             self.context = None
-            self.frame_status = '게임 실행 대기 · 측정값 없음'
+            self.frame_status = '표시 중 · 게임 실행 대기'
             self._tick()
         except Exception as exc: self._failed(str(exc))
 
-    def stop_frames(self, message='중단됨 · 측정값 없음'):
+    def _toggle_frames(self, on):
+        """'FPS 표시' 토글: 켜기 = 기존 측정 시작, 끄기 = 측정 중단(동작 변경 없음). 이전 세션 정리도 끄기로 처리."""
+        if on and not self.collector.pending:
+            self.start_frames()
+        else:
+            self.stop_frames()
+        self._sync_frames_toggle()
+
+    def _sync_frames_toggle(self):
+        if self.panel is None: return
+        toggle = self.panel.frames_toggle
+        if toggle.isChecked() != self.frames:
+            toggle.blockSignals(True); toggle.setChecked(self.frames); toggle.blockSignals(False)
+        toggle.setText('FPS 표시 중' if self.frames else 'FPS 표시')
+
+    def stop_frames(self, message='꺼짐 · 표시 안 함'):
         if self.stream is not None:
             self.stream.boundary(self._summary_now(), 'measurement_stop')
         self.frames = False
@@ -416,7 +431,7 @@ class OptimizationController(QObject):
                     self.stream.boundary(self._summary_now(), 'game_exit')
                 self.target,self.stream,self.context=None,None,None
                 self._hide_overlay()
-                self.frame_status='게임 실행 대기 · 측정값 없음'
+                self.frame_status='표시 중 · 게임 실행 대기'
                 return
         except Exception:
             pass
@@ -463,9 +478,9 @@ class OptimizationController(QObject):
                 self.stream = FrameStream(game['pid'],frequency,self.summary)
                 self.stream.boundary(now)
                 self.collector.start(game['pid'])
-                self.frame_status = '측정 준비 중 · 최신 프레임을 기다려요.'
+                self.frame_status = '표시 중 · 최신 프레임을 기다려요.'
         if game is None:
-            self.frame_status = '게임 실행 대기 · 측정값 없음'
+            self.frame_status = '표시 중 · 게임 실행 대기'
             return
         context = presentmon.game_context(game,self.backend._game_window)
         active = context[0]
@@ -478,7 +493,7 @@ class OptimizationController(QObject):
             self.stream.boundary(now, 'inactive')
             self.sampler.update((), None)  # 게임 밖에서는 지표 조회도 쉰다
             self._hide_overlay()
-            self.frame_status = '게임 비활성 · 표시를 쉬고 있어요.'
+            self.frame_status = '표시 중 · 게임 비활성이라 쉬고 있어요.'
             return
         if self.stream.header is not None and self.collector.active and time.monotonic()-self.last_health > 1:
             self.last_health = time.monotonic()
@@ -489,7 +504,7 @@ class OptimizationController(QObject):
         if result['source'] != self._reported_source:
             self._reported_source=result['source']
             _log.info('FPS 대상 확인: pid=%s source=%s candidates=%s',game['pid'],result['source'],len(result['sources']))
-        self.frame_status = result['status']
+        self.frame_status = '표시 중 · ' + result['status']
         # 추가 지표는 작업 스레드에서 1초마다 읽은 최신 값만 쓴다(UI 스레드에서 OS 조회 없음).
         self.sampler.update([k for k, on in self._metrics.items() if on and k != 'fps'], game['pid'])
         items = self.overlay_items(result['fps'], self.sampler.latest) if result['fps'] is not None else []
@@ -520,8 +535,8 @@ class OptimizationController(QObject):
         d.start.setEnabled(allowed and not busy and not self.recovery.corrupt and not (self.recovery.pending or self.recovery.restart_targets))
         d.stop.setEnabled(busy or bool(self.recovery.pending or self.recovery.restart_targets))
         for control in (d.lock,d.scale,*d.metric_boxes.values()): control.setEnabled(allowed)
-        d.frames_start.setEnabled(allowed and not self.frames)
-        d.frames_stop.setEnabled(self.frames or self.collector.pending)
+        d.frames_toggle.setEnabled((allowed and not self.closing) or self.frames or self.collector.pending)
+        self._sync_frames_toggle()
         for control in (d.summary_collect,d.summary_save,d.summary_folder): control.setEnabled(allowed)
         d.frames_status.setText(self.frame_status)
         d.status.setText(('복구 기록이 손상돼 새 적용을 차단했어요. 추정값으로 원복하지 않아요.\n기록: '+str(self.recovery.path)) if self.recovery.corrupt else self.engine.status)
@@ -582,13 +597,8 @@ class OptimizationController(QObject):
         if self.stream is not None:
             self.stream.boundary(self._summary_now(), 'collection_toggle')
         self._summary_collecting = enabled
-        if enabled and not self.frames:
-            self.start_frames()
-        if enabled and not self.frames:
-            self._summary_collecting = False
-            self.panel.summary_collect.blockSignals(True)
-            self.panel.summary_collect.setChecked(False)
-            self.panel.summary_collect.blockSignals(False)
+        # 수집은 FPS 표시가 켜져 있을 때만 동작한다(표시를 자동으로 켜지 않음). 꺼져 있으면 파일을 쓰지 않고 안내만.
+        self._render_summary(force=True)
 
     def _summary_closed(self, record):
         if self._summary_collecting:
@@ -682,7 +692,7 @@ class OptimizationController(QObject):
         d.condition_result.setVisible(bool(self._condition_text))
         if index == 'measurement':
             d.summary_result.setText(self._measurement_text())
-            d.summary_path.setText(f'저장 위치: {self.summary_store.folder} · {self._summary_message}')
+            d.summary_path.setText(f'저장 위치: {self.summary_store.folder} · {self._collect_message()}')
             return
         record = self.summary.current() if index is None else self.summary.records[index]
         if record is None:
@@ -712,8 +722,13 @@ class OptimizationController(QObject):
             text += f"\nCPU 요청 {requested.get('count','—')}개 · {cpu}"
             text += ' · 설정 상세는 저장 요약에 포함'
         d.summary_result.setText(text)
-        d.summary_path.setText(f'저장 위치: {self.summary_store.folder} · {self._summary_message}')
+        d.summary_path.setText(f'저장 위치: {self.summary_store.folder} · {self._collect_message()}')
         d.summary_path.setToolTip(str(self.summary_store.folder))
+
+    def _collect_message(self):
+        if self._summary_collecting and not self.frames:
+            return '수집 모드 켜짐 · FPS 표시가 꺼져 있어 수집하지 않아요. 위에서 FPS 표시를 켜면 시작해요.'
+        return self._summary_message
 
     def _measurement_text(self):
         """측정 1회(시작~중단) 전체 집계와 직전 측정 비교(FPS 7절). 진행 중이면 완료 구간까지만."""
