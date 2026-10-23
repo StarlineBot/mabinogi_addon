@@ -20,7 +20,7 @@ def test_audio_slice_across_packets_and_missing_audio_is_not_filled():
     timeline.push(b'\x00\x00', 25000)
     assert timeline.gaps == 1 and timeline.run_within(15000, 26000) == (15000, 20000)
     with pytest.raises(ValueError, match='overlap'):
-        timeline.push(b'\x00\x00', 20000)  # 겹침은 계속 거부
+        timeline.push(b'\x00\x00' * 300, 26000 - 200_000)  # 큰 겹침(-200ms)은 계속 거부
     timeline.close()
     with pytest.raises(ValueError, match='incomplete'):
         timeline.slice(15000, 25000, timeout=1)
@@ -181,3 +181,26 @@ def test_candidates_must_be_hardware_and_end_with_encoder(tmp_path, candidates):
     ffmpeg = tmp_path / 'ffmpeg'; ffmpeg.write_text('', encoding="utf-8"); probe = tmp_path / 'ffprobe'; probe.write_text('', encoding="utf-8")
     with _pytest.raises(ValueError):
         CodecSettings(ffmpeg, probe, 'h264_mf', 1_000_000, 60, 10, 50_000, candidates=candidates)
+
+
+def test_small_overlap_drops_only_duplicate_samples_and_keeps_recording():
+    # 0.13.2 QA: 첫 묶음 기준점 지터(+2.9→-2.9ms)·장치 시계 드리프트 누적으로 'audio overlap' 녹화 중단.
+    timeline = PcmTimeline(1000, 1, 1 << 16)
+    timeline.push(b'\x01\x00' * 10, 1_000_000)                    # 1.000~1.010초
+    timeline.push(b'\x02\x00' * 10, 1_010_000 - 6000)             # 6ms 겹침 → 앞 6샘플 버림
+    assert timeline.trimmed == 1 and timeline.max_trim_us == 6000
+    timeline.push(b'\x03\x00' * 3, 1_014_000 - 5000)              # 묶음 전체가 이미 받은 시간대 → 버림
+    assert timeline.trimmed == 2 and timeline.gaps == 0
+    pcm = timeline.slice(1_000_000, 1_014_000, timeout=1)
+    assert pcm == b'\x01\x00' * 10 + b'\x02\x00' * 4             # 샘플 수가 구간 길이(14ms)와 일치, 생성한 소리 없음
+
+
+@pytest.mark.parametrize('ppm', [2000, -2000])
+def test_device_clock_drift_keeps_recording(ppm):
+    # 장치가 빠르면(겹침) 중복만 잘라내고, 느리면(공백) 새 연속 구간으로 이어 간다. 어느 쪽도 중단하지 않는다.
+    rate = 48000
+    timeline = PcmTimeline(rate, 1, 1 << 24)
+    packet = b'\x01\x00' * 480                                    # 장치 기준 10ms
+    for n in range(400):                                          # 4초
+        timeline.push(packet, 1_000_000 + round(n * 10_000 * (1 - ppm / 1_000_000)))
+    assert (timeline.trimmed > 0) if ppm > 0 else (timeline.gaps > 0)

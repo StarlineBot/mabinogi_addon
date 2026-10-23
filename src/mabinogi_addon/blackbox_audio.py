@@ -14,6 +14,9 @@ _log = logging.getLogger(__name__)
 
 
 JITTER_US = 3000  # 루프백 시각 흔들림 허용(약 3ms). 이 안이면 연속으로 이어 붙인다
+# 이보다 작은 겹침은 중복 부분만 잘라 이어 붙인다(첫 묶음 지터 고정·장치 시계와 QPC 드리프트 누적, 0.13.2 QA).
+# 소리를 만들지 않고 이미 받은 시간대의 중복 샘플만 버린다. 이보다 큰 겹침은 시각 이상으로 보고 거부한다.
+OVERLAP_TRIM_US = 100_000
 
 
 class PcmTimeline:
@@ -27,6 +30,8 @@ class PcmTimeline:
         self._runs = []  # [시작, 끝] 연속 구간. 큰 공백마다 새 구간
         self.gaps = 0
         self.max_jitter_us = 0  # 허용 범위 안에서 관측한 가장 큰 시각 차이(실측 판단용)
+        self.trimmed = 0  # 겹친 앞부분을 잘라 이어 붙인(또는 통째로 버린) 묶음 수
+        self.max_trim_us = 0
         self._closed = False
         self._condition = Condition()
 
@@ -44,9 +49,20 @@ class PcmTimeline:
             continuing = False
             if self._end is not None:
                 delta = stamp_us - self._end
-                if delta < -JITTER_US:
-                    _log.warning('블랙박스 소리 겹침 %+.0fµs로 녹화 중단(허용 ±%dµs)', delta, JITTER_US)
+                if delta < -OVERLAP_TRIM_US:
+                    _log.warning('블랙박스 소리 겹침 %+.0fµs로 녹화 중단(자르기 허용 %dµs)', delta, OVERLAP_TRIM_US)
                     raise ValueError('audio overlap; refusing to merge or synthesize sound')
+                if delta < -JITTER_US:
+                    # 이미 받은 시간대와 겹친 앞부분(샘플 단위)만 버리고 나머지를 끝에 이어 붙인다.
+                    drop = round(-delta * self.rate / 1_000_000) * self.block
+                    self.trimmed += 1
+                    self.max_trim_us = max(self.max_trim_us, round(-delta))
+                    if self.trimmed <= 5 or self.trimmed % 100 == 0:
+                        _log.info('블랙박스 소리 겹침 %+.0fµs · 중복 %d샘플 잘라 이어 붙임(누적 %d회, 최대 %dµs)',
+                                  delta, drop // self.block, self.trimmed, self.max_trim_us)
+                    if drop >= len(data):
+                        return  # 묶음 전체가 이미 받은 시간대: 버린다
+                    data, delta = data[drop:], 0
                 if delta <= JITTER_US:
                     self.max_jitter_us = max(self.max_jitter_us, round(abs(delta)))
                     stamp_us, continuing = self._end, True  # 지터: 샘플 수 기준으로 연속 배치
