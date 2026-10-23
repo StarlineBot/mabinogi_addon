@@ -152,6 +152,10 @@
   최댓값, 지표 변경 시 UI 스레드 대기 제거. 저장 반응은 마지막 게임 창 기준 모니터 + `to_logical` 변환.
   `qa_0130_overlay_metrics_retry` 종료 0(3초 1회), 0.13.0 변경 검사 464건/28.50초 통과. 배포 가능.
   참고: `to_logical`은 앱 공통의 단일 배율(screen_scale) 변환이라 모니터별 배율이 다른 환경은 다른 오버레이와 같은 한계.
+- v0.13.0 게시 완료: [39906142062](https://github.com/StarlineBot/mabinogi_addon/actions/runs/39906142062) (apt 32초, 변경 검사
+  28초, Windows 기동 10초, exe 빌드 5분29초, 전체 8분24초) → 게시 [39906921983](https://github.com/StarlineBot/mabinogi_addon/actions/runs/39906921983)
+  성공(1분18초). 태그 `7c6c933`. Release exe 162,840,576 bytes, sha256 `befbf261…81d4`가 version.json과 일치(직접 다운로드 확인).
+  실게임(저장 반응 위치·녹화 미포함, CPU/GPU/메모리 수치·부하) 확인 남음.
   - QA 후속 수정: 조회기 생성 실패는 지표 조합별 30초 뒤 재시도·경고 1회, CPU/GPU 카운터 지표별 추가(하나만 실패해도 나머지 표시).
     저장 반응은 마지막으로 관측한 게임 창(hwnd)으로 완료·실패도 같은 모니터에 띄우고, `GetWindowRect`를 `dpi.to_logical`로 변환 후
     화면 탐색. 참고 항목도 반영: GPU%는 엔진(eng_N)별 합의 최댓값, 지표 변경 시 UI 스레드가 조회 스레드를 기다리지 않음.
