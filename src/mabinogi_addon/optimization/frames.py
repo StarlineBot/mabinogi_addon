@@ -4,6 +4,10 @@ import csv
 import math
 
 
+# 도착 지연(수신 시각 - 이벤트 QPC 시각) 실측용 FPS 대역(간격 ms 상한, 이름). PresentMon 출력이 묶여 도착하는지 판단한다.
+DELAY_BANDS = ((5, '200FPS+'), (10, '100~200FPS'), (20, '50~100FPS'), (50, '20~50FPS'), (math.inf, '20FPS 미만'))
+
+
 class FrameStream:
     WINDOW = 1.0
     MIN_SPAN = 0.25
@@ -22,6 +26,7 @@ class FrameStream:
         self.selected = None
         self.cutoff = 0.0
         self.problem = ''
+        self.delays = {}  # 대역 → [개수, 합, 최대] (초)
 
     def boundary(self, now, reason="context_boundary"):
         if self.summary is not None:
@@ -29,6 +34,15 @@ class FrameStream:
         self.cutoff = now
         self.sources.clear()
         self.problem = ''
+
+    def delay_report(self):
+        """FPS 대역별 도착 지연 요약 문자열(로그용)을 만들고 누적을 비운다. 자료가 없으면 None."""
+        if not self.delays:
+            return None
+        parts = [f'{band} {count}개 평균 {total / count * 1000:.0f}ms 최대 {peak * 1000:.0f}ms'
+                 for band, (count, total, peak) in self.delays.items()]
+        self.delays = {}
+        return ' · '.join(parts)
 
     def select(self, source, now):
         self.selected = source
@@ -84,11 +98,15 @@ class FrameStream:
         interval = float(data[self.interval_column]) / 1000
         if not math.isfinite(stamp) or not math.isfinite(interval) or interval < 0 or stamp > now + .1:
             raise ValueError('프레임 시각이 잘못됐어요.')
-        if stamp <= self.cutoff or now - stamp > self.STALE:
-            if stamp > self.cutoff and self.summary is not None:
-                self.summary.reject('stale_delivery', now, interval)
-                self.summary.boundary(now, 'stale_delivery')
+        if stamp <= self.cutoff:
             return  # Queued events from before a focus/sleep/target boundary.
+        # 늦게 도착한 것만으로는 구간을 끊지 않는다: PresentMon 출력이 묶여 오면(저FPS일수록 오래) 정상 이벤트도
+        # 2초 넘게 늦게 도착한다(0.13.2 실사용, 45~80FPS 구간이 stale_delivery로 끊겨 비교에서 빠짐).
+        # 순서·간격 검사(아래)와 포커스·대상 경계(cutoff)는 그대로 적용한다.
+        band = next(name for limit, name in DELAY_BANDS if interval * 1000 < limit)
+        stats = self.delays.setdefault(band, [0, 0.0, 0.0])
+        delay = max(0.0, now - stamp)
+        stats[0] += 1; stats[1] += delay; stats[2] = max(stats[2], delay)
         if source not in self.sources:
             if len(self.sources) >= self.MAX_SOURCES:
                 raise ValueError('렌더링 대상이 너무 많아 측정을 중단했어요.')
@@ -109,7 +127,8 @@ class FrameStream:
                 raise ValueError('프레임 버퍼 한도를 초과했어요. 값을 추정하지 않아요.')
         events.append(stamp)
         if self.summary is not None:
-            candidates = [key for key, values in self.sources.items() if values and now-values[-1] <= self.STALE]
+            # 후보는 도착 시각이 아니라 이벤트 시각 기준으로 본다(묶여 도착해도 같은 대상이면 이어서 집계).
+            candidates = [key for key, values in self.sources.items() if values and stamp-values[-1] <= self.STALE]
             effective = self.selected if self.selected in candidates else None
             if self.selected is None and len(candidates) == 1:
                 effective = candidates[0]

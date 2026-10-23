@@ -234,3 +234,37 @@ def test_condition_summary_is_independent_of_file_order():
         shapes.add(tuple((k,g['segments']) for k,g in sorted(result.items())))
     assert len(shapes)==1
     assert dict(next(iter(shapes)))['(조건 이름 없음)']>=1  # 이름 입력 전 구간은 그 구간 기록의 조건으로 묶임
+
+
+def test_late_batched_delivery_keeps_one_observed_segment_and_condition_summary():
+    # 0.13.3: 60FPS 이벤트가 3초씩 묶여 늦게 도착해도 순서·간격이 정상이면 한 구간으로 이어진다.
+    from mabinogi_addon.optimization.frame_summary import condition_summary
+    book=FrameSummary();book.set_condition('기본')
+    stream=FrameStream(7,1_000_000,book)
+    stream.feed('Application,ProcessID,SwapChainAddress,QPCTime,msBetweenPresents',100)
+    stamp=100.0
+    for batch in range(6):                       # 6묶음 × 3초 = 18초
+        lines=[]
+        for n in range(180):
+            stamp+=1/60
+            lines.append(f'game,7,0x1,{round(stamp*1_000_000)},{1000/60:.6f}')
+        arrival=stamp+3.0                         # 묶음 전체가 3초 늦게 도착
+        for line in lines: stream.feed(line,arrival)
+    stream.boundary(stamp+3.1,'measurement_stop')
+    assert len(book.records)==1
+    record=book.records[0]
+    assert record['quality']=='observed' and record['end_reason']=='measurement_stop'
+    assert record['valid_intervals']>=1000 and book.rejected.get('stale_delivery') is None
+    assert '50~100FPS' in stream.delay_report()
+    result=condition_summary([book.report()])
+    assert result and result[0]['condition']=='기본' and result[0]['segments']==1
+
+
+def test_events_queued_before_focus_boundary_are_still_dropped():
+    book=FrameSummary()
+    stream=FrameStream(7,1_000_000,book)
+    stream.feed('Application,ProcessID,SwapChainAddress,QPCTime,msBetweenPresents',100)
+    stream.boundary(105,'inactive')
+    for n in range(50):                          # 경계(105초) 이전 시각의 이벤트가 늦게 도착
+        stream.feed(f'game,7,0x1,{round((104+n*.02)*1_000_000)},20',105.5)
+    assert book.current() is None and not stream.sources

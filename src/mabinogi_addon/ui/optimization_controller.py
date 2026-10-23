@@ -87,6 +87,7 @@ class OptimizationController(QObject):
         self.frame_status = ("이전 FPS 세션 정리 필요 · 'FPS 표시'를 한 번 눌러 정리해 주세요." if self.collector.pending
                              else '꺼짐 · 표시 안 함')
         self.last_health = 0.0
+        self._delay_logged = time.monotonic()
         self._offered_review = None
         self._offering = False
         self._auto_inspected = False  # 탭을 처음 열 때 환경 확인 1회 자동 실행(13.1)
@@ -495,6 +496,10 @@ class OptimizationController(QObject):
             self._hide_overlay()
             self.frame_status = '표시 중 · 게임 비활성이라 쉬고 있어요.'
             return
+        if time.monotonic() - self._delay_logged >= 60:
+            self._delay_logged = time.monotonic()
+            report = self.stream.delay_report()
+            if report: _log.info('FPS 이벤트 도착 지연(최근 약 60초): %s', report)  # PresentMon 출력 묶임 실측(0.13.3)
         if self.stream.header is not None and self.collector.active and time.monotonic()-self.last_health > 1:
             self.last_health = time.monotonic()
             if presentmon.session_losses(self.collector.session):
