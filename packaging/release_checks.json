@@ -1,5 +1,5 @@
 {
-  "version": "0.12.0",
+  "version": "0.13.0",
   "tests": [
     "tests/test_blackbox.py",
     "tests/test_blackbox_access.py",
@@ -25,6 +25,7 @@
     "tests/test_blackbox_hotkey.py",
     "tests/test_autostart.py",
     "tests/test_updater_relaunch_env.py",
-    "tests/test_manual_update_progress.py"
+    "tests/test_manual_update_progress.py",
+    "tests/test_overlay_metrics.py"
   ]
 }
