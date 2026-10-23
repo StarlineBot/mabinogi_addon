@@ -329,7 +329,7 @@ def test_full_regression_is_optional_development_work_not_a_release_prerequisite
 def test_release_linux_installs_synthetic_codec_dependency():
     from pathlib import Path
     import yaml
-    workflow = yaml.safe_load((Path(__file__).resolve().parents[1] / '.github/workflows/windows.yml').read_text())
+    workflow = yaml.safe_load((Path(__file__).resolve().parents[1] / '.github/workflows/windows.yml').read_text(encoding="utf-8"))
     installs = [step.get('run', '') for step in workflow['jobs']['regression']['steps']]
     assert any('run_apt install 120s install' in command and 'ffmpeg' in command.split() for command in installs)
 
@@ -341,13 +341,13 @@ def test_apt_failure_stops_before_install_with_diagnostics(tmp_path, result):
     command=next(s['run'] for s in workflow('windows.yml')['jobs']['regression']['steps']
                  if s.get('name')=='Install Qt runtime libraries')
     mirrors=tmp_path/'mirrors'
-    mirrors.write_text('http://azure.archive.ubuntu.com/ubuntu/\tpriority:1\nhttps://archive.ubuntu.com/ubuntu/\tpriority:2\nhttps://security.ubuntu.com/ubuntu/\tpriority:3\n')
+    mirrors.write_text('http://azure.archive.ubuntu.com/ubuntu/\tpriority:1\nhttps://archive.ubuntu.com/ubuntu/\tpriority:2\nhttps://security.ubuntu.com/ubuntu/\tpriority:3\n', encoding="utf-8")
     command=command.replace('/etc/apt/apt-mirrors.txt',str(mirrors))
     sudo=tmp_path/'sudo'
-    sudo.write_text('#!/bin/sh\nexec "$@"\n')
+    sudo.write_text('#!/bin/sh\nexec "$@"\n', encoding="utf-8")
     sudo.chmod(0o755)
     fake=tmp_path/'timeout'
-    fake.write_text('#!/bin/sh\necho "synthetic download failure"\nexit '+str(result)+'\n')
+    fake.write_text('#!/bin/sh\necho "synthetic download failure"\nexit '+str(result)+'\n', encoding="utf-8")
     fake.chmod(0o755)
     completed=subprocess.run(['bash','-e','-c',command],cwd=tmp_path,
         env={**os.environ,'PATH':str(tmp_path)+os.pathsep+os.environ['PATH']},capture_output=True,text=True)
@@ -364,18 +364,18 @@ def test_apt_priority_and_required_packages_preserved(tmp_path):
     command=next(s['run'] for s in workflow('windows.yml')['jobs']['regression']['steps']
                  if s.get('name')=='Install Qt runtime libraries')
     mirrors=tmp_path/'mirrors'
-    mirrors.write_text('http://azure.archive.ubuntu.com/ubuntu/\tpriority:1\nhttps://archive.ubuntu.com/ubuntu/\tpriority:2\nhttps://security.ubuntu.com/ubuntu/\tpriority:3\n')
+    mirrors.write_text('http://azure.archive.ubuntu.com/ubuntu/\tpriority:1\nhttps://archive.ubuntu.com/ubuntu/\tpriority:2\nhttps://security.ubuntu.com/ubuntu/\tpriority:3\n', encoding="utf-8")
     command=command.replace('/etc/apt/apt-mirrors.txt',str(mirrors))
     for name, body in [('sudo', 'exec "$@"'), ('timeout', 'printf "%s\\n" "$*" >> calls')]:
         path=tmp_path/name
-        path.write_text('#!/bin/sh\n'+body+'\n')
+        path.write_text('#!/bin/sh\n'+body+'\n', encoding="utf-8")
         path.chmod(0o755)
     result=subprocess.run(['bash','-e','-c',command],cwd=tmp_path,
         env={**os.environ,'PATH':str(tmp_path)+os.pathsep+os.environ['PATH']},capture_output=True,text=True)
     assert result.returncode==0, result.stderr
-    assert mirrors.read_text()==('http://azure.archive.ubuntu.com/ubuntu/\tpriority:2\n'
+    assert mirrors.read_text(encoding="utf-8")==('http://azure.archive.ubuntu.com/ubuntu/\tpriority:2\n'
         'https://archive.ubuntu.com/ubuntu/\tpriority:1\nhttps://security.ubuntu.com/ubuntu/\tpriority:3\n')
-    calls=(tmp_path/'calls').read_text().splitlines()
+    calls=(tmp_path/'calls').read_text(encoding="utf-8").splitlines()
     assert len(calls)==2
     assert '--kill-after=10s 60s' in calls[0] and calls[0].endswith(' update')
     assert '--kill-after=10s 120s' in calls[1]

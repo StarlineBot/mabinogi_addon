@@ -249,7 +249,7 @@ def test_summary_collection_shares_parser_preserves_pause_and_exports_without_ra
         time.sleep(.005)
     assert c._summary_saved==1
     saved,=list((tmp_path/'summaries').glob('*.json'))
-    report=json.loads(saved.read_text())
+    report=json.loads(saved.read_text(encoding="utf-8"))
     assert report['raw_events_saved'] is False
     assert report['segments'][0]['context']['target']==c.target
     assert report['segments'][0]['context']['qpc_frequency']==1000000

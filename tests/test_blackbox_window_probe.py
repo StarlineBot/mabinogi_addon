@@ -83,5 +83,5 @@ def test_setup_failure_closes_owned_window_and_records_error(tmp_path, monkeypat
         monkeypatch.setattr(probe.threading.Thread, 'start', fail)
     with pytest.raises(RuntimeError, match='setup fixture failed'):
         probe.run(args)
-    assert json.loads((args.output / 'result.json').read_text())['error'] == 'setup fixture failed'
+    assert json.loads((args.output / 'result.json').read_text(encoding="utf-8"))['error'] == 'setup fixture failed'
     assert not [w for w in app.topLevelWidgets() if w.isVisible() and w.windowTitle().startswith('Blackbox synthetic')]
