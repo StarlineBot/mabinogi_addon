@@ -195,6 +195,11 @@
   수정: 정렬 키를 `p.relative_to(base).as_posix()` 문자열로 고정(고정 해시값 변경 불필요).
 - 독립 QA(`e75aa16`): 정렬 수정 확인. autocrlf=true + Path 비교 대소문자 무시 흉내 조건에서 nv·AMF 해시 일치,
   0.11.4 변경 검사 437건/23.39초, 번들 검사 22건 통과. 다음 실행에서 처음 FFmpeg Windows configure/빌드 단계 진입.
+- v0.11.4 게시 완료: [39881033466](https://github.com/StarlineBot/mabinogi_addon/actions/runs/39881033466) (apt 34초, 변경 검사
+  27초, Windows 기동 10초, exe 빌드 5분39초 — nvenc/amf 포함 FFmpeg Windows 빌드 첫 성공, 전체 약 8분) → 게시
+  [39881856653](https://github.com/StarlineBot/mabinogi_addon/actions/runs/39881856653) 성공(1분20초). 태그 `baa46da`.
+  Release exe 162,805,167 bytes, sha256 `10134a54…0d25`가 version.json과 일치(직접 다운로드 확인).
+  실게임(NVENC 녹화·저장 키·업데이트 후 자동 재실행·RSS 재연결 후 확인·원복 거절 경로) 확인 남음.
 
 ### 0.11.3 추가 — 항상 관리자 실행 복원, 블랙박스 종료 확인 흐름 시안
 
