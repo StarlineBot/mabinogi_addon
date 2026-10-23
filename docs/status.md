@@ -112,6 +112,11 @@
 
 ## 마지막 작업
 
+### 업데이트 작업 스레드 테스트 보강 (6bbace9 대응)
+
+- `test_real_worker_dispatch_and_failure_retry`: 시한 15초, 초과 시 상태+전체 스레드 스택을 실제 stderr로 출력
+  (pytest 실패 보고 'Captured stderr'에 남는 것 확인). 검증 조건 불변, 로컬 반복 통과. 근본 원인은 재발 스택으로 확인 예정.
+
 ### 0.11.4 검증 실패 수정 — 헤더 CRLF 체크아웃 (0a51073 대응)
 
 - `_git_checkout` clone에 `--config core.autocrlf=false`. 전역 autocrlf=true 재현 회귀(로컬 저장소, 수정 전 실패 확인)와
