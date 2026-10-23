@@ -306,6 +306,13 @@
   - Highly Likely(원인 계층 미확인): 도착 지연이 FPS에 반비례 → PresentMon 표준 출력이 파이프에서 일정 크기씩 묶여 나가는 버퍼링(또는
     ETW 버퍼 전달). 앱은 QProcess readyRead로 바로 읽음. 수정 방향: 도착 지연을 로그로 실측하고, QPC 시각이 정확하면 지연만으로
     구간을 끊지 않기(`cutoff` 이전 이벤트만 버림), PresentMon 출력 즉시 전달 수단이 있으면 함께.
+- 0.13.2 실사용: 게임에 들어가면 게임 창 테두리에 노란 테두리.
+  - Confirmed(코드): Windows 11은 Windows Graphics Capture로 창을 캡처하는 동안 노란 테두리를 그린다. `native/blackbox/capture.cpp`는
+    `CreateCaptureSession` 뒤 커서 옵션만 정하고 `IsBorderRequired(false)`를 설정하지 않음.
+  - 0.13.1까지는 소리 오류로 캡처가 약 1초 만에 닫혀 잠깐만 보였고, 0.13.2부터 녹화가 이어져 게임이 앞에 있는 동안 계속 보임
+    (블랙박스가 계속 녹화 중이라는 간접 증거). 녹화 영상에는 들어가지 않음(DWM이 창 밖에 그림).
+  - 수정 방향: `GraphicsCaptureAccess::RequestAccessAsync(Borderless)` 확인 뒤 `session.IsBorderRequired(false)`,
+    API 없음(구버전 Windows)·거부 시 녹화는 계속하고 테두리 유지 사실만 로그·상태에 안내. 실게임 확인 필요.
 
 ### 0.12.0 개발 — 최적화 13.1~13.3, FPS 7절 (실험 준비)
 
