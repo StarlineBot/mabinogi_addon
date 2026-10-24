@@ -156,6 +156,15 @@
   version.json 0.14.1·exe 162,812,002바이트·sha256 `4708ac77…073a`가 공개 저장소 URL 직접 다운로드와 일치.
 - 0.14.1 실게임(사용자 스크린샷): 단축키 저장 중 탭 문구 `저장 중 · 1분 49초 분량 · 경과 0:13 · 약 32% (인코딩)` 정상 표시
   (평소 녹화, 확보 115초·배지 1:55 일치). 남은 실게임 확인: 녹화 중 종료 1회 클릭, 업데이트 뒤 FPS 표시 유지, 완료 문구 '걸림'.
+- **0.14.1 회귀(Confirmed, 재현 `scripts/qa_0141_blackbox_saved_toast_stuck.py` REPRODUCED): 저장 완료 뒤 게임 화면 '영상 저장 완료 · 1분 49초'가 사라지지 않고
+  탭은 '저장 대기 1건 · 앞 작업이 끝나면 시작해요'에 멈춤(사용자 스크린샷 2장).**
+  - 원인: 417a32c가 `BlackboxController._tick`의 완료 분기에 `time.monotonic()`을 넣었는데, 같은 함수의 단축키 문구 분기에 기존 지역 `import time`이 있어
+    `time`이 함수 지역 변수가 된다. 단축키 문구(`_hotkey_note`)가 끝난 뒤(None) 완료가 오면 UnboundLocalError → `service.completed.clear()`에 못 닿음 →
+    100ms 틱마다 완료 알림 재표시(3초 타이머 재시작)·탭 문구 갱신 중단. 예외 전 단계(service.tick·배지)는 돌아 녹화·저장 파일 자체는 정상.
+  - 영향: 이후 모든 완료·거부가 completed에 쌓여 매 틱 재표시. 거부(rejected)는 효과음까지 매 틱 반복될 수 있음. 앱 재시작 전까지 지속.
+  - 재현: 실제 `_tick` 5틱 — 문구 끝난 뒤 완료: 알림 5번·completed 남음·탭 '저장 대기 1건' 고정·UnboundLocalError / 문구 표시 중 완료: 알림 1번·정상.
+  - 수정 방향(0.14.2 핫픽스): `_tick`의 지역 `import time` 제거(모듈 상단 import 사용, 같은 패턴의 다른 지역 import도 정리),
+    completed는 먼저 꺼내 비운 뒤 처리(예외가 나도 무한 재표시 없음), 위 Potential(취소·실패 뒤 progress/_save_started) 함께. 회귀: `_hotkey_note=None`+saved 틱.
 
 ### 0.14.0 '뒤에 있을 때 녹화 되돌림' 보류 — 뒤에서도 녹화하는 버전으로 먼저 배포 테스트 (사용자 요청)
 
