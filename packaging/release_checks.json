@@ -1,5 +1,5 @@
 {
-  "version": "0.14.2",
+  "version": "0.15.0",
   "tests": [
     "tests/test_blackbox.py",
     "tests/test_blackbox_access.py",
@@ -29,6 +29,7 @@
     "tests/test_overlay_metrics.py",
     "tests/test_halo_clock.py",
     "tests/test_blackbox_combat.py",
+    "tests/test_blackbox_stream.py",
     "tests/test_log_throttle.py"
   ]
 }

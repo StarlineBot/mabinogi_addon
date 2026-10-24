@@ -3,6 +3,7 @@
 원시 프레임 큐가 차면 오류로 중단하고 무음 누락/무제한 메모리 증가로 대체하지 않는다.
 게임 PCM은 같은 시간 구간이 완전히 있을 때만 결합한다. 누락 시 실패하고 무음으로 대체하지 않는다.
 """
+from collections import deque
 from dataclasses import dataclass
 from queue import Queue, Empty, Full
 from threading import Event, Thread, Lock
@@ -19,6 +20,7 @@ _log = logging.getLogger(__name__)
 _TIMING_FIRST = 3        # 처음 몇 구간은 인코딩 시간을 하나씩 남긴다
 _TIMING_EVERY = 240      # 이후에는 이만큼(60FPS·15프레임 기준 약 60초)마다 요약
 FILL_LIMIT_US = 250_000  # 이 안의 프레임 공백은 직전 프레임 반복으로 채우고, 넘으면 구간을 끊는다
+FLUSH_WAIT_S = 1.0       # 저장 요청 지점이 담긴 조각을 기다리는 상한(화면이 멈춰 프레임이 안 오면 인코더를 닫아 마무리)
 AUDIO_WAIT_S = 3.0       # 한 묶음이 소리를 기다리는 상한. 넘으면 소리가 있는 만큼만 쓰고 이어 녹화(무음 채움 없음)
 
 
@@ -66,6 +68,11 @@ class CaptureProducer:
         self.segments = 0  # 완료한 구간 수(오류 로그용)
         self.filled = 0  # 직전 프레임 반복으로 채운 칸 수
         self._timing = []
+        # 녹화 진단(0.15.0 검증 지표): 캡처 읽기 시간, 직전 요약 이후 반복 채움·공백 증가분·서로 다른 화면 수
+        self._reads = deque(maxlen=8192)
+        self._distinct, self._slots = 0, 0
+        self._logged_filled = self._logged_gaps = 0
+        self.restarts = 0  # 상주 인코더를 다시 연 횟수(공백·저장 마무리)
         self._flush = []
         self._flush_lock = Lock()
         self._error = None
@@ -138,7 +145,10 @@ class CaptureProducer:
                     for request in requests:
                         self._put(self._batches, ('flush', request), pump=True)
                 self._pump_audio()
+                read_started = time.perf_counter()
                 frame = self.native.read()
+                if frame is not None:
+                    self._reads.append(time.perf_counter() - read_started)
                 if frame is None:
                     self._stop.wait(0.002)
                     continue
@@ -217,18 +227,140 @@ class CaptureProducer:
                      stage, self._error, self.target, self.segments, self.gaps,
                      self.audio.gaps if self.audio is not None else 0)
 
-    def _segment_timing(self, seconds, frames):
+    def _diagnostics(self):
+        """직전 요약 이후 녹화 진단 문자열을 만들고 누적을 비운다(영상 끊김 원인 구분용)."""
+        reads, self._reads = list(self._reads), deque(maxlen=8192)
+        fps = self._distinct / (self._slots / self.codec.settings.fps) if self._slots else 0.0
+        filled, gaps = self.filled - self._logged_filled, self.gaps - self._logged_gaps
+        self._logged_filled, self._logged_gaps, self._distinct, self._slots = self.filled, self.gaps, 0, 0
+        read = (f'평균 {sum(reads) / len(reads) * 1000:.1f}ms·최대 {max(reads) * 1000:.1f}ms' if reads else '없음')
+        return (f'반복 채움 +{filled}칸 · 서로 다른 화면 {fps:.1f}FPS · 캡처 읽기 {read} · '
+                f'프레임 공백 +{gaps}회(누적 {self.gaps}) · 인코더 재시작 누적 {self.restarts}회')
+
+    def _segment_timing(self, seconds, frames, distinct=None, label='구간 인코딩'):
+        """구간(묶음)마다 걸린 시간. 상주 인코더에서는 인코더 입력(stdin) 대기 시간이다."""
         budget = frames / self.codec.settings.fps
         self._timing.append(seconds)
+        self._slots += frames
+        self._distinct += frames if distinct is None else distinct
         count = len(self._timing)
         if count <= _TIMING_FIRST:
-            _log.info('블랙박스 구간 인코딩 %.3f초(구간 길이 %.3f초)', seconds, budget)
+            _log.info('블랙박스 %s %.3f초(구간 길이 %.3f초)', label, seconds, budget)
         if count % _TIMING_EVERY == 0:
             recent = self._timing[-_TIMING_EVERY:]
-            _log.info('블랙박스 구간 인코딩 최근 %d개: 평균 %.3f초 · 최대 %.3f초 · 구간 길이 초과 %d개 · 프레임 공백 누적 %d회'
-                      ' · 소리 공백 누적 %d회', len(recent), sum(recent) / len(recent), max(recent),
-                      sum(t > budget for t in recent), self.gaps, self.audio.gaps if self.audio is not None else 0)
+            _log.info('블랙박스 %s 최근 %d개: 평균 %.3f초 · 최대 %.3f초 · 구간 길이 초과 %d개 · %s'
+                      ' · 소리 공백 누적 %d회', label, len(recent), sum(recent) / len(recent), max(recent),
+                      sum(t > budget for t in recent), self._diagnostics(),
+                      self.audio.gaps if self.audio is not None else 0)
             del self._timing[:-_TIMING_EVERY]
+
+    @staticmethod
+    def _distinct_frames(frames):
+        # 반복 채움 칸은 직전 프레임과 같은 bytes 객체라 객체 비교로 서로 다른 화면 수를 센다
+        return 1 + sum(frames[i] is not frames[i - 1] for i in range(1, len(frames)))
+
+    def _stream_loop(self):
+        """상주 인코더(0.15.0): 연속 구간 동안 ffmpeg 1개에 프레임을 계속 흘리고 조각마다 구간을 만든다.
+
+        공백(시각이 이어지지 않음)·화면 크기 변경·종료 때만 인코더를 닫고 다시 연다. 저장 요청(flush)은
+        요청 전까지 넣은 프레임이 모두 조각으로 나온 뒤에 결과로 넘긴다(조각은 다음 키프레임이 와야 나오므로
+        보통 0.25~0.5초 뒤). 화면이 멈춰 FLUSH_WAIT_S 안에 안 나오면 인코더를 닫아 마무리한다."""
+        fps = self.codec.settings.fps
+        period = 1_000_000 / fps
+        lock = Lock()
+        state = dict(stream=None, dims=None, expected=None, written=0, emitted=0)
+        stamps = deque()
+        pending = []  # (이 시점까지 넣은 프레임 수, 저장 요청, 받은 시각)
+
+        def on_fragment(data, count):  # 인코더 출력 스레드
+            if len(stamps) < count:
+                raise ValueError(f'인코더 조각 프레임 수 {count}가 넣은 프레임보다 많아요')
+            start = stamps[0]
+            for _ in range(count):
+                stamps.popleft()
+            width, height = state['dims']
+            source = self.spool.write(lambda sink: sink.write(data), max_bytes=self.limits.max_segment_bytes)
+            segment = Segment(self.target.session, source, start, start + round(count * 1_000_000 / fps),
+                              self.spool.resolve(source).stat().st_size, f'{width}x{height}:{fps}:video')
+            self._put(self.results, ('segment', segment))
+            self.segments += 1
+            with lock:
+                state['emitted'] += count
+                ready = [request for written, request, _ in pending if written <= state['emitted']]
+                pending[:] = [item for item in pending if item[0] > state['emitted']]
+            for request in ready:
+                self._put(self.results, ('flush', request))
+
+        def close(graceful=True):
+            stream = state['stream']
+            if stream is None:
+                return
+            state['stream'] = None
+            if graceful:
+                stream.finish(self.codec.settings.timeout)
+                if stamps:
+                    raise ValueError(f'인코더가 넣은 프레임 {len(stamps)}개를 구간으로 내보내지 않았어요')
+            else:
+                stream.abort()
+            stamps.clear()
+            with lock:
+                ready, pending[:] = [request for _, request, _ in pending], []
+            for request in ready:
+                self._put(self.results, ('flush', request))
+
+        def restarted(reason):
+            self.restarts += 1
+            if self.restarts <= 3 or self.restarts % 100 == 0:
+                _log.info('블랙박스 인코더 다시 시작(%s) · 누적 %d회', reason, self.restarts)
+
+        try:
+            while not self._captured.is_set() or not self._batches.empty():
+                with lock:
+                    waiting = pending and time.monotonic() - pending[0][2] > FLUSH_WAIT_S
+                if waiting:
+                    close()  # 화면이 멈춰 다음 조각이 안 나옴: 남은 프레임을 마무리해 저장을 진행한다
+                    restarted('저장 요청 마무리')
+                try:
+                    batch = self._batches.get(timeout=0.05)
+                except Empty:
+                    continue
+                if batch[0] == 'flush':
+                    with lock:
+                        if state['stream'] is None or state['written'] <= state['emitted']:
+                            ready = True
+                        else:
+                            ready = False
+                            pending.append((state['written'], batch[1], time.monotonic()))
+                    if ready:
+                        self._put(self.results, batch)
+                    continue
+                frames, batch_stamps, dims = batch
+                if state['stream'] is not None and (dims != state['dims'] or abs(batch_stamps[0] - state['expected']) > period / 2):
+                    close()  # 공백·크기 변경: 이 지점에서 영상이 이어지지 않으므로 새 인코더로
+                    restarted('화면 크기 변경' if dims != state['dims'] else '프레임 공백')
+                if state['stream'] is None:
+                    state['dims'] = dims
+                    with lock:
+                        state['written'] = state['emitted'] = 0
+                    started = time.perf_counter()
+                    state['stream'] = self.codec.open_stream(dims[0], dims[1], self.limits.segment_frames, on_fragment)
+                    if not self.restarts:
+                        _log.info('블랙박스 상주 인코더 시작 %d×%d · %.2f초', dims[0], dims[1], time.perf_counter() - started)
+                waited = 0.0
+                for data, stamp in zip(frames, batch_stamps):
+                    stamps.append(stamp)
+                    waited += state['stream'].write(data)
+                    with lock:
+                        state['written'] += 1
+                state['expected'] = batch_stamps[-1] + period
+                self._segment_timing(waited, len(frames), self._distinct_frames(frames), '인코더 입력 대기')
+            close()
+        except BaseException:
+            try:
+                close(graceful=False)
+            except Exception:
+                pass
+            raise
 
     def _encode_loop(self):
         try:
@@ -238,6 +370,8 @@ class CaptureProducer:
                 encoder = select()  # 후보 시험 인코딩은 캡처 시작 전에(첫 구간이 밀리지 않게)
                 _log.info('블랙박스 인코더 준비 %.2f초: %s', time.perf_counter() - started, encoder)
             self._ready.set()
+            if self.audio is None and hasattr(self.codec, 'open_stream'):
+                return self._stream_loop()
             while not self._captured.is_set() or not self._batches.empty():
                 try:
                     batch = self._batches.get(timeout=0.05)
@@ -275,7 +409,7 @@ class CaptureProducer:
                 started = time.perf_counter()
                 source = self.spool.write(lambda sink: self.codec.encode_frames(frames, width, height, sink,
                                           audio_path=audio_path), max_bytes=self.limits.max_segment_bytes)
-                self._segment_timing(time.perf_counter() - started, len(frames))
+                self._segment_timing(time.perf_counter() - started, len(frames), self._distinct_frames(frames))
                 segment = Segment(self.target.session, source, stamps[0], stamps[0] + duration,
                     self.spool.resolve(source).stat().st_size, f'{width}x{height}:{self.codec.settings.fps}:' + ('audio' if self.audio is not None else 'video'))
                 self._put(self.results, ('segment', segment))

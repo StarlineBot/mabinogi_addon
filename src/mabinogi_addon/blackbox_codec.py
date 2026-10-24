@@ -116,6 +116,144 @@ def stream_process(command, sink, *, timeout: float, chunks=(), host=None):
                 thread.join()
 
 
+STREAM_STALL_S = 10.0  # 상주 인코더가 입력을 이만큼 못 받으면 멈춘 것으로 보고 중단
+
+
+class EncoderStream:
+    """녹화 동안 유지하는 ffmpeg 1개(0.15.0 상주 인코더). BGRA 프레임을 stdin으로 계속 흘리고,
+    stdout의 fragmented MP4를 조각(15프레임)마다 독립 MP4로 잘라 on_fragment(data, frames)로 넘긴다.
+
+    0.14.1까지는 0.25초 구간마다 ffmpeg 실행·하드웨어 인코더 초기화를 반복해 구간당 평균 0.34초가 걸렸고,
+    캡처가 밀려 영상이 끊겼다(사용자 app.log). 상주 인코더는 시작 비용을 녹화 시작·공백 뒤 한 번만 낸다.
+    on_fragment는 출력 읽기 스레드에서 순서대로 불린다. 오류는 write/finish에서 올린다(인코더 종료 코드·stderr 우선).
+    """
+
+    def __init__(self, command, on_fragment, *, host=None, stall=STREAM_STALL_S, splitter=None):
+        from queue import Queue
+        from .blackbox_fmp4 import FragmentSplitter
+        if sys.platform == 'win32':
+            if host is None or not Path(host).is_absolute() or not Path(host).is_file():
+                raise ValueError('built Windows codec host required for process-tree lifetime')
+            command = [str(host), *command]
+        self._stall = stall
+        self._splitter = splitter or FragmentSplitter()
+        self._on_fragment = on_fragment
+        self._inputs = Queue(maxsize=2)  # 프레임 참조만 담는다(복사 없음)
+        self._errors, self._diagnostic, self._lock = [], bytearray(), threading.Lock()
+        self.written = 0
+        self.process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, shell=False, start_new_session=sys.platform != 'win32',
+            creationflags=0x08000000 if sys.platform == 'win32' else 0)
+        self._threads = [threading.Thread(target=fn, name=f'blackbox-encoder-{name}', daemon=True)
+                         for name, fn in (('in', self._input), ('out', self._output), ('err', self._stderr))]
+        for thread in self._threads:
+            thread.start()
+
+    def _input(self):
+        try:
+            while (data := self._inputs.get()) is not None:
+                self.process.stdin.write(data)
+            self.process.stdin.close()
+        except BaseException as exc:
+            self._errors.append(exc)
+
+    def _output(self):
+        try:
+            # read1: 받은 만큼 바로 돌려준다(read(n)은 n바이트가 찰 때까지 기다려 조각이 늦게 나온다).
+            while chunk := self.process.stdout.read1(65536):
+                for data, frames in self._splitter.feed(chunk):
+                    self._on_fragment(data, frames)
+        except BaseException as exc:
+            self._errors.append(exc)
+
+    def _stderr(self):
+        try:
+            while chunk := self.process.stderr.read(4096):
+                with self._lock:
+                    self._diagnostic.extend(chunk)
+                    del self._diagnostic[:-8192]
+        except OSError:
+            pass
+
+    def _failure(self):
+        """인코더가 비정상 종료했으면 종료 코드·stderr를 우선 보여준다(BrokenPipe가 원인을 가리지 않게)."""
+        try:
+            self.process.wait(1.0)
+        except subprocess.TimeoutExpired:
+            return self._errors[0] if self._errors else None
+        if self.process.returncode:
+            self._threads[2].join(1.0)
+            with self._lock:
+                text = self._diagnostic.decode(errors='replace').strip()
+            _log.error('blackbox encoder exited %s: %s', self.process.returncode, text)
+            return OSError(f'encoder exited {self.process.returncode}: {text}')
+        return self._errors[0] if self._errors else None
+
+    def _put(self, item):
+        """입력 대기열에 넣고 기다린 시간(초)을 돌려준다. 인코더가 못 받으면 여기서 기다린다(입력 대기)."""
+        from queue import Full
+        started = time.perf_counter()
+        deadline = time.monotonic() + self._stall
+        while True:
+            if self._errors or self.process.poll() is not None:
+                raise self._failure() or OSError(f'encoder exited {self.process.returncode}')
+            try:
+                self._inputs.put(item, timeout=0.05)
+                return time.perf_counter() - started
+            except Full:
+                if time.monotonic() >= deadline:
+                    raise TimeoutError(f'블랙박스 인코더가 {self._stall:.0f}초 동안 입력을 받지 않았어요')
+
+    def write(self, data: bytes) -> float:
+        waited = self._put(data)
+        self.written += 1
+        return waited
+
+    def finish(self, timeout: float):
+        """입력을 닫고 남은 조각을 모두 받은 뒤 종료를 확인한다. 실패하면 예외."""
+        try:
+            self._put(None)
+            deadline = time.monotonic() + timeout
+            for thread in self._threads:
+                thread.join(max(0.0, deadline - time.monotonic()))
+            if any(thread.is_alive() for thread in self._threads):
+                raise TimeoutError('encoder stream did not finish')
+            self.process.wait(max(0.1, deadline - time.monotonic()))
+            if self.process.returncode or self._errors:
+                raise self._failure() or OSError(f'encoder exited {self.process.returncode}')
+            if self._splitter.pending:
+                raise ValueError(f'인코더 출력이 조각 중간에서 끝났어요({self._splitter.pending}바이트)')
+        finally:
+            self.abort()
+
+    def abort(self):
+        """프로세스를 정리한다(여러 번 불러도 됨)."""
+        process = self.process
+        if sys.platform != 'win32':
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except (ProcessLookupError, PermissionError):
+                pass
+        if process.poll() is None:
+            process.kill()
+        process.wait()
+        from queue import Empty
+        try:
+            while True:
+                self._inputs.get_nowait()
+        except Empty:
+            pass
+        self._inputs.put_nowait(None)  # 입력 스레드가 대기열에서 기다리고 있으면 깨운다
+        for pipe in (process.stdin, process.stdout, process.stderr):
+            try:
+                pipe.close()
+            except OSError:
+                pass
+        for thread in self._threads:
+            if thread is not threading.current_thread():
+                thread.join(2.0)
+
+
 @dataclass(frozen=True)
 class CodecSettings:
     ffmpeg: Path
@@ -218,9 +356,16 @@ class FFmpegEncoder:
         else:
             _log.warning('블랙박스 인코더 %s: 첫 시험은 실패했지만 진단 재실행은 성공(일시 오류 가능)', encoder)
 
-    def _output(self, audio=False, encoder=None):
+    def _output(self, audio=False, encoder=None, gop=None):
         s = self.settings
         encoder = encoder or self.encoder()
+        keyframes = []
+        if gop is not None:
+            # 상주 인코더: gop 프레임마다 키프레임을 고정해 조각(moof+mdat)이 구간 길이와 같게 한다(장면 전환 키프레임 끔).
+            keyframes = ['-g', str(gop), '-keyint_min', str(gop), '-sc_threshold', '0',
+                         '-force_key_frames', f'expr:eq(mod(n,{gop}),0)', '-flush_packets', '1']
+            if encoder == 'h264_nvenc':
+                keyframes += ['-forced-idr', '1']
         audio_args = []
         if audio:
             if type(s.audio_bitrate) is not int or s.audio_bitrate <= 0:
@@ -229,8 +374,22 @@ class FFmpegEncoder:
         hardware = ['-hw_encoding', '1'] if encoder == 'h264_mf' else []
         pixel_format = 'nv12' if encoder in HARDWARE_ENCODERS else 'yuv420p'
         return [*audio_args, '-r', str(s.fps), '-c:v', encoder, *hardware, '-b:v', str(s.bitrate), '-threads', '1', '-bf', '0',
-                '-pix_fmt', pixel_format, '-movflags', 'frag_keyframe+delay_moov+default_base_moof',
+                *keyframes, '-pix_fmt', pixel_format, '-movflags', 'frag_keyframe+delay_moov+default_base_moof',
                 '-f', 'mp4', 'pipe:1']
+
+    def _input_command(self, width, height):
+        return [str(self.settings.ffmpeg), '-v', 'error', '-nostdin', '-xerror', '-err_detect', 'explode', '-f', 'rawvideo',
+                '-pix_fmt', 'bgra', '-video_size', f'{width}x{height}', '-framerate', str(self.settings.fps),
+                '-i', 'pipe:0']
+
+    _SCALE = ['-vf', "scale=w='min(1920,iw)':h='min(1080,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2"]
+
+    def open_stream(self, width, height, gop, on_fragment):
+        """녹화용 상주 인코더(0.15.0). gop 프레임마다 on_fragment(독립 MP4 bytes, 프레임 수)."""
+        if width < 2 or height < 2:
+            raise ValueError('source must have at least two pixels per dimension')
+        command = [*self._input_command(width, height), '-an', *self._SCALE, *self._output(gop=gop)]
+        return EncoderStream(command, on_fragment, host=self.settings.host)
 
     def encode_frames(self, frames, width, height, sink, *, audio_path=None):
         if width < 2 or height < 2:
