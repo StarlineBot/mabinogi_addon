@@ -217,6 +217,16 @@
   - 실게임 미검증: 1080p NVENC 처리량(240구간 요약의 입력 대기 평균 ≪0.25초·공백 +0·재시작 0·서로 다른 화면 FPS≈게임 FPS), 저장 영상 끊김, 알림 3초 소멸.
 - v0.15.0 게시 완료: 검증·게시 [40064426567](https://github.com/StarlineBot/mabinogi_addon/actions/runs/40064426567) 성공, 태그 `v0.15.0` → bc8f63f.
   version.json 0.15.0·exe 162,891,458바이트·sha256 `83866d24…bd39`가 공개 저장소 URL 직접 다운로드와 일치.
+- **0.15.0 실게임 녹화 불가(Confirmed, 사용자 스크린샷):** '녹화 오류 · 확보한 영상 0초', 저장은 '영상이 너무 짧아요'.
+  상세 `OSError: encoder exited 2880417800: Unrecognized option 'sc_threshold'. Error splitting the argument list: Option not found`.
+  - 원인: 2f8c6da `_output(gop=…)`가 상주 인코더 명령에 `-sc_threshold 0`을 넣음. FFmpeg 6.1·8.0 소스에서 `sc_threshold`는 공통 옵션(options_table.h)이 아니라
+    libx264 등 개별 인코더 전용 옵션. 번들 최소 빌드(--disable-gpl, libx264 없음)에는 이 옵션을 가진 인코더가 없어 ffmpeg가 인자 해석 단계에서 종료
+    → 상주 인코더가 매번 시작 실패 → 녹화 0초. (`-g`·`-keyint_min`·`-flush_packets`는 공통, `-forced-idr`는 NVENC 전용이라 번들에 있음.)
+  - 테스트·QA가 못 잡은 이유: 합성 테스트와 qa_0150은 시스템 ffmpeg(libx264 포함, test_support/blackbox_codec.py '제품 번들 아님')를 씀.
+    0.13.0(번들 구성 누락 저장 실패)과 같은 종류 — 시스템 ffmpeg 회귀는 번들 옵션·구성 차이를 못 잡는다. QA도 이 차이를 확인하지 않았음.
+  - 수정 방향(0.15.1): `-sc_threshold 0`은 libx264일 때만. 번들 기준 회귀: 번들 준비(packaging/blackbox_bundle.py) 때 빌드된 ffmpeg로
+    상주 인코더 명령을 빈 입력으로 실행해 'Unrecognized option'/'Option not found'가 없는지 확인(빌드 검사 경로 변경이라 사용자 승인 필요).
+    Improvement: 녹화 오류 상태에서 저장 실패 사유를 '영상이 너무 짧아요' 대신 '녹화 오류로 저장할 영상이 없어요'로.
 
 ### 0.14.0 '뒤에 있을 때 녹화 되돌림' 보류 — 뒤에서도 녹화하는 버전으로 먼저 배포 테스트 (사용자 요청)
 
