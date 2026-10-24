@@ -144,6 +144,14 @@
   out_time_us/저장 분량으로 퍼센트, 검증 단계는 '마무리 확인 중(검증)'. 탭 문구 `저장 중 · m분 s초 분량 · 경과 m:ss · 약 n% (인코딩)`,
   뒤 대기 `다음 저장 대기 n건`, 완료 `저장 완료: 경로 · 분량 · m:ss 걸림`. 회귀(진행 파싱·문구).
 - 4(상주 인코더)는 규모가 커 0.15.0으로 분리.
+- **독립 QA(18d639e·417a32c): 통과, 0.14.1 배포 가능.**
+  - 종료: 첫 `prepare_close`의 request_stop 뒤 컨트롤러 100ms tick이 producer를 비우고 다음 200ms 재시도에서 정리 완료 — 창 없이 1회 클릭 종료 경로 확인(코드). 저장 진행 중·실패 자료는 기존 복구 창 유지.
+  - 업데이트: 재시도 중 재질문 없음, 성공 시 splash 전에 FPS `stop_frames`(display 저장 안 함 — `_toggle_frames`만 저장). 새 실행 복원은 pending이면 정리 후 시작.
+  - 저장 진행: 번들 ffmpeg 8.1.3 최소 빌드에 file 프로토콜 포함·codec host는 kill-on-close 잡만이라 `-progress` 임시 파일 쓰기 가능(코드). 시스템 ffmpeg 6.1 실제 저장 재현 `scripts/qa_0141_blackbox_save_progress.py`: 20초 분량에서 퍼센트 표본 61개(최대 88% 뒤 검증 단계), 완료 뒤 progress None.
+  - Potential(표시만): 저장 취소·인코딩 실패는 validate를 거치지 않아 `codec.progress`가 남는다(qa_0141 종료 1). 탭은 실패 문구가 우선이라 거의 안 보이지만, 컨트롤러 `_save_started`도 남아 **다음 저장 완료의 'm:ss 걸림'이 실패한 저장 시작부터 계산**될 수 있다. 수정: encode의 finally에서 실패 시 progress None, 컨트롤러는 completed의 실패·취소에서도 `_save_started=None`. 0.14.2 또는 0.15.0에 묶어도 됨.
+  - 테스트: 배포 변경 검사 `run_release_checks --version 0.14.1` 516 passed. 전체(tkinter 제외) 2950 passed·1 failed —
+    `test_release_checks::test_current_plan_matches…`의 기대 목록 하드코딩이 0.13.0·0.13.6에 추가된 `test_overlay_metrics`·`test_halo_clock`을 모름(기존부터, 배포 검사 목록 밖). Improvement: 기대 목록 갱신.
+  - 실게임 미검증: 녹화 중 종료·업데이트 1회 클릭, 업데이트 뒤 FPS 표시 유지, 저장 진행 문구.
 
 ### 0.14.0 '뒤에 있을 때 녹화 되돌림' 보류 — 뒤에서도 녹화하는 버전으로 먼저 배포 테스트 (사용자 요청)
 
