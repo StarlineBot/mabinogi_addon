@@ -244,6 +244,8 @@
     모르는 옵션 주입 시 세 후보 모두 'Option not found'로 잡힘(0.2초, 빈 입력에서 멈추지 않음). 리눅스 ffmpeg엔 h264_mf가 없어 -hw_encoding이 걸리는 것도 같은 원리로 확인.
     변경 검사 0.15.1 540 passed, test_blackbox_bundle 25 passed, qa_0150 PASS, qa_0141 두 개·qa_0140 종료 0. 녹화 오류 시 저장 실패 문구 분리 확인.
     한계: 번들(Windows 최소 빌드) 실제 실행은 이 환경에서 불가 — 배포 Actions의 번들 준비 단계가 그 검사.
+- v0.15.1 게시 완료: 검증·게시 [40069155361](https://github.com/StarlineBot/mabinogi_addon/actions/runs/40069155361) 성공(번들 상주 명령 옵션 검사 포함), 태그 `v0.15.1` → 6b1cab2.
+  version.json 0.15.1·exe 162,891,820바이트·sha256 `36ba4c74…f063`가 공개 저장소 URL 직접 다운로드와 일치. 실게임 녹화·끊김·240구간 요약 확인 남음.
 
 ### 0.14.0 '뒤에 있을 때 녹화 되돌림' 보류 — 뒤에서도 녹화하는 버전으로 먼저 배포 테스트 (사용자 요청)
 
