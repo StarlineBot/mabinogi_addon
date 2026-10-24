@@ -175,7 +175,7 @@ class Engine:
                 self.session_end = 'network_only'
                 return
             seen = set()
-            priority = dict(applied=set(), reapplied=[], stopped=set(), preset=set())  # 게임 우선순위 상태(13.7)
+            priority = dict(applied=set(), reapplied=[], stopped=set(), preset=set(), background=set())  # 게임 우선순위 상태(13.7)
             observed = game
             while not self.cancel.is_set() and self.allowed():
                 if observed is None:
@@ -262,6 +262,12 @@ class Engine:
             focused = foreground(game) if foreground is not None else True
         except Exception:
             focused = True
+        # 직전 확인에서 게임 창이 뒤였는지: 뒤→앞 복귀 뒤 첫 다시 걸기는 한도에 넣지 않는다(Alt+Tab마다 한도가 차 관리가 멈추던 문제, 0.17.0 QA)
+        returned = focused and identity in state.setdefault('background', set())
+        if focused:
+            state['background'].discard(identity)
+        else:
+            state['background'].add(identity)
         if identity not in state['applied']:
             state['applied'].add(identity)
             try:
@@ -318,6 +324,15 @@ class Engine:
             message = (f"다른 도구가 게임 우선순위를 바꿨어요(현재 {name(current)}). 덮어쓰지 않고 관리에서 뺐어요(원복하지 않음).")
             _log.warning(message)
             notices.append(message)
+            return notices
+        if returned:
+            # 뒤에 있는 동안 게임이 낮춘 보통: 앞으로 돌아온 첫 확인에서 다시 건다(한도는 앞에 있는 동안 되돌아간 경우만 센다)
+            try:
+                self.backend.write('priority', game, item['applied'])
+            except ProcessLookupError:
+                pass
+            except Exception as exc:
+                fail(f'게임 우선순위 다시 걸기 실패: {exc}')
             return notices
         now = time.monotonic()
         state['reapplied'] = [t for t in state['reapplied'] if now - t < PRIORITY_REAPPLY_WINDOW]

@@ -253,3 +253,39 @@ def test_preset_high_waits_while_background_then_manages_in_front(setup):
     assert _wait(lambda: b.values[KEY] == HIGH, 6)
     assert r.items[0]['old'] == NORMAL
     e.stop(); e.thread.join(5)
+
+
+def _direct(setup):
+    """_keep_priority를 2초 대기 없이 직접 부른다(Alt+Tab을 수십 번 반복하는 시뮬레이션용)."""
+    r, b = setup
+    front = [True]
+    b.foreground = lambda target: front[0]
+    e = Engine(b, r, lambda: True)
+    state = dict(applied=set(), reapplied=[], stopped=set(), preset=set(), background=set())
+    notices = []
+    tick = lambda: e._keep_priority(TARGET, state, [], notices, lambda message: notices.append(message))
+    tick()  # 첫 적용
+    assert b.values[KEY] == HIGH
+    return b, front, state, notices, tick
+
+
+def test_alt_tab_return_reapply_is_not_counted_toward_limit(setup):
+    # 0.17.0 QA(4b6fb48): 뒤(게임이 보통으로 낮춤)↔앞 35번 반복해도 매번 다시 높음, 관리가 멈추지 않는다.
+    b, front, state, notices, tick = _direct(setup)
+    for _ in range(35):
+        front[0] = False
+        b.values[KEY] = NORMAL
+        tick()
+        assert b.values[KEY] == NORMAL  # 뒤에 있는 동안은 그대로
+        front[0] = True
+        tick()
+        assert b.values[KEY] == HIGH
+    assert not state['stopped'] and not state['reapplied'] and not any('계속' in n for n in notices)
+
+
+def test_reverts_while_in_front_still_hit_the_limit(setup):
+    b, front, state, notices, tick = _direct(setup)
+    for _ in range(engine_module.PRIORITY_REAPPLY_LIMIT + 1):
+        b.values[KEY] = NORMAL  # 앞에 있는 동안 되돌림(맵 이동·재접속·다른 도구)
+        tick()
+    assert state['stopped'] and any('계속 보통(으)로 돌아가요' in n for n in notices)
