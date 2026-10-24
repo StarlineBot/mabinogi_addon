@@ -580,7 +580,7 @@ def test_collection_without_display_never_shows_overlay_and_records_usage(window
     assert not c.overlay.isVisible()
     assert wanted[-1] == ('cpu', 'gpu', 'process')  # 수집 중: 사용률·선호도·우선순위를 함께 읽음
     record = c.summary.current()
-    assert record['cpu_busiest_avg_percent'] == 90.0 and record['gpu_avg_percent'] == 40.0
+    assert record['game_cpu_thread_avg_percent'] == 90.0 and record['gpu_avg_percent'] == 40.0
     assert record['process_states'] == [state]
     c.frames, c._collect_only, c._summary_collecting = False, False, False
 

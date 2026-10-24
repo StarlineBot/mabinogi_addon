@@ -1,8 +1,8 @@
-"""FPS 오버레이 추가 지표(FPS 명세 8.4): CPU·GPU·게임 메모리. 읽기 전용, 1초 1회.
+"""FPS 오버레이 추가 지표(FPS 명세 8.4·10.4): 게임 CPU·GPU·게임 메모리. 읽기 전용, 1초 1회.
 
-- CPU: **가장 바쁜 논리 코어 사용률**(Processor(*)\\% Processor Time 최댓값). 마비노기처럼 한 스레드에 몰리는
-  게임은 전체 CPU%가 낮게 나온다(16스레드 중 1개 100% → 약 6%). 게임 프로세스 기준 값도 같은 이유로
-  코어 수로 나누면 낮고, 코어 1개 기준으로 두면 100%를 넘을 수 있어 '병목 코어'를 바로 보여주지 못한다.
+- 게임 CPU(10.4 D안, 0.17.0): **마비노기 프로세스에서 가장 바쁜 스레드의 사용률(코어 1개 = 100%)**(`process_threads.GameCpu`).
+  이전 정의(가장 바쁜 논리 코어, PC 전체)는 다른 프로그램 부하가 섞이고, 메인 스레드가 코어를 옮겨 다니면 낮게 나와 바꿨다.
+  조회할 수 없으면 '—'(이전 코어 기준 값으로 몰래 바꾸지 않음). 값 키는 설정 호환을 위해 그대로 'cpu'.
 - GPU: 작업 관리자와 같은 방식. GPU Engine(*)\\Utilization Percentage를 엔진(물리 GPU·eng_N)별로 프로세스 합을 내고
   그중 최댓값(보통 3D). 제조사와 무관하다.
 - 메모리: 게임 프로세스의 전용 메모리(PrivateUsage, 커밋). 장시간 증가(누수 주장) 확인에 쓴다.
@@ -22,12 +22,6 @@ _log = logging.getLogger(__name__)
 METRICS = ('fps', 'cpu', 'gpu', 'memory')
 _ENGINE = re.compile(r'phys_(?P<phys>\d+)_eng_(?P<eng>\d+)', re.IGNORECASE)
 _LUID = re.compile(r'luid_(0x[0-9a-f]+_0x[0-9a-f]+)', re.IGNORECASE)
-
-
-def busiest_core(values: dict) -> float | None:
-    """Processor 인스턴스별 사용률에서 _Total을 뺀 최댓값(0~100)."""
-    cores = [float(v) for name, v in values.items() if not str(name).startswith('_')]
-    return max(0.0, min(100.0, max(cores))) if cores else None
 
 
 # GetPriorityClass 값 → 작업 관리자 이름(FPS 명세 9절: 외부 도구가 바꾼 우선순위를 기록)
@@ -72,8 +66,7 @@ def gpu_utilization(values: dict) -> float | None:
 
 
 class WindowsPerfReader:
-    """PDH 카운터와 프로세스 메모리 조회. 켠 지표만 조회한다."""
-    CPU = r'\Processor(*)\% Processor Time'
+    """PDH 카운터(GPU)·게임 스레드 CPU·프로세스 메모리 조회. 켠 지표만 조회한다."""
     GPU = r'\GPU Engine(*)\Utilization Percentage'
 
     def __init__(self, metrics):
@@ -90,7 +83,9 @@ class WindowsPerfReader:
         self._counters = {}
         errors = []
         # 지표별로 따로 추가한다: 한 카운터가 없는 PC에서도 나머지는 표시한다(없는 값은 '—').
-        for key, path in (('cpu', self.CPU), ('gpu', self.GPU)):
+        from .process_threads import GameCpu
+        self._game_cpu = GameCpu() if 'cpu' in metrics else None
+        for key, path in (('gpu', self.GPU),):
             if key in metrics:
                 try:
                     self._counters[key] = win32pdh.AddEnglishCounter(self._query, path)
@@ -98,7 +93,7 @@ class WindowsPerfReader:
                     errors.append(f'{key}: {exc}')
         if errors:
             _log.warning('오버레이 지표 카운터 일부를 쓸 수 없어요: %s', '; '.join(errors))
-            if not self._counters and not {'memory', 'process'} & set(metrics):
+            if not self._counters and not {'memory', 'process', 'cpu'} & set(metrics):
                 self.close()
                 raise OSError('; '.join(errors))
         if self._counters:
@@ -113,7 +108,15 @@ class WindowsPerfReader:
                     values = pdh.GetFormattedCounterArray(counter, pdh.PDH_FMT_DOUBLE | pdh.PDH_FMT_NOCAP100)
                 except Exception:
                     values = {}
-                result[key] = busiest_core(values) if key == 'cpu' else gpu_utilization(values)
+                result[key] = gpu_utilization(values)
+        if self._game_cpu is not None:
+            try:
+                result['cpu'] = self._game_cpu.read(pid)
+            except Exception as exc:
+                result['cpu'] = None
+                if not getattr(self, '_cpu_warned', False):
+                    self._cpu_warned = True
+                    _log.warning('게임 CPU(스레드 시간)를 읽지 못했어요 · 표시는 —: %s', exc)
         if 'memory' in metrics and pid:
             result['memory'] = process_private_bytes(pid)
         if 'process' in metrics and pid:

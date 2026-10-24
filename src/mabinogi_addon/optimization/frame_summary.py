@@ -38,7 +38,7 @@ class FrameSummary:
         self._reset_observed()
 
     def _reset_observed(self):
-        # 구간마다 함께 남기는 읽기 전용 값(FPS 명세 9절): CPU(가장 바쁜 코어)·GPU 사용률 평균, 게임 선호도·우선순위
+        # 구간마다 함께 남기는 읽기 전용 값(FPS 명세 9절): 게임 CPU(가장 바쁜 스레드, 10.4)·GPU 사용률 평균, 게임 선호도·우선순위
         self._usage = dict(cpu=[0.0, 0], gpu=[0.0, 0])
         self._process = []
 
@@ -159,7 +159,8 @@ class FrameSummary:
             relative_long_count=len(long), relative_long_seconds=math.fsum(d for _, d in long),
             relative_long_per_minute=len(long) / total * 60,  # 구간 길이가 달라도 비교할 수 있게 분당 횟수
             condition=self.condition,
-            cpu_busiest_avg_percent=self._usage['cpu'][0] / self._usage['cpu'][1] if self._usage['cpu'][1] else None,
+            # 10.4: 이전 'cpu_busiest_avg_percent'(가장 바쁜 코어)와 섞지 않도록 정의 이름을 바꿔 남긴다
+            game_cpu_thread_avg_percent=self._usage['cpu'][0] / self._usage['cpu'][1] if self._usage['cpu'][1] else None,
             gpu_avg_percent=self._usage['gpu'][0] / self._usage['gpu'][1] if self._usage['gpu'][1] else None,
             process_states=[dict(state) for state in self._process],
             longest=[dict(at_seconds=self.relative(t), milliseconds=d*1000)
@@ -297,12 +298,13 @@ def condition_summary(reports):
                     continue
                 seen.add(key)
                 group = groups.setdefault(label(record.get('condition', report.get('condition'))),
-                                          dict(low=[], long=[], seconds=0.0, sessions=set(), cpu=[], gpu=[], states=[]))
+                                          dict(low=[], long=[], seconds=0.0, sessions=set(), cpu=[], game_cpu=[], gpu=[], states=[]))
                 group['low'].append(record['low_1pct_fps'])
                 group['long'].append(_long_per_minute(record))
                 group['seconds'] += record['measured_seconds']
                 group['sessions'].add(session)
-                group['cpu'].append(record.get('cpu_busiest_avg_percent'))
+                group['cpu'].append(record.get('cpu_busiest_avg_percent'))  # 이전 정의(0.16.0 자료)
+                group['game_cpu'].append(record.get('game_cpu_thread_avg_percent'))
                 group['gpu'].append(record.get('gpu_avg_percent'))
                 for state in record.get('process_states') or ():
                     if isinstance(state, dict) and state not in group['states']:
@@ -326,7 +328,8 @@ def condition_summary(reports):
             measured_seconds=group['seconds'], segment_low_1pct_fps=_spread(group['low']),
             segment_long_per_minute=_spread(group['long']),
             measurement_low_1pct_fps=_spread(measurements.get(name, [])),
-            cpu_busiest_percent=_spread(group['cpu']), gpu_percent=_spread(group['gpu']),
+            cpu_busiest_percent=_spread(group['cpu']), game_cpu_percent=_spread(group['game_cpu']),
+            gpu_percent=_spread(group['gpu']),
             # 조건 안에서 선호도·우선순위가 둘 이상이면 외부 도구 등으로 조건이 섞였을 수 있다(FPS 명세 9절)
             process_states=group['states'], process_mixed=len(group['states']) > 1))
     return sorted(result, key=lambda item: item['condition'])

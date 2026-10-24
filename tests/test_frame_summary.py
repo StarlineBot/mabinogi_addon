@@ -285,15 +285,15 @@ def test_segment_records_usage_average_and_process_states_and_condition_summary_
             first_segment = not book.records
             book.observe(dict(cpu=80.0 if first_segment else 60.0, gpu=50.0, process=full if first_segment else smt))
     first = book.records[0]
-    assert first['cpu_busiest_avg_percent'] == 80.0 and first['gpu_avg_percent'] == 50.0
+    assert first['game_cpu_thread_avg_percent'] == 80.0 and first['gpu_avg_percent'] == 50.0
     assert first['process_states'] == [full]
     current = book.current()
-    assert current['cpu_busiest_avg_percent'] == 60.0 and current['process_states'] == [smt]
+    assert current['game_cpu_thread_avg_percent'] == 60.0 and current['process_states'] == [smt]
     book.boundary(t + .001, 'measurement_stop')
     assert book.measurement()['process_states'] == [full, smt]
     groups = condition_summary([book.report()])
     assert groups[0]['process_mixed'] and groups[0]['process_states'] == [full, smt]
-    assert groups[0]['cpu_busiest_percent']['minimum'] == 60.0 and groups[0]['gpu_percent']['median'] == 50.0
+    assert groups[0]['game_cpu_percent']['minimum'] == 60.0 and groups[0]['cpu_busiest_percent'] is None and groups[0]['gpu_percent']['median'] == 50.0
 
 
 def test_affinity_and_priority_descriptions():
@@ -307,3 +307,16 @@ def test_affinity_and_priority_descriptions():
     assert describe_affinity(even, every) == '논리 CPU 8개/16개'
     assert describe_priority(0x80) == '높음' and describe_priority(0x20) == '보통'
     assert describe_priority(0x1234).startswith('알 수 없음')
+
+
+def test_old_core_based_cpu_reports_stay_separate_from_game_cpu():
+    # FPS 명세 10.4: 0.16.0 자료의 '가장 바쁜 코어'와 새 '게임 CPU(가장 바쁜 스레드)'를 섞어 비교하지 않는다.
+    from mabinogi_addon.optimization.frame_summary import condition_summary
+    def report(session, field, value):
+        record = dict(index=1, end_reason='window_complete', quality='observed', low_1pct_fps=50.0,
+                      relative_long_per_minute=10.0, measured_seconds=60.0, condition='기본', **{field: value})
+        return dict(session=session, condition='기본', segments=[record])
+    groups = condition_summary([report('a', 'cpu_busiest_avg_percent', 71.0),
+                                report('b', 'game_cpu_thread_avg_percent', 98.0)])
+    assert groups[0]['cpu_busiest_percent']['median'] == 71.0
+    assert groups[0]['game_cpu_percent']['median'] == 98.0

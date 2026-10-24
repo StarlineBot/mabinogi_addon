@@ -303,11 +303,11 @@ class OptimizationController(QObject):
             return ('—', '') if value is None else (f'{value:.0f}', '%')
         items = []
         if self._metrics['fps']: items.append(('FPS', f'{fps:.0f}', ''))
-        if self._metrics['cpu']: items.append(('CPU', *percent(values.get('cpu'))))
+        if self._metrics['cpu']: items.append(('게임 CPU', *percent(values.get('cpu'))))  # FPS 명세 10.4 D안
         if self._metrics['gpu']: items.append(('GPU', *percent(values.get('gpu'))))
         if self._metrics['memory']:
             memory = values.get('memory')
-            items.append(('메모리', '—', '') if memory is None else ('메모리', f'{memory/1024**3:.1f}', 'GB'))
+            items.append(('게임 메모리', '—', '') if memory is None else ('게임 메모리', f'{memory/1024**3:.1f}', 'GB'))
         return items
 
     def _lock(self, locked):
@@ -824,10 +824,13 @@ class OptimizationController(QObject):
                 if whole:
                     line += (f" · 측정 전체 1% low {whole['minimum']:.1f}~{whole['maximum']:.1f} FPS"
                              if whole['count'] > 1 else f" · 측정 전체 1% low {whole['median']:.1f} FPS")
-                cpu, gpu = g.get('cpu_busiest_percent'), g.get('gpu_percent')
-                if cpu or gpu:
+                cpu, game_cpu, gpu = g.get('cpu_busiest_percent'), g.get('game_cpu_percent'), g.get('gpu_percent')
+                if cpu or game_cpu or gpu:
                     usage = []
-                    if cpu: usage.append(f"CPU(가장 바쁜 코어) {cpu['median']:.0f}% [{cpu['minimum']:.0f}~{cpu['maximum']:.0f}]")
+                    if game_cpu:
+                        usage.append(f"게임 CPU {game_cpu['median']:.0f}% [{game_cpu['minimum']:.0f}~{game_cpu['maximum']:.0f}]")
+                    if cpu:  # 0.16.0 자료(이전 정의): 섞어 비교하지 않게 이름을 구분
+                        usage.append(f"가장 바쁜 코어(이전 정의) {cpu['median']:.0f}% [{cpu['minimum']:.0f}~{cpu['maximum']:.0f}]")
                     if gpu: usage.append(f"GPU {gpu['median']:.0f}% [{gpu['minimum']:.0f}~{gpu['maximum']:.0f}]")
                     line += '\n    ' + ' · '.join(usage)
                 states = g.get('process_states') or []
@@ -892,8 +895,8 @@ class OptimizationController(QObject):
                     f"중앙값 2배 초과 {record['relative_long_count']}회 (분당 {record['relative_long_per_minute']:.1f}회)"
                     " · 설정/대상 전환은 별도 구간")
             observed = []  # FPS 명세 9절: 수집 중 함께 기록한 값(읽기 전용)
-            if record.get('cpu_busiest_avg_percent') is not None:
-                observed.append(f"CPU(가장 바쁜 코어) 평균 {record['cpu_busiest_avg_percent']:.0f}%")
+            if record.get('game_cpu_thread_avg_percent') is not None:
+                observed.append(f"게임 CPU 평균 {record['game_cpu_thread_avg_percent']:.0f}%")
             if record.get('gpu_avg_percent') is not None:
                 observed.append(f"GPU 평균 {record['gpu_avg_percent']:.0f}%")
             for state in record.get('process_states') or ():

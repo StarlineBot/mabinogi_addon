@@ -16,11 +16,6 @@ def app():
     return QApplication.instance() or QApplication([])
 
 
-def test_busiest_core_ignores_total_and_clamps():
-    assert pm.busiest_core({'_Total': 6.2, '0': 3.0, '7': 100.4, '3': 12}) == 100.0
-    assert pm.busiest_core({'_Total': 5}) is None
-
-
 def test_gpu_matches_task_manager_engine_aggregation():
     # 같은 엔진 종류는 프로세스별로 더하고, 종류(3D/Copy/VideoEncode) 중 최댓값.
     values = {
@@ -80,7 +75,8 @@ def test_overlay_items_follow_toggles_and_default_is_fps_only(app, tmp_path, mon
     assert items == [('FPS', '144', '')]  # 정수 표시(8.1)
     fake._metrics.update(cpu=True, gpu=True, memory=True, fps=False)
     items = OptimizationController.overlay_items(fake, 60, {'cpu': 34.4, 'memory': 3.2 * 1024 ** 3})
-    assert items == [('CPU', '34', '%'), ('GPU', '—', ''), ('메모리', '3.2', 'GB')]  # 숨긴 FPS 자리는 당겨 붙음
+    # FPS 명세 10.4: 이름은 '게임 CPU'·'게임 메모리'. 숨긴 FPS 자리는 당겨 붙음
+    assert items == [('게임 CPU', '34', '%'), ('GPU', '—', ''), ('게임 메모리', '3.2', 'GB')]
     overlay = FrameOverlay(100)
     overlay.set_items([('FPS', '144', '')])
     one = overlay.width()
@@ -189,7 +185,7 @@ def test_failed_reader_is_retried_only_after_interval_and_warned_once(caplog):
 
 
 def test_one_missing_counter_keeps_the_other(monkeypatch):
-    # 0.13.0 QA 2: CPU/GPU 카운터를 따로 추가해 하나가 없어도 나머지를 표시한다.
+    # 0.13.0 QA 2: GPU 카운터가 없어도 나머지(게임 CPU)는 표시한다.
     import sys
     from types import ModuleType
     fake = ModuleType('win32pdh')
@@ -205,11 +201,14 @@ def test_one_missing_counter_keeps_the_other(monkeypatch):
     fake.AddEnglishCounter = add
     fake.GetFormattedCounterArray = lambda counter, fmt: {'_Total': 9, '0': 55.0}
     monkeypatch.setitem(sys.modules, 'win32pdh', fake)
+    # FPS 명세 10.4: 게임 CPU는 PDH가 아니라 게임 스레드 CPU 시간(process_threads)에서 읽는다.
+    from mabinogi_addon.system import process_threads
+    monkeypatch.setattr(process_threads, 'GameCpu', lambda: NS(read=lambda pid: 55.0))
     reader = pm.WindowsPerfReader({'cpu', 'gpu'})
-    assert reader.read(None, {'cpu', 'gpu'}) == {'cpu': 55.0}
+    assert reader.read(123, {'cpu', 'gpu'}) == {'cpu': 55.0}
     fake.AddEnglishCounter = lambda q, p: (_ for _ in ()).throw(OSError('없음'))
     with pytest.raises(OSError):
-        pm.WindowsPerfReader({'cpu', 'gpu'})
+        pm.WindowsPerfReader({'gpu'})  # 읽을 지표가 하나도 없으면 시작 실패
 
 
 def test_save_results_toast_on_game_monitor_using_logical_coordinates(app, monkeypatch):

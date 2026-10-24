@@ -69,17 +69,18 @@ class OptimizationPanel(QWidget):
         form=QFormLayout();form.addRow('표시 배율',self.scale);group.addLayout(form)
         # 표시 항목(FPS 명세 8.4): 기본은 FPS만. 표시만 바꾸며 구간 요약·수집에는 영향 없음.
         row=QHBoxLayout();self.metric_boxes={}
-        for key, text in (('fps','FPS'),('cpu','CPU'),('gpu','GPU'),('memory','메모리')):
+        for key, text in (('fps','FPS'),('cpu','게임 CPU'),('gpu','GPU'),('memory','게임 메모리')):
             self.metric_boxes[key]=QCheckBox(text);row.addWidget(self.metric_boxes[key])
         row.addStretch();form.addRow('표시 항목',row)
-        group.addWidget(_label('CPU: 가장 바쁜 논리 코어 사용률 · GPU: 작업 관리자와 같은 엔진 사용률 · '
-                               '메모리: 게임 전용 메모리\n1초마다 읽기만 해요. 실제 Windows 수치 확인 전이라 정확도를 보증하지 않아요.'))
+        # FPS 명세 10.4 D안·10.5 읽는 법(문구만 변경, 배치는 현행 유지 10.3)
+        group.addWidget(_label('게임 CPU: 마비노기에서 가장 바쁜 작업이 코어 하나를 얼마나 쓰는지 · GPU: 작업 관리자와 같은 엔진 사용률 · '
+                               '게임 메모리: 마비노기가 차지한 메모리\n1초마다 읽기만 해요. 작업 관리자는 PC 전체 기준이라 숫자가 달라요.'))
         group=_group('상태 · 수집 품질',body)
         self.frames_status=_label('꺼짐 · 표시 안 함');group.addWidget(self.frames_status)
         group.addWidget(_label('앱을 다시 실행해도 FPS 표시 설정은 유지돼요. 수집 모드는 매번 꺼진 상태로 시작해요.\n전투 보조 일시정지는 FPS 표시만 숨겨요.'))
         group=_group('프레임 수집(베타)',body)
         group.addWidget(_label('수집 모드를 켜 두면 FPS 표시와 관계없이 게임이 앞에 있는 동안 구간 요약을 파일로 남겨요.\n'
-                               'CPU·GPU 사용률과 게임의 CPU 선호도·우선순위도 함께 기록해요. 매 프레임 원본은 저장하지 않아요.'))
+                               '게임 CPU·GPU 사용률과 게임의 CPU 선호도·우선순위도 함께 기록해요. 매 프레임 원본은 저장하지 않아요.'))
         row=QHBoxLayout()
         self.summary_save=QPushButton('요약 저장');row.addWidget(self.summary_save)
         self.summary_folder=QPushButton('폴더 열기');row.addWidget(self.summary_folder)
