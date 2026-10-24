@@ -274,3 +274,21 @@ def test_too_short_recording_is_not_saved_as_zero_second_file():
         service.request_save(1)
     assert save_failure_reason(error.value) == '저장할 영상이 너무 짧아요'
     assert MIN_SAVE_US == 1_000_000
+
+
+def test_recording_error_with_no_video_says_error_instead_of_too_short():
+    # 0.15.0 실게임: 인코더 시작 실패로 녹화 0초인데 저장 실패 문구가 '너무 짧아요'라 원인이 가려졌다.
+    from mabinogi_addon.blackbox_service import BlackboxService, MIN_SAVE_US, TooShortToSave
+    from mabinogi_addon.ui.blackbox_controller import save_failure_reason
+    service = BlackboxService.__new__(BlackboxService)
+    service._allowed, service._closing = (lambda: True), False
+    service.settings = NS(min_save_us=MIN_SAVE_US)
+    service.status = 'error'
+    service.current = NS(session=NS(_replay=NS(available_us=0)))
+    with pytest.raises(TooShortToSave) as error:
+        service.request_save(1)
+    assert save_failure_reason(error.value) == '녹화 오류로 저장할 영상이 없어요 · 앱에서 확인'
+    service.current = NS(session=NS(_replay=NS(available_us=400_000)))  # 오류 전 일부 보관분: 기존 문구
+    with pytest.raises(TooShortToSave) as error:
+        service.request_save(1)
+    assert save_failure_reason(error.value) == '저장할 영상이 너무 짧아요'

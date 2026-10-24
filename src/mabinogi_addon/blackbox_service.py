@@ -28,7 +28,11 @@ MIN_SAVE_US = 1_000_000  # 이보다 짧은 보관분은 저장하지 않는다
 
 
 class TooShortToSave(ValueError):
-    """보관한 영상이 너무 짧아 저장하지 않음."""
+    """보관한 영상이 너무 짧아 저장하지 않음. recording_error면 녹화 오류로 보관분이 없는 경우."""
+
+    def __init__(self, message, recording_error=False):
+        super().__init__(message)
+        self.recording_error = recording_error
 
 
 @dataclass(frozen=True)
@@ -241,6 +245,9 @@ class BlackboxService:
             raise PermissionError('save unavailable')
         if self.current.session._replay.available_us < self.settings.min_save_us:
             # 녹화가 막 시작됐거나 중단돼 보관분이 거의 없을 때 0초짜리 파일을 만들지 않는다(0.13.1 실사용).
+            if getattr(self, 'status', None) == 'error' and self.current.session._replay.available_us <= 0:
+                # 녹화 오류로 한 구간도 없으면 '짧아요'가 아니라 오류를 알린다(0.15.0 인코더 시작 실패 실게임).
+                raise TooShortToSave('녹화 오류로 저장할 영상이 없어요 · 앱에서 확인해 주세요.', recording_error=True)
             raise TooShortToSave('저장할 영상이 너무 짧아요 · 1초 이상 보관된 뒤 다시 저장해 주세요.')
         if len(self._pending) + sum(len(r.tickets) for r in self.runtimes.values()) >= 2:
             raise RuntimeError('one active and one queued save already reserved')

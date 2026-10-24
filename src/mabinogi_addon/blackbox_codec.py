@@ -362,8 +362,12 @@ class FFmpegEncoder:
         keyframes = []
         if gop is not None:
             # 상주 인코더: gop 프레임마다 키프레임을 고정해 조각(moof+mdat)이 구간 길이와 같게 한다(장면 전환 키프레임 끔).
-            keyframes = ['-g', str(gop), '-keyint_min', str(gop), '-sc_threshold', '0',
+            # -sc_threshold는 공통 옵션이 아니라 libx264 전용이다. 번들 최소 빌드(libx264 없음)에 넣으면 인자 해석 단계에서
+            # 'Unrecognized option'으로 종료해 녹화가 시작되지 않았다(0.15.0 실게임). NVENC는 lookahead를 안 쓰면 장면 전환 I프레임이 없다.
+            keyframes = ['-g', str(gop), '-keyint_min', str(gop),
                          '-force_key_frames', f'expr:eq(mod(n,{gop}),0)', '-flush_packets', '1']
+            if encoder == 'libx264':
+                keyframes += ['-sc_threshold', '0']
             if encoder == 'h264_nvenc':
                 keyframes += ['-forced-idr', '1']
         audio_args = []

@@ -26,6 +26,8 @@ def save_failure_reason(exc) -> str:
     if isinstance(exc, PermissionError):
         return '확보한 영상 없음'
     if type(exc).__name__ == 'TooShortToSave':
+        if getattr(exc, 'recording_error', False):
+            return '녹화 오류로 저장할 영상이 없어요 · 앱에서 확인'
         return '저장할 영상이 너무 짧아요'
     if isinstance(exc, RuntimeError) and 'already reserved' in str(exc):
         return '이미 저장 중이에요'

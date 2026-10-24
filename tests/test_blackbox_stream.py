@@ -242,3 +242,15 @@ def test_summary_reports_input_wait_fill_distinct_fps_read_and_gap_increase(monk
     assert '블랙박스 인코더 입력 대기 최근 2개' in line and '구간 길이 초과 0개' in line
     assert '반복 채움 +1칸' in line and '서로 다른 화면 8.3FPS' in line  # 6칸(0.6초) 중 서로 다른 화면 5장
     assert '캡처 읽기 평균' in line and '프레임 공백 +0회(누적 0)' in line and '인코더 재시작 누적 0회' in line
+
+
+@pytest.mark.parametrize('encoder', ['h264_nvenc', 'h264_mf', 'h264_amf', 'h264_qsv', 'libx264'])
+def test_stream_command_uses_libx264_only_option_only_for_libx264(encoder):
+    # 0.15.0 실게임: 번들 최소 빌드(libx264 없음)는 -sc_threshold를 몰라 상주 인코더가 매번 시작 실패(녹화 0초).
+    codec = FFmpegEncoder.__new__(FFmpegEncoder)
+    codec.settings = SimpleNamespace(fps=60, bitrate=12_000_000, audio_bitrate=None)
+    codec.encoder = lambda: encoder
+    command = codec._output(gop=15)
+    assert ('-sc_threshold' in command) == (encoder == 'libx264')
+    assert command[command.index('-g') + 1] == '15' and '-force_key_frames' in command and '-flush_packets' in command
+    assert ('-forced-idr' in command) == (encoder == 'h264_nvenc')
