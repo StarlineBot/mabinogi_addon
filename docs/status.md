@@ -186,6 +186,9 @@
   조건별 정리에서 '가장 바쁜 코어(이전 정의)'로 따로 표시. 10.1·10.2 공개 범위는 이번 범위 아님.
 - 회귀: `test_process_priority`·`test_optimization_priority`·`test_process_threads` + 기존 갱신(지표 이름·리더). 렌더: 최적화 탭 우선순위 항목, FPS 표시 항목·오버레이 — 사용자 승인(6b687ae).
 - **실게임 미검증:** 진단 스크립트 결과, 우선순위 높음 적용·유지·원복, 게임 CPU 값(작업 관리자 세부 정보 스레드와 비교)·조회 비용.
+- **독립 재QA(9ee1459): 통과, 0.17.0 배포 가능.** `run_release_checks --version 0.17.0` 597 passed, qa_0170_priority_preset_high 종료 0,
+  Alt+Tab 시뮬레이션 뒤(보통)↔앞 35회 모두 다시 높음·한도 0회(e5ab76d). 함께 실리는 13.8·13.9(1ba5574): RSS 새 적용·TCPNoDelay 쓰기 제거, 패스트핑은 ack+autotuning만,
+  기존 RSS·NoDelay 복구 기록은 원복 경로·형식 검사 유지 — 이상 없음. Improvement(비차단): 0.17.0 노트에 RSS·TCPNoDelay 제외 줄 없음(제작자 전용).
 - **배포 실행 [40135866884](https://github.com/StarlineBot/mabinogi_addon/actions/runs/40135866884)(e4b7037) 실패 — 게시 안 됨, 태그 없음.** regression(Linux) 배포 검사 중
   약 97%에서 종료 코드 245(= pytest 주 프로세스가 신호 11 SIGSEGV로 종료, run_regressions가 -11을 그대로 반환). 두 워커는 끝맺음 때 'cannot send (already closed?)'.
   출력에 실패(F) 없음, 메모리 여유·OOM 0. 같은 명령(`run_regressions … -n 2`)을 로컬에서 HEAD로 3번 반복: 모두 596 passed, 재현 안 됨. 이력상 첫 발생.
