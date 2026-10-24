@@ -31,7 +31,7 @@ def busiest_core(values: dict) -> float | None:
 
 
 # GetPriorityClass 값 → 작업 관리자 이름(FPS 명세 9절: 외부 도구가 바꾼 우선순위를 기록)
-PRIORITY_NAMES = {0x40: '낮음', 0x4000: '보통 미만', 0x20: '보통', 0x8000: '보통 초과', 0x80: '높음', 0x100: '실시간'}
+from .process_priority import NAMES as PRIORITY_NAMES  # noqa: E402
 
 
 def describe_affinity(mask, system_mask, cores=None) -> str:
@@ -155,12 +155,17 @@ def process_state(pid, cores=None) -> dict | None:
         return None
     try:
         mask, system_mask = win32process.GetProcessAffinityMask(handle)
-        priority = win32process.GetPriorityClass(handle)
-        return dict(affinity=describe_affinity(mask, system_mask, cores), priority=describe_priority(priority))
     except Exception:
         return None
     finally:
         handle.Close()
+    # 우선순위는 두 경로(핸들 API·프로세스 목록)로 교차 확인한다. 다르면 '확인 불가(…)'(최적화 명세 13.7 조사).
+    from . import process_priority
+    try:
+        priority = process_priority.describe(process_priority.read(pid))
+    except Exception:
+        priority = '확인 불가'
+    return dict(affinity=describe_affinity(mask, system_mask, cores), priority=priority)
 
 
 class PerfSampler:
