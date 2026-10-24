@@ -7,7 +7,7 @@ from PySide6.QtCore import QObject, QTimer
 from PySide6.QtWidgets import QMessageBox
 from .. import config, paths
 from ..feature_access import is_creator
-from ..optimization.session import Recovery
+from ..optimization.session import PROCESS_KINDS, Recovery
 from ..optimization.engine import Engine
 from ..optimization.frames import FrameStream
 from ..optimization.frame_summary import FrameSummary, compare, REASONS, condition_summary, load_reports
@@ -30,7 +30,7 @@ def optimization_badge(recovery, engine, split=None, *, restore_wait=False, kept
     if engine.busy and engine.task != 'inspect':
         if engine.cancel.is_set() or engine.task == 'restore':
             return '최적화: 원복 중', 'neutral'
-        if any(i['kind'] == 'cpu' and i['state'] == 'applied' for i in recovery.pending):
+        if any(i['kind'] in PROCESS_KINDS and i['state'] == 'applied' for i in recovery.pending):
             return ('최적화: 적용 중 ' + split if split else '최적화: 적용 중'), 'neutral'
         return '최적화: 게임 대기', 'neutral'
     if any(i['state'] == 'failed' for i in recovery.pending):
@@ -183,7 +183,7 @@ class OptimizationController(QObject):
         d, saved = self.panel, config.load_optimization_selection()
         self._restoring_selection = True
         try:
-            for key, box in (('cpu', d.cpu), ('tcp', d.tcp), ('rss', d.rss)):
+            for key, box in (('cpu', d.cpu), ('priority', d.priority), ('tcp', d.tcp), ('rss', d.rss)):
                 if key in saved: box.setChecked(saved[key])
         finally:
             self._restoring_selection = False
@@ -191,7 +191,7 @@ class OptimizationController(QObject):
     def _save_selection(self, *_):
         if self._restoring_selection or self.panel is None: return
         d = self.panel
-        selection = dict(cpu=d.cpu.isChecked(), tcp=d.tcp.isChecked(), rss=d.rss.isChecked())
+        selection = dict(cpu=d.cpu.isChecked(), priority=d.priority.isChecked(), tcp=d.tcp.isChecked(), rss=d.rss.isChecked())
         saved = config.load_optimization_selection()
         # 환경 확인 전(목록이 비어 있음)에는 저장된 배분·어댑터를 지우지 않는다.
         selection['count'] = d.split.currentData() if d.split.currentData() is not None else saved.get('count')
@@ -242,7 +242,7 @@ class OptimizationController(QObject):
 
     def _wire_panel(self):
         d=self.panel
-        for box in (d.cpu, d.tcp, d.rss): box.toggled.connect(self._save_selection)
+        for box in (d.cpu, d.priority, d.tcp, d.rss): box.toggled.connect(self._save_selection)
         d.split.currentIndexChanged.connect(self._save_selection)
         d.adapter.currentIndexChanged.connect(self._save_selection)
         d.inspect.clicked.connect(self.engine.inspect)
@@ -325,8 +325,8 @@ class OptimizationController(QObject):
         if not self._can_start() or self.engine.busy: return
         d = self.panel
         options = dict(cpu=d.cpu.isChecked(),count=d.split.currentData(),adapter=d.adapter.currentData(),
-                       tcp=d.tcp.isChecked(),rss=d.rss.isChecked())
-        if not any(options[k] for k in ('cpu','tcp','rss')):
+                       tcp=d.tcp.isChecked(),rss=d.rss.isChecked(),priority=d.priority.isChecked())
+        if not any(options[k] for k in ('cpu','tcp','rss','priority')):
             self.engine.status='사용할 항목을 선택해 주세요.'
             return
         if (options['cpu'] or options['rss']) and options['count'] is None:
@@ -339,7 +339,7 @@ class OptimizationController(QObject):
         self._badge_split = (f"{options['count']}+{self._core_total-options['count']}"
                              if options['cpu'] and self._core_total else None)
         self._kept_on = True  # 이미 목표값이라 바꾼 것이 없어도 켜짐으로 보여준다(13.5)
-        self._summary_requested = {key: options[key] for key in ('cpu','count','tcp','rss')}
+        self._summary_requested = {key: options[key] for key in ('cpu','count','tcp','rss','priority')}
         self._summary_requested['adapter_selected'] = bool(options['adapter'])
         self._summary_state = None
         if self.stream is not None:
@@ -403,7 +403,7 @@ class OptimizationController(QObject):
         남긴다(명세 6절: 게임 중 연결을 끊지 않고 CPU만 멈추는 경로).
         제작자 접근이 없으면 CPU만 원복한다(네트워크 원복은 기존처럼 접근 필요)."""
         self._restore_requested = True  # 끝난 뒤 남으면 '원복 대기'(13.5)
-        network = (any(i['kind'] != 'cpu' for i in self.recovery.pending) or bool(self.recovery.restart_targets))
+        network = (any(i['kind'] not in PROCESS_KINDS for i in self.recovery.pending) or bool(self.recovery.restart_targets))
         network = network and self._can_start()
         normalized = network and bool(self.recovery.normalized_review)
         deferred = False
@@ -678,7 +678,7 @@ class OptimizationController(QObject):
         self._render_summary()
         d = self.panel
         allowed, busy = self._can_start(), self.engine.busy
-        for w in (d.cpu,d.tcp,d.rss,d.split,d.adapter,d.inspect): w.setEnabled(allowed and not busy)
+        for w in (d.cpu,d.priority,d.tcp,d.rss,d.split,d.adapter,d.inspect): w.setEnabled(allowed and not busy)
         self._sync_optimization_toggle()
         for control in (d.lock,d.scale,*d.metric_boxes.values()): control.setEnabled(allowed)
         d.frames_toggle.setEnabled((allowed and not self.closing) or self.frames or self.collector.pending)
@@ -688,7 +688,7 @@ class OptimizationController(QObject):
         d.status.setText(('복구 기록이 손상돼 새 적용을 차단했어요. 추정값으로 원복하지 않아요.\n기록: '+str(self.recovery.path)) if self.recovery.corrupt else self.engine.status)
         from collections import Counter
         counts=Counter((item['kind'],item['state']) for item in self.recovery.items)
-        kinds={'cpu':'CPU 배치','ack':'TcpAckFrequency','nodelay':'TCPNoDelay','autotuning':'TCP 자동 조정','rss':'RSS'}
+        kinds={'cpu':'CPU 배치','priority':'게임 우선순위','ack':'TcpAckFrequency','nodelay':'TCPNoDelay','autotuning':'TCP 자동 조정','rss':'RSS'}
         states={'prepared':'적용 확인 필요','applied':'적용됨','failed':'미적용·확인 필요','restored':'원복됨',
                 'released':'외부 변경·관리 제외'}
         lines=[f'{kinds[kind]} · {states[state]} {count}개' for (kind,state),count in counts.items()]
@@ -720,7 +720,7 @@ class OptimizationController(QObject):
                 return True
             counts = Counter((i['kind'],i['state']) for i in self.recovery.items)
             values = [dict(kind=i['kind'], state=i['state'], value=i['applied']) for i in self.recovery.items
-                      if i['kind'] != 'cpu' or i['target'] == self.target][:128]
+                      if i['kind'] not in PROCESS_KINDS or i['target'] == self.target][:128]
             from ..version import __version__
             context = dict(target=self.target, requested=self._summary_requested,
                 app_version=__version__, collector_sha256=presentmon.SHA256, qpc_frequency=self.stream.frequency,

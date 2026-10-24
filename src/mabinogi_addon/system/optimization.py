@@ -84,12 +84,15 @@ class WindowsOptimization:
 
     @staticmethod
     def validate(kind, target, value):
-        if kind == 'cpu':
+        if kind in ('cpu', 'priority'):
             if (not isinstance(target,dict) or set(target) != {'pid','birth'} or
                     type(target['pid']) is not int or not 0 < target['pid'] < 2**32 or
                     not isinstance(target['birth'], str) or not target['birth'].isdecimal()):
                 raise ValueError('프로세스 식별값을 확인해 주세요.')
-            if type(value) is not int or not 0 < value < 2**64: raise ValueError('잘못된 CPU 집합')
+            if kind == 'priority':
+                from .process_priority import NAMES
+                if value not in NAMES: raise ValueError('잘못된 우선순위 값')
+            elif type(value) is not int or not 0 < value < 2**64: raise ValueError('잘못된 CPU 집합')
         elif kind == 'autotuning':
             if target != 'global' or value not in AUTOTUNING: raise ValueError('잘못된 TCP 값')
         elif kind in ('ack','nodelay','rss'):
@@ -327,6 +330,16 @@ class WindowsOptimization:
                 value, system = ctypes.c_size_t(),ctypes.c_size_t()
                 if not kernel.GetProcessAffinityMask(handle,ctypes.byref(value),ctypes.byref(system)): raise ctypes.WinError(ctypes.get_last_error())
                 return int(value.value)
+        if kind == 'priority':
+            # 같은 프로세스인지(PID 재사용 아님) 확인한 뒤 두 경로로 읽는다(13.7). 두 경로가 다르면 확인 불가.
+            from . import process_priority
+            with self._process(target):
+                pass
+            reading = process_priority.read(target['pid'])
+            value, _state = process_priority.judge(reading['api'], reading['list_base'])
+            if value is None:
+                raise process_priority.Unconfirmed(process_priority.describe(reading))
+            return value
         if kind == 'autotuning': return self._tcp_level()
         if kind in ('ack','nodelay'):
             import winreg
@@ -362,6 +375,12 @@ class WindowsOptimization:
         if kind == 'cpu':
             with self._process(target,write=True) as (kernel,handle,_):
                 if not kernel.SetProcessAffinityMask(handle,value): raise ctypes.WinError(ctypes.get_last_error())
+            return
+        if kind == 'priority':
+            from . import process_priority
+            with self._process(target):  # 같은 프로세스인지 확인(보호 프로세스면 아래 쓰기가 권한 오류)
+                pass
+            process_priority.write(target['pid'], value)
             return
         if kind == 'autotuning':
             if guard is not None: guard()

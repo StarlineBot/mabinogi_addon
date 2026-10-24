@@ -28,6 +28,10 @@ class OptimizationPanel(QWidget):
         group.addWidget(self.cpu_info)
         self.inspect=QPushButton('다시 확인');row=QHBoxLayout();row.addWidget(self.inspect);row.addStretch();group.addLayout(row)
         group=_group('CPU 배치',body)
+        # 최적화 명세 13.7: 게임 프로세스 우선순위 '높음'(기본 켬). 실시간·다른 프로그램 우선순위 변경은 하지 않는다.
+        self.priority=QCheckBox('게임 우선순위 높음');self.priority.setChecked(True);group.addWidget(self.priority)
+        group.addWidget(_label('무거운 장면에서 Windows가 게임을 먼저 실행해요. 끄거나 세션이 끝나면 원래 값으로 되돌려요.\n'
+                               '다른 도구가 우선순위를 바꾸면 덮어쓰지 않아요.'))
         self.cpu=QCheckBox('게임·백그라운드 CPU 배치');self.cpu.setChecked(True);group.addWidget(self.cpu)
         self.split=QComboBox();self.split.addItem('CPU 구조를 먼저 확인해 주세요.',None)
         form=QFormLayout();form.addRow('물리 코어 배분',self.split);group.addLayout(form)

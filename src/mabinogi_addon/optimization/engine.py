@@ -1,12 +1,16 @@
 """One explicit optimization session; all blocking OS calls run off the UI thread."""
 import logging
 import threading
-from .session import ChangeDeferred
+from .session import ChangeDeferred, PROCESS_KINDS
 
 _log = logging.getLogger(__name__)
 
 
 NETWORK_APPLIED = '네트워크 설정 적용 중 · 끄면 원래 값으로 되돌려요'
+HIGH_PRIORITY = 0x80
+# 게임 우선순위가 원본으로 되돌아가면 다시 건다(라쏘 '항상' 규칙과 같은 효과). 외부와 무한히 다투지 않게 10분에 3회까지(13.7).
+PRIORITY_REAPPLY_LIMIT = 3
+PRIORITY_REAPPLY_WINDOW = 600.0
 
 
 def result_headline(notices, failures):
@@ -82,9 +86,9 @@ class Engine:
                 self.status += ('\n네트워크 원복 완료' if not net_errors and not self.recovery.pending
                                 else '\n네트워크 원복 확인 필요: ' + '; '.join(net_errors[:4]))
             deferred, self._network_deferred = self._network_deferred, False
-            if deferred and (any(i['kind'] != 'cpu' for i in self.recovery.pending) or self.recovery.restart_targets):
+            if deferred and (any(i['kind'] not in PROCESS_KINDS for i in self.recovery.pending) or self.recovery.restart_targets):
                 self.status += ("\n네트워크 원복 대기 · 연결을 끊어도 될 때 '최적화 적용 중' 버튼을 다시 눌러 주세요.")
-            elif self.recovery.corrupt or any(i['kind'] == 'cpu' for i in self.recovery.pending) or (
+            elif self.recovery.corrupt or any(i['kind'] in PROCESS_KINDS for i in self.recovery.pending) or (
                     network is not None and (self.recovery.pending or self.recovery.restart_targets)):
                 self.status += '\n복구 기록이 남아 있어요. 원복 상태를 확인해 주세요.'
             elif self.recovery.pending or self.recovery.restart_targets:
@@ -134,7 +138,8 @@ class Engine:
                     raise ChangeDeferred('게임 실행 중: 남은 TCP·RSS 적용과 네트워크 재연결을 보류했어요.')
             processes = self.backend.processes()
             governor = self.backend.governor_running()
-            if governor and (options['cpu'] or options['rss']): notices.append('Process Lasso Governor 실행 중: CPU·RSS 적용 보류')
+            if governor and (options['cpu'] or options['rss'] or options.get('priority')):
+                notices.append('Process Lasso Governor 실행 중: CPU·RSS·게임 우선순위 적용 보류')
             if game and (options['tcp'] or options['rss']):
                 notices.append('게임 실행 중: TCP·RSS 적용을 보류했어요.')
             elif options['tcp'] or options['rss']:
@@ -160,13 +165,14 @@ class Engine:
                         results.append('rss: 재연결 후 적용값 확인 완료')
                 except ChangeDeferred as exc: notices.append(str(exc))
                 except Exception as exc: fail('네트워크 재연결 확인 필요: '+str(exc))
-            if not options['cpu']:
-                # CPU를 끈 세션은 게임을 기다릴 이유가 없다(네트워크 설정은 원복 전까지 유지).
+            if not options['cpu'] and not options.get('priority'):
+                # CPU·우선순위를 끈 세션은 게임을 기다릴 이유가 없다(네트워크 설정은 원복 전까지 유지).
                 self.status = '\n'.join([result_headline(notices, failures)] + results + notices
                                          + ['네트워크 설정 작업을 마쳤어요. CPU 배치는 사용하지 않아요.'])
                 self.session_end = 'network_only'
                 return
             seen = set()
+            priority = dict(applied=set(), reapplied=[], stopped=set())  # 게임 우선순위 상태(13.7)
             observed = game
             while not self.cancel.is_set() and self.allowed():
                 if observed is None:
@@ -179,9 +185,9 @@ class Engine:
                     self.status = '\n'.join(results + notices + ['게임 종료 · CPU를 원복해요. 다음 게임에는 자동 적용하지 않아요.'])
                     self.session_end = 'game_exit'
                     return
-                processes = self.backend.processes()
+                processes = self.backend.processes() if options['cpu'] else []  # 우선순위만이면 전체 목록이 필요 없다
                 governor = self.backend.governor_running()
-                if governor and (options['cpu'] or options['rss']):
+                if governor and (options['cpu'] or options['rss'] or options.get('priority')):
                     # Never fight the governor, including if it starts mid-session.
                     self.status = 'Process Lasso Governor가 실행돼 CPU를 원복하고 세션을 종료해요.'
                     self.session_end = 'governor'
@@ -226,15 +232,75 @@ class Engine:
                         _log.warning(message)
                         notices.append(message)
                         notices = notices[-12:]
+                if options.get('priority'):
+                    notices = self._keep_priority(observed, priority, results, notices, fail)[-12:]
                 self.status = '\n'.join([result_headline(notices, failures)] + results + notices + [session_line(notices, failures)])
                 self.cancel.wait(2)
             self.status = '\n'.join(results + notices + ['세션을 중단하고 CPU를 원복해요.'])
             self.session_end = 'cancel'
         return self._launch(work, restore_cpu=True, status='적용 중…', task='session')
 
+    def _keep_priority(self, game, state, results, notices, fail):
+        """게임 우선순위 높음(최적화 명세 13.7): 게임마다 한 번 걸고, 2초마다 유지 여부를 본다.
+
+        - 원본으로 돌아갔으면 다시 건다(10분에 3회까지, 넘으면 안내만).
+        - 원본·적용값이 아닌 다른 값이면 다른 도구가 바꾼 것: 덮어쓰지 않고 관리에서 뺀다.
+        - 두 읽기 경로가 다르면 '확인 불가'로 안내만 하고 다시 걸지 않는다(읽기 불일치 조사 중)."""
+        import time
+        from ..system.process_priority import Unconfirmed, name
+        identity = (game['pid'], game['birth'])
+        if identity not in state['applied']:
+            state['applied'].add(identity)
+            try:
+                result = self.recovery.apply('priority', game, HIGH_PRIORITY)
+                results.append('게임 우선순위: ' + {'unchanged': '이미 높음 · 그대로 둠', 'applied': '높음 적용 · 확인 완료',
+                                                    'unverified': '높음 적용 · 확인 불가(읽기 경로가 서로 달라요)'}.get(result, result))
+            except ProcessLookupError:
+                pass
+            except Unconfirmed as exc:
+                notices.append(f'게임 우선순위 확인 불가 · 적용하지 않았어요: {exc}')
+            except Exception as exc:
+                fail(f'게임 우선순위 미적용: {exc}')
+            return notices
+        item = next((i for i in self.recovery.items if i['kind'] == 'priority' and i['target'] == game
+                     and i['state'] == 'applied'), None)
+        if item is None or identity in state['stopped']:
+            return notices
+        try:
+            current = self.backend.read('priority', game)
+        except (ProcessLookupError, Unconfirmed):
+            return notices
+        if current == item['applied']:
+            return notices
+        if current != item['old']:
+            self.recovery.release(item)
+            message = (f"다른 도구가 게임 우선순위를 바꿨어요(현재 {name(current)}). 덮어쓰지 않고 관리에서 뺐어요(원복하지 않음).")
+            _log.warning(message)
+            notices.append(message)
+            return notices
+        now = time.monotonic()
+        state['reapplied'] = [t for t in state['reapplied'] if now - t < PRIORITY_REAPPLY_WINDOW]
+        if len(state['reapplied']) >= PRIORITY_REAPPLY_LIMIT:
+            state['stopped'].add(identity)
+            message = (f'게임 우선순위가 계속 {name(current)}(으)로 돌아가요. 10분에 {PRIORITY_REAPPLY_LIMIT}회까지 다시 걸고 '
+                       '멈췄어요(다른 프로그램과 다투지 않음).')
+            _log.warning(message)
+            notices.append(message)
+            return notices
+        state['reapplied'].append(now)
+        try:
+            self.backend.write('priority', game, item['applied'])
+            _log.info('게임 우선순위가 %s(으)로 돌아가 다시 높음으로 걸었어요(%d/%d).', name(current),
+                      len(state['reapplied']), PRIORITY_REAPPLY_LIMIT)
+        except ProcessLookupError:
+            pass
+        except Exception as exc:
+            fail(f'게임 우선순위 다시 걸기 실패: {exc}')
+        return notices
+
     def stop(self):
         self.cancel.set()
-        if not self.busy and any(i['kind']=='cpu' for i in self.recovery.pending):
+        if not self.busy and any(i['kind'] in PROCESS_KINDS for i in self.recovery.pending):
             self._launch(lambda: setattr(self,'status','CPU 원복을 확인했어요.'), restore_cpu=True,
                          status='CPU 원복 중…')
 

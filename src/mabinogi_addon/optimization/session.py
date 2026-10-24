@@ -3,8 +3,12 @@ from dataclasses import dataclass
 from pathlib import Path
 import json
 import os
+import logging
 import threading
 import uuid
+
+
+_log = logging.getLogger(__name__)
 
 
 class ChangeDeferred(RuntimeError):
@@ -64,6 +68,10 @@ def rss_normalized(applied, current):
             and (top, count) != (applied['MaxProcessorNumber'], applied['MaxProcessors']))
 
 
+# 프로세스 단위 항목: 게임·백그라운드 CPU 배치와 게임 우선순위(13.7). 원복은 CPU 원복과 같은 때 하고, 프로세스가 끝나면 되돌릴 것이 없다.
+PROCESS_KINDS = ('cpu', 'priority')
+
+
 class Recovery:
     """Write-ahead journal; originals survive retries, crashes and access revocation."""
     MAX_ITEMS = 4096
@@ -85,7 +93,7 @@ class Recovery:
                 if not isinstance(data,dict) or data.get('schema') != 1 or not isinstance(data.get('items'), list) or len(data['items']) > self.MAX_ITEMS:
                     raise ValueError('journal schema')
                 for item in data['items']:
-                    if not isinstance(item,dict) or item.get('state') not in ('prepared','applied','failed','restored','released') or set(item) != {'kind', 'target', 'old', 'applied', 'state'} or item['kind'] not in ('cpu','ack','nodelay','autotuning','rss'):
+                    if not isinstance(item,dict) or item.get('state') not in ('prepared','applied','failed','restored','released') or set(item) != {'kind', 'target', 'old', 'applied', 'state'} or item['kind'] not in ('cpu','priority','ack','nodelay','autotuning','rss'):
                         raise ValueError('journal item')
                     backend.validate(item['kind'], item['target'], item['old'])
                     backend.validate(item['kind'], item['target'], item['applied'])
@@ -106,16 +114,16 @@ class Recovery:
         """종료한 프로세스의 CPU 기록을 지운다(되돌릴 대상이 없다). 블랙박스 인코더처럼 짧게 뜨고 끝나는
         프로세스가 계속 쌓여 기록 한도(MAX_ITEMS)에 닿아 세션이 끝나지 않게 한다(명세 13.3)."""
         with self.lock:
-            if item['kind'] != 'cpu' or item not in self.items:
-                raise ValueError('CPU 적용 항목만 정리할 수 있어요.')
+            if item['kind'] not in PROCESS_KINDS or item not in self.items:
+                raise ValueError('프로세스 적용 항목만 정리할 수 있어요.')
             self.items.remove(item)
             self._save()
 
     def release(self, item):
         """외부(다른 도구·게임 자신)가 바꾼 CPU 항목을 관리에서 뺀다. 그쪽 값을 덮어쓰거나 원복하지 않는다."""
         with self.lock:
-            if item['kind'] != 'cpu' or item not in self.items:
-                raise ValueError('CPU 적용 항목만 관리에서 뺄 수 있어요.')
+            if item['kind'] not in PROCESS_KINDS or item not in self.items:
+                raise ValueError('프로세스 적용 항목만 관리에서 뺄 수 있어요.')
             item['state'] = 'released'
             self._save()
 
@@ -136,7 +144,7 @@ class Recovery:
     def _read(self, kind, target, phase):
         try: return self.backend.read(kind,target)
         except OSError as exc:
-            if kind=='cpu': raise  # Preserve process-lifecycle exception types.
+            if kind in PROCESS_KINDS: raise  # Preserve process-lifecycle(·우선순위 확인 불가) exception types.
             raise OSError(exc.errno, f'{phase}/{kind}: {exc}') from None
 
     def apply(self, kind, target, value, *, guard=None):
@@ -185,6 +193,17 @@ class Recovery:
                     # flush_network가 재시작 직후 확인한다. 원본은 이미 기록돼 있다.
                     self._save()
                     return 'written'
+                if kind == 'priority':
+                    # 13.7: 읽기 경로 불일치 원인이 확인되기 전에는 확인 실패를 적용 실패로 단정하지 않는다.
+                    # 쓰기는 성공했으므로 원본과 함께 '적용'으로 기록하고(원복 대상), 확인 결과만 따로 알린다.
+                    from ..system.process_priority import Unconfirmed
+                    try:
+                        applied = self._read(kind, target, '적용값 확인')
+                    except Unconfirmed:
+                        applied = None
+                    item['state'] = 'applied'
+                    self._save()
+                    return 'applied' if applied == value else 'unverified'
                 applied = self._read(kind,target,'적용값 확인')
                 if applied != value:
                     raise RuntimeError('적용값을 확인하지 못했어요. ' + self._apply_difference(kind, target, value, applied))
@@ -208,6 +227,9 @@ class Recovery:
                                        for k in keys if current.get(k) != value.get(k))
         if kind == 'cpu':
             return f'현재=0x{current:X}, 적용=0x{value:X}' if isinstance(current, int) else ''
+        if kind == 'priority':
+            from ..system.process_priority import name
+            return f'현재={name(current)}, 적용={name(value)}'
         if isinstance(current, (int, str, type(None))):
             return f'현재={current}, 적용={value}'
         return ''
@@ -233,9 +255,15 @@ class Recovery:
             if network:
                 self.normalized_review = []
             for item in reversed(self.pending):
-                if item['kind'] != 'cpu' and not network:
+                if item['kind'] not in PROCESS_KINDS and not network:
                     continue
                 try:
+                    if item['kind'] == 'priority':
+                        if self._restore_priority(item):
+                            continue  # 외부 변경으로 관리에서 뺌(덮어쓰지 않음)
+                        item['state'] = 'restored'
+                        self._save()
+                        continue
                     current = self._read(item['kind'],item['target'],'원복 전 확인')
                     normalized = item['kind'] == 'rss' and rss_normalized(item['applied'], current)
                     if item['kind'] == 'rss' and item['state'] == 'prepared':
@@ -264,7 +292,7 @@ class Recovery:
                         raise RuntimeError(self._difference(item, current))
                     item['state'] = 'restored'
                 except ProcessLookupError:
-                    if item['kind'] == 'cpu':
+                    if item['kind'] in PROCESS_KINDS:
                         item['state'] = 'restored'
                     else:
                         errors.append('원래 어댑터를 찾지 못했어요.')
@@ -272,6 +300,29 @@ class Recovery:
                     errors.append(f"원복/{item['kind']}: {exc}")
                 self._save()
             return errors
+
+    def _restore_priority(self, item):
+        """게임 우선순위 원복(13.7). 지금 값이 원본·적용값이 아니면 다른 도구가 바꾼 것이라 덮어쓰지 않고 관리에서 뺀다(True).
+        두 읽기 경로가 다르면(확인 불가) 원본을 다시 쓴다 — 같은 값을 다시 써도 해가 없고, 읽기만 믿다가 '높음'을 남기지 않게."""
+        from ..system.process_priority import Unconfirmed, name
+        try:
+            current = self._read('priority', item['target'], '원복 전 확인')
+        except Unconfirmed:
+            current = None
+        if current is not None and current not in (item['old'], item['applied']):
+            item['state'] = 'released'
+            self._save()
+            _log.warning('게임 우선순위를 다른 도구가 바꿔(%s) 원복하지 않고 관리에서 뺐어요(원본 %s · 적용 %s).',
+                         name(current), name(item['old']), name(item['applied']))
+            return True
+        self.backend.write('priority', item['target'], item['old'])
+        try:
+            back = self._read('priority', item['target'], '원복값 확인')
+        except Unconfirmed:
+            back = None  # 확인 불가: 원본을 썼으므로 원복으로 본다(읽기 불일치 조사 중)
+        if back is not None and back != item['old']:
+            raise RuntimeError(f"원복값 확인 실패(현재 {name(back)}, 원본 {name(item['old'])})")
+        return False
 
     def flush_network(self, *, guard=None, verify_restored=False):
         with self.lock:
@@ -286,7 +337,7 @@ class Recovery:
                 verified = self._verify_after_restart(target)
                 if verify_restored:
                     for item in self.items:
-                        if item['target'] != target or item['kind'] == 'cpu' or item['state'] != 'restored':
+                        if item['target'] != target or item['kind'] in PROCESS_KINDS or item['state'] != 'restored':
                             continue
                         try:
                             current = self._read(item['kind'], target, '재연결 후 확인')

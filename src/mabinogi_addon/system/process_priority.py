@@ -21,6 +21,10 @@ CLASS_OF_BASE = {base: cls for cls, base in BASE.items()}
 WRITABLE = (IDLE, BELOW_NORMAL, NORMAL, ABOVE_NORMAL, HIGH)  # 실시간은 절대 쓰지 않는다
 
 
+class Unconfirmed(OSError):
+    """두 경로의 우선순위가 달라(또는 둘 다 실패해) 지금 값을 확정할 수 없음. 적용 실패로 단정하지 않는다."""
+
+
 def name(value) -> str:
     return NAMES.get(value, f'알 수 없음(0x{int(value or 0):X})' if isinstance(value, int) else '알 수 없음')
 
