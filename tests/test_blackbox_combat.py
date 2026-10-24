@@ -105,4 +105,70 @@ def test_save_progress_reads_ffmpeg_report_and_formats_text(tmp_path, monkeypatc
     codec.progress = dict(codec.progress, stage='validate')
     assert '마무리 확인 중(검증)' in c._progress_text(1)
     codec.progress = None
-    assert c._progress_text(1) == '저장 대기 1건 · 앞 작업이 끝나면 시작해요'
+    assert c._progress_text(1) == '저장 준비·마무리 중'               # 0.14.2: 1건뿐이면 중립 문구
+    assert c._progress_text(2) == '저장 대기 2건 · 앞 작업이 끝나면 시작해요'
+
+
+def test_saved_result_is_handled_once_without_hotkey_note(monkeypatch):
+    # 0.14.2 회귀: 지역 import time 때문에 UnboundLocalError → completed를 비우지 못해 완료 알림이 매 틱 반복되던 문제.
+    import importlib.util
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    spec = importlib.util.spec_from_file_location('qa_stuck', root / 'scripts/qa_0141_blackbox_saved_toast_stuck.py')
+    qa = importlib.util.module_from_spec(spec); spec.loader.exec_module(qa)
+    from PySide6.QtWidgets import QApplication
+    app = QApplication.instance() or QApplication([])
+    c, toasts = qa.controller(None)
+    for _ in range(5):
+        c._tick()
+    assert toasts == ['저장 완료 · 1분 49초'] and c.service.completed == []
+    assert c.panel.save_result.value.startswith('저장 완료: ') and c.panel.save_result.value.endswith('0:45 걸림')
+
+
+def test_game_screen_progress_toast_stays_until_finished_then_hides(monkeypatch):
+    from PySide6.QtWidgets import QApplication
+    from mabinogi_addon.ui import blackbox_controller as module
+    from mabinogi_addon.ui.blackbox_toast import BlackboxToast
+    app = QApplication.instance() or QApplication([])
+    import time
+    c = module.BlackboxController.__new__(module.BlackboxController)
+    c.window, c._last_target = NS(_closing=False), None
+    monkeypatch.setattr(module, 'is_creator', lambda: True)
+    c._toast = BlackboxToast()
+    snap = {'value': None}
+    c.service = NS(codec=NS(progress_snapshot=lambda: snap['value']))
+    c._toast.show_message('저장 중 0%', 'pending', sticky=True)
+    snap['value'] = ('encode', 300_000_000, 10.0, 0.42)
+    c._update_save_toast(2)
+    assert c._toast.text() == '저장 중 42% · 대기 1' and c._toast.sticky and not c._toast._timer.isActive()
+    snap['value'] = ('validate', 300_000_000, 20.0, None)
+    c._update_save_toast(1)
+    assert c._toast.text() == '저장 마무리 중'
+    c._toast.show_message('저장 완료 · 5분 0초', 'done')      # 완료는 3초 알림
+    c._update_save_toast(0)
+    assert c._toast.isVisible() and c._toast._timer.isActive()
+    c._toast.show_message('저장 중 0%', 'pending', sticky=True)
+    c._update_save_toast(0)                                    # 저장이 없으면 진행 알림을 남기지 않음
+    assert not c._toast.isVisible()
+    assert c._toast._font.pixelSize() == 14
+
+
+def test_encode_failure_clears_progress():
+    import pytest
+    from mabinogi_addon import blackbox_codec as codec_module
+    encoder = codec_module.FFmpegEncoder.__new__(codec_module.FFmpegEncoder)
+    encoder.progress = None
+    encoder.settings = NS(ffmpeg='ffmpeg', timeout=5, host=None, fps=60, bitrate=1, audio_bitrate=None)
+    encoder.resolve = lambda source: '/tmp/x.mp4'
+    encoder._output = lambda audio=False: ['-f', 'null', '-']
+    segment = NS(format_key='1x1:60:video', source='s')
+    plan = NS(slices=(NS(segment=segment, offset_us=0, duration_us=1_000_000),), duration_us=1_000_000)
+    def boom(*a, **k): raise OSError('encoder exited 1')
+    original = codec_module.stream_process
+    codec_module.stream_process = boom
+    try:
+        with pytest.raises(OSError):
+            encoder.encode(plan, NS(write=lambda b: None))
+    finally:
+        codec_module.stream_process = original
+    assert encoder.progress is None and encoder.progress_snapshot() is None

@@ -278,6 +278,9 @@ class FFmpegEncoder:
         self.progress = dict(stage='encode', duration_us=plan.duration_us, started=time.monotonic(), path=report)
         try:
             stream_process(command, sink, timeout=self.settings.timeout, chunks=(manifest,), host=self.settings.host)
+        except BaseException:
+            self.progress = None  # 실패·취소 뒤 '저장 중'이 남지 않게(0.14.2)
+            raise
         finally:
             try:
                 report.unlink(missing_ok=True)

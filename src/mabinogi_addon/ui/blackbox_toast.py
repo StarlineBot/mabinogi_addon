@@ -10,7 +10,7 @@ from PySide6.QtGui import QColor, QFont, QFontMetricsF, QGuiApplication, QPainte
 from PySide6.QtWidgets import QWidget
 
 SHOW_MS = 3000
-_COLORS = {'pending': QColor('#00d1a7'), 'done': QColor('#00d1a7'), 'failed': QColor('#ff8a65')}
+_COLORS = {'pending': QColor('#00d1a7'), 'done': QColor('#2ecc71'), 'failed': QColor('#ff8a65')}
 
 
 def format_duration(us) -> str:
@@ -26,11 +26,12 @@ class BlackboxToast(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
         self._text, self._kind = '', 'pending'
+        self.sticky = False  # 진행 알림은 저장이 끝날 때까지 유지(타이머 없음)
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)
         self._timer.timeout.connect(self.hide)
         self._font = QFont()
-        self._font.setPixelSize(20)
+        self._font.setPixelSize(14)  # 0.14.2 사용자 확정(A안): 작게, 볼드 유지
         self._font.setWeight(QFont.Weight.Bold)
 
     def text(self) -> str:
@@ -39,11 +40,11 @@ class BlackboxToast(QWidget):
     def kind(self) -> str:
         return self._kind
 
-    def show_message(self, text, kind='pending', screen_rect=None):
-        """kind: pending(접수) · done(완료) · failed(거부·실패). 새 문구는 이전 문구를 바로 대신한다."""
-        self._text, self._kind = text, kind
+    def show_message(self, text, kind='pending', screen_rect=None, sticky=False):
+        """kind: pending(진행) · done(완료) · failed(거부·실패). sticky면 끝날 때까지 유지, 아니면 SHOW_MS 뒤 사라짐."""
+        self._text, self._kind, self.sticky = text, kind, sticky
         metrics = QFontMetricsF(self._font)
-        self.resize(round(metrics.horizontalAdvance(text) + 44), round(metrics.height() + 20))
+        self.resize(round(metrics.horizontalAdvance(text) + 34), round(metrics.height() + 12))
         if screen_rect is None:
             screen = QGuiApplication.primaryScreen()
             screen_rect = screen.geometry() if screen is not None else None
@@ -54,7 +55,15 @@ class BlackboxToast(QWidget):
         set_click_through(self, True)
         self.update()
         self.show()
-        self._timer.start(SHOW_MS)
+        if sticky:
+            self._timer.stop()
+        else:
+            self._timer.start(SHOW_MS)
+
+    def hide_message(self):
+        self.sticky = False
+        self._timer.stop()
+        self.hide()
 
     def paintEvent(self, _event) -> None:
         painter = QPainter(self)
@@ -66,12 +75,12 @@ class BlackboxToast(QWidget):
         accent = _COLORS.get(self._kind, _COLORS['pending'])
         painter.setBrush(accent)
         dot = rect.height() * .22
-        painter.drawEllipse(QPointF(rect.x() + 16, rect.center().y()), dot / 2, dot / 2)
+        painter.drawEllipse(QPointF(rect.x() + 12, rect.center().y()), dot / 2, dot / 2)
         metrics = QFontMetricsF(self._font)
         path = QPainterPath()
-        path.addText(QPointF(rect.x() + 28, rect.center().y() + metrics.ascent() / 2 - metrics.descent() / 2),
+        path.addText(QPointF(rect.x() + 21, rect.center().y() + metrics.ascent() / 2 - metrics.descent() / 2),
                      self._font, self._text)
-        painter.setPen(QPen(QColor(0, 0, 0, 220), 3, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap,
+        painter.setPen(QPen(QColor(0, 0, 0, 220), 2, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap,
                             Qt.PenJoinStyle.RoundJoin))
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawPath(path)

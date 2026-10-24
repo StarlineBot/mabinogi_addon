@@ -29,7 +29,7 @@ def save_failure_reason(exc) -> str:
         return '저장할 영상이 너무 짧아요'
     if isinstance(exc, RuntimeError) and 'already reserved' in str(exc):
         return '이미 저장 중이에요'
-    return '앱에서 확인해 주세요'
+    return '앱에서 확인'
 
 
 def _toast_duration(us):
@@ -274,7 +274,6 @@ class BlackboxController(QObject):
             self.close_error = str(exc)
 
     def _request_save(self, request_us=None):
-        import time
         if self._allowed() and self.service is not None:
             try:
                 self.service.request_save(time.perf_counter_ns() // 1000 if request_us is None else request_us)
@@ -282,9 +281,9 @@ class BlackboxController(QObject):
                 if self.panel is not None:
                     self.panel.save_result.setText(str(exc))
                 self.close_error = str(exc)
-                self._react('저장하지 못했어요 · ' + save_failure_reason(exc), 'failed', self._last_target)
+                self._react('저장 실패 · ' + save_failure_reason(exc), 'failed', self._last_target)
                 return
-            self._react('영상 저장 중…', 'pending', self._last_target)
+            self._react('저장 중 0%', 'pending', self._last_target)
 
     def _react(self, text, kind, target=None):
         """게임 화면 오버레이 문구 + 효과음(접수·실패만). 전투 보조 일시정지와 무관하게 표시한다(저장 확인)."""
@@ -294,7 +293,7 @@ class BlackboxController(QObject):
         from .notifier import play_blackbox_sound
         if self._toast is None:
             self._toast = BlackboxToast()
-        self._toast.show_message(text, kind, self._screen_rect(target))
+        self._toast.show_message(text, kind, self._screen_rect(target), sticky=kind == 'pending')
         if kind in ('pending', 'failed'):
             play_blackbox_sound('accepted' if kind == 'pending' else 'failed')
 
@@ -324,7 +323,6 @@ class BlackboxController(QObject):
         self.panel.hotkey.setText(self._hotkey_base + ('\n' + self._hotkey_last if self._hotkey_last else ''))
 
     def _note_hotkey(self, text, result):
-        import time
         self._hotkey_note = (text, time.monotonic() + _HOTKEY_NOTE_SEC)
         # 게임→앱 전환 사이에 6초 강조가 사라져도 마지막 입력 시각·결과는 계속 남긴다.
         self._hotkey_last = f"마지막 단축키 입력 {time.strftime('%H:%M:%S')} · {result}"
@@ -338,17 +336,17 @@ class BlackboxController(QObject):
         if not (active and foreground and target is not None and shortcut[1] == target.hwnd):
             self._note_hotkey('단축키 입력을 받았어요 · 게임 창이 앞에 있을 때만 저장해요.',
                               '게임 창이 앞에 있지 않아 저장 안 함')
-            self._react('저장하지 못했어요 · 게임 창이 앞에 있을 때만 저장해요', 'failed', target)
+            self._react('저장 실패 · 게임 창이 앞에 있을 때만 저장해요', 'failed', target)
             return
         try:
             self.service.request_save(shortcut[0])
         except Exception as exc:
             reason = self.service.error or str(exc)
             self._note_hotkey(f'단축키 입력을 받았지만 지금은 저장할 수 없어요: {reason}', f'저장 불가: {reason}')
-            self._react('저장하지 못했어요 · ' + save_failure_reason(exc), 'failed', target)
+            self._react('저장 실패 · ' + save_failure_reason(exc), 'failed', target)
             return
         self._note_hotkey('단축키 입력을 받았어요 · 저장 요청을 접수했어요.', '저장 요청 접수')
-        self._react('영상 저장 중…', 'pending', target)
+        self._react('저장 중 0%', 'pending', target)
 
     def wants_boss_presence(self):
         """보스 탭이 보스바 존재 판정을 돌려야 하는지(전투 녹화 + 블랙박스 사용 중)."""
@@ -358,7 +356,6 @@ class BlackboxController(QObject):
         """전투 녹화면 보스바 판정으로 녹화 여부를 정한다. 평소 녹화면 항상 True."""
         if self._mode != 'combat':
             return True
-        import time
         boss = getattr(self.window, 'boss_tab', None)
         registered = bool(boss is not None and boss.has_region())
         foreground = getattr(self.events, 'foreground', active)
@@ -404,18 +401,26 @@ class BlackboxController(QObject):
         runtime = getattr(self.service, 'current', None)
         duration = runtime.session._replay.available_us if runtime else 0
         self._update_badge(duration)
+        # 처리할 결과를 먼저 꺼내고 비운다(0.14.2: 처리 중 예외로 비우지 못해 완료 알림이 매 틱 반복되던 회귀).
+        completed = list(self.service.completed)
+        self.service.completed.clear()
         # 저장 결과 반응(명세 11.1): 완료는 검증을 마친 결과에서만, 실패는 작업마다 한 번.
-        for kind, result in self.service.completed:
+        for kind, result in completed:
             if kind == 'saved':
-                self._react('영상 저장 완료' + (' · ' + _toast_duration(result.duration_us)
-                                                if getattr(result, 'duration_us', None) else ''), 'done',
-                            self._last_target)
+                self._react('저장 완료' + (' · ' + _toast_duration(result.duration_us)
+                                          if getattr(result, 'duration_us', None) else ''), 'done', self._last_target)
             elif kind == 'rejected':
-                self._react('저장하지 못했어요 · 앱에서 확인해 주세요', 'failed', self._last_target)
+                self._save_started = None
+                self._react('저장 실패 · 앱에서 확인', 'failed', self._last_target)
+            elif kind == 'cancelled':
+                self._save_started = None
         for _runtime, ticket, result in getattr(self.service, 'recoveries', list)():
             if result is not None and not result.completed and ticket not in self._toasted_failures:
                 self._toasted_failures.add(ticket)
-                self._react('저장하지 못했어요 · 앱에서 확인해 주세요', 'failed', self._last_target)
+                self._save_started = None
+                self._react('저장 실패 · 앱에서 확인', 'failed', self._last_target)
+        entries = getattr(self.service, 'recoveries', list)()
+        self._update_save_toast(sum(r is None for _, _, r in entries))
         if self.panel is not None:
             text = _STATES.get(self.service.status, '게임 실행 대기')
             if self._mode == 'combat' and self.service.enabled and self.service.status not in ('error', 'disabled'):
@@ -427,7 +432,6 @@ class BlackboxController(QObject):
             self.panel.capture_info.setText('게임 화면만 · 목표 1080p / 60FPS' + ('\n' + border if border else ''))
             self.panel.available.setText(f'확보한 영상 {duration // 1_000_000}초 / 설정 {self.service._retention // 60_000_000}분')
             self.panel.folder.setText(str(self.service.settings.output_folder))
-            entries = self.service.recoveries()
             failures = [r for _, _, r in entries if r is not None and not r.completed]
             running = sum(r is None for _, _, r in entries)
             if failures:
@@ -438,13 +442,12 @@ class BlackboxController(QObject):
                 self.panel.save_result.setText(self.service.error)
             note = self._hotkey_note
             if note is not None:
-                import time
                 if time.monotonic() < note[1]:
                     # 녹화 오류 문구가 매 틱 덮어써도 단축키를 눌렀다는 반응은 잠시 보이게 한다.
                     self.panel.save_result.setText(note[0])
                 else:
                     self._hotkey_note = None
-            for kind, result in self.service.completed:
+            for kind, result in completed:
                 if kind == 'saved':
                     took = getattr(self, '_save_started', None)
                     detail = ''
@@ -458,17 +461,39 @@ class BlackboxController(QObject):
                         (f' · {result.cleanup_error}' if result.cleanup_error else ''))
                 elif kind in ('rejected', 'cancelled'):
                     self.panel.save_result.setText(str(result))
-        self.service.completed.clear()
         if self._recovery_dialog is not None and self._recovery_dialog.isVisible():
             self._recovery_dialog.refresh()
 
+    def _update_save_toast(self, running):
+        """게임 화면 저장 진행 알림(0.14.2): 접수부터 끝날 때까지 유지, 1초마다 퍼센트 갱신. 완료·실패만 3초 뒤 사라짐."""
+        toast = getattr(self, '_toast', None)
+        if toast is None or not self._allowed():
+            return
+        if running <= 0:
+            if toast.sticky:
+                toast.hide_message()  # 저장이 없는데 진행 알림이 남지 않게(완료·실패 3초 알림은 그대로)
+            return
+        if not toast.sticky and toast.isVisible():
+            return  # 방금 뜬 완료·실패 알림은 3초 동안 둔다
+        codec = getattr(self.service, 'codec', None)
+        snapshot = codec.progress_snapshot() if codec is not None and hasattr(codec, 'progress_snapshot') else None
+        if snapshot is not None and snapshot[0] == 'validate':
+            text = '저장 마무리 중'
+        else:
+            fraction = snapshot[3] if snapshot is not None else None
+            text = f'저장 중 {round((fraction or 0) * 100)}%'
+            if running > 1:
+                text += f' · 대기 {running - 1}'
+        if text != toast.text() or not toast.isVisible():
+            toast.show_message(text, 'pending', self._screen_rect(self._last_target), sticky=True)
+
     def _progress_text(self, running):
         """저장 진행 표시(0.14.1): 저장 분량·경과·인코딩 퍼센트 또는 마무리 확인, 뒤에 기다리는 저장 수."""
-        import time
         codec = getattr(self.service, 'codec', None)
         snapshot = codec.progress_snapshot() if codec is not None and hasattr(codec, 'progress_snapshot') else None
         if snapshot is None:
-            return f'저장 대기 {running}건 · 앞 작업이 끝나면 시작해요'
+            # 인코딩 전후(접수 직후·검증 뒤 게시 중)에는 앞 작업이 없을 수 있다: 1건이면 중립 문구(0.14.2)
+            return '저장 준비·마무리 중' if running == 1 else f'저장 대기 {running}건 · 앞 작업이 끝나면 시작해요'
         stage, duration_us, elapsed, fraction = snapshot
         if getattr(self, '_save_started', None) is None:
             self._save_started = time.monotonic() - elapsed

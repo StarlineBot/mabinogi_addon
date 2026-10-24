@@ -59,6 +59,7 @@ def test_current_plan_matches_bundled_release_and_changed_features():
         'tests/test_optimization_ui.py', 'tests/test_config_atomic.py',
         'tests/test_config_bundle.py', 'tests/test_startup_build.py',
         'tests/test_autostart.py', 'tests/test_updater_relaunch_env.py',
-        'tests/test_manual_update_progress.py',
+        'tests/test_manual_update_progress.py', 'tests/test_overlay_metrics.py',
+        'tests/test_halo_clock.py',
     })
     assert set(paths) == expected

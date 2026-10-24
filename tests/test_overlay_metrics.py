@@ -149,11 +149,12 @@ def test_blackbox_reactions_toast_and_sound_slots(app, monkeypatch):
     controller._last_target = None
     controller.service, controller.close_error = Service(), None
     controller._request_save(1)
-    assert controller._toast.text() == '영상 저장 중…' and played == ['accepted']
+    assert controller._toast.text() == '저장 중 0%' and controller._toast.sticky and played == ['accepted']
     controller._request_save(2)
-    assert controller._toast.text() == '저장하지 못했어요 · 확보한 영상 없음' and played[-1] == 'failed'
-    controller._react('영상 저장 완료 · ' + format_duration(192_000_000), 'done')
-    assert controller._toast.text() == '영상 저장 완료 · 3분 12초' and len(played) == 2  # 완료는 문구만
+    assert controller._toast.text() == '저장 실패 · 확보한 영상 없음' and played[-1] == 'failed'
+    controller._react('저장 완료 · ' + format_duration(192_000_000), 'done')
+    assert controller._toast.text() == '저장 완료 · 3분 12초' and len(played) == 2  # 완료는 문구만
+    assert not controller._toast.sticky  # 완료·실패만 3초 뒤 사라짐
 
 
 def test_blackbox_sound_slot_is_silent_without_files(app):
@@ -229,10 +230,11 @@ def test_save_results_toast_on_game_monitor_using_logical_coordinates(app, monke
                             tick=lambda *a, **k: None, error=None, recoveries=list,
                             _retention=600_000_000, settings=NS(output_folder='f'), current=None)
     controller.events = NS(sample=lambda: (NS(hwnd=42), True), consume_hotkey=lambda: None)
-    controller._toast = NS(show_message=lambda text, kind, rect: shown.append((text, rect)))
+    controller._toast = NS(show_message=lambda text, kind, rect, sticky=False: shown.append((text, rect)),
+                           sticky=False, isVisible=lambda: True, text=lambda: '')
     controller._recovery_dialog = None
     controller._tick()
-    assert shown[0][0] == '영상 저장 완료 · 5초'
+    assert shown[0][0] == '저장 완료 · 5초'
     assert logical == [(0, 0, 2000, 1000)] and shown[0][1] is not None
 
 
