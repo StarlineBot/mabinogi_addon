@@ -268,3 +268,42 @@ def test_events_queued_before_focus_boundary_are_still_dropped():
     for n in range(50):                          # 경계(105초) 이전 시각의 이벤트가 늦게 도착
         stream.feed(f'game,7,0x1,{round((104+n*.02)*1_000_000)},20',105.5)
     assert book.current() is None and not stream.sources
+
+
+def test_segment_records_usage_average_and_process_states_and_condition_summary_flags_mix():
+    # FPS 명세 9절: 구간마다 CPU(가장 바쁜 코어)·GPU 사용률 평균과 게임 선호도·우선순위를 남기고,
+    # 조건별 정리에서 한 조건 안에 선호도·우선순위가 둘 이상이면 섞였다고 표시한다.
+    from mabinogi_addon.optimization.frame_summary import FrameSummary, condition_summary
+    smt = dict(affinity='코어당 1개(SMT 끔으로 보임 · 논리 CPU 8개)', priority='높음')
+    full = dict(affinity='전체(논리 CPU 16개)', priority='보통')
+    book = FrameSummary(); book.set_condition('기본'); book.activate('a', 0)
+    book.observe(dict(cpu=99.0, gpu=99.0, process=smt))  # 프레임 표본 전: 버림
+    t = 0
+    for n in range(7000):
+        t += .01; book.interval('a', t, .01)
+        if n % 100 == 0:
+            first_segment = not book.records
+            book.observe(dict(cpu=80.0 if first_segment else 60.0, gpu=50.0, process=full if first_segment else smt))
+    first = book.records[0]
+    assert first['cpu_busiest_avg_percent'] == 80.0 and first['gpu_avg_percent'] == 50.0
+    assert first['process_states'] == [full]
+    current = book.current()
+    assert current['cpu_busiest_avg_percent'] == 60.0 and current['process_states'] == [smt]
+    book.boundary(t + .001, 'measurement_stop')
+    assert book.measurement()['process_states'] == [full, smt]
+    groups = condition_summary([book.report()])
+    assert groups[0]['process_mixed'] and groups[0]['process_states'] == [full, smt]
+    assert groups[0]['cpu_busiest_percent']['minimum'] == 60.0 and groups[0]['gpu_percent']['median'] == 50.0
+
+
+def test_affinity_and_priority_descriptions():
+    from mabinogi_addon.system.perf_metrics import describe_affinity, describe_priority
+    cores = tuple((2 * i, 2 * i + 1) for i in range(8))  # 8코어 16스레드
+    every = (1 << 16) - 1
+    assert describe_affinity(every, every, cores) == '전체(논리 CPU 16개)'
+    even = sum(1 << (2 * i) for i in range(8))  # 라쏘 'SMT 끔'(짝수 CPU)
+    assert describe_affinity(even, every, cores) == '코어당 1개(SMT 끔으로 보임 · 논리 CPU 8개)'
+    assert describe_affinity(0b1111, every, cores) == '논리 CPU 4개(물리 코어 2개)'
+    assert describe_affinity(even, every) == '논리 CPU 8개/16개'
+    assert describe_priority(0x80) == '높음' and describe_priority(0x20) == '보통'
+    assert describe_priority(0x1234).startswith('알 수 없음')

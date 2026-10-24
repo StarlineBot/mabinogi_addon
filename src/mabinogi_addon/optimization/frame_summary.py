@@ -35,6 +35,25 @@ class FrameSummary:
         # 128구간×16,384 = 16MiB 상한, 디스크에 쓰지 않음). 측정 집계는 구간이 닫힐 때만 다시 계산한다.
         self._closed_intervals = array('d')
         self._measurement = None
+        self._reset_observed()
+
+    def _reset_observed(self):
+        # 구간마다 함께 남기는 읽기 전용 값(FPS 명세 9절): CPU(가장 바쁜 코어)·GPU 사용률 평균, 게임 선호도·우선순위
+        self._usage = dict(cpu=[0.0, 0], gpu=[0.0, 0])
+        self._process = []
+
+    def observe(self, values):
+        """지표 표본(PerfSampler.latest)을 현재 구간에 더한다. 프레임 표본이 없는 동안(게임 밖·대기)은 버린다."""
+        if not self.samples or not isinstance(values, dict):
+            return
+        for key in ('cpu', 'gpu'):
+            value = values.get(key)
+            if isinstance(value, (int, float)) and math.isfinite(value):
+                self._usage[key][0] += float(value)
+                self._usage[key][1] += 1
+        state = values.get('process')
+        if isinstance(state, dict) and state not in self._process and len(self._process) < 8:
+            self._process.append(dict(affinity=str(state.get('affinity')), priority=str(state.get('priority'))))
 
     def set_condition(self, text):
         self.condition = ' '.join(str(text or '').split())[:CONDITION_MAX]
@@ -62,6 +81,7 @@ class FrameSummary:
             self._closed_intervals.extend(duration for _, duration in self.samples)
             self._measurement = None
             self.samples = []
+            self._reset_observed()
             self.revision += 1
             if len(self.records) >= self.MAX_SEGMENTS:
                 self.full = True
@@ -139,6 +159,9 @@ class FrameSummary:
             relative_long_count=len(long), relative_long_seconds=math.fsum(d for _, d in long),
             relative_long_per_minute=len(long) / total * 60,  # 구간 길이가 달라도 비교할 수 있게 분당 횟수
             condition=self.condition,
+            cpu_busiest_avg_percent=self._usage['cpu'][0] / self._usage['cpu'][1] if self._usage['cpu'][1] else None,
+            gpu_avg_percent=self._usage['gpu'][0] / self._usage['gpu'][1] if self._usage['gpu'][1] else None,
+            process_states=[dict(state) for state in self._process],
             longest=[dict(at_seconds=self.relative(t), milliseconds=d*1000)
                      for t, d in sorted(self.samples, key=lambda sample: sample[1], reverse=True)[:8]],
             end_reason='collecting')
@@ -172,6 +195,11 @@ class FrameSummary:
                 contexts.append((record['context'], record['source']))
         maxima = [r['max_1s_fps'] for r in self.records if r['max_1s_fps'] is not None]
         interrupted = [r['end_reason'] for r in self.records if r['end_reason'] in INTERRUPTED]
+        states = []
+        for record in self.records:
+            for state in record.get('process_states') or ():
+                if state not in states:
+                    states.append(state)
         self._measurement = dict(condition=self.condition, segments=len(self.records), valid_intervals=count,
             measured_seconds=total, average_fps=count / total,
             low_1pct_fps=tail_count / float(math.fsum(tail)) if tail is not None else None,
@@ -180,7 +208,7 @@ class FrameSummary:
             relative_long_count=long_count, relative_long_per_minute=long_count / total * 60,
             max_1s_fps=max(maxima) if maxima else None,
             quality='observed' if count >= 100 and maxima else 'insufficient_samples',
-            conditions_recorded=len(contexts), interrupted_segments=len(interrupted),
+            conditions_recorded=len(contexts), interrupted_segments=len(interrupted), process_states=states,
             end_reason=interrupted[0] if interrupted else 'measurement_complete',
             context=contexts[0][0], source=contexts[0][1] if len(contexts) == 1 else None)
         return self._measurement
@@ -269,11 +297,16 @@ def condition_summary(reports):
                     continue
                 seen.add(key)
                 group = groups.setdefault(label(record.get('condition', report.get('condition'))),
-                                          dict(low=[], long=[], seconds=0.0, sessions=set()))
+                                          dict(low=[], long=[], seconds=0.0, sessions=set(), cpu=[], gpu=[], states=[]))
                 group['low'].append(record['low_1pct_fps'])
                 group['long'].append(_long_per_minute(record))
                 group['seconds'] += record['measured_seconds']
                 group['sessions'].add(session)
+                group['cpu'].append(record.get('cpu_busiest_avg_percent'))
+                group['gpu'].append(record.get('gpu_avg_percent'))
+                for state in record.get('process_states') or ():
+                    if isinstance(state, dict) and state not in group['states']:
+                        group['states'].append(state)
             except (KeyError, TypeError, ZeroDivisionError):
                 continue
         whole = report.get('measurement')
@@ -292,7 +325,10 @@ def condition_summary(reports):
         result.append(dict(condition=name, segments=len(group['low']), measurements=len(group['sessions']),
             measured_seconds=group['seconds'], segment_low_1pct_fps=_spread(group['low']),
             segment_long_per_minute=_spread(group['long']),
-            measurement_low_1pct_fps=_spread(measurements.get(name, []))))
+            measurement_low_1pct_fps=_spread(measurements.get(name, [])),
+            cpu_busiest_percent=_spread(group['cpu']), gpu_percent=_spread(group['gpu']),
+            # 조건 안에서 선호도·우선순위가 둘 이상이면 외부 도구 등으로 조건이 섞였을 수 있다(FPS 명세 9절)
+            process_states=group['states'], process_mixed=len(group['states']) > 1))
     return sorted(result, key=lambda item: item['condition'])
 
 

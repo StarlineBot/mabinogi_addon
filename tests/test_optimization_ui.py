@@ -468,7 +468,7 @@ def test_condition_name_measurement_view_and_condition_summary(window, monkeypat
         book.boundary(t + .001, 'measurement_stop')
         return book
 
-    c.panel.condition.setText('7+1 SMT끔')
+    c.panel.condition.setText('7+1 SMT끔'); c.panel.condition.editingFinished.emit()  # 9절: 입력을 마치면 적용
     assert c.summary.condition == '7+1 SMT끔'
     before, after = measure(50, '기본'), measure(500, '7+1 SMT끔')
     c.summary, c._previous_measurement = after, before.measurement()
@@ -488,16 +488,27 @@ def test_condition_name_measurement_view_and_condition_summary(window, monkeypat
     assert '■ 기본' in shown and '■ 7+1 SMT끔' in shown and '평균해 조건 전체 1% low로 쓰지 않아요' in shown
 
 
-def test_condition_change_during_measurement_applies_to_next_measurement(window, monkeypatch):
-    # 0.12.0 QA 선택 2: 측정 중 조건 이름을 바꿔도 한 측정에 이름이 섞이지 않는다.
+def test_condition_change_during_measurement_cuts_and_continues_with_new_name(window, monkeypatch):
+    # FPS 명세 9절(이전 0.12.0 '다음 측정부터' 대체): 입력을 마치면 바로 적용. 기록 중이면 구간을 끊고 새 측정으로 이어서,
+    # 한 구간·한 측정 안에 두 이름이 섞이지 않는다(7절 원칙).
     w, app = window; c = w.optimization_tools
     monkeypatch.setattr(module, 'is_creator', lambda: True); c.refresh_access()
-    c.panel.condition.setText('기본')
+    c.panel.condition.setText('기본'); c.panel.condition.editingFinished.emit()
     assert c.summary.condition == '기본'
+    old = c.summary
+    old.activate('a', 0); t = 0
+    for n in range(7000):  # 60초 구간 하나 완료 + 진행 중 구간
+        t += .01; old.interval('a', t, .01)
+    assert old.records and old.samples
     c.frames = True
     try:
-        c.panel.condition.setText('7+1')
-        assert c.summary.condition == '기본' and '다음 측정부터' in c._summary_message
+        c.panel.condition.setText('7+1'); c.panel.condition.editingFinished.emit()
+        assert c.summary is not old and c.summary.condition == '7+1' and not c.summary.records
+        assert all(r['condition'] == '기본' for r in old.records) and old.records[-1]['end_reason'] == 'condition_change'
+        assert not old.samples and c._previous_measurement['condition'] == '기본'
+        assert '「7+1」' in c._summary_message
+        c.panel.condition.editingFinished.emit()  # 같은 이름으로 다시 마쳐도 새 측정을 만들지 않음
+        assert c.summary.condition == '7+1' and not c.summary.records
     finally:
         c.frames = False
 
@@ -521,18 +532,57 @@ def test_fps_display_toggle_starts_and_stops_measurement(window, monkeypatch):
     assert not toggle.isChecked() and toggle.text() == 'FPS 표시'
 
 
-def test_collection_mode_does_not_start_display_or_write_files_when_display_is_off(window, monkeypatch, tmp_path):
+def test_collection_mode_measures_without_display_and_stops_when_both_off(window, monkeypatch, tmp_path):
+    # FPS 명세 9절(이전 8.3 '표시가 켜져 있을 때만' 대체): 수집 모드를 켜면 표시와 무관하게 측정한다. 표시는 켜지 않는다.
     from mabinogi_addon.optimization.frame_summary_store import SummaryStore
     w, app = window; c = w.optimization_tools
     monkeypatch.setattr(module, 'is_creator', lambda: True); c.refresh_access()
-    monkeypatch.setattr(c, 'start_frames', lambda: pytest.fail('collection must not start the display'))
+    calls = []
+    monkeypatch.setattr(c, 'start_frames', lambda: calls.append('start') or setattr(c, 'frames', True))
+    monkeypatch.setattr(c, 'stop_frames', lambda message=None: calls.append('stop') or setattr(c, 'frames', False))
     c.summary_store = SummaryStore(tmp_path / 'summaries')
     c.panel.summary_collect.setChecked(True)
-    assert c._summary_collecting and not c.frames
-    assert 'FPS 표시가 꺼져 있어 수집하지 않아요' in c.panel.summary_path.text()
-    c._tick()
-    assert not (tmp_path / 'summaries').exists() or not any((tmp_path / 'summaries').iterdir())
-    c.panel.summary_collect.setChecked(False)
+    assert c._summary_collecting and c.frames and calls == ['start']
+    assert c._collect_only and not c.panel.frames_toggle.isChecked()  # FPS 표시는 꺼진 그대로
+    assert c._run_label() == '수집 중'
+    c._render_summary(force=True)
+    assert '수집 중(FPS 표시 꺼짐)' in c.panel.summary_path.text()
+    # 표시를 켰다 꺼도 수집은 계속
+    c.panel.frames_toggle.click()
+    assert c.panel.frames_toggle.isChecked() and not c._collect_only and calls == ['start']
+    c.panel.frames_toggle.click()
+    assert c.frames and c._collect_only and calls == ['start'] and not c.panel.frames_toggle.isChecked()
+    c.panel.summary_collect.setChecked(False)  # 둘 다 꺼지면 측정 중단
+    assert calls == ['start', 'stop'] and not c.frames and not c._collect_only
+
+
+def test_collection_without_display_never_shows_overlay_and_records_usage(window, monkeypatch):
+    w, app = window; c = w.optimization_tools
+    c.timer.stop()
+    game = {'pid': 123, 'birth': '999'}
+    now = [100.0]
+    monkeypatch.setattr(module, 'is_creator', lambda: True)
+    monkeypatch.setattr(c.backend, 'game', lambda: game)
+    monkeypatch.setattr(module.presentmon, 'clock', lambda: (now[0], 1000))
+    monkeypatch.setattr(module.presentmon, 'game_context', lambda *a: (True, (11, 123, 0, 0, 1000, 800)))
+    wanted = []
+    monkeypatch.setattr(c.sampler, 'update', lambda metrics, pid: wanted.append(tuple(metrics)))
+    state = dict(affinity='코어당 1개(SMT 끔으로 보임 · 논리 CPU 8개)', priority='높음')
+    monkeypatch.setattr(type(c.sampler), 'latest', property(lambda self: dict(cpu=90.0, gpu=40.0, process=state)))
+    c.frames, c._collect_only, c._summary_collecting = True, True, True
+    c.target, c.stream = game, FrameStream(123, 1000, c.summary)
+    c.stream.feed('Application,ProcessID,SwapChainAddress,TimeInQPC,MsBetweenPresents', 100)
+    c._frame_tick(.25)
+    for n in range(26):
+        now[0] = 100.02 + n * .02
+        c._line(f'game.exe,123,0xabc,{round(now[0] * 1000)},20')
+    c._frame_tick(.25)
+    assert not c.overlay.isVisible()
+    assert wanted[-1] == ('cpu', 'gpu', 'process')  # 수집 중: 사용률·선호도·우선순위를 함께 읽음
+    record = c.summary.current()
+    assert record['cpu_busiest_avg_percent'] == 90.0 and record['gpu_avg_percent'] == 40.0
+    assert record['process_states'] == [state]
+    c.frames, c._collect_only, c._summary_collecting = False, False, False
 
 
 def test_fps_display_setting_is_restored_after_restart_but_collection_is_not(window, monkeypatch):

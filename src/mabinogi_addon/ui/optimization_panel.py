@@ -74,8 +74,8 @@ class OptimizationPanel(QWidget):
         self.frames_status=_label('꺼짐 · 표시 안 함');group.addWidget(self.frames_status)
         group.addWidget(_label('앱을 다시 실행해도 FPS 표시 설정은 유지돼요. 수집 모드는 매번 꺼진 상태로 시작해요.\n전투 보조 일시정지는 FPS 표시만 숨겨요.'))
         group=_group('프레임 수집(베타)',body)
-        group.addWidget(_label('FPS 표시가 켜져 있을 때만 동작해요. 수집 모드를 켜면 구간 요약을 파일로 남겨요.\n'
-                               '매 프레임 원본은 저장하지 않아요.'))
+        group.addWidget(_label('수집 모드를 켜 두면 FPS 표시와 관계없이 게임이 앞에 있는 동안 구간 요약을 파일로 남겨요.\n'
+                               'CPU·GPU 사용률과 게임의 CPU 선호도·우선순위도 함께 기록해요. 매 프레임 원본은 저장하지 않아요.'))
         row=QHBoxLayout()
         self.summary_save=QPushButton('요약 저장');row.addWidget(self.summary_save)
         self.summary_folder=QPushButton('폴더 열기');row.addWidget(self.summary_folder)
@@ -87,6 +87,7 @@ class OptimizationPanel(QWidget):
         # 앱이 알 수 없는 조건(FPS 제한·렌더링 엔진·외부 도구·장면)을 측정마다 남긴다(FPS 7절).
         self.condition=QLineEdit();self.condition.setMaxLength(48)
         self.condition.setPlaceholderText('예: 7+1 SMT끔 · Vulkan · 제한없음')
+        self.condition.setToolTip('입력을 마치면(Enter 또는 다른 곳 클릭) 바로 적용돼요. 기록 중이면 구간을 끊고 새 이름으로 이어서 기록해요.')
         form=QFormLayout();form.addRow('측정 조건',self.condition);group.addLayout(form)
         self.summary_select=QComboBox();self.summary_select.addItem('현재 구간',None)
         group.addWidget(self.summary_select)

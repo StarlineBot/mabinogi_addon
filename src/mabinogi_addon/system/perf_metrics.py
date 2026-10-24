@@ -30,6 +30,34 @@ def busiest_core(values: dict) -> float | None:
     return max(0.0, min(100.0, max(cores))) if cores else None
 
 
+# GetPriorityClass 값 → 작업 관리자 이름(FPS 명세 9절: 외부 도구가 바꾼 우선순위를 기록)
+PRIORITY_NAMES = {0x40: '낮음', 0x4000: '보통 미만', 0x20: '보통', 0x8000: '보통 초과', 0x80: '높음', 0x100: '실시간'}
+
+
+def describe_affinity(mask, system_mask, cores=None) -> str:
+    """게임 프로세스 CPU 선호도(마스크)를 읽기 쉬운 문구로. cores: 물리 코어별 논리 CPU 번호 묶음(모르면 None).
+
+    예: 전체 / 코어당 1개(SMT 끔으로 보임) / 논리 CPU 8개(코어 4개)."""
+    mask, system_mask = int(mask or 0), int(system_mask or 0)
+    chosen = [i for i in range(64) if mask & (1 << i)]
+    total = [i for i in range(64) if system_mask & (1 << i)]
+    if not chosen:
+        return '알 수 없음'
+    if total and set(chosen) >= set(total):
+        return f'전체(논리 CPU {len(total)}개)'
+    if cores:
+        used = [core for core in cores if set(core) & set(chosen)]
+        per_core = [len(set(core) & set(chosen)) for core in used]
+        if len(used) == len(cores) and all(n == 1 for n in per_core) and any(len(core) > 1 for core in cores):
+            return f'코어당 1개(SMT 끔으로 보임 · 논리 CPU {len(chosen)}개)'
+        return f'논리 CPU {len(chosen)}개(물리 코어 {len(used)}개)'
+    return f'논리 CPU {len(chosen)}개' + (f'/{len(total)}개' if total else '')
+
+
+def describe_priority(value) -> str:
+    return PRIORITY_NAMES.get(int(value or 0), f'알 수 없음(0x{int(value or 0):X})')
+
+
 def gpu_utilization(values: dict) -> float | None:
     """GPU 엔진 인스턴스(pid_..._luid_..._phys_0_eng_0_engtype_3D)별 사용률 → 작업 관리자식 GPU%(엔진별 합의 최댓값)."""
     totals = {}
@@ -50,6 +78,13 @@ class WindowsPerfReader:
 
     def __init__(self, metrics):
         import win32pdh
+        self._cores = None
+        if 'process' in metrics:
+            try:  # 물리 코어별 논리 CPU 묶음(읽기 전용). 모르면 선호도를 개수로만 적는다.
+                from .optimization import WindowsOptimization
+                self._cores = tuple(core.cpus for core in WindowsOptimization().topology().cores)
+            except Exception as exc:
+                _log.info('CPU 구조를 확인하지 못해 선호도를 개수로만 기록해요: %s', exc)
         self._pdh = win32pdh
         self._query = win32pdh.OpenQuery()
         self._counters = {}
@@ -63,7 +98,7 @@ class WindowsPerfReader:
                     errors.append(f'{key}: {exc}')
         if errors:
             _log.warning('오버레이 지표 카운터 일부를 쓸 수 없어요: %s', '; '.join(errors))
-            if not self._counters and 'memory' not in metrics:
+            if not self._counters and not {'memory', 'process'} & set(metrics):
                 self.close()
                 raise OSError('; '.join(errors))
         if self._counters:
@@ -81,6 +116,8 @@ class WindowsPerfReader:
                 result[key] = busiest_core(values) if key == 'cpu' else gpu_utilization(values)
         if 'memory' in metrics and pid:
             result['memory'] = process_private_bytes(pid)
+        if 'process' in metrics and pid:
+            result['process'] = process_state(pid, self._cores)
         return result
 
     def close(self):
@@ -101,6 +138,25 @@ def process_private_bytes(pid) -> int | None:
     try:
         info = win32process.GetProcessMemoryInfo(handle)
         return int(info.get('PrivateUsage') or info.get('PagefileUsage') or 0) or None
+    except Exception:
+        return None
+    finally:
+        handle.Close()
+
+
+def process_state(pid, cores=None) -> dict | None:
+    """게임 프로세스의 CPU 선호도·우선순위(읽기 전용, 조회 권한만). 바꾸지 않는다."""
+    import win32api
+    import win32con
+    import win32process
+    try:
+        handle = win32api.OpenProcess(win32con.PROCESS_QUERY_LIMITED_INFORMATION, False, int(pid))
+    except Exception:
+        return None
+    try:
+        mask, system_mask = win32process.GetProcessAffinityMask(handle)
+        priority = win32process.GetPriorityClass(handle)
+        return dict(affinity=describe_affinity(mask, system_mask, cores), priority=describe_priority(priority))
     except Exception:
         return None
     finally:
@@ -131,8 +187,8 @@ class PerfSampler:
             return dict(self._latest)
 
     def update(self, metrics, pid):
-        """켠 지표(cpu/gpu/memory)와 게임 PID를 바꾼다. 지표가 없으면 스레드를 멈춘다."""
-        wanted = frozenset(m for m in metrics if m in ('cpu', 'gpu', 'memory'))
+        """켠 지표(cpu/gpu/memory/process)와 게임 PID를 바꾼다. 지표가 없으면 스레드를 멈춘다."""
+        wanted = frozenset(m for m in metrics if m in ('cpu', 'gpu', 'memory', 'process'))
         with self._lock:
             self._pid = pid
             changed = wanted != self._metrics
