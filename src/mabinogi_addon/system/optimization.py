@@ -243,6 +243,14 @@ class WindowsOptimization:
         with self._process({'pid':target[1]}) as (_,handle,birth):
             return {'pid':target[1],'birth':birth}
 
+    def foreground(self, target):
+        """게임 창이 지금 맨 앞에 있는지(13.7: 게임에 집중할 때만 높음 유지). 확인할 수 없으면 True(기존 동작)."""
+        try:
+            import win32gui, win32process
+            return win32process.GetWindowThreadProcessId(win32gui.GetForegroundWindow())[1] == target['pid']
+        except Exception:
+            return True
+
     def alive(self, target):
         try:
             with self._process(target): return True

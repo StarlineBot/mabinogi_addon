@@ -215,3 +215,41 @@ def test_preset_high_changed_to_other_value_is_external_and_left_alone(setup):
 def test_query_remembers_last_buffer_size():
     from mabinogi_addon.system import process_threads
     assert process_threads._last_size == 1 << 20  # 시작값; Windows에서 성공한 크기를 기억해 다음 호출에 쓴다
+
+
+def test_background_game_lowering_to_normal_is_respected_until_it_comes_back_to_front(setup):
+    # 2026-10-24 사용자 결정: 게임에 집중할 때만 높음이면 된다. 뒤에 있을 때 게임이 낮춘 '보통'은 그대로 두고,
+    # 앞으로 왔는데도 보통이면 다시 건다(다시 걸기 횟수에도 넣지 않음).
+    r, b = setup
+    front = [True]
+    b.foreground = lambda target: front[0]
+    e = Engine(b, r, lambda: True)
+    assert e.start(OPTIONS)
+    assert _wait(lambda: b.values[KEY] == HIGH)
+    writes = len(b.writes)
+    front[0] = False
+    b.values[KEY] = NORMAL  # 뒤로 가자 게임이 낮춤
+    import time
+    time.sleep(4.5)
+    assert b.values[KEY] == NORMAL and len(b.writes) == writes
+    front[0] = True
+    assert _wait(lambda: b.values[KEY] == HIGH, 6)
+    e.stop(); e.thread.join(5)
+
+
+def test_preset_high_waits_while_background_then_manages_in_front(setup):
+    r, b = setup
+    b.values[KEY] = HIGH
+    front = [False]
+    b.foreground = lambda target: front[0]
+    e = Engine(b, r, lambda: True)
+    assert e.start(OPTIONS)
+    assert _wait(lambda: '이미 높음 · 그대로 둠' in e.status)
+    b.values[KEY] = NORMAL
+    import time
+    time.sleep(4.5)
+    assert not b.writes and not r.items
+    front[0] = True
+    assert _wait(lambda: b.values[KEY] == HIGH, 6)
+    assert r.items[0]['old'] == NORMAL
+    e.stop(); e.thread.join(5)

@@ -248,6 +248,8 @@ class Engine:
 
         - 원본으로 돌아갔으면 다시 건다(10분에 30회까지, 넘으면 안내만).
         - 원본·적용값이 아닌 다른 값이면 다른 도구가 바꾼 것: 덮어쓰지 않고 관리에서 뺀다.
+        - 게임 창이 뒤에 있는 동안 게임이 '보통'으로 낮추면 그대로 둔다(2026-10-24 사용자 결정: 게임에 집중할 때만 높음이면 됨).
+          다시 앞으로 왔는데도 '보통'이면 그때 다시 건다(다시 걸기 횟수에도 넣지 않음).
         - 시작 때 이미 높음이었으면(작업 관리자·라쏘로 미리 건 경우) 기록 없이 지켜보다가, 게임이 '보통'으로 되돌리면
           그 '보통'을 원본으로 기록하고 높음을 건다(0.17.0 QA). 이후는 위 유지·원복 흐름. '보통'이 아닌 다른 값으로 바뀌면
           다른 도구가 바꾼 것으로 보고 손대지 않는다.
@@ -255,6 +257,11 @@ class Engine:
         import time
         from ..system.process_priority import Unconfirmed, name
         identity = (game['pid'], game['birth'])
+        foreground = getattr(self.backend, 'foreground', None)
+        try:
+            focused = foreground(game) if foreground is not None else True
+        except Exception:
+            focused = True
         if identity not in state['applied']:
             state['applied'].add(identity)
             try:
@@ -275,8 +282,8 @@ class Engine:
                 current = self.backend.read('priority', game)
             except (ProcessLookupError, Unconfirmed):
                 return notices
-            if current == HIGH_PRIORITY:
-                return notices
+            if current == HIGH_PRIORITY or (current == NORMAL_PRIORITY and not focused):
+                return notices  # 뒤에 있을 때 게임이 낮춘 보통은 존중하고 계속 지켜본다
             state['preset'].discard(identity)
             if current != NORMAL_PRIORITY:
                 message = (f'다른 도구가 게임 우선순위를 바꿨어요(현재 {name(current)}). 덮어쓰지 않아요.')
@@ -304,6 +311,8 @@ class Engine:
             return notices
         if current == item['applied']:
             return notices
+        if current == item['old'] and not focused:
+            return notices  # 게임 창이 뒤: 게임이 낮춘 값을 그대로 둔다(앞으로 오면 다시 건다)
         if current != item['old']:
             self.recovery.release(item)
             message = (f"다른 도구가 게임 우선순위를 바꿨어요(현재 {name(current)}). 덮어쓰지 않고 관리에서 뺐어요(원복하지 않음).")
