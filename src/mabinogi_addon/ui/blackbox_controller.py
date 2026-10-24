@@ -1,5 +1,7 @@
 """제작자 전용 최상위 진입점. 캡처 어댑터가 없는 제품 상태에서는 조작을 열지 않는다."""
 
+import time
+
 from PySide6.QtCore import QObject, QTimer
 
 from ..feature_access import is_creator
@@ -431,7 +433,7 @@ class BlackboxController(QObject):
             if failures:
                 self.panel.save_result.setText('저장 실패 · 저장 내역·복구에서 확인하세요: ' + str(failures[0].error))
             elif running:
-                self.panel.save_result.setText(f'저장 처리·대기 {running}건 · 녹화 상태는 위에서 확인하세요.')
+                self.panel.save_result.setText(self._progress_text(running))
             if self.service.error:
                 self.panel.save_result.setText(self.service.error)
             note = self._hotkey_note
@@ -444,13 +446,43 @@ class BlackboxController(QObject):
                     self._hotkey_note = None
             for kind, result in self.service.completed:
                 if kind == 'saved':
-                    self.panel.save_result.setText(f'저장 완료: {result.output}' +
+                    took = getattr(self, '_save_started', None)
+                    detail = ''
+                    if getattr(result, 'duration_us', None):
+                        detail += ' · ' + _toast_duration(result.duration_us)
+                    if took is not None:
+                        seconds = int(time.monotonic() - took)
+                        detail += f' · {seconds // 60}:{seconds % 60:02d} 걸림'
+                    self._save_started = None
+                    self.panel.save_result.setText(f'저장 완료: {result.output}{detail}' +
                         (f' · {result.cleanup_error}' if result.cleanup_error else ''))
                 elif kind in ('rejected', 'cancelled'):
                     self.panel.save_result.setText(str(result))
         self.service.completed.clear()
         if self._recovery_dialog is not None and self._recovery_dialog.isVisible():
             self._recovery_dialog.refresh()
+
+    def _progress_text(self, running):
+        """저장 진행 표시(0.14.1): 저장 분량·경과·인코딩 퍼센트 또는 마무리 확인, 뒤에 기다리는 저장 수."""
+        import time
+        codec = getattr(self.service, 'codec', None)
+        snapshot = codec.progress_snapshot() if codec is not None and hasattr(codec, 'progress_snapshot') else None
+        if snapshot is None:
+            return f'저장 대기 {running}건 · 앞 작업이 끝나면 시작해요'
+        stage, duration_us, elapsed, fraction = snapshot
+        if getattr(self, '_save_started', None) is None:
+            self._save_started = time.monotonic() - elapsed
+        elapsed = int(elapsed)
+        text = f'저장 중 · {_toast_duration(duration_us)} 분량 · 경과 {elapsed // 60}:{elapsed % 60:02d}'
+        if stage == 'validate':
+            text += ' · 마무리 확인 중(검증)'
+        elif fraction is not None:
+            text += f' · 약 {round(fraction * 100)}% (인코딩)'
+        else:
+            text += ' · 인코딩 시작 중'
+        if running > 1:
+            text += f'\n다음 저장 대기 {running - 1}건 · 앞 저장이 끝나면 시작해요'
+        return text
 
     def _update_badge(self, available_us):
         badge = getattr(self.window, '_blackbox_badge', None)

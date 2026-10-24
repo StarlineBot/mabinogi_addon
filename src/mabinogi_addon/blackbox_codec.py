@@ -168,6 +168,9 @@ class FFmpegEncoder:
         self._lock = threading.Lock()
         self.selected = None if settings.candidates else settings.encoder
         self.attempts = {}  # 후보 → 실패 사유(마지막 시험 기준, 진단 표시용)
+        # 진행 중인 저장(0.14.1 저장 진행 표시): dict(stage='encode'|'validate', duration_us, started, path) 또는 None.
+        # 저장 작업은 한 번에 하나라 속성 하나로 충분하다. UI는 progress_snapshot()만 읽는다.
+        self.progress = None
 
     def encoder(self):
         """사용할 인코더. 후보가 있으면 처음 한 번 시험 인코딩으로 고르고 실행 중 캐시한다.
@@ -268,10 +271,44 @@ class FFmpegEncoder:
                 'aselect=concatdec_select,aresample=async=1:first_pts=0,atrim=duration=' + seconds(plan.duration_us)]
         else:
             command += ['-an']
+        import tempfile, uuid
+        report = Path(tempfile.gettempdir()) / f'mabinogi-blackbox-progress-{uuid.uuid4().hex}.txt'
+        command += ['-progress', str(report), '-stats_period', '0.5']  # 처리한 영상 시각(out_time_us)을 주기적으로 기록
         command += self._output(audio=audio)
-        stream_process(command, sink, timeout=self.settings.timeout, chunks=(manifest,), host=self.settings.host)
+        self.progress = dict(stage='encode', duration_us=plan.duration_us, started=time.monotonic(), path=report)
+        try:
+            stream_process(command, sink, timeout=self.settings.timeout, chunks=(manifest,), host=self.settings.host)
+        finally:
+            try:
+                report.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+    def progress_snapshot(self):
+        """(단계, 저장 분량 µs, 경과 초, 인코딩 진행 0~1 또는 None). 저장 중이 아니면 None."""
+        progress = getattr(self, 'progress', None)
+        if progress is None:
+            return None
+        fraction = None
+        if progress['stage'] == 'encode':
+            try:
+                text = progress['path'].read_text(encoding='utf-8', errors='replace')
+                times = [line.split('=', 1)[1] for line in text.splitlines() if line.startswith('out_time_us=')]
+                if times and times[-1].strip().lstrip('-').isdigit():
+                    fraction = max(0.0, min(1.0, int(times[-1]) / max(1, progress['duration_us'])))
+            except OSError:
+                pass
+        return progress['stage'], progress['duration_us'], time.monotonic() - progress['started'], fraction
 
     def validate(self, path, plan):
+        if getattr(self, 'progress', None) is not None:
+            self.progress = dict(self.progress, stage='validate')
+        try:
+            return self._validate(path, plan)
+        finally:
+            self.progress = None
+
+    def _validate(self, path, plan):
         output = io.BytesIO()
         stream_process([str(self.settings.ffprobe), '-v', 'error',
             '-show_entries', 'stream=codec_type,start_time,duration,width,height', '-of', 'json', str(path)],

@@ -83,3 +83,26 @@ def test_combat_badge_and_status_text():
     assert combat_text(gate) == '보관 중 · 전투 종료 대기 59초'
     assert blackbox_badge(service, 0, gate)[0] == '블랙박스: 전투 종료 대기 59초'
     assert blackbox_badge(NS(enabled=True, status='recording'), 60_000_000)[0] == '블랙박스: 보관 중 1:00'  # 평소 녹화 불변
+
+
+def test_save_progress_reads_ffmpeg_report_and_formats_text(tmp_path, monkeypatch):
+    # 0.14.1 저장 진행 표시: ffmpeg -progress의 out_time_us를 저장 분량 대비 퍼센트로.
+    import time
+    from mabinogi_addon.blackbox_codec import FFmpegEncoder
+    from mabinogi_addon.ui import blackbox_controller as module
+    codec = FFmpegEncoder.__new__(FFmpegEncoder)
+    report = tmp_path / 'progress.txt'
+    report.write_text('frame=10\nout_time_us=60000000\nprogress=continue\nout_time_us=120000000\n', encoding='utf-8')
+    codec.progress = dict(stage='encode', duration_us=300_000_000, started=time.monotonic() - 72, path=report)
+    stage, duration, elapsed, fraction = codec.progress_snapshot()
+    assert stage == 'encode' and duration == 300_000_000 and 71 <= elapsed < 74 and fraction == 0.4
+    c = module.BlackboxController.__new__(module.BlackboxController)
+    c.service = NS(codec=codec)
+    c._save_started = None
+    text = c._progress_text(2)
+    assert text.startswith('저장 중 · 5분 0초 분량 · 경과 1:1') and '약 40% (인코딩)' in text
+    assert '다음 저장 대기 1건' in text
+    codec.progress = dict(codec.progress, stage='validate')
+    assert '마무리 확인 중(검증)' in c._progress_text(1)
+    codec.progress = None
+    assert c._progress_text(1) == '저장 대기 1건 · 앞 작업이 끝나면 시작해요'
