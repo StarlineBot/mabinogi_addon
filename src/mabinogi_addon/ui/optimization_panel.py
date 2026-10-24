@@ -38,10 +38,10 @@ class OptimizationPanel(QWidget):
         group=_group('네트워크',body)
         self.adapter=QComboBox();self.adapter.addItem('네트워크 어댑터를 선택해 주세요.',None)
         form=QFormLayout();form.addRow('네트워크 어댑터',self.adapter);group.addLayout(form)
+        # 13.9: 패스트핑 = TcpAckFrequency(TCPNoDelay 제외). 13.8: RSS 배치는 항목에서 뺐다(예전 기록 원복만 유지).
         self.tcp=QCheckBox('패스트핑 · TCP 자동 조정 Normal')
-        self.rss=QCheckBox('RSS 수신 처리를 백그라운드 코어에 배치')
-        group.addWidget(self.tcp);group.addWidget(self.rss)
-        self.notice=_label('TCP·RSS는 다른 앱의 통신에도 영향을 줄 수 있고 관리자 권한·재연결이 필요해요.\n게임 실행 중 시작하면 네트워크는 미루고 CPU만 적용해요.\n성능이 좋아졌다는 의미는 아니에요. 효과는 별도 계측으로 비교해 주세요.')
+        group.addWidget(self.tcp)
+        self.notice=_label('TCP 설정은 다른 앱의 통신에도 영향을 줄 수 있고 관리자 권한·재연결이 필요해요.\n게임 실행 중 시작하면 네트워크는 미루고 CPU만 적용해요.\n성능이 좋아졌다는 의미는 아니에요. 효과는 별도 계측으로 비교해 주세요.')
         group.addWidget(self.notice)
         group=_group('적용 · 복구',body)
         # 토글 하나(명세 13.5, 렌더 2안): 꺼짐 '최적화 시작' → 켜짐 '최적화 적용 중'(민트). 켜진 상태에서 누르면 중단·원복.

@@ -245,7 +245,7 @@ def test_existing_game_defers_network_and_does_not_write_on_just_waiting(recover
     e.thread.join(2)
     # CPU를 끈 세션은 게임을 기다리지 않고 끝난다(네트워크 보류 안내는 남김).
     assert not e.busy and not observed.is_set() and not b.writes and not b.restarts
-    assert '게임 실행 중: TCP·RSS 적용을 보류' in e.status and '게임 실행 대기' not in e.status
+    assert '게임 실행 중: TCP 적용을 보류' in e.status and '게임 실행 대기' not in e.status
     assert not r.pending
 
 
@@ -452,7 +452,7 @@ def test_session_exception_keeps_earlier_results_and_notices(recovery):
     e = Engine(b, r, lambda: True)
     assert e.start(dict(cpu=True, count=1, adapter=GUID, tcp=True, rss=False))
     e.thread.join(2)
-    assert '게임 실행 중: TCP·RSS 적용을 보류' in e.status and '작업을 완료하지 못했어요: boom' in e.status
+    assert '게임 실행 중: TCP 적용을 보류' in e.status and '작업을 완료하지 못했어요: boom' in e.status
 
 
 def test_status_is_replaced_immediately_when_work_starts(recovery):
@@ -519,20 +519,23 @@ def test_rss_is_verified_after_restart_not_before(tmp_path):
     r.finish()
 
 
-def test_engine_reports_rss_written_then_verified_after_reconnect(recovery):
+def test_engine_never_applies_rss_or_tcpnodelay_anymore(recovery):
+    # 최적화 명세 13.8·13.9(2026-10-24): RSS 배치·TCPNoDelay는 새로 적용하지 않는다(예전 기록 원복은 유지 — 아래 원복 테스트들).
     r, b, _ = recovery
     b.values[('rss', json.dumps(GUID))] = copy.deepcopy(RSS_ORIGINAL)
+    b.values[('nodelay', json.dumps(GUID))] = None
+    b.values[('autotuning', json.dumps('global'))] = 'disabled'
     b.topology = lambda: Topology('AMD Ryzen 7 9800X3D', tuple(Core(i, (i * 2, i * 2 + 1)) for i in range(8)))
-    b.rss_plan = lambda guid, cores: WindowsOptimization.rss_plan(b, guid, cores)
+    b.rss_plan = lambda guid, cores: pytest.fail('RSS 계획을 세우면 안 돼요')
     b.game = lambda: None
     b.processes = lambda: []
     b.governor_running = lambda: False
     e = Engine(b, r, lambda: True)
-    assert e.start(dict(cpu=False, count=7, adapter=GUID, tcp=False, rss=True))
+    assert e.start(dict(cpu=False, count=7, adapter=GUID, tcp=True, rss=True))
     e.thread.join(3)
-    assert 'rss: 적용 · 재연결 후 확인' in e.status and 'rss: 재연결 후 적용값 확인 완료' in e.status
-    assert r.items[0]['state'] == 'applied' and not r.restart_targets
-
+    assert {w[0] for w in b.writes} == {'ack', 'autotuning'}
+    assert 'rss' not in e.status and 'nodelay' not in e.status
+    assert b.read('rss', GUID) == RSS_ORIGINAL and b.read('nodelay', GUID) is None
 
 
 def test_stop_and_restore_reverts_cpu_then_network_in_one_action(recovery):
@@ -556,7 +559,7 @@ def test_stop_and_restore_reverts_cpu_then_network_in_one_action(recovery):
     e = Engine(b, r, lambda: True)
     assert e.start(dict(cpu=True, count=1, adapter=GUID, tcp=True, rss=False))
     assert entered.wait(5), e.status
-    assert e.busy and {i['kind'] for i in r.pending} == {'cpu', 'ack', 'nodelay'}, e.status
+    assert e.busy and {i['kind'] for i in r.pending} == {'cpu', 'ack'}, e.status  # 13.9: TCPNoDelay 새 적용 없음
     assert e.stop_and_restore(network=True) and e.status == '중단 · 원복 중…'
     e.thread.join(5)
     assert not e.busy and not r.pending and not r.restart_targets

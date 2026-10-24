@@ -119,7 +119,8 @@ class Engine:
         def work():
             if not self.allowed(): raise PermissionError('제작자 접근이 필요해요.')
             self.recovery.finish()
-            plan = self.backend.topology().plan(options['count']) if options['cpu'] or options['rss'] else None
+            # 13.8: RSS는 새로 적용하지 않는다(예전 기록의 원복만 유지). 13.9: 패스트핑은 TcpAckFrequency만(TCPNoDelay 제외).
+            plan = self.backend.topology().plan(options['count']) if options['cpu'] else None
             game = self.backend.game()
             notices = []
             results = []
@@ -138,20 +139,17 @@ class Engine:
                     raise ChangeDeferred('게임 상태를 확인하지 못해 네트워크 변경과 재연결을 보류해요.') from exc
                 if current is not None:
                     game=current
-                    raise ChangeDeferred('게임 실행 중: 남은 TCP·RSS 적용과 네트워크 재연결을 보류했어요.')
+                    raise ChangeDeferred('게임 실행 중: 남은 TCP 적용과 네트워크 재연결을 보류했어요.')
             processes = self.backend.processes()
             governor = self.backend.governor_running()
-            if governor and (options['cpu'] or options['rss'] or options.get('priority')):
-                notices.append('Process Lasso Governor 실행 중: CPU·RSS·게임 우선순위 적용 보류')
-            if game and (options['tcp'] or options['rss']):
-                notices.append('게임 실행 중: TCP·RSS 적용을 보류했어요.')
-            elif options['tcp'] or options['rss']:
+            if governor and (options['cpu'] or options.get('priority')):
+                notices.append('Process Lasso Governor 실행 중: CPU·게임 우선순위 적용 보류')
+            if game and options['tcp']:
+                notices.append('게임 실행 중: TCP 적용을 보류했어요.')
+            elif options['tcp']:
                 guid = options['adapter']
                 if not guid: raise ValueError('적용할 물리 네트워크 어댑터를 선택해 주세요.')
-                changes = [('ack',guid,1),('nodelay',guid,1),('autotuning','global','normal')] if options['tcp'] else []
-                if options['rss'] and not governor:
-                    try: changes.append(('rss',guid,self.backend.rss_plan(guid,plan['background_cores'])))
-                    except Exception as exc: fail('RSS 미적용: '+str(exc))
+                changes = [('ack',guid,1),('autotuning','global','normal')]
                 for kind, target, value in changes:
                     if self.cancel.is_set() or not self.allowed(): break
                     try:
@@ -190,7 +188,7 @@ class Engine:
                     return
                 processes = self.backend.processes() if options['cpu'] else []  # 우선순위만이면 전체 목록이 필요 없다
                 governor = self.backend.governor_running()
-                if governor and (options['cpu'] or options['rss'] or options.get('priority')):
+                if governor and (options['cpu'] or options.get('priority')):
                     # Never fight the governor, including if it starts mid-session.
                     self.status = 'Process Lasso Governor가 실행돼 CPU를 원복하고 세션을 종료해요.'
                     self.session_end = 'governor'

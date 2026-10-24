@@ -84,7 +84,7 @@ def run_session(tmp_path,phase,action='game',cpu=False,rss=False):
     return b,r,e
 
 
-@pytest.mark.parametrize('phase',['processes','governor','rss_plan','read_ack','save','preflight'])
+@pytest.mark.parametrize('phase',['processes','governor','read_ack','save','preflight'])  # 13.8: rss_plan 단계 없음
 def test_game_start_before_first_write_defers_all_network(tmp_path,phase):
     b,r,e=run_session(tmp_path,phase,rss=phase=='rss_plan')
     assert not b.writes and not b.restarts
@@ -96,7 +96,7 @@ def test_game_start_before_first_write_defers_all_network(tmp_path,phase):
 @pytest.mark.parametrize('phase',['write_ack','write_autotuning'])
 def test_interruption_preserves_partial_changes_without_restart(tmp_path,phase,action):
     b,r,e=run_session(tmp_path,phase,action)
-    assert [w[0] for w in b.writes]==(['ack'] if phase=='write_ack' else ['ack','nodelay','autotuning'])
+    assert [w[0] for w in b.writes]==(['ack'] if phase=='write_ack' else ['ack','autotuning'])  # 13.9: nodelay 없음
     assert not b.restarts and r.restart_targets=={GUID}
     assert r.pending[0]['old'] is None and r.pending[0]['applied']==1
     reloaded=Recovery(r.path,b,lambda:False)

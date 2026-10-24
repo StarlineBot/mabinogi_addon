@@ -183,7 +183,7 @@ class OptimizationController(QObject):
         d, saved = self.panel, config.load_optimization_selection()
         self._restoring_selection = True
         try:
-            for key, box in (('cpu', d.cpu), ('priority', d.priority), ('tcp', d.tcp), ('rss', d.rss)):
+            for key, box in (('cpu', d.cpu), ('priority', d.priority), ('tcp', d.tcp)):
                 if key in saved: box.setChecked(saved[key])
         finally:
             self._restoring_selection = False
@@ -191,7 +191,7 @@ class OptimizationController(QObject):
     def _save_selection(self, *_):
         if self._restoring_selection or self.panel is None: return
         d = self.panel
-        selection = dict(cpu=d.cpu.isChecked(), priority=d.priority.isChecked(), tcp=d.tcp.isChecked(), rss=d.rss.isChecked())
+        selection = dict(cpu=d.cpu.isChecked(), priority=d.priority.isChecked(), tcp=d.tcp.isChecked())
         saved = config.load_optimization_selection()
         # 환경 확인 전(목록이 비어 있음)에는 저장된 배분·어댑터를 지우지 않는다.
         selection['count'] = d.split.currentData() if d.split.currentData() is not None else saved.get('count')
@@ -222,7 +222,7 @@ class OptimizationController(QObject):
                     notes.append(f"저장한 배분(게임 {saved['count']}개)을 이 CPU에서 쓸 수 없어 구조별 기본 배분을 표시해요.")
                 d.split.setCurrentIndex(index if index >= 0 else d.split.findData(topology.plan()['count']))
             else:
-                d.cpu_info.setText('CPU 구조를 확인하지 못했어요. CPU·RSS 배치를 적용하지 않아요.')
+                d.cpu_info.setText('CPU 구조를 확인하지 못했어요. CPU 배치를 적용하지 않아요.')
             d.adapter.clear()
             d.adapter.addItem('직접 사용할 물리 어댑터를 선택해 주세요.',None)
             for adapter in adapters:
@@ -242,7 +242,7 @@ class OptimizationController(QObject):
 
     def _wire_panel(self):
         d=self.panel
-        for box in (d.cpu, d.priority, d.tcp, d.rss): box.toggled.connect(self._save_selection)
+        for box in (d.cpu, d.priority, d.tcp): box.toggled.connect(self._save_selection)
         d.split.currentIndexChanged.connect(self._save_selection)
         d.adapter.currentIndexChanged.connect(self._save_selection)
         d.inspect.clicked.connect(self.engine.inspect)
@@ -325,21 +325,21 @@ class OptimizationController(QObject):
         if not self._can_start() or self.engine.busy: return
         d = self.panel
         options = dict(cpu=d.cpu.isChecked(),count=d.split.currentData(),adapter=d.adapter.currentData(),
-                       tcp=d.tcp.isChecked(),rss=d.rss.isChecked(),priority=d.priority.isChecked())
-        if not any(options[k] for k in ('cpu','tcp','rss','priority')):
+                       tcp=d.tcp.isChecked(),rss=False,priority=d.priority.isChecked())  # 13.8: RSS 새 적용 없음
+        if not any(options[k] for k in ('cpu','tcp','priority')):
             self.engine.status='사용할 항목을 선택해 주세요.'
             return
-        if (options['cpu'] or options['rss']) and options['count'] is None:
+        if options['cpu'] and options['count'] is None:
             self.engine.status='먼저 환경을 확인하고 물리 코어 배분을 선택해 주세요.'
             return
-        if (options['tcp'] or options['rss']) and not options['adapter']:
+        if options['tcp'] and not options['adapter']:
             self.engine.status='적용할 물리 네트워크 어댑터를 선택해 주세요.'
             return
-        if (options['tcp'] or options['rss']) and not self._network_confirmation(): return
+        if options['tcp'] and not self._network_confirmation(): return
         self._badge_split = (f"{options['count']}+{self._core_total-options['count']}"
                              if options['cpu'] and self._core_total else None)
         self._kept_on = True  # 이미 목표값이라 바꾼 것이 없어도 켜짐으로 보여준다(13.5)
-        self._summary_requested = {key: options[key] for key in ('cpu','count','tcp','rss','priority')}
+        self._summary_requested = {key: options[key] for key in ('cpu','count','tcp','priority')}
         self._summary_requested['adapter_selected'] = bool(options['adapter'])
         self._summary_state = None
         if self.stream is not None:
@@ -678,7 +678,7 @@ class OptimizationController(QObject):
         self._render_summary()
         d = self.panel
         allowed, busy = self._can_start(), self.engine.busy
-        for w in (d.cpu,d.priority,d.tcp,d.rss,d.split,d.adapter,d.inspect): w.setEnabled(allowed and not busy)
+        for w in (d.cpu,d.priority,d.tcp,d.split,d.adapter,d.inspect): w.setEnabled(allowed and not busy)
         self._sync_optimization_toggle()
         for control in (d.lock,d.scale,*d.metric_boxes.values()): control.setEnabled(allowed)
         d.frames_toggle.setEnabled((allowed and not self.closing) or self.frames or self.collector.pending)
