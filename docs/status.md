@@ -140,7 +140,10 @@
   (-g, -keyint_min, -force_key_frames, -flush_packets 공통, -forced-idr NVENC)은 그대로. 회귀: 후보 인코더별 상주 명령 옵션 테스트.
 - 녹화 오류로 보관분 0초일 때 저장 실패 문구 '녹화 오류로 저장할 영상이 없어요 · 앱에서 확인'(일부 보관분이 있으면 기존 '너무 짧아요').
 - 검사: `run_release_checks --version 0.15.1` 539 passed, qa_0150 종료 0. 실게임(번들 ffmpeg) 녹화 시작은 미검증.
-- 2(번들 ffmpeg로 상주 명령 검사)는 빌드 검사 경로 변경이라 사용자 승인 대기 — 이번 커밋에 넣지 않음.
+- 2(사용자 승인): `packaging/blackbox_bundle.prepare`가 번들 ffmpeg.exe로 하드웨어 후보별 제품 상주 명령(`FFmpegEncoder.stream_command`, 320×240)을
+  빈 입력으로 실행, stderr에 `Unrecognized option`·`Option not found`·`Error splitting the argument list`가 있으면 빌드 실패(장치 초기화 실패는 허용).
+  시스템 ffmpeg 확인: nvenc·amf·libx264 거부 없음, 일부러 넣은 모르는 옵션은 검출, MF 없는 리눅스 빌드에서 h264_mf의 `-hw_encoding`도 검출.
+  첫 Windows 빌드에서 실제 번들로 통과하는지 확인 필요.
 
 ### 0.15.0 블랙박스 상주 인코더 + 0.14.1 회귀 수정·게임 화면 저장 진행 알림 (163fb55·cbedd20·a06d796·6d70e02, 사용자 결정: 한 번에 0.15.0)
 

@@ -31,6 +31,31 @@ def missing_components(listings):
     return missing
 
 
+# 번들 ffmpeg가 인자 해석 단계에서 거부하는 표시(0.15.0: libx264 전용 -sc_threshold로 상주 인코더가 매번 시작 실패).
+OPTION_ERRORS = ('Unrecognized option', 'Option not found', 'Error splitting the argument list')
+
+
+def stream_option_failures(ffmpeg, codec, segment_frames, run=None):
+    """하드웨어 후보마다 제품의 상주 인코더 명령을 빈 입력으로 실행해, 옵션을 모르는 후보를 [(후보, stderr)]로 돌려준다.
+
+    GPU 없는 빌드 러너에서는 인코더 초기화가 실패할 수 있지만 그건 허용한다(옵션 해석은 그보다 먼저 일어난다).
+    입력이 비어 있어 장치·화면을 쓰지 않는다."""
+    from types import SimpleNamespace
+    from mabinogi_addon.blackbox_codec import FFmpegEncoder, _PROBE_SIZE
+    encoder = FFmpegEncoder.__new__(FFmpegEncoder)
+    encoder.settings = SimpleNamespace(ffmpeg=Path(ffmpeg), fps=codec['fps'], bitrate=codec['bitrate'], audio_bitrate=None)
+    run = run or subprocess.run
+    failures = []
+    for candidate in codec.get('candidates') or [codec['encoder']]:
+        command = encoder.stream_command(*_PROBE_SIZE, segment_frames, encoder=candidate)
+        result = run(command, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=30)
+        stderr = result.stderr or b''
+        stderr = stderr.decode('utf-8', 'replace') if isinstance(stderr, bytes) else stderr  # 콘솔 코드페이지 무관
+        if any(marker in stderr for marker in OPTION_ERRORS):
+            failures.append((candidate, stderr.strip()))
+    return failures
+
+
 def prepare(root, output):
     policy = reviewed_inputs(root)
     from ffmpeg_source import build as build_ffmpeg, digest, VERSION
@@ -58,6 +83,16 @@ def prepare(root, output):
     if missing:
         raise ValueError('required FFmpeg components were not built: '
                          + ', '.join(f'{kind[:-1]} {name}' for kind, name in missing))
+    import sys
+    sys.path.insert(0, str(root / 'src'))
+    try:
+        product = json.loads(policy.read_text(encoding='utf-8'))
+        failures = stream_option_failures(output / 'ffmpeg.exe', product['codec'], product['producer']['segment_frames'])
+    finally:
+        sys.path.pop(0)
+    if failures:
+        raise ValueError('bundled FFmpeg rejects the blackbox stream encoder options: '
+                         + '; '.join(f'{name}: {text[-300:]}' for name, text in failures))
     (output / 'ffmpeg-build.txt').write_text(info + '\n' + '\n'.join(listings.values()), encoding='utf-8')
     (output / 'manifest.json').write_text(json.dumps({p.name: digest(p) for p in output.iterdir()
         if p.is_file()}, indent=2), encoding='utf-8')

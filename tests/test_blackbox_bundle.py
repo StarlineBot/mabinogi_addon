@@ -107,6 +107,9 @@ def test_prepare_builds_and_validates_complete_bundle_from_approved_policy(tmp_p
                 for name in ('mabinogi_blackbox.dll','blackbox_codec_host.exe'):
                     (release/name).write_bytes(b'synthetic native input')
             return SimpleNamespace(stdout='')
+        if command[1]=='-v':  # 상주 인코더 옵션 검사: GPU 없는 러너의 초기화 실패는 허용
+            events.append('stream-check:'+command[command.index('-c:v')+1])
+            return SimpleNamespace(stdout='',stderr='Cannot load nvcuda.dll',returncode=1)
         assert command[1] in ('-version','-hide_banner')
         if command[1]=='-version':
             return SimpleNamespace(stdout='ffmpeg version 8.1.3 --disable-gpl')
@@ -118,7 +121,8 @@ def test_prepare_builds_and_validates_complete_bundle_from_approved_policy(tmp_p
     manifest=json.loads((output/'manifest.json').read_text(encoding="utf-8"))
     assert 'mabinogi_blackbox.dll' in manifest and 'corresponding-source.zip' in manifest
     assert json.loads((output/'product.json').read_text(encoding="utf-8"))['codec']['bitrate']==12000000
-    assert events==['native-build','native-build','source-build']
+    assert events==['native-build','native-build','source-build',
+                    'stream-check:h264_nvenc','stream-check:h264_amf','stream-check:h264_mf']
 
 
 LISTINGS = {
@@ -327,3 +331,21 @@ def test_product_blackbox_is_video_only(tmp_path):
     profile['codec'] = dict(product['codec'], ffmpeg=str(tmp_path/'ffmpeg.exe'), ffprobe=str(tmp_path/'ffprobe.exe'),
                             host=str(tmp_path/'host.exe'))
     assert ServiceSettings.from_dict(profile).audio is None  # 생산자는 소리 경로(PcmTimeline·소리 길이 검증)를 타지 않음
+
+
+def test_bundle_check_fails_when_bundled_ffmpeg_rejects_stream_encoder_options():
+    # 0.15.0 실게임: 번들 최소 빌드가 libx264 전용 -sc_threshold를 몰라 상주 인코더가 매번 시작 실패(녹화 0초).
+    from types import SimpleNamespace
+    product = json.loads((ROOT/'packaging/blackbox-product.json').read_text(encoding='utf-8'))
+    commands = []
+    def run(command, **kwargs):
+        commands.append(command)
+        assert kwargs['stdin'] is packager.subprocess.DEVNULL and kwargs['timeout'] <= 30
+        encoder = command[command.index('-c:v')+1]
+        if encoder == 'h264_amf':
+            return SimpleNamespace(stderr="Unrecognized option 'sc_threshold'.\nError splitting the argument list: Option not found")
+        return SimpleNamespace(stderr='Cannot load nvcuda.dll')  # 장치 없음은 허용
+    failures = packager.stream_option_failures(Path('ffmpeg.exe'), product['codec'], product['producer']['segment_frames'], run)
+    assert [name for name, _ in failures] == ['h264_amf'] and 'sc_threshold' in failures[0][1]
+    assert len(commands) == 3 and all('-force_key_frames' in c and '-sc_threshold' not in c for c in commands)
+    assert all(c[0] == 'ffmpeg.exe' and c[c.index('-g')+1] == '15' for c in commands)

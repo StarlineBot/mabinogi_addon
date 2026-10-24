@@ -392,8 +392,11 @@ class FFmpegEncoder:
         """녹화용 상주 인코더(0.15.0). gop 프레임마다 on_fragment(독립 MP4 bytes, 프레임 수)."""
         if width < 2 or height < 2:
             raise ValueError('source must have at least two pixels per dimension')
-        command = [*self._input_command(width, height), '-an', *self._SCALE, *self._output(gop=gop)]
-        return EncoderStream(command, on_fragment, host=self.settings.host)
+        return EncoderStream(self.stream_command(width, height, gop), on_fragment, host=self.settings.host)
+
+    def stream_command(self, width, height, gop, encoder=None):
+        """상주 인코더 명령. 빌드 단계에서 번들 ffmpeg로 같은 명령의 옵션 인식을 검사한다(0.15.1)."""
+        return [*self._input_command(width, height), '-an', *self._SCALE, *self._output(encoder=encoder, gop=gop)]
 
     def encode_frames(self, frames, width, height, sink, *, audio_path=None):
         if width < 2 or height < 2:
