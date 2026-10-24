@@ -152,6 +152,8 @@
   - 테스트: 배포 변경 검사 `run_release_checks --version 0.14.1` 516 passed. 전체(tkinter 제외) 2950 passed·1 failed —
     `test_release_checks::test_current_plan_matches…`의 기대 목록 하드코딩이 0.13.0·0.13.6에 추가된 `test_overlay_metrics`·`test_halo_clock`을 모름(기존부터, 배포 검사 목록 밖). Improvement: 기대 목록 갱신.
   - 실게임 미검증: 녹화 중 종료·업데이트 1회 클릭, 업데이트 뒤 FPS 표시 유지, 저장 진행 문구.
+- v0.14.1 게시 완료: 검증·게시 [40051042571](https://github.com/StarlineBot/mabinogi_addon/actions/runs/40051042571) 성공, 태그 `v0.14.1` → 4bcf106.
+  version.json 0.14.1·exe 162,812,002바이트·sha256 `4708ac77…073a`가 공개 저장소 URL 직접 다운로드와 일치.
 
 ### 0.14.0 '뒤에 있을 때 녹화 되돌림' 보류 — 뒤에서도 녹화하는 버전으로 먼저 배포 테스트 (사용자 요청)
 
