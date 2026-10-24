@@ -160,7 +160,7 @@
 - **FPS 10.4:** `게임 CPU` = 게임 프로세스에서 가장 바쁜 스레드 사용률(코어 1개=100%), `NtQuerySystemInformation` 스레드 CPU 시간 1초 차이(핸들 없음).
   못 읽으면 '—'(코어 기준으로 대체 안 함). `게임 메모리` 이름 변경. 수집 기록은 새 이름 `game_cpu_thread_avg_percent`, 이전 `cpu_busiest_avg_percent`는
   조건별 정리에서 '가장 바쁜 코어(이전 정의)'로 따로 표시. 10.1·10.2 공개 범위는 이번 범위 아님.
-- 회귀: `test_process_priority`·`test_optimization_priority`·`test_process_threads` + 기존 갱신(지표 이름·리더). 렌더: 최적화 탭 우선순위 항목, FPS 표시 항목·오버레이.
+- 회귀: `test_process_priority`·`test_optimization_priority`·`test_process_threads` + 기존 갱신(지표 이름·리더). 렌더: 최적화 탭 우선순위 항목, FPS 표시 항목·오버레이 — 사용자 승인(6b687ae).
 - **실게임 미검증:** 진단 스크립트 결과, 우선순위 높음 적용·유지·원복, 게임 CPU 값(작업 관리자 세부 정보 스레드와 비교)·조회 비용.
 
 ### 0.16.0 블랙박스 공개(베타)·기본 5분·단축키 변경 — 구현 완료, 렌더 사용자 승인(f69ac06), 배포 대기 (2026-10-24 사용자 결정)
