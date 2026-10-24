@@ -8,6 +8,7 @@ _log = logging.getLogger(__name__)
 
 NETWORK_APPLIED = '네트워크 설정 적용 중 · 끄면 원래 값으로 되돌려요'
 HIGH_PRIORITY = 0x80
+NORMAL_PRIORITY = 0x20  # 게임이 재접속·맵 이동 때 되돌리는 값(2026-10-24 실측)
 # 게임 우선순위가 원본으로 되돌아가면 다시 건다(라쏘 '항상' 규칙과 같은 효과, 13.7).
 # 2026-10-24 실측(diag --watch): 게임 재실행 없이 재접속·맵 이동만 해도 게임이 '보통'으로 되돌린다 → 던전 층·맵 이동마다 생길 수 있어
 # 10분에 30회까지(맵 이동 20초 간격 수준) 다시 건다. 그보다 잦으면 무언가 계속 되돌리는 것이라 멈추고 안내한다(무한히 다투지 않음).
@@ -174,7 +175,7 @@ class Engine:
                 self.session_end = 'network_only'
                 return
             seen = set()
-            priority = dict(applied=set(), reapplied=[], stopped=set())  # 게임 우선순위 상태(13.7)
+            priority = dict(applied=set(), reapplied=[], stopped=set(), preset=set())  # 게임 우선순위 상태(13.7)
             observed = game
             while not self.cancel.is_set() and self.allowed():
                 if observed is None:
@@ -245,8 +246,11 @@ class Engine:
     def _keep_priority(self, game, state, results, notices, fail):
         """게임 우선순위 높음(최적화 명세 13.7): 게임마다 한 번 걸고, 2초마다 유지 여부를 본다.
 
-        - 원본으로 돌아갔으면 다시 건다(10분에 3회까지, 넘으면 안내만).
+        - 원본으로 돌아갔으면 다시 건다(10분에 30회까지, 넘으면 안내만).
         - 원본·적용값이 아닌 다른 값이면 다른 도구가 바꾼 것: 덮어쓰지 않고 관리에서 뺀다.
+        - 시작 때 이미 높음이었으면(작업 관리자·라쏘로 미리 건 경우) 기록 없이 지켜보다가, 게임이 '보통'으로 되돌리면
+          그 '보통'을 원본으로 기록하고 높음을 건다(0.17.0 QA). 이후는 위 유지·원복 흐름. '보통'이 아닌 다른 값으로 바뀌면
+          다른 도구가 바꾼 것으로 보고 손대지 않는다.
         - 두 읽기 경로가 다르면 '확인 불가'로 안내만 하고 다시 걸지 않는다(읽기 불일치 조사 중)."""
         import time
         from ..system.process_priority import Unconfirmed, name
@@ -255,8 +259,34 @@ class Engine:
             state['applied'].add(identity)
             try:
                 result = self.recovery.apply('priority', game, HIGH_PRIORITY)
+                if result == 'unchanged':
+                    state['preset'].add(identity)  # 기록 없이 지켜본다(위 독스트링)
                 results.append('게임 우선순위: ' + {'unchanged': '이미 높음 · 그대로 둠', 'applied': '높음 적용 · 확인 완료',
                                                     'unverified': '높음 적용 · 확인 불가(읽기 경로가 서로 달라요)'}.get(result, result))
+            except ProcessLookupError:
+                pass
+            except Unconfirmed as exc:
+                notices.append(f'게임 우선순위 확인 불가 · 적용하지 않았어요: {exc}')
+            except Exception as exc:
+                fail(f'게임 우선순위 미적용: {exc}')
+            return notices
+        if identity in state['preset']:
+            try:
+                current = self.backend.read('priority', game)
+            except (ProcessLookupError, Unconfirmed):
+                return notices
+            if current == HIGH_PRIORITY:
+                return notices
+            state['preset'].discard(identity)
+            if current != NORMAL_PRIORITY:
+                message = (f'다른 도구가 게임 우선순위를 바꿨어요(현재 {name(current)}). 덮어쓰지 않아요.')
+                _log.warning(message)
+                notices.append(message)
+                return notices
+            try:  # 게임이 '보통'으로 되돌림: 그 값을 원본으로 기록하고 높음을 건다
+                result = self.recovery.apply('priority', game, HIGH_PRIORITY)
+                _log.info('미리 높음이던 게임 우선순위가 보통으로 돌아가 앱이 관리하기 시작했어요(%s).', result)
+                notices.append('게임 우선순위가 보통으로 돌아가 앱이 다시 높음으로 걸었어요(이제 세션이 끝나면 보통으로 원복).')
             except ProcessLookupError:
                 pass
             except Unconfirmed as exc:

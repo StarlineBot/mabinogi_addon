@@ -50,6 +50,9 @@ def busiest_percent(before, after, seconds):
     return max(0.0, min(100.0, max(deltas) / (seconds * 10_000_000) * 100))
 
 
+_last_size = 1 << 20
+
+
 def query() -> bytes:
     """전체 프로세스·스레드 목록 원본(Windows 전용). 버퍼가 작으면 키운다(최대 64MiB)."""
     if sys.platform != 'win32':
@@ -60,12 +63,14 @@ def query() -> bytes:
     fn = ntdll.NtQuerySystemInformation
     fn.argtypes = [wintypes.ULONG, ctypes.c_void_p, wintypes.ULONG, ctypes.POINTER(wintypes.ULONG)]
     fn.restype = ctypes.c_long
-    size = 1 << 20
+    global _last_size
+    size = _last_size  # 지난번에 맞았던 크기부터(매초 1MiB부터 다시 키우지 않게)
     while size <= 64 << 20:
         buffer = ctypes.create_string_buffer(size)
         needed = wintypes.ULONG()
         status = fn(5, buffer, size, ctypes.byref(needed)) & 0xFFFFFFFF
         if status == 0:
+            _last_size = size
             return buffer.raw[:max(needed.value, PROCESS_SIZE) if needed.value else size]
         if status != 0xC0000004:  # STATUS_INFO_LENGTH_MISMATCH 외에는 실패
             raise OSError(f'프로세스 정보 조회 실패(NTSTATUS 0x{status:08X})')

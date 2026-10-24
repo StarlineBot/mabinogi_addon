@@ -169,3 +169,49 @@ def test_game_resets_on_map_moves_are_reapplied_each_time_by_default(setup):
         assert _wait(lambda: b.values[KEY] == HIGH, 6)
     assert '계속' not in e.status and r.items[0]['state'] == 'applied'
     e.stop(); e.thread.join(5)
+
+
+def test_preset_high_is_watched_and_managed_when_game_resets_to_normal(setup):
+    # 0.17.0 QA: 시작 때 이미 높음(작업 관리자로 미리 건 경우) → 게임이 보통으로 되돌리면 그 '보통'을 원본으로 기록하고 높음을 건다.
+    r, b = setup
+    b.values[KEY] = HIGH
+    e = Engine(b, r, lambda: True)
+    assert e.start(OPTIONS)
+    assert _wait(lambda: '이미 높음 · 그대로 둠' in e.status)
+    assert not b.writes and not r.items
+    b.values[KEY] = NORMAL  # 맵 이동·재접속
+    assert _wait(lambda: b.values[KEY] == HIGH, 6)
+    item = r.items[0]
+    assert item['old'] == NORMAL and item['applied'] == HIGH and item['state'] == 'applied'
+    b.alive_flag[0] = False
+    e.thread.join(5)
+    assert b.values[KEY] == NORMAL and not r.pending  # 세션 끝: 기록한 원본(보통)으로 원복
+
+
+def test_preset_high_kept_means_zero_writes(setup):
+    r, b = setup
+    b.values[KEY] = HIGH
+    e = Engine(b, r, lambda: True)
+    assert e.start(OPTIONS)
+    assert _wait(lambda: '이미 높음 · 그대로 둠' in e.status)
+    import time
+    time.sleep(4.5)  # 유지 확인 두 번
+    e.stop(); e.thread.join(5)
+    assert not b.writes and not r.items and b.values[KEY] == HIGH
+
+
+def test_preset_high_changed_to_other_value_is_external_and_left_alone(setup):
+    r, b = setup
+    b.values[KEY] = HIGH
+    e = Engine(b, r, lambda: True)
+    assert e.start(OPTIONS)
+    assert _wait(lambda: '이미 높음 · 그대로 둠' in e.status)
+    b.values[KEY] = ABOVE_NORMAL  # 다른 도구
+    assert _wait(lambda: '다른 도구가 게임 우선순위를 바꿨어요' in e.status, 6)
+    e.stop(); e.thread.join(5)
+    assert not b.writes and not r.items and b.values[KEY] == ABOVE_NORMAL
+
+
+def test_query_remembers_last_buffer_size():
+    from mabinogi_addon.system import process_threads
+    assert process_threads._last_size == 1 << 20  # 시작값; Windows에서 성공한 크기를 기억해 다음 호출에 쓴다
