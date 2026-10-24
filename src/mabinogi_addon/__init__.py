@@ -70,11 +70,14 @@ def _main(startup) -> None:
         logging.getLogger("mabinogi_addon").info("파일 로그 설정 실패(무시)", exc_info=True)
 
     # 처리되지 않은 예외도 로그에 남겨, 버그 신고 로그·파일에서 크래시 원인이 보이게 한다.
+    # 같은 예외가 타이머마다 반복되면 처음 1회만 traceback, 이후 100회마다 요약(로그 폭주 방지, 0.15.0).
+    from mabinogi_addon.log_throttle import ExceptionThrottle
+
+    throttle = ExceptionThrottle()
+
     def _excepthook(exc_type, exc, tb) -> None:
-        logging.getLogger("mabinogi_addon").critical(
-            "처리되지 않은 예외", exc_info=(exc_type, exc, tb)
-        )
-        sys.__excepthook__(exc_type, exc, tb)
+        if throttle.log(logging.getLogger("mabinogi_addon"), "처리되지 않은 예외", (exc_type, exc, tb)) == "full":
+            sys.__excepthook__(exc_type, exc, tb)
 
     sys.excepthook = _excepthook
 
@@ -82,10 +85,11 @@ def _main(startup) -> None:
     import threading
 
     def _thread_excepthook(args) -> None:
-        logging.getLogger("mabinogi_addon").critical(
+        throttle.log(
+            logging.getLogger("mabinogi_addon"),
             "처리되지 않은 스레드 예외(%s)",
+            (args.exc_type, args.exc_value, args.exc_traceback),
             getattr(args.thread, "name", "?"),
-            exc_info=(args.exc_type, args.exc_value, args.exc_traceback),
         )
 
     threading.excepthook = _thread_excepthook

@@ -28,6 +28,7 @@
     "tests/test_manual_update_progress.py",
     "tests/test_overlay_metrics.py",
     "tests/test_halo_clock.py",
-    "tests/test_blackbox_combat.py"
+    "tests/test_blackbox_combat.py",
+    "tests/test_log_throttle.py"
   ]
 }
