@@ -133,3 +133,42 @@ def test_recovery_labels_use_times_not_internal_ids():
         assert dialog.sessions.itemData(0) == f'28508:{created}'  # 저장 요청은 실행 ID로
     finally:
         dialog.close(); dialog.deleteLater(); app.processEvents()
+
+
+
+def test_recording_stop_only_retries_close_and_update_without_recovery_window(monkeypatch):
+    # 0.14.1: 녹화 중 종료·업데이트마다 저장 내역 창이 뜨고 취소되던 회귀. 녹화 중지만 남으면 창 없이 자동 재시도.
+    from mabinogi_addon.ui.blackbox_controller import BlackboxController
+    from mabinogi_addon.ui import main_window as module
+    app = QApplication.instance() or QApplication([])
+    shown = []
+    c = BlackboxController.__new__(BlackboxController)
+    c.panel = None
+    c.service = SimpleNamespace(prepare_close=lambda: False, error=None, close_wait_reason=lambda: 'capture')
+    monkeypatch.setattr(c, 'show_recovery', lambda: shown.append(1))
+    assert c.prepare_close() is False and shown == [] and c.closing_capture_only()
+    c.service.close_wait_reason = lambda: 'save'     # 저장 진행 중이면 기존처럼 복구 창
+    c.prepare_close()
+    assert shown == [1]
+    # 업데이트: 녹화 중지만 남으면 다시 묻지 않고 200ms 뒤 이어서
+    retries, asked = [], []
+    monkeypatch.setattr(module.QTimer, 'singleShot', lambda ms, fn: retries.append(ms))
+    monkeypatch.setattr(QMessageBox, 'question', lambda *a: asked.append(1) or QMessageBox.StandardButton.Yes)
+    monkeypatch.setattr(QMessageBox, 'information', lambda *a: pytest.fail('capture-only must not ask to retry manually'))
+    host = SimpleNamespace(_pending_update={'version': 'test'}, _update_splash=None, _on_update_clicked=lambda: None,
+        blackbox_tools=SimpleNamespace(prepare_close=lambda: False, closing_capture_only=lambda: True))
+    MainWindow._on_update_clicked(host)
+    assert retries == [200] and asked == [1] and host._update_retry_until is not None
+    MainWindow._on_update_clicked(host)              # 재시도는 다시 묻지 않는다
+    assert asked == [1] and retries == [200, 200]
+
+
+def test_service_close_reason_separates_capture_from_saves():
+    from mabinogi_addon.blackbox_service import BlackboxService
+    s = BlackboxService.__new__(BlackboxService)
+    s._pending, s.runtimes, s.producer = {}, {}, object()
+    assert s.close_wait_reason() == 'capture'
+    s._pending = {'t': 1}
+    assert s.close_wait_reason() == 'save'
+    s._pending, s.producer = {}, None
+    assert s.close_wait_reason() is None

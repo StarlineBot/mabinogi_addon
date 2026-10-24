@@ -310,6 +310,14 @@ class BlackboxService:
             self.completed.append(('cancelled', '저장 중단을 요청했어요. 처리 후 실패 자료는 복구 화면에서 확인하세요.'))
         return accepted
 
+    def close_wait_reason(self):
+        """종료가 안 끝난 이유: 'capture'(녹화 중지 진행 중뿐 — 잠시 뒤 자동으로 끝남) | 'save'(저장 대기·결과 미인수) | None."""
+        if self._pending or any(r.queue.result(t) is None for r in self.runtimes.values() for t in r.tickets):
+            return 'save'
+        if self.producer:
+            return 'capture'
+        return None
+
     def prepare_close(self):
         self._closing = True
         if self.producer:

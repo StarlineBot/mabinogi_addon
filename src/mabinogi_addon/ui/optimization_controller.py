@@ -63,6 +63,7 @@ class OptimizationController(QObject):
         self.sampler = PerfSampler()
         # 'FPS 표시' 켜짐은 재실행 후에도 유지(수집 모드는 매번 꺼짐으로 시작). 접근이 확인된 첫 틱에 1회 복원.
         self._restore_display = section.get('display') is True
+        self._restore_retry_at, self._restore_tries = 0.0, 0
         # 수집기 오류로 꺼진 'FPS 표시'의 자동 재시작(0.13.5): 약 5초 뒤, 10분에 3회까지. 저장된 표시 설정은 바꾸지 않는다.
         self._restart_at = None
         self._restarts = []
@@ -625,11 +626,20 @@ class OptimizationController(QObject):
                     self.stop_frames()
                 if not self.collector.pending:
                     self.start_frames()
-        if self._restore_display and self._can_start():
-            self._restore_display = False
-            # 이전 FPS 세션 정리가 남아 있으면 켜지 않고 기존 정리 안내를 둔다.
-            if not self.collector.pending and not self.frames:
-                self.start_frames()
+        if self._restore_display and self._can_start() and now >= self._restore_retry_at:
+            # 이전 FPS 세션 정리가 남아 있으면 먼저 정리하고 바로 켠다(0.14.1: 업데이트 뒤 표시 미복원).
+            # 정리에 실패하면 5초 뒤 다시(최대 3회), 그래도 안 되면 기존 정리 안내만 남긴다.
+            if self.collector.pending and not self.frames:
+                self.stop_frames()
+            if not self.collector.pending:
+                self._restore_display = False
+                if not self.frames:
+                    self.start_frames()
+            else:
+                self._restore_tries += 1
+                self._restore_retry_at = now + 5
+                if self._restore_tries >= 3:
+                    self._restore_display = False
         if self.frames:
             try: self._frame_tick(gap)
             except Exception as exc: self._failed(str(exc))

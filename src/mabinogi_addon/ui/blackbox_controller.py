@@ -158,6 +158,11 @@ class BlackboxController(QObject):
                 self.events.close()
                 return True
             self.close_error = self.service.error or '저장/캡처 종료 또는 복구 결정 대기'
+            if self.closing_capture_only():
+                # 녹화 중지만 진행 중이면 잠시 뒤 자동으로 끝난다: 복구 창을 띄우지 않고 호출자가 다시 시도한다(0.14.1).
+                if self.panel is not None:
+                    self.panel.status.setText('블랙박스 녹화 정리 중…')
+                return False
             self.show_recovery()
             return False
         if self.lifecycle is None:
@@ -167,6 +172,11 @@ class BlackboxController(QObject):
         if not ready and self.panel is not None:
             self.panel.status.setText('종료 대기 · 저장 결과 또는 복구 자료를 확인해야 해요.')
         return ready
+
+    def closing_capture_only(self):
+        """종료를 막는 이유가 녹화 중지 진행뿐인지(저장 대기·실패 자료 없음). 호출자는 200ms 뒤 다시 시도한다."""
+        reason = getattr(self.service, 'close_wait_reason', None)
+        return bool(reason is not None and reason() == 'capture')
 
     def resume_after_update_failure(self):
         if self.service is not None and self.service._closed:

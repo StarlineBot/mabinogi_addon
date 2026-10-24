@@ -1083,7 +1083,9 @@ class MainWindow(QMainWindow):
             return
 
         ver = info.get("version", "?")
-        if QMessageBox.question(
+        import time
+        retry_until = getattr(self, "_update_retry_until", None)
+        if retry_until is None and QMessageBox.question(
             self, "업데이트",
             f"새 버전 v{ver} 을(를) 받아 교체하고 다시 시작합니다.\n진행할까요?",
         ) != QMessageBox.StandardButton.Yes:
@@ -1092,9 +1094,22 @@ class MainWindow(QMainWindow):
         # 교체 helper를 시작하기 전에 접수된 저장/복구를 마친다.
         # 다운로드 thread에서 Qt/blackbox 상태를 만지지 않는다.
         if not self.blackbox_tools.prepare_close():
+            capture_only = getattr(self.blackbox_tools, "closing_capture_only", lambda: False)()
+            if capture_only and (retry_until is None or time.monotonic() < retry_until):
+                # 녹화 중지만 진행 중: 다시 묻지 않고 잠시 뒤 자동으로 이어서 업데이트한다(0.14.1).
+                self._update_retry_until = retry_until or time.monotonic() + 15
+                QTimer.singleShot(200, self._on_update_clicked)
+                return
+            self._update_retry_until = None
             QMessageBox.information(self, '업데이트 대기',
                 '블랙박스 저장·정리가 끝난 뒤 지금 업데이트를 다시 눌러 주세요.')
             return
+        self._update_retry_until = None
+        # 업데이트 교체 전에 FPS 수집기를 정리한다. 남겨 두면 새 버전이 이전 세션 정리(pending) 때문에
+        # FPS 표시를 복원하지 못했다(0.14.1). 저장된 표시 설정(frameMeter.display)은 바꾸지 않는다.
+        tools = getattr(self, "optimization_tools", None)
+        if tools is not None and getattr(tools, "frames", False):
+            tools.stop_frames()
 
         splash = UpdateSplash(ver)
         splash.center_on_screen()
@@ -1880,8 +1895,20 @@ class MainWindow(QMainWindow):
         if not self.blackbox_tools.prepare_close():
             event.ignore()
             self._force_quit = True
-            # 저장/복구 결정을 자동으로 대신하거나 앱을 강제 종료하지 않는다.
+            # 녹화 중지만 진행 중이면 창 없이 자동 재시도(0.14.1: 녹화 중 종료마다 복구 창+종료 취소 회귀).
+            # 저장 대기·실패 자료는 복구 창에서 사용자가 결정한다(자동으로 대신하거나 강제 종료하지 않음).
+            import time
+            deadline = getattr(self, '_blackbox_close_deadline', None)
+            if deadline is None:
+                deadline = self._blackbox_close_deadline = time.monotonic() + 15
+            if self.blackbox_tools.closing_capture_only() and time.monotonic() < deadline:
+                QTimer.singleShot(200, self.close)
+            else:
+                if self.blackbox_tools.closing_capture_only():
+                    self.blackbox_tools.show_recovery()  # 상한 시간 안에 안 끝나면 상태를 보여준다
+                self._blackbox_close_deadline = None
             return
+        self._blackbox_close_deadline = None
 
         if not self.settings_tab.prepare_close():
             event.ignore()

@@ -553,11 +553,19 @@ def test_fps_display_setting_is_restored_after_restart_but_collection_is_not(win
     calls.clear(); c.frames = False; c._restore_display = False
     c._tick()
     assert calls == []
-    # 이전 FPS 세션 정리 필요(pending)면 자동으로 켜지 않는다.
-    monkeypatch.setattr(type(c.collector), 'pending', property(lambda self: True), raising=False)
-    c._restore_display = True
-    c._tick()
-    assert calls == [] and not c._restore_display
+    # 0.14.1: 이전 FPS 세션 정리(pending)가 남으면 정리 → 성공 시 바로 켜고, 실패하면 5초 간격 3회 시도 뒤 포기.
+    state = {'pending': True}
+    monkeypatch.setattr(type(c.collector), 'pending', property(lambda self: state['pending']), raising=False)
+    clock = [5000.0]
+    monkeypatch.setattr(module.time, 'monotonic', lambda: clock[0])
+    c._restore_display, c._restore_retry_at, c._restore_tries = True, 0.0, 0
+    for n in range(4):
+        clock[0] += 6; c._tick()
+    assert calls.count('start') == 0 and calls.count('stop') == 3 and not c._restore_display
+    calls.clear(); c._restore_display, c._restore_retry_at, c._restore_tries = True, 0.0, 0
+    monkeypatch.setattr(c, 'stop_frames', lambda message=None: calls.append('stop') or state.update(pending=False))
+    clock[0] += 6; c._tick()
+    assert calls == ['stop', 'start'] and not c._restore_display  # 업데이트 뒤: 한 번에 정리하고 켜짐
 
 
 
