@@ -27,23 +27,34 @@ def watch(minutes, exe):
     import time
     from mabinogi_addon.system import process_priority as pp
     print(f'{minutes}분 동안 감시해요. 게임을 평소처럼 하면서 두세요(던전 입장·로딩·채널 이동 포함). Ctrl+C로 멈춰요.')
+    import win32gui, win32process
+
+    def foreground_pid():
+        try:
+            return win32process.GetWindowThreadProcessId(win32gui.GetForegroundWindow())[1]
+        except Exception:
+            return None
+
     last, end = {}, time.monotonic() + minutes * 60
     try:
         while time.monotonic() < end:
             listed = pp.list_base_priorities()
+            front = foreground_pid()
             now = {}
             for pid, (name, base) in listed.items():
                 if name.lower() == Path(exe).name.lower():
                     api, error = pp.api_priority(pid)
-                    now[pid] = (pp.name(api) if api else f'실패({error})', base)
+                    # 게임 창이 앞에 있는지도 함께 본다(가설: 게임이 뒤로 가면 스스로 '보통'으로 낮춤)
+                    now[pid] = (pp.name(api) if api else f'실패({error})', base, front == pid)
             for pid in sorted(set(now) | set(last)):
                 if now.get(pid) != last.get(pid):
                     stamp = time.strftime('%H:%M:%S')
                     if pid not in now:
                         print(f'{stamp} PID {pid} 종료')
                     else:
-                        api_text, base = now[pid]
-                        print(f'{stamp} PID {pid} · API {api_text} · 목록 {base}({pp.name(pp.CLASS_OF_BASE.get(base)) if base in pp.CLASS_OF_BASE else "?"})')
+                        api_text, base, focused = now[pid]
+                        where = '게임 창 앞' if focused else f'게임 창 뒤(앞: {listed.get(front, ("?",))[0] if front else "?"})'
+                        print(f'{stamp} PID {pid} · API {api_text} · 목록 {base}({pp.name(pp.CLASS_OF_BASE.get(base)) if base in pp.CLASS_OF_BASE else "?"}) · {where}')
             last = now
             time.sleep(1)
     except KeyboardInterrupt:
