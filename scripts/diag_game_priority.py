@@ -3,6 +3,7 @@
 실행(앱과 같은 권한으로 — 앱은 관리자 실행):
     uv run python -m scripts.diag_game_priority            # 등록한 게임 실행 파일 이름으로 찾기
     uv run python -m scripts.diag_game_priority Client.exe # 이름 직접 지정
+    uv run python -m scripts.diag_game_priority --watch 60 # 60분 동안 1초마다 감시, 값이 바뀐 순간만 출력
 작업 관리자 '세부 정보'에서 같은 PID의 '기본 우선 순위' 열을 보면서, 이 출력과 같은 순간에 비교한다.
 
 같은 PID를 여러 경로로 동시에 읽어 어느 경로가 작업 관리자와 다른지 본다:
@@ -20,10 +21,46 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
 
 
+def watch(minutes, exe):
+    """우선순위가 언제 바뀌는지 잡는다(리서치 7.7: 측정 내내 '보통'이었는데 측정 뒤 작업 관리자는 '높음').
+    1초마다 같은 이름의 모든 프로세스를 두 경로(API·목록)로 읽어, 값이 바뀌거나 PID가 생기고 사라질 때만 시각과 함께 출력한다."""
+    import time
+    from mabinogi_addon.system import process_priority as pp
+    print(f'{minutes}분 동안 감시해요. 게임을 평소처럼 하면서 두세요(던전 입장·로딩·채널 이동 포함). Ctrl+C로 멈춰요.')
+    last, end = {}, time.monotonic() + minutes * 60
+    try:
+        while time.monotonic() < end:
+            listed = pp.list_base_priorities()
+            now = {}
+            for pid, (name, base) in listed.items():
+                if name.lower() == Path(exe).name.lower():
+                    api, error = pp.api_priority(pid)
+                    now[pid] = (pp.name(api) if api else f'실패({error})', base)
+            for pid in sorted(set(now) | set(last)):
+                if now.get(pid) != last.get(pid):
+                    stamp = time.strftime('%H:%M:%S')
+                    if pid not in now:
+                        print(f'{stamp} PID {pid} 종료')
+                    else:
+                        api_text, base = now[pid]
+                        print(f'{stamp} PID {pid} · API {api_text} · 목록 {base}({pp.name(pp.CLASS_OF_BASE.get(base)) if base in pp.CLASS_OF_BASE else "?"})')
+            last = now
+            time.sleep(1)
+    except KeyboardInterrupt:
+        pass
+    print('감시 끝. 위 출력 전체를 보내 주세요.')
+    return 0
+
+
 def main(argv):
     if sys.platform != 'win32':
         print('Windows에서 실행해 주세요.')
         return 2
+    if len(argv) > 1 and argv[1] == '--watch':
+        from mabinogi_addon import config
+        minutes = float(argv[2]) if len(argv) > 2 else 60
+        exe = argv[3] if len(argv) > 3 else (config.load_game_exe() or 'Client.exe')
+        return watch(minutes, exe)
     from mabinogi_addon import config
     from mabinogi_addon.system import process_priority as pp
     exe = argv[1] if len(argv) > 1 else (config.load_game_exe() or 'Client.exe')
