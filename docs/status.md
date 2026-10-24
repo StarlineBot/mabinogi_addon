@@ -248,6 +248,11 @@
     한계: 번들(Windows 최소 빌드) 실제 실행은 이 환경에서 불가 — 배포 Actions의 번들 준비 단계가 그 검사.
 - v0.15.1 게시 완료: 검증·게시 [40069155361](https://github.com/StarlineBot/mabinogi_addon/actions/runs/40069155361) 성공(번들 상주 명령 옵션 검사 포함), 태그 `v0.15.1` → 6b1cab2.
   version.json 0.15.1·exe 162,891,820바이트·sha256 `36ba4c74…f063`가 공개 저장소 URL 직접 다운로드와 일치. 실게임 녹화·끊김·240구간 요약 확인 남음.
+- **0.15.1 실게임(사용자): '프레임은 부드럽게 잘 녹화됨'** — 0.14.x 끊김(체감 15FPS) 해소 확인(주관). 240구간 요약 수치는 아직 없음.
+  - 사용자 보고: 저장 영상을 보다가 플레이어를 끄니 'Alert · Unhandled exception occurred[0xC0000005(Access Violation)@…] at ntdll.dll ·
+    Additional exception information has been stored locally and this application will be terminated' 창.
+    판단 Highly Likely 플레이어 쪽: 앱 코드·native(capture/codec_host/audio)에 이런 창·문구·SetUnhandledExceptionFilter 없음, 앱 예외는 app.log 기록만.
+    저장 파일은 ffprobe+전체 디코드 검증을 통과한 것만 완료 처리. 확인: 확인 누른 뒤 애드온(트레이·배지)이 살아 있는지, 다른 영상도 같은지.
 
 ### 0.14.0 '뒤에 있을 때 녹화 되돌림' 보류 — 뒤에서도 녹화하는 버전으로 먼저 배포 테스트 (사용자 요청)
 
