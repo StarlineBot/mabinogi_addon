@@ -360,3 +360,49 @@ def test_blackbox_badge_muted_states_are_gray():
     gate = CombatGate()
     gate.update(0, False, True)
     assert blackbox_badge(NS(enabled=True, status='recording'), 0, gate) == ('● 블랙박스: 전투 대기', 'muted')
+
+
+# ---- 0.16.0 독립 QA(f0ce570) 회귀 ----
+
+def test_retention_ignores_wheel_without_focus_so_scrolling_never_trims_video(app):
+    from PySide6.QtCore import QPoint, QPointF
+    from PySide6.QtGui import QWheelEvent
+    from mabinogi_addon.ui.blackbox_tab import BlackboxTab
+    tab = BlackboxTab()
+    try:
+        tab.retention.setEnabled(True)
+        tab.show()
+        changes = []
+        tab.retention.valueChanged.connect(changes.append)
+        pos = QPointF(tab.retention.rect().center())
+        def wheel():
+            event = QWheelEvent(pos, QPointF(tab.retention.mapToGlobal(pos.toPoint())), QPoint(0, 0), QPoint(0, -120),
+                                Qt.MouseButton.NoButton, Qt.KeyboardModifier.NoModifier, Qt.ScrollPhase.NoScrollPhase, False)
+            QApplication.sendEvent(tab.retention, event)
+            return event
+        for _ in range(4):
+            assert not wheel().isAccepted()  # 바깥 스크롤로 넘김
+        assert tab.retention.value() == 5 and changes == []
+        assert tab.retention.focusPolicy() == Qt.FocusPolicy.StrongFocus
+    finally:
+        tab.deleteLater()
+
+
+def test_one_shot_error_notice_survives_ticks_and_recording_error_clears_when_resolved(monkeypatch, app):
+    import importlib.util
+    from pathlib import Path
+    spec = importlib.util.spec_from_file_location('qa_0160', Path(__file__).resolve().parents[1] / 'scripts/qa_0160_blackbox_public.py')
+    qa = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(qa)
+    c = qa.controller()
+    c._show_error('단축키를 바꾸지 못했어요: 설정 파일 쓰기 실패')
+    for _ in range(3):
+        c._tick()
+    assert not c.panel.error.isHidden() and c.panel.error.text().startswith('단축키를 바꾸지 못했어요')
+    c.service.error = 'encoder exited 1: nvenc'
+    c._tick()
+    assert c.panel.error.text() == '영상 인코더가 멈춰 녹화를 중단했어요 (자세한 내용: app.log)'
+    c.service.error = None  # 녹화 오류가 풀리면 오류 줄을 비운다
+    c._tick()
+    assert c.panel.error.isHidden()
+    c.panel.deleteLater()

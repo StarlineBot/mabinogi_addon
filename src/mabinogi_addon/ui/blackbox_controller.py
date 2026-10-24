@@ -442,7 +442,14 @@ class BlackboxController(QObject):
             retention = self.service._retention // 60_000_000
             self.panel.available.setText(f'확보한 영상 {_toast_duration(duration)} / 설정 {retention}분')
             self.panel.folder.setText(str(self.service.settings.output_folder))
-            self._show_error(self.service.error)
+            # 녹화 오류는 매 틱 반영하되, 오류가 없을 때 직접 띄운 안내(단축키 변경 실패·지난 실행 임시 자료)를 지우지 않는다.
+            # 녹화 오류가 풀린 순간에만 오류 줄을 비운다(0.16.0 QA: 0.1초 뒤 안내가 사라지던 문제).
+            if self.service.error:
+                self._show_error(self.service.error)
+                self._service_error_shown = True
+            elif getattr(self, '_service_error_shown', False):
+                self._service_error_shown = False
+                self._show_error(None)
             running = sum(r is None for _, _, r in entries)
             if running:
                 self._set_recent(self._progress_text(running))

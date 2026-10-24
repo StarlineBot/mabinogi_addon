@@ -14,6 +14,17 @@ from .widgets import FeatureHeader
 ERROR_COLOR = '#d35b58'
 
 
+class _NoWheelSpinBox(QSpinBox):
+    """포커스가 없을 때는 휠을 무시하고 바깥 스크롤로 넘긴다(0.16.0 QA).
+    탭을 휠로 스크롤하다 칸 위를 지나면 보관 시간이 줄어 오래된 영상이 즉시 지워지던 문제를 막는다."""
+
+    def wheelEvent(self, event):
+        if not self.hasFocus():
+            event.ignore()
+            return
+        super().wheelEvent(event)
+
+
 def _label(text, *, muted=False):
     label = QLabel(text)
     label.setWordWrap(True)
@@ -72,7 +83,8 @@ class BlackboxTab(QWidget):
         row.addWidget(self.mode_always)
         row.addWidget(self.mode_combat)
         row.addStretch()
-        self.retention = QSpinBox()
+        self.retention = _NoWheelSpinBox()
+        self.retention.setFocusPolicy(Qt.FocusPolicy.StrongFocus)  # 휠로 포커스를 가져가지 않음(클릭·Tab으로만)
         self.retention.setRange(1, MAX_RETENTION_MINUTES)
         self.retention.setValue(5)
         self.retention.setSuffix(' 분')
