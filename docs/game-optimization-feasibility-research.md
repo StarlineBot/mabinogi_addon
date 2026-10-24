@@ -165,3 +165,24 @@
 - 우선순위가 "보통"으로 남은 원인은 미확정: 작업 관리자 변경이 적용되지 않았거나, 게임이나 다른 요인이 되돌렸을 수 있다. 라쏘는 "항상" 규칙으로 계속 다시 걸어 준다.
   사용자가 우선순위 효과를 체감한 것은 라쏘가 켜져 있던 때다(7.5·7.6).
 
+## 8. 마비노기 커뮤니티의 TCPNoDelay (2026-10-24, 사용자 요청: 공식 문서 말고 마비노기 설정 기준)
+
+출처는 웹 검색 요약으로 확인했다(본문 직접 열람 아님).
+
+| 출처 | TCPNoDelay 위치 | 내용 |
+|---|---|---|
+| [Mabinogi World Wiki: Lag](https://wiki.mabinogiworld.com/view/Lag) | **MSMQ 키**(`HKLM\SOFTWARE\Microsoft\MSMQ\Parameters`) | 핵심 해법은 어댑터별 `TcpAckFrequency`. TCPNoDelay 단계는 MSMQ 키이며 "MSMQ가 켜져 있을 때만 적용, 보통은 꺼져 있음"이라고 위키 스스로 적는다. 최대 다운로드 속도가 줄 수 있다는 주의도 있다 |
+| [디시 마비노기 갤러리(패핑)](https://gall.dcinside.com/board/view/?id=game_mabinogi1&no=4479793) | MSMQ 키 | 값 1 = 네이글 끄기로 설명 |
+| [elitepvpers 렉 해결 모음(오래됨)](https://www.elitepvpers.com/forum/mabinogi-hacks-bots-cheats-exploits/969115-guide-lag-fix-complication.html) | MSMQ 키 | 위와 같은 계열 |
+| [Fix mabinogi latency for good!(2009)](https://alttabninja.wordpress.com/2009/01/31/fix-mabinogi-latency-for-good/) | — | "마비노기는 네이글을 스스로 우회하지 않는다"(클라이언트가 소켓에 TCP_NODELAY를 걸지 않는다는 주장, 당시 기준) |
+| [아카 마비노기 채널(2024)](https://arca.live/b/mabi/111892986) | 어댑터별 Interfaces 키 | TcpAckFrequency·TCPNoDelay와 함께 `NetworkThrottlingIndex` 변경도 안내. 체감 댓글은 있으나 근거 없음 |
+| 일반 윈도우 가이드(2020년대) | 어댑터별 Interfaces 키 | 두 값을 1로. "모든 렉의 해법이 아님", UDP 게임에는 무관 |
+
+- 정리: 마비노기 커뮤니티의 오래된 "패스트핑"의 **핵심은 TcpAckFrequency**이고, TCPNoDelay는 원래 **MSMQ 키**에 넣던 값이다. MSMQ 키는 메시지 큐 서비스 전용이라
+  게임에는 영향이 없다(위키도 같은 취지). 최근 글들은 TCPNoDelay를 어댑터 키로 옮겨 안내하지만, 그 위치가 일반 앱에 반영된다는 근거는 이번에도 찾지 못했다(3절과 같음).
+- 원리상 의미: 네이글은 보내는 쪽 기능이다. 2009년 글처럼 마비노기 클라이언트가 소켓에 TCP_NODELAY를 걸지 않는다면 클라이언트→서버 작은 패킷(스킬 입력 등)이
+  네이글로 늦어질 수 있고, 이를 끄는 확실한 방법은 프로그램이 소켓마다 거는 것뿐이다. 레지스트리 TCPNoDelay가 이것을 대신한다는 근거는 없다.
+  반면 TcpAckFrequency=1은 서버 쪽 네이글이 우리 ACK를 기다리는 시간을 줄이는 원리가 확인된 설정이다.
+- 우리 앱 기준: TCPNoDelay는 TcpAckFrequency와 같은 어댑터 재시작에 묶여 있어 **추가 끊김은 없다**. 해도 해롭지 않지만 효과 근거가 없다.
+- 검증하려면: 패킷 캡처(Wireshark·pktmon)로 스킬 입력 때 클라이언트가 작은 패킷을 바로 보내는지, ACK를 기다렸다 몰아 보내는지 본다. 일반 사용자가 할 일은 아니다.
+
