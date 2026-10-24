@@ -8,8 +8,10 @@ _log = logging.getLogger(__name__)
 
 NETWORK_APPLIED = '네트워크 설정 적용 중 · 끄면 원래 값으로 되돌려요'
 HIGH_PRIORITY = 0x80
-# 게임 우선순위가 원본으로 되돌아가면 다시 건다(라쏘 '항상' 규칙과 같은 효과). 외부와 무한히 다투지 않게 10분에 3회까지(13.7).
-PRIORITY_REAPPLY_LIMIT = 3
+# 게임 우선순위가 원본으로 되돌아가면 다시 건다(라쏘 '항상' 규칙과 같은 효과, 13.7).
+# 2026-10-24 실측(diag --watch): 게임 재실행 없이 재접속·맵 이동만 해도 게임이 '보통'으로 되돌린다 → 던전 층·맵 이동마다 생길 수 있어
+# 10분에 30회까지(맵 이동 20초 간격 수준) 다시 건다. 그보다 잦으면 무언가 계속 되돌리는 것이라 멈추고 안내한다(무한히 다투지 않음).
+PRIORITY_REAPPLY_LIMIT = 30
 PRIORITY_REAPPLY_WINDOW = 600.0
 
 
@@ -290,8 +292,10 @@ class Engine:
         state['reapplied'].append(now)
         try:
             self.backend.write('priority', game, item['applied'])
-            _log.info('게임 우선순위가 %s(으)로 돌아가 다시 높음으로 걸었어요(%d/%d).', name(current),
-                      len(state['reapplied']), PRIORITY_REAPPLY_LIMIT)
+            count = len(state['reapplied'])
+            if count <= 3 or count % 10 == 0:  # 맵 이동마다 생기므로 로그는 처음 몇 번과 10회마다
+                _log.info('게임 우선순위가 %s(으)로 돌아가 다시 높음으로 걸었어요(최근 10분 %d/%d회).', name(current),
+                          count, PRIORITY_REAPPLY_LIMIT)
         except ProcessLookupError:
             pass
         except Exception as exc:

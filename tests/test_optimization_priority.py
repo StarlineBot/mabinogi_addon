@@ -155,3 +155,17 @@ def test_panel_checkbox_default_on_selection_remembered_and_badge_counts_priorit
                                pending=[dict(kind='priority', state='applied')])
     busy = SimpleNamespace(busy=True, task='session', cancel=threading.Event())
     assert optimization_badge(recovery, busy) == ('최적화: 적용 중', 'neutral')
+
+
+def test_game_resets_on_map_moves_are_reapplied_each_time_by_default(setup):
+    # 2026-10-24 실측: 재접속·맵 이동마다 게임이 '보통'으로 되돌린다. 기본 한도에서 여러 번 이어져도 계속 다시 건다.
+    assert engine_module.PRIORITY_REAPPLY_LIMIT >= 20
+    r, b = setup
+    e = Engine(b, r, lambda: True)
+    assert e.start(OPTIONS)
+    assert _wait(lambda: b.values[KEY] == HIGH)
+    for _ in range(4):
+        b.values[KEY] = NORMAL  # 맵 이동
+        assert _wait(lambda: b.values[KEY] == HIGH, 6)
+    assert '계속' not in e.status and r.items[0]['state'] == 'applied'
+    e.stop(); e.thread.join(5)
