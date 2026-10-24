@@ -137,7 +137,7 @@ class CaptureProducer:
             origin, count = None, 0
             while not self._stop.is_set():
                 if self.allowed() is not True:
-                    raise PermissionError('creator access revoked')
+                    raise PermissionError('blackbox access revoked')
                 with self._flush_lock:
                     requests, self._flush = self._flush, []
                 if requests:

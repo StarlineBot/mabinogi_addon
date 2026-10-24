@@ -1354,7 +1354,13 @@ def load_blackbox_preferences(path: Path = LOCAL_CONFIG_PATH) -> dict:
     result = {}
     minutes = section.get('retentionMinutes')
     if type(minutes) is int and minutes > 0:
-        result['retentionMinutes'] = minutes
+        # 1~15분(0.16.0). 예전 자유 입력의 15 초과 값은 15로 맞춘다(실효 상한 약 17분이라 30을 넣어도 조용히 17분만 보관했다).
+        from .blackbox import MAX_RETENTION_MINUTES
+        result['retentionMinutes'] = min(minutes, MAX_RETENTION_MINUTES)
+    from .blackbox_shortcut import valid
+    hotkey = (section.get('hotkeyModifiers'), section.get('hotkeyVk'))
+    if valid(*hotkey):
+        result['hotkey'] = hotkey  # 저장 단축키(0.16.0). 규칙을 어긴 값은 무시하고 기본값을 쓴다.
     folder = section.get('outputFolder')
     if isinstance(folder, str) and folder and Path(folder).is_absolute():
         result['outputFolder'] = folder
@@ -1365,8 +1371,13 @@ def load_blackbox_preferences(path: Path = LOCAL_CONFIG_PATH) -> dict:
 
 def save_blackbox_preference(key, value, path: Path = LOCAL_CONFIG_PATH) -> None:
     if key == 'retentionMinutes':
-        if type(value) is not int or value <= 0:
-            raise ValueError('positive whole minutes required')
+        from .blackbox import MAX_RETENTION_MINUTES
+        if type(value) is not int or not 1 <= value <= MAX_RETENTION_MINUTES:
+            raise ValueError(f'retention must be 1..{MAX_RETENTION_MINUTES} whole minutes')
+    elif key == 'hotkey':
+        from .blackbox_shortcut import valid
+        if not (isinstance(value, (tuple, list)) and len(value) == 2 and valid(*value)):
+            raise ValueError('hotkey must be Ctrl/Alt/Shift + one key')
     elif key == 'outputFolder':
         if not isinstance(value, str) or not Path(value).is_absolute():
             raise ValueError('absolute output folder required')
@@ -1378,6 +1389,9 @@ def save_blackbox_preference(key, value, path: Path = LOCAL_CONFIG_PATH) -> None
     data = _read_local_config(path)
     section = data.get('blackbox')
     section = dict(section) if isinstance(section, dict) else {}
-    section[key] = value
+    if key == 'hotkey':
+        section['hotkeyModifiers'], section['hotkeyVk'] = int(value[0]), int(value[1])
+    else:
+        section[key] = value
     data['blackbox'] = section
     _write_local_config(data, path)

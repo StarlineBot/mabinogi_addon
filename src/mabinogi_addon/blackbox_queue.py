@@ -16,7 +16,7 @@ import uuid
 
 from .blackbox_budget import DiskBudget
 from .blackbox_export import ExportJob, ExportResult
-from .feature_access import is_creator
+from .feature_access import blackbox_available
 
 
 class QueueFullError(RuntimeError):
@@ -35,7 +35,7 @@ class _Entry:
 
 class ExportQueue:
     def __init__(self, budget: DiskBudget, *, max_workers: int, max_jobs: int,
-                 creator_check=is_creator):
+                 creator_check=blackbox_available):
         if any(type(n) is not int or n <= 0 for n in (max_workers, max_jobs)):
             raise ValueError('worker/job bounds must be positive integers')
         if max_workers > max_jobs:

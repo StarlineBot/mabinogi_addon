@@ -19,7 +19,7 @@ def test_creator_entry_no_automatic_measurement_and_access_revocation(window,mon
     monkeypatch.setattr(module,'is_creator',lambda:True)
     c.refresh_access()
     assert w._tabs.tabText(w._tabs.indexOf(c.panel))=='최적화'
-    assert [w._tabs.tabText(i) for i in range(w._tabs.count())]==['전투 보조','파티 모집','편의기능','최적화','설정']
+    assert [w._tabs.tabText(i) for i in range(w._tabs.count())]==['전투 보조','파티 모집','편의기능','블랙박스','최적화','설정']  # 0.16.0: 로그인 사용자는 블랙박스 탭도 보임
     assert not hasattr(w.settings_tab,'optimization_button')
     c.open()
     assert c.panel is not None and not c.frames
@@ -211,7 +211,8 @@ def test_embedded_creator_and_recovery_tabs_preserve_single_lifetime(window,monk
     c.engine.recovery_requested=True;c._tick()
     monkeypatch.setattr(module,'is_creator',lambda:True)
     c.refresh_access()
-    assert w._tabs.indexOf(panel)==3 and w._tabs.widget(4) is w._settings_scroll
+    # 0.16.0: 로그인 사용자(픽스처)는 블랙박스 탭도 보여 최적화는 설정 바로 앞(4), 설정은 마지막(5)
+    assert w._tabs.indexOf(panel)==4 and w._tabs.widget(5) is w._settings_scroll
     # Avoid an actual recovery prompt/OS action in window fixture cleanup.
     c.recovery.items=[];c.recovery.restart_targets.clear();c.recovery.corrupt=False
 
@@ -219,7 +220,7 @@ def test_embedded_creator_and_recovery_tabs_preserve_single_lifetime(window,monk
 def test_creator_tour_settings_target_is_stable_when_optimization_is_inserted(window,monkeypatch):
     w,app=window;c=w.optimization_tools
     monkeypatch.setattr(module,'is_creator',lambda:True);c.refresh_access()
-    assert w._tabs.indexOf(w._settings_scroll)==4
+    assert w._tabs.indexOf(w._settings_scroll)==w._tabs.count()-1==5  # 0.16.0: 블랙박스 탭 포함
     w._run_tour();tour=w._tour;tour._i=5;tour._show_step();app.processEvents()
     assert w._tabs.currentWidget() is w._settings_scroll
     assert tour._steps[5].target is w.settings_tab.setup_btn

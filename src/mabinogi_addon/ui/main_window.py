@@ -113,79 +113,6 @@ def _scrolled(widget: QWidget) -> QScrollArea:
     return area
 
 
-class _OverlayToggle(QPushButton):
-    """오버레이 재생/일시정지 토글 버튼(오디오 플레이어식).
-
-    폰트 이모지(⏸/▶)는 글리프마다 '자체 둥근 네모 테두리'가 딸려 와, 버튼 테두리와
-    겹쳐 '네모 안에 버튼' 처럼 보인다. 그래서 글자 대신 아이콘(두 막대/삼각형)을 직접
-    그린다. 색은 앱 전체 모노톤에 맞춰 무채색만 쓰고, 상태는 색이 아니라 모양·채움·
-    밝기로 구분한다. checked = 일시정지 상태(→ ▶ 재개 아이콘).
-    """
-
-    def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-        self.setCheckable(True)
-        self.setFixedSize(23, 23)  # 옆 상태 글자 대비 과하지 않게 작게
-        self.setFlat(True)
-        self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)  # hover 때 다시 그리기
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.toggled.connect(self.update)
-
-    def paintEvent(self, _event) -> None:
-        from PySide6.QtCore import QPointF, QRectF
-        from PySide6.QtGui import QColor, QPainter, QPolygonF
-
-        p = QPainter(self)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        paused = self.isChecked()
-        pressed = self.isDown()
-        hover = self.underMouse()
-        circle = QRectF(1, 1, self.width() - 2, self.height() - 2)
-
-        if paused:
-            # 일시정지 상태: 밝은 무채색 원으로 채워 '멈춤'을 또렷이(색 대신 명도로).
-            lum = 210 if pressed else (225 if hover else 200)
-            p.setBrush(QColor(lum, lum, lum))
-            p.setPen(Qt.PenStyle.NoPen)
-            p.drawEllipse(circle)
-            ink = QColor(40, 44, 52)  # 밝은 원 위 어두운 아이콘
-        else:
-            # 동작 중: 은은한 원(hover/press 때만 살짝 채움) + 가는 무채색 테두리.
-            fill = 46 if pressed else (34 if hover else 0)
-            p.setBrush(QColor(255, 255, 255, fill))
-            p.setPen(QColor(150, 150, 150, 210 if hover else 150))
-            p.drawEllipse(circle.adjusted(0.5, 0.5, -0.5, -0.5))
-            ink = QColor(220, 224, 228) if hover else QColor(150, 155, 164)
-
-        cx, cy = self.width() / 2.0, self.height() / 2.0
-        s = min(self.width(), self.height())  # 아이콘을 버튼 크기에 비례시켜 축소 대응
-        p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(ink)
-        if paused:  # ▶ 재생(재개) 삼각형. 광학 중심 보정으로 살짝 오른쪽.
-            half_h, w = s * 0.24, s * 0.40
-            left = cx - w / 2.0 + s * 0.04
-            tri = QPolygonF(
-                [
-                    QPointF(left, cy - half_h),
-                    QPointF(left, cy + half_h),
-                    QPointF(left + w, cy),
-                ]
-            )
-            p.drawPolygon(tri)
-        else:  # ❚❚ 두 막대.
-            bw, bh, gap = s * 0.12, s * 0.46, s * 0.14
-            r = bw * 0.45
-            p.drawRoundedRect(QRectF(cx - gap / 2 - bw, cy - bh / 2, bw, bh), r, r)
-            p.drawRoundedRect(QRectF(cx + gap / 2, cy - bh / 2, bw, bh), r, r)
-        p.end()
-
-
-# 탭 바: 밑줄 스타일 + 균등 고정 너비. 선택 탭은 민트색·굵게 + 민트 밑줄로 또렷하게.
-# 색은 테마별로 분기한다(단일 색으론 라이트/다크를 동시에 못 맞춤):
-# - 다크: 은은한 밝은 회색(원래 룩) / - 라이트: 어두운 회색.
-# 미선택은 중간 회색(#8a8f98) 고정 — 양쪽 다 보임. 호버/선택만 테마로 또렷하게.
-
-
 def _tab_qss(dark: bool) -> str:
     """상위 탭 스타일. 선택=민트(양쪽 공통), 호버는 테마별."""
     pane = "#2a2f3a" if dark else "#d5d7dd"
@@ -677,35 +604,36 @@ class MainWindow(QMainWindow):
         self._optimization_badge.setToolTip("최적화 상태(제작자 전용)예요. 성능 개선을 뜻하지 않아요. 누르면 최적화 탭으로 이동해요.")
         self._optimization_badge.hide()
         h.addWidget(self._optimization_badge)
-        # 블랙박스 상태(블랙박스 명세 11.2, 제작자 전용). '블랙박스 사용'이 꺼져 있으면 숨긴다.
+        # 블랙박스 상태(블랙박스 명세 11.2, 0.16.0 로그인 사용자). '블랙박스 사용'이 꺼져 있으면 숨긴다.
+        # 전투 보조 상태와 같은 모양: 평평한 버튼 · '● 상태' 한 색 · 밑줄 없음 · 손가락 커서. 누르면 끄기(오류면 탭 이동).
         self._blackbox_badge = QPushButton()
         self._blackbox_badge.setObjectName("blackboxBadge")
         self._blackbox_badge.setFlat(True)
         self._blackbox_badge.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._blackbox_badge.setToolTip("블랙박스 상태(제작자 전용)예요. 누르면 블랙박스 탭으로 이동해요.")
         self._blackbox_badge.hide()
         h.addWidget(self._blackbox_badge)
-        self._status_label = QLabel("● 전투 보조: 켜짐")
-        self._status_label.setObjectName("statusText")
-        self._status_label.setToolTip(
-            "각 기능의 사용 설정과 게임 활성 상태에 따라 표시됩니다. 영역 등록 여부는 각 탭에서 확인하세요."
-        )
-        h.addWidget(self._status_label)
-        # 재생/일시정지 토글: 감지 중이면 ❚❚(누르면 멈춤), 멈추면 ▶(누르면 재개).
-        # 아이콘은 직접 그린다(_OverlayToggle) — 이모지의 자체 네모 테두리 artifact 제거 +
-        # 앱 민트 기조와 달리 이 버튼만 모노톤으로.
-        self._pause_btn = _OverlayToggle()
-        self._pause_btn.setToolTip(
-            "전투 보조의 오버레이와 소리 알림을 잠시 멈춰요. 파티 모집 알림은 계속 받을 수 있어요."
-        )
-        self._pause_btn.toggled.connect(self._set_paused)
-        h.addWidget(self._pause_btn)
+        # 전투 보조 상태 = 일시정지 토글(0.16.0): 누르면 켜짐 ↔ 일시정지. 세션 한정, 트레이 메뉴와 양방향 동기화.
+        self._combat_status = QPushButton("● 전투 보조: 켜짐")
+        self._combat_status.setObjectName("combatStatus")
+        self._combat_status.setFlat(True)
+        self._combat_status.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._combat_status.setToolTip(self._COMBAT_TIPS[False])
+        self._combat_status.setStyleSheet(self.status_style(self._STATUS_OK))
+        self._combat_status.clicked.connect(lambda: self._set_paused(not self._paused))
+        h.addWidget(self._combat_status)
         bar.setStyleSheet(
             "#statusBar { border-bottom:1px solid rgba(128,128,128,0.25); }"
-            "#statusText { font-size:12px; }"
-            "#optimizationBadge, #blackboxBadge { font-size:12px; border:none; padding:0 2px; text-decoration:underline; }"
+            "#optimizationBadge { font-size:12px; border:none; padding:0 2px; text-decoration:underline; }"
         )
         return bar
+
+    _COMBAT_TIPS = {False: "누르면 전투 보조의 오버레이와 소리 알림을 잠시 멈춰요. 파티 모집 알림은 계속 받을 수 있어요.",
+                    True: "누르면 기존 설정에 따라 전투 보조의 표시와 알림을 다시 켜요."}
+
+    @staticmethod
+    def status_style(color: str) -> str:
+        """상단 상태 버튼 공통 모양(전투 보조·블랙박스): 12px, 한 색, 테두리·밑줄 없음."""
+        return f"color:{color}; font-size:12px; border:none; padding:0 2px; text-decoration:none;"
 
     def _overlay_status(self) -> tuple[str, str]:
         """최상단 상태 한 줄 = 재생/일시정지 토글과 1:1(2상태).
@@ -721,11 +649,9 @@ class MainWindow(QMainWindow):
 
     def _update_header_status(self) -> None:
         text, color = self._overlay_status()
-        self._status_label.setText(text)  # 앞의 ●/⏸ 가 상태 표시('상태:' 접두어 없음)
-        self._status_label.setStyleSheet(f"color:{color}; font-size:12px;")
-        # 버튼 아이콘: 재생 중이면 ❚❚(멈춤 유도), 일시정지면 ▶(재개 유도).
-        # 체크 상태는 _set_paused 에서 동기화되고, _OverlayToggle 이 직접 그린다.
-        self._pause_btn.update()
+        self._combat_status.setText(text)  # 앞의 ● 가 상태 표시('상태:' 접두어 없음)
+        self._combat_status.setStyleSheet(self.status_style(color))
+        self._combat_status.setToolTip(self._COMBAT_TIPS[bool(self._paused)])
 
     # ---- 진단 상태 한 줄 ----
     _STATUS_OK = "#2ecc71"
@@ -951,8 +877,8 @@ class MainWindow(QMainWindow):
             TourStep(self.buff_tab.lock_btn, "오버레이 위치 잠금",
                      "오버레이를 원하는 위치로 옮긴 뒤 잠그면 클릭이 게임으로 통과해요.",
                      before=lambda: go_buff_control(self.buff_tab.lock_btn)),
-            TourStep(self._pause_btn, "전체 일시정지",
-                     "잠시 쉬고 싶다면 상단의 일시정지 버튼을 눌러주세요. 전투 보조의 오버레이와 소리 알림만 멈추고, 다시 누르면 이어서 사용할 수 있어요.", before=go_tracker),
+            TourStep(self._combat_status, "전체 일시정지",
+                     "잠시 쉬고 싶다면 상단의 「● 전투 보조: 켜짐」을 눌러주세요. 전투 보조의 오버레이와 소리 알림만 멈추고, 다시 누르면 이어서 사용할 수 있어요.", before=go_tracker),
             settings_step,
             TourStep(None, "사용 안내 종료",
                      "준비됐어요. 남은 설정은 각 기능 화면에서 이어서 할 수 있어요.", before=go_tracker),
@@ -1715,17 +1641,11 @@ class MainWindow(QMainWindow):
             stop_warn_gone_sound()
         tip = ("기존 설정에 따라 전투 보조의 표시와 알림을 다시 켜요." if paused else
                "전투 보조의 오버레이와 소리 알림을 잠시 멈춰요. 파티 모집 알림은 계속 받을 수 있어요.")
-        self._pause_btn.setToolTip(tip)
+        self._tick_memo_visibility()
+        # 트레이 라벨·툴팁 + 상단 상태 버튼 동기화(어느 쪽에서 눌러도 둘 다 반영).
         if getattr(self,'_pause_act',None) is not None:
             self._pause_act.setToolTip(tip)
-        self._tick_memo_visibility()
-        # 트레이 라벨 + 상단 버튼 동기화(어느 쪽에서 눌러도 둘 다 반영, 루프 방지).
-        if getattr(self,'_pause_act',None) is not None:
             self._pause_act.setText("전투 보조 재개" if paused else "전투 보조 일시정지")
-        if self._pause_btn.isChecked() != paused:
-            self._pause_btn.blockSignals(True)
-            self._pause_btn.setChecked(paused)
-            self._pause_btn.blockSignals(False)
         self._update_header_status()
         if self._tray is not None:
             self._tray.setToolTip(

@@ -372,7 +372,7 @@ def test_main_window_setup_navigation_and_bidirectional_use(app, settings, monke
     update("general", skipSetup=skip)
     window = MainWindow()
     try:
-        assert window._tabs.count() == 4
+        assert window._tabs.count() == 5  # 0.16.0: 로그인 사용자(픽스처)는 블랙박스 탭 포함
         assert window._pages.currentWidget() is (window._tabs if skip else window.setup_guide)
         window._open_setup()
         assert window._pages.currentWidget() is window.setup_guide
@@ -990,7 +990,7 @@ def test_guide_actual_window_navigation_and_resume_preserve_step(app, settings, 
         assert guide.statuses["buff"].text() == "등록됨"
         assert not config.load_general_flag("firstUseGuideShown")
         window._open_setup_login()
-        assert window._tabs.currentIndex() == 3
+        assert window._tabs.currentWidget() is window._settings_scroll  # 0.16.0: 블랙박스 탭이 앞에 있어 위치 대신 설정 탭으로 확인
         assert window.settings_tab._login_thread is None
         window._guide_return_btn.click()
         assert guide.stage == 1

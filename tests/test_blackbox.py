@@ -12,8 +12,9 @@ MINUTE = 60 * SECOND
 
 
 def buffer(**options):
+    # 버퍼 동작 검사는 명세 AC20(6분+4분=10분) 예시 기준 10분 보관으로 한다. 제품 기본 5분은 test_blackbox_public에서 검사.
     return ReplayBuffer('app1-game1', **(dict(max_bytes=1000, max_segments=100,
-                                            max_saves=2) | options))
+                                            max_saves=2, retention_us=10 * MINUTE) | options))
 
 
 def segment(start, end, *, size=10, source=None, session='app1-game1', fmt='1080p60'):

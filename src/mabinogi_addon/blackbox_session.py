@@ -3,7 +3,7 @@
 한 게임 실행의 ReplayBuffer를 소유하며 모든 호출은 제어 스레드에서 직렬화한다.
 대상 검증/잠금/절전 이벤트와 실제 캡처 중단은 후속 Windows 어댑터 책임이다.
 조건 변경을 update_context에 전달하면 이전 캡처 허가를 폐기해 늦은 결과를 막는다.
-권한은 기존 feature_access.is_creator를 매 요청 재확인한다.
+권한은 feature_access.blackbox_available(디스코드 로그인)을 매 요청 재확인한다.
 """
 
 from collections.abc import Callable
@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 from .blackbox import ReplayBuffer, SavePlan, Segment
-from .feature_access import is_creator
+from .feature_access import blackbox_available
 
 
 class State(str, Enum):
@@ -47,7 +47,7 @@ class CaptureContext:
 class BlackboxSession:
     def __init__(self, replay: ReplayBuffer, *, enabled: bool,
                  persist_enabled: Callable[[bool], None],
-                 creator_check: Callable[[], bool] = is_creator):
+                 creator_check: Callable[[], bool] = blackbox_available):
         if type(enabled) is not bool:
             raise ValueError('enabled must be a boolean')
         self._replay = replay

@@ -43,8 +43,10 @@ def controller(note):
     c._hotkey_note = note
     c._save_started = time.monotonic() - 45  # 저장 중 진행 표시가 기록한 시작 시각
     c.events = NS(sample=lambda: (None, False), consume_hotkey=lambda: None)
-    c.panel = NS(**{k: Label() for k in ('status', 'capture_info', 'available', 'folder', 'save_result')})
-    c.panel.save_result.value = '저장 대기 1건 · 앞 작업이 끝나면 시작해요'
+    c.panel = NS(**{k: Label() for k in ('status', 'capture_info', 'available', 'folder', 'recent')},
+                 show_error=lambda text: None)  # 0.16.0 패널: 최근 저장 줄(recent)과 오류 줄이 분리됨
+    c.panel.recent.value = '최근 저장: 저장 대기 1건 · 앞 작업이 끝나면 시작해요'
+    c._logged_error, c._capturing_hotkey = None, False
     result = NS(output=Path('C:/Videos/clip.mp4'), duration_us=109_000_000, cleanup_error=None, completed=True)
     c.service = NS(tick=lambda *a, **k: None, current=None, completed=[('saved', result)], status='recording',
                    enabled=True, error=None, producer=None, recoveries=lambda: [],
@@ -61,7 +63,7 @@ def run(label, note):
         except Exception as exc:  # Qt 타이머 슬롯에서는 예외가 출력만 되고 다음 틱이 계속 돈다
             errors.append(type(exc).__name__ + ': ' + str(exc))
     print(f'[{label}] 틱 5번 · 완료 알림 {len(toasts)}번 · 남은 completed {len(c.service.completed)}개 · '
-          f'탭 문구 "{c.panel.save_result.value}" · 예외 {errors[:1] or "없음"}')
+          f'탭 문구 "{c.panel.recent.value}" · 예외 {errors[:1] or "없음"}')
     return errors
 
 

@@ -19,7 +19,7 @@ from .blackbox_queue import ExportQueue
 from .blackbox_runtime import BlackboxRuntime
 from .blackbox_session import BlackboxSession, CaptureContext
 from .blackbox_spool import DiskSpool, clean_leftovers
-from .feature_access import is_creator
+from .feature_access import blackbox_available
 
 _log = logging.getLogger(__name__)
 
@@ -93,7 +93,7 @@ class ServiceSettings:
 
 class BlackboxService:
     def __init__(self, settings: ServiceSettings, *, enabled, persist_enabled,
-                 allowed=is_creator, producer_factory=CaptureProducer, native_factory=NativeCapture):
+                 allowed=blackbox_available, producer_factory=CaptureProducer, native_factory=NativeCapture):
         self.settings, self.enabled, self.persist = settings, enabled, persist_enabled
         self.allowed = allowed
         self.budget = DiskBudget(max_bytes=settings.max_bytes, min_free_bytes=settings.min_free_bytes,
@@ -141,7 +141,7 @@ class BlackboxService:
 
     def set_retention(self, duration_us):
         if not self._allowed() or self._closing or type(duration_us) is not int or duration_us <= 0:
-            raise ValueError('positive retention and creator access required')
+            raise ValueError('positive retention and blackbox access required')
         self._retention = duration_us
         for runtime in self.runtimes.values():
             runtime._retire_segments(runtime.session._replay.set_retention(duration_us))

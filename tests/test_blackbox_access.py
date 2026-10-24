@@ -21,11 +21,12 @@ def window():
 
 
 @pytest.mark.parametrize('user', [None, {}, {'id': 'ordinary'}, {'id': CREATOR_DISCORD_ID}])
-def test_top_level_tab_and_direct_commands_obey_creator_access(monkeypatch, user):
+def test_top_level_tab_and_direct_commands_obey_login_access(monkeypatch, user):
+    # 0.16.0: 블랙박스는 제작자 전용 → 디스코드 로그인 사용자(베타). 제작자가 아닌 로그인 사용자도 사용 가능.
     monkeypatch.setattr(config, 'load_discord_user', lambda: user)
     app, host = window()
     tools = BlackboxController(host)
-    creator = user == {'id': CREATOR_DISCORD_ID}
+    creator = bool(user and user.get('id'))  # 로그인 여부
     assert ('블랙박스' in [host._tabs.tabText(i) for i in range(host._tabs.count())]) is creator
     assert (tools.panel is not None) is creator
     expected = RuntimeError if creator else PermissionError
@@ -34,8 +35,7 @@ def test_top_level_tab_and_direct_commands_obey_creator_access(monkeypatch, user
     with pytest.raises(expected):
         tools.set_enabled(True)
     if creator:
-        assert all(not c.isEnabled() for c in (tools.panel.enabled, tools.panel.retention,
-            tools.panel.save, tools.panel.change_folder, tools.panel.open_folder))
+        assert all(not c.isEnabled() for c in tools.panel.controls())
     host.close()
 
 
@@ -48,12 +48,12 @@ def test_access_transitions_preserve_pending_save_but_invalidate_capture(monkeyp
     session.update_context(CaptureContext('run', foreground=True, ready=True))
     tools = BlackboxController(host, session=session)
     assert tools.panel is None
-    user[0] = {'id': CREATOR_DISCORD_ID}
+    user[0] = {'id': 'ordinary'}
     tools.refresh_access()
     permit = session.capture_permit()
     session.append(permit, Segment('run', 'one', 0, 10, 10, 'test'))
     plan = tools.request_save(10)
-    user[0] = {'id': 'ordinary'}
+    user[0] = None  # 로그아웃
     tools.refresh_access()
     assert tools.panel is None and session.enabled and session.state == State.ACCESS_DENIED
     with pytest.raises(PermissionError):
@@ -62,7 +62,7 @@ def test_access_transitions_preserve_pending_save_but_invalidate_capture(monkeyp
         session.capture_permit()
     with pytest.raises(BufferFullError):
         replay.clear()
-    user[0] = {'id': CREATOR_DISCORD_ID}
+    user[0] = {'id': 'ordinary'}
     tools.refresh_access()
     with pytest.raises(PermissionError):
         session.append(permit, Segment('run', 'two', 10, 20, 10, 'test'))
@@ -175,50 +175,44 @@ def test_hotkey_is_shown_with_key_names_not_vk_codes(modifiers, vk, text):
 
 
 @pytest.mark.parametrize('active, received_hwnd, refuse, expected', [
-    (True, 42, True, '지금은 저장할 수 없어요: video buffer limit'),
-    (False, 42, False, '게임 창이 앞에 있을 때만'),
-    (True, 42, False, '저장 요청을 접수했어요'),
+    (True, 42, True, '최근 저장: 저장 안 함 · 확보한 영상 없음'),
+    (False, 42, False, '최근 저장: 아직 없어요'),  # 게임이 앞에 없으면 게임 화면 알림만(탭 줄은 그대로)
+    (True, 42, False, '최근 저장: 저장 요청을 접수했어요'),
 ])
-def test_hotkey_feedback_stays_visible_over_recording_error(monkeypatch, active, received_hwnd, refuse, expected):
-    """녹화 오류 중에도 단축키를 누른 결과가 매 틱 오류 문구에 덮이지 않고 보인다."""
+def test_hotkey_result_status_and_error_use_separate_lines(monkeypatch, active, received_hwnd, refuse, expected):
+    """0.16.0: 상태·오류·최근 저장이 각각 다른 위젯이라 0.1초 틱이 서로 덮어쓰지 않는다. 오류는 한국어 요약 + app.log 안내."""
     from types import SimpleNamespace
-    from mabinogi_addon.ui import blackbox_controller as module
     from mabinogi_addon.ui.blackbox_tab import BlackboxTab
     monkeypatch.setattr(config, 'load_discord_user', lambda: None)
     app, host = window()
     tools = BlackboxController(host)
     tools.panel = BlackboxTab()
-    error = 'video buffer limit' if refuse else None
+    error = 'encoder exited 1: h264_nvenc: OpenEncodeSessionEx failed' if refuse else None
     def request_save(us):
         if refuse:
             raise PermissionError('save unavailable')
     def tick(*a, **kw):
         tools.service.error = error  # 실제 서비스처럼 매 틱 오류를 다시 기록
     tools.service = SimpleNamespace(tick=tick, request_save=request_save, completed=[], error=error,
-        status='error' if refuse else 'recording', current=None, _retention=600_000_000,
+        status='error' if refuse else 'recording', current=None, _retention=300_000_000,
         settings=SimpleNamespace(output_folder='out'), recoveries=lambda: [])
     pending = [(123456, received_hwnd)]
     tools.events = SimpleNamespace(sample=lambda: (SimpleNamespace(hwnd=42), active),
         consume_hotkey=lambda: pending.pop() if pending else None)
+    toasts = []
     monkeypatch.setattr(tools, '_allowed', lambda: True)
+    monkeypatch.setattr(tools, '_react', lambda text, kind, target=None: toasts.append(text))
     for _ in range(3):
         tools._tick()
-        assert expected in tools.panel.save_result.text()
-    clock = [module._HOTKEY_NOTE_SEC + 10**6]
-    monkeypatch.setattr('time.monotonic', lambda: clock[0])
-    tools._tick()
-    if refuse:  # 표시 시간이 지나면 다시 녹화 오류 문구가 보인다.
-        assert tools.panel.save_result.text() == error
-    # 강조가 사라져도 마지막 단축키 입력 시각·결과는 계속 남는다(게임→앱 전환 대비).
-    import re
-    tools._hotkey_base = '검증용 단축키: Ctrl+Alt+F10 · 실게임 미검증'
-    tools._show_hotkey()
-    lines = tools.panel.hotkey.text().split('\n')
-    assert lines[0] == tools._hotkey_base
-    assert re.fullmatch(r'마지막 단축키 입력 \d\d:\d\d:\d\d · .+', lines[1])
-    assert {'지금은 저장할 수 없어요': '저장 불가: video buffer limit', '게임 창이 앞에': '게임 창이 앞에 있지 않아',
-            '접수했어요': '저장 요청 접수'}[next(k for k in ('지금은 저장할 수 없어요', '게임 창이 앞에', '접수했어요')
-                                          if k in expected)] in lines[1]
+        assert tools.panel.recent.text() == expected
+        assert tools.panel.status.text() == ('녹화 오류' if refuse else '보관 중')
+        if refuse:
+            assert tools.panel.error.text() == '영상 인코더가 멈춰 녹화를 중단했어요 (자세한 내용: app.log)'
+            assert not tools.panel.error.isHidden() and 'encoder exited' not in tools.panel.error.text()
+        else:
+            assert tools.panel.error.isHidden()
+    assert len(toasts) == 1 and toasts[0].startswith('저장 실패' if (refuse or not active) else '저장 중 0%')
+    assert not hasattr(tools.panel, 'save_result')
     tools.panel.deleteLater()
     host.close()
 

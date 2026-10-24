@@ -39,7 +39,8 @@ def window(monkeypatch):
 
 def test_structure_and_default_editor_space(window):
     w, app = window
-    assert [w._tabs.tabText(i) for i in range(4)] == ['전투 보조','파티 모집','편의기능','설정']
+    # 0.16.0: 로그인 사용자(픽스처)는 블랙박스 탭이 설정 앞에 보인다
+    assert [w._tabs.tabText(i) for i in range(w._tabs.count())] == ['전투 보조','파티 모집','편의기능','블랙박스','설정']
     assert [w._tracker_tabs.tabText(i) for i in range(w._tracker_tabs.count())] == LABELS
     assert [w._convenience_tabs.tabText(i) for i in range(w._convenience_tabs.count())] == ['분배 계산기','구슬 분배 계산기','환전비율 계산기','던전 입장 계산기']
     bar = w._tracker_tabs.tabBar()

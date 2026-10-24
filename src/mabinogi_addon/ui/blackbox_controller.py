@@ -1,22 +1,15 @@
-"""제작자 전용 최상위 진입점. 캡처 어댑터가 없는 제품 상태에서는 조작을 열지 않는다."""
+"""블랙박스 최상위 진입점(디스코드 로그인 사용자, 0.16.0 베타). 캡처 어댑터가 없는 제품 상태에서는 조작을 열지 않는다."""
 
 import time
 
 from PySide6.QtCore import QObject, QTimer
 
-from ..feature_access import is_creator
+from .. import feature_access
 from .blackbox_tab import BlackboxTab
 
 
-# 가상 키 코드 → 사용자가 아는 키 이름. 'VK 79'처럼 16진 코드로 보이면 실제 키(F10)를 알 수 없다.
-_KEY_NAMES = {0x08: 'Backspace', 0x09: 'Tab', 0x0D: 'Enter', 0x13: 'Pause', 0x14: 'CapsLock',
-              0x1B: 'Esc', 0x20: 'Space', 0x21: 'PageUp', 0x22: 'PageDown', 0x23: 'End',
-              0x24: 'Home', 0x25: '←', 0x26: '↑', 0x27: '→', 0x28: '↓', 0x2C: 'PrintScreen',
-              0x2D: 'Insert', 0x2E: 'Delete', 0x6A: 'Num *', 0x6B: 'Num +', 0x6D: 'Num -',
-              0x6E: 'Num .', 0x6F: 'Num /', 0x90: 'NumLock', 0x91: 'ScrollLock', 0xBA: ';',
-              0xBB: '=', 0xBC: ',', 0xBD: '-', 0xBE: '.', 0xBF: '/', 0xC0: '`', 0xDB: '[',
-              0xDC: '\\', 0xDD: ']', 0xDE: "'"}
-_HOTKEY_NOTE_SEC = 6.0
+from ..blackbox_shortcut import hotkey_text, key_name  # noqa: F401 — 기존 가져오기 경로 유지
+_log = __import__('logging').getLogger(__name__)
 _STATES = {'recording': '보관 중', 'preparing': '녹화 준비 중', 'paused': '일시정지',
            'pausing': '중단 구간 정리 중', 'disabled': '사용 안 함', 'error': '녹화 오류'}
 
@@ -34,6 +27,30 @@ def save_failure_reason(exc) -> str:
     return '앱에서 확인'
 
 
+def error_summary(text):
+    """녹화 오류 원문(영어·내부 문구)을 탭에 보일 한국어 요약으로. 원문은 app.log에만 남긴다(0.16.0)."""
+    raw = str(text or '')
+    lowered = raw.lower()
+    if not raw:
+        return ''
+    for needle, summary in (('encoder exited', '영상 인코더가 멈춰 녹화를 중단했어요'),
+                            ('하드웨어 h.264 인코더', '그래픽카드 영상 인코더를 열지 못했어요'),
+                            ('access revoked', '로그인이 풀려 녹화를 멈췄어요'),
+                            ('access required', '로그인이 풀려 녹화를 멈췄어요'),
+                            ('dimensions changed', '게임 창 크기가 바뀌어 녹화를 다시 시작해요'),
+                            ('no space', '저장 공간이 부족해요'), ('budget', '저장 공간이 부족해요'),
+                            ('disk', '저장 공간이 부족해요'),
+                            ('retained for recovery', '임시 보관 자료를 정리하지 못했어요'),
+                            ('timeout', '녹화 장치 응답이 늦어 녹화를 중단했어요'),
+                            ('timed out', '녹화 장치 응답이 늦어 녹화를 중단했어요')):
+        if needle in lowered:
+            return summary + ' (자세한 내용: app.log)'
+    if any('\uac00' <= ch <= '\ud7a3' for ch in raw[:40]):
+        first = raw.split(' · ')[0].split(': ')[0].strip()  # 이미 한국어 문구: 첫 문장만
+        return first + ' (자세한 내용: app.log)'
+    return '녹화 중 문제가 생겼어요 (자세한 내용: app.log)'
+
+
 def _toast_duration(us):
     from .blackbox_toast import format_duration
     return format_duration(us)
@@ -47,40 +64,32 @@ def combat_text(gate):
             'grace': f'보관 중 · 전투 종료 대기 {gate.grace_left}초'}[gate.state]
 
 
+BADGE_COLORS = {'ok': '#2ecc71', 'muted': '#8a8f98', 'error': '#e74c3c'}  # 전투 보조 상태와 같은 색(0.16.0)
+BADGE_TIPS = {'ok': '누르면 블랙박스를 꺼요. 지금까지 보관한 영상은 앱을 닫기 전까지 저장할 수 있어요.',
+              'muted': '누르면 블랙박스를 꺼요. 지금까지 보관한 영상은 앱을 닫기 전까지 저장할 수 있어요.',
+              'error': '녹화 오류예요. 누르면 블랙박스 탭에서 내용을 볼 수 있어요.'}
+
+
 def blackbox_badge(service, available_us=0, combat=None):
-    """상단 블랙박스 상태(명세 11.2). '블랙박스 사용'이 꺼져 있으면 None(숨김). combat: 전투 녹화 판정(CombatGate)."""
+    """상단 블랙박스 상태(명세 11.2): (문구, 'ok'|'muted'|'error'). '블랙박스 사용'이 꺼져 있으면 None(숨김).
+
+    보관 중은 초록, 게임 대기·일시정지·전투 대기·전투 종료 대기 등은 회색, 녹화 오류는 빨강. combat: 전투 녹화 판정(CombatGate)."""
     if service is None or not getattr(service, 'enabled', False) or getattr(service, 'status', None) == 'disabled':
         return None
-    if combat is not None and service.status != 'error':
-        if combat.state in ('waiting', 'unregistered'):
-            return '블랙박스: 전투 대기', 'neutral'
-        if combat.state == 'grace':
-            return f'블랙박스: 전투 종료 대기 {combat.grace_left}초', 'neutral'
-        if service.status == 'recording':
-            seconds = max(0, int(available_us) // 1_000_000)
-            return f'블랙박스: 보관 중 · 전투 {seconds // 60}:{seconds % 60:02d}', 'neutral'
-    if service.status == 'recording':
-        seconds = max(0, int(available_us) // 1_000_000)
-        return f'블랙박스: 보관 중 {seconds // 60}:{seconds % 60:02d}', 'neutral'
     if service.status == 'error':
-        return '블랙박스: 녹화 오류', 'error'
-    return '블랙박스: ' + _STATES.get(service.status, '게임 대기'), 'neutral'
-
-
-def key_name(vk):
-    if 0x70 <= vk <= 0x87:
-        return f'F{vk - 0x6F}'
-    if 0x30 <= vk <= 0x39 or 0x41 <= vk <= 0x5A:
-        return chr(vk)
-    if 0x60 <= vk <= 0x69:
-        return f'Num {vk - 0x60}'
-    return _KEY_NAMES.get(vk, f'키 코드 0x{vk:02X}')
-
-
-def hotkey_text(modifiers, vk):
-    """RegisterHotKey 수식 마스크(Alt=1, Ctrl=2, Shift=4, Win=8)와 키 코드를 'Ctrl+Alt+F10' 형식으로."""
-    keys = [name for mask, name in ((2, 'Ctrl'), (1, 'Alt'), (4, 'Shift'), (8, 'Win')) if modifiers & mask]
-    return '+'.join(keys + [key_name(vk)])
+        return '● 블랙박스: 녹화 오류', 'error'
+    seconds = max(0, int(available_us) // 1_000_000)
+    clock = f'{seconds // 60}:{seconds % 60:02d}'
+    if combat is not None:
+        if combat.state in ('waiting', 'unregistered'):
+            return '● 블랙박스: 전투 대기', 'muted'
+        if combat.state == 'grace':
+            return f'● 블랙박스: 전투 종료 대기 {combat.grace_left}초', 'muted'
+        if service.status == 'recording':
+            return f'● 블랙박스: 보관 중 · 전투 {clock}', 'ok'
+    if service.status == 'recording':
+        return f'● 블랙박스: 보관 중 {clock}', 'ok'
+    return '● 블랙박스: ' + _STATES.get(service.status, '게임 대기'), 'muted'
 
 
 class BlackboxController(QObject):
@@ -100,9 +109,9 @@ class BlackboxController(QObject):
         self._timer = None
         self._recovery_dialog = None
         self._profile_error = None
-        self._hotkey_note = None  # (문구, 표시 종료 monotonic) — 단축키 반응을 오류 문구에 묻히지 않게
-        self._hotkey_base = None  # '검증용 단축키: …' 줄
-        self._hotkey_last = None  # '마지막 단축키 입력 HH:MM:SS · 결과' — 앱으로 돌아와도 남아 있게
+        self._hotkey = None  # 저장 단축키 (수식, 키) — 설정값 또는 제품 기본값(0.16.0)
+        self._capturing_hotkey = False  # 변경 창이 떠 있는 동안 기존 단축키 입력은 반응 없이 버린다
+        self._logged_error = None  # 탭에는 한국어 요약, 원문은 바뀔 때 한 번 app.log에
         self._toast = None  # 게임 화면 위 저장 반응(명세 11.1)
         from ..blackbox_combat import CombatGate
         from .. import config as _config
@@ -117,7 +126,7 @@ class BlackboxController(QObject):
 
     def _allowed(self):
         try:
-            return is_creator() is True and not getattr(self.window, '_closing', False)
+            return feature_access.blackbox_available() is True and not getattr(self.window, '_closing', False)
         except Exception:
             return False
 
@@ -142,7 +151,7 @@ class BlackboxController(QObject):
 
     def _require_session(self):
         if not self._allowed():
-            raise PermissionError('creator access required')
+            raise PermissionError('블랙박스는 디스코드 로그인 후 사용할 수 있어요.')
         if self.session is None:
             raise RuntimeError('capture and export adapters are not connected')
         return self.session
@@ -216,11 +225,13 @@ class BlackboxController(QObject):
                 if 'outputFolder' in preferences:
                     profile['output_folder'] = preferences['outputFolder']
                 settings = ServiceSettings.from_dict(profile)
-                events = WindowsEvents(int(self.window.winId()), profile['hotkey_modifiers'], profile['hotkey_vk'])
+                # 저장 단축키: 사용자 설정(규칙을 지킨 값만 불러옴) 또는 제품 기본값
+                self._hotkey = tuple(preferences.get('hotkey') or (profile['hotkey_modifiers'], profile['hotkey_vk']))
+                events = WindowsEvents(int(self.window.winId()), *self._hotkey)
                 try:
                     service = BlackboxService(settings, enabled=config.load_blackbox_enabled(),
                                               persist_enabled=config.save_blackbox_enabled)
-                    service.set_retention(preferences.get('retentionMinutes', 10) * 60 * 1_000_000)
+                    service.set_retention(preferences.get('retentionMinutes', 5) * 60 * 1_000_000)
                 except BaseException:
                     events.close()
                     raise
@@ -236,25 +247,21 @@ class BlackboxController(QObject):
                 self._profile_error = str(exc)
         if self.service is None:
             if self._profile_error:
-                self.panel.status.setText('녹화 준비 실패: ' + self._profile_error)
+                self.panel.status.setText('녹화 준비 실패')
+                self._show_error(self._profile_error)
             return
         panel = self.panel
-        panel.preview_notice.setText('제작자 알파 · Windows 실게임 검증 전이에요.')
         failures = getattr(self.service, 'leftover_failures', None)
         if failures:
             # 지난 실행이 남긴 임시 자료를 자동 정리하지 못했을 때만 안내한다(정리 성공은 조용히).
-            panel.save_result.setText(f'지난 실행에서 남은 블랙박스 임시 자료 {len(failures)}건을 지우지 못했어요. '
-                                      '다음 실행 때 다시 정리해요.')
-        panel.audio_info.setText('게임 소리: 대상 프로세스만 · 동기화 검증 전' if self.service.settings.audio
-                                 else '게임 소리: 저장하지 않아요 · 화면만 보관해요(실수 확인용)')
+            panel.show_error(f'지난 실행에서 남은 블랙박스 임시 자료 {len(failures)}건을 지우지 못했어요. '
+                             '다음 실행 때 다시 정리해요.')
         panel.enabled.setChecked(self.service.enabled)
-        panel.retention.setText(str(self.service._retention // 60_000_000))
-        if profile:
-            self._hotkey_base = ('검증용 단축키: ' + hotkey_text(profile.get('hotkey_modifiers', 0),
-                                                              profile['hotkey_vk']) + ' · 실게임 미검증')
-            self._show_hotkey()
-        for control in (panel.enabled, panel.retention, panel.save, panel.change_folder, panel.open_folder, panel.recovery,
-                        panel.mode_always, panel.mode_combat):
+        panel.retention.setValue(max(1, min(panel.retention.maximum(), self.service._retention // 60_000_000)))
+        if self._hotkey is not None:
+            panel.hotkey.setText(hotkey_text(*self._hotkey))
+        panel.folder.setText(str(self.service.settings.output_folder))
+        for control in panel.controls():
             control.setEnabled(True)
         panel.enabled.toggled.connect(lambda value: self._action(lambda: self.service.set_enabled(value)))
         (panel.mode_combat if self._mode == 'combat' else panel.mode_always).setChecked(True)
@@ -262,7 +269,8 @@ class BlackboxController(QObject):
         panel.mode_combat.toggled.connect(lambda on: on and self._set_mode('combat'))
         self._show_mode_notice()
         panel.save.clicked.connect(lambda checked=False: self._request_save())
-        panel.retention.editingFinished.connect(lambda: self._action(self._set_retention))
+        panel.retention.valueChanged.connect(lambda value: self._action(lambda: self._set_retention(value)))
+        panel.change_hotkey.clicked.connect(self._change_hotkey)
         panel.change_folder.clicked.connect(self._change_folder)
         panel.open_folder.clicked.connect(self._open_folder)
         panel.recovery.clicked.connect(self.show_recovery)
@@ -271,20 +279,31 @@ class BlackboxController(QObject):
         try:
             return operation()
         except Exception as exc:
-            if self.panel is not None:
-                self.panel.save_result.setText(str(exc))
+            self._show_error(str(exc))
             self.close_error = str(exc)
+
+    def _show_error(self, raw):
+        """오류 줄: 한국어 요약 + '(자세한 내용: app.log)'. 원문은 바뀔 때 한 번만 app.log에 남긴다."""
+        if raw and raw != getattr(self, '_logged_error', None):
+            _log.warning('블랙박스 오류: %s', raw)
+        self._logged_error = raw or None
+        if self.panel is not None:
+            self.panel.show_error(error_summary(raw))
+
+    def _set_recent(self, text):
+        if self.panel is not None:
+            self.panel.recent.setText('최근 저장: ' + text)
 
     def _request_save(self, request_us=None):
         if self._allowed() and self.service is not None:
             try:
                 self.service.request_save(time.perf_counter_ns() // 1000 if request_us is None else request_us)
             except Exception as exc:
-                if self.panel is not None:
-                    self.panel.save_result.setText(str(exc))
+                self._set_recent('저장 안 함 · ' + save_failure_reason(exc))
                 self.close_error = str(exc)
                 self._react('저장 실패 · ' + save_failure_reason(exc), 'failed', self._last_target)
                 return
+            self._set_recent('저장 요청을 접수했어요')
             self._react('저장 중 0%', 'pending', self._last_target)
 
     def _react(self, text, kind, target=None):
@@ -319,35 +338,21 @@ class BlackboxController(QObject):
             return None
         return screen.geometry() if screen is not None else None
 
-    def _show_hotkey(self):
-        if self.panel is None or self._hotkey_base is None:
-            return
-        self.panel.hotkey.setText(self._hotkey_base + ('\n' + self._hotkey_last if self._hotkey_last else ''))
-
-    def _note_hotkey(self, text, result):
-        self._hotkey_note = (text, time.monotonic() + _HOTKEY_NOTE_SEC)
-        # 게임→앱 전환 사이에 6초 강조가 사라져도 마지막 입력 시각·결과는 계속 남긴다.
-        self._hotkey_last = f"마지막 단축키 입력 {time.strftime('%H:%M:%S')} · {result}"
-        self._show_hotkey()
-
     def _hotkey_pressed(self, shortcut, target, active):
         """단축키 입력마다 결과를 남긴다(저장 불가 상태 포함). 게임 창에서 받은 입력만 저장한다."""
         if not self._allowed():
             return
         foreground = getattr(self.events, 'foreground', active)  # 녹화는 뒤에서도 하지만 단축키는 게임이 앞에 있을 때만
         if not (active and foreground and target is not None and shortcut[1] == target.hwnd):
-            self._note_hotkey('단축키 입력을 받았어요 · 게임 창이 앞에 있을 때만 저장해요.',
-                              '게임 창이 앞에 있지 않아 저장 안 함')
             self._react('저장 실패 · 게임 창이 앞에 있을 때만 저장해요', 'failed', target)
             return
         try:
             self.service.request_save(shortcut[0])
         except Exception as exc:
-            reason = self.service.error or str(exc)
-            self._note_hotkey(f'단축키 입력을 받았지만 지금은 저장할 수 없어요: {reason}', f'저장 불가: {reason}')
+            self._set_recent('저장 안 함 · ' + save_failure_reason(exc))
             self._react('저장 실패 · ' + save_failure_reason(exc), 'failed', target)
             return
-        self._note_hotkey('단축키 입력을 받았어요 · 저장 요청을 접수했어요.', '저장 요청 접수')
+        self._set_recent('저장 요청을 접수했어요')
         self._react('저장 중 0%', 'pending', target)
 
     def wants_boss_presence(self):
@@ -395,7 +400,7 @@ class BlackboxController(QObject):
         self._action(lambda: self.service.tick(target, active=active and self._combat_record(active)))
         try:
             shortcut = self.events.consume_hotkey()
-            if shortcut is not None:
+            if shortcut is not None and not getattr(self, '_capturing_hotkey', False):
                 self._hotkey_pressed(shortcut, target, active)
         except Exception as exc:
             self.close_error = str(exc)
@@ -420,6 +425,7 @@ class BlackboxController(QObject):
             if result is not None and not result.completed and ticket not in self._toasted_failures:
                 self._toasted_failures.add(ticket)
                 self._save_started = None
+                self._set_recent('실패 · 저장 내역·복구에서 확인하세요')
                 self._react('저장 실패 · 앱에서 확인', 'failed', self._last_target)
         entries = getattr(self.service, 'recoveries', list)()
         self._update_save_toast(sum(r is None for _, _, r in entries))
@@ -431,38 +437,24 @@ class BlackboxController(QObject):
             self._show_mode_notice()
             native = getattr(getattr(self.service, 'producer', None), 'native', None)
             border = getattr(native, 'border_note', None)  # Windows 11 캡처 테두리를 끄지 못했을 때만
-            self.panel.capture_info.setText('게임 화면만 · 목표 1080p / 60FPS' + ('\n' + border if border else ''))
-            self.panel.available.setText(f'확보한 영상 {duration // 1_000_000}초 / 설정 {self.service._retention // 60_000_000}분')
+            self.panel.capture_info.setText('게임 화면만 · 1080p / 60FPS · 게임 소리는 저장하지 않아요'
+                                            + ('\n' + border if border else ''))
+            retention = self.service._retention // 60_000_000
+            self.panel.available.setText(f'확보한 영상 {_toast_duration(duration)} / 설정 {retention}분')
             self.panel.folder.setText(str(self.service.settings.output_folder))
-            failures = [r for _, _, r in entries if r is not None and not r.completed]
+            self._show_error(self.service.error)
             running = sum(r is None for _, _, r in entries)
-            if failures:
-                self.panel.save_result.setText('저장 실패 · 저장 내역·복구에서 확인하세요: ' + str(failures[0].error))
-            elif running:
-                self.panel.save_result.setText(self._progress_text(running))
-            if self.service.error:
-                self.panel.save_result.setText(self.service.error)
-            note = self._hotkey_note
-            if note is not None:
-                if time.monotonic() < note[1]:
-                    # 녹화 오류 문구가 매 틱 덮어써도 단축키를 눌렀다는 반응은 잠시 보이게 한다.
-                    self.panel.save_result.setText(note[0])
-                else:
-                    self._hotkey_note = None
+            if running:
+                self._set_recent(self._progress_text(running))
             for kind, result in completed:
                 if kind == 'saved':
-                    took = getattr(self, '_save_started', None)
-                    detail = ''
-                    if getattr(result, 'duration_us', None):
-                        detail += ' · ' + _toast_duration(result.duration_us)
-                    if took is not None:
-                        seconds = int(time.monotonic() - took)
-                        detail += f' · {seconds // 60}:{seconds % 60:02d} 걸림'
                     self._save_started = None
-                    self.panel.save_result.setText(f'저장 완료: {result.output}{detail}' +
-                        (f' · {result.cleanup_error}' if result.cleanup_error else ''))
+                    name = getattr(getattr(result, 'output', None), 'name', '') or str(getattr(result, 'output', ''))
+                    detail = f" · {_toast_duration(result.duration_us)} 영상" if getattr(result, 'duration_us', None) else ''
+                    self._set_recent(time.strftime('%H:%M') + detail + (f' · {name}' if name else '') +
+                                     (f' · {result.cleanup_error}' if getattr(result, 'cleanup_error', None) else ''))
                 elif kind in ('rejected', 'cancelled'):
-                    self.panel.save_result.setText(str(result))
+                    self._set_recent(('실패 · ' if kind == 'rejected' else '') + str(result))
         if self._recovery_dialog is not None and self._recovery_dialog.isVisible():
             self._recovery_dialog.refresh()
 
@@ -517,13 +509,32 @@ class BlackboxController(QObject):
             return
         if not self._badge_wired:
             self._badge_wired = True
-            badge.clicked.connect(self._open_tab)
+            badge.clicked.connect(self._badge_clicked)
         state = (blackbox_badge(self.service, available_us, self._gate if self._mode == 'combat' else None)
                  if self._allowed() else None)
+        self._badge_kind = state[1] if state is not None else None
         badge.setVisible(state is not None)
         if state is not None:
             badge.setText(state[0])
-            badge.setStyleSheet('color:#e74c3c;' if state[1] == 'error' else '')
+            style = getattr(type(self.window), 'status_style', None)
+            color = BADGE_COLORS[state[1]]
+            badge.setStyleSheet(style(color) if style else f'color:{color}; font-size:12px; border:none;')
+            badge.setToolTip(BADGE_TIPS[state[1]])
+
+    def _badge_clicked(self):
+        """상단 배지(0.16.0): 오류면 블랙박스 탭으로, 아니면 블랙박스 끄기(탭 '블랙박스 사용'과 같은 경로·저장).
+        끄기는 녹화(생산자)만 멈추고 보관 영상·진행 중 저장은 그대로라 확인 창 없이 바로 끈다."""
+        if self.service is None or not self._allowed():
+            return
+        if getattr(self.service, 'status', None) == 'error':
+            self._open_tab()
+            return
+        if self.panel is not None and self.panel.enabled.isChecked():
+            self.panel.enabled.setChecked(False)  # 탭 토글 신호 → service.set_enabled(False) (같은 경로)
+        else:
+            self._action(lambda: self.service.set_enabled(False))
+        runtime = getattr(self.service, 'current', None)
+        self._update_badge(runtime.session._replay.available_us if runtime else 0)
 
     def _open_tab(self):
         if self._page is not None and self.window._tabs.indexOf(self._page) >= 0:
@@ -544,13 +555,48 @@ class BlackboxController(QObject):
         self._recovery_dialog.show()
         self._recovery_dialog.raise_()
 
-    def _set_retention(self):
+    def _set_retention(self, minutes):
         from .. import config
-        minutes = int(self.panel.retention.text())
-        if not self._allowed() or self.service._closing or minutes <= 0:
-            raise ValueError('보관 시간은 양의 정수로 입력하세요.')
-        config.save_blackbox_preference('retentionMinutes', minutes)
-        self.service.set_retention(minutes * 60_000_000)
+        if not self._allowed() or self.service._closing:
+            return
+        config.save_blackbox_preference('retentionMinutes', int(minutes))
+        self.service.set_retention(int(minutes) * 60_000_000)
+
+    def _change_hotkey(self):
+        """저장 단축키 변경 창(0.16.0). 저장하면 설정에 남기고 앱 재시작 없이 바로 새 조합으로 바꾼다."""
+        if not self._allowed() or self._hotkey is None:
+            return
+        from .blackbox_hotkey_dialog import HotkeyDialog
+        dialog = HotkeyDialog(self._hotkey, self.window)
+        self._capturing_hotkey = True  # 변경 창에서 누른 기존 조합이 '게임 창이 앞에 없어 저장 실패' 알림을 띄우지 않게
+        try:
+            accepted = dialog.exec()
+        finally:
+            self._capturing_hotkey = False
+        chosen = dialog.result_hotkey if accepted else None
+        dialog.deleteLater()
+        if chosen is None:
+            self._discard_hotkey_input()
+            return
+        self._apply_hotkey(chosen)
+
+    def _apply_hotkey(self, chosen):
+        from .. import config
+        try:
+            config.save_blackbox_preference('hotkey', chosen)
+            if self.events is not None:
+                self.events.set_hotkey(*chosen)  # 훅은 유지하고 조합만 교체: 녹화·저장 진행에 영향 없음
+        except Exception as exc:
+            self._show_error(f'단축키를 바꾸지 못했어요: {exc}')
+            return
+        self._hotkey = tuple(chosen)
+        if self.panel is not None:
+            self.panel.hotkey.setText(hotkey_text(*self._hotkey))
+
+    def _discard_hotkey_input(self):
+        discard = getattr(getattr(self.events, 'observer', None), 'discard', None)
+        if discard is not None:
+            discard()
 
     def _change_folder(self):
         if not self._allowed():

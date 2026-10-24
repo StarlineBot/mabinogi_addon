@@ -11,7 +11,8 @@ source는 저장소 어댑터가 발급한 불변 참조다. 이 모듈은 경�
 from dataclasses import dataclass
 
 
-DEFAULT_RETENTION_US = 10 * 60 * 1_000_000
+DEFAULT_RETENTION_US = 5 * 60 * 1_000_000  # 0.16.0 기본 5분(사용자 결정)
+MAX_RETENTION_MINUTES = 15  # 실효 상한: max_segments 4096 × 0.25초 ≈ 17분
 
 
 def _positive(value: int, name: str) -> None:

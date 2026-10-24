@@ -123,6 +123,12 @@ class HotkeyObserver:
             self.thread.join(5)
             raise self.error
 
+    def set_chord(self, modifiers, vk):
+        """단축키를 즉시 바꾼다(0.16.0). 훅은 그대로 두고 감시할 조합만 교체한다(녹화·저장은 멈추지 않음).
+        훅 스레드는 매 입력마다 self.chord를 읽으므로 객체 교체 한 번으로 바뀐다. 이전 조합의 대기 입력은 버린다."""
+        self.chord = Chord(modifiers, vk)
+        self.discard()
+
     def _observe(self, vk, message, flags):
         # Only this hook thread mutates Chord. GUI invalidation advances an epoch
         # instead of sharing a lock with the latency-sensitive OS callback.

@@ -122,10 +122,10 @@ def test_blackbox_badge_states():
     service = lambda status, enabled=True: NS(status=status, enabled=enabled)
     assert blackbox_badge(None) is None
     assert blackbox_badge(service('recording', enabled=False)) is None  # 사용 꺼짐 → 숨김
-    assert blackbox_badge(service('recording'), 192_000_000) == ('블랙박스: 보관 중 3:12', 'neutral')
-    assert blackbox_badge(service('paused'))[0] == '블랙박스: 일시정지'
-    assert blackbox_badge(service('waiting'))[0] == '블랙박스: 게임 대기'
-    assert blackbox_badge(service('error')) == ('블랙박스: 녹화 오류', 'error')
+    assert blackbox_badge(service('recording'), 192_000_000) == ('● 블랙박스: 보관 중 3:12', 'ok')
+    assert blackbox_badge(service('paused')) == ('● 블랙박스: 일시정지', 'muted')
+    assert blackbox_badge(service('waiting')) == ('● 블랙박스: 게임 대기', 'muted')
+    assert blackbox_badge(service('error')) == ('● 블랙박스: 녹화 오류', 'error')
     assert save_failure_reason(PermissionError('save unavailable')) == '확보한 영상 없음'
     assert save_failure_reason(RuntimeError('one active and one queued save already reserved')) == '이미 저장 중이에요'
 
@@ -135,7 +135,7 @@ def test_blackbox_reactions_toast_and_sound_slots(app, monkeypatch):
     from mabinogi_addon.ui.blackbox_toast import format_duration
     played = []
     monkeypatch.setattr(notifier, 'play_blackbox_sound', lambda kind: played.append(kind) or False)
-    monkeypatch.setattr(module, 'is_creator', lambda: True)
+    monkeypatch.setattr(module.feature_access, 'blackbox_available', lambda: True)
 
     class Service:
         error = None
@@ -217,7 +217,7 @@ def test_save_results_toast_on_game_monitor_using_logical_coordinates(app, monke
     from mabinogi_addon.ui import blackbox_controller as module, notifier, dpi
     from mabinogi_addon.system import blackbox_events
     monkeypatch.setattr(notifier, 'play_blackbox_sound', lambda kind: False)
-    monkeypatch.setattr(module, 'is_creator', lambda: True)
+    monkeypatch.setattr(module.feature_access, 'blackbox_available', lambda: True)
     monkeypatch.setattr(blackbox_events, 'window_rect', lambda hwnd: (0, 0, 2000, 1000))
     logical = []
     monkeypatch.setattr(dpi, 'to_logical', lambda *a: logical.append(a) or (0, 0, 1000, 500))

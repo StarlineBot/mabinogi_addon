@@ -78,11 +78,15 @@ def test_revoked_or_invalid_access_blocks_new_work_but_keeps_accepted_save(acces
     assert session.enabled
 
 
-def test_actual_feature_access_excludes_normal_discord_user(monkeypatch):
-    monkeypatch.setattr(config, 'load_discord_user', lambda: {'id': '1234'})
+def test_actual_feature_access_allows_logged_in_user_and_denies_logged_out(monkeypatch):
+    # 0.16.0: 제작자가 아닌 디스코드 로그인 사용자도 녹화·저장 가능, 미로그인은 불가.
+    user = [{'id': '1234'}]
+    monkeypatch.setattr(config, 'load_discord_user', lambda: user[0])
     replay = ReplayBuffer('run1', max_bytes=10, max_segments=1, max_saves=1)
     session = BlackboxSession(replay, enabled=True, persist_enabled=lambda value: None)
     session.update_context(CaptureContext('run1', foreground=True, ready=True))
+    session.capture_permit()
+    user[0] = None
     with pytest.raises(PermissionError):
         session.capture_permit()
     with pytest.raises(PermissionError):

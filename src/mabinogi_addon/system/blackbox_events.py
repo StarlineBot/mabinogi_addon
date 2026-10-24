@@ -47,6 +47,11 @@ class WindowsEvents:
             self.observer.discard()
         return False
 
+    def set_hotkey(self, modifiers, vk):
+        if type(modifiers) is not int or modifiers & ~0xF or type(vk) is not int or not 1 <= vk <= 254:
+            raise ValueError('explicit valid hotkey required')
+        self.observer.set_chord(modifiers, vk)
+
     def consume_hotkey(self):
         event = self.observer.consume()
         return None if self.locked or self.suspended else event

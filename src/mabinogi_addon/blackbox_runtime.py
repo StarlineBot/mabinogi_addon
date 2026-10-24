@@ -9,12 +9,12 @@ import time
 
 from .blackbox_export import ExportJob
 from .blackbox_queue import ExportQueue
-from .feature_access import is_creator
+from .feature_access import blackbox_available
 
 
 class BlackboxRuntime:
     def __init__(self, session, budget, *, max_output_bytes: int, encode, validate,
-                 retire, creator_check=is_creator, queue=None):
+                 retire, creator_check=blackbox_available, queue=None):
         if type(max_output_bytes) is not int or max_output_bytes <= 0:
             raise ValueError('explicit positive output limit required')
         self.session = session

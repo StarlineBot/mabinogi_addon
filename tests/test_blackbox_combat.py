@@ -48,7 +48,7 @@ def test_record_mode_is_saved_and_restored(tmp_path):
 def _controller(monkeypatch, mode, boss):
     from mabinogi_addon.ui import blackbox_controller as module
     from mabinogi_addon.blackbox_combat import CombatGate
-    monkeypatch.setattr(module, 'is_creator', lambda: True)
+    monkeypatch.setattr(module.feature_access, 'blackbox_available', lambda: True)
     c = module.BlackboxController.__new__(module.BlackboxController)
     c.window, c.panel, c._mode, c._gate = NS(_closing=False, boss_tab=boss), None, mode, CombatGate()
     return c
@@ -75,14 +75,14 @@ def test_combat_badge_and_status_text():
     service = NS(enabled=True, status='paused')
     gate.update(0, False, True)
     assert combat_text(gate) == '전투 대기 · 보스 체력바가 보이면 녹화해요'
-    assert blackbox_badge(service, 0, gate) == ('블랙박스: 전투 대기', 'neutral')
+    assert blackbox_badge(service, 0, gate) == ('● 블랙박스: 전투 대기', 'muted')
     gate.update(1, True, True)
     assert combat_text(gate) == '보관 중 · 전투'
-    assert blackbox_badge(NS(enabled=True, status='recording'), 184_000_000, gate)[0] == '블랙박스: 보관 중 · 전투 3:04'
+    assert blackbox_badge(NS(enabled=True, status='recording'), 184_000_000, gate)== ('● 블랙박스: 보관 중 · 전투 3:04', 'ok')
     gate.update(2, False, True)
     assert combat_text(gate) == '보관 중 · 전투 종료 대기 59초'
-    assert blackbox_badge(service, 0, gate)[0] == '블랙박스: 전투 종료 대기 59초'
-    assert blackbox_badge(NS(enabled=True, status='recording'), 60_000_000)[0] == '블랙박스: 보관 중 1:00'  # 평소 녹화 불변
+    assert blackbox_badge(service, 0, gate)== ('● 블랙박스: 전투 종료 대기 59초', 'muted')
+    assert blackbox_badge(NS(enabled=True, status='recording'), 60_000_000)== ('● 블랙박스: 보관 중 1:00', 'ok')  # 평소 녹화 불변
 
 
 def test_save_progress_reads_ffmpeg_report_and_formats_text(tmp_path, monkeypatch):
@@ -122,7 +122,9 @@ def test_saved_result_is_handled_once_without_hotkey_note(monkeypatch):
     for _ in range(5):
         c._tick()
     assert toasts == ['저장 완료 · 1분 49초'] and c.service.completed == []
-    assert c.panel.save_result.value.startswith('저장 완료: ') and c.panel.save_result.value.endswith('0:45 걸림')
+    # 0.16.0: '최근 저장: HH:MM · 1분 49초 영상 · 파일이름.mp4'(다음 저장까지 유지)
+    import re
+    assert re.fullmatch(r'최근 저장: \d\d:\d\d · 1분 49초 영상 · clip\.mp4', c.panel.recent.value), c.panel.recent.value
 
 
 def test_game_screen_progress_toast_stays_until_finished_then_hides(monkeypatch):
@@ -133,7 +135,7 @@ def test_game_screen_progress_toast_stays_until_finished_then_hides(monkeypatch)
     import time
     c = module.BlackboxController.__new__(module.BlackboxController)
     c.window, c._last_target = NS(_closing=False), None
-    monkeypatch.setattr(module, 'is_creator', lambda: True)
+    monkeypatch.setattr(module.feature_access, 'blackbox_available', lambda: True)
     c._toast = BlackboxToast()
     snap = {'value': None}
     c.service = NS(codec=NS(progress_snapshot=lambda: snap['value']))
