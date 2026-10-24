@@ -238,6 +238,12 @@
   - 수정 방향(0.15.1): `-sc_threshold 0`은 libx264일 때만. 번들 기준 회귀: 번들 준비(packaging/blackbox_bundle.py) 때 빌드된 ffmpeg로
     상주 인코더 명령을 빈 입력으로 실행해 'Unrecognized option'/'Option not found'가 없는지 확인(빌드 검사 경로 변경이라 사용자 승인 필요).
     Improvement: 녹화 오류 상태에서 저장 실패 사유를 '영상이 너무 짧아요' 대신 '녹화 오류로 저장할 영상이 없어요'로.
+  - **독립 QA(e374e13·3baf6e6): 통과, 0.15.1 배포 가능.** `-sc_threshold`는 libx264일 때만. 후보별 상주 명령의 새 옵션(-g·-keyint_min·-force_key_frames·
+    -flush_packets·NVENC -forced-idr)을 FFmpeg n8.1.3 소스(libavcodec/libavformat options_table.h, fftools/ffmpeg_opt.c, nvenc_h264.c)에서 확인, sc_threshold는 공통·NVENC에 없음.
+    빌드 검사 `stream_option_failures`는 build_windows.py → blackbox_bundle.prepare에서 매 Windows 빌드마다 실행. 실제 ffmpeg 6.1로 검증:
+    모르는 옵션 주입 시 세 후보 모두 'Option not found'로 잡힘(0.2초, 빈 입력에서 멈추지 않음). 리눅스 ffmpeg엔 h264_mf가 없어 -hw_encoding이 걸리는 것도 같은 원리로 확인.
+    변경 검사 0.15.1 540 passed, test_blackbox_bundle 25 passed, qa_0150 PASS, qa_0141 두 개·qa_0140 종료 0. 녹화 오류 시 저장 실패 문구 분리 확인.
+    한계: 번들(Windows 최소 빌드) 실제 실행은 이 환경에서 불가 — 배포 Actions의 번들 준비 단계가 그 검사.
 
 ### 0.14.0 '뒤에 있을 때 녹화 되돌림' 보류 — 뒤에서도 녹화하는 버전으로 먼저 배포 테스트 (사용자 요청)
 
