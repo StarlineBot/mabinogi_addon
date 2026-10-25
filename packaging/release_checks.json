@@ -37,6 +37,7 @@
     "tests/test_process_threads.py",
     "tests/test_blackbox_cpu.py",
     "tests/test_access_cache.py",
-    "tests/test_optimization_auto.py"
+    "tests/test_optimization_auto.py",
+    "tests/test_blackbox_resume.py"
   ]
 }

@@ -108,7 +108,17 @@ struct Capture {
     ~Capture() {
         if (active_capture == this) active_capture = nullptr;
         if (hook) UnhookWinEvent(hook);
-        try { if (session) session.Close(); if (pool) pool.Close(); } catch (...) {}
+        // 0.18.0: 게임 재실행(대상 프로세스 종료) 뒤 닫기가 돌아오지 않은 것으로 보인다(2026-10-25 app.log, NV12 경로).
+        // 캡처 세션을 닫기 전에 우리 쪽 GPU 작업·비디오 프로세서·스테이징 참조를 먼저 비워, 세션/프레임 풀 닫기가
+        // 우리가 쥔 표면·대기 중 명령을 기다리지 않게 한다. 실패해도 닫기는 계속한다.
+        try {
+            if (context) { context->ClearState(); context->Flush(); }
+            scaler = Scaler{};
+            copy_staging = nullptr;
+        } catch (...) {}
+        try { if (session) session.Close(); } catch (...) {}
+        try { if (pool) pool.Close(); } catch (...) {}
+        session = nullptr; pool = nullptr; frame_device = nullptr;
         if (process) CloseHandle(process);
     }
     bool valid() {

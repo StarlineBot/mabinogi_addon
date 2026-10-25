@@ -91,10 +91,37 @@ class ServiceSettings:
         return cls(**p)
 
 
+# 2026-10-25 사용자 app.log(0.17.2): 게임 재실행(PID 교체)으로 캡처가 끊긴 뒤 생산자가 '멈춤'이 되지 않아 약 2시간 반 동안
+# 녹화가 재개되지 않았고, 화면은 계속 '보관 중 5:00'이었다(멈춘 위치는 로그로 확정 못 함). 원인과 무관하게 스스로 회복한다.
+STOP_GRACE_S = 15.0  # 멈춤 요청 뒤 이만큼 안 멈추면 그 생산자를 버리고(스레드 스택을 로그에) 새로 시작
+CLOSE_GRACE_S = 5.0  # 앱 종료·업데이트 중에는 더 짧게(화면의 종료 재시도 상한 15초 안에 끝나게). 남은 스레드는 종료 시 os._exit로 끝남
+STALL_STATUS_S = 10.0  # 녹화 중 새 구간이 이만큼 없으면 '보관 중'으로 두지 않는다(정상은 0.25초마다 구간)
+STALL_RESTART_S = 60.0  # 새 구간이 이만큼 없으면 생산자를 다시 시작한다
+
+
+def thread_report(producer):
+    """생산자 스레드 중 살아 있는 것과 그 스택(마지막 몇 줄). 멈춘 위치를 다음 로그에서 확정하기 위한 진단."""
+    import sys
+    import traceback
+    frames, lines = sys._current_frames(), []
+    for name in ('_capture', '_encoder'):
+        thread = getattr(producer, name, None)
+        if thread is None or not thread.is_alive():
+            continue
+        stack = traceback.format_stack(frames.get(thread.ident)) if thread.ident in frames else []
+        lines.append(f'{thread.name} 실행 중: ' + ' | '.join(line.strip().replace('\n', ' ') for line in stack[-6:]))
+    return ' / '.join(lines) or '생산자 스레드 없음'
+
+
 class BlackboxService:
     def __init__(self, settings: ServiceSettings, *, enabled, persist_enabled,
-                 allowed=blackbox_available, producer_factory=CaptureProducer, native_factory=NativeCapture):
+                 allowed=blackbox_available, producer_factory=CaptureProducer, native_factory=NativeCapture,
+                 clock=time.monotonic):
         self.settings, self.enabled, self.persist = settings, enabled, persist_enabled
+        self._clock = clock
+        self._stop_requested_at = None  # 지금 생산자에 멈춤을 처음 요청한 시각
+        self._last_segment_at = None  # 지금 생산자가 마지막으로 구간을 낸 시각(시작 시각으로 초기화)
+        self.abandoned = 0  # 멈추지 않아 버린 생산자 수(진단)
         self.allowed = allowed
         self.budget = DiskBudget(max_bytes=settings.max_bytes, min_free_bytes=settings.min_free_bytes,
                                  max_entries=settings.max_entries)
@@ -121,6 +148,14 @@ class BlackboxService:
         self._retention = DEFAULT_RETENTION_US
         self._producer_target = None
         self._failed_target = None
+
+    def _stop_producer(self, now, reason):
+        if self.producer is None:
+            return
+        if self._stop_requested_at is None:
+            self._stop_requested_at = now
+            _log.info('블랙박스 녹화 멈춤 요청: %s', reason)
+        self.producer.request_stop()
 
     def _allowed(self):
         try:
@@ -163,15 +198,17 @@ class BlackboxService:
     def tick(self, target, *, active: bool):
         """状態 events와 worker 결과를 직렬화. 캡처 API/인코더 대기를 UI에서 하지 않는다."""
         should_run = self.enabled and self._allowed() and not self._closing and target is not None and active
+        now = self._clock()
         if self.producer is not None:
             if not should_run or target != self._producer_target:
-                self.producer.request_stop()
+                self._stop_producer(now, '게임 대상 변경' if should_run else '녹화 조건 해제')
             while True:
                 try:
                     kind, item = self.producer.results.get_nowait()
                 except Empty:
                     break
                 if kind == 'segment':
+                    self._last_segment_at = now
                     try:
                         retired = self.current.session.append(self._permit, item)
                         self.current._retire_segments(retired)
@@ -201,8 +238,24 @@ class BlackboxService:
                 self.producer = None
                 for token in tuple(self._pending):
                     self._finish_pending(token)
+            elif self._stop_requested_at is not None and now - self._stop_requested_at >= (
+                    CLOSE_GRACE_S if self._closing else STOP_GRACE_S):
+                # 멈추지 않는 생산자: 버리고(데몬 아님 — 스레드는 남지만 캡처·인코더 핸들은 그 스레드 몫) 새 생산자로 이어 간다.
+                self.abandoned += 1
+                _log.warning('블랙박스 녹화가 %.0f초 동안 멈추지 않아 새로 시작해요(누적 %d회) · %s',
+                             now - self._stop_requested_at, self.abandoned, thread_report(self.producer))
+                self.producer = None
+                self._failed_target = None
+                for token in tuple(self._pending):
+                    self._finish_pending(token)
             else:
-                self.status = ('recording' if self.current.session.state.value == 'recording' else 'preparing') if should_run else 'pausing'
+                quiet = now - self._last_segment_at if self._last_segment_at is not None else 0.0
+                if should_run and self._stop_requested_at is None and quiet >= STALL_RESTART_S:
+                    _log.warning('블랙박스 새 영상이 %.0f초 동안 없어 녹화를 다시 시작해요 · %s', quiet, thread_report(self.producer))
+                    self._stop_producer(now, '새 영상 없음')
+                recording = self.current.session.state.value == 'recording'
+                self.status = (('stalled' if quiet >= STALL_STATUS_S else 'recording') if recording else 'preparing') \
+                    if should_run else 'pausing'
         if self.producer is None:
             if self.current is not None:
                 self.current.session.update_context(CaptureContext())
@@ -226,6 +279,7 @@ class BlackboxService:
                 producer = self._producer_factory(target, native, self.codec, self.spool,
                                                    self.settings.producer, allowed=self._allowed)
                 self.producer, self._producer_target = producer, target
+                self._stop_requested_at, self._last_segment_at = None, now
                 producer.start()
                 self.status = 'preparing'
             else:
@@ -331,7 +385,7 @@ class BlackboxService:
     def prepare_close(self):
         self._closing = True
         if self.producer:
-            self.producer.request_stop()
+            self._stop_producer(self._clock(), '앱 종료·업데이트')
             return False  # tick이 유효한 기존 segment/flush 결과를 먼저 인수
         if self._closed:
             return True

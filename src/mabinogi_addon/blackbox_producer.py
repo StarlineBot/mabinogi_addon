@@ -98,8 +98,10 @@ class CaptureProducer:
         self._flush_lock = Lock()
         self._error = None
         self.transition = False
-        self._capture = Thread(target=self._capture_loop, name='blackbox-window')
-        self._encoder = Thread(target=self._encode_loop, name='blackbox-segments')
+        # 데몬 스레드(0.18.0): 네이티브 캡처 닫기가 돌아오지 않아 버린 생산자(서비스 감시)가 앱 종료·업데이트 뒤
+        # 인터프리터 종료를 막지 않게 한다(QApplication.quit 경로는 일반 스레드를 기다림). 정상 종료는 서비스가 멈춤을 기다린다.
+        self._capture = Thread(target=self._capture_loop, name='blackbox-window', daemon=True)
+        self._encoder = Thread(target=self._encode_loop, name='blackbox-segments', daemon=True)
 
     def start(self):
         self._encoder.start()
@@ -245,10 +247,15 @@ class CaptureProducer:
             self._error = f'{type(exc).__name__}: {exc}'
             self._log_error('캡처')
         finally:
+            # 2026-10-25: 게임 재실행 뒤 여기(bb_close)가 돌아오지 않아 생산자가 멈춤 상태가 안 된 것으로 보인다(Highly Likely).
+            # '닫기 시작'만 있고 '닫기 끝'이 없으면 네이티브 닫기 멈춤이 확정된다.
+            started = time.perf_counter()
+            _log.info('블랙박스 캡처 닫기 시작 · %s', self._error or '정상 멈춤')
             try:
                 self.native.close()
             except Exception as exc:
                 self._error = f'native close failed: {exc}'
+            _log.info('블랙박스 캡처 닫기 끝 %.0fms', (time.perf_counter() - started) * 1000)
             if self.audio is not None:
                 self.audio.close()
             self._captured.set()

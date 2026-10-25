@@ -11,7 +11,8 @@ from .blackbox_tab import BlackboxTab
 from ..blackbox_shortcut import hotkey_text, key_name  # noqa: F401 — 기존 가져오기 경로 유지
 _log = __import__('logging').getLogger(__name__)
 _STATES = {'recording': '보관 중', 'preparing': '녹화 준비 중', 'paused': '일시정지',
-           'pausing': '중단 구간 정리 중', 'disabled': '사용 안 함', 'error': '녹화 오류'}
+           'pausing': '중단 구간 정리 중', 'disabled': '사용 안 함', 'error': '녹화 오류',
+           'stalled': '녹화 멈춤 · 새 영상이 들어오지 않아요'}  # 0.18.0: 새 구간이 없으면 '보관 중'으로 두지 않음
 
 
 def save_failure_reason(exc) -> str:
@@ -89,6 +90,8 @@ def blackbox_badge(service, available_us=0, combat=None):
             return f'● 블랙박스: 보관 중 · 전투 {clock}', 'ok'
     if service.status == 'recording':
         return f'● 블랙박스: 보관 중 {clock}', 'ok'
+    if service.status == 'stalled':
+        return '● 블랙박스: 녹화 멈춤', 'muted'  # 새 영상이 안 들어옴(스스로 다시 시작해요)
     return '● 블랙박스: ' + _STATES.get(service.status, '게임 대기'), 'muted'
 
 
@@ -319,6 +322,8 @@ class BlackboxController(QObject):
             except Exception as exc:
                 self._set_recent('저장 안 함 · ' + save_failure_reason(exc))
                 self.close_error = str(exc)
+                _log.warning('블랙박스 저장 요청 실패(버튼): %s: %s · 상태 %s', type(exc).__name__, exc,
+                             getattr(self.service, 'status', None))
                 self._react('저장 실패 · ' + save_failure_reason(exc), 'failed', self._last_target)
                 return
             self._set_recent('저장 요청을 접수했어요')
@@ -367,6 +372,10 @@ class BlackboxController(QObject):
         try:
             self.service.request_save(shortcut[0])
         except Exception as exc:
+            # 2026-10-25: 저장 실패 원인이 화면(close_error)에만 있고 app.log에 없어 사후 판정을 못 했다
+            self.close_error = str(exc)
+            _log.warning('블랙박스 저장 요청 실패(단축키): %s: %s · 상태 %s', type(exc).__name__, exc,
+                         getattr(self.service, 'status', None))
             self._set_recent('저장 안 함 · ' + save_failure_reason(exc))
             self._react('저장 실패 · ' + save_failure_reason(exc), 'failed', target)
             return
