@@ -156,6 +156,14 @@
 
 ## 마지막 작업
 
+### CI 테스트 도구: xdist 주 프로세스 스택 덤프 타이머 제거(사용자 승인 2026-10-25) — 수정 완료, 배포 실행 확인 대기
+
+- `test_support/progress.py`: `xdist_controller(config)`(workerinput 없음 + `-n` 사용)이면 `Journal.arm()`이 faulthandler 반복 덤프를 걸지 않음.
+  워커·`-n` 없는 단일 프로세스는 지금처럼 테스트마다 다시 건다. 주 프로세스 journal·watchdog 표시는 유지. 워크플로 파일 변경 없음.
+- 회귀 4건(`test_regression_watchdog.py`: controller 안 걸림 / 단일 프로세스·워커·옵션 없음 걸림, journal 기록 유지).
+  `run_release_checks --version 0.18.0`(진단 journal + `-n 2` 경로) 646 passed. `qa_ci_faulthandler_segv.py`는 위험 패턴 자체의 재현이라 수정 뒤에도 139(제품·도구 코드 아님).
+- 남은 위험(참고): 워커도 한 테스트가 30초를 넘기면 반복 덤프가 돈다(멈춘 테스트 진단용, 이번 범위 밖).
+
 ### CI 배포 검사 SIGSEGV 원인 (2026-10-25, 0.18.0 배포 실행 [40169040208](https://github.com/StarlineBot/mabinogi_addon/actions/runs/40169040208) 실패 — 게시 안 됨)
 
 - #127에 이어 두 번째 종료 코드 245(pytest 주 프로세스 SIGSEGV), 테스트 실패(F)는 없음. 두 번 모두 "bringing up nodes" 뒤 **약 30.5초**에 주 프로세스가 죽음.

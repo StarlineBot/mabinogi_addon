@@ -18,6 +18,14 @@ _SLEEP=time.sleep
 _WRITE=os.write
 
 
+def xdist_controller(config):
+    """xdist 주 프로세스(controller): 테스트를 직접 돌리지 않고 워커만 관리한다(workerinput 없음 + -n 사용).
+    -n 없이(또는 -n 0) 돌면 주 프로세스가 테스트를 돌리므로 controller가 아니다."""
+    if hasattr(config,'workerinput'): return False
+    option=getattr(config,'option',None)
+    return getattr(option,'dist','no') not in ('no',None) or bool(getattr(option,'numprocesses',None))
+
+
 class Journal:
     def __init__(self, config):
         self.root=Path(os.environ['MABINOGI_TEST_DIAGNOSTICS'])
@@ -30,6 +38,10 @@ class Journal:
         self.record=dict(worker=worker,pid=os.getpid(),node='',case_hash='',phase='configure',status='idle',
                          started=_CLOCK())
         self.interval=float(os.environ.get('MABINOGI_TEST_STACK_SECONDS','30'))
+        # xdist 주 프로세스에는 스택 덤프 타이머를 걸지 않는다: 테스트를 돌리지 않아 다시 걸리지 않고(pytest_runtest_protocol 없음)
+        # 30초마다 반복 덤프가 워커 관리 스레드 생성·종료와 겹치면 SIGSEGV로 죽었다(배포 실행 #127·#132, 시작 약 30.5초 뒤 종료 코드 245).
+        # 워커는 테스트마다 다시 건다(멈춘 테스트 스택 보존). journal·watchdog 표시는 그대로 남긴다.
+        self.stack=not xdist_controller(config)
         def initialize():
             self.root.mkdir(parents=True,exist_ok=True)
             self.raw=_OPEN(self.root/(self.key+'.raw'),'w+b')
@@ -63,6 +75,7 @@ class Journal:
                 _SLEEP(min(.01*2**attempt,.16))
 
     def arm(self):
+        if not self.stack: return
         def reset():
             faulthandler.cancel_dump_traceback_later()
             self.raw.seek(0);self.raw.truncate()
