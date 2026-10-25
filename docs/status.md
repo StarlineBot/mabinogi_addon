@@ -262,6 +262,8 @@
   **0.20.0 게시 1차 차단(안전장치 정상 동작)**: 검증 [#140](https://github.com/StarlineBot/mabinogi_addon/actions/runs/40203059390)(b2eafd0) 성공 뒤 게시 #220이
   `validation inputs changed after validation`으로 실패 — 검증 시작(14:36Z) 뒤 ae25502가 `tests/data/스크린샷 2026-10-25 233749.png`를 추가(지문 대상 `tests/`).
   태그·게시 없음(version.json 0.19.0 유지). 새 main에서 배포 검사 698 passed(그 이미지를 읽는 테스트 없음) → 같은 0.20.0으로 validate-and-publish 재실행 필요.
+  **v0.20.0 게시 완료**: 재실행 [#141](https://github.com/StarlineBot/mabinogi_addon/actions/runs/40203957532)·게시 #221 성공, 태그 `v0.20.0` → 497d4e7(검증 SHA, candidate.json 일치).
+  공개 version.json 0.20.0·exe 162,903,903바이트·sha256 `d6b9f184…d8f8`이 후보·공개 URL 직접 다운로드와 일치. 실게임 확인 남음(위 '확인 남음').
 - **QA(fd56be6) 통과**: `run_release_checks --version 0.20.0` 691 passed, 전체 3139 passed(리눅스 tkinter 없는 splash 1개 제외). 명세 13.12~13.14와 코드 대조 일치.
   엔진 항목 결과(게임 프로세스만 cpu 결과·외부 변경 released·자동 적용 게임 종료 restored→다음 게임 재적용)·요약 문구 확인.
   Confirmed(재현, 배포 비차단): 시작이 막힐 때 안내가 접힌 `자세히 보기`에만 들어가 화면에는 `시작 전 · 시스템 설정을 변경하지 않았어요.` 그대로 —
