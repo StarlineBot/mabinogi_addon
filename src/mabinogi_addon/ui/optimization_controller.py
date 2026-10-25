@@ -56,6 +56,14 @@ def optimization_badge(recovery, engine, split=None, *, restore_wait=False, kept
     return None
 
 
+def object_particle(word: str) -> str:
+    """목적격 조사: 마지막 글자에 받침이 있으면 '을', 없으면 '를'(한글이 아니면 '을(를)')."""
+    last = word.rstrip()[-1:] if word.strip() else ''
+    if not last or not '가' <= last <= '힣':
+        return '을(를)'
+    return '을' if (ord(last) - 0xAC00) % 28 else '를'
+
+
 class OptimizationController(QObject):
     def __init__(self, window):
         super().__init__(window)
@@ -931,7 +939,8 @@ class OptimizationController(QObject):
             self.engine.inspection = None
             self._apply_inspection(topology, adapters)
             failed = getattr(self.engine, 'inspection_failed', [])
-            self._inspect_notice = (f"{'·'.join(failed)}을 읽지 못했어요 · 자세히 보기에서 이유를 확인하고 '다시 확인'을 눌러 주세요"
+            names = '·'.join(failed)
+            self._inspect_notice = (f"{names}{object_particle(names)} 읽지 못했어요 · 자세히 보기에서 이유를 확인하고 '다시 확인'을 눌러 주세요"
                                     if failed else None)
             self._notice = self._inspect_notice
             self._render_result(d)  # 같은 틱에 바로 보이게

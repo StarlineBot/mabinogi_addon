@@ -255,3 +255,17 @@ def test_app_log_gets_only_newly_added_session_lines(window, monkeypatch, caplog
     c._tick()
     messages = [r.getMessage() for r in caplog.records if r.getMessage().startswith('최적화 상태:')]
     assert messages == ['최적화 상태: 게임 우선순위: 높음 적용 · 확인 완료', '최적화 상태: 다른 도구가 CPU 배치를 바꿨어요']
+
+
+@pytest.mark.parametrize('failed, expected', [
+    (['CPU 구조'], 'CPU 구조를 읽지 못했어요'),
+    (['네트워크 연결'], '네트워크 연결을 읽지 못했어요'),
+    (['CPU 구조', '네트워크 연결'], 'CPU 구조·네트워크 연결을 읽지 못했어요'),
+])
+def test_inspection_failure_uses_correct_object_particle(window, monkeypatch, failed, expected):
+    # QA 후속: 'CPU 구조을'(조사 오류) → 마지막 항목 받침에 따라 을/를
+    w, c = _controller(window, monkeypatch)
+    c.engine.inspection, c.engine.inspection_failed = (X9800, []), failed
+    c._tick()
+    assert c.panel.status.text().startswith(expected)
+    assert module.object_particle('Wi-Fi') == '을(를)'
