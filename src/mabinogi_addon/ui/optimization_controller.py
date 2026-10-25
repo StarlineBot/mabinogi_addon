@@ -436,6 +436,10 @@ class OptimizationController(QObject):
             # 게임 종료·Governor·중단·오류로 끝난 세션은 남은 변경이 없으면 꺼진다. 네트워크만 한 세션은 켜짐 유지.
             if engine.session_end != 'network_only':
                 self._kept_on = False
+            if engine.session_end == 'cancel' and self.panel.auto.isChecked():
+                # 0.18.0 QA: 자동 적용 중 토글로 끄면 체크는 켜진 채라도 다음 앱 시작(또는 체크 다시 켬)까지 기다리지 않는다
+                engine.status += '\n자동 적용을 멈췄어요 · 앱을 다시 켜거나 체크를 다시 켜면 게임을 기다려요.'
+
             engine.session_end = None
         on = self._optimization_on()
         toggle = self.panel.toggle

@@ -194,3 +194,59 @@ def test_fps_record_has_auto_apply_flag(window, monkeypatch):
     c._restoring_selection = True; c.panel.auto.setChecked(True); c._restoring_selection = False
     c._sync_summary_context(101.0)
     assert c.summary.context['optimization_auto_apply'] is True
+
+
+# ---- 0.18.0 QA ----
+
+def test_unchecking_auto_while_waiting_ends_session_and_later_game_is_untouched(setup):
+    # 재현 scripts/qa_0180_auto_uncheck_waiting.py: 게임 없는 대기 중 체크 해제 → 그 뒤 켠 게임에 적용되면 안 됨
+    r, b = setup
+    r.apply('ack', GUID, 1)  # 네트워크 기록은 그대로 남아야 한다
+    b.current[0] = None
+    e = Engine(b, r, lambda: True)
+    assert e.start(AUTO)
+    assert _wait(lambda: '게임 실행 대기' in e.status)
+    e.auto = False
+    e.thread.join(5)
+    assert not e.busy and e.session_end == 'auto_off' and '게임 대기를 멈췄어요' in e.status
+    b.current[0] = TARGET
+    assert not _wait(lambda: b.values[key(TARGET)] == HIGH, 1.5)
+    assert [i['kind'] for i in r.pending] == ['ack']
+
+
+def test_unchecking_auto_while_game_managed_ends_at_that_game_exit(setup):
+    r, b = setup
+    e = Engine(b, r, lambda: True)
+    assert e.start(AUTO)
+    assert _wait(lambda: b.values[key(TARGET)] == HIGH)
+    e.auto = False
+    assert not _wait(lambda: not e.busy, 2.5)  # 관리 중인 게임이 있으면 계속
+    assert b.values[key(TARGET)] == HIGH
+    b.current[0] = None
+    e.thread.join(6)
+    assert not e.busy and e.session_end == 'game_exit' and b.values[key(TARGET)] == NORMAL
+
+
+def test_manual_session_without_auto_still_waits_for_game(setup):
+    r, b = setup
+    b.current[0] = None
+    e = Engine(b, r, lambda: True)
+    assert e.start(dict(AUTO, auto=False))
+    assert not _wait(lambda: not e.busy, 1.5)
+    b.current[0] = TARGET
+    assert _wait(lambda: b.values[key(TARGET)] == HIGH, 4)
+    e.stop(); e.thread.join(5)
+
+
+def test_toggle_off_during_auto_says_waiting_stopped(window, monkeypatch):
+    w, c, started = _controller(window, monkeypatch)
+    c._restoring_selection = True; c.panel.auto.setChecked(True); c._restoring_selection = False
+    c.engine.session_end = 'cancel'
+    c.engine.status = '세션을 중단하고 CPU를 원복해요.'
+    c._sync_optimization_toggle()
+    assert '자동 적용을 멈췄어요 · 앱을 다시 켜거나 체크를 다시 켜면 게임을 기다려요.' in c.engine.status
+    c.engine.session_end = 'cancel'
+    c._restoring_selection = True; c.panel.auto.setChecked(False); c._restoring_selection = False
+    c.engine.status = '세션을 중단하고 CPU를 원복해요.'
+    c._sync_optimization_toggle()
+    assert '자동 적용을 멈췄어요' not in c.engine.status  # 체크가 꺼져 있으면 안내 없음

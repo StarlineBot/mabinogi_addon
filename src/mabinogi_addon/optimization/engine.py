@@ -200,6 +200,12 @@ class Engine:
             priority = dict(applied=set(), reapplied=[], stopped=set(), preset=set(), background=set())  # 게임 우선순위 상태(13.7)
             observed = game
             while not self.cancel.is_set() and self.allowed():
+                if options.get('auto') and not self.auto and observed is None:
+                    # 0.18.0 QA: 게임 없는 대기(또는 보류) 중 자동 적용 체크를 끔 → 관리 중인 게임이 없으니 세션을 끝낸다.
+                    # 네트워크 기록은 그대로(원복은 토글로). 관리 중인 게임이 있으면 그 게임이 끝날 때 끝난다(명세 13.10).
+                    self.status = '\n'.join(notices[-4:] + ['자동 적용을 껐어요 · 게임 대기를 멈췄어요.'])
+                    self.session_end = 'auto_off'
+                    return
                 if self.auto and (options['cpu'] or options.get('priority')) and self.backend.governor_running():
                     # 자동 적용 중 Governor 실행: 세션을 끝내지 않고 이 게임에 건 값을 정리한 뒤 보류(다투지 않음).
                     if not self.held:
@@ -207,6 +213,7 @@ class Engine:
                         seen.clear(); names.clear()
                         priority = dict(applied=set(), reapplied=[], stopped=set(), preset=set(), background=set())
                         results = []
+                        observed = None  # 보류 중에는 관리하는 게임 없음(풀리면 다시 찾음)
                         self.held = True
                     self.status = 'Process Lasso Governor 실행 중 · 자동 적용을 보류했어요(Governor를 끄면 다시 적용해요).'
                     self.cancel.wait(2)
