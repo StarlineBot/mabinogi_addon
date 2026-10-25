@@ -382,3 +382,40 @@ def test_apt_priority_and_required_packages_preserved(tmp_path):
     assert 'install --no-install-recommends -y libegl1 libopengl0 libxkbcommon0 libdbus-1-3 libpulse0 fonts-noto-cjk ffmpeg' in calls[1]
     assert all('Acquire::Retries=1' in call and 'APT::Update::Error-Mode=any' in call for call in calls)
     assert 'allow-unauthenticated' not in command and 'trusted=yes' not in command
+
+
+def test_smoke_crash_dumps_are_armed_reported_and_stored_without_weakening_smoke():
+    # 2026-10-25 사용자 승인: 시작 스모크 종료 중 access violation(#133~#135) 원인 확인용 WER 덤프
+    job = workflow("windows.yml")["jobs"]["validate"]
+    steps = job["steps"]
+    names = [step.get("name") for step in steps]
+    arm = next(s for s in steps if s.get("name") == "Arm crash dumps")
+    report = next(s for s in steps if s.get("name") == "Report crash dumps")
+    store = next(s for s in steps if s.get("name") == "Store crash dumps")
+    smoke = next(s for s in steps if s.get("id") == "smoke")
+    assert names.index("Arm crash dumps") == names.index("Windows startup smoke") - 1
+    assert "scripts.ci_crash_dumps arm crash-dumps" in arm["run"] and "if" not in arm
+    assert names.index("Windows startup smoke") < names.index("Report crash dumps") < names.index("Store crash dumps")
+    for step in (report, store):
+        assert step["if"] == "failure() && steps.smoke.outcome == 'failure'"
+        assert "continue-on-error" not in step
+    assert "scripts.ci_crash_dumps report crash-dumps" in report["run"]
+    assert "crash-dumps/*.dmp" in store["with"]["path"] and store["with"]["retention-days"] == "1"
+    assert "github.run_id" in store["with"]["name"] and "github.run_attempt" in store["with"]["name"]
+    assert "if" not in smoke and "continue-on-error" not in smoke  # 스모크 실패는 그대로 잡 실패
+
+
+def test_crash_dump_summary_extracts_native_frames():
+    import importlib
+    dumps = importlib.import_module("scripts.ci_crash_dumps")
+    sample = """ # Child-SP          RetAddr               Call Site
+00 000000e1`2f7fe3a0 00007ffb`1a2b3c4d     Qt6Widgets!QWidget::~QWidget+0x5a
+01 000000e1`2f7fe3f0 00007ffb`1a2b3c4d     QtWidgets_pyd!PySide::destroyQObject+0x20
+02 000000e1`2f7fe450 00007ffb`5a6b7c8d     python312!PyObject_Call+0x10
+03 000000e1`2f7fe4a0 00007ffb`5a6b7c8d     Qt6Core!QObject::~QObject+0x1f0
+"""
+    lines = dumps.summarize(sample)
+    assert lines[:4] == ["Qt6Widgets!QWidget::~QWidget+0x5a", "QtWidgets_pyd!PySide::destroyQObject+0x20",
+                         "python312!PyObject_Call+0x10", "Qt6Core!QObject::~QObject+0x1f0"]
+    assert "Qt6Core!QObject::~QObject+0x1f0" in lines[lines.index("— Qt·PySide·python 프레임 —"):]
+    assert dumps.main(["bogus"]) == 2

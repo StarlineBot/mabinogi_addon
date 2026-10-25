@@ -213,6 +213,15 @@
 
 ## 마지막 작업
 
+### CI 시작 스모크 access violation 크래시 덤프 수집(사용자 승인 2026-10-25) — 워크플로 반영, 다음 Windows 실행 대기
+
+- validate 잡: 스모크 직전 `Arm crash dumps`(`scripts/ci_crash_dumps.py arm` — WER LocalDumps python.exe·전체 덤프·5개, 환경 버전 출력),
+  스모크 실패 때만 `Report crash dumps`(cdb `.ecxr; kn; ~*kn; !analyze -v; lmv m Qt6*` → 모듈!함수 요약을 로그에, 원문 `.cdb.txt`)·`Store crash dumps`
+  (`crash-dumps-smoke-<run>-<attempt>`, 1일). 스모크 단계·실패 판정은 그대로(skip·약화 없음). 회귀 2건(`test_windows_ci.py`).
+- 환경 비교(#131 통과 vs #135 실패, 잡 로그): 러너 이미지 win22/20261022.344·runner 2.338.0·uv 0.13.5·Python 3.12.15·PySide6/shiboken6 6.11.2 **모두 동일**.
+  → 환경 변경 아님, d6a9c8f..main 코드 차이 쪽. 스모크 경로에서 실행되는 변경은 debuff `_IDENTITY_PEERS`(참조 아이콘 추가 적재)·릴리즈 노트 문구·
+  블랙박스 컨트롤러 문구 정도(progress.py는 비 xdist라 동작 동일 — 로컬 확인). 덤프로 네이티브 위치 확인 뒤 수정.
+
 ### CI 테스트 도구: xdist 주 프로세스 스택 덤프 타이머 제거(사용자 승인 2026-10-25) — 수정 완료, 배포 실행 확인 대기
 
 - `test_support/progress.py`: `xdist_controller(config)`(workerinput 없음 + `-n` 사용)이면 `Journal.arm()`이 faulthandler 반복 덤프를 걸지 않음.
