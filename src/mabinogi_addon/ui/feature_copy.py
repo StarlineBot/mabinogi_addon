@@ -224,5 +224,6 @@ def resource_help(show_percent=False):
 
 # 설정 안내 그림(2026-10-25 사용자 결정): 각 탭 도움말 맨 위에 그 탭 영역만 표시한 연습 모드 화면(누르면 크게).
 from .guide_figure import figure_html as _figure  # noqa: E402
-for _title, _name in (('버프 트래커', 'buff'), ('디버프 트래커', 'debuff'), ('보스 패턴 알림', 'boss'), ('체력바', 'stat_bars')):
+for _title, _name in (('버프 트래커', 'buff'), ('디버프 트래커', 'debuff'), ('보스 패턴 알림', 'boss'), ('체력바', 'stat_bars'),
+                      ('도르카·투아림', 'dorcha_tuarim')):
     HELP[_title] = _figure(_name) + HELP[_title]

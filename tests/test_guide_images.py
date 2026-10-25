@@ -1,4 +1,4 @@
-"""설정 안내 그림(2026-10-25 사용자 결정): 다섯 곳 표시·탭별 그림·도움말 연동·첫 사용 안내."""
+"""설정 안내 그림(2026-10-25 사용자 결정): 여섯 곳 표시·탭별 그림·도움말 연동·첫 사용 안내."""
 import numpy as np
 import pytest
 from PySide6.QtCore import QUrl
@@ -20,9 +20,11 @@ def _source():
     return image_io.imread(Path(__file__).parent / 'data' / '스크린샷 2026-10-25 233749.png')
 
 
-def test_areas_are_the_five_user_chosen_regions_inside_the_screenshot():
-    assert [AREAS[k][1] for k in IMAGES['all']] == ['버프 목록', '전투 제한 시간', '디버프', '보스 체력바', '하단 체력바']
-    assert sorted(a[0] for a in AREAS.values()) == [1, 2, 3, 4, 5]
+def test_areas_are_the_six_user_chosen_regions_inside_the_screenshot():
+    # 0.21.0 다섯 곳 + 후속 ⑥ 도르카·투아림(전투 제한 시간 위 게이지와 100%)
+    assert [AREAS[k][1] for k in IMAGES['all']] == ['버프 목록', '전투 제한 시간', '디버프', '보스 체력바', '하단 체력바', '도르카·투아림']
+    assert sorted(a[0] for a in AREAS.values()) == [1, 2, 3, 4, 5, 6]
+    assert IMAGES['dorcha_tuarim'] == ('dorcha_tuarim',)
     for _n, _label, (x, y, w, h) in AREAS.values():
         assert 0 <= x and 0 <= y and x + w <= SOURCE_SIZE[0] and y + h <= SOURCE_SIZE[1]
     assert IMAGES['boss'] == ('boss', 'halo_timer')  # 보스 패턴 알림 = 보스 체력바 + 전투 제한 시간
@@ -58,7 +60,8 @@ def test_bundled_images_exist_and_load(name):
 
 
 @pytest.mark.parametrize('title, name', [('버프 트래커', 'buff'), ('디버프 트래커', 'debuff'),
-                                         ('보스 패턴 알림', 'boss'), ('체력바', 'stat_bars')])
+                                         ('보스 패턴 알림', 'boss'), ('체력바', 'stat_bars'),
+                                         ('도르카·투아림', 'dorcha_tuarim')])
 def test_each_tab_help_starts_with_its_own_figure(qapp, title, name, monkeypatch):
     from mabinogi_addon.ui import guide_figure
     from mabinogi_addon.ui.feature_copy import HELP
@@ -91,3 +94,10 @@ def test_setup_guide_shows_full_figure_in_feature_stages(qapp, monkeypatch):
     monkeypatch.setattr(guide_figure.ZoomDialog, 'exec', lambda self: opened.append(self) or 0)
     page.figure.clicked.emit()
     assert opened
+
+
+def test_resource_tab_help_starts_with_dorcha_tuarim_figure():
+    from mabinogi_addon.ui.feature_copy import resource_help
+    for percent in (False, True):
+        assert resource_help(percent).startswith('<p><a href="zoom:dorcha_tuarim"><img src="guide/dorcha_tuarim.jpg"')
+    assert guide_images.caption('all').endswith('⑥ 도르카·투아림')

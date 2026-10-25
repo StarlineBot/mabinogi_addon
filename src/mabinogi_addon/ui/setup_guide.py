@@ -60,7 +60,7 @@ class SetupGuide(QWidget):
         layout.addWidget(self.title)
         self.description = _label("")
         layout.addWidget(self.description)
-        # 설정 안내 그림(2026-10-25 사용자 결정): 다섯 곳 전체 + 연습 모드 안내. 누르면 큰 창.
+        # 설정 안내 그림(2026-10-25 사용자 결정): 여섯 곳 전체 + 연습 모드 안내. 누르면 큰 창.
         self.figure = ClickableFigure('all')
         layout.addWidget(self.figure)
         self.figure_caption = _label(GUIDE_FIGURE_TEXT + '\n' + guide_images.caption('all'))

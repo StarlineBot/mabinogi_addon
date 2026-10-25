@@ -1,8 +1,8 @@
 """설정 안내 그림(2026-10-25 사용자 결정): 연습 모드 화면에 설정할 영역을 점선으로 표시한 예시.
 
-원본: tests/data/스크린샷 2026-10-25 233749.png(2560×1440, 레넨의 미미르 100%). 사용자가 정한 다섯 곳만 표시한다
+원본: tests/data/스크린샷 2026-10-25 233749.png(2560×1440, 레넨의 미미르 100%). 사용자가 정한 여섯 곳만 표시한다
 (왼쪽 위 아이콘 줄은 단축키, 오른쪽 아이콘 칸은 추가 단축바라 표시하지 않음). 각 탭 도움말에는 그 탭 영역만, 첫 사용 안내에는
-다섯 곳 전체. 영역 밖은 어둡게 하고 칸만 잘라 넣지 않는다. 그림은 미리 만들어 assets/guide에 넣는다(scripts/build_guide_images.py).
+여섯 곳 전체. 영역 밖은 어둡게 하고 칸만 잘라 넣지 않는다. 그림은 미리 만들어 assets/guide에 넣는다(scripts/build_guide_images.py).
 """
 from __future__ import annotations
 
@@ -17,6 +17,7 @@ AREAS = {
     'debuff': (3, '디버프', (1016, 1206, 522, 38)),  # 보스 체력바 바로 위
     'boss': (4, '보스 체력바', (1016, 1244, 522, 46)),
     'stat_bars': (5, '하단 체력바', (914, 1398, 140, 42)),
+    'dorcha_tuarim': (6, '도르카·투아림', (1226, 36, 82, 64)),  # 전투 제한 시간 바로 위 게이지(숫자)와 옆 ▲ 100%를 함께(0.21.0 후속)
 }
 # 그림별 표시 영역(탭 도움말은 그 탭 영역만, 보스 패턴 알림은 같은 탭의 1분 헤일로용 전투 제한 시간 포함)
 IMAGES = {
@@ -24,7 +25,8 @@ IMAGES = {
     'debuff': ('debuff',),
     'boss': ('boss', 'halo_timer'),
     'stat_bars': ('stat_bars',),
-    'all': ('buff', 'halo_timer', 'debuff', 'boss', 'stat_bars'),
+    'dorcha_tuarim': ('dorcha_tuarim',),
+    'all': ('buff', 'halo_timer', 'debuff', 'boss', 'stat_bars', 'dorcha_tuarim'),
 }
 OUTPUT_WIDTH = 1200  # 큰 창 크기. 도움말 안에는 약 420px로 줄여 보인다
 OUTLINE = (148, 184, 0)  # BGR 민트(#00B894)
@@ -86,5 +88,5 @@ def caption(name: str) -> str:
     """그림 아래 글: 표시한 곳 이름(번호 그림은 번호와 함께)."""
     keys = IMAGES[name]
     if len(keys) > 2:
-        return ' · '.join(f"{'①②③④⑤'[AREAS[k][0] - 1]} {AREAS[k][1]}" for k in keys)
+        return ' · '.join(f"{'①②③④⑤⑥'[AREAS[k][0] - 1]} {AREAS[k][1]}" for k in keys)
     return ' · '.join(AREAS[k][1] for k in keys)
