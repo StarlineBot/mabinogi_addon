@@ -89,6 +89,10 @@
   QA 누락(리눅스 UTF-8 콘솔에서만 확인). 수정: 스크립트 시작에 `sys.stdout.reconfigure(encoding='utf-8', errors='replace')`(stderr 동일) 등,
   회귀로 cp1252 콘솔에서 arm/report 종료 0 확인.
   → 81b85e6 QA 통과: cp1252 콘솔에서 arm·report 종료 0, `test_windows_ci.py` 44 passed. 다음: verify-only로 덤프·스택 확보.
+  **verify-only #137(a0a1d3f) 성공**: 덤프 설정 정상, 스모크 2 passed, exe 빌드(162,879,202 bytes)·후보 저장 success. 이번엔 AV 미발생 →
+  덤프 없음, 원인 미확정(CI 3/4 재현, 간헐). 사용자 영향 판단(코드 Confirmed): 실제 앱 완전 종료는 closeEvent 안에서 `os._exit(0)`이라
+  창 네이티브 정리 단계가 실행되지 않음(테스트는 pytest 분기로 return 후 Qt가 계속 닫음 — AV 위치). 트레이 숨김은 사용자 일상 사용에서 문제 없음.
+  → 앱 영향 낮음(Highly Likely). 검증된 #137 후보를 publish-existing으로 게시 가능. 스모크 AV는 다음 재발 시 덤프로 확정(설정 유지).
 - 블랙박스 CPU 11.4 **합격 Confirmed**(0.17.1~0.17.2 실게임 10:31~12:51, 60초 요약 약 140개): 앱+인코더 합계 대부분 2.3~3.6%(0.17.2 분리: 앱 본체 1.3~2.6·인코더 0.3~0.5·
   FPS 수집기 0.6~0.8), 1분 일시값 최대 8.7%(10:32) 1회·4.8~5.0% 2회. 0.17.1 절의 8.7% 판정 보류는 일시값으로 정리.
 - 2026-10-24 결정: RSS를 최적화에서 제외(최적화 명세 13.8, 기존 기록 원복 경로만 유지). TCPNoDelay 마비노기 커뮤니티 조사: 원래 MSMQ 키 값이라 게임 무관,
