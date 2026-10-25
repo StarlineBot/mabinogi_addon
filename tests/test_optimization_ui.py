@@ -418,7 +418,8 @@ def test_saved_selection_is_restored_and_unusable_values_are_explained(window, m
     c._apply_inspection(topology, adapters)
     assert c.panel.split.currentData() == 'focus' and c.panel.split.currentIndex() == 0  # 9800X3D 추천
     assert c.panel.adapter.currentData() is None
-    assert '저장한 CPU 배치를 이 CPU에서 쓸 수 없어' in c.panel.cpu_info.text() and '저장한 네트워크 어댑터를 찾지 못해' in c.panel.cpu_info.text()
+    # 13.12(명세 변경): '어댑터' → '연결', 판단 가능한 기본 경로가 없으면 직접 고르라고 안내
+    assert '저장한 CPU 배치를 이 CPU에서 쓸 수 없어' in c.panel.cpu_info.text() and '저장한 네트워크 연결을 찾지 못했어요' in c.panel.cpu_info.text()
     # 사용자가 다시 고르면 저장된다(자동 적용은 하지 않음).
     c.panel.adapter.setCurrentIndex(1)
     assert config.load_optimization_selection()['adapter'] == 'AAAA-1'
@@ -625,7 +626,8 @@ def test_fps_display_setting_is_restored_after_restart_but_collection_is_not(win
 
 
 def test_single_optimization_toggle_follows_spec_13_5(window, monkeypatch):
-    # 13.5: 꺼짐 '최적화 시작' → 켜짐 '최적화 적용 중'. 바꾼 것이 없어도 켜짐, 되돌릴 게 없으면 바로 꺼짐+안내.
+    # 13.5: 꺼짐 → 켜짐 '최적화 적용 중'. 바꾼 것이 없어도 켜짐, 되돌릴 게 없으면 바로 꺼짐+안내.
+    # 13.14(명세 변경): 꺼짐 문구는 '추천 설정으로 최적화'(직접 고르면 '선택한 설정으로 최적화').
     w, app = window; c = w.optimization_tools
     monkeypatch.setattr(module, 'is_creator', lambda: True); c.refresh_access()
     toggle = c.panel.toggle
@@ -635,7 +637,7 @@ def test_single_optimization_toggle_follows_spec_13_5(window, monkeypatch):
     monkeypatch.setattr(c, '_start_optimization', start)
     monkeypatch.setattr(c, '_restore_all', lambda: restored.append(1))
     c._tick()
-    assert toggle.text() == '최적화 시작' and not toggle.isChecked()
+    assert toggle.text() == '추천 설정으로 최적화' and not toggle.isChecked()
     toggle.click()  # 네트워크만, 모든 항목이 이미 목표값 → 바꾼 기록 없음
     c._tick()
     assert started == [1] and toggle.isChecked() and toggle.text() == '최적화 적용 중'

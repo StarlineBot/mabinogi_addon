@@ -1299,7 +1299,7 @@ def load_optimization_selection(path: Path = LOCAL_CONFIG_PATH) -> dict:
     앱이 게임을 기다렸다가 프로세스 항목을 적용한다."""
     raw = _read_local_config(path).get("optimizationSelection")
     raw = raw if isinstance(raw, dict) else {}
-    result = {key: raw[key] for key in ("cpu", "priority", "tcp", "rss", "auto") if type(raw.get(key)) is bool}
+    result = {key: raw[key] for key in ("cpu", "priority", "tcp", "rss", "auto", "advanced") if type(raw.get(key)) is bool}
     if type(raw.get("count")) is int and raw["count"] > 0:
         result["count"] = raw["count"]
     adapter = raw.get("adapter")
@@ -1314,7 +1314,7 @@ def load_optimization_selection(path: Path = LOCAL_CONFIG_PATH) -> dict:
 def save_optimization_selection(selection: dict, path: Path = LOCAL_CONFIG_PATH) -> None:
     data = _read_local_config(path)
     data["optimizationSelection"] = {k: v for k, v in selection.items()
-                                     if k in ("cpu", "priority", "tcp", "rss", "auto", "count", "adapter", "layout") and v is not None}
+                                     if k in ("cpu", "priority", "tcp", "rss", "auto", "advanced", "count", "adapter", "layout") and v is not None}
     _write_local_config(data, path)
 
 

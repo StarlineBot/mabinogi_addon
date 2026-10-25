@@ -327,7 +327,14 @@ class WindowsOptimization:
             raise WindowsCommandError(operation,0,category='OutputInvalid') from None
 
     def adapters(self):
-        result = self._ps("[Console]::OutputEncoding=[Text.Encoding]::UTF8; @(Get-NetAdapter -Physical | Where-Object {$_.Status -eq 'Up'} | Select-Object Name,InterfaceGuid,ifIndex) | ConvertTo-Json -Compress", '환경 조회/어댑터')
+        # 13.12: 인터넷 기본 경로(0.0.0.0/0, 경로 지표+인터페이스 지표가 가장 낮은 것)를 쓰는 어댑터를 Default로 표시한다(읽기만).
+        # VPN 등 물리 어댑터가 아닌 경로가 기본이면 어느 것도 Default가 아니다 → 직접 선택.
+        result = self._ps("[Console]::OutputEncoding=[Text.Encoding]::UTF8; "
+                          "$route=@(Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue | "
+                          "Sort-Object {[int]$_.RouteMetric + [int]$_.InterfaceMetric})[0]; $def=if($route){[int]$route.ifIndex}else{-1}; "
+                          "@(Get-NetAdapter -Physical | Where-Object {$_.Status -eq 'Up'} | "
+                          "Select-Object Name,InterfaceGuid,ifIndex,@{n='Default';e={[int]$_.ifIndex -eq $def}}) | ConvertTo-Json -Compress",
+                          '환경 조회/어댑터')
         rows = result if isinstance(result,list) else [result] if result else []
         if len(rows)>64: raise ValueError('네트워크 어댑터 목록 한도를 초과했어요.')
         seen=set()
@@ -335,6 +342,7 @@ class WindowsOptimization:
             if not isinstance(row,dict) or not isinstance(row.get('Name'),str) or not row['Name']:
                 raise ValueError('네트워크 어댑터 정보를 확인하지 못했어요.')
             row['InterfaceGuid']=str(uuid.UUID(row.get('InterfaceGuid')))
+            row['Default'] = row.get('Default') is True
             if row['InterfaceGuid'] in seen: raise ValueError('네트워크 장치 식별자가 중복됐어요.')
             seen.add(row['InterfaceGuid'])
         return rows
@@ -484,3 +492,9 @@ def parse_l3(data: bytes):
                 groups.append((cache_size, tuple(i for i in range(64) if mask & (1 << i))))
         offset += length
     return tuple(groups)
+
+
+def default_adapter(adapters):
+    """인터넷 기본 경로를 쓰는 물리 어댑터의 GUID(13.12). 정확히 하나일 때만, 판단할 수 없으면 None."""
+    found = [a for a in adapters if isinstance(a, dict) and a.get('Default') is True]
+    return str(found[0]['InterfaceGuid']).strip('{}') if len(found) == 1 else None

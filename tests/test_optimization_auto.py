@@ -180,6 +180,7 @@ def test_manual_start_carries_auto_choice(window, monkeypatch):
     w, c, started = _controller(window, monkeypatch)
     d = c.panel
     config.save_optimization_selection(dict(layout='none')); d.priority.setChecked(True)
+    d.tcp.setChecked(False)  # 13.14: 패스트핑 기본 켬 — 이 테스트는 연결 없이 시작
     c._restoring_selection = True; d.auto.setChecked(True); c._restoring_selection = False
     c._start_optimization()
     assert started[-1]['auto'] is True

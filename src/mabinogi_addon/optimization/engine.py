@@ -34,6 +34,14 @@ def session_line(notices, failures):
     return '게임 세션 사용 중 · 항목별 적용값 확인 완료'
 
 
+def short_reason(exc) -> str:
+    """결과 요약(13.13)용 이유 한 마디. 원문은 상세(자세히 보기·app.log)에만 둔다."""
+    text = str(exc)
+    if isinstance(exc, PermissionError) or '권한' in text or 'Access' in text or '0x80070005' in text:
+        return '관리자 권한이 필요해요'
+    return '적용하지 못했어요'
+
+
 class Engine:
     def __init__(self, backend, recovery, allowed):
         self.backend, self.recovery, self.allowed = backend, recovery, allowed
@@ -54,6 +62,11 @@ class Engine:
         # 컨트롤러가 체크 변경 때 바꾼다(작업 스레드는 게임 종료 시점에 읽는다).
         self.auto = False
         self.held = False  # 자동 적용 중 Process Lasso Governor 실행으로 보류 중
+        # 결과 요약(13.13): 항목별 지금 결과 {'priority'|'cpu'|'tcp': (상태, 이유)}. 상태: ok·same·fail·released·deferred·restored.
+        # phase: 세션 단계 'waiting'(게임 대기)·'applied'(게임에 적용)·'ended'(자동 적용 중 게임 종료 → 되돌림)·'held'(Governor 보류).
+        self.outcome = {}
+        self.phase = None
+        self.ran = False  # 이번 실행에서 세션·원복을 한 번이라도 했는지(꺼짐 문구 구분)
 
     @property
     def busy(self):
@@ -132,6 +145,7 @@ class Engine:
         self.session_end = None
         self.auto = bool(options.get('auto'))
         self.held = False
+        self.outcome, self.phase, self.ran = {}, None, True
         options = dict(options)
         def work():
             if not self.allowed(): raise PermissionError('제작자 접근이 필요해요.')
@@ -183,7 +197,9 @@ class Engine:
                 notices.append('Process Lasso Governor 실행 중: CPU·게임 우선순위 적용 보류')
             if game and options['tcp']:
                 notices.append('게임 실행 중: TCP 적용을 보류했어요.')
+                self.outcome['tcp'] = ('deferred', '게임이 실행 중이라 미뤘어요')
             elif options['tcp']:
+                tcp_results = []
                 guid = options['adapter']
                 if not guid: raise ValueError('적용할 물리 네트워크 어댑터를 선택해 주세요.')
                 changes = [('ack',guid,1),('autotuning','global','normal')]
@@ -191,18 +207,28 @@ class Engine:
                     if self.cancel.is_set() or not self.allowed(): break
                     try:
                         result=self.recovery.apply(kind,target,value,guard=network_guard)
+                        tcp_results.append(result)
                         results.append(f'{kind}: '+{'unchanged':'이미 목표값 · 그대로 둠','written':'적용 · 재연결 후 확인'}.get(result,'적용값 확인 완료'))
                     except ChangeDeferred as exc:
                         notices.append(str(exc))
+                        self.outcome['tcp'] = ('deferred', '게임이 실행 중이라 미뤘어요')
                         break
-                    except Exception as exc: fail(f'{kind} 미적용·확인 필요: {exc}')
+                    except Exception as exc:
+                        fail(f'{kind} 미적용·확인 필요: {exc}')
+                        self.outcome['tcp'] = ('fail', short_reason(exc))
                 # Explicit start confirmation covered this one batch reconnect.
                 try:
                     self.recovery.flush_network(guard=network_guard)
                     if any(i['kind']=='rss' and i['state']=='applied' for i in self.recovery.items):
                         results.append('rss: 재연결 후 적용값 확인 완료')
-                except ChangeDeferred as exc: notices.append(str(exc))
-                except Exception as exc: fail('네트워크 재연결 확인 필요: '+str(exc))
+                except ChangeDeferred as exc:
+                    notices.append(str(exc))
+                    self.outcome.setdefault('tcp', ('deferred', '게임이 실행 중이라 미뤘어요'))
+                except Exception as exc:
+                    fail('네트워크 재연결 확인 필요: '+str(exc))
+                    self.outcome['tcp'] = ('fail', short_reason(exc))
+                if 'tcp' not in self.outcome and tcp_results:
+                    self.outcome['tcp'] = ('same', '') if all(r == 'unchanged' for r in tcp_results) else ('ok', '')
             if not options['cpu'] and not options.get('priority'):
                 # CPU·우선순위를 끈 세션은 게임을 기다릴 이유가 없다(네트워크 설정은 원복 전까지 유지).
                 self.status = '\n'.join([result_headline(notices, failures)] + results + notices
@@ -216,6 +242,7 @@ class Engine:
                 if options.get('auto') and not self.auto and observed is None:
                     # 0.18.0 QA: 게임 없는 대기(또는 보류) 중 자동 적용 체크를 끔 → 관리 중인 게임이 없으니 세션을 끝낸다.
                     # 네트워크 기록은 그대로(원복은 토글로). 관리 중인 게임이 있으면 그 게임이 끝날 때 끝난다(명세 13.10).
+                    self.phase = None
                     self.status = '\n'.join(notices[-4:] + ['자동 적용을 껐어요 · 게임 대기를 멈췄어요.'])
                     self.session_end = 'auto_off'
                     return
@@ -228,13 +255,20 @@ class Engine:
                         results = []
                         observed = None  # 보류 중에는 관리하는 게임 없음(풀리면 다시 찾음)
                         self.held = True
+                        self.phase = 'held'
+                        for key in ('priority', 'cpu'):
+                            self.outcome.pop(key, None)
                     self.status = 'Process Lasso Governor 실행 중 · 자동 적용을 보류했어요(Governor를 끄면 다시 적용해요).'
                     self.cancel.wait(2)
                     continue
                 self.held = False
+                if self.phase == 'held':
+                    self.phase = None
                 if observed is None:
                     observed = self.backend.game()
                     if observed is None:
+                        if self.phase != 'ended':  # 자동 적용: 게임이 끝나 되돌린 뒤에는 다음 게임까지 그 결과를 보여준다
+                            self.phase = 'waiting'
                         waiting = ('게임 실행 대기 · 자동 적용 켜짐(게임을 켜면 적용하고, 끄면 그 게임에 건 값을 되돌려요).'
                                    if self.auto else '게임 실행 대기 · CPU는 아직 적용하지 않았어요.')
                         self.status = '\n'.join(results + notices + [waiting])
@@ -248,6 +282,10 @@ class Engine:
                         priority = dict(applied=set(), reapplied=[], stopped=set(), preset=set(), background=set())
                         results, notices, failures = [], notices[-4:], set()
                         observed = None
+                        self.phase = 'ended'
+                        for key in ('priority', 'cpu'):
+                            if key in self.outcome:
+                                self.outcome[key] = ('restored', '')
                         _log.info('최적화 자동 적용: 게임 종료 · 그 게임에 건 값을 정리하고 다음 게임을 기다려요')
                         notices.append('게임 종료 · 이 게임에 건 값을 정리했어요. 다음 게임을 기다려요.')
                         continue
@@ -261,6 +299,11 @@ class Engine:
                     self.status = 'Process Lasso Governor가 실행돼 CPU를 원복하고 세션을 종료해요.'
                     self.session_end = 'governor'
                     return
+                if self.phase in ('waiting', 'ended', None):
+                    self.phase = 'applied'
+                    for key in ('priority', 'cpu'):
+                        if self.outcome.get(key, ('',))[0] == 'restored':
+                            del self.outcome[key]
                 if options['cpu']:
                     # 관측 목록은 살아 있는 프로세스로만 유지한다(짧게 뜨고 끝나는 프로세스 누적 방지, 13.3).
                     alive = {(p['target']['pid'],p['target']['birth']) for p in processes}
@@ -278,10 +321,16 @@ class Engine:
                         seen.add(identity)
                         if len(seen)>self.recovery.MAX_ITEMS:
                             raise RuntimeError('프로세스 관측 한도에 도달했어요. 세션을 중단해요.')
+                        is_game_target = target is observed
                         try:
-                            self.recovery.apply('cpu',target,mask)
+                            result = self.recovery.apply('cpu',target,mask)
+                            if is_game_target:
+                                self.outcome['cpu'] = ('same', '') if result == 'unchanged' else ('ok', '')
                         except ProcessLookupError: pass
-                        except Exception as exc: fail('CPU 일부 미적용: '+str(exc))
+                        except Exception as exc:
+                            fail('CPU 일부 미적용: '+str(exc))
+                            if is_game_target:
+                                self.outcome['cpu'] = ('fail', short_reason(exc))
                         notices = notices[-12:]
                     # Verify ownership without overwriting external changes. 한 프로세스가 달라져도
                     # 세션 전체를 끝내지 않고 그 프로세스만 관리에서 뺀다(원복도 하지 않음 — 바꾼 쪽의 값을 존중).
@@ -296,6 +345,8 @@ class Engine:
                         is_game = observed is not None and identity == (observed['pid'],observed['birth'])
                         label = '게임 프로세스' if is_game else names.get(identity,'이름 확인 불가')
                         self.recovery.release(item)
+                        if is_game:  # 요약에는 게임 프로세스 자체만(다른 프로세스 충돌은 상세에만, 13.13)
+                            self.outcome['cpu'] = ('released', '다른 프로그램이 바꿔서 그대로 뒀어요')
                         message = (f"{'게임 프로세스가 직접' if is_game else '다른 도구가'} CPU 배치를 바꿨어요 · "
                                    f"{label} (PID {identity[0]}): 적용=0x{item['applied']:X}, 현재=0x{current:X}. "
                                    '이 프로세스는 관리에서 빼고 계속해요(원복하지 않음).')
@@ -343,6 +394,7 @@ class Engine:
                               for i in self.recovery.items)
                 if result == 'unchanged' and not managed:
                     state['preset'].add(identity)  # 기록 없이 지켜본다(위 독스트링)
+                self.outcome['priority'] = ('same', '') if result == 'unchanged' else ('ok', '')
                 # managed: 앱이 비정상 종료되기 전에 건 기록을 이어 받음(13.10) — 원본 기록 그대로 유지·원복
                 results.append('게임 우선순위: ' + {'unchanged': '이미 높음 · 그대로 둠', 'applied': '높음 적용 · 확인 완료',
                                                     'unverified': '높음 적용 · 확인 불가(읽기 경로가 서로 달라요)'}.get(result, result))
@@ -350,8 +402,10 @@ class Engine:
                 pass
             except Unconfirmed as exc:
                 notices.append(f'게임 우선순위 확인 불가 · 적용하지 않았어요: {exc}')
+                self.outcome['priority'] = ('fail', '값을 확인할 수 없어 적용하지 않았어요')
             except Exception as exc:
                 fail(f'게임 우선순위 미적용: {exc}')
+                self.outcome['priority'] = ('fail', short_reason(exc))
             return notices
         if identity in state['preset']:
             try:
@@ -365,6 +419,7 @@ class Engine:
                 message = (f'다른 도구가 게임 우선순위를 바꿨어요(현재 {name(current)}). 덮어쓰지 않아요.')
                 _log.warning(message)
                 notices.append(message)
+                self.outcome['priority'] = ('released', '다른 프로그램이 바꿔서 그대로 뒀어요')
                 return notices
             try:  # 게임이 '보통'으로 되돌림: 그 값을 원본으로 기록하고 높음을 건다
                 result = self.recovery.apply('priority', game, HIGH_PRIORITY)
@@ -394,6 +449,7 @@ class Engine:
             message = (f"다른 도구가 게임 우선순위를 바꿨어요(현재 {name(current)}). 덮어쓰지 않고 관리에서 뺐어요(원복하지 않음).")
             _log.warning(message)
             notices.append(message)
+            self.outcome['priority'] = ('released', '다른 프로그램이 바꿔서 그대로 뒀어요')
             return notices
         if returned:
             # 뒤에 있는 동안 게임이 낮춘 보통: 앞으로 돌아온 첫 확인에서 다시 건다(한도는 앞에 있는 동안 되돌아간 경우만 센다)
@@ -427,6 +483,7 @@ class Engine:
         return notices
 
     def stop(self):
+        self.ran = True
         self.cancel.set()
         if not self.busy and any(i['kind'] in PROCESS_KINDS for i in self.recovery.pending):
             self._launch(lambda: setattr(self,'status','CPU 원복을 확인했어요.'), restore_cpu=True,
@@ -448,6 +505,7 @@ class Engine:
         """'중단 · 원복' 한 번으로 적용했던 것을 모두 되돌린다: 세션 중단 → CPU 원복 → (network면) 네트워크 원복.
 
         세션이 돌고 있으면 그 작업이 끝나며 CPU를 원복하고 이어서 네트워크를 원복한다(같은 작업 스레드)."""
+        self.ran = True
         if network:
             self._restore_network_after = (accept_normalized,)
         self._network_deferred = network_deferred and not network

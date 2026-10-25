@@ -109,6 +109,8 @@ class OptimizationController(QObject):
         self._condition_text = None  # '조건별 정리'를 누른 뒤 표시하는 저장 요약 묶음
         self._core_total = None
         self._layouts = {}  # 환경 확인으로 만든 CPU 배치 {키: Layout}(13.11)
+        self._auto_adapter = None  # 인터넷 기본 경로 연결 GUID(13.12, 판단 불가면 None)
+        self._logged_status = None  # app.log에 남긴 마지막 세션 기록(13.13: 상세는 항상 로그에)
         self._badge_split = None
         self._badge_wired = False
         self.frames = False  # 측정 파이프라인(PresentMon 수집기) 동작 중: FPS 표시 또는 수집 모드가 켜져 있을 때
@@ -208,13 +210,17 @@ class OptimizationController(QObject):
         try:
             for key, box in (('priority', d.priority), ('tcp', d.tcp), ('auto', d.auto)):
                 if key in saved: box.setChecked(saved[key])
+            if 'tcp' not in saved:
+                d.tcp.setChecked(True)  # 13.14: 처음 쓰는 사용자 기본값은 추천(패스트핑 포함). 기존 저장은 유지
+            d.advanced_toggle.setChecked(saved.get('advanced') is True)
         finally:
             self._restoring_selection = False
 
     def _save_selection(self, *_):
         if self._restoring_selection or self.panel is None: return
         d = self.panel
-        selection = dict(priority=d.priority.isChecked(), tcp=d.tcp.isChecked(), auto=d.auto.isChecked())
+        selection = dict(priority=d.priority.isChecked(), tcp=d.tcp.isChecked(), auto=d.auto.isChecked(),
+                         advanced=d.advanced_toggle.isChecked())
         saved = config.load_optimization_selection()
         # 환경 확인 전(목록이 비어 있음)에는 저장된 배치·어댑터를 지우지 않는다(13.11: 배분 숫자 대신 배치 이름 키).
         layout = self._layout_key()
@@ -257,6 +263,83 @@ class OptimizationController(QObject):
             return key or f'count:{count}'  # 같은 뜻의 이름이 없으면 '쓸 수 없음' 안내 뒤 추천
         return None
 
+    # ---- 추천 최적화·결과 요약(명세 13.13·13.14) -------------------------------------------------
+    def _recommendation(self):
+        """이 PC 추천: 게임 우선순위 높음 + CPU 종류별 1순위 배치(13.11) + 패스트핑(자동 선택 연결, 13.12)."""
+        first = next(iter(self._layouts.values()), None)
+        return dict(priority=True, layout=first.key if first else None, tcp=True, adapter=self._auto_adapter)
+
+    def _is_custom(self):
+        """상세에서 하나라도 추천과 다르게 골랐는지. 환경 확인 전에는 알 수 있는 항목만 비교한다."""
+        d = self.panel
+        if d is None:
+            return False
+        rec = self._recommendation()
+        if not d.priority.isChecked() or not d.tcp.isChecked():
+            return True
+        if rec['layout'] is not None and d.split.currentData() not in (None, rec['layout']):
+            return True
+        chosen = d.adapter.currentData()
+        return rec['adapter'] is not None and chosen is not None and str(chosen).lower() != rec['adapter'].lower()
+
+    def _describe(self, priority, layout_key, tcp):
+        parts = []
+        if priority:
+            parts.append('게임 우선순위 높음')
+        layout = self._layouts.get(layout_key)
+        if layout is not None:
+            parts.append(f'CPU 배치 {layout.name} ({layout.short})' if layout.applies else 'CPU 배치 안 함')
+        elif layout_key is None:
+            parts.append('CPU 배치(환경 확인 뒤 표시)')
+        if tcp:
+            parts.append('패스트핑' if self._auto_adapter or self.panel.adapter.currentData() else '패스트핑(연결 선택 필요)')
+        return ' · '.join(parts) or '고른 항목 없음'
+
+    def _update_recommendation(self):
+        d = self.panel
+        if d is None: return
+        custom = self._is_custom()
+        if custom:
+            text = '직접 고른 설정: ' + self._describe(d.priority.isChecked(), d.split.currentData(), d.tcp.isChecked())
+        else:
+            rec = self._recommendation()
+            text = '이 PC 추천: ' + self._describe(True, rec['layout'], True)
+        if d.recommend.text() != text:
+            d.recommend.setText(text)
+        d.reset_recommended.setVisible(custom)
+
+    def _reset_to_recommended(self):
+        """'추천 설정으로 되돌리기'(13.14): 상세 선택을 추천값으로."""
+        d, rec = self.panel, self._recommendation()
+        d.priority.setChecked(True)
+        d.tcp.setChecked(True)
+        if rec['layout'] is not None:
+            d.split.setCurrentIndex(max(0, d.split.findData(rec['layout'])))
+        if rec['adapter'] is not None:
+            d.adapter.setCurrentIndex(max(0, d.adapter.findData(rec['adapter'])))
+        self._update_recommendation()
+        self._sync_optimization_toggle()
+
+    def _render_result(self, d):
+        """결과 요약(13.13): 상태 한 줄(굵게·색) + 항목 줄. 세션 기록이 바뀌면 app.log에 한 번 남긴다."""
+        from ..optimization.result_summary import COLORS, summarize
+        layout = self._layouts.get(self._summary_requested.get('layout')) if isinstance(self._summary_requested, dict) else None
+        label = f'{layout.name} ({layout.short})' if layout is not None else self._summary_requested.get('layout_name')
+        headline, level, lines = summarize(self.engine, self.recovery, self._summary_requested, layout_label=label,
+                                           kept_on=self._kept_on, restore_wait=self._restore_wait)
+        style = f'font-weight:bold; color:{COLORS[level]};'
+        if d.status.text() != headline:
+            d.status.setText(headline)
+        if d.status.styleSheet() != style:
+            d.status.setStyleSheet(style)
+        text = '\n'.join(lines)
+        if d.results.text() != text:
+            d.results.setText(text)
+        d.results.setVisible(bool(lines))
+        if self.engine.status != self._logged_status:
+            self._logged_status = self.engine.status
+            _log.info('최적화 상태: %s', self.engine.status.replace('\n', ' / '))
+
     def _show_layout_detail(self):
         """콤보 아래 회색 두 줄: 실제 배분과 근거(13.11, 알파 동안 숫자 병기)."""
         if self.panel is None: return
@@ -295,17 +378,30 @@ class OptimizationController(QObject):
             else:
                 d.cpu_info.setText('CPU 구조를 확인하지 못했어요. CPU 배치를 적용하지 않아요.')
             d.adapter.clear()
-            d.adapter.addItem('직접 사용할 물리 어댑터를 선택해 주세요.',None)
+            d.adapter.addItem('적용할 연결을 선택해 주세요.',None)
+            # 13.12: 인터넷 기본 경로를 쓰는 연결을 자동 선택. 연결이 1개면 선택 칸 없이 한 줄, 2개 이상이면 미리 고른 콤보.
+            from ..system.optimization import default_adapter
+            self._auto_adapter = default_adapter(adapters)
             for adapter in adapters:
-                d.adapter.addItem(str(adapter['Name']),str(adapter['InterfaceGuid']).strip('{}'))
+                guid = str(adapter['InterfaceGuid']).strip('{}')
+                suffix = ' (인터넷 연결 중 · 자동 선택)' if guid == self._auto_adapter else ''
+                d.adapter.addItem(str(adapter['Name']) + suffix, guid)
             wanted = saved.get('adapter')
+            index = -1
             if wanted:
                 index = next((i for i in range(1, d.adapter.count())
                               if str(d.adapter.itemData(i)).lower() == wanted.lower()), -1)
-                if index > 0:
-                    d.adapter.setCurrentIndex(index)
-                else:
-                    notes.append('저장한 네트워크 어댑터를 찾지 못해 선택을 비웠어요. 네트워크 항목을 쓰려면 어댑터를 다시 골라 주세요.')
+                if index < 0:
+                    notes.append('저장한 네트워크 연결을 찾지 못했어요.' + (' 인터넷에 연결된 연결을 자동으로 골랐어요.' if self._auto_adapter
+                                                                         else ' 패스트핑을 쓰려면 적용할 연결을 다시 골라 주세요.'))
+            if index < 0 and self._auto_adapter:
+                index = d.adapter.findData(self._auto_adapter)
+            if index > 0:
+                d.adapter.setCurrentIndex(index)
+            single = len(adapters) == 1 and self._auto_adapter is not None
+            d.adapter.setVisible(not single)
+            d.adapter_label.setVisible(single)
+            d.adapter_label.setText(d.adapter.itemText(1) if single else '')
         finally:
             self._restoring_selection = False
         if notes:
@@ -315,6 +411,8 @@ class OptimizationController(QObject):
     def _wire_panel(self):
         d=self.panel
         for box in (d.priority, d.tcp, d.auto): box.toggled.connect(self._save_selection)
+        d.reset_recommended.clicked.connect(self._reset_to_recommended)
+        d.advanced_toggle.toggled.connect(self._save_selection)
         d.auto.toggled.connect(self._auto_changed)
         d.split.currentIndexChanged.connect(self._save_selection)
         d.split.currentIndexChanged.connect(lambda _index: self._show_layout_detail())
@@ -448,7 +546,7 @@ class OptimizationController(QObject):
             self.engine.status='사용할 항목을 선택해 주세요.'
             return
         if options['tcp'] and not options['adapter']:
-            self.engine.status='적용할 물리 네트워크 어댑터를 선택해 주세요.'
+            self.engine.status='패스트핑을 적용할 연결을 상세 설정에서 선택해 주세요.'
             return
         if options['tcp'] and not self._network_confirmation(): return
         self._begin(options)
@@ -503,7 +601,8 @@ class OptimizationController(QObject):
         if toggle.isChecked() != on:
             toggle.blockSignals(True); toggle.setChecked(on); toggle.blockSignals(False)
         waiting = on and not engine.busy and self._restore_wait and remaining
-        toggle.setText('최적화 적용 중 · 네트워크 원복 대기' if waiting else '최적화 적용 중' if on else '최적화 시작')
+        toggle.setText('최적화 적용 중 · 네트워크 원복 대기' if waiting else '최적화 적용 중' if on
+                       else '선택한 설정으로 최적화' if self._is_custom() else '추천 설정으로 최적화')
         allowed = self._can_start()
         toggle.setEnabled(True if on and (engine.busy or self.recovery.pending or self.recovery.restart_targets)
                           else allowed and not engine.busy and not self.recovery.corrupt)
@@ -800,7 +899,8 @@ class OptimizationController(QObject):
         self._sync_frames_toggle()
         for control in (d.summary_collect,d.summary_save,d.summary_folder): control.setEnabled(allowed)
         d.frames_status.setText(self.frame_status)
-        d.status.setText(('복구 기록이 손상돼 새 적용을 차단했어요. 추정값으로 원복하지 않아요.\n기록: '+str(self.recovery.path)) if self.recovery.corrupt else self.engine.status)
+        self._render_result(d)
+        self._update_recommendation()
         from collections import Counter
         counts=Counter((item['kind'],item['state']) for item in self.recovery.items)
         kinds={'cpu':'CPU 배치','priority':'게임 우선순위','ack':'TcpAckFrequency','nodelay':'TCPNoDelay','autotuning':'TCP 자동 조정','rss':'RSS'}
@@ -808,7 +908,11 @@ class OptimizationController(QObject):
                 'released':'외부 변경·관리 제외'}
         lines=[f'{kinds[kind]} · {states[state]} {count}개' for (kind,state),count in counts.items()]
         if self.recovery.restart_targets: lines.append(f'네트워크 재연결 대기: {len(self.recovery.restart_targets)}개 어댑터')
-        d.results.setText('\n'.join(lines))
+        # 13.13: 세션 기록·변경 수는 접힌 '자세히 보기'에만(요약에 쓰지 않음)
+        details = self.engine.status + ('\n\n' + '\n'.join(lines) if lines else '')
+        if self.recovery.corrupt:
+            details += '\n기록: ' + str(self.recovery.path)
+        d.details.setText(details)
         if self.engine.inspection is not None:
             topology, adapters = self.engine.inspection
             self.engine.inspection = None

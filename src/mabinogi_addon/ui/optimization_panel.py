@@ -6,6 +6,9 @@ from PySide6.QtGui import QPalette
 from PySide6.QtWidgets import QStyledItemDelegate
 from .widgets import FeatureHeader
 
+# '자세히 보기 ▸'·'상세 설정 ▸': 펼쳐도 눌린 버튼처럼 보이지 않는 글자 버튼(13.13·13.14)
+DISCLOSURE_STYLE = ('QPushButton { border:none; background:transparent; text-align:left; padding:2px 4px; }'
+                    'QPushButton:hover { text-decoration:underline; }')
 POPUP_ROLE = Qt.ItemDataRole.UserRole + 1  # 펼친 목록 문구(이름 + 배분 두 줄). 닫힌 목록은 DisplayRole
 
 
@@ -65,7 +68,37 @@ class OptimizationPanel(QWidget):
         self.cpu_info=_label('최적화 탭을 열면 CPU 구조와 네트워크 어댑터를 자동으로 읽어요. 읽기만 하고 설정은 바꾸지 않아요.')
         group.addWidget(self.cpu_info)
         self.inspect=QPushButton('다시 확인');row=QHBoxLayout();row.addWidget(self.inspect);row.addStretch();group.addLayout(row)
-        group=_group('CPU 배치',body)
+        from .settings_layout import LOCK_STYLE
+        # 13.14 추천 최적화(시안 사용자 확인): 환경 확인 바로 아래. 예전 '적용 · 복구' 구역을 합쳐 시작 버튼은 하나.
+        group=_group('추천 최적화',body)
+        self.recommend=_label('이 PC 추천: 환경을 확인하면 보여줘요.');self.recommend.setStyleSheet('font-weight:bold;')
+        group.addWidget(self.recommend)
+        # 토글 하나(13.5): 꺼짐 '추천 설정으로 최적화'(직접 고르면 '선택한 설정으로 최적화') → 켜짐 '최적화 적용 중'(민트). 켜진 상태에서 누르면 중단·원복.
+        self.toggle=QPushButton('추천 설정으로 최적화');self.toggle.setCheckable(True);self.toggle.setStyleSheet(LOCK_STYLE)
+        group.addWidget(self.toggle,0,Qt.AlignmentFlag.AlignLeft)
+        # 13.10 자동 적용(기본 꺼짐): 우선순위·CPU 배치만. 네트워크는 자동으로 바꾸지 않는다.
+        self.auto=QCheckBox('마비노기를 켜면 자동 적용');group.addWidget(self.auto)
+        self.auto_note=_label('켜 두면 앱을 켤 때부터 게임을 기다렸다가 우선순위·CPU 배치를 걸고, 게임을 끄면 그 게임에 건 값만 되돌려요.\n'
+                              '패스트핑(네트워크)은 자동으로 바꾸지 않아요.')
+        self.auto_note.setForegroundRole(QPalette.ColorRole.PlaceholderText);group.addWidget(self.auto_note)
+        # 13.13 결과 요약: 지금 상태 한 줄(굵게·색) + 항목마다 한 줄. 상세(세션 기록)는 접힌 '자세히 보기'와 app.log.
+        self.status=_label('시작 전 · 시스템 설정을 변경하지 않았어요.');group.addWidget(self.status)
+        self.results=_label('');group.addWidget(self.results)
+        self.details_toggle=QPushButton('자세히 보기 ▸');self.details_toggle.setFlat(True);self.details_toggle.setCheckable(True)
+        self.details_toggle.setCursor(Qt.CursorShape.PointingHandCursor);self.details_toggle.setStyleSheet(DISCLOSURE_STYLE)
+        group.addWidget(self.details_toggle,0,Qt.AlignmentFlag.AlignLeft)
+        self.details=_label('');self.details.setForegroundRole(QPalette.ColorRole.PlaceholderText)
+        self.details.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse);self.details.hide()
+        group.addWidget(self.details)
+        self.details_toggle.toggled.connect(self._toggle_details)
+        # '상세 설정 ▸'는 구역 테두리 밖 바로 아래(사용자 수정: 안에 있으면 그 안에서 펼쳐질 것처럼 보임). 펼침 상태는 저장.
+        self.advanced_toggle=QPushButton('상세 설정 ▸');self.advanced_toggle.setFlat(True);self.advanced_toggle.setCheckable(True)
+        self.advanced_toggle.setCursor(Qt.CursorShape.PointingHandCursor);self.advanced_toggle.setStyleSheet(DISCLOSURE_STYLE)
+        body.addWidget(self.advanced_toggle,0,Qt.AlignmentFlag.AlignLeft)
+        self.advanced=QWidget();advanced=QVBoxLayout(self.advanced);advanced.setContentsMargins(0,0,0,0)
+        body.addWidget(self.advanced)
+        self.advanced_toggle.toggled.connect(self._toggle_advanced)
+        group=_group('CPU 배치',advanced)
         # 최적화 명세 13.7: 게임 프로세스 우선순위 '높음'(기본 켬). 실시간·다른 프로그램 우선순위 변경은 하지 않는다.
         self.priority=QCheckBox('게임 우선순위 높음');self.priority.setChecked(True);group.addWidget(self.priority)
         group.addWidget(_label('무거운 장면에서 Windows가 게임을 먼저 실행해요. 끄거나 세션이 끝나면 원래 값으로 되돌려요.\n'
@@ -77,26 +110,22 @@ class OptimizationPanel(QWidget):
         form=QFormLayout();form.addRow('CPU 배치',self.split);group.addLayout(form)
         self.split_detail=_label('');self.split_detail.setForegroundRole(QPalette.ColorRole.PlaceholderText)
         group.addWidget(self.split_detail)
-        group=_group('네트워크',body)
-        self.adapter=QComboBox();self.adapter.addItem('네트워크 어댑터를 선택해 주세요.',None)
-        form=QFormLayout();form.addRow('네트워크 어댑터',self.adapter);group.addLayout(form)
-        # 13.9: 패스트핑 = TcpAckFrequency(TCPNoDelay 제외). 13.8: RSS 배치는 항목에서 뺐다(예전 기록 원복만 유지).
-        self.tcp=QCheckBox('패스트핑 · TCP 자동 조정 Normal')
-        group.addWidget(self.tcp)
-        self.notice=_label('TCP 설정은 다른 앱의 통신에도 영향을 줄 수 있고 관리자 권한·재연결이 필요해요.\n게임 실행 중 시작하면 네트워크는 미루고 CPU만 적용해요.\n성능이 좋아졌다는 의미는 아니에요. 효과는 별도 계측으로 비교해 주세요.')
-        group.addWidget(self.notice)
-        group=_group('적용 · 복구',body)
-        # 토글 하나(명세 13.5, 렌더 2안): 꺼짐 '최적화 시작' → 켜짐 '최적화 적용 중'(민트). 켜진 상태에서 누르면 중단·원복.
-        from PySide6.QtCore import Qt
-        from .settings_layout import LOCK_STYLE
-        self.toggle=QPushButton('최적화 시작');self.toggle.setCheckable(True);self.toggle.setStyleSheet(LOCK_STYLE)
-        group.addWidget(self.toggle,0,Qt.AlignmentFlag.AlignLeft)
-        # 13.10 자동 적용(기본 꺼짐): 위에서 체크한 프로세스 항목(우선순위·CPU 배치)만. 네트워크는 자동으로 바꾸지 않는다.
-        self.auto=QCheckBox('마비노기를 켜면 자동 적용');group.addWidget(self.auto)
-        group.addWidget(_label('켜 두면 앱을 켤 때부터 게임을 기다렸다가 체크한 우선순위·CPU 배치를 걸고, 게임을 끄면 그 게임에 건 값만 되돌려요.\n'
-                               '패스트핑(네트워크)은 자동으로 바꾸지 않아요.'))
-        self.status=_label('시작 전 · 시스템 설정을 변경하지 않았어요.');group.addWidget(self.status)
-        self.results=_label('');group.addWidget(self.results);body.addStretch()
+        group=_group('네트워크',advanced)
+        # 13.12: 이름 '패스트핑'(사용자 결정) → 적용할 연결(인터넷 기본 경로 어댑터 자동 선택) → 설명. 13.9: TcpAckFrequency, 13.8: RSS 없음.
+        self.tcp=QCheckBox('패스트핑');group.addWidget(self.tcp)
+        self.adapter=QComboBox();self.adapter.addItem('적용할 연결을 선택해 주세요.',None)
+        self.adapter_label=QLabel('');self.adapter_label.hide()
+        connection=QHBoxLayout();connection.addWidget(self.adapter,1);connection.addWidget(self.adapter_label,1)
+        form=QFormLayout();form.addRow('적용할 연결',connection);group.addLayout(form)
+        self.notice=_label('TCP 응답을 모아 보내지 않고 바로 보내요(TcpAckFrequency) · 수신 창 자동 조정은 기본값(Normal)으로 둬요.\n'
+                           '다른 앱의 통신에도 영향을 줄 수 있고 관리자 권한·재연결이 필요해요. 게임 실행 중이면 네트워크는 미뤄요.\n'
+                           '성능이 좋아졌다는 의미는 아니에요. 효과는 별도 계측으로 비교해 주세요.')
+        self.notice.setForegroundRole(QPalette.ColorRole.PlaceholderText);group.addWidget(self.notice)
+        # 13.14: 추천과 다르게 고르면 상세 끝에 보인다.
+        self.reset_recommended=QPushButton('추천 설정으로 되돌리기');self.reset_recommended.hide()
+        advanced.addWidget(self.reset_recommended,0,Qt.AlignmentFlag.AlignLeft)
+        self.advanced.hide()
+        body.addStretch()
         self.tabs.addTab(_scrolled(page),'최적화')
         page=QWidget();body=QVBoxLayout(page)
         body.addWidget(FeatureHeader('FPS 측정','마비노기의 프레임을 측정해 현재 FPS를 보여줘요.'))
@@ -104,7 +133,6 @@ class OptimizationPanel(QWidget):
         group=_group('게임에 FPS 표시',body)
         group.addWidget(_label('켜 두면 게임 화면에 FPS를 보여줘요. 파일로 남기지 않아요.\n'
                                '게임의 제출 프레임 기준이며, 모니터에 실제 표시된 FPS·통신 지연과는 달라요.'))
-        from PySide6.QtCore import Qt
         from .settings_layout import LOCK_STYLE
         self.frames_toggle=QPushButton('FPS 표시');self.frames_toggle.setCheckable(True);self.frames_toggle.setStyleSheet(LOCK_STYLE)
         self.frames_toggle.toggled.connect(lambda on: self.frames_toggle.setText('FPS 표시 중' if on else 'FPS 표시'))
@@ -150,3 +178,11 @@ class OptimizationPanel(QWidget):
         for combo in (self.split,self.adapter):
             combo.setMinimumContentsLength(16)
             combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+
+    def _toggle_details(self, on):
+        self.details.setVisible(on)
+        self.details_toggle.setText('자세히 보기 ▾' if on else '자세히 보기 ▸')
+
+    def _toggle_advanced(self, on):
+        self.advanced.setVisible(on)
+        self.advanced_toggle.setText('상세 설정 ▾' if on else '상세 설정 ▸')

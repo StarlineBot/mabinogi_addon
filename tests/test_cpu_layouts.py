@@ -170,6 +170,7 @@ def test_badge_and_fps_record_use_layout_name(window, monkeypatch):
     started = []
     monkeypatch.setattr(c.engine, 'start', lambda options: started.append(options) or True)
     c._apply_inspection(X9800, [])
+    c.panel.tcp.setChecked(False)  # 연결 없이 시작(13.14 기본은 패스트핑 포함)
     c._start_optimization()
     assert started[-1]['layout'] == 'focus' and started[-1]['cpu'] is True
     assert c._badge_split == '· 게임 집중'
