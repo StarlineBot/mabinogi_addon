@@ -174,6 +174,9 @@
 - **Confirmed(실제 원본, 사용자 업로드 `tests/data/스크린샷 2026-10-25 142736.png` 2560×1440):** 1칸 실제 물리 아이콘에 마법 템플릿 **0.72**(감지 0.68 이상),
   물리 0.909. 물리 칸만 잘라 '물리만 걸린 순간'을 만들면 현재 엔진은 마법도 '걸림' → 사용자 증상과 일치. 쌍 구분(_IDENTITY_PEERS) 추가 시 물리만 판정,
   둘 다 걸린 원래 영역(BOX 전체)에서는 둘 다 걸림 유지. `scripts/qa_debuff_defense_peer.py`에 실제 표본 반영.
+- **재QA(0dc364a): 통과, 0.18.0(자동 적용 + 이 수정) 배포 가능.** qa_debuff_defense_peer 종료 0(모형·실제 5경우 모두 맞게), `test_debuff_live_detection` 28 passed,
+  `run_release_checks --version 0.18.0` 646 passed. 판독 비용 15아이콘 전체 판정 중앙 9.6ms → 9.6~9.8ms(차이 없음).
+  Improvement: 배포 검사 목록(packaging/release_checks.json)에 test_debuff_live_detection이 없어 CI 배포 검사에서는 이 회귀가 돌지 않음(로컬에서 별도 실행).
 
 ### v0.17.2 게시 확인 · 0.18.0 자동 적용 독립 QA (2026-10-25)
 
