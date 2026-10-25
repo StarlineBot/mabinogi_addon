@@ -49,6 +49,7 @@ class Engine:
         self.thread = None
         self.status = '시작 전 · 시스템 설정을 변경하지 않았어요.'
         self.inspection = None
+        self.inspection_failed = []  # 환경 확인에서 읽지 못한 항목 이름
         self.recovery_requested = False
         self.lock = threading.Lock()
         self._partial = None  # 진행 중 작업의 결과/안내 줄(예외로 끝나도 버리지 않게)
@@ -125,8 +126,13 @@ class Engine:
             except Exception as exc:
                 topology=None
                 errors.append(str(exc))
+            adapters_failed = False
             try: adapters = self.backend.adapters()
-            except Exception as exc: errors.append(str(exc))
+            except Exception as exc:
+                errors.append(str(exc))
+                adapters_failed = True
+            # 결과 요약(13.13 QA 후속): 읽지 못한 항목은 보이는 상태 줄에 알린다(원문은 자세히 보기)
+            self.inspection_failed = [name for name, failed in (('CPU 구조', topology is None), ('네트워크 연결', adapters_failed)) if failed]
             self.inspection = (topology, adapters)
             self.status = '\n'.join(errors) if errors else '환경을 확인했어요. 시작을 누르기 전에는 적용하지 않아요.'
         return self._launch(work, status='환경 확인 중…', task='inspect')

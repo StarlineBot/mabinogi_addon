@@ -203,3 +203,55 @@ def test_session_record_goes_to_app_log_and_details_once(window, monkeypatch, ca
     assert 'PID 10596' in d.details.text() and d.details.isHidden() and 'PID' not in d.status.text() + d.results.text()
     d.details_toggle.click()
     assert d.details.isVisibleTo(d) and d.details_toggle.text() == '자세히 보기 ▾'
+
+
+# ---- 13.13 QA 후속: 시작이 막힌 이유·환경 확인 실패는 보이는 상태 줄에 ----
+
+def test_blocked_start_without_internet_route_shows_warning_on_status_line(window, monkeypatch):
+    w, c = _controller(window, monkeypatch)
+    c._apply_inspection(X9800, [dict(WIFI), dict(WIRED, Default=False)])  # 기본 경로 판단 불가
+    started = []
+    monkeypatch.setattr(c.engine, 'start', lambda options: started.append(options))
+    d = c.panel
+    d.toggle.click()  # 추천 설정으로 최적화
+    c._tick()
+    assert not started
+    assert d.status.text() == '패스트핑을 적용할 연결을 상세 설정에서 선택해 주세요.'
+    assert '#e67e22' in d.status.styleSheet() and d.results.isHidden()
+    d.adapter.setCurrentIndex(1)  # 연결을 고르면 안내는 사라진다
+    c._tick()
+    assert d.status.text().startswith('시작 전')
+
+
+def test_nothing_selected_warns_on_status_line(window, monkeypatch):
+    w, c = _controller(window, monkeypatch)
+    config.save_optimization_selection(dict(layout='none'))
+    d = c.panel
+    d.priority.setChecked(False); d.tcp.setChecked(False)
+    c._start_optimization(); c._tick()
+    assert d.status.text() == '사용할 항목을 선택해 주세요.' and '#e67e22' in d.status.styleSheet()
+
+
+def test_inspection_failure_is_visible_until_rechecked(window, monkeypatch):
+    w, c = _controller(window, monkeypatch)
+    c.engine.inspection, c.engine.inspection_failed = (X9800, []), ['네트워크 연결']
+    c._tick()
+    d = c.panel
+    assert d.status.text().startswith('네트워크 연결을 읽지 못했어요') and '#e67e22' in d.status.styleSheet()
+    d.priority.setChecked(False)  # 다른 선택을 바꿔도 환경 확인 실패 안내는 유지
+    c._tick()
+    assert d.status.text().startswith('네트워크 연결을 읽지 못했어요')
+    c.engine.inspection, c.engine.inspection_failed = (X9800, [WIRED]), []
+    c._tick()
+    assert d.status.text().startswith('시작 전')
+
+
+def test_app_log_gets_only_newly_added_session_lines(window, monkeypatch, caplog):
+    caplog.set_level(logging.INFO)
+    w, c = _controller(window, monkeypatch)
+    c.engine.status = '게임 우선순위: 높음 적용 · 확인 완료'
+    c._tick()
+    c.engine.status = '게임 우선순위: 높음 적용 · 확인 완료\n다른 도구가 CPU 배치를 바꿨어요'
+    c._tick()
+    messages = [r.getMessage() for r in caplog.records if r.getMessage().startswith('최적화 상태:')]
+    assert messages == ['최적화 상태: 게임 우선순위: 높음 적용 · 확인 완료', '최적화 상태: 다른 도구가 CPU 배치를 바꿨어요']

@@ -111,6 +111,10 @@ class OptimizationController(QObject):
         self._layouts = {}  # 환경 확인으로 만든 CPU 배치 {키: Layout}(13.11)
         self._auto_adapter = None  # 인터넷 기본 경로 연결 GUID(13.12, 판단 불가면 None)
         self._logged_status = None  # app.log에 남긴 마지막 세션 기록(13.13: 상세는 항상 로그에)
+        # 시작이 막힌 이유·환경 확인 실패(13.13 QA 후속): 접힌 상세에만 두면 버튼이 무반응처럼 보여 상태 줄에 주황으로 보인다.
+        # 다시 시작하거나 선택을 바꾸거나 환경 확인을 다시 하면 지운다.
+        self._notice = None
+        self._inspect_notice = None  # 환경 확인 실패 안내(다시 확인해야 지워짐)
         self._badge_split = None
         self._badge_wired = False
         self.frames = False  # 측정 파이프라인(PresentMon 수집기) 동작 중: FPS 표시 또는 수집 모드가 켜져 있을 때
@@ -218,6 +222,8 @@ class OptimizationController(QObject):
 
     def _save_selection(self, *_):
         if self._restoring_selection or self.panel is None: return
+        if self._notice and self._notice != self._inspect_notice:
+            self._notice = None  # 고른 항목이 바뀌면 시작 차단 안내는 지운다(환경 확인 실패 안내는 다시 확인 때까지)
         d = self.panel
         selection = dict(priority=d.priority.isChecked(), tcp=d.tcp.isChecked(), auto=d.auto.isChecked(),
                          advanced=d.advanced_toggle.isChecked())
@@ -327,6 +333,8 @@ class OptimizationController(QObject):
         label = f'{layout.name} ({layout.short})' if layout is not None else self._summary_requested.get('layout_name')
         headline, level, lines = summarize(self.engine, self.recovery, self._summary_requested, layout_label=label,
                                            kept_on=self._kept_on, restore_wait=self._restore_wait)
+        if self._notice and not self.engine.busy:
+            headline, level, lines = self._notice, 'warn', []
         style = f'font-weight:bold; color:{COLORS[level]};'
         if d.status.text() != headline:
             d.status.setText(headline)
@@ -337,8 +345,12 @@ class OptimizationController(QObject):
             d.results.setText(text)
         d.results.setVisible(bool(lines))
         if self.engine.status != self._logged_status:
+            # 바뀔 때 새로 생긴 줄만 남긴다(2초마다 다시 만든 같은 기록을 반복하지 않게, 13.13 QA 후속)
+            before = set((self._logged_status or '').split('\n'))
+            added = [line for line in self.engine.status.split('\n') if line and line not in before]
             self._logged_status = self.engine.status
-            _log.info('최적화 상태: %s', self.engine.status.replace('\n', ' / '))
+            if added:
+                _log.info('최적화 상태: %s', ' / '.join(added))
 
     def _show_layout_detail(self):
         """콤보 아래 회색 두 줄: 실제 배분과 근거(13.11, 알파 동안 숫자 병기)."""
@@ -514,6 +526,7 @@ class OptimizationController(QObject):
         return True
 
     def _begin(self, options):
+        self._notice = None
         layout = self._layouts.get(options.get('layout')) if options.get('layout') else None
         if options['cpu'] and options.get('layout'):
             from ..optimization.layouts import NAMES
@@ -543,10 +556,10 @@ class OptimizationController(QObject):
                        tcp=d.tcp.isChecked(),rss=False,priority=d.priority.isChecked(),
                        auto=d.auto.isChecked())  # 13.8: RSS 새 적용 없음 · 13.11: 배치는 이름 키
         if not any(options[k] for k in ('cpu','tcp','priority')):
-            self.engine.status='사용할 항목을 선택해 주세요.'
+            self.engine.status = self._notice = '사용할 항목을 선택해 주세요.'
             return
         if options['tcp'] and not options['adapter']:
-            self.engine.status='패스트핑을 적용할 연결을 상세 설정에서 선택해 주세요.'
+            self.engine.status = self._notice = '패스트핑을 적용할 연결을 상세 설정에서 선택해 주세요.'
             return
         if options['tcp'] and not self._network_confirmation(): return
         self._begin(options)
@@ -917,6 +930,11 @@ class OptimizationController(QObject):
             topology, adapters = self.engine.inspection
             self.engine.inspection = None
             self._apply_inspection(topology, adapters)
+            failed = getattr(self.engine, 'inspection_failed', [])
+            self._inspect_notice = (f"{'·'.join(failed)}을 읽지 못했어요 · 자세히 보기에서 이유를 확인하고 '다시 확인'을 눌러 주세요"
+                                    if failed else None)
+            self._notice = self._inspect_notice
+            self._render_result(d)  # 같은 틱에 바로 보이게
 
     def _summary_now(self):
         try: return presentmon.clock()[0]
