@@ -55,7 +55,11 @@ def summarize(engine, recovery, requested=None, *, layout_label=None, kept_on=Fa
         if phase == 'ended':
             lines = [_line(key, labels.get(key, ''), 'restored', '') for key in ('priority', 'cpu')
                      if outcome.get(key, ('',))[0] == 'restored']
-            return '게임이 끝나 원래대로 되돌렸어요', 'neutral', lines + ([network_line] if network_left else [])
+            if 'tcp' in outcome and 'tcp' in labels:  # 13.15: 미룬 패스트핑은 게임이 끝나면 적용 — 결과 줄을 남긴다
+                lines.append(_line('tcp', labels['tcp'], *outcome['tcp']))
+            elif network_left:
+                lines.append(network_line)
+            return '게임이 끝나 원래대로 되돌렸어요', 'neutral', lines
         if phase != 'applied':
             auto = requested.get('auto')
             return ('마비노기를 기다리는 중 · 켜지면 자동으로 적용해요' if auto else '마비노기를 기다리는 중 · 켜지면 적용해요'), 'neutral', []

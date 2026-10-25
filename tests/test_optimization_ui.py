@@ -10,13 +10,13 @@ from mabinogi_addon.optimization.frames import FrameStream
 def test_creator_entry_no_automatic_measurement_and_access_revocation(window,monkeypatch):
     w,app=window
     c=w.optimization_tools
-    monkeypatch.setattr(module,'is_creator',lambda:False)
+    monkeypatch.setattr(module, 'optimization_available',lambda:False)
     c.refresh_access()
     assert w._tabs.indexOf(c.panel)==-1
     assert not c.frames and not c.collector.active and not c.engine.busy
     c.start_frames()
     assert not c.frames
-    monkeypatch.setattr(module,'is_creator',lambda:True)
+    monkeypatch.setattr(module, 'optimization_available',lambda:True)
     c.refresh_access()
     assert w._tabs.tabText(w._tabs.indexOf(c.panel))=='최적화'
     assert [w._tabs.tabText(i) for i in range(w._tabs.count())]==['전투 보조','파티 모집','편의기능','블랙박스','최적화','설정']  # 0.16.0: 로그인 사용자는 블랙박스 탭도 보임
@@ -30,7 +30,7 @@ def test_creator_entry_no_automatic_measurement_and_access_revocation(window,mon
     monkeypatch.setattr(c.backend,'game',lambda:None)
     c.start_frames()
     assert c.frames and not c.collector.active
-    monkeypatch.setattr(module,'is_creator',lambda:False)
+    monkeypatch.setattr(module, 'optimization_available',lambda:False)
     c.refresh_access()
     assert not c.frames and not c.overlay.isVisible()
 
@@ -42,7 +42,7 @@ def test_fps_pause_hides_only_and_focus_boundary_resets_frames(window,monkeypatc
     game={'pid':123,'birth':'999'}
     now=[100.0]
     active=[True]
-    monkeypatch.setattr(module,'is_creator',lambda:True)
+    monkeypatch.setattr(module, 'optimization_available',lambda:True)
     monkeypatch.setattr(c.backend,'game',lambda:game)
     monkeypatch.setattr(module.presentmon,'clock',lambda:(now[0],1000))
     monkeypatch.setattr(module.presentmon,'game_context',lambda *a:(active[0],(11,123,0,0,1000,800)))
@@ -105,7 +105,7 @@ def test_owned_fps_marker_recovers_without_requiring_creator(window,monkeypatch)
     previous=Collector()
     calls=[]
     monkeypatch.setattr(module.presentmon,'session_losses',lambda session,**kw:calls.append((session,kw)) or 0)
-    monkeypatch.setattr(module,'is_creator',lambda:False)
+    monkeypatch.setattr(module, 'optimization_available',lambda:False)
     assert previous.pending
     assert previous.stop()
     assert calls==[(name,{'stop':True})]
@@ -127,7 +127,7 @@ def test_corrupt_fps_marker_never_stops_guessed_or_foreign_session(window,monkey
 def test_fps_scale_and_lock_save_without_enabling_measurement(window,monkeypatch):
     w,app=window
     c=w.optimization_tools
-    monkeypatch.setattr(module,'is_creator',lambda:True)
+    monkeypatch.setattr(module, 'optimization_available',lambda:True)
     c.open()
     base=c.overlay.width()
     c.panel.scale.setValue(200)
@@ -137,7 +137,7 @@ def test_fps_scale_and_lock_save_without_enabling_measurement(window,monkeypatch
     stored=module.config._read_local_config()['frameMeter']
     assert stored['scale']==200 and stored['overlay']['locked'] is False
     assert c.panel.scale.value()==200
-    monkeypatch.setattr(module,'is_creator',lambda:False)
+    monkeypatch.setattr(module, 'optimization_available',lambda:False)
     c._set_scale(300)
     assert c._scale==200 and not c.frames
 
@@ -145,7 +145,7 @@ def test_fps_scale_and_lock_save_without_enabling_measurement(window,monkeypatch
 def test_config_restart_blocks_new_alpha_operations_and_stops_capture(window,monkeypatch):
     w,app=window
     c=w.optimization_tools
-    monkeypatch.setattr(module,'is_creator',lambda:True)
+    monkeypatch.setattr(module, 'optimization_available',lambda:True)
     c.open()
     c.frames=True
     w._config_pending_restart=True
@@ -165,7 +165,7 @@ def test_collector_csv_reaches_app_parser_in_fragmented_chunks(window,monkeypatc
     chunks=deque((data[:17],data[17:213],data[213:]))
     monkeypatch.setattr(c.collector,'process',SimpleNamespace(readAllStandardOutput=lambda:chunks.popleft()))
     monkeypatch.setattr(module.presentmon,'clock',lambda:(100.52,1000))
-    monkeypatch.setattr(module,'is_creator',lambda:True)
+    monkeypatch.setattr(module, 'optimization_available',lambda:True)
     c.frames=True;c.stream=FrameStream(123,1000);c.collector.active=True
     c._sync_summary_context(100.0)  # 실제 시작 tick처럼 수집 전에 관측 조건 확정
     for _ in range(3): c.collector._read()
@@ -184,7 +184,7 @@ def test_embedded_creator_and_recovery_tabs_preserve_single_lifetime(window,monk
     monkeypatch.setattr(c.engine,'inspect',lambda:calls.append('inspect'))
     monkeypatch.setattr(c.engine,'start',lambda *a:calls.append('start'))
     monkeypatch.setattr(c,'start_frames',lambda:calls.append('frames'))
-    monkeypatch.setattr(module,'is_creator',lambda:True)
+    monkeypatch.setattr(module, 'optimization_available',lambda:True)
     for _ in range(5):
         c.refresh_access();w._tabs.setCurrentWidget(panel);panel.tabs.setCurrentIndex(1)
         w._tabs.setCurrentWidget(w._settings_scroll);panel.tabs.setCurrentIndex(0)
@@ -196,7 +196,7 @@ def test_embedded_creator_and_recovery_tabs_preserve_single_lifetime(window,monk
     if recovery=='corrupt': c.recovery.corrupt=True
     elif recovery=='pending': c.recovery.items=[dict(kind='ack',target='12345678-1234-1234-1234-123456789abc',old=None,applied=1,state='failed')]
     elif recovery=='restart': c.recovery.restart_targets={'12345678-1234-1234-1234-123456789abc'}
-    monkeypatch.setattr(module,'is_creator',lambda:False)
+    monkeypatch.setattr(module, 'optimization_available',lambda:False)
     c.refresh_access();c._tick()
     assert w._tabs.indexOf(panel)==-1
     # 새 시작은 막는다. 되돌릴 기록이 남아 있으면 토글은 켜짐(원복 경로)으로 남는다(13.5, 이전 '중단 · 원복'과 같음).
@@ -209,7 +209,7 @@ def test_embedded_creator_and_recovery_tabs_preserve_single_lifetime(window,monk
     c._restore_all()
     assert restores==[dict(network=False,accept_normalized=False,network_deferred=False)]
     c.engine.recovery_requested=True;c._tick()
-    monkeypatch.setattr(module,'is_creator',lambda:True)
+    monkeypatch.setattr(module, 'optimization_available',lambda:True)
     c.refresh_access()
     # 0.16.0: 로그인 사용자(픽스처)는 블랙박스 탭도 보여 최적화는 설정 바로 앞(4), 설정은 마지막(5)
     assert w._tabs.indexOf(panel)==4 and w._tabs.widget(5) is w._settings_scroll
@@ -219,7 +219,7 @@ def test_embedded_creator_and_recovery_tabs_preserve_single_lifetime(window,monk
 
 def test_creator_tour_settings_target_is_stable_when_optimization_is_inserted(window,monkeypatch):
     w,app=window;c=w.optimization_tools
-    monkeypatch.setattr(module,'is_creator',lambda:True);c.refresh_access()
+    monkeypatch.setattr(module, 'optimization_available',lambda:True);c.refresh_access()
     assert w._tabs.indexOf(w._settings_scroll)==w._tabs.count()-1==5  # 0.16.0: 블랙박스 탭 포함
     w._run_tour();tour=w._tour;tour._i=5;tour._show_step();app.processEvents()
     assert w._tabs.currentWidget() is w._settings_scroll
@@ -231,7 +231,8 @@ def test_summary_collection_shares_parser_preserves_pause_and_exports_without_ra
     import json,time
     from mabinogi_addon.optimization.frame_summary_store import SummaryStore
     c=window[0].optimization_tools;c.timer.stop()
-    monkeypatch.setattr(module,'is_creator',lambda:True)
+    monkeypatch.setattr(module, 'optimization_available',lambda:True)
+    monkeypatch.setattr(module, 'is_creator', lambda: True)  # 13.15: 수집 모드는 제작자만
     now=[100.0]
     monkeypatch.setattr(module.presentmon,'clock',lambda:(now[0],1000000))
     c.summary_store=SummaryStore(tmp_path/'summaries')
@@ -274,7 +275,7 @@ def test_start_from_app_preserves_collector_header_before_game_focus(window, mon
     now = [100.0]
     game = {'pid': 123, 'birth': '999'}
     active = [False]
-    monkeypatch.setattr(module, 'is_creator', lambda: True)
+    monkeypatch.setattr(module, 'optimization_available', lambda: True)
     monkeypatch.setattr(module.config, 'load_game_exe', lambda: 'game.exe')
     monkeypatch.setattr(module.presentmon, 'clock', lambda: (now[0], 1000))
     monkeypatch.setattr(module.presentmon, 'executable', lambda: object())
@@ -302,7 +303,7 @@ def test_start_from_app_preserves_collector_header_before_game_focus(window, mon
 
 def test_rss_normalized_restore_asks_specific_confirmation(window, monkeypatch):
     w, app = window; c = w.optimization_tools
-    monkeypatch.setattr(module, 'is_creator', lambda: True); c.refresh_access()
+    monkeypatch.setattr(module, 'optimization_available', lambda: True); c.refresh_access()
     calls = []
     c.recovery.restart_targets = {'12345678-1234-1234-1234-123456789abc'}  # 네트워크 원복 대상 있음
     monkeypatch.setattr(c.engine, 'stop_and_restore', lambda **k: calls.append(k))
@@ -329,7 +330,7 @@ def test_rss_normalized_restore_asks_specific_confirmation(window, monkeypatch):
 
 def test_rss_normalization_detected_asks_once_without_second_click(window, monkeypatch):
     w, app = window; c = w.optimization_tools
-    monkeypatch.setattr(module, 'is_creator', lambda: True); c.refresh_access()
+    monkeypatch.setattr(module, 'optimization_available', lambda: True); c.refresh_access()
     calls, asked = [], []
     monkeypatch.setattr(c.engine, 'restore_network', lambda **k: calls.append(k))
     monkeypatch.setattr(c, '_normalized_confirmation', lambda: asked.append(1) or True)
@@ -349,7 +350,7 @@ def test_rss_normalization_detected_asks_once_without_second_click(window, monke
 def test_single_restore_button_restores_cpu_only_without_network_prompt(window, monkeypatch):
     """원버튼: 네트워크 변경이 없으면 확인 없이 CPU만, 있으면 확인 1회 후 함께 원복. 별도 버튼 없음."""
     w, app = window; c = w.optimization_tools
-    monkeypatch.setattr(module, 'is_creator', lambda: True); c.refresh_access()
+    monkeypatch.setattr(module, 'optimization_available', lambda: True); c.refresh_access()
     assert not hasattr(c.panel, 'stop') and not hasattr(c.panel, 'restore')  # 13.5: 토글 하나
     calls = []
     monkeypatch.setattr(c.engine, 'stop_and_restore', lambda **k: calls.append(k))
@@ -364,7 +365,7 @@ def test_single_restore_button_restores_cpu_only_without_network_prompt(window, 
 
 def test_declining_network_prompt_restores_cpu_only(window, monkeypatch):
     w, app = window; c = w.optimization_tools
-    monkeypatch.setattr(module, 'is_creator', lambda: True); c.refresh_access()
+    monkeypatch.setattr(module, 'optimization_available', lambda: True); c.refresh_access()
     calls = []
     monkeypatch.setattr(c.engine, 'stop_and_restore', lambda **k: calls.append(k))
     monkeypatch.setattr(c, '_network_confirmation', lambda: False)
@@ -390,7 +391,7 @@ def test_selection_is_machine_local_and_not_exported(tmp_path):
 
 def test_first_open_runs_inspection_once_in_background(window, monkeypatch):
     w, app = window; c = w.optimization_tools
-    monkeypatch.setattr(module, 'is_creator', lambda: True); c.refresh_access()
+    monkeypatch.setattr(module, 'optimization_available', lambda: True); c.refresh_access()
     calls = []
     monkeypatch.setattr(c.engine, 'inspect', lambda: calls.append(1) or True)
     c._auto_inspected = False
@@ -430,7 +431,7 @@ def test_top_badge_is_creator_only_hidden_when_idle_and_opens_tab(window, monkey
     from types import SimpleNamespace as NS
     w, app = window; c = w.optimization_tools
     badge = w._optimization_badge
-    monkeypatch.setattr(module, 'is_creator', lambda: True); c.refresh_access()
+    monkeypatch.setattr(module, 'optimization_available', lambda: True); c.refresh_access()
     c._update_badge()
     assert badge.isHidden()  # 작업 없음
     c.recovery.items.append(dict(kind='ack', state='applied', target='x', old=1, applied=0))
@@ -440,7 +441,7 @@ def test_top_badge_is_creator_only_hidden_when_idle_and_opens_tab(window, monkey
         w._tabs.setCurrentWidget(w._settings_scroll)
         badge.click()
         assert w._tabs.currentWidget() is c.panel
-        monkeypatch.setattr(module, 'is_creator', lambda: False)
+        monkeypatch.setattr(module, 'optimization_available', lambda: False)
         c._update_badge()
         assert badge.isHidden()
     finally:
@@ -463,7 +464,7 @@ def test_condition_name_measurement_view_and_condition_summary(window, monkeypat
     import json
     from mabinogi_addon.optimization.frame_summary import FrameSummary
     w, app = window; c = w.optimization_tools
-    monkeypatch.setattr(module, 'is_creator', lambda: True); c.refresh_access()
+    monkeypatch.setattr(module, 'optimization_available', lambda: True); c.refresh_access()
 
     def measure(gap_every, condition):
         book = FrameSummary(); book.set_condition(condition); book.activate('a', 0); t = 0
@@ -497,7 +498,7 @@ def test_condition_change_during_measurement_cuts_and_continues_with_new_name(wi
     # FPS 명세 9절(이전 0.12.0 '다음 측정부터' 대체): 입력을 마치면 바로 적용. 기록 중이면 구간을 끊고 새 측정으로 이어서,
     # 한 구간·한 측정 안에 두 이름이 섞이지 않는다(7절 원칙).
     w, app = window; c = w.optimization_tools
-    monkeypatch.setattr(module, 'is_creator', lambda: True); c.refresh_access()
+    monkeypatch.setattr(module, 'optimization_available', lambda: True); c.refresh_access()
     c.panel.condition.setText('기본'); c.panel.condition.editingFinished.emit()
     assert c.summary.condition == '기본'
     old = c.summary
@@ -521,7 +522,7 @@ def test_condition_change_during_measurement_cuts_and_continues_with_new_name(wi
 def test_fps_display_toggle_starts_and_stops_measurement(window, monkeypatch):
     # FPS 탭 표시/수집 분리: 'FPS 표시' 토글 하나가 기존 측정 시작·중단과 같은 동작.
     w, app = window; c = w.optimization_tools
-    monkeypatch.setattr(module, 'is_creator', lambda: True); c.refresh_access()
+    monkeypatch.setattr(module, 'optimization_available', lambda: True); c.refresh_access()
     calls = []
     monkeypatch.setattr(c, 'start_frames', lambda: calls.append('start') or setattr(c, 'frames', True))
     monkeypatch.setattr(c, 'stop_frames', lambda message=None: calls.append('stop') or setattr(c, 'frames', False))
@@ -541,7 +542,8 @@ def test_collection_mode_measures_without_display_and_stops_when_both_off(window
     # FPS 명세 9절(이전 8.3 '표시가 켜져 있을 때만' 대체): 수집 모드를 켜면 표시와 무관하게 측정한다. 표시는 켜지 않는다.
     from mabinogi_addon.optimization.frame_summary_store import SummaryStore
     w, app = window; c = w.optimization_tools
-    monkeypatch.setattr(module, 'is_creator', lambda: True); c.refresh_access()
+    monkeypatch.setattr(module, 'optimization_available', lambda: True)
+    monkeypatch.setattr(module, 'is_creator', lambda: True); c.refresh_access()  # 13.15: 수집 모드는 제작자만
     calls = []
     monkeypatch.setattr(c, 'start_frames', lambda: calls.append('start') or setattr(c, 'frames', True))
     monkeypatch.setattr(c, 'stop_frames', lambda message=None: calls.append('stop') or setattr(c, 'frames', False))
@@ -566,7 +568,7 @@ def test_collection_without_display_never_shows_overlay_and_records_usage(window
     c.timer.stop()
     game = {'pid': 123, 'birth': '999'}
     now = [100.0]
-    monkeypatch.setattr(module, 'is_creator', lambda: True)
+    monkeypatch.setattr(module, 'optimization_available', lambda: True)
     monkeypatch.setattr(c.backend, 'game', lambda: game)
     monkeypatch.setattr(module.presentmon, 'clock', lambda: (now[0], 1000))
     monkeypatch.setattr(module.presentmon, 'game_context', lambda *a: (True, (11, 123, 0, 0, 1000, 800)))
@@ -593,7 +595,7 @@ def test_collection_without_display_never_shows_overlay_and_records_usage(window
 def test_fps_display_setting_is_restored_after_restart_but_collection_is_not(window, monkeypatch):
     # 0.13.3: 'FPS 표시' 켜짐은 재실행 후 유지, 수집 모드는 매번 꺼짐. 이전 세션 정리가 남으면 켜지 않음.
     w, app = window; c = w.optimization_tools
-    monkeypatch.setattr(module, 'is_creator', lambda: True); c.refresh_access()
+    monkeypatch.setattr(module, 'optimization_available', lambda: True); c.refresh_access()
     calls = []
     monkeypatch.setattr(c, 'start_frames', lambda: calls.append('start') or setattr(c, 'frames', True))
     monkeypatch.setattr(c, 'stop_frames', lambda message=None: calls.append('stop') or setattr(c, 'frames', False))
@@ -629,7 +631,7 @@ def test_single_optimization_toggle_follows_spec_13_5(window, monkeypatch):
     # 13.5: 꺼짐 → 켜짐 '최적화 적용 중'. 바꾼 것이 없어도 켜짐, 되돌릴 게 없으면 바로 꺼짐+안내.
     # 13.14(명세 변경): 꺼짐 문구는 '추천 설정으로 최적화'(직접 고르면 '선택한 설정으로 최적화').
     w, app = window; c = w.optimization_tools
-    monkeypatch.setattr(module, 'is_creator', lambda: True); c.refresh_access()
+    monkeypatch.setattr(module, 'optimization_available', lambda: True); c.refresh_access()
     toggle = c.panel.toggle
     started, restored = [], []
     def start():
@@ -698,7 +700,7 @@ def test_previous_run_records_start_as_restore_wait_and_session_end_is_not_alarm
 def test_pending_cleanup_and_start_in_one_click(window, monkeypatch):
     # 0.13.5: 이전 세션 정리가 남아 있으면 첫 클릭은 정리만 하고 두 번째에 켜지던 문제.
     w, app = window; c = w.optimization_tools
-    monkeypatch.setattr(module, 'is_creator', lambda: True); c.refresh_access()
+    monkeypatch.setattr(module, 'optimization_available', lambda: True); c.refresh_access()
     state = {'pending': True}
     monkeypatch.setattr(type(c.collector), 'pending', property(lambda self: state['pending']), raising=False)
     monkeypatch.setattr(c.collector, 'stop', lambda: state.update(pending=False) or True)
@@ -717,7 +719,7 @@ def test_collector_error_is_logged_and_restarted_at_most_three_times(window, mon
     import logging
     caplog.set_level(logging.INFO)
     w, app = window; c = w.optimization_tools
-    monkeypatch.setattr(module, 'is_creator', lambda: True); c.refresh_access()
+    monkeypatch.setattr(module, 'optimization_available', lambda: True); c.refresh_access()
     clock = [1000.0]
     monkeypatch.setattr(module.time, 'monotonic', lambda: clock[0])
     monkeypatch.setattr(c.collector, 'stop', lambda: True)

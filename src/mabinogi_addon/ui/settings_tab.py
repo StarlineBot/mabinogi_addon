@@ -558,7 +558,7 @@ class SettingsTab(QWidget):
         v.addLayout(row)
         v.addWidget(
             hint_label(
-                "베타 기능을 먼저 사용해 볼 수 있어요."
+                "로그인하면 블랙박스와 최적화를 사용할 수 있어요."
             )
         )
         self._refresh_login()

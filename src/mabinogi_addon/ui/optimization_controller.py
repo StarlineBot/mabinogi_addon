@@ -6,7 +6,7 @@ _log = logging.getLogger(__name__)
 from PySide6.QtCore import QObject, QTimer
 from PySide6.QtWidgets import QMessageBox
 from .. import config, paths
-from ..feature_access import Recheck, is_creator
+from ..feature_access import Recheck, is_creator, optimization_available
 from ..optimization.session import PROCESS_KINDS, Recovery
 from ..optimization.engine import Engine
 from ..optimization.frames import FrameStream
@@ -70,7 +70,8 @@ class OptimizationController(QObject):
         self.window = window
         # 제작자 확인은 config.json 읽기라 FPS 줄(초당 수백 개)·타이머마다 하지 않고 1초 동안 재사용한다(0.17.2).
         # 로그인 변경(login_changed → refresh_access)에는 바로 다시 확인한다.
-        self._creator = Recheck(lambda: is_creator())
+        self._access = Recheck(lambda: optimization_available())  # 13.15: 디스코드 로그인 사용자
+        self._creator = Recheck(lambda: is_creator())  # FPS 수집 모드(구간 요약 파일)는 제작자만
         self.backend = WindowsOptimization()
         # Machine-local recovery must never travel in a settings export/import.
         self.recovery = Recovery(paths.user_data_dir().parent / 'StarlineMabinogiAddonRuntime' / 'recovery.json',
@@ -151,7 +152,7 @@ class OptimizationController(QObject):
         self.refresh_access()
 
     def _can_start(self):
-        return (self._creator() and not getattr(self,'closing',False)
+        return (self._access() and not getattr(self,'closing',False)
                 and not getattr(self.window,'_closing',False)
                 and not getattr(self.window,'_config_pending_restart',False))
 
@@ -175,9 +176,15 @@ class OptimizationController(QObject):
         if self._overlay is not None: self._overlay.hide()
 
     def refresh_access(self, recheck=True):
-        if recheck: self._creator.invalidate()  # 로그인 변경 등 외부 요청: 설정을 바로 다시 읽는다
+        if recheck:  # 로그인 변경 등 외부 요청: 설정을 바로 다시 읽는다
+            self._access.invalidate(); self._creator.invalidate()
         allowed = self._can_start()
-        needed = self._creator()
+        needed = self._access()
+        creator = allowed and self._creator()
+        if self.panel is not None:
+            self.panel.collect_box.setVisible(creator)
+        if not creator and getattr(self, '_summary_collecting', False) and self.panel is not None:
+            self.panel.summary_collect.setChecked(False)  # 수집 권한이 없어지면 수집 모드도 끈다
         if hasattr(self.window,'_tabs'):
             tabs=self.window._tabs;index=tabs.indexOf(self.panel)
             if not self._tabs_watched:  # 메인 창 탭은 컨트롤러보다 늦게 생길 수 있어 여기서 한 번 연결
@@ -190,7 +197,7 @@ class OptimizationController(QObject):
                 tabs.removeTab(index)
             if needed: tabs.setTabText(index,'최적화')
         if not allowed:
-            if self.frames: self.stop_frames('제작자 접근이 해제돼 측정을 중단했어요.')
+            if self.frames: self.stop_frames('로그인이 해제돼 측정을 중단했어요.')
             if self.engine.busy: self.engine.cancel.set()
 
     def _update_badge(self):
@@ -200,7 +207,7 @@ class OptimizationController(QObject):
             self._badge_wired = True
             badge.clicked.connect(self._open_tab)
         state = (optimization_badge(self.recovery, self.engine, self._badge_split,
-                                    restore_wait=self._restore_wait, kept_on=self._kept_on) if self._creator() else None)
+                                    restore_wait=self._restore_wait, kept_on=self._kept_on) if self._access() else None)
         badge.setVisible(state is not None)
         if state is not None:
             text, level = state
@@ -361,10 +368,10 @@ class OptimizationController(QObject):
                 _log.info('최적화 상태: %s', ' / '.join(added))
 
     def _show_layout_detail(self):
-        """콤보 아래 회색 두 줄: 실제 배분과 근거(13.11, 알파 동안 숫자 병기)."""
+        """콤보 아래 회색 줄: 실제 배분만(13.15에서 근거 문장 삭제 — 내부 문서 번호 노출도 함께 해소)."""
         if self.panel is None: return
         layout = self._layouts.get(self.panel.split.currentData())
-        self.panel.split_detail.setText(f'{layout.allocation}\n근거: {layout.basis}' if layout else '')
+        self.panel.split_detail.setText(layout.allocation if layout else '')
 
     def _maybe_auto_inspect(self):
         if (self._auto_inspected or not hasattr(self.window, '_tabs')
@@ -632,7 +639,7 @@ class OptimizationController(QObject):
         """'중단 · 원복': 세션을 멈추고 적용했던 CPU·네트워크를 모두 되돌린다. 네트워크가 포함되면
         시작할 때처럼 연결 끊김 확인을 한 번 받는다. 거절하면 CPU만 되돌리고 네트워크는 '원복 대기'로
         남긴다(명세 6절: 게임 중 연결을 끊지 않고 CPU만 멈추는 경로).
-        제작자 접근이 없으면 CPU만 원복한다(네트워크 원복은 기존처럼 접근 필요)."""
+        접근(로그인)이 없으면 CPU만 원복한다(네트워크 원복은 기존처럼 접근 필요)."""
         self._restore_requested = True  # 끝난 뒤 남으면 '원복 대기'(13.5)
         network = (any(i['kind'] not in PROCESS_KINDS for i in self.recovery.pending) or bool(self.recovery.restart_targets))
         network = network and self._can_start()
@@ -794,7 +801,7 @@ class OptimizationController(QObject):
         try:
             now, _ = presentmon.clock()
             if not self._can_start():
-                self.stop_frames('제작자 접근 해제 · 측정 중단')
+                self.stop_frames('로그인 해제 · 측정 중단')
                 return
             active = self.context is None or self.context[0]
             accept_events = active and self._sync_summary_context(now)
@@ -918,7 +925,7 @@ class OptimizationController(QObject):
         for control in (d.lock,d.scale,*d.metric_boxes.values()): control.setEnabled(allowed)
         d.frames_toggle.setEnabled((allowed and not self.closing) or self.frames or self.collector.pending)
         self._sync_frames_toggle()
-        for control in (d.summary_collect,d.summary_save,d.summary_folder): control.setEnabled(allowed)
+        for control in (d.summary_collect,d.summary_save,d.summary_folder): control.setEnabled(allowed and self._creator())
         d.frames_status.setText(self.frame_status)
         self._render_result(d)
         self._update_recommendation()
@@ -985,7 +992,7 @@ class OptimizationController(QObject):
         return True
 
     def _toggle_summary_collection(self, enabled):
-        if enabled and not self._can_start():
+        if enabled and not (self._can_start() and self._creator()):
             self.panel.summary_collect.setChecked(False)
             return
         if self.stream is not None:

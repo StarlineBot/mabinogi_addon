@@ -34,6 +34,9 @@ def session_line(notices, failures):
     return '게임 세션 사용 중 · 항목별 적용값 확인 완료'
 
 
+TCP_DEFERRED = '게임을 끄면 적용해요'  # 13.15: 게임 중 시작해 미룬 패스트핑(게임이 끝나면 자동 적용)
+
+
 def short_reason(exc) -> str:
     """결과 요약(13.13)용 이유 한 마디. 원문은 상세(자세히 보기·app.log)에만 둔다."""
     text = str(exc)
@@ -118,7 +121,7 @@ class Engine:
 
     def inspect(self):
         def work():
-            if not self.allowed(): raise PermissionError('제작자 접근이 필요해요.')
+            if not self.allowed(): raise PermissionError('로그인이 필요해요.')
             topology, adapters, errors = None, [], []
             try:
                 topology = self.backend.topology()
@@ -137,6 +140,48 @@ class Engine:
             self.status = '\n'.join(errors) if errors else '환경을 확인했어요. 시작을 누르기 전에는 적용하지 않아요.'
         return self._launch(work, status='환경 확인 중…', task='inspect')
 
+    def _apply_tcp(self, options, results, notices, fail, network_guard):
+        """패스트핑 적용(시작 때, 또는 13.15: 게임 실행 중이라 미룬 뒤 그 게임이 끝나 CPU를 되돌린 직후). 확인 창은 시작 때 한 번만."""
+        tcp_results = []
+        guid = options['adapter']
+        if not guid: raise ValueError('적용할 물리 네트워크 어댑터를 선택해 주세요.')
+        changes = [('ack',guid,1),('autotuning','global','normal')]
+        for kind, target, value in changes:
+            if self.cancel.is_set() or not self.allowed(): break
+            try:
+                result=self.recovery.apply(kind,target,value,guard=network_guard)
+                tcp_results.append(result)
+                results.append(f'{kind}: '+{'unchanged':'이미 목표값 · 그대로 둠','written':'적용 · 재연결 후 확인'}.get(result,'적용값 확인 완료'))
+            except ChangeDeferred as exc:
+                notices.append(str(exc))
+                self.outcome['tcp'] = ('deferred', TCP_DEFERRED)
+                break
+            except Exception as exc:
+                fail(f'{kind} 미적용·확인 필요: {exc}')
+                self.outcome['tcp'] = ('fail', short_reason(exc))
+        # Explicit start confirmation covered this one batch reconnect.
+        try:
+            self.recovery.flush_network(guard=network_guard)
+            if any(i['kind']=='rss' and i['state']=='applied' for i in self.recovery.items):
+                results.append('rss: 재연결 후 적용값 확인 완료')
+        except ChangeDeferred as exc:
+            notices.append(str(exc))
+            self.outcome.setdefault('tcp', ('deferred', TCP_DEFERRED))
+        except Exception as exc:
+            fail('네트워크 재연결 확인 필요: '+str(exc))
+            self.outcome['tcp'] = ('fail', short_reason(exc))
+        if 'tcp' not in self.outcome and tcp_results:
+            self.outcome['tcp'] = ('same', '') if all(r == 'unchanged' for r in tcp_results) else ('ok', '')
+
+    def _deferred_tcp(self, options, results, notices, fail, network_guard):
+        """13.15: 미룬 패스트핑을 지금 적용한다(중단·접근 해제면 하지 않음). 게임이 다시 켜져 있으면 계속 미룬다."""
+        if self.outcome.get('tcp', ('',))[0] != 'deferred' or self.cancel.is_set() or not self.allowed():
+            return False
+        del self.outcome['tcp']
+        _log.info('최적화: 게임이 끝나 미룬 패스트핑을 적용해요')
+        self._apply_tcp(options, results, notices, fail, network_guard)
+        return True
+
     def _end_game(self, notices):
         """자동 적용: 끝난 게임(또는 보류)에 건 프로세스 값만 원복하고 기록을 정리한다. 네트워크는 건드리지 않는다."""
         errors = self.recovery.restore()
@@ -154,7 +199,7 @@ class Engine:
         self.outcome, self.phase, self.ran = {}, None, True
         options = dict(options)
         def work():
-            if not self.allowed(): raise PermissionError('제작자 접근이 필요해요.')
+            if not self.allowed(): raise PermissionError('로그인이 필요해요.')
             if options.get('auto'):
                 # 13.10: 남은 네트워크 기록(패스트핑 유지)은 그대로 두고 시작한다. 앱이 비정상 종료돼 남은 프로세스 기록은
                 # 게임이 아직 켜져 있으면 그 게임을 다시 관리하고(같은 PID·시작 시각이면 apply가 이어 받음),
@@ -202,39 +247,10 @@ class Engine:
             if governor and (options['cpu'] or options.get('priority')):
                 notices.append('Process Lasso Governor 실행 중: CPU·게임 우선순위 적용 보류')
             if game and options['tcp']:
-                notices.append('게임 실행 중: TCP 적용을 보류했어요.')
-                self.outcome['tcp'] = ('deferred', '게임이 실행 중이라 미뤘어요')
+                notices.append('게임 실행 중: TCP 적용을 보류했어요(게임이 끝나면 적용).')
+                self.outcome['tcp'] = ('deferred', TCP_DEFERRED)
             elif options['tcp']:
-                tcp_results = []
-                guid = options['adapter']
-                if not guid: raise ValueError('적용할 물리 네트워크 어댑터를 선택해 주세요.')
-                changes = [('ack',guid,1),('autotuning','global','normal')]
-                for kind, target, value in changes:
-                    if self.cancel.is_set() or not self.allowed(): break
-                    try:
-                        result=self.recovery.apply(kind,target,value,guard=network_guard)
-                        tcp_results.append(result)
-                        results.append(f'{kind}: '+{'unchanged':'이미 목표값 · 그대로 둠','written':'적용 · 재연결 후 확인'}.get(result,'적용값 확인 완료'))
-                    except ChangeDeferred as exc:
-                        notices.append(str(exc))
-                        self.outcome['tcp'] = ('deferred', '게임이 실행 중이라 미뤘어요')
-                        break
-                    except Exception as exc:
-                        fail(f'{kind} 미적용·확인 필요: {exc}')
-                        self.outcome['tcp'] = ('fail', short_reason(exc))
-                # Explicit start confirmation covered this one batch reconnect.
-                try:
-                    self.recovery.flush_network(guard=network_guard)
-                    if any(i['kind']=='rss' and i['state']=='applied' for i in self.recovery.items):
-                        results.append('rss: 재연결 후 적용값 확인 완료')
-                except ChangeDeferred as exc:
-                    notices.append(str(exc))
-                    self.outcome.setdefault('tcp', ('deferred', '게임이 실행 중이라 미뤘어요'))
-                except Exception as exc:
-                    fail('네트워크 재연결 확인 필요: '+str(exc))
-                    self.outcome['tcp'] = ('fail', short_reason(exc))
-                if 'tcp' not in self.outcome and tcp_results:
-                    self.outcome['tcp'] = ('same', '') if all(r == 'unchanged' for r in tcp_results) else ('ok', '')
+                self._apply_tcp(options, results, notices, fail, network_guard)
             if not options['cpu'] and not options.get('priority'):
                 # CPU·우선순위를 끈 세션은 게임을 기다릴 이유가 없다(네트워크 설정은 원복 전까지 유지).
                 self.status = '\n'.join([result_headline(notices, failures)] + results + notices
@@ -292,9 +308,24 @@ class Engine:
                         for key in ('priority', 'cpu'):
                             if key in self.outcome:
                                 self.outcome[key] = ('restored', '')
+                        self._deferred_tcp(options, results, notices, fail, network_guard)
                         _log.info('최적화 자동 적용: 게임 종료 · 그 게임에 건 값을 정리하고 다음 게임을 기다려요')
                         notices.append('게임 종료 · 이 게임에 건 값을 정리했어요. 다음 게임을 기다려요.')
                         continue
+                    if self.outcome.get('tcp', ('',))[0] == 'deferred' and not self.cancel.is_set():
+                        # 13.15: CPU를 먼저 되돌리고 미룬 패스트핑을 적용한다. 요약에는 패스트핑 줄만 남는다.
+                        errors = self.recovery.restore()
+                        if errors:
+                            notices.append('CPU 원복 확인 필요: ' + '; '.join(errors[:4]))
+                        for key in ('priority', 'cpu'):
+                            self.outcome.pop(key, None)
+                        results = []
+                        self._deferred_tcp(options, results, notices, fail, network_guard)
+                        if self.outcome.get('tcp', ('',))[0] == 'deferred':
+                            self.outcome['tcp'] = ('fail', '게임이 다시 켜져 적용하지 못했어요')
+                        self.status = '\n'.join(results + notices + ['게임 종료 · CPU를 원복하고 미룬 패스트핑을 적용했어요.'])
+                        self.session_end = 'network_only'
+                        return
                     self.status = '\n'.join(results + notices + ['게임 종료 · CPU를 원복해요. 다음 게임에는 자동 적용하지 않아요.'])
                     self.session_end = 'game_exit'
                     return

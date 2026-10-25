@@ -94,7 +94,7 @@ def test_access_revoked_outside_login_signal_is_seen_within_one_second(window, m
         now[0] += 0.0045
         c._line(f'game,123,0x1,{round(now[0] * 1000000)},4.5')
         time.sleep(0.01)
-    assert not c.frames and '제작자 접근 해제' in c.frame_status
+    assert not c.frames and '로그인 해제' in c.frame_status
 
 
 # ---- FPS 표시 약 2시간 뒤 꺼짐(요약 한도) ----
@@ -118,7 +118,7 @@ def _next_line(c, now):
 def test_summary_limit_without_collection_keeps_display(window, monkeypatch, caplog):
     # 사용자 app.log 08:33:02 'FPS 표시 중단: 구간/전환 요약 한도' → 수집을 안 하면 표시는 멈추지 않는다
     c = window[0].optimization_tools; c.timer.stop()
-    monkeypatch.setattr(module, 'is_creator', lambda: True)
+    monkeypatch.setattr(module, 'optimization_available', lambda: True)
     c.summary.set_condition('마을')
     now = _feed(c, monkeypatch, 30)
     old = c.summary
@@ -134,7 +134,7 @@ def test_summary_limit_without_collection_keeps_display(window, monkeypatch, cap
 
 def test_summary_limit_while_collecting_stops_collection_only(window, monkeypatch):
     c = window[0].optimization_tools; c.timer.stop()
-    monkeypatch.setattr(module, 'is_creator', lambda: True)
+    monkeypatch.setattr(module, 'optimization_available', lambda: True)
     c.open()
     now = _feed(c, monkeypatch, 30)
     c._collect_only = False
@@ -150,7 +150,7 @@ def test_summary_limit_while_collecting_stops_collection_only(window, monkeypatc
 
 def test_summary_limit_in_collect_only_mode_ends_measurement(window, monkeypatch):
     c = window[0].optimization_tools; c.timer.stop()
-    monkeypatch.setattr(module, 'is_creator', lambda: True)
+    monkeypatch.setattr(module, 'optimization_available', lambda: True)
     c.open()
     now = _feed(c, monkeypatch, 30)
     c._collect_only = True
@@ -231,7 +231,7 @@ def test_blackbox_controller_shares_cached_permission_with_service(monkeypatch, 
 def test_optimization_badge_matches_other_status_badges(window, monkeypatch, state, color):
     w = window[0]
     c = w.optimization_tools; c.timer.stop()
-    monkeypatch.setattr(module, 'is_creator', lambda: True)
+    monkeypatch.setattr(module, 'optimization_available', lambda: True)
     monkeypatch.setattr(module, "optimization_badge", lambda *a, **k: state)
     c.refresh_access()
     c._update_badge()

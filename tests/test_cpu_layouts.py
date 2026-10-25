@@ -147,7 +147,7 @@ def test_panel_has_no_cpu_checkbox_and_combo_shows_names_with_numbers(window, mo
     from mabinogi_addon.ui.optimization_panel import POPUP_ROLE
     w = window[0]
     c = w.optimization_tools; c.timer.stop()
-    monkeypatch.setattr(module, 'is_creator', lambda: True); c.refresh_access()
+    monkeypatch.setattr(module, 'optimization_available', lambda: True); c.refresh_access()
     d = c.panel
     assert not hasattr(d, 'cpu')
     labels = [label.text() for label in d.findChildren(type(d.split_detail))]
@@ -156,7 +156,7 @@ def test_panel_has_no_cpu_checkbox_and_combo_shows_names_with_numbers(window, mo
     assert [d.split.itemText(i) for i in range(d.split.count())] == [
         '게임 집중 (추천) · 6+2', '게임 최대 집중 · 7+1', '게임 코어 단독 사용 · SMT 8×1', '배치 안 함 · 기본']
     assert d.split.itemData(0, POPUP_ROLE) == '게임 집중 · 추천\n게임 6코어 · 그 외 2코어 (6+2)'
-    assert d.split_detail.text().startswith('게임 6코어 · 그 외 2코어 (6+2)\n근거:')
+    assert d.split_detail.text() == '게임 6코어 · 그 외 2코어 (6+2)'  # 13.15: 근거 줄 삭제
     d.split.setCurrentIndex(3)
     assert d.split_detail.text().startswith('Windows 기본 배치') and not c._cpu_selected()
     from mabinogi_addon import config
@@ -166,7 +166,7 @@ def test_panel_has_no_cpu_checkbox_and_combo_shows_names_with_numbers(window, mo
 def test_badge_and_fps_record_use_layout_name(window, monkeypatch):
     w = window[0]
     c = w.optimization_tools; c.timer.stop()
-    monkeypatch.setattr(module, 'is_creator', lambda: True); c.refresh_access()
+    monkeypatch.setattr(module, 'optimization_available', lambda: True); c.refresh_access()
     started = []
     monkeypatch.setattr(c.engine, 'start', lambda options: started.append(options) or True)
     c._apply_inspection(X9800, [])

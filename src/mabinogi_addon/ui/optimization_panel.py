@@ -151,10 +151,12 @@ class OptimizationPanel(QWidget):
                                '게임 메모리: 마비노기가 차지한 메모리\n1초마다 읽기만 해요. 작업 관리자는 PC 전체 기준이라 숫자가 달라요.'))
         group=_group('상태 · 수집 품질',body)
         self.frames_status=_label('꺼짐 · 표시 안 함');group.addWidget(self.frames_status)
-        group.addWidget(_label('앱을 다시 실행해도 FPS 표시 설정은 유지돼요. 수집 모드는 매번 꺼진 상태로 시작해요.\n전투 보조 일시정지는 FPS 표시만 숨겨요.'))
-        group=_group('프레임 수집(베타)',body)
+        group.addWidget(_label('앱을 다시 실행해도 FPS 표시 설정은 유지돼요.\n전투 보조 일시정지는 FPS 표시만 숨겨요.'))
+        group=_group('프레임 수집',body)
+        self.collect_box=group.parentWidget()  # 13.15: 수집 모드는 제작자만 보임
         group.addWidget(_label('수집 모드를 켜 두면 FPS 표시와 관계없이 게임이 앞에 있는 동안 구간 요약을 파일로 남겨요.\n'
-                               '게임 CPU·GPU 사용률과 게임의 CPU 선호도·우선순위도 함께 기록해요. 매 프레임 원본은 저장하지 않아요.'))
+                               '게임 CPU·GPU 사용률과 게임의 CPU 선호도·우선순위도 함께 기록해요. 매 프레임 원본은 저장하지 않아요.\n'
+                               '수집 모드는 앱을 실행할 때마다 꺼진 상태로 시작해요.'))
         row=QHBoxLayout()
         self.summary_save=QPushButton('요약 저장');row.addWidget(self.summary_save)
         self.summary_folder=QPushButton('폴더 열기');row.addWidget(self.summary_folder)

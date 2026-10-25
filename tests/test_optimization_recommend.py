@@ -31,7 +31,7 @@ def test_default_adapter_only_when_exactly_one_internet_route():
 def _controller(window, monkeypatch):
     w = window[0]
     c = w.optimization_tools; c.timer.stop()
-    monkeypatch.setattr(module, 'is_creator', lambda: True); c.refresh_access()
+    monkeypatch.setattr(module, 'optimization_available', lambda: True); c.refresh_access()
     return w, c
 
 

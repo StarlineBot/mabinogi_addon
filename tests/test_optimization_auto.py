@@ -139,7 +139,7 @@ def test_auto_option_is_saved_and_defaults_off(tmp_path):
 def _controller(window, monkeypatch):
     w = window[0]
     c = w.optimization_tools; c.timer.stop()
-    monkeypatch.setattr(module, 'is_creator', lambda: True); c.refresh_access()
+    monkeypatch.setattr(module, 'optimization_available', lambda: True); c.refresh_access()
     started = []
     monkeypatch.setattr(c.engine, 'start', lambda options: started.append(options) or True)
     return w, c, started

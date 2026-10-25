@@ -152,7 +152,7 @@ class Recovery:
     def apply(self, kind, target, value, *, guard=None):
         with self.lock:
             if not self.allowed() or self.corrupt:
-                raise PermissionError('제작자 접근 또는 복구 기록을 확인해 주세요.')
+                raise PermissionError('로그인 또는 복구 기록을 확인해 주세요.')
             self.backend.validate(kind, target, value)
             if guard is not None: guard()
             existing = next((i for i in self.items if i['kind'] == kind and i['target'] == target and i['state'] != 'restored'), None)
@@ -182,7 +182,7 @@ class Recovery:
             try:
                 if guard is not None: guard()
                 if not self.allowed():
-                    raise PermissionError('제작자 접근이 해제됐어요.')
+                    raise PermissionError('로그인이 해제됐어요.')
                 write_started=True
                 guarded_write=getattr(self.backend,'guarded_write',None)
                 if guard is not None and guarded_write is not None:

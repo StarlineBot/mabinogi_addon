@@ -11,6 +11,11 @@ def blackbox_available() -> bool:
     return isinstance(user, dict) and bool(user.get("id"))
 
 
+def optimization_available() -> bool:
+    """최적화(13.15, 2026-10-25 사용자 결정): 블랙박스와 같은 판정 — 디스코드 로그인 사용자. FPS 수집 모드는 제작자만(is_creator)."""
+    return blackbox_available()
+
+
 def is_creator() -> bool:
     user = config.load_discord_user()
     return (isinstance(CREATOR_DISCORD_ID, str) and CREATOR_DISCORD_ID.isdecimal()

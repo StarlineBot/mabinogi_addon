@@ -166,7 +166,10 @@ class BlackboxController(QObject):
             from .main_window import _scrolled
             self.panel = BlackboxTab()
             self._page = _scrolled(self.panel)
-            tabs.insertTab(tabs.indexOf(self.window._settings_scroll), self._page, '블랙박스')
+            # 탭 순서는 항상 … · 블랙박스 · 최적화 · 설정(0.22.0: 최적화가 먼저 열려 있어도 그 앞에 넣는다)
+            optimization = getattr(getattr(self.window, 'optimization_tools', None), 'panel', None)
+            before = tabs.indexOf(optimization) if optimization is not None else -1
+            tabs.insertTab(before if before >= 0 else tabs.indexOf(self.window._settings_scroll), self._page, '블랙박스')
             self._connect_service()
 
     def _require_session(self):
