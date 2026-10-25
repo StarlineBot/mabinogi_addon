@@ -240,6 +240,13 @@
 - 테스트: 신규 `test_cpu_layouts.py` 17건(CPU 6종 목록·마스크·L3 감지·엔진 적용·화면). 기존 테스트 갱신(명세 변경 — CPU 체크박스 제거·배분 숫자 → 이름):
   `test_optimization_ui.py` 저장값 복원 1건, `test_optimization_auto.py` 4건.
 - 확인 남음: 실제 Windows L3 읽기(9800X3D는 L3 하나 → 3D 항목 없음이 정상), 게임 집중 적용 뒤 작업 관리자 선호도.
+- **QA(1df691d) 통과**: `run_release_checks --version 0.19.0` 672 passed, 최적화 테스트 217 passed. 명세 13.11과 코드 대조 일치.
+  L3 파싱 오프셋(CacheSize@12·GroupCount@38·GroupMask@40)을 SDK 구조체(ctypes)로 대조 일치, Win10 GroupCount 0도 통과.
+  CPU 5종 목록 직접 실행: 9800X3D 6+2(0xfff/0xf000)·7+1·SMT 8×1(그 외 안 바꿈)·기본 / 7950X3D 3D 8+8(0xffff/0xffff0000) / 7950X 단일 규칙 /
+  12600K P6+E4·P6×1+E4 / 5600 기본(추천)·5+1 — 명세 순서와 일치.
+  Improvement: 예전 저장(배분 숫자)의 이름 변환은 화면에만 반영되고 저장되지 않아, 환경 확인 전 앱 시작 자동 적용은 추천을 씀
+  (7+1 저장 사용자는 탭을 열 때까지 6+2. 개발 PC 6+2 저장이면 같음). Potential(낮음): 6코어 이하·우선순위 끔·환경 확인 전 자동 적용이면
+  추천 '배치 안 함'으로 할 일이 없어 '네트워크 설정 작업을 마쳤어요' 안내와 켜짐 표시.
 
 ### CI 시작 스모크 access violation 크래시 덤프 수집(사용자 승인 2026-10-25) — 워크플로 반영, 다음 Windows 실행 대기
 
