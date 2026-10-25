@@ -126,3 +126,52 @@ def test_color_verification_candidate_count_is_bounded(scene, templates, monkeyp
     engine.best_scores(crop(scene, *BOX))
     assert 0 < len(calls) <= len(IDS) * 4
     assert all(shape[:2] == (16, 16) for shape in calls)
+
+
+# ---- 2026-10-25 물리/마법 방어력 보호 감소 오인(사용자 원본 2560×1440) ----
+PHYSICAL = "물리 방어력 보호 감소"
+DEFENSE = (PHYSICAL, MAGIC)
+
+
+@pytest.fixture(scope="module")
+def defense_scene():
+    frame = image_io.imread(ROOT / "tests/data" / "스크린샷 2026-10-25 142736.png")
+    assert frame is not None and frame.shape[:2] == (1440, 2560)
+    return frame
+
+
+def _detected(region, templates, order, reference_ids=()):
+    """tick을 여러 번 돌린 뒤 '걸림'(오버레이에서 숨김)으로 판정된 디버프."""
+    engine = DebuffEngine({bid: templates[bid] for bid in order}, list(order),
+                          reference_templates={bid: templates[bid] for bid in reference_ids})
+    for index in range(12):
+        result = engine.tick(region, now=index * 0.15)
+    shown = {entry.buff_id for entry in result.entries}
+    return set(order) - shown
+
+
+def _slot(frame, index):
+    x, y = BOX[0] + 9 + index * 18, BOX[1] + 19
+    return frame[y - 2:y + 18, x - 2:x + 18]
+
+
+def test_physical_defense_icon_alone_never_marks_magic(defense_scene, templates):
+    # 1칸 실제 물리 아이콘: 물리 0.909 / 마법 0.72(감지 0.68 이상) → 같은 무늬 쌍 구분으로 물리만 걸림
+    assert _detected(_slot(defense_scene, 0), templates, DEFENSE) == {PHYSICAL}
+
+
+def test_magic_defense_icon_alone_never_marks_physical(defense_scene, templates):
+    # 2칸 실제 마법 아이콘: 마법 0.94 / 물리 0.662(해제 0.58 위 → 이력 유지 구간)
+    assert _detected(_slot(defense_scene, 1), templates, DEFENSE) == {MAGIC}
+
+
+def test_both_defense_icons_in_full_box_are_both_detected(defense_scene, templates):
+    assert _detected(crop(defense_scene, *BOX), templates, DEFENSE) == set(DEFENSE)
+
+
+@pytest.mark.parametrize("registered, slot", [(MAGIC, 0), (PHYSICAL, 1)])
+def test_single_registration_uses_peer_reference_icon(defense_scene, templates, registered, slot):
+    # 한쪽만 등록한 사용자: reference_ids가 상대 아이콘을 비교용으로 불러와 그 칸에 걸림으로 잡지 않는다
+    other = PHYSICAL if registered == MAGIC else MAGIC
+    assert DebuffEngine.reference_ids([registered]) == {other}
+    assert _detected(_slot(defense_scene, slot), templates, (registered,), reference_ids=(other,)) == set()
