@@ -311,3 +311,25 @@ def test_persistent_reader_failure_is_infrastructure_error_without_fake_progress
     assert runner.supervise(args)==3
     failure=json.loads(next(tmp_path.glob('run-*/failure.json')).read_text(encoding='utf-8'))
     assert failure['failure']=='diagnostic infrastructure failure: snapshot read'
+
+
+@pytest.mark.parametrize('config, armed', [
+    (dict(option=dict(dist='load', numprocesses=4)), False),  # xdist 주 프로세스: 테스트를 돌리지 않음
+    (dict(option=dict(dist='no', numprocesses=None)), True),  # -n 없이 한 프로세스: 테스트마다 다시 건다
+    (dict(option=dict(dist='load', numprocesses=4), workerinput=dict(workerid='gw0')), True),  # 워커
+    (dict(), True),
+])
+def test_stack_timer_never_armed_in_xdist_controller(tmp_path, monkeypatch, config, armed):
+    # 배포 실행 #127·#132: 주 프로세스의 30초 반복 덤프가 스레드 생성·종료와 겹쳐 SIGSEGV(종료 코드 245)
+    from types import SimpleNamespace
+    from test_support import progress
+    monkeypatch.setenv('MABINOGI_TEST_DIAGNOSTICS', str(tmp_path))
+    calls = []
+    monkeypatch.setattr(progress.faulthandler, 'dump_traceback_later', lambda *a, **k: calls.append(k))
+    monkeypatch.setattr(progress.faulthandler, 'cancel_dump_traceback_later', lambda: None)
+    namespace = SimpleNamespace(**{k: SimpleNamespace(**v) if k == 'option' else v for k, v in config.items()})
+    journal = progress.Journal(namespace)
+    journal.arm()
+    assert bool(calls) is armed and journal.stack is armed
+    assert json.loads(journal.path.read_text(encoding='utf-8'))['phase'] == 'configure'  # journal은 그대로 남김
+    journal.raw.close()
