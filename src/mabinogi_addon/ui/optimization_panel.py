@@ -49,6 +49,10 @@ class OptimizationPanel(QWidget):
         from .settings_layout import LOCK_STYLE
         self.toggle=QPushButton('최적화 시작');self.toggle.setCheckable(True);self.toggle.setStyleSheet(LOCK_STYLE)
         group.addWidget(self.toggle,0,Qt.AlignmentFlag.AlignLeft)
+        # 13.10 자동 적용(기본 꺼짐): 위에서 체크한 프로세스 항목(우선순위·CPU 배치)만. 네트워크는 자동으로 바꾸지 않는다.
+        self.auto=QCheckBox('마비노기를 켜면 자동 적용');group.addWidget(self.auto)
+        group.addWidget(_label('켜 두면 앱을 켤 때부터 게임을 기다렸다가 체크한 우선순위·CPU 배치를 걸고, 게임을 끄면 그 게임에 건 값만 되돌려요.\n'
+                               '패스트핑(네트워크)은 자동으로 바꾸지 않아요.'))
         self.status=_label('시작 전 · 시스템 설정을 변경하지 않았어요.');group.addWidget(self.status)
         self.results=_label('');group.addWidget(self.results);body.addStretch()
         self.tabs.addTab(_scrolled(page),'최적화')

@@ -372,6 +372,16 @@ class Recovery:
             self._save()
         return failures
 
+    def prune(self):
+        """자동 적용(13.10): 끝난 기록(원복됨·관리 제외)만 지우고 남은 기록은 둔다. 패스트핑(네트워크)은 원복 전까지
+        유지되는 정상 상태라 자동 적용 세션을 막지 않는다. 같은 게임의 남은 프로세스 기록은 apply가 그대로 이어 받는다."""
+        with self.lock:
+            if self.corrupt:
+                raise RuntimeError('복구 기록이 손상돼 새 세션을 시작할 수 없어요.')
+            if any(i['state'] in ('restored', 'released') for i in self.items):
+                self.items[:] = self.pending
+                self._save()
+
     def finish(self):
         with self.lock:
             if self.corrupt or self.pending or self.restart_targets:

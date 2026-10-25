@@ -1295,10 +1295,11 @@ def load_debuff_settings(path: Path = LOCAL_CONFIG_PATH) -> list[BuffSettings]:
 
 
 def load_optimization_selection(path: Path = LOCAL_CONFIG_PATH) -> dict:
-    """최적화 탭 선택값(명세 13.1). 기억만 하며 자동 적용하지 않는다. 형식이 틀린 값은 버린다."""
+    """최적화 탭 선택값(명세 13.1). 형식이 틀린 값은 버린다. auto(13.10 자동 적용 체크, 기본 꺼짐)가 켜져 있을 때만
+    앱이 게임을 기다렸다가 프로세스 항목을 적용한다."""
     raw = _read_local_config(path).get("optimizationSelection")
     raw = raw if isinstance(raw, dict) else {}
-    result = {key: raw[key] for key in ("cpu", "priority", "tcp", "rss") if type(raw.get(key)) is bool}
+    result = {key: raw[key] for key in ("cpu", "priority", "tcp", "rss", "auto") if type(raw.get(key)) is bool}
     if type(raw.get("count")) is int and raw["count"] > 0:
         result["count"] = raw["count"]
     adapter = raw.get("adapter")
@@ -1310,7 +1311,7 @@ def load_optimization_selection(path: Path = LOCAL_CONFIG_PATH) -> dict:
 def save_optimization_selection(selection: dict, path: Path = LOCAL_CONFIG_PATH) -> None:
     data = _read_local_config(path)
     data["optimizationSelection"] = {k: v for k, v in selection.items()
-                                     if k in ("cpu", "priority", "tcp", "rss", "count", "adapter") and v is not None}
+                                     if k in ("cpu", "priority", "tcp", "rss", "auto", "count", "adapter") and v is not None}
     _write_local_config(data, path)
 
 

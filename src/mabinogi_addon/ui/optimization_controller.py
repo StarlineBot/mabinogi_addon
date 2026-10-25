@@ -42,6 +42,8 @@ def optimization_badge(recovery, engine, split=None, *, restore_wait=False, kept
     if engine.busy and engine.task != 'inspect':
         if engine.cancel.is_set() or engine.task == 'restore':
             return '최적화: 원복 중', 'neutral'
+        if getattr(engine, 'held', False):
+            return '최적화: 보류', 'neutral'  # 13.10 자동 적용 중 Process Lasso Governor 실행
         if any(i['kind'] in PROCESS_KINDS and i['state'] == 'applied' for i in recovery.pending):
             return ('최적화: 적용 중 ' + split if split else '최적화: 적용 중'), 'neutral'
         return '최적화: 게임 대기', 'neutral'
@@ -78,6 +80,8 @@ class OptimizationController(QObject):
         self.sampler = PerfSampler()
         # 'FPS 표시' 켜짐은 재실행 후에도 유지(수집 모드는 매번 꺼짐으로 시작). 접근이 확인된 첫 틱에 1회 복원.
         self._restore_display = section.get('display') is True
+        # 13.10: 자동 적용을 켜 두었으면 접근이 확인된 첫 틱에 한 번 게임 대기를 시작한다(앱 시작 = 라쏘와 같은 체감).
+        self._auto_pending = config.load_optimization_selection().get('auto') is True
         self._restore_retry_at, self._restore_tries = 0.0, 0
         # 수집기 오류로 꺼진 'FPS 표시'의 자동 재시작(0.13.5): 약 5초 뒤, 10분에 3회까지. 저장된 표시 설정은 바꾸지 않는다.
         self._restart_at = None
@@ -201,7 +205,7 @@ class OptimizationController(QObject):
         d, saved = self.panel, config.load_optimization_selection()
         self._restoring_selection = True
         try:
-            for key, box in (('cpu', d.cpu), ('priority', d.priority), ('tcp', d.tcp)):
+            for key, box in (('cpu', d.cpu), ('priority', d.priority), ('tcp', d.tcp), ('auto', d.auto)):
                 if key in saved: box.setChecked(saved[key])
         finally:
             self._restoring_selection = False
@@ -209,7 +213,7 @@ class OptimizationController(QObject):
     def _save_selection(self, *_):
         if self._restoring_selection or self.panel is None: return
         d = self.panel
-        selection = dict(cpu=d.cpu.isChecked(), priority=d.priority.isChecked(), tcp=d.tcp.isChecked())
+        selection = dict(cpu=d.cpu.isChecked(), priority=d.priority.isChecked(), tcp=d.tcp.isChecked(), auto=d.auto.isChecked())
         saved = config.load_optimization_selection()
         # 환경 확인 전(목록이 비어 있음)에는 저장된 배분·어댑터를 지우지 않는다.
         selection['count'] = d.split.currentData() if d.split.currentData() is not None else saved.get('count')
@@ -260,7 +264,8 @@ class OptimizationController(QObject):
 
     def _wire_panel(self):
         d=self.panel
-        for box in (d.cpu, d.priority, d.tcp): box.toggled.connect(self._save_selection)
+        for box in (d.cpu, d.priority, d.tcp, d.auto): box.toggled.connect(self._save_selection)
+        d.auto.toggled.connect(self._auto_changed)
         d.split.currentIndexChanged.connect(self._save_selection)
         d.adapter.currentIndexChanged.connect(self._save_selection)
         d.inspect.clicked.connect(self.engine.inspect)
@@ -339,11 +344,46 @@ class OptimizationController(QObject):
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes
 
+    # ---- 자동 적용(명세 13.10) -------------------------------------------------------------------
+    def _auto_changed(self, on):
+        """체크를 켜면 바로 게임 대기(앱 시작과 같은 체감), 끄면 지금 게임이 끝날 때 세션도 끝난다(이전 방식)."""
+        if self._restoring_selection: return
+        self.engine.auto = bool(on)
+        if on: self._auto_start()
+
+    def _auto_start(self):
+        """자동 적용 세션: 체크한 프로세스 항목만, 네트워크(패스트핑)는 바꾸지 않는다. 게임이 없으면 아무것도 바꾸지 않고 기다린다.
+        이미 세션이 돌거나 복구 기록이 손상됐거나 프로세스 항목을 하나도 고르지 않았으면 시작하지 않는다."""
+        d = self.panel
+        if (d is None or not d.auto.isChecked() or not self._can_start() or self.engine.busy or self.recovery.corrupt
+                or not (d.cpu.isChecked() or d.priority.isChecked())):
+            return False
+        count = d.split.currentData()
+        if count is None:
+            count = config.load_optimization_selection().get('count')  # 환경 확인 전이면 저장한 배분(없으면 권장값)
+        options = dict(cpu=d.cpu.isChecked(), count=count, adapter=None, tcp=False, rss=False,
+                       priority=d.priority.isChecked(), auto=True)
+        self._begin(options)
+        return True
+
+    def _begin(self, options):
+        self._badge_split = (f"{options['count']}+{self._core_total-options['count']}"
+                             if options['cpu'] and options['count'] and self._core_total else None)
+        self._kept_on = True  # 이미 목표값이라 바꾼 것이 없어도 켜짐으로 보여준다(13.5)
+        self._summary_requested = {key: options[key] for key in ('cpu','count','tcp','priority')}
+        self._summary_requested['adapter_selected'] = bool(options['adapter'])
+        self._summary_requested['auto'] = bool(options.get('auto'))  # 13.10: FPS 자동 기록에 자동 적용 여부
+        self._summary_state = None
+        if self.stream is not None:
+            self.stream.boundary(presentmon.clock()[0], 'optimization_start_request')
+        self.engine.start(options)
+
     def _start_optimization(self):
         if not self._can_start() or self.engine.busy: return
         d = self.panel
         options = dict(cpu=d.cpu.isChecked(),count=d.split.currentData(),adapter=d.adapter.currentData(),
-                       tcp=d.tcp.isChecked(),rss=False,priority=d.priority.isChecked())  # 13.8: RSS 새 적용 없음
+                       tcp=d.tcp.isChecked(),rss=False,priority=d.priority.isChecked(),
+                       auto=d.auto.isChecked())  # 13.8: RSS 새 적용 없음
         if not any(options[k] for k in ('cpu','tcp','priority')):
             self.engine.status='사용할 항목을 선택해 주세요.'
             return
@@ -354,15 +394,7 @@ class OptimizationController(QObject):
             self.engine.status='적용할 물리 네트워크 어댑터를 선택해 주세요.'
             return
         if options['tcp'] and not self._network_confirmation(): return
-        self._badge_split = (f"{options['count']}+{self._core_total-options['count']}"
-                             if options['cpu'] and self._core_total else None)
-        self._kept_on = True  # 이미 목표값이라 바꾼 것이 없어도 켜짐으로 보여준다(13.5)
-        self._summary_requested = {key: options[key] for key in ('cpu','count','tcp','priority')}
-        self._summary_requested['adapter_selected'] = bool(options['adapter'])
-        self._summary_state = None
-        if self.stream is not None:
-            self.stream.boundary(presentmon.clock()[0], 'optimization_start_request')
-        self.engine.start(options)
+        self._begin(options)
 
     # ---- 토글 하나(명세 13.5) -------------------------------------------------------------------
     def _optimization_on(self):
@@ -667,6 +699,10 @@ class OptimizationController(QObject):
                     self.stop_frames()
                 if not self.collector.pending:
                     self.start_frames()
+        if self._auto_pending and self._can_start() and self.panel is not None:
+            self._auto_pending = False
+            if self._auto_start():
+                _log.info('최적화 자동 적용: 앱 시작 · 게임을 기다려요')
         if self._restore_display and self._can_start() and now >= self._restore_retry_at:
             # 이전 FPS 세션 정리가 남아 있으면 먼저 정리하고 바로 켠다(0.14.1: 업데이트 뒤 표시 미복원).
             # 정리에 실패하면 5초 뒤 다시(최대 3회), 그래도 안 되면 기존 정리 안내만 남긴다.
@@ -732,8 +768,9 @@ class OptimizationController(QObject):
             self._summary_state = None
             return False
         try:
+            auto = bool(self.panel is not None and self.panel.auto.isChecked())
             state = (self.recovery.measurement_revision, self.engine.busy, self.engine.cancel.is_set(),
-                     tuple(sorted((self.target or {}).items())), repr(self._summary_requested), self.recovery.corrupt)
+                     tuple(sorted((self.target or {}).items())), repr(self._summary_requested), self.recovery.corrupt, auto)
             if state == self._summary_state:
                 return True
             counts = Counter((i['kind'],i['state']) for i in self.recovery.items)
@@ -745,7 +782,8 @@ class OptimizationController(QObject):
                 observation='journal_unconfirmed' if self.recovery.corrupt else 'last_journal_confirmation_not_live_os_read',
                 optimization_worker_active=self.engine.busy, values=values,
                 states=[dict(kind=k,state=st,count=n) for (k,st),n in sorted(counts.items())],
-                reconnect_pending=len(self.recovery.restart_targets))
+                reconnect_pending=len(self.recovery.restart_targets),
+                optimization_auto_apply=auto)  # 13.10: 자동 적용 켬/끔(실험 자료가 섞였는지 확인용)
             self._summary_state = state
         finally:
             self.recovery.lock.release()
