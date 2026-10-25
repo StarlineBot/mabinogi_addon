@@ -6,7 +6,7 @@ _log = logging.getLogger(__name__)
 from PySide6.QtCore import QObject, QTimer
 from PySide6.QtWidgets import QMessageBox
 from .. import config, paths
-from ..feature_access import is_creator
+from ..feature_access import Recheck, is_creator
 from ..optimization.session import PROCESS_KINDS, Recovery
 from ..optimization.engine import Engine
 from ..optimization.frames import FrameStream
@@ -17,6 +17,18 @@ from ..system import presentmon
 from .optimization_panel import OptimizationPanel
 from .frame_overlay import FrameOverlay
 from ..system.perf_metrics import METRICS, PerfSampler
+
+
+# 상단 최적화 배지 색(0.17.2 사용자 결정): 블랙박스·전투 보조와 같은 모양('● 최적화: …', 한 색, 밑줄 없음)
+BADGE_COLORS = {'applied': '#2ecc71', 'neutral': '#8a8f98', 'warn': '#e67e22', 'error': '#e74c3c'}
+BADGE_TIP = '최적화 상태예요. 성능 개선을 뜻하지 않아요. 누르면 최적화 탭으로 이동해요.'
+
+
+def badge_color(text, level):
+    """적용 중 초록 · 게임 대기·원복 중(그 밖의 neutral) 회색 · 원복 대기 주황 · 오류 빨강."""
+    if level == 'neutral':
+        return BADGE_COLORS['applied' if text.startswith('최적화: 적용 중') else 'neutral']
+    return BADGE_COLORS.get(level, BADGE_COLORS['neutral'])
 
 
 def optimization_badge(recovery, engine, split=None, *, restore_wait=False, kept_on=False):
@@ -46,6 +58,9 @@ class OptimizationController(QObject):
     def __init__(self, window):
         super().__init__(window)
         self.window = window
+        # 제작자 확인은 config.json 읽기라 FPS 줄(초당 수백 개)·타이머마다 하지 않고 1초 동안 재사용한다(0.17.2).
+        # 로그인 변경(login_changed → refresh_access)에는 바로 다시 확인한다.
+        self._creator = Recheck(lambda: is_creator())
         self.backend = WindowsOptimization()
         # Machine-local recovery must never travel in a settings export/import.
         self.recovery = Recovery(paths.user_data_dir().parent / 'StarlineMabinogiAddonRuntime' / 'recovery.json',
@@ -117,7 +132,7 @@ class OptimizationController(QObject):
         self.refresh_access()
 
     def _can_start(self):
-        return (is_creator() and not getattr(self,'closing',False)
+        return (self._creator() and not getattr(self,'closing',False)
                 and not getattr(self.window,'_closing',False)
                 and not getattr(self.window,'_config_pending_restart',False))
 
@@ -140,9 +155,10 @@ class OptimizationController(QObject):
     def _hide_overlay(self):
         if self._overlay is not None: self._overlay.hide()
 
-    def refresh_access(self):
+    def refresh_access(self, recheck=True):
+        if recheck: self._creator.invalidate()  # 로그인 변경 등 외부 요청: 설정을 바로 다시 읽는다
         allowed = self._can_start()
-        needed = is_creator()
+        needed = self._creator()
         if hasattr(self.window,'_tabs'):
             tabs=self.window._tabs;index=tabs.indexOf(self.panel)
             if not self._tabs_watched:  # 메인 창 탭은 컨트롤러보다 늦게 생길 수 있어 여기서 한 번 연결
@@ -165,13 +181,15 @@ class OptimizationController(QObject):
             self._badge_wired = True
             badge.clicked.connect(self._open_tab)
         state = (optimization_badge(self.recovery, self.engine, self._badge_split,
-                                    restore_wait=self._restore_wait, kept_on=self._kept_on) if is_creator() else None)
+                                    restore_wait=self._restore_wait, kept_on=self._kept_on) if self._creator() else None)
         badge.setVisible(state is not None)
         if state is not None:
             text, level = state
-            color = {'error': '#e74c3c', 'warn': '#e67e22'}.get(level)
-            badge.setText(text)
-            badge.setStyleSheet(f'color:{color};' if color else '')
+            color = badge_color(text, level)
+            badge.setText('● ' + text)
+            style = getattr(type(self.window), 'status_style', None)
+            badge.setStyleSheet(style(color) if style else f'color:{color}; font-size:12px; border:none;')
+            badge.setToolTip(BADGE_TIP)
 
     def _open_tab(self):
         tabs = getattr(self.window, '_tabs', None)
@@ -571,7 +589,7 @@ class OptimizationController(QObject):
             # Preserve protocol metadata even when focus/transition excludes samples.
             self.stream.feed(line, now, accept_events=accept_events)
             if self.summary.full:
-                self.stop_frames('구간/전환 요약 한도 · 기존 자료를 보존하고 측정을 중단했어요.')
+                self._summary_limit()
         except Exception as exc: self._failed(str(exc))
 
     def _frame_tick(self, gap):
@@ -639,7 +657,7 @@ class OptimizationController(QObject):
     def _tick(self):
         now = time.monotonic()
         gap, self.last_tick = now-self.last_tick, now
-        self.refresh_access()
+        self.refresh_access(recheck=False)
         if self._restart_at is not None and now >= self._restart_at:
             self._restart_at = None
             if not self.frames and self._can_start() and not self.closing:
@@ -667,7 +685,7 @@ class OptimizationController(QObject):
             try: self._frame_tick(gap)
             except Exception as exc: self._failed(str(exc))
             if self.frames and self.summary.full:
-                self.stop_frames('구간/전환 요약 한도 · 기존 자료를 보존하고 측정을 중단했어요.')
+                self._summary_limit()
         if self.engine.recovery_requested and not self.engine.busy:
             self.engine.recovery_requested = False
         self._offer_normalized_restore()
@@ -782,6 +800,44 @@ class OptimizationController(QObject):
         except Exception as exc: self._summary_message = str(exc)
         self._render_summary(force=True)
 
+    def _new_summary(self, reason):
+        """진행 중 구간을 마감하고 같은 조건 이름의 새 측정으로 이어 간다. 끝난 측정은 비교 기준으로만 남긴다."""
+        closer = self.stream if self.stream is not None else self.summary
+        closer.boundary(self._summary_now(), reason)
+        condition = self.summary.condition
+        if self.summary.measurement() is not None:
+            self._previous_measurement = self.summary.measurement()
+        self.summary = FrameSummary()
+        self.summary.closed_callback = self._summary_closed
+        if self.stream is not None:
+            self.stream.summary = self.summary
+        self._summary_state = None  # 새 측정에도 최적화 상태 기록을 다시 남긴다
+        self.summary.set_condition(condition)
+
+    def _summary_limit(self):
+        """구간 요약 한도(구간 128개·전환 512개, 약 2시간)에 닿았을 때(0.17.2: 사용자 app.log 'FPS 표시 중단: 구간/전환 요약 한도').
+
+        한도는 요약(수집) 자료의 상한이지 표시의 상한이 아니다. 수집을 안 하면 조용히 새 요약으로 이어 가고 표시는 계속한다.
+        수집 중이면 기존 자료 보존 원칙대로 수집만 멈추고 안내한다(완료 구간은 이미 저장됨). 표시가 꺼진 수집 전용이면 측정도 끝낸다."""
+        collecting = self._summary_collecting
+        self._new_summary('summary_capacity')
+        if not collecting:
+            _log.info('FPS 구간 요약 한도 · 수집 꺼짐이라 새 요약으로 이어서 표시해요')
+            return
+        self._summary_collecting = False
+        if self.panel is not None:
+            self.panel.summary_collect.blockSignals(True)
+            self.panel.summary_collect.setChecked(False)
+            self.panel.summary_collect.blockSignals(False)
+        message = ('수집 한도(구간 128개, 약 2시간)에 닿아 수집을 멈췄어요. 지금까지 구간은 저장돼 있어요. '
+                   "이어서 모으려면 '수집'을 다시 켜 주세요.")
+        self._summary_message = message
+        _log.info('FPS 구간 요약 한도 · 수집을 멈추고 표시는 계속해요')
+        if self._collect_only:
+            self._collect_only = False
+            self.stop_frames('수집 한도에 닿아 수집을 멈췄어요(표시는 꺼져 있어 측정도 끝냈어요).')
+        self._render_summary(force=True)
+
     def _condition_changed(self, text=None):
         """측정 조건 이름은 입력을 마치면 바로 적용한다(FPS 명세 9절). 기록 중이면 지금 구간을 끊고 새 측정으로 이어서,
         한 구간·한 측정 안에 두 이름이 섞이지 않게 한다(7절 원칙). 끝난 측정의 이름은 바꾸지 않는다."""
@@ -791,15 +847,7 @@ class OptimizationController(QObject):
         if name == self.summary.condition:
             return
         if self.summary.records or self.summary.samples:
-            closer = self.stream if self.stream is not None else self.summary
-            closer.boundary(self._summary_now(), 'condition_change')  # 진행 중 구간을 옛 이름으로 마감
-            if self.summary.measurement() is not None:
-                self._previous_measurement = self.summary.measurement()
-            self.summary = FrameSummary()
-            self.summary.closed_callback = self._summary_closed
-            if self.stream is not None:
-                self.stream.summary = self.summary
-            self._summary_state = None  # 새 측정에도 최적화 상태 기록을 다시 남긴다
+            self._new_summary('condition_change')  # 진행 중 구간을 옛 이름으로 마감
             self.summary.set_condition(name)
             self._summary_message = f'측정 조건을 「{name or "조건 이름 없음"}」(으)로 바꿨어요 · 지금부터 새 이름으로 기록해요.'
             self._render_summary(force=True)

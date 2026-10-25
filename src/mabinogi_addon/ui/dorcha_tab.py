@@ -10,7 +10,7 @@ from PySide6.QtGui import QGuiApplication, QImage, QPixmap
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QMessageBox, QPushButton, QScrollArea, QSpinBox, QVBoxLayout, QWidget
 
 from .. import config
-from ..feature_access import is_creator
+from ..feature_access import Recheck, is_creator
 from ..detect.dorcha_reader import read_dorcha
 from .dorcha_overlay import DorchaOverlay
 from .widgets import checkbox, hint_label
@@ -133,9 +133,24 @@ class DorchaTab(QWidget):
         control.toggled.connect(self._on_percent_enabled)
         self._update_elements()
 
+    def _is_creator(self):
+        """제작자 확인(config.json 읽기)을 200ms 타이머마다 하지 않고 1초 동안 재사용한다(0.17.2).
+        로그인 변경은 login_refresh에서 바로 다시 확인한다."""
+        check = self.__dict__.get('_creator_check')
+        if check is None:
+            check = self.__dict__['_creator_check'] = Recheck(lambda: is_creator())
+        return check()
+
+    def login_refresh(self):
+        """로그인 변경(login_changed): 판정을 바로 다시 읽고 표시 조건을 적용한다."""
+        check = self.__dict__.get('_creator_check')
+        if check is not None:
+            check.invalidate()
+        self._apply_gate()
+
     def percent_requested(self):
         return (self._cfg["showTuarim"] and self._tuarim_source is not None
-                and self._alpha_ready and is_creator()
+                and self._alpha_ready and self._is_creator()
                 and not self._render_suspended() and not self._paused and self._active())
 
     def _render_suspended(self):
@@ -146,7 +161,7 @@ class DorchaTab(QWidget):
         return False
 
     def _on_percent_enabled(self, checked):
-        if not (self._alpha_ready and is_creator()):
+        if not (self._alpha_ready and self._is_creator()):
             from PySide6.QtCore import QSignalBlocker
             with QSignalBlocker(self._percent_control):
                 self._percent_control.setChecked(self._cfg["showTuarim"])
@@ -171,7 +186,7 @@ class DorchaTab(QWidget):
     def _update_elements(self):
         for overlay in (self.preview,self._overlay):
             if overlay is not None:
-                overlay.set_elements(self._cfg["enabled"],self._cfg["showTuarim"] and self._alpha_ready and is_creator())
+                overlay.set_elements(self._cfg["enabled"],self._cfg["showTuarim"] and self._alpha_ready and self._is_creator())
 
     def _sync_overlay(self):
         visible = (not self._render_suspended() and not self._paused and self._active()
@@ -191,9 +206,9 @@ class DorchaTab(QWidget):
             control.setEnabled(not self._shutting_down and not self._autofind_busy)
         self.auto_find_btn.setEnabled(not self._shutting_down and not self._autofind_busy)
         if self._percent_control is not None:
-            self._percent_control.setVisible(self._alpha_ready and is_creator())
-            self._percent_control.setEnabled(self._alpha_ready and is_creator() and not self._shutting_down)
-        if not (self._alpha_ready and is_creator()):
+            self._percent_control.setVisible(self._alpha_ready and self._is_creator())
+            self._percent_control.setEnabled(self._alpha_ready and self._is_creator() and not self._shutting_down)
+        if not (self._alpha_ready and self._is_creator()):
             self._percent = None
             self.preview.set_percent(None)
             if self._overlay is not None:
@@ -219,7 +234,7 @@ class DorchaTab(QWidget):
         value = self.preview.value
         dorcha = f"{value}/15" if value is not None else "--/15"
         percent = f"{self._percent}%" if self._percent is not None else "--%"
-        if self._cfg["showTuarim"] and self._alpha_ready and is_creator():
+        if self._cfg["showTuarim"] and self._alpha_ready and self._is_creator():
             text = f"도르카 {dorcha} · 투아림 {percent}" if self._cfg["enabled"] else f"투아림 {percent}"
         else:
             text = dorcha

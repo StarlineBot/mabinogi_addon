@@ -65,8 +65,8 @@ def combat_text(gate):
 
 
 BADGE_COLORS = {'ok': '#2ecc71', 'muted': '#8a8f98', 'error': '#e74c3c'}  # 전투 보조 상태와 같은 색(0.16.0)
-BADGE_TIPS = {'ok': '누르면 블랙박스를 꺼요. 지금까지 보관한 영상은 앱을 닫기 전까지 저장할 수 있어요.',
-              'muted': '누르면 블랙박스를 꺼요. 지금까지 보관한 영상은 앱을 닫기 전까지 저장할 수 있어요.',
+BADGE_TIPS = {'ok': '누르면 블랙박스 탭으로 이동해요.',  # 0.17.2: 모든 상태에서 탭 이동(끄기는 탭에서)
+              'muted': '누르면 블랙박스 탭으로 이동해요.',
               'error': '녹화 오류예요. 누르면 블랙박스 탭에서 내용을 볼 수 있어요.'}
 
 
@@ -124,13 +124,30 @@ class BlackboxController(QObject):
         self._page = None
         self.refresh_access()
 
+    @property
+    def _access(self):
+        """권한(디스코드 로그인) 확인은 config.json 읽기라 100ms 타이머·캡처 루프(초당 수백 회)마다 하지 않고 1초 동안
+        재사용한다(0.17.2). 로그인 변경(login_changed → refresh_access)에는 바로 다시 확인한다."""
+        check = self.__dict__.get('_access_check')
+        if check is None:
+            check = self.__dict__['_access_check'] = feature_access.Recheck(lambda: feature_access.blackbox_available())
+        return check
+
     def _allowed(self):
         try:
-            return feature_access.blackbox_available() is True and not getattr(self.window, '_closing', False)
+            return self._access() is True and not getattr(self.window, '_closing', False)
+        except Exception:
+            return False
+
+    def _service_allowed(self):
+        """서비스·생산자(캡처 스레드)용 권한 확인: 같은 1초 재사용 판정."""
+        try:
+            return self._access() is True
         except Exception:
             return False
 
     def refresh_access(self):
+        self._access.invalidate()
         if self.session is not None:
             # 접근 해제 관측으로 이전 캡처 허가를 무효화. 사용 체크/저장 pin은 유지.
             self.session.state
@@ -230,7 +247,8 @@ class BlackboxController(QObject):
                 events = WindowsEvents(int(self.window.winId()), *self._hotkey)
                 try:
                     service = BlackboxService(settings, enabled=config.load_blackbox_enabled(),
-                                              persist_enabled=config.save_blackbox_enabled)
+                                              persist_enabled=config.save_blackbox_enabled,
+                                              allowed=self._service_allowed)
                     service.set_retention(preferences.get('retentionMinutes', 5) * 60 * 1_000_000)
                 except BaseException:
                     events.close()
@@ -529,19 +547,10 @@ class BlackboxController(QObject):
             badge.setToolTip(BADGE_TIPS[state[1]])
 
     def _badge_clicked(self):
-        """상단 배지(0.16.0): 오류면 블랙박스 탭으로, 아니면 블랙박스 끄기(탭 '블랙박스 사용'과 같은 경로·저장).
-        끄기는 녹화(생산자)만 멈추고 보관 영상·진행 중 저장은 그대로라 확인 창 없이 바로 끈다."""
-        if self.service is None or not self._allowed():
+        """상단 배지(0.17.2 사용자 결정): 모든 상태에서 블랙박스 탭으로 이동한다. 끄기는 탭의 '블랙박스 사용'에서 한다."""
+        if not self._allowed():
             return
-        if getattr(self.service, 'status', None) == 'error':
-            self._open_tab()
-            return
-        if self.panel is not None and self.panel.enabled.isChecked():
-            self.panel.enabled.setChecked(False)  # 탭 토글 신호 → service.set_enabled(False) (같은 경로)
-        else:
-            self._action(lambda: self.service.set_enabled(False))
-        runtime = getattr(self.service, 'current', None)
-        self._update_badge(runtime.session._replay.available_us if runtime else 0)
+        self._open_tab()
 
     def _open_tab(self):
         if self._page is not None and self.window._tabs.indexOf(self._page) >= 0:

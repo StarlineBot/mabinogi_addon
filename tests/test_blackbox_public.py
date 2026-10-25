@@ -321,22 +321,23 @@ class _Service:
             self.status = 'disabled'
 
 
-def test_blackbox_badge_click_turns_off_like_tab_toggle_and_keeps_recorded_video(main):
+def test_blackbox_badge_click_opens_tab_and_never_turns_off(main):
+    # 0.17.2 사용자 결정: 상단 배지는 모든 상태에서 블랙박스 탭으로 이동(이전: 누르면 끄기). 끄기는 탭에서.
     tools = main.blackbox_tools
     service = tools.service = _Service()
     tools.panel.enabled.toggled.connect(lambda value: tools._action(lambda: service.set_enabled(value)))
     tools.panel.enabled.setChecked(True)
     service.calls.clear()
+    main._tabs.setCurrentIndex(0)
     tools._update_badge(192_000_000)
     badge = main._blackbox_badge
     assert not badge.isHidden() and badge.text() == '● 블랙박스: 보관 중 3:12' and '#2ecc71' in badge.styleSheet()
     assert 'underline' not in badge.styleSheet()
-    assert badge.toolTip() == '누르면 블랙박스를 꺼요. 지금까지 보관한 영상은 앱을 닫기 전까지 저장할 수 있어요.'
+    assert badge.toolTip() == '누르면 블랙박스 탭으로 이동해요.'
     badge.click()
-    assert service.calls == [False] and not service.enabled
-    assert not tools.panel.enabled.isChecked() and tools.panel.enabled.text() == '블랙박스 사용'
-    assert service.current.session._replay.available_us == 192_000_000  # 보관 영상 유지
-    assert badge.isHidden()
+    assert service.calls == [] and service.enabled and tools.panel.enabled.isChecked()
+    assert main._tabs.currentWidget() is tools._page
+    assert not badge.isHidden()
 
 
 def test_blackbox_badge_click_on_error_opens_tab_instead_of_turning_off(main):

@@ -431,7 +431,7 @@ def test_top_badge_is_creator_only_hidden_when_idle_and_opens_tab(window, monkey
     c.recovery.items.append(dict(kind='ack', state='applied', target='x', old=1, applied=0))
     try:
         c._update_badge()
-        assert not badge.isHidden() and badge.text() == '최적화: 적용 중'  # 13.5 보정: 원복 요청 전은 정상 적용
+        assert not badge.isHidden() and badge.text() == '● 최적화: 적용 중'  # 13.5 보정: 원복 요청 전은 정상 적용
         w._tabs.setCurrentWidget(w._settings_scroll)
         badge.click()
         assert w._tabs.currentWidget() is c.panel
@@ -646,12 +646,12 @@ def test_single_optimization_toggle_follows_spec_13_5(window, monkeypatch):
         c._tick()
         # 13.5 보정: 원복을 요청하지 않은 네트워크 변경은 정상 '적용 중'(경고 아님)
         assert toggle.isChecked() and toggle.text() == '최적화 적용 중'
-        assert w._optimization_badge.text() == '최적화: 적용 중'
+        assert w._optimization_badge.text() == '● 최적화: 적용 중'
         toggle.click()  # 원복 요청(가짜 _restore_all) → 끝났는데 남음 = 거절·실패 → 원복 대기
         c._restore_requested = True
         c._tick()
         assert restored == [1] and toggle.text() == '최적화 적용 중 · 네트워크 원복 대기'
-        assert w._optimization_badge.text() == '최적화: 원복 대기'
+        assert w._optimization_badge.text() == '● 최적화: 원복 대기'
     finally:
         c.recovery.items = []
     c._tick()

@@ -8,7 +8,7 @@ from PySide6.QtWidgets import QFrame, QGroupBox, QHBoxLayout, QLabel, QPushButto
 import numpy as np
 
 from .. import config, paths
-from ..feature_access import is_creator
+from ..feature_access import Recheck, is_creator
 from ..halo_capture import CaptureSession, MAX_PIXELS, MAX_SHOTS, MAX_BYTES
 from ..setup_state import valid_box
 from ..version import __version__
@@ -359,13 +359,27 @@ class HaloCaptureSection(QWidget):
             self._preview_until = float('-inf')
             self._stop_audio()
 
+    def _login(self):
+        """로그인·제작자 판정(config.json 읽기)을 500ms 타이머마다 하지 않고 1초 동안 재사용한다(0.17.2)."""
+        checks = self.__dict__.get('_access_checks')
+        if checks is None:
+            checks = self.__dict__['_access_checks'] = (Recheck(lambda: bool(config.load_discord_user())),
+                                                        Recheck(lambda: is_creator()))
+        return checks
+
+    def login_refresh(self):
+        """로그인 변경(login_changed): 판정을 바로 다시 읽고 한 번 갱신한다."""
+        for check in self._login():
+            check.invalidate()
+        self._tick()
+
     def _allowed(self):
         window = self.window()
-        return (bool(config.load_discord_user()) and not self._shutting_down and not getattr(window, "_closing", False)
+        return (self._login()[0]() and not self._shutting_down and not getattr(window, "_closing", False)
                 and not getattr(window, "_config_pending_restart", False))
 
     def _collect_allowed(self):
-        return self._allowed() and is_creator()
+        return self._allowed() and self._login()[1]()
 
     def _logged_in(self):
         return self._allowed()

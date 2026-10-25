@@ -62,5 +62,6 @@ def test_current_plan_matches_bundled_release_and_changed_features():
         'tests/test_manual_update_progress.py', 'tests/test_overlay_metrics.py',
         'tests/test_halo_clock.py', 'tests/test_log_throttle.py',
         'tests/test_process_priority.py', 'tests/test_optimization_priority.py', 'tests/test_process_threads.py',
+        'tests/test_access_cache.py',
     })
     assert set(paths) == expected

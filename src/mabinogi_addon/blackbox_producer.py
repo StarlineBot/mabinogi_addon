@@ -56,6 +56,7 @@ class ProducerLimits:
             raise ValueError('raw frame queues exceed explicit RAM budget')
 
 
+PERMISSION_RECHECK_S = 0.25  # 캡처 루프의 권한 재확인 간격
 CPU_PASS_PERCENT = 5.0  # 블랙박스 11.4 합격선: 녹화 중 앱+인코더 합계(작업 관리자 기준, 전체 코어 = 100%)
 
 
@@ -73,6 +74,9 @@ class CaptureProducer:
             self.audio = PcmTimeline(native.audio[0], native.audio[1], native.audio_buffer_bytes)
         self.target, self.native, self.codec, self.spool = target, native, codec, spool
         self.limits, self.allowed = limits, allowed
+        # 캡처 루프는 초당 수백 번 돈다. 권한 확인(설정 파일 읽기)은 0.25초마다 한 번만 한다(0.17.2, 해제 반영 1초 이내).
+        from .feature_access import Recheck
+        self._permitted = Recheck(lambda: self.allowed() is True, interval=PERMISSION_RECHECK_S)
         self.results = Queue(maxsize=limits.queued_segments + 2)
         self._batches = Queue(maxsize=limits.queued_segments)
         self._stop, self._captured, self._encoded = Event(), Event(), Event()
@@ -153,7 +157,7 @@ class CaptureProducer:
             last = None  # 반복 채움에 쓸 직전 프레임(같은 bytes 참조, 복사 없음)
             origin, count = None, 0
             while not self._stop.is_set():
-                if self.allowed() is not True:
+                if not self._permitted():
                     raise PermissionError('blackbox access revoked')
                 with self._flush_lock:
                     requests, self._flush = self._flush, []
@@ -172,7 +176,7 @@ class CaptureProducer:
                 # 블랙박스 11.4: NV12(GPU 색 변환)면 다섯 번째 값이 'nv12'. 없으면 BGRA(이전 방식·구버전 DLL).
                 data, width, height, stamp, *rest = frame
                 pixel_format = rest[0] if rest else 'bgra'
-                if self._stop.is_set() or self.allowed() is not True:
+                if self._stop.is_set() or not self._permitted():
                     break
                 if self.limits.max_width is not None and (width > self.limits.max_width or height > self.limits.max_height):
                     raise ValueError(f'블랙박스 영상 {width}×{height}이 출력 한도 '
@@ -281,9 +285,11 @@ class CaptureProducer:
         used = self._cpu_sample()
         if used is None:
             return ''
-        total, encoder = used
+        # 0.17.2: 프로세스별(앱 본체 / 인코더 / FPS 수집기 등 기타 하위)로 나눠 어느 쪽이 쓰는지 바로 보이게
+        total = used['total']
         verdict = '합격선 이내' if total <= CPU_PASS_PERCENT else '합격선 초과'
-        return (f' · CPU(전체 코어 기준) 앱+인코더 {total:.1f}%(인코더 {encoder:.1f}%) · '
+        return (f" · CPU(전체 코어 기준) 앱+인코더 합계 {total:.1f}%(앱 본체 {used['app']:.1f}% · "
+                f"인코더 {used['encoder']:.1f}% · FPS 수집기 등 {used['other']:.1f}%) · "
                 f'{verdict}(최대 {CPU_PASS_PERCENT:.0f}%)')
 
     def _segment_timing(self, seconds, frames, distinct=None, label='구간 인코딩'):

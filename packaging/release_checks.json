@@ -1,5 +1,5 @@
 {
-  "version": "0.17.1",
+  "version": "0.17.2",
   "tests": [
     "tests/test_blackbox.py",
     "tests/test_blackbox_access.py",
@@ -35,6 +35,7 @@
     "tests/test_process_priority.py",
     "tests/test_optimization_priority.py",
     "tests/test_process_threads.py",
-    "tests/test_blackbox_cpu.py"
+    "tests/test_blackbox_cpu.py",
+    "tests/test_access_cache.py"
   ]
 }

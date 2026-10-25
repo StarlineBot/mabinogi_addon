@@ -319,8 +319,8 @@ class MainWindow(QMainWindow):
         self.setup_guide.cancel_requested.connect(self._setup_flow.cancel)
         self.setup_guide.finished.connect(self._finish_guide)
         self.settings_tab.login_changed.connect(self.setup_page.refresh)
-        self.settings_tab.login_changed.connect(self.dorcha_tab._apply_gate)
-        self.settings_tab.login_changed.connect(self.boss_tab.halo_capture._tick)
+        self.settings_tab.login_changed.connect(self.dorcha_tab.login_refresh)
+        self.settings_tab.login_changed.connect(self.boss_tab.halo_capture.login_refresh)
         self.settings_tab.login_changed.connect(self._guide_login_changed)
         self.settings_tab.game_registered.connect(self.setup_page.refresh)
         self.settings_tab.game_registration_finished.connect(self._setup_game_finished)
@@ -601,11 +601,11 @@ class MainWindow(QMainWindow):
         self._optimization_badge.setObjectName("optimizationBadge")
         self._optimization_badge.setFlat(True)
         self._optimization_badge.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._optimization_badge.setToolTip("최적화 상태(제작자 전용)예요. 성능 개선을 뜻하지 않아요. 누르면 최적화 탭으로 이동해요.")
+        self._optimization_badge.setToolTip("최적화 상태예요. 성능 개선을 뜻하지 않아요. 누르면 최적화 탭으로 이동해요.")
         self._optimization_badge.hide()
         h.addWidget(self._optimization_badge)
         # 블랙박스 상태(블랙박스 명세 11.2, 0.16.0 로그인 사용자). '블랙박스 사용'이 꺼져 있으면 숨긴다.
-        # 전투 보조 상태와 같은 모양: 평평한 버튼 · '● 상태' 한 색 · 밑줄 없음 · 손가락 커서. 누르면 끄기(오류면 탭 이동).
+        # 전투 보조 상태와 같은 모양: 평평한 버튼 · '● 상태' 한 색 · 밑줄 없음 · 손가락 커서. 누르면 블랙박스 탭으로 이동(0.17.2).
         self._blackbox_badge = QPushButton()
         self._blackbox_badge.setObjectName("blackboxBadge")
         self._blackbox_badge.setFlat(True)
@@ -623,7 +623,6 @@ class MainWindow(QMainWindow):
         h.addWidget(self._combat_status)
         bar.setStyleSheet(
             "#statusBar { border-bottom:1px solid rgba(128,128,128,0.25); }"
-            "#optimizationBadge { font-size:12px; border:none; padding:0 2px; text-decoration:underline; }"
         )
         return bar
 

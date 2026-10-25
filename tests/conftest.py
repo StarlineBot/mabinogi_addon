@@ -145,3 +145,13 @@ def _no_leaked_qthreads(_isolated_runtime):
         f"테스트가 실행 중인 QThread를 정리하지 않았습니다: {leaked} "
         "(끝에서 워커를 stop()/close() 하세요 — 안 하면 종료 시 abort rc=134)"
     )
+
+
+@pytest.fixture(autouse=True)
+def _access_recheck_immediate():
+    """기존 기능 테스트는 권한 함수를 바꾼 즉시 반영되길 기대한다. 0.17.2 권한 캐시(1초 재사용)는
+    tests/test_access_cache.py가 기본 간격으로 따로 확인한다. (monkeypatch를 쓰면 정리 순서가 바뀌어 직접 되돌린다.)"""
+    from mabinogi_addon import feature_access
+    saved, feature_access.Recheck.INTERVAL = feature_access.Recheck.INTERVAL, 0.0
+    yield
+    feature_access.Recheck.INTERVAL = saved

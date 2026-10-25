@@ -2,7 +2,7 @@
 
 실행: uv run python -m scripts.qa_0171_fps_line_cost
 실사용 로그(2026-10-25): 'FPS 이벤트 도착 지연' 200FPS+ 분당 약 22,000개 → 초당 약 370줄이 UI 스레드로 들어온다.
-줄마다 하는 일(optimization_controller._line): 제작자 확인(is_creator → config.json 읽기·JSON 해석), 시계 조회, FrameStream.feed
+줄마다 하는 일(optimization_controller._line): 제작자 확인(0.17.2부터 1초 재사용, 이전은 줄마다 config.json 읽기), 시계 조회, FrameStream.feed
 (csv 해석·dict), 수집기 _read의 줄 자르기(buffer.split 반복). Windows 호출(QPC)은 대신 time.perf_counter로 둔다.
 - 각 단계 비용을 따로 재고, 분당 2만 줄 기준 CPU 점유율(코어 1개 기준)로 환산한다.
 """
@@ -52,7 +52,12 @@ if __name__ == '__main__':
     base = time.perf_counter()
     rows = lines(int(base * FREQ))
     total = 0.0
-    total += timed('① 제작자 확인(config.json 읽기·해석) ×2만', lambda: [config.load_discord_user(cfg) for _ in range(N)])
+    timed('(참고) 수정 전: 줄마다 config.json 읽기·해석 ×2만', lambda: [config.load_discord_user(cfg) for _ in range(N)])
+    # 0.17.2: 제품과 같은 1초 재사용 판정(feature_access.Recheck). 2만 줄을 1분에 고르게 받는 것처럼 시계를 진행시킨다.
+    from mabinogi_addon.feature_access import Recheck
+    ticks = iter(i * 60 / N for i in range(N + 1))
+    check = Recheck(lambda: config.load_discord_user(cfg), interval=1.0, clock=lambda: next(ticks))
+    total += timed('① 제작자 확인(1초 재사용, 0.17.2) ×2만', lambda: [check() for _ in range(N)])
     total += timed('② 시계 조회(perf_counter 대용) ×2만', lambda: [time.perf_counter() for _ in range(N)])
 
     def feed():

@@ -203,9 +203,11 @@ def test_process_tree_cpu_counts_app_children_and_encoder_grandchild():
     clock = iter([0.0, 1.0])
     meter = process_threads.ProcessTreeCpu(source=lambda: next(samples), clock=lambda: next(clock), cores=16)
     assert meter.sample(10, 20) is None
-    app, encoder = meter.sample(10, 20)
-    assert encoder == pytest.approx(0.3 / 16 * 100)
-    assert app == pytest.approx(0.45 / 16 * 100)  # 앱+인코더 합계(하위 포함), 관계없는 프로세스 제외
+    used = meter.sample(10, 20)
+    assert used['encoder'] == pytest.approx(0.3 / 16 * 100)
+    assert used['total'] == pytest.approx(0.45 / 16 * 100)  # 앱+인코더 합계(하위 포함), 관계없는 프로세스 제외
+    # 0.17.2: 프로세스별 — 앱 본체 0.1초, 그 밖의 하위(FPS 수집기 등) 0.05초
+    assert used['app'] == pytest.approx(0.1 / 16 * 100) and used['other'] == pytest.approx(0.05 / 16 * 100)
 
 
 def test_tree_ignores_self_parent_and_missing_root():
@@ -221,12 +223,14 @@ class Meter:
         return self.values.pop(0) if self.values else None
 
 
-@pytest.mark.parametrize('used, verdict', [((4.2, 2.0), '합격선 이내'), ((8.6, 5.8), '합격선 초과')])
+@pytest.mark.parametrize('used, verdict', [((4.2, 1.5, 2.0, 0.7), '합격선 이내'), ((8.6, 2.0, 5.8, 0.8), '합격선 초과')])
 def test_summary_reports_app_plus_encoder_against_pass_line(used, verdict):
+    # 0.17.2: 합계와 함께 앱 본체·인코더·FPS 수집기 등으로 나눠 남긴다
     producer = stream_tests._producer([], FormatCodec())
-    producer._cpu_meter = Meter([used])
+    producer._cpu_meter = Meter([dict(zip(('total', 'app', 'encoder', 'other'), used))])
     text = producer._diagnostics()
-    assert f'앱+인코더 {used[0]:.1f}%(인코더 {used[1]:.1f}%)' in text and f'{verdict}(최대 5%)' in text
+    assert (f'앱+인코더 합계 {used[0]:.1f}%(앱 본체 {used[1]:.1f}% · 인코더 {used[2]:.1f}% · '
+            f'FPS 수집기 등 {used[3]:.1f}%)') in text and f'{verdict}(최대 5%)' in text
 
 
 def test_cpu_meter_failure_never_stops_recording():

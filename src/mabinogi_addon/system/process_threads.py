@@ -137,7 +137,8 @@ def tree(table, root):
 
 
 class ProcessTreeCpu:
-    """sample(앱 PID, 인코더 PID) → 직전 표본 이후 (앱 전체 %, 인코더 %). 앱 전체는 하위 프로세스(인코더 포함) 합계.
+    """sample(앱 PID, 인코더 PID) → 직전 표본 이후 CPU %(전체 코어 = 100%) dict:
+    total(앱과 모든 하위 프로세스 합계) · app(앱 본체) · encoder(인코더 호스트와 ffmpeg) · other(그 밖의 하위, 주로 FPS 수집기 PresentMon).
     처음 표본은 None. 표본 사이에 끝난 프로세스의 시간은 빠진다(긴 간격 요약용이라 영향이 작다)."""
 
     def __init__(self, source=query, clock=time.monotonic, cores=None):
@@ -151,6 +152,7 @@ class ProcessTreeCpu:
         now = self._clock()
         app, encoder = tree(table, app_pid), tree(table, encoder_pid)
         times = {pid: table[pid][1] for pid in app | encoder}
+        own = {app_pid} & app
         previous, self._previous = self._previous, (now, times)
         if previous is None or now <= previous[0]:
             return None
@@ -158,4 +160,4 @@ class ProcessTreeCpu:
 
         def used(pids):
             return sum(max(0, times[pid] - previous[1].get(pid, 0)) for pid in pids) * scale
-        return used(app), used(encoder)
+        return dict(total=used(app), app=used(own), encoder=used(encoder), other=used(app - own - encoder))
