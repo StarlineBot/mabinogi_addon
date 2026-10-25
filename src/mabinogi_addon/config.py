@@ -1305,13 +1305,16 @@ def load_optimization_selection(path: Path = LOCAL_CONFIG_PATH) -> dict:
     adapter = raw.get("adapter")
     if isinstance(adapter, str) and 0 < len(adapter) <= 64:
         result["adapter"] = adapter
+    layout = raw.get("layout")  # 13.11 CPU 배치 이름 키(예: focus, none)
+    if isinstance(layout, str) and layout.replace("_", "").isalnum() and len(layout) <= 32:
+        result["layout"] = layout
     return result
 
 
 def save_optimization_selection(selection: dict, path: Path = LOCAL_CONFIG_PATH) -> None:
     data = _read_local_config(path)
     data["optimizationSelection"] = {k: v for k, v in selection.items()
-                                     if k in ("cpu", "priority", "tcp", "rss", "auto", "count", "adapter") and v is not None}
+                                     if k in ("cpu", "priority", "tcp", "rss", "auto", "count", "adapter", "layout") and v is not None}
     _write_local_config(data, path)
 
 

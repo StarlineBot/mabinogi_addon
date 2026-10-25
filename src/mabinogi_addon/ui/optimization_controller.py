@@ -108,6 +108,7 @@ class OptimizationController(QObject):
         self._previous_measurement = None  # 직전 측정 1회(시작~중단) 집계: 측정 단위 비교 기준(FPS 7절)
         self._condition_text = None  # '조건별 정리'를 누른 뒤 표시하는 저장 요약 묶음
         self._core_total = None
+        self._layouts = {}  # 환경 확인으로 만든 CPU 배치 {키: Layout}(13.11)
         self._badge_split = None
         self._badge_wired = False
         self.frames = False  # 측정 파이프라인(PresentMon 수집기) 동작 중: FPS 표시 또는 수집 모드가 켜져 있을 때
@@ -205,7 +206,7 @@ class OptimizationController(QObject):
         d, saved = self.panel, config.load_optimization_selection()
         self._restoring_selection = True
         try:
-            for key, box in (('cpu', d.cpu), ('priority', d.priority), ('tcp', d.tcp), ('auto', d.auto)):
+            for key, box in (('priority', d.priority), ('tcp', d.tcp), ('auto', d.auto)):
                 if key in saved: box.setChecked(saved[key])
         finally:
             self._restoring_selection = False
@@ -213,12 +214,54 @@ class OptimizationController(QObject):
     def _save_selection(self, *_):
         if self._restoring_selection or self.panel is None: return
         d = self.panel
-        selection = dict(cpu=d.cpu.isChecked(), priority=d.priority.isChecked(), tcp=d.tcp.isChecked(), auto=d.auto.isChecked())
+        selection = dict(priority=d.priority.isChecked(), tcp=d.tcp.isChecked(), auto=d.auto.isChecked())
         saved = config.load_optimization_selection()
-        # 환경 확인 전(목록이 비어 있음)에는 저장된 배분·어댑터를 지우지 않는다.
-        selection['count'] = d.split.currentData() if d.split.currentData() is not None else saved.get('count')
+        # 환경 확인 전(목록이 비어 있음)에는 저장된 배치·어댑터를 지우지 않는다(13.11: 배분 숫자 대신 배치 이름 키).
+        layout = self._layout_key()
+        if layout is not None:
+            selection['layout'] = layout
+            selection['cpu'] = layout != 'none'
         selection['adapter'] = (d.adapter.currentData() if d.adapter.count() > 1 else saved.get('adapter'))
         config.save_optimization_selection(selection)
+
+    # ---- CPU 배치 이름(명세 13.11) -----------------------------------------------------------------
+    def _layout_key(self):
+        """고른 배치 키. 환경 확인 전(목록 비어 있음)이면 저장값, 그것도 없으면 None."""
+        data = self.panel.split.currentData() if self.panel is not None else None
+        if data is not None:
+            return data
+        saved = config.load_optimization_selection()
+        if 'layout' in saved:
+            return saved['layout']
+        return 'none' if saved.get('cpu') is False else None
+
+    def _cpu_selected(self):
+        """CPU 배치를 적용하는지('배치 안 함'이 아닌지). 환경 확인 전이고 저장값도 없으면 추천을 쓰므로 True."""
+        key = self._layout_key()
+        if key is None:
+            return True
+        layout = self._layouts.get(key)
+        return key != 'none' and (layout is None or layout.applies)
+
+    @staticmethod
+    def _saved_layout(saved, topology):
+        """저장한 배치 키. 예전 저장(배분 숫자·CPU 체크)은 같은 뜻의 이름으로 옮긴다."""
+        if 'layout' in saved:
+            return saved['layout']
+        if saved.get('cpu') is False:
+            return 'none'
+        count = saved.get('count')
+        if type(count) is int:
+            rest = len(topology.cores) - count
+            key = {2: 'focus', 1: 'max_focus'}.get(rest) if len(topology.cores) > 6 else ('focus' if rest == 1 else None)
+            return key or f'count:{count}'  # 같은 뜻의 이름이 없으면 '쓸 수 없음' 안내 뒤 추천
+        return None
+
+    def _show_layout_detail(self):
+        """콤보 아래 회색 두 줄: 실제 배분과 근거(13.11, 알파 동안 숫자 병기)."""
+        if self.panel is None: return
+        layout = self._layouts.get(self.panel.split.currentData())
+        self.panel.split_detail.setText(f'{layout.allocation}\n근거: {layout.basis}' if layout else '')
 
     def _maybe_auto_inspect(self):
         if (self._auto_inspected or not hasattr(self.window, '_tabs')
@@ -233,16 +276,22 @@ class OptimizationController(QObject):
         self._restoring_selection = True
         try:
             d.split.clear()
+            self._layouts = {}
             if topology is not None:
                 d.cpu_info.setText(f'CPU: {topology.name} · 물리 {len(topology.cores)}개 / 논리 {sum(len(c.cpus) for c in topology.cores)}개')
-                count = len([c for c in topology.cores if c.performance])
                 self._core_total = len(topology.cores)
-                for n in range(1,count):
-                    d.split.addItem(f'게임 {n}개 + 백그라운드 물리 코어 {len(topology.cores)-n}개',n)
-                index = d.split.findData(saved.get('count')) if 'count' in saved else -1
-                if 'count' in saved and index < 0:
-                    notes.append(f"저장한 배분(게임 {saved['count']}개)을 이 CPU에서 쓸 수 없어 구조별 기본 배분을 표시해요.")
-                d.split.setCurrentIndex(index if index >= 0 else d.split.findData(topology.plan()['count']))
+                from ..optimization.layouts import layouts
+                from .optimization_panel import POPUP_ROLE
+                for layout in layouts(topology):  # 13.11: 이름 + 실제 배분, 추천 순
+                    self._layouts[layout.key] = layout
+                    d.split.addItem(layout.label(), layout.key)
+                    popup = f"{layout.name}{' · 추천' if layout.recommended else ''}\n{layout.allocation}"
+                    d.split.setItemData(d.split.count() - 1, popup, POPUP_ROLE)
+                wanted = self._saved_layout(saved, topology)
+                index = d.split.findData(wanted) if wanted else -1
+                if wanted and index < 0:
+                    notes.append('저장한 CPU 배치를 이 CPU에서 쓸 수 없어 추천 배치를 표시해요.')
+                d.split.setCurrentIndex(max(index, 0))
             else:
                 d.cpu_info.setText('CPU 구조를 확인하지 못했어요. CPU 배치를 적용하지 않아요.')
             d.adapter.clear()
@@ -261,12 +310,14 @@ class OptimizationController(QObject):
             self._restoring_selection = False
         if notes:
             d.cpu_info.setText(d.cpu_info.text() + '\n' + '\n'.join(notes))
+        self._show_layout_detail()
 
     def _wire_panel(self):
         d=self.panel
-        for box in (d.cpu, d.priority, d.tcp, d.auto): box.toggled.connect(self._save_selection)
+        for box in (d.priority, d.tcp, d.auto): box.toggled.connect(self._save_selection)
         d.auto.toggled.connect(self._auto_changed)
         d.split.currentIndexChanged.connect(self._save_selection)
+        d.split.currentIndexChanged.connect(lambda _index: self._show_layout_detail())
         d.adapter.currentIndexChanged.connect(self._save_selection)
         d.inspect.clicked.connect(self.engine.inspect)
         d.toggle.clicked.connect(self._toggle_optimization)
@@ -356,23 +407,31 @@ class OptimizationController(QObject):
         이미 세션이 돌거나 복구 기록이 손상됐거나 프로세스 항목을 하나도 고르지 않았으면 시작하지 않는다."""
         d = self.panel
         if (d is None or not d.auto.isChecked() or not self._can_start() or self.engine.busy or self.recovery.corrupt
-                or not (d.cpu.isChecked() or d.priority.isChecked())):
+                or not (self._cpu_selected() or d.priority.isChecked())):
             return False
-        count = d.split.currentData()
-        if count is None:
-            count = config.load_optimization_selection().get('count')  # 환경 확인 전이면 저장한 배분(없으면 권장값)
-        options = dict(cpu=d.cpu.isChecked(), count=count, adapter=None, tcp=False, rss=False,
-                       priority=d.priority.isChecked(), auto=True)
+        # 환경 확인 전이면 저장한 배치(없으면 이 CPU의 추천 — 엔진이 구조를 읽어 정한다)
+        options = dict(cpu=self._cpu_selected(), count=None, layout=self._layout_key() or 'recommended', adapter=None,
+                       tcp=False, rss=False, priority=d.priority.isChecked(), auto=True)
         self._begin(options)
         return True
 
     def _begin(self, options):
-        self._badge_split = (f"{options['count']}+{self._core_total-options['count']}"
-                             if options['cpu'] and options['count'] and self._core_total else None)
+        layout = self._layouts.get(options.get('layout')) if options.get('layout') else None
+        if options['cpu'] and options.get('layout'):
+            from ..optimization.layouts import NAMES
+            name = layout.name if layout else NAMES.get(options['layout'], ('',))[0]
+            self._badge_split = f'· {name}' if name else None  # 상단: '최적화: 적용 중 · 게임 집중'(13.11)
+        else:
+            self._badge_split = (f"{options['count']}+{self._core_total-options['count']}"
+                                 if options['cpu'] and options['count'] and self._core_total else None)
         self._kept_on = True  # 이미 목표값이라 바꾼 것이 없어도 켜짐으로 보여준다(13.5)
         self._summary_requested = {key: options[key] for key in ('cpu','count','tcp','priority')}
         self._summary_requested['adapter_selected'] = bool(options['adapter'])
         self._summary_requested['auto'] = bool(options.get('auto'))  # 13.10: FPS 자동 기록에 자동 적용 여부
+        if options.get('layout'):  # 13.11: FPS 자동 기록에 배치 이름과 실제 배분(숫자)
+            self._summary_requested['layout'] = options['layout']
+            if layout is not None:
+                self._summary_requested.update(layout_name=layout.name, layout_allocation=layout.short)
         self._summary_state = None
         if self.stream is not None:
             self.stream.boundary(presentmon.clock()[0], 'optimization_start_request')
@@ -381,14 +440,12 @@ class OptimizationController(QObject):
     def _start_optimization(self):
         if not self._can_start() or self.engine.busy: return
         d = self.panel
-        options = dict(cpu=d.cpu.isChecked(),count=d.split.currentData(),adapter=d.adapter.currentData(),
+        layout = self._layout_key() or 'recommended'  # 환경 확인 전이면 저장값, 없으면 이 CPU의 추천
+        options = dict(cpu=self._cpu_selected(),count=None,layout=layout,adapter=d.adapter.currentData(),
                        tcp=d.tcp.isChecked(),rss=False,priority=d.priority.isChecked(),
-                       auto=d.auto.isChecked())  # 13.8: RSS 새 적용 없음
+                       auto=d.auto.isChecked())  # 13.8: RSS 새 적용 없음 · 13.11: 배치는 이름 키
         if not any(options[k] for k in ('cpu','tcp','priority')):
             self.engine.status='사용할 항목을 선택해 주세요.'
-            return
-        if options['cpu'] and options['count'] is None:
-            self.engine.status='먼저 환경을 확인하고 물리 코어 배분을 선택해 주세요.'
             return
         if options['tcp'] and not options['adapter']:
             self.engine.status='적용할 물리 네트워크 어댑터를 선택해 주세요.'
@@ -736,7 +793,7 @@ class OptimizationController(QObject):
         self._render_summary()
         d = self.panel
         allowed, busy = self._can_start(), self.engine.busy
-        for w in (d.cpu,d.priority,d.tcp,d.split,d.adapter,d.inspect): w.setEnabled(allowed and not busy)
+        for w in (d.priority,d.tcp,d.split,d.adapter,d.inspect): w.setEnabled(allowed and not busy)
         self._sync_optimization_toggle()
         for control in (d.lock,d.scale,*d.metric_boxes.values()): control.setEnabled(allowed)
         d.frames_toggle.setEnabled((allowed and not self.closing) or self.frames or self.collector.pending)

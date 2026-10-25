@@ -149,23 +149,24 @@ def test_checkbox_is_off_by_default_and_turning_on_starts_waiting_without_networ
     w, c, started = _controller(window, monkeypatch)
     d = c.panel
     assert not d.auto.isChecked() and d.auto.text() == '마비노기를 켜면 자동 적용'
-    d.tcp.setChecked(True); d.cpu.setChecked(False); d.priority.setChecked(True)
+    config.save_optimization_selection(dict(layout='none'))  # 13.11: CPU 체크 해제 대신 '배치 안 함'
+    d.tcp.setChecked(True); d.priority.setChecked(True)
     d.auto.setChecked(True)
-    assert started == [dict(cpu=False, count=None, adapter=None, tcp=False, rss=False, priority=True, auto=True)]
+    assert started == [dict(cpu=False, count=None, layout='none', adapter=None, tcp=False, rss=False, priority=True, auto=True)]
     assert c.engine.auto and config.load_optimization_selection()['auto'] is True
     assert c._summary_requested['auto'] is True
 
 
 def test_no_auto_start_without_any_process_item(window, monkeypatch):
     w, c, started = _controller(window, monkeypatch)
-    c.panel.cpu.setChecked(False); c.panel.priority.setChecked(False)
+    config.save_optimization_selection(dict(layout='none')); c.panel.priority.setChecked(False)
     c.panel.auto.setChecked(True)
     assert started == []
 
 
 def test_app_start_waits_for_game_once_when_auto_saved(window, monkeypatch):
     w, c, started = _controller(window, monkeypatch)
-    c.panel.cpu.setChecked(False); c.panel.priority.setChecked(True)
+    config.save_optimization_selection(dict(layout='none')); c.panel.priority.setChecked(True)
     c._restoring_selection = True; c.panel.auto.setChecked(True); c._restoring_selection = False  # 저장값 복원(시작 안 함)
     assert started == []
     c._auto_pending = True  # 앱 시작 때 저장된 '자동 적용 켬'
@@ -178,7 +179,7 @@ def test_app_start_waits_for_game_once_when_auto_saved(window, monkeypatch):
 def test_manual_start_carries_auto_choice(window, monkeypatch):
     w, c, started = _controller(window, monkeypatch)
     d = c.panel
-    d.cpu.setChecked(False); d.priority.setChecked(True)
+    config.save_optimization_selection(dict(layout='none')); d.priority.setChecked(True)
     c._restoring_selection = True; d.auto.setChecked(True); c._restoring_selection = False
     c._start_optimization()
     assert started[-1]['auto'] is True

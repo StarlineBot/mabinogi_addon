@@ -405,16 +405,20 @@ def test_saved_selection_is_restored_and_unusable_values_are_explained(window, m
     w, app = window; c = w.optimization_tools
     topology = Topology('AMD Ryzen 7 9800X3D', tuple(Core(i, (i * 2, i * 2 + 1)) for i in range(8)))
     adapters = [dict(Name='Realtek 2.5GbE', InterfaceGuid='{AAAA-1}'), dict(Name='Wi-Fi', InterfaceGuid='{BBBB-2}')]
+    # 13.11(명세 변경): CPU 체크박스 대신 배치 이름. 예전 저장(cpu=False)은 '배치 안 함', 배분 숫자는 같은 뜻의 이름으로 옮긴다.
     config.save_optimization_selection(dict(cpu=False, count=6, adapter='bbbb-2', tcp=True, rss=False))
     c._restore_selection()
-    assert not c.panel.cpu.isChecked() and c.panel.tcp.isChecked()
+    assert c.panel.tcp.isChecked()
     c._apply_inspection(topology, adapters)
-    assert c.panel.split.currentData() == 6 and c.panel.adapter.currentText() == 'Wi-Fi'
+    assert c.panel.split.currentData() == 'none' and c.panel.adapter.currentText() == 'Wi-Fi'
+    config.save_optimization_selection(dict(cpu=True, count=6, adapter='bbbb-2', tcp=True, rss=False))
+    c._apply_inspection(topology, adapters)
+    assert c.panel.split.currentData() == 'focus'  # 8코어 6+2 = 게임 집중
     config.save_optimization_selection(dict(cpu=True, count=20, adapter='GONE', tcp=False, rss=False))
     c._apply_inspection(topology, adapters)
-    assert c.panel.split.currentData() == 7  # 9800X3D 구조별 기본 7+1
+    assert c.panel.split.currentData() == 'focus' and c.panel.split.currentIndex() == 0  # 9800X3D 추천
     assert c.panel.adapter.currentData() is None
-    assert '저장한 배분(게임 20개)' in c.panel.cpu_info.text() and '저장한 네트워크 어댑터를 찾지 못해' in c.panel.cpu_info.text()
+    assert '저장한 CPU 배치를 이 CPU에서 쓸 수 없어' in c.panel.cpu_info.text() and '저장한 네트워크 어댑터를 찾지 못해' in c.panel.cpu_info.text()
     # 사용자가 다시 고르면 저장된다(자동 적용은 하지 않음).
     c.panel.adapter.setCurrentIndex(1)
     assert config.load_optimization_selection()['adapter'] == 'AAAA-1'

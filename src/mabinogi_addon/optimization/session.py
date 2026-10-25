@@ -26,6 +26,8 @@ class Core:
 class Topology:
     name: str
     cores: tuple[Core, ...]
+    # L3 캐시 묶음 ((크기 바이트, 논리 CPU들), ...). 3D V-Cache 코어 묶음 감지용(13.11). 못 읽으면 비움.
+    l3: tuple[tuple[int, tuple[int, ...]], ...] = ()
 
     def plan(self, count=None):
         performance = [c for c in self.cores if c.performance]

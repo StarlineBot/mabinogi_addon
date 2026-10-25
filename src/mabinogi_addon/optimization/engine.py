@@ -132,6 +132,7 @@ class Engine:
         self.session_end = None
         self.auto = bool(options.get('auto'))
         self.held = False
+        options = dict(options)
         def work():
             if not self.allowed(): raise PermissionError('제작자 접근이 필요해요.')
             if options.get('auto'):
@@ -144,7 +145,19 @@ class Engine:
             else:
                 self.recovery.finish()
             # 13.8: RSS는 새로 적용하지 않는다(예전 기록의 원복만 유지). 13.9: 패스트핑은 TcpAckFrequency만(TCPNoDelay 제외).
-            plan = self.backend.topology().plan(options['count']) if options['cpu'] else None
+            plan = None
+            if options['cpu'] and options.get('layout'):
+                # 13.11: 이름으로 고른 배치(게임·그 외 마스크). 그 외가 None이면 다른 프로그램은 바꾸지 않는다.
+                from .layouts import find
+                chosen = find(self.backend.topology(), options['layout'])
+                if chosen is None:
+                    raise ValueError('고른 CPU 배치를 이 CPU에서 쓸 수 없어요. 환경을 다시 확인해 주세요.')
+                if chosen.applies:
+                    plan = dict(game=chosen.game, background=chosen.background)
+                else:
+                    options['cpu'] = False  # '배치 안 함'(추천이 배치 안 함인 6코어 이하 포함): 우선순위만
+            elif options['cpu']:
+                plan = self.backend.topology().plan(options['count'])
             game = self.backend.game()
             notices = []
             results = []
@@ -254,7 +267,8 @@ class Engine:
                     alive.add((observed['pid'],observed['birth']))
                     seen &= alive
                     names = {k: v for k, v in names.items() if k in alive}
-                    candidates = [p for p in processes if self.backend.background_candidate(p,observed)]
+                    candidates = ([p for p in processes if self.backend.background_candidate(p,observed)]
+                                  if plan['background'] is not None else [])
                     for p in candidates: names[(p['target']['pid'],p['target']['birth'])] = p['name']
                     targets = [(observed,plan['game'])] + [(p['target'],plan['background']) for p in candidates]
                     for target, mask in targets:

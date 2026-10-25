@@ -12,12 +12,15 @@ import json
 import os
 import re
 import struct
+import logging
 import subprocess
 import sys
 import uuid
 from functools import lru_cache
 
 from ..optimization.session import Core, Topology
+
+_log = logging.getLogger(__name__)
 
 class WindowsCommandError(OSError):
     """Bounded, non-identifying diagnostics; never expose shell text or scripts."""
@@ -281,7 +284,22 @@ class WindowsOptimization:
         if len(classes) > 2: raise ValueError('이 CPU의 성능 코어 구분을 확인하지 못했어요.')
         with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,r'HARDWARE\DESCRIPTION\System\CentralProcessor\0') as key:
             name = winreg.QueryValueEx(key,'ProcessorNameString')[0]
-        return Topology(name, tuple(Core(i,cpus,eff == max(classes)) for i,(eff,cpus) in enumerate(records)))
+        try:
+            l3 = self._l3_groups(fn)
+        except Exception as exc:  # 3D 캐시 감지 실패는 그 항목만 숨긴다(13.11)
+            _log.info('L3 캐시 구조를 읽지 못했어요(3D 캐시 코어 전용 숨김): %s', exc)
+            l3 = ()
+        return Topology(name, tuple(Core(i,cpus,eff == max(classes)) for i,(eff,cpus) in enumerate(records)), l3)
+
+    @staticmethod
+    def _l3_groups(fn):
+        """GetLogicalProcessorInformationEx(RelationCache=2)의 L3 묶음 → ((크기, 논리 CPU들), ...)."""
+        size = wintypes.DWORD()
+        fn(2,None,ctypes.byref(size))
+        if not 0 < size.value <= 1024*1024: raise ValueError('캐시 구조 크기를 확인하지 못했어요.')
+        buffer = ctypes.create_string_buffer(size.value)
+        if not fn(2,buffer,ctypes.byref(size)): raise ctypes.WinError(ctypes.get_last_error())
+        return parse_l3(buffer.raw[:size.value])
 
     def _ps(self, script, operation='Windows 명령'):
         self._windows()
@@ -445,3 +463,24 @@ class WindowsOptimization:
         leads = sorted(g[0] for g in groups)
         return dict(old,Enabled=True,BaseProcessorGroup=0,MaxProcessorGroup=0,
                     BaseProcessorNumber=leads[0],MaxProcessorNumber=leads[-1],MaxProcessors=len(groups),Profile='ClosestStatic')
+
+
+def parse_l3(data: bytes):
+    """SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX(RelationCache) 버퍼 → L3 묶음. OS 없이 테스트한다.
+    CACHE_RELATIONSHIP: Level@8(BYTE), CacheSize@12(DWORD), Type@16, GroupCount@38(WORD), GroupMask.Mask@40(QWORD), Group@48(WORD)."""
+    offset, groups = 0, []
+    while offset + 8 <= len(data):
+        relation, length = struct.unpack_from('<II', data, offset)
+        if length < 8 or offset + length > len(data):
+            raise ValueError('캐시 구조 형식 미지원')
+        if relation == 2 and length >= 50:
+            level = data[offset + 8]
+            cache_size = struct.unpack_from('<I', data, offset + 12)[0]
+            group_count = struct.unpack_from('<H', data, offset + 38)[0]
+            mask, group = struct.unpack_from('<QH', data, offset + 40)
+            if level == 3:
+                if group_count > 1 or group != 0:
+                    raise ValueError('다중 프로세서 그룹 캐시는 아직 지원하지 않아요.')
+                groups.append((cache_size, tuple(i for i in range(64) if mask & (1 << i))))
+        offset += length
+    return tuple(groups)

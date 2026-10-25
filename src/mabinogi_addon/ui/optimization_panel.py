@@ -1,7 +1,45 @@
 """Embedded creator alpha pages using the application's shared form sections."""
 from PySide6.QtWidgets import (QCheckBox,QComboBox,QFormLayout,QGroupBox,QHBoxLayout,
     QLabel,QLineEdit,QPushButton,QSpinBox,QTabWidget,QVBoxLayout,QWidget)
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QPalette
+from PySide6.QtWidgets import QStyledItemDelegate
 from .widgets import FeatureHeader
+
+POPUP_ROLE = Qt.ItemDataRole.UserRole + 1  # 펼친 목록 문구(이름 + 배분 두 줄). 닫힌 목록은 DisplayRole
+
+
+class _TwoLineDelegate(QStyledItemDelegate):
+    """CPU 배치 펼친 목록(13.11): 항목마다 첫 줄 이름(맨 위 추천), 둘째 줄 실제 배분(회색).
+    스타일은 항목 글자를 한 줄로만 그려 두 줄을 직접 그린다(선택 배경은 스타일 그대로)."""
+
+    def paint(self, painter, option, index):
+        popup = index.data(POPUP_ROLE)
+        if not popup:
+            return super().paint(painter, option, index)
+        from PySide6.QtWidgets import QApplication, QStyle, QStyleOptionViewItem
+        item = QStyleOptionViewItem(option)
+        self.initStyleOption(item, index)
+        item.text = ''
+        style = item.widget.style() if item.widget is not None else QApplication.style()
+        style.drawControl(QStyle.ControlElement.CE_ItemViewItem, item, painter, item.widget)
+        name, _, detail = popup.partition('\n')
+        selected = bool(option.state & QStyle.StateFlag.State_Selected)
+        palette = option.palette
+        rect = option.rect.adjusted(8, 3, -8, -3)
+        half = rect.height() // 2
+        painter.save()
+        painter.setPen(palette.color(QPalette.ColorRole.HighlightedText if selected else QPalette.ColorRole.Text))
+        painter.drawText(rect.adjusted(0, 0, 0, -half), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, name)
+        painter.setPen(palette.color(QPalette.ColorRole.HighlightedText if selected else QPalette.ColorRole.PlaceholderText))
+        painter.drawText(rect.adjusted(0, half, 0, 0), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, detail)
+        painter.restore()
+
+    def sizeHint(self, option, index):
+        size = super().sizeHint(option, index)
+        if index.data(POPUP_ROLE):
+            size.setHeight(option.fontMetrics.height() * 2 + 10)
+        return size
 
 
 def _label(text):
@@ -32,9 +70,13 @@ class OptimizationPanel(QWidget):
         self.priority=QCheckBox('게임 우선순위 높음');self.priority.setChecked(True);group.addWidget(self.priority)
         group.addWidget(_label('무거운 장면에서 Windows가 게임을 먼저 실행해요. 끄거나 세션이 끝나면 원래 값으로 되돌려요.\n'
                                '다른 도구가 우선순위를 바꾸면 덮어쓰지 않아요.'))
-        self.cpu=QCheckBox('게임·백그라운드 CPU 배치');self.cpu.setChecked(True);group.addWidget(self.cpu)
+        # 13.11(렌더 시안 사용자 확인): 체크박스 대신 '배치 안 함' 항목. 닫힌 목록은 `이름 (추천) · 6+2`, 아래 회색 두 줄에 실제 배분과 근거,
+        # 펼친 목록은 항목마다 이름 + 배분 한 줄. 목록은 감지한 CPU 구조로 만들고 추천 순으로 정렬한다.
         self.split=QComboBox();self.split.addItem('CPU 구조를 먼저 확인해 주세요.',None)
-        form=QFormLayout();form.addRow('물리 코어 배분',self.split);group.addLayout(form)
+        self.split.setItemDelegate(_TwoLineDelegate(self.split))
+        form=QFormLayout();form.addRow('CPU 배치',self.split);group.addLayout(form)
+        self.split_detail=_label('');self.split_detail.setForegroundRole(QPalette.ColorRole.PlaceholderText)
+        group.addWidget(self.split_detail)
         group=_group('네트워크',body)
         self.adapter=QComboBox();self.adapter.addItem('네트워크 어댑터를 선택해 주세요.',None)
         form=QFormLayout();form.addRow('네트워크 어댑터',self.adapter);group.addLayout(form)
