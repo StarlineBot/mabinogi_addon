@@ -419,3 +419,20 @@ def test_crash_dump_summary_extracts_native_frames():
                          "python312!PyObject_Call+0x10", "Qt6Core!QObject::~QObject+0x1f0"]
     assert "Qt6Core!QObject::~QObject+0x1f0" in lines[lines.index("— Qt·PySide·python 프레임 —"):]
     assert dumps.main(["bogus"]) == 2
+
+
+@pytest.mark.parametrize("command", ["arm", "report"])
+def test_crash_dump_script_survives_cp1252_console(tmp_path, command):
+    # verify-only #136: 러너 콘솔 cp1252에서 한국어 print가 UnicodeEncodeError → 설정 단계 실패·스모크 미실행
+    import os
+    import subprocess
+    import sys
+    root = Path(__file__).resolve().parents[1]
+    env = dict(os.environ, PYTHONIOENCODING="cp1252")
+    folder = tmp_path / "crash-dumps"
+    folder.mkdir()  # report: 덤프 없음 경로
+    result = subprocess.run([sys.executable, "-m", "scripts.ci_crash_dumps", command, str(folder)], cwd=root, env=env,
+                            capture_output=True, timeout=60)
+    assert result.returncode == 0, result.stderr.decode("utf-8", "replace")
+    text = result.stdout.decode("utf-8")
+    assert "[crash-dumps]" in text and ("덤프 없음" in text if command == "report" else "python" in text)

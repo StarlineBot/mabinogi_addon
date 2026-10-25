@@ -107,7 +107,18 @@ def report(folder: Path) -> int:
     return 0
 
 
+def utf8_console():
+    """러너 콘솔 글자표(cp1252 등)와 무관하게 한국어 안내를 출력한다(#136: 인코딩 오류로 설정 단계가 실패해 스모크 미실행).
+    표현 못 하는 글자는 바꿔 쓰고 실패하지 않는다."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding='utf-8', errors='replace')
+        except (AttributeError, ValueError, OSError):
+            pass
+
+
 def main(argv=None) -> int:
+    utf8_console()
     argv = list(sys.argv[1:] if argv is None else argv)
     if len(argv) != 2 or argv[0] not in ('arm', 'report'):
         print(__doc__)

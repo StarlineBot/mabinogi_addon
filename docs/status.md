@@ -228,6 +228,8 @@
 - 환경 비교(#131 통과 vs #135 실패, 잡 로그): 러너 이미지 win22/20261022.344·runner 2.338.0·uv 0.13.5·Python 3.12.15·PySide6/shiboken6 6.11.2 **모두 동일**.
   → 환경 변경 아님, d6a9c8f..main 코드 차이 쪽. 스모크 경로에서 실행되는 변경은 debuff `_IDENTITY_PEERS`(참조 아이콘 추가 적재)·릴리즈 노트 문구·
   블랙박스 컨트롤러 문구 정도(progress.py는 비 xdist라 동작 동일 — 로컬 확인). 덤프로 네이티브 위치 확인 뒤 수정.
+- #136 후속: `Arm crash dumps`가 cp1252 콘솔의 한국어 출력으로 UnicodeEncodeError(스모크 미실행) → 스크립트 시작에 stdout/stderr를 UTF-8(errors=replace)로 재설정.
+  회귀 2건(cp1252에서 arm·report 덤프 없음 경로 종료 0, 수정 전 실패 확인).
 
 ### CI 테스트 도구: xdist 주 프로세스 스택 덤프 타이머 제거(사용자 승인 2026-10-25) — 수정 완료, 배포 실행 확인 대기
 
