@@ -218,6 +218,9 @@ class BlackboxService:
                 bounds = {} if limits.max_input_width is None else dict(
                     max_output=(limits.max_width, limits.max_height),
                     max_input=(limits.max_input_width, limits.max_input_height))
+                # 블랙박스 11.4: 소리 없는 상주 인코더 녹화는 GPU 색 변환(NV12)으로 받아 인코더 CPU를 줄인다.
+                if not self.settings.audio and hasattr(self.codec, 'open_stream'):
+                    bounds['pixel_format'] = 'nv12'
                 native = self._native_factory(self.settings.library, max_frame_bytes=limits.max_frame_bytes,
                                                cursor=self.settings.cursor, **bounds, **(self.settings.audio or {}))
                 producer = self._producer_factory(target, native, self.codec, self.spool,

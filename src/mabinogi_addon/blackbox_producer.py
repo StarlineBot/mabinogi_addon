@@ -8,10 +8,13 @@ from dataclasses import dataclass
 from queue import Queue, Empty, Full
 from threading import Event, Thread, Lock
 import logging
+import os
+import sys
 import time
 
 from .blackbox import Segment
 from .blackbox_native import NativeTransition
+from .system.blackbox_capture import frame_bytes
 from .blackbox_audio import PcmTimeline
 import io
 import wave
@@ -53,8 +56,18 @@ class ProducerLimits:
             raise ValueError('raw frame queues exceed explicit RAM budget')
 
 
+CPU_PASS_PERCENT = 5.0  # 블랙박스 11.4 합격선: 녹화 중 앱+인코더 합계(작업 관리자 기준, 전체 코어 = 100%)
+
+
+def _default_cpu_meter():
+    if sys.platform != 'win32':
+        return None
+    from .system.process_threads import ProcessTreeCpu
+    return ProcessTreeCpu()
+
+
 class CaptureProducer:
-    def __init__(self, target, native, codec, spool, limits: ProducerLimits, *, allowed):
+    def __init__(self, target, native, codec, spool, limits: ProducerLimits, *, allowed, cpu_meter=None):
         self.audio = None
         if native.audio[0] is not None:
             self.audio = PcmTimeline(native.audio[0], native.audio[1], native.audio_buffer_bytes)
@@ -73,6 +86,10 @@ class CaptureProducer:
         self._distinct, self._slots = 0, 0
         self._logged_filled = self._logged_gaps = 0
         self.restarts = 0  # 상주 인코더를 다시 연 횟수(공백·저장 마무리)
+        self.pixel_format_logged = None  # 처음 받은 캡처 형식(로그 1회)
+        # 블랙박스 11.4 검증 지표: 요약마다 앱 전체(하위 프로세스 포함)·인코더 CPU를 함께 남긴다
+        self._cpu_meter = cpu_meter if cpu_meter is not None else _default_cpu_meter()
+        self._encoder_pid = None
         self._flush = []
         self._flush_lock = Lock()
         self._error = None
@@ -152,17 +169,28 @@ class CaptureProducer:
                 if frame is None:
                     self._stop.wait(0.002)
                     continue
-                data, width, height, stamp = frame
+                # 블랙박스 11.4: NV12(GPU 색 변환)면 다섯 번째 값이 'nv12'. 없으면 BGRA(이전 방식·구버전 DLL).
+                data, width, height, stamp, *rest = frame
+                pixel_format = rest[0] if rest else 'bgra'
                 if self._stop.is_set() or self.allowed() is not True:
                     break
                 if self.limits.max_width is not None and (width > self.limits.max_width or height > self.limits.max_height):
                     raise ValueError(f'블랙박스 영상 {width}×{height}이 출력 한도 '
                                      f'{self.limits.max_width}×{self.limits.max_height}를 넘었어요(축소 결과 확인 실패).')
-                if len(data) > self.limits.max_frame_bytes or len(data) != width * height * 4:
+                if len(data) > self.limits.max_frame_bytes or len(data) != frame_bytes(width, height, pixel_format):
                     raise ValueError('native frame exceeds bound')
-                if dimensions is not None and dimensions != (width, height):
+                if dimensions is not None and dimensions[:2] != (width, height):
                     raise ValueError('capture dimensions changed; new format required')
-                dimensions = width, height
+                if dimensions is not None and dimensions[2] != pixel_format:
+                    # GPU가 NV12를 못 해 BGRA로 내려온 경우: 지금까지를 닫고 새 형식 인코더로 이어 간다.
+                    _log.warning('블랙박스 GPU 색 변환(NV12) 불가 · %s로 이어서 녹화(인코더 CPU 사용 증가)', pixel_format)
+                    flush()
+                    last = None
+                if dimensions is None and self.pixel_format_logged is None:
+                    self.pixel_format_logged = pixel_format
+                    _log.info('블랙박스 캡처 형식 %s %d×%d(%s)', pixel_format, width, height,
+                              'GPU 색 변환' if pixel_format == 'nv12' else 'ffmpeg CPU 색 변환')
+                dimensions = width, height, pixel_format
                 if previous is not None and stamp <= previous:
                     raise ValueError('out-of-order native frame')
                 previous = stamp
@@ -235,7 +263,28 @@ class CaptureProducer:
         self._logged_filled, self._logged_gaps, self._distinct, self._slots = self.filled, self.gaps, 0, 0
         read = (f'평균 {sum(reads) / len(reads) * 1000:.1f}ms·최대 {max(reads) * 1000:.1f}ms' if reads else '없음')
         return (f'반복 채움 +{filled}칸 · 서로 다른 화면 {fps:.1f}FPS · 캡처 읽기 {read} · '
-                f'프레임 공백 +{gaps}회(누적 {self.gaps}) · 인코더 재시작 누적 {self.restarts}회')
+                f'프레임 공백 +{gaps}회(누적 {self.gaps}) · 인코더 재시작 누적 {self.restarts}회'
+                f'{self._cpu_text()}')
+
+    def _cpu_sample(self):
+        if self._cpu_meter is None:
+            return None
+        try:
+            return self._cpu_meter.sample(os.getpid(), self._encoder_pid)
+        except Exception as exc:  # 진단 실패가 녹화를 멈추지 않게
+            self._cpu_meter = None
+            _log.info('블랙박스 CPU 측정 중단: %s', exc)
+            return None
+
+    def _cpu_text(self):
+        """직전 요약 이후 CPU. 앱 전체는 인코더 등 하위 프로세스를 포함한 합계(합격선과 같은 기준)."""
+        used = self._cpu_sample()
+        if used is None:
+            return ''
+        total, encoder = used
+        verdict = '합격선 이내' if total <= CPU_PASS_PERCENT else '합격선 초과'
+        return (f' · CPU(전체 코어 기준) 앱+인코더 {total:.1f}%(인코더 {encoder:.1f}%) · '
+                f'{verdict}(최대 {CPU_PASS_PERCENT:.0f}%)')
 
     def _segment_timing(self, seconds, frames, distinct=None, label='구간 인코딩'):
         """구간(묶음)마다 걸린 시간. 상주 인코더에서는 인코더 입력(stdin) 대기 시간이다."""
@@ -278,7 +327,7 @@ class CaptureProducer:
             start = stamps[0]
             for _ in range(count):
                 stamps.popleft()
-            width, height = state['dims']
+            width, height = state['dims'][:2]
             source = self.spool.write(lambda sink: sink.write(data), max_bytes=self.limits.max_segment_bytes)
             segment = Segment(self.target.session, source, start, start + round(count * 1_000_000 / fps),
                               self.spool.resolve(source).stat().st_size, f'{width}x{height}:{fps}:video')
@@ -337,15 +386,21 @@ class CaptureProducer:
                 frames, batch_stamps, dims = batch
                 if state['stream'] is not None and (dims != state['dims'] or abs(batch_stamps[0] - state['expected']) > period / 2):
                     close()  # 공백·크기 변경: 이 지점에서 영상이 이어지지 않으므로 새 인코더로
-                    restarted('화면 크기 변경' if dims != state['dims'] else '프레임 공백')
+                    restarted(('화면 크기 변경' if dims[:2] != state['dims'][:2] else '캡처 형식 변경')
+                              if dims != state['dims'] else '프레임 공백')
                 if state['stream'] is None:
                     state['dims'] = dims
                     with lock:
                         state['written'] = state['emitted'] = 0
                     started = time.perf_counter()
-                    state['stream'] = self.codec.open_stream(dims[0], dims[1], self.limits.segment_frames, on_fragment)
+                    extra = {} if dims[2] == 'bgra' else {'pixel_format': dims[2]}
+                    state['stream'] = self.codec.open_stream(dims[0], dims[1], self.limits.segment_frames, on_fragment, **extra)
+                    self._encoder_pid = getattr(getattr(state['stream'], 'process', None), 'pid', None)
                     if not self.restarts:
-                        _log.info('블랙박스 상주 인코더 시작 %d×%d · %.2f초', dims[0], dims[1], time.perf_counter() - started)
+                        self._cpu_sample()  # 기준 표본: 첫 요약이 녹화 시작부터의 CPU가 되게
+                    if not self.restarts:
+                        _log.info('블랙박스 상주 인코더 시작 %d×%d %s · %.2f초', dims[0], dims[1], dims[2],
+                                  time.perf_counter() - started)
                 waited = 0.0
                 for data, stamp in zip(frames, batch_stamps):
                     stamps.append(stamp)
@@ -380,7 +435,9 @@ class CaptureProducer:
                 if batch[0] == 'flush':
                     self._put(self.results, batch)
                     continue
-                frames, stamps, (width, height) = batch
+                frames, stamps, (width, height, pixel_format) = batch
+                if pixel_format != 'bgra':
+                    raise ValueError(f'구간 인코딩은 BGRA만 받아요({pixel_format})')
                 duration = round(len(frames) * 1_000_000 / self.codec.settings.fps)
                 audio_source = None
                 if self.audio is not None:

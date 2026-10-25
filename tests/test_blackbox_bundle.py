@@ -121,8 +121,9 @@ def test_prepare_builds_and_validates_complete_bundle_from_approved_policy(tmp_p
     manifest=json.loads((output/'manifest.json').read_text(encoding="utf-8"))
     assert 'mabinogi_blackbox.dll' in manifest and 'corresponding-source.zip' in manifest
     assert json.loads((output/'product.json').read_text(encoding="utf-8"))['codec']['bitrate']==12000000
+    # 블랙박스 11.4: 후보마다 NV12 입력(GPU 색 변환)·BGRA 입력(이전 방식) 명령 두 개를 검사한다
     assert events==['native-build','native-build','source-build',
-                    'stream-check:h264_nvenc','stream-check:h264_amf','stream-check:h264_mf']
+                    *(f'stream-check:{name}' for name in ('h264_nvenc','h264_nvenc','h264_amf','h264_amf','h264_mf','h264_mf'))]
 
 
 LISTINGS = {
@@ -346,6 +347,6 @@ def test_bundle_check_fails_when_bundled_ffmpeg_rejects_stream_encoder_options()
             return SimpleNamespace(stderr="Unrecognized option 'sc_threshold'.\nError splitting the argument list: Option not found")
         return SimpleNamespace(stderr='Cannot load nvcuda.dll')  # 장치 없음은 허용
     failures = packager.stream_option_failures(Path('ffmpeg.exe'), product['codec'], product['producer']['segment_frames'], run)
-    assert [name for name, _ in failures] == ['h264_amf'] and 'sc_threshold' in failures[0][1]
-    assert len(commands) == 3 and all('-force_key_frames' in c and '-sc_threshold' not in c for c in commands)
+    assert [name for name, _ in failures] == ['h264_amf nv12', 'h264_amf bgra'] and 'sc_threshold' in failures[0][1]
+    assert len(commands) == 6 and all('-force_key_frames' in c and '-sc_threshold' not in c for c in commands)
     assert all(c[0] == 'ffmpeg.exe' and c[c.index('-g')+1] == '15' for c in commands)

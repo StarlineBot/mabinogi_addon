@@ -47,12 +47,14 @@ def stream_option_failures(ffmpeg, codec, segment_frames, run=None):
     run = run or subprocess.run
     failures = []
     for candidate in codec.get('candidates') or [codec['encoder']]:
-        command = encoder.stream_command(*_PROBE_SIZE, segment_frames, encoder=candidate)
-        result = run(command, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=30)
-        stderr = result.stderr or b''
-        stderr = stderr.decode('utf-8', 'replace') if isinstance(stderr, bytes) else stderr  # 콘솔 코드페이지 무관
-        if any(marker in stderr for marker in OPTION_ERRORS):
-            failures.append((candidate, stderr.strip()))
+        # 블랙박스 11.4: GPU 색 변환(NV12) 입력 명령과 이전 BGRA 입력 명령(구버전 DLL·미지원 GPU) 둘 다 검사한다.
+        for pixel_format in ('nv12', 'bgra'):
+            command = encoder.stream_command(*_PROBE_SIZE, segment_frames, encoder=candidate, pixel_format=pixel_format)
+            result = run(command, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=30)
+            stderr = result.stderr or b''
+            stderr = stderr.decode('utf-8', 'replace') if isinstance(stderr, bytes) else stderr  # 콘솔 코드페이지 무관
+            if any(marker in stderr for marker in OPTION_ERRORS):
+                failures.append((f'{candidate} {pixel_format}', stderr.strip()))
     return failures
 
 

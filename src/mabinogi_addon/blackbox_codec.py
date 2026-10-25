@@ -381,22 +381,32 @@ class FFmpegEncoder:
                 *keyframes, '-pix_fmt', pixel_format, '-movflags', 'frag_keyframe+delay_moov+default_base_moof',
                 '-f', 'mp4', 'pipe:1']
 
-    def _input_command(self, width, height):
+    def _input_command(self, width, height, pixel_format='bgra'):
+        # NV12는 캡처 DLL이 GPU에서 BT.709·제한 범위로 변환한 값이라 그대로 표시한다(인코더가 색 정보로 기록).
+        tags = ['-color_range', 'tv', '-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709'] \
+            if pixel_format == 'nv12' else []
         return [str(self.settings.ffmpeg), '-v', 'error', '-nostdin', '-xerror', '-err_detect', 'explode', '-f', 'rawvideo',
-                '-pix_fmt', 'bgra', '-video_size', f'{width}x{height}', '-framerate', str(self.settings.fps),
+                '-pix_fmt', pixel_format, *tags, '-video_size', f'{width}x{height}', '-framerate', str(self.settings.fps),
                 '-i', 'pipe:0']
 
     _SCALE = ['-vf', "scale=w='min(1920,iw)':h='min(1080,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2"]
 
-    def open_stream(self, width, height, gop, on_fragment):
+    def open_stream(self, width, height, gop, on_fragment, pixel_format='bgra'):
         """녹화용 상주 인코더(0.15.0). gop 프레임마다 on_fragment(독립 MP4 bytes, 프레임 수)."""
         if width < 2 or height < 2:
             raise ValueError('source must have at least two pixels per dimension')
-        return EncoderStream(self.stream_command(width, height, gop), on_fragment, host=self.settings.host)
+        return EncoderStream(self.stream_command(width, height, gop, pixel_format=pixel_format), on_fragment,
+                             host=self.settings.host)
 
-    def stream_command(self, width, height, gop, encoder=None):
-        """상주 인코더 명령. 빌드 단계에서 번들 ffmpeg로 같은 명령의 옵션 인식을 검사한다(0.15.1)."""
-        return [*self._input_command(width, height), '-an', *self._SCALE, *self._output(encoder=encoder, gop=gop)]
+    def stream_command(self, width, height, gop, encoder=None, pixel_format='bgra'):
+        """상주 인코더 명령. 빌드 단계에서 번들 ffmpeg로 같은 명령의 옵션 인식을 검사한다(0.15.1).
+
+        블랙박스 11.4: NV12 입력은 캡처 DLL이 GPU에서 이미 1080p 안으로 줄이고 색 변환까지 마친 프레임이라
+        크기 필터를 넣지 않는다. 하드웨어 인코더 출력도 NV12라 ffmpeg 안에서 CPU 변환이 일어나지 않는다."""
+        if pixel_format not in ('bgra', 'nv12'):
+            raise ValueError('pixel format must be bgra or nv12')
+        scale = [] if pixel_format == 'nv12' else self._SCALE
+        return [*self._input_command(width, height, pixel_format), '-an', *scale, *self._output(encoder=encoder, gop=gop)]
 
     def encode_frames(self, frames, width, height, sink, *, audio_path=None):
         if width < 2 or height < 2:

@@ -98,3 +98,64 @@ class GameCpu:
         if previous is None or previous[0] != int(pid):
             return None
         return busiest_percent(previous[2], times, now - previous[1])
+
+
+# ---- 블랙박스 11.4: 앱·인코더 CPU(작업 관리자 '세부 정보'와 같은 기준: 전체 논리 코어 = 100%) ----
+# SYSTEM_PROCESS_INFORMATION(x64): UserTime@40, KernelTime@48, InheritedFromUniqueProcessId@88
+
+def process_times(buffer: bytes):
+    """버퍼의 모든 프로세스 → {PID: (부모 PID, CPU 시간 100ns)}."""
+    table, offset = {}, 0
+    for _ in range(65536):
+        if offset + PROCESS_SIZE > len(buffer):
+            break
+        next_offset = struct.unpack_from('<I', buffer, offset)[0]
+        user, kernel = struct.unpack_from('<qq', buffer, offset + 40)
+        pid, parent = struct.unpack_from('<QQ', buffer, offset + 80)
+        table[pid] = (parent, user + kernel)
+        if not next_offset:
+            break
+        offset += next_offset
+    return table
+
+
+def tree(table, root):
+    """root와 그 하위 프로세스 PID 집합(인코더 호스트 → ffmpeg 같은 손자까지)."""
+    if not root or root not in table:
+        return set()
+    children = {}
+    for pid, (parent, _) in table.items():
+        if pid != parent:
+            children.setdefault(parent, []).append(pid)
+    found, stack = set(), [root]
+    while stack and len(found) < 4096:
+        pid = stack.pop()
+        if pid not in found:
+            found.add(pid)
+            stack.extend(children.get(pid, ()))
+    return found
+
+
+class ProcessTreeCpu:
+    """sample(앱 PID, 인코더 PID) → 직전 표본 이후 (앱 전체 %, 인코더 %). 앱 전체는 하위 프로세스(인코더 포함) 합계.
+    처음 표본은 None. 표본 사이에 끝난 프로세스의 시간은 빠진다(긴 간격 요약용이라 영향이 작다)."""
+
+    def __init__(self, source=query, clock=time.monotonic, cores=None):
+        import os
+        self._source, self._clock = source, clock
+        self._cores = cores or os.cpu_count() or 1
+        self._previous = None  # (시각, {PID: CPU 시간})
+
+    def sample(self, app_pid, encoder_pid=None):
+        table = process_times(self._source())
+        now = self._clock()
+        app, encoder = tree(table, app_pid), tree(table, encoder_pid)
+        times = {pid: table[pid][1] for pid in app | encoder}
+        previous, self._previous = self._previous, (now, times)
+        if previous is None or now <= previous[0]:
+            return None
+        scale = 100 / ((now - previous[0]) * 10_000_000 * self._cores)
+
+        def used(pids):
+            return sum(max(0, times[pid] - previous[1].get(pid, 0)) for pid in pids) * scale
+        return used(app), used(encoder)

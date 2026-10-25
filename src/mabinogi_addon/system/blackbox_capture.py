@@ -61,6 +61,14 @@ def target_identity(hwnd: int, pid: int) -> Target:
 
 ERROR_NOT_SUPPORTED = 0x80070032  # 입력 상한 초과(네이티브가 입력 크기를 보고)
 BB_E_GPU_SCALE = 0x80040201       # GPU 축소 실패(CPU 축소로 대체하지 않음)
+FORMATS = {0: 'bgra', 1: 'nv12'}  # bb_frame_format 값 → ffmpeg 입력 형식 이름
+
+
+def frame_bytes(width: int, height: int, pixel_format: str = 'bgra') -> int:
+    """한 프레임 바이트 수. NV12는 Y(w*h) + UV(w*h/2)이고 짝수 크기만 된다."""
+    if pixel_format == 'nv12':
+        return width * height * 3 // 2 if width % 2 == 0 and height % 2 == 0 else -1
+    return width * height * 4
 
 
 def fit_output(width: int, height: int, max_width: int, max_height: int) -> tuple[int, int]:
@@ -83,7 +91,8 @@ class NativeCapture:
                  audio_rate: int | None = None, audio_channels: int | None = None,
                  max_audio_bytes: int | None = None, activation_timeout_ms: int | None = None,
                  audio_buffer_bytes: int | None = None,
-                 max_output: tuple[int, int] | None = None, max_input: tuple[int, int] | None = None):
+                 max_output: tuple[int, int] | None = None, max_input: tuple[int, int] | None = None,
+                 pixel_format: str = 'bgra'):
         self.border_note = None  # 캡처 테두리를 끄지 못했을 때 탭에 보일 안내
         if type(max_frame_bytes) is not int or max_frame_bytes <= 0 or type(cursor) is not bool:
             raise ValueError('explicit frame limit and cursor policy required')
@@ -96,6 +105,10 @@ class NativeCapture:
             if max_output[0] * max_output[1] * 4 > max_frame_bytes:
                 raise ValueError('output bound exceeds frame buffer')
         self.max_output, self.max_input = max_output, max_input
+        if pixel_format not in ('bgra', 'nv12'):
+            raise ValueError('pixel format must be bgra or nv12')
+        # 블랙박스 11.4: 'nv12'면 GPU에서 색 변환까지 마친 NV12를 요청한다. 구버전 DLL·미지원 GPU는 BGRA로 받는다.
+        self.pixel_format = pixel_format
         if audio_rate is not None and any(type(v) is not int or v <= 0 for v in
                 (audio_rate, audio_channels, max_audio_bytes, activation_timeout_ms, audio_buffer_bytes)):
             raise ValueError('explicit audio format, capacity and timeout required')
@@ -104,6 +117,7 @@ class NativeCapture:
         self.audio = (audio_rate, audio_channels, max_audio_bytes, activation_timeout_ms)
         self.audio_buffer_bytes = audio_buffer_bytes
         self._dll = None
+        self._frame_format = None  # bb_frame_format(NV12 요청이 받아들여졌을 때만)
         self._video = C.c_void_p()
         self._audio = C.c_void_p()
         self._apartment = None
@@ -153,6 +167,14 @@ class NativeCapture:
                 status.restype = i32
                 self.border_note = border_note(status())
             self._buffer = C.create_string_buffer(self.limit)
+            self._frame_format = None
+            if self.pixel_format == 'nv12':
+                setter, getter = getattr(dll, 'bb_set_format', None), getattr(dll, 'bb_frame_format', None)
+                if setter is not None and getter is not None:
+                    setter.argtypes, setter.restype = [p, i32], i32
+                    getter.argtypes, getter.restype = [p], i32
+                    self._check(setter(self._video, 1), "NV12 출력 요청")
+                    self._frame_format = getter
             rate, channels, capacity, timeout = self.audio
             if rate is not None:
                 self._check(dll.bb_audio_open(target.hwnd, target.pid, target.created, rate, channels,
@@ -186,10 +208,16 @@ class NativeCapture:
         self._check(hr, "게임 영상 읽기")
         if hr == 1:
             return None
-        size = w.value * h.value * 4
-        if w.value <= 0 or h.value <= 0 or size > self.limit:
+        getter = self._frame_format
+        pixel_format = FORMATS.get(getter(self._video), '?') if getter is not None else 'bgra'
+        size = frame_bytes(w.value, h.value, pixel_format) if pixel_format in ('bgra', 'nv12') else -1
+        if w.value <= 0 or h.value <= 0 or size <= 0 or size > self.limit:
             raise OSError('invalid native frame bounds')
-        return self._buffer.raw[:size], w.value, h.value, stamp.value // 10
+        # string_at: 필요한 만큼 한 번만 복사한다(.raw[:size]는 버퍼 전체를 복사한 뒤 다시 잘라 두 번 복사였다).
+        data = C.string_at(self._buffer, size)
+        if pixel_format == 'nv12':
+            return data, w.value, h.value, stamp.value // 10, 'nv12'
+        return data, w.value, h.value, stamp.value // 10
 
     def read_audio(self):
         if not self._audio.value:

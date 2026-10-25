@@ -35,9 +35,14 @@ static void fit_output(int w, int h, int max_w, int max_h, int* out_w, int* out_
     if (*out_h < 2) *out_h = 2;
 }
 
+// 프레임 형식(bb_frame_format). NV12는 GPU에서 색 변환까지 마친 4:2:0(Y 평면 + UV 교차 평면, 프레임당 w*h*3/2바이트).
+constexpr int BB_FORMAT_BGRA = 0, BB_FORMAT_NV12 = 1;
+
 // 캡처 텍스처를 CPU로 복사하기 전에 GPU(D3D11 비디오 프로세서)에서 출력 크기로 줄인다.
+// 블랙박스 11.4: NV12 출력이면 크기가 같아도 이 경로로 BGRA→NV12(BT.709, 16~235)를 GPU에서 끝낸다.
+// 그러면 CPU로 넘기는 양이 절반 이하가 되고 ffmpeg의 CPU 색 변환(SIMD 없는 빌드라 무거움)이 사라진다.
 struct Scaler {
-    int in_w{}, in_h{};
+    int in_w{}, in_h{}, format{-1};
     com_ptr<ID3D11VideoDevice> video_device;
     com_ptr<ID3D11VideoContext> video_context;
     com_ptr<ID3D11VideoProcessorEnumerator> enumerator;
@@ -95,6 +100,11 @@ struct Capture {
     int max_out_w{}, max_out_h{}, max_in_w{}, max_in_h{};
     int out_w{}, out_h{};  // 첫 프레임에서 정하고 녹화 중 고정
     Scaler scaler;
+    // 블랙박스 11.4: NV12 요청(bb_set_format)·실제 형식. 비디오 프로세서가 NV12 출력을 못 하면 BGRA로 내린다.
+    bool want_nv12 = false, nv12_failed = false;
+    int frame_format = BB_FORMAT_BGRA;
+    com_ptr<ID3D11Texture2D> copy_staging;  // 축소 없는 BGRA 복사용(프레임마다 새로 만들지 않음)
+    UINT copy_w{}, copy_h{};
     ~Capture() {
         if (active_capture == this) active_capture = nullptr;
         if (hook) UnhookWinEvent(hook);
@@ -128,10 +138,10 @@ bool capture_epoch_active(HWND hwnd) {
     return active_capture && active_capture->hwnd == hwnd && active_capture->valid();
 }
 
-static HRESULT scale_frame(Capture& c, ID3D11Texture2D* source, int cw, int ch) noexcept {
+static HRESULT scale_frame(Capture& c, ID3D11Texture2D* source, int cw, int ch, int format) noexcept {
     auto& s = c.scaler;
     try {
-        if (!s.processor || s.in_w != cw || s.in_h != ch) {
+        if (!s.processor || s.in_w != cw || s.in_h != ch || s.format != format) {
             s = Scaler{};
             s.video_device = c.device.as<ID3D11VideoDevice>();
             s.video_context = c.context.as<ID3D11VideoContext>();
@@ -145,8 +155,14 @@ static HRESULT scale_frame(Capture& c, ID3D11Texture2D* source, int cw, int ch) 
             check_hresult(s.video_device->CreateVideoProcessorEnumerator(&content, s.enumerator.put()));
             UINT support = 0;
             check_hresult(s.enumerator->CheckVideoProcessorFormat(DXGI_FORMAT_B8G8R8A8_UNORM, &support));
-            if (!(support & D3D11_VIDEO_PROCESSOR_FORMAT_SUPPORT_INPUT) ||
-                !(support & D3D11_VIDEO_PROCESSOR_FORMAT_SUPPORT_OUTPUT))
+            if (!(support & D3D11_VIDEO_PROCESSOR_FORMAT_SUPPORT_INPUT))
+                return E_NOTIMPL;
+            const DXGI_FORMAT out_format = format == BB_FORMAT_NV12 ? DXGI_FORMAT_NV12 : DXGI_FORMAT_B8G8R8A8_UNORM;
+            if (format == BB_FORMAT_NV12) {
+                support = 0;
+                check_hresult(s.enumerator->CheckVideoProcessorFormat(out_format, &support));
+            }
+            if (!(support & D3D11_VIDEO_PROCESSOR_FORMAT_SUPPORT_OUTPUT))
                 return E_NOTIMPL;
             check_hresult(s.video_device->CreateVideoProcessor(s.enumerator.get(), 0, s.processor.put()));
             D3D11_TEXTURE2D_DESC t{};
@@ -159,6 +175,8 @@ static HRESULT scale_frame(Capture& c, ID3D11Texture2D* source, int cw, int ch) 
             check_hresult(s.video_device->CreateVideoProcessorInputView(
                 s.input.get(), s.enumerator.get(), &in_view, s.input_view.put()));
             t.Width = UINT(c.out_w); t.Height = UINT(c.out_h);
+            t.Format = out_format;
+            t.BindFlags = D3D11_BIND_RENDER_TARGET;
             check_hresult(c.device->CreateTexture2D(&t, nullptr, s.output.put()));
             D3D11_VIDEO_PROCESSOR_OUTPUT_VIEW_DESC out_view{};
             out_view.ViewDimension = D3D11_VPOV_DIMENSION_TEXTURE2D;
@@ -171,7 +189,16 @@ static HRESULT scale_frame(Capture& c, ID3D11Texture2D* source, int cw, int ch) 
             s.video_context->VideoProcessorSetStreamSourceRect(s.processor.get(), 0, TRUE, &src);
             s.video_context->VideoProcessorSetStreamDestRect(s.processor.get(), 0, TRUE, &dst);
             s.video_context->VideoProcessorSetOutputTargetRect(s.processor.get(), TRUE, &dst);
-            s.in_w = cw; s.in_h = ch;
+            // 드라이버 자동 보정(잡음 제거·선명화 등)은 끈다. 녹화는 게임 화면 그대로여야 한다.
+            s.video_context->VideoProcessorSetStreamAutoProcessingMode(s.processor.get(), 0, FALSE);
+            D3D11_VIDEO_PROCESSOR_COLOR_SPACE input_space{};  // 캡처 BGRA: RGB 전체 범위(0~255)
+            input_space.RGB_Range = 0;
+            s.video_context->VideoProcessorSetStreamColorSpace(s.processor.get(), 0, &input_space);
+            D3D11_VIDEO_PROCESSOR_COLOR_SPACE output_space{};  // NV12: BT.709 행렬, 제한 범위(16~235) — ffmpeg 입력 표시와 같게
+            output_space.YCbCr_Matrix = 1;
+            output_space.Nominal_Range = D3D11_VIDEO_PROCESSOR_NOMINAL_RANGE_16_235;
+            s.video_context->VideoProcessorSetOutputColorSpace(s.processor.get(), &output_space);
+            s.in_w = cw; s.in_h = ch; s.format = format;
         }
         D3D11_BOX box{0, 0, 0, UINT(cw), UINT(ch), 1};
         c.context->CopySubresourceRegion(s.input.get(), 0, 0, 0, 0, source, 0, &box);
@@ -265,8 +292,14 @@ BB HRESULT __cdecl bb_read(void* handle, BYTE* destination, UINT64 capacity,
         if (!c.out_w) {
             if (c.max_out_w) fit_output(cw, ch, c.max_out_w, c.max_out_h, &c.out_w, &c.out_h);
             else { c.out_w = cw; c.out_h = ch; }
+            if (c.want_nv12) {  // NV12(4:2:0)는 짝수 크기만 된다. 홀수 창은 GPU에서 1픽셀 줄여 맞춘다.
+                c.out_w = c.out_w & ~1; c.out_h = c.out_h & ~1;
+                if (c.out_w < 2) c.out_w = 2;
+                if (c.out_h < 2) c.out_h = 2;
+            }
         }
-        UINT64 bytes = UINT64(c.out_w) * UINT64(c.out_h) * 4;
+        const bool nv12 = c.want_nv12 && !c.nv12_failed;
+        UINT64 bytes = nv12 ? UINT64(c.out_w) * UINT64(c.out_h) * 3 / 2 : UINT64(c.out_w) * UINT64(c.out_h) * 4;
         if (bytes > capacity) {
             // Report required geometry without writing any pixel data.
             *width = c.out_w; *height = c.out_h;
@@ -280,27 +313,67 @@ BB HRESULT __cdecl bb_read(void* handle, BYTE* destination, UINT64 capacity,
         if (desc.Format != DXGI_FORMAT_B8G8R8A8_UNORM || desc.Width < UINT(cw) || desc.Height < UINT(ch))
             return E_UNEXPECTED;
         com_ptr<ID3D11Texture2D> staging;
-        if (cw != c.out_w || ch != c.out_h) {
+        int format = BB_FORMAT_BGRA;
+        if (nv12 && SUCCEEDED(scale_frame(c, texture.get(), cw, ch, BB_FORMAT_NV12))) {
+            staging = c.scaler.staging;
+            format = BB_FORMAT_NV12;
+        } else if (nv12) {
+            // GPU가 NV12 출력을 못 함: 이 캡처는 BGRA로 계속한다(ffmpeg가 CPU에서 변환, 이전 방식). 형식으로 알린다.
+            c.nv12_failed = true;
+            *width = c.out_w; *height = c.out_h;
+            return S_FALSE;
+        } else if (cw != c.out_w || ch != c.out_h) {
             // CPU 복사 전에 GPU에서 축소한다. 실패하면 CPU 축소로 대체하지 않는다.
-            if (FAILED(scale_frame(c, texture.get(), cw, ch))) return BB_E_GPU_SCALE;
+            if (FAILED(scale_frame(c, texture.get(), cw, ch, BB_FORMAT_BGRA))) return BB_E_GPU_SCALE;
             staging = c.scaler.staging;
         } else {
-            desc.Usage = D3D11_USAGE_STAGING; desc.BindFlags = 0;
-            desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ; desc.MiscFlags = 0;
-            check_hresult(c.device->CreateTexture2D(&desc, nullptr, staging.put()));
+            if (!c.copy_staging || c.copy_w != desc.Width || c.copy_h != desc.Height) {
+                c.copy_staging = nullptr;
+                desc.Usage = D3D11_USAGE_STAGING; desc.BindFlags = 0;
+                desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ; desc.MiscFlags = 0;
+                check_hresult(c.device->CreateTexture2D(&desc, nullptr, c.copy_staging.put()));
+                c.copy_w = desc.Width; c.copy_h = desc.Height;
+            }
+            staging = c.copy_staging;
             c.context->CopyResource(staging.get(), texture.get());
         }
         D3D11_MAPPED_SUBRESOURCE mapped{};
         check_hresult(c.context->Map(staging.get(), 0, D3D11_MAP_READ, 0, &mapped));
-        for (int y = 0; y < c.out_h; ++y)
-            std::memcpy(destination + UINT64(y) * c.out_w * 4,
-                        static_cast<BYTE*>(mapped.pData) + UINT64(y) * mapped.RowPitch, UINT64(c.out_w) * 4);
+        auto* source = static_cast<BYTE*>(mapped.pData);
+        if (format == BB_FORMAT_NV12) {
+            // Y 평면(out_h줄) 뒤에 UV 교차 평면(out_h/2줄)이 RowPitch*높이 위치에서 시작한다.
+            for (int y = 0; y < c.out_h; ++y)
+                std::memcpy(destination + UINT64(y) * c.out_w, source + UINT64(y) * mapped.RowPitch, UINT64(c.out_w));
+            BYTE* uv = destination + UINT64(c.out_w) * c.out_h;
+            const BYTE* uv_source = source + UINT64(mapped.RowPitch) * c.out_h;
+            for (int y = 0; y < c.out_h / 2; ++y)
+                std::memcpy(uv + UINT64(y) * c.out_w, uv_source + UINT64(y) * mapped.RowPitch, UINT64(c.out_w));
+        } else {
+            for (int y = 0; y < c.out_h; ++y)
+                std::memcpy(destination + UINT64(y) * c.out_w * 4, source + UINT64(y) * mapped.RowPitch, UINT64(c.out_w) * 4);
+        }
         c.context->Unmap(staging.get(), 0);
         pump_capture_events();
         // Recheck after copying; a late frame across Alt+Tab must be discarded.
         if (!c.valid() || IsIconic(c.hwnd)) return E_ACCESSDENIED;
         *width = c.out_w; *height = c.out_h; *timestamp100ns = frame.SystemRelativeTime().count();
+        c.frame_format = format;
         return S_OK;
     } catch (...) { return to_hresult(); }
 }
 BB void __cdecl bb_close(void* handle) { delete static_cast<Capture*>(handle); }
+
+// 블랙박스 11.4: 출력 형식 요청. 첫 프레임 전에만 바꿀 수 있다(출력 크기·형식은 녹화 중 고정).
+BB HRESULT __cdecl bb_set_format(void* handle, int format) {
+    if (!handle) return E_POINTER;
+    if (format != BB_FORMAT_BGRA && format != BB_FORMAT_NV12) return E_INVALIDARG;
+    auto& c = *static_cast<Capture*>(handle);
+    if (c.out_w) return E_ILLEGAL_METHOD_CALL;
+    c.want_nv12 = format == BB_FORMAT_NV12;
+    return S_OK;
+}
+
+// 마지막으로 성공한 bb_read 프레임의 형식(BB_FORMAT_*). NV12를 요청했어도 GPU가 못 하면 BGRA다.
+BB int __cdecl bb_frame_format(void* handle) {
+    return handle ? static_cast<Capture*>(handle)->frame_format : BB_FORMAT_BGRA;
+}
