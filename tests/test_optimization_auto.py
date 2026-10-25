@@ -252,3 +252,56 @@ def test_toggle_off_during_auto_says_waiting_stopped(window, monkeypatch):
     c.engine.status = '세션을 중단하고 CPU를 원복해요.'
     c._sync_optimization_toggle()
     assert '자동 적용을 멈췄어요' not in c.engine.status  # 체크가 꺼져 있으면 안내 없음
+
+
+# ---- 0.22.0 QA: 자동 적용 세션이 엔진을 점유해도 환경 확인 ----
+
+def test_inspection_runs_while_auto_session_waits_and_fills_layouts(window, monkeypatch, tmp_path):
+    from test_cpu_layouts import X9800
+    from test_optimization_recommend import WIRED
+    w = window[0]
+    c = w.optimization_tools; c.timer.stop()
+    monkeypatch.setattr(module, 'optimization_available', lambda: True); c.refresh_access()
+    b = GameBackend()
+    b.current[0] = None  # 게임 대기 중
+    b.topology = lambda: X9800
+    b.adapters = lambda: [dict(WIRED)]
+    b.background_candidate = lambda p, game: True
+    b.values[('cpu', json.dumps(TARGET, sort_keys=True))] = 0xFFFF
+    c.backend = b
+    c.recovery = Recovery(tmp_path / 'j.json', b, lambda: True)
+    c.engine = Engine(b, c.recovery, c._can_start)
+    d = c.panel
+    assert d.split.findData('focus') < 0  # 환경 확인 전
+    c._restoring_selection = True; d.priority.setChecked(True); d.auto.setChecked(True); c._restoring_selection = False
+    c._auto_pending = True
+    c._tick()  # 앱 시작: 자동 세션이 게임을 기다리며 엔진 점유
+    assert _wait(lambda: c.engine.busy and c.engine.phase == 'waiting')
+    w._tabs.setCurrentWidget(c.panel)  # 탭을 연다 → 세션 중이어도 환경 확인
+    assert _wait(lambda: (c._tick(), d.split.findData('focus') >= 0)[1])
+    assert c.engine.busy and c.engine.task == 'session'  # 세션은 그대로
+    assert d.split.count() == 4 and d.split.currentData() == 'focus'
+    assert d.adapter.currentData() == '11111111-1111-1111-1111-111111111111'
+    assert d.inspect.isEnabled()  # '다시 확인'도 세션 중 누를 수 있음
+    b.current[0] = TARGET  # 게임 시작 → 추천 배치 이름이 결과 줄·상단에
+    assert _wait(lambda: c.engine.outcome.get('cpu') == ('ok', ''), 6)
+    c._tick()
+    assert '✓ CPU 배치 · 게임 집중 (6+2)' in d.results.text().split('\n')
+    assert c._badge_split == '· 게임 집중'
+    c.engine.stop(); c.engine.thread.join(5)
+
+
+def test_engine_inspection_during_session_keeps_session_status(setup):
+    from test_cpu_layouts import X9800
+    r, b = setup
+    b.current[0] = None
+    b.topology = lambda: X9800
+    b.adapters = lambda: []
+    e = Engine(b, r, lambda: True)
+    assert e.start(AUTO)
+    assert _wait(lambda: e.phase == 'waiting' and '게임 실행 대기' in e.status)
+    assert e.inspect() and e.inspecting or e.inspection is not None
+    assert not e.inspect() or e.inspection is not None  # 이미 확인 중이면 겹치지 않음
+    assert _wait(lambda: e.inspection is not None and not e.inspecting)
+    assert e.inspection[0] is X9800 and e.task == 'session' and '환경을 확인했어요' not in e.status
+    e.stop(); e.thread.join(5)

@@ -53,6 +53,8 @@ class Engine:
         self.status = '시작 전 · 시스템 설정을 변경하지 않았어요.'
         self.inspection = None
         self.inspection_failed = []  # 환경 확인에서 읽지 못한 항목 이름
+        self.inspection_errors = []
+        self.inspect_thread = None  # 세션 중 환경 확인(0.22.0 QA)
         self.recovery_requested = False
         self.lock = threading.Lock()
         self._partial = None  # 진행 중 작업의 결과/안내 줄(예외로 끝나도 버리지 않게)
@@ -119,26 +121,51 @@ class Engine:
                 # 원복을 요청하지 않은 네트워크 변경은 정상 적용 상태다(13.5: '적용 중'과 '원복 대기' 구분).
                 self.status += '\n' + NETWORK_APPLIED
 
+    @property
+    def inspecting(self):
+        """환경 확인 중(세션과 별개 스레드 포함)."""
+        side = self.inspect_thread is not None and self.inspect_thread.is_alive()
+        return side or (self.busy and self.task == 'inspect')
+
     def inspect(self):
-        def work():
-            if not self.allowed(): raise PermissionError('로그인이 필요해요.')
-            topology, adapters, errors = None, [], []
-            try:
-                topology = self.backend.topology()
-                topology.plan()
-            except Exception as exc:
-                topology=None
-                errors.append(str(exc))
-            adapters_failed = False
-            try: adapters = self.backend.adapters()
-            except Exception as exc:
-                errors.append(str(exc))
-                adapters_failed = True
-            # 결과 요약(13.13 QA 후속): 읽지 못한 항목은 보이는 상태 줄에 알린다(원문은 자세히 보기)
-            self.inspection_failed = [name for name, failed in (('CPU 구조', topology is None), ('네트워크 연결', adapters_failed)) if failed]
-            self.inspection = (topology, adapters)
+        """환경 확인(읽기 전용 조회). 0.22.0 QA: 자동 적용 세션이 앱 시작부터 엔진을 점유해도 확인할 수 있게,
+        세션이 돌고 있으면 별도 스레드에서 결과(inspection)만 남기고 세션 상태 줄은 건드리지 않는다."""
+        if self.busy:
+            with self.lock:
+                if self.task == 'inspect' or self.inspecting:
+                    return False
+                def side():
+                    try:
+                        self._inspect(write_status=False)
+                    except Exception as exc:
+                        _log.warning('환경 확인 실패(세션 중): %s', exc)
+                self.inspect_thread = threading.Thread(target=side, daemon=True, name='optimization-inspect')
+                self.inspect_thread.start()
+                return True
+        return self._launch(lambda: self._inspect(write_status=True), status='환경 확인 중…', task='inspect')
+
+    def _inspect(self, write_status):
+        if not self.allowed(): raise PermissionError('로그인이 필요해요.')
+        topology, adapters, errors = None, [], []
+        try:
+            topology = self.backend.topology()
+            topology.plan()
+        except Exception as exc:
+            topology=None
+            errors.append(str(exc))
+        adapters_failed = False
+        try: adapters = self.backend.adapters()
+        except Exception as exc:
+            errors.append(str(exc))
+            adapters_failed = True
+        # 결과 요약(13.13 QA 후속): 읽지 못한 항목은 보이는 상태 줄에 알린다(원문은 자세히 보기)
+        self.inspection_failed = [name for name, failed in (('CPU 구조', topology is None), ('네트워크 연결', adapters_failed)) if failed]
+        self.inspection_errors = errors
+        self.inspection = (topology, adapters)
+        if write_status:
             self.status = '\n'.join(errors) if errors else '환경을 확인했어요. 시작을 누르기 전에는 적용하지 않아요.'
-        return self._launch(work, status='환경 확인 중…', task='inspect')
+        elif errors:
+            _log.warning('환경 확인(세션 중): %s', ' / '.join(errors))
 
     def _apply_tcp(self, options, results, notices, fail, network_guard):
         """패스트핑 적용(시작 때, 또는 13.15: 게임 실행 중이라 미룬 뒤 그 게임이 끝나 CPU를 되돌린 직후). 확인 창은 시작 때 한 번만."""

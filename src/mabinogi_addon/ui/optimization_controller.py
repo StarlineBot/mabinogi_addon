@@ -344,7 +344,7 @@ class OptimizationController(QObject):
     def _render_result(self, d):
         """결과 요약(13.13): 상태 한 줄(굵게·색) + 항목 줄. 세션 기록이 바뀌면 app.log에 한 번 남긴다."""
         from ..optimization.result_summary import COLORS, summarize
-        layout = self._layouts.get(self._summary_requested.get('layout')) if isinstance(self._summary_requested, dict) else None
+        layout = self._requested_layout()
         label = f'{layout.name} ({layout.short})' if layout is not None else self._summary_requested.get('layout_name')
         headline, level, lines = summarize(self.engine, self.recovery, self._summary_requested, layout_label=label,
                                            kept_on=self._kept_on, restore_wait=self._restore_wait)
@@ -367,6 +367,15 @@ class OptimizationController(QObject):
             if added:
                 _log.info('최적화 상태: %s', ' / '.join(added))
 
+    def _requested_layout(self):
+        """시작한 세션의 배치. 환경 확인 전에 '추천'으로 시작했으면(자동 적용) 확인 뒤 이 CPU의 추천 배치로 푼다."""
+        if not isinstance(self._summary_requested, dict):
+            return None
+        key = self._summary_requested.get('layout')
+        if key == 'recommended':
+            return next((layout for layout in self._layouts.values() if layout.recommended), None)
+        return self._layouts.get(key)
+
     def _show_layout_detail(self):
         """콤보 아래 회색 줄: 실제 배분만(13.15에서 근거 문장 삭제 — 내부 문서 번호 노출도 함께 해소)."""
         if self.panel is None: return
@@ -375,10 +384,12 @@ class OptimizationController(QObject):
 
     def _maybe_auto_inspect(self):
         if (self._auto_inspected or not hasattr(self.window, '_tabs')
-                or self.window._tabs.currentWidget() is not self.panel or not self._can_start() or self.engine.busy):
+                or self.window._tabs.currentWidget() is not self.panel or not self._can_start()
+                or (self.engine.busy and self.engine.task != 'session')):
             return
-        self._auto_inspected = True
-        self.engine.inspect()  # 읽기 전용(Windows API·PowerShell 조회), 작업 스레드에서 실행
+        # 0.22.0 QA: 자동 적용 세션이 앱 시작부터 엔진을 점유해도(게임 대기 포함) 확인한다 — 세션 중이면 별도 스레드에서 결과만.
+        # 읽기 전용(Windows API·PowerShell 조회). 이미 확인 중이라 거절(False)됐을 때만 다음 틱에 다시 시도한다.
+        self._auto_inspected = self.engine.inspect() is not False
 
     def _apply_inspection(self, topology, adapters):
         d, saved = self.panel, config.load_optimization_selection()
@@ -920,7 +931,8 @@ class OptimizationController(QObject):
         self._render_summary()
         d = self.panel
         allowed, busy = self._can_start(), self.engine.busy
-        for w in (d.priority,d.tcp,d.split,d.adapter,d.inspect): w.setEnabled(allowed and not busy)
+        for w in (d.priority,d.tcp,d.split,d.adapter): w.setEnabled(allowed and not busy)
+        d.inspect.setEnabled(allowed and not self.engine.inspecting)  # 0.22.0 QA: 세션(자동 적용 대기 포함) 중에도 다시 확인 가능
         self._sync_optimization_toggle()
         for control in (d.lock,d.scale,*d.metric_boxes.values()): control.setEnabled(allowed)
         d.frames_toggle.setEnabled((allowed and not self.closing) or self.frames or self.collector.pending)
@@ -929,6 +941,7 @@ class OptimizationController(QObject):
         d.frames_status.setText(self.frame_status)
         self._render_result(d)
         self._update_recommendation()
+        self._maybe_auto_inspect()  # 탭에 머문 채 세션이 끝나거나 접근이 생겨도 한 번은 확인
         from collections import Counter
         counts=Counter((item['kind'],item['state']) for item in self.recovery.items)
         kinds={'cpu':'CPU 배치','priority':'게임 우선순위','ack':'TcpAckFrequency','nodelay':'TCPNoDelay','autotuning':'TCP 자동 조정','rss':'RSS'}
@@ -950,6 +963,9 @@ class OptimizationController(QObject):
             self._inspect_notice = (f"{names}{object_particle(names)} 읽지 못했어요 · 자세히 보기에서 이유를 확인하고 '다시 확인'을 눌러 주세요"
                                     if failed else None)
             self._notice = self._inspect_notice
+            layout = self._requested_layout()
+            if busy and isinstance(self._summary_requested, dict) and self._summary_requested.get('cpu') and layout is not None and self._badge_split is None:
+                self._badge_split = f'· {layout.name}'  # 추천으로 시작한 자동 세션: 상단에도 배치 이름
             self._render_result(d)  # 같은 틱에 바로 보이게
 
     def _summary_now(self):
