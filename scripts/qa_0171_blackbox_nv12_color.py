@@ -5,7 +5,8 @@ GPU(D3D11 비디오 프로세서) 대신 ffmpeg로 같은 규격(BT.709·제한 
 색 막대 8개(검정·흰색·빨강·초록·파랑·노랑·하늘·자주)를 저장 영상에서 다시 RGB로 풀어 원래 색과 비교한다.
 - NV12 경로: 막대별 RGB 오차가 작아야 한다(색이 바래거나·진해지거나·색조가 틀어지지 않음).
 - 대조: 이전 BGRA 경로(ffmpeg CPU 변환)도 같은 방식으로 잰다.
-- 중간 전환: NV12로 녹화하다 BGRA로 내려온 경우(GPU NV12 불가) 인코더 재시작 뒤 저장 영상이 끝까지 이어지는지.
+- 중간 전환: NV12로 녹화하다 BGRA로 내려온 경우(GPU NV12 불가) 인코더 재시작 뒤 저장 영상이 끝까지 이어지는지,
+  전환 뒤 BGRA 구간 색도 맞는지(두 경로 색 기준 통일, 0.17.1 권장 수정 — 수정 전 오차 40).
 시스템 ffmpeg(libx264)로 돈다(제품은 번들 8.1.3·NVENC). 실패하면 FAIL, 종료 코드 1.
 """
 import json
@@ -159,7 +160,7 @@ if __name__ == '__main__':
         print(f'[{label}] 구간 {len(segs)}개 · 오류 {error or "없음"} · 재시작 {pr.restarts} · 저장 영상 {probe}')
         print('  막대 RGB(원래 → 저장): ' + ' '.join(f'{c}→{m}' for c, m in zip(COLORS, measured)))
         print(f'  최대 채널 오차 {worst}')
-        if error or not segs or (label.startswith('NV12') and worst > 12):
+        if error or not segs or worst > 12:  # 두 경로 모두 같은 색 기준(BT.709·제한 범위)
             failures.append(label)
     enc, segs, pr, error = record(Game({'nv12': nv12, 'bgra': bgra}, switch_at=1.5), 3.5)
     clip, probe = export(enc, segs)
@@ -167,7 +168,7 @@ if __name__ == '__main__':
     before, after = error_of(bar_colors(clip, 30)), error_of(bar_colors(clip, int(probe['nb_read_frames']) - 10))
     print(f'[NV12 → BGRA 중간 전환] 구간 {len(segs)}개 · 이어짐 {contiguous} · 재시작 {pr.restarts} · 오류 {error or "없음"} · '
           f'프레임 {probe["nb_read_frames"]} · 색 오차 전환 전 {before}/후 {after}')
-    if error or pr.restarts != 1 or not contiguous:
+    if error or pr.restarts != 1 or not contiguous or before > 12 or after > 12:
         failures.append('중간 전환')
     print('FAIL: ' + ', '.join(failures) if failures else 'PASS: NV12 입력 녹화·저장·검증과 색 정상')
     sys.exit(1 if failures else 0)

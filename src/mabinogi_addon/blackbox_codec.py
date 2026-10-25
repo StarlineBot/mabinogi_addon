@@ -383,13 +383,17 @@ class FFmpegEncoder:
 
     def _input_command(self, width, height, pixel_format='bgra'):
         # NV12는 캡처 DLL이 GPU에서 BT.709·제한 범위로 변환한 값이라 그대로 표시한다(인코더가 색 정보로 기록).
-        tags = ['-color_range', 'tv', '-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709'] \
-            if pixel_format == 'nv12' else []
+        tags = self._COLOR_TAGS if pixel_format == 'nv12' else []
         return [str(self.settings.ffmpeg), '-v', 'error', '-nostdin', '-xerror', '-err_detect', 'explode', '-f', 'rawvideo',
                 '-pix_fmt', pixel_format, *tags, '-video_size', f'{width}x{height}', '-framerate', str(self.settings.fps),
                 '-i', 'pipe:0']
 
     _SCALE = ['-vf', "scale=w='min(1920,iw)':h='min(1080,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2"]
+    # 녹화 영상 색 기준(0.17.1): BT.709·제한 범위(16~235). NV12(GPU 변환)와 BGRA(ffmpeg CPU 변환) 구간이 한 저장 영상에
+    # 섞여도 같은 기준이어야 한다(저장 재인코딩은 첫 구간의 색 표시를 따르므로, 기준이 다르면 다른 쪽 구간 색이 틀어진다).
+    _COLOR_TAGS = ['-color_range', 'tv', '-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709']
+    _SCALE_BT709 = ['-vf', "scale=w='min(1920,iw)':h='min(1080,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2"
+                           ':out_color_matrix=bt709:out_range=tv']
 
     def open_stream(self, width, height, gop, on_fragment, pixel_format='bgra'):
         """녹화용 상주 인코더(0.15.0). gop 프레임마다 on_fragment(독립 MP4 bytes, 프레임 수)."""
@@ -405,7 +409,8 @@ class FFmpegEncoder:
         크기 필터를 넣지 않는다. 하드웨어 인코더 출력도 NV12라 ffmpeg 안에서 CPU 변환이 일어나지 않는다."""
         if pixel_format not in ('bgra', 'nv12'):
             raise ValueError('pixel format must be bgra or nv12')
-        scale = [] if pixel_format == 'nv12' else self._SCALE
+        # BGRA(구버전 DLL·NV12 미지원 GPU): ffmpeg가 BT.709·제한 범위로 변환하고 출력에 NV12와 같은 색 표시를 붙인다
+        scale = [] if pixel_format == 'nv12' else [*self._SCALE_BT709, *self._COLOR_TAGS]
         return [*self._input_command(width, height, pixel_format), '-an', *scale, *self._output(encoder=encoder, gop=gop)]
 
     def encode_frames(self, frames, width, height, sink, *, audio_path=None):

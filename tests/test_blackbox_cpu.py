@@ -94,7 +94,11 @@ def test_nv12_stream_command_has_no_cpu_scale_or_conversion():
     assert command[command.index('-colorspace') + 1] == 'bt709' and command[command.index('-color_range') + 1] == 'tv'
     assert command.index('-colorspace') < command.index('-i')  # 입력 표시(캡처 DLL 변환과 같은 색 기준)
     legacy = _encoder().stream_command(1920, 1080, 15)
-    assert '-vf' in legacy and legacy[legacy.index('-pix_fmt') + 1] == 'bgra' and '-colorspace' not in legacy
+    assert '-vf' in legacy and legacy[legacy.index('-pix_fmt') + 1] == 'bgra'
+    # 0.17.1 권장 수정: BGRA 경로도 BT.709·제한 범위로 변환하고 출력에 같은 색 표시(입력 표시는 없음 — 입력은 RGB)
+    assert legacy[legacy.index('-vf') + 1].endswith(':out_color_matrix=bt709:out_range=tv')
+    assert legacy.index('-i') < legacy.index('-colorspace') and legacy[legacy.index('-colorspace') + 1] == 'bt709'
+    assert legacy[legacy.index('-color_range') + 1] == 'tv'
     with pytest.raises(ValueError):
         _encoder().stream_command(64, 48, 15, pixel_format='rgb24')
 
@@ -231,3 +235,24 @@ def test_cpu_meter_failure_never_stops_recording():
     producer = stream_tests._producer([], FormatCodec())
     producer._cpu_meter = Broken()
     assert 'CPU' not in producer._diagnostics() and producer._cpu_meter is None
+
+
+def test_real_ffmpeg_bgra_stream_uses_same_color_basis_as_nv12(tmp_path):
+    # 0.17.1 QA(qa_0171 중간 전환 색 오차 40): NV12 구간 뒤 BGRA 구간이 붙은 저장 영상에서 BGRA 구간 색이 틀어지지 않게
+    settings = CodecSettings(*codec_tools(), 'libx264', 500000, 60, 30, 50000, host=codec_host())
+    encoder = FFmpegEncoder(settings, lambda key: None)
+    red = bytes((0, 0, 255, 255)) * (64 * 48)
+    fragments = []
+    stream = encoder.open_stream(64, 48, 15, lambda data, frames: fragments.append(data))
+    for _ in range(15):
+        stream.write(red)
+    stream.finish(30)
+    path = tmp_path / 'bgra.mp4'
+    path.write_bytes(fragments[0])
+    probe = subprocess.check_output([str(settings.ffprobe), '-v', 'error', '-show_entries', 'stream=color_space,color_range',
+                                     '-of', 'csv=p=0', str(path)], text=True)
+    assert probe.strip().split(',') == ['tv', 'bt709']
+    yuv = subprocess.check_output([str(settings.ffmpeg), '-v', 'error', '-i', str(path), '-frames:v', '1', '-f', 'rawvideo',
+                                   '-pix_fmt', 'yuv420p', 'pipe:1'], timeout=20)
+    y = yuv[64 * 24 + 32]
+    assert abs(y - 63) <= 2  # BT.709 빨강 Y=63 (BT.601이면 81)
