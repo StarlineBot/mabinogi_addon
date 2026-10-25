@@ -55,7 +55,9 @@ def summarize(engine, recovery, requested=None, *, layout_label=None, kept_on=Fa
         if phase == 'ended':
             lines = [_line(key, labels.get(key, ''), 'restored', '') for key in ('priority', 'cpu')
                      if outcome.get(key, ('',))[0] == 'restored']
-            if 'tcp' in outcome and 'tcp' in labels:  # 13.15: 미룬 패스트핑은 게임이 끝나면 적용 — 결과 줄을 남긴다
+            tcp = outcome.get('tcp', ('',))[0]
+            if 'tcp' in labels and (tcp == 'deferred' or (tcp and getattr(engine, 'tcp_at_game_end', False))):
+                # 13.15: 미룬 패스트핑을 이번 게임 종료 때 적용(또는 아직 미룸)한 경우만 결과 줄. 시작 때 이미 적용했으면 13.13 '적용 중' 줄.
                 lines.append(_line('tcp', labels['tcp'], *outcome['tcp']))
             elif network_left:
                 lines.append(network_line)

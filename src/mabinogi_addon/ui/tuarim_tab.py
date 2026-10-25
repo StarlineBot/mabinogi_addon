@@ -308,6 +308,14 @@ class TuarimTab(QWidget):
         self.value_label.setText("최근 확정: —")
         self._update_region_label()
 
+    def reset_for_new_game(self):
+        """게임 종료·재시작(프로세스 기준): 지난 관측·확정값을 비운다(영역·기준값은 유지)."""
+        self._tracker.reset_observations()
+        self.observed.emit(None)
+        self._prev_raw = self._stable_value = self._last_value = None
+        self._last_frame = None
+        self.value_label.setText("최근 확정: —")
+
     def _region_cleared(self):
         self._region = None
         self._tracker.reset_observations()

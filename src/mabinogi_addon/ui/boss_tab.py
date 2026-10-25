@@ -726,6 +726,20 @@ class BossTab(QWidget):
         diff = np.abs(frame.astype(np.int16) - prev.astype(np.int16))
         return float(diff.mean()) >= threshold
 
+    def reset_for_new_game(self) -> None:
+        """게임 종료·재시작(프로세스 기준): 보스·HP·패턴 진행·1분 헤일로 시계를 비우고 오버레이를 숨긴다. 영역은 유지."""
+        self.halo_capture._stop_monitoring()
+        self._tracker = None
+        self._cur_boss = None
+        self._reset_hp()
+        self._last_raw_hp = None
+        self._unidentified = 0
+        self._bar_absent = self._UPCOMING_GONE_FRAMES + 1
+        self._boss_present = False
+        self._upcoming.set_items([])
+        self._upcoming.hide()
+        self._overlay.hide()
+
     def _reset_hp(self) -> None:
         self._stable_hp = None
         self._hp_cand = None

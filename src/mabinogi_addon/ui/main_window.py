@@ -184,6 +184,10 @@ class MainWindow(QMainWindow):
 
         # 포그라운드 감지(맥=항상 활성). 저장된 게임 실행파일로 판정(없으면 제목 폴백).
         self._watcher = create_window_watcher(game_exe=config.load_game_exe())
+        # 게임 종료·재시작(프로세스 기준) 감지 → 내부 시계 추적기 전부 초기화(2026-10-25 사용자 결정 A)
+        from ..tracker.game_session import GameSession
+        self._game_session = GameSession()
+        self._game_probe = None
         self._restoring = False  # 복원 중엔 상태 저장 안 함
         # 부팅(생성~복원 완료) 구간엔 저장을 전부 막는다. 이 사이에 위젯 구성·레이아웃에서
         # 파생된 신호(예: 에디터 textChanged)가 _save_memo를 불러, '기본 해제 상태'로
@@ -707,10 +711,52 @@ class MainWindow(QMainWindow):
         if need_debuff:
             self._start_debuff_tracking()
 
+    def _game_identity(self):
+        """지금 게임 프로세스 (pid, 시작 시각) 또는 None. Windows가 아니면 None(초기화하지 않음)."""
+        if self._game_probe is None:
+            try:
+                from ..system.game_process import GameProcessProbe
+                self._game_probe = GameProcessProbe()
+            except Exception:  # noqa: BLE001
+                return None
+        return self._game_probe.identity()
+
+    def _check_game_process(self, now: float | None = None) -> None:
+        """게임 종료·재시작 감지(약 1초 간격). 감지되면 내부 시계 추적기를 모두 처음 상태로 돌린다."""
+        import time
+        now = time.monotonic() if now is None else now
+        if now < getattr(self, "_game_check_at", 0.0):
+            return
+        self._game_check_at = now + 1.0
+        try:
+            reason = self._game_session.update(self._game_identity(), now)
+        except Exception:  # noqa: BLE001 — 판정 실패로 추적을 지우지 않는다
+            _cap_log.debug("게임 프로세스 확인 실패", exc_info=True)
+            return
+        if reason is not None:
+            self._reset_for_new_game(reason)
+
+    def _reset_for_new_game(self, reason: str) -> None:
+        """게임 종료('exit')·새 프로세스('restart'): 버프·디버프·보스 패턴·1분 헤일로·도르카·투아림 상태를 비우고
+        오버레이를 숨긴다. 영역·설정은 그대로이며 새 게임에서 보이면 처음부터 읽는다(2026-10-25 사용자 결정 A)."""
+        _cap_log.info("게임 %s 감지 · 추적 상태를 초기화해요", "종료" if reason == "exit" else "재시작")
+        # 엔진·컨트롤러를 새로 만든다(설정 변경 때와 같은 경로) → 상태 ABSENT·앵커 기록 초기화
+        self._start_buff_tracking()
+        self._start_debuff_tracking()
+        for overlay in (self.buff_overlay, self.debuff_overlay):
+            overlay.set_items([])
+            overlay.hide()
+        for tab in (self.boss_tab, self.tuarim_tab, self.dorcha_tab):
+            try:
+                tab.reset_for_new_game()
+            except Exception:  # noqa: BLE001 — 한 탭 실패가 나머지 초기화를 막지 않게
+                _cap_log.exception("게임 재시작 초기화 실패: %s", type(tab).__name__)
+
     def _update_tracking_status(self) -> None:
         if self._closing or self._config_pending_restart:
             return
         self._maybe_retry_live_capture()
+        self._check_game_process()
         self.buff_tab.set_status(*self._buff_status())
         self.debuff_tab.set_status(*self._debuff_status())
         # 사라짐 경고 가능 여부 안내. 방식과 무관하게 '디버프 영역에서 띠를 한 번이라도

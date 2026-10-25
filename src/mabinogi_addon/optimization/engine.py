@@ -68,6 +68,7 @@ class Engine:
         # 컨트롤러가 체크 변경 때 바꾼다(작업 스레드는 게임 종료 시점에 읽는다).
         self.auto = False
         self.held = False  # 자동 적용 중 Process Lasso Governor 실행으로 보류 중
+        self.tcp_at_game_end = False  # 13.15: 미룬 패스트핑을 이번 게임 종료 때 적용했는지(요약에 결과 줄, 아니면 '적용 중' 줄)
         # 결과 요약(13.13): 항목별 지금 결과 {'priority'|'cpu'|'tcp': (상태, 이유)}. 상태: ok·same·fail·released·deferred·restored.
         # phase: 세션 단계 'waiting'(게임 대기)·'applied'(게임에 적용)·'ended'(자동 적용 중 게임 종료 → 되돌림)·'held'(Governor 보류).
         self.outcome = {}
@@ -223,6 +224,7 @@ class Engine:
         self.session_end = None
         self.auto = bool(options.get('auto'))
         self.held = False
+        self.tcp_at_game_end = False
         self.outcome, self.phase, self.ran = {}, None, True
         options = dict(options)
         def work():
@@ -335,7 +337,7 @@ class Engine:
                         for key in ('priority', 'cpu'):
                             if key in self.outcome:
                                 self.outcome[key] = ('restored', '')
-                        self._deferred_tcp(options, results, notices, fail, network_guard)
+                        self.tcp_at_game_end = self._deferred_tcp(options, results, notices, fail, network_guard)
                         _log.info('최적화 자동 적용: 게임 종료 · 그 게임에 건 값을 정리하고 다음 게임을 기다려요')
                         notices.append('게임 종료 · 이 게임에 건 값을 정리했어요. 다음 게임을 기다려요.')
                         continue
@@ -365,6 +367,7 @@ class Engine:
                     return
                 if self.phase in ('waiting', 'ended', None):
                     self.phase = 'applied'
+                    self.tcp_at_game_end = False
                     for key in ('priority', 'cpu'):
                         if self.outcome.get(key, ('',))[0] == 'restored':
                             del self.outcome[key]

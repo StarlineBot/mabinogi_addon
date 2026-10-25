@@ -262,6 +262,16 @@ class DorchaTab(QWidget):
             self._overlay.set_percent(None)
             self._overlay.hide()
 
+    def reset_for_new_game(self):
+        """게임 종료·재시작(프로세스 기준): 지난 도르카·투아림 값을 지우고 오버레이를 숨긴다(영역은 유지, 새 게임에서 다시 읽음)."""
+        self._set_value(None)
+        self._percent = None
+        self.preview.set_percent(None)
+        self._update_value_label()
+        if self._overlay is not None:
+            self._overlay.set_percent(None)
+            self._overlay.hide()
+
     def _ensure_overlay(self):
         if self._overlay is not None:
             return

@@ -134,3 +134,22 @@ def test_no_alpha_or_beta_words_on_screen_and_no_basis_line(window, monkeypatch)
         joined = ' '.join(_texts(widget))
         assert '알파' not in joined and '베타' not in joined and '근거' not in joined
     assert '로그인하면 블랙박스와 최적화를 사용할 수 있어요.' in _texts(w.settings_tab)
+
+
+def test_auto_game_end_shows_applying_line_when_fastping_was_applied_at_start(tmp_path):
+    # QA(0.22.0): 시작 때 이미 적용한 패스트핑은 게임 종료 뒤에도 13.13 '적용 중' 줄(결과 줄 ✓는 미룬 것을 이번 종료 때 적용한 경우만)
+    b = GameBackend()
+    b.current[0] = None  # 게임 없을 때 시작 → 패스트핑 즉시 적용
+    r = Recovery(tmp_path / 'j.json', b, lambda: True)
+    e = Engine(b, r, lambda: True)
+    assert e.start(dict(cpu=False, count=None, adapter=GUID, tcp=True, rss=False, priority=True, auto=True))
+    e.auto = True
+    assert _wait(lambda: e.outcome.get('tcp') == ('ok', '') and e.phase == 'waiting')
+    b.current[0] = TARGET
+    assert _wait(lambda: e.phase == 'applied' and e.outcome.get('priority') == ('ok', ''), 6)
+    b.current[0] = None
+    assert _wait(lambda: e.phase == 'ended', 6)
+    headline, _level, lines = summarize(e, r, dict(REQ, auto=True))
+    assert headline == '게임이 끝나 원래대로 되돌렸어요'
+    assert lines == ['↺ 게임 우선순위 · 되돌림', '• 패스트핑 · 적용 중 (최적화를 끄면 되돌려요)']
+    e.stop(); e.thread.join(5)
