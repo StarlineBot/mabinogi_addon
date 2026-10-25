@@ -77,11 +77,16 @@ class HelpDialog(QDialog):
     def __init__(self, title: str, html: str, parent=None) -> None:
         super().__init__(parent)
         self.setWindowTitle(title)
-        self.resize(460, 460)
+        self.resize(480, 520)
         v = QVBoxLayout(self)
         browser = QTextBrowser()
+        # 설정 안내 그림(guide/<이름>.jpg)은 assets 기준 경로로 찾는다. `zoom:<이름>` 링크는 큰 그림 창, 그 밖의 링크는 브라우저.
+        from .. import paths
+        browser.setSearchPaths([str(paths.resource_dir())])
+        browser.setOpenLinks(False)
+        browser.anchorClicked.connect(self._link)
         browser.setHtml(html)
-        browser.setOpenExternalLinks(True)
+        self.browser = browser
         v.addWidget(browser)
         row = QHBoxLayout()
         row.addStretch(1)
@@ -89,6 +94,15 @@ class HelpDialog(QDialog):
         close_btn.clicked.connect(self.accept)
         row.addWidget(close_btn)
         v.addLayout(row)
+
+
+    def _link(self, url) -> None:
+        if url.scheme() == 'zoom':
+            from .guide_figure import ZoomDialog
+            ZoomDialog(url.path(), self).exec()
+            return
+        from PySide6.QtGui import QDesktopServices
+        QDesktopServices.openUrl(url)
 
 
 def help_button(title: str, html: str, parent=None) -> QPushButton:

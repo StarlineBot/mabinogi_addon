@@ -40,6 +40,8 @@
     "tests/test_optimization_auto.py",
     "tests/test_blackbox_resume.py",
     "tests/test_cpu_layouts.py",
-    "tests/test_optimization_recommend.py"
+    "tests/test_optimization_recommend.py",
+    "tests/test_guide_images.py",
+    "tests/test_setup.py"
   ]
 }

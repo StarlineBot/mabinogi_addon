@@ -118,7 +118,7 @@ class BlackboxController(QObject):
         self._toast = None  # 게임 화면 위 저장 반응(명세 11.1)
         from ..blackbox_combat import CombatGate
         from .. import config as _config
-        self._mode = _config.load_blackbox_preferences().get('recordMode', 'always')  # 녹화 방식(명세 12.2)
+        self._mode = _config.load_blackbox_preferences().get('recordMode', 'combat')  # 녹화 방식(명세 12.2). 저장값이 없으면 전투 녹화(2026-10-25 사용자 결정)
         self._gate = CombatGate()
         self._last_target = None  # 마지막으로 관측한 게임 창: 완료·실패 반응도 게임 모니터에 띄운다
         self._toasted_failures = set()

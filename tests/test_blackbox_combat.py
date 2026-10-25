@@ -6,6 +6,7 @@ import pytest
 
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 from mabinogi_addon.blackbox_combat import CombatGate, GRACE_SECONDS
+from test_navigation import window  # noqa: F401  (픽스처)
 
 
 def test_boss_bar_starts_recording_and_stops_sixty_seconds_after_it_disappears():
@@ -174,3 +175,13 @@ def test_encode_failure_clears_progress():
     finally:
         codec_module.stream_process = original
     assert encoder.progress is None and encoder.progress_snapshot() is None
+
+
+def test_combat_mode_is_first_and_default(window):  # noqa: F811
+    """2026-10-25 사용자 결정: 전투 녹화를 앞에, 저장값이 없으면 전투 녹화."""
+    from mabinogi_addon.ui.blackbox_tab import BlackboxTab
+    tab = BlackboxTab()
+    row = [tab.mode_group.buttons()[i].text() for i in range(2)]
+    assert row == ['전투 녹화', '평소 녹화'] and tab.mode_combat.isChecked()
+    assert tab.mode_help.text().startswith('전투 녹화')
+    assert window[0].blackbox_tools._mode == 'combat'

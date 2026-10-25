@@ -63,6 +63,6 @@ def test_current_plan_matches_bundled_release_and_changed_features():
         'tests/test_halo_clock.py', 'tests/test_log_throttle.py',
         'tests/test_process_priority.py', 'tests/test_optimization_priority.py', 'tests/test_process_threads.py',
         'tests/test_access_cache.py', 'tests/test_optimization_auto.py', 'tests/test_cpu_layouts.py',
-        'tests/test_optimization_recommend.py',
+        'tests/test_optimization_recommend.py', 'tests/test_guide_images.py', 'tests/test_setup.py',
     })
     assert set(paths) == expected

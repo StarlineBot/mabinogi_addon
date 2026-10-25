@@ -72,16 +72,16 @@ class BlackboxTab(QWidget):
         self.enabled.toggled.connect(lambda on: self.enabled.setText('블랙박스 사용 중' if on else '블랙박스 사용'))
         group.addWidget(self.enabled, 0, Qt.AlignmentFlag.AlignLeft)
         group.addWidget(_label('켜 두는 동안 컴퓨터 자원과 임시 저장 공간(5분 보관 기준 약 450MB)을 사용해요.', muted=True))
-        # 녹화 방식(명세 12.2): 평소 녹화(기본) / 전투 녹화(보스 체력바가 보이는 동안)
-        self.mode_always = QRadioButton('평소 녹화')
+        # 녹화 방식(명세 12.2): 전투 녹화(기본, 보스 체력바가 보이는 동안) / 평소 녹화
         self.mode_combat = QRadioButton('전투 녹화')
-        self.mode_always.setChecked(True)
+        self.mode_always = QRadioButton('평소 녹화')
+        self.mode_combat.setChecked(True)
         self.mode_group = QButtonGroup(self)
-        self.mode_group.addButton(self.mode_always)
         self.mode_group.addButton(self.mode_combat)
+        self.mode_group.addButton(self.mode_always)
         row = QHBoxLayout()
-        row.addWidget(self.mode_always)
         row.addWidget(self.mode_combat)
+        row.addWidget(self.mode_always)
         row.addStretch()
         self.retention = _NoWheelSpinBox()
         self.retention.setFocusPolicy(Qt.FocusPolicy.StrongFocus)  # 휠로 포커스를 가져가지 않음(클릭·Tab으로만)
@@ -99,8 +99,8 @@ class BlackboxTab(QWidget):
         self.mode_notice.setStyleSheet('color:#e67e22;')
         self.mode_notice.hide()
         group.addWidget(self.mode_notice)
-        self.mode_help = _label('평소 녹화: 게임 창이 최소화되지 않았으면 항상 보관해요.\n'
-                                '전투 녹화: 보스 체력바가 보이는 동안 보관하고, 사라지면 60초 뒤 멈춰요.\n'
+        self.mode_help = _label('전투 녹화: 보스 체력바가 보이는 동안 보관하고, 사라지면 60초 뒤 멈춰요.\n'
+                                '평소 녹화: 게임 창이 최소화되지 않았으면 항상 보관해요.\n'
                                 '게임 창이 뒤에 있어도 보관해요. 최소화하면 잠시 멈추고, 복원하면 이어서 보관해요.', muted=True)
         group.addWidget(self.mode_help)
         body.addWidget(box)

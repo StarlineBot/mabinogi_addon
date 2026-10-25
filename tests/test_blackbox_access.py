@@ -186,6 +186,7 @@ def test_hotkey_result_status_and_error_use_separate_lines(monkeypatch, active, 
     monkeypatch.setattr(config, 'load_discord_user', lambda: None)
     app, host = window()
     tools = BlackboxController(host)
+    tools._mode = 'always'  # 상태·오류 줄만 본다(2026-10-25부터 기본은 전투 녹화)
     tools.panel = BlackboxTab()
     error = 'encoder exited 1: h264_nvenc: OpenEncodeSessionEx failed' if refuse else None
     def request_save(us):

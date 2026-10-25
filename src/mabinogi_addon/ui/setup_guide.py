@@ -8,11 +8,14 @@ from PySide6.QtWidgets import (
 
 from .. import config
 from ..setup_state import BY_KEY, selected as enabled, missing, section, batch_allowed, needs_boss_preparation, BOSS_PREPARATION
+from .. import guide_images
+from .guide_figure import ClickableFigure
 from .setup_page import CHOICE_TEXT, _label
 
 
 STAGES = ((), ("buff", "debuff", "boss", "halo_timer"), ("tuarim", "dorcha", "stat_bars", "skillbar"))
 GUIDE_KEYS = STAGES[1] + STAGES[2]
+GUIDE_FIGURE_TEXT = '연습 모드에 들어가 보스 체력바가 보이는 화면에서 설정해 주세요. 점선이 앱이 찾는 곳이에요(그림을 누르면 크게 볼 수 있어요).'
 
 
 class SetupGuide(QWidget):
@@ -57,6 +60,12 @@ class SetupGuide(QWidget):
         layout.addWidget(self.title)
         self.description = _label("")
         layout.addWidget(self.description)
+        # 설정 안내 그림(2026-10-25 사용자 결정): 다섯 곳 전체 + 연습 모드 안내. 누르면 큰 창.
+        self.figure = ClickableFigure('all')
+        layout.addWidget(self.figure)
+        self.figure_caption = _label(GUIDE_FIGURE_TEXT + '\n' + guide_images.caption('all'))
+        self.figure_caption.setStyleSheet('color:#8a8f98;')
+        layout.addWidget(self.figure_caption)
 
         self.game_row = QWidget()
         row = QVBoxLayout(self.game_row)
@@ -231,6 +240,8 @@ class SetupGuide(QWidget):
         self.game_space.setVisible(self.stage == 0)
         self.selection.setVisible(self.stage in (1, 2))
         self.run_btn.setVisible(self.stage in (1, 2))
+        self.figure.setVisible(self.stage in (1, 2))
+        self.figure_caption.setVisible(self.stage in (1, 2))
         groups = {key: [] for key in self.groups}
         for key in GUIDE_KEYS:
             feature = BY_KEY[key]

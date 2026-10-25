@@ -324,6 +324,7 @@ class _Service:
 def test_blackbox_badge_click_opens_tab_and_never_turns_off(main):
     # 0.17.2 사용자 결정: 상단 배지는 모든 상태에서 블랙박스 탭으로 이동(이전: 누르면 끄기). 끄기는 탭에서.
     tools = main.blackbox_tools
+    tools._mode = 'always'  # 배지 문구만 본다(2026-10-25부터 기본은 전투 녹화)
     service = tools.service = _Service()
     tools.panel.enabled.toggled.connect(lambda value: tools._action(lambda: service.set_enabled(value)))
     tools.panel.enabled.setChecked(True)
