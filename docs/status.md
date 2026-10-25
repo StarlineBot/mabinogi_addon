@@ -156,6 +156,14 @@
 
 ## 마지막 작업
 
+### CI 배포 검사 SIGSEGV 원인 (2026-10-25, 0.18.0 배포 실행 [40169040208](https://github.com/StarlineBot/mabinogi_addon/actions/runs/40169040208) 실패 — 게시 안 됨)
+
+- #127에 이어 두 번째 종료 코드 245(pytest 주 프로세스 SIGSEGV), 테스트 실패(F)는 없음. 두 번 모두 "bringing up nodes" 뒤 **약 30.5초**에 주 프로세스가 죽음.
+- **Highly Likely 원인:** `test_support/progress.py` Journal이 xdist 주 프로세스(controller)에도 `faulthandler.dump_traceback_later(30, repeat=True)`를 걸고,
+  주 프로세스는 테스트를 돌리지 않아 다시 걸지(arm) 않음 → 시작 30초 뒤 첫 스택 덤프. 덤프는 다른 스레드가 생기고 끝나는 중이면 SIGSEGV 가능.
+  재현 `scripts/qa_ci_faulthandler_segv.py`(반복 덤프 + 스레드 생성·종료): 3회 모두 종료 139(SIGSEGV). 검사 묶음이 30초를 넘기면서(현재 약 30~70초) 드러남.
+- 수정안(테스트 인프라 = CI 동결 대상, 사용자 승인 필요): 주 프로세스(workerinput 없음)에서는 스택 덤프 타이머를 걸지 않기. 워커는 테스트마다 다시 걸어 그대로.
+
 ### 디버프 물리/마법 방어력 보호 감소 오인 수정(0.18.0에 포함) — 개발 완료, 실게임 대기
 
 - `_IDENTITY_PEERS`에 '물리 방어력 보호 감소' ↔ '마법 방어력 보호 감소'(프라가라흐와 같은 같은 무늬 쌍 구분). 한쪽만 등록해도 `reference_ids`로 상대 아이콘과 비교.
