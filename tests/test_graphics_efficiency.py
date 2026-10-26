@@ -28,6 +28,9 @@ class FakeDrs:
         yield 'session'
 
     def find_application(self, session, name):
+        exact = next((p for p, v in self.profiles.items() if name in v['apps']), None)  # 전체 경로 등록이 더 구체적
+        if exact is not None:
+            return exact
         name = name.lower().replace('/', '\\').rsplit('\\', 1)[-1]
         return next((p for p, v in self.profiles.items() if name in v['apps']), None)
 
@@ -347,3 +350,18 @@ def test_own_profile_registers_full_path():
     drs.add_application = lambda session, profile, name: added.append(name) or original(session, profile, name)
     FrameLimit(drs).write([full], 400)
     assert added == [full]
+
+
+def test_other_game_profile_with_same_exe_name_is_never_written():
+    # 실측(2026-10-26): 없는 경로도 사전 정의 'Client.exe'(다른 게임) 프로필로 잡힘 → 그 프로필은 건드리지 않고 앱 프로필을 만든다
+    drs = FakeDrs()
+    drs.profiles = {'Client.exe': {'apps': {EXE}, 'settings': {}}}
+    limit = FrameLimit(drs)
+    full = r'D:\Games\Mabinogi\Client.exe'
+    assert limit.read([full]) is None
+    limit.write([full], 400)
+    assert drs.profiles['Client.exe']['settings'] == {}
+    assert drs.profiles[OWN_PROFILE] == {'apps': {full}, 'settings': {FRL_FPS_ID: 400}}
+    assert limit.read([full]) == 400
+    limit.write([full], None)
+    assert OWN_PROFILE not in drs.profiles and drs.profiles['Client.exe']['settings'] == {}

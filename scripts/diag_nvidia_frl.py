@@ -62,11 +62,18 @@ def own_profile_test():
     with nv.session() as session:
         before = nv.find_application(session, fake)
         before = nv.profile_name(session, before) if before is not None else None
-    print('쓰기 전 가짜 경로 프로필:', before or '(없음)')
-    if before is not None and before != OWN_PROFILE:
-        print('가짜 경로가 다른 프로필에 잡혀 시험을 건너뛰어요.')
+    print('쓰기 전 가짜 경로 프로필:', before or '(없음)', '(앱은 마비노기·앱 프로필이 아니면 쓰지 않음)')
+    try:
+        limit.write([fake], 400)  # 마비노기 프로필이 아니므로 앱 프로필을 만들고 전체 경로를 등록한다
+    except Exception as exc:
+        print('앱 프로필 만들기·등록 실패:', exc)
+        with nv.session() as session:
+            own = nv.find_profile(session, OWN_PROFILE)
+            if own is not None:
+                nv.delete_profile(session, own)
+                nv.save(session)
+                print('남은 앱 프로필을 지웠어요.')
         return
-    limit.write([fake], 400)
     with nv.session() as session:
         found = nv.find_application(session, fake)
         print('쓴 뒤 가짜 경로 프로필:', nv.profile_name(session, found) if found is not None else '(없음)')

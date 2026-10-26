@@ -67,12 +67,19 @@ class FrameLimit:
             self.api.save(session)
 
     def _find(self, session, names):
+        """마비노기 프로필(사전 정의 'Mabinogi …') 또는 앱이 만든 프로필만 쓴다. 실측(2026-10-26): 없는 경로
+        `C:\\StarlineFrlTest\\Client.exe`도 다른 게임용 사전 정의 프로필 `Client.exe`로 잡혀, 이름만 같은 다른 게임 프로필은 건드리지 않는다."""
         for name in names:
             profile = self.api.find_application(session, name)
-            if profile is not None:
+            if profile is not None and _ours(self.api.profile_name(session, profile)):
                 return profile
-        return None
+        return self.api.find_profile(session, OWN_PROFILE)  # 앱이 만든 프로필(드라이버가 다른 프로필을 먼저 돌려줘도 찾아 지운다)
 
+
+
+def _ours(profile_name):
+    name = str(profile_name).lower()
+    return 'mabinogi' in name or '마비노기' in name or profile_name == OWN_PROFILE
 
 
 # ---- Windows NVAPI(ctypes) -------------------------------------------------------------------
