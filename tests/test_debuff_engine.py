@@ -277,10 +277,12 @@ def test_no_bar_region_never_warns():
 def _real_debuff_templates():
     from pathlib import Path as _P
 
-    d = _P("src/mabinogi_addon/assets/debuff/icon")
+    d = _P("src/mabinogi_addon/assets/debuff")
     out = {}
-    for name in ("방해 카드", "모모"):
-        t = image_io.imread(d / f"{name}.png")
+    # 모모는 2026-10-26 원본 16px로 바꾼 뒤 바닥에 0.58로 더는 오매칭되지 않는다. 게이팅을 검증하려면
+    # 바닥에 오매칭되던 예전(흐린) 그림이 필요해 표시용으로 보존한 image/의 28px를 쓴다.
+    for name, sub in (("방해 카드", "icon"), ("모모", "image")):
+        t = image_io.imread(d / sub / f"{name}.png")
         if t is not None:
             out[name] = t
     return out

@@ -59,7 +59,9 @@ def test_native_template_and_display_are_separate():
     raw = item.display_image.read_bytes()
     header = f"blob {len(raw)}\0".encode()
     assert hashlib.sha1(header + raw).hexdigest() == "4897f486059403742327ef754104862d7254b7ba"
-    assert entries["불협화음"].display_image is None
+    # 2026-10-26: 불협화음도 원본 16px 판독 + 예전 28px 표시로 나눴다(tests/test_debuff_native_icons.py).
+    assert image_io.imread(entries["불협화음"].match_icon).shape == (16, 16, 3)
+    assert image_io.imread(entries["불협화음"].display_image).shape == (28, 28, 3)
 
 
 def test_user_icon_override_keeps_own_match_and_display(tmp_path):
