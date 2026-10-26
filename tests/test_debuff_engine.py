@@ -279,10 +279,10 @@ def _real_debuff_templates():
 
     d = _P("src/mabinogi_addon/assets/debuff")
     out = {}
-    # 모모는 2026-10-26 원본 16px로 바꾼 뒤 바닥에 0.58로 더는 오매칭되지 않는다. 게이팅을 검증하려면
+    # 모모·방해 카드는 2026-10-26 원본 16px로 바꾼 뒤 바닥에 감지 기준 아래(0.58·0.55)로 내려갔다. 게이팅을 검증하려면
     # 바닥에 오매칭되던 예전(흐린) 그림이 필요해 표시용으로 보존한 image/의 28px를 쓴다.
-    for name, sub in (("방해 카드", "icon"), ("모모", "image")):
-        t = image_io.imread(d / sub / f"{name}.png")
+    for name in ("방해 카드", "모모"):
+        t = image_io.imread(d / "image" / f"{name}.png")
         if t is not None:
             out[name] = t
     return out
