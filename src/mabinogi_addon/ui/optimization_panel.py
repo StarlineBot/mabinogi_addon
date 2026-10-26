@@ -121,6 +121,14 @@ class OptimizationPanel(QWidget):
                            '다른 앱의 통신에도 영향을 줄 수 있고 관리자 권한·재연결이 필요해요. 게임 실행 중이면 네트워크는 미뤄요.\n'
                            '성능이 좋아졌다는 의미는 아니에요. 효과는 별도 계측으로 비교해 주세요.')
         self.notice.setForegroundRole(QPalette.ColorRole.PlaceholderText);group.addWidget(self.notice)
+        group=_group('그래픽',advanced)
+        # 13.6(화면 확정): 체크 · 그래픽카드 이름과 상한 · 회색 설명. NVIDIA가 아니면 체크 비활성 + 이유.
+        self.graphics=QCheckBox('그래픽 효율 최적화');group.addWidget(self.graphics)
+        self.gpu_label=QLabel('환경을 확인하면 보여줘요.')
+        form=QFormLayout();form.addRow('그래픽카드',self.gpu_label);group.addLayout(form)
+        self.graphics_notice=_label('로딩·캐릭터 선택처럼 헛도는 순간만 최대 프레임을 400으로 막아 전력·발열을 줄여요.\n'
+                                    '이미 400 이하로 제한해 뒀으면 그대로 두고, 수직 동기화는 바꾸지 않아요. NVIDIA 그래픽카드만 지원해요.')
+        self.graphics_notice.setForegroundRole(QPalette.ColorRole.PlaceholderText);group.addWidget(self.graphics_notice)
         # 13.14: 추천과 다르게 고르면 상세 끝에 보인다.
         self.reset_recommended=QPushButton('추천 설정으로 되돌리기');self.reset_recommended.hide()
         advanced.addWidget(self.reset_recommended,0,Qt.AlignmentFlag.AlignLeft)

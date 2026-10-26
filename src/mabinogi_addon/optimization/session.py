@@ -72,6 +72,10 @@ def rss_normalized(applied, current):
 
 # 프로세스 단위 항목: 게임·백그라운드 CPU 배치와 게임 우선순위(13.7). 원복은 CPU 원복과 같은 때 하고, 프로세스가 끝나면 되돌릴 것이 없다.
 PROCESS_KINDS = ('cpu', 'priority')
+# 13.6 그래픽 효율(드라이버 프로필 최대 프레임). 패스트핑처럼 게임이 끝나도 유지하고 최적화를 끌 때 되돌린다.
+# 네트워크와 달리 연결을 끊지 않아 확인 창 없이 되돌린다(restore(graphics=True)).
+GRAPHICS_KINDS = ('frl',)
+NETWORK_KINDS = ('ack', 'nodelay', 'autotuning', 'rss')
 
 
 class Recovery:
@@ -95,7 +99,7 @@ class Recovery:
                 if not isinstance(data,dict) or data.get('schema') != 1 or not isinstance(data.get('items'), list) or len(data['items']) > self.MAX_ITEMS:
                     raise ValueError('journal schema')
                 for item in data['items']:
-                    if not isinstance(item,dict) or item.get('state') not in ('prepared','applied','failed','restored','released') or set(item) != {'kind', 'target', 'old', 'applied', 'state'} or item['kind'] not in ('cpu','priority','ack','nodelay','autotuning','rss'):
+                    if not isinstance(item,dict) or item.get('state') not in ('prepared','applied','failed','restored','released') or set(item) != {'kind', 'target', 'old', 'applied', 'state'} or item['kind'] not in ('cpu','priority','ack','nodelay','autotuning','rss','frl'):
                         raise ValueError('journal item')
                     backend.validate(item['kind'], item['target'], item['old'])
                     backend.validate(item['kind'], item['target'], item['applied'])
@@ -122,9 +126,9 @@ class Recovery:
             self._save()
 
     def release(self, item):
-        """외부(다른 도구·게임 자신)가 바꾼 CPU 항목을 관리에서 뺀다. 그쪽 값을 덮어쓰거나 원복하지 않는다."""
+        """외부(다른 도구·게임 자신·제어판)가 바꾼 CPU·그래픽 항목을 관리에서 뺀다. 그쪽 값을 덮어쓰거나 원복하지 않는다."""
         with self.lock:
-            if item['kind'] not in PROCESS_KINDS or item not in self.items:
+            if item['kind'] not in PROCESS_KINDS + GRAPHICS_KINDS or item not in self.items:
                 raise ValueError('프로세스 적용 항목만 관리에서 뺄 수 있어요.')
             item['state'] = 'released'
             self._save()
@@ -247,9 +251,10 @@ class Recovery:
             message += ' 비교 시점 차이: ' + '; '.join(fields)
         return message
 
-    def restore(self, *, network=False, accept_normalized=False):
+    def restore(self, *, network=False, accept_normalized=False, graphics=False):
         """기록된 원본으로 되돌린다. accept_normalized: 사용자가 확인한 경우에만 '장치가 앱 적용값을
-        정규화한' RSS 항목도 원본으로 다시 쓴다(확인 전에는 차이를 알리고 보류)."""
+        정규화한' RSS 항목도 원본으로 다시 쓴다(확인 전에는 차이를 알리고 보류).
+        graphics: 그래픽 효율(13.6)도 되돌린다(최적화를 끌 때). 게임 종료 정리에서는 유지한다."""
         with self.lock:
             if self.corrupt:
                 return ['복구 기록이 손상돼 추정값으로 변경하지 않아요.']
@@ -257,9 +262,15 @@ class Recovery:
             if network:
                 self.normalized_review = []
             for item in reversed(self.pending):
-                if item['kind'] not in PROCESS_KINDS and not network:
+                if item['kind'] in GRAPHICS_KINDS:
+                    if not graphics:
+                        continue
+                elif item['kind'] not in PROCESS_KINDS and not network:
                     continue
                 try:
+                    if item['kind'] in GRAPHICS_KINDS:
+                        self._restore_graphics(item)
+                        continue
                     if item['kind'] == 'priority':
                         if self._restore_priority(item):
                             continue  # 외부 변경으로 관리에서 뺌(덮어쓰지 않음)
@@ -303,6 +314,23 @@ class Recovery:
                 self._save()
             return errors
 
+    def _restore_graphics(self, item):
+        """13.6: 지금 값이 적용값이면 원본으로(설정 없음이면 지움). 원본이면 그대로. 제어판에서 다른 값으로 바꿨으면
+        덮어쓰지 않고 관리에서 뺀다(사용자 값 존중)."""
+        current = self._read(item['kind'], item['target'], '원복 전 확인')
+        if current == item['applied']:
+            self.backend.write(item['kind'], item['target'], item['old'])
+            if self._read(item['kind'], item['target'], '원복값 확인') != item['old']:
+                raise RuntimeError('원복값 확인 실패')
+            item['state'] = 'restored'
+        elif current == item['old']:
+            item['state'] = 'restored'
+        else:
+            item['state'] = 'released'
+            _log.warning('그래픽 효율: 최대 프레임을 다른 값(%s)으로 바꿔 원복하지 않고 관리에서 뺐어요(원본 %s · 적용 %s).',
+                         current, item['old'], item['applied'])
+        self._save()
+
     def _restore_priority(self, item):
         """게임 우선순위 원복(13.7). 지금 값이 원본·적용값이 아니면 다른 도구가 바꾼 것이라 덮어쓰지 않고 관리에서 뺀다(True).
         두 읽기 경로가 다르면(확인 불가) 원본을 다시 쓴다 — 같은 값을 다시 써도 해가 없고, 읽기만 믿다가 '높음'을 남기지 않게."""
@@ -339,7 +367,7 @@ class Recovery:
                 verified = self._verify_after_restart(target)
                 if verify_restored:
                     for item in self.items:
-                        if item['target'] != target or item['kind'] in PROCESS_KINDS or item['state'] != 'restored':
+                        if item['target'] != target or item['kind'] not in NETWORK_KINDS or item['state'] != 'restored':
                             continue
                         try:
                             current = self._read(item['kind'], target, '재연결 후 확인')

@@ -1,5 +1,5 @@
 {
-  "version": "0.22.1",
+  "version": "0.23.0",
   "tests": [
     "tests/test_blackbox.py",
     "tests/test_blackbox_access.py",
@@ -44,6 +44,7 @@
     "tests/test_guide_images.py",
     "tests/test_setup.py",
     "tests/test_optimization_public.py",
-    "tests/test_game_restart_reset.py"
+    "tests/test_game_restart_reset.py",
+    "tests/test_graphics_efficiency.py"
   ]
 }

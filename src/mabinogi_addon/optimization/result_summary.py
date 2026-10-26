@@ -6,7 +6,7 @@
 """
 from __future__ import annotations
 
-from .session import PROCESS_KINDS
+from .session import GRAPHICS_KINDS, NETWORK_KINDS
 
 COLORS = {'ok': '#2ecc71', 'neutral': '#8a8f98', 'warn': '#e67e22', 'error': '#e74c3c'}
 IDLE = '시작 전 · 시스템 설정을 변경하지 않았어요.'
@@ -21,11 +21,18 @@ def _labels(requested, layout_label):
         labels['cpu'] = f'CPU 배치 · {layout_label}' if layout_label else 'CPU 배치'
     if requested.get('tcp'):
         labels['tcp'] = '패스트핑'
+    if requested.get('graphics'):
+        labels['graphics'] = '그래픽 효율'
     return labels
 
 
 def _line(key, label, state, reason):
-    short = {'priority': '게임 우선순위', 'cpu': 'CPU 배치', 'tcp': '패스트핑'}[key]
+    short = {'priority': '게임 우선순위', 'cpu': 'CPU 배치', 'tcp': '패스트핑', 'graphics': '그래픽 효율'}[key]
+    if key == 'graphics':  # 13.6 화면 확정 문구
+        if state in ('ok', 'same'):
+            return '✓ 그래픽 효율 · 최대 프레임 400'
+        if state == 'low':
+            return '✓ 그래픽 효율 · 이미 400 이하라 그대로 뒀어요'
     if state == 'ok':
         return f'✓ {label}'
     if state == 'same':
@@ -42,8 +49,10 @@ def summarize(engine, recovery, requested=None, *, layout_label=None, kept_on=Fa
     requested = requested or {}
     if recovery.corrupt:
         return '복구 기록이 손상돼 새 적용을 막았어요. 추정값으로 되돌리지 않아요.', 'error', []
-    network_left = any(i['kind'] not in PROCESS_KINDS for i in recovery.pending) or bool(recovery.restart_targets)
+    network_left = any(i['kind'] in NETWORK_KINDS for i in recovery.pending) or bool(recovery.restart_targets)
+    graphics_left = any(i['kind'] in GRAPHICS_KINDS for i in recovery.pending)
     network_line = '• 패스트핑 · 적용 중 (최적화를 끄면 되돌려요)'
+    graphics_line = '• 그래픽 효율 · 최대 프레임 400 적용 중 (최적화를 끄면 되돌려요)'
     outcome = getattr(engine, 'outcome', {}) or {}
     labels = _labels(requested, layout_label)
     if engine.busy and engine.task != 'inspect':
@@ -61,6 +70,8 @@ def summarize(engine, recovery, requested=None, *, layout_label=None, kept_on=Fa
                 lines.append(_line('tcp', labels['tcp'], *outcome['tcp']))
             elif network_left:
                 lines.append(network_line)
+            if graphics_left:
+                lines.append(graphics_line)
             return '게임이 끝나 원래대로 되돌렸어요', 'neutral', lines
         if phase != 'applied':
             auto = requested.get('auto')
@@ -68,10 +79,19 @@ def summarize(engine, recovery, requested=None, *, layout_label=None, kept_on=Fa
         return _applied(outcome, labels)
     if getattr(engine, 'status', '').startswith('작업을 완료하지 못했어요') or '\n작업을 완료하지 못했어요' in getattr(engine, 'status', ''):
         return '작업을 완료하지 못했어요 · 자세히 보기에서 이유를 확인해 주세요', 'warn', []
-    if network_left:
-        if restore_wait:
+    if network_left or graphics_left:
+        if restore_wait and network_left:
             return '네트워크 원복 대기 · 연결을 끊어도 될 때 최적화 버튼을 다시 눌러 주세요', 'warn', []
-        return '최적화 적용 중', 'ok', [network_line if 'tcp' not in outcome else _line('tcp', '패스트핑', *outcome['tcp'])]
+        # 게임에 적용한 세션이 끝난 뒤(게임 종료 등)에는 남은 항목을 '적용 중' 줄로, 네트워크·그래픽만 한 세션은 방금 결과 줄로.
+        game_session = bool(requested.get('priority') or requested.get('cpu'))
+        lines = []
+        if network_left:
+            fresh = not game_session or getattr(engine, 'tcp_at_game_end', False)  # 13.15: 게임 종료 때 미룬 것을 적용했으면 결과 줄
+            lines.append(_line('tcp', '패스트핑', *outcome['tcp']) if 'tcp' in outcome and fresh else network_line)
+        if graphics_left:
+            lines.append(graphics_line if 'graphics' not in outcome or game_session
+                         else _line('graphics', '그래픽 효율', *outcome['graphics']))
+        return '최적화 적용 중', 'ok', lines
     if kept_on:
         return _applied(outcome, labels)
     if getattr(engine, 'status', '') == NOTHING_TO_RESTORE:
@@ -83,7 +103,7 @@ def summarize(engine, recovery, requested=None, *, layout_label=None, kept_on=Fa
 
 def _applied(outcome, labels):
     lines, failed = [], False
-    for key in ('priority', 'cpu', 'tcp'):
+    for key in ('priority', 'cpu', 'tcp', 'graphics'):
         if key not in labels or key not in outcome:
             continue
         state, reason = outcome[key]

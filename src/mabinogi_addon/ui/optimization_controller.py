@@ -7,7 +7,7 @@ from PySide6.QtCore import QObject, QTimer
 from PySide6.QtWidgets import QMessageBox
 from .. import config, paths
 from ..feature_access import Recheck, is_creator, optimization_available
-from ..optimization.session import PROCESS_KINDS, Recovery
+from ..optimization.session import NETWORK_KINDS, PROCESS_KINDS, Recovery
 from ..optimization.engine import Engine
 from ..optimization.frames import FrameStream
 from ..optimization.frame_summary import FrameSummary, compare, REASONS, condition_summary, load_reports
@@ -119,6 +119,8 @@ class OptimizationController(QObject):
         self._core_total = None
         self._layouts = {}  # 환경 확인으로 만든 CPU 배치 {키: Layout}(13.11)
         self._auto_adapter = None  # 인터넷 기본 경로 연결 GUID(13.12, 판단 불가면 None)
+        self._gpu = None  # 13.6 NVIDIA 그래픽카드 이름(환경 확인 결과, 아니면 None)
+        self._gpu_checked = False
         self._logged_status = None  # app.log에 남긴 마지막 세션 기록(13.13: 상세는 항상 로그에)
         # 시작이 막힌 이유·환경 확인 실패(13.13 QA 후속): 접힌 상세에만 두면 버튼이 무반응처럼 보여 상태 줄에 주황으로 보인다.
         # 다시 시작하거나 선택을 바꾸거나 환경 확인을 다시 하면 지운다.
@@ -230,10 +232,12 @@ class OptimizationController(QObject):
         d, saved = self.panel, config.load_optimization_selection()
         self._restoring_selection = True
         try:
-            for key, box in (('priority', d.priority), ('tcp', d.tcp), ('auto', d.auto)):
+            for key, box in (('priority', d.priority), ('tcp', d.tcp), ('auto', d.auto), ('graphics', d.graphics)):
                 if key in saved: box.setChecked(saved[key])
             if 'tcp' not in saved:
                 d.tcp.setChecked(True)  # 13.14: 처음 쓰는 사용자 기본값은 추천(패스트핑 포함). 기존 저장은 유지
+            if 'graphics' not in saved:
+                d.graphics.setChecked(True)  # 13.6: 추천에 포함(NVIDIA일 때만 적용)
             d.advanced_toggle.setChecked(saved.get('advanced') is True)
         finally:
             self._restoring_selection = False
@@ -244,7 +248,7 @@ class OptimizationController(QObject):
             self._notice = None  # 고른 항목이 바뀌면 시작 차단 안내는 지운다(환경 확인 실패 안내는 다시 확인 때까지)
         d = self.panel
         selection = dict(priority=d.priority.isChecked(), tcp=d.tcp.isChecked(), auto=d.auto.isChecked(),
-                         advanced=d.advanced_toggle.isChecked())
+                         advanced=d.advanced_toggle.isChecked(), graphics=d.graphics.isChecked())
         saved = config.load_optimization_selection()
         # 환경 확인 전(목록이 비어 있음)에는 저장된 배치·어댑터를 지우지 않는다(13.11: 배분 숫자 대신 배치 이름 키).
         layout = self._layout_key()
@@ -301,12 +305,36 @@ class OptimizationController(QObject):
         rec = self._recommendation()
         if not d.priority.isChecked() or not d.tcp.isChecked():
             return True
+        if self._gpu and not d.graphics.isChecked():
+            return True
         if rec['layout'] is not None and d.split.currentData() not in (None, rec['layout']):
             return True
         chosen = d.adapter.currentData()
         return rec['adapter'] is not None and chosen is not None and str(chosen).lower() != rec['adapter'].lower()
 
-    def _describe(self, priority, layout_key, tcp):
+    def _graphics_on(self):
+        """13.6: 그래픽 효율을 쓸지(체크 + NVIDIA)."""
+        return bool(self._gpu) and self.panel is not None and self.panel.graphics.isChecked()
+
+    def _detect_gpu(self):
+        """환경 확인 전(앱 시작 자동 적용 등)에 한 번 NVIDIA 여부를 읽는다."""
+        if not self._gpu_checked:
+            self._gpu_checked = True
+            try:
+                graphics = getattr(self.backend, 'graphics', None)
+                self._gpu = graphics() if graphics is not None else None
+            except Exception:
+                self._gpu = None
+            self._show_gpu()
+        return self._gpu
+
+    def _show_gpu(self):
+        d = self.panel
+        if d is None:
+            return
+        d.gpu_label.setText(f'{self._gpu} · 최대 프레임 400' if self._gpu else 'NVIDIA 그래픽카드에서만 쓸 수 있어요')
+
+    def _describe(self, priority, layout_key, tcp, graphics=False):
         parts = []
         if priority:
             parts.append('게임 우선순위 높음')
@@ -317,6 +345,8 @@ class OptimizationController(QObject):
             parts.append('CPU 배치(환경 확인 뒤 표시)')
         if tcp:
             parts.append('패스트핑' if self._auto_adapter or self.panel.adapter.currentData() else '패스트핑(연결 선택 필요)')
+        if graphics and self._gpu:
+            parts.append('그래픽 효율')
         return ' · '.join(parts) or '고른 항목 없음'
 
     def _update_recommendation(self):
@@ -324,10 +354,10 @@ class OptimizationController(QObject):
         if d is None: return
         custom = self._is_custom()
         if custom:
-            text = '직접 고른 설정: ' + self._describe(d.priority.isChecked(), d.split.currentData(), d.tcp.isChecked())
+            text = '직접 고른 설정: ' + self._describe(d.priority.isChecked(), d.split.currentData(), d.tcp.isChecked(), d.graphics.isChecked())
         else:
             rec = self._recommendation()
-            text = '이 PC 추천: ' + self._describe(True, rec['layout'], True)
+            text = '이 PC 추천: ' + self._describe(True, rec['layout'], True, True)
         if d.recommend.text() != text:
             d.recommend.setText(text)
         d.reset_recommended.setVisible(custom)
@@ -337,6 +367,7 @@ class OptimizationController(QObject):
         d, rec = self.panel, self._recommendation()
         d.priority.setChecked(True)
         d.tcp.setChecked(True)
+        d.graphics.setChecked(True)
         if rec['layout'] is not None:
             d.split.setCurrentIndex(max(0, d.split.findData(rec['layout'])))
         if rec['adapter'] is not None:
@@ -451,7 +482,7 @@ class OptimizationController(QObject):
 
     def _wire_panel(self):
         d=self.panel
-        for box in (d.priority, d.tcp, d.auto): box.toggled.connect(self._save_selection)
+        for box in (d.priority, d.tcp, d.auto, d.graphics): box.toggled.connect(self._save_selection)
         d.reset_recommended.clicked.connect(self._reset_to_recommended)
         d.advanced_toggle.toggled.connect(self._save_selection)
         d.auto.toggled.connect(self._auto_changed)
@@ -549,8 +580,10 @@ class OptimizationController(QObject):
                 or not (self._cpu_selected() or d.priority.isChecked())):
             return False
         # 환경 확인 전이면 저장한 배치(없으면 이 CPU의 추천 — 엔진이 구조를 읽어 정한다)
+        self._detect_gpu()
         options = dict(cpu=self._cpu_selected(), count=None, layout=self._layout_key() or 'recommended', adapter=None,
-                       tcp=False, rss=False, priority=d.priority.isChecked(), auto=True)
+                       tcp=False, rss=False, priority=d.priority.isChecked(), auto=True,
+                       graphics=self._graphics_on(), game_exe=config.load_game_exe())  # 13.6: 자동 적용에 포함
         self._begin(options)
         return True
 
@@ -566,6 +599,7 @@ class OptimizationController(QObject):
                                  if options['cpu'] and options['count'] and self._core_total else None)
         self._kept_on = True  # 이미 목표값이라 바꾼 것이 없어도 켜짐으로 보여준다(13.5)
         self._summary_requested = {key: options[key] for key in ('cpu','count','tcp','priority')}
+        self._summary_requested['graphics'] = bool(options.get('graphics'))
         self._summary_requested['adapter_selected'] = bool(options['adapter'])
         self._summary_requested['auto'] = bool(options.get('auto'))  # 13.10: FPS 자동 기록에 자동 적용 여부
         if options.get('layout'):  # 13.11: FPS 자동 기록에 배치 이름과 실제 배분(숫자)
@@ -583,8 +617,9 @@ class OptimizationController(QObject):
         layout = self._layout_key() or 'recommended'  # 환경 확인 전이면 저장값, 없으면 이 CPU의 추천
         options = dict(cpu=self._cpu_selected(),count=None,layout=layout,adapter=d.adapter.currentData(),
                        tcp=d.tcp.isChecked(),rss=False,priority=d.priority.isChecked(),
-                       auto=d.auto.isChecked())  # 13.8: RSS 새 적용 없음 · 13.11: 배치는 이름 키
-        if not any(options[k] for k in ('cpu','tcp','priority')):
+                       auto=d.auto.isChecked(),  # 13.8: RSS 새 적용 없음 · 13.11: 배치는 이름 키
+                       graphics=self._graphics_on(), game_exe=config.load_game_exe())  # 13.6
+        if not any(options[k] for k in ('cpu','tcp','priority','graphics')):
             self.engine.status = self._notice = '사용할 항목을 선택해 주세요.'
             return
         if options['tcp'] and not options['adapter']:
@@ -655,7 +690,7 @@ class OptimizationController(QObject):
         남긴다(명세 6절: 게임 중 연결을 끊지 않고 CPU만 멈추는 경로).
         접근(로그인)이 없으면 CPU만 원복한다(네트워크 원복은 기존처럼 접근 필요)."""
         self._restore_requested = True  # 끝난 뒤 남으면 '원복 대기'(13.5)
-        network = (any(i['kind'] not in PROCESS_KINDS for i in self.recovery.pending) or bool(self.recovery.restart_targets))
+        network = (any(i['kind'] in NETWORK_KINDS for i in self.recovery.pending) or bool(self.recovery.restart_targets))
         network = network and self._can_start()
         normalized = network and bool(self.recovery.normalized_review)
         deferred = False
@@ -935,6 +970,7 @@ class OptimizationController(QObject):
         d = self.panel
         allowed, busy = self._can_start(), self.engine.busy
         for w in (d.priority,d.tcp,d.split,d.adapter): w.setEnabled(allowed and not busy)
+        d.graphics.setEnabled(allowed and not busy and bool(self._gpu))  # 13.6: NVIDIA가 아니면 비활성
         d.inspect.setEnabled(allowed and not self.engine.inspecting)  # 0.22.0 QA: 세션(자동 적용 대기 포함) 중에도 다시 확인 가능
         self._sync_optimization_toggle()
         for control in (d.lock,d.scale,*d.metric_boxes.values()): control.setEnabled(allowed)
@@ -961,6 +997,9 @@ class OptimizationController(QObject):
             topology, adapters = self.engine.inspection
             self.engine.inspection = None
             self._apply_inspection(topology, adapters)
+            self._gpu, self._gpu_checked = getattr(self.engine, 'inspection_gpu', None), True
+            self._show_gpu()
+            self._update_recommendation()
             failed = getattr(self.engine, 'inspection_failed', [])
             names = '·'.join(failed)
             self._inspect_notice = (f"{names}{object_particle(names)} 읽지 못했어요 · 자세히 보기에서 이유를 확인하고 '다시 확인'을 눌러 주세요"

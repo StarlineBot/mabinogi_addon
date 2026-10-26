@@ -152,7 +152,8 @@ def test_checkbox_is_off_by_default_and_turning_on_starts_waiting_without_networ
     config.save_optimization_selection(dict(layout='none'))  # 13.11: CPU 체크 해제 대신 '배치 안 함'
     d.tcp.setChecked(True); d.priority.setChecked(True)
     d.auto.setChecked(True)
-    assert started == [dict(cpu=False, count=None, layout='none', adapter=None, tcp=False, rss=False, priority=True, auto=True)]
+    assert started == [dict(cpu=False, count=None, layout='none', adapter=None, tcp=False, rss=False, priority=True, auto=True,
+                            graphics=False, game_exe=None)]  # 13.6: 그래픽 효율 항목(NVIDIA 아님 → 끔)
     assert c.engine.auto and config.load_optimization_selection()['auto'] is True
     assert c._summary_requested['auto'] is True
 

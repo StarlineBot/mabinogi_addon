@@ -1,7 +1,7 @@
 """One explicit optimization session; all blocking OS calls run off the UI thread."""
 import logging
 import threading
-from .session import ChangeDeferred, PROCESS_KINDS
+from .session import ChangeDeferred, NETWORK_KINDS, PROCESS_KINDS
 
 _log = logging.getLogger(__name__)
 
@@ -54,12 +54,14 @@ class Engine:
         self.inspection = None
         self.inspection_failed = []  # 환경 확인에서 읽지 못한 항목 이름
         self.inspection_errors = []
+        self.inspection_gpu = None  # 13.6 NVIDIA 그래픽카드 이름
         self.inspect_thread = None  # 세션 중 환경 확인(0.22.0 QA)
         self.recovery_requested = False
         self.lock = threading.Lock()
         self._partial = None  # 진행 중 작업의 결과/안내 줄(예외로 끝나도 버리지 않게)
         self._restore_network_after = None  # '중단 · 원복': CPU 원복 뒤 이어서 할 네트워크 원복(accept_normalized,)
         self._restore_cpu_after = False  # '중단 · 원복'을 누른 시점에 돌던 작업이 무엇이든 끝에서 CPU를 원복
+        self._restore_graphics_after = False  # '중단 · 원복': 그래픽 효율(13.6)도 원본으로(확인 창 없음)
         self._network_deferred = False  # 사용자가 네트워크 원복을 미룸 → '네트워크 원복 대기' 안내
         self.task = None  # 진행 중 작업 종류: 'inspect' | 'session' | 'restore' (busy일 때만 의미)
         # 세션이 끝난 이유: 'network_only'(네트워크만 하고 정상 종료) | 'game_exit' | 'governor' | 'cancel' | 'error'
@@ -104,6 +106,9 @@ class Engine:
             restore_cpu = restore_cpu or self._restore_cpu_after
             self._restore_cpu_after = False
             errors = self.recovery.restore() if restore_cpu else []
+            graphics, self._restore_graphics_after = self._restore_graphics_after, False
+            if graphics:
+                errors += self.recovery.restore(graphics=True)
             if restore_cpu: self.recovery_requested = True
             if errors: self.status += '\nCPU 원복 확인 필요: ' + '; '.join(errors[:4])
             network, self._restore_network_after = self._restore_network_after, None
@@ -113,12 +118,12 @@ class Engine:
                 self.status += ('\n네트워크 원복 완료' if not net_errors and not self.recovery.pending
                                 else '\n네트워크 원복 확인 필요: ' + '; '.join(net_errors[:4]))
             deferred, self._network_deferred = self._network_deferred, False
-            if deferred and (any(i['kind'] not in PROCESS_KINDS for i in self.recovery.pending) or self.recovery.restart_targets):
+            if deferred and (any(i['kind'] in NETWORK_KINDS for i in self.recovery.pending) or self.recovery.restart_targets):
                 self.status += ("\n네트워크 원복 대기 · 연결을 끊어도 될 때 '최적화 적용 중' 버튼을 다시 눌러 주세요.")
             elif self.recovery.corrupt or any(i['kind'] in PROCESS_KINDS for i in self.recovery.pending) or (
                     network is not None and (self.recovery.pending or self.recovery.restart_targets)):
                 self.status += '\n복구 기록이 남아 있어요. 원복 상태를 확인해 주세요.'
-            elif self.recovery.pending or self.recovery.restart_targets:
+            elif any(i['kind'] in NETWORK_KINDS for i in self.recovery.pending) or self.recovery.restart_targets:
                 # 원복을 요청하지 않은 네트워크 변경은 정상 적용 상태다(13.5: '적용 중'과 '원복 대기' 구분).
                 self.status += '\n' + NETWORK_APPLIED
 
@@ -161,12 +166,47 @@ class Engine:
             adapters_failed = True
         # 결과 요약(13.13 QA 후속): 읽지 못한 항목은 보이는 상태 줄에 알린다(원문은 자세히 보기)
         self.inspection_failed = [name for name, failed in (('CPU 구조', topology is None), ('네트워크 연결', adapters_failed)) if failed]
+        # 13.6: NVIDIA 그래픽카드 이름(없으면 None). 확인 실패는 '미지원'으로 본다(실패 안내 대상 아님).
+        try:
+            graphics = getattr(self.backend, 'graphics', None)
+            self.inspection_gpu = graphics() if graphics is not None else None
+        except Exception:
+            self.inspection_gpu = None
         self.inspection_errors = errors
         self.inspection = (topology, adapters)
         if write_status:
             self.status = '\n'.join(errors) if errors else '환경을 확인했어요. 시작을 누르기 전에는 적용하지 않아요.'
         elif errors:
             _log.warning('환경 확인(세션 중): %s', ' / '.join(errors))
+
+    FRL_TARGET = 400  # 13.6: 일괄 400 상한(렘부스터와 같은 값)
+
+    def _apply_graphics(self, options, results, fail):
+        """13.6 그래픽 효율: 게임 프로필 최대 프레임을 400으로. 이미 400 이하로 제한해 뒀으면 건드리지 않는다.
+        세션 시작 때(게임 실행 전 포함) 걸어 로딩 화면부터 적용되게 하고, 최적화를 끌 때 되돌린다."""
+        target = str(options.get('game_exe') or '').lower()
+        try:
+            if not target:
+                raise ValueError('게임 실행 파일을 먼저 등록해 주세요.')
+            existing = next((i for i in self.recovery.pending if i['kind'] == 'frl' and i['target'] == target), None)
+            current = self.backend.read('frl', target)
+            if existing is not None and current != existing['applied']:
+                self.recovery.release(existing)  # 제어판에서 바꾼 값: 덮어쓰지 않는다
+                self.outcome['graphics'] = ('released', '제어판에서 바꾼 값이라 그대로 뒀어요')
+                return
+            if existing is None and current is not None and 0 < current <= self.FRL_TARGET:
+                self.outcome['graphics'] = ('low', '')
+                results.append(f'frl: 이미 {current} 제한 · 그대로 둠')
+                return
+            result = self.recovery.apply('frl', target, self.FRL_TARGET)
+            self.outcome['graphics'] = ('same', '') if result == 'unchanged' else ('ok', '')
+            results.append('frl: ' + ('이미 목표값 · 그대로 둠' if result == 'unchanged' else f'최대 프레임 {self.FRL_TARGET} 적용 · 확인 완료'))
+        except Exception as exc:
+            fail(f'그래픽 효율 미적용·확인 필요: {exc}')
+            reason = str(exc) if isinstance(exc, ValueError) else short_reason(exc)
+            if 'NVIDIA' in str(exc) or 'NVAPI' in str(exc):
+                reason = 'NVIDIA 드라이버 설정을 바꾸지 못했어요' if reason == '적용하지 못했어요' else reason
+            self.outcome['graphics'] = ('fail', reason)
 
     def _apply_tcp(self, options, results, notices, fail, network_guard):
         """패스트핑 적용(시작 때, 또는 13.15: 게임 실행 중이라 미룬 뒤 그 게임이 끝나 CPU를 되돌린 직후). 확인 창은 시작 때 한 번만."""
@@ -280,10 +320,12 @@ class Engine:
                 self.outcome['tcp'] = ('deferred', TCP_DEFERRED)
             elif options['tcp']:
                 self._apply_tcp(options, results, notices, fail, network_guard)
+            if options.get('graphics'):
+                self._apply_graphics(options, results, fail)
             if not options['cpu'] and not options.get('priority'):
-                # CPU·우선순위를 끈 세션은 게임을 기다릴 이유가 없다(네트워크 설정은 원복 전까지 유지).
+                # CPU·우선순위를 끈 세션은 게임을 기다릴 이유가 없다(네트워크·그래픽 설정은 원복 전까지 유지).
                 self.status = '\n'.join([result_headline(notices, failures)] + results + notices
-                                         + ['네트워크 설정 작업을 마쳤어요. CPU 배치는 사용하지 않아요.'])
+                                         + ['네트워크·그래픽 설정 작업을 마쳤어요. CPU 배치는 사용하지 않아요.'])
                 self.session_end = 'network_only'
                 return
             seen = set()
@@ -349,7 +391,7 @@ class Engine:
                         for key in ('priority', 'cpu'):
                             self.outcome.pop(key, None)
                         results = []
-                        self._deferred_tcp(options, results, notices, fail, network_guard)
+                        self.tcp_at_game_end = self._deferred_tcp(options, results, notices, fail, network_guard)
                         if self.outcome.get('tcp', ('',))[0] == 'deferred':
                             self.outcome['tcp'] = ('fail', '게임이 다시 켜져 적용하지 못했어요')
                         self.status = '\n'.join(results + notices + ['게임 종료 · CPU를 원복하고 미룬 패스트핑을 적용했어요.'])
@@ -577,6 +619,7 @@ class Engine:
             self._restore_network_after = (accept_normalized,)
         self._network_deferred = network_deferred and not network
         self._restore_cpu_after = True
+        self._restore_graphics_after = True
         self.cancel.set()
         if self.busy:
             self.status = '중단 · 원복 중…'

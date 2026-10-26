@@ -98,6 +98,12 @@ class WindowsOptimization:
             elif type(value) is not int or not 0 < value < 2**64: raise ValueError('잘못된 CPU 집합')
         elif kind == 'autotuning':
             if target != 'global' or value not in AUTOTUNING: raise ValueError('잘못된 TCP 값')
+        elif kind == 'frl':  # 13.6 그래픽 효율: 게임 실행 파일 이름(소문자) · 최대 프레임(None=설정 없음, 0=끔)
+            if (not isinstance(target, str) or not re.fullmatch(r'[^\\/:*?"<>|]{1,255}\.exe', target)
+                    or target != target.lower()):
+                raise ValueError('게임 실행 파일 이름을 확인해 주세요.')
+            if value is not None and (type(value) is not int or not 0 <= value <= 1023):
+                raise ValueError('잘못된 최대 프레임 값')
         elif kind in ('ack','nodelay','rss'):
             uuid.UUID(target)
             if kind != 'rss':
@@ -260,6 +266,27 @@ class WindowsOptimization:
         except ProcessLookupError: return False
         # Access failures are not proof that the game ended.
 
+    def graphics(self):
+        """13.6: NVIDIA 그래픽카드 이름 또는 None(미지원)."""
+        from .nvidia_drs import nvidia_gpu
+        return nvidia_gpu()
+
+    def _frl_names(self, target):
+        """드라이버 프로필을 찾을 이름: 실행 중인 게임의 전체 경로(같은 이름일 때, 사전 정의 프로필의 폴더 조건 대응) → 실행 파일 이름."""
+        names = []
+        try:
+            game = self.game()
+            if game is not None:
+                with self._process({'pid': game['pid']}) as (kernel, handle, _):
+                    path = ctypes.create_unicode_buffer(32768)
+                    length = wintypes.DWORD(len(path))
+                    if kernel.QueryFullProcessImageNameW(handle, 0, path, ctypes.byref(length)):
+                        if path.value.replace('/', '\\').rsplit('\\', 1)[-1].lower() == target:
+                            names.append(path.value)
+        except Exception:
+            pass
+        return names + [target]
+
     def topology(self):
         self._windows()
         import winreg
@@ -375,6 +402,9 @@ class WindowsOptimization:
                 raise process_priority.Unconfirmed(process_priority.describe(reading))
             return value
         if kind == 'autotuning': return self._tcp_level()
+        if kind == 'frl':
+            from .nvidia_drs import FrameLimit, api
+            return FrameLimit(api()).read(self._frl_names(target))
         if kind in ('ack','nodelay'):
             import winreg
             self._ps(self._adapter(target), '장치 확인/'+kind)
@@ -415,6 +445,10 @@ class WindowsOptimization:
             with self._process(target):  # 같은 프로세스인지 확인(보호 프로세스면 아래 쓰기가 권한 오류)
                 pass
             process_priority.write(target['pid'], value)
+            return
+        if kind == 'frl':
+            from .nvidia_drs import FrameLimit, api
+            FrameLimit(api()).write(self._frl_names(target), value)
             return
         if kind == 'autotuning':
             if guard is not None: guard()
