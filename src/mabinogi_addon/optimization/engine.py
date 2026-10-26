@@ -183,6 +183,7 @@ class Engine:
     FRL_TARGET = 400  # 13.6: 일괄 400 상한(렘부스터와 같은 값)
 
     def _apply_graphics(self, options, results, fail):
+        from ..system.nvidia_drs import GamePathUnknown
         """13.6 그래픽 효율: 게임 프로필 최대 프레임을 400으로. 이미 400 이하로 제한해 뒀으면 건드리지 않는다.
         세션 시작 때(게임 실행 전 포함) 걸어 로딩 화면부터 적용되게 하고, 최적화를 끌 때 되돌린다."""
         target = str(options.get('game_exe') or '').lower()
@@ -208,12 +209,13 @@ class Engine:
             else:
                 self.outcome['graphics'] = ('same', '') if result == 'unchanged' else ('ok', '')
             results.append('frl: ' + ('이미 목표값 · 그대로 둠' if result == 'unchanged' else f'최대 프레임 {self.FRL_TARGET} 적용 · 확인 완료'))
-        except LookupError:
+        except GamePathUnknown:
             # 게임 실행 파일 전체 경로를 아직 모름(이름만으로는 다른 프로필이 잡힘): 게임이 보이면 다시 시도한다.
             self.outcome['graphics'] = ('deferred', '마비노기를 한 번 실행하면 적용해요')
         except Exception as exc:
             fail(f'그래픽 효율 미적용·확인 필요: {exc}')
-            reason = str(exc) if isinstance(exc, ValueError) else short_reason(exc)
+            from ..system.nvidia_drs import ProfileNotFound
+            reason = str(exc) if isinstance(exc, (ValueError, ProfileNotFound)) else short_reason(exc)
             if 'NVIDIA' in str(exc) or 'NVAPI' in str(exc):
                 reason = 'NVIDIA 드라이버 설정을 바꾸지 못했어요' if reason == '적용하지 못했어요' else reason
             self.outcome['graphics'] = ('fail', reason)

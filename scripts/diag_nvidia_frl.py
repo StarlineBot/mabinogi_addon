@@ -5,7 +5,7 @@
     uv run python -m scripts.diag_nvidia_frl --write 400     # 400으로 쓰고 다시 읽기(원래 값은 화면에 출력)
     uv run python -m scripts.diag_nvidia_frl --restore none  # 설정 지우기(원래 '설정 없음'이던 경우)
     uv run python -m scripts.diag_nvidia_frl --restore 120   # 원래 값으로 되돌리기
-    uv run python -m scripts.diag_nvidia_frl --own-profile-test  # 앱 프로필에 전체 경로 등록이 되는지(가짜 경로, 끝나면 지움)
+    uv run python -m scripts.diag_nvidia_frl --own-profile-test  # 마비노기 프로필이 아닌 경로엔 쓰지 않는지(가짜 경로)
 확인할 것:
   ① NVAPI 호출이 되는지(함수·구조체 버전), ② 관리자 없이 쓰기가 되는지, ③ NVIDIA 제어판 '프로그램 설정'에 같은 값이 보이는지,
   ④ 게임 실행 중에 쓰면 바로 반영되는지(FPS 표시로 로딩 화면 400 상한) 아니면 게임을 다시 켜야 하는지.
@@ -54,34 +54,18 @@ def main():
 
 
 def own_profile_test():
-    """게임 프로필이 없는 PC에서 앱이 하는 일을 가짜 경로로 재현: 프로필 만들기 → 전체 경로 등록 → 그 경로로 찾기·읽기 → 지우기."""
-    from mabinogi_addon.system.nvidia_drs import FrameLimit, OWN_PROFILE, api
+    """마비노기 프로필에 안 걸리는 경로(가짜)에서 앱이 아무것도 쓰지 않는지: 다른 게임 프로필을 건드리지 않고 ProfileNotFound."""
+    from mabinogi_addon.system.nvidia_drs import FrameLimit, ProfileNotFound, api
     fake = r'C:\StarlineFrlTest\Client.exe'
     nv = api()
-    limit = FrameLimit(nv)
-    with nv.session() as session:
-        before = nv.find_application(session, fake)
-        before = nv.profile_name(session, before) if before is not None else None
-    print('쓰기 전 가짜 경로 프로필:', before or '(없음)', '(앱은 마비노기·앱 프로필이 아니면 쓰지 않음)')
-    try:
-        limit.write([fake], 400)  # 마비노기 프로필이 아니므로 앱 프로필을 만들고 전체 경로를 등록한다
-    except Exception as exc:
-        print('앱 프로필 만들기·등록 실패:', exc)
-        with nv.session() as session:
-            own = nv.find_profile(session, OWN_PROFILE)
-            if own is not None:
-                nv.delete_profile(session, own)
-                nv.save(session)
-                print('남은 앱 프로필을 지웠어요.')
-        return
     with nv.session() as session:
         found = nv.find_application(session, fake)
-        print('쓴 뒤 가짜 경로 프로필:', nv.profile_name(session, found) if found is not None else '(없음)')
-    print('쓴 뒤 다시 읽기:', limit.read([fake]))
-    limit.write([fake], None)
-    with nv.session() as session:
-        print('지운 뒤 앱 프로필:', '(남아 있음)' if nv.find_profile(session, OWN_PROFILE) is not None else '(없음)')
-
+        print('가짜 경로 프로필:', nv.profile_name(session, found) if found is not None else '(없음)')
+    try:
+        FrameLimit(nv).write([fake], 400)
+        print('주의: 가짜 경로에 썼어요 — 결과를 알려 주세요.')
+    except ProfileNotFound as exc:
+        print('정상: 마비노기 프로필이 아니라 쓰지 않았어요 →', exc)
 
 if __name__ == '__main__':
     main()

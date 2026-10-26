@@ -317,7 +317,13 @@ class Recovery:
     def _restore_graphics(self, item):
         """13.6: 지금 값이 적용값이면 원본으로(설정 없음이면 지움). 원본이면 그대로. 제어판에서 다른 값으로 바꿨으면
         덮어쓰지 않고 관리에서 뺀다(사용자 값 존중)."""
-        current = self._read(item['kind'], item['target'], '원복 전 확인')
+        from ..system.nvidia_drs import ProfileNotFound
+        try:
+            current = self._read(item['kind'], item['target'], '원복 전 확인')
+        except ProfileNotFound:
+            item['state'] = 'restored'  # 프로필이 사라짐(드라이버 재설치 등): 되돌릴 설정도 없다
+            self._save()
+            return
         if current == item['applied']:
             self.backend.write(item['kind'], item['target'], item['old'])
             if self._read(item['kind'], item['target'], '원복값 확인') != item['old']:

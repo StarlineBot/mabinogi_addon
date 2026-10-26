@@ -8,7 +8,7 @@ from mabinogi_addon.optimization.engine import Engine
 from mabinogi_addon.optimization.result_summary import summarize
 from mabinogi_addon.optimization.session import Recovery
 from mabinogi_addon.system import nvidia_drs
-from mabinogi_addon.system.nvidia_drs import FRL_FPS_ID, OWN_PROFILE, FrameLimit
+from mabinogi_addon.system.nvidia_drs import FRL_FPS_ID, OWN_PROFILE, FrameLimit, ProfileNotFound
 from mabinogi_addon.ui import optimization_controller as module
 from test_navigation import window  # noqa: F401  (픽스처)
 from test_optimization import Backend, TARGET, _wait
@@ -71,17 +71,6 @@ def test_frame_limit_uses_existing_game_profile_and_deletes_only_the_setting():
     assert drs.profiles['Mabinogi']['settings'] == {FRL_FPS_ID: 400} and limit.read([EXE]) == 400
     limit.write([EXE], None)
     assert drs.profiles['Mabinogi']['settings'] == {} and 'Mabinogi' in drs.profiles and drs.saved == 2
-
-
-def test_frame_limit_creates_own_profile_when_missing_and_removes_it_on_restore():
-    drs = FakeDrs()
-    limit = FrameLimit(drs)
-    limit.write([EXE], 400)
-    assert drs.profiles[OWN_PROFILE] == {'apps': {EXE}, 'settings': {FRL_FPS_ID: 400}}
-    limit.write([EXE], None)
-    assert OWN_PROFILE not in drs.profiles  # 앱이 만든 프로필은 통째로 지운다
-    with pytest.raises(ValueError):
-        limit.write([EXE], 5000)
 
 
 def test_nvidia_gpu_is_none_outside_windows():
@@ -341,27 +330,48 @@ def test_only_graphics_left_after_restart_is_applying_not_restore_wait(window, m
                                      kept_on=c._kept_on) == ('최적화: 적용 중', 'neutral')
 
 
-def test_own_profile_registers_full_path():
-    # QA ③: 앱이 만든 프로필에 이름만 넣으면 사전 정의 'Client.exe'와 겹친다 → 전체 경로로 등록
-    drs = FakeDrs()
-    full = r'C:\Nexon\Mabinogi\Client.exe'
-    added = []
-    original = drs.add_application
-    drs.add_application = lambda session, profile, name: added.append(name) or original(session, profile, name)
-    FrameLimit(drs).write([full], 400)
-    assert added == [full]
-
+# ---- 실측(2026-10-26 --own-profile-test): 다른 게임 'Client.exe' 프로필이 있으면 앱 프로필 등록이 EXECUTABLE_ALREADY_IN_USE ----
 
 def test_other_game_profile_with_same_exe_name_is_never_written():
-    # 실측(2026-10-26): 없는 경로도 사전 정의 'Client.exe'(다른 게임) 프로필로 잡힘 → 그 프로필은 건드리지 않고 앱 프로필을 만든다
     drs = FakeDrs()
     drs.profiles = {'Client.exe': {'apps': {EXE}, 'settings': {}}}
     limit = FrameLimit(drs)
     full = r'D:\Games\Mabinogi\Client.exe'
-    assert limit.read([full]) is None
-    limit.write([full], 400)
-    assert drs.profiles['Client.exe']['settings'] == {}
-    assert drs.profiles[OWN_PROFILE] == {'apps': {full}, 'settings': {FRL_FPS_ID: 400}}
-    assert limit.read([full]) == 400
-    limit.write([full], None)
-    assert OWN_PROFILE not in drs.profiles and drs.profiles['Client.exe']['settings'] == {}
+    with pytest.raises(ProfileNotFound):
+        limit.read([full])
+    with pytest.raises(ProfileNotFound):
+        limit.write([full], 400)
+    assert drs.profiles == {'Client.exe': {'apps': {EXE}, 'settings': {}}} and drs.saved == 0  # 아무것도 안 만들고 안 씀
+    limit.write([full], None)  # 원복은 지울 것이 없으면 조용히 끝
+
+
+def test_leftover_own_profile_from_dev_build_is_removed_on_restore():
+    drs = FakeDrs()
+    drs.profiles[OWN_PROFILE] = {'apps': set(), 'settings': {FRL_FPS_ID: 400}}
+    FrameLimit(drs).write([r'C:\X\Client.exe'], None)
+    assert OWN_PROFILE not in drs.profiles
+
+
+class NoProfileBackend(GraphicsBackend):
+    def read(self, kind, target):
+        if kind == 'frl':
+            raise ProfileNotFound('마비노기 드라이버 프로필을 찾지 못했어요')
+        return super().read(kind, target)
+
+
+def test_no_mabinogi_profile_reports_reason_without_journal_entry(tmp_path):
+    b = NoProfileBackend()
+    r = Recovery(tmp_path / 'j.json', b, lambda: True)
+    e = Engine(b, r, lambda: True)
+    assert e.start(dict(cpu=False, count=None, adapter=None, tcp=False, rss=False, priority=True, auto=False,
+                        graphics=True, game_exe=EXE))
+    assert _wait(lambda: e.outcome.get('graphics') == ('fail', '마비노기 드라이버 프로필을 찾지 못했어요'))
+    assert not r.items and not any(w[0] == 'frl' for w in b.writes)  # 복구 기록에 '실패'가 남지 않음
+    e.stop(); e.thread.join(5)
+
+
+def test_restore_when_profile_disappeared_marks_restored(tmp_path):
+    b = NoProfileBackend()
+    r = Recovery(tmp_path / 'j.json', b, lambda: True)
+    r.items = [dict(kind='frl', target=EXE, old=None, applied=400, state='applied')]
+    assert r.restore(graphics=True) == [] and r.items[0]['state'] == 'restored'

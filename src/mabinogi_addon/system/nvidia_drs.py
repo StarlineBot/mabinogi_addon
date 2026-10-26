@@ -2,7 +2,9 @@
 
 NVIDIA 공식 드라이버 설정 API(NVAPI DRS)로 게임 실행 파일 프로필의 최대 프레임 속도(FRL_FPS)를 읽고 쓴다.
 - 값: None = 프로필에 설정 없음(드라이버 기본 = 제한 없음), 0 = 끔, 그 밖의 정수 = FPS 상한.
-- 게임 프로필이 없으면 앱 이름의 프로필을 만들어 실행 파일을 넣는다(원복 때 앱이 만든 프로필이면 통째로 지운다).
+- 마비노기 프로필(드라이버 사전 정의 'Mabinogi …')에만 쓴다. 없으면 쓰지 않는다(ProfileNotFound).
+  실측(2026-10-26): 같은 이름의 다른 게임 프로필(`Client.exe`)이 있으면 앱 프로필을 만들어 전체 경로를 등록해도
+  NVAPI_EXECUTABLE_ALREADY_IN_USE로 막힌다 — 앱 프로필 방식은 쓰지 않는다. 예전 판이 만든 앱 프로필은 원복 때 지운다.
 - 수직 동기화 등 다른 설정은 건드리지 않는다.
 
 `FrameLimit`은 DRS 기본 동작(`_Nvapi`)만 받아 쓰는 논리 층이라 맥·리눅스에서 가짜 API로 테스트한다.
@@ -12,13 +14,17 @@ from __future__ import annotations
 import sys
 
 FRL_FPS_ID = 0x10835002  # NvApiDriverSettings.h: Frame Rate Limiter(최대 프레임 속도)
-OWN_PROFILE = 'Starline Mabinogi Addon'  # 게임 프로필이 없을 때 앱이 만드는 프로필 이름
+OWN_PROFILE = 'Starline Mabinogi Addon'  # 개발 중 판이 만들었을 수 있는 앱 프로필(원복 때만 찾아 지움)
 
 NVAPI_OK = 0
 NVAPI_SETTING_NOT_FOUND = -160
 NVAPI_PROFILE_NOT_FOUND = -163
 NVAPI_EXECUTABLE_NOT_FOUND = -166
 NVAPI_INCOMPATIBLE_STRUCT_VERSION = -9
+
+
+class ProfileNotFound(LookupError):
+    """이 PC의 드라이버에서 마비노기 프로필을 찾지 못했다(다른 게임 프로필은 건드리지 않는다)."""
 
 
 class GamePathUnknown(LookupError):
@@ -38,11 +44,12 @@ class FrameLimit:
         self.api = api
 
     def read(self, names):
-        """names: 찾아볼 실행 파일 이름(전체 경로 우선). 프로필이 없거나 설정이 없으면 None."""
+        """names: 게임 실행 파일 전체 경로. 설정이 없으면 None. 마비노기 프로필이 없으면 ProfileNotFound
+        (쓰기 전에 알아야 복구 기록에 '실패'가 남지 않는다)."""
         with self.api.session() as session:
             profile = self._find(session, names)
             if profile is None:
-                return None
+                raise ProfileNotFound('마비노기 드라이버 프로필을 찾지 못했어요')
             return self.api.get_setting(session, profile, FRL_FPS_ID)
 
     def write(self, names, value):
@@ -60,9 +67,7 @@ class FrameLimit:
                     self.api.delete_setting(session, profile, FRL_FPS_ID)
             else:
                 if profile is None:
-                    profile = self.api.find_profile(session, OWN_PROFILE) or self.api.create_profile(session, OWN_PROFILE)
-                    # 전체 경로로 등록(0.23.0 QA: 이름만이면 사전 정의 'Client.exe'와 겹치고 같은 이름의 다른 게임에도 걸림)
-                    self.api.add_application(session, profile, names[0])
+                    raise ProfileNotFound('마비노기 드라이버 프로필을 찾지 못했어요')
                 self.api.set_setting(session, profile, FRL_FPS_ID, value)
             self.api.save(session)
 
