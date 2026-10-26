@@ -61,7 +61,8 @@ class FrameLimit:
             else:
                 if profile is None:
                     profile = self.api.find_profile(session, OWN_PROFILE) or self.api.create_profile(session, OWN_PROFILE)
-                    self.api.add_application(session, profile, _basename(names[-1]))
+                    # 전체 경로로 등록(0.23.0 QA: 이름만이면 사전 정의 'Client.exe'와 겹치고 같은 이름의 다른 게임에도 걸림)
+                    self.api.add_application(session, profile, names[0])
                 self.api.set_setting(session, profile, FRL_FPS_ID, value)
             self.api.save(session)
 
@@ -72,9 +73,6 @@ class FrameLimit:
                 return profile
         return None
 
-
-def _basename(name):
-    return str(name).replace('/', '\\').rsplit('\\', 1)[-1].lower()
 
 
 # ---- Windows NVAPI(ctypes) -------------------------------------------------------------------

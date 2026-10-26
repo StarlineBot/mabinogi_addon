@@ -97,7 +97,7 @@ class OptimizationController(QObject):
         self._restarts = []
         self._kept_on = False  # 바꾼 것 없이 켜진 상태는 기록이 없어 재실행하면 꺼짐(13.5)
         # '원복 대기'(확인 필요): 원복을 미뤘거나 실패했거나, 지난 실행에서 되돌리지 못한 기록이 남아 시작한 경우.
-        self._restore_wait = bool(self.recovery.pending or self.recovery.restart_targets)
+        self._restore_wait = self._network_left()  # 원복 대기는 네트워크만(그래픽 효율만 남으면 '적용 중', 0.23.0 QA)
         self._restore_requested = False
         self._reported_source = None
         self._overlay = None
@@ -649,10 +649,15 @@ class OptimizationController(QObject):
             self.engine.status = '원래부터 같은 값이라 되돌릴 것이 없어요.'
         self._sync_optimization_toggle()
 
+    def _network_left(self):
+        """되돌릴 네트워크(패스트핑 등) 변경이 남았는지. '원복 대기'는 연결을 끊어야 하는 네트워크만 해당한다."""
+        return (any(i['kind'] in NETWORK_KINDS for i in self.recovery.pending)
+                or bool(self.recovery.restart_targets))
+
     def _update_restore_wait(self):
         """'원복 대기'(확인 필요) 여부 갱신. 남은 변경이 있는지 돌려준다. 상단 상태·토글이 같은 값을 쓴다."""
         remaining = bool(self.recovery.pending or self.recovery.restart_targets)
-        if not remaining:
+        if not self._network_left():
             self._restore_wait = False
         elif self._restore_requested and not self.engine.busy:
             self._restore_wait = True  # 원복을 요청했는데(거절·실패) 아직 남음 → 확인 필요
@@ -983,10 +988,11 @@ class OptimizationController(QObject):
         self._maybe_auto_inspect()  # 탭에 머문 채 세션이 끝나거나 접근이 생겨도 한 번은 확인
         from collections import Counter
         counts=Counter((item['kind'],item['state']) for item in self.recovery.items)
-        kinds={'cpu':'CPU 배치','priority':'게임 우선순위','ack':'TcpAckFrequency','nodelay':'TCPNoDelay','autotuning':'TCP 자동 조정','rss':'RSS'}
+        kinds={'cpu':'CPU 배치','priority':'게임 우선순위','ack':'TcpAckFrequency','nodelay':'TCPNoDelay','autotuning':'TCP 자동 조정','rss':'RSS',
+               'frl':'그래픽 효율(최대 프레임)'}
         states={'prepared':'적용 확인 필요','applied':'적용됨','failed':'미적용·확인 필요','restored':'원복됨',
                 'released':'외부 변경·관리 제외'}
-        lines=[f'{kinds[kind]} · {states[state]} {count}개' for (kind,state),count in counts.items()]
+        lines=[f'{kinds.get(kind,kind)} · {states.get(state,state)} {count}개' for (kind,state),count in counts.items()]  # 모르는 종류도 멈추지 않게
         if self.recovery.restart_targets: lines.append(f'네트워크 재연결 대기: {len(self.recovery.restart_targets)}개 어댑터')
         # 13.13: 세션 기록·변경 수는 접힌 '자세히 보기'에만(요약에 쓰지 않음)
         details = self.engine.status + ('\n\n' + '\n'.join(lines) if lines else '')

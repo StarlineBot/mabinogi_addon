@@ -304,3 +304,46 @@ def test_applied_while_game_runs_says_next_launch_then_ok_on_new_game(tmp_path):
     assert '✓ 그래픽 효율 · 최대 프레임 400' in summarize(e, r, dict(REQ, auto=True))[2]
     e.stop_and_restore(); e.thread.join(6)
     assert frl(b) is None
+
+
+# ---- 0.23.0 QA 보류 후속 ----
+
+@pytest.mark.parametrize('state', ['applied', 'restored', 'released'])
+def test_tick_survives_frl_record_and_consumes_inspection(window, monkeypatch, state):
+    from test_cpu_layouts import X9800
+    w, c = _controller(window, monkeypatch, None)
+    c.recovery.items = [dict(kind='frl', target=EXE, old=None, applied=400, state=state)]
+    c.engine.inspection, c.engine.inspection_gpu = (X9800, []), 'NVIDIA GeForce RTX 4080'
+    c._tick()  # QA ①: kinds 표에 frl이 없어 KeyError → 상세·환경 확인 반영이 멈췄음
+    assert c.engine.inspection is None and c.panel.split.findData('focus') >= 0
+    assert c.panel.gpu_label.text() == 'NVIDIA GeForce RTX 4080 · 최대 프레임 400'
+    assert '그래픽 효율(최대 프레임)' in c.panel.details.text()
+
+
+def test_only_graphics_left_after_restart_is_applying_not_restore_wait(window, monkeypatch, tmp_path):
+    # QA ②: 그래픽 효율만 남은 채 앱 재시작 → '네트워크 원복 대기'·'원복 대기'(warn)가 아니라 '적용 중'
+    journal = tmp_path / 'recovery.json'
+    journal.write_text(json.dumps(dict(schema=1, restart_targets=[], items=[
+        dict(kind='frl', target=EXE, old=None, applied=400, state='applied')])), encoding='utf-8')
+    w = window[0]
+    c = w.optimization_tools; c.timer.stop()
+    monkeypatch.setattr(module, 'optimization_available', lambda: True)
+    c.recovery = Recovery(journal, GraphicsBackend(400), lambda: True)
+    assert not c.recovery.corrupt
+    c._restore_wait = c._network_left()  # __init__과 같은 규칙
+    c.engine.recovery = c.recovery
+    c.refresh_access(); c._tick()
+    assert c.panel.toggle.text() == '최적화 적용 중'
+    assert module.optimization_badge(c.recovery, c.engine, None, restore_wait=c._restore_wait,
+                                     kept_on=c._kept_on) == ('최적화: 적용 중', 'neutral')
+
+
+def test_own_profile_registers_full_path():
+    # QA ③: 앱이 만든 프로필에 이름만 넣으면 사전 정의 'Client.exe'와 겹친다 → 전체 경로로 등록
+    drs = FakeDrs()
+    full = r'C:\Nexon\Mabinogi\Client.exe'
+    added = []
+    original = drs.add_application
+    drs.add_application = lambda session, profile, name: added.append(name) or original(session, profile, name)
+    FrameLimit(drs).write([full], 400)
+    assert added == [full]
