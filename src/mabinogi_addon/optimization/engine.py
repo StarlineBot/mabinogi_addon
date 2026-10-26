@@ -71,6 +71,7 @@ class Engine:
         self.auto = False
         self.held = False  # 자동 적용 중 Process Lasso Governor 실행으로 보류 중
         self.tcp_at_game_end = False  # 13.15: 미룬 패스트핑을 이번 게임 종료 때 적용했는지(요약에 결과 줄, 아니면 '적용 중' 줄)
+        self._graphics_game = None  # 13.6: 게임 실행 중에 최대 프레임을 쓴 그 게임(다음 게임부터 반영)
         # 결과 요약(13.13): 항목별 지금 결과 {'priority'|'cpu'|'tcp': (상태, 이유)}. 상태: ok·same·fail·released·deferred·restored.
         # phase: 세션 단계 'waiting'(게임 대기)·'applied'(게임에 적용)·'ended'(자동 적용 중 게임 종료 → 되돌림)·'held'(Governor 보류).
         self.outcome = {}
@@ -198,8 +199,14 @@ class Engine:
                 self.outcome['graphics'] = ('low', '')
                 results.append(f'frl: 이미 {current} 제한 · 그대로 둠')
                 return
+            running = self.backend.game()
             result = self.recovery.apply('frl', target, self.FRL_TARGET)
-            self.outcome['graphics'] = ('same', '') if result == 'unchanged' else ('ok', '')
+            if result != 'unchanged' and running is not None:
+                # 실측(2026-10-26): 드라이버 프로필은 게임을 다시 켜야 반영된다 → 지금 게임에는 아직 아님
+                self._graphics_game = (running['pid'], running.get('birth'))
+                self.outcome['graphics'] = ('next', '다음 게임 실행부터 적용돼요')
+            else:
+                self.outcome['graphics'] = ('same', '') if result == 'unchanged' else ('ok', '')
             results.append('frl: ' + ('이미 목표값 · 그대로 둠' if result == 'unchanged' else f'최대 프레임 {self.FRL_TARGET} 적용 · 확인 완료'))
         except LookupError:
             # 게임 실행 파일 전체 경로를 아직 모름(이름만으로는 다른 프로필이 잡힘): 게임이 보이면 다시 시도한다.
@@ -268,6 +275,7 @@ class Engine:
         self.auto = bool(options.get('auto'))
         self.held = False
         self.tcp_at_game_end = False
+        self._graphics_game = None
         self.outcome, self.phase, self.ran = {}, None, True
         options = dict(options)
         def work():
@@ -415,6 +423,9 @@ class Engine:
                     self.tcp_at_game_end = False
                     if options.get('graphics') and self.outcome.get('graphics', ('',))[0] == 'deferred':
                         self._apply_graphics(options, results, fail)  # 13.6: 게임을 봤으니 전체 경로로 다시
+                    elif (self.outcome.get('graphics', ('',))[0] == 'next'
+                          and (observed['pid'], observed.get('birth')) != self._graphics_game):
+                        self.outcome['graphics'] = ('ok', '')  # 새로 켠 게임부터 적용됨
                     for key in ('priority', 'cpu'):
                         if self.outcome.get(key, ('',))[0] == 'restored':
                             del self.outcome[key]

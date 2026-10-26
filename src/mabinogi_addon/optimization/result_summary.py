@@ -33,6 +33,8 @@ def _line(key, label, state, reason):
             return '✓ 그래픽 효율 · 최대 프레임 400'
         if state == 'low':
             return '✓ 그래픽 효율 · 이미 400 이하라 그대로 뒀어요'
+        if state == 'next':
+            return '• 그래픽 효율 · 다음 게임 실행부터 적용돼요'  # 실측: 드라이버 설정은 게임을 다시 켜야 반영
     if state == 'ok':
         return f'✓ {label}'
     if state == 'same':

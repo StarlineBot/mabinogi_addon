@@ -275,7 +275,32 @@ def test_unknown_game_path_defers_until_game_is_seen(tmp_path):
     assert _wait(lambda: e.outcome.get('graphics') == ('deferred', '마비노기를 한 번 실행하면 적용해요') and e.phase == 'waiting')
     assert frl(b) is None and not r.items
     b.current[0] = TARGET
-    assert _wait(lambda: e.outcome.get('graphics') == ('ok', '') and frl(b) == 400, 6)
-    assert '✓ 그래픽 효율 · 최대 프레임 400' in summarize(e, r, REQ)[2]
+    # 경로를 안 시점에는 이미 게임이 실행 중 → 이 게임은 다음 실행부터(실측: 다시 켜야 반영)
+    assert _wait(lambda: e.outcome.get('graphics', ('',))[0] == 'next' and frl(b) == 400, 6)
+    assert '• 그래픽 효율 · 다음 게임 실행부터 적용돼요' in summarize(e, r, REQ)[2]
+    e.stop_and_restore(); e.thread.join(6)
+    assert frl(b) is None
+
+
+# ---- 실측(2026-10-26): 실행 중인 게임에는 바로 반영되지 않고 게임을 다시 켜야 400 상한 ----
+
+def test_applied_while_game_runs_says_next_launch_then_ok_on_new_game(tmp_path):
+    from test_optimization_auto import SECOND
+    b = GraphicsBackend()
+    b.current[0] = TARGET  # 게임 실행 중에 시작
+    b.values[('priority', json.dumps(SECOND, sort_keys=True))] = 0x20
+    r = Recovery(tmp_path / 'j.json', b, lambda: True)
+    e = Engine(b, r, lambda: True)
+    assert e.start(dict(cpu=False, count=None, adapter=None, tcp=False, rss=False, priority=True, auto=True,
+                        graphics=True, game_exe=EXE))
+    e.auto = True
+    assert _wait(lambda: e.outcome.get('graphics') == ('next', '다음 게임 실행부터 적용돼요') and e.phase == 'applied')
+    assert frl(b) == 400
+    assert '• 그래픽 효율 · 다음 게임 실행부터 적용돼요' in summarize(e, r, dict(REQ, auto=True))[2]
+    b.current[0] = None
+    assert _wait(lambda: e.phase == 'ended', 6)
+    b.current[0] = SECOND  # 다시 켠 게임부터 적용
+    assert _wait(lambda: e.phase == 'applied' and e.outcome.get('graphics') == ('ok', ''), 6)
+    assert '✓ 그래픽 효율 · 최대 프레임 400' in summarize(e, r, dict(REQ, auto=True))[2]
     e.stop_and_restore(); e.thread.join(6)
     assert frl(b) is None
