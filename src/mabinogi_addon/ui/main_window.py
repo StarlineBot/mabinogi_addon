@@ -180,6 +180,7 @@ class MainWindow(QMainWindow):
         from ..setup_state import initialize_new_user
         initialize_new_user()
         config.migrate_default_buff_names()
+        config.migrate_default_debuff_icons()  # 0.24.0: 같은 이름 사용자 아이콘 → 새 기본(원본 16px)
         self._restore_window_pos()  # 저장된 창 위치 복원(없으면 화면 중앙)
 
         # 포그라운드 감지(맥=항상 활성). 저장된 게임 실행파일로 판정(없으면 제목 폴백).

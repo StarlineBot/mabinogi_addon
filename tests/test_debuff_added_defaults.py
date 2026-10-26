@@ -1,11 +1,11 @@
-"""개발 데이터(devdata) 디버프 아이콘의 원본 16px 교체 회귀(2026-10-26 사용자 요청: 슈터스 아이·마기그래프·공격력 감소·집중 도발).
+"""0.24.0에 기본 제공으로 추가한 디버프 4종(공격력 감소·마기그래프·슈터스 아이·집중 도발, 2026-10-26 사용자 결정).
 
-슈터스 아이·마기그래프는 기본 제공이 아니라 devdata에만 있다. 예전 28px 이미지는 흐려서
-슈터스 아이가 이름 미확정 슬롯(U14)에 0.67, 마기그래프가 모모 슬롯에 0.755(감지 기준 0.68 이상)까지
-올랐다. 보스 디버프 줄 원본 픽셀(2560x1440)로 바꾸고, 정답은 그대로 잡으면서 다른 아이콘 슬롯에
-감지 기준을 넘지 않는지 고정한다.
+원래 개발 데이터(devdata)에만 있던 사용자 아이콘이라 앱에는 없었다. 게임 원본 16px로 판독하고, 예전 흐린 28px는
+다른 기본 디버프처럼 오버레이 표시용(image/)으로 보존한다. 예전 그림은 슈터스 아이가 이름 미확정 칸(U14)에 0.67,
+마기그래프가 모모 칸에 0.755(감지 기준 0.68 이상)까지 올랐다. 정답은 잡고 다른 아이콘 칸에선 기준을 넘지 않는지 고정한다.
 """
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -15,7 +15,8 @@ from mabinogi_addon import image_io
 from mabinogi_addon.tracker.debuff_engine import DebuffEngine
 
 ROOT = Path(__file__).resolve().parents[1]
-ICONS = ROOT / "devdata/debuff/icon"
+ICONS = ROOT / "src/mabinogi_addon/assets/debuff/icon"
+IMAGES = ROOT / "src/mabinogi_addon/assets/debuff/image"
 SOURCE = ROOT / "tests/data/스크린샷 2026-10-25 150822.png"
 MANIFEST = json.loads((ROOT / "docs/qa/assets/debuff_native_20261016/manifest.json").read_text(encoding="utf-8"))
 NAMES = {item["id"]: item["name"] for item in MANIFEST["icons"]}
@@ -67,3 +68,18 @@ def test_native_icon_stays_below_threshold_on_other_identified_slots(name):
             x = x0 + index * scene["stride"]
             score = runtime.best_scores(frame[y - 2:y + 18, x - 2:x + 18])[name]
             assert score < threshold, (name, scene["id"], index, label, score)
+
+
+# 예전(devdata) 28px의 Git blob — 표시용으로 바이트 그대로 보존
+OLD_BLOBS = {"슈터스 아이": "d844443fd25ce4a8fd9b750e55df6226296ef6eb", "마기그래프": "c5d0465c6a22d4ff16ae6d1bb5cfd61770d1abea",
+             "공격력 감소": "537fe852c085b7afa11e3aa95543a5dafe1211d2", "집중 도발": "52634ea367a21ec1e51845e2c2e400b402585c90"}
+
+
+@pytest.mark.parametrize("name", sorted(OLD_BLOBS))
+def test_added_default_is_bundled_with_old_picture_for_display(name):
+    from mabinogi_addon import catalog
+    item = {b.id: b for b in catalog.load_debuff_catalog(icon_dirs=(catalog.DEFAULT_DEBUFF_ICON_DIR,))}[name]
+    assert item.match_icon == ICONS / f"{name}.png" and image_io.imread(item.match_icon).shape == (16, 16, 3)
+    raw = item.display_image.read_bytes()
+    assert hashlib.sha1(f"blob {len(raw)}\0".encode() + raw).hexdigest() == OLD_BLOBS[name]
+    assert name in catalog.DEFAULT_DEBUFF_ORDER

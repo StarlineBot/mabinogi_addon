@@ -66,6 +66,7 @@ def test_current_plan_matches_bundled_release_and_changed_features():
         'tests/test_optimization_recommend.py', 'tests/test_guide_images.py', 'tests/test_setup.py',
         'tests/test_optimization_public.py', 'tests/test_game_restart_reset.py',
         'tests/test_graphics_efficiency.py', 'tests/test_debuff_native_icons.py', 'tests/test_crescendo_native.py',
-        'tests/test_debuff_engine.py', 'tests/test_debuff_identity.py', 'tests/test_debuff_devdata_native.py',
+        'tests/test_debuff_engine.py', 'tests/test_debuff_identity.py', 'tests/test_debuff_added_defaults.py',
+        'tests/test_debuff_icon_migration.py',
     })
     assert set(paths) == expected

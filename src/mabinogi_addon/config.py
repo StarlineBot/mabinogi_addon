@@ -635,6 +635,53 @@ def migrate_default_buff_names(path: Path | None = None) -> bool:
     return True
 
 
+def migrate_default_debuff_icons(path: Path | None = None, *, user_dir: Path | None = None,
+                                 default_ids: set[str] | None = None) -> bool:
+    """0.24.0 일회 이관: 기본 디버프와 같은 이름의 사용자 아이콘을 치워 새 기본(게임 원본 16px)을 쓰게 한다.
+
+    사용자 아이콘은 같은 이름의 기본 아이콘을 덮어쓰므로(catalog._collect), 예전에 직접 등록한 흐린 그림이
+    남아 있으면 새 기본이 적용되지 않는다. 지우지 않고 `debuff/icon_backup_0.24.0`으로 옮긴다(목록에서는 빠짐).
+    표시 이름·순서·알림 등 설정(config)은 id가 같아 그대로 이어진다. 하나라도 못 옮기면 표시를 남기지 않고 다음 실행에서 다시 한다."""
+    from .catalog import USER_DEBUFF_ICON_DIR, default_debuff_ids
+
+    path = LOCAL_CONFIG_PATH if path is None else path
+    user_dir = USER_DEBUFF_ICON_DIR if user_dir is None else user_dir
+    default_ids = default_debuff_ids() if default_ids is None else default_ids
+    data = _read_local_config_document(path)
+    if data is None:
+        return False  # 읽지 못한 설정을 표시만 있는 문서로 바꾸지 않는다.
+    marker = "defaultDebuffIconsNativeMigrated"
+    if data.get(marker) is True:
+        return True
+    log = logging.getLogger(__name__)
+    backup = user_dir.parent / "icon_backup_0.24.0"
+    ok = True
+    for icon in sorted(user_dir.glob("*.png")) if user_dir.is_dir() else []:
+        if icon.stem not in default_ids:
+            continue  # 사용자가 새로 만든 디버프는 그대로
+        try:
+            backup.mkdir(parents=True, exist_ok=True)
+            target = backup / icon.name
+            n = 2
+            while target.exists():
+                target = backup / f"{icon.stem} ({n}).png"
+                n += 1
+            shutil.move(str(icon), str(target))
+            log.info("기본 디버프 아이콘 이관: %s → %s", icon.name, target)
+        except OSError:
+            ok = False
+            log.warning("기본 디버프 아이콘 이관 실패: %s(다음 실행에서 재시도)", icon.name, exc_info=True)
+    if not ok:
+        return False
+    data[marker] = True
+    try:
+        _write_local_config(data, path)
+    except OSError:
+        log.warning("기본 디버프 아이콘 이관 표시 저장 실패; 다음 실행에서 재시도")
+        return False
+    return True
+
+
 def seed_warn_gone_defaults(
     sound_ids: set[str], path: Path = LOCAL_CONFIG_PATH
 ) -> None:

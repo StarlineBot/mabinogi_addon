@@ -1,5 +1,5 @@
 {
-  "version": "0.23.1",
+  "version": "0.24.0",
   "tests": [
     "tests/test_blackbox.py",
     "tests/test_blackbox_access.py",
@@ -50,6 +50,7 @@
     "tests/test_crescendo_native.py",
     "tests/test_debuff_engine.py",
     "tests/test_debuff_identity.py",
-    "tests/test_debuff_devdata_native.py"
+    "tests/test_debuff_added_defaults.py",
+    "tests/test_debuff_icon_migration.py"
   ]
 }
