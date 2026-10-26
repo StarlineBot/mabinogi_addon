@@ -272,8 +272,11 @@ class WindowsOptimization:
         return nvidia_gpu()
 
     def _frl_names(self, target):
-        """드라이버 프로필을 찾을 이름: 실행 중인 게임의 전체 경로(같은 이름일 때, 사전 정의 프로필의 폴더 조건 대응) → 실행 파일 이름."""
-        names = []
+        """드라이버 프로필을 찾을 이름: 게임 실행 파일의 **전체 경로**만 쓴다(0.23.0 실측: 이름만으로 찾으면
+        `client.exe`가 다른 사전 정의 프로필 `Client.exe`로 잡히고, 전체 경로여야 `Mabinogi / Luo Qi`가 잡힌다).
+        실행 중이면 그 경로를 기억해 두고, 꺼져 있으면 기억한 경로를 쓴다. 둘 다 없으면 GamePathUnknown."""
+        from .. import config
+        from .nvidia_drs import GamePathUnknown
         try:
             game = self.game()
             if game is not None:
@@ -282,10 +285,14 @@ class WindowsOptimization:
                     length = wintypes.DWORD(len(path))
                     if kernel.QueryFullProcessImageNameW(handle, 0, path, ctypes.byref(length)):
                         if path.value.replace('/', '\\').rsplit('\\', 1)[-1].lower() == target:
-                            names.append(path.value)
+                            config.save_game_image_path(path.value)
+                            return [path.value]
         except Exception:
             pass
-        return names + [target]
+        saved = config.load_game_image_path()
+        if saved and saved.replace('/', '\\').rsplit('\\', 1)[-1].lower() == target:
+            return [saved]
+        raise GamePathUnknown('게임 실행 파일 위치를 아직 몰라요. 마비노기를 한 번 실행하면 적용해요.')
 
     def topology(self):
         self._windows()

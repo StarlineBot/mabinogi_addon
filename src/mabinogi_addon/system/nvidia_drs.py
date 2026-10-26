@@ -21,6 +21,10 @@ NVAPI_EXECUTABLE_NOT_FOUND = -166
 NVAPI_INCOMPATIBLE_STRUCT_VERSION = -9
 
 
+class GamePathUnknown(LookupError):
+    """게임 실행 파일 전체 경로를 아직 모른다(한 번도 실행 중인 게임을 보지 못함). 게임을 보면 다시 시도한다."""
+
+
 class NvapiError(OSError):
     def __init__(self, operation, status, message=''):
         self.status = status

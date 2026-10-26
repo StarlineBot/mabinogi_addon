@@ -234,3 +234,48 @@ def test_turning_off_with_only_graphics_left_asks_no_network_question(window, mo
     monkeypatch.setattr(c.engine, 'stop_and_restore', lambda **k: calls.append(k))
     c._restore_all()
     assert not asked and calls == [dict(network=False, accept_normalized=False, network_deferred=False)]
+
+
+# ---- 0.23.0 Windows 실측 후속: 이름만으로 찾으면 다른 프로필(`Client.exe`)이 잡힘 → 전체 경로만 ----
+
+def test_profile_lookup_uses_only_full_path_and_remembers_it(monkeypatch, tmp_path):
+    from mabinogi_addon import config
+    from mabinogi_addon.system.nvidia_drs import GamePathUnknown
+    from mabinogi_addon.system.optimization import WindowsOptimization
+    path = tmp_path / 'c.json'
+    read, write = config._read_local_config, config._write_local_config
+    monkeypatch.setattr(config, '_read_local_config', lambda *a, **k: read(path))
+    monkeypatch.setattr(config, '_write_local_config', lambda data, *a, **k: write(data, path))
+    backend = WindowsOptimization()
+    backend.game = lambda: None  # 게임 꺼짐
+    with pytest.raises(GamePathUnknown):
+        backend._frl_names(EXE)  # 한 번도 본 적 없으면 이름만으로 찾지 않는다
+    config.save_game_image_path(r'C:\Nexon\Mabinogi\Client.exe')
+    assert backend._frl_names(EXE) == [r'C:\Nexon\Mabinogi\Client.exe']
+    with pytest.raises(GamePathUnknown):
+        backend._frl_names('other.exe')  # 다른 실행 파일 이름이면 기억한 경로를 쓰지 않는다
+
+
+class PathUnknownBackend(GraphicsBackend):
+    def read(self, kind, target):
+        if kind == 'frl' and self.current[0] is None and not getattr(self, 'seen', False):
+            from mabinogi_addon.system.nvidia_drs import GamePathUnknown
+            raise GamePathUnknown('위치 모름')
+        if kind == 'frl':
+            self.seen = True
+        return super().read(kind, target)
+
+
+def test_unknown_game_path_defers_until_game_is_seen(tmp_path):
+    b = PathUnknownBackend()
+    r = Recovery(tmp_path / 'j.json', b, lambda: True)
+    e = Engine(b, r, lambda: True)
+    assert e.start(dict(cpu=False, count=None, adapter=None, tcp=False, rss=False, priority=True, auto=False,
+                        graphics=True, game_exe=EXE))
+    assert _wait(lambda: e.outcome.get('graphics') == ('deferred', '마비노기를 한 번 실행하면 적용해요') and e.phase == 'waiting')
+    assert frl(b) is None and not r.items
+    b.current[0] = TARGET
+    assert _wait(lambda: e.outcome.get('graphics') == ('ok', '') and frl(b) == 400, 6)
+    assert '✓ 그래픽 효율 · 최대 프레임 400' in summarize(e, r, REQ)[2]
+    e.stop_and_restore(); e.thread.join(6)
+    assert frl(b) is None

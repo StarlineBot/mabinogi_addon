@@ -201,6 +201,9 @@ class Engine:
             result = self.recovery.apply('frl', target, self.FRL_TARGET)
             self.outcome['graphics'] = ('same', '') if result == 'unchanged' else ('ok', '')
             results.append('frl: ' + ('이미 목표값 · 그대로 둠' if result == 'unchanged' else f'최대 프레임 {self.FRL_TARGET} 적용 · 확인 완료'))
+        except LookupError:
+            # 게임 실행 파일 전체 경로를 아직 모름(이름만으로는 다른 프로필이 잡힘): 게임이 보이면 다시 시도한다.
+            self.outcome['graphics'] = ('deferred', '마비노기를 한 번 실행하면 적용해요')
         except Exception as exc:
             fail(f'그래픽 효율 미적용·확인 필요: {exc}')
             reason = str(exc) if isinstance(exc, ValueError) else short_reason(exc)
@@ -410,6 +413,8 @@ class Engine:
                 if self.phase in ('waiting', 'ended', None):
                     self.phase = 'applied'
                     self.tcp_at_game_end = False
+                    if options.get('graphics') and self.outcome.get('graphics', ('',))[0] == 'deferred':
+                        self._apply_graphics(options, results, fail)  # 13.6: 게임을 봤으니 전체 경로로 다시
                     for key in ('priority', 'cpu'):
                         if self.outcome.get(key, ('',))[0] == 'restored':
                             del self.outcome[key]

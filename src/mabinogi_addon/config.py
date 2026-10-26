@@ -830,6 +830,25 @@ def save_game_exe(exe: str, path: Path = LOCAL_CONFIG_PATH) -> None:
     _write_local_config(data, path)
 
 
+def load_game_image_path(path: Path = LOCAL_CONFIG_PATH) -> str | None:
+    """마지막으로 본 게임 실행 파일 전체 경로(13.6: 드라이버 프로필을 폴더까지 맞춰 찾기용). 없으면 None."""
+    g = _read_local_config(path).get("general") or {}
+    value = g.get("gameImagePath")
+    return value if isinstance(value, str) and 0 < len(value) <= 1024 and value.lower().endswith(".exe") else None
+
+
+def save_game_image_path(image: str, path: Path = LOCAL_CONFIG_PATH) -> None:
+    data = _read_local_config(path)
+    g = data.get("general")
+    if not isinstance(g, dict):
+        g = {}
+    if g.get("gameImagePath") == image:
+        return
+    g["gameImagePath"] = image
+    data["general"] = g
+    _write_local_config(data, path)
+
+
 def set_buff_scale(pct: int, path: Path = LOCAL_CONFIG_PATH) -> None:
     _, debuff = load_overlay_scales(path)
     save_overlay_scales(pct, debuff, path)

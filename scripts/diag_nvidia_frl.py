@@ -33,10 +33,10 @@ def main():
     nv = api()
     print('그래픽카드:', nv.gpu_names())
     backend = WindowsOptimization()
-    names = backend._frl_names(exe)
-    print('찾는 이름:', names)
+    names = backend._frl_names(exe)  # 앱과 같은 규칙: 실행 중이거나 기억한 전체 경로만
+    print('앱이 쓰는 이름:', names)
     with nv.session() as session:
-        for name in names:
+        for name in names + [exe]:  # 비교용으로 이름만으로 찾은 프로필도 보여준다(앱은 쓰지 않음)
             profile = nv.find_application(session, name)
             print(f'  {name} → 프로필:', nv.profile_name(session, profile) if profile is not None else '(없음)')
     limit = FrameLimit(nv)
