@@ -61,7 +61,7 @@
   → 게임 실행 중에 쓰면 `• 그래픽 효율 · 다음 게임 실행부터 적용돼요`, 그 뒤 새로 켠 게임(다른 PID)을 보면 `✓ 그래픽 효율 · 최대 프레임 400`. 회귀 추가.
   남은 실측: 관리자 없이 쓰기(참고), 제어판 표시 일치, 로딩 시간 비교(공개 조건). 실측 뒤 `--restore none`으로 되돌림 Confirmed(다시 읽기 None).
   **공개 조건 판정(2026-10-26 사용자)**: 메인스트림 동영상 로딩이 400 상한에서 제한 없음과 큰 차이 없음(체감) → 화면 확정대로 공개(추천·자동 적용 포함 유지). 0.23.0 Windows 검증 대기.
-  **QA 0.23.0(e82a19f~043c61a) 보류 — 개발 수정 필요**. NVAPI 함수 ID·`FRL_FPS_ID`·SETTING/PROFILE/APPLICATION V1 구조체 크기는 헤더와 일치(실측 1차와 같음).
+  **QA 0.23.0(e82a19f~043c61a) 보류 — 개발 수정 필요**(테스트는 통과: 전체 3193 passed/26 skipped, release checks 0.23.0 912 passed — 아래 ①②는 기존 테스트가 못 잡음). NVAPI 함수 ID·`FRL_FPS_ID`·SETTING/PROFILE/APPLICATION V1 구조체 크기는 헤더와 일치(실측 1차와 같음).
   ① **Confirmed(재현)**: `optimization_controller._tick`의 상세 기록 `kinds` 표에 `frl`이 없어 그래픽 효율 기록(적용·원복·관리 제외 무엇이든 items에 있으면)이 생긴 뒤
   **매 틱(250ms) `KeyError: 'frl'`**. 그 줄 뒤의 `자세히 보기` 갱신과 **환경 확인 결과 반영(`engine.inspection` 소비·CPU 배치·연결·그래픽카드 표시)이 멈춤**
   → NVIDIA PC에서 자동 적용이 앱 시작 때 400을 쓰면 0.22.1에서 고친 '환경 확인 결과 표시'가 다시 안 보임. app.log에 미처리 예외 반복(throttle). 기존 테스트는 기록을 틱 뒤에 넣어 못 잡음.
