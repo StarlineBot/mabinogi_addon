@@ -53,6 +53,7 @@
     "tests/test_debuff_added_defaults.py",
     "tests/test_debuff_icon_migration.py",
     "tests/test_status_icons.py",
-    "tests/test_tracker_layout.py"
+    "tests/test_tracker_layout.py",
+    "tests/test_tray_status.py"
   ]
 }

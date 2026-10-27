@@ -758,6 +758,7 @@ class MainWindow(QMainWindow):
             return
         self._maybe_retry_live_capture()
         self._check_game_process()
+        self._update_tray_tooltip()
         self.buff_tab.set_status(*self._buff_status())
         self.debuff_tab.set_status(*self._debuff_status())
         # 사라짐 경고 가능 여부 안내. 방식과 무관하게 '디버프 영역에서 띠를 한 번이라도
@@ -1607,7 +1608,18 @@ class MainWindow(QMainWindow):
             return None
         tray = QSystemTrayIcon(app_icon(), self)
         tray.setToolTip(config.APP_NAME)
+        tray.setContextMenu(self._build_tray_menu())
+        tray.activated.connect(self._on_tray_activated)
+        tray.show()
+        return tray
+
+    def _build_tray_menu(self) -> QMenu:
         menu = QMenu()
+        # 2026-10-27 사용자 결정: 맨 위 상태 줄(상단 배지와 같은 문구·색), 앞 점은 직접 그린 색 원. 아이콘 왼쪽 여백(렌더 선택).
+        menu.setStyleSheet("QMenu::icon{margin-left:12px;}")
+        self._tray_status_acts = []
+        self._tray_status_sep = menu.addSeparator()
+        menu.aboutToShow.connect(self._refresh_tray_menu)
         open_act = QAction("열기", self)
         open_act.triggered.connect(self._show_from_tray)
         # 글자가 상태를 말하므로 체크표시 대신 라벨을 토글(⏸ 정지 ↔ ▶ 다시 시작).
@@ -1622,10 +1634,82 @@ class MainWindow(QMainWindow):
         menu.addAction(self._pause_act)
         menu.addSeparator()
         menu.addAction(quit_act)
-        tray.setContextMenu(menu)
-        tray.activated.connect(self._on_tray_activated)
-        tray.show()
-        return tray
+        return menu
+
+    def _tray_status_lines(self) -> list[tuple[str, str, str]]:
+        """트레이 상태 줄 (키, 문구, 색): 전투 보조는 항상, 블랙박스·최적화는 상단 배지가 보일 때만(같은 문구·색)."""
+        import re
+        text, color = self._overlay_status()
+        lines = [("combat", text.removeprefix("● "), color)]
+        for key, badge in (("blackbox", getattr(self, "_blackbox_badge", None)),
+                           ("optimization", getattr(self, "_optimization_badge", None))):
+            if badge is None or badge.isHidden() or not badge.text():
+                continue
+            found = re.search(r"color:\s*(#[0-9a-fA-F]{6})", badge.styleSheet())
+            lines.append((key, badge.text().removeprefix("● "), found.group(1) if found else self._STATUS_MUTED))
+        return lines
+
+    @staticmethod
+    def _dot_icon(color: str) -> QIcon:
+        """메뉴 상태 줄 앞 색 원(글꼴의 ● 대신 직접 그림 — 이모지 글꼴 대체 방지)."""
+        from PySide6.QtGui import QColor, QPixmap
+        pixmap = QPixmap(32, 32)
+        pixmap.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(color))
+        painter.drawEllipse(9, 9, 14, 14)
+        painter.end()
+        return QIcon(pixmap)
+
+    def _refresh_tray_menu(self) -> None:
+        """메뉴를 열 때 상태 줄을 새로 만든다(맨 위, 구분선 앞). 누르면 창을 열고 해당 탭으로."""
+        if self._tray is None:
+            return
+        menu = self._tray.contextMenu()
+        for act in self._tray_status_acts:
+            menu.removeAction(act)
+            act.deleteLater()
+        self._tray_status_acts = []
+        for key, text, color in self._tray_status_lines():
+            act = QAction(self._dot_icon(color), text, menu)
+            act.triggered.connect(lambda _=False, key=key: self._open_status_tab(key))
+            menu.insertAction(self._tray_status_sep, act)
+            self._tray_status_acts.append(act)
+
+    def _open_status_tab(self, key: str) -> None:
+        self._show_from_tray()
+        if key == "blackbox":
+            self.blackbox_tools._open_tab()
+        elif key == "optimization":
+            self.optimization_tools._open_tab()
+        else:
+            self._tabs.setCurrentIndex(0)  # 전투 보조
+
+    def _update_tray_tooltip(self) -> None:
+        """마우스 올림 툴팁: 앱 이름 + 보이는 상태 줄(줄바꿈). 바뀔 때만 설정한다."""
+        if self._tray is None:
+            return
+        tip = "\n".join([config.APP_NAME] + [text for _key, text, _color in self._tray_status_lines()])
+        if tip != getattr(self, "_tray_tip", None):
+            self._tray_tip = tip
+            self._tray.setToolTip(tip)
+
+    def _tray_minimized_message(self) -> str:
+        """트레이로 숨길 때 알림 본문: 실제로 계속 도는 것만 알린다."""
+        running = []
+        tools = getattr(self, "blackbox_tools", None)
+        if getattr(getattr(tools, "service", None), "enabled", False):
+            running.append("블랙박스 보관")
+        badge = getattr(self, "_optimization_badge", None)
+        if badge is not None and not badge.isHidden() and badge.text():
+            running.append("최적화")
+        lines = ["트레이로 최소화했어요."]
+        if running:
+            lines.append(f"{'과 '.join(running) if len(running) == 2 else running[0]}{'는' if running[-1] == '최적화' else '은'} 계속 동작해요.")
+        lines.append("트레이 아이콘을 누르면 다시 열려요.")
+        return "\n".join(lines)
 
     def _on_tray_activated(self, reason) -> None:
         # 트레이 아이콘 클릭·더블클릭 → 창 복귀
@@ -1686,11 +1770,7 @@ class MainWindow(QMainWindow):
             self._pause_act.setToolTip(tip)
             self._pause_act.setText("전투 보조 재개" if paused else "전투 보조 일시정지")
         self._update_header_status()
-        if self._tray is not None:
-            self._tray.setToolTip(
-                f"{config.APP_NAME} — 오버레이 정지됨"
-                if paused else config.APP_NAME
-            )
+        self._update_tray_tooltip()
         from .toast import show_toast
 
         if paused:
@@ -1844,8 +1924,8 @@ class MainWindow(QMainWindow):
             self.hide()
             if self._tray is not None:
                 self._tray.showMessage(
-                    "마비노기 버프 트래커",
-                    "트레이로 최소화됨. 트레이 아이콘으로 열거나 종료하세요.",
+                    config.APP_NAME,
+                    self._tray_minimized_message(),
                     app_icon(),
                     2000,
                 )
