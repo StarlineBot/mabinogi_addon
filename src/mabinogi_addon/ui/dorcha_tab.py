@@ -18,6 +18,21 @@ from .widgets import checkbox, hint_label
 _log = logging.getLogger(__name__)
 
 
+
+def _note_dorcha(trace, value):
+    """버그 문의 진단에 최근 판독 결과(값 또는 거절 이유)를 남기고, 바뀔 때만 app.log에 한 줄."""
+    global _last_dorcha_state
+    from .. import diagnostics
+    text = diagnostics.describe_dorcha(trace, value)
+    state = "읽음" if value is not None else trace.get("rejection")
+    if state != _last_dorcha_state:  # 읽힘 ↔ 거절 이유가 바뀔 때만(값이 바뀔 때마다 남기지 않음)
+        _last_dorcha_state = state
+        _log.info("도르카 판독: %s", text)
+    diagnostics.note("도르카 최근 판독", text)
+
+
+_last_dorcha_state = None
+
 class DorchaTab(QWidget):
     def __init__(self, watcher):
         super().__init__()
@@ -344,7 +359,9 @@ class DorchaTab(QWidget):
                 self._invalidate_search()
                 self._tracking_lost = True
             else:
-                value = read_dorcha(frame)
+                trace = {}
+                value = read_dorcha(frame, trace)
+                _note_dorcha(trace, value)
                 if value is not None and target is not None:
                     self._live_box, self._live_target = box, target
         self._set_value(value)
@@ -370,12 +387,14 @@ class DorchaTab(QWidget):
         if frame is None or frame.shape[:2] != (bottom-top,right-left) or self._search_target() != target:
             return None
         from ..detect.dorcha_anchor import locate_dorcha
+        trace = {}
         try:
-            found = locate_dorcha(frame)
+            found = locate_dorcha(frame, diagnostics=trace)
         except Exception:
             _log.warning("도르카 초기 영역 검증 실패",exc_info=True)
             return None
         if found is None:
+            _note_dorcha(trace, None)
             return None
         fx,fy,fw,fh = found
         current = (left+fx,top+fy,fw,fh)

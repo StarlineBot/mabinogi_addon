@@ -11,6 +11,29 @@ import platform
 import sys
 
 
+# 실행 중 최근 상태 메모(2026-10-27 도르카 문의: 영역·거절 이유가 진단에 없어 원인을 몰랐음). 키 → 한 줄.
+_NOTES: dict[str, str] = {}
+
+
+def note(key: str, text: str) -> None:
+    """진단 헤더에 붙일 최근 상태 한 줄을 기록한다(같은 키는 덮어씀)."""
+    _NOTES[key] = text
+
+
+def describe_dorcha(trace: dict, value) -> str:
+    """도르카 판독 결과를 한 줄로: 읽은 값, 또는 거절 이유와 점수."""
+    if value is not None:
+        return f"읽음 {value}" + (" (장식 낮은 점수 인정)" if trace.get("soft_ornament") else "")
+    reason = trace.get("rejection") or "알 수 없음"
+    parts = [reason]
+    if "score" in trace:
+        parts.append(f"숫자 점수 {trace['score']:.3f}·차이 {trace.get('margin', 0):.3f}")
+    scores = [c.get("score", 0) for c in trace.get("candidates", []) if isinstance(c, dict)]
+    if scores:
+        parts.append(f"장식 최고 {max(scores):.3f}")
+    return "거절 · " + " · ".join(parts)
+
+
 def _region_line(section: str) -> str:
     from . import config
 
@@ -48,8 +71,11 @@ def header_text() -> str:
         box = config.load_tuarim().get("box")
         tuarim = f"{box['w']}×{box['h']} @ ({box['x']},{box['y']})" if box else "미지정"
         lines.append(f"투아림 영역: {tuarim}")
+        dorcha = config.load_dorcha().get("box")
+        lines.append(f"도르카 영역: {dorcha['w']}×{dorcha['h']} @ ({dorcha['x']},{dorcha['y']})" if dorcha else "도르카 영역: 미지정")
         lines.append(f"알림 목소리: {config.load_voice_pack() or '기본(녹음)'}")
     except Exception as exc:  # noqa: BLE001
         lines.append(f"(설정 읽기 실패: {exc!r})")
 
+    lines.extend(f"{key}: {text}" for key, text in sorted(_NOTES.items()))
     return "===== 진단 정보 =====\n" + "\n".join(lines)

@@ -23,7 +23,7 @@ def assets(feature):
     return result
 
 
-def candidates(frame, templates, trace, cancelled=None):
+def candidates(frame, templates, trace, cancelled=None, accept=ACCEPT):
     anchor, mask = templates["anchor"], templates["mask"]
     if frame is None or frame.ndim != 3 or frame.shape[2] != 3 or frame.dtype != np.uint8:
         trace["rejection"] = "invalid_frame"
@@ -33,7 +33,7 @@ def candidates(frame, templates, trace, cancelled=None):
         return []
     ratio = min(1.0, 1280 / max(frame.shape[:2]))
     small = cv2.resize(frame, None, fx=ratio, fy=ratio, interpolation=cv2.INTER_AREA)
-    trace.update(accept_score=ACCEPT, search_scales=list(SCALES),
+    trace.update(accept_score=accept, search_scales=list(SCALES),
                  transforms=["BGR masked CCORR_NORMED", "coarse max side <= 1280", "native-resolution refinement"],
                  coarse_ratio=ratio, candidates=[])
     found = []
@@ -65,7 +65,7 @@ def candidates(frame, templates, trace, cancelled=None):
                 x, y = left + point_native[0], top + point_native[1]
                 item = {"anchor": [x, y, w, h], "scale": scale, "score": float(score)}
                 trace["candidates"].append(item)
-                if score >= ACCEPT:
+                if score >= accept:
                     found.append(item)
             px, py = point
             scores[max(0, py - ch // 2):py + ch // 2 + 1,

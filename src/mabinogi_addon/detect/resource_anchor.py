@@ -43,7 +43,8 @@ def valid_inputs(frame,templates,trace):
     return True
 
 
-def ornament_candidates(frame,templates,trace,cancelled=None):
+def ornament_candidates(frame,templates,trace,cancelled=None,accept=ACCEPT):
+    """accept: 후보로 돌려줄 최저 점수(기본 0.97). 도르카는 0.94까지 받아 숫자 판독으로 한 번 더 거른다."""
     if not valid_inputs(frame,templates,trace):
         return []
     anchor,mask = templates["anchor"],templates["mask"]
@@ -64,7 +65,7 @@ def ornament_candidates(frame,templates,trace,cancelled=None):
             trace["rejection"] = "cancelled"
             return []
         search = {}
-        matches.extend(candidates(search_frame,{"anchor":source,"mask":mask},search,cancelled))
+        matches.extend(candidates(search_frame,{"anchor":source,"mask":mask},search,cancelled,accept))
         searches.append(search)
     trace.update(searches[0])
     trace["anchor_searches"] = searches
@@ -86,7 +87,7 @@ def ornament_candidates(frame,templates,trace,cancelled=None):
             scores = np.nan_to_num(scores,nan=0,posinf=0,neginf=0)
             for _ in range(3):
                 _,score,_,(x,y) = cv2.minMaxLoc(scores)
-                if score < ACCEPT:
+                if score < accept:
                     break
                 item = dict(anchor=[x,y,w,h],scale=scale,score=float(score))
                 trace["candidates"].append(item)

@@ -29,7 +29,7 @@ def runtime(window,monkeypatch):
     t._watcher = d._watcher = watcher
     monkeypatch.setattr(config,'load_discord_user',lambda:{'id':CREATOR_DISCORD_ID} if state.logged else None)
     monkeypatch.setattr(tuarim_tab,'read_percent',lambda frame:state.raw)
-    monkeypatch.setattr(dorcha_tab,'read_dorcha',lambda frame:state.dorcha if frame is not None else None)
+    monkeypatch.setattr(dorcha_tab,'read_dorcha',lambda frame,*_:state.dorcha if frame is not None else None)
     monkeypatch.setattr(t,'_play',state.fired.append)
     monkeypatch.setattr(d,'_search_target',lambda:None)
     def percent_capture(*args):
