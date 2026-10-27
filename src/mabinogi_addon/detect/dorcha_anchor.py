@@ -39,10 +39,14 @@ def locate_dorcha(frame,templates=None,diagnostics=None,cancelled=None):
             return None
         trace.update(value=value,result=list(box),ornament=strong[0])
         return box
+    # 0.94~0.97: 숫자를 기준 통과로 읽는 후보만. 밝은 배경에선 장식 최고점이 몇 px 어긋나고 바른 위치는 겹치는 후보로
+    # 밀려나(문의 4K: 최고 y=1722 0.958, 바른 y=1719 0.956), 겹침 제거 전 후보를 모두 시험해 숫자가 읽히는 자리를 고른다.
+    pool = [item for item in trace.get("candidates",[]) if item.get("score",0) >= SOFT_ACCEPT] or matches
     readable = []
-    for match in matches:  # 0.94~0.97: 숫자를 기준 통과로 읽는 후보만
+    for match in sorted(pool,key=lambda item:item["score"],reverse=True):
         box,value,_ = _digits(frame,match,references)
-        if box is not None:
+        if box is not None and not any(abs(box[0]-other[0]) < box[2]/2 and abs(box[1]-other[1]) < box[3]/2
+                                       for _,other,_ in readable):
             readable.append((match,box,value))
     if len(readable) != 1:
         trace.setdefault("rejection","ambiguous_candidates" if readable else "anchor_not_found")

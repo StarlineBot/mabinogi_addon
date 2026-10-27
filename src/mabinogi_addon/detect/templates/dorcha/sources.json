@@ -22,6 +22,17 @@
     "sha256": "376dae3cdcf8c87379eecae4a804948c317c0ed9fccecf599239f984aaefd634"
   },
   {
+    "value": 0,
+    "file": "2026-10-24_dorcha_report_4K.png",
+    "box": [
+      1112,
+      1736,
+      28,
+      23
+    ],
+    "sha256": "48802285c54141a908ae801c69f2f158cfe6a49081b7497da41fb6005f7aef86"
+  },
+  {
     "value": 1,
     "file": "스크린샷 2026-10-16 211435.png",
     "box": [

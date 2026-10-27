@@ -49,3 +49,35 @@ def test_diagnostics_header_has_dorcha_region_and_last_reason(monkeypatch):
     assert diagnostics.describe_dorcha({'rejection': 'anchor_not_found', 'candidates': [{'score': 0.958}]}, None) \
         == '거절 · anchor_not_found · 장식 최고 0.958'
     diagnostics._NOTES.clear()
+
+
+# ---- ② 문의자 원본(4K, 밝은 모래): 기존 '0' 3종과 가장자리 1px 달라 0.849로 거절 + 장식 최고점이 3px 어긋남 ----
+
+REPORT = 'tests/data/2026-10-24_dorcha_report_4K.png'
+
+
+def test_inquirer_frame_reads_zero_at_true_box():
+    frame = image_io.imread(DATA / '2026-10-24_dorcha_report_4K.png')
+    trace = {}
+    assert locate_dorcha(frame, diagnostics=trace) == (1112, 1736, 28, 23)
+    assert trace['value'] == 0 and trace['soft_ornament']
+    from mabinogi_addon.detect.dorcha_reader import read_dorcha
+    word = {}
+    assert read_dorcha(frame[1736:1759, 1112:1140], word) == 0 and word['score'] > 0.95
+
+
+def test_inquirer_saved_region_is_corrected_by_verification_crop():
+    # 저장 영역(1113,1736 29×24)은 1px 어긋나 그대로는 못 읽지만, 앱의 검증(_verify_registered_region과 같은 여백)이 칸을 바로잡는다
+    frame = image_io.imread(DATA / '2026-10-24_dorcha_report_4K.png')
+    x, y, w, h = 1113, 1736, 29, 24
+    pad_x, pad_y = max(8, w // 2), max(17, h)
+    left, top = x - pad_x, y - pad_y
+    found = locate_dorcha(frame[top:y + h + pad_y, left:x + w + pad_x])
+    assert found is not None and (left + found[0], top + found[1]) == (1112, 1736)
+
+
+def test_zero_reference_from_inquirer_is_recorded_with_provenance():
+    import json
+    sources = json.loads((Path(__file__).parents[1] / 'src/mabinogi_addon/detect/templates/dorcha/sources.json').read_text(encoding='utf-8'))
+    entry = next(s for s in sources if s['file'] == '2026-10-24_dorcha_report_4K.png')
+    assert entry['value'] == 0 and entry['box'] == [1112, 1736, 28, 23]
