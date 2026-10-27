@@ -185,7 +185,9 @@ class DebuffTab(QWidget):
         auto_row.addWidget(self.diagnostic_button)
         v.addLayout(auto_row)
         v.addWidget(self.shared_region_hint)
-        v.addWidget(self.status_label)
+        from .status_icon import status_row
+        status, self.status_icon = status_row(self.status_label)  # B안: 앞 기호 대신 그린 아이콘
+        v.addLayout(status)
         self._method_row = QWidget()
         method_row = QHBoxLayout(self._method_row)
         method_row.setContentsMargins(0, 0, 0, 0)
@@ -377,8 +379,9 @@ class DebuffTab(QWidget):
         if self.effective_gate_mode() != self._last_effective:
             self._emit_gate_mode()
 
-    def set_status(self, text: str, color: str) -> None:
-        """진단 상태 한 줄 갱신(메인의 주기 폴링에서 호출)."""
+    def set_status(self, text: str, color: str, icon: str | None = None) -> None:
+        """진단 상태 한 줄 갱신(메인의 주기 폴링에서 호출). icon: status_icon 종류(B안)."""
+        self.status_icon.set_kind(icon, color)
         self.status_label.setText(text)
         self.status_label.setStyleSheet(f"color:{color};")
 

@@ -244,7 +244,9 @@ class BuffTab(QWidget):
         v.addLayout(top)
 
         self.status_label = hint_label("")  # 진단 상태(추적 중/게임 비활성 등)
-        v.addWidget(self.status_label)
+        from .status_icon import status_row
+        status, self.status_icon = status_row(self.status_label)  # B안: 앞 기호 대신 그린 아이콘
+        v.addLayout(status)
 
         self.buff_list = QListWidget()
         self.buff_list.setIconSize(QSize(32, 32))
@@ -298,8 +300,9 @@ class BuffTab(QWidget):
         self.lock_btn.blockSignals(False)
         self._on_lock_toggled(locked)  # 텍스트 갱신 + lock_toggled 방출(→ 오버레이 적용)
 
-    def set_status(self, text: str, color: str) -> None:
-        """진단 상태 한 줄 갱신(메인의 주기 폴링에서 호출)."""
+    def set_status(self, text: str, color: str, icon: str | None = None) -> None:
+        """진단 상태 한 줄 갱신(메인의 주기 폴링에서 호출). icon: status_icon 종류(B안)."""
+        self.status_icon.set_kind(icon, color)
         self.status_label.setText(text)
         self.status_label.setStyleSheet(f"color:{color};")
 

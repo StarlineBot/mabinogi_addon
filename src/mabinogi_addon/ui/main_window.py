@@ -788,43 +788,36 @@ class MainWindow(QMainWindow):
             self._last_bg_update_tick = now
             self._maybe_check_update("주기")
 
-    def _buff_status(self) -> tuple[str, str]:
+    # 상태 줄(2026-10-27 B안): (문구, 색, 아이콘 종류). 앞 기호는 글꼴 따라 이모지로 바뀌어 그린 아이콘(status_icon)으로 대체.
+    _WAITING_TEXT = ("추적 대기 — 화면 캡처 준비 중 (게임이 '전체화면'이면 '테두리 없는 창'"
+                     "으로 바꿔 주세요 · 자동 재시도 중)")
+    _INACTIVE_TEXT = "게임 비활성 — 마비노기 창을 맨 앞으로 두면 추적합니다"
+
+    def _buff_status(self) -> tuple[str, str, str]:
         if not config.load_capture_region("buffTracker"):
-            return ("⚠ 영역 미지정 — 버프 판독 영역의 '직접 지정'을 먼저 하세요", self._STATUS_WARN)
+            return ("영역 미지정 — 버프 판독 영역의 '직접 지정'을 먼저 하세요", self._STATUS_WARN, "region")
         if self.buff_controller is None:
-            return (
-                ("ℹ 추적 대기 — 화면 캡처 준비 중 (게임이 '전체화면'이면 '테두리 없는 창'"
-                 "으로 바꿔 주세요 · 자동 재시도 중)"),
-                self._STATUS_MUTED,
-            )
+            return (self._WAITING_TEXT, self._STATUS_MUTED, "waiting")
         if not self._watcher.is_game_active():
-            return ("⏸ 게임 비활성 — 마비노기 창을 맨 앞으로 두면 추적합니다",
-                    self._STATUS_MUTED)
+            return (self._INACTIVE_TEXT, self._STATUS_MUTED, "inactive")
         if self._engine is not None and not self._engine.anchor_seen:
-            return ("⚠ 기준 버프 미검출 — 영역에 ⚓ 프리미엄 배틀 멤버십이 보이나요?",
-                    self._STATUS_WARN)
+            return ("기준 버프 미검출 — 영역에 ⚓ 프리미엄 배틀 멤버십이 보이나요?", self._STATUS_WARN, "anchor")
         n = self.buff_controller.item_count
         if n:
-            return (f"● 추적 중 — 버프 {n}개 표시", self._STATUS_OK)
-        return ("● 추적 중 — 지금 표시할 버프 없음", self._STATUS_OK)
+            return (f"추적 중 — 버프 {n}개 표시", self._STATUS_OK, "ok")
+        return ("추적 중 — 지금 표시할 버프 없음", self._STATUS_OK, "ok")
 
-    def _debuff_status(self) -> tuple[str, str]:
+    def _debuff_status(self) -> tuple[str, str, str]:
         if not config.load_capture_region("debuffTracker"):
-            return ("⚠ 영역 미지정 — 디버프 판독 영역의 '직접 지정'을 먼저 하세요",
-                    self._STATUS_WARN)
+            return ("영역 미지정 — 디버프 판독 영역의 '직접 지정'을 먼저 하세요", self._STATUS_WARN, "region")
         if self.debuff_controller is None:
-            return (
-                ("ℹ 추적 대기 — 화면 캡처 준비 중 (게임이 '전체화면'이면 '테두리 없는 창'"
-                 "으로 바꿔 주세요 · 자동 재시도 중)"),
-                self._STATUS_MUTED,
-            )
+            return (self._WAITING_TEXT, self._STATUS_MUTED, "waiting")
         if not self._watcher.is_game_active():
-            return ("⏸ 게임 비활성 — 마비노기 창을 맨 앞으로 두면 추적합니다",
-                    self._STATUS_MUTED)
+            return (self._INACTIVE_TEXT, self._STATUS_MUTED, "inactive")
         n = self.debuff_controller.item_count
         if n:
-            return (f"● 추적 중 — 안 걸린 디버프 {n}개 표시", self._STATUS_OK)
-        return ("● 추적 중 — 표시할 디버프 없음", self._STATUS_OK)
+            return (f"추적 중 — 안 걸린 디버프 {n}개 표시", self._STATUS_OK, "ok")
+        return ("추적 중 — 표시할 디버프 없음", self._STATUS_OK, "ok")
 
     def _maybe_run_tour(self) -> None:
         """시청 기록과 무관하게 명시적 숨김만 존중하는 베타 시작 안내."""
