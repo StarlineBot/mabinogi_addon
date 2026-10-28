@@ -94,3 +94,9 @@ def test_party_keyword_bell_toggle_is_kept(window, monkeypatch):
     tab.alert_bell.click()
     assert tab._alert_sound is (not before) and tab.alert_bell.text() == ('🔔' if not before else '🔕')
     assert not hasattr(tab, 'alert_sound_chk')
+
+
+def test_debuff_gear_button_is_kept(window):
+    # 2026-10-28 사용자 결정: 디버프 진단 방식 버튼은 톱니(⚙) 그대로('조정' 글자 버튼 대체 철회)
+    button = window[0].debuff_tab.diagnostic_button
+    assert button.text() == '⚙' and button.width() == 26
