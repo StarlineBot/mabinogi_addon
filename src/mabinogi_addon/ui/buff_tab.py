@@ -42,6 +42,9 @@ ANCHOR_ID = "premium_battle"
 
 # 영역에 꼭 들어가야 하는 것(앱 힌트 ↔ 화면 점선 라벨이 같은 기준을 공유).
 REGION_CRITERION = "버프 아이콘 + 남은시간이 함께 보이게 드래그하세요"
+# 판독 영역 안내: 기본(비즐겨찾기 영역) / 즐겨찾기 영역(기획서 3.1.1, 0.26.0 제작자 알파)
+REGION_GUIDE = "기준 버프가 포함된 상태목록을 지정하세요. 상단의 고정 즐겨찾기 영역은 제외합니다."
+REGION_GUIDE_FAVORITES = "상태목록창을 맨 위(즐겨찾기 칸 포함)부터 지정하세요. 즐겨찾기 칸은 구분선을 찾아 따로 읽어요."
 HIGHLIGHT_TITLE = "버프 영역 확인"
 HIGHLIGHT_SUB = "아이콘 + 남은시간이 점선 안에 다 들어왔나요?"
 
@@ -88,6 +91,7 @@ class BuffTab(QWidget):
     tracking_changed = Signal()  # 순서·노출·지속시간·알림 변경 → 라이브 반영(재시작 X)
     catalog_changed = Signal()  # 버프 추가·삭제·아이콘 변경 → 엔진 재구성 필요
     scale_changed = Signal(int)  # 오버레이 배율(%) 변경
+    read_mode_changed = Signal()  # 버프 읽는 영역(즐겨찾기/비즐겨찾기) 변경 → 엔진 재구성
 
     def __init__(self) -> None:
         super().__init__()
@@ -240,7 +244,13 @@ class BuffTab(QWidget):
         hint_row.removeWidget(self.region_hint)
         hint_row.addStretch()
         v.addLayout(hint_row)
-        v.addWidget(hint_label("기준 버프가 포함된 상태목록을 지정하세요. 상단의 고정 즐겨찾기 영역은 제외합니다."))
+        self.region_guide = hint_label(REGION_GUIDE)
+        v.addWidget(self.region_guide)
+        # 즐겨찾기 영역 인식 줄(즐겨찾기 영역일 때만): 칸 줄 수·등록 버프 켜짐/꺼짐. 메인 상태 폴링이 갱신한다.
+        self.favorites_info = hint_label("")
+        self.favorites_info.hide()
+        v.addWidget(self.favorites_info)
+        v.addWidget(self._build_read_mode())
         v.addLayout(top)
 
         self.status_label = hint_label("")  # 진단 상태(추적 중/게임 비활성 등)
@@ -280,6 +290,54 @@ class BuffTab(QWidget):
             )
         )
         return panel
+
+    def _build_read_mode(self) -> QGroupBox:
+        """버프 읽는 영역 선택(0.26.0 제작자 알파, 사용자 결정 2026-10-28). 기본은 지금 방식인 비즐겨찾기 영역."""
+        from PySide6.QtWidgets import QButtonGroup, QRadioButton
+        from ..feature_access import Recheck, is_creator
+
+        self._creator = Recheck(lambda: is_creator())
+        box = QGroupBox("버프 읽는 영역 · 알파(제작자)")
+        row = QHBoxLayout(box)
+        self.read_list_radio = QRadioButton("비즐겨찾기 영역(목록)")
+        self.read_list_radio.setToolTip("지금 방식: 구분선 아래 목록만 읽어요. 즐겨찾기 칸은 영역에서 빼 주세요.")
+        self.read_favorites_radio = QRadioButton("즐겨찾기 영역 포함")
+        self.read_favorites_radio.setToolTip("구분선 위 즐겨찾기 칸(켜짐/꺼짐)과 아래 목록을 함께 읽어요.")
+        group = QButtonGroup(box)
+        group.addButton(self.read_list_radio)
+        group.addButton(self.read_favorites_radio)
+        row.addWidget(self.read_list_radio)
+        row.addWidget(self.read_favorites_radio)
+        row.addStretch()
+        self.read_mode_box = box
+        self.read_favorites_radio.toggled.connect(self._on_read_mode)
+        self.refresh_read_mode()
+        return box
+
+    def favorites_mode(self) -> bool:
+        return bool(self._creator()) and config.load_general_flag("buffFavoritesMode", False)
+
+    def refresh_read_mode(self, recheck: bool = False) -> None:
+        """제작자에게만 선택을 보이고, 고른 영역에 맞춰 안내 문구를 바꾼다(로그인 변경 때 recheck)."""
+        if recheck:
+            self._creator.invalidate()
+        favorites = self.favorites_mode()
+        self.read_mode_box.setVisible(bool(self._creator()))
+        for radio, on in ((self.read_favorites_radio, favorites), (self.read_list_radio, not favorites)):
+            radio.blockSignals(True)
+            radio.setChecked(on)
+            radio.blockSignals(False)
+        self.region_guide.setText(REGION_GUIDE_FAVORITES if favorites else REGION_GUIDE)
+        self.favorites_info.setVisible(favorites)
+
+    def _on_read_mode(self, favorites: bool) -> None:
+        config.save_general_flag("buffFavoritesMode", favorites)
+        self.refresh_read_mode()
+        self.read_mode_changed.emit()
+
+    def set_favorites_info(self, text: str, color: str) -> None:
+        self.favorites_info.setText(text)
+        self.favorites_info.setStyleSheet(f"color:{color};")
 
     def _on_scale(self, pct: int) -> None:
         config.set_buff_scale(pct)
@@ -360,13 +418,20 @@ class BuffTab(QWidget):
             )
             return
         x, y, w, h = box
+        if self.favorites_mode():  # 즐겨찾기 영역(0.26.0 알파): 위쪽을 즐겨찾기 칸 맨 위까지 넓힌다
+            from ..detect.favorites import favorites_top
+            from ..detect.status_panel import anchor_template, find_anchor
+            hit = find_anchor(frame, anchor_template())
+            top = favorites_top(frame, box, hit.y) if hit is not None else None
+            if top is not None:
+                y, h = top, h + (y - top)
         lx, ly, lw, lh = to_logical(x + ox, y + oy, w, h)  # 물리 → 논리
         # 위 경계만 사용자가 맞추는 오버레이. 좌우(너비)·아래(화면 끝)는 자동값으로 고정하고,
         # '목록 맨 위'를 찍게 해 상단 고정(즐겨찾기) 버프를 빼도록 유도한다(고정은 꺼져도
         # 목록에 남아 오탐 위험). 클릭=확정 / Enter=자동값 그대로 / ESC=취소.
         from .top_edge_selector import TopEdgeSelector
 
-        self._top_sel = TopEdgeSelector(lx, lw, ly)
+        self._top_sel = TopEdgeSelector(lx, lw, ly, favorites=self.favorites_mode())
         if generation(self) != stamp:
             return
         connect_selection(self, self._top_sel, self._on_region_selected)

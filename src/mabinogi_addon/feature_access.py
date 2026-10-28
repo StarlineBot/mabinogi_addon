@@ -21,6 +21,12 @@ def is_creator() -> bool:
             and isinstance(user, dict) and user.get("id") == CREATOR_DISCORD_ID)
 
 
+def buff_favorites_mode() -> bool:
+    """버프 즐겨찾기 칸 읽기(기획서 3.1.1, 0.26.0): 제작자 알파. 제작자가 '즐겨찾기 영역'을 골랐을 때만 켜고,
+    그 밖에는 지금 목록 방식(비즐겨찾기 영역)이 기본이다."""
+    return is_creator() and config.load_general_flag("buffFavoritesMode", False)
+
+
 class Recheck:
     """권한 판정을 interval초 동안 재사용한다(0.17.2). 판정은 config.json을 읽고 해석하므로, 프레임·루프마다 부르면
     그 자체가 CPU를 쓴다(FPS 줄 분당 2만 개 중 95%가 설정 읽기였음). 로그인 변경(login_changed)에는 invalidate()로

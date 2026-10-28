@@ -1,5 +1,5 @@
 {
-  "version": "0.25.0",
+  "version": "0.26.0",
   "tests": [
     "tests/test_blackbox.py",
     "tests/test_blackbox_access.py",
@@ -61,6 +61,8 @@
     "tests/test_public_release.py",
     "tests/test_halo_capture.py",
     "tests/test_boss_tab.py",
-    "tests/test_feature_release_policy.py"
+    "tests/test_feature_release_policy.py",
+    "tests/test_buff_favorites.py",
+    "tests/test_buff_favorites_ui.py"
   ]
 }

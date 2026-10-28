@@ -13,6 +13,8 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from ..detect import detect_buffs, read_time, score_sets, set_names
+from ..detect.buff_detector import Detection
+from ..detect.favorites import FavoritesReader
 from ..detect.icon_matcher import DEFAULT_THRESHOLD
 from .buff_state import BuffStateMachine, Event, State
 
@@ -49,6 +51,7 @@ class BuffEngine:
         row_height: int = 24,
         appear_frames: int = 3,
         threshold: float = DEFAULT_THRESHOLD,
+        favorites: bool = False,
     ) -> None:
         self._templates = templates
         self._order = list(order)
@@ -59,6 +62,9 @@ class BuffEngine:
         self._row_pad_top = row_pad_top
         self._row_height = row_height
         self._threshold = threshold
+        # 즐겨찾기 칸 읽기(기획서 3.1.1, 0.26.0 제작자 알파): 구분선 위 = 즐겨찾기(켜짐/꺼짐), 아래 = 기존 목록.
+        # 끄면(기본) 지금 목록 방식 그대로다.
+        self.favorites = FavoritesReader(templates, icon_column) if favorites else None
 
         self._anchor_seen = False  # 앵커를 한 번이라도 봤는지(게이팅 안전장치)
         # 시간 템플릿 세트 자동선택: 모니터·스케일링마다 글자 렌더링이 달라 세트가 여럿.
@@ -121,6 +127,8 @@ class BuffEngine:
         detections = detect_buffs(
             region, self._templates, self._icon_column, self._threshold
         )
+        if self.favorites is not None:
+            detections = self._split_favorites(region, detections)
         present = {d.buff_id: d for d in detections}
         # 앵커 게이팅: 앵커가 한 번도 안 보였으면(영역에 앵커가 없는 설정 등)
         # 게이팅하지 않는다 — 즉 기존처럼 항상 정상 프레임으로 본다.
@@ -193,6 +201,21 @@ class BuffEngine:
         return TickResult(
             entries=entries, alerts=alerts, frame_valid=frame_valid, alerts2=alerts2
         )
+
+    def _split_favorites(self, region: np.ndarray, detections: list[Detection]) -> list[Detection]:
+        """구분선 위 아이콘은 목록 검출에서 빼고, 기억한 즐겨찾기 줄 중 켜진 것만 그 줄 위치로 넣는다.
+        기준 버프가 즐겨찾기에 있어도 켜져 있으면 정상 프레임으로 본다(기준 버프 미검출 경고 없음)."""
+        reader = self.favorites
+        reader.update(region, [d.y for d in detections])
+        boundary = reader.boundary
+        if boundary is None:
+            return detections  # 구분선 없음: 전체를 목록으로(즐겨찾기를 안 쓰는 사람·예전 영역 호환)
+        listed = [d for d in detections if d.y > boundary and d.buff_id not in reader.rows]
+        for bid, row in reader.rows.items():
+            if reader.on.get(bid):
+                listed.append(Detection(bid, 1.0, row.y))
+        listed.sort(key=lambda d: d.y)
+        return listed
 
     # 세트 고정 기준: 누적 신뢰도(≈ 좋은 판독 몇 회분)가 이만큼 앞서면 고정.
     _SET_LOCK_CONF = 3.0

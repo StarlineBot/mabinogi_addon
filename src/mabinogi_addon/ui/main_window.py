@@ -328,6 +328,7 @@ class MainWindow(QMainWindow):
         self.settings_tab.login_changed.connect(self.dorcha_tab.login_refresh)
         self.settings_tab.login_changed.connect(self.boss_tab.halo_capture.login_refresh)
         self.settings_tab.login_changed.connect(self._guide_login_changed)
+        self.settings_tab.login_changed.connect(self._buff_read_mode_login_changed)
         self.settings_tab.game_registered.connect(self.setup_page.refresh)
         self.settings_tab.game_registration_finished.connect(self._setup_game_finished)
         self.setCentralWidget(central)
@@ -342,6 +343,7 @@ class MainWindow(QMainWindow):
         self.buff_tab.lock_toggled.connect(self._on_overlay_lock)
         self.buff_tab.tracking_changed.connect(self._on_tracking_changed)
         self.buff_tab.catalog_changed.connect(self._on_catalog_changed)
+        self.buff_tab.read_mode_changed.connect(self._on_catalog_changed)
         self.buff_overlay.moved.connect(self._save_overlay_state)
 
         # 디버프 오버레이
@@ -771,6 +773,8 @@ class MainWindow(QMainWindow):
         self._check_game_process()
         self._update_tray_tooltip()
         self.buff_tab.set_status(*self._buff_status())
+        if self.buff_tab.favorites_info.isVisibleTo(self.buff_tab):
+            self.buff_tab.set_favorites_info(*self._favorites_info())
         self.debuff_tab.set_status(*self._debuff_status())
         # 사라짐 경고 가능 여부 안내. 방식과 무관하게 '디버프 영역에서 띠를 한 번이라도
         # 봤는지'(bar_ever_seen)로 표시한다 — 보스가 잠깐 없어도 "인식됨"을 유지해, 영역이
@@ -812,12 +816,29 @@ class MainWindow(QMainWindow):
             return (self._WAITING_TEXT, self._STATUS_MUTED, "waiting")
         if not self._watcher.is_game_active():
             return (self._INACTIVE_TEXT, self._STATUS_MUTED, "inactive")
+        reader = getattr(self._engine, "favorites", None)
+        if reader is not None and reader.lost:
+            return ("즐겨찾기 칸을 찾지 못했어요 · 영역을 다시 지정해 주세요", self._STATUS_WARN, "region")
         if self._engine is not None and not self._engine.anchor_seen:
             return ("기준 버프 미검출 — 영역에 ⚓ 프리미엄 배틀 멤버십이 보이나요?", self._STATUS_WARN, "anchor")
         n = self.buff_controller.item_count
         if n:
             return (f"추적 중 — 버프 {n}개 표시", self._STATUS_OK, "ok")
         return ("추적 중 — 지금 표시할 버프 없음", self._STATUS_OK, "ok")
+
+    def _favorites_info(self) -> tuple[str, str]:
+        """즐겨찾기 영역 인식 줄(기획서 3.1.1): 칸 줄 수 · 등록한 버프 켜짐/꺼짐."""
+        reader = getattr(self._engine, "favorites", None)
+        if reader is None:
+            return ("즐겨찾기 칸 확인 대기 — 추적이 시작되면 구분선을 찾아요", self._STATUS_MUTED)
+        if reader.separator is None:
+            return ("즐겨찾기 칸 없음 — 구분선이 없으면 전체를 목록으로 읽어요", self._STATUS_MUTED)
+        rows = sorted(reader.rows.values(), key=lambda row: row.y)
+        listed = " · ".join(f"{self.buff_tab._display_name(row.buff_id)}({'켜짐' if reader.on.get(row.buff_id) else '꺼짐'})"
+                            for row in rows)
+        count = "?" if reader.row_count is None else reader.row_count
+        text = f"즐겨찾기 칸 {count}줄 · 등록한 버프 {len(rows)}개"
+        return (text + (f": {listed}" if listed else "") + " — 구분선 아래는 목록으로 읽어요", self._STATUS_OK)
 
     def _debuff_status(self) -> tuple[str, str, str]:
         if not config.load_capture_region("debuffTracker"):
@@ -1351,6 +1372,7 @@ class MainWindow(QMainWindow):
             show_duration=show_duration,
             alert_before=alert_before,
             alert_before2=alert_before2,
+            favorites=self.buff_tab.favorites_mode(),  # 0.26.0 제작자 알파: 즐겨찾기 영역 포함
         )
         self.buff_controller = BuffController(
             self.buff_overlay,
@@ -1410,6 +1432,13 @@ class MainWindow(QMainWindow):
         self.buff_controller.set_order(order)
         self.buff_controller.set_warn_gone_ids(self._warn_gone_ids())
         self._sound_ids = self._sound_enabled_ids()
+
+    def _buff_read_mode_login_changed(self) -> None:
+        """로그인이 바뀌면 제작자 알파(즐겨찾기 영역) 선택 표시를 다시 보고, 읽는 방식이 바뀌었으면 추적을 다시 건다."""
+        before = self.buff_tab.favorites_mode()
+        self.buff_tab.refresh_read_mode(recheck=True)
+        if self.buff_tab.favorites_mode() != before:
+            self._on_catalog_changed()
 
     def _on_catalog_changed(self) -> None:
         """버프 추가·삭제·아이콘 변경 → 템플릿 재구성을 위해 추적 재시작."""
