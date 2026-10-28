@@ -116,7 +116,8 @@ def test_percent_toggle_and_navigation_do_not_repeat_alerts(runtime):
     assert s.fired == [90,95,90,95]
 
 
-def test_logout_and_pause_hide_beta_display_but_keep_public_alerts(runtime):
+def test_logout_keeps_percent_display_and_pause_hides_until_resumed(runtime):
+    # 2026-10-28 기능 공개 정책 7절: 투아림 % 표시도 로그인 없이(이전: 로그아웃하면 % 표시가 꺼짐)
     w,s,pump = runtime
     d,t,r = w.dorcha_tab,w.tuarim_tab,w.resource_tab
     d.set_paused(True)
@@ -129,8 +130,8 @@ def test_logout_and_pause_hide_beta_display_but_keep_public_alerts(runtime):
     assert d._overlay.isVisible()
     s.logged = False
     pump()
-    assert not d._overlay.isVisible() and d._overlay.percent is None
-    assert not r.percent_chk.isEnabled() and r.percent_chk.isChecked()
+    assert d._overlay.isVisible() and d._overlay.percent == 95
+    assert r.percent_chk.isEnabled() and r.percent_chk.isChecked()
     assert t.enable.isEnabled() and t.enable.isChecked()
     assert config.load_dorcha()['showTuarim']
     assert s.fired == [90,95]

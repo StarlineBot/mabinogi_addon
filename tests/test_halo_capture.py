@@ -185,11 +185,10 @@ def test_creator_only_region_capture_and_stop(window,monkeypatch,tmp_path):
     session = section._session
     assert finish(session) == ''
     assert session.count == 1
-    user.clear()
+    user.clear()  # 로그아웃: 수집(제작자)만 멈추고 1분 헤일로 화면·판독은 계속(2026-10-28 전체 공개)
     section._tick()
-    assert section.isHidden() and not section.collect.isChecked()
+    assert not section.isHidden() and not section.collect.isChecked()
     assert session.cancelled.is_set()
-    assert section.preview.pixmap().isNull()
     assert not section._timer.isActive()  # fixture stops owned timers before test
     after = config._read_local_config()
     assert {k:v for k,v in after.items() if k != 'haloTimer'} == {k:v for k,v in before.items() if k != 'haloTimer'}
@@ -270,18 +269,20 @@ def test_twenty_writes_leave_no_worker_and_metadata_stays_paired(tmp_path):
         assert session.thread is None
 
 
-def test_logged_out_user_never_captures_saved_region(window,monkeypatch):
+def test_logged_out_user_never_collects_saved_region(window,monkeypatch,tmp_path):
+    # 2026-10-28 전체 공개: 미로그인도 1분 헤일로를 쓰지만(화면 보임) 수집은 하지 않는다
     w,_ = window
     monkeypatch.setattr(config,'load_discord_user',lambda:None)
     section = w.boss_tab.halo_capture
+    section._root = tmp_path / '수집'
     section._region = dict(x=0,y=0,w=100,h=20)
     section._watcher = SimpleNamespace(is_game_active=lambda:True)
-    monkeypatch.setattr(section,'_grab',lambda *a:pytest.fail('unauthorized capture'))
+    monkeypatch.setattr(section,'_grab',lambda *a:np.zeros((20,100,3),np.uint8))
     section._tick()
     section._snapshot()
     section.collect.setChecked(True)
-    assert section.isHidden() and not section.collect.isChecked()
-    assert section._session is None
+    assert not section.isHidden() and not section.collect.isChecked()
+    assert section._session is None and not section._root.exists()
 
 
 def test_outside_game_or_target_change_never_saves(window,monkeypatch):
@@ -370,9 +371,9 @@ def test_third_tabs_follow_beta_access_without_resetting_settings(window,monkeyp
     boss.halo_capture._tick()
     assert tabs.isTabVisible(1)
     assert not boss.halo_capture.disclosure.isVisible()
-    user.clear()
+    user.clear()  # 2026-10-28 전체 공개: 로그아웃해도 1분 헤일로 탭은 그대로
     boss.halo_capture._tick()
-    assert not tabs.isTabVisible(1) and tabs.currentIndex() == 0
+    assert tabs.isTabVisible(1)
     boss._apply_collect_gate()
-    assert not tabs.isTabVisible(1)
+    assert tabs.isTabVisible(1)
     assert config._read_local_config() == before

@@ -51,7 +51,7 @@ class InquiryDialog(QDialog):
         hint = QLabel(
             f"답변 받을 계정: {user['name']}"
             if user
-            else "로그인(설정 탭)하면 답변을 Discord DM으로 받을 수 있어요"
+            else "로그인(설정 탭)하면 답변을 디스코드 DM으로 받을 수 있어요"
         )
         hint.setWordWrap(True)
         hint.setStyleSheet(

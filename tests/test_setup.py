@@ -579,15 +579,16 @@ def test_selection_copy_and_beta_guidance_fit_current_window(app, settings, monk
         assert page.height() == 744
         assert page.skip.geometry().bottom() < page.height()
         assert not page.beta_note.text() and page.beta_note.isHidden()
-        assert page.login_btn.isVisible() is (not logged_in)
+        assert page.login_btn.isHidden()  # 2026-10-28 기능 공개 정책 7절: 로그인 여부와 무관하게 로그인 버튼 없음
         assert page.checks["stat_bars"].isEnabled()
         page.set_busy(True)
-        assert not page.login_btn.isEnabled()
+        assert not page.checks["stat_bars"].isEnabled()
     finally:
         page.close()
 
 
-def test_setup_login_opens_existing_account_without_starting_auth(app, settings, monkeypatch):
+def test_setup_page_shows_no_login_prompt(app, settings, monkeypatch):
+    # 2026-10-28 기능 공개 정책 7절: 설정 화면에 로그인 버튼·안내가 없다(이전: 미로그인이면 'Discord 로그인' 버튼)
     from mabinogi_addon.ui.main_window import MainWindow
 
     monkeypatch.setattr(QApplication, "quit", lambda: None)
@@ -598,19 +599,9 @@ def test_setup_login_opens_existing_account_without_starting_auth(app, settings,
         app.processEvents()
         expected_height = min(864, window.screen().availableGeometry().height() - 32)
         assert window.width() == 790 and window.height() == expected_height
-        assert window._pages.currentWidget() is window.setup_guide
         window._open_setup()
-        assert window._pages.currentWidget() is window.setup_guide
-        before = deepcopy(config._read_local_config())
-        window.setup_page.login_btn.click()
-        app.processEvents()
-        assert window._pages.currentWidget() is window._tabs
-        assert window._tabs.currentIndex() == 3
-        viewport = window._tabs.currentWidget().viewport()
-        button = window.settings_tab._login_btn
-        assert viewport.rect().contains(button.mapTo(viewport, button.rect().center()))
-        assert window.settings_tab._login_thread is None
-        assert config._read_local_config() == before
+        window.setup_page.refresh()
+        assert window.setup_page.login_btn.isHidden() and window.setup_page.beta_note.isHidden()
     finally:
         window._force_quit = True
         window.close()
@@ -1012,7 +1003,7 @@ def test_guide_actual_window_navigation_and_resume_preserve_step(app, settings, 
             for key, widget in guide.feature_rows.items():
                 assert widget.isVisible() is (key in guide.feature_keys and stage in (1, 2) and state.batch_allowed(key))
             assert not any(button.text() == "개별 설정" for button in guide.findChildren(type(guide.next_btn)))
-            assert not any(button.text() in ("앱으로 이동", "Discord 로그인")
+            assert not any(button.text() in ("앱으로 이동", "Discord 로그인", "디스코드 로그인")
                            for button in guide.findChildren(type(guide.next_btn)))
             assert not hasattr(guide, "result")
         guide.next_btn.click()
@@ -1367,7 +1358,8 @@ def test_restricted_selection_does_not_block_public_targets_or_gain_access(flow,
     run, page, applied, detections, *_ = flow
     for key in ('halo_timer', 'buff'):
         state.save_selection(key, True)
-    monkeypatch.setattr(config, 'load_discord_user', lambda: None)
+    # 2026-10-28 기능 공개 정책 7절로 1분 헤일로도 공개 — 제한 기능 목록(RESTRICTED)으로 '권한으로 제외' 경로를 그대로 확인
+    monkeypatch.setattr(state, 'RESTRICTED', frozenset({'halo_timer'}))
     before = deepcopy(config._read_local_config())
     run.run()
     assert [item[0] for item in applied] == ['buff']
@@ -1375,6 +1367,9 @@ def test_restricted_selection_does_not_block_public_targets_or_gain_access(flow,
     assert config._read_local_config()['haloTimer'] == before['haloTimer']
     assert '권한으로 제외 1' in page.progress.text()
     assert not state.batch_allowed('halo_timer') and not run.cancelled
+    monkeypatch.setattr(config, 'load_discord_user', lambda: None)
+    monkeypatch.setattr(state, 'RESTRICTED', frozenset())
+    assert state.batch_allowed('halo_timer')  # 실제로는 미로그인도 일괄 자동설정 대상
 
 
 @pytest.mark.parametrize('phase', ['capture', 'detect', 'approval'])
@@ -1390,19 +1385,19 @@ def test_restricted_access_loss_rejects_only_that_candidate(flow, monkeypatch, p
     def wrapped_capture(**kwargs):
         result = capture(**kwargs)
         diag.capture_info.set({'game_target': [123, 456]})
-        if phase == 'capture':
-            monkeypatch.setattr(config, 'load_discord_user', lambda: None)
+        if phase == 'capture':  # 진행 중 접근 제한(2026-10-28부터 로그아웃은 해당 없음 — 제한 목록으로)
+            monkeypatch.setattr(state, 'RESTRICTED', frozenset({'halo_timer'}))
         return result
     monkeypatch.setattr(setup_flow, 'capture_for_autofind', wrapped_capture)
     detect = run._detect
     def wrapped_detect(key, *args):
         if phase == 'detect' and key == 'halo_timer':
-            monkeypatch.setattr(config, 'load_discord_user', lambda: None)
+            monkeypatch.setattr(state, 'RESTRICTED', frozenset({'halo_timer'}))
         return detect(key, *args)
     monkeypatch.setattr(run, '_detect', wrapped_detect)
     def approve(key, box):
         if phase == 'approval' and key == 'halo_timer':
-            monkeypatch.setattr(config, 'load_discord_user', lambda: None)
+            monkeypatch.setattr(state, 'RESTRICTED', frozenset({'halo_timer'}))
         return box
     monkeypatch.setattr(run, '_approve', approve)
     run.run()

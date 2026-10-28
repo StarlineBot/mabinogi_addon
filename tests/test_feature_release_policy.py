@@ -76,13 +76,14 @@ def test_basic_controls_and_alpha_are_independent(window,monkeypatch,user):
     assert d.enable.isEnabled() and d.region_btn.isEnabled()
     assert w.stat_bars_tab.region_btn.isEnabled() and w.stat_bars_tab.alert_sound_chk.isEnabled()
     assert w.skillbar_tab.anchor_btn.isEnabled() and w.skillbar_tab.scale_spin.isEnabled()
-    assert w.resource_tab.percent_chk.isHidden() is (not feature_access.is_creator())
+    assert w.resource_tab.percent_chk.isHidden() is (not d._alpha_ready)  # 2026-10-28: 투아림 %는 로그인과 무관(판독 자료가 있으면)
     assert d.auto_find_btn.isEnabled()
     assert w.stat_bars_tab.collect_chk.isEnabled() is (user is not None)
     assert w.skillbar_tab.auto_find_btn.isEnabled()
 
 
-def test_account_revocation_removes_only_percent(runtime_policy):
+def test_logout_keeps_percent_display(runtime_policy):
+    # 2026-10-28 기능 공개 정책 7절: 로그아웃해도 투아림 % 표시 유지(이전: % 표시만 꺼짐)
     w,state,pump = runtime_policy
     w.dorcha_tab.enable.setChecked(True)
     w.resource_tab.percent_chk.setChecked(True)
@@ -93,9 +94,9 @@ def test_account_revocation_removes_only_percent(runtime_policy):
     pump()
     assert w.dorcha_tab._overlay.isVisible()
     assert w.dorcha_tab._overlay.value == 13
-    assert not w.dorcha_tab._overlay._show_tuarim
-    assert w.dorcha_tab._overlay.percent is None
-    assert w.resource_tab.percent_chk.isHidden()
+    assert w.dorcha_tab._overlay._show_tuarim
+    assert w.dorcha_tab._overlay.percent == 95
+    assert not w.resource_tab.percent_chk.isHidden()
     assert config.load_dorcha()['showTuarim']
     assert state.fired == [90,95]
 

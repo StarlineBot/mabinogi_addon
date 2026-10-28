@@ -2,7 +2,7 @@ import pytest
 from PySide6.QtCore import QCoreApplication, QEvent, QTimer
 from PySide6.QtWidgets import QApplication, QTabWidget, QWidget
 
-from mabinogi_addon import config
+from mabinogi_addon import config, feature_access
 from mabinogi_addon.blackbox import BufferFullError, ReplayBuffer, Segment
 from mabinogi_addon.blackbox_session import BlackboxSession, CaptureContext, State
 from mabinogi_addon.feature_access import CREATOR_DISCORD_ID
@@ -21,15 +21,15 @@ def window():
 
 
 @pytest.mark.parametrize('user', [None, {}, {'id': 'ordinary'}, {'id': CREATOR_DISCORD_ID}])
-def test_top_level_tab_and_direct_commands_obey_login_access(monkeypatch, user):
-    # 0.16.0: 블랙박스는 제작자 전용 → 디스코드 로그인 사용자(베타). 제작자가 아닌 로그인 사용자도 사용 가능.
+def test_top_level_tab_and_direct_commands_are_public(monkeypatch, user):
+    # 2026-10-28 기능 공개 정책 7절: 블랙박스는 로그인과 무관하게 모든 사용자(이전: 디스코드 로그인 사용자).
     monkeypatch.setattr(config, 'load_discord_user', lambda: user)
     app, host = window()
     tools = BlackboxController(host)
-    creator = bool(user and user.get('id'))  # 로그인 여부
+    creator = True
     assert ('블랙박스' in [host._tabs.tabText(i) for i in range(host._tabs.count())]) is creator
     assert (tools.panel is not None) is creator
-    expected = RuntimeError if creator else PermissionError
+    expected = RuntimeError
     with pytest.raises(expected):
         tools.request_save(10)
     with pytest.raises(expected):
@@ -40,11 +40,13 @@ def test_top_level_tab_and_direct_commands_obey_login_access(monkeypatch, user):
 
 
 def test_access_transitions_preserve_pending_save_but_invalidate_capture(monkeypatch):
+    # 2026-10-28부터 블랙박스는 전체 공개지만, 접근 판정이 바뀌는 경로(회수·복귀)는 그대로 남아 판정 함수를 직접 바꿔 확인한다.
     user = [None]
-    monkeypatch.setattr(config, 'load_discord_user', lambda: user[0])
+    monkeypatch.setattr(feature_access, 'blackbox_available', lambda: user[0] is not None)
     app, host = window()
     replay = ReplayBuffer('run', max_bytes=100, max_segments=10, max_saves=2)
-    session = BlackboxSession(replay, enabled=True, persist_enabled=lambda value: None)
+    session = BlackboxSession(replay, enabled=True, persist_enabled=lambda value: None,
+                              creator_check=lambda: feature_access.blackbox_available())
     session.update_context(CaptureContext('run', foreground=True, ready=True))
     tools = BlackboxController(host, session=session)
     assert tools.panel is None
@@ -74,8 +76,8 @@ def test_access_transitions_preserve_pending_save_but_invalidate_capture(monkeyp
 
 
 def test_repeated_access_changes_do_not_leave_duplicate_tabs(monkeypatch):
-    user = [None]
-    monkeypatch.setattr(config, 'load_discord_user', lambda: user[0])
+    user = [None]  # 접근 판정 함수를 직접 바꿔 회수·복귀 경로 확인(2026-10-28부터 실제로는 항상 공개)
+    monkeypatch.setattr(feature_access, 'blackbox_available', lambda: user[0] is not None)
     app, host = window()
     tools = BlackboxController(host)
     for _ in range(100):
@@ -90,13 +92,13 @@ def test_repeated_access_changes_do_not_leave_duplicate_tabs(monkeypatch):
     host.close()
 
 
-def test_real_main_window_uses_top_level_tab_only_for_creator(monkeypatch):
+def test_real_main_window_uses_top_level_tab_and_follows_access(monkeypatch):
     from mabinogi_addon.system import autostart
     from mabinogi_addon.system.window_watcher import AlwaysActiveWatcher
     from mabinogi_addon.ui import main_window
     app = QApplication.instance() or QApplication([])
-    user = [None]
-    monkeypatch.setattr(config, 'load_discord_user', lambda: user[0])
+    user = [None]  # 접근 판정 함수를 직접 바꿔 회수·복귀 경로 확인(2026-10-28부터 실제로는 항상 공개)
+    monkeypatch.setattr(feature_access, 'blackbox_available', lambda: user[0] is not None)
     monkeypatch.setattr(QApplication, 'quit', lambda: None)
     monkeypatch.setattr(autostart, 'is_enabled', lambda: False)
     monkeypatch.setattr(autostart, 'reconcile', lambda value: None)
@@ -132,7 +134,7 @@ def test_real_main_window_uses_top_level_tab_only_for_creator(monkeypatch):
 def test_hook_request_keeps_received_endpoint_and_requires_game_and_access(
         monkeypatch, active, received_hwnd, allowed, expected):
     from types import SimpleNamespace
-    monkeypatch.setattr(config, 'load_discord_user', lambda: None)
+    monkeypatch.setattr(feature_access, 'blackbox_available', lambda: False)  # 패널 없이 단축키 경로만(공개 뒤에도 같은 설정)
     app, host = window()
     tools = BlackboxController(host)
     saved = []
@@ -150,7 +152,7 @@ def test_hook_request_keeps_received_endpoint_and_requires_game_and_access(
 
 def test_hook_failure_is_visible_without_submitting_a_save(monkeypatch):
     from types import SimpleNamespace
-    monkeypatch.setattr(config, 'load_discord_user', lambda: None)
+    monkeypatch.setattr(feature_access, 'blackbox_available', lambda: False)  # 패널 없이 단축키 경로만(공개 뒤에도 같은 설정)
     app, host = window()
     tools = BlackboxController(host)
     saved = []
@@ -220,7 +222,7 @@ def test_hotkey_result_status_and_error_use_separate_lines(monkeypatch, active, 
 
 def test_hotkey_is_ignored_while_game_records_in_background(monkeypatch):
     from types import SimpleNamespace
-    monkeypatch.setattr(config, 'load_discord_user', lambda: None)
+    monkeypatch.setattr(feature_access, 'blackbox_available', lambda: False)  # 패널 없이 단축키 경로만(공개 뒤에도 같은 설정)
     app, host = window()
     tools = BlackboxController(host)
     saved = []

@@ -78,19 +78,24 @@ def test_revoked_or_invalid_access_blocks_new_work_but_keeps_accepted_save(acces
     assert session.enabled
 
 
-def test_actual_feature_access_allows_logged_in_user_and_denies_logged_out(monkeypatch):
-    # 0.16.0: 제작자가 아닌 디스코드 로그인 사용자도 녹화·저장 가능, 미로그인은 불가.
-    user = [{'id': '1234'}]
+def test_actual_feature_access_is_public_and_revocation_still_denies(monkeypatch):
+    # 2026-10-28 기능 공개 정책 7절: 로그인하지 않아도 녹화·저장 가능(이전: 로그인 사용자만).
+    user = [None]
     monkeypatch.setattr(config, 'load_discord_user', lambda: user[0])
     replay = ReplayBuffer('run1', max_bytes=10, max_segments=1, max_saves=1)
     session = BlackboxSession(replay, enabled=True, persist_enabled=lambda value: None)
     session.update_context(CaptureContext('run1', foreground=True, ready=True))
-    session.capture_permit()
-    user[0] = None
+    session.capture_permit()  # 미로그인도 허용
+    allowed = [True]  # 접근 판정이 거부로 바뀌는 경로는 그대로 막는다
+    revocable = BlackboxSession(ReplayBuffer('run2', max_bytes=10, max_segments=1, max_saves=1), enabled=True,
+                                persist_enabled=lambda value: None, creator_check=lambda: allowed[0])
+    revocable.update_context(CaptureContext('run2', foreground=True, ready=True))
+    revocable.capture_permit()
+    allowed[0] = False
     with pytest.raises(PermissionError):
-        session.capture_permit()
+        revocable.capture_permit()
     with pytest.raises(PermissionError):
-        session.request_save(0)
+        revocable.request_save(0)
 
 
 def test_capture_continues_during_save_and_plan_keeps_original_end():

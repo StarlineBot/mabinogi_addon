@@ -99,8 +99,8 @@ class SetupPage(QWidget):
         beta_row = QHBoxLayout()
         self.beta_note = _label("")
         beta_row.addWidget(self.beta_note, 1)
-        self.login_btn = QPushButton("Discord 로그인")
-        self.login_btn.setToolTip("설정의 Discord 계정으로 이동합니다. 로그인은 직접 시작할 수 있습니다.")
+        self.login_btn = QPushButton("디스코드 로그인")
+        self.login_btn.setToolTip("설정의 디스코드 계정으로 이동합니다. 로그인은 직접 시작할 수 있습니다.")
         self.login_btn.clicked.connect(self.login_requested.emit)
         beta_row.addWidget(self.login_btn)
         layout.addLayout(beta_row)
@@ -158,11 +158,9 @@ class SetupPage(QWidget):
         blocked = self.skip.blockSignals(True)
         self.skip.setChecked(section(raw, "general").get("skipSetup") is True)
         self.skip.blockSignals(blocked)
-        logged_in = config.load_discord_user() is not None
         self.beta_note.setText("")
         self.beta_note.hide()
-        self.login_btn.setVisible(not logged_in)
-        self.login_btn.setEnabled(not self.busy)
+        self.login_btn.hide()  # 2026-10-28 기능 공개 정책 7절: 설정 화면에 로그인 안내·버튼을 두지 않는다
         self.game_status.setText("등록된 게임: " + str(section(raw, "general").get("gameExe"))
                                  if section(raw, "general").get("gameExe") else "게임창 등록 필요")
         need, done, unused = [], [], []

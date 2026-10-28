@@ -83,8 +83,8 @@ def test_editing_overlays_are_cleaned_on_lifecycle_boundary(window, monkeypatch,
     s.warn_lock.click()
     s.countdown_lock.click()
     assert s._warning.isVisible() and s._countdown.isVisible()
-    if stop_reason == 'access':
-        monkeypatch.setattr(config, 'load_discord_user', lambda: None)
+    if stop_reason == 'access':  # 접근 회수 경로(2026-10-28부터 로그아웃은 해당 없음)
+        monkeypatch.setattr(s, '_allowed', lambda: False)
         s._tick()
     elif stop_reason == 'clear':
         s._persist(None)

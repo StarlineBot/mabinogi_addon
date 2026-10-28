@@ -179,9 +179,13 @@ def needs_start_screen(raw=None):
     return section(raw, "general").get("skipSetup") is not True
 
 
-# 일괄 자동설정만의 공개 정책. 개별 자동찾기/수집 버튼은 각 기능의 기존 정책을 사용한다.
+# 일괄 자동설정에서 제외할(접근이 제한된) 기능. 2026-10-28 기능 공개 정책 7절: 1분 헤일로 포함 모두 로그인 없이 → 비어 있음.
+# 제한 기능이 다시 생기면 여기에 넣는다(일괄 설정의 '권한으로 제외' 경로는 그대로 동작).
+RESTRICTED: frozenset = frozenset()
+
+
 def batch_allowed(key):
-    return key != 'halo_timer' or config.load_discord_user() is not None
+    return key not in RESTRICTED
 
 
 def batch_pending(raw=None, *, feature_keys=None):

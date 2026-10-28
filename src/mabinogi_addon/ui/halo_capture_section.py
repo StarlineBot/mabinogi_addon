@@ -1,4 +1,4 @@
-"""Discord beta halo guidance with creator-only raw collection."""
+"""1분 헤일로 안내(모든 사용자, 2026-10-28 기능 공개 정책 7절)와 제작자 전용 원본 수집."""
 
 import math
 import time
@@ -374,8 +374,9 @@ class HaloCaptureSection(QWidget):
         self._tick()
 
     def _allowed(self):
+        """1분 헤일로 알림·영역 지정: 모든 사용자(기능 공개 정책 7절). 헤일로 수집만 제작자(_collect_allowed)."""
         window = self.window()
-        return (self._login()[0]() and not self._shutting_down and not getattr(window, "_closing", False)
+        return (not self._shutting_down and not getattr(window, "_closing", False)
                 and not getattr(window, "_config_pending_restart", False))
 
     def _collect_allowed(self):

@@ -424,7 +424,7 @@ class SettingsTab(QWidget):
             logged_in = config.load_discord_user() is not None
             self._dm_export_btn.setEnabled(logged_in and not self._export_busy() and not self._export_closing)
             self._dm_export_btn.setToolTip(
-                "" if logged_in else "먼저 Discord 로그인이 필요합니다"
+                "" if logged_in else "먼저 디스코드 로그인이 필요합니다"
             )
 
     def _export_busy(self):
@@ -483,7 +483,7 @@ class SettingsTab(QWidget):
         if self._export_busy() or self._export_closing: return
         user = config.load_discord_user()
         if user is None:
-            QMessageBox.information(self,'디스코드로 내보내기','먼저 Discord 로그인을 해주세요.')
+            QMessageBox.information(self,'디스코드로 내보내기','먼저 디스코드 로그인을 해 주세요.')
             return
         webhook = config.get_config_webhook_url()
         if not webhook:
@@ -546,7 +546,7 @@ class SettingsTab(QWidget):
 
     # ---- Discord 계정(로그인) ----
     def _discord_group(self) -> QGroupBox:
-        box = QGroupBox("Discord 계정")
+        box = QGroupBox("디스코드 계정")
         v = QVBoxLayout(box)
         self._login_status = hint_label("")
         v.addWidget(self._login_status)
@@ -558,7 +558,7 @@ class SettingsTab(QWidget):
         v.addLayout(row)
         v.addWidget(
             hint_label(
-                "로그인하면 블랙박스와 최적화를 사용할 수 있어요."
+                "로그인하면 디스코드로 설정을 백업하고, 오류 신고용 수집 도구를 쓸 수 있어요."
             )
         )
         self._refresh_login()
@@ -578,7 +578,7 @@ class SettingsTab(QWidget):
         else:
             self._login_status.setText("로그인하지 않음")
             self._login_status.setStyleSheet("color:#8a8f98;")
-            self._login_btn.setText("Discord 로그인")
+            self._login_btn.setText("디스코드 로그인")
         self._refresh_dm_export()  # 로그인 상태에 맞춰 DM 내보내기 버튼 갱신
         self._refresh_diag()  # 진단 스냅샷(디버깅)도 로그인 시에만 노출
 
@@ -589,7 +589,7 @@ class SettingsTab(QWidget):
             self.login_changed.emit()
             return
         self._login_btn.setEnabled(False)
-        self._login_status.setText("브라우저에서 Discord 승인을 진행하세요…")
+        self._login_status.setText("브라우저에서 디스코드 승인을 진행하세요…")
         self._login_status.setStyleSheet("color:#8a8f98;")
         self._login_thread = _LoginThread(self)
         self._login_thread.done.connect(self._on_login_done)

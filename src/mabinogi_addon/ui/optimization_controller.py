@@ -70,7 +70,7 @@ class OptimizationController(QObject):
         self.window = window
         # 제작자 확인은 config.json 읽기라 FPS 줄(초당 수백 개)·타이머마다 하지 않고 1초 동안 재사용한다(0.17.2).
         # 로그인 변경(login_changed → refresh_access)에는 바로 다시 확인한다.
-        self._access = Recheck(lambda: optimization_available())  # 13.15: 디스코드 로그인 사용자
+        self._access = Recheck(lambda: optimization_available())  # 2026-10-28 기능 공개 정책 7절: 모든 사용자
         self._creator = Recheck(lambda: is_creator())  # FPS 수집 모드(구간 요약 파일)는 제작자만
         self.backend = WindowsOptimization()
         # Machine-local recovery must never travel in a settings export/import.
@@ -202,7 +202,7 @@ class OptimizationController(QObject):
                 tabs.removeTab(index)
             if needed: tabs.setTabText(index,'최적화')
         if not allowed:
-            if self.frames: self.stop_frames('로그인이 해제돼 측정을 중단했어요.')
+            if self.frames: self.stop_frames('사용할 수 없게 돼 측정을 중단했어요.')
             if self.engine.busy: self.engine.cancel.set()
 
     def _update_badge(self):
@@ -855,7 +855,7 @@ class OptimizationController(QObject):
         try:
             now, _ = presentmon.clock()
             if not self._can_start():
-                self.stop_frames('로그인 해제 · 측정 중단')
+                self.stop_frames('사용 불가 · 측정 중단')
                 return
             active = self.context is None or self.context[0]
             accept_events = active and self._sync_summary_context(now)

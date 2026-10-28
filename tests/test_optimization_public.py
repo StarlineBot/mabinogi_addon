@@ -103,14 +103,15 @@ def _texts(widget):
     return texts + [w.title() for w in widget.findChildren(QGroupBox)]
 
 
-def test_logged_in_user_sees_tab_but_collection_only_for_creator(window, monkeypatch):
+def test_everyone_sees_tab_but_collection_only_for_creator(window, monkeypatch):
+    # 2026-10-28 기능 공개 정책 7절: 최적화 탭은 로그인 없이도(이전 13.15: 로그인 사용자). 수집 모드는 그대로 제작자만.
     w = window[0]
     c = w.optimization_tools; c.timer.stop()
     user = [None]
     monkeypatch.setattr(module.config, 'load_discord_user', lambda *a: user[0])
     monkeypatch.setattr(feature_access.config, 'load_discord_user', lambda *a: user[0])
     c.refresh_access()
-    assert w._tabs.indexOf(c.panel) == -1
+    assert w._tabs.indexOf(c.panel) >= 0 and c._can_start() and c.panel.collect_box.isHidden()
     user[0] = {'id': '1234', 'username': 'someone'}
     c.refresh_access()
     assert w._tabs.indexOf(c.panel) >= 0 and c._can_start()
@@ -133,7 +134,7 @@ def test_no_alpha_or_beta_words_on_screen_and_no_basis_line(window, monkeypatch)
     for widget in (c.panel, w.settings_tab):
         joined = ' '.join(_texts(widget))
         assert '알파' not in joined and '베타' not in joined and '근거' not in joined
-    assert '로그인하면 블랙박스와 최적화를 사용할 수 있어요.' in _texts(w.settings_tab)
+    assert '로그인하면 디스코드로 설정을 백업하고, 오류 신고용 수집 도구를 쓸 수 있어요.' in _texts(w.settings_tab)  # 2026-10-28 정책 7절 문구
 
 
 def test_auto_game_end_shows_applying_line_when_fastping_was_applied_at_start(tmp_path):

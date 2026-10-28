@@ -287,11 +287,8 @@ class DebuffTab(QWidget):
         return self.method_combo.currentData() or "auto"
 
     def effective_gate_mode(self) -> str:
-        """자동은 로그인 비의존. 과거 강제 2·3차의 베타 접근 조건은 유지한다."""
-        mode = self._selected_mode()
-        if mode in ("band", "percent") and not self._logged_in():
-            return "off"
-        return mode
+        """선택한 탐지 방식 그대로(2026-10-28 기능 공개 정책 7절: 2·3차도 로그인 없이)."""
+        return self._selected_mode()
 
     def _apply_login_gate(self) -> None:
         """과거 강제 2·3차의 실제 적용이 제한되는 경우만 안내한다."""
@@ -309,8 +306,8 @@ class DebuffTab(QWidget):
     def _refresh_method_ui(self) -> None:
         """자동/퍼센트에서 선택적인 공유 HP 영역 상태를 갱신한다."""
         is_percent = self._selected_mode() in ("auto", "percent")
-        self._bar_region_row.setVisible(is_percent and (self._selected_mode() == "auto" or self._logged_in()))
-        self.bar_adjust_btn.setVisible(is_percent and (self._selected_mode() == "auto" or self._logged_in()))
+        self._bar_region_row.setVisible(is_percent)
+        self.bar_adjust_btn.setVisible(is_percent)
         self._bar_region_container.setVisible(self.bar_adjust_btn.isVisibleTo(self) and self.bar_adjust_btn.isChecked())
         self.bar_view_btn.setEnabled(bool(config.load_boss_bar_region()))
         self.clear_bar_region_btn.setEnabled(bool(config.load_boss_bar_region()))
@@ -434,7 +431,7 @@ class DebuffTab(QWidget):
     def _on_auto_find(self) -> None:
         from .region_registration import generation, save_boxes, editing_allowed
         stamp = generation(self)
-        """보스 체력바를 찾아 그 위 디버프 영역을 자동 지정(Discord 베타). 확인 후에만 저장."""
+        """보스 체력바를 찾아 그 위 디버프 영역을 자동 지정(모든 사용자). 확인 후에만 저장."""
         from .dpi import to_logical
         from .screen_grab import capture_for_autofind
 

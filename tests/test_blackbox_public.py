@@ -198,7 +198,7 @@ def test_old_hotkey_pressed_inside_change_dialog_does_not_react(monkeypatch, tmp
 
 # ---- 공개 범위: 제작자가 아닌 디스코드 로그인 사용자 ----
 
-def test_real_main_window_shows_blackbox_for_ordinary_logged_in_user(monkeypatch, app):
+def test_real_main_window_shows_blackbox_for_everyone(monkeypatch, app):
     from mabinogi_addon.system import autostart
     from mabinogi_addon.system.window_watcher import AlwaysActiveWatcher
     from mabinogi_addon.ui import main_window
@@ -215,17 +215,18 @@ def test_real_main_window_shows_blackbox_for_ordinary_logged_in_user(monkeypatch
         for timer in host.findChildren(QTimer):
             timer.stop()
         names = lambda: [host._tabs.tabText(i) for i in range(host._tabs.count())]
-        assert '블랙박스' not in names() and not host._blackbox_badge.isVisible()  # 미로그인: 탭·배지 없음
+        # 2026-10-28 기능 공개 정책 7절: 로그인하지 않아도 블랙박스 탭이 보인다
+        assert '블랙박스' in names() and host.blackbox_tools._allowed()
         user[0] = {'id': '1234', 'name': '일반 사용자'}
         host.settings_tab.login_changed.emit()
-        assert '블랙박스' in names() and host.blackbox_tools._allowed()
+        assert names().count('블랙박스') == 1 and host.blackbox_tools._allowed()
         assert '제작자' not in host._blackbox_badge.toolTip()
         panel = host.blackbox_tools.panel
         assert panel.findChild(type(panel.save), '') is not None
-        user[0] = None  # 로그아웃 → 탭 제거
+        user[0] = None  # 로그아웃해도 탭 유지(공개)
         host.settings_tab.login_changed.emit()
         QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
-        assert '블랙박스' not in names() and not host.blackbox_tools._allowed()
+        assert '블랙박스' in names() and host.blackbox_tools._allowed()
         user[0] = {'id': '1234', 'name': '일반 사용자'}  # 다시 로그인 → 탭 복귀
         host.settings_tab.login_changed.emit()
         assert names().count('블랙박스') == 1

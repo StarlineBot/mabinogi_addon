@@ -220,7 +220,8 @@ class CreatorDialogue(QObject):
 
     def _footer_visible(self):
         normal = self.window._pages.currentWidget() is self.window._tabs
-        return (normal and self.window._tabs.currentIndex() != 3
+        # 설정 탭은 위치가 아니라 위젯으로 판단(블랙박스·최적화 탭이 생기면 순서가 밀린다)
+        return (normal and self.window._tabs.currentWidget() is not self.window._settings_scroll
                 and not self.window._guide_return_btn.isVisible())
 
     def _can_expand(self, footer, height):
@@ -277,7 +278,8 @@ class CreatorDialogue(QObject):
             self.footer.raise_()
 
     def _anchor(self):
-        return self.window.settings_tab.creator_avatar if self.window._tabs.currentIndex() == 3 else self.face
+        return (self.window.settings_tab.creator_avatar
+                if self.window._tabs.currentWidget() is self.window._settings_scroll else self.face)
 
     def _position(self, text):
         anchor = self._anchor()

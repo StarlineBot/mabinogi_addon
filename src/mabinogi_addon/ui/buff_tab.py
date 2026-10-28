@@ -343,9 +343,7 @@ class BuffTab(QWidget):
     def _on_auto_find(self) -> None:
         from .region_registration import generation, connect_selection
         stamp = generation(self)
-        """상태목록창을 앵커로 자동 검출 → 민트 점선 미리보기 + 확인 후에만 저장(Discord 베타)."""
-        if config.load_discord_user() is None:
-            return
+        """상태목록창을 앵커로 자동 검출 → 민트 점선 미리보기 + 확인 후에만 저장(모든 사용자, 기능 공개 정책 7절)."""
         from ..autofind_diagnostics import perform_autofind
         frame, ox, oy, box = perform_autofind("buff", capture_for_autofind)
         if frame is None:

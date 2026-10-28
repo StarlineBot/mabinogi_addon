@@ -1,4 +1,4 @@
-"""블랙박스 최상위 진입점(디스코드 로그인 사용자, 0.16.0 베타). 캡처 어댑터가 없는 제품 상태에서는 조작을 열지 않는다."""
+"""블랙박스 최상위 진입점(모든 사용자, 2026-10-28 기능 공개 정책 7절). 캡처 어댑터가 없는 제품 상태에서는 조작을 열지 않는다."""
 
 import time
 
@@ -36,8 +36,8 @@ def error_summary(text):
         return ''
     for needle, summary in (('encoder exited', '영상 인코더가 멈춰 녹화를 중단했어요'),
                             ('하드웨어 h.264 인코더', '그래픽카드 영상 인코더를 열지 못했어요'),
-                            ('access revoked', '로그인이 풀려 녹화를 멈췄어요'),
-                            ('access required', '로그인이 풀려 녹화를 멈췄어요'),
+                            ('access revoked', '사용할 수 없게 돼 녹화를 멈췄어요'),
+                            ('access required', '사용할 수 없게 돼 녹화를 멈췄어요'),
                             ('dimensions changed', '게임 창 크기가 바뀌어 녹화를 다시 시작해요'),
                             ('no space', '저장 공간이 부족해요'), ('budget', '저장 공간이 부족해요'),
                             ('disk', '저장 공간이 부족해요'),
@@ -172,7 +172,7 @@ class BlackboxController(QObject):
 
     def _require_session(self):
         if not self._allowed():
-            raise PermissionError('블랙박스는 디스코드 로그인 후 사용할 수 있어요.')
+            raise PermissionError('지금은 블랙박스를 사용할 수 없어요.')
         if self.session is None:
             raise RuntimeError('capture and export adapters are not connected')
         return self.session

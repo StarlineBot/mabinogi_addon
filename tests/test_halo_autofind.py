@@ -111,8 +111,8 @@ def test_approval_is_transactional(window,monkeypatch,storage,outcome):
     monkeypatch.setattr(window_capture,'registered_game_target',lambda *a:target)
     monkeypatch.setattr(autofind_confirm,'to_logical',lambda x,y,w,h:(x//2,y//2,w//2,h//2))
     def approve(*a,**k):
-        if outcome=='logout':
-            monkeypatch.setattr(config,'load_discord_user',lambda:None)
+        if outcome=='logout':  # 접근 회수 경로(2026-10-28부터 로그아웃은 해당 없음 — 판정 함수를 직접 막음)
+            monkeypatch.setattr(s,'_allowed',lambda:False)
         elif outcome=='target_change':
             monkeypatch.setattr(window_capture,'registered_game_target',lambda *a:None)
         elif outcome=='clear':

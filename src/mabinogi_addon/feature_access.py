@@ -1,4 +1,4 @@
-"""Local alpha eligibility; ordinary Discord login does not grant alpha access."""
+"""기능 접근 판정. 2026-10-28부터 사용 기능은 모두 공개, 수집·진단만 로그인·제작자 제한(기능 공개 정책 7절)."""
 
 from . import config
 
@@ -6,14 +6,13 @@ CREATOR_DISCORD_ID = "280290004926857216"
 
 
 def blackbox_available() -> bool:
-    """블랙박스(0.16.0 베타): 디스코드 로그인 사용자. 다른 베타 기능과 같은 판정(로그인 여부)."""
-    user = config.load_discord_user()
-    return isinstance(user, dict) and bool(user.get("id"))
+    """블랙박스: 모든 사용자(2026-10-28 기능 공개 정책 7절 — 사용 기능은 로그인 없이 공개). 호출부 호환용으로 남긴다."""
+    return True
 
 
 def optimization_available() -> bool:
-    """최적화(13.15, 2026-10-25 사용자 결정): 블랙박스와 같은 판정 — 디스코드 로그인 사용자. FPS 수집 모드는 제작자만(is_creator)."""
-    return blackbox_available()
+    """게임 최적화: 모든 사용자(기능 공개 정책 7절). FPS 수집 모드는 제작자만(is_creator)."""
+    return True
 
 
 def is_creator() -> bool:

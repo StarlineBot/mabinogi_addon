@@ -61,8 +61,8 @@ def test_live_battle_stops_or_suspends_at_real_boundaries(window,monkeypatch,bou
         raw = None
     elif boundary == 'pause':
         w._paused = True
-    else:
-        monkeypatch.setattr(config,'load_discord_user',lambda:None)
+    else:  # 접근 회수 경로(2026-10-28부터 로그아웃은 해당 없음 — 판정 함수를 직접 막음)
+        monkeypatch.setattr(s,'_allowed',lambda:False)
     s._monitor(raw)
     assert not s._countdown.isVisible() and not s._warning.isVisible()
     if boundary == 'pause':
@@ -93,7 +93,7 @@ def recorded_audio(monkeypatch):
     return players
 
 
-def test_beta_can_read_and_warn_but_cannot_collect(window,monkeypatch,tmp_path,recorded_audio):
+def test_ordinary_user_can_read_and_warn_but_cannot_collect(window,monkeypatch,tmp_path,recorded_audio):
     w, _, s, now = live_section(window,monkeypatch)
     monkeypatch.setattr(config,'load_discord_user',lambda:{'id':'ordinary-beta'})
     s._root = tmp_path / 'no-collection'
@@ -114,9 +114,12 @@ def test_beta_can_read_and_warn_but_cannot_collect(window,monkeypatch,tmp_path,r
     assert recorded_audio[0].calls == ['halo']
     s._monitor(835)
     assert recorded_audio[0].calls == ['halo'] and len(recorded_audio)==1
-    monkeypatch.setattr(config,'load_discord_user',lambda:None)
+    monkeypatch.setattr(config,'load_discord_user',lambda:None)  # 2026-10-28: 로그아웃해도 알림은 계속(전체 공개)
     s._tick()
-    assert s.isHidden() and not s._countdown.isVisible()
+    assert not s.isHidden() and s._allowed() and not s._collect_allowed()
+    monkeypatch.setattr(s,'_allowed',lambda:False)  # 접근 회수 경로는 그대로 정리
+    s._tick()
+    assert not s._countdown.isVisible()
     assert recorded_audio[0].stopped and s._notifier is None
 
 

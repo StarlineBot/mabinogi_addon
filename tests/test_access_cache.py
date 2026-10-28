@@ -73,7 +73,9 @@ def test_fps_lines_read_settings_a_constant_number_of_times(window, monkeypatch,
 def test_logout_stops_fps_measurement_immediately_through_login_changed(window, monkeypatch, real_interval):
     c = window[0].optimization_tools; c.timer.stop()
     user = [{'id': feature_access.CREATOR_DISCORD_ID}]
+    # 2026-10-28부터 최적화·FPS 표시는 전체 공개 — 접근 판정 함수를 직접 바꿔 캐시 무효화·회수 경로를 확인한다
     monkeypatch.setattr(config, 'load_discord_user', lambda *a: user[0])
+    monkeypatch.setattr(module, 'optimization_available', lambda: user[0] is not None)
     c.refresh_access()
     _feed(c, monkeypatch, 10)
     assert c.frames
@@ -85,7 +87,9 @@ def test_logout_stops_fps_measurement_immediately_through_login_changed(window, 
 def test_access_revoked_outside_login_signal_is_seen_within_one_second(window, monkeypatch, real_interval):
     c = window[0].optimization_tools; c.timer.stop()
     user = [{'id': feature_access.CREATOR_DISCORD_ID}]
+    # 2026-10-28부터 최적화·FPS 표시는 전체 공개 — 접근 판정 함수를 직접 바꿔 캐시 무효화·회수 경로를 확인한다
     monkeypatch.setattr(config, 'load_discord_user', lambda *a: user[0])
+    monkeypatch.setattr(module, 'optimization_available', lambda: user[0] is not None)
     c.refresh_access()
     now = _feed(c, monkeypatch, 10)
     user[0] = None  # 설정 파일이 바뀜(신호 없음)
@@ -94,7 +98,7 @@ def test_access_revoked_outside_login_signal_is_seen_within_one_second(window, m
         now[0] += 0.0045
         c._line(f'game,123,0x1,{round(now[0] * 1000000)},4.5')
         time.sleep(0.01)
-    assert not c.frames and '로그인 해제' in c.frame_status
+    assert not c.frames and '사용 불가' in c.frame_status
 
 
 # ---- FPS 표시 약 2시간 뒤 꺼짐(요약 한도) ----
