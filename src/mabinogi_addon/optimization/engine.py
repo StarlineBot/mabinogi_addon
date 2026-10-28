@@ -522,9 +522,11 @@ class Engine:
                 if result == 'unchanged' and not managed:
                     state['preset'].add(identity)  # 기록 없이 지켜본다(위 독스트링)
                 self.outcome['priority'] = ('same', '') if result == 'unchanged' else ('ok', '')
-                # managed: 앱이 비정상 종료되기 전에 건 기록을 이어 받음(13.10) — 원본 기록 그대로 유지·원복
+                # managed: 앱이 비정상 종료되기 전에 건 기록을 이어 받음(13.10) — 원본 기록 그대로 유지·원복.
+                # resumed: 이어 받았는데 게임이 원본(보통)으로 낮춰 둔 상태 — 아래 유지 루프가 게임이 앞에 오면 높음으로 건다.
                 results.append('게임 우선순위: ' + {'unchanged': '이미 높음 · 그대로 둠', 'applied': '높음 적용 · 확인 완료',
-                                                    'unverified': '높음 적용 · 확인 불가(읽기 경로가 서로 달라요)'}.get(result, result))
+                                                    'unverified': '높음 적용 · 확인 불가(읽기 경로가 서로 달라요)',
+                                                    'resumed': '높음 관리 이어 받음 · 게임 창이 앞에 오면 높음'}.get(result, result))
             except ProcessLookupError:
                 pass
             except Unconfirmed as exc:

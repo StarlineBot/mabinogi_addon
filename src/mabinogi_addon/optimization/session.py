@@ -162,9 +162,13 @@ class Recovery:
             existing = next((i for i in self.items if i['kind'] == kind and i['target'] == target and i['state'] != 'restored'), None)
             if existing:
                 current = self._read(kind,target,'원본·현재 조회')
-                if current != existing['applied']:
-                    raise RuntimeError('다른 도구가 값을 바꿨어요. 재적용을 보류해요.')
-                return 'unchanged'
+                if current == existing['applied']:
+                    return 'unchanged'
+                if kind == 'priority' and existing['state'] == 'applied' and current == existing['old']:
+                    # 게임이 켜진 채 다시 시작된 세션(13.10 이어 받기)에서 앱 창이 앞이라 게임이 스스로 원본(보통)으로 낮춘 경우:
+                    # 다른 도구가 아니다. 기록을 이어 받고, 다시 걸지는 유지 루프 규칙(게임이 뒤면 보류, 앞이면 높음)에 맡긴다.
+                    return 'resumed'
+                raise RuntimeError('다른 도구가 값을 바꿨어요. 재적용을 보류해요.')
             current = self._read(kind,target,'원본·현재 조회')
             if guard is not None: guard()
             if current == value:

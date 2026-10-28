@@ -289,3 +289,36 @@ def test_reverts_while_in_front_still_hit_the_limit(setup):
         b.values[KEY] = NORMAL  # 앞에 있는 동안 되돌림(맵 이동·재접속·다른 도구)
         tick()
     assert state['stopped'] and any('계속 보통(으)로 돌아가요' in n for n in notices)
+
+
+def test_resumed_session_with_game_lowered_to_normal_is_not_a_failure(tmp_path):
+    # QA 0.26.0: 게임이 켜진 채 다시 시작된 자동 적용 세션. 남은 기록(보통→높음)이 있는데 앱 창이 앞이라 게임이 스스로
+    # '보통'(원본)으로 낮춘 상태 → '다른 도구'로 보고 '적용하지 못했어요'로 남던 것. 이어 받고, 게임이 앞에 오면 높음.
+    b = PriorityBackend()
+    r = Recovery(tmp_path / 'journal.json', b, lambda: True)
+    assert r.apply('priority', TARGET, HIGH) == 'applied'
+    b.values[KEY] = NORMAL  # 앱이 꺼진 사이 게임이 낮춤
+    again = Recovery(tmp_path / 'journal.json', b, lambda: True)
+    assert again.apply('priority', TARGET, HIGH) == 'resumed'
+    front = [False]
+    b.foreground = lambda target: front[0]
+    e = Engine(b, again, lambda: True)
+    assert e.start(dict(OPTIONS, auto=True))  # 자동 적용: 게임이 켜져 있으면 남은 기록을 이어 받는다(13.10)
+    assert _wait(lambda: '높음 관리 이어 받음' in e.status)
+    assert e.outcome['priority'][0] != 'fail' and '미적용' not in e.status
+    import time
+    time.sleep(2.5)
+    assert b.values[KEY] == NORMAL  # 게임이 뒤: 그대로 둠
+    front[0] = True
+    assert _wait(lambda: b.values[KEY] == HIGH, 6)  # 앞으로 오면 높음
+    e.stop(); e.thread.join(5)
+    assert b.values[KEY] == NORMAL and not again.pending  # 원본(보통)으로 원복
+
+
+def test_resumed_record_with_other_value_is_still_external(tmp_path):
+    b = PriorityBackend()
+    r = Recovery(tmp_path / 'journal.json', b, lambda: True)
+    assert r.apply('priority', TARGET, HIGH) == 'applied'
+    b.values[KEY] = ABOVE_NORMAL  # 원본도 적용값도 아님
+    with pytest.raises(RuntimeError, match='다른 도구'):
+        Recovery(tmp_path / 'journal.json', b, lambda: True).apply('priority', TARGET, HIGH)
