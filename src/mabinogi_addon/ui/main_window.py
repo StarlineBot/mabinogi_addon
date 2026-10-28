@@ -318,6 +318,7 @@ class MainWindow(QMainWindow):
         self.settings_tab.reopen_setup.connect(self._open_setup)
         self.settings_tab.reopen_guide.connect(self._open_guide)
         self.setup_guide.open_feature.connect(self._open_setup_feature)
+        self.setup_guide.open_tab.connect(self._open_guide_tab)
         self.setup_guide.feature_changed.connect(self._set_feature_enabled)
         self.setup_guide.register_game.connect(self._register_setup_game)
         self.setup_guide.run_requested.connect(self._run_guide_setup)
@@ -427,6 +428,16 @@ class MainWindow(QMainWindow):
             self.boss_tab.pattern_tabs.setCurrentIndex(1 if key == 'halo_timer' else 0)
         if key == "tuarim":
             page.ensureWidgetVisible(self.tuarim_tab.threshold_box)
+        return True
+
+    def _open_guide_tab(self, name):
+        """첫 사용 안내 4단계 카드의 '… 탭 열기'. 안내는 진행 중으로 남아 '첫 사용 안내로 돌아가기'가 보인다."""
+        if self._setup_busy() or self._closing or self._config_pending_restart or self._setup_flow.closed:
+            return False
+        if name != 'optimization' or self._tabs.indexOf(self.optimization_tools.panel) < 0:
+            return False
+        self._pages.setCurrentWidget(self._tabs)
+        self.optimization_tools._open_tab()
         return True
 
     def _register_setup_game(self):

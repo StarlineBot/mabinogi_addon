@@ -8,7 +8,7 @@ import time
 import numpy as np
 import pytest
 from PySide6.QtCore import QTimer
-from PySide6.QtWidgets import QApplication, QMessageBox
+from PySide6.QtWidgets import QApplication, QMessageBox, QScrollArea
 
 from mabinogi_addon import config, setup_state as state, autofind_diagnostics as diag
 from mabinogi_addon.ui.setup_page import SetupPage
@@ -500,7 +500,7 @@ def test_new_user_selection_is_seeded_once_before_main_window_tabs(app, settings
     try:
         assert all(not check.isChecked() for check in window._feature_checks.values())
         assert window._pages.currentWidget() is window.setup_guide
-        assert window.setup_guide.game_status.text() == "게임창 등록 필요"
+        assert window.setup_guide.game_status.text().endswith("아직 등록 안 됨")  # 0.25.0 명세 11절 '게임창' 상자
         assert all(not check.isChecked() for check in window.setup_guide.checks.values())
         assert all(not check.isChecked() for check in window.setup_page.checks.values())
         assert state.pending() == []
@@ -832,7 +832,7 @@ def test_guide_scopes_existing_flow_and_preserves_check_order(flow, stage, expec
         assert page.outcomes == {key: "등록됨" for key in expected}
         assert all(state.missing(key) for key in GUIDE_KEYS if key not in expected)
         assert not run.running and not page.busy and run.page is home
-        assert page.run_btn.text() == "자동설정"
+        assert page.run_btn.text() == "고른 기능 자동설정"  # 0.25.0 명세 11절
         storage.io.wait()
         assert {r.metadata["feature"] for r in storage.recent()} == set(expected)
         run.run(page=page, feature_keys=page.feature_keys, on_result=page.record_result)
@@ -915,7 +915,8 @@ def test_guide_failures_keep_unattempted_separate_and_allow_next_stage(flow, mon
         assert state.missing("buff")
         if failure == "capture":
             assert page.outcomes == {"buff": expected}
-            assert page.status_text("debuff", config._read_local_config()) == "아직 시도하지 않음"
+            # 0.25.0 명세 11절: 시도 전 줄은 실패 문구와 구분되는 '영역 지정 필요'
+            assert page.status_text("debuff", config._read_local_config()) == "영역 지정 필요"
             assert not applied and not detections
         else:
             assert [item[0] for item in applied] == ["debuff", "boss"]
@@ -988,7 +989,7 @@ def test_guide_actual_window_navigation_and_resume_preserve_step(app, settings, 
         guide.move(1)
         guide.feature_changed.emit("stat_bars", True)
         assert state.selected("stat_bars")
-        for stage in range(3):
+        for stage in range(4):  # 0.25.0 명세 11절: 안내 4단계 + 앱 둘러보기, 기능 목록은 스크롤 없이 펼친 상자
             guide.stage = stage
             guide.refresh()
             app.processEvents()
@@ -996,7 +997,8 @@ def test_guide_actual_window_navigation_and_resume_preserve_step(app, settings, 
             expected_height = min(800, window.screen().availableGeometry().height() - 32)
             assert window.width() == 790 and window.height() == expected_height
             assert window.rect().contains(guide.next_btn.mapTo(window, guide.next_btn.rect().bottomRight()))
-            assert guide.selection.horizontalScrollBar().maximum() == 0
+            assert guide.body_scroll.horizontalScrollBar().maximum() == 0
+            assert not guide.selection.findChildren(QScrollArea)
             for key in guide.feature_keys:
                 assert guide.checks[key].width() >= guide.checks[key].sizeHint().width()
             assert not hasattr(guide, "beta_note") and not hasattr(guide, "login_btn")
@@ -1151,7 +1153,7 @@ def test_guide_cancel_and_reentrant_navigation_do_not_escape_busy_stage(flow, mo
         assert not applied
         assert [key for key, _ in detections] == ["tuarim"]
         assert page.outcomes == {"tuarim": "중단됨"}
-        assert page.status_text("skillbar", config._read_local_config()) == "아직 시도하지 않음"
+        assert page.status_text("skillbar", config._read_local_config()) == "영역 지정 필요"  # 0.25.0 명세 11절
         assert not page.busy and not run.running
         monkeypatch.setattr(run, "_approve", lambda key, box: box)
         run.run(page=page, feature_keys=page.feature_keys, on_result=page.record_result)
@@ -1270,8 +1272,10 @@ def test_guide_approval_updates_current_stage_before_next_candidate(flow, monkey
     def approve(key, box):
         if key == "debuff":
             assert page.statuses["buff"].text() == "등록됨"
-            assert page.feature_rows["buff"].parentWidget() is page.groups["done"][1].widget()
-            assert page.feature_rows["debuff"].parentWidget() is page.groups["need"][1].widget()
+            # 0.25.0 명세 11절: 하단 목록 대신 줄 상태가 즉시 바뀐다(등록됨 초록 / 영역 지정 필요 주황)
+            assert "#2ecc71" in page.statuses["buff"].styleSheet()
+            assert page.statuses["debuff"].text() == "영역 지정 필요"
+            assert "#e67e22" in page.statuses["debuff"].styleSheet()
         seen.append(key)
         return box
     monkeypatch.setattr(run, "_approve", approve)
@@ -1294,7 +1298,7 @@ def test_logout_preserves_public_guide_and_tour(app, settings, monkeypatch, duri
         window.show()
         window._open_guide()
         if during_tour:
-            window.setup_guide.stage = 2
+            window.setup_guide.stage = 3  # 0.25.0: 마지막 안내 단계는 4단계 '다른 기능'
             window.setup_guide.move(1)
             assert window._tour.isVisible()
         before = deepcopy(config._read_local_config())
@@ -1443,6 +1447,6 @@ def test_manual_result_button_preserves_stage_and_disables_while_running(app, se
         update('buffTracker', captureRegion=BOX)
         guide.refresh()
         assert guide.statuses['buff'].text() == '등록됨'
-        assert guide.manual_buttons['buff'].isHidden()
+        assert not guide.manual_buttons['buff'].isHidden()  # 0.25.0 명세 11절: 등록된 줄에도 '직접 설정'
     finally:
         guide.close()

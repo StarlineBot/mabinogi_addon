@@ -42,3 +42,41 @@ def test_creator_dialogue_finds_settings_tab_by_widget_not_position(window, monk
     assert w._tabs.currentIndex() == 3 and d._footer_visible() and d._anchor() is d.face
     w._tabs.setCurrentWidget(w._settings_scroll)
     assert not d._footer_visible() and d._anchor() is w.settings_tab.creator_avatar
+
+
+def test_guide_stage_four_introduces_other_features_and_opens_optimization(window, monkeypatch):
+    # 명세 auto-setup-v2 11절: 5단계(진행 표시는 제목 오른쪽 위), 4단계 = 최적화 강조 카드 + 그 밖의 기능 카드, 로그인 없음
+    from mabinogi_addon.ui.setup_guide import OTHER_FEATURES
+    w = window[0]
+    monkeypatch.setattr(config, 'load_discord_user', lambda *a: None)
+    w.optimization_tools.refresh_access()
+    w._open_guide()
+    guide = w.setup_guide
+    guide.move(1); guide.move(1); guide.move(1)
+    assert guide.stage == 3 and guide.title.text() == '다른 기능도 있어요'
+    assert guide.step_label.text().startswith('<b>4 / 5</b>')
+    assert guide.others.isVisible() and not guide.selection.isVisible() and not guide.later_btn.isVisible()
+    assert [name for name, *_ in OTHER_FEATURES] == ['블랙박스', '파티 모집', '커스텀 오버레이', '메모', '계산기']
+    assert not any('로그인' in b.text() for b in guide.findChildren(type(guide.next_btn)))
+    guide.optimization_btn.click()
+    assert w._pages.currentWidget() is w._tabs and w._tabs.currentWidget() is w.optimization_tools.panel
+    assert guide.active and w._guide_return_btn.isVisible()  # 안내는 이어서 볼 수 있다
+    w._guide_return_btn.click()
+    assert guide.stage == 3
+    guide.next_btn.click()  # 마지막 안내 단계에서 '다음' → 앱 둘러보기
+    assert not guide.active and w._tour.isVisible()
+    w._tour._finish()
+
+
+def test_optimization_panel_is_not_a_fragment_before_it_joins_the_tabs(window):
+    # 탭에 붙기 전 패널은 창의 자식이라, 숨기지 않으면 창이 보일 때 왼쪽 위(0,0)에 조각으로 함께 그려졌다
+    from PySide6.QtWidgets import QWidget
+    from mabinogi_addon.ui.optimization_controller import OptimizationController
+    host = QWidget()  # 탭이 아직 없는 창(메인 창 구성 도중과 같은 상태)
+    tools = OptimizationController(host)
+    try:
+        host.show()
+        assert tools.panel.parentWidget() is host and not tools.panel.isVisible()
+    finally:
+        tools.prepare_close()
+        host.close()

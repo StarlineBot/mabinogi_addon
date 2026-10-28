@@ -78,6 +78,8 @@ class OptimizationController(QObject):
                                  self.backend, lambda: self._can_start() and not self.engine.cancel.is_set())
         self.engine = Engine(self.backend,self.recovery,self._can_start)
         self.panel = OptimizationPanel(window)
+        # 탭에 붙기 전에는 메인 창의 맨 자식이라 창이 보일 때 왼쪽 위(0,0)에 조각으로 함께 그려진다 → 붙을 때까지 숨긴다
+        self.panel.hide()
         section = config._read_local_config().get('frameMeter')
         section = section if isinstance(section,dict) else {}
         scale = section.get('scale',100)
