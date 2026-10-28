@@ -69,6 +69,7 @@ def test_current_plan_matches_bundled_release_and_changed_features():
         'tests/test_debuff_engine.py', 'tests/test_debuff_identity.py', 'tests/test_debuff_added_defaults.py',
         'tests/test_debuff_icon_migration.py', 'tests/test_status_icons.py', 'tests/test_tracker_layout.py',
         'tests/test_tray_status.py', 'tests/test_dorcha_inquiry.py', 'tests/test_dorcha_autofind.py',
-        'tests/test_resource_integration.py',
+        'tests/test_resource_integration.py', 'tests/test_public_release.py', 'tests/test_halo_capture.py',
+        'tests/test_boss_tab.py', 'tests/test_feature_release_policy.py',
     })
     assert set(paths) == expected

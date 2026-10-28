@@ -166,7 +166,6 @@ class BossTab(QWidget):
         self.preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
         prev_row.addWidget(self.preview)
         self.status_label = QLabel("식별: —   HP: —")
-        self.status_label.setStyleSheet("font-size:14px; font-weight:600;")
         prev_row.addWidget(self.status_label, 1)
         preview_layout.addLayout(prev_row)
         cv.addWidget(preview_group)
@@ -216,11 +215,14 @@ class BossTab(QWidget):
         v.addWidget(self._controls)
 
         # 보스 HP바 수집(오독 제보용) — 로그인 사용자만.
+        # 0.25.0(앱 문구 명세 10절): 사용 정보인 지원 보스 목록은 제목 있는 상자로, 진단은 그 아래 맨 끝
+        self.supported_box = QGroupBox("지원 보스 · 알림 체력 %")
+        QVBoxLayout(self.supported_box).addWidget(self._supported_label())
+        v.addWidget(self.supported_box)
         self._collect_box = self._collect_group()
         from .settings_layout import disclosure
         self.diagnostics_btn = disclosure("진단 · 보스 HP바 수집",self._collect_box,v)
         self.diagnostics_btn.toggled.connect(self._apply_collect_gate)
-        v.addWidget(self._supported_label())
         from .halo_capture_section import HaloCaptureSection
         self.halo_capture = HaloCaptureSection(watcher, self._grab_rect, self)
         v.addStretch(1)
@@ -230,7 +232,7 @@ class BossTab(QWidget):
         halo_layout.addWidget(self.halo_capture)
         halo_layout.addStretch(1)
         self.pattern_tabs = QTabWidget()
-        for page, label in ((hp_page,"체력별패턴"),(halo_page,"1분 헤일로")):
+        for page, label in ((hp_page,"체력별 패턴"),(halo_page,"1분 헤일로")):
             scroll = QScrollArea()
             scroll.setWidgetResizable(True)
             scroll.setFrameShape(QFrame.Shape.NoFrame)
@@ -267,13 +269,12 @@ class BossTab(QWidget):
             )
 
     def _supported_label(self) -> QLabel:
-        lines = ["지원 보스 & 알림 %:"]
+        lines = []
         for b in self._bosses.values():
             if b.thresholds:
                 pct = ", ".join(f"{t}%" for t in b.thresholds)
-                lines.append(f"  • {b.name} — {pct}")
+                lines.append(f"• {b.name} — {pct}")
         lbl = hint_label("\n".join(lines))
-        lbl.setStyleSheet("color:#9aa0aa; font-size:12px;")
         return lbl
 
     def _preview_warning(self) -> None:

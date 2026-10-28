@@ -63,7 +63,10 @@ class HaloCaptureSection(QWidget):
             self._countdown.move(pos['x'], pos['y'])
         v = QVBoxLayout(self)
         v.setContentsMargins(0, 0, 0, 0)
-        v.addWidget(FeatureHeader("믿음의 균열의 1분 헤일로 알림", "게임의 남은 시간을 기준으로 다음 헤일로까지 표시하고, 발생 5초 전에 알립니다."))
+        from .feature_copy import HELP
+        from .help_dialog import help_button
+        v.addWidget(FeatureHeader("믿음의 균열의 1분 헤일로 알림", "게임의 남은 시간을 기준으로 다음 헤일로까지 표시하고, 발생 5초 전에 알립니다.",
+                                  help_button("1분 헤일로 사용법", HELP['1분 헤일로'], self)))
         self.state = QLabel("레넨의 미이르 : 회한 식별 대기")
         self.state.setWordWrap(True)
         warning_group = QGroupBox('헤일로 경고')
@@ -129,7 +132,6 @@ class HaloCaptureSection(QWidget):
         preview_row = QHBoxLayout()
         preview_row.addWidget(self.preview)
         self.reading = QLabel('판독 시간: —')
-        self.reading.setStyleSheet('font-size:14px;font-weight:600;')
         preview_row.addWidget(self.reading)
         preview_row.addStretch()
         preview_group = QGroupBox('판독 미리보기')
@@ -416,7 +418,7 @@ class HaloCaptureSection(QWidget):
         allowed = self._allowed()
         self.setVisible(allowed)
         self.access_changed.emit(allowed)
-        self.region_label.setText("영역 미등록" if self._region is None else
+        self.region_label.setText("영역 미지정" if self._region is None else
             "등록 영역 {x}, {y} / {w} × {h}".format(**self._region))
         self.region_btn.setEnabled(allowed)
         self.auto_find_btn.setEnabled(allowed and not self._autofind_busy)

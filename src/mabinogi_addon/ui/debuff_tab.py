@@ -178,10 +178,9 @@ class DebuffTab(QWidget):
         self.mode_status.setStyleSheet("font-weight:600;")
         auto_row.addWidget(self.mode_status, 1)
         self.diagnostic_button = QToolButton()
-        self.diagnostic_button.setText("⚙")
+        self.diagnostic_button.setText("조정")  # 0.25.0: ⚙ 이모지 대신 글자 버튼(앱 문구 명세 10절)
         self.diagnostic_button.setToolTip("진단 방식 선택")
         self.diagnostic_button.setCheckable(True)
-        self.diagnostic_button.setFixedSize(26, 26)
         auto_row.addWidget(self.diagnostic_button)
         v.addLayout(auto_row)
         v.addWidget(self.shared_region_hint)
@@ -406,7 +405,7 @@ class DebuffTab(QWidget):
             self.region_hint.setStyleSheet("color:#2ecc71;")
             self.view_region_btn.setEnabled(True)
         else:
-            self.region_hint.setText("디버프 영역 미등록")
+            self.region_hint.setText("디버프 영역 미지정")
             self.region_hint.setStyleSheet("color:#8a8f98;")
             self.view_region_btn.setEnabled(False)
 

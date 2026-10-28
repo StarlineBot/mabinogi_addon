@@ -62,8 +62,11 @@ class OptimizationPanel(QWidget):
         from .main_window import _scrolled
         root=QVBoxLayout(self);root.setContentsMargins(0,0,0,0)
         self.tabs=QTabWidget();root.addWidget(self.tabs)
-        page=QWidget();body=QVBoxLayout(page)
-        body.addWidget(FeatureHeader('게임 최적화','선택한 CPU 배치와 네트워크 설정을 적용하고, 변경 전 값으로 되돌릴 수 있어요.'))
+        page=QWidget();body=QVBoxLayout(page);body.setContentsMargins(12,12,12,12)  # 다른 탭과 같은 여백(앱 문구 명세 10절)
+        from .feature_copy import HELP
+        from .help_dialog import help_button
+        body.addWidget(FeatureHeader('게임 최적화','선택한 CPU 배치와 네트워크 설정을 적용하고, 변경 전 값으로 되돌릴 수 있어요.',
+                                     help_button('게임 최적화 사용법',HELP['게임 최적화'],self)))
         group=_group('환경 확인',body)
         self.cpu_info=_label('최적화 탭을 열면 CPU 구조와 네트워크 어댑터를 자동으로 읽어요. 읽기만 하고 설정은 바꾸지 않아요.')
         group.addWidget(self.cpu_info)
@@ -135,7 +138,7 @@ class OptimizationPanel(QWidget):
         self.advanced.hide()
         body.addStretch()
         self.tabs.addTab(_scrolled(page),'최적화')
-        page=QWidget();body=QVBoxLayout(page)
+        page=QWidget();body=QVBoxLayout(page);body.setContentsMargins(12,12,12,12)  # 다른 탭과 같은 여백(앱 문구 명세 10절)
         body.addWidget(FeatureHeader('FPS 측정','마비노기의 프레임을 측정해 현재 FPS를 보여줘요.'))
         # 표시와 수집 분리(FPS 명세 8.3, 2026-10-23 지금 적용): 위는 게임에 FPS 표시 켜기·끄기 하나, 파일 수집은 아래 베타 묶음.
         group=_group('게임에 FPS 표시',body)
@@ -146,7 +149,10 @@ class OptimizationPanel(QWidget):
         self.frames_toggle.toggled.connect(lambda on: self.frames_toggle.setText('FPS 표시 중' if on else 'FPS 표시'))
         group.addWidget(self.frames_toggle,0,Qt.AlignmentFlag.AlignLeft)
         group=_group('오버레이',body)
-        self.lock=QCheckBox('위치 잠금');self.lock.setChecked(True);group.addWidget(self.lock)
+        # 다른 탭과 같은 잠금 버튼(잠금됨 = 초록, 앱 문구 명세 10절). 체크 상태 API는 체크박스와 같다.
+        self.lock=QPushButton('위치 잠금됨');self.lock.setCheckable(True);self.lock.setStyleSheet(LOCK_STYLE)
+        self.lock.toggled.connect(lambda on: self.lock.setText('위치 잠금됨' if on else '위치 잠금'))
+        self.lock.setChecked(True);group.addWidget(self.lock,0,Qt.AlignmentFlag.AlignLeft)
         self.scale=QSpinBox();self.scale.setRange(50,300);self.scale.setValue(100);self.scale.setSuffix(' %')
         form=QFormLayout();form.addRow('표시 배율',self.scale);group.addLayout(form)
         # 표시 항목(FPS 명세 8.4): 기본은 FPS만. 표시만 바꾸며 구간 요약·수집에는 영향 없음.

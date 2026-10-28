@@ -291,7 +291,7 @@ class SkillbarTab(QWidget):
             )
             self.anchor_label.setStyleSheet("color:#2ecc71;")
         else:
-            self.anchor_label.setText("앵커 미지정 — 첫 아이콘에 맞춰 클릭하세요")
+            self.anchor_label.setText("원본 첫 칸 미지정 — 맨 왼쪽 위 첫 칸에 맞춰 클릭해 주세요.")
             self.anchor_label.setStyleSheet("color:#8a8f98;")
 
     # ---- 설정 변경 ----

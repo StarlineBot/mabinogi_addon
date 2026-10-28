@@ -139,7 +139,6 @@ class TuarimTab(QWidget):
         self.preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
         prev_row.addWidget(self.preview)
         self.value_label = QLabel("최근 확정: —")
-        self.value_label.setStyleSheet("font-size:14px; font-weight:600;")
         prev_row.addWidget(self.value_label, 1)
         v.addLayout(prev_row)
 

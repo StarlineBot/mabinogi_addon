@@ -22,9 +22,8 @@ from PySide6.QtWidgets import (
 )
 
 from .. import config
-from .help_dialog import tab_header
 from .markdown_highlighter import MarkdownHighlighter
-from .widgets import hint_label, section_label
+from .widgets import FeatureHeader, hint_label, section_label
 
 # 마크다운 툴바 아이콘 버튼 스타일(hover 시 민트).
 _TOOL_QSS = (
@@ -35,11 +34,6 @@ _TOOL_QSS = (
     "QPushButton:checked { background:#00B894; color:#06281e; border-color:#00B894; }"
 )
 
-# 메모 사용법(? 아이콘 → 새 창).
-from .feature_copy import HELP
-
-HELP_TITLE = '메모 사용법'
-HELP_HTML = HELP['메모']
 
 
 class MemoTab(QWidget):
@@ -55,9 +49,7 @@ class MemoTab(QWidget):
         v = QVBoxLayout(self)
         v.setContentsMargins(12, 12, 12, 12)
         v.setSpacing(10)
-        v.addWidget(tab_header(
-            "게임 위에 표시할 메모를 작성합니다.", HELP_TITLE, HELP_HTML, self
-        ))
+        v.addWidget(FeatureHeader("메모", "게임 위에 표시할 메모를 작성합니다."))  # 0.25.0: 도움말 없음(앱 문구 명세 10절)
 
         v.addWidget(section_label("표시 영역 · 메모 위치·너비"))
         self.region_hint = hint_label("")

@@ -59,7 +59,7 @@ def _toast_duration(us):
 
 def combat_text(gate):
     """전투 녹화 상태 문구(명세 12.2)."""
-    return {'unregistered': '전투 대기 · 보스 체력바 영역 미등록',
+    return {'unregistered': '전투 대기 · 보스 체력바 영역 미지정',
             'waiting': '전투 대기 · 보스 체력바가 보이면 녹화해요',
             'recording': '보관 중 · 전투',
             'grace': f'보관 중 · 전투 종료 대기 {gate.grace_left}초'}[gate.state]

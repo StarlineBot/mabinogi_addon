@@ -119,7 +119,7 @@ class DorchaTab(QWidget):
         self.preview_scroll.setFixedHeight(self.preview.height()+24)
         self.preview_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         layout.addWidget(self.preview_scroll)
-        self.value_label = QLabel("현재 판독  --/15")
+        self.value_label = QLabel("현재 판독: --/15")
         layout.addWidget(self.value_label)
         self.source_preview = QLabel()
         self.source_preview.setFixedSize(80, 40)
@@ -220,7 +220,7 @@ class DorchaTab(QWidget):
         self.view_region_btn.setEnabled(self._region is not None and not self._shutting_down)
         self._update_value_label()
         self._sync_overlay()
-        self.region_label.setText("영역 미등록" if self._region is None else
+        self.region_label.setText("영역 미지정" if self._region is None else
                                  "등록 영역  {x}, {y}  /  {w} × {h}".format(**self._region))
         if (reference:=getattr(self,"_resource_view",None)) is not None and (view:=reference()) is not None:
             view.refresh_registration()
@@ -241,7 +241,7 @@ class DorchaTab(QWidget):
             text = f"도르카 {dorcha} · 투아림 {percent}" if self._cfg["enabled"] else f"투아림 {percent}"
         else:
             text = dorcha
-        self.value_label.setText("현재 판독  " + text)
+        self.value_label.setText("현재 판독: " + text)
 
     def _show_source(self, frame):
         if frame is None or frame.size == 0:

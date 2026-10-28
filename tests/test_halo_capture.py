@@ -357,7 +357,7 @@ def test_third_tabs_follow_beta_access_without_resetting_settings(window,monkeyp
     tabs = boss.pattern_tabs
     before = config._read_local_config()
     boss.halo_capture._refresh()
-    assert [tabs.tabText(i) for i in range(tabs.count())] == ['체력별패턴','1분 헤일로']
+    assert [tabs.tabText(i) for i in range(tabs.count())] == ['체력별 패턴','1분 헤일로']  # 0.25.0 띄어쓰기(앱 문구 명세 10절)
     assert tabs.isTabVisible(1)
     w._open_setup_feature('boss')
     for _ in range(10):

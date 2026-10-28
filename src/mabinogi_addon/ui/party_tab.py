@@ -34,16 +34,10 @@ from ..party.client import SERVERS
 from ..party.models import Recruit
 from ..party.service import build_board, humanize_age
 from ..party.worker import PartyWorker
-from .help_dialog import tab_header
 from .notifier import PARTY_ALERT_FILE, SoundNotifier
 from .toast import show_toast
-from .widgets import hint_label
+from .widgets import FeatureHeader, checkbox, hint_label
 
-# 파티 모집 사용법(? 아이콘 → 새 창).
-from .feature_copy import HELP
-
-HELP_TITLE = '파티 모집 사용법'
-HELP_HTML = HELP['파티 모집']
 
 _DIM = QColor("#9aa0a6")
 _ACCENT = QColor("#00D1A7")  # 키워드 매칭 강조색(왼쪽 바)
@@ -127,9 +121,7 @@ class PartyTab(QWidget):
         root = QVBoxLayout(self)
         root.setContentsMargins(12, 12, 12, 12)
         root.setSpacing(10)
-        root.addWidget(tab_header(
-            "선택한 서버의 파티 모집을 보고 등록한 키워드가 포함되면 알림을 받습니다.", HELP_TITLE, HELP_HTML, self
-        ))
+        root.addWidget(FeatureHeader("파티 모집", "선택한 서버의 파티 모집을 보고 등록한 키워드가 포함되면 알림을 받습니다."))  # 0.25.0: 도움말 없음
         root.addWidget(self._build_board(), 1)
 
         bottom = QHBoxLayout()
@@ -140,7 +132,7 @@ class PartyTab(QWidget):
 
     # ---- 현황판 ----
     def _build_board(self) -> QGroupBox:
-        box = QGroupBox("파티모집현황")
+        box = QGroupBox("파티 모집 현황")
         v = QVBoxLayout(box)
 
         # 서버 선택(현황·알림이 이 서버 기준으로 조회된다)
@@ -312,26 +304,10 @@ class PartyTab(QWidget):
 
     # ---- 키워드 ----
     def _build_keywords(self) -> QGroupBox:
-        # 제목을 라벨로 만들어 그 '바로 옆'에 종 아이콘 토글을 둔다(테두리 제목 대신).
-        box = QGroupBox("")
+        # 0.25.0(앱 문구 명세 10절): 종 이모지(Windows에서 컬러 박스) 대신 상자 제목 + 아래 '소리 알림' 체크
+        box = QGroupBox("키워드 알림")
         v = QVBoxLayout(box)
-
-        title_row = QHBoxLayout()
-        title_row.setSpacing(4)
         self._alert_sound = config.load_party_alert_sound()
-        self.alert_bell = QPushButton()
-        self.alert_bell.setFlat(True)
-        self.alert_bell.setFixedSize(24, 22)
-        self.alert_bell.setStyleSheet("QPushButton { font-size:15px; border:none; }")
-        self.alert_bell.setToolTip("키워드 알림 효과음 켜기/끄기")
-        self.alert_bell.clicked.connect(self._toggle_alert_sound)
-        self._update_bell()
-        title_row.addWidget(self.alert_bell)  # 타이틀 '앞'(왼쪽)에 종
-        title = QLabel("키워드 알림")
-        title.setStyleSheet("font-weight:600;")
-        title_row.addWidget(title)
-        title_row.addStretch(1)
-        v.addLayout(title_row)
 
         add_row = QHBoxLayout()
         self.keyword_input = QLineEdit()
@@ -354,23 +330,19 @@ class PartyTab(QWidget):
         btn_row.addStretch(1)
         v.addLayout(btn_row)
 
+        self.alert_sound_chk = checkbox("소리 알림")
+        self.alert_sound_chk.setToolTip("키워드 알림 효과음 켜기/끄기")
+        self.alert_sound_chk.setChecked(self._alert_sound)
+        self.alert_sound_chk.toggled.connect(self._toggle_alert_sound)
+        v.addWidget(self.alert_sound_chk)
         v.addWidget(
-            hint_label(
-                "키워드가 뜨면 우측 하단에 토스트·효과음 (게임 중에도)\n"
-                "위 종(🔔/🔕)으로 소리 켜고 끄기 · 항목은 X로 삭제"
-            )
+            hint_label("키워드가 뜨면 우측 하단에 토스트·효과음 (게임 중에도) · 항목은 X로 삭제")
         )
         return box
 
-    def _update_bell(self) -> None:
-        self.alert_bell.setText("🔔" if self._alert_sound else "🔕")
-
-    def _toggle_alert_sound(self) -> None:
-        self._alert_sound = not self._alert_sound
+    def _toggle_alert_sound(self, on: bool) -> None:
+        self._alert_sound = bool(on)
         config.save_party_alert_sound(self._alert_sound)
-        self._update_bell()
-        state = "켜짐 🔔" if self._alert_sound else "꺼짐 🔕"
-        show_toast("키워드 알림 효과음", state)
         if self._alert_sound:
             self._sound.play("party")  # 다시 켤 때 미리듣기로 소리 한 번 재생
 
@@ -502,7 +474,7 @@ class PartyTab(QWidget):
             if part
         )
         show_toast(
-            f"🔔 파티모집 · '{keyword}'",
+            f"파티 모집 · '{keyword}'",
             f"{recruit.content}\n{meta}",
             on_click=self.activate_requested.emit,  # 클릭 → 파티 모집 탭으로
         )

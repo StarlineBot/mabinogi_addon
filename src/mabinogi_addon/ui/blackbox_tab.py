@@ -58,6 +58,7 @@ class BlackboxTab(QWidget):
         from .feature_copy import HELP
         from .help_dialog import help_button
         body = QVBoxLayout(self)
+        body.setContentsMargins(12, 12, 12, 12)  # 다른 탭과 같은 여백(앱 문구 명세 10절)
         body.setSpacing(12)
         body.addWidget(FeatureHeader('블랙박스', '최근 게임 영상을 보관하고, 필요한 순간을 저장해요.',
                                      help_button('블랙박스 사용법', HELP['블랙박스'], self)))

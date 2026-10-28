@@ -137,7 +137,7 @@ class ResourceTab(QWidget):
         if not isValid(self) or not hasattr(self,"clear_region_btn"): return
         regions = {k:c._region for k,c in self._controllers().items()}
         state = ("둘 다 등록됨" if all(regions.values()) else "도르카만 등록됨" if regions["dorcha"]
-                 else "투아림만 등록됨" if regions["tuarim"] else "영역 미등록")
+                 else "투아림만 등록됨" if regions["tuarim"] else "영역 미지정")
         details = [f"{name} {b['x']},{b['y']} / {b['w']}×{b['h']}"
                    for k,name in (("dorcha","도르카"),("tuarim","투아림")) if (b:=regions[k])]
         self.region_status.setText(state)

@@ -233,13 +233,20 @@ class SettingsTab(QWidget):
         dialogue_row.addStretch()
         v.addLayout(dialogue_row)
         v.addWidget(self._inquiry_button())
-        v.addWidget(self._diag_button())
-        v.addWidget(self._autofind_diagnostic_group())
         v.addWidget(self._discord_group())
         v.addWidget(self._backup_group())
         v.addWidget(self._general_group())
         v.addWidget(self._theme_group())
         v.addWidget(self._game_group())
+        # 0.25.0(앱 문구 명세 10절): 평소 볼 필요 없는 오류 신고용 진단은 맨 아래 접힌 구역(보이는 조건은 그대로)
+        self.diagnostics_body = QWidget()
+        diagnostics = QVBoxLayout(self.diagnostics_body)
+        diagnostics.setContentsMargins(0, 0, 0, 0)
+        diagnostics.setSpacing(12)
+        diagnostics.addWidget(self._diag_button())
+        diagnostics.addWidget(self._autofind_diagnostic_group())
+        from .settings_layout import disclosure
+        self.diagnostics_toggle = disclosure("진단 · 오류 신고용 자료", self.diagnostics_body, v)
         v.addStretch(1)
 
     def _autofind_diagnostic_group(self) -> QGroupBox:
@@ -891,7 +898,7 @@ class SettingsTab(QWidget):
         toast_row.addStretch(1)
         v.addLayout(toast_row)
         v.addWidget(
-            hint_label("파티모집 등 토스트 알림이 뜰 화면 모서리. (기본 우측 하단)")
+            hint_label("파티 모집 등 토스트 알림이 뜰 화면 모서리. (기본 우측 하단)")
         )
 
         from .notifier import list_voice_packs

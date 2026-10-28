@@ -1,5 +1,5 @@
 {
-  "version": "0.24.2",
+  "version": "0.25.0",
   "tests": [
     "tests/test_blackbox.py",
     "tests/test_blackbox_access.py",
@@ -57,6 +57,10 @@
     "tests/test_tray_status.py",
     "tests/test_dorcha_inquiry.py",
     "tests/test_dorcha_autofind.py",
-    "tests/test_resource_integration.py"
+    "tests/test_resource_integration.py",
+    "tests/test_public_release.py",
+    "tests/test_halo_capture.py",
+    "tests/test_boss_tab.py",
+    "tests/test_feature_release_policy.py"
   ]
 }

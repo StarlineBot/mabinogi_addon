@@ -203,7 +203,6 @@ class StatBarsTab(QWidget):
         prev_row.addWidget(self.preview)
         self.value_label = QLabel("현재 판독: —")
         self.value_label.setWordWrap(True)
-        self.value_label.setStyleSheet("font-size:13px; font-weight:600;")
         prev_row.addWidget(self.value_label, 1)
         source_layout.addLayout(prev_row)
         v.addWidget(source_group)
@@ -389,7 +388,7 @@ class StatBarsTab(QWidget):
 
     def refresh_boss_region(self):
         registered = config.load_boss_bar_region() is not None
-        self.boss_region_status.setText("보스 체력바 · " + ("등록됨" if registered else "미등록"))
+        self.boss_region_status.setText("보스 체력바 · " + ("등록됨" if registered else "영역 미지정"))
         if not registered:
             self._alert_low_since.clear()
             self._reset_visual_alerts()

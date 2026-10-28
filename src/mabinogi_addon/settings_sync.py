@@ -65,7 +65,7 @@ def send_config_backup_file(webhook_url, user_id, path, *, filename='섯다라�
     import urllib.error
     from pathlib import Path
     from .config import BundleCancelled
-    if not webhook_url or not user_id: raise ValueError('설정 백업 채널과 Discord 로그인이 필요해요.')
+    if not webhook_url or not user_id: raise ValueError('설정 백업 채널과 디스코드 로그인이 필요해요.')
     path = Path(path)
     if path.stat().st_size > upload_budget: raise ValueError('앱의 전송 크기 한도를 넘었어요. 파일로 저장해 주세요.')
     boundary = '----mabi' + uuid.uuid4().hex
