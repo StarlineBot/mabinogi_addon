@@ -80,3 +80,17 @@ def test_optimization_panel_is_not_a_fragment_before_it_joins_the_tabs(window):
     finally:
         tools.prepare_close()
         host.close()
+
+
+def test_party_keyword_bell_toggle_is_kept(window, monkeypatch):
+    # 2026-10-28 사용자 결정: 종(🔔/🔕)이 직관적이라 '소리 알림' 체크로 바꾸지 않고 유지
+    from mabinogi_addon.ui import party_tab
+    tab = window[0].party_tab
+    monkeypatch.setattr(party_tab, 'show_toast', lambda *a, **k: None)
+    monkeypatch.setattr(party_tab.config, 'save_party_alert_sound', lambda *a: None)
+    monkeypatch.setattr(tab._sound, 'play', lambda *a: None)
+    before = tab._alert_sound
+    assert tab.alert_bell.text() == ('🔔' if before else '🔕')
+    tab.alert_bell.click()
+    assert tab._alert_sound is (not before) and tab.alert_bell.text() == ('🔔' if not before else '🔕')
+    assert not hasattr(tab, 'alert_sound_chk')
