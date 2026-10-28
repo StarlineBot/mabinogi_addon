@@ -181,7 +181,7 @@ def test_shared_clear_discards_late_selector_and_updates_other_consumers(registe
     assert received == []
     assert "디버프" in questions[0]
     assert config.load_boss_bar_region() is None
-    assert "미등록" in w.stat_bars_tab.boss_region_status.text()
+    assert "영역 미지정" in w.stat_bars_tab.boss_region_status.text()  # 0.25.0 문구 통일(앱 문구 명세 10절)
 
 
 def test_boss_reads_registered_region_even_if_legacy_switch_was_off(registered, monkeypatch):
