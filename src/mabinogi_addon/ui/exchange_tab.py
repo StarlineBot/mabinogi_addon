@@ -91,6 +91,15 @@ class ExchangeTab(QWidget):
         self._done.connect(self._show)
         self._fail.connect(self._show_fail)
 
+    def showEvent(self, event) -> None:
+        """명세 12절: 처음 화면에 보일 때 첫 던전을 선택한다(시세 조회도 이때 — 앱 시작·탭 생성 때 미리 조회하지 않음).
+        사용자가 이미 고른 던전이 있으면 그대로 둔다. 선택은 저장하지 않는다."""
+        super().showEvent(event)
+        if not getattr(self, "_first_shown", False):
+            self._first_shown = True
+            if self.region_list.currentItem() is None and self.region_list.count():
+                self.region_list.setCurrentRow(0)
+
     def _on_region(self, region: str, force: bool = False) -> None:
         if not region:
             return

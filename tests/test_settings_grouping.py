@@ -13,9 +13,10 @@ from mabinogi_addon.ui import region_registration as reg
 
 def test_groups_and_lock_controls_follow_approved_layout(window):
     w,app = window
-    for tab,titles in ((w.boss_tab,{"판독 미리보기","패턴 경고","남은 패턴 목록"}),
-                       (w.stat_bars_tab,{"판독 미리보기","표시","낮은 수치 알림 · 보스전"}),
-                       (w.resource_tab,{"표시","투아림 알림 (% 이상)"}),
+    # 0.27.0(안내·도움말 명세 11.2): 보스 '화면 표시' 하나로, 도르카·투아림 '화면 표시'·'투아림 알림', 영역은 '영역 지정' 상자
+    for tab,titles in ((w.boss_tab,{"영역 지정","판독 미리보기","화면 표시"}),
+                       (w.stat_bars_tab,{"영역 지정","판독 미리보기","표시","낮은 수치 알림 · 보스전"}),
+                       (w.resource_tab,{"영역 지정","화면 표시","투아림 알림"}),
                        (w.custom_overlay_tab,{"오버레이","프리셋"}),
                        (w.skillbar_tab,{"표시"}),(w.memo_tab,{"표시","메모 내용"})):
         assert titles <= {box.title() for box in tab.findChildren(QGroupBox)}
@@ -30,8 +31,9 @@ def test_registration_status_always_precedes_commands(window,key):
     w._open_setup_feature(key)
     app.processEvents()
     tab = w.resource_tab if key=="dorcha" else getattr(w,{"stat_bars":"stat_bars_tab"}.get(key,key+"_tab"))
-    status = (tab.region_status if key=="dorcha" else tab.anchor_label if key=="skillbar"
-              else tab.region_hint if key=="memo" else tab.region_label)
+    # 0.27.0(명세 11절): 지정 전 정보 줄은 '영역 지정' 상자의 '● 아직 지정 안 됨' 줄
+    status = (tab.anchor_label if key=="skillbar" else tab.region_hint if key=="memo"
+              else tab.region_section.unset_label)
     button = tab.region_btn if key!="skillbar" else tab.anchor_btn
     assert status.mapTo(tab,QPoint()).y()+status.height() <= button.mapTo(tab,QPoint()).y()
 

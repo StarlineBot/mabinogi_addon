@@ -47,10 +47,15 @@ class ResourceTab(QWidget):
         from .help_dialog import help_button
         layout.addWidget(FeatureHeader("도르카·투아림", "도르카와 투아림을 오버레이로 표시하고 투아림 충전 상태를 알려줍니다.", help_button("도르카·투아림 사용법", lambda: resource_help(self.dorcha._percent_control is not None and self.dorcha._percent_control.isVisibleTo(self)), self)))
         layout.addWidget(QLabel("판독 영역 · 도르카 / 투아림"))
+        # 영역 묶음(안내·도움말 명세 11절): 버튼·안내 한 줄·개별 영역 조정·판독 확인은 지정 후 '영역 다시 지정 · 판독 확인 ▸' 안으로
+        outer = layout
+        region_body = QWidget()
+        layout = QVBoxLayout(region_body)
+        layout.setContentsMargins(0,0,0,0)
         self.region_status = QLabel()
         self.region_status.setWordWrap(True)
         layout.addWidget(self.region_status)
-        guide = QLabel("보라색 원과 오른쪽 아래의 투아림 숫자·%가 함께 들어오도록 지정해 주세요.\n두 영역은 함께 찾고, 필요한 경우 ‘개별 영역 조정’에서 따로 맞출 수 있어요.")
+        guide = QLabel("보라색 원과 오른쪽 아래의 투아림 숫자·%가 함께 들어오도록 지정해 주세요.")
         guide.setWordWrap(True)
         layout.addWidget(guide)
         row = QHBoxLayout()
@@ -90,25 +95,41 @@ class ResourceTab(QWidget):
             row.addWidget(value,1)
             reading_layout.addLayout(row)
         layout.addWidget(self.reading_group)
-        display = QGroupBox("표시")
+        from .region_section import RegionSection
+        self.region_section = RegionSection(region_body, unset_text="지정하면 도르카와 투아림을 보기 편한 위치에 보여줘요",
+                                            title="영역 다시 지정 · 판독 확인")
+        layout = outer
+        layout.addWidget(self.region_section)
+        # 화면 표시(명세 11.2): 1줄 표시 체크 + 잠금, 2줄 배율. 표시 미리보기는 없앰.
+        display = QGroupBox("화면 표시")
         box = QVBoxLayout(display)
         row = QHBoxLayout()
         dorcha.enable.setText("도르카 표시")
         self.percent_chk = checkbox("투아림 % 표시")
         self.percent_chk.setChecked(dorcha._cfg["showTuarim"])
         dorcha.bind_tuarim(tuarim,self.percent_chk)
-        for control in (dorcha.enable,self.percent_chk,tuarim.enable): row.addWidget(control)
+        for control in (dorcha.enable,self.percent_chk): row.addWidget(control)
         row.addStretch()
+        row.addWidget(dorcha.lock_chk)
         box.addLayout(row)
         row = QHBoxLayout()
-        for control in (QLabel("표시 배율"),dorcha.scale_spin,dorcha.lock_chk): row.addWidget(control)
+        for control in (QLabel("표시 배율"),dorcha.scale_spin): row.addWidget(control)
         row.addStretch()
         box.addLayout(row)
-        box.addWidget(QLabel("표시 미리보기"))
-        box.addWidget(dorcha.preview_scroll,0,Qt.AlignmentFlag.AlignLeft)
         layout.addWidget(display)
-        tuarim.threshold_box.setTitle("투아림 알림 (% 이상)")
-        layout.addWidget(tuarim.threshold_box)
+        # 투아림 알림(명세 11.2): 사용 체크(표시 구역에서 옮김) + 첫 알림 %·소리 · 추가 알림 %·소리
+        self.tuarim_alert_box = QGroupBox("투아림 알림")
+        alert = QVBoxLayout(self.tuarim_alert_box)
+        alert.addWidget(tuarim.enable)
+        tuarim.threshold_box.setTitle("")
+        tuarim.threshold_box.setFlat(True)
+        tuarim.threshold_box.setStyleSheet("QGroupBox { border: 0; margin: 0; padding: 0; }")
+        alert.addWidget(tuarim.threshold_box)
+        layout.addWidget(self.tuarim_alert_box)
+        # 지정 후 요약 줄은 보일 때만 1초마다 판독 값을 옮긴다(숨어 있을 때 비용 없음)
+        self._summary_timer = QTimer(self)
+        self._summary_timer.setInterval(1000)
+        self._summary_timer.timeout.connect(self._update_summary)
         self.diagnostics_btn = QToolButton()
         self.diagnostics_btn.setText("진단 · 도르카/투아림 판독 / 수집")
         self.diagnostics_btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
@@ -142,12 +163,39 @@ class ResourceTab(QWidget):
                    for k,name in (("dorcha","도르카"),("tuarim","투아림")) if (b:=regions[k])]
         self.region_status.setText(state)
         self.region_status.setToolTip("\n".join(details))
+        section = getattr(self,"region_section",None)
+        if section is not None:  # 영역 묶음(명세 11절): 둘 중 하나라도 지정되면 요약 줄 + 접힘, 막 지정했으면 펼침
+            registered = any(regions.values())
+            section.set_registered(registered, just_set=registered and not section.registered
+                                   and getattr(self,"_region_ready",False))
+            self.region_status.setVisible(registered)
+            self._region_ready = True
+            self._update_summary()
         available = (not self._busy and not self._shutting_down
                      and (self._future is None or self._future.done())
                      and not any(c._shutting_down or c._autofind_busy for c in self._controllers().values()))
         self.auto_find_btn.setEnabled(available)
         self.region_btn.setEnabled(available)
         for b in (self.view_region_btn,self.clear_region_btn): b.setEnabled(available and any(regions.values()))
+
+    def _update_summary(self):
+        """`✓ 영역 지정됨 · 도르카 12/15 · 투아림 87%` — 판독 확인 줄의 값을 그대로 옮긴다."""
+        if not self.region_section.registered: return
+        parts = []
+        dorcha = self.dorcha.value_label.text().split(": ",1)[-1]
+        if self.dorcha._region and dorcha not in ("", "--/15", "—"): parts.append("도르카 " + dorcha)
+        tuarim = self.tuarim.value_label.text().split(": ",1)[-1]
+        if self.tuarim._region and tuarim.endswith("%"): parts.append("투아림 " + tuarim)
+        self.region_section.set_summary("✓ 영역 지정됨 · " + (" · ".join(parts) if parts else "판독 대기"))
+
+    def showEvent(self,event):
+        super().showEvent(event)
+        self._update_summary()
+        self._summary_timer.start()
+
+    def hideEvent(self,event):
+        self._summary_timer.stop()
+        super().hideEvent(event)
 
     def _show_diagnostics(self,checked):
         self.diagnostics_btn.setArrowType(Qt.ArrowType.DownArrow if checked else Qt.ArrowType.RightArrow)

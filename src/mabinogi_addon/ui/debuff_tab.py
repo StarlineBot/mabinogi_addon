@@ -160,17 +160,19 @@ class DebuffTab(QWidget):
         from .region_registration import clear_button
         self.clear_region_btn = clear_button(self, "debuff", self._region_cleared)
         hint_row.addWidget(self.clear_region_btn)
-        self._update_region_hint()
-        v.addWidget(section_label("판독 영역 · 디버프 줄"))
+        # 영역 묶음(안내·도움말 명세 11절): 버튼·안내·보스 확인 줄·공유 보스 영역은 지정 후 '영역 다시 지정 ▸' 안으로
+        outer = v
+        body = QWidget()
+        v = QVBoxLayout(body)
+        v.setContentsMargins(0, 0, 0, 0)
         v.addWidget(self.region_hint)
         hint_row.removeWidget(self.region_hint)
         hint_row.addStretch()
         v.addLayout(hint_row)
-        v.addWidget(hint_label("자동 찾기: 디버프 줄과 보스 체력바를 함께 등록\n직접 지정·보기·해제: 디버프 줄만 변경"))
+        v.addWidget(hint_label("자동 찾기는 디버프 줄과 보스 체력바를 함께, 직접 지정은 디버프 줄만 등록해요."))
         self.shared_region_hint = hint_label("")
-        v.addLayout(top)
 
-        self.status_label = hint_label("")  # 진단 상태(추적 중/게임 비활성 등)
+        self.status_label = hint_label("")  # 진단 상태(추적 중/게임 비활성 등) = 지정 후 요약 줄
 
         # 일반 화면은 자동 판단. 기존 강제 방식은 접힌 진단 설정에 보존한다.
         auto_row = QHBoxLayout()
@@ -187,7 +189,8 @@ class DebuffTab(QWidget):
         v.addWidget(self.shared_region_hint)
         from .status_icon import status_row
         status, self.status_icon = status_row(self.status_label)  # B안: 앞 기호 대신 그린 아이콘
-        v.addLayout(status)
+        summary = QWidget()
+        summary.setLayout(status)
         self._method_row = QWidget()
         method_row = QHBoxLayout(self._method_row)
         method_row.setContentsMargins(0, 0, 0, 0)
@@ -243,6 +246,14 @@ class DebuffTab(QWidget):
         self.bar_view_btn.clicked.connect(self._flash_bar_region)
         bar_layout.addWidget(self.bar_view_btn)
         self.bar_adjust_btn = disclosure("공유 보스 영역 개별 조정", self._bar_region_container, v)
+        from .region_section import RegionSection
+        self.region_section = RegionSection(body, unset_text="지정하면 보스에게 아직 걸리지 않은 디버프를 보여줘요",
+                                            summary=summary)
+        v = outer
+        v.addWidget(section_label("판독 영역 · 디버프 줄"))
+        v.addWidget(self.region_section)
+        self._update_region_hint()
+        v.addLayout(top)
 
         self._bar_gating_notice = hint_label("")
         self._bar_gating_notice.setStyleSheet("color:#e67e22; font-size:12px;")
@@ -398,6 +409,12 @@ class DebuffTab(QWidget):
     def _update_region_hint(self) -> None:
         region = config.load_capture_region("debuffTracker")
         self.clear_region_btn.setEnabled(region is not None)
+        section = getattr(self, "region_section", None)
+        if section is not None:  # 영역 묶음(명세 11절): 미지정이면 '영역 지정' 상자, 지정되면 요약 줄 + 접힘
+            newly = bool(region) and not section.registered and getattr(self, "_region_ready", False)
+            section.set_registered(bool(region), just_set=newly)
+            self.region_hint.setVisible(bool(region))
+            self._region_ready = True
         if region:
             self.region_hint.setText(
                 f"등록됨 · {region['x']},{region['y']}  "

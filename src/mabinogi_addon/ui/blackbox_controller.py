@@ -465,10 +465,16 @@ class BlackboxController(QObject):
             self._show_mode_notice()
             native = getattr(getattr(self.service, 'producer', None), 'native', None)
             border = getattr(native, 'border_note', None)  # Windows 11 캡처 테두리를 끄지 못했을 때만
-            self.panel.capture_info.setText('게임 화면만 · 1080p / 60FPS · 게임 소리는 저장하지 않아요'
-                                            + ('\n' + border if border else ''))
+            from .blackbox_tab import CAPTURE_INFO
+            self.panel.capture_info.setText(CAPTURE_INFO + ('\n' + border if border else ''))
             retention = self.service._retention // 60_000_000
-            self.panel.available.setText(f'확보한 영상 {_toast_duration(duration)} / 설정 {retention}분')
+            self.panel.available.setText(f'· {_toast_duration(duration)} / {retention}분')
+            # 1줄 상태 색·꺼짐 문구(명세 11.2: 예전 '현재 상태' 상자를 사용 버튼 옆 한 줄로)
+            paint = getattr(self.panel, 'paint_state', None)
+            if paint is not None:
+                status = self.service.status
+                on = getattr(self.service, 'enabled', True) and status != 'disabled'
+                paint(on, 'recording' if on and (status == 'recording' or text.startswith('보관 중')) else status)
             self.panel.folder.setText(str(self.service.settings.output_folder))
             # 녹화 오류는 매 틱 반영하되, 오류가 없을 때 직접 띄운 안내(단축키 변경 실패·지난 실행 임시 자료)를 지우지 않는다.
             # 녹화 오류가 풀린 순간에만 오류 줄을 비운다(0.16.0 QA: 0.1초 뒤 안내가 사라지던 문제).

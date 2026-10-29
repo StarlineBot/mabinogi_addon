@@ -69,9 +69,11 @@ class HaloCaptureSection(QWidget):
                                   help_button("1분 헤일로 사용법", HELP['1분 헤일로'], self)))
         self.state = QLabel("레넨의 미이르 : 회한 식별 대기")
         self.state.setWordWrap(True)
-        warning_group = QGroupBox('헤일로 경고')
-        warning_layout = QVBoxLayout(warning_group)
+        # 화면 표시와 경고(명세 11.2): 1줄 다음 헤일로 잠금, 2줄 헤일로 경고 잠금·미리보기·소리
+        display_group = QGroupBox('화면 표시와 경고')
+        display_layout = QVBoxLayout(display_group)
         options = QHBoxLayout()
+        options.addWidget(QLabel('헤일로 경고'))
         self.warn_lock = QPushButton('경고 위치 잠금됨')
         self.warn_lock.setCheckable(True)
         self.warn_lock.setChecked(True)
@@ -85,12 +87,10 @@ class HaloCaptureSection(QWidget):
         self.sound = checkbox('소리 알림')
         self.sound.setChecked(isinstance(raw, dict) and raw.get('sound') is True)
         self.sound.toggled.connect(self._save_sound)
+        options.addWidget(self.sound)
         options.addStretch()
-        warning_layout.addLayout(options)
-        warning_layout.addWidget(self.sound)
-        countdown_group = QGroupBox('다음 헤일로 표시')
-        countdown_layout = QVBoxLayout(countdown_group)
         countdown_options = QHBoxLayout()
+        countdown_options.addWidget(QLabel('다음 헤일로'))
         self.countdown_lock = QPushButton('카운트다운 위치 잠금됨')
         self.countdown_lock.setCheckable(True)
         self.countdown_lock.setChecked(True)
@@ -98,8 +98,13 @@ class HaloCaptureSection(QWidget):
         self.countdown_lock.clicked.connect(self._toggle_countdown_lock)
         countdown_options.addWidget(self.countdown_lock)
         countdown_options.addStretch()
-        countdown_layout.addLayout(countdown_options)
+        display_layout.addLayout(countdown_options)
+        display_layout.addLayout(options)
         v.addWidget(QLabel("판독 영역 · 전투 제한 시간"))
+        outer = v
+        region_body = QWidget()  # 영역 묶음(명세 11절): 지정 후 '영역 다시 지정 · 판독 확인 ▸' 안으로
+        v = QVBoxLayout(region_body)
+        v.setContentsMargins(0, 0, 0, 0)
         self.region_label = QLabel()
         self.region_label.setWordWrap(True)
         v.addWidget(self.region_label)
@@ -118,7 +123,7 @@ class HaloCaptureSection(QWidget):
         commands.addWidget(self.clear_btn)
         self.region_row = wrapping_row(row, commands)
         v.addLayout(self.region_row)
-        guide = QLabel('게임 상단의 남은 시간이 분·초까지 모두 들어오도록 지정해 주세요.\n보스 이름을 확인한 뒤 남은 시간을 기준으로 안내해요.')
+        guide = QLabel('게임 상단의 남은 시간이 분·초까지 모두 들어오도록 지정해 주세요.')
         guide.setWordWrap(True)
         v.addWidget(guide)
         self.region_btn.clicked.connect(self._pick)
@@ -139,8 +144,12 @@ class HaloCaptureSection(QWidget):
         preview_layout.addLayout(preview_row)
         preview_layout.addWidget(self.state)
         v.addWidget(preview_group)
-        v.addWidget(countdown_group)
-        v.addWidget(warning_group)
+        from .region_section import RegionSection
+        self.region_section = RegionSection(region_body, unset_text="지정하면 다음 헤일로까지 남은 시간을 보여주고 5초 전에 알려줘요",
+                                            title="영역 다시 지정 · 판독 확인")
+        v = outer
+        v.addWidget(self.region_section)
+        v.addWidget(display_group)
         tools = QWidget()
         box = QVBoxLayout(tools)
         self.collect = checkbox("수집 모드")
@@ -420,6 +429,14 @@ class HaloCaptureSection(QWidget):
         self.access_changed.emit(allowed)
         self.region_label.setText("영역 미지정" if self._region is None else
             "등록 영역 {x}, {y} / {w} × {h}".format(**self._region))
+        section = self.region_section  # 영역 묶음(명세 11절): 지정 후 한 줄 요약 + 접힘, 막 지정했으면 펼침
+        registered = self._region is not None
+        section.set_registered(registered, just_set=registered and not section.registered
+                               and getattr(self, '_region_ready', False))
+        self.region_label.setVisible(registered)
+        if registered and not section.summary_label.text():
+            section.set_summary('✓ 영역 지정됨 · 판독 시간 —')
+        self._region_ready = True
         self.region_btn.setEnabled(allowed)
         self.auto_find_btn.setEnabled(allowed and not self._autofind_busy)
         for button in (self.view_btn, self.clear_btn):
@@ -613,6 +630,8 @@ class HaloCaptureSection(QWidget):
             self._last_frame = frame
             raw_time = read_seconds(frame)
             self.reading.setText('판독 시간: ' + ('—' if raw_time is None else self._time_text(raw_time)))
+            self.region_section.set_summary('✓ 영역 지정됨 · 판독 시간 ' + ('—' if raw_time is None else self._time_text(raw_time))
+                                            + (' · 레넨의 미이르 : 회한' if self._boss_id == 'lenen_miir_hoehan' else ''))
             self._monitor(raw_time)
             rgb = np.ascontiguousarray(frame[:,:,::-1])
             h,w = rgb.shape[:2]

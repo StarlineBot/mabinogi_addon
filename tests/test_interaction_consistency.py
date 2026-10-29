@@ -35,24 +35,16 @@ def test_normal_close_refuses_to_discard_unsaved_custom_edits(window, monkeypatc
     assert tab.flush_pending()
 
 
-def test_embedded_stat_preview_has_no_native_window_or_motion(window):
+def test_stat_display_preview_removed_and_settings_never_start_output(window):
+    # 0.27.0(안내·도움말 명세 11.2): 체력바 '표시 미리보기'(바 3개 그림)는 없앴다. 배율·정렬을 바꿔도 캡처·출력 창은 시작하지 않는다.
     w, app = window
     tab = w.stat_bars_tab
     w._open_setup_feature("stat_bars")
     app.processEvents()
-    for bar in tab._preview_bars.values():
-        assert not bar.isWindow()
-        assert bar.parent() is tab._preview_groups[bar.stat_id]
-        assert bar.parent().parent() is tab.display_preview.widget()
-        before = bar.pos()
-        bar.set_warning(True, 1)
-        bar.set_scale(3)
-        assert not bar.warning_active and not bar._warning_timer.isActive()
-        assert bar.pos() == before
+    assert not hasattr(tab, "_preview_bars") and not hasattr(tab, "display_preview")
     tab.scale_spin.setValue(100)
     tab.align_combo.setCurrentIndex(2)
-    assert all(bar._scale == 1 and bar._align == "right" for bar in tab._preview_bars.values())
-    assert tab._overlays == {}  # Inspecting an output preview never starts capture/output windows.
+    assert tab._overlays == {}  # Inspecting settings never starts capture/output windows.
 
 
 def test_shared_boss_registration_status_updates_without_polling(window, monkeypatch):
@@ -95,8 +87,6 @@ def test_actual_layout_render_and_commands(window, kind, tmp_path):
         panel.value_label.setText("현재 판독: 생명력 21% · 마나 100% · 스태미나 100%")
         panel._region = dict(x=1000, y=1300, w=frame.shape[1], h=frame.shape[0])
         panel._update_region_label()
-        for sid, bar in panel._preview_bars.items():
-            bar.set_value(.21 if sid == "hp" else 1)
         key = "stat_bars"
     elif kind.startswith("custom"):
         panel = w.custom_overlay_tab

@@ -5,7 +5,6 @@ import os
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
-from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication, QInputDialog
 
 from mabinogi_addon import config
@@ -130,7 +129,7 @@ def test_failed_save_blocks_switch_retains_edits_and_can_retry(tab, monkeypatch)
         assert tab.save_status.text() == "저장 실패"
         assert not tab._save_timer.isActive()
     assert tab.flush_pending()
-    assert tab.save_status.text() == "자동 저장됨"
+    assert tab.save_status.text() == "" and "바꾸면 자동 저장돼요" in tab.active_label.text()  # 0.27.0 명세 11.2
     assert tab._apply_preset("B")
 
 
@@ -221,7 +220,7 @@ def test_debounce_batches_edits_and_per_row_mixed_lock_is_preserved(tab, monkeyp
         tab._mgr.overlay_moved.emit()
     item = tab.overlay_list.topLevelItem(0)
     tab.overlay_list.topLevelItem(1).setSelected(True)
-    item.setCheckState(3, Qt.CheckState.Checked)
+    tab.overlay_list.itemClicked.emit(item, 3)  # 0.27.0(명세 11.2): 표의 위치 잠금 칸을 누르면 그 오버레이만 잠금
     assert tab.overlay_list.topLevelItem(0) is item
     assert tab.overlay_list.topLevelItem(1).isSelected()
     assert [o.locked for o in tab._mgr.overlays()] == [True, False]

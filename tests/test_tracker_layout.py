@@ -140,12 +140,13 @@ def test_small_buff_uses_reserved_footer_and_restores_without_drift(window, monk
     reserved = w.centralWidget().layout().indexOf(d.footer) >= 0
     fits = state["needed"] + 64 - w.buff_tab.form_panel.layout().contentsMargins().bottom() <= state["viewport"] + (64 if reserved else 0)
     assert d._floating_footer == (not w.buff_tab._columns.stacked and fits)
-    notice = w.buff_tab.status_label.text()
+    # 0.27.0(명세 11절): 상태 줄은 지정 후 요약 줄이라 지정 전엔 숨는다 → 지정 전에도 보이는 영역 안내 줄로 늘어나는 안내를 만든다
+    notice = w.buff_tab.region_guide.text()
     # QLabel의 양쪽 내용 배치가 처리된 뒤 반복 전환의 기준 높이를 잰다.
-    w.buff_tab.status_label.setText("status\n" * 80)
+    w.buff_tab.region_guide.setText("status\n" * 80)
     for _ in range(8):
         app.processEvents()
-    w.buff_tab.status_label.setText(notice)
+    w.buff_tab.region_guide.setText(notice)
     for _ in range(8):
         app.processEvents()
     state = layout_state(w, w.buff_tab)
@@ -156,11 +157,11 @@ def test_small_buff_uses_reserved_footer_and_restores_without_drift(window, monk
     height = w.buff_tab.buff_list.height()
     for _ in range(4):
         # 글꼴에 관계없이 실제 내용이 작은 viewport에 들어가지 않는 조건을 만든다.
-        w.buff_tab.status_label.setText("status\n" * 80)
+        w.buff_tab.region_guide.setText("status\n" * 80)
         monkeypatch.setattr(w, "screen", lambda: SimpleNamespace(availableGeometry=lambda: QRect(0, 0, 1100, 730)))
         d.refresh()
-        app.processEvents()
-        app.processEvents()
+        for _ in range(6):  # 0.27.0: 영역 묶음 안 안내 줄의 배치 요청이 탭까지 올라오도록
+            app.processEvents()
         state = layout_state(w, w.buff_tab)
         assert state["needed"] > state["viewport"] + 64, state
         assert not d._floating_footer, state
@@ -172,7 +173,7 @@ def test_small_buff_uses_reserved_footer_and_restores_without_drift(window, monk
         scroll.verticalScrollBar().setValue(scroll.verticalScrollBar().maximum())
         app.processEvents()
         assert d.face.mapTo(w, QPoint()).y() > scroll.mapTo(w, scroll.rect().bottomLeft()).y()
-        w.buff_tab.status_label.setText(notice)
+        w.buff_tab.region_guide.setText(notice)
         monkeypatch.setattr(w, "screen", lambda: SimpleNamespace(availableGeometry=lambda: QRect(0, 0, 1600, 1100)))
         d.refresh()
         for _ in range(8):
@@ -381,14 +382,14 @@ def test_bubble_does_not_resize_expanded_list_or_expand_visibility_region(window
 def test_growing_notice_reevaluates_footer_without_tab_switch(window):
     w, app = window
     d = w.creator_dialogue
-    label = w.buff_tab.status_label
+    label = w.buff_tab.region_guide  # 0.27.0: 상태 줄은 지정 후 요약 줄(지정 전 숨김)
     original = label.text()
     assert d._floating_footer
     label.setText("여러 줄 상태 안내입니다.\n" * 40)
-    app.processEvents()
-    app.processEvents()
+    for _ in range(6):  # 0.27.0: 영역 묶음으로 몇 단계 깊어져 배치 요청이 탭까지 올라오는 데 루프가 몇 번 더 돈다
+        app.processEvents()
     assert not d._floating_footer
     label.setText(original)
-    app.processEvents()
-    app.processEvents()
+    for _ in range(6):  # 0.27.0: 영역 묶음으로 몇 단계 깊어져 배치 요청이 탭까지 올라오는 데 루프가 몇 번 더 돈다
+        app.processEvents()
     assert d._floating_footer

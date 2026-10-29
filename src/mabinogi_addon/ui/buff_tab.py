@@ -238,25 +238,34 @@ class BuffTab(QWidget):
         from .region_registration import clear_button
         self.clear_region_btn = clear_button(self, "buff", self._region_cleared)
         hint_row.addWidget(self.clear_region_btn)
-        self._update_region_hint()
-        v.addWidget(section_label("판독 영역 · 버프 목록"))
-        v.addWidget(self.region_hint)
+        # 영역 묶음(안내·도움말 명세 11절): 지정 전 '영역 지정' 상자, 지정 후 상태 줄 + 접힌 '영역 다시 지정 ▸'
+        body = QWidget()
+        region = QVBoxLayout(body)
+        region.setContentsMargins(0, 0, 0, 0)
+        region.addWidget(self.region_hint)
         hint_row.removeWidget(self.region_hint)
         hint_row.addStretch()
-        v.addLayout(hint_row)
+        region.addLayout(hint_row)
         self.region_guide = hint_label(REGION_GUIDE)
-        v.addWidget(self.region_guide)
+        region.addWidget(self.region_guide)
         # 즐겨찾기 영역 인식 줄(즐겨찾기 영역일 때만): 칸 줄 수·등록 버프 켜짐/꺼짐. 메인 상태 폴링이 갱신한다.
         self.favorites_info = hint_label("")
         self.favorites_info.hide()
-        v.addWidget(self.favorites_info)
-        v.addWidget(self._build_read_mode())
-        v.addLayout(top)
+        region.addWidget(self.favorites_info)
+        region.addWidget(self._build_read_mode())
 
-        self.status_label = hint_label("")  # 진단 상태(추적 중/게임 비활성 등)
+        self.status_label = hint_label("")  # 진단 상태(추적 중/게임 비활성 등) = 지정 후 요약 줄
         from .status_icon import status_row
         status, self.status_icon = status_row(self.status_label)  # B안: 앞 기호 대신 그린 아이콘
-        v.addLayout(status)
+        summary = QWidget()
+        summary.setLayout(status)
+        from .region_section import RegionSection
+        self.region_section = RegionSection(body, unset_text="지정하면 버프 남은 시간을 오버레이로 보여줘요",
+                                            summary=summary)
+        v.addWidget(section_label("판독 영역 · 버프 목록"))
+        v.addWidget(self.region_section)
+        self._update_region_hint()
+        v.addLayout(top)
 
         self.buff_list = QListWidget()
         self.buff_list.setIconSize(QSize(32, 32))
@@ -365,9 +374,15 @@ class BuffTab(QWidget):
         self.status_label.setStyleSheet(f"color:{color};")
 
     # ---- 영역 지정 ----
-    def _update_region_hint(self) -> None:
+    def _update_region_hint(self, *, just_set: bool = False) -> None:
         region = config.load_capture_region("buffTracker")
         self.clear_region_btn.setEnabled(region is not None)
+        section = getattr(self, "region_section", None)
+        if section is not None:  # 영역 묶음: 미지정이면 '영역 지정' 상자, 지정되면 요약 줄 + 접힘
+            newly = bool(region) and not section.registered and getattr(self, "_region_ready", False)
+            section.set_registered(bool(region), just_set=just_set or newly)
+            self.region_hint.setVisible(bool(region))
+            self._region_ready = True
         if region:
             self.region_hint.setText(
                 f"등록됨 · {region['x']},{region['y']}  "

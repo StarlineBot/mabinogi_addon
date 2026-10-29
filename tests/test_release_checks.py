@@ -71,6 +71,8 @@ def test_current_plan_matches_bundled_release_and_changed_features():
         'tests/test_tray_status.py', 'tests/test_dorcha_inquiry.py', 'tests/test_dorcha_autofind.py',
         'tests/test_resource_integration.py', 'tests/test_public_release.py', 'tests/test_halo_capture.py',
         'tests/test_boss_tab.py', 'tests/test_feature_release_policy.py', 'tests/test_buff_favorites.py',
-        'tests/test_buff_favorites_ui.py',
+        'tests/test_buff_favorites_ui.py', 'tests/test_settings_grouping.py', 'tests/test_interaction_polish.py',
+        'tests/test_custom_autosave.py', 'tests/test_calculator_result_state.py', 'tests/test_wrapping_controls.py',
+        'tests/test_interaction_consistency.py',
     })
     assert set(paths) == expected

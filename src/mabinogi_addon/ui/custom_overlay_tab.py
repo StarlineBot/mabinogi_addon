@@ -17,11 +17,9 @@ from PySide6.QtGui import QColor, QPen
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
-    QGridLayout,
     QHBoxLayout,
     QInputDialog,
     QListWidget,
-    QListWidgetItem,
     QLabel,
     QMessageBox,
     QPushButton,
@@ -40,8 +38,8 @@ from .. import config
 from ..system.window_watcher import WindowWatcher
 from .help_dialog import tab_header
 from .mirror_manager import MirrorManager
-from .widgets import CapturePathLabel, checkbox, section_label, hint_label
-from .settings_layout import DANGER_STYLE, disclosure
+from .widgets import CapturePathLabel, checkbox, hint_label
+from .settings_layout import DANGER_STYLE, LOCK_STYLE
 
 _log = logging.getLogger(__name__)
 
@@ -147,8 +145,10 @@ class CustomOverlayTab(QWidget):
         self.enable.toggled.connect(self._on_enable)
         v.addWidget(self.enable)
         self._mgr.set_paused(not self.enable.isChecked())
+        # 프리셋(명세 11.2): 1줄 선택·불러오기·관리, 2줄 현재 프리셋 · 자동 저장 + 다른 이름으로 저장(안내 2줄 삭제)
+        preset_box = QGroupBox("프리셋")
+        preset_box_layout = QVBoxLayout(preset_box)
         preset_row = QHBoxLayout()
-        preset_row.addWidget(QLabel("프리셋"))
         self.preset_combo = QComboBox()
         self.preset_combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
         self.preset_combo.setMinimumContentsLength(8)
@@ -156,24 +156,12 @@ class CustomOverlayTab(QWidget):
         self.preset_load_btn = QPushButton("불러오기")
         self.preset_load_btn.clicked.connect(self._on_preset_load)
         preset_row.addWidget(self.preset_load_btn)
+        preset_row.addStretch()
         self.preset_manage_btn = QToolButton()
         self.preset_manage_btn.setText("프리셋 관리")
         self.preset_manage_btn.setCheckable(True)
         preset_row.addWidget(self.preset_manage_btn)
-        v.addLayout(preset_row)
-        overlay_group = QGroupBox("오버레이")
-        overlay_layout = QVBoxLayout(overlay_group)
-        v.addWidget(overlay_group)
-        preset_group = QGroupBox("프리셋")
-        preset_layout = QVBoxLayout(preset_group)
-        self.region_btn = QPushButton("복제할 영역 추가")
-        self.region_btn.setToolTip("드래그로 화면 일부를 잘라 오버레이로 복제(돋보기)")
-        self.region_btn.clicked.connect(self._on_region)
-        row = QHBoxLayout()
-        row.addWidget(self.region_btn)
-        row.addStretch()
-        add_row = row
-
+        preset_box_layout.addLayout(preset_row)
         row = QHBoxLayout()
         self.active_label = CapturePathLabel()
         self.active_label.setStyleSheet("")
@@ -183,7 +171,7 @@ class CustomOverlayTab(QWidget):
         row.addWidget(self.active_label, 1)
         row.addWidget(self.save_status)
         row.addWidget(self.save_btn)
-        overlay_layout.addLayout(row)
+        preset_box_layout.addLayout(row)
         self.error_box = QWidget()
         error_row = QHBoxLayout(self.error_box)
         self.error_label = CapturePathLabel()
@@ -193,14 +181,11 @@ class CustomOverlayTab(QWidget):
         error_row.addWidget(self.error_label, 1)
         error_row.addWidget(self.retry_btn)
         self.error_box.setStyleSheet("color:#c0392b; background:#fdecea;")
-        overlay_layout.addWidget(self.error_box)
+        preset_box_layout.addWidget(self.error_box)
         self.error_box.hide()
-        guidance = CapturePathLabel()
-        guidance.setText("변경은 현재 프리셋에 자동 저장됩니다. 원본을 남기려면 먼저 다른 이름으로 저장하세요.")
-        overlay_layout.addWidget(guidance)
-        overlay_layout.addLayout(add_row)
-
-        # 프리셋
+        preset_group = QWidget()  # 프리셋 관리(펼침): 삭제·시작 시 자동 불러오기
+        preset_layout = QVBoxLayout(preset_group)
+        preset_layout.setContentsMargins(0, 0, 0, 0)
         preset_row = QHBoxLayout()
         self.preset_delete_btn = QPushButton("선택 프리셋 삭제")
         self.preset_delete_btn.setStyleSheet(_DANGER_QSS)
@@ -210,7 +195,6 @@ class CustomOverlayTab(QWidget):
         self.selection_label.setText("선택: 없음")
         preset_row.addWidget(self.selection_label, 1)
         preset_layout.addLayout(preset_row)
-
         # 시작 대상은 적용 대상이나 목록 선택과 별도로 저장한다.
         row = QHBoxLayout()
         row.addWidget(QLabel("시작 시 자동 불러오기"))
@@ -220,14 +204,38 @@ class CustomOverlayTab(QWidget):
         self.auto_combo.currentIndexChanged.connect(self._on_auto_changed)
         row.addWidget(self.auto_combo, 1)
         preset_layout.addLayout(row)
+        preset_box_layout.addWidget(preset_group)
+        preset_group.hide()
+        self.preset_manage_btn.toggled.connect(preset_group.setVisible)
         self.preset_combo.currentIndexChanged.connect(self._selection_changed)
+        v.addWidget(preset_box)
 
-        # 오버레이 목록(선택만)
-        self.overlays_title = CapturePathLabel()
+        # 오버레이(명세 11.2): 비었을 때는 점선 안내, 있을 때 추가·전체 잠금 + 표 + 선택 삭제. 표의 잠금 칸 = 하나씩 잠금/해제
+        overlay_group = QGroupBox("오버레이")
+        overlay_layout = QVBoxLayout(overlay_group)
+        v.addWidget(overlay_group)
+        self.region_btn = QPushButton("＋ 복제할 영역 추가")
+        self.region_btn.setToolTip("드래그로 화면 일부를 잘라 오버레이로 복제(돋보기)")
+        self.region_btn.clicked.connect(self._on_region)
+        self.lock_all_btn = QPushButton("전체 위치 잠금")
+        self.lock_all_btn.setCheckable(True)
+        self.lock_all_btn.setStyleSheet(LOCK_STYLE)
+        self.lock_all_btn.clicked.connect(lambda checked: self._mgr.set_locked_all(checked))
+        row = QHBoxLayout()
+        row.addWidget(self.region_btn)
+        row.addStretch()
+        row.addWidget(self.lock_all_btn)
+        overlay_layout.addLayout(row)
+        self.empty_hint = QLabel("아직 오버레이가 없어요. ‘복제할 영역 추가’로 게임 화면 일부를 골라 원하는 위치에 띄워 보세요.")
+        self.empty_hint.setWordWrap(True)
+        self.empty_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.empty_hint.setStyleSheet("color:#8a8f98; border:1px dashed #8a8f98; border-radius:4px; padding:14px;")
+        overlay_layout.addWidget(self.empty_hint)
+        self.overlays_title = CapturePathLabel()  # 설정 교체(재시작 대기) 때만 보임
         self.overlays_title.setStyleSheet("font-weight:600;")
         self.overlays_title.setText("적용 중인 오버레이")
+        self.overlays_title.hide()
         overlay_layout.addWidget(self.overlays_title)
-        overlay_layout.addWidget(hint_label("잠금을 해제한 오버레이에서 마우스 휠로 크기를 조절할 수 있습니다."))
         self.overlay_list = QTreeWidget()
         self.overlay_list.setRootIsDecorated(False)
         self.overlay_list.setMinimumHeight(100)
@@ -239,46 +247,25 @@ class CustomOverlayTab(QWidget):
         self.overlay_list.header().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
         self.overlay_list.header().setMinimumSectionSize(85)
         self.overlay_list.header().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        self.overlay_list.itemChanged.connect(self._on_item_lock)
+        self.overlay_list.itemClicked.connect(self._on_item_lock)
         self.overlay_list.itemSelectionChanged.connect(self._update_commands)
         overlay_layout.addWidget(self.overlay_list)
+        row = QHBoxLayout()
+        self.del_sel_btn = QPushButton("선택 삭제")
+        self.del_sel_btn.setStyleSheet(_DANGER_QSS)
+        self.del_sel_btn.clicked.connect(self._on_delete_selected)
+        row.addWidget(self.del_sel_btn)
+        row.addStretch()
+        overlay_layout.addLayout(row)
+        self.list_hint = hint_label("표의 위치 잠금 칸을 눌러 하나씩 잠그거나 풀 수 있어요. 잠금을 풀면 마우스 휠로 크기를 바꿀 수 있어요.")
+        overlay_layout.addWidget(self.list_hint)
+        self._populated_widgets = (self.lock_all_btn, self.overlay_list, self.del_sel_btn, self.list_hint)
 
         # 호환 캡처 모드: 미러가 검정/멈춤(고정)으로 나올 때 켠다. '전체 창 모드' + 특정
         # GPU(MPO)에서 DWM 미러가 안 그려지는 경우를 캡처 방식으로 우회(CPU 약간↑).
         self.compat_chk = checkbox("호환 캡처 모드 (미러가 검정·멈춤으로 나올 때 켜세요)")
         self.compat_chk.setChecked(config.load_mirror_force_capture())
         self.compat_chk.toggled.connect(self._on_compat_toggled)
-
-        # 선택/전체 명령을 행으로 구분한다.
-        grid = QGridLayout()
-        grid.setHorizontalSpacing(6)
-        grid.setVerticalSpacing(6)
-        for c in range(4):
-            grid.setColumnStretch(c, 1)
-        self.sel_lock_btn = QPushButton("선택 잠금")
-        self.sel_lock_btn.clicked.connect(lambda: self._lock_selected(True))
-        self.sel_unlock_btn = QPushButton("선택 잠금 해제")
-        self.sel_unlock_btn.clicked.connect(lambda: self._lock_selected(False))
-        self.del_sel_btn = QPushButton("선택 삭제")
-        self.del_sel_btn.setStyleSheet(_DANGER_QSS)
-        self.del_sel_btn.clicked.connect(self._on_delete_selected)
-        self.del_all_btn = QPushButton("전체 삭제")
-        self.del_all_btn.setStyleSheet(_DANGER_QSS)
-        self.del_all_btn.clicked.connect(self._on_delete_all)
-        self.lock_all_btn = QPushButton("전체 잠금")
-        self.lock_all_btn.clicked.connect(lambda: self._mgr.set_locked_all(True))
-        self.unlock_all_btn = QPushButton("전체 잠금 해제")
-        self.unlock_all_btn.clicked.connect(lambda: self._mgr.set_locked_all(False))
-        grid.addWidget(self.sel_lock_btn, 0, 0)
-        grid.addWidget(self.sel_unlock_btn, 0, 1)
-        grid.addWidget(self.del_sel_btn, 0, 2)
-        grid.addWidget(self.lock_all_btn, 1, 0)
-        grid.addWidget(self.unlock_all_btn, 1, 1)
-        grid.addWidget(self.del_all_btn, 1, 2)
-        overlay_layout.addLayout(grid)
-        v.addWidget(preset_group)
-        preset_group.hide()
-        self.preset_manage_btn.toggled.connect(preset_group.setVisible)
         self.advanced_btn = QToolButton()
         self.advanced_btn.setText("고급 · 캡처 호환성")
         self.advanced_btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
@@ -329,10 +316,14 @@ class CustomOverlayTab(QWidget):
     def _update_commands(self):
         selected = bool(self.overlay_list.selectedItems())
         populated = self.overlay_list.topLevelItemCount() > 0
-        for button in (self.sel_lock_btn, self.sel_unlock_btn, self.del_sel_btn):
-            button.setEnabled(selected)
-        for button in (self.lock_all_btn, self.unlock_all_btn, self.del_all_btn):
-            button.setEnabled(populated)
+        self.del_sel_btn.setEnabled(selected)
+        self.lock_all_btn.setEnabled(populated)
+        locked = populated and all(o.get("locked") for o in self._mgr.to_dicts())
+        self.lock_all_btn.setChecked(locked)
+        self.lock_all_btn.setText("전체 위치 잠금됨" if locked else "전체 위치 잠금")
+        for widget in self._populated_widgets:  # 비었으면 표·버튼 대신 점선 안내(명세 11.2)
+            widget.setVisible(populated)
+        self.empty_hint.setVisible(not populated)
 
     def _on_auto_changed(self) -> None:
         if self._writes_suspended:
@@ -409,13 +400,21 @@ class CustomOverlayTab(QWidget):
         self._update_commands()
 
     def _on_item_lock(self, item, column):
-        if column == 3:
-            self._editing_lock = True
-            try:
-                self._mgr.set_locked([self.overlay_list.indexOfTopLevelItem(item)],
-                                     item.checkState(3) == Qt.CheckState.Checked)
-            finally:
-                self._editing_lock = False
+        """표의 '위치 잠금' 칸을 누르면 그 오버레이만 잠금/해제(명세 11.2 신규 동작)."""
+        if column != 3 or self._writes_suspended:
+            return
+        index = self.overlay_list.indexOfTopLevelItem(item)
+        overlays = self._mgr.to_dicts()
+        if not 0 <= index < len(overlays):
+            return
+        locked = not overlays[index].get("locked")
+        self._editing_lock = True  # 목록을 다시 만들지 않아 선택·스크롤이 그대로 남는다
+        try:
+            self._mgr.set_locked([index], locked)
+        finally:
+            self._editing_lock = False
+        item.setText(3, "잠금됨" if locked else "잠금 해제")
+        self._update_commands()
 
     def _refresh_presets(self) -> None:
         selected = self.preset_combo.currentData()
@@ -458,14 +457,15 @@ class CustomOverlayTab(QWidget):
         if self._writes_suspended:
             self.active_label.setText("설정이 교체되었습니다")
             self.overlays_title.setText("적용 중인 오버레이 · 재시작 대기")
+            self.overlays_title.show()
             self.save_status.setText("재시작 필요")
             self.save_status.setStyleSheet("")
             self.error_box.hide()
             return
         name = self._active_preset or "이름 없는 구성"
-        self.active_label.setText(f"현재 프리셋: {name}")
-        self.overlays_title.setText("현재 오버레이 목록")
-        self.save_status.setText("저장 실패" if self._save_error else "저장 대기 중" if self._dirty else "자동 저장됨")
+        self.active_label.setText(f"현재: {name} · 바꾸면 자동 저장돼요")
+        self.overlays_title.hide()
+        self.save_status.setText("저장 실패" if self._save_error else "저장 대기 중" if self._dirty else "")
         self.save_status.setStyleSheet("color:#c0392b;" if self._save_error else "")
         self.error_box.setVisible(bool(self._save_error))
         self.error_label.setText(
@@ -498,9 +498,6 @@ class CustomOverlayTab(QWidget):
         return True
 
     # ---- 오버레이 버튼 ----
-    def _lock_selected(self, locked: bool) -> None:
-        self._mgr.set_locked(self._selected_rows(self.overlay_list), locked)
-
     def _on_delete_selected(self) -> None:
         rows = self._selected_rows(self.overlay_list)
         names = [self.overlay_list.topLevelItem(i).text(0) for i in rows]
@@ -509,16 +506,6 @@ class CustomOverlayTab(QWidget):
             summary += f"\n외 {len(names)-8}개"
         if rows and self._confirm("선택 오버레이 삭제", "다음 오버레이를 삭제할까요?\n" + summary):
             self._mgr.remove_indices(rows)
-
-    def _on_delete_all(self) -> None:
-        if not self._mgr.overlays():
-            return
-        names = [self.overlay_list.topLevelItem(i).text(0) for i in range(self.overlay_list.topLevelItemCount())]
-        summary = "\n".join(name[:80] for name in names[:8])
-        if len(names) > 8:
-            summary += f"\n외 {len(names)-8}개"
-        if self._confirm("오버레이 전체 삭제", "현재 목록의 모든 오버레이를 삭제할까요?\n" + summary):
-            self._mgr.clear()
 
     # ---- 프리셋 버튼 ----
     def _on_preset_save(self) -> None:

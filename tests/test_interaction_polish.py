@@ -92,25 +92,46 @@ def test_stat_individual_and_all_locks_preserve_show_alert_pause(window):
 
 
 def test_custom_empty_and_selection_command_states(window):
+    # 0.27.0(안내·도움말 명세 11.2): 선택/전체 × 잠금/해제/삭제 6버튼 → 선택 삭제·전체 위치 잠금 2개, 비었을 때는 표·버튼 대신 점선 안내
     w, app = window
     tab = w.custom_overlay_tab
-    selected = (tab.sel_lock_btn, tab.sel_unlock_btn, tab.del_sel_btn)
-    all_items = (tab.lock_all_btn, tab.unlock_all_btn, tab.del_all_btn)
-    assert not any(b.isEnabled() for b in (*selected, *all_items))
-    assert tab.region_btn.isEnabled()
+    w._open_setup_feature("custom")
+    settle(app)
+    assert not tab.del_sel_btn.isEnabled() and not tab.lock_all_btn.isEnabled()
+    assert tab.empty_hint.isVisible() and not tab.overlay_list.isVisible() and not tab.lock_all_btn.isVisible()
+    assert tab.region_btn.isEnabled() and tab.region_btn.isVisible()
     assert not tab.preset_load_btn.isEnabled()
     assert not tab.preset_delete_btn.isEnabled()
     tab._mgr.add(dict(x=1, y=2, w=40, h=40, posX=100, posY=100, name="시험"))
-    assert all(b.isEnabled() for b in all_items)
-    assert not any(b.isEnabled() for b in selected)
+    settle(app)
+    assert tab.lock_all_btn.isEnabled() and tab.overlay_list.isVisible() and not tab.empty_hint.isVisible()
+    assert not tab.del_sel_btn.isEnabled()
     tab.overlay_list.topLevelItem(0).setSelected(True)
-    assert all(b.isEnabled() for b in selected)
+    assert tab.del_sel_btn.isEnabled()
     tab._mgr.clear()
-    assert not any(b.isEnabled() for b in (*selected, *all_items))
+    assert not tab.del_sel_btn.isEnabled() and not tab.lock_all_btn.isEnabled()
     before = deepcopy(config._read_local_config())
     tab.preset_manage_btn.setChecked(True)
     tab.preset_manage_btn.setChecked(False)
     assert config._read_local_config() == before
+
+
+def test_custom_lock_cell_toggles_one_overlay_and_all_lock_button_follows(window):
+    # 0.27.0(명세 11.2 신규 동작): 표의 '위치 잠금' 칸을 누르면 그 오버레이만 잠금/해제, 모두 잠기면 '전체 위치 잠금됨'
+    w, app = window
+    tab = w.custom_overlay_tab
+    for i in range(2):
+        tab._mgr.add(dict(x=1 + i, y=2, w=40, h=40, posX=100, posY=100, name=f"시험{i}"))
+    tab._mgr.set_locked_all(False)
+    first = tab.overlay_list.topLevelItem(0)
+    tab.overlay_list.itemClicked.emit(first, 3)
+    assert [o.locked for o in tab._mgr.overlays()] == [True, False]
+    assert tab.overlay_list.topLevelItem(0).text(3) == "잠금됨" and tab.lock_all_btn.text() == "전체 위치 잠금"
+    tab.overlay_list.itemClicked.emit(tab.overlay_list.topLevelItem(0), 0)  # 다른 칸은 잠금을 바꾸지 않음
+    assert [o.locked for o in tab._mgr.overlays()] == [True, False]
+    tab.lock_all_btn.click()
+    assert all(o.locked for o in tab._mgr.overlays()) and tab.lock_all_btn.text() == "전체 위치 잠금됨"
+    tab._mgr.clear()
 
 
 def test_custom_delete_confirmation_identifies_overlay_not_preset(window, monkeypatch):
@@ -120,23 +141,24 @@ def test_custom_delete_confirmation_identifies_overlay_not_preset(window, monkey
     tab.overlay_list.topLevelItem(0).setSelected(True)
     confirmations = []
     monkeypatch.setattr(tab, "_confirm", lambda title, text: confirmations.append((title, text)) or False)
-    tab._on_delete_selected()
-    tab._on_delete_all()
-    assert len(confirmations) == 2
+    tab._on_delete_selected()  # 0.27.0: '전체 삭제'는 없앰(명세 11.2 — 버튼 2개)
+    assert len(confirmations) == 1
     assert all("삭제 확인 대상" in text for _, text in confirmations)
     assert all("오버레이" in title for title, _ in confirmations)
     assert tab.overlay_list.topLevelItemCount() == 1
 
 
-def test_resource_both_displays_off_keeps_preview_and_independent_alert(window):
+def test_resource_both_displays_off_keeps_independent_alert(window):
+    # 0.27.0(명세 11.2): 표시 미리보기는 없앴고, 투아림 알림 사용은 '투아림 알림' 구역으로 옮겼다(표시와 독립)
     w, app = window
     w._open_setup_feature("dorcha")
     w.dorcha_tab.enable.setChecked(False)
     w.resource_tab.percent_chk.setChecked(False)
     w.tuarim_tab.enable.setChecked(True)
     settle(app)
-    assert w.dorcha_tab.preview_scroll.isVisible()
-    assert w.dorcha_tab.preview_scroll.width() > 0
+    assert not w.dorcha_tab.preview_scroll.isVisible()
+    assert w.tuarim_tab.enable.parentWidget() is w.resource_tab.tuarim_alert_box
+    assert w.tuarim_tab.enable.isVisible()
     assert config.load_tuarim()["enabled"]
     assert not w.dorcha_tab.enable.isChecked()
     assert not w.resource_tab.percent_chk.isChecked()
@@ -160,10 +182,12 @@ def test_seeded_lock_and_preset_states_render(window, tmp_path):
     tab._set_bar_locked("hp", True)
     tab._set_bar_locked("mp", False)
     tab._set_bar_locked("sta", True)
-    for sid, ratio in (("hp", .7), ("mp", 1.), ("sta", 1.)):
-        tab._preview_bars[sid].set_value(ratio, f"{ratio*100:.0f}%")
+    # 0.27.0(명세 11.2): 표시 미리보기 없음. 잠금은 하나 — 바마다 다르면 '위치 잠금'(모두 잠겨야 '위치 잠금됨')
+    assert not tab.lock_btn.isChecked() and tab.lock_btn.text() == "위치 잠금"
+    tab.lock_btn.click()
+    assert all(b.isChecked() for b in tab.bar_lock_buttons.values()) and tab.lock_btn.text() == "위치 잠금됨"
+    tab._set_bar_locked("mp", False)
     settle(app)
-    assert tab.display_preview.horizontalScrollBar().maximum() == 0
     assert w.grab().save(str(tmp_path / "stat-mixed-locks.png"))
     custom = w.custom_overlay_tab
     items = [dict(x=10+i*50, y=20, w=40, h=40, posX=100, posY=100,
@@ -178,7 +202,7 @@ def test_seeded_lock_and_preset_states_render(window, tmp_path):
     settle(app)
     assert custom._active_preset == "편집 대상"
     assert custom.overlay_list.topLevelItemCount() == 2
-    assert not custom.sel_lock_btn.isEnabled()
+    assert not custom.del_sel_btn.isEnabled()
     assert custom.lock_all_btn.isEnabled()
     assert w.grab().save(str(tmp_path / "custom-distinct-targets.png"))
 

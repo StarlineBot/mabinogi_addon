@@ -131,3 +131,22 @@ def test_sidebar_font_growth_and_return_preserve_selection(monkeypatch):
             widget.close()
             widget.deleteLater()
         app.processEvents()
+
+
+def test_exchange_opens_with_first_dungeon_only_when_first_shown(monkeypatch):
+    # 명세 12절(2026-10-29): 던전 입장 계산기처럼 첫 던전이 선택된 채 열린다. 시세 조회는 탭이 처음 보일 때만
+    # (앱 시작·탭 생성 때 미리 조회하지 않음), 사용자가 고른 던전은 그대로 둔다.
+    calls = []
+    monkeypatch.setattr(ExchangeTab, '_work', lambda self, region: calls.append(region))
+    monkeypatch.setattr('mabinogi_addon.ui.exchange_tab.threading.Thread',
+                        lambda target, args, daemon: type('T', (), {'start': lambda self: target(*args)})())
+    tab = ExchangeTab()
+    assert calls == [] and tab.region_list.currentItem() is None
+    tab.show()
+    first = tab.region_list.item(0).text()
+    assert tab.region_list.currentItem().text() == first and calls == [first] and tab.title.text() == first
+    tab.region_list.setCurrentRow(2)
+    tab.hide()
+    tab.show()
+    assert tab.region_list.currentRow() == 2 and calls == [first, tab.region_list.item(2).text()]
+    tab.close()

@@ -123,11 +123,14 @@ class BossTab(QWidget):
 
         # 실제 컨트롤 묶음(항상 표시 — 로그인 불필요)
         self._controls = QWidget()
-        cv = QVBoxLayout(self._controls)
+        controls = QVBoxLayout(self._controls)
+        controls.setContentsMargins(0, 0, 0, 0)
+        # 영역 묶음(안내·도움말 명세 11절): 버튼·안내 한 줄·판독 확인은 지정 후 '영역 다시 지정 · 판독 확인 ▸' 안으로
+        region_body = QWidget()
+        cv = QVBoxLayout(region_body)
         cv.setContentsMargins(0, 0, 0, 0)
 
         row = QHBoxLayout()
-        cv.addWidget(QLabel("판독 영역 · 보스 체력바"))
         self.region_btn = QPushButton("직접 지정")
         self.region_btn.setToolTip(
             "보스 HP바의 이름과 체력 비율이 들어오도록 지정합니다."
@@ -169,13 +172,17 @@ class BossTab(QWidget):
         prev_row.addWidget(self.status_label, 1)
         preview_layout.addLayout(prev_row)
         cv.addWidget(preview_group)
+        from .region_section import RegionSection
+        self.region_section = RegionSection(region_body, unset_text="지정하면 보스 체력이 패턴 기준에 가까워질 때 알려줘요",
+                                            title="영역 다시 지정 · 판독 확인")
+        controls.addWidget(QLabel("판독 영역 · 보스 체력바"))
+        controls.addWidget(self.region_section)
 
-        cv.addWidget(
-            hint_label("판독 미리보기의 식별 결과와 HP가 게임 화면과 같은지 확인해 주세요.")
-        )
-
-        # 경고 위치 이동/고정(다음 패턴 목록과 동일 구조).
+        # 화면 표시(명세 11.2): 패턴 경고·남은 패턴 목록을 한 상자 두 줄로. 잠금은 상태형 버튼 하나(설명 줄 없음).
+        display = QGroupBox("화면 표시")
+        display_layout = QVBoxLayout(display)
         warn_row = QHBoxLayout()
+        warn_row.addWidget(QLabel("패턴 경고"))
         self.warn_lock_btn = QPushButton("경고 위치 잠금")
         self.warn_lock_btn.setCheckable(True)
         from .settings_layout import LOCK_STYLE
@@ -184,12 +191,7 @@ class BossTab(QWidget):
         warn_row.addWidget(self.warn_lock_btn)
         warn_row.addWidget(prev_btn)
         warn_row.addStretch()
-        self.warn_lock_hint = hint_label("")
-        warning_group = QGroupBox("패턴 경고")
-        warning_layout = QVBoxLayout(warning_group)
-        warning_layout.addLayout(warn_row)
-        warning_layout.addWidget(self.warn_lock_hint)
-        cv.addWidget(warning_group)
+        display_layout.addLayout(warn_row)
         self._sync_warn_btn()
 
         # 다음 패턴 목록(왼쪽에 남은 패턴 % 나열) — 준비(5% 전) 알림이 뜨면 그 %가 빠짐.
@@ -197,20 +199,16 @@ class BossTab(QWidget):
         self.show_upcoming.setToolTip("남은 패턴의 체력 비율을 별도 목록으로 표시합니다.")
         self.show_upcoming.setChecked(cfg["showUpcoming"])
         self.show_upcoming.toggled.connect(self._on_show_upcoming)
-        upcoming_group = QGroupBox("남은 패턴 목록")
-        upcoming_layout = QVBoxLayout(upcoming_group)
-        upcoming_layout.addWidget(self.show_upcoming)
         up_row = QHBoxLayout()
+        up_row.addWidget(self.show_upcoming)
         self.upcoming_lock_btn = QPushButton("목록 위치 잠금")
         self.upcoming_lock_btn.setCheckable(True)
         self.upcoming_lock_btn.setStyleSheet(LOCK_STYLE)
         self.upcoming_lock_btn.clicked.connect(self._toggle_upcoming_lock)
         up_row.addWidget(self.upcoming_lock_btn)
         up_row.addStretch()
-        self.upcoming_lock_hint = hint_label("")
-        upcoming_layout.addLayout(up_row)
-        upcoming_layout.addWidget(self.upcoming_lock_hint)
-        cv.addWidget(upcoming_group)
+        display_layout.addLayout(up_row)
+        controls.addWidget(display)
         self._sync_upcoming_btn()
         v.addWidget(self._controls)
 
@@ -273,7 +271,7 @@ class BossTab(QWidget):
         for b in self._bosses.values():
             if b.thresholds:
                 pct = ", ".join(f"{t}%" for t in b.thresholds)
-                lines.append(f"• {b.name} — {pct}")
+                lines.append(f"{b.name} — {pct}")
         lbl = hint_label("\n".join(lines))
         return lbl
 
@@ -321,6 +319,14 @@ class BossTab(QWidget):
             self.region_label.setText(f"등록됨 · {r['w']}×{r['h']}")
         else:
             self.region_label.setText("영역 미지정")
+        section = getattr(self, "region_section", None)
+        if section is not None:  # 영역 묶음(명세 11절): 지정 후 한 줄 요약 + 접힘, 막 지정했으면 펼쳐 판독 확인
+            newly = bool(self._region) and not section.registered and getattr(self, "_region_ready", False)
+            section.set_registered(bool(self._region), just_set=newly)
+            self.region_label.setVisible(bool(self._region))
+            if self._region and not section.summary_label.text():
+                section.set_summary("✓ 영역 지정됨 · 식별: — · HP —")
+            self._region_ready = True
 
     def reload_region(self) -> None:
         """공유 보스 HP바 영역을 다시 읽어 반영(디버프 탭에서 바꿨을 때 메인이 호출).
@@ -384,8 +390,6 @@ class BossTab(QWidget):
     def _sync_warn_btn(self) -> None:
         self.warn_lock_btn.setChecked(self._overlay.locked)
         self.warn_lock_btn.setText("경고 위치 잠금됨" if self._overlay.locked else "경고 위치 잠금")
-        self.warn_lock_hint.setText("잠금됨 · 경고 창은 클릭을 통과합니다." if self._overlay.locked
-                                   else "잠금 해제됨 · 경고 창을 드래그해 위치를 변경할 수 있습니다.")
 
     def _toggle_warn_lock(self) -> None:
         self._overlay.set_locked(not self._overlay.locked)
@@ -408,8 +412,6 @@ class BossTab(QWidget):
     def _sync_upcoming_btn(self) -> None:
         self.upcoming_lock_btn.setChecked(self._upcoming.locked)
         self.upcoming_lock_btn.setText("목록 위치 잠금됨" if self._upcoming.locked else "목록 위치 잠금")
-        self.upcoming_lock_hint.setText("잠금됨 · 목록은 클릭을 통과합니다." if self._upcoming.locked
-                                       else "잠금 해제됨 · 목록을 드래그해 위치를 변경할 수 있습니다.")
 
     def _on_show_upcoming(self, checked: bool) -> None:
         self._save()
@@ -539,6 +541,7 @@ class BossTab(QWidget):
             name = "미식별"
         hp_txt = f"{hp}%" if hp is not None else "—"
         self.status_label.setText(f"식별: {name}   HP: {hp_txt}")
+        self.region_section.set_summary(f"✓ 영역 지정됨 · 식별: {name} · HP {hp_txt}")
 
         # 트래커 상태 갱신: 보스가 이번 프레임 식별됐을 때만(garbage 발동 차단).
         # 관측은 '경고 사용'과 무관하게 돌려 '다음 패턴 목록'도 최신으로 유지하고,
