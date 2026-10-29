@@ -162,7 +162,7 @@ def test_long_preset_names_do_not_push_commands_outside_viewport(window):
     scroll = w._combat_pages["custom"]
     assert scroll.horizontalScrollBar().maximum() == 0
     assert tab.active_label.width() > 100
-    for control in (tab.save_btn, tab.preset_load_btn, tab.preset_delete_btn, tab.auto_combo, tab.del_all_btn):
+    for control in (tab.save_btn, tab.preset_load_btn, tab.preset_delete_btn, tab.auto_combo, tab.lock_all_btn):  # 0.27.0: 전체 삭제 대신 전체 위치 잠금(명세 11.2)
         scroll.ensureWidgetVisible(control)
         app.processEvents()
         rect = QRect(control.mapTo(scroll.viewport(), QPoint()), control.size())
