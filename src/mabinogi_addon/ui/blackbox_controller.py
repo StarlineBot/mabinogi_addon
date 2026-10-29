@@ -562,6 +562,26 @@ class BlackboxController(QObject):
             badge.setStyleSheet(style(color) if style else f'color:{color}; font-size:12px; border:none;')
             badge.setToolTip(BADGE_TIPS[state[1]])
 
+    def home_state(self):
+        """홈 '최근 영상 보관' 줄(탐색 구조 명세 12.3): (상태 문구, 종류, 스위치 켬). 보관 시간 등 숫자는 쓰지 않는다."""
+        if self.panel is None or not self._allowed():
+            return '꺼짐', 'muted', False
+        on = self.panel.enabled.isChecked()
+        state = blackbox_badge(self.service, 0, self._gate if self._mode == 'combat' else None)
+        if not on or state is None:
+            return '꺼짐', 'muted', on
+        text, kind = state
+        if kind == 'ok':
+            return '보관 중', 'ok', on
+        if kind == 'error':
+            return '녹화 오류 · 블랙박스 탭에서 확인', 'warn', on
+        text = text.removeprefix('● 블랙박스: ').split(' · ')[0].rstrip('0123456789초 ')
+        return '대기 중 · ' + text, 'muted', on
+
+    def set_home_enabled(self, on):
+        if self.panel is not None and self._allowed() and self.panel.enabled.isChecked() != bool(on):
+            self.panel.enabled.setChecked(bool(on))  # 탭의 '블랙박스 사용'과 같은 경로
+
     def _badge_clicked(self):
         """상단 배지(0.17.2 사용자 결정): 모든 상태에서 블랙박스 탭으로 이동한다. 끄기는 탭의 '블랙박스 사용'에서 한다."""
         if not self._allowed():

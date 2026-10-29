@@ -18,6 +18,7 @@ def window(monkeypatch):
     monkeypatch.setattr(config, "load_discord_user", lambda: {"id": "test", "name": "테스트"})
     monkeypatch.setattr(QApplication, "quit", lambda: None)
     w = MainWindow()
+    w._hide_home()  # 0.28.0: 앱은 홈부터 시작(탐색 구조 명세 12.1). 이 테스트는 탭 화면을 측정한다.
     # These tests measure the editable form. The anchor now intentionally shows guidance instead.
     w.buff_tab.buff_list.setCurrentRow(1)
     assert w.buff_tab.name_edit.isEnabled()

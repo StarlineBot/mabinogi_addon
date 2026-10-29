@@ -190,6 +190,8 @@ class CreatorDialogue(QObject):
         self.enabled = enabled
         if not enabled:
             self.dismiss()
+        if self._home():
+            self.refresh()
 
     def _play_sound(self, text):
         from .notifier import CREATOR_DIALOGUE_SOUND_FILE, SoundNotifier
@@ -218,13 +220,22 @@ class CreatorDialogue(QObject):
     def _scrolled(self, *_):
         self.dismiss()
 
+    def _home(self):
+        visible = getattr(self.window, "home_visible", None)
+        return bool(visible and visible())
+
     def _footer_visible(self):
+        if self._home():
+            # 홈(탐색 구조 명세 12.4): 잡담이 켜져 있으면 창 864, 캐릭터는 다른 탭과 같은 아래 오른쪽. 꺼져 있으면 800.
+            return bool(self.enabled)
         normal = self.window._pages.currentWidget() is self.window._tabs
         # 설정 탭은 위치가 아니라 위젯으로 판단(블랙박스·최적화 탭이 생기면 순서가 밀린다)
         return (normal and self.window._tabs.currentWidget() is not self.window._settings_scroll
                 and not self.window._guide_return_btn.isVisible())
 
     def _can_expand(self, footer, height):
+        if self._home():
+            return bool(footer)  # 홈은 창 전체를 덮으므로 캐릭터를 그 위에 띄운다
         if not (footer and self.window._tabs.currentIndex() == 0
                 and self.window._tracker_tabs.currentIndex() in (0, 1)):
             return False
@@ -252,7 +263,7 @@ class CreatorDialogue(QObject):
             height = min(height, max(200, screen.availableGeometry().height() - frame))
         self._floating_footer = self._can_expand(footer, height)
         for tab in (self.window.buff_tab, self.window.debuff_tab):
-            tab.form_panel.layout().setContentsMargins(0, 0, 0, 64 if self._floating_footer else 0)
+            tab.form_panel.layout().setContentsMargins(0, 0, 0, 64 if self._floating_footer and not self._home() else 0)
         if self._floating_footer:
             layout.removeWidget(self.footer)
             self.footer.setFixedWidth(76)
@@ -279,7 +290,7 @@ class CreatorDialogue(QObject):
 
     def _anchor(self):
         return (self.window.settings_tab.creator_avatar
-                if self.window._tabs.currentWidget() is self.window._settings_scroll else self.face)
+                if self.window._tabs.currentWidget() is self.window._settings_scroll and not self._home() else self.face)
 
     def _position(self, text):
         anchor = self._anchor()

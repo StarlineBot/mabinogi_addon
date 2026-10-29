@@ -651,6 +651,39 @@ class OptimizationController(QObject):
             self.engine.status = '원래부터 같은 값이라 되돌릴 것이 없어요.'
         self._sync_optimization_toggle()
 
+    # ---- 홈 '게임 최적화' 스위치(탐색 구조 명세 12.3 C안) ---------------------------------------
+    def home_state(self):
+        """홈 줄: (상태 문구, 'ok'|'muted'|'warn', 스위치 켬). 켬 = 자동 적용 체크 또는 지금 적용 중."""
+        if self.panel is None or not self._access():
+            return '꺼짐', 'muted', False
+        on = self.panel.auto.isChecked() or self._optimization_on()
+        state = optimization_badge(self.recovery, self.engine, None, restore_wait=self._restore_wait, kept_on=self._kept_on)
+        text = state[0].removeprefix('최적화: ') if state is not None else None
+        if text is None:
+            return ('대기 중 · 게임 대기' if on else '꺼짐'), 'muted', on
+        if text.startswith('적용 중'):
+            return '적용 중', 'ok', on
+        if text in ('오류', '원복 대기'):
+            return text + ' · 최적화 탭에서 확인', 'warn', on
+        return '대기 중 · ' + text, 'muted', on  # 게임 대기 · 보류 · 원복 중
+
+    def set_home_enabled(self, on):
+        """C안 '최적화 사용': 켜면 자동 적용 켜기 + 게임이 있으면 바로 적용, 끄면 자동 적용 끄기 + 지금 적용분 원복.
+        패스트핑(네트워크)은 여기서 바꾸지 않는다(명세 13.10 — 최적화 탭에서 적용)."""
+        d = self.panel
+        if d is None or not self._access():
+            return
+        if on:
+            if not d.auto.isChecked():
+                d.auto.setChecked(True)  # _auto_changed → 저장·_auto_start(게임 대기 또는 바로 적용)
+            else:
+                self._auto_start()
+            return
+        if d.auto.isChecked():
+            d.auto.setChecked(False)
+        if self._optimization_on():
+            self._toggle_optimization()  # 끄기 = 원복(네트워크가 남았으면 기존 확인 창)
+
     def _network_left(self):
         """되돌릴 네트워크(패스트핑 등) 변경이 남았는지. '원복 대기'는 연결을 끊어야 하는 네트워크만 해당한다."""
         return (any(i['kind'] in NETWORK_KINDS for i in self.recovery.pending)

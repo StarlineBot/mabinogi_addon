@@ -332,6 +332,17 @@ class MainWindow(QMainWindow):
         self.settings_tab.game_registered.connect(self.setup_page.refresh)
         self.settings_tab.game_registration_finished.connect(self._setup_game_finished)
         self.setCentralWidget(central)
+        # 홈(탐색 구조 명세 12절): 상위 탭이 아니라 앱 창 전체(상태 줄·탭 포함)를 덮는 중앙 위젯의 자식.
+        from .home_page import HomePage
+        self.home_page = HomePage(central)
+        self.home_page.hide()
+        central.installEventFilter(self)
+        self.home_page.menu_requested.connect(self._hide_home)
+        self.home_page.open_feature.connect(self._home_open_feature)
+        self.home_page.open_region.connect(self._home_open_region)
+        self.home_page.open_combat_tab.connect(self._home_open_combat_tab)
+        self.home_page.switch_toggled.connect(self._home_switch)
+        self.home_page.combat_toggled.connect(lambda on: self._set_paused(not on))
 
         # 버프 오버레이
         self.buff_overlay = BuffOverlay()
@@ -394,6 +405,177 @@ class MainWindow(QMainWindow):
             self._pages.setCurrentWidget(self.setup_guide)
         from .creator_dialogue import CreatorDialogue
         self.creator_dialogue = CreatorDialogue(self)
+        if not needs_start_screen():
+            self._show_home()  # 앱을 새로 띄우면 홈부터(명세 12.1). 안내가 먼저면 안내·둘러보기 뒤에 홈.
+
+    # ---- 홈(탐색 구조 명세 12절) ----
+    # 홈 줄 키 → 기존 화면 키(_open_setup_feature)와 설정 필요 판정 키(setup_state)
+    _HOME_FEATURES = {"buff": "buff", "debuff": "debuff", "boss": "boss", "halo": "halo_timer",
+                      "stat_bars": "stat_bars", "dorcha": "dorcha", "tuarim": "tuarim", "custom": "custom",
+                      "skillbar": "skillbar", "memo": "memo"}
+    _HOME_NAMES = {"buff": "버프", "debuff": "디버프", "boss": "보스 패턴 알림", "halo": "1분 헤일로",
+                   "stat_bars": "체력바", "dorcha": "도르카 표시", "tuarim": "투아림 알림",
+                   "custom": "커스텀 오버레이", "skillbar": "단축바", "memo": "메모"}
+
+    def home_visible(self) -> bool:
+        home = getattr(self, "home_page", None)
+        return home is not None and not home.isHidden()
+
+    def _show_home(self) -> None:
+        if self._closing or self._config_pending_restart:
+            return
+        tour = getattr(self, "_tour", None)
+        if tour is not None:  # 둘러보기 중에는 그 화면을 가리지 않는다
+            return
+        self.home_page.setGeometry(self.centralWidget().rect())
+        self.home_page.update_state(self._home_state())
+        self.home_page.show()
+        self.home_page.raise_()
+        self._raise_creator()
+        self.creator_dialogue.refresh()
+
+    def _hide_home(self) -> None:
+        if not self.home_visible():
+            return
+        self.home_page.hide()
+        self.creator_dialogue.refresh()
+
+    def _raise_creator(self) -> None:
+        # 제작자 캐릭터·말풍선은 홈 위에 둔다(명세 12.4: 홈에서도 같은 위치·모양, 잡담이 그대로 뜸)
+        dialogue = getattr(self, "creator_dialogue", None)
+        if dialogue is not None:
+            dialogue.footer.raise_()
+            dialogue.bubble.raise_()
+
+    def eventFilter(self, watched, event):
+        if watched is self.centralWidget() and event.type() == QEvent.Type.Resize and self.home_visible():
+            self.home_page.setGeometry(watched.rect())
+            self._raise_creator()
+        return super().eventFilter(watched, event)
+
+    def _home_open_feature(self, key) -> None:
+        """줄·› 누름: 홈을 닫고 그 화면으로."""
+        if key in self._HOME_FEATURES:
+            self._open_setup_feature(self._HOME_FEATURES[key])  # 성공하면 홈을 닫는다
+            return
+        if self._setup_busy() or self._config_pending_restart or self._setup_flow.closed:
+            return
+        self._hide_home()
+        self._pages.setCurrentWidget(self._tabs)
+        if key in ("opt", "fps"):
+            self.optimization_tools._open_tab()
+            self.optimization_tools.panel.tabs.setCurrentIndex(1 if key == "fps" else 0)
+        elif key == "blackbox":
+            self.blackbox_tools._open_tab()
+        elif key == "keywords":
+            self._tabs.setCurrentWidget(self._party_scroll)
+
+    def _home_open_region(self, key) -> None:
+        """설정 필요 상자의 '영역 지정': 그 화면의 영역 지정 상자(0.27.0)로."""
+        if not self._open_setup_feature(self._HOME_FEATURES.get(key, key)):
+            return
+        tab = {"buff": self.buff_tab, "debuff": self.debuff_tab, "boss": self.boss_tab,
+               "halo": self.boss_tab.halo_capture, "stat_bars": self.stat_bars_tab,
+               "dorcha": self.resource_tab, "tuarim": self.resource_tab}.get(key)
+        section = getattr(tab, "region_section", None)
+        page = self._tracker_tabs.currentWidget()
+        if section is not None and isinstance(page, QScrollArea):
+            page.ensureWidgetVisible(section)
+
+    def _home_open_combat_tab(self) -> None:
+        if self._setup_busy() or self._config_pending_restart or self._setup_flow.closed:
+            return
+        self._hide_home()
+        self._pages.setCurrentWidget(self._tabs)
+        self._tabs.setCurrentWidget(self._tracker_tabs)
+
+    def _home_switch(self, key, on) -> None:
+        """홈 스위치 = 해당 화면의 기존 설정(양쪽 동기화). 새 켜기/끄기 기능은 만들지 않는다(명세 12.3)."""
+        if key == "stat_bars":
+            self.stat_bars_tab.set_all_shown(on)
+        elif key in ("dorcha", "tuarim", "custom"):
+            check = {"dorcha": self.dorcha_tab, "tuarim": self.tuarim_tab, "custom": self.custom_overlay_tab}[key].enable
+            if check.isChecked() != on:
+                check.setChecked(on)
+        elif key == "opt":
+            self.optimization_tools.set_home_enabled(on)
+        elif key == "fps":
+            toggle = self.optimization_tools.panel.frames_toggle
+            if toggle.isEnabled() and toggle.isChecked() != on:
+                toggle.click()  # 최적화 탭 'FPS 표시'와 같은 경로
+        elif key == "blackbox":
+            self.blackbox_tools.set_home_enabled(on)
+        self.home_page.update_state(self._home_state())
+
+    def _home_state(self) -> dict:
+        """홈 상태(명세 12.2·12.3). 각 화면의 기존 상태·설정만 쓰고 새로 판독하지 않는다. 숫자(판독 값)는 넣지 않는다."""
+        from .. import setup_state
+
+        raw = config._read_local_config()
+        game = self._watcher.is_game_active()
+        paused = bool(self._paused)
+        waiting_game = ("대기 중 · 게임 대기", "muted")
+        rows = {}
+
+        def missing(key):
+            return bool(setup_state.missing(self._HOME_FEATURES[key], raw))
+
+        def shown(key, on=True, active="표시 중"):
+            if missing(key):
+                return ("영역 지정 필요", "warn")
+            if not on:
+                return ("꺼짐", "muted")
+            if paused:
+                return ("대기 중 · 일시정지", "muted")
+            return (active, "ok") if game else waiting_game
+
+        def tracked(status):
+            kind = status[2]
+            if kind == "region":
+                return ("영역 지정 필요", "warn")
+            if paused:
+                return ("대기 중 · 일시정지", "muted")
+            if kind == "ok":
+                return ("추적 중", "ok")
+            if kind == "anchor":
+                return ("대기 중 · 기준 버프 찾는 중", "muted")
+            return waiting_game if kind == "inactive" else ("대기 중 · 화면 준비 중", "muted")
+
+        rows["buff"] = tracked(self._buff_status())
+        rows["debuff"] = tracked(self._debuff_status())
+        if missing("boss"):
+            rows["boss"] = ("영역 지정 필요", "warn")
+        elif paused:
+            rows["boss"] = ("대기 중 · 일시정지", "muted")
+        else:
+            rows["boss"] = (("추적 중", "ok") if self.boss_tab.is_boss_present()
+                            else ("대기 중 · 보스가 보이면 동작", "muted"))
+        if missing("halo"):
+            rows["halo"] = ("영역 지정 필요", "warn")
+        elif paused:
+            rows["halo"] = ("대기 중 · 일시정지", "muted")
+        else:
+            armed = getattr(getattr(self.boss_tab.halo_capture, "_clock", None), "armed", False)
+            rows["halo"] = ("추적 중", "ok") if armed else ("대기 중 · 회한 보스가 보이면 동작", "muted")
+        stat_on = self.stat_bars_tab.any_shown()
+        rows["stat_bars"] = (*shown("stat_bars", stat_on), stat_on)
+        for key, tab, active in (("dorcha", self.dorcha_tab, "표시 중"), ("tuarim", self.tuarim_tab, "감시 중"),
+                                 ("custom", self.custom_overlay_tab, "표시 중")):
+            on = tab.enable.isChecked()
+            rows[key] = (*shown(key, on, active), on)
+        rows["skillbar"] = shown("skillbar")
+        rows["memo"] = shown("memo")
+        rows["opt"] = self.optimization_tools.home_state()
+        frames = self.optimization_tools.panel.frames_toggle.isChecked()
+        rows["fps"] = ("표시 중" if frames else "꺼짐", "ok" if frames else "muted", frames)
+        rows["blackbox"] = self.blackbox_tools.home_state()
+        rows["keywords"] = (("감시 중", "ok") if self.party_tab._keywords else ("대기 중 · 키워드 없음", "muted"))
+        # 설정 필요: 사용자가 쓰기로 고른 기능 중 영역이 없는 것만(명세 12.2-3)
+        needs = [(key, self._HOME_NAMES[key]) for key in self._HOME_FEATURES
+                 if setup_state.selected(self._HOME_FEATURES[key], raw) and missing(key)]
+        working = sum(1 for key in self._HOME_FEATURES if rows[key][1] == "ok")
+        title = "paused" if paused else "running" if game else "waiting"
+        return {"title": title, "combat_on": not paused, "working": working, "needs": needs, "rows": rows}
 
     def _open_setup(self):
         self._open_guide()
@@ -416,6 +598,7 @@ class MainWindow(QMainWindow):
             return
         self._tabs.setCurrentWidget(self._tracker_tabs)
         self._tracker_tabs.setCurrentIndex(0)
+        self._hide_home()  # 다른 화면으로 가면 홈을 닫는다
         self._pages.setCurrentWidget(self._tabs)
 
     def _open_setup_feature(self, key):
@@ -423,6 +606,7 @@ class MainWindow(QMainWindow):
         if (page is None or self._setup_busy() or self._closing
                 or self._config_pending_restart or self._setup_flow.closed):
             return False
+        self._hide_home()  # 다른 화면으로 가면 홈을 닫는다
         self._pages.setCurrentWidget(self._tabs)
         self._tabs.setCurrentWidget(self._tracker_tabs)
         self._tracker_tabs.setCurrentWidget(page)
@@ -438,6 +622,7 @@ class MainWindow(QMainWindow):
             return False
         if name != 'optimization' or self._tabs.indexOf(self.optimization_tools.panel) < 0:
             return False
+        self._hide_home()  # 다른 화면으로 가면 홈을 닫는다
         self._pages.setCurrentWidget(self._tabs)
         self.optimization_tools._open_tab()
         return True
@@ -459,6 +644,7 @@ class MainWindow(QMainWindow):
     def _open_setup_login(self):
         if self._setup_busy() or self._config_pending_restart or self._setup_flow.closed:
             return
+        self._hide_home()  # 다른 화면으로 가면 홈을 닫는다
         self._pages.setCurrentWidget(self._tabs)
         scroll = self._tabs.widget(self._tabs.count() - 1)
         self._tabs.setCurrentWidget(scroll)
@@ -512,6 +698,7 @@ class MainWindow(QMainWindow):
             previous.dismiss()
             self._tour = None
         self.setup_guide.reset(first_run=first_run)
+        self._hide_home()  # 다른 화면으로 가면 홈을 닫는다
         self._pages.setCurrentWidget(self.setup_guide)
         self._refresh_guide_return()
 
@@ -519,6 +706,7 @@ class MainWindow(QMainWindow):
         if self._setup_busy() or self._config_pending_restart or self._setup_flow.closed:
             return
         self.setup_guide.refresh()
+        self._hide_home()  # 다른 화면으로 가면 홈을 닫는다
         self._pages.setCurrentWidget(self.setup_guide)
 
     def _run_guide_setup(self):
@@ -619,6 +807,17 @@ class MainWindow(QMainWindow):
         h = QHBoxLayout(bar)
         h.setContentsMargins(12, 6, 12, 6)
         h.setSpacing(10)
+        # 홈(탐색 구조 명세 12.1): 상태 줄 왼쪽. 직접 그린 집 아이콘 + '홈'(이모지 금지). 누르면 홈이 창 전체를 덮는다.
+        from .home_page import house_icon
+        self._home_btn = QPushButton(" 홈")
+        self._home_btn.setObjectName("homeButton")
+        self._home_btn.setIcon(QIcon(house_icon("#2dd4bf")))
+        self._home_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._home_btn.setToolTip("홈: 잘 돌고 있는지 확인하고 켜고 끄는 곳")
+        self._home_btn.setStyleSheet("QPushButton#homeButton { font-size:12px; padding:3px 10px; border-radius:4px;"
+                                     " border:1px solid rgba(128,128,128,0.45); }")
+        self._home_btn.clicked.connect(self._show_home)
+        h.addWidget(self._home_btn)
         h.addStretch(1)  # 오른쪽 정렬: 상태·버튼을 우상단에 모은다.
         # 최적화 상태(명세 13.2, 제작자 전용). 작업이 없으면 숨기고, 누르면 최적화 탭으로 이동한다.
         self._optimization_badge = QPushButton()
@@ -793,6 +992,8 @@ class MainWindow(QMainWindow):
         if self._debuff_engine is not None:
             self.debuff_tab.set_gate_status(self._debuff_engine.gate_diagnostics)
         self._update_header_status()
+        if self.home_visible():
+            self.home_page.update_state(self._home_state())
         self._maybe_tick_update_check()
 
     def _maybe_tick_update_check(self) -> None:
@@ -909,6 +1110,7 @@ class MainWindow(QMainWindow):
         if self._setup_busy() or self._config_pending_restart or self._setup_flow.closed:
             return
         self.creator_dialogue.dismiss()
+        self._hide_home()  # 둘러보기는 탭 화면을 가리킨다
         if not self.isVisible():
             self.show()
         previous = getattr(self, "_tour", None)
@@ -928,10 +1130,12 @@ class MainWindow(QMainWindow):
             self._combat_pages["buff"].ensureWidgetVisible(control)
 
         def go_convenience():
+            self._hide_home()  # 다른 화면으로 가면 홈을 닫는다
             self._pages.setCurrentWidget(self._tabs)
             self._tabs.setCurrentWidget(self._convenience_tabs)
 
         def go_settings():
+            self._hide_home()  # 다른 화면으로 가면 홈을 닫는다
             self._pages.setCurrentWidget(self._tabs)
             scroll = self._settings_scroll
             self._tabs.setCurrentWidget(scroll)
@@ -970,6 +1174,7 @@ class MainWindow(QMainWindow):
                 return
             if from_guide:
                 self._open_setup_feature("buff")
+                self._show_home()  # 안내를 마치면 홈(명세 12.1)
             else:
                 self._tracker_tabs.setCurrentWidget(entry[1])
                 self._convenience_tabs.setCurrentWidget(entry[2])
@@ -1777,6 +1982,7 @@ class MainWindow(QMainWindow):
     def _focus_party_tab(self) -> None:
         """파티 알림 토스트 클릭 → 창을 띄우고 파티 모집 탭으로 전환."""
         self._show_from_tray()
+        self._hide_home()
         self._tabs.setCurrentWidget(self._party_scroll)
 
     def _quit_from_tray(self) -> None:
@@ -1946,6 +2152,7 @@ class MainWindow(QMainWindow):
         if not self.custom_overlay_tab.flush_pending():
             event.ignore()
             self._force_quit = False
+            self._hide_home()  # 다른 화면으로 가면 홈을 닫는다
             self._pages.setCurrentWidget(self._tabs)
             self._tabs.setCurrentWidget(self._tracker_tabs)
             self._tracker_tabs.setCurrentWidget(self._combat_pages["custom"])

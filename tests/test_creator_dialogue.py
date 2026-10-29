@@ -280,6 +280,7 @@ def window(app, monkeypatch):
     monkeypatch.setattr(QApplication, "quit", lambda: None)
     config.save_general_flag("skipSetup", True)
     w = MainWindow()
+    w._hide_home()  # 0.28.0: 앱은 홈부터 시작(탐색 구조 명세 12.1). 이 테스트는 탭 화면의 잡담을 본다.
     w.show()
     app.processEvents()
     assert w._pages.currentWidget() is w._tabs

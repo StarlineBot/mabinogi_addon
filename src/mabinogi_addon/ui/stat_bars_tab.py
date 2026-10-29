@@ -724,6 +724,25 @@ class StatBarsTab(QWidget):
         self._apply_visibility()
         self._save()
 
+    def any_shown(self) -> bool:
+        """홈 '체력바' 스위치(탐색 구조 명세 12.3): 표시할 바가 하나라도 켜져 있으면 켬."""
+        return any(chk.isChecked() for chk in self._show_checks.values())
+
+    def set_all_shown(self, on: bool) -> None:
+        """홈 스위치: 끄면 모든 바 표시를 끄고(켜져 있던 바 기억), 켜면 기억한 바(없으면 전부)를 다시 켠다."""
+        if on == self.any_shown():
+            return
+        if on:
+            remembered = getattr(self, "_home_shown", None) or set(self._show_checks)
+        else:
+            self._home_shown = {sid for sid, chk in self._show_checks.items() if chk.isChecked()}
+            remembered = set()
+        for sid, chk in self._show_checks.items():
+            chk.blockSignals(True)
+            chk.setChecked(sid in remembered)
+            chk.blockSignals(False)
+        self._on_show_toggle()
+
     def _on_scale(self, value: int) -> None:
         self._scale = value
         for ov in self._overlays.values():
