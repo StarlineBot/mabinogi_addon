@@ -109,3 +109,16 @@ def test_creator_dialogue_is_always_on_with_sound_choice_only(window):
         assert tab.dialogue_sound_enabled.isEnabled()
     finally:
         tab.deleteLater()
+
+
+
+def test_name_column_is_not_wider_than_the_longest_name(window):
+    """0.28.1 사용자 피드백: 이름 칸을 96px로 고정하면 '다음 헤일로'와 잠금 사이가 다른 화면의 '라벨 + 버튼' 간격보다 훨씬 벌어졌다."""
+    w, app = window
+    w._open_setup_feature("halo_timer")
+    app.processEvents()
+    halo = w.boss_tab.halo_capture
+    label = next(child for child in halo.findChildren(type(halo.state)) if child.text() == "다음 헤일로")
+    widest = max(label.fontMetrics().horizontalAdvance(t) for t in ("패턴 경고", "패턴 목록", "다음 헤일로", "헤일로 경고"))
+    gap = _x(halo.countdown_lock, halo) - (_x(label, halo) + widest)
+    assert gap <= 14  # 가장 긴 이름 뒤 = 레이아웃 기본 간격 정도
