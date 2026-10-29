@@ -48,7 +48,7 @@
   내용 높이 실측(Noto) 설정 필요 0/2/3/4개 = 590/721/762/803 → 3개까지 스크롤 없음. 앱 전체 렌더(Noto) 재확인, 원격 v0.28.0 태그 없음.
   **v0.28.0 게시 완료(0.27.0 포함)**: [#154](https://github.com/StarlineBot/mabinogi_addon/actions/runs/40880023771)·게시 [#234](https://github.com/StarlineBot/mabinogi_addon/actions/runs/40881679579) 성공,
   태그 `v0.28.0` → 3c1ee30(검증 SHA, candidate.json source_sha·지문 `31b651cd…` 일치). 공개 version.json 0.28.0(sha256 후보와 일치)·
-  exe 163,778,583바이트·sha256 `4f073e0a…7961aa12`가 후보·공개 URL 직접 다운로드와 일치. 실화면(홈 스크롤 없음·영역 접기) 확인 대기.
+  exe 163,778,583바이트·sha256 `4f073e0a…7961aa12`가 후보·공개 URL 직접 다운로드와 일치. 실화면 확인(2026-10-29 사용자 Windows 스크린샷): 홈 790×864 스크롤 없음·탭 영역 접기 정상, 피드백은 0.28.1로.
   테스트: `tests/test_home_page.py` 신규. 탭 화면을 재는 `test_tracker_layout.py`·`test_creator_dialogue.py` 픽스처는 홈 시작(명세 변경)이라 홈을 닫고 시작.
 - **개발 대상(2026-10-29 사용자 결정, 0.27.0): 설정을 마친 영역은 접는 화면 정리 — 8개 화면.** [안내·도움말 명세 11절](app-copy-help-combat-controls-spec.md).
   공통: 지정 전 `영역 지정` 상자 / 지정 후 한 줄 요약 + `영역 다시 지정 ▸`(버프·디버프는 상태 줄이 요약 줄, 디버프 보스 확인 두 줄도 안으로), 설명은 도움말로.
