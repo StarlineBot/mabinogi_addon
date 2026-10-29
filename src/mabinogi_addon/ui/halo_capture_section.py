@@ -75,7 +75,8 @@ class HaloCaptureSection(QWidget):
         display_layout = QVBoxLayout(display_group)
         options = QHBoxLayout()
         from .settings_layout import lock_button, name_label
-        options.addWidget(name_label('헤일로 경고'))  # 이름 칸 폭은 보스 패턴 화면과 같게(명세 13.2)
+        names = ('다음 헤일로', '헤일로 경고')
+        options.addWidget(name_label('헤일로 경고', names))  # 두 줄 잠금 버튼이 같은 세로선(명세 13.2)
         self.warn_lock = lock_button(True)
         self.warn_lock.clicked.connect(self._toggle_warning_lock)
         options.addWidget(self.warn_lock)
@@ -88,7 +89,7 @@ class HaloCaptureSection(QWidget):
         options.addWidget(self.sound)
         options.addStretch()
         countdown_options = QHBoxLayout()
-        countdown_options.addWidget(name_label('다음 헤일로'))
+        countdown_options.addWidget(name_label('다음 헤일로', names))
         self.countdown_lock = lock_button(True)
         self.countdown_lock.clicked.connect(self._toggle_countdown_lock)
         countdown_options.addWidget(self.countdown_lock)

@@ -1,6 +1,6 @@
 """화면 마무리 다듬기(안내·도움말 명세 13절, 0.28.1): 잠금 버튼 통일·보스/헤일로 줄 맞춤·체력바·투아림 여백·단축바/메모 접기·잡담 항상 켬."""
 from PySide6.QtCore import QPoint
-from PySide6.QtWidgets import QPushButton
+from PySide6.QtWidgets import QLabel, QPushButton
 
 from mabinogi_addon import config
 from mabinogi_addon.ui.settings_layout import lock_width
@@ -47,11 +47,11 @@ def test_boss_and_halo_rows_line_up(window):
     assert boss.show_upcoming.text() == "표시"
     assert _x(boss.warn_lock_btn, boss) == _x(boss.upcoming_lock_btn, boss)  # 같은 세로선
     assert _x(boss.upcoming_lock_btn, boss) < _x(boss.show_upcoming, boss)  # 표시 체크는 잠금 뒤
-    boss_x = _x(boss.warn_lock_btn, w)
     w._open_setup_feature("halo_timer")
     app.processEvents()
     halo = boss.halo_capture
-    assert _x(halo.warn_lock, w) == _x(halo.countdown_lock, w) == boss_x  # 1분 헤일로와 이름 칸·버튼 위치 같게
+    # 상자 안 두 줄은 같은 세로선. 화면끼리는 맞추지 않음(이름 길이가 달라 간격 통일 우선, 2026-10-29 사용자 결정)
+    assert _x(halo.warn_lock, w) == _x(halo.countdown_lock, w)
 
 
 def test_stat_bars_lock_menu_and_boss_note_first(window):
@@ -112,13 +112,25 @@ def test_creator_dialogue_is_always_on_with_sound_choice_only(window):
 
 
 
-def test_name_column_is_not_wider_than_the_longest_name(window):
-    """0.28.1 사용자 피드백: 이름 칸을 96px로 고정하면 '다음 헤일로'와 잠금 사이가 다른 화면의 '라벨 + 버튼' 간격보다 훨씬 벌어졌다."""
+
+def _name_gap(root, label_text, button):
+    label = next(child for child in root.findChildren(QLabel) if child.text() == label_text)
+    return _x(button, root) - (_x(label, root) + label.fontMetrics().horizontalAdvance(label_text))
+
+
+def test_name_column_gap_matches_other_screens(window):
+    """0.28.1 사용자 피드백: 이름 칸을 고정 폭(96px)이나 다른 화면 이름에 맞추면 이름 뒤가 벌어졌다.
+    상자마다 가장 긴 이름 뒤 간격이 다른 화면의 '라벨 + 조작' 간격(단축바 '표시 배율' 등)과 같아야 한다."""
     w, app = window
+    w._open_setup_feature("skillbar")
+    app.processEvents()
+    reference = _name_gap(w.skillbar_tab, "표시 배율", w.skillbar_tab.scale_spin)
+    w._open_setup_feature("boss")
+    app.processEvents()
+    boss = w.boss_tab
+    assert min(_name_gap(boss, "패턴 경고", boss.warn_lock_btn), _name_gap(boss, "패턴 목록", boss.upcoming_lock_btn)) <= reference + 3
     w._open_setup_feature("halo_timer")
     app.processEvents()
-    halo = w.boss_tab.halo_capture
-    label = next(child for child in halo.findChildren(type(halo.state)) if child.text() == "다음 헤일로")
-    widest = max(label.fontMetrics().horizontalAdvance(t) for t in ("패턴 경고", "패턴 목록", "다음 헤일로", "헤일로 경고"))
-    gap = _x(halo.countdown_lock, halo) - (_x(label, halo) + widest)
-    assert gap <= 14  # 가장 긴 이름 뒤 = 레이아웃 기본 간격 정도
+    halo = boss.halo_capture
+    gaps = (_name_gap(halo, "다음 헤일로", halo.countdown_lock), _name_gap(halo, "헤일로 경고", halo.warn_lock))
+    assert min(gaps) <= reference + 3

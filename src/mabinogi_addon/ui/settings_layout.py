@@ -43,13 +43,10 @@ def set_lock_text(button, locked):
     button.setText(lock_text(locked, every=bool(button.property("lockEvery"))))
 
 
-# 보스 패턴·1분 헤일로 '화면 표시'의 줄 앞 이름(두 화면 버튼 위치를 같게 하려고 한 묶음으로 잰다, 명세 13.2)
-DISPLAY_NAMES = ("패턴 경고", "패턴 목록", "다음 헤일로", "헤일로 경고")
-
-
-def name_label(text, names=DISPLAY_NAMES):
-    """한 상자 안 여러 줄의 줄 앞 이름 칸(명세 13.1). 폭 = 묶음 이름 중 가장 긴 글자 폭.
-    가장 긴 이름 뒤 간격이 다른 화면의 '라벨 + 버튼' 간격(레이아웃 기본 간격)과 같아지고, 잠금 버튼은 같은 세로선에 선다."""
+def name_label(text, names=()):
+    """한 상자 안 여러 줄의 줄 앞 이름 칸(명세 13.1). 폭 = 같은 상자 이름(names) 중 가장 긴 글자 폭.
+    상자 안 잠금 버튼은 같은 세로선에 서고, 가장 긴 이름 뒤 간격은 다른 화면의 '라벨 + 버튼' 간격과 같다.
+    화면끼리(보스 패턴·1분 헤일로) 버튼 위치는 맞추지 않는다 — 이름 길이가 달라 간격 통일을 택함(2026-10-29 사용자 결정)."""
     label = QLabel(text)
     metrics = label.fontMetrics()
     label.setFixedWidth(max(metrics.horizontalAdvance(name) for name in (*names, text)) + 2)

@@ -180,12 +180,13 @@ class BossTab(QWidget):
         controls.addWidget(self.region_section)
 
         # 화면 표시(명세 13.2): `패턴 경고 [잠금] [알림 미리보기]` / `패턴 목록 [잠금] [ ] 표시`.
-        # 이름 칸 폭을 1분 헤일로와 같게 해 잠금 버튼이 같은 세로선에 선다.
+        # 이름 칸 폭은 이 상자의 가장 긴 이름에 맞춰 두 줄 잠금 버튼이 같은 세로선에 선다.
         display = QGroupBox("화면 표시")
         display_layout = QVBoxLayout(display)
         warn_row = QHBoxLayout()
         from .settings_layout import lock_button, name_label
-        warn_row.addWidget(name_label("패턴 경고"))
+        NAMES = ("패턴 경고", "패턴 목록")
+        warn_row.addWidget(name_label("패턴 경고", NAMES))
         self.warn_lock_btn = lock_button()
         self.warn_lock_btn.clicked.connect(self._toggle_warn_lock)
         warn_row.addWidget(self.warn_lock_btn)
@@ -200,7 +201,7 @@ class BossTab(QWidget):
         self.show_upcoming.setChecked(cfg["showUpcoming"])
         self.show_upcoming.toggled.connect(self._on_show_upcoming)
         up_row = QHBoxLayout()
-        up_row.addWidget(name_label("패턴 목록"))
+        up_row.addWidget(name_label("패턴 목록", NAMES))
         self.upcoming_lock_btn = lock_button()
         self.upcoming_lock_btn.clicked.connect(self._toggle_upcoming_lock)
         up_row.addWidget(self.upcoming_lock_btn)
