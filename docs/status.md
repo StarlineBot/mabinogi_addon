@@ -32,6 +32,10 @@
   (`test_startup_splash` 수집 오류는 QA 컨테이너에 tkinter 없음 — 변경 무관). 원격 v0.27.0·v0.28.0 태그 없음. 블랙박스·최적화 공개(0.25.0)라 권한 빈틈 없음.
   렌더(창 800/864·설정 필요 0/3개·일시정지·홈 버튼) 사용자 전달 — 확인 대기. Potential: 창 800에서 설정 필요 3개 이상이면 스크롤(아래 3칸 잘림, 밝은 기본 스크롤바),
   설정 필요 문구가 `setup_state.missing` 기준이라 디버프 퍼센트 방식·헤일로·체력바 경고처럼 **보스 영역**만 없을 때도 `<기능> 판독 영역을 지정해야` + 그 기능 화면으로 이동(드묾).
+  → **v0.28.0 검증 실패(QA 판정 정정: 수정 필요)**: [#153](https://github.com/StarlineBot/mabinogi_addon/actions/runs/40864131111)(1f0868c) regression
+  `test_home_page.py::test_rows_layout_and_painted_switch_only_where_settings_exist` — 790×800·설정 필요 2개에서 스크롤 최대 7(기대 0). 게시 #233 skipped, 태그·version.json(0.26.1) 변화 없음.
+  원인: 홈 세로 높이가 경계값이라 글꼴 따라 넘침. QA 컨테이너 기본 글꼴(WenQuanYi)에선 통과, CI와 같은 Noto Sans CJK KR로 재현(최대 14).
+  시험: `home_page.py` 본문 `v.setSpacing(12)`→`8`이면 Noto에서 11 passed(되돌림). Windows 맑은 고딕 높이는 미확인 → 여유 있게 줄이는 것을 개발에 전달.
   테스트: `tests/test_home_page.py` 신규. 탭 화면을 재는 `test_tracker_layout.py`·`test_creator_dialogue.py` 픽스처는 홈 시작(명세 변경)이라 홈을 닫고 시작.
 - **개발 대상(2026-10-29 사용자 결정, 0.27.0): 설정을 마친 영역은 접는 화면 정리 — 8개 화면.** [안내·도움말 명세 11절](app-copy-help-combat-controls-spec.md).
   공통: 지정 전 `영역 지정` 상자 / 지정 후 한 줄 요약 + `영역 다시 지정 ▸`(버프·디버프는 상태 줄이 요약 줄, 디버프 보스 확인 두 줄도 안으로), 설명은 도움말로.
