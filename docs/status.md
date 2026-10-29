@@ -36,6 +36,11 @@
   `test_home_page.py::test_rows_layout_and_painted_switch_only_where_settings_exist` — 790×800·설정 필요 2개에서 스크롤 최대 7(기대 0). 게시 #233 skipped, 태그·version.json(0.26.1) 변화 없음.
   원인: 홈 세로 높이가 경계값이라 글꼴 따라 넘침. QA 컨테이너 기본 글꼴(WenQuanYi)에선 통과, CI와 같은 Noto Sans CJK KR로 재현(최대 14).
   시험: `home_page.py` 본문 `v.setSpacing(12)`→`8`이면 Noto에서 11 passed(되돌림). Windows 맑은 고딕 높이는 미확인 → 여유 있게 줄이는 것을 개발에 전달.
+  → **수정(로컬 검증)**: 홈 세로 간격·줄 여백 축소(본문 간격 12→8, 줄 위아래 10→7, 상태 카드 14→10, 설정 필요 줄 8→5). 790×800 내용 높이
+  Noto Sans CJK KR 814→721(설정 필요 2개, 여유 79px)·3개 762, 기본 글꼴 727→634. 설정 필요가 아주 많을 때만 생기는 스크롤바는 어두운 모양.
+  회귀: 설정 필요 2개에서 내용 높이 ≤ 785(여유 15px) 단언 추가, 많을 때 스크롤·어두운 스크롤바. 로컬 검증은 CI와 같은 Noto로도 실행:
+  `fonts-noto-cjk` 설치 + `FONTCONFIG_FILE`로 WenQuanYi·Nanum을 `rejectfont` → 홈·탐색·잡담·레이아웃 130개, 0.28.0 릴리즈 검사 1370개 통과(기본 글꼴도 130개 통과).
+  Windows 맑은 고딕은 이 여유 안이라고 보지만 실화면 미확인.
   테스트: `tests/test_home_page.py` 신규. 탭 화면을 재는 `test_tracker_layout.py`·`test_creator_dialogue.py` 픽스처는 홈 시작(명세 변경)이라 홈을 닫고 시작.
 - **개발 대상(2026-10-29 사용자 결정, 0.27.0): 설정을 마친 영역은 접는 화면 정리 — 8개 화면.** [안내·도움말 명세 11절](app-copy-help-combat-controls-spec.md).
   공통: 지정 전 `영역 지정` 상자 / 지정 후 한 줄 요약 + `영역 다시 지정 ▸`(버프·디버프는 상태 줄이 요약 줄, 디버프 보스 확인 두 줄도 안으로), 설명은 도움말로.

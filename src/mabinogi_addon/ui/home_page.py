@@ -146,10 +146,10 @@ class FeatureRow(QFrame):
         self.setObjectName("homeRow")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         row = QHBoxLayout(self)
-        row.setContentsMargins(0, 10, 0, 10)
+        row.setContentsMargins(0, 7, 0, 7)  # 줄 높이: 한글 글꼴(Noto·맑은 고딕)이 높아도 790×800에 스크롤 없게
         row.setSpacing(10)
         text = QVBoxLayout()
-        text.setSpacing(2)
+        text.setSpacing(1)
         self.name = _label(name, 13, TEXT)
         text.addWidget(self.name)
         self.state = QLabel()
@@ -202,6 +202,11 @@ class HomePage(QWidget):
             QPushButton#homeRegion {{ color:#fde68a; background:transparent; border:1px solid {YELLOW}; border-radius:6px;
                                       padding:5px 12px; font-size:12px; }}
             QScrollArea, #homeContent {{ background:transparent; border:none; }}
+            QScrollBar:vertical {{ background:transparent; width:8px; margin:4px 2px 4px 0; }}
+            QScrollBar::handle:vertical {{ background:#3a4556; border-radius:3px; min-height:30px; }}
+            QScrollBar::handle:vertical:hover {{ background:#4b5768; }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height:0; }}
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background:none; }}
         """)
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -216,8 +221,8 @@ class HomePage(QWidget):
         outer.addWidget(scroll)
         self.scroll = scroll
         v = QVBoxLayout(content)
-        v.setContentsMargins(18, 8, 18, 16)
-        v.setSpacing(12)
+        v.setContentsMargins(18, 6, 18, 12)
+        v.setSpacing(8)
 
         # 1. 위 줄: 로고 · 전체 메뉴 ›
         top = QHBoxLayout()
@@ -242,7 +247,7 @@ class HomePage(QWidget):
         # 2. 상태 카드
         card = _box()
         row = QHBoxLayout(card)
-        row.setContentsMargins(16, 14, 16, 14)
+        row.setContentsMargins(16, 10, 16, 10)
         row.setSpacing(12)
         self.state_icon = StateIcon()
         row.addWidget(self.state_icon)
@@ -276,7 +281,7 @@ class HomePage(QWidget):
         warn.addLayout(head)
         self._warn_rows = QVBoxLayout()
         self._warn_rows.setSpacing(0)
-        warn.addSpacing(6)
+        warn.addSpacing(4)
         warn.addLayout(self._warn_rows)
         v.addWidget(self.warn_box)
 
@@ -371,7 +376,7 @@ class HomePage(QWidget):
                 line.setObjectName("homeWarnRow")
                 line.setProperty("key", key)
                 row = QHBoxLayout(line)
-                row.setContentsMargins(0, 8, 0, 8)
+                row.setContentsMargins(0, 5, 0, 5)
                 row.setSpacing(14)
                 row.addWidget(_label(name, 12, "#fde68a", bold=True))
                 row.addWidget(_label("판독 영역을 지정해야 동작해요", 12, "#e5d3a8"), 1)

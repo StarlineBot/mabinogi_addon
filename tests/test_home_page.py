@@ -186,6 +186,8 @@ def test_rows_layout_and_painted_switch_only_where_settings_exist():
     page.show()
     QTest.qWait(1)
     assert page.scroll.verticalScrollBar().maximum() == 0  # 기준 창 790×800에서 스크롤 없음
+    # 0.28.0 QA(#153): 글꼴(Noto Sans CJK KR·맑은 고딕)에 따라 줄이 높아져도 넘치지 않게 최소 15px 여유
+    assert page.scroll.widget().sizeHint().height() <= 800 - 15
     clicks = []
     page.open_feature.connect(clicks.append)
     QTest.mouseClick(page.rows["memo"], Qt.MouseButton.LeftButton)
@@ -201,3 +203,15 @@ def test_moving_to_another_screen_from_code_closes_home(window):
     w._show_home()
     w._open_guide()  # 설정 > 안내 다시 보기 등
     assert not w.home_visible() and w._pages.currentWidget() is w.setup_guide
+
+
+def test_many_needs_scroll_with_dark_scrollbar():
+    page = HomePage()
+    page.resize(790, 800)
+    page.update_state({"needs": [(str(i), "기능") for i in range(10)], "title": "running"})
+    page.show()
+    QTest.qWait(1)
+    bar = page.scroll.verticalScrollBar()
+    assert bar.maximum() > 0  # 아주 많을 때만 스크롤
+    assert "QScrollBar::handle:vertical" in page.styleSheet()  # 밝은 기본 스크롤바 대신 어두운 모양
+    page.close()
