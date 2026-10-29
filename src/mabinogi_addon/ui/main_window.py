@@ -442,6 +442,12 @@ class MainWindow(QMainWindow):
         self.optimization_tools._open_tab()
         return True
 
+    def _open_buff_region_for_tour(self):
+        """둘러보기 '개별 기능 설정': 영역이 이미 지정돼 접혀 있으면 펼쳐 '직접 지정'을 보여 준다(탭을 떠나면 다시 접힘)."""
+        section = self.buff_tab.region_section
+        if section.registered and not section.toggle.isChecked():
+            section.set_registered(True, just_set=True)
+
     def _register_setup_game(self):
         self.settings_tab._start_detect()
         self.setup_page.game_btn.setEnabled(False)
@@ -945,7 +951,7 @@ class MainWindow(QMainWindow):
                      before=go_convenience),
             TourStep(self.buff_tab.region_btn, "개별 기능 설정",
                      "아직 등록하지 않은 영역은 해당 기능 화면에서 직접 지정할 수 있어요.",
-                     before=lambda: go_buff_control(self.buff_tab.region_btn)),
+                     before=lambda: (self._open_buff_region_for_tour(), go_buff_control(self.buff_tab.region_btn))),
             TourStep(self.buff_tab.lock_btn, "오버레이 위치 잠금",
                      "오버레이를 원하는 위치로 옮긴 뒤 잠그면 클릭이 게임으로 통과해요.",
                      before=lambda: go_buff_control(self.buff_tab.lock_btn)),
