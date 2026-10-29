@@ -33,7 +33,7 @@ from ..catalog import USER_DEBUFF_ICON_DIR, BuffDef, available_debuff_catalog
 from .buff_tab import _capture_icon_to, _pixmap
 from .help_dialog import tab_header
 from .widgets import TrackerColumns, checkbox, hint_label, icon_slot, section_label
-from .settings_layout import LOCK_STYLE, DANGER_STYLE, disclosure
+from .settings_layout import LOCK_STYLE, lock_text, lock_width, DANGER_STYLE, disclosure
 
 # 영역에 꼭 들어가야 하는 것(앱 힌트 ↔ 화면 점선 라벨이 같은 기준을 공유).
 REGION_CRITERION = "디버프 아이콘 줄과 보스 체력바가 함께 들어오게 지정하세요"
@@ -131,8 +131,9 @@ class DebuffTab(QWidget):
             "해제하면 드래그로 위치를 옮길 수 있어요."
         )
         self.lock_btn.setStyleSheet(LOCK_STYLE)
+        self.lock_btn.setFixedWidth(lock_width(self.lock_btn))  # 앱 전체 같은 폭(명세 13.1)
         self.lock_btn.toggled.connect(self._on_lock_toggled)
-        top.addWidget(self.lock_btn, 1)
+        top.addWidget(self.lock_btn)
         self.scale_spin = QSpinBox()
         self.scale_spin.setRange(50, 300)
         self.scale_spin.setSingleStep(10)
@@ -517,7 +518,7 @@ class DebuffTab(QWidget):
         )
 
     def _on_lock_toggled(self, locked: bool) -> None:
-        self.lock_btn.setText("위치 잠금됨" if locked else "위치 잠금")
+        self.lock_btn.setText(lock_text(locked))
         self.lock_toggled.emit(locked)
 
     def set_lock_state(self, locked: bool) -> None:

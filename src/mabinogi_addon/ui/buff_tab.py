@@ -35,7 +35,7 @@ from ..catalog import BuffDef, available_catalog
 from .dpi import to_logical
 from .screen_grab import capture_for_autofind
 from .widgets import TrackerColumns, callout, checkbox, hint_label, icon_slot, section_label
-from .settings_layout import LOCK_STYLE, DANGER_STYLE
+from .settings_layout import LOCK_STYLE, lock_text, lock_width, DANGER_STYLE
 
 # 앵커로 고정 사용할 버프(항상 존재, 지속시간 없음 → 판정 기준)
 ANCHOR_ID = "premium_battle"
@@ -211,8 +211,9 @@ class BuffTab(QWidget):
             "해제하면 드래그로 위치를 옮길 수 있어요."
         )
         self.lock_btn.setStyleSheet(LOCK_STYLE)
+        self.lock_btn.setFixedWidth(lock_width(self.lock_btn))  # 앱 전체 같은 폭(명세 13.1)
         self.lock_btn.toggled.connect(self._on_lock_toggled)
-        top.addWidget(self.lock_btn, 1)
+        top.addWidget(self.lock_btn)
         self.scale_spin = QSpinBox()
         self.scale_spin.setRange(50, 300)
         self.scale_spin.setSingleStep(10)
@@ -357,7 +358,7 @@ class BuffTab(QWidget):
         return [ANCHOR_ID, *self._order]
 
     def _on_lock_toggled(self, locked: bool) -> None:
-        self.lock_btn.setText("위치 잠금됨" if locked else "위치 잠금")
+        self.lock_btn.setText(lock_text(locked))
         self.lock_toggled.emit(locked)
 
     def set_lock_state(self, locked: bool) -> None:

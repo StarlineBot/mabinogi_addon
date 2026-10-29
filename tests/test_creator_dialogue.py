@@ -358,10 +358,12 @@ def test_click_replaces_and_option_stops_all(window):
     assert d.session.last_text != first
     assert not d.session.shown
     assert d.expiry.isActive()
+    # 0.28.1(명세 13.6): '제작자 잡담 사용' 체크는 숨김(잡담 항상 켬). 숨긴 체크를 끄는 내부 경로는 여전히 모두 멈추지만 저장하지 않는다.
+    assert window.settings_tab.dialogue_enabled.isHidden()
     window.settings_tab.dialogue_enabled.setChecked(False)
     assert not d.bubble.isVisible()
     assert not d.request()
-    assert not config.load_general_flag("creatorDialogue", True)
+    assert config.load_general_flag("creatorDialogue", True)
 
 
 def test_expiry_occlusion_gap_and_no_backlog(window):
@@ -679,7 +681,7 @@ def test_dialogue_sound_option_stops_playback_and_preserves_preference(window):
     assert d.request() and player._player._playing
     settings.dialogue_enabled.setChecked(False)
     assert not player._player._playing and not d.bubble.isVisible()
-    assert not settings.dialogue_sound_enabled.isEnabled()
+    assert settings.dialogue_sound_enabled.isEnabled()  # 0.28.1(명세 13.6): 소리 체크는 항상 조작 가능
     assert settings.dialogue_sound_enabled.isChecked()
     settings.dialogue_enabled.setChecked(True)
     assert settings.dialogue_sound_enabled.isEnabled()

@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from .settings_layout import set_lock_text
 from .. import config, image_io, paths
 from ..detect.boss_bar import (
     normalize_box_height,
@@ -178,15 +179,14 @@ class BossTab(QWidget):
         controls.addWidget(QLabel("판독 영역 · 보스 체력바"))
         controls.addWidget(self.region_section)
 
-        # 화면 표시(명세 11.2): 패턴 경고·남은 패턴 목록을 한 상자 두 줄로. 잠금은 상태형 버튼 하나(설명 줄 없음).
+        # 화면 표시(명세 13.2): `패턴 경고 [잠금] [알림 미리보기]` / `패턴 목록 [잠금] [ ] 표시`.
+        # 이름 칸 폭을 1분 헤일로와 같게 해 잠금 버튼이 같은 세로선에 선다.
         display = QGroupBox("화면 표시")
         display_layout = QVBoxLayout(display)
         warn_row = QHBoxLayout()
-        warn_row.addWidget(QLabel("패턴 경고"))
-        self.warn_lock_btn = QPushButton("경고 위치 잠금")
-        self.warn_lock_btn.setCheckable(True)
-        from .settings_layout import LOCK_STYLE
-        self.warn_lock_btn.setStyleSheet(LOCK_STYLE)
+        from .settings_layout import lock_button, name_label
+        warn_row.addWidget(name_label("패턴 경고"))
+        self.warn_lock_btn = lock_button()
         self.warn_lock_btn.clicked.connect(self._toggle_warn_lock)
         warn_row.addWidget(self.warn_lock_btn)
         warn_row.addWidget(prev_btn)
@@ -195,17 +195,16 @@ class BossTab(QWidget):
         self._sync_warn_btn()
 
         # 다음 패턴 목록(왼쪽에 남은 패턴 % 나열) — 준비(5% 전) 알림이 뜨면 그 %가 빠짐.
-        self.show_upcoming = checkbox("남은 패턴 목록 표시")
+        self.show_upcoming = checkbox("표시")
         self.show_upcoming.setToolTip("남은 패턴의 체력 비율을 별도 목록으로 표시합니다.")
         self.show_upcoming.setChecked(cfg["showUpcoming"])
         self.show_upcoming.toggled.connect(self._on_show_upcoming)
         up_row = QHBoxLayout()
-        up_row.addWidget(self.show_upcoming)
-        self.upcoming_lock_btn = QPushButton("목록 위치 잠금")
-        self.upcoming_lock_btn.setCheckable(True)
-        self.upcoming_lock_btn.setStyleSheet(LOCK_STYLE)
+        up_row.addWidget(name_label("패턴 목록"))
+        self.upcoming_lock_btn = lock_button()
         self.upcoming_lock_btn.clicked.connect(self._toggle_upcoming_lock)
         up_row.addWidget(self.upcoming_lock_btn)
+        up_row.addWidget(self.show_upcoming)  # 표시 여부 체크는 잠금 뒤로(명세 13.2)
         up_row.addStretch()
         display_layout.addLayout(up_row)
         controls.addWidget(display)
@@ -389,7 +388,7 @@ class BossTab(QWidget):
 
     def _sync_warn_btn(self) -> None:
         self.warn_lock_btn.setChecked(self._overlay.locked)
-        self.warn_lock_btn.setText("경고 위치 잠금됨" if self._overlay.locked else "경고 위치 잠금")
+        set_lock_text(self.warn_lock_btn, self._overlay.locked)
 
     def _toggle_warn_lock(self) -> None:
         self._overlay.set_locked(not self._overlay.locked)
@@ -411,7 +410,7 @@ class BossTab(QWidget):
 
     def _sync_upcoming_btn(self) -> None:
         self.upcoming_lock_btn.setChecked(self._upcoming.locked)
-        self.upcoming_lock_btn.setText("목록 위치 잠금됨" if self._upcoming.locked else "목록 위치 잠금")
+        set_lock_text(self.upcoming_lock_btn, self._upcoming.locked)
 
     def _on_show_upcoming(self, checked: bool) -> None:
         self._save()

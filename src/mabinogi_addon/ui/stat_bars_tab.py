@@ -36,7 +36,7 @@ from .help_dialog import tab_header
 from .screen_grab import capture_for_autofind
 from .stat_overlay import WARNING_SAMPLE_MAX_AGE, StatBarOverlay
 from .widgets import checkbox, hint_label, wrapping_row
-from .settings_layout import LOCK_STYLE
+from .settings_layout import lock_button, set_lock_text
 
 STAT_LABELS = {"hp": "생명력", "mp": "마나", "sta": "스태미나"}
 
@@ -155,7 +155,7 @@ class StatBarsTab(QWidget):
         v = outer
         v.addWidget(self.region_section)
 
-        # 표시(명세 11.2): 1줄 표시할 바 + 잠금 하나(전체), 2줄 배율·정렬, 접힌 '바마다 따로 잠그기'. 표시 미리보기는 없앰.
+        # 표시(명세 11.2·13.3): 1줄 표시할 바 + '전체 위치 잠금', 2줄 배율·정렬, 접힌 '생명력·마나·스태미나 따로 잠그기'.
         display_group = QGroupBox("표시")
         display_layout = QVBoxLayout(display_group)
         v.addWidget(display_group)
@@ -169,9 +169,7 @@ class StatBarsTab(QWidget):
             show_row.addWidget(chk)
             self._show_checks[sid] = chk
         show_row.addStretch(1)
-        self.lock_btn = QPushButton("위치 잠금")
-        self.lock_btn.setCheckable(True)
-        self.lock_btn.setStyleSheet(LOCK_STYLE)
+        self.lock_btn = lock_button(every=True)  # 세 바 모두(명세 13.3)
         self.lock_btn.clicked.connect(lambda checked: self._set_locked_all(checked))
         show_row.addWidget(self.lock_btn)
         display_layout.addLayout(show_row)
@@ -204,16 +202,13 @@ class StatBarsTab(QWidget):
         self.bar_lock_buttons = {}
         for sid in ("hp", "mp", "sta"):
             per_bar_row.addWidget(QLabel(STAT_LABELS[sid]))
-            lock = QPushButton("위치 잠금됨" if self._bars_cfg[sid]["locked"] else "위치 잠금")
-            lock.setCheckable(True)
-            lock.setChecked(self._bars_cfg[sid]["locked"])
-            lock.setStyleSheet(LOCK_STYLE)
+            lock = lock_button(self._bars_cfg[sid]["locked"])
             lock.toggled.connect(lambda checked, sid=sid: self._set_bar_locked(sid, checked))
             per_bar_row.addWidget(lock)
             self.bar_lock_buttons[sid] = lock
         per_bar_row.addStretch(1)
         from .settings_layout import disclosure
-        self.per_bar_toggle = disclosure("바마다 따로 잠그기", per_bar, display_layout)
+        self.per_bar_toggle = disclosure("생명력·마나·스태미나 따로 잠그기", per_bar, display_layout)
         self._sync_bar_locks()
 
         # 저값 경고(생/마/스 각각 임계 이하면 알림).
@@ -253,6 +248,7 @@ class StatBarsTab(QWidget):
     def _alert_group(self) -> QGroupBox:
         box = QGroupBox("낮은 수치 알림 · 보스전")
         g = QVBoxLayout(box)
+        g.addWidget(hint_label("보스 체력바가 보일 때만 동작해요"))  # 상자 첫 줄(명세 13.3)
         groups = []
         self._alert_checks: dict[str, QWidget] = {}
         self._alert_spins: dict[str, QSpinBox] = {}
@@ -284,7 +280,6 @@ class StatBarsTab(QWidget):
         sound_row = QHBoxLayout()
         sound_row.addWidget(self.alert_sound_chk)
         sound_row.addStretch(1)
-        sound_row.addWidget(hint_label("보스 체력바가 보일 때만 동작해요"))
         g.addLayout(sound_row)
         self.boss_region_status = hint_label("")  # 보스 체력바가 미지정일 때만 보임(지정돼 있으면 위 한 줄로 충분)
         self.boss_region_status.setStyleSheet("color:#e67e22;")
@@ -774,13 +769,13 @@ class StatBarsTab(QWidget):
         for sid, button in self.bar_lock_buttons.items():
             button.blockSignals(True)
             button.setChecked(self._bars_cfg[sid]["locked"])
-            button.setText("위치 잠금됨" if button.isChecked() else "위치 잠금")
+            set_lock_text(button, button.isChecked())
             button.blockSignals(False)
         lock = getattr(self, "lock_btn", None)
-        if lock is not None:  # 잠금 하나(명세 11.2): 세 바가 모두 잠겼으면 '위치 잠금됨'
+        if lock is not None:  # 잠금 하나(명세 13.3): 세 바가 모두 잠겼으면 '전체 위치 잠금됨', 하나라도 풀리면 '전체 위치 잠금'
             locked = all(cfg["locked"] for cfg in self._bars_cfg.values())
             lock.setChecked(locked)
-            lock.setText("위치 잠금됨" if locked else "위치 잠금")
+            set_lock_text(lock, locked)
 
     def _save(self) -> None:
         for sid, ov in self._overlays.items():

@@ -169,15 +169,15 @@ def test_warn_lock_toggle_updates_overlay_and_button(monkeypatch):
     # 알려진 상태에서 시작해 양방향 전환과 checked 상태를 모두 검사한다.
     t._overlay.set_locked(True)
     t._sync_warn_btn()
-    assert t.warn_lock_btn.text() == "경고 위치 잠금됨"
+    assert t.warn_lock_btn.text() == "위치 잠금됨"  # 0.28.1(명세 13.1): 무엇의 위치인지는 줄 앞 '패턴 경고'가 알려 줌
     assert t.warn_lock_btn.isChecked()
     t.warn_lock_btn.click()
     assert t._overlay.locked is False  # 해제 → 위치 조정(샘플 표시)
-    assert t.warn_lock_btn.text() == "경고 위치 잠금"
+    assert t.warn_lock_btn.text() == "위치 잠금"
     assert not t.warn_lock_btn.isChecked()
     t.warn_lock_btn.click()
     assert t._overlay.locked is True  # 고정 → 경고만 표시(클릭 통과)
-    assert t.warn_lock_btn.text() == "경고 위치 잠금됨"
+    assert t.warn_lock_btn.text() == "위치 잠금됨"
     assert t.warn_lock_btn.isChecked()
     t.shutdown()
 

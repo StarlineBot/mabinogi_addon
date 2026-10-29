@@ -18,7 +18,7 @@ ORANGE, GREEN = "#e67e22", "#2ecc71"
 
 class RegionSection(QWidget):
     def __init__(self, body: QWidget, *, unset_text: str, title: str = "영역 다시 지정",
-                 summary: QWidget | None = None, parent=None):
+                 summary: QWidget | None = None, box_title: str = "영역 지정", parent=None):
         super().__init__(parent)
         self.body = body
         self.registered = False
@@ -26,7 +26,7 @@ class RegionSection(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(6)
-        self.box = QGroupBox("영역 지정")
+        self.box = QGroupBox(box_title)
         box = QVBoxLayout(self.box)
         self.unset_label = QLabel(f'<span style="color:{ORANGE}">●</span> 아직 지정 안 됨 — {unset_text}')
         self.unset_label.setTextFormat(Qt.TextFormat.RichText)

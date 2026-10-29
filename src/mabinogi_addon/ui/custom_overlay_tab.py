@@ -39,7 +39,7 @@ from ..system.window_watcher import WindowWatcher
 from .help_dialog import tab_header
 from .mirror_manager import MirrorManager
 from .widgets import CapturePathLabel, checkbox, hint_label
-from .settings_layout import DANGER_STYLE, LOCK_STYLE
+from .settings_layout import DANGER_STYLE, lock_button, set_lock_text
 
 _log = logging.getLogger(__name__)
 
@@ -217,9 +217,7 @@ class CustomOverlayTab(QWidget):
         self.region_btn = QPushButton("＋ 복제할 영역 추가")
         self.region_btn.setToolTip("드래그로 화면 일부를 잘라 오버레이로 복제(돋보기)")
         self.region_btn.clicked.connect(self._on_region)
-        self.lock_all_btn = QPushButton("전체 위치 잠금")
-        self.lock_all_btn.setCheckable(True)
-        self.lock_all_btn.setStyleSheet(LOCK_STYLE)
+        self.lock_all_btn = lock_button(every=True)
         self.lock_all_btn.clicked.connect(lambda checked: self._mgr.set_locked_all(checked))
         row = QHBoxLayout()
         row.addWidget(self.region_btn)
@@ -320,7 +318,7 @@ class CustomOverlayTab(QWidget):
         self.lock_all_btn.setEnabled(populated)
         locked = populated and all(o.get("locked") for o in self._mgr.to_dicts())
         self.lock_all_btn.setChecked(locked)
-        self.lock_all_btn.setText("전체 위치 잠금됨" if locked else "전체 위치 잠금")
+        set_lock_text(self.lock_all_btn, locked)
         for widget in self._populated_widgets:  # 비었으면 표·버튼 대신 점선 안내(명세 11.2)
             widget.setVisible(populated)
         self.empty_hint.setVisible(not populated)

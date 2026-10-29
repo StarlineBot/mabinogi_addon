@@ -150,8 +150,9 @@ class OptimizationPanel(QWidget):
         group.addWidget(self.frames_toggle,0,Qt.AlignmentFlag.AlignLeft)
         group=_group('오버레이',body)
         # 다른 탭과 같은 잠금 버튼(잠금됨 = 초록, 앱 문구 명세 10절). 체크 상태 API는 체크박스와 같다.
-        self.lock=QPushButton('위치 잠금됨');self.lock.setCheckable(True);self.lock.setStyleSheet(LOCK_STYLE)
-        self.lock.toggled.connect(lambda on: self.lock.setText('위치 잠금됨' if on else '위치 잠금'))
+        from .settings_layout import lock_button, set_lock_text
+        self.lock=lock_button(True)  # 앱 전체 같은 글자·폭(명세 13.1)
+        self.lock.toggled.connect(lambda on: set_lock_text(self.lock, on))
         self.lock.setChecked(True);group.addWidget(self.lock,0,Qt.AlignmentFlag.AlignLeft)
         self.scale=QSpinBox();self.scale.setRange(50,300);self.scale.setValue(100);self.scale.setSuffix(' %')
         form=QFormLayout();form.addRow('표시 배율',self.scale);group.addLayout(form)

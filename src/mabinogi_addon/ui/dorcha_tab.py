@@ -9,6 +9,7 @@ from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QGuiApplication, QImage, QPixmap
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QMessageBox, QPushButton, QScrollArea, QSpinBox, QVBoxLayout, QWidget
 
+from .settings_layout import set_lock_text
 from .. import config
 from ..detect.dorcha_reader import read_dorcha
 from .dorcha_overlay import DorchaOverlay
@@ -103,11 +104,8 @@ class DorchaTab(QWidget):
         self.scale_spin.setValue(self._cfg["scale"])
         self.scale_spin.valueChanged.connect(self._on_scale)
         row.addWidget(self.scale_spin)
-        self.lock_chk = QPushButton("위치 잠금됨" if self._cfg["locked"] else "위치 잠금")
-        self.lock_chk.setCheckable(True)
-        from .settings_layout import LOCK_STYLE
-        self.lock_chk.setStyleSheet(LOCK_STYLE)
-        self.lock_chk.setChecked(self._cfg["locked"])
+        from .settings_layout import lock_button
+        self.lock_chk = lock_button(self._cfg["locked"])
         self.lock_chk.toggled.connect(self._on_locked)
         row.addWidget(self.lock_chk)
         layout.addLayout(row)
@@ -549,7 +547,7 @@ class DorchaTab(QWidget):
         self._save()
 
     def _on_locked(self, checked):
-        self.lock_chk.setText("위치 잠금됨" if checked else "위치 잠금")
+        set_lock_text(self.lock_chk, checked)
         self._cfg["locked"] = checked
         if self._overlay is not None:
             self._overlay.set_locked(checked)

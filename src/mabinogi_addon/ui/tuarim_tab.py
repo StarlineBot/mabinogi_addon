@@ -182,7 +182,7 @@ class TuarimTab(QWidget):
             grid.addWidget(chk, 0, i * 4 + 2)
             self._spins.append(spin)
             self._sound_checks.append(chk)
-        grid.setColumnStretch(3, 1)
+        grid.setColumnMinimumWidth(3, 16)  # '추가 알림'은 '첫 알림' 바로 옆(일정 간격, 명세 13.4) — 가로 절반 지점으로 밀지 않는다
         grid.setColumnStretch(7, 1)
         return box
 

@@ -7,6 +7,7 @@ from PySide6.QtGui import QDesktopServices, QImage, QPixmap
 from PySide6.QtWidgets import QFrame, QGroupBox, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 import numpy as np
 
+from .settings_layout import set_lock_text
 from .. import config, paths
 from ..feature_access import Recheck, is_creator
 from ..halo_capture import CaptureSession, MAX_PIXELS, MAX_SHOTS, MAX_BYTES
@@ -73,12 +74,9 @@ class HaloCaptureSection(QWidget):
         display_group = QGroupBox('화면 표시와 경고')
         display_layout = QVBoxLayout(display_group)
         options = QHBoxLayout()
-        options.addWidget(QLabel('헤일로 경고'))
-        self.warn_lock = QPushButton('경고 위치 잠금됨')
-        self.warn_lock.setCheckable(True)
-        self.warn_lock.setChecked(True)
-        from .settings_layout import LOCK_STYLE
-        self.warn_lock.setStyleSheet(LOCK_STYLE)
+        from .settings_layout import lock_button, name_label
+        options.addWidget(name_label('헤일로 경고'))  # 이름 칸 폭은 보스 패턴 화면과 같게(명세 13.2)
+        self.warn_lock = lock_button(True)
         self.warn_lock.clicked.connect(self._toggle_warning_lock)
         options.addWidget(self.warn_lock)
         self.preview_alert = QPushButton('알림 미리보기')
@@ -90,11 +88,8 @@ class HaloCaptureSection(QWidget):
         options.addWidget(self.sound)
         options.addStretch()
         countdown_options = QHBoxLayout()
-        countdown_options.addWidget(QLabel('다음 헤일로'))
-        self.countdown_lock = QPushButton('카운트다운 위치 잠금됨')
-        self.countdown_lock.setCheckable(True)
-        self.countdown_lock.setChecked(True)
-        self.countdown_lock.setStyleSheet(LOCK_STYLE)
+        countdown_options.addWidget(name_label('다음 헤일로'))
+        self.countdown_lock = lock_button(True)
         self.countdown_lock.clicked.connect(self._toggle_countdown_lock)
         countdown_options.addWidget(self.countdown_lock)
         countdown_options.addStretch()
@@ -229,7 +224,7 @@ class HaloCaptureSection(QWidget):
         self._place_warning()
         self._warning.set_locked(not self._warning.locked)
         self.warn_lock.setChecked(self._warning.locked)
-        self.warn_lock.setText('경고 위치 잠금됨' if self._warning.locked else '경고 위치 잠금')
+        set_lock_text(self.warn_lock, self._warning.locked)
 
     def _toggle_countdown_lock(self):
         if not self._allowed():
@@ -237,7 +232,7 @@ class HaloCaptureSection(QWidget):
         self._place_countdown()
         self._countdown.set_locked(not self._countdown.locked)
         self.countdown_lock.setChecked(self._countdown.locked)
-        self.countdown_lock.setText('카운트다운 위치 잠금됨' if self._countdown.locked else '카운트다운 위치 잠금')
+        set_lock_text(self.countdown_lock, self._countdown.locked)
 
     def _save_countdown_position(self):
         self._save_overlay_position(self._countdown, 'countdownPos')

@@ -182,10 +182,10 @@ def test_seeded_lock_and_preset_states_render(window, tmp_path):
     tab._set_bar_locked("hp", True)
     tab._set_bar_locked("mp", False)
     tab._set_bar_locked("sta", True)
-    # 0.27.0(명세 11.2): 표시 미리보기 없음. 잠금은 하나 — 바마다 다르면 '위치 잠금'(모두 잠겨야 '위치 잠금됨')
-    assert not tab.lock_btn.isChecked() and tab.lock_btn.text() == "위치 잠금"
+    # 0.27.0(명세 11.2): 표시 미리보기 없음. 잠금은 하나 — 바마다 다르면 '전체 위치 잠금'(모두 잠겨야 '전체 위치 잠금됨', 0.28.1 명세 13.3)
+    assert not tab.lock_btn.isChecked() and tab.lock_btn.text() == "전체 위치 잠금"
     tab.lock_btn.click()
-    assert all(b.isChecked() for b in tab.bar_lock_buttons.values()) and tab.lock_btn.text() == "위치 잠금됨"
+    assert all(b.isChecked() for b in tab.bar_lock_buttons.values()) and tab.lock_btn.text() == "전체 위치 잠금됨"
     tab._set_bar_locked("mp", False)
     settle(app)
     assert w.grab().save(str(tmp_path / "stat-mixed-locks.png"))

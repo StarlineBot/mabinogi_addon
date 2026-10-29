@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QGroupBox,
 )
 
+from .settings_layout import set_lock_text
 from .. import config
 from .help_dialog import tab_header
 from .skillbar_mirror import (
@@ -72,16 +73,16 @@ class SkillbarTab(QWidget):
         ))
         self._beta_notice = hint_label("")
         self._beta_notice.hide()
-        v.addWidget(hint_label(
-            "원본 단축바를 보이게 한 뒤 자동 찾기를 실행하세요."
-            " 직접 지정할 때는 맨 왼쪽 위 첫 칸에 맞추세요. 빈 칸은 오버레이에서 우클릭해 숨길 수 있습니다."
-        ))
-
+        # 영역 묶음(명세 13.5 — 11절 접기를 단축바에도): 지정 전 '영역 지정' 상자 / 지정 후 '✓ 영역 지정됨' + '영역 다시 지정 ▸'
+        outer = v
+        v.addWidget(QLabel("판독 영역 · 원본 첫 칸"))
+        region_body = QWidget()
+        v = QVBoxLayout(region_body)
+        v.setContentsMargins(0, 0, 0, 0)
         row = QHBoxLayout()
         self.anchor_btn = QPushButton("직접 지정")
         self.anchor_btn.setToolTip("단축바 첫 아이콘에 박스를 맞춰 클릭(돋보기)")
         self.anchor_btn.clicked.connect(self._on_anchor)
-        v.addWidget(QLabel("판독 영역 · 원본 첫 칸"))
         self.anchor_label = hint_label("")
         v.addWidget(self.anchor_label)
         self.auto_find_btn = QPushButton("자동 찾기")
@@ -97,8 +98,13 @@ class SkillbarTab(QWidget):
         row.addStretch()
         row.addWidget(self.clear_region_btn)
         v.addLayout(row)
+        v.addWidget(hint_label("원본 단축바를 보이게 한 뒤 자동 찾기 · 직접 지정은 맨 왼쪽 위 첫 칸에 맞추세요."))
+        from .region_section import RegionSection
+        self.region_section = RegionSection(region_body, unset_text="지정하면 단축바를 그룹별로 원하는 위치에 보여줘요")
+        v = outer
+        v.addWidget(self.region_section)
 
-
+        # 표시(명세 13.5): 표시 배율 … [전체 위치 잠금됨] / 기본 배치 [중앙 하단(기본)] [중앙 2단] [블록 분리] / 안내 한 줄
         display_group = QGroupBox("표시")
         display_layout = QVBoxLayout(display_group)
         v.addWidget(display_group)
@@ -112,18 +118,14 @@ class SkillbarTab(QWidget):
         self.scale_spin.valueChanged.connect(self._on_scale)
         ctl.addWidget(self.scale_spin)
         ctl.addStretch(1)
-        self.lock_all_btn = QPushButton("전체 잠금")
-        self.lock_all_btn.clicked.connect(lambda: self._set_locked_all(True))
-        self.unlock_all_btn = QPushButton("전체 잠금 해제")
-        self.unlock_all_btn.clicked.connect(lambda: self._set_locked_all(False))
+        from .settings_layout import lock_button
+        self.lock_all_btn = lock_button(every=True)  # 전체 잠금·전체 잠금 해제 두 버튼 → 상태형 하나
+        self.lock_all_btn.clicked.connect(self._set_locked_all)
         ctl.addWidget(self.lock_all_btn)
-        ctl.addWidget(self.unlock_all_btn)
         display_layout.addLayout(ctl)
 
-        # 프리셋(기본 배치)
         pr = QHBoxLayout()
-        display_layout.addWidget(QLabel("기본 배치"))
-        display_layout.addWidget(hint_label("빈칸은 오버레이에서 우클릭해 숨길 수 있습니다."))
+        pr.addWidget(QLabel("기본 배치"))
         for label, fn in (
             ("중앙 하단(기본)", self._preset_default),
             ("중앙 2단", self._preset_two_tier),
@@ -132,15 +134,18 @@ class SkillbarTab(QWidget):
             b = QPushButton(label)
             b.clicked.connect(fn)
             pr.addWidget(b)
+        pr.addStretch(1)
         display_layout.addLayout(pr)
-        self._preset_btns = [pr.itemAt(i).widget() for i in range(pr.count())]
+        display_layout.addWidget(hint_label("빈칸은 오버레이에서 우클릭해 숨길 수 있습니다."))
+        self._preset_btns = [pr.itemAt(i).widget() for i in range(1, pr.count()) if pr.itemAt(i).widget() is not None]
         v.addStretch(1)
 
         self._gated = [
             self.anchor_btn, self.auto_find_btn, self.view_region_btn, self.scale_spin,
-            self.lock_all_btn, self.unlock_all_btn, *self._preset_btns,
+            self.lock_all_btn, *self._preset_btns,
         ]
         self._update_anchor_label()
+        self._sync_lock_all()
         self._apply_login_gate()
         self._timer = QTimer(self)
         self._timer.setInterval(120)  # 쿨타임 숫자가 빨리 반영되게 약간 빠르게
@@ -293,6 +298,13 @@ class SkillbarTab(QWidget):
         else:
             self.anchor_label.setText("원본 첫 칸 미지정 — 맨 왼쪽 위 첫 칸에 맞춰 클릭해 주세요.")
             self.anchor_label.setStyleSheet("color:#8a8f98;")
+        section = self.region_section  # 영역 묶음(명세 13.5): 지정 후 한 줄 요약 + 접힘, 막 지정했으면 펼침
+        registered = self._anchor is not None
+        section.set_registered(registered, just_set=registered and not section.registered
+                               and getattr(self, "_region_ready", False))
+        self.anchor_label.setVisible(registered)
+        section.set_summary("✓ 영역 지정됨")
+        self._region_ready = True
 
     # ---- 설정 변경 ----
     def _on_scale(self, value: int) -> None:
@@ -307,6 +319,12 @@ class SkillbarTab(QWidget):
             ov.set_locked(locked)
             self._chunks_cfg.setdefault(key, {})["locked"] = locked
         self._save()
+
+    def _sync_lock_all(self) -> None:
+        """모든 묶음이 잠겼으면 '전체 위치 잠금됨', 하나라도 풀리면 '전체 위치 잠금'."""
+        locked = all(self._chunks_cfg.get(key, {}).get("locked", False) for key in self._defs)
+        self.lock_all_btn.setChecked(locked)
+        set_lock_text(self.lock_all_btn, locked)
 
     def _toggle_cell(self, key: str, i: int) -> None:
         cells = list(self._cells_on(key))
@@ -421,6 +439,7 @@ class SkillbarTab(QWidget):
         # (다음에 '중앙 하단' 눌러도 그 높이보다 아래로 안 내려가게).
         if tops:
             self._center_top_y = min(tops)
+        self._sync_lock_all()
         config.save_skillbar(
             {
                 "scale": self._scale,

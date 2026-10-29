@@ -124,6 +124,7 @@ class ResourceTab(QWidget):
         tuarim.threshold_box.setTitle("")
         tuarim.threshold_box.setFlat(True)
         tuarim.threshold_box.setStyleSheet("QGroupBox { border: 0; margin: 0; padding: 0; }")
+        tuarim.threshold_box.layout().setContentsMargins(0, 0, 0, 0)  # 옮겨 온 상자의 안쪽 여백 0(명세 13.4: 다른 줄과 같은 들여쓰기)
         alert.addWidget(tuarim.threshold_box)
         layout.addWidget(self.tuarim_alert_box)
         # 지정 후 요약 줄은 보일 때만 1초마다 판독 값을 옮긴다(숨어 있을 때 비용 없음)

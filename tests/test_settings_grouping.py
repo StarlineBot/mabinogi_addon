@@ -31,9 +31,8 @@ def test_registration_status_always_precedes_commands(window,key):
     w._open_setup_feature(key)
     app.processEvents()
     tab = w.resource_tab if key=="dorcha" else getattr(w,{"stat_bars":"stat_bars_tab"}.get(key,key+"_tab"))
-    # 0.27.0(명세 11절): 지정 전 정보 줄은 '영역 지정' 상자의 '● 아직 지정 안 됨' 줄
-    status = (tab.anchor_label if key=="skillbar" else tab.region_hint if key=="memo"
-              else tab.region_section.unset_label)
+    # 0.27.0(명세 11절): 지정 전 정보 줄은 '영역 지정' 상자의 '● 아직 지정 안 됨' 줄(0.28.1 명세 13.5: 단축바·메모도 같은 상자)
+    status = tab.region_section.unset_label
     button = tab.region_btn if key!="skillbar" else tab.anchor_btn
     assert status.mapTo(tab,QPoint()).y()+status.height() <= button.mapTo(tab,QPoint()).y()
 
