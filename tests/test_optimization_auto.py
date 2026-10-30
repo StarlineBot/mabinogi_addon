@@ -148,7 +148,7 @@ def _controller(window, monkeypatch):
 def test_checkbox_is_off_by_default_and_turning_on_starts_waiting_without_network(window, monkeypatch):
     w, c, started = _controller(window, monkeypatch)
     d = c.panel
-    assert not d.auto.isChecked() and d.auto.text() == '마비노기를 켜면 자동 적용'
+    assert not d.auto.isChecked() and d.auto.text() == '최적화 사용'  # 0.29.0(명세 14.5): 기능 켜기 스위치(C안)
     config.save_optimization_selection(dict(layout='none'))  # 13.11: CPU 체크 해제 대신 '배치 안 함'
     d.tcp.setChecked(True); d.priority.setChecked(True)
     d.auto.setChecked(True)

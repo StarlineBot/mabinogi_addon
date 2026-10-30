@@ -29,13 +29,14 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from .palette import color
 from .. import catalog as catalog_mod
 from .. import config
 from ..catalog import BuffDef, available_catalog
 from .dpi import to_logical
 from .screen_grab import capture_for_autofind
 from .widgets import TrackerColumns, callout, checkbox, hint_label, icon_slot, section_label
-from .settings_layout import lock_text, style_toggle, DANGER_STYLE
+from .settings_layout import lock_text, style_toggle, danger_style
 
 # 앵커로 고정 사용할 버프(항상 존재, 지속시간 없음 → 판정 기준)
 ANCHOR_ID = "premium_battle"
@@ -43,7 +44,7 @@ ANCHOR_ID = "premium_battle"
 # 영역에 꼭 들어가야 하는 것(앱 힌트 ↔ 화면 점선 라벨이 같은 기준을 공유).
 REGION_CRITERION = "버프 아이콘 + 남은시간이 함께 보이게 드래그하세요"
 # 판독 영역 안내: 기본(비즐겨찾기 영역) / 즐겨찾기 영역(기획서 3.1.1, 0.26.0 제작자 알파)
-REGION_GUIDE = "기준 버프가 포함된 상태목록을 지정하세요. 상단의 고정 즐겨찾기 영역은 제외합니다."
+REGION_GUIDE = "기준 버프가 포함된 상태목록을 지정하세요. 상단의 고정 즐겨찾기 영역은 제외해요."
 REGION_GUIDE_FAVORITES = "상태목록창을 맨 위(즐겨찾기 칸 포함)부터 지정하세요. 즐겨찾기 칸은 구분선을 찾아 따로 읽어요."
 HIGHLIGHT_TITLE = "버프 영역 확인"
 HIGHLIGHT_SUB = "아이콘 + 남은시간이 점선 안에 다 들어왔나요?"
@@ -130,9 +131,9 @@ class BuffTab(QWidget):
         self.anchor_name.setWordWrap(True)
         anchor_layout.addWidget(self.anchor_name)
         anchor_layout.addWidget(hint_label(
-            "버프 트래커가 상태목록 위치를 찾을 때 사용하는 기준 버프입니다.\n\n"
-            "판독 영역 안에 이 버프가 포함되어야 합니다.\n\n"
-            "기준 버프 자체는 오버레이에 표시하거나 개별 알림을 설정하지 않습니다.\n\n"
+            "버프 트래커가 상태목록 위치를 찾을 때 사용하는 기준 버프예요.\n\n"
+            "판독 영역 안에 이 버프가 포함되어야 해요.\n\n"
+            "기준 버프 자체는 오버레이에 표시하거나 개별 알림을 설정하지 않아요.\n\n"
             "표시·알림을 설정하려면 왼쪽 목록에서 일반 버프를 선택하세요."))
         anchor_layout.addStretch()
         self._form_stack.addWidget(self.anchor_panel)
@@ -207,7 +208,7 @@ class BuffTab(QWidget):
         # 버프·디버프는 배율 칸과 반씩 나눠 쓰는 원래 폭(사용자 결정 2026-10-30), 글씨·높이만 다른 잠금 버튼과 같은 톤
         self.lock_btn = style_toggle(QPushButton(lock_text(False)))
         self.lock_btn.setToolTip(
-            "잠그면 오버레이 위치가 고정되고, 클릭이 통과돼 게임을 가리지 않습니다.\n"
+            "잠그면 오버레이 위치가 고정되고, 클릭이 통과돼 게임을 가리지 않아요.\n"
             "해제하면 드래그로 위치를 옮길 수 있어요."
         )
         self.lock_btn.toggled.connect(self._on_lock_toggled)
@@ -278,7 +279,7 @@ class BuffTab(QWidget):
         self.add_btn.setToolTip("새 버프 등록")
         self.add_btn.clicked.connect(self._on_register)
         self.del_btn = QPushButton("－ 삭제")
-        self.del_btn.setStyleSheet(DANGER_STYLE)
+        self.del_btn.setStyleSheet(danger_style())
         self.del_btn.setToolTip("선택한 버프 삭제")
         self.del_btn.clicked.connect(self._on_delete)
         self.up_btn = QPushButton("▲")
@@ -293,7 +294,7 @@ class BuffTab(QWidget):
 
         v.addWidget(
             callout(
-                "아이콘이 똑같은 버프는 오탐 여지가 있습니다\n"
+                "아이콘이 똑같은 버프는 오탐 여지가 있어요\n"
                 "예: 급소관통(스킬), 물리공격력증가(물약)"
             )
         )
@@ -387,11 +388,11 @@ class BuffTab(QWidget):
                 f"등록됨 · {region['x']},{region['y']}  "
                 f"{region['w']}×{region['h']}"
             )
-            self.region_hint.setStyleSheet("color:#2ecc71;")
+            self.region_hint.setStyleSheet(f"color:{color('ok')};")
             self.view_region_btn.setEnabled(True)
         else:
             self.region_hint.setText(f"영역 미지정 — {REGION_CRITERION}")
-            self.region_hint.setStyleSheet("color:#8a8f98;")
+            self.region_hint.setStyleSheet(f"color:{color('muted')};")
             self.view_region_btn.setEnabled(False)
 
     def _pick_region(self) -> None:
@@ -419,14 +420,14 @@ class BuffTab(QWidget):
         from ..autofind_diagnostics import perform_autofind
         frame, ox, oy, box = perform_autofind("buff", capture_for_autofind)
         if frame is None:
-            QMessageBox.warning(self, "자동 찾기", "화면 캡처에 실패했습니다.")
+            QMessageBox.warning(self, "자동 찾기", "화면 캡처에 실패했어요.")
             return
         if box is None:
             QMessageBox.information(
                 self,
                 "자동 찾기 — 못 찾음",
-                "상태목록창을 찾지 못했습니다.\n\n"
-                "• 상태목록창에 '프리미엄 배틀 멤버십'이 떠 있나요? (이 아이콘을 기준으로 찾습니다)\n"
+                "상태목록창을 찾지 못했어요.\n\n"
+                "• 상태목록창에 '프리미엄 배틀 멤버십'이 떠 있나요? (이 아이콘을 기준으로 찾아요)\n"
                 "• 상태목록창이 화면에 보이나요?\n\n"
                 "다시 시도하거나 버프 판독 영역의 '직접 지정'으로 잡으세요.",
             )
@@ -526,9 +527,9 @@ class BuffTab(QWidget):
         box.setWindowTitle("버프 삭제")
         is_default = bid in catalog_mod.default_buff_ids()
         msg = (
-            f"'{bid}' 기본 버프를 목록에서 뺄까요?\n(배포돼도 계속 숨겨집니다)"
+            f"'{bid}' 기본 버프를 목록에서 뺄까요?\n(배포돼도 계속 숨겨져요)"
             if is_default
-            else f"'{bid}' 버프를 삭제할까요?\n(매칭 아이콘·표시 이미지 파일이 삭제됩니다)"
+            else f"'{bid}' 버프를 삭제할까요?\n(매칭 아이콘·표시 이미지 파일이 삭제돼요)"
         )
         box.setText(msg)
         yes = box.addButton("예", QMessageBox.ButtonRole.YesRole)
@@ -612,7 +613,7 @@ class BuffTab(QWidget):
         show_row.addWidget(self.display_clear_btn)
         show_row.addStretch(1)
         iv.addLayout(show_row)
-        iv.addWidget(hint_label("└ 비워 두면 찾을 아이콘을 사용합니다."))
+        iv.addWidget(hint_label("└ 비워 두면 찾을 아이콘을 사용해요."))
         v.addWidget(icon_box)
 
         # --- 그룹 2: 표시(오버레이 노출·지속시간) ---

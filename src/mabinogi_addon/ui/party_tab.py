@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from .palette import color
 from .. import config
 from ..party.client import SERVERS
 from ..party.models import Recruit
@@ -40,7 +41,6 @@ from .widgets import FeatureHeader, hint_label
 
 
 _DIM = QColor("#9aa0a6")
-_ACCENT = QColor("#00D1A7")  # 키워드 매칭 강조색(왼쪽 바)
 _BAR_WIDTH = 4  # 왼쪽 강조 바 두께(px)
 
 
@@ -65,7 +65,7 @@ class _AccentBarDelegate(QStyledItemDelegate):
         if index.column() == 0 and self._is_matched(index.row()):
             painter.save()
             r = option.rect
-            painter.fillRect(r.left(), r.top(), _BAR_WIDTH, r.height(), _ACCENT)
+            painter.fillRect(r.left(), r.top(), _BAR_WIDTH, r.height(), QColor(color('accent')))
             painter.restore()
 
 
@@ -86,7 +86,7 @@ class _ChipRow(QWidget):
         self._x.setFlat(True)
         self._x.setCursor(Qt.CursorShape.PointingHandCursor)
         self._x.setToolTip("삭제")
-        self._x.setStyleSheet("QPushButton{border:none;color:#e06c75;}")
+        self._x.setStyleSheet(f"QPushButton{{border:none;color:{color('danger')};}}")
         self._x.clicked.connect(lambda: self.deleted.emit(self._text))
         self._x.setVisible(False)  # 평소 숨김, 호버/선택 시 표시
         row.addWidget(self._x)
@@ -121,7 +121,7 @@ class PartyTab(QWidget):
         root = QVBoxLayout(self)
         root.setContentsMargins(12, 12, 12, 12)
         root.setSpacing(10)
-        root.addWidget(FeatureHeader("파티 모집", "선택한 서버의 파티 모집을 보고 등록한 키워드가 포함되면 알림을 받습니다."))  # 0.25.0: 도움말 없음
+        root.addWidget(FeatureHeader("파티 모집", "선택한 서버의 파티 모집을 보고 등록한 키워드가 포함되면 알림을 받아요."))  # 0.25.0: 도움말 없음
         root.addWidget(self._build_board(), 1)
 
         bottom = QHBoxLayout()
@@ -213,7 +213,7 @@ class PartyTab(QWidget):
         box.setWindowTitle("파티장 제외")
         box.setText(
             f"'{name}'\n\n이 파티장을 제외하시겠습니까?\n"
-            "이 파티장의 모집은 현황·알림에서 숨겨집니다."
+            "이 파티장의 모집은 현황·알림에서 숨겨져요."
         )
         yes = box.addButton("예", QMessageBox.ButtonRole.YesRole)
         no = box.addButton("아니오", QMessageBox.ButtonRole.NoRole)
@@ -421,7 +421,7 @@ class PartyTab(QWidget):
         btn_row.addStretch(1)
         v.addLayout(btn_row)
 
-        v.addWidget(hint_label("이 파티장의 모집은 현황·알림에서 숨깁니다 · 항목 위 X로 삭제"))
+        v.addWidget(hint_label("이 파티장의 모집은 현황·알림에서 숨겨요 · 항목 위 X로 삭제"))
         return box
 
     def _refresh_exclude_list(self) -> None:

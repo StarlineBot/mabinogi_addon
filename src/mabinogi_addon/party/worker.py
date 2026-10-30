@@ -56,7 +56,7 @@ class PartyWorker(QThread):
     def _poll_once(self) -> None:
         api_key = self._get_api_key()
         if not api_key:
-            self.status.emit("넥슨 API 키가 없습니다. .env의 NEXON_API_KEY를 설정하세요.")
+            self.status.emit("넥슨 API 키가 없어요. .env의 NEXON_API_KEY를 설정하세요.")
             return
         # HTTP는 데몬 스레드에서 돌려 종료를 막지 않게 한다(요청 중 종료해도 즉시 빠져나감).
         box: dict = {}

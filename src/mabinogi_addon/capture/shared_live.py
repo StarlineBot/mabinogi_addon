@@ -145,7 +145,7 @@ class _SharedLiveCamera:
         self._mss_monitor = mon
         _log.warning(
             "dxcam 대신 mss(GDI) 폴백으로 라이브 캡처 (%dx%d). "
-            "Desktop Duplication 미지원 환경 호환용 — CPU가 다소 높을 수 있습니다.",
+            "Desktop Duplication 미지원 환경 호환용 — CPU가 다소 높을 수 있어요.",
             mon["width"],
             mon["height"],
         )

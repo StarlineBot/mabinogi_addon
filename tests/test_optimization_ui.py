@@ -296,7 +296,7 @@ def test_start_from_app_preserves_collector_header_before_game_focus(window, mon
     assert c.frames, c.frame_status
     assert c.overlay.isVisible()
     assert c.panel.frames_toggle.isEnabled() and c.panel.frames_toggle.isChecked()
-    assert c.panel.frames_toggle.text() == 'FPS 표시 중' and c.frame_status.startswith('표시 중 · ')
+    assert c.panel.frames_toggle.isChecked() and c.panel.frames_toggle.text() == 'FPS 표시' and c.frame_status.startswith('표시 중 · ')
     assert c.stream.snapshot(now[0])['fps'] == pytest.approx(50)
     c.stop_frames()
 
@@ -529,7 +529,7 @@ def test_fps_display_toggle_starts_and_stops_measurement(window, monkeypatch):
     toggle = c.panel.frames_toggle
     assert toggle.text() == 'FPS 표시' and not toggle.isChecked()
     toggle.click()
-    assert calls == ['start'] and toggle.isChecked() and toggle.text() == 'FPS 표시 중'
+    assert calls == ['start'] and toggle.isChecked() and toggle.text() == 'FPS 표시'  # 0.29.0(명세 14.5): 스위치 — 글자는 그대로
     toggle.click()
     assert calls == ['start', 'stop'] and not toggle.isChecked() and toggle.text() == 'FPS 표시'
     # 시작이 실패하면(게임 미등록 등) 토글은 다시 꺼짐으로 돌아간다.

@@ -5,6 +5,7 @@ import logging
 _log = logging.getLogger(__name__)
 from PySide6.QtCore import QObject, QTimer
 from PySide6.QtWidgets import QMessageBox
+from .palette import Named
 from .. import config, paths
 from ..feature_access import Recheck, is_creator, optimization_available
 from ..optimization.session import NETWORK_KINDS, PROCESS_KINDS, Recovery
@@ -20,7 +21,8 @@ from ..system.perf_metrics import METRICS, PerfSampler
 
 
 # 상단 최적화 배지 색(0.17.2 사용자 결정): 블랙박스·전투 보조와 같은 모양('● 최적화: …', 한 색, 밑줄 없음)
-BADGE_COLORS = {'applied': '#2ecc71', 'neutral': '#8a8f98', 'warn': '#e67e22', 'error': '#e74c3c'}
+RESULT_COLORS = Named({'ok': 'ok', 'neutral': 'muted', 'warn': 'warn', 'error': 'danger'})  # 결과 요약 줄(명세 14.6)
+BADGE_COLORS = Named({'applied': 'ok', 'neutral': 'muted', 'warn': 'warn', 'error': 'danger'})
 BADGE_TIP = '최적화 상태예요. 성능 개선을 뜻하지 않아요. 누르면 최적화 탭으로 이동해요.'
 
 
@@ -379,14 +381,14 @@ class OptimizationController(QObject):
 
     def _render_result(self, d):
         """결과 요약(13.13): 상태 한 줄(굵게·색) + 항목 줄. 세션 기록이 바뀌면 app.log에 한 번 남긴다."""
-        from ..optimization.result_summary import COLORS, summarize
+        from ..optimization.result_summary import summarize
         layout = self._requested_layout()
         label = f'{layout.name} ({layout.short})' if layout is not None else self._summary_requested.get('layout_name')
         headline, level, lines = summarize(self.engine, self.recovery, self._summary_requested, layout_label=label,
                                            kept_on=self._kept_on, restore_wait=self._restore_wait)
         if self._notice and not self.engine.busy:
             headline, level, lines = self._notice, 'warn', []
-        style = f'font-weight:bold; color:{COLORS[level]};'
+        style = f"font-weight:bold; color:{RESULT_COLORS[level]};"
         if d.status.text() != headline:
             d.status.setText(headline)
         if d.status.styleSheet() != style:
@@ -569,10 +571,13 @@ class OptimizationController(QObject):
 
     # ---- 자동 적용(명세 13.10) -------------------------------------------------------------------
     def _auto_changed(self, on):
-        """체크를 켜면 바로 게임 대기(앱 시작과 같은 체감), 끄면 지금 게임이 끝날 때 세션도 끝난다(이전 방식)."""
+        """'최적화 사용'(C안, 명세 14.5·12.3): 켜면 바로 게임 대기(게임이 있으면 적용), 끄면 자동 적용 끄기 + 지금 적용분 바로 원복."""
         if self._restoring_selection: return
         self.engine.auto = bool(on)
-        if on: self._auto_start()
+        if on:
+            self._auto_start()
+        elif self._optimization_on():
+            self._toggle_optimization()  # 원복(네트워크가 남았으면 기존 확인 창)
 
     def _auto_start(self):
         """자동 적용 세션: 체크한 프로세스 항목만, 네트워크(패스트핑)는 바꾸지 않는다. 게임이 없으면 아무것도 바꾸지 않고 기다린다.
@@ -656,7 +661,7 @@ class OptimizationController(QObject):
         """홈 줄: (상태 문구, 'ok'|'muted'|'warn', 스위치 켬). 켬 = 자동 적용 체크 또는 지금 적용 중."""
         if self.panel is None or not self._access():
             return '꺼짐', 'muted', False
-        on = self.panel.auto.isChecked() or self._optimization_on()
+        on = self.panel.auto.isChecked()  # 스위치 = '최적화 사용'(탭 스위치와 같은 값)
         state = optimization_badge(self.recovery, self.engine, None, restore_wait=self._restore_wait, kept_on=self._kept_on)
         text = state[0].removeprefix('최적화: ') if state is not None else None
         if text is None:
@@ -673,16 +678,10 @@ class OptimizationController(QObject):
         d = self.panel
         if d is None or not self._access():
             return
-        if on:
-            if not d.auto.isChecked():
-                d.auto.setChecked(True)  # _auto_changed → 저장·_auto_start(게임 대기 또는 바로 적용)
-            else:
-                self._auto_start()
-            return
-        if d.auto.isChecked():
-            d.auto.setChecked(False)
-        if self._optimization_on():
-            self._toggle_optimization()  # 끄기 = 원복(네트워크가 남았으면 기존 확인 창)
+        if d.auto.isChecked() != bool(on):
+            d.auto.setChecked(bool(on))  # 탭의 '최적화 사용' 스위치와 같은 경로(_auto_changed)
+        elif on:
+            self._auto_start()
 
     def _network_left(self):
         """되돌릴 네트워크(패스트핑 등) 변경이 남았는지. '원복 대기'는 연결을 끊어야 하는 네트워크만 해당한다."""
@@ -829,7 +828,6 @@ class OptimizationController(QObject):
         shown = self.frames and not self._collect_only
         if toggle.isChecked() != shown:
             toggle.blockSignals(True); toggle.setChecked(shown); toggle.blockSignals(False)
-        toggle.setText('FPS 표시 중' if shown else 'FPS 표시')
 
     def stop_frames(self, message='꺼짐 · 표시 안 함'):
         user = message == '꺼짐 · 표시 안 함'
@@ -846,7 +844,7 @@ class OptimizationController(QObject):
         self.sampler.update((), None)
         self._hide_overlay()
         self.frame_status = message
-        if self.panel is not None: self.panel.frames_status.setText(message)
+        if self.panel is not None: self.panel.show_frames_status(message, False)
 
     def _collector_ended(self, code):
         if not self.frames: return
@@ -1017,7 +1015,7 @@ class OptimizationController(QObject):
         d.frames_toggle.setEnabled((allowed and not self.closing) or self.frames or self.collector.pending)
         self._sync_frames_toggle()
         for control in (d.summary_collect,d.summary_save,d.summary_folder): control.setEnabled(allowed and self._creator())
-        d.frames_status.setText(self.frame_status)
+        d.show_frames_status(self.frame_status, bool(self.frames and not self._collect_only))
         self._render_result(d)
         self._update_recommendation()
         self._maybe_auto_inspect()  # 탭에 머문 채 세션이 끝나거나 접근이 생겨도 한 번은 확인

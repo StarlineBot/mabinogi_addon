@@ -4,17 +4,25 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont, QFontMetrics
 from PySide6.QtWidgets import QLabel, QPushButton, QToolButton
 from shiboken6 import isValid
+
+from .palette import color
 import weakref
 
 # 상태형 토글(위치 잠금·최적화·FPS 표시·블랙박스 사용) 공통 톤. 굵기 보통·세로 padding 0, 켜짐 초록(안내·도움말 명세 13.1 정정).
 # 높이는 스타일시트로 계산하지 않고 style_toggle에서 일반 버튼 높이로 고정한다(스타일시트를 입히면 Windows 기본 버튼 높이를 버리기 때문).
-LOCK_STYLE = (
-    "QPushButton { padding:0 10px; border:1px solid palette(mid); border-radius:3px;"
-    " background:palette(button); color:palette(button-text); font-weight:400; }"
-    "QPushButton:disabled { color:palette(mid); }"
-    "QPushButton:checked:enabled { background:#00b894; color:#062f28; border-color:#00856b; }"
-)
-DANGER_STYLE = "QPushButton:enabled { color:#d35b58; }"
+def lock_style():
+    return (
+        "QPushButton { padding:0 10px; border:1px solid palette(mid); border-radius:3px;"
+        " background:palette(button); color:palette(button-text); font-weight:400; }"
+        "QPushButton:disabled { color:palette(mid); }"
+        f"QPushButton:checked:enabled {{ background:{color('accent')}; color:{color('on-accent')}; border-color:#00856b; }}"
+    )
+
+
+def danger_style():
+    return f"QPushButton:enabled {{ color:{color('danger')}; }}"
+
+
 LOCK_PADDING = 22  # 잠금 버튼 폭 = 보통 굵기 '…위치 잠금됨' 글자 폭 + 여백(B안)
 
 
@@ -26,7 +34,7 @@ def plain_button_height():
 def style_toggle(button):
     """상태형 토글 버튼에 공통 톤을 입히는 한 곳: 스타일 + 일반 버튼 높이. 폭은 호출한 쪽이 정한다(토글은 글자에 맞춤)."""
     button.setCheckable(True)
-    button.setStyleSheet(LOCK_STYLE)
+    button.setStyleSheet(lock_style())
     button.setFixedHeight(plain_button_height())
     return button
 

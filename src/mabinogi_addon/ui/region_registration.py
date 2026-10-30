@@ -8,7 +8,7 @@ from shiboken6 import isValid
 
 from .. import config
 from ..setup_state import section, valid_box
-from .settings_layout import DANGER_STYLE
+from .settings_layout import danger_style
 
 REGIONS = {
     "buff": ("buffTracker", "captureRegion", "버프 판독"),
@@ -74,7 +74,7 @@ def connect_selection(owner, selector, callback):
         try:
             callback(*box)
         except OSError:
-            QMessageBox.warning(owner, "영역 저장 실패", "기존 등록 영역을 유지합니다.")
+            QMessageBox.warning(owner, "영역 저장 실패", "기존 등록 영역을 유지해요.")
 
     selector.selected.connect(apply)
 
@@ -82,10 +82,10 @@ def connect_selection(owner, selector, callback):
 def clear_button(owner, key, changed):
     name, field, label = REGIONS[key]
     button = QPushButton("지정 해제", owner)
-    button.setStyleSheet(DANGER_STYLE)
+    button.setStyleSheet(danger_style())
     button.setEnabled(section(config._read_local_config(), name).get(field) is not None)
     owner._region_keys = tuple(dict.fromkeys((*getattr(owner, "_region_keys", ()), key)))
-    button.setToolTip(label + " 영역만 지웁니다. 세부 설정은 유지합니다.")
+    button.setToolTip(label + " 영역만 지워요. 세부 설정은 유지해요.")
     reference = weakref.ref(owner)
     method_name = changed.__name__
 
@@ -110,13 +110,13 @@ def clear_button(owner, key, changed):
                 impacts += " · 체력바 보스전 경고"
         answer = confirm_clear(owner, label + " 지정 해제",
             impacts + "에 사용하는 영역을 지정 해제할까요?\n"
-            "해당 영역의 판독·표시·알림이 중단됩니다.\n"
-            "다른 영역과 아이콘·표시·배치·알림·소리 설정은 유지합니다.")
+            "해당 영역의 판독·표시·알림이 중단돼요.\n"
+            "다른 영역과 아이콘·표시·배치·알림·소리 설정은 유지해요.")
         if answer != QMessageBox.StandardButton.Yes or not editing_allowed(owner):
             return
         latest = config._read_local_config()
         if section(latest, name).get(field) != before:
-            warn(owner, "영역 변경됨", "확인 중 영역이 변경됐습니다. 현재 영역을 확인한 뒤 다시 시도하세요.")
+            warn(owner, "영역 변경됨", "확인 중 영역이 변경됐어요. 현재 영역을 확인한 뒤 다시 시도하세요.")
             return
         target = dict(section(latest, name))
         target[field] = None
@@ -124,7 +124,7 @@ def clear_button(owner, key, changed):
         try:
             config._write_local_config(latest)
         except OSError:
-            warn(owner, "지정 해제 실패", "영역을 저장하지 못했습니다. 기존 영역과 동작을 유지합니다.")
+            warn(owner, "지정 해제 실패", "영역을 저장하지 못했어요. 기존 영역과 동작을 유지해요.")
             return
         owner._region_generation = getattr(owner, "_region_generation", 0) + 1
         invalidate_region(key)
@@ -147,6 +147,6 @@ def save_boxes(owner, boxes):
     try:
         config._write_local_config(raw)
     except OSError:
-        warn(owner, "영역 저장 실패", "기존 등록 영역을 유지합니다.")
+        warn(owner, "영역 저장 실패", "기존 등록 영역을 유지해요.")
         return False
     return True

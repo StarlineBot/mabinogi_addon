@@ -24,11 +24,13 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from .palette import color
 from .. import config
 from ..market import auction, fee
 from .widgets import FeatureHeader, SuffixSpinBox, hint_label
 
-_GRAY = "color:#9aa0aa; font-size:12px;"
+def _gray():
+    return f"color:{color('muted')}; font-size:12px;"
 
 
 class DistributionTab(QWidget):
@@ -53,7 +55,7 @@ class DistributionTab(QWidget):
         # 1줄: 수수료
         r1 = QHBoxLayout()
         lbl = QLabel("수수료")
-        lbl.setStyleSheet(_GRAY)
+        lbl.setStyleSheet(_gray())
         r1.addWidget(lbl)
         self.rate_membership = QRadioButton("4%(멤버십)")
         self.rate_base = QRadioButton("5%")
@@ -103,13 +105,13 @@ class DistributionTab(QWidget):
         self.grid.setColumnStretch(0, 1)
         self.grid.setColumnStretch(1, 1)
         self._placeholder = QLabel("판매가·인원을 입력하세요.")
-        self._placeholder.setStyleSheet(_GRAY)
+        self._placeholder.setStyleSheet(_gray())
         self.grid.addWidget(self._placeholder, 0, 0, 1, 2)
         v.addWidget(self.result_area)
 
         self.note_lbl = QLabel("")
         self.note_lbl.setWordWrap(True)
-        self.note_lbl.setStyleSheet(_GRAY)
+        self.note_lbl.setStyleSheet(_gray())
         v.addWidget(self.note_lbl)
         v.addStretch(1)
 
@@ -138,7 +140,7 @@ class DistributionTab(QWidget):
         self._clear_grid()
         if sale <= 0:
             msg = QLabel("판매가를 입력하세요.")
-            msg.setStyleSheet(_GRAY)
+            msg.setStyleSheet(_gray())
             self.grid.addWidget(msg, 0, 0, 1, 2)
             self.note_lbl.setText("")
             self._inputs_changed()
@@ -146,7 +148,7 @@ class DistributionTab(QWidget):
         self._query_input = (sale, headcount, membership)
         self._inputs_changed()
         busy = QLabel("경매장에서 수수료 쿠폰 가격 확인 중…")
-        busy.setStyleSheet(_GRAY)
+        busy.setStyleSheet(_gray())
         self.grid.addWidget(busy, 0, 0, 1, 2)
         self.note_lbl.setText("")
         threading.Thread(
@@ -178,7 +180,7 @@ class DistributionTab(QWidget):
         is_best = best is not None and row["label"] == best["label"]
         f = QFrame()
         f.setObjectName("card")
-        border = "#00C9A2" if is_best else "#3a3d44"
+        border = color('accent') if is_best else "#3a3d44"
         f.setStyleSheet(f"#card {{ border:1px solid {border}; border-radius:8px; }}")
         cv = QVBoxLayout(f)
         cv.setContentsMargins(10, 8, 10, 8)
@@ -190,14 +192,14 @@ class DistributionTab(QWidget):
 
         if not row["available"]:
             na = QLabel("쿠폰 가격 조회 안됨")
-            na.setStyleSheet(_GRAY)
+            na.setStyleSheet(_gray())
             cv.addWidget(na)
             return f
 
         per = QLabel(f"1인당 {row['per_person']:,} ({kg(row['per_person'])})")
         per.setStyleSheet(
             "font-size:14px; font-weight:700;"
-            + (" color:#00C9A2;" if is_best else "")
+            + (f" color:{color('accent')};" if is_best else "")
         )
         cv.addWidget(per)
 
@@ -205,7 +207,7 @@ class DistributionTab(QWidget):
         if row["pct"] != 0:
             fee_txt += f" + 쿠폰 {(row['coupon_price'] or 0):,}"
         fl = QLabel(fee_txt)
-        fl.setStyleSheet(_GRAY)
+        fl.setStyleSheet(_gray())
         cv.addWidget(fl)
         return f
 

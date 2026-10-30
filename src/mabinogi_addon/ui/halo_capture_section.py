@@ -18,7 +18,7 @@ from ..tracker.halo import HaloTracker
 from .dpi import to_physical
 from .region_registration import connect_selection
 from .settings_layout import disclosure
-from .widgets import FeatureHeader, CapturePathLabel, checkbox, wrapping_row
+from .widgets import FeatureHeader, CapturePathLabel, checkbox, wrapping_row, hint_label
 
 
 class HaloCaptureSection(QWidget):
@@ -66,7 +66,7 @@ class HaloCaptureSection(QWidget):
         v.setContentsMargins(0, 0, 0, 0)
         from .feature_copy import HELP
         from .help_dialog import help_button
-        v.addWidget(FeatureHeader("믿음의 균열의 1분 헤일로 알림", "게임의 남은 시간을 기준으로 다음 헤일로까지 표시하고, 발생 5초 전에 알립니다.",
+        v.addWidget(FeatureHeader("믿음의 균열의 1분 헤일로 알림", "게임의 남은 시간을 기준으로 다음 헤일로까지 표시하고, 발생 5초 전에 알려요.",
                                   help_button("1분 헤일로 사용법", HELP['1분 헤일로'], self)))
         self.state = QLabel("레넨의 미이르 : 회한 식별 대기")
         self.state.setWordWrap(True)
@@ -112,15 +112,14 @@ class HaloCaptureSection(QWidget):
         self.clear_btn = QPushButton("지정 해제")
         for button in (self.auto_find_btn, self.region_btn, self.view_btn):
             row.addWidget(button)
-        from .settings_layout import DANGER_STYLE
-        self.clear_btn.setStyleSheet(DANGER_STYLE)
+        from .settings_layout import danger_style
+        self.clear_btn.setStyleSheet(danger_style())
         commands = QHBoxLayout()
         commands.addStretch(1)
         commands.addWidget(self.clear_btn)
         self.region_row = wrapping_row(row, commands)
         v.addLayout(self.region_row)
-        guide = QLabel('게임 상단의 남은 시간이 분·초까지 모두 들어오도록 지정해 주세요.')
-        guide.setWordWrap(True)
+        guide = hint_label('게임 상단의 남은 시간이 분·초까지 모두 들어오도록 지정해 주세요.')  # 안내 = 회색(명세 14.2)
         v.addWidget(guide)
         self.region_btn.clicked.connect(self._pick)
         self.view_btn.clicked.connect(self._view)
@@ -162,7 +161,7 @@ class HaloCaptureSection(QWidget):
         self.folder.clicked.connect(self._open_folder)
         self.saved = CapturePathLabel()
         box.addWidget(self.saved)
-        hint = QLabel("레넨의 미이르 : 회한 식별 중 시간 값이 바뀌면 원본 PNG와 캡처 정보를 저장합니다. 판독 불가 시 숫자 모양 변화를 기준으로 수집하므로 배경 변화가 포함될 수 있습니다. 초당 최대 1장, 세션당 900장 또는 100MB까지 수집합니다.")
+        hint = hint_label("레넨의 미이르 : 회한 식별 중 시간 값이 바뀌면 원본 PNG와 캡처 정보를 저장해요. 판독 불가 시 숫자 모양 변화를 기준으로 수집하므로 배경 변화가 포함될 수 있어요. 초당 최대 1장, 세션당 900장 또는 100MB까지 수집해요.")
         hint.setWordWrap(True)
         box.addWidget(hint)
         self.disclosure = disclosure("진단 · 시간 자료 수집", tools, v)
@@ -256,7 +255,7 @@ class HaloCaptureSection(QWidget):
             else:
                 self._countdown_positioned = True
         except OSError:
-            self.state.setText('경고 위치를 저장하지 못했습니다.')
+            self.state.setText('경고 위치를 저장하지 못했어요.')
 
     def _save_sound(self, checked):
         if not checked:
@@ -274,7 +273,7 @@ class HaloCaptureSection(QWidget):
         except OSError:
             with QSignalBlocker(self.sound):
                 self.sound.setChecked(previous)
-            self.state.setText('소리 설정을 저장하지 못했습니다.')
+            self.state.setText('소리 설정을 저장하지 못했어요.')
 
     def _stop_audio(self):
         notifier, self._notifier = self._notifier, None
@@ -516,14 +515,14 @@ class HaloCaptureSection(QWidget):
         from PySide6.QtWidgets import QMessageBox
         from .region_registration import confirm_clear
         stamp = self._region_generation
-        if (confirm_clear(self, "시간 영역 지정 해제", "시간 영역만 해제합니다. 기존 수집 파일과 보스 체력바 설정은 유지합니다.")
+        if (confirm_clear(self, "시간 영역 지정 해제", "시간 영역만 해제해요. 기존 수집 파일과 보스 체력바 설정은 유지해요.")
                 != QMessageBox.StandardButton.Yes or not self._allowed() or stamp != self._region_generation):
             return
         try:
             self._persist(None)
             self._close_marks()
         except OSError:
-            self.state.setText("영역을 저장하지 못했습니다. 기존 영역을 유지합니다.")
+            self.state.setText("영역을 저장하지 못했어요. 기존 영역을 유지해요.")
 
     def _capture(self):
         if (not self._allowed() or not self._region or not self._watcher.is_game_active()
@@ -582,7 +581,7 @@ class HaloCaptureSection(QWidget):
             self._store(frame, force=True)
         except Exception:
             self._stop()
-            self.state.setText("수집을 중단했습니다. 영역과 수집 한도를 확인하세요.")
+            self.state.setText("수집을 중단했어요. 영역과 수집 한도를 확인하세요.")
 
     def _tick(self):
         try:
@@ -610,7 +609,7 @@ class HaloCaptureSection(QWidget):
                     return
                 elif self._session.count >= MAX_SHOTS or self._session.bytes >= MAX_BYTES:
                     self._stop()
-                    self.state.setText("수집 한도에 도달해 중단했습니다.")
+                    self.state.setText("수집 한도에 도달해 중단했어요.")
                     self._refresh()
                     return
             if (not self.collect.isChecked() and not self.isVisible()
@@ -641,7 +640,7 @@ class HaloCaptureSection(QWidget):
         except Exception:
             self._stop()
             self._stop_monitoring()
-            self.state.setText("캡처 또는 저장 실패로 수집을 중단했습니다.")
+            self.state.setText("캡처 또는 저장 실패로 수집을 중단했어요.")
 
     def _open_folder(self):
         if self._collect_allowed():
@@ -649,9 +648,9 @@ class HaloCaptureSection(QWidget):
             try:
                 target.mkdir(parents=True, exist_ok=True)
                 if not QDesktopServices.openUrl(QUrl.fromLocalFile(str(target))):
-                    self.state.setText("폴더를 열지 못했습니다.")
+                    self.state.setText("폴더를 열지 못했어요.")
             except OSError:
-                self.state.setText("저장 폴더에 접근할 수 없습니다.")
+                self.state.setText("저장 폴더에 접근할 수 없어요.")
 
     def _close_marks(self):
         if self._autofind_highlight is not None:

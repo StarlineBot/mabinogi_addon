@@ -16,8 +16,8 @@ from . import region_registration as registration
 from .dpi import to_logical,to_physical
 from .region_highlight import RegionHighlight
 from .screen_grab import capture_for_autofind
-from .widgets import FeatureHeader, checkbox
-from .settings_layout import disclosure, DANGER_STYLE
+from .widgets import FeatureHeader, checkbox, hint_label
+from .settings_layout import disclosure, danger_style
 
 
 def notice(owner,title,text):
@@ -45,7 +45,7 @@ class ResourceTab(QWidget):
         layout.setSpacing(10)
         from .feature_copy import resource_help
         from .help_dialog import help_button
-        layout.addWidget(FeatureHeader("도르카·투아림", "도르카와 투아림을 오버레이로 표시하고 투아림 충전 상태를 알려줍니다.", help_button("도르카·투아림 사용법", lambda: resource_help(self.dorcha._percent_control is not None and self.dorcha._percent_control.isVisibleTo(self)), self)))
+        layout.addWidget(FeatureHeader("도르카·투아림", "도르카와 투아림을 오버레이로 표시하고 투아림 충전 상태를 알려줘요.", help_button("도르카·투아림 사용법", lambda: resource_help(self.dorcha._percent_control is not None and self.dorcha._percent_control.isVisibleTo(self)), self)))
         layout.addWidget(QLabel("판독 영역 · 도르카 / 투아림"))
         # 영역 묶음(안내·도움말 명세 11절): 버튼·안내 한 줄·개별 영역 조정·판독 확인은 지정 후 '영역 다시 지정 · 판독 확인 ▸' 안으로
         outer = layout
@@ -55,8 +55,7 @@ class ResourceTab(QWidget):
         self.region_status = QLabel()
         self.region_status.setWordWrap(True)
         layout.addWidget(self.region_status)
-        guide = QLabel("보라색 원과 오른쪽 아래의 투아림 숫자·%가 함께 들어오도록 지정해 주세요.")
-        guide.setWordWrap(True)
+        guide = hint_label("보라색 원과 오른쪽 아래의 투아림 숫자·%가 함께 들어오도록 지정해 주세요.")  # 안내 = 회색(명세 14.2)
         layout.addWidget(guide)
         row = QHBoxLayout()
         for attr,text in (("auto_find_btn","자동 찾기"),("region_btn","직접 지정"),
@@ -64,7 +63,7 @@ class ResourceTab(QWidget):
             button = QPushButton(text)
             setattr(self,attr,button)
             if attr == "clear_region_btn": row.addStretch()
-            if attr == "clear_region_btn": button.setStyleSheet(DANGER_STYLE)
+            if attr == "clear_region_btn": button.setStyleSheet(danger_style())
             row.addWidget(button)
         layout.addLayout(row)
         self.auto_find_btn.clicked.connect(self._auto_find)
@@ -302,7 +301,7 @@ class ResourceTab(QWidget):
                 return {"status":"cancelled_shutdown"}
             regions = {k:to_logical(b[0]+ox,b[1]+oy,b[2],b[3]) for k,b in trace.get("regions",{}).items() if k in keys}
             if not regions:
-                notice(self,"후보 확인","선택한 대상의 위치를 확인하지 못했습니다. 기존 영역을 유지합니다.")
+                notice(self,"후보 확인","선택한 대상의 위치를 확인하지 못했어요. 기존 영역을 유지해요.")
                 return {"status":"no_requested_candidate"}
             self._close_highlights()
             names = []
@@ -322,7 +321,7 @@ class ResourceTab(QWidget):
             for k in keys:
                 name,field,_ = registration.REGIONS[k]
                 if section(latest,name).get(field) != section(before,name).get(field):
-                    registration.warn(self,"영역 변경됨","확인 중 영역이 변경됐습니다. 다시 시도하세요.")
+                    registration.warn(self,"영역 변경됨","확인 중 영역이 변경됐어요. 다시 시도하세요.")
                     return {"status":"cancelled"}
             if not registration.save_boxes(self,regions):
                 self.last_status = "save_failed"
@@ -338,9 +337,9 @@ class ResourceTab(QWidget):
                 require_game=True,restore_allowed=lambda:registration.editing_allowed(self))),detect=detect,confirm=confirm)
             if registration.editing_allowed(self) and allowed() and (frame is None or box is None):
                 notice(self,"공통 영역 확인 불가",
-                    "화면 또는 영역 위치를 확인하지 못했습니다. 기존 영역은 유지됩니다. 개별 영역 조정을 사용할 수 있습니다.")
+                    "화면 또는 영역 위치를 확인하지 못했어요. 기존 영역은 유지돼요. 개별 영역 조정을 사용할 수 있어요.")
         except Exception:
-            if registration.editing_allowed(self): registration.warn(self,"공통 영역 설정 실패","기존 영역을 유지합니다. 진단 ZIP을 확인해 주세요.")
+            if registration.editing_allowed(self): registration.warn(self,"공통 영역 설정 실패","기존 영역을 유지해요. 진단 ZIP을 확인해 주세요.")
         finally:
             self._close_highlights()
             self._busy = False
@@ -363,7 +362,7 @@ class ResourceTab(QWidget):
     def _approve(self,title):
         self._dialog = QMessageBox(self)
         self._dialog.setWindowTitle("도르카·투아림 · 후보 확인")
-        self._dialog.setText(title+"\n표시한 영역을 등록할까요? 찾지 못한 쪽의 기존 영역은 유지합니다.")
+        self._dialog.setText(title+"\n표시한 영역을 등록할까요? 찾지 못한 쪽의 기존 영역은 유지해요.")
         self._dialog.setStandardButtons(QMessageBox.StandardButton.Yes|QMessageBox.StandardButton.No)
         self._dialog.setDefaultButton(QMessageBox.StandardButton.No)
         poll = QTimer(self._dialog)
@@ -384,21 +383,21 @@ class ResourceTab(QWidget):
         if self._busy or not registration.editing_allowed(self): return
         before = config._read_local_config()
         answer = registration.confirm_clear(self,"도르카·투아림 지정 해제",
-            "두 판독 영역을 지정 해제할까요? 도르카 표시·투아림 표시·투아림 알림이 중단됩니다.\n"
-            "표시/알림 선택·위치·배율·잠금·소리 설정은 유지합니다.")
+            "두 판독 영역을 지정 해제할까요? 도르카 표시·투아림 표시·투아림 알림이 중단돼요.\n"
+            "표시/알림 선택·위치·배율·잠금·소리 설정은 유지해요.")
         if answer != QMessageBox.StandardButton.Yes or not registration.editing_allowed(self): return
         latest = config._read_local_config()
         for k in self._region_keys:
             name,field,_ = registration.REGIONS[k]
             if section(latest,name).get(field) != section(before,name).get(field):
-                registration.warn(self,"영역 변경됨","확인 중 영역이 변경됐습니다. 다시 시도하세요.")
+                registration.warn(self,"영역 변경됨","확인 중 영역이 변경됐어요. 다시 시도하세요.")
                 return
             latest[name] = dict(section(latest,name))
             latest[name][field] = None
         try:
             config._write_local_config(latest)
         except OSError:
-            registration.warn(self,"지정 해제 실패","기존 영역과 동작을 유지합니다.")
+            registration.warn(self,"지정 해제 실패","기존 영역과 동작을 유지해요.")
             return
         for k,c in self._controllers().items():
             registration.invalidate_region(k)

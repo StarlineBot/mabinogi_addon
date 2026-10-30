@@ -4,6 +4,7 @@ import time
 
 from PySide6.QtCore import QObject, QTimer
 
+from .palette import Named
 from .. import feature_access
 from .blackbox_tab import BlackboxTab
 
@@ -65,7 +66,7 @@ def combat_text(gate):
             'grace': f'보관 중 · 전투 종료 대기 {gate.grace_left}초'}[gate.state]
 
 
-BADGE_COLORS = {'ok': '#2ecc71', 'muted': '#8a8f98', 'error': '#e74c3c'}  # 전투 보조 상태와 같은 색(0.16.0)
+BADGE_COLORS = Named({'ok': 'ok', 'muted': 'muted', 'error': 'danger'})  # 전투 보조 상태와 같은 색(0.16.0)
 BADGE_TIPS = {'ok': '누르면 블랙박스 탭으로 이동해요.',  # 0.17.2: 모든 상태에서 탭 이동(끄기는 탭에서)
               'muted': '누르면 블랙박스 탭으로 이동해요.',
               'error': '녹화 오류예요. 누르면 블랙박스 탭에서 내용을 볼 수 있어요.'}

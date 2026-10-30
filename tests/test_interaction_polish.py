@@ -9,7 +9,7 @@ from test_navigation import window
 from test_support.scroll_visibility import assert_control_reachable
 from mabinogi_addon import config
 from mabinogi_addon.ui.buff_tab import ANCHOR_ID
-from mabinogi_addon.ui.settings_layout import LOCK_STYLE
+from mabinogi_addon.ui.settings_layout import lock_style  # 0.29.0(명세 14.6): 색이 테마에 따라 정해져 함수로
 
 
 def settle(app):
@@ -20,7 +20,7 @@ def settle(app):
 def test_lock_button_height_does_not_change_when_checked(window):
     button = QPushButton("위치 잠금")
     button.setCheckable(True)
-    button.setStyleSheet(LOCK_STYLE)
+    button.setStyleSheet(lock_style())
     button.ensurePolished()
     height = button.sizeHint().height()
     button.setChecked(True)
@@ -87,7 +87,7 @@ def test_stat_individual_and_all_locks_preserve_show_alert_pause(window):
     for key in original:
         assert saved["bars"][key]["show"] == original[key]["show"]
         assert saved["bars"][key]["alert"] == original[key]["alert"]
-        assert tab.bar_lock_buttons[key].styleSheet() == LOCK_STYLE
+        assert tab.bar_lock_buttons[key].styleSheet() == lock_style()
         assert tab.bar_lock_buttons[key].text() == "위치 잠금"
 
 

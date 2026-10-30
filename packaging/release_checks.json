@@ -1,5 +1,5 @@
 {
-  "version": "0.28.2",
+  "version": "0.29.0",
   "tests": [
     "tests/test_blackbox.py",
     "tests/test_blackbox_access.py",
@@ -72,6 +72,8 @@
     "tests/test_interaction_consistency.py",
     "tests/test_home_page.py",
     "tests/test_creator_dialogue.py",
-    "tests/test_screen_polish.py"
+    "tests/test_screen_polish.py",
+    "tests/test_color_switch_polish.py",
+    "tests/test_dungeon_cost.py"
   ]
 }

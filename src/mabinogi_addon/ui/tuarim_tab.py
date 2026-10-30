@@ -25,11 +25,12 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from .palette import color
 from .. import config, image_io, paths
 from ..detect.tuarim_reader import read_percent
 from ..tracker import TuarimTracker
 from .help_dialog import tab_header
-from .widgets import CapturePathLabel, checkbox, hint_label
+from .widgets import CapturePathLabel, checkbox, hint_label, switch
 
 
 # 숫자 두 자리+% 를 덮는 고정 박스 크기(px). 스샷 측정: 한 글자 ~16px, '0%'=32×19.
@@ -46,17 +47,17 @@ HELP_TITLE = "투아림 트래커 사용법"
 HELP_HTML = """
 <h3>투아림 트래커란?</h3>
 <p>화면의 투아림 <b>% 게이지</b>(작은 원 안 숫자 아래 %)를 읽어, 지정한 %(예: 95·98)
-이상이 되면 소리로 알립니다. 100%가 되면 다시 0%부터 시작합니다.
-게임 화면을 <b>읽기만</b> 합니다. 도르카·투아림 탭에서 % 표시와 소리 알림을 따로 선택합니다.</p>
+이상이 되면 소리로 알려요. 100%가 되면 다시 0%부터 시작해요.
+게임 화면을 <b>읽기만</b> 해요. 도르카·투아림 탭에서 % 표시와 소리 알림을 따로 선택해요.</p>
 <p><b>영역은 100%일 때 "100%"가 다 들어가게</b> 넉넉히 잡으세요. 앞 숫자가 잘리면
-100%를 잘못 읽을 수 있습니다.</p>
+100%를 잘못 읽을 수 있어요.</p>
 
 <h3>사용 순서</h3>
 <ol>
-<li><b>영역 지정</b> — 버튼을 누르면 박스가 커서를 따라옵니다.
+<li><b>영역 지정</b> — 버튼을 누르면 박스가 커서를 따라와요.
 <b>마우스 휠로 크기를 숫자에 맞게</b> 조절하고, 투아림 <b>%(숫자 두 자리)</b> 위에
-올려 클릭해 배치합니다. 선택 중 화면에 '박스 미리보기'로 실제 잡는 영역이 보입니다.</li>
-<li><b>알림 기준</b> — 1차·2차 %를 정하고, 각각 <b>소리</b> 알림을 켤 수 있습니다.</li>
+올려 클릭해 배치해요. 선택 중 화면에 '박스 미리보기'로 실제 잡는 영역이 보여요.</li>
+<li><b>알림 기준</b> — 1차·2차 %를 정하고, 각각 <b>소리</b> 알림을 켤 수 있어요.</li>
 </ol>
 
 <p>아래 <b>미리보기</b>와 <b>현재 값</b>으로 영역이 숫자에 잘 맞았는지 확인하세요.</p>
@@ -101,7 +102,7 @@ class TuarimTab(QWidget):
         v.setContentsMargins(12, 12, 12, 12)
         v.setSpacing(10)
         v.addWidget(tab_header(
-            "투아림이 설정한 비율에 도달하면 소리로 알립니다.", HELP_TITLE, HELP_HTML, self
+            "투아림이 설정한 비율에 도달하면 소리로 알려요.", HELP_TITLE, HELP_HTML, self
         ))
         v.addWidget(
             hint_label(
@@ -142,7 +143,7 @@ class TuarimTab(QWidget):
         prev_row.addWidget(self.value_label, 1)
         v.addLayout(prev_row)
 
-        self.enable = checkbox("투아림 알림 사용")
+        self.enable = switch("투아림 알림 사용")  # 기능 켜기 = 스위치(명세 14.5)
         self.enable.setChecked(cfg["enabled"])
         self.enable.toggled.connect(self._save)
         v.addWidget(self.enable)
@@ -212,14 +213,14 @@ class TuarimTab(QWidget):
         if paths.is_frozen():
             how = (
                 "영역 지정 후 '수집 모드'를 켜면, 게이지 값이 바뀔 때마다 그 영역이\n"
-                "PNG로 자동 저장됩니다(타이머 아님 — 숫자가 바뀔 때 1장). 0→100 한 바퀴\n"
+                "PNG로 자동 저장돼요(타이머 아님 — 숫자가 바뀔 때 1장). 0→100 한 바퀴\n"
                 "(특히 90~99%) 돌린 뒤, 아래 '저장 위치' 폴더의 PNG들을 보내주세요."
             )
         else:
             how = (
-                "영역 지정 후, 지금 캡처된 영역을 PNG로 저장합니다(전체화면 캡처 불필요).\n"
-                "'수집 모드'를 켜면 값이 바뀔 때마다 자동 저장 → 0~100 한 바퀴면 숫자가 모입니다.\n"
-                "저장 후 커밋·푸시하면 저장소에서 숫자 템플릿을 만들 수 있습니다."
+                "영역 지정 후, 지금 캡처된 영역을 PNG로 저장해요(전체화면 캡처 불필요).\n"
+                "'수집 모드'를 켜면 값이 바뀔 때마다 자동 저장 → 0~100 한 바퀴면 숫자가 모여요.\n"
+                "저장 후 커밋·푸시하면 저장소에서 숫자 템플릿을 만들 수 있어요."
             )
         g.addWidget(hint_label(how))
         row = QHBoxLayout()
@@ -228,7 +229,7 @@ class TuarimTab(QWidget):
         self.snap_btn.clicked.connect(self._save_snapshot)
         row.addWidget(self.snap_btn)
         self.open_dir_btn = QPushButton("폴더 열기")
-        self.open_dir_btn.setToolTip("수집된 스냅샷이 저장되는 폴더를 탐색기로 엽니다")
+        self.open_dir_btn.setToolTip("수집된 스냅샷이 저장되는 폴더를 탐색기로 열어요")
         self.open_dir_btn.clicked.connect(lambda: paths.open_folder(self._shot_dir))
         row.addWidget(self.open_dir_btn)
         self.collect_chk = checkbox("수집 모드(값 바뀔 때 자동 저장)")
@@ -245,7 +246,7 @@ class TuarimTab(QWidget):
 
     def _save_snapshot(self) -> None:
         if self._last_frame is None:
-            self.collect_label.setText("저장할 캡처가 없습니다 — 먼저 영역을 지정하세요")
+            self.collect_label.setText("저장할 캡처가 없어요 — 먼저 영역을 지정하세요")
             return
         self._write_shot(self._last_frame, self._last_value)
 
@@ -287,7 +288,7 @@ class TuarimTab(QWidget):
             self._apply_region(x, y, w, h)
         except OSError:
             from PySide6.QtWidgets import QMessageBox
-            QMessageBox.warning(self,"영역 저장 실패","기존 등록 영역을 유지합니다.")
+            QMessageBox.warning(self,"영역 저장 실패","기존 등록 영역을 유지해요.")
             return
         self._flash_region()
 
@@ -347,11 +348,11 @@ class TuarimTab(QWidget):
         if self._region:
             r = self._region
             self.region_label.setText(f"등록됨 · {r['x']},{r['y']}  {r['w']}×{r['h']}")
-            self.region_label.setStyleSheet("color:#2ecc71;")
+            self.region_label.setStyleSheet(f"color:{color('ok')};")
             self.view_region_btn.setEnabled(True)
         else:
             self.region_label.setText("영역 미지정 — 숫자 두 자리와 % 가 보이게 지정하세요")
-            self.region_label.setStyleSheet("color:#8a8f98;")
+            self.region_label.setStyleSheet(f"color:{color('muted')};")
             self.view_region_btn.setEnabled(False)
 
         if (reference:=getattr(self,"_resource_view",None)) is not None and (view:=reference()) is not None:
@@ -376,7 +377,7 @@ class TuarimTab(QWidget):
             if not self._save_failed:
                 from PySide6.QtWidgets import QMessageBox
                 self._save_failed = True
-                QMessageBox.warning(self,"설정 저장 실패","현재 설정을 저장하지 못했습니다. 재실행하면 이전 설정으로 돌아갈 수 있습니다.")
+                QMessageBox.warning(self,"설정 저장 실패","현재 설정을 저장하지 못했어요. 재실행하면 이전 설정으로 돌아갈 수 있어요.")
 
     # ---- 읽기 루프 ----
     def _tick_enabled(self) -> None:

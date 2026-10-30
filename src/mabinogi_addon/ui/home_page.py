@@ -12,14 +12,19 @@ from PySide6.QtWidgets import (QAbstractButton, QFrame, QGridLayout, QHBoxLayout
                                QScrollArea, QSizePolicy, QVBoxLayout, QWidget)
 
 from .. import paths
+from .palette import color
 from .status_icon import paint_icon
 
 BG_TOP, BG_BOTTOM = "#111827", "#0b1220"
 BOX, BORDER = "#18202c", "#2a3443"
-MINT, GREEN = "#2dd4bf", "#34d399"
-GRAY, YELLOW, ORANGE = "#8a8f98", "#fbbf24", "#f59e0b"
-TEXT, SUBTEXT = "#e5e7eb", "#9ca3af"
-KIND_COLORS = {"ok": GREEN, "muted": GRAY, "warn": YELLOW}
+# 색 이름(명세 14.6). 홈은 테마와 관계없이 어두운 디자인이라 다크 값을 쓴다.
+MINT, GREEN = color("accent", dark=True), color("ok", dark=True)
+GRAY = SUBTEXT = color("muted", dark=True)
+WARN, DANGER = color("warn", dark=True), color("danger", dark=True)
+TEXT = "#e5e7eb"
+# 경고 상자: 주의 색 계열(탭의 '영역 지정 필요'와 같은 주황, 예전 노랑 폐지)
+WARN_BG, WARN_BORDER, WARN_LINE, WARN_TEXT, WARN_SUBTEXT = "#2b1c10", "#8a4a14", "#5a3416", "#f3b37a", "#e2c7ae"
+KIND_COLORS = {"ok": GREEN, "muted": GRAY, "warn": WARN}
 
 # 전투 보조 2열 10줄(명세 12.2): (키, 이름, 스위치 있음)
 COMBAT_ROWS = (("buff", "버프", False), ("debuff", "디버프", False),
@@ -76,7 +81,7 @@ class StateIcon(QLabel):
         if kind == self.kind:
             return
         self.kind = kind
-        color = {"ok": MINT, "waiting": SUBTEXT, "inactive": ORANGE}[kind]
+        color = {"ok": MINT, "waiting": SUBTEXT, "inactive": DANGER}[kind]  # 일시정지 = 위험 색(상단 '● 전투 보조: 일시정지'와 같음)
         pixmap = QPixmap(76, 76)
         pixmap.fill(Qt.GlobalColor.transparent)
         pixmap.setDevicePixelRatio(2)
@@ -192,14 +197,14 @@ class HomePage(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(f"""
             #homeBox {{ background:{BOX}; border:1px solid {BORDER}; border-radius:10px; }}
-            #homeWarn {{ background:#2a1e0c; border:1px solid #92400e; border-radius:10px; }}
+            #homeWarn {{ background:{WARN_BG}; border:1px solid {WARN_BORDER}; border-radius:10px; }}
             #homeRow {{ background:transparent; border:none; border-top:1px solid {BORDER}; }}
-            #homeWarnRow {{ background:transparent; border:none; border-top:1px solid #5b3a12; }}
+            #homeWarnRow {{ background:transparent; border:none; border-top:1px solid {WARN_LINE}; }}
             QPushButton#homeMenu {{ color:{TEXT}; background:#141c28; border:1px solid #2f5d5a; border-radius:8px;
                                     padding:8px 14px; font-size:12px; }}
             QPushButton#homeMenu:hover {{ border-color:{MINT}; }}
             QPushButton#homeLink {{ color:{MINT}; background:transparent; border:none; font-size:12px; padding:0; }}
-            QPushButton#homeRegion {{ color:#fde68a; background:transparent; border:1px solid {YELLOW}; border-radius:6px;
+            QPushButton#homeRegion {{ color:{WARN_TEXT}; background:transparent; border:1px solid {WARN}; border-radius:6px;
                                       padding:5px 12px; font-size:12px; }}
             QScrollArea, #homeContent {{ background:transparent; border:none; }}
             QScrollBar:vertical {{ background:transparent; width:8px; margin:4px 2px 4px 0; }}
@@ -272,10 +277,10 @@ class HomePage(QWidget):
         head = QHBoxLayout()
         head.setSpacing(6)
         triangle = QLabel()
-        triangle.setPixmap(paint_icon("region", YELLOW))
+        triangle.setPixmap(paint_icon("region", WARN))
         triangle.setStyleSheet("background:transparent;")
         head.addWidget(triangle)
-        self.warn_title = _label("", 13, YELLOW, bold=True)
+        self.warn_title = _label("", 13, WARN, bold=True)
         head.addWidget(self.warn_title)
         head.addStretch(1)
         warn.addLayout(head)
@@ -378,8 +383,8 @@ class HomePage(QWidget):
                 row = QHBoxLayout(line)
                 row.setContentsMargins(0, 5, 0, 5)
                 row.setSpacing(14)
-                row.addWidget(_label(name, 12, "#fde68a", bold=True))
-                row.addWidget(_label("판독 영역을 지정해야 동작해요", 12, "#e5d3a8"), 1)
+                row.addWidget(_label(name, 12, WARN_TEXT, bold=True))
+                row.addWidget(_label("판독 영역을 지정해야 동작해요", 12, WARN_SUBTEXT), 1)
                 button = QPushButton("영역 지정")
                 button.setObjectName("homeRegion")
                 button.setCursor(Qt.CursorShape.PointingHandCursor)

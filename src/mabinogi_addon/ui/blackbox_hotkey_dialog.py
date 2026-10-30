@@ -11,6 +11,7 @@ from PySide6.QtCore import QEvent, Qt
 from PySide6.QtGui import QFont, QPalette
 from PySide6.QtWidgets import QDialog, QHBoxLayout, QLabel, QLineEdit, QPushButton, QVBoxLayout
 
+from . import palette
 from ..blackbox_shortcut import ALT, CTRL, DEFAULT, SHIFT, WIN, check, hotkey_text
 
 K = Qt.Key
@@ -23,7 +24,6 @@ _QT_VK = {K.Key_Print: 0x2C, K.Key_Pause: 0x13, K.Key_ScrollLock: 0x91, K.Key_In
           K.Key_Control: 0x11, K.Key_Alt: 0x12, K.Key_Shift: 0x10, K.Key_Meta: 0x5B, K.Key_CapsLock: 0x14,
           K.Key_NumLock: 0x90}
 _MODIFIER_KEYS = {K.Key_Control, K.Key_Alt, K.Key_Shift, K.Key_Meta, K.Key_AltGr}
-OK_COLOR, ERROR_COLOR = '#2e9e5b', '#d35b58'
 
 
 def event_vk(event):
@@ -131,7 +131,7 @@ class HotkeyDialog(QDialog):
         state, message = check(modifiers, vk)
         if initial:
             state, message = 'current', '지금 쓰는 단축키예요.'
-        color = {'ok': OK_COLOR, 'invalid': ERROR_COLOR}.get(state)
+        color = {'ok': palette.color('ok'), 'invalid': palette.color('danger')}.get(state)
         self.verdict.setStyleSheet(f'color:{color};' if color else '')
         # 판정 색(초록·빨강)은 흐린 안내 글자 역할을 쓰지 않아야 제 색으로 보인다
         self.verdict.setForegroundRole(QPalette.ColorRole.WindowText if color else QPalette.ColorRole.PlaceholderText)

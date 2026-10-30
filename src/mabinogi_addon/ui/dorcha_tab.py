@@ -13,7 +13,7 @@ from .settings_layout import set_lock_text
 from .. import config
 from ..detect.dorcha_reader import read_dorcha
 from .dorcha_overlay import DorchaOverlay
-from .widgets import checkbox, hint_label
+from .widgets import checkbox, hint_label, switch
 
 _log = logging.getLogger(__name__)
 
@@ -92,7 +92,7 @@ class DorchaTab(QWidget):
         self.region_label.setWordWrap(True)
         layout.addWidget(self.region_label)
         row = QHBoxLayout()
-        self.enable = checkbox("도르카 오버레이 사용")
+        self.enable = switch("도르카 오버레이 사용")  # 기능 켜기 = 스위치(명세 14.5)
         self.enable.setChecked(self._cfg["enabled"])
         self.enable.toggled.connect(self._on_enabled)
         row.addWidget(self.enable)
@@ -528,7 +528,7 @@ class DorchaTab(QWidget):
         except OSError:
             if not self._save_failed:
                 self._save_failed = True
-                QMessageBox.warning(self,"설정 저장 실패","현재 설정을 저장하지 못했습니다. 재실행하면 이전 설정으로 돌아갈 수 있습니다.")
+                QMessageBox.warning(self,"설정 저장 실패","현재 설정을 저장하지 못했어요. 재실행하면 이전 설정으로 돌아갈 수 있어요.")
 
     def _on_enabled(self, checked):
         self._cfg["enabled"] = checked
@@ -614,7 +614,7 @@ class DorchaTab(QWidget):
         try:
             self._apply_region(x,y,w,h)
         except OSError:
-            QMessageBox.warning(self,"영역 저장 실패","기존 등록 영역을 유지합니다.")
+            QMessageBox.warning(self,"영역 저장 실패","기존 등록 영역을 유지해요.")
             return
         finally:
             self._resume_after_selector()
@@ -638,7 +638,7 @@ class DorchaTab(QWidget):
         box = (to_logical(*self._live_box) if self._live_box is not None else
                tuple(self._region[key] for key in ("x","y","w","h")))
         self._highlight.flash(*box,
-                              "도르카 영역 확인","원 안의 숫자 0~15가 모두 들어가야 합니다.")
+                              "도르카 영역 확인","원 안의 숫자 0~15가 모두 들어가야 해요.")
 
     def set_paused(self, paused):
         self._paused = paused

@@ -90,7 +90,7 @@ class CaptureSession:
             partial.rename(self.path / f"{self.count+1:04d}")
             self.results.put((mask, size, ""))
         except Exception:
-            self.results.put((None, 0, "수집 파일을 저장하지 못했습니다. 경로 권한과 저장 공간을 확인하세요."))
+            self.results.put((None, 0, "수집 파일을 저장하지 못했어요. 경로 권한과 저장 공간을 확인하세요."))
 
     def poll(self):
         if self.thread is None or self.thread.is_alive():

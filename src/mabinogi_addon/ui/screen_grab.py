@@ -220,10 +220,10 @@ def _warn_no_game_window() -> None:
         QMessageBox.information(
             QApplication.activeWindow(),
             "자동 찾기 — 게임 창 안내",
-            "게임 창을 인식하지 못해 전체 화면을 캡처했습니다.\n\n"
-            "모니터가 여러 개면 엉뚱한 화면을 잡을 수 있습니다. "
+            "게임 창을 인식하지 못해 전체 화면을 캡처했어요.\n\n"
+            "모니터가 여러 개면 엉뚱한 화면을 잡을 수 있어요. "
             "설정 › '게임 창 인식'에서 게임 창을 등록하면, 자동 찾기가 "
-            "게임 화면만 정확히 캡처합니다.",
+            "게임 화면만 정확히 캡처해요.",
         )
     except Exception:  # noqa: BLE001 — 안내 실패는 무시
         pass

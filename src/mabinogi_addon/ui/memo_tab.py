@@ -21,19 +21,21 @@ from PySide6.QtWidgets import (
     QLabel,
 )
 
+from .palette import color
 from .settings_layout import set_lock_text
 from .. import config
 from .markdown_highlighter import MarkdownHighlighter
 from .widgets import FeatureHeader, hint_label, section_label
 
 # 마크다운 툴바 아이콘 버튼 스타일(hover 시 민트).
-_TOOL_QSS = (
-    "QPushButton { background:palette(button); color:palette(button-text);"
-    " border:1px solid palette(mid); border-radius:7px; font-size:14px;"
-    " font-weight:800; padding:4px 10px; }"
-    "QPushButton:hover { background:#00B894; color:#06281e; border-color:#00B894; }"
-    "QPushButton:checked { background:#00B894; color:#06281e; border-color:#00B894; }"
-)
+def _tool_qss():
+    return (
+        "QPushButton { background:palette(button); color:palette(button-text);"
+        " border:1px solid palette(mid); border-radius:7px; font-size:14px;"
+        " font-weight:800; padding:4px 10px; }"
+        f"QPushButton:hover {{ background:{color('accent')}; color:{color('on-accent')}; border-color:{color('accent')}; }}"
+        f"QPushButton:checked {{ background:{color('accent')}; color:{color('on-accent')}; border-color:{color('accent')}; }}"
+    )
 
 
 
@@ -50,7 +52,7 @@ class MemoTab(QWidget):
         v = QVBoxLayout(self)
         v.setContentsMargins(12, 12, 12, 12)
         v.setSpacing(10)
-        v.addWidget(FeatureHeader("메모", "게임 위에 표시할 메모를 작성합니다."))  # 0.25.0: 도움말 없음(앱 문구 명세 10절)
+        v.addWidget(FeatureHeader("메모", "게임 위에 표시할 메모를 작성해요."))  # 0.25.0: 도움말 없음(앱 문구 명세 10절)
 
         # 표시 위치 묶음(명세 13.5): 판독이 아니라 띄울 자리라 지정 후 '✓ 표시 위치 지정됨' + '표시 위치 다시 지정 ▸'
         v.addWidget(section_label("표시 위치 · 메모 위치·너비"))
@@ -63,7 +65,7 @@ class MemoTab(QWidget):
         top = QHBoxLayout()
         top.setSpacing(6)
         region_btn = QPushButton("직접 지정")
-        region_btn.setToolTip("메모의 표시 위치와 너비를 지정합니다. 높이는 내용에 맞춥니다.")
+        region_btn.setToolTip("메모의 표시 위치와 너비를 지정해요. 높이는 내용에 맞춰요.")
         region_btn.clicked.connect(self._pick_region)
         self.region_btn = region_btn
         top.addWidget(region_btn)
@@ -72,7 +74,7 @@ class MemoTab(QWidget):
         self.clear_region_btn = clear_button(self,"memo",self._region_cleared)
         top.addWidget(self.clear_region_btn)
         v.addLayout(top)
-        v.addWidget(hint_label("위치와 너비를 지정하세요. 높이는 내용에 맞춰 자동으로 조절됩니다."))
+        v.addWidget(hint_label("위치와 너비를 지정하세요. 높이는 내용에 맞춰 자동으로 조절돼요."))
         from .region_section import RegionSection
         self.region_section = RegionSection(region_body, unset_text="지정하면 그 자리에 메모를 띄워요",
                                             title="표시 위치 다시 지정", box_title="표시 위치 지정")
@@ -85,7 +87,7 @@ class MemoTab(QWidget):
         from .settings_layout import lock_button
         self.lock_btn = lock_button()
         self.lock_btn.setToolTip(
-            "잠그면 메모 위치가 고정되고, 클릭이 통과돼 게임을 가리지 않습니다.\n"
+            "잠그면 메모 위치가 고정되고, 클릭이 통과돼 게임을 가리지 않아요.\n"
             "해제하면 테두리를 끌어 위치를 옮길 수 있어요."
         )
         self.lock_btn.toggled.connect(self._on_lock_toggled)
@@ -119,13 +121,13 @@ class MemoTab(QWidget):
             b = QPushButton(glyph)
             b.setFixedSize(34, 30)
             b.setToolTip(f"{tip} 삽입")
-            b.setStyleSheet(_TOOL_QSS)
+            b.setStyleSheet(_tool_qss())
             b.clicked.connect(lambda _c=False, s=snippet: self._insert(s))
             tools.addWidget(b)
         tools.addStretch(1)
         self.preview_btn = QPushButton("표시 미리보기")
         self.preview_btn.setCheckable(True)
-        self.preview_btn.setStyleSheet(_TOOL_QSS)
+        self.preview_btn.setStyleSheet(_tool_qss())
         self.preview_btn.toggled.connect(self._on_preview_toggled)
         tools.addWidget(self.preview_btn)
         content_layout.addLayout(tools)
@@ -156,7 +158,7 @@ class MemoTab(QWidget):
         self._split.addWidget(self.preview)
         self._split.setSizes([600, 0])
         content_layout.addWidget(self._split, 1)
-        content_layout.addWidget(hint_label("작성 내용은 자동 저장됩니다. 표시 미리보기에서 실제 모양을 확인할 수 있습니다."))
+        content_layout.addWidget(hint_label("작성 내용은 자동 저장돼요. 표시 미리보기에서 실제 모양을 확인할 수 있어요."))
 
     def _insert(self, snippet: str) -> None:
         """커서 위치에 마크다운 조각 삽입(선택 영역이 있으면 '굵게'는 감싼다)."""
@@ -190,12 +192,12 @@ class MemoTab(QWidget):
                 f"위치 {region['x']},{region['y']}  ·  너비 {region['w']}px  "
                 "(높이 자동)  ✔"
             )
-            self.region_hint.setStyleSheet("color:#2ecc71;")
+            self.region_hint.setStyleSheet(f"color:{color('ok')};")
         else:
             self.region_hint.setText(
                 "영역 미지정"
             )
-            self.region_hint.setStyleSheet("color:#8a8f98;")
+            self.region_hint.setStyleSheet(f"color:{color('muted')};")
         section = getattr(self, "region_section", None)
         if section is not None:
             registered = region is not None

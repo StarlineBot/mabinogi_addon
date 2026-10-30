@@ -116,10 +116,10 @@ class BossTab(QWidget):
 
         from .feature_copy import HELP
         from .help_dialog import help_button
-        v.addWidget(FeatureHeader("보스 패턴 알림", "보스 체력이 패턴 기준에 가까워지면 화면과 소리로 알립니다. 보스 체력바가 보이는 상태에서 자동 찾기를 실행하세요.", help_button("보스 패턴 알림 사용법", HELP["보스 패턴 알림"], self)))
+        v.addWidget(FeatureHeader("보스 패턴 알림", "보스 체력이 패턴 기준에 가까워지면 화면과 소리로 알려요. 보스 체력바가 보이는 상태에서 자동 찾기를 실행하세요.", help_button("보스 패턴 알림 사용법", HELP["보스 패턴 알림"], self)))
 
         prev_btn = QPushButton("알림 미리보기")
-        prev_btn.setToolTip("경고가 화면 어디에 어떻게 뜨는지 한 번 띄워 봅니다")
+        prev_btn.setToolTip("경고가 화면 어디에 어떻게 뜨는지 한 번 띄워 봐요")
         prev_btn.clicked.connect(self._preview_warning)
 
         # 실제 컨트롤 묶음(항상 표시 — 로그인 불필요)
@@ -134,7 +134,7 @@ class BossTab(QWidget):
         row = QHBoxLayout()
         self.region_btn = QPushButton("직접 지정")
         self.region_btn.setToolTip(
-            "보스 HP바의 이름과 체력 비율이 들어오도록 지정합니다."
+            "보스 HP바의 이름과 체력 비율이 들어오도록 지정해요."
         )
         self.region_btn.clicked.connect(self._on_region)
         self.region_label = hint_label("")
@@ -145,7 +145,7 @@ class BossTab(QWidget):
         # 디버프 영역(바로 위)까지 함께 지정. 저장은 반드시 확인 후에만.
         self.auto_find_btn = QPushButton("자동 찾기")
         self.auto_find_btn.setToolTip(
-            "보스 체력바(+디버프 영역)를 화면에서 자동으로 찾아 지정합니다"
+            "보스 체력바(+디버프 영역)를 화면에서 자동으로 찾아 지정해요"
         )
         self.auto_find_btn.clicked.connect(self._on_auto_find)
         commands = QHBoxLayout()
@@ -197,7 +197,7 @@ class BossTab(QWidget):
 
         # 다음 패턴 목록(왼쪽에 남은 패턴 % 나열) — 준비(5% 전) 알림이 뜨면 그 %가 빠짐.
         self.show_upcoming = checkbox("표시")
-        self.show_upcoming.setToolTip("남은 패턴의 체력 비율을 별도 목록으로 표시합니다.")
+        self.show_upcoming.setToolTip("남은 패턴의 체력 비율을 별도 목록으로 표시해요.")
         self.show_upcoming.setChecked(cfg["showUpcoming"])
         self.show_upcoming.toggled.connect(self._on_show_upcoming)
         up_row = QHBoxLayout()
@@ -608,8 +608,8 @@ class BossTab(QWidget):
         box = QGroupBox("보스 HP바 수집 (오독 제보용)")
         g = QVBoxLayout(box)
         g.addWidget(hint_label(
-            "'수집 모드'를 켜면 보스 HP바 영역이 바뀔 때마다 자동 저장됩니다(보스별로).\n"
-            "실제와 다른 %가 뜰 때(예: 48%인데 30% 알림)를 모아 보내주시면 오독 원인을 잡습니다."
+            "'수집 모드'를 켜면 보스 HP바 영역이 바뀔 때마다 자동 저장돼요(보스별로).\n"
+            "실제와 다른 %가 뜰 때(예: 48%인데 30% 알림)를 모아 보내주시면 오독 원인을 잡아요."
         ))
         row = QHBoxLayout()
         self.snap_btn = QPushButton("스냅샷 저장")
@@ -652,13 +652,13 @@ class BossTab(QWidget):
         from ..autofind_diagnostics import perform_autofind
         frame, ox, oy, box = perform_autofind("boss", capture_for_autofind)
         if frame is None:
-            QMessageBox.warning(self, "자동 찾기", "화면 캡처에 실패했습니다.")
+            QMessageBox.warning(self, "자동 찾기", "화면 캡처에 실패했어요.")
             return
         if box is None:
             QMessageBox.information(
                 self,
                 "자동 찾기 — 못 찾음",
-                "보스 체력바를 찾지 못했습니다.\n\n"
+                "보스 체력바를 찾지 못했어요.\n\n"
                 "• 보스 체력바가 지금 화면에 노출돼 있나요? "
                 "(보스전 중, 첫 노출·HP 높은 구간에서 시도하세요)\n"
                 "• 하단 메뉴바가 최소화돼 있지 않나요?\n\n"
@@ -685,7 +685,7 @@ class BossTab(QWidget):
             self,
             "자동 찾기 — 확인",
             "민트 점선으로 표시한 영역으로 **보스 체력바 + 디버프 영역**을 지정할까요?\n\n"
-            "'아니오'를 누르면 기존 설정이 그대로 유지됩니다.",
+            "'아니오'를 누르면 기존 설정이 그대로 유지돼요.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
@@ -707,7 +707,7 @@ class BossTab(QWidget):
 
     def _save_snapshot(self) -> None:
         if self._last_frame is None:
-            self.collect_label.setText("저장할 캡처가 없습니다 — 먼저 영역을 지정하세요")
+            self.collect_label.setText("저장할 캡처가 없어요 — 먼저 영역을 지정하세요")
             return
         self._write_shot(self._last_frame)
 

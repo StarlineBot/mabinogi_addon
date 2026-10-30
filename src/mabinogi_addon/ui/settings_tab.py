@@ -31,6 +31,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from .palette import color
 from .. import config, discord_auth, paths
 from ..system.window_watcher import WindowWatcher
 from .widgets import checkbox, hint_label, section_label
@@ -44,7 +45,6 @@ _THEME_SWATCH = {
     "light": "#f4f4f5",
     "dark": "#2b2d31",
 }
-_THEME_ACCENT = "#00C9A2"  # 다크 테마 강조(민트)
 
 # 번들 경로 사용(exe=_MEIPASS/assets). __file__ 기준은 frozen에서 어긋나 이미지가 안 뜬다.
 _ASSETS = paths.resource_dir()
@@ -158,7 +158,7 @@ class _ConfigExportThread(QThread):
             if self.destination is not None:
                 config.export_bundle(self.destination, path=self.config_path,
                                      cancelled=self.isInterruptionRequested)
-                self.done.emit(True, '설정을 저장했습니다.')
+                self.done.emit(True, '설정을 저장했어요.')
             else:
                 limit = settings_sync.BACKUP_UPLOAD_BUDGET
                 limits = config.BundleLimits(max_source_bytes=limit, max_zip_bytes=limit)
@@ -224,7 +224,7 @@ class SettingsTab(QWidget):
         self.dialogue_enabled = _checked("제작자 잡담 사용", True)
         self.dialogue_enabled.hide()
         self.dialogue_sound_enabled = _checked("잡담 소리 사용", config.load_general_flag("creatorDialogueSound", True))
-        self.dialogue_sound_enabled.setToolTip("잡담이 표시될 때 알림음을 50% 볼륨으로 재생합니다.")
+        self.dialogue_sound_enabled.setToolTip("잡담이 표시될 때 알림음을 50% 볼륨으로 재생해요.")
         self.dialogue_sound_enabled.toggled.connect(lambda on: config.save_general_flag("creatorDialogueSound", on))
         dialogue_row = QHBoxLayout()
         dialogue_row.setSpacing(16)
@@ -264,7 +264,7 @@ class SettingsTab(QWidget):
         row.addWidget(self._diag_refresh)
         self._diag_zip = QPushButton("ZIP 저장")
         self._diag_zip.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DialogSaveButton))
-        self._diag_zip.setToolTip("원본 화면이 포함됩니다. 공유 전 개인정보가 보이는지 확인하세요.")
+        self._diag_zip.setToolTip("원본 화면이 포함돼요. 공유 전 개인정보가 보이는지 확인하세요.")
         self._diag_zip.setEnabled(False)
         self._diag_zip.clicked.connect(self._export_diagnostic)
         row.addWidget(self._diag_zip)
@@ -368,7 +368,7 @@ class SettingsTab(QWidget):
     def _diagnostic_exported(self, path, error) -> None:
         if error is not None:
             self._diag_status.setText(f"ZIP 저장 실패: {error}")
-            QMessageBox.warning(self, "진단 ZIP", f"저장하지 못했습니다.\n{error}")
+            QMessageBox.warning(self, "진단 ZIP", f"저장하지 못했어요.\n{error}")
         else:
             self._diag_status.setText(f"ZIP 저장 완료: {path}")
 
@@ -396,8 +396,8 @@ class SettingsTab(QWidget):
         v.addLayout(row)
         v.addWidget(
             hint_label(
-                "설정과 등록한 버프·디버프 아이콘까지 하나의 zip으로 저장/불러옵니다"
-                "(다른 PC로 이동·백업).\n가져오면 앱을 다시 시작해 전부 반영합니다."
+                "설정과 등록한 버프·디버프 아이콘까지 하나의 zip으로 저장/불러와요"
+                "(다른 PC로 이동·백업).\n가져오면 앱을 다시 시작해 전부 반영해요."
             )
         )
 
@@ -407,19 +407,19 @@ class SettingsTab(QWidget):
         v.addWidget(self._dm_export_btn)
         v.addWidget(
             hint_label(
-                "로그인한 계정으로 섯다라인 봇이 백업 파일을 DM으로 보냅니다.\n"
+                "로그인한 계정으로 섯다라인 봇이 백업 파일을 DM으로 보내요.\n"
                 "다른 PC에서 그 파일을 받아 '설정 가져오기'로 적용하세요."
             )
         )
 
         v.addSpacing(12)
         reset_btn = self._reset_btn = QPushButton("설정 초기화")
-        from .settings_layout import DANGER_STYLE
-        reset_btn.setStyleSheet(DANGER_STYLE)
+        from .settings_layout import danger_style
+        reset_btn.setStyleSheet(danger_style())
         reset_btn.clicked.connect(self._on_reset_config)
         v.addWidget(reset_btn)
         v.addWidget(
-            hint_label("모든 설정을 지우고 처음 상태로 되돌립니다(되돌릴 수 없음).")
+            hint_label("모든 설정을 지우고 처음 상태로 되돌려요(되돌릴 수 없음).")
         )
         self._refresh_dm_export()
         return box
@@ -430,7 +430,7 @@ class SettingsTab(QWidget):
             logged_in = config.load_discord_user() is not None
             self._dm_export_btn.setEnabled(logged_in and not self._export_busy() and not self._export_closing)
             self._dm_export_btn.setToolTip(
-                "" if logged_in else "먼저 디스코드 로그인이 필요합니다"
+                "" if logged_in else "먼저 디스코드 로그인이 필요해요"
             )
 
     def _export_busy(self):
@@ -493,7 +493,7 @@ class SettingsTab(QWidget):
             return
         webhook = config.get_config_webhook_url()
         if not webhook:
-            QMessageBox.warning(self,'디스코드로 내보내기','설정 백업 채널이 구성되지 않았습니다.')
+            QMessageBox.warning(self,'디스코드로 내보내기','설정 백업 채널이 구성되지 않았어요.')
             return
         self._start_export(None,webhook=webhook,user=user)
 
@@ -515,7 +515,7 @@ class SettingsTab(QWidget):
         except (OSError, ValueError) as exc:
             QMessageBox.warning(self, "설정 가져오기", f"불러오기 실패: {exc}")
             return
-        self._offer_restart("설정 가져오기", "설정을 가져왔습니다.")
+        self._offer_restart("설정 가져오기", "설정을 가져왔어요.")
 
     def _on_reset_config(self) -> None:
         if self._export_busy() or self._export_closing: return
@@ -523,7 +523,7 @@ class SettingsTab(QWidget):
             QMessageBox.question(
                 self,
                 "설정 초기화",
-                "모든 설정을 지우고 처음 상태로 되돌립니다.\n계속할까요?",
+                "모든 설정을 지우고 처음 상태로 되돌려요.\n계속할까요?",
             )
             != QMessageBox.StandardButton.Yes
         ):
@@ -533,7 +533,7 @@ class SettingsTab(QWidget):
         except OSError as exc:
             QMessageBox.warning(self, "설정 초기화", f"초기화 실패: {exc}")
             return
-        self._offer_restart("설정 초기화", "설정을 초기화했습니다.")
+        self._offer_restart("설정 초기화", "설정을 초기화했어요.")
 
     def _offer_restart(self, title: str, msg: str) -> None:
         """가져오기/초기화 후: 종료 시 덮어쓰기 방지 신호를 보내고, 재실행을 안내한다.
@@ -547,7 +547,7 @@ class SettingsTab(QWidget):
             title,
             f"{msg}\n\n전부 반영하려면 앱을 완전히 종료한 뒤 다시 실행하세요.\n"
             "(트레이로 최소화가 아니라 트레이 아이콘 → '종료' 후 재실행)\n"
-            "지금 창을 닫아도 가져온 설정은 안전하게 유지됩니다.",
+            "지금 창을 닫아도 가져온 설정은 안전하게 유지돼요.",
         )
 
     # ---- Discord 계정(로그인) ----
@@ -579,11 +579,11 @@ class SettingsTab(QWidget):
             self.guide_btn.setVisible(True)
         if user:
             self._login_status.setText(f"로그인됨: {user['name']}")
-            self._login_status.setStyleSheet("color:#2ecc71;")
+            self._login_status.setStyleSheet(f"color:{color('ok')};")
             self._login_btn.setText("로그아웃")
         else:
             self._login_status.setText("로그인하지 않음")
-            self._login_status.setStyleSheet("color:#8a8f98;")
+            self._login_status.setStyleSheet(f"color:{color('muted')};")
             self._login_btn.setText("디스코드 로그인")
         self._refresh_dm_export()  # 로그인 상태에 맞춰 DM 내보내기 버튼 갱신
         self._refresh_diag()  # 진단 스냅샷(디버깅)도 로그인 시에만 노출
@@ -596,7 +596,7 @@ class SettingsTab(QWidget):
             return
         self._login_btn.setEnabled(False)
         self._login_status.setText("브라우저에서 디스코드 승인을 진행하세요…")
-        self._login_status.setStyleSheet("color:#8a8f98;")
+        self._login_status.setStyleSheet(f"color:{color('muted')};")
         self._login_thread = _LoginThread(self)
         self._login_thread.done.connect(self._on_login_done)
         self._login_thread.start()
@@ -610,11 +610,11 @@ class SettingsTab(QWidget):
             except Exception as exc:  # noqa: BLE001 — 저장 실패도 UI엔 알림
                 _log.warning("사용자 저장 실패: %r", exc)
                 self._login_status.setText("로그인됐지만 저장 실패 — 다시 시도하세요.")
-                self._login_status.setStyleSheet("color:#e67e22;")
+                self._login_status.setStyleSheet(f"color:{color('warn')};")
                 return
         else:
             self._login_status.setText("로그인 실패/취소 — 다시 시도하세요.")
-            self._login_status.setStyleSheet("color:#e67e22;")
+            self._login_status.setStyleSheet(f"color:{color('warn')};")
         self._refresh_login()
         self.login_changed.emit()
 
@@ -634,8 +634,8 @@ class SettingsTab(QWidget):
         avatar.setFixedSize(48, 48)
         avatar.setIconSize(QSize(48, 48))
         # 제작자 아이콘: 굵은 테두리(RGB 58,7,41 = #3A0729).
-        pm = _circular(PROFILE_IMAGE, 48, 3, "#3A0729") or _circular(
-            LOGO_IMAGE, 48, 3, "#3A0729"
+        pm = _circular(PROFILE_IMAGE, 48, 3, color('brand')) or _circular(
+            LOGO_IMAGE, 48, 3, color('brand')
         )
         if pm is not None:
             avatar.setIcon(QIcon(pm))
@@ -650,12 +650,12 @@ class SettingsTab(QWidget):
         name = QLabel(f"제작자: {config.CREATOR_NAME}")
         name.setStyleSheet("font-size:15px; font-weight:700;")
         desc = QLabel(
-            "개인개발용 마비노기 애드온 입니다.\n"
+            "개인개발용 마비노기 애드온이에요.\n"
             "건의사항이나 필요한 기능은 아래 문의하기 버튼 혹은 "
             "하프서버 Starline 에게 문의해 주세요."
         )
         desc.setWordWrap(True)
-        desc.setStyleSheet("color:#8a8f98; font-size:11px;")
+        desc.setStyleSheet(f"color:{color('muted')}; font-size:11px;")
         col.addWidget(name)
         col.addWidget(desc)
         row.addLayout(col, 1)
@@ -663,7 +663,7 @@ class SettingsTab(QWidget):
 
     def _inquiry_button(self) -> QPushButton:
         btn = QPushButton("문의하기")
-        btn.setToolTip("제작자에게 제목·내용으로 문의를 보냅니다")
+        btn.setToolTip("제작자에게 제목·내용으로 문의를 보내요")
         btn.clicked.connect(self._open_inquiry)
         return btn
 
@@ -676,8 +676,8 @@ class SettingsTab(QWidget):
         # 디버깅용 도구 → 디스코드 로그인 사용자에게만 노출(설명 없이 쓰기 어려움).
         btn = QPushButton("진단 스냅샷 저장 (시간·% 오류 신고용)")
         btn.setToolTip(
-            "지금 설정된 버프·디버프·투아림 영역을 그대로 캡처해 PNG로 저장합니다.\n"
-            "시간/% 가 틀리게 읽힐 때, 저장된 파일을 제작자에게 보내면 원인을 찾습니다."
+            "지금 설정된 버프·디버프·투아림 영역을 그대로 캡처해 PNG로 저장해요.\n"
+            "시간/% 가 틀리게 읽힐 때, 저장된 파일을 제작자에게 보내면 원인을 찾아요."
         )
         btn.clicked.connect(self._on_diag_snapshot)
         self._diag_btn = btn
@@ -700,7 +700,7 @@ class SettingsTab(QWidget):
         if QMessageBox.question(
             self, "진단 스냅샷",
             "게임에서 버프창(남은시간)이 보이게 띄워 주세요.\n\n"
-            "'확인'을 누르면 이 앱이 잠시 최소화되고 5초 뒤 자동으로 캡처합니다.\n"
+            "'확인'을 누르면 이 앱이 잠시 최소화되고 5초 뒤 자동으로 캡처해요.\n"
             "그 사이 게임 화면을 맨 앞으로 두세요.",
             QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel,
         ) != QMessageBox.StandardButton.Ok:
@@ -733,10 +733,10 @@ class SettingsTab(QWidget):
     def _diag_captured(self, result, error) -> None:
         try:
             try:
-                message = result.message() if error is None else f"진단 수집에 실패했습니다.\n{type(error).__name__}: {error}"
+                message = result.message() if error is None else f"진단 수집에 실패했어요.\n{type(error).__name__}: {error}"
             except Exception as exc:
                 error = exc
-                message = f"진단 결과를 읽지 못했습니다.\n{type(exc).__name__}: {exc}"
+                message = f"진단 결과를 읽지 못했어요.\n{type(exc).__name__}: {exc}"
         finally:
             self._restore_diagnostic_window()
         if error is not None or not result.saved:
@@ -789,13 +789,13 @@ class SettingsTab(QWidget):
     def _style_swatch(self, btn: QPushButton, name: str, selected: bool) -> None:
         bg = _THEME_SWATCH[name]
         border = (
-            f"2px solid {_THEME_ACCENT}" if selected else "1px solid #6b6e76"
+            f"2px solid {color('accent')}" if selected else "1px solid #6b6e76"
         )
         btn.setText("✓" if selected else "")
         btn.setStyleSheet(
             "QPushButton {"
             f" background: {bg}; border: {border}; border-radius: 12px;"
-            f" color: {_THEME_ACCENT}; font-size: 12px; font-weight: 900;"
+            f" color: {color('accent')}; font-size: 12px; font-weight: 900;"
             " }"
         )
 
@@ -825,7 +825,7 @@ class SettingsTab(QWidget):
         self._autostart = _checked("Windows 시작 시 자동 실행", intent)
         self._autostart.setEnabled(autostart.available())
         if not autostart.available():
-            self._autostart.setToolTip("Windows에서만 사용할 수 있습니다")
+            self._autostart.setToolTip("Windows에서만 사용할 수 있어요")
         self._autostart.toggled.connect(self._on_autostart_toggled)
         v.addWidget(self._autostart)
 
@@ -891,7 +891,7 @@ class SettingsTab(QWidget):
         self._toast_corner.currentIndexChanged.connect(self._on_toast_corner_changed)
         toast_row.addWidget(self._toast_corner)
         toast_test = QPushButton("테스트")
-        toast_test.setToolTip("지금 설정한 위치로 샘플 토스트를 한 번 띄웁니다")
+        toast_test.setToolTip("지금 설정한 위치로 샘플 토스트를 한 번 띄워요")
         toast_test.clicked.connect(self._on_toast_test)
         toast_row.addWidget(toast_test)
         toast_row.addStretch(1)
@@ -929,15 +929,15 @@ class SettingsTab(QWidget):
         setup_btn.clicked.connect(self.reopen_setup.emit)
         v.addWidget(setup_btn)
         self.guide_btn = setup_btn
-        self.guide_btn.setToolTip("게임창 등록부터 단계별 기능 선택과 영역 등록 안내를 엽니다.")
+        self.guide_btn.setToolTip("게임창 등록부터 단계별 기능 선택과 영역 등록 안내를 열어요.")
         self.guide_btn.setVisible(True)
         tour_btn = QPushButton("앱 둘러보기 다시 열기")
         self.tour_btn = tour_btn
-        tour_btn.setToolTip("전투 보조·편의기능·잠금·일시정지의 하이라이트 안내를 다시 봅니다")
+        tour_btn.setToolTip("전투 보조·편의기능·잠금·일시정지의 하이라이트 안내를 다시 봐요")
         tour_btn.clicked.connect(self.replay_tour.emit)
         tour_row.addWidget(tour_btn)
         notes_btn = QPushButton("업데이트 노트 보기")
-        notes_btn.setToolTip("지금까지 배포된 버전별 업데이트 노트를 다시 봅니다")
+        notes_btn.setToolTip("지금까지 배포된 버전별 업데이트 노트를 다시 봐요")
         notes_btn.clicked.connect(self._show_release_notes)
         tour_row.addWidget(notes_btn)
         tour_row.addStretch(1)
@@ -957,7 +957,7 @@ class SettingsTab(QWidget):
     def _on_toast_test(self) -> None:
         from .toast import show_toast
 
-        show_toast("테스트 알림", "토스트가 이 위치에 이렇게 표시됩니다 🎉", 3000)
+        show_toast("테스트 알림", "토스트가 이 위치에 이렇게 표시돼요 🎉", 3000)
 
     def _on_voice_pack_changed(self, _index: int) -> None:
         pack = self._voice_pack.currentData()
@@ -996,7 +996,7 @@ class SettingsTab(QWidget):
             QMessageBox.information(
                 self,
                 "자동 실행",
-                "로그인 시 자동으로 실행됩니다.\n"
+                "로그인 시 자동으로 실행돼요.\n"
                 "창 없이 조용히 시작하려면 '실행 시 트레이로 시작'도 켜두세요.",
             )
 
@@ -1006,7 +1006,7 @@ class SettingsTab(QWidget):
         # 바뀐 위치를 바로 확인할 수 있게 샘플 토스트를 띄운다(다음 토스트부터 적용).
         from .toast import show_toast
 
-        show_toast("알림 위치", "토스트가 여기에 표시됩니다.", 2000)
+        show_toast("알림 위치", "토스트가 여기에 표시돼요.", 2000)
 
     # ---- 게임 창 인식(포그라운드 판정 대상) ----
     def _game_group(self) -> QGroupBox:
@@ -1025,7 +1025,7 @@ class SettingsTab(QWidget):
 
         v.addWidget(
             hint_label(
-                "‘게임창 등록 시작’을 누른 뒤 3초 안에 마비노기 창을 선택해 주세요. 실행 파일명으로 등록합니다."
+                "‘게임창 등록 시작’을 누른 뒤 3초 안에 마비노기 창을 선택해 주세요. 실행 파일명으로 등록해요."
             )
         )
         return box
@@ -1038,12 +1038,12 @@ class SettingsTab(QWidget):
         exe = config.load_game_exe()
         if exe:
             self._game_hint.setText(f"등록된 게임: {exe}")
-            self._game_hint.setStyleSheet("color:#2ecc71;")
+            self._game_hint.setStyleSheet(f"color:{color('ok')};")
         else:
             self._game_hint.setText(
                 "미등록 — 창 제목에 '마비노기'가 들어가면 게임으로 판정(폴더 창 등 오인 가능)"
             )
-            self._game_hint.setStyleSheet("color:#8a8f98;")
+            self._game_hint.setStyleSheet(f"color:{color('muted')};")
 
     def _start_detect(self) -> None:
         if self._detect_timer is not None and self._detect_timer.isActive():
@@ -1079,8 +1079,8 @@ class SettingsTab(QWidget):
                 self.game_registered.emit()
             except Exception:
                 exe = None
-                self._game_hint.setText("게임창 등록을 저장하지 못했습니다. 쓰기 권한과 창 정보를 확인하세요.")
+                self._game_hint.setText("게임창 등록을 저장하지 못했어요. 쓰기 권한과 창 정보를 확인하세요.")
         else:
             self._game_hint.setText("자동 찾기 실패(창 정보를 못 읽음). Windows에서 시도하세요.")
-            self._game_hint.setStyleSheet("color:#e67e22;")
+            self._game_hint.setStyleSheet(f"color:{color('warn')};")
         self.game_registration_finished.emit(bool(exe))

@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QGroupBox,
 )
 
+from .palette import color
 from .settings_layout import set_lock_text
 from .. import config
 from .help_dialog import tab_header
@@ -69,7 +70,7 @@ class SkillbarTab(QWidget):
         v.setContentsMargins(12, 12, 12, 12)
         v.setSpacing(10)
         v.addWidget(tab_header(
-            "게임 원본 단축바를 그룹별로 복제해 원하는 위치에 표시합니다.", HELP_TITLE, HELP_HTML, self
+            "게임 원본 단축바를 그룹별로 복제해 원하는 위치에 표시해요.", HELP_TITLE, HELP_HTML, self
         ))
         self._beta_notice = hint_label("")
         self._beta_notice.hide()
@@ -136,7 +137,7 @@ class SkillbarTab(QWidget):
             pr.addWidget(b)
         pr.addStretch(1)
         display_layout.addLayout(pr)
-        display_layout.addWidget(hint_label("빈칸은 오버레이에서 우클릭해 숨길 수 있습니다."))
+        display_layout.addWidget(hint_label("빈칸은 오버레이에서 우클릭해 숨길 수 있어요."))
         self._preset_btns = [pr.itemAt(i).widget() for i in range(1, pr.count()) if pr.itemAt(i).widget() is not None]
         v.addStretch(1)
 
@@ -294,10 +295,10 @@ class SkillbarTab(QWidget):
             self.anchor_label.setText(
                 f"등록됨 · {self._anchor['x']},{self._anchor['y']}"
             )
-            self.anchor_label.setStyleSheet("color:#2ecc71;")
+            self.anchor_label.setStyleSheet(f"color:{color('ok')};")
         else:
             self.anchor_label.setText("원본 첫 칸 미지정 — 맨 왼쪽 위 첫 칸에 맞춰 클릭해 주세요.")
-            self.anchor_label.setStyleSheet("color:#8a8f98;")
+            self.anchor_label.setStyleSheet(f"color:{color('muted')};")
         section = self.region_section  # 영역 묶음(명세 13.5): 지정 후 한 줄 요약 + 접힘, 막 지정했으면 펼침
         registered = self._anchor is not None
         section.set_registered(registered, just_set=registered and not section.registered

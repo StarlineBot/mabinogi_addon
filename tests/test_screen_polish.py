@@ -46,9 +46,8 @@ def test_lock_buttons_share_wording_and_width_per_kind(window):
 def test_toggle_buttons_match_plain_button_height_and_normal_weight(window):
     """잠금·사용 토글은 옆 일반 버튼(알림 미리보기 등)과 같은 키, 굵기 보통(명세 13.1 정정)."""
     w, app = window
-    toggles = {**_locks(w), "opt": w.optimization_tools.panel.toggle, "fps": w.optimization_tools.panel.frames_toggle}
-    if w.blackbox_tools.panel is not None:
-        toggles["blackbox"] = w.blackbox_tools.panel.enabled
+    # 0.29.0(명세 14.5): FPS 표시·블랙박스 사용은 스위치로 바뀌어 상태 버튼 대상에서 빠짐('추천 설정으로 최적화'는 버튼 유지)
+    toggles = {**_locks(w), "opt": w.optimization_tools.panel.toggle}
     height = plain_button_height()
     for name, button in toggles.items():
         assert button.minimumHeight() == button.maximumHeight() == height, name
@@ -57,7 +56,8 @@ def test_toggle_buttons_match_plain_button_height_and_normal_weight(window):
     app.processEvents()
     halo = w.boss_tab.halo_capture
     assert halo.warn_lock.height() == halo.preview_alert.height()  # 같은 줄 옆 버튼과 같은 키
-    assert "QPushButton:checked:enabled { background:#00b894" in halo.warn_lock.styleSheet()  # 켜짐 초록 유지
+    from mabinogi_addon.ui.palette import color
+    assert f"QPushButton:checked:enabled {{ background:{color('accent')}" in halo.warn_lock.styleSheet()  # 켜짐 = 강조 색(0.29.0 색 이름)
 
 
 def test_boss_and_halo_rows_line_up(window):

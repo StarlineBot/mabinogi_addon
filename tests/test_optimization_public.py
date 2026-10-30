@@ -120,7 +120,7 @@ def test_everyone_sees_tab_but_collection_only_for_creator(window, monkeypatch):
     assert not c.panel.summary_collect.isChecked() and not c._summary_collecting
     user[0] = {'id': feature_access.CREATOR_DISCORD_ID}
     c.refresh_access()
-    assert not c.panel.collect_box.isHidden() and c.panel.collect_box.title() == '프레임 수집'
+    assert not c.panel.collect_box.isHidden() and c.panel.collect_toggle.text() == '진단 · 프레임 수집(구간 요약 파일)'  # 0.29.0(명세 14.4): 맨 아래 접힘
 
 
 def test_no_alpha_or_beta_words_on_screen_and_no_basis_line(window, monkeypatch):

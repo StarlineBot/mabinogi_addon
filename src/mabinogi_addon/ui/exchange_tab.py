@@ -25,14 +25,15 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from .palette import color
 from .. import config
 from ..market import auction, exchange
 from .calculator_sidebar import calculator_sidebar, refresh_button
 from .widgets import FeatureHeader, hint_label
 
 _CACHE_TTL = 10 * 60  # 경매 데이터가 ~10분 지연이라 던전별 10분 캐시
-_ACCENT = QColor("#00C9A2")
-_GRAY = "color:#9aa0aa; font-size:12px;"
+def _gray():
+    return f"color:{color('muted')}; font-size:12px;"
 
 
 class ExchangeTab(QWidget):
@@ -48,7 +49,7 @@ class ExchangeTab(QWidget):
         v.setContentsMargins(12, 12, 12, 12)
         v.addWidget(
             FeatureHeader("환전비율 계산기",
-                "던전을 선택하면 구슬당 판매금액이 높은 재료부터 보여줍니다."
+                "던전을 선택하면 구슬당 판매금액이 높은 재료부터 보여줘요."
             )
         )
 
@@ -69,7 +70,7 @@ class ExchangeTab(QWidget):
         title_row.addWidget(self.refresh_btn)
         right.addLayout(title_row)
         self.asof = QLabel("경매 시세는 넥슨 API 특성상 10분가량 지연돼요.")
-        self.asof.setStyleSheet(_GRAY)
+        self.asof.setStyleSheet(_gray())
         right.addWidget(self.asof)
 
         self.table = QTableWidget(0, 4)
@@ -160,7 +161,7 @@ class ExchangeTab(QWidget):
             f = item.font()
             f.setBold(True)
             item.setFont(f)
-            item.setForeground(QBrush(_ACCENT))
+            item.setForeground(QBrush(QColor(color('accent'))))
         return item
 
     def _render(self, region: str, rows: list[dict]) -> None:
@@ -168,7 +169,7 @@ class ExchangeTab(QWidget):
         self.title.setText(region)
         at = self._cache.get(region, (time.time(), None))[0]
         hhmm = time.strftime("%H:%M", time.localtime(at))
-        self.asof.setText(f"조회 시각 {hhmm} · 경매 시세는 약 10분 지연됩니다.")
+        self.asof.setText(f"조회 시각 {hhmm} · 경매 시세는 약 10분 지연돼요.")
         best = next((r for r in rows if r["efficiency"] is not None), None)
         self.table.setRowCount(len(rows))
         for i, r in enumerate(rows):

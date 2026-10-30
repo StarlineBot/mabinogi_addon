@@ -34,12 +34,13 @@ from PySide6.QtWidgets import (
     QGroupBox,
 )
 
+from .palette import color
 from .. import config
 from ..system.window_watcher import WindowWatcher
 from .help_dialog import tab_header
 from .mirror_manager import MirrorManager
 from .widgets import CapturePathLabel, checkbox, hint_label
-from .settings_layout import DANGER_STYLE, lock_button, set_lock_text
+from .settings_layout import danger_style, lock_button, set_lock_text
 
 _log = logging.getLogger(__name__)
 
@@ -51,14 +52,14 @@ HELP_HTML = HELP['커스텀 오버레이']
 
 # 외곽 테두리 + 최소 높이 → 비어 있어도 '여기 리스트가 있다'가 보이게.
 # outline:0 → 선택 시 생기는 포커스 박스(버튼처럼 보이던 테두리) 제거해 '리스트' 느낌.
-_LIST_QSS = """
-QListWidget { border:1px solid palette(mid); border-radius:6px; background:palette(base);
-  min-height:72px; outline:0; }
-QListWidget::item { padding:7px 10px; border:none; }
-QListWidget::item:hover { background:palette(midlight); }
-QListWidget::item:selected { background:#00B894; color:white; }
+def _list_qss():
+    return f"""
+QListWidget {{ border:1px solid palette(mid); border-radius:6px; background:palette(base);
+  min-height:72px; outline:0; }}
+QListWidget::item {{ padding:7px 10px; border:none; }}
+QListWidget::item:hover {{ background:palette(midlight); }}
+QListWidget::item:selected {{ background:{color('accent')}; color:{color('on-accent')}; }}
 """
-_DANGER_QSS = DANGER_STYLE
 
 
 class _DashSeparatorDelegate(QStyledItemDelegate):
@@ -86,7 +87,7 @@ class _DashSeparatorDelegate(QStyledItemDelegate):
 def _name_list() -> QListWidget:
     lst = QListWidget()
     lst.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
-    lst.setStyleSheet(_LIST_QSS)
+    lst.setStyleSheet(_list_qss())
     lst.setItemDelegate(_DashSeparatorDelegate(lst))
     return lst
 
@@ -136,12 +137,12 @@ class CustomOverlayTab(QWidget):
         v.setSpacing(8)
 
         v.addWidget(tab_header(
-            "게임 화면의 일부를 복제해 원하는 위치에 표시합니다.",
+            "게임 화면의 일부를 복제해 원하는 위치에 표시해요.",
             HELP_TITLE, HELP_HTML, self
         ))
-        from .widgets import feature_checkbox
+        from .widgets import feature_switch
         self._paused = False
-        self.enable = feature_checkbox("custom", "커스텀 오버레이 사용")
+        self.enable = feature_switch("custom", "커스텀 오버레이 사용")  # 기능 켜기 = 스위치(명세 14.5)
         self.enable.toggled.connect(self._on_enable)
         v.addWidget(self.enable)
         self._mgr.set_paused(not self.enable.isChecked())
@@ -180,7 +181,7 @@ class CustomOverlayTab(QWidget):
         self.retry_btn.clicked.connect(self.flush_pending)
         error_row.addWidget(self.error_label, 1)
         error_row.addWidget(self.retry_btn)
-        self.error_box.setStyleSheet("color:#c0392b; background:#fdecea;")
+        self.error_box.setStyleSheet(f"color:{color('danger')}; background:#fdecea;")
         preset_box_layout.addWidget(self.error_box)
         self.error_box.hide()
         preset_group = QWidget()  # 프리셋 관리(펼침): 삭제·시작 시 자동 불러오기
@@ -188,7 +189,7 @@ class CustomOverlayTab(QWidget):
         preset_layout.setContentsMargins(0, 0, 0, 0)
         preset_row = QHBoxLayout()
         self.preset_delete_btn = QPushButton("선택 프리셋 삭제")
-        self.preset_delete_btn.setStyleSheet(_DANGER_QSS)
+        self.preset_delete_btn.setStyleSheet(danger_style())
         self.preset_delete_btn.clicked.connect(self._on_preset_delete)
         preset_row.addWidget(self.preset_delete_btn)
         self.selection_label = CapturePathLabel()
@@ -227,7 +228,7 @@ class CustomOverlayTab(QWidget):
         self.empty_hint = QLabel("아직 오버레이가 없어요. ‘복제할 영역 추가’로 게임 화면 일부를 골라 원하는 위치에 띄워 보세요.")
         self.empty_hint.setWordWrap(True)
         self.empty_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.empty_hint.setStyleSheet("color:#8a8f98; border:1px dashed #8a8f98; border-radius:4px; padding:14px;")
+        self.empty_hint.setStyleSheet(f"color:{color('muted')}; border:1px dashed {color('muted')}; border-radius:4px; padding:14px;")
         overlay_layout.addWidget(self.empty_hint)
         self.overlays_title = CapturePathLabel()  # 설정 교체(재시작 대기) 때만 보임
         self.overlays_title.setStyleSheet("font-weight:600;")
@@ -241,7 +242,7 @@ class CustomOverlayTab(QWidget):
         self.overlay_list.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         self.overlay_list.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.overlay_list.setHeaderLabels(["이름", "원본 영역", "표시 배율", "위치 잠금"])
-        self.overlay_list.setStyleSheet(_LIST_QSS.replace("QListWidget", "QTreeWidget"))
+        self.overlay_list.setStyleSheet(_list_qss().replace("QListWidget", "QTreeWidget"))
         self.overlay_list.header().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
         self.overlay_list.header().setMinimumSectionSize(85)
         self.overlay_list.header().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
@@ -250,7 +251,7 @@ class CustomOverlayTab(QWidget):
         overlay_layout.addWidget(self.overlay_list)
         row = QHBoxLayout()
         self.del_sel_btn = QPushButton("선택 삭제")
-        self.del_sel_btn.setStyleSheet(_DANGER_QSS)
+        self.del_sel_btn.setStyleSheet(danger_style())
         self.del_sel_btn.clicked.connect(self._on_delete_selected)
         row.addWidget(self.del_sel_btn)
         row.addStretch()
@@ -329,7 +330,7 @@ class CustomOverlayTab(QWidget):
         try:
             config.save_auto_preset(self.auto_combo.currentData())
         except OSError:
-            self._info("시작 시 자동 불러오기 설정을 저장하지 못했습니다.")
+            self._info("시작 시 자동 불러오기 설정을 저장하지 못했어요.")
         self._refresh_presets()
 
     def _on_compat_toggled(self, checked: bool) -> None:
@@ -453,7 +454,7 @@ class CustomOverlayTab(QWidget):
 
     def _update_save_status(self):
         if self._writes_suspended:
-            self.active_label.setText("설정이 교체되었습니다")
+            self.active_label.setText("설정이 교체되었어요")
             self.overlays_title.setText("적용 중인 오버레이 · 재시작 대기")
             self.overlays_title.show()
             self.save_status.setText("재시작 필요")
@@ -464,10 +465,10 @@ class CustomOverlayTab(QWidget):
         self.active_label.setText(f"현재: {name} · 바꾸면 자동 저장돼요")
         self.overlays_title.hide()
         self.save_status.setText("저장 실패" if self._save_error else "저장 대기 중" if self._dirty else "")
-        self.save_status.setStyleSheet("color:#c0392b;" if self._save_error else "")
+        self.save_status.setStyleSheet(f"color:{color('danger')};" if self._save_error else "")
         self.error_box.setVisible(bool(self._save_error))
         self.error_label.setText(
-            f"{name}의 변경 내용을 저장하지 못했습니다. 프리셋 전환·종료 보류. "
+            f"{name}의 변경 내용을 저장하지 못했어요. 프리셋 전환·종료 보류. "
             "현재 편집 내용 유지 · 마지막 정상 저장본 보존")
         self.error_label.setToolTip(self._save_error)
 
@@ -594,7 +595,7 @@ class CustomOverlayTab(QWidget):
                 config.delete_custom_preset(name)
             except OSError as error:
                 _log.warning("커스텀 프리셋 삭제 실패: %s", error)
-                self._info(f"'{name}' 프리셋을 삭제하지 못했습니다. 기존 프리셋과 적용 상태를 유지합니다.")
+                self._info(f"'{name}' 프리셋을 삭제하지 못했어요. 기존 프리셋과 적용 상태를 유지해요.")
                 return
             if name == self._active_preset:
                 self._active_preset = None

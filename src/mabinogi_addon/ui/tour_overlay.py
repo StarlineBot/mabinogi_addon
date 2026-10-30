@@ -25,6 +25,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from .palette import color
+
 
 @dataclass
 class TourStep:
@@ -107,11 +109,11 @@ class TourOverlay(QWidget):
             "#tourCard { background:#1f2937; border:1px solid #FFD54A; border-radius:12px; }"
             "#tourTitle { color:#FFD54A; font-size:14px; font-weight:800; }"
             "#tourBody { color:#e5e7eb; font-size:12px; }"
-            "#tourStep { color:#9aa0aa; font-size:11px; }"
+            f"#tourStep {{ color:{color('muted')}; font-size:11px; }}"
             "QPushButton { background:#2a2f3a; color:#e5e7eb; border:1px solid #3a3f4a;"
             " border-radius:6px; padding:4px 12px; }"
             "#tourNext { background:#FFD54A; color:#2a2300; border:none; font-weight:700; }"
-            "#tourSkip { background:transparent; color:#9aa0aa; border:none; }"
+            f"#tourSkip {{ background:transparent; color:{color('muted')}; border:none; }}"
         )
         self._host.installEventFilter(self)  # 창 크기 바뀌면 오버레이도 맞춤
 

@@ -9,6 +9,7 @@ from PySide6.QtCore import QEvent, QObject, QPoint, QRectF, QSize, Qt, QTimer, S
 from PySide6.QtGui import QColor, QIcon, QPainter, QPainterPath, QPen, QTextLayout, QTextOption
 from PySide6.QtWidgets import QApplication, QHBoxLayout, QLabel, QToolButton, QWidget
 
+from .palette import color
 from ..creator_dialogue import DialogueSession, MAX_CHARS
 from ..system.dialogue_visibility import display_available, exposed
 from ..system.window_watcher import is_main_window_foreground
@@ -136,7 +137,7 @@ class CreatorDialogue(QObject):
         self.face.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.face.setFixedSize(48, 48)
         self.face.setIconSize(QSize(48, 48))
-        image = _circular(PROFILE_IMAGE, 48, 3, "#3A0729") or _circular(LOGO_IMAGE, 48, 3, "#3A0729")
+        image = _circular(PROFILE_IMAGE, 48, 3, color('brand')) or _circular(LOGO_IMAGE, 48, 3, color('brand'))
         if image is not None:
             self.face.setIcon(QIcon(image))
         self.face.setToolTip("잡담")

@@ -2,6 +2,8 @@
 from types import SimpleNamespace as NS
 
 import pytest
+
+from mabinogi_addon.ui.palette import color  # 0.29.0(명세 14.6): 상태 색은 이름으로
 from PySide6.QtCore import QCoreApplication, QEvent, Qt, QTimer
 from PySide6.QtWidgets import QApplication
 
@@ -74,7 +76,9 @@ def test_hotkey_is_saved_loaded_and_invalid_saved_value_falls_back_to_default(tm
 
 
 def test_change_dialog_judges_combinations_and_handles_release_only_printscreen(app):
-    from mabinogi_addon.ui.blackbox_hotkey_dialog import ERROR_COLOR, OK_COLOR, HotkeyDialog
+    from mabinogi_addon.ui.blackbox_hotkey_dialog import HotkeyDialog
+    from mabinogi_addon.ui.palette import color  # 0.29.0(명세 14.6): 색 이름
+    OK_COLOR, ERROR_COLOR = color('ok'), color('danger')
     dialog = HotkeyDialog(DEFAULT)
     try:
         assert dialog.field.text() == 'Ctrl+Alt+PrintScreen' and not dialog.save.isEnabled()
@@ -284,11 +288,11 @@ def test_combat_status_button_toggles_pause_and_syncs_with_tray(main):
     assert button.cursor().shape() == Qt.CursorShape.PointingHandCursor
     assert main._blackbox_badge.cursor().shape() == Qt.CursorShape.PointingHandCursor
     assert not hasattr(main, '_pause_btn') and not hasattr(main, '_status_label')
-    assert button.text() == '● 전투 보조: 켜짐' and '#2ecc71' in button.styleSheet()
+    assert button.text() == '● 전투 보조: 켜짐' and color('ok') in button.styleSheet()
     assert 'underline' not in button.styleSheet() and '12px' in button.styleSheet()
     assert button.toolTip().startswith('누르면 전투 보조의 오버레이와 소리 알림을 잠시 멈춰요.')
     button.click()
-    assert main._paused and button.text() == '● 전투 보조: 일시정지' and '#e74c3c' in button.styleSheet()
+    assert main._paused and button.text() == '● 전투 보조: 일시정지' and color('danger') in button.styleSheet()
     assert button.toolTip() == '누르면 기존 설정에 따라 전투 보조의 표시와 알림을 다시 켜요.'
     if getattr(main, '_pause_act', None) is not None:
         assert main._pause_act.text() == '전투 보조 재개'
@@ -333,7 +337,7 @@ def test_blackbox_badge_click_opens_tab_and_never_turns_off(main):
     main._tabs.setCurrentIndex(0)
     tools._update_badge(192_000_000)
     badge = main._blackbox_badge
-    assert not badge.isHidden() and badge.text() == '● 블랙박스: 보관 중 3:12' and '#2ecc71' in badge.styleSheet()
+    assert not badge.isHidden() and badge.text() == '● 블랙박스: 보관 중 3:12' and color('ok') in badge.styleSheet()
     assert 'underline' not in badge.styleSheet()
     assert badge.toolTip() == '누르면 블랙박스 탭으로 이동해요.'
     badge.click()
@@ -348,7 +352,7 @@ def test_blackbox_badge_click_on_error_opens_tab_instead_of_turning_off(main):
     main._tabs.setCurrentIndex(0)
     tools._update_badge(0)
     badge = main._blackbox_badge
-    assert badge.text() == '● 블랙박스: 녹화 오류' and '#e74c3c' in badge.styleSheet()
+    assert badge.text() == '● 블랙박스: 녹화 오류' and color('danger') in badge.styleSheet()
     assert badge.toolTip() == '녹화 오류예요. 누르면 블랙박스 탭에서 내용을 볼 수 있어요.'
     badge.click()
     assert service.calls == [] and main._tabs.currentWidget() is tools._page
@@ -357,7 +361,8 @@ def test_blackbox_badge_click_on_error_opens_tab_instead_of_turning_off(main):
 def test_blackbox_badge_muted_states_are_gray():
     from mabinogi_addon.blackbox_combat import CombatGate
     from mabinogi_addon.ui.blackbox_controller import BADGE_COLORS, blackbox_badge
-    assert BADGE_COLORS == {'ok': '#2ecc71', 'muted': '#8a8f98', 'error': '#e74c3c'}
+    from mabinogi_addon.ui.palette import color  # 0.29.0(명세 14.6): 전투 보조 상태와 같은 색 이름
+    assert [BADGE_COLORS[k] for k in ('ok', 'muted', 'error')] == [color('ok'), color('muted'), color('danger')]
     for status in ('waiting', 'paused', 'preparing'):
         assert blackbox_badge(NS(enabled=True, status=status))[1] == 'muted'
     gate = CombatGate()

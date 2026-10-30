@@ -297,7 +297,7 @@ class SetupFlow:
                         reason + "\n" + (
                             "보스 체력바가 보이는 상태에서 다시 시도하세요." if key in ("boss", "debuff") else
                             "대상 UI가 보이는 상태에서 다시 시도하세요.") +
-                        "\n기존 설정은 유지됩니다. 실패 입력은 설정에서 진단 ZIP으로 저장할 수 있습니다.")
+                        "\n기존 설정은 유지돼요. 실패 입력은 설정에서 진단 ZIP으로 저장할 수 있어요.")
                 if frame is None:
                     # 전체 캡처 실패는 같은 화면의 나머지 항목에 반복하지 않는다.
                     break
@@ -309,4 +309,4 @@ class SetupFlow:
                 page.set_busy(False)
                 summary = " / ".join(f"{label} {len(names)}" for label, names in results.items())
                 details = "\n".join(label + ": " + ", ".join(names) for label, names in results.items() if names)
-                page.progress.setText(("중단했습니다. " if self.cancelled else "") + summary + ("\n" + details if details else ""))
+                page.progress.setText(("중단했어요. " if self.cancelled else "") + summary + ("\n" + details if details else ""))

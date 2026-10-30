@@ -29,13 +29,14 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from .palette import color
 from .. import config, image_io, paths
 from ..detect.stat_bars import read_stat_bars
 from .dpi import to_logical
 from .help_dialog import tab_header
 from .screen_grab import capture_for_autofind
 from .stat_overlay import WARNING_SAMPLE_MAX_AGE, StatBarOverlay
-from .widgets import checkbox, hint_label, wrapping_row
+from .widgets import checkbox, hint_label, wrapping_row, switch
 from .settings_layout import lock_button, set_lock_text
 
 STAT_LABELS = {"hp": "생명력", "mp": "마나", "sta": "스태미나"}
@@ -97,7 +98,7 @@ class StatBarsTab(QWidget):
         v.setContentsMargins(12, 12, 12, 12)
         v.setSpacing(10)
         v.addWidget(tab_header(
-            "생명력·마나·스태미나를 별도 오버레이로 표시합니다.", HELP_TITLE, HELP_HTML, self
+            "생명력·마나·스태미나를 별도 오버레이로 표시해요.", HELP_TITLE, HELP_HTML, self
         ))
         self._beta_notice = hint_label("")
         self._beta_notice.hide()
@@ -110,7 +111,7 @@ class StatBarsTab(QWidget):
         row = QHBoxLayout()
         self.region_btn = QPushButton("직접 지정")
         self.region_btn.setToolTip(
-            "고정 크기 박스가 커서를 따라옵니다. 세 바 위에 올려 클릭 배치(휠로 크기 조절)"
+            "고정 크기 박스가 커서를 따라와요. 세 바 위에 올려 클릭 배치(휠로 크기 조절)"
         )
         self.region_btn.clicked.connect(self._on_region)
         self.region_label = hint_label("")
@@ -159,6 +160,13 @@ class StatBarsTab(QWidget):
         display_group = QGroupBox("표시")
         display_layout = QVBoxLayout(display_group)
         v.addWidget(display_group)
+        # 1줄: 체력바 표시 스위치(홈 체력바 스위치와 같은 값, 명세 14.5) + 전체 위치 잠금
+        top_row = QHBoxLayout()
+        self.show_switch = switch("체력바 표시")
+        self.show_switch.toggled.connect(self.set_all_shown)
+        top_row.addWidget(self.show_switch)
+        top_row.addStretch(1)
+        display_layout.addLayout(top_row)
         show_row = QHBoxLayout()
         show_row.addWidget(QLabel("표시할 바"))
         self._show_checks: dict[str, QWidget] = {}
@@ -171,7 +179,8 @@ class StatBarsTab(QWidget):
         show_row.addStretch(1)
         self.lock_btn = lock_button(every=True)  # 세 바 모두(명세 13.3)
         self.lock_btn.clicked.connect(lambda checked: self._set_locked_all(checked))
-        show_row.addWidget(self.lock_btn)
+        top_row.addWidget(self.lock_btn)
+        self.show_switch.setChecked(self.any_shown())
         display_layout.addLayout(show_row)
 
         ctl_row = QHBoxLayout()
@@ -282,7 +291,7 @@ class StatBarsTab(QWidget):
         sound_row.addStretch(1)
         g.addLayout(sound_row)
         self.boss_region_status = hint_label("")  # 보스 체력바가 미지정일 때만 보임(지정돼 있으면 위 한 줄로 충분)
-        self.boss_region_status.setStyleSheet("color:#e67e22;")
+        self.boss_region_status.setStyleSheet(f"color:{color('warn')};")
         self.refresh_boss_region()
         g.addWidget(self.boss_region_status)
         return box
@@ -413,16 +422,16 @@ class StatBarsTab(QWidget):
         box = QGroupBox("체력바 수집 (저HP·전환 프레임 제보용)")
         g = QVBoxLayout(box)
         g.addWidget(hint_label(
-            "영역 지정 후 '수집 모드'를 켜면, 바가 바뀔 때마다 그 영역이 자동 저장됩니다.\n"
+            "영역 지정 후 '수집 모드'를 켜면, 바가 바뀔 때마다 그 영역이 자동 저장돼요.\n"
             "실제 사냥에서 HP가 낮게 깎일 때·지역이동(가려짐)일 때를 모아 보내주시면,"
-            " 저HP 인식·경고 오작동을 잡는 데 씁니다."
+            " 저HP 인식·경고 오작동을 잡는 데 써요."
         ))
         row = QHBoxLayout()
         self.snap_btn = QPushButton("스냅샷 저장")
         self.snap_btn.clicked.connect(self._save_snapshot)
         row.addWidget(self.snap_btn)
         self.open_dir_btn = QPushButton("폴더 열기")
-        self.open_dir_btn.setToolTip("수집된 스냅샷이 저장되는 폴더를 탐색기로 엽니다")
+        self.open_dir_btn.setToolTip("수집된 스냅샷이 저장되는 폴더를 탐색기로 열어요")
         self.open_dir_btn.clicked.connect(self._open_shot_dir)
         row.addWidget(self.open_dir_btn)
         self.collect_chk = checkbox("수집 모드(바 바뀔 때 자동 저장)")
@@ -449,7 +458,7 @@ class StatBarsTab(QWidget):
         if not self._logged_in() or self._shutting_down:
             return
         if self._last_frame is None:
-            self.collect_label.setText("저장할 캡처가 없습니다 — 먼저 영역을 지정하세요")
+            self.collect_label.setText("저장할 캡처가 없어요 — 먼저 영역을 지정하세요")
             return
         self._write_shot(self._last_frame)
 
@@ -644,14 +653,14 @@ class StatBarsTab(QWidget):
         from ..autofind_diagnostics import perform_autofind
         frame, ox, oy, box = perform_autofind("stat_bars", capture_for_autofind)
         if frame is None:
-            QMessageBox.warning(self, "자동 찾기", "화면 캡처에 실패했습니다.")
+            QMessageBox.warning(self, "자동 찾기", "화면 캡처에 실패했어요.")
             return
         if box is None:
             QMessageBox.information(
                 self,
                 "자동 찾기 — 못 찾음",
-                "체력바(생/마/스)를 찾지 못했습니다.\n\n"
-                "• 체력바가 화면에 보이나요? (하단 메뉴바가 최소화돼 있으면 안 보입니다)\n"
+                "체력바(생/마/스)를 찾지 못했어요.\n\n"
+                "• 체력바가 화면에 보이나요? (하단 메뉴바가 최소화돼 있으면 안 보여요)\n"
                 "• 세 바(분홍·파랑·노랑)가 가려지지 않았나요?\n\n"
                 "다시 시도하거나 '영역 지정'으로 직접 잡으세요.",
             )
@@ -668,7 +677,7 @@ class StatBarsTab(QWidget):
             self,
             "자동 찾기 — 확인",
             "민트 점선으로 표시한 영역으로 체력바를 지정할까요?\n\n"
-            "'아니오'를 누르면 기존 설정이 그대로 유지됩니다.",
+            "'아니오'를 누르면 기존 설정이 그대로 유지돼요.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
@@ -678,7 +687,7 @@ class StatBarsTab(QWidget):
         try:
             self._on_selected(lx, ly, lw, lh)
         except OSError:
-            QMessageBox.warning(self, "영역 저장 실패", "기존 등록 영역을 유지합니다.")
+            QMessageBox.warning(self, "영역 저장 실패", "기존 등록 영역을 유지해요.")
 
     def _flash_region(self) -> None:
         if not self._region:
@@ -697,11 +706,11 @@ class StatBarsTab(QWidget):
         if self._region:
             r = self._region
             self.region_label.setText(f"등록됨 · {r['x']},{r['y']}  {r['w']}×{r['h']}")
-            self.region_label.setStyleSheet("color:#2ecc71;")
+            self.region_label.setStyleSheet(f"color:{color('ok')};")
             self.view_region_btn.setEnabled(True)
         else:
             self.region_label.setText("영역 미지정 — 세 바를 감싸게 지정하세요")
-            self.region_label.setStyleSheet("color:#8a8f98;")
+            self.region_label.setStyleSheet(f"color:{color('muted')};")
             self.view_region_btn.setEnabled(False)
         section = self.region_section  # 영역 묶음(명세 11절): 지정 후 한 줄 요약 + 접힘, 막 지정했으면 펼침
         registered = self._region is not None
@@ -716,6 +725,12 @@ class StatBarsTab(QWidget):
     def _on_show_toggle(self) -> None:
         for sid, chk in self._show_checks.items():
             self._bars_cfg[sid]["show"] = chk.isChecked()
+        switch_ = getattr(self, "show_switch", None)
+        if switch_ is not None and switch_.isChecked() != self.any_shown():
+            switch_.blockSignals(True)
+            switch_.setChecked(self.any_shown())
+            switch_.blockSignals(False)
+            switch_.update()
         self._apply_visibility()
         self._save()
 

@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from .palette import color, subtab_underline
 from .. import config, paths
 from ..capture import Region, create_live_source
 from ..catalog import available_catalog, available_debuff_catalog, build_templates
@@ -120,12 +121,12 @@ def _tab_qss(dark: bool) -> str:
     return (
         f"QTabWidget::pane {{ border: none; border-top: 1px solid {pane}; }}"
         "QTabBar { qproperty-drawBase: 0; }"
-        "QTabBar::tab { background: transparent; color: #8a8f98; padding: 9px 4px;"
+        f"QTabBar::tab {{ background: transparent; color: {color('muted', dark)}; padding: 9px 4px;"
         " min-width: 104px; border: none; border-bottom: 2px solid transparent;"
         " font-size: 13px; }"
         f"QTabBar::tab:hover {{ color: {hover}; }}"
-        "QTabBar::tab:selected { color: #00C9A2; font-weight: 800;"
-        " border-bottom: 2px solid #00D1A7; }"
+        f"QTabBar::tab:selected {{ color: {color('accent', dark)}; font-weight: 800;"
+        f" border-bottom: 2px solid {color('accent', dark)}; }}"
     )
 
 
@@ -141,15 +142,24 @@ class _CombatTabBar(QTabBar):
 
 
 def _subtab_qss(dark: bool) -> str:
-    """하위(트래커 내부) 탭. 선택 표시는 무채색 밑줄 → '한 단계 아래'. 테마별 색."""
-    pane = "#2a2f3a" if dark else "#d5d7dd"
-    hover = "#cfd3da" if dark else "#1f2124"
+    """2단(기능 탭: 전투 보조·편의기능·최적화의 하위 탭). 선택 = 연한 민트(명세 14.1 A안), 안 된 탭은 회색."""
+    return _level_qss(dark, color("accent-soft", dark), subtab_underline(dark))
+
+
+def _tertiary_qss(dark: bool) -> str:
+    """3단(보스 패턴의 '체력별 패턴'/'1분 헤일로'): 지금 회색 그대로 — 2단 스타일을 물려받지 않게 따로 지정."""
     sel = "#cfd3da" if dark else "#1f2124"  # 다크=은은한 회색(흰색 아님), 라이트=어두움
     underline = "#5a6270" if dark else "#b2b5bc"
+    return _level_qss(dark, sel, underline)
+
+
+def _level_qss(dark: bool, sel: str, underline: str) -> str:
+    pane = "#2a2f3a" if dark else "#d5d7dd"
+    hover = "#cfd3da" if dark else "#1f2124"
     return (
         f"QTabWidget::pane {{ border: none; border-top: 1px solid {pane}; }}"
         "QTabBar { qproperty-drawBase: 0; }"
-        "QTabBar::tab { background: transparent; color: #7d828b; padding: 6px 14px;"
+        f"QTabBar::tab {{ background: transparent; color: {color('muted', dark)}; padding: 6px 14px;"
         " min-width: 0px; border: none; border-bottom: 2px solid transparent;"
         " font-size: 12px; }"
         f"QTabBar::tab:hover {{ color: {hover}; }}"
@@ -637,7 +647,7 @@ class MainWindow(QMainWindow):
         self.settings_tab._start_detect()
         self.setup_page.game_btn.setEnabled(False)
         self.setup_guide.game_btn.setEnabled(False)
-        self.setup_page.progress.setText("3초 안에 게임창을 선택하세요. 등록 결과는 이 화면에 반영됩니다.")
+        self.setup_page.progress.setText("3초 안에 게임창을 선택하세요. 등록 결과는 이 화면에 반영돼요.")
         self.setup_guide.progress.setText(self.setup_page.progress.text())
         self.setup_guide.refresh()
 
@@ -665,7 +675,7 @@ class MainWindow(QMainWindow):
         try:
             save_selection(key, value)
         except OSError:
-            QMessageBox.warning(self, "설정 저장 실패", "자동설정 대상 선택을 저장하지 못했습니다.")
+            QMessageBox.warning(self, "설정 저장 실패", "자동설정 대상 선택을 저장하지 못했어요.")
         self.setup_page.refresh()
         self.setup_guide.refresh()
 
@@ -760,7 +770,7 @@ class MainWindow(QMainWindow):
         h = QHBoxLayout(bar)
         h.setContentsMargins(12, 6, 8, 6)
         h.setSpacing(8)
-        self._update_label = QLabel("새 버전이 있습니다")
+        self._update_label = QLabel("새 버전이 있어요")
         self._update_label.setObjectName("updateMsg")
         h.addWidget(self._update_label)
         h.addStretch(1)
@@ -775,11 +785,11 @@ class MainWindow(QMainWindow):
         close.clicked.connect(self._update_banner_hide)
         h.addWidget(close)
         bar.setStyleSheet(
-            "#updateBar { background:#10402f; border-bottom:1px solid #00B894; }"
+            f"#updateBar {{ background:#10402f; border-bottom:1px solid {color('accent')}; }}"
             "#updateMsg { color:#d1fae5; font-size:12px; }"
-            "#updateBtn { background:#00B894; color:#06281e; border:none;"
+            f"#updateBtn {{ background:{color('accent')}; color:{color('on-accent')}; border:none;"
             " border-radius:4px; padding:4px 12px; font-weight:700; }"
-            "#updateBtn:hover { background:#00D1A7; }"
+            f"#updateBtn:hover {{ background:{color('accent')}; }}"
             "#updateClose { background:transparent; color:#9ae6c7; border:none;"
             " font-size:13px; }"
             "#updateClose:hover { color:#ffffff; }"
@@ -811,7 +821,7 @@ class MainWindow(QMainWindow):
         from .home_page import house_icon
         self._home_btn = QPushButton(" 홈")
         self._home_btn.setObjectName("homeButton")
-        self._home_btn.setIcon(QIcon(house_icon("#2dd4bf")))
+        self._home_btn.setIcon(QIcon(house_icon(color('accent'))))
         self._home_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._home_btn.setToolTip("홈: 잘 돌고 있는지 확인하고 켜고 끄는 곳")
         self._home_btn.setStyleSheet("QPushButton#homeButton { font-size:12px; padding:3px 10px; border-radius:4px;"
@@ -876,10 +886,11 @@ class MainWindow(QMainWindow):
         self._combat_status.setToolTip(self._COMBAT_TIPS[bool(self._paused)])
 
     # ---- 진단 상태 한 줄 ----
-    _STATUS_OK = "#2ecc71"
-    _STATUS_WARN = "#e67e22"
-    _STATUS_STOP = "#e74c3c"  # 정지중 빨간 ●
-    _STATUS_MUTED = "#8a8f98"
+    # 색 이름(명세 14.6): 테마에 따라 값이 달라 쓰는 순간 고른다
+    _STATUS_OK = property(lambda self: color("ok"))
+    _STATUS_WARN = property(lambda self: color("warn"))
+    _STATUS_STOP = property(lambda self: color("danger"))  # 정지중 빨간 ●
+    _STATUS_MUTED = property(lambda self: color("muted"))
 
     def _apply_tab_styles(self) -> None:
         """현재 테마(다크/라이트)에 맞춰 상·하위 탭 색을 적용. 테마 변경 시 재호출."""
@@ -889,6 +900,7 @@ class MainWindow(QMainWindow):
         sub = _subtab_qss(dark)
         self._tracker_tabs.setStyleSheet(sub + "QTabBar::tab { padding:6px 9px; }")
         self._convenience_tabs.setStyleSheet(sub)
+        self.boss_tab.pattern_tabs.setStyleSheet(_tertiary_qss(dark))  # 3단: 2단 색을 물려받지 않게
         self.optimization_tools.panel.tabs.setStyleSheet(sub)
         self._tabs.setStyleSheet(_tab_qss(dark))
         # 파티 현황판은 매칭 행 배경색이 셀에 박혀 있어, 테마가 바뀌면 다시 그려야
@@ -1014,7 +1026,7 @@ class MainWindow(QMainWindow):
     # 상태 줄(2026-10-27 B안): (문구, 색, 아이콘 종류). 앞 기호는 글꼴 따라 이모지로 바뀌어 그린 아이콘(status_icon)으로 대체.
     _WAITING_TEXT = ("추적 대기 — 화면 캡처 준비 중 (게임이 '전체화면'이면 '테두리 없는 창'"
                      "으로 바꿔 주세요 · 자동 재시도 중)")
-    _INACTIVE_TEXT = "게임 비활성 — 마비노기 창을 맨 앞으로 두면 추적합니다"
+    _INACTIVE_TEXT = "게임 비활성 — 마비노기 창을 맨 앞으로 두면 추적해요"
 
     def _buff_status(self) -> tuple[str, str, str]:
         if not config.load_capture_region("buffTracker"):
@@ -1296,7 +1308,7 @@ class MainWindow(QMainWindow):
         retry_until = getattr(self, "_update_retry_until", None)
         if retry_until is None and QMessageBox.question(
             self, "업데이트",
-            f"새 버전 v{ver} 을(를) 받아 교체하고 다시 시작합니다.\n진행할까요?",
+            f"새 버전 v{ver} 을(를) 받아 교체하고 다시 시작해요.\n진행할까요?",
         ) != QMessageBox.StandardButton.Yes:
             return
 

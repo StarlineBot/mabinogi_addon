@@ -7,9 +7,10 @@
 from __future__ import annotations
 
 import math
-from PySide6.QtCore import QEvent, QPointF, Qt
-from PySide6.QtGui import QFontInfo, QFocusEvent, QPainter, QPalette, QTextLayout, QTextOption
-from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout, QBoxLayout, QCheckBox, QFormLayout, QLabel, QMessageBox, QSizePolicy, QSpinBox, QWidget
+from PySide6.QtCore import QEvent, QPointF, QRectF, QSize, Qt
+from PySide6.QtGui import QColor, QFontInfo, QFocusEvent, QPainter, QPalette, QPen, QTextLayout, QTextOption
+from PySide6.QtWidgets import QAbstractButton, QHBoxLayout, QVBoxLayout, QBoxLayout, QCheckBox, QFormLayout, QLabel, QMessageBox, QSizePolicy, QSpinBox, QWidget
+from .palette import color
 
 
 FEATURE_HEADER_ACTION_SIZE = 26  # logical pixels; shared with the help action
@@ -38,7 +39,7 @@ class CapturePathLabel(QLabel):
         super().__init__()
         self.setWordWrap(True)
         self.setTextFormat(Qt.TextFormat.PlainText)
-        self.setStyleSheet("color:#8a8f98;")
+        self.setStyleSheet(f"color:{color('muted')};")
         policy = self.sizePolicy()
         policy.setHorizontalPolicy(QSizePolicy.Policy.Ignored)
         self.setSizePolicy(policy)
@@ -133,10 +134,73 @@ def checkbox(text: str = "") -> QCheckBox:
     return cb
 
 
+class SwitchButton(QAbstractButton):
+    """기능 켜기·끄기 스위치(명세 14.5): 홈과 같은 그린 둥근 스위치 + 옆에 기능 이름 글자.
+
+    체크박스와 같은 API(setChecked·isChecked·toggled·setText)라 기존 연결을 그대로 쓴다. 이모지·글꼴 의존 없음.
+    색: 켜짐 = 강조(accent), 꺼짐 = 회색 트랙.
+    """
+
+    TRACK_W, TRACK_H, GAP = 36, 20, 8
+
+    def __init__(self, text: str = "", parent=None):
+        super().__init__(parent)
+        self.setCheckable(True)
+        self.setText(text)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
+
+    def sizeHint(self):
+        metrics = self.fontMetrics()
+        text_w = metrics.horizontalAdvance(self.text()) + self.GAP if self.text() else 0
+        return QSize(self.TRACK_W + text_w + 2, max(self.TRACK_H, metrics.height()) + 4)
+
+    def minimumSizeHint(self):
+        return self.sizeHint()
+
+    def paintEvent(self, _event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        y = (self.height() - self.TRACK_H) / 2
+        on = self.isChecked()
+        track = QColor(color("accent")) if on else self.palette().color(QPalette.ColorRole.Mid)
+        if not self.isEnabled():
+            track.setAlpha(110)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(track)
+        p.drawRoundedRect(QRectF(1, y, self.TRACK_W, self.TRACK_H), self.TRACK_H / 2, self.TRACK_H / 2)
+        p.setBrush(QColor("#ffffff"))
+        knob = self.TRACK_H - 6
+        p.drawEllipse(QRectF(1 + (self.TRACK_W - knob - 3 if on else 3), y + 3, knob, knob))
+        if self.text():
+            p.setPen(self.palette().color(QPalette.ColorGroup.Active if self.isEnabled() else QPalette.ColorGroup.Disabled,
+                                          QPalette.ColorRole.WindowText))
+            rect = self.rect().adjusted(self.TRACK_W + self.GAP + 1, 0, 0, 0)
+            p.drawText(rect, int(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft), self.text())
+        if self.hasFocus():
+            pen = QPen(QColor(color("accent")), 1, Qt.PenStyle.DotLine)
+            p.setPen(pen)
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.drawRoundedRect(QRectF(0.5, y - 1.5, self.TRACK_W + 1, self.TRACK_H + 3), self.TRACK_H / 2, self.TRACK_H / 2)
+        p.end()
+
+
+def switch(text: str = "") -> SwitchButton:
+    return SwitchButton(text)
+
+
+def feature_switch(key: str, text: str) -> SwitchButton:
+    """설정(setup_state)의 기능 사용 값과 묶인 스위치."""
+    return _bind_feature(key, switch(text))
+
+
 def feature_checkbox(key: str, text: str) -> QCheckBox:
+    return _bind_feature(key, checkbox(text))
+
+
+def _bind_feature(key, cb):
     from ..setup_state import enabled, save_enabled
 
-    cb = checkbox(text)
     cb.setChecked(enabled(key))
 
     def save(value):
@@ -146,7 +210,7 @@ def feature_checkbox(key: str, text: str) -> QCheckBox:
             cb.blockSignals(True)
             cb.setChecked(enabled(key))
             cb.blockSignals(False)
-            QMessageBox.warning(cb, "설정 저장 실패", "사용 설정을 저장하지 못했습니다. 쓰기 권한을 확인하세요.")
+            QMessageBox.warning(cb, "설정 저장 실패", "사용 설정을 저장하지 못했어요. 쓰기 권한을 확인하세요.")
 
     cb.toggled.connect(save)
     return cb
@@ -167,7 +231,7 @@ def icon_slot(placeholder: str = "▣") -> QLabel:
 def hint_label(text: str) -> QLabel:
     lbl = QLabel(text)
     lbl.setWordWrap(True)  # 긴 안내문이 한 줄로 창 폭을 강제하지 않게(여러 줄로 접힘)
-    lbl.setStyleSheet("color:#8a8f98;")
+    lbl.setStyleSheet(f"color:{color('muted')};")
     return lbl
 
 
@@ -189,7 +253,7 @@ def callout(text: str, icon: str = "⚠") -> QLabel:
     lbl.setStyleSheet(
         "QLabel { background: rgba(230,160,30,0.12);"
         " border:1px solid rgba(230,160,30,0.55);"
-        " border-radius:7px; padding:8px 10px; color:#d98a1a; }"
+        f" border-radius:7px; padding:8px 10px; color:{color('warn')}; }}"
     )
     return lbl
 

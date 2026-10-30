@@ -55,7 +55,7 @@ def test_no_key_keeps_quantities_unknown_cost(tab, monkeypatch):
     assert not tab._poll.isActive()
 
 
-@pytest.mark.parametrize('price,error,message', [(None,'','매물이 없습니다'), (None,'조회 실패','조회 실패'), (10000,'','조회')])
+@pytest.mark.parametrize('price,error,message', [(None,'','매물이 없어요'), (None,'조회 실패','조회 실패'), (10000,'','조회')])
 def test_result_never_overwrites_selected_dungeon(tab, price, error, message):
     tab.dungeons.setCurrentRow(2)
     tab._pending = queue.Queue()
@@ -234,12 +234,12 @@ def test_empty_listing_is_cached_but_missing_key_is_not(market, monkeypatch):
     tab.dungeons.itemClicked.emit(tab.dungeons.currentItem())
     assert len(jobs) == 1
     complete(tab, None)
-    assert '매물이 없습니다' in tab.status.text()
+    assert '매물이 없어요' in tab.status.text()
     assert tab.table.item(5, 1).text() == '5' and tab.table.item(5, 3).text() == '—'
     clock[0] = 599
     tab.dungeons.setCurrentRow(0)
     tab.dungeons.setCurrentRow(2)
-    assert len(jobs) == 1 and '매물이 없습니다' in tab.status.text()
+    assert len(jobs) == 1 and '매물이 없어요' in tab.status.text()
     clock[0] = 600
     tab.dungeons.itemClicked.emit(tab.dungeons.currentItem())
     assert len(jobs) == 2

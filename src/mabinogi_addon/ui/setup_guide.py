@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout, QWidget,
 )
 
+from .palette import color
 from .. import config
 from ..setup_state import BY_KEY, selected as enabled, missing, section, batch_allowed, needs_boss_preparation, BOSS_PREPARATION
 from .. import guide_images
@@ -22,7 +23,6 @@ GUIDE_KEYS = STAGES[1] + STAGES[2]
 STAGE_NAMES = ('게임창 등록', '전투 보조', '추가 설정', '다른 기능', '앱 둘러보기')
 LAST = len(STAGES) - 1  # '다음'을 누르면 앱 둘러보기(하이라이트)로 넘어가는 마지막 안내 단계
 GUIDE_FIGURE_TEXT = '연습 모드에 들어가 보스 체력바가 보이는 화면에서 설정해 주세요. 점선이 앱이 찾는 곳이에요(그림을 누르면 크게 볼 수 있어요).'
-ORANGE, GREEN, GRAY = '#e67e22', '#2ecc71', '#8a8f98'
 # 4단계 '다른 기능도 있어요'(명세 11절): 영역 지정 없이 쓰는 기능은 여기 카드로만 소개한다. 기능이 늘면 카드만 추가.
 OPTIMIZATION_ITEMS = '게임 우선순위 높음 · CPU 배치 · 패스트핑 · 그래픽 효율(NVIDIA)'
 OTHER_FEATURES = (
@@ -36,7 +36,7 @@ OTHER_FEATURES = (
 
 def _gray(text):
     label = _label(text)
-    label.setStyleSheet(f'color:{GRAY};')
+    label.setStyleSheet(f'color:{color('muted')};')
     return label
 
 
@@ -161,11 +161,11 @@ class SetupGuide(QWidget):
         others.setSpacing(10)
         self.optimization_card, card = _card('guideRecommendCard')
         self.optimization_card.setStyleSheet(
-            f'#guideRecommendCard {{ border:2px solid {GREEN}; border-radius:6px; }}')
+            f'#guideRecommendCard {{ border:2px solid {color('ok')}; border-radius:6px; }}')
         head = QHBoxLayout()
         head.addWidget(_label('게임 최적화', bold=True))
         tag = QLabel('추천')
-        tag.setStyleSheet(f'color:#ffffff; background:{GREEN}; border-radius:3px; padding:1px 6px; font-weight:600;')
+        tag.setStyleSheet(f'color:#ffffff; background:{color('ok')}; border-radius:3px; padding:1px 6px; font-weight:600;')
         head.addWidget(tag)
         head.addStretch(1)
         card.addLayout(head)
@@ -183,7 +183,7 @@ class SetupGuide(QWidget):
         self.feature_cards = {}
         for index, (name, text, where) in enumerate(OTHER_FEATURES):
             frame, box = _card('guideFeatureCard')
-            frame.setStyleSheet(f'#guideFeatureCard {{ border:1px solid {GRAY}; border-radius:6px; }}')
+            frame.setStyleSheet(f'#guideFeatureCard {{ border:1px solid {color('muted')}; border-radius:6px; }}')
             box.addWidget(_label(name, bold=True))
             box.addWidget(_label(text))
             box.addStretch(1)
@@ -277,10 +277,10 @@ class SetupGuide(QWidget):
 
     def refresh(self):
         raw = config._read_local_config()
-        trail = ' → '.join(f'<b style="color:{GREEN}">{name}</b>' if i == self.stage else name
+        trail = ' → '.join(f'<b style="color:{color('ok')}">{name}</b>' if i == self.stage else name
                            for i, name in enumerate(STAGE_NAMES))
         self.step_label.setText(f'<b>{self.stage + 1} / {len(STAGE_NAMES)}</b><br>'
-                                f'<span style="color:{GRAY}">{trail}</span>')
+                                f'<span style="color:{color('muted')}">{trail}</span>')
         self.title.setText(("게임창 등록", "전투 보조 설정", "전투 보조 추가 설정", "다른 기능도 있어요")[self.stage])
         self.description.setText((
             ("처음 오셨군요. 필요한 기능만 골라 함께 설정해 봐요.\n"
@@ -291,8 +291,8 @@ class SetupGuide(QWidget):
             "영역을 지정하지 않아도 바로 쓸 수 있는 기능들이에요. 필요할 때 해당 탭에서 켜 보세요.",
         )[self.stage])
         game = section(raw, "general").get("gameExe")
-        self.game_status.setText(f'<span style="color:{GREEN}">●</span> 등록됨 · {escape(str(game))}' if game else
-                                 f'<span style="color:{ORANGE}">●</span> 아직 등록 안 됨')
+        self.game_status.setText(f'<span style="color:{color('ok')}">●</span> 등록됨 · {escape(str(game))}' if game else
+                                 f'<span style="color:{color('warn')}">●</span> 아직 등록 안 됨')
         choosing = self.stage in (1, 2)
         self.game_row.setVisible(self.stage == 0)
         self.selection.setVisible(choosing)
@@ -312,7 +312,7 @@ class SetupGuide(QWidget):
             # 자동설정 승인·거절·실패 결과는 이 줄의 상태로 바로 보인다(6.1 즉시 갱신)
             text = self.status_text(key, raw)
             self.statuses[key].setText(text)
-            self.statuses[key].setStyleSheet(f'color:{GREEN if text == "등록됨" else ORANGE};')
+            self.statuses[key].setStyleSheet(f'color:{color('ok') if text == "등록됨" else color('warn')};')
             self.manual_buttons[key].setEnabled(not self.busy and batch_allowed(key))
         self.boss_preparation.setVisible(choosing and needs_boss_preparation(raw, feature_keys=self.feature_keys))
         self._queue_fit()

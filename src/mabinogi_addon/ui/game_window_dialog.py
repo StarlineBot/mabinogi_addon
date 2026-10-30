@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from .palette import color
 from .. import config
 from ..system.window_watcher import list_windows
 from .notifier import SoundNotifier, sound_path
@@ -46,18 +47,18 @@ class GameWindowDialog(QDialog):
         v.setContentsMargins(20, 18, 20, 16)
         v.setSpacing(10)
 
-        title = QLabel("⚠️ 게임 창 인식이 필요합니다")
-        title.setStyleSheet("font-size:14px; font-weight:700; color:#e67e22;")
+        title = QLabel("⚠️ 게임 창 인식이 필요해요")
+        title.setStyleSheet(f"font-size:14px; font-weight:700; color:{color('warn')};")
         title.setWordWrap(True)
         v.addWidget(title)
 
         desc = QLabel(
-            "이 앱이 제대로 동작하려면 어떤 창이 '게임'인지 알아야 합니다. "
+            "이 앱이 제대로 동작하려면 어떤 창이 '게임'인지 알아야 해요. "
             "인식이 안 되면 자동 찾기가 엉뚱한 화면을 잡거나(특히 모니터 여러 개), "
-            "오버레이·포그라운드 판정이 어긋날 수 있습니다.\n"
+            "오버레이·포그라운드 판정이 어긋날 수 있어요.\n"
             "아래에서 마비노기 창을 골라 '이 창으로 지정'을 눌러 주세요."
         )
-        desc.setStyleSheet("color:#c7ccd4; font-size:12px;")
+        desc.setStyleSheet(f"color:{color('muted')}; font-size:12px;")
         desc.setWordWrap(True)
         v.addWidget(desc)
 
@@ -65,7 +66,7 @@ class GameWindowDialog(QDialog):
         v.addWidget(self._combo)
 
         self._empty = QLabel("")
-        self._empty.setStyleSheet("color:#e67e22; font-size:12px;")
+        self._empty.setStyleSheet(f"color:{color('warn')}; font-size:12px;")
         self._empty.setWordWrap(True)
         self._empty.hide()
         v.addWidget(self._empty)
@@ -90,10 +91,10 @@ class GameWindowDialog(QDialog):
 
         hint = QLabel(
             "'나중에'를 누르면 이번엔 창 '제목'으로 대충 판정하지만(오인 가능), "
-            "등록 전까진 다음 실행 때 다시 안내합니다.\n"
+            "등록 전까진 다음 실행 때 다시 안내해요.\n"
             "설정 탭 → '게임 창 인식'에서 언제든 지정할 수 있어요."
         )
-        hint.setStyleSheet("color:#8a8f98; font-size:11px;")
+        hint.setStyleSheet(f"color:{color('muted')}; font-size:11px;")
         hint.setWordWrap(True)
         v.addWidget(hint)
 
@@ -125,7 +126,7 @@ class GameWindowDialog(QDialog):
         if not windows:
             self._combo.hide()
             self._empty.setText(
-                "열린 창을 찾지 못했어요. 게임을 켜면 자동으로 목록에 나타납니다.\n"
+                "열린 창을 찾지 못했어요. 게임을 켜면 자동으로 목록에 나타나요.\n"
                 "(안 뜨면 '새로고침'을 눌러 주세요.)"
             )
             self._empty.show()

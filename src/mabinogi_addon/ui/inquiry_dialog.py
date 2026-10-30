@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from .palette import color
 from .. import config
 from ..inquiry import send_inquiry
 from ..logbuffer import recent_logs
@@ -55,7 +56,7 @@ class InquiryDialog(QDialog):
         )
         hint.setWordWrap(True)
         hint.setStyleSheet(
-            "color:#2ecc71;" if user else "color:#8a8f98;"
+            f"color:{color('ok')};" if user else f"color:{color('muted')};"
         )
         v.addWidget(hint)
 
@@ -77,7 +78,7 @@ class InquiryDialog(QDialog):
 
         # 버그 신고는 진단 로그를 항상 자동 첨부(개발자가 원인 파악에 꼭 필요).
         self._log_hint = hint_label(
-            "🛠 진단용 최근 로그가 자동으로 함께 전송됩니다(버전·환경 포함)."
+            "🛠 진단용 최근 로그가 자동으로 함께 전송돼요(버전·환경 포함)."
         )
         v.addWidget(self._log_hint)
         self._on_category(self.category.currentText())
@@ -93,7 +94,7 @@ class InquiryDialog(QDialog):
         self.send_btn = QPushButton("보내기")
         self.send_btn.setDefault(True)
         self.send_btn.setStyleSheet(
-            "QPushButton { background:#00B894; color:white; font-weight:600;"
+            f"QPushButton {{ background:{color('accent')}; color:{color('on-accent')}; font-weight:600;"
             " padding:4px 14px; }"
         )
         self.send_btn.clicked.connect(self._on_send)
@@ -105,7 +106,7 @@ class InquiryDialog(QDialog):
 
     def _set_status(self, text: str, *, error: bool = False) -> None:
         self.status.setText(text)
-        self.status.setStyleSheet("color:#e74c3c;" if error else "color:#8a8f98;")
+        self.status.setStyleSheet(f"color:{color('danger')};" if error else f"color:{color('muted')};")
 
     def _on_category(self, text: str) -> None:
         # 로그 자동 첨부 안내는 '버그 신고'에서만 노출.
@@ -120,7 +121,7 @@ class InquiryDialog(QDialog):
         webhook = config.get_inquiry_webhook_url()
         if not webhook:
             self._set_status(
-                "문의 채널이 설정되지 않았습니다(웹훅 미등록).", error=True
+                "문의 채널이 설정되지 않았어요(웹훅 미등록).", error=True
             )
             return
 
@@ -161,7 +162,7 @@ class InquiryDialog(QDialog):
 
     def _on_done(self, ok: bool, msg: str) -> None:
         if ok:
-            show_toast("문의", "보내기 완료 — 소중한 의견 감사합니다!")
+            show_toast("문의", "보내기 완료 — 소중한 의견 감사해요!")
             self.accept()
             return
         self.send_btn.setEnabled(True)

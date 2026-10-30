@@ -3,6 +3,8 @@ from datetime import datetime
 
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel, QComboBox, QPushButton, QMessageBox
 
+from .widgets import hint_label
+
 
 def clock_text(timestamp, now=None):
     """'오후 3:42'(오늘) / '10월 23일 오후 3:42'. 내부 ID 대신 사용자가 알아볼 시각으로 표시한다."""

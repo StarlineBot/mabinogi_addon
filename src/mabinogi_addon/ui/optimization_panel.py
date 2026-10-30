@@ -4,6 +4,7 @@ from PySide6.QtWidgets import (QCheckBox,QComboBox,QFormLayout,QGroupBox,QHBoxLa
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QPalette
 from PySide6.QtWidgets import QStyledItemDelegate
+from .widgets import hint_label
 from .widgets import FeatureHeader
 
 # '자세히 보기 ▸'·'상세 설정 ▸': 펼쳐도 눌린 버튼처럼 보이지 않는 글자 버튼(13.13·13.14)
@@ -80,10 +81,12 @@ class OptimizationPanel(QWidget):
         self.toggle=style_toggle(QPushButton('추천 설정으로 최적화'))
         group.addWidget(self.toggle,0,Qt.AlignmentFlag.AlignLeft)
         # 13.10 자동 적용(기본 꺼짐): 우선순위·CPU 배치만. 네트워크는 자동으로 바꾸지 않는다.
-        self.auto=QCheckBox('마비노기를 켜면 자동 적용');group.addWidget(self.auto)
-        self.auto_note=_label('켜 두면 앱을 켤 때부터 게임을 기다렸다가 우선순위·CPU 배치를 걸고, 게임을 끄면 그 게임에 건 값만 되돌려요.\n'
-                              '패스트핑(네트워크)은 자동으로 바꾸지 않아요.')
-        self.auto_note.setForegroundRole(QPalette.ColorRole.PlaceholderText);group.addWidget(self.auto_note)
+        # 명세 14.5: 기능 켜기는 스위치 — '최적화 사용'(홈과 같은 C안: 켜면 자동 적용, 끄면 자동 적용 끄기 + 지금 적용분 원복)
+        from .widgets import switch
+        self.auto=switch('최적화 사용');group.addWidget(self.auto)
+        self.auto_note=hint_label('켜 두면 앱을 켤 때부터 게임을 기다렸다가 우선순위·CPU 배치를 걸고, 게임을 끄면 그 게임에 건 값만 되돌려요. '
+                              '끄면 지금 적용한 것도 바로 되돌려요.\n패스트핑(네트워크)은 자동으로 바꾸지 않아요.')
+        group.addWidget(self.auto_note)
         # 13.13 결과 요약: 지금 상태 한 줄(굵게·색) + 항목마다 한 줄. 상세(세션 기록)는 접힌 '자세히 보기'와 app.log.
         self.status=_label('시작 전 · 시스템 설정을 변경하지 않았어요.');group.addWidget(self.status)
         self.results=_label('');group.addWidget(self.results)
@@ -104,7 +107,7 @@ class OptimizationPanel(QWidget):
         group=_group('CPU 배치',advanced)
         # 최적화 명세 13.7: 게임 프로세스 우선순위 '높음'(기본 켬). 실시간·다른 프로그램 우선순위 변경은 하지 않는다.
         self.priority=QCheckBox('게임 우선순위 높음');self.priority.setChecked(True);group.addWidget(self.priority)
-        group.addWidget(_label('무거운 장면에서 Windows가 게임을 먼저 실행해요. 끄거나 세션이 끝나면 원래 값으로 되돌려요.\n'
+        group.addWidget(hint_label('무거운 장면에서 Windows가 게임을 먼저 실행해요. 끄거나 세션이 끝나면 원래 값으로 되돌려요.\n'
                                '다른 도구가 우선순위를 바꾸면 덮어쓰지 않아요.'))
         # 13.11(렌더 시안 사용자 확인): 체크박스 대신 '배치 안 함' 항목. 닫힌 목록은 `이름 (추천) · 6+2`, 아래 회색 두 줄에 실제 배분과 근거,
         # 펼친 목록은 항목마다 이름 + 배분 한 줄. 목록은 감지한 CPU 구조로 만들고 추천 순으로 정렬한다.
@@ -120,7 +123,7 @@ class OptimizationPanel(QWidget):
         self.adapter_label=QLabel('');self.adapter_label.hide()
         connection=QHBoxLayout();connection.addWidget(self.adapter,1);connection.addWidget(self.adapter_label,1)
         form=QFormLayout();form.addRow('적용할 연결',connection);group.addLayout(form)
-        self.notice=_label('TCP 응답을 모아 보내지 않고 바로 보내요(TcpAckFrequency) · 수신 창 자동 조정은 기본값(Normal)으로 둬요.\n'
+        self.notice=hint_label('TCP 응답을 모아 보내지 않고 바로 보내요(TcpAckFrequency) · 수신 창 자동 조정은 기본값(Normal)으로 둬요.\n'
                            '다른 앱의 통신에도 영향을 줄 수 있고 관리자 권한·재연결이 필요해요. 게임 실행 중이면 네트워크는 미뤄요.\n'
                            '성능이 좋아졌다는 의미는 아니에요. 효과는 별도 계측으로 비교해 주세요.')
         self.notice.setForegroundRole(QPalette.ColorRole.PlaceholderText);group.addWidget(self.notice)
@@ -129,9 +132,9 @@ class OptimizationPanel(QWidget):
         self.graphics=QCheckBox('그래픽 효율 최적화');group.addWidget(self.graphics)
         self.gpu_label=QLabel('환경을 확인하면 보여줘요.')
         form=QFormLayout();form.addRow('그래픽카드',self.gpu_label);group.addLayout(form)
-        self.graphics_notice=_label('로딩·캐릭터 선택처럼 헛도는 순간만 최대 프레임을 400으로 막아 전력·발열을 줄여요.\n'
+        self.graphics_notice=hint_label('로딩·캐릭터 선택처럼 헛도는 순간만 최대 프레임을 400으로 막아 전력·발열을 줄여요.\n'
                                     '이미 400 이하로 제한해 뒀으면 그대로 두고, 수직 동기화는 바꾸지 않아요. NVIDIA 그래픽카드만 지원해요.')
-        self.graphics_notice.setForegroundRole(QPalette.ColorRole.PlaceholderText);group.addWidget(self.graphics_notice)
+        group.addWidget(self.graphics_notice)
         # 13.14: 추천과 다르게 고르면 상세 끝에 보인다.
         self.reset_recommended=QPushButton('추천 설정으로 되돌리기');self.reset_recommended.hide()
         advanced.addWidget(self.reset_recommended,0,Qt.AlignmentFlag.AlignLeft)
@@ -139,35 +142,37 @@ class OptimizationPanel(QWidget):
         body.addStretch()
         self.tabs.addTab(_scrolled(page),'최적화')
         page=QWidget();body=QVBoxLayout(page);body.setContentsMargins(12,12,12,12)  # 다른 탭과 같은 여백(앱 문구 명세 10절)
-        body.addWidget(FeatureHeader('FPS 측정','마비노기의 프레임을 측정해 현재 FPS를 보여줘요.'))
-        # 표시와 수집 분리(FPS 명세 8.3, 2026-10-23 지금 적용): 위는 게임에 FPS 표시 켜기·끄기 하나, 파일 수집은 아래 베타 묶음.
+        body.addWidget(FeatureHeader('FPS 측정','마비노기의 프레임을 측정해 현재 FPS를 보여줘요.',
+                                     help_button('FPS 측정 사용법',HELP['FPS 측정'],self)))
+        # 명세 14.4: 위 세 구역(게임에 FPS 표시/오버레이/상태)을 '게임에 FPS 표시' 하나로. 항목 설명·유지·일시정지 안내는 도움말로.
         group=_group('게임에 FPS 표시',body)
-        group.addWidget(_label('켜 두면 게임 화면에 FPS를 보여줘요. 파일로 남기지 않아요.\n'
-                               '게임의 제출 프레임 기준이며, 모니터에 실제 표시된 FPS·통신 지연과는 달라요.'))
-        self.frames_toggle=style_toggle(QPushButton('FPS 표시'))
-        self.frames_toggle.toggled.connect(lambda on: self.frames_toggle.setText('FPS 표시 중' if on else 'FPS 표시'))
-        group.addWidget(self.frames_toggle,0,Qt.AlignmentFlag.AlignLeft)
-        group=_group('오버레이',body)
-        # 다른 탭과 같은 잠금 버튼(잠금됨 = 초록, 앱 문구 명세 10절). 체크 상태 API는 체크박스와 같다.
-        from .settings_layout import lock_button, set_lock_text
-        self.lock=lock_button(True)  # 앱 전체 같은 글자·폭(명세 13.1)
-        self.lock.toggled.connect(lambda on: set_lock_text(self.lock, on))
-        self.lock.setChecked(True);group.addWidget(self.lock,0,Qt.AlignmentFlag.AlignLeft)
-        self.scale=QSpinBox();self.scale.setRange(50,300);self.scale.setValue(100);self.scale.setSuffix(' %')
-        form=QFormLayout();form.addRow('표시 배율',self.scale);group.addLayout(form)
-        # 표시 항목(FPS 명세 8.4): 기본은 FPS만. 표시만 바꾸며 구간 요약·수집에는 영향 없음.
-        row=QHBoxLayout();self.metric_boxes={}
+        from .widgets import switch
+        row=QHBoxLayout()
+        self.frames_toggle=switch('FPS 표시')  # 기능 켜기 = 스위치(명세 14.5)
+        row.addWidget(self.frames_toggle)
+        row.addSpacing(12)
+        self.frames_status=QLabel();self.frames_status.setTextFormat(Qt.TextFormat.RichText);self.frames_status.setWordWrap(True)
+        row.addWidget(self.frames_status,1);group.addLayout(row)
+        self.show_frames_status('꺼짐 · 표시 안 함', False)
+        row=QHBoxLayout();row.addWidget(QLabel('표시 항목'));self.metric_boxes={}
         for key, text in (('fps','FPS'),('cpu','게임 CPU'),('gpu','GPU'),('memory','게임 메모리')):
             self.metric_boxes[key]=QCheckBox(text);row.addWidget(self.metric_boxes[key])
-        row.addStretch();form.addRow('표시 항목',row)
-        # FPS 명세 10.4 D안·10.5 읽는 법(문구만 변경, 배치는 현행 유지 10.3)
-        group.addWidget(_label('게임 CPU: 마비노기에서 가장 바쁜 작업이 코어 하나를 얼마나 쓰는지 · GPU: 작업 관리자와 같은 엔진 사용률 · '
-                               '게임 메모리: 마비노기가 차지한 메모리\n1초마다 읽기만 해요. 작업 관리자는 PC 전체 기준이라 숫자가 달라요.'))
-        group=_group('상태 · 수집 품질',body)
-        self.frames_status=_label('꺼짐 · 표시 안 함');group.addWidget(self.frames_status)
-        group.addWidget(_label('앱을 다시 실행해도 FPS 표시 설정은 유지돼요.\n전투 보조 일시정지는 FPS 표시만 숨겨요.'))
-        group=_group('프레임 수집',body)
-        self.collect_box=group.parentWidget()  # 13.15: 수집 모드는 제작자만 보임
+        row.addStretch();group.addLayout(row)
+        row=QHBoxLayout();row.addWidget(QLabel('표시 배율'))
+        self.scale=QSpinBox();self.scale.setRange(50,300);self.scale.setValue(100);self.scale.setSuffix(' %')
+        self.scale.setFixedWidth(self.scale.sizeHint().width())  # 배율은 짧은 입력칸
+        row.addWidget(self.scale);row.addStretch()
+        from .settings_layout import lock_button, set_lock_text
+        self.lock=lock_button(True)  # 잠금은 다른 화면처럼 오른쪽
+        self.lock.toggled.connect(lambda on: set_lock_text(self.lock, on))
+        row.addWidget(self.lock);group.addLayout(row)
+        group.addWidget(hint_label('게임의 제출 프레임 기준이며, 모니터에 실제 표시된 FPS·통신 지연과는 달라요. 파일로 남기지 않아요.'))
+        # 제작자 전용 프레임 수집: 맨 아래 접힌 '진단 · 프레임 수집(구간 요약 파일)'
+        collect=QWidget();cv=QVBoxLayout(collect);cv.setContentsMargins(0,0,0,0)
+        group=_group('프레임 수집',cv)
+        self.collect_box=QWidget();box_layout=QVBoxLayout(self.collect_box);box_layout.setContentsMargins(0,0,0,0)
+        from .settings_layout import disclosure
+        self.collect_toggle=disclosure('진단 · 프레임 수집(구간 요약 파일)',collect,box_layout)
         group.addWidget(_label('수집 모드를 켜 두면 FPS 표시와 관계없이 게임이 앞에 있는 동안 구간 요약을 파일로 남겨요.\n'
                                '게임 CPU·GPU 사용률과 게임의 CPU 선호도·우선순위도 함께 기록해요. 매 프레임 원본은 저장하지 않아요.\n'
                                '수집 모드는 앱을 실행할 때마다 꺼진 상태로 시작해요.'))
@@ -189,11 +194,21 @@ class OptimizationPanel(QWidget):
         self.summary_result=_label('측정값 없음 · 1% low는 유효 간격 100개부터 표시해요.')
         group.addWidget(self.summary_result)
         self.condition_result=_label('');self.condition_result.hide();group.addWidget(self.condition_result)
-        group.addWidget(_label('1% low: 느린 상위 1% 간격의 평균을 FPS로 환산해요(P99 아님).\n긴 간격: 해당 구간 중앙값의 2배 초과. 최적화 효과 판정이 아니며 같은 장면·조건에서 비교해 주세요.'))
-        body.addStretch();self.tabs.addTab(_scrolled(page),'FPS 측정')
+        group.addWidget(hint_label('1% low: 느린 상위 1% 간격의 평균을 FPS로 환산해요(P99 아님).\n긴 간격: 해당 구간 중앙값의 2배 초과. 최적화 효과 판정이 아니며 같은 장면·조건에서 비교해 주세요.'))
+        body.addStretch();body.addWidget(self.collect_box);self.tabs.addTab(_scrolled(page),'FPS 측정')
         for combo in (self.split,self.adapter):
             combo.setMinimumContentsLength(16)
             combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+
+    def show_frames_status(self, text, running):
+        """FPS 상태 한 줄(명세 14.4: 상태 구역 흡수). 꺼짐이면 '● 꺼짐 — 켜면 게임 화면에 FPS를 보여줘요'."""
+        from html import escape
+        from .palette import color
+        if text == '꺼짐 · 표시 안 함':
+            text = '꺼짐 — 켜면 게임 화면에 FPS를 보여줘요'
+        tint = color('ok') if running else color('muted')
+        self.frames_status.setText(f'<span style="color:{tint}">● {escape(text).replace(chr(10), "<br>")}</span>')
+        self.frames_status.setProperty('plainText', text)
 
     def _toggle_details(self, on):
         self.details.setVisible(on)

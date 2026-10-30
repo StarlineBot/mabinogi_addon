@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from .session import GRAPHICS_KINDS, NETWORK_KINDS
 
-COLORS = {'ok': '#2ecc71', 'neutral': '#8a8f98', 'warn': '#e67e22', 'error': '#e74c3c'}
 IDLE = '시작 전 · 시스템 설정을 변경하지 않았어요.'
 NOTHING_TO_RESTORE = '원래부터 같은 값이라 되돌릴 것이 없어요.'
 

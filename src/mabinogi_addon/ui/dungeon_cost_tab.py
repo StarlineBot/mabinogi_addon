@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
+from .palette import color
 from .. import config
 from ..market import auction, dungeon_cost as calc
 from .calculator_sidebar import calculator_sidebar, refresh_button
@@ -34,7 +35,7 @@ def _fetch(result, key, cancelled):
             raise ValueError("invalid price")
         result.put((price, ""))
     except Exception:
-        result.put((None, "시세 조회에 실패했습니다. 다시 시도해 주세요."))
+        result.put((None, "시세 조회에 실패했어요. 다시 시도해 주세요."))
 
 
 class DungeonCostTab(QWidget):
@@ -43,7 +44,7 @@ class DungeonCostTab(QWidget):
         self._price = None
         self._clock = time.monotonic
         self._cache = None  # (monotonic receipt time, price or normal empty result, status)
-        self._status = "믿음의 균열을 선택하면 편린 시세를 조회합니다."
+        self._status = "믿음의 균열을 선택하면 편린 시세를 조회해요."
         self._pending = None
         self._cancelled = threading.Event()
         self._poll = QTimer(self)
@@ -51,7 +52,7 @@ class DungeonCostTab(QWidget):
         self._poll.timeout.connect(self._receive)
         root = QVBoxLayout(self)
         root.setContentsMargins(12, 12, 12, 12)
-        root.addWidget(FeatureHeader("던전 입장 계산기", "던전별 입장 비용과 누적 이익을 비교합니다. 믿음의 균열을 선택하면 편린 시세를 조회합니다."))
+        root.addWidget(FeatureHeader("던전 입장 계산기", "던전별 입장 비용과 누적 이익을 비교해요. 믿음의 균열을 선택하면 편린 시세를 조회해요."))
         layout = QHBoxLayout()
         root.addLayout(layout, 1)
         self.dungeons = calculator_sidebar(calc.NAMES)
@@ -122,7 +123,7 @@ class DungeonCostTab(QWidget):
             first_loss = next(r[0] for r in rows if r[2] < 0)
             self.summary.setText(f"매회 클리어 보상 {calc.REWARDS[name]:,} 골드")
             self.status.setText(f"최대 이익 {best}차 {rows[best-1][2]:+,} / 최초 누적 적자 {first_loss}차")
-            self.status.setStyleSheet("color:#00C9A2;")
+            self.status.setStyleSheet(f"color:{color('accent')};")
             columns = ["차수", "통행증 구매가", "누적 순이익"]
         self.table.setColumnCount(len(columns))
         self.table.setHorizontalHeaderLabels(columns)
@@ -143,11 +144,11 @@ class DungeonCostTab(QWidget):
                 cell.setTextAlignment(Qt.AlignmentFlag.AlignVCenter |
                     (Qt.AlignmentFlag.AlignLeft if j == 0 else Qt.AlignmentFlag.AlignRight))
                 if not market and (row[0] == best or (j == 2 and value < 0)):
-                    cell.setForeground(QColor("#00C9A2" if row[0] == best else "#ef8585"))
+                    cell.setForeground(QColor(color('accent') if row[0] == best else color('danger')))
                 self.table.setItem(i, j, cell)
-        detail = ("입장 비용만 계산하며 클리어 보상은 포함하지 않습니다." if market else
-                  "누적 순이익 = 누적 보상 − 누적 구매 비용\n11차 이후 통행증은 매회 50,000,000 골드입니다.\n무료입장·보유 통행증·추가 드랍·소모품은 제외합니다.")
-        self.note.setText("표시: 1~11차 · 실제 입장 가능 횟수를 의미하지 않습니다.\n" + detail)
+        detail = ("입장 비용만 계산하며 클리어 보상은 포함하지 않아요." if market else
+                  "누적 순이익 = 누적 보상 − 누적 구매 비용\n11차 이후 통행증은 매회 50,000,000 골드예요.\n무료입장·보유 통행증·추가 드랍·소모품은 제외해요.")
+        self.note.setText("표시: 1~11차 · 실제 입장 가능 횟수를 의미하지 않아요.\n" + detail)
 
     def _request(self):
         if self._pending is not None or self._cancelled.is_set():
@@ -156,7 +157,7 @@ class DungeonCostTab(QWidget):
         self._cache = None  # A forced refresh must not revive an earlier success on error.
         key = config.get_nexon_api_key()
         if not key:
-            self._status = "넥슨 API 키가 없어 시세를 조회할 수 없습니다."
+            self._status = "넥슨 API 키가 없어 시세를 조회할 수 없어요."
             self._render()
             return
         self._status = "시세 조회 중…"
@@ -175,8 +176,8 @@ class DungeonCostTab(QWidget):
         self._pending = None
         self._poll.stop()
         self._price = price
-        self._status = error or ("매물이 없습니다." if price is None else
-            f"조회 {time.strftime('%H:%M')} · 경매 시세는 약 10분 지연됩니다.")
+        self._status = error or ("매물이 없어요." if price is None else
+            f"조회 {time.strftime('%H:%M')} · 경매 시세는 약 10분 지연돼요.")
         if not error:
             self._cache = (self._clock(), self._price, self._status)
         self._render()

@@ -110,7 +110,8 @@ def test_blackbox_toggle_button_text(app):
     tab.enabled.setEnabled(True)
     assert tab.enabled.isCheckable() and tab.enabled.text() == '블랙박스 사용'
     tab.enabled.setChecked(True)
-    assert tab.enabled.text() == '블랙박스 사용 중'
+    # 0.29.0(명세 14.5): 기능 켜기는 스위치 — 켜짐은 스위치·상태 줄이 보여 주고 글자는 그대로
+    assert tab.enabled.isChecked() and tab.enabled.text() == '블랙박스 사용'
 
 
 def test_blackbox_badge_states():

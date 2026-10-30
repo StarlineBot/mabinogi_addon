@@ -13,7 +13,8 @@ from __future__ import annotations
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QGroupBox, QLabel, QToolButton, QVBoxLayout, QWidget
 
-ORANGE, GREEN = "#e67e22", "#2ecc71"
+from .palette import color
+
 
 
 class RegionSection(QWidget):
@@ -28,17 +29,17 @@ class RegionSection(QWidget):
         layout.setSpacing(6)
         self.box = QGroupBox(box_title)
         box = QVBoxLayout(self.box)
-        self.unset_label = QLabel(f'<span style="color:{ORANGE}">●</span> 아직 지정 안 됨 — {unset_text}')
+        self.unset_label = QLabel(f'<span style="color:{color('warn')}">●</span> 아직 지정 안 됨 — {unset_text}')
         self.unset_label.setTextFormat(Qt.TextFormat.RichText)
         self.unset_label.setWordWrap(True)
-        self.unset_label.setStyleSheet(f"color:{ORANGE};")
+        self.unset_label.setStyleSheet(f"color:{color('warn')};")
         box.addWidget(self.unset_label)
         self._box_layout = box
         layout.addWidget(self.box)
         if summary is None:
             summary = QLabel("")
             summary.setWordWrap(True)
-            summary.setStyleSheet(f"color:{GREEN};")
+            summary.setStyleSheet(f"color:{color('ok')};")
             self.summary_label = summary
         else:
             self.summary_label = None
@@ -79,10 +80,10 @@ class RegionSection(QWidget):
         else:
             self.fold.setVisible(self.toggle.isChecked())
 
-    def set_summary(self, text: str, color: str = GREEN) -> None:
+    def set_summary(self, text: str, tint: str | None = None) -> None:
         if self.summary_label is not None:
             self.summary_label.setText(text)
-            self.summary_label.setStyleSheet(f"color:{color};")
+            self.summary_label.setStyleSheet(f"color:{tint or color('ok')};")
 
     def _set_open(self, value: bool) -> None:
         self.toggle.blockSignals(True)

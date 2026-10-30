@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from .palette import color
 from .. import paths
 
 RELEASE_NOTES_FILE = paths.resource_dir() / "release_notes.md"
@@ -118,7 +119,7 @@ class ReleaseNotesDialog(QDialog):
         v.addLayout(row)
 
         self.setStyleSheet(
-            "#notesOk { background:#00B894; color:#06281e; border:none;"
+            f"#notesOk {{ background:{color('accent')}; color:{color('on-accent')}; border:none;"
             " border-radius:6px; padding:6px 18px; font-weight:700; }"
-            "#notesOk:hover { background:#00D1A7; }"
+            f"#notesOk:hover {{ background:{color('accent')}; }}"
         )

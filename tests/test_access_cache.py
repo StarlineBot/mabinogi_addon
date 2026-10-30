@@ -225,12 +225,12 @@ def test_blackbox_controller_shares_cached_permission_with_service(monkeypatch, 
 # ---- 상단 최적화 배지 통일 ----
 
 @pytest.mark.parametrize('state, color', [
-    (('최적화: 적용 중', 'neutral'), '#2ecc71'),
-    (('최적화: 적용 중 6+2', 'neutral'), '#2ecc71'),
-    (('최적화: 게임 대기', 'neutral'), '#8a8f98'),
-    (('최적화: 원복 중', 'neutral'), '#8a8f98'),
-    (('최적화: 원복 대기', 'warn'), '#e67e22'),
-    (('최적화: 오류', 'error'), '#e74c3c'),
+    (('최적화: 적용 중', 'neutral'), 'ok'),
+    (('최적화: 적용 중 6+2', 'neutral'), 'ok'),
+    (('최적화: 게임 대기', 'neutral'), 'muted'),
+    (('최적화: 원복 중', 'neutral'), 'muted'),
+    (('최적화: 원복 대기', 'warn'), 'warn'),
+    (('최적화: 오류', 'error'), 'danger'),
 ])
 def test_optimization_badge_matches_other_status_badges(window, monkeypatch, state, color):
     w = window[0]
@@ -241,7 +241,8 @@ def test_optimization_badge_matches_other_status_badges(window, monkeypatch, sta
     c._update_badge()
     badge = w._optimization_badge
     assert not badge.isHidden() and badge.text() == '● ' + state[0]
-    assert badge.styleSheet() == w.status_style(color) and 'underline' not in badge.styleSheet()
+    from mabinogi_addon.ui.palette import color as named  # 0.29.0(명세 14.6): 색 이름으로 비교
+    assert badge.styleSheet() == w.status_style(named(color)) and 'underline' not in badge.styleSheet()
     assert badge.toolTip() == '최적화 상태예요. 성능 개선을 뜻하지 않아요. 누르면 최적화 탭으로 이동해요.'
     assert 'underline' not in w.findChild(type(badge.parentWidget()), 'statusBar').styleSheet()
     badge.click()

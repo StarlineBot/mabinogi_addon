@@ -27,13 +27,14 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from .palette import color
 from .. import catalog as catalog_mod
 from .. import config
 from ..catalog import USER_DEBUFF_ICON_DIR, BuffDef, available_debuff_catalog
 from .buff_tab import _capture_icon_to, _pixmap
 from .help_dialog import tab_header
 from .widgets import TrackerColumns, checkbox, hint_label, icon_slot, section_label
-from .settings_layout import lock_text, style_toggle, DANGER_STYLE, disclosure
+from .settings_layout import lock_text, style_toggle, danger_style, disclosure
 
 # 영역에 꼭 들어가야 하는 것(앱 힌트 ↔ 화면 점선 라벨이 같은 기준을 공유).
 REGION_CRITERION = "디버프 아이콘 줄과 보스 체력바가 함께 들어오게 지정하세요"
@@ -127,7 +128,7 @@ class DebuffTab(QWidget):
         # 버프·디버프는 배율 칸과 반씩 나눠 쓰는 원래 폭(사용자 결정 2026-10-30), 글씨·높이만 다른 잠금 버튼과 같은 톤
         self.lock_btn = style_toggle(QPushButton(lock_text(False)))
         self.lock_btn.setToolTip(
-            "잠그면 오버레이 위치가 고정되고, 클릭이 통과돼 게임을 가리지 않습니다.\n"
+            "잠그면 오버레이 위치가 고정되고, 클릭이 통과돼 게임을 가리지 않아요.\n"
             "해제하면 드래그로 위치를 옮길 수 있어요."
         )
         self.lock_btn.toggled.connect(self._on_lock_toggled)
@@ -206,7 +207,7 @@ class DebuffTab(QWidget):
         self.method_combo.setToolTip(
             "1차: 항상 탐지(기존). 바닥 오탐이 있을 수 있으나 보스 바 인식에 비의존.\n"
             "2차: 디버프 영역 안의 '평평한 띠'로 보스가 있을 때만 탐지.\n"
-            "체력 %: 별도로 지정한 보스 체력바 숫자가 읽히는 동안 탐지합니다."
+            "체력 %: 별도로 지정한 보스 체력바 숫자가 읽히는 동안 탐지해요."
         )
         cur = config.load_debuff_runtime_mode()
         idx = self.method_combo.findData(cur)
@@ -227,7 +228,7 @@ class DebuffTab(QWidget):
         self.bar_region_btn = QPushButton("보스 HP바 영역 지정")
         self.bar_region_btn.setToolTip(
             "보스 이름~퍼센트가 다 들어오게 HP바를 가로로 감싸 드래그하세요.\n"
-            "보스패턴알림과 같은 영역을 공유합니다(한쪽에서 지정하면 양쪽이 사용)."
+            "보스패턴알림과 같은 영역을 공유해요(한쪽에서 지정하면 양쪽이 사용)."
         )
         self.bar_region_btn.clicked.connect(self._pick_bar_region)
         from .region_registration import clear_button
@@ -239,7 +240,7 @@ class DebuffTab(QWidget):
         self._bar_region_container = QWidget()
         bar_layout = QVBoxLayout(self._bar_region_container)
         bar_layout.setContentsMargins(0, 0, 0, 0)
-        bar_layout.addWidget(hint_label("공유 보스 체력바는 보스 패턴 알림과 디버프 보스 판단에 사용합니다. 변경·해제 시 공유 기능에도 반영됩니다."))
+        bar_layout.addWidget(hint_label("공유 보스 체력바는 보스 패턴 알림과 디버프 보스 판단에 사용해요. 변경·해제 시 공유 기능에도 반영돼요."))
         bar_layout.addWidget(self._bar_region_row)
         self.bar_view_btn = QPushButton("지정 영역 보기")
         self.bar_view_btn.clicked.connect(self._flash_bar_region)
@@ -255,7 +256,7 @@ class DebuffTab(QWidget):
         v.addLayout(top)
 
         self._bar_gating_notice = hint_label("")
-        self._bar_gating_notice.setStyleSheet("color:#e67e22; font-size:12px;")
+        self._bar_gating_notice.setStyleSheet(f"color:{color('warn')}; font-size:12px;")
         v.addWidget(self._bar_gating_notice)
         self._apply_login_gate()
         self._refresh_method_ui()
@@ -310,8 +311,8 @@ class DebuffTab(QWidget):
     def _bar_region_status_text(self) -> tuple[str, str]:
         r = config.load_boss_bar_region()
         if r:
-            return f"공유됨 ✓  {r['w']}×{r['h']}", "#2ecc71"
-        return "미지정 · 아이콘 감시", "#8a8f98"
+            return f"공유됨 ✓  {r['w']}×{r['h']}", color('ok')
+        return "미지정 · 아이콘 감시", color('muted')
 
     def _refresh_method_ui(self) -> None:
         """자동/퍼센트에서 선택적인 공유 HP 영역 상태를 갱신한다."""
@@ -419,11 +420,11 @@ class DebuffTab(QWidget):
                 f"등록됨 · {region['x']},{region['y']}  "
                 f"{region['w']}×{region['h']}"
             )
-            self.region_hint.setStyleSheet("color:#2ecc71;")
+            self.region_hint.setStyleSheet(f"color:{color('ok')};")
             self.view_region_btn.setEnabled(True)
         else:
             self.region_hint.setText("디버프 영역 미지정")
-            self.region_hint.setStyleSheet("color:#8a8f98;")
+            self.region_hint.setStyleSheet(f"color:{color('muted')};")
             self.view_region_btn.setEnabled(False)
 
     def _pick_region(self) -> None:
@@ -454,13 +455,13 @@ class DebuffTab(QWidget):
         from ..autofind_diagnostics import perform_autofind
         frame, ox, oy, box = perform_autofind("debuff", capture_for_autofind)
         if frame is None:
-            QMessageBox.warning(self, "자동 찾기", "화면 캡처에 실패했습니다.")
+            QMessageBox.warning(self, "자동 찾기", "화면 캡처에 실패했어요.")
             return
         if box is None:
             QMessageBox.information(
                 self,
                 "자동 찾기 — 못 찾음",
-                "디버프 영역의 기준인 보스 체력바를 찾지 못했습니다.\n\n"
+                "디버프 영역의 기준인 보스 체력바를 찾지 못했어요.\n\n"
                 "• 보스 체력바가 지금 화면에 노출돼 있나요? (보스전 중 시도)\n"
                 "• 하단 메뉴바가 최소화돼 있지 않나요?\n\n"
                 "다시 시도하거나 디버프 판독 영역의 '직접 지정'으로 잡으세요.",
@@ -484,8 +485,8 @@ class DebuffTab(QWidget):
             self,
             "자동 찾기 — 확인",
             "민트 점선 영역으로 **디버프 영역 + 보스 HP바 영역**을 지정할까요?\n\n"
-            "(디버프 3차 판독은 보스 HP바 영역도 필요해 함께 지정합니다.)\n"
-            "'아니오'를 누르면 기존 설정이 그대로 유지됩니다.",
+            "(디버프 3차 판독은 보스 HP바 영역도 필요해 함께 지정해요.)\n"
+            "'아니오'를 누르면 기존 설정이 그대로 유지돼요.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
@@ -581,9 +582,9 @@ class DebuffTab(QWidget):
         box.setWindowTitle("디버프 삭제")
         is_default = did in catalog_mod.default_debuff_ids()
         box.setText(
-            f"'{did}' 기본 디버프를 목록에서 뺄까요?\n(배포돼도 계속 숨겨집니다)"
+            f"'{did}' 기본 디버프를 목록에서 뺄까요?\n(배포돼도 계속 숨겨져요)"
             if is_default
-            else f"'{did}' 디버프를 삭제할까요?\n(매칭 아이콘 파일이 삭제됩니다)"
+            else f"'{did}' 디버프를 삭제할까요?\n(매칭 아이콘 파일이 삭제돼요)"
         )
         yes = box.addButton("예", QMessageBox.ButtonRole.YesRole)
         box.addButton("아니오", QMessageBox.ButtonRole.NoRole)
@@ -664,7 +665,7 @@ class DebuffTab(QWidget):
         self.warn_gone_check = checkbox("사라짐 경고 (보스에서 떨어지면 알림)")
         self.warn_gone_check.setToolTip(
             "걸어둔 디버프가 보스에서 떨어지면 오버레이에 빨간 테두리+X로 표시하고 "
-            "소리로 알려요.\n※ 영역에 보스 체력바가 보여야 작동합니다."
+            "소리로 알려요.\n※ 영역에 보스 체력바가 보여야 작동해요."
         )
         self.warn_gone_check.toggled.connect(self._form_changed)
         sv.addWidget(self.warn_gone_check)
@@ -703,12 +704,12 @@ class DebuffTab(QWidget):
         """사라짐 경고 가능 여부(영역에 보스 체력바가 인식됐는지)를 안내."""
         if seen:
             self.bar_status.setText("✓ 보스 체력바 인식됨 — 사라짐 경고 작동")
-            self.bar_status.setStyleSheet("color:#2ecc71; font-size:12px;")
+            self.bar_status.setStyleSheet(f"color:{color('ok')}; font-size:12px;")
         else:
             self.bar_status.setText(
                 "체력바가 안 보여요 — 사라짐 경고를 쓰려면 영역에 보스 체력바를 포함하세요."
             )
-            self.bar_status.setStyleSheet("color:#e67e22; font-size:12px;")
+            self.bar_status.setStyleSheet(f"color:{color('warn')}; font-size:12px;")
 
     def _save_name(self) -> None:
         if self._loading or self._name_id is None:

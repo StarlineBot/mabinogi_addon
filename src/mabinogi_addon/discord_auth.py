@@ -57,7 +57,7 @@ _SUCCESS_BODY = """
 <div class="card">
   <div class="check">&#10003;</div>
   <h1>로그인 완료</h1>
-  <p>디스코드 계정이 연결되었습니다.<br>
+  <p>디스코드 계정이 연결되었어요.<br>
      이 창은 <b id="sec">5</b>초 후 자동으로 닫힙니다.</p>
   <div class="app">섯다라인 마비노기 애드온</div>
 </div>
@@ -73,7 +73,7 @@ _SUCCESS_BODY = """
       // 닫기가 막히면 안내 문구로 교체
       setTimeout(function () {
         document.querySelector('p').innerHTML =
-          '디스코드 계정이 연결되었습니다.<br>이 창을 닫고 앱으로 돌아가세요.';
+          '디스코드 계정이 연결되었어요.<br>이 창을 닫고 앱으로 돌아가세요.';
       }, 300);
     }
   }, 1000);

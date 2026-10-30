@@ -22,12 +22,13 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from .palette import color
 from .. import bead_split
 from ..market.auction import korean_gold
 from .widgets import FeatureHeader, SuffixSpinBox, hint_label
 
-_GRAY = "color:#9aa0aa; font-size:12px;"
-_ACCENT = "#00C9A2"
+def _gray():
+    return f"color:{color('muted')}; font-size:12px;"
 
 
 def _spin(maximum: int, width: int = 90, suffix: str = "") -> QSpinBox:
@@ -48,14 +49,14 @@ class BeadSplitTab(QWidget):
         v.setSpacing(8)
         v.addWidget(
             FeatureHeader("구슬 분배 계산기",
-                "구슬 개수·개당 가격·인원을 입력하면 1인당 분배금을 계산합니다."
+                "구슬 개수·개당 가격·인원을 입력하면 1인당 분배금을 계산해요."
             )
         )
 
         # 던전 선택(브리레흐 / 탈라가흐)
         mode_row = QHBoxLayout()
         lbl = QLabel("던전")
-        lbl.setStyleSheet(_GRAY)
+        lbl.setStyleSheet(_gray())
         mode_row.addWidget(lbl)
         self.mode_brireh = QRadioButton("브리레흐")
         self.mode_talagah = QRadioButton("탈라가흐")
@@ -110,15 +111,15 @@ class BeadSplitTab(QWidget):
         v.addWidget(self.talagah_box)
 
         # 입력 칸 바로 아래 안내(상단 설명을 안 읽는 사람 대비)
-        note = hint_label("등장한 개수를 입력하세요. 계산에는 2배가 반영됩니다.")
-        note.setStyleSheet(_GRAY)
+        note = hint_label("등장한 개수를 입력하세요. 계산에는 2배가 반영돼요.")
+        note.setStyleSheet(_gray())
         v.addWidget(note)
 
         # 결과 카드(테두리, 강조): 총 구슬 갯수(자동) + 1인당 분배금
         self.result_card = QFrame()
         self.result_card.setObjectName("card")
         self.result_card.setStyleSheet(
-            f"#card {{ border:1px solid {_ACCENT}; border-radius:8px; }}"
+            f"#card {{ border:1px solid {color('accent')}; border-radius:8px; }}"
         )
         cv = QVBoxLayout(self.result_card)
         cv.setContentsMargins(12, 10, 12, 10)
@@ -128,11 +129,11 @@ class BeadSplitTab(QWidget):
         cv.addWidget(self.result_total)
         self.result_main = QLabel()
         self.result_main.setStyleSheet(
-            f"font-size:16px; font-weight:800; color:{_ACCENT};"
+            f"font-size:16px; font-weight:800; color:{color('accent')};"
         )
         cv.addWidget(self.result_main)
         self.result_sub = QLabel()
-        self.result_sub.setStyleSheet(_GRAY)
+        self.result_sub.setStyleSheet(_gray())
         self.result_sub.setWordWrap(True)
         cv.addWidget(self.result_sub)
         v.addWidget(self.result_card)

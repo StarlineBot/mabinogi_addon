@@ -8,12 +8,12 @@ from PySide6.QtGui import QFont, QPalette
 from PySide6.QtWidgets import (QAbstractSpinBox, QButtonGroup, QGroupBox, QHBoxLayout, QLabel,
                                QPushButton, QRadioButton, QSpinBox, QVBoxLayout, QWidget)
 
+from .palette import Named, color
 from ..blackbox import MAX_RETENTION_MINUTES
 from .widgets import FeatureHeader
 
-ERROR_COLOR = '#d35b58'
 CAPTURE_INFO = '켜 두는 동안 컴퓨터 자원과 임시 공간(5분 기준 약 450MB)을 써요 · 게임 화면만 1080p/60FPS · 게임 소리는 저장하지 않아요'
-STATE_COLORS = {'ok': '#2ecc71', 'muted': '#8a8f98', 'error': ERROR_COLOR}
+STATE_COLORS = Named({'ok': 'ok', 'muted': 'muted', 'error': 'danger'})
 
 
 class _NoWheelSpinBox(QSpinBox):
@@ -31,7 +31,7 @@ def _label(text, *, muted=False):
     label = QLabel(text)
     label.setWordWrap(True)
     if muted:
-        label.setForegroundRole(QPalette.ColorRole.PlaceholderText)
+        label.setStyleSheet(f"color:{color('muted')};")  # 안내 = 같은 회색(명세 14.2)
     return label
 
 
@@ -66,10 +66,9 @@ class BlackboxTab(QWidget):
                                      help_button('블랙박스 사용법', HELP['블랙박스'], self)))
 
         # 1줄(안내·도움말 명세 11.2): 사용 토글 + 상태 한 줄(예전 '현재 상태' 상자 흡수)
-        # 사용 켜기/끄기는 '위치 잠금'과 같은 토글 버튼(명세 11.3): 꺼짐 '블랙박스 사용', 켜짐 '블랙박스 사용 중'(민트).
-        from .settings_layout import style_toggle
-        self.enabled = style_toggle(QPushButton('블랙박스 사용'))  # 잠금 버튼과 같은 톤·일반 버튼 높이(명세 13.1)
-        self.enabled.toggled.connect(lambda on: self.enabled.setText('블랙박스 사용 중' if on else '블랙박스 사용'))
+        # 사용 켜기/끄기는 홈과 같은 스위치(명세 14.5) — 켜짐·꺼짐은 스위치와 옆 상태 줄이 보여 준다.
+        from .widgets import switch
+        self.enabled = switch('블랙박스 사용')
         self.dot = QLabel('●')
         self.status = _label('녹화 연결 전')
         self.status.setWordWrap(False)
@@ -83,7 +82,7 @@ class BlackboxTab(QWidget):
         row.addStretch()
         body.addLayout(row)
         self.error = _label('')
-        self.error.setStyleSheet(f'color:{ERROR_COLOR};')
+        self.error.setStyleSheet(f"color:{color('danger')};")
         self.error.hide()
         body.addWidget(self.error)
         self.paint_state(False, 'disabled')
@@ -124,7 +123,7 @@ class BlackboxTab(QWidget):
         self.mode_group.addButton(self.mode_always)
         _left(group, self.mode_combat, self.mode_always)
         self.mode_notice = _label('')
-        self.mode_notice.setStyleSheet('color:#e67e22;')
+        self.mode_notice.setStyleSheet(f'color:{color('warn')};')
         self.mode_notice.hide()
         group.addWidget(self.mode_notice)
         self.mode_help = _label('', muted=True)
@@ -157,7 +156,7 @@ class BlackboxTab(QWidget):
                                  '저장한 영상은 블랙박스를 꺼도 그대로 남아요.')
         body.addWidget(self.recovery, 0, Qt.AlignmentFlag.AlignLeft)
         self.capture_info = _label(CAPTURE_INFO)
-        self.capture_info.setStyleSheet('color:#8a8f98;')  # 맨 아래 회색 한 줄(명세 11.2)
+        self.capture_info.setStyleSheet(f'color:{color('muted')};')  # 맨 아래 회색 한 줄(명세 11.2)
         body.addWidget(self.capture_info)
         body.addStretch()
         for control in self.controls():

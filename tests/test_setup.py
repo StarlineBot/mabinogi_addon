@@ -1273,9 +1273,10 @@ def test_guide_approval_updates_current_stage_before_next_candidate(flow, monkey
         if key == "debuff":
             assert page.statuses["buff"].text() == "등록됨"
             # 0.25.0 명세 11절: 하단 목록 대신 줄 상태가 즉시 바뀐다(등록됨 초록 / 영역 지정 필요 주황)
-            assert "#2ecc71" in page.statuses["buff"].styleSheet()
+            from mabinogi_addon.ui.palette import color  # 0.29.0(명세 14.6): 색 이름
+            assert color("ok") in page.statuses["buff"].styleSheet()
             assert page.statuses["debuff"].text() == "영역 지정 필요"
-            assert "#e67e22" in page.statuses["debuff"].styleSheet()
+            assert color("warn") in page.statuses["debuff"].styleSheet()
         seen.append(key)
         return box
     monkeypatch.setattr(run, "_approve", approve)

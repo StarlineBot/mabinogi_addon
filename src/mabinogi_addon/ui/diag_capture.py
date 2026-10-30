@@ -55,7 +55,7 @@ class DiagnosticResult:
         labels = {"buffTracker": "버프", "debuffTracker": "디버프", "tuarim": "투아림"}
         states = {"unconfigured": "영역 미지정", "invalid_region": "영역 오류",
                   "capture_failed": "캡처 실패", "save_failed": "PNG 저장 실패"}
-        lines = [f"{len(self.saved)}개 저장했습니다."] if self.saved else ["저장된 PNG가 없습니다."]
+        lines = [f"{len(self.saved)}개 저장했어요."] if self.saved else ["저장된 PNG가 없어요."]
         if self.error:
             lines.append(f"저장 폴더 오류: {self.error}")
         for r in self.regions:
