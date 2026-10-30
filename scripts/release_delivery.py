@@ -15,6 +15,17 @@ def gh(*args, token):
     return subprocess.check_output(['gh', *args], env={**os.environ, 'GH_TOKEN': token}, text=True)
 
 
+def fold_changelog(text):
+    """README용 내역: 최신 버전 하나만 펼치고 이전 버전은 접는다(CHANGELOG.md 자체는 전체 유지)."""
+    lines = text.splitlines(keepends=True)
+    heads = [i for i, line in enumerate(lines) if line.startswith('### v')]
+    if len(heads) < 2:
+        return text
+    latest, older = ''.join(lines[:heads[1]]).rstrip('\n'), ''.join(lines[heads[1]:]).strip('\n')
+    return (latest+'\n\n<details>\n<summary>이전 버전 업데이트 내역 보기</summary>\n\n'
+            + older+'\n\n</details>\n')
+
+
 def prepare_public(root, public, candidate, version):
     notes = (candidate/'notes.md').read_text(encoding='utf-8')
     changelog = public/'CHANGELOG.md'
@@ -25,7 +36,7 @@ def prepare_public(root, public, candidate, version):
     changelog.write_text(heading+'\n'+notes+'\n'+previous, encoding='utf-8')
     template = (root/'packaging/releases_README.md').read_text(encoding='utf-8')
     require('<!-- CHANGELOG -->' in template, 'missing changelog placeholder')
-    (public/'README.md').write_text(template.replace('<!-- CHANGELOG -->', changelog.read_text(encoding='utf-8')), encoding='utf-8')
+    (public/'README.md').write_text(template.replace('<!-- CHANGELOG -->', fold_changelog(changelog.read_text(encoding='utf-8'))), encoding='utf-8')
     shutil.copyfile(candidate/'version.json', public/'version.json')
     target = public/'data/dialogues.json'
     target.parent.mkdir(exist_ok=True)

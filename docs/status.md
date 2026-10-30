@@ -6,6 +6,8 @@
 
 ## 배포와 검증
 
+- 공개 README 업데이트 내역 접기(2026-10-30 사용자 승인한 배포 스크립트 최소 변경): `scripts/release_delivery.py` `fold_changelog` — 최신 버전만 펼치고 이전은 `<details>`, CHANGELOG.md 전체 유지.
+  다음 게시(0.29.0)부터 반영. 로컬 `test_release_candidate.py`·`test_windows_ci.py` 224 passed(접기 회귀 1개 추가). 실제 공개 README 렌더는 게시 후 확인.
 - [v0.10.1](https://github.com/StarlineBot/mabinogi_addon-releases/releases/tag/v0.10.1) 게시 완료.
   태그 소스는 `035abc29`, exe와 업데이트 정보의 크기·해시 일치를 API로 확인했다.
 - [검증 실행](https://github.com/StarlineBot/mabinogi_addon/actions/runs/39724316823): 총 3분 20초.

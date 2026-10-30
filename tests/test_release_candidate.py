@@ -181,6 +181,26 @@ def test_public_dialogue_seed_never_replaces_author_file(bundle,tmp_path,existin
         d.prepare_public(root,public,folder,'0.6.0')
 
 
+def test_public_readme_folds_all_but_latest_version(bundle,tmp_path):
+    # 공개 README에서 최신 버전만 펼치고 이전 내역은 접는다(주요 기능이 아래로 밀리지 않게). CHANGELOG.md는 전체 유지.
+    root,folder,_,_ = bundle
+    (root/'packaging').mkdir()
+    (root/'packaging/CHANGELOG.md').write_text('### v0.5.0\n- 이전 변경\n\n### v0.4.0\n- 더 이전\n',encoding='utf-8')
+    (root/'packaging/releases_README.md').write_text('Header\n<!-- CHANGELOG -->\n## 주요 기능\n',encoding='utf-8')
+    (root/'src/mabinogi_addon/assets/dialogues.json').write_bytes(b'{}')
+    public = tmp_path/'pub'
+    public.mkdir()
+    d.prepare_public(root,public,folder,'0.6.0')
+    readme = (public/'README.md').read_text(encoding='utf-8')
+    head, folded = readme.split('<details>')
+    assert '### v0.6.0' in head and '### v0.5.0' not in head
+    assert folded.index('### v0.5.0') < folded.index('### v0.4.0') < folded.index('</details>') < folded.index('## 주요 기능')
+    assert '<summary>이전 버전 업데이트 내역 보기</summary>\n\n### v0.5.0' in folded
+    changelog = (public/'CHANGELOG.md').read_text(encoding='utf-8')
+    assert '<details>' not in changelog and '### v0.4.0' in changelog
+    assert d.fold_changelog('### v0.1.0\n- 하나\n') == '### v0.1.0\n- 하나\n'
+
+
 @pytest.mark.parametrize('corruption',['hash','expired','failed-gate','changed-after-upload','corrupt-upload','missing-upload'])
 def test_delivery_failure_never_publishes_or_updates(bundle,tmp_path,monkeypatch,corruption):
     root,folder,manifest,context = bundle
