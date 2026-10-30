@@ -1,13 +1,14 @@
 """설정 › 테마 › 개인화 패널과 직접 고르기 창(테마 개인화 명세 3·4절).
 
 패널은 값(배경·강조·내용 칸)만 다루고, 적용·저장은 신호로 설정 화면에 맡긴다.
-- preview(values): 미리 적용(저장 안 함) — 직접 고르기 창에서 고르는 동안
+- preview(values): 미리 적용(저장 안 함) — 직접 고르기 창에서 고르는 동안. 끄는 동안은 묶어서
+  마지막 값만(PREVIEW_DELAY_MS 동안 멈추면), 손을 떼거나 색 코드를 넣으면 바로.
 - commit(values): 적용하고 저장 — 프리셋·내용 칸·되돌리기·직접 고르기 '적용'
 - cancel_preview(): 직접 고르기를 취소 — 창을 열기 전 값으로 되돌림
 """
 from __future__ import annotations
 
-from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal
+from PySide6.QtCore import QPointF, QRectF, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QLinearGradient, QPainter, QPen
 from PySide6.QtWidgets import (QButtonGroup, QDialog, QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit,
                                QPushButton, QSpinBox, QVBoxLayout, QWidget)
@@ -18,6 +19,8 @@ from .widgets import hint_label
 
 TONES = (("auto", "자동"), ("dark", "어둡게"), ("light", "밝게"))
 ADJUSTED_TEXT = "읽기 쉽게 조금 조정했어요"
+# 미리보기 1회는 화면 전체를 다시 꾸며서(위젯 약 1400개, 수백 ms) 끄는 동안 매번 하면 쌓인다(QA)
+PREVIEW_DELAY_MS = 100
 
 
 def rainbow_style(selected: bool) -> str:
@@ -76,6 +79,12 @@ class CustomThemePanel(QFrame):
         self.setObjectName("customThemePanel")
         self.setStyleSheet("#customThemePanel { border:1px solid palette(mid); border-radius:8px; }")
         self.values = dict(values)
+        self.picker = None
+        self._pending = None
+        self._preview_timer = QTimer(self)
+        self._preview_timer.setSingleShot(True)
+        self._preview_timer.setInterval(PREVIEW_DELAY_MS)
+        self._preview_timer.timeout.connect(self._flush_preview)
         grid = QGridLayout(self)
         grid.setContentsMargins(14, 12, 14, 12)
         grid.setHorizontalSpacing(10)
@@ -141,7 +150,6 @@ class CustomThemePanel(QFrame):
         bottom.addWidget(self.reset_btn, 0, Qt.AlignmentFlag.AlignBottom)
         grid.addLayout(bottom, 3, 0, 1, 2)
         grid.setColumnStretch(1, 1)
-        self.picker = None
         self.refresh()
 
     # ---- 값 ----
@@ -181,15 +189,28 @@ class CustomThemePanel(QFrame):
         title = "배경 직접 고르기" if key == "background" else "강조색 직접 고르기"
         dialog = ColorPickerDialog(title, normalize(self.values.get(key), DEFAULT[key]), self)
         self.picker = dialog
-        dialog.color_changed.connect(lambda value: self._preview({**before, key: value}))
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            self.picker = None
+        dialog.color_changed.connect(lambda value: self._queue_preview({**before, key: value}))
+        dialog.settled.connect(self._flush_preview)
+        accepted = dialog.exec() == QDialog.DialogCode.Accepted
+        self._preview_timer.stop()
+        self._pending = None  # 닫은 뒤에 늦게 미리보기가 덮어쓰지 않게
+        self.picker = None
+        if accepted:
             self._set_all({**before, key: dialog.value()})
         else:
-            self.picker = None
             self.values = before
             self.refresh()
             self.cancel_preview.emit()
+
+    def _queue_preview(self, values):
+        self._pending = dict(values)
+        self._preview_timer.start()  # 다시 시작 = 멈출 때까지 미룸(마지막 값만)
+
+    def _flush_preview(self):
+        self._preview_timer.stop()
+        if self._pending is not None:
+            values, self._pending = self._pending, None
+            self._preview(values)
 
     def _preview(self, values):
         self.values = dict(values)
@@ -204,6 +225,7 @@ class CustomThemePanel(QFrame):
 class _SvSquare(QWidget):
     """네모판: 가로 진하기(S), 세로 밝기(V)."""
     changed = Signal(float, float)
+    released = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -241,10 +263,14 @@ class _SvSquare(QWidget):
     def mouseMoveEvent(self, event):
         self._pick(event.position())
 
+    def mouseReleaseEvent(self, _event):
+        self.released.emit()
+
 
 class _HueBar(QWidget):
     """색조 무지개 막대."""
     changed = Signal(float)
+    released = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -277,10 +303,14 @@ class _HueBar(QWidget):
     def mouseMoveEvent(self, event):
         self._pick(event.position())
 
+    def mouseReleaseEvent(self, _event):
+        self.released.emit()
+
 
 class ColorPickerDialog(QDialog):
     """직접 고르기 창: 네모판·색조 막대·색 코드·RGB가 서로 연동. 밝기·진하기 제한 없음, 고르는 동안 미리 적용."""
     color_changed = Signal(str)
+    settled = Signal()  # 손을 뗌·색 코드 입력 — 묶어 둔 미리보기를 바로 적용
 
     def __init__(self, title: str, value: str, parent=None):
         super().__init__(parent)
@@ -295,9 +325,11 @@ class ColorPickerDialog(QDialog):
         v.addWidget(heading)
         self.square = _SvSquare()
         self.square.changed.connect(self._from_square)
+        self.square.released.connect(self.settled)
         v.addWidget(self.square)
         self.hue_bar = _HueBar()
         self.hue_bar.changed.connect(self._from_hue)
+        self.hue_bar.released.connect(self.settled)
         v.addWidget(self.hue_bar)
         row = QHBoxLayout()
         row.addWidget(QLabel("색 코드"))
@@ -361,6 +393,7 @@ class ColorPickerDialog(QDialog):
             self._sync(emit=False)  # 잘못된 색 코드는 직전 값 유지
             return
         self._set(QColor(normalize(text if text.startswith("#") else "#" + text, None)))
+        self.settled.emit()
 
     def _from_rgb(self, _value=None):
         if self._updating:

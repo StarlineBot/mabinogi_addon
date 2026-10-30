@@ -76,6 +76,7 @@
     "tests/test_color_switch_polish.py",
     "tests/test_dungeon_cost.py",
     "tests/test_theme_colors.py",
-    "tests/test_theme_personalization.py"
+    "tests/test_theme_personalization.py",
+    "tests/test_dialog_buttons.py"
   ]
 }

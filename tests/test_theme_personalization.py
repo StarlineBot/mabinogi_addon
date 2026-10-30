@@ -131,3 +131,65 @@ def test_dark_and_light_paths_do_not_use_custom_values(window):
     w.settings_tab._on_theme_pick("dark")
     assert palette.custom() is None and "#00C9A2" in _tab_qss(True)
     assert QApplication.instance().palette() is not None
+
+
+def test_picker_drag_previews_once_with_last_value(window):
+    """QA: 끄는 동안 미리보기(화면 전체 다시 꾸미기)가 쌓이지 않게 묶고, 손을 떼면 바로 마지막 값."""
+    w, app = window
+    settings = w.settings_tab
+    settings._on_theme_pick("custom")
+    panel = settings.custom_panel
+    panel._set_all({"background": "#141A26", "accent": "#38BDF8", "content": "auto"})
+    previews = []
+    panel.preview.connect(previews.append)
+    dialog = ColorPickerDialog("배경 직접 고르기", "#141A26")
+    panel.picker = dialog
+    dialog.color_changed.connect(lambda value: panel._queue_preview({**panel.values, "background": value}))
+    dialog.settled.connect(panel._flush_preview)
+    for s in (0.2, 0.4, 0.6, 0.8):  # 네모판 끌기
+        dialog._from_square(s, 0.5)
+    assert previews == [] and palette.custom()["background"] == "#141A26"  # 끄는 동안은 아직
+    dialog.square.released.emit()  # 손을 뗌
+    assert len(previews) == 1 and previews[0]["background"] == dialog.value()
+    assert palette.custom()["background"] == dialog.value()
+    dialog._from_square(0.1, 0.9)
+    assert panel._preview_timer.isActive()  # 멈추면 잠시 뒤(PREVIEW_DELAY_MS) 마지막 값
+    panel._preview_timer.timeout.emit()
+    assert len(previews) == 2 and palette.custom()["background"] == dialog.value()
+    panel.picker = None
+    dialog.deleteLater()
+
+
+def test_custom_preview_repolishes_whole_window_once(window, monkeypatch):
+    """QA: 미리보기 1회에 큰 위젯(아래 위젯이 많은) 스타일을 한 번만 바꾼다 — 예전엔 중앙 위젯·1단 탭 두 번(약 400ms)."""
+    from PySide6.QtWidgets import QWidget
+    w, app = window
+    settings = w.settings_tab
+    settings._on_theme_pick("custom")
+    big = []
+    original = QWidget.setStyleSheet
+
+    def counting(widget, qss):
+        if len(widget.findChildren(QWidget)) > 300:
+            big.append(widget.objectName() or type(widget).__name__)
+        original(widget, qss)
+    monkeypatch.setattr(QWidget, "setStyleSheet", counting)
+    settings._apply_theme("custom", {"background": "#C2185B", "accent": "#00C9A2", "content": "auto"}, save=False)
+    assert big == ["appCentral"]
+    assert w._tabs.styleSheet() == "" and w._tracker_tabs.styleSheet() == ""  # 1·2단 탭 규칙은 중앙 위젯 한 곳에
+    assert "QTabWidget#mainTabs::pane" in w.centralWidget().styleSheet()
+    assert "QTabWidget#trackerTabs > QTabBar::tab:selected" in w.centralWidget().styleSheet()
+
+
+def test_creator_footer_is_not_filled_over_home(window):
+    """QA: 개인화 때 홈 오른쪽 아래 제작자 캐릭터 뒤에 내용 칸 색 네모가 생기지 않게."""
+    w, app = window
+    w.settings_tab._on_theme_pick("custom")
+    footer = w.creator_dialogue.footer
+    assert not w.home_visible() and footer.autoFillBackground()  # 내용 칸 위에서는 칠함
+    w._show_home()
+    assert w.home_visible() and not footer.autoFillBackground()  # 홈 위에서는 홈 배경 그대로
+    w._hide_home()
+    assert footer.autoFillBackground()
+    w.settings_tab._on_theme_pick("dark")
+    assert not footer.autoFillBackground()  # 다크 기본은 지금처럼

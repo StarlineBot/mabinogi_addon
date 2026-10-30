@@ -136,18 +136,27 @@ def _tab_qss(dark: bool) -> str:
 
 def _custom_tab_qss(custom: dict) -> str:
     """테마 개인화의 1단 탭(테마 개인화 명세 5절): 탭 줄은 틀(고른 색 그대로) 위, 아래 페이지(pane)는 내용 칸."""
+    # 1단 탭(#mainTabs)과 그 바로 아래 탭 줄에만 걸리게 좁힌다 — 틀 칠하기와 함께 중앙 위젯 한 곳에 두어
+    # 미리보기 1회에 화면 전체 다시 꾸미기(polish)가 한 번만 일어나게(QA: 두 번이면 약 400ms).
     frame = custom["on_frame"]
+    bar = "QTabWidget#mainTabs > QTabBar"
     return (
-        f"QTabWidget::pane {{ border: none; border-top: 1px solid {custom['roles']['mid']};"
+        f"QTabWidget#mainTabs::pane {{ border: none; border-top: 1px solid {custom['roles']['mid']};"
         f" background: {custom['roles']['window']}; }}"
-        "QTabBar { qproperty-drawBase: 0; background: transparent; }"
-        f"QTabBar::tab {{ background: transparent; color: {frame['muted']}; padding: 9px 4px;"
+        f"{bar} {{ qproperty-drawBase: 0; background: transparent; }}"
+        f"{bar}::tab {{ background: transparent; color: {frame['muted']}; padding: 9px 4px;"
         " min-width: 104px; border: none; border-bottom: 2px solid transparent;"
         " font-size: 13px; }"
-        f"QTabBar::tab:hover {{ color: {custom['frame_text']}; }}"
-        f"QTabBar::tab:selected {{ color: {frame['accent']}; font-weight: 800;"
+        f"{bar}::tab:hover {{ color: {custom['frame_text']}; }}"
+        f"{bar}::tab:selected {{ color: {frame['accent']}; font-weight: 800;"
         f" border-bottom: 2px solid {frame['accent']}; }}"
     )
+
+
+def _set_qss(widget, qss: str) -> None:
+    """같은 스타일이면 다시 넣지 않는다(넣을 때마다 아래 위젯 전체를 다시 꾸미므로)."""
+    if widget.styleSheet() != qss:
+        widget.setStyleSheet(qss)
 
 
 class _CombatTabBar(QTabBar):
@@ -161,9 +170,9 @@ class _CombatTabBar(QTabBar):
         painter.end()
 
 
-def _subtab_qss(dark: bool) -> str:
+def _subtab_qss(dark: bool, scope: str = "") -> str:
     """2단(기능 탭: 전투 보조·편의기능·최적화의 하위 탭). 선택 = 연한 민트(명세 14.1 A안), 안 된 탭은 회색."""
-    return _level_qss(dark, color("accent-soft", dark), subtab_underline(dark))
+    return _level_qss(dark, color("accent-soft", dark), subtab_underline(dark), scope)
 
 
 def _tertiary_qss(dark: bool) -> str:
@@ -173,19 +182,30 @@ def _tertiary_qss(dark: bool) -> str:
     return _level_qss(dark, sel, underline)
 
 
-def _level_qss(dark: bool, sel: str, underline: str) -> str:
+def _level_qss(dark: bool, sel: str, underline: str, scope: str = "") -> str:
+    """scope('QTabWidget#이름'): 그 탭에만 걸리게 좁힌 규칙(개인화 때 중앙 위젯 스타일 한 곳에 모을 때)."""
     pane = "#2a2f3a" if dark else "#d5d7dd"
     hover = "#cfd3da" if dark else "#1f2124"
+    bar = f"{scope} > QTabBar" if scope else "QTabBar"
     return (
-        f"QTabWidget::pane {{ border: none; border-top: 1px solid {pane}; }}"
-        "QTabBar { qproperty-drawBase: 0; }"
-        f"QTabBar::tab {{ background: transparent; color: {color('muted', dark)}; padding: 6px 14px;"
+        f"{scope or 'QTabWidget'}::pane {{ border: none; border-top: 1px solid {pane}; }}"
+        f"{bar} {{ qproperty-drawBase: 0; }}"
+        f"{bar}::tab {{ background: transparent; color: {color('muted', dark)}; padding: 6px 14px;"
         " min-width: 0px; border: none; border-bottom: 2px solid transparent;"
         " font-size: 12px; }"
-        f"QTabBar::tab:hover {{ color: {hover}; }}"
-        f"QTabBar::tab:selected {{ color: {sel}; font-weight: 700;"
+        f"{bar}::tab:hover {{ color: {hover}; }}"
+        f"{bar}::tab:selected {{ color: {sel}; font-weight: 700;"
         f" border-bottom: 2px solid {underline}; }}"
     )
+
+
+# 2단 탭(개인화 색을 따라 바뀌는 것). 개인화 중에는 이 규칙을 중앙 위젯 스타일로 옮긴다.
+_SUBTABS = ("trackerTabs", "convenienceTabs", "optimizationTabs")
+
+
+def _custom_subtab_qss(dark: bool) -> str:
+    qss = "".join(_subtab_qss(dark, f"QTabWidget#{name}") for name in _SUBTABS)
+    return qss + "QTabWidget#trackerTabs > QTabBar::tab { padding:6px 9px; }"
 
 
 class MainWindow(QMainWindow):
@@ -273,6 +293,7 @@ class MainWindow(QMainWindow):
         self.settings_tab.theme_changed.connect(self._apply_tab_styles)
         # Keep the full editor width: one combat tab row, without a sidebar.
         self._tracker_tabs = QTabWidget()
+        self._tracker_tabs.setObjectName("trackerTabs")
         self._tracker_tabs.setTabBar(_CombatTabBar())
         self._combat_pages = {}
         for key, title, panel in (
@@ -293,6 +314,7 @@ class MainWindow(QMainWindow):
         self.exchange_tab = ExchangeTab()
         self.bead_split_tab = BeadSplitTab()
         self._convenience_tabs = QTabWidget()
+        self._convenience_tabs.setObjectName("convenienceTabs")
         self._convenience_tabs.addTab(_scrolled(self.distribution_tab), "분배 계산기")
         self._convenience_tabs.addTab(_scrolled(self.bead_split_tab), "구슬 분배 계산기")
         self._convenience_tabs.addTab(_scrolled(self.exchange_tab), "환전비율 계산기")
@@ -300,6 +322,7 @@ class MainWindow(QMainWindow):
         self._convenience_tabs.addTab(_scrolled(self.dungeon_cost_tab), "던전 입장 계산기")
 
         tabs = QTabWidget()
+        tabs.setObjectName("mainTabs")
         self._tabs = tabs  # 온보딩 투어에서 탭 전환에 사용
         tabs.addTab(self._tracker_tabs, "전투 보조")
         self._party_scroll = _scrolled(self.party_tab)  # 토스트 클릭 시 이 탭으로 전환
@@ -463,12 +486,14 @@ class MainWindow(QMainWindow):
         self.home_page.show()
         self.home_page.raise_()
         self._raise_creator()
+        self._sync_creator_fill()
         self.creator_dialogue.refresh()
 
     def _hide_home(self) -> None:
         if not self.home_visible():
             return
         self.home_page.hide()
+        self._sync_creator_fill()
         self.creator_dialogue.refresh()
 
     def _raise_creator(self) -> None:
@@ -919,12 +944,14 @@ class MainWindow(QMainWindow):
         from .theme import is_dark
 
         dark = is_dark()
-        sub = _subtab_qss(dark)
-        self._tracker_tabs.setStyleSheet(sub + "QTabBar::tab { padding:6px 9px; }")
-        self._convenience_tabs.setStyleSheet(sub)
-        self.boss_tab.pattern_tabs.setStyleSheet(_tertiary_qss(dark))  # 3단: 2단 색을 물려받지 않게
-        self.optimization_tools.panel.tabs.setStyleSheet(sub)
-        self._tabs.setStyleSheet(_tab_qss(dark))
+        # 개인화면 1·2단 탭 스타일은 중앙 위젯(틀 칠하기)에 함께 둔다(_apply_frame_colors) — 다시 꾸미기 1번
+        custom = palette_custom() is not None
+        sub = "" if custom else _subtab_qss(dark)
+        _set_qss(self._tracker_tabs, sub and sub + "QTabBar::tab { padding:6px 9px; }")
+        _set_qss(self._convenience_tabs, sub)
+        _set_qss(self.boss_tab.pattern_tabs, _tertiary_qss(dark))  # 3단: 2단 색을 물려받지 않게
+        _set_qss(self.optimization_tools.panel.tabs, sub)
+        _set_qss(self._tabs, "" if custom else _tab_qss(dark))
         self._apply_frame_colors()
         # 파티 현황판은 매칭 행 배경색이 셀에 박혀 있어, 테마가 바뀌면 다시 그려야
         # 새 테마 색으로 갱신된다(안 그러면 호버 전까지 옛 색으로 보임).
@@ -939,7 +966,10 @@ class MainWindow(QMainWindow):
             return
         central.setObjectName("appCentral")
         central.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        central.setStyleSheet(f"#appCentral {{ background:{custom['frame']}; }}" if custom else "")
+        # 개인화: 틀 색 + 1단 탭을 한 스타일로. 앱 팔레트가 바뀌어도 스타일 아래 위젯은 다시 꾸며야 새 색을 받아서,
+        # 화면 전체 다시 꾸미기는 여기 한 번으로 모은다.
+        _set_qss(central, f"#appCentral {{ background:{custom['frame']}; }}" + _custom_tab_qss(custom)
+                 + _custom_subtab_qss(custom["tone"] == "dark") if custom else "")
         text = custom["frame_text"] if custom else None
         border = f"{text}66" if text else "rgba(128,128,128,0.45)"
         self._home_btn.setStyleSheet("QPushButton#homeButton { font-size:12px; padding:3px 10px; border-radius:4px;"
@@ -947,13 +977,19 @@ class MainWindow(QMainWindow):
                                      + " }")
         self._home_btn.setIcon(QIcon(house_icon(on_frame(color("accent")) if not custom else custom["on_frame"]["accent"])))
         # 틀 위가 아닌 화면(첫 사용 안내 등)과 제작자 줄은 내용 칸 바탕
-        for widget in (self.setup_page, self.setup_guide, getattr(getattr(self, "creator_dialogue", None), "footer", None)):
-            if widget is not None:
-                widget.setAutoFillBackground(custom is not None)
+        for widget in (self.setup_page, self.setup_guide):
+            widget.setAutoFillBackground(custom is not None)
+        self._sync_creator_fill()
         self._update_header_status()
         home = getattr(self, "home_page", None)
         if home is not None:
             home.apply_theme(custom)
+
+    def _sync_creator_fill(self) -> None:
+        """제작자 줄 바탕: 개인화 중 내용 칸 위에서만 칠한다. 홈 위에서는 홈 배경이 그대로 보이게(QA: 캐릭터 뒤 네모)."""
+        dialogue = getattr(self, "creator_dialogue", None)
+        if dialogue is not None:
+            dialogue.footer.setAutoFillBackground(palette_custom() is not None and not self.home_visible())
 
     def _maybe_retry_live_capture(self) -> None:
         """라이브 캡처가 시작 실패로 비어 있으면 주기적으로 재시도한다.

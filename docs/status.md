@@ -32,6 +32,13 @@
   Highly Likely: 직접 고르기 미리보기 1회 ≈ 400ms(오프스크린, 위젯 1445개) — 대부분 `_apply_tab_styles`→`_apply_frame_colors`의 `central.setStyleSheet`(루트에 스타일 → 전체 다시 polish, 358ms), restyle 22ms. 끄는 동안 이동마다 실행 → 끊김.
   Confirmed: 개인화 때 홈 오른쪽 아래 제작자 캐릭터 뒤에 내용 칸 색 네모(`_apply_frame_colors`가 footer `setAutoFillBackground(True)` — 홈 위에서도 칠함). 꺼진 스위치 바탕이 배경 색조를 따라가는 것은 사용자 결정으로 유지(2026-10-30).
   추가 요청(사용자 2026-10-30): 확인 창 Yes/No(그리고 OK/Cancel)가 영어 → 예/아니요·확인/취소(Qt 번역 미설치, QMessageBox 표준 버튼).
+  → **수정(로컬 검증, 재QA 대기)**: ① 스타일 아래 위젯은 앱 팔레트가 바뀌어도 다시 꾸며야 새 색을 받아서(오프스크린 실험 — `palette()` 참조도 고정) 다시 꾸미기 0회는 불가.
+  대신 개인화 중엔 1·2단 탭 규칙(`#mainTabs`·`#trackerTabs`·`#convenienceTabs`·`#optimizationTabs`로 좁힘)을 틀 색과 함께 중앙 위젯 스타일 한 곳에 두고, 같은 스타일은 다시 넣지 않으며(`_set_qss`), restyle은 중앙 위젯 제외 → 큰 다시 꾸미기 1회, 미리보기 1회 ≈ 400 → 약 210ms(오프스크린).
+  여기에 직접 고르기 묶기(`PREVIEW_DELAY_MS`=100, 마지막 값만; 네모판·막대에서 손을 떼거나 색 코드 입력은 바로) — 끄는 동안은 미리보기 0회. 렌더는 홈 오른쪽 아래 외 픽셀 동일.
+  ② 제작자 줄 바탕은 개인화 + 홈이 안 보일 때만(`_sync_creator_fill`, 홈 열기/닫기·테마 변경 때).
+  ③ `ui/dialogs.py` 코드 번역기(`QPlatformTheme` 표준 버튼 글자만 답함)를 앱 시작 때 설치 — 정적 `QMessageBox.question/information/warning`·직접 만든 상자 모두, 직접 글자(setup_flow 등)는 그대로.
+  호출부마다 헬퍼로 바꾸는 안은 테스트 36개 파일이 `QMessageBox.question` 등을 직접 바꿔 끼워서 대신 이 방식(`(&Y)` 표시·번역 파일 포함 문제 없음). 미검증: Windows 실화면 버튼 글자.
+  테스트 `test_dialog_buttons.py`(신규, release checks 추가)·개인화 묶기·다시 꾸미기 1회·홈 캐릭터 바탕.
 - **개발 대상(2026-10-30 사용자 결정, 0.29.0): 탭 단계 색·FPS 정리·기능 켜기 스위치.** [안내·도움말 명세 14절](app-copy-help-combat-controls-spec.md) — 0.28.2 전체 렌더 재검토.
   2단 탭 선택 색 연한 민트(A안, 3단 회색 그대로), 안내 문구 회색 통일, `~해요` 말투 통일, FPS 측정 한 구역 정리(수집은 맨 아래 접힘),
   기능 켜기만 스위치(블랙박스·FPS·커스텀·도르카/투아림·체력바·최적화 사용 C안 — `추천 설정으로 최적화` 버튼·위치 잠금 버튼은 그대로). 구현 후 다크·라이트 렌더 확인.

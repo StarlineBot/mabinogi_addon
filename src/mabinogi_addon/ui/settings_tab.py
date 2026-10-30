@@ -841,7 +841,9 @@ class SettingsTab(QWidget):
         apply_theme(name, values)
         after = palette.snapshot()
 
-        def outside_home(widget):  # 홈은 자기 색 표로 다시 칠한다
+        def outside_home(widget):  # 홈은 자기 색 표로, 틀(중앙 위젯)은 메인 창이 통째로 다시 칠한다
+            if widget.objectName() == "appCentral":
+                return False
             while widget is not None:
                 if isinstance(widget, HomePage):
                     return False

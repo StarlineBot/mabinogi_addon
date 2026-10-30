@@ -520,9 +520,11 @@ class OptimizationController(QObject):
 
     def apply_theme(self):
         if self.panel is not None:
-            from .main_window import _subtab_qss
+            from .main_window import _set_qss, _subtab_qss
+            from .palette import custom
             from .theme import is_dark
-            self.panel.tabs.setStyleSheet(_subtab_qss(is_dark()))
+            # 개인화 중에는 메인 창 중앙 위젯 스타일이 2단 탭까지 맡는다(다시 꾸미기 1번)
+            _set_qss(self.panel.tabs, "" if custom() is not None else _subtab_qss(is_dark()))
 
     def _save_overlay(self, **extra):
         raw=config._read_local_config()

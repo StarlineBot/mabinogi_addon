@@ -102,6 +102,9 @@ def _main(startup) -> None:
 
     app = QApplication(sys.argv)
     app.setApplicationName(config.APP_NAME)
+    from mabinogi_addon.ui.dialogs import install_korean_buttons
+
+    install_korean_buttons(app)  # 확인 창 표준 버튼 예/아니요·확인/취소
     # 저장된 테마(시스템/라이트/다크) 적용
     from mabinogi_addon.ui.theme import apply_theme
 

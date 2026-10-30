@@ -62,7 +62,7 @@ class OptimizationPanel(QWidget):
         super().__init__(parent)
         from .main_window import _scrolled
         root=QVBoxLayout(self);root.setContentsMargins(0,0,0,0)
-        self.tabs=QTabWidget();root.addWidget(self.tabs)
+        self.tabs=QTabWidget();self.tabs.setObjectName("optimizationTabs");root.addWidget(self.tabs)
         page=QWidget();body=QVBoxLayout(page);body.setContentsMargins(12,12,12,12)  # 다른 탭과 같은 여백(앱 문구 명세 10절)
         from .feature_copy import HELP
         from .help_dialog import help_button
