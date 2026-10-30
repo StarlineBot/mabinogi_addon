@@ -32,13 +32,14 @@ def locate_dorcha(frame,templates=None,diagnostics=None,cancelled=None):
     if len(strong) > 1:
         trace.setdefault("rejection","ambiguous_candidates")
         return None
+    strong_reason = None
     if strong:  # 기존 기준(0.97) 통과 장식: 지금처럼 숫자까지 읽혀야 인정
-        box,value,reason = _digits(frame,strong[0],references)
-        if box is None:
-            trace["rejection"] = reason
-            return None
-        trace.update(value=value,result=list(box),ornament=strong[0])
-        return box
+        box,value,strong_reason = _digits(frame,strong[0],references)
+        if box is not None:
+            trace.update(value=value,result=list(box),ornament=strong[0])
+            return box
+        # 0.30.2: 금속 픽셀만 보는 마스크로 밝은 배경 장식도 0.97을 넘는데, 최고점이 몇 px 어긋날 수 있다
+        # (문의 4K: y=1722 0.981, 바른 자리 1719). 바로 거절하지 않고 아래처럼 겹치는 후보에서 숫자가 읽히는 자리를 찾는다.
     # 0.94~0.97: 숫자를 기준 통과로 읽는 후보만. 밝은 배경에선 장식 최고점이 몇 px 어긋나고 바른 위치는 겹치는 후보로
     # 밀려나(문의 4K: 최고 y=1722 0.958, 바른 y=1719 0.956), 겹침 제거 전 후보를 모두 시험해 숫자가 읽히는 자리를 고른다.
     pool = [item for item in trace.get("candidates",[]) if item.get("score",0) >= SOFT_ACCEPT] or matches
@@ -49,7 +50,7 @@ def locate_dorcha(frame,templates=None,diagnostics=None,cancelled=None):
                                        for _,other,_ in readable):
             readable.append((match,box,value))
     if len(readable) != 1:
-        trace.setdefault("rejection","ambiguous_candidates" if readable else "anchor_not_found")
+        trace.setdefault("rejection","ambiguous_candidates" if readable else strong_reason or "anchor_not_found")
         return None
     match,box,value = readable[0]
     trace.update(value=value,result=list(box),ornament=match,soft_ornament=True)

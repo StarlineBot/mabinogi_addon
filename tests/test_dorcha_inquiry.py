@@ -17,10 +17,12 @@ DATA = Path(__file__).parent / 'data'
     ('스크린샷 2026-10-09 201512.png', 15, 0.967),
 ])
 def test_bright_background_ornament_is_accepted_when_digits_read(name, value, score):
+    # 0.30.2 명세 변경: 장식 마스크가 금속 픽셀만 보게 되어(잎사귀 사이 배경 제외) 밝은 배경에서도 예전 점수(score)보다
+    # 높게 0.97을 넘는다 → 낮은 점수 인정(soft) 경로 없이 바로 찾고, 값은 그대로.
     trace = {}
     box = locate_dorcha(image_io.imread(DATA / name), diagnostics=trace)
-    assert box is not None and trace['value'] == value and trace['soft_ornament']
-    assert abs(trace['ornament']['score'] - score) < 0.002 and trace['ornament']['score'] < 0.97
+    assert box is not None and trace['value'] == value
+    assert trace['ornament']['score'] >= 0.97 > score
 
 
 def test_soft_ornament_without_readable_digits_is_rejected():
@@ -28,7 +30,8 @@ def test_soft_ornament_without_readable_digits_is_rejected():
     x, y, w, h = locate_dorcha(frame)
     frame[y:y + h, x:x + w] = 40  # 숫자를 지움 → 0.94~0.97 장식만으로는 인정하지 않음
     trace = {}
-    assert locate_dorcha(frame, diagnostics=trace) is None and trace['rejection'] == 'anchor_not_found'
+    # 0.30.2: 장식은 이제 0.97을 넘어 찾지만 숫자가 없으면 여전히 거절(이유가 '숫자 못 읽음'으로 정확해짐)
+    assert locate_dorcha(frame, diagnostics=trace) is None and trace['rejection'] == 'unreadable_digits'
 
 
 def test_soft_floor_is_dorcha_only():

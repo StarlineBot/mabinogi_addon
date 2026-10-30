@@ -1,5 +1,5 @@
 {
-  "version": "0.30.2",
+  "version": "0.30.3",
   "tests": [
     "tests/test_blackbox.py",
     "tests/test_blackbox_access.py",
@@ -81,6 +81,7 @@
     "tests/test_debuff_wireweb.py",
     "tests/test_skillbar_mask.py",
     "tests/test_time_4k_render.py",
-    "tests/test_boss_bar_4k.py"
+    "tests/test_boss_bar_4k.py",
+    "tests/test_resource_4k.py"
   ]
 }

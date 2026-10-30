@@ -198,6 +198,72 @@
     "sha256": "9fb7d423d07ae21812d507b1acff7686b760fe4a9dbea1504e6d9f551a8fda68"
   },
   {
+    "value": 15,
+    "file": "mabinogi_2026_10_30_213520.png",
+    "box": [
+      1342,
+      57,
+      28,
+      23
+    ],
+    "sha256": "c097a029cb92bab5abd953f5168df5044cc927bf807d543f1fdf200877aa1fc5"
+  },
+  {
+    "value": 14,
+    "file": "mabinogi_2026_10_30_213927.png",
+    "box": [
+      1342,
+      57,
+      28,
+      23
+    ],
+    "sha256": "f085f9e7103ec3b4187ec9e6901ad0b8785273bb99164aa4ebd4733c542bb075"
+  },
+  {
+    "value": 13,
+    "file": "mabinogi_2026_10_30_213942.png",
+    "box": [
+      1342,
+      57,
+      28,
+      23
+    ],
+    "sha256": "8a900983ad1c5fb9ecd9ad8cadbb406e797ea3c800deba799656ff80aab07d59"
+  },
+  {
+    "value": 11,
+    "file": "mabinogi_2026_10_30_214016.png",
+    "box": [
+      1342,
+      57,
+      28,
+      23
+    ],
+    "sha256": "ecf653800c23f609fcf9fd25320d5e313cf3f800acde974de0c51c3bef59cb2e"
+  },
+  {
+    "value": 10,
+    "file": "mabinogi_2026_10_30_214051.png",
+    "box": [
+      1342,
+      57,
+      28,
+      23
+    ],
+    "sha256": "5cee48cb4b9a7116352eef1d8ea107d6fce042a20b6940fbf5bfbf91fc0753a9"
+  },
+  {
+    "value": 9,
+    "file": "mabinogi_2026_10_30_214648.png",
+    "box": [
+      1342,
+      57,
+      28,
+      23
+    ],
+    "sha256": "015620092fb71c0081ab696902305a9579687826f0ec4c16ce24dc9b037fd304"
+  },
+  {
     "value": 0,
     "file": "tests/data/autofind_20261016T192204168176Z_e70b6c5c.zip",
     "member": "input.png",

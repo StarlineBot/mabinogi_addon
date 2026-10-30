@@ -23,6 +23,10 @@ def test_recorded_failure_preserves_original_assets_and_adds_explicit_live_model
     current = detector_assets("tuarim")
     assert set(current) == set(saved) | {"circle_anchor_live", "circle_anchor_seven", "structure_live"}
     for name, image in saved.items():
+        if name == "circle_mask":
+            # 0.30.2 명세 변경: 원형 장식 마스크는 금속 픽셀만(예전 고리 안의 부분집합, 잎사귀 사이 배경 제외)
+            assert current[name].any() and not np.any((current[name] > 0) & (image == 0))
+            continue
         np.testing.assert_array_equal(image, current[name])
     assert current["circle_anchor_live"].shape == current["circle_anchor"].shape
     assert metadata["app_version"] == "0.4.80"

@@ -16,6 +16,10 @@ def assets():
     gray = cv2.cvtColor(source["anchor"][:, :45], cv2.COLOR_BGR2GRAY)
     result = {"anchor":cv2.cvtColor(gray,cv2.COLOR_GRAY2BGR),
               "mask":source["mask"][:, :45].copy()}
+    # 0.30.2: 장식 금속 픽셀만(잎사귀 사이 게임 배경 제외) — scripts/build_ornament_mask.py
+    metal = image_io.imread(Path(__file__).parent / "templates/autofind/ornament_mask.png", cv2.IMREAD_GRAYSCALE)
+    if metal is not None and metal.shape == result["mask"].shape and metal.any():
+        result["mask"] = metal
     alternate = image_io.imread(Path(__file__).parent / "templates/autofind/dorcha_anchor_alt.png")
     if alternate is not None:
         result["anchor_alt"] = alternate
