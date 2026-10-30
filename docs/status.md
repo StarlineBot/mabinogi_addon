@@ -47,6 +47,8 @@
   tests/data 보스 바 65장 이전/이후 비교: 바뀐 것 3장뿐(10-11 111640·213927·213942 None→gomok_petak), 잃거나 틀리게 바뀐 것 0, 기브넨·브론타나스 None 유지.
   4K 전용 변형(name_uhd) 없이 2단계만으로도 4K 회한 0.723(2위 0.077) — 해상도 독립 확인. 판독 시간 반복 1.5~3ms(최악 약 5ms), 보스 탭 300ms 주기.
   release checks 0.31.0 1595 passed, 전체 3495 passed/1 failed/26 skipped — 실패는 `test_regression_watchdog`(진단 마커 파일 경합, 단독 3회 38/38 통과, 변경 무관 Potential flaky). 원격 v0.31.0 태그 없음.
+  **v0.31.0 게시 완료**: [#162](https://github.com/StarlineBot/mabinogi_addon/actions/runs/41134285995)·게시 [#242](https://github.com/StarlineBot/mabinogi_addon/actions/runs/41135830754) 성공,
+  태그 `v0.31.0` → f3b78d1(candidate source_sha·지문 `43cf6827…` 일치). 공개 version.json 0.31.0(sha256 후보와 일치)·exe 163,864,744바이트·sha256 `7581aed1…a032776ce` 후보·공개 URL 일치. 공개 README 펼친 내역 v0.31.0만.
   → **0.31.0에 합침 — 개발 완료(로컬 검증)**: `boss_name_matcher.identify_by_shape`(이름 글자 연결 요소만 → 높이 24px·3×3 흐림 → 기준과 같은 폭 TM_CCOEFF_NORMED × 폭 비율), 1단계(픽셀 비교)가 실패할 때만.
   보정 64장 결과: 1단계 47장 그대로, 페타크 3장(111640·213927·213942) 새로 식별. **시제품 기준 0.35에서 오인 1건 추가 발견** — 망집의 키리아(10-25 142736, 목록 밖) → 페타크 0.368(2위 차 0.31).
   펠롬 보조 바 '어둠의 에르그'도 페타크 0.53(기존 펠롬 테스트가 잡음). 맞는 보스는 4K 변형 없이도 0.72 이상이라 **기준 0.6**으로 올림
