@@ -39,6 +39,8 @@
   ③ `ui/dialogs.py` 코드 번역기(`QPlatformTheme` 표준 버튼 글자만 답함)를 앱 시작 때 설치 — 정적 `QMessageBox.question/information/warning`·직접 만든 상자 모두, 직접 글자(setup_flow 등)는 그대로.
   호출부마다 헬퍼로 바꾸는 안은 테스트 36개 파일이 `QMessageBox.question` 등을 직접 바꿔 끼워서 대신 이 방식(`(&Y)` 표시·번역 파일 포함 문제 없음). 미검증: Windows 실화면 버튼 글자.
   테스트 `test_dialog_buttons.py`(신규, release checks 추가)·개인화 묶기·다시 꾸미기 1회·홈 캐릭터 바탕.
+  → **QA b0857bc 통과(Noto)**: release checks 0.29.0 1433·전체 3333 passed/26 skipped, 원격 v0.29.0 태그 없음. 미리보기 1회 ≈ 166ms(이전 400, `_apply_tab_styles` 358→8ms)·끄는 동안은 묶여 쌓이지 않음.
+  개인화 5조합 홈 오른쪽 아래 네모 사라짐, 확인 창 `예`/`아니요`·`확인`(정적 question/information·직접 만든 상자 모두) 렌더 확인. Windows 확인: 버튼 글자·미리보기 체감·개인화→다크/라이트 복귀.
 - **개발 대상(2026-10-30 사용자 결정, 0.29.0): 탭 단계 색·FPS 정리·기능 켜기 스위치.** [안내·도움말 명세 14절](app-copy-help-combat-controls-spec.md) — 0.28.2 전체 렌더 재검토.
   2단 탭 선택 색 연한 민트(A안, 3단 회색 그대로), 안내 문구 회색 통일, `~해요` 말투 통일, FPS 측정 한 구역 정리(수집은 맨 아래 접힘),
   기능 켜기만 스위치(블랙박스·FPS·커스텀·도르카/투아림·체력바·최적화 사용 C안 — `추천 설정으로 최적화` 버튼·위치 잠금 버튼은 그대로). 구현 후 다크·라이트 렌더 확인.
