@@ -783,10 +783,23 @@ class SettingsTab(QWidget):
         row.addStretch(1)
         v.addLayout(row)
         v.addWidget(hint_label("‘시스템’을 선택하면 Windows 테마 설정을 따라가요. 기본 테마는 다크예요."))
+        # 개인화 패널(테마 개인화 명세 3절): '개인화'를 골랐을 때만 열린다. 다른 테마로 바꿔도 값은 남긴다.
+        from .theme_panel import CustomThemePanel
+        self.custom_panel = CustomThemePanel(config.load_custom_theme())
+        self.custom_panel.preview.connect(lambda values: self._apply_theme("custom", values, save=False))
+        self.custom_panel.commit.connect(lambda values: self._apply_theme("custom", values, save=True))
+        self.custom_panel.cancel_preview.connect(lambda: self._apply_theme("custom", config.load_custom_theme(), save=False))
+        self.custom_panel.setVisible(cur == "custom")
+        v.addWidget(self.custom_panel)
         self._sync_theme_swatches(cur)
         return box
 
     def _style_swatch(self, btn: QPushButton, name: str, selected: bool) -> None:
+        if name == "custom":  # 무지개 원뿔 그라데이션(크기·선택 테두리는 다른 동그라미와 같다)
+            from .theme_panel import rainbow_style
+            btn.setText("✓" if selected else "")
+            btn.setStyleSheet(rainbow_style(selected))
+            return
         bg = _THEME_SWATCH[name]
         border = (
             f"2px solid {color('accent')}" if selected else "1px solid #6b6e76"
@@ -805,12 +818,39 @@ class SettingsTab(QWidget):
             self._style_swatch(btn, name, name == selected)
 
     def _on_theme_pick(self, name: str) -> None:
+        config.save_theme(name)
+        self._apply_theme(name, config.load_custom_theme() if name == "custom" else None, save=False)
+        self.custom_panel.setVisible(name == "custom")
+        if name == "custom":
+            self.custom_panel.set_values(config.load_custom_theme())
+
+    def _apply_theme(self, name: str, values: dict | None, *, save: bool) -> None:
+        """테마를 바꾸고 화면 전체를 바로 다시 칠한다(테마 개인화 명세 6절 — 재시작 없이).
+
+        이름 색을 쓰는 스타일은 옛 값 → 새 값으로 바꿔 끼우고(palette.restyle), 틀·탭·홈은 theme_changed로 다시 만든다.
+        save: 개인화 값을 저장(프리셋·내용 칸·되돌리기·직접 고르기 '적용'). 미리보기·취소는 저장하지 않는다.
+        """
+        from PySide6.QtWidgets import QApplication
+        from . import palette
+        from .home_page import HomePage
         from .theme import apply_theme
 
-        config.save_theme(name)
-        apply_theme(name)  # 즉시 적용
-        self._sync_theme_swatches(name)
-        self.theme_changed.emit()  # 메인이 탭 등 테마색 재적용
+        if save and values is not None:
+            config.save_custom_theme(values)
+        before = palette.snapshot()
+        apply_theme(name, values)
+        after = palette.snapshot()
+
+        def outside_home(widget):  # 홈은 자기 색 표로 다시 칠한다
+            while widget is not None:
+                if isinstance(widget, HomePage):
+                    return False
+                widget = widget.parentWidget()
+            return True
+        palette.restyle(before, after, [w for w in QApplication.allWidgets() if outside_home(w)])
+        self._sync_theme_swatches(config.load_theme())
+        self.custom_panel.refresh()
+        self.theme_changed.emit()  # 메인이 탭·틀·홈 등 테마색 재적용
 
     def _general_group(self) -> QGroupBox:
         from ..system import autostart

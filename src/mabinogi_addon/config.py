@@ -478,15 +478,36 @@ def save_voice_pack(pack: str, path: Path = LOCAL_CONFIG_PATH) -> None:
     _write_local_config(data, path)
 
 
-# 앱 테마: system(시스템 따름) / light / dark. 기본값은 다크(앱 디자인 기준 톤).
+# 앱 테마: system(시스템 따름) / light / dark / custom(개인화). 기본값은 다크(앱 디자인 기준 톤).
+THEME_NAMES = ("system", "light", "dark", "custom")
+
+
 def load_theme(path: Path = LOCAL_CONFIG_PATH) -> str:
     v = _read_local_config(path).get("theme")
-    return v if v in ("system", "light", "dark") else "dark"
+    return v if v in THEME_NAMES else "dark"
 
 
 def save_theme(name: str, path: Path = LOCAL_CONFIG_PATH) -> None:
     data = _read_local_config(path)
-    data["theme"] = name if name in ("system", "light", "dark") else "dark"
+    data["theme"] = name if name in THEME_NAMES else "dark"
+    _write_local_config(data, path)
+
+
+# 테마 개인화 값(테마 개인화 명세 6절): customTheme = {background, accent, content}. 다른 테마로 바꿔도 남긴다.
+# 잘못된 값은 기본값(되돌리기 값: 그레이 #202020 · 민트 #00C9A2 · 자동)으로 읽는다.
+def load_custom_theme(path: Path = LOCAL_CONFIG_PATH) -> dict:
+    from .theme_colors import CONTENT_TONES, DEFAULT, normalize
+    raw = _read_local_config(path).get("customTheme")
+    raw = raw if isinstance(raw, dict) else {}
+    content = raw.get("content")
+    return {"background": normalize(raw.get("background"), DEFAULT["background"]),
+            "accent": normalize(raw.get("accent"), DEFAULT["accent"]),
+            "content": content if content in CONTENT_TONES else DEFAULT["content"]}
+
+
+def save_custom_theme(values: dict, path: Path = LOCAL_CONFIG_PATH) -> None:
+    data = _read_local_config(path)
+    data["customTheme"] = {k: values[k] for k in ("background", "accent", "content")}
     _write_local_config(data, path)
 
 

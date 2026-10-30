@@ -26,6 +26,19 @@ COLORS = {
 SUBTAB_UNDERLINE = ("#3F8F82", "#8FCFC4")
 
 
+# 테마 개인화(테마 개인화 명세 5절): 개인화 중이면 theme_colors.compute 결과를 쓴다. None이면 다크/라이트 값.
+_custom: dict | None = None
+
+
+def set_custom(result: dict | None) -> None:
+    global _custom
+    _custom = result
+
+
+def custom() -> dict | None:
+    return _custom
+
+
 def _dark(dark):
     if dark is not None:
         return bool(dark)
@@ -33,14 +46,78 @@ def _dark(dark):
     return is_dark()
 
 
+def _use_custom(dark) -> bool:
+    # 개인화 중이면 내용 칸 톤과 같은 쪽을 물을 때(또는 묻지 않을 때) 개인화 값
+    return _custom is not None and (dark is None or bool(dark) == (_custom["tone"] == "dark"))
+
+
 def color(name: str, dark: bool | None = None) -> str:
-    """이름의 색 값. dark를 주지 않으면 지금 적용 중인 테마로."""
+    """이름의 색 값. dark를 주지 않으면 지금 적용 중인 테마로(개인화 중이면 개인화 값)."""
+    if _use_custom(dark):
+        return _custom["names"][name]
     pair = COLORS[name]
     return pair[0] if _dark(dark) else pair[1]
 
 
 def subtab_underline(dark: bool | None = None) -> str:
+    if _use_custom(dark):
+        return _custom["subtab_underline"]
     return SUBTAB_UNDERLINE[0] if _dark(dark) else SUBTAB_UNDERLINE[1]
+
+
+def on_frame(value: str) -> str:
+    """틀(머리줄·1단 탭 줄) 위에 쓰는 색: 개인화 중이면 그 색 이름의 틀 대비 조정값, 아니면 그대로."""
+    if _custom is None:
+        return value
+    for name, current in _custom["names"].items():
+        if current.upper() == str(value).upper() and name in _custom["on_frame"]:
+            return _custom["on_frame"][name]
+    return value
+
+
+def snapshot() -> dict:
+    """지금 이름 색 값(다시 칠하기 전후 비교용)."""
+    return {name: color(name) for name in COLORS}
+
+
+def restyle(before: dict, after: dict, widgets) -> int:
+    """이름 색을 쓰는 화면 전체를 다시 칠한다(테마 개인화 명세 6절 — 재시작 없이 즉시).
+
+    화면 코드는 만들 때 color()로 값을 스타일시트·서식 글자에 넣어 두므로, 바뀐 이름의 옛 값을 새 값으로 바꿔 끼운다.
+    이름 값은 서로 겹치지 않는다(theme_colors._unique). 강조 위 글자(흰색일 수 있음)는 강조 바탕이 함께 있는 스타일에서만 바꾼다.
+    """
+    import re
+    changes = {before[n].upper(): after[n] for n in before if before[n].upper() != after[n].upper() and n != "on-accent"}
+    on_accent = (before["on-accent"].upper(), after["on-accent"]) if before["on-accent"].upper() != after["on-accent"].upper() else None
+    accent_old = before["accent"].upper()
+    if not changes and on_accent is None:
+        return 0
+    keys = list(changes) + ([on_accent[0]] if on_accent else [])
+    pattern = re.compile("|".join(re.escape(k) for k in sorted(set(keys), key=len, reverse=True)), re.I)
+
+    def swap(text):
+        has_accent = accent_old in text.upper()
+
+        def one(match):
+            key = match.group(0).upper()
+            if on_accent and key == on_accent[0] and key not in changes:
+                return on_accent[1] if has_accent else match.group(0)
+            return changes.get(key, match.group(0))
+        return pattern.sub(one, text)
+
+    count = 0
+    from PySide6.QtWidgets import QLabel
+    for widget in widgets:
+        sheet = widget.styleSheet()
+        if sheet and pattern.search(sheet):
+            widget.setStyleSheet(swap(sheet))
+            count += 1
+        if isinstance(widget, QLabel):
+            text = widget.text()
+            if "style=" in text and pattern.search(text):
+                widget.setText(swap(text))
+                count += 1
+    return count
 
 
 class Named:

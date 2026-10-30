@@ -15,16 +15,38 @@ from .. import paths
 from .palette import color
 from .status_icon import paint_icon
 
-BG_TOP, BG_BOTTOM = "#111827", "#0b1220"
-BOX, BORDER = "#18202c", "#2a3443"
-# 색 이름(명세 14.6). 홈은 테마와 관계없이 어두운 디자인이라 다크 값을 쓴다.
-MINT, GREEN = color("accent", dark=True), color("ok", dark=True)
-GRAY = SUBTEXT = color("muted", dark=True)
-WARN, DANGER = color("warn", dark=True), color("danger", dark=True)
-TEXT = "#e5e7eb"
-# 경고 상자: 주의 색 계열(탭의 '영역 지정 필요'와 같은 주황, 예전 노랑 폐지)
-WARN_BG, WARN_BORDER, WARN_LINE, WARN_TEXT, WARN_SUBTEXT = "#2b1c10", "#8a4a14", "#5a3416", "#f3b37a", "#e2c7ae"
-KIND_COLORS = {"ok": GREEN, "muted": GRAY, "warn": WARN}
+# 홈 디자인 색. 기본은 테마와 관계없이 어두운 남색 디자인(명세 12.4), 색 이름(명세 14.6)은 다크 값.
+# 테마 개인화 중에는 배경 = 틀(고른 색 그대로, 아래로 살짝 어둡게), 카드 = 내용 칸(테마 개인화 명세 5·6절).
+DEFAULT_DESIGN = {
+    "bg_top": "#111827", "bg_bottom": "#0b1220", "box": "#18202c", "border": "#2a3443",
+    "text": "#e5e7eb", "title": "#ffffff", "sub": color("muted", dark=True),
+    "accent": color("accent", dark=True), "ok": color("ok", dark=True), "muted": color("muted", dark=True),
+    "warn": color("warn", dark=True), "danger": color("danger", dark=True),
+    # 경고 상자: 주의 색 계열(탭의 '영역 지정 필요'와 같은 주황, 예전 노랑 폐지)
+    "warn_bg": "#2b1c10", "warn_border": "#8a4a14", "warn_line": "#5a3416", "warn_text": "#f3b37a", "warn_sub": "#e2c7ae",
+    "menu_bg": "#141c28", "menu_border": "#2f5d5a", "track": "#3a4556", "handle": "#3a4556", "handle_hover": "#4b5768",
+}
+_D = dict(DEFAULT_DESIGN)
+KIND_COLORS = {"ok": _D["ok"], "muted": _D["muted"], "warn": _D["warn"]}
+TEXT = DEFAULT_DESIGN["text"]
+
+
+def design(custom: dict | None) -> dict:
+    """홈 색 표. custom = theme_colors.compute 결과(개인화 중) 또는 None(기본 남색 디자인)."""
+    if custom is None:
+        return dict(DEFAULT_DESIGN)
+    from ..theme_colors import mix
+    roles, names = custom["roles"], custom["names"]
+    box = roles["window"]
+    return {
+        "bg_top": custom["frame"], "bg_bottom": custom["frame_bottom"], "box": box, "border": roles["mid"],
+        "text": roles["text"], "title": roles["text"], "sub": names["muted"],
+        "accent": names["accent"], "ok": names["ok"], "muted": names["muted"], "warn": names["warn"], "danger": names["danger"],
+        "warn_bg": mix(names["warn"], box, 0.12), "warn_border": mix(names["warn"], box, 0.55),
+        "warn_line": mix(names["warn"], box, 0.28), "warn_text": names["warn"], "warn_sub": roles["text"],
+        "menu_bg": box, "menu_border": roles["mid"], "track": roles["mid"], "handle": roles["mid"], "handle_hover": roles["dark"],
+    }
+
 
 # 전투 보조 2열 10줄(명세 12.2): (키, 이름, 스위치 있음)
 COMBAT_ROWS = (("buff", "버프", False), ("debuff", "디버프", False),
@@ -58,7 +80,7 @@ class Switch(QAbstractButton):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         on = self.isChecked()
-        track = QColor(MINT if on else "#3a4556")
+        track = QColor(_D["accent"] if on else _D["track"])
         if not self.isEnabled():
             track.setAlpha(110)
         p.setPen(Qt.PenStyle.NoPen)
@@ -81,7 +103,7 @@ class StateIcon(QLabel):
         if kind == self.kind:
             return
         self.kind = kind
-        color = {"ok": MINT, "waiting": SUBTEXT, "inactive": DANGER}[kind]  # 일시정지 = 위험 색(상단 '● 전투 보조: 일시정지'와 같음)
+        color = {"ok": _D["accent"], "waiting": _D["sub"], "inactive": _D["danger"]}[kind]  # 일시정지 = 위험 색(상단 '● 전투 보조: 일시정지'와 같음)
         pixmap = QPixmap(76, 76)
         pixmap.fill(Qt.GlobalColor.transparent)
         pixmap.setDevicePixelRatio(2)
@@ -129,9 +151,11 @@ def house_icon(color: str = TEXT, size: int = 14) -> QPixmap:
     return pixmap
 
 
-def _label(text, size, color, bold=False):
+def _label(text, size, role, bold=False):
+    """role: 홈 색 표의 이름(text·title·sub·muted·warn·warn_text·warn_sub). 색은 페이지 스타일시트가 칠한다(테마 바뀌면 다시 칠함)."""
     label = QLabel(text)
-    label.setStyleSheet(f"color:{color}; font-size:{size}px; font-weight:{700 if bold else 400}; background:transparent;")
+    label.setObjectName("h_" + role)
+    label.setStyleSheet(f"font-size:{size}px; font-weight:{700 if bold else 400}; background:transparent;")
     return label
 
 
@@ -155,7 +179,7 @@ class FeatureRow(QFrame):
         row.setSpacing(10)
         text = QVBoxLayout()
         text.setSpacing(1)
-        self.name = _label(name, 13, TEXT)
+        self.name = _label(name, 13, "text")
         text.addWidget(self.name)
         self.state = QLabel()
         self.state.setTextFormat(Qt.TextFormat.RichText)
@@ -165,11 +189,12 @@ class FeatureRow(QFrame):
         self.switch = Switch() if has_switch else None
         if self.switch is not None:
             row.addWidget(self.switch, 0, Qt.AlignmentFlag.AlignVCenter)
-        chevron = _label("›", 20, GRAY)
+        chevron = _label("›", 20, "muted")
         row.addWidget(chevron, 0, Qt.AlignmentFlag.AlignVCenter)
 
     def set_state(self, text, kind, switch=None):
-        color = KIND_COLORS.get(kind, GRAY)
+        self._last = (text, kind)
+        color = KIND_COLORS.get(kind, _D["muted"])
         self.state.setText(f'<span style="color:{color}">●</span>'
                            f'<span style="color:{color}">&nbsp;{text}</span>')
         if self.switch is not None and switch is not None and self.switch.isChecked() != bool(switch):
@@ -195,24 +220,7 @@ class HomePage(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self.setStyleSheet(f"""
-            #homeBox {{ background:{BOX}; border:1px solid {BORDER}; border-radius:10px; }}
-            #homeWarn {{ background:{WARN_BG}; border:1px solid {WARN_BORDER}; border-radius:10px; }}
-            #homeRow {{ background:transparent; border:none; border-top:1px solid {BORDER}; }}
-            #homeWarnRow {{ background:transparent; border:none; border-top:1px solid {WARN_LINE}; }}
-            QPushButton#homeMenu {{ color:{TEXT}; background:#141c28; border:1px solid #2f5d5a; border-radius:8px;
-                                    padding:8px 14px; font-size:12px; }}
-            QPushButton#homeMenu:hover {{ border-color:{MINT}; }}
-            QPushButton#homeLink {{ color:{MINT}; background:transparent; border:none; font-size:12px; padding:0; }}
-            QPushButton#homeRegion {{ color:{WARN_TEXT}; background:transparent; border:1px solid {WARN}; border-radius:6px;
-                                      padding:5px 12px; font-size:12px; }}
-            QScrollArea, #homeContent {{ background:transparent; border:none; }}
-            QScrollBar:vertical {{ background:transparent; width:8px; margin:4px 2px 4px 0; }}
-            QScrollBar::handle:vertical {{ background:#3a4556; border-radius:3px; min-height:30px; }}
-            QScrollBar::handle:vertical:hover {{ background:#4b5768; }}
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height:0; }}
-            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background:none; }}
-        """)
+        self._apply_style()
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         scroll = QScrollArea()  # 설정 필요 줄이 아주 많을 때만 스크롤(기준 창 790×800은 스크롤 없음)
@@ -258,12 +266,12 @@ class HomePage(QWidget):
         row.addWidget(self.state_icon)
         text = QVBoxLayout()
         text.setSpacing(3)
-        self.title = _label("", 16, "#ffffff", bold=True)
-        self.summary = _label("", 12, SUBTEXT)
+        self.title = _label("", 16, "title", bold=True)
+        self.summary = _label("", 12, "sub")
         text.addWidget(self.title)
         text.addWidget(self.summary)
         row.addLayout(text, 1)
-        row.addWidget(_label("전투 보조", 12, TEXT))
+        row.addWidget(_label("전투 보조", 12, "text"))
         self.combat_switch = Switch()
         self.combat_switch.toggled.connect(self.combat_toggled.emit)
         row.addWidget(self.combat_switch)
@@ -277,10 +285,11 @@ class HomePage(QWidget):
         head = QHBoxLayout()
         head.setSpacing(6)
         triangle = QLabel()
-        triangle.setPixmap(paint_icon("region", WARN))
+        self._triangle = triangle
+        triangle.setPixmap(paint_icon("region", _D["warn"]))
         triangle.setStyleSheet("background:transparent;")
         head.addWidget(triangle)
-        self.warn_title = _label("", 13, WARN, bold=True)
+        self.warn_title = _label("", 13, "warn", bold=True)
         head.addWidget(self.warn_title)
         head.addStretch(1)
         warn.addLayout(head)
@@ -296,7 +305,7 @@ class HomePage(QWidget):
         box.setContentsMargins(16, 10, 16, 6)
         box.setSpacing(4)
         head = QHBoxLayout()
-        head.addWidget(_label("전투 보조", 14, "#ffffff", bold=True))
+        head.addWidget(_label("전투 보조", 14, "title", bold=True))
         head.addStretch(1)
         self.combat_link = QPushButton("전투 보조 탭 열기")
         self.combat_link.setObjectName("homeLink")
@@ -324,7 +333,7 @@ class HomePage(QWidget):
             box = QVBoxLayout(frame)
             box.setContentsMargins(16, 10, 16, 6)
             box.setSpacing(4)
-            box.addWidget(_label(title, 14, "#ffffff", bold=True))
+            box.addWidget(_label(title, 14, "title", bold=True))
             for key, name, has_switch in rows:
                 box.addWidget(self._row(key, name, has_switch))
             box.addStretch(1)
@@ -332,6 +341,48 @@ class HomePage(QWidget):
         v.addLayout(bottom)
         v.addStretch(1)
         self.update_state({})
+
+    def _apply_style(self):
+        d = _D
+        self.setStyleSheet(f"""
+            #homeBox {{ background:{d['box']}; border:1px solid {d['border']}; border-radius:10px; }}
+            #homeWarn {{ background:{d['warn_bg']}; border:1px solid {d['warn_border']}; border-radius:10px; }}
+            #homeRow {{ background:transparent; border:none; border-top:1px solid {d['border']}; }}
+            #homeWarnRow {{ background:transparent; border:none; border-top:1px solid {d['warn_line']}; }}
+            QLabel#h_text {{ color:{d['text']}; }} QLabel#h_title {{ color:{d['title']}; }} QLabel#h_sub {{ color:{d['sub']}; }}
+            QLabel#h_muted {{ color:{d['muted']}; }} QLabel#h_warn {{ color:{d['warn']}; }}
+            QLabel#h_warn_text {{ color:{d['warn_text']}; }} QLabel#h_warn_sub {{ color:{d['warn_sub']}; }}
+            QPushButton#homeMenu {{ color:{d['text']}; background:{d['menu_bg']}; border:1px solid {d['menu_border']}; border-radius:8px;
+                                    padding:8px 14px; font-size:12px; }}
+            QPushButton#homeMenu:hover {{ border-color:{d['accent']}; }}
+            QPushButton#homeLink {{ color:{d['accent']}; background:transparent; border:none; font-size:12px; padding:0; }}
+            QPushButton#homeRegion {{ color:{d['warn_text']}; background:transparent; border:1px solid {d['warn']}; border-radius:6px;
+                                      padding:5px 12px; font-size:12px; }}
+            QScrollArea, #homeContent {{ background:transparent; border:none; }}
+            QScrollBar:vertical {{ background:transparent; width:8px; margin:4px 2px 4px 0; }}
+            QScrollBar::handle:vertical {{ background:{d['handle']}; border-radius:3px; min-height:30px; }}
+            QScrollBar::handle:vertical:hover {{ background:{d['handle_hover']}; }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height:0; }}
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background:none; }}
+        """)
+
+    def apply_theme(self, custom: dict | None) -> None:
+        """테마가 바뀌면 홈을 다시 칠한다(개인화 중이면 틀/내용 칸, 아니면 기본 남색). 재시작 없이 즉시."""
+        _D.clear()
+        _D.update(design(custom))
+        KIND_COLORS.update(ok=_D["ok"], muted=_D["muted"], warn=_D["warn"])
+        self._apply_style()
+        self._triangle.setPixmap(paint_icon("region", _D["warn"]))
+        kind, self.state_icon.kind = self.state_icon.kind, None
+        if kind is not None:
+            self.state_icon.set_kind(kind)
+        for row in self.rows.values():
+            last = getattr(row, "_last", None)
+            if last is not None:
+                row.set_state(*last)
+        self.update()
+        for widget in self.findChildren(QAbstractButton):
+            widget.update()
 
     def _row(self, key, name, has_switch):
         row = FeatureRow(name, has_switch)
@@ -344,8 +395,8 @@ class HomePage(QWidget):
     def paintEvent(self, _event):
         p = QPainter(self)
         gradient = QLinearGradient(0, 0, 0, self.height())
-        gradient.setColorAt(0, QColor(BG_TOP))
-        gradient.setColorAt(1, QColor(BG_BOTTOM))
+        gradient.setColorAt(0, QColor(_D["bg_top"]))
+        gradient.setColorAt(1, QColor(_D["bg_bottom"]))
         p.fillRect(self.rect(), gradient)
         p.end()
 
@@ -383,8 +434,8 @@ class HomePage(QWidget):
                 row = QHBoxLayout(line)
                 row.setContentsMargins(0, 5, 0, 5)
                 row.setSpacing(14)
-                row.addWidget(_label(name, 12, WARN_TEXT, bold=True))
-                row.addWidget(_label("판독 영역을 지정해야 동작해요", 12, WARN_SUBTEXT), 1)
+                row.addWidget(_label(name, 12, "warn_text", bold=True))
+                row.addWidget(_label("판독 영역을 지정해야 동작해요", 12, "warn_sub"), 1)
                 button = QPushButton("영역 지정")
                 button.setObjectName("homeRegion")
                 button.setCursor(Qt.CursorShape.PointingHandCursor)

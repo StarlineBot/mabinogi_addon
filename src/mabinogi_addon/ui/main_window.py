@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
 )
 
 from .palette import color, subtab_underline
+from .palette import custom as palette_custom, on_frame
 from .. import config, paths
 from ..capture import Region, create_live_source
 from ..catalog import available_catalog, available_debuff_catalog, build_templates
@@ -116,6 +117,9 @@ def _scrolled(widget: QWidget) -> QScrollArea:
 
 def _tab_qss(dark: bool) -> str:
     """상위 탭 스타일. 선택=민트(양쪽 공통), 호버는 테마별."""
+    custom = palette_custom()
+    if custom is not None:
+        return _custom_tab_qss(custom)
     pane = "#2a2f3a" if dark else "#d5d7dd"
     hover = "#cfd3da" if dark else "#1f2124"
     return (
@@ -127,6 +131,22 @@ def _tab_qss(dark: bool) -> str:
         f"QTabBar::tab:hover {{ color: {hover}; }}"
         f"QTabBar::tab:selected {{ color: {color('accent', dark)}; font-weight: 800;"
         f" border-bottom: 2px solid {color('accent', dark)}; }}"
+    )
+
+
+def _custom_tab_qss(custom: dict) -> str:
+    """테마 개인화의 1단 탭(테마 개인화 명세 5절): 탭 줄은 틀(고른 색 그대로) 위, 아래 페이지(pane)는 내용 칸."""
+    frame = custom["on_frame"]
+    return (
+        f"QTabWidget::pane {{ border: none; border-top: 1px solid {custom['roles']['mid']};"
+        f" background: {custom['roles']['window']}; }}"
+        "QTabBar { qproperty-drawBase: 0; background: transparent; }"
+        f"QTabBar::tab {{ background: transparent; color: {frame['muted']}; padding: 9px 4px;"
+        " min-width: 104px; border: none; border-bottom: 2px solid transparent;"
+        " font-size: 13px; }"
+        f"QTabBar::tab:hover {{ color: {custom['frame_text']}; }}"
+        f"QTabBar::tab:selected {{ color: {frame['accent']}; font-weight: 800;"
+        f" border-bottom: 2px solid {frame['accent']}; }}"
     )
 
 
@@ -415,6 +435,7 @@ class MainWindow(QMainWindow):
             self._pages.setCurrentWidget(self.setup_guide)
         from .creator_dialogue import CreatorDialogue
         self.creator_dialogue = CreatorDialogue(self)
+        self._apply_frame_colors()  # 저장된 테마(개인화면 틀/내용 칸)로 처음 칠하기
         if not needs_start_screen():
             self._show_home()  # 앱을 새로 띄우면 홈부터(명세 12.1). 안내가 먼저면 안내·둘러보기 뒤에 홈.
 
@@ -865,7 +886,8 @@ class MainWindow(QMainWindow):
     @staticmethod
     def status_style(color: str) -> str:
         """상단 상태 버튼 공통 모양(전투 보조·블랙박스): 12px, 한 색, 테두리·밑줄 없음."""
-        return f"color:{color}; font-size:12px; border:none; padding:0 2px; text-decoration:none;"
+        # 머리줄은 틀 위라 개인화 중이면 틀 대비로 맞춘 값(테마 개인화 명세 5절)
+        return f"color:{on_frame(color)}; font-size:12px; border:none; padding:0 2px; text-decoration:none;"
 
     def _overlay_status(self) -> tuple[str, str]:
         """최상단 상태 한 줄 = 재생/일시정지 토글과 1:1(2상태).
@@ -903,9 +925,35 @@ class MainWindow(QMainWindow):
         self.boss_tab.pattern_tabs.setStyleSheet(_tertiary_qss(dark))  # 3단: 2단 색을 물려받지 않게
         self.optimization_tools.panel.tabs.setStyleSheet(sub)
         self._tabs.setStyleSheet(_tab_qss(dark))
+        self._apply_frame_colors()
         # 파티 현황판은 매칭 행 배경색이 셀에 박혀 있어, 테마가 바뀌면 다시 그려야
         # 새 테마 색으로 갱신된다(안 그러면 호버 전까지 옛 색으로 보임).
         self.party_tab.apply_theme()
+
+    def _apply_frame_colors(self) -> None:
+        """틀(머리줄·1단 탭 줄)·내용 칸 바탕과 홈을 지금 테마로 다시 칠한다(테마 개인화 명세 5·6절, 재시작 없이)."""
+        from .home_page import house_icon
+        custom = palette_custom()
+        central = self.centralWidget()
+        if central is None:
+            return
+        central.setObjectName("appCentral")
+        central.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        central.setStyleSheet(f"#appCentral {{ background:{custom['frame']}; }}" if custom else "")
+        text = custom["frame_text"] if custom else None
+        border = f"{text}66" if text else "rgba(128,128,128,0.45)"
+        self._home_btn.setStyleSheet("QPushButton#homeButton { font-size:12px; padding:3px 10px; border-radius:4px;"
+                                     f" border:1px solid {border};" + (f" color:{text}; background:transparent;" if text else "")
+                                     + " }")
+        self._home_btn.setIcon(QIcon(house_icon(on_frame(color("accent")) if not custom else custom["on_frame"]["accent"])))
+        # 틀 위가 아닌 화면(첫 사용 안내 등)과 제작자 줄은 내용 칸 바탕
+        for widget in (self.setup_page, self.setup_guide, getattr(getattr(self, "creator_dialogue", None), "footer", None)):
+            if widget is not None:
+                widget.setAutoFillBackground(custom is not None)
+        self._update_header_status()
+        home = getattr(self, "home_page", None)
+        if home is not None:
+            home.apply_theme(custom)
 
     def _maybe_retry_live_capture(self) -> None:
         """라이브 캡처가 시작 실패로 비어 있으면 주기적으로 재시도한다.
