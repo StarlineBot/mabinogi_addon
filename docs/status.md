@@ -33,6 +33,8 @@
   Confirmed 단축바: 3.png만 실패(`original_grid_not_found`) — 기준 `templates/autofind/skillbar_anchor.png`(◀▶ 페이지 화살표 2줄)의 마스크에 화살표 주변 게임 배경이 포함돼, 어두운 배경에서 점수 0.952 < 0.97.
   화살표·외곽선 픽셀만(템플릿 회색값 >215 또는 <55, 마스크 1020→526px) 쓰면 1·2·3 모두 1.0, 둘째 후보 ≤0.85(QA 실험, 앱 미변경).
   1분 헤일로: 세 장 모두 `전투 제한 시간 15:29` 후보는 찾았지만 900초(15:00) 초과라 거절 — 믿음의 균열(15:00 시작) 전용 설계대로, 이 던전은 대상 아님(변경 불필요).
+  → **QA 5376862 통과(Noto)**: release checks 0.30.0 1445·전체 3346 passed/26 skipped, 원격 v0.30.0 태그 없음. `와이어웹.png`는 QA 자른 원본과 픽셀 차이 0, 이관은 0.24.0 함수 재사용(표시 `defaultDebuffWirewebMigrated`·`icon_backup_0.30.0`).
+  단축바 새 마스크: 창 모드 세 장 모두 (3,43,1168×89). 옛/새 마스크로 tests/data 76장 비교 — 찾음 37→52, 잃거나 위치 바뀐 것 0(새로 찾은 15장은 왼쪽 위 단축바로 육안 확인).
   → **0.30.0 개발 완료(2026-10-30, 로컬 검증)** — 재QA·Windows 후보 검증 대기.
   와이어웹: `assets/debuff/icon/와이어웹.png`(1번 장 원본 16px, BGR), `DEFAULT_DEBUFF_ORDER` 맨 뒤(기본 20종), 표시용 image/ 없음(matchIcon 사용).
   이관: `migrate_default_debuff_icons`에 표시·백업 폴더 인자 추가(0.24.0 기본값 그대로), `migrate_new_default_debuff_icons` = `defaultDebuffWirewebMigrated` + `icon_backup_0.30.0`, '와이어웹.png'만, 실패 시 표시 없이 재시도. 0.24.0 이관 다음에 실행.
