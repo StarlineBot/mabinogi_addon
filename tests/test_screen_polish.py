@@ -30,13 +30,17 @@ def test_lock_buttons_share_wording_and_width_per_kind(window):
     w, app = window
     locks = _locks(w)
     every = {"stat", "custom", "skillbar"}
+    # 버프·디버프는 배율 칸과 반씩 나누는 원래 폭(2026-10-30 사용자 결정) — 글자만 같은 규칙
+    for name in ("buff", "debuff"):
+        assert locks[name].text() in LOCK_TEXTS and locks[name].maximumWidth() > 10000, name
+    locks = {k: v for k, v in locks.items() if k not in ("buff", "debuff")}
     for name, button in locks.items():
         assert button.text() in LOCK_TEXTS, name
         assert button.text().startswith("전체 ") is (name in every), name
         width = lock_width(button, every=name in every)
         assert button.minimumWidth() == button.maximumWidth() == width, name
         assert button.fontMetrics().horizontalAdvance(lock_text(True, every=name in every)) < width  # 가장 긴 글자가 들어간다
-    assert lock_width(locks["buff"]) < lock_width(locks["stat"], every=True)  # 일반은 '전체'보다 좁다(128 고정 폐지)
+    assert lock_width(locks["boss_warn"]) < lock_width(locks["stat"], every=True)  # 일반은 '전체'보다 좁다(128 고정 폐지)
 
 
 def test_toggle_buttons_match_plain_button_height_and_normal_weight(window):
@@ -151,3 +155,11 @@ def test_name_column_gap_matches_other_screens(window):
     halo = boss.halo_capture
     gaps = (_name_gap(halo, "다음 헤일로", halo.countdown_lock), _name_gap(halo, "헤일로 경고", halo.warn_lock))
     assert min(gaps) <= reference + 3
+
+
+def test_buff_debuff_lock_keeps_half_row_width(window):
+    w, app = window
+    for key, tab in (("buff", w.buff_tab), ("debuff", w.debuff_tab)):
+        w._open_setup_feature(key)
+        app.processEvents()
+        assert abs(tab.lock_btn.width() - tab.scale_spin.width()) <= 2, key  # 배율 칸과 반씩
