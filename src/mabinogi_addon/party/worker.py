@@ -6,6 +6,7 @@ UI 스레드를 막지 않도록 QThread에서 돈다. 네트워크/파싱은 �
 
 from __future__ import annotations
 
+import logging
 import threading
 from collections.abc import Callable
 
@@ -96,6 +97,8 @@ class PartyWorker(QThread):
             self._primed = True
             return
         for keyword, recruit in hits:
+            # 진단용(0.30.4): 어떤 키워드로 울렸는지 — '키워드 없는데 알림' 제보 확인
+            logging.getLogger(__name__).info("파티 모집 알림: 키워드 %r", keyword)
             self.alerted.emit(keyword, recruit)
 
     def reprime(self) -> None:

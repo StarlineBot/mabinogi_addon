@@ -33,7 +33,9 @@ def detector_assets(feature: str) -> dict[str, np.ndarray]:
         return assets()
     if feature == "skillbar":
         from .detect.autofind_anchors import assets
-        return assets(feature)
+        from .detect.skillbar_anchor import _uhd_assets
+        # 0.30.4: 4K 화살표 변형도 진단 ZIP에 함께(anchor_uhd·mask_uhd)
+        return {**assets(feature), **{f"{key}_uhd": image for key, image in _uhd_assets().items()}}
     if feature == "buff":
         from .detect.status_panel import anchor_template
         template = anchor_template()

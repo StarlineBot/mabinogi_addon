@@ -416,13 +416,28 @@ def clear_discord_user(path: Path = LOCAL_CONFIG_PATH) -> None:
     _write_local_config(data, path)
 
 
+def _clean_word_list(value) -> list[str]:
+    """목록이 아니면 버리고, 각 항목은 앞뒤 공백을 떼고 빈 값은 뺀다(중복도 처음 것만).
+
+    0.30.4 QA: 저장값이 [""]·[" "]이면 빈 키워드가 모든 모집글에 걸리고, 목록 대신 문자열("레이드")이면
+    글자 하나하나('레','이','드')가 키워드가 되어 키워드가 없는데도 알림이 울렸다(화면엔 빈 칩)."""
+    if not isinstance(value, list):
+        return []
+    out: list[str] = []
+    for item in value:
+        if not isinstance(item, (str, int, float)) or isinstance(item, bool):
+            continue
+        word = str(item).strip()
+        if word and word not in out:
+            out.append(word)
+    return out
+
+
 def load_party_lists() -> tuple[list[str], list[str]]:
-    """(keywords, excludeLeaders)를 로컬 설정에서 읽는다."""
+    """(keywords, excludeLeaders)를 로컬 설정에서 읽는다(잘못된 저장값은 정리)."""
     data = _read_local_config()
     party = data.get("party", {}) if isinstance(data.get("party"), dict) else {}
-    keywords = [str(x) for x in party.get("keywords", [])]
-    excludes = [str(x) for x in party.get("excludeLeaders", [])]
-    return keywords, excludes
+    return _clean_word_list(party.get("keywords", [])), _clean_word_list(party.get("excludeLeaders", []))
 
 
 def load_party_server(path: Path = LOCAL_CONFIG_PATH) -> str:
@@ -534,8 +549,8 @@ def save_party_lists(keywords: list[str], excludes: list[str]) -> None:
     party = data.get("party", {})
     if not isinstance(party, dict):
         party = {}
-    party["keywords"] = keywords
-    party["excludeLeaders"] = excludes
+    party["keywords"] = _clean_word_list(list(keywords))
+    party["excludeLeaders"] = _clean_word_list(list(excludes))
     data["party"] = party
     _write_local_config(data)
 

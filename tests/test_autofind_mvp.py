@@ -167,6 +167,8 @@ def test_new_detectors_roundtrip_original_zip(frames, tmp_path, monkeypatch, fea
         expected = {"anchor", "mask"}
         if feature == "tuarim":
             expected |= {"circle_anchor", "circle_mask", "circle_anchor_alt", "circle_anchor_live", "circle_anchor_seven", "structure_live"}
+        if feature == "skillbar":
+            expected |= {"anchor_uhd", "mask_uhd"}  # 0.30.4 명세 변경: 4K 화살표 변형도 진단 ZIP에
         assert set(record.metadata["asset_names"]) == expected
         np.testing.assert_array_equal(image_io.imread(record.directory / "input.png"), frame)
         result = replay(storage.export(record, tmp_path / "공유.zip"))

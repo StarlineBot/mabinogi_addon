@@ -89,6 +89,7 @@ def find_alerts(
     now: datetime | None = None,
 ) -> list[tuple[str, Recruit]]:
     """최근 5분 내 신규 모집 중 키워드 매칭 건을 (키워드, Recruit)로. 서명별 1회."""
+    keywords = [kw.strip() for kw in keywords if isinstance(kw, str) and kw.strip()]  # 빈 키워드는 모든 글에 걸린다
     if not keywords:
         return []
     now = now or datetime.now(KST)
