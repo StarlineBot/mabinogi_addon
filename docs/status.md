@@ -10,6 +10,9 @@
   다음 게시(0.29.0)부터 반영. 로컬 `test_release_candidate.py`·`test_windows_ci.py` 224 passed(접기 회귀 1개 추가). 실제 공개 README 렌더는 게시 후 확인.
   → **QA 6c87458 통과**: 현재 공개 CHANGELOG(버전 165개)에 v0.29.0 노트를 붙여 `prepare_public`과 같은 방식으로 모의 생성 → 펼친 부분은 v0.29.0만(25줄),
   v0.28.2~v0.1.x는 `<details>` 안, `<details>`/`</details>` 1쌍·`<summary>` 뒤 빈 줄 있음(GitHub에서 안쪽 마크다운 렌더). release 관련 테스트 237 passed. 원격 v0.29.0 태그 없음.
+- **v0.29.0 게시 완료**: [#157](https://github.com/StarlineBot/mabinogi_addon/actions/runs/41034259144)·게시 [#237](https://github.com/StarlineBot/mabinogi_addon/actions/runs/41035576828) 성공,
+  태그 `v0.29.0` → ede7de7(candidate source_sha·지문 `a152620f…` 일치). 공개 version.json 0.29.0(sha256 후보와 일치)·exe 163,824,772바이트·sha256 `d9bb8973…b3bb9253` 후보·공개 URL 일치.
+  공개 README: 펼친 내역 v0.29.0만, 이전 165개 버전은 `<details>` 1쌍 안(접기 실제 반영). 실화면(개인화 미리보기·확인 창 한글 버튼·다크 복귀) 확인 대기.
 - [v0.10.1](https://github.com/StarlineBot/mabinogi_addon-releases/releases/tag/v0.10.1) 게시 완료.
   태그 소스는 `035abc29`, exe와 업데이트 정보의 크기·해시 일치를 API로 확인했다.
 - [검증 실행](https://github.com/StarlineBot/mabinogi_addon/actions/runs/39724316823): 총 3분 20초.
