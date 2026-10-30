@@ -125,7 +125,9 @@ def count_rows(gray: np.ndarray, bottom: int, rows: dict, pitch: int) -> int | N
     """즐겨찾기 칸 줄 수. 창 위 테두리가 보이면 (구분선 − 테두리) ÷ 줄 간격, 안 보이면 기억한 맨 윗줄까지.
     둘 다 없으면 None(너무 어두워 모름)."""
     top = panel_top(gray, bottom, pitch)
-    if top is not None:
+    # 0.31.1: 기억한 즐겨찾기 줄이 '테두리'보다 위에 있으면 그건 테두리가 아니다(창 모드 wireweb_3: 칸 안 바닥 금을
+    # 테두리로 잡아 1줄) — 줄 기준으로 센다.
+    if top is not None and not any(row.y < top for row in rows.values()):
         return max(0, (bottom - top) // pitch)
     if rows:
         return max(round((bottom - row.y) / pitch) for row in rows.values())
@@ -232,7 +234,12 @@ class FavoritesReader:
         if self.separator is None and self._pending is None and (self._frame - 1) % self.SCAN_EVERY:
             return  # 즐겨찾기를 안 쓰는 경우 전체 탐색은 가끔만
         # 목록에 가장 가까운(아래쪽) 선: 영역을 창 위 게임 화면부터 잡아도 그쪽 가로선을 고르지 않게
-        candidates = [y for y in find_separators(gray) if any(ly > y for ly in list_ys)]
+        separators = find_separators(gray)
+        candidates = [y for y in separators if any(ly > y for ly in list_ys)]
+        if not candidates:
+            # 0.31.1: 선 아래 목록이 모두 미등록 버프면(창 모드 wireweb_1) 위 근거로 — 선 바로 위 한 줄에 등록 버프
+            # 아이콘(즐겨찾기 줄)이 있으면 구분선. 영역 아래 게임 바닥선은 바로 위가 아이콘 줄이 아니라 걸리지 않는다.
+            candidates = next(([y] for y in reversed(separators) if self._favorite_row_above(gray, y)), [])
         new = candidates[-1] if candidates else None
         if new is None:
             self._pending, self._pending_count = None, 0
@@ -245,6 +252,19 @@ class FavoritesReader:
             if self.separator != new:
                 _log.info("즐겨찾기 구분선 %s → %s", self.separator, new)
             self.separator, self._pending, self._pending_count, self._gone = new, None, 0, 0
+
+    def _favorite_row_above(self, gray: np.ndarray, y: int) -> bool:
+        """구분선 후보 y 바로 위 한 줄(줄 간격 안)에 등록 버프 아이콘이 있는지. 그 띠만 봐서 가볍다(전체 줄 맞춤의 약 1/40)."""
+        x0, x1 = self._icon_column
+        for template in self._templates.values():
+            t = _gray(template)
+            size = t.shape[0]
+            band = gray[max(0, y - round(size * 1.5) - 4):y, x0:x1]
+            if band.shape[0] < size or band.shape[1] < t.shape[1]:
+                continue
+            if match_icon(band, t).score >= FAV_MATCH_THRESHOLD:
+                return True
+        return False
 
     def _pitch(self) -> int:
         size = next((row.size for row in self.rows.values()), 16)

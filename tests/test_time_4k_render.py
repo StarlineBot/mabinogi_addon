@@ -31,7 +31,12 @@ EXPECTED = {
     ("tests/data/mabinogi_2026_10_30_214051.png", _BOX): {"han_adrenaline": 179, "overture_of_the_battlefield": 80,
                                                          "melee_attack": 85, "sharp": 289},
     ("tests/data/mabinogi_2026_10_30_214648.png", (3546, 300, 294, 1860)): {"overture_of_the_battlefield": 69,
-                                                                           "sharp": 253, "star": 0},  # 빨간 0초
+                                                                           "sharp": 253, "star": 0,  # 빨간 0초
+                                                                           "han_adrenaline": 178},  # 0.31.1 숫자 8(세트에 안 쓴 장)
+    # 0.31.1: 숫자 8·'시간'을 이 장에서 떴다(예리 3분 28초, 공격력 증가 1시간 58분 21초)
+    ("tests/data/mabinogi_2026_10_31_0055251.png", (3546, 276, 294, 1884)): {
+        "han_adrenaline": 84, "magi": 93, "voice_of_vitality": 119, "sharp": 208,
+        "overture_of_the_battlefield": 263, "march": 360, "melee_attack": 7101},
 }
 
 

@@ -78,6 +78,6 @@ def test_current_plan_matches_bundled_release_and_changed_features():
         'tests/test_theme_colors.py', 'tests/test_theme_personalization.py', 'tests/test_dialog_buttons.py',
         'tests/test_debuff_wireweb.py', 'tests/test_skillbar_mask.py',
         'tests/test_time_4k_render.py', 'tests/test_boss_bar_4k.py', 'tests/test_resource_4k.py', 'tests/test_skillbar_4k.py',
-        'tests/test_party_keywords_clean.py', 'tests/test_buff_opacity_reorder.py', 'tests/test_boss_name_4k.py', 'tests/test_boss_name_shape.py',
+        'tests/test_party_keywords_clean.py', 'tests/test_buff_opacity_reorder.py', 'tests/test_boss_name_4k.py', 'tests/test_boss_name_shape.py', 'tests/test_favorites_windowed.py',
     })
     assert set(paths) == expected

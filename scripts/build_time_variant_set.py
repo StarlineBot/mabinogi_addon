@@ -31,6 +31,7 @@ from mabinogi_addon import image_io  # noqa: E402
 from mabinogi_addon.detect.binarize import binarize  # noqa: E402
 
 _UNIT = {"분": "bun", "초": "cho", "일": "day"}
+_HOUR_WIDTH = 16  # '시간' 두 글자 폭(4K 19px) — 숫자(5px)·분/초(9px)보다 넓다
 _TIME_RIGHT = 132  # 시간 글자 오른쪽 끝(strip 기준) 너머의 패널 테두리 세로선은 빼고 나눈다
 
 
@@ -87,9 +88,20 @@ def extract(image: Path, box: tuple[int, int, int, int], rows: list[tuple[int, s
     for icon_y, text in rows:
         strip = binarize(region[max(0, icon_y - 4):icon_y + 24, 150:])[:, :_TIME_RIGHT]
         labels = labels_of(text)
-        groups = split_touching(strip, glyph_groups(strip), labels)[-len(labels):]  # 오른쪽 정렬: 뒤에서부터
-        if len(groups) != len(labels):
-            raise SystemExit(f"{icon_y} {text}: 글자 {len(labels)}개인데 묶음 {len(groups)}개")
+        # 오른쪽 정렬이라 뒤에서부터 라벨을 묶음에 붙인다. '시간'은 '시'(ㅅ·ㅣ)·'간'처럼 묶음이 여럿이라
+        # 합친 폭이 _HOUR_WIDTH가 될 때까지 왼쪽으로 합친다(0.31.1: 합치지 않으면 '간'을 시간, 'ㅅ'을 숫자로 잘못 뜬다).
+        found_groups = split_touching(strip, glyph_groups(strip), labels)
+        groups, i = [], len(found_groups) - 1
+        for label in reversed(labels):
+            if i < 0:
+                raise SystemExit(f"{icon_y} {text}: 글자 묶음이 모자람")
+            group = list(found_groups[i])
+            i -= 1
+            while label == "hour" and group[-1] - group[0] + 1 < _HOUR_WIDTH and i >= 0:
+                group = list(found_groups[i]) + group
+                i -= 1
+            groups.append(group)
+        groups.reverse()
         for label, g in zip(labels, groups):
             x0, x1 = g[0], g[-1] + 1
             if label.isdigit() and x1 - x0 < 5:  # '1'처럼 좁은 숫자는 숫자 칸(5px) 가운데로

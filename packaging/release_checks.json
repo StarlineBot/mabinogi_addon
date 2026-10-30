@@ -1,5 +1,5 @@
 {
-  "version": "0.31.0",
+  "version": "0.31.1",
   "tests": [
     "tests/test_blackbox.py",
     "tests/test_blackbox_access.py",
@@ -87,6 +87,7 @@
     "tests/test_party_keywords_clean.py",
     "tests/test_buff_opacity_reorder.py",
     "tests/test_boss_name_4k.py",
-    "tests/test_boss_name_shape.py"
+    "tests/test_boss_name_shape.py",
+    "tests/test_favorites_windowed.py"
   ]
 }
