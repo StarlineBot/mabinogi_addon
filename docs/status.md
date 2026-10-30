@@ -37,6 +37,12 @@
   (사용자 재결정 — 굵기 보통·일반 버튼 높이, 폭은 지금처럼 글자에 맞춤). 0.28.1 배포는 이 수정 뒤.
   → **수정(로컬 검증)**: `settings_layout.style_toggle`(LOCK_STYLE 굵기 400·세로 padding 0 + `setFixedHeight(plain_button_height())`) 한 곳에서 적용, `lock_button`·버프/디버프 잠금(이제 `lock_button`)·최적화 토글·FPS 표시·블랙박스 사용이 모두 이 함수. `lock_width(every=)` = 보통 굵기 `…잠금됨` 폭 + 22. 테스트: 종류별 폭·일반 버튼 높이·굵기 보통·같은 줄 `알림 미리보기`와 같은 키(`test_screen_polish.py`), 기본 글꼴·Noto 둘 다 통과. 노트 문구·명세 13.1 정정.
   → 사용자 재결정: 버프·디버프 잠금은 원래 폭(배율 칸과 반씩, stretch 1) 복원, 굵기·높이만 `style_toggle` 톤.
+  **v0.28.1은 이미 게시됨(QA 정정 — 위 "0.28.1에 포함/배포 보류" 안내는 태그 미확인 오류)**: 검증 [#155](https://github.com/StarlineBot/mabinogi_addon/actions/runs/40900202688)·게시
+  [#235](https://github.com/StarlineBot/mabinogi_addon/actions/runs/40902406515) 성공(2026-10-29 15:18 UTC), 태그 `v0.28.1` → 9c7bb42(candidate source_sha·지문 `afc51862…` 일치),
+  공개 version.json 0.28.1(sha256 후보와 일치)·exe 163,780,829바이트·sha256 `b13fc98f…59481bbd` 후보·공개 URL 일치. 사용자 실화면 피드백은 이 게시본.
+  → **QA f185c52·b184d2d(잠금·토글 톤 통일)**: 코드·테스트·렌더 통과(Noto: release checks 1379, 전체 3301 passed/26 skipped, 모든 잠금·토글 높이 = 일반 버튼 26px,
+  헤일로·보스 81px·체력바/단축바 106px·버프/디버프 배율 칸과 반씩). **단, 버전 수정 필요**: 게시된 0.28.1 노트 섹션을 고쳤고 release_checks도 0.28.1 →
+  새 버전 0.28.2로(UI 다듬기만) 노트 `## v0.28.2` 새 섹션 + v0.28.1 섹션 게시본(9c7bb42) 그대로 복원 + `packaging/release_checks.json` 0.28.2. 그 전 배포 금지.
 - **개발 대상(2026-10-29 사용자 결정, 0.28.0 — 0.27.0 다음): 홈 화면.** [탐색 구조 명세 12절](navigation-structure-spec.md), 기준 이미지 `docs/qa/assets/home_draft_20261029/`.
   상태 줄 왼쪽 `홈` 버튼 → 앱 창 전체를 덮는 홈, `전체 메뉴 ›`로 복귀, 앱 시작은 홈(첫 사용 안내 뒤). 상태 카드 + 설정 필요 상자(있을 때만) + 전투 보조 2열 10줄 +
   최적화·블랙박스·파티 모집 3칸. 스위치는 기존 켜기 설정이 있는 기능만, 상태는 판독 값 없이, 최적화 스위치 C안, 배경 이미지 없음, 제작자 잡담 켜짐(창 864) 때 캐릭터 유지.
