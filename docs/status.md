@@ -38,7 +38,7 @@
   QA 재현: 시작 #ffffff → 개인화(살구) #062F28 → 다크 #FFFFFF → 개인화(파랑) #062F28. 같은 패턴(accent + 고정 흰색 스타일시트)은 이 한 곳(나머지 흰색은 QPainter라 무관).
   → **0.31.1 수정(2026-10-31, 로컬 검증)** — 잠금 켜짐 테두리 = `accent`(이름 색이라 테마 변경 즉시 다시 칠함, 기본 다크 #00C9A2·라이트 #00A884로 바탕과 같은 색).
   `✕`: `palette.restyle`이 on-accent를 **강조색이 같은 규칙 블록(`{ … }`, 서식 글자는 같은 태그)** 안에서만 바꿈 → 시스템→살구→다크→파랑 순서에서 `#updateClose:hover` #ffffff 유지, `#updateBtn` 글자는 on-accent 따라감.
-  배너 고정 초록색 테마 연동은 사용자 판단 대기(이번 미포함). 테스트 `test_theme_banner_polish.py`(수정 전 4개 실패 확인).
+  배너 고정 초록색 테마 연동은 **하지 않음(2026-10-31 사용자 결정: 업데이트 배너까지 맞출 필요 없음 — 초록 유지)**. 테스트 `test_theme_banner_polish.py`(수정 전 4개 실패 확인).
   → **QA 29c0b9c 통과(2026-10-31, Noto 글꼴)**: 시스템→살구→다크→파랑에서 `#updateClose:hover` #ffffff 유지·`#updateBtn` 글자 on-accent 따라감, 개인화 살구 잠금 켜짐 `border-color:#F59E7B`(렌더 확인).
   on-accent 쓰는 스타일 8곳 모두 강조 바탕과 같은 규칙 블록이라 블록 단위 치환으로 빠지는 곳 없음.
 - **Confirmed(2026-10-31 사용자 Windows 스크린샷, v0.31.0)**: 버프·디버프 탭이 두 칸(목록|상세) → 한 칸으로 접힘. 잠금 줄 세 칸을 `equal_columns`가 **가장 넓은 칸 기본 폭 × 3**으로 최소 폭을 걸어,
@@ -88,6 +88,8 @@
   name_uhd 변형을 빼도 2단계만으로 4K 회한 0.72·레넨 0.74 식별. 기준 모양은 처음 한 번 준비(약 0.16초), 이후 1회 약 1ms. 테스트 `test_boss_name_shape.py`(64장 표), `test_boss_name_4k.py`의 213927·213942를 페타크로 정정.
 - **0.31.1 QA 통과(2026-10-31, 48bdc1b·29c0b9c)**: release checks 0.31.1 1606 passed, 전체(Noto) 3505 passed/1 failed — 실패는 xdist 워커가 `test_resource_null_sections[dorcha]` 픽스처 정리(deleteLater) 중 Qt Aborted(자원 탭 정리, 이번 변경 무관), 단독 3회·병렬 2회 통과 Potential flaky.
   원격 태그 최신 v0.31.0 → 배포 번호 **0.31.1**(노트 헤더·release_checks 일치). 사용자 Windows 11 실화면 확인 항목: 버프·디버프 두 칸, 홈 배너.
+  **v0.31.1 게시 완료**: [#163](https://github.com/StarlineBot/mabinogi_addon/actions/runs/41142999599)·게시 [#243](https://github.com/StarlineBot/mabinogi_addon/actions/runs/41144349978) 성공,
+  태그 `v0.31.1` → d19889e(candidate source_sha·지문 `d38c98fd…` 일치). 공개 version.json 0.31.1(Release 자산과 동일)·exe 163,869,138바이트·sha256 `0baaef68…5d3536b2` 후보·공개 URL 일치. 실화면 확인 대기.
 - **조사(2026-10-31 제보: 4K에서 헤일로 알림·보스 패턴이 안 뜸)** — 자료 `tests/data/mabinogi_2026_10_31_0055251.png`(레넨의 미이르 : 회한 86.15%, 전투 제한 시간 13:36).
   Confirmed **4K 보스 이름 식별 실패**: `boss_name_matcher.identify` 점수 회한 0.401·레넨 0.462(0055251·214648), 다른 4K 바는 0.25~0.34 < 기준 0.6. 창 모드 레넨은 1.0.
   → `boss_tab._tick`은 식별된 프레임에서만 HP 판독·패턴 알림, 헤일로는 회한 식별(`_target_boss_active`)이 있어야 시계 무장 → **4K에서는 보스 패턴·헤일로가 전혀 동작 안 함**.
