@@ -84,8 +84,8 @@ def test_after_migration_catalog_uses_bundled_native_icon(tmp_path):
     _icon(icons / "모모.png", 9)
     before = {b.id: b for b in catalog.load_debuff_catalog(icon_dirs=(catalog.DEFAULT_DEBUFF_ICON_DIR, icons))}
     assert before["모모"].match_icon == icons / "모모.png"
-    assert config.migrate_default_debuff_icons(cfg, user_dir=icons)  # 실제 기본 목록(19종)으로
+    assert config.migrate_default_debuff_icons(cfg, user_dir=icons)  # 실제 기본 목록(0.30.0 와이어웹 추가로 20종)으로
     after = {b.id: b for b in catalog.load_debuff_catalog(icon_dirs=(catalog.DEFAULT_DEBUFF_ICON_DIR, icons))}
     assert after["모모"].match_icon == catalog.DEFAULT_DEBUFF_ICON_DIR / "모모.png"
     assert after["모모"].display_image is not None
-    assert len(catalog.default_debuff_ids()) == 19
+    assert len(catalog.default_debuff_ids()) == 20  # 0.30.0 와이어웹 기본 추가(명세 변경)
