@@ -50,9 +50,18 @@ def _is_auxiliary_bar(sub, names) -> bool:
 
 _SAT_MIN = 90
 _VAL_MIN = 80
-_MIN_W_FRAC = 0.18  # 화면 폭 대비 최소 바 폭(= 가장자리 행 '씨앗' 판정의 최장 연속 하한)
-_MIN_H_FRAC = 0.014  # 화면 높이 대비 최소 바 높이
-_MAX_H_FRAC = 0.06  # 최대(너무 두꺼운 건 바 아님)
+# 크기 기준은 'UI 배율'에 곱한다. 게임 UI는 1440 높이를 넘는 화면(4K)에서 더 커지지 않는다
+# (0.30.1 QA: 4K에서도 보스바 521×37, 2560×1440과 같음). 예전엔 화면 비율이라 4K에서 최소 폭이
+# 691px(> 실제 521px)가 되어 후보 0개였다. 1440 이하 화면은 예전 비율 그대로(ui_scale = H/1440).
+_REF_H, _REF_W = 1440, 2560
+_MIN_W_FRAC = 0.18  # 기준 화면(2560) 폭 대비 최소 바 폭(= 가장자리 행 '씨앗' 판정의 최장 연속 하한) → 461px
+_MIN_H_FRAC = 0.014  # 기준 화면 높이 대비 최소 바 높이 → 20px
+_MAX_H_FRAC = 0.06  # 최대(너무 두꺼운 건 바 아님) → 86px
+# 색조 나눠 찾기(채도 마스크가 바닥과 한 덩어리일 때만): OpenCV 색조 0~179를 30씩 겹쳐 45 폭으로.
+_HUE_STEP, _HUE_WIDTH = 30, 45
+_VALUE_SPLITS = (230, 200)  # 그다음 밝기 상한으로 나눠(밝은 바닥 제외)
+# 자동 찾기 검증: HP% 기본 판독의 최저 자리 점수 하한(실제 보스바 0.74~1.0, 위치가 어긋난 4K 판독 0.48)
+_VALIDATE_SCORE = 0.6
 _FLAT_RATIO = 6  # w > h * 이것 (납작한 가로 바)
 _BOTTOM_FRAC = 0.72  # 이 아래(하단)에서만
 _FILL_ROW = 0.45  # 바 높이 확장: 씨앗 좌우 범위 안 '채움 행' 비율 하한(글자 행도 통과)
@@ -61,6 +70,11 @@ _EDGE_FRAC = 0.90  # 좌우 끝 확정에 쓸 '가장자리 행' 기준(띠 내 
 _NAME_SAT_MAX = 90
 _NAME_VAL_MIN = 170
 _NAME_COV_MIN = 0.012  # 박스 왼쪽 60%에서 흰 글자 최소 비율(실제 보스 ≥0.027, 여유 둠)
+
+
+def ui_scale(H: int) -> float:
+    """물리 화면 높이 H에서 게임 UI 배율(1440 기준). 1440보다 큰 화면에서는 1(UI가 안 커짐)."""
+    return min(H, _REF_H) / _REF_H
 
 
 def _has_name_text(sub: np.ndarray) -> bool:
@@ -80,7 +94,7 @@ def make_validator(*, templates=None, diagnostics: dict | None = None, auxiliary
 
     이걸로 거르는 것: 펠롬 2단 바 등 % 판독 실패(read_percent None), 글자 없는 솔리드 밴드.
     """
-    from .boss_hp_reader import read_percent
+    from .boss_hp_reader import main_path_score, read_percent
     auxiliary_names = _AUXILIARY_NAMES if auxiliary_names is None else auxiliary_names
 
     def validate(sub: np.ndarray) -> bool:
@@ -94,6 +108,13 @@ def make_validator(*, templates=None, diagnostics: dict | None = None, auxiliary
         if percent is None:
             if diagnostics is not None:
                 diagnostics.setdefault("validation", []).append({"percent": None, "rejection": "percent_unreadable"})
+            return False
+        score = main_path_score(sub, templates)
+        if score is not None and score < _VALIDATE_SCORE:
+            # 겨우 맞춘 판독(글자 위치·모양이 기준과 다른 화면)은 보스바로 확정하지 않는다 — 틀린 HP로 패턴 알림이 울리지 않게
+            if diagnostics is not None:
+                diagnostics.setdefault("validation", []).append({"percent": percent, "score": round(score, 3),
+                                                                 "rejection": "percent_low_confidence"})
             return False
         has_name = _has_name_text(sub)
         if diagnostics is not None:
@@ -141,38 +162,10 @@ def has_wide_bar_row(frame: np.ndarray, frac: float = 0.70) -> bool:
     return bool(best.size and int(best.max()) >= w * frac)
 
 
-def locate_boss_bar(
-    frame: np.ndarray, validate=None, *, diagnostics: dict | None = None, auxiliary_names=None,
-) -> tuple[int, int, int, int] | None:
-    """전체 화면에서 보스 체력바 영역 (x,y,w,h)를 찾는다(없으면 None).
-
-    주변 UI(단축바·채팅·버프 아이콘) 배치와 무관하게, 바 '자체 특징'(긴 가로 연속을 갖는
-    가장자리 행 → 채움 행 확장)으로 찾는다(모듈 상단 설명 1~5). 보스바가 안 보이면 None.
-    validate(sub_bgr)->bool 을 주면, 그 박스 안에서 검증(퍼센트·이름 판독)이 통과한 후보만
-    채택한다(이름 없는 솔리드 밴드·% 판독 실패 등을 거른다).
-    """
-    if frame is None or frame.size == 0 or frame.shape[0] < 40 or frame.shape[1] < 80:
-        return None
-    H, W = frame.shape[:2]
-    if diagnostics is not None:
-        diagnostics.update(transforms=["BGR to HSV", "saturation mask", "row longest run", "height normalization",
-                                       "auxiliary name exclusion", "validated upper companion strip"],
-                           search_region=[0, int(H * _BOTTOM_FRAC), W, H - int(H * _BOTTOM_FRAC)],
-                           thresholds={"saturation_min": _SAT_MIN, "value_min": _VAL_MIN,
-                                       "min_width_fraction": _MIN_W_FRAC, "fill_row": _FILL_ROW,
-                                       "min_height_fraction": _MIN_H_FRAC, "max_height_fraction": _MAX_H_FRAC,
-                                       "flat_ratio": _FLAT_RATIO, "edge_fraction": _EDGE_FRAC,
-                                       "auxiliary_name_score": _AUXILIARY_NAME_THRESHOLD,
-                                       "companion_step_fraction": _AUXILIARY_STEP},
-                           candidates=[], rejection="no_geometric_candidate")
-    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-    sat = (hsv[:, :, 1] > _SAT_MIN) & (hsv[:, :, 2] > _VAL_MIN)
-    y_off = int(H * _BOTTOM_FRAC)  # 하단 영역에서만 (바는 메뉴바 위)
-    band = sat[y_off:, :]  # (R, W) bool — 하단
+def _band_candidates(band, y_off, H, min_run, min_h, max_h, diagnostics):
+    """하단 마스크(band)에서 가장자리 행(긴 가로 연속) → 채움 행 확장으로 바 후보 상자들(높이 정규화)."""
     R = band.shape[0]
     best, bstart, bend = _row_longest_runs(band)
-    min_run = int(W * _MIN_W_FRAC)
-    min_h, max_h = int(H * _MIN_H_FRAC), int(H * _MAX_H_FRAC)
     seeds = np.flatnonzero(best >= min_run)  # 가장자리 행(긴 가로 연속) — 위→아래
     cands: list[tuple[int, int, int, int]] = []
     consumed = np.zeros(R, bool)  # 한 띠로 쓴 행은 다른 씨앗이 재사용하지 않게
@@ -200,13 +193,61 @@ def locate_boss_bar(
                 diagnostics["candidates"].append({"box": [left, y_off + int(top), w, int(h)], "rejection": "geometry_filter"})
             continue
         cands.append(normalize_box_height((left, y_off + top, w, h), H))
+    return cands
+
+
+def locate_boss_bar(
+    frame: np.ndarray, validate=None, *, diagnostics: dict | None = None, auxiliary_names=None,
+) -> tuple[int, int, int, int] | None:
+    """전체 화면에서 보스 체력바 영역 (x,y,w,h)를 찾는다(없으면 None).
+
+    주변 UI(단축바·채팅·버프 아이콘) 배치와 무관하게, 바 '자체 특징'(긴 가로 연속을 갖는
+    가장자리 행 → 채움 행 확장)으로 찾는다(모듈 상단 설명 1~5). 보스바가 안 보이면 None.
+    validate(sub_bgr)->bool 을 주면, 그 박스 안에서 검증(퍼센트·이름 판독)이 통과한 후보만
+    채택한다(이름 없는 솔리드 밴드·% 판독 실패 등을 거른다).
+    """
+    if frame is None or frame.size == 0 or frame.shape[0] < 40 or frame.shape[1] < 80:
+        return None
+    H, W = frame.shape[:2]
+    if diagnostics is not None:
+        diagnostics.update(transforms=["BGR to HSV", "saturation mask", "row longest run", "height normalization",
+                                       "auxiliary name exclusion", "validated upper companion strip"],
+                           search_region=[0, int(H * _BOTTOM_FRAC), W, H - int(H * _BOTTOM_FRAC)],
+                           thresholds={"saturation_min": _SAT_MIN, "value_min": _VAL_MIN,
+                                       "min_width_fraction": _MIN_W_FRAC, "fill_row": _FILL_ROW,
+                                       "min_height_fraction": _MIN_H_FRAC, "max_height_fraction": _MAX_H_FRAC,
+                                       "flat_ratio": _FLAT_RATIO, "edge_fraction": _EDGE_FRAC,
+                                       "auxiliary_name_score": _AUXILIARY_NAME_THRESHOLD,
+                                       "companion_step_fraction": _AUXILIARY_STEP},
+                           candidates=[], rejection="no_geometric_candidate")
+    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    sat = (hsv[:, :, 1] > _SAT_MIN) & (hsv[:, :, 2] > _VAL_MIN)
+    y_off = int(H * _BOTTOM_FRAC)  # 하단 영역에서만 (바는 메뉴바 위)
+    ui = ui_scale(H) * _REF_H  # UI 기준 높이(px): 1440 이하 화면은 H, 4K는 1440
+    min_run = int(min(W, ui * _REF_W / _REF_H) * _MIN_W_FRAC)
+    min_h, max_h = int(ui * _MIN_H_FRAC), int(ui * _MAX_H_FRAC)
+    cands = _band_candidates(sat[y_off:, :], y_off, H, min_run, min_h, max_h, diagnostics)
+    if not cands:
+        # 채도 높은 바닥(파란 얼음 등)이 바와 한 덩어리가 되면 기하 조건에서 떨어진다(0.30.1 QA, 213520).
+        # 색조별로 나눠 다시 찾는다 — 바 채움(초록·빨강 등)은 다른 색조의 바닥과 갈라진다.
+        # 같은 색조(파란 바 + 파란 얼음)면 밝기로: 바닥은 매우 밝고(V 250) 바 채움은 어둡다(V 150~165).
+        hue = hsv[y_off:, :, 0].astype(np.int16)
+        val = hsv[y_off:, :, 2]
+        splits = [("hue", lo, ((hue - lo) % 180) < _HUE_WIDTH) for lo in range(0, 180, _HUE_STEP)]
+        splits += [("value", hi, val < hi) for hi in _VALUE_SPLITS]
+        for kind, at, keep in splits:
+            cands = _band_candidates(sat[y_off:, :] & keep, y_off, H, min_run, min_h, max_h, diagnostics)
+            if cands:
+                if diagnostics is not None:
+                    diagnostics["fallback_split"] = [kind, int(at)]
+                break
     auxiliary_names = _AUXILIARY_NAMES if auxiliary_names is None else auxiliary_names
     filtered = []
     for bx, by, bw, bh in cands:
         if _is_auxiliary_bar(frame[by:by + bh, bx:bx + bw], auxiliary_names):
             # Pellom's auxiliary strip is a separate, fixed row below the HP strip.
             # It can supply geometry when low HP leaves no long saturated seed above.
-            above = (bx, by - round(H * _AUXILIARY_STEP), bw, bh)
+            above = (bx, by - round(ui_scale(H) * _REF_H * _AUXILIARY_STEP), bw, bh)
             ax, ay, aw, ah = above
             if validate is not None and ay >= 0 and validate(frame[ay:ay + ah, ax:ax + aw]):
                 filtered.append(above)
@@ -230,8 +271,9 @@ def locate_boss_bar(
 # 보스바 높이는 보스마다 다르지만(레넨 37px, 글라스 기브넨 45px) **세로 중심과 이름·% 글자
 # 크기·위치는 같다**. read_percent는 박스 높이(h/36)로 글자 크기를 스케일하므로, 높이가 큰
 # 박스를 '공유 보스바 영역'에 저장하면 **다른 보스 HP가 1/10로 읽혀** 패턴 알림이 오작동한다.
-# 그래서 찾은 바의 세로 중심만 쓰고 높이는 고정 비율로 정규화한다. (기준 2560×1440 → 37px.
-# 비율이라 4K도 비례하나, 4K 보스 스샷이 없어 미검증 — 확보 시 확인할 것.)
+# 그래서 찾은 바의 세로 중심만 쓰고 높이는 고정값으로 정규화한다(기준 2560×1440 → 37px).
+# 0.30.1: 4K에서도 바는 37px(UI가 안 커짐) — 예전 화면 비율(4K 56px)은 100.00%를 1%로 읽었다.
+# 그래서 1440 이하 화면은 예전처럼 비율(H×_HEIGHT_FRAC), 그보다 큰 화면은 37px로 고정(ui_scale).
 # 자동 찾기뿐 아니라 **손으로 잡은 박스도 판독 직전 이 함수로 정규화**한다(예: 40px로 잡아
 # 46%가 4로 읽히던 것). 화면 내용이 아니라 H(화면/프레임 높이) 기반 고정 계산이라 프레임마다
 # 결과가 같다 → 판독이 흔들리지 않는다(매 프레임 채움행 트림은 흔들려서 안 쓴다).
@@ -239,15 +281,16 @@ _HEIGHT_FRAC = 0.0257
 
 
 def normalize_box_height(
-    box: tuple[int, int, int, int], H: int
+    box: tuple[int, int, int, int], H: int, scale: float = 1.0
 ) -> tuple[int, int, int, int]:
-    """박스의 세로 중심은 유지하고 높이를 고정 비율(H×_HEIGHT_FRAC)로 맞춘다. x·w는 그대로.
+    """박스의 세로 중심은 유지하고 높이를 바 높이(물리 37px × UI 배율)로 맞춘다. x·w는 그대로.
 
-    H는 box와 같은 좌표계의 화면/프레임 높이(자동 찾기는 물리 프레임 높이, 런타임 수동 박스
-    정규화는 논리 화면 높이 — 비율이 같아 어느 쪽이든 같은 바 높이로 수렴)."""
+    H는 box와 같은 좌표계의 화면/프레임 높이. scale은 그 좌표계 1px당 물리픽셀(자동 찾기는 물리
+    프레임이라 1, 손으로 잡은 박스는 논리좌표라 화면 배율 dpr) — UI 크기는 물리 화면 높이로 정해진다."""
     x, y, w, h = box
     cy = y + h / 2
-    nh = round(H * _HEIGHT_FRAC)
+    scale = scale or 1.0
+    nh = round(ui_scale(round(H * scale)) * _REF_H * _HEIGHT_FRAC / scale)
     ny = round(cy - nh / 2)
     ny = max(0, min(ny, H - nh))
     return (int(x), int(ny), int(w), int(nh))

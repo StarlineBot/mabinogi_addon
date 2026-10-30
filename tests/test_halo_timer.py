@@ -28,8 +28,9 @@ def frame(index, filename='0058.zip'):
 def test_qa_raw_timer(index,text):
     minutes,seconds=map(int,text.split(':'))
     observed=read_seconds(frame(index))
-    # Hold the ambiguous frame; do not substitute clock predictions or its QA label.
-    assert observed == (None if index==16 else minutes*60+seconds)
+    # 0.30.1: 16번 프레임은 글자 윗변이 읽기 창 윗변과 겹쳐 버려지던 것(4K 214648과 같은 원인)이라
+    # 창에 1px 여유를 두자 네 글자 모두 IoU 1.0으로 14:23을 읽는다(예전엔 '모호'로 보류). 예측·라벨 대입은 여전히 없음.
+    assert observed == minutes*60+seconds
 
 
 def test_training_and_holdout_are_separate():

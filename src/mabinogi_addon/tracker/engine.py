@@ -71,6 +71,7 @@ class BuffEngine:
         # 워밍업 동안 세트별 신뢰도를 누적해, 리더가 충분히 앞서면 그 세트로 고정한다.
         self._time_set: str | None = None  # 고정된 세트(None=아직 워밍업)
         self._set_conf: dict[str, float] = {}
+        self._locked_misses = 0  # 고정 세트로 연속 못 읽은 횟수(화면 크기가 중간에 바뀌면 다시 고르기)
         if len(set_names()) <= 1:  # 세트가 하나뿐이면 바로 고정(기본)
             only = set_names()
             self._time_set = only[0] if only else None
@@ -219,6 +220,8 @@ class BuffEngine:
 
     # 세트 고정 기준: 누적 신뢰도(≈ 좋은 판독 몇 회분)가 이만큼 앞서면 고정.
     _SET_LOCK_CONF = 3.0
+    # 고정 세트로 연속 이만큼 못 읽으면 모든 세트로 한 번 확인(다른 세트가 읽으면 고정을 풀고 다시 고른다).
+    _RESELECT_AFTER = 8
 
     def _read_row_time(self, region: np.ndarray, icon_y: int) -> float | None:
         top = max(0, icon_y - self._row_pad_top)
@@ -226,7 +229,19 @@ class BuffEngine:
         if strip.size == 0:
             return None
         if self._time_set is not None:  # 이미 고정됨 → 그 세트만(빠름)
-            return read_time(strip, set_name=self._time_set)
+            value = read_time(strip, set_name=self._time_set)
+            if value is not None or len(set_names()) <= 1:
+                self._locked_misses = 0
+                return value
+            # Alt+Tab 등으로 글자 크기가 바뀌면 고정 세트로는 계속 못 읽는다(0.30.1 4K 조사).
+            # 시간 없는 버프 줄도 못 읽으므로, 여러 번 연속일 때만 모든 세트로 확인하고 다른 세트가 읽으면 다시 고른다.
+            self._locked_misses += 1
+            if self._locked_misses < self._RESELECT_AFTER:
+                return None
+            self._locked_misses = 0
+            if not any(val is not None for val, _conf in score_sets(strip).values()):
+                return None
+            self._time_set, self._set_conf = None, {}  # 고정 해제 → 아래 워밍업으로 다시 고름
         # 워밍업: 모든 세트로 읽어 신뢰도 누적, 이번 프레임은 최고 신뢰도 값 사용.
         best_val: float | None = None
         best_conf = -1.0

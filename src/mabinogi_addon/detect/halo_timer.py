@@ -50,8 +50,9 @@ def cells(frame):
                 continue
             scale = distance/16
             cx = x+w/2
-            top = round(y-3*scale)
-            height = round(29*scale)
+            # 글자 위아래로 1px 여유: 4K(214648 '14:46')는 글자 윗변이 창 윗변(점 위 3칸)과 딱 겹쳐 normalize가 버렸다
+            top = round(y-3*scale)-1
+            height = round(29*scale)+2
             glyphs = []
             for left,right in ((-46,-28),(-26,-4),(6,28),(28,50)):
                 a,b = round(cx+left*scale),round(cx+right*scale)

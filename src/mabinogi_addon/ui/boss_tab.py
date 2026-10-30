@@ -767,7 +767,7 @@ class BossTab(QWidget):
             self._stable_hp = raw
 
     def _grab_region(self) -> dict:
-        """판독용 영역 — 저장된 박스의 세로 중심은 두고 높이만 화면 비율로 정규화한다.
+        """판독용 영역 — 저장된 박스의 세로 중심은 두고 높이만 바 높이로 정규화한다.
 
         손으로 잡은 박스가 바보다 크면(예 40px) read_percent가 글자 크기를 과하게 잡아
         46%를 4로 읽는다(2자리 '46' 점수↓ → 1자리 '4'가 이김). 자동 찾기와 같은 방식으로
@@ -781,7 +781,10 @@ class BossTab(QWidget):
         sh = int(s.geometry().height()) if s is not None else 0
         if not sh:
             return reg
-        x, y, w, h = normalize_box_height((reg["x"], reg["y"], reg["w"], reg["h"]), sh)
+        # 영역은 논리좌표 — 바 높이는 물리 화면 높이로 정해지므로 배율(dpr)을 함께 넘긴다(0.30.1: 4K·배율 무관 37px)
+        ratio = getattr(s, "devicePixelRatio", None)
+        dpr = float(ratio() or 1.0) if callable(ratio) else 1.0
+        x, y, w, h = normalize_box_height((reg["x"], reg["y"], reg["w"], reg["h"]), sh, dpr)
         return {"x": x, "y": y, "w": w, "h": h}
 
     def _grab_rect(self, x: int, y: int, w: int, h: int):

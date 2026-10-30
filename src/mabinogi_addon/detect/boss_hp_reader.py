@@ -227,6 +227,21 @@ def read_percent(
     return _low_hp_value(region_bgr, templates, band, w, scale, pitch, span, bright_samples)
 
 
+def main_path_score(
+    region_bgr: np.ndarray, templates: dict[str, list[np.ndarray]] | None = None,
+) -> float | None:
+    """read_percent 기본 경로(채도 마스크)의 최고 정렬 점수. 기본 경로로 못 읽으면 None(저HP 보조 경로 등).
+
+    자동 찾기 검증용: _ACCEPT(0.45)는 실행 중 판독용으로 낮게 둔 값이라, 글자 위치·모양이 기준과
+    다른 화면(0.30.1 4K 자료 10-11 123333: 100.00%를 30으로, 점수 0.48)을 보스바로 확정하지 않게 한다."""
+    prep = _prep(region_bgr, templates)
+    if prep is None:
+        return None
+    templates, w, scale, band, pitch, span = prep
+    val, score, _ = _scan(band, w, scale, pitch, templates, range(-span, span + 1))
+    return score if val is not None and score >= _ACCEPT else None
+
+
 def read_percent_cached(
     region_bgr: np.ndarray,
     templates: dict[str, list[np.ndarray]] | None = None,
