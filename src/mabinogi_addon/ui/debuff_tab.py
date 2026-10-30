@@ -53,6 +53,7 @@ class DebuffTab(QWidget):
     tracking_changed = Signal()  # 순서·노출 변경 → 라이브 반영
     catalog_changed = Signal()  # 디버프 추가·삭제·아이콘 변경 → 엔진 재구성
     scale_changed = Signal(int)  # 디버프 오버레이 배율(%) 변경
+    opacity_changed = Signal(int)  # 오버레이 불투명도(%) 변경(명세 15절)
     gate_mode_changed = Signal(str)  # 탐지 방식(1/2/3차) 변경 또는 바 영역 변경 → 재시작
     bar_region_changed = Signal()  # 보스 HP바 영역 지정 → 보스패턴알림도 반영(공유)
 
@@ -125,7 +126,7 @@ class DebuffTab(QWidget):
         region_btn = QPushButton("직접 지정")
         self.region_btn = region_btn
         region_btn.clicked.connect(self._pick_region)
-        # 버프·디버프는 배율 칸과 반씩 나눠 쓰는 원래 폭(사용자 결정 2026-10-30), 글씨·높이만 다른 잠금 버튼과 같은 톤
+        # 버프·디버프 잠금 줄은 한 줄 세 칸 '위치 잠금 │ 표시 배율 │ 불투명도'(같은 너비, 안내·도움말 명세 15절 — 13절 9항 5:5 대체)
         self.lock_btn = style_toggle(QPushButton(lock_text(False)))
         self.lock_btn.setToolTip(
             "잠그면 오버레이 위치가 고정되고, 클릭이 통과돼 게임을 가리지 않아요.\n"
@@ -141,6 +142,12 @@ class DebuffTab(QWidget):
         self.scale_spin.setValue(config.load_overlay_scales()[1])
         self.scale_spin.valueChanged.connect(self._on_scale)
         top.addWidget(self.scale_spin, 1)
+        from .settings_layout import opacity_spin
+        self.opacity_spin = opacity_spin(config.load_overlay_opacities()[1])
+        self.opacity_spin.valueChanged.connect(self._on_opacity)
+        top.addWidget(self.opacity_spin, 1)
+        from .settings_layout import equal_columns, lock_width
+        equal_columns(self.lock_btn, self.scale_spin, self.opacity_spin, at_least=lock_width(self.lock_btn))
 
         hint_row = QHBoxLayout()
         hint_row.setSpacing(6)
@@ -265,6 +272,8 @@ class DebuffTab(QWidget):
         self.debuff_list.setIconSize(QSize(28, 28))
         self.debuff_list.currentRowChanged.connect(self._on_select)
         v.addWidget(self.debuff_list, 1)
+        from .settings_layout import enable_drag_reorder
+        enable_drag_reorder(self.debuff_list, self._on_dropped)  # 끌어서 순서 바꾸기(명세 15절 2항), ▲▼도 그대로
 
         order_row = QHBoxLayout()
         order_row.setSpacing(4)
@@ -288,6 +297,10 @@ class DebuffTab(QWidget):
     def _on_scale(self, pct: int) -> None:
         config.set_debuff_scale(pct)
         self.scale_changed.emit(pct)
+
+    def _on_opacity(self, pct: int) -> None:
+        config.set_debuff_opacity(pct)
+        self.opacity_changed.emit(pct)
 
     # ---- 탐지 방식(1/2/3차) ----
     @staticmethod
@@ -618,6 +631,17 @@ class DebuffTab(QWidget):
             return
         self._order[i], self._order[j] = self._order[j], self._order[i]
         self._current = did
+        self._save()
+        self._rebuild_list()
+        self.tracking_changed.emit()
+
+    def _on_dropped(self, order: list[str], dropped: str | None) -> None:
+        """끌어서 놓은 순서를 ▲▼과 같은 경로로 저장하고 오버레이에 바로 반영."""
+        if sorted(order) != sorted(self._order):  # 이동만(삭제·복제 없음)
+            self._rebuild_list()
+            return
+        self._order = list(order)
+        self._current = dropped if dropped in self._order else self._current
         self._save()
         self._rebuild_list()
         self.tracking_changed.emit()

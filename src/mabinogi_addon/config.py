@@ -945,6 +945,45 @@ def save_game_image_path(image: str, path: Path = LOCAL_CONFIG_PATH) -> None:
     _write_local_config(data, path)
 
 
+# 오버레이 불투명도(안내·도움말 명세 15절, 0.31.0): 100%(기본, 예전과 같음) ~ 20%, 10%씩. 0%는 사라져 보여 막는다.
+OPACITY_MIN, OPACITY_MAX, OPACITY_STEP = 20, 100, 10
+
+
+def _clamp_opacity(value) -> int:
+    try:
+        pct = int(value)
+    except (TypeError, ValueError):
+        return OPACITY_MAX
+    pct = max(OPACITY_MIN, min(OPACITY_MAX, pct))
+    return pct - (pct - OPACITY_MIN) % OPACITY_STEP  # 10%씩(직접 편집한 값도 칸에 맞춤)
+
+
+def load_overlay_opacities(path: Path = LOCAL_CONFIG_PATH) -> tuple[int, int]:
+    """(버프 불투명도%, 디버프 불투명도%). 기본 100 / 100, 범위 20~100."""
+    s = _read_local_config(path).get("overlay") or {}
+    if not isinstance(s, dict):
+        s = {}
+    return _clamp_opacity(s.get("buffOpacity", OPACITY_MAX)), _clamp_opacity(s.get("debuffOpacity", OPACITY_MAX))
+
+
+def _set_overlay_value(key: str, value, path: Path) -> None:
+    data = _read_local_config(path)
+    s = data.get("overlay")
+    if not isinstance(s, dict):
+        s = {}
+    s[key] = value
+    data["overlay"] = s
+    _write_local_config(data, path)
+
+
+def set_buff_opacity(pct: int, path: Path = LOCAL_CONFIG_PATH) -> None:
+    _set_overlay_value("buffOpacity", _clamp_opacity(pct), path)
+
+
+def set_debuff_opacity(pct: int, path: Path = LOCAL_CONFIG_PATH) -> None:
+    _set_overlay_value("debuffOpacity", _clamp_opacity(pct), path)
+
+
 def set_buff_scale(pct: int, path: Path = LOCAL_CONFIG_PATH) -> None:
     _, debuff = load_overlay_scales(path)
     save_overlay_scales(pct, debuff, path)

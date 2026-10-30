@@ -92,6 +92,7 @@ class BuffTab(QWidget):
     tracking_changed = Signal()  # 순서·노출·지속시간·알림 변경 → 라이브 반영(재시작 X)
     catalog_changed = Signal()  # 버프 추가·삭제·아이콘 변경 → 엔진 재구성 필요
     scale_changed = Signal(int)  # 오버레이 배율(%) 변경
+    opacity_changed = Signal(int)  # 오버레이 불투명도(%) 변경(명세 15절)
     read_mode_changed = Signal()  # 버프 읽는 영역(즐겨찾기/비즐겨찾기) 변경 → 엔진 재구성
 
     def __init__(self) -> None:
@@ -205,7 +206,7 @@ class BuffTab(QWidget):
         region_btn = QPushButton("직접 지정")
         region_btn.clicked.connect(self._pick_region)
         self.region_btn = region_btn  # 온보딩 투어가 강조 대상으로 참조
-        # 버프·디버프는 배율 칸과 반씩 나눠 쓰는 원래 폭(사용자 결정 2026-10-30), 글씨·높이만 다른 잠금 버튼과 같은 톤
+        # 버프·디버프 잠금 줄은 한 줄 세 칸 '위치 잠금 │ 표시 배율 │ 불투명도'(같은 너비, 안내·도움말 명세 15절 — 13절 9항 5:5 대체)
         self.lock_btn = style_toggle(QPushButton(lock_text(False)))
         self.lock_btn.setToolTip(
             "잠그면 오버레이 위치가 고정되고, 클릭이 통과돼 게임을 가리지 않아요.\n"
@@ -221,6 +222,12 @@ class BuffTab(QWidget):
         self.scale_spin.setValue(config.load_overlay_scales()[0])
         self.scale_spin.valueChanged.connect(self._on_scale)
         top.addWidget(self.scale_spin, 1)
+        from .settings_layout import opacity_spin
+        self.opacity_spin = opacity_spin(config.load_overlay_opacities()[0])
+        self.opacity_spin.valueChanged.connect(self._on_opacity)
+        top.addWidget(self.opacity_spin, 1)
+        from .settings_layout import equal_columns, lock_width
+        equal_columns(self.lock_btn, self.scale_spin, self.opacity_spin, at_least=lock_width(self.lock_btn))
 
         hint_row = QHBoxLayout()
         hint_row.setSpacing(6)
@@ -271,6 +278,8 @@ class BuffTab(QWidget):
         self.buff_list.setIconSize(QSize(32, 32))
         self.buff_list.currentRowChanged.connect(self._on_select)
         v.addWidget(self.buff_list, 1)
+        from .settings_layout import enable_drag_reorder
+        enable_drag_reorder(self.buff_list, self._on_dropped, pinned=ANCHOR_ID)  # 끌어서 순서 바꾸기(명세 15절 2항), ▲▼도 그대로
 
         # 추가·삭제는 글자 라벨(짝 맞춤), 순서 이동은 아이콘 — 4등분 균등 너비.
         order_row = QHBoxLayout()
@@ -351,6 +360,10 @@ class BuffTab(QWidget):
     def _on_scale(self, pct: int) -> None:
         config.set_buff_scale(pct)
         self.scale_changed.emit(pct)
+
+    def _on_opacity(self, pct: int) -> None:
+        config.set_buff_opacity(pct)
+        self.opacity_changed.emit(pct)
 
     def _rows(self) -> list[str]:
         """목록에 표시되는 id 순서: 앵커 먼저, 그다음 표시 순서."""
@@ -483,6 +496,8 @@ class BuffTab(QWidget):
             label = f"⚓ {name} (기준)" if bid == ANCHOR_ID else name
             item = QListWidgetItem(label)
             item.setData(Qt.ItemDataRole.UserRole, bid)
+            if bid == ANCHOR_ID:  # 기준 버프는 맨 위 고정 — 끌 수 없음(▲▼에서 빠지는 것과 같은 규칙)
+                item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsDragEnabled)
             if buff is not None:
                 pm = _pixmap(buff.display_image or buff.match_icon, 32)
                 if pm is not None:
@@ -565,6 +580,18 @@ class BuffTab(QWidget):
             return
         self._order[i], self._order[j] = self._order[j], self._order[i]
         self._current = bid
+        self._save()
+        self._rebuild_list()
+        self.tracking_changed.emit()
+
+    def _on_dropped(self, order: list[str], dropped: str | None) -> None:
+        """끌어서 놓은 순서를 ▲▼과 같은 경로로 저장. 기준 버프는 맨 위 고정(그 위로 놓인 항목은 바로 아래로)."""
+        new = [bid for bid in order if bid != ANCHOR_ID]
+        if sorted(new) != sorted(self._order):  # 이동만(삭제·복제 없음) — 어긋나면 목록만 다시 그림
+            self._rebuild_list()
+            return
+        self._order = new
+        self._current = dropped if dropped in new else self._current
         self._save()
         self._rebuild_list()
         self.tracking_changed.emit()

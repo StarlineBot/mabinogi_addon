@@ -70,6 +70,7 @@ class BuffOverlay(QWidget):
         self._items: list[OverlayItem] = []
         self._locked = False  # 고정=클릭 통과, 해제=드래그 이동
         self._drag_offset = None
+        self._opacity = 1.0  # 창 전체 불투명도(명세 15절) — 잠금·클릭 통과와 무관하게 같은 값
 
     # ---- 고정/이동 ----
     def set_locked(self, locked: bool) -> None:
@@ -78,6 +79,7 @@ class BuffOverlay(QWidget):
         from ..system.clickthrough import set_click_through
 
         set_click_through(self, locked)
+        self.setWindowOpacity(self._opacity)  # 확장 스타일을 바꾼 뒤에도 같은 불투명도(Windows 레이어드 창)
         self._relayout()  # 해제 시 비어 있어도 위치 잡게 플레이스홀더 크기
 
     @property
@@ -115,6 +117,15 @@ class BuffOverlay(QWidget):
 
             grid.hide_guide()
             self.moved.emit()
+
+    def set_opacity(self, percent: int) -> None:
+        """창 전체 불투명도(%) — 20~100. 바꾸는 즉시 반영(Qt setWindowOpacity)."""
+        self._opacity = max(20, min(100, int(percent))) / 100
+        self.setWindowOpacity(self._opacity)
+
+    @property
+    def opacity_percent(self) -> int:
+        return round(self._opacity * 100)
 
     def set_scale(self, scale: float) -> None:
         self._scale = max(0.5, min(3.0, scale))

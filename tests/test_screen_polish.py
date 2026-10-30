@@ -162,4 +162,6 @@ def test_buff_debuff_lock_keeps_half_row_width(window):
     for key, tab in (("buff", w.buff_tab), ("debuff", w.debuff_tab)):
         w._open_setup_feature(key)
         app.processEvents()
-        assert abs(tab.lock_btn.width() - tab.scale_spin.width()) <= 2, key  # 배율 칸과 반씩
+        # 0.31.0 명세 변경(15절 1항): 5:5 대신 '위치 잠금 │ 표시 배율 │ 불투명도' 한 줄 세 칸 같은 너비
+        widths = [tab.lock_btn.width(), tab.scale_spin.width(), tab.opacity_spin.width()]
+        assert max(widths) - min(widths) <= 2, (key, widths)

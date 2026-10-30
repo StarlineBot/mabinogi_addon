@@ -446,6 +446,12 @@ class MainWindow(QMainWindow):
         self.debuff_tab.scale_changed.connect(
             lambda pct: self.debuff_overlay.set_scale(pct / 100)
         )
+        # 불투명도(명세 15절): 저장값으로 시작, 바꾸면 즉시
+        buff_opacity, debuff_opacity = config.load_overlay_opacities()
+        self.buff_overlay.set_opacity(buff_opacity)
+        self.debuff_overlay.set_opacity(debuff_opacity)
+        self.buff_tab.opacity_changed.connect(self.buff_overlay.set_opacity)
+        self.debuff_tab.opacity_changed.connect(self.debuff_overlay.set_opacity)
 
         self._feature_checks = {
             "tuarim": self.tuarim_tab.enable,

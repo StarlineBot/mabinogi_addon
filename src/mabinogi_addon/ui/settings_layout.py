@@ -90,3 +90,56 @@ def disclosure(title,body,layout):
     layout.addWidget(body)
     body.hide()
     return button
+
+
+def opacity_spin(value: int):
+    """불투명도 칸(안내·도움말 명세 15절): 배율 칸과 같은 모양, 20~100 %, 10%씩. 0%는 막는다(사라져 보임)."""
+    from PySide6.QtWidgets import QSpinBox
+
+    from .. import config
+    spin = QSpinBox()
+    spin.setRange(config.OPACITY_MIN, config.OPACITY_MAX)
+    spin.setSingleStep(config.OPACITY_STEP)
+    spin.setPrefix("불투명도 ")
+    spin.setSuffix(" %")
+    spin.setValue(value)
+    spin.setToolTip("오버레이 창 전체의 불투명도예요. 낮출수록 게임 화면이 비쳐 보여요(20~100%).")
+    return spin
+
+
+def enable_drag_reorder(list_widget, on_dropped, *, pinned=None):
+    """목록을 끌어서 순서 바꾸기(명세 15절 2항): 안에서만 옮기고(목록 밖으로 끌어도 삭제·복제 없음), 놓일 자리는 Qt 기본 선.
+
+    놓으면 on_dropped(지금 목록 순서의 id들, 놓은 id)를 부른다. pinned(id)는 끌 수 없는 항목(버프 기준) —
+    그 위로 놓인 항목은 호출하는 쪽이 고정 항목 바로 아래로 둔다.
+    """
+    from PySide6.QtCore import QTimer, Qt
+    from PySide6.QtWidgets import QAbstractItemView
+
+    list_widget.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
+    list_widget.setDefaultDropAction(Qt.DropAction.MoveAction)
+    list_widget.setDragEnabled(True)
+    list_widget.setDropIndicatorShown(True)
+    list_widget.pinned_id = pinned
+
+    def ids():
+        return [list_widget.item(row).data(Qt.ItemDataRole.UserRole) for row in range(list_widget.count())]
+
+    def moved(_parent, start, _end, _dest, row):
+        moved_row = row if row <= start else row - 1
+        item = list_widget.item(moved_row)
+        dropped = item.data(Qt.ItemDataRole.UserRole) if item is not None else None
+        order = ids()
+        # 놓은 뒤 목록을 다시 그리므로, Qt가 끌기 처리를 마친 다음에 부른다
+        QTimer.singleShot(0, lambda: on_dropped(order, dropped))
+
+    list_widget.model().rowsMoved.connect(moved)
+
+
+def equal_columns(*widgets, at_least=0):
+    """한 줄 같은 너비 칸(명세 15절 '위치 잠금 │ 표시 배율 │ 불투명도'): stretch만으로는 최소 폭이 큰 칸이 넓어져,
+    가장 넓은 칸의 기본 폭을 모두의 최소 폭으로 맞춘다(글자가 잘리지 않으면서 같은 너비).
+    at_least: 글자가 바뀌어 길어지는 칸(잠금 → '위치 잠금됨')의 폭."""
+    width = max(at_least, *(widget.sizeHint().width() for widget in widgets))
+    for widget in widgets:
+        widget.setMinimumWidth(width)
