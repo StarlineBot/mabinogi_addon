@@ -84,7 +84,9 @@ def restyle(before: dict, after: dict, widgets) -> int:
     """이름 색을 쓰는 화면 전체를 다시 칠한다(테마 개인화 명세 6절 — 재시작 없이 즉시).
 
     화면 코드는 만들 때 color()로 값을 스타일시트·서식 글자에 넣어 두므로, 바뀐 이름의 옛 값을 새 값으로 바꿔 끼운다.
-    이름 값은 서로 겹치지 않는다(theme_colors._unique). 강조 위 글자(흰색일 수 있음)는 강조 바탕이 함께 있는 스타일에서만 바꾼다.
+    이름 값은 서로 겹치지 않는다(theme_colors._unique). 강조 위 글자(흰색일 수 있음)는 강조 바탕이 함께 있는
+    **같은 규칙 블록**({ … }, 서식 글자는 같은 태그 < … >) 안에서만 바꾼다 — 0.31.1: 스타일시트 전체로 보면
+    업데이트 배너의 '✕' 호버 흰색처럼 강조와 무관한 흰색까지 강조 위 글자로 바뀌었다.
     """
     import re
     changes = {before[n].upper(): after[n] for n in before if before[n].upper() != after[n].upper() and n != "on-accent"}
@@ -95,15 +97,19 @@ def restyle(before: dict, after: dict, widgets) -> int:
     keys = list(changes) + ([on_accent[0]] if on_accent else [])
     pattern = re.compile("|".join(re.escape(k) for k in sorted(set(keys), key=len, reverse=True)), re.I)
 
-    def swap(text):
-        has_accent = accent_old in text.upper()
+    def swap_block(block):
+        has_accent = accent_old in block.upper()
 
         def one(match):
             key = match.group(0).upper()
             if on_accent and key == on_accent[0] and key not in changes:
                 return on_accent[1] if has_accent else match.group(0)
             return changes.get(key, match.group(0))
-        return pattern.sub(one, text)
+        return pattern.sub(one, block)
+
+    def swap(text):
+        # 규칙 블록('}'로 끝남)·태그('>'로 끝남) 단위로 나눠, 강조 위 글자는 강조가 같은 블록에 있을 때만
+        return "".join(swap_block(block) for block in re.split(r"(?<=[}>])", text))
 
     count = 0
     from PySide6.QtWidgets import QLabel

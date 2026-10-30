@@ -488,7 +488,7 @@ class MainWindow(QMainWindow):
         tour = getattr(self, "_tour", None)
         if tour is not None:  # 둘러보기 중에는 그 화면을 가리지 않는다
             return
-        self.home_page.setGeometry(self.centralWidget().rect())
+        self.home_page.setGeometry(self._home_rect())
         self.home_page.update_state(self._home_state())
         self.home_page.show()
         self.home_page.raise_()
@@ -510,10 +510,27 @@ class MainWindow(QMainWindow):
             dialogue.footer.raise_()
             dialogue.bubble.raise_()
 
+    def _home_rect(self):
+        """홈이 덮는 영역 = 중앙 위젯에서 위쪽 업데이트 배너(보일 때)를 뺀 곳(0.31.1 시안 A: 홈에서도 배너가 보이고 눌림)."""
+        central = self.centralWidget()
+        area = central.rect()
+        banner = getattr(self, "_update_banner", None)
+        if banner is not None and not banner.isHidden():
+            if central.layout() is not None:
+                central.layout().activate()  # 방금 보인 배너도 자리(높이)가 정해진 뒤 잰다
+            area.setTop(banner.geometry().bottom() + 1)
+        if getattr(self, "home_page", None) is not None:
+            self.home_page.set_tight(area.top() > 0)
+        return area
+
+    def _place_home(self) -> None:
+        if self.home_visible():
+            self.home_page.setGeometry(self._home_rect())
+            self._raise_creator()
+
     def eventFilter(self, watched, event):
         if watched is self.centralWidget() and event.type() == QEvent.Type.Resize and self.home_visible():
-            self.home_page.setGeometry(watched.rect())
-            self._raise_creator()
+            self._place_home()
         return super().eventFilter(watched, event)
 
     def _home_open_feature(self, key) -> None:
@@ -859,9 +876,11 @@ class MainWindow(QMainWindow):
             f"🔔 새 버전 v{latest} 가 나왔어요   (현재 {cur})"
         )
         self._update_banner.show()
+        self._place_home()  # 홈 표시 중이면 배너 아래로
 
     def _update_banner_hide(self) -> None:
         self._update_banner.hide()
+        self._place_home()  # 홈이 다시 창 전체
 
     # ---- 탭 위 최상단: 재생/일시정지 토글 + 상태 표시 ----
     def _build_status_bar(self) -> QWidget:

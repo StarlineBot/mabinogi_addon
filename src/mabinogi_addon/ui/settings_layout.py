@@ -15,7 +15,8 @@ def lock_style():
         "QPushButton { padding:0 10px; border:1px solid palette(mid); border-radius:3px;"
         " background:palette(button); color:palette(button-text); font-weight:400; }"
         "QPushButton:disabled { color:palette(mid); }"
-        f"QPushButton:checked:enabled {{ background:{color('accent')}; color:{color('on-accent')}; border-color:#00856b; }}"
+        # 켜짐 테두리 = 강조색(0.31.1: 고정 민트 #00856b는 개인화 강조색에서 초록으로 남았다 — 이름 색이라 즉시 다시 칠해짐)
+        f"QPushButton:checked:enabled {{ background:{color('accent')}; color:{color('on-accent')}; border-color:{color('accent')}; }}"
     )
 
 
@@ -100,7 +101,7 @@ def opacity_spin(value: int):
     spin = QSpinBox()
     spin.setRange(config.OPACITY_MIN, config.OPACITY_MAX)
     spin.setSingleStep(config.OPACITY_STEP)
-    spin.setPrefix("불투명도 ")
+    spin.setPrefix("불투명도 ")  # 뜻이 반대인 '투명도'로 줄이지 않는다
     spin.setSuffix(" %")
     spin.setValue(value)
     spin.setToolTip("오버레이 창 전체의 불투명도예요. 낮출수록 게임 화면이 비쳐 보여요(20~100%).")
@@ -137,9 +138,10 @@ def enable_drag_reorder(list_widget, on_dropped, *, pinned=None):
 
 
 def equal_columns(*widgets, at_least=0):
-    """한 줄 같은 너비 칸(명세 15절 '위치 잠금 │ 표시 배율 │ 불투명도'): stretch만으로는 최소 폭이 큰 칸이 넓어져,
-    가장 넓은 칸의 기본 폭을 모두의 최소 폭으로 맞춘다(글자가 잘리지 않으면서 같은 너비).
-    at_least: 글자가 바뀌어 길어지는 칸(잠금 → '위치 잠금됨')의 폭."""
-    width = max(at_least, *(widget.sizeHint().width() for widget in widgets))
+    """한 줄 같은 너비 칸(명세 15절 '위치 잠금 │ 배율 │ 불투명도'): 같은 stretch로 여유 폭을 나눠 같은 너비가 되고,
+    최소 폭은 칸마다 자기 글자+화살표(minimumSizeHint)만 지킨다. at_least: 글자가 바뀌어 길어지는 칸(잠금 → '위치 잠금됨')의 폭.
+
+    0.31.1: 예전엔 가장 넓은 칸의 기본 폭을 세 칸 모두의 최소 폭으로 걸어 왼쪽 최소 폭이 3배가 됐고, Windows 11 스타일
+    (숫자 칸 가로 화살표가 넓음)에서 790 창의 버프·디버프 탭이 두 칸 → 한 칸으로 접혔다(TrackerColumns.fit_width)."""
     for widget in widgets:
-        widget.setMinimumWidth(width)
+        widget.setMinimumWidth(max(at_least, widget.minimumSizeHint().width()))

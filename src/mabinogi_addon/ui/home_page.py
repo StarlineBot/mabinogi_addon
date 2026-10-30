@@ -236,6 +236,8 @@ class HomePage(QWidget):
         v = QVBoxLayout(content)
         v.setContentsMargins(18, 6, 18, 12)
         v.setSpacing(8)
+        self._content_layout = v
+        self._tight = False
 
         # 1. 위 줄: 로고 · 전체 메뉴 ›
         top = QHBoxLayout()
@@ -366,6 +368,17 @@ class HomePage(QWidget):
             QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background:none; }}
         """)
 
+    def set_tight(self, tight: bool) -> None:
+        """위에 업데이트 배너가 있을 때(0.31.1 시안 A) 여백을 조금 줄여 790×800에서도 설정 필요 3줄까지 스크롤 없게."""
+        tight = bool(tight)
+        if tight == self._tight:
+            return
+        self._tight = tight
+        self._content_layout.setContentsMargins(18, 0 if tight else 6, 18, 12)
+        self._content_layout.setSpacing(6 if tight else 8)
+        for line in self._warn_widgets():
+            line.layout().setContentsMargins(0, 4 if tight else 5, 0, 4 if tight else 5)
+
     def apply_theme(self, custom: dict | None) -> None:
         """테마가 바뀌면 홈을 다시 칠한다(개인화 중이면 틀/내용 칸, 아니면 기본 남색). 재시작 없이 즉시."""
         _D.clear()
@@ -432,7 +445,8 @@ class HomePage(QWidget):
                 line.setObjectName("homeWarnRow")
                 line.setProperty("key", key)
                 row = QHBoxLayout(line)
-                row.setContentsMargins(0, 5, 0, 5)
+                pad = 4 if self._tight else 5
+                row.setContentsMargins(0, pad, 0, pad)
                 row.setSpacing(14)
                 row.addWidget(_label(name, 12, "warn_text", bold=True))
                 row.addWidget(_label("판독 영역을 지정해야 동작해요", 12, "warn_sub"), 1)

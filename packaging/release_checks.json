@@ -88,6 +88,8 @@
     "tests/test_buff_opacity_reorder.py",
     "tests/test_boss_name_4k.py",
     "tests/test_boss_name_shape.py",
-    "tests/test_favorites_windowed.py"
+    "tests/test_favorites_windowed.py",
+    "tests/test_theme_banner_polish.py",
+    "tests/test_lock_row_wide_spin.py"
   ]
 }

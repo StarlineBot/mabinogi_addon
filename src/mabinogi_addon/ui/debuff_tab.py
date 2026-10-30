@@ -126,7 +126,7 @@ class DebuffTab(QWidget):
         region_btn = QPushButton("직접 지정")
         self.region_btn = region_btn
         region_btn.clicked.connect(self._pick_region)
-        # 버프·디버프 잠금 줄은 한 줄 세 칸 '위치 잠금 │ 표시 배율 │ 불투명도'(같은 너비, 안내·도움말 명세 15절 — 13절 9항 5:5 대체)
+        # 버프·디버프 잠금 줄은 한 줄 세 칸 '위치 잠금 │ 배율 │ 불투명도'(같은 너비, 안내·도움말 명세 15절 — 13절 9항 5:5 대체)
         self.lock_btn = style_toggle(QPushButton(lock_text(False)))
         self.lock_btn.setToolTip(
             "잠그면 오버레이 위치가 고정되고, 클릭이 통과돼 게임을 가리지 않아요.\n"
@@ -137,7 +137,7 @@ class DebuffTab(QWidget):
         self.scale_spin = QSpinBox()
         self.scale_spin.setRange(50, 300)
         self.scale_spin.setSingleStep(10)
-        self.scale_spin.setPrefix("표시 배율 ")
+        self.scale_spin.setPrefix("배율 ")  # 0.31.1: '표시 배율' → '배율'(세 칸 한 줄 최소 폭 줄이기)
         self.scale_spin.setSuffix(" %")
         self.scale_spin.setValue(config.load_overlay_scales()[1])
         self.scale_spin.valueChanged.connect(self._on_scale)
