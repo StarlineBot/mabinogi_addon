@@ -150,6 +150,7 @@
   태그 `v0.30.0` → 3711086(candidate source_sha·지문 `e6feaa20…` 일치). 공개 version.json 0.30.0(sha256 후보와 일치)·exe 163,828,144바이트·sha256 `81f78d10…d465646f9` 후보·공개 URL 일치. 공개 README 펼친 내역 v0.30.0만.
 - **Confirmed(2026-10-30 사용자 실사용): 홈에서 업데이트 배너가 안 보임**(0.28.0부터) — 배너(`_update_banner`)는 중앙 위젯 맨 위인데 홈이 `centralWidget().rect()` 전체를 덮음.
   토스트 문구 '상단의 [지금 업데이트]'·토스트 클릭(`_show_from_tray`)도 홈이면 배너가 가려짐. 시안 A(홈을 배너 아래부터 덮기) 렌더 사용자 전달 — 결정 대기.
+  → 2026-10-31 사용자 재제보(v0.31.0 업데이트 때 홈에서 안 보임) — 시안 A로 0.31.1에 포함(미수정 확인: `_show_home`·eventFilter가 여전히 중앙 위젯 전체).
   → **0.30.0 개발 완료(2026-10-30, 로컬 검증)** — 재QA·Windows 후보 검증 대기.
   와이어웹: `assets/debuff/icon/와이어웹.png`(1번 장 원본 16px, BGR), `DEFAULT_DEBUFF_ORDER` 맨 뒤(기본 20종), 표시용 image/ 없음(matchIcon 사용).
   이관: `migrate_default_debuff_icons`에 표시·백업 폴더 인자 추가(0.24.0 기본값 그대로), `migrate_new_default_debuff_icons` = `defaultDebuffWirewebMigrated` + `icon_backup_0.30.0`, '와이어웹.png'만, 실패 시 표시 없이 재시도. 0.24.0 이관 다음에 실행.
