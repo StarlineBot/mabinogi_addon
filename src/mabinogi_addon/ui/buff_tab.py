@@ -35,7 +35,7 @@ from ..catalog import BuffDef, available_catalog
 from .dpi import to_logical
 from .screen_grab import capture_for_autofind
 from .widgets import TrackerColumns, callout, checkbox, hint_label, icon_slot, section_label
-from .settings_layout import LOCK_STYLE, lock_text, lock_width, DANGER_STYLE
+from .settings_layout import lock_button, lock_text, DANGER_STYLE
 
 # 앵커로 고정 사용할 버프(항상 존재, 지속시간 없음 → 판정 기준)
 ANCHOR_ID = "premium_battle"
@@ -204,14 +204,11 @@ class BuffTab(QWidget):
         region_btn = QPushButton("직접 지정")
         region_btn.clicked.connect(self._pick_region)
         self.region_btn = region_btn  # 온보딩 투어가 강조 대상으로 참조
-        self.lock_btn = QPushButton("위치 잠금")
-        self.lock_btn.setCheckable(True)
+        self.lock_btn = lock_button()
         self.lock_btn.setToolTip(
             "잠그면 오버레이 위치가 고정되고, 클릭이 통과돼 게임을 가리지 않습니다.\n"
             "해제하면 드래그로 위치를 옮길 수 있어요."
         )
-        self.lock_btn.setStyleSheet(LOCK_STYLE)
-        self.lock_btn.setFixedWidth(lock_width(self.lock_btn))  # 앱 전체 같은 폭(명세 13.1)
         self.lock_btn.toggled.connect(self._on_lock_toggled)
         top.addWidget(self.lock_btn)
         self.scale_spin = QSpinBox()

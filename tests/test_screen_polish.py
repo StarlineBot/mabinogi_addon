@@ -3,7 +3,7 @@ from PySide6.QtCore import QPoint
 from PySide6.QtWidgets import QLabel, QPushButton
 
 from mabinogi_addon import config
-from mabinogi_addon.ui.settings_layout import lock_width
+from mabinogi_addon.ui.settings_layout import lock_text, lock_width, plain_button_height
 from test_navigation import window  # noqa: F401  (픽스처)
 
 LOCK_TEXTS = {"위치 잠금", "위치 잠금됨", "전체 위치 잠금", "전체 위치 잠금됨"}
@@ -25,18 +25,35 @@ def _locks(w):
     }
 
 
-def test_lock_buttons_share_wording_and_fixed_width(window):
+def test_lock_buttons_share_wording_and_width_per_kind(window):
+    """명세 13.1 정정(2026-10-30 Windows 실화면 피드백, B안): 같은 종류끼리 같은 폭 — 일반 '위치 잠금(됨)' / '전체 위치 잠금(됨)'."""
     w, app = window
     locks = _locks(w)
-    width = lock_width(w.buff_tab.lock_btn)
+    every = {"stat", "custom", "skillbar"}
     for name, button in locks.items():
         assert button.text() in LOCK_TEXTS, name
-        assert button.minimumWidth() == button.maximumWidth() == width, name  # 앱 전체 같은 고정 폭
-        assert button.text().startswith("전체 ") is (name in ("stat", "custom", "skillbar")), name
-    probe = QPushButton("전체 위치 잠금됨")
-    probe.setStyleSheet(locks["stat"].styleSheet())
-    probe.ensurePolished()
-    assert probe.sizeHint().width() <= width  # 가장 긴 글자가 들어간다
+        assert button.text().startswith("전체 ") is (name in every), name
+        width = lock_width(button, every=name in every)
+        assert button.minimumWidth() == button.maximumWidth() == width, name
+        assert button.fontMetrics().horizontalAdvance(lock_text(True, every=name in every)) < width  # 가장 긴 글자가 들어간다
+    assert lock_width(locks["buff"]) < lock_width(locks["stat"], every=True)  # 일반은 '전체'보다 좁다(128 고정 폐지)
+
+
+def test_toggle_buttons_match_plain_button_height_and_normal_weight(window):
+    """잠금·사용 토글은 옆 일반 버튼(알림 미리보기 등)과 같은 키, 굵기 보통(명세 13.1 정정)."""
+    w, app = window
+    toggles = {**_locks(w), "opt": w.optimization_tools.panel.toggle, "fps": w.optimization_tools.panel.frames_toggle}
+    if w.blackbox_tools.panel is not None:
+        toggles["blackbox"] = w.blackbox_tools.panel.enabled
+    height = plain_button_height()
+    for name, button in toggles.items():
+        assert button.minimumHeight() == button.maximumHeight() == height, name
+        assert "font-weight:400" in button.styleSheet() and "font-weight:600" not in button.styleSheet(), name
+    w._open_setup_feature("halo_timer")
+    app.processEvents()
+    halo = w.boss_tab.halo_capture
+    assert halo.warn_lock.height() == halo.preview_alert.height()  # 같은 줄 옆 버튼과 같은 키
+    assert "QPushButton:checked:enabled { background:#00b894" in halo.warn_lock.styleSheet()  # 켜짐 초록 유지
 
 
 def test_boss_and_halo_rows_line_up(window):

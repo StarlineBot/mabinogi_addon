@@ -67,10 +67,8 @@ class BlackboxTab(QWidget):
 
         # 1줄(안내·도움말 명세 11.2): 사용 토글 + 상태 한 줄(예전 '현재 상태' 상자 흡수)
         # 사용 켜기/끄기는 '위치 잠금'과 같은 토글 버튼(명세 11.3): 꺼짐 '블랙박스 사용', 켜짐 '블랙박스 사용 중'(민트).
-        from .settings_layout import LOCK_STYLE
-        self.enabled = QPushButton('블랙박스 사용')
-        self.enabled.setCheckable(True)
-        self.enabled.setStyleSheet(LOCK_STYLE)
+        from .settings_layout import style_toggle
+        self.enabled = style_toggle(QPushButton('블랙박스 사용'))  # 잠금 버튼과 같은 톤·일반 버튼 높이(명세 13.1)
         self.enabled.toggled.connect(lambda on: self.enabled.setText('블랙박스 사용 중' if on else '블랙박스 사용'))
         self.dot = QLabel('●')
         self.status = _label('녹화 연결 전')

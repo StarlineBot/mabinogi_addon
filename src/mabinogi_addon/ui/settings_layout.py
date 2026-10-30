@@ -6,35 +6,46 @@ from PySide6.QtWidgets import QLabel, QPushButton, QToolButton
 from shiboken6 import isValid
 import weakref
 
+# 상태형 토글(위치 잠금·최적화·FPS 표시·블랙박스 사용) 공통 톤. 굵기 보통·세로 padding 0, 켜짐 초록(안내·도움말 명세 13.1 정정).
+# 높이는 스타일시트로 계산하지 않고 style_toggle에서 일반 버튼 높이로 고정한다(스타일시트를 입히면 Windows 기본 버튼 높이를 버리기 때문).
 LOCK_STYLE = (
-    "QPushButton { padding:4px 10px; border:1px solid palette(mid); border-radius:3px;"
-    " background:palette(button); color:palette(button-text); font-weight:600; }"
+    "QPushButton { padding:0 10px; border:1px solid palette(mid); border-radius:3px;"
+    " background:palette(button); color:palette(button-text); font-weight:400; }"
     "QPushButton:disabled { color:palette(mid); }"
     "QPushButton:checked:enabled { background:#00b894; color:#062f28; border-color:#00856b; }"
 )
 DANGER_STYLE = "QPushButton:enabled { color:#d35b58; }"
-# 잠금 버튼 통일(안내·도움말 명세 13.1): 글자는 '위치 잠금(됨)', 여러 개를 한 번에 잠그는 버튼만 '전체 위치 잠금(됨)'.
-# 앱 전체에서 같은 고정 폭(가장 긴 '전체 위치 잠금됨'이 들어가는 폭, 목업 128px).
-LOCK_WIDTH = 128
+LOCK_PADDING = 22  # 잠금 버튼 폭 = 보통 굵기 '…위치 잠금됨' 글자 폭 + 여백(B안)
+
+
+def plain_button_height():
+    """스타일시트 없는 일반 QPushButton의 기본 높이(옆 '알림 미리보기' 등과 같은 키)."""
+    return QPushButton("가").sizeHint().height()
+
+
+def style_toggle(button):
+    """상태형 토글 버튼에 공통 톤을 입히는 한 곳: 스타일 + 일반 버튼 높이. 폭은 호출한 쪽이 정한다(토글은 글자에 맞춤)."""
+    button.setCheckable(True)
+    button.setStyleSheet(LOCK_STYLE)
+    button.setFixedHeight(plain_button_height())
+    return button
 
 
 def lock_text(locked, *, every=False):
     return ("전체 " if every else "") + ("위치 잠금됨" if locked else "위치 잠금")
 
 
-def lock_width(widget=None):
+def lock_width(widget=None, *, every=False):
+    """같은 종류끼리 같은 폭: 일반 '위치 잠금(됨)' / '전체 위치 잠금(됨)'. 보통 굵기 '…잠금됨' 글자 폭 + 여백."""
     font = QFont(widget.font()) if widget is not None else QFont()
-    font.setWeight(QFont.Weight.DemiBold)  # LOCK_STYLE의 font-weight:600
-    return max(LOCK_WIDTH, QFontMetrics(font).horizontalAdvance(lock_text(True, every=True)) + 26)
+    return QFontMetrics(font).horizontalAdvance(lock_text(True, every=every)) + LOCK_PADDING
 
 
 def lock_button(locked=False, *, every=False):
-    """같은 모양·같은 폭의 위치 잠금 토글 버튼. 글자는 set_lock_text로 바꾼다."""
-    button = QPushButton(lock_text(locked, every=every))
-    button.setCheckable(True)
+    """같은 모양의 위치 잠금 토글 버튼(일반·전체 종류별 같은 폭). 글자는 set_lock_text로 바꾼다."""
+    button = style_toggle(QPushButton(lock_text(locked, every=every)))
     button.setChecked(bool(locked))
-    button.setStyleSheet(LOCK_STYLE)
-    button.setFixedWidth(lock_width(button))
+    button.setFixedWidth(lock_width(button, every=every))
     button.setProperty("lockEvery", bool(every))
     return button
 

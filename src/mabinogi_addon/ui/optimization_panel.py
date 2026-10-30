@@ -71,13 +71,13 @@ class OptimizationPanel(QWidget):
         self.cpu_info=_label('최적화 탭을 열면 CPU 구조와 네트워크 어댑터를 자동으로 읽어요. 읽기만 하고 설정은 바꾸지 않아요.')
         group.addWidget(self.cpu_info)
         self.inspect=QPushButton('다시 확인');row=QHBoxLayout();row.addWidget(self.inspect);row.addStretch();group.addLayout(row)
-        from .settings_layout import LOCK_STYLE
+        from .settings_layout import style_toggle
         # 13.14 추천 최적화(시안 사용자 확인): 환경 확인 바로 아래. 예전 '적용 · 복구' 구역을 합쳐 시작 버튼은 하나.
         group=_group('추천 최적화',body)
         self.recommend=_label('이 PC 추천: 환경을 확인하면 보여줘요.');self.recommend.setStyleSheet('font-weight:bold;')
         group.addWidget(self.recommend)
         # 토글 하나(13.5): 꺼짐 '추천 설정으로 최적화'(직접 고르면 '선택한 설정으로 최적화') → 켜짐 '최적화 적용 중'(민트). 켜진 상태에서 누르면 중단·원복.
-        self.toggle=QPushButton('추천 설정으로 최적화');self.toggle.setCheckable(True);self.toggle.setStyleSheet(LOCK_STYLE)
+        self.toggle=style_toggle(QPushButton('추천 설정으로 최적화'))
         group.addWidget(self.toggle,0,Qt.AlignmentFlag.AlignLeft)
         # 13.10 자동 적용(기본 꺼짐): 우선순위·CPU 배치만. 네트워크는 자동으로 바꾸지 않는다.
         self.auto=QCheckBox('마비노기를 켜면 자동 적용');group.addWidget(self.auto)
@@ -144,8 +144,7 @@ class OptimizationPanel(QWidget):
         group=_group('게임에 FPS 표시',body)
         group.addWidget(_label('켜 두면 게임 화면에 FPS를 보여줘요. 파일로 남기지 않아요.\n'
                                '게임의 제출 프레임 기준이며, 모니터에 실제 표시된 FPS·통신 지연과는 달라요.'))
-        from .settings_layout import LOCK_STYLE
-        self.frames_toggle=QPushButton('FPS 표시');self.frames_toggle.setCheckable(True);self.frames_toggle.setStyleSheet(LOCK_STYLE)
+        self.frames_toggle=style_toggle(QPushButton('FPS 표시'))
         self.frames_toggle.toggled.connect(lambda on: self.frames_toggle.setText('FPS 표시 중' if on else 'FPS 표시'))
         group.addWidget(self.frames_toggle,0,Qt.AlignmentFlag.AlignLeft)
         group=_group('오버레이',body)
