@@ -27,6 +27,11 @@
   계산 `theme_colors.compute`(순수, 프리셋 6×6×3·무작위 3000쌍 대비 테스트), 저장 config `theme:"custom"` + `customTheme{background,accent,content}`(다른 테마로 가도 유지, 잘못된 값은 기본값).
   즉시 반영: 테마 전후 `palette.snapshot()` → `palette.restyle()`이 홈 밖 위젯 스타일시트·리치텍스트의 이전 이름 값을 새 값으로 치환(이름 값끼리 겹치지 않게 1만 옮김), 틀·탭·홈은 `theme_changed`로 다시 그림.
   강조색은 내용 칸·틀에서 따로 3:1 맞춤. 미검증: Windows에서 개인화 → 다크/라이트/시스템 복귀 시 플랫폼 팔레트 원복(`app.setPalette(QPalette())`, 오프스크린만 확인).
+  → **QA 0.29.0(08b3386~5c83d3a) 수정 필요**: release checks 0.29.0 1425·전체 3325 passed/26 skipped(Noto), 원격 v0.29.0 태그 없음(마지막 게시 v0.28.2), 최적화 `최적화 사용` 끄기 원복은 저장값 복원 때 `_restoring_selection`으로 막힘(안전).
+  렌더 8조합(다크·라이트·남색+하늘·진한 핑크+민트 자동/밝게·하늘+민트·크림+보라·#808080+민트) × 홈·버프·보스·설정 사용자 전달(오프스크린은 다크/라이트 색 구성표를 안 따라 둘 다 밝게 나옴 — 환경 한계).
+  Highly Likely: 직접 고르기 미리보기 1회 ≈ 400ms(오프스크린, 위젯 1445개) — 대부분 `_apply_tab_styles`→`_apply_frame_colors`의 `central.setStyleSheet`(루트에 스타일 → 전체 다시 polish, 358ms), restyle 22ms. 끄는 동안 이동마다 실행 → 끊김.
+  Confirmed: 개인화 때 홈 오른쪽 아래 제작자 캐릭터 뒤에 내용 칸 색 네모(`_apply_frame_colors`가 footer `setAutoFillBackground(True)` — 홈 위에서도 칠함). Potential: 꺼진 스위치 바탕이 배경 색조를 따라가 하늘·핑크에서 켜짐과 헷갈릴 수 있음(사용자 판단).
+  추가 요청(사용자 2026-10-30): 확인 창 Yes/No(그리고 OK/Cancel)가 영어 → 예/아니요·확인/취소(Qt 번역 미설치, QMessageBox 표준 버튼).
 - **개발 대상(2026-10-30 사용자 결정, 0.29.0): 탭 단계 색·FPS 정리·기능 켜기 스위치.** [안내·도움말 명세 14절](app-copy-help-combat-controls-spec.md) — 0.28.2 전체 렌더 재검토.
   2단 탭 선택 색 연한 민트(A안, 3단 회색 그대로), 안내 문구 회색 통일, `~해요` 말투 통일, FPS 측정 한 구역 정리(수집은 맨 아래 접힘),
   기능 켜기만 스위치(블랙박스·FPS·커스텀·도르카/투아림·체력바·최적화 사용 C안 — `추천 설정으로 최적화` 버튼·위치 잠금 버튼은 그대로). 구현 후 다크·라이트 렌더 확인.
