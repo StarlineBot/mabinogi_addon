@@ -85,6 +85,7 @@
     "tests/test_resource_4k.py",
     "tests/test_skillbar_4k.py",
     "tests/test_party_keywords_clean.py",
-    "tests/test_buff_opacity_reorder.py"
+    "tests/test_buff_opacity_reorder.py",
+    "tests/test_boss_name_4k.py"
   ]
 }

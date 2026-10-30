@@ -34,13 +34,21 @@ _MIN_PX = 8  # 칸에 이 미만이면 빈 칸(자리 없음)
 _SEARCH = 8  # 정렬 오프셋 탐색 범위(±, 기준 해상도 px)
 _ACCEPT = 0.45  # 최고 정렬의 최저 자리 점수가 이 이상이어야 채택
 _STRONG = 0.85  # 자리수를 '확신'으로 셀 최저 자리 점수(이 이상이면 그 자리수를 우선 비교)
+# 값으로 쓰는 최저 점수(read_percent 기본 경로). _ACCEPT~이 사이는 '바는 있음'(read_percent_cached·존재 판정)으로만.
+VALUE_MIN_SCORE = 0.6
 
 
-def _load_digits(pattern="d*_*.png") -> dict[str, list[np.ndarray]]:
+# 4K(3840×2160)에서 굵게 그려진 숫자 샘플(0.30.1: 213520 '76'·214016 '100', 0.31.0: 0055251 '86').
+UHD_DIGIT_SAMPLES = frozenset({"d0_12", "d1_1", "d6_5", "d7_4", "d6_6", "d8_3"})
+
+
+def _load_digits(pattern="d*_*.png", exclude=frozenset()) -> dict[str, list[np.ndarray]]:
     out: dict[str, list[np.ndarray]] = {}
     if not _DIGIT_DIR.exists():
         return out
     for p in sorted(_DIGIT_DIR.glob(pattern)):
+        if p.stem in exclude:
+            continue
         img = imread(p, cv2.IMREAD_GRAYSCALE)
         if img is None:
             continue
@@ -223,7 +231,9 @@ def read_percent(
     templates, w, scale, band, pitch, span = prep
     val, score, _ = _scan(band, w, scale, pitch, templates, range(-span, span + 1))
     if val is not None and score >= _ACCEPT:
-        return val
+        # 0.31.0: 겨우 맞춘 판독(0.45~0.6)은 값을 쓰지 않는다 — 4K '86.15%'를 '8'(0.59)로 읽어 패턴 알림이
+        # 거짓으로 울릴 뻔했다. 틀린 값 대신 못 읽음(자동 찾기 검증과 같은 하한).
+        return val if score >= VALUE_MIN_SCORE else None
     return _low_hp_value(region_bgr, templates, band, w, scale, pitch, span, bright_samples)
 
 

@@ -36,7 +36,8 @@ def test_misaligned_4k_text_is_not_confirmed_by_autofind():
     frame = image_io.imread("tests/data/2026-10-11_123333.png", cv2.IMREAD_COLOR)
     trace = {}
     assert run_detector("boss", frame, detector_assets("boss"), trace) is None
-    assert any(v.get("rejection") == "percent_low_confidence" for v in trace.get("validation", []))
+    # 0.31.0: 실행 중 판독도 점수 0.6 미만은 못 읽음(None)이라 이유가 '판독 불가'로 한 단계 앞에서 나온다(확정 안 함은 같음)
+    assert any(v.get("rejection") in ("percent_low_confidence", "percent_unreadable") for v in trace.get("validation", []))
 
 
 def test_box_height_uses_ui_scale_not_screen_ratio():

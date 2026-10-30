@@ -59,9 +59,12 @@ def test_auxiliary_percent_is_not_sufficient_for_a_boss(monkeypatch):
 def test_bright_sample_only_participates_in_low_hp_fallback():
     upper = crop(image(), upper_box("001801"))[:, int(521 * .58):]
     assert boss_hp_reader._ACCEPT == .45
-    assert boss_hp_reader.read_percent(upper, boss_hp_reader._DIGITS) is None
-    assert boss_hp_reader.read_percent(upper, boss_hp_reader._DIGITS,
-                                       bright_samples=boss_hp_reader._BRIGHT_SAMPLES) == 8
+    # 0.31.0: 4K 굵은 '8' 샘플(UHD_DIGIT_SAMPLES)이 생겨 기본 경로도 이 프레임을 같은 값 8로 읽는다.
+    # 밝은 샘플이 저HP 보조 경로에서만 쓰인다는 점은 4K 샘플을 뺀 기존 샘플로 확인한다.
+    assert boss_hp_reader.read_percent(upper, boss_hp_reader._DIGITS) in (None, 8)
+    legacy = boss_hp_reader._load_digits(exclude=boss_hp_reader.UHD_DIGIT_SAMPLES)
+    assert boss_hp_reader.read_percent(upper, legacy) is None
+    assert boss_hp_reader.read_percent(upper, legacy, bright_samples=boss_hp_reader._BRIGHT_SAMPLES) == 8
     auxiliary = image()[1280:1317, 1016:1537]
     assert boss_hp_reader.read_percent(auxiliary) == boss_hp_reader.read_percent(auxiliary, boss_hp_reader._DIGITS)
 

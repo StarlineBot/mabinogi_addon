@@ -60,8 +60,9 @@ _MAX_H_FRAC = 0.06  # 최대(너무 두꺼운 건 바 아님) → 86px
 # 색조 나눠 찾기(채도 마스크가 바닥과 한 덩어리일 때만): OpenCV 색조 0~179를 30씩 겹쳐 45 폭으로.
 _HUE_STEP, _HUE_WIDTH = 30, 45
 _VALUE_SPLITS = (230, 200)  # 그다음 밝기 상한으로 나눠(밝은 바닥 제외)
-# 자동 찾기 검증: HP% 기본 판독의 최저 자리 점수 하한(실제 보스바 0.74~1.0, 위치가 어긋난 4K 판독 0.48)
-_VALIDATE_SCORE = 0.6
+# 자동 찾기 검증: HP% 기본 판독의 최저 자리 점수 하한(실제 보스바 0.69~1.0, 위치가 어긋난 4K 판독 0.48)
+# — 실행 중 판독(read_percent)도 0.31.0부터 같은 하한(boss_hp_reader.VALUE_MIN_SCORE)
+from .boss_hp_reader import VALUE_MIN_SCORE as _VALIDATE_SCORE  # noqa: E402
 _FLAT_RATIO = 6  # w > h * 이것 (납작한 가로 바)
 _BOTTOM_FRAC = 0.72  # 이 아래(하단)에서만
 _FILL_ROW = 0.45  # 바 높이 확장: 씨앗 좌우 범위 안 '채움 행' 비율 하한(글자 행도 통과)
