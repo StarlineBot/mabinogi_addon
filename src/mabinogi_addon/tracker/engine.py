@@ -52,6 +52,7 @@ class BuffEngine:
         appear_frames: int = 3,
         threshold: float = DEFAULT_THRESHOLD,
         favorites: bool = False,
+        favorites_separator: int | None = None,
     ) -> None:
         self._templates = templates
         self._order = list(order)
@@ -62,9 +63,11 @@ class BuffEngine:
         self._row_pad_top = row_pad_top
         self._row_height = row_height
         self._threshold = threshold
-        # 즐겨찾기 칸 읽기(기획서 3.1.1, 0.26.0 제작자 알파): 구분선 위 = 즐겨찾기(켜짐/꺼짐), 아래 = 기존 목록.
-        # 끄면(기본) 지금 목록 방식 그대로다.
-        self.favorites = FavoritesReader(templates, icon_column) if favorites else None
+        # 즐겨찾기 칸 읽기(기획서 3.1.1): 구분선 위 = 즐겨찾기(켜짐/꺼짐), 아래 = 기존 목록. 0.33.0부터 앱은 항상 켠다(전체 공개) —
+        # 구분선이 없으면 전체를 목록으로 읽어 예전과 같다. favorites_separator: 지난 실행에서 저장한 구분선 y.
+        self.favorites = FavoritesReader(templates, icon_column, favorites_separator) if favorites else None
+        # 선 확인 전 거짓 종료 알림 방지(0.33.0): 마지막 시간 판독이 실패한 버프는 알림을 보류(소비 안 함).
+        self._read_ok: dict[str, bool] = {}
 
         self._anchor_seen = False  # 앵커를 한 번이라도 봤는지(게이팅 안전장치)
         # 시간 템플릿 세트 자동선택: 모니터·스케일링마다 글자 렌더링이 달라 세트가 여럿.
@@ -160,6 +163,7 @@ class BuffEngine:
                     if just_appeared or near or (now - last) >= self._TIME_READ_GAP:
                         reading = self._read_row_time(region, det.y)
                         self._last_read_at[bid] = now
+                        self._read_ok[bid] = reading is not None
             elif (
                 frame_valid
                 and self._show_duration.get(bid, True)
@@ -176,18 +180,26 @@ class BuffEngine:
                         detected = True
                         reading = float(t)
                         self._last_read_at[bid] = now
+                        self._read_ok[bid] = True
+            if not detected:
+                self._read_ok.pop(bid, None)
+            # 구분선을 아직 모를 때(즐겨찾기 칸이 영역에 있으면 꺼진 즐겨찾기도 목록 아이콘으로 잡힌다) 시간을 못 읽는 줄은
+            # 알림을 보류한다 — 꺼진 즐겨찾기는 시간이 없어 내부 시계만 줄어 거짓 종료 알림을 냈다(2026-10-31 테스터 제보).
+            # 진짜 목록 버프는 임박 구간에서 매 틱 시간을 읽으므로 그대로 울린다. 보류는 '포그라운드 아님'과 같게 소비하지 않는다.
+            hold = (detected and self.favorites is not None and self.favorites.boundary is None
+                    and not self._read_ok.get(bid, False))
             event = machine.observe(
                 detected=detected,
                 reading=reading,
                 now=now,
                 frame_valid=frame_valid,
-                foreground=foreground,
+                foreground=foreground and not hold,
             )
             if event is Event.ALERT:
                 alerts.append(bid)
             # 2차 알림: 더 가까운 기준 교차 시 1회 더(놓침·오독 대비). 포그라운드일 때만.
             # 1차와 분리해 alerts2로 — 앱이 '막차' 전용 소리(연장2.mp3)를 재생한다.
-            if foreground and frame_valid and machine.check_second_alert(now):
+            if foreground and not hold and frame_valid and machine.check_second_alert(now):
                 alerts2.append(bid)
 
         self._present_prev = set(present)  # 다음 틱의 '방금 등장' 판정용
@@ -211,7 +223,14 @@ class BuffEngine:
         boundary = reader.boundary
         if boundary is None:
             return detections  # 구분선 없음: 전체를 목록으로(즐겨찾기를 안 쓰는 사람·예전 영역 호환)
-        listed = [d for d in detections if d.y > boundary and d.buff_id not in reader.rows]
+        # 같은 버프가 즐겨찾기 칸과 목록에 함께 있을 수 없다(즐겨찾기하면 목록에서 빠짐). 구분선 아래 목록에서 잡힌 버프의
+        # 즐겨찾기 줄 대응은 비슷한 꺼진 아이콘을 잘못 맞춘 것이라 버린다 — 0.33.0 tests/data 80장 점검: 꺼진 '정화의 고동'이
+        # 마나 피어스와 0.714로 맞아(줄 기준 0.7) 목록의 진짜 마나 피어스(1.0)가 빠지던 장 40여 개.
+        below = {d.buff_id for d in detections if d.y > boundary}
+        for bid in below & set(reader.rows):
+            reader.rows.pop(bid)
+            reader.on.pop(bid, None)
+        listed = [d for d in detections if d.y > boundary]
         for bid, row in reader.rows.items():
             if reader.on.get(bid):
                 listed.append(Detection(bid, 1.0, row.y))

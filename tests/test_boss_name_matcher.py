@@ -51,8 +51,12 @@ def test_prefix_trap_picks_longer_name():
 
 
 def test_unregistered_boss_returns_none():
-    # 185152 = "브론타나스"(미등록)
-    assert identify(_region("185152")) is None
+    # 0.33.0 명세 변경: 185152 '브론타나스'는 등록됨(아래 테스트) → 미등록 예시는 190901 '글라스 기브넨'
+    assert identify(_region("190901")) is None
+
+
+def test_identifies_brontanas():
+    assert identify(_region("185152")) == "brontanas"
 
 
 def test_empty_region_returns_none():

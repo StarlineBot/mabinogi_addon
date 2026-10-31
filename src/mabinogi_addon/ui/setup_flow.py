@@ -230,6 +230,9 @@ class SetupFlow:
                         return dict(outcome)
                     if self.closed or self.cancelled:
                         return {"status": "cancelled_shutdown" if self.closed else "cancelled"}
+                    if key == "buff":  # 위쪽을 즐겨찾기 칸 맨 위까지(기획서 3.1.1 — 0.33.0 전체 공개, 탭 자동 찾기와 같게)
+                        from ..detect.favorites import widen_to_favorites
+                        box = widen_to_favorites(current["frame"], box)
                     logical = to_logical(box[0] + ox, box[1] + oy, box[2], box[3])
                     if key == "skillbar":
                         from .skillbar_mirror import SRC_W, SRC_H

@@ -1,5 +1,5 @@
 {
-  "version": "0.32.0",
+  "version": "0.33.0",
   "tests": [
     "tests/test_blackbox.py",
     "tests/test_blackbox_access.py",
@@ -93,6 +93,8 @@
     "tests/test_lock_row_wide_spin.py",
     "tests/test_boss_bar_small_screen.py",
     "tests/test_buff_hidden_kept.py",
-    "tests/test_overlay_window_visible.py"
+    "tests/test_overlay_window_visible.py",
+    "tests/test_buff_favorites_public.py",
+    "tests/test_boss_brontanas.py"
   ]
 }

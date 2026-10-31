@@ -23,10 +23,11 @@ class BossDef:
 
 
 def load_bosses() -> dict[str, BossDef]:
-    """{boss_id: BossDef}. patterns.json 없거나 깨진 폴더는 건너뛴다."""
-    out: dict[str, BossDef] = {}
+    """{boss_id: BossDef}. patterns.json 없거나 깨진 폴더는 건너뛴다.
+    순서 = patterns.json의 "order"(보스 탭 지원 목록 순서, 0.33.0 — 브론타나스를 페타크와 레넨 사이에), 없으면 폴더 이름 뒤."""
+    found: list[tuple[float, str, BossDef]] = []
     if not _BOSS_DIR.exists():
-        return out
+        return {}
     for sub in sorted(p for p in _BOSS_DIR.iterdir() if p.is_dir()):
         pj = sub / "patterns.json"
         if not pj.exists():
@@ -40,8 +41,10 @@ def load_bosses() -> dict[str, BossDef]:
             {int(t) for t in data.get("thresholds", []) if isinstance(t, (int, float))},
             reverse=True,
         )
-        out[sub.name] = BossDef(id=sub.name, name=str(name), thresholds=tuple(thr))
-    return out
+        order = data.get("order")
+        order = float(order) if isinstance(order, (int, float)) and not isinstance(order, bool) else float("inf")
+        found.append((order, sub.name, BossDef(id=sub.name, name=str(name), thresholds=tuple(thr))))
+    return {boss.id: boss for _order, _name, boss in sorted(found, key=lambda item: item[:2])}
 
 
 def make_tracker(boss: BossDef) -> BossPatternTracker:

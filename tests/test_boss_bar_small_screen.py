@@ -31,7 +31,7 @@ def test_hand_drawn_box_on_1080_screen_is_read():
 
 
 SHOTS_1080 = {  # 앱 v0.31.1 화면 함께 찍힌 장: 자동 찾기 상자, HP, 이름(목록 밖은 None)
-    "image02.png": ((703, 818, 521, 37), 99, None),  # 브론타나스 99.99% — 지원 목록 밖
+    "image02.png": ((703, 818, 521, 37), 99, "brontanas"),  # 브론타나스 99.99% — 0.33.0 명세 변경: 등록(예전 목록 밖 None)
     "image03.png": ((703, 818, 518, 37), 100, "lenen_miir"),
     "image04.png": ((703, 818, 518, 37), 100, "lenen_miir_hoehan"),
 }

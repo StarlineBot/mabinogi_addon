@@ -18,7 +18,7 @@ class Feature:
 
 FEATURES = (
     Feature("buff", "버프 트래커", "buffTracker", True,
-            "기준 버프와 추적할 버프의 아이콘·남은 시간이 들어오는지 확인하세요."),
+            "상태목록창 맨 위(즐겨찾기 칸 포함)부터 기준 버프와 추적할 버프의 아이콘·남은 시간이 들어오는지 확인하세요."),
     Feature("debuff", "디버프 트래커", "debuffTracker", True,
             "보스바 위 디버프 줄이 들어오는지 확인하세요. 아이콘이 없어도 등록할 수 있어요."),
     Feature("tuarim", "투아림 알림", "tuarim", False,

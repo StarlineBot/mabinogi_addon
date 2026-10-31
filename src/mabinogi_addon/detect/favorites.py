@@ -178,10 +178,14 @@ class FavoritesReader:
     FORGET_FRAMES = 40  # 밝은 배경에서 기억한 자리에 선이 이만큼 연속으로 없으면 잊음(즐겨찾기 모두 해제)
     SCAN_EVERY = 5  # 기억한 선이 안 보일 때 전체 탐색 간격(프레임)
 
-    def __init__(self, templates: dict[str, np.ndarray], icon_column: tuple[int, int]) -> None:
+    def __init__(self, templates: dict[str, np.ndarray], icon_column: tuple[int, int],
+                 separator: int | None = None) -> None:
         self._templates = templates
         self._icon_column = icon_column
-        self.separator: int | None = None
+        # separator: 지난 실행에서 확인해 영역 기준으로 저장한 구분선 y(0.33.0). 첫 프레임부터 쓴다 —
+        # 아주 어두운 맵에서 켜면 선을 못 찾아 전체를 목록으로 읽고 꺼진 즐겨찾기를 '있음'으로 보던 한계 대비.
+        # 그 자리에 선이 계속 안 보이면 평소처럼 잊는다(FORGET_FRAMES).
+        self.separator: int | None = separator
         self.rows: dict[str, FavoriteRow] = {}
         self.on: dict[str, bool] = {}
         self.row_count: int | None = 0
@@ -284,6 +288,18 @@ class FavoritesReader:
             _log.info("즐겨찾기 줄 다시 맞춤(%s): %s", reason,
                       ", ".join(f"{b}@{r.y}" for b, r in sorted(rows.items(), key=lambda i: i[1].y)) or "등록 버프 없음")
         self.rows = rows
+
+
+def widen_to_favorites(frame: np.ndarray, box: tuple[int, int, int, int]) -> tuple[int, int, int, int]:
+    """버프 자동 찾기 영역(프레임 좌표)의 위쪽을 즐겨찾기 칸 맨 위까지 넓힌다(0.33.0 전체 공개 — 탭 자동 찾기·첫 안내 자동설정 공용).
+    즐겨찾기 칸이 없거나 기준 버프를 못 찾으면 그대로."""
+    from .status_panel import anchor_template, find_anchor
+    x, y, w, h = box
+    hit = find_anchor(frame, anchor_template())
+    top = favorites_top(frame, box, hit.y) if hit is not None else None
+    if top is None:
+        return box
+    return (x, top, w, h + (y - top))
 
 
 def favorites_top(frame: np.ndarray, box: tuple[int, int, int, int], anchor_y: int) -> int | None:

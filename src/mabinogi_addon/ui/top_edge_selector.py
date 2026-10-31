@@ -24,7 +24,7 @@ class TopEdgeSelector(QWidget):
     selected = Signal(int, int, int, int)  # 확정 (x, y, w, h) 전역 좌표
     cancelled = Signal()
 
-    def __init__(self, x: int, w: int, initial_top: int, *, favorites: bool = False) -> None:
+    def __init__(self, x: int, w: int, initial_top: int, *, favorites: bool = True) -> None:
         super().__init__(
             None,
             Qt.WindowType.FramelessWindowHint
@@ -40,7 +40,7 @@ class TopEdgeSelector(QWidget):
         self._bottom = int(self._geo.height())  # 아래 = 화면 끝(불변)
         self._top = max(0, min(int(initial_top - self._geo.y()), self._bottom - 10))
         self._auto_top = self._top  # 자동값(Enter로 그대로 확정 — 마우스 이동에 안 흔들림)
-        # 즐겨찾기 영역(기획서 3.1.1, 0.26.0 제작자 알파)이면 위 경계는 상태목록창 맨 위(즐겨찾기 첫 줄 위)
+        # 위 경계는 상태목록창 맨 위(즐겨찾기 첫 줄 위) — 기획서 3.1.1, 0.33.0 전체 공개
         self._favorites = favorites
 
     def start(self) -> None:

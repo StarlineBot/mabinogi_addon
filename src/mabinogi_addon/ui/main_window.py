@@ -382,7 +382,6 @@ class MainWindow(QMainWindow):
         self.settings_tab.login_changed.connect(self.dorcha_tab.login_refresh)
         self.settings_tab.login_changed.connect(self.boss_tab.halo_capture.login_refresh)
         self.settings_tab.login_changed.connect(self._guide_login_changed)
-        self.settings_tab.login_changed.connect(self._buff_read_mode_login_changed)
         self.settings_tab.game_registered.connect(self.setup_page.refresh)
         self.settings_tab.game_registration_finished.connect(self._setup_game_finished)
         self.setCentralWidget(central)
@@ -408,7 +407,6 @@ class MainWindow(QMainWindow):
         self.buff_tab.lock_toggled.connect(self._on_overlay_lock)
         self.buff_tab.tracking_changed.connect(self._on_tracking_changed)
         self.buff_tab.catalog_changed.connect(self._on_catalog_changed)
-        self.buff_tab.read_mode_changed.connect(self._on_catalog_changed)
         self.buff_overlay.moved.connect(self._save_overlay_state)
 
         # 디버프 오버레이
@@ -1105,8 +1103,8 @@ class MainWindow(QMainWindow):
         self._check_game_process()
         self._update_tray_tooltip()
         self.buff_tab.set_status(*self._buff_status())
-        if self.buff_tab.favorites_info.isVisibleTo(self.buff_tab):
-            self.buff_tab.set_favorites_info(*self._favorites_info())
+        self.buff_tab.set_favorites_info(*self._favorites_info())
+        self._remember_favorites_separator()
         self.debuff_tab.set_status(*self._debuff_status())
         # 사라짐 경고 가능 여부 안내. 방식과 무관하게 '디버프 영역에서 띠를 한 번이라도
         # 봤는지'(bar_ever_seen)로 표시한다 — 보스가 잠깐 없어도 "인식됨"을 유지해, 영역이
@@ -1159,6 +1157,21 @@ class MainWindow(QMainWindow):
         if n:
             return (f"추적 중 — 버프 {n}개 표시", self._STATUS_OK, "ok")
         return ("추적 중 — 지금 표시할 버프 없음", self._STATUS_OK, "ok")
+
+    def _remember_favorites_separator(self) -> None:
+        """확정된 구분선 위치가 바뀌면 버프 영역 기준으로 저장(0.33.0) — 다음 실행은 어두운 맵 첫 프레임부터 그 선을 쓴다.
+        상태 폴링(0.7초, UI 스레드)에서만 저장해 작업 스레드가 설정 파일을 쓰지 않는다."""
+        reader = getattr(self._engine, "favorites", None)
+        if reader is None:
+            return
+        separator = reader.separator
+        if separator != getattr(self, "_saved_favorites_separator", "unset"):
+            self._saved_favorites_separator = separator
+            if separator is not None or config.load_favorites_separator() is not None:
+                try:
+                    config.save_favorites_separator(separator)
+                except OSError:
+                    pass
 
     def _favorites_info(self) -> tuple[str, str]:
         """즐겨찾기 영역 인식 줄(기획서 3.1.1): 칸 줄 수 · 등록한 버프 켜짐/꺼짐."""
@@ -1711,7 +1724,8 @@ class MainWindow(QMainWindow):
             show_duration=show_duration,
             alert_before=alert_before,
             alert_before2=alert_before2,
-            favorites=self.buff_tab.favorites_mode(),  # 0.26.0 제작자 알파: 즐겨찾기 영역 포함
+            favorites=True,  # 즐겨찾기 칸 함께 읽기(기획서 3.1.1 — 0.33.0 전체 공개, 구분선 없으면 예전과 같음)
+            favorites_separator=config.load_favorites_separator(),  # 지난 실행에서 확인한 구분선(첫 프레임부터)
         )
         self.buff_controller = BuffController(
             self.buff_overlay,
@@ -1777,13 +1791,6 @@ class MainWindow(QMainWindow):
         self.buff_controller.set_order(order)
         self.buff_controller.set_warn_gone_ids(self._warn_gone_ids())
         self._sound_ids = self._sound_enabled_ids()
-
-    def _buff_read_mode_login_changed(self) -> None:
-        """로그인이 바뀌면 제작자 알파(즐겨찾기 영역) 선택 표시를 다시 보고, 읽는 방식이 바뀌었으면 추적을 다시 건다."""
-        before = self.buff_tab.favorites_mode()
-        self.buff_tab.refresh_read_mode(recheck=True)
-        if self.buff_tab.favorites_mode() != before:
-            self._on_catalog_changed()
 
     def _on_catalog_changed(self) -> None:
         """버프 추가·삭제·아이콘 변경 → 템플릿 재구성을 위해 추적 재시작."""

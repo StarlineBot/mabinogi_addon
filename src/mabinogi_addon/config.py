@@ -772,7 +772,34 @@ def save_capture_region(
     if not isinstance(sec, dict):
         sec = {}
     sec["captureRegion"] = {"x": x, "y": y, "w": w, "h": h}
+    sec.pop("favoritesSeparator", None)  # 영역이 바뀌면 저장한 즐겨찾기 구분선은 무효(0.33.0)
     data[section] = sec
+    _write_local_config(data, path)
+
+
+def load_favorites_separator(path: Path = LOCAL_CONFIG_PATH) -> int | None:
+    """버프 영역 기준으로 저장한 즐겨찾기 구분선 y(0.33.0). 저장 때 영역과 지금 영역이 다르면 None."""
+    sec = _read_local_config(path).get("buffTracker") or {}
+    saved = sec.get("favoritesSeparator") if isinstance(sec, dict) else None
+    region = sec.get("captureRegion") if isinstance(sec, dict) else None
+    if not isinstance(saved, dict) or not isinstance(region, dict) or saved.get("region") != region:
+        return None
+    y = saved.get("y")
+    return y if isinstance(y, int) and not isinstance(y, bool) and y > 0 else None
+
+
+def save_favorites_separator(y: int | None, path: Path = LOCAL_CONFIG_PATH) -> None:
+    """확인된 구분선 y를 지금 버프 영역과 함께 저장(None이면 지움). 다음 실행 첫 프레임부터 쓴다."""
+    data = _read_local_config(path)
+    sec = data.get("buffTracker")
+    if not isinstance(sec, dict) or not isinstance(sec.get("captureRegion"), dict):
+        return
+    if y is None:
+        if sec.pop("favoritesSeparator", None) is None:
+            return
+    else:
+        sec["favoritesSeparator"] = {"y": int(y), "region": dict(sec["captureRegion"])}
+    data["buffTracker"] = sec
     _write_local_config(data, path)
 
 
