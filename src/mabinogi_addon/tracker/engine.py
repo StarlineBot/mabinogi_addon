@@ -128,8 +128,9 @@ class BuffEngine:
         # foreground: 게임이 포그라운드일 때만 '소리 알림(만료 임박)'을 낸다. 탐지·시간
         # 읽기는 포커스와 무관하게 계속해 시간을 동기화하되, 알림만 포커스+화면 확정 시로
         # 제한한다(비포커스 중의 거짓/추정 알림 방지). 복귀하면 아직 임박인 버프는 그때 운다.
+        held = {bid: self._last_y[bid] for bid in self._present_prev if bid in self._last_y}
         detections = detect_buffs(
-            region, self._templates, self._icon_column, self._threshold
+            region, self._templates, self._icon_column, self._threshold, held=held
         )
         if self.favorites is not None:
             detections = self._split_favorites(region, detections)

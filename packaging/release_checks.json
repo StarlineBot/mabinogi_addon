@@ -95,6 +95,7 @@
     "tests/test_buff_hidden_kept.py",
     "tests/test_overlay_window_visible.py",
     "tests/test_buff_favorites_public.py",
-    "tests/test_boss_brontanas.py"
+    "tests/test_boss_brontanas.py",
+    "tests/test_buff_4k_icons.py"
   ]
 }
