@@ -42,12 +42,7 @@ def _line(key, label, state, reason):
         return f'↺ {short} · 되돌림'
     if state == 'deferred':
         return f'• {label} · {reason}'
-    if state == 'pending':  # 0.34.0
-        return PENDING_LINE
     return f'! {short} · {reason}'  # fail·released
-
-
-PENDING_LINE = '• 패스트핑 · 재부팅 대기 (PC를 재부팅하거나 게임을 끈 뒤 [지금 적용])'
 
 
 def summarize(engine, recovery, requested=None, *, layout_label=None, kept_on=False, restore_wait=False):
@@ -57,16 +52,13 @@ def summarize(engine, recovery, requested=None, *, layout_label=None, kept_on=Fa
         return '복구 기록이 손상돼 새 적용을 막았어요. 추정값으로 되돌리지 않아요.', 'error', []
     network_left = any(i['kind'] in NETWORK_KINDS for i in recovery.pending) or bool(recovery.restart_targets)
     graphics_left = any(i['kind'] in GRAPHICS_KINDS for i in recovery.pending)
-    network_line = (PENDING_LINE if getattr(recovery, 'reboot_pending', False)
-                    else '• 패스트핑 · 적용 중 (최적화를 끄면 되돌려요)')
+    network_line = '• 패스트핑 · 적용 중 (최적화를 끄면 되돌려요)'
     graphics_line = '• 그래픽 효율 · 최대 프레임 400 적용 중 (최적화를 끄면 되돌려요)'
     outcome = getattr(engine, 'outcome', {}) or {}
     labels = _labels(requested, layout_label)
     if engine.busy and engine.task != 'inspect':
         if engine.cancel.is_set() or engine.task == 'restore':
             return '원래대로 되돌리는 중…', 'neutral', []
-        if engine.task == 'network':  # 0.34.0 [지금 적용]
-            return '패스트핑 적용 중…(인터넷이 잠깐 끊겨요)', 'neutral', []
         phase = getattr(engine, 'phase', None)
         if phase == 'held':
             return 'Process Lasso가 실행 중이라 잠시 멈췄어요 · 끄면 다시 적용해요', 'neutral', []
@@ -91,8 +83,7 @@ def summarize(engine, recovery, requested=None, *, layout_label=None, kept_on=Fa
         game_session = bool(requested.get('priority') or requested.get('cpu'))
         lines = []
         if network_left:
-            lines.append(_line('tcp', '패스트핑', *outcome['tcp']) if 'tcp' in outcome and not game_session
-                         and not getattr(recovery, 'reboot_pending', False) else network_line)
+            lines.append(_line('tcp', '패스트핑', *outcome['tcp']) if 'tcp' in outcome and not game_session else network_line)
         if graphics_left:
             lines.append(graphics_line if 'graphics' not in outcome or game_session
                          else _line('graphics', '그래픽 효율', *outcome['graphics']))

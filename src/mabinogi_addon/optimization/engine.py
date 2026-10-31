@@ -34,12 +34,22 @@ def session_line(notices, failures):
     return '게임 세션 사용 중 · 항목별 적용값 확인 완료'
 
 
-# 0.34.0: 게임 실행 중 켜면 값만 써 두고 어댑터를 재시작하지 않는다(게임 접속이 끊기지 않게). TcpAckFrequency는 어댑터가
-# 다시 묶일 때만 읽혀 게임을 다시 켜도 적용되지 않는다 → PC 재부팅 또는 게임을 끈 뒤 [지금 적용]. 예전(13.15)엔 게임이 끝나는
-# 순간 앱이 스스로 어댑터를 재시작해, 게임을 끄고 바로 PC를 끄면 Windows 종료와 겹칠 수 있었다(사용자 결정으로 제거).
-TCP_PENDING = '재부팅 대기'
-TCP_PENDING_MESSAGE = ('패스트핑은 아직 적용 전이에요. 게임을 다시 켜도 적용되지 않아요 — '
-                       'PC를 재부팅하거나 게임을 끈 뒤 [지금 적용]을 눌러 주세요.')
+# 0.34.0(사용자 결정 E안): 패스트핑은 게임이 꺼져 있을 때 최적화를 켜는 그 순간에만 적용한다. 적용하면 어댑터를 다시 연결해
+# 인터넷이 잠깐 끊기고, 이 게임은 그 순간 종료된다. 그래서 게임 중에는 이미 목표값인 경우만 그대로 진행하고(바꿀 것·끊김 없음),
+# 바꿔야 하면 화면에서 '게임을 끈 뒤 다시 눌러 주세요'로 막는다. 예전(13.15)엔 미뤘다가 게임이 끝나는 순간 앱이 스스로 적용·재연결해,
+# 게임을 끄고 바로 PC를 끄면 Windows 종료와 겹칠 수 있었다 — 그 경로는 없앴다.
+FASTPING_TARGETS = (('ack', 1), ('autotuning', 'normal'))
+FASTPING_GAME_RUNNING = '게임 실행 중이라 패스트핑을 적용하지 않았어요 · 게임을 끈 뒤 최적화를 다시 켜 주세요.'
+
+
+def fastping_ready(read, adapter):
+    """패스트핑 값(TcpAckFrequency 1·자동 조정 normal)이 이미 목표값인지 — 읽기만 한다(인터넷 끊김 없음). 못 읽으면 False."""
+    if not adapter:
+        return False
+    try:
+        return (read('ack', adapter) == 1 and read('autotuning', 'global') == 'normal')
+    except Exception:
+        return False
 
 
 def short_reason(exc) -> str:
@@ -225,20 +235,25 @@ class Engine:
             self.outcome['graphics'] = ('fail', reason)
 
     def _apply_tcp(self, options, results, notices, fail, network_guard, game_running=False):
-        """패스트핑 적용 — 최적화를 켜는 그 순간에만(확인 창은 시작 때 한 번). 게임 실행 중이면 값만 쓰고 어댑터 재시작은
-        하지 않아 '재부팅 대기'로 기록한다(0.34.0). 게임 종료 등으로 앱이 스스로 다시 적용·재시작하는 경로는 없다."""
+        """패스트핑 적용 — 게임이 꺼진 상태에서 최적화를 켜는 그 순간에만(확인 창은 시작 때 한 번, 0.34.0 E안).
+        게임 실행 중이면 이미 목표값일 때만 '그대로 둠'으로 진행하고 아무것도 쓰지 않는다(화면이 미리 막지만 작업 쪽도 지킨다)."""
+        if game_running:
+            if fastping_ready(self.backend.read, options['adapter']):
+                results.extend(['ack: 이미 목표값 · 그대로 둠', 'autotuning: 이미 목표값 · 그대로 둠'])
+                self.outcome['tcp'] = ('same', '')
+            else:
+                fail(FASTPING_GAME_RUNNING)
+                self.outcome['tcp'] = ('fail', '게임을 끈 뒤 적용할 수 있어요')
+            return
         tcp_results = []
         withheld = False
-        def write_guard():
-            if self.cancel.is_set() or not self.allowed():
-                raise ChangeDeferred('중단 요청·접근 해제로 남은 네트워크 적용을 보류해요.')
         guid = options['adapter']
         if not guid: raise ValueError('적용할 물리 네트워크 어댑터를 선택해 주세요.')
         changes = [('ack',guid,1),('autotuning','global','normal')]
         for kind, target, value in changes:
             if self.cancel.is_set() or not self.allowed(): break
             try:
-                result=self.recovery.apply(kind,target,value,guard=write_guard if game_running else network_guard)
+                result=self.recovery.apply(kind,target,value,guard=network_guard)
                 tcp_results.append(result)
                 results.append(f'{kind}: '+{'unchanged':'이미 목표값 · 그대로 둠','written':'적용 · 재연결 후 확인'}.get(result,'적용값 확인 완료'))
             except ChangeDeferred as exc:
@@ -250,50 +265,21 @@ class Engine:
                 fail(f'{kind} 미적용·확인 필요: {exc}')
                 self.outcome['tcp'] = ('fail', short_reason(exc))
         if withheld:
-            return  # 중단·게임 시작으로 쓰기를 멈췄다: 쓴 값이 있으면 원복 기록에 남고, 재시작은 하지 않는다
-        if game_running:
-            self._mark_pending(notices)
-            return
+            return  # 중단·게임 시작으로 쓰기를 멈췄다: 쓴 값이 있으면 원복 기록에 남고, 재연결은 다음 원복 때
         # Explicit start confirmation covered this one batch reconnect.
         try:
             self.recovery.flush_network(guard=network_guard)
             if any(i['kind']=='rss' and i['state']=='applied' for i in self.recovery.items):
                 results.append('rss: 재연결 후 적용값 확인 완료')
         except ChangeDeferred as exc:
-            # 확인 뒤 재시작 직전에 게임이 켜졌다: 값은 써 뒀고 재시작만 미룬다(재부팅 대기).
-            self._mark_pending(notices)
+            # 확인 뒤 재연결 직전에 게임이 켜졌다: 게임 접속을 끊지 않는다(쓴 값은 원복 기록에 남아 최적화를 끄면 되돌림).
             notices.append(str(exc))
+            self.outcome.setdefault('tcp', ('fail', '게임이 켜져 적용을 마치지 못했어요'))
         except Exception as exc:
             fail('네트워크 재연결 확인 필요: '+str(exc))
             self.outcome['tcp'] = ('fail', short_reason(exc))
         if 'tcp' not in self.outcome and tcp_results:
             self.outcome['tcp'] = ('same', '') if all(r == 'unchanged' for r in tcp_results) else ('ok', '')
-
-    def _mark_pending(self, notices):
-        if self.recovery.restart_targets:
-            import time
-            self.recovery.mark_reboot_pending(time.time())
-            self.outcome.setdefault('tcp', ('pending', TCP_PENDING))  # 일부 실패면 실패 줄을 유지
-            notices.append(TCP_PENDING_MESSAGE)
-
-    def apply_pending_network(self):
-        """[지금 적용](0.34.0): 재부팅 대기 중인 패스트핑을 어댑터 재시작으로 적용한다. 사용자가 확인 창에서 고른 경우만,
-        게임이 꺼져 있을 때만(재시작 직전에 다시 확인). 성공하면 대기 해제."""
-        def work():
-            def guard():
-                if not self.allowed():
-                    raise ChangeDeferred('로그인이 해제돼 적용하지 않았어요.')
-                if self.backend.game() is not None:
-                    raise ChangeDeferred('게임이 실행 중이라 적용하지 않았어요. 게임을 끈 뒤 다시 눌러 주세요.')
-            try:
-                self.recovery.flush_network(guard=guard)
-            except ChangeDeferred as exc:
-                self.status = str(exc)
-                return
-            _log.info('패스트핑 재부팅 대기 해제(지금 적용)')
-            self.outcome['tcp'] = ('ok', '')
-            self.status = '패스트핑 적용 완료 · 어댑터를 다시 연결했어요.'
-        return self._launch(work, status='패스트핑 적용 중…(인터넷이 잠깐 끊겨요)', task='network')
 
     def _end_game(self, notices):
         """자동 적용: 끝난 게임(또는 보류)에 건 프로세스 값만 원복하고 기록을 정리한다. 네트워크는 건드리지 않는다."""

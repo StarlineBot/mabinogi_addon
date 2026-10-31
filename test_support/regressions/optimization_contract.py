@@ -92,6 +92,4 @@ def test_network_control_game_already_running(tmp_path):
     engine = Engine(backend, recovery, lambda: True)
     assert engine.start(dict(cpu=False, count=None, adapter=GUID, tcp=True, rss=False))
     engine.thread.join(3)
-    # 0.34.0 명세 변경(사용자 결정): 게임 실행 중 켜면 값은 써 두고 어댑터 재시작만 하지 않는다('재부팅 대기').
-    # 예전(13.15)은 아무것도 쓰지 않고 게임이 끝날 때 앱이 스스로 적용·재시작했다(그 경로는 없앰).
-    assert not engine.busy and backend.writes and not backend.restarts and recovery.reboot_pending
+    assert not engine.busy and not backend.writes and not backend.restarts

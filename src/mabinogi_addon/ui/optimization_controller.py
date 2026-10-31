@@ -79,11 +79,6 @@ class OptimizationController(QObject):
         self.recovery = Recovery(paths.user_data_dir().parent / 'StarlineMabinogiAddonRuntime' / 'recovery.json',
                                  self.backend, lambda: self._can_start() and not self.engine.cancel.is_set())
         self.engine = Engine(self.backend,self.recovery,self._can_start)
-        # 0.34.0: 재부팅 대기 중이었는데 PC가 그 뒤에 부팅됐으면 패스트핑이 적용된 것 → 대기 해제(읽기만, 네트워크 작업 없음)
-        try:
-            self.recovery.clear_if_rebooted(getattr(self.backend, 'boot_time', lambda: None)())
-        except Exception as exc:  # noqa: BLE001 — 기록 저장 실패 등: 대기를 그대로 둔다
-            _log.warning('패스트핑 재부팅 대기 확인 실패: %s', exc)
         self.panel = OptimizationPanel(window)
         # 탭에 붙기 전에는 메인 창의 맨 자식이라 창이 보일 때 왼쪽 위(0,0)에 조각으로 함께 그려진다 → 붙을 때까지 숨긴다
         self.panel.hide()
@@ -500,7 +495,6 @@ class OptimizationController(QObject):
         d.adapter.currentIndexChanged.connect(self._save_selection)
         d.inspect.clicked.connect(self.engine.inspect)
         d.toggle.clicked.connect(self._toggle_optimization)
-        d.apply_now.clicked.connect(self._apply_pending_now)
         d.frames_toggle.clicked.connect(self._toggle_frames)
         d.lock.setChecked(bool((config.load_overlay_state('frameMeter') or {}).get('locked',True)))
         d.lock.toggled.connect(self._lock)
@@ -571,31 +565,11 @@ class OptimizationController(QObject):
         self.overlay.set_locked(locked)
         self._save_overlay()
 
-    def _sync_pending(self, d):
-        """'패스트핑: 재부팅 대기' 줄과 [지금 적용](0.34.0). 버튼은 게임이 꺼져 있을 때만 — 게임 접속이 끊기지 않게."""
-        pending = self.recovery.reboot_pending
-        d.pending_row.setVisible(pending)
-        if not pending:
-            return
-        game_on = self._game_running()
-        d.apply_now.setEnabled(self._can_start() and not self.engine.busy and not game_on)
-        d.pending_label.setVisible(game_on)
-        d.apply_now.setToolTip('게임 접속이 끊기지 않게 게임을 끈 뒤 눌러 주세요' if game_on
-                               else '어댑터를 다시 연결해 패스트핑을 지금 적용해요(인터넷이 잠깐 끊겨요)')
-
     def _game_running(self):
         try:
             return self.backend.game() is not None
         except Exception:
             return True  # 모르면 끊지 않는 쪽으로
-
-    def _apply_pending_now(self):
-        if not self.recovery.reboot_pending or self.engine.busy or self._game_running():
-            return
-        if not self._network_confirmation():
-            return
-        self.engine.apply_pending_network()
-        self._tick()
 
     def _network_confirmation(self):
         return QMessageBox.question(self.panel or self.window,'네트워크 재연결',
@@ -665,6 +639,17 @@ class OptimizationController(QObject):
             return
         if options['tcp'] and not options['adapter']:
             self.engine.status = self._notice = '패스트핑을 적용할 연결을 상세 설정에서 선택해 주세요.'
+            return
+        if options['tcp'] and self._game_running():
+            # 0.34.0(사용자 결정 E안): 패스트핑을 적용하면 인터넷이 잠깐 끊겨 게임이 종료된다 → 게임 중에는 시작하지 않는다.
+            # 이미 목표값이면 바꿀 것·끊김이 없으니 확인 창 없이 그대로 시작한다(읽기만).
+            from ..optimization.engine import fastping_ready
+            if not fastping_ready(self.backend.read, options['adapter']):
+                _log.info('최적화: 게임 실행 중 패스트핑 적용 요청 → 게임을 끈 뒤 다시 누르도록 안내')
+                QMessageBox.information(self.panel or self.window, '패스트핑은 게임을 끈 뒤에 적용할 수 있어요',
+                    '패스트핑을 적용하면 인터넷이 잠깐 끊겨 게임이 종료돼요.\n게임을 끈 뒤 최적화를 다시 눌러 주세요.')
+                return
+            self._begin(options)
             return
         if options['tcp'] and not self._network_confirmation(): return
         self._begin(options)
@@ -1051,7 +1036,6 @@ class OptimizationController(QObject):
         for control in (d.summary_collect,d.summary_save,d.summary_folder): control.setEnabled(allowed and self._creator())
         d.show_frames_status(self.frame_status, bool(self.frames and not self._collect_only))
         self._render_result(d)
-        self._sync_pending(d)
         self._update_recommendation()
         self._maybe_auto_inspect()  # 탭에 머문 채 세션이 끝나거나 접근이 생겨도 한 번은 확인
         from collections import Counter

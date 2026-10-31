@@ -97,6 +97,6 @@
     "tests/test_buff_favorites_public.py",
     "tests/test_boss_brontanas.py",
     "tests/test_buff_4k_icons.py",
-    "tests/test_fastping_pending.py"
+    "tests/test_fastping_game_running.py"
   ]
 }
