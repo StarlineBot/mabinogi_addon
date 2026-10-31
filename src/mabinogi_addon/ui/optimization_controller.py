@@ -565,6 +565,12 @@ class OptimizationController(QObject):
         self.overlay.set_locked(locked)
         self._save_overlay()
 
+    def _game_running(self):
+        try:
+            return self.backend.game() is not None
+        except Exception:
+            return True  # 모르면 끊지 않는 쪽으로
+
     def _network_confirmation(self):
         return QMessageBox.question(self.panel or self.window,'네트워크 재연결',
             '선택한 어댑터의 연결이 잠시 끊길 수 있어요. 통신 중인 다른 앱에도 영향을 줄 수 있어요. 지금 진행할까요?',
@@ -633,6 +639,17 @@ class OptimizationController(QObject):
             return
         if options['tcp'] and not options['adapter']:
             self.engine.status = self._notice = '패스트핑을 적용할 연결을 상세 설정에서 선택해 주세요.'
+            return
+        if options['tcp'] and self._game_running():
+            # 0.34.0(사용자 결정 E안): 패스트핑을 적용하면 인터넷이 잠깐 끊겨 게임이 종료된다 → 게임 중에는 시작하지 않는다.
+            # 이미 목표값이면 바꿀 것·끊김이 없으니 확인 창 없이 그대로 시작한다(읽기만).
+            from ..optimization.engine import fastping_ready
+            if not fastping_ready(self.backend.read, options['adapter']):
+                _log.info('최적화: 게임 실행 중 패스트핑 적용 요청 → 게임을 끈 뒤 다시 누르도록 안내')
+                QMessageBox.information(self.panel or self.window, '패스트핑은 게임을 끈 뒤에 적용할 수 있어요',
+                    '패스트핑을 적용하면 인터넷이 잠깐 끊겨 게임이 종료돼요.\n게임을 끈 뒤 최적화를 다시 눌러 주세요.')
+                return
+            self._begin(options)
             return
         if options['tcp'] and not self._network_confirmation(): return
         self._begin(options)

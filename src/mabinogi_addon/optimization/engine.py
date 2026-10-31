@@ -34,7 +34,22 @@ def session_line(notices, failures):
     return '게임 세션 사용 중 · 항목별 적용값 확인 완료'
 
 
-TCP_DEFERRED = '게임을 끄면 적용해요'  # 13.15: 게임 중 시작해 미룬 패스트핑(게임이 끝나면 자동 적용)
+# 0.34.0(사용자 결정 E안): 패스트핑은 게임이 꺼져 있을 때 최적화를 켜는 그 순간에만 적용한다. 적용하면 어댑터를 다시 연결해
+# 인터넷이 잠깐 끊기고, 이 게임은 그 순간 종료된다. 그래서 게임 중에는 이미 목표값인 경우만 그대로 진행하고(바꿀 것·끊김 없음),
+# 바꿔야 하면 화면에서 '게임을 끈 뒤 다시 눌러 주세요'로 막는다. 예전(13.15)엔 미뤘다가 게임이 끝나는 순간 앱이 스스로 적용·재연결해,
+# 게임을 끄고 바로 PC를 끄면 Windows 종료와 겹칠 수 있었다 — 그 경로는 없앴다.
+FASTPING_TARGETS = (('ack', 1), ('autotuning', 'normal'))
+FASTPING_GAME_RUNNING = '게임 실행 중이라 패스트핑을 적용하지 않았어요 · 게임을 끈 뒤 최적화를 다시 켜 주세요.'
+
+
+def fastping_ready(read, adapter):
+    """패스트핑 값(TcpAckFrequency 1·자동 조정 normal)이 이미 목표값인지 — 읽기만 한다(인터넷 끊김 없음). 못 읽으면 False."""
+    if not adapter:
+        return False
+    try:
+        return (read('ack', adapter) == 1 and read('autotuning', 'global') == 'normal')
+    except Exception:
+        return False
 
 
 def short_reason(exc) -> str:
@@ -70,7 +85,6 @@ class Engine:
         # 컨트롤러가 체크 변경 때 바꾼다(작업 스레드는 게임 종료 시점에 읽는다).
         self.auto = False
         self.held = False  # 자동 적용 중 Process Lasso Governor 실행으로 보류 중
-        self.tcp_at_game_end = False  # 13.15: 미룬 패스트핑을 이번 게임 종료 때 적용했는지(요약에 결과 줄, 아니면 '적용 중' 줄)
         self._graphics_game = None  # 13.6: 게임 실행 중에 최대 프레임을 쓴 그 게임(다음 게임부터 반영)
         # 결과 요약(13.13): 항목별 지금 결과 {'priority'|'cpu'|'tcp': (상태, 이유)}. 상태: ok·same·fail·released·deferred·restored.
         # phase: 세션 단계 'waiting'(게임 대기)·'applied'(게임에 적용)·'ended'(자동 적용 중 게임 종료 → 되돌림)·'held'(Governor 보류).
@@ -220,9 +234,19 @@ class Engine:
                 reason = 'NVIDIA 드라이버 설정을 바꾸지 못했어요' if reason == '적용하지 못했어요' else reason
             self.outcome['graphics'] = ('fail', reason)
 
-    def _apply_tcp(self, options, results, notices, fail, network_guard):
-        """패스트핑 적용(시작 때, 또는 13.15: 게임 실행 중이라 미룬 뒤 그 게임이 끝나 CPU를 되돌린 직후). 확인 창은 시작 때 한 번만."""
+    def _apply_tcp(self, options, results, notices, fail, network_guard, game_running=False):
+        """패스트핑 적용 — 게임이 꺼진 상태에서 최적화를 켜는 그 순간에만(확인 창은 시작 때 한 번, 0.34.0 E안).
+        게임 실행 중이면 이미 목표값일 때만 '그대로 둠'으로 진행하고 아무것도 쓰지 않는다(화면이 미리 막지만 작업 쪽도 지킨다)."""
+        if game_running:
+            if fastping_ready(self.backend.read, options['adapter']):
+                results.extend(['ack: 이미 목표값 · 그대로 둠', 'autotuning: 이미 목표값 · 그대로 둠'])
+                self.outcome['tcp'] = ('same', '')
+            else:
+                fail(FASTPING_GAME_RUNNING)
+                self.outcome['tcp'] = ('fail', '게임을 끈 뒤 적용할 수 있어요')
+            return
         tcp_results = []
+        withheld = False
         guid = options['adapter']
         if not guid: raise ValueError('적용할 물리 네트워크 어댑터를 선택해 주세요.')
         changes = [('ack',guid,1),('autotuning','global','normal')]
@@ -234,33 +258,28 @@ class Engine:
                 results.append(f'{kind}: '+{'unchanged':'이미 목표값 · 그대로 둠','written':'적용 · 재연결 후 확인'}.get(result,'적용값 확인 완료'))
             except ChangeDeferred as exc:
                 notices.append(str(exc))
-                self.outcome['tcp'] = ('deferred', TCP_DEFERRED)
+                self.outcome['tcp'] = ('fail', '게임이 켜져 적용하지 않았어요' if '게임' in str(exc) else '중단해서 적용하지 않았어요')
+                withheld = True
                 break
             except Exception as exc:
                 fail(f'{kind} 미적용·확인 필요: {exc}')
                 self.outcome['tcp'] = ('fail', short_reason(exc))
+        if withheld:
+            return  # 중단·게임 시작으로 쓰기를 멈췄다: 쓴 값이 있으면 원복 기록에 남고, 재연결은 다음 원복 때
         # Explicit start confirmation covered this one batch reconnect.
         try:
             self.recovery.flush_network(guard=network_guard)
             if any(i['kind']=='rss' and i['state']=='applied' for i in self.recovery.items):
                 results.append('rss: 재연결 후 적용값 확인 완료')
         except ChangeDeferred as exc:
+            # 확인 뒤 재연결 직전에 게임이 켜졌다: 게임 접속을 끊지 않는다(쓴 값은 원복 기록에 남아 최적화를 끄면 되돌림).
             notices.append(str(exc))
-            self.outcome.setdefault('tcp', ('deferred', TCP_DEFERRED))
+            self.outcome.setdefault('tcp', ('fail', '게임이 켜져 적용을 마치지 못했어요'))
         except Exception as exc:
             fail('네트워크 재연결 확인 필요: '+str(exc))
             self.outcome['tcp'] = ('fail', short_reason(exc))
         if 'tcp' not in self.outcome and tcp_results:
             self.outcome['tcp'] = ('same', '') if all(r == 'unchanged' for r in tcp_results) else ('ok', '')
-
-    def _deferred_tcp(self, options, results, notices, fail, network_guard):
-        """13.15: 미룬 패스트핑을 지금 적용한다(중단·접근 해제면 하지 않음). 게임이 다시 켜져 있으면 계속 미룬다."""
-        if self.outcome.get('tcp', ('',))[0] != 'deferred' or self.cancel.is_set() or not self.allowed():
-            return False
-        del self.outcome['tcp']
-        _log.info('최적화: 게임이 끝나 미룬 패스트핑을 적용해요')
-        self._apply_tcp(options, results, notices, fail, network_guard)
-        return True
 
     def _end_game(self, notices):
         """자동 적용: 끝난 게임(또는 보류)에 건 프로세스 값만 원복하고 기록을 정리한다. 네트워크는 건드리지 않는다."""
@@ -276,7 +295,6 @@ class Engine:
         self.session_end = None
         self.auto = bool(options.get('auto'))
         self.held = False
-        self.tcp_at_game_end = False
         self._graphics_game = None
         self.outcome, self.phase, self.ran = {}, None, True
         options = dict(options)
@@ -328,11 +346,8 @@ class Engine:
             governor = self.backend.governor_running()
             if governor and (options['cpu'] or options.get('priority')):
                 notices.append('Process Lasso Governor 실행 중: CPU·게임 우선순위 적용 보류')
-            if game and options['tcp']:
-                notices.append('게임 실행 중: TCP 적용을 보류했어요(게임이 끝나면 적용).')
-                self.outcome['tcp'] = ('deferred', TCP_DEFERRED)
-            elif options['tcp']:
-                self._apply_tcp(options, results, notices, fail, network_guard)
+            if options['tcp']:
+                self._apply_tcp(options, results, notices, fail, network_guard, game_running=game is not None)
             if options.get('graphics'):
                 self._apply_graphics(options, results, fail)
             if not options['cpu'] and not options.get('priority'):
@@ -392,24 +407,9 @@ class Engine:
                         for key in ('priority', 'cpu'):
                             if key in self.outcome:
                                 self.outcome[key] = ('restored', '')
-                        self.tcp_at_game_end = self._deferred_tcp(options, results, notices, fail, network_guard)
                         _log.info('최적화 자동 적용: 게임 종료 · 그 게임에 건 값을 정리하고 다음 게임을 기다려요')
                         notices.append('게임 종료 · 이 게임에 건 값을 정리했어요. 다음 게임을 기다려요.')
                         continue
-                    if self.outcome.get('tcp', ('',))[0] == 'deferred' and not self.cancel.is_set():
-                        # 13.15: CPU를 먼저 되돌리고 미룬 패스트핑을 적용한다. 요약에는 패스트핑 줄만 남는다.
-                        errors = self.recovery.restore()
-                        if errors:
-                            notices.append('CPU 원복 확인 필요: ' + '; '.join(errors[:4]))
-                        for key in ('priority', 'cpu'):
-                            self.outcome.pop(key, None)
-                        results = []
-                        self.tcp_at_game_end = self._deferred_tcp(options, results, notices, fail, network_guard)
-                        if self.outcome.get('tcp', ('',))[0] == 'deferred':
-                            self.outcome['tcp'] = ('fail', '게임이 다시 켜져 적용하지 못했어요')
-                        self.status = '\n'.join(results + notices + ['게임 종료 · CPU를 원복하고 미룬 패스트핑을 적용했어요.'])
-                        self.session_end = 'network_only'
-                        return
                     self.status = '\n'.join(results + notices + ['게임 종료 · CPU를 원복해요. 다음 게임에는 자동 적용하지 않아요.'])
                     self.session_end = 'game_exit'
                     return
@@ -422,7 +422,6 @@ class Engine:
                     return
                 if self.phase in ('waiting', 'ended', None):
                     self.phase = 'applied'
-                    self.tcp_at_game_end = False
                     if options.get('graphics') and self.outcome.get('graphics', ('',))[0] == 'deferred':
                         self._apply_graphics(options, results, fail)  # 13.6: 게임을 봤으니 전체 경로로 다시
                     elif (self.outcome.get('graphics', ('',))[0] == 'next'

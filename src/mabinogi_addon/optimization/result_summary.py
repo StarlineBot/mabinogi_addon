@@ -65,11 +65,7 @@ def summarize(engine, recovery, requested=None, *, layout_label=None, kept_on=Fa
         if phase == 'ended':
             lines = [_line(key, labels.get(key, ''), 'restored', '') for key in ('priority', 'cpu')
                      if outcome.get(key, ('',))[0] == 'restored']
-            tcp = outcome.get('tcp', ('',))[0]
-            if 'tcp' in labels and (tcp == 'deferred' or (tcp and getattr(engine, 'tcp_at_game_end', False))):
-                # 13.15: 미룬 패스트핑을 이번 게임 종료 때 적용(또는 아직 미룸)한 경우만 결과 줄. 시작 때 이미 적용했으면 13.13 '적용 중' 줄.
-                lines.append(_line('tcp', labels['tcp'], *outcome['tcp']))
-            elif network_left:
+            if network_left:  # 0.34.0: 게임 종료로 네트워크는 건드리지 않는다(적용 중 또는 재부팅 대기 줄)
                 lines.append(network_line)
             if graphics_left:
                 lines.append(graphics_line)
@@ -87,8 +83,7 @@ def summarize(engine, recovery, requested=None, *, layout_label=None, kept_on=Fa
         game_session = bool(requested.get('priority') or requested.get('cpu'))
         lines = []
         if network_left:
-            fresh = not game_session or getattr(engine, 'tcp_at_game_end', False)  # 13.15: 게임 종료 때 미룬 것을 적용했으면 결과 줄
-            lines.append(_line('tcp', '패스트핑', *outcome['tcp']) if 'tcp' in outcome and fresh else network_line)
+            lines.append(_line('tcp', '패스트핑', *outcome['tcp']) if 'tcp' in outcome and not game_session else network_line)
         if graphics_left:
             lines.append(graphics_line if 'graphics' not in outcome or game_session
                          else _line('graphics', '그래픽 효율', *outcome['graphics']))

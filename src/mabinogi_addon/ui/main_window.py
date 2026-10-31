@@ -227,6 +227,10 @@ class MainWindow(QMainWindow):
         # 파티(≈612)·커스텀(≈718)이 스크롤 없이 들어오고, 길이가 압도적인 설정 탭
         # (≈1265)만 세로 스크롤로 본다(_VScroll이 눌림 방지).
         self.setFixedSize(790, 800)
+        # 진단(0.34.0): Windows 종료 신호(WM_QUERYENDSESSION → Qt commitDataRequest)를 받은 시각을 app.log에 남긴다.
+        app = QApplication.instance()
+        if app is not None and hasattr(app, "commitDataRequest"):
+            app.commitDataRequest.connect(lambda *_: _log.info("Windows 종료 신호 받음"))
         from ..setup_state import initialize_new_user
         initialize_new_user()
         config.migrate_default_buff_names()

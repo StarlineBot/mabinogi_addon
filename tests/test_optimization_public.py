@@ -1,11 +1,15 @@
-"""최적화 공개 전환(명세 13.15): 로그인 사용자 공개·수집 모드는 제작자만, 미룬 패스트핑은 게임이 끝나면 적용, 근거 줄 삭제, 알파·베타 문구 없음."""
+"""최적화 공개 전환(명세 13.15): 로그인 사용자 공개·수집 모드는 제작자만, 근거 줄 삭제, 알파·베타 문구 없음.
+
+0.34.0 명세 변경(사용자 결정): '미룬 패스트핑은 게임이 끝나면 적용'을 없앴다 —
+게임 중에는 패스트핑을 시작하지 않는다(이미 목표값이면 그대로). 그 4개 테스트는 tests/test_fastping_game_running.py로 바꿨다.
+"""
 import json
 from types import SimpleNamespace as NS
 
 from PySide6.QtWidgets import QAbstractButton, QGroupBox, QLabel
 
 from mabinogi_addon import feature_access
-from mabinogi_addon.optimization.engine import Engine, TCP_DEFERRED
+from mabinogi_addon.optimization.engine import Engine
 from mabinogi_addon.optimization.result_summary import summarize
 from mabinogi_addon.optimization.session import Recovery
 from mabinogi_addon.ui import optimization_controller as module
@@ -41,59 +45,6 @@ def _tcp_writes(b):
 
 
 REQ = dict(priority=True, tcp=True)
-
-
-def test_manual_session_applies_deferred_fastping_after_game_exit(tmp_path):
-    b, r, e = _engine(tmp_path)
-    assert _wait(lambda: e.outcome.get('priority') == ('ok', '') and e.outcome.get('tcp') == ('deferred', TCP_DEFERRED))
-    assert TCP_DEFERRED == '게임을 끄면 적용해요' and not _tcp_writes(b)
-    assert '• 패스트핑 · 게임을 끄면 적용해요' in summarize(e, r, REQ)[2]
-    b.current[0] = None  # 게임 종료 → 우선순위 되돌림 → 패스트핑 적용
-    e.thread.join(6)
-    assert not e.busy and e.session_end == 'network_only'
-    kinds = [kind for kind, _t, _v in b.writes]
-    assert kinds.index('ack') > max(i for i, k in enumerate(kinds) if k == 'priority')  # CPU(우선순위) 원복 뒤 적용
-    assert b.values[('priority', json.dumps(TARGET, sort_keys=True))] == NORMAL
-    assert e.outcome == {'tcp': ('ok', '')}
-    headline, level, lines = summarize(e, r, REQ, kept_on=True)
-    assert headline == '최적화 적용 중' and lines == ['✓ 패스트핑']
-
-
-def test_turning_off_while_deferred_never_applies_fastping(tmp_path):
-    b, r, e = _engine(tmp_path)
-    assert _wait(lambda: e.outcome.get('tcp') == ('deferred', TCP_DEFERRED))
-    e.stop()
-    b.current[0] = None
-    e.thread.join(6)
-    assert not _tcp_writes(b) and e.session_end == 'cancel'
-
-
-def test_auto_session_applies_deferred_fastping_when_game_ends_and_keeps_line(tmp_path):
-    b, r, e = _engine(tmp_path, auto=True)
-    e.auto = True
-    assert _wait(lambda: e.outcome.get('tcp') == ('deferred', TCP_DEFERRED) and e.phase == 'applied')
-    b.current[0] = None
-    assert _wait(lambda: e.phase == 'ended' and e.outcome.get('tcp') == ('ok', ''), 6)
-    headline, _level, lines = summarize(e, r, dict(REQ, auto=True))
-    assert headline == '게임이 끝나 원래대로 되돌렸어요' and lines == ['↺ 게임 우선순위 · 되돌림', '✓ 패스트핑']
-    e.stop(); e.thread.join(5)
-
-
-def test_fastping_stays_deferred_if_game_restarts_before_applying(tmp_path):
-    b, r, e = _engine(tmp_path)
-    assert _wait(lambda: e.outcome.get('tcp') == ('deferred', TCP_DEFERRED))
-    other = {'pid': 456, 'birth': '1'}
-    b.values[('priority', json.dumps(other, sort_keys=True))] = NORMAL
-    original = b.game
-    calls = []
-    def game():  # 끝난 게임을 확인한 직후 새 게임이 켜짐
-        calls.append(1)
-        return other if b.current[0] is None and len(calls) > 1 else original()
-    b.alive = lambda target: target == TARGET and b.current[0] == TARGET
-    b.game = game
-    b.current[0] = None
-    e.thread.join(6)
-    assert not _tcp_writes(b) and e.outcome['tcp'][0] == 'fail'
 
 
 # ---- 화면 ----

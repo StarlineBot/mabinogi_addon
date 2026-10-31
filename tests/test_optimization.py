@@ -243,9 +243,10 @@ def test_existing_game_defers_network_and_does_not_write_on_just_waiting(recover
     e=Engine(b,r,lambda:True)
     assert e.start(dict(cpu=False,count=None,adapter=GUID,tcp=True,rss=False))
     e.thread.join(2)
-    # CPU를 끈 세션은 게임을 기다리지 않고 끝난다(네트워크 보류 안내는 남김).
+    # CPU를 끈 세션은 게임을 기다리지 않고 끝난다(네트워크는 쓰지 않음).
+    # 0.34.0 명세 변경: 게임이 끝나면 적용하던 '보류'가 없어져 안내 문구가 '게임을 끈 뒤 다시 켜 주세요'로 바뀜(화면은 시작 전에 막는다).
     assert not e.busy and not observed.is_set() and not b.writes and not b.restarts
-    assert '게임 실행 중: TCP 적용을 보류' in e.status and '게임 실행 대기' not in e.status
+    assert '게임 실행 중이라 패스트핑을 적용하지 않았어요' in e.status and '게임 실행 대기' not in e.status
     assert not r.pending
 
 
@@ -452,7 +453,8 @@ def test_session_exception_keeps_earlier_results_and_notices(recovery):
     e = Engine(b, r, lambda: True)
     assert e.start(dict(cpu=True, count=1, adapter=GUID, tcp=True, rss=False))
     e.thread.join(2)
-    assert '게임 실행 중: TCP 적용을 보류' in e.status and '작업을 완료하지 못했어요: boom' in e.status
+    # 0.34.0 명세 변경: 게임 실행 중 패스트핑 안내 문구(예전 'TCP 적용을 보류 … 게임이 끝나면 적용')
+    assert '게임 실행 중이라 패스트핑을 적용하지 않았어요' in e.status and '작업을 완료하지 못했어요: boom' in e.status
 
 
 def test_status_is_replaced_immediately_when_work_starts(recovery):
