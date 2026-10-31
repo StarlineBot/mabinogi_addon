@@ -26,6 +26,15 @@
 
 ## 열린 문제
 
+- **0.34.0 패스트핑 켜는 순간에만 적용 + 재부팅 대기(2026-10-31 QA·사용자 결정, 게임 창 기준 영역·그림대화와 같은 0.34.0)** — 로컬 검증, **브랜치 `claude/happy-hopper-hw8n26`**(0.33.0 게시 전이라 main에 안 올림 — 게시 뒤 main에 합침).
+  ① 게임 종료 때 미룬 패스트핑 적용·어댑터 재시작 경로 제거(`_deferred_tcp`·`tcp_at_game_end`·`TCP_DEFERRED`·'deferred' 패스트핑 상태) — 게임 종료로는 네트워크 작업 0(CPU·우선순위 원복은 그대로).
+  ② 켜는 순간: 게임 꺼짐 → 지금처럼 확인 창·적용·Restart-NetAdapter·확인. 게임 켜짐 → TcpAckFrequency·자동 조정은 쓰고 재시작은 안 함, 원복 기록에
+  `restart_pending_since`(+ 기존 `restart_targets`)로 '재부팅 대기' 저장 + 결과 문구(QA 문안). 일부 항목 실패여도 쓴 값이 있으면 대기 기록.
+  ③ 화면: 결과 줄 '• 패스트핑 · 재부팅 대기 (PC를 재부팅하거나 게임을 끈 뒤 [지금 적용])' + [지금 적용(인터넷 잠깐 끊김)] — 게임 켜짐이면 회색·툴팁·'게임을 끈 뒤 누를 수 있어요'.
+  누르면 기존 확인 창 → 재시작(직전에 게임 다시 확인) → 확인 → 해제. 앱 시작 때 부팅 시각(`GetTickCount64`, `system/optimization.boot_time`) > 기록 시각이면 해제(순수 `rebooted_since`).
+  ④ 사용자가 직접 끄는 원복은 그대로(재시작 포함). ⑤ app.log: '패스트핑 재부팅 대기 기록/해제(재부팅·어댑터 재시작·지금 적용)', 'Windows 종료 신호 받음'(Qt commitDataRequest).
+  테스트 `test_fastping_pending.py` 7개, 명세 변경 갱신: `test_optimization`(게임 중 켜기 2개), `test_optimization_public`(게임 종료 적용 4개 삭제 → 새 파일), `test_support/regressions/optimization_contract`(게임 실행 중 켜기).
+  최적화 화면 렌더(게임 켜짐/꺼짐) 사용자 확인 대기. 전체 3652 passed.
 - **조사 대기(2026-10-31 제보, 불확실): 렘부·라브·섯다라인을 함께 켠 날 PC 종료가 안 됨(CPU·그래픽카드는 돌아감).** 코드상 종료를 늦출 수 있는 곳: ① 최적화 원복 중이면
   `prepare_close`가 False → 창 닫기 거부(엔진 원복 스레드가 끝날 때까지 — 네트워크 어댑터 원복은 `Restart-NetAdapter`), ② 블랙박스 녹화 정리 최대 15초. 앱은 WM_QUERYENDSESSION을
   따로 처리하지 않음(Qt 기본). 확인 자료: 그날 app.log의 '종료 단계 …ms'·'종료 총' 줄, 종료 화면에 '앱이 종료를 막고 있음' 목록이 떴는지, 최적화·블랙박스 사용 여부.

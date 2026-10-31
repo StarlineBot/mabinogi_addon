@@ -492,6 +492,17 @@ class WindowsOptimization:
         self._ps(script, '재연결/어댑터')
         self.restarts.discard(str(uuid.UUID(target)))
 
+    def boot_time(self):
+        """PC 부팅 시각(time.time() 기준 초). GetTickCount64 = 부팅 뒤 지난 밀리초(절전 시간 포함). 읽기 전용, 못 읽으면 None.
+        0.34.0 패스트핑 '재부팅 대기' 자동 해제 판단에 쓴다."""
+        try:
+            import time
+            tick = ctypes.windll.kernel32.GetTickCount64
+            tick.restype = ctypes.c_ulonglong
+            return time.time() - tick() / 1000.0
+        except Exception:
+            return None
+
     def flush_network(self):
         for target in tuple(self.restarts):
             self.restart_network(target)

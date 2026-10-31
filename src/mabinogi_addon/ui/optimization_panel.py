@@ -90,6 +90,12 @@ class OptimizationPanel(QWidget):
         # 13.13 결과 요약: 지금 상태 한 줄(굵게·색) + 항목마다 한 줄. 상세(세션 기록)는 접힌 '자세히 보기'와 app.log.
         self.status=_label('시작 전 · 시스템 설정을 변경하지 않았어요.');group.addWidget(self.status)
         self.results=_label('');group.addWidget(self.results)
+        # 0.34.0 패스트핑 '재부팅 대기': 게임 중 켜서 값만 써 둔 상태. [지금 적용]은 게임이 꺼져 있을 때만(컨트롤러가 갱신).
+        self.pending_row=QWidget();row=QHBoxLayout(self.pending_row);row.setContentsMargins(0,0,0,0)
+        # 상태 글자는 결과 줄('• 패스트핑 · 재부팅 대기 …')에 있으니 여기엔 버튼과 짧은 안내만(같은 말 두 번 안 함)
+        self.apply_now=QPushButton('지금 적용(인터넷 잠깐 끊김)');row.addWidget(self.apply_now)
+        self.pending_label=hint_label('게임을 끈 뒤 누를 수 있어요');row.addWidget(self.pending_label);row.addStretch()
+        self.pending_row.hide();group.addWidget(self.pending_row)
         self.details_toggle=QPushButton('자세히 보기 ▸');self.details_toggle.setFlat(True);self.details_toggle.setCheckable(True)
         self.details_toggle.setCursor(Qt.CursorShape.PointingHandCursor);self.details_toggle.setStyleSheet(DISCLOSURE_STYLE)
         group.addWidget(self.details_toggle,0,Qt.AlignmentFlag.AlignLeft)

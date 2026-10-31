@@ -11,6 +11,11 @@ import uuid
 _log = logging.getLogger(__name__)
 
 
+def rebooted_since(boot_time, recorded):
+    """PC 부팅 시각이 기록 시각보다 나중이면 True(부팅 시각을 모르면 False — 대기 유지). 0.34.0 패스트핑 재부팅 대기."""
+    return boot_time is not None and recorded is not None and boot_time > recorded
+
+
 class ChangeDeferred(RuntimeError):
     """A mutation was withheld; durable originals must remain available."""
 
@@ -89,6 +94,9 @@ class Recovery:
         self.items = []
         self.corrupt = False
         self.restart_targets = set()
+        # 0.34.0 패스트핑 '재부팅 대기': 게임 실행 중 켜서 값만 써 두고 어댑터 재시작을 하지 않은 시각(time.time()).
+        # restart_targets가 남아 있는 동안만 의미가 있다. PC가 그 뒤에 부팅됐으면 값이 적용된 것이다.
+        self.restart_pending_since = None
         # 마지막 원복 시도에서 '장치 정규화'로 보인 RSS 항목(사용자 확인 후 원본 재기록 대상).
         self.normalized_review = []
         if self.path.exists():
@@ -108,6 +116,10 @@ class Recovery:
                     raise ValueError('restart journal')
                 for target in restarts: uuid.UUID(target)
                 self.restart_targets = set(restarts)
+                since = data.get('restart_pending_since')
+                if since is not None and (isinstance(since, bool) or not isinstance(since, (int, float))):
+                    raise ValueError('restart pending')
+                self.restart_pending_since = float(since) if since is not None and restarts else None
                 self.items = data['items']
             except Exception:
                 self.corrupt = True
@@ -140,7 +152,9 @@ class Recovery:
         try:
             with temporary.open('x', encoding='utf-8') as file:
                 os.chmod(temporary, 0o600)
-                json.dump(dict(schema=1, items=self.items, restart_targets=sorted(self.restart_targets)), file, ensure_ascii=False)
+                json.dump(dict(schema=1, items=self.items, restart_targets=sorted(self.restart_targets),
+                               restart_pending_since=self.restart_pending_since if self.restart_targets else None),
+                          file, ensure_ascii=False)
                 file.flush()
                 os.fsync(file.fileno())
             os.replace(temporary, self.path)
@@ -364,6 +378,32 @@ class Recovery:
             raise RuntimeError(f"원복값 확인 실패(현재 {name(back)}, 원본 {name(item['old'])})")
         return False
 
+    @property
+    def reboot_pending(self):
+        """패스트핑 값을 써 두고 어댑터 재시작(또는 PC 재부팅)을 기다리는 중."""
+        return bool(self.restart_targets) and self.restart_pending_since is not None
+
+    def mark_reboot_pending(self, now):
+        """게임 실행 중이라 어댑터를 재시작하지 않았다 → '재부팅 대기' 기록(0.34.0). 이미 기록돼 있으면 그 시각을 둔다."""
+        with self.lock:
+            if self.restart_targets and self.restart_pending_since is None:
+                self.restart_pending_since = float(now)
+                self._save()
+                _log.info('패스트핑 재부팅 대기 기록(어댑터 재시작 안 함, 게임 실행 중)')
+
+    def clear_if_rebooted(self, boot_time):
+        """PC가 기록 뒤에 부팅됐으면 TcpAckFrequency가 그때 읽혀 적용된 것 → 대기 해제. 해제했으면 True."""
+        with self.lock:
+            if not self.reboot_pending or not rebooted_since(boot_time, self.restart_pending_since):
+                return False
+            if any(i['kind'] == 'rss' and i['state'] == 'prepared' for i in self.items):
+                return False  # 재연결 직후 확인이 필요한 RSS 기록은 재시작 경로로만
+            self.restart_targets.clear()
+            self.restart_pending_since = None
+            self._save()
+            _log.info('패스트핑 재부팅 대기 해제(재부팅)')
+            return True
+
     def flush_network(self, *, guard=None, verify_restored=False):
         with self.lock:
             if self.corrupt: raise RuntimeError('복구 기록을 확인해 주세요.')
@@ -388,6 +428,9 @@ class Recovery:
                             self._save()  # Keep originals and the restart marker on failure/crash.
                             raise RuntimeError(f"재연결 후 확인/{item['kind']}: {exc}") from None
                 self.restart_targets.remove(target)
+                if not self.restart_targets and self.restart_pending_since is not None:
+                    self.restart_pending_since = None
+                    _log.info('패스트핑 재부팅 대기 해제(어댑터 재시작)')
                 self._save()
                 if verified:
                     raise RuntimeError('; '.join(verified))
