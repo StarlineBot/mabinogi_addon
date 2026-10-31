@@ -10,6 +10,7 @@ from mabinogi_addon import image_io
 from mabinogi_addon.autofind_replay import detector_assets, run_detector
 from mabinogi_addon.detect import boss_hp_reader, boss_name_matcher
 from mabinogi_addon.detect.boss_bar import normalize_box_height
+from test_navigation import window  # noqa: F401  (픽스처)
 
 
 def test_1080_window_boss_bar_found_read_and_named():
@@ -58,24 +59,18 @@ def test_hoehan_halo_autofind_with_many_white_dots():
     assert halo_timer.read_seconds(frame[y:y + h, x:x + w]) == 14 * 60 + 43
 
 
-class _Watcher:
-    def is_game_active(self):
-        return False
+def test_preview_in_790_window_keeps_readable_size(window):
+    """판독 미리보기: 790 창 보스 탭에서 image04 띠(37px)를 여러 번 그려도 읽을 수 있는 크기(QA 0.31.2 퇴행 158×11 회귀).
 
-    def is_self_active(self):
-        return True
-
-
-def test_preview_fits_label_width():
-    """판독 미리보기: 높이 38로 키운 띠가 라벨보다 넓으면 양쪽이 잘렸다 → 라벨 폭 안에 비율 유지 축소."""
-    from PySide6.QtWidgets import QApplication
-    from mabinogi_addon.ui.boss_tab import BossTab
-    QApplication.instance() or QApplication([])
-    frame = image_io.imread("tests/data/image02.png", cv2.IMREAD_COLOR)
-    tab = BossTab(_Watcher())
-    tab.preview.setFixedWidth(300)
-    tab._show_preview(frame[810:856, 700:1228])  # 528×46 손 지정 박스(예전 높이 38 → 폭 436)
-    pixmap = tab.preview.pixmap()
-    assert pixmap.width() <= tab.preview.contentsRect().width() and pixmap.height() <= 38
-    assert abs(pixmap.height() - pixmap.width() * 46 / 528) <= 1  # 가로·세로 비율 유지(반올림 1px)
-    tab.shutdown()
+    1080 화면 이름 잘림('른타나스')은 28px 띠를 높이 38로 키워 716px가 된 것 — 37px 고정이면 약 542px로 라벨 안에 든다."""
+    w, app = window
+    frame = image_io.imread("tests/data/image04.png", cv2.IMREAD_COLOR)
+    w._open_setup_feature("boss")
+    app.processEvents()
+    x, y, bw, bh = run_detector("boss", frame, detector_assets("boss"), {})
+    for _ in range(6):
+        w.boss_tab._show_preview(frame[y:y + bh, x:x + bw])
+        app.processEvents()
+    pixmap = w.boss_tab.preview.pixmap()
+    assert pixmap.height() >= 30 and pixmap.width() >= 400, pixmap.size()
+    assert pixmap.width() <= w.boss_tab.preview.width()  # 이름·HP 끝이 잘리지 않음

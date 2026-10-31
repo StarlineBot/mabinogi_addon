@@ -804,12 +804,11 @@ class BossTab(QWidget):
         h, w = frame.shape[:2]
         rgb = np.ascontiguousarray(frame[:, :, ::-1])
         img = QImage(rgb.tobytes(), w, h, 3 * w, QImage.Format.Format_RGB888)
-        # 0.31.2: 높이 38에 맞추면 띠가 라벨보다 넓어질 때 가운데 정렬로 양쪽(이름 앞·HP 끝)이 잘렸다
-        # → 라벨 안쪽(폭·높이 38) 안에 가로·세로 비율을 지켜 넣는다.
-        area = self.preview.contentsRect()
-        width = max(1, area.width() - 2, self.preview.minimumWidth() - 2)
-        self.preview.setPixmap(QPixmap.fromImage(img).scaled(
-            width, 38, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+        # 높이 38에 맞춘다. 0.31.2 이름 잘림은 1080 화면에서 28px 띠를 키워 716px가 된 것 — 37px 고정으로 약 542px.
+        # (라벨 폭에 맞춰 줄이면 stretch 없는 라벨이 처음 폭 160에 갇혀 158×11이 됐다 — QA 퇴행, 되돌림)
+        self.preview.setPixmap(
+            QPixmap.fromImage(img).scaledToHeight(38, Qt.TransformationMode.FastTransformation)
+        )
 
     def _play(self, stage: str) -> None:
         if self._paused:

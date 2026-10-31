@@ -48,9 +48,10 @@
   image01: 자동 찾기 (698,817,521,37)·HP 99·이름 gomok_petak. tests/data 98장 전후 비교 — 바뀐 것은 image01(None → 찾음)과 1410 창 3장(36 → 37px, y 1218 → 1217, HP 89/99/99 그대로)뿐.
   다른 판독의 '1440 비율' 가정 점검: 단축바·도르카·투아림·상태 목록·디버프는 화면과 무관한 배율 묶음(SCALES)·고정 크기로 찾고, 체력바는 화면 비율 하한/상한만 넉넉히 써 해당 없음. 테스트 `test_boss_bar_small_screen.py` 신규(수정 전 2개 실패), `test_boss_bar_4k` 1080·1410 기대값 갱신(명세 변경).
   image02~04(QA 추가): 자동 찾기 (703,818,521/518,37)·HP 99/100/100·이름 None(브론타나스 목록 밖)/lenen_miir/lenen_miir_hoehan, 손 지정 (700,818,528,46) 정규화 경로도 같은 값.
-  미리보기: `BossTab._show_preview`를 라벨 안쪽 폭·높이 38 안에 비율 유지로 넣음(예전 높이 38 고정 → 라벨보다 넓으면 양쪽 잘림). 전/후 렌더 사용자 전달.
+  미리보기: 처음엔 `BossTab._show_preview`를 라벨 폭 안 비율 유지로 바꿨다가 QA 퇴행(stretch 없는 라벨이 처음 폭 160에 갇혀 158×11) → **0.31.1 방식(높이 38)으로 되돌림**(QA a안).
+  이름 잘림은 37px 고정만으로 해결(띠 약 532~535×38, 790 창 라벨 안). 회귀 `test_preview_in_790_window_keeps_readable_size`(되돌리기 전 코드에서 158×11로 실패 확인).
   헤일로 자동 찾기: `halo_timer.cells` 포기 기준을 흰 점 64개 → **콜론 쌍 32개**(점 상한 1024, 쌍 찾기는 배열 비교). image04 자동 찾기 (923,146,102,37) → 883(14:43), 쌍 찾기 약 14ms.
-  tests/data 101장 전후 비교 — 바뀐 것은 image04(None → 찾음)뿐. 테스트 `test_boss_bar_small_screen.py` 7개(수정 전 7개 모두 실패).
+  tests/data 101장 전후 비교 — 바뀐 것은 image04(None → 찾음)뿐. 테스트 `test_boss_bar_small_screen.py` 7개.
   스태미나 소모 구간(Highly Likely)은 많이 줄어든 화면 자료를 받은 뒤 진행(이번 미포함).
   → **QA 460e90c 보류(2026-10-31, Noto)**: release checks 0.31.2 1613 passed, 전체 3512 passed. tests/data 87장 보스·헤일로 자동 찾기 전후 비교 — 바뀐 것은 창 3장 36→37px,
   image01~04 보스 None→찾음, image04 헤일로 None→883뿐(헤일로 자동 찾기 최대 88→94ms). **판독 미리보기 퇴행 Confirmed**: 미리보기 라벨은 stretch 없이 pixmap 크기가 곧 크기(sizeHint)라,
