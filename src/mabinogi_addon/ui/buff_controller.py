@@ -169,6 +169,7 @@ class BuffController(QObject):
         self._game_active = True  # 게임 포그라운드
         self._self_active = False  # 우리 앱 포그라운드
         self._paused = False  # 사용자 일시정지(사냥 안 할 때) → 숨김·알림 억제
+        self._window_visible = True  # '오버레이 창 보이기'(0.32.0) — 끄면 창만 숨김, 탐지·알림은 계속
         self._generation = 0
         self._last_remaining: dict[str, float] = {}  # 표시 평활용 직전 표시값
         # 사라짐 경고용 상태
@@ -287,6 +288,12 @@ class BuffController(QObject):
         self._paused = paused
         self._apply_visibility()
 
+    def set_window_visible(self, visible: bool) -> None:
+        """'오버레이 창 보이기'(0.32.0): 끄면 포그라운드·잠금과 무관하게 창만 숨긴다.
+        일시정지와 달리 탐지·알림·소리는 그대로(아이콘 없이 소리 알림만)."""
+        self._window_visible = bool(visible)
+        self._apply_visibility()
+
     def set_show_duration(self, show_duration: dict[str, bool]) -> None:
         """지속시간 표시 설정 갱신(실행 중 폼 변경 반영)."""
         self._show_duration = show_duration
@@ -392,7 +399,7 @@ class BuffController(QObject):
         self._apply_visibility()
 
     def _apply_visibility(self) -> None:
-        if self._paused:  # 일시정지: 포그라운드·고정 상태와 무관하게 무조건 숨김
+        if self._paused or not self._window_visible:  # 일시정지·창 보이기 끔: 포그라운드·고정 상태와 무관하게 숨김
             self._overlay.hide()
             return
         locked = self._overlay.locked

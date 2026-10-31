@@ -984,6 +984,22 @@ def set_debuff_opacity(pct: int, path: Path = LOCAL_CONFIG_PATH) -> None:
     _set_overlay_value("debuffOpacity", _clamp_opacity(pct), path)
 
 
+def load_overlay_windows(path: Path = LOCAL_CONFIG_PATH) -> tuple[bool, bool]:
+    """(버프, 디버프) 오버레이 창 보이기. 기본 켜짐. 끄면 창만 숨고 탐지·알림은 계속(0.32.0)."""
+    s = _read_local_config(path).get("overlay") or {}
+    if not isinstance(s, dict):
+        s = {}
+    return s.get("buffWindowVisible", True) is not False, s.get("debuffWindowVisible", True) is not False
+
+
+def set_buff_window_visible(visible: bool, path: Path = LOCAL_CONFIG_PATH) -> None:
+    _set_overlay_value("buffWindowVisible", bool(visible), path)
+
+
+def set_debuff_window_visible(visible: bool, path: Path = LOCAL_CONFIG_PATH) -> None:
+    _set_overlay_value("debuffWindowVisible", bool(visible), path)
+
+
 def set_buff_scale(pct: int, path: Path = LOCAL_CONFIG_PATH) -> None:
     _, debuff = load_overlay_scales(path)
     save_overlay_scales(pct, debuff, path)

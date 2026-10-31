@@ -237,7 +237,12 @@ def assert_form_controls_reachable(w, tab, app, output):
                 and control.isVisible()]
     assert controls, state
     for control in controls:
-        scroll.ensureWidgetVisible(control, 50, 50)
+        # 칸 전체를 기준으로 스크롤한다. Qt6 ensureWidgetVisible은 입력칸(QLineEdit)이면 커서 영역만 보고,
+        # 그게 보이면 칸 테두리가 잘려도 스크롤하지 않는다(0.32.0 디버프 '이 디버프 추적' 자리 이동 뒤 이름 칸 아래 3px).
+        # '모든 칸을 온전히 보이게 스크롤할 수 있는가'라는 검사 의도는 같다.
+        top_left = control.mapTo(scroll.widget(), QPoint())
+        scroll.ensureVisible(top_left.x() + control.width() // 2, top_left.y() + control.height() // 2,
+                             control.width() // 2 + 50, control.height() // 2 + 50)
         for _ in range(8):
             app.processEvents()
         rect = QRect(control.mapTo(scroll.viewport(), QPoint()), control.size())
@@ -358,6 +363,7 @@ def test_reachability_check_rejects_controls_left_below_viewport(window, tmp_pat
     assert_form_controls_reachable(w, tab, app, tmp_path)
     scroll.verticalScrollBar().setValue(0)
     monkeypatch.setattr(scroll, "ensureWidgetVisible", lambda *a: None)
+    monkeypatch.setattr(scroll, "ensureVisible", lambda *a: None)  # 0.32.0: 도우미가 칸 전체 기준 ensureVisible로 스크롤
     with pytest.raises(AssertionError, match="unreachable control"):
         assert_form_controls_reachable(w, tab, app, tmp_path)
 

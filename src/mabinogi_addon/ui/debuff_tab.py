@@ -54,6 +54,7 @@ class DebuffTab(QWidget):
     catalog_changed = Signal()  # 디버프 추가·삭제·아이콘 변경 → 엔진 재구성
     scale_changed = Signal(int)  # 디버프 오버레이 배율(%) 변경
     opacity_changed = Signal(int)  # 오버레이 불투명도(%) 변경(명세 15절)
+    window_visible_changed = Signal(bool)  # '오버레이 창 보이기'(0.32.0)
     gate_mode_changed = Signal(str)  # 탐지 방식(1/2/3차) 변경 또는 바 영역 변경 → 재시작
     bar_region_changed = Signal()  # 보스 HP바 영역 지정 → 보스패턴알림도 반영(공유)
 
@@ -261,6 +262,19 @@ class DebuffTab(QWidget):
         v.addWidget(self.region_section)
         self._update_region_hint()
         v.addLayout(top)
+        # '오버레이 창 보이기'(0.32.0): 끄면 창만 숨기고 탐지·알림은 계속 — 아이콘 없이 소리 알림만 쓰는 사람용.
+        # 잠금 줄과 다른 줄이라 두 칸(목록|상세) 최소 폭에 영향 없음(0.31.1).
+        self.window_check = checkbox("오버레이 창 보이기")
+        self.window_check.setChecked(config.load_overlay_windows()[1])
+        self.window_check.setToolTip("끄면 디버프 오버레이 창만 숨겨요. 추적·알림·소리는 그대로예요.\n"
+                                     "일시정지와 달리 알림도 계속 울려요.")
+        self.window_check.toggled.connect(self._on_window_visible)
+        self.window_hint = hint_label("끄면 창 없이 알림만 받아요")
+        window_row = QHBoxLayout()
+        window_row.setSpacing(8)
+        window_row.addWidget(self.window_check)
+        window_row.addWidget(self.window_hint, 1)
+        v.addLayout(window_row)
 
         self._bar_gating_notice = hint_label("")
         self._bar_gating_notice.setStyleSheet(f"color:{color('warn')}; font-size:12px;")
@@ -297,6 +311,10 @@ class DebuffTab(QWidget):
     def _on_scale(self, pct: int) -> None:
         config.set_debuff_scale(pct)
         self.scale_changed.emit(pct)
+
+    def _on_window_visible(self, visible: bool) -> None:
+        config.set_debuff_window_visible(visible)
+        self.window_visible_changed.emit(visible)
 
     def _on_opacity(self, pct: int) -> None:
         config.set_debuff_opacity(pct)
@@ -546,17 +564,21 @@ class DebuffTab(QWidget):
         for did in self._order:
             item = QListWidgetItem(self._display_name(did))
             item.setData(Qt.ItemDataRole.UserRole, did)
-            buff = self._catalog.get(did)
-            if buff is not None:
-                pm = _pixmap(buff.display_image or buff.match_icon, 28)
-                if pm is not None:
-                    item.setIcon(QIcon(pm))
             self.debuff_list.addItem(item)
+            self._style_item(item, did)
         self.debuff_list.blockSignals(False)
         if keep in self._order:
             self.debuff_list.setCurrentRow(self._order.index(keep))
         elif self.debuff_list.count():
             self.debuff_list.setCurrentRow(0)
+
+    def _style_item(self, item, did: str) -> None:
+        """추적을 끈 디버프는 흐리게 + '추적 안 함'(버프 목록과 같은 구분, 0.32.0)."""
+        from .settings_layout import style_tracked_item
+        buff = self._catalog.get(did)
+        settings = self._settings.get(did)
+        pm = _pixmap(buff.display_image or buff.match_icon, 28) if buff is not None else None
+        style_tracked_item(item, self._display_name(did), pm, settings is not None and settings.hidden, "디버프")
 
     def _current_id(self) -> str | None:
         item = self.debuff_list.currentItem()
@@ -683,7 +705,9 @@ class DebuffTab(QWidget):
         show_box = QGroupBox("표시")
         sv = QVBoxLayout(show_box)
         sv.setSpacing(6)
-        self.display_check = checkbox("오버레이에 표시")
+        # '이 디버프 추적'(0.32.0 — 예전 '오버레이에 표시', 자리 그대로·사용자 결정). 끄면 사라짐 경고는 흐리게.
+        from .settings_layout import track_check
+        self.display_check = track_check("디버프")
         self.display_check.toggled.connect(self._form_changed)
         sv.addWidget(self.display_check)
         self.warn_gone_check = checkbox("사라짐 경고 (보스에서 떨어지면 알림)")
@@ -713,14 +737,19 @@ class DebuffTab(QWidget):
         self._set_slot(self.match_slot, buff.match_icon if buff else None, "▣")
         self.display_check.setChecked(not s.hidden)
         self.warn_gone_check.setChecked(s.alert.warn_gone)
+        self.warn_gone_check.setEnabled(not s.hidden)
         self._loading = False
 
     def _form_changed(self) -> None:
         if self._loading or self._current is None:
             return
         s = self._settings[self._current]
-        s.hidden = not self.display_check.isChecked()
+        s.hidden = not self.display_check.isChecked()  # '이 디버프 추적' 끔(config 키는 hidden 그대로)
         s.alert.warn_gone = self.warn_gone_check.isChecked()
+        self.warn_gone_check.setEnabled(not s.hidden)
+        item = self.debuff_list.currentItem()
+        if item is not None and item.data(Qt.ItemDataRole.UserRole) == self._current:
+            self._style_item(item, self._current)
         self._save()
         self.tracking_changed.emit()
 

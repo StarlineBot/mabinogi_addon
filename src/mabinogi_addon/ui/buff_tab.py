@@ -93,6 +93,7 @@ class BuffTab(QWidget):
     catalog_changed = Signal()  # 버프 추가·삭제·아이콘 변경 → 엔진 재구성 필요
     scale_changed = Signal(int)  # 오버레이 배율(%) 변경
     opacity_changed = Signal(int)  # 오버레이 불투명도(%) 변경(명세 15절)
+    window_visible_changed = Signal(bool)  # '오버레이 창 보이기'(0.32.0)
     read_mode_changed = Signal()  # 버프 읽는 영역(즐겨찾기/비즐겨찾기) 변경 → 엔진 재구성
 
     def __init__(self) -> None:
@@ -170,13 +171,14 @@ class BuffTab(QWidget):
                 ),
             )
 
-        # 표시 순서 = 저장 순서(숨김·앵커 제외) + 새 카탈로그 버프
+        # 목록 순서 = 저장 순서(앵커 제외) + 새 카탈로그 버프. 추적을 끈(hidden) 버프도 넣는다 —
+        # 0.32.0: 예전엔 빼서 다시 실행하면 목록에서 사라져 다시 켤 방법이 없었다. 추적 제외는 MainWindow가 hidden으로 따로 판단.
         order: list[str] = []
         for s in saved:
-            if s.id in self._catalog and s.id != ANCHOR_ID and not s.hidden:
+            if s.id in self._catalog and s.id != ANCHOR_ID and s.id not in order:
                 order.append(s.id)
         for bid in self._catalog:
-            if bid != ANCHOR_ID and bid not in order and not settings[bid].hidden:
+            if bid != ANCHOR_ID and bid not in order:
                 order.append(bid)
         return settings, order
 
@@ -273,6 +275,19 @@ class BuffTab(QWidget):
         v.addWidget(self.region_section)
         self._update_region_hint()
         v.addLayout(top)
+        # '오버레이 창 보이기'(0.32.0): 끄면 창만 숨기고 탐지·알림은 계속 — 아이콘 없이 소리 알림만 쓰는 사람용.
+        # 잠금 줄과 다른 줄이라 두 칸(목록|상세) 최소 폭에 영향 없음(0.31.1).
+        self.window_check = checkbox("오버레이 창 보이기")
+        self.window_check.setChecked(config.load_overlay_windows()[0])
+        self.window_check.setToolTip("끄면 버프 오버레이 창만 숨겨요. 추적·알림·소리는 그대로예요.\n"
+                                     "일시정지와 달리 알림도 계속 울려요.")
+        self.window_check.toggled.connect(self._on_window_visible)
+        self.window_hint = hint_label("끄면 창 없이 알림만 받아요")
+        window_row = QHBoxLayout()
+        window_row.setSpacing(8)
+        window_row.addWidget(self.window_check)
+        window_row.addWidget(self.window_hint, 1)
+        v.addLayout(window_row)
 
         self.buff_list = QListWidget()
         self.buff_list.setIconSize(QSize(32, 32))
@@ -360,6 +375,10 @@ class BuffTab(QWidget):
     def _on_scale(self, pct: int) -> None:
         config.set_buff_scale(pct)
         self.scale_changed.emit(pct)
+
+    def _on_window_visible(self, visible: bool) -> None:
+        config.set_buff_window_visible(visible)
+        self.window_visible_changed.emit(visible)
 
     def _on_opacity(self, pct: int) -> None:
         config.set_buff_opacity(pct)
@@ -494,20 +513,28 @@ class BuffTab(QWidget):
             name = self._display_name(bid)
             # 설명과 용어 통일: '앵커'(스킬 앵커러시와 혼동)가 아니라 '기준' 버프로 표기.
             label = f"⚓ {name} (기준)" if bid == ANCHOR_ID else name
-            item = QListWidgetItem(label)
+            item = QListWidgetItem(label)  # 글자·아이콘은 _style_item이 정함
             item.setData(Qt.ItemDataRole.UserRole, bid)
             if bid == ANCHOR_ID:  # 기준 버프는 맨 위 고정 — 끌 수 없음(▲▼에서 빠지는 것과 같은 규칙)
                 item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsDragEnabled)
-            if buff is not None:
-                pm = _pixmap(buff.display_image or buff.match_icon, 32)
-                if pm is not None:
-                    item.setIcon(QIcon(pm))
             self.buff_list.addItem(item)
+            self._style_item(item, bid)
         self.buff_list.blockSignals(False)
 
         rows = self._rows()
         row = rows.index(keep) if keep in rows else 0
         self.buff_list.setCurrentRow(row)
+
+    def _style_item(self, item, bid: str) -> None:
+        """목록 한 줄의 글자·아이콘. 추적을 끈 버프는 흐리게 + '추적 안 함'(사라진 것처럼 보이지 않게, 0.32.0)."""
+        from .settings_layout import style_tracked_item
+        buff = self._catalog.get(bid)
+        settings = self._settings.get(bid)
+        off = bid != ANCHOR_ID and settings is not None and settings.hidden
+        name = self._display_name(bid)
+        label = f"⚓ {name} (기준)" if bid == ANCHOR_ID else name
+        pm = _pixmap(buff.display_image or buff.match_icon, 32) if buff is not None else None
+        style_tracked_item(item, label, pm, off, "버프")
 
     def _current_id(self) -> str | None:
         item = self.buff_list.currentItem()
@@ -643,11 +670,13 @@ class BuffTab(QWidget):
         iv.addWidget(hint_label("└ 비워 두면 찾을 아이콘을 사용해요."))
         v.addWidget(icon_box)
 
-        # --- 그룹 2: 표시(오버레이 노출·지속시간) ---
+        # --- 그룹 2: 표시(추적·지속시간·사라짐 경고) ---
         show_box = QGroupBox("표시")
         sv = QVBoxLayout(show_box)
         sv.setSpacing(6)
-        self.display_check = checkbox("오버레이에 표시")
+        # '이 버프 추적'(0.32.0 — 예전 '오버레이에 표시', 자리 그대로·사용자 결정). 끄면 그 아래 설정은 흐리게.
+        from .settings_layout import track_check
+        self.display_check = track_check("버프")
         self.display_check.toggled.connect(self._form_changed)
         sv.addWidget(self.display_check)
         self.show_duration = checkbox("지속시간 표시")
@@ -664,6 +693,7 @@ class BuffTab(QWidget):
 
         # --- 그룹 3: 알림(종료 알림 + 2차) ---
         alert_box = QGroupBox("알림")
+        self._alert_box = alert_box
         alv = QVBoxLayout(alert_box)
         alv.setSpacing(6)
         alert_row = QHBoxLayout()
@@ -751,7 +781,14 @@ class BuffTab(QWidget):
             wdg.setEnabled(editable)
         # 알림 하위 위젯(초·소리·2차)은 앵커여부 + 알림 켜짐 상태로 최종 결정.
         self._apply_alert_enabled(s.alert.enabled)
+        if not is_anchor:  # 기준 버프는 위에서 전부 비활성
+            self._apply_tracked(not s.hidden)
         self._loading = False
+
+    def _apply_tracked(self, tracked: bool) -> None:
+        """추적을 끈 동안 지속시간·사라짐 경고·알림은 흐리게(값은 그대로 보존 — 다시 켜면 그대로)."""
+        for widget in (self.show_duration, self.warn_gone_check, self._alert_box):
+            widget.setEnabled(tracked)
 
     def _on_alert_toggled(self, enabled: bool) -> None:
         self._apply_alert_enabled(enabled)
@@ -778,7 +815,11 @@ class BuffTab(QWidget):
         if self._loading or self._current is None:
             return
         s = self._settings[self._current]
-        s.hidden = not self.display_check.isChecked()  # 오버레이 노출 여부
+        s.hidden = not self.display_check.isChecked()  # '이 버프 추적' 끔(config 키는 hidden 그대로)
+        self._apply_tracked(not s.hidden)
+        item = self.buff_list.currentItem()
+        if item is not None and item.data(Qt.ItemDataRole.UserRole) == self._current:
+            self._style_item(item, self._current)
         s.show_duration = self.show_duration.isChecked()
         s.alert = config.AlertConfig(
             enabled=self.alert_check.isChecked(),

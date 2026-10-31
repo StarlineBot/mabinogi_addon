@@ -93,6 +93,42 @@ def disclosure(title,body,layout):
     return button
 
 
+UNTRACKED_SUFFIX = " · 추적 안 함"
+
+
+def track_check(what: str):
+    """버프·디버프별 '이 버프 추적' 체크(0.32.0 — 예전 '오버레이에 표시'). 끄면 찾지 않음(알림도 없음), config 키는 hidden 그대로."""
+    from .widgets import checkbox
+    check = checkbox(f"이 {what} 추적")
+    check.setToolTip(f"끄면 이 {what}를 찾지 않아요(알림도 없음). 목록에는 남아서 언제든 다시 켤 수 있어요.\n"
+                     "아이콘 없이 알림만 받으려면 위쪽 '오버레이 창 보이기'를 끄세요.")
+    return check
+
+
+def style_tracked_item(item, name: str, pixmap, off: bool, what: str) -> None:
+    """목록 한 줄: 추적 안 하는 항목은 흐린 글자·아이콘 + 이름 옆 '추적 안 함'(사라진 것처럼 보이지 않게, 0.32.0)."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
+
+    item.setText(name + (UNTRACKED_SUFFIX if off else ""))
+    if pixmap is not None:
+        if off:
+            faded = QPixmap(pixmap.size())
+            faded.fill(Qt.GlobalColor.transparent)
+            painter = QPainter(faded)
+            painter.setOpacity(0.35)
+            painter.drawPixmap(0, 0, pixmap)
+            painter.end()
+            pixmap = faded
+        item.setIcon(QIcon(pixmap))
+    if off:
+        item.setForeground(QColor(color("muted")))
+        item.setToolTip(f"추적하지 않는 {what}예요. 오른쪽 '이 {what} 추적'으로 다시 켤 수 있어요.")
+    else:
+        item.setData(Qt.ItemDataRole.ForegroundRole, None)
+        item.setToolTip("")
+
+
 def opacity_spin(value: int):
     """불투명도 칸(안내·도움말 명세 15절): 배율 칸과 같은 모양, 20~100 %, 10%씩. 0%는 막는다(사라져 보임)."""
     from PySide6.QtWidgets import QSpinBox

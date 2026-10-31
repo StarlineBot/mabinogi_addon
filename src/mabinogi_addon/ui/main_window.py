@@ -452,6 +452,11 @@ class MainWindow(QMainWindow):
         self.debuff_overlay.set_opacity(debuff_opacity)
         self.buff_tab.opacity_changed.connect(self.buff_overlay.set_opacity)
         self.debuff_tab.opacity_changed.connect(self.debuff_overlay.set_opacity)
+        # 오버레이 창 보이기(0.32.0): 끄면 창만 숨김(추적·알림 계속). 컨트롤러가 다시 만들어질 때도 저장값으로.
+        self.buff_tab.window_visible_changed.connect(
+            lambda on: self.buff_controller is not None and self.buff_controller.set_window_visible(on))
+        self.debuff_tab.window_visible_changed.connect(
+            lambda on: self.debuff_controller is not None and self.debuff_controller.set_window_visible(on))
 
         self._feature_checks = {
             "tuarim": self.tuarim_tab.enable,
@@ -1698,6 +1703,7 @@ class MainWindow(QMainWindow):
         # 아이콘 탐지(매 틱)가 템플릿 수에 비례해 느려진다. 앵커는 프레임 게이팅에 필요.
         tracked_ids = set(order) | {ANCHOR_ID}
         tracked = [b for b in catalog if b.id in tracked_ids]
+        self._buff_tracked_ids = tracked_ids  # 실행 중 '오버레이에 표시' 변경 시 비교(0.32.0)
         self._engine = BuffEngine(
             build_templates(tracked),
             order,
@@ -1718,6 +1724,7 @@ class MainWindow(QMainWindow):
         self.buff_controller.set_order(order)
         self.buff_controller.set_warn_gone_ids(self._warn_gone_ids())
         self.buff_controller.set_paused(self._paused)  # 재생성 시 일시정지 상태 유지
+        self.buff_controller.set_window_visible(config.load_overlay_windows()[0])
         # 아이콘 생성/소멸을 빠르게 캐치(50ms=20fps). 시간 판독은 엔진이 throttle하고,
         # 매칭 대상도 표시된 버프만이라 비용이 낮아 이 주기가 감당된다.
         self.buff_controller.start(source, self._engine, interval_ms=50)
@@ -1732,7 +1739,7 @@ class MainWindow(QMainWindow):
 
     def _warn_gone_ids(self) -> set[str]:
         """'사라짐 경고'를 켠 버프 id 집합(사라지면 빨간 테두리+X+소리)."""
-        return {s.id for s in config.load_buff_settings() if s.alert.warn_gone}
+        return {s.id for s in config.load_buff_settings() if s.alert.warn_gone and not s.hidden}
 
     def _on_buff_alert(self, buff_ids) -> None:
         """엔진이 만료임박(1차) 알림을 올리면, 소리 켠 버프만 사운드 재생."""
@@ -1757,6 +1764,11 @@ class MainWindow(QMainWindow):
         order, show_duration, alert_before, alert_before2 = (
             self._compute_tracking(available_catalog())
         )
+        if set(order) | {ANCHOR_ID} != getattr(self, "_buff_tracked_ids", None):
+            # 0.32.0: '오버레이에 표시'를 바꾸면 재시작 뒤와 같게 — 끈 버프는 탐지 템플릿·알림·사라짐 경고에서 빠지고,
+            # 켠 버프는 템플릿에 들어온다. 예전엔 실행 중엔 표시만 숨고 시작 때 만든 상태 기계로 알림이 계속 울렸다.
+            self._start_buff_tracking()
+            return
         self._engine.set_order(order)
         self._engine.set_show_duration(show_duration)
         self._engine.set_alert_before(alert_before)
@@ -1857,6 +1869,7 @@ class MainWindow(QMainWindow):
             watcher=self._watcher,
         )
         self.debuff_controller.set_paused(self._paused)  # 재생성 시 일시정지 상태 유지
+        self.debuff_controller.set_window_visible(config.load_overlay_windows()[1])
         # 보스에서 떨어진 디버프(재적용 필요)를 빨리 캐치하도록 150ms 주기.
         # 표시한 것만 매칭이라 비용은 낮다(시간 판독도 없음).
         self.debuff_controller.start(
