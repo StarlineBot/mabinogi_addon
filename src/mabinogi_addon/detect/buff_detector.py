@@ -31,7 +31,7 @@ class Detection:
 # 기준을 낮추면 비슷한 아이콘(마기그래프·마법 공격력 강화/증가 등 0.70~0.77)이 '있음'이 되므로 기준은 그대로 두고
 #  ① 첫 검출 구제: 점수가 기준 바로 아래(RESCUE_MIN~기준)면 양쪽을 살짝 흐려 다시 비교해 RESCUE_BLUR 이상일 때만 인정
 #    (tests/data: 4K 123333 행진곡 0.786→0.912 / 비슷한 아이콘 최고 0.771·0.758 → 원 점수에서 탈락)
-#  ② 유지 이력: 직전 프레임에 있던 버프는 같은 줄(±HOLD_ROWS)에서 HOLD_THRESHOLD 이상이면 계속 '있음'
+#  ② 유지 이력: 직전 프레임에 있던 버프는 같은 줄(±HOLD_ROWS)에서 HOLD_THRESHOLD 이상이고 흐림 비교도 RESCUE_BLUR 이상이면 계속 '있음'
 #    (점수가 0.8 근처에서 흔들려 '있음→3초 없음'이 반복 → 사라짐 경고가 계속 울리던 것. 디버프 0.68/0.58 이력과 같은 방식)
 RESCUE_MIN = 0.78
 RESCUE_BLUR = 0.9
@@ -85,8 +85,15 @@ def detect_buffs(
             band = scores[max(0, hy - HOLD_ROWS):hy + HOLD_ROWS + 1]
             if band.size:
                 _lo, kept, _lo_at, kept_at = cv2.minMaxLoc(band)
+                ky, kx = max(0, hy - HOLD_ROWS) + int(kept_at[1]), int(kept_at[0])
+                # 유지도 구제와 같은 흐림 확인(0.33.0 QA): 원 점수만 보면 마기그래프가 미등록 '재생'에 0.758로 붙어
+                # 그 줄 시간을 마기그래프 시간으로 계속 읽었다(흐림 0.858~0.864, 진짜 4K 버프 0.912~0.949).
                 if kept >= HOLD_THRESHOLD:
-                    detections.append(Detection(buff_id, float(kept), max(0, hy - HOLD_ROWS) + int(kept_at[1])))
+                    if soft_strip is None:
+                        soft_strip = _soft(strip)
+                    window = soft_strip[ky:ky + t.shape[0], kx:kx + t.shape[1]]
+                    if window.shape == t.shape and match_icon(window, _soft(t)).score >= RESCUE_BLUR:
+                        detections.append(Detection(buff_id, float(kept), ky))
 
     detections.sort(key=lambda d: d.y)
     return detections

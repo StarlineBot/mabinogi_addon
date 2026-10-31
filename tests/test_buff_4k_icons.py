@@ -72,19 +72,20 @@ def test_enough_4k_shots():
     assert sum(h >= 2000 for h in heights) >= 9
 
 
-def _noisy(region, y, size, sigma=25):
+def _subpixel(region, y, size, dx=0.7, dy=0.7):
+    """아이콘 줄을 소수 픽셀만큼 어긋나게(4K 렌더링 흔들림) — 213520 행진곡 원 점수 0.848 → 0.768."""
     out = region.copy()
-    rng = np.random.default_rng(0)
-    patch = out[y:y + size, 0:50].astype(float) + rng.normal(0, sigma, (size, 50, 3))
-    out[y:y + size, 0:50] = np.clip(patch, 0, 255).astype(np.uint8)
+    band = region[y - 4:y + size + 4, 0:50]
+    shift = np.float32([[1, 0, dx], [0, 1, dy]])
+    out[y - 4:y + size + 4, 0:50] = cv2.warpAffine(band, shift, (band.shape[1], band.shape[0]), borderMode=cv2.BORDER_REFLECT)
     return out
 
 
 def test_held_buff_survives_score_dip_but_not_real_end(catalog):
-    region, _ = _region("tests/data/mabinogi_2026_10_30_214016.png")
+    region, _ = _region("tests/data/mabinogi_2026_10_30_213520.png")
     march = {d.buff_id: d for d in detect_buffs(region, catalog, (0, 50))}["march"]
     size = catalog["march"].shape[0]
-    dipped = _noisy(region, march.y, size)  # 4K 흔들림처럼 점수 0.75~0.78
+    dipped = _subpixel(region, march.y, size)
     assert "march" not in {d.buff_id for d in detect_buffs(dipped, catalog, (0, 50))}
     kept = {d.buff_id: d for d in detect_buffs(dipped, catalog, (0, 50), held={"march": march.y})}
     assert "march" in kept and 0.75 <= kept["march"].score < 0.78
@@ -93,19 +94,35 @@ def test_held_buff_survives_score_dip_but_not_real_end(catalog):
     assert "march" not in {d.buff_id for d in detect_buffs(gone, catalog, (0, 50), held={"march": march.y})}
 
 
+def test_held_lookalike_is_released(catalog):
+    """QA: 마기그래프 템플릿이 미등록 '재생' 아이콘에 0.758(wireweb_1 줄 602). 원 점수만 보는 유지는 마기그래프를 계속 붙잡고
+    그 줄(재생) 시간을 마기그래프 시간으로 읽었다 → 유지도 흐림 비교(0.858~0.864 < 0.9)로 놓아준다."""
+    region, _ = _region("tests/data/2026-10-30_windowed_wireweb_1.png")
+    assert "magi" not in {d.buff_id for d in detect_buffs(region, catalog, (0, 50), held={"magi": 602})}
+    # 시뮬레이션: 재생 줄에 마기그래프 아이콘이 붙은 프레임(있음) → 원본 프레임(재생) — 엔진이 이어 보며 놓아야 한다
+    pasted = region.copy()
+    icon = catalog["magi"]
+    pasted[602:602 + icon.shape[0], 4:4 + icon.shape[1]] = icon
+    engine = BuffEngine(catalog, list(catalog), anchor_id="premium_battle", favorites=False,
+                        show_duration={"magi": False})
+    for i in range(6):
+        engine.tick(pasted, i * 0.05)
+    assert "magi" in {entry.buff_id for entry in engine.tick(pasted, 0.3).entries}
+    for i in range(20):
+        result = engine.tick(region, 1.0 + i * 0.1)
+    assert "magi" not in {entry.buff_id for entry in result.entries}
+
+
 def test_engine_keeps_4k_buff_through_flicker(catalog):
-    """흔들린 프레임 0.6초·정상 0.2초를 8초 동안 반복 — 목록의 예리(4K 0.854)가 계속 '있음'(예전: 없음 확정 반복 → 사라짐 경고 반복).
-    (214016 행진곡은 꺼진 즐겨찾기라 목록 버프인 213927 예리로 본다.)"""
-    region, _ = _region("tests/data/mabinogi_2026_10_30_213927.png")
-    sharp = {d.buff_id: d for d in detect_buffs(region, catalog, (0, 50))}["sharp"]
-    dipped = _noisy(region, sharp.y, catalog["sharp"].shape[0], sigma=20)  # 0.775
-    assert "sharp" not in {d.buff_id for d in detect_buffs(dipped, catalog, (0, 50))}
-    # 지속시간 표시를 끈 버프(시간으로 '아직 있음'을 확인하는 보조 경로가 없음 — 사라짐 경고가 반복되던 경우)
-    engine = BuffEngine(catalog, list(catalog), anchor_id="premium_battle", favorites=True,
-                        show_duration={"sharp": False})
+    """흔들린 프레임 0.6초·정상 0.2초를 8초 동안 반복 — 행진곡이 계속 '있음'(예전: 없음 확정 반복 → 사라짐 경고 반복).
+    지속시간 표시를 끈 버프(시간으로 '아직 있음'을 확인하는 보조 경로가 없음)를 목록 방식으로 본다(213520 행진곡은 켜진 즐겨찾기라 칸 판독에서는 점수와 무관)."""
+    region, _ = _region("tests/data/mabinogi_2026_10_30_213520.png")
+    march = {d.buff_id: d for d in detect_buffs(region, catalog, (0, 50))}["march"]
+    dipped = _subpixel(region, march.y, catalog["march"].shape[0])
+    engine = BuffEngine(catalog, list(catalog), anchor_id="premium_battle", favorites=False,
+                        show_duration={"march": False})
     for i in range(6):
         engine.tick(region, i * 0.05)
     for i in range(80):
-        # 흔들림 0.6초(엔진 '없음' 확정 0.4초보다 김) + 정상 0.2초를 반복
         result = engine.tick(dipped if i % 8 < 6 else region, 1.0 + i * 0.1)
-        assert "sharp" in {entry.buff_id for entry in result.entries}, i
+        assert "march" in {entry.buff_id for entry in result.entries}, i
