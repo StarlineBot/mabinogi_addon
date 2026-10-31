@@ -39,6 +39,8 @@
   (`_deferred_tcp`·`tcp_at_game_end`·`TCP_DEFERRED` 남은 곳 없음, 어댑터 재시작은 켜는 순간 `_apply_tcp`와 사용자 원복뿐). 게임 중 켜기: 목표값이면 그대로 시작, 아니면 안내 창만(엔진도 쓰지 않음).
   '재부팅 대기'·[지금 적용]은 E안으로 제거(사용자 결정). Windows 종료 신호 로그 추가. 최적화 테스트 139·release checks 0.34.0 1746 passed. main과 충돌 없음(main 쪽 차이는 status.md뿐).
   → main 반영 완료(v0.33.0 게시 뒤 브랜치 합침).
+  → main 합침(c8d92f9·d1f10c1, QA 커밋과 지문 같음 — 문서만 차이). **v0.34.0 게시 완료**: [#167](https://github.com/StarlineBot/mabinogi_addon/actions/runs/41222413830)·게시 [#247](https://github.com/StarlineBot/mabinogi_addon/actions/runs/41223521096) 성공,
+  태그 `v0.34.0` → d1f10c1(candidate source_sha·지문 `f3463f1e…` 일치). 공개 version.json 0.34.0(Release 자산과 동일)·exe 163,882,798바이트·sha256 `bc0a2be1…5aa6099d` 후보·공개 URL 일치.
 - **조사 대기(2026-10-31 제보, 불확실): 렘부·라브·섯다라인을 함께 켠 날 PC 종료가 안 됨(CPU·그래픽카드는 돌아감).** 코드상 종료를 늦출 수 있는 곳: ① 최적화 원복 중이면
   `prepare_close`가 False → 창 닫기 거부(엔진 원복 스레드가 끝날 때까지 — 네트워크 어댑터 원복은 `Restart-NetAdapter`), ② 블랙박스 녹화 정리 최대 15초. 앱은 WM_QUERYENDSESSION을
   따로 처리하지 않음(Qt 기본). 확인 자료: 그날 app.log의 '종료 단계 …ms'·'종료 총' 줄, 종료 화면에 '앱이 종료를 막고 있음' 목록이 떴는지, 최적화·블랙박스 사용 여부.
