@@ -50,9 +50,10 @@ def _is_auxiliary_bar(sub, names) -> bool:
 
 _SAT_MIN = 90
 _VAL_MIN = 80
-# 크기 기준은 'UI 배율'에 곱한다. 게임 UI는 1440 높이를 넘는 화면(4K)에서 더 커지지 않는다
-# (0.30.1 QA: 4K에서도 보스바 521×37, 2560×1440과 같음). 예전엔 화면 비율이라 4K에서 최소 폭이
-# 691px(> 실제 521px)가 되어 후보 0개였다. 1440 이하 화면은 예전 비율 그대로(ui_scale = H/1440).
+# 크기 기준은 화면 높이와 무관한 고정 픽셀(기준 2560×1440 값). 게임 UI는 화면 크기에 따라 커지거나
+# 작아지지 않는다 — 4K(0.30.1 QA)·2560×1440·1410 창·1080 화면 창 모드(0.31.2 QA, image01) 모두 보스바 521×37.
+# 예전엔 화면 비율이라 4K에서 최소 폭 691px(후보 0개), 0.30.1~0.31.1은 1440 미만만 비율이라 1080 화면에서
+# 바를 28px로 줄여 HP를 못 읽었다(보스 패턴 알림 안 뜸).
 _REF_H, _REF_W = 1440, 2560
 _MIN_W_FRAC = 0.18  # 기준 화면(2560) 폭 대비 최소 바 폭(= 가장자리 행 '씨앗' 판정의 최장 연속 하한) → 461px
 _MIN_H_FRAC = 0.014  # 기준 화면 높이 대비 최소 바 높이 → 20px
@@ -74,8 +75,8 @@ _NAME_COV_MIN = 0.012  # 박스 왼쪽 60%에서 흰 글자 최소 비율(실제
 
 
 def ui_scale(H: int) -> float:
-    """물리 화면 높이 H에서 게임 UI 배율(1440 기준). 1440보다 큰 화면에서는 1(UI가 안 커짐)."""
-    return min(H, _REF_H) / _REF_H
+    """물리 화면 높이 H에서 게임 UI 배율. 화면 크기와 무관하게 1(0.31.2: 1440 미만도 UI가 안 작아짐)."""
+    return 1.0
 
 
 def _has_name_text(sub: np.ndarray) -> bool:
@@ -224,7 +225,7 @@ def locate_boss_bar(
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
     sat = (hsv[:, :, 1] > _SAT_MIN) & (hsv[:, :, 2] > _VAL_MIN)
     y_off = int(H * _BOTTOM_FRAC)  # 하단 영역에서만 (바는 메뉴바 위)
-    ui = ui_scale(H) * _REF_H  # UI 기준 높이(px): 1440 이하 화면은 H, 4K는 1440
+    ui = ui_scale(H) * _REF_H  # UI 기준 높이(px): 화면과 무관하게 1440 기준 고정 픽셀
     min_run = int(min(W, ui * _REF_W / _REF_H) * _MIN_W_FRAC)
     min_h, max_h = int(ui * _MIN_H_FRAC), int(ui * _MAX_H_FRAC)
     cands = _band_candidates(sat[y_off:, :], y_off, H, min_run, min_h, max_h, diagnostics)
@@ -274,7 +275,7 @@ def locate_boss_bar(
 # 박스를 '공유 보스바 영역'에 저장하면 **다른 보스 HP가 1/10로 읽혀** 패턴 알림이 오작동한다.
 # 그래서 찾은 바의 세로 중심만 쓰고 높이는 고정값으로 정규화한다(기준 2560×1440 → 37px).
 # 0.30.1: 4K에서도 바는 37px(UI가 안 커짐) — 예전 화면 비율(4K 56px)은 100.00%를 1%로 읽었다.
-# 그래서 1440 이하 화면은 예전처럼 비율(H×_HEIGHT_FRAC), 그보다 큰 화면은 37px로 고정(ui_scale).
+# 0.31.2: 1440 미만 화면도 37px(1080 화면 창 모드 image01 — 비율이면 28px로 줄여 HP None). 물리 37px 고정.
 # 자동 찾기뿐 아니라 **손으로 잡은 박스도 판독 직전 이 함수로 정규화**한다(예: 40px로 잡아
 # 46%가 4로 읽히던 것). 화면 내용이 아니라 H(화면/프레임 높이) 기반 고정 계산이라 프레임마다
 # 결과가 같다 → 판독이 흔들리지 않는다(매 프레임 채움행 트림은 흔들려서 안 쓴다).
@@ -284,7 +285,7 @@ _HEIGHT_FRAC = 0.0257
 def normalize_box_height(
     box: tuple[int, int, int, int], H: int, scale: float = 1.0
 ) -> tuple[int, int, int, int]:
-    """박스의 세로 중심은 유지하고 높이를 바 높이(물리 37px × UI 배율)로 맞춘다. x·w는 그대로.
+    """박스의 세로 중심은 유지하고 높이를 바 높이(물리 37px)로 맞춘다. x·w는 그대로.
 
     H는 box와 같은 좌표계의 화면/프레임 높이. scale은 그 좌표계 1px당 물리픽셀(자동 찾기는 물리
     프레임이라 1, 손으로 잡은 박스는 논리좌표라 화면 배율 dpr) — UI 크기는 물리 화면 높이로 정해진다."""

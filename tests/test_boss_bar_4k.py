@@ -41,11 +41,13 @@ def test_misaligned_4k_text_is_not_confirmed_by_autofind():
 
 
 def test_box_height_uses_ui_scale_not_screen_ratio():
-    assert ui_scale(2160) == 1 and ui_scale(1440) == 1 and ui_scale(1080) == 0.75
+    # 0.31.2 명세 변경(QA image01): 1440 미만 화면도 UI가 안 작아진다 — 1080 0.75 → 1, 1410 창 36 → 37px
+    assert ui_scale(2160) == 1 and ui_scale(1440) == 1 and ui_scale(1080) == 1
     assert normalize_box_height((0, 1940, 521, 80), 2160)[3] == 37  # 4K: 예전 56
     assert normalize_box_height((0, 1200, 521, 40), 1440)[3] == 37  # 2560×1440 그대로
-    assert normalize_box_height((0, 1200, 521, 40), 1410)[3] == 36  # 창 모드 그대로
-    # 손으로 잡은 박스(논리좌표): 4K@150% → 논리 1440, 물리 37px = 논리 25px / 4K@200% → 논리 1080, 18~19px
+    assert normalize_box_height((0, 1200, 521, 40), 1410)[3] == 37  # 창 모드(실제 바 37px)
+    assert normalize_box_height((0, 800, 521, 40), 1080)[3] == 37  # 1080 화면(예전 28 → HP None)
+    # 손으로 잡은 박스(논리좌표): 물리 37px ÷ 배율 — 150% → 논리 25px / 200% → 18~19px
     assert normalize_box_height((0, 1300, 347, 30), 1440, 1.5)[3] == 25
     assert normalize_box_height((0, 980, 260, 30), 1080, 2.0)[3] in (18, 19)
     # 4K@100%에서 그린 큰 박스도 세로 중심은 그대로 두고 37px로 → 100.00%를 100으로

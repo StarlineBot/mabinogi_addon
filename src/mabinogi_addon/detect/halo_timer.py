@@ -32,6 +32,10 @@ def normalize(mask):
     return result
 
 
+MAX_DOTS = 1024  # 흰 점 상한(이보다 많으면 글자가 아닌 흰 화면) — 쌍 비교 배열 1024² 이하
+MAX_COLON_PAIRS = 32  # 콜론 쌍 후보 상한(예전 '흰 점 64개' 대신)
+
+
 def cells(frame):
     if (not isinstance(frame,np.ndarray) or frame.dtype != np.uint8 or frame.ndim != 3
             or frame.shape[2] != 3 or not frame.size or frame.size > 3*1024*1024):
@@ -40,32 +44,40 @@ def cells(frame):
     _,_,stats,_ = cv2.connectedComponentsWithStats(mask)
     dots = [tuple(map(int,s)) for s in stats[1:] if 2 <= s[2] <= 14 and 2 <= s[3] <= 14
             and .6 <= s[2]/s[3] <= 1.5 and s[4] >= .55*s[2]*s[3]]
-    if len(dots)>64:
+    # 0.31.2: 흰 점 개수가 아니라 '콜론 쌍' 개수로 포기한다 — 회한 날개 효과처럼 흰 점이 많아도(image04 74개)
+    # 위아래로 같은 크기·간격인 쌍은 몇 개뿐이다. 쌍 찾기는 배열 비교로(점이 많아도 Python 이중 반복 없음).
+    if not dots or len(dots) > MAX_DOTS:
+        return []
+    d = np.array([dot[:4] for dot in dots], np.int32)
+    x0, y0, w0, h0 = (d[:, i:i + 1] for i in range(4))
+    distance_all = d[None, :, 1] - y0
+    pairs = np.argwhere((np.abs(x0 - d[None, :, 0]) <= 1) & (np.abs(w0 - d[None, :, 2]) <= 1)
+                        & (np.abs(h0 - d[None, :, 3]) <= 1)
+                        & (distance_all >= 2.5 * h0) & (distance_all <= 4 * h0))
+    if len(pairs) > MAX_COLON_PAIRS:
         return []
     candidates = []
-    for x,y,w,h,_ in dots:
-        for xx,yy,ww,hh,_ in dots:
-            distance = yy-y
-            if not (abs(x-xx) <= 1 and abs(w-ww) <= 1 and abs(h-hh) <= 1 and 2.5*h <= distance <= 4*h):
-                continue
-            scale = distance/16
-            cx = x+w/2
-            # 글자 위아래로 1px 여유: 4K(214648 '14:46')는 글자 윗변이 창 윗변(점 위 3칸)과 딱 겹쳐 normalize가 버렸다
-            top = round(y-3*scale)-1
-            height = round(29*scale)+2
-            glyphs = []
-            for left,right in ((-46,-28),(-26,-4),(6,28),(28,50)):
-                a,b = round(cx+left*scale),round(cx+right*scale)
-                if a < 0 or b > mask.shape[1] or top < 0 or top+height > mask.shape[0]:
-                    break
-                glyph=normalize(mask[top:top+height,a:b])
-                if glyph is None:
-                    break
-                glyphs.append(glyph)
-            if len(glyphs)==4:
-                candidates.append((glyphs,(round(cx-46*scale),top,round(96*scale),height)))
-            if len(candidates)>32:
-                return []
+    for i, j in pairs:
+        x,y,w,h = map(int, d[i])
+        distance = int(d[j, 1]) - y
+        scale = distance/16
+        cx = x+w/2
+        # 글자 위아래로 1px 여유: 4K(214648 '14:46')는 글자 윗변이 창 윗변(점 위 3칸)과 딱 겹쳐 normalize가 버렸다
+        top = round(y-3*scale)-1
+        height = round(29*scale)+2
+        glyphs = []
+        for left,right in ((-46,-28),(-26,-4),(6,28),(28,50)):
+            a,b = round(cx+left*scale),round(cx+right*scale)
+            if a < 0 or b > mask.shape[1] or top < 0 or top+height > mask.shape[0]:
+                break
+            glyph=normalize(mask[top:top+height,a:b])
+            if glyph is None:
+                break
+            glyphs.append(glyph)
+        if len(glyphs)==4:
+            candidates.append((glyphs,(round(cx-46*scale),top,round(96*scale),height)))
+        if len(candidates)>32:
+            return []
     return candidates
 
 
