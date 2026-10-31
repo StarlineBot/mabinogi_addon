@@ -44,6 +44,8 @@
   → **QA 1bae2e2 통과(2026-10-31, Noto)**: release checks 0.32.0 1620 passed, 전체 3519 passed. 제보 설정으로 띄움 → 버프 목록 14줄(기본 13 흐리게 '· 추적 안 함'),
   추적 0개, 골라서 '이 버프 추적' 켜면 즉시 추적 순서에 들어감·알림 칸 활성. '오버레이 창 보이기' 끔 → config buffWindowVisible false. 790×864 버프·디버프 두 칸 유지,
   숫자 칸 +48px(Windows 11 흉내)에서도 두 칸. 원격 v0.32.0 태그 없음 → 배포 번호 0.32.0. 렌더 사용자 전달.
+  **v0.32.0 게시 완료**: [#165](https://github.com/StarlineBot/mabinogi_addon/actions/runs/41179592561)·게시 [#245](https://github.com/StarlineBot/mabinogi_addon/actions/runs/41180367437) 성공,
+  태그 `v0.32.0` → cfd3592(candidate source_sha·지문 `c2122380…` 일치). 공개 version.json 0.32.0(Release 자산과 동일)·exe 163,873,820바이트·sha256 `ff64a328…2aac250e` 후보·공개 URL 일치. 제보자 실사용 확인 대기.
   → **0.32.0 개발(2026-10-31, 로컬 검증)** — ① `BuffTab._load_state`가 hidden도 저장 순서대로 목록에(기준 맨 위 고정).
   ② 체크 이름 '오버레이에 표시' → **'이 버프 추적'/'이 디버프 추적'**(QA 제안, config 키 hidden 그대로). 위치는 예전 '오버레이에 표시' 자리 그대로('표시' 묶음 첫 줄, 사용자 결정 — QA 제안의 상세 맨 위 분리는 안 함). 끈 동안 지속시간·사라짐 경고·알림 비활성.
   목록은 흐린 글자(`muted`)·아이콘 35% + 이름 옆 '· 추적 안 함'(버프·디버프 같은 `settings_layout.style_tracked_item`).
