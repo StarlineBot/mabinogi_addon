@@ -108,17 +108,22 @@ def panel_top(gray: np.ndarray, bottom: int, pitch: int = 24) -> int | None:
     gray = _gray(gray)
     if bottom < 8 or gray.shape[1] < 20:
         return None
-    g = cv2.blur(gray[:bottom].astype(np.float32), (9, 1))
+    hits = _border_rows(gray[:bottom], bottom - MAX_ROWS * pitch - 4, bottom - 4)
+    return hits[-1] if hits else None
+
+
+def _border_rows(gray: np.ndarray, lo: int, hi: int) -> list[int]:
+    """lo~hi 사이에서 상태목록창 위 테두리처럼 위는 밝고 아래는 어두워지는 가로 경계 y들."""
+    g = cv2.blur(gray.astype(np.float32), (9, 1))
     w = g.shape[1]
     c = g[:, int(w * _LINE_SPAN[0]):int(w * _LINE_SPAN[1])]
-    ys = np.arange(max(4, bottom - MAX_ROWS * pitch - 4), bottom - 4)
+    ys = np.arange(max(4, lo), min(hi, g.shape[0] - 4))
     if ys.size == 0:
-        return None
+        return []
     above = (c[ys - 4] + c[ys - 3] + c[ys - 2]) / 3
     below = (c[ys + 1] + c[ys + 2] + c[ys + 3]) / 3
     frac = ((below <= above * 0.8) & (above - below >= 3)).mean(axis=1)
-    hits = ys[frac >= 0.8]
-    return int(hits[-1]) if hits.size else None
+    return [int(y) for y in ys[frac >= 0.8]]
 
 
 def count_rows(gray: np.ndarray, bottom: int, rows: dict, pitch: int) -> int | None:
@@ -311,6 +316,11 @@ def favorites_top(frame: np.ndarray, box: tuple[int, int, int, int], anchor_y: i
     if not candidates:
         return None
     sep = candidates[-1]  # 기준 버프에 가장 가까운(아래쪽) 선
+    if _border_rows(strip, sep + 6, strip.shape[0] - 4):
+        # 그 선과 기준 버프 사이에 상태목록창 위 테두리가 있으면 선은 창 밖(스킬바 아래 선·전투 분석기 머리줄 등)이다 —
+        # 기준 버프가 즐겨찾기 칸 안이거나 즐겨찾기가 없는 경우. 원래 자동 찾기 영역이 이미 창 맨 위를 포함하므로 넓히지 않는다
+        # (0.33.0 QA: tests/data 81장 중 8장이 화면 위까지 넓어짐. 진짜 구분선 7장은 사이에 테두리 0).
+        return None
     top = panel_top(strip, sep)
     if top is None or top >= y:
         return None

@@ -105,3 +105,52 @@ def test_list_buff_wins_over_lookalike_off_favorite():
         result = engine.tick(region, i * 0.05)
     assert "mana_pierce" in {entry.buff_id for entry in result.entries}
     assert "mana_pierce" not in engine.favorites.rows
+
+
+# ---- 자동 찾기 '즐겨찾기 칸까지 넓히기'(widen_to_favorites — 버프 탭 자동 찾기·첫 안내 자동설정 공용) ----
+# 0.33.0 QA: 기준 버프 위 가장 가까운 가로선을 화면 맨 위까지 찾아, 기준 버프가 즐겨찾기 칸 안이거나 즐겨찾기가 없으면
+# 스킬바 아래 선·전투 분석기 머리줄을 구분선으로 보고 화면 위까지 넓혔다. 선과 기준 버프 사이에 창 위 테두리가 있으면 넓히지 않는다.
+NOT_WIDENED = ("2026-10-30_windowed_wireweb_1.png", "2026-10-30_windowed_wireweb_2.png", "2026-10-30_windowed_wireweb_3.png",
+               "스크린샷 2026-10-09 190926.png", "스크린샷 2026-10-12 200625.png", "스크린샷 2026-10-18 001116.png",
+               "스크린샷 2026-10-18 001801.png", "스크린샷 2026-10-12 024008.png", "2026-10-11_123333.png")
+WIDENED_TOP = {"스크린샷 2026-10-12 200511.png": 412, "스크린샷 2026-10-15 213313.png": 412,
+               "스크린샷 2026-10-15 213734.png": 412, "스크린샷 2026-10-18 001216.png": 412,
+               "스크린샷 2026-10-18 001541.png": 220, "스크린샷 2026-10-25 142736.png": 414}  # 진짜 구분선(≈598) 위 칸 맨 위 — 그대로
+
+
+def _autofind(name):
+    import cv2
+    from mabinogi_addon import image_io
+    from mabinogi_addon.detect.favorites import widen_to_favorites
+    from mabinogi_addon.detect.status_panel import locate_status_region
+    frame = image_io.imread(f"tests/data/{name}", cv2.IMREAD_COLOR)
+    box = locate_status_region(frame, anchor_template())
+    return frame, box, widen_to_favorites(frame, box)
+
+
+@pytest.mark.parametrize("name", NOT_WIDENED)
+def test_line_outside_status_window_is_not_a_separator(name):
+    _frame, box, wide = _autofind(name)
+    assert wide == box  # 원래 영역(기준 버프 위 34줄)이 이미 창 맨 위를 포함
+
+
+@pytest.mark.parametrize("name", sorted(WIDENED_TOP))
+def test_real_separator_still_widens(name):
+    _frame, box, wide = _autofind(name)
+    assert wide[1] == WIDENED_TOP[name] and wide[1] + wide[3] == box[1] + box[3]
+
+
+def test_windowed_wireweb_1_reads_favorites_after_autofind():
+    """0.31.1 수동 영역과 같은 구분선(영역 기준 593)·칸 15줄, 경고 없음, 꺼진 즐겨찾기는 목록에 안 섞임."""
+    from mabinogi_addon.catalog import available_catalog, build_templates
+    frame, _box, (x, y, w, h) = _autofind("2026-10-30_windowed_wireweb_1.png")
+    region = np.ascontiguousarray(frame[y:y + h, x:x + w])
+    catalog = build_templates(available_catalog())
+    engine = BuffEngine(catalog, list(catalog), anchor_id="premium_battle", favorites=True)
+    for i in range(8):
+        result = engine.tick(region, i * 0.05)
+    reader = engine.favorites
+    assert reader.separator == 593 and reader.row_count == 15 and not reader.lost
+    shown = {entry.buff_id for entry in result.entries}
+    # 화면에서 회색(꺼짐)인 즐겨찾기 — 마나실드는 화면상 흰 글자(켜짐)라 제외
+    assert not shown & {"han_adrenaline", "melee_attack", "magic_attack", "ladeca", "mana_pierce", "penet"}
