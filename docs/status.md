@@ -54,6 +54,8 @@
   지금 0.35.1은 ②를 안 지킴(항상 유지) → 0.35.1 배포 보류, `_restore_all`을 게임 여부로 나눠 수정 요청. [패스트핑 되돌리기]는 게임 중에 끈 경우를 위해 유지(QA 권장).
   → **사용자 최종(2026-11-01)**: 패스트핑은 굳이 되돌릴 필요 없음 → **0.35.1 그대로 배포**(최적화 끄기는 항상 패스트핑 유지, 되돌리기는 [패스트핑 되돌리기] 버튼만). 규칙 ② 수정은 보내지 않음.
   참고: 앱을 지워도 패스트핑 값은 Windows에 남음 — 필요하면 도움말·공지에 '지우기 전 [패스트핑 되돌리기]' 한 줄.
+  **v0.35.1 게시 완료**: [#169](https://github.com/StarlineBot/mabinogi_addon/actions/runs/41284081312)·게시 [#249](https://github.com/StarlineBot/mabinogi_addon/actions/runs/41284965956) 성공,
+  태그 `v0.35.1` → 4f703d7(QA 커밋 e3ac470과 지문 같음, 문서만 차이 — candidate 지문 `be624fa1…` 일치). 공개 version.json 0.35.1(Release 자산과 동일)·exe 163,896,984바이트·sha256 `b7332014…5bc38b2d` 후보·공개 URL 일치.
 - **QA 0.35.0(a5364e9 디버프 그림·b0d6237 그림대화, 2026-11-01)**: 디버프 — 번들 20종 display_image 모두 None, image/ 폴더 없음(통과).
   그림대화 — tests/data 게임 파일(zip, 비공개)과 우리 저장 파일 비교: IHDR 256×96·2비트·팔레트, 청크 순서 IHDR·PLTE·zTXt authid·zTXt author·IDAT·IEND, 필터 0, 왕복 픽셀·팔레트 동일,
   서명 zTXt 두 청크가 recentchatimage.png와 바이트 동일(zlib 압축 수준만 다름 78da/58c3 — 표준 해제 가능). 서명 없으면 저장 버튼 꺼짐, 이름 겹치면 초 올림, 기존 파일 덮어쓰기 없음.
