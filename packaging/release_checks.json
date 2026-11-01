@@ -1,5 +1,5 @@
 {
-  "version": "0.35.0",
+  "version": "0.35.1",
   "tests": [
     "tests/test_blackbox.py",
     "tests/test_blackbox_access.py",
@@ -98,6 +98,8 @@
     "tests/test_boss_brontanas.py",
     "tests/test_buff_4k_icons.py",
     "tests/test_fastping_game_running.py",
-    "tests/test_sketch_chat.py"
+    "tests/test_sketch_chat.py",
+    "tests/test_skillbar_testers.py",
+    "tests/test_fastping_kept.py"
   ]
 }

@@ -225,7 +225,8 @@ def test_turning_off_with_only_graphics_left_asks_no_network_question(window, mo
     monkeypatch.setattr(c, '_network_confirmation', lambda: asked.append(1) or True)
     monkeypatch.setattr(c.engine, 'stop_and_restore', lambda **k: calls.append(k))
     c._restore_all()
-    assert not asked and calls == [dict(network=False, accept_normalized=False, network_deferred=False)]
+    # 0.35.1 명세 변경(사용자 결정): 최적화를 끄면 패스트핑은 그대로 두고 CPU·우선순위·그래픽만 되돌린다(확인 창·재연결 없음).
+    assert not asked and calls == [dict(network=False, network_kept=False)]
 
 
 # ---- 0.23.0 Windows 실측 후속: 이름만으로 찾으면 다른 프로필(`Client.exe`)이 잡힘 → 전체 경로만 ----

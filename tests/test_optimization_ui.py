@@ -199,15 +199,16 @@ def test_embedded_creator_and_recovery_tabs_preserve_single_lifetime(window,monk
     monkeypatch.setattr(module, 'optimization_available',lambda:False)
     c.refresh_access();c._tick()
     assert w._tabs.indexOf(panel)==-1
-    # 새 시작은 막는다. 되돌릴 기록이 남아 있으면 토글은 켜짐(원복 경로)으로 남는다(13.5, 이전 '중단 · 원복'과 같음).
+    # 새 시작은 막는다. 0.35.1 명세 변경(사용자 결정): 최적화를 끄면 패스트핑은 그대로 두고 CPU·우선순위·그래픽만 되돌린다(확인 창·재연결 없음).
+    # 패스트핑(네트워크)만 남은 기록은 '켜짐'이 아니다 → 접근이 없으면 토글은 꺼짐·비활성.
     assert not panel.frames_toggle.isEnabled()
-    assert panel.toggle.isEnabled() == (recovery in ('pending','restart')) and panel.toggle.isChecked() == (recovery in ('pending','restart'))
+    assert not panel.toggle.isEnabled() and not panel.toggle.isChecked()
     # 접근이 없으면 네트워크 원복을 묻거나 실행하지 않는다(CPU 원복 경로만 남음).
     monkeypatch.setattr(c,'_network_confirmation',lambda:pytest.fail('hidden alpha must not prompt'))
     restores=[]
     monkeypatch.setattr(c.engine,'stop_and_restore',lambda **k:restores.append(k))
     c._restore_all()
-    assert restores==[dict(network=False,accept_normalized=False,network_deferred=False)]
+    assert restores==[dict(network=False,network_kept=recovery in ('pending','restart'))]
     c.engine.recovery_requested=True;c._tick()
     monkeypatch.setattr(module, 'optimization_available',lambda:True)
     c.refresh_access()
@@ -302,14 +303,16 @@ def test_start_from_app_preserves_collector_header_before_game_focus(window, mon
 
 
 def test_rss_normalized_restore_asks_specific_confirmation(window, monkeypatch):
+    # 0.35.1 명세 변경: 네트워크 원복은 최적화 끄기가 아니라 상세 설정 [패스트핑 되돌리기]에서만(게임 꺼짐).
     w, app = window; c = w.optimization_tools
     monkeypatch.setattr(module, 'optimization_available', lambda: True); c.refresh_access()
+    monkeypatch.setattr(c, '_game_running', lambda: False)
     calls = []
     c.recovery.restart_targets = {'12345678-1234-1234-1234-123456789abc'}  # 네트워크 원복 대상 있음
-    monkeypatch.setattr(c.engine, 'stop_and_restore', lambda **k: calls.append(k))
-    monkeypatch.setattr(c, '_network_confirmation', lambda: calls.append('generic') or True)
-    c._restore_all()
-    assert calls == ['generic', {'network': True, 'accept_normalized': False, 'network_deferred': False}]
+    monkeypatch.setattr(c.engine, 'restore_network', lambda **k: calls.append(k))
+    monkeypatch.setattr(module.QMessageBox, 'question', lambda *a: calls.append('generic') or module.QMessageBox.StandardButton.Yes)
+    c._revert_fastping()
+    assert calls == ['generic', {'accept_normalized': False}]
     calls.clear()
     old = dict(MaxProcessorNumber=14, MaxProcessors=8); cur = dict(MaxProcessorNumber=14, MaxProcessors=1)
     c.recovery.normalized_review = [dict(target='g', current=cur, old=old)]
@@ -317,13 +320,12 @@ def test_rss_normalized_restore_asks_specific_confirmation(window, monkeypatch):
     def question(parent, title, text, *a):
         asked.append(text); return module.QMessageBox.StandardButton.No
     monkeypatch.setattr(module.QMessageBox, 'question', question)
-    c._restore_all()
+    c._revert_fastping()
     assert '14 · 1개' in asked[0] and '14 · 8개' in asked[0]
-    assert calls == [{'network': False, 'accept_normalized': False, 'network_deferred': True}]  # 거절 → CPU만
-    calls.clear()
+    assert calls == []  # 거절 → 아무것도 안 함
     monkeypatch.setattr(module.QMessageBox, 'question', lambda *a: module.QMessageBox.StandardButton.Yes)
-    c._restore_all()
-    assert calls == [{'network': True, 'accept_normalized': True, 'network_deferred': False}]
+    c._revert_fastping()
+    assert calls == [{'accept_normalized': True}]
     c.recovery.normalized_review = []
     c.recovery.restart_targets.clear()
 
@@ -359,19 +361,20 @@ def test_single_restore_button_restores_cpu_only_without_network_prompt(window, 
     c._tick()
     assert c.panel.toggle.isEnabled() and c.panel.toggle.isChecked() and c.panel.toggle.text() == '최적화 적용 중'
     c.panel.toggle.click()  # 켜진 상태에서 누르면 중단·원복
-    assert calls == [dict(network=False, accept_normalized=False, network_deferred=False)]
+    assert calls == [dict(network=False, network_kept=False)]  # 0.35.1 인자 변경(네트워크는 항상 그대로)
     c.recovery.items = []
 
 
-def test_declining_network_prompt_restores_cpu_only(window, monkeypatch):
+def test_turning_off_keeps_fastping_without_prompt(window, monkeypatch):
+    """0.35.1 명세 변경(예전: 네트워크 확인 창 거절 → CPU만): 패스트핑이 남아도 묻지 않고 CPU만 되돌린다."""
     w, app = window; c = w.optimization_tools
     monkeypatch.setattr(module, 'optimization_available', lambda: True); c.refresh_access()
     calls = []
     monkeypatch.setattr(c.engine, 'stop_and_restore', lambda **k: calls.append(k))
-    monkeypatch.setattr(c, '_network_confirmation', lambda: False)
+    monkeypatch.setattr(c, '_network_confirmation', lambda: pytest.fail('최적화 끄기는 네트워크를 묻지 않음'))
     c.recovery.items = [dict(kind='ack', target='12345678-1234-1234-1234-123456789abc', old=None, applied=1, state='applied')]
     c._restore_all()
-    assert calls == [dict(network=False, accept_normalized=False, network_deferred=True)]
+    assert calls == [dict(network=False, network_kept=True)]
     c.recovery.items = []
 
 
@@ -434,7 +437,8 @@ def test_top_badge_is_creator_only_hidden_when_idle_and_opens_tab(window, monkey
     monkeypatch.setattr(module, 'optimization_available', lambda: True); c.refresh_access()
     c._update_badge()
     assert badge.isHidden()  # 작업 없음
-    c.recovery.items.append(dict(kind='ack', state='applied', target='x', old=1, applied=0))
+    # 0.35.1 명세 변경: 패스트핑만 남은 것은 최적화가 꺼진 정상 상태 — 상단 상태는 CPU 변경(또는 켜 둔 동안)만
+    c.recovery.items.append(dict(kind='cpu', state='applied', target={'pid': 1, 'birth': '1'}, old=15, applied=3))
     try:
         c._update_badge()
         assert not badge.isHidden() and badge.text() == '● 최적화: 적용 중'  # 13.5 보정: 원복 요청 전은 정상 적용
@@ -645,21 +649,22 @@ def test_single_optimization_toggle_follows_spec_13_5(window, monkeypatch):
     assert started == [1] and toggle.isChecked() and toggle.text() == '최적화 적용 중'
     toggle.click()  # 되돌릴 변경 없음 → 원복 호출 없이 바로 꺼짐
     assert restored == [] and not toggle.isChecked() and '되돌릴 것이 없어요' in c.engine.status
-    # 게임 종료로 끝난 세션은 남은 변경이 없으면 꺼지고, 네트워크 변경이 남으면 원복 대기로 켜짐 유지.
+    # 게임 종료로 끝난 세션은 남은 변경이 없으면 꺼진다.
     c._kept_on, c.engine.session_end = True, 'game_exit'
     c._tick()
     assert not toggle.isChecked()
+    # 0.35.1 명세 변경: 패스트핑(네트워크)만 남은 것은 꺼짐 상태 그대로(예전: 켜짐 → 끄면 원복 확인 → 원복 대기).
     c.recovery.items = [dict(kind='ack', target='12345678-1234-1234-1234-123456789abc', old=0, applied=1, state='applied')]
     try:
         c._tick()
-        # 13.5 보정: 원복을 요청하지 않은 네트워크 변경은 정상 '적용 중'(경고 아님)
+        assert not toggle.isChecked() and w._optimization_badge.isHidden()
+        # 켜 둔 동안(패스트핑만 적용한 세션)은 '적용 중', 끄면 원복 호출 없이 꺼지고 패스트핑 유지 안내
+        c._kept_on = True; c._tick()
         assert toggle.isChecked() and toggle.text() == '최적화 적용 중'
-        assert w._optimization_badge.text() == '● 최적화: 적용 중'
-        toggle.click()  # 원복 요청(가짜 _restore_all) → 끝났는데 남음 = 거절·실패 → 원복 대기
-        c._restore_requested = True
+        toggle.click()
         c._tick()
-        assert restored == [1] and toggle.text() == '최적화 적용 중 · 네트워크 원복 대기'
-        assert w._optimization_badge.text() == '● 최적화: 원복 대기'
+        assert restored == [] and not toggle.isChecked() and '패스트핑은 그대로 뒀어요' in c.engine.status
+        assert '원복 대기' not in toggle.text()
     finally:
         c.recovery.items = []
     c._tick()
@@ -679,8 +684,13 @@ def test_badge_separates_applied_from_restore_wait():
     idle = NS(busy=False, task=None, cancel=NS(is_set=lambda: False))
     net = NS(pending=[dict(kind='ack', state='applied')], restart_targets=set(), corrupt=False)
     none = NS(pending=[], restart_targets=set(), corrupt=False)
-    assert module.optimization_badge(net, idle) == ('최적화: 적용 중', 'neutral')
-    assert module.optimization_badge(net, idle, restore_wait=True) == ('최적화: 원복 대기', 'warn')
+    cpu = NS(pending=[dict(kind='cpu', state='applied')], restart_targets=set(), corrupt=False)
+    assert module.optimization_badge(cpu, idle) == ('최적화: 적용 중', 'neutral')
+    assert module.optimization_badge(cpu, idle, restore_wait=True) == ('최적화: 원복 대기', 'warn')
+    # 0.35.1 명세 변경: 패스트핑만 남은 것은 최적화가 꺼진 정상 상태(숨김), 켜 둔 동안만 '적용 중'
+    assert module.optimization_badge(net, idle) is None
+    assert module.optimization_badge(net, idle, restore_wait=True) is None
+    assert module.optimization_badge(net, idle, kept_on=True) == ('최적화: 적용 중', 'neutral')
     assert module.optimization_badge(none, idle, kept_on=True) == ('최적화: 적용 중', 'neutral')  # 바꾼 것 없이 켜짐
     assert module.optimization_badge(none, idle) is None
 

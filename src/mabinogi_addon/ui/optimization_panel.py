@@ -124,9 +124,13 @@ class OptimizationPanel(QWidget):
         connection=QHBoxLayout();connection.addWidget(self.adapter,1);connection.addWidget(self.adapter_label,1)
         form=QFormLayout();form.addRow('적용할 연결',connection);group.addLayout(form)
         self.notice=hint_label('TCP 응답을 모아 보내지 않고 바로 보내요(TcpAckFrequency) · 수신 창 자동 조정은 기본값(Normal)으로 둬요.\n'
-                           '다른 앱의 통신에도 영향을 줄 수 있고 관리자 권한·재연결이 필요해요. 게임 실행 중이면 네트워크는 미뤄요.\n'
+                           '다른 앱의 통신에도 영향을 줄 수 있고 관리자 권한·재연결이 필요해요. 게임 실행 중에는 적용하지 않아요.\n'
+                           '최적화를 꺼도 패스트핑은 그대로 둬요(인터넷이 끊기지 않게).\n'
                            '성능이 좋아졌다는 의미는 아니에요. 효과는 별도 계측으로 비교해 주세요.')
         self.notice.setForegroundRole(QPalette.ColorRole.PlaceholderText);group.addWidget(self.notice)
+        # 0.35.1: 최적화를 꺼도 패스트핑은 그대로 둔다 — 되돌리기는 여기서만(패스트핑이 남아 있을 때 보임, 게임 중엔 회색).
+        self.fastping_revert=QPushButton('패스트핑 되돌리기');self.fastping_revert.hide()
+        group.addWidget(self.fastping_revert,0,Qt.AlignmentFlag.AlignLeft)
         group=_group('그래픽',advanced)
         # 13.6(화면 확정): 체크 · 그래픽카드 이름과 상한 · 회색 설명. NVIDIA가 아니면 체크 비활성 + 이유.
         self.graphics=QCheckBox('그래픽 효율 최적화');group.addWidget(self.graphics)

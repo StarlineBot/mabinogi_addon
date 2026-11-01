@@ -23,7 +23,7 @@ def assets(feature):
     return result
 
 
-def candidates(frame, templates, trace, cancelled=None, accept=ACCEPT):
+def candidates(frame, templates, trace, cancelled=None, accept=ACCEPT, peaks=3):
     anchor, mask = templates["anchor"], templates["mask"]
     if frame is None or frame.ndim != 3 or frame.shape[2] != 3 or frame.dtype != np.uint8:
         trace["rejection"] = "invalid_frame"
@@ -48,7 +48,7 @@ def candidates(frame, templates, trace, cancelled=None, accept=ACCEPT):
         scaled_mask = cv2.resize(mask, (cw, ch), interpolation=cv2.INTER_NEAREST)
         scores = cv2.matchTemplate(small, template, cv2.TM_CCORR_NORMED, mask=scaled_mask)
         scores = np.nan_to_num(scores, nan=0, posinf=0, neginf=0)
-        for _ in range(3):
+        for _ in range(peaks):  # 배율마다 원본 정밀 비교할 봉우리 수(다른 UI가 자리를 차지해도 진짜가 빠지지 않게)
             _, score, _, point = cv2.minMaxLoc(scores)
             if score < 0.90:
                 break
@@ -77,3 +77,27 @@ def candidates(frame, templates, trace, cancelled=None, accept=ACCEPT):
                    and abs(y - other["anchor"][1]) < h / 2 for other in unique):
             unique.append(item)
     return unique
+
+
+def native_band_candidates(frame, templates, trace, band_height, accept=ACCEPT, peaks=10):
+    """화면 위쪽 띠만 원본 해상도·배율 1.0으로 찾는다(축소 손실 없음). 크기가 고정인 UI의 빠른 첫 단계."""
+    anchor, mask = templates["anchor"], templates["mask"]
+    if frame is None or frame.ndim != 3 or frame.shape[2] != 3 or frame.dtype != np.uint8:
+        return []
+    band = frame[:min(frame.shape[0], int(band_height))]
+    h, w = anchor.shape[:2]
+    if band.shape[0] < h or band.shape[1] < w:
+        return []
+    scores = cv2.matchTemplate(band, anchor, cv2.TM_CCORR_NORMED, mask=mask)
+    scores = np.nan_to_num(scores, nan=0, posinf=0, neginf=0)
+    found = []
+    for _ in range(peaks):
+        _, score, _, (x, y) = cv2.minMaxLoc(scores)
+        item = {"anchor": [x, y, w, h], "scale": 1.0, "score": float(score)}
+        trace.setdefault("band_candidates", []).append(item)  # 진단: 둘째 후보와의 여유도 볼 수 있게 봉우리는 모두 기록
+        if score < 0.90:
+            break
+        if score >= accept:
+            found.append(item)
+        scores[max(0, y - h // 2):y + h // 2 + 1, max(0, x - w // 2):x + w // 2 + 1] = 0
+    return found

@@ -6,7 +6,10 @@ from .session import ChangeDeferred, NETWORK_KINDS, PROCESS_KINDS
 _log = logging.getLogger(__name__)
 
 
-NETWORK_APPLIED = '네트워크 설정 적용 중 · 끄면 원래 값으로 되돌려요'
+NETWORK_APPLIED = '패스트핑 적용 중 · 최적화를 꺼도 그대로 둬요(인터넷이 끊기지 않게)'
+# 0.35.1(사용자 결정): 최적화를 끌 때 패스트핑은 게임 여부와 관계없이 그대로 둔다 — 되돌리기는 상세 설정 버튼만.
+FASTPING_KEPT = ('패스트핑은 그대로 뒀어요(인터넷이 끊기지 않게). '
+                 '되돌리려면 상세 설정의 [패스트핑 되돌리기]를 눌러 주세요.')
 HIGH_PRIORITY = 0x80
 NORMAL_PRIORITY = 0x20  # 게임이 재접속·맵 이동 때 되돌리는 값(2026-10-24 실측)
 # 게임 우선순위가 원본으로 되돌아가면 다시 건다(라쏘 '항상' 규칙과 같은 효과, 13.7).
@@ -78,6 +81,7 @@ class Engine:
         self._restore_cpu_after = False  # '중단 · 원복'을 누른 시점에 돌던 작업이 무엇이든 끝에서 CPU를 원복
         self._restore_graphics_after = False  # '중단 · 원복': 그래픽 효율(13.6)도 원본으로(확인 창 없음)
         self._network_deferred = False  # 사용자가 네트워크 원복을 미룸 → '네트워크 원복 대기' 안내
+        self._network_kept = False  # 최적화 끄기: 패스트핑은 그대로 둠(0.35.1) → 결과 문구
         self.task = None  # 진행 중 작업 종류: 'inspect' | 'session' | 'restore' (busy일 때만 의미)
         # 세션이 끝난 이유: 'network_only'(네트워크만 하고 정상 종료) | 'game_exit' | 'governor' | 'cancel' | 'error'
         self.session_end = None
@@ -133,6 +137,7 @@ class Engine:
                 self.status += ('\n네트워크 원복 완료' if not net_errors and not self.recovery.pending
                                 else '\n네트워크 원복 확인 필요: ' + '; '.join(net_errors[:4]))
             deferred, self._network_deferred = self._network_deferred, False
+            kept, self._network_kept = self._network_kept, False
             if deferred and (any(i['kind'] in NETWORK_KINDS for i in self.recovery.pending) or self.recovery.restart_targets):
                 self.status += ("\n네트워크 원복 대기 · 연결을 끊어도 될 때 '최적화 적용 중' 버튼을 다시 눌러 주세요.")
             elif self.recovery.corrupt or any(i['kind'] in PROCESS_KINDS for i in self.recovery.pending) or (
@@ -140,7 +145,7 @@ class Engine:
                 self.status += '\n복구 기록이 남아 있어요. 원복 상태를 확인해 주세요.'
             elif any(i['kind'] in NETWORK_KINDS for i in self.recovery.pending) or self.recovery.restart_targets:
                 # 원복을 요청하지 않은 네트워크 변경은 정상 적용 상태다(13.5: '적용 중'과 '원복 대기' 구분).
-                self.status += '\n' + NETWORK_APPLIED
+                self.status += '\n' + (FASTPING_KEPT if kept else NETWORK_APPLIED)
 
     @property
     def inspecting(self):
@@ -629,7 +634,7 @@ class Engine:
             self.status = '원복 완료' if not errors and not self.recovery.pending else '원복 확인 필요: '+'; '.join(errors[:4])
         return self._launch(work, status='네트워크 원복 중…')
 
-    def stop_and_restore(self, network=False, accept_normalized=False, network_deferred=False):
+    def stop_and_restore(self, network=False, accept_normalized=False, network_deferred=False, network_kept=False):
         """'중단 · 원복' 한 번으로 적용했던 것을 모두 되돌린다: 세션 중단 → CPU 원복 → (network면) 네트워크 원복.
 
         세션이 돌고 있으면 그 작업이 끝나며 CPU를 원복하고 이어서 네트워크를 원복한다(같은 작업 스레드)."""
@@ -637,6 +642,7 @@ class Engine:
         if network:
             self._restore_network_after = (accept_normalized,)
         self._network_deferred = network_deferred and not network
+        self._network_kept = network_kept and not network
         self._restore_cpu_after = True
         self._restore_graphics_after = True
         self.cancel.set()

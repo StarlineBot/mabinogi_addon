@@ -51,8 +51,9 @@ def optimization_badge(recovery, engine, split=None, *, restore_wait=False, kept
         return '최적화: 게임 대기', 'neutral'
     if any(i['state'] == 'failed' for i in recovery.pending):
         return '최적화: 오류', 'error'
-    if recovery.pending or recovery.restart_targets:
+    if any(i['kind'] not in NETWORK_KINDS for i in recovery.pending):
         return ('최적화: 원복 대기', 'warn') if restore_wait else ('최적화: 적용 중', 'neutral')
+    # 0.35.1: 패스트핑(네트워크)만 남은 것은 최적화를 꺼도 그대로 두는 정상 상태 — 켜 둔 동안만 '적용 중'
     if kept_on:
         return '최적화: 적용 중', 'neutral'
     return None
@@ -495,6 +496,7 @@ class OptimizationController(QObject):
         d.adapter.currentIndexChanged.connect(self._save_selection)
         d.inspect.clicked.connect(self.engine.inspect)
         d.toggle.clicked.connect(self._toggle_optimization)
+        d.fastping_revert.clicked.connect(self._revert_fastping)
         d.frames_toggle.clicked.connect(self._toggle_frames)
         d.lock.setChecked(bool((config.load_overlay_state('frameMeter') or {}).get('locked',True)))
         d.lock.toggled.connect(self._lock)
@@ -656,23 +658,30 @@ class OptimizationController(QObject):
 
     # ---- 토글 하나(명세 13.5) -------------------------------------------------------------------
     def _optimization_on(self):
-        """켜짐: 세션 진행 중, 되돌릴 변경(원복 대기 포함)이 남음, 또는 바꾼 것 없이 목표 상태로 시작한 뒤 아직 끄지 않음."""
+        """켜짐: 세션 진행 중, 되돌릴 CPU·우선순위·그래픽 변경이 남음, 또는 시작한 뒤 아직 끄지 않음.
+        패스트핑(네트워크)만 남은 것은 켜짐이 아니다(0.35.1 — 최적화를 꺼도 패스트핑은 그대로 둔다)."""
         if self.engine.busy and self.engine.task == 'session':
             return True
-        if self.recovery.pending or self.recovery.restart_targets:
+        if self._local_left():
             return True
         return self._kept_on
+
+    def _local_left(self):
+        """되돌릴 CPU·우선순위·그래픽 변경(네트워크 제외)이 남았는지."""
+        return any(i['kind'] not in NETWORK_KINDS for i in self.recovery.pending)
 
     def _toggle_optimization(self, _checked=False):
         if not self._optimization_on():
             self._start_optimization()
-        elif self.engine.busy or self.recovery.pending or self.recovery.restart_targets:
+        elif self.engine.busy or self._local_left():
             self._kept_on = False
             self._restore_all()
         else:
-            # 바꾼 것 없이 켜졌던 상태: 되돌릴 기록이 없으니 바로 끄고, 원복 실패로 오해하지 않게 알린다.
+            # 바꾼 것 없이 켜졌던 상태(또는 패스트핑만 적용): 되돌릴 CPU 기록이 없으니 바로 끈다.
+            # 패스트핑은 그대로 둔다(0.35.1 — 재연결하면 게임이 꺼진다).
+            from ..optimization.engine import FASTPING_KEPT
             self._kept_on = False
-            self.engine.status = '원래부터 같은 값이라 되돌릴 것이 없어요.'
+            self.engine.status = FASTPING_KEPT if self._network_left() else '원래부터 같은 값이라 되돌릴 것이 없어요.'
         self._sync_optimization_toggle()
 
     # ---- 홈 '게임 최적화' 스위치(탐색 구조 명세 12.3 C안) ---------------------------------------
@@ -739,26 +748,60 @@ class OptimizationController(QObject):
         toggle.setText('최적화 적용 중 · 네트워크 원복 대기' if waiting else '최적화 적용 중' if on
                        else '선택한 설정으로 최적화' if self._is_custom() else '추천 설정으로 최적화')
         allowed = self._can_start()
-        toggle.setEnabled(True if on and (engine.busy or self.recovery.pending or self.recovery.restart_targets)
+        toggle.setEnabled(True if on and (engine.busy or self._local_left())
                           else allowed and not engine.busy and not self.recovery.corrupt)
 
     def _restore_all(self):
-        """'중단 · 원복': 세션을 멈추고 적용했던 CPU·네트워크를 모두 되돌린다. 네트워크가 포함되면
-        시작할 때처럼 연결 끊김 확인을 한 번 받는다. 거절하면 CPU만 되돌리고 네트워크는 '원복 대기'로
-        남긴다(명세 6절: 게임 중 연결을 끊지 않고 CPU만 멈추는 경로).
-        접근(로그인)이 없으면 CPU만 원복한다(네트워크 원복은 기존처럼 접근 필요)."""
-        self._restore_requested = True  # 끝난 뒤 남으면 '원복 대기'(13.5)
-        network = (any(i['kind'] in NETWORK_KINDS for i in self.recovery.pending) or bool(self.recovery.restart_targets))
-        network = network and self._can_start()
-        normalized = network and bool(self.recovery.normalized_review)
-        deferred = False
-        if network and not (self._normalized_confirmation() if normalized else self._network_confirmation()):
-            network, normalized, deferred = False, False, True
-        self._summary_requested = dict(action='restore_all' if network else 'stop_cpu')
+        """최적화 끄기('중단 · 원복'): 세션을 멈추고 CPU·우선순위·그래픽만 되돌린다.
+        0.35.1(사용자 결정): 패스트핑(네트워크)은 게임 여부와 관계없이 그대로 둔다 — 되돌리면 인터넷이 잠깐 끊겨
+        게임이 종료됐다. 확인 창·재연결 없음. 되돌리기는 상세 설정의 [패스트핑 되돌리기](게임이 꺼져 있을 때만)."""
+        self._restore_requested = False  # 패스트핑 유지는 정상 상태 — '네트워크 원복 대기'를 쓰지 않는다
+        self._summary_requested = dict(action='stop_cpu')
         self._summary_state = None
         if self.stream is not None:
             self.stream.boundary(presentmon.clock()[0], 'optimization_stop_request')
-        self.engine.stop_and_restore(network=network, accept_normalized=normalized, network_deferred=deferred)
+        self.engine.stop_and_restore(network=False, network_kept=self._network_left())
+
+    FASTPING_REVERT_GAME = '인터넷이 끊기면 게임이 종료돼요 · 게임을 끈 뒤 눌러 주세요'
+
+    def _fastping_revert_state(self):
+        """[패스트핑 되돌리기] (보일지, 누를 수 있을지, 툴팁)."""
+        visible = self._network_left()
+        if not visible:
+            return False, False, ''
+        if self._game_running():
+            return True, False, self.FASTPING_REVERT_GAME
+        enabled = self._can_start() and not self.engine.busy and not self.recovery.corrupt
+        return True, enabled, '패스트핑 설정을 원래 값으로 되돌리고 연결을 다시 이어요.'
+
+    def _revert_fastping(self):
+        """상세 설정 [패스트핑 되돌리기]: 게임이 꺼져 있을 때만, 확인 뒤 네트워크 원복 + 재연결.
+        확인 창이 떠 있는 동안 게임이 켜졌으면 재연결하지 않는다."""
+        if not self._network_left() or self.engine.busy or not self._can_start():
+            return
+        if self._game_running():
+            self.engine.status = self.FASTPING_REVERT_GAME
+            return
+        normalized = bool(self.recovery.normalized_review)
+        if normalized:
+            ok = self._normalized_confirmation()
+        else:
+            ok = QMessageBox.question(self.panel or self.window, '패스트핑 되돌리기',
+                '패스트핑을 원래 값으로 되돌려요. 연결이 잠시 끊겨요.\n'
+                '게임을 켜 둔 상태라면 게임이 종료되니 먼저 꺼 주세요. 지금 되돌릴까요?',
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes
+        if not ok:
+            return
+        if self._game_running():  # 확인하는 사이 게임이 켜짐 → 끊지 않는다
+            _log.info('최적화: 패스트핑 되돌리기 확인 중 게임이 켜져 재연결하지 않음')
+            self.engine.status = self.FASTPING_REVERT_GAME
+            return
+        self._summary_requested = dict(action='restore_network')
+        self._summary_state = None
+        if self.stream is not None:
+            self.stream.boundary(presentmon.clock()[0], 'network_restore_request')
+        self.engine.restore_network(accept_normalized=normalized)
 
     def _normalized_confirmation(self):
         """장치가 앱 적용값을 정규화한 RSS 항목을 원본으로 다시 쓸지 묻는다(값을 보여주고 확인)."""
@@ -1028,6 +1071,10 @@ class OptimizationController(QObject):
         allowed, busy = self._can_start(), self.engine.busy
         for w in (d.priority,d.tcp,d.split,d.adapter): w.setEnabled(allowed and not busy)
         d.graphics.setEnabled(allowed and not busy and bool(self._gpu))  # 13.6: NVIDIA가 아니면 비활성
+        visible, enabled, tip = self._fastping_revert_state()
+        d.fastping_revert.setVisible(visible)
+        d.fastping_revert.setEnabled(enabled)
+        d.fastping_revert.setToolTip(tip)
         d.inspect.setEnabled(allowed and not self.engine.inspecting)  # 0.22.0 QA: 세션(자동 적용 대기 포함) 중에도 다시 확인 가능
         self._sync_optimization_toggle()
         for control in (d.lock,d.scale,*d.metric_boxes.values()): control.setEnabled(allowed)
