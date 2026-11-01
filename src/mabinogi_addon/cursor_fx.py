@@ -11,11 +11,12 @@
 from __future__ import annotations
 
 import math
+import random
 from collections import deque
 from dataclasses import dataclass
 
 SHAPES = ("none", "ring", "scope", "lines")
-TAILS = ("none", "dots", "line", "rainbow", "sparkle")
+TAILS = ("none", "dots", "line", "rainbow", "sparkle", "fire")  # 0.37.0: 반짝이 = 튀는 흩뿌림, 불꽃 추가
 TAIL_SECONDS = {"short": 0.2, "normal": 0.3, "long": 0.45}
 PRESET_COLORS = ("#1DD3B0", "#FFD43B", "#FF5A5F", "#FFFFFF", "#A78BFA")  # 민트·노랑·빨강·흰색·보라
 # 0.36.1: 흔들어 찾기 기본 꺼짐(오판·렉 — QA·사용자 실측)
@@ -27,6 +28,7 @@ OPACITY_RANGE = (20, 100)
 SHAKE_SECONDS = 1.0  # 흔들면 원이 커졌다 돌아오는 시간
 SHAKE_SCALE = 3.0  # 가장 클 때 배율
 SPARKLE_LIMIT = 40  # 반짝이 조각 수 제한(CPU)
+FIRE_LIMIT = 70  # 불꽃 조각 수 제한
 
 
 def clean_settings(raw) -> dict:
@@ -188,3 +190,129 @@ def sparkle_offsets(index: int, size: float) -> tuple[float, float]:
     a = (index * 2654435761) % 1000 / 1000 * 2 * math.pi
     r = ((index * 40503) % 1000 / 1000) * size * 0.35
     return math.cos(a) * r, math.sin(a) * r
+
+
+
+# ---- 0.37.0 조각 꼬리(반짝이 흩뿌림·불꽃) ------------------------------------------------------
+PARTICLE_KINDS = ("sparkle", "fire")
+GRAVITY = 420.0  # 반짝이 중력(px/s²)
+
+
+@dataclass(frozen=True)
+class Particle:
+    x: float
+    y: float
+    age: float  # 0 = 방금, 1 = 곧 사라짐
+    radius: float
+    index: int  # 만든 순서(깜빡임·색 고르기용)
+
+
+class Particles:
+    """움직일 때만 조각을 만들고, 시간이 지나면 위치·나이를 계산해 돌려준다(난수 시드 주입 → 같은 시드 같은 결과).
+    멈추면 새로 만들지 않아 수명이 지나면 0개 → 창을 숨기고 다시 그리지 않는다(명세 4절)."""
+
+    def __init__(self, kind: str, seed: int | None = None) -> None:
+        self.kind = kind
+        self._rng = random.Random(seed)
+        self._items: deque = deque()  # (x0, y0, vx, vy, born, life, radius, index)
+        self._count = 0
+        self._last: tuple[float, float, float] | None = None
+
+    def clear(self) -> None:
+        self._items.clear()
+        self._last = None
+
+    def spawn(self, now: float, x: float, y: float) -> None:
+        """커서가 (x, y)로 움직였을 때 한 번 부른다."""
+        rng = self._rng
+        last, self._last = self._last, (now, float(x), float(y))
+        if self.kind == "sparkle":
+            for _ in range(rng.randint(1, 2)):
+                self._add(x, y, rng.uniform(-90, 90), rng.uniform(-220, 80), now, rng.uniform(0.45, 0.8),
+                          rng.uniform(2.0, 4.0), SPARKLE_LIMIT)
+        elif self.kind == "fire":
+            mvx = mvy = 0.0
+            if last is not None and now > last[0]:
+                dt = now - last[0]
+                mvx, mvy = (x - last[1]) / dt, (y - last[2]) / dt
+            for _ in range(5):
+                angle = rng.uniform(0, 2 * math.pi)
+                speed = rng.uniform(10, 50)
+                vx = math.cos(angle) * speed - mvx * 0.15
+                vy = math.sin(angle) * speed - mvy * 0.15 - 40.0
+                self._add(x + rng.uniform(-4, 4), y + rng.uniform(-4, 4), vx, vy, now, rng.uniform(0.3, 0.6),
+                          rng.uniform(4.0, 7.0), FIRE_LIMIT)
+
+    def _add(self, x, y, vx, vy, now, life, radius, limit) -> None:
+        self._items.append((float(x), float(y), vx, vy, now, life, radius, self._count))
+        self._count += 1
+        while len(self._items) > limit:
+            self._items.popleft()  # 가장 오래된 것부터 버려 최대 개수 유지
+
+    def alive(self, now: float) -> list[Particle]:
+        """살아 있는 조각(오래된 것부터). 수명이 다한 것은 버린다."""
+        items = [it for it in self._items if now - it[4] < it[5]]
+        if len(items) != len(self._items):
+            self._items = deque(items)
+        out = []
+        gravity = GRAVITY if self.kind == "sparkle" else 0.0
+        for x0, y0, vx, vy, born, life, radius, index in items:
+            t = max(0.0, now - born)
+            age = min(1.0, t / life)
+            out.append(Particle(x0 + vx * t, y0 + vy * t + 0.5 * gravity * t * t, age, radius, index))
+        return out
+
+    def active(self, now: float) -> bool:
+        return any(now - it[4] < it[5] for it in self._items)
+
+
+def particle_bounds(particles, pad: float) -> tuple[int, int, int, int] | None:
+    if not particles:
+        return None
+    xs = [p.x for p in particles]
+    ys = [p.y for p in particles]
+    r = max(p.radius for p in particles) + pad
+    x0, y0 = math.floor(min(xs) - r), math.floor(min(ys) - r)
+    return x0, y0, max(1, math.ceil(max(xs) + r) - x0), max(1, math.ceil(max(ys) + r) - y0)
+
+
+def _lerp_stops(stops, age: float) -> tuple[int, int, int]:
+    age = min(1.0, max(0.0, age))
+    for (a0, c0), (a1, c1) in zip(stops, stops[1:]):
+        if age <= a1:
+            t = 0.0 if a1 == a0 else (age - a0) / (a1 - a0)
+            return tuple(int(round(c0[i] + (c1[i] - c0[i]) * t)) for i in range(3))
+    return stops[-1][1]
+
+
+FIRE_STOPS = ((0.0, (255, 255, 255)), (0.1, (255, 245, 170)), (0.3, (255, 210, 60)), (0.55, (255, 140, 30)),
+              (0.8, (225, 50, 20)), (1.0, (110, 20, 10)))  # 흰 → 연노랑 → 노랑 → 주황 → 빨강 → 어두운 빨강
+
+
+def _hsv(rgb):
+    import colorsys
+    return colorsys.rgb_to_hsv(*(c / 255 for c in rgb))
+
+
+def _rgb(h, s, v):
+    import colorsys
+    return tuple(int(round(c * 255)) for c in colorsys.hsv_to_rgb(h % 1.0, max(0.0, min(1.0, s)), max(0.0, min(1.0, v))))
+
+
+def fire_stops(chosen: str | None):
+    """불꽃 색 단계. chosen None = 기본 불꽃색, 고른 색이면 흰 → 옅은 색(채도 40%) → 고른 색 → 색상 -0.06·밝기 75% → 색상 -0.1·밝기 35%."""
+    if chosen is None:
+        return FIRE_STOPS
+    c = chosen.lstrip("#")
+    rgb = tuple(int(c[i:i + 2], 16) for i in (0, 2, 4))
+    h, s, v = _hsv(rgb)
+    return ((0.0, (255, 255, 255)), (0.08, _rgb(h, s * 0.4, max(v, 0.95))), (0.25, rgb),
+            (0.7, _rgb(h - 0.06, s, v * 0.75)), (1.0, _rgb(h - 0.1, s, v * 0.35)))
+
+
+def fire_color(age: float, stops=FIRE_STOPS) -> tuple[int, int, int]:
+    return _lerp_stops(stops, age)
+
+
+def fire_alpha(age: float) -> float:
+    return (1.0 - min(1.0, max(0.0, age))) ** 0.7 * 0.7

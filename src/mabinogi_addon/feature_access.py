@@ -16,8 +16,8 @@ def optimization_available() -> bool:
 
 
 def cursor_fx_available() -> bool:
-    """마우스 커서 표시: 첫 개발이라 제작자에게만 공개(2026-11-01 사용자 결정). 화면 문구에는 공개 단계를 쓰지 않는다."""
-    return is_creator()
+    """마우스 커서 표시: 모든 사용자(0.37.0 사용자 결정 — 기능 공개 정책 7절과 같음. 0.36.x는 제작자만). 호출부 호환용으로 남긴다."""
+    return True
 
 
 def is_creator() -> bool:

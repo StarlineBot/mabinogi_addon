@@ -15,14 +15,14 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..cursor_fx import PRESET_COLORS, SHAPES, TAIL_SECONDS, TAILS, Trail, shake_scale, sparkle_multicolor
-from .cursor_paint import paint_ring, paint_scope, paint_tail
+from ..cursor_fx import PARTICLE_KINDS, PRESET_COLORS, Particles, SHAPES, TAIL_SECONDS, TAILS, Trail, shake_scale, sparkle_multicolor
+from .cursor_paint import paint_particles, paint_ring, paint_scope, paint_tail
 from .help_dialog import help_button
 from .palette import color
 from .widgets import FeatureHeader, SuffixSpinBox, hint_label, switch
 
 SHAPE_TEXT = dict(zip(SHAPES, ("없음", "원", "스코프(짧은 십자)", "스코프(화면 선)")))
-TAIL_TEXT = dict(zip(TAILS, ("없음", "점", "선", "무지개 선", "반짝이")))
+TAIL_TEXT = dict(zip(TAILS, ("없음", "점", "선", "무지개 선", "반짝이", "불꽃")))
 LENGTH_TEXT = {"short": "짧게", "normal": "보통", "long": "길게"}
 COLOR_NAMES = dict(zip(PRESET_COLORS, ("민트", "노랑", "빨강", "흰색", "보라")))
 
@@ -100,6 +100,7 @@ class CursorPreview(QWidget):
         self.setFixedSize(300, 120)
         self._t = 0.0
         self._trail = Trail()
+        self._particles = {k: Particles(k, seed=7) for k in PARTICLE_KINDS}  # 미리보기는 고정 시드
         self._timer = QTimer(self)
         self._timer.setInterval(33)  # 미리보기는 초당 30번이면 충분
         self._timer.timeout.connect(self._advance)
@@ -112,6 +113,9 @@ class CursorPreview(QWidget):
         self._t += 0.033
         p = self._path(self._t)
         self._trail.add(self._t, p.x(), p.y())
+        kind = self._tab.settings["tail"]
+        if kind in self._particles:
+            self._particles[kind].spawn(self._t, p.x(), p.y())
         if self._tab.settings["shake"] and int(self._t * 10) % 60 == 0:
             self._shake_at = self._t  # 6초마다 흔들기 예시
         self.update()
@@ -119,11 +123,15 @@ class CursorPreview(QWidget):
     def set_time(self, t: float) -> None:
         """렌더·테스트용: t초까지 진행한 모습."""
         self._trail.clear()
+        for parts in self._particles.values():
+            parts.clear()
         step = 0.016
-        k = max(0.0, t - 0.6)
+        k = max(0.0, t - 0.9)
         while k <= t:
             p = self._path(k)
             self._trail.add(k, p.x(), p.y())
+            for parts in self._particles.values():
+                parts.spawn(k, p.x(), p.y())
             k += step
         self._t = t
         self.update()
@@ -143,7 +151,11 @@ class CursorPreview(QWidget):
         opacity = s["opacity"] / 100
         pos = self._path(self._t)
         points = self._trail.points(self._t, TAIL_SECONDS[s["tailLength"]])
-        paint_tail(p, points, s["tail"], s["color"], s["size"], opacity, multicolor=sparkle_multicolor(s))
+        if s["tail"] in self._particles:
+            paint_particles(p, self._particles[s["tail"]].alive(self._t), s["tail"], s["color"], opacity,
+                            multicolor=sparkle_multicolor(s))
+        else:
+            paint_tail(p, points, s["tail"], s["color"], s["size"], opacity, multicolor=sparkle_multicolor(s))
         scale = shake_scale(self._t - self._shake_at) if s["shake"] else 1.0
         if s["shape"] == "lines":
             c = QColor(s["color"])
@@ -297,6 +309,7 @@ class CursorTab(QWidget):
             if custom else "")
         self.color_note.setText("무지개 선은 색 설정을 쓰지 않아요." if s["tail"] == "rainbow"
                                 else "색을 고르기 전에는 반짝이가 여러 색으로 보여요." if s["tail"] == "sparkle" and sparkle_multicolor(s)
+                                else "색을 고르기 전에는 기본 불꽃색으로 보여요." if s["tail"] == "fire" and sparkle_multicolor(s)
                                 else "")
         self.size.setEnabled(s["shape"] in ("ring", "scope") or s["shake"] or s["tail"] != "none")
         self.length.setEnabled(s["tail"] != "none")

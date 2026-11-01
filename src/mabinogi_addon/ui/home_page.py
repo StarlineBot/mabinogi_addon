@@ -55,10 +55,10 @@ COMBAT_ROWS = (("buff", "버프", False), ("debuff", "디버프", False),
                ("tuarim", "투아림 알림", True), ("custom", "커스텀 오버레이", True),
                ("skillbar", "단축바", False), ("memo", "메모", False))
 # 아래 한 줄 3칸(중요도·자주 보는 순): (묶음 제목, [(키, 이름, 스위치 있음)])
-BOTTOM_BOXES = (("최적화", (("opt", "게임 최적화", True), ("fps", "FPS 표시", True))),
+BOTTOM_BOXES = (("최적화", (("opt", "게임 최적화", True), ("fps", "FPS 표시", True),
+                           ("cursor", "마우스 커서", True))),  # 0.37.0: 커서는 최적화 › 마우스 커서
                 ("블랙박스", (("blackbox", "최근 영상 보관", True),)),
-                ("파티 모집", (("keywords", "키워드 알림", False),)),
-                ("편의기능", (("cursor", "마우스 커서", True),)))  # 0.36.0: 아래 줄 4칸(마우스 커서 명세 5절 가안)
+                ("파티 모집", (("keywords", "키워드 알림", False),)))
 TITLES = {"running": ("마비노기 실행 중 · 화면을 읽고 있어요", "ok"),
           "waiting": ("마비노기를 기다리는 중", "waiting"),
           "paused": ("전투 보조 일시정지", "inactive")}
@@ -176,7 +176,7 @@ class FeatureRow(QFrame):
         self.setObjectName("homeRow")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         row = QHBoxLayout(self)
-        row.setContentsMargins(0, 7, 0, 7)  # 줄 높이: 한글 글꼴(Noto·맑은 고딕)이 높아도 790×800에 스크롤 없게
+        row.setContentsMargins(0, 5, 0, 5)  # 줄 높이: 한글 글꼴이 높아도 790×800에 스크롤 없게(0.37.0: 최적화 칸 3줄이 되어 7→5)
         row.setSpacing(10)
         text = QVBoxLayout()
         text.setSpacing(1)
@@ -327,7 +327,7 @@ class HomePage(QWidget):
         box.addLayout(grid)
         v.addWidget(combat)
 
-        # 5. 아래 한 줄 4칸
+        # 5. 아래 한 줄 3칸
         bottom = QHBoxLayout()
         bottom.setSpacing(12)
         self.boxes: dict[str, QFrame] = {}
@@ -387,6 +387,9 @@ class HomePage(QWidget):
         self._content_layout.setSpacing(6 if tight else 8)
         for line in self._warn_widgets():
             line.layout().setContentsMargins(0, 4 if tight else 5, 0, 4 if tight else 5)
+        # 0.37.0: 최적화 칸이 3줄(게임 최적화·FPS 표시·마우스 커서)이 되어 배너+설정 필요 3줄이면 넘친다 → 배너가 있을 때만 줄 높이를 조금 줄인다
+        for row in self.rows.values():
+            row.layout().setContentsMargins(0, 3 if tight else 5, 0, 3 if tight else 5)
 
     def apply_theme(self, custom: dict | None) -> None:
         """테마가 바뀌면 홈을 다시 칠한다(개인화 중이면 틀/내용 칸, 아니면 기본 남색). 재시작 없이 즉시."""

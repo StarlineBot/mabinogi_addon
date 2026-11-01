@@ -232,47 +232,40 @@ def test_shake_shows_ring_even_with_shape_none(fx):
 from test_navigation import window  # noqa: E402,F401  (창 픽스처)
 
 
-def test_creator_only_scope(window, monkeypatch):
-    """첫 개발: 제작자에게만 공개(2026-11-01 사용자 결정). 아니면 탭·홈 칸 숨김, 설정이 켜져 있어도 돌지 않음."""
+def test_public_for_everyone(window):
+    """0.37.0 명세 변경(사용자 결정 — 0.36.x는 제작자만): 모두에게 공개. 픽스처 사용자(제작자 아님)도 탭·홈 줄이 보이고 돈다."""
     from mabinogi_addon import feature_access
     w, app = window
-    index = w._convenience_tabs.indexOf(w._cursor_scroll)
-    assert not feature_access.cursor_fx_available()  # 픽스처 사용자는 제작자가 아님
-    assert not w._convenience_tabs.isTabVisible(index) and not w.home_page.boxes['편의기능'].isVisibleTo(w.home_page)
-    w.cursor_fx.settings['enabled'] = True
+    assert feature_access.cursor_fx_available()
+    panel_tabs = w.optimization_tools.panel.tabs
+    assert panel_tabs.isTabVisible(panel_tabs.indexOf(w._cursor_scroll))
+    assert 'cursor' in w.home_page.rows and w.home_page.rows['cursor'].isVisibleTo(w.home_page)
     try:
-        w.cursor_fx._sync_timer()
-        assert not w.cursor_fx.is_enabled() and not w.cursor_fx._timer.isActive()
-        w._home_switch('cursor', False)  # 홈에서 바꿀 수 없음
-        assert w.cursor_fx.settings['enabled'] is True
-        monkeypatch.setattr(feature_access, 'is_creator', lambda: True)
-        w.settings_tab.login_changed.emit()  # 로그인 바뀌면 바로 반영
-        assert w._convenience_tabs.isTabVisible(index) and w.home_page.boxes['편의기능'].isVisibleTo(w.home_page)
+        w._home_switch('cursor', True)
         assert w.cursor_fx.is_enabled() and w.cursor_fx._timer.isActive()
     finally:
-        w.cursor_fx.settings['enabled'] = False
-        w.cursor_fx._sync_timer()
+        w.cursor_fx.update_settings(enabled=False)
 
 
-def test_tab_order_home_switch_and_tab_stay_in_sync(window, monkeypatch):
-    from mabinogi_addon import feature_access
+def test_tab_order_home_switch_and_tab_stay_in_sync(window):
     w, app = window
-    monkeypatch.setattr(feature_access, 'is_creator', lambda: True)
-    w._refresh_cursor_access()
-    # 마우스 커서 명세 1절 B안: 2단 계산기·그림대화·마우스 커서, 계산기 안 3단
-    assert [w._convenience_tabs.tabText(i) for i in range(w._convenience_tabs.count())] == ['계산기', '그림대화', '마우스 커서']
-    assert [w._calculator_tabs.tabText(i) for i in range(w._calculator_tabs.count())] == ['분배', '구슬 분배', '환전비율', '던전 입장']
+    # 0.37.0 명세 변경(사용자 결정 안 A): 편의기능 2단 한 줄(탭 이름 = 화면 제목), 마우스 커서는 최적화 2단 세 번째
+    assert [w._convenience_tabs.tabText(i) for i in range(w._convenience_tabs.count())] == [
+        '분배 계산기', '구슬 분배 계산기', '환전비율 계산기', '던전 입장 계산기', '그림대화 만들기']
+    panel_tabs = w.optimization_tools.panel.tabs
+    assert [panel_tabs.tabText(i) for i in range(panel_tabs.count())] == ['최적화', 'FPS 측정', '마우스 커서']
     try:
         w._home_switch('cursor', True)  # 홈 스위치 → 화면 스위치·설정
         assert w.cursor_tab.switch.isChecked() and w.cursor_fx.is_enabled()
         assert clean_settings(config.load_cursor_fx())['enabled'] is True
         assert w._home_state()['rows']['cursor'][2] is True
+        assert not w.optimization_tools._optimization_on()  # 최적화 시작과 무관하게 켜짐
         w.cursor_tab.switch.setChecked(False)  # 화면 스위치 → 홈 줄
         assert not w.cursor_fx.is_enabled() and w._home_state()['rows']['cursor'] == ('꺼짐', 'muted', False)
-        w._home_open_feature('cursor')  # › → 편의기능 › 마우스 커서
+        w._home_open_feature('cursor')  # › → 최적화 › 마우스 커서
         app.processEvents()
-        assert w._tabs.currentWidget() is w._convenience_tabs
-        assert w._convenience_tabs.currentWidget() is w._cursor_scroll
+        assert w._tabs.currentWidget() is w.optimization_tools.panel
+        assert panel_tabs.currentWidget() is w._cursor_scroll
     finally:
         w.cursor_fx.update_settings(enabled=False)
 
@@ -443,3 +436,129 @@ def test_precise_timer_and_lag_log(fx, monkeypatch, caplog):
         f.tick()
     lines = [r.getMessage() for r in caplog.records if "마우스 커서 틱" in r.getMessage()]
     assert lines and "늦은 틱(>33ms)" in lines[0] and "최대 간격 50ms" in lines[0]
+
+
+
+# --- 0.37.0 A: 옛 Windows에서 캡처 제외를 걸지 않음 ---
+
+
+@pytest.mark.parametrize("available", [True, False])
+def test_exclude_from_capture_only_when_supported(monkeypatch, available):
+    import sys
+    import types
+    from mabinogi_addon.system import capture_exclusion, cursor as cursor_sys
+    calls = []
+    monkeypatch.setattr(capture_exclusion, "available", lambda: available)
+    fake_ctypes = types.SimpleNamespace(windll=types.SimpleNamespace(user32=types.SimpleNamespace(
+        SetWindowDisplayAffinity=lambda hwnd, value: calls.append(value) or 1)))
+    monkeypatch.setitem(sys.modules, "ctypes", fake_ctypes)
+    widget = types.SimpleNamespace(winId=lambda: 123)
+    assert cursor_sys.exclude_from_capture(widget) is available
+    assert calls == ([0x11] if available else [])  # 2004 미만은 0x11이 WDA_MONITOR(검은 상자) — 걸지 않음
+
+
+# --- 0.37.0 B·C: 반짝이 흩뿌림·불꽃 ---
+
+from mabinogi_addon.cursor_fx import (  # noqa: E402
+    FIRE_LIMIT, FIRE_STOPS, SPARKLE_LIMIT, Particles, fire_alpha, fire_color, fire_stops, particle_bounds,
+)
+
+
+def _feed_particles(kind, seconds, seed=1, still_after=None):
+    parts = Particles(kind, seed=seed)
+    t = 0.0
+    while t < seconds:
+        if still_after is None or t < still_after:
+            parts.spawn(t, 400 + t * 600, 300)
+        t += 1 / 60
+    return parts, t
+
+
+@pytest.mark.parametrize("kind,limit,life", [("sparkle", SPARKLE_LIMIT, 0.8), ("fire", FIRE_LIMIT, 0.6)])
+def test_particles_cap_and_vanish_when_stopped(kind, limit, life):
+    parts, t = _feed_particles(kind, 3.0)
+    assert 0 < len(parts.alive(t)) <= limit  # 최대 개수 유지
+    parts, t = _feed_particles(kind, 3.0, still_after=1.0)
+    assert parts.alive(1.0 + life + 0.01) == [] and not parts.active(1.0 + life + 0.01)  # 멈추면 수명 뒤 0
+
+
+def test_same_seed_same_result():
+    a, t = _feed_particles("fire", 1.0, seed=5)
+    b, _ = _feed_particles("fire", 1.0, seed=5)
+    assert a.alive(t) == b.alive(t)
+    c, _ = _feed_particles("fire", 1.0, seed=6)
+    assert a.alive(t) != c.alive(t)
+
+
+def test_sparkle_falls_with_gravity_and_spawn_counts():
+    parts = Particles("sparkle", seed=3)
+    parts.spawn(0.0, 100, 100)
+    n = len(parts.alive(0.0))
+    assert 1 <= n <= 2
+    first = parts.alive(0.0)[0]
+    later = parts.alive(0.4)[0]
+    vy0 = (parts.alive(0.01)[0].y - first.y) / 0.01
+    assert -230 <= vy0 <= 90 and later.y > first.y + vy0 * 0.4  # 중력으로 아래로 휨
+    fire = Particles("fire", seed=3)
+    fire.spawn(0.0, 100, 100)
+    pts = fire.alive(0.0)
+    assert len(pts) == 5 and all(abs(p.x - 100) <= 4 and abs(p.y - 100) <= 4 for p in pts)
+
+
+def test_fire_color_stops_and_alpha():
+    assert fire_color(0.0) == (255, 255, 255)
+    assert fire_color(0.3) == FIRE_STOPS[2][1] and fire_color(0.55) == FIRE_STOPS[3][1]
+    assert fire_color(1.0) == FIRE_STOPS[-1][1]
+    assert fire_alpha(0) == pytest.approx(0.7) and fire_alpha(1) == 0
+    stops = fire_stops("#1DD3B0")
+    assert stops[0][1] == (255, 255, 255) and stops[2] == (0.25, (0x1D, 0xD3, 0xB0))
+    assert sum(stops[-1][1]) < sum(stops[2][1])  # 끝은 어둡게
+    assert fire_stops(None) is FIRE_STOPS
+
+
+def test_clean_settings_accepts_fire():
+    assert clean_settings({"tail": "fire"})["tail"] == "fire"
+    assert clean_settings({"tail": "plasma"})["tail"] == "none"
+
+
+def test_particle_tail_window_hides_after_stop(fx):
+    f, clock, pos, watcher = fx
+    f.update_settings(enabled=True, shape="none", tail="fire")
+    k = [0]
+
+    def move():
+        k[0] += 1
+        pos[0] = (400 + k[0] * 7, 300)
+    _run(f, clock, 0.5, move=move)
+    assert f._tail.isVisible() and f._tail.width() % 64 == 0
+    box = particle_bounds(f._particles.alive(clock[0]), 4)
+    assert f._tail.width() >= box[2] and f._tail.height() >= box[3]
+    _run(f, clock, 0.7)  # 멈춤: 수명(최대 0.6초) 뒤
+    assert not f._tail.isVisible()
+
+
+def test_lag_log_skips_first_tick_after_idle(fx, monkeypatch, caplog):
+    """0.37.0 QA: 멈춤(50ms)→움직임 첫 틱의 50ms 간격을 '늦은 틱'으로 세지 않는다."""
+    import logging
+    from mabinogi_addon.ui import cursor_overlay as co
+    f, clock, pos, watcher = fx
+    f.update_settings(enabled=True)
+    real = [1000.0]
+    monkeypatch.setattr(co.time, "perf_counter", lambda: real[0])
+    caplog.set_level(logging.INFO, logger=co.__name__)
+    k = [0]
+    for cycle in range(40):  # 1초 넘게 멈췄다(50ms 틱) 0.3초 움직이기를 반복 — 실제 밀림은 없음
+        for _ in range(90):  # 멈춤: 타이머 간격대로(1초 뒤 50ms로 느려짐)
+            step = f._timer.interval() / 1000
+            real[0] += step
+            clock[0] += step
+            f.tick()
+        for _ in range(18):  # 움직임: 다음 틱은 지금 타이머 간격 뒤(멈춤 뒤 첫 틱은 50ms 뒤)
+            k[0] += 1
+            pos[0] = (400 + k[0] % 40 * 9, 300)
+            step = f._timer.interval() / 1000
+            real[0] += step
+            clock[0] += step
+            f.tick()
+    lines = [r.getMessage() for r in caplog.records if "마우스 커서 틱" in r.getMessage()]
+    assert lines and all("늦은 틱(>33ms) 0(" in line for line in lines), lines

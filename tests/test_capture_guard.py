@@ -96,3 +96,52 @@ def test_boss_tab_capture_goes_through_guard(monkeypatch):
     finally:
         tab.shutdown()
         tab.close()
+
+
+def test_restore_does_not_wait_for_dwm_flush(monkeypatch):
+    """0.37.0 QA: 되돌린 뒤 DwmFlush로 화면 스레드를 막지 않는다(제외 쪽 1번만)."""
+    import ctypes
+    import os as _os
+
+    class User:
+        def __init__(self):
+            self.affinity = {}
+
+        def GetWindowThreadProcessId(self, hwnd, pid):
+            pid._obj.value = _os.getpid()
+            return 1
+
+        def IsWindowVisible(self, hwnd):
+            return True
+
+        def IsWindow(self, hwnd):
+            return True
+
+        def GetWindowRect(self, hwnd, rect):
+            r = rect._obj
+            r.left, r.top, r.right, r.bottom = 0, 0, 100, 100
+            return True
+
+        def GetWindowDisplayAffinity(self, hwnd, out):
+            out._obj.value = self.affinity.get(hwnd, 0)
+            return True
+
+        def SetWindowDisplayAffinity(self, hwnd, value):
+            self.affinity[hwnd] = value
+            return True
+
+    class Dwm:
+        flushes = 0
+
+        def DwmFlush(self):
+            Dwm.flushes += 1
+            return 0
+
+    user, dwm = User(), Dwm()
+    monkeypatch.setattr(capture_exclusion, "available", lambda: True)
+    monkeypatch.setattr(capture_exclusion, "_api", lambda: (user, dwm))
+    monkeypatch.setattr(ctypes, "byref", lambda obj: type("Ref", (), {"_obj": obj})())
+    with capture_exclusion.excluding_windows([11, 12], (10, 10, 50, 50)) as pending:
+        assert user.affinity == {11: 0x11, 12: 0x11} and Dwm.flushes == 1
+    assert user.affinity == {11: 0, 12: 0} and pending == []
+    assert Dwm.flushes == 1  # 복원 쪽 Flush 없음

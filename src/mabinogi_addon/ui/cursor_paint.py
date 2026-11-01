@@ -97,3 +97,38 @@ def paint_tail(p: QPainter, points, kind: str, color: str, size: float, opacity:
             x, y = q.x() + dx * (1 - life), q.y() + dy * (1 - life)
             p.drawLine(QPointF(x - arm, y), QPointF(x + arm, y))
             p.drawLine(QPointF(x, y - arm), QPointF(x, y + arm))
+
+
+def paint_particles(p: QPainter, particles, kind: str, color: str, opacity: float,
+                    offset: QPointF = QPointF(0, 0), multicolor: bool = False) -> None:
+    """0.37.0 조각 꼬리. sparkle: 위아래로 튀는 + 모양(깜빡임·나이에 따라 흐려지고 작아짐),
+    fire: 둥근 불티(나이에 따라 흰→노랑→주황→빨강, 가산 혼합). 색 규칙: 안 고름 = 여러 색/기본 불꽃색, 고름 = 그 색."""
+    from ..cursor_fx import fire_alpha, fire_color, fire_stops
+
+    if not particles:
+        return
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    ox, oy = offset.x(), offset.y()
+    if kind == "sparkle":
+        for q in particles:
+            life = 1.0 - q.age
+            twinkle = 0.55 + 0.45 * math.cos(q.age * 18.0 + q.index * 1.7)
+            c = QColor.fromHsvF((q.index * 0.13) % 1.0, 0.45, 1.0) if multicolor else QColor(color)
+            c.setAlphaF(max(0.0, min(1.0, opacity * life * twinkle)))
+            p.setPen(QPen(c, 1.5))
+            arm = q.radius * (0.4 + 0.6 * life) + 1
+            x, y = q.x - ox, q.y - oy
+            p.drawLine(QPointF(x - arm, y), QPointF(x + arm, y))
+            p.drawLine(QPointF(x, y - arm), QPointF(x, y + arm))
+    elif kind == "fire":
+        stops = fire_stops(None if multicolor else color)
+        p.setCompositionMode(QPainter.CompositionMode.CompositionMode_Plus)
+        p.setPen(Qt.PenStyle.NoPen)
+        for q in particles:
+            r, g, b = fire_color(q.age, stops)
+            c = QColor(r, g, b)
+            c.setAlphaF(max(0.0, min(1.0, fire_alpha(q.age) * opacity)))
+            p.setBrush(c)
+            rad = q.radius * (1.0 - 0.6 * q.age)  # 나이에 따라 40%까지
+            p.drawEllipse(QPointF(q.x - ox, q.y - oy), rad, rad)
+        p.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)

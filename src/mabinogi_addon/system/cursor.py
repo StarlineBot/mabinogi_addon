@@ -18,10 +18,11 @@ def cursor_pos() -> tuple[int, int]:
 def exclude_from_capture(widget) -> bool:
     """커서 효과 창을 화면 캡처에서 뺀다(Windows 10 2004+ `WDA_EXCLUDEFROMCAPTURE`).
     원·꼬리가 버프·디버프 판독 영역 위를 지나가도 판독 그림에 섞이지 않게 한다(진짜 커서도 캡처에 안 찍힌다).
-    다른 OS·실패 시 False(표시는 그대로)."""
-    import sys
+    2004(19041) 미만은 같은 값을 `WDA_MONITOR`로 받아 **캡처에 검은 상자**가 생기므로 걸지 않는다(0.37.0 공개 전 QA).
+    다른 OS·옛 Windows·실패 시 False(표시는 그대로)."""
+    from . import capture_exclusion
 
-    if sys.platform != "win32":
+    if not capture_exclusion.available():
         return False
     try:
         import ctypes

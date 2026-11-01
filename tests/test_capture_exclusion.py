@@ -64,7 +64,7 @@ def test_capture_restores_original_affinity_in_reverse_order_even_on_error(nativ
         assert raises
     assert native.affinity == original
     assert native.calls == [(1, 0x11), (2, 0x11), (2, 1), (1, 0)]
-    assert native.flushes == 2
+    assert native.flushes == 1  # 0.37.0 명세 변경(QA): 복원 쪽 DwmFlush 제거 — 제외 쪽 1번만
 
 
 @pytest.mark.parametrize("kind", ["foreign", "hidden", "outside"])

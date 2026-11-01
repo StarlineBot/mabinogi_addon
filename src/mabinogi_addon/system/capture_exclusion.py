@@ -117,12 +117,8 @@ def excluding_windows(handles, box):
     try:
         yield pending
     finally:
+        # 되돌린 뒤에는 DwmFlush로 기다리지 않는다(0.37.0 QA): 화면 스레드를 한 화면 주기씩 막아 커서·오버레이가
+        # 주기적으로 밀렸다. 제외 쪽 Flush는 캡처에 우리 창이 안 찍히게 하는 데 필요해서 그대로 둔다.
         for hwnd, previous in reversed(changed):
             if not _restore(user, hwnd, previous):
                 pending.append((hwnd, previous))
-        if changed:
-            try:
-                if dwm.DwmFlush() != 0:
-                    _warning()
-            except Exception:
-                _warning()

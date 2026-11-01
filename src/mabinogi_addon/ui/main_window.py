@@ -319,29 +319,24 @@ class MainWindow(QMainWindow):
         self.exchange_tab = ExchangeTab()
         self.bead_split_tab = BeadSplitTab()
         self.dungeon_cost_tab = DungeonCostTab()
-        # 편의기능 B안(마우스 커서 명세 1절): 2단 `계산기 · 그림대화`, 계산기 안 3단 4개(이름에서 '계산기' 뺌).
-        # 0.36.0에서 2단에 `마우스 커서`가 붙는다. 화면 안 제목(`분배 계산기` 등)은 그대로.
-        self._calculator_tabs = QTabWidget()
-        self._calculator_tabs.setObjectName("calculatorTabs")
-        self._calculator_tabs.addTab(_scrolled(self.distribution_tab), "분배")
-        self._calculator_tabs.addTab(_scrolled(self.bead_split_tab), "구슬 분배")
-        self._calculator_tabs.addTab(_scrolled(self.exchange_tab), "환전비율")
-        self._calculator_tabs.addTab(_scrolled(self.dungeon_cost_tab), "던전 입장")
+        # 0.37.0(사용자 결정 안 A): 편의기능 2단 한 줄 — 탭 이름 = 화면 제목, 계산기 단계(3단) 없음.
         from .sketch_tab import SketchTab
         self.sketch_tab = SketchTab()
         self._sketch_scroll = _scrolled(self.sketch_tab)
         self._convenience_tabs = QTabWidget()
         self._convenience_tabs.setObjectName("convenienceTabs")
-        self._convenience_tabs.addTab(self._calculator_tabs, "계산기")
-        self._convenience_tabs.addTab(self._sketch_scroll, "그림대화")
-        # 0.36.0 마우스 커서 표시(마우스 커서 명세): 2단 세 번째. 오버레이(CursorFx)는 창과 함께 산다.
+        for page, title in ((self.distribution_tab, "분배 계산기"), (self.bead_split_tab, "구슬 분배 계산기"),
+                            (self.exchange_tab, "환전비율 계산기"), (self.dungeon_cost_tab, "던전 입장 계산기")):
+            self._convenience_tabs.addTab(_scrolled(page), title)
+        self._convenience_tabs.addTab(self._sketch_scroll, "그림대화 만들기")
+        # 마우스 커서 표시(마우스 커서 명세): 0.37.0부터 최적화 2단 세 번째(`최적화 · FPS 측정 · 마우스 커서`), 모두에게 공개.
+        # 오버레이(CursorFx)는 창과 함께 살며 최적화 시작·종료와 무관하게 켜는 즉시 동작한다.
         from .cursor_overlay import CursorFx
         from .cursor_tab import CursorTab
         self.cursor_fx = CursorFx(self._watcher, self)
         self.cursor_tab = CursorTab(self.cursor_fx)
         self._cursor_scroll = _scrolled(self.cursor_tab)
-        self._convenience_tabs.addTab(self._cursor_scroll, "마우스 커서")
-        self.settings_tab.login_changed.connect(self._refresh_cursor_access)
+        self.optimization_tools.panel.tabs.addTab(self._cursor_scroll, "마우스 커서")
 
         tabs = QTabWidget()
         tabs.setObjectName("mainTabs")
@@ -574,9 +569,9 @@ class MainWindow(QMainWindow):
             self.blackbox_tools._open_tab()
         elif key == "keywords":
             self._tabs.setCurrentWidget(self._party_scroll)
-        elif key == "cursor" and self.cursor_fx._allowed:
-            self._tabs.setCurrentWidget(self._convenience_tabs)
-            self._convenience_tabs.setCurrentWidget(self._cursor_scroll)
+        elif key == "cursor":
+            self.optimization_tools._open_tab()
+            self.optimization_tools.panel.tabs.setCurrentWidget(self._cursor_scroll)
 
     def _home_open_region(self, key) -> None:
         """설정 필요 상자의 '영역 지정': 그 화면의 영역 지정 상자(0.27.0)로."""
@@ -613,23 +608,15 @@ class MainWindow(QMainWindow):
                 toggle.click()  # 최적화 탭 'FPS 표시'와 같은 경로
         elif key == "blackbox":
             self.blackbox_tools.set_home_enabled(on)
-        elif key == "cursor" and self.cursor_fx._allowed:
+        elif key == "cursor":
             self.cursor_tab.set_enabled(on)  # 마우스 커서 화면 '커서 표시'와 같은 값
         self.home_page.update_state(self._home_state())
 
     def _refresh_cursor_access(self) -> None:
-        """마우스 커서 표시 공개 범위(제작자). 아니면 탭·홈 칸을 숨기고 오버레이를 멈춘다(설정값은 그대로 둔다)."""
+        """마우스 커서 표시 공개 범위 반영(0.37.0부터 모두 공개 — 탭·홈 칸은 늘 보인다)."""
         from .. import feature_access
 
-        allowed = feature_access.cursor_fx_available()
-        self.cursor_fx.set_allowed(allowed)
-        index = self._convenience_tabs.indexOf(self._cursor_scroll)
-        if not allowed and self._convenience_tabs.currentIndex() == index:
-            self._convenience_tabs.setCurrentIndex(0)
-        self._convenience_tabs.setTabVisible(index, allowed)
-        home = getattr(self, "home_page", None)
-        if home is not None:
-            home.set_box_visible("편의기능", allowed)
+        self.cursor_fx.set_allowed(feature_access.cursor_fx_available())
 
     def _home_state(self) -> dict:
         """홈 상태(명세 12.2·12.3). 각 화면의 기존 상태·설정만 쓰고 새로 판독하지 않는다. 숫자(판독 값)는 넣지 않는다."""
@@ -1023,7 +1010,6 @@ class MainWindow(QMainWindow):
         _set_qss(self._tracker_tabs, sub and sub + "QTabBar::tab { padding:6px 9px; }")
         _set_qss(self._convenience_tabs, sub)
         _set_qss(self.boss_tab.pattern_tabs, _tertiary_qss(dark))  # 3단: 2단 색을 물려받지 않게
-        _set_qss(self._calculator_tabs, _tertiary_qss(dark))  # 편의기능 › 계산기 3단(보스 패턴과 같은 회색)
         _set_qss(self.optimization_tools.panel.tabs, sub)
         _set_qss(self._tabs, "" if custom else _tab_qss(dark))
         self._apply_frame_colors()

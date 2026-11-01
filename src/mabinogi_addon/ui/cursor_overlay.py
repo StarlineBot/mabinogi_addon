@@ -18,9 +18,9 @@ from PySide6.QtGui import QColor, QGuiApplication, QPainter
 from PySide6.QtWidgets import QWidget
 
 from .. import config
-from ..cursor_fx import SHAKE_SCALE, TAIL_SECONDS, ShakeDetector, Trail, bounds, clean_settings, shake_scale, sparkle_multicolor
+from ..cursor_fx import PARTICLE_KINDS, SHAKE_SCALE, TAIL_SECONDS, Particles, particle_bounds, ShakeDetector, Trail, bounds, clean_settings, shake_scale, sparkle_multicolor
 from ..system import cursor as cursor_sys
-from .cursor_paint import paint_ring, paint_scope, paint_tail
+from .cursor_paint import paint_particles, paint_ring, paint_scope, paint_tail
 
 _log = logging.getLogger(__name__)
 LAG_LOG_EVERY = 30.0  # 앱 안에서 틱이 얼마나 밀리는지 30초마다 로그(실사용 렉 원인 가르기, 0.36.1)
@@ -92,6 +92,7 @@ class CursorFx(QObject):
         self._tail_points = []
         self._tail_size = (0, 0)
         self._ring_drawn = None
+        self._particles = None
         self._timer = QTimer(self)
         # 정밀 타이머: 기본(대략) 타이머는 다른 타이머가 많은 앱 안에서 실행 시점이 크게 흔들린다(0.36.1 — 앱에서만 렉)
         self._timer.setTimerType(Qt.TimerType.PreciseTimer)
@@ -145,6 +146,8 @@ class CursorFx(QObject):
 
     def _hide_all(self) -> None:
         self._visible = False
+        if getattr(self, "_particles", None) is not None:
+            self._particles.clear()
         self._ring_drawn = None
         self._tail_size = (0, 0)
         for w in self.windows():
@@ -164,8 +167,12 @@ class CursorFx(QObject):
         다른 작업(판독 등)이 같은 화면 스레드를 막는 것, 자체 시간이 길면 그리기가 무거운 것."""
         now = time.perf_counter()
         last, self._last_tick = self._last_tick, now
+        # 직전 틱이 빠른 틱(16ms)일 때만 간격을 센다 — 멈춤(50ms)→움직임 첫 틱을 '늦은 틱'으로 세지 않게(0.37.0 QA)
+        fast_before, self._fast_before = getattr(self, "_fast_before", False), self._timer.interval() == TICK_MS
         if not self._visible or self._timer.interval() != TICK_MS:
             return
+        if not fast_before:
+            last = None
         lag = self._lag
         if self._lag_since is None:
             self._lag_since = now
@@ -247,9 +254,21 @@ class CursorFx(QObject):
                     w.hide()
         # 꼬리
         seconds = TAIL_SECONDS[s["tailLength"]]
-        if s["tail"] != "none" and self._trail.active(now, seconds):
-            points = self._trail.points(now, seconds)
-            box = bounds(points, s["size"] * 0.4 + 6)
+        particle = s["tail"] in PARTICLE_KINDS
+        if particle:
+            if self._particles is None or self._particles.kind != s["tail"]:
+                self._particles = Particles(s["tail"])
+            if moved:
+                self._particles.spawn(now, x, y)
+        live = (self._particles.active(now) if particle
+                else s["tail"] != "none" and self._trail.active(now, seconds))
+        if live:
+            if particle:
+                points = self._particles.alive(now)
+                box = particle_bounds(points, 4)
+            else:
+                points = self._trail.points(now, seconds)
+                box = bounds(points, s["size"] * 0.4 + 6)
             if box is not None:
                 self._tail_points = points
                 # 꼬리 창 크기는 64px 단위로 맞춰 꼬리가 그 단위를 넘을 때만 바꾸고, 아니면 옮기기만 한다.
@@ -307,5 +326,9 @@ class CursorFx(QObject):
 
     def _paint_tail(self, p: QPainter, w: QWidget) -> None:
         s = self.settings
+        if s["tail"] in PARTICLE_KINDS:
+            paint_particles(p, self._tail_points, s["tail"], s["color"], self._opacity(), self._tail_origin,
+                            multicolor=sparkle_multicolor(s))
+            return
         paint_tail(p, self._tail_points, s["tail"], s["color"], s["size"], self._opacity(), self._tail_origin,
                    multicolor=sparkle_multicolor(s))
