@@ -19,7 +19,8 @@ TAILS = ("none", "dots", "line", "rainbow", "sparkle")
 TAIL_SECONDS = {"short": 0.2, "normal": 0.3, "long": 0.45}
 PRESET_COLORS = ("#1DD3B0", "#FFD43B", "#FF5A5F", "#FFFFFF", "#A78BFA")  # 민트·노랑·빨강·흰색·보라
 DEFAULTS = {"enabled": False, "shape": "ring", "tail": "none", "shake": True, "color": "#FFD43B",
-            "size": 40, "tailLength": "normal", "opacity": 100}
+            "size": 40, "tailLength": "normal", "opacity": 100,
+            "colorChosen": False}  # 사용자가 색을 직접 고른 적 있는지 — 아니면 반짝이는 여러 색(0.36.0 QA)
 SIZE_RANGE = (20, 120)
 OPACITY_RANGE = (20, 100)
 SHAKE_SECONDS = 1.0  # 흔들면 원이 커졌다 돌아오는 시간
@@ -33,8 +34,9 @@ def clean_settings(raw) -> dict:
     out = dict(DEFAULTS)
     if isinstance(raw.get("enabled"), bool):
         out["enabled"] = raw["enabled"]
-    if isinstance(raw.get("shake"), bool):
-        out["shake"] = raw["shake"]
+    for key in ("shake", "colorChosen"):
+        if isinstance(raw.get(key), bool):
+            out[key] = raw[key]
     if raw.get("shape") in SHAPES:
         out["shape"] = raw["shape"]
     if raw.get("tail") in TAILS:
@@ -92,6 +94,34 @@ class Trail:
     def active(self, now: float, seconds: float) -> bool:
         """아직 그릴 꼬리가 남았는지(멈춘 뒤 다 사라지면 False → 다시 그리지 않음)."""
         return any(now - t <= seconds for t, _, _ in self._points) and len(self._points) > 1
+
+
+def smooth(points, steps: int = 5) -> list[TailPoint]:
+    """꼬리 점들을 Catmull-Rom 곡선으로 이어 점 사이를 steps개로 나눈다(나이도 같이 보간).
+    60Hz로 읽은 점을 직선으로 이으면 빠른 움직임에서 다각형처럼 각지므로 그릴 때만 곡선으로 메운다
+    (커서를 더 자주 읽지 않음). 양 끝은 끝점을 한 번 더 쓴 것으로 본다. 원래 점은 그대로 지난다."""
+    pts = list(points)
+    if len(pts) < 3 or steps <= 1:
+        return pts
+    out: list[TailPoint] = []
+    n = len(pts)
+    for i in range(n - 1):
+        p0, p1, p2 = pts[max(0, i - 1)], pts[i], pts[i + 1]
+        p3 = pts[min(n - 1, i + 2)]
+        for k in range(steps):
+            t = k / steps
+            t2, t3 = t * t, t * t * t
+            def cr(a, b, c, d):
+                return 0.5 * (2 * b + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t2 + (-a + 3 * b - 3 * c + d) * t3)
+            out.append(TailPoint(cr(p0.x, p1.x, p2.x, p3.x), cr(p0.y, p1.y, p2.y, p3.y),
+                                 p1.age + (p2.age - p1.age) * t))
+    out.append(pts[-1])
+    return out
+
+
+def sparkle_multicolor(settings: dict) -> bool:
+    """반짝이 색: 색을 직접 고르기 전(기본)이면 여러 색, 고른 뒤에는 그 색만(흰색도 흰색만)."""
+    return not settings.get("colorChosen", False)
 
 
 def bounds(points, pad: float) -> tuple[int, int, int, int] | None:

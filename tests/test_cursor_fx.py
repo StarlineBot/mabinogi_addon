@@ -8,6 +8,7 @@ import pytest
 
 from mabinogi_addon import config
 from mabinogi_addon.cursor_fx import (
+    TailPoint, smooth, sparkle_multicolor,
     DEFAULTS, SHAKE_SCALE, SHAKE_SECONDS, TAIL_SECONDS, ShakeDetector, Trail, bounds, clean_settings, shake_scale,
 )
 
@@ -15,8 +16,9 @@ from mabinogi_addon.cursor_fx import (
 
 
 def test_defaults_match_spec():
+    # 0.36.0 QA: colorChosen(색을 직접 고른 적 있는지, 기본 False — 반짝이 여러 색 규칙) 추가
     assert DEFAULTS == {"enabled": False, "shape": "ring", "tail": "none", "shake": True, "color": "#FFD43B",
-                        "size": 40, "tailLength": "normal", "opacity": 100}
+                        "size": 40, "tailLength": "normal", "opacity": 100, "colorChosen": False}
     assert clean_settings(None) == DEFAULTS
 
 
@@ -285,3 +287,78 @@ def test_idle_cursor_reads_less_often_and_wakes_on_move(fx):
     pos[0] = (450, 320)
     _run(f, clock, 0.02)
     assert f._timer.interval() == TICK_MS
+
+
+# --- 0.36.0 QA: 꼬리 곡선·반짝이 색 ---
+
+
+def _circle(speed=16.0, seconds=0.3):
+    import math
+    trail = Trail()
+    t = 0.0
+    while t <= 1.0:
+        trail.add(t, 300 + 120 * math.cos(t * speed), 200 + 70 * math.sin(t * speed))
+        t += 1 / 60
+    return trail.points(1.0, seconds)
+
+
+def _max_turn(points):
+    import math
+    worst = 0.0
+    for a, b, c in zip(points, points[1:], points[2:]):
+        h1 = math.atan2(b.y - a.y, b.x - a.x)
+        h2 = math.atan2(c.y - b.y, c.x - b.x)
+        worst = max(worst, abs((h2 - h1 + math.pi) % (2 * math.pi) - math.pi))
+    return worst
+
+
+def test_smooth_passes_through_points_and_rounds_corners():
+    raw = _circle()
+    curve = smooth(raw, 5)
+    assert len(curve) == (len(raw) - 1) * 5 + 1
+    for i, p in enumerate(raw):  # 원래 점은 그대로 지난다(나이도 같음)
+        q = curve[i * 5]
+        assert (q.x, q.y, q.age) == pytest.approx((p.x, p.y, p.age))
+    ages = [p.age for p in curve]
+    assert ages == sorted(ages, reverse=True)  # 오래된 것부터 그대로
+    assert _max_turn(curve) < _max_turn(raw) / 3  # 꺾이는 각이 훨씬 작다(빠른 원에서 다각형 → 곡선)
+    assert smooth(raw[:2]) == raw[:2] and smooth([]) == []
+
+
+def test_sparkle_color_rule_default_multi_chosen_single():
+    assert sparkle_multicolor(clean_settings({})) is True  # 기본(색을 고르기 전) = 여러 색
+    assert sparkle_multicolor(clean_settings({"color": "#FFFFFF", "colorChosen": True})) is False  # 흰색 골라도 흰색만
+    assert sparkle_multicolor(clean_settings({"color": "#FF5A5F", "colorChosen": True})) is False
+
+
+@pytest.mark.parametrize("multicolor,expect_many", [(True, True), (False, False)])
+def test_sparkle_paint_uses_one_or_many_hues(multicolor, expect_many):
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtWidgets import QApplication
+    QApplication.instance() or QApplication([])
+    import numpy as np
+    from PySide6.QtGui import QImage, QPainter
+    from mabinogi_addon.ui.cursor_paint import paint_tail
+
+    img = QImage(640, 400, QImage.Format.Format_RGB32)
+    img.fill(0)
+    p = QPainter(img)
+    paint_tail(p, _circle(), "sparkle", "#FFFFFF", 40, 1.0, multicolor=multicolor)
+    p.end()
+    arr = np.frombuffer(img.constBits(), np.uint8).reshape(400, img.bytesPerLine())[:, :640 * 4].reshape(400, 640, 4)
+    lit = arr[..., :3][arr[..., :3].max(axis=2) > 120].astype(int)
+    spread = (lit.max(axis=1) - lit.min(axis=1))  # 흰색 계열이면 채널 차이가 작다
+    assert bool(spread.max() > 60) == expect_many
+
+
+def test_choosing_color_in_tab_marks_chosen(fx):
+    from mabinogi_addon.ui.cursor_tab import CursorTab
+    f, *_ = fx
+    tab = CursorTab(f)
+    try:
+        assert f.settings["colorChosen"] is False
+        tab.swatches[3].click()  # 흰색
+        assert f.settings["color"] == "#FFFFFF" and f.settings["colorChosen"] is True
+        assert clean_settings(config.load_cursor_fx())["colorChosen"] is True
+    finally:
+        tab.close()

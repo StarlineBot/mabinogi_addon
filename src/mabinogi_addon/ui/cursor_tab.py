@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..cursor_fx import PRESET_COLORS, SHAPES, TAIL_SECONDS, TAILS, Trail, shake_scale
+from ..cursor_fx import PRESET_COLORS, SHAPES, TAIL_SECONDS, TAILS, Trail, shake_scale, sparkle_multicolor
 from .cursor_paint import paint_ring, paint_scope, paint_tail
 from .help_dialog import help_button
 from .palette import color
@@ -143,7 +143,7 @@ class CursorPreview(QWidget):
         opacity = s["opacity"] / 100
         pos = self._path(self._t)
         points = self._trail.points(self._t, TAIL_SECONDS[s["tailLength"]])
-        paint_tail(p, points, s["tail"], s["color"], s["size"], opacity)
+        paint_tail(p, points, s["tail"], s["color"], s["size"], opacity, multicolor=sparkle_multicolor(s))
         scale = shake_scale(self._t - self._shake_at) if s["shake"] else 1.0
         if s["shape"] == "lines":
             c = QColor(s["color"])
@@ -216,7 +216,7 @@ class CursorTab(QWidget):
         self.swatches: list[_Swatch] = []
         for hex_color in PRESET_COLORS:
             sw = _Swatch(hex_color)
-            sw.clicked.connect(lambda _=False, h=hex_color: self._change(color=h))
+            sw.clicked.connect(lambda _=False, h=hex_color: self._change(color=h, colorChosen=True))
             self.swatches.append(sw)
             colors.addWidget(sw)
         self.custom_color = QPushButton("+")
@@ -295,7 +295,9 @@ class CursorTab(QWidget):
         self.custom_color.setStyleSheet(
             f"QPushButton {{ background:{s['color']}; border:3px solid {color('accent')}; border-radius:5px; }}"
             if custom else "")
-        self.color_note.setText("무지개 선은 색 설정을 쓰지 않아요." if s["tail"] == "rainbow" else "")
+        self.color_note.setText("무지개 선은 색 설정을 쓰지 않아요." if s["tail"] == "rainbow"
+                                else "색을 고르기 전에는 반짝이가 여러 색으로 보여요." if s["tail"] == "sparkle" and sparkle_multicolor(s)
+                                else "")
         self.size.setEnabled(s["shape"] in ("ring", "scope") or s["shake"] or s["tail"] != "none")
         self.length.setEnabled(s["tail"] != "none")
         on = s["enabled"]
@@ -325,4 +327,4 @@ class CursorTab(QWidget):
 
         dlg = ColorPickerDialog("커서 색", self.settings["color"], self)
         if dlg.exec() == ColorPickerDialog.DialogCode.Accepted:
-            self._change(color=dlg.value())
+            self._change(color=dlg.value(), colorChosen=True)

@@ -7,7 +7,7 @@ import math
 from PySide6.QtCore import QPointF, Qt
 from PySide6.QtGui import QColor, QPainter, QPen
 
-from ..cursor_fx import SPARKLE_LIMIT, sparkle_offsets
+from ..cursor_fx import SPARKLE_LIMIT, smooth, sparkle_offsets
 
 
 def _color(hex_color: str, alpha: float) -> QColor:
@@ -40,11 +40,14 @@ def paint_scope(p: QPainter, center: QPointF, size: float, color: str, opacity: 
 
 
 def paint_tail(p: QPainter, points, kind: str, color: str, size: float, opacity: float,
-               offset: QPointF = QPointF(0, 0)) -> None:
-    """꼬리. points: cursor_fx.TailPoint(오래된 것부터), offset: 창 왼쪽 위의 화면 좌표(빼서 창 안 좌표로)."""
+               offset: QPointF = QPointF(0, 0), multicolor: bool = False) -> None:
+    """꼬리. points: cursor_fx.TailPoint(오래된 것부터), offset: 창 왼쪽 위의 화면 좌표(빼서 창 안 좌표로).
+    multicolor: 반짝이를 여러 색으로(색을 직접 고르기 전 기본). 선·무지개 선·점은 곡선으로 메운 점을 쓴다."""
     if len(points) < 2 or kind == "none":
         return
     p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    if kind in ("line", "rainbow", "dots"):
+        points = smooth(points)
     pts = [(QPointF(pt.x - offset.x(), pt.y - offset.y()), 1.0 - pt.age) for pt in points]
     base = max(3.0, size * 0.16)
     if kind == "dots":
@@ -59,20 +62,35 @@ def paint_tail(p: QPainter, points, kind: str, color: str, size: float, opacity:
             r = base * (0.35 + 0.65 * life)
             p.drawEllipse(q, r, r)
     elif kind in ("line", "rainbow"):
+        # 가운데 조각은 평평한 끝(FlatCap) — 짧은 조각마다 둥근 끝이면 반투명 겹침이 구슬처럼 보인다.
+        # 머리(가장 최근) 끝만 둥근 점으로 마무리한다.
+        # 점 몇 개씩 한 경로(같은 굵기·색)로 그어 이음매를 줄인다 — 조각마다 끊으면 반투명 겹침이 구슬처럼 보임.
         n = len(pts)
-        for i in range(1, n):
-            (a, _), (b, life) = pts[i - 1], pts[i]
-            c = QColor.fromHsvF((i / n * 0.8) % 1.0, 0.9, 1.0) if kind == "rainbow" else QColor(color)
+        group = 6
+        for start in range(0, n - 1, group):
+            chunk = pts[start:min(n, start + group + 1)]  # 다음 묶음과 끝점 하나를 같이 써서 끊김 없이
+            mid = start + len(chunk) / 2
+            life = sum(l for _, l in chunk) / len(chunk)
+            c = QColor.fromHsvF((mid / n * 0.8) % 1.0, 0.9, 1.0) if kind == "rainbow" else QColor(color)
             c.setAlphaF(max(0.0, min(1.0, opacity * life)))
             pen = QPen(c, max(1.0, base * 1.2 * life))
-            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+            pen.setCapStyle(Qt.PenCapStyle.FlatCap)
+            pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
             p.setPen(pen)
-            p.drawLine(a, b)
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.drawPolyline([q for q, _ in chunk])
+        head, life = pts[-1]
+        c = QColor.fromHsvF(0.8 * (n - 1) / n % 1.0, 0.9, 1.0) if kind == "rainbow" else QColor(color)
+        c.setAlphaF(max(0.0, min(1.0, opacity * life)))
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(c)
+        r = max(1.0, base * 1.2 * life) / 2
+        p.drawEllipse(head, r, r)
     elif kind == "sparkle":
         step = max(1, len(pts) // SPARKLE_LIMIT)
         for i, (q, life) in enumerate(pts[::step][-SPARKLE_LIMIT:]):
             dx, dy = sparkle_offsets(i, size)
-            c = QColor.fromHsvF((i * 0.13) % 1.0, 0.45, 1.0) if color.upper() == "#FFFFFF" else QColor(color)
+            c = QColor.fromHsvF((i * 0.13) % 1.0, 0.45, 1.0) if multicolor else QColor(color)
             c.setAlphaF(max(0.0, min(1.0, opacity * life)))
             p.setPen(QPen(c, 1.5))
             arm = 2 + 3 * life

@@ -17,7 +17,7 @@ from PySide6.QtGui import QColor, QGuiApplication, QPainter
 from PySide6.QtWidgets import QWidget
 
 from .. import config
-from ..cursor_fx import TAIL_SECONDS, ShakeDetector, Trail, bounds, clean_settings, shake_scale
+from ..cursor_fx import TAIL_SECONDS, ShakeDetector, Trail, bounds, clean_settings, shake_scale, sparkle_multicolor
 from ..system import cursor as cursor_sys
 from .cursor_paint import paint_ring, paint_scope, paint_tail
 
@@ -232,4 +232,5 @@ class CursorFx(QObject):
 
     def _paint_tail(self, p: QPainter, w: QWidget) -> None:
         s = self.settings
-        paint_tail(p, self._tail_points, s["tail"], s["color"], s["size"], self._opacity(), self._tail_origin)
+        paint_tail(p, self._tail_points, s["tail"], s["color"], s["size"], self._opacity(), self._tail_origin,
+                   multicolor=sparkle_multicolor(s))
