@@ -33,6 +33,8 @@
   `folder_label`이 전체 경로를 줄이지 않음. 35~45자 한글 경로는 정상. 게임 실제 등록(목록 표시·보내기)은 사용자 확인 필요.
   전체 3675·release checks 0.35.0 1745 passed. **보류 2건**: ① `packaging/release_checks.json`에 `tests/test_sketch_chat.py`(그림대화 30개) 없음 — 배포 검증이 새 기능을 안 돌림,
   ② 위 긴 경로 잘림. 둘 다 작은 수정.
+  → **QA c8ca5cc 통과(2026-11-01)**: release checks에 test_sketch_chat 포함(0.35.0 1776 passed). 75자·120자 경로에서 탭 790·[변경] 창 안, 경로 가운데 '…'·툴팁 전체(렌더).
+  원격 v0.35.0 태그 없음 → **0.35.0 배포 가능**. 그림대화 게임 등록은 배포 후 사용자 확인.
   → **QA 보류 수정(2026-11-01, 0.35.0 그대로)**: ① release_checks.json·`test_release_checks.py` 기대값에 `tests/test_sketch_chat.py` 추가.
   release checks 0.35.0 1776 passed(그림대화 31개 포함). ② `folder_label` = 가운데 줄임(…) 라벨(툴팁 전체 경로, 가로 Ignored·최소 폭 0) — 긴 경로 탭 최소 폭 1606 → 643, 회귀 `test_long_save_folder_does_not_widen_tab`(120자, 최소 폭 ≤790·[변경]·저장 버튼 창 안).
 - **0.35.0 그림대화 만들기 + 편의기능 탭 재배치(B안 1절) (2026-11-01 사용자 결정 '추천대로' — 마우스 커서·게임 창 기준 영역은 0.36.0)** — 로컬 검증, 게임 확인 대기.
