@@ -171,6 +171,36 @@ def _image_from_mime(mime) -> QImage | None:
     return None
 
 
+class _ElidedLabel(QLabel):
+    """전체 글자는 툴팁으로, 화면에는 칸 폭만큼 가운데를 …로 줄여 보여주는 라벨. 최소 폭이 글자 길이를 따르지 않는다."""
+
+    def __init__(self):
+        super().__init__()
+        self._full = ""
+        self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        self.setMinimumWidth(0)
+
+    def set_full_text(self, text: str) -> None:
+        self._full = text
+        self.setToolTip(text)
+        self._elide()
+
+    def full_text(self) -> str:
+        return self._full
+
+    def _elide(self) -> None:
+        super().setText(self.fontMetrics().elidedText(self._full, Qt.TextElideMode.ElideMiddle, max(0, self.width())))
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._elide()
+
+    def minimumSizeHint(self):
+        hint = super().minimumSizeHint()
+        hint.setWidth(0)
+        return hint
+
+
 class _Slot(QPushButton):
     """색 칸. 한 번 누르면 고르기, 두 번 누르면 색 바꾸기 창."""
 
@@ -321,8 +351,7 @@ class SketchTab(QWidget):
         g.addWidget(self.signature_label)
         row = QHBoxLayout()
         row.addWidget(QLabel("저장 위치"))
-        self.folder_label = QLabel()
-        self.folder_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self.folder_label = _ElidedLabel()  # 긴 경로는 가운데를 …로 줄이고 툴팁에 전체 경로(탭 폭을 넓히지 않게)
         row.addWidget(self.folder_label, 1)
         self.folder_btn = QPushButton("변경")
         self.folder_btn.clicked.connect(self.change_folder)
@@ -531,7 +560,7 @@ class SketchTab(QWidget):
     # --- 저장 ---
     def refresh_signature(self) -> None:
         folder = sketch_dir()
-        self.folder_label.setText(_display_dir(folder))
+        self.folder_label.set_full_text(_display_dir(folder))
         self.signature = read_signature_file(folder / RECENT_NAME)
         if self.signature is None:
             self.signature_label.setText(f"서명  <span style='color:{color('muted')}'>{NO_SIGNATURE}</span>")

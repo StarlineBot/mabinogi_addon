@@ -302,3 +302,26 @@ def test_import_overwrites_canvas_and_is_undoable(tab):
     assert t.palette_combo.currentData() == "gray"
     t.undo()
     assert (t.canvas.pixels == BACKGROUND).all()
+
+
+def test_long_save_folder_does_not_widen_tab(tab, monkeypatch, tmp_path):
+    """QA 0.35.0: 바꾼 저장 위치(긴 경로)를 그대로 넣어 탭 최소 폭이 930이 되고 오른쪽(실제 크기·[변경])이 잘렸다."""
+    from PySide6.QtWidgets import QApplication
+    from mabinogi_addon import config
+
+    t, _ = tab
+    long_dir = tmp_path / ("아주긴폴더이름" * 20)[:120]
+    assert len(str(long_dir)) >= 120
+    config.save_sketch_dir(str(long_dir))
+    t.refresh_signature()
+    assert t.folder_label.full_text() == str(long_dir) and t.folder_label.toolTip() == str(long_dir)
+    assert t.minimumSizeHint().width() <= 790
+    t.resize(790, 900)
+    t.show()
+    QApplication.processEvents()
+    btn = t.folder_btn.geometry()
+    btn.moveTopLeft(t.folder_btn.mapTo(t, btn.topLeft() - btn.topLeft()))
+    assert t.rect().contains(btn)
+    assert t.save_btn.mapTo(t, t.save_btn.rect().bottomRight()).x() <= t.width()
+    shown = t.folder_label.text()
+    assert "…" in shown and len(shown) < len(str(long_dir))

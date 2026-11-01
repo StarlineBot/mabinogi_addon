@@ -33,6 +33,8 @@
   `folder_label`이 전체 경로를 줄이지 않음. 35~45자 한글 경로는 정상. 게임 실제 등록(목록 표시·보내기)은 사용자 확인 필요.
   전체 3675·release checks 0.35.0 1745 passed. **보류 2건**: ① `packaging/release_checks.json`에 `tests/test_sketch_chat.py`(그림대화 30개) 없음 — 배포 검증이 새 기능을 안 돌림,
   ② 위 긴 경로 잘림. 둘 다 작은 수정.
+  → **QA 보류 수정(2026-11-01, 0.35.0 그대로)**: ① release_checks.json·`test_release_checks.py` 기대값에 `tests/test_sketch_chat.py` 추가.
+  release checks 0.35.0 1776 passed(그림대화 31개 포함). ② `folder_label` = 가운데 줄임(…) 라벨(툴팁 전체 경로, 가로 Ignored·최소 폭 0) — 긴 경로 탭 최소 폭 1606 → 643, 회귀 `test_long_save_folder_does_not_widen_tab`(120자, 최소 폭 ≤790·[변경]·저장 버튼 창 안).
 - **0.35.0 그림대화 만들기 + 편의기능 탭 재배치(B안 1절) (2026-11-01 사용자 결정 '추천대로' — 마우스 커서·게임 창 기준 영역은 0.36.0)** — 로컬 검증, 게임 확인 대기.
   [그림대화 명세](sketch-chat-spec.md): `sketch/`(순수: 2비트 PNG 쓰기·서명 바이트 복사·이름 규칙·캔버스·4색 변환) + `ui/sketch_tab.py`·`ui/sketch_import_dialog.py`.
   편의기능 2단 `계산기 · 그림대화`, 계산기 안 3단 `분배 · 구슬 분배 · 환전비율 · 던전 입장`(회색 `_tertiary_qss`). 3배 표시는 창 폭에 맞춰 약 2.9배(가로 스크롤 없음), 4배 이상은 가로 스크롤.
