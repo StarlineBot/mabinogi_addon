@@ -254,6 +254,7 @@
   release checks 0.31.2 1613 passed, 보스·내비게이션 44 passed. 원격 v0.31.2 태그 없음 → 배포 번호 0.31.2.
   **v0.31.2 게시 완료**: [#164](https://github.com/StarlineBot/mabinogi_addon/actions/runs/41172883755)·게시 [#244](https://github.com/StarlineBot/mabinogi_addon/actions/runs/41173754959) 성공,
   태그 `v0.31.2` → 624a3e9(candidate source_sha·지문 `3b8ad062…` 일치). 공개 version.json 0.31.2(Release 자산과 동일)·exe 163,867,801바이트·sha256 `5ac7c667…08dabaa1e` 후보·공개 URL 일치. 1080 창 모드 실화면 확인 대기.
+- **보류(2026-11-01 사용자 결정): 게임 창 기준 영역** — 요청 없음·이관 위험이 모든 기존 사용자에게 걸림. 재개 조건·QA 위험 목록은 [명세 7절](window-relative-regions-spec.md). 0.36.0은 마우스 커서만.
 - **개발 대상(2026-10-31 사용자 결정, 0.36.0 — 2026-11-01 사용자 결정 '좌표를 다음 버전으로', 마우스 커서와 같은 번호): 판독 영역 게임 창 기준 저장(창 모드 창 이동 대응).** [명세](window-relative-regions-spec.md) — QA 요청 A안 + QA 제안.
   → **QA 사전 검토(2026-11-01, 사용자 질문)**: 방향은 문제없음. 명세에 없는 위험 4가지 — ① 저장 영역은 **논리 좌표**(`ui/dpi` — 캡처 직전 `to_physical`), `ClientToScreen`은 물리 →
   배율 125·150%에서 그대로 빼면 어긋남(이관·저장 모두 물리로 바꾼 뒤 계산, dpr 1.5 테스트 필수). ② 캡처 영역은 시작 때 고정(`create_live_source(Region)`·`RegionView._region`) —
