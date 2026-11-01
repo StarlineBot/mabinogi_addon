@@ -70,13 +70,23 @@ def test_shared_headers_wrap_without_losing_controls_or_saved_state(window, them
     before = deepcopy(config._read_local_config())
     try:
         pages = [(0, i) for i in range(w._tracker_tabs.count())]
-        pages += [(2, i) for i in range(w._convenience_tabs.count())] + [(1, 0)]
+        # 0.35.0 편의기능 B안(마우스 커서 명세 1절): 계산기 4개는 3단(_calculator_tabs) 안, 2단 두 번째는 그림대화
+        pages += [(2, ('calc', i)) for i in range(w._calculator_tabs.count())] + [(2, ('sketch', 1)), (1, 0)]
         for main, sub in pages:
             w._tabs.setCurrentIndex(main)
-            if main != 1:
-                (w._tracker_tabs if main == 0 else w._convenience_tabs).setCurrentIndex(sub)
+            if main == 0:
+                w._tracker_tabs.setCurrentIndex(sub)
+            elif main == 2:
+                w._convenience_tabs.setCurrentIndex(0 if sub[0] == 'calc' else 1)
+                if sub[0] == 'calc':
+                    w._calculator_tabs.setCurrentIndex(sub[1])
             app.processEvents()
-            scroll = w._tabs.widget(1) if main == 1 else (w._tracker_tabs if main == 0 else w._convenience_tabs).currentWidget()
+            if main == 1:
+                scroll = w._tabs.widget(1)
+            elif main == 0:
+                scroll = w._tracker_tabs.currentWidget()
+            else:
+                scroll = w._calculator_tabs.currentWidget() if sub[0] == 'calc' else w._convenience_tabs.currentWidget()
             headers = [h for h in scroll.widget().findChildren(FeatureHeader) if h.isVisible()]
             assert headers, (main, sub)
             for header in headers:

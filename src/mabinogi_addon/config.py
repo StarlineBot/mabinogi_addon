@@ -1596,3 +1596,23 @@ def save_blackbox_preference(key, value, path: Path = LOCAL_CONFIG_PATH) -> None
         section[key] = value
     data['blackbox'] = section
     _write_local_config(data, path)
+
+
+def load_sketch_dir(path: Path = LOCAL_CONFIG_PATH) -> str | None:
+    """그림대화 저장 위치(사용자가 바꾼 경우만). 없으면 None → 문서\\마비노기\\그림대화."""
+    sec = _read_local_config(path).get("sketch")
+    value = sec.get("dir") if isinstance(sec, dict) else None
+    return value if isinstance(value, str) and value.strip() else None
+
+
+def save_sketch_dir(folder: str | None, path: Path = LOCAL_CONFIG_PATH) -> None:
+    data = _read_local_config(path)
+    sec = data.get("sketch")
+    if not isinstance(sec, dict):
+        sec = {}
+    if folder:
+        sec["dir"] = str(folder)
+    else:
+        sec.pop("dir", None)
+    data["sketch"] = sec
+    _write_local_config(data, path)

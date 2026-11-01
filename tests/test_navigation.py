@@ -42,7 +42,9 @@ def test_structure_and_default_editor_space(window):
     # 0.16.0: 로그인 사용자(픽스처)는 블랙박스 탭, 0.22.0(13.15): 최적화 탭도 공개. 0.22.1: 순서 최적화 · 블랙박스(사용자 결정)
     assert [w._tabs.tabText(i) for i in range(w._tabs.count())] == ['전투 보조','파티 모집','편의기능','최적화','블랙박스','설정']
     assert [w._tracker_tabs.tabText(i) for i in range(w._tracker_tabs.count())] == LABELS
-    assert [w._convenience_tabs.tabText(i) for i in range(w._convenience_tabs.count())] == ['분배 계산기','구슬 분배 계산기','환전비율 계산기','던전 입장 계산기']
+    # 0.35.0 명세 변경(마우스 커서 명세 1절 B안): 2단 계산기·그림대화, 계산기 안 3단(이름에서 '계산기' 뺌)
+    assert [w._convenience_tabs.tabText(i) for i in range(w._convenience_tabs.count())] == ['계산기','그림대화']
+    assert [w._calculator_tabs.tabText(i) for i in range(w._calculator_tabs.count())] == ['분배','구슬 분배','환전비율','던전 입장']
     bar = w._tracker_tabs.tabBar()
     assert all(bar.rect().contains(bar.tabRect(i)) for i in range(8))
     assert w._combat_pages['tuarim'] is w._combat_pages['dorcha']
@@ -102,7 +104,7 @@ def test_selection_drives_only_the_visible_editing_feature(window, monkeypatch):
 def test_tour_both_directions_and_approved_return(window, from_guide, finish):
     w, app = window
     w._open_setup_feature('dorcha')
-    w._convenience_tabs.setCurrentIndex(2)
+    w._convenience_tabs.setCurrentIndex(1)  # 0.35.0 편의기능 B안(마우스 커서 명세 1절): 2단 계산기·그림대화 — 예전 3번째 계산기 탭 대신 그림대화(1)
     w._tabs.setCurrentIndex(2)
     before = deepcopy(config._read_local_config())
     paused = w._paused
@@ -136,7 +138,7 @@ def test_tour_both_directions_and_approved_return(window, from_guide, finish):
         assert w._tracker_tabs.currentWidget() is w._combat_pages['buff']
     else:
         assert w._tabs.currentWidget() is w._convenience_tabs
-        assert w._convenience_tabs.currentIndex() == 2
+        assert w._convenience_tabs.currentIndex() == 1  # 0.35.0 편의기능 B안(마우스 커서 명세 1절): 2단 계산기·그림대화 — 예전 3번째 계산기 탭 대신 그림대화(1)
         assert w._tracker_tabs.currentWidget() is w._combat_pages['dorcha']
     after = config._read_local_config()
     before.setdefault('general', {})['tourShown'] = True

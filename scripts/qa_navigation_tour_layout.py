@@ -82,7 +82,7 @@ def test_seeded_navigation_and_tour(area, large_font, finish, monkeypatch, tmp_p
         assert set(window.findChildren(QTimer)) == timers
         assert config._read_local_config() == before
         window._tabs.setCurrentIndex(2)
-        window._convenience_tabs.setCurrentIndex(2)
+        window._convenience_tabs.setCurrentIndex(1)  # 0.35.0 편의기능 B안(마우스 커서 명세 1절): 2단 계산기·그림대화 — 예전 3번째 계산기 탭 대신 그림대화(1)
         window._run_tour()
         tour = window._tour
         for index in list(range(7)) + list(reversed(range(7))):
@@ -125,7 +125,7 @@ def test_seeded_navigation_and_tour(area, large_font, finish, monkeypatch, tmp_p
         app.processEvents()
         assert window._tour is None
         assert window._tabs.currentWidget() is window._convenience_tabs
-        assert window._convenience_tabs.currentIndex() == 2
+        assert window._convenience_tabs.currentIndex() == 1  # 0.35.0 편의기능 B안(마우스 커서 명세 1절): 2단 계산기·그림대화 — 예전 3번째 계산기 탭 대신 그림대화(1)
         assert window._tracker_tabs.currentWidget() is window._combat_pages["memo"]
         assert window._paused
         assert config._read_local_config() == before

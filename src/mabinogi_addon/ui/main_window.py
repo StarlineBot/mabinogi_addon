@@ -318,13 +318,22 @@ class MainWindow(QMainWindow):
         self.distribution_tab = DistributionTab()
         self.exchange_tab = ExchangeTab()
         self.bead_split_tab = BeadSplitTab()
+        self.dungeon_cost_tab = DungeonCostTab()
+        # 편의기능 B안(마우스 커서 명세 1절): 2단 `계산기 · 그림대화`, 계산기 안 3단 4개(이름에서 '계산기' 뺌).
+        # 0.36.0에서 2단에 `마우스 커서`가 붙는다. 화면 안 제목(`분배 계산기` 등)은 그대로.
+        self._calculator_tabs = QTabWidget()
+        self._calculator_tabs.setObjectName("calculatorTabs")
+        self._calculator_tabs.addTab(_scrolled(self.distribution_tab), "분배")
+        self._calculator_tabs.addTab(_scrolled(self.bead_split_tab), "구슬 분배")
+        self._calculator_tabs.addTab(_scrolled(self.exchange_tab), "환전비율")
+        self._calculator_tabs.addTab(_scrolled(self.dungeon_cost_tab), "던전 입장")
+        from .sketch_tab import SketchTab
+        self.sketch_tab = SketchTab()
+        self._sketch_scroll = _scrolled(self.sketch_tab)
         self._convenience_tabs = QTabWidget()
         self._convenience_tabs.setObjectName("convenienceTabs")
-        self._convenience_tabs.addTab(_scrolled(self.distribution_tab), "분배 계산기")
-        self._convenience_tabs.addTab(_scrolled(self.bead_split_tab), "구슬 분배 계산기")
-        self._convenience_tabs.addTab(_scrolled(self.exchange_tab), "환전비율 계산기")
-        self.dungeon_cost_tab = DungeonCostTab()
-        self._convenience_tabs.addTab(_scrolled(self.dungeon_cost_tab), "던전 입장 계산기")
+        self._convenience_tabs.addTab(self._calculator_tabs, "계산기")
+        self._convenience_tabs.addTab(self._sketch_scroll, "그림대화")
 
         tabs = QTabWidget()
         tabs.setObjectName("mainTabs")
@@ -983,6 +992,7 @@ class MainWindow(QMainWindow):
         _set_qss(self._tracker_tabs, sub and sub + "QTabBar::tab { padding:6px 9px; }")
         _set_qss(self._convenience_tabs, sub)
         _set_qss(self.boss_tab.pattern_tabs, _tertiary_qss(dark))  # 3단: 2단 색을 물려받지 않게
+        _set_qss(self._calculator_tabs, _tertiary_qss(dark))  # 편의기능 › 계산기 3단(보스 패턴과 같은 회색)
         _set_qss(self.optimization_tools.panel.tabs, sub)
         _set_qss(self._tabs, "" if custom else _tab_qss(dark))
         self._apply_frame_colors()
