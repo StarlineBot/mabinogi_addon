@@ -26,6 +26,10 @@
 
 ## 열린 문제
 
+- **Confirmed(2026-11-01 사용자 질문: 보스 체력바 위에 단축바 오버레이를 두면 읽나)**: 못 읽음(가린 동안). 우리 오버레이 창은 화면 캡처에 그대로 찍힘 —
+  캡처 제외(`WDA_EXCLUDEFROMCAPTURE`)는 마우스 커서 효과 창(상시)과 도르카 판독(`dorcha_tab._grab_tracking_rect` — 판독 영역과 겹친 우리 창만 잡는 동안 제외)뿐.
+  보스 탭은 `_grab_rect`로 그냥 캡처 → 겹친 오버레이 픽셀을 읽어 이름·HP 실패(보스 있음 판단은 약 1.8초 유예). 단축바 프리셋은 화면 아래 16% 위로 올려 기본 배치는 안 가림(`skillbar_tab._center_base_y`).
+  개선안: 보스 바 판독도 도르카와 같은 `capture_exclusion.excluding_windows` 적용(Windows 10 2004+).
 - **Confirmed(2026-11-01 사용자: 단축바 이동이 격자로 안 됨)**: 다른 오버레이(버프·디버프·메모·미러·도르카·체력바·패턴 등)는 끌 때 `ui/grid` 격자 맞춤(`grid.enabled`·`snap`·`show_guide`)을 쓰는데,
   단축바 묶음 창 `ui/skillbar_mirror.ChunkOverlay`의 `mousePressEvent/mouseMoveEvent/mouseReleaseEvent`에만 없음(2026-10-11 v0.4.40 첫 구현 그대로). 같은 코드 추가로 해결.
 - **QA 0.36.0 마우스 커서(3cf3d69·f53e533·0388c02, 2026-11-01)**: 통과 — 전체 3791·release checks 1891 passed(test_cursor_fx 포함). 커서 위치는 읽기만(QCursor.pos),
