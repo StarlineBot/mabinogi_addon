@@ -17,7 +17,7 @@ from PySide6.QtGui import QColor, QGuiApplication, QPainter
 from PySide6.QtWidgets import QWidget
 
 from .. import config
-from ..cursor_fx import TAIL_SECONDS, ShakeDetector, Trail, bounds, clean_settings, shake_scale, sparkle_multicolor
+from ..cursor_fx import SHAKE_SCALE, TAIL_SECONDS, ShakeDetector, Trail, bounds, clean_settings, shake_scale, sparkle_multicolor
 from ..system import cursor as cursor_sys
 from .cursor_paint import paint_ring, paint_scope, paint_tail
 
@@ -81,6 +81,8 @@ class CursorFx(QObject):
         self._tail = _FxWindow(self._paint_tail, self.stats)
         self._tail_origin = QPointF(0, 0)
         self._tail_points = []
+        self._tail_size = (0, 0)
+        self._ring_drawn = None
         self._timer = QTimer(self)
         self._timer.setInterval(TICK_MS)
         self._timer.timeout.connect(self.tick)
@@ -129,6 +131,8 @@ class CursorFx(QObject):
 
     def _hide_all(self) -> None:
         self._visible = False
+        self._ring_drawn = None
+        self._tail_size = (0, 0)
         for w in self.windows():
             if w.isVisible():
                 w.hide()
@@ -166,11 +170,19 @@ class CursorFx(QObject):
         if ring_on:
             if moved or pulsing or not self._ring.isVisible():
                 self._ring_scale = pulse
-                side = int(s["size"] * max(1.0, pulse)) + 8
+                # 창 크기는 설정마다 고정(흔들기 켬이면 가장 클 때 크기) — 반투명 창은 크기를 바꿀 때마다 버퍼를 다시
+                # 만들고 합성해서 무겁다(0.36.1 QA: 흔들 때 렉). 틱마다 위치만 옮기고, 안에서 배율만 바꿔 그린다.
+                side = int(s["size"] * (SHAKE_SCALE if s["shake"] else 1.0)) + 8
                 self.stats['ring_moves'] += 1
-                self._ring.setGeometry(x - side // 2, y - side // 2, side, side)
+                if self._ring.width() != side or self._ring.height() != side:
+                    self.stats['resizes'] += 1
+                    self._ring.setGeometry(x - side // 2, y - side // 2, side, side)
+                else:
+                    self._ring.move(x - side // 2, y - side // 2)
                 self._ring.show_fx()
-                self._ring.update()
+                if pulsing or not moved or self._ring_drawn != pulse:
+                    self._ring_drawn = pulse
+                    self._ring.update()  # 움직이기만 하면 그림은 그대로(다시 그리지 않음)
         elif self._ring.isVisible():
             self._ring.hide()
         # 화면 선
@@ -193,13 +205,26 @@ class CursorFx(QObject):
             box = bounds(points, s["size"] * 0.4 + 6)
             if box is not None:
                 self._tail_points = points
-                self._tail_origin = QPointF(box[0], box[1])
-                self._tail.setGeometry(QRect(*box))
+                # 꼬리 창은 커져야 할 때만 키우고(여유 64px), 아니면 꼬리 범위 가운데로 옮기기만 한다.
+                # 꼬리가 다 사라져 숨길 때 크기를 잊어 다음엔 작게 시작한다(0.36.1 QA: 틱마다 크기 바꿈 → CPU).
+                w0, h0 = self._tail_size
+                if box[2] > w0 or box[3] > h0 or not self._tail.isVisible():
+                    w0, h0 = max(w0, box[2]) + 64, max(h0, box[3]) + 64
+                    self._tail_size = (w0, h0)
+                ox = box[0] + box[2] // 2 - w0 // 2
+                oy = box[1] + box[3] // 2 - h0 // 2
+                self._tail_origin = QPointF(ox, oy)
+                if self._tail.width() != w0 or self._tail.height() != h0:
+                    self.stats['resizes'] += 1
+                    self._tail.setGeometry(QRect(ox, oy, w0, h0))
+                else:
+                    self._tail.move(ox, oy)
                 self._tail.show_fx()
                 self.stats['tail_updates'] += 1
                 self._tail.update()
         elif self._tail.isVisible():
             self._tail_points = []
+            self._tail_size = (0, 0)
             self._tail.hide()  # 멈춰서 꼬리가 다 사라지면 창을 숨기고 더 그리지 않는다
         idle = now - self._moved_at > IDLE_AFTER and not pulsing and not self._tail.isVisible()
         interval = IDLE_TICK_MS if idle else TICK_MS

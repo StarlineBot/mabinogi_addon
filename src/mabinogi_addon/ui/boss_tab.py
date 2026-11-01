@@ -788,6 +788,14 @@ class BossTab(QWidget):
         return {"x": x, "y": y, "w": w, "h": h}
 
     def _grab_rect(self, x: int, y: int, w: int, h: int):
+        """판독 캡처. 판독 영역에 겹친 우리 오버레이(단축바 묶음 등)는 캡처하는 동안만 빼서 찍는다(0.36.1 —
+        도르카와 같은 방식). 헤일로 판독도 이 함수를 쓴다."""
+        if not hasattr(self, "_capture_guard"):
+            from .capture_guard import CaptureGuard
+            self._capture_guard = CaptureGuard()
+        return self._capture_guard.grab(self._grab_raw, x, y, w, h)
+
+    def _grab_raw(self, x: int, y: int, w: int, h: int):
         try:
             if self._sct is None:
                 import mss
@@ -836,6 +844,9 @@ class BossTab(QWidget):
                 self._notifier.stop()
 
     def shutdown(self) -> None:
+        guard = getattr(self, "_capture_guard", None)
+        if guard is not None:
+            guard.restore()
         self.halo_capture.shutdown()
         self._timer.stop()
         self._upcoming.close()

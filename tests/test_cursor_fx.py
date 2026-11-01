@@ -17,7 +17,8 @@ from mabinogi_addon.cursor_fx import (
 
 def test_defaults_match_spec():
     # 0.36.0 QA: colorChosen(색을 직접 고른 적 있는지, 기본 False — 반짝이 여러 색 규칙) 추가
-    assert DEFAULTS == {"enabled": False, "shape": "ring", "tail": "none", "shake": True, "color": "#FFD43B",
+    # 0.36.1 명세 변경(QA·사용자 실측 렉): 흔들어 찾기 기본 꺼짐
+    assert DEFAULTS == {"enabled": False, "shape": "ring", "tail": "none", "shake": False, "color": "#FFD43B",
                         "size": 40, "tailLength": "normal", "opacity": 100, "colorChosen": False}
     assert clean_settings(None) == DEFAULTS
 
@@ -211,7 +212,7 @@ def test_screen_lines_are_one_pixel_windows(fx):
 
 def test_shake_shows_ring_even_with_shape_none(fx):
     f, clock, pos, watcher = fx
-    f.update_settings(enabled=True, shape="none")
+    f.update_settings(enabled=True, shape="none", shake=True)  # 0.36.1: 기본 꺼짐 → 켜고 확인
     i = [0]
 
     def zig():
@@ -314,11 +315,16 @@ def _max_turn(points):
 
 def test_smooth_passes_through_points_and_rounds_corners():
     raw = _circle()
-    curve = smooth(raw, 5)
+    curve = smooth(raw, 5, min_gap=0)
     assert len(curve) == (len(raw) - 1) * 5 + 1
     for i, p in enumerate(raw):  # 원래 점은 그대로 지난다(나이도 같음)
         q = curve[i * 5]
         assert (q.x, q.y, q.age) == pytest.approx((p.x, p.y, p.age))
+    # 0.36.1: 기본은 3등분, 점 사이 12px 미만은 나누지 않음(그리기 조각 수 줄이기)
+    default = smooth(raw)
+    assert len(default) <= (len(raw) - 1) * 3 + 1
+    slow = [TailPoint(i * 4.0, 0.0, 1 - i / 20) for i in range(20)]
+    assert smooth(slow) == slow
     ages = [p.age for p in curve]
     assert ages == sorted(ages, reverse=True)  # 오래된 것부터 그대로
     assert _max_turn(curve) < _max_turn(raw) / 3  # 꺾이는 각이 훨씬 작다(빠른 원에서 다각형 → 곡선)
@@ -362,3 +368,53 @@ def test_choosing_color_in_tab_marks_chosen(fx):
         assert clean_settings(config.load_cursor_fx())["colorChosen"] is True
     finally:
         tab.close()
+
+
+# --- 0.36.1 QA: 흔들 때·꼬리 렉(창 크기를 매 틱 바꿈) ---
+
+
+def test_ring_window_size_fixed_while_pulsing(fx, monkeypatch):
+    from mabinogi_addon.cursor_fx import SHAKE_SCALE
+    f, clock, pos, watcher = fx
+    f.update_settings(enabled=True, shape="ring", shake=True)
+    _run(f, clock, 0.3)
+    side = f._ring.width()
+    assert side == int(40 * SHAKE_SCALE) + 8 and f._ring.height() == side
+    sizes, moves = set(), []
+    i = [0]
+
+    def zig():
+        i[0] += 1
+        pos[0] = (int(500 + (150 if (i[0] // 4) % 2 else -150) * ((i[0] % 4) / 3)), 300)
+        sizes.add((f._ring.width(), f._ring.height()))
+        moves.append(f._ring.pos())
+    f.stats.clear()
+    _run(f, clock, 1.5, move=zig)
+    assert f._shake_at > 0  # 흔들기 판정됨(맥동)
+    assert sizes == {(side, side)} and f.stats["resizes"] == 0  # 크기는 그대로, 위치만
+    assert len(set((p.x(), p.y()) for p in moves)) > 5
+
+
+def test_tail_window_resizes_rarely(fx):
+    import math
+    f, clock, pos, watcher = fx
+    f.update_settings(enabled=True, shape="none", tail="rainbow")
+    k = [0]
+
+    def circle():
+        k[0] += 1
+        t = k[0] / 60
+        pos[0] = (int(800 + 250 * math.cos(t * 9)), int(500 + 180 * math.sin(t * 9)))
+    f.stats.clear()
+    _run(f, clock, 3.0, move=circle)  # 3초 동안 빠르게 원 그리기(180틱)
+    assert f.stats["tail_updates"] > 150
+    assert f.stats["resizes"] <= 8  # 예전: 틱마다(180번) 크기 변경
+
+
+def test_fast_normal_motion_is_not_shake():
+    import math
+    # 전투 중 흔한 빠른 움직임: 큰 원 돌리기·좌우 두세 번 크게 왕복
+    circle = [600 + 300 * math.cos(i / 60 * 12) for i in range(120)]
+    assert not any(_feed(ShakeDetector(), circle, 1 / 60))
+    three = [500 + (250 if (i // 6) % 2 else -250) * ((i % 6) / 5) for i in range(20)]  # 방향 바뀜 3번
+    assert not any(_feed(ShakeDetector(), three, 1 / 60))

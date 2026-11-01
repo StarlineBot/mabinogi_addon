@@ -18,7 +18,8 @@ SHAPES = ("none", "ring", "scope", "lines")
 TAILS = ("none", "dots", "line", "rainbow", "sparkle")
 TAIL_SECONDS = {"short": 0.2, "normal": 0.3, "long": 0.45}
 PRESET_COLORS = ("#1DD3B0", "#FFD43B", "#FF5A5F", "#FFFFFF", "#A78BFA")  # 민트·노랑·빨강·흰색·보라
-DEFAULTS = {"enabled": False, "shape": "ring", "tail": "none", "shake": True, "color": "#FFD43B",
+# 0.36.1: 흔들어 찾기 기본 꺼짐(오판·렉 — QA·사용자 실측)
+DEFAULTS = {"enabled": False, "shape": "ring", "tail": "none", "shake": False, "color": "#FFD43B",
             "size": 40, "tailLength": "normal", "opacity": 100,
             "colorChosen": False}  # 사용자가 색을 직접 고른 적 있는지 — 아니면 반짝이는 여러 색(0.36.0 QA)
 SIZE_RANGE = (20, 120)
@@ -96,10 +97,11 @@ class Trail:
         return any(now - t <= seconds for t, _, _ in self._points) and len(self._points) > 1
 
 
-def smooth(points, steps: int = 5) -> list[TailPoint]:
-    """꼬리 점들을 Catmull-Rom 곡선으로 이어 점 사이를 steps개로 나눈다(나이도 같이 보간).
+def smooth(points, steps: int = 3, min_gap: float = 12.0) -> list[TailPoint]:
+    """꼬리 점들을 Catmull-Rom 곡선으로 이어 **점 사이가 min_gap px 이상인 구간만** steps개로 나눈다(나이도 같이 보간).
     60Hz로 읽은 점을 직선으로 이으면 빠른 움직임에서 다각형처럼 각지므로 그릴 때만 곡선으로 메운다
-    (커서를 더 자주 읽지 않음). 양 끝은 끝점을 한 번 더 쓴 것으로 본다. 원래 점은 그대로 지난다."""
+    (커서를 더 자주 읽지 않음). 가까운 점 사이는 직선으로도 매끄러워 나누지 않는다(그리기 조각 수 = CPU, 0.36.1).
+    양 끝은 끝점을 한 번 더 쓴 것으로 본다. 원래 점은 그대로 지난다."""
     pts = list(points)
     if len(pts) < 3 or steps <= 1:
         return pts
@@ -108,6 +110,9 @@ def smooth(points, steps: int = 5) -> list[TailPoint]:
     for i in range(n - 1):
         p0, p1, p2 = pts[max(0, i - 1)], pts[i], pts[i + 1]
         p3 = pts[min(n - 1, i + 2)]
+        if math.hypot(p2.x - p1.x, p2.y - p1.y) < min_gap:
+            out.append(p1)
+            continue
         for k in range(steps):
             t = k / steps
             t2, t3 = t * t, t * t * t
@@ -139,7 +144,8 @@ class ShakeDetector:
     """흔들어 찾기 판정: window초 안에 좌우 방향이 turns번 이상 바뀌고, 가로 이동 합이 distance 이상이면 흔든 것.
     한 번 판정하면 cooldown초 동안 다시 판정하지 않는다. 작은 떨림(step px 미만)은 방향 바뀜으로 세지 않는다."""
 
-    def __init__(self, window: float = 0.5, turns: int = 3, distance: float = 400.0, step: float = 6.0,
+    # 0.36.1 QA: 전투 중 빠른 움직임 오판을 줄이려고 방향 바뀜 4번·가로 이동 600px로 올림(예전 3번·400px)
+    def __init__(self, window: float = 0.5, turns: int = 4, distance: float = 600.0, step: float = 6.0,
                  cooldown: float = SHAKE_SECONDS) -> None:
         self.window, self.turns, self.distance, self.step, self.cooldown = window, turns, distance, step, cooldown
         self._samples: deque[tuple[float, float]] = deque()

@@ -24,6 +24,8 @@ CASES = (
     ("꼬리: 무지개 선", dict(shape="none", tail="rainbow")),
     ("꼬리: 반짝이", dict(shape="none", tail="sparkle")),
     ("원 + 선 꼬리(길게)", dict(shape="ring", tail="line", tailLength="long")),
+    ("흔들기(모양·꼬리 없음, 흔들어 찾기 켬) — 빠르게 좌우로 흔들어 주세요", dict(shape="none", tail="none", shake=True)),
+    ("원 + 반짝이 + 흔들어 찾기", dict(shape="ring", tail="sparkle", shake=True)),
     ("원 · 마우스 멈춤(움직이지 마세요)", dict(shape="ring", tail="line")),
 )
 

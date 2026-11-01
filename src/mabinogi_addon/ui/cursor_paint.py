@@ -66,7 +66,7 @@ def paint_tail(p: QPainter, points, kind: str, color: str, size: float, opacity:
         # 머리(가장 최근) 끝만 둥근 점으로 마무리한다.
         # 점 몇 개씩 한 경로(같은 굵기·색)로 그어 이음매를 줄인다 — 조각마다 끊으면 반투명 겹침이 구슬처럼 보임.
         n = len(pts)
-        group = 6
+        group = 3  # 묶음이 길면 색·굵기 단계가 보인다(0.36.1 세분 축소 뒤 3)
         for start in range(0, n - 1, group):
             chunk = pts[start:min(n, start + group + 1)]  # 다음 묶음과 끝점 하나를 같이 써서 끊김 없이
             mid = start + len(chunk) / 2
