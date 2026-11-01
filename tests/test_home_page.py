@@ -178,7 +178,8 @@ def test_app_starts_on_home_unless_guide_comes_first(window, monkeypatch):
 def test_rows_layout_and_painted_switch_only_where_settings_exist():
     page = HomePage()
     with_switch = {key for key, row in page.rows.items() if row.switch is not None}
-    assert with_switch == {"stat_bars", "dorcha", "tuarim", "custom", "opt", "fps", "blackbox"}
+    # 0.36.0: 아래 줄 4번째 칸 `편의기능 › 마우스 커서` 스위치(마우스 커서 명세 5절)
+    assert with_switch == {"stat_bars", "dorcha", "tuarim", "custom", "opt", "fps", "blackbox", "cursor"}
     assert [key for key, *_ in COMBAT_ROWS] == ["buff", "debuff", "boss", "halo", "stat_bars", "dorcha",
                                                 "tuarim", "custom", "skillbar", "memo"]
     page.resize(790, 800)

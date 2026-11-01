@@ -43,7 +43,7 @@ def test_structure_and_default_editor_space(window):
     assert [w._tabs.tabText(i) for i in range(w._tabs.count())] == ['전투 보조','파티 모집','편의기능','최적화','블랙박스','설정']
     assert [w._tracker_tabs.tabText(i) for i in range(w._tracker_tabs.count())] == LABELS
     # 0.35.0 명세 변경(마우스 커서 명세 1절 B안): 2단 계산기·그림대화, 계산기 안 3단(이름에서 '계산기' 뺌)
-    assert [w._convenience_tabs.tabText(i) for i in range(w._convenience_tabs.count())] == ['계산기','그림대화']
+    assert [w._convenience_tabs.tabText(i) for i in range(w._convenience_tabs.count())] == ['계산기','그림대화','마우스 커서']  # 0.36.0: 2단 세 번째 마우스 커서(마우스 커서 명세 1절)
     assert [w._calculator_tabs.tabText(i) for i in range(w._calculator_tabs.count())] == ['분배','구슬 분배','환전비율','던전 입장']
     bar = w._tracker_tabs.tabBar()
     assert all(bar.rect().contains(bar.tabRect(i)) for i in range(8))

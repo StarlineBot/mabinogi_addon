@@ -15,6 +15,11 @@ def optimization_available() -> bool:
     return True
 
 
+def cursor_fx_available() -> bool:
+    """마우스 커서 표시: 첫 개발이라 제작자에게만 공개(2026-11-01 사용자 결정). 화면 문구에는 공개 단계를 쓰지 않는다."""
+    return is_creator()
+
+
 def is_creator() -> bool:
     user = config.load_discord_user()
     return (isinstance(CREATOR_DISCORD_ID, str) and CREATOR_DISCORD_ID.isdecimal()

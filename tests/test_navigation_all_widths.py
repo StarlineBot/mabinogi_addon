@@ -40,13 +40,15 @@ def test_all_pages_and_controls_large_font(window,monkeypatch,area):
 
 @pytest.mark.parametrize('theme', ['light', 'dark'])
 @pytest.mark.parametrize('pixels', [12, 20])
-def test_shared_headers_wrap_without_losing_controls_or_saved_state(window, theme, pixels):
+def test_shared_headers_wrap_without_losing_controls_or_saved_state(window, theme, pixels, monkeypatch):
     from copy import deepcopy
     from PySide6.QtGui import QColor, QFontInfo, QPalette
-    from mabinogi_addon import config
+    from mabinogi_addon import config, feature_access
     from mabinogi_addon.ui.theme import apply_theme
     from mabinogi_addon.ui.widgets import FeatureHeader
     w, app = window
+    monkeypatch.setattr(feature_access, 'is_creator', lambda: True)  # 0.36.0 마우스 커서(제작자 공개) 화면도 확인
+    w._refresh_cursor_access()
     old_scheme = app.styleHints().colorScheme()
     old_palette = QPalette(app.palette())
     apply_theme(theme)
@@ -71,13 +73,13 @@ def test_shared_headers_wrap_without_losing_controls_or_saved_state(window, them
     try:
         pages = [(0, i) for i in range(w._tracker_tabs.count())]
         # 0.35.0 편의기능 B안(마우스 커서 명세 1절): 계산기 4개는 3단(_calculator_tabs) 안, 2단 두 번째는 그림대화
-        pages += [(2, ('calc', i)) for i in range(w._calculator_tabs.count())] + [(2, ('sketch', 1)), (1, 0)]
+        pages += [(2, ('calc', i)) for i in range(w._calculator_tabs.count())] + [(2, ('sketch', 1)), (2, ('cursor', 2)), (1, 0)]  # 0.36.0: 마우스 커서 화면도
         for main, sub in pages:
             w._tabs.setCurrentIndex(main)
             if main == 0:
                 w._tracker_tabs.setCurrentIndex(sub)
             elif main == 2:
-                w._convenience_tabs.setCurrentIndex(0 if sub[0] == 'calc' else 1)
+                w._convenience_tabs.setCurrentIndex(0 if sub[0] == 'calc' else sub[1])
                 if sub[0] == 'calc':
                     w._calculator_tabs.setCurrentIndex(sub[1])
             app.processEvents()

@@ -334,6 +334,14 @@ class MainWindow(QMainWindow):
         self._convenience_tabs.setObjectName("convenienceTabs")
         self._convenience_tabs.addTab(self._calculator_tabs, "계산기")
         self._convenience_tabs.addTab(self._sketch_scroll, "그림대화")
+        # 0.36.0 마우스 커서 표시(마우스 커서 명세): 2단 세 번째. 오버레이(CursorFx)는 창과 함께 산다.
+        from .cursor_overlay import CursorFx
+        from .cursor_tab import CursorTab
+        self.cursor_fx = CursorFx(self._watcher, self)
+        self.cursor_tab = CursorTab(self.cursor_fx)
+        self._cursor_scroll = _scrolled(self.cursor_tab)
+        self._convenience_tabs.addTab(self._cursor_scroll, "마우스 커서")
+        self.settings_tab.login_changed.connect(self._refresh_cursor_access)
 
         tabs = QTabWidget()
         tabs.setObjectName("mainTabs")
@@ -409,6 +417,7 @@ class MainWindow(QMainWindow):
         self.home_page.open_combat_tab.connect(self._home_open_combat_tab)
         self.home_page.switch_toggled.connect(self._home_switch)
         self.home_page.combat_toggled.connect(lambda on: self._set_paused(not on))
+        self._refresh_cursor_access()
 
         # 버프 오버레이
         self.buff_overlay = BuffOverlay()
@@ -565,6 +574,9 @@ class MainWindow(QMainWindow):
             self.blackbox_tools._open_tab()
         elif key == "keywords":
             self._tabs.setCurrentWidget(self._party_scroll)
+        elif key == "cursor" and self.cursor_fx._allowed:
+            self._tabs.setCurrentWidget(self._convenience_tabs)
+            self._convenience_tabs.setCurrentWidget(self._cursor_scroll)
 
     def _home_open_region(self, key) -> None:
         """설정 필요 상자의 '영역 지정': 그 화면의 영역 지정 상자(0.27.0)로."""
@@ -601,7 +613,23 @@ class MainWindow(QMainWindow):
                 toggle.click()  # 최적화 탭 'FPS 표시'와 같은 경로
         elif key == "blackbox":
             self.blackbox_tools.set_home_enabled(on)
+        elif key == "cursor" and self.cursor_fx._allowed:
+            self.cursor_tab.set_enabled(on)  # 마우스 커서 화면 '커서 표시'와 같은 값
         self.home_page.update_state(self._home_state())
+
+    def _refresh_cursor_access(self) -> None:
+        """마우스 커서 표시 공개 범위(제작자). 아니면 탭·홈 칸을 숨기고 오버레이를 멈춘다(설정값은 그대로 둔다)."""
+        from .. import feature_access
+
+        allowed = feature_access.cursor_fx_available()
+        self.cursor_fx.set_allowed(allowed)
+        index = self._convenience_tabs.indexOf(self._cursor_scroll)
+        if not allowed and self._convenience_tabs.currentIndex() == index:
+            self._convenience_tabs.setCurrentIndex(0)
+        self._convenience_tabs.setTabVisible(index, allowed)
+        home = getattr(self, "home_page", None)
+        if home is not None:
+            home.set_box_visible("편의기능", allowed)
 
     def _home_state(self) -> dict:
         """홈 상태(명세 12.2·12.3). 각 화면의 기존 상태·설정만 쓰고 새로 판독하지 않는다. 숫자(판독 값)는 넣지 않는다."""
@@ -666,6 +694,9 @@ class MainWindow(QMainWindow):
         rows["fps"] = ("표시 중" if frames else "꺼짐", "ok" if frames else "muted", frames)
         rows["blackbox"] = self.blackbox_tools.home_state()
         rows["keywords"] = (("감시 중", "ok") if self.party_tab._keywords else ("대기 중 · 키워드 없음", "muted"))
+        cursor_on = self.cursor_fx.is_enabled()
+        rows["cursor"] = (("꺼짐", "muted") if not cursor_on else ("대기 중 · 일시정지", "muted") if paused
+                          else ("표시 중", "ok") if game else waiting_game) + (cursor_on,)
         # 설정 필요: 사용자가 쓰기로 고른 기능 중 영역이 없는 것만(명세 12.2-3)
         needs = [(key, self._HOME_NAMES[key]) for key in self._HOME_FEATURES
                  if setup_state.selected(self._HOME_FEATURES[key], raw) and missing(key)]
@@ -2164,6 +2195,7 @@ class MainWindow(QMainWindow):
         self.skillbar_tab.set_paused(paused)
         self.boss_tab.set_paused(paused)
         self.tuarim_tab.set_paused(paused)
+        self.cursor_fx.set_paused(paused)
         if paused:
             for player in (self._notifier, self._notifier2):
                 if player is not None:
@@ -2374,6 +2406,7 @@ class MainWindow(QMainWindow):
         self._closing = True
         self.creator_dialogue.shutdown()
         self.dungeon_cost_tab.shutdown()
+        self.cursor_fx.shutdown()
         if self._status_timer is not None:
             self._status_timer.stop()
 

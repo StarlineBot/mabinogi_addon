@@ -1616,3 +1616,15 @@ def save_sketch_dir(folder: str | None, path: Path = LOCAL_CONFIG_PATH) -> None:
         sec.pop("dir", None)
     data["sketch"] = sec
     _write_local_config(data, path)
+
+
+def load_cursor_fx(path: Path = LOCAL_CONFIG_PATH) -> dict:
+    """마우스 커서 표시 설정(원본 dict — cursor_fx.clean_settings로 정리해서 쓴다)."""
+    sec = _read_local_config(path).get("cursorFx")
+    return dict(sec) if isinstance(sec, dict) else {}
+
+
+def save_cursor_fx(values: dict, path: Path = LOCAL_CONFIG_PATH) -> None:
+    data = _read_local_config(path)
+    data["cursorFx"] = dict(values)
+    _write_local_config(data, path)

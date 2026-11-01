@@ -57,7 +57,8 @@ COMBAT_ROWS = (("buff", "버프", False), ("debuff", "디버프", False),
 # 아래 한 줄 3칸(중요도·자주 보는 순): (묶음 제목, [(키, 이름, 스위치 있음)])
 BOTTOM_BOXES = (("최적화", (("opt", "게임 최적화", True), ("fps", "FPS 표시", True))),
                 ("블랙박스", (("blackbox", "최근 영상 보관", True),)),
-                ("파티 모집", (("keywords", "키워드 알림", False),)))
+                ("파티 모집", (("keywords", "키워드 알림", False),)),
+                ("편의기능", (("cursor", "마우스 커서", True),)))  # 0.36.0: 아래 줄 4칸(마우스 커서 명세 5절 가안)
 TITLES = {"running": ("마비노기 실행 중 · 화면을 읽고 있어요", "ok"),
           "waiting": ("마비노기를 기다리는 중", "waiting"),
           "paused": ("전투 보조 일시정지", "inactive")}
@@ -326,11 +327,13 @@ class HomePage(QWidget):
         box.addLayout(grid)
         v.addWidget(combat)
 
-        # 5. 아래 한 줄 3칸
+        # 5. 아래 한 줄 4칸
         bottom = QHBoxLayout()
         bottom.setSpacing(12)
+        self.boxes: dict[str, QFrame] = {}
         for title, rows in BOTTOM_BOXES:
             frame = _box()
+            self.boxes[title] = frame
             frame.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
             box = QVBoxLayout(frame)
             box.setContentsMargins(16, 10, 16, 6)
@@ -343,6 +346,12 @@ class HomePage(QWidget):
         v.addLayout(bottom)
         v.addStretch(1)
         self.update_state({})
+
+    def set_box_visible(self, title: str, visible: bool) -> None:
+        """아래 줄 칸 보이기(공개 범위가 아닌 기능 칸은 숨겨 나머지 칸이 넓어진다)."""
+        box = self.boxes.get(title)
+        if box is not None and box.isVisibleTo(self) != bool(visible):
+            box.setVisible(bool(visible))
 
     def _apply_style(self):
         d = _D
