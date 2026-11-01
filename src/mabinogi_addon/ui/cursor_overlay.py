@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import logging
 import time
 from collections import Counter
 
@@ -20,6 +21,10 @@ from .. import config
 from ..cursor_fx import SHAKE_SCALE, TAIL_SECONDS, ShakeDetector, Trail, bounds, clean_settings, shake_scale, sparkle_multicolor
 from ..system import cursor as cursor_sys
 from .cursor_paint import paint_ring, paint_scope, paint_tail
+
+_log = logging.getLogger(__name__)
+LAG_LOG_EVERY = 30.0  # 앱 안에서 틱이 얼마나 밀리는지 30초마다 로그(실사용 렉 원인 가르기, 0.36.1)
+LATE_GAP = 0.033  # 60번 틱이 33ms 넘게 벌어지면 '늦은 틱'(한 프레임 이상 밀림)
 
 TICK_MS = 16  # 초당 약 60번
 IDLE_TICK_MS = 50  # 1초 넘게 멈춰 있고 그릴 것이 없으면 초당 20번만 읽는다(움직이면 바로 60번으로)
@@ -88,7 +93,12 @@ class CursorFx(QObject):
         self._tail_size = (0, 0)
         self._ring_drawn = None
         self._timer = QTimer(self)
+        # 정밀 타이머: 기본(대략) 타이머는 다른 타이머가 많은 앱 안에서 실행 시점이 크게 흔들린다(0.36.1 — 앱에서만 렉)
+        self._timer.setTimerType(Qt.TimerType.PreciseTimer)
         self._timer.setInterval(TICK_MS)
+        self._lag = Counter()
+        self._lag_since = None
+        self._last_tick = None
         self._timer.timeout.connect(self.tick)
         self._sync_timer()
 
@@ -143,6 +153,39 @@ class CursorFx(QObject):
 
     # ---- 매 틱 -----------------------------------------------------------------------------
     def tick(self) -> None:
+        started = time.perf_counter()
+        try:
+            self._tick()
+        finally:
+            self._note_lag(started)
+
+    def _note_lag(self, started: float) -> None:
+        """보이는 동안(빠른 틱) 틱 간격과 틱 자체 시간을 모아 30초마다 로그. 늦은 틱이 많은데 자체 시간이 짧으면
+        다른 작업(판독 등)이 같은 화면 스레드를 막는 것, 자체 시간이 길면 그리기가 무거운 것."""
+        now = time.perf_counter()
+        last, self._last_tick = self._last_tick, now
+        if not self._visible or self._timer.interval() != TICK_MS:
+            return
+        lag = self._lag
+        if self._lag_since is None:
+            self._lag_since = now
+        if last is not None:
+            gap = now - last
+            lag["ticks"] += 1
+            lag["late"] += gap > LATE_GAP
+            lag["max_gap_ms"] = max(lag["max_gap_ms"], round(gap * 1000))
+        own = (now - started) * 1000
+        lag["own_total_ms"] += own
+        lag["max_own_ms"] = max(lag["max_own_ms"], round(own, 1))
+        if now - self._lag_since >= LAG_LOG_EVERY and lag["ticks"]:
+            s = self.settings
+            _log.info("마우스 커서 틱 %.0f초(%s·%s): 틱 %d · 늦은 틱(>33ms) %d(%.0f%%) · 최대 간격 %dms · 틱 자체 평균 %.2fms · 최대 %.1fms",
+                      now - self._lag_since, s["shape"], s["tail"], lag["ticks"], lag["late"],
+                      lag["late"] * 100 / lag["ticks"], lag["max_gap_ms"], lag["own_total_ms"] / lag["ticks"], lag["max_own_ms"])
+            lag.clear()
+            self._lag_since = now
+
+    def _tick(self) -> None:
         now = self._clock()
         self.stats['ticks'] += 1
         if now - self._checked_at >= VISIBILITY_EVERY:

@@ -421,3 +421,25 @@ def test_fast_normal_motion_is_not_shake():
     assert not any(_feed(ShakeDetector(), circle, 1 / 60))
     three = [500 + (250 if (i // 6) % 2 else -250) * ((i % 6) / 5) for i in range(20)]  # 방향 바뀜 3번
     assert not any(_feed(ShakeDetector(), three, 1 / 60))
+
+
+def test_precise_timer_and_lag_log(fx, monkeypatch, caplog):
+    """0.36.1: 앱 안에서만 렉 — 정밀 타이머, 30초마다 틱 밀림 로그(다른 작업이 막는지 / 그리기가 무거운지 가르기)."""
+    import logging
+    from PySide6.QtCore import Qt
+    from mabinogi_addon.ui import cursor_overlay as co
+    f, clock, pos, watcher = fx
+    f.update_settings(enabled=True, tail="line")
+    assert f._timer.timerType() == Qt.TimerType.PreciseTimer
+    real = [1000.0]
+    monkeypatch.setattr(co.time, "perf_counter", lambda: real[0])
+    caplog.set_level(logging.INFO, logger=co.__name__)
+    k = [0]
+    for i in range(2000):  # 약 33초: 열 번에 한 번 50ms 밀림
+        k[0] += 1
+        pos[0] = (400 + k[0] % 50 * 6, 300)
+        real[0] += 0.05 if i % 10 == 0 else 0.016
+        clock[0] += 0.016
+        f.tick()
+    lines = [r.getMessage() for r in caplog.records if "마우스 커서 틱" in r.getMessage()]
+    assert lines and "늦은 틱(>33ms)" in lines[0] and "최대 간격 50ms" in lines[0]
