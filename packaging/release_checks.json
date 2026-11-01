@@ -1,5 +1,5 @@
 {
-  "version": "0.34.0",
+  "version": "0.35.0",
   "tests": [
     "tests/test_blackbox.py",
     "tests/test_blackbox_access.py",

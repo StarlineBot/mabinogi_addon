@@ -24,7 +24,6 @@ from .image_io import imread
 DEFAULT_ICON_DIR = paths.resource_dir() / "buff" / "icon"
 DEFAULT_IMAGE_DIR = paths.resource_dir() / "buff" / "image"
 DEFAULT_DEBUFF_ICON_DIR = paths.resource_dir() / "debuff" / "icon"
-DEFAULT_DEBUFF_IMAGE_DIR = paths.resource_dir() / "debuff" / "image"
 # 사용자 커스텀 자산 — 쓰기 가능(사용자가 추가한 버프/디버프)
 USER_ICON_DIR = paths.user_data_dir() / "buff" / "icon"
 USER_IMAGE_DIR = paths.user_data_dir() / "buff" / "image"
@@ -157,17 +156,13 @@ def load_debuff_catalog(
 
     디버프는 파일명 자체가 한글이라 이름은 그대로 쓰고 순서만 기본값으로 맞춘다.
     사용자가 바꾼 순서는 로컬 config에 저장돼 우선한다(기본값을 덮어쓰지 않음).
-    번들 표시 그림은 번들 판독 아이콘에만 짝짓고, 사용자 override는 기존처럼
-    사용자 아이콘 자체를 표시한다.
+    표시 그림은 따로 두지 않는다 — 오버레이·목록·사라짐 경고 모두 찾는 그림(게임 원본 16px, 사용자 아이콘이면 그 그림)을 쓴다
+    (0.35.0 사용자 결정: 디버프 탭엔 '보여 줄 그림' 칸이 없다. 예전 28px 표시 그림 image/ 18종은 확대하면 뭉개지고
+    크레센도는 찾는 그림과 달라 보였다).
     """
     icons = _collect(icon_dirs, lambda p: p.stem)
-    images = _collect((DEFAULT_DEBUFF_IMAGE_DIR,), lambda p: p.stem)
     return [
-        BuffDef(
-            id=key, name=key, match_icon=icons[key],
-            display_image=(images.get(key)
-                           if icons[key].parent == DEFAULT_DEBUFF_ICON_DIR else None),
-        )
+        BuffDef(id=key, name=key, match_icon=icons[key], display_image=None)
         for key in _ordered_keys(icons, DEFAULT_DEBUFF_ORDER)
     ]
 

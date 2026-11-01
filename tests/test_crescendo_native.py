@@ -53,15 +53,11 @@ def test_native_template_and_display_are_separate():
     assert item.match_icon.read_bytes() == candidate.read_bytes()
     assert np.array_equal(image_io.imread(item.match_icon), image_io.imread(candidate))
     assert image_io.imread(item.match_icon).shape == (16, 16, 3)
-    assert item.display_image is not None
-    assert image_io.imread(item.display_image).shape == (28, 28, 3)
-    # Preserve the exact old PNG, including its encoding, rather than upscaling the crop.
-    raw = item.display_image.read_bytes()
-    header = f"blob {len(raw)}\0".encode()
-    assert hashlib.sha1(header + raw).hexdigest() == "4897f486059403742327ef754104862d7254b7ba"
-    # 2026-10-26: 불협화음도 원본 16px 판독 + 예전 28px 표시로 나눴다(tests/test_debuff_native_icons.py).
+    # 0.35.0 명세 변경(사용자 결정): 예전 28px 표시 그림(image/)을 없애고 표시도 찾는 그림(16px 원본)으로 통일 —
+    # 크레센도는 찾는 그림과 보이는 그림이 달랐다. 번들 디버프 display_image는 None(오버레이가 match_icon을 그린다).
+    assert item.display_image is None
     assert image_io.imread(entries["불협화음"].match_icon).shape == (16, 16, 3)
-    assert image_io.imread(entries["불협화음"].display_image).shape == (28, 28, 3)
+    assert entries["불협화음"].display_image is None
 
 
 def test_user_icon_override_keeps_own_match_and_display(tmp_path):

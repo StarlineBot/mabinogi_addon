@@ -50,12 +50,12 @@ def blob(path):
 
 
 @pytest.mark.parametrize("name", sorted(NATIVE))
-def test_match_icon_is_native_crop_and_old_picture_is_kept_for_display(name):
-    source, x, y, old_blob = NATIVE[name]
+def test_match_icon_is_native_crop_and_shown_as_is(name):
+    # 0.35.0 명세 변경(사용자 결정): 예전 28px 표시 그림(image/)을 없애고 표시도 찾는 그림(16px 원본)으로 통일
+    source, x, y, _old_blob = NATIVE[name]
     item = entries()[name]
     assert (image_io.imread(item.match_icon) == image_io.imread(source)[y:y + 16, x:x + 16]).all()
-    assert item.display_image is not None and blob(item.display_image) == old_blob
-    assert image_io.imread(item.display_image).shape == (28, 28, 3)
+    assert item.display_image is None
 
 
 def _detected(runtime, patch):
@@ -101,7 +101,8 @@ def test_native_low_detail_icons_score_lower_on_empty_floor(name, old_floor):
     floor = image_io.imread(ROOT / "tests/data/스크린샷 2026-10-12 024008.png")[1210:1289, 1017:1541]
     item = entries()[name]
     native = DebuffEngine({name: image_io.imread(item.match_icon)}, [name])
-    old = DebuffEngine({name: image_io.imread(item.display_image)}, [name])
-    before, after = old.best_scores(floor)[name], native.best_scores(floor)[name]
+    # 0.35.0: 예전 흐린 그림(image/)은 지웠다 — 그때 잰 점수(위 설명: 모모 0.686·방해 카드 0.648)와 비교한다
+    before = {"모모": 0.686, "방해 카드": 0.648}[name]
     assert before >= old_floor
+    after = native.best_scores(floor)[name]
     assert after < 0.68 and after <= before - 0.09
