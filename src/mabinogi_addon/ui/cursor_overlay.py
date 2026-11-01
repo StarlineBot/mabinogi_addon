@@ -27,6 +27,10 @@ IDLE_AFTER = 1.0
 VISIBILITY_EVERY = 0.25  # 게임이 앞에 있는지는 0.25초마다만 확인
 
 
+def _bucket(n: int, step: int = 64) -> int:
+    return max(step, -(-int(n) // step) * step)
+
+
 class _FxWindow(QWidget):
     def __init__(self, painter, stats=None) -> None:
         super().__init__(None, Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint
@@ -205,11 +209,14 @@ class CursorFx(QObject):
             box = bounds(points, s["size"] * 0.4 + 6)
             if box is not None:
                 self._tail_points = points
-                # 꼬리 창은 커져야 할 때만 키우고(여유 64px), 아니면 꼬리 범위 가운데로 옮기기만 한다.
-                # 꼬리가 다 사라져 숨길 때 크기를 잊어 다음엔 작게 시작한다(0.36.1 QA: 틱마다 크기 바꿈 → CPU).
+                # 꼬리 창 크기는 64px 단위로 맞춰 꼬리가 그 단위를 넘을 때만 바꾸고, 아니면 옮기기만 한다.
+                # 키우기만 하면(0.36.1 첫 수정) 창이 너무 커져 매번 다시 칠하는 반투명 면적이 늘었다(선 꼬리 0.66→1.37%).
+                # 줄이기는 두 단위 이상 작아졌을 때만(왔다 갔다 하며 크기를 자주 바꾸지 않게).
                 w0, h0 = self._tail_size
-                if box[2] > w0 or box[3] > h0 or not self._tail.isVisible():
-                    w0, h0 = max(w0, box[2]) + 64, max(h0, box[3]) + 64
+                need_w, need_h = _bucket(box[2]), _bucket(box[3])
+                if (need_w > w0 or need_h > h0 or need_w <= w0 - 128 or need_h <= h0 - 128
+                        or not self._tail.isVisible()):
+                    w0, h0 = need_w, need_h
                     self._tail_size = (w0, h0)
                 ox = box[0] + box[2] // 2 - w0 // 2
                 oy = box[1] + box[3] // 2 - h0 // 2

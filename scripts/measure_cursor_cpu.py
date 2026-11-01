@@ -67,7 +67,8 @@ def main(argv=None) -> int:
             print(f"  → {name}: 전체 {results[-1][1]:.2f}% · 코어 1개 {results[-1][2]:.1f}%", flush=True)
             st = fx.stats
             print(f"    초당: 틱 {st['ticks']/wall:.0f} · 움직임 {st['moved']/wall:.0f} · 원 이동 {st['ring_moves']/wall:.0f}"
-                  f" · 꼬리 갱신 {st['tail_updates']/wall:.0f} · 그리기 {st['paints']/wall:.0f} · 타이머 {fx._timer.interval()}ms", flush=True)
+                  f" · 꼬리 갱신 {st['tail_updates']/wall:.0f} · 그리기 {st['paints']/wall:.0f} · 창 크기 변경 {st['resizes']/wall:.1f}"
+                  f" · 꼬리 창 {fx._tail.width()}×{fx._tail.height()} · 타이머 {fx._timer.interval()}ms", flush=True)
         state["i"] += 1
         if state["i"] >= len(CASES):
             fx.shutdown()

@@ -408,7 +408,10 @@ def test_tail_window_resizes_rarely(fx):
     f.stats.clear()
     _run(f, clock, 3.0, move=circle)  # 3초 동안 빠르게 원 그리기(180틱)
     assert f.stats["tail_updates"] > 150
-    assert f.stats["resizes"] <= 8  # 예전: 틱마다(180번) 크기 변경
+    # 0.36.1 2차(Windows 실측: 크게 고정한 창은 칠할 면적이 늘어 선 꼬리 0.66→1.37%): 64px 단위로 꼬리에 맞춤 —
+    # 면적은 꼬리만큼, 크기 변경은 틱의 절반 아래(예전 0.36.0: 틱마다 180번)
+    assert f.stats["resizes"] <= f.stats["tail_updates"] // 2
+    assert f._tail.width() % 64 == 0 and f._tail.height() % 64 == 0
 
 
 def test_fast_normal_motion_is_not_shake():
