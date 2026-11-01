@@ -140,16 +140,31 @@ class ChunkOverlay(QWidget):
             self._drag_offset = (
                 event.globalPosition().toPoint() - self.frameGeometry().topLeft()
             )
+            # 다른 오버레이와 같은 격자 맞춤(mirror_overlay와 같은 방식, 0.36.1 사용자 제보)
+            from . import grid
+
+            self._snap = grid.enabled()
+            self._grid_size = grid.size() if self._snap else None
+            if self._snap:
+                grid.show_guide()
             event.accept()
 
     def mouseMoveEvent(self, event) -> None:
         if not self._locked and self._drag_offset is not None:
-            self.move(event.globalPosition().toPoint() - self._drag_offset)
+            target = event.globalPosition().toPoint() - self._drag_offset
+            if getattr(self, "_snap", False):
+                from . import grid
+
+                target = grid.snap(target, getattr(self, "_grid_size", None))
+            self.move(target)
             event.accept()
 
     def mouseReleaseEvent(self, event) -> None:
         if self._drag_offset is not None:
             self._drag_offset = None
+            from . import grid
+
+            grid.hide_guide()
             self.moved.emit()
 
     # ---- 그리기 ----

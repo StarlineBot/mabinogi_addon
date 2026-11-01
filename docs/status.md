@@ -39,6 +39,9 @@
   개선안: 보스 바 판독도 도르카와 같은 `capture_exclusion.excluding_windows` 적용(Windows 10 2004+).
 - **Confirmed(2026-11-01 사용자: 단축바 이동이 격자로 안 됨)**: 다른 오버레이(버프·디버프·메모·미러·도르카·체력바·패턴 등)는 끌 때 `ui/grid` 격자 맞춤(`grid.enabled`·`snap`·`show_guide`)을 쓰는데,
   단축바 묶음 창 `ui/skillbar_mirror.ChunkOverlay`의 `mousePressEvent/mouseMoveEvent/mouseReleaseEvent`에만 없음(2026-10-11 v0.4.40 첫 구현 그대로). 같은 코드 추가로 해결.
+  → **0.36.1 수정(2026-11-01)** — 로컬 검증. `ChunkOverlay` 누름·끌기·놓기에 `mirror_overlay`와 같은 격자 맞춤(가이드 표시·`grid.snap`·가이드 숨김), 우클릭 칸 토글 그대로.
+  회귀 `test_skillbar_chunk_snap.py`(격자 켬 → 화면 중앙 기준 32px 위, 끔 → 그대로, 우클릭 토글 — 수정 전 코드에서 2개 실패 확인). 마우스 커서 꼬리 세분(5)은 그대로 —
+  QA 메모대로 Windows `measure_cursor_cpu`에서 선·무지개 선·원+선(길게)이 2%를 넘으면 세분 5→3 검토.
 - **QA 0.36.0 마우스 커서(3cf3d69·f53e533·0388c02, 2026-11-01)**: 통과 — 전체 3791·release checks 1891 passed(test_cursor_fx 포함). 커서 위치는 읽기만(QCursor.pos),
   효과 창 클릭 통과·`WDA_EXCLUDEFROMCAPTURE`로 판독 캡처에서 제외. 제작자만 탭·홈 4칸, 일반 사용자는 탭 숨김·홈 3칸 그대로(렌더, 스크롤 없음).
   사용자 개선 요청 2건(배포 전): ① 꼬리 '선·무지개 선'이 각짐 — 원인은 CPU가 아니라 초당 60번 읽은 점을 **직선으로 이음**(`cursor_paint` drawLine). 같은 점을 곡선(Catmull-Rom 등)으로
