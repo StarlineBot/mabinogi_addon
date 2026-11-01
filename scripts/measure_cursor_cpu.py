@@ -76,7 +76,10 @@ def main(argv=None) -> int:
             app.quit()
             return
         name, changes = CASES[state["i"]]
-        print(f"\n[{state['i'] + 1}/{len(CASES)}] {name} — 3초 뒤 {args.seconds:g}초 측정", flush=True)
+        still = "멈춤" in name
+        # 안내는 3초 전에 미리(예전엔 측정 시작 때 나와, 앞 단계대로 움직이던 손이 멈춤 측정에 섞였다)
+        print(f"\n[{state['i'] + 1}/{len(CASES)}] {name} — 3초 뒤 {args.seconds:g}초 측정 · "
+              + ("지금 마우스에서 손을 떼 주세요." if still else "지금부터 마우스를 계속 크게 움직여 주세요."), flush=True)
         fx.update_settings(**{**dict(enabled=True, shake=False, size=40, opacity=100, tailLength="normal"), **changes})
 
         def start():
