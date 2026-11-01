@@ -31,6 +31,9 @@
   사용자 개선 요청 2건(배포 전): ① 꼬리 '선·무지개 선'이 각짐 — 원인은 CPU가 아니라 초당 60번 읽은 점을 **직선으로 이음**(`cursor_paint` drawLine). 같은 점을 곡선(Catmull-Rom 등)으로
   이으면 부드러움, 그리기 비용 같음(QA 시제품 1ms 안팎). 둥근 끝을 짧은 선마다 쓰면 구슬처럼 보여 가운데는 평평한 끝. ② 반짝이: 지금은 흰색일 때만 여러 색 →
   색을 직접 고르기 전(기본)엔 여러 색, 고르면 그 색.
+  → **QA 3cb2fe7 통과(모양)**: 실제 `paint_tail`로 렌더 — 선·무지개 선 곡선(묶음 이음매 거의 안 보임)·점 고른 간격, 반짝이 기본 여러 색/노랑·흰색 지정 단색. release checks 0.36.0 1896 passed.
+  **Potential(CPU)**: 그리기 비용이 움직일 때 약 3배(오프스크린, 점 30개 0.29→0.82ms·60개 0.53→1.58ms — Python 곡선 계산). 이전 Windows 측정 선 0.66%·무지개 0.81%·원+선(길게) 0.84% →
+  배포 전 `scripts/measure_cursor_cpu.py` Windows 재측정 권장(2% 넘으면 smooth를 numpy로). 원격 v0.36.0 태그 없음.
 - **0.36.0 마우스 커서 표시(2026-11-01 사용자 요청 '마우스 강조 개발 · 좌표는 보류', 공개 범위 제작자만)** — 로컬 검증, Windows 실화면·CPU 측정 대기. [명세](mouse-cursor-spec.md)
   `cursor_fx.py`(순수: 설정 정리·꼬리 점(짧게 0.2/보통 0.3/길게 0.45초)·흔들기 판정 0.5초 안 방향 3번+가로 400px·배율 곡선), `system/cursor.py`(Qt `QCursor.pos()` = Windows `GetCursorPos`+DPI 환산, 읽기만;
   효과 창 `WDA_EXCLUDEFROMCAPTURE` — 판독 캡처에 안 섞이게), `ui/cursor_overlay.py`(원·스코프 작은 창, 화면 선 1px 창 2개, 꼬리는 범위만큼 창, 클릭 통과, 게임 앞·일시정지 아님만,
