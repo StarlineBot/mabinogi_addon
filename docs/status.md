@@ -26,6 +26,8 @@
 
 ## 열린 문제
 
+- **Confirmed(2026-11-01 사용자: 단축바 이동이 격자로 안 됨)**: 다른 오버레이(버프·디버프·메모·미러·도르카·체력바·패턴 등)는 끌 때 `ui/grid` 격자 맞춤(`grid.enabled`·`snap`·`show_guide`)을 쓰는데,
+  단축바 묶음 창 `ui/skillbar_mirror.ChunkOverlay`의 `mousePressEvent/mouseMoveEvent/mouseReleaseEvent`에만 없음(2026-10-11 v0.4.40 첫 구현 그대로). 같은 코드 추가로 해결.
 - **QA 0.36.0 마우스 커서(3cf3d69·f53e533·0388c02, 2026-11-01)**: 통과 — 전체 3791·release checks 1891 passed(test_cursor_fx 포함). 커서 위치는 읽기만(QCursor.pos),
   효과 창 클릭 통과·`WDA_EXCLUDEFROMCAPTURE`로 판독 캡처에서 제외. 제작자만 탭·홈 4칸, 일반 사용자는 탭 숨김·홈 3칸 그대로(렌더, 스크롤 없음).
   사용자 개선 요청 2건(배포 전): ① 꼬리 '선·무지개 선'이 각짐 — 원인은 CPU가 아니라 초당 60번 읽은 점을 **직선으로 이음**(`cursor_paint` drawLine). 같은 점을 곡선(Catmull-Rom 등)으로
@@ -34,6 +36,10 @@
   → **QA 3cb2fe7 통과(모양)**: 실제 `paint_tail`로 렌더 — 선·무지개 선 곡선(묶음 이음매 거의 안 보임)·점 고른 간격, 반짝이 기본 여러 색/노랑·흰색 지정 단색. release checks 0.36.0 1896 passed.
   **Potential(CPU)**: 그리기 비용이 움직일 때 약 3배(오프스크린, 점 30개 0.29→0.82ms·60개 0.53→1.58ms — Python 곡선 계산). 이전 Windows 측정 선 0.66%·무지개 0.81%·원+선(길게) 0.84% →
   배포 전 `scripts/measure_cursor_cpu.py` Windows 재측정 권장(2% 넘으면 smooth를 numpy로). 원격 v0.36.0 태그 없음.
+  → numpy 시제품(결과 동일): 곡선 계산만 0.1~0.2ms 줄고 늘어난 비용 대부분은 Qt가 더 많은 조각을 그리는 몫(점 30: Python 0.88·numpy 0.95·곡선 없음 0.74ms) — numpy 효과 작음.
+  줄이려면 세분 수(5→3)·긴 간격만 세분이 효과적. 우선 Windows 실측.
+  **v0.36.0 게시 완료**: [#170](https://github.com/StarlineBot/mabinogi_addon/actions/runs/41304919077)·게시 [#250](https://github.com/StarlineBot/mabinogi_addon/actions/runs/41306241532) 성공,
+  태그 `v0.36.0` → 01999ba(candidate 지문 `4fb29b95…` 일치). 공개 version.json 0.36.0(Release 자산과 동일)·exe 163,930,499바이트·sha256 `62bc13b7…5d30ad60` 후보·공개 URL 일치.
 - **0.36.0 마우스 커서 표시(2026-11-01 사용자 요청 '마우스 강조 개발 · 좌표는 보류', 공개 범위 제작자만)** — 로컬 검증, Windows 실화면·CPU 측정 대기. [명세](mouse-cursor-spec.md)
   `cursor_fx.py`(순수: 설정 정리·꼬리 점(짧게 0.2/보통 0.3/길게 0.45초)·흔들기 판정 0.5초 안 방향 3번+가로 400px·배율 곡선), `system/cursor.py`(Qt `QCursor.pos()` = Windows `GetCursorPos`+DPI 환산, 읽기만;
   효과 창 `WDA_EXCLUDEFROMCAPTURE` — 판독 캡처에 안 섞이게), `ui/cursor_overlay.py`(원·스코프 작은 창, 화면 선 1px 창 2개, 꼬리는 범위만큼 창, 클릭 통과, 게임 앞·일시정지 아님만,
