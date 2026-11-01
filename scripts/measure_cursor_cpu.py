@@ -36,7 +36,12 @@ class _Always:
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--seconds", type=float, default=15.0)
+    parser.add_argument("--only", type=str, default="", help="측정할 번호(쉼표, 예: 1,9)")
     args = parser.parse_args(argv)
+    global CASES
+    if args.only:
+        picks = [int(n) - 1 for n in args.only.split(",") if n.strip().isdigit()]
+        CASES = tuple(CASES[i] for i in picks if 0 <= i < len(CASES))
     from PySide6.QtCore import QTimer
     from PySide6.QtWidgets import QApplication
 
@@ -58,6 +63,9 @@ def main(argv=None) -> int:
             name = CASES[state["i"]][0]
             results.append((name, cpu / wall * 100 / cores, cpu / wall * 100))
             print(f"  → {name}: 전체 {results[-1][1]:.2f}% · 코어 1개 {results[-1][2]:.1f}%", flush=True)
+            st = fx.stats
+            print(f"    초당: 틱 {st['ticks']/wall:.0f} · 움직임 {st['moved']/wall:.0f} · 원 이동 {st['ring_moves']/wall:.0f}"
+                  f" · 꼬리 갱신 {st['tail_updates']/wall:.0f} · 그리기 {st['paints']/wall:.0f} · 타이머 {fx._timer.interval()}ms", flush=True)
         state["i"] += 1
         if state["i"] >= len(CASES):
             fx.shutdown()
@@ -74,6 +82,7 @@ def main(argv=None) -> int:
         def start():
             print("  측정 중… " + ("마우스를 움직이지 마세요." if "멈춤" in name else "마우스를 계속 크게 움직여 주세요."),
                   flush=True)
+            fx.stats.clear()
             state["t0"], state["c0"] = time.perf_counter(), time.process_time()
             QTimer.singleShot(int(args.seconds * 1000), next_case)
         QTimer.singleShot(int(min(3.0, args.seconds) * 1000), start)

@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import time
+from collections import Counter
 
 from PySide6.QtCore import QObject, QPointF, QRect, Qt, QTimer
 from PySide6.QtGui import QColor, QGuiApplication, QPainter
@@ -27,7 +28,7 @@ VISIBILITY_EVERY = 0.25  # 게임이 앞에 있는지는 0.25초마다만 확인
 
 
 class _FxWindow(QWidget):
-    def __init__(self, painter) -> None:
+    def __init__(self, painter, stats=None) -> None:
         super().__init__(None, Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint
                          | Qt.WindowType.Tool | Qt.WindowType.WindowTransparentForInput
                          | Qt.WindowType.WindowDoesNotAcceptFocus)
@@ -35,6 +36,7 @@ class _FxWindow(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
         self._painter = painter
+        self._stats = stats
         self._prepared = False
 
     def show_fx(self) -> None:
@@ -47,6 +49,8 @@ class _FxWindow(QWidget):
                 cursor_sys.exclude_from_capture(self)
 
     def paintEvent(self, _event):
+        if self._stats is not None:
+            self._stats['paints'] += 1
         p = QPainter(self)
         self._painter(p, self)
         p.end()
@@ -70,10 +74,11 @@ class CursorFx(QObject):
         self._trail = Trail()
         self._shake = ShakeDetector()
         self._shake_at = -1e9
-        self._ring = _FxWindow(self._paint_ring)
-        self._hline = _FxWindow(self._paint_line)
-        self._vline = _FxWindow(self._paint_line)
-        self._tail = _FxWindow(self._paint_tail)
+        self.stats = Counter()  # 측정 스크립트용 횟수(틱·움직임·창 이동·그리기) — 더하기만 해서 비용 없음
+        self._ring = _FxWindow(self._paint_ring, self.stats)
+        self._hline = _FxWindow(self._paint_line, self.stats)
+        self._vline = _FxWindow(self._paint_line, self.stats)
+        self._tail = _FxWindow(self._paint_tail, self.stats)
         self._tail_origin = QPointF(0, 0)
         self._tail_points = []
         self._timer = QTimer(self)
@@ -131,6 +136,7 @@ class CursorFx(QObject):
     # ---- 매 틱 -----------------------------------------------------------------------------
     def tick(self) -> None:
         now = self._clock()
+        self.stats['ticks'] += 1
         if now - self._checked_at >= VISIBILITY_EVERY:
             self._checked_at = now
             show = self.is_enabled() and not self._paused and bool(self._watcher.is_game_active())
@@ -148,6 +154,7 @@ class CursorFx(QObject):
         moved = (x, y) != self._last_pos
         self._last_pos = (x, y)
         if moved:
+            self.stats['moved'] += 1
             self._moved_at = now
             self._trail.add(now, x, y)
             if s["shake"] and self._shake.add(now, x):
@@ -160,6 +167,7 @@ class CursorFx(QObject):
             if moved or pulsing or not self._ring.isVisible():
                 self._ring_scale = pulse
                 side = int(s["size"] * max(1.0, pulse)) + 8
+                self.stats['ring_moves'] += 1
                 self._ring.setGeometry(x - side // 2, y - side // 2, side, side)
                 self._ring.show_fx()
                 self._ring.update()
@@ -188,6 +196,7 @@ class CursorFx(QObject):
                 self._tail_origin = QPointF(box[0], box[1])
                 self._tail.setGeometry(QRect(*box))
                 self._tail.show_fx()
+                self.stats['tail_updates'] += 1
                 self._tail.update()
         elif self._tail.isVisible():
             self._tail_points = []
