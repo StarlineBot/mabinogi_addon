@@ -231,6 +231,9 @@ class MainWindow(QMainWindow):
         app = QApplication.instance()
         if app is not None and hasattr(app, "commitDataRequest"):
             app.commitDataRequest.connect(lambda *_: _log.info("Windows 종료 신호 받음"))
+        if app is not None:
+            from . import overlay_capture  # 0.37.1: 오버레이 창이 뜰 때마다 판독 캡처에서 빼기
+            overlay_capture.install(app)
         from ..setup_state import initialize_new_user
         initialize_new_user()
         config.migrate_default_buff_names()

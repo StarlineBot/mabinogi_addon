@@ -1,5 +1,5 @@
 {
-  "version": "0.37.0",
+  "version": "0.37.1",
   "tests": [
     "tests/test_blackbox.py",
     "tests/test_blackbox_access.py",
@@ -103,6 +103,7 @@
     "tests/test_fastping_kept.py",
     "tests/test_cursor_fx.py",
     "tests/test_skillbar_chunk_snap.py",
-    "tests/test_capture_guard.py"
+    "tests/test_capture_guard.py",
+    "tests/test_overlay_capture.py"
   ]
 }

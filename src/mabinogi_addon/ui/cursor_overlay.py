@@ -55,7 +55,9 @@ class _FxWindow(QWidget):
                 self._prepared = True
                 from ..system.clickthrough import set_click_through
                 set_click_through(self, True)
-                cursor_sys.exclude_from_capture(self)
+                # 캡처 제외는 0.37.1부터 오버레이 공통(ui/overlay_capture)
+                from . import overlay_capture
+                overlay_capture.apply(self)
 
     def paintEvent(self, _event):
         if self._stats is not None:

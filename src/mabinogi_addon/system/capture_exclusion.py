@@ -122,3 +122,18 @@ def excluding_windows(handles, box):
         for hwnd, previous in reversed(changed):
             if not _restore(user, hwnd, previous):
                 pending.append((hwnd, previous))
+
+
+def set_excluded(hwnd, excluded):
+    """창 하나를 화면 캡처에서 계속 빼거나(True) 되돌린다(False). 2004 미만·다른 OS는 아무것도 안 함(False).
+    0.37.1: 우리 오버레이 상시 제외(판독·녹화·방송 캡처 모두에서 빠짐)."""
+    if not available():
+        return False
+    try:
+        user, _dwm = _api()
+        if not _owned(user, hwnd):
+            return False
+        return bool(user.SetWindowDisplayAffinity(hwnd, _EXCLUDE if excluded else 0))
+    except Exception:
+        _warning()
+        return False
