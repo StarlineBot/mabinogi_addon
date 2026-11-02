@@ -50,6 +50,10 @@
     mss 10.2 Windows(`mss/windows/gdi.py`)는 생성 때 GetWindowDC·CreateCompatibleDC, 캡처 때 CreateDIBSection을 잡고 `close()`에서만 반납, `__del__` 없음
     → 초당 5회×GDI 핸들 2~3개 누수(프로세스 한도 기본 10,000 → 십수 분 뒤 그리기 실패·창 깨짐·충돌 위험, Highly Likely) + 전체 탐색마다 2560×1440 DIB(약 14.7MB) 미반납.
     Windows 검증 런은 게임이 없어 못 잡음. 수정 요청: 오래 사는 작업 스레드 1개(또는 작업마다 `with mss.mss()`로 닫기), 종료 때 close, 생성·close 짝 회귀 테스트.
+  → **수정**: 판독 틱·다시 읽기는 탭마다 오래 사는 작업 스레드 1개(`ThreadPoolExecutor(max_workers=1)`, 결과는 Signal 대기열로 화면 스레드에)에서 그 스레드의 mss 하나를 재사용,
+    `DorchaJob` 제거. 전체 탐색(`DorchaSearch`, 드묾)은 탐색마다 mss를 열고 run 끝에 그 스레드에서 `close`. `shutdown`은 작업 스레드에 닫기를 넣고 종료 대기, 화면 스레드(겹친 창 경로) mss도 닫음.
+    테스트 `test_dorcha_thread.py::test_capture_objects_are_reused_and_closed`(가짜 mss: 틱 25번 → 생성 1·close 0, 탐색 3번 → +3 생성·3 close, 종료 뒤 생성 == close; 수정 전 생성 25로 실패).
+    전체 3849 passed·404 skipped, release checks 0.38.0 1944 passed.
 - **사용자 app.log 분석(2026-11-02, 0.36.1·0.37.0 실게임 '게임 느릴 때 커서도 느려 보임')**: `마우스 커서 틱` 30초 줄 20여 개 —
   틱 자체 평균 0.4~0.7ms·최대 대개 2~5ms(그리기 가벼움, Confirmed), 늦은 틱(>33ms) 2~8%·최대 간격 100~180ms(게임 시작 직후 424ms) →
   커서가 아니라 **같은 화면 스레드의 다른 작업이 주기적으로 100~180ms 막음**(Highly Likely). 앱 CPU: 블랙박스 진단의 '앱 본체'가 0.36.0 때부터 실게임 3.7~5.4%

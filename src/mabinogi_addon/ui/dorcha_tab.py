@@ -6,7 +6,7 @@ from time import monotonic, perf_counter as monotonic_perf
 import weakref
 
 import numpy as np
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QGuiApplication, QImage, QPixmap
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QMessageBox, QPushButton, QScrollArea, QSpinBox, QVBoxLayout, QWidget
 
@@ -35,6 +35,8 @@ def _note_dorcha(trace, value):
 _last_dorcha_state = None
 
 class DorchaTab(QWidget):
+    _job_ready = Signal(object)  # 작업 스레드 → 화면 스레드 결과 전달(대기열 연결)
+
     def __init__(self, watcher):
         super().__init__()
         self._watcher = watcher
@@ -356,23 +358,39 @@ class DorchaTab(QWidget):
         if self.INLINE_JOBS or inline:
             done(work())
             return
-        if getattr(self, slot, None) is not None:
+        if getattr(self, slot, None) is not None or self._shutting_down:
             return
-        from .dorcha_search import DorchaJob
-        job = DorchaJob(work)
-        setattr(self, slot, job)
+        executor = self._job_executor()
+        token = object()
+        setattr(self, slot, token)
 
-        def finished():
-            job.wait()
-            if getattr(self, slot, None) is job:
+        def deliver(result):
+            if getattr(self, slot, None) is token:
                 setattr(self, slot, None)
+            if not self._shutting_down:
+                done(result)
+
+        def run():
             try:
-                if not self._shutting_down:
-                    done(job.result)
-            finally:
-                job.deleteLater()
-        job.finished.connect(finished)
-        job.start()
+                result = work()
+            except Exception:  # noqa: BLE001 — 계산 함수가 스스로 잡지만 마지막 방어
+                _log.warning("도르카 작업 실패", exc_info=True)
+                result = None
+            self._job_ready.emit(lambda: deliver(result))
+        executor.submit(run)
+
+    def _job_executor(self):
+        """0.38.0 QA: 작업마다 새 스레드(+스레드마다 새 mss, 미반납 → GDI 누수) 대신 오래 사는 작업 스레드 1개.
+        판독 틱·다시 읽기를 순서대로 처리하고 그 스레드의 mss 하나를 재사용, 종료 때 그 스레드에서 닫는다."""
+        executor = self.__dict__.get("_executor")
+        if executor is None:
+            from concurrent.futures import ThreadPoolExecutor
+            executor = self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="dorcha-job")
+            self._job_ready.connect(self._deliver_job)
+        return executor
+
+    def _deliver_job(self, deliver):
+        deliver()  # 화면 스레드
 
     def _compute_tick(self, snap):
         """작업 스레드: 대상 창 확인 → (필요하면) 등록 영역 확인 → 캡처 → 판독. 위젯·Qt 객체는 건드리지 않는다.
@@ -567,7 +585,8 @@ class DorchaTab(QWidget):
             worker = DorchaSearch(np.array(frame, copy=True), target, self._search_epoch)
         else:
             worker = DorchaSearch(None, target, self._search_epoch, grab=self._grab_rect,
-                                  read=read_dorcha, target_fn=self._search_target)
+                                  read=read_dorcha, target_fn=self._search_target,
+                                  release=self._close_thread_mss)  # 탐색 하나 = mss 하나, 끝나면 그 스레드에서 닫음
         self._search_worker = worker
         worker.finished.connect(self._finish_search)
         worker.start()
@@ -671,7 +690,7 @@ class DorchaTab(QWidget):
                 import mss
                 sct = local.sct = mss.mss()
                 if threading.current_thread() is threading.main_thread():
-                    self._sct = sct  # 종료 때 닫기(작업 스레드 것은 스레드와 함께 정리)
+                    self._sct = sct  # 종료 때 닫기(작업 스레드 것은 그 스레드에서 _close_thread_mss)
             shot = sct.grab(dict(left=x,top=y,width=w,height=h))
             frame = np.frombuffer(shot.bgra,np.uint8).reshape(shot.height,shot.width,4)[:,:,:3]
             self._capture_failed = False
@@ -681,6 +700,20 @@ class DorchaTab(QWidget):
                 _log.warning("도르카 캡처 실패", exc_info=True)
             self._capture_failed = True
             return None
+
+    def _close_thread_mss(self):
+        """지금 스레드의 mss를 닫는다(GDI DC·DIB 반납 — mss는 close()에서만 반납, __del__ 없음)."""
+        local = self.__dict__.get("_sct_local")
+        sct = getattr(local, "sct", None) if local is not None else None
+        if sct is None:
+            return
+        local.sct = None
+        if sct is self._sct:
+            self._sct = None
+        try:
+            sct.close()
+        except Exception:  # noqa: BLE001
+            _log.warning("도르카 캡처 정리 실패", exc_info=True)
 
     def _save(self):
         if self._shutting_down:
@@ -820,12 +853,12 @@ class DorchaTab(QWidget):
             worker.wait()
             self._search_worker = None
             worker.deleteLater()
-        for slot in ("_tick_job", "_reread_job"):
-            job = getattr(self, slot, None)
-            if job is not None:
-                job.wait()
-                setattr(self, slot, None)
-                job.deleteLater()
+        executor = self.__dict__.pop("_executor", None)
+        if executor is not None:
+            executor.submit(self._close_thread_mss)  # 작업 스레드의 mss는 그 스레드에서 닫는다
+            executor.shutdown(wait=True)
+        self._tick_job = self._reread_job = None
+        self._close_thread_mss()
         for widget in (self._overlay,self._selector,self._highlight,self._autofind_highlight):
             if widget is not None:
                 widget.close()

@@ -8,6 +8,7 @@ import logging
 import threading
 from time import monotonic
 
+import numpy as np
 import pytest
 from PySide6.QtCore import QEventLoop, QTimer
 
@@ -59,7 +60,8 @@ def test_screen_thread_never_captures_looks_up_or_searches(threaded):
     app, tab, state, calls, located = threaded
     place(state, 20, 20)
     tab._tick()
-    assert calls == []  # 틱 자체(화면 스레드)는 아무것도 캡처·조회하지 않고 작업만 건다
+    # 틱 자체(화면 스레드)는 아무것도 캡처·조회하지 않고 작업만 건다(작업 스레드는 이미 돌기 시작했을 수 있음)
+    assert not any(on_main for _, on_main, _ in calls)
     settle(tab)
     assert tab._overlay.value == 15
     # 장식이 옮겨 가면: 못 읽음 → 전체 탐색(창 전체 캡처 포함) → 찾은 자리 다시 읽기 — 전부 작업 스레드
@@ -126,3 +128,51 @@ def test_game_exe_and_owner_lookups_are_cached(monkeypatch):
     config.save_game_exe("Client.exe")  # 설정에서 게임 실행 파일을 바꾸면 캐시를 바로 비운다
     window_capture.registered_game_target((5, 7, 0, 0, 1, 1))
     assert reads == [1, 1]
+
+
+def test_capture_objects_are_reused_and_closed(moving, monkeypatch):
+    """0.38.0 QA(배포 보류): 작업마다 새 스레드 + 스레드마다 새 mss를 만들고 닫지 않아 GDI 핸들이 샜다
+    (mss는 close()에서만 DC·DIB를 반납). 판독 틱은 오래 사는 작업 스레드 1개의 mss 하나를 재사용하고,
+    전체 탐색은 탐색마다 열고 닫으며, 종료하면 열린 mss가 0개여야 한다."""
+    import sys
+    from types import SimpleNamespace
+    app, tab, state, _ = moving
+    monkeypatch.setattr(dorcha_tab.DorchaTab, "INLINE_JOBS", False)
+    opened, closed, threads = [], [], set()
+
+    class FakeMss:
+        def __init__(self):
+            opened.append(self)
+            threads.add(threading.get_ident())
+
+        def grab(self, box):
+            assert self not in closed
+            x, y, w, h = box["left"], box["top"], box["width"], box["height"]
+            crop = state.frame[y:y + h, x:x + w]
+            bgra = np.dstack([crop, np.full(crop.shape[:2], 255, np.uint8)]).tobytes()
+            return SimpleNamespace(bgra=bgra, width=w, height=h)
+
+        def close(self):
+            closed.append(self)
+
+    monkeypatch.setitem(sys.modules, "mss", SimpleNamespace(mss=FakeMss))
+    monkeypatch.setattr(tab, "_grab_rect", dorcha_tab.DorchaTab._grab_rect.__get__(tab))  # 진짜 캡처 경로
+    place(state, 20, 20)
+    for _ in range(25):  # 판독 틱 25번
+        tab._tick()
+        settle(tab)
+    assert tab._overlay.value == 15
+    assert len(opened) == 1 and not closed  # 작업 스레드 하나의 mss 하나를 계속 씀
+    searches = 0
+    for x, y in [(150, 90), (60, 120), (200, 40)]:  # 전체 탐색 3번(탐색마다 열고 닫음)
+        place(state, x, y)
+        state.now = tab._next_search + 1
+        tab._tick()
+        settle(tab)
+        settle(tab)
+        searches += 1
+        assert tab._overlay.value == 15 and tab._live_box == (x, y, 28, 23)
+    assert len(opened) == 1 + searches and len(closed) == searches
+    tab.shutdown()
+    assert len(opened) == len(closed)  # 종료 뒤 열린 mss 0개(작업 스레드 것은 그 스레드에서 닫음)
+    assert tab._sct is None
