@@ -38,6 +38,10 @@
   → 0.37.1 로그(11-02 20:09~20:15, FPS 수집 20:11부터 꺼짐): 늦은 틱 7~9%·최대 간격 123~242ms, 틱 자체 0.4~0.8ms. 같은 날 0.37.0은 2~8%(대개 5%), 11-02 새벽 0.36.1은 1~5%(대개 2%).
     FPS 꺼도 정체 그대로라 FPS 이벤트는 주범 아님(Confirmed). 버전마다 늘어난 건 Potential(표본 6분·게임 상황 다름): 0.37.1부터 오버레이가 상시 캡처 제외라
     화면 스레드 mss BitBlt마다 DWM이 '제외 창 없는 화면'을 따로 합성해 넘겨야 해서 캡처당 대기가 커졌을 수 있음. 로그상 확실히 켜진 화면 스레드 캡처는 도르카(판독 기록), 나머지 켜짐 여부는 미확인.
+  → **사용자 A/B(11-02): 도르카 끄니 부드러워짐** → 도르카가 주범(사용자 체감 기준 Confirmed, 수치 미수집). 코드(`ui/dorcha_tab.py`, 모두 화면 스레드 200ms 타이머):
+    ① 틱마다 `_search_target()`→`registered_game_target()` 최대 2회 — 호출마다 `load_game_exe()`가 설정 JSON을 디스크에서 다시 읽고 OpenProcess로 exe 이름 확인, 추적을 잃으면 EnumWindows 전수 조사
+    ② 틱마다 `_grab_tracking_rect`(mss BitBlt)+`read_dorcha` ③ 판독 실패(로그의 잦은 `거절 · invalid_input`)마다 `_start_search`가 **게임 창 전체(2560×1440) BitBlt+복사**를 화면 스레드에서(2→10초 간격)
+    ④ 추적 상실 시 2초마다 `_verify_registered_region`의 `locate_dorcha` 매칭도 화면 스레드. 개선: 캡처·판독·대상 확인을 작업 스레드로, 게임 exe/대상은 캐시(변경 이벤트 때만 갱신), 전체 탐색 프레임은 공유 dxcam에서.
 - **v0.37.1 게시 확인(2026-11-02)**: 검증 41431550901 성공·게시 41433475404 success, 태그 v0.37.1 = c799861, candidate source_sha·fingerprint(32ddc691…) 일치,
   공개 version.json 0.37.1·exe 163946848B·sha256 3a4290da… 실제 다운로드와 일치. 남은 확인(사용자 Windows): 미러를 보스 바 위에 두고 패턴 알림, Print Screen에 오버레이 빠짐.
 - **QA 0.37.1 재확인(0249e10, 2026-11-02)**: 통과 — 기동·캡처 제외 시험 9·전체 3830·release checks 0.37.1 1925 passed(순서대로 실행). 앱 전체 필터 제거,
