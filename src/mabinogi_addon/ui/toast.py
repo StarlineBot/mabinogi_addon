@@ -34,6 +34,8 @@ class Toast(QWidget):
             | Qt.WindowType.WindowStaysOnTopHint
             | Qt.WindowType.Tool,
         )
+        from . import overlay_capture
+        overlay_capture.watch(self)  # 0.37.1: 뜰 때마다 판독 캡처에서 빼기(이 창에만 필터)
         # 포커스를 뺏지 않고 뜬다(게임 입력 방해 금지).
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)

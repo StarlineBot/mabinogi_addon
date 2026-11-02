@@ -12,8 +12,6 @@
 
 from __future__ import annotations
 
-import weakref
-
 from PySide6.QtCore import QEvent, QObject
 
 # 게임 화면 위에 뜨는 우리 창(판독 영역과 겹칠 수 있음) — 상시 제외 대상
@@ -45,27 +43,27 @@ def apply(widget) -> bool:
 
 
 class _ShowFilter(QObject):
-    def __init__(self) -> None:
-        super().__init__()
-        self.applied = weakref.WeakSet()
+    """오버레이 창에만 설치하는 필터(앱 전체가 아니라 — 0.37.1 Windows 검증: 앱 전체 Python 필터는 모든 이벤트마다
+    불려 예외가 남은 상태에서 연쇄 오류를 냈다). 본문 전체를 try로 감싸 어떤 경우에도 이벤트를 막지 않는다."""
 
     def eventFilter(self, watched, event):
-        if event.type() in (QEvent.Type.Show, QEvent.Type.WinIdChange):
-            try:
-                if hasattr(watched, "isWindow") and is_overlay(watched):
-                    apply(watched)
-                    self.applied.add(watched)
-            except Exception:  # noqa: BLE001 — 캡처 제외 실패가 화면 표시를 막지 않게
-                pass
+        try:
+            if event.type() in (QEvent.Type.Show, QEvent.Type.WinIdChange):
+                apply(watched)
+        except Exception:  # noqa: BLE001 — 캡처 제외 실패가 화면 표시를 막지 않게
+            pass
         return False
 
 
 _filter: _ShowFilter | None = None
 
 
-def install(app) -> None:
-    """앱 전체에 한 번 설치(메인 창 생성 때). 이후 뜨는 오버레이마다 자동 적용."""
+def watch(widget) -> None:
+    """오버레이 생성자에서 부른다. 이 창이 뜰 때마다(창 핸들이 바뀌어도) 캡처 제외를 건다."""
     global _filter
-    if _filter is None:
-        _filter = _ShowFilter()
-        app.installEventFilter(_filter)
+    try:
+        if _filter is None:
+            _filter = _ShowFilter()
+        widget.installEventFilter(_filter)
+    except Exception:  # noqa: BLE001
+        pass

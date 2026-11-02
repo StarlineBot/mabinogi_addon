@@ -43,6 +43,8 @@ class UpcomingPatternsOverlay(QWidget):
             | Qt.WindowType.WindowStaysOnTopHint
             | Qt.WindowType.Tool,
         )
+        from . import overlay_capture
+        overlay_capture.watch(self)  # 0.37.1: 뜰 때마다 판독 캡처에서 빼기(이 창에만 필터)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
         self._locked = False

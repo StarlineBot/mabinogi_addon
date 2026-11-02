@@ -35,6 +35,8 @@ class MirrorOverlay(QWidget):
             | Qt.WindowType.WindowStaysOnTopHint
             | Qt.WindowType.Tool,
         )
+        from . import overlay_capture
+        overlay_capture.watch(self)  # 0.37.1: 뜰 때마다 판독 캡처에서 빼기(이 창에만 필터)
         # DWM 썸네일 모드: 컴포지터가 창 표면에 소스를 직접 합성하므로 창은 불투명이어야
         # 한다. per-pixel 투명(WA_TranslucentBackground)이면 레이어드 창이 돼 썸네일이
         # 안 보인다. mss 모드에서만 투명 배경을 쓴다.

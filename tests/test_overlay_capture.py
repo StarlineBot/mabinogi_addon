@@ -37,11 +37,7 @@ def fake(monkeypatch):
     state = {"available": True}
     monkeypatch.setattr(capture_exclusion, "available", lambda: state["available"])
     monkeypatch.setattr(capture_exclusion, "set_excluded", lambda hwnd, excluded: calls.append((hwnd, excluded)) or True)
-    monkeypatch.setattr(overlay_capture, "_filter", None)
-    overlay_capture.install(QApplication.instance())
     yield calls, state
-    QApplication.instance().removeEventFilter(overlay_capture._filter)
-    overlay_capture._filter = None
 
 
 def _chunk():
@@ -89,3 +85,34 @@ def test_main_window_is_not_an_overlay(fake):
     from test_navigation import window  # noqa: F401
     from mabinogi_addon.ui.main_window import MainWindow
     assert not any(cls.__name__ in overlay_capture.OVERLAYS for cls in MainWindow.__mro__)
+
+
+def test_every_overlay_class_registers_itself():
+    """0.37.1 Windows 검증 뒤: 앱 전체 필터 대신 오버레이 생성자에서 그 창에만 등록 — 빠진 오버레이가 없게."""
+    registered = set()
+    for path in UI.glob("*.py"):
+        text = path.read_text(encoding="utf-8")
+        classes = [(m.start(), m.group(1)) for m in re.finditer(r"^class (\w+)\(", text, re.M)]
+        for hit in re.finditer(r"overlay_capture\.watch\(self\)", text):
+            owner = [name for pos, name in classes if pos < hit.start()]
+            if owner:
+                registered.add(owner[-1])
+    assert registered == set(overlay_capture.OVERLAYS)
+
+
+def test_no_app_wide_filter_and_errors_never_escape(fake, monkeypatch):
+    """앱 전체 이벤트 필터를 쓰지 않고, 제외 함수가 예외를 내도 창 표시·이벤트는 그대로."""
+    calls, _ = fake
+    assert not hasattr(overlay_capture, "install")
+    w = _chunk()
+    try:
+        def boom(*a):
+            raise RuntimeError("native failure")
+        monkeypatch.setattr(capture_exclusion, "set_excluded", boom)
+        w.show()
+        QApplication.processEvents()
+        assert w.isVisible()
+        from PySide6.QtCore import QCoreApplication, QEvent
+        QCoreApplication.sendEvent(w, QEvent(QEvent.Type.ActivationChange))
+    finally:
+        w.close()

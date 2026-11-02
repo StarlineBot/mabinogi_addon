@@ -41,6 +41,8 @@ class _FxWindow(QWidget):
         super().__init__(None, Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint
                          | Qt.WindowType.Tool | Qt.WindowType.WindowTransparentForInput
                          | Qt.WindowType.WindowDoesNotAcceptFocus)
+        from . import overlay_capture
+        overlay_capture.watch(self)  # 0.37.1: 뜰 때마다 판독 캡처에서 빼기(이 창에만 필터)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
@@ -55,9 +57,7 @@ class _FxWindow(QWidget):
                 self._prepared = True
                 from ..system.clickthrough import set_click_through
                 set_click_through(self, True)
-                # 캡처 제외는 0.37.1부터 오버레이 공통(ui/overlay_capture)
-                from . import overlay_capture
-                overlay_capture.apply(self)
+                # 캡처 제외는 0.37.1부터 오버레이 공통(ui/overlay_capture.watch — 생성자에서 등록)
 
     def paintEvent(self, _event):
         if self._stats is not None:

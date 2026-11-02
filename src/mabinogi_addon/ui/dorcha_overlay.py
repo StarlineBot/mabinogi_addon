@@ -18,6 +18,8 @@ class DorchaOverlay(QWidget):
         flags = (Qt.WindowType.Widget if parent is not None else
                  Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.Tool)
         super().__init__(parent, flags)
+        from . import overlay_capture
+        overlay_capture.watch(self)  # 0.37.1: 뜰 때마다 판독 캡처에서 빼기(이 창에만 필터)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, parent is None)
         self.setAutoFillBackground(parent is not None)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)

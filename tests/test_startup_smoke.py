@@ -22,7 +22,7 @@ def test_main_window_initializes_and_closes(returning_user, monkeypatch):
     monkeypatch.setattr(autostart, "is_enabled", lambda: False)
     monkeypatch.setattr(autostart, "reconcile", lambda value: None)
     monkeypatch.setattr(main_window, "create_window_watcher", lambda **kw: AlwaysActiveWatcher())
-    monkeypatch.setattr(main_window.MainWindow, "_maybe_check_update", lambda self: None)
+    monkeypatch.setattr(main_window.MainWindow, "_maybe_check_update", lambda self, *a, **k: None)  # 실제 호출은 인자 있음(_maybe_check_update("창활성화"))
     if returning_user:
         config._write_local_config({"general": {"skipSetup": True, "tourShown": True,
                                                 "firstUseGuideShown": True}})
@@ -34,6 +34,10 @@ def test_main_window_initializes_and_closes(returning_user, monkeypatch):
         assert window.isVisible() and window.windowTitle()
         assert window.centralWidget() is not None
         assert not window.grab().isNull()
+        # 0.37.1 Windows 검증 실패 재현: 네이티브 Windows는 활성화 이벤트로 _maybe_check_update("창활성화")를 부른다
+        # (리눅스 offscreen은 이 이벤트가 없어 놓쳤다) — 직접 보내도 기동·종료가 정상이어야 한다.
+        QCoreApplication.sendEvent(window, QEvent(QEvent.Type.ActivationChange))
+        app.processEvents()
     finally:
         window._force_quit = True
         window.close()
