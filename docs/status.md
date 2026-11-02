@@ -26,6 +26,8 @@
 
 ## 열린 문제
 
+- **QA 0.37.1 재확인(0249e10, 2026-11-02)**: 통과 — 기동·캡처 제외 시험 9·전체 3830·release checks 0.37.1 1925 passed(순서대로 실행). 앱 전체 필터 제거,
+  오버레이 13종 생성자에서 `overlay_capture.watch(self)`(자기 창에만 필터, 본문 전체 try), 시험 대역 인자 수정 + 활성화 이벤트 회귀 확인. 원격 태그 최신 v0.37.0 → 같은 0.37.1로 재검증.
 - **0.37.1 검증 실패(2026-11-02, run 41409198216, 769af34) — 게시·태그 없음(v0.37.1 미사용)** Confirmed: Windows startup smoke `test_main_window_initializes_and_closes[False]` 실패 후 GC 중 비정상 종료.
   사슬: 시험 대역 `_maybe_check_update = lambda self: None`인데 실제 호출은 `_maybe_check_update("창활성화")` → native Windows에서 ActivationChange 때 changeEvent TypeError →
   0.37.1의 **앱 전체 Python 이벤트 필터**(`overlay_capture._ShowFilter`, 모든 객체의 모든 이벤트가 Python을 거침)가 남은 예외 상태에서 계속 호출돼 `event.type()`이 SystemError 연쇄.
