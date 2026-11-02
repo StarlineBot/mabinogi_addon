@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QMessageBox,
     QPushButton,
+    QSlider,
     QStyle,
     QToolButton,
     QVBoxLayout,
@@ -963,6 +964,35 @@ class SettingsTab(QWidget):
             )
         )
 
+        # 0.38.0: 전체 알림 음량 — 앱의 모든 알림 소리를 한 번에(소리별 상대 크기는 그대로)
+        from .notifier import master_volume
+
+        volume_row = QHBoxLayout()
+        volume_row.addWidget(QLabel("알림 음량"))
+        self._alert_volume = QSlider(Qt.Orientation.Horizontal)
+        self._alert_volume.setRange(0, 100)
+        self._alert_volume.setSingleStep(5)
+        self._alert_volume.setPageStep(10)
+        self._alert_volume.setMinimumWidth(180)
+        self._alert_volume.setValue(master_volume())
+        volume_row.addWidget(self._alert_volume, 1)
+        self._alert_volume_label = QLabel(f"{master_volume()}%")
+        self._alert_volume_label.setMinimumWidth(44)
+        volume_row.addWidget(self._alert_volume_label)
+        volume_preview = QPushButton("미리듣기")
+        volume_preview.setToolTip("지금 음량으로 샘플 알림을 한 번 들어요")
+        volume_preview.clicked.connect(self._preview_voice)
+        volume_row.addWidget(volume_preview)
+        self._alert_volume.valueChanged.connect(self._on_alert_volume_changed)
+        self._alert_volume.sliderReleased.connect(self._apply_alert_volume)
+        v.addLayout(volume_row)
+        v.addWidget(
+            hint_label(
+                "앱의 모든 알림 소리(버프·투아림·보스 패턴·헤일로·저체력·파티 모집·잡담 등)를 한 번에 줄여요. "
+                "100%가 지금과 같은 크기예요."
+            )
+        )
+
         v.addSpacing(8)
         v.addWidget(section_label("안내 다시 보기"))
         tour_row = QHBoxLayout()
@@ -1006,6 +1036,23 @@ class SettingsTab(QWidget):
         config.save_voice_pack(pack)  # 먼저 저장 → sound_path가 선택 팩을 가리킴
         self._preview_voice()
         self.voice_pack_changed.emit()  # 실행 중 재생기도 새 팩으로 갱신(바로 적용)
+
+    def _on_alert_volume_changed(self, value: int) -> None:
+        """끄는 동안은 숫자만, 놓을 때(또는 키보드로 바꿀 때) 저장·적용. 5단위로 맞춘다."""
+        snapped = int(round(value / 5) * 5)
+        if snapped != value:
+            self._alert_volume.setValue(snapped)
+            return
+        self._alert_volume_label.setText(f"{value}%")
+        if not self._alert_volume.isSliderDown():
+            self._apply_alert_volume()
+
+    def _apply_alert_volume(self) -> None:
+        from .notifier import master_volume, set_master_volume
+
+        value = self._alert_volume.value()
+        if value != master_volume():
+            set_master_volume(value)  # 저장 + 실행 중 재생기 모두 바로 반영
 
     def _preview_voice(self) -> None:
         """선택한 팩의 샘플 음성을 재생(미리듣기). 팩에 없으면 기본 녹음본."""

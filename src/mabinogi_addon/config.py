@@ -1628,3 +1628,26 @@ def save_cursor_fx(values: dict, path: Path = LOCAL_CONFIG_PATH) -> None:
     data = _read_local_config(path)
     data["cursorFx"] = dict(values)
     _write_local_config(data, path)
+
+
+def clamp_alert_volume(value) -> int:
+    """전체 알림 음량(%)을 0~100 정수로. 숫자가 아니면 100(지금과 같은 크기)."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return 100
+    return int(min(100, max(0, round(value))))
+
+
+def load_alert_volume(path: Path = LOCAL_CONFIG_PATH) -> int:
+    """설정 › 일반 › 알림 음량(0~100, 기본 100). 0.38.0."""
+    g = _read_local_config(path).get("general") or {}
+    return clamp_alert_volume(g.get("alertVolume", 100))
+
+
+def save_alert_volume(value, path: Path = LOCAL_CONFIG_PATH) -> None:
+    data = _read_local_config(path)
+    g = data.get("general")
+    if not isinstance(g, dict):
+        g = {}
+    g["alertVolume"] = clamp_alert_volume(value)
+    data["general"] = g
+    _write_local_config(data, path)

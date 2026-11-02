@@ -10,6 +10,8 @@ QtMultimedia가 없거나 백엔드가 없으면(헤드리스 등) 조용히 no-
 
 from __future__ import annotations
 
+import weakref
+
 from pathlib import Path
 
 from PySide6.QtCore import QObject, QUrl
@@ -99,6 +101,53 @@ def second_sound_map() -> dict[str, Path]:
     return out
 
 
+# ---- 전체 알림 음량(0.38.0, 설정 › 일반 › 알림 음량) ---------------------------------------------
+# 최종 음량 = 소리별 기본값(보스·헤일로 0.8, 파티·게임창 0.6 …) × 전체 음량. 상대 균형은 그대로, 0%면 무음.
+_master_volume: int | None = None  # 0~100(처음 쓸 때 설정에서 읽음)
+_live = weakref.WeakSet()  # 살아 있는 SoundNotifier(전체 음량을 바꾸면 바로 반영)
+
+
+def effective_volume(base: float, master_percent) -> float:
+    """소리별 기본값(0~1) × 전체 음량(0~100%) → 0~1."""
+    from .. import config
+
+    base = max(0.0, min(1.0, float(base)))
+    return base * config.clamp_alert_volume(master_percent) / 100
+
+
+def master_volume() -> int:
+    global _master_volume
+    if _master_volume is None:
+        from .. import config
+
+        _master_volume = config.load_alert_volume()
+    return _master_volume
+
+
+def set_master_volume(percent) -> int:
+    """설정에서 바꿈: 저장하고 실행 중 재생기 모두에 바로 적용. 정리된 값(0~100)을 돌려준다."""
+    global _master_volume
+    from .. import config
+
+    _master_volume = config.clamp_alert_volume(percent)
+    config.save_alert_volume(_master_volume)
+    for notifier in list(_live):
+        notifier.apply_master_volume()
+    for player in (_update_player, _warn_gone_player, _blackbox_player):
+        _set_player_volume(player)
+    return _master_volume
+
+
+def _set_player_volume(player) -> None:
+    """모듈 일회성 재생기(업데이트·사라짐 경고·블랙박스, 기본값 1.0)에 전체 음량 반영."""
+    if player is None:
+        return
+    try:
+        player._audio.setVolume(effective_volume(1.0, master_volume()))
+    except Exception:  # noqa: BLE001
+        pass
+
+
 # 새 버전 감지 알림 효과음(assets/sounds/에 이 이름으로 두면 재생, 없으면 조용히 생략).
 UPDATE_SOUND_FILE = "업데이트 알림.mp3"
 _update_player = None  # 일회성 재생기(모듈에 보관해 재생 전 GC 방지)
@@ -119,7 +168,8 @@ def play_update_sound() -> bool:
             player.setAudioOutput(audio)
             player._audio = audio  # 오디오 출력도 함께 보관(재생 중 끊김 방지)
             _update_player = player
-        _sync_default_device(_update_player._audio)  # 지금 쓰는 출력 장치로 맞춤
+        _sync_default_device(_update_player._audio)
+        _set_player_volume(_update_player)  # 전체 알림 음량  # 지금 쓰는 출력 장치로 맞춤
         _update_player.setSource(QUrl.fromLocalFile(str(path)))
         _update_player.play()
         return True
@@ -155,7 +205,8 @@ def play_warn_gone_sound() -> bool:
             player.setAudioOutput(audio)
             player._audio = audio  # 오디오 출력도 함께 보관(재생 중 끊김 방지)
             _warn_gone_player = player
-        _sync_default_device(_warn_gone_player._audio)  # 지금 쓰는 출력 장치로 맞춤
+        _sync_default_device(_warn_gone_player._audio)
+        _set_player_volume(_warn_gone_player)  # 전체 알림 음량  # 지금 쓰는 출력 장치로 맞춤
         _warn_gone_player.setSource(QUrl.fromLocalFile(str(path)))
         _warn_gone_player.play()
         return True
@@ -176,15 +227,24 @@ class SoundNotifier(QObject):
         self._sounds = dict(sounds)
         self._player = None
         self._audio = None
+        self._base_volume = max(0.0, min(1.0, volume))  # 소리별 기본값(전체 음량을 곱하기 전)
+        _live.add(self)
         try:
             from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 
             self._audio = QAudioOutput(self)
-            self._audio.setVolume(max(0.0, min(1.0, volume)))  # 0.0~1.0
+            self._audio.setVolume(effective_volume(volume, master_volume()))  # 기본값 × 전체 알림 음량
             self._player = QMediaPlayer(self)
             self._player.setAudioOutput(self._audio)
         except Exception:  # noqa: BLE001 — QtMultimedia/백엔드 없음 → 무음
             self._player = None
+
+    def apply_master_volume(self) -> None:
+        if self._audio is not None:
+            try:
+                self._audio.setVolume(effective_volume(self._base_volume, master_volume()))
+            except Exception:  # noqa: BLE001
+                pass
 
     def set_sounds(self, sounds: dict[str, Path]) -> None:
         self._sounds = dict(sounds)
@@ -238,6 +298,7 @@ def play_blackbox_sound(kind: str) -> bool:
             player._audio = audio
             _blackbox_player = player
         _sync_default_device(_blackbox_player._audio)
+        _set_player_volume(_blackbox_player)  # 전체 알림 음량
         _blackbox_player.setSource(QUrl.fromLocalFile(str(path)))
         _blackbox_player.play()
         return True
