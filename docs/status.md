@@ -73,6 +73,9 @@
     ① 틱마다 `_search_target()`→`registered_game_target()` 최대 2회 — 호출마다 `load_game_exe()`가 설정 JSON을 디스크에서 다시 읽고 OpenProcess로 exe 이름 확인, 추적을 잃으면 EnumWindows 전수 조사
     ② 틱마다 `_grab_tracking_rect`(mss BitBlt)+`read_dorcha` ③ 판독 실패(로그의 잦은 `거절 · invalid_input`)마다 `_start_search`가 **게임 창 전체(2560×1440) BitBlt+복사**를 화면 스레드에서(2→10초 간격)
     ④ 추적 상실 시 2초마다 `_verify_registered_region`의 `locate_dorcha` 매칭도 화면 스레드. 개선: 캡처·판독·대상 확인을 작업 스레드로, 게임 exe/대상은 캐시(변경 이벤트 때만 갱신), 전체 탐색 프레임은 공유 dxcam에서.
+- **v0.38.1 게시 확인(2026-11-02)**: 검증 41468960851 success·게시 41471340177 success(모두 API 직접 조회), 태그 v0.38.1 = c62898f,
+  candidate source_sha·fingerprint(b530ae4b…) 일치, 공개 version.json 0.38.1·exe 163961861바이트·sha256 a8ae7187…(직접 내려받아 일치).
+  내용: 반짝이 채도 0.85·굵기 섞기, 커서 창 항상 앞, 노랑(기본)으로 기본 색 복귀. 실게임 확인 남음.
 - **v0.38.0 게시 확인(2026-11-02)**: 검증 41454038759 success·게시 41456251504 success, 태그 v0.38.0 = 2f381ee, candidate source_sha·fingerprint(4845db4a…) 일치,
   공개 version.json 0.38.0·exe 163959303바이트·sha256 bbcb0d00…(직접 내려받아 일치). 내용: 도르카 판독 작업 스레드 이전(끊김 수정)·전체 알림 음량.
   QA 메모: 로컬 release checks 1944 passed는 보고 시점에 미확인이었다가 13:43 단독 실행 완료로 확인(백그라운드 완료 알림이 실제보다 먼저 와서 — 이후 결과는 파일·API를 직접 읽어 확인).
