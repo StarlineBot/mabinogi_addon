@@ -91,6 +91,17 @@
     사용자 요청: 맨 앞에 무지개 원(기본) 견본 + **원 색과 꼬리 색 따로 지정**. 시안 렌더 전달(원 색 줄 / 꼬리 색 줄 맨 앞 무지개 원).
     → 시안 3번(무지개 원 → '기본' 글자 버튼 → 모양 밑 모양 색·꼬리 밑 꼬리 색) 후 사용자: 색 분리는 **보류**, 버그만 먼저.
     QA 제안(사용자 전달용): 기본 노랑(#FFD43B) 견본을 누르면 colorChosen=False(기본)로 — 화면 변화 없이 반짝이 여러 색·불꽃 기본색 복귀. 0.38.1에 추가.
+- **0.38.1 마우스 커서 두 가지(QA 요청)** — 로컬 검증, 실게임 미검증.
+  (전체 3857 passed·404 skipped, release checks 0.38.1 1952 passed)
+  ① 반짝이(`ui/cursor_paint`): 여러 색 채도 0.45 → 0.85(`sparkle_color`), 굵기 섞기 — 조각 3개 중 1개(index % 3 == 0)만 2.6px·+ 팔 +0.8px, 나머지 1.5px(`sparkle_stroke`).
+     고른 단색도 굵기 섞기는 같고 색은 그대로. 깜빡임·크기·수명·불꽃 그대로. 렌더: 최적화 탭 미리보기 이전/0.38.1 비교(여러 색·고른 색).
+  ② 커서 창 항상 앞: `overlay_capture`에 커서 창 등록(`keep_in_front`), 오버레이 Show 필터와 `raise_overlay`(pattern_overlay·보스 예고의 raise_() 대체)가
+     한 이벤트 루프 차례 뒤 한 번 보이는 커서 창을 맨 앞으로(`system/zorder.bring_to_front` = SetWindowPos(HWND_TOPMOST, NOMOVE|NOSIZE|NOACTIVATE), 그 밖 raise_).
+     커서 틱은 순서를 바꾸지 않음(테스트). 클릭 통과·포커스 안 뺏음·캡처 제외 그대로. 1초 확인 타이머는 넣지 않음(뜨기·올리기 경로로 충분하다고 판단 — 실게임에서 남으면 추가).
+  테스트 `test_cursor_front.py`(채도·굵기 규칙·그리기 펜, 미러 다시 표시·raise 뒤 커서 맨 앞, 여러 번 올려도 한 번, 커서 틱 무변경, raise_ 직접 호출 없음).
+  ③ (추가 버그) 색을 한 번 고르면 기본(반짝이 여러 색·기본 불꽃색)으로 못 돌아감: `CursorTab._choose_color` — 기본색 #FFD43B(견본·'+' 모두, 대소문자 무관)면
+     colorChosen=False, 다른 색은 True. 안내문 "노랑(기본)을 고르면 반짝이는 여러 색, 불꽃은 기본 불꽃색으로 보여요."(반짝이·불꽃일 때). 기존 설정 이동 없음.
+     테스트: 노랑→민트→노랑 = False/True/False·저장값·sparkle_multicolor·fire_stops(None), '+' 노랑. 커서 탭 렌더 확인.
 - **v0.37.1 게시 확인(2026-11-02)**: 검증 41431550901 성공·게시 41433475404 success, 태그 v0.37.1 = c799861, candidate source_sha·fingerprint(32ddc691…) 일치,
   공개 version.json 0.37.1·exe 163946848B·sha256 3a4290da… 실제 다운로드와 일치. 남은 확인(사용자 Windows): 미러를 보스 바 위에 두고 패턴 알림, Print Screen에 오버레이 빠짐.
 - **QA 0.37.1 재확인(0249e10, 2026-11-02)**: 통과 — 기동·캡처 제외 시험 9·전체 3830·release checks 0.37.1 1925 passed(순서대로 실행). 앱 전체 필터 제거,

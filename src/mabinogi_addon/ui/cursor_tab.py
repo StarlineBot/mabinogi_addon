@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..cursor_fx import PARTICLE_KINDS, PRESET_COLORS, Particles, SHAPES, TAIL_SECONDS, TAILS, Trail, shake_scale, sparkle_multicolor
+from ..cursor_fx import DEFAULTS, PARTICLE_KINDS, PRESET_COLORS, Particles, SHAPES, TAIL_SECONDS, TAILS, Trail, shake_scale, sparkle_multicolor
 from .cursor_paint import paint_particles, paint_ring, paint_scope, paint_tail
 from .help_dialog import help_button
 from .palette import color
@@ -228,7 +228,7 @@ class CursorTab(QWidget):
         self.swatches: list[_Swatch] = []
         for hex_color in PRESET_COLORS:
             sw = _Swatch(hex_color)
-            sw.clicked.connect(lambda _=False, h=hex_color: self._change(color=h, colorChosen=True))
+            sw.clicked.connect(lambda _=False, h=hex_color: self._choose_color(h))
             self.swatches.append(sw)
             colors.addWidget(sw)
         self.custom_color = QPushButton("+")
@@ -308,9 +308,8 @@ class CursorTab(QWidget):
             f"QPushButton {{ background:{s['color']}; border:3px solid {color('accent')}; border-radius:5px; }}"
             if custom else "")
         self.color_note.setText("무지개 선은 색 설정을 쓰지 않아요." if s["tail"] == "rainbow"
-                                else "색을 고르기 전에는 반짝이가 여러 색으로 보여요." if s["tail"] == "sparkle" and sparkle_multicolor(s)
-                                else "색을 고르기 전에는 기본 불꽃색으로 보여요." if s["tail"] == "fire" and sparkle_multicolor(s)
-                                else "")
+                                else "노랑(기본)을 고르면 반짝이는 여러 색, 불꽃은 기본 불꽃색으로 보여요."
+                                if s["tail"] in ("sparkle", "fire") else "")
         self.size.setEnabled(s["shape"] in ("ring", "scope") or s["shake"] or s["tail"] != "none")
         self.length.setEnabled(s["tail"] != "none")
         on = s["enabled"]
@@ -340,4 +339,10 @@ class CursorTab(QWidget):
 
         dlg = ColorPickerDialog("커서 색", self.settings["color"], self)
         if dlg.exec() == ColorPickerDialog.DialogCode.Accepted:
-            self._change(color=dlg.value(), colorChosen=True)
+            self._choose_color(dlg.value())
+
+    def _choose_color(self, hex_color: str) -> None:
+        """0.38.1: 기본색(노랑)을 고르면 기본 상태(colorChosen=False — 반짝이 여러 색·기본 불꽃색)로 되돌린다.
+        다른 색(견본·직접 고르기 모두)은 고른 색. 예전엔 한 번 고르면 기본으로 돌아갈 길이 없었다."""
+        chosen = hex_color.upper() != DEFAULTS["color"].upper()
+        self._change(color=hex_color, colorChosen=chosen)

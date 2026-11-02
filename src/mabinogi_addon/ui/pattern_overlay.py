@@ -22,6 +22,7 @@ from PySide6.QtGui import (
     QPen,
 )
 from PySide6.QtWidgets import QWidget
+from . import overlay_capture
 
 # 글씨 = 화면높이 / FONT_DIV (크면 작아짐), 최소 FONT_MIN.
 _FONT_DIV = 28
@@ -78,7 +79,7 @@ class PatternWarningOverlay(QWidget):
         self._text = text
         self._relayout()
         self.show()
-        self.raise_()
+        overlay_capture.raise_overlay(self)  # 커서 창은 다시 그 위로(0.38.1)
         from ..system.clickthrough import set_click_through
 
         set_click_through(self, True)  # 게임 조작 막지 않게 클릭 통과
@@ -109,7 +110,7 @@ class PatternWarningOverlay(QWidget):
             self._relayout()
             if not self._paused:
                 self.show()
-                self.raise_()
+                overlay_capture.raise_overlay(self)  # 커서 창은 다시 그 위로(0.38.1)
         self.update()
 
     def set_paused(self, paused):

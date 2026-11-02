@@ -36,6 +36,7 @@ from .dpi import to_logical
 from .screen_grab import capture_for_autofind
 from ..detect.boss_name_matcher import identify, load_name_templates, load_name_variants
 from ..tracker.boss_catalog import load_bosses, make_tracker
+from . import overlay_capture
 from .pattern_overlay import PatternWarningOverlay
 from .upcoming_overlay import UpcomingPatternsOverlay
 from .widgets import FeatureHeader, CapturePathLabel, checkbox, hint_label, wrapping_row
@@ -442,7 +443,7 @@ class BossTab(QWidget):
             items = self._tracker.upcoming(hp) if self._tracker is not None else []
             self._upcoming.set_items(items)
             self._upcoming.show()
-            self._upcoming.raise_()
+            overlay_capture.raise_overlay(self._upcoming)  # 커서 창은 다시 그 위로(0.38.1)
             return
         # 고정: 보스가 최근 식별됐을 때만(짧은 유예로 전투 중 1~2프레임 미식별은 버팀).
         recent = self._unidentified <= self._UPCOMING_GONE_FRAMES
@@ -454,7 +455,7 @@ class BossTab(QWidget):
         self._upcoming.set_items(items)
         if items:
             self._upcoming.show()
-            self._upcoming.raise_()
+            overlay_capture.raise_overlay(self._upcoming)  # 커서 창은 다시 그 위로(0.38.1)
         else:
             self._upcoming.hide()
 

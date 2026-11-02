@@ -43,6 +43,7 @@ class _FxWindow(QWidget):
                          | Qt.WindowType.WindowDoesNotAcceptFocus)
         from . import overlay_capture
         overlay_capture.watch(self)  # 0.37.1: 뜰 때마다 판독 캡처에서 빼기(이 창에만 필터)
+        overlay_capture.keep_in_front(self)  # 0.38.1: 미러·오버레이가 다시 떠도 커서 창이 항상 앞
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)

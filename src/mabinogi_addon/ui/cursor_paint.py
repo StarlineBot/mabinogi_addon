@@ -90,13 +90,28 @@ def paint_tail(p: QPainter, points, kind: str, color: str, size: float, opacity:
         step = max(1, len(pts) // SPARKLE_LIMIT)
         for i, (q, life) in enumerate(pts[::step][-SPARKLE_LIMIT:]):
             dx, dy = sparkle_offsets(i, size)
-            c = QColor.fromHsvF((i * 0.13) % 1.0, 0.45, 1.0) if multicolor else QColor(color)
+            c = sparkle_color(i, multicolor, color)
             c.setAlphaF(max(0.0, min(1.0, opacity * life)))
-            p.setPen(QPen(c, 1.5))
-            arm = 2 + 3 * life
+            width, extra = sparkle_stroke(i)
+            p.setPen(QPen(c, width))
+            arm = 2 + 3 * life + extra
             x, y = q.x() + dx * (1 - life), q.y() + dy * (1 - life)
             p.drawLine(QPointF(x - arm, y), QPointF(x + arm, y))
             p.drawLine(QPointF(x, y - arm), QPointF(x, y + arm))
+
+
+SPARKLE_SATURATION = 0.85  # 0.38.1: 0.45 → 0.85(인게임에서 잘 안 보임 — 사용자 렌더 비교 후 선택)
+SPARKLE_THIN, SPARKLE_BOLD, SPARKLE_BOLD_ARM = 1.5, 2.6, 0.8
+
+
+def sparkle_color(index: int, multicolor: bool, color: str) -> QColor:
+    """여러 색: 조각 번호마다 색상환을 돌며 채도 0.85. 고른 색이면 그 색 그대로."""
+    return QColor.fromHsvF((index * 0.13) % 1.0, SPARKLE_SATURATION, 1.0) if multicolor else QColor(color)
+
+
+def sparkle_stroke(index: int) -> tuple[float, float]:
+    """0.38.1 굵기 섞기(사용자 선택 '섞기'): 조각 3개 중 1개만 굵게(2.6px, + 팔 +0.8px), 나머지 1.5px."""
+    return (SPARKLE_BOLD, SPARKLE_BOLD_ARM) if index % 3 == 0 else (SPARKLE_THIN, 0.0)
 
 
 def paint_particles(p: QPainter, particles, kind: str, color: str, opacity: float,
@@ -113,10 +128,11 @@ def paint_particles(p: QPainter, particles, kind: str, color: str, opacity: floa
         for q in particles:
             life = 1.0 - q.age
             twinkle = 0.55 + 0.45 * math.cos(q.age * 18.0 + q.index * 1.7)
-            c = QColor.fromHsvF((q.index * 0.13) % 1.0, 0.45, 1.0) if multicolor else QColor(color)
+            c = sparkle_color(q.index, multicolor, color)
             c.setAlphaF(max(0.0, min(1.0, opacity * life * twinkle)))
-            p.setPen(QPen(c, 1.5))
-            arm = q.radius * (0.4 + 0.6 * life) + 1
+            width, extra = sparkle_stroke(q.index)
+            p.setPen(QPen(c, width))
+            arm = q.radius * (0.4 + 0.6 * life) + 1 + extra
             x, y = q.x - ox, q.y - oy
             p.drawLine(QPointF(x - arm, y), QPointF(x + arm, y))
             p.drawLine(QPointF(x, y - arm), QPointF(x, y + arm))

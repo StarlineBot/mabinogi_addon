@@ -50,6 +50,8 @@ class _ShowFilter(QObject):
         try:
             if event.type() in (QEvent.Type.Show, QEvent.Type.WinIdChange):
                 apply(watched)
+            if event.type() == QEvent.Type.Show and watched not in _front:
+                keep_cursor_front()  # 0.38.1: 다른 오버레이가 뜨면 커서 창을 다시 맨 앞으로
         except Exception:  # noqa: BLE001 — 캡처 제외 실패가 화면 표시를 막지 않게
             pass
         return False
@@ -67,3 +69,47 @@ def watch(widget) -> None:
         widget.installEventFilter(_filter)
     except Exception:  # noqa: BLE001
         pass
+
+
+# ---- 0.38.1 마우스 커서 창은 우리 다른 '항상 위' 창보다 항상 앞 ----------------------------------------------
+# 같은 '항상 위' 층에서는 나중에 뜨거나(show) 올려진(raise_) 창이 위라, 미러·오버레이가 다시 뜨면 커서를 덮었다.
+# 오버레이가 뜰 때(위 Show 필터)·올려질 때(raise_overlay) 커서 창을 다시 맨 앞으로 — 커서 틱에서는 순서를 안 바꾼다.
+import weakref  # noqa: E402
+
+_front: "weakref.WeakSet" = weakref.WeakSet()
+_pending = False
+
+
+def keep_in_front(widget) -> None:
+    """커서 창 등록(생성자에서)."""
+    _front.add(widget)
+
+
+def raise_overlay(widget) -> None:
+    """오버레이 raise_() 대신 — 올린 뒤 커서 창을 다시 그 위로."""
+    widget.raise_()
+    keep_cursor_front()
+
+
+def keep_cursor_front() -> None:
+    """한 이벤트 루프 차례 뒤 한 번(여러 창이 한꺼번에 떠도 한 번만) 보이는 커서 창들을 맨 앞으로."""
+    global _pending
+    if _pending or not len(_front):
+        return
+    _pending = True
+    from PySide6.QtCore import QTimer
+    QTimer.singleShot(0, _bring_front)
+
+
+def _bring_front() -> None:
+    global _pending
+    _pending = False
+    from shiboken6 import isValid
+
+    from ..system.zorder import bring_to_front
+    for widget in list(_front):
+        try:
+            if isValid(widget) and widget.isVisible():
+                bring_to_front(widget)
+        except Exception:  # noqa: BLE001
+            pass
