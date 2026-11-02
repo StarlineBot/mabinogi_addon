@@ -26,6 +26,8 @@
 
 ## 열린 문제
 
+- **v0.37.1 게시 확인(2026-11-02)**: 검증 41431550901 성공·게시 41433475404 success, 태그 v0.37.1 = c799861, candidate source_sha·fingerprint(32ddc691…) 일치,
+  공개 version.json 0.37.1·exe 163946848B·sha256 3a4290da… 실제 다운로드와 일치. 남은 확인(사용자 Windows): 미러를 보스 바 위에 두고 패턴 알림, Print Screen에 오버레이 빠짐.
 - **QA 0.37.1 재확인(0249e10, 2026-11-02)**: 통과 — 기동·캡처 제외 시험 9·전체 3830·release checks 0.37.1 1925 passed(순서대로 실행). 앱 전체 필터 제거,
   오버레이 13종 생성자에서 `overlay_capture.watch(self)`(자기 창에만 필터, 본문 전체 try), 시험 대역 인자 수정 + 활성화 이벤트 회귀 확인. 원격 태그 최신 v0.37.0 → 같은 0.37.1로 재검증.
 - **0.37.1 검증 실패(2026-11-02, run 41409198216, 769af34) — 게시·태그 없음(v0.37.1 미사용)** Confirmed: Windows startup smoke `test_main_window_initializes_and_closes[False]` 실패 후 GC 중 비정상 종료.
