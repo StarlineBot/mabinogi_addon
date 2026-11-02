@@ -54,6 +54,9 @@
     `DorchaJob` 제거. 전체 탐색(`DorchaSearch`, 드묾)은 탐색마다 mss를 열고 run 끝에 그 스레드에서 `close`. `shutdown`은 작업 스레드에 닫기를 넣고 종료 대기, 화면 스레드(겹친 창 경로) mss도 닫음.
     테스트 `test_dorcha_thread.py::test_capture_objects_are_reused_and_closed`(가짜 mss: 틱 25번 → 생성 1·close 0, 탐색 3번 → +3 생성·3 close, 종료 뒤 생성 == close; 수정 전 생성 25로 실패).
     전체 3849 passed·404 skipped, release checks 0.38.0 1944 passed.
+  → **QA(d5f6a49) 통과**: 판독 틱·다시 읽기 = 오래 사는 작업 스레드 1개(mss 하나 재사용), 전체 탐색 = 탐색마다 열고 그 스레드에서 close, 종료 순서(_shutting_down→탐색 대기→작업 스레드 close→화면 스레드 close) 확인.
+    회귀 테스트가 수정 전 누수(생성 25)를 잡는 형태, test_dorcha_thread 5회 반복 모두 통과. 전체 3849 passed·404 skipped, release checks 0.38.0 1944 passed(단독 재실행).
+    원격 v0.38 태그 없음 → 0.38.0 배포 가능. 실게임 확인: 도르카 켬에서 `마우스 커서 틱` 늦은 틱 1% 미만·최대 간격 50ms 미만, 장시간 플레이 후에도 창 깨짐 없음.
 - **사용자 app.log 분석(2026-11-02, 0.36.1·0.37.0 실게임 '게임 느릴 때 커서도 느려 보임')**: `마우스 커서 틱` 30초 줄 20여 개 —
   틱 자체 평균 0.4~0.7ms·최대 대개 2~5ms(그리기 가벼움, Confirmed), 늦은 틱(>33ms) 2~8%·최대 간격 100~180ms(게임 시작 직후 424ms) →
   커서가 아니라 **같은 화면 스레드의 다른 작업이 주기적으로 100~180ms 막음**(Highly Likely). 앱 CPU: 블랙박스 진단의 '앱 본체'가 0.36.0 때부터 실게임 3.7~5.4%
