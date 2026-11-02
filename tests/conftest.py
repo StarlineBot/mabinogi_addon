@@ -155,3 +155,16 @@ def _access_recheck_immediate():
     saved, feature_access.Recheck.INTERVAL = feature_access.Recheck.INTERVAL, 0.0
     yield
     feature_access.Recheck.INTERVAL = saved
+
+
+@pytest.fixture(autouse=True)
+def _dorcha_inline_jobs():
+    """0.38.0: 앱에서는 도르카 판독 틱·다시 읽기를 작업 스레드에서 돌린다. 기존 판정 테스트는 `_tick()` 직후
+    결과를 확인하므로 같은 계산을 바로(동기로) 돌린다. 스레드 실행 자체는 tests/test_dorcha_thread.py가 확인한다."""
+    from mabinogi_addon.system.window_capture import clear_target_cache
+    from mabinogi_addon.ui.dorcha_tab import DorchaTab
+    saved, DorchaTab.INLINE_JOBS = DorchaTab.INLINE_JOBS, True
+    clear_target_cache()  # 게임 실행 파일·창 주인 캐시(몇 초)가 테스트 사이에 남지 않게
+    yield
+    DorchaTab.INLINE_JOBS = saved
+    clear_target_cache()

@@ -951,6 +951,11 @@ def save_game_exe(exe: str, path: Path = LOCAL_CONFIG_PATH) -> None:
     g["gameExe"] = exe
     data["general"] = g
     _write_local_config(data, path)
+    try:  # 도르카 등 대상 창 조회 캐시(몇 초)를 바로 비운다
+        from .system.window_capture import clear_target_cache
+        clear_target_cache()
+    except Exception:
+        pass
 
 
 def load_game_image_path(path: Path = LOCAL_CONFIG_PATH) -> str | None:

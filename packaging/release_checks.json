@@ -105,6 +105,7 @@
     "tests/test_skillbar_chunk_snap.py",
     "tests/test_capture_guard.py",
     "tests/test_overlay_capture.py",
-    "tests/test_alert_volume.py"
+    "tests/test_alert_volume.py",
+    "tests/test_dorcha_thread.py"
   ]
 }

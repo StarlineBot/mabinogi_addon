@@ -148,6 +148,9 @@ def held_worker(monkeypatch):
     release = Event()
     class Held(dorcha_search.DorchaSearch):
         def run(self):
+            # 0.38.0 명세 변경: 게임 창 전체 캡처는 화면 스레드가 아니라 탐색 스레드가 한다(진짜 run과 같은 자리).
+            if self.frame is None and self._grab is not None:
+                self._grab(*self.target[2:])
             self.box = (150,90,28,23)
             while not self.isInterruptionRequested() and not release.wait(.01):
                 pass
@@ -285,6 +288,11 @@ def test_full_frame_capture_failure_does_not_spawn_or_retry_each_tick(moving,mon
     monkeypatch.setattr(tab,"_grab_rect",fail_full)
     for _ in range(100):
         tab._tick()
+    # 0.38.0 명세 변경: 창 전체 캡처는 탐색 스레드에서 하므로, 실패한 탐색 하나가 끝나길 기다린 뒤 확인한다.
+    drain(_,tab)
+    for _ in range(100):
+        tab._tick()
+    drain(_,tab)
     assert state.captures.count((0,0,260,180)) == 1
     assert tab._search_worker is None and tab._overlay.value is None
 

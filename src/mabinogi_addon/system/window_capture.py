@@ -12,8 +12,53 @@ Windows 전용(그 외 None). PrintWindow(PW_RENDERFULLCONTENT)는 DWM/일부 D3
 from __future__ import annotations
 
 import sys
+import threading
+import time
 
 _PW_RENDERFULLCONTENT = 0x00000002  # 가려지거나 D3D로 그려진 내용까지 렌더 시도
+
+
+# 0.38.0: 도르카 틱(초당 5번)마다 설정 파일 읽기·프로세스 이름 조회를 하던 것을 캐시(몇 초).
+# 같은 창·같은 프로세스가 이어지는 동안은 창 위치(GetWindowRect)만 새로 읽는다.
+_CACHE_SECONDS = 5.0
+_cache_lock = threading.Lock()
+_exe_cache = [0.0, None]       # [만료 시각, 실행 파일 이름]
+_owner_cache = {}              # (hwnd, pid) -> 만료 시각 — 이 창이 게임 실행 파일 것임을 확인함
+
+
+def _cached_game_exe():
+    now = time.monotonic()
+    with _cache_lock:
+        if now < _exe_cache[0]:
+            return _exe_cache[1]
+    from .. import config
+    exe = config.load_game_exe()
+    with _cache_lock:
+        _exe_cache[:] = [now + _CACHE_SECONDS, exe]
+    return exe
+
+
+def _owner_confirmed(hwnd, pid, exe):
+    now = time.monotonic()
+    key = (int(hwnd), int(pid), exe.lower())
+    with _cache_lock:
+        if now < _owner_cache.get(key, 0.0):
+            return True
+    from .window_watcher import _exe_basename_of_pid
+    ok = _exe_basename_of_pid(pid) == exe.lower()
+    with _cache_lock:
+        if len(_owner_cache) > 16:
+            _owner_cache.clear()
+        if ok:
+            _owner_cache[key] = now + _CACHE_SECONDS
+    return ok
+
+
+def clear_target_cache():
+    """설정에서 게임 실행 파일을 바꿨을 때 등 — 다음 조회에서 바로 다시 읽는다."""
+    with _cache_lock:
+        _exe_cache[:] = [0.0, None]
+        _owner_cache.clear()
 
 
 def registered_game_target(previous=None):
@@ -22,21 +67,19 @@ def registered_game_target(previous=None):
         return None
     try:
         import win32process
-        from .. import config
         from . import dwm_thumbnail
         from .window_watcher import DEFAULT_GAME_TITLES
 
-        exe = config.load_game_exe()
+        exe = _cached_game_exe()
         if not exe:
             return None
         hwnd = 0
         if previous is not None:
             import win32gui
-            from .window_watcher import _exe_basename_of_pid
             candidate, previous_pid = previous[:2]
             if win32gui.IsWindow(candidate) and win32gui.IsWindowVisible(candidate):
                 _, pid = win32process.GetWindowThreadProcessId(candidate)
-                if pid == previous_pid and _exe_basename_of_pid(pid) == exe.lower():
+                if pid == previous_pid and _owner_confirmed(candidate, pid, exe):
                     hwnd = candidate
         if not hwnd:
             hwnd = dwm_thumbnail.find_game_window(exe, DEFAULT_GAME_TITLES)

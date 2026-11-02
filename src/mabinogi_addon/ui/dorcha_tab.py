@@ -1,7 +1,8 @@
 """Independent opt-in beta display; no Tuarim alerts or saved values."""
 
 import logging
-from time import monotonic
+import threading
+from time import monotonic, perf_counter as monotonic_perf
 import weakref
 
 import numpy as np
@@ -291,6 +292,12 @@ class DorchaTab(QWidget):
         self._overlay = overlay
         self._update_elements()
 
+    # ---- 판독 틱(0.38.0: 대상 확인·캡처·판독은 작업 스레드, 화면 스레드는 결과 반영만) ----------------
+    # 사용자 실측(0.37.1): 도르카 켬이면 커서·오버레이가 1초에 2~3번 0.1~0.24초 멈춤 — 이 틱이 화면 스레드에서
+    # 설정 파일 읽기·프로세스 조회·mss 캡처·판독·(실패 때) 게임 창 전체 캡처를 했다. 이제 그 일은 작업 스레드에서 한다.
+    INLINE_JOBS = False  # 테스트: 같은 계산을 바로(동기로) 돌린다 — 판정 로직 회귀를 그대로 확인
+    SLOW_TICK_MS = 30.0  # 틱 하나가 이보다 오래 걸리면 단계별 소요를 app.log에(분당 1번)
+
     def _tick(self):
         self._restore_capture_windows()
         if self._shutting_down or self._autofind_busy:
@@ -309,47 +316,151 @@ class DorchaTab(QWidget):
             return
         from .dpi import to_physical
         self._ensure_overlay()
-        box = self._live_box or to_physical(self._region)
-        probe_due = (self._tracking_lost and self._search_worker is None
-                     and self._watcher.is_game_active() and monotonic() >= self._next_region_probe)
-        target = self._search_target() if not self._tracking_lost or probe_due else None
-        recovered = None
-        if probe_due:
-            self._next_region_probe = monotonic() + 2.0
-            registered = to_physical(self._region)
-            # Recovery must remain a small ROI check, not a second full search.
-            if (target is not None and registered[2]*registered[3] <= 16_384
-                    and self._inside_target(registered,target)):
-                recovered = self._verify_registered_region(registered,target)
-                if recovered is not None:
-                    box = recovered
-                    self._tracking_lost = False
-        if not self._tracking_lost and (
-                (self._live_target is not None and target != self._live_target)
-                or (target is not None and not self._inside_target(box,target))):
-            self._invalidate_search()
-            self._tracking_lost = True
-        value = None
-        frame = None
-        if (recovered is None and not self._tracking_lost and target is not None and self._live_target is None
-                and self._approved_target != target):
-            verified = self._verify_registered_region(box,target)
-            if verified is None:
-                self._tracking_lost = True
-                self._next_region_probe = monotonic() + 2.0
+        if getattr(self, "_tick_job", None) is not None:
+            self._sync_overlay()  # 지난 틱 계산이 아직 도는 중 — 쌓지 않고 이번 틱은 건너뛴다
+            return
+        snap = dict(region=to_physical(self._region), live_box=self._live_box, live_target=self._live_target,
+                    approved=self._approved_target, lost=self._tracking_lost, epoch=self._search_epoch,
+                    probe_due=(self._tracking_lost and self._search_worker is None
+                               and self._watcher.is_game_active() and monotonic() >= self._next_region_probe),
+                    search_due=(self._search_worker is None and monotonic() >= self._next_search
+                                and self._watcher.is_game_active()),
+                    now=monotonic())
+        box = self._live_box or snap["region"]
+        guarded = self._own_window_over((box[0]-box[2], box[1]-2*box[3], box[2]*3, box[3]*4))
+        # 우리 창(메인 창 등)이 도르카 자리를 덮고 있으면 캡처 순간 제외가 필요하다 — 창 조작은 화면 스레드 전용이라
+        # 이때만 예전처럼 화면 스레드에서 바로 돈다(오버레이는 0.37.1부터 상시 제외라 해당 없음).
+        snap["grab"] = self._grab_tracking_rect if guarded else self._grab_rect
+        self._run_job(lambda: self._compute_tick(snap), lambda result: self._apply_tick(snap, result), inline=guarded)
+
+    def _own_window_over(self, area):
+        """화면 캡처에서 상시 제외되지 않은 우리 창이 area(물리 픽셀)와 겹치나 — Qt 위치만 본다(시스템 호출 없음)."""
+        from ..system import capture_exclusion
+        if not capture_exclusion.available():
+            return False
+        from PySide6.QtWidgets import QApplication
+        from . import overlay_capture
+        from .dpi import to_physical
+        x, y, w, h = area
+        for widget in QApplication.topLevelWidgets():
+            if not widget.isVisible() or overlay_capture.is_overlay(widget):
+                continue
+            g = widget.frameGeometry()
+            wx, wy, ww, wh = to_physical(dict(x=g.x(), y=g.y(), w=g.width(), h=g.height()))
+            if wx < x + w and wy < y + h and wx + ww > x and wy + wh > y:
+                return True
+        return False
+
+    def _run_job(self, work, done, slot="_tick_job", inline=False):
+        """work()는 작업 스레드(테스트는 바로), done(결과)는 화면 스레드에서. slot마다 하나씩만 돈다."""
+        if self.INLINE_JOBS or inline:
+            done(work())
+            return
+        if getattr(self, slot, None) is not None:
+            return
+        from .dorcha_search import DorchaJob
+        job = DorchaJob(work)
+        setattr(self, slot, job)
+
+        def finished():
+            job.wait()
+            if getattr(self, slot, None) is job:
+                setattr(self, slot, None)
+            try:
+                if not self._shutting_down:
+                    done(job.result)
+            finally:
+                job.deleteLater()
+        job.finished.connect(finished)
+        job.start()
+
+    def _compute_tick(self, snap):
+        """작업 스레드: 대상 창 확인 → (필요하면) 등록 영역 확인 → 캡처 → 판독. 위젯·Qt 객체는 건드리지 않는다.
+        상태는 바꾸지 않고 결과(events·값·프레임·판독 기록)만 돌려준다 — 화면 스레드가 순서대로 반영."""
+        steps = {}
+        out = dict(events=[], notes=[], value=None, frame=None, live=None, target=None, steps=steps, error=None)
+
+        def timed(name, fn, *args):
+            started = monotonic_perf()
+            try:
+                return fn(*args)
+            finally:
+                steps[name] = steps.get(name, 0.0) + (monotonic_perf() - started) * 1000
+
+        try:
+            box = snap["live_box"] or snap["region"]
+            lost = snap["lost"]
+            target = timed("대상 확인", self._search_target) if not lost or snap["probe_due"] else None
+            recovered = None
+            if snap["probe_due"]:
+                out["events"].append(("probe", snap["now"] + 2.0))
+                registered = snap["region"]
+                # Recovery must remain a small ROI check, not a second full search.
+                if (target is not None and registered[2]*registered[3] <= 16_384
+                        and self._inside_target(registered, target)):
+                    recovered = timed("영역 확인", self._verify_region_job, registered, target, out["notes"], snap["grab"])
+                    if recovered is not None:
+                        box = recovered
+                        lost = False
+            if not lost and ((snap["live_target"] is not None and target != snap["live_target"])
+                             or (target is not None and not self._inside_target(box, target))):
+                out["events"].append(("invalidate",))
+                lost = True
+            if (recovered is None and not lost and target is not None and snap["live_target"] is None
+                    and snap["approved"] != target):
+                verified = timed("영역 확인", self._verify_region_job, box, target, out["notes"], snap["grab"])
+                if verified is None:
+                    lost = True
+                    out["events"].append(("probe", snap["now"] + 2.0))
+                else:
+                    box = verified
+            if not lost:
+                frame = timed("캡처", snap["grab"], *box)
+                out["frame"] = frame
+                if target is not None and timed("대상 확인", self._search_target) != target:
+                    out["events"].append(("invalidate",))
+                    lost = True
+                else:
+                    trace = {}
+                    value = timed("판독", read_dorcha, frame, trace)
+                    out["notes"].append((trace, value))
+                    out["value"] = value
+                    if value is not None and target is not None:
+                        out["live"] = (box, target)
+            out["lost"] = lost
+            # 못 읽었으면 화면 스레드가 전체 탐색을 시작할 수 있다 — 탐색 대상은 지금 다시 확인(작업 스레드에서)
+            # (탐색 대기 중이면 조회하지 않는다 — 추적을 잃은 틱마다 대상 조회 금지)
+            if out["value"] is None and snap["search_due"]:
+                out["target"] = timed("대상 확인", self._search_target)
             else:
-                box = verified
-        if not self._tracking_lost:
-            frame = self._grab_tracking_rect(*box)
-            if target is not None and self._search_target() != target:
+                out["target"] = target
+        except Exception as exc:  # noqa: BLE001 — 작업 스레드 예외는 화면 스레드에서 한 번 기록
+            out["error"] = exc
+            out["lost"] = snap["lost"]
+        return out
+
+    def _apply_tick(self, snap, out):
+        """화면 스레드: 계산 결과를 원래 틱과 같은 순서로 반영한다."""
+        if out.get("error") is not None:
+            _log.warning("도르카 판독 틱 실패: %r", out["error"])
+            return
+        if (self._shutting_down or self._autofind_busy or self._paused or not self._cfg["enabled"]
+                or not self._region or not self._active()):
+            return  # 계산하는 사이 멈춤·끔·숨김 — 결과를 쓰지 않는다(다음 틱이 화면을 정리)
+        if snap["epoch"] != self._search_epoch:
+            return  # 계산하는 사이 숨김·영역 변경·대상 변경 등으로 무효화 — 낡은 결과는 쓰지 않는다
+        for trace, value in out["notes"]:
+            _note_dorcha(trace, value)
+        for event in out["events"]:
+            if event[0] == "invalidate":
                 self._invalidate_search()
-                self._tracking_lost = True
             else:
-                trace = {}
-                value = read_dorcha(frame, trace)
-                _note_dorcha(trace, value)
-                if value is not None and target is not None:
-                    self._live_box, self._live_target = box, target
+                self._next_region_probe = event[1]
+        self._tracking_lost = out["lost"]
+        if out["live"] is not None:
+            self._live_box, self._live_target = out["live"]
+        self._last_target = out["target"]
+        value, frame = out["value"], out["frame"]
         self._set_value(value)
         self._show_source(frame)
         if value is None:
@@ -361,15 +472,27 @@ class DorchaTab(QWidget):
             self._next_search = 0.0
             self._search_backoff = 2.0
         self._sync_overlay()
+        self._log_slow("판독 틱", out["steps"])
 
-    def _verify_registered_region(self, box, target):
-        """A saved rectangle is a hint, not proof of the current resource UI."""
+    def _log_slow(self, kind, steps):
+        total = sum(steps.values())
+        if total < self.SLOW_TICK_MS:
+            return
+        now = monotonic()
+        if now < getattr(self, "_slow_logged_until", 0.0):
+            return
+        self._slow_logged_until = now + 60.0
+        detail = " · ".join(f"{name} {ms:.0f}ms" for name, ms in steps.items())
+        _log.info("도르카 %s 느림(작업 스레드) %.0fms: %s", kind, total, detail)
+
+    def _verify_region_job(self, box, target, notes, grab=None):
+        """작업 스레드: 저장된 사각형 주변을 캡처해 도르카 장식이 정말 그 안에 있는지 확인."""
         x,y,w,h = box
         _,_,tx,ty,tw,th = target
         pad_x,pad_y = max(8,w//2),max(17,h)
         left,top = max(tx,x-pad_x),max(ty,y-pad_y)
         right,bottom = min(tx+tw,x+w+pad_x),min(ty+th,y+h+pad_y)
-        frame = self._grab_tracking_rect(left,top,right-left,bottom-top)
+        frame = (grab or self._grab_rect)(left,top,right-left,bottom-top)
         if frame is None or frame.shape[:2] != (bottom-top,right-left) or self._search_target() != target:
             return None
         from ..detect.dorcha_anchor import locate_dorcha
@@ -380,7 +503,7 @@ class DorchaTab(QWidget):
             _log.warning("도르카 초기 영역 검증 실패",exc_info=True)
             return None
         if found is None:
-            _note_dorcha(trace, None)
+            notes.append((trace, None))
             return None
         fx,fy,fw,fh = found
         current = (left+fx,top+fy,fw,fh)
@@ -388,6 +511,14 @@ class DorchaTab(QWidget):
                 or not (x <= current[0]+fw/2 < x+w and y <= current[1]+fh/2 < y+h)):
             return None
         return current
+
+    def _verify_registered_region(self, box, target):
+        """(호환) 화면 스레드에서 바로 확인 — 수동 작업용. 틱은 _verify_region_job을 작업 스레드에서 쓴다."""
+        notes = []
+        result = self._verify_region_job(box, target, notes, self._grab_tracking_rect)
+        for trace, value in notes:
+            _note_dorcha(trace, value)
+        return result
 
     def _invalidate_search(self):
         self._search_epoch += 1
@@ -403,7 +534,8 @@ class DorchaTab(QWidget):
 
     def _search_target(self):
         from ..system.window_capture import registered_game_target
-        return registered_game_target(self._live_target)
+        # 추적 중이 아니어도 지난번 확인한 창을 먼저 확인(매번 전체 창 나열 대신 — 창이 바뀌었으면 다시 찾는다)
+        return registered_game_target(self._live_target or getattr(self, "_last_target", None))
 
     @staticmethod
     def _inside_target(box,target):
@@ -417,18 +549,25 @@ class DorchaTab(QWidget):
             return
         self._next_search = monotonic() + self._search_backoff
         self._search_backoff = min(10.0, self._search_backoff * 2)
-        target = self._search_target()
+        target = getattr(self, "_last_target", None)  # 방금 틱(작업 스레드)이 확인한 대상 — 화면 스레드 조회 없음
         if target is None:
             return
         _, _, x, y, w, h = target
         # A single full-frame job is allowed; no queue or unbounded image allocation.
         if w*h > 16_777_216:
             return
-        frame = self._grab_tracking_rect(x,y,w,h)
-        if frame is None or frame.shape[:2] != (h,w):
-            return
         from .dorcha_search import DorchaSearch
-        worker = DorchaSearch(np.array(frame, copy=True, order="C"), target, self._search_epoch)
+        # 0.38.0: 게임 창 전체 캡처·복사도 탐색 스레드에서(예전엔 화면 스레드 BitBlt — 끊김 0.15~0.24초의 주범 후보)
+        if self._own_window_over((x, y, w, h)):
+            # 우리 창이 게임 창 위에 있음 — 캡처 순간 제외가 필요해 전체 캡처만 화면 스레드에서(예전 방식).
+            # 다시 읽기는 _finish_search가 같은 판단으로 한다.
+            frame = self._grab_tracking_rect(x, y, w, h)
+            if frame is None:
+                return
+            worker = DorchaSearch(np.array(frame, copy=True), target, self._search_epoch)
+        else:
+            worker = DorchaSearch(None, target, self._search_epoch, grab=self._grab_rect,
+                                  read=read_dorcha, target_fn=self._search_target)
         self._search_worker = worker
         worker.finished.connect(self._finish_search)
         worker.start()
@@ -443,11 +582,12 @@ class DorchaTab(QWidget):
             if (worker.epoch != self._search_epoch or worker.isInterruptionRequested()
                     or self._shutting_down or self._autofind_busy or self._paused
                     or not self._cfg["enabled"] or not self._region
-                    or not self._watcher.is_game_active() or self._search_target() != worker.target):
+                    or not self._watcher.is_game_active()):
                 return
             self._next_search = max(self._next_search, monotonic() + worker.elapsed*20)
             if worker.error:
                 _log.warning("도르카 재탐색 실패: %s", worker.error)
+            self._log_slow("전체 탐색", getattr(worker, "steps", {}))
             if worker.box is None:
                 return
             _, _, ox, oy, _, _ = worker.target
@@ -455,20 +595,40 @@ class DorchaTab(QWidget):
             box = (x+ox,y+oy,w,h)
             if not self._inside_target(box,worker.target):
                 return
-            # Re-read current pixels: the worker's old screenshot is never displayed.
-            frame = self._grab_tracking_rect(*box)
-            value = read_dorcha(frame)
-            if value is None or self._search_target() != worker.target:
-                return
-            self._live_box = box
-            self._live_target = worker.target
-            self._tracking_lost = False
-            self._set_value(value)
-            self._show_source(frame)
-            self._next_search = 0.0
-            self._search_backoff = 2.0
+            if getattr(worker, "read_done", False):
+                self._apply_search_read(worker.target, box, worker.value, worker.read_frame, worker.current_target)
+            else:
+                # (탐색이 다시 읽기를 하지 않은 경우) 다시 읽기만 작업으로 — 화면 스레드에서 캡처하지 않는다
+                target = worker.target
+                guarded = self._own_window_over(box)
+                grab = self._grab_tracking_rect if guarded else self._grab_rect
+
+                def reread():
+                    try:
+                        frame = grab(*box)
+                        return frame, read_dorcha(frame), self._search_target()
+                    except Exception:  # noqa: BLE001
+                        _log.warning("도르카 다시 읽기 실패", exc_info=True)
+                        return None, None, None
+                self._run_job(reread, lambda r: self._apply_search_read(target, box, r[1], r[0], r[2]),
+                              slot="_reread_job", inline=guarded)
         finally:
             worker.deleteLater()
+
+    def _apply_search_read(self, target, box, value, frame, current_target):
+        """탐색 결과로 찾은 자리를 다시 읽은 값 반영(탐색 때의 옛 화면은 쓰지 않는다)."""
+        if (self._shutting_down or self._paused or not self._cfg["enabled"] or not self._region
+                or value is None or current_target != target):
+            return
+        self._search_epoch += 1  # 이 사이 계산 중이던 판독 틱(옛 자리 기준) 결과는 버린다
+        self._live_box = box
+        self._live_target = target
+        self._last_target = target
+        self._tracking_lost = False
+        self._set_value(value)
+        self._show_source(frame)
+        self._next_search = 0.0
+        self._search_backoff = 2.0
 
     def _grab_tracking_rect(self, x, y, w, h):
         from ..system import capture_exclusion
@@ -503,11 +663,16 @@ class DorchaTab(QWidget):
                 del self._capture_restore[hwnd]
 
     def _grab_rect(self,x,y,w,h):
+        """작업 스레드에서도 부른다 — mss 캡처 객체는 스레드마다 따로 둔다(스레드 사이 공유 불가)."""
         try:
-            if self._sct is None:
+            local = self.__dict__.setdefault("_sct_local", threading.local())
+            sct = getattr(local, "sct", None)
+            if sct is None:
                 import mss
-                self._sct = mss.mss()
-            shot = self._sct.grab(dict(left=x,top=y,width=w,height=h))
+                sct = local.sct = mss.mss()
+                if threading.current_thread() is threading.main_thread():
+                    self._sct = sct  # 종료 때 닫기(작업 스레드 것은 스레드와 함께 정리)
+            shot = sct.grab(dict(left=x,top=y,width=w,height=h))
             frame = np.frombuffer(shot.bgra,np.uint8).reshape(shot.height,shot.width,4)[:,:,:3]
             self._capture_failed = False
             return frame
@@ -655,6 +820,12 @@ class DorchaTab(QWidget):
             worker.wait()
             self._search_worker = None
             worker.deleteLater()
+        for slot in ("_tick_job", "_reread_job"):
+            job = getattr(self, slot, None)
+            if job is not None:
+                job.wait()
+                setattr(self, slot, None)
+                job.deleteLater()
         for widget in (self._overlay,self._selector,self._highlight,self._autofind_highlight):
             if widget is not None:
                 widget.close()
