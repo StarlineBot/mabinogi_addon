@@ -26,6 +26,11 @@
 
 ## 열린 문제
 
+- **0.37.1 검증 실패(2026-11-02, run 41409198216, 769af34) — 게시·태그 없음(v0.37.1 미사용)** Confirmed: Windows startup smoke `test_main_window_initializes_and_closes[False]` 실패 후 GC 중 비정상 종료.
+  사슬: 시험 대역 `_maybe_check_update = lambda self: None`인데 실제 호출은 `_maybe_check_update("창활성화")` → native Windows에서 ActivationChange 때 changeEvent TypeError →
+  0.37.1의 **앱 전체 Python 이벤트 필터**(`overlay_capture._ShowFilter`, 모든 객체의 모든 이벤트가 Python을 거침)가 남은 예외 상태에서 계속 호출돼 `event.type()`이 SystemError 연쇄.
+  0.37.0 같은 시험은 통과(로그에 TypeError 없음). 리눅스 offscreen은 활성화 이벤트가 없어 재현 안 됨. 수정 요청: ① 시험 대역 `lambda self, *a, **k: None`
+  ② 앱 전체 필터 대신 오버레이 창에만 설치(또는 각 오버레이 showEvent/생성 시 apply) — 영향 범위·이벤트마다 Python 호출 비용 축소 ③ 필터 본문 전체 try 안으로. 같은 0.37.1로 재검증 가능.
 - **QA 0.37.1(dfce53f, 2026-11-02)**: 통과 — 전체 3827+1(배포 검사와 동시 실행 중 `test_ci_live_errors` 1건 실패 → 단독 재실행 10 passed, 부하성)·release checks 0.37.1 1923 passed.
   원격 태그 최신 v0.37.0. 코드: 항상 위 창 18개 파일 전부 OVERLAYS/NOT_OVERLAYS 분류(헤일로 경고·체력바 등은 같은 클래스 재사용), 대화상자·메인 창·도르카 미리보기(자식 위젯) 미적용,
   창 핸들 재생성(WinIdChange) 재적용, 2004 미만 무동작 확인. 남은 확인(사용자 Windows): 미러를 보스 바·디버프 줄·단축바 원본 위에 두고 판독 정상, 캡처 도구에 오버레이 안 찍힘.
