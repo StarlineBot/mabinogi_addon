@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+from .. import perf_meter
 import numpy as np
 from PySide6.QtCore import QTimer
 from PySide6.QtGui import QGuiApplication
@@ -210,6 +211,7 @@ class SkillbarTab(QWidget):
                 ov.hide()
 
     # ---- 읽기 루프 ----
+    @perf_meter.timed("단축바 미러")  # 앱 CPU 절감 1단계: 기능별 처리 시간(측정만)
     def _tick(self) -> None:
         self._apply_login_gate()
         self._apply_visibility()

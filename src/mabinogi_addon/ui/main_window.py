@@ -340,6 +340,10 @@ class MainWindow(QMainWindow):
         # 하프 채널 연결(docs/harp-channel-tcp-spec.md): 최적화 2단 네 번째, 제작자만(다른 사용자에겐 탭도 측정도 없음).
         from .harp_tab import HarpChannelTab
         self.harp_tab = HarpChannelTab()
+        # 앱 CPU 절감 1단계: 기능별 처리 시간을 1분마다 app.log에 한 줄(측정만, perf_meter)
+        from .. import perf_meter
+        self._perf_reporter = perf_meter.Reporter(self)
+        self._perf_reporter.start()
         self._harp_scroll = _scrolled(self.harp_tab)
         self._refresh_harp_access()
 
@@ -1925,6 +1929,7 @@ class MainWindow(QMainWindow):
             {b.id: False for b in catalog},
             on_alert=self._on_debuff_gone,  # 디버프 떨어짐 확정 → 사라짐 경고음
             watcher=self._watcher,
+            name="디버프",
         )
         self.debuff_controller.set_paused(self._paused)  # 재생성 시 일시정지 상태 유지
         self.debuff_controller.set_window_visible(config.load_overlay_windows()[1])
@@ -2415,6 +2420,7 @@ class MainWindow(QMainWindow):
         self.dungeon_cost_tab.shutdown()
         self.cursor_fx.shutdown()
         self.harp_tab.shutdown()
+        self._perf_reporter.stop()
         if self._status_timer is not None:
             self._status_timer.stop()
 

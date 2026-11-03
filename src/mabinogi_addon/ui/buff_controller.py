@@ -21,6 +21,7 @@ _log = logging.getLogger("mabinogi_addon.close")
 from PySide6.QtCore import QObject, QThread, Signal
 from PySide6.QtGui import QPixmap
 
+from .. import perf_meter
 from ..capture.base import FrameSource
 from ..system.window_watcher import AlwaysActiveWatcher, WindowWatcher
 from ..tracker.engine import BuffEngine
@@ -62,8 +63,10 @@ class _TrackWorker(QThread):
         watcher: WindowWatcher,
         interval_ms: int = 200,
         bar_source: FrameSource | None = None,
+        name: str = "버프",
     ) -> None:
         super().__init__()
+        self._name = name  # 기능별 처리 시간 로그 이름(버프/디버프)
         self._source = source
         self._engine = engine
         self._watcher = watcher
@@ -88,7 +91,8 @@ class _TrackWorker(QThread):
             # 지정한 직후 3차 판독 틱이 던지면 앱이 통째로 꺼지던 문제). 이 틱만 로그로 남기고
             # 건너뛰면 추적은 다음 틱에 스스로 복구된다.
             try:
-                self._tick_once(game)
+                with perf_meter.measure(self._name):
+                    self._tick_once(game)
             except Exception:  # noqa: BLE001 — 추적 틱 격리(앱 생존 우선)
                 _log.exception("추적 틱 실패 — 이 틱만 건너뛰고 계속(앱 유지)")
             self._sleep(active=game)
@@ -154,8 +158,10 @@ class BuffController(QObject):
         on_alert=None,
         watcher: WindowWatcher | None = None,
         on_alert2=None,
+        name: str = "버프",
     ) -> None:
         super().__init__()
+        self._meter_name = name  # 기능별 처리 시간 로그 이름
         self._overlay = overlay
         self._catalog = catalog  # id -> BuffDef
         self._show_duration = show_duration
@@ -187,7 +193,7 @@ class BuffController(QObject):
         self._source = source
         self._bar_source = bar_source
         self._worker = _TrackWorker(
-            source, engine, self._watcher, interval_ms, bar_source=bar_source
+            source, engine, self._watcher, interval_ms, bar_source=bar_source, name=self._meter_name
         )
         generation = self._generation
         for signal, callback in ((self._worker.updated, self._on_updated),

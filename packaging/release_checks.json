@@ -9,7 +9,8 @@
     "tests/test_release_checks.py",
     "tests/test_release_candidate.py",
     "tests/test_windows_ci.py",
-    "tests/test_startup_build.py"
+    "tests/test_startup_build.py",
+    "tests/test_perf_meter.py"
   ],
   "coverage": {
     "src/mabinogi_addon/harp_latency.py": {
@@ -41,7 +42,8 @@
       "tests": [
         "tests/test_harp_channels.py",
         "tests/test_startup_smoke.py",
-        "tests/test_navigation.py"
+        "tests/test_navigation.py",
+        "tests/test_perf_meter.py"
       ],
       "reason": "최적화 2단 탭(제작자만 하프 탭)·일시정지 연결·최소 기동/종료·탭 구조"
     },
@@ -87,6 +89,84 @@
         "tests/test_startup_build.py"
       ],
       "reason": "후보/승인/버전/동일 산출물·Windows 최소 기동/빌드 계약, 시작 화면 always_on_top=False"
+    },
+    "src/mabinogi_addon/perf_meter.py": {
+      "tests": [
+        "tests/test_perf_meter.py"
+      ],
+      "reason": "기능별 처리 시간 계측(측정만): 틱 감싸기·버프/디버프 이름·1분 한 줄 로그"
+    },
+    "src/mabinogi_addon/ui/buff_controller.py": {
+      "tests": [
+        "tests/test_perf_meter.py"
+      ],
+      "reason": "기능별 처리 시간 계측(측정만): 틱 감싸기·버프/디버프 이름·1분 한 줄 로그"
+    },
+    "src/mabinogi_addon/ui/boss_tab.py": {
+      "tests": [
+        "tests/test_perf_meter.py"
+      ],
+      "reason": "기능별 처리 시간 계측(측정만): 틱 감싸기·버프/디버프 이름·1분 한 줄 로그"
+    },
+    "src/mabinogi_addon/ui/halo_capture_section.py": {
+      "tests": [
+        "tests/test_perf_meter.py"
+      ],
+      "reason": "기능별 처리 시간 계측(측정만): 틱 감싸기·버프/디버프 이름·1분 한 줄 로그"
+    },
+    "src/mabinogi_addon/ui/tuarim_tab.py": {
+      "tests": [
+        "tests/test_perf_meter.py"
+      ],
+      "reason": "기능별 처리 시간 계측(측정만): 틱 감싸기·버프/디버프 이름·1분 한 줄 로그"
+    },
+    "src/mabinogi_addon/ui/dorcha_tab.py": {
+      "tests": [
+        "tests/test_perf_meter.py"
+      ],
+      "reason": "기능별 처리 시간 계측(측정만): 틱 감싸기·버프/디버프 이름·1분 한 줄 로그"
+    },
+    "src/mabinogi_addon/ui/dorcha_search.py": {
+      "tests": [
+        "tests/test_perf_meter.py"
+      ],
+      "reason": "기능별 처리 시간 계측(측정만): 틱 감싸기·버프/디버프 이름·1분 한 줄 로그"
+    },
+    "src/mabinogi_addon/ui/stat_bars_tab.py": {
+      "tests": [
+        "tests/test_perf_meter.py"
+      ],
+      "reason": "기능별 처리 시간 계측(측정만): 틱 감싸기·버프/디버프 이름·1분 한 줄 로그"
+    },
+    "src/mabinogi_addon/ui/skillbar_tab.py": {
+      "tests": [
+        "tests/test_perf_meter.py"
+      ],
+      "reason": "기능별 처리 시간 계측(측정만): 틱 감싸기·버프/디버프 이름·1분 한 줄 로그"
+    },
+    "src/mabinogi_addon/ui/mirror_manager.py": {
+      "tests": [
+        "tests/test_perf_meter.py"
+      ],
+      "reason": "기능별 처리 시간 계측(측정만): 틱 감싸기·버프/디버프 이름·1분 한 줄 로그"
+    },
+    "src/mabinogi_addon/ui/blackbox_controller.py": {
+      "tests": [
+        "tests/test_perf_meter.py"
+      ],
+      "reason": "기능별 처리 시간 계측(측정만): 틱 감싸기·버프/디버프 이름·1분 한 줄 로그"
+    },
+    "src/mabinogi_addon/ui/optimization_controller.py": {
+      "tests": [
+        "tests/test_perf_meter.py"
+      ],
+      "reason": "기능별 처리 시간 계측(측정만): 틱 감싸기·버프/디버프 이름·1분 한 줄 로그"
+    },
+    "src/mabinogi_addon/ui/cursor_overlay.py": {
+      "tests": [
+        "tests/test_perf_meter.py"
+      ],
+      "reason": "기능별 처리 시간 계측(측정만): 틱 감싸기·버프/디버프 이름·1분 한 줄 로그"
     }
   }
 }

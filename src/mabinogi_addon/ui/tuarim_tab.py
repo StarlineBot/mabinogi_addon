@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+from .. import perf_meter
 import numpy as np
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QImage, QPixmap
@@ -380,6 +381,7 @@ class TuarimTab(QWidget):
                 QMessageBox.warning(self,"설정 저장 실패","현재 설정을 저장하지 못했어요. 재실행하면 이전 설정으로 돌아갈 수 있어요.")
 
     # ---- 읽기 루프 ----
+    @perf_meter.timed("투아림")  # 앱 CPU 절감 1단계: 기능별 처리 시간(측정만)
     def _tick_enabled(self) -> None:
         self._apply_collect_gate()
         if self._shutting_down or self._autofind_busy or (self._selector is not None and self._selector.isVisible()):

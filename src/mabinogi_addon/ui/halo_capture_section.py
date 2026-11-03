@@ -1,5 +1,6 @@
 """1분 헤일로 안내(모든 사용자, 2026-10-28 기능 공개 정책 7절)와 제작자 전용 원본 수집."""
 
+from .. import perf_meter
 import math
 import time
 from PySide6.QtCore import QSignalBlocker, QTimer, QUrl, Qt, Signal
@@ -583,6 +584,7 @@ class HaloCaptureSection(QWidget):
             self._stop()
             self.state.setText("수집을 중단했어요. 영역과 수집 한도를 확인하세요.")
 
+    @perf_meter.timed("헤일로")  # 앱 CPU 절감 1단계: 기능별 처리 시간(측정만)
     def _tick(self):
         try:
             self._refresh()

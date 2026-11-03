@@ -1,5 +1,6 @@
 """Independent opt-in beta display; no Tuarim alerts or saved values."""
 
+from .. import perf_meter
 import logging
 import threading
 from time import monotonic, perf_counter as monotonic_perf
@@ -300,6 +301,7 @@ class DorchaTab(QWidget):
     INLINE_JOBS = False  # 테스트: 같은 계산을 바로(동기로) 돌린다 — 판정 로직 회귀를 그대로 확인
     SLOW_TICK_MS = 30.0  # 틱 하나가 이보다 오래 걸리면 단계별 소요를 app.log에(분당 1번)
 
+    @perf_meter.timed("도르카")  # 앱 CPU 절감 1단계: 기능별 처리 시간(측정만)
     def _tick(self):
         self._restore_capture_windows()
         if self._shutting_down or self._autofind_busy:
@@ -392,6 +394,7 @@ class DorchaTab(QWidget):
     def _deliver_job(self, deliver):
         deliver()  # 화면 스레드
 
+    @perf_meter.timed("도르카")  # 앱 CPU 절감 1단계: 기능별 처리 시간(측정만)
     def _compute_tick(self, snap):
         """작업 스레드: 대상 창 확인 → (필요하면) 등록 영역 확인 → 캡처 → 판독. 위젯·Qt 객체는 건드리지 않는다.
         상태는 바꾸지 않고 결과(events·값·프레임·판독 기록)만 돌려준다 — 화면 스레드가 순서대로 반영."""

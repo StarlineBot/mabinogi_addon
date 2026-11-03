@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+from .. import perf_meter
 import logging
 import time
 from collections import Counter
@@ -158,6 +159,7 @@ class CursorFx(QObject):
                 w.hide()
 
     # ---- 매 틱 -----------------------------------------------------------------------------
+    @perf_meter.timed("커서 효과")  # 앱 CPU 절감 1단계: 기능별 처리 시간(측정만)
     def tick(self) -> None:
         started = time.perf_counter()
         try:

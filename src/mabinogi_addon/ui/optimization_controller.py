@@ -1,4 +1,5 @@
 """Creator tools lifetime is owned by the app, not by the settings dialog."""
+from .. import perf_meter
 import time
 import logging
 
@@ -1023,6 +1024,7 @@ class OptimizationController(QObject):
             self.overlay.show()
         else: self._hide_overlay()
 
+    @perf_meter.timed("FPS·최적화")  # 앱 CPU 절감 1단계: 기능별 처리 시간(측정만)
     def _tick(self):
         now = time.monotonic()
         gap, self.last_tick = now-self.last_tick, now

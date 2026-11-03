@@ -9,6 +9,7 @@ crop해서 받는다(미러 개수와 무관하게 캡처 비용 일정). fps �
 
 from __future__ import annotations
 
+from .. import perf_meter
 import logging
 
 import numpy as np
@@ -236,6 +237,7 @@ class MirrorManager(QObject):
                 o.hide()
             self._shown = False
 
+    @perf_meter.timed("커스텀 미러")  # 앱 CPU 절감 1단계: 기능별 처리 시간(측정만)
     def _tick(self) -> None:
         # 일시정지 또는 게임 비활성/최소화: 캡처를 쉬고(가장 큰 비용) 오버레이를 숨긴다.
         if self._paused or not self._is_active():

@@ -1,5 +1,6 @@
 """블랙박스 최상위 진입점(모든 사용자, 2026-10-28 기능 공개 정책 7절). 캡처 어댑터가 없는 제품 상태에서는 조작을 열지 않는다."""
 
+from .. import perf_meter
 import time
 
 from PySide6.QtCore import QObject, QTimer
@@ -416,6 +417,7 @@ class BlackboxController(QObject):
                                        if missing else '')
         self.panel.mode_notice.setVisible(missing)
 
+    @perf_meter.timed("블랙박스")  # 앱 CPU 절감 1단계: 기능별 처리 시간(측정만)
     def _tick(self):
         if self.service is None:
             return

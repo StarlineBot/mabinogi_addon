@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+from .. import perf_meter
 import time
 
 import numpy as np
@@ -549,6 +550,7 @@ class StatBarsTab(QWidget):
             self._reset_visual_alerts()
 
     # ---- 읽기 루프 ----
+    @perf_meter.timed("체력바")  # 앱 CPU 절감 1단계: 기능별 처리 시간(측정만)
     def _tick(self) -> None:
         self._apply_login_gate()
         if (

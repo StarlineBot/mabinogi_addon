@@ -4,6 +4,7 @@
 판독 틱·다시 읽기는 DorchaTab의 오래 사는 작업 스레드 1개(ThreadPoolExecutor)에서 돈다.
 """
 
+from .. import perf_meter
 import time
 
 from PySide6.QtCore import QThread
@@ -36,6 +37,7 @@ class DorchaSearch(QThread):
         finally:
             self.steps[name] = self.steps.get(name, 0.0) + (time.perf_counter() - started) * 1000
 
+    @perf_meter.timed("도르카 탐색")  # 앱 CPU 절감 1단계: 기능별 처리 시간(측정만)
     def run(self):
         started = time.monotonic()
         try:

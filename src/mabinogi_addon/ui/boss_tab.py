@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+from .. import perf_meter
 import numpy as np
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QGuiApplication, QImage, QPixmap
@@ -249,6 +250,7 @@ class BossTab(QWidget):
         self._timer.timeout.connect(self._safe_tick)
         self._timer.start()
 
+    @perf_meter.timed("보스")  # 앱 CPU 절감 1단계: 기능별 처리 시간(측정만)
     def _safe_tick(self) -> None:
         """타이머 틱 가드 — 한 틱의 예외(판독·캡처 등)가 앱 전체를 죽이지 않게 흡수한다.
         (메인 스레드 QTimer 슬롯의 미처리 예외는 PySide6에서 프로세스를 abort시킬 수 있다.)"""
