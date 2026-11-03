@@ -1,123 +1,301 @@
 {
   "version": "0.39.0",
   "tests": [
-    "tests/test_blackbox.py",
-    "tests/test_blackbox_access.py",
-    "tests/test_blackbox_audio_codec.py",
-    "tests/test_blackbox_bundle.py",
-    "tests/test_blackbox_export.py",
-    "tests/test_blackbox_lifecycle.py",
-    "tests/test_blackbox_producer.py",
-    "tests/test_blackbox_queue.py",
-    "tests/test_blackbox_runtime.py",
-    "tests/test_blackbox_service.py",
-    "tests/test_blackbox_session.py",
-    "tests/test_blackbox_ui_connection.py",
-    "tests/test_blackbox_window_probe.py",
-    "tests/test_frame_summary.py",
-    "tests/test_optimization.py",
-    "tests/test_optimization_network.py",
-    "tests/test_optimization_contract.py",
-    "tests/test_optimization_ui.py",
+    "tests/test_autofind_diagnostics.py",
+    "tests/test_autofind_mvp.py",
+    "tests/test_autofind_thread.py",
+    "tests/test_autofind_v2.py",
+    "tests/test_blackbox_combat.py",
+    "tests/test_boss_tab.py",
+    "tests/test_capture_guard.py",
     "tests/test_config_atomic.py",
     "tests/test_config_bundle.py",
-    "tests/test_startup_build.py",
-    "tests/test_blackbox_hotkey.py",
-    "tests/test_autostart.py",
-    "tests/test_updater_relaunch_env.py",
-    "tests/test_manual_update_progress.py",
-    "tests/test_overlay_metrics.py",
-    "tests/test_halo_clock.py",
-    "tests/test_blackbox_combat.py",
-    "tests/test_blackbox_stream.py",
-    "tests/test_blackbox_public.py",
-    "tests/test_log_throttle.py",
-    "tests/test_process_priority.py",
-    "tests/test_optimization_priority.py",
-    "tests/test_process_threads.py",
-    "tests/test_blackbox_cpu.py",
-    "tests/test_access_cache.py",
-    "tests/test_optimization_auto.py",
-    "tests/test_blackbox_resume.py",
-    "tests/test_cpu_layouts.py",
-    "tests/test_optimization_recommend.py",
-    "tests/test_guide_images.py",
-    "tests/test_setup.py",
-    "tests/test_optimization_public.py",
-    "tests/test_game_restart_reset.py",
-    "tests/test_graphics_efficiency.py",
-    "tests/test_debuff_native_icons.py",
-    "tests/test_crescendo_native.py",
-    "tests/test_debuff_engine.py",
+    "tests/test_debuff_auto.py",
     "tests/test_debuff_identity.py",
-    "tests/test_debuff_added_defaults.py",
-    "tests/test_debuff_icon_migration.py",
-    "tests/test_status_icons.py",
-    "tests/test_tracker_layout.py",
-    "tests/test_tray_status.py",
-    "tests/test_dorcha_inquiry.py",
     "tests/test_dorcha_autofind.py",
-    "tests/test_resource_integration.py",
-    "tests/test_public_release.py",
-    "tests/test_halo_capture.py",
-    "tests/test_boss_tab.py",
-    "tests/test_feature_release_policy.py",
-    "tests/test_buff_favorites.py",
-    "tests/test_buff_favorites_ui.py",
-    "tests/test_settings_grouping.py",
-    "tests/test_interaction_polish.py",
-    "tests/test_custom_autosave.py",
-    "tests/test_calculator_result_state.py",
-    "tests/test_wrapping_controls.py",
-    "tests/test_interaction_consistency.py",
-    "tests/test_home_page.py",
-    "tests/test_creator_dialogue.py",
-    "tests/test_screen_polish.py",
-    "tests/test_color_switch_polish.py",
-    "tests/test_dungeon_cost.py",
-    "tests/test_theme_colors.py",
-    "tests/test_theme_personalization.py",
-    "tests/test_dialog_buttons.py",
-    "tests/test_debuff_wireweb.py",
-    "tests/test_skillbar_mask.py",
-    "tests/test_time_4k_render.py",
-    "tests/test_boss_bar_4k.py",
-    "tests/test_resource_4k.py",
-    "tests/test_skillbar_4k.py",
-    "tests/test_party_keywords_clean.py",
-    "tests/test_buff_opacity_reorder.py",
-    "tests/test_boss_name_4k.py",
-    "tests/test_boss_name_shape.py",
-    "tests/test_favorites_windowed.py",
-    "tests/test_theme_banner_polish.py",
-    "tests/test_lock_row_wide_spin.py",
-    "tests/test_boss_bar_small_screen.py",
-    "tests/test_buff_hidden_kept.py",
-    "tests/test_overlay_window_visible.py",
-    "tests/test_buff_favorites_public.py",
-    "tests/test_boss_brontanas.py",
-    "tests/test_buff_4k_icons.py",
-    "tests/test_fastping_game_running.py",
-    "tests/test_sketch_chat.py",
-    "tests/test_skillbar_testers.py",
-    "tests/test_fastping_kept.py",
-    "tests/test_cursor_fx.py",
-    "tests/test_skillbar_chunk_snap.py",
-    "tests/test_capture_guard.py",
-    "tests/test_overlay_capture.py",
-    "tests/test_alert_volume.py",
     "tests/test_dorcha_thread.py",
-    "tests/test_cursor_front.py",
-    "tests/test_autofind_v2.py",
-    "tests/test_autofind_mvp.py",
-    "tests/test_autofind_diagnostics.py",
-    "tests/test_status_panel.py",
-    "tests/test_halo_timer.py",
+    "tests/test_feature_release_policy.py",
+    "tests/test_game_restart_reset.py",
+    "tests/test_guide_images.py",
     "tests/test_halo_autofind.py",
+    "tests/test_halo_capture.py",
+    "tests/test_halo_clock.py",
+    "tests/test_halo_timer.py",
+    "tests/test_home_page.py",
+    "tests/test_navigation_all_widths.py",
+    "tests/test_overlay_capture.py",
+    "tests/test_public_release.py",
     "tests/test_region_registration.py",
     "tests/test_region_selector_lifecycle.py",
+    "tests/test_release_candidate.py",
+    "tests/test_release_checks.py",
+    "tests/test_release_notes.py",
+    "tests/test_release_notes_trigger.py",
+    "tests/test_resource_common_settings.py",
+    "tests/test_resource_integration.py",
+    "tests/test_resource_live_samples.py",
+    "tests/test_resource_pair.py",
+    "tests/test_setup.py",
     "tests/test_setup_common_resources.py",
-    "tests/test_navigation_all_widths.py",
-    "tests/test_autofind_thread.py"
-  ]
+    "tests/test_startup_build.py",
+    "tests/test_startup_smoke.py",
+    "tests/test_stat_visibility.py",
+    "tests/test_status_panel.py",
+    "tests/test_tuarim.py",
+    "tests/test_tuarim_native_autofind.py",
+    "tests/test_windows_ci.py"
+  ],
+  "coverage": {
+    "src/mabinogi_addon/autofind_state.py": {
+      "tests": [
+        "tests/test_autofind_v2.py",
+        "tests/test_autofind_thread.py"
+      ],
+      "reason": "발견/활성 분리, 5개 독립 소비자, 확인·취소·대상 변경·재시작·상주 작업자·100% 읽힘·미판독 안내"
+    },
+    "src/mabinogi_addon/ui/autofind_runtime.py": {
+      "tests": [
+        "tests/test_autofind_v2.py",
+        "tests/test_autofind_thread.py"
+      ],
+      "reason": "발견/활성 분리, 5개 독립 소비자, 확인·취소·대상 변경·재시작·상주 작업자·100% 읽힘·미판독 안내"
+    },
+    "src/mabinogi_addon/autofind_replay.py": {
+      "tests": [
+        "tests/test_autofind_mvp.py",
+        "tests/test_autofind_diagnostics.py"
+      ],
+      "reason": "실제 검출→확인→등록·ZIP 재생·취소/저장 실패 계약"
+    },
+    "src/mabinogi_addon/ui/autofind_confirm.py": {
+      "tests": [
+        "tests/test_autofind_mvp.py",
+        "tests/test_autofind_diagnostics.py"
+      ],
+      "reason": "실제 검출→확인→등록·ZIP 재생·취소/저장 실패 계약"
+    },
+    "src/mabinogi_addon/setup_state.py": {
+      "tests": [
+        "tests/test_setup.py",
+        "tests/test_setup_common_resources.py",
+        "tests/test_guide_images.py"
+      ],
+      "reason": "첫 안내 단계·재진입/취소/종료·기존 설정 보존·공유 자원 찾기·안내 자산"
+    },
+    "src/mabinogi_addon/ui/setup_flow.py": {
+      "tests": [
+        "tests/test_setup.py",
+        "tests/test_setup_common_resources.py",
+        "tests/test_guide_images.py"
+      ],
+      "reason": "첫 안내 단계·재진입/취소/종료·기존 설정 보존·공유 자원 찾기·안내 자산"
+    },
+    "src/mabinogi_addon/ui/setup_guide.py": {
+      "tests": [
+        "tests/test_setup.py",
+        "tests/test_setup_common_resources.py",
+        "tests/test_guide_images.py"
+      ],
+      "reason": "첫 안내 단계·재진입/취소/종료·기존 설정 보존·공유 자원 찾기·안내 자산"
+    },
+    "src/mabinogi_addon/ui/main_window.py": {
+      "tests": [
+        "tests/test_home_page.py",
+        "tests/test_navigation_all_widths.py",
+        "tests/test_public_release.py",
+        "tests/test_startup_smoke.py",
+        "tests/test_game_restart_reset.py"
+      ],
+      "reason": "홈 이어하기·안내 탐색·공개 사용/권한·최소 기동/종료·게임 재시작 연결"
+    },
+    "src/mabinogi_addon/config.py": {
+      "tests": [
+        "tests/test_config_atomic.py",
+        "tests/test_config_bundle.py",
+        "tests/test_feature_release_policy.py"
+      ],
+      "reason": "원자 저장/손상 복구·백업 가져오기·기존 사용자 기본값 및 1회 이전 보존(setup도 포함)"
+    },
+    "src/mabinogi_addon/ui/settings_tab.py": {
+      "tests": [
+        "tests/test_setup.py",
+        "tests/test_autofind_v2.py"
+      ],
+      "reason": "안내 다시 보기와 자동 찾기 설정 양방향 동기화"
+    },
+    "src/mabinogi_addon/ui/region_registration.py": {
+      "tests": [
+        "tests/test_region_registration.py",
+        "tests/test_region_selector_lifecycle.py"
+      ],
+      "reason": "영역 선택/해제·소비자 연결·취소/종료·등록 요약과 안내 노출"
+    },
+    "src/mabinogi_addon/ui/region_section.py": {
+      "tests": [
+        "tests/test_region_registration.py",
+        "tests/test_region_selector_lifecycle.py"
+      ],
+      "reason": "영역 선택/해제·소비자 연결·취소/종료·등록 요약과 안내 노출"
+    },
+    "src/mabinogi_addon/ui/buff_tab.py": {
+      "tests": [
+        "tests/test_status_panel.py",
+        "tests/test_autofind_v2.py"
+      ],
+      "reason": "1080 대체 아이콘 열·빈 화면 거부·기존 멤버십/4K 앵커 좌표 및 영역 계약"
+    },
+    "src/mabinogi_addon/detect/status_panel.py": {
+      "tests": [
+        "tests/test_status_panel.py",
+        "tests/test_autofind_v2.py"
+      ],
+      "reason": "1080 대체 아이콘 열·빈 화면 거부·기존 멤버십/4K 앵커 좌표 및 영역 계약"
+    },
+    "src/mabinogi_addon/detect/halo_timer.py": {
+      "tests": [
+        "tests/test_halo_timer.py",
+        "tests/test_halo_autofind.py",
+        "tests/test_halo_capture.py",
+        "tests/test_halo_clock.py"
+      ],
+      "reason": "위치 탐색 15분 초과 허용과 알림 15분 제한 분리·보스 문맥/재동기화"
+    },
+    "src/mabinogi_addon/ui/halo_capture_section.py": {
+      "tests": [
+        "tests/test_halo_timer.py",
+        "tests/test_halo_autofind.py",
+        "tests/test_halo_capture.py",
+        "tests/test_halo_clock.py"
+      ],
+      "reason": "위치 탐색 15분 초과 허용과 알림 15분 제한 분리·보스 문맥/재동기화"
+    },
+    "src/mabinogi_addon/detect/tuarim_reader.py": {
+      "tests": [
+        "tests/test_tuarim.py",
+        "tests/test_resource_live_samples.py",
+        "tests/test_tuarim_native_autofind.py"
+      ],
+      "reason": "기존 read_percent 원본/실화면/스케일 회귀·read_observation 100%·오인식/재알림 방지"
+    },
+    "src/mabinogi_addon/detect/tuarim_small.py": {
+      "tests": [
+        "tests/test_tuarim.py",
+        "tests/test_resource_live_samples.py",
+        "tests/test_tuarim_native_autofind.py"
+      ],
+      "reason": "기존 read_percent 원본/실화면/스케일 회귀·read_observation 100%·오인식/재알림 방지"
+    },
+    "src/mabinogi_addon/ui/dorcha_tab.py": {
+      "tests": [
+        "tests/test_dorcha_thread.py",
+        "tests/test_dorcha_autofind.py",
+        "tests/test_resource_pair.py",
+        "tests/test_resource_common_settings.py",
+        "tests/test_resource_integration.py"
+      ],
+      "reason": "기존 도르카 스레드·두 자원 같은 창 페어링·원자 등록/부분 성공·독립 표시/알림"
+    },
+    "src/mabinogi_addon/ui/resource_tab.py": {
+      "tests": [
+        "tests/test_dorcha_thread.py",
+        "tests/test_dorcha_autofind.py",
+        "tests/test_resource_pair.py",
+        "tests/test_resource_common_settings.py",
+        "tests/test_resource_integration.py"
+      ],
+      "reason": "기존 도르카 스레드·두 자원 같은 창 페어링·원자 등록/부분 성공·독립 표시/알림"
+    },
+    "src/mabinogi_addon/capture/shared.py": {
+      "tests": [
+        "tests/test_autofind_v2.py",
+        "tests/test_boss_tab.py",
+        "tests/test_halo_capture.py",
+        "tests/test_blackbox_combat.py",
+        "tests/test_debuff_auto.py"
+      ],
+      "reason": "보스 공유 프레임 구독/해제·각 소비자 단독 사용·패턴/헤일로/디버프/전투 녹화 연결"
+    },
+    "src/mabinogi_addon/ui/boss_tab.py": {
+      "tests": [
+        "tests/test_autofind_v2.py",
+        "tests/test_boss_tab.py",
+        "tests/test_halo_capture.py",
+        "tests/test_blackbox_combat.py",
+        "tests/test_debuff_auto.py"
+      ],
+      "reason": "보스 공유 프레임 구독/해제·각 소비자 단독 사용·패턴/헤일로/디버프/전투 녹화 연결"
+    },
+    "src/mabinogi_addon/ui/debuff_tab.py": {
+      "tests": [
+        "tests/test_debuff_identity.py",
+        "tests/test_debuff_auto.py"
+      ],
+      "reason": "공유 보스 프레임을 사용하는 디버프 신원·자동 판독/오버레이 연결"
+    },
+    "src/mabinogi_addon/ui/stat_bars_tab.py": {
+      "tests": [
+        "tests/test_autofind_v2.py",
+        "tests/test_region_registration.py",
+        "tests/test_stat_visibility.py"
+      ],
+      "reason": "보스전 저체력 소비자 요구·선택/해제·비활성/재개 시 표시 안전성"
+    },
+    "src/mabinogi_addon/ui/capture_guard.py": {
+      "tests": [
+        "tests/test_capture_guard.py",
+        "tests/test_overlay_capture.py"
+      ],
+      "reason": "자동 찾기 캡처가 의존하는 우리 창 제외·복원·중첩/종료 계약"
+    },
+    "src/mabinogi_addon/ui/overlay_capture.py": {
+      "tests": [
+        "tests/test_capture_guard.py",
+        "tests/test_overlay_capture.py"
+      ],
+      "reason": "자동 찾기 캡처가 의존하는 우리 창 제외·복원·중첩/종료 계약"
+    },
+    "src/mabinogi_addon/assets/release_notes.md": {
+      "tests": [
+        "tests/test_release_notes.py",
+        "tests/test_release_notes_trigger.py"
+      ],
+      "reason": "0.39.0 노트 파싱·기존 사용자 새 버전 표시 계약"
+    },
+    "packaging/release_checks.json": {
+      "tests": [
+        "tests/test_release_checks.py"
+      ],
+      "reason": "버전·선택 경로 유효성·범위 근거와 변경/공통 계약 매핑 검증"
+    },
+    "scripts/run_release_checks.py": {
+      "tests": [
+        "tests/test_release_checks.py"
+      ],
+      "reason": "버전·선택 경로 유효성·범위 근거와 변경/공통 계약 매핑 검증"
+    },
+    "scripts/release_delivery.py": {
+      "tests": [
+        "tests/test_release_candidate.py",
+        "tests/test_windows_ci.py",
+        "tests/test_startup_build.py"
+      ],
+      "reason": "후보/승인/버전/동일 산출물·Windows 최소 기동/빌드 계약(인프라 변경 없음)"
+    },
+    ".github/workflows/windows.yml": {
+      "tests": [
+        "tests/test_release_candidate.py",
+        "tests/test_windows_ci.py",
+        "tests/test_startup_build.py"
+      ],
+      "reason": "후보/승인/버전/동일 산출물·Windows 최소 기동/빌드 계약(인프라 변경 없음)"
+    },
+    "packaging/build_windows.py": {
+      "tests": [
+        "tests/test_release_candidate.py",
+        "tests/test_windows_ci.py",
+        "tests/test_startup_build.py"
+      ],
+      "reason": "후보/승인/버전/동일 산출물·Windows 최소 기동/빌드 계약(인프라 변경 없음)"
+    }
+  }
 }

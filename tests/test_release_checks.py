@@ -47,44 +47,46 @@ def test_runner_keeps_result_and_never_falls_back_to_all_tests(tmp_path, monkeyp
     assert '--junitxml=unit-results.xml' in calls[0]
 
 
-def test_current_plan_matches_bundled_release_and_changed_features():
+def test_current_plan_maps_every_selected_file_to_changed_code_or_shared_contract():
     root = Path(__file__).resolve().parents[1]
     notes = (root / 'src/mabinogi_addon/assets/release_notes.md').read_text(encoding='utf-8')
     version = notes.splitlines()[0].removeprefix('## v')
     paths = checks.release_tests(root, version)
-    expected = {path.relative_to(root).as_posix() for path in (root / 'tests').glob('test_blackbox*.py')}
-    expected.update({
-        'tests/test_frame_summary.py', 'tests/test_optimization.py',
-        'tests/test_optimization_network.py', 'tests/test_optimization_contract.py',
-        'tests/test_optimization_ui.py', 'tests/test_config_atomic.py',
-        'tests/test_config_bundle.py', 'tests/test_startup_build.py',
-        'tests/test_autostart.py', 'tests/test_updater_relaunch_env.py',
-        'tests/test_manual_update_progress.py', 'tests/test_overlay_metrics.py',
-        'tests/test_halo_clock.py', 'tests/test_log_throttle.py',
-        'tests/test_process_priority.py', 'tests/test_optimization_priority.py', 'tests/test_process_threads.py',
-        'tests/test_access_cache.py', 'tests/test_optimization_auto.py', 'tests/test_cpu_layouts.py',
-        'tests/test_optimization_recommend.py', 'tests/test_guide_images.py', 'tests/test_setup.py',
-        'tests/test_optimization_public.py', 'tests/test_game_restart_reset.py',
-        'tests/test_graphics_efficiency.py', 'tests/test_debuff_native_icons.py', 'tests/test_crescendo_native.py',
-        'tests/test_debuff_engine.py', 'tests/test_debuff_identity.py', 'tests/test_debuff_added_defaults.py',
-        'tests/test_debuff_icon_migration.py', 'tests/test_status_icons.py', 'tests/test_tracker_layout.py',
-        'tests/test_tray_status.py', 'tests/test_dorcha_inquiry.py', 'tests/test_dorcha_autofind.py',
-        'tests/test_resource_integration.py', 'tests/test_public_release.py', 'tests/test_halo_capture.py',
-        'tests/test_boss_tab.py', 'tests/test_feature_release_policy.py', 'tests/test_buff_favorites.py',
-        'tests/test_buff_favorites_ui.py', 'tests/test_settings_grouping.py', 'tests/test_interaction_polish.py',
-        'tests/test_custom_autosave.py', 'tests/test_calculator_result_state.py', 'tests/test_wrapping_controls.py',
-        'tests/test_interaction_consistency.py', 'tests/test_home_page.py', 'tests/test_creator_dialogue.py',
-        'tests/test_screen_polish.py', 'tests/test_color_switch_polish.py', 'tests/test_dungeon_cost.py',
-        'tests/test_theme_colors.py', 'tests/test_theme_personalization.py', 'tests/test_dialog_buttons.py',
-        'tests/test_debuff_wireweb.py', 'tests/test_skillbar_mask.py',
-        'tests/test_time_4k_render.py', 'tests/test_boss_bar_4k.py', 'tests/test_resource_4k.py', 'tests/test_skillbar_4k.py',
-        'tests/test_party_keywords_clean.py', 'tests/test_buff_opacity_reorder.py', 'tests/test_boss_name_4k.py', 'tests/test_boss_name_shape.py', 'tests/test_favorites_windowed.py', 'tests/test_theme_banner_polish.py', 'tests/test_lock_row_wide_spin.py', 'tests/test_boss_bar_small_screen.py', 'tests/test_buff_hidden_kept.py', 'tests/test_overlay_window_visible.py', 'tests/test_buff_favorites_public.py', 'tests/test_boss_brontanas.py', 'tests/test_buff_4k_icons.py', 'tests/test_fastping_game_running.py',
-        'tests/test_sketch_chat.py', 'tests/test_skillbar_testers.py', 'tests/test_fastping_kept.py', 'tests/test_cursor_fx.py', 'tests/test_skillbar_chunk_snap.py', 'tests/test_capture_guard.py', 'tests/test_overlay_capture.py', 'tests/test_alert_volume.py', 'tests/test_dorcha_thread.py', 'tests/test_cursor_front.py',
-    })
-    expected.update({
-        'tests/test_autofind_thread.py', 'tests/test_autofind_v2.py', 'tests/test_autofind_mvp.py', 'tests/test_autofind_diagnostics.py',
-        'tests/test_status_panel.py', 'tests/test_halo_timer.py', 'tests/test_halo_autofind.py',
-        'tests/test_region_registration.py', 'tests/test_region_selector_lifecycle.py',
-        'tests/test_setup_common_resources.py', 'tests/test_navigation_all_widths.py',
-    })
-    assert set(paths) == expected
+    plan = json.loads((root / 'packaging/release_checks.json').read_text(encoding='utf-8'))
+    coverage = plan['coverage']
+    assert coverage and isinstance(coverage, dict)
+    mapped = set()
+    for source, entry in coverage.items():
+        source_path = Path(source)
+        assert not source_path.is_absolute() and '..' not in source_path.parts
+        assert (root / source).is_file(), source
+        assert isinstance(entry['reason'], str) and entry['reason'].strip(), source
+        assert entry['tests'] and len(entry['tests']) == len(set(entry['tests'])), source
+        assert set(entry['tests']) <= set(paths), source
+        mapped.update(entry['tests'])
+    # No wildcard/cumulative expected set: every selected test needs an explicit dependency reason.
+    assert mapped == set(paths)
+
+
+def test_current_release_keeps_feature_boundaries_and_delivery_contracts():
+    root = Path(__file__).resolve().parents[1]
+    plan = json.loads((root / 'packaging/release_checks.json').read_text(encoding='utf-8'))
+    paths = set(plan['tests'])
+    # Minimum risk boundaries, not the union of every earlier release's tests.
+    assert {
+        'tests/test_autofind_v2.py', 'tests/test_autofind_thread.py', 'tests/test_setup.py',
+        'tests/test_region_registration.py', 'tests/test_status_panel.py',
+        'tests/test_halo_timer.py', 'tests/test_resource_live_samples.py',
+        'tests/test_blackbox_combat.py', 'tests/test_release_checks.py',
+        'tests/test_release_candidate.py', 'tests/test_windows_ci.py',
+        'tests/test_startup_smoke.py',
+    } <= paths
+    assert {
+        'src/mabinogi_addon/autofind_state.py', 'src/mabinogi_addon/capture/shared.py',
+        'src/mabinogi_addon/ui/setup_flow.py', 'src/mabinogi_addon/ui/setup_guide.py',
+        'src/mabinogi_addon/config.py', 'src/mabinogi_addon/detect/tuarim_reader.py',
+    } <= set(plan['coverage'])
+    # The separate development entry must continue collecting the whole suite.
+    regression = (root / '.github/workflows/regression.yml').read_text(encoding='utf-8')
+    assert 'scripts.run_regressions' in regression
+    assert 'run_release_checks' not in regression
