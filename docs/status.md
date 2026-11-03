@@ -6,6 +6,8 @@
 
 ## 배포와 검증
 
+- **[긴급] v0.40.0 exe 시작 즉시 종료(Confirmed, 사용자 실행)** — `harp_latency.DATA_PATH = Path(__file__).parent/'assets'/...`가 exe에서 `_MEIPASS/mabinogi_addon/assets/harp_channels.json`을 찾음(빌드는 `assets`를 `_MEIPASS/assets`로 넣음) → HarpTab 생성(모든 사용자) 중 FileNotFoundError.
+  소스 실행 스모크는 경로가 맞아 못 잡음. 업데이트 적용은 MainWindow 전(`__init__` 126행)이라 0.40.1을 게시하면 다음 실행에 자동 복구. 수정: `paths.resource_dir()/'harp_channels.json'` + 하프 탭 로드 실패 시 앱은 계속 뜨게 + 번들 배치 모의 테스트.
 - **v0.40.0 게시 완료(2026-11-04 03:41 KST)** — Windows validation #180(41692661474, 38a23e4) → release.yml 게시. 태그 v0.40.0=38a23e4, candidate source_fingerprint 7c84c19d…(87f5367 QA 지문과 같음).
   exe 163,999,390 바이트·sha256 4d1cba92…(내려받아 version.json과 일치 확인). 전체 약 22분: regression 내려받기 7분 11초(검사 1분 28초), Windows 내려받기 2분 22초 — 전체 히스토리(fetch-depth 0, .git 907MB·tests/data 772MB) 때문. 개선(얕은 받기·스크린샷 제외)은 인프라 변경이라 사용자 승인 대기.
 
