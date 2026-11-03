@@ -11,6 +11,13 @@
   배포 검사 `--version 0.39.0` 2306 passed(단독). 탐지 코드 변경 없음(835e5d9 측정 유지: 버프 88/89·헤일로 49/89·엉뚱한 곳 0). 원격 v0.39.0 태그 없음.
   개선(비차단): `autofind_runtime.tick()`이 0.5초마다 `registered_game_target()`을 이전 대상 없이 불러 화면 스레드에서 창 전체 나열·프로세스 열기 — `self.target` 전달 권장.
   남은 것: main 병합 → Windows에서 도르카·자동 찾기 켠 채 커서·오버레이 끊김 확인 → 배포(main에서).
+  → **기존 사용자 영향 점검(2026-11-03, ea74092 기준): 배포 보류 — 투아림 100% 오판 1건**. 문제없음: 패턴·헤일로·디버프 '사용' 값은 시작 시 1회 '영역 있음'으로 채움(기존 동작 유지),
+    첫 사용 안내 자동 표시 조건은 기존(skipSetup)보다 넓어지지 않음, 보스·헤일로 대기 탐색은 일괄 찾기 실행 사용자(`armed`)만, ea74092(`registered_game_target(self.target)`) 관련 54 passed.
+    **Confirmed**: `autofind_runtime.readable('tuarim')` = `read_percent(...) is not None`인데 `read_percent`는 설계상 100%에서 None(문서화) → tests/data 투아림 찾은 영역 88곳 중 24곳 '못 읽음'(그중 14곳 화면 100%).
+    **Highly Likely(코드 추적, 실행 미재현)**: 자동 찾기 켜짐(기존 사용자 기본) + 투아림 100%로 10초 → 도르카·투아림 전체 창 재탐색(작업 스레드, 이 컨테이너 2~5초) 10초×3 후 60초마다 계속,
+    도르카도 켜져 있으면 확인 후 `_reload_autofind_feature('dorcha')`→`_accept_region`이 값을 비워 도르카 표시가 잠깐 '--'. 꺼짐이면 투아림 탭에 '못 읽은 지 10초…자동 찾기를 눌러주세요' 오안내.
+    버프 87/88·도르카 87/87은 '읽힘'으로 정상(버프 1곳은 4K 도르카 제보 화면).
+    → 수정 요청: 투아림 '읽힘'에 100% 인식 포함(예: 100% 근거를 따로 돌려주는 판독 함수), 위치가 같으면 저장·탭 다시 불러오기 생략, 100% 화면 회귀 테스트.
 - 공개 README 업데이트 내역 접기(2026-10-30 사용자 승인한 배포 스크립트 최소 변경): `scripts/release_delivery.py` `fold_changelog` — 최신 버전만 펼치고 이전은 `<details>`, CHANGELOG.md 전체 유지.
   다음 게시(0.29.0)부터 반영. 로컬 `test_release_candidate.py`·`test_windows_ci.py` 224 passed(접기 회귀 1개 추가). 실제 공개 README 렌더는 게시 후 확인.
   → **QA 6c87458 통과**: 현재 공개 CHANGELOG(버전 165개)에 v0.29.0 노트를 붙여 `prepare_public`과 같은 방식으로 모의 생성 → 펼친 부분은 v0.29.0만(25줄),
