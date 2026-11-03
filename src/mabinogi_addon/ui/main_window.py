@@ -628,8 +628,9 @@ class MainWindow(QMainWindow):
     def _home_state(self) -> dict:
         """홈 상태(명세 12.2·12.3). 각 화면의 기존 상태·설정만 쓰고 새로 판독하지 않는다. 숫자(판독 값)는 넣지 않는다."""
         from .. import setup_state
+        from ..autofind_state import settings
 
-        raw = config._read_local_config()
+        raw = settings()  # 0.39.1: 상태 타이머(700ms)용 읽기 전용 사본 — 저장 때만 다시 읽음
         game = self._watcher.is_game_active()
         paused = bool(self._paused)
         waiting_game = ("대기 중 · 게임 대기", "muted")
@@ -2073,7 +2074,10 @@ class MainWindow(QMainWindow):
     def _tick_memo_visibility(self) -> None:
         """메모 표시 규칙: 영역 등록 + 전체 재개 + 게임 포그라운드면 표시. 해제(편집) 상태면
         우리 앱에서도 표시(위치/입력). 고정인데 게임이 포그라운드 아니면 숨김."""
-        if self._paused or self._closing or self._config_pending_restart or config.load_capture_region("memoTracker") is None:
+        from ..autofind_state import settings  # 0.39.1: 300ms마다 디스크 읽기 대신 설정 사본(바뀔 때만 읽음)
+        memo = settings().get("memoTracker") or {}
+        if (self._paused or self._closing or self._config_pending_restart
+                or not isinstance(memo.get("captureRegion"), dict)):
             self.memo_overlay.hide()
             return
         if self._watcher.is_game_active() or self._watcher.is_self_active() and not self.memo_overlay.locked:

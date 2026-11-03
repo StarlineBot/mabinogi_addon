@@ -29,6 +29,19 @@ def revision():
     return _revision
 
 
+_settings_cache = [None, None, None]  # [revision, 읽기 함수, raw]
+
+
+def settings():
+    """0.39.1: 화면 스레드 주기 작업용 설정 사본 — 설정 파일을 쓸 때(revision 증가)만 다시 읽는다.
+    (보스 탭 300ms 틱이 판정마다 디스크를 읽어 초당 약 17회 — 끊김 원인 후보, QA 실측.)
+    돌려받은 dict는 바꾸지 말 것(공유 사본). 바꿔서 저장할 일이면 config._read_local_config()로 새로 읽는다."""
+    reader = config._read_local_config
+    if _settings_cache[0] != _revision or _settings_cache[1] is not reader:
+        _settings_cache[:] = [_revision, reader, reader()]
+    return _settings_cache[2]
+
+
 def epoch(key):
     return _epochs.get(key, 0)
 
@@ -156,7 +169,13 @@ def shared_needed(raw=None, *, external=False):
     return external or alerts or any(active(k,raw) for k in SHARED)
 
 
-def release_unused_boss(*, external=False):
+def release_unused_boss(*, external=False, raw=None):
+    """raw(읽기 전용 사본)로 먼저 판정하고, 실제로 바꿀 때만 새로 읽어 저장한다."""
+    if raw is not None:
+        box = box_for('boss', raw)
+        needed = shared_needed(raw, external=external)
+        if not ((box and not needed) or (not box and needed and remembered('boss', raw))):
+            return False
     raw = config._read_local_config()
     box = box_for('boss',raw)
     if box and not shared_needed(raw,external=external):

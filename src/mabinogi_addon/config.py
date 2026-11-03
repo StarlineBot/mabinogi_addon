@@ -43,11 +43,30 @@ def _load_env() -> None:
                 os.environ.setdefault(key.strip(), value.strip())
 
 
+# 0.39.1: 설정 파일 본문 캐시 — 파일이 그대로면(같은 파일 ID·크기·수정 시각) 디스크를 다시 열지 않는다.
+# 화면 스레드 타이머 여러 곳이 초당 수십 번 읽었다(보스 탭 300ms 틱만 5회+). 파일 열기·읽기는 백신 검사 등으로
+# 가끔 길게 멈출 수 있어 끊김 원인 후보(QA). 받은 dict는 호출자가 고쳐 저장하므로 매번 새로 파싱해 돌려준다.
+_text_cache: dict = {}
+
+
+def _cached_text(p: Path) -> str:
+    st = p.stat()
+    key = (st.st_ino, st.st_size, st.st_mtime_ns)
+    hit = _text_cache.get(p)
+    if hit is not None and hit[0] == key:
+        return hit[1]
+    text = p.read_text(encoding="utf-8")
+    if len(_text_cache) > 8:
+        _text_cache.clear()
+    _text_cache[p] = (key, text)
+    return text
+
+
 def _read_local_config_document(path: Path) -> dict | None:
     # 본 파일이 깨졌으면(.bak) 백업으로 복구 시도 → 전원차단 등으로 손상돼도 설정 보존.
     for p in (path, path.with_name(path.name + ".bak")):
         try:
-            text = p.read_text(encoding="utf-8")
+            text = _cached_text(p)
         except (OSError, UnicodeError):
             continue
         if not text.strip():
@@ -88,6 +107,7 @@ def _write_local_config(data: dict, path: Path = LOCAL_CONFIG_PATH) -> None:
         except (OSError, ValueError):  # 백업 실패해도 본 저장은 진행
             pass
     os.replace(tmp, path)  # 원자적 교체
+    _text_cache.pop(path, None)
     from .autofind_state import changed
     changed(previous, data)
 
@@ -401,9 +421,15 @@ def get_config_webhook_url() -> str | None:
     return _bundled("CONFIG_WEBHOOK_URL")
 
 
-def load_discord_user(path: Path = LOCAL_CONFIG_PATH) -> dict | None:
-    """로그인한 Discord 사용자 {id, name} 또는 None(비로그인)."""
-    u = _read_local_config(path).get("discordUser")
+def load_discord_user(path: Path | None = None) -> dict | None:
+    """로그인한 Discord 사용자 {id, name} 또는 None(비로그인).
+    0.39.1: 경로를 안 주면 공유 설정 사본(autofind_state.settings — 저장 때만 다시 읽음) — 탭 틱마다 불린다."""
+    if path is None:
+        from .autofind_state import settings
+        raw = settings()
+    else:
+        raw = _read_local_config(path)
+    u = raw.get("discordUser")
     return u if isinstance(u, dict) and u.get("id") else None
 
 

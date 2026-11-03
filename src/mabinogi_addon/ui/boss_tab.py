@@ -434,8 +434,8 @@ class BossTab(QWidget):
           트래커·HP는 긴 패턴을 버티려 _GONE_FRAMES(~18초)까지 유지되지만, 목록까지
           그만큼 남으면 보스가 떠난 뒤에도 '다가오는 %'가 한참 떠 있다(#4). 그래서
           목록은 보스가 화면에서 사라지면(_UPCOMING_GONE_FRAMES) 금방 감춘다."""
-        from ..autofind_state import active
-        if self._paused or not active("boss") or not self.show_upcoming.isChecked():
+        from ..autofind_state import active, settings
+        if self._paused or not active("boss", settings()) or not self.show_upcoming.isChecked():
             self._upcoming.hide()
             return
         if not self._upcoming.locked:
@@ -462,19 +462,26 @@ class BossTab(QWidget):
     # ---- 읽기 루프 ----
     def _tick(self) -> None:
         self.halo_capture.set_boss_context(None)
-        from ..autofind_state import active as feature_active, shared_needed, release_unused_boss
+        from ..autofind_state import active as feature_active, settings, shared_needed, release_unused_boss
+        # 0.39.1: 틱에서 설정은 한 번(설정 파일이 바뀔 때만 디스크 읽기) — 모든 판정에 같은 raw
+        raw = settings()
         external = bool(self._presence_wanted_fn and self._presence_wanted_fn())
-        if release_unused_boss(external=external):
+        if release_unused_boss(external=external, raw=raw):
             self.reload_region()
-        needed = shared_needed(external=external)
-        if not feature_active("boss"):
-            self._overlay.hide()
+            raw = settings()
+        needed = shared_needed(raw, external=external)
+        boss_on = feature_active("boss", raw)
+        if not boss_on:
+            if self._overlay.isVisible():
+                self._overlay.hide()
             if self._notifier is not None: self._notifier.stop()
         active = self._watcher.is_game_active() or self._watcher.is_self_active()
         if not self._region or not active or not needed:
+            # 쓸 일이 없음(영역 없음·소비자 없음·게임 뒤) — 0.38.1처럼 캡처·판정 없이 바로 끝
             self.shared_frame.publish(None)
             self._boss_present = False  # 게임 비활성 → '보스전 아님'(저체력 알림 게이트)
-            self._upcoming.hide()
+            if self._upcoming.isVisible():
+                self._upcoming.hide()
             return
         from .dpi import to_physical
 
@@ -492,7 +499,7 @@ class BossTab(QWidget):
         name_reg = frame[:, : int(w * 0.60)]  # 왼쪽=이름
         pct_reg = frame[:, int(w * 0.58) :]  # 오른쪽=HP%(가운데 빈 띠는 글자 없음)
         boss_id = identify(name_reg, self._name_templates, variants=self._name_variants)
-        self.halo_capture.set_boss_context(boss_id if feature_active("halo_timer") else None)
+        self.halo_capture.set_boss_context(boss_id if feature_active("halo_timer", raw) else None)
 
         # 보스 식별/소멸 관리. **HP 판독·경고는 보스가 '이번 프레임' 식별됐을 때만**
         # 처리한다 — 보스가 없으면 영역이 길바닥/UI라 HP가 garbage로 읽히는데, 그걸
@@ -561,7 +568,7 @@ class BossTab(QWidget):
         alerts = []
         if boss_id is not None and self._tracker is not None and hp is not None:
             alerts = self._tracker.observe(hp)
-        if self._region and not self._paused and feature_active("boss"):
+        if self._region and not self._paused and boss_on:
             for alert in alerts:
                 self._overlay.show_message(alert.text, 3000)
                 self._play(alert.sound)
