@@ -6,6 +6,9 @@
 
 ## 배포와 검증
 
+- **QA 5c9422f 배포 검사 축소 복구(2026-11-03)**: 제품 코드 변화 없음(v0.39.1과 src·workflow·scripts 동일). `coverage` 형식·근거 강제 테스트 복구, 28파일·785건 수집, `test_release_checks.py` 14 passed.
+  단독 배포 대상 아님(사용자에게 보이는 변경 없음). 목록 버전이 이미 게시된 0.39.1이라 **다음 배포 때 그 버전 번호와 변경 범위로 다시 선정해야 함**(안 하면 배포 검증의 버전 확인에서 실패).
+  배포 시간의 나머지 큰 몫(검사·빌드 직렬 약 6분, FFmpeg 재빌드 약 4분)은 그대로 — B·C는 사용자 승인 후 별도.
 - **v0.39.1 게시 완료(2026-11-03, 0.38.1 동작으로 되돌림)**: 검증 [#178](https://github.com/StarlineBot/mabinogi_addon/actions/runs/41628645192) 14분47초·게시 [#258](https://github.com/StarlineBot/mabinogi_addon/actions/runs/41630622058) 성공
   (게시 실행 표시 커밋은 중간에 올라온 문서 커밋 8c7cd52, 후보·태그는 검증 커밋 기준). 태그 `v0.39.1` → ebd0f42, candidate source_sha·지문 `5c72628e…` 일치.
   공개 version.json 0.39.1·exe 163,962,647바이트·sha256 `209183ac…9d7aef` 후보·공개 URL 일치. 실사용 확인 대기(마우스 꼬리·CPU — 그대로면 원인은 0.39.0 밖).
