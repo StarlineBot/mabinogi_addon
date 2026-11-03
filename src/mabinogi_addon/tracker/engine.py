@@ -225,6 +225,7 @@ class BuffEngine:
                         self._last_read_at[bid] = now
                         self._read_ok[bid] = True
                     elif (t is not None and t > rem + self._TIME_CONFIRM_TOL
+                          and not self._row_taken(present, bid, y)
                           and self._icon_still_at(region, bid, y)):
                         # 0.40.0: 같은 줄에 그 버프 아이콘이 그대로 있는데 시간이 위로 크게 뜀 = 연장(종료 직전에 다시 건 것).
                         # 예전엔 '시계와 맞을 때만 살아 있음'이라 종료로 처리돼 오버레이에서 사라졌다. 연장 확정은 상태 기계가
@@ -268,6 +269,14 @@ class BuffEngine:
         )
 
     _ICON_STILL = 0.7  # 그 줄에 아이콘이 그대로 있다고 볼 점수(즐겨찾기 줄 맞춤 기준과 같음)
+
+    def _row_taken(self, present: dict, bid: str, y: int) -> bool:
+        """이번 프레임에 다른 버프가 그 줄(±아이콘 크기/2)에 잡혔나 — 버프가 끝나 아랫줄이 올라온 것(0.40.0 QA: 비슷한 아이콘
+        dark_erg↔flame_of_resurrection 0.737, penet↔melee_attack 0.91~1.0이 '같은 아이콘 그대로'로 보여 끝난 버프가 올라온 줄의
+        시간을 받아 유령으로 남았다)."""
+        template = self._templates.get(bid)
+        half = (template.shape[0] if template is not None else 16) // 2
+        return any(other != bid and abs(det.y - y) < half for other, det in present.items())
 
     def _icon_still_at(self, region: np.ndarray, bid: str, y: int) -> bool:
         """마지막으로 본 줄(y)에 그 버프 아이콘이 아직 있나(아이콘 열 안에서, 위아래 3px 여유)."""

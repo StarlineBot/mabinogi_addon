@@ -160,3 +160,49 @@ def test_top_row_cut_by_region_warns_and_shows_notice(cut, caplog):
         mw.config.load_capture_region = original
     assert text == "즐겨찾기 맨 위 줄이 잘려요 · 자동 찾기를 다시 해 주세요"
     assert (color, icon) == ("warn", "region")
+
+
+def test_similar_icon_moving_up_does_not_keep_the_ended_buff_as_ghost():
+    """0.40.0 QA(d6bc4d6): 목록에서 버프가 끝나 아랫줄이 올라올 때, 올라온 버프 아이콘이 비슷하면(dark_erg↔flame_of_resurrection 0.737)
+    '같은 줄 아이콘 그대로 + 시간 위로 뜀 = 연장'으로 보아 끝난 버프가 그 시간을 받아 유령으로 남았다. 그 줄에 다른 버프가 잡히면 연장이 아니다."""
+    frame = image_io.imread("tests/data/2026-11-03_나눔고딕_1080_행진곡59초빨강_밝은배경.png", cv2.IMREAD_COLOR)
+    region = frame[262:962, 1628:1918].copy()  # 1080 상태 목록(즐겨찾기 읽기 끔 = 전체가 목록)
+    cat = load_catalog()
+    templates = build_templates(cat)
+    engine = BuffEngine(templates, [b.id for b in cat], appear_frames=1)
+    pad, height = engine._row_pad_top, engine._row_height
+    before = region.copy()
+    before[449:465, 4:20] = templates["dark_erg"]  # dark_erg 줄(2분 44초)
+    after = region.copy()
+    after[449 - pad:449 + height, 20:] = region[545 - pad:545 + height, 20:]  # 아랫줄(29분 23초)이 올라옴
+    after[449:465, 4:20] = templates["flame_of_resurrection"]
+    t = 0.0
+    while t < 2.0:
+        result = engine.tick(before, now=t)
+        t += STEP
+    dark = next(e for e in result.entries if e.buff_id == "dark_erg")
+    assert dark.remaining == pytest.approx(164, abs=1.5)
+    while t < 12.0:  # dark_erg가 끝나 그 줄이 지워지고 10초
+        result = engine.tick(after, now=t)
+        t += STEP
+    ids = {e.buff_id for e in result.entries}
+    assert "dark_erg" not in ids and "flame_of_resurrection" in ids
+
+
+def test_unknown_favorites_do_not_keep_remapping(monkeypatch):
+    """0.40.0 QA(d6bc4d6): 앱이 모르는 버프가 즐겨찾기에 섞이면 '기억 줄 < 칸 수'가 늘 참이라 5프레임마다 map_rows(9~13ms)가 돌았다.
+    다시 채움은 유지 중이거나 유지 시간을 넘겨 빠진 줄이 있을 때만 — 014744(기억 2줄 / 칸 8줄)를 100틱 돌려도 첫 맞춤 뒤로 늘지 않는다."""
+    from mabinogi_addon.detect import favorites as fav
+    calls = []
+    original = fav.map_rows
+    monkeypatch.setattr(fav, "map_rows", lambda *a, **k: calls.append(1) or original(*a, **k))
+    region = _region(SHOT_2560)
+    engine = _engine()
+    for i in range(10):
+        engine.tick(region, now=i * STEP)
+    reader = engine.favorites
+    assert reader.row_count is not None and len(reader.rows) < reader.row_count  # 모르는 즐겨찾기가 섞인 화면
+    first = len(calls)
+    for i in range(10, 110):
+        engine.tick(region, now=i * STEP)
+    assert len(calls) == first

@@ -185,6 +185,9 @@ class FavoritesReader:
     # 0.40.0(사용자 실게임·app.log): 종료 직전 깜빡이는 프레임에 다시 맞추면 그 줄이 빠지고, 남은 줄이 멀쩡하면 다시 넣지 않아
     # 그 사이 연장해도 종료 처리됐다. 새로 못 찾은 기억 줄은 이만큼(약 2초) 유지하고, 빈 결과로 전체를 지우지 않는다.
     HOLD_FRAMES = 10
+    # 유지 시간을 넘겨 빠진 줄은 다시 찾으면 넣는다(5프레임마다 다시 맞춤). 이만큼(≈30초) 못 찾으면 포기.
+    # 앱이 모르는 버프가 즐겨찾기에 섞여 '기억 줄 < 칸 수'가 늘 참인 경우에는 다시 맞추지 않는다(0.40.0 QA: map_rows 9~13ms 상시 실행).
+    GIVE_UP_FRAMES = 150
 
     def __init__(self, templates: dict[str, np.ndarray], icon_column: tuple[int, int],
                  separator: int | None = None) -> None:
@@ -202,6 +205,7 @@ class FavoritesReader:
         self._gone = 0
         self._frame = 0
         self._missing: dict[str, int] = {}  # 다시 맞춤에서 못 찾은 기억 줄 → 연속 프레임 수(HOLD_FRAMES까지 유지)
+        self._dropped: dict[str, int] = {}  # 유지 시간을 넘겨 빠진 줄 → 빠진 프레임(다시 찾으면 지움, GIVE_UP_FRAMES 뒤 포기)
         self.top_cut = False  # 맨 위 즐겨찾기 줄이 영역 위 끝에 걸림(아이콘 잘림 → 다른 버프로 오인) → 자동 찾기 다시 안내
 
     @property
@@ -224,11 +228,14 @@ class FavoritesReader:
         if self.separator is None:
             self.rows, self.on, self.row_count = {}, {}, 0
             self._missing.clear()
+            self._dropped.clear()
             self.top_cut = False
             return None
-        refill = self._frame % self.SCAN_EVERY == 0 and (
-            not self.rows or bool(self._missing)
-            or (self.row_count is not None and len(self.rows) < self.row_count))  # 빠진 줄은 몇 프레임마다 다시 채움
+        if self.separator != before:
+            self._dropped.clear()  # 구분선이 바뀌면 칸이 새로 맞춰지므로 빠진 줄 기억도 비움
+        self._dropped = {b: f for b, f in self._dropped.items() if self._frame - f < self.GIVE_UP_FRAMES}
+        # 다시 채움: 유지 중인 줄이나 유지 시간을 넘겨 빠진 줄이 있을 때만(앱이 모르는 즐겨찾기 때문에 늘 돌지 않게)
+        refill = self._frame % self.SCAN_EVERY == 0 and (not self.rows or bool(self._missing) or bool(self._dropped))
         remapped = self.separator != before or self._needs_remap(gray) or refill
         if remapped:
             self._remap(gray, reason="구분선 이동" if before is not None and self.separator != before else "줄 확인")
@@ -311,8 +318,11 @@ class FavoritesReader:
                 self._missing[bid] = misses
             else:
                 self._missing.pop(bid, None)
+                if not taken and row.y < (self.separator or 0):
+                    self._dropped[bid] = self._frame  # 오래 가려짐 — 아이콘이 돌아오면 다시 채운다
         for bid in found:
             self._missing.pop(bid, None)
+            self._dropped.pop(bid, None)
         if set(rows) != set(self.rows) or any(rows[b].y != self.rows[b].y for b in rows):
             _log.info("즐겨찾기 줄 다시 맞춤(%s): %s", reason,
                       ", ".join(f"{b}@{r.y}{'(유지)' if b in self._missing else ''}"
