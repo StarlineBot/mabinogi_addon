@@ -1,205 +1,71 @@
 {
-  "version": "0.40.1",
+  "version": "0.40.2",
   "tests": [
     "tests/test_harp_channels.py",
-    "tests/test_startup_smoke.py",
-    "tests/test_navigation.py",
+    "tests/test_bundle_layout.py",
+    "tests/test_startup_build.py",
+    "tests/test_release_candidate.py",
+    "tests/test_windows_ci.py",
     "tests/test_release_notes.py",
     "tests/test_release_notes_trigger.py",
     "tests/test_release_checks.py",
-    "tests/test_release_candidate.py",
-    "tests/test_windows_ci.py",
-    "tests/test_startup_build.py",
-    "tests/test_perf_meter.py",
-    "tests/test_time_nanum.py",
-    "tests/test_time_4k_render.py",
-    "tests/test_favorites_hold.py",
-    "tests/test_skillbar_testers.py"
+    "tests/test_startup_smoke.py"
   ],
   "coverage": {
     "src/mabinogi_addon/harp_latency.py": {
       "tests": [
-        "tests/test_harp_channels.py"
+        "tests/test_harp_channels.py",
+        "tests/test_bundle_layout.py"
       ],
-      "reason": "하프 채널 연결: 주소 데이터·로컬 서버 성공/거부/시간 초과/취소·소켓 정리·중앙값/추천·화면 이탈/일시정지/회차 중복·제작자만"
+      "reason": "하프: 중앙값 추천·배지 하나·성공 3회 전 추천 없음, 채널 파일 번들 경로"
     },
     "src/mabinogi_addon/ui/harp_tab.py": {
       "tests": [
-        "tests/test_harp_channels.py"
-      ],
-      "reason": "하프 채널 연결: 주소 데이터·로컬 서버 성공/거부/시간 초과/취소·소켓 정리·중앙값/추천·화면 이탈/일시정지/회차 중복·제작자만"
-    },
-    "src/mabinogi_addon/assets/harp_channels.json": {
-      "tests": [
-        "tests/test_harp_channels.py"
-      ],
-      "reason": "하프 채널 연결: 주소 데이터·로컬 서버 성공/거부/시간 초과/취소·소켓 정리·중앙값/추천·화면 이탈/일시정지/회차 중복·제작자만"
-    },
-    "src/mabinogi_addon/ui/splash.py": {
-      "tests": [
         "tests/test_harp_channels.py",
-        "tests/test_startup_smoke.py"
+        "tests/test_bundle_layout.py"
       ],
-      "reason": "로딩 창 맨 위 고정 제거·최소 기동"
+      "reason": "하프 화면: 큰 숫자=중앙값·방금 값 작게·'비슷하게 빠름'·배지 잘림·채널 파일 못 읽어도 앱 계속"
     },
-    "src/mabinogi_addon/ui/main_window.py": {
+    "src/mabinogi_addon/paths.py": {
       "tests": [
-        "tests/test_harp_channels.py",
-        "tests/test_startup_smoke.py",
-        "tests/test_navigation.py",
-        "tests/test_perf_meter.py",
-        "tests/test_time_nanum.py",
-        "tests/test_favorites_hold.py"
+        "tests/test_bundle_layout.py"
       ],
-      "reason": "최적화 2단 탭(제작자만 하프 탭)·일시정지 연결·최소 기동/종료·탭 구조"
+      "reason": "번들(_MEIPASS) 배치 모의로 MainWindow 생성·assets는 resource_dir()만(0.40.0 시작 즉시 종료 재발 방지)"
+    },
+    "packaging/build_windows.py": {
+      "tests": [
+        "tests/test_bundle_layout.py",
+        "tests/test_startup_build.py",
+        "tests/test_release_candidate.py",
+        "tests/test_windows_ci.py"
+      ],
+      "reason": "--add-data 매핑대로 번들 배치 모의·빌드/후보 계약"
     },
     "src/mabinogi_addon/assets/release_notes.md": {
       "tests": [
         "tests/test_release_notes.py",
         "tests/test_release_notes_trigger.py"
       ],
-      "reason": "0.40.0 노트 파싱·기존 사용자 새 버전 표시 계약"
+      "reason": "0.40.2 노트 파싱·새 버전 표시"
     },
     "packaging/release_checks.json": {
       "tests": [
         "tests/test_release_checks.py"
       ],
-      "reason": "버전·선택 경로 유효성·범위 근거와 변경/공통 계약 매핑 검증"
+      "reason": "버전·선택 경로 유효성·범위 근거"
     },
     "scripts/run_release_checks.py": {
       "tests": [
         "tests/test_release_checks.py"
       ],
-      "reason": "버전·선택 경로 유효성·범위 근거와 변경/공통 계약 매핑 검증"
+      "reason": "버전·선택 경로 유효성·범위 근거"
     },
-    "scripts/release_delivery.py": {
+    "src/mabinogi_addon/ui/main_window.py": {
       "tests": [
-        "tests/test_release_candidate.py",
-        "tests/test_windows_ci.py",
-        "tests/test_startup_build.py"
+        "tests/test_bundle_layout.py",
+        "tests/test_startup_smoke.py"
       ],
-      "reason": "후보/승인/버전/동일 산출물·Windows 최소 기동/빌드 계약, 시작 화면 always_on_top=False"
-    },
-    ".github/workflows/windows.yml": {
-      "tests": [
-        "tests/test_release_candidate.py",
-        "tests/test_windows_ci.py",
-        "tests/test_startup_build.py"
-      ],
-      "reason": "후보/승인/버전/동일 산출물·Windows 최소 기동/빌드 계약, 시작 화면 always_on_top=False"
-    },
-    "packaging/build_windows.py": {
-      "tests": [
-        "tests/test_release_candidate.py",
-        "tests/test_windows_ci.py",
-        "tests/test_startup_build.py"
-      ],
-      "reason": "후보/승인/버전/동일 산출물·Windows 최소 기동/빌드 계약, 시작 화면 always_on_top=False"
-    },
-    "src/mabinogi_addon/perf_meter.py": {
-      "tests": [
-        "tests/test_perf_meter.py"
-      ],
-      "reason": "기능별 처리 시간 계측(측정만): 틱 감싸기·버프/디버프 이름·1분 한 줄 로그"
-    },
-    "src/mabinogi_addon/ui/buff_controller.py": {
-      "tests": [
-        "tests/test_perf_meter.py"
-      ],
-      "reason": "기능별 처리 시간 계측(측정만): 틱 감싸기·버프/디버프 이름·1분 한 줄 로그"
-    },
-    "src/mabinogi_addon/ui/boss_tab.py": {
-      "tests": [
-        "tests/test_perf_meter.py"
-      ],
-      "reason": "기능별 처리 시간 계측(측정만): 틱 감싸기·버프/디버프 이름·1분 한 줄 로그"
-    },
-    "src/mabinogi_addon/ui/halo_capture_section.py": {
-      "tests": [
-        "tests/test_perf_meter.py"
-      ],
-      "reason": "기능별 처리 시간 계측(측정만): 틱 감싸기·버프/디버프 이름·1분 한 줄 로그"
-    },
-    "src/mabinogi_addon/ui/tuarim_tab.py": {
-      "tests": [
-        "tests/test_perf_meter.py"
-      ],
-      "reason": "기능별 처리 시간 계측(측정만): 틱 감싸기·버프/디버프 이름·1분 한 줄 로그"
-    },
-    "src/mabinogi_addon/ui/dorcha_tab.py": {
-      "tests": [
-        "tests/test_perf_meter.py"
-      ],
-      "reason": "기능별 처리 시간 계측(측정만): 틱 감싸기·버프/디버프 이름·1분 한 줄 로그"
-    },
-    "src/mabinogi_addon/ui/dorcha_search.py": {
-      "tests": [
-        "tests/test_perf_meter.py"
-      ],
-      "reason": "기능별 처리 시간 계측(측정만): 틱 감싸기·버프/디버프 이름·1분 한 줄 로그"
-    },
-    "src/mabinogi_addon/ui/stat_bars_tab.py": {
-      "tests": [
-        "tests/test_perf_meter.py"
-      ],
-      "reason": "기능별 처리 시간 계측(측정만): 틱 감싸기·버프/디버프 이름·1분 한 줄 로그"
-    },
-    "src/mabinogi_addon/ui/skillbar_tab.py": {
-      "tests": [
-        "tests/test_perf_meter.py"
-      ],
-      "reason": "기능별 처리 시간 계측(측정만): 틱 감싸기·버프/디버프 이름·1분 한 줄 로그"
-    },
-    "src/mabinogi_addon/ui/mirror_manager.py": {
-      "tests": [
-        "tests/test_perf_meter.py"
-      ],
-      "reason": "기능별 처리 시간 계측(측정만): 틱 감싸기·버프/디버프 이름·1분 한 줄 로그"
-    },
-    "src/mabinogi_addon/ui/blackbox_controller.py": {
-      "tests": [
-        "tests/test_perf_meter.py"
-      ],
-      "reason": "기능별 처리 시간 계측(측정만): 틱 감싸기·버프/디버프 이름·1분 한 줄 로그"
-    },
-    "src/mabinogi_addon/ui/optimization_controller.py": {
-      "tests": [
-        "tests/test_perf_meter.py"
-      ],
-      "reason": "기능별 처리 시간 계측(측정만): 틱 감싸기·버프/디버프 이름·1분 한 줄 로그"
-    },
-    "src/mabinogi_addon/ui/cursor_overlay.py": {
-      "tests": [
-        "tests/test_perf_meter.py"
-      ],
-      "reason": "기능별 처리 시간 계측(측정만): 틱 감싸기·버프/디버프 이름·1분 한 줄 로그"
-    },
-    "src/mabinogi_addon/detect/time_reader.py": {
-      "tests": [
-        "tests/test_time_nanum.py",
-        "tests/test_time_4k_render.py"
-      ],
-      "reason": "나눔고딕 시간 글자 세트: 2560·1080 자료 화면 값 일치·시간 없는 목록 오판독 없음·못 읽음 안내/로그, 기존 4K·기본 세트 판독 불변"
-    },
-    "src/mabinogi_addon/tracker/engine.py": {
-      "tests": [
-        "tests/test_time_nanum.py",
-        "tests/test_time_4k_render.py",
-        "tests/test_favorites_hold.py"
-      ],
-      "reason": "나눔고딕 시간 글자 세트: 2560·1080 자료 화면 값 일치·시간 없는 목록 오판독 없음·못 읽음 안내/로그, 기존 4K·기본 세트 판독 불변"
-    },
-    "src/mabinogi_addon/detect/favorites.py": {
-      "tests": [
-        "tests/test_favorites_hold.py"
-      ],
-      "reason": "즐겨찾기 줄 유지(깜빡임·빈 결과)·빠진 줄 다시 채움·같은 줄 시간 점프=연장·맨 위 줄 잘림 경고/안내(014744·010804)"
-    },
-    "src/mabinogi_addon/detect/skillbar_anchor.py": {
-      "tests": [
-        "tests/test_skillbar_testers.py"
-      ],
-      "reason": "tests/data 큰 화면 목록 검사(새 나눔고딕·0.40.0 자료 17장 포함) — 배포 검증 #179 실패 원인"
+      "reason": "번들 배치·소스 최소 기동"
     }
   }
 }

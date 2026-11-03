@@ -25,6 +25,7 @@ TIMEOUT = 2.0          # 연결 제한 시간(초)
 CONCURRENCY = 2        # 동시 연결 최대
 RECENT = 5             # 중앙값에 쓰는 최근 성공 수
 TIE_MS = 0.1           # 이 안의 차이는 같은 빠르기로 본다
+MIN_SAMPLES = 3        # 0.40.2: 성공이 이만큼 모인 채널만 추천·'가장 빠름'(1~3ms에서 0.1ms 차이는 측정 오차 수준)
 _SLICE = 0.05          # 취소 확인 간격(초)
 
 OK, TIMEOUT_KIND, REFUSED, ERROR, CANCELLED = "ok", "timeout", "refused", "error", "cancelled"
@@ -152,27 +153,31 @@ class History:
         self.stats[number].record(result)
 
     def ranking(self) -> list[tuple[int, float]]:
-        """(채널, 중앙값) 빠른 순. 실패만 한 채널은 빠진다. 같은 값이면 번호가 낮은 채널이 앞."""
-        rows = [(n, s.median) for n, s in self.stats.items() if s.median is not None]
+        """(채널, 중앙값) 빠른 순 — 중앙값 오름차순, 같으면 번호 낮은 순. 성공 MIN_SAMPLES회 이상인 채널만(실패만 한 채널 제외)."""
+        rows = [(n, s.median) for n, s in self.stats.items() if len(s.recent) >= MIN_SAMPLES]
         return sorted(rows, key=lambda r: (r[1], r[0]))
 
-    def fastest(self) -> set[int]:
-        """'가장 빠름' 표시 — 가장 빠른 중앙값에서 0.1ms 안의 채널 모두."""
-        ranking = self.ranking()
-        if not ranking:
-            return set()
-        best = ranking[0][1]
-        return {n for n, m in ranking if m - best <= TIE_MS + 1e-9}
+    def samples(self) -> int:
+        """추천까지 모인 표본 수(성공이 가장 많은 채널 기준, 최대 MIN_SAMPLES) — '측정 중이에요(n/3)'."""
+        return min(MIN_SAMPLES, max((len(s.recent) for s in self.stats.values()), default=0))
 
-    def recommendation(self) -> tuple[int | None, list[int]]:
-        """추천 채널 = 가장 빠름 기준(0.1ms 동점이면 번호가 낮은 채널) + 다음으로 빠른 채널 2개."""
+    def fastest(self) -> set[int]:
+        """'가장 빠름' 배지 — 추천 채널 하나에만(0.40.2: 동점 묶음 전부에 달면 추천과 엇갈려 보였다)."""
+        top, _others, _similar = self.recommendation()
+        return {top} if top is not None else set()
+
+    def recommendation(self) -> tuple[int | None, list[int], bool]:
+        """(추천 채널, 옆에 보일 채널 최대 2개, 그 채널들이 '비슷하게 빠름'인지).
+        추천 = 중앙값이 가장 작은 채널(같으면 번호 낮은 채널). 추천과 0.1ms 안인 채널이 있으면 그 채널들을 '비슷하게 빠름'으로,
+        없으면 다음으로 빠른 2개를 '다음으로 빠른 채널'로."""
         ranking = self.ranking()
         if not ranking:
-            return None, []
-        tied = self.fastest()
-        top = min(tied)
-        rest = [n for n, _ in ranking if n != top]
-        return top, rest[:2]
+            return None, [], False
+        top, best = ranking[0]
+        similar = [n for n, m in ranking[1:] if m - best <= TIE_MS + 1e-9]
+        if similar:
+            return top, similar[:2], True
+        return top, [n for n, _m in ranking[1:3]], False
 
 
 class Round:

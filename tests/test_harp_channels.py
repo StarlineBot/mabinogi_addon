@@ -157,11 +157,16 @@ def test_fastest_ties_and_recommendation():
     for n, ms in ((1, 3.0), (4, 2.05), (7, 2.0), (9, 2.1), (13, 2.2)):
         h.record(n, _ok(ms))
     h.record(13, hl.Result(hl.TIMEOUT_KIND))
-    assert h.fastest() == {4, 7, 9}  # 0.1ms 안 동점은 모두 '가장 빠름'
-    assert h.recommendation() == (4, [7, 9])  # 동점이면 번호가 낮은 채널을 추천, 다음 2개
+    # 0.40.2 명세 변경: 성공 3회 전에는 추천·배지 없음, 배지는 추천 채널 하나에만, 추천 = 중앙값이 가장 작은 채널
+    assert h.fastest() == set() and h.recommendation() == (None, [], False)
+    for _ in range(2):
+        for n, ms in ((1, 3.0), (4, 2.05), (7, 2.0), (9, 2.1), (13, 2.2)):
+            h.record(n, _ok(ms))
+    assert h.fastest() == {7}
+    assert h.recommendation() == (7, [4, 9], True)  # 7(2.0)과 0.1ms 안 → '비슷하게 빠름'(중앙값 순)
     only_fail = hl.History([chans[0]])
     only_fail.record(1, hl.Result(hl.REFUSED))
-    assert only_fail.fastest() == set() and only_fail.recommendation() == (None, [])
+    assert only_fail.fastest() == set() and only_fail.recommendation() == (None, [], False)
 
 
 def test_round_runs_at_most_two_at_once_and_reports_every_channel():
@@ -248,8 +253,9 @@ def test_opening_measures_at_once_then_every_60s_while_viewing(harp):
     assert wait_until(lambda: tab._round is None and tab._last_time is not None)
     assert sorted(gate.calls) == [1, 2, 3, 4, 5, 6, 7]
     assert tab.cards[3].value.text().count("시간 초과") and tab.cards[5].value.text().count("연결 거부")
-    assert tab.cards[1].badge.isVisible() and not tab.cards[2].badge.isVisible()
-    assert "1채널" in tab.recommend.main.text() and "2채널" in tab.recommend.others.text()
+    # 0.40.2 명세 변경: 성공 3회 전에는 추천·배지 없이 '측정 중이에요(n/3)'
+    assert not any(card.badge.isVisible() for card in tab.cards.values())
+    assert "측정 중이에요(1/3)" in tab.recommend.main.text()
     assert "마지막 측정 오후 9:41:08 · 다음 측정까지 60초" in tab.status.text()
     clock[0] += 59
     tab._tick()
@@ -258,6 +264,12 @@ def test_opening_measures_at_once_then_every_60s_while_viewing(harp):
     tab._tick()  # 한 회차가 끝나고 60초 뒤
     assert wait_until(lambda: len(gate.calls) == 14 and tab._round is None)
     assert tab.history.stats[1].attempts == 2
+    clock[0] += 60
+    tab._tick()  # 세 번째 회차 → 성공 3회
+    assert wait_until(lambda: len(gate.calls) == 21 and tab._round is None)
+    assert tab.cards[1].badge.isVisible() and not tab.cards[2].badge.isVisible()
+    assert "1채널" in tab.recommend.main.text() and "다음으로 빠른 채널" in tab.recommend.others.text()
+    assert "2채널" in tab.recommend.others.text()
 
 
 def test_leaving_screen_cancels_and_cancel_is_not_counted(harp):
@@ -331,3 +343,92 @@ def test_startup_windows_are_not_always_on_top():
     finally:
         s.close()
         s.deleteLater()
+
+
+
+# ---- 0.40.2 화면 정리: 큰 숫자 = 중앙값, 배지 하나, 표본 3회, 배지 잘림 ---------------------------------
+def _history(values):
+    """{채널: [성공 ms ...]} → History."""
+    h = hl.History([hl.Channel(n, "1.1.1.1", n) for n in values])
+    for n, seq in values.items():
+        for ms in seq:
+            h.record(n, _ok(ms))
+    return h
+
+
+def test_recommend_smallest_median_and_group_similar():
+    h = _history({15: [2.0, 2.0, 2.0], 21: [2.0, 2.0, 2.0], 6: [1.9, 1.9, 1.9], 22: [2.8, 2.8, 2.8]})
+    assert h.recommendation() == (6, [15, 21], True)  # 2.0·2.0·1.9 → 1.9 채널 추천, 나머지는 '비슷하게 빠름'
+    assert h.fastest() == {6}
+    far = _history({1: [1.5, 1.5, 1.5], 2: [2.0, 2.0, 2.0], 3: [2.5, 2.5, 2.5], 4: [3.0, 3.0, 3.0]})
+    assert far.recommendation() == (1, [2, 3], False)  # 0.1ms 안이 없으면 '다음으로 빠른 채널'
+
+
+def test_two_samples_or_fewer_give_no_recommendation(harp):
+    app, make, clock = harp
+    tabs, tab = make(Gate())
+    for n, s in tab.history.stats.items():
+        for _ in range(2):
+            s.record(_ok(2.0 + n / 10))
+    tab._last_time = datetime(2026, 11, 3, 21, 41, 8)
+    tab._refresh_view()
+    assert tab.history.recommendation()[0] is None
+    assert "측정 중이에요(2/3)" in tab.recommend.main.text()
+    assert not any(card.badge.isVisible() for card in tab.cards.values())
+
+
+def test_big_number_is_median_and_just_now_is_small(harp):
+    from mabinogi_addon.ui.harp_tab import ChannelCard
+    app, make, clock = harp
+    s = hl.ChannelStats(("1.1.1.1", 1))
+    for ms in (2.8, 2.7, 2.9, 2.8, 10.5):  # 한 번 튄 10.5
+        s.record(_ok(ms))
+    card = ChannelCard(22)
+    try:
+        card.show_state("done", s)
+        assert ">2.8<" in card.value.text() and "10.5" not in card.value.text()  # 큰 숫자 = 중앙값
+        assert "방금 10.5" in card.sub.text() and "5/5" in card.sub.text()
+        s.record(hl.Result(hl.TIMEOUT_KIND))
+        card.show_state("done", s)
+        assert ">2.8<" in card.value.text() and "시간 초과" in card.sub.text()
+    finally:
+        card.deleteLater()
+
+
+def test_fastest_badge_is_not_clipped_at_narrow_window(harp):
+    """0.40.2(Confirmed 스크린샷 2장): '가장 빠름'이 '가장 빠'로 잘림 — 배지 폭이 글자보다 좁아지지 않는다(칸 폭은 그대로)."""
+    from PySide6.QtWidgets import QScrollArea
+    app, make, clock = harp
+    tabs, tab = make(Gate())
+    tabs.setCurrentWidget(tab)
+    tab.cancel()
+    for n, s in tab.history.stats.items():
+        for _ in range(3):
+            s.record(_ok(2.0 + n / 10))
+    tab._last_time = datetime(2026, 11, 3, 21, 41, 8)
+    tab._refresh_view()
+    tabs.resize(760, 600)  # QA가 잘림을 본 창 폭
+    tabs.show()
+    app.processEvents()
+    badge = tab.cards[1].badge
+    assert badge.isVisible()
+    assert badge.sizeHint().width() <= badge.width()
+
+
+def test_unreadable_channel_file_keeps_app_running(monkeypatch, caplog):
+    """0.40.2: 채널 목록을 못 읽어도(0.40.0 exe 경로 문제) 탭만 안내하고 예외로 앱을 끝내지 않는다."""
+    import logging
+    from mabinogi_addon.ui.harp_tab import HarpChannelTab
+    QApplication.instance() or QApplication([])
+    caplog.set_level(logging.ERROR)
+    monkeypatch.setattr(hl, "load_channels", lambda *a, **k: (_ for _ in ()).throw(FileNotFoundError("harp_channels.json")))
+    tab = HarpChannelTab()
+    try:
+        assert tab.channels == [] and tab.load_error == "채널 목록을 불러오지 못했어요"
+        assert "채널 목록을 불러오지 못했어요" in tab.recommend.main.text()
+        assert any("하프 채널 목록" in r.getMessage() for r in caplog.records)
+        tab.measure_now()
+        assert tab._round is None
+    finally:
+        tab.shutdown()
+        tab.deleteLater()

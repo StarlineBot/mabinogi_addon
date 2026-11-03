@@ -69,18 +69,17 @@ def test_current_plan_maps_every_selected_file_to_changed_code_or_shared_contrac
 
 
 def test_current_release_keeps_feature_boundaries_and_delivery_contracts():
-    """0.40.0: 하프 채널 연결(제작자만)·시작 화면 맨 위 고정 제거 + 배포 계약. (릴리즈마다 경계를 바꾼다 — 누적하지 않음)"""
+    """0.40.2: 하프 화면 정리 + 번들 배치(0.40.0 시작 즉시 종료 재발 방지) + 배포 계약. (릴리즈마다 경계를 바꾼다 — 누적하지 않음)"""
     root = Path(__file__).resolve().parents[1]
     plan = json.loads((root / 'packaging/release_checks.json').read_text(encoding='utf-8'))
     paths = set(plan['tests'])
-    # Minimum risk boundaries, not the union of every earlier release's tests.
     assert {
-        'tests/test_harp_channels.py', 'tests/test_startup_build.py', 'tests/test_release_checks.py',
-        'tests/test_release_candidate.py', 'tests/test_windows_ci.py', 'tests/test_startup_smoke.py',
+        'tests/test_harp_channels.py', 'tests/test_bundle_layout.py', 'tests/test_startup_build.py',
+        'tests/test_release_checks.py', 'tests/test_release_candidate.py', 'tests/test_windows_ci.py',
+        'tests/test_startup_smoke.py',
     } <= paths
     assert {
-        'src/mabinogi_addon/harp_latency.py', 'src/mabinogi_addon/ui/harp_tab.py',
-        'src/mabinogi_addon/assets/harp_channels.json', 'src/mabinogi_addon/ui/splash.py',
+        'src/mabinogi_addon/harp_latency.py', 'src/mabinogi_addon/ui/harp_tab.py', 'src/mabinogi_addon/paths.py',
         'packaging/build_windows.py', 'src/mabinogi_addon/assets/release_notes.md',
     } <= set(plan['coverage'])
     # The separate development entry must continue collecting the whole suite.

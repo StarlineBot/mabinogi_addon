@@ -6,15 +6,17 @@
 from __future__ import annotations
 
 from datetime import datetime
+import logging
 from time import monotonic
 
 from PySide6.QtCore import Qt, QTimer, Signal
-from PySide6.QtWidgets import QFrame, QGridLayout, QHBoxLayout, QLabel, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QFrame, QGridLayout, QHBoxLayout, QLabel, QSizePolicy, QVBoxLayout, QWidget
 
 from .. import harp_latency as hl
 from .palette import color
 from .widgets import FeatureHeader, hint_label
 
+_log = logging.getLogger(__name__)
 INTERVAL = 60.0  # 한 회차가 끝난 뒤 다음 회차까지(초)
 COLUMNS = 6
 TITLE = "하프 채널 연결"
@@ -38,7 +40,7 @@ def _tint(name: str, alpha: float) -> str:
 
 
 class ChannelCard(QFrame):
-    """채널 칸: 이름(+가장 빠름) · 큰 숫자 ms 또는 상태 글자 · 중앙값·성공/시도."""
+    """채널 칸: 이름(+가장 빠름) · 큰 숫자 = 중앙값(판단에 쓰는 값) · 작게 '방금' 값·성공/시도(0.40.2)."""
 
     def __init__(self, number: int):
         super().__init__()
@@ -46,15 +48,18 @@ class ChannelCard(QFrame):
         self.setObjectName("harpCard")
         self.setMinimumWidth(104)
         v = QVBoxLayout(self)
-        v.setContentsMargins(10, 8, 10, 8)
+        v.setContentsMargins(8, 8, 8, 8)  # 0.40.2: 창 폭 760에서도 '가장 빠름'이 칸 안에 다 들어가게(칸 폭은 그대로)
         v.setSpacing(2)
         top = QHBoxLayout()
-        top.setSpacing(6)
+        top.setSpacing(4)
         self.name = QLabel(f"{number}채널")
         self.name.setStyleSheet("font-size:15px; font-weight:bold;")
         self.badge = QLabel("가장 빠름")
-        self.badge.setStyleSheet(f"background:{color('ok')}; color:#062F1A; font-size:10px; font-weight:bold;"
-                                 " padding:1px 4px; border-radius:3px;")
+        self.badge.setStyleSheet(f"background:{color('ok')}; color:#062F1A; font-size:9px; font-weight:bold;"
+                                 " padding:1px 2px; border-radius:3px;")
+        # 0.40.2: 글자보다 좁아지지 않게('가장 빠' 잘림) — 칸 폭은 그대로, 배지를 작게 해 이름 옆에 들어가게
+        self.badge.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self.badge.setMinimumWidth(self.badge.sizeHint().width())
         self.badge.hide()
         top.addWidget(self.name)
         top.addWidget(self.badge)
@@ -64,6 +69,7 @@ class ChannelCard(QFrame):
         self.value.setTextFormat(Qt.TextFormat.RichText)
         v.addWidget(self.value)
         self.sub = QLabel()
+        self.sub.setTextFormat(Qt.TextFormat.RichText)
         self.sub.setStyleSheet(f"color:{color('muted')}; font-size:11px;")
         v.addWidget(self.sub)
         self.fastest = False
@@ -91,17 +97,28 @@ class ChannelCard(QFrame):
         elif last is None:
             self.value.setText(f"<span style='{big} color:{muted}'>—</span>")
             self.sub.setText("대기" if state in ("waiting", "measuring") else "측정 전")
-        elif last.kind == hl.OK:
-            self.value.setText(f"<span style='{big}'>{_ms(last.ms)}</span> <span style='color:{muted}'>ms</span>")
-            self.sub.setText(f"중앙값 {_ms(stats.median)} · {stats.successes}/{stats.attempts}")
+        elif stats.median is not None:
+            # 큰 숫자 = 중앙값(추천·순위와 같은 값), 방금 값은 작게 — 한 번 튄 값이 크게 보이지 않게(0.40.2)
+            self.value.setText(f"<span style='{big}'>{_ms(stats.median)}</span> <span style='color:{muted}'>ms</span>")
+            self.sub.setText(f"방금 {just_now(last)} · {stats.successes}/{stats.attempts}")
         else:
-            word, tone = {hl.TIMEOUT_KIND: ("시간 초과", "warn"), hl.REFUSED: ("연결 거부", "danger")}.get(
-                last.kind, ("연결 실패", "danger"))
+            word, tone = _failure(last)
             self.value.setText(f"<span style='font-size:15px; font-weight:bold; color:{color(tone)}'>{word}</span>")
-            self.sub.setText(f"중앙값 {_ms(stats.median)} · {stats.successes}/{stats.attempts}" if stats.median is not None
-                             else f"성공 {stats.successes}/{stats.attempts}")
+            self.sub.setText(f"성공 {stats.successes}/{stats.attempts}")
         if state == "measuring" and last is not None:
             self.sub.setText(self.sub.text() + " · 측정 중")
+
+
+def _failure(result: hl.Result) -> tuple[str, str]:
+    return {hl.TIMEOUT_KIND: ("시간 초과", "warn"), hl.REFUSED: ("연결 거부", "danger")}.get(result.kind, ("연결 실패", "danger"))
+
+
+def just_now(result: hl.Result) -> str:
+    """'방금' 값 글자 — 성공이면 ms 숫자, 실패면 이유(색)."""
+    if result.kind == hl.OK:
+        return _ms(result.ms)
+    word, tone = _failure(result)
+    return f"<span style='color:{color(tone)}'>{word}</span>"
 
 
 class RecommendBox(QFrame):
@@ -128,17 +145,18 @@ class RecommendBox(QFrame):
         self.others.setText("")
 
     def show_result(self, history: hl.History) -> bool:
-        top, rest = history.recommendation()
+        top, others, similar = history.recommendation()
         if top is None:
             return False
         s = history.stats[top]
         muted = color("muted")
         self.main.setText(f"<span style='font-size:24px; font-weight:bold; color:{color('ok')}'>{top}채널</span>"
-                          f"&nbsp;&nbsp;<span style='font-size:16px; font-weight:bold'>{_ms(s.median if s.last is None or s.last.kind != hl.OK else s.last.ms)}</span>"
-                          f" <span style='color:{muted}'>ms · 중앙값 {_ms(s.median)}</span>")
-        if rest:
-            items = " · ".join(f"<b>{n}채널</b> {_ms(history.stats[n].median)}" for n in rest)
-            self.others.setText(f"<span style='color:{muted}'>다음으로 빠른 채널</span>&nbsp;&nbsp;{items}")
+                          f"&nbsp;&nbsp;<span style='font-size:16px; font-weight:bold'>{_ms(s.median)}</span>"
+                          f" <span style='color:{muted}'>ms · 방금 {just_now(s.last)}</span>")
+        if others:
+            label = "비슷하게 빠름" if similar else "다음으로 빠른 채널"
+            items = " · ".join(f"<b>{n}채널</b> {_ms(history.stats[n].median)}" for n in others)
+            self.others.setText(f"<span style='color:{muted}'>{label}</span>&nbsp;&nbsp;{items}")
         else:
             self.others.setText("")
         return True
@@ -152,7 +170,16 @@ class HarpChannelTab(QWidget):
     def __init__(self, *, channels: list[hl.Channel] | None = None, connect=hl.connect_time,
                  now=datetime.now, clock=monotonic, timeout: float = hl.TIMEOUT):
         super().__init__()
-        self.channels = hl.load_channels() if channels is None else channels
+        self.load_error: str | None = None
+        if channels is None:
+            try:
+                channels = hl.load_channels()
+            except (OSError, ValueError, KeyError, TypeError) as exc:
+                # 0.40.2: 채널 데이터 하나 때문에 앱 시작 전체가 막히면 안 된다(0.40.0 exe 시작 즉시 종료) — 이 탭에만 안내
+                _log.error("하프 채널 목록을 불러오지 못했어요: %r", exc)
+                self.load_error = "채널 목록을 불러오지 못했어요"
+                channels = []
+        self.channels = channels
         self.history = hl.History(self.channels)
         self._connect, self._now, self._clock, self._timeout = connect, now, clock, timeout
         self._round: hl.Round | None = None
@@ -242,7 +269,7 @@ class HarpChannelTab(QWidget):
 
     # ---- 회차 ---------------------------------------------------------------------------------
     def measure_now(self) -> None:
-        if self._round is not None or not self._viewing():
+        if self._round is not None or not self._viewing() or not self.channels:
             return  # 회차가 겹치지 않게
         self._generation += 1
         generation = self._generation
@@ -326,8 +353,13 @@ class HarpChannelTab(QWidget):
                 state = "done" if stats.last is not None else "before"
             card.show_state(state, stats)
             card.set_fastest(number in fastest)
-        if not self.recommend.show_result(self.history):
-            if self._round is not None:
+        if self.load_error:
+            self.recommend.show_message(self.load_error)
+        elif not self.recommend.show_result(self.history):
+            samples = self.history.samples()
+            if 0 < samples < hl.MIN_SAMPLES:
+                self.recommend.show_message(f"측정 중이에요({samples}/{hl.MIN_SAMPLES})")
+            elif self._round is not None:
                 self.recommend.show_message("측정하고 있어요 — 끝나면 알려줘요")
             elif self._last_time is not None:
                 self.recommend.show_message("연결된 채널이 없어요")
