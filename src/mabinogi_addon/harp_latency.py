@@ -17,7 +17,10 @@ import statistics
 import threading
 from time import perf_counter
 
-DATA_PATH = Path(__file__).parent / "assets" / "harp_channels.json"
+from . import paths
+
+# 0.40.1: exe(PyInstaller)는 assets를 _MEIPASS/assets에 넣는다 — __file__ 기준이면 exe에서 못 찾아 앱 시작 즉시 종료됐다.
+DATA_PATH = paths.resource_dir() / "harp_channels.json"
 TIMEOUT = 2.0          # 연결 제한 시간(초)
 CONCURRENCY = 2        # 동시 연결 최대
 RECENT = 5             # 중앙값에 쓰는 최근 성공 수

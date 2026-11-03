@@ -1,5 +1,5 @@
 {
-  "version": "0.40.0",
+  "version": "0.40.1",
   "tests": [
     "tests/test_harp_channels.py",
     "tests/test_startup_smoke.py",
