@@ -183,6 +183,7 @@ class Confirmation:
         self.last_time = None
         self.elapsed = 0.0
         self.saved = False
+        self.changed = False
 
     def observe(self, *, frame_id, now, readable, stamp, target, running=True):
         if stamp != self.stamp or target != self.target or self.saved:
@@ -211,6 +212,7 @@ class Confirmation:
             name, field = FIELDS[key]
             raw[name] = {**section(raw,name),field:deepcopy(self.box)}
             config._write_local_config(raw)
+            self.changed = True
             logging.getLogger(__name__).info('자동 찾기 위치 저장 %s: %s -> %s',key,old,self.box)
         self.saved = True
         return True

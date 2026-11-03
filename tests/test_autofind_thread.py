@@ -9,6 +9,8 @@ from PySide6.QtWidgets import QApplication, QWidget
 from mabinogi_addon import config, autofind_state as state
 from mabinogi_addon.ui import autofind_runtime as module
 
+REAL_READABLE = module.readable
+
 TARGET = (11, 22, 0, 0, 1920, 1080)
 BOX = dict(x=10, y=20, w=30, h=40)
 
@@ -255,3 +257,59 @@ def test_tick_reuses_valid_target_and_rediscovers_replacement(runtime, monkeypat
     r.tick()
     assert r.target == (55,44,0,0,1920,1080)
     assert len(enumerations) == 4
+
+
+@pytest.mark.parametrize('automatic', [False, True])
+@pytest.mark.parametrize('stamp', ['2026-10-09 185117', '2026-10-14 000646'])
+def test_real_hundred_does_not_start_search_or_false_notice(runtime, monkeypatch, automatic, stamp):
+    from mabinogi_addon import image_io
+    from mabinogi_addon.autofind_replay import detector_assets, run_detector
+    from mabinogi_addon.detect.tuarim_reader import read_percent, read_observation
+    r, window, _, _ = runtime
+    frame = image_io.imread(f'tests/data/스크린샷 {stamp}.png')
+    box = run_detector('tuarim', frame, detector_assets('tuarim'), {})
+    assert box is not None
+    x,y,w,h = box
+    crop = frame[y:y+h,x:x+w]
+    assert read_percent(crop) is None  # The tab's hold-at-full contract is unchanged.
+    assert read_observation(crop) == 100
+    # The fixture normally stubs readers; restore the production function for this replay.
+    monkeypatch.setattr(module, 'readable', REAL_READABLE)
+    assert module.readable('tuarim', crop)
+    monkeypatch.setattr(r.native, 'grab', lambda *a: crop.copy())
+    notices = []
+    window.setup_guide.record_result = lambda *a: notices.append(a)
+    monkeypatch.setattr(r, '_search', lambda *a, **kw: pytest.fail('100% must not trigger reacquisition'))
+    config._write_local_config({'tuarim': {'enabled': True, 'box': BOX},
+                                'autofind': {'enabled': automatic}})
+    clock = [0.0]
+    monkeypatch.setattr(module, 'monotonic', lambda: clock[0])
+    for _ in range(65):
+        r.tick()
+        r.future.result(timeout=5)
+        clock[0] += .5
+        r.tick()
+        clock[0] += .5
+    assert r.lost['tuarim'] == r.failures['tuarim'] == 0
+    assert not r.candidates and not notices
+
+
+@pytest.mark.parametrize('changed', [False, True])
+def test_confirmed_resource_only_reloads_when_position_changes(runtime, monkeypatch, changed):
+    r, window, _, _ = runtime
+    config._write_local_config({'dorcha': {'enabled': True, 'box': BOX}})
+    r.target = TARGET
+    box = {**BOX, 'x': BOX['x'] + 1} if changed else dict(BOX)
+    candidate = state.Confirmation(box, state.epoch('dorcha'), TARGET)
+    r.candidates['dorcha'] = candidate
+    r.lost['dorcha'], r.failures['dorcha'] = 20, 2
+    writes, reloads = [], []
+    original = config._write_local_config
+    monkeypatch.setattr(config, '_write_local_config', lambda raw: (writes.append(raw), original(raw))[1])
+    window._reload_autofind_feature = reloads.append
+    for i in range(4):
+        r._accept(dict(kind='read',frame_id=i,delta=1), {'dorcha': True}, i, True, 1)
+    assert len(writes) == int(changed)
+    assert reloads == (['dorcha'] if changed else [])
+    assert candidate.saved and candidate.changed == changed
+    assert not r.candidates and r.lost['dorcha'] == r.failures['dorcha'] == 0

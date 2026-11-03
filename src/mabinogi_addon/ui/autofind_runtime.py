@@ -34,8 +34,8 @@ def readable(key, frame, *, templates=None):
         from ..detect.dorcha_reader import read_dorcha
         return read_dorcha(frame) is not None
     if key == 'tuarim':
-        from ..detect.tuarim_reader import read_percent
-        return read_percent(frame) is not None
+        from ..detect.tuarim_reader import read_observation
+        return read_observation(frame) is not None
     if key == 'halo_timer':
         from ..detect.halo_timer import read_seconds
         return read_seconds(frame,max_seconds=3600) is not None
@@ -312,7 +312,8 @@ class AutofindRuntime(QObject):
                             saved=False
                         self.candidates.pop(key,None)
                         if saved:
-                            self.window._reload_autofind_feature(key)
+                            if candidate.changed:
+                                self.window._reload_autofind_feature(key)
                             self.lost[key]=self.failures[key]=0
                     elif now-getattr(candidate,"created",now)>10:
                         # A failed frame resets the 3-second interval. Bound unreadable trials to 10 seconds.
