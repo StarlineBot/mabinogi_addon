@@ -22,8 +22,8 @@ class Splash(QWidget):
     def __init__(self, *, typing: bool = True, status: str = "") -> None:
         super().__init__(
             None,
+            # 0.40.0(사용자): 맨 위 고정 없음 — 로딩 중에도 다른 창을 앞으로 가져올 수 있게
             Qt.WindowType.FramelessWindowHint
-            | Qt.WindowType.WindowStaysOnTopHint
             | Qt.WindowType.SplashScreen,
         )
         self.setFixedSize(440, 240)

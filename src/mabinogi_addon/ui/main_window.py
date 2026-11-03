@@ -337,6 +337,11 @@ class MainWindow(QMainWindow):
         self.cursor_tab = CursorTab(self.cursor_fx)
         self._cursor_scroll = _scrolled(self.cursor_tab)
         self.optimization_tools.panel.tabs.addTab(self._cursor_scroll, "마우스 커서")
+        # 하프 채널 연결(docs/harp-channel-tcp-spec.md): 최적화 2단 네 번째, 제작자만(다른 사용자에겐 탭도 측정도 없음).
+        from .harp_tab import HarpChannelTab
+        self.harp_tab = HarpChannelTab()
+        self._harp_scroll = _scrolled(self.harp_tab)
+        self._refresh_harp_access()
 
         tabs = QTabWidget()
         tabs.setObjectName("mainTabs")
@@ -398,6 +403,7 @@ class MainWindow(QMainWindow):
         self.settings_tab.login_changed.connect(self.dorcha_tab.login_refresh)
         self.settings_tab.login_changed.connect(self.boss_tab.halo_capture.login_refresh)
         self.settings_tab.login_changed.connect(self._guide_login_changed)
+        self.settings_tab.login_changed.connect(self._refresh_harp_access)
         self.settings_tab.game_registered.connect(self.setup_page.refresh)
         self.settings_tab.game_registration_finished.connect(self._setup_game_finished)
         self.setCentralWidget(central)
@@ -611,6 +617,20 @@ class MainWindow(QMainWindow):
         elif key == "cursor":
             self.cursor_tab.set_enabled(on)  # 마우스 커서 화면 '커서 표시'와 같은 값
         self.home_page.update_state(self._home_state())
+
+    def _refresh_harp_access(self, *_args) -> None:
+        """하프 채널 연결은 제작자만 — 아니면 탭을 빼고 측정을 멈춘다."""
+        from .. import feature_access
+
+        tabs = self.optimization_tools.panel.tabs
+        index = tabs.indexOf(self._harp_scroll)
+        if feature_access.is_creator():
+            if index < 0:
+                tabs.addTab(self._harp_scroll, "하프 채널 연결")
+        elif index >= 0:
+            self.harp_tab.cancel()
+            tabs.removeTab(index)
+            self._harp_scroll.hide()
 
     def _refresh_cursor_access(self) -> None:
         """마우스 커서 표시 공개 범위 반영(0.37.0부터 모두 공개 — 탭·홈 칸은 늘 보인다)."""
@@ -2182,6 +2202,7 @@ class MainWindow(QMainWindow):
         self.boss_tab.set_paused(paused)
         self.tuarim_tab.set_paused(paused)
         self.cursor_fx.set_paused(paused)
+        self.harp_tab.set_paused(paused)
         if paused:
             for player in (self._notifier, self._notifier2):
                 if player is not None:
@@ -2393,6 +2414,7 @@ class MainWindow(QMainWindow):
         self.creator_dialogue.shutdown()
         self.dungeon_cost_tab.shutdown()
         self.cursor_fx.shutdown()
+        self.harp_tab.shutdown()
         if self._status_timer is not None:
             self._status_timer.stop()
 

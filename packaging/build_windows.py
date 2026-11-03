@@ -58,9 +58,11 @@ def extend_spec(spec: Path, root: Path) -> None:
     )
     call = calls[0]
     call.keywords = [
-        keyword for keyword in call.keywords if keyword.arg != "minify_script"
+        keyword for keyword in call.keywords if keyword.arg not in {"minify_script", "always_on_top"}
     ]
     call.keywords.append(ast.keyword(arg="minify_script", value=ast.Constant(False)))
+    # 0.40.0(사용자): 압축 푸는 시작 화면도 맨 위 고정 없이(PyInstaller 기본값 True는 뒤 창을 가렸다)
+    call.keywords.append(ast.keyword(arg="always_on_top", value=ast.Constant(False)))
     spec.write_text(preamble + ast.unparse(tree) + "\n", encoding="utf-8")
 
 
