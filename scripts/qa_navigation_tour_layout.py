@@ -69,7 +69,8 @@ def test_seeded_navigation_and_tour(area, large_font, finish, monkeypatch, tmp_p
         before = deepcopy(config._read_local_config())
         for key in raw:
             if key not in ("buffTracker", "general"):
-                assert before[key] == raw[key], key
+                expected = {**raw[key], "use": True} if key == "debuffTracker" else raw[key]
+                assert before[key] == expected, key
         timers = set(window.findChildren(QTimer))
         for _ in range(3):
             for key in KEYS:

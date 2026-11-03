@@ -148,7 +148,12 @@ class ResourceTab(QWidget):
         return {"dorcha":self.dorcha,"tuarim":self.tuarim}
 
     def _auto_find(self):
-        self.find_regions()
+        from .autofind_runtime import try_remembered
+        pending=[]
+        for key,tab in self._controllers().items():
+            if not try_remembered(tab,key,tab._apply_region): pending.append(key)
+        if pending: self.find_regions(keys=tuple(pending))
+        self.refresh_registration()
 
     def resizeEvent(self,event):
         super().resizeEvent(event)

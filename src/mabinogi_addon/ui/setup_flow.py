@@ -313,3 +313,115 @@ class SetupFlow:
                 summary = " / ".join(f"{label} {len(names)}" for label, names in results.items())
                 details = "\n".join(label + ": " + ", ".join(names) for label, names in results.items() if names)
                 page.progress.setText(("중단했어요. " if self.cancelled else "") + summary + ("\n" + details if details else ""))
+
+    def find_all(self, page, keys=None):
+        """Discover all locations; publish only for consumers explicitly selected earlier."""
+        from .. import autofind_state as state
+        from ..autofind_diagnostics import capture_info
+        from ..system.window_capture import registered_game_target
+        from .region_registration import region_generation
+        replacing = keys is not None
+        keys = tuple(keys) if keys is not None else tuple(f.key for f in FEATURES if f.automatic)
+        if self.closed or self.running or (self.future is not None and not self.future.done()):
+            return
+        if not section(config._read_local_config(),'general').get('gameExe'):
+            page.progress.setText('게임창을 먼저 등록해 주세요.')
+            page.refresh()
+            return
+        target = registered_game_target()
+        if target is None:
+            page.progress.setText('게임창 미발견 · 게임을 실행한 뒤 다시 찾아주세요.')
+            page.refresh()
+            return
+        raw = config._read_local_config()
+        raw['autofind'] = {**section(raw,'autofind'),'armed':True,'guide':'started'}
+        try:
+            config._write_local_config(raw)
+        except OSError:
+            page.progress.setText('설정 저장 실패 · 기존 설정을 유지해요.')
+            page.refresh()
+            return
+        self.running, self.cancelled = True, False
+        self.page = page
+        page.stage = 1
+        page.set_busy(True)
+        stamps = {key:region_generation(key) for key in keys}
+        completed = set()
+        try:
+            generation = self._restore_generation
+            token = capture_info.set({})
+            try:
+                frame,ox,oy = capture_for_autofind(require_game=True,strict_game=True,
+                    capture_allowed=lambda:not self.closed and not self.cancelled,
+                    restore_allowed=lambda:not self.closed,
+                    restore_widget_allowed=lambda widget:widget is not page.window() or generation==self._restore_generation)
+            finally:
+                capture_info.reset(token)
+            if frame is None or target is None:
+                page.progress.setText('게임창 미발견 또는 캡처 실패 · 기존 설정은 유지해요.')
+                return
+            work = []
+            for key in keys:
+                detector = 'resources' if key in ('dorcha','tuarim') else 'boss' if key=='debuff' else key
+                if detector not in work:
+                    work.append(detector)
+            for detector in work:
+                if self.closed or self.cancelled or registered_game_target(target)!=target:
+                    break
+                targets = [k for k in keys if ('resources' if k in ('dorcha','tuarim') else 'boss' if k=='debuff' else k)==detector]
+                page.progress.setText(' · '.join(BY_KEY[k].name for k in targets)+' 찾는 중…')
+                page.refresh()
+                details = {}
+                def detect(source, trace, assets):
+                    try:
+                        result = self._detect(detector,source,trace,assets)
+                    except Exception as exc:
+                        details["error"] = type(exc).__name__
+                        raise
+                    details.update(trace)
+                    return result
+                _,_,_,box = perform_autofind(detector,lambda:(frame,ox,oy),detect=detect)
+                if self.closed or self.cancelled or registered_game_target(target)!=target:
+                    break
+                for key in targets:
+                    if not batch_allowed(key) or region_generation(key)!=stamps[key]:
+                        page.record_result(key,'설정이 변경되어 결과를 버렸어요')
+                        continue
+                    result = details.get('regions',{}).get(key) if detector=='resources' else box
+                    if result is None:
+                        page.record_result(key, '못 찾음 · 검출 오류' if details.get('error') else '나타나면 찾기' if key in ('boss','debuff','halo_timer') and state.automatic()
+                                           else '못 찾음 · 현재 화면에서 미발견')
+                        completed.add(key)
+                        continue
+                    if key=='buff':
+                        from ..detect.favorites import widen_to_favorites
+                        result = widen_to_favorites(frame,result)
+                    if key=='debuff':
+                        x,y,w,h=result
+                        top=max(0,y-max(12,int(h*1.4)))
+                        result=x,top,w,y+h-top
+                    logical=to_logical(result[0]+ox,result[1]+oy,result[2],result[3])
+                    if key=='skillbar' and (abs(logical[2]-1168)>1 or abs(logical[3]-89)>1):
+                        page.record_result(key,'못 찾음 · 단축바 크기 미지원')
+                        continue
+                    try:
+                        state.remember(key,dict(zip(('x','y','w','h'),logical)),target)
+                    except OSError:
+                        page.record_result(key,'저장 실패 · 이전 위치 유지')
+                    else:
+                        selected = section(section(config._read_local_config(),"autofind"),"selected").get(key) is True
+                        if selected and state.apply_discovered(key,replace=replacing):
+                            window=page.window()
+                            if hasattr(window,'_reload_autofind_feature'): window._reload_autofind_feature(key)
+                        page.record_result(key,'찾음')
+                    completed.add(key)
+        finally:
+            self.running=False
+            self.page=self.home_page
+            if not self.closed:
+                page.set_busy(False)
+                if self.cancelled or len(completed)<len(keys):
+                    page.progress.setText('중단했어요. 찾은 위치는 유지하고 나머지는 아직 찾지 않았어요.')
+                else:
+                    page.progress.setText('찾은 위치를 기억했어요. 다음 단계에서 쓸 기능을 골라주세요.')
+                page.refresh()

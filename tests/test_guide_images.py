@@ -83,12 +83,12 @@ def test_setup_guide_shows_full_figure_in_feature_stages(qapp, monkeypatch):
     from mabinogi_addon.ui.setup_guide import SetupGuide, GUIDE_FIGURE_TEXT
     page = SetupGuide()
     page.show()
-    for stage, visible in ((0, False), (1, True), (2, True)):
+    for stage, visible in ((0, True), (1, False), (2, False)):
         page.stage = stage
         page.refresh()
         assert page.figure.isVisible() is visible and page.figure_caption.isVisible() is visible
     assert page.figure.name == 'all' and page.figure.pixmap().width() == 420
-    assert '연습 모드' in GUIDE_FIGURE_TEXT and '보스 체력바' in GUIDE_FIGURE_TEXT
+    assert '보스바·전투 시간은 지금 없어도' in GUIDE_FIGURE_TEXT and '연습 모드' not in GUIDE_FIGURE_TEXT
     assert guide_images.caption('all') in page.figure_caption.text()
     opened = []
     monkeypatch.setattr(guide_figure.ZoomDialog, 'exec', lambda self: opened.append(self) or 0)

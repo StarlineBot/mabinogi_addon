@@ -1,4 +1,4 @@
-"""단계별 첫 사용 안내(5단계: 게임창 등록 → 전투 보조 → 추가 설정 → 다른 기능 → 앱 둘러보기, 명세 auto-setup-v2 11절).
+"""단계별 첫 사용 안내(5단계: 준비 → 자동 찾기 → 쓸 기능 → 다른 기능 → 앱 둘러보기, 명세 auto-setup-v2 12절).
 저장된 사용 설정과 기존 자동찾기를 공유한다."""
 
 from html import escape
@@ -11,18 +11,19 @@ from PySide6.QtWidgets import (
 )
 
 from .palette import color
-from .. import config
+from .. import config, autofind_state
+from .widgets import switch
 from ..setup_state import BY_KEY, selected as enabled, missing, section, batch_allowed, needs_boss_preparation, BOSS_PREPARATION
 from .. import guide_images
 from .guide_figure import ClickableFigure
 from .setup_page import CHOICE_TEXT, _label
 
 
-STAGES = ((), ("buff", "debuff", "boss", "halo_timer"), ("tuarim", "dorcha", "stat_bars", "skillbar"), ())
+STAGES = ((), (), ("buff", "debuff", "boss", "halo_timer", "tuarim", "dorcha", "stat_bars", "skillbar"), ())
 GUIDE_KEYS = STAGES[1] + STAGES[2]
-STAGE_NAMES = ('게임창 등록', '전투 보조', '추가 설정', '다른 기능', '앱 둘러보기')
+STAGE_NAMES = ('준비', '자동 찾기', '쓸 기능', '다른 기능', '앱 둘러보기')
 LAST = len(STAGES) - 1  # '다음'을 누르면 앱 둘러보기(하이라이트)로 넘어가는 마지막 안내 단계
-GUIDE_FIGURE_TEXT = '연습 모드에 들어가 보스 체력바가 보이는 화면에서 설정해 주세요. 점선이 앱이 찾는 곳이에요(그림을 누르면 크게 볼 수 있어요).'
+GUIDE_FIGURE_TEXT = '캐릭터 화면에서 상태 목록·단축바·체력바·도르카·투아림을 보여주세요. 보스바·전투 시간은 지금 없어도 돼요. 탐색 중에는 게임 UI를 움직이지 말아주세요.'
 # 4단계 '다른 기능도 있어요'(명세 11절): 영역 지정 없이 쓰는 기능은 여기 카드로만 소개한다. 기능이 늘면 카드만 추가.
 OPTIMIZATION_ITEMS = '게임 우선순위 높음 · CPU 배치 · 패스트핑 · 그래픽 효율(NVIDIA)'
 OTHER_FEATURES = (
@@ -57,6 +58,9 @@ class SetupGuide(QWidget):
     run_requested = Signal()
     cancel_requested = Signal()
     finished = Signal()
+    deferred_signal = Signal()
+    retry_requested = Signal(object)
+    view_requested = Signal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -64,6 +68,7 @@ class SetupGuide(QWidget):
         self.active = False
         self.stage = 0
         self.outcomes = {}
+        self.outcome_epochs = {}
         self.deferred = set()
         self.first_run = False
         layout = QVBoxLayout(self)
@@ -122,6 +127,36 @@ class SetupGuide(QWidget):
         row.addWidget(self.game_hint)
         layout.addWidget(self.game_row)
 
+        self.autofind_switch = switch('자동 찾기 사용')
+        self.autofind_switch.toggled.connect(self._automatic_changed)
+        layout.addWidget(self.autofind_switch)
+        self.autofind_hint = _gray('켜면 움직인 버프·도르카·투아림을 다시 찾고, 보스바·전투 시간은 나타나면 찾아둬요.\n끄면 다시 찾지 않고, 못 읽을 때 안내만 해요. 각 탭에서 한 번 찾기는 할 수 있어요.')
+        layout.addWidget(self.autofind_hint)
+        self.results = QGroupBox('찾은 위치')
+        result_layout = QVBoxLayout(self.results)
+        self.result_summary = _label('')
+        result_layout.addWidget(self.result_summary)
+        self.result_labels, self.result_views, self.result_retries, self.result_manuals = {}, {}, {}, {}
+        for key in GUIDE_KEYS:
+            line = QHBoxLayout()
+            label = _label('')
+            line.addWidget(label, 1)
+            view = QPushButton('보기')
+            view.clicked.connect(lambda _=False,k=key:self.view_requested.emit(k))
+            retry = QPushButton('다시 찾기')
+            retry.clicked.connect(lambda _=False,k=key:self.retry_requested.emit([k]))
+            manual = QPushButton('직접 지정')
+            manual.clicked.connect(lambda _=False,k=key:self.open_feature.emit(k))
+            for button in (view,retry,manual): line.addWidget(button)
+            result_layout.addLayout(line)
+            self.result_labels[key],self.result_views[key],self.result_retries[key],self.result_manuals[key] = label,view,retry,manual
+        self.retry_failed = QPushButton('못 찾은 항목 다시 찾기')
+        self.retry_failed.clicked.connect(lambda:self.retry_requested.emit([k for k in GUIDE_KEYS if self._result(k).startswith(('못 찾음','저장 실패'))]))
+        result_layout.addWidget(self.retry_failed)
+        self.waiting_help = _gray('보스바·전투 시간이 화면에 보이는데 못 찾았나요? 해당 기능의 직접 설정에서 다시 찾아주세요.')
+        result_layout.addWidget(self.waiting_help)
+        layout.addWidget(self.results)
+
         # 2·3단계: 스크롤 없이 모두 펼친 '쓸 기능 고르기' 상자. 줄 = 체크 | 상태 | 직접 설정
         self.selection = QGroupBox('쓸 기능 고르기')
         rows = QVBoxLayout(self.selection)
@@ -132,13 +167,17 @@ class SetupGuide(QWidget):
             widget = QWidget()
             line = QHBoxLayout(widget)
             line.setContentsMargins(0, 2, 0, 2)
-            check = QCheckBox(CHOICE_TEXT[key] + " - " + feature.name)
+            caption = _label(f"<b>{escape(feature.name)}</b><br><span style='color:{color("muted")}'>{escape(CHOICE_TEXT[key])}</span>")
+            line.addWidget(caption, 1)
+            check = switch()
             # 너비는 줄 레이아웃이 정하고 글자는 _fit_content가 그 너비에 맞춰 접는다(체크박스는 스스로 줄바꿈하지 않음)
-            check.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+            check.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+            check.setFixedSize(check.sizeHint())
             check.toggled.connect(lambda value, key=key: self.feature_changed.emit(key, value))
-            line.addWidget(check, 1)
+
             status = QLabel("")
             line.addWidget(status, 0, Qt.AlignmentFlag.AlignVCenter)
+            line.addWidget(check, 0, Qt.AlignmentFlag.AlignVCenter)
             button = QPushButton('직접 설정')
             button.clicked.connect(lambda _=False, key=key: self.open_feature.emit(key))
             line.addWidget(button, 0, Qt.AlignmentFlag.AlignVCenter)
@@ -149,7 +188,7 @@ class SetupGuide(QWidget):
         self.boss_preparation = _label(BOSS_PREPARATION)
         self.boss_preparation.setStyleSheet('color:#c78c32; padding:8px; border:1px solid #806837; border-radius:3px;')
         layout.addWidget(self.boss_preparation)
-        self.run_btn = QPushButton("고른 기능 자동설정")
+        self.run_btn = QPushButton("한 번에 자동 찾기")
         self.run_btn.setMinimumHeight(34)
         self.run_btn.clicked.connect(self.run_requested.emit)
         layout.addWidget(self.run_btn)
@@ -205,8 +244,9 @@ class SetupGuide(QWidget):
         layout.addStretch(1)
         layout = footer_layout
         self.skip = QCheckBox("시작할 때 이 화면 다시 보지 않기")
+        self.skip.hide()
         self.skip.toggled.connect(lambda value: config.save_general_flag("skipSetup", value))
-        layout.addWidget(self.skip)
+
         footer = QHBoxLayout()
         self.back_btn = QPushButton("이전")
         self.back_btn.clicked.connect(lambda: self.move(-1))
@@ -252,28 +292,48 @@ class SetupGuide(QWidget):
     def defer(self):
         if not self.busy:
             self.deferred.update(self.feature_keys)
-            self.move(1)
+            if not self._save_progress("deferred"): return
+            self.active = False
+            self.deferred_signal.emit()
 
     def finish(self):
         if not self.busy:
+            if not self._save_progress("completed"): return
             self.active = False
             self.finished.emit()
 
     def record_result(self, key, status):
         self.outcomes[key] = status
+        self.outcome_epochs[key] = autofind_state.epoch(key)
         self.refresh()
 
+    def _automatic_changed(self, on):
+        try:
+            autofind_state.set_automatic(on)
+        except OSError:
+            self.progress.setText('자동 찾기 설정을 저장하지 못했어요.')
+        self.refresh()
+
+    def _save_progress(self, status):
+        raw = config._read_local_config()
+        raw['autofind'] = {**section(raw,'autofind'), 'guide':status}
+        try:
+            config._write_local_config(raw)
+        except OSError:
+            self.progress.setText('진행 상태를 저장하지 못했어요. 다시 시도해 주세요.')
+            self.refresh()
+            return False
+        return True
+
+    def _result(self, key, raw=None):
+        raw = config._read_local_config() if raw is None else raw
+        fallback = '찾음' if autofind_state.remembered(key,raw) or autofind_state.box_for(key,raw) else '아직 찾지 않음'
+        result = self.outcomes.get(key,fallback) if self.outcome_epochs.get(key)==autofind_state.epoch(key) else fallback
+        return '찾음' if result=='등록됨' else result
+
     def status_text(self, key, raw):
-        needed = missing(key, raw)
-        if not needed:
-            return "등록됨"
-        fallback = "나중에 설정" if key in self.deferred and enabled(key, raw) else "영역 지정 필요"
-        if not enabled(key, raw):
-            return fallback
-        if needed == [key]:
-            return self.outcomes.get(key, fallback)
-        return " / ".join(("보스 체력바" if region == "boss" else BY_KEY[region].name)
-                          + ": " + self.outcomes.get(region, fallback) for region in needed)
+        result=self._result(key,raw)
+        return '● ' + ('못 찾음' if result.startswith(('못 찾음','저장 실패')) else result)
 
     def refresh(self):
         raw = config._read_local_config()
@@ -281,30 +341,54 @@ class SetupGuide(QWidget):
                            for i, name in enumerate(STAGE_NAMES))
         self.step_label.setText(f'<b>{self.stage + 1} / {len(STAGE_NAMES)}</b><br>'
                                 f'<span style="color:{color('muted')}">{trail}</span>')
-        self.title.setText(("게임창 등록", "전투 보조 설정", "전투 보조 추가 설정", "다른 기능도 있어요")[self.stage])
+        self.title.setText(("게임 화면 준비", "한 번에 자동 찾기", "쓸 기능 고르기", "다른 기능도 있어요")[self.stage])
         self.description.setText((
             ("처음 오셨군요. 필요한 기능만 골라 함께 설정해 봐요.\n"
              "게임창을 등록하면 앱이 마비노기 창을 찾을 수 있어요." if self.first_run else
              "등록한 게임창을 확인해 주세요.\n게임창을 바꿔야 한다면 여기서 다시 등록할 수 있어요."),
-            "이번 자동설정에 포함할 전투 보조 기능을 골라주세요.\n선택하지 않아도 이미 등록한 영역과 세부 설정은 그대로 유지해요.",
-            "도르카·투아림·체력바·단축바도 함께 설정할 수 있어요.\n이 기능들도 ‘전투 보조’ 탭에 있어요. 필요한 것만 고르거나 이 단계를 넘어가도 돼요.",
+            "찾은 위치는 기억만 해요. 기능은 다음 단계에서 켤 수 있어요.",
+            "쓸 기능만 켜 주세요. 찾은 위치로 등록하고 동작을 시작해요.\n아직 못 찾은 기능도 켜 둘 수 있어요.",
             "영역을 지정하지 않아도 바로 쓸 수 있는 기능들이에요. 필요할 때 해당 탭에서 켜 보세요.",
         )[self.stage])
         game = section(raw, "general").get("gameExe")
         self.game_status.setText(f'<span style="color:{color('ok')}">●</span> 등록됨 · {escape(str(game))}' if game else
                                  f'<span style="color:{color('warn')}">●</span> 아직 등록 안 됨')
-        choosing = self.stage in (1, 2)
+        choosing = self.stage == 2
+        self.results.setVisible(self.stage == 1)
+        self.autofind_switch.setVisible(self.stage == 0)
+        self.autofind_hint.setVisible(self.stage == 0)
+        self.autofind_switch.blockSignals(True)
+        self.autofind_switch.setChecked(autofind_state.automatic(raw))
+        self.autofind_switch.blockSignals(False)
+        self.autofind_switch.setEnabled(not self.busy)
+        counts = {"찾음":0,"나타나면 찾기":0,"못 찾음":0}
+        for key in GUIDE_KEYS:
+            result = self._result(key,raw)
+            found = result == "찾음"
+            waiting = result == "나타나면 찾기" and autofind_state.automatic(raw)
+            failed = result.startswith(("못 찾음","저장 실패"))
+            self.result_labels[key].setText(BY_KEY[key].name + " · " + (result if not result == "나타나면 찾기" or waiting else "자동 찾기 꺼짐"))
+            self.result_views[key].setVisible(found)
+            self.result_retries[key].setVisible(not waiting)
+            self.result_manuals[key].setVisible(not found and not waiting)
+            for button in (self.result_views[key],self.result_retries[key],self.result_manuals[key]): button.setEnabled(not self.busy)
+            counts["찾음"] += found
+            counts["나타나면 찾기"] += waiting
+            counts["못 찾음"] += failed
+        self.result_summary.setText(" · ".join(f"{k} {v}" for k,v in counts.items()))
+        self.retry_failed.setVisible(bool(counts["못 찾음"]))
+        self.retry_failed.setEnabled(not self.busy)
         self.game_row.setVisible(self.stage == 0)
         self.selection.setVisible(choosing)
-        self.run_btn.setVisible(choosing)
-        self.figure.setVisible(choosing)
-        self.figure_caption.setVisible(choosing)
+        self.run_btn.setVisible(self.stage == 0)
+        self.figure.setVisible(self.stage == 0)
+        self.figure_caption.setVisible(self.stage == 0)
         self.others.setVisible(self.stage == 3)
         for key in GUIDE_KEYS:
             feature = BY_KEY[key]
             check = self.checks[key]
             check.blockSignals(True)
-            check.setChecked(enabled(key, raw))
+            check.setChecked(autofind_state.wanted(key, raw))
             check.blockSignals(False)
             check.setEnabled(not self.busy and batch_allowed(key))
             check.setToolTip(feature.guidance)
@@ -312,9 +396,9 @@ class SetupGuide(QWidget):
             # 자동설정 승인·거절·실패 결과는 이 줄의 상태로 바로 보인다(6.1 즉시 갱신)
             text = self.status_text(key, raw)
             self.statuses[key].setText(text)
-            self.statuses[key].setStyleSheet(f'color:{color('ok') if text == "등록됨" else color('warn')};')
+            self.statuses[key].setStyleSheet(f'color:{color("ok") if text == "● 찾음" else color("muted") if text == "● 나타나면 찾기" else color("warn")};')
             self.manual_buttons[key].setEnabled(not self.busy and batch_allowed(key))
-        self.boss_preparation.setVisible(choosing and needs_boss_preparation(raw, feature_keys=self.feature_keys))
+        self.boss_preparation.hide()
         self._queue_fit()
         self.skip.blockSignals(True)
         self.skip.setChecked(section(raw, "general").get("skipSetup") is True)
@@ -354,26 +438,3 @@ class SetupGuide(QWidget):
 
     def _fit_content(self):
         self._fit_pending = False
-        if not hasattr(self, 'selection'):
-            return
-        for key, check in self.checks.items():
-            if not self.feature_rows[key].isVisibleTo(self):
-                continue
-            width = check.width()
-            if width < 40:  # 아직 배치 전: 상태·버튼 몫을 빼고 어림잡는다
-                width = self.body_scroll.viewport().width() - 260
-            text = CHOICE_TEXT[key] + ' - ' + BY_KEY[key].name
-            lines = QTextLayout(text, check.font())
-            option = QTextOption()
-            option.setWrapMode(QTextOption.WrapMode.WrapAtWordBoundaryOrAnywhere)
-            lines.setTextOption(option)
-            lines.beginLayout()
-            wrapped = []
-            while (line := lines.createLine()).isValid():
-                line.setLineWidth(max(40, width - check.style().pixelMetric(check.style().PixelMetric.PM_IndicatorWidth) - 12))
-                wrapped.append(text[line.textStart():line.textStart()+line.textLength()].rstrip())
-            lines.endLayout()
-            joined = '\n'.join(wrapped)
-            if check.text() != joined:
-                check.setText(joined)
-            check.setMinimumHeight(max(30, check.sizeHint().height() + 8))

@@ -46,11 +46,14 @@ def warn(owner, title, text):
 
 
 def region_generation(key):
-    return _epochs.get(REGIONS[key][:2], 0)
+    from ..autofind_state import epoch
+    return _epochs.get(REGIONS[key][:2], 0) + epoch(key)
 
 
 def invalidate_region(key):
-    _epochs[REGIONS[key][:2]] = region_generation(key) + 1
+    _epochs[REGIONS[key][:2]] = _epochs.get(REGIONS[key][:2],0) + 1
+    from .. import autofind_state
+    autofind_state._epochs[key] = autofind_state.epoch(key) + 1
 
 
 def generation(owner):
@@ -66,6 +69,7 @@ def editing_allowed(owner):
 
 
 def connect_selection(owner, selector, callback):
+    for key in getattr(owner,"_region_keys",()): invalidate_region(key)
     stamp = generation(owner)
 
     def apply(*box):
@@ -97,19 +101,9 @@ def clear_button(owner, key, changed):
         before = deepcopy(section(raw, name).get(field))
         if before is None:
             return
-        impacts = label
-        if key == "boss":
-            impacts = "보스 패턴 알림"
-            general = section(raw, "general")
-            if (valid_box(section(raw, "debuffTracker").get("captureRegion"))
-                    and (general.get("debuffAutoGate") is not False or general.get("debuffGateMode") == "percent")):
-                impacts += " · 디버프 보스 체력 판단"
-            bars = section(section(raw, "statBars"), "bars")
-            if (valid_box(section(raw, "statBars").get("box"))
-                    and any(section(value, "alert").get("on") for value in bars.values() if isinstance(value, dict))):
-                impacts += " · 체력바 보스전 경고"
+        impacts = ('디버프 보스 확인' if owner.__class__.__name__=='DebuffTab' else '보스 패턴 알림') if key=='boss' else label
         answer = confirm_clear(owner, label + " 지정 해제",
-            impacts + "에 사용하는 영역을 지정 해제할까요?\n"
+            impacts + "을 지정 해제할까요?\n"
             "해당 영역의 판독·표시·알림이 중단돼요.\n"
             "다른 영역과 아이콘·표시·배치·알림·소리 설정은 유지해요.")
         if answer != QMessageBox.StandardButton.Yes or not editing_allowed(owner):
@@ -118,11 +112,21 @@ def clear_button(owner, key, changed):
         if section(latest, name).get(field) != before:
             warn(owner, "영역 변경됨", "확인 중 영역이 변경됐어요. 현재 영역을 확인한 뒤 다시 시도하세요.")
             return
-        target = dict(section(latest, name))
-        target[field] = None
-        latest[name] = target
         try:
-            config._write_local_config(latest)
+            if key in ('boss','debuff','halo_timer'):
+                from .. import autofind_state as state
+                state.select('debuff' if key=='boss' and owner.__class__.__name__=='DebuffTab' else key,False)
+                window=owner.window()
+                external = bool(getattr(getattr(window,'blackbox_tools',None),'wants_boss_presence',lambda:False)())
+                state.release_unused_boss(external=external)
+            else:
+                target = dict(section(latest, name))
+                target[field] = None
+                latest[name] = target
+                auto = dict(section(latest,"autofind"))
+                auto["selected"] = {**section(auto,"selected"),key:False}
+                latest["autofind"] = auto
+                config._write_local_config(latest)
         except OSError:
             warn(owner, "지정 해제 실패", "영역을 저장하지 못했어요. 기존 영역과 동작을 유지해요.")
             return
@@ -132,17 +136,23 @@ def clear_button(owner, key, changed):
         if selector is not None and isValid(selector):
             selector.close()
         getattr(owner,method_name)()
+        if key == "boss" and hasattr(owner,"reload_region"):
+            owner.reload_region()
 
     button.clicked.connect(remove)
     return button
 
 
 def save_boxes(owner, boxes):
+    from ..autofind_state import migrate
     raw = config._read_local_config()
+    migrate(raw)
     for key, box in boxes.items():
         name, field, _ = REGIONS[key]
         target = dict(section(raw, name))
         target[field] = dict(zip(("x", "y", "w", "h"), box))
+        if key=="boss" and owner.__class__.__name__=="BossTab" or key=="debuff" and owner.__class__.__name__=="DebuffTab":
+            target["use"]=True
         raw[name] = target
     try:
         config._write_local_config(raw)

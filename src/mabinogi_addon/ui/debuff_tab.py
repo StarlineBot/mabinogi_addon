@@ -393,6 +393,8 @@ class DebuffTab(QWidget):
             self._bar_highlight.flash(region["x"], region["y"], region["w"], region["h"], "공유 보스 체력바")
 
     def _on_bar_region_selected(self, x: int, y: int, w: int, h: int) -> None:
+        from ..autofind_state import initialize_consumers
+        initialize_consumers()
         config.save_boss_bar_region(x, y, w, h)  # 보스패턴알림과 공유 저장
         self._refresh_method_ui()
         from .region_highlight import RegionHighlight
@@ -477,6 +479,11 @@ class DebuffTab(QWidget):
         self.catalog_changed.emit()
 
     def _on_auto_find(self) -> None:
+        from .region_registration import invalidate_region
+        invalidate_region("debuff")
+        from .autofind_runtime import try_remembered
+        if try_remembered(self,"debuff",self._on_region_selected):
+            return
         from .region_registration import generation, save_boxes, editing_allowed
         stamp = generation(self)
         """보스 체력바를 찾아 그 위 디버프 영역을 자동 지정(모든 사용자). 확인 후에만 저장."""

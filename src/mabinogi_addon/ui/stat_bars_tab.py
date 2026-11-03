@@ -645,6 +645,11 @@ class StatBarsTab(QWidget):
         self._apply_visibility()
 
     def _on_auto_find(self) -> None:
+        from .region_registration import invalidate_region
+        invalidate_region("stat_bars")
+        from .autofind_runtime import try_remembered
+        if try_remembered(self,"stat_bars",self._on_selected):
+            return
         if self._shutting_down:
             return
         from .region_registration import generation, editing_allowed

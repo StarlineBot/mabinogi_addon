@@ -141,6 +141,8 @@ def startup(library, monkeypatch):
                         _debuff_engine=None, _paused=False, _watcher=None,
                         debuff_overlay=object(), debuff_tab=SimpleNamespace(effective_gate_mode=lambda: "off"),
                         _debuff_warn_gone_ids=lambda: set(), _on_debuff_gone=lambda *a: None)
+    from mabinogi_addon.capture.shared import SharedFrame
+    w.boss_tab = SimpleNamespace(shared_frame=SharedFrame())
     w._debuff_order = lambda entries: module.MainWindow._debuff_order(w, entries)
     w._start_debuff_tracking = lambda: module.MainWindow._start_debuff_tracking(w)
     return w, settings, controllers, module
@@ -206,5 +208,7 @@ def test_auto_start_is_independent_of_boss_pattern_feature(startup, monkeypatch,
     monkeypatch.setattr(module, "create_live_source", capture)
     w._start_debuff_tracking()
     assert w._debuff_engine.gate_mode == "auto"
-    assert len(captures) == (2 if hp_region else 1)
-    assert w.debuff_controller.bar_source is (captures[1] if hp_region else None)
+    assert len(captures) == 1  # shared boss capture, no duplicate native source
+    assert w.debuff_controller.bar_source.shared is w.boss_tab.shared_frame
+    # A missing bar may be discovered later without recreating the consumer.
+    assert w.debuff_controller.bar_source.grab() is None

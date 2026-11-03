@@ -142,7 +142,9 @@ def test_setup_selection_dependency_and_navigation(window,monkeypatch):
     assert setup_state.missing('halo_timer',raw)==['boss','halo_timer']
     setup_state.save_selection('halo_timer',True)
     assert setup_state.pending(feature_keys=('halo_timer',),automatic_only=True)==['boss','halo_timer']
-    w.setup_guide.stage=1
+    from mabinogi_addon.autofind_state import select
+    select('halo_timer',True)
+    w.setup_guide.stage=2
     w.setup_guide.refresh()
     keys = list(w.setup_guide.checks)
     assert keys.index('halo_timer')==keys.index('boss')+1
@@ -154,7 +156,7 @@ def test_setup_selection_dependency_and_navigation(window,monkeypatch):
     w._apply_setup_region('halo_timer',(440,70,119,42))
     assert setup_state.missing('halo_timer')==[]
     w.setup_guide.refresh()
-    assert w.setup_guide.statuses['halo_timer'].text()=='등록됨'
+    assert w.setup_guide.statuses['halo_timer'].text()=='● 찾음'
     w.setup_page.refresh()
     assert w.setup_page.feature_rows['halo_timer'][1].text()=='영역 등록됨'
 

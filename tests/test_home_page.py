@@ -99,7 +99,9 @@ def test_switches_are_the_same_settings_as_each_screen(window):
         _refresh(w)  # 0.7초 상태 타이머의 홈 갱신(캡처 재시도 없이)
         assert rows[key].switch.isChecked() is before
     stat = w.stat_bars_tab
+    stat.set_all_shown(True)  # new users now start OFF; exercise the saved-display restore case
     stat._show_checks["mp"].setChecked(False)
+    _refresh(w)
     rows["stat_bars"].switch.click()  # 끄기: 모든 바 표시 끔
     assert not stat.any_shown()
     rows["stat_bars"].switch.click()  # 켜기: 꺼 두었던 마나는 그대로

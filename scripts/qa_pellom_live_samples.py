@@ -86,6 +86,8 @@ def test_actual_boss_tick_starts_pellom_tracking(monkeypatch, sample):
     tab = BossTab(watcher)
     tab._timer.stop()
     tab._region = dict(zip(("x", "y", "w", "h"), box))
+    from mabinogi_addon import config
+    config.save_boss_pattern({"box": tab._region, "use": True})
     screen = SimpleNamespace(geometry=lambda: SimpleNamespace(height=lambda: image.shape[0]))
     monkeypatch.setattr(QGuiApplication, "primaryScreen", lambda: screen)
     monkeypatch.setattr(dpi, "to_physical", lambda reg: tuple(reg[key] for key in ("x", "y", "w", "h")))

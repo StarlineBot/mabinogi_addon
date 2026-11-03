@@ -88,6 +88,7 @@ def test_feature_on_off_controls_are_switches(window):
 def test_stat_bar_switch_matches_home_and_bar_checks(window):
     w, app = window
     tab = w.stat_bars_tab
+    tab.set_all_shown(True)
     tab.show_switch.click()
     assert not tab.any_shown() and not tab.show_switch.isChecked()
     w._show_home()
