@@ -6,6 +6,11 @@
 
 ## 배포와 검증
 
+- **0.39.0 후보 `feat/auto-setup-v2-onboarding` 재QA 69fce05 통과(2026-11-03, main 미병합)**: 아래 '열린 문제'의 835e5d9 보류(화면 스레드 캡처) 해소 —
+  캡처·판독·탐색이 상주 작업자 1개(전용 mss 생성·close 같은 스레드), 우리 창 겹침일 때만 화면 스레드 예외. 전체 3914 passed·397 skipped(실패 0),
+  배포 검사 `--version 0.39.0` 2306 passed(단독). 탐지 코드 변경 없음(835e5d9 측정 유지: 버프 88/89·헤일로 49/89·엉뚱한 곳 0). 원격 v0.39.0 태그 없음.
+  개선(비차단): `autofind_runtime.tick()`이 0.5초마다 `registered_game_target()`을 이전 대상 없이 불러 화면 스레드에서 창 전체 나열·프로세스 열기 — `self.target` 전달 권장.
+  남은 것: main 병합 → Windows에서 도르카·자동 찾기 켠 채 커서·오버레이 끊김 확인 → 배포(main에서).
 - 공개 README 업데이트 내역 접기(2026-10-30 사용자 승인한 배포 스크립트 최소 변경): `scripts/release_delivery.py` `fold_changelog` — 최신 버전만 펼치고 이전은 `<details>`, CHANGELOG.md 전체 유지.
   다음 게시(0.29.0)부터 반영. 로컬 `test_release_candidate.py`·`test_windows_ci.py` 224 passed(접기 회귀 1개 추가). 실제 공개 README 렌더는 게시 후 확인.
   → **QA 6c87458 통과**: 현재 공개 CHANGELOG(버전 165개)에 v0.29.0 노트를 붙여 `prepare_public`과 같은 방식으로 모의 생성 → 펼친 부분은 v0.29.0만(25줄),
