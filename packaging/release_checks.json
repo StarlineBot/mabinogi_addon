@@ -117,6 +117,7 @@
     "tests/test_region_registration.py",
     "tests/test_region_selector_lifecycle.py",
     "tests/test_setup_common_resources.py",
-    "tests/test_navigation_all_widths.py"
+    "tests/test_navigation_all_widths.py",
+    "tests/test_autofind_thread.py"
   ]
 }

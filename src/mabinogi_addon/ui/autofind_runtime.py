@@ -1,6 +1,5 @@
-"""Bounded background discovery and confirmed relocation; Qt owns capture and commits."""
-from concurrent.futures import Future
-from threading import Thread
+"""Persistent worker capture and discovery; Qt owns guarded capture and commits."""
+from concurrent.futures import ThreadPoolExecutor
 from time import monotonic
 import logging
 
@@ -16,7 +15,19 @@ _log = logging.getLogger(__name__)
 MOVING = ('buff','dorcha','tuarim')
 
 
-def readable(key, frame):
+def buff_templates():
+    import cv2
+    from ..catalog import available_catalog
+    from ..image_io import imread
+    result = []
+    for buff in available_catalog():
+        template = imread(buff.match_icon)
+        if template is not None:
+            result.append(cv2.cvtColor(template, cv2.COLOR_BGR2GRAY) if template.ndim == 3 else template)
+    return tuple(result)
+
+
+def readable(key, frame, *, templates=None):
     if frame is None or not frame.size:
         return False
     if key == 'dorcha':
@@ -33,13 +44,8 @@ def readable(key, frame):
         return make_validator()(frame)
     if key == 'buff':
         import cv2
-        from ..catalog import available_catalog
         gray = cv2.cvtColor(frame[:,:64],cv2.COLOR_BGR2GRAY)
-        for buff in available_catalog():
-            from ..image_io import imread
-            template = imread(buff.match_icon)
-            if template is None: continue
-            if template.ndim==3: template=cv2.cvtColor(template,cv2.COLOR_BGR2GRAY)
+        for template in buff_templates() if templates is None else templates:
             if gray.shape[0]>=template.shape[0] and gray.shape[1]>=template.shape[1]:
                 if cv2.minMaxLoc(cv2.matchTemplate(gray,template,cv2.TM_CCOEFF_NORMED))[1]>=.85:
                     return True
@@ -76,10 +82,45 @@ def find_expected(key, frame):
     return found[0] if len(found)==1 else None
 
 
+class NativeCapture:
+    """Owned exclusively by one executor thread, including creation and close."""
+    def __init__(self):
+        self.sct = None
+        self.failed = False
+
+    def grab(self, x, y, w, h):
+        import numpy as np
+        try:
+            if self.sct is None:
+                import mss
+                self.sct = mss.mss()
+            shot = self.sct.grab(dict(left=x, top=y, width=w, height=h))
+            frame = np.frombuffer(shot.bgra, np.uint8).reshape(shot.height, shot.width, 4)[:, :, :3].copy()
+            self.failed = False
+            return frame
+        except Exception:
+            if not self.failed:
+                _log.warning('자동 찾기 캡처 실패', exc_info=True)
+            self.failed = True
+            return None
+
+    def close(self):
+        sct, self.sct = self.sct, None
+        if sct is not None:
+            try: sct.close()
+            except Exception: _log.warning('자동 찾기 캡처 정리 실패', exc_info=True)
+
+
 class AutofindRuntime(QObject):
     def __init__(self, window):
         super().__init__(window)
         self.window=window
+        self.executor = None
+        self.native = NativeCapture()
+        self._raw_revision = -1
+        self._raw = None
+        self._templates_revision = -1
+        self._templates = ()
         self.future=None
         self.job=None
         self.closed=False
@@ -101,31 +142,61 @@ class AutofindRuntime(QObject):
         self.timer.start()
 
     def shutdown(self):
+        if self.closed: return
         self.closed=True
         self.timer.stop()
         self.candidates.clear()
+        if self.executor is not None:
+            # Queued after the only in-flight job: release on the owning thread.
+            self.executor.submit(self.native.close)
+            self.executor.shutdown(wait=False)
+        self.future = self.job = None
+
+    def _settings(self):
+        revision = state.revision()
+        if revision != self._raw_revision:
+            self._raw = config._read_local_config()
+            self._raw_revision = revision
+        return self._raw
+
+    def _read(self, key, frame, revision):
+        if key == 'buff':
+            if self._templates_revision != revision:
+                self._templates = buff_templates()
+                self._templates_revision = revision
+            return readable(key, frame, templates=self._templates)
+        return readable(key, frame)
 
     def _submit(self, job, work):
-        future=Future()
-        job["generation"]=self.target_generation
-        self.future,self.job=future,job
-        def run():
-            try: future.set_result(work())
-            except Exception as exc: future.set_exception(exc)
-        Thread(target=run,daemon=True,name='autofind-runtime').start()
+        if self.closed or self.future is not None:
+            return
+        if self.executor is None:
+            self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='autofind-runtime')
+        job["generation"] = self.target_generation
+        self.job = job
+        self.future = self.executor.submit(work)
 
     def _capture(self, physical):
-        _,_,left,top,width,height=self.target
-        x,y,w,h=physical
-        if w<=0 or h<=0 or x<left or y<top or x+w>left+width or y+h>top+height:
-            return None
-        target=self.target
-        self.capturing=True
-        try:
-            frame=self.window.boss_tab._grab_rect(x,y,w,h)
-            return frame if registered_game_target(target)==target else None
-        finally:
-            self.capturing=False
+        """Prepare on Qt; native capture runs on the persistent worker unless occluded by our UI."""
+        target = self.target
+        _, _, left, top, width, height = target
+        x, y, w, h = physical
+        if w <= 0 or h <= 0 or x < left or y < top or x+w > left+width or y+h > top+height:
+            return lambda: None
+        if self.window.dorcha_tab._own_window_over(physical):
+            self.capturing = True
+            try:
+                frame = self.window.boss_tab._grab_rect(x, y, w, h)
+                frame = frame.copy() if frame is not None else None
+            finally:
+                self.capturing = False
+            return lambda: frame if registered_game_target(target) == target else None
+        def capture():
+            if self.closed or registered_game_target(target) != target:
+                return None
+            frame = self.native.grab(x, y, w, h)
+            return frame if not self.closed and registered_game_target(target) == target else None
+        return capture
 
     def _safe_tick(self):
         try: self.tick()
@@ -144,7 +215,7 @@ class AutofindRuntime(QObject):
             self.next_search.clear()
             self.failures.clear()
             self.last_tick=None
-        raw=config._read_local_config()
+        raw=self._settings()
         auto=state.automatic(raw)
         running=bool(target and not getattr(window,'_paused',False) and not window._setup_busy()
                      and not getattr(window,'_config_pending_restart',False) and window._watcher.is_game_active())
@@ -178,9 +249,7 @@ class AutofindRuntime(QObject):
             box=self.candidates[key].box if key in self.candidates else state.box_for(key,raw)
             if box:
                 physical=to_physical(box)
-                frame=self._capture(physical)
-                if frame is not None: checks[key]=frame.copy()
-                elif key in self.candidates: self.candidates[key].last_time=None
+                checks[key]=self._capture(physical)
         due=[k for k in MOVING if state.active(k,raw) and (self.lost.get(k,0)>10 or (state.box_for(k,raw) is None and section(section(raw,"autofind"),"selected").get(k) is True))
              and now>=self.next_search.get(k,0) and k not in self.candidates]
         if auto and due:
@@ -200,17 +269,25 @@ class AutofindRuntime(QObject):
         if checks:
             self.sequence+=1
             job=dict(kind='read',target=target,stamps={k:stamps[k] for k in checks},frame_id=self.sequence,delta=delta)
-            self._submit(job,lambda:{k:readable(k,f) for k,f in checks.items()})
+            revision = self._raw_revision
+            def work():
+                result = {}
+                for key, capture in checks.items():
+                    frame = capture()
+                    result[key] = None if frame is None else self._read(key, frame, revision)
+                return result
+            self._submit(job, work)
 
     def _search(self, detector, keys, now, *, waiting=False, small=False):
         physical=expected_crop(detector,self.target) if small else tuple(self.target[2:])
         stamps={k:state.epoch(k) for k in keys}
-        frame=self._capture(physical)
-        if frame is None or any(state.epoch(k)!=v for k,v in stamps.items()): return
-        frame=frame.copy()
+        capture=self._capture(physical)
+        if any(state.epoch(k)!=v for k,v in stamps.items()): return
         job=dict(kind='search',target=self.target,stamps=stamps,
                  keys=keys,detector=detector,physical=physical,waiting=waiting)
         def work():
+            frame = capture()
+            if frame is None: return None, {"capture_failed": True}
             trace={}
             box=find_expected(detector,frame) if small else run_detector(detector,frame,detector_assets(detector),trace)
             if box and detector=='buff':
@@ -224,6 +301,9 @@ class AutofindRuntime(QObject):
         if job['kind']=='read':
             for key,ok in result.items():
                 candidate=self.candidates.get(key)
+                if ok is None:
+                    if candidate: candidate.last_time = None
+                    continue
                 if candidate:
                     if candidate.observe(frame_id=job['frame_id'],now=now,readable=ok,stamp=state.epoch(key),target=self.target):
                         try: saved=candidate.commit(key)
@@ -254,6 +334,7 @@ class AutofindRuntime(QObject):
             return
         if not auto: return
         box,trace=result
+        if trace.get("capture_failed"): return
         ox,oy,_,_=job['physical']
         for key in job['keys']:
             region=trace.get('regions',{}).get(key) if job['detector']=='resources' else box

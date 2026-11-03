@@ -10,9 +10,12 @@ FIELDS = {k: (f.section, 'captureRegion' if k in ('buff', 'debuff') else
               'anchor' if k == 'skillbar' else 'box') for k, f in BY_KEY.items() if f.automatic}
 SHARED = ('boss', 'halo_timer', 'debuff')
 _epochs = {}
+_revision = 0
 
 
 def changed(before, after):
+    global _revision
+    _revision += 1
     for key, (name, field) in FIELDS.items():
         if (section(before, name) != section(after, name)
                 or section(before, 'general').get('gameExe') != section(after, 'general').get('gameExe')
@@ -20,6 +23,10 @@ def changed(before, after):
                 or section(section(before,'autofind'),'selected').get(key) != section(section(after,'autofind'),'selected').get(key)
                 or remembered(key,before) != remembered(key,after)):
             _epochs[key] = _epochs.get(key, 0) + 1
+
+
+def revision():
+    return _revision
 
 
 def epoch(key):

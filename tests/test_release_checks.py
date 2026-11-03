@@ -82,7 +82,7 @@ def test_current_plan_matches_bundled_release_and_changed_features():
         'tests/test_sketch_chat.py', 'tests/test_skillbar_testers.py', 'tests/test_fastping_kept.py', 'tests/test_cursor_fx.py', 'tests/test_skillbar_chunk_snap.py', 'tests/test_capture_guard.py', 'tests/test_overlay_capture.py', 'tests/test_alert_volume.py', 'tests/test_dorcha_thread.py', 'tests/test_cursor_front.py',
     })
     expected.update({
-        'tests/test_autofind_v2.py', 'tests/test_autofind_mvp.py', 'tests/test_autofind_diagnostics.py',
+        'tests/test_autofind_thread.py', 'tests/test_autofind_v2.py', 'tests/test_autofind_mvp.py', 'tests/test_autofind_diagnostics.py',
         'tests/test_status_panel.py', 'tests/test_halo_timer.py', 'tests/test_halo_autofind.py',
         'tests/test_region_registration.py', 'tests/test_region_selector_lifecycle.py',
         'tests/test_setup_common_resources.py', 'tests/test_navigation_all_widths.py',
