@@ -45,6 +45,13 @@ class RegionSection(QWidget):
             self.summary_label = None
         self.summary = summary
         layout.addWidget(summary)
+        # 판독 실패는 접힌 설정 본문 밖에 남기며 평소 판독 요약과 독립적으로 갱신한다.
+        self._notices = {}
+        self.notice = QLabel()
+        self.notice.setWordWrap(True)
+        self.notice.setStyleSheet(f"color:{color('warn')};")
+        self.notice.hide()
+        layout.addWidget(self.notice)
         self.toggle = QToolButton()
         self.toggle.setText(title)
         self.toggle.setCheckable(True)
@@ -79,6 +86,14 @@ class RegionSection(QWidget):
             self._set_open(True)
         else:
             self.fold.setVisible(self.toggle.isChecked())
+
+    def set_notice(self, key: str, message: str = "") -> None:
+        if message:
+            self._notices[key] = message
+        else:
+            self._notices.pop(key, None)
+        self.notice.setText("\n".join(self._notices.values()))
+        self.notice.setVisible(bool(self._notices))
 
     def set_summary(self, text: str, tint: str | None = None) -> None:
         if self.summary_label is not None:

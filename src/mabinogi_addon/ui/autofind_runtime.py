@@ -136,6 +136,8 @@ class AutofindRuntime(QObject):
         self.last_tick=None
         self.sequence=0
         self.notified=set()
+        self._notice_epochs={}
+        self._automatic=None
         self.timer=QTimer(self)
         self.timer.setInterval(500)
         self.timer.timeout.connect(self._safe_tick)
@@ -151,6 +153,22 @@ class AutofindRuntime(QObject):
             self.executor.submit(self.native.close)
             self.executor.shutdown(wait=False)
         self.future = self.job = None
+
+    def _notice(self, key, visible):
+        tab = getattr(self.window, 'buff_tab' if key == 'buff' else 'resource_tab', None)
+        region = getattr(tab, 'region_section', None)
+        if visible:
+            self.notified.add(key)
+            self._notice_epochs[key] = state.epoch(key)
+            name = {'buff': '버프', 'dorcha': '도르카', 'tuarim': '투아림'}[key]
+            particle = '을' if key == 'tuarim' else '를'
+            message = f'{name}{particle} 10초 넘게 읽지 못했어요. 아래 영역 다시 지정을 펼쳐 자동 찾기를 눌러주세요.'
+        else:
+            self.notified.discard(key)
+            self._notice_epochs.pop(key, None)
+            message = ''
+        if region is not None:
+            region.set_notice(key, message)
 
     def _settings(self):
         revision = state.revision()
@@ -208,6 +226,7 @@ class AutofindRuntime(QObject):
         window=self.window
         target=registered_game_target(self.target)
         if target!=self.target:
+            for key in tuple(self.notified): self._notice(key, False)
             self.target=target
             self.target_generation+=1
             self.candidates.clear()
@@ -217,6 +236,15 @@ class AutofindRuntime(QObject):
             self.last_tick=None
         raw=self._settings()
         auto=state.automatic(raw)
+        if auto != self._automatic:
+            self._automatic = auto
+            self.lost.clear()
+            for key in tuple(self.notified): self._notice(key, False)
+            if self.job: self.job['suspended'] = True
+        for key in tuple(self.notified):
+            if not state.active(key, raw) or self._notice_epochs[key] != state.epoch(key):
+                self._notice(key, False)
+                self.lost.pop(key, None)
         running=bool(target and not getattr(window,'_paused',False) and not window._setup_busy()
                      and not getattr(window,'_config_pending_restart',False) and window._watcher.is_game_active())
         if not running:
@@ -322,16 +350,13 @@ class AutofindRuntime(QObject):
                         self.next_search[key]=now+(60 if self.failures[key]>=3 else 10)
                 elif ok:
                     self.lost[key]=self.failures[key]=0
-                    self.notified.discard(key)
+                    self._notice(key, False)
                 else:
                     self.lost[key]=self.lost.get(key,0)+job['delta']+delta
                     if not auto and self.lost[key]>10 and key not in self.notified:
-                        self.notified.add(key)
+                        self._notice(key, True)
                         message='못 읽은 지 10초가 지났어요. 해당 탭에서 자동 찾기를 눌러주세요.'
                         self.window.setup_guide.record_result(key,'못 찾음 · '+message)
-                        tab={'buff':self.window.buff_tab,'dorcha':self.window.dorcha_tab,'tuarim':self.window.tuarim_tab}[key]
-                        label=getattr(tab,'value_label',None) or getattr(tab,'region_hint',None)
-                        if label is not None: label.setText(message)
             return
         if not auto: return
         box,trace=result
