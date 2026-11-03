@@ -113,3 +113,55 @@ def test_buff_tab_status_shows_the_notice():
         assert mw.MainWindow._buff_status(fake)[0] == "추적 중 — 버프 3개 표시"
     finally:
         mw.config.load_capture_region = original
+
+
+def _only_untimed_rows(path):
+    """QA 재현: 시간 있는 줄의 시간 칸을 지워 '시간 없는 버프 줄만 남은' 화면(마을 등)을 만든다."""
+    frame = image_io.imread(path, cv2.IMREAD_COLOR)
+    x, y, w, h = locate_status_region(frame, anchor_template())
+    region = frame[y:y + h, x:x + w].copy()
+    engine = _engine()
+    timed = []
+    original = engine._read_row_time_raw
+
+    def record(reg, icon_y):
+        value = original(reg, icon_y)
+        if value is not None:
+            timed.append(icon_y)
+        return value
+    engine._read_row_time_raw = record
+    _entries(engine, region, ticks=3)
+    assert timed  # 지울 시간 줄이 있었다
+    for icon_y in timed:
+        top = max(0, icon_y - engine._row_pad_top)
+        region[top:icon_y + engine._row_height, engine._time_x0:] = 0
+    return region
+
+
+@pytest.mark.parametrize("name", ["스크린샷 2026-10-16 211332.png",  # 마비노기옛체
+                                  "스크린샷 2026-11-03 234912.png", "스크린샷 2026-11-03 234931.png"])  # 나눔고딕
+def test_untimed_rows_on_bright_floor_never_raise_the_notice(name, caplog):
+    """0.40.0 QA(Confirmed): 반투명 상태창 뒤 밝은 바닥을 글자로 세어, 시간 없는 줄(마나실드·멤버십 '…')만 남으면
+    6초 만에 '시간 글자를 읽지 못하고 있어요'가 떴다. 이제 시간 글자처럼 생긴 잉크만 센다."""
+    caplog.set_level(logging.INFO, logger="mabinogi_addon.tracker.engine")
+    region = _only_untimed_rows("tests/data/" + name)
+    engine = _engine()
+    _entries(engine, region, ticks=60, step=1.1)
+    assert not engine.time_unreadable and engine._unread_streak == 0
+    assert not any("읽지 못하고 있어요" in r.getMessage() for r in caplog.records)
+
+
+def test_time_text_shape_check():
+    from mabinogi_addon.tracker.engine import looks_like_time_text
+    import numpy as np
+    blank = np.zeros((28, 154), np.uint8)
+    assert not looks_like_time_text(blank)
+    floor = blank.copy()
+    floor[:, 140:] = 255  # 오른쪽 끝 밝은 바닥(줄 높이 전체)
+    assert not looks_like_time_text(floor)
+    text = blank.copy()
+    for x0 in (100, 108, 116):  # 9px 높이 글자 3개(숫자·숫자·단위 자리)
+        text[8:17, x0:x0 + 5] = 255
+        text[10:15, x0 + 1:x0 + 4] = 0
+    assert looks_like_time_text(text)
+    assert looks_like_time_text(np.maximum(text, floor))  # 밝은 바닥이 옆에 있어도 글자 줄은 알아본다

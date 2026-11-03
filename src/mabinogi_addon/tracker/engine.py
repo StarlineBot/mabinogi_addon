@@ -24,6 +24,39 @@ from .buff_state import BuffStateMachine, Event, State
 _log = logging.getLogger(__name__)
 
 
+def _timelike_cluster(part: np.ndarray) -> bool:
+    rows = np.flatnonzero(part.any(axis=1))
+    if rows.size == 0 or not 7 <= rows[-1] - rows[0] + 1 <= 14:
+        return False
+    cols = np.concatenate(([False], part.any(axis=0), [False])).astype(np.int8)
+    edges = np.flatnonzero(np.diff(cols))
+    widths = edges[1::2] - edges[::2]
+    if widths.size < 3 or widths.max() > 12:
+        return False
+    return part[rows[0]:rows[-1] + 1].mean() <= 0.5
+
+
+def looks_like_time_text(binary: np.ndarray, edge: int = 45, gap: int = 10) -> bool:
+    """이진 시간 칸에 시간 글자 줄처럼 생긴 덩어리가 오른쪽 끝(edge px 안)에 있나(글꼴과 무관한 모양 판정)."""
+    import cv2
+
+    n, labels, stats, _ = cv2.connectedComponentsWithStats((binary > 0).astype(np.uint8), connectivity=8)
+    keep = np.zeros(n, bool)
+    keep[1:] = (stats[1:, cv2.CC_STAT_HEIGHT] <= 13) & (stats[1:, cv2.CC_STAT_WIDTH] <= 14)  # 글자보다 큰 밝은 덩어리 제외
+    mask = keep[labels]
+    ink = np.flatnonzero(mask.any(axis=0))
+    if ink.size < 6:
+        return False
+    clusters, start, prev = [], ink[0], ink[0]
+    for c in ink[1:]:
+        if c - prev > gap:
+            clusters.append((start, prev))
+            start = c
+        prev = c
+    clusters.append((start, prev))
+    return any(end >= binary.shape[1] - edge and _timelike_cluster(mask[:, a:end + 1]) for a, end in clusters)
+
+
 @dataclass
 class OverlayEntry:
     buff_id: str
@@ -253,9 +286,6 @@ class BuffEngine:
 
     # 시간 칸에 글자가 있는데 못 읽은 줄이 성공 없이 이만큼 이어지면 '시간 글자를 읽지 못함'(버프 탭 안내·app.log).
     UNREADABLE_AFTER = 20
-    # 시간은 시간 칸 오른쪽 끝에 붙어 있다(오른쪽 정렬). 이 안에 글자가 있어야 '시간이 있는 줄'로 본다.
-    _TIME_EDGE = 45
-
     def _read_row_time(self, region: np.ndarray, icon_y: int) -> float | None:
         value = self._read_row_time_raw(region, icon_y)
         if value is not None:
@@ -272,13 +302,17 @@ class BuffEngine:
         return value
 
     def _has_time_ink(self, region: np.ndarray, icon_y: int) -> bool:
-        """그 줄 시간 칸 오른쪽 끝에 글자가 있나(시간 없는 버프 줄과 구분 — 마나실드처럼 원래 시간이 없는 줄은 비어 있음)."""
+        """그 줄 시간 칸 오른쪽 끝에 '시간 글자처럼 생긴' 잉크가 있나 — 시간 없는 버프 줄과 구분.
+
+        0.40.0 QA: 밝은 픽셀만 보면 반투명 상태창 뒤 밝은 바닥(시간 칸 오른쪽 끝)도 글자로 셌다 → 시간 없는 줄만 남으면 6초 만에
+        잘못된 '시간 글자를 읽지 못함' 안내. 이제 이어진 잉크 조각 중 글자 크기(높이 13·폭 14 이하)만 남기고,
+        오른쪽 끝 근처 덩어리가 글자 줄 모양(세로 7~14px, 빈 열로 나뉜 조각 3개 이상·조각 폭 12 이하, 채움 50% 이하)일 때만 인정.
+        """
         top = max(0, icon_y - self._row_pad_top)
         strip = region[top : icon_y + self._row_height, self._time_x0 :]
         if strip.size == 0:
             return False
-        ink = np.flatnonzero(binarize(strip).max(axis=0))
-        return ink.size >= 6 and ink[-1] >= strip.shape[1] - self._TIME_EDGE
+        return looks_like_time_text(binarize(strip))
 
     def _read_row_time_raw(self, region: np.ndarray, icon_y: int) -> float | None:
         top = max(0, icon_y - self._row_pad_top)
