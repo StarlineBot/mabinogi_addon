@@ -12,7 +12,9 @@
     "tests/test_startup_build.py",
     "tests/test_perf_meter.py",
     "tests/test_time_nanum.py",
-    "tests/test_time_4k_render.py"
+    "tests/test_time_4k_render.py",
+    "tests/test_favorites_hold.py",
+    "tests/test_skillbar_testers.py"
   ],
   "coverage": {
     "src/mabinogi_addon/harp_latency.py": {
@@ -46,7 +48,8 @@
         "tests/test_startup_smoke.py",
         "tests/test_navigation.py",
         "tests/test_perf_meter.py",
-        "tests/test_time_nanum.py"
+        "tests/test_time_nanum.py",
+        "tests/test_favorites_hold.py"
       ],
       "reason": "최적화 2단 탭(제작자만 하프 탭)·일시정지 연결·최소 기동/종료·탭 구조"
     },
@@ -181,9 +184,22 @@
     "src/mabinogi_addon/tracker/engine.py": {
       "tests": [
         "tests/test_time_nanum.py",
-        "tests/test_time_4k_render.py"
+        "tests/test_time_4k_render.py",
+        "tests/test_favorites_hold.py"
       ],
       "reason": "나눔고딕 시간 글자 세트: 2560·1080 자료 화면 값 일치·시간 없는 목록 오판독 없음·못 읽음 안내/로그, 기존 4K·기본 세트 판독 불변"
+    },
+    "src/mabinogi_addon/detect/favorites.py": {
+      "tests": [
+        "tests/test_favorites_hold.py"
+      ],
+      "reason": "즐겨찾기 줄 유지(깜빡임·빈 결과)·빠진 줄 다시 채움·같은 줄 시간 점프=연장·맨 위 줄 잘림 경고/안내(014744·010804)"
+    },
+    "src/mabinogi_addon/detect/skillbar_anchor.py": {
+      "tests": [
+        "tests/test_skillbar_testers.py"
+      ],
+      "reason": "tests/data 큰 화면 목록 검사(새 나눔고딕·0.40.0 자료 17장 포함) — 배포 검증 #179 실패 원인"
     }
   }
 }

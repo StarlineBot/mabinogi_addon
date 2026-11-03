@@ -1206,6 +1206,9 @@ class MainWindow(QMainWindow):
         reader = getattr(self._engine, "favorites", None)
         if reader is not None and reader.lost:
             return ("즐겨찾기 칸을 찾지 못했어요 · 영역을 다시 지정해 주세요", self._STATUS_WARN, "region")
+        if reader is not None and getattr(reader, "top_cut", False):
+            # 0.40.0: 예전 자동 찾기 영역은 즐겨찾기 맨 위 줄이 영역 위 끝에 걸려 아이콘이 잘리고 다른 버프로 오인됐다
+            return ("즐겨찾기 맨 위 줄이 잘려요 · 자동 찾기를 다시 해 주세요", self._STATUS_WARN, "region")
         if self._engine is not None and not self._engine.anchor_seen:
             return ("기준 버프 미검출 — 영역에 ⚓ 프리미엄 배틀 멤버십이 보이나요?", self._STATUS_WARN, "anchor")
         if self._engine is not None and getattr(self._engine, "time_unreadable", False):

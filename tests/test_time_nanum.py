@@ -32,8 +32,7 @@ EXPECTED = {
                                                    "magic_attack": 7196, "magic_speed": 7196},
     D + "1080_전장의서곡55초빨강.png": {"overture_of_the_battlefield": 55, "march": 55, "vivace": 55},
     D + "1080_행진곡59초빨강_밝은배경.png": {"overture_of_the_battlefield": 59, "march": 59, "vivace": 59,
-                                         "han_adrenaline": 137, "enduring_will": 164, "melee_attack": 1763,
-                                         "penet": 1763,  # 공격력 증가와 같은 줄
+                                         "han_adrenaline": 137, "enduring_will": 164,
                                          "music_boost": 1763},  # 29분 23초
     D + "1080_시간없는목록.png": {},  # 시간이 하나도 없는 목록 — 엉뚱한 값을 읽지 않는다
 }
@@ -58,10 +57,18 @@ def _entries(engine, region, ticks=4, start=0.0, step=0.001):
     return {e.buff_id: e.remaining for e in result.entries if e.remaining is not None}
 
 
+# 0.40.0 배포 검증 #179 명세 변경: 급소 관통(penet)과 공격력 증가(melee_attack)는 같은 아이콘이라 실행 환경마다 어느 줄
+# (급소 관통 2분 43초=163 / 공격력 증가 29분 23초=1763)에 붙는지 바뀐다 — 두 버프는 화면 값 둘 중 하나면 맞는 것으로 본다.
+SAME_ICON = {D + "1080_행진곡59초빨강_밝은배경.png": {"penet": {163, 1763}, "melee_attack": {163, 1763}}}
+
+
 @pytest.mark.parametrize("path", list(EXPECTED), ids=lambda p: p.rsplit("_나눔고딕_", 1)[-1][:-4])
 def test_nanum_times_read_as_shown(path):
     engine = _engine()
     got = _entries(engine, _region(path))
+    for bid, allowed in SAME_ICON.get(path, {}).items():
+        if bid in got:
+            assert round(got.pop(bid)) in allowed, bid
     assert got == pytest.approx(EXPECTED[path], abs=0.5)
     assert not engine.time_unreadable
 

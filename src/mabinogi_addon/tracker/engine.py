@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 
 import logging
 
+import cv2
 import numpy as np
 
 from ..detect import detect_buffs, read_time, score_sets, set_names
@@ -223,6 +224,15 @@ class BuffEngine:
                         reading = float(t)
                         self._last_read_at[bid] = now
                         self._read_ok[bid] = True
+                    elif (t is not None and t > rem + self._TIME_CONFIRM_TOL
+                          and self._icon_still_at(region, bid, y)):
+                        # 0.40.0: 같은 줄에 그 버프 아이콘이 그대로 있는데 시간이 위로 크게 뜀 = 연장(종료 직전에 다시 건 것).
+                        # 예전엔 '시계와 맞을 때만 살아 있음'이라 종료로 처리돼 오버레이에서 사라졌다. 연장 확정은 상태 기계가
+                        # 다음 프레임에서 이어지는지 보고 한다(한 프레임 오독은 무시).
+                        detected = True
+                        reading = float(t)
+                        self._last_read_at[bid] = now
+                        self._read_ok[bid] = True
             if not detected:
                 self._read_ok.pop(bid, None)
             # 구분선을 아직 모를 때(즐겨찾기 칸이 영역에 있으면 꺼진 즐겨찾기도 목록 아이콘으로 잡힌다) 시간을 못 읽는 줄은
@@ -256,6 +266,23 @@ class BuffEngine:
         return TickResult(
             entries=entries, alerts=alerts, frame_valid=frame_valid, alerts2=alerts2
         )
+
+    _ICON_STILL = 0.7  # 그 줄에 아이콘이 그대로 있다고 볼 점수(즐겨찾기 줄 맞춤 기준과 같음)
+
+    def _icon_still_at(self, region: np.ndarray, bid: str, y: int) -> bool:
+        """마지막으로 본 줄(y)에 그 버프 아이콘이 아직 있나(아이콘 열 안에서, 위아래 3px 여유)."""
+        from ..detect.icon_matcher import match_icon
+
+        template = self._templates.get(bid)
+        if template is None:
+            return False
+        t = template if template.ndim == 2 else cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
+        g = region if region.ndim == 2 else cv2.cvtColor(region, cv2.COLOR_BGR2GRAY)
+        x0, x1 = self._icon_column
+        win = g[max(0, y - 3):y + t.shape[0] + 3, x0:x1]
+        if win.shape[0] < t.shape[0] or win.shape[1] < t.shape[1]:
+            return False
+        return match_icon(win, t).score >= self._ICON_STILL
 
     def _split_favorites(self, region: np.ndarray, detections: list[Detection]) -> list[Detection]:
         """구분선 위 아이콘은 목록 검출에서 빼고, 기억한 즐겨찾기 줄 중 켜진 것만 그 줄 위치로 넣는다.

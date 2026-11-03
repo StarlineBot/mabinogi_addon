@@ -182,6 +182,9 @@ class FavoritesReader:
     CONFIRM_FRAMES = 4  # 새 선 위치를 받아들이기 전 연속 확인 프레임
     FORGET_FRAMES = 40  # 밝은 배경에서 기억한 자리에 선이 이만큼 연속으로 없으면 잊음(즐겨찾기 모두 해제)
     SCAN_EVERY = 5  # 기억한 선이 안 보일 때 전체 탐색 간격(프레임)
+    # 0.40.0(사용자 실게임·app.log): 종료 직전 깜빡이는 프레임에 다시 맞추면 그 줄이 빠지고, 남은 줄이 멀쩡하면 다시 넣지 않아
+    # 그 사이 연장해도 종료 처리됐다. 새로 못 찾은 기억 줄은 이만큼(약 2초) 유지하고, 빈 결과로 전체를 지우지 않는다.
+    HOLD_FRAMES = 10
 
     def __init__(self, templates: dict[str, np.ndarray], icon_column: tuple[int, int],
                  separator: int | None = None) -> None:
@@ -198,6 +201,8 @@ class FavoritesReader:
         self._pending_count = 0
         self._gone = 0
         self._frame = 0
+        self._missing: dict[str, int] = {}  # 다시 맞춤에서 못 찾은 기억 줄 → 연속 프레임 수(HOLD_FRAMES까지 유지)
+        self.top_cut = False  # 맨 위 즐겨찾기 줄이 영역 위 끝에 걸림(아이콘 잘림 → 다른 버프로 오인) → 자동 찾기 다시 안내
 
     @property
     def boundary(self) -> int | None:
@@ -218,9 +223,13 @@ class FavoritesReader:
         self._track(gray, list_ys)
         if self.separator is None:
             self.rows, self.on, self.row_count = {}, {}, 0
+            self._missing.clear()
+            self.top_cut = False
             return None
-        remapped = (self.separator != before or self._needs_remap(gray)
-                    or (not self.rows and self._frame % self.SCAN_EVERY == 0))
+        refill = self._frame % self.SCAN_EVERY == 0 and (
+            not self.rows or bool(self._missing)
+            or (self.row_count is not None and len(self.rows) < self.row_count))  # 빠진 줄은 몇 프레임마다 다시 채움
+        remapped = self.separator != before or self._needs_remap(gray) or refill
         if remapped:
             self._remap(gray, reason="구분선 이동" if before is not None and self.separator != before else "줄 확인")
         if remapped or self._frame % (self.SCAN_EVERY * 4) == 0:
@@ -288,11 +297,49 @@ class FavoritesReader:
         return False
 
     def _remap(self, gray: np.ndarray, *, reason: str) -> None:
-        rows = map_rows(gray, self._templates, self._icon_column, self.separator)
+        found = map_rows(gray, self._templates, self._icon_column, self.separator)
+        rows = dict(found)
+        for bid, row in self.rows.items():
+            if bid in found:
+                continue
+            # 못 찾은 기억 줄: 그 자리에서 다른 버프를 찾았거나(진짜 종료로 아래 줄이 올라옴) 구분선 아래면 바로 빼고,
+            # 아니면 깜빡임·순간 가림일 수 있어 HOLD_FRAMES 동안 유지한다(빈 결과 한 프레임으로 전체가 지워지지 않게).
+            taken = any(abs(other.y - row.y) < row.size // 2 for other in found.values())
+            misses = self._missing.get(bid, 0) + 1
+            if not taken and row.y < (self.separator or 0) and misses < self.HOLD_FRAMES:
+                rows[bid] = row
+                self._missing[bid] = misses
+            else:
+                self._missing.pop(bid, None)
+        for bid in found:
+            self._missing.pop(bid, None)
         if set(rows) != set(self.rows) or any(rows[b].y != self.rows[b].y for b in rows):
             _log.info("즐겨찾기 줄 다시 맞춤(%s): %s", reason,
-                      ", ".join(f"{b}@{r.y}" for b, r in sorted(rows.items(), key=lambda i: i[1].y)) or "등록 버프 없음")
+                      ", ".join(f"{b}@{r.y}{'(유지)' if b in self._missing else ''}"
+                                for b, r in sorted(rows.items(), key=lambda i: i[1].y)) or "등록 버프 없음")
         self.rows = rows
+        self._check_top_cut(gray)
+
+    _CUT_TEXTURE = 25.0  # 잘린 아이콘 띠의 밝기 편차(아이콘 37~40, 빈 칸 배경 12 안팎 — 010804 실측)
+
+    def _check_top_cut(self, gray: np.ndarray) -> None:
+        """맨 위 즐겨찾기 줄이 영역 위 끝에 걸리면 경고 — 예전 자동 찾기 영역에서 잘린 아이콘을 다른 버프로 오인하거나 빠뜨렸다.
+        ① 맞춘 줄이 위 끝에 붙음(y < 아이콘 크기/2) ② 맨 위 줄 한 칸 위 자리가 위 끝에 반쯤 걸쳐 있고 그 띠에 아이콘 같은 무늬가 있음
+        (상태목록창 위 테두리가 보이면 그 위는 창 밖이라 보지 않는다)."""
+        kept = [row for bid, row in self.rows.items() if bid not in self._missing]
+        cut = any(row.y < row.size // 2 for row in kept)
+        if not cut and kept and self.separator is not None:
+            top = min(kept, key=lambda r: r.y)
+            above = top.y - self._pitch()
+            visible = above + top.size
+            if above < 0 < visible and visible >= 3 and panel_top(gray, self.separator, self._pitch()) is None:
+                band = gray[0:visible, top.x:top.x + top.size]
+                cut = band.size > 0 and float(band.std()) >= self._CUT_TEXTURE
+        if cut and not self.top_cut:
+            top = min(self.rows.values(), key=lambda r: r.y)
+            _log.warning("즐겨찾기 맨 위 줄이 영역 위 끝에 걸려 있어요(맨 위 기억 줄 y=%s, 아이콘 %spx) — 버프 영역 자동 찾기를 다시 해 주세요",
+                         top.y, top.size)
+        self.top_cut = cut
 
 
 def widen_to_favorites(frame: np.ndarray, box: tuple[int, int, int, int]) -> tuple[int, int, int, int]:
