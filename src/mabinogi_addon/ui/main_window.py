@@ -1208,6 +1208,9 @@ class MainWindow(QMainWindow):
             return ("즐겨찾기 칸을 찾지 못했어요 · 영역을 다시 지정해 주세요", self._STATUS_WARN, "region")
         if self._engine is not None and not self._engine.anchor_seen:
             return ("기준 버프 미검출 — 영역에 ⚓ 프리미엄 배틀 멤버십이 보이나요?", self._STATUS_WARN, "anchor")
+        if self._engine is not None and getattr(self._engine, "time_unreadable", False):
+            # 0.40.0: 버프는 보이는데 남은 시간 글자를 계속 못 읽음(지원하지 않는 게임 글꼴 등) — 알림이 늦게 울릴 수 있음
+            return ("시간 글자를 읽지 못하고 있어요 (게임 글꼴 설정을 확인해 주세요)", self._STATUS_WARN, "region")
         n = self.buff_controller.item_count
         if n:
             return (f"추적 중 — 버프 {n}개 표시", self._STATUS_OK, "ok")

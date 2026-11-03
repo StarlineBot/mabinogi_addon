@@ -10,13 +10,18 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+import logging
+
 import numpy as np
 
 from ..detect import detect_buffs, read_time, score_sets, set_names
+from ..detect.binarize import binarize
 from ..detect.buff_detector import Detection
 from ..detect.favorites import FavoritesReader
 from ..detect.icon_matcher import DEFAULT_THRESHOLD
 from .buff_state import BuffStateMachine, Event, State
+
+_log = logging.getLogger(__name__)
 
 
 @dataclass
@@ -75,6 +80,9 @@ class BuffEngine:
         self._time_set: str | None = None  # 고정된 세트(None=아직 워밍업)
         self._set_conf: dict[str, float] = {}
         self._locked_misses = 0  # 고정 세트로 연속 못 읽은 횟수(화면 크기가 중간에 바뀌면 다시 고르기)
+        # 0.40.0: 시간 칸에 글자가 있는데 어느 세트로도 못 읽은 줄이 성공 없이 이어지면(예: 지원하지 않는 게임 글꼴) 안내
+        self._unread_streak = 0
+        self.time_unreadable = False
         if len(set_names()) <= 1:  # 세트가 하나뿐이면 바로 고정(기본)
             only = set_names()
             self._time_set = only[0] if only else None
@@ -243,7 +251,36 @@ class BuffEngine:
     # 고정 세트로 연속 이만큼 못 읽으면 모든 세트로 한 번 확인(다른 세트가 읽으면 고정을 풀고 다시 고른다).
     _RESELECT_AFTER = 8
 
+    # 시간 칸에 글자가 있는데 못 읽은 줄이 성공 없이 이만큼 이어지면 '시간 글자를 읽지 못함'(버프 탭 안내·app.log).
+    UNREADABLE_AFTER = 20
+    # 시간은 시간 칸 오른쪽 끝에 붙어 있다(오른쪽 정렬). 이 안에 글자가 있어야 '시간이 있는 줄'로 본다.
+    _TIME_EDGE = 45
+
     def _read_row_time(self, region: np.ndarray, icon_y: int) -> float | None:
+        value = self._read_row_time_raw(region, icon_y)
+        if value is not None:
+            self._unread_streak = 0
+            if self.time_unreadable:
+                self.time_unreadable = False
+                _log.info("버프 시간 글자를 다시 읽고 있어요")
+        elif self._has_time_ink(region, icon_y):
+            self._unread_streak += 1
+            if self._unread_streak >= self.UNREADABLE_AFTER and not self.time_unreadable:
+                self.time_unreadable = True
+                _log.warning("버프 시간 글자를 읽지 못하고 있어요(시간이 있는 줄 %d번 연속 판독 실패) — "
+                             "게임 글꼴 설정이 지원 글꼴(마비노기옛체·나눔고딕)인지 확인 필요", self._unread_streak)
+        return value
+
+    def _has_time_ink(self, region: np.ndarray, icon_y: int) -> bool:
+        """그 줄 시간 칸 오른쪽 끝에 글자가 있나(시간 없는 버프 줄과 구분 — 마나실드처럼 원래 시간이 없는 줄은 비어 있음)."""
+        top = max(0, icon_y - self._row_pad_top)
+        strip = region[top : icon_y + self._row_height, self._time_x0 :]
+        if strip.size == 0:
+            return False
+        ink = np.flatnonzero(binarize(strip).max(axis=0))
+        return ink.size >= 6 and ink[-1] >= strip.shape[1] - self._TIME_EDGE
+
+    def _read_row_time_raw(self, region: np.ndarray, icon_y: int) -> float | None:
         top = max(0, icon_y - self._row_pad_top)
         strip = region[top : icon_y + self._row_height, self._time_x0 :]
         if strip.size == 0:
