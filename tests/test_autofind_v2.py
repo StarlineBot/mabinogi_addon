@@ -330,7 +330,7 @@ def test_absent_boss_does_not_starve_waiting_halo(monkeypatch):
     runtime = runtime_module.AutofindRuntime(window)
     runtime.timer.stop()
     target = (1, 2, 0, 0, 1920, 1080)
-    monkeypatch.setattr(runtime_module, 'registered_game_target', lambda: target)
+    monkeypatch.setattr(runtime_module, 'registered_game_target', lambda previous=None: target)
     clock = [100.0]
     monkeypatch.setattr(runtime_module, 'monotonic', lambda: clock[0])
     config._write_local_config({'autofind': {'armed': True}, 'dorcha': {'enabled': False},

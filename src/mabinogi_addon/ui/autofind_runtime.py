@@ -206,7 +206,7 @@ class AutofindRuntime(QObject):
         if self.closed or self.capturing: return
         now=monotonic()
         window=self.window
-        target=registered_game_target()
+        target=registered_game_target(self.target)
         if target!=self.target:
             self.target=target
             self.target_generation+=1

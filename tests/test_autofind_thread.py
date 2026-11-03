@@ -207,3 +207,51 @@ def test_real_buff_icons_cached_and_keep_sample_reading(monkeypatch):
         r.shutdown()
         r.executor.shutdown(wait=True)
         window.close()
+
+
+@pytest.mark.parametrize('replacement', ['destroyed', 'owner-changed', 'hidden', 'exe-changed'])
+def test_tick_reuses_valid_target_and_rediscovers_replacement(runtime, monkeypatch, replacement):
+    import sys
+    from mabinogi_addon.system import window_capture, dwm_thumbnail, window_watcher
+    r, window, _, _ = runtime
+    window._paused = True  # Exercise real target lookup without starting native capture.
+    monkeypatch.setattr(module, 'registered_game_target', window_capture.registered_game_target)
+    monkeypatch.setattr(window_capture, 'sys', SimpleNamespace(platform='win32'))
+    clock = [0.0]
+    monkeypatch.setattr(window_capture, 'time', SimpleNamespace(monotonic=lambda: clock[0]))
+    native = dict(hwnd=11, pid=22, valid=True, visible=True, exe='client.exe')
+    enumerations, owners = [], []
+    monkeypatch.setattr(config, 'load_game_exe', lambda: 'Client.exe')
+    monkeypatch.setattr(dwm_thumbnail, 'find_game_window',
+                        lambda *a: (enumerations.append(1), native['hwnd'])[1])
+    monkeypatch.setattr(dwm_thumbnail, 'window_rect', lambda hwnd: (0,0,1920,1080))
+    monkeypatch.setattr(window_watcher, '_exe_basename_of_pid',
+                        lambda pid: (owners.append(pid), native['exe'])[1])
+    monkeypatch.setitem(sys.modules, 'win32gui', SimpleNamespace(
+        IsWindow=lambda hwnd: native['valid'], IsWindowVisible=lambda hwnd: native['visible']))
+    monkeypatch.setitem(sys.modules, 'win32process', SimpleNamespace(
+        GetWindowThreadProcessId=lambda hwnd: (1, native['pid'] if hwnd == 11 else 44)))
+    r.tick()
+    assert r.target == TARGET and len(enumerations) == 1
+    for _ in range(5): r.tick()
+    assert len(enumerations) == 1 and owners == [22]
+    generation = r.target_generation
+    r.candidates['buff'] = state.Confirmation(BOX, state.epoch('buff'), TARGET)
+    native['hwnd'] = 33
+    if replacement == 'destroyed': native['valid'] = False
+    elif replacement == 'hidden': native['visible'] = False
+    elif replacement == 'owner-changed': native['pid'] = 99
+    else:
+        native['exe'] = 'other.exe'
+        clock[0] = 6  # Ownership is revalidated after the existing five-second cache.
+    r.tick()
+    assert r.target == (33,44,0,0,1920,1080)
+    assert len(enumerations) == 2 and r.target_generation == generation + 1
+    assert not r.candidates
+    native.update(hwnd=0, valid=False)
+    r.tick()
+    assert r.target is None
+    native.update(hwnd=55, valid=True, visible=True, exe='client.exe')
+    r.tick()
+    assert r.target == (55,44,0,0,1920,1080)
+    assert len(enumerations) == 4
