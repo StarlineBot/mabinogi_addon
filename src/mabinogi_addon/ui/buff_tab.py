@@ -398,11 +398,6 @@ class BuffTab(QWidget):
         self.catalog_changed.emit()
 
     def _on_auto_find(self) -> None:
-        from .region_registration import invalidate_region
-        invalidate_region("buff")
-        from .autofind_runtime import try_remembered
-        if try_remembered(self,"buff",self._on_region_selected):
-            return
         from .region_registration import generation, connect_selection
         stamp = generation(self)
         """상태목록창을 앵커로 자동 검출 → 민트 점선 미리보기 + 확인 후에만 저장(모든 사용자, 기능 공개 정책 7절)."""

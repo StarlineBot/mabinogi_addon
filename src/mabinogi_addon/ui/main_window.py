@@ -233,8 +233,6 @@ class MainWindow(QMainWindow):
             app.commitDataRequest.connect(lambda *_: _log.info("Windows 종료 신호 받음"))
         from ..setup_state import initialize_new_user
         initialize_new_user()
-        from ..autofind_state import initialize_consumers
-        initialize_consumers()
         config.migrate_default_buff_names()
         config.migrate_default_debuff_icons()  # 0.24.0: 같은 이름 사용자 아이콘 → 새 기본(원본 16px)
         config.migrate_new_default_debuff_icons()  # 0.30.0: 와이어웹 기본 추가 — 같은 이름 사용자 아이콘 한 번 치움
@@ -391,16 +389,11 @@ class MainWindow(QMainWindow):
         self.settings_tab.reopen_guide.connect(self._open_guide)
         self.setup_guide.open_feature.connect(self._open_setup_feature)
         self.setup_guide.open_tab.connect(self._open_guide_tab)
-        self.setup_guide.feature_changed.connect(self._select_autofind_feature)
-        self.setup_guide.retry_requested.connect(lambda keys:self._setup_flow.find_all(self.setup_guide,keys))
-        self.setup_guide.view_requested.connect(self._view_found_region)
-        self.setup_guide.deferred_signal.connect(self._leave_setup)
+        self.setup_guide.feature_changed.connect(self._set_feature_enabled)
         self.setup_guide.register_game.connect(self._register_setup_game)
         self.setup_guide.run_requested.connect(self._run_guide_setup)
         self.setup_guide.cancel_requested.connect(self._setup_flow.cancel)
         self.setup_guide.finished.connect(self._finish_guide)
-        from .autofind_runtime import AutofindRuntime
-        self._autofind_runtime = AutofindRuntime(self)
         self.settings_tab.login_changed.connect(self.setup_page.refresh)
         self.settings_tab.login_changed.connect(self.dorcha_tab.login_refresh)
         self.settings_tab.login_changed.connect(self.boss_tab.halo_capture.login_refresh)
@@ -661,11 +654,8 @@ class MainWindow(QMainWindow):
 
         rows["buff"] = tracked(self._buff_status())
         rows["debuff"] = tracked(self._debuff_status())
-        from .. import autofind_state
         if missing("boss"):
             rows["boss"] = ("영역 지정 필요", "warn")
-        elif not autofind_state.active("boss",raw):
-            rows["boss"] = ("꺼짐", "muted")
         elif paused:
             rows["boss"] = ("대기 중 · 일시정지", "muted")
         else:
@@ -673,8 +663,6 @@ class MainWindow(QMainWindow):
                             else ("대기 중 · 보스가 보이면 동작", "muted"))
         if missing("halo"):
             rows["halo"] = ("영역 지정 필요", "warn")
-        elif not autofind_state.active("halo_timer",raw):
-            rows["halo"] = ("꺼짐", "muted")
         elif paused:
             rows["halo"] = ("대기 중 · 일시정지", "muted")
         else:
@@ -698,8 +686,7 @@ class MainWindow(QMainWindow):
                           else ("표시 중", "ok") if game else waiting_game) + (cursor_on,)
         # 설정 필요: 사용자가 쓰기로 고른 기능 중 영역이 없는 것만(명세 12.2-3)
         needs = [(key, self._HOME_NAMES[key]) for key in self._HOME_FEATURES
-                 if setup_state.section(setup_state.section(raw,"autofind"),"selected").get(
-                     self._HOME_FEATURES[key], setup_state.selected(self._HOME_FEATURES[key],raw)) and missing(key)]
+                 if setup_state.selected(self._HOME_FEATURES[key], raw) and missing(key)]
         working = sum(1 for key in self._HOME_FEATURES if rows[key][1] == "ok")
         title = "paused" if paused else "running" if game else "waiting"
         return {"title": title, "combat_on": not paused, "working": working, "needs": needs, "rows": rows}
@@ -809,10 +796,7 @@ class MainWindow(QMainWindow):
         return self.setup_page.busy or self.setup_guide.busy or self._setup_flow.running
 
     def _refresh_guide_return(self):
-        from ..setup_state import section
-        pending=section(config._read_local_config(),"autofind").get("guide") in ("started","deferred")
-        self._guide_return_btn.setText("설정 이어하기" if pending and not self.setup_guide.active else "첫 사용 안내로 돌아가기")
-        self._guide_return_btn.setVisible((self.setup_guide.active or pending)
+        self._guide_return_btn.setVisible(self.setup_guide.active
                                           and self._pages.currentWidget() is not self.setup_guide)
 
     def _guide_login_changed(self):
@@ -835,78 +819,17 @@ class MainWindow(QMainWindow):
     def _resume_guide(self):
         if self._setup_busy() or self._config_pending_restart or self._setup_flow.closed:
             return
-        self.setup_guide.active = True
         self.setup_guide.refresh()
         self._hide_home()  # 다른 화면으로 가면 홈을 닫는다
         self._pages.setCurrentWidget(self.setup_guide)
 
     def _run_guide_setup(self):
-        self._setup_flow.find_all(self.setup_guide)
+        self._setup_flow.run(page=self.setup_guide, feature_keys=self.setup_guide.feature_keys,
+                             on_result=self.setup_guide.record_result)
         if not self._setup_flow.closed:
             self.setup_guide.refresh()
             if config.load_discord_user() is None:
                 self._guide_login_changed()
-
-    def _view_found_region(self, key):
-        from ..autofind_state import remembered, box_for
-        raw = config._read_local_config()
-        entry = remembered(key, raw)
-        box = entry['box'] if entry else box_for(key,raw)
-        if box:
-            from .region_highlight import RegionHighlight
-            highlight = RegionHighlight()
-            self._found_highlight = highlight
-            highlight.flash(*(box[k] for k in ('x','y','w','h')), key)
-
-    def _select_autofind_feature(self, key, on):
-        from .. import autofind_state as state
-        try:
-            from ..system.window_capture import registered_game_target
-            state.select(key, on, game_target=registered_game_target())
-        except OSError:
-            QMessageBox.warning(self,'설정 저장 실패','기존 설정을 유지해요.')
-        else:
-            self._reload_autofind_feature(key)
-            self.boss_tab.reload_region()
-        self.setup_guide.refresh()
-
-    def _reload_autofind_feature(self, key):
-        from .. import autofind_state as state
-        raw = config._read_local_config()
-        box = state.box_for(key,raw)
-        if key in ('buff','debuff'):
-            self._feature_changed(key)
-            self.buff_tab._update_region_hint() if key=='buff' else self.debuff_tab.refresh_region_hint()
-        elif key=='boss':
-            self.boss_tab.reload_region()
-        elif key=='halo_timer':
-            halo=self.boss_tab.halo_capture
-            halo._region=box
-            halo._stop_monitoring()
-            halo._refresh()
-        elif key in ('dorcha','tuarim'):
-            tab=self.dorcha_tab if key=='dorcha' else self.tuarim_tab
-            if box: tab._accept_region(*(box[k] for k in ('x','y','w','h')))
-            else: tab._region_cleared()
-            tab.enable.setChecked(state.active(key,raw))
-        elif key=='stat_bars':
-            tab=self.stat_bars_tab
-            tab._region=box
-            bars=config.load_stat_bars()['bars']
-            for sid,check in tab._show_checks.items():
-                check.blockSignals(True)
-                check.setChecked(bars[sid]['show'])
-                check.blockSignals(False)
-                tab._bars_cfg[sid]['show']=bars[sid]['show']
-            tab.show_switch.blockSignals(True)
-            tab.show_switch.setChecked(tab.any_shown())
-            tab.show_switch.blockSignals(False)
-            tab._apply_visibility()
-            tab._update_region_label()
-        elif key=='skillbar':
-            self.skillbar_tab._anchor=None if box is None else {k:box[k] for k in ('x','y')}
-            self.skillbar_tab._update_anchor_label()
-            self.skillbar_tab._apply_visibility()
 
     def _finish_guide(self):
         try:
@@ -1961,9 +1884,20 @@ class MainWindow(QMainWindow):
             reference_templates=build_templates(references),
         )
         self._debuff_engine.set_warn_gone_ids(self._debuff_warn_gone_ids())
-        # Pattern, halo and debuff consumers share the boss tab's single capture.
-        bar_source = (self.boss_tab.shared_frame.source()
-                      if gate_mode in ('percent','auto') else None)
+        # 3차(percent): 보스 HP바 영역(보스패턴알림과 공유)을 따로 캡처해 넘긴다.
+        bar_source = None
+        if gate_mode in ("percent", "auto"):
+            bar_region = config.load_boss_bar_region()
+            if bar_region:
+                try:
+                    from .dpi import to_physical
+
+                    bar_source = create_live_source(Region(*to_physical(bar_region)))
+                except ImportError:
+                    bar_source = None  # dxcam 없음(맥/개발)
+                except Exception as exc:  # noqa: BLE001
+                    _cap_log.error("보스 바 라이브 캡처 시작 실패: %s", exc)
+                    bar_source = None
         # 지속시간·알림·점멸 없음 → show_duration 전부 False.
         self.debuff_controller = BuffController(
             self.debuff_overlay,
@@ -2291,7 +2225,6 @@ class MainWindow(QMainWindow):
         """
         self._config_pending_restart = True
         self.custom_overlay_tab.suspend_for_config_replacement()
-        self._autofind_runtime.shutdown()
         self._setup_flow.shutdown()
         self._memo_timer.stop()
         self.setup_page.setEnabled(False)
@@ -2473,7 +2406,6 @@ class MainWindow(QMainWindow):
             _log.info("종료 단계 '%s' %.0fms", name, (time.perf_counter() - t) * 1000)
 
         total = time.perf_counter()
-        self._autofind_runtime.shutdown()
         self._setup_flow.shutdown()
         self._memo_timer.stop()
         _step("공통 자원 설정 정지",self.resource_tab.shutdown)

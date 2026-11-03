@@ -277,10 +277,6 @@ class SettingsTab(QWidget):
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
-        from ..autofind_state import automatic
-        self.autofind_switch.blockSignals(True)
-        self.autofind_switch.setChecked(automatic())
-        self.autofind_switch.blockSignals(False)
         if not self._diag_closing and not self._diag_minimized and self._diag_future is None:
             self._refresh_diagnostics()
 
@@ -893,18 +889,6 @@ class SettingsTab(QWidget):
         )
         v.addWidget(self._min_tray)
 
-        v.addSpacing(8)
-        from .. import autofind_state
-        from .widgets import switch
-        v.addWidget(section_label('자동 찾기'))
-        self.autofind_switch = switch('자동 찾기 사용')
-        self.autofind_switch.setChecked(autofind_state.automatic())
-        self.autofind_switch.toggled.connect(autofind_state.set_automatic)
-        v.addWidget(self.autofind_switch)
-        hint = QLabel('켜면 게임 안에서 옮긴 버프 목록·도르카·투아림을 다시 찾아 저장하고, 보스 체력바·전투 시간은 처음 보일 때 찾아둬요.\n끄면 다시 찾지 않고, 못 읽을 때 안내만 해요. 각 탭의 자동 찾기 버튼은 그대로 쓸 수 있어요.')
-        hint.setWordWrap(True)
-        hint.setStyleSheet(f"color:{color('muted')};")
-        v.addWidget(hint)
         v.addSpacing(8)
         v.addWidget(section_label("오버레이 배치"))
         self._grid_snap = _checked(

@@ -102,21 +102,12 @@ def test_clear_only_removes_its_region_and_preserves_options(panels, monkeypatch
         assert tab._warning.isVisible()
     clear_control(tab, key).click()
     expected = deepcopy(before)
-    expected[name][field] = before[name][field] if key=='boss' else None
-    actual = config._read_local_config()
-    # Consumer flags and remembered locations are the approved migration, not deleted user options.
-    metadata=actual.pop('autofind',{})
-    for section_name in ('bossPattern','debuffTracker','haloTimer'):
-        actual[section_name].pop('use',None)
-    assert actual == expected
-    if key in ('buff','debuff','boss','halo_timer','skillbar'):
+    expected[name][field] = None
+    assert config._read_local_config() == expected
+    if key in ("buff", "debuff", "boss", "halo_timer", "stat_bars", "skillbar"):
         assert not setup_state.enabled(key)
-    if key=='stat_bars':
-        assert setup_state.missing(key)
-    if key in ('dorcha','tuarim','stat_bars','halo_timer'):
+    if key in ("dorcha", "tuarim", "stat_bars", "boss", 'halo_timer'):
         assert tab._region is None
-    if key=='boss':
-        assert tab._region == before[name][field]  # halo/debuff keep the shared reader alive
     if key == "skillbar":
         assert tab._anchor is None
     for other in REGIONS:
@@ -188,10 +179,9 @@ def test_shared_clear_discards_late_selector_and_updates_other_consumers(registe
     selector.selected.emit(1, 2, 3, 4)
     selector.selected.disconnect()
     assert received == []
-    assert "보스 패턴 알림" in questions[0] and "디버프" not in questions[0]
-    assert config.load_boss_bar_region() is not None
-    assert not setup_state.enabled("boss")
-    assert "등록됨" in w.stat_bars_tab.boss_region_status.text()  # 0.25.0 문구 통일(앱 문구 명세 10절)
+    assert "디버프" in questions[0]
+    assert config.load_boss_bar_region() is None
+    assert "영역 미지정" in w.stat_bars_tab.boss_region_status.text()  # 0.25.0 문구 통일(앱 문구 명세 10절)
 
 
 def test_boss_reads_registered_region_even_if_legacy_switch_was_off(registered, monkeypatch):

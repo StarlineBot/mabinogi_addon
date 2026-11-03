@@ -37,9 +37,9 @@ def detector_assets(feature: str) -> dict[str, np.ndarray]:
         # 0.30.4: 4K 화살표 변형도 진단 ZIP에 함께(anchor_uhd·mask_uhd)
         return {**assets(feature), **{f"{key}_uhd": image for key, image in _uhd_assets().items()}}
     if feature == "buff":
-        from .detect.status_panel import anchor_template, fallback_assets
+        from .detect.status_panel import anchor_template
         template = anchor_template()
-        return {} if template is None else {"anchor": template, **{f"fallback_{k}":v for k,v in fallback_assets().items()}}
+        return {} if template is None else {"anchor": template}
     if feature in ("boss", "debuff"):
         from .detect.boss_hp_reader import _DIGITS, _BRIGHT_SAMPLES
         from .detect.boss_bar import _AUXILIARY_NAMES
@@ -112,8 +112,7 @@ def run_detector(feature: str, frame: np.ndarray, assets: dict, trace: dict):
         return locate_resources(frame,assets,trace)
     if feature == "buff":
         from .detect.status_panel import locate_status_region
-        return locate_status_region(frame, assets["anchor"], diagnostics=trace,
-            fallback_templates={k.removeprefix("fallback_"):v for k,v in assets.items() if k.startswith("fallback_")})
+        return locate_status_region(frame, assets["anchor"], diagnostics=trace)
     if feature in ("boss", "debuff"):
         from .detect.boss_bar import locate_boss_bar, make_validator
         from .detect import boss_hp_reader

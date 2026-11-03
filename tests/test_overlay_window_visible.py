@@ -28,7 +28,6 @@ def live(window, monkeypatch):
     raw = config._read_local_config()
     for name in ("buffTracker", "debuffTracker"):
         raw.setdefault(name, {}).update(enabled=True, captureRegion={"x": 10, "y": 20, "w": 80, "h": 40})
-    raw["debuffTracker"]["use"] = True  # Match explicit registration after legacy-use migration.
     raw.setdefault("general", {}).setdefault("setupSelection", {}).update(buff=True, debuff=True)
     config._write_local_config(raw)
     w._start_buff_tracking()

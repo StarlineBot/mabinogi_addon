@@ -88,7 +88,7 @@ def references():
         return archive['images'].copy(),archive['labels'].copy(),archive['slots'].copy()
 
 
-def read_seconds(frame, *, templates=None, max_seconds=900):
+def read_seconds(frame, *, templates=None):
     """Return a raw 0..900 second observation, or None on ambiguity/missing glyphs."""
     found = []
     try:
@@ -111,7 +111,7 @@ def read_seconds(frame, *, templates=None, max_seconds=900):
             if len(digits)==4:
                 minutes,seconds = digits[0]*10+digits[1],digits[2]*10+digits[3]
                 total=minutes*60+seconds
-                if seconds<60 and total<=max_seconds:
+                if seconds<60 and total<=900:
                     found.append((total,box))
     except (OSError,ValueError,KeyError,cv2.error):
         return None
@@ -135,7 +135,7 @@ def locate_timer(frame, templates, trace):
         pad=max(3,round(h/10))
         x0,y0=max(0,x-pad),max(0,y-pad)
         x1,y1=min(roi.shape[1],x+w+pad),min(bottom,y+h+pad)
-        value=read_seconds(roi[y0:y1,x0:x1],templates=templates,max_seconds=3600)
+        value=read_seconds(roi[y0:y1,x0:x1],templates=templates)
         box=(left+x0,y0,x1-x0,y1-y0)
         trace['candidates'].append(dict(box=list(box),raw_seconds=value,
                                         rejection=None if value is not None else 'unreadable_or_ambiguous'))

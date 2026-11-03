@@ -11,7 +11,7 @@ from scripts.qa_new_resource_samples import (
     test_manually_read_percent_must_not_become_four,
     test_original_diagnostic_png_integrity_and_recorded_failure,
 )
-from mabinogi_addon.detect.tuarim_reader import read_percent, read_observation
+from mabinogi_addon.detect.tuarim_reader import read_percent
 from mabinogi_addon.tracker.tuarim import TuarimTracker, REARM_FRAMES
 from mabinogi_addon.autofind_replay import detector_assets, run_detector
 from mabinogi_addon import autofind_diagnostics as diag
@@ -26,7 +26,6 @@ def sample(name):
 @pytest.mark.parametrize('name,value',[('4318',14),('4778',38),('4869',45),('4973',49),('4563',28)])
 def test_visually_read_holdouts_not_used_as_glyph_sources(name,value):
     assert read_percent(sample(name)) == value
-    assert read_observation(sample(name)) == value
 
 
 def test_hundred_hold_cannot_rearm_but_true_zero_can():
@@ -43,18 +42,15 @@ def test_hundred_hold_cannot_rearm_but_true_zero_can():
 @pytest.mark.parametrize('value',[0,130,255])
 def test_blank_manual_box_does_not_become_four(value):
     assert read_percent(np.full((28,58,3),value,np.uint8)) is None
-    assert read_observation(np.full((28,58,3),value,np.uint8)) is None
 
 
 def test_corrupt_or_occluded_small_words_do_not_fall_back_to_four():
     image = sample('5845')
     image[:, :19] = 0
     assert read_percent(image) is None  # the visible 00% is not a reset
-    assert read_observation(image) is None
     image = sample('5789')
     image[8:16,27:32] = 0
     assert read_percent(image) is None
-    assert read_observation(image) is None
 
 
 def test_new_dorcha_without_digits_and_two_panels_still_rejected(dorcha_input):
@@ -98,36 +94,3 @@ def test_new_models_replay_from_zip_without_installed_assets(feature,expected,do
         assert result['result'] == list(expected)
     finally:
         store.io.close()
-
-
-def test_full_small_font_has_health_evidence_without_changing_tab_hold():
-    image = sample('5845')
-    assert read_percent(image) is None
-    assert read_observation(image) == 100
-
-
-HUNDRED_SCREENSHOTS = [('2026-10-11_111640.png', (1359, 64, 42, 16)),
- ('스크린샷 2026-10-09 185117.png', (742, 920, 42, 16)),
- ('스크린샷 2026-10-09 185152.png', (740, 918, 42, 16)),
- ('스크린샷 2026-10-09 185217.png', (742, 920, 42, 16)),
- ('스크린샷 2026-10-09 185247.png', (742, 920, 42, 16)),
- ('스크린샷 2026-10-09 200715.png', (742, 920, 42, 16)),
- ('스크린샷 2026-10-09 200724.png', (742, 920, 42, 16)),
- ('스크린샷 2026-10-12 200511.png', (965, 974, 42, 16)),
- ('스크린샷 2026-10-14 000646.png', (967, 976, 42, 16)),
- ('스크린샷 2026-10-16 210734.png', (967, 976, 42, 16)),
- ('스크린샷 2026-10-16 213335.png', (965, 974, 42, 16)),
- ('스크린샷 2026-10-25 233749.png', (1265, 85, 42, 16)),
- ('스크린샷 2026-10-31 174933.png', (1265, 85, 42, 16)),
- ('스크린샷 2026-10-31 174946.png', (1263, 83, 42, 16))]
-
-@pytest.mark.parametrize("filename,box", HUNDRED_SCREENSHOTS)
-def test_full_percent_real_screenshot_health(filename, box):
-    from mabinogi_addon import image_io
-    from mabinogi_addon.ui.autofind_runtime import readable
-    frame = image_io.imread("tests/data/" + filename)
-    x,y,w,h = box
-    crop = frame[y:y+h,x:x+w]
-    assert read_percent(crop) is None
-    assert read_observation(crop) == 100
-    assert readable("tuarim", crop)

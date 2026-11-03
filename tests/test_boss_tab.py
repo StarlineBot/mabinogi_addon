@@ -61,7 +61,6 @@ def test_stale_tracker_cleared_when_boss_gone(monkeypatch):
     monkeypatch.setattr(config, "load_discord_user", lambda *a, **k: {"name": "x"})
     t = BossTab(_Watcher())
     t._region = {"x": 0, "y": 0, "w": 150, "h": 36}
-    config.save_boss_pattern({"box":t._region,"use":True})
     monkeypatch.setattr(t, "_grab_rect", lambda *a: np.zeros((36, 150, 3), np.uint8))
     monkeypatch.setattr(t, "_show_preview", lambda *a: None)
     monkeypatch.setattr(t, "_play", lambda *a: None)
@@ -102,7 +101,6 @@ def test_upcoming_list_updates_from_tracker(monkeypatch):
     monkeypatch.setattr(config, "load_discord_user", lambda *a, **k: {"name": "x"})
     t = BossTab(_Watcher())
     t._region = {"x": 0, "y": 0, "w": 150, "h": 36}
-    config.save_boss_pattern({"box":t._region,"use":True})
     t.show_upcoming.setChecked(True)
     monkeypatch.setattr(t, "_grab_rect", lambda *a: np.zeros((36, 150, 3), np.uint8))
     monkeypatch.setattr(t, "_show_preview", lambda *a: None)
@@ -134,7 +132,6 @@ def test_upcoming_hides_quickly_after_boss_gone(monkeypatch):
     monkeypatch.setattr(config, "load_discord_user", lambda *a, **k: {"name": "x"})
     t = BossTab(_Watcher())
     t._region = {"x": 0, "y": 0, "w": 150, "h": 36}
-    config.save_boss_pattern({"box":t._region,"use":True})
     t.show_upcoming.setChecked(True)
     t._upcoming.set_locked(True)  # 고정(게임 위 표시) — 이 상태에서 게이트가 적용됨
     monkeypatch.setattr(t, "_grab_rect", lambda *a: np.zeros((36, 150, 3), np.uint8))
@@ -194,7 +191,6 @@ def test_upcoming_hidden_when_option_off(monkeypatch):
     monkeypatch.setattr(config, "load_discord_user", lambda *a, **k: {"name": "x"})
     t = BossTab(_Watcher())
     t._region = {"x": 0, "y": 0, "w": 150, "h": 36}
-    config.save_boss_pattern({"box":t._region,"use":True})
     t.show_upcoming.setChecked(False)
     monkeypatch.setattr(t, "_grab_rect", lambda *a: np.zeros((36, 150, 3), np.uint8))
     monkeypatch.setattr(t, "_show_preview", lambda *a: None)

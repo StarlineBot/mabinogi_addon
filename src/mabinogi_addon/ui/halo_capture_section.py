@@ -479,11 +479,7 @@ class HaloCaptureSection(QWidget):
         raw = config._read_local_config()
         section = raw.get("haloTimer")
         section = dict(section) if isinstance(section, dict) else {}
-        if box is None and section.get("box"):
-            from ..autofind_state import _remember
-            _remember(raw,"halo_timer",section["box"])
         section["box"] = box
-        section["use"] = box is not None
         raw["haloTimer"] = section
         config._write_local_config(raw)
         from .region_registration import invalidate_region

@@ -42,7 +42,7 @@ def _load_uhd():
 _UHD = _load_uhd()
 
 
-def read_small(region, threshold=.92, *, include_full=False):
+def read_small(region, threshold=.92):
     """Return (recognized rendering, value); uncertain words never use a legacy fallback.
 
     기본(8px) 렌더링의 '%'가 안 맞으면 4K(9px) 렌더링으로 한 번 더 본다(0.30.2)."""
@@ -51,13 +51,13 @@ def read_small(region, threshold=.92, *, include_full=False):
     for rendering in (_REFS, _UHD):
         if rendering is None:
             continue
-        matched,value = _read_rendering(region, rendering, threshold, include_full=include_full)
+        matched,value = _read_rendering(region, rendering, threshold)
         if matched:
             return True,value
     return False,None
 
 
-def _read_rendering(region, rendering, threshold, *, include_full=False):
+def _read_rendering(region, rendering, threshold):
     refs,labels,percents = rendering
     gh,gw = refs.shape[1],refs.shape[2]
     ink = ((region.min(axis=2)>=180)&(np.ptp(region,axis=2)<=35)).astype(np.uint8)
@@ -106,4 +106,4 @@ def _read_rendering(region, rendering, threshold, *, include_full=False):
     if not chosen or (len(chosen)>1 and chosen[-1]==0):
         return True,None
     value = sum(digit*10**i for i,digit in enumerate(chosen))
-    return True,value if value < 100 or (include_full and value == 100) else None
+    return True,value if value < 100 else None

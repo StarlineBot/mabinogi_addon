@@ -66,8 +66,6 @@ class BossTab(QWidget):
         self._region = config.load_boss_bar_region()
         self._sct = None
         self._last_frame = None
-        from ..capture.shared import SharedFrame
-        self.shared_frame = SharedFrame()
         self._last_raw_hp: int | None = None  # 이번 프레임 '원판독'값(수집 태그·진단용)
         # 보스 HP바 수집(오독 프레임 제보 — 보스별 스샷). 로그인 사용자만.
         self._last_saved_frame = None
@@ -257,6 +255,10 @@ class BossTab(QWidget):
         self.halo_capture.set_boss_context(None)
         try:
             self._apply_collect_gate()
+            if not self._region:
+                self._boss_present = False
+                self._upcoming.hide()
+                return
             self._tick()
         except Exception:  # noqa: BLE001 — 틱 격리(앱 생존 우선)
             import logging
@@ -295,7 +297,7 @@ class BossTab(QWidget):
     def _on_selected(self, x: int, y: int, w: int, h: int) -> None:
         # 영역은 '공유 키'(bossPattern.box)에만 저장한다 — _save()가 토글 때마다 box를
         # 통째로 덮어써 디버프 쪽 변경을 날리던 문제 방지(box는 여기서만 쓴다).
-        config.save_boss_pattern({"box":dict(x=x,y=y,w=w,h=h), "use":True})
+        config.save_boss_bar_region(x, y, w, h)
         self._region = {"x": x, "y": y, "w": w, "h": h}
         self._update_region_label()
         self._flash_region()
@@ -342,7 +344,6 @@ class BossTab(QWidget):
             self._update_region_label()
 
     def _region_cleared(self):
-        self.shared_frame.publish(None)
         self.halo_capture.set_boss_context(None)
         self.halo_capture._stop_monitoring()
         self._region = None
@@ -434,8 +435,7 @@ class BossTab(QWidget):
           트래커·HP는 긴 패턴을 버티려 _GONE_FRAMES(~18초)까지 유지되지만, 목록까지
           그만큼 남으면 보스가 떠난 뒤에도 '다가오는 %'가 한참 떠 있다(#4). 그래서
           목록은 보스가 화면에서 사라지면(_UPCOMING_GONE_FRAMES) 금방 감춘다."""
-        from ..autofind_state import active
-        if self._paused or not active("boss") or not self.show_upcoming.isChecked():
+        if self._paused or not self.show_upcoming.isChecked():
             self._upcoming.hide()
             return
         if not self._upcoming.locked:
@@ -462,17 +462,8 @@ class BossTab(QWidget):
     # ---- 읽기 루프 ----
     def _tick(self) -> None:
         self.halo_capture.set_boss_context(None)
-        from ..autofind_state import active as feature_active, shared_needed, release_unused_boss
-        external = bool(self._presence_wanted_fn and self._presence_wanted_fn())
-        if release_unused_boss(external=external):
-            self.reload_region()
-        needed = shared_needed(external=external)
-        if not feature_active("boss"):
-            self._overlay.hide()
-            if self._notifier is not None: self._notifier.stop()
         active = self._watcher.is_game_active() or self._watcher.is_self_active()
-        if not self._region or not active or not needed:
-            self.shared_frame.publish(None)
+        if not self._region or not active:
             self._boss_present = False  # 게임 비활성 → '보스전 아님'(저체력 알림 게이트)
             self._upcoming.hide()
             return
@@ -481,9 +472,7 @@ class BossTab(QWidget):
         px, py, pw, ph = to_physical(self._grab_region())
         frame = self._grab_rect(px, py, pw, ph)
         if frame is None:
-            self.shared_frame.publish(None)
             return
-        self.shared_frame.publish(frame)
         self._show_preview(frame)
         self._last_frame = frame
         self._apply_collect_gate()
@@ -492,7 +481,7 @@ class BossTab(QWidget):
         name_reg = frame[:, : int(w * 0.60)]  # 왼쪽=이름
         pct_reg = frame[:, int(w * 0.58) :]  # 오른쪽=HP%(가운데 빈 띠는 글자 없음)
         boss_id = identify(name_reg, self._name_templates, variants=self._name_variants)
-        self.halo_capture.set_boss_context(boss_id if feature_active("halo_timer") else None)
+        self.halo_capture.set_boss_context(boss_id)
 
         # 보스 식별/소멸 관리. **HP 판독·경고는 보스가 '이번 프레임' 식별됐을 때만**
         # 처리한다 — 보스가 없으면 영역이 길바닥/UI라 HP가 garbage로 읽히는데, 그걸
@@ -561,7 +550,7 @@ class BossTab(QWidget):
         alerts = []
         if boss_id is not None and self._tracker is not None and hp is not None:
             alerts = self._tracker.observe(hp)
-        if self._region and not self._paused and feature_active("boss"):
+        if self._region and not self._paused:
             for alert in alerts:
                 self._overlay.show_message(alert.text, 3000)
                 self._play(alert.sound)
@@ -658,11 +647,6 @@ class BossTab(QWidget):
         self.pattern_tabs.setTabVisible(1,allowed)
 
     def _on_auto_find(self) -> None:
-        from .region_registration import invalidate_region
-        invalidate_region("boss")
-        from .autofind_runtime import try_remembered
-        if try_remembered(self,"boss",self._on_selected):
-            return
         from .region_registration import generation, save_boxes, editing_allowed
         stamp = generation(self)
         """보스 체력바를 화면에서 자동 검출 → 민트 점선 미리보기 + 확인 후에만 저장."""

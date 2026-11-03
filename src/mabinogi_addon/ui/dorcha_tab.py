@@ -562,8 +562,6 @@ class DorchaTab(QWidget):
         return w > 0 and h > 0 and left <= x and top <= y and x+w <= left+width and y+h <= top+height
 
     def _start_search(self):
-        if hasattr(self.window(), "_autofind_runtime"):
-            return  # C-policy controller owns paired reacquisition and persistence.
         if (self._search_worker is not None or monotonic() < self._next_search
                 or not self._watcher.is_game_active()):
             return

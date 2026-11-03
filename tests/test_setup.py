@@ -10,7 +10,7 @@ import pytest
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QApplication, QMessageBox, QScrollArea
 
-from mabinogi_addon import config, setup_state as state, autofind_diagnostics as diag, autofind_state
+from mabinogi_addon import config, setup_state as state, autofind_diagnostics as diag
 from mabinogi_addon.ui.setup_page import SetupPage
 from mabinogi_addon.ui import setup_flow
 
@@ -120,9 +120,7 @@ def test_enabled_interpretation_matches_existing_tabs(settings, value):
     for key, loader in (("tuarim", config.load_tuarim), ("boss", config.load_boss_pattern),
                         ("skillbar", config.load_skillbar), ("stat_bars", config.load_stat_bars)):
         update(state.BY_KEY[key].section, enabled=value)
-        if key == "stat_bars":
-            assert state.enabled(key) == any(b["show"] for b in loader()["bars"].values())
-        elif key == "tuarim":
+        if key == "tuarim":
             assert state.enabled(key) == loader()["enabled"]
         else:
             assert not state.enabled(key)
@@ -828,16 +826,16 @@ def test_guide_scopes_existing_flow_and_preserves_check_order(flow, stage, expec
     page.stage = stage
     page.refresh()
     try:
-        run.run(page=page, feature_keys=expected, on_result=page.record_result)
+        run.run(page=page, feature_keys=page.feature_keys, on_result=page.record_result)
         assert [key for key, _ in detections] == expected
         assert [item[0] for item in applied] == expected
         assert page.outcomes == {key: "등록됨" for key in expected}
         assert all(state.missing(key) for key in GUIDE_KEYS if key not in expected)
         assert not run.running and not page.busy and run.page is home
-        assert page.run_btn.text() == "한 번에 자동 찾기"  # 0.39.0 명세 12절
+        assert page.run_btn.text() == "고른 기능 자동설정"  # 0.25.0 명세 11절
         storage.io.wait()
         assert {r.metadata["feature"] for r in storage.recent()} == set(expected)
-        run.run(page=page, feature_keys=expected, on_result=page.record_result)
+        run.run(page=page, feature_keys=page.feature_keys, on_result=page.record_result)
         assert len(detections) == 3
     finally:
         page.close()
@@ -855,7 +853,7 @@ def test_guide_shared_boss_dependency_does_not_enable_boss_feature(flow):
     page.stage = 2
     page.refresh()
     try:
-        assert "boss" in state.missing("stat_bars")
+        assert "보스 체력바" in page.status_text("stat_bars", config._read_local_config())
         run.run(page=page, feature_keys=page.feature_keys, on_result=page.record_result)
         assert [key for key, _ in detections] == ["tuarim", "stat_bars", "boss"]
         assert state.enabled("boss") and not state.selected("boss")
@@ -910,7 +908,7 @@ def test_guide_failures_keep_unattempted_separate_and_allow_next_stage(flow, mon
         monkeypatch.setattr(setup_flow, "run_detector", lambda key, *args:
                             None if key == "buff" else original(key, *args))
     try:
-        run.run(page=page, feature_keys=("buff","debuff","boss"), on_result=page.record_result)
+        run.run(page=page, feature_keys=page.feature_keys, on_result=page.record_result)
         expected = {"capture": "게임창 미발견 또는 캡처 실패", "decline": "등록하지 않음",
                     "save": "저장 실패", "detect": "찾지 못함"}[failure]
         assert page.outcomes["buff"] == expected
@@ -918,7 +916,7 @@ def test_guide_failures_keep_unattempted_separate_and_allow_next_stage(flow, mon
         if failure == "capture":
             assert page.outcomes == {"buff": expected}
             # 0.25.0 명세 11절: 시도 전 줄은 실패 문구와 구분되는 '영역 지정 필요'
-            assert page.status_text("debuff", config._read_local_config()) == "● 아직 찾지 않음"
+            assert page.status_text("debuff", config._read_local_config()) == "영역 지정 필요"
             assert not applied and not detections
         else:
             assert [item[0] for item in applied] == ["debuff", "boss"]
@@ -941,15 +939,13 @@ def test_guide_defer_back_and_reset_never_change_saved_configuration(app, settin
         page.reset()
         page.move(1)
         page.defer()
-        assert page.stage == 1 and not page.active
+        assert page.stage == 2
         page.move(-1)
-        assert page.status_text("buff", before) == "● 찾음"
-        assert page.status_text("boss", before) == "● 아직 찾지 않음"
+        assert page.status_text("buff", before) == "등록됨"
+        assert page.status_text("boss", before) == "나중에 설정"
         page.reset()
         assert page.stage == 0 and not page.outcomes
-        after = config._read_local_config()
-        assert after.pop("autofind")["guide"] == "deferred"
-        assert after == before
+        assert config._read_local_config() == before
         assert set(page.checks) == {"buff", "debuff", "boss", 'halo_timer', "tuarim", "dorcha", "stat_bars", "skillbar"}
     finally:
         page.close()
@@ -977,13 +973,13 @@ def test_guide_actual_window_navigation_and_resume_preserve_step(app, settings, 
         assert window._pages.currentWidget() is guide and guide.stage == 0
         guide.move(1)
         guide.feature_changed.emit("buff", True)
-        assert guide.checks["buff"].isChecked() and autofind_state.wanted("buff")
+        assert guide.checks["buff"].isChecked() and state.selected("buff")
         guide.manual_buttons["buff"].click()
         assert window._guide_return_btn.isVisible()
         update("buffTracker", captureRegion=BOX)
         window._guide_return_btn.click()
         assert window._pages.currentWidget() is guide and guide.stage == 1
-        assert guide.statuses["buff"].text() == "● 찾음"
+        assert guide.statuses["buff"].text() == "등록됨"
         assert not config.load_general_flag("firstUseGuideShown")
         window._open_setup_login()
         assert window._tabs.currentWidget() is window._settings_scroll  # 0.16.0: 블랙박스 탭이 앞에 있어 위치 대신 설정 탭으로 확인
@@ -992,7 +988,7 @@ def test_guide_actual_window_navigation_and_resume_preserve_step(app, settings, 
         assert guide.stage == 1
         guide.move(1)
         guide.feature_changed.emit("stat_bars", True)
-        assert autofind_state.wanted("stat_bars")
+        assert state.selected("stat_bars")
         for stage in range(4):  # 0.25.0 명세 11절: 안내 4단계 + 앱 둘러보기, 기능 목록은 스크롤 없이 펼친 상자
             guide.stage = stage
             guide.refresh()
@@ -1157,7 +1153,7 @@ def test_guide_cancel_and_reentrant_navigation_do_not_escape_busy_stage(flow, mo
         assert not applied
         assert [key for key, _ in detections] == ["tuarim"]
         assert page.outcomes == {"tuarim": "중단됨"}
-        assert page.status_text("skillbar", config._read_local_config()) == "● 아직 찾지 않음"  # 0.25.0 명세 11절
+        assert page.status_text("skillbar", config._read_local_config()) == "영역 지정 필요"  # 0.25.0 명세 11절
         assert not page.busy and not run.running
         monkeypatch.setattr(run, "_approve", lambda key, box: box)
         run.run(page=page, feature_keys=page.feature_keys, on_result=page.record_result)
@@ -1221,7 +1217,7 @@ def test_guide_restart_restores_saved_areas_but_starts_at_first_step(app, settin
         assert config.load_capture_region() == BOX
         assert second.setup_guide.checks["buff"].isChecked()
         assert not config.load_general_flag("firstUseGuideShown")
-        assert second.setup_guide.status_text("buff", config._read_local_config()) == "● 찾음"
+        assert second.setup_guide.status_text("buff", config._read_local_config()) == "등록됨"
     finally:
         second._force_quit = True
         second.close()
@@ -1275,20 +1271,20 @@ def test_guide_approval_updates_current_stage_before_next_candidate(flow, monkey
     seen = []
     def approve(key, box):
         if key == "debuff":
-            assert page.statuses["buff"].text() == "● 찾음"
+            assert page.statuses["buff"].text() == "등록됨"
             # 0.25.0 명세 11절: 하단 목록 대신 줄 상태가 즉시 바뀐다(등록됨 초록 / 영역 지정 필요 주황)
             from mabinogi_addon.ui.palette import color  # 0.29.0(명세 14.6): 색 이름
             assert color("ok") in page.statuses["buff"].styleSheet()
-            assert page.statuses["debuff"].text() == "● 아직 찾지 않음"
+            assert page.statuses["debuff"].text() == "영역 지정 필요"
             assert color("warn") in page.statuses["debuff"].styleSheet()
         seen.append(key)
         return box
     monkeypatch.setattr(run, "_approve", approve)
     try:
-        run.run(page=page, feature_keys=("buff","debuff"), on_result=page.record_result)
+        run.run(page=page, feature_keys=page.feature_keys, on_result=page.record_result)
         assert seen == ["buff", "debuff"]
         assert len(applied) == 2 and page.stage == 1
-        assert page.statuses["debuff"].text() == "● 찾음"
+        assert page.statuses["debuff"].text() == "등록됨"
     finally:
         page.close()
 
@@ -1337,8 +1333,7 @@ def test_logout_during_guide_public_approval_preserves_registration(flow, monkey
             window.settings_tab.login_changed.emit()
             return box
         monkeypatch.setattr(window._setup_flow, "_approve", approve)
-        state.save_selection("buff",True)
-        window._setup_flow.run(page=window.setup_guide,feature_keys=("buff",))
+        window._run_guide_setup()
         assert not window._setup_flow.cancelled and not window._setup_flow.running
         assert state.missing("buff") == []
         assert window.setup_guide.active
@@ -1452,7 +1447,7 @@ def test_manual_result_button_preserves_stage_and_disables_while_running(app, se
         guide.set_busy(False)
         update('buffTracker', captureRegion=BOX)
         guide.refresh()
-        assert guide.statuses['buff'].text() == '● 찾음'
+        assert guide.statuses['buff'].text() == '등록됨'
         assert not guide.manual_buttons['buff'].isHidden()  # 0.25.0 명세 11절: 등록된 줄에도 '직접 설정'
     finally:
         guide.close()

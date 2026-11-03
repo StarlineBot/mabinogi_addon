@@ -46,9 +46,7 @@ def initialize_new_user(path=None):
     # 누락된 enabled 값이나 손상된 본 파일을 신규 사용자로 해석하지 않는다.
     if path.exists() or path.with_name(path.name + ".bak").exists() or config._read_local_config(path):
         return
-    raw = {feature.section: {"enabled": False} for feature in FEATURES}
-    raw["statBars"]["bars"] = {sid:{"show":False} for sid in ("hp","mp","sta")}
-    config._write_local_config(raw, path)
+    config._write_local_config({feature.section: {"enabled": False} for feature in FEATURES}, path)
 
 
 def section(raw, name):
@@ -65,9 +63,6 @@ def valid_box(value):
 def enabled(key, raw=None):
     raw = config._read_local_config() if raw is None else raw
     feature = BY_KEY[key]
-    if key in ("boss", "halo_timer", "debuff", "stat_bars"):
-        from .autofind_state import active
-        return active(key, raw)
     if key == "memo":
         return valid_box(section(raw,"memoTracker").get("captureRegion"))
     if key in ("buff", "debuff", "boss", "halo_timer", "stat_bars", "skillbar"):
@@ -181,8 +176,7 @@ def pending(raw=None, *, automatic_only=False, feature_keys=None):
 def needs_start_screen(raw=None):
     raw = config._read_local_config() if raw is None else raw
     # 베타 검증 중에는 등록 완료 여부와 무관하게 명시적으로 숨긴 경우만 건너뛴다.
-    return (section(raw, "general").get("skipSetup") is not True
-            and section(raw,"autofind").get("guide") not in ("started","deferred","completed"))
+    return section(raw, "general").get("skipSetup") is not True
 
 
 # 일괄 자동설정에서 제외할(접근이 제한된) 기능. 2026-10-28 기능 공개 정책 7절: 1분 헤일로 포함 모두 로그인 없이 → 비어 있음.

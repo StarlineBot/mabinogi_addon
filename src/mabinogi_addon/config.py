@@ -70,7 +70,6 @@ def _write_local_config(data: dict, path: Path = LOCAL_CONFIG_PATH) -> None:
     """원자적 저장: 임시 파일에 쓰고 flush+fsync 후 os.replace로 교체한다. 쓰는
     도중 전원이 끊겨도 본 파일은 '이전 정상본' 아니면 '새 완본'이라 절대 깨지지
     않는다(빈 파일로 초기화되던 문제 방지). 교체 직전 직전본을 .bak로 보존한다."""
-    previous = _read_local_config(path)
     text = json.dumps(data, ensure_ascii=False, indent=2)
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
@@ -88,8 +87,6 @@ def _write_local_config(data: dict, path: Path = LOCAL_CONFIG_PATH) -> None:
         except (OSError, ValueError):  # 백업 실패해도 본 저장은 진행
             pass
     os.replace(tmp, path)  # 원자적 교체
-    from .autofind_state import changed
-    changed(previous, data)
 
 
 # 내보내기에서 제외할 비밀값(공유·이동 시 유출 방지). 가져올 때도 덮어쓰지 않음.
@@ -775,8 +772,6 @@ def save_capture_region(
     if not isinstance(sec, dict):
         sec = {}
     sec["captureRegion"] = {"x": x, "y": y, "w": w, "h": h}
-    if section == "debuffTracker":
-        sec["use"] = True
     sec.pop("favoritesSeparator", None)  # 영역이 바뀌면 저장한 즐겨찾기 구분선은 무효(0.33.0)
     data[section] = sec
     _write_local_config(data, path)

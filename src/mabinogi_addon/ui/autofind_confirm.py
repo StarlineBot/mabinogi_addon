@@ -9,15 +9,10 @@ from .screen_grab import capture_for_autofind
 
 
 def confirm_autofind(tab, feature, label, apply, compatible=None, *, capture=None, allowed=None):
+    from .region_registration import generation, editing_allowed
+    stamp = generation(tab)
     if tab._autofind_busy or tab._shutting_down:
         return
-    from .region_registration import generation, editing_allowed
-    from .region_registration import invalidate_region
-    invalidate_region(feature)
-    from .autofind_runtime import try_remembered
-    if (allowed is None or allowed()) and try_remembered(tab,feature,apply):
-        return
-    stamp = generation(tab)
     tab._autofind_busy = True
     tab.auto_find_btn.setEnabled(False)
     running = tab._timer.isActive()

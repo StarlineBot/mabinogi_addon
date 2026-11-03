@@ -1,12 +1,11 @@
 """상태목록창(버프 리스트) 자동 위치 검출 (영역 자동 찾기).
 
 상태목록창은 사용자가 화면 어디로든 **옮길 수 있다**. 그래서 고정 위치를 가정하지 않고,
-앵커 버프(프리미엄 배틀 멤버십)의 작은 리스트 아이콘을 **전체
+'반드시 떠 있어야 하는' 앵커 버프(프리미엄 배틀 멤버십)의 작은 리스트 아이콘을 **전체
 화면에서 멀티스케일 템플릿 매칭**으로 찾는다. 해상도·UI 배율이 달라 아이콘 픽셀 크기가
 변해도 여러 크기를 시도해 흡수한다(=유기적).
 
 여기서는 '앵커를 정확히 어디서 찾는가'까지만 담당한다(순수 함수, 맥에서도 테스트 가능).
-멤버십 아이콘이 없으면 같은 열·행 간격의 서로 다른 버프 아이콘 3개를 확인한다.
 패널 경계(반투명 검은 박스) 바운딩·영역 설정은 호출 측(UI)에서 이 위치를 기준으로 한다.
 """
 
@@ -115,18 +114,17 @@ def locate_status_region(
     *,
     threshold: float = _THRESHOLD,
     diagnostics: dict | None = None,
-    fallback_templates: dict | None = None,
 ) -> tuple[int, int, int, int] | None:
     """상태목록창 전체 영역 (x,y,w,h)를 앵커 기준으로 유도한다(없으면 None).
 
     앵커(아이콘 열)를 찾은 뒤: 왼쪽=아이콘 열, 폭=리스트 폭 추정, 위로는 버프들이 쌓인
     만큼 넉넉히, 아래는 '버프가 더 걸리면 아래로 길어지므로' 화면 끝까지 잡는다. 정확한
     패널 경계(반투명 박스 상단)는 배경을 타서 어려우므로, 넉넉히 잡고 사용자가 미리보기로
-    확인/조정하는 전제(베타). 앵커가 없으면 복수 아이콘 열을 확인하고, 둘 다 없으면 None.
+    확인/조정하는 전제(베타). 앵커가 없으면 None.
     """
     hit = find_anchor(frame, template, threshold=threshold, diagnostics=diagnostics)
     if hit is None:
-        return locate_icon_column(frame, fallback_templates, diagnostics)
+        return None
     H, W = frame.shape[:2]
     s = hit.size
     left = max(0, hit.x - int(s * 0.3))
@@ -141,48 +139,3 @@ def locate_status_region(
     # 앵커가 영역 밖으로 밀려 트래커가 조용히 멈출 수 있다.
     top = max(0, hit.y - int(s * 34))
     return (left, top, width, max(1, H - top))
-
-
-def fallback_assets():
-    from ..catalog import DEFAULT_ICON_DIR
-    from ..image_io import imread
-    return {name: image for name in ('speed','music_boost','magic_attack','overture_of_the_battlefield','march')
-            if (image := imread(DEFAULT_ICON_DIR / (name + '.png'))) is not None}
-
-
-def locate_icon_column(frame, templates=None, diagnostics=None):
-    """Without membership: require three distinct list icons in one 24px-spaced column.
-
-    Large shortcut icons and a single matching effect cannot establish a list.
-    Multiple plausible columns are rejected instead of choosing a score winner.
-    """
-    if frame is None or not frame.size:
-        return None
-    templates = fallback_assets() if templates is None else templates
-    hits = []
-    for name, template in templates.items():
-        if min(frame.shape[:2]) < max(template.shape[:2]):
-            continue
-        scores = cv2.matchTemplate(frame, template, cv2.TM_CCOEFF_NORMED)
-        # Bounded peaks; nearby repeated correlation maxima count only once.
-        for _ in range(6):
-            _, score, _, (x,y) = cv2.minMaxLoc(scores)
-            if score < .9:
-                break
-            hits.append((name,x,y))
-            scores[max(0,y-8):y+9,max(0,x-8):x+9] = -1
-    columns = {}
-    for _,x,y in hits:
-        aligned = [(name,hy) for name,hx,hy in hits if abs(hx-x)<=1 and
-                   min(abs(hy-y)%24,24-abs(hy-y)%24)<=1]
-        if len({name for name,_ in aligned}) >= 3 and len({hy for _,hy in aligned})>=3:
-            columns[x] = sorted({hy for _,hy in aligned})
-    if not columns or max(columns)-min(columns)>2:
-        return None
-    x = min(columns)
-    top = max(0,min(columns[x])-16*34)
-    left = max(0,x-4)
-    result = left,top,min(304,frame.shape[1]-left),frame.shape[0]-top
-    if diagnostics is not None:
-        diagnostics.update(rejection=None, fallback='aligned_distinct_buff_icons', column=x, rows=columns[x])
-    return result

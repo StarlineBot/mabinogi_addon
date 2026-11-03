@@ -109,10 +109,6 @@ def test_locate_status_region_covers_anchor(name, ex, ey):
     assert ry + rh > ey, f"{name}: 아래가 앵커보다 위 {reg}"
 
 
-def test_locate_status_region_without_membership_uses_visible_icon_column():
-    # Original screenshots contain a status list but no membership icon.
-    # 193901: visually confirmed list at x158. Finding the list no longer requires membership.
-    region = locate_status_region(_img(_ABSENT[0]), _template())
-    assert region is not None and region[0] == 154 and region[2] == 304
-    import numpy as np
-    assert locate_status_region(np.zeros((1080,1920,3),np.uint8), _template()) is None
+def test_locate_status_region_absent_none():
+    for name in _ABSENT:
+        assert locate_status_region(_img(name), _template()) is None, name
