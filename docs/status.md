@@ -231,7 +231,7 @@
   **수동 후보 확인(사용자, 2026-11-04 21:38 KST 회신)**: #184 artifact 13319373292 exe를 사용자 PC에서 실행 — v0.41.0·현재 시각 표시·종료 정상('잘나오고'), 배포 승인. 게시 전 main 1fab2d2 지문 a6d1339b… = 후보 동일 → `publish-existing` 안내.
 - **v0.42.0 게시 완료(2026-11-04 23:10 KST)** — windows #187(41844664135, publish-existing) success, release #267(41844753628) success.
   태그 v0.42.0 → ff4a752(후보 SHA), candidate.json run 41841661999 attempt 1·지문 5a86bf4c…. exe 164,018,576바이트, sha256 0beb3f97…519e.
-  1) 공개 파일 일치(QA): 본 저장소 릴리즈 exe·공개 저장소(mabinogi_addon-releases) exe 직접 내려받아 해시 일치, latest version.json = 0.42.0. 2) 업데이트·실행(사용자) 3) 실게임 확인(사용자) — 대기.
+  1) 공개 파일 일치(QA): 본 저장소 릴리즈 exe·공개 저장소(mabinogi_addon-releases) exe 직접 내려받아 해시 일치, latest version.json = 0.42.0. 2) 업데이트·실행(사용자) 완료 3) 실게임: 사용자 '버전업 하니 확실히 부드러워짐'(11-04). 보스전 패턴 경고·저HP 알림 게이트는 실게임 미확인(평소 사용 중 이상 시 제보).
 - **QA 0.42.0(2026-11-04, 대상 2fd343b, 지문 5a86bf4c…): 소스 QA 통과 — 후보 확인 완료 → 게시.**
   verify-only #186 성공(run 41841661999, attempt 1, ff4a752 = 제품 2fd343b + 문서만): 요청·회귀(Linux)·검증(Windows 시작 smoke·exe 빌드·후보 봉인) 모두 success, 13:49~14:00 UTC.
   후보 artifact verified-windows-41841661999-1(ID 13329588324, 보관 1일), exe 164,018,576바이트. 
