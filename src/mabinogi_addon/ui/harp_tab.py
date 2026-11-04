@@ -1,6 +1,7 @@
-"""최적화 › 하프 채널 연결(docs/harp-channel-tcp-spec.md, 1절 끝 사용자 결정 1~3차 우선). 제작자만.
+"""최적화 › 서버별 채널 상태(docs/harp-channel-tcp-spec.md, 1절 끝 사용자 결정 1~3차 우선). 0.42.0부터 모두에게 공개.
 
-이 화면을 보는 동안만 잰다: 열면 바로 한 번, 한 회차가 끝나고 60초 뒤 다시. 다른 탭·최소화·트레이·전투 보조 일시정지면 멈춘다.
+이 화면을 보는 동안: 열면 바로 한 번, 한 회차가 끝나고 60초 뒤 다시. 다른 탭·최소화·트레이·전투 보조 일시정지면 멈춘다.
+0.42.0: 앱 창이 뜬 뒤 백그라운드로 3회 연속 한 번만(홈 '가장 빠른 채널'), 홈 새로고침은 1회. 상시 반복 측정은 없다.
 측정(소켓 연결)은 작업 스레드(harp_latency.Round)에서 하고, 결과는 신호로 화면 스레드에 넘긴다.
 """
 from __future__ import annotations
@@ -10,18 +11,23 @@ import logging
 from time import monotonic
 
 from PySide6.QtCore import Qt, QTimer, Signal
-from PySide6.QtWidgets import QFrame, QGridLayout, QHBoxLayout, QLabel, QSizePolicy, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QComboBox, QFrame, QGridLayout, QHBoxLayout, QLabel, QSizePolicy, QVBoxLayout, QWidget
 
 from .. import harp_latency as hl
+from ..party.client import SERVERS
 from .palette import color
 from .widgets import FeatureHeader, hint_label
 
 _log = logging.getLogger(__name__)
 INTERVAL = 60.0  # 한 회차가 끝난 뒤 다음 회차까지(초)
+BURST_ROUNDS = 3  # 0.42.0: 앱 시작 직후 연속 회차 수(= MIN_SAMPLES, 첫 추천까지)
+BURST_GAP = 1.0   # 연속 회차 사이 쉬는 시간(초)
 COLUMNS = 6
-TITLE = "하프 채널 연결"
-SUMMARY = "내 PC에서 하프 서버 채널별 접속 주소까지 TCP 연결에 걸리는 시간을 재요."
-NOTICE = "TCP 연결 시간이며, 게임 안 핑이나 채널 혼잡도와 다를 수 있어요. 이 화면을 보는 동안 60초마다 다시 재요."
+TITLE = "서버별 채널 상태"
+SUMMARY = "내 PC에서 서버 채널별 접속 주소까지 TCP 연결에 걸리는 시간을 재요."
+NOTICE = ("TCP 연결 시간이며, 게임 안 핑이나 채널 혼잡도와 다를 수 있어요. "
+          "앱을 켤 때 한 번 재고, 이 화면을 보는 동안 60초마다 다시 재요.")
+READY_SERVERS = ("하프",)  # 파티 모집과 같은 서버 목록 중 채널 주소를 확인한 서버만 고를 수 있다
 
 
 def clock_text(when: datetime) -> str:
@@ -168,7 +174,16 @@ class RecommendBox(QFrame):
         return True
 
 
+def ago_text(seconds: float) -> str:
+    """홈 '가장 빠른 채널'의 측정 시각 — 1분 안이면 '방금', 아니면 'n분 전'(1시간 넘으면 'n시간 전')."""
+    minutes = int(max(0.0, seconds) // 60)
+    if minutes < 1:
+        return "방금"
+    return f"{minutes}분 전" if minutes < 60 else f"{minutes // 60}시간 전"
+
+
 class HarpChannelTab(QWidget):
+    summary_changed = Signal()         # 홈 '가장 빠른 채널' 다시 그리기
     _started = Signal(int, int)        # 회차 번호, 채널
     _result = Signal(int, int, object)  # 회차 번호, 채널, Result
     _finished = Signal(int, bool)       # 회차 번호, 취소됨
@@ -196,11 +211,29 @@ class HarpChannelTab(QWidget):
         self._next_at: float | None = None
         self._paused = False
         self._active = False
+        self._background = 0                     # 화면과 무관하게 남은 회차(시작 직후 3회·홈 새로고침 1회)
+        self._round_ok = 0                       # 이번 회차 성공 수
+        self._failed = False                     # 마지막으로 끝난 회차가 전부 실패(네트워크 확인)
+        self._finished_at: float | None = None   # 마지막으로 끝난 회차(clock)
 
         v = QVBoxLayout(self)
         v.setContentsMargins(12, 12, 12, 12)
         v.setSpacing(10)
         v.addWidget(FeatureHeader(TITLE, SUMMARY))
+        server_row = QHBoxLayout()  # 파티 모집처럼 서버 선택(지금은 하프만)
+        server_row.setSpacing(6)
+        server_row.addWidget(QLabel("서버"))
+        self.server_combo = QComboBox()
+        for name in SERVERS:
+            ready = name in READY_SERVERS
+            self.server_combo.addItem(name if ready else f"{name} (준비 중)", name)
+            if not ready:
+                self.server_combo.model().item(self.server_combo.count() - 1).setEnabled(False)
+        self.server_combo.setCurrentIndex(max(0, self.server_combo.findData(READY_SERVERS[0])))
+        self.server_combo.setToolTip("채널 주소를 확인한 서버만 고를 수 있어요")
+        server_row.addWidget(self.server_combo)
+        server_row.addStretch(1)
+        v.addLayout(server_row)
         self.recommend = RecommendBox()
         v.addWidget(self.recommend)
         row = QHBoxLayout()
@@ -238,6 +271,10 @@ class HarpChannelTab(QWidget):
     # ---- 화면을 보는 동안만 ----------------------------------------------------------------
     def set_paused(self, paused: bool) -> None:
         self._paused = bool(paused)
+        if self._paused:  # 일시정지면 시작 직후 측정·홈 새로고침도 멈춘다
+            self._background = 0
+            self.cancel()
+            self._refresh_view()
         self._tick()
 
     def _viewing(self) -> bool:
@@ -263,7 +300,8 @@ class HarpChannelTab(QWidget):
             self._next_at = None
             self.measure_now()  # 다시 보면 바로 한 번
         else:
-            self.cancel()
+            if self._background == 0:  # 시작 직후·홈 새로고침 측정은 화면을 떠나도 끝까지
+                self.cancel()
             self._next_at = None
             self._refresh_view()
 
@@ -277,10 +315,27 @@ class HarpChannelTab(QWidget):
     def measure_now(self) -> None:
         if self._round is not None or not self._viewing() or not self.channels:
             return  # 회차가 겹치지 않게
+        self._begin()
+
+    def measure_background(self, rounds: int = 1) -> None:
+        """화면을 보지 않아도 rounds회 잰다 — 앱 시작 직후(BURST_ROUNDS)·홈 새로고침(1). 일시정지면 재지 않는다."""
+        if self._paused or not self.channels:
+            return
+        self._background = max(self._background, rounds)
+        if self._round is None:
+            self._begin()
+        self._refresh_view()
+
+    def _continue_background(self) -> None:
+        if self._background > 0 and self._round is None and not self._paused:
+            self._begin()
+
+    def _begin(self) -> None:
         self._generation += 1
         generation = self._generation
         self._measuring.clear()
         self._done_count = 0
+        self._round_ok = 0
         self._next_at = None
         self._round = hl.Round(
             self.channels,
@@ -320,6 +375,8 @@ class HarpChannelTab(QWidget):
         self.history.record(number, result)
         if result.kind != hl.CANCELLED:
             self._done_count += 1
+        if result.kind == hl.OK:
+            self._round_ok += 1
         self.cards[number].show_state("done", self.history.stats[number])
         self._refresh_status()
 
@@ -330,8 +387,35 @@ class HarpChannelTab(QWidget):
         self._measuring.clear()
         if not cancelled:
             self._last_time = self._now()
+            self._finished_at = self._clock()
             self._next_at = self._clock() + INTERVAL
+            self._failed = self._round_ok == 0
+            if self._background > 0:
+                self._background -= 1
+                if self._background > 0:
+                    QTimer.singleShot(int(BURST_GAP * 1000), self._continue_background)
+        else:
+            self._background = 0
         self._refresh_view()
+
+    # ---- 홈 ----------------------------------------------------------------------------------
+    def home_summary(self) -> tuple[str, str, bool]:
+        """홈 '가장 빠른 채널' 한 줄: (문구, 종류 ok|muted|warn, 측정 중)."""
+        busy = self._round is not None
+        if self.load_error:
+            return "측정 못 함 · 채널 목록을 불러오지 못했어요", "warn", busy
+        top, _others, _similar = self.history.recommendation()
+        if self._failed and not busy:
+            return "측정 못 함 · 네트워크 연결을 확인해 주세요", "warn", busy
+        if top is not None:
+            ago = ago_text(self._clock() - self._finished_at) if self._finished_at is not None else "방금"
+            return f"가장 빠른 채널 {top}채널 {_ms(self.history.stats[top].median)}ms ({ago})", "ok", busy
+        if busy or self._background > 0:
+            samples = self.history.samples()
+            return f"측정 중이에요({samples}/{hl.MIN_SAMPLES})", "muted", True
+        if self._last_time is not None:
+            return f"측정 중이에요({self.history.samples()}/{hl.MIN_SAMPLES}) · 새로고침으로 더 재요", "muted", busy
+        return "아직 재지 않았어요", "muted", busy
 
     # ---- 표시 ---------------------------------------------------------------------------------
     def _refresh_status(self) -> None:
@@ -348,6 +432,7 @@ class HarpChannelTab(QWidget):
                 text += f" · 다음 측정까지 {max(0, int(round(self._next_at - self._clock())))}초"
             self.status.setText(f"<span style='color:{color('muted')}'>{text}</span>")
         self.refresh.setEnabled(self._round is None and self._viewing())
+        self.summary_changed.emit()
 
     def _refresh_view(self) -> None:
         fastest = self.history.fastest() if self._round is None or self._last_time is not None else set()

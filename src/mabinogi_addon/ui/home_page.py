@@ -217,6 +217,7 @@ class HomePage(QWidget):
     open_combat_tab = Signal()
     switch_toggled = Signal(str, bool)  # 스위치(기능 키, 켬)
     combat_toggled = Signal(bool)  # 전투 보조 켜짐(True)/일시정지(False)
+    channel_refresh = Signal()  # 0.42.0: 가장 빠른 채널 새로고침(1회 측정)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -253,6 +254,29 @@ class HomePage(QWidget):
         logo.setStyleSheet("background:transparent;")
         top.addWidget(logo)
         top.addStretch(1)
+        # 0.42.0: 가장 빠른 채널(서버별 채널 상태) — 로고와 전체 메뉴 사이 빈 자리라 화면 높이가 늘지 않는다
+        self.channel_box = _box("homeChannel")
+        chip = QHBoxLayout(self.channel_box)
+        chip.setContentsMargins(12, 4, 6, 4)
+        chip.setSpacing(6)
+        self.channel_label = QLabel()
+        self.channel_label.setObjectName("homeChannelText")
+        self.channel_label.setTextFormat(Qt.TextFormat.RichText)
+        self.channel_label.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.channel_label.setToolTip("서버별 채널 상태 열기")
+        self.channel_label.mousePressEvent = lambda _e: self.open_feature.emit("channels")
+        chip.addWidget(self.channel_label)
+        self.channel_btn = QPushButton("↻")
+        self.channel_btn.setObjectName("homeChannelRefresh")
+        self.channel_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.channel_btn.setToolTip("지금 다시 재기")
+        self.channel_btn.setAccessibleName("가장 빠른 채널 다시 재기")
+        self.channel_btn.setFixedSize(26, 26)
+        self.channel_btn.clicked.connect(self.channel_refresh.emit)
+        chip.addWidget(self.channel_btn)
+        self.channel_box.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        top.addWidget(self.channel_box, 0, Qt.AlignmentFlag.AlignVCenter)
+        top.addSpacing(10)
         self.menu_btn = QPushButton("전체 메뉴  ›")
         self.menu_btn.setObjectName("homeMenu")
         self.menu_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -366,6 +390,12 @@ class HomePage(QWidget):
             QPushButton#homeMenu {{ color:{d['text']}; background:{d['menu_bg']}; border:1px solid {d['menu_border']}; border-radius:8px;
                                     padding:8px 14px; font-size:12px; }}
             QPushButton#homeMenu:hover {{ border-color:{d['accent']}; }}
+            #homeChannel {{ background:{d['box']}; border:1px solid {d['border']}; border-radius:8px; }}
+            QLabel#homeChannelText {{ background:transparent; font-size:12px; }}
+            QPushButton#homeChannelRefresh {{ color:{d['text']}; background:transparent; border:1px solid {d['border']}; border-radius:6px;
+                                              font-size:14px; padding:0; }}
+            QPushButton#homeChannelRefresh:hover {{ border-color:{d['accent']}; }}
+            QPushButton#homeChannelRefresh:disabled {{ color:{d['muted']}; }}
             QPushButton#homeLink {{ color:{d['accent']}; background:transparent; border:none; font-size:12px; padding:0; }}
             QPushButton#homeRegion {{ color:{d['warn_text']}; background:transparent; border:1px solid {d['warn']}; border-radius:6px;
                                       padding:5px 12px; font-size:12px; }}
@@ -405,6 +435,10 @@ class HomePage(QWidget):
             last = getattr(row, "_last", None)
             if last is not None:
                 row.set_state(*last)
+        if getattr(self, "_channel", None) is not None:
+            channel = self._channel
+            self.channel_label.clear()
+            self.set_channel(*channel)
         self.update()
         for widget in self.findChildren(QAbstractButton):
             widget.update()
@@ -442,9 +476,30 @@ class HomePage(QWidget):
             self.combat_switch.blockSignals(False)
             self.combat_switch.update()
         self._set_needs(needs)
+        if "channel" in state:
+            self.set_channel(*state["channel"])
         for key, value in state.get("rows", {}).items():
             if key in self.rows:
                 self.rows[key].set_state(*value)
+
+    def set_channel(self, text: str, kind: str, busy: bool = False) -> None:
+        """가장 빠른 채널 한 줄: '가장 빠른 채널 21채널 2.0ms (3분 전)'(채널 번호만 굵게) · 측정 중 · 측정 못 함."""
+        self._channel = (text, kind, busy)
+        tone = {"ok": _D["text"], "warn": _D["warn"]}.get(kind, _D["muted"])
+        label = "가장 빠른 채널"
+        if kind == "ok" and text.startswith(label):
+            rest = text[len(label):].strip()
+            channel, _, tail = rest.partition(" ")
+            html = (f'<span style="color:{_D["muted"]}">{label}</span>&nbsp; '
+                    f'<span style="color:{_D["ok"]}; font-weight:700">{channel}</span>&nbsp;'
+                    f'<span style="color:{tone}">{tail}</span>')
+        else:
+            html = f'<span style="color:{tone}">{text}</span>'
+        if busy and kind == "ok":
+            html += f'<span style="color:{_D["muted"]}">&nbsp;· 측정 중</span>'
+        if self.channel_label.text() != html:
+            self.channel_label.setText(html)
+        self.channel_btn.setEnabled(not busy)
 
     def _set_needs(self, needs):
         if [w.property("key") for w in self._warn_widgets()] != [k for k, _ in needs]:

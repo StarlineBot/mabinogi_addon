@@ -168,3 +168,13 @@ def _dorcha_inline_jobs():
     yield
     DorchaTab.INLINE_JOBS = saved
     clear_target_cache()
+
+
+@pytest.fixture(autouse=True)
+def _no_startup_channel_measure():
+    """0.42.0: 앱 창이 뜬 뒤 몇 초 있다 서버별 채널 상태를 실제 게임 서버로 잰다. 창을 띄우는 기존 테스트가 오래 걸려도
+    외부 연결이 나가지 않게 시작 측정 대기를 아주 길게 둔다. 시작 측정 자체는 test_harp_channels가 직접 부른다."""
+    from mabinogi_addon.ui import main_window
+    saved, main_window.CHANNEL_STARTUP_DELAY_MS = main_window.CHANNEL_STARTUP_DELAY_MS, 24 * 3600 * 1000
+    yield
+    main_window.CHANNEL_STARTUP_DELAY_MS = saved

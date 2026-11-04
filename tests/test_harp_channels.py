@@ -317,19 +317,25 @@ def test_pause_minimize_and_no_overlap(harp):
         assert tab._round is None
 
 
-def test_creator_only_tab(window, monkeypatch):
+def test_channel_tab_is_public_and_renamed(window, monkeypatch):
+    """0.42.0 사용자 결정: 서버별 채널 상태는 모두에게 공개(로그인·제작자와 무관), 이름 변경."""
     from mabinogi_addon import feature_access
     w, app = window
     tabs = w.optimization_tools.panel.tabs
     names = lambda: [tabs.tabText(i) for i in range(tabs.count())]
-    assert "하프 채널 연결" not in names()  # 일반 사용자: 탭도 측정도 없음
-    assert w.harp_tab._round is None
-    monkeypatch.setattr(feature_access, "is_creator", lambda: True)
-    w._refresh_harp_access()
-    assert names()[-1] == "하프 채널 연결"
-    monkeypatch.setattr(feature_access, "is_creator", lambda: False)
-    w._refresh_harp_access()
-    assert "하프 채널 연결" not in names() and w.harp_tab._round is None
+    assert names()[-1] == "서버별 채널 상태" and "하프 채널 연결" not in names()
+    for creator in (True, False):
+        monkeypatch.setattr(feature_access, "is_creator", lambda c=creator: c)
+        w._refresh_harp_access()
+        assert names().count("서버별 채널 상태") == 1
+    calls = []
+    monkeypatch.setattr(w.harp_tab, "measure_background", lambda rounds=1: calls.append(rounds))
+    w._startup_channel_measure()  # 창이 뜬 뒤 몇 초 뒤(타이머) — 시작 직후 3회
+    w._home_refresh_channels()    # 홈 새로고침 — 1회
+    assert calls == [3, 1]
+    w.harp_tab._connect = lambda *a: hl.Result(hl.OK, 2.0)  # 탭을 열면 바로 재므로 실제 서버 대신 가짜 연결
+    w.home_page.open_feature.emit("channels")
+    assert tabs.currentWidget() is w._harp_scroll
 
 
 def test_startup_windows_are_not_always_on_top():
@@ -436,3 +442,101 @@ def test_unreadable_channel_file_keeps_app_running(monkeypatch, caplog):
     finally:
         tab.shutdown()
         tab.deleteLater()
+
+
+# ---- 0.42.0 서버 선택·시작 직후 측정·홈 ---------------------------------------------------------
+def test_server_combo_only_harp_selectable(harp):
+    from mabinogi_addon.party.client import SERVERS
+    app, make, clock = harp
+    tabs, tab = make(Gate())
+    combo = tab.server_combo
+    assert [combo.itemData(i) for i in range(combo.count())] == list(SERVERS)
+    assert combo.currentData() == "하프"
+    model = combo.model()
+    assert [model.item(i).isEnabled() for i in range(combo.count())] == [name == "하프" for name in SERVERS]
+    assert all("준비 중" in combo.itemText(i) for i in range(combo.count()) if combo.itemData(i) != "하프")
+
+
+def test_ago_text():
+    from mabinogi_addon.ui.harp_tab import ago_text
+    assert [ago_text(s) for s in (0, 59, 60, 179, 3599, 3600, 7300)] == ["방금", "방금", "1분 전", "2분 전", "59분 전",
+                                                                          "1시간 전", "2시간 전"]
+
+
+def test_startup_burst_runs_three_rounds_without_viewing_then_stops(harp):
+    """앱 시작 직후: 탭을 보지 않아도 3회 연속(첫 추천) → 그 뒤 상시 반복 없음. 홈 문구가 측정 중 → 가장 빠른 채널."""
+    app, make, clock = harp
+    gate = Gate()
+    tabs, tab = make(gate)
+    tabs.show()  # 다른 탭을 보는 중
+    assert tab.home_summary() == ("아직 재지 않았어요", "muted", False)
+    tab.measure_background(3)
+    text, kind, busy = tab.home_summary()
+    assert busy and kind == "muted" and text.startswith("측정 중이에요")
+    assert wait_until(lambda: len(gate.calls) == 21 and tab._round is None, 10)
+    assert tab._background == 0
+    assert tab.home_summary() == ("가장 빠른 채널 1채널 2.3ms (방금)", "ok", False)
+    clock[0] += 185
+    assert tab.home_summary()[0] == "가장 빠른 채널 1채널 2.3ms (3분 전)"
+    tab._tick()  # 탭을 보지 않으면 60초 재측정도 없음
+    app.processEvents()
+    assert len(gate.calls) == 21 and tab._round is None
+    tab.measure_background(1)  # 홈 새로고침 1회
+    assert wait_until(lambda: len(gate.calls) == 28 and tab._round is None)
+    assert tab.history.stats[1].attempts == 4
+
+
+def test_background_burst_survives_leaving_tab_but_not_pause(harp):
+    app, make, clock = harp
+    gate = Gate(hold=True)
+    tabs, tab = make(gate)
+    tabs.show()
+    tabs.setCurrentWidget(tab)
+    assert wait_until(lambda: len(gate.calls) == 2)
+    tab.measure_background(3)  # 보는 중 회차에 이어 시작 직후 3회
+    tabs.setCurrentIndex(0)  # 화면을 떠나도 시작 직후 측정은 계속
+    assert tab._round is not None
+    tab.set_paused(True)  # 전투 보조 일시정지면 멈춤
+    assert tab._round is None and tab._background == 0
+    tab.measure_background(3)
+    assert tab._round is None  # 일시정지 중에는 시작하지 않음
+    gate.hold.set()
+
+
+def test_network_failure_is_reported_on_home(harp):
+    app, make, clock = harp
+    gate = Gate({n: hl.Result(hl.TIMEOUT_KIND) for n in range(1, 8)})
+    tabs, tab = make(gate)
+    tabs.show()
+    tab.measure_background(1)
+    assert wait_until(lambda: tab._round is None and tab._last_time is not None)
+    assert tab.home_summary() == ("측정 못 함 · 네트워크 연결을 확인해 주세요", "warn", False)
+
+
+def test_round_still_limits_concurrency_and_sends_nothing(server):
+    """동시 연결 최대 2개·연결만 하고 데이터 없음(현행 유지) — 전체 공개 전 확인."""
+    assert hl.CONCURRENCY == 2
+    import inspect
+    source = inspect.getsource(hl.connect_time)
+    assert ".send" not in source and ".recv" not in source
+
+
+def test_home_channel_chip_states():
+    from mabinogi_addon.ui.home_page import HomePage
+    app = QApplication.instance() or QApplication([])
+    home = HomePage()
+    try:
+        home.resize(790, 800)
+        home.update_state({"channel": ("가장 빠른 채널 21채널 2.0ms (3분 전)", "ok", False)})
+        text = home.channel_label.text()
+        assert "21채널" in text and "2.0ms (3분 전)" in text and home.channel_btn.isEnabled()
+        home.set_channel("측정 중이에요(1/3)", "muted", True)
+        assert "측정 중이에요(1/3)" in home.channel_label.text() and not home.channel_btn.isEnabled()
+        home.set_channel("측정 못 함 · 네트워크 연결을 확인해 주세요", "warn", False)
+        assert "측정 못 함" in home.channel_label.text()
+        fired = []
+        home.channel_refresh.connect(lambda: fired.append(1))
+        home.channel_btn.click()
+        assert fired == [1]
+    finally:
+        home.deleteLater()

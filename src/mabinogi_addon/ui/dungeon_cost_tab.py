@@ -91,7 +91,7 @@ class DungeonCostTab(QWidget):
     def _select(self, *_):
         if self._cancelled.is_set() or self.dungeons.currentItem() is None:
             return
-        if self.dungeons.currentItem().text() != calc.NAMES[2]:
+        if self.dungeons.currentItem().text() != calc.RIFT:
             self._render()
             return
         if self._pending is not None:
@@ -105,7 +105,7 @@ class DungeonCostTab(QWidget):
 
     def _render(self, *_):
         name = self.dungeons.currentItem().text()
-        market = name == calc.NAMES[2]
+        market = name == calc.RIFT
         self.title.setText(name)
         self.refresh.setVisible(market)
         self.refresh.setEnabled(self._pending is None)

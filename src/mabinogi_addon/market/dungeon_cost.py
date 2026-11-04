@@ -1,7 +1,10 @@
 """Dungeon entry arithmetic, independent of UI and market access."""
 
-NAMES = ("크롬바스 심연", "브리레흐", "믿음의 균열", "탈라가흐")
-REWARDS = {NAMES[0]: 500_000, NAMES[1]: 1_300_000, NAMES[3]: 1_700_000}
+TALAGAH, RIFT, BRIREACH, CROMBAS = "탈라가흐", "믿음의 균열", "브리레흐", "크롬바스 심연"
+# 0.42.0: 화면 순서(사용자 결정) — 교환 탭 지역 순서와 같게. 순번이 아니라 이름 상수로 참조한다.
+NAMES = (TALAGAH, RIFT, BRIREACH, CROMBAS)
+
+REWARDS = {CROMBAS: 500_000, BRIREACH: 1_300_000, TALAGAH: 1_700_000}
 PRICES = (100_000, 200_000, 400_000, 700_000, 1_000_000,
           2_000_000, 3_000_000, 5_000_000, 7_000_000, 10_000_000)
 MATERIAL = "균열의 편린"

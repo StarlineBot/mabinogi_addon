@@ -46,7 +46,8 @@ def test_structure_and_default_editor_space(window):
     assert [w._convenience_tabs.tabText(i) for i in range(w._convenience_tabs.count())] == [
         '분배 계산기','구슬 분배 계산기','환전비율 계산기','던전 입장 계산기','그림대화 만들기']
     panel_tabs = w.optimization_tools.panel.tabs
-    assert [panel_tabs.tabText(i) for i in range(panel_tabs.count())] == ['최적화','FPS 측정','마우스 커서']
+    # 0.42.0 사용자 결정: 서버별 채널 상태(옛 하프 채널 연결) 모두에게 공개 → 최적화 2단 네 번째
+    assert [panel_tabs.tabText(i) for i in range(panel_tabs.count())] == ['최적화','FPS 측정','마우스 커서','서버별 채널 상태']
     bar = w._tracker_tabs.tabBar()
     assert all(bar.rect().contains(bar.tabRect(i)) for i in range(8))
     assert w._combat_pages['tuarim'] is w._combat_pages['dorcha']

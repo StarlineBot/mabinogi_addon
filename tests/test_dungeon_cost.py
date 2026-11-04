@@ -9,10 +9,15 @@ from mabinogi_addon.market import dungeon_cost as calc
 from mabinogi_addon.ui import dungeon_cost_tab as ui
 
 
+def _row(name):
+    """0.42.0: 순번이 아니라 이름으로 줄을 고른다(화면 순서 탈라가흐·믿음의 균열·브리레흐·크롬바스 심연)."""
+    return calc.NAMES.index(name)
+
+
 @pytest.mark.parametrize('name,best,profit,loss', [
-    (calc.NAMES[0], 3, 800_000, 6),
-    (calc.NAMES[1], 5, 4_100_000, 8),
-    (calc.NAMES[3], 5, 6_100_000, 9),
+    (calc.CROMBAS, 3, 800_000, 6),
+    (calc.BRIREACH, 5, 4_100_000, 8),
+    (calc.TALAGAH, 5, 6_100_000, 9),
 ])
 def test_ticket_math(name, best, profit, loss):
     rows = calc.ticket_rows(name, 12)
@@ -29,7 +34,7 @@ def test_rift_math_and_unknown_price():
     assert [r[1] for r in rows] == [1, 1, 2, 3, 4, 5]
     assert [r[3] for r in rows] == [10000, 20000, 40000, 70000, 110000, 160000]
     assert all(row[2:] == (None, None) for row in calc.rift_rows(None))
-    assert calc.ticket_rows(calc.NAMES[1])[1][2] == 2_300_000
+    assert calc.ticket_rows(calc.BRIREACH)[1][2] == 2_300_000
 
 
 @pytest.fixture
@@ -47,7 +52,7 @@ def tab():
 
 def test_no_key_keeps_quantities_unknown_cost(tab, monkeypatch):
     monkeypatch.setattr(ui.config, 'get_nexon_api_key', lambda: '')
-    tab.dungeons.setCurrentRow(2)
+    tab.dungeons.setCurrentRow(_row(calc.RIFT))
     tab._request()
     assert 'API 키' in tab.status.text()
     assert tab.table.item(5, 1).text() == '5'
@@ -57,17 +62,17 @@ def test_no_key_keeps_quantities_unknown_cost(tab, monkeypatch):
 
 @pytest.mark.parametrize('price,error,message', [(None,'','매물이 없어요'), (None,'조회 실패','조회 실패'), (10000,'','조회')])
 def test_result_never_overwrites_selected_dungeon(tab, price, error, message):
-    tab.dungeons.setCurrentRow(2)
+    tab.dungeons.setCurrentRow(_row(calc.RIFT))
     tab._pending = queue.Queue()
     tab._poll.start()
-    tab.dungeons.setCurrentRow(1)
+    tab.dungeons.setCurrentRow(_row(calc.BRIREACH))
     tab._pending.put((price,error))
     tab._receive()
-    assert tab.title.text() == calc.NAMES[1]
+    assert tab.title.text() == calc.BRIREACH
     assert tab.table.item(1,2).text() == '+2,300,000'
     assert not tab._poll.isActive()
     assert message in tab._status
-    tab.dungeons.setCurrentRow(2)
+    tab.dungeons.setCurrentRow(_row(calc.RIFT))
     # Failed requests are not cached: reselect retries, reporting the missing key.
     assert ("API 키" if error else message) in tab.status.text()
     assert tab.table.item(0,3).text() == ('—' if price is None else '10,000')
@@ -124,7 +129,7 @@ def test_repeated_async_refresh_and_no_old_price(tab, monkeypatch):
         threads.append(threading.current_thread())
         return [{'item_display_name':calc.MATERIAL,'auction_price_per_unit':len(threads)*10000}]
     monkeypatch.setattr(ui.auction, 'fetch_items_by_name', fetch)
-    tab.dungeons.setCurrentRow(2)
+    tab.dungeons.setCurrentRow(_row(calc.RIFT))
     for n in range(1,21):
         tab._request()
         assert tab._price is None
@@ -179,21 +184,21 @@ def complete(tab, price=10000, error=''):
 
 def test_auto_selection_reuses_one_request_cache_and_respects_exact_expiry(market):
     tab, jobs, clock = market
-    for row in (0, 1, 3):
-        tab.dungeons.setCurrentRow(row)
+    for name in (calc.CROMBAS, calc.BRIREACH, calc.TALAGAH):
+        tab.dungeons.setCurrentRow(_row(name))
     assert not jobs and tab._pending is None
-    tab.dungeons.setCurrentRow(2)
+    tab.dungeons.setCurrentRow(_row(calc.RIFT))
     assert len(jobs) == 1 and tab._price is None and '조회 중' in tab.status.text()
     tab.dungeons.itemClicked.emit(tab.dungeons.currentItem())
     tab._request()
-    tab.dungeons.setCurrentRow(0)
-    tab.dungeons.setCurrentRow(2)
+    tab.dungeons.setCurrentRow(_row(calc.CROMBAS))
+    tab.dungeons.setCurrentRow(_row(calc.RIFT))
     assert len(jobs) == 1
-    tab.dungeons.setCurrentRow(1)
+    tab.dungeons.setCurrentRow(_row(calc.BRIREACH))
     complete(tab)
-    assert tab.title.text() == calc.NAMES[1]
+    assert tab.title.text() == calc.BRIREACH
     assert tab.table.item(1, 2).text() == '+2,300,000'
-    tab.dungeons.setCurrentRow(2)
+    tab.dungeons.setCurrentRow(_row(calc.RIFT))
     assert tab.table.item(5, 3).text() == '160,000'
     clock[0] = 599.999
     tab.dungeons.itemClicked.emit(tab.dungeons.currentItem())
@@ -208,7 +213,7 @@ def test_auto_selection_reuses_one_request_cache_and_respects_exact_expiry(marke
 
 def test_explicit_refresh_bypasses_cache_and_failure_does_not_revive_old_price(market):
     tab, jobs, clock = market
-    tab.dungeons.setCurrentRow(2)
+    tab.dungeons.setCurrentRow(_row(calc.RIFT))
     complete(tab)
     tab._request()
     assert len(jobs) == 2 and tab._cache is None and tab._price is None
@@ -218,8 +223,8 @@ def test_explicit_refresh_bypasses_cache_and_failure_does_not_revive_old_price(m
         tab._render()
         tab._receive()
     assert len(jobs) == 2
-    tab.dungeons.setCurrentRow(0)
-    tab.dungeons.setCurrentRow(2)
+    tab.dungeons.setCurrentRow(_row(calc.CROMBAS))
+    tab.dungeons.setCurrentRow(_row(calc.RIFT))
     assert len(jobs) == 3
     complete(tab, 30000)
     assert tab.table.item(5, 3).text() == '480,000'
@@ -228,7 +233,7 @@ def test_explicit_refresh_bypasses_cache_and_failure_does_not_revive_old_price(m
 def test_empty_listing_is_cached_but_missing_key_is_not(market, monkeypatch):
     tab, jobs, clock = market
     monkeypatch.setattr(ui.config, 'get_nexon_api_key', lambda: '')
-    tab.dungeons.setCurrentRow(2)
+    tab.dungeons.setCurrentRow(_row(calc.RIFT))
     assert not jobs and tab._cache is None and 'API 키' in tab.status.text()
     monkeypatch.setattr(ui.config, 'get_nexon_api_key', lambda: 'test-key')
     tab.dungeons.itemClicked.emit(tab.dungeons.currentItem())
@@ -237,8 +242,8 @@ def test_empty_listing_is_cached_but_missing_key_is_not(market, monkeypatch):
     assert '매물이 없어요' in tab.status.text()
     assert tab.table.item(5, 1).text() == '5' and tab.table.item(5, 3).text() == '—'
     clock[0] = 599
-    tab.dungeons.setCurrentRow(0)
-    tab.dungeons.setCurrentRow(2)
+    tab.dungeons.setCurrentRow(_row(calc.CROMBAS))
+    tab.dungeons.setCurrentRow(_row(calc.RIFT))
     assert len(jobs) == 1 and '매물이 없어요' in tab.status.text()
     clock[0] = 600
     tab.dungeons.itemClicked.emit(tab.dungeons.currentItem())
@@ -247,7 +252,7 @@ def test_empty_listing_is_cached_but_missing_key_is_not(market, monkeypatch):
 
 def test_shutdown_drops_late_result_and_never_restarts_selection(market):
     tab, jobs, clock = market
-    tab.dungeons.setCurrentRow(2)
+    tab.dungeons.setCurrentRow(_row(calc.RIFT))
     pending = tab._pending
     text = tab.status.text()
     tab.shutdown()
@@ -256,3 +261,11 @@ def test_shutdown_drops_late_result_and_never_restarts_selection(market):
     tab.dungeons.itemClicked.emit(tab.dungeons.currentItem())
     assert len(jobs) == 1 and tab._cache is None and tab._price is None
     assert not tab._poll.isActive() and tab.status.text() == text
+
+
+def test_display_order_follows_user_decision(tab):
+    """0.42.0 사용자 결정: 탈라가흐 → 믿음의 균열 → 브리레흐 → 크롬바스 심연, 처음 선택은 탈라가흐(시세 조회 없음)."""
+    assert calc.NAMES == ("탈라가흐", "믿음의 균열", "브리레흐", "크롬바스 심연")
+    assert [tab.dungeons.item(i).text() for i in range(tab.dungeons.count())][:4] == list(calc.NAMES)
+    assert tab.title.text() == "탈라가흐" and tab._pending is None
+    assert set(calc.REWARDS) == set(calc.NAMES) - {calc.RIFT}

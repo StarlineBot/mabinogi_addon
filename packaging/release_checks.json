@@ -1,13 +1,13 @@
 {
-  "version": "0.41.0",
+  "version": "0.42.0",
   "tests": [
-    "tests/test_overlay_clock.py",
-    "tests/test_overlay_metrics.py",
-    "tests/test_optimization.py",
-    "tests/test_optimization_ui.py",
-    "tests/test_color_switch_polish.py",
-    "tests/test_home_page.py",
     "tests/test_harp_channels.py",
+    "tests/test_home_page.py",
+    "tests/test_navigation.py",
+    "tests/test_cursor_fx.py",
+    "tests/test_dungeon_cost.py",
+    "tests/test_calculator_result_state.py",
+    "tests/test_bundle_layout.py",
     "tests/test_startup_build.py",
     "tests/test_release_candidate.py",
     "tests/test_windows_ci.py",
@@ -17,56 +17,50 @@
     "tests/test_startup_smoke.py"
   ],
   "coverage": {
-    "src/mabinogi_addon/optimization/frames.py": {
+    "src/mabinogi_addon/ui/harp_tab.py": {
       "tests": [
-        "tests/test_overlay_clock.py",
-        "tests/test_optimization.py"
+        "tests/test_harp_channels.py",
+        "tests/test_bundle_layout.py"
       ],
-      "reason": "깜빡임: 도착 지연 기준 끊김(3.5초~, 최근 최대 지연+1초)·묶여 온 이벤트에도 fps·대상 유지·대상 여럿이면 고르지 않음"
+      "reason": "서버별 채널 상태: 이름·서버 선택(하프만)·화면 밖 3회/1회 측정·일시정지 중단·홈 문구(가장 빠른 채널·측정 중·측정 못 함)"
     },
-    "src/mabinogi_addon/ui/optimization_controller.py": {
+    "src/mabinogi_addon/ui/main_window.py": {
       "tests": [
-        "tests/test_overlay_clock.py",
-        "tests/test_overlay_metrics.py",
-        "tests/test_optimization_ui.py"
+        "tests/test_harp_channels.py",
+        "tests/test_navigation.py",
+        "tests/test_cursor_fx.py",
+        "tests/test_home_page.py",
+        "tests/test_bundle_layout.py"
       ],
-      "reason": "현재 시각 항목·형식/초 저장·매번 시계 읽기, 마지막 FPS 4초 유지 후 —, 숨김은 비활성·일시정지·중지 때만, 정보 표시 문구"
-    },
-    "src/mabinogi_addon/ui/optimization_panel.py": {
-      "tests": [
-        "tests/test_overlay_clock.py",
-        "tests/test_overlay_metrics.py",
-        "tests/test_optimization_ui.py",
-        "tests/test_color_switch_polish.py"
-      ],
-      "reason": "게임 위 정보 표시 구역·정보 표시 스위치·현재 시각 체크·시각 형식/초 표시 줄(시각 켤 때만)·꺼짐/수집 모드 문구 정보 표시"
-    },
-    "src/mabinogi_addon/ui/frame_overlay.py": {
-      "tests": [
-        "tests/test_overlay_clock.py",
-        "tests/test_overlay_metrics.py"
-      ],
-      "reason": "AM/PM 작은 앞글자·폭 계산·기존 세 칸 항목 호환·숫자 고정 칸(시각·FPS 폭 고정)"
+      "reason": "채널 탭 전체 공개·창 뜬 뒤 시작 측정·홈 새로고침/열기 연결, 최적화 2단 탭 순서"
     },
     "src/mabinogi_addon/ui/home_page.py": {
       "tests": [
-        "tests/test_overlay_clock.py",
+        "tests/test_harp_channels.py",
         "tests/test_home_page.py"
       ],
-      "reason": "홈 최적화 줄 이름 게임 위 정보"
+      "reason": "홈 위 줄 가장 빠른 채널 칸·새로고침 버튼·790×800 스크롤 없음"
     },
-    "src/mabinogi_addon/ui/feature_copy.py": {
+    "src/mabinogi_addon/market/dungeon_cost.py": {
       "tests": [
-        "tests/test_optimization_ui.py"
+        "tests/test_dungeon_cost.py",
+        "tests/test_calculator_result_state.py"
       ],
-      "reason": "FPS 측정 도움말 문구(정보 표시·현재 시각)"
+      "reason": "던전 순서·이름 상수(순번 참조 제거)"
+    },
+    "src/mabinogi_addon/ui/dungeon_cost_tab.py": {
+      "tests": [
+        "tests/test_dungeon_cost.py",
+        "tests/test_calculator_result_state.py"
+      ],
+      "reason": "믿음의 균열 판정을 이름 상수로"
     },
     "src/mabinogi_addon/assets/release_notes.md": {
       "tests": [
         "tests/test_release_notes.py",
         "tests/test_release_notes_trigger.py"
       ],
-      "reason": "0.41.0 노트 파싱·새 버전 표시"
+      "reason": "0.42.0 노트 파싱·새 버전 표시"
     },
     "packaging/release_checks.json": {
       "tests": [
@@ -81,13 +75,7 @@
         "tests/test_windows_ci.py",
         "tests/test_startup_smoke.py"
       ],
-      "reason": "배포 계약: 빌드·후보·Windows CI·시작 확인"
-    },
-    "src/mabinogi_addon/ui/harp_tab.py": {
-      "tests": [
-        "tests/test_harp_channels.py"
-      ],
-      "reason": "목록 읽기 실패 안내를 경고색 상자로(추천 초록과 구분)"
+      "reason": "배포 계약: 빌드·후보·Windows CI·시작 확인(새 자산 없음)"
     }
   }
 }

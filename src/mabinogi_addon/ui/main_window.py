@@ -57,6 +57,8 @@ from .tuarim_tab import TuarimTab
 
 # 번들 경로 사용(exe=_MEIPASS/assets). __file__ 기준은 frozen에서 어긋난다.
 LOGO_PATH = paths.resource_dir() / "logo.png"
+CHANNEL_TAB_TITLE = "서버별 채널 상태"  # 0.42.0: 옛 이름 하프 채널 연결
+CHANNEL_STARTUP_DELAY_MS = 4000  # 창이 뜬 뒤 채널 상태 첫 측정까지(시작 속도에 영향 없게)
 _log = logging.getLogger("mabinogi_addon.close")
 _cap_log = logging.getLogger("mabinogi_addon.capture")  # 라이브 캡처 시작 진단
 _up_log = logging.getLogger("mabinogi_addon.updater")  # 업데이트 확인 진단(계기·스로틀·결과)
@@ -337,7 +339,7 @@ class MainWindow(QMainWindow):
         self.cursor_tab = CursorTab(self.cursor_fx)
         self._cursor_scroll = _scrolled(self.cursor_tab)
         self.optimization_tools.panel.tabs.addTab(self._cursor_scroll, "마우스 커서")
-        # 하프 채널 연결(docs/harp-channel-tcp-spec.md): 최적화 2단 네 번째, 제작자만(다른 사용자에겐 탭도 측정도 없음).
+        # 서버별 채널 상태(docs/harp-channel-tcp-spec.md): 최적화 2단 네 번째, 0.42.0부터 모두에게 공개.
         from .harp_tab import HarpChannelTab
         self.harp_tab = HarpChannelTab()
         # 앱 CPU 절감 1단계: 기능별 처리 시간을 1분마다 app.log에 한 줄(측정만, perf_meter)
@@ -422,6 +424,8 @@ class MainWindow(QMainWindow):
         self.home_page.open_combat_tab.connect(self._home_open_combat_tab)
         self.home_page.switch_toggled.connect(self._home_switch)
         self.home_page.combat_toggled.connect(lambda on: self._set_paused(not on))
+        self.home_page.channel_refresh.connect(self._home_refresh_channels)
+        self.harp_tab.summary_changed.connect(self._home_channel_changed)
         self._refresh_cursor_access()
 
         # 버프 오버레이
@@ -582,6 +586,9 @@ class MainWindow(QMainWindow):
         elif key == "cursor":
             self.optimization_tools._open_tab()
             self.optimization_tools.panel.tabs.setCurrentWidget(self._cursor_scroll)
+        elif key == "channels":
+            self.optimization_tools._open_tab()
+            self.optimization_tools.panel.tabs.setCurrentWidget(self._harp_scroll)
 
     def _home_open_region(self, key) -> None:
         """설정 필요 상자의 '영역 지정': 그 화면의 영역 지정 상자(0.27.0)로."""
@@ -623,18 +630,28 @@ class MainWindow(QMainWindow):
         self.home_page.update_state(self._home_state())
 
     def _refresh_harp_access(self, *_args) -> None:
-        """하프 채널 연결은 제작자만 — 아니면 탭을 빼고 측정을 멈춘다."""
-        from .. import feature_access
-
+        """서버별 채널 상태 탭(0.42.0부터 모두에게 공개 — 로그인과 무관하게 늘 있다)."""
         tabs = self.optimization_tools.panel.tabs
-        index = tabs.indexOf(self._harp_scroll)
-        if feature_access.is_creator():
-            if index < 0:
-                tabs.addTab(self._harp_scroll, "하프 채널 연결")
-        elif index >= 0:
-            self.harp_tab.cancel()
-            tabs.removeTab(index)
-            self._harp_scroll.hide()
+        if tabs.indexOf(self._harp_scroll) < 0:
+            tabs.addTab(self._harp_scroll, CHANNEL_TAB_TITLE)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        # 0.42.0: 창이 처음 뜬 뒤 몇 초 있다가 채널 상태를 백그라운드로 3회(스플래시·시작 속도와 무관).
+        # '트레이로 시작'이면 창을 처음 열 때 잰다.
+        if not getattr(self, "_channel_startup_armed", False):
+            self._channel_startup_armed = True
+            QTimer.singleShot(CHANNEL_STARTUP_DELAY_MS, self._startup_channel_measure)
+
+    def _startup_channel_measure(self) -> None:
+        if getattr(self, "_closing", False):
+            return
+        from .harp_tab import BURST_ROUNDS
+        self.harp_tab.measure_background(BURST_ROUNDS)
+
+    def _home_refresh_channels(self) -> None:
+        self.harp_tab.measure_background(1)
+        self.home_page.update_state(self._home_state())
 
     def _refresh_cursor_access(self) -> None:
         """마우스 커서 표시 공개 범위 반영(0.37.0부터 모두 공개 — 탭·홈 칸은 늘 보인다)."""
@@ -713,7 +730,13 @@ class MainWindow(QMainWindow):
                  if setup_state.selected(self._HOME_FEATURES[key], raw) and missing(key)]
         working = sum(1 for key in self._HOME_FEATURES if rows[key][1] == "ok")
         title = "paused" if paused else "running" if game else "waiting"
-        return {"title": title, "combat_on": not paused, "working": working, "needs": needs, "rows": rows}
+        return {"title": title, "combat_on": not paused, "working": working, "needs": needs, "rows": rows,
+                "channel": self.harp_tab.home_summary()}
+
+    def _home_channel_changed(self) -> None:
+        """채널 측정 결과가 바뀌면 홈 한 줄만 바로 다시(0.7초 상태 타이머를 기다리지 않음)."""
+        if self.home_visible():
+            self.home_page.set_channel(*self.harp_tab.home_summary())
 
     def _open_setup(self):
         self._open_guide()
