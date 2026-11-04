@@ -196,6 +196,8 @@
 
 ## 열린 문제
 
+- **게임 위 현재 시각(2026-11-04 사용자 요청, 미구현)**: FPS 오버레이 `표시 항목`에 `현재 시각`, 형식 기본 24시간·12시간이면 `AM/PM` 앞, 초 표시 옵션 — [안내 명세 16절](app-copy-help-combat-controls-spec.md), 목업 3장.
+  이름 확인 대기: `게임에 FPS 표시`→`게임 위 정보 표시`, 스위치 `정보 표시`, 홈 `게임 위 정보`(제안).
 - **비인가 프로그램 점검(2026-11-04, '쿨타임도우미' 제재 소문 — 근거 미확인)** — 코드 전수 grep.
   없음: 입력 자동화(SendInput·PostMessage 등)·게임 메모리 읽기/쓰기·주입(ReadProcessMemory·CreateRemoteThread) 0건.
   회색 지대(Potential): ① 블랙박스 저장 단축키가 전역 저수준 키보드 훅(`system/blackbox_hotkey.py` SetWindowsHookExW 13=WH_KEYBOARD_LL, 모든 사용자·블랙박스 켜짐 시) — 입력은 통과만 하나 매크로·키로거와 같은 기법 → RegisterHotKey로 교체 권장.
