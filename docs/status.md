@@ -222,6 +222,8 @@
   **재QA(대상 88720bb, 지문 a6d1339b…): 통과, 후보 확인 대기.** 시각만 바꿀 때 오버레이 폭 1종(227px, 이전 178~223 6종), FPS 값은 자릿수가 같으면 같은 폭.
   렌더: 상태 줄 '정보를 보여줘요', 하프 읽기 실패 경고색 상자, 12시간 작은 PM, '1'은 고정 칸 가운데라 간격이 넓어 보임(디지털 시계형 — 의도된 절충).
   FPS 깜빡임 모의 그대로 0회. `run_release_checks --version 0.41.0` 424 passed·46초·exit 0, 작업본 전후 깨끗. preflight 통과, v0.41.0 태그 없음. 삭제 모듈 참조 0건(src·tests·packaging, 캐시 제외).
+  **verify-only #184**(41825716685, attempt 1, d7f4a88, StarlineBot): request 17초·regression 1분 19초·validate 7분 34초 성공, 게시 없음(태그 없음, 공개 0.40.2 유지).
+  후보 `verified-windows-41825716685-1`(artifact 13319373292, zip sha256 4a549318…, 만료 2026-11-05 12:10 UTC), exe 164,006,992 바이트(로그). 지문 a6d1339b…(main d7f4a88 동일). 사용자 후보 확인 대기.
 - **비인가 프로그램 점검(2026-11-04, '쿨타임도우미' 제재 소문 — 근거 미확인)** — 코드 전수 grep.
   없음: 입력 자동화(SendInput·PostMessage 등)·게임 메모리 읽기/쓰기·주입(ReadProcessMemory·CreateRemoteThread) 0건.
   회색 지대(Potential): ① 블랙박스 저장 단축키가 전역 저수준 키보드 훅(`system/blackbox_hotkey.py` SetWindowsHookExW 13=WH_KEYBOARD_LL, 모든 사용자·블랙박스 켜짐 시) — 입력은 통과만 하나 매크로·키로거와 같은 기법 → RegisterHotKey로 교체 권장.
