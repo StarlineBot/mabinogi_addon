@@ -34,20 +34,22 @@ class FrameOverlay(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
         self._locked = False
         self._drag_offset = None
-        self._items = [('FPS', '—', '')]
+        self._items = [('FPS', '—', '', '')]
         self._scale = 1.0
         self.set_scale(scale_percent)
 
     # ---- 내용 ----
     def set_items(self, items):
-        """[(이름, 값, 단위)]. 숨긴 항목은 넘기지 않으면 자리를 비우지 않고 당겨 붙는다."""
-        items = [(str(n), str(v), str(u or '')) for n, v, u in items]
+        """[(이름, 값, 단위[, 앞글자])]. 숨긴 항목은 넘기지 않으면 자리를 비우지 않고 당겨 붙는다.
+        앞글자는 값 앞에 단위 글꼴(작게)로 — 12시간 시각의 AM/PM(명세 16절, 사용자 결정 ampm-size.png)."""
+        items = [(str(i[0]), str(i[1]), str(i[2] or ''), str(i[3] if len(i) > 3 and i[3] else '')) for i in items]
         if items != self._items:
             self._items = items
             self._relayout()
 
     def items(self):
-        return list(self._items)
+        """앞글자가 없는 항목은 예전처럼 (이름, 값, 단위)."""
+        return [item if item[3] else item[:3] for item in self._items]
 
     def set_scale(self, percent) -> None:
         self._scale = max(50, min(300, int(percent))) / 100
@@ -64,11 +66,12 @@ class FrameOverlay(QWidget):
         nm, vm, um = QFontMetricsF(name_font), QFontMetricsF(value_font), QFontMetricsF(unit_font)
         pad, gap = 8 * self._scale, 18 * self._scale
         x, boxes = pad, []
-        for name, value, unit in self._items:
+        for name, value, unit, prefix in self._items:
+            prefix_w = um.horizontalAdvance(prefix) + 3 * self._scale if prefix else 0
             value_w = vm.horizontalAdvance(value)
             unit_w = um.horizontalAdvance(unit) + (2 * self._scale if unit else 0)
-            width = max(nm.horizontalAdvance(name), value_w + unit_w)
-            boxes.append((x, value_w, width))
+            width = max(nm.horizontalAdvance(name), prefix_w + value_w + unit_w)
+            boxes.append((x, value_w, width, prefix_w))
             x += width + gap
         top = _HEADER_H if not self._locked else 0
         height = top + pad + nm.height() + vm.ascent() + vm.descent() + pad
@@ -126,11 +129,14 @@ class FrameOverlay(QWidget):
         pad = 8 * self._scale
         name_base = top + pad + nm.ascent()
         value_base = top + pad + nm.height() + vm.ascent()
-        for (x, value_w, _width), (name, value, unit) in zip(boxes, self._items):
+        for (x, value_w, _width, prefix_w), (name, value, unit, prefix) in zip(boxes, self._items):
             self._draw_text(painter, name_font, MINT, x, name_base, name)
-            self._draw_text(painter, value_font, QColor('white'), x, value_base, value)
+            if prefix:  # AM/PM: 값과 같은 기준선에 작게(단위처럼)
+                self._draw_text(painter, unit_font, QColor('white'), x, value_base, prefix)
+            self._draw_text(painter, value_font, QColor('white'), x + prefix_w, value_base, value)
             if unit:
-                self._draw_text(painter, unit_font, QColor('white'), x + value_w + 2 * self._scale, value_base, unit)
+                self._draw_text(painter, unit_font, QColor('white'), x + prefix_w + value_w + 2 * self._scale,
+                                value_base, unit)
         painter.end()
 
     # ---- 드래그 이동 ----

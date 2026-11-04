@@ -11,7 +11,11 @@ DELAY_BANDS = ((5, '200FPS+'), (10, '100~200FPS'), (20, '50~100FPS'), (50, '20~5
 class FrameStream:
     WINDOW = 1.0
     MIN_SPAN = 0.25
-    STALE = 2.0
+    STALE = 2.0  # 이벤트 시각끼리의 끊김(구간 요약 후보) — 도착 지연과 무관
+    # 0.40.2(FPS 오버레이 깜빡임): 도착 기준 '오래됨'은 실측 도착 지연(PresentMon 출력 묶임, 최대 2~2.7초)보다 넉넉하게.
+    # 최소 3.5초, 최근 60초 최대 지연 + 1초(상한 10초). 예전 2초는 묶인 출력을 기다리는 사이 fps·대상이 순간 None이 돼 깜빡였다.
+    ARRIVAL_STALE_MIN = 3.5
+    ARRIVAL_STALE_MAX = 10.0
     MAX_FRAMES = 16384
     MAX_SOURCES = 8
 
@@ -27,6 +31,7 @@ class FrameStream:
         self.cutoff = 0.0
         self.problem = ''
         self.delays = {}  # 대역 → [개수, 합, 최대] (초)
+        self._delay_peaks = deque(maxlen=60)  # [초 단위 수신 시각, 그 초의 최대 도착 지연]
 
     def boundary(self, now, reason="context_boundary"):
         if self.summary is not None:
@@ -107,6 +112,11 @@ class FrameStream:
         stats = self.delays.setdefault(band, [0, 0.0, 0.0])
         delay = max(0.0, now - stamp)
         stats[0] += 1; stats[1] += delay; stats[2] = max(stats[2], delay)
+        second = int(now)
+        if self._delay_peaks and self._delay_peaks[-1][0] == second:
+            self._delay_peaks[-1][1] = max(self._delay_peaks[-1][1], delay)
+        else:
+            self._delay_peaks.append([second, delay])
         if source not in self.sources:
             if len(self.sources) >= self.MAX_SOURCES:
                 raise ValueError('렌더링 대상이 너무 많아 측정을 중단했어요.')
@@ -138,8 +148,14 @@ class FrameStream:
         while len(events) > 2 and stamp - events[0] > self.WINDOW:
             events.popleft()
 
+    def arrival_stale(self, now):
+        """도착 기준 '오래됨' 한계(초): 최근 60초 최대 도착 지연 + 1초, 최소 3.5초·최대 10초."""
+        peak = max((d for t, d in self._delay_peaks if now - t <= 60), default=0.0)
+        return min(self.ARRIVAL_STALE_MAX, max(self.ARRIVAL_STALE_MIN, peak + 1.0))
+
     def snapshot(self, now):
-        available = sorted(key for key, events in self.sources.items() if events and now-events[-1] <= self.STALE)
+        stale = self.arrival_stale(now)
+        available = sorted(key for key, events in self.sources.items() if events and now-events[-1] <= stale)
         source = self.selected
         if source is None and len(available) == 1:
             source = available[0]
@@ -147,7 +163,7 @@ class FrameStream:
                   if len(available)>1 and source is None else '측정 준비 중 · 최신 프레임을 기다려요.')
         events = self.sources.get(source, ())
         fps = None
-        if len(events) >= 2 and now-events[-1] <= self.STALE:
+        if len(events) >= 2 and now-events[-1] <= stale:
             span = events[-1]-events[0]
             if span >= self.MIN_SPAN:
                 fps = (len(events)-1)/span

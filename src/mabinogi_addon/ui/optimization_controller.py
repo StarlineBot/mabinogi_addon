@@ -20,6 +20,17 @@ from .optimization_panel import OptimizationPanel
 from .frame_overlay import FrameOverlay
 from ..system.perf_metrics import METRICS, PerfSampler
 
+OVERLAY_ITEMS = (*METRICS, 'clock')  # 게임 위 정보 표시 항목(명세 16절: 현재 시각은 OS 지표가 아니라 수집하지 않음)
+FPS_HOLD = 4.0  # FPS가 이 시간 넘게 계속 없을 때만 '—'(PresentMon 출력이 1~2.7초 묶여 와도 깜빡이지 않게)
+
+
+def clock_text(hour: int, minute: int, second: int, fmt: str = '24', seconds: bool = True) -> tuple[str, str]:
+    """(앞글자, 값) — 24시간 ('', '21:41:08'), 12시간 ('PM', '9:41:08'). 초를 끄면 '21:41'."""
+    tail = f':{second:02d}' if seconds else ''
+    if fmt == '12':
+        return ('AM' if hour < 12 else 'PM'), f'{hour % 12 or 12}:{minute:02d}{tail}'
+    return '', f'{hour:02d}:{minute:02d}{tail}'
+
 
 # 상단 최적화 배지 색(0.17.2 사용자 결정): 블랙박스·전투 보조와 같은 모양('● 최적화: …', 한 색, 밑줄 없음)
 RESULT_COLORS = Named({'ok': 'ok', 'neutral': 'muted', 'warn': 'warn', 'error': 'danger'})  # 결과 요약 줄(명세 14.6)
@@ -91,7 +102,12 @@ class OptimizationController(QObject):
         # 오버레이 표시 항목(FPS 명세 8.4). 기본은 FPS만. 표시만 바꾸며 구간 요약·수집에는 영향 없음.
         saved = section.get('metrics')
         saved = saved if isinstance(saved,dict) else {}
-        self._metrics = {key: (saved[key] if type(saved.get(key)) is bool else key == 'fps') for key in METRICS}
+        self._metrics = {key: (saved[key] if type(saved.get(key)) is bool else key == 'fps') for key in OVERLAY_ITEMS}
+        # 명세 16절: 현재 시각 형식(24/12시간)·초 표시. 초 표시 기본 켜짐(사용자 선호, 기본값 재확인 대상).
+        clock = section.get('clock') if isinstance(section.get('clock'), dict) else {}
+        self._clock_format = clock.get('format') if clock.get('format') in ('24', '12') else '24'
+        self._clock_seconds = clock.get('seconds') if type(clock.get('seconds')) is bool else True
+        self._last_fps, self._fps_seen_at = None, 0.0  # 깜빡임 방지: FPS가 잠깐 비어도 마지막 값을 FPS_HOLD초 유지
         self.sampler = PerfSampler()
         # 'FPS 표시' 켜짐은 재실행 후에도 유지(수집 모드는 매번 꺼짐으로 시작). 접근이 확인된 첫 틱에 1회 복원.
         self._restore_display = section.get('display') is True
@@ -142,7 +158,7 @@ class OptimizationController(QObject):
         self.closing = False
         self.context = None
         self.last_tick = time.monotonic()
-        self.frame_status = ("이전 FPS 세션 정리 필요 · 'FPS 표시'를 한 번 눌러 정리해 주세요." if self.collector.pending
+        self.frame_status = ("이전 FPS 세션 정리 필요 · '정보 표시'를 한 번 눌러 정리해 주세요." if self.collector.pending
                              else '꺼짐 · 표시 안 함')
         self.last_health = 0.0
         self._delay_logged = time.monotonic()
@@ -180,7 +196,18 @@ class OptimizationController(QObject):
             overlay.moved.connect(self._save_overlay)
         return self._overlay
 
+    def _display_fps(self, fps, now):
+        """(보일 FPS, 오버레이를 띄울지). 잠깐 비면 마지막 값을 FPS_HOLD초 유지, 계속 없으면 None('—').
+        측정을 시작한 뒤 첫 값이 나오기 전에는 띄우지 않는다(예전과 같음)."""
+        if fps is not None:
+            self._last_fps, self._fps_seen_at = fps, now
+            return fps, True
+        if self._last_fps is None:
+            return None, False
+        return (self._last_fps if now - self._fps_seen_at < FPS_HOLD else None), True
+
     def _hide_overlay(self):
+        self._last_fps = None  # 다시 보일 때는 새 값부터(비활성·일시정지·대상 경계 뒤 옛 값을 유지하지 않음)
         if self._overlay is not None: self._overlay.hide()
 
     def refresh_access(self, recheck=True):
@@ -506,6 +533,10 @@ class OptimizationController(QObject):
         for key, box in d.metric_boxes.items():
             box.setChecked(self._metrics[key])
             box.toggled.connect(lambda on, key=key: self._set_metric(key, on))
+        d.clock_format.setCurrentIndex(1 if self._clock_format == '12' else 0)
+        d.clock_format.currentIndexChanged.connect(lambda i: self._set_clock_format('12' if i == 1 else '24'))
+        d.clock_seconds.setChecked(self._clock_seconds)
+        d.clock_seconds.toggled.connect(self._set_clock_seconds)
         d.summary_collect.toggled.connect(self._toggle_summary_collection)
         d.summary_save.clicked.connect(self._save_summary)
         d.summary_folder.clicked.connect(self._open_summary_folder)
@@ -533,7 +564,8 @@ class OptimizationController(QObject):
         raw=config._read_local_config()
         section=raw.get('frameMeter')
         section=section if isinstance(section,dict) else {}
-        section.update(scale=self._scale,metrics=dict(self._metrics),**extra)
+        section.update(scale=self._scale,metrics=dict(self._metrics),
+                       clock=dict(format=self._clock_format,seconds=self._clock_seconds),**extra)
         if self._overlay is not None:  # 오버레이를 아직 만들지 않았어도 배율·표시 항목·표시 켜짐은 저장한다
             section.update(overlay=dict(x=self.overlay.x(),y=self.overlay.y(),locked=self.overlay.locked))
         raw['frameMeter']=section
@@ -549,18 +581,39 @@ class OptimizationController(QObject):
         if not self._can_start(): return
         self._metrics[key] = bool(on)
         self._save_overlay()
+        if key == 'clock' and self.panel is not None:
+            self.panel.set_clock_options_enabled(bool(on))
+
+    def _set_clock_format(self, fmt):
+        if not self._can_start(): return
+        self._clock_format = '12' if fmt == '12' else '24'
+        self._save_overlay()
+
+    def _set_clock_seconds(self, on):
+        if not self._can_start(): return
+        self._clock_seconds = bool(on)
+        self._save_overlay()
+
+    def _clock_item(self):
+        """PC 시계를 매번 새로 읽는다(앱 안에서 1초씩 더하지 않음 — 절전 복귀·시간 동기화 뒤에도 바로 맞게).
+        Qt 시계는 Windows 현재 시간대를 따른다(파이썬 time은 시작 때 시간대를 기억할 수 있음)."""
+        from PySide6.QtCore import QTime
+        now = QTime.currentTime()
+        prefix, value = clock_text(now.hour(), now.minute(), now.second(), self._clock_format, self._clock_seconds)
+        return ('현재 시각', value, '', prefix)
 
     def overlay_items(self, fps, values):
-        """켠 항목만 (이름, 값, 단위)로. 값을 아직 못 읽었으면 '—'."""
+        """켠 항목만 (이름, 값, 단위[, 앞글자])로. 값을 아직 못 읽었으면 '—'."""
         def percent(value):
             return ('—', '') if value is None else (f'{value:.0f}', '%')
         items = []
-        if self._metrics['fps']: items.append(('FPS', f'{fps:.0f}', ''))
+        if self._metrics['fps']: items.append(('FPS', '—' if fps is None else f'{fps:.0f}', ''))
         if self._metrics['cpu']: items.append(('게임 CPU', *percent(values.get('cpu'))))  # FPS 명세 10.4 D안
         if self._metrics['gpu']: items.append(('GPU', *percent(values.get('gpu'))))
         if self._metrics['memory']:
             memory = values.get('memory')
             items.append(('게임 메모리', '—', '') if memory is None else ('게임 메모리', f'{memory/1024**3:.1f}', 'GB'))
+        if self._metrics.get('clock'): items.append(self._clock_item())
         return items
 
     def _lock(self, locked):
@@ -937,9 +990,9 @@ class OptimizationController(QObject):
         if running and not self.closing and self._can_start():
             if len(self._restarts) < self.RESTART_LIMIT:
                 self._restart_at = now + self.RESTART_DELAY
-                message += f'\n잠시 뒤 FPS 표시를 다시 켜요({len(self._restarts) + 1}/{self.RESTART_LIMIT}).'
+                message += f'\n잠시 뒤 정보 표시를 다시 켜요({len(self._restarts) + 1}/{self.RESTART_LIMIT}).'
             else:
-                message += '\n자동 재시작 한도(10분에 3회)에 도달해 꺼졌어요. 다시 켜려면 FPS 표시를 눌러 주세요.'
+                message += '\n자동 재시작 한도(10분에 3회)에 도달해 꺼졌어요. 다시 켜려면 정보 표시를 눌러 주세요.'
         self.stop_frames(message)
 
     def set_paused(self, paused):
@@ -1012,13 +1065,15 @@ class OptimizationController(QObject):
         self.frame_status = self._run_label() + ' · ' + result['status']
         # 추가 지표는 작업 스레드에서 1초마다 읽은 최신 값만 쓴다(UI 스레드에서 OS 조회 없음).
         # 표시 중에는 켠 표시 항목, 수집 중에는 구간 기록용 CPU·GPU 사용률과 게임 선호도·우선순위도 함께 읽는다(FPS 명세 9절).
-        wanted = set() if self._collect_only else {k for k, on in self._metrics.items() if on and k != 'fps'}
+        wanted = set() if self._collect_only else {k for k, on in self._metrics.items() if on and k not in ('fps', 'clock')}
         if self._summary_collecting:
             wanted |= {'cpu', 'gpu', 'process'}
         self.sampler.update(sorted(wanted), game['pid'])
         self.summary.observe(self.sampler.latest)
-        items = (self.overlay_items(result['fps'], self.sampler.latest)
-                 if result['fps'] is not None and not self._collect_only else [])
+        # 깜빡임 방지(2026-11-03 app.log: PresentMon 출력이 1~2.7초 묶여 와 fps가 순간 None → 숨김↔표시 반복).
+        # 잠깐 비면 마지막 값을 FPS_HOLD초 유지하고, 계속 없으면 '—'. 숨기는 건 비활성·일시정지·측정 중지일 때만.
+        fps, shown = self._display_fps(result['fps'], time.monotonic())
+        items = self.overlay_items(fps, self.sampler.latest) if shown and not self._collect_only else []
         if items and not self.paused:
             self.overlay.set_items(items)
             self.overlay.show()
@@ -1080,6 +1135,7 @@ class OptimizationController(QObject):
         d.inspect.setEnabled(allowed and not self.engine.inspecting)  # 0.22.0 QA: 세션(자동 적용 대기 포함) 중에도 다시 확인 가능
         self._sync_optimization_toggle()
         for control in (d.lock,d.scale,*d.metric_boxes.values()): control.setEnabled(allowed)
+        d.set_clock_options_enabled(allowed and self._metrics.get('clock', False))
         d.frames_toggle.setEnabled((allowed and not self.closing) or self.frames or self.collector.pending)
         self._sync_frames_toggle()
         for control in (d.summary_collect,d.summary_save,d.summary_folder): control.setEnabled(allowed and self._creator())
@@ -1377,7 +1433,7 @@ class OptimizationController(QObject):
             # 수집기 오류로 멈춘 경우(자동 재시작 대기 등). 표시 여부와는 무관하다(FPS 명세 9절).
             return '수집 모드 켜짐 · 측정이 멈춰 있어요. 상태 줄을 확인해 주세요.'
         if self._summary_collecting and self._collect_only:
-            return '수집 중(FPS 표시 꺼짐) · ' + self._summary_message
+            return '수집 중(정보 표시 꺼짐) · ' + self._summary_message
         return self._summary_message
 
     def _measurement_text(self):

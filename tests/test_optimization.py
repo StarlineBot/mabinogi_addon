@@ -165,7 +165,9 @@ def test_fps_uses_present_events_and_stales_to_unknown():
     # Integer millisecond input uses exact 50 FPS for this test.
     frames(s,rate=50,count=51)
     assert s.snapshot(101)['fps']==pytest.approx(50)
-    assert s.snapshot(104)['fps'] is None
+    # 0.41.0 명세 변경(깜빡임): 도착 기준 '오래됨'은 최소 3.5초 — 3초 뒤에는 아직 값, 3.6초 뒤 없음
+    assert s.snapshot(104)['fps']==pytest.approx(50)
+    assert s.snapshot(104.6)['fps'] is None
     s.boundary(104)
     frames(s,start=103,rate=50,count=20)
     assert s.snapshot(104)['fps'] is None

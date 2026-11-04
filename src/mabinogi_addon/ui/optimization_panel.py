@@ -149,19 +149,30 @@ class OptimizationPanel(QWidget):
         body.addWidget(FeatureHeader('FPS 측정','마비노기의 프레임을 측정해 현재 FPS를 보여줘요.',
                                      help_button('FPS 측정 사용법',HELP['FPS 측정'],self)))
         # 명세 14.4: 위 세 구역(게임에 FPS 표시/오버레이/상태)을 '게임에 FPS 표시' 하나로. 항목 설명·유지·일시정지 안내는 도움말로.
-        group=_group('게임에 FPS 표시',body)
+        group=_group('게임 위 정보 표시',body)  # 명세 16절: 시각만 보는 사람도 있어 'FPS' 대신 '정보'(2단 탭 'FPS 측정'은 그대로)
         from .widgets import switch
         row=QHBoxLayout()
-        self.frames_toggle=switch('FPS 표시')  # 기능 켜기 = 스위치(명세 14.5)
+        self.frames_toggle=switch('정보 표시')  # 기능 켜기 = 스위치(명세 14.5), 이름은 명세 16절
         row.addWidget(self.frames_toggle)
         row.addSpacing(12)
         self.frames_status=QLabel();self.frames_status.setTextFormat(Qt.TextFormat.RichText);self.frames_status.setWordWrap(True)
         row.addWidget(self.frames_status,1);group.addLayout(row)
         self.show_frames_status('꺼짐 · 표시 안 함', False)
         row=QHBoxLayout();row.addWidget(QLabel('표시 항목'));self.metric_boxes={}
-        for key, text in (('fps','FPS'),('cpu','게임 CPU'),('gpu','GPU'),('memory','게임 메모리')):
+        items_label=row.itemAt(0).widget()
+        for key, text in (('fps','FPS'),('cpu','게임 CPU'),('gpu','GPU'),('memory','게임 메모리'),('clock','현재 시각')):
             self.metric_boxes[key]=QCheckBox(text);row.addWidget(self.metric_boxes[key])
         row.addStretch();group.addLayout(row)
+        # 명세 16절 2항: 표시 항목 아래 줄 — 시각 형식·초 표시(현재 시각을 켰을 때만 조작)
+        row=QHBoxLayout()
+        row.addSpacing(items_label.sizeHint().width()+row.spacing()+12)  # '표시 항목' 칸만큼 들여 항목 아래에 맞춤
+        self.clock_format_label=QLabel('시각 형식');row.addWidget(self.clock_format_label)
+        self.clock_format=QComboBox();self.clock_format.addItems(['24시간 (21:41)','12시간 (PM 9:41)'])
+        self.clock_format.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
+        row.addWidget(self.clock_format);row.addSpacing(16)
+        self.clock_seconds=QCheckBox('초 표시');self.clock_seconds.setChecked(True);row.addWidget(self.clock_seconds)
+        row.addStretch();group.addLayout(row)
+        self.set_clock_options_enabled(False)
         row=QHBoxLayout();row.addWidget(QLabel('표시 배율'))
         self.scale=QSpinBox();self.scale.setRange(50,300);self.scale.setValue(100);self.scale.setSuffix(' %')
         self.scale.setFixedWidth(self.scale.sizeHint().width())  # 배율은 짧은 입력칸
@@ -203,6 +214,11 @@ class OptimizationPanel(QWidget):
         for combo in (self.split,self.adapter):
             combo.setMinimumContentsLength(16)
             combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+
+    def set_clock_options_enabled(self, on: bool) -> None:
+        """시각 형식 줄은 '현재 시각'을 켰을 때만 조작(꺼지면 회색)."""
+        for control in (self.clock_format_label, self.clock_format, self.clock_seconds):
+            control.setEnabled(bool(on))
 
     def show_frames_status(self, text, running):
         """FPS 상태 한 줄(명세 14.4: 상태 구역 흡수). 꺼짐이면 '● 꺼짐 — 켜면 게임 화면에 FPS를 보여줘요'."""

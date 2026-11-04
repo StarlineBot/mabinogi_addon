@@ -1,8 +1,12 @@
 {
-  "version": "0.40.2",
+  "version": "0.41.0",
   "tests": [
-    "tests/test_harp_channels.py",
-    "tests/test_bundle_layout.py",
+    "tests/test_overlay_clock.py",
+    "tests/test_overlay_metrics.py",
+    "tests/test_optimization.py",
+    "tests/test_optimization_ui.py",
+    "tests/test_color_switch_polish.py",
+    "tests/test_home_page.py",
     "tests/test_startup_build.py",
     "tests/test_release_candidate.py",
     "tests/test_windows_ci.py",
@@ -12,41 +16,56 @@
     "tests/test_startup_smoke.py"
   ],
   "coverage": {
-    "src/mabinogi_addon/harp_latency.py": {
+    "src/mabinogi_addon/optimization/frames.py": {
       "tests": [
-        "tests/test_harp_channels.py",
-        "tests/test_bundle_layout.py"
+        "tests/test_overlay_clock.py",
+        "tests/test_optimization.py"
       ],
-      "reason": "하프: 중앙값 추천·배지 하나·성공 3회 전 추천 없음, 채널 파일 번들 경로"
+      "reason": "깜빡임: 도착 지연 기준 끊김(3.5초~, 최근 최대 지연+1초)·묶여 온 이벤트에도 fps·대상 유지·대상 여럿이면 고르지 않음"
     },
-    "src/mabinogi_addon/ui/harp_tab.py": {
+    "src/mabinogi_addon/ui/optimization_controller.py": {
       "tests": [
-        "tests/test_harp_channels.py",
-        "tests/test_bundle_layout.py"
+        "tests/test_overlay_clock.py",
+        "tests/test_overlay_metrics.py",
+        "tests/test_optimization_ui.py"
       ],
-      "reason": "하프 화면: 큰 숫자=중앙값·방금 값 작게·'비슷하게 빠름'·배지 잘림·채널 파일 못 읽어도 앱 계속"
+      "reason": "현재 시각 항목·형식/초 저장·매번 시계 읽기, 마지막 FPS 4초 유지 후 —, 숨김은 비활성·일시정지·중지 때만, 정보 표시 문구"
     },
-    "src/mabinogi_addon/paths.py": {
+    "src/mabinogi_addon/ui/optimization_panel.py": {
       "tests": [
-        "tests/test_bundle_layout.py"
+        "tests/test_overlay_clock.py",
+        "tests/test_overlay_metrics.py",
+        "tests/test_optimization_ui.py",
+        "tests/test_color_switch_polish.py"
       ],
-      "reason": "번들(_MEIPASS) 배치 모의로 MainWindow 생성·assets는 resource_dir()만(0.40.0 시작 즉시 종료 재발 방지)"
+      "reason": "게임 위 정보 표시 구역·정보 표시 스위치·현재 시각 체크·시각 형식/초 표시 줄(시각 켤 때만)"
     },
-    "packaging/build_windows.py": {
+    "src/mabinogi_addon/ui/frame_overlay.py": {
       "tests": [
-        "tests/test_bundle_layout.py",
-        "tests/test_startup_build.py",
-        "tests/test_release_candidate.py",
-        "tests/test_windows_ci.py"
+        "tests/test_overlay_clock.py",
+        "tests/test_overlay_metrics.py"
       ],
-      "reason": "--add-data 매핑대로 번들 배치 모의·빌드/후보 계약"
+      "reason": "AM/PM 작은 앞글자·폭 계산·기존 세 칸 항목 호환"
+    },
+    "src/mabinogi_addon/ui/home_page.py": {
+      "tests": [
+        "tests/test_overlay_clock.py",
+        "tests/test_home_page.py"
+      ],
+      "reason": "홈 최적화 줄 이름 게임 위 정보"
+    },
+    "src/mabinogi_addon/ui/feature_copy.py": {
+      "tests": [
+        "tests/test_optimization_ui.py"
+      ],
+      "reason": "FPS 측정 도움말 문구(정보 표시·현재 시각)"
     },
     "src/mabinogi_addon/assets/release_notes.md": {
       "tests": [
         "tests/test_release_notes.py",
         "tests/test_release_notes_trigger.py"
       ],
-      "reason": "0.40.2 노트 파싱·새 버전 표시"
+      "reason": "0.41.0 노트 파싱·새 버전 표시"
     },
     "packaging/release_checks.json": {
       "tests": [
@@ -54,18 +73,14 @@
       ],
       "reason": "버전·선택 경로 유효성·범위 근거"
     },
-    "scripts/run_release_checks.py": {
+    "packaging/build_windows.py": {
       "tests": [
-        "tests/test_release_checks.py"
-      ],
-      "reason": "버전·선택 경로 유효성·범위 근거"
-    },
-    "src/mabinogi_addon/ui/main_window.py": {
-      "tests": [
-        "tests/test_bundle_layout.py",
+        "tests/test_startup_build.py",
+        "tests/test_release_candidate.py",
+        "tests/test_windows_ci.py",
         "tests/test_startup_smoke.py"
       ],
-      "reason": "번들 배치·소스 최소 기동"
+      "reason": "배포 계약: 빌드·후보·Windows CI·시작 확인"
     }
   }
 }

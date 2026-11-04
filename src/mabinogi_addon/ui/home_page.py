@@ -55,7 +55,7 @@ COMBAT_ROWS = (("buff", "버프", False), ("debuff", "디버프", False),
                ("tuarim", "투아림 알림", True), ("custom", "커스텀 오버레이", True),
                ("skillbar", "단축바", False), ("memo", "메모", False))
 # 아래 한 줄 3칸(중요도·자주 보는 순): (묶음 제목, [(키, 이름, 스위치 있음)])
-BOTTOM_BOXES = (("최적화", (("opt", "게임 최적화", True), ("fps", "FPS 표시", True),
+BOTTOM_BOXES = (("최적화", (("opt", "게임 최적화", True), ("fps", "게임 위 정보", True),
                            ("cursor", "마우스 커서", True))),  # 0.37.0: 커서는 최적화 › 마우스 커서
                 ("블랙박스", (("blackbox", "최근 영상 보관", True),)),
                 ("파티 모집", (("keywords", "키워드 알림", False),)))

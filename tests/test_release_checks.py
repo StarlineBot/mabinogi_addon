@@ -69,17 +69,19 @@ def test_current_plan_maps_every_selected_file_to_changed_code_or_shared_contrac
 
 
 def test_current_release_keeps_feature_boundaries_and_delivery_contracts():
-    """0.40.2: 하프 화면 정리 + 번들 배치(0.40.0 시작 즉시 종료 재발 방지) + 배포 계약. (릴리즈마다 경계를 바꾼다 — 누적하지 않음)"""
+    """0.41.0: 게임 위 정보(현재 시각·이름 바꾸기) + FPS 깜빡임 + 배포 계약. (릴리즈마다 경계를 바꾼다 — 누적하지 않음)"""
     root = Path(__file__).resolve().parents[1]
     plan = json.loads((root / 'packaging/release_checks.json').read_text(encoding='utf-8'))
     paths = set(plan['tests'])
     assert {
-        'tests/test_harp_channels.py', 'tests/test_bundle_layout.py', 'tests/test_startup_build.py',
+        'tests/test_overlay_clock.py', 'tests/test_optimization.py', 'tests/test_optimization_ui.py',
+        'tests/test_overlay_metrics.py', 'tests/test_startup_build.py',
         'tests/test_release_checks.py', 'tests/test_release_candidate.py', 'tests/test_windows_ci.py',
         'tests/test_startup_smoke.py',
     } <= paths
     assert {
-        'src/mabinogi_addon/harp_latency.py', 'src/mabinogi_addon/ui/harp_tab.py', 'src/mabinogi_addon/paths.py',
+        'src/mabinogi_addon/optimization/frames.py', 'src/mabinogi_addon/ui/optimization_controller.py',
+        'src/mabinogi_addon/ui/optimization_panel.py', 'src/mabinogi_addon/ui/frame_overlay.py',
         'packaging/build_windows.py', 'src/mabinogi_addon/assets/release_notes.md',
     } <= set(plan['coverage'])
     # The separate development entry must continue collecting the whole suite.

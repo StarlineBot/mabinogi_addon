@@ -117,7 +117,8 @@ def test_fps_is_one_section_with_lock_on_the_right(window):
     panel = w.optimization_tools.panel
     page = panel.tabs.widget(1)
     titles = [box.title() for box in page.findChildren(QGroupBox)]
-    assert "게임에 FPS 표시" in titles and "오버레이" not in titles and "상태 · 수집 품질" not in titles
+    assert "게임 위 정보 표시" in titles  # 0.41.0 명세 16절 이름 변경
+    assert "게임에 FPS 표시" not in titles and "오버레이" not in titles and "상태 · 수집 품질" not in titles
     w._tabs.setCurrentWidget(panel)
     panel.tabs.setCurrentIndex(1)
     app.processEvents()

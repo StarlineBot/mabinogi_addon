@@ -297,7 +297,7 @@ def test_start_from_app_preserves_collector_header_before_game_focus(window, mon
     assert c.frames, c.frame_status
     assert c.overlay.isVisible()
     assert c.panel.frames_toggle.isEnabled() and c.panel.frames_toggle.isChecked()
-    assert c.panel.frames_toggle.isChecked() and c.panel.frames_toggle.text() == 'FPS 표시' and c.frame_status.startswith('표시 중 · ')
+    assert c.panel.frames_toggle.isChecked() and c.panel.frames_toggle.text() == '정보 표시' and c.frame_status.startswith('표시 중 · ')
     assert c.stream.snapshot(now[0])['fps'] == pytest.approx(50)
     c.stop_frames()
 
@@ -524,6 +524,7 @@ def test_condition_change_during_measurement_cuts_and_continues_with_new_name(wi
 
 
 def test_fps_display_toggle_starts_and_stops_measurement(window, monkeypatch):
+    # 0.41.0 명세 16절: 스위치 이름 'FPS 표시' → '정보 표시'.
     # FPS 탭 표시/수집 분리: 'FPS 표시' 토글 하나가 기존 측정 시작·중단과 같은 동작.
     w, app = window; c = w.optimization_tools
     monkeypatch.setattr(module, 'optimization_available', lambda: True); c.refresh_access()
@@ -531,15 +532,15 @@ def test_fps_display_toggle_starts_and_stops_measurement(window, monkeypatch):
     monkeypatch.setattr(c, 'start_frames', lambda: calls.append('start') or setattr(c, 'frames', True))
     monkeypatch.setattr(c, 'stop_frames', lambda message=None: calls.append('stop') or setattr(c, 'frames', False))
     toggle = c.panel.frames_toggle
-    assert toggle.text() == 'FPS 표시' and not toggle.isChecked()
+    assert toggle.text() == '정보 표시' and not toggle.isChecked()
     toggle.click()
-    assert calls == ['start'] and toggle.isChecked() and toggle.text() == 'FPS 표시'  # 0.29.0(명세 14.5): 스위치 — 글자는 그대로
+    assert calls == ['start'] and toggle.isChecked() and toggle.text() == '정보 표시'  # 0.29.0(명세 14.5): 스위치 — 글자는 그대로
     toggle.click()
-    assert calls == ['start', 'stop'] and not toggle.isChecked() and toggle.text() == 'FPS 표시'
+    assert calls == ['start', 'stop'] and not toggle.isChecked() and toggle.text() == '정보 표시'
     # 시작이 실패하면(게임 미등록 등) 토글은 다시 꺼짐으로 돌아간다.
     monkeypatch.setattr(c, 'start_frames', lambda: calls.append('start-failed'))
     toggle.click()
-    assert not toggle.isChecked() and toggle.text() == 'FPS 표시'
+    assert not toggle.isChecked() and toggle.text() == '정보 표시'
 
 
 def test_collection_mode_measures_without_display_and_stops_when_both_off(window, monkeypatch, tmp_path):
@@ -557,7 +558,7 @@ def test_collection_mode_measures_without_display_and_stops_when_both_off(window
     assert c._collect_only and not c.panel.frames_toggle.isChecked()  # FPS 표시는 꺼진 그대로
     assert c._run_label() == '수집 중'
     c._render_summary(force=True)
-    assert '수집 중(FPS 표시 꺼짐)' in c.panel.summary_path.text()
+    assert '수집 중(정보 표시 꺼짐)' in c.panel.summary_path.text()
     # 표시를 켰다 꺼도 수집은 계속
     c.panel.frames_toggle.click()
     assert c.panel.frames_toggle.isChecked() and not c._collect_only and calls == ['start']

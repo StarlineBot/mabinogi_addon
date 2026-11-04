@@ -91,7 +91,8 @@ def test_fps_tab_has_no_render_target_combo_and_default_metrics(app):
     from mabinogi_addon.ui.optimization_panel import OptimizationPanel
     panel = OptimizationPanel(QWidget())
     assert not hasattr(panel, 'source')  # 8.2 렌더링 대상 선택 제거
-    assert list(panel.metric_boxes) == ['fps', 'cpu', 'gpu', 'memory']
+    # 0.41.0 명세 16절: '현재 시각' 항목 추가(FPS·게임 CPU·GPU·게임 메모리 뒤)
+    assert list(panel.metric_boxes) == ['fps', 'cpu', 'gpu', 'memory', 'clock']
 
 
 def test_multiple_render_targets_are_explained_in_status():
