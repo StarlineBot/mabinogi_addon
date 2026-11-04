@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import threading
 from time import monotonic, perf_counter
 
 from .. import perf_meter
@@ -60,7 +61,7 @@ class BossTab(QWidget):
     # 꼬리 끊김 조사(사용자 app.log 11-04): 보스 틱(300ms)이 화면 스레드에서 캡처·이름 식별·HP 판독·보스바 확인(최대 ~36ms)을 했다.
     # 도르카(0.38.0)처럼 그 계산은 작업 스레드 1개에서, 화면 스레드는 결과 반영(상태·표시·경고)만 한다.
     INLINE_JOBS = False  # 테스트: 같은 계산을 바로(동기로) — 판정 회귀를 그대로 확인
-    SLOW_TICK_MS = 30.0  # 틱 계산이 이보다 오래 걸리면 단계별 소요를 app.log에(분당 1번)
+    SLOW_TICK_MS = 16.0  # 틱(계산+반영)이 커서 꼬리 한 박자(16ms)보다 길면 단계별 소요를 app.log에(분당 1번, 그 사이 횟수 함께)
     _job_ready = Signal(object)  # 작업 스레드 → 화면 스레드(대기열 연결)
     bar_region_changed = Signal()  # 보스 HP바 영역 변경 → 디버프 3차와 공유(재시작 알림)
     debuff_region_changed = Signal()  # 자동 찾기가 디버프 영역도 지정 → 디버프 추적 재시작
@@ -483,6 +484,12 @@ class BossTab(QWidget):
 
         area = to_physical(self._grab_region())
         presence = self._presence_wanted_fn is None or self._presence_wanted_fn()
+        if presence and self._bar_absent > self._UPCOMING_GONE_FRAMES:
+            # 보스바 확인(이름 글자 + % 판독)은 사전 판정을 통과하면 1회 평균 80ms(최대 150ms, 게임 화면 525곳 측정 — 61% 통과).
+            # 바가 이미 안 보이는 동안에는 BAR_CHECK_EVERY틱에 한 번만(약 0.9초 — 저체력 알림 게이트 반응은 1초 안).
+            # 바가 보이거나 유예 중(깜빡임)일 때는 매 틱 확인 — '없음'으로 확정된 뒤에만 띄엄띄엄.
+            self._bar_skip = (getattr(self, "_bar_skip", 0) + 1) % self.BAR_CHECK_EVERY
+            presence = self._bar_skip == 0
         from .capture_guard import own_window_over
         # 우리 일반 창(메인 창 등)이 보스 영역을 덮으면 캡처 순간 제외가 필요하다 — 창 조작은 화면 스레드 전용이라
         # 이때만 예전처럼 화면 스레드에서(오버레이는 상시 캡처 제외라 해당 없음). 도르카와 같은 기준.
@@ -502,8 +509,14 @@ class BossTab(QWidget):
             finally:
                 steps[name] = steps.get(name, 0.0) + (perf_counter() - started) * 1000
 
-        out = dict(frame=None, boss_id=None, raw_hp=None, bar=None, steps=steps)
+        out = dict(frame=None, boss_id=None, raw_hp=None, bar=None, steps=steps,
+                   thread="화면" if threading.current_thread() is threading.main_thread() else "작업")
+        self._raw_ms = None
         frame = timed("캡처", grab, *area)
+        raw = self._raw_ms
+        if raw is not None and grab == self._grab_rect:  # 화면 스레드 캡처: 우리 창 빼기(CaptureGuard)와 실제 캡처를 나눠 본다
+            steps["CaptureGuard"] = max(0.0, steps["캡처"] - raw)
+            steps["캡처"] = raw
         if frame is None:
             return out
         out["frame"] = frame
@@ -524,16 +537,31 @@ class BossTab(QWidget):
         if out is None:
             self.halo_capture.set_boss_context(None)
             return
-        self._log_slow(out["steps"])
+        started = perf_counter()
+        ui: dict[str, float] = {}
+        try:
+            self._apply_frame(out, ui)
+        finally:
+            ui["반영"] = max(0.0, (perf_counter() - started) * 1000 - sum(ui.values()))
+            self._log_slow(out["steps"], ui, out.get("thread", "작업"))
+
+    def _apply_frame(self, out, ui) -> None:
+        def timed(name, fn, *args):
+            started = perf_counter()
+            try:
+                return fn(*args)
+            finally:
+                ui[name] = ui.get(name, 0.0) + (perf_counter() - started) * 1000
+
         frame = out["frame"]
         if frame is None:
-            self.halo_capture.set_boss_context(None)
+            timed("헤일로", self.halo_capture.set_boss_context, None)
             return
-        self._show_preview(frame)
+        timed("미리보기", self._show_preview, frame)
         self._last_frame = frame
         self._apply_collect_gate()
         boss_id = out["boss_id"]
-        self.halo_capture.set_boss_context(boss_id)
+        timed("헤일로", self.halo_capture.set_boss_context, boss_id)
 
         # 보스 식별/소멸 관리. **HP 판독·경고는 보스가 '이번 프레임' 식별됐을 때만**
         # 처리한다 — 보스가 없으면 영역이 길바닥/UI라 HP가 garbage로 읽히는데, 그걸
@@ -670,18 +698,25 @@ class BossTab(QWidget):
             except Exception:  # noqa: BLE001
                 pass
 
-    def _log_slow(self, steps) -> None:
-        """틱 계산이 SLOW_TICK_MS 넘으면 단계별 소요를 app.log에 — 분당 1번(도르카 '틱 느림'과 같은 형식)."""
-        total = sum(steps.values())
+    def _log_slow(self, steps, ui=None, thread="작업") -> None:
+        """틱(계산+화면 반영)이 SLOW_TICK_MS 넘으면 단계별 소요를 app.log에 — 분당 1번, 그 사이 느린 틱 횟수와 함께.
+        예: 보스 틱 느림 52ms(지난 1분 느린 틱 12회): [계산·작업] 캡처 3ms · 이름 식별 2ms · 보스바 확인 43ms · [반영·화면] 미리보기 1ms · 헤일로 0ms · 반영 2ms
+        [계산·화면]이면 우리 창이 보스 영역을 덮어 화면 스레드에서 읽은 틱(CaptureGuard 포함) — 이때는 꼬리를 멈춘다."""
+        ui = ui or {}
+        total = sum(steps.values()) + sum(ui.values())
         if total < self.SLOW_TICK_MS:
             return
+        self._slow_count = getattr(self, "_slow_count", 0) + 1
         now = monotonic()
         if now < getattr(self, "_slow_logged_until", 0.0):
             return
         self._slow_logged_until = now + 60.0
+        count, self._slow_count = self._slow_count, 0
         import logging
-        detail = " · ".join(f"{name} {ms:.0f}ms" for name, ms in steps.items())
-        logging.getLogger(__name__).info("보스 틱 느림(작업 스레드) %.0fms: %s", total, detail)
+        work = " · ".join(f"{name} {ms:.0f}ms" for name, ms in steps.items())
+        shown = " · ".join(f"{name} {ms:.0f}ms" for name, ms in ui.items())
+        logging.getLogger(__name__).info("보스 틱 느림 %.0fms(지난 1분 느린 틱 %d회): [계산·%s] %s · [반영·화면] %s",
+                                         total, count, thread, work or "-", shown or "-")
 
     def _boss_bar_visible(self, frame) -> bool:
         """이 프레임의 보스 영역이 '보스 체력바'로 검증되는지(등록 여부 무관).
@@ -729,6 +764,7 @@ class BossTab(QWidget):
     # '다음 패턴 목록'은 보스가 화면에서 사라지면 금방 감춘다. 트래커는 _GONE_FRAMES까지
     # 살아 있지만 목록까지 그만큼 떠 있으면 보스가 떠난 뒤 한참 남는다(#4). ~2초로 짧게.
     _UPCOMING_GONE_FRAMES = 6  # ~1.8초 (틱 300ms)
+    BAR_CHECK_EVERY = 3  # 바가 안 보이는 동안 보스바 확인 간격(틱)
 
     # ---- 보스 HP바 수집(오독 제보용) ----
     def _collect_group(self) -> QGroupBox:
@@ -923,6 +959,13 @@ class BossTab(QWidget):
         return self._capture_guard.grab(self._grab_raw, x, y, w, h)
 
     def _grab_raw(self, x: int, y: int, w: int, h: int):
+        started = perf_counter()
+        try:
+            return self._grab_raw_inner(x, y, w, h)
+        finally:
+            self._raw_ms = (perf_counter() - started) * 1000  # 보스 틱 로그: CaptureGuard와 실제 캡처 나누기
+
+    def _grab_raw_inner(self, x: int, y: int, w: int, h: int):
         try:
             if self._sct is None:
                 import mss

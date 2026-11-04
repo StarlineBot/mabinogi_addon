@@ -87,7 +87,7 @@
         "tests/test_boss_thread.py",
         "tests/test_boss_tab.py"
       ],
-      "reason": "보스 틱 계산 작업 스레드·반영 화면 스레드·느린 틱 단계별 로그, 기존 판정 회귀(동기 모드)"
+      "reason": "보스 틱 계산 작업 스레드·반영 화면 스레드·16ms 넘는 틱 단계별 로그(CaptureGuard 분리)·보스바 확인 간격, 기존 판정 회귀(동기 모드)"
     },
     "src/mabinogi_addon/ui/capture_guard.py": {
       "tests": [
