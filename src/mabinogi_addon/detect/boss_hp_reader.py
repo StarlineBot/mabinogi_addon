@@ -180,6 +180,30 @@ def number_area_flooded(region_bgr: np.ndarray) -> bool:
     return _flooded(band, w)
 
 
+_HINT_BRIGHT = (0.03, 0.40)  # 숫자 칸의 흰 글자 비율(실측 저HP 0.09~0.13, 회색 풍경은 0 또는 통째로 밝음)
+_HINT_RED = 0.01  # 왼쪽 60% 숫자 밴드의 빨간 채움 비율(실측 저HP 0.04~0.70)
+
+
+def low_hp_bar_hint(region_bgr: np.ndarray) -> bool:
+    """보스 존재 사전 판정용 저HP 단서: 숫자 칸 flooded + 흰 숫자 글자 + 왼쪽 빨간 채움.
+
+    number_area_flooded만으로는 보스 없는 회색·어두운 풍경도 숫자 칸이 저채도라 통과했다
+    (사용자 app.log 11-04: 게임 화면 조각 1010곳 중 100% 오통과 → 비싼 검증 0.5~150ms가 0.3초마다).
+    포인셰 저HP 재생에서 판독되는 프레임은 전부 통과, 풍경 오통과는 2.3%(23/1010)."""
+    if not number_area_flooded(region_bgr):
+        return False
+    h, w = region_bgr.shape[:2]
+    hsv = cv2.cvtColor(region_bgr, cv2.COLOR_BGR2HSV)
+    y0, y1 = int(h * _YBAND[0]), int(h * _YBAND[1])
+    num = hsv[y0:y1, int(w * 0.80):]
+    bright = float(((num[:, :, 1] < _SAT_MAX) & (num[:, :, 2] >= _BRIGHT_V)).mean())
+    if not (_HINT_BRIGHT[0] <= bright <= _HINT_BRIGHT[1]):
+        return False
+    left = hsv[y0:y1, : int(w * 0.60)]
+    red = ((left[:, :, 0] < 10) | (left[:, :, 0] > 170)) & (left[:, :, 1] > 100) & (left[:, :, 2] > 80)
+    return float(red.mean()) >= _HINT_RED
+
+
 def _low_hp_value(region_bgr, templates, band, w, scale, pitch, span, bright_samples=None) -> int | None:
     """기본 판독이 None일 때의 저HP 보조 판독. 해당 없으면 None(정상 경로 불변)."""
     if not _flooded(band, w):

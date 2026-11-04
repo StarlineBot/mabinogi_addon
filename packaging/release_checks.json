@@ -1,6 +1,7 @@
 {
   "version": "0.42.0",
   "tests": [
+    "tests/test_boss_bar_locate.py",
     "tests/test_capture_guard.py",
     "tests/test_perf_meter.py",
     "tests/test_favorites_hold.py",
@@ -84,8 +85,9 @@
     },
     "src/mabinogi_addon/ui/boss_tab.py": {
       "tests": [
-        "tests/test_boss_thread.py",
-        "tests/test_boss_tab.py"
+        "tests/test_boss_bar_locate.py",
+        "tests/test_boss_tab.py",
+        "tests/test_boss_thread.py"
       ],
       "reason": "보스 틱 계산 작업 스레드·반영 화면 스레드·16ms 넘는 틱 단계별 로그(CaptureGuard 분리)·보스바 확인 간격, 기존 판정 회귀(동기 모드)"
     },
@@ -107,6 +109,12 @@
         "tests/test_perf_meter.py"
       ],
       "reason": "오버레이 그리기 시간 기능별 집계"
+    },
+    "src/mabinogi_addon/detect/boss_hp_reader.py": {
+      "tests": [
+        "tests/test_boss_bar_locate.py"
+      ],
+      "reason": "보스 존재 사전 판정 저HP 단서(흰 숫자·빨간 채움): 진짜 저HP 프레임 통과·풍경 오통과 감소"
     }
   }
 }

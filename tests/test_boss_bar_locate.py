@@ -212,10 +212,10 @@ _POINCHE_ZIP = "tests/data/eotgallin_poinche_hp004_115.zip"
 
 
 def _precut(frame) -> bool:
-    """_boss_bar_visible의 값싼 사전 컷과 동일: 넓은 가로연속 OR 숫자영역 flooded."""
-    from mabinogi_addon.detect.boss_hp_reader import number_area_flooded
+    """_boss_bar_visible의 값싼 사전 컷과 동일: 넓은 가로연속 OR 저HP 단서(flooded + 흰 숫자 + 빨간 채움, 0.42.0)."""
+    from mabinogi_addon.detect.boss_hp_reader import low_hp_bar_hint
 
-    return bool(has_wide_bar_row(frame) or number_area_flooded(frame))
+    return bool(has_wide_bar_row(frame) or low_hp_bar_hint(frame))
 
 
 def _norm37(im):
@@ -249,3 +249,31 @@ def test_precut_misses_no_readable_lowhp_frame():
                 seen_low.setdefault(hp, _precut(f))
     for hp in (13, 5, 1):
         assert seen_low.get(hp) is True, f"저HP {hp}% 프레임이 사전 컷 통과 못 함"
+
+
+def test_precut_rarely_passes_scenery_without_boss():
+    """0.42.0(사용자 app.log 11-04): 보스 없는 게임 화면 조각에서 사전 컷이 48~61% 통과해 비싼 검증(최대 150ms)이
+    0.3초마다 돌았다. 저HP 단서를 좁혀 풍경 통과율을 크게 낮춘다(진짜 저HP 프레임은 위 테스트가 지킨다)."""
+    import glob
+    from mabinogi_addon.detect.boss_hp_reader import number_area_flooded
+
+    rng = np.random.default_rng(0)
+    old = new = total = 0
+    v = make_validator()
+    for path in sorted(glob.glob("tests/data/*.png")):
+        img = image_io.imread(path, cv2.IMREAD_COLOR)
+        if img is None or img.shape[0] < 200 or img.shape[1] < 600:
+            continue
+        for _ in range(15):
+            x = int(rng.integers(0, img.shape[1] - 540))
+            y = int(rng.integers(0, img.shape[0] - 37))
+            f = np.ascontiguousarray(img[y : y + 37, x : x + 540])
+            if _precut(f) and v(f):
+                continue  # 우연히 진짜 보스바 — 세지 않음
+            total += 1
+            old += bool(has_wide_bar_row(f) or number_area_flooded(f))
+            new += _precut(f)
+    if total < 200:
+        pytest.skip("게임 화면 자료 부족")
+    assert old / total > 0.4  # 예전 사전 컷(실측 약 60%)
+    assert new / total < 0.12, f"사전 컷 통과 {new}/{total}"
