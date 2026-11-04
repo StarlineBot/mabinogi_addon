@@ -123,7 +123,8 @@ def test_fps_is_one_section_with_lock_on_the_right(window):
     panel.tabs.setCurrentIndex(1)
     app.processEvents()
     assert panel.lock.mapTo(page, panel.lock.rect().topLeft()).x() > panel.scale.mapTo(page, panel.scale.rect().topLeft()).x()
-    assert "꺼짐 — 켜면 게임 화면에 FPS를 보여줘요" in panel.frames_status.text()
+    # 0.41.1: 0.41.0 이름 변경(정보 표시)과 맞춤 — FPS를 → 정보를
+    assert "꺼짐 — 켜면 게임 화면에 정보를 보여줘요" in panel.frames_status.text()
     assert panel.collect_toggle.text() == "진단 · 프레임 수집(구간 요약 파일)"
 
 

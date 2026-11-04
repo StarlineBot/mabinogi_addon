@@ -152,3 +152,23 @@ def test_overlay_keeps_last_value_then_dash_and_hides_only_when_told(app):
     assert show(58.0, 9.0) == (58.0, True)
     oc.OptimizationController._hide_overlay(fake)  # 게임 비활성·일시정지·대상 경계
     assert show(None, 9.5) == (None, False)  # 다시 보일 때는 새 값부터(옛 값 유지 안 함)
+
+
+@pytest.mark.parametrize('scale', [100, 150])
+def test_clock_and_fps_width_do_not_change_with_digits(app, scale):
+    """0.41.1: 숫자는 고정 칸 — 초마다 값이 바뀌어도 형식이 같으면 오버레이 폭이 같다(오른쪽 끝 흔들림 방지)."""
+    from mabinogi_addon.ui.frame_overlay import FrameOverlay
+    overlay = FrameOverlay(scale)
+    try:
+        widths = set()
+        for clock in ('11:11:11', '20:00:00', '23:59:59', '08:48:18'):
+            overlay.set_items([('FPS', '60', ''), ('현재 시각', clock, '')])
+            widths.add(overlay.width())
+        assert len(widths) == 1
+        fps_widths = set()
+        for fps in ('11', '88', '40', '17'):
+            overlay.set_items([('FPS', fps, '')])
+            fps_widths.add(overlay.width())
+        assert len(fps_widths) == 1
+    finally:
+        overlay.deleteLater()

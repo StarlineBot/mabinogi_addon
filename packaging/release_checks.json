@@ -7,6 +7,7 @@
     "tests/test_optimization_ui.py",
     "tests/test_color_switch_polish.py",
     "tests/test_home_page.py",
+    "tests/test_harp_channels.py",
     "tests/test_startup_build.py",
     "tests/test_release_candidate.py",
     "tests/test_windows_ci.py",
@@ -38,14 +39,14 @@
         "tests/test_optimization_ui.py",
         "tests/test_color_switch_polish.py"
       ],
-      "reason": "게임 위 정보 표시 구역·정보 표시 스위치·현재 시각 체크·시각 형식/초 표시 줄(시각 켤 때만)"
+      "reason": "게임 위 정보 표시 구역·정보 표시 스위치·현재 시각 체크·시각 형식/초 표시 줄(시각 켤 때만)·꺼짐/수집 모드 문구 정보 표시"
     },
     "src/mabinogi_addon/ui/frame_overlay.py": {
       "tests": [
         "tests/test_overlay_clock.py",
         "tests/test_overlay_metrics.py"
       ],
-      "reason": "AM/PM 작은 앞글자·폭 계산·기존 세 칸 항목 호환"
+      "reason": "AM/PM 작은 앞글자·폭 계산·기존 세 칸 항목 호환·숫자 고정 칸(시각·FPS 폭 고정)"
     },
     "src/mabinogi_addon/ui/home_page.py": {
       "tests": [
@@ -81,6 +82,12 @@
         "tests/test_startup_smoke.py"
       ],
       "reason": "배포 계약: 빌드·후보·Windows CI·시작 확인"
+    },
+    "src/mabinogi_addon/ui/harp_tab.py": {
+      "tests": [
+        "tests/test_harp_channels.py"
+      ],
+      "reason": "목록 읽기 실패 안내를 경고색 상자로(추천 초록과 구분)"
     }
   }
 }

@@ -125,7 +125,7 @@ class RecommendBox(QFrame):
     def __init__(self):
         super().__init__()
         self.setObjectName("harpRecommend")
-        self.setStyleSheet(f"#harpRecommend {{ background:{_tint('ok', 0.10)}; border:1px solid {color('ok')}; border-radius:6px; }}")
+        self._frame("ok")
         h = QHBoxLayout(self)
         h.setContentsMargins(14, 10, 14, 10)
         h.setSpacing(12)
@@ -140,14 +140,20 @@ class RecommendBox(QFrame):
         self.others.setTextFormat(Qt.TextFormat.RichText)
         h.addWidget(self.others)
 
-    def show_message(self, text: str) -> None:
-        self.main.setText(f"<span style='color:{color('muted')}'>{text}</span>")
+    def _frame(self, tone: str) -> None:
+        self.setStyleSheet(f"#harpRecommend {{ background:{_tint(tone, 0.10)}; border:1px solid {color(tone)}; border-radius:6px; }}")
+
+    def show_message(self, text: str, tone: str | None = None) -> None:
+        """tone='warn'이면 경고색 상자·글자(목록 읽기 실패 — 추천 초록과 구분)."""
+        self._frame(tone or "ok")
+        self.main.setText(f"<span style='color:{color(tone or 'muted')}'>{text}</span>")
         self.others.setText("")
 
     def show_result(self, history: hl.History) -> bool:
         top, others, similar = history.recommendation()
         if top is None:
             return False
+        self._frame("ok")
         s = history.stats[top]
         muted = color("muted")
         self.main.setText(f"<span style='font-size:24px; font-weight:bold; color:{color('ok')}'>{top}채널</span>"
@@ -354,7 +360,7 @@ class HarpChannelTab(QWidget):
             card.show_state(state, stats)
             card.set_fastest(number in fastest)
         if self.load_error:
-            self.recommend.show_message(self.load_error)
+            self.recommend.show_message(self.load_error, "warn")
         elif not self.recommend.show_result(self.history):
             samples = self.history.samples()
             if 0 < samples < hl.MIN_SAMPLES:

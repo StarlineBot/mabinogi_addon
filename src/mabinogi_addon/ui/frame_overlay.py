@@ -15,6 +15,25 @@ MINT = QColor('#00d1a7')
 _HEADER_H = 18  # 해제 상태의 이동 안내 줄
 
 
+def _digit_cell(metrics):
+    """숫자 한 칸 폭 — 가장 넓은 숫자 기준. 시각(초마다)·FPS 값이 바뀌어도 형식이 같으면 폭이 같다."""
+    return max(metrics.horizontalAdvance(d) for d in '0123456789')
+
+
+def _glyphs(metrics, text):
+    """[(x, 글자)]와 전체 폭. 숫자는 고정 칸 가운데, 나머지는 글자 폭 그대로(글꼴의 tnum 유무와 무관)."""
+    cell, x, out = _digit_cell(metrics), 0.0, []
+    for ch in text:
+        advance = metrics.horizontalAdvance(ch)
+        if ch.isdigit():
+            out.append((x + (cell - advance) / 2, ch))
+            x += cell
+        else:
+            out.append((x, ch))
+            x += advance
+    return out, x
+
+
 def _font(px, weight):
     font = QFont()
     font.setPixelSize(max(6, round(px)))
@@ -68,7 +87,7 @@ class FrameOverlay(QWidget):
         x, boxes = pad, []
         for name, value, unit, prefix in self._items:
             prefix_w = um.horizontalAdvance(prefix) + 3 * self._scale if prefix else 0
-            value_w = vm.horizontalAdvance(value)
+            value_w = _glyphs(vm, value)[1]
             unit_w = um.horizontalAdvance(unit) + (2 * self._scale if unit else 0)
             width = max(nm.horizontalAdvance(name), prefix_w + value_w + unit_w)
             boxes.append((x, value_w, width, prefix_w))
@@ -96,9 +115,13 @@ class FrameOverlay(QWidget):
         self._relayout()
 
     # ---- 그리기 ----
-    def _draw_text(self, painter, font, color, x, baseline, text):
+    def _draw_text(self, painter, font, color, x, baseline, text, fixed_digits=False):
         path = QPainterPath()
-        path.addText(QPointF(x, baseline), font, text)
+        if fixed_digits:  # 값: 숫자 고정 칸(오른쪽 끝이 초마다 흔들리지 않게)
+            for dx, ch in _glyphs(QFontMetricsF(font), text)[0]:
+                path.addText(QPointF(x + dx, baseline), font, ch)
+        else:
+            path.addText(QPointF(x, baseline), font, text)
         size = font.pixelSize()
         painter.setBrush(QColor(0, 0, 0, 90))  # 옅은 그림자
         painter.setPen(Qt.PenStyle.NoPen)
@@ -133,7 +156,7 @@ class FrameOverlay(QWidget):
             self._draw_text(painter, name_font, MINT, x, name_base, name)
             if prefix:  # AM/PM: 값과 같은 기준선에 작게(단위처럼)
                 self._draw_text(painter, unit_font, QColor('white'), x, value_base, prefix)
-            self._draw_text(painter, value_font, QColor('white'), x + prefix_w, value_base, value)
+            self._draw_text(painter, value_font, QColor('white'), x + prefix_w, value_base, value, fixed_digits=True)
             if unit:
                 self._draw_text(painter, unit_font, QColor('white'), x + prefix_w + value_w + 2 * self._scale,
                                 value_base, unit)

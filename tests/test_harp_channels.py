@@ -426,6 +426,10 @@ def test_unreadable_channel_file_keeps_app_running(monkeypatch, caplog):
     try:
         assert tab.channels == [] and tab.load_error == "채널 목록을 불러오지 못했어요"
         assert "채널 목록을 불러오지 못했어요" in tab.recommend.main.text()
+        # 0.41.1: 읽기 실패는 추천(초록) 상자가 아니라 경고색
+        from mabinogi_addon.ui.palette import color
+        assert color("warn") in tab.recommend.main.text() and color("warn") in tab.recommend.styleSheet()
+        assert color("ok") not in tab.recommend.styleSheet()
         assert any("하프 채널 목록" in r.getMessage() for r in caplog.records)
         tab.measure_now()
         assert tab._round is None

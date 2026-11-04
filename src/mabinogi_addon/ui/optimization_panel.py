@@ -188,7 +188,7 @@ class OptimizationPanel(QWidget):
         self.collect_box=QWidget();box_layout=QVBoxLayout(self.collect_box);box_layout.setContentsMargins(0,0,0,0)
         from .settings_layout import disclosure
         self.collect_toggle=disclosure('진단 · 프레임 수집(구간 요약 파일)',collect,box_layout)
-        group.addWidget(_label('수집 모드를 켜 두면 FPS 표시와 관계없이 게임이 앞에 있는 동안 구간 요약을 파일로 남겨요.\n'
+        group.addWidget(_label('수집 모드를 켜 두면 정보 표시와 관계없이 게임이 앞에 있는 동안 구간 요약을 파일로 남겨요.\n'
                                '게임 CPU·GPU 사용률과 게임의 CPU 선호도·우선순위도 함께 기록해요. 매 프레임 원본은 저장하지 않아요.\n'
                                '수집 모드는 앱을 실행할 때마다 꺼진 상태로 시작해요.'))
         row=QHBoxLayout()
@@ -221,11 +221,11 @@ class OptimizationPanel(QWidget):
             control.setEnabled(bool(on))
 
     def show_frames_status(self, text, running):
-        """FPS 상태 한 줄(명세 14.4: 상태 구역 흡수). 꺼짐이면 '● 꺼짐 — 켜면 게임 화면에 FPS를 보여줘요'."""
+        """FPS 상태 한 줄(명세 14.4: 상태 구역 흡수). 꺼짐이면 '● 꺼짐 — 켜면 게임 화면에 정보를 보여줘요'."""
         from html import escape
         from .palette import color
         if text == '꺼짐 · 표시 안 함':
-            text = '꺼짐 — 켜면 게임 화면에 FPS를 보여줘요'
+            text = '꺼짐 — 켜면 게임 화면에 정보를 보여줘요'
         tint = color('ok') if running else color('muted')
         self.frames_status.setText(f'<span style="color:{tint}">● {escape(text).replace(chr(10), "<br>")}</span>')
         self.frames_status.setProperty('plainText', text)
