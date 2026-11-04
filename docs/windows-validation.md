@@ -6,7 +6,12 @@ CI·배포 인프라는 현재 구성을 동결하며, 버전/관련 검사 목�
 ## 흐름과 실행 조건
 
 소스 개발과 후속 독립 QA를 마친 뒤 사용자가 GitHub Actions의 **Windows validation**에서
-main·버전·모드를 선택해 한 번 실행한다. PC에 gh가 없어도 웹의 Run workflow로 실행할 수 있다.
+main·버전·`verify-only`를 선택한다. 후보 exe를 직접 확인하고 기록한 뒤 `publish-existing`으로
+같은 후보를 게시한다. PC에 gh가 없어도 웹의 Run workflow로 실행할 수 있다.
+정책의 기준은 [AGENTS.md](../AGENTS.md)의 Windows 검증·수동 후보 확인 절이다.
+
+아래는 **현재 구현된 모드**다. 완성된 exe 실행·확인자 기록은 아직 자동 게이트가 아니다.
+`validate-and-publish`는 중간 수동 확인을 기다리지 않으므로 현재 필수 수동 절차의 기본 경로로 안내하지 않는다.
 
 | 모드 | 동작 | 게시 승인 |
 | --- | --- | --- |
@@ -17,7 +22,9 @@ main·버전·모드를 선택해 한 번 실행한다. PC에 gh가 없어도 �
 일반 main/태그 푸시는 Windows 검사나 게시를 시작하지 않는다. 검증만 성공도 게시하지 않는다.
 검증 run이 **완전히 completed/success로 끝난 뒤** `workflow_run`이 게시 workflow를 시작한다.
 같은 run 안에서 완료 검사를 생략하지 않으며, 검증 workflow가 게시 workflow를 기다리지 않는다.
-필수 단계 실패/skip/취소, 업로드 실패는 게시를 차단한다. 변경 기능 검사와 Windows 최소 기동/빌드의
+workflow 필수 단계 실패/skip/취소, 업로드 실패는 게시를 차단한다. 개별 테스트 skip은 별개이며 현재 JUnit
+검사는 실행 사례 존재와 failure/error 부재를 확인한다. 필수 자료 누락과 플랫폼 조건 등 정상 skip의 분류는
+담당자가 보고서로 확인해야 하며, 자료 목록/해시 기반 자동 실패 처리는 향후 별도 구현이다. 변경 기능 검사와 Windows 최소 기동/빌드의
 각 필수 단계를 같은 run/SHA/attempt에서 확인한다. Linux 통과를 네이티브 전체 검사 통과로 부르지 않는다.
 
 게시 workflow는 기본 브랜치의 신뢰한 코드만 실행한다. 실행 이벤트/API/승인 기록/후보를 대조하고,
@@ -222,7 +229,7 @@ Python 감독 바깥에도 배포 기능 검사 14분·개발 전체 회귀 17�
 입력한 버전의 앞뒤 공백은 요청 생성 경계에서 제거한다. 그 뒤 엄격한 `X.Y.Z` 검사를 거친
 동일한 값이 승인 영수증과 request job output을 통해 Windows `APP_VERSION`·PE 빌드·봉인에
 전달된다. 버전 본문, 노트 일치, 기존 태그·후보·SHA·승인 검사를 완화하지 않는다.
-소스 독립 QA를 마친 뒤 다음 중 **하나**를 실행한다. gh가 없으면 웹에서 같은 값을 선택한다.
+소스 독립 QA를 마친 뒤 아래 순서로 실행한다. gh가 없으면 웹에서 같은 값을 선택한다.
 
 검증만(기본, 게시 승인 아님):
 
@@ -230,17 +237,21 @@ Python 감독 바깥에도 배포 기능 검사 14분·개발 전체 회귀 17�
 gh workflow run windows.yml --ref main -f version=X.Y.Z -f mode=verify-only
 ```
 
-검증 성공 시 배포까지 승인:
+검증이 완료되면 후보 exe를 내려받아 [수동 후보 확인](../AGENTS.md#자동화-전-필수-수동-후보-확인)을 수행한다.
+창 준비·필수 자료 로드·정상 종료와 실행 전후 해시/버전을 확인하고, 확인자·확인 시각(시간대)·환경·
+검증 run/attempt·artifact ID·exe SHA256/크기·증거 위치를 기록해 회신한다.
+기존 앱 인스턴스와 실제 설정/로그인·네트워크를 분리한다. 공개 버전이 후보보다 새로울 때만 업데이트가
+가능하지만, 후보 버전이 더 높다는 이유만으로 다른 부작용까지 격리되는 것은 아니다.
+현재 exe에 전용 검증 모드는 없으며, 다른 파일로 교체되었거나 동일성이 불명확하면 게시하지 않는다.
 
-```bash
-gh workflow run windows.yml --ref main -f version=X.Y.Z -f mode=validate-and-publish
-```
-
-이미 검증만으로 확인한 유효 후보 배포(재검사/재빌드 없음):
+후보 확인 기록을 검토한 뒤 **사용자가** 같은 유효 후보를 게시한다(재검사/재빌드 없음):
 
 ```bash
 gh workflow run windows.yml --ref main -f version=X.Y.Z -f mode=publish-existing
 ```
+
+현재 `validate-and-publish` 모드는 코드에 남아 있지만 수동 확인 단계를 건너뛴다.
+이 모드가 존재한다는 사실을 후보 확인 완료 또는 게시 승인으로 해석하지 않는다.
 
 기존 후보는 dispatch 시작 SHA의 중요 입력 fingerprint와 버전이 일치해야 한다. 일반 Markdown만
 추가된 main은 허용한다. 후보 선택 시 정확한 run/최신 attempt/아티팩트 ID/manifest 해시를 고정한다.
