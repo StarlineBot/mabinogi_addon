@@ -6,6 +6,15 @@
 
 ## 배포와 검증
 
+- **후보 게시 안내 보완(2026-11-04, 문서만)**: 게시 직전 수동 기록의 run/attempt·exe 해시/버전과 현재 후보를 대조하고
+  확인한 run을 `candidate_run`으로 항상 지정하도록 명시. 선택기의 최신 attempt 고정/무결성 검사와 사람의 확인 기록 대조를 구분했다.
+  사람의 attempt/해시 확인을 자동 강제하는 기능은 없으며 재실행/교체 시 게시 보류·재확인한다.
+  실패 후 필수 후보 검증을 전체 회귀로 읽을 표현, 최초 배포 전제와 하프 후속 개발 상태를 정리했다.
+  검사: 기준 7510094, Linux/Python 3.12·QT_QPA_PLATFORM=offscreen·잠금 의존성,
+  `uv run --frozen python -m pytest tests/test_release_candidate.py -q --tb=short --junitxml=/tmp/candidate-docs-followup.xml`
+  **180 passed / 0 failed / 0 skipped / 5.83초 / exit0**. 제품/검사 입력 고정. 소스 선택 경로·문서 링크/diff 대조 통과.
+  문서만 변경하여 전체 회귀·Windows exe 검증은 미실행. 제품/workflow 변경·배포 없음.
+
 - **개발·QA·배포 지침 정리(2026-11-04, 문서만)**: 사용자 검토·정정에 따라 AGENTS의 해당 절을 직접 수정했다.
   변경 영향 검사·독립 재현·조건부 전체 회귀·작업본 고정/결과 재사용·실패/정상 skip/필수 자료 누락을 구분한다.
   실제 workflow는 소스 스모크+exe 빌드이며 완성 exe 실행과 확인자 기록은 자동 강제되지 않음을 명시했다.
@@ -23,7 +32,9 @@
   제품/검증 입력 지문 유지, 게시/릴리스 실행 없음.
 
 - **v0.40.1 게시 완료(2026-11-04 04:06 KST)** — #181(41697536552, 3d46a24) 태그 v0.40.1=3d46a24, 지문 c7731fad…(커밋과 일치), exe 164,000,697 바이트·sha256 35dedcb4…(내려받아 일치). 사용자 실게임(04:1x KST): 0.40.1 기동 정상, 즐겨찾기 버프 연장 시 계속 표시 확인. 나눔고딕에서도 정상 동작 확인(사용자).
-  남은 일(개발): 채널 파일 못 읽어도 앱은 뜨게(하프 탭만 오류), 번들 배치 모의 테스트·`__file__` 기준 assets 금지 검사, 배포에 빌드 exe 실제 기동 확인(인프라·승인 필요).
+  후속 개발 상태(11-04 main 소스 확인): 채널 파일 오류를 하프 탭 안에 표시하고 앱 기동을 유지하는 처리와
+  번들 배치 모의·`__file__` 기준 assets 금지 검사는 구현됨(`harp_tab.py`, `test_bundle_layout.py`).
+  완성된 후보 exe 자동 기동 게이트는 미구현이며 현재는 위 지침의 사용자 수동 후보 확인을 따른다. 구현 존재는 실게임/실제 exe 통과를 뜻하지 않는다.
 - **[긴급] v0.40.0 exe 시작 즉시 종료(Confirmed, 사용자 실행)** — `harp_latency.DATA_PATH = Path(__file__).parent/'assets'/...`가 exe에서 `_MEIPASS/mabinogi_addon/assets/harp_channels.json`을 찾음(빌드는 `assets`를 `_MEIPASS/assets`로 넣음) → HarpTab 생성(모든 사용자) 중 FileNotFoundError.
   소스 실행 스모크는 경로가 맞아 못 잡음. 업데이트 적용은 MainWindow 전(`__init__` 126행)이라 0.40.1을 게시하면 다음 실행에 자동 복구. 수정: `paths.resource_dir()/'harp_channels.json'` + 하프 탭 로드 실패 시 앱은 계속 뜨게 + 번들 배치 모의 테스트.
 - **v0.40.0 게시 완료(2026-11-04 03:41 KST)** — Windows validation #180(41692661474, 38a23e4) → release.yml 게시. 태그 v0.40.0=38a23e4, candidate source_fingerprint 7c84c19d…(87f5367 QA 지문과 같음).
