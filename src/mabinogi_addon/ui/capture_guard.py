@@ -46,3 +46,23 @@ class CaptureGuard:
                     or not widget.testAttribute(Qt.WidgetAttribute.WA_WState_Created)
                     or int(widget.winId()) != hwnd or restore_window(hwnd, previous)):
                 del self._pending[hwnd]
+
+
+def own_window_over(area) -> bool:
+    """캡처에서 상시 제외되지 않은 우리 창이 area(물리 픽셀 x, y, w, h)와 겹치나 — Qt 위치만 본다(시스템 호출 없음).
+    겹치면 캡처 순간 그 창을 빼야 해서(창 조작은 화면 스레드 전용) 판독을 화면 스레드에서 해야 한다(도르카·보스 공용)."""
+    from ..system import capture_exclusion
+    if not capture_exclusion.available():
+        return False
+    from PySide6.QtWidgets import QApplication
+    from . import overlay_capture
+    from .dpi import to_physical
+    x, y, w, h = area
+    for widget in QApplication.topLevelWidgets():
+        if not widget.isVisible() or overlay_capture.is_overlay(widget):
+            continue
+        g = widget.frameGeometry()
+        wx, wy, ww, wh = to_physical(dict(x=g.x(), y=g.y(), w=g.width(), h=g.height()))
+        if wx < x + w and wy < y + h and wx + ww > x and wy + wh > y:
+            return True
+    return False

@@ -188,6 +188,11 @@ class FavoritesReader:
     # 유지 시간을 넘겨 빠진 줄은 다시 찾으면 넣는다(5프레임마다 다시 맞춤). 이만큼(≈30초) 못 찾으면 포기.
     # 앱이 모르는 버프가 즐겨찾기에 섞여 '기억 줄 < 칸 수'가 늘 참인 경우에는 다시 맞추지 않는다(0.40.0 QA: map_rows 9~13ms 상시 실행).
     GIVE_UP_FRAMES = 150
+    # 0.42.0(사용자 app.log 0.40.2 21:29~21:31): 같은 자리에서 빠졌다 다시 찾기를 되풀이하는 줄(아이콘이 오래 깜빡임)은
+    # 다시 찾을 때 포기 시계가 처음부터라 GIVE_UP_FRAMES가 걸리지 않아, 2분 넘게 '다시 맞춤'이 0.3~0.5초마다 반복됐다
+    # (재현: 014744에서 비바체 아이콘 2.4초 주기 깜빡임 2분 → 다시 맞춤 로그 50줄·map_rows 288회).
+    # 같은 자리로 이만큼 돌아온 줄은 '깜빡이는 진짜 줄'로 보고 붙잡아 둔다(빼지 않고 그 줄 때문에 다시 맞추지 않음).
+    STICKY_RETURNS = 2
 
     def __init__(self, templates: dict[str, np.ndarray], icon_column: tuple[int, int],
                  separator: int | None = None) -> None:
@@ -206,6 +211,8 @@ class FavoritesReader:
         self._frame = 0
         self._missing: dict[str, int] = {}  # 다시 맞춤에서 못 찾은 기억 줄 → 연속 프레임 수(HOLD_FRAMES까지 유지)
         self._dropped: dict[str, int] = {}  # 유지 시간을 넘겨 빠진 줄 → 빠진 프레임(다시 찾으면 지움, GIVE_UP_FRAMES 뒤 포기)
+        self._returns: dict[str, tuple[int, int]] = {}  # 빠졌다 같은 자리로 돌아온 줄 → (y, 횟수)
+        self._sticky: dict[str, int] = {}  # 깜빡이는 진짜 줄(같은 자리로 STICKY_RETURNS번 돌아옴) → y. 구분선이 바뀌면 비움
         self.top_cut = False  # 맨 위 즐겨찾기 줄이 영역 위 끝에 걸림(아이콘 잘림 → 다른 버프로 오인) → 자동 찾기 다시 안내
 
     @property
@@ -229,10 +236,14 @@ class FavoritesReader:
             self.rows, self.on, self.row_count = {}, {}, 0
             self._missing.clear()
             self._dropped.clear()
+            self._returns.clear()
+            self._sticky.clear()
             self.top_cut = False
             return None
         if self.separator != before:
             self._dropped.clear()  # 구분선이 바뀌면 칸이 새로 맞춰지므로 빠진 줄 기억도 비움
+            self._returns.clear()
+            self._sticky.clear()
         self._dropped = {b: f for b, f in self._dropped.items() if self._frame - f < self.GIVE_UP_FRAMES}
         # 다시 채움: 유지 중인 줄이나 유지 시간을 넘겨 빠진 줄이 있을 때만(앱이 모르는 즐겨찾기 때문에 늘 돌지 않게)
         refill = self._frame % self.SCAN_EVERY == 0 and (not self.rows or bool(self._missing) or bool(self._dropped))
@@ -297,6 +308,8 @@ class FavoritesReader:
 
     def _needs_remap(self, gray: np.ndarray) -> bool:
         for bid, row in self.rows.items():
+            if self._sticky.get(bid) == row.y:
+                continue  # 깜빡이는 진짜 줄 — 안 보인다고 매번 다시 맞추지 않는다
             t = _gray(self._templates[bid])
             win = gray[max(0, row.y - 3):row.y + row.size + 3, max(0, row.x - 3):row.x + row.size + 3]
             if match_icon(win, t).score < VERIFY_THRESHOLD:
@@ -312,6 +325,9 @@ class FavoritesReader:
             # 못 찾은 기억 줄: 그 자리에서 다른 버프를 찾았거나(진짜 종료로 아래 줄이 올라옴) 구분선 아래면 바로 빼고,
             # 아니면 깜빡임·순간 가림일 수 있어 HOLD_FRAMES 동안 유지한다(빈 결과 한 프레임으로 전체가 지워지지 않게).
             taken = any(abs(other.y - row.y) < row.size // 2 for other in found.values())
+            if not taken and self._sticky.get(bid) == row.y:
+                rows[bid] = row  # 깜빡이는 진짜 줄은 붙잡아 둔다(다른 버프가 그 자리를 차지하면 그때 뺀다)
+                continue
             misses = self._missing.get(bid, 0) + 1
             if not taken and row.y < (self.separator or 0) and misses < self.HOLD_FRAMES:
                 rows[bid] = row
@@ -320,9 +336,18 @@ class FavoritesReader:
                 self._missing.pop(bid, None)
                 if not taken and row.y < (self.separator or 0):
                     self._dropped[bid] = self._frame  # 오래 가려짐 — 아이콘이 돌아오면 다시 채운다
-        for bid in found:
-            self._missing.pop(bid, None)
-            self._dropped.pop(bid, None)
+        for bid, row in found.items():
+            held = self._missing.pop(bid, None) is not None
+            if self._dropped.pop(bid, None) is not None or held:  # 놓쳤던(유지 중·빠진) 줄이 돌아옴 — 같은 자리면 횟수를 센다
+                y, count = self._returns.get(bid, (row.y, 0))
+                count = count + 1 if abs(y - row.y) <= 1 else 1
+                self._returns[bid] = (row.y, count)
+                if count >= self.STICKY_RETURNS and bid not in self._sticky:
+                    self._sticky[bid] = row.y
+                    _log.info("즐겨찾기 줄 %s@%s가 빠졌다 돌아오기를 반복해 붙잡아 둠(깜빡임)", bid, row.y)
+        for bid in list(self._sticky):
+            if bid in found and found[bid].y != self._sticky[bid]:
+                self._sticky.pop(bid)  # 줄이 다른 자리로 옮겨 감 — 붙잡기 해제
         if set(rows) != set(self.rows) or any(rows[b].y != self.rows[b].y for b in rows):
             _log.info("즐겨찾기 줄 다시 맞춤(%s): %s", reason,
                       ", ".join(f"{b}@{r.y}{'(유지)' if b in self._missing else ''}"

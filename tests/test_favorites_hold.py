@@ -206,3 +206,28 @@ def test_unknown_favorites_do_not_keep_remapping(monkeypatch):
     for i in range(10, 110):
         engine.tick(region, now=i * STEP)
     assert len(calls) == first
+
+
+@pytest.mark.parametrize("period", [2, 6, 12])
+def test_long_blinking_row_does_not_keep_remapping(monkeypatch, caplog, period):
+    """0.42.0(사용자 app.log 0.40.2 21:29~21:31): 한 줄이 2분 동안 깜빡이면 빠졌다 다시 찾기를 되풀이하며 포기 시계가 매번 처음부터라
+    '다시 맞춤'이 계속 반복됐다(GIVE_UP_FRAMES 무력화). 같은 자리로 두 번 돌아온 줄은 붙잡아 두고 그 줄 때문에 다시 맞추지 않는다.
+    예전 코드: 12프레임 주기 → 다시 맞춤 로그 50줄·map_rows 288회, 2프레임 주기 → map_rows 361회(2분)."""
+    from mabinogi_addon.detect import favorites as fav
+    caplog.set_level(logging.INFO, logger="mabinogi_addon.favorites")
+    calls = []
+    original = fav.map_rows
+    monkeypatch.setattr(fav, "map_rows", lambda *a, **k: calls.append(1) or original(*a, **k))
+    region = _region(SHOT_2560)
+    engine = _engine()
+    for i in range(6):
+        engine.tick(region, now=i * STEP)
+    row = engine.favorites.rows["vivace"]
+    blink = region.copy()
+    blink[row.y:row.y + row.size, row.x:row.x + row.size] = 20
+    for i in range(6, 606):  # 2분
+        engine.tick(blink if (i // period) % 2 == 0 else region, now=i * STEP)
+    remaps = [r for r in caplog.records if "다시 맞춤" in r.getMessage()]
+    assert len(remaps) <= 6 and len(calls) <= 30
+    assert engine.favorites.rows["vivace"].y == row.y and "mana_pierce" in engine.favorites.rows
+    assert any("붙잡아 둠" in r.getMessage() for r in caplog.records)

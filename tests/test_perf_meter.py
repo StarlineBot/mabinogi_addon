@@ -68,7 +68,8 @@ def test_every_listed_feature_tick_is_measured():
     from mabinogi_addon.ui import (blackbox_controller, boss_tab, cursor_overlay, dorcha_search, dorcha_tab,
                                    halo_capture_section, mirror_manager, optimization_controller, skillbar_tab,
                                    stat_bars_tab, tuarim_tab)
-    wrapped = [boss_tab.BossTab._safe_tick, halo_capture_section.HaloCaptureSection._tick,
+    # 꼬리 끊김 조사: 보스는 계산(작업 스레드)·반영(화면)을 따로 잰다(틱 진입 _safe_tick은 가벼운 문 역할만)
+    wrapped = [boss_tab.BossTab._compute_tick, boss_tab.BossTab._apply_tick, halo_capture_section.HaloCaptureSection._tick,
                tuarim_tab.TuarimTab._tick_enabled, dorcha_tab.DorchaTab._tick, dorcha_tab.DorchaTab._compute_tick,
                stat_bars_tab.StatBarsTab._tick, skillbar_tab.SkillbarTab._tick, mirror_manager.MirrorManager._tick,
                blackbox_controller.BlackboxController._tick, optimization_controller.OptimizationController._tick,
@@ -98,3 +99,22 @@ def test_buff_and_debuff_workers_report_their_own_names():
         w.deleteLater()
     snap = perf_meter.take()
     assert {k[0] for k in snap} == {"버프", "디버프"}
+
+
+def test_overlay_paint_is_counted_per_feature():
+    """꼬리 끊김 조사(사용자 app.log 11-04): 오버레이 그리기 시간도 기능별 처리 시간에('그리기·기능', 화면 스레드)."""
+    import os
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtWidgets import QApplication
+    from mabinogi_addon import perf_meter
+    from mabinogi_addon.ui.frame_overlay import FrameOverlay
+    QApplication.instance() or QApplication([])
+    perf_meter.take()
+    overlay = FrameOverlay(100)
+    try:
+        overlay.set_items([("FPS", "60", "")])
+        overlay.grab()  # paintEvent 한 번
+        rows = perf_meter.take()
+        assert ("그리기·게임 위 정보", "화면") in rows and rows[("그리기·게임 위 정보", "화면")][2] >= 1
+    finally:
+        overlay.deleteLater()

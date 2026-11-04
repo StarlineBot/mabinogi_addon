@@ -7,6 +7,8 @@
 """
 from __future__ import annotations
 
+from .. import perf_meter
+
 from PySide6.QtCore import QPointF, QRect, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QFontMetricsF, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QWidget
@@ -135,6 +137,7 @@ class FrameOverlay(QWidget):
         painter.setBrush(color)
         painter.drawPath(path)
 
+    @perf_meter.timed("그리기·게임 위 정보")  # 꼬리 끊김 조사: 오버레이 그리기 시간도 기능별 처리 시간에
     def paintEvent(self, _event) -> None:
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)

@@ -8,6 +8,8 @@
 
 from __future__ import annotations
 
+from .. import perf_meter
+
 from dataclasses import dataclass
 
 from PySide6.QtCore import QRect, Qt, Signal
@@ -160,6 +162,7 @@ class BuffOverlay(QWidget):
         self.update()
 
     # ---- 그리기 ----
+    @perf_meter.timed("그리기·버프·디버프")  # 꼬리 끊김 조사: 오버레이 그리기 시간도 기능별 처리 시간에
     def paintEvent(self, _event) -> None:
         if not self._items:
             if not self._locked:

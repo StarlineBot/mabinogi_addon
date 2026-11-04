@@ -11,6 +11,8 @@
 
 from __future__ import annotations
 
+from .. import perf_meter
+
 from PySide6.QtCore import QRect, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QPainter
 from PySide6.QtWidgets import QTextEdit, QVBoxLayout, QWidget
@@ -150,6 +152,7 @@ class MemoOverlay(QWidget):
             self.moved.emit()
 
     # ---- 배경/헤더(해제 상태에서만) ----
+    @perf_meter.timed("그리기·메모")  # 꼬리 끊김 조사: 오버레이 그리기 시간도 기능별 처리 시간에
     def paintEvent(self, _event) -> None:
         if self._locked:
             return  # 고정: 완전 투명(흰 글씨만)

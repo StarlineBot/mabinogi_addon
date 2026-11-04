@@ -10,6 +10,8 @@
 
 from __future__ import annotations
 
+from time import monotonic, perf_counter
+
 from .. import perf_meter
 import numpy as np
 from PySide6.QtCore import Qt, QTimer, Signal
@@ -55,6 +57,11 @@ DEFAULT_BOX = {"x": 1017, "y": 1248, "w": 523, "h": 36}
 
 
 class BossTab(QWidget):
+    # 꼬리 끊김 조사(사용자 app.log 11-04): 보스 틱(300ms)이 화면 스레드에서 캡처·이름 식별·HP 판독·보스바 확인(최대 ~36ms)을 했다.
+    # 도르카(0.38.0)처럼 그 계산은 작업 스레드 1개에서, 화면 스레드는 결과 반영(상태·표시·경고)만 한다.
+    INLINE_JOBS = False  # 테스트: 같은 계산을 바로(동기로) — 판정 회귀를 그대로 확인
+    SLOW_TICK_MS = 30.0  # 틱 계산이 이보다 오래 걸리면 단계별 소요를 app.log에(분당 1번)
+    _job_ready = Signal(object)  # 작업 스레드 → 화면 스레드(대기열 연결)
     bar_region_changed = Signal()  # 보스 HP바 영역 변경 → 디버프 3차와 공유(재시작 알림)
     debuff_region_changed = Signal()  # 자동 찾기가 디버프 영역도 지정 → 디버프 추적 재시작
 
@@ -250,10 +257,11 @@ class BossTab(QWidget):
         self._timer.timeout.connect(self._safe_tick)
         self._timer.start()
 
-    @perf_meter.timed("보스")  # 앱 CPU 절감 1단계: 기능별 처리 시간(측정만)
     def _safe_tick(self) -> None:
         """타이머 틱 가드 — 한 틱의 예외(판독·캡처 등)가 앱 전체를 죽이지 않게 흡수한다.
         (메인 스레드 QTimer 슬롯의 미처리 예외는 PySide6에서 프로세스를 abort시킬 수 있다.)"""
+        if getattr(self, "_tick_job", None) is not None:
+            return  # 지난 틱 계산이 아직 도는 중 — 쌓지 않고 건너뛴다(헤일로 문맥은 그 결과가 정한다)
         self.halo_capture.set_boss_context(None)
         try:
             self._apply_collect_gate()
@@ -463,26 +471,68 @@ class BossTab(QWidget):
 
     # ---- 읽기 루프 ----
     def _tick(self) -> None:
-        self.halo_capture.set_boss_context(None)
         active = self._watcher.is_game_active() or self._watcher.is_self_active()
         if not self._region or not active:
+            self.halo_capture.set_boss_context(None)
             self._boss_present = False  # 게임 비활성 → '보스전 아님'(저체력 알림 게이트)
             self._upcoming.hide()
             return
+        if getattr(self, "_tick_job", None) is not None:
+            return
         from .dpi import to_physical
 
-        px, py, pw, ph = to_physical(self._grab_region())
-        frame = self._grab_rect(px, py, pw, ph)
+        area = to_physical(self._grab_region())
+        presence = self._presence_wanted_fn is None or self._presence_wanted_fn()
+        from .capture_guard import own_window_over
+        # 우리 일반 창(메인 창 등)이 보스 영역을 덮으면 캡처 순간 제외가 필요하다 — 창 조작은 화면 스레드 전용이라
+        # 이때만 예전처럼 화면 스레드에서(오버레이는 상시 캡처 제외라 해당 없음). 도르카와 같은 기준.
+        guarded = own_window_over(area)
+        grab = self._grab_rect if (guarded or self.INLINE_JOBS) else self._grab_worker
+        self._run_job(lambda: self._compute_tick(area, grab, presence), self._apply_tick, inline=guarded)
+
+    @perf_meter.timed("보스")  # 기능별 처리 시간 — 계산(작업 스레드)과 반영(화면)을 따로 센다
+    def _compute_tick(self, area, grab, presence) -> dict:
+        """작업 스레드: 캡처 → 이름 식별 → (식별되면) HP 판독 → (필요하면) 보스바 확인. 위젯·상태는 건드리지 않는다."""
+        steps: dict[str, float] = {}
+
+        def timed(name, fn, *args, **kwargs):
+            started = perf_counter()
+            try:
+                return fn(*args, **kwargs)
+            finally:
+                steps[name] = steps.get(name, 0.0) + (perf_counter() - started) * 1000
+
+        out = dict(frame=None, boss_id=None, raw_hp=None, bar=None, steps=steps)
+        frame = timed("캡처", grab, *area)
         if frame is None:
+            return out
+        out["frame"] = frame
+        w = frame.shape[1]
+        name_reg = frame[:, : int(w * 0.60)]  # 왼쪽=이름
+        pct_reg = frame[:, int(w * 0.58) :]  # 오른쪽=HP%(가운데 빈 띠는 글자 없음)
+        boss_id = timed("이름 식별", identify, name_reg, self._name_templates, variants=self._name_variants)
+        out["boss_id"] = boss_id
+        if boss_id is not None:
+            out["raw_hp"] = timed("HP 판독", read_percent, pct_reg)
+        elif presence:  # 미등록 보스 존재 확인(이름 글자 + % 판독 — 바가 보일 때만 ~36ms)
+            out["bar"] = timed("보스바 확인", self._boss_bar_visible, frame)
+        return out
+
+    @perf_meter.timed("보스")
+    def _apply_tick(self, out) -> None:
+        """화면 스레드: 작업 스레드 결과를 순서대로 반영(상태 머신·표시·경고). 예전 _tick 뒷부분 그대로."""
+        if out is None:
+            self.halo_capture.set_boss_context(None)
+            return
+        self._log_slow(out["steps"])
+        frame = out["frame"]
+        if frame is None:
+            self.halo_capture.set_boss_context(None)
             return
         self._show_preview(frame)
         self._last_frame = frame
         self._apply_collect_gate()
-
-        w = frame.shape[1]
-        name_reg = frame[:, : int(w * 0.60)]  # 왼쪽=이름
-        pct_reg = frame[:, int(w * 0.58) :]  # 오른쪽=HP%(가운데 빈 띠는 글자 없음)
-        boss_id = identify(name_reg, self._name_templates, variants=self._name_variants)
+        boss_id = out["boss_id"]
         self.halo_capture.set_boss_context(boss_id)
 
         # 보스 식별/소멸 관리. **HP 판독·경고는 보스가 '이번 프레임' 식별됐을 때만**
@@ -500,7 +550,7 @@ class BossTab(QWidget):
                     else None
                 )
                 self._reset_hp()  # 새 보스 → HP 상태 초기화
-            self._last_raw_hp = read_percent(pct_reg)  # 원판독(수집 태그·진단용)
+            self._last_raw_hp = out["raw_hp"]  # 원판독(수집 태그·진단용)
             self._accept_hp(self._last_raw_hp)  # 식별된 프레임만 HP 반영
         else:
             self._last_raw_hp = None
@@ -516,7 +566,7 @@ class BossTab(QWidget):
         # 가려짐은 ~2초(_UPCOMING_GONE_FRAMES) 유예로 흡수한다. 아무도 이 신호를 안 쓰면
         # (저체력 경고 전부 꺼짐) 비싼 검증을 돌리지 않고 건너뛴다(UI 스레드 부하 절감).
         if self._presence_wanted_fn is None or self._presence_wanted_fn():
-            if boss_id is not None or self._boss_bar_visible(frame):
+            if boss_id is not None or bool(out["bar"]):
                 self._bar_absent = 0
             else:
                 self._bar_absent += 1
@@ -558,6 +608,80 @@ class BossTab(QWidget):
                 self._play(alert.sound)
 
         self._update_upcoming(hp)
+
+    def _run_job(self, work, done, inline=False) -> None:
+        """work()는 작업 스레드(테스트·창이 덮을 때는 바로), done(결과)는 화면 스레드. 한 번에 하나만."""
+        if self.INLINE_JOBS or inline:
+            done(work())
+            return
+        if getattr(self, "_shutting_down", False):
+            return
+        executor = self.__dict__.get("_executor")
+        if executor is None:
+            from concurrent.futures import ThreadPoolExecutor
+            executor = self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="boss-job")
+            self._job_ready.connect(self._deliver_job)
+        token = self._tick_job = object()
+
+        def deliver(result):
+            if self._tick_job is token:
+                self._tick_job = None
+            if not getattr(self, "_shutting_down", False):
+                done(result)
+
+        def run():
+            try:
+                result = work()
+            except Exception:  # noqa: BLE001 — 틱 격리(앱 생존 우선)
+                import logging
+                logging.getLogger("mabinogi_addon.capture").exception("보스 탭 틱 실패(작업 스레드) — 이 틱만 건너뜀")
+                result = None
+            self._job_ready.emit(lambda: deliver(result))
+        executor.submit(run)
+
+    def _deliver_job(self, deliver) -> None:
+        try:
+            deliver()  # 화면 스레드
+        except Exception:  # noqa: BLE001 — 틱 격리(앱 생존 우선)
+            import logging
+            logging.getLogger("mabinogi_addon.capture").exception("보스 탭 틱 반영 실패 — 이 틱만 건너뜀(앱 유지)")
+
+    def _grab_worker(self, x: int, y: int, w: int, h: int):
+        """작업 스레드 캡처 — mss는 스레드마다 따로(스레드 사이 공유 불가). 화면 스레드 것(_sct)과 별개."""
+        import threading
+        local = self.__dict__.setdefault("_sct_local", threading.local())
+        try:
+            sct = getattr(local, "sct", None)
+            if sct is None:
+                import mss
+                sct = local.sct = mss.mss()
+            shot = sct.grab({"left": x, "top": y, "width": w, "height": h})
+            return np.frombuffer(shot.bgra, dtype=np.uint8).reshape(shot.height, shot.width, 4)[:, :, :3]
+        except Exception:  # noqa: BLE001 — 캡처 불가 → 이번 틱 건너뜀
+            return None
+
+    def _close_worker_mss(self) -> None:
+        local = self.__dict__.get("_sct_local")
+        sct = getattr(local, "sct", None) if local is not None else None
+        if sct is not None:
+            local.sct = None
+            try:
+                sct.close()
+            except Exception:  # noqa: BLE001
+                pass
+
+    def _log_slow(self, steps) -> None:
+        """틱 계산이 SLOW_TICK_MS 넘으면 단계별 소요를 app.log에 — 분당 1번(도르카 '틱 느림'과 같은 형식)."""
+        total = sum(steps.values())
+        if total < self.SLOW_TICK_MS:
+            return
+        now = monotonic()
+        if now < getattr(self, "_slow_logged_until", 0.0):
+            return
+        self._slow_logged_until = now + 60.0
+        import logging
+        detail = " · ".join(f"{name} {ms:.0f}ms" for name, ms in steps.items())
+        logging.getLogger(__name__).info("보스 틱 느림(작업 스레드) %.0fms: %s", total, detail)
 
     def _boss_bar_visible(self, frame) -> bool:
         """이 프레임의 보스 영역이 '보스 체력바'로 검증되는지(등록 여부 무관).
@@ -847,6 +971,12 @@ class BossTab(QWidget):
                 self._notifier.stop()
 
     def shutdown(self) -> None:
+        self._shutting_down = True
+        executor = self.__dict__.pop("_executor", None)
+        if executor is not None:
+            executor.submit(self._close_worker_mss)  # 작업 스레드의 mss는 그 스레드에서 닫는다
+            executor.shutdown(wait=True)
+        self._tick_job = None
         guard = getattr(self, "_capture_guard", None)
         if guard is not None:
             guard.restore()

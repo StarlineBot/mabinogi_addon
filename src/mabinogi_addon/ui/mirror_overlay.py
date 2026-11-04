@@ -8,6 +8,8 @@
 
 from __future__ import annotations
 
+from .. import perf_meter
+
 import logging
 
 from PySide6.QtCore import Qt, Signal
@@ -229,6 +231,7 @@ class MirrorOverlay(QWidget):
         self.detach_thumbnail()
         super().closeEvent(event)
 
+    @perf_meter.timed("그리기·단축바")  # 꼬리 끊김 조사: 오버레이 그리기 시간도 기능별 처리 시간에
     def paintEvent(self, _event) -> None:
         painter = QPainter(self)
         if self._thumb_mode:

@@ -338,22 +338,9 @@ class DorchaTab(QWidget):
         self._run_job(lambda: self._compute_tick(snap), lambda result: self._apply_tick(snap, result), inline=guarded)
 
     def _own_window_over(self, area):
-        """화면 캡처에서 상시 제외되지 않은 우리 창이 area(물리 픽셀)와 겹치나 — Qt 위치만 본다(시스템 호출 없음)."""
-        from ..system import capture_exclusion
-        if not capture_exclusion.available():
-            return False
-        from PySide6.QtWidgets import QApplication
-        from . import overlay_capture
-        from .dpi import to_physical
-        x, y, w, h = area
-        for widget in QApplication.topLevelWidgets():
-            if not widget.isVisible() or overlay_capture.is_overlay(widget):
-                continue
-            g = widget.frameGeometry()
-            wx, wy, ww, wh = to_physical(dict(x=g.x(), y=g.y(), w=g.width(), h=g.height()))
-            if wx < x + w and wy < y + h and wx + ww > x and wy + wh > y:
-                return True
-        return False
+        """캡처에서 상시 제외되지 않은 우리 창이 area(물리 픽셀)와 겹치나 — 보스와 공용(capture_guard.own_window_over)."""
+        from .capture_guard import own_window_over
+        return own_window_over(area)
 
     def _run_job(self, work, done, slot="_tick_job", inline=False):
         """work()는 작업 스레드(테스트는 바로), done(결과)는 화면 스레드에서. slot마다 하나씩만 돈다."""

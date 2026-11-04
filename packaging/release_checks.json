@@ -1,6 +1,11 @@
 {
   "version": "0.42.0",
   "tests": [
+    "tests/test_capture_guard.py",
+    "tests/test_perf_meter.py",
+    "tests/test_favorites_hold.py",
+    "tests/test_boss_tab.py",
+    "tests/test_boss_thread.py",
     "tests/test_harp_channels.py",
     "tests/test_home_page.py",
     "tests/test_navigation.py",
@@ -76,6 +81,32 @@
         "tests/test_startup_smoke.py"
       ],
       "reason": "배포 계약: 빌드·후보·Windows CI·시작 확인(새 자산 없음)"
+    },
+    "src/mabinogi_addon/ui/boss_tab.py": {
+      "tests": [
+        "tests/test_boss_thread.py",
+        "tests/test_boss_tab.py"
+      ],
+      "reason": "보스 틱 계산 작업 스레드·반영 화면 스레드·느린 틱 단계별 로그, 기존 판정 회귀(동기 모드)"
+    },
+    "src/mabinogi_addon/ui/capture_guard.py": {
+      "tests": [
+        "tests/test_capture_guard.py",
+        "tests/test_boss_thread.py"
+      ],
+      "reason": "우리 창이 덮을 때만 화면 스레드 판독(도르카·보스 공용 own_window_over)"
+    },
+    "src/mabinogi_addon/detect/favorites.py": {
+      "tests": [
+        "tests/test_favorites_hold.py"
+      ],
+      "reason": "깜빡이며 같은 자리로 돌아오는 줄 붙잡기(다시 맞춤 반복·map_rows 상시 실행 방지), 기존 유지·다시 채움"
+    },
+    "src/mabinogi_addon/perf_meter.py": {
+      "tests": [
+        "tests/test_perf_meter.py"
+      ],
+      "reason": "오버레이 그리기 시간 기능별 집계"
     }
   }
 }

@@ -178,3 +178,13 @@ def _no_startup_channel_measure():
     saved, main_window.CHANNEL_STARTUP_DELAY_MS = main_window.CHANNEL_STARTUP_DELAY_MS, 24 * 3600 * 1000
     yield
     main_window.CHANNEL_STARTUP_DELAY_MS = saved
+
+
+@pytest.fixture(autouse=True)
+def _boss_inline_jobs():
+    """꼬리 끊김 조사: 앱에서는 보스 틱 계산(캡처·이름·HP·보스바)을 작업 스레드에서 돌린다. 기존 판정 테스트는 `_tick()`
+    직후 결과를 확인하므로 같은 계산을 바로(동기로) 돌린다. 스레드 실행 자체는 tests/test_boss_thread.py가 확인한다."""
+    from mabinogi_addon.ui.boss_tab import BossTab
+    saved, BossTab.INLINE_JOBS = BossTab.INLINE_JOBS, True
+    yield
+    BossTab.INLINE_JOBS = saved

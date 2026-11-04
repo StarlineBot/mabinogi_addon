@@ -61,6 +61,7 @@ class _FxWindow(QWidget):
                 set_click_through(self, True)
                 # 캡처 제외는 0.37.1부터 오버레이 공통(ui/overlay_capture.watch — 생성자에서 등록)
 
+    @perf_meter.timed("그리기·커서 효과")  # 꼬리 끊김 조사: 오버레이 그리기 시간도 기능별 처리 시간에
     def paintEvent(self, _event):
         if self._stats is not None:
             self._stats['paints'] += 1

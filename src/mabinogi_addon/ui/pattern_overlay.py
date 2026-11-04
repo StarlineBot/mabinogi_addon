@@ -11,6 +11,8 @@
 
 from __future__ import annotations
 
+from .. import perf_meter
+
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import (
     QColor,
@@ -166,6 +168,7 @@ class PatternWarningOverlay(QWidget):
             self.moved.emit()
 
     # ---- 그리기 ----
+    @perf_meter.timed("그리기·보스 경고")  # 꼬리 끊김 조사: 오버레이 그리기 시간도 기능별 처리 시간에
     def paintEvent(self, _event) -> None:
         text = self._display_text()
         if not text:

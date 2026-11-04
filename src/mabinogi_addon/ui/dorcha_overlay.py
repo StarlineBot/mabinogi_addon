@@ -1,5 +1,6 @@
 """A stable fifteen-cell resource display, separate from the source game UI."""
 
+from .. import perf_meter
 from PySide6.QtCore import QRectF, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QPainter, QPen
 from PySide6.QtWidgets import QWidget
@@ -93,6 +94,7 @@ class DorchaOverlay(QWidget):
             x += cell + (group_gap if index in (4, 9) else gap)
         return result
 
+    @perf_meter.timed("그리기·도르카")  # 꼬리 끊김 조사: 오버레이 그리기 시간도 기능별 처리 시간에
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
