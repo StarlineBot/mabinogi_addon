@@ -804,3 +804,42 @@ def test_prepare_cli_exports_the_same_canonical_version(automation, tmp_path, mo
     receipt = json.loads((env['root']/'release-request/release-request.json').read_text(encoding='utf-8'))
     assert receipt['version'] == '0.6.0'
     assert output.read_text(encoding='utf-8') == 'version=0.6.0\n'
+
+
+def test_release_announcement_sends_user_agent_and_falls_back_for_text_channels(capsys):
+    """배포 알림이 2026-10-19부터 안 오던 원인: 파이썬 기본 User-Agent가 Discord(Cloudflare)에서 403.
+    식별 UA를 보내고, 포럼이 아닌 채널(thread_name 400)이면 제목을 본문에 넣어 다시 보낸다. 실패는 원인과 함께 경고."""
+    import json as _json
+    import urllib.error
+
+    sent = []
+
+    class Resp:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    def forum(request, timeout=None):
+        sent.append((request.get_header('User-agent'), _json.loads(request.data)))
+        return Resp()
+    assert d.announce('https://hook', 'v0.43.0', '노트', urlopen=forum)
+    assert sent[0][0] == d.USER_AGENT and 'Python-urllib' not in sent[0][0]
+    assert sent[0][1] == {'thread_name': 'v0.43.0', 'content': '노트'}
+
+    sent.clear()
+
+    def text_channel(request, timeout=None):
+        body = _json.loads(request.data)
+        sent.append(body)
+        if 'thread_name' in body:
+            raise urllib.error.HTTPError('https://hook', 400, 'bad', {}, None)
+        return Resp()
+    assert d.announce('https://hook', 'v0.43.0', '노트', urlopen=text_channel)
+    assert sent[-1] == {'content': '**v0.43.0**\n노트'}
+
+    def blocked(request, timeout=None):
+        raise urllib.error.HTTPError('https://hook', 403, 'forbidden', {}, None)
+    assert not d.announce('https://hook', 'v0.43.0', '노트', urlopen=blocked)
+    assert 'HTTP 403' in capsys.readouterr().out

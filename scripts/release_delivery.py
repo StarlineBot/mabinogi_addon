@@ -6,6 +6,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+import urllib.error
 import urllib.request
 
 from scripts.release_candidate import PUBLIC_REPO, digest, gate, require, verify_bundle
@@ -90,13 +91,35 @@ def promote(root=Path('.'), folder=Path('candidate'), public=Path('pub')):
     hook = os.environ.get('RELEASE_WEBHOOK_URL')
     if hook:
         content = (folder/'notes.md').read_text(encoding='utf-8') + f'\nhttps://github.com/{PUBLIC_REPO}/releases/tag/{tag}'
-        request = urllib.request.Request(hook, data=json.dumps(dict(thread_name=tag,content=content[:1900])).encode(),
-                                         headers={'Content-Type':'application/json'})
+        announce(hook, tag, content)
+
+
+# Discord 앞단 Cloudflare는 Python-urllib 기본 User-Agent를 403으로 막는다(앱 문의하기와 같은 원인).
+# 2026-10-19 배포 단계를 bash(curl) → 파이썬으로 옮긴 뒤 헤더가 빠져 배포 알림이 조용히 실패했다.
+USER_AGENT = 'mabinogi-addon-release (https://github.com/StarlineBot/mabinogi_addon, 1.0)'
+
+
+def announce(hook, tag, content, *, urlopen=urllib.request.urlopen):
+    """배포 알림(포럼 글 = 버전). 포럼이 아닌 채널이면 thread_name을 거부(400)하므로 제목을 본문에 넣어 다시 보낸다.
+    실패해도 배포는 끝난 뒤라 경고만 — 단 원인(HTTP 코드)을 남긴다. 성공하면 True."""
+    def post(payload):
+        request = urllib.request.Request(hook, data=json.dumps(payload).encode(), method='POST',
+                                         headers={'Content-Type': 'application/json', 'User-Agent': USER_AGENT})
+        with urlopen(request, timeout=30):
+            pass
+    payload = dict(thread_name=tag, content=content[:1900])
+    try:
         try:
-            with urllib.request.urlopen(request, timeout=30):
-                pass
-        except Exception:
-            print('::warning::Release published, Discord announcement failed')
+            post(payload)
+        except urllib.error.HTTPError as exc:
+            if exc.code != 400:
+                raise
+            post(dict(content=f'**{tag}**\n{content}'[:1900]))
+        return True
+    except Exception as exc:  # noqa: BLE001 — 배포는 이미 끝났다
+        detail = f'HTTP {exc.code}' if isinstance(exc, urllib.error.HTTPError) else type(exc).__name__
+        print(f'::warning::Release published, Discord announcement failed ({detail})')
+        return False
 
 
 if __name__ == '__main__':
