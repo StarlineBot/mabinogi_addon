@@ -250,7 +250,7 @@ def test_fps_overlay_drag_snaps_to_grid_like_other_overlays(app, monkeypatch):
     guides = []
     monkeypatch.setattr(grid, 'enabled', lambda: True)
     monkeypatch.setattr(grid, 'size', lambda: 32)
-    monkeypatch.setattr(grid, 'show_guide', lambda: guides.append('show'))
+    monkeypatch.setattr(grid, 'show_guide', lambda owner=None: guides.append('show'))  # 11-05: 끄는 오버레이(owner)를 넘긴다
     monkeypatch.setattr(grid, 'hide_guide', lambda: guides.append('hide'))
     snapped = []
     monkeypatch.setattr(grid, 'snap', lambda point, size: snapped.append((point, size)) or QPoint(64, 96))

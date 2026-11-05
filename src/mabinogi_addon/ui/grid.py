@@ -7,7 +7,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QPoint, Qt
+from PySide6.QtCore import QEvent, QObject, QPoint, Qt, QTimer
 from PySide6.QtGui import QColor, QGuiApplication, QPainter, QPen
 from PySide6.QtWidgets import QWidget
 
@@ -64,7 +64,24 @@ class _GridGuide(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
         self._size = _DEFAULT_SIZE
+        self.owner = None
+        # 11-05: 각 오버레이의 mouseRelease에서만 숨기다 보니 뗌 이벤트를 못 받으면(드래그 중 숨김·고정·포커스 이동 등)
+        # 안내선이 한동안 남았다. 보이는 동안 100ms마다 스스로 확인해 정리한다(원인과 무관하게).
+        self._watch = QTimer(self)
+        self._watch.setInterval(WATCH_MS)
+        self._watch.timeout.connect(self.check)
 
+    def check(self) -> None:
+        """마우스 버튼이 안 눌려 있거나, 끌던 오버레이가 사라졌거나 고정됐으면 숨긴다."""
+        if not self.isVisible():
+            self._watch.stop()
+            return
+        if QGuiApplication.mouseButtons() == Qt.MouseButton.NoButton or _owner_gone(self.owner):
+            hide_guide()
+
+    def hideEvent(self, event) -> None:
+        self._watch.stop()
+        super().hideEvent(event)
     def show_guide(self, grid_size: int) -> None:
         self._size = max(2, int(grid_size))
         screen = QGuiApplication.primaryScreen()
@@ -73,6 +90,7 @@ class _GridGuide(QWidget):
         self.setGeometry(screen.geometry())
         self.show()
         self.raise_()
+        self._watch.start()
 
     def paintEvent(self, _event) -> None:
         painter = QPainter(self)
@@ -97,15 +115,68 @@ class _GridGuide(QWidget):
 
 
 _guide: _GridGuide | None = None
+WATCH_MS = 100
 
 
-def show_guide() -> None:
+def _owner_gone(owner) -> bool:
+    if owner is None:
+        return False
+    from shiboken6 import isValid
+    if not isValid(owner) or not owner.isVisible():
+        return True
+    return bool(getattr(owner, "_locked", False) or getattr(owner, "locked", False) is True)
+
+
+class _OwnerFilter(QObject):
+    """끌던 오버레이가 숨거나(Hide)·닫히면 바로 안내선을 숨긴다(오버레이마다 따로 처리하지 않게 — 공용)."""
+
+    def eventFilter(self, watched, event):
+        if event.type() in (QEvent.Type.Hide, QEvent.Type.Close) and _alive() is not None and watched is _guide.owner:
+            hide_guide()
+        return False
+
+
+_filter: _OwnerFilter | None = None
+
+
+def _alive() -> _GridGuide | None:
+    """안내선 창(Qt 객체가 지워졌으면 None — 다시 만든다)."""
     global _guide
-    if _guide is None:
+    if _guide is not None:
+        from shiboken6 import isValid
+        if not isValid(_guide):
+            _guide = None
+    return _guide
+
+
+def show_guide(owner=None) -> None:
+    """owner = 지금 끄는 오버레이(숨김·닫힘·고정 때 안내선을 함께 정리)."""
+    global _guide, _filter
+    if _alive() is None:
         _guide = _GridGuide()
+    if _filter is None:
+        _filter = _OwnerFilter()
+    if owner is not None and owner is not _guide.owner:
+        owner.installEventFilter(_filter)
+    _guide.owner = owner
     _guide.show_guide(size())
 
 
 def hide_guide() -> None:
-    if _guide is not None:
+    if _alive() is not None:
+        if _guide.owner is not None and _filter is not None:
+            from shiboken6 import isValid
+            if isValid(_guide.owner):
+                _guide.owner.removeEventFilter(_filter)
+        _guide.owner = None
         _guide.hide()
+
+
+def guide_visible() -> bool:
+    return _alive() is not None and _guide.isVisible()
+
+
+def owner_locked(owner) -> None:
+    """오버레이 고정(set_locked) 때 부른다 — 그 오버레이를 끄는 중이었으면 안내선을 바로 숨긴다."""
+    if _alive() is not None and _guide.owner is owner:
+        hide_guide()

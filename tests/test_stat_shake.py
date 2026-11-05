@@ -259,7 +259,7 @@ def test_save_scale_lock_and_drag_preserve_baseline_during_shake(pipeline, monke
     ov.set_locked(False)
     monkeypatch.setattr(grid, "enabled", lambda: snap)
     monkeypatch.setattr(grid, "size", lambda: 10)
-    monkeypatch.setattr(grid, "show_guide", lambda: None)
+    monkeypatch.setattr(grid, "show_guide", lambda owner=None: None)
     monkeypatch.setattr(grid, "hide_guide", lambda: None)
     monkeypatch.setattr(grid, "snap", lambda point, size: QPoint(round(point.x() / size) * size,
                                                                round(point.y() / size) * size))

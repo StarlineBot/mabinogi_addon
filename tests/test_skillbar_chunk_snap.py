@@ -40,7 +40,7 @@ def test_drag_snaps_to_grid_only_when_enabled(chunk, monkeypatch, snap_on):
     monkeypatch.setattr(grid, "enabled", lambda: snap_on)
     monkeypatch.setattr(grid, "size", lambda: 32)
     monkeypatch.setattr(grid, "_screen_center", lambda: (1000, 500))
-    monkeypatch.setattr(grid, "show_guide", lambda: guides.append("show"))
+    monkeypatch.setattr(grid, "show_guide", lambda owner=None: guides.append("show"))  # 11-05: 끄는 오버레이(owner)를 넘긴다
     monkeypatch.setattr(grid, "hide_guide", lambda: guides.append("hide"))
     moved = []
     chunk.moved.connect(lambda: moved.append(1))

@@ -765,6 +765,12 @@ class SettingsTab(QWidget):
         if box.clickedButton() is open_btn:
             paths.open_folder(result.directory)
 
+    def _on_grid_snap(self, on: bool) -> None:
+        config.save_general_flag(_GRID_SNAP, on)
+        if not on:  # 11-05: 끄면 남아 있던 격자 안내선도 바로 숨긴다
+            from . import grid
+            grid.hide_guide()
+
     def _theme_group(self) -> QGroupBox:
         from .theme import THEME_LABELS, THEMES
 
@@ -908,9 +914,7 @@ class SettingsTab(QWidget):
             "오버레이 격자 맞춤 (이동 시 칸에 딱 맞춤)",
             config.load_general_flag(_GRID_SNAP, False),
         )
-        self._grid_snap.toggled.connect(
-            lambda on: config.save_general_flag(_GRID_SNAP, on)
-        )
+        self._grid_snap.toggled.connect(self._on_grid_snap)
         v.addWidget(self._grid_snap)
 
         size_row = QHBoxLayout()

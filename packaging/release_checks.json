@@ -1,6 +1,11 @@
 {
   "version": "0.43.0",
   "tests": [
+    "tests/test_stat_shake.py",
+    "tests/test_skillbar_chunk_snap.py",
+    "tests/test_overlay_metrics.py",
+    "tests/test_grid_snap.py",
+    "tests/test_grid_guide_cleanup.py",
     "tests/test_bundle_layout.py",
     "tests/test_harp_channels.py",
     "tests/test_inquiry_unified.py",
@@ -47,10 +52,11 @@
     },
     "src/mabinogi_addon/ui/settings_tab.py": {
       "tests": [
+        "tests/test_grid_guide_cleanup.py",
         "tests/test_inquiry_unified.py",
         "tests/test_navigation.py"
       ],
-      "reason": "문의하기 새 창 열기·진단 구역 제작자만"
+      "reason": "문의하기 새 창 열기·진단 구역 제작자만·격자 맞춤 끄면 안내선 숨김"
     },
     "src/mabinogi_addon/ui/main_window.py": {
       "tests": [
@@ -127,6 +133,94 @@
         "tests/test_harp_channels.py"
       ],
       "reason": "channelStatus 저장·읽기"
+    },
+    "src/mabinogi_addon/ui/grid.py": {
+      "tests": [
+        "tests/test_grid_guide_cleanup.py",
+        "tests/test_grid_snap.py"
+      ],
+      "reason": "격자 안내선 스스로 정리(100ms·버튼 풀림)·끄던 오버레이 숨김/닫힘/고정 때 숨김"
+    },
+    "src/mabinogi_addon/ui/overlay.py": {
+      "tests": [
+        "tests/test_grid_guide_cleanup.py",
+        "tests/test_overlay_metrics.py",
+        "tests/test_skillbar_chunk_snap.py",
+        "tests/test_stat_shake.py"
+      ],
+      "reason": "드래그 중 고정 시 격자 안내선 숨김(공용 owner_locked)·안내선에 끄는 오버레이 전달"
+    },
+    "src/mabinogi_addon/ui/frame_overlay.py": {
+      "tests": [
+        "tests/test_grid_guide_cleanup.py",
+        "tests/test_overlay_metrics.py",
+        "tests/test_skillbar_chunk_snap.py",
+        "tests/test_stat_shake.py"
+      ],
+      "reason": "드래그 중 고정 시 격자 안내선 숨김(공용 owner_locked)·안내선에 끄는 오버레이 전달"
+    },
+    "src/mabinogi_addon/ui/memo_overlay.py": {
+      "tests": [
+        "tests/test_grid_guide_cleanup.py",
+        "tests/test_overlay_metrics.py",
+        "tests/test_skillbar_chunk_snap.py",
+        "tests/test_stat_shake.py"
+      ],
+      "reason": "드래그 중 고정 시 격자 안내선 숨김(공용 owner_locked)·안내선에 끄는 오버레이 전달"
+    },
+    "src/mabinogi_addon/ui/mirror_overlay.py": {
+      "tests": [
+        "tests/test_grid_guide_cleanup.py",
+        "tests/test_overlay_metrics.py",
+        "tests/test_skillbar_chunk_snap.py",
+        "tests/test_stat_shake.py"
+      ],
+      "reason": "드래그 중 고정 시 격자 안내선 숨김(공용 owner_locked)·안내선에 끄는 오버레이 전달"
+    },
+    "src/mabinogi_addon/ui/pattern_overlay.py": {
+      "tests": [
+        "tests/test_grid_guide_cleanup.py",
+        "tests/test_overlay_metrics.py",
+        "tests/test_skillbar_chunk_snap.py",
+        "tests/test_stat_shake.py"
+      ],
+      "reason": "드래그 중 고정 시 격자 안내선 숨김(공용 owner_locked)·안내선에 끄는 오버레이 전달"
+    },
+    "src/mabinogi_addon/ui/skillbar_mirror.py": {
+      "tests": [
+        "tests/test_grid_guide_cleanup.py",
+        "tests/test_overlay_metrics.py",
+        "tests/test_skillbar_chunk_snap.py",
+        "tests/test_stat_shake.py"
+      ],
+      "reason": "드래그 중 고정 시 격자 안내선 숨김(공용 owner_locked)·안내선에 끄는 오버레이 전달"
+    },
+    "src/mabinogi_addon/ui/stat_overlay.py": {
+      "tests": [
+        "tests/test_grid_guide_cleanup.py",
+        "tests/test_overlay_metrics.py",
+        "tests/test_skillbar_chunk_snap.py",
+        "tests/test_stat_shake.py"
+      ],
+      "reason": "드래그 중 고정 시 격자 안내선 숨김(공용 owner_locked)·안내선에 끄는 오버레이 전달"
+    },
+    "src/mabinogi_addon/ui/upcoming_overlay.py": {
+      "tests": [
+        "tests/test_grid_guide_cleanup.py",
+        "tests/test_overlay_metrics.py",
+        "tests/test_skillbar_chunk_snap.py",
+        "tests/test_stat_shake.py"
+      ],
+      "reason": "드래그 중 고정 시 격자 안내선 숨김(공용 owner_locked)·안내선에 끄는 오버레이 전달"
+    },
+    "src/mabinogi_addon/ui/dorcha_overlay.py": {
+      "tests": [
+        "tests/test_grid_guide_cleanup.py",
+        "tests/test_overlay_metrics.py",
+        "tests/test_skillbar_chunk_snap.py",
+        "tests/test_stat_shake.py"
+      ],
+      "reason": "드래그 중 고정 시 격자 안내선 숨김(공용 owner_locked)·안내선에 끄는 오버레이 전달"
     }
   }
 }

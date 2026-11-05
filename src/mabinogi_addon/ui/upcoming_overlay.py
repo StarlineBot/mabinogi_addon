@@ -101,6 +101,9 @@ class UpcomingPatternsOverlay(QWidget):
 
     # ---- 고정(클릭 통과) ----
     def set_locked(self, locked: bool) -> None:
+        if locked:  # 끄던 중 고정되면 격자 안내선도 바로 숨긴다(공용 — grid.owner_locked)
+            from . import grid as _grid
+            _grid.owner_locked(self)
         self._locked = locked
         self.setCursor(
             Qt.CursorShape.ArrowCursor if locked else Qt.CursorShape.SizeAllCursor
@@ -121,7 +124,7 @@ class UpcomingPatternsOverlay(QWidget):
             self._snap = grid.enabled()
             self._grid_size = grid.size() if self._snap else None
             if self._snap:
-                grid.show_guide()
+                grid.show_guide(self)
             event.accept()
 
     def mouseMoveEvent(self, event) -> None:
