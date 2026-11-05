@@ -32,7 +32,7 @@ from PySide6.QtWidgets import (
 from .palette import color
 from .. import catalog as catalog_mod
 from .. import config
-from ..catalog import BuffDef, available_catalog
+from ..catalog import DEFAULT_HIDDEN_BUFFS, BuffDef, available_catalog
 from .dpi import to_logical
 from .screen_grab import capture_for_autofind
 from .widgets import TrackerColumns, callout, checkbox, hint_label, icon_slot, section_label
@@ -165,6 +165,7 @@ class BuffTab(QWidget):
                 bid,
                 config.BuffSettings(
                     id=bid,
+                    hidden=bid in DEFAULT_HIDDEN_BUFFS,  # 요새화 등: 처음엔 오버레이 표시 꺼짐(판독은 함)
                     alert=config.AlertConfig(warn_gone=bid in self._sound_ids),
                 ),
             )

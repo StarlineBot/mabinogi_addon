@@ -116,3 +116,57 @@ def test_color_check_rejects_lookalike_frame_icons():
     templates = _default_templates()
     for name in ("스크린샷 2026-10-31 174946.png", "2026-10-30_windowed_wireweb_3.png"):
         assert "fortification" not in {d.buff_id for d in detect_buffs(_status(name), templates, (0, 50))}, name
+
+
+# ---- 요새화: 기본 표시 꺼짐, 판독은 항상(사용자 11-05) -----------------------------------------------------
+def _run_engine(order, ticks=4):
+    from mabinogi_addon.catalog import DEFAULT_ICON_DIR, DEFAULT_IMAGE_DIR, build_templates, load_catalog
+    from mabinogi_addon.tracker.engine import BuffEngine
+    from mabinogi_addon.ui.main_window import ANCHOR_ID, MainWindow
+    catalog = load_catalog((DEFAULT_ICON_DIR,), (DEFAULT_IMAGE_DIR,))
+    detect = MainWindow._detect_ids(order, catalog)
+    engine = BuffEngine(build_templates([b for b in catalog if b.id in detect]), order, anchor_id=ANCHOR_ID)
+    region = _status("image1.png")
+    result = None
+    for i in range(ticks):
+        result = engine.tick(region, float(i))
+    return {e.buff_id for e in result.entries}, detect
+
+
+def test_fortification_hidden_by_default_but_still_claims_its_row():
+    from mabinogi_addon import config
+    from mabinogi_addon.catalog import DEFAULT_ICON_DIR, DEFAULT_IMAGE_DIR, load_catalog
+    from mabinogi_addon.ui.main_window import MainWindow
+    catalog = load_catalog((DEFAULT_ICON_DIR,), (DEFAULT_IMAGE_DIR,))
+    assert config.load_buff_settings() == []  # 처음 설치·업데이트(저장된 설정 없음)
+    order = MainWindow._compute_tracking(None, catalog)[0]
+    assert "fortification" not in order and "vivace" in order  # 표시 꺼짐이 기본
+    shown, detect = _run_engine(order)
+    assert "fortification" in detect  # 그래도 판독은 한다
+    assert "fortification" not in shown and "vivace" not in shown  # 오버레이에 둘 다 없음(요새화 줄을 비바체가 못 가져감)
+
+
+def test_fortification_shown_when_user_turns_it_on():
+    from mabinogi_addon import config
+    from mabinogi_addon.catalog import DEFAULT_ICON_DIR, DEFAULT_IMAGE_DIR, load_catalog
+    from mabinogi_addon.ui.main_window import MainWindow
+    config.save_buff_settings([config.BuffSettings(id="fortification", hidden=False)])
+    catalog = load_catalog((DEFAULT_ICON_DIR,), (DEFAULT_IMAGE_DIR,))
+    order = MainWindow._compute_tracking(None, catalog)[0]
+    assert "fortification" in order
+    shown, _ = _run_engine(order)
+    assert "fortification" in shown and "vivace" not in shown
+
+
+def test_buff_tab_new_fortification_defaults_to_hidden():
+    import os
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtWidgets import QApplication
+    QApplication.instance() or QApplication([])
+    from mabinogi_addon.ui.buff_tab import BuffTab
+    tab = BuffTab()
+    try:
+        settings, _order = tab._load_state()
+        assert settings["fortification"].hidden is True and settings["vivace"].hidden is False
+    finally:
+        tab.close()

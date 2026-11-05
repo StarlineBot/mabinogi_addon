@@ -39,7 +39,8 @@ def test_hidden_buffs_stay_in_list_dimmed_and_unchecked(app):
     probe = BuffTab()
     every = list(probe._order)
     probe.deleteLater()
-    hidden = every[::2]
+    from mabinogi_addon.catalog import DEFAULT_HIDDEN_BUFFS
+    hidden = every[::2] + [b for b in every[1::2] if b in DEFAULT_HIDDEN_BUFFS]  # 요새화 등은 처음부터 표시 꺼짐(11-05)
     order = _hide(hidden)
     tab = BuffTab()  # 다시 실행
     assert _ids(tab.buff_list) == [ANCHOR_ID, *order]  # 저장 순서 그대로, 끈 버프도 목록에(기준 맨 위)

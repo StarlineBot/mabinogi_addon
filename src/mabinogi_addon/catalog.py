@@ -54,6 +54,11 @@ DEFAULT_BUFF_NAMES: dict[str, str] = {
     "fortification": "요새화",
 }
 
+# 처음 설치·업데이트 때 '오버레이 표시 꺼짐'이 기본인 버프(사용자 11-05). 켜면 그때 표시.
+DEFAULT_HIDDEN_BUFFS: frozenset[str] = frozenset({"fortification"})
+# 표시를 꺼도 판독은 하는 버프 — 자기 줄을 차지해 비슷한 아이콘의 다른 버프가 그 줄을 가져가지 못하게(요새화 ↔ 비바체 오인, 11-05).
+DETECT_ALWAYS_BUFFS: frozenset[str] = frozenset({"fortification"})
+
 # 기본 버프 표시 순서(사용자가 순서를 바꾸기 전 초기값). 앵커(premium_battle)는
 # 어차피 GUI에서 맨 위로 고정되지만, 목록 선두에 둬 catalog 순서도 자연스럽게.
 # 여기 없는 id(사용자 추가 버프)는 뒤에 id 순으로 붙는다.

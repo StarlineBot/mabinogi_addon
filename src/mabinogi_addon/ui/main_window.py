@@ -30,7 +30,7 @@ from .palette import color, subtab_underline
 from .palette import custom as palette_custom, on_frame
 from .. import config, paths
 from ..capture import Region, create_live_source
-from ..catalog import available_catalog, available_debuff_catalog, build_templates
+from ..catalog import DEFAULT_HIDDEN_BUFFS, DETECT_ALWAYS_BUFFS, available_catalog, available_debuff_catalog, build_templates
 from ..system.window_watcher import create_window_watcher
 from ..tracker.debuff_engine import DebuffEngine
 from ..tracker.engine import BuffEngine
@@ -1751,7 +1751,10 @@ class MainWindow(QMainWindow):
                 order.append(s.id)
         for b in catalog:
             if b.id != ANCHOR_ID and b.id not in order:
-                if b.id not in saved or not saved[b.id].hidden:
+                if b.id in saved:
+                    if not saved[b.id].hidden:
+                        order.append(b.id)
+                elif b.id not in DEFAULT_HIDDEN_BUFFS:  # 처음 보는 버프: 기본 표시 꺼짐 목록이면 숨김으로 시작
                     order.append(b.id)
 
         show_duration = {
@@ -1816,7 +1819,7 @@ class MainWindow(QMainWindow):
         # 기존 동작과 동일 — 엔진 쪽 anchor_seen 안전장치가 처리한다.
         # 표시(오버레이 ON)된 버프 + 앵커만 매칭한다. 숨긴 버프까지 전부 매칭하면
         # 아이콘 탐지(매 틱)가 템플릿 수에 비례해 느려진다. 앵커는 프레임 게이팅에 필요.
-        tracked_ids = set(order) | {ANCHOR_ID}
+        tracked_ids = self._detect_ids(order, catalog)
         tracked = [b for b in catalog if b.id in tracked_ids]
         self._buff_tracked_ids = tracked_ids  # 실행 중 '오버레이에 표시' 변경 시 비교(0.32.0)
         self._engine = BuffEngine(
@@ -1845,12 +1848,18 @@ class MainWindow(QMainWindow):
         # 매칭 대상도 표시된 버프만이라 비용이 낮아 이 주기가 감당된다.
         self.buff_controller.start(source, self._engine, interval_ms=50)
 
+    @staticmethod
+    def _detect_ids(order, catalog) -> set[str]:
+        """판독할 버프 = 표시 중인 버프 + 앵커 + 표시를 꺼도 판독하는 버프(요새화 — 자기 줄 차지, 오버레이엔 안 나옴)."""
+        return set(order) | {ANCHOR_ID} | {b.id for b in catalog if b.id in DETECT_ALWAYS_BUFFS}
+
     def _sound_enabled_ids(self) -> set[str]:
-        """'종료 알림'과 '소리'를 모두 켠 버프 id 집합(알림 시 사운드 재생 대상)."""
+        """'종료 알림'과 '소리'를 모두 켠 버프 id 집합(알림 시 사운드 재생 대상). 표시를 끈 버프는 빼기 —
+        판독만 하는 버프(요새화)가 숨김 상태에서 알림을 내지 않게."""
         return {
             s.id
             for s in config.load_buff_settings()
-            if s.alert.enabled and s.alert.sound
+            if s.alert.enabled and s.alert.sound and not s.hidden
         }
 
     def _warn_gone_ids(self) -> set[str]:
@@ -1880,7 +1889,7 @@ class MainWindow(QMainWindow):
         order, show_duration, alert_before, alert_before2 = (
             self._compute_tracking(available_catalog())
         )
-        if set(order) | {ANCHOR_ID} != getattr(self, "_buff_tracked_ids", None):
+        if self._detect_ids(order, available_catalog()) != getattr(self, "_buff_tracked_ids", None):
             # 0.32.0: '오버레이에 표시'를 바꾸면 재시작 뒤와 같게 — 끈 버프는 탐지 템플릿·알림·사라짐 경고에서 빠지고,
             # 켠 버프는 템플릿에 들어온다. 예전엔 실행 중엔 표시만 숨고 시작 때 만든 상태 기계로 알림이 계속 울렸다.
             self._start_buff_tracking()
