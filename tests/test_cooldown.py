@@ -644,3 +644,19 @@ def test_sixteen_slots_survive_save_and_reload_and_reader_caps_per_set():
     config.save_cooldown({"slots": slots + [_set_slot("a9", 999, 1)]})  # 손으로 고친 설정 등: 세트 1에 9칸
     cfg = config.load_cooldown()
     assert len(cfg["slots"]) == 16 and "a9" not in {s["id"] for s in cfg["slots"]}  # 세트당 8칸으로 읽음
+
+
+def test_highlight_stays_three_seconds_and_reuse_cancels():
+    """제작자 시험 #194: 강조 3초(커지기 0.4초 포함) — 사용 가능 뒤 2.9초까지 줄에 있고 3초 뒤 빠진다."""
+    from mabinogi_addon.tracker.cooldown_row import HIGHLIGHT_SECONDS
+    assert HIGHLIGHT_SECONDS == 3.0
+    row = CooldownRow()
+    row.update({"a": READY}, 0)
+    row.update({"a": COOLING}, 1)
+    row.update({"a": READY}, 10.0)
+    assert row.expire(12.9) is False and row.row == ["a"] and "a" in row.until
+    assert row.expire(13.0) is True and row.row == []
+    row.update({"a": COOLING}, 20)
+    row.update({"a": READY}, 30.0)
+    row.update({"a": COOLING}, 31.0)  # 강조 중 다시 씀 → 바로 사용 중
+    assert row.row == ["a"] and "a" not in row.until
