@@ -14,7 +14,16 @@ import time
 import numpy as np
 from PySide6.QtCore import QObject, Signal
 
+from .. import perf_meter
+
 _log = logging.getLogger(__name__)
+# '기능별 처리 시간'(perf_meter) 이름: 공유 캡처(찍기)와 미러 자르기는 '단축바 캡처', 쿨타임 칸 판정은 '쿨타임 판정'
+CAPTURE_NAME = "단축바 캡처"
+PERF_NAMES = {"mirror": CAPTURE_NAME, "cooldown": "쿨타임 판정"}
+
+
+def perf_name(request: str) -> str:
+    return PERF_NAMES.get(request, f"{CAPTURE_NAME}·{request}")
 
 
 class SkillbarCapture(QObject):
@@ -39,9 +48,11 @@ class SkillbarCapture(QObject):
             return
         rect = tuple(int(v) for v in rect)
         if self.INLINE:  # 테스트: 바로 찍어 처리·전달
-            frame = (grab or self._grab)(*rect)
+            with perf_meter.measure(CAPTURE_NAME):
+                frame = (grab or self._grab)(*rect)
             if frame is not None:
-                result = handler(frame)
+                with perf_meter.measure(perf_name(name)):
+                    result = handler(frame)
                 if result is not None:
                     self.delivered.emit(name, result)
             return
@@ -101,7 +112,8 @@ class SkillbarCapture(QObject):
         y0 = min(r["rect"][1] for r in due.values())
         x1 = max(r["rect"][0] + r["rect"][2] for r in due.values())
         y1 = max(r["rect"][1] + r["rect"][3] for r in due.values())
-        frame = self._grab(x0, y0, x1 - x0, y1 - y0)  # 사각형 하나만 찍는다(요청들이 나눠 씀)
+        with perf_meter.measure(CAPTURE_NAME):
+            frame = self._grab(x0, y0, x1 - x0, y1 - y0)  # 사각형 하나만 찍는다(요청들이 나눠 씀)
         for name, req in due.items():
             with self._lock:
                 live = self._requests.get(name)
@@ -112,7 +124,8 @@ class SkillbarCapture(QObject):
             x, y, w, h = req["rect"]
             part = frame[y - y0:y - y0 + h, x - x0:x - x0 + w]
             try:
-                result = req["handler"](part)
+                with perf_meter.measure(perf_name(name)):
+                    result = req["handler"](part)
             except Exception:  # noqa: BLE001 — 처리 하나가 실패해도 다른 요청은 계속
                 _log.warning("단축바 공유 캡처 처리 실패(%s)", name, exc_info=True)
                 continue

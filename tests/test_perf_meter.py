@@ -118,3 +118,39 @@ def test_overlay_paint_is_counted_per_feature():
         assert ("그리기·게임 위 정보", "화면") in rows and rows[("그리기·게임 위 정보", "화면")][2] >= 1
     finally:
         overlay.deleteLater()
+
+
+def test_skillbar_shared_capture_reports_capture_and_cooldown_by_request():
+    """단축바 공유 캡처 작업 스레드: 찍기·미러 자르기 = '단축바 캡처', 쿨타임 칸 판정 = '쿨타임 판정'(작업 스레드)."""
+    import os
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    import numpy as np
+    from PySide6.QtWidgets import QApplication
+    QApplication.instance() or QApplication([])
+    from mabinogi_addon.ui import skillbar_capture as sc
+
+    done = threading.Event()
+    cap = sc.SkillbarCapture(grab=lambda x, y, w, h: np.zeros((h, w, 3), np.uint8))
+    seen = set()
+
+    def handler(name):
+        def run(part):
+            time.sleep(0.002)
+            seen.add(name)
+            if seen == {"mirror", "cooldown"}:
+                done.set()
+        return run
+    old, sc.SkillbarCapture.INLINE = sc.SkillbarCapture.INLINE, False
+    try:
+        with cap._lock:
+            for name in ("mirror", "cooldown"):
+                cap._requests[name] = {"rect": (0, 0, 8, 8), "interval": 10.0, "handler": handler(name), "due": 0.0}
+        cap._ensure_thread()
+        assert done.wait(3)
+    finally:
+        cap.stop()
+        sc.SkillbarCapture.INLINE = old
+    snap = perf_meter.take()
+    assert snap[("단축바 캡처", "작업")][2] == 2  # 찍기 1회 + 미러 자르기 1회
+    assert snap[("쿨타임 판정", "작업")][2] == 1 and snap[("쿨타임 판정", "작업")][0] >= 0.0015
+    assert sc.perf_name("other") == "단축바 캡처·other"
