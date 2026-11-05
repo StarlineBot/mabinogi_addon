@@ -731,39 +731,36 @@ def test_one_page_selector_per_row_middle_or_right_end():
     assert cd.page_rect(frame2, box2, 0)[0] == round(box2[0] + 540 + 34)
 
 
-def test_registered_while_cooling_rechecks_page_and_shows_cooling(creator, monkeypatch):
-    """쿨 중 스냅샷으로 등록 → 안내 문구 → 사용 가능 프레임에서 페이지 모양 다시 저장 → 다음 쿨이 오버레이에 나온다."""
-    import numpy as np
-    from mabinogi_addon import config
+def test_page_saved_at_registration_is_never_overwritten(creator, monkeypatch):
+    """QA 5c01ccf: 위 줄 '1'로 등록(쿨 중) → Shift로 '2' 상자가 보이는 사용 가능 프레임 관측 → 저장된 페이지는 '1' 그대로.
+    (예전 recheck는 그 순간 '2'로 덮어써 평소엔 계속 숨겼다.) 다시 '1' 페이지에서 쓰면 오버레이에 나온다."""
+    from mabinogi_addon import config, image_io
     from mabinogi_addon.ui import cooldown_section as cs
     from mabinogi_addon.ui import skillbar_capture
     cool, box, cells = _screen("스크린샷 2026-11-06 013726.png")
-    target = cells[(1, 0, 0, 2)]  # F3 '31'(사용 중)
+    target = cells[(1, 0, 0, 2)]  # 위 줄 F3 '31'(사용 중), 페이지 '1'
     sec = cs.CooldownSection(_FrontWatcher(game=True, own=False))
     try:
         slot = sec.register(target, cool, (0, 0))
-        assert slot["recheck"] is True
-        assert "사용 가능할 때 등록하면 더 정확해요." in sec.status.text()
-        # 등록 때 페이지 모양이 어긋나게 저장된 경우를 흉내(원인 미확정 — 저장값이 실제와 다름)
-        from mabinogi_addon import image_io
+        assert "사용 가능할 때" not in sec.status.text() and "recheck" not in slot
+        one = slot["page"]
+        px, py, pw, ph = slot["page_rect"]
         two = image_io.imread("tests/data/스크린샷 2026-10-16 211914.png", cv2.IMREAD_COLOR)
-        wrong = cs.cd.page_signature(two, tuple(cs.cd.page_rect(cool, box, 0)))  # 같은 자리 '2' 페이지 모양
-        sec._save(slots=[{**slot, "page": wrong}])
-        ready = cool.copy()
+        shift_frame = cool.copy()
+        shift_frame[py:py + ph, px:px + pw] = two[py:py + ph, px:px + pw]  # '2' 상자(Shift 누르는 동안)
         x, y, w, h = slot["rect"]
-        rx, ry, _, _ = cells[(1, 0, 1, 0)].rect  # 사용 가능 칸 그림을 그 자리에(사용 가능 프레임)
-        ready[y:y + h, x:x + w] = cool[ry:ry + h, rx:rx + w]
-        frames = {"img": ready}
+        rx, ry, _, _ = cells[(1, 0, 1, 0)].rect
+        shift_frame[y:y + h, x:x + w] = cool[ry:ry + h, rx:rx + w]  # 그 칸은 사용 가능
+        frames = {"img": shift_frame}
         monkeypatch.setattr(skillbar_capture.SkillbarCapture, "_grab",
                             lambda self, X, Y, W, H: frames["img"][Y:Y + H, X:X + W].copy())
         sec.enable.setChecked(True)
-        sec._tick()  # 사용 가능 프레임 관측 → 페이지 모양 다시 저장
-        saved = config.load_cooldown()["slots"][0]
-        assert saved["recheck"] is False and saved["page"] != wrong
-        frames["img"] = cool  # 다시 쓰면(쿨 중)
         sec._tick()
-        assert sec.row.row == [slot["id"]] and sec._overlay is not None and sec._overlay.items() == [(slot["id"], False)]
-        assert sec.state_text(slot["id"]) == "사용 중"
+        assert config.load_cooldown()["slots"][0]["page"] == one  # 덮어쓰지 않음
+        assert sec.state_text(slot["id"]) == "가려짐(페이지 다름)"
+        frames["img"] = cool  # Shift를 떼면 '1' — 쿨 중
+        sec._tick()
+        assert sec.row.row == [slot["id"]] and sec._overlay.items() == [(slot["id"], False)]
     finally:
         sec.shutdown()
 

@@ -63,14 +63,14 @@ def save_icon(sid: str, cell) -> bool:
         return False
 
 
-def observe(frame, origin, slots, last: dict, with_crops: bool, need_icon=frozenset(), recheck=frozenset()):
+def observe(frame, origin, slots, last: dict, with_crops: bool, need_icon=frozenset()):
     """작업 스레드: 공유 캡처 한 장(물리 사각형 origin에서 시작)에서 칸마다 상태. 바뀐 칸만 돌려준다(없으면 None).
     last는 이 함수만 쓰는 이전 상태(작업 스레드 안에서만 바뀐다).
     need_icon: 목록 아이콘을 아직 '사용 가능' 그림으로 저장하지 않은 칸 — 사용 가능으로 보이면 여기서(작업 스레드) 저장하고 icons에 알린다.
-    recheck: 쿨 중에 등록한 칸 — 처음 '사용 가능'으로 보일 때 그 자리 페이지 모양을 다시 저장(pages에 알림)한 뒤 비교한다
-    (등록 시점과 무관하게, 11-06 제작자: 쿨 중 등록한 F3이 오버레이에 안 나옴)."""
+    페이지 모양은 등록 스냅샷 그대로 쓴다 — 다시 저장하지 않는다(QA 5c01ccf: 위 줄은 Shift를 누르는 동안 2페이지가 보여 그 순간 덮어쓰면 평소 계속 숨김.
+    쿨 중 등록 문제의 원인은 상자 모서리 픽셀로 확정 — 등록 스냅샷의 페이지 모양은 쿨 여부와 무관)."""
     ox, oy = origin
-    changes, crops, icons, pages = {}, {}, [], {}
+    changes, crops, icons = {}, {}, []
     for slot in slots:
         x, y, w, h = slot["rect"]
         cx, cy = x - ox, y - oy
@@ -79,13 +79,6 @@ def observe(frame, origin, slots, last: dict, with_crops: bool, need_icon=frozen
         state = cd.classify(cell) if cell.shape[:2] == (h, w) else cd.UNKNOWN
         page_rect = slot.get("page_rect")
         signature = slot.get("page")
-        if slot["id"] in recheck and state == cd.READY and page_rect:
-            px, py, pw, ph = page_rect
-            fresh = cd.page_signature(frame, (px - ox, py - oy, pw, ph)) if px >= ox and py >= oy else None
-            if fresh is not None:
-                pages[slot["id"]] = fresh
-                signature = fresh
-                recheck = recheck - {slot["id"]}
         if state != cd.UNKNOWN and page_rect and signature:
             px, py, pw, ph = page_rect
             same = cd.same_page(frame, (px - ox, py - oy, pw, ph), signature)
@@ -103,9 +96,9 @@ def observe(frame, origin, slots, last: dict, with_crops: bool, need_icon=frozen
         if slot["id"] in need_icon and state == cd.READY and cell.size and save_icon(slot["id"], cell.copy()):
             icons.append(slot["id"])
             need_icon = need_icon - {slot["id"]}
-    if not changes and not crops and not icons and not pages:
+    if not changes and not crops and not icons:
         return None
-    return {"changes": changes, "crops": crops, "icons": icons, "pages": pages}
+    return {"changes": changes, "crops": crops, "icons": icons}
 
 
 class CooldownSection(QGroupBox):
@@ -305,22 +298,16 @@ class CooldownSection(QGroupBox):
                 page_rect = [pr[0] + ox, pr[1] + oy, pr[2], pr[3]]
         used = {s["label"] for s in self.slots}
         label = next(f"스킬 {n}" for n in range(1, MAX_SLOTS * MAX_SETS + 2) if f"스킬 {n}" not in used)  # 전체에서 겹치지 않게
-        cooling = False
         cell = frame[y:y + h, x:x + w] if frame is not None else None
-        if cell is not None and cell.shape[:2] == (h, w):
-            cooling = cd.classify(cell) == cd.COOLING
         slot = {"id": uuid.uuid4().hex[:8], "rect": rect, "page_rect": page_rect, "page": page, "label": label, "row": row,
-                "set": set_no, "icon_ok": False,
-                "recheck": cooling}  # 쿨 중 등록 → 처음 '사용 가능'일 때 페이지 모양 다시 저장
+                "set": set_no, "icon_ok": False}
         if cell is not None and cell.shape[:2] == (h, w):  # 등록 스냅샷에서 칸을 잘라 목록 아이콘으로(처음 '사용 가능'일 때 한 번 더)
             save_icon(slot["id"], cell.copy())
         self._save(slots=self.slots + [slot])
         self._last.clear()
         self._render_list()
-        self.status.setText(f"{label}을(를) 세트 {set_no}에 등록했어요." + ("" if page else " (페이지 숫자를 못 읽어 페이지 확인 없이 봐요)")
-                            + (" 사용 가능할 때 등록하면 더 정확해요." if cooling else ""))
-        _log.info("쿨타임 칸 등록: %s(세트 %d) 칸 %s 페이지 %s%s", label, set_no, rect, "있음" if page else "없음",
-                  " · 쿨 중 등록(처음 사용 가능일 때 페이지 다시 저장)" if cooling else "")
+        self.status.setText(f"{label}을(를) 세트 {set_no}에 등록했어요." + ("" if page else " (페이지 숫자를 못 읽어 페이지 확인 없이 봐요)"))
+        _log.info("쿨타임 칸 등록: %s(세트 %d) 칸 %s 페이지 %s", label, set_no, rect, "있음" if page else "없음")
         return slot
 
     # ---- 칸 상태(목록 표시·app.log) ----------------------------------------------------------
@@ -460,9 +447,8 @@ class CooldownSection(QGroupBox):
         from ..system import dwm_thumbnail
         crops = not dwm_thumbnail.available()  # 썸네일을 못 쓸 때만 그림을 넘긴다
         need_icon = frozenset(s["id"] for s in slots if not s.get("icon_ok"))
-        recheck = frozenset(s["id"] for s in slots if s.get("recheck"))
         capture.set_request("cooldown", (x0, y0, x1 - x0, y1 - y0), OBSERVE_INTERVAL,
-                            lambda frame: observe(frame, (x0, y0), slots, last, crops, need_icon, recheck))
+                            lambda frame: observe(frame, (x0, y0), slots, last, crops, need_icon))
         if self.row.expire(time.monotonic()):
             self._show_row()
         elif self._needs_refresh():
@@ -483,11 +469,6 @@ class CooldownSection(QGroupBox):
             done = set(payload["icons"])
             self._save(slots=[{**s, "icon_ok": True} if s["id"] in done else s for s in self.slots])
             self._render_list()
-        if payload.get("pages"):  # 쿨 중 등록한 칸: 처음 사용 가능일 때 다시 읽은 페이지 모양으로 바꿔 저장
-            pages = payload["pages"]
-            self._save(slots=[{**s, "page": pages[s["id"]], "recheck": False} if s["id"] in pages else s for s in self.slots])
-            for sid in pages:
-                _log.info("쿨타임 칸 페이지 모양 다시 저장: %s(처음 사용 가능으로 보임)", self._name_of(sid))
         self._note_states(payload.get("changes") or {})
         before = set(self.row.until)
         sound = self.row.update(payload["changes"], time.monotonic())

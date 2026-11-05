@@ -1,29 +1,8 @@
 {
-  "version": "0.43.0",
+  "version": "0.43.1",
   "tests": [
-    "tests/test_stat_shake.py",
-    "tests/test_skillbar_chunk_snap.py",
-    "tests/test_overlay_metrics.py",
-    "tests/test_grid_snap.py",
-    "tests/test_grid_guide_cleanup.py",
-    "tests/test_bundle_layout.py",
-    "tests/test_harp_channels.py",
-    "tests/test_inquiry_unified.py",
-    "tests/test_inquiry.py",
-    "tests/test_overlay_capture.py",
-    "tests/test_feature_release_policy.py",
-    "tests/test_tuarim_settings_width.py",
-    "tests/test_navigation.py",
-    "tests/test_click_snap.py",
     "tests/test_cooldown.py",
-    "tests/test_skillbar_mirror.py",
-    "tests/test_mirror.py",
-    "tests/test_region_selector.py",
-    "tests/test_region_selector_lifecycle.py",
-    "tests/test_autofind_mvp.py",
-    "tests/test_region_registration.py",
-    "tests/test_custom_autosave.py",
-    "tests/test_boss_tab.py",
+    "tests/test_skillbar_testers.py",
     "tests/test_startup_build.py",
     "tests/test_release_candidate.py",
     "tests/test_windows_ci.py",
@@ -33,82 +12,37 @@
     "tests/test_startup_smoke.py"
   ],
   "coverage": {
-    "src/mabinogi_addon/inquiry_session.py": {
+    "src/mabinogi_addon/detect/cooldown.py": {
       "tests": [
-        "tests/test_inquiry_unified.py"
-      ],
-      "reason": "카드 6개·회차 ID·설치 ID·변경 프레임·60초/20장/8MiB·ZIP(info.json·본문·로그)·이름·24시간 잔여물 정리"
-    },
-    "src/mabinogi_addon/inquiry.py": {
-      "tests": [
-        "tests/test_inquiry_unified.py",
-        "tests/test_inquiry.py"
-      ],
-      "reason": "ZIP 첨부·본문 첫 줄(보낸 사람·회차·종류·카드)·전송 제한 시간, 기존 로그 첨부·포럼/일반 채널"
-    },
-    "src/mabinogi_addon/ui/inquiry_window.py": {
-      "tests": [
-        "tests/test_inquiry_unified.py"
-      ],
-      "reason": "새 창 3단계·카드 선택 전 시작 안 함·영역 수집·게임 1장 strict·자료 없이·다시 보내기 같은 회차·닫으면 정리·진행 표시 클릭 통과"
-    },
-    "src/mabinogi_addon/ui/overlay_capture.py": {
-      "tests": [
-        "tests/test_overlay_capture.py",
-        "tests/test_inquiry_unified.py",
         "tests/test_cooldown.py"
       ],
-      "reason": "문의 진행 표시를 판독 캡처 제외 목록에 · 쿨타임 오버레이 캡처 제외"
+      "reason": "페이지 상자 네 모서리 제외 비교(예전 서명도 맞음)·'1' vs '2' 구분 유지"
     },
-    "src/mabinogi_addon/ui/settings_tab.py": {
+    "src/mabinogi_addon/ui/cooldown_section.py": {
       "tests": [
-        "tests/test_grid_guide_cleanup.py",
-        "tests/test_inquiry_unified.py",
-        "tests/test_navigation.py"
+        "tests/test_cooldown.py"
       ],
-      "reason": "문의하기 새 창 열기·진단 구역 제작자만·격자 맞춤 끄면 안내선 숨김"
+      "reason": "페이지 모양 재저장 제거(등록 값 유지)·상태 표시·app.log·다른 페이지라 숨김 문구"
     },
-    "src/mabinogi_addon/ui/main_window.py": {
+    "src/mabinogi_addon/config.py": {
       "tests": [
-        "tests/test_harp_channels.py",
-        "tests/test_inquiry_unified.py",
-        "tests/test_navigation.py"
+        "tests/test_cooldown.py"
       ],
-      "reason": "문의 창 하나·종료 정리·시작 때 잔여물 정리·채널 첫 측정 1초"
+      "reason": "cooldown 칸 읽기(recheck 필드 제거, 세트·아이콘 필드)"
     },
-    "src/mabinogi_addon/ui/boss_tab.py": {
+    "tests/data/스크린샷 2026-11-06 013726.png": {
       "tests": [
-        "tests/test_inquiry_unified.py",
-        "tests/test_boss_tab.py"
+        "tests/test_skillbar_testers.py",
+        "tests/test_cooldown.py"
       ],
-      "reason": "보스 HP바 수집 구역 제작자만"
-    },
-    "src/mabinogi_addon/ui/stat_bars_tab.py": {
-      "tests": [
-        "tests/test_inquiry_unified.py",
-        "tests/test_feature_release_policy.py"
-      ],
-      "reason": "체력바 수집 구역 제작자만"
-    },
-    "src/mabinogi_addon/ui/tuarim_tab.py": {
-      "tests": [
-        "tests/test_inquiry_unified.py",
-        "tests/test_tuarim_settings_width.py"
-      ],
-      "reason": "도르카/투아림 수집 구역 제작자만(제작자 화면 배치)"
-    },
-    "scripts/release_delivery.py": {
-      "tests": [
-        "tests/test_release_candidate.py"
-      ],
-      "reason": "배포 알림 웹훅 User-Agent·텍스트 채널 대체"
+      "reason": "새 2560 스크린샷 — 단축바 CASES·쿨 중 등록 회귀"
     },
     "src/mabinogi_addon/assets/release_notes.md": {
       "tests": [
         "tests/test_release_notes.py",
         "tests/test_release_notes_trigger.py"
       ],
-      "reason": "0.43.0 노트 파싱·새 버전 표시"
+      "reason": "0.43.1 노트 파싱·새 버전 표시"
     },
     "packaging/release_checks.json": {
       "tests": [
@@ -124,180 +58,6 @@
         "tests/test_startup_smoke.py"
       ],
       "reason": "배포 계약: 빌드·후보·Windows CI·시작 확인"
-    },
-    "src/mabinogi_addon/ui/harp_tab.py": {
-      "tests": [
-        "tests/test_harp_channels.py",
-        "tests/test_bundle_layout.py"
-      ],
-      "reason": "지난 결과 저장·복원(지문·7일)·시작 즉시 표시·3회 뒤 교체·숨은 탭 카드 갱신 없음·회차당 홈 갱신/저장 1번"
-    },
-    "src/mabinogi_addon/harp_latency.py": {
-      "tests": [
-        "tests/test_harp_channels.py"
-      ],
-      "reason": "주소 지문·기록 내보내기/복원"
-    },
-    "src/mabinogi_addon/config.py": {
-      "tests": [
-        "tests/test_harp_channels.py",
-        "tests/test_cooldown.py"
-      ],
-      "reason": "channelStatus 저장·읽기 · cooldown 저장·읽기"
-    },
-    "src/mabinogi_addon/ui/grid.py": {
-      "tests": [
-        "tests/test_grid_guide_cleanup.py",
-        "tests/test_grid_snap.py"
-      ],
-      "reason": "격자 안내선 스스로 정리(100ms·버튼 풀림)·끄던 오버레이 숨김/닫힘/고정 때 숨김"
-    },
-    "src/mabinogi_addon/ui/overlay.py": {
-      "tests": [
-        "tests/test_grid_guide_cleanup.py",
-        "tests/test_overlay_metrics.py",
-        "tests/test_skillbar_chunk_snap.py",
-        "tests/test_stat_shake.py"
-      ],
-      "reason": "드래그 중 고정 시 격자 안내선 숨김(공용 owner_locked)·안내선에 끄는 오버레이 전달"
-    },
-    "src/mabinogi_addon/ui/frame_overlay.py": {
-      "tests": [
-        "tests/test_grid_guide_cleanup.py",
-        "tests/test_overlay_metrics.py",
-        "tests/test_skillbar_chunk_snap.py",
-        "tests/test_stat_shake.py"
-      ],
-      "reason": "드래그 중 고정 시 격자 안내선 숨김(공용 owner_locked)·안내선에 끄는 오버레이 전달"
-    },
-    "src/mabinogi_addon/ui/memo_overlay.py": {
-      "tests": [
-        "tests/test_grid_guide_cleanup.py",
-        "tests/test_overlay_metrics.py",
-        "tests/test_skillbar_chunk_snap.py",
-        "tests/test_stat_shake.py"
-      ],
-      "reason": "드래그 중 고정 시 격자 안내선 숨김(공용 owner_locked)·안내선에 끄는 오버레이 전달"
-    },
-    "src/mabinogi_addon/ui/mirror_overlay.py": {
-      "tests": [
-        "tests/test_grid_guide_cleanup.py",
-        "tests/test_overlay_metrics.py",
-        "tests/test_skillbar_chunk_snap.py",
-        "tests/test_stat_shake.py"
-      ],
-      "reason": "드래그 중 고정 시 격자 안내선 숨김(공용 owner_locked)·안내선에 끄는 오버레이 전달"
-    },
-    "src/mabinogi_addon/ui/pattern_overlay.py": {
-      "tests": [
-        "tests/test_grid_guide_cleanup.py",
-        "tests/test_overlay_metrics.py",
-        "tests/test_skillbar_chunk_snap.py",
-        "tests/test_stat_shake.py"
-      ],
-      "reason": "드래그 중 고정 시 격자 안내선 숨김(공용 owner_locked)·안내선에 끄는 오버레이 전달"
-    },
-    "src/mabinogi_addon/ui/skillbar_mirror.py": {
-      "tests": [
-        "tests/test_grid_guide_cleanup.py",
-        "tests/test_overlay_metrics.py",
-        "tests/test_skillbar_chunk_snap.py",
-        "tests/test_stat_shake.py",
-        "tests/test_skillbar_mirror.py",
-        "tests/test_mirror.py"
-      ],
-      "reason": "드래그 중 고정 시 격자 안내선 숨김(공용 owner_locked)·안내선에 끄는 오버레이 전달 · numpy 자르기(slice_group_np)"
-    },
-    "src/mabinogi_addon/ui/stat_overlay.py": {
-      "tests": [
-        "tests/test_grid_guide_cleanup.py",
-        "tests/test_overlay_metrics.py",
-        "tests/test_skillbar_chunk_snap.py",
-        "tests/test_stat_shake.py"
-      ],
-      "reason": "드래그 중 고정 시 격자 안내선 숨김(공용 owner_locked)·안내선에 끄는 오버레이 전달"
-    },
-    "src/mabinogi_addon/ui/upcoming_overlay.py": {
-      "tests": [
-        "tests/test_grid_guide_cleanup.py",
-        "tests/test_overlay_metrics.py",
-        "tests/test_skillbar_chunk_snap.py",
-        "tests/test_stat_shake.py"
-      ],
-      "reason": "드래그 중 고정 시 격자 안내선 숨김(공용 owner_locked)·안내선에 끄는 오버레이 전달"
-    },
-    "src/mabinogi_addon/ui/dorcha_overlay.py": {
-      "tests": [
-        "tests/test_grid_guide_cleanup.py",
-        "tests/test_overlay_metrics.py",
-        "tests/test_skillbar_chunk_snap.py",
-        "tests/test_stat_shake.py"
-      ],
-      "reason": "드래그 중 고정 시 격자 안내선 숨김(공용 owner_locked)·안내선에 끄는 오버레이 전달"
-    },
-    "src/mabinogi_addon/detect/click_targets.py": {
-      "tests": [
-        "tests/test_click_snap.py"
-      ],
-      "reason": "클릭 맞춤 대상(단축바 48칸·체력바 3줄·보스바 보일 때만)·빈 화면·겹침 판정"
-    },
-    "src/mabinogi_addon/detect/cooldown.py": {
-      "tests": [
-        "tests/test_cooldown.py"
-      ],
-      "reason": "사용 중 판정(1080·창 모드·4K 실화면 칸 정확히)·페이지 숫자 모양 같음/다름·못 읽음"
-    },
-    "src/mabinogi_addon/tracker/cooldown_row.py": {
-      "tests": [
-        "tests/test_cooldown.py"
-      ],
-      "reason": "쓴 순서·1초 강조·소리 한 번·다시 사용·가려짐/페이지 바뀜 알림 없음"
-    },
-    "src/mabinogi_addon/ui/cooldown_section.py": {
-      "tests": [
-        "tests/test_cooldown.py"
-      ],
-      "reason": "제작자만 보임·등록(페이지 저장·중복·8칸)·드래그 거부·관측 바뀐 칸만·캡처 밖 칸·게임 비활성/일시정지 정지"
-    },
-    "src/mabinogi_addon/ui/cooldown_overlay.py": {
-      "tests": [
-        "tests/test_cooldown.py",
-        "tests/test_overlay_capture.py"
-      ],
-      "reason": "한 줄 배치·예시 3칸·바뀔 때만 다시 그림·배율"
-    },
-    "src/mabinogi_addon/ui/skillbar_capture.py": {
-      "tests": [
-        "tests/test_cooldown.py",
-        "tests/test_skillbar_mirror.py",
-        "tests/test_mirror.py"
-      ],
-      "reason": "작업 스레드가 덮는 사각형 하나만 찍어 나눔·INLINE·요청 해제"
-    },
-    "src/mabinogi_addon/ui/region_selector.py": {
-      "tests": [
-        "tests/test_click_snap.py",
-        "tests/test_region_selector.py",
-        "tests/test_region_selector_lifecycle.py",
-        "tests/test_region_registration.py"
-      ],
-      "reason": "클릭=테두리 맞춤·4px 넘으면 드래그·배율·제작자 아니면 탐지 안 함·크롭/고정 모드 그대로"
-    },
-    "src/mabinogi_addon/ui/custom_overlay_tab.py": {
-      "tests": [
-        "tests/test_click_snap.py",
-        "tests/test_custom_autosave.py"
-      ],
-      "reason": "영역 지정 선택창에 단축바·체력바·보스바 맞춤"
-    },
-    "src/mabinogi_addon/ui/skillbar_tab.py": {
-      "tests": [
-        "tests/test_cooldown.py",
-        "tests/test_autofind_mvp.py",
-        "tests/test_skillbar_chunk_snap.py",
-        "tests/test_region_registration.py"
-      ],
-      "reason": "미러 캡처를 공유 작업 스레드로·쿨타임 구역(제작자)·종료 정리"
     }
   }
 }
