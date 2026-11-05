@@ -36,11 +36,35 @@ def sound_available() -> bool:
     return sound_path(SOUND_FILE).exists()
 
 
-def observe(frame, origin, slots, last: dict, with_crops: bool):
+ICON_DIR_NAME = "cooldown_icons"
+LIST_ICON = 28  # 목록 줄 아이콘 크기(px)
+
+
+def icon_dir():
+    from .. import paths
+    return paths.user_data_dir() / ICON_DIR_NAME
+
+
+def icon_path(sid: str):
+    return icon_dir() / f"{sid}.png"
+
+
+def save_icon(sid: str, cell) -> bool:
+    """칸 그림을 목록 아이콘으로 저장(사용자 데이터 폴더 PNG, 40px 남짓 — 등록 순간과 처음 '사용 가능' 관측 때 한 번)."""
+    from .. import image_io
+    try:
+        icon_dir().mkdir(parents=True, exist_ok=True)
+        return bool(image_io.imwrite(icon_path(sid), cell))
+    except OSError:
+        return False
+
+
+def observe(frame, origin, slots, last: dict, with_crops: bool, need_icon=frozenset()):
     """작업 스레드: 공유 캡처 한 장(물리 사각형 origin에서 시작)에서 칸마다 상태. 바뀐 칸만 돌려준다(없으면 None).
-    last는 이 함수만 쓰는 이전 상태(작업 스레드 안에서만 바뀐다)."""
+    last는 이 함수만 쓰는 이전 상태(작업 스레드 안에서만 바뀐다).
+    need_icon: 목록 아이콘을 아직 '사용 가능' 그림으로 저장하지 않은 칸 — 사용 가능으로 보이면 여기서(작업 스레드) 저장하고 icons에 알린다."""
     ox, oy = origin
-    changes, crops = {}, {}
+    changes, crops, icons = {}, {}, []
     for slot in slots:
         x, y, w, h = slot["rect"]
         cx, cy = x - ox, y - oy
@@ -60,9 +84,12 @@ def observe(frame, origin, slots, last: dict, with_crops: bool):
             last[slot["id"]] = state
         if with_crops and state == cd.COOLING and cell.size:
             crops[slot["id"]] = cell.copy()
-    if not changes and not crops:
+        if slot["id"] in need_icon and state == cd.READY and cell.size and save_icon(slot["id"], cell.copy()):
+            icons.append(slot["id"])
+            need_icon = need_icon - {slot["id"]}
+    if not changes and not crops and not icons:
         return None
-    return {"changes": changes, "crops": crops}
+    return {"changes": changes, "crops": crops, "icons": icons}
 
 
 class CooldownSection(QGroupBox):
@@ -92,7 +119,7 @@ class CooldownSection(QGroupBox):
         self.set_combo = QComboBox()
         self.set_combo.addItems([f"세트 {n}" for n in range(1, MAX_SETS + 1)])
         self.set_combo.setToolTip("등록할 칸을 넣을 세트 — 세트마다 오버레이가 따로 떠요(위치만 따로, 크기·투명도·고정은 공통)")
-        self.set_combo.currentIndexChanged.connect(lambda _i: self._update_add_button())
+        self.set_combo.currentIndexChanged.connect(lambda _i: self._render_list())  # 고른 세트의 칸만 목록에
         row.addWidget(self.set_combo)
         self.add_btn = QPushButton("스킬 추가")
         self.add_btn.setToolTip("단축바 칸을 클릭해 등록해요(칸 테두리에 자동으로 맞춰요). 세트마다 최대 8칸")
@@ -152,28 +179,57 @@ class CooldownSection(QGroupBox):
         config.save_cooldown(data)
 
     def _render_list(self) -> None:
+        """고른 세트의 칸만: 스킬 아이콘(28px) + 이름 + 삭제. 위치 숫자는 마우스를 올리면(툴팁)."""
         while self.list_box.count():
             item = self.list_box.takeAt(0)
             if item.widget() is not None:
                 item.widget().hide()
                 item.widget().deleteLater()
-        for slot in sorted(self.slots, key=lambda s: s.get("set", 1)):
+        set_no = self.set_combo.currentIndex() + 1
+        mine = [s for s in self.slots if s.get("set", 1) == set_no]
+        from .settings_layout import danger_style
+        for slot in mine:
             line = QWidget()
             h = QHBoxLayout(line)
             h.setContentsMargins(0, 0, 0, 0)
             x, y, w, hh = slot["rect"]
-            h.addWidget(QLabel(f"세트 {slot.get('set', 1)} · {slot['label']} · 칸 {w}×{hh} @ ({x},{y})"
-                               + ("" if slot.get("page") else " · 페이지 확인 없음")))
+            tip = f"칸 {w}×{hh} @ ({x},{y})" + ("" if slot.get("page") else " · 페이지 확인 없음")
+            icon = QLabel()
+            icon.setFixedSize(LIST_ICON, LIST_ICON)
+            icon.setPixmap(self._list_icon(slot["id"]))
+            icon.setToolTip(tip)
+            h.addWidget(icon)
+            name = QLabel(slot["label"])
+            name.setToolTip(tip)
+            h.addWidget(name)
             h.addStretch(1)
             remove = QPushButton("－ 삭제")
-            from .settings_layout import danger_style
             remove.setStyleSheet(danger_style())
             remove.clicked.connect(lambda _=False, sid=slot["id"]: self._remove(sid))
             h.addWidget(remove)
+            line.setToolTip(tip)
             self.list_box.addWidget(line)
-        if not self.slots:
-            self.list_box.addWidget(hint_label("등록한 스킬이 없어요. '스킬 추가'로 단축바 칸을 클릭해 주세요."))
+        if not mine:
+            self.list_box.addWidget(hint_label(f"세트 {set_no}에 등록한 스킬이 없어요. '스킬 추가'로 단축바 칸을 클릭해 주세요."))
         self._update_add_button()
+
+    @staticmethod
+    def _list_icon(sid: str):
+        """저장한 칸 그림(없으면 빈 칸 그림)."""
+        from PySide6.QtCore import Qt
+        from PySide6.QtGui import QColor, QPainter, QPen, QPixmap
+        path = icon_path(sid)
+        pix = QPixmap(str(path)) if path.exists() else QPixmap()
+        if not pix.isNull():
+            return pix.scaled(LIST_ICON, LIST_ICON, Qt.AspectRatioMode.IgnoreAspectRatio,
+                              Qt.TransformationMode.SmoothTransformation)
+        empty = QPixmap(LIST_ICON, LIST_ICON)
+        empty.fill(QColor(0, 0, 0, 0))
+        p = QPainter(empty)
+        p.setPen(QPen(QColor(150, 150, 150, 180), 1, Qt.PenStyle.DashLine))
+        p.drawRect(1, 1, LIST_ICON - 3, LIST_ICON - 3)
+        p.end()
+        return empty
 
     def _count(self, set_no: int) -> int:
         return sum(1 for s in self.slots if s.get("set", 1) == set_no)
@@ -230,7 +286,11 @@ class CooldownSection(QGroupBox):
         used = {s["label"] for s in self.slots}
         label = next(f"스킬 {n}" for n in range(1, MAX_SLOTS * MAX_SETS + 2) if f"스킬 {n}" not in used)  # 전체에서 겹치지 않게
         slot = {"id": uuid.uuid4().hex[:8], "rect": rect, "page_rect": page_rect, "page": page, "label": label, "row": row,
-                "set": set_no}
+                "set": set_no, "icon_ok": False}
+        if frame is not None:  # 등록 스냅샷에서 칸을 잘라 목록 아이콘으로(쿨 중일 수 있어 처음 '사용 가능'일 때 한 번 더)
+            cell = frame[y:y + h, x:x + w]
+            if cell.shape[:2] == (h, w):
+                save_icon(slot["id"], cell.copy())
         self._save(slots=self.slots + [slot])
         self._last.clear()
         self._render_list()
@@ -239,6 +299,10 @@ class CooldownSection(QGroupBox):
 
     def _remove(self, sid: str) -> None:
         self._save(slots=[s for s in self.slots if s["id"] != sid])
+        try:
+            icon_path(sid).unlink(missing_ok=True)
+        except OSError:
+            pass
         self.row.prune([s["id"] for s in self.slots])
         self._last.clear()
         self._render_list()
@@ -339,8 +403,9 @@ class CooldownSection(QGroupBox):
         last = self._last
         from ..system import dwm_thumbnail
         crops = not dwm_thumbnail.available()  # 썸네일을 못 쓸 때만 그림을 넘긴다
+        need_icon = frozenset(s["id"] for s in slots if not s.get("icon_ok"))
         capture.set_request("cooldown", (x0, y0, x1 - x0, y1 - y0), OBSERVE_INTERVAL,
-                            lambda frame: observe(frame, (x0, y0), slots, last, crops))
+                            lambda frame: observe(frame, (x0, y0), slots, last, crops, need_icon))
         if self.row.expire(time.monotonic()):
             self._show_row()
         elif self._needs_refresh():
@@ -349,6 +414,10 @@ class CooldownSection(QGroupBox):
     def _on_delivered(self, name, payload) -> None:
         if name != "cooldown" or not self._running():
             return
+        if payload.get("icons"):  # 작업 스레드가 '사용 가능' 그림으로 아이콘을 다시 저장함 → 표시만 해 두고 목록 새로
+            done = set(payload["icons"])
+            self._save(slots=[{**s, "icon_ok": True} if s["id"] in done else s for s in self.slots])
+            self._render_list()
         before = set(self.row.until)
         sound = self.row.update(payload["changes"], time.monotonic())
         pixmaps = None

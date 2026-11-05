@@ -580,18 +580,76 @@ def test_two_sets_show_their_own_cooling_cells_at_once(creator):
         sec.shutdown()
 
 
-def test_register_uses_chosen_set_and_list_shows_set(creator):
+def _list_rows(sec):
+    """목록 줄 → (이름, 툴팁). 빈 안내 줄은 뺀다."""
+    from PySide6.QtWidgets import QLabel, QPushButton
+    rows = []
+    for i in range(sec.list_box.count()):
+        line = sec.list_box.itemAt(i).widget()
+        if line is None or not line.findChildren(QPushButton):
+            continue
+        labels = [lb for lb in line.findChildren(QLabel) if lb.text()]
+        rows.append((labels[0].text(), line.toolTip()))
+    return rows
+
+
+def test_list_shows_only_chosen_set_with_icon_name_and_tooltip(creator):
+    """#195: 고른 세트의 칸만, 줄 = 아이콘 + 이름 + 삭제, 위치 숫자는 툴팁."""
     from mabinogi_addon.ui.cooldown_section import CooldownSection
     sec = CooldownSection(_Watcher())
     try:
         sec.set_combo.setCurrentIndex(1)
         slot = sec.register(Target("skill", (0, 0, 40, 40), "단축바 칸", {}), None)
         assert slot["set"] == 2
-        texts = [sec.list_box.itemAt(i).widget().findChildren(type(sec.status))[0].text()
-                 for i in range(sec.list_box.count()) if sec.list_box.itemAt(i).widget() is not None]
-        assert any(t.startswith("세트 2 ·") for t in texts)
+        sec.set_combo.setCurrentIndex(0)
+        sec.register(Target("skill", (50, 0, 40, 40), "단축바 칸", {}), None)
+        assert [n for n, _t in _list_rows(sec)] == ["스킬 2"]  # 세트 1만
+        sec.set_combo.setCurrentIndex(1)
+        rows = _list_rows(sec)
+        assert [n for n, _t in rows] == ["스킬 1"]  # 세트를 바꾸면 목록도
+        assert "@ (0,0)" in rows[0][1] and "40×40" in rows[0][1]  # 위치는 툴팁
     finally:
         sec.shutdown()
+
+
+def test_register_saves_icon_from_snapshot_and_ready_observation_resaves(creator):
+    import numpy as np
+    from mabinogi_addon import config
+    from mabinogi_addon.ui import cooldown_section as cs
+    frame, box, cells = _screen("스크린샷 2026-11-05 203318.png")
+    sec = cs.CooldownSection(_Watcher())
+    try:
+        slot = sec.register(cells[(1, 0, 0, 1)], frame, (0, 0))  # 등록 순간 쿨 중('47')
+        assert cs.icon_path(slot["id"]).exists() and slot["icon_ok"] is False
+        ready = cells[(1, 0, 0, 0)]  # 같은 자리가 사용 가능해진 화면을 흉내 — 사용 가능 칸 그림을 그 자리에
+        fake = frame.copy()
+        x, y, w, h = slot["rect"]
+        rx, ry, _, _ = ready.rect
+        fake[y:y + h, x:x + w] = frame[ry:ry + h, rx:rx + w]
+        out = cs.observe(fake, (0, 0), [dict(slot, page=None)], {}, False, frozenset({slot["id"]}))
+        assert out["icons"] == [slot["id"]]
+        from mabinogi_addon import image_io
+        import cv2
+        saved = image_io.imread(cs.icon_path(slot["id"]), cv2.IMREAD_COLOR)
+        assert np.array_equal(saved, fake[y:y + h, x:x + w])  # '사용 가능' 그림으로 다시 저장
+        sec._running = lambda: True
+        sec._on_delivered("cooldown", {"changes": {}, "icons": [slot["id"]]})
+        assert config.load_cooldown()["slots"][0]["icon_ok"] is True
+        assert cs.observe(fake, (0, 0), [dict(slot, page=None)], {slot["id"]: "ready"}, False, frozenset()) is None  # 한 번만
+        sec._remove(slot["id"])
+        assert not cs.icon_path(slot["id"]).exists()
+    finally:
+        sec.shutdown()
+
+
+def test_old_slot_without_icon_shows_empty_placeholder(creator):
+    from mabinogi_addon import config
+    from mabinogi_addon.ui import cooldown_section as cs
+    config.save_cooldown({"slots": [_set_slot("old", 0)]})  # 예전 등록(아이콘 없음)
+    assert config.load_cooldown()["slots"][0]["icon_ok"] is False
+    assert not cs.icon_path("old").exists()
+    pix = cs.CooldownSection._list_icon("old")
+    assert (pix.width(), pix.height()) == (cs.LIST_ICON, cs.LIST_ICON)
 
 
 def test_ready_cell_pops_in_its_own_set_and_timer_stops():
