@@ -8,8 +8,10 @@
 from __future__ import annotations
 
 import logging
+import math
+import time
 
-from PySide6.QtCore import QRect, Qt, Signal
+from PySide6.QtCore import QRect, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import QWidget
 
@@ -21,12 +23,16 @@ ICON = 40
 GAP = 4
 HEADER = 16
 BORDER = 3
+# 사용 가능 순간 '한 번 커졌다 돌아오기'(사용자 11-05): 약 1.4배 → 원래 크기, 0.4초. 창은 커질 여백을 미리 확보(창 크기는 그대로).
+POP_SCALE = 1.4
+POP_SECONDS = 0.4
+POP_FRAME_MS = 25  # 초당 약 40번 — 커지는 칸이 있을 때만 돈다
 
 
 class CooldownOverlay(QWidget):
     moved = Signal()
 
-    def __init__(self, scale_percent: int = 100) -> None:
+    def __init__(self, scale_percent: int = 100, set_no: int = 1) -> None:
         super().__init__(None, Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint
                          | Qt.WindowType.Tool)
         from . import overlay_capture
@@ -41,6 +47,12 @@ class CooldownOverlay(QWidget):
         self._locked = True
         self._drag = None
         self._scale = 1.0
+        self.set_no = int(set_no)
+        self._pops: dict[str, float] = {}  # 칸 id → 커지기 시작한 시각
+        self._pop_timer = QTimer(self)
+        self._pop_timer.setInterval(POP_FRAME_MS)
+        self._pop_timer.timeout.connect(self._pop_tick)
+        self._now = time.monotonic  # 테스트·렌더가 시각을 바꿔 끼운다
         self.set_scale(scale_percent)
 
     # ---- 내용 ----
@@ -94,19 +106,60 @@ class CooldownOverlay(QWidget):
             return [(sid, hi, False) for sid, hi in self._items]
         return [(f"예시{i}", False, True) for i in range(3)]
 
+    def _pad(self) -> int:
+        """커질 여백(칸 한 변의 (1.4-1)/2) — 창 크기를 애니메이션 중 바꾸지 않으려고 늘 확보."""
+        return math.ceil(ICON * self._scale * (POP_SCALE - 1) / 2) + 1
+
     def _rects(self):
-        size, gap = round(ICON * self._scale), round(GAP * self._scale)
+        size, gap, pad = round(ICON * self._scale), round(GAP * self._scale), self._pad()
         top = 0 if self._locked else HEADER
-        return [QRect(2 + i * (size + gap), top + 2, size, size) for i in range(len(self._cells()))]
+        return [QRect(pad + i * (size + gap), top + pad, size, size) for i in range(len(self._cells()))]
 
     def _relayout(self) -> None:
         rects = self._rects()
-        size = round(ICON * self._scale)
-        width = (rects[-1].right() + 3) if rects else size + 4
-        height = (0 if self._locked else HEADER) + size + 4
-        self.resize(max(width, 40 if not self._locked else 1), height)
+        size, pad = round(ICON * self._scale), self._pad()
+        width = (rects[-1].right() + 1 + pad) if rects else size + 2 * pad
+        height = (0 if self._locked else HEADER) + size + 2 * pad
+        self.resize(max(width, 56 if not self._locked else 1), height)
         self._sync_thumbs()
         self.update()
+
+    # ---- 커졌다 돌아오기 ----
+    def pop(self, sid: str) -> None:
+        """그 칸을 한 번 1.4배로 키웠다 돌려놓는다(0.4초). 타이머는 커지는 칸이 있을 때만 돈다."""
+        self._pops[str(sid)] = self._now()
+        if not self._pop_timer.isActive():
+            self._pop_timer.start()
+        self._pop_tick()
+
+    def pop_factor(self, sid: str) -> float:
+        start = self._pops.get(sid)
+        if start is None:
+            return 1.0
+        t = (self._now() - start) / POP_SECONDS
+        if not 0 <= t < 1:
+            return 1.0
+        return 1.0 + (POP_SCALE - 1.0) * math.sin(math.pi * t)  # 0 → 최대(중간) → 0
+
+    def popping(self) -> bool:
+        return bool(self._pops)
+
+    def _pop_tick(self) -> None:
+        now = self._now()
+        for sid in [s for s, t0 in self._pops.items() if now - t0 >= POP_SECONDS]:
+            self._pops.pop(sid)
+        if not self._pops:
+            self._pop_timer.stop()
+        self._sync_thumbs()
+        self.update()
+
+    @staticmethod
+    def _grown(rect: QRect, factor: float) -> QRect:
+        if factor == 1.0:
+            return QRect(rect)
+        w, h = round(rect.width() * factor), round(rect.height() * factor)
+        c = rect.center()
+        return QRect(c.x() - w // 2, c.y() - h // 2, w, h)
 
     # ---- DWM 썸네일(9.1-3) ----
     def _sync_thumbs(self) -> None:
@@ -123,6 +176,7 @@ class CooldownOverlay(QWidget):
             src = self._sources.get(sid)
             if example or src is None:
                 continue
+            rect = self._grown(rect, self.pop_factor(sid))  # 커지는 칸은 썸네일 표시 사각형도 같이
             inset = BORDER if hi else 0
             dest = (rect.x() + inset, rect.y() + inset, rect.width() - 2 * inset, rect.height() - 2 * inset)
             x, y, w, h = src
@@ -152,6 +206,7 @@ class CooldownOverlay(QWidget):
         super().hideEvent(event)
 
     def closeEvent(self, event) -> None:
+        self._pop_timer.stop()
         self._clear_thumbs()
         super().closeEvent(event)
 
@@ -168,8 +223,11 @@ class CooldownOverlay(QWidget):
             f.setPixelSize(10)
             p.setFont(f)
             p.setPen(QColor(150, 200, 190))
-            p.drawText(QRect(4, 0, self.width() - 4, HEADER), Qt.AlignmentFlag.AlignVCenter, "⠿ 쿨타임")
-        for (sid, hi, example), rect in zip(self._cells(), self._rects()):
+            p.drawText(QRect(4, 0, self.width() - 4, HEADER), Qt.AlignmentFlag.AlignVCenter, f"⠿ 쿨타임 세트 {self.set_no}")
+        cells = list(zip(self._cells(), self._rects()))
+        cells.sort(key=lambda c: self.pop_factor(c[0][0]))  # 커지는 칸을 맨 위에(이웃 칸을 덮게)
+        for (sid, hi, example), rect in cells:
+            rect = self._grown(rect, self.pop_factor(sid))
             if example:
                 p.setPen(QPen(QColor(200, 200, 200, 160), 1, Qt.PenStyle.DashLine))
                 p.setBrush(QColor(60, 60, 60, 150))

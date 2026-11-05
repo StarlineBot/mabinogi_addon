@@ -400,7 +400,7 @@ def test_unlocked_overlay_stays_and_drag_continues_while_our_app_is_front(creato
         assert ov.isVisible() and ov.pos() != start  # 끌기가 이어짐
         assert not skillbar_capture.shared().active("cooldown")  # 관측은 게임이 앞일 때만
         ov.mouseReleaseEvent(_press(ov, 30, 20, QEvent.Type.MouseButtonRelease))
-        assert config.load_cooldown()["pos"] == {"x": ov.x(), "y": ov.y()}
+        assert config.load_cooldown()["positions"][1] == {"x": ov.x(), "y": ov.y()}
     finally:
         sec.shutdown()
 

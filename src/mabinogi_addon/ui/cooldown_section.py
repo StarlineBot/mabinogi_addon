@@ -15,7 +15,7 @@ import time
 import uuid
 
 from PySide6.QtCore import QTimer
-from PySide6.QtWidgets import (QGroupBox, QHBoxLayout, QLabel, QPushButton, QSpinBox, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QComboBox, QGroupBox, QHBoxLayout, QLabel, QPushButton, QSpinBox, QVBoxLayout, QWidget)
 
 from .. import config
 from ..detect import cooldown as cd
@@ -25,6 +25,7 @@ from .widgets import checkbox, hint_label, switch
 _log = logging.getLogger(__name__)
 OBSERVE_INTERVAL = 0.22   # 관측 4~5회/초(9.1-2)
 MAX_SLOTS = 8
+MAX_SETS = 4  # 세트(사용자 11-05) — 세트마다 오버레이 하나, 따로 두는 것은 위치만
 # 쿨타임 전용 효과음 자리(11-05: 상태지원 음성 재사용을 뺌). 파일은 나중에 assets/sounds/에 이 이름으로 넣으면 바로 쓰인다.
 # 파일이 없으면 알림음 체크 칸을 숨기고 소리를 내지 않는다(다른 알림음으로 대신하지 않음).
 SOUND_FILE = "쿨타임 끝.mp3"
@@ -73,7 +74,7 @@ class CooldownSection(QGroupBox):
         self._paused = False
         self._shutting_down = False
         self._last: dict[str, str] = {}
-        self._overlay = None
+        self._overlays: dict = {}  # 세트 번호 → CooldownOverlay
         self._notifier = None
         self._selector = None
         self._allowed = None
@@ -88,6 +89,10 @@ class CooldownSection(QGroupBox):
         top.addStretch(1)
         v.addLayout(top)
         row = QHBoxLayout()
+        self.set_combo = QComboBox()
+        self.set_combo.addItems([f"세트 {n}" for n in range(1, MAX_SETS + 1)])
+        self.set_combo.setToolTip("등록할 칸을 넣을 세트 — 세트마다 오버레이가 따로 떠요(위치만 따로, 크기·투명도·고정은 공통)")
+        row.addWidget(self.set_combo)
         self.add_btn = QPushButton("스킬 추가")
         self.add_btn.setToolTip("단축바 칸을 클릭해 등록해요(칸 테두리에 자동으로 맞춰요). 최대 8칸")
         self.add_btn.clicked.connect(self._on_add)
@@ -151,12 +156,13 @@ class CooldownSection(QGroupBox):
             if item.widget() is not None:
                 item.widget().hide()
                 item.widget().deleteLater()
-        for slot in self.slots:
+        for slot in sorted(self.slots, key=lambda s: s.get("set", 1)):
             line = QWidget()
             h = QHBoxLayout(line)
             h.setContentsMargins(0, 0, 0, 0)
             x, y, w, hh = slot["rect"]
-            h.addWidget(QLabel(f"{slot['label']} · 칸 {w}×{hh} @ ({x},{y})" + ("" if slot.get("page") else " · 페이지 확인 없음")))
+            h.addWidget(QLabel(f"세트 {slot.get('set', 1)} · {slot['label']} · 칸 {w}×{hh} @ ({x},{y})"
+                               + ("" if slot.get("page") else " · 페이지 확인 없음")))
             h.addStretch(1)
             remove = QPushButton("－ 삭제")
             from .settings_layout import danger_style
@@ -214,11 +220,13 @@ class CooldownSection(QGroupBox):
                 page_rect = [pr[0] + ox, pr[1] + oy, pr[2], pr[3]]
         used = {s["label"] for s in self.slots}
         label = next(f"스킬 {n}" for n in range(1, MAX_SLOTS + 2) if f"스킬 {n}" not in used)
-        slot = {"id": uuid.uuid4().hex[:8], "rect": rect, "page_rect": page_rect, "page": page, "label": label, "row": row}
+        set_no = self.set_combo.currentIndex() + 1
+        slot = {"id": uuid.uuid4().hex[:8], "rect": rect, "page_rect": page_rect, "page": page, "label": label, "row": row,
+                "set": set_no}
         self._save(slots=self.slots + [slot])
         self._last.clear()
         self._render_list()
-        self.status.setText(f"{label}을(를) 등록했어요." + ("" if page else " (페이지 숫자를 못 읽어 페이지 확인 없이 봐요)"))
+        self.status.setText(f"{label}을(를) 세트 {set_no}에 등록했어요." + ("" if page else " (페이지 숫자를 못 읽어 페이지 확인 없이 봐요)"))
         return slot
 
     def _remove(self, sid: str) -> None:
@@ -235,22 +243,22 @@ class CooldownSection(QGroupBox):
 
     def _on_scale(self, value: int) -> None:
         self._save(scale=int(value))
-        if self._overlay is not None:
-            self._overlay.set_scale(value)
+        for ov in self._overlays.values():
+            ov.set_scale(value)
 
     def _on_opacity(self, value: int) -> None:
         self._save(opacity=int(value))
-        if self._overlay is not None:
-            self._overlay.set_opacity(value)
+        for ov in self._overlays.values():
+            ov.set_opacity(value)
 
     def _on_lock(self) -> None:
         locked = not self._cfg["locked"]
         self._save(locked=locked)
         from .settings_layout import set_lock_text
         set_lock_text(self.lock_btn, locked)
-        if self._overlay is not None:
-            self._overlay.set_locked(locked)
-            self._show_row()
+        for ov in self._overlays.values():
+            ov.set_locked(locked)
+        self._show_row()
 
     # ---- 관측·표시 ------------------------------------------------------------------------------
     def allowed(self) -> bool:
@@ -273,8 +281,20 @@ class CooldownSection(QGroupBox):
         """관측(판정)은 게임이 앞일 때만."""
         return self._enabled() and self._game_active()
 
+    @property
+    def _overlay(self):
+        """1세트 오버레이(예전 한 개짜리와 같은 자리 — 테스트·호환)."""
+        return self._overlays.get(1)
+
     def _dragging(self) -> bool:
-        return self._overlay is not None and getattr(self._overlay, "_drag", None) is not None
+        return any(getattr(ov, "_drag", None) is not None for ov in self._overlays.values())
+
+    def _set_of(self) -> dict[str, int]:
+        return {s["id"]: s.get("set", 1) for s in self.slots}
+
+    def _sets(self) -> list[int]:
+        """칸이 있는 세트(칸 없는 세트는 오버레이를 띄우지 않는다)."""
+        return sorted({s.get("set", 1) for s in self.slots})
 
     def _display_active(self) -> bool:
         """표시는 다른 오버레이 탭과 같은 규칙: 게임이 앞이거나, 우리 앱이 앞이고(구역이 보이거나·고정 해제 중이거나·끄는 중).
@@ -301,7 +321,7 @@ class CooldownSection(QGroupBox):
             if (self.row.row or self._last) and not (self._enabled() and self._display_active()):
                 self.row.reset()  # 표시도 끝날 때만 줄을 비운다(우리 창이 잠깐 앞이면 그대로 둠)
                 self._last.clear()
-            if self._overlay is None or self._overlay.isVisible() != self._should_show():
+            if self._needs_refresh():
                 self._show_row()
             return
         slots = [dict(s) for s in self.slots]
@@ -315,59 +335,92 @@ class CooldownSection(QGroupBox):
                             lambda frame: observe(frame, (x0, y0), slots, last, crops))
         if self.row.expire(time.monotonic()):
             self._show_row()
-        elif self._overlay is None or self._overlay.isVisible() != self._should_show():
+        elif self._needs_refresh():
             self._show_row()
 
     def _on_delivered(self, name, payload) -> None:
         if name != "cooldown" or not self._running():
             return
+        before = set(self.row.until)
         sound = self.row.update(payload["changes"], time.monotonic())
         pixmaps = None
         if payload.get("crops"):
             from .skillbar_mirror import _np_to_pixmap
             pixmaps = {sid: _np_to_pixmap(c) for sid, c in payload["crops"].items()}
         self._show_row(pixmaps)
+        sets = self._set_of()
+        for sid in set(self.row.until) - before:  # 방금 사용 가능해진 칸 → 자기 세트 오버레이 안에서 한 번 커졌다 돌아오기
+            ov = self._overlays.get(sets.get(sid, 1))
+            if ov is not None:
+                ov.pop(sid)
         if sound and self._cfg["sound"]:
             self._play()
 
-    def _should_show(self) -> bool:
-        return self._enabled() and self._display_active() and (bool(self.row.row) or not self._cfg["locked"])
+    def _should_show(self, set_no: int | None = None) -> bool:
+        """그 세트(없으면 아무 세트나)를 띄울지 — 표시 조건은 세트마다 같다. 칸 없는 세트는 띄우지 않는다."""
+        if not (self._enabled() and self._display_active()):
+            return False
+        sets = self._sets() if set_no is None else [set_no]
+        of = self._set_of()
+        for n in sets:
+            if n in self._sets() and (not self._cfg["locked"] or any(of.get(sid) == n for sid in self.row.row)):
+                return True
+        return False
 
-    def _ensure_overlay(self):
-        if self._overlay is None:
+    def _needs_refresh(self) -> bool:
+        for n in range(1, MAX_SETS + 1):
+            ov = self._overlays.get(n)
+            want = self._should_show(n)
+            if (ov is None and want) or (ov is not None and ov.isVisible() != want):
+                return True
+        return False
+
+    def _ensure_overlay(self, set_no: int = 1):
+        ov = self._overlays.get(set_no)
+        if ov is None:
             from .cooldown_overlay import CooldownOverlay
-            ov = CooldownOverlay(self._cfg["scale"])
+            ov = CooldownOverlay(self._cfg["scale"], set_no)
             ov.set_opacity(self._cfg["opacity"])
             ov.set_locked(self._cfg["locked"])
-            pos = self._cfg.get("pos")
+            pos = self._cfg.get("positions", {}).get(set_no)
             if pos:
                 ov.move(pos["x"], pos["y"])
             else:
-                self._default_position(ov)
-            ov.moved.connect(lambda: self._save(pos={"x": ov.x(), "y": ov.y()}))
-            self._overlay = ov
-        return self._overlay
+                self._default_position(ov, set_no)
+            ov.moved.connect(lambda n=set_no, o=ov: self._save_position(n, o))
+            self._overlays[set_no] = ov
+        return ov
+
+    def _save_position(self, set_no: int, ov) -> None:
+        positions = dict(self._cfg.get("positions") or {})
+        positions[set_no] = {"x": ov.x(), "y": ov.y()}
+        self._cfg["positions"] = positions
+        config.save_cooldown({"setPos": {str(n): p for n, p in positions.items() if p}})
 
     @staticmethod
-    def _default_position(ov) -> None:
-        """처음 위치: 화면 가운데 아래쪽(버프 오버레이 아래 근처) — 화면 좌표로 저장(10.1)."""
+    def _default_position(ov, set_no: int = 1) -> None:
+        """처음 위치: 화면 가운데 아래쪽, 세트마다 조금씩 아래로 — 화면 좌표로 저장(10.1)."""
         from PySide6.QtGui import QGuiApplication
         screen = QGuiApplication.primaryScreen()
         if screen is not None:
             g = screen.geometry()
-            ov.move(g.x() + g.width() // 2 - 60, g.y() + int(g.height() * 0.62))
+            ov.move(g.x() + g.width() // 2 - 60, g.y() + int(g.height() * 0.62) + (set_no - 1) * 70)
 
     def _show_row(self, pixmaps=None) -> None:
-        if not self._should_show():
-            if self._overlay is not None:
-                self._overlay.hide()
-            return
-        ov = self._ensure_overlay()
-        ov.set_sources({s["id"]: s["rect"] for s in self.slots})
-        ov.set_items([(sid, sid in self.row.until) for sid in self.row.row], pixmaps)
-        if not ov.isVisible():
-            ov.show()
-            self._attach_game(ov)
+        of = self._set_of()
+        sources = {s["id"]: s["rect"] for s in self.slots}
+        for n in range(1, MAX_SETS + 1):
+            if not self._should_show(n):
+                ov = self._overlays.get(n)
+                if ov is not None:
+                    ov.hide()
+                continue
+            ov = self._ensure_overlay(n)
+            ov.set_sources({sid: r for sid, r in sources.items() if of.get(sid) == n})
+            ov.set_items([(sid, sid in self.row.until) for sid in self.row.row if of.get(sid) == n], pixmaps)
+            if not ov.isVisible():
+                ov.show()
+                self._attach_game(ov)
 
     def _attach_game(self, ov) -> None:
         try:
@@ -398,5 +451,5 @@ class CooldownSection(QGroupBox):
         self._timer.stop()
         from .skillbar_capture import shared
         shared().clear("cooldown")
-        if self._overlay is not None:
-            self._overlay.close()
+        for ov in self._overlays.values():
+            ov.close()

@@ -36,9 +36,12 @@ class BossBarOverlay(QWidget):
         self.set_scale(scale_percent)
 
     # ---- 내용 ----
-    def set_state(self, name: str | None, value: int | None, stale: bool = False, thresholds=()) -> bool:
-        """그릴 내용. 바뀌었으면 True(그때만 다시 그림). value None = 비움."""
-        state = None if value is None else (str(name or "보스"), int(value), bool(stale), tuple(int(t) for t in thresholds))
+    def set_state(self, name: str | None, value: int | None, stale: bool = False, thresholds=(),
+                  frac: str | None = None) -> bool:
+        """그릴 내용. 바뀌었으면 True(그때만 다시 그림). value None = 비움.
+        frac = 소수 두 자리 글자('38') — 판독이 확실할 때만(없으면 정수만, 틀린 소수는 그리지 않는다)."""
+        frac = frac if isinstance(frac, str) and len(frac) == 2 and frac.isdigit() else None
+        state = None if value is None else (str(name or "보스"), int(value), bool(stale), tuple(int(t) for t in thresholds), frac)
         if state == self._state:
             return False
         self._state = state
@@ -80,7 +83,7 @@ class BossBarOverlay(QWidget):
         example = state is None
         if example and self._locked:
             return
-        name, value, stale, marks = (EXAMPLE[0], EXAMPLE[1], False, EXAMPLE[2]) if example else state
+        name, value, stale, marks, frac = (EXAMPLE[0], EXAMPLE[1], False, EXAMPLE[2], "38") if example else state
         s = self._scale
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -114,12 +117,30 @@ class BossBarOverlay(QWidget):
         font.setBold(True)
         p.setFont(font)
         text_box = inner.adjusted(7 * s, 0, -7 * s, 0)
-        right = f"… {value} %" if stale else f"{value} %"
+        # 오른쪽 값: 정수 크게 + 소수 작게(예: 50.38 %) — 소수를 못 읽으면 정수만
+        small = QFont(font)
+        small.setPixelSize(max(7, round(10 * s)))
+        pieces = []  # (글자, 글꼴) 오른쪽부터
+        pieces.append((" %", font))
+        if frac:
+            pieces.append((f".{frac}", small))
+        pieces.append((f"{value}", font))
+        if stale:
+            pieces.append(("… ", font))
+        from PySide6.QtGui import QFontMetrics
         for dx, dy, color in ((1, 1, QColor(0, 0, 0, 200)), (0, 0, QColor(255, 255, 255))):  # 글자 그림자
             p.setPen(color)
             box = text_box.translated(dx, dy)
+            p.setFont(font)
             p.drawText(box, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, name)
-            p.drawText(box, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight, right)
+            right = box.right()
+            base = box.center().y() + QFontMetrics(font).ascent() / 2 - 1  # 큰 글자 기준선에 작은 소수를 맞춘다
+            for text, f in pieces:
+                p.setFont(f)
+                width = QFontMetrics(f).horizontalAdvance(text)
+                right -= width
+                p.drawText(round(right), round(base), text)
+        p.setFont(font)
         if not self._locked:
             p.setOpacity(1.0)
             p.setBrush(Qt.BrushStyle.NoBrush)

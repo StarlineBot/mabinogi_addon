@@ -1674,6 +1674,7 @@ def save_channel_cache(data: dict, path: Path = LOCAL_CONFIG_PATH) -> None:
 
 
 _COOLDOWN_MAX_SLOTS = 8
+_COOLDOWN_MAX_SETS = 4
 
 
 def load_cooldown(path: Path = LOCAL_CONFIG_PATH) -> dict:
@@ -1691,16 +1692,25 @@ def load_cooldown(path: Path = LOCAL_CONFIG_PATH) -> dict:
     for item in sec.get("slots") if isinstance(sec.get("slots"), list) else []:
         if not isinstance(item, dict) or rect(item.get("rect")) is None or not isinstance(item.get("id"), str):
             continue
+        set_no = item.get("set")
         slots.append({"id": item["id"], "rect": rect(item["rect"]), "page_rect": rect(item.get("page_rect")),
                       "page": item.get("page") if isinstance(item.get("page"), str) else None,
-                      "label": str(item.get("label") or "스킬"), "row": int(item.get("row", 0)) if isinstance(item.get("row"), int) else 0})
-    pos = sec.get("pos")
-    pos = {"x": int(pos["x"]), "y": int(pos["y"])} if isinstance(pos, dict) and all(type(pos.get(k)) is int for k in ("x", "y")) else None
+                      "label": str(item.get("label") or "스킬"), "row": int(item.get("row", 0)) if isinstance(item.get("row"), int) else 0,
+                      # 세트(사용자 11-05, 최대 4) — 예전 설정의 칸은 모두 1세트
+                      "set": set_no if type(set_no) is int and 1 <= set_no <= _COOLDOWN_MAX_SETS else 1})
+
+    def point(value):
+        return {"x": int(value["x"]), "y": int(value["y"])} if isinstance(value, dict) and all(type(value.get(k)) is int for k in ("x", "y")) else None
+    pos = point(sec.get("pos"))
+    raw_sets = sec.get("setPos") if isinstance(sec.get("setPos"), dict) else {}
+    positions = {n: point(raw_sets.get(str(n))) for n in range(1, _COOLDOWN_MAX_SETS + 1)}
+    if positions[1] is None:
+        positions[1] = pos  # 예전 오버레이 위치 = 1세트 위치
 
     def clamp(key, default, lo, hi):
         value = sec.get(key)
         return max(lo, min(hi, value)) if type(value) is int else default
-    return {"enabled": sec.get("enabled") is True, "slots": slots[:_COOLDOWN_MAX_SLOTS], "pos": pos,
+    return {"enabled": sec.get("enabled") is True, "slots": slots[:_COOLDOWN_MAX_SLOTS], "pos": pos, "positions": positions,
             "scale": clamp("scale", 100, 50, 300), "opacity": clamp("opacity", 100, 30, 100),
             "locked": sec.get("locked") is not False,
             "sound": sec.get("sound") is True}  # 알림음 기본 꺼짐(11-05) — 칸마다 울리면 잦다, 민트 강조로 충분
