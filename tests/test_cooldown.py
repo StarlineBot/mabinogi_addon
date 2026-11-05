@@ -309,14 +309,26 @@ def test_section_registers_snapped_cell_with_page_and_observes(creator, monkeypa
         sec.shutdown()
 
 
-def test_section_max_eight_and_ignores_plain_drag(creator):
+def test_section_max_eight_per_set_and_ignores_plain_drag(creator):
+    """세트마다 8칸(제작자 시험 #194: 예전엔 합계 8칸이라 세트 1에 5칸이면 세트 2는 3칸에서 막힘)."""
+    from mabinogi_addon import config
     from mabinogi_addon.ui.cooldown_section import MAX_SLOTS, CooldownSection
     sec = CooldownSection(_Watcher())
     try:
-        for i in range(MAX_SLOTS):
-            assert sec.register(Target("skill", (i * 50, 0, 40, 40), "단축바 칸", {}), None) is not None
-        assert sec.register(Target("skill", (999, 0, 40, 40), "단축바 칸", {}), None) is None
+        for set_index, y in ((0, 0), (1, 100)):
+            sec.set_combo.setCurrentIndex(set_index)
+            for i in range(MAX_SLOTS):
+                assert sec.register(Target("skill", (i * 50, y, 40, 40), "단축바 칸", {}), None) is not None
+            assert not sec.add_btn.isEnabled()  # 고른 세트가 가득
+            assert sec.register(Target("skill", (999, y, 40, 40), "단축바 칸", {}), None) is None  # 같은 세트 9번째 거부
+            assert sec.status.text() == "이 세트는 최대 8칸까지 등록할 수 있어요."
+        sec.set_combo.setCurrentIndex(2)
+        assert sec.add_btn.isEnabled()  # 다른 세트는 비어 있어 켜짐
+        labels = [s["label"] for s in sec.slots]
+        assert len(labels) == 16 and len(set(labels)) == 16  # 스킬 번호는 전체에서 겹치지 않게
+        sec.set_combo.setCurrentIndex(0)
         assert not sec.add_btn.isEnabled()
+        assert len(config.load_cooldown()["slots"]) == 16  # 저장·다시 읽기에서 16칸 유지
         sec._snap_hit = False
         sec._on_selected(1, 2, 3, 4)
         assert "클릭" in sec.status.text()
@@ -620,3 +632,15 @@ def test_section_pops_newly_ready_cell_in_its_set(creator):
         assert popped == [(2, "b")]  # 자기 세트 오버레이에서만
     finally:
         sec.shutdown()
+
+
+
+def test_sixteen_slots_survive_save_and_reload_and_reader_caps_per_set():
+    from mabinogi_addon import config
+    slots = [_set_slot(f"a{i}", i * 50, 1) for i in range(8)] + [_set_slot(f"b{i}", i * 50, 2) for i in range(8)]
+    config.save_cooldown({"slots": slots})
+    cfg = config.load_cooldown()
+    assert len(cfg["slots"]) == 16 and [s["set"] for s in cfg["slots"]].count(2) == 8
+    config.save_cooldown({"slots": slots + [_set_slot("a9", 999, 1)]})  # 손으로 고친 설정 등: 세트 1에 9칸
+    cfg = config.load_cooldown()
+    assert len(cfg["slots"]) == 16 and "a9" not in {s["id"] for s in cfg["slots"]}  # 세트당 8칸으로 읽음

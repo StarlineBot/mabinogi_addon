@@ -3,7 +3,7 @@
 제작자(`feature_access.is_creator()`)에게만 보인다. 다른 사용자는 구역·관측·오버레이가 전혀 없다.
 
 흐름(코드 → 동작):
-- `스킬 추가` = 클릭 경계 자동 맞춤 선택창(단축바 칸만). 칸을 클릭하면 그 칸 사각형과 **그 줄의 페이지 숫자 모양**을 저장(최대 8칸).
+- `스킬 추가` = 클릭 경계 자동 맞춤 선택창(단축바 칸만). 칸을 클릭하면 그 칸 사각형과 **그 줄의 페이지 숫자 모양**을 저장(세트당 최대 8칸).
 - 관측은 단축바 공유 캡처의 **작업 스레드**에서 4~5회/초(0.22초): 등록 칸·페이지 상자를 덮는 사각형 하나를 찍어 칸마다
   `회색 바탕 + 가운데 숫자` 판정, 페이지 숫자가 다르면 '가려짐'. **바뀐 칸만** 화면 스레드로 넘긴다.
 - 화면 스레드는 줄 상태(`tracker.cooldown_row`)를 갱신하고 오버레이에 바뀐 줄만 그린다. 칸 그림은 DWM 썸네일.
@@ -24,7 +24,7 @@ from .widgets import checkbox, hint_label, switch
 
 _log = logging.getLogger(__name__)
 OBSERVE_INTERVAL = 0.22   # 관측 4~5회/초(9.1-2)
-MAX_SLOTS = 8
+MAX_SLOTS = 8  # 세트당 칸 상한(제작자 시험 #194, 11-05 — 예전엔 세트 합계 8칸이라 세트 2가 3칸에서 막힘). 전체 = MAX_SLOTS × MAX_SETS
 MAX_SETS = 4  # 세트(사용자 11-05) — 세트마다 오버레이 하나, 따로 두는 것은 위치만
 # 쿨타임 전용 효과음 자리(11-05: 상태지원 음성 재사용을 뺌). 파일은 나중에 assets/sounds/에 이 이름으로 넣으면 바로 쓰인다.
 # 파일이 없으면 알림음 체크 칸을 숨기고 소리를 내지 않는다(다른 알림음으로 대신하지 않음).
@@ -92,9 +92,10 @@ class CooldownSection(QGroupBox):
         self.set_combo = QComboBox()
         self.set_combo.addItems([f"세트 {n}" for n in range(1, MAX_SETS + 1)])
         self.set_combo.setToolTip("등록할 칸을 넣을 세트 — 세트마다 오버레이가 따로 떠요(위치만 따로, 크기·투명도·고정은 공통)")
+        self.set_combo.currentIndexChanged.connect(lambda _i: self._update_add_button())
         row.addWidget(self.set_combo)
         self.add_btn = QPushButton("스킬 추가")
-        self.add_btn.setToolTip("단축바 칸을 클릭해 등록해요(칸 테두리에 자동으로 맞춰요). 최대 8칸")
+        self.add_btn.setToolTip("단축바 칸을 클릭해 등록해요(칸 테두리에 자동으로 맞춰요). 세트마다 최대 8칸")
         self.add_btn.clicked.connect(self._on_add)
         row.addWidget(self.add_btn)
         self.sound_chk = checkbox("사용 가능해지면 알림음")
@@ -172,7 +173,14 @@ class CooldownSection(QGroupBox):
             self.list_box.addWidget(line)
         if not self.slots:
             self.list_box.addWidget(hint_label("등록한 스킬이 없어요. '스킬 추가'로 단축바 칸을 클릭해 주세요."))
-        self.add_btn.setEnabled(len(self.slots) < MAX_SLOTS)
+        self._update_add_button()
+
+    def _count(self, set_no: int) -> int:
+        return sum(1 for s in self.slots if s.get("set", 1) == set_no)
+
+    def _update_add_button(self) -> None:
+        """추가 버튼은 '고른 세트'가 가득일 때만 끈다(세트마다 8칸)."""
+        self.add_btn.setEnabled(self._count(self.set_combo.currentIndex() + 1) < MAX_SLOTS)
 
     def _on_add(self) -> None:
         from .region_selector import RegionSelector
@@ -208,8 +216,9 @@ class CooldownSection(QGroupBox):
         if any(s["rect"] == rect for s in self.slots):
             self.status.setText("이미 등록한 칸이에요.")
             return None
-        if len(self.slots) >= MAX_SLOTS:
-            self.status.setText(f"최대 {MAX_SLOTS}칸까지 등록할 수 있어요.")
+        set_no = self.set_combo.currentIndex() + 1
+        if self._count(set_no) >= MAX_SLOTS:
+            self.status.setText(f"이 세트는 최대 {MAX_SLOTS}칸까지 등록할 수 있어요.")
             return None
         page_rect = page = None
         source, row = target.info.get("source"), target.info.get("row", 0)
@@ -219,8 +228,7 @@ class CooldownSection(QGroupBox):
                 page = cd.page_signature(frame, pr)
                 page_rect = [pr[0] + ox, pr[1] + oy, pr[2], pr[3]]
         used = {s["label"] for s in self.slots}
-        label = next(f"스킬 {n}" for n in range(1, MAX_SLOTS + 2) if f"스킬 {n}" not in used)
-        set_no = self.set_combo.currentIndex() + 1
+        label = next(f"스킬 {n}" for n in range(1, MAX_SLOTS * MAX_SETS + 2) if f"스킬 {n}" not in used)  # 전체에서 겹치지 않게
         slot = {"id": uuid.uuid4().hex[:8], "rect": rect, "page_rect": page_rect, "page": page, "label": label, "row": row,
                 "set": set_no}
         self._save(slots=self.slots + [slot])

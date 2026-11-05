@@ -1673,7 +1673,7 @@ def save_channel_cache(data: dict, path: Path = LOCAL_CONFIG_PATH) -> None:
     _write_local_config(cfg, path)
 
 
-_COOLDOWN_MAX_SLOTS = 8
+_COOLDOWN_MAX_SLOTS = 8  # 세트당(11-05 #194) — 전체는 세트 4개 × 8 = 32칸
 _COOLDOWN_MAX_SETS = 4
 
 
@@ -1710,7 +1710,13 @@ def load_cooldown(path: Path = LOCAL_CONFIG_PATH) -> dict:
     def clamp(key, default, lo, hi):
         value = sec.get(key)
         return max(lo, min(hi, value)) if type(value) is int else default
-    return {"enabled": sec.get("enabled") is True, "slots": slots[:_COOLDOWN_MAX_SLOTS], "pos": pos, "positions": positions,
+    per_set: dict[int, int] = {}
+    kept = []
+    for slot in slots:  # 세트마다 앞에서 8칸까지
+        per_set[slot["set"]] = per_set.get(slot["set"], 0) + 1
+        if per_set[slot["set"]] <= _COOLDOWN_MAX_SLOTS:
+            kept.append(slot)
+    return {"enabled": sec.get("enabled") is True, "slots": kept, "pos": pos, "positions": positions,
             "scale": clamp("scale", 100, 50, 300), "opacity": clamp("opacity", 100, 30, 100),
             "locked": sec.get("locked") is not False,
             "sound": sec.get("sound") is True}  # 알림음 기본 꺼짐(11-05) — 칸마다 울리면 잦다, 민트 강조로 충분
