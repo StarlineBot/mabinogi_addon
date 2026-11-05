@@ -201,21 +201,23 @@ class ChunkOverlay(QWidget):
         painter.end()
 
 
+def slice_group_np(source_bgr: np.ndarray, gdef: GroupDef, cells_on: list[bool]) -> list[np.ndarray | None]:
+    """한 그룹 4칸을 numpy로 자른다(작업 스레드에서 — 공유 캡처). 꺼진 칸·영역 밖은 None."""
+    out: list[np.ndarray | None] = []
+    H, W = source_bgr.shape[:2]
+    for i in range(CELLS):
+        x = gdef.x + i * IPITCH
+        y = gdef.y
+        if not cells_on[i] or x + ICON > W or y + ICON > H or x < 0 or y < 0:
+            out.append(None)
+            continue
+        out.append(np.ascontiguousarray(source_bgr[y : y + ICON, x : x + ICON]))
+    return out
+
+
 def slice_group(source_bgr: np.ndarray, gdef: GroupDef, cells_on: list[bool]) -> list[QPixmap | None]:
     """소스 영역(앵커 기준 BGR)에서 한 그룹의 4칸 아이콘을 잘라 QPixmap 리스트로.
 
     cells_on[i]가 False면 그 칸은 None(투명). 영역을 벗어나면 None.
     """
-    out: list[QPixmap | None] = []
-    H, W = source_bgr.shape[:2]
-    for i in range(CELLS):
-        if not cells_on[i]:
-            out.append(None)
-            continue
-        x = gdef.x + i * IPITCH
-        y = gdef.y
-        if x + ICON > W or y + ICON > H or x < 0 or y < 0:
-            out.append(None)
-            continue
-        out.append(_np_to_pixmap(source_bgr[y : y + ICON, x : x + ICON]))
-    return out
+    return [None if c is None else _np_to_pixmap(c) for c in slice_group_np(source_bgr, gdef, cells_on)]

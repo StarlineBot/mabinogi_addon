@@ -1,0 +1,335 @@
+"""쿨타임 오버레이(쿨타임 명세 10절) — 판정·페이지 번호(tests/data 실화면)·줄 상태·공유 캡처·구역(제작자 전용)."""
+import os
+
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+import threading
+import time
+from pathlib import Path
+
+import cv2
+import numpy as np
+import pytest
+from PySide6.QtWidgets import QApplication
+
+from mabinogi_addon.detect import cooldown as cd
+from mabinogi_addon.detect.click_targets import Target, skill_cells
+from mabinogi_addon.detect.skillbar_anchor import locate_skillbar
+from mabinogi_addon.tracker.cooldown_row import COOLING, HIDDEN, READY, CooldownRow
+
+_app = QApplication.instance() or QApplication([])
+DATA = Path(__file__).parent / "data"
+
+
+def _read(name):
+    return cv2.imdecode(np.fromfile(str(DATA / name), np.uint8), cv2.IMREAD_COLOR)
+
+
+_cache = {}
+
+
+def _screen(name):
+    if name not in _cache:
+        frame = _read(name)
+        box = locate_skillbar(frame)
+        cells = {(t.info["block"], t.info["row"], t.info["group"], t.info["slot"]): t for t in skill_cells(box)}
+        _cache[name] = (frame, box, cells)
+    return _cache[name]
+
+
+def _classify(name, key):
+    frame, _box, cells = _screen(name)
+    x, y, w, h = cells[key].rect
+    return cd.classify(frame[y:y + h, x:x + w])
+
+
+# ---- 사용 중 판정 -------------------------------------------------------------------------------
+@pytest.mark.parametrize("name,cooling", [
+    ("image01.png", {(0, 1, 1, 0), (1, 1, 2, 1)}),
+    ("2026-10-30_windowed_wireweb_1.png", {(0, 0, 0, 0), (0, 0, 1, 0), (1, 0, 0, 0)}),
+    ("2026-10-30_windowed_wireweb_2.png", {(0, 0, 0, 0), (0, 0, 1, 0), (0, 0, 1, 3), (0, 1, 1, 0), (1, 0, 0, 0)}),
+    ("mabinogi_2026_10_30_214648.png", {(0, 1, 0, 0), (0, 1, 0, 1)}),
+])
+def test_cooling_cells_exactly(name, cooling):
+    _frame, _box, cells = _screen(name)
+    found = {k for k in cells if _classify(name, k) == cd.COOLING}
+    assert found == cooling  # 나머지(아이콘·귀퉁이 수량·단축키 글자만 있는 칸)는 사용 가능
+
+
+def test_too_small_or_missing_cell_is_unknown():
+    assert cd.classify(None) == cd.UNKNOWN
+    assert cd.classify(np.zeros((10, 10, 3), np.uint8)) == cd.UNKNOWN
+
+
+def test_bright_cell_is_ready_and_dark_blank_is_ready():
+    assert cd.classify(np.full((40, 40, 3), 200, np.uint8)) == cd.READY
+    assert cd.classify(np.full((40, 40, 3), 60, np.uint8)) == cd.READY  # 회색 바탕이라도 숫자가 없으면
+
+
+# ---- 페이지 번호 ----------------------------------------------------------------------------------
+def test_page_box_found_on_both_rows_and_rows_differ():
+    frame, box, _cells = _screen("image01.png")
+    r0, r1 = cd.page_rect(frame, box, 0), cd.page_rect(frame, box, 1)
+    assert r0 == (584, 55, 15, 16) and r1 == (584, 104, 15, 16)
+    s0 = cd.page_signature(frame, r0)
+    assert s0 and s0.startswith("15x16:")
+    assert cd.same_page(frame, r0, s0) is True
+    assert cd.same_page(frame, r1, s0) is False  # 윗줄·아랫줄 페이지가 다름
+
+
+@pytest.mark.parametrize("other", ["image02.png", "image03.png", "image04.png"])
+def test_same_page_across_screens(other):
+    f1, b1, _ = _screen("image01.png")
+    f2, b2, _ = _screen(other)
+    for row in (0, 1):
+        sig = cd.page_signature(f1, cd.page_rect(f1, b1, row))
+        assert cd.same_page(f2, cd.page_rect(f2, b2, row), sig) is True
+        assert cd.same_page(f2, cd.page_rect(f2, b2, 1 - row), sig) is False
+
+
+def test_unreadable_page_box_is_none_and_no_signature_passes():
+    frame, box, _ = _screen("image01.png")
+    sig = cd.page_signature(frame, cd.page_rect(frame, box, 0))
+    blank = np.full_like(frame, 128)
+    assert cd.same_page(blank, (584, 55, 15, 16), sig) is None  # 가려짐
+    assert cd.same_page(blank, (584, 55, 15, 16), None) is True  # 페이지를 저장 못 한 칸은 확인 안 함
+    assert cd.page_rect(blank, box, 0) is None
+
+
+# ---- 줄 상태 ------------------------------------------------------------------------------------
+def test_row_order_highlight_sound_and_removal():
+    row = CooldownRow(highlight=1.0)
+    assert row.update({"a": READY, "b": READY}, 0) is False  # 처음부터 사용 가능 → 강조 없음
+    row.update({"b": COOLING}, 1)
+    row.update({"a": COOLING}, 2)
+    assert row.row == ["b", "a"]  # 쓴 순서
+    assert row.update({"b": READY}, 3) is True and row.until == {"b": 4.0}
+    assert row.row == ["b", "a"]  # 강조 중엔 자리 유지
+    assert row.expire(4.0) is True and row.row == ["a"]  # 빠지고 당겨짐
+
+
+def test_two_ready_at_once_one_sound_and_recool_cancels_highlight():
+    row = CooldownRow()
+    row.update({"a": READY, "b": READY}, 0)
+    row.update({"a": COOLING, "b": COOLING}, 1)
+    assert row.update({"a": READY, "b": READY}, 2) is True  # 소리는 한 번(호출당)
+    row.update({"a": COOLING}, 2.5)  # 강조 중 다시 사용
+    assert "a" not in row.until and row.row == ["b", "a"]
+
+
+def test_hidden_or_page_change_drops_without_highlight():
+    row = CooldownRow()
+    row.update({"a": COOLING}, 0)
+    assert row.update({"a": HIDDEN}, 1) is False and row.row == []
+    row.update({"a": READY}, 2)  # 다시 보였을 때 이미 사용 가능 → 강조 없음
+    assert row.until == {} and row.row == []
+
+
+def test_already_cooling_on_start_joins_row_and_prune_reset():
+    row = CooldownRow()
+    row.update({"a": COOLING, "b": COOLING}, 0)
+    assert row.row == ["a", "b"]
+    row.prune(["b"])
+    assert row.row == ["b"]
+    row.reset()
+    assert row.row == [] and row.until == {}
+
+
+# ---- 관측(작업 스레드 함수) ----------------------------------------------------------------------
+def _slot(frame, box, cells, key, sid):
+    x, y, w, h = cells[key].rect
+    pr = cd.page_rect(frame, box, key[1])
+    return {"id": sid, "rect": [x, y, w, h], "page_rect": list(pr), "page": cd.page_signature(frame, pr), "row": key[1]}
+
+
+def test_observe_reports_only_changes_and_hides_on_other_page():
+    from mabinogi_addon.ui.cooldown_section import observe
+    frame, box, cells = _screen("image01.png")
+    slots = [_slot(frame, box, cells, (0, 1, 1, 0), "cool"), _slot(frame, box, cells, (0, 0, 0, 0), "ready")]
+    last = {}
+    out = observe(frame, (0, 0), slots, last, with_crops=False)
+    assert out["changes"] == {"cool": COOLING, "ready": READY}
+    assert observe(frame, (0, 0), slots, last, with_crops=False) is None  # 바뀐 칸만
+    slots[0]["page"] = slots[1]["page"]  # 다른 줄 페이지 모양 → 페이지 다름 = 가려짐
+    assert observe(frame, (0, 0), slots, last, with_crops=False)["changes"] == {"cool": HIDDEN}
+
+
+def test_observe_with_origin_offset_and_crops():
+    from mabinogi_addon.ui.cooldown_section import observe
+    frame, box, cells = _screen("image01.png")
+    slot = _slot(frame, box, cells, (0, 1, 1, 0), "cool")
+    x0, y0 = slot["rect"][0] - 10, slot["page_rect"][1] - 60  # 칸·페이지 상자를 덮는 일부만
+    out = observe(frame[y0:, x0:], (x0, y0), [slot], {}, with_crops=True)
+    assert out["changes"] == {"cool": COOLING} and out["crops"]["cool"].shape == (40, 40, 3)
+    # 칸이 캡처 밖(왼쪽)으로 벗어나면 반대편을 잘라 오지 않고 '가려짐'
+    x1 = slot["rect"][0] + 20
+    assert observe(frame[y0:, x1:], (x1, y0), [slot], {}, with_crops=False)["changes"] == {"cool": HIDDEN}
+
+
+# ---- 공유 캡처 ----------------------------------------------------------------------------------
+def test_shared_capture_worker_grabs_union_once_and_splits(monkeypatch):
+    from mabinogi_addon.ui import skillbar_capture as sc
+    monkeypatch.setattr(sc.SkillbarCapture, "INLINE", False)
+    big = np.arange(200 * 300 * 3, dtype=np.uint8).reshape(200, 300, 3)
+    grabs, got, done = [], {}, threading.Event()
+
+    def grab(x, y, w, h):
+        grabs.append((x, y, w, h))
+        return big[y:y + h, x:x + w].copy()
+    cap = sc.SkillbarCapture(grab=grab)
+    worker_threads = set()
+
+    def handler(name):
+        def h(part):
+            worker_threads.add(threading.current_thread().name)
+            got[name] = part.copy()
+            if len(got) == 2:
+                done.set()
+            return None
+        return h
+    try:
+        with cap._lock:  # 두 요청을 같은 회차에 받게 미리 넣는다
+            cap._requests["a"] = {"rect": (10, 20, 30, 40), "interval": 10.0, "handler": handler("a"), "due": 0.0}
+            cap._requests["b"] = {"rect": (100, 50, 20, 10), "interval": 10.0, "handler": handler("b"), "due": 0.0}
+        cap._ensure_thread()
+        assert done.wait(3)
+    finally:
+        cap.stop()
+    assert grabs[0] == (10, 20, 110, 40)  # 덮는 사각형 하나
+    assert np.array_equal(got["a"], big[20:60, 10:40]) and np.array_equal(got["b"], big[50:60, 100:120])
+    assert worker_threads == {"skillbar-capture"}  # 처리는 작업 스레드
+
+
+def test_shared_capture_inline_delivers_and_clear():
+    from mabinogi_addon.ui.skillbar_capture import SkillbarCapture
+    cap = SkillbarCapture(grab=lambda x, y, w, h: np.zeros((h, w, 3), np.uint8))
+    out = []
+    cap.delivered.connect(lambda n, r: out.append((n, r)))
+    cap.set_request("x", (0, 0, 4, 3), 0.1, lambda f: f.shape)
+    assert out == [("x", (3, 4, 3))]
+    cap.set_request("x", None, 0.1, lambda f: 1)  # None = 그만
+    assert not cap.active("x")
+
+
+# ---- 오버레이 ------------------------------------------------------------------------------------
+def test_overlay_row_layout_examples_and_change_only_repaint():
+    from mabinogi_addon.ui.cooldown_overlay import CooldownOverlay
+    ov = CooldownOverlay(100)
+    try:
+        ov.set_locked(False)
+        assert [c[2] for c in ov._cells()] == [True, True, True]  # 비었을 때 예시 3칸(위치 잡기)
+        ov.set_locked(True)
+        assert ov._cells() == []
+        ov.set_items([("a", False), ("b", True)])
+        assert ov.items() == [("a", False), ("b", True)] and ov.width() >= 2 * 40
+        calls = []
+        ov._relayout = lambda: calls.append(1)
+        ov.set_items([("a", False), ("b", True)])
+        assert calls == []  # 같으면 다시 그리지 않는다
+        ov.set_scale(200)
+        assert calls == [1]
+    finally:
+        ov.close()
+
+
+# ---- 구역(제작자 전용) -------------------------------------------------------------------------
+class _Watcher:
+    active = True
+
+    def is_game_active(self):
+        return self.active
+
+    def is_self_active(self):
+        return False
+
+
+@pytest.fixture
+def creator(monkeypatch):
+    from mabinogi_addon import feature_access
+    monkeypatch.setattr(feature_access, "is_creator", lambda: True)
+
+
+def test_section_hidden_and_idle_for_non_creator(monkeypatch):
+    from mabinogi_addon import config, feature_access
+    from mabinogi_addon.ui import skillbar_capture
+    from mabinogi_addon.ui.skillbar_tab import SkillbarTab
+    monkeypatch.setattr(feature_access, "is_creator", lambda: False)
+    config.save_cooldown({"enabled": True, "slots": [{"id": "s1", "rect": [0, 0, 40, 40], "label": "스킬 1"}]})
+    tab = SkillbarTab(_Watcher())
+    try:
+        tab.show()
+        tab.cooldown._tick()
+        assert tab.cooldown.isHidden()
+        assert not skillbar_capture.shared().active("cooldown")
+        assert tab.cooldown._overlay is None
+    finally:
+        tab.shutdown()
+        tab.close()
+
+
+def test_section_registers_snapped_cell_with_page_and_observes(creator, monkeypatch):
+    from mabinogi_addon import config
+    from mabinogi_addon.ui import skillbar_capture
+    from mabinogi_addon.ui.cooldown_section import CooldownSection
+    frame, box, cells = _screen("image01.png")
+    monkeypatch.setattr(skillbar_capture.SkillbarCapture, "_grab",
+                        lambda self, x, y, w, h: frame[y:y + h, x:x + w].copy())
+    sec = CooldownSection(_Watcher())
+    try:
+        assert sec.allowed()
+        slot = sec.register(cells[(0, 1, 1, 0)], frame, (0, 0))
+        assert slot["page"] and slot["page_rect"] == [584, 104, 15, 16] and slot["row"] == 1
+        assert sec.register(cells[(0, 1, 1, 0)], frame, (0, 0)) is None  # 중복
+        assert config.load_cooldown()["slots"][0]["rect"] == slot["rect"]
+        sec.enable.setChecked(True)  # 켜면 관측 → INLINE 공유 캡처로 바로 판정·전달
+        assert sec.row.row == [slot["id"]]
+        assert sec._overlay is not None and sec._overlay.items() == [(slot["id"], False)]
+        sec._remove(slot["id"])
+        assert sec.row.row == [] and config.load_cooldown()["slots"] == []
+    finally:
+        sec.shutdown()
+
+
+def test_section_max_eight_and_ignores_plain_drag(creator):
+    from mabinogi_addon.ui.cooldown_section import MAX_SLOTS, CooldownSection
+    sec = CooldownSection(_Watcher())
+    try:
+        for i in range(MAX_SLOTS):
+            assert sec.register(Target("skill", (i * 50, 0, 40, 40), "단축바 칸", {}), None) is not None
+        assert sec.register(Target("skill", (999, 0, 40, 40), "단축바 칸", {}), None) is None
+        assert not sec.add_btn.isEnabled()
+        sec._snap_hit = False
+        sec._on_selected(1, 2, 3, 4)
+        assert "클릭" in sec.status.text()
+    finally:
+        sec.shutdown()
+
+
+def test_section_stops_when_game_inactive_or_paused(creator):
+    from mabinogi_addon import config
+    from mabinogi_addon.ui import skillbar_capture
+    from mabinogi_addon.ui.cooldown_section import CooldownSection
+    config.save_cooldown({"enabled": True, "slots": [{"id": "s1", "rect": [0, 0, 40, 40], "label": "스킬 1"}]})
+    watcher = _Watcher()
+    watcher.active = False
+    sec = CooldownSection(watcher)
+    try:
+        sec._tick()
+        assert not skillbar_capture.shared().active("cooldown")
+        sec.row.update({"s1": COOLING}, time.monotonic())
+        sec.set_paused(True)
+        assert sec.row.row == []  # 일시정지 → 줄 비움(다시 보일 때 처음부터)
+    finally:
+        sec.shutdown()
+
+
+def test_section_visible_in_skillbar_tab_for_creator(creator):
+    from mabinogi_addon.ui.skillbar_tab import SkillbarTab
+    tab = SkillbarTab(_Watcher())
+    try:
+        tab.show()
+        tab.cooldown._tick()
+        assert tab.cooldown.isVisible()
+    finally:
+        tab.shutdown()
+        tab.close()

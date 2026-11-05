@@ -38,12 +38,15 @@ class RegionSelector(QWidget):
     selected = Signal(int, int, int, int)  # 화면 픽셀 x, y, w, h
     cancelled = Signal()
     captured = Signal(bool)  # 크롭 모드: 저장 성공=True, 취소/너무 작음=False
+    snapped = Signal(object)  # 클릭 맞춤으로 확정한 대상(click_targets.Target) — selected 직전에
+    _targets_ready = Signal(int, object)  # 작업 스레드 → 화면 스레드(회차, 대상 목록)
 
     def __init__(
         self,
         save_path: Path | None = None,
         fixed_size: tuple[int, int] | None = None,
         window_hwnd: int | None = None,
+        snap_kinds: tuple[str, ...] | None = None,
     ) -> None:
         super().__init__(
             None,
@@ -69,6 +72,14 @@ class RegionSelector(QWidget):
         self._cursor: QPoint | None = None
         self._shot = QPixmap()  # 선택창 띄우기 전 화면 스냅샷(돋보기 원본)
         self._dpr = 1.0  # 스냅샷 배율(물리픽셀=논리×dpr). start()에서 실제값으로 채움
+        # 클릭 경계 자동 맞춤(click-snap 명세): 드래그 모드 + 제작자일 때만. 다른 사용자는 지금과 완전히 같다.
+        self._snap_kinds = snap_kinds
+        self._targets: list = []
+        self._hover = None
+        self._press: QPoint | None = None
+        self._dragging = False
+        self._generation = 0
+        self._targets_ready.connect(self._on_targets)
 
     def start(self) -> None:
         self._finished = False
@@ -86,9 +97,64 @@ class RegionSelector(QWidget):
             self._shot.setDevicePixelRatio(1.0)
             if self._window_hwnd:
                 self._composite_window(self._window_hwnd)
+        self._targets, self._hover = [], None
+        if self._snap_enabled() and not self._shot.isNull():
+            self._find_targets()
         self.showFullScreen()
         self.raise_()
         self.activateWindow()
+
+    # ---- 클릭 경계 자동 맞춤 -----------------------------------------------------------------
+    def _snap_enabled(self) -> bool:
+        if not self._snap_kinds or self._fixed is not None or self._save_path is not None:
+            return False
+        from .. import feature_access
+        return feature_access.is_creator()
+
+    def _find_targets(self) -> None:
+        """스냅샷(물리 픽셀)으로 작업 스레드에서 1회 — 새 캡처 없음, 선택창이 닫히면 결과를 버린다."""
+        import threading
+
+        import numpy as np
+        img = self._shot.toImage().convertToFormat(QImage.Format.Format_RGB888)
+        w, h, stride = img.width(), img.height(), img.bytesPerLine()
+        rgb = np.frombuffer(img.constBits(), np.uint8, count=stride * h).reshape(h, stride)[:, : w * 3].reshape(h, w, 3)
+        frame = np.ascontiguousarray(rgb[:, :, ::-1])  # BGR, 화면 스레드에서 복사(이미지 수명과 분리)
+        self.snapshot_bgr = frame  # 쿨타임 등록: 페이지 번호 상자 모양을 같은 스냅샷에서 읽는다
+        self._generation += 1
+        generation, kinds = self._generation, tuple(self._snap_kinds)
+
+        def run():
+            from ..detect.click_targets import find_targets
+            try:
+                found = find_targets(frame, kinds)
+            except Exception:  # noqa: BLE001 — 못 찾으면 드래그로 지정하면 된다
+                found = []
+            self._targets_ready.emit(generation, found)
+        threading.Thread(target=run, name="click-snap", daemon=True).start()
+
+    def _on_targets(self, generation, found) -> None:
+        if generation != self._generation or self._finished:
+            return
+        self._targets = list(found)
+        self._update_hover()
+        self.update()
+
+    def _update_hover(self) -> None:
+        if not self._targets or self._cursor is None or self._dragging:
+            self._hover = None
+            return
+        from ..detect.click_targets import hit
+        self._hover = hit(self._targets, self._cursor.x() * self._dpr, self._cursor.y() * self._dpr)
+
+    def physical_origin(self) -> tuple[int, int]:
+        """스냅샷(물리 픽셀) 왼쪽 위의 화면 물리 좌표 — 대상 사각형을 화면 좌표로 옮길 때."""
+        return round(self._screen_geo.x() * self._dpr), round(self._screen_geo.y() * self._dpr)
+
+    def _logical(self, rect) -> QRect:
+        x, y, w, h = rect
+        d = self._dpr or 1.0
+        return QRect(round(x / d), round(y / d), max(1, round(w / d)), max(1, round(h / d)))
 
     def _composite_window(self, hwnd: int) -> None:
         """게임 창 그림을 PrintWindow로 읽어 스냅샷(물리픽셀) 위에 덮는다.
@@ -144,6 +210,8 @@ class RegionSelector(QWidget):
             )
             return
         self._origin = event.position().toPoint()
+        self._press = self._origin
+        self._dragging = False
         self._rect = QRect(self._origin, self._origin)
         self.update()
 
@@ -176,11 +244,25 @@ class RegionSelector(QWidget):
         if self._fixed is not None:
             self._rect = self._fixed_rect(self._cursor)  # 커서 따라 박스 이동
         elif self._origin is not None:
-            self._rect = QRect(self._origin, self._cursor).normalized()
+            if not self._dragging and (self._cursor - self._origin).manhattanLength() > 4:
+                self._dragging = True  # 맞출 곳 위에서도 4px 넘게 움직이면 드래그(직접 지정)
+                self._hover = None
+            if self._dragging or not self._targets:
+                self._rect = QRect(self._origin, self._cursor).normalized()
+        if not self._dragging:
+            self._update_hover()
         self.update()
 
     def mouseReleaseEvent(self, event) -> None:
         if self._finished or self._origin is None:
+            return
+        if not self._dragging and self._hover is not None and self._save_path is None:
+            target, rect = self._hover, self._logical(self._hover.rect)  # 클릭 = 테두리에 맞춰 바로 확정
+            self._finished = True
+            self.close()
+            self.snapped.emit(target)
+            self.selected.emit(self._screen_geo.x() + rect.x(), self._screen_geo.y() + rect.y(),
+                               rect.width(), rect.height())
             return
         rect = self._rect
         self._finished = True
@@ -233,10 +315,13 @@ class RegionSelector(QWidget):
         painter = QPainter(self)
         painter.fillRect(self.rect(), QColor(0, 0, 0, 110))  # 전체 어둡게
         if self._fixed is None:
-            # 드래그 선택 모드 안내(고정 박스 모드는 아래에서 별도 안내).
+            # 드래그 선택 모드 안내(고정 박스 모드는 아래에서 별도 안내). 맞출 곳을 찾았으면 클릭 안내.
             self._draw_hint(
-                painter, "드래그해서 영역을 지정하세요   ·   ESC: 취소"
+                painter, "클릭: 테두리에 맞추기   ·   드래그: 직접 지정   ·   ESC: 취소" if self._targets
+                else "드래그해서 영역을 지정하세요   ·   ESC: 취소"
             )
+            if self._hover is not None and not self._dragging:
+                self._draw_hover(painter, self._logical(self._hover.rect), self._hover.label)
         if not self._rect.isNull():
             if self._fixed is not None:
                 # 고정 박스: 완전 투명(Clear)으로 비우면 레이어드 창 per-pixel 히트테스트
@@ -267,6 +352,25 @@ class RegionSelector(QWidget):
                 self._draw_box_preview(painter, self._rect)
         elif self._cursor is not None and not self._shot.isNull():
             self._draw_loupe(painter, self._cursor)
+
+    def _draw_hover(self, painter: QPainter, rect: QRect, label: str) -> None:
+        """맞출 곳: 그 부분만 밝게(원래 화면) + 민트 테두리 + 이름·크기 표."""
+        painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Clear)
+        painter.fillRect(rect, Qt.GlobalColor.transparent)
+        painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceOver)
+        painter.fillRect(rect, QColor(0, 209, 167, 24))  # 옅은 틴트 — 레이어드 창에서 클릭이 통과하지 않게
+        painter.setPen(QPen(QColor(0, 209, 167), 2))
+        painter.drawRect(rect.adjusted(-1, -1, 1, 1))
+        fm = painter.fontMetrics()
+        tw, th = fm.horizontalAdvance(label) + 12, fm.height() + 6
+        tx = rect.x()
+        ty = rect.y() - th - 4 if rect.y() - th - 4 >= 0 else rect.bottom() + 4
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(0, 209, 167))
+        painter.drawRoundedRect(tx, ty, tw, th, 4, 4)
+        painter.setPen(QColor(6, 47, 40))
+        painter.drawText(QRect(tx, ty, tw, th), Qt.AlignmentFlag.AlignCenter, label)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
 
     def _draw_hint(self, painter: QPainter, text: str) -> None:
         """화면 상단 중앙에 조작 안내 알약(pill)을 그린다."""
@@ -403,6 +507,16 @@ class RegionSelector(QWidget):
         painter.drawPixmap(lx, ly, zoomed)
         painter.setPen(QPen(QColor(0, 209, 167), 2))
         painter.drawRect(lx, ly, _LOUPE, _LOUPE)
+        if self._hover is not None and not self._dragging:  # 맞출 곳 위: 돋보기 안에도 민트 테두리
+            hx, hy, hw, hh = self._hover.rect
+            scale = _LOUPE / src
+            painter.save()
+            painter.setClipRect(QRect(lx, ly, _LOUPE, _LOUPE))  # 돋보기 안에만
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.setPen(QPen(QColor(0, 209, 167), 2))
+            painter.drawRect(round(lx + (hx - sx0) * scale), round(ly + (hy - sy0) * scale),
+                             round(hw * scale), round(hh * scale))
+            painter.restore()
         # 중앙 십자선(현재 포인터 지점)
         cx, cy = lx + _LOUPE // 2, ly + _LOUPE // 2
         painter.setPen(QPen(QColor(255, 60, 60), 1))
