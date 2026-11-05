@@ -452,3 +452,21 @@ def test_low_hp_height_rule_skipped(tab, tmp_path, monkeypatch):
     out = {"boss_id": None, "raw_hp": None, "bar_pct": 7, "bar": True, "frame": img[45:82]}
     reading = tab._overlay_reading(img, 45, 37, out)
     assert reading["value"] == 7 and reading["rule"] is None
+
+
+@pytest.mark.parametrize("name,expected", [
+    ("eotgallin_poinche_hp004_002.png", 46),  # 46.78 % — 40px 높이 그대로(10-13 수집)
+    ("eotgallin_poinche_hp004_109.png", 46),  # 46.86 %
+    ("eotgallin_poinche_hp004_000.png", 48), ("eotgallin_poinche_hp004_004.png", 44),
+    ("eotgallin_poinche_hp004_008.png", 40), ("eotgallin_poinche_hp045_003.png", 45),
+    ("eotgallin_poinche_hp047_001.png", 47),
+])
+def test_read_percent_tall_40px_box(tmp_path, name, expected):
+    """바(37px)보다 높게 잡은 40px 박스: 숫자 위치를 37px 배율로 봐서 46.xx도 46(예전 4)."""
+    import zipfile
+    from mabinogi_addon.detect.boss_hp_reader import read_percent
+    with zipfile.ZipFile(f"tests/data/{ZIP}") as z:
+        z.extract(name, tmp_path)
+    frame = image_io.imread(str(tmp_path / name), cv2.IMREAD_COLOR)
+    assert frame.shape[0] == 40
+    assert read_percent(frame[:, int(frame.shape[1] * 0.58):]) == expected

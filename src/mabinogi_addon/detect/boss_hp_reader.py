@@ -27,6 +27,7 @@ from ..image_io import imread
 _DIGIT_DIR = paths.resource_dir() / "boss_hp_digits"
 _SAT_MAX = 110  # 채도가 이 미만이면 글자(흰/회/검). 바 채움은 고채도라 제외됨.
 _REF_H = 36.0  # 기준 바 높이(px) — 스케일 기준
+_UI_H = 37  # 실제 게임 보스바 높이(해상도 무관 고정) — 이보다 높은 박스는 이 배율로 숫자 위치를 본다
 _FIRST = 62.0  # 바 오른쪽 끝 → 최우측 정수자리 right edge (기준 해상도)
 _PITCH = 11.0  # 정수 자리 간격(기준 해상도)
 _YBAND = (0.28, 0.82)  # 숫자 세로 밴드(바 테두리 제외)
@@ -259,7 +260,10 @@ def _prep(region_bgr, templates):
     if region_bgr.ndim != 3:
         return None
     h, w = region_bgr.shape[:2]
-    scale = h / _REF_H
+    # 숫자 위치·간격 배율. 게임 보스바는 해상도와 무관하게 37px라, 바보다 높게 잡은 박스(예 40px)에서 h/36으로 키우면
+    # 칸 위치가 약 5px 왼쪽으로 예측돼 맞는 정렬이 탐색 범위 밖으로 밀렸다(포인세 46.78·46.86을 4로, 10-13 수집).
+    # 그래서 37px보다 높은 박스는 37px 배율로 본다(37px 이하는 예전 그대로). 세로 띠(_YBAND)는 박스 높이 기준 그대로.
+    scale = min(h, _UI_H) / _REF_H
     band = _color_mask(region_bgr)[int(h * _YBAND[0]):int(h * _YBAND[1])]
     pitch = _PITCH * scale
     span = max(1, round(_SEARCH * scale))
