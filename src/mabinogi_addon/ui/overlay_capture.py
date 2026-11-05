@@ -18,6 +18,7 @@ from PySide6.QtCore import QEvent, QObject
 OVERLAYS = frozenset({
     "BuffOverlay", "MirrorOverlay", "ChunkOverlay", "MemoOverlay", "StatBarOverlay", "PatternWarningOverlay",
     "UpcomingPatternsOverlay", "DorchaOverlay", "FrameOverlay", "BlackboxToast", "Toast", "_GridGuide", "_FxWindow",
+    "InquiryChip",  # 문의 자료 모으는 중 진행 표시(문의 일원화 6.2 4항 — 클릭 통과·판독 캡처 제외)
 })
 # 항상 위에 뜨지만 오버레이가 아닌 창 — 영역 지정·안내·시작 화면(사용자가 캡처해 보낼 수 있어야 함)
 NOT_OVERLAYS = frozenset({"RegionSelector", "TopEdgeSelector", "RegionHighlight", "Splash", "TourOverlay"})

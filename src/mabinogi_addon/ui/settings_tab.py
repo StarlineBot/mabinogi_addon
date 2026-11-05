@@ -247,6 +247,7 @@ class SettingsTab(QWidget):
         diagnostics.addWidget(self._autofind_diagnostic_group())
         from .settings_layout import disclosure
         self.diagnostics_toggle = disclosure("진단 · 오류 신고용 자료", self.diagnostics_body, v)
+        self._refresh_diag()
         v.addStretch(1)
 
     def _autofind_diagnostic_group(self) -> QGroupBox:
@@ -565,7 +566,7 @@ class SettingsTab(QWidget):
         v.addLayout(row)
         v.addWidget(
             hint_label(
-                "로그인하면 디스코드로 설정을 백업하고, 오류 신고용 수집 도구를 쓸 수 있어요."
+                "로그인하면 디스코드로 설정을 백업하고, 문의 답변을 디스코드로 받을 수 있어요."
             )
         )
         self._refresh_login()
@@ -664,14 +665,19 @@ class SettingsTab(QWidget):
 
     def _inquiry_button(self) -> QPushButton:
         btn = QPushButton("문의하기")
-        btn.setToolTip("제작자에게 제목·내용으로 문의를 보내요")
+        btn.setToolTip("문제 신고·기능 요청·기타 문의를 보내요. 문제 신고는 필요한 화면 자료를 자동으로 모아 함께 보내요")
         btn.clicked.connect(self._open_inquiry)
         return btn
 
     def _open_inquiry(self) -> None:
-        from .inquiry_dialog import InquiryDialog
-
-        InquiryDialog(self).exec()
+        """문의하기(문의 일원화 6.2 — 앱 크기 새 창). 메인 창이 회차 하나를 들고 있어 다시 누르면 앞으로 가져온다."""
+        opener = getattr(self.window(), "open_inquiry", None)
+        if opener is not None:
+            opener()
+            return
+        from .inquiry_window import InquiryWindow
+        self._inquiry_window = InquiryWindow()
+        self._inquiry_window.show()
 
     def _diag_button(self) -> QPushButton:
         # 디버깅용 도구 → 디스코드 로그인 사용자에게만 노출(설명 없이 쓰기 어려움).
@@ -686,9 +692,16 @@ class SettingsTab(QWidget):
         return btn
 
     def _refresh_diag(self) -> None:
-        """진단 스냅샷 버튼은 디스코드 로그인 시에만 보인다(디버깅 전용)."""
+        """진단 · 오류 신고용 자료는 제작자만(문의 일원화 6.3 — 일반·로그인 사용자는 문의하기로 자료를 보낸다)."""
+        from .. import feature_access
+        allowed = feature_access.is_creator()
         if hasattr(self, "_diag_btn"):
-            self._diag_btn.setVisible(config.load_discord_user() is not None)
+            self._diag_btn.setVisible(allowed)
+        toggle = getattr(self, "diagnostics_toggle", None)
+        if toggle is not None:
+            toggle.setVisible(allowed)
+            if not allowed and toggle.isChecked():
+                toggle.setChecked(False)
 
     def _on_diag_snapshot(self) -> None:
         from PySide6.QtCore import QTimer

@@ -346,6 +346,12 @@ class MainWindow(QMainWindow):
         from .. import perf_meter
         self._perf_reporter = perf_meter.Reporter(self)
         self._perf_reporter.start()
+        # 문의 일원화: 비정상 종료로 남은 문의 임시 폴더 중 24시간 넘은 것만 지운다(수동 수집 폴더는 건드리지 않음)
+        try:
+            from .. import inquiry_session
+            inquiry_session.cleanup_stale()
+        except Exception:  # noqa: BLE001
+            logging.getLogger(__name__).warning("문의 임시 폴더 정리 실패", exc_info=True)
         self._harp_scroll = _scrolled(self.harp_tab)
         self._refresh_harp_access()
 
@@ -642,6 +648,18 @@ class MainWindow(QMainWindow):
         if not getattr(self, "_channel_startup_armed", False):
             self._channel_startup_armed = True
             QTimer.singleShot(CHANNEL_STARTUP_DELAY_MS, self._startup_channel_measure)
+
+    def open_inquiry(self) -> None:
+        """문의하기 새 창(문의 일원화). 한 번에 하나 — 열려 있으면 앞으로."""
+        from .inquiry_window import InquiryWindow
+        win = getattr(self, "_inquiry", None)
+        if win is None or not win.isVisible():
+            if win is not None:
+                win.shutdown()
+            win = self._inquiry = InquiryWindow(self._watcher)
+        win.showNormal()
+        win.raise_()
+        win.activateWindow()
 
     def _startup_channel_measure(self) -> None:
         if getattr(self, "_closing", False):
@@ -2449,6 +2467,10 @@ class MainWindow(QMainWindow):
         self.dungeon_cost_tab.shutdown()
         self.cursor_fx.shutdown()
         self.harp_tab.shutdown()
+        inquiry = getattr(self, "_inquiry", None)
+        if inquiry is not None:  # 문의 회차 정리(모은 자료·진행 표시)
+            inquiry.shutdown()
+            inquiry.close()
         self._perf_reporter.stop()
         if self._status_timer is not None:
             self._status_timer.stop()

@@ -299,7 +299,7 @@ class StatBarsTab(QWidget):
 
     def _show_diagnostics(self, checked, logged_in=None):
         self.diagnostics_btn.setArrowType(Qt.ArrowType.DownArrow if checked else Qt.ArrowType.RightArrow)
-        self._collect_box.setVisible(checked and (self._logged_in() if logged_in is None else logged_in))
+        self._collect_box.setVisible(checked and (self._diagnostics_allowed() if logged_in is None else logged_in))
 
     def refresh_boss_region(self):
         registered = config.load_boss_bar_region() is not None
@@ -451,12 +451,12 @@ class StatBarsTab(QWidget):
         )
 
     def _open_shot_dir(self) -> None:
-        if not self._logged_in() or self._shutting_down:
+        if not self._diagnostics_allowed() or self._shutting_down:
             return
         paths.open_folder(self._shot_dir)
 
     def _save_snapshot(self) -> None:
-        if not self._logged_in() or self._shutting_down:
+        if not self._diagnostics_allowed() or self._shutting_down:
             return
         if self._last_frame is None:
             self.collect_label.setText("저장할 캡처가 없어요 — 먼저 영역을 지정하세요")
@@ -487,12 +487,14 @@ class StatBarsTab(QWidget):
         return float(diff.mean()) >= threshold
 
     @staticmethod
-    def _logged_in() -> bool:
-        return config.load_discord_user() is not None
+    def _diagnostics_allowed() -> bool:
+        """수집·진단 구역은 제작자만(문의 일원화 6.3 — 일반·로그인 사용자는 문의하기가 유일한 입구)."""
+        from .. import feature_access
+        return feature_access.is_creator()
 
     def _apply_login_gate(self) -> None:
         """Keep login restrictions only on auto-find and diagnostic tools."""
-        ok = self._logged_in()
+        ok = self._diagnostics_allowed()
         self._show_diagnostics(self.diagnostics_btn.isChecked(), ok)
         self.diagnostics_btn.setVisible(ok)
         self._beta_notice.hide()
@@ -581,7 +583,7 @@ class StatBarsTab(QWidget):
         # 수집 모드: 로그인 사용자가 켠 동안, 바가 눈에 띄게 바뀌면 자동 저장(튜닝용 제보).
         if (
             self.collect_chk.isChecked()
-            and self._logged_in()
+            and self._diagnostics_allowed()
             and self._frame_changed(frame)
         ):
             self._write_shot(frame)

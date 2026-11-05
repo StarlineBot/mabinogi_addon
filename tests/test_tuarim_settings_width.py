@@ -15,8 +15,12 @@ pytestmark = pytest.mark.usefixtures("tuarim_width_diagnostics")
 
 
 @pytest.mark.parametrize("registered", [False, True])
-def test_all_controls_accessible_with_non_ascii_deep_windows_path(window, registered):
+def test_all_controls_accessible_with_non_ascii_deep_windows_path(window, registered, monkeypatch):
     w, app = window
+    from mabinogi_addon import feature_access
+    # 문의 일원화 6.3: 수집 구역은 제작자만 — 이 배치 검사는 제작자 화면(수집 버튼까지 보이는 가장 넓은 경우)으로
+    monkeypatch.setattr(feature_access, "is_creator", lambda: True)
+    w.tuarim_tab._apply_collect_gate()
     saved = deepcopy(config._read_local_config())
     path = PureWindowsPath("C:/Users/한글 사용자/AppData/Local") / ("아주 긴 폴더 이름 " * 12) / "투아림 수집"
     w._open_setup_feature("tuarim")

@@ -78,7 +78,8 @@ def test_basic_controls_and_alpha_are_independent(window,monkeypatch,user):
     assert w.skillbar_tab.anchor_btn.isEnabled() and w.skillbar_tab.scale_spin.isEnabled()
     assert w.resource_tab.percent_chk.isHidden() is (not d._alpha_ready)  # 2026-10-28: 투아림 %는 로그인과 무관(판독 자료가 있으면)
     assert d.auto_find_btn.isEnabled()
-    assert w.stat_bars_tab.collect_chk.isEnabled() is (user is not None)
+    # 문의 일원화 6.3: 수집·진단 구역은 제작자만(일반·로그인 사용자는 문의하기가 입구)
+    assert w.stat_bars_tab.collect_chk.isEnabled() is (user is not None and user['id'] == feature_access.CREATOR_DISCORD_ID)
     assert w.skillbar_tab.auto_find_btn.isEnabled()
 
 

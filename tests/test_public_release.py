@@ -28,7 +28,8 @@ def test_collection_and_diagnostics_stay_restricted_when_logged_out(window, monk
     assert not halo._collect_allowed() and not halo.disclosure.isVisible()  # 헤일로 수집: 제작자
     assert not w.optimization_tools._creator()  # FPS 수집 모드: 제작자
     w.settings_tab._refresh_login()
-    assert '로그인하면 디스코드로 설정을 백업하고, 오류 신고용 수집 도구를 쓸 수 있어요.' in [
+    # 문의 일원화 6.3: 수집 도구는 문의하기로 — 안내 문구 변경
+    assert '로그인하면 디스코드로 설정을 백업하고, 문의 답변을 디스코드로 받을 수 있어요.' in [
         label.text() for label in w.settings_tab.findChildren(type(w.settings_tab._login_status))]
 
 

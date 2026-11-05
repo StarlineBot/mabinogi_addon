@@ -85,7 +85,7 @@ def test_no_alpha_or_beta_words_on_screen_and_no_basis_line(window, monkeypatch)
     for widget in (c.panel, w.settings_tab):
         joined = ' '.join(_texts(widget))
         assert '알파' not in joined and '베타' not in joined and '근거' not in joined
-    assert '로그인하면 디스코드로 설정을 백업하고, 오류 신고용 수집 도구를 쓸 수 있어요.' in _texts(w.settings_tab)  # 2026-10-28 정책 7절 문구
+    assert '로그인하면 디스코드로 설정을 백업하고, 문의 답변을 디스코드로 받을 수 있어요.' in _texts(w.settings_tab)  # 2026-10-28 정책 7절 문구 → 문의 일원화 6.3(수집 도구는 문의하기로)
 
 
 def test_auto_game_end_shows_applying_line_when_fastping_was_applied_at_start(tmp_path):

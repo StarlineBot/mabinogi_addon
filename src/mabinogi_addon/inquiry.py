@@ -43,12 +43,16 @@ def send_inquiry(
     username: str | None = None,
     timeout: float = 5.0,
     urlopen=urllib.request.urlopen,
+    header: str | None = None,
+    attachment: tuple[str, bytes, str] | None = None,
 ) -> None:
     """Discord 웹훅으로 문의를 전송. 실패하면 예외를 던진다.
 
     user_id가 있으면(로그인) 글 끝에 <@id> 멘션을 넣어, 봇이 '이 글 = 이 사용자'로
     연결해 제작자 답변을 그 사용자에게 DM할 수 있게 한다.
     urlopen은 테스트에서 가짜로 주입할 수 있다.
+    header: 본문 첫 줄(보낸 사람 · 회차 ID · 문의 종류 · 카드 — 문의 일원화 6.3). attachment: (파일 이름, 바이트, MIME) —
+    문의 자료 ZIP 1개(log_text 대신). 큰 첨부는 timeout을 늘려 부른다(작업 스레드라 화면은 멈추지 않음).
     """
     title = title.strip()
     content = content.strip()
@@ -60,10 +64,14 @@ def send_inquiry(
     full_title = (f"[{category}] {title}" if category else title)[:_TITLE_MAX]
     if user_id:
         content = f"{content}\n\n문의자: <@{user_id}>"
+    if header:
+        content = f"{header}\n{content}"
     body = content[:_CONTENT_MAX]
     log_file = None
-    if log_text and log_text.strip():
-        log_file = (_LOG_FILENAME, log_text.encode("utf-8"))
+    if attachment is not None:
+        log_file = attachment
+    elif log_text and log_text.strip():
+        log_file = (_LOG_FILENAME, log_text.encode("utf-8"), "text/plain; charset=utf-8")
 
     payload: dict = {"content": body, "thread_name": full_title}
     if username:
@@ -97,9 +105,11 @@ def _post(webhook_url, payload, log_file, timeout, urlopen) -> None:
             raise RuntimeError(f"웹훅 응답 코드 {status}")
 
 
-def _multipart(payload: dict, log_file: tuple[str, bytes]) -> tuple[bytes, dict]:
-    """Discord 웹훅 멀티파트(payload_json + files[0]) 본문을 만든다."""
-    filename, file_bytes = log_file
+def _multipart(payload: dict, log_file: tuple) -> tuple[bytes, dict]:
+    """Discord 웹훅 멀티파트(payload_json + files[0]) 본문을 만든다. log_file = (이름, 바이트[, MIME])."""
+    filename, file_bytes = log_file[0], log_file[1]
+    mime = log_file[2] if len(log_file) > 2 else "text/plain; charset=utf-8"
+    filename = filename.replace('"', "_")
     boundary = f"----mabi{uuid.uuid4().hex}"
     crlf = b"\r\n"
     parts: list[bytes] = []
@@ -111,9 +121,9 @@ def _multipart(payload: dict, log_file: tuple[str, bytes]) -> tuple[bytes, dict]
     parts.append(f"--{boundary}".encode())
     parts.append(
         f'Content-Disposition: form-data; name="files[0]"; '
-        f'filename="{filename}"'.encode()
+        f'filename="{filename}"'.encode()  # 한글 이름은 UTF-8 그대로(기존 문의로그.txt와 같음)
     )
-    parts.append(b"Content-Type: text/plain; charset=utf-8")
+    parts.append(f"Content-Type: {mime}".encode())
     parts.append(b"")
     parts.append(file_bytes)
     parts.append(f"--{boundary}--".encode())

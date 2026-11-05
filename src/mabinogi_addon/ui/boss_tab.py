@@ -606,7 +606,7 @@ class BossTab(QWidget):
         # 바뀌면 자동 저장(오독 프레임 제보). 보스 없는 프레임은 길바닥이라 제외.
         if (
             self.collect_chk.isChecked()
-            and self._logged_in()
+            and self._diagnostics_allowed()
             and boss_id is not None
             and self._frame_changed(frame)
         ):
@@ -791,15 +791,17 @@ class BossTab(QWidget):
         return box
 
     @staticmethod
-    def _logged_in() -> bool:
-        return config.load_discord_user() is not None
+    def _diagnostics_allowed() -> bool:
+        """수집·진단 구역은 제작자만(문의 일원화 6.3 — 일반·로그인 사용자는 문의하기가 유일한 입구)."""
+        from .. import feature_access
+        return feature_access.is_creator()
 
     def _apply_collect_gate(self) -> None:
         self._set_halo_access(self.halo_capture._allowed())
         box = getattr(self, "_collect_box", None)
         if box is not None:
-            box.setVisible(self._logged_in() and self.diagnostics_btn.isChecked())
-            self.diagnostics_btn.setVisible(self._logged_in())
+            box.setVisible(self._diagnostics_allowed() and self.diagnostics_btn.isChecked())
+            self.diagnostics_btn.setVisible(self._diagnostics_allowed())
         btn = getattr(self, "auto_find_btn", None)
         if btn is not None:
             btn.setVisible(True)  # 일반 기능의 자동 찾기는 비로그인 공개

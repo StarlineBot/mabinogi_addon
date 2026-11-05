@@ -189,12 +189,14 @@ class TuarimTab(QWidget):
         return box
 
     @staticmethod
-    def _logged_in() -> bool:
-        return config.load_discord_user() is not None
+    def _diagnostics_allowed() -> bool:
+        """수집·진단 구역은 제작자만(문의 일원화 6.3 — 일반·로그인 사용자는 문의하기가 유일한 입구)."""
+        from .. import feature_access
+        return feature_access.is_creator()
 
     def _apply_collect_gate(self) -> None:
         """수집(제보) 도구는 디스코드 로그인 사용자에게만 노출."""
-        logged_in = self._logged_in()
+        logged_in = self._diagnostics_allowed()
         box = getattr(self, "_collect_box", None)
         toggle = getattr(self, "_diagnostics_toggle", None)
         if box is not None:

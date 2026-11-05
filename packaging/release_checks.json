@@ -1,10 +1,13 @@
 {
-  "version": "0.42.1",
+  "version": "0.43.0",
   "tests": [
-    "tests/test_overlay_clock.py",
-    "tests/test_overlay_metrics.py",
-    "tests/test_optimization_ui.py",
-    "tests/test_perf_meter.py",
+    "tests/test_inquiry_unified.py",
+    "tests/test_inquiry.py",
+    "tests/test_overlay_capture.py",
+    "tests/test_feature_release_policy.py",
+    "tests/test_tuarim_settings_width.py",
+    "tests/test_navigation.py",
+    "tests/test_boss_tab.py",
     "tests/test_startup_build.py",
     "tests/test_release_candidate.py",
     "tests/test_windows_ci.py",
@@ -14,28 +17,79 @@
     "tests/test_startup_smoke.py"
   ],
   "coverage": {
-    "src/mabinogi_addon/ui/frame_overlay.py": {
+    "src/mabinogi_addon/inquiry_session.py": {
       "tests": [
-        "tests/test_overlay_clock.py",
-        "tests/test_overlay_metrics.py",
-        "tests/test_perf_meter.py"
+        "tests/test_inquiry_unified.py"
       ],
-      "reason": "항목 칸 폭 예약(자릿수·— 변화에도 시작 x 고정, 넘는 값만 넓힘)·칸 안 값 위치·그리기 계측"
+      "reason": "카드 6개·회차 ID·설치 ID·변경 프레임·60초/20장/8MiB·ZIP(info.json·본문·로그)·이름·24시간 잔여물 정리"
     },
-    "src/mabinogi_addon/ui/optimization_controller.py": {
+    "src/mabinogi_addon/inquiry.py": {
       "tests": [
-        "tests/test_overlay_clock.py",
-        "tests/test_overlay_metrics.py",
-        "tests/test_optimization_ui.py"
+        "tests/test_inquiry_unified.py",
+        "tests/test_inquiry.py"
       ],
-      "reason": "항목별 예약 견본(FPS 000·CPU/GPU 100%·메모리 00.0GB·시각 형식별)"
+      "reason": "ZIP 첨부·본문 첫 줄(보낸 사람·회차·종류·카드)·전송 제한 시간, 기존 로그 첨부·포럼/일반 채널"
+    },
+    "src/mabinogi_addon/ui/inquiry_window.py": {
+      "tests": [
+        "tests/test_inquiry_unified.py"
+      ],
+      "reason": "새 창 3단계·카드 선택 전 시작 안 함·영역 수집·게임 1장 strict·자료 없이·다시 보내기 같은 회차·닫으면 정리·진행 표시 클릭 통과"
+    },
+    "src/mabinogi_addon/ui/overlay_capture.py": {
+      "tests": [
+        "tests/test_overlay_capture.py",
+        "tests/test_inquiry_unified.py"
+      ],
+      "reason": "문의 진행 표시를 판독 캡처 제외 목록에"
+    },
+    "src/mabinogi_addon/ui/settings_tab.py": {
+      "tests": [
+        "tests/test_inquiry_unified.py",
+        "tests/test_navigation.py"
+      ],
+      "reason": "문의하기 새 창 열기·진단 구역 제작자만"
+    },
+    "src/mabinogi_addon/ui/main_window.py": {
+      "tests": [
+        "tests/test_inquiry_unified.py",
+        "tests/test_navigation.py"
+      ],
+      "reason": "문의 창 하나·종료 정리·시작 때 잔여물 정리"
+    },
+    "src/mabinogi_addon/ui/boss_tab.py": {
+      "tests": [
+        "tests/test_inquiry_unified.py",
+        "tests/test_boss_tab.py"
+      ],
+      "reason": "보스 HP바 수집 구역 제작자만"
+    },
+    "src/mabinogi_addon/ui/stat_bars_tab.py": {
+      "tests": [
+        "tests/test_inquiry_unified.py",
+        "tests/test_feature_release_policy.py"
+      ],
+      "reason": "체력바 수집 구역 제작자만"
+    },
+    "src/mabinogi_addon/ui/tuarim_tab.py": {
+      "tests": [
+        "tests/test_inquiry_unified.py",
+        "tests/test_tuarim_settings_width.py"
+      ],
+      "reason": "도르카/투아림 수집 구역 제작자만(제작자 화면 배치)"
+    },
+    "scripts/release_delivery.py": {
+      "tests": [
+        "tests/test_release_candidate.py"
+      ],
+      "reason": "배포 알림 웹훅 User-Agent·텍스트 채널 대체"
     },
     "src/mabinogi_addon/assets/release_notes.md": {
       "tests": [
         "tests/test_release_notes.py",
         "tests/test_release_notes_trigger.py"
       ],
-      "reason": "0.42.1 노트 파싱·새 버전 표시"
+      "reason": "0.43.0 노트 파싱·새 버전 표시"
     },
     "packaging/release_checks.json": {
       "tests": [
