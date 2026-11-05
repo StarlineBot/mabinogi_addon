@@ -205,6 +205,7 @@
 
 ## 열린 문제
 
+- **0.43.0 게시 후보: verify-only #196 성공**(run 42061423097, attempt 1, adcb270 = 제품 beaaedc + 문서만, 16:07~16:19 UTC; 첫 실행 요청은 GitHub HTTP 500으로 접수 안 됨 → 재실행). 후보 verified-windows-42061423097-1(ID 13432692773, 11-06 16:18 UTC 만료), exe 164,152,627바이트. 사용자 확인 대기: 쿨타임 목록 + 필수 1~6.
 - **QA beaaedc(2026-11-05)**: 단축바 CASES에 image.png·image1.png 추가 + CLAUDE.md에 '큰 스크린샷은 CASES 등록' 규칙 — 쿨타임·단축바 188 passed(실패 0), preflight 통과. 0.43.0 후보 만들 준비 완료.
 - **QA 06da5c2(2026-11-05)**: 쿨타임 목록 — 고른 세트만·아이콘 28px+이름+삭제·위치는 툴팁·아이콘 없으면 점선 빈 칸, 첫 '사용 가능' 관측 때 작업 스레드에서 아이콘 다시 저장, 삭제 시 아이콘 파일도 삭제. 렌더(세트 1·2) 확인.
   쿨타임·단축바 185 passed, **1 failed: `test_skillbar_testers::test_case_list_covers_all_large_screenshots` — 3472804에서 올린 image.png·image1.png(1920 폭) 미등록**(203318·203332 때와 같은 원인, 배포 검사엔 미포함). 배포 검사 0.43.0 639 passed.
