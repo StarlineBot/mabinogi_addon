@@ -1,6 +1,8 @@
 {
   "version": "0.43.0",
   "tests": [
+    "tests/test_bundle_layout.py",
+    "tests/test_harp_channels.py",
     "tests/test_inquiry_unified.py",
     "tests/test_inquiry.py",
     "tests/test_overlay_capture.py",
@@ -52,10 +54,11 @@
     },
     "src/mabinogi_addon/ui/main_window.py": {
       "tests": [
+        "tests/test_harp_channels.py",
         "tests/test_inquiry_unified.py",
         "tests/test_navigation.py"
       ],
-      "reason": "문의 창 하나·종료 정리·시작 때 잔여물 정리"
+      "reason": "문의 창 하나·종료 정리·시작 때 잔여물 정리·채널 첫 측정 1초"
     },
     "src/mabinogi_addon/ui/boss_tab.py": {
       "tests": [
@@ -105,6 +108,25 @@
         "tests/test_startup_smoke.py"
       ],
       "reason": "배포 계약: 빌드·후보·Windows CI·시작 확인"
+    },
+    "src/mabinogi_addon/ui/harp_tab.py": {
+      "tests": [
+        "tests/test_harp_channels.py",
+        "tests/test_bundle_layout.py"
+      ],
+      "reason": "지난 결과 저장·복원(지문·7일)·시작 즉시 표시·3회 뒤 교체·숨은 탭 카드 갱신 없음·회차당 홈 갱신/저장 1번"
+    },
+    "src/mabinogi_addon/harp_latency.py": {
+      "tests": [
+        "tests/test_harp_channels.py"
+      ],
+      "reason": "주소 지문·기록 내보내기/복원"
+    },
+    "src/mabinogi_addon/config.py": {
+      "tests": [
+        "tests/test_harp_channels.py"
+      ],
+      "reason": "channelStatus 저장·읽기"
     }
   }
 }

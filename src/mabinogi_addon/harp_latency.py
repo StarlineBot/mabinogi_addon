@@ -135,6 +135,13 @@ class ChannelStats:
         return statistics.median(self.recent) if self.recent else None
 
 
+def fingerprint(channels) -> str:
+    """주소 목록 지문 — 데이터 파일의 채널·주소가 바뀌면 저장해 둔 지난 결과를 버린다(8절 1항)."""
+    import hashlib
+    text = ";".join(f"{c.number},{c.ip},{c.port}" for c in sorted(channels, key=lambda c: c.number))
+    return hashlib.sha256(text.encode()).hexdigest()[:16]
+
+
 class History:
     """채널별 기록. 데이터 파일의 주소가 바뀌면 그 채널 기록을 지운다."""
 
@@ -151,6 +158,24 @@ class History:
 
     def record(self, number: int, result: Result) -> None:
         self.stats[number].record(result)
+
+    def export(self) -> dict[str, list[float]]:
+        """채널별 최근 성공값(최대 RECENT개) — 저장용."""
+        return {str(n): [round(v, 3) for v in s.recent] for n, s in self.stats.items() if s.recent}
+
+    def restore(self, recent: dict) -> None:
+        """저장값으로 채운다(성공만 — 시도·실패는 모름). 모르는 채널·잘못된 값은 건너뛴다."""
+        for key, values in recent.items():
+            try:
+                number = int(key)
+            except (TypeError, ValueError):
+                continue
+            stats = self.stats.get(number)
+            if stats is None or not isinstance(values, list):
+                continue
+            for value in values[-RECENT:]:
+                if isinstance(value, (int, float)) and 0 <= value < 10_000:
+                    stats.record(Result(OK, float(value)))
 
     def ranking(self) -> list[tuple[int, float]]:
         """(채널, 중앙값) 빠른 순 — 중앙값 오름차순, 같으면 번호 낮은 순. 성공 MIN_SAMPLES회 이상인 채널만(실패만 한 채널 제외)."""

@@ -1656,3 +1656,18 @@ def save_alert_volume(value, path: Path = LOCAL_CONFIG_PATH) -> None:
     g["alertVolume"] = clamp_alert_volume(value)
     data["general"] = g
     _write_local_config(data, path)
+
+
+def load_channel_cache(path: Path = LOCAL_CONFIG_PATH) -> dict | None:
+    """서버별 채널 상태 지난 결과(하프 채널 명세 8절) — {fingerprint, measuredAt(ISO), recent{채널: [ms…]}} 또는 None."""
+    sec = _read_local_config(path).get("channelStatus")
+    if not isinstance(sec, dict) or not isinstance(sec.get("recent"), dict):
+        return None
+    return sec
+
+
+def save_channel_cache(data: dict, path: Path = LOCAL_CONFIG_PATH) -> None:
+    """회차가 끝날 때 한 번만 부른다(화면 스레드 부담·디스크 쓰기 최소)."""
+    cfg = _read_local_config(path)
+    cfg["channelStatus"] = data
+    _write_local_config(cfg, path)

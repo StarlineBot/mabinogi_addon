@@ -7,7 +7,7 @@ from __future__ import annotations
 import json
 import socket
 import threading
-from datetime import datetime
+from datetime import datetime, timedelta
 from time import monotonic, perf_counter, sleep
 
 import pytest
@@ -457,12 +457,6 @@ def test_server_combo_only_harp_selectable(harp):
     assert all("준비 중" in combo.itemText(i) for i in range(combo.count()) if combo.itemData(i) != "하프")
 
 
-def test_ago_text():
-    from mabinogi_addon.ui.harp_tab import ago_text
-    assert [ago_text(s) for s in (0, 59, 60, 179, 3599, 3600, 7300)] == ["방금", "방금", "1분 전", "2분 전", "59분 전",
-                                                                          "1시간 전", "2시간 전"]
-
-
 def test_startup_burst_runs_three_rounds_without_viewing_then_stops(harp):
     """앱 시작 직후: 탭을 보지 않아도 3회 연속(첫 추천) → 그 뒤 상시 반복 없음. 홈 문구가 측정 중 → 가장 빠른 채널."""
     app, make, clock = harp
@@ -475,9 +469,9 @@ def test_startup_burst_runs_three_rounds_without_viewing_then_stops(harp):
     assert busy and kind == "muted" and text.startswith("측정 중이에요")
     assert wait_until(lambda: len(gate.calls) == 21 and tab._round is None, 10)
     assert tab._background == 0
-    assert tab.home_summary() == ("가장 빠른 채널 1채널 2.3ms (방금)", "ok", False)
+    assert tab.home_summary() == ("가장 빠른 채널 1채널 2.3ms", "ok", False)
     clock[0] += 185
-    assert tab.home_summary()[0] == "가장 빠른 채널 1채널 2.3ms (3분 전)"
+    assert tab.home_summary()[0] == "가장 빠른 채널 1채널 2.3ms"
     tab._tick()  # 탭을 보지 않으면 60초 재측정도 없음
     app.processEvents()
     assert len(gate.calls) == 21 and tab._round is None
@@ -527,9 +521,9 @@ def test_home_channel_chip_states():
     home = HomePage()
     try:
         home.resize(790, 800)
-        home.update_state({"channel": ("가장 빠른 채널 21채널 2.0ms (3분 전)", "ok", False)})
+        home.update_state({"channel": ("가장 빠른 채널 21채널 2.0ms", "ok", False)})
         text = home.channel_label.text()
-        assert "21채널" in text and "2.0ms (3분 전)" in text and home.channel_btn.isEnabled()
+        assert "21채널" in text and "2.0ms" in text and home.channel_btn.isEnabled()
         home.set_channel("측정 중이에요(1/3)", "muted", True)
         assert "측정 중이에요(1/3)" in home.channel_label.text() and not home.channel_btn.isEnabled()
         home.set_channel("측정 못 함 · 네트워크 연결을 확인해 주세요", "warn", False)
@@ -540,3 +534,114 @@ def test_home_channel_chip_states():
         assert fired == [1]
     finally:
         home.deleteLater()
+
+
+# ---- 8절: 앱 켜자마자 추천(지난 결과 저장·시작 1초·화면 스레드 부담) --------------------------------
+def _tab_at(when, gate, chans=None):
+    from mabinogi_addon.ui.harp_tab import HarpChannelTab
+    QApplication.instance() or QApplication([])
+    chans = chans or [hl.Channel(n, "127.0.0.1", n) for n in (1, 2, 3, 4, 5, 6, 7)]
+    now = [when]
+    tab = HarpChannelTab(channels=chans, connect=gate, now=lambda: now[0], clock=monotonic)
+    return tab, now
+
+
+def _rounds(tab, count):
+    for _ in range(count):
+        tab.measure_background(1)
+        assert wait_until(lambda: tab._round is None)
+
+
+def test_startup_timing_constants():
+    from mabinogi_addon.ui import harp_tab, main_window
+    assert harp_tab.BURST_GAP == 0.5 and harp_tab.BURST_ROUNDS == 3
+    import inspect  # 테스트 공통 설정(conftest)이 대기를 늘려 두므로 원래 값은 소스에서 확인
+    assert "CHANNEL_STARTUP_DELAY_MS = 1000" in inspect.getsource(main_window)
+
+
+def test_save_restore_round_trip_and_address_change_discards():
+    from mabinogi_addon import config
+    tab, now = _tab_at(datetime(2026, 11, 4, 21, 40), Gate())
+    try:
+        assert tab.saved is None
+        _rounds(tab, 3)
+        cache = config.load_channel_cache()
+        assert cache["fingerprint"] == hl.fingerprint(tab.channels) and cache["measuredAt"] == "2026-11-04T21:40:00"
+        assert cache["recent"]["1"] == [2.3, 2.3, 2.3]
+    finally:
+        tab.shutdown()
+    again, _ = _tab_at(datetime(2026, 11, 5, 10, 0), Gate(hold=True))
+    try:  # 다음 날 앱 시작 — 측정 전에 바로 지난 결과
+        assert again.home_summary() == ("가장 빠른 채널 1채널 2.3ms", "ok", False)  # 시각 없이(사용자 결정 11-05)
+        assert again.saved.stats[1].median == pytest.approx(2.3)
+    finally:
+        again.shutdown()
+    moved = [hl.Channel(n, "127.0.0.1", n + (100 if n == 3 else 0)) for n in (1, 2, 3, 4, 5, 6, 7)]
+    changed, _ = _tab_at(datetime(2026, 11, 5, 10, 0), Gate(hold=True), moved)
+    try:  # 주소 목록이 바뀌면 저장값을 버린다
+        assert changed.saved is None and changed.home_summary()[0] == "아직 재지 않았어요"
+    finally:
+        changed.shutdown()
+
+
+@pytest.mark.parametrize("age,shown", [(timedelta(days=6, hours=23), True), (timedelta(days=7), False)])
+def test_saved_result_seven_day_limit(age, shown):
+    from mabinogi_addon import config
+    chans = [hl.Channel(n, "127.0.0.1", n) for n in (1, 2, 3)]
+    measured = datetime(2026, 11, 1, 12, 0)
+    config.save_channel_cache({"fingerprint": hl.fingerprint(chans), "measuredAt": measured.isoformat(),
+                               "recent": {"1": [2.0, 2.0, 2.0], "2": [3.0, 3.0, 3.0]}})
+    tab, _ = _tab_at(measured + age, Gate(hold=True), chans)
+    try:
+        assert (tab.saved is not None) is shown
+        if shown:
+            assert tab.home_summary()[0] == "가장 빠른 채널 1채널 2.0ms"
+    finally:
+        tab.shutdown()
+
+
+def test_saved_shown_until_three_new_rounds_then_replaced_without_mixing():
+    from mabinogi_addon import config
+    chans = [hl.Channel(n, "127.0.0.1", n) for n in (1, 2, 3, 4, 5, 6, 7)]
+    config.save_channel_cache({"fingerprint": hl.fingerprint(chans), "measuredAt": "2026-11-04T21:40:00",
+                               "recent": {"7": [1.0, 1.0, 1.0], "1": [9.0, 9.0, 9.0]}})
+    tab, _ = _tab_at(datetime(2026, 11, 5, 10, 0), Gate(), chans)  # 새로 재면 1채널(2.3ms)이 가장 빠름
+    try:
+        assert tab.home_summary()[0] == "가장 빠른 채널 7채널 1.0ms"
+        _rounds(tab, 2)  # 새 값 1~2회 — 저장값 그대로(섞지 않음)
+        assert tab.home_summary()[0] == "가장 빠른 채널 7채널 1.0ms"
+        assert "7채널" in tab.recommend.main.text() and "방금" not in tab.recommend.main.text()  # 측정 시각은 보이지 않음(11-05)
+        _rounds(tab, 1)  # 3회 모임 → 새 값으로 교체
+        assert tab.home_summary()[0] == "가장 빠른 채널 1채널 2.3ms"
+        assert "1채널" in tab.recommend.main.text()
+    finally:
+        tab.shutdown()
+
+
+def test_hidden_tab_no_card_updates_and_one_summary_and_save_per_round(monkeypatch):
+    """8절 4항: 탭이 안 보이면 카드 갱신 0회, 홈 문구(summary_changed)는 회차당 1회, 저장은 회차당 최대 1회."""
+    from mabinogi_addon import config
+    from mabinogi_addon.ui import harp_tab
+    tab, _ = _tab_at(datetime(2026, 11, 5, 10, 0), Gate())
+    cards, summaries, saves = [], [], []
+    monkeypatch.setattr(harp_tab.ChannelCard, "show_state", lambda self, *a: cards.append(self.number))
+    tab.summary_changed.connect(lambda: summaries.append(1))
+    original = config.save_channel_cache
+    monkeypatch.setattr(config, "save_channel_cache", lambda data: saves.append(1) or original(data))
+    try:
+        assert not tab.isVisible()
+        _rounds(tab, 4)
+        assert cards == []                      # 숨은 탭은 채널 카드를 그리지 않음
+        assert len(summaries) == 4              # 회차당 1번
+        assert len(saves) == 2                  # 추천이 생긴 3·4회차에 1번씩(1~2회 값으로 덮지 않음)
+        tabs = QTabWidget()
+        tabs.addTab(tab, "서버별 채널 상태")
+        tab._connect = Gate(hold=True)          # 보이면서 시작하는 측정은 붙잡아 둔다
+        tabs.show()
+        app = QApplication.instance()
+        app.processEvents()
+        assert len(set(cards)) == 7             # 보이는 순간 한 번에 그림
+        tab.cancel()
+        tabs.close()
+    finally:
+        tab.shutdown()

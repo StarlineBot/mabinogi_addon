@@ -58,7 +58,7 @@ from .tuarim_tab import TuarimTab
 # 번들 경로 사용(exe=_MEIPASS/assets). __file__ 기준은 frozen에서 어긋난다.
 LOGO_PATH = paths.resource_dir() / "logo.png"
 CHANNEL_TAB_TITLE = "서버별 채널 상태"  # 0.42.0: 옛 이름 하프 채널 연결
-CHANNEL_STARTUP_DELAY_MS = 4000  # 창이 뜬 뒤 채널 상태 첫 측정까지(시작 속도에 영향 없게)
+CHANNEL_STARTUP_DELAY_MS = 1000  # 창이 뜬 뒤 채널 상태 첫 측정까지 — 하프 채널 8절 3항: 4→1초(시작 화면 직후 순간은 피함)
 _log = logging.getLogger("mabinogi_addon.close")
 _cap_log = logging.getLogger("mabinogi_addon.capture")  # 라이브 캡처 시작 진단
 _up_log = logging.getLogger("mabinogi_addon.updater")  # 업데이트 확인 진단(계기·스로틀·결과)

@@ -21,7 +21,8 @@ from .widgets import FeatureHeader, hint_label
 _log = logging.getLogger(__name__)
 INTERVAL = 60.0  # 한 회차가 끝난 뒤 다음 회차까지(초)
 BURST_ROUNDS = 3  # 0.42.0: 앱 시작 직후 연속 회차 수(= MIN_SAMPLES, 첫 추천까지)
-BURST_GAP = 1.0   # 연속 회차 사이 쉬는 시간(초)
+BURST_GAP = 0.5   # 연속 회차 사이 쉬는 시간(초) — 8절 3항: 1→0.5초(3회차가 약 1.5초 안에)
+SAVED_DAYS = 7    # 지난 결과를 앱 시작 때 보여줄 최대 나이(8절 2항)
 COLUMNS = 6
 TITLE = "서버별 채널 상태"
 SUMMARY = "내 PC에서 서버 채널별 접속 주소까지 TCP 연결에 걸리는 시간을 재요."
@@ -155,7 +156,8 @@ class RecommendBox(QFrame):
         self.main.setText(f"<span style='color:{color(tone or 'muted')}'>{text}</span>")
         self.others.setText("")
 
-    def show_result(self, history: hl.History) -> bool:
+    def show_result(self, history: hl.History, saved: bool = False) -> bool:
+        """saved면 지난 실행 결과 — '방금' 값을 붙이지 않는다(사용자 결정 11-05: 측정 시각은 보이지 않음)."""
         top, others, similar = history.recommendation()
         if top is None:
             return False
@@ -164,7 +166,8 @@ class RecommendBox(QFrame):
         muted = color("muted")
         self.main.setText(f"<span style='font-size:24px; font-weight:bold; color:{color('ok')}'>{top}채널</span>"
                           f"&nbsp;&nbsp;<span style='font-size:16px; font-weight:bold'>{_ms(s.median)}</span>"
-                          f" <span style='color:{muted}'>ms · 방금 {just_now(s.last)}</span>")
+                          + (f" <span style='color:{muted}'>ms</span>" if saved else
+                             f" <span style='color:{muted}'>ms · 방금 {just_now(s.last)}</span>"))
         if others:
             label = "비슷하게 빠름" if similar else "다음으로 빠른 채널"
             items = " · ".join(f"<b>{n}채널</b> {_ms(history.stats[n].median)}" for n in others)
@@ -172,14 +175,6 @@ class RecommendBox(QFrame):
         else:
             self.others.setText("")
         return True
-
-
-def ago_text(seconds: float) -> str:
-    """홈 '가장 빠른 채널'의 측정 시각 — 1분 안이면 '방금', 아니면 'n분 전'(1시간 넘으면 'n시간 전')."""
-    minutes = int(max(0.0, seconds) // 60)
-    if minutes < 1:
-        return "방금"
-    return f"{minutes}분 전" if minutes < 60 else f"{minutes // 60}시간 전"
 
 
 class HarpChannelTab(QWidget):
@@ -215,6 +210,10 @@ class HarpChannelTab(QWidget):
         self._round_ok = 0                       # 이번 회차 성공 수
         self._failed = False                     # 마지막으로 끝난 회차가 전부 실패(네트워크 확인)
         self._finished_at: float | None = None   # 마지막으로 끝난 회차(clock)
+        self._dirty = False                      # 숨어 있는 동안 미룬 화면 갱신(보일 때 한 번에 그린다 — 8절 4항)
+        self.saved: hl.History | None = None     # 지난 실행 결과(8절 2항) — 이번 실행에서 추천이 나오면 그만 쓴다
+        self.saved_at: datetime | None = None
+        self._restore_saved()
 
         v = QVBoxLayout(self)
         v.setContentsMargins(12, 12, 12, 12)
@@ -268,6 +267,45 @@ class HarpChannelTab(QWidget):
         self._timer.timeout.connect(self._tick)
         self._refresh_view()
 
+    # ---- 지난 결과(8절 1·2항) -----------------------------------------------------------------
+    def _restore_saved(self) -> None:
+        if not self.channels:
+            return
+        try:
+            from .. import config
+            data = config.load_channel_cache()
+            if not data or data.get("fingerprint") != hl.fingerprint(self.channels):
+                return  # 없거나 주소 목록이 바뀜 → 버림
+            at = datetime.fromisoformat(str(data.get("measuredAt")))
+            age = self._now() - at
+            if age.total_seconds() < 0 or age.days >= SAVED_DAYS:
+                return
+            saved = hl.History(self.channels)
+            saved.restore(data["recent"])
+            if saved.recommendation()[0] is None:
+                return
+            self.saved, self.saved_at = saved, at
+        except Exception:  # noqa: BLE001 — 저장값이 깨져도 앱·탭은 계속
+            _log.warning("지난 채널 결과를 읽지 못했어요", exc_info=True)
+
+    def _save(self) -> None:
+        """회차가 끝날 때 한 번 — 이번 실행 추천이 있을 때만(1~2회 값으로 좋은 저장값을 덮지 않게)."""
+        if self.history.recommendation()[0] is None:
+            return
+        try:
+            from .. import config
+            config.save_channel_cache({"server": READY_SERVERS[0], "fingerprint": hl.fingerprint(self.channels),
+                                       "measuredAt": self._now().isoformat(timespec="seconds"),
+                                       "recent": self.history.export()})
+        except Exception:  # noqa: BLE001
+            _log.warning("채널 결과를 저장하지 못했어요", exc_info=True)
+
+    def _view(self) -> tuple[hl.History, bool]:
+        """(화면에 쓸 기록, 지난 결과인지). 이번 실행 추천이 나오기 전까지는 저장값(새 값과 섞지 않음)."""
+        if self.history.recommendation()[0] is None and self.saved is not None:
+            return self.saved, True
+        return self.history, False
+
     # ---- 화면을 보는 동안만 ----------------------------------------------------------------
     def set_paused(self, paused: bool) -> None:
         self._paused = bool(paused)
@@ -284,6 +322,8 @@ class HarpChannelTab(QWidget):
 
     def showEvent(self, event):
         super().showEvent(event)
+        if self._dirty:
+            self._refresh_view()  # 숨어 있는 동안 모인 결과를 한 번에
         self._timer.start()
         self._tick()
 
@@ -366,7 +406,10 @@ class HarpChannelTab(QWidget):
         if generation != self._generation:
             return
         self._measuring.add(number)
-        self.cards[number].show_state("measuring", self.history.stats[number])
+        if self.isVisible():  # 8절 4항: 탭이 안 보이면 카드를 갱신하지 않는다(기록만)
+            self.cards[number].show_state("measuring", self.history.stats[number])
+        else:
+            self._dirty = True
 
     def _on_result(self, generation: int, number: int, result: hl.Result) -> None:
         if generation != self._generation:
@@ -377,8 +420,13 @@ class HarpChannelTab(QWidget):
             self._done_count += 1
         if result.kind == hl.OK:
             self._round_ok += 1
-        self.cards[number].show_state("done", self.history.stats[number])
-        self._refresh_status()
+        if self.isVisible():  # 보이는 동안만 채널마다 카드·진행 표시(`측정 중 · n / 21`)
+            stats = self.history.stats[number]
+            if stats.last is not None or self.saved is None:
+                self.cards[number].show_state("done", stats)
+            self._refresh_status()
+        else:
+            self._dirty = True
 
     def _on_finished(self, generation: int, cancelled: bool) -> None:
         if generation != self._generation:
@@ -390,6 +438,7 @@ class HarpChannelTab(QWidget):
             self._finished_at = self._clock()
             self._next_at = self._clock() + INTERVAL
             self._failed = self._round_ok == 0
+            self._save()  # 회차당 한 번
             if self._background > 0:
                 self._background -= 1
                 if self._background > 0:
@@ -397,6 +446,7 @@ class HarpChannelTab(QWidget):
         else:
             self._background = 0
         self._refresh_view()
+        self.summary_changed.emit()  # 홈 문구는 회차가 끝날 때 한 번(8절 4항)
 
     # ---- 홈 ----------------------------------------------------------------------------------
     def home_summary(self) -> tuple[str, str, bool]:
@@ -407,9 +457,12 @@ class HarpChannelTab(QWidget):
         top, _others, _similar = self.history.recommendation()
         if self._failed and not busy:
             return "측정 못 함 · 네트워크 연결을 확인해 주세요", "warn", busy
+        # 사용자 결정(11-05): 홈 위 줄 뒤에 측정 시각((방금)·(어제 21:40) 등)을 붙이지 않는다 — 시각은 채널 탭 추천 줄에만
         if top is not None:
-            ago = ago_text(self._clock() - self._finished_at) if self._finished_at is not None else "방금"
-            return f"가장 빠른 채널 {top}채널 {_ms(self.history.stats[top].median)}ms ({ago})", "ok", busy
+            return f"가장 빠른 채널 {top}채널 {_ms(self.history.stats[top].median)}ms", "ok", busy
+        if self.saved is not None:  # 이번 실행 추천 전까지는 지난 결과(새 1~2회 값과 섞지 않음)
+            saved_top = self.saved.recommendation()[0]
+            return f"가장 빠른 채널 {saved_top}채널 {_ms(self.saved.stats[saved_top].median)}ms", "ok", busy
         if busy or self._background > 0:
             samples = self.history.samples()
             return f"측정 중이에요({samples}/{hl.MIN_SAMPLES})", "muted", True
@@ -432,13 +485,17 @@ class HarpChannelTab(QWidget):
                 text += f" · 다음 측정까지 {max(0, int(round(self._next_at - self._clock())))}초"
             self.status.setText(f"<span style='color:{color('muted')}'>{text}</span>")
         self.refresh.setEnabled(self._round is None and self._viewing())
-        self.summary_changed.emit()
 
     def _refresh_view(self) -> None:
-        fastest = self.history.fastest() if self._round is None or self._last_time is not None else set()
-        for number, card in self.cards.items():
-            stats = self.history.stats[number]
-            if self._round is not None:
+        view, when = self._view()  # when = 지난 결과를 보여 주는 중
+        fastest = view.fastest() if self._round is None or self._last_time is not None or when else set()
+        hidden = not self.isVisible()
+        self._dirty = hidden  # 8절 4항: 숨은 탭은 채널 카드를 그리지 않고 보일 때 한 번에(showEvent) — 추천 줄만 갱신
+        for number, card in ({} if hidden else self.cards).items():
+            stats = view.stats[number]
+            if when and self.history.stats[number].last is None:
+                state = "measuring" if number in self._measuring else "done"  # 저장값 그대로 보여 주며 새로 재는 중
+            elif self._round is not None:
                 state = "measuring" if number in self._measuring else ("done" if stats.last is not None else "waiting")
             else:
                 state = "done" if stats.last is not None else "before"
@@ -446,7 +503,7 @@ class HarpChannelTab(QWidget):
             card.set_fastest(number in fastest)
         if self.load_error:
             self.recommend.show_message(self.load_error, "warn")
-        elif not self.recommend.show_result(self.history):
+        elif not self.recommend.show_result(view, when):
             samples = self.history.samples()
             if 0 < samples < hl.MIN_SAMPLES:
                 self.recommend.show_message(f"측정 중이에요({samples}/{hl.MIN_SAMPLES})")
