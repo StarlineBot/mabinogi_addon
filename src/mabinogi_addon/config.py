@@ -1712,3 +1712,26 @@ def save_cooldown(data: dict, path: Path = LOCAL_CONFIG_PATH) -> None:
     sec.update(data)
     cfg["cooldown"] = sec
     _write_local_config(cfg, path)
+
+
+def load_boss_bar_overlay(path: Path = LOCAL_CONFIG_PATH) -> dict:
+    """보스바 오버레이(보스바 오버레이 명세, 제작자 테스트). {enabled, pos{x,y}|None, scale(%), opacity(%), locked}"""
+    sec = _read_local_config(path).get("bossBarOverlay")
+    sec = sec if isinstance(sec, dict) else {}
+    pos = sec.get("pos")
+    pos = {"x": int(pos["x"]), "y": int(pos["y"])} if isinstance(pos, dict) and all(type(pos.get(k)) is int for k in ("x", "y")) else None
+
+    def clamp(key, default, lo, hi):
+        value = sec.get(key)
+        return max(lo, min(hi, value)) if type(value) is int else default
+    return {"enabled": sec.get("enabled") is True, "pos": pos, "scale": clamp("scale", 100, 50, 300),
+            "opacity": clamp("opacity", 100, 30, 100), "locked": sec.get("locked") is not False}
+
+
+def save_boss_bar_overlay(data: dict, path: Path = LOCAL_CONFIG_PATH) -> None:
+    cfg = _read_local_config(path)
+    sec = cfg.get("bossBarOverlay")
+    sec = dict(sec) if isinstance(sec, dict) else {}
+    sec.update(data)
+    cfg["bossBarOverlay"] = sec
+    _write_local_config(cfg, path)

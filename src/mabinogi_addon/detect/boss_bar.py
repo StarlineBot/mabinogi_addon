@@ -88,7 +88,8 @@ def _has_name_text(sub: np.ndarray) -> bool:
     return float(glyph.mean()) >= _NAME_COV_MIN
 
 
-def make_validator(*, templates=None, diagnostics: dict | None = None, auxiliary_names=None, bright_samples=None):
+def make_validator(*, templates=None, diagnostics: dict | None = None, auxiliary_names=None, bright_samples=None,
+                   return_percent: bool = False):
     """박스가 진짜 보스바인지 검증하는 콜백 — HP% 판독이 되고(오른쪽에 'XXX.XX%'),
     왼쪽에 **이름 글자가 있을 때**만 True. (지난 커밋은 등록된 5개 보스만 식별(identify)해
     통과시켜, 글라스 기브넨 등 미등록 보스에선 자동 찾기가 안 됐다. 디버프 트래커는 모든
@@ -99,7 +100,14 @@ def make_validator(*, templates=None, diagnostics: dict | None = None, auxiliary
     from .boss_hp_reader import main_path_score, read_percent
     auxiliary_names = _AUXILIARY_NAMES if auxiliary_names is None else auxiliary_names
 
-    def validate(sub: np.ndarray) -> bool:
+    def validate(sub: np.ndarray):
+        """보스바면 True(return_percent=True면 그 정수 %), 아니면 False(None)."""
+        ok = _validate(sub)
+        if return_percent:
+            return ok if ok is not False else None
+        return ok is not False
+
+    def _validate(sub: np.ndarray):
         if sub is None or sub.size == 0 or sub.shape[1] < 20:
             return False
         if _is_auxiliary_bar(sub, auxiliary_names):
@@ -121,7 +129,7 @@ def make_validator(*, templates=None, diagnostics: dict | None = None, auxiliary
         has_name = _has_name_text(sub)
         if diagnostics is not None:
             diagnostics.setdefault("validation", []).append({"percent": percent, "rejection": None if has_name else "name_text_missing"})
-        return has_name
+        return percent if has_name else False
 
     return validate
 
@@ -129,23 +137,52 @@ def make_validator(*, templates=None, diagnostics: dict | None = None, auxiliary
 def _row_longest_runs(
     mask: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """각 행의 '1(채도) 픽셀 최장 가로 연속'의 (길이, 시작x, 끝x)를 돌려준다.
+    """각 행의 '1(채도) 픽셀 최장 가로 연속'의 (길이, 시작x, 끝x)를 돌려준다(같은 길이면 왼쪽 것).
 
-    픽셀 반복문을 쓰지 않도록 **열 단위로만 루프**(W회)하고, 매 열에서 모든 행을 동시에
-    갱신한다. run[y]=현재 열에서 끝나는 연속 길이(0에서 리셋), best/끝을 최댓값으로 추적.
-    """
+    반복문 없이: 행마다 0을 덧대 차분 → 연속 시작/끝 위치 → 길이 → 행별 최댓값(첫 번째).
+    (예전엔 열 단위 루프 W회 — 521px 박스 한 번에 약 3ms, 보스바 오버레이가 틱마다 여러 번 불러 바꿨다. 결과는 같다.)"""
     r, w = mask.shape
-    run = np.zeros(r, np.int32)  # 지금 열에서 끝나는 연속 길이
-    best = np.zeros(r, np.int32)  # 최장 길이
-    best_end = np.full(r, -1, np.int32)  # 최장 연속이 끝나는 열 x
-    for col in range(w):
-        on = mask[:, col]
-        run = np.where(on, run + 1, 0)
-        upd = run > best
-        best = np.where(upd, run, best)
-        best_end = np.where(upd, col, best_end)
+    best = np.zeros(r, np.int32)
+    best_end = np.full(r, -1, np.int32)
+    d = np.diff(np.pad(mask.astype(np.int8), ((0, 0), (1, 1))), axis=1)
+    rows, starts = np.nonzero(d == 1)
+    _, ends = np.nonzero(d == -1)  # 행 우선 순서라 시작과 짝이 맞는다
+    if rows.size:
+        lengths = (ends - starts).astype(np.int32)
+        order = np.lexsort((starts, -lengths, rows))  # 행마다 긴 것 → 왼쪽 것 먼저
+        first = order[np.unique(rows[order], return_index=True)[1]]
+        best[rows[first]] = lengths[first]
+        best_end[rows[first]] = ends[first] - 1
     best_start = best_end - best + 1
     return best, best_start, best_end
+
+
+# 보스바 오버레이(보스바 오버레이 명세 3절-3): 판독 영역 둘레의 바 채움 띠 높이. 보스바는 해상도 무관 37px, 얇은 일반 체력바는
+# 그보다 훨씬 얇다. tests/data 실측: 일반 보스 37~38px, 궁극의 글라스 기브넨(미등록 레이드 보스)만 45px — 그래서 위쪽 한도는 넉넉히.
+BAR_BAND_MIN, BAR_BAND_MAX = 34, 48
+
+
+def bar_band_height(frame: np.ndarray, row: int, search: int = 12) -> int | None:
+    """frame(영역 + 위아래 여유)에서 row 근처 바의 채움 띠 높이(px). 채움이 너무 짧아(8px 미만) 못 재면 None.
+
+    자동 찾기 3단계와 같은 기준: 가장 긴 채도 가로 연속 행의 좌우 범위에서 채움 비율 ≥ 0.45인 행이 위아래로 이어진 수."""
+    if frame is None or frame.ndim != 3 or frame.size == 0:
+        return None
+    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    sat = (hsv[:, :, 1] > _SAT_MIN) & (hsv[:, :, 2] > _VAL_MIN)
+    best, start, end = _row_longest_runs(sat)
+    lo, hi = max(0, row - search), min(len(best), row + search + 1)
+    if lo >= hi:
+        return None
+    seed = lo + int(np.argmax(best[lo:hi]))
+    if best[seed] < 8:
+        return None
+    fill = sat[:, start[seed]:end[seed] + 1].mean(axis=1) >= _FILL_ROW
+    gaps = np.flatnonzero(~fill)
+    above, below = gaps[gaps < seed], gaps[gaps > seed]
+    top = int(above.max()) + 1 if above.size else 0
+    bottom = int(below.min()) if below.size else len(fill)
+    return bottom - top
 
 
 def has_wide_bar_row(frame: np.ndarray, frac: float = 0.70) -> bool:
