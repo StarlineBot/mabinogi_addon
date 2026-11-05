@@ -450,18 +450,32 @@ def test_boss_bar_overlay_also_stays_while_dragging_with_our_app_front(monkeypat
 
 
 # ---- 알림음(제작자 시험 11-05: 상태지원 음성이 나던 것) ----------------------------------------------------
-def test_sound_is_dedicated_short_effect_and_off_by_default():
-    import wave
+def test_sound_slot_waits_for_file_and_is_off_by_default(creator, monkeypatch, tmp_path):
+    """효과음은 아직 없음(11-05 사용자: 넣을 자리만) — 파일이 없으면 체크 칸 숨김·무음, 넣으면 그 파일로."""
     from mabinogi_addon import config
-    from mabinogi_addon.ui import cooldown_section
-    from mabinogi_addon.ui.notifier import SOUND_DIR
-    assert cooldown_section.SOUND_FILE != "상태지원 알림.mp3"
-    path = SOUND_DIR / cooldown_section.SOUND_FILE
-    with wave.open(str(path)) as w:
-        assert w.getnframes() / w.getframerate() < 0.6  # 짧은 효과음
+    from mabinogi_addon.ui import cooldown_section, notifier
+    from mabinogi_addon.ui.cooldown_section import CooldownSection
+    assert cooldown_section.SOUND_FILE == "쿨타임 끝.mp3"
+    assert not cooldown_section.sound_available()
     assert config.load_cooldown()["sound"] is False  # 기본 꺼짐
-    config.save_cooldown({"sound": True})
-    assert config.load_cooldown()["sound"] is True
+    played = []
+    monkeypatch.setattr(notifier.SoundNotifier, "play", lambda self, key: played.append(self._sounds[key]) or True)
+    sec = CooldownSection(_Watcher())
+    try:
+        assert sec.sound_chk.isHidden()
+        sec._play()
+        assert played == []  # 파일이 없으면 다른 알림음으로 대신하지 않는다
+    finally:
+        sec.shutdown()
+    (tmp_path / "쿨타임 끝.mp3").write_bytes(b"x")
+    monkeypatch.setattr(notifier, "sound_path", lambda name: tmp_path / name)
+    sec = CooldownSection(_Watcher())
+    try:
+        assert not sec.sound_chk.isHidden()
+        sec._play()
+        assert played == [tmp_path / "쿨타임 끝.mp3"]
+    finally:
+        sec.shutdown()
 
 
 def test_cells_ending_together_sound_once_even_across_observations():

@@ -25,7 +25,14 @@ from .widgets import checkbox, hint_label, switch
 _log = logging.getLogger(__name__)
 OBSERVE_INTERVAL = 0.22   # 관측 4~5회/초(9.1-2)
 MAX_SLOTS = 8
-SOUND_FILE = "쿨타임 끝.wav"  # 쿨타임 전용 짧은 효과음(scripts/make_cooldown_sound.py로 합성) — 상태지원 음성 재사용을 바꿈(11-05)
+# 쿨타임 전용 효과음 자리(11-05: 상태지원 음성 재사용을 뺌). 파일은 나중에 assets/sounds/에 이 이름으로 넣으면 바로 쓰인다.
+# 파일이 없으면 알림음 체크 칸을 숨기고 소리를 내지 않는다(다른 알림음으로 대신하지 않음).
+SOUND_FILE = "쿨타임 끝.mp3"
+
+
+def sound_available() -> bool:
+    from .notifier import sound_path
+    return sound_path(SOUND_FILE).exists()
 
 
 def observe(frame, origin, slots, last: dict, with_crops: bool):
@@ -89,6 +96,7 @@ class CooldownSection(QGroupBox):
         self.sound_chk.setChecked(self._cfg["sound"])
         self.sound_chk.toggled.connect(lambda on: self._save(sound=on))
         row.addWidget(self.sound_chk)
+        self.sound_chk.setVisible(sound_available())  # 효과음 파일을 넣기 전까지는 숨김
         row.addStretch(1)
         v.addLayout(row)
         self.list_box = QVBoxLayout()
@@ -370,6 +378,8 @@ class CooldownSection(QGroupBox):
             pass
 
     def _play(self) -> None:
+        if not sound_available():
+            return
         try:
             if self._notifier is None:
                 from .notifier import SoundNotifier, sound_path
