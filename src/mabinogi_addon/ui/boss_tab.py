@@ -557,6 +557,7 @@ class BossTab(QWidget):
         return out
 
     BAR_EXT_UP, BAR_EXT_DOWN = 45, 6
+    LOW_HP_SKIP_HEIGHT = 20  # 이 % 이하는 띠 높이 규칙을 쓰지 않는다
     BAR_PITCH = 39  # 바 한 칸 간격(펠롬 보스바 ↔ 어둠의 에르그, 해상도 무관 px) — 보호막 기믹 실화면 확인 전 추정값
 
     def _overlay_reading(self, full, up, h, out) -> dict:
@@ -572,7 +573,9 @@ class BossTab(QWidget):
         if not seen:
             return {"value": None, "boss": None, "seen": False, "raw": None, "rule": None}
         band = bar_band_height(full, up + h // 2)
-        if band is not None and not BAR_BAND_MIN <= band <= BAR_BAND_MAX:
+        # 저HP(≤ 20% 또는 저HP 단서)는 채움이 짧아 띠 높이가 낮게 재진다(7.70%에서 18px, 11-05 수집) → 높이 규칙을 건너뛴다
+        low_hp = (value is not None and value <= self.LOW_HP_SKIP_HEIGHT) or low_hp_bar_hint(frame)
+        if band is not None and not low_hp and not BAR_BAND_MIN <= band <= BAR_BAND_MAX:
             if value is not None:
                 rule = "height"
             value = None  # 얇은 일반 체력바(또는 바가 아닌 띠) — 보스 값으로 쓰지 않는다
@@ -860,7 +863,7 @@ class BossTab(QWidget):
         g.addWidget(hint_label(
             "'수집 모드'를 켜면 보스 HP바 영역이 바뀔 때마다 자동 저장돼요(보스별로).\n"
             "실제와 다른 %가 뜰 때(예: 48%인데 30% 알림)를 모아 보내주시면 오독 원인을 잡아요.\n"
-            "보스바 오버레이를 켜 두면 미등록 보스·한 칸 위까지 찍고, 못 읽음·급상승·위 칸 전환·높이 제외 순간을 이유와 함께 저장해요"
+            "보스바 오버레이를 켜 두면 미등록 보스·한 칸 위까지 찍고, 못 읽음·급상승·급하락·위 칸 전환·높이 제외 순간을 이유와 함께 저장해요"
             f"(한 번 실행에 {self.AUTO_LIMIT}장까지). 스냅샷 저장은 최근 약 3초 {self.RECENT_SHOTS}장을 한 번에 저장해요."
         ))
         row = QHBoxLayout()

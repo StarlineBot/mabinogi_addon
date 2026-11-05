@@ -31,6 +31,7 @@ _FIRST = 62.0  # 바 오른쪽 끝 → 최우측 정수자리 right edge (기준
 _PITCH = 11.0  # 정수 자리 간격(기준 해상도)
 _YBAND = (0.28, 0.82)  # 숫자 세로 밴드(바 테두리 제외)
 _MIN_PX = 8  # 칸에 이 미만이면 빈 칸(자리 없음)
+_DIGIT_JITTER = 0.2  # 둘째 자리부터 칸마다 따로 맞출 범위(자리 간격의 비율 — 기준 11px에서 ±2px)
 _SEARCH = 8  # 정렬 오프셋 탐색 범위(±, 기준 해상도 px)
 _ACCEPT = 0.45  # 최고 정렬의 최저 자리 점수가 이 이상이어야 채택
 _STRONG = 0.85  # 자리수를 '확신'으로 셀 최저 자리 점수(이 이상이면 그 자리수를 우선 비교)
@@ -85,26 +86,40 @@ def _classify(
 
 def _read_at(
     band: np.ndarray, w: int, first: float, pitch: float,
-    templates: dict[str, list[np.ndarray]],
+    templates: dict[str, list[np.ndarray]], jitter: int = 0,
 ) -> tuple[int | None, float, int]:
-    """한 정렬에서 오른쪽 끝 기준 고정 칸으로 최대 3자리 읽기. (값, 최저 자리 점수, 자리수)."""
+    """한 정렬에서 오른쪽 끝 기준 고정 칸으로 최대 3자리 읽기. (값, 최저 자리 점수, 자리수).
+    jitter > 0이면 둘째 자리부터 칸마다 ±jitter px 따로 맞춘다(_scan의 두 번째 탐색에서만)."""
     digits: list[str] = []
     scores: list[float] = []
     for k in range(1, 4):
-        right = round(w - first - pitch * (k - 1))
-        left = round(right - pitch)
-        if left < 0:
+        right0 = round(w - first - pitch * (k - 1))
+        best: tuple[str | None, float] | None = None
+        # 둘째 자리부터는 칸마다 ±jitter px 따로 맞춘다 — 글자 폭이 달라 자리 간격이 고정이 아니다
+        # ('46.96 %'에서 6이 맞는 위치와 4가 맞는 위치가 2px 어긋나 두 자리가 동시에 확신을 못 얻고 '4'만 읽혔다, 11-05 수집).
+        base_left = round(right0 - pitch)
+        if base_left < 0:
             break
-        cell = band[:, max(left, 0):right]
-        if cell.size == 0 or int((cell > 127).sum()) < _MIN_PX:
+        base = band[:, base_left:right0]
+        if base.size == 0 or int((base > 127).sum()) < _MIN_PX:
+            break  # 기준 위치가 빈 칸 → 정수부 끝(옆으로 옮겨 이웃 글자를 줍지 않는다)
+        for dx in ((0,) if k == 1 else range(-jitter, jitter + 1)):
+            right = right0 + dx
+            left = round(right - pitch)
+            if left < 0 or right > band.shape[1]:
+                continue
+            cell = band[:, left:right]
+            if cell.size == 0 or int((cell > 127).sum()) < _MIN_PX:
+                continue
+            ys = np.where((cell > 127).any(axis=1))[0]
+            xs = np.where((cell > 127).any(axis=0))[0]
+            d, sc = _classify(cell[ys.min():ys.max() + 1, xs.min():xs.max() + 1], templates)
+            if d is not None and (best is None or sc > best[1]):
+                best = (d, sc)
+        if best is None:
             break  # 빈 칸 → 정수부 끝
-        ys = np.where((cell > 127).any(axis=1))[0]
-        xs = np.where((cell > 127).any(axis=0))[0]
-        d, sc = _classify(cell[ys.min():ys.max() + 1, xs.min():xs.max() + 1], templates)
-        if d is None:
-            return None, -2.0, 0
-        digits.append(d)
-        scores.append(sc)
+        digits.append(best[0])
+        scores.append(best[1])
     if not digits:
         return None, -2.0, 0
     try:
@@ -117,6 +132,19 @@ def _read_at(
 
 
 def _scan(band, w, scale, pitch, templates, shifts, strong: float = _STRONG):
+    """두 번 탐색: 먼저 고정 간격으로, 그 결과가 '확신 2자리 이상'이 아니면 자리마다 조금씩 따로 맞춰 한 번 더.
+    ('46.96 %'에서 6과 4가 맞는 위치가 2px 어긋나 '4'만 확신되던 문제, 11-05 수집. 흔한 프레임은 첫 탐색에서 끝나 비용 그대로.)"""
+    shifts = tuple(shifts)
+    val, score, shift, key = _scan_once(band, w, scale, pitch, templates, shifts, strong, 0)
+    if key[0] < 2:
+        jitter = max(1, round(pitch * _DIGIT_JITTER))
+        val2, score2, shift2, key2 = _scan_once(band, w, scale, pitch, templates, shifts, strong, jitter)
+        if key2 > key:
+            return val2, score2, shift2
+    return val, score, shift
+
+
+def _scan_once(band, w, scale, pitch, templates, shifts, strong, jitter):
     """주어진 오프셋 후보들에서 최적 판독을 찾는다. (val, score, shift).
 
     '확신되는 자리수'가 많은 판독을 우선하고, 동률이면 점수로 고른다. 정렬 창이 왼쪽으로
@@ -131,14 +159,14 @@ def _scan(band, w, scale, pitch, templates, shifts, strong: float = _STRONG):
     best_val: int | None = None
     best_shift: int | None = None
     for shift in shifts:
-        val, score, ndig = _read_at(band, w, _FIRST * scale + shift, pitch, templates)
+        val, score, ndig = _read_at(band, w, _FIRST * scale + shift, pitch, templates, jitter)
         if val is None:
             continue
         strong_digits = ndig if score >= strong else 0
         key = (strong_digits, score)
         if key > best_key:
             best_key, best_val, best_shift = key, val, shift
-    return best_val, best_key[1], best_shift
+    return best_val, best_key[1], best_shift, best_key
 
 
 # 저HP(빨간 바) 보조 경로. 빈 바의 '어두운 회색' 배경은 채도가 낮아 기본 마스크(채도<110)가

@@ -32,12 +32,25 @@ GLASS = [(f"스크린샷 2026-10-09 {n}.png", v) for n, v in
 
 
 # ---- 값 규칙(명세 3절-2·못 읽음) ----------------------------------------------------------------
-def test_rising_spike_needs_two_equal_reads_falling_is_immediate():
+def test_rising_spike_needs_two_equal_reads_and_big_drop_needs_a_second_read():
     v = BossBarValue()
     assert v.update(87, "pellom", 0).value == 87
-    assert v.update(20, "pellom", 0.3).value == 20   # 내려가는 값은 바로
-    assert v.update(87, "pellom", 0.6).value == 20   # 5%p 넘게 오름 한 번 → 무시
-    assert v.update(87, "pellom", 0.9).value == 87   # 같은 값 2번 연속 → 반영
+    assert v.update(20, "pellom", 0.3).value == 87   # 10%p 넘는 하락 한 번 → 보류(오독일 수 있음)
+    assert v.rule == "drop"
+    assert v.update(87, "pellom", 0.6).value == 87   # 원래 값으로 돌아옴 → 하락 무시
+    assert v.update(20, "pellom", 0.9).value == 87
+    assert v.update(19, "pellom", 1.2).value == 19   # 두 번째로 크게 낮은 값(비슷함) → 반영
+    assert v.update(30, "pellom", 1.5).value == 19   # 5%p 넘게 오름 한 번 → 무시
+    assert v.update(30, "pellom", 1.8).value == 30   # 같은 값 2번 연속 → 반영
+    assert v.update(25, "pellom", 2.1).value == 25   # 작은 하락은 바로
+
+
+def test_misread_46_as_4_does_not_stick():
+    """11-05 수집: 47 → 4(46.96 오독) → 45에서 4가 바로 반영돼 45가 '급상승'으로 막혔다."""
+    v = BossBarValue()
+    v.update(47, "pellom", 0)
+    assert v.update(4, "pellom", 0.3).value == 47
+    assert v.update(45, "pellom", 0.6).value == 45
 
 
 def test_single_misread_up_is_ignored_and_small_rise_passes():
@@ -143,6 +156,7 @@ def test_registered_pellom_five_screens(tab):
     for name, box, hp in PELLOM:
         tab.show_screen(name, box)
         tab._tick()
+        tab._tick()  # 10%p 넘는 하락은 한 번 더 읽혀야 반영(장면마다 실제로는 여러 틱)
         s = _shown(tab)
         assert (s.value, s.boss, s.stale) == (hp, "pellom", False), name
     ov = tab.bar_section._overlay
@@ -360,3 +374,81 @@ def test_shots_are_written_off_the_ui_thread(collecting, tmp_path, monkeypatch):
     tab._queue_shots([{"frame": np.zeros((10, 10, 3), np.uint8), "boss": None, "raw": None}], auto=False)
     tab._shot_writer.shutdown(wait=True)
     assert threads and threads[0] is not threading.main_thread()
+
+
+
+# ---- 수집 묶음 재생(11-05 제작자 수집: 궁극의 글라스 기브넨 100→7, 펠롬 100→25) --------------------------------
+ZIP = "eotgallin_poinche_hp098_058.zip"
+# 미등록 보스(궁극의 글라스 기브넨) 실제 정수 %(화면 확인) — 그 전 000~016은 바가 없거나 가려짐
+GLASS_TRUE = dict(zip(range(17, 47), (100, 99, 98, 96, 95, 94, 93, 91, 85, 84, 80, 77, 76, 76, 75, 59, 42, 21, 26, 25, 24,
+                                      23, 21, 20, 19, 14, 14, 9, 7, 7)))
+
+
+def _replay_frames(tmp_path):
+    import re
+    import zipfile
+    with zipfile.ZipFile(f"tests/data/{ZIP}") as z:
+        names = [n for n in z.namelist() if re.match(r"(unknown|pellom)_hp.*_(\d{3})\.png$", n)]
+        z.extractall(tmp_path, names)
+    names.sort(key=lambda n: int(n[-7:-4]))
+    return [(n, image_io.imread(str(tmp_path / n), cv2.IMREAD_COLOR)) for n in names]
+
+
+def _truth(name, prev):
+    import re
+    idx = int(name[-7:-4])
+    if name.startswith("unknown"):
+        return GLASS_TRUE.get(idx)
+    if idx == 107:
+        return 46  # 46.96 % — 예전 판독 4
+    m = re.match(r"pellom_hp(\d{3})_", name)
+    return int(m.group(1)) if m else prev  # 못 읽는 순간(가려짐) = 직전 값 흐리게
+
+
+def test_collected_frames_replay_shows_true_value(tab, tmp_path, monkeypatch):
+    frames = _replay_frames(tmp_path)
+    assert len(frames) == 139 and all(f.shape[:2] == (88, 521) for _n, f in frames)
+    state = {}
+    tab._region = {"x": 0, "y": 45, "w": 521, "h": 37}
+    monkeypatch.setattr(tab, "_grab_region", lambda: dict(tab._region))
+    monkeypatch.setattr(tab, "_grab_rect", lambda x, y, w, h: state["img"][y:y + h, x:x + w].copy())
+    wrong, expected = [], None
+    for name, img in frames:
+        state["img"] = img
+        for _ in range(3):  # 저장 간격이 1초 이상 = 실제로는 여러 틱. 바가 없던 뒤 존재 확인은 3틱에 한 번
+            tab._tick()
+        expected = _truth(name, expected)
+        shown = _shown(tab)
+        if shown.value != expected:
+            wrong.append((name, shown.value, expected))
+    assert wrong == []
+
+
+@pytest.mark.parametrize("name,top,expected", [
+    ("pellom_hp004_107.png", 45, 46),             # 펠롬 46.96 % (예전 4)
+    ("eotgallin_poinche_hp004_002.png", 1, 46),   # 포인세 46.78 % — 37px 높이(지금 판독 영역)
+    ("eotgallin_poinche_hp004_109.png", 1, 46),   # 포인세 46.86 %
+    ("pellom_hp047_106.png", 45, 47), ("pellom_hp045_108.png", 45, 45),
+    ("eotgallin_poinche_hp047_001.png", 1, 47), ("eotgallin_poinche_hp045_003.png", 1, 45),
+    ("eotgallin_poinche_hp004_004.png", 1, 44), ("eotgallin_poinche_hp004_000.png", 1, 48),
+])
+def test_read_percent_46_is_not_4(tmp_path, name, top, expected):
+    import zipfile
+    from mabinogi_addon.detect.boss_hp_reader import read_percent
+    with zipfile.ZipFile(f"tests/data/{ZIP}") as z:
+        z.extract(name, tmp_path)
+    frame = image_io.imread(str(tmp_path / name), cv2.IMREAD_COLOR)[top:top + 37]
+    assert read_percent(frame[:, int(frame.shape[1] * 0.58):]) == expected
+
+
+def test_low_hp_height_rule_skipped(tab, tmp_path, monkeypatch):
+    """7.70 %에서 채움이 짧아 띠 높이 18px — 높이 규칙으로 버리지 않는다(9%에 멈추던 문제)."""
+    import zipfile
+    name = "unknown_hpxxx_045.png"
+    with zipfile.ZipFile(f"tests/data/{ZIP}") as z:
+        z.extract(name, tmp_path)
+    img = image_io.imread(str(tmp_path / name), cv2.IMREAD_COLOR)
+    assert bar_band_height(img, 45 + 18) < BAR_BAND_MIN
+    out = {"boss_id": None, "raw_hp": None, "bar_pct": 7, "bar": True, "frame": img[45:82]}
+    reading = tab._overlay_reading(img, 45, 37, out)
+    assert reading["value"] == 7 and reading["rule"] is None
