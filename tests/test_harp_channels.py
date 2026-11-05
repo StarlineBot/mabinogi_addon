@@ -645,3 +645,42 @@ def test_hidden_tab_no_card_updates_and_one_summary_and_save_per_round(monkeypat
         tabs.close()
     finally:
         tab.shutdown()
+
+
+def test_saved_cards_hide_just_now_until_this_run_measures_them():
+    """저장값을 보여 주는 동안 카드에 '방금 x.x' 작은 글씨 없음(추천 줄과 같게). 이번 실행 값이 생긴 카드만 '방금'."""
+    from mabinogi_addon import config
+    chans = [hl.Channel(n, "127.0.0.1", n) for n in (1, 2, 3)]
+    config.save_channel_cache({"fingerprint": hl.fingerprint(chans), "measuredAt": "2026-11-04T21:40:00",
+                               "recent": {"1": [2.0, 2.0, 2.0], "2": [3.0, 3.0, 3.0], "3": [4.0, 4.0, 4.0]}})
+    gate = Gate({2: hl.Result(hl.OK, 2.5), 3: hl.Result(hl.OK, 3.5)})
+    tab, _ = _tab_at(datetime(2026, 11, 5, 10, 0), gate, chans)
+    tabs = QTabWidget()
+    tabs.addTab(QWidget(), "다른 탭")
+    tabs.addTab(tab, "서버별 채널 상태")
+    tabs.resize(800, 600)
+    try:
+        tabs.show()
+        tabs.setCurrentWidget(tab)  # 화면을 열자마자 저장값 표시 + 바로 1회 측정
+        QApplication.instance().processEvents()
+        assert wait_until(lambda: tab._round is None and tab._last_time is not None)
+        assert tab.saved is not None and tab._view()[1]  # 아직 지난 결과를 보여 주는 중(새 값 1회)
+        for n in (1, 2, 3):
+            assert "방금" in tab.cards[n].sub.text()  # 1회 측정으로 세 채널 모두 이번 실행 값이 생김
+        tab2, _ = _tab_at(datetime(2026, 11, 5, 10, 0), Gate(hold=True), chans)
+        holder = QTabWidget()
+        holder.addTab(tab2, "x")
+        holder.show()
+        QApplication.instance().processEvents()
+        tab2.cancel()
+        tab2.history.record(1, hl.Result(hl.OK, 2.1))  # 이번 실행 값은 1채널만
+        tab2._refresh_view()
+        assert "방금 2.1" in tab2.cards[1].sub.text()
+        for n in (2, 3):  # 저장값 카드: 큰 숫자만, '방금'·성공/시도 없음
+            assert "방금" not in tab2.cards[n].sub.text() and "/" not in tab2.cards[n].sub.text()
+            assert "ms" in tab2.cards[n].value.text()
+        tab2.shutdown()
+        holder.close()
+    finally:
+        tab.shutdown()
+        tabs.close()

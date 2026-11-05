@@ -93,8 +93,9 @@ class ChannelCard(QFrame):
         self.badge.setVisible(on)
         self._style()
 
-    def show_state(self, state: str, stats: hl.ChannelStats | None) -> None:
-        """state: before(측정 전) | waiting(대기) | measuring(측정 중) | done(이 채널 결과 있음)"""
+    def show_state(self, state: str, stats: hl.ChannelStats | None, saved: bool = False) -> None:
+        """state: before(측정 전) | waiting(대기) | measuring(측정 중) | done(이 채널 결과 있음).
+        saved: 지난 실행 결과(저장값) — 추천 줄처럼 '방금 x.x'·성공/시도 작은 글씨 없이 큰 숫자만(11-05 사용자 결정)."""
         big = "font-size:22px; font-weight:bold;"
         muted = color("muted")
         last = stats.last if stats is not None else None
@@ -107,13 +108,13 @@ class ChannelCard(QFrame):
         elif stats.median is not None:
             # 큰 숫자 = 중앙값(추천·순위와 같은 값), 방금 값은 작게 — 한 번 튄 값이 크게 보이지 않게(0.40.2)
             self.value.setText(f"<span style='{big}'>{_ms(stats.median)}</span> <span style='color:{muted}'>ms</span>")
-            self.sub.setText(f"방금 {just_now(last)} · {stats.successes}/{stats.attempts}")
+            self.sub.setText("" if saved else f"방금 {just_now(last)} · {stats.successes}/{stats.attempts}")
         else:
             word, tone = _failure(last)
             self.value.setText(f"<span style='font-size:15px; font-weight:bold; color:{color(tone)}'>{word}</span>")
             self.sub.setText(f"성공 {stats.successes}/{stats.attempts}")
         if state == "measuring" and last is not None:
-            self.sub.setText(self.sub.text() + " · 측정 중")
+            self.sub.setText(f"{self.sub.text()} · 측정 중" if self.sub.text() else "측정 중")
 
 
 def _failure(result: hl.Result) -> tuple[str, str]:
@@ -493,9 +494,14 @@ class HarpChannelTab(QWidget):
         self._dirty = hidden  # 8절 4항: 숨은 탭은 채널 카드를 그리지 않고 보일 때 한 번에(showEvent) — 추천 줄만 갱신
         for number, card in ({} if hidden else self.cards).items():
             stats = view.stats[number]
-            if when and self.history.stats[number].last is None:
-                state = "measuring" if number in self._measuring else "done"  # 저장값 그대로 보여 주며 새로 재는 중
-            elif self._round is not None:
+            current = self.history.stats[number]
+            if when and current.last is None:  # 저장값 그대로(방금 값 없이) 보여 주며 새로 재는 중
+                card.show_state("measuring" if number in self._measuring else "done", stats, saved=True)
+                card.set_fastest(number in fastest)
+                continue
+            if when:  # 이번 실행 값이 생긴 카드만 '방금' 표시
+                stats = current
+            if self._round is not None:
                 state = "measuring" if number in self._measuring else ("done" if stats.last is not None else "waiting")
             else:
                 state = "done" if stats.last is not None else "before"
