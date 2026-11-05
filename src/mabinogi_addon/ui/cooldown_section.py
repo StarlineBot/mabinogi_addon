@@ -20,6 +20,10 @@ from PySide6.QtWidgets import (QComboBox, QGroupBox, QHBoxLayout, QLabel, QPushB
 from .. import config
 from ..detect import cooldown as cd
 from ..tracker.cooldown_row import HIDDEN, CooldownRow
+
+PAGE_DIFF = "page"  # 페이지 숫자 모양이 저장한 것과 다름(가려짐과 같이 줄에서 빼되, 목록엔 따로 알림)
+PAGE_WARN_SECONDS = 3.0  # 이만큼 계속 다르면 목록에 '다시 등록해 주세요'
+STATE_TEXT = {cd.COOLING: "사용 중", cd.READY: "사용 가능", HIDDEN: "가려짐", PAGE_DIFF: "가려짐(페이지 다름)"}
 from .widgets import checkbox, hint_label, switch
 
 _log = logging.getLogger(__name__)
@@ -59,12 +63,14 @@ def save_icon(sid: str, cell) -> bool:
         return False
 
 
-def observe(frame, origin, slots, last: dict, with_crops: bool, need_icon=frozenset()):
+def observe(frame, origin, slots, last: dict, with_crops: bool, need_icon=frozenset(), recheck=frozenset()):
     """작업 스레드: 공유 캡처 한 장(물리 사각형 origin에서 시작)에서 칸마다 상태. 바뀐 칸만 돌려준다(없으면 None).
     last는 이 함수만 쓰는 이전 상태(작업 스레드 안에서만 바뀐다).
-    need_icon: 목록 아이콘을 아직 '사용 가능' 그림으로 저장하지 않은 칸 — 사용 가능으로 보이면 여기서(작업 스레드) 저장하고 icons에 알린다."""
+    need_icon: 목록 아이콘을 아직 '사용 가능' 그림으로 저장하지 않은 칸 — 사용 가능으로 보이면 여기서(작업 스레드) 저장하고 icons에 알린다.
+    recheck: 쿨 중에 등록한 칸 — 처음 '사용 가능'으로 보일 때 그 자리 페이지 모양을 다시 저장(pages에 알림)한 뒤 비교한다
+    (등록 시점과 무관하게, 11-06 제작자: 쿨 중 등록한 F3이 오버레이에 안 나옴)."""
     ox, oy = origin
-    changes, crops, icons = {}, {}, []
+    changes, crops, icons, pages = {}, {}, [], {}
     for slot in slots:
         x, y, w, h = slot["rect"]
         cx, cy = x - ox, y - oy
@@ -72,10 +78,20 @@ def observe(frame, origin, slots, last: dict, with_crops: bool, need_icon=frozen
         cell = frame[cy:cy + h, cx:cx + w] if inside else frame[:0, :0]
         state = cd.classify(cell) if cell.shape[:2] == (h, w) else cd.UNKNOWN
         page_rect = slot.get("page_rect")
-        if state != cd.UNKNOWN and page_rect and slot.get("page"):
+        signature = slot.get("page")
+        if slot["id"] in recheck and state == cd.READY and page_rect:
             px, py, pw, ph = page_rect
-            same = cd.same_page(frame, (px - ox, py - oy, pw, ph), slot["page"])
-            if same is not True:  # 페이지가 다르거나 상자를 못 읽음 → 가려짐(알림 없음)
+            fresh = cd.page_signature(frame, (px - ox, py - oy, pw, ph)) if px >= ox and py >= oy else None
+            if fresh is not None:
+                pages[slot["id"]] = fresh
+                signature = fresh
+                recheck = recheck - {slot["id"]}
+        if state != cd.UNKNOWN and page_rect and signature:
+            px, py, pw, ph = page_rect
+            same = cd.same_page(frame, (px - ox, py - oy, pw, ph), signature)
+            if same is False:  # 페이지 숫자가 다름 → 줄에서 빼고(알림 없음) 목록에 따로 알린다
+                state = PAGE_DIFF
+            elif same is None:  # 상자를 못 읽음(가려짐)
                 state = HIDDEN
         if state == cd.UNKNOWN:
             state = HIDDEN
@@ -87,9 +103,9 @@ def observe(frame, origin, slots, last: dict, with_crops: bool, need_icon=frozen
         if slot["id"] in need_icon and state == cd.READY and cell.size and save_icon(slot["id"], cell.copy()):
             icons.append(slot["id"])
             need_icon = need_icon - {slot["id"]}
-    if not changes and not crops and not icons:
+    if not changes and not crops and not icons and not pages:
         return None
-    return {"changes": changes, "crops": crops, "icons": icons}
+    return {"changes": changes, "crops": crops, "icons": icons, "pages": pages}
 
 
 class CooldownSection(QGroupBox):
@@ -202,6 +218,14 @@ class CooldownSection(QGroupBox):
             name = QLabel(slot["label"])
             name.setToolTip(tip)
             h.addWidget(name)
+            state = QLabel(self.state_text(slot["id"]))
+            if "다시 등록" in state.text():
+                from .palette import color
+                state.setStyleSheet(f"color:{color('danger')};")
+            else:
+                state.setStyleSheet("color:palette(mid);")
+            state.setObjectName("cooldownState")
+            h.addWidget(state)
             h.addStretch(1)
             remove = QPushButton("－ 삭제")
             remove.setStyleSheet(danger_style())
@@ -285,17 +309,53 @@ class CooldownSection(QGroupBox):
                 page_rect = [pr[0] + ox, pr[1] + oy, pr[2], pr[3]]
         used = {s["label"] for s in self.slots}
         label = next(f"스킬 {n}" for n in range(1, MAX_SLOTS * MAX_SETS + 2) if f"스킬 {n}" not in used)  # 전체에서 겹치지 않게
+        cooling = False
+        cell = frame[y:y + h, x:x + w] if frame is not None else None
+        if cell is not None and cell.shape[:2] == (h, w):
+            cooling = cd.classify(cell) == cd.COOLING
         slot = {"id": uuid.uuid4().hex[:8], "rect": rect, "page_rect": page_rect, "page": page, "label": label, "row": row,
-                "set": set_no, "icon_ok": False}
-        if frame is not None:  # 등록 스냅샷에서 칸을 잘라 목록 아이콘으로(쿨 중일 수 있어 처음 '사용 가능'일 때 한 번 더)
-            cell = frame[y:y + h, x:x + w]
-            if cell.shape[:2] == (h, w):
-                save_icon(slot["id"], cell.copy())
+                "set": set_no, "icon_ok": False,
+                "recheck": cooling}  # 쿨 중 등록 → 처음 '사용 가능'일 때 페이지 모양 다시 저장
+        if cell is not None and cell.shape[:2] == (h, w):  # 등록 스냅샷에서 칸을 잘라 목록 아이콘으로(처음 '사용 가능'일 때 한 번 더)
+            save_icon(slot["id"], cell.copy())
         self._save(slots=self.slots + [slot])
         self._last.clear()
         self._render_list()
-        self.status.setText(f"{label}을(를) 세트 {set_no}에 등록했어요." + ("" if page else " (페이지 숫자를 못 읽어 페이지 확인 없이 봐요)"))
+        self.status.setText(f"{label}을(를) 세트 {set_no}에 등록했어요." + ("" if page else " (페이지 숫자를 못 읽어 페이지 확인 없이 봐요)")
+                            + (" 사용 가능할 때 등록하면 더 정확해요." if cooling else ""))
+        _log.info("쿨타임 칸 등록: %s(세트 %d) 칸 %s 페이지 %s%s", label, set_no, rect, "있음" if page else "없음",
+                  " · 쿨 중 등록(처음 사용 가능일 때 페이지 다시 저장)" if cooling else "")
         return slot
+
+    # ---- 칸 상태(목록 표시·app.log) ----------------------------------------------------------
+    def _name_of(self, sid: str) -> str:
+        slot = next((s for s in self.slots if s["id"] == sid), None)
+        return f"{slot['label']}(세트 {slot.get('set', 1)})" if slot else sid
+
+    def _note_states(self, changes: dict) -> None:
+        """관측이 알린 칸 상태 변화 → 목록 상태 글자, 상태가 바뀔 때만 app.log 한 줄(가려짐을 조용히 넘기지 않게)."""
+        if not changes:
+            return
+        now = time.monotonic()
+        states = self.__dict__.setdefault("_states", {})
+        since = self.__dict__.setdefault("_page_since", {})
+        for sid, state in changes.items():
+            before = states.get(sid)
+            states[sid] = state
+            if state == PAGE_DIFF:
+                since.setdefault(sid, now)
+            else:
+                since.pop(sid, None)
+            if before != state:
+                _log.info("쿨타임 칸 상태: %s %s → %s", self._name_of(sid), STATE_TEXT.get(before, "처음"),
+                          STATE_TEXT.get(state, state))
+        self._render_list()
+
+    def state_text(self, sid: str) -> str:
+        state = self.__dict__.get("_states", {}).get(sid)
+        if state == PAGE_DIFF and time.monotonic() - self.__dict__.get("_page_since", {}).get(sid, time.monotonic()) >= PAGE_WARN_SECONDS:
+            return "가려짐(페이지 다름) — 다시 등록해 주세요"
+        return STATE_TEXT.get(state, "")
 
     def _remove(self, sid: str) -> None:
         self._save(slots=[s for s in self.slots if s["id"] != sid])
@@ -404,12 +464,21 @@ class CooldownSection(QGroupBox):
         from ..system import dwm_thumbnail
         crops = not dwm_thumbnail.available()  # 썸네일을 못 쓸 때만 그림을 넘긴다
         need_icon = frozenset(s["id"] for s in slots if not s.get("icon_ok"))
+        recheck = frozenset(s["id"] for s in slots if s.get("recheck"))
         capture.set_request("cooldown", (x0, y0, x1 - x0, y1 - y0), OBSERVE_INTERVAL,
-                            lambda frame: observe(frame, (x0, y0), slots, last, crops, need_icon))
+                            lambda frame: observe(frame, (x0, y0), slots, last, crops, need_icon, recheck))
         if self.row.expire(time.monotonic()):
             self._show_row()
         elif self._needs_refresh():
             self._show_row()
+        since = self.__dict__.get("_page_since", {})
+        flagged = self.__dict__.setdefault("_page_flagged", set())
+        due = {sid for sid, t0 in since.items() if time.monotonic() - t0 >= PAGE_WARN_SECONDS}
+        if due != flagged & set(since):  # 페이지 다름이 3초 넘게 이어진 칸 → 목록에 '다시 등록해 주세요'(한 번만 다시 그림)
+            flagged.clear()
+            flagged.update(due)
+            if due:
+                self._render_list()
 
     def _on_delivered(self, name, payload) -> None:
         if name != "cooldown" or not self._running():
@@ -418,6 +487,12 @@ class CooldownSection(QGroupBox):
             done = set(payload["icons"])
             self._save(slots=[{**s, "icon_ok": True} if s["id"] in done else s for s in self.slots])
             self._render_list()
+        if payload.get("pages"):  # 쿨 중 등록한 칸: 처음 사용 가능일 때 다시 읽은 페이지 모양으로 바꿔 저장
+            pages = payload["pages"]
+            self._save(slots=[{**s, "page": pages[s["id"]], "recheck": False} if s["id"] in pages else s for s in self.slots])
+            for sid in pages:
+                _log.info("쿨타임 칸 페이지 모양 다시 저장: %s(처음 사용 가능으로 보임)", self._name_of(sid))
+        self._note_states(payload.get("changes") or {})
         before = set(self.row.until)
         sound = self.row.update(payload["changes"], time.monotonic())
         pixmaps = None

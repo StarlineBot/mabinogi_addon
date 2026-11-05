@@ -1699,7 +1699,9 @@ def load_cooldown(path: Path = LOCAL_CONFIG_PATH) -> dict:
                       # 세트(사용자 11-05, 최대 4) — 예전 설정의 칸은 모두 1세트
                       "set": set_no if type(set_no) is int and 1 <= set_no <= _COOLDOWN_MAX_SETS else 1,
                       # 목록 아이콘을 '사용 가능' 상태에서 다시 저장했는지(등록 순간은 쿨 중일 수 있음, #195)
-                      "icon_ok": item.get("icon_ok") is True})
+                      "icon_ok": item.get("icon_ok") is True,
+                      # 쿨 중에 등록해 처음 '사용 가능'일 때 페이지 모양을 다시 저장할 칸(11-06)
+                      "recheck": item.get("recheck") is True})
 
     def point(value):
         return {"x": int(value["x"]), "y": int(value["y"])} if isinstance(value, dict) and all(type(value.get(k)) is int for k in ("x", "y")) else None

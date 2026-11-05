@@ -93,7 +93,8 @@ ROW_Y = (0, 49)
 
 
 def page_rect(frame: np.ndarray, source_box, row: int) -> tuple[int, int, int, int] | None:
-    """그 줄의 페이지 숫자 상자(프레임 좌표). 어두운 상자 + 흰 글자가 있는 후보 위치. 없으면 None."""
+    """그 줄의 페이지 숫자 상자(프레임 좌표). 어두운 상자 + 흰 글자가 있는 후보 위치. 없으면 None.
+    한 줄에 선택기는 하나(그 줄 전체 페이지) — 배치에 따라 블록 사이(540) 또는 오른쪽 끝(1160)에 있다(tests/data 실측: 둘이 함께 보이는 화면 없음)."""
     x, y, w, _h = source_box
     s = w / 1168.0
     bx, by, bw, bh = PAGE_BOX

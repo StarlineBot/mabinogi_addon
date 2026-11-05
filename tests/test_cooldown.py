@@ -169,8 +169,9 @@ def test_observe_reports_only_changes_and_hides_on_other_page():
     out = observe(frame, (0, 0), slots, last, with_crops=False)
     assert out["changes"] == {"cool": COOLING, "ready": READY}
     assert observe(frame, (0, 0), slots, last, with_crops=False) is None  # 바뀐 칸만
-    slots[0]["page"] = slots[1]["page"]  # 다른 줄 페이지 모양 → 페이지 다름 = 가려짐
-    assert observe(frame, (0, 0), slots, last, with_crops=False)["changes"] == {"cool": HIDDEN}
+    slots[0]["page"] = slots[1]["page"]  # 다른 줄 페이지 모양 → 페이지 다름(줄에서 빼되 목록엔 따로 알림, 11-06)
+    from mabinogi_addon.ui.cooldown_section import PAGE_DIFF
+    assert observe(frame, (0, 0), slots, last, with_crops=False)["changes"] == {"cool": PAGE_DIFF}
 
 
 def test_observe_with_origin_offset_and_crops():
@@ -718,3 +719,72 @@ def test_highlight_stays_three_seconds_and_reuse_cancels():
     row.update({"a": READY}, 30.0)
     row.update({"a": COOLING}, 31.0)  # 강조 중 다시 씀 → 바로 사용 중
     assert row.row == ["a"] and "a" not in row.until
+
+
+
+# ---- 등록 시점과 무관하게(제작자 11-06: 쿨 중 등록한 F3이 오버레이에 안 나옴) ----------------------------------
+def test_one_page_selector_per_row_middle_or_right_end():
+    """한 줄에 선택기는 하나 — 배치에 따라 블록 사이(540) 또는 오른쪽 끝(1160)."""
+    frame, box, _ = _screen("스크린샷 2026-11-06 013726.png")
+    assert cd.page_rect(frame, box, 0)[0] == round(box[0] + 1160 + 34)
+    frame2, box2, _ = _screen("image01.png")
+    assert cd.page_rect(frame2, box2, 0)[0] == round(box2[0] + 540 + 34)
+
+
+def test_registered_while_cooling_rechecks_page_and_shows_cooling(creator, monkeypatch):
+    """쿨 중 스냅샷으로 등록 → 안내 문구 → 사용 가능 프레임에서 페이지 모양 다시 저장 → 다음 쿨이 오버레이에 나온다."""
+    import numpy as np
+    from mabinogi_addon import config
+    from mabinogi_addon.ui import cooldown_section as cs
+    from mabinogi_addon.ui import skillbar_capture
+    cool, box, cells = _screen("스크린샷 2026-11-06 013726.png")
+    target = cells[(1, 0, 0, 2)]  # F3 '31'(사용 중)
+    sec = cs.CooldownSection(_FrontWatcher(game=True, own=False))
+    try:
+        slot = sec.register(target, cool, (0, 0))
+        assert slot["recheck"] is True
+        assert "사용 가능할 때 등록하면 더 정확해요." in sec.status.text()
+        # 등록 때 페이지 모양이 어긋나게 저장된 경우를 흉내(원인 미확정 — 저장값이 실제와 다름)
+        wrong = cs.cd.page_signature(cool, tuple(cs.cd.page_rect(cool, box, 1)))  # 다른 줄 페이지 모양
+        sec._save(slots=[{**slot, "page": wrong}])
+        ready = cool.copy()
+        x, y, w, h = slot["rect"]
+        rx, ry, _, _ = cells[(1, 0, 1, 0)].rect  # 사용 가능 칸 그림을 그 자리에(사용 가능 프레임)
+        ready[y:y + h, x:x + w] = cool[ry:ry + h, rx:rx + w]
+        frames = {"img": ready}
+        monkeypatch.setattr(skillbar_capture.SkillbarCapture, "_grab",
+                            lambda self, X, Y, W, H: frames["img"][Y:Y + H, X:X + W].copy())
+        sec.enable.setChecked(True)
+        sec._tick()  # 사용 가능 프레임 관측 → 페이지 모양 다시 저장
+        saved = config.load_cooldown()["slots"][0]
+        assert saved["recheck"] is False and saved["page"] != wrong
+        frames["img"] = cool  # 다시 쓰면(쿨 중)
+        sec._tick()
+        assert sec.row.row == [slot["id"]] and sec._overlay is not None and sec._overlay.items() == [(slot["id"], False)]
+        assert sec.state_text(slot["id"]) == "사용 중"
+    finally:
+        sec.shutdown()
+
+
+def test_persistent_page_mismatch_is_listed_not_silent(creator, caplog):
+    import logging
+    from mabinogi_addon import config
+    from mabinogi_addon.ui import cooldown_section as cs
+    config.save_cooldown({"slots": [_set_slot("a", 0, 1)]})
+    sec = cs.CooldownSection(_Watcher())
+    caplog.set_level(logging.INFO, logger="mabinogi_addon.ui.cooldown_section")
+    try:
+        sec._note_states({"a": cs.PAGE_DIFF})
+        assert sec.state_text("a") == "가려짐(페이지 다름)"
+        sec._page_since["a"] -= cs.PAGE_WARN_SECONDS  # 3초 넘게 계속 다름
+        assert sec.state_text("a") == "가려짐(페이지 다름) — 다시 등록해 주세요"
+        sec._render_list()
+        from PySide6.QtWidgets import QLabel
+        texts = [lb.text() for lb in sec.findChildren(QLabel, "cooldownState")]
+        assert "가려짐(페이지 다름) — 다시 등록해 주세요" in texts
+        sec._note_states({"a": cs.cd.COOLING})
+        assert sec.state_text("a") == "사용 중"
+        lines = [r.getMessage() for r in caplog.records if "쿨타임 칸 상태" in r.getMessage()]
+        assert len(lines) == 2 and "가려짐(페이지 다름)" in lines[0] and "사용 중" in lines[1]  # 바뀔 때만 한 줄
+    finally:
+        sec.shutdown()
