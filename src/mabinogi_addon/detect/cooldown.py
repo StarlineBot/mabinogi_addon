@@ -115,7 +115,15 @@ def _box_mask(frame, rect):
     white = gray > 150
     if dark < 0.35 or white.sum() < 6:  # 숫자 상자가 아님(바탕·아이콘)
         return None
-    return white
+    return _drop_corners(white)
+
+
+def _drop_corners(mask: np.ndarray) -> np.ndarray:
+    """상자 네 모서리 픽셀은 뒤 배경 밝기에 따라 흰색이 되었다 안 되었다 한다 — '1'(글자 9px)은 모서리 4개 차이로
+    겹침 9/13 = 0.69 < 0.7이 돼 '페이지 다름'으로 숨겨졌다(던전 등, 758a01e). 비교에서 늘 뺀다."""
+    mask = mask.copy()
+    mask[0, 0] = mask[0, -1] = mask[-1, 0] = mask[-1, -1] = False
+    return mask
 
 
 def page_signature(frame: np.ndarray, rect) -> str | None:
@@ -147,6 +155,7 @@ def same_page(frame: np.ndarray, rect, signature: str | None) -> bool | None:
     mask = _box_mask(frame, rect)
     if want is None or mask is None:
         return None
+    want = _drop_corners(want)  # 예전에 저장한 서명(모서리 포함)도 다시 등록 없이 맞게
     if mask.shape != want.shape:
         mask = cv2.resize(mask.astype(np.uint8), (want.shape[1], want.shape[0]), interpolation=cv2.INTER_NEAREST).astype(bool)
     best = 0.0

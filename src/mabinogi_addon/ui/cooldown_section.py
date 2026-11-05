@@ -22,7 +22,7 @@ from ..detect import cooldown as cd
 from ..tracker.cooldown_row import HIDDEN, CooldownRow
 
 PAGE_DIFF = "page"  # 페이지 숫자 모양이 저장한 것과 다름(가려짐과 같이 줄에서 빼되, 목록엔 따로 알림)
-PAGE_WARN_SECONDS = 3.0  # 이만큼 계속 다르면 목록에 '다시 등록해 주세요'
+PAGE_WARN_SECONDS = 3.0  # 이만큼 계속 다르면 목록에 '다른 페이지라 숨김'(실제로 페이지를 넘긴 정상 상황에도 뜨므로 재등록 안내는 하지 않음)
 STATE_TEXT = {cd.COOLING: "사용 중", cd.READY: "사용 가능", HIDDEN: "가려짐", PAGE_DIFF: "가려짐(페이지 다름)"}
 from .widgets import checkbox, hint_label, switch
 
@@ -219,11 +219,7 @@ class CooldownSection(QGroupBox):
             name.setToolTip(tip)
             h.addWidget(name)
             state = QLabel(self.state_text(slot["id"]))
-            if "다시 등록" in state.text():
-                from .palette import color
-                state.setStyleSheet(f"color:{color('danger')};")
-            else:
-                state.setStyleSheet("color:palette(mid);")
+            state.setStyleSheet("color:palette(mid);")  # 페이지를 넘긴 정상 상황에도 뜨므로 경고색은 쓰지 않음
             state.setObjectName("cooldownState")
             h.addWidget(state)
             h.addStretch(1)
@@ -354,7 +350,7 @@ class CooldownSection(QGroupBox):
     def state_text(self, sid: str) -> str:
         state = self.__dict__.get("_states", {}).get(sid)
         if state == PAGE_DIFF and time.monotonic() - self.__dict__.get("_page_since", {}).get(sid, time.monotonic()) >= PAGE_WARN_SECONDS:
-            return "가려짐(페이지 다름) — 다시 등록해 주세요"
+            return "가려짐(페이지 다름) — 다른 페이지라 숨김"
         return STATE_TEXT.get(state, "")
 
     def _remove(self, sid: str) -> None:
@@ -474,7 +470,7 @@ class CooldownSection(QGroupBox):
         since = self.__dict__.get("_page_since", {})
         flagged = self.__dict__.setdefault("_page_flagged", set())
         due = {sid for sid, t0 in since.items() if time.monotonic() - t0 >= PAGE_WARN_SECONDS}
-        if due != flagged & set(since):  # 페이지 다름이 3초 넘게 이어진 칸 → 목록에 '다시 등록해 주세요'(한 번만 다시 그림)
+        if due != flagged & set(since):  # 페이지 다름이 3초 넘게 이어진 칸 → 목록에 '다른 페이지라 숨김'(한 번만 다시 그림)
             flagged.clear()
             flagged.update(due)
             if due:

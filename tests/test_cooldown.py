@@ -745,7 +745,9 @@ def test_registered_while_cooling_rechecks_page_and_shows_cooling(creator, monke
         assert slot["recheck"] is True
         assert "사용 가능할 때 등록하면 더 정확해요." in sec.status.text()
         # 등록 때 페이지 모양이 어긋나게 저장된 경우를 흉내(원인 미확정 — 저장값이 실제와 다름)
-        wrong = cs.cd.page_signature(cool, tuple(cs.cd.page_rect(cool, box, 1)))  # 다른 줄 페이지 모양
+        from mabinogi_addon import image_io
+        two = image_io.imread("tests/data/스크린샷 2026-10-16 211914.png", cv2.IMREAD_COLOR)
+        wrong = cs.cd.page_signature(two, tuple(cs.cd.page_rect(cool, box, 0)))  # 같은 자리 '2' 페이지 모양
         sec._save(slots=[{**slot, "page": wrong}])
         ready = cool.copy()
         x, y, w, h = slot["rect"]
@@ -777,14 +779,48 @@ def test_persistent_page_mismatch_is_listed_not_silent(creator, caplog):
         sec._note_states({"a": cs.PAGE_DIFF})
         assert sec.state_text("a") == "가려짐(페이지 다름)"
         sec._page_since["a"] -= cs.PAGE_WARN_SECONDS  # 3초 넘게 계속 다름
-        assert sec.state_text("a") == "가려짐(페이지 다름) — 다시 등록해 주세요"
+        assert sec.state_text("a") == "가려짐(페이지 다름) — 다른 페이지라 숨김"
         sec._render_list()
         from PySide6.QtWidgets import QLabel
         texts = [lb.text() for lb in sec.findChildren(QLabel, "cooldownState")]
-        assert "가려짐(페이지 다름) — 다시 등록해 주세요" in texts
+        assert "가려짐(페이지 다름) — 다른 페이지라 숨김" in texts
         sec._note_states({"a": cs.cd.COOLING})
         assert sec.state_text("a") == "사용 중"
         lines = [r.getMessage() for r in caplog.records if "쿨타임 칸 상태" in r.getMessage()]
         assert len(lines) == 2 and "가려짐(페이지 다름)" in lines[0] and "사용 중" in lines[1]  # 바뀔 때만 한 줄
     finally:
         sec.shutdown()
+
+
+
+# ---- 페이지 상자 모서리(758a01e: 던전 등에서 '1' 페이지를 '다름'으로 오판) -----------------------------------
+PAGE_BOX_ROW0 = (1196, 24, 15, 16)
+
+
+def _shot(name):
+    from mabinogi_addon import image_io
+    return image_io.imread(f"tests/data/{name}", cv2.IMREAD_COLOR)
+
+
+def test_page_box_corners_do_not_change_page():
+    a, b = _shot("스크린샷 2026-11-05 203318.png"), _shot("스크린샷 2026-11-03 234812.png")  # '1' 상자 — 모서리 흰 픽셀 0개 / 4개
+    sig_a, sig_b = cd.page_signature(a, PAGE_BOX_ROW0), cd.page_signature(b, PAGE_BOX_ROW0)
+    assert cd.same_page(b, PAGE_BOX_ROW0, sig_a) is True
+    assert cd.same_page(a, PAGE_BOX_ROW0, sig_b) is True
+
+
+def test_old_signature_with_corners_still_matches():
+    """예전에 저장한 서명(모서리 포함)도 다시 등록 없이 맞는다."""
+    import numpy as np
+    b = _shot("스크린샷 2026-11-03 234812.png")
+    x, y, w, h = PAGE_BOX_ROW0
+    gray = cv2.cvtColor(b[y:y + h, x:x + w], cv2.COLOR_BGR2GRAY)
+    old = gray > 150  # 모서리를 지우기 전 방식 그대로
+    assert old[0, 0] and old[-1, -1]
+    old_sig = f"{w}x{h}:{np.packbits(old.astype(np.uint8).ravel()).tobytes().hex()}"
+    assert cd.same_page(_shot("스크린샷 2026-11-05 203318.png"), PAGE_BOX_ROW0, old_sig) is True
+
+
+def test_page_one_vs_two_still_different():
+    one = cd.page_signature(_shot("스크린샷 2026-11-05 203318.png"), PAGE_BOX_ROW0)
+    assert cd.same_page(_shot("스크린샷 2026-10-16 211914.png"), PAGE_BOX_ROW0, one) is False  # 같은 자리 '2'
