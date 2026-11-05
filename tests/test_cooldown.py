@@ -821,3 +821,59 @@ def test_old_signature_with_corners_still_matches():
 def test_page_one_vs_two_still_different():
     one = cd.page_signature(_shot("스크린샷 2026-11-05 203318.png"), PAGE_BOX_ROW0)
     assert cd.same_page(_shot("스크린샷 2026-10-16 211914.png"), PAGE_BOX_ROW0, one) is False  # 같은 자리 '2'
+
+
+# ---- 페이지 확인은 '지금 키를 쓰는 단축바' 칸에만(제작자 11-06) ---------------------------------------------
+def _register_on(name, key):
+    from mabinogi_addon.ui.cooldown_section import CooldownSection
+    frame, box, cells = _screen(name)
+    sec = CooldownSection(_Watcher())
+    slot = sec.register(cells[key], frame, (0, 0))
+    sec.shutdown()
+    return slot
+
+
+def test_key_block_from_selector_position():
+    for name, expected in (("스크린샷 2026-11-06 013739.png", 1), ("스크린샷 2026-11-04 014744.png", 1),
+                           ("mabinogi_2026_10_30_213520.png", 0)):  # 3840 배치(선택기 540) → 왼쪽이 키 블록
+        frame, box, _ = _screen(name)
+        assert cd.key_block(frame, cd.selector_rects(box, 0)) == expected, name
+
+
+def test_register_saves_page_only_for_key_block_cells(creator):
+    keyed = _register_on("스크린샷 2026-11-04 014744.png", (1, 0, 0, 2))  # 가운데(키 블록) 위 줄
+    keyless = _register_on("스크린샷 2026-11-04 014744.png", (0, 0, 0, 2))  # 왼쪽(키 없음) 위 줄
+    assert keyed["page"] and keyed["page_block"] == 1 and keyed["block"] == 1
+    assert keyless["page"] is None and keyless["page_block"] is None and keyless["block"] == 0
+    left = _register_on("mabinogi_2026_10_30_213520.png", (0, 1, 0, 0))  # 3840: 왼쪽이 키 블록
+    assert left["page"] and left["page_block"] == 0
+
+
+def test_page_change_hides_only_key_block_cells():
+    """위 줄 014744('2') → 013739('1'), 아래 줄 013739 → 214902: 키 없는 블록 칸은 페이지가 달라도 숨기지 않고, 키 블록 칸만 숨김."""
+    from mabinogi_addon.ui.cooldown_section import PAGE_DIFF, observe
+    for (before, after), row in ((("스크린샷 2026-11-04 014744.png", "스크린샷 2026-11-06 013739.png"), 0),
+                                 (("스크린샷 2026-11-06 013739.png", "스크린샷 2026-10-16 214902.png"), 1)):
+        frame_b, box, cells = _screen(before)
+        rects = cd.selector_rects(box, row)
+        sig = cd.page_signature(frame_b, rects[1])
+        base = {"page": sig, "page_block": 1, "page_rects": {str(k): list(v) for k, v in rects.items()}, "page_rect": list(rects[1])}
+        keyed = dict(base, id="k", rect=list(cells[(1, row, 0, 1)].rect), block=1)
+        keyless = dict(base, id="n", rect=list(cells[(0, row, 0, 1)].rect), block=0)
+        frame_a, _, _ = _screen(after)
+        out = observe(frame_a, (0, 0), [keyed, keyless], {}, False)
+        assert out["changes"]["k"] == PAGE_DIFF, (before, after)
+        assert out["changes"]["n"] != PAGE_DIFF, (before, after)
+
+
+def test_no_page_compare_when_key_bar_switched():
+    """page_block(등록 때 키 블록)과 지금 키 블록이 다르면 비교하지 않는다 — 엉뚱한 단축바 페이지와 비교 금지."""
+    from mabinogi_addon.ui.cooldown_section import PAGE_DIFF, observe
+    left_frame, left_box, left_cells = _screen("mabinogi_2026_10_30_213520.png")  # 키 블록 0
+    rects = cd.selector_rects(left_box, 0)
+    slot = {"id": "a", "rect": list(left_cells[(0, 0, 0, 1)].rect), "block": 0, "page_block": 0,
+            "page": cd.page_signature(left_frame, rects[0]), "page_rects": {str(k): list(v) for k, v in rects.items()},
+            "page_rect": list(rects[0])}
+    other, _, _ = _screen("스크린샷 2026-11-06 013739.png")  # 같은 좌표에 키 블록 1(선택기 1160)
+    out = observe(other, (0, 0), [slot], {}, False)
+    assert out["changes"]["a"] != PAGE_DIFF

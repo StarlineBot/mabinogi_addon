@@ -63,6 +63,28 @@ def save_icon(sid: str, cell) -> bool:
         return False
 
 
+def _page_differs(frame, ox, oy, slot) -> bool:
+    """칸이 '지금 키를 쓰는 단축바'에 있고 그 단축바가 등록 때와 같을 때만 페이지를 비교(제작자 11-06).
+    키 없는 단축바 칸은 페이지가 없어(늘 같은 스킬) 비교하지 않고, 도중에 키 단축바를 바꿔도 엉뚱한 단축바 페이지와 비교하지 않는다.
+    상자를 못 읽으면(가려짐) 숨기지 않는다. 예전 등록분(page_block 없음)은 칸이 속한 블록 = 등록 때 키 블록으로 보고 저장 자리만 비교."""
+    signature = slot.get("page")
+    if not signature:
+        return False
+
+    def local(rect):
+        px, py, pw, ph = rect
+        return (px - ox, py - oy, pw, ph)
+    rects = slot.get("page_rects")
+    page_block = slot.get("page_block")
+    if rects and page_block is not None:
+        now = cd.key_block(frame, {int(b): local(r) for b, r in rects.items()})
+        if now is None or now != page_block or slot.get("block") != page_block:
+            return False
+        return cd.same_page(frame, local(rects[str(now)]), signature) is False
+    page_rect = slot.get("page_rect")
+    return bool(page_rect) and cd.same_page(frame, local(page_rect), signature) is False
+
+
 def observe(frame, origin, slots, last: dict, with_crops: bool, need_icon=frozenset()):
     """작업 스레드: 공유 캡처 한 장(물리 사각형 origin에서 시작)에서 칸마다 상태. 바뀐 칸만 돌려준다(없으면 None).
     last는 이 함수만 쓰는 이전 상태(작업 스레드 안에서만 바뀐다).
@@ -77,15 +99,8 @@ def observe(frame, origin, slots, last: dict, with_crops: bool, need_icon=frozen
         inside = cx >= 0 and cy >= 0  # 음수 인덱스는 numpy가 반대편에서 잘라 오므로 먼저 막는다
         cell = frame[cy:cy + h, cx:cx + w] if inside else frame[:0, :0]
         state = cd.classify(cell) if cell.shape[:2] == (h, w) else cd.UNKNOWN
-        page_rect = slot.get("page_rect")
-        signature = slot.get("page")
-        if state != cd.UNKNOWN and page_rect and signature:
-            px, py, pw, ph = page_rect
-            same = cd.same_page(frame, (px - ox, py - oy, pw, ph), signature)
-            if same is False:  # 페이지 숫자가 다름 → 줄에서 빼고(알림 없음) 목록에 따로 알린다
-                state = PAGE_DIFF
-            elif same is None:  # 상자를 못 읽음(가려짐)
-                state = HIDDEN
+        if state != cd.UNKNOWN and _page_differs(frame, ox, oy, slot):
+            state = PAGE_DIFF  # 페이지 숫자가 다름 → 줄에서 빼고(알림 없음) 목록에 따로 알린다
         if state == cd.UNKNOWN:
             state = HIDDEN
         if last.get(slot["id"]) != state:
@@ -289,18 +304,23 @@ class CooldownSection(QGroupBox):
         if self._count(set_no) >= MAX_SLOTS:
             self.status.setText(f"이 세트는 최대 {MAX_SLOTS}칸까지 등록할 수 있어요.")
             return None
-        page_rect = page = None
-        source, row = target.info.get("source"), target.info.get("row", 0)
+        page_rect = page = page_block = None
+        page_rects = None
+        source, row, block = target.info.get("source"), target.info.get("row", 0), target.info.get("block")
         if frame is not None and source is not None:
-            pr = cd.page_rect(frame, source, row)
-            if pr is not None:
-                page = cd.page_signature(frame, pr)
-                page_rect = [pr[0] + ox, pr[1] + oy, pr[2], pr[3]]
+            # 페이지는 '키를 쓰는 단축바'에만 있다 — 그 줄 선택기 위치로 키 블록을 정하고, 칸이 키 블록일 때만 페이지 모양 저장
+            rects = cd.selector_rects(source, row)
+            page_rects = {str(b): [r[0] + ox, r[1] + oy, r[2], r[3]] for b, r in rects.items()}
+            kb = cd.key_block(frame, rects)
+            if kb is not None and kb == block:
+                page = cd.page_signature(frame, rects[kb])
+                if page is not None:
+                    page_rect, page_block = page_rects[str(kb)], kb
         used = {s["label"] for s in self.slots}
         label = next(f"스킬 {n}" for n in range(1, MAX_SLOTS * MAX_SETS + 2) if f"스킬 {n}" not in used)  # 전체에서 겹치지 않게
         cell = frame[y:y + h, x:x + w] if frame is not None else None
         slot = {"id": uuid.uuid4().hex[:8], "rect": rect, "page_rect": page_rect, "page": page, "label": label, "row": row,
-                "set": set_no, "icon_ok": False}
+                "set": set_no, "icon_ok": False, "block": block, "page_block": page_block, "page_rects": page_rects}
         if cell is not None and cell.shape[:2] == (h, w):  # 등록 스냅샷에서 칸을 잘라 목록 아이콘으로(처음 '사용 가능'일 때 한 번 더)
             save_icon(slot["id"], cell.copy())
         self._save(slots=self.slots + [slot])
@@ -440,7 +460,8 @@ class CooldownSection(QGroupBox):
                 self._show_row()
             return
         slots = [dict(s) for s in self.slots]
-        rects = [s["rect"] for s in slots] + [s["page_rect"] for s in slots if s.get("page_rect")]
+        rects = ([s["rect"] for s in slots] + [s["page_rect"] for s in slots if s.get("page_rect")]
+                 + [r for s in slots for r in (s.get("page_rects") or {}).values()])  # 키 블록을 정하려고 두 선택기 자리 모두 찍는다
         x0, y0 = min(r[0] for r in rects), min(r[1] for r in rects)
         x1, y1 = max(r[0] + r[2] for r in rects), max(r[1] + r[3] for r in rects)
         last = self._last

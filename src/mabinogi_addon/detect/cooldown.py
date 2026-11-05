@@ -106,6 +106,22 @@ def page_rect(frame: np.ndarray, source_box, row: int) -> tuple[int, int, int, i
     return None
 
 
+def selector_rects(source_box, row: int) -> dict[int, tuple[int, int, int, int]]:
+    """그 줄 페이지 선택기 후보 자리(프레임 좌표) — 블록 번호 → 상자. 게임은 F키·숫자키를 쓸 단축바(키 블록)를 왼쪽/가운데 중 고르고,
+    고른 쪽에만 줄마다 '◀n▶'이 있다: 왼쪽(블록 0) 선택 → 블록 사이 540, 가운데(블록 1) 선택 → 오른쪽 끝 1160(제작자 확인 11-06)."""
+    x, y, w, _h = source_box
+    s = w / 1168.0
+    bx, by, bw, bh = PAGE_BOX
+    return {block: (round(x + (offset + bx) * s), round(y + (ROW_Y[row] + by) * s), max(1, round(bw * s)), max(1, round(bh * s)))
+            for block, offset in enumerate(PAGE_OFFSETS)}
+
+
+def key_block(frame: np.ndarray, rects: dict) -> int | None:
+    """지금 페이지 선택기가 보이는 블록(= 키를 쓰는 단축바). 하나만 보일 때 그 블록, 아니면 None(못 정함 — 비교하지 않음)."""
+    seen = [block for block, rect in rects.items() if _box_mask(frame, tuple(rect)) is not None]
+    return seen[0] if len(seen) == 1 else None
+
+
 def _box_mask(frame, rect):
     x, y, w, h = rect
     if x < 0 or y < 0 or y + h > frame.shape[0] or x + w > frame.shape[1]:
