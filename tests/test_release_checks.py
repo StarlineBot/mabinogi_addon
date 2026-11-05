@@ -69,19 +69,18 @@ def test_current_plan_maps_every_selected_file_to_changed_code_or_shared_contrac
 
 
 def test_current_release_keeps_feature_boundaries_and_delivery_contracts():
-    """0.42.0: 서버별 채널 상태(전체 공개·시작 측정·홈) + 던전 순서 + 배포 계약. (릴리즈마다 경계를 바꾼다 — 누적하지 않음)"""
+    """0.42.1: 게임 위 정보 항목 칸 폭 예약 + 배포 계약. (릴리즈마다 경계를 바꾼다 — 누적하지 않음)"""
     root = Path(__file__).resolve().parents[1]
     plan = json.loads((root / 'packaging/release_checks.json').read_text(encoding='utf-8'))
     paths = set(plan['tests'])
     assert {
-        'tests/test_harp_channels.py', 'tests/test_home_page.py', 'tests/test_navigation.py', 'tests/test_dungeon_cost.py',
-        'tests/test_bundle_layout.py', 'tests/test_startup_build.py',
+        'tests/test_overlay_clock.py', 'tests/test_overlay_metrics.py', 'tests/test_startup_build.py',
         'tests/test_release_checks.py', 'tests/test_release_candidate.py', 'tests/test_windows_ci.py',
         'tests/test_startup_smoke.py',
     } <= paths
     assert {
-        'src/mabinogi_addon/ui/harp_tab.py', 'src/mabinogi_addon/ui/main_window.py', 'src/mabinogi_addon/ui/home_page.py',
-        'src/mabinogi_addon/market/dungeon_cost.py', 'packaging/build_windows.py', 'src/mabinogi_addon/assets/release_notes.md',
+        'src/mabinogi_addon/ui/frame_overlay.py', 'src/mabinogi_addon/ui/optimization_controller.py',
+        'packaging/build_windows.py', 'src/mabinogi_addon/assets/release_notes.md',
     } <= set(plan['coverage'])
     # The separate development entry must continue collecting the whole suite.
     regression = (root / '.github/workflows/regression.yml').read_text(encoding='utf-8')

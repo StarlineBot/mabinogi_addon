@@ -24,6 +24,16 @@ OVERLAY_ITEMS = (*METRICS, 'clock')  # 게임 위 정보 표시 항목(명세 16
 FPS_HOLD = 4.0  # FPS가 이 시간 넘게 계속 없을 때만 '—'(PresentMon 출력이 1~2.7초 묶여 와도 깜빡이지 않게)
 
 
+# 항목마다 '나올 수 있는 최대 값' 견본(값, 단위, 앞글자). 숫자는 고정 칸이라 0으로 충분하다.
+RESERVE = {'fps': ('000', '', ''), 'cpu': ('100', '%', ''), 'gpu': ('100', '%', ''), 'memory': ('00.0', 'GB', '')}
+
+
+def clock_reserve(fmt='24', seconds=True) -> tuple[str, str, str]:
+    """현재 시각 칸 견본 — 형식별(12시간은 1~12시라 두 자리 + 앞글자는 AM·PM 중 넓은 쪽)."""
+    value = '00:00:00' if seconds else '00:00'
+    return (value, '', 'AM|PM' if fmt == '12' else '')
+
+
 def clock_text(hour: int, minute: int, second: int, fmt: str = '24', seconds: bool = True) -> tuple[str, str]:
     """(앞글자, 값) — 24시간 ('', '21:41:08'), 12시간 ('PM', '9:41:08'). 초를 끄면 '21:41'."""
     tail = f':{second:02d}' if seconds else ''
@@ -600,19 +610,21 @@ class OptimizationController(QObject):
         from PySide6.QtCore import QTime
         now = QTime.currentTime()
         prefix, value = clock_text(now.hour(), now.minute(), now.second(), self._clock_format, self._clock_seconds)
-        return ('현재 시각', value, '', prefix)
+        return ('현재 시각', value, '', prefix, clock_reserve(self._clock_format, self._clock_seconds))
 
     def overlay_items(self, fps, values):
         """켠 항목만 (이름, 값, 단위[, 앞글자])로. 값을 아직 못 읽었으면 '—'."""
         def percent(value):
             return ('—', '') if value is None else (f'{value:.0f}', '%')
+        # 항목 칸 폭 예약(값, 단위, 앞글자) — 자릿수가 바뀌거나 '—'여도 뒤 항목이 밀리지 않게(다음 버전 요청)
         items = []
-        if self._metrics['fps']: items.append(('FPS', '—' if fps is None else f'{fps:.0f}', ''))
-        if self._metrics['cpu']: items.append(('게임 CPU', *percent(values.get('cpu'))))  # FPS 명세 10.4 D안
-        if self._metrics['gpu']: items.append(('GPU', *percent(values.get('gpu'))))
+        if self._metrics['fps']: items.append(('FPS', '—' if fps is None else f'{fps:.0f}', '', '', RESERVE['fps']))
+        if self._metrics['cpu']: items.append(('게임 CPU', *percent(values.get('cpu')), '', RESERVE['cpu']))  # FPS 명세 10.4 D안
+        if self._metrics['gpu']: items.append(('GPU', *percent(values.get('gpu')), '', RESERVE['gpu']))
         if self._metrics['memory']:
             memory = values.get('memory')
-            items.append(('게임 메모리', '—', '') if memory is None else ('게임 메모리', f'{memory/1024**3:.1f}', 'GB'))
+            value, unit = ('—', '') if memory is None else (f'{memory/1024**3:.1f}', 'GB')
+            items.append(('게임 메모리', value, unit, '', RESERVE['memory']))
         if self._metrics.get('clock'): items.append(self._clock_item())
         return items
 

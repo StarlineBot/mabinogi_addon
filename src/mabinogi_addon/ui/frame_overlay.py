@@ -17,6 +17,9 @@ MINT = QColor('#00d1a7')
 _HEADER_H = 18  # 해제 상태의 이동 안내 줄
 
 
+VALUE_ALIGN = 'left'  # 예약 칸 안 값 위치(사용자 렌더 확인 대기 — left/right)
+
+
 def _digit_cell(metrics):
     """숫자 한 칸 폭 — 가장 넓은 숫자 기준. 시각(초마다)·FPS 값이 바뀌어도 형식이 같으면 폭이 같다."""
     return max(metrics.horizontalAdvance(d) for d in '0123456789')
@@ -56,17 +59,27 @@ class FrameOverlay(QWidget):
         self._locked = False
         self._drag_offset = None
         self._items = [('FPS', '—', '', '')]
+        self._reserve: list[tuple[str, str, str] | None] = [None]
+        self.align = VALUE_ALIGN
         self._scale = 1.0
         self.set_scale(scale_percent)
 
     # ---- 내용 ----
     def set_items(self, items):
-        """[(이름, 값, 단위[, 앞글자])]. 숨긴 항목은 넘기지 않으면 자리를 비우지 않고 당겨 붙는다.
-        앞글자는 값 앞에 단위 글꼴(작게)로 — 12시간 시각의 AM/PM(명세 16절, 사용자 결정 ampm-size.png)."""
+        """[(이름, 값, 단위[, 앞글자[, 예약]])]. 숨긴 항목은 넘기지 않으면 자리를 비우지 않고 당겨 붙는다.
+        앞글자는 값 앞에 단위 글꼴(작게)로 — 12시간 시각의 AM/PM(명세 16절, 사용자 결정 ampm-size.png).
+        예약 = (값, 단위, 앞글자) 견본 — 항목 칸 폭을 '나올 수 있는 최대 값' 기준으로 잡아, 앞 항목 자릿수가 바뀌어도
+        뒤 항목이 밀리지 않게 한다(다음 버전 요청). 실제 값이 더 넓으면(FPS 1000 등) 그때만 넓어진다."""
+        reserve = [tuple(map(str, i[4])) if len(i) > 4 and i[4] else None for i in items]
         items = [(str(i[0]), str(i[1]), str(i[2] or ''), str(i[3] if len(i) > 3 and i[3] else '')) for i in items]
-        if items != self._items:
-            self._items = items
+        if items != self._items or reserve != self._reserve:
+            self._items, self._reserve = items, reserve
             self._relayout()
+
+    def set_align(self, align: str) -> None:
+        """예약 칸 안에서 값 위치: 'left'(이름과 같은 시작) | 'right'(칸 오른쪽 끝에 맞춤)."""
+        self.align = 'right' if align == 'right' else 'left'
+        self.update()
 
     def items(self):
         """앞글자가 없는 항목은 예전처럼 (이름, 값, 단위)."""
@@ -87,12 +100,20 @@ class FrameOverlay(QWidget):
         nm, vm, um = QFontMetricsF(name_font), QFontMetricsF(value_font), QFontMetricsF(unit_font)
         pad, gap = 8 * self._scale, 18 * self._scale
         x, boxes = pad, []
-        for name, value, unit, prefix in self._items:
-            prefix_w = um.horizontalAdvance(prefix) + 3 * self._scale if prefix else 0
-            value_w = _glyphs(vm, value)[1]
+
+        def parts(value, unit, prefix):
+            # 견본 앞글자 'AM|PM' = 둘 중 넓은 쪽(글꼴마다 다름)
+            prefix_w = (max(um.horizontalAdvance(p) for p in prefix.split('|')) + 3 * self._scale) if prefix else 0
             unit_w = um.horizontalAdvance(unit) + (2 * self._scale if unit else 0)
-            width = max(nm.horizontalAdvance(name), prefix_w + value_w + unit_w)
-            boxes.append((x, value_w, width, prefix_w))
+            return prefix_w, _glyphs(vm, value)[1], unit_w
+
+        for (name, value, unit, prefix), reserve in zip(self._items, self._reserve):
+            prefix_w, value_w, unit_w = parts(value, unit, prefix)
+            content = prefix_w + value_w + unit_w
+            reserved = sum(parts(*reserve)) if reserve else 0.0
+            width = max(nm.horizontalAdvance(name), content, reserved)
+            shift = (width - content) if self.align == 'right' else 0.0  # 값 묶음(앞글자·값·단위)을 칸 안 어디에 둘지
+            boxes.append((x, value_w, width, prefix_w, shift))
             x += width + gap
         top = _HEADER_H if not self._locked else 0
         height = top + pad + nm.height() + vm.ascent() + vm.descent() + pad
@@ -155,8 +176,9 @@ class FrameOverlay(QWidget):
         pad = 8 * self._scale
         name_base = top + pad + nm.ascent()
         value_base = top + pad + nm.height() + vm.ascent()
-        for (x, value_w, _width, prefix_w), (name, value, unit, prefix) in zip(boxes, self._items):
-            self._draw_text(painter, name_font, MINT, x, name_base, name)
+        for (x0, value_w, _width, prefix_w, shift), (name, value, unit, prefix) in zip(boxes, self._items):
+            self._draw_text(painter, name_font, MINT, x0, name_base, name)
+            x = x0 + shift
             if prefix:  # AM/PM: 값과 같은 기준선에 작게(단위처럼)
                 self._draw_text(painter, unit_font, QColor('white'), x, value_base, prefix)
             self._draw_text(painter, value_font, QColor('white'), x + prefix_w, value_base, value, fixed_digits=True)

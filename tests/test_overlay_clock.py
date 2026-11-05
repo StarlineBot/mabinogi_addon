@@ -37,8 +37,8 @@ def test_clock_item_reads_the_pc_clock_each_time(monkeypatch):
     times = iter([QtCore.QTime(21, 41, 8), QtCore.QTime(21, 41, 9)])
     monkeypatch.setattr(QtCore.QTime, 'currentTime', staticmethod(lambda: next(times)))
     fake = NS(_clock_format='12', _clock_seconds=True)
-    assert oc.OptimizationController._clock_item(fake) == ('현재 시각', '9:41:08', '', 'PM')
-    assert oc.OptimizationController._clock_item(fake) == ('현재 시각', '9:41:09', '', 'PM')
+    assert oc.OptimizationController._clock_item(fake) == ('현재 시각', '9:41:08', '', 'PM', ('00:00:00', '', 'AM|PM'))
+    assert oc.OptimizationController._clock_item(fake)[:4] == ('현재 시각', '9:41:09', '', 'PM')
 
 
 def test_clock_is_last_item_and_off_by_default(monkeypatch):
@@ -148,7 +148,7 @@ def test_overlay_keeps_last_value_then_dash_and_hides_only_when_told(app):
     assert show(None, 1.0 + oc.FPS_HOLD + 0.1) == (None, True)  # 계속 없음 → '—'
     items = oc.OptimizationController.overlay_items(NS(_metrics=dict(fps=True, cpu=False, gpu=False, memory=False)),
                                                     None, {})
-    assert items == [('FPS', '—', '')]
+    assert [i[:3] for i in items] == [('FPS', '—', '')]
     assert show(58.0, 9.0) == (58.0, True)
     oc.OptimizationController._hide_overlay(fake)  # 게임 비활성·일시정지·대상 경계
     assert show(None, 9.5) == (None, False)  # 다시 보일 때는 새 값부터(옛 값 유지 안 함)
@@ -170,5 +170,62 @@ def test_clock_and_fps_width_do_not_change_with_digits(app, scale):
             overlay.set_items([('FPS', fps, '')])
             fps_widths.add(overlay.width())
         assert len(fps_widths) == 1
+    finally:
+        overlay.deleteLater()
+
+
+
+# ---- 다음 버전: 항목마다 칸 폭 예약 ---------------------------------------------------------------
+def _starts(overlay):
+    boxes = overlay._layout()[0]
+    return [round(b[0], 2) for b in boxes]
+
+
+@pytest.mark.parametrize('align', ['left', 'right'])
+@pytest.mark.parametrize('scale', [100, 150])
+def test_item_starts_do_not_move_when_digits_change(app, align, scale):
+    """재현(요청): FPS 99→144, CPU 9→12→100%일 때 '현재 시각' 시작 x 209→230→242→284 — 이제 그대로."""
+    from mabinogi_addon.ui.frame_overlay import FrameOverlay
+    overlay = FrameOverlay(scale)
+    overlay.set_align(align)
+    fake = NS(_metrics=dict(fps=True, cpu=True, gpu=True, memory=True, clock=True), _clock_format='24',
+              _clock_seconds=True)
+    fake._clock_item = lambda: ('현재 시각', '21:41:08', '', '', oc.clock_reserve('24', True))
+    try:
+        seen = set()
+        for fps, cpu, gpu, mem in ((99, 9, 5, 0.9), (144, 12, 50, 12.3), (None, 100, 100, 9.9), (60, None, None, None)):
+            values = {'cpu': cpu, 'gpu': gpu, 'memory': None if mem is None else mem * 1024 ** 3}
+            overlay.set_items(oc.OptimizationController.overlay_items(fake, fps, values))
+            seen.add((tuple(_starts(overlay)), overlay.width()))
+        assert len(seen) == 1, seen
+    finally:
+        overlay.deleteLater()
+
+
+def test_reserve_grows_only_for_values_wider_than_reserve(app):
+    """예약 폭을 넘는 값(FPS 1000)이 나오면 그때만 넓어진다."""
+    from mabinogi_addon.ui.frame_overlay import FrameOverlay
+    overlay = FrameOverlay(100)
+    try:
+        overlay.set_items([('FPS', '99', '', '', oc.RESERVE['fps']), ('GPU', '5', '%', '', oc.RESERVE['gpu'])])
+        base = _starts(overlay)
+        overlay.set_items([('FPS', '1000', '', '', oc.RESERVE['fps']), ('GPU', '5', '%', '', oc.RESERVE['gpu'])])
+        assert _starts(overlay)[1] > base[1]
+    finally:
+        overlay.deleteLater()
+
+
+@pytest.mark.parametrize('fmt,seconds', [('24', True), ('24', False), ('12', True), ('12', False)])
+def test_clock_reserve_covers_every_time_of_day(app, fmt, seconds):
+    """현재 시각 칸은 형식별 견본 — 하루 중 어떤 시각이어도(1자리 시·AM/PM) 폭이 같다."""
+    from mabinogi_addon.ui.frame_overlay import FrameOverlay
+    overlay = FrameOverlay(100)
+    try:
+        widths = set()
+        for h, m, s in ((0, 0, 0), (1, 11, 11), (9, 41, 8), (12, 0, 0), (13, 59, 59), (21, 41, 8), (23, 59, 59)):
+            prefix, value = oc.clock_text(h, m, s, fmt, seconds)
+            overlay.set_items([('현재 시각', value, '', prefix, oc.clock_reserve(fmt, seconds))])
+            widths.add(overlay.width())
+        assert len(widths) == 1, widths
     finally:
         overlay.deleteLater()

@@ -1,19 +1,10 @@
 {
-  "version": "0.42.0",
+  "version": "0.42.1",
   "tests": [
-    "tests/test_boss_bar_locate.py",
-    "tests/test_capture_guard.py",
+    "tests/test_overlay_clock.py",
+    "tests/test_overlay_metrics.py",
+    "tests/test_optimization_ui.py",
     "tests/test_perf_meter.py",
-    "tests/test_favorites_hold.py",
-    "tests/test_boss_tab.py",
-    "tests/test_boss_thread.py",
-    "tests/test_harp_channels.py",
-    "tests/test_home_page.py",
-    "tests/test_navigation.py",
-    "tests/test_cursor_fx.py",
-    "tests/test_dungeon_cost.py",
-    "tests/test_calculator_result_state.py",
-    "tests/test_bundle_layout.py",
     "tests/test_startup_build.py",
     "tests/test_release_candidate.py",
     "tests/test_windows_ci.py",
@@ -23,50 +14,28 @@
     "tests/test_startup_smoke.py"
   ],
   "coverage": {
-    "src/mabinogi_addon/ui/harp_tab.py": {
+    "src/mabinogi_addon/ui/frame_overlay.py": {
       "tests": [
-        "tests/test_harp_channels.py",
-        "tests/test_bundle_layout.py"
+        "tests/test_overlay_clock.py",
+        "tests/test_overlay_metrics.py",
+        "tests/test_perf_meter.py"
       ],
-      "reason": "서버별 채널 상태: 이름·서버 선택(하프만)·화면 밖 3회/1회 측정·일시정지 중단·홈 문구(가장 빠른 채널·측정 중·측정 못 함)"
+      "reason": "항목 칸 폭 예약(자릿수·— 변화에도 시작 x 고정, 넘는 값만 넓힘)·칸 안 값 위치·그리기 계측"
     },
-    "src/mabinogi_addon/ui/main_window.py": {
+    "src/mabinogi_addon/ui/optimization_controller.py": {
       "tests": [
-        "tests/test_harp_channels.py",
-        "tests/test_navigation.py",
-        "tests/test_cursor_fx.py",
-        "tests/test_home_page.py",
-        "tests/test_bundle_layout.py"
+        "tests/test_overlay_clock.py",
+        "tests/test_overlay_metrics.py",
+        "tests/test_optimization_ui.py"
       ],
-      "reason": "채널 탭 전체 공개·창 뜬 뒤 시작 측정·홈 새로고침/열기 연결, 최적화 2단 탭 순서"
-    },
-    "src/mabinogi_addon/ui/home_page.py": {
-      "tests": [
-        "tests/test_harp_channels.py",
-        "tests/test_home_page.py"
-      ],
-      "reason": "홈 위 줄 가장 빠른 채널 칸·새로고침 버튼·790×800 스크롤 없음"
-    },
-    "src/mabinogi_addon/market/dungeon_cost.py": {
-      "tests": [
-        "tests/test_dungeon_cost.py",
-        "tests/test_calculator_result_state.py"
-      ],
-      "reason": "던전 순서·이름 상수(순번 참조 제거)"
-    },
-    "src/mabinogi_addon/ui/dungeon_cost_tab.py": {
-      "tests": [
-        "tests/test_dungeon_cost.py",
-        "tests/test_calculator_result_state.py"
-      ],
-      "reason": "믿음의 균열 판정을 이름 상수로"
+      "reason": "항목별 예약 견본(FPS 000·CPU/GPU 100%·메모리 00.0GB·시각 형식별)"
     },
     "src/mabinogi_addon/assets/release_notes.md": {
       "tests": [
         "tests/test_release_notes.py",
         "tests/test_release_notes_trigger.py"
       ],
-      "reason": "0.42.0 노트 파싱·새 버전 표시"
+      "reason": "0.42.1 노트 파싱·새 버전 표시"
     },
     "packaging/release_checks.json": {
       "tests": [
@@ -81,40 +50,7 @@
         "tests/test_windows_ci.py",
         "tests/test_startup_smoke.py"
       ],
-      "reason": "배포 계약: 빌드·후보·Windows CI·시작 확인(새 자산 없음)"
-    },
-    "src/mabinogi_addon/ui/boss_tab.py": {
-      "tests": [
-        "tests/test_boss_bar_locate.py",
-        "tests/test_boss_tab.py",
-        "tests/test_boss_thread.py"
-      ],
-      "reason": "보스 틱 계산 작업 스레드·반영 화면 스레드·16ms 넘는 틱 단계별 로그(CaptureGuard 분리)·보스바 확인 간격, 기존 판정 회귀(동기 모드)"
-    },
-    "src/mabinogi_addon/ui/capture_guard.py": {
-      "tests": [
-        "tests/test_capture_guard.py",
-        "tests/test_boss_thread.py"
-      ],
-      "reason": "우리 창이 덮을 때만 화면 스레드 판독(도르카·보스 공용 own_window_over)"
-    },
-    "src/mabinogi_addon/detect/favorites.py": {
-      "tests": [
-        "tests/test_favorites_hold.py"
-      ],
-      "reason": "깜빡이며 같은 자리로 돌아오는 줄 붙잡기(다시 맞춤 반복·map_rows 상시 실행 방지), 기존 유지·다시 채움"
-    },
-    "src/mabinogi_addon/perf_meter.py": {
-      "tests": [
-        "tests/test_perf_meter.py"
-      ],
-      "reason": "오버레이 그리기 시간 기능별 집계"
-    },
-    "src/mabinogi_addon/detect/boss_hp_reader.py": {
-      "tests": [
-        "tests/test_boss_bar_locate.py"
-      ],
-      "reason": "보스 존재 사전 판정 저HP 단서(흰 숫자·빨간 채움): 진짜 저HP 프레임 통과·풍경 오통과 감소"
+      "reason": "배포 계약: 빌드·후보·Windows CI·시작 확인"
     }
   }
 }

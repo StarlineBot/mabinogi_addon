@@ -72,11 +72,13 @@ def test_overlay_items_follow_toggles_and_default_is_fps_only(app, tmp_path, mon
     from mabinogi_addon.ui.optimization_controller import OptimizationController
     fake = NS(_metrics=dict(fps=True, cpu=False, gpu=False, memory=False))
     items = OptimizationController.overlay_items(fake, 143.7, {'cpu': 50})
-    assert items == [('FPS', '144', '')]  # 정수 표시(8.1)
+    # 다음 버전: 항목마다 칸 폭 예약 견본(값, 단위, 앞글자)이 다섯째 칸으로 붙는다
+    assert [i[:3] for i in items] == [('FPS', '144', '')]  # 정수 표시(8.1)
+    assert items[0][4] == ('000', '', '')
     fake._metrics.update(cpu=True, gpu=True, memory=True, fps=False)
     items = OptimizationController.overlay_items(fake, 60, {'cpu': 34.4, 'memory': 3.2 * 1024 ** 3})
     # FPS 명세 10.4: 이름은 '게임 CPU'·'게임 메모리'. 숨긴 FPS 자리는 당겨 붙음
-    assert items == [('게임 CPU', '34', '%'), ('GPU', '—', ''), ('게임 메모리', '3.2', 'GB')]
+    assert [i[:3] for i in items] == [('게임 CPU', '34', '%'), ('GPU', '—', ''), ('게임 메모리', '3.2', 'GB')]
     overlay = FrameOverlay(100)
     overlay.set_items([('FPS', '144', '')])
     one = overlay.width()
