@@ -17,7 +17,7 @@ MINT = QColor('#00d1a7')
 _HEADER_H = 18  # 해제 상태의 이동 안내 줄
 
 
-VALUE_ALIGN = 'left'  # 예약 칸 안 값 위치(사용자 렌더 확인 대기 — left/right)
+VALUE_ALIGN = 'left'  # 예약 칸 안 값 위치 — 사용자 확정(11-05): 왼쪽(이름과 같은 시작)
 
 
 def _digit_cell(metrics):
