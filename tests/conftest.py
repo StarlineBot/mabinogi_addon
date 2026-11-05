@@ -188,3 +188,13 @@ def _boss_inline_jobs():
     saved, BossTab.INLINE_JOBS = BossTab.INLINE_JOBS, True
     yield
     BossTab.INLINE_JOBS = saved
+
+
+@pytest.fixture(autouse=True)
+def _skillbar_capture_inline():
+    """쿨타임 명세 9.1: 앱에서는 단축바 공유 캡처가 작업 스레드에서 돈다. 기존 미러 테스트는 `_tick()` 직후 결과를
+    보므로 같은 일을 바로(동기로) 한다. 스레드 실행 자체는 tests/test_cooldown_overlay.py가 확인한다."""
+    from mabinogi_addon.ui.skillbar_capture import SkillbarCapture
+    saved, SkillbarCapture.INLINE = SkillbarCapture.INLINE, True
+    yield
+    SkillbarCapture.INLINE = saved

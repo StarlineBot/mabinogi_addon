@@ -35,8 +35,9 @@ from .skillbar_mirror import (
     SRC_W,
     ChunkOverlay,
     group_defs,
-    slice_group,
+    slice_group_np,
 )
+MIRROR_INTERVAL = 0.12  # 기존 120ms 그대로(표시용) — 캡처는 공유 작업 스레드
 from .widgets import checkbox, hint_label
 
 ANCHOR_BOX = (40, 40)  # 첫 아이콘(1칸) 크기 — 이 박스를 첫 아이콘에 맞춰 클릭
@@ -140,6 +141,9 @@ class SkillbarTab(QWidget):
         display_layout.addLayout(pr)
         display_layout.addWidget(hint_label("빈칸은 오버레이에서 우클릭해 숨길 수 있어요."))
         self._preset_btns = [pr.itemAt(i).widget() for i in range(1, pr.count()) if pr.itemAt(i).widget() is not None]
+        from .cooldown_section import CooldownSection
+        self.cooldown = CooldownSection(watcher)  # 제작자 테스트(쿨타임 명세 10절) — 다른 사용자는 숨김
+        v.addWidget(self.cooldown)
         v.addStretch(1)
 
         self._gated = [
@@ -219,24 +223,45 @@ class SkillbarTab(QWidget):
             self._paused or self._shutting_down
             or self._anchor is None or not self._active()
         ):
+            if getattr(self, "_capture_connected", False):
+                self._capture().clear("mirror")  # 안 보일 땐 찍지 않는다
             return
         from .dpi import to_physical
 
-        px, py, pw, ph = to_physical(
+        rect = to_physical(
             {"x": self._anchor["x"], "y": self._anchor["y"], "w": SRC_W, "h": SRC_H}
         )
-        frame = self._grab_rect(px, py, pw, ph)
-        if frame is None:
+        # 쿨타임 명세 9.1: 캡처·크기 조정·자르기는 공유 캡처의 작업 스레드에서(화면 스레드는 칸 그림만 바꾼다).
+        keys = [key for key, ov in self._overlays.items() if ov.isVisible()]
+        if not keys:
+            self._capture().clear("mirror")
             return
-        # 물리픽셀 캡처를 논리 기준 격자(SRC_W×SRC_H)로 맞춰 슬라이싱(150% 보정).
-        if frame.shape[1] != SRC_W or frame.shape[0] != SRC_H:
-            import cv2
+        cells = {key: list(self._cells_on(key)) for key in keys}
+        defs = self._defs
 
-            frame = cv2.resize(frame, (SRC_W, SRC_H), interpolation=cv2.INTER_AREA)
-        for key, ov in self._overlays.items():
-            if not ov.isVisible():
-                continue
-            ov.set_cells(slice_group(frame, self._defs[key], self._cells_on(key)))
+        def crop(frame):  # 작업 스레드
+            if frame.shape[1] != SRC_W or frame.shape[0] != SRC_H:  # 물리픽셀 → 논리 격자(150% 보정)
+                import cv2
+                frame = cv2.resize(frame, (SRC_W, SRC_H), interpolation=cv2.INTER_AREA)
+            return {key: slice_group_np(frame, defs[key], cells[key]) for key in keys}
+        self._capture().set_request("mirror", rect, MIRROR_INTERVAL, crop, grab=self._grab_rect)
+
+    def _capture(self):
+        from .skillbar_capture import shared
+        capture = shared()
+        if not getattr(self, "_capture_connected", False):
+            capture.delivered.connect(self._on_captured)
+            self._capture_connected = True
+        return capture
+
+    def _on_captured(self, name, data) -> None:
+        if name != "mirror" or self._shutting_down or self._paused:
+            return
+        from .skillbar_mirror import _np_to_pixmap
+        for key, crops in data.items():
+            ov = self._overlays.get(key)
+            if ov is not None and ov.isVisible():
+                ov.set_cells([None if c is None else _np_to_pixmap(c) for c in crops])
 
     # ---- 앵커 지정 ----
     def _on_anchor(self) -> None:
@@ -469,9 +494,15 @@ class SkillbarTab(QWidget):
     def set_paused(self, paused: bool) -> None:
         self._paused = paused
         self._apply_visibility()
+        self.cooldown.set_paused(paused)
 
     def shutdown(self) -> None:
         self._shutting_down = True
+        if getattr(self, "_capture_connected", False):
+            self._capture().clear("mirror")
+        cooldown = getattr(self, "cooldown", None)
+        if cooldown is not None:
+            cooldown.shutdown()
         for mark in getattr(self,"_source_marks",[]):
             mark.close()
             mark.deleteLater()

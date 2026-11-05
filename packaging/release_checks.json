@@ -14,6 +14,15 @@
     "tests/test_feature_release_policy.py",
     "tests/test_tuarim_settings_width.py",
     "tests/test_navigation.py",
+    "tests/test_click_snap.py",
+    "tests/test_cooldown.py",
+    "tests/test_skillbar_mirror.py",
+    "tests/test_mirror.py",
+    "tests/test_region_selector.py",
+    "tests/test_region_selector_lifecycle.py",
+    "tests/test_autofind_mvp.py",
+    "tests/test_region_registration.py",
+    "tests/test_custom_autosave.py",
     "tests/test_boss_tab.py",
     "tests/test_startup_build.py",
     "tests/test_release_candidate.py",
@@ -46,9 +55,10 @@
     "src/mabinogi_addon/ui/overlay_capture.py": {
       "tests": [
         "tests/test_overlay_capture.py",
-        "tests/test_inquiry_unified.py"
+        "tests/test_inquiry_unified.py",
+        "tests/test_cooldown.py"
       ],
-      "reason": "문의 진행 표시를 판독 캡처 제외 목록에"
+      "reason": "문의 진행 표시를 판독 캡처 제외 목록에 · 쿨타임 오버레이 캡처 제외"
     },
     "src/mabinogi_addon/ui/settings_tab.py": {
       "tests": [
@@ -130,9 +140,10 @@
     },
     "src/mabinogi_addon/config.py": {
       "tests": [
-        "tests/test_harp_channels.py"
+        "tests/test_harp_channels.py",
+        "tests/test_cooldown.py"
       ],
-      "reason": "channelStatus 저장·읽기"
+      "reason": "channelStatus 저장·읽기 · cooldown 저장·읽기"
     },
     "src/mabinogi_addon/ui/grid.py": {
       "tests": [
@@ -191,9 +202,11 @@
         "tests/test_grid_guide_cleanup.py",
         "tests/test_overlay_metrics.py",
         "tests/test_skillbar_chunk_snap.py",
-        "tests/test_stat_shake.py"
+        "tests/test_stat_shake.py",
+        "tests/test_skillbar_mirror.py",
+        "tests/test_mirror.py"
       ],
-      "reason": "드래그 중 고정 시 격자 안내선 숨김(공용 owner_locked)·안내선에 끄는 오버레이 전달"
+      "reason": "드래그 중 고정 시 격자 안내선 숨김(공용 owner_locked)·안내선에 끄는 오버레이 전달 · numpy 자르기(slice_group_np)"
     },
     "src/mabinogi_addon/ui/stat_overlay.py": {
       "tests": [
@@ -221,6 +234,70 @@
         "tests/test_stat_shake.py"
       ],
       "reason": "드래그 중 고정 시 격자 안내선 숨김(공용 owner_locked)·안내선에 끄는 오버레이 전달"
+    },
+    "src/mabinogi_addon/detect/click_targets.py": {
+      "tests": [
+        "tests/test_click_snap.py"
+      ],
+      "reason": "클릭 맞춤 대상(단축바 48칸·체력바 3줄·보스바 보일 때만)·빈 화면·겹침 판정"
+    },
+    "src/mabinogi_addon/detect/cooldown.py": {
+      "tests": [
+        "tests/test_cooldown.py"
+      ],
+      "reason": "사용 중 판정(1080·창 모드·4K 실화면 칸 정확히)·페이지 숫자 모양 같음/다름·못 읽음"
+    },
+    "src/mabinogi_addon/tracker/cooldown_row.py": {
+      "tests": [
+        "tests/test_cooldown.py"
+      ],
+      "reason": "쓴 순서·1초 강조·소리 한 번·다시 사용·가려짐/페이지 바뀜 알림 없음"
+    },
+    "src/mabinogi_addon/ui/cooldown_section.py": {
+      "tests": [
+        "tests/test_cooldown.py"
+      ],
+      "reason": "제작자만 보임·등록(페이지 저장·중복·8칸)·드래그 거부·관측 바뀐 칸만·캡처 밖 칸·게임 비활성/일시정지 정지"
+    },
+    "src/mabinogi_addon/ui/cooldown_overlay.py": {
+      "tests": [
+        "tests/test_cooldown.py",
+        "tests/test_overlay_capture.py"
+      ],
+      "reason": "한 줄 배치·예시 3칸·바뀔 때만 다시 그림·배율"
+    },
+    "src/mabinogi_addon/ui/skillbar_capture.py": {
+      "tests": [
+        "tests/test_cooldown.py",
+        "tests/test_skillbar_mirror.py",
+        "tests/test_mirror.py"
+      ],
+      "reason": "작업 스레드가 덮는 사각형 하나만 찍어 나눔·INLINE·요청 해제"
+    },
+    "src/mabinogi_addon/ui/region_selector.py": {
+      "tests": [
+        "tests/test_click_snap.py",
+        "tests/test_region_selector.py",
+        "tests/test_region_selector_lifecycle.py",
+        "tests/test_region_registration.py"
+      ],
+      "reason": "클릭=테두리 맞춤·4px 넘으면 드래그·배율·제작자 아니면 탐지 안 함·크롭/고정 모드 그대로"
+    },
+    "src/mabinogi_addon/ui/custom_overlay_tab.py": {
+      "tests": [
+        "tests/test_click_snap.py",
+        "tests/test_custom_autosave.py"
+      ],
+      "reason": "영역 지정 선택창에 단축바·체력바·보스바 맞춤"
+    },
+    "src/mabinogi_addon/ui/skillbar_tab.py": {
+      "tests": [
+        "tests/test_cooldown.py",
+        "tests/test_autofind_mvp.py",
+        "tests/test_skillbar_chunk_snap.py",
+        "tests/test_region_registration.py"
+      ],
+      "reason": "미러 캡처를 공유 작업 스레드로·쿨타임 구역(제작자)·종료 정리"
     }
   }
 }

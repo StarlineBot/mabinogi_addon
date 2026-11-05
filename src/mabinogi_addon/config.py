@@ -1671,3 +1671,44 @@ def save_channel_cache(data: dict, path: Path = LOCAL_CONFIG_PATH) -> None:
     cfg = _read_local_config(path)
     cfg["channelStatus"] = data
     _write_local_config(cfg, path)
+
+
+_COOLDOWN_MAX_SLOTS = 8
+
+
+def load_cooldown(path: Path = LOCAL_CONFIG_PATH) -> dict:
+    """쿨타임 오버레이(쿨타임 명세 10절, 제작자 테스트). 칸 좌표는 물리 픽셀.
+    {enabled, slots[{id, rect[x,y,w,h], page_rect[..]|None, page str|None, label, row}], pos{x,y}|None,
+     scale(%), opacity(%), locked, sound}"""
+    sec = _read_local_config(path).get("cooldown")
+    sec = sec if isinstance(sec, dict) else {}
+
+    def rect(value):
+        if isinstance(value, list) and len(value) == 4 and all(type(v) is int for v in value) and value[2] > 0 and value[3] > 0:
+            return list(value)
+        return None
+    slots = []
+    for item in sec.get("slots") if isinstance(sec.get("slots"), list) else []:
+        if not isinstance(item, dict) or rect(item.get("rect")) is None or not isinstance(item.get("id"), str):
+            continue
+        slots.append({"id": item["id"], "rect": rect(item["rect"]), "page_rect": rect(item.get("page_rect")),
+                      "page": item.get("page") if isinstance(item.get("page"), str) else None,
+                      "label": str(item.get("label") or "스킬"), "row": int(item.get("row", 0)) if isinstance(item.get("row"), int) else 0})
+    pos = sec.get("pos")
+    pos = {"x": int(pos["x"]), "y": int(pos["y"])} if isinstance(pos, dict) and all(type(pos.get(k)) is int for k in ("x", "y")) else None
+
+    def clamp(key, default, lo, hi):
+        value = sec.get(key)
+        return max(lo, min(hi, value)) if type(value) is int else default
+    return {"enabled": sec.get("enabled") is True, "slots": slots[:_COOLDOWN_MAX_SLOTS], "pos": pos,
+            "scale": clamp("scale", 100, 50, 300), "opacity": clamp("opacity", 100, 30, 100),
+            "locked": sec.get("locked") is not False, "sound": sec.get("sound") is not False}
+
+
+def save_cooldown(data: dict, path: Path = LOCAL_CONFIG_PATH) -> None:
+    cfg = _read_local_config(path)
+    sec = cfg.get("cooldown")
+    sec = dict(sec) if isinstance(sec, dict) else {}
+    sec.update(data)
+    cfg["cooldown"] = sec
+    _write_local_config(cfg, path)
