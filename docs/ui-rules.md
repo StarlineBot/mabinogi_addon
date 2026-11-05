@@ -123,6 +123,7 @@
 ## 9. 오버레이 공통
 
 - **위치 잠금** = 이동 막기 + 클릭 통과. 잠금을 풀면 드래그로 옮기고, 격자 맞춤(`ui/grid`)을 따른다.
+  - 새 오버레이도 드래그에 `grid.snap`·`grid.show_guide(self)`·뗄 때 `grid.hide_guide()`, 고정 때 `grid.owner_locked(self)`를 쓴다. `tests/test_grid_all_overlays.py`가 끌어서 옮기는 모든 오버레이를 훑어 빠지면 실패한다.
 - **배율**은 `표시 배율` 칸이다. **불투명도**는 그 옆에 `불투명도 100%`(기본)~`20%`, 10%씩 둔다([15절](app-copy-help-combat-controls-spec.md)).
   - 지금 불투명도가 있는 곳: **버프·디버프만**(0.31.0).
   - 후속(같은 규칙, [TODO](TODO.md)): 체력바·도르카·단축바·FPS·커스텀 오버레이.
