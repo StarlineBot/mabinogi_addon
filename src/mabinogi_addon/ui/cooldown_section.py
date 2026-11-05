@@ -252,13 +252,32 @@ class CooldownSection(QGroupBox):
             self._allowed = feature_access.Recheck(lambda: feature_access.is_creator())
         return bool(self._allowed())
 
-    def _running(self) -> bool:
-        if self._shutting_down or self._paused or not self._cfg["enabled"] or not self.slots or not self.allowed():
-            return False
+    def _enabled(self) -> bool:
+        return not (self._shutting_down or self._paused or not self._cfg["enabled"] or not self.slots or not self.allowed())
+
+    def _game_active(self) -> bool:
         try:
             return bool(self._watcher.is_game_active())
         except Exception:  # noqa: BLE001
             return False
+
+    def _running(self) -> bool:
+        """관측(판정)은 게임이 앞일 때만."""
+        return self._enabled() and self._game_active()
+
+    def _dragging(self) -> bool:
+        return self._overlay is not None and getattr(self._overlay, "_drag", None) is not None
+
+    def _display_active(self) -> bool:
+        """표시는 다른 오버레이 탭과 같은 규칙: 게임이 앞이거나, 우리 앱이 앞이고(구역이 보이거나·고정 해제 중이거나·끄는 중).
+        오버레이를 누르면 같은 프로세스인 우리 창이 앞이 된다 — 그때 숨기면 끌기가 끊기고 다음 클릭은 게임으로 통과했다."""
+        if self._game_active():
+            return True
+        try:
+            self_active = bool(self._watcher.is_self_active())
+        except Exception:  # noqa: BLE001
+            self_active = False
+        return self_active and (self.isVisible() or not self._cfg["locked"] or self._dragging())
 
     def _tick(self) -> None:
         from .skillbar_capture import shared
@@ -270,11 +289,12 @@ class CooldownSection(QGroupBox):
         if self.isHidden() == allowed:  # 제작자가 아니면 구역 자체가 안 보인다(로그인이 바뀌면 다음 틱에 반영)
             self.setVisible(allowed)
         if not self._running():
-            capture.clear("cooldown")
-            if self.row.row or self._last:
-                self.row.reset()
+            capture.clear("cooldown")  # 관측은 멈춘다(게임이 앞일 때만)
+            if (self.row.row or self._last) and not (self._enabled() and self._display_active()):
+                self.row.reset()  # 표시도 끝날 때만 줄을 비운다(우리 창이 잠깐 앞이면 그대로 둠)
                 self._last.clear()
-            self._show_row()
+            if self._overlay is None or self._overlay.isVisible() != self._should_show():
+                self._show_row()
             return
         slots = [dict(s) for s in self.slots]
         rects = [s["rect"] for s in slots] + [s["page_rect"] for s in slots if s.get("page_rect")]
@@ -303,7 +323,7 @@ class CooldownSection(QGroupBox):
             self._play()
 
     def _should_show(self) -> bool:
-        return self._running() and (bool(self.row.row) or not self._cfg["locked"])
+        return self._enabled() and self._display_active() and (bool(self.row.row) or not self._cfg["locked"])
 
     def _ensure_overlay(self):
         if self._overlay is None:

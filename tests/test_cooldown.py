@@ -352,3 +352,98 @@ def test_section_visible_in_skillbar_tab_for_creator(creator):
     finally:
         tab.shutdown()
         tab.close()
+
+
+# ---- 표시 조건(제작자 실게임 11-05: 오버레이를 누르면 우리 창이 앞 → 숨겨져 끌기가 끊김) ----------------------------
+class _FrontWatcher:
+    def __init__(self, game=False, own=True):
+        self.game, self.own = game, own
+
+    def is_game_active(self):
+        return self.game
+
+    def is_self_active(self):
+        return self.own
+
+
+def _press(ov, dx=0, dy=0, kind=None):
+    from PySide6.QtCore import QEvent, QPointF, Qt
+    from PySide6.QtGui import QMouseEvent
+    p = ov.frameGeometry().topLeft() + __import__("PySide6.QtCore", fromlist=["QPoint"]).QPoint(5 + dx, 5 + dy)
+    return QMouseEvent(kind or QEvent.Type.MouseButtonPress, QPointF(5, 5), QPointF(p.x(), p.y()),
+                       Qt.MouseButton.LeftButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+
+
+def test_unlocked_overlay_stays_and_drag_continues_while_our_app_is_front(creator, monkeypatch):
+    from PySide6.QtCore import QEvent
+    from mabinogi_addon import config
+    from mabinogi_addon.ui import skillbar_capture
+    from mabinogi_addon.ui.cooldown_section import CooldownSection
+    config.save_cooldown({"enabled": True, "locked": False,
+                          "slots": [{"id": "s1", "rect": [0, 0, 40, 40], "label": "스킬 1"}]})
+    monkeypatch.setattr(skillbar_capture.SkillbarCapture, "_grab", lambda self, x, y, w, h: np.zeros((h, w, 3), np.uint8))
+    watcher = _FrontWatcher(game=True, own=False)
+    from PySide6.QtWidgets import QWidget
+    holder = QWidget()  # 보이지 않는 부모 = 구역이 화면에 없음(다른 탭을 보는 중과 같음)
+    sec = CooldownSection(watcher, holder)
+    try:
+        sec._tick()
+        ov = sec._overlay
+        assert ov is not None and ov.isVisible()  # 고정 해제 = 예시 칸
+        watcher.game, watcher.own = False, True  # 오버레이를 누르는 순간 우리 창이 앞
+        start = ov.pos()
+        ov.mousePressEvent(_press(ov))
+        sec._tick()
+        assert ov.isVisible()  # 숨기지 않는다
+        ov.mouseMoveEvent(_press(ov, 30, 20, QEvent.Type.MouseMove))
+        sec._tick()
+        assert ov.isVisible() and ov.pos() != start  # 끌기가 이어짐
+        assert not skillbar_capture.shared().active("cooldown")  # 관측은 게임이 앞일 때만
+        ov.mouseReleaseEvent(_press(ov, 30, 20, QEvent.Type.MouseButtonRelease))
+        assert config.load_cooldown()["pos"] == {"x": ov.x(), "y": ov.y()}
+    finally:
+        sec.shutdown()
+
+
+def test_locked_overlay_hides_when_another_app_is_front_and_keeps_row_while_ours(creator):
+    from mabinogi_addon import config
+    from mabinogi_addon.ui.cooldown_section import CooldownSection
+    config.save_cooldown({"enabled": True, "locked": True,
+                          "slots": [{"id": "s1", "rect": [0, 0, 40, 40], "label": "스킬 1"}]})
+    watcher = _FrontWatcher(game=True, own=False)
+    from PySide6.QtWidgets import QWidget
+    holder = QWidget()
+    sec = CooldownSection(watcher, holder)
+    try:
+        sec.row.update({"s1": COOLING}, time.monotonic())
+        sec._show_row()
+        assert sec._overlay.isVisible()
+        watcher.game, watcher.own = False, False  # 다른 프로그램이 앞
+        sec._tick()
+        assert not sec._overlay.isVisible() and sec.row.row == []
+        sec.row.update({"s1": COOLING}, time.monotonic())
+        watcher.game, watcher.own = False, True  # 우리 앱이 앞, 고정 중, 구역은 안 보임 → 숨김(다른 오버레이 탭과 같음)
+        sec._tick()
+        assert not sec._overlay.isVisible()
+    finally:
+        sec.shutdown()
+
+
+def test_boss_bar_overlay_also_stays_while_dragging_with_our_app_front(monkeypatch):
+    from mabinogi_addon import config, feature_access
+    from mabinogi_addon.ui import boss_tab as bt
+    monkeypatch.setattr(feature_access, "is_creator", lambda: True)
+    config.save_boss_bar_overlay({"enabled": True, "locked": False})
+    watcher = _FrontWatcher(game=True, own=False)
+    tab = bt.BossTab(watcher)
+    tab._timer.stop()
+    sec = tab.bar_section
+    try:
+        sec._tick()
+        assert sec._overlay is not None and sec._overlay.isVisible()  # 고정 해제 = 예시 바
+        watcher.game, watcher.own = False, True
+        sec._overlay.mousePressEvent(_press(sec._overlay))
+        sec._tick()
+        assert sec._overlay.isVisible()
+    finally:
+        tab.shutdown()

@@ -87,6 +87,18 @@ class BossBarSection(QGroupBox):
         except Exception:  # noqa: BLE001
             return False
 
+    def _display_active(self) -> bool:
+        """표시는 다른 오버레이 탭과 같은 규칙: 게임이 앞이거나, 우리 앱이 앞이고(구역이 보이거나·고정 해제 중이거나·끄는 중).
+        오버레이를 누르면 같은 프로세스인 우리 창이 앞이 된다 — 그때 숨기면 끌기가 끊긴다."""
+        if self._game_active():
+            return True
+        try:
+            self_active = bool(self._tab._watcher.is_self_active())
+        except Exception:  # noqa: BLE001
+            self_active = False
+        dragging = self._overlay is not None and getattr(self._overlay, "_drag", None) is not None
+        return self_active and (self.isVisible() or not self._cfg["locked"] or dragging)
+
     # ---- 판독 반영(화면 스레드) ----
     def feed(self, reading: dict):
         """판독 한 번 반영. 그린 상태(Shown)를 돌려준다(보스 탭 수집이 표시값·이유 태그로 씀). 꺼져 있으면 None."""
@@ -99,7 +111,7 @@ class BossBarSection(QGroupBox):
 
     def _show(self, shown=None) -> None:
         shown = shown or self.value.shown()
-        visible = self.wanted() and self._game_active() and (shown.value is not None or not self._cfg["locked"])
+        visible = self.wanted() and self._display_active() and (shown.value is not None or not self._cfg["locked"])
         if not visible:
             if self._overlay is not None and self._overlay.isVisible():
                 self._overlay.hide()
@@ -114,7 +126,7 @@ class BossBarSection(QGroupBox):
         allowed = self.allowed()
         if self.isHidden() == allowed:  # 로그인이 바뀌면 다음 틱에 반영
             self.setVisible(allowed)
-        if not self.wanted() or not self._game_active():
+        if not self.wanted() or not self._display_active():
             self.value.reset()
         else:
             self.value.tick(time.monotonic())  # 판독이 멈춰도(영역 없음 등) 1.8초 뒤 숨김
