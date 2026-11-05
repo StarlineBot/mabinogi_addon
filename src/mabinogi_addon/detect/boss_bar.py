@@ -89,7 +89,7 @@ def _has_name_text(sub: np.ndarray) -> bool:
 
 
 def make_validator(*, templates=None, diagnostics: dict | None = None, auxiliary_names=None, bright_samples=None,
-                   return_percent: bool = False):
+                   return_percent: bool = False, with_frac: bool = False):
     """박스가 진짜 보스바인지 검증하는 콜백 — HP% 판독이 되고(오른쪽에 'XXX.XX%'),
     왼쪽에 **이름 글자가 있을 때**만 True. (지난 커밋은 등록된 5개 보스만 식별(identify)해
     통과시켜, 글라스 기브넨 등 미등록 보스에선 자동 찾기가 안 됐다. 디버프 트래커는 모든
@@ -97,12 +97,14 @@ def make_validator(*, templates=None, diagnostics: dict | None = None, auxiliary
 
     이걸로 거르는 것: 펠롬 2단 바 등 % 판독 실패(read_percent None), 글자 없는 솔리드 밴드.
     """
-    from .boss_hp_reader import main_path_score, read_percent
+    from .boss_hp_reader import main_path_score, read_percent, read_percent_frac
     auxiliary_names = _AUXILIARY_NAMES if auxiliary_names is None else auxiliary_names
 
     def validate(sub: np.ndarray):
         """보스바면 True(return_percent=True면 그 정수 %), 아니면 False(None)."""
         ok = _validate(sub)
+        if with_frac:  # (정수, 소수 두 자리|None) 또는 None — 보스바 오버레이(미등록 보스 소수 표시)
+            return ok if ok is not False else None
         if return_percent:
             return ok if ok is not False else None
         return ok is not False
@@ -114,7 +116,11 @@ def make_validator(*, templates=None, diagnostics: dict | None = None, auxiliary
             if diagnostics is not None:
                 diagnostics.setdefault("validation", []).append({"percent": None, "rejection": "auxiliary_bar"})
             return False
-        percent = read_percent(sub, templates, bright_samples=bright_samples)
+        frac = None
+        if with_frac:
+            percent, frac = read_percent_frac(sub, templates, bright_samples=bright_samples)
+        else:
+            percent = read_percent(sub, templates, bright_samples=bright_samples)
         if percent is None:
             if diagnostics is not None:
                 diagnostics.setdefault("validation", []).append({"percent": None, "rejection": "percent_unreadable"})
@@ -129,7 +135,9 @@ def make_validator(*, templates=None, diagnostics: dict | None = None, auxiliary
         has_name = _has_name_text(sub)
         if diagnostics is not None:
             diagnostics.setdefault("validation", []).append({"percent": percent, "rejection": None if has_name else "name_text_missing"})
-        return percent if has_name else False
+        if not has_name:
+            return False
+        return (percent, frac) if with_frac else percent
 
     return validate
 

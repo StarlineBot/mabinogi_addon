@@ -35,7 +35,7 @@ from .. import config, image_io, paths
 from ..detect.boss_bar import (
     normalize_box_height,
 )
-from ..detect.boss_hp_reader import read_percent
+from ..detect.boss_hp_reader import read_percent, read_percent_frac
 from .dpi import to_logical
 from .screen_grab import capture_for_autofind
 from ..detect.boss_name_matcher import identify, load_name_templates, load_name_variants
@@ -545,10 +545,13 @@ class BossTab(QWidget):
         pct_reg = frame[:, int(w * 0.58) :]  # 오른쪽=HP%(가운데 빈 띠는 글자 없음)
         boss_id = timed("이름 식별", identify, name_reg, self._name_templates, variants=self._name_variants)
         out["boss_id"] = boss_id
-        if boss_id is not None:
+        if boss_id is not None and ext is not None:  # 오버레이: 같은 정수 + 소수 두 자리(표시용)
+            out["raw_hp"], out["raw_frac"] = timed("HP 판독", read_percent_frac, pct_reg)
+        elif boss_id is not None:
             out["raw_hp"] = timed("HP 판독", read_percent, pct_reg)
-        elif presence and ext is not None:  # 오버레이: 존재 확인에서 읽은 %도 받는다(추가 판독 없음)
-            out["bar_pct"] = timed("보스바 확인", self._boss_bar_percent, frame)
+        elif presence and ext is not None:  # 오버레이: 존재 확인에서 읽은 %(+소수)도 받는다(추가 판독 없음)
+            reading = timed("보스바 확인", self._boss_bar_reading, frame)
+            out["bar_pct"], out["bar_frac"] = reading if reading is not None else (None, None)
             out["bar"] = out["bar_pct"] is not None
         elif presence:  # 미등록 보스 존재 확인(이름 글자 + % 판독 — 바가 보일 때만 ~36ms)
             out["bar"] = timed("보스바 확인", self._boss_bar_visible, frame)
@@ -566,6 +569,7 @@ class BossTab(QWidget):
         from ..detect.boss_bar import BAR_BAND_MAX, BAR_BAND_MIN, bar_band_height, has_wide_bar_row
         from ..detect.boss_hp_reader import low_hp_bar_hint
         boss_id, value = out["boss_id"], out["raw_hp"] if out["boss_id"] is not None else out.get("bar_pct")
+        frac = out.get("raw_frac") if out["boss_id"] is not None else out.get("bar_frac")
         raw, rule = value, None
         frame = out["frame"]
         # 영역에 바 모양이 있으면(보스로 확인 안 된 바 — 에르그·보호막 등 포함) 한 칸 위까지 본다
@@ -578,18 +582,20 @@ class BossTab(QWidget):
         if band is not None and not low_hp and not BAR_BAND_MIN <= band <= BAR_BAND_MAX:
             if value is not None:
                 rule = "height"
-            value = None  # 얇은 일반 체력바(또는 바가 아닌 띠) — 보스 값으로 쓰지 않는다
+            value = frac = None  # 얇은 일반 체력바(또는 바가 아닌 띠) — 보스 값으로 쓰지 않는다
         top = up - self.BAR_PITCH
         if top >= 0:  # 한 칸 위에도 보스바가 있으면 위가 보스(기믹으로 보스바가 밀려 올라간 경우)
             above = full[top:top + h]
-            pct = self._boss_bar_percent(above)
-            if pct is not None:
+            reading = self._boss_bar_reading(above)
+            if reading is not None:
+                pct, above_frac = reading
                 w = above.shape[1]
                 boss_id = identify(above[:, : int(w * 0.60)], self._name_templates, variants=self._name_variants)
                 if boss_id is not None:  # 등록 보스는 숫자 칸 판독(보스 탭과 같은 경로)
-                    pct = read_percent(above[:, int(w * 0.58):])
-                value, rule = pct, "upper"
-        return {"value": value, "boss": boss_id, "seen": True, "raw": raw, "rule": rule, "band": band}
+                    pct, above_frac = read_percent_frac(above[:, int(w * 0.58):])
+                value, frac, rule = pct, above_frac, "upper"
+        return {"value": value, "frac": frac if value is not None else None, "boss": boss_id, "seen": True,
+                "raw": raw, "rule": rule, "band": band}
 
     @perf_meter.timed("보스")
     def _apply_tick(self, out) -> None:
@@ -783,6 +789,19 @@ class BossTab(QWidget):
         shown = " · ".join(f"{name} {ms:.0f}ms" for name, ms in ui.items())
         logging.getLogger(__name__).info("보스 틱 느림 %.0fms(지난 1분 느린 틱 %d회): [계산·%s] %s · [반영·화면] %s",
                                          total, count, thread, work or "-", shown or "-")
+
+    def _boss_bar_reading(self, frame):
+        """보스바면 (정수 %, 소수 두 자리|None), 아니면 None — 보스바 오버레이(미등록 보스 값·소수). 기준은 _boss_bar_visible과 같다."""
+        from ..detect.boss_bar import has_wide_bar_row, make_validator
+        from ..detect.boss_hp_reader import low_hp_bar_hint
+        if frame is None or frame.size == 0 or not (has_wide_bar_row(frame) or low_hp_bar_hint(frame)):
+            return None
+        if getattr(self, "_bar_reading", None) is None:
+            self._bar_reading = make_validator(with_frac=True)
+        try:
+            return self._bar_reading(frame)
+        except Exception:  # noqa: BLE001
+            return None
 
     def _boss_bar_percent(self, frame) -> int | None:
         """보스바면 존재 확인에서 읽은 정수 %(보스바 오버레이 — 미등록 보스 값), 아니면 None. 기준은 _boss_bar_visible과 같다."""

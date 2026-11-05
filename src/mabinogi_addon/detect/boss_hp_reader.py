@@ -293,6 +293,65 @@ def read_percent(
     return _low_hp_value(region_bgr, templates, band, w, scale, pitch, span, bright_samples)
 
 
+# 소수 두 자리(보스바 오버레이 표시용, 사용자 확정 11-05) — 정수 판독 경로·결과는 그대로, 같은 글꼴·같은 숫자 샘플.
+# 'XX.YY %'에서 정수 일의 자리 오른쪽 끝 + '.'(약 4px) 뒤 두 칸. 칸 위치가 프레임마다 2~6px 흔들려 첫 칸은 1~7px, 둘째 칸은 첫 칸 기준 ±3px로 맞춘다.
+# 두 칸 모두 _STRONG(0.85) 이상일 때만 — 하나라도 낮으면 None(틀린 소수 대신 정수만). 저HP(빨간 바, 밝기 마스크 경로)는 샘플이 맞지 않아 소수 없음.
+_FRAC_GAP = range(1, 8)
+_FRAC_JITTER = 3
+
+
+def _cell_digit(band, right, pitch, templates):
+    left, right = round(right - pitch), round(right)
+    if left < 0 or right > band.shape[1]:
+        return None
+    cell = band[:, left:right]
+    if int((cell > 127).sum()) < _MIN_PX:
+        return None
+    ys = np.where((cell > 127).any(axis=1))[0]
+    xs = np.where((cell > 127).any(axis=0))[0]
+    d, sc = _classify(cell[ys.min():ys.max() + 1, xs.min():xs.max() + 1], templates)
+    return None if d is None else (d, sc)
+
+
+def _fraction(band, w, scale, pitch, templates, shift) -> str | None:
+    units_right = w - (_FIRST * scale + shift)
+    first = None
+    for gap in _FRAC_GAP:
+        right = units_right + gap * scale + pitch
+        got = _cell_digit(band, right, pitch, templates)
+        if got is not None and (first is None or got[1] > first[1]):
+            first = (got[0], got[1], right)
+    if first is None or first[1] < _STRONG:
+        return None
+    second = None
+    for dj in range(-_FRAC_JITTER, _FRAC_JITTER + 1):
+        got = _cell_digit(band, first[2] + pitch + dj, pitch, templates)
+        if got is not None and (second is None or got[1] > second[1]):
+            second = got
+    if second is None or second[1] < _STRONG:
+        return None
+    return first[0] + second[0]
+
+
+def read_percent_frac(
+    region_bgr: np.ndarray,
+    templates: dict[str, list[np.ndarray]] | None = None,
+    *, bright_samples: dict[str, list[np.ndarray]] | None = None,
+) -> tuple[int | None, str | None]:
+    """(read_percent와 같은 정수, 소수 두 자리 글자 또는 None). 소수는 보스바 오버레이 표시용 — 경고 판정은 정수만 쓴다."""
+    bright_samples = (_BRIGHT_SAMPLES if templates is None else {}) if bright_samples is None else bright_samples
+    prep = _prep(region_bgr, templates)
+    if prep is None:
+        return None, None
+    templates, w, scale, band, pitch, span = prep
+    val, score, shift = _scan(band, w, scale, pitch, templates, range(-span, span + 1))
+    if val is not None and score >= _ACCEPT:
+        if score < VALUE_MIN_SCORE:
+            return None, None
+        return val, _fraction(band, w, scale, pitch, templates, shift)
+    return _low_hp_value(region_bgr, templates, band, w, scale, pitch, span, bright_samples), None
+
+
 def main_path_score(
     region_bgr: np.ndarray, templates: dict[str, list[np.ndarray]] | None = None,
 ) -> float | None:

@@ -106,6 +106,8 @@ class BossBarSection(QGroupBox):
             return None
         value = reading.get("value") if reading.get("seen") else None
         shown = self.value.update(value, reading.get("boss"), time.monotonic())
+        # 소수는 표시용: 이번 판독 정수가 그린 값과 같고 흐림이 아닐 때만(값 규칙은 정수 기준, 틀린 소수 금지)
+        self._frac = reading.get("frac") if (value is not None and shown.value == value and not shown.stale) else None
         self._show(shown)
         return shown
 
@@ -118,7 +120,8 @@ class BossBarSection(QGroupBox):
             return
         ov = self._ensure_overlay()
         boss = self._tab._bosses.get(shown.boss) if shown.boss else None
-        ov.set_state(boss.name if boss else "보스", shown.value, shown.stale, boss.thresholds if boss else ())
+        frac = getattr(self, "_frac", None) if not shown.stale else None
+        ov.set_state(boss.name if boss else "보스", shown.value, shown.stale, boss.thresholds if boss else (), frac)
         if not ov.isVisible():
             ov.show()
 

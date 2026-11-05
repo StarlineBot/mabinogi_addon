@@ -470,3 +470,73 @@ def test_read_percent_tall_40px_box(tmp_path, name, expected):
     frame = image_io.imread(str(tmp_path / name), cv2.IMREAD_COLOR)
     assert frame.shape[0] == 40
     assert read_percent(frame[:, int(frame.shape[1] * 0.58):]) == expected
+
+
+# ---- 소수 두 자리(표시용, 사용자 확정 11-05) ------------------------------------------------------------------
+FRAC_TRUE = [  # (zip 안 파일, 판독 영역 위 여백, 화면 글자) — 화면으로 확인
+    ("pellom_hp047_106.png", 45, "47.58"), ("pellom_hp004_107.png", 45, "46.96"), ("pellom_hp045_108.png", 45, "45.72"),
+    ("unknown_hpxxx_032.png", 45, "59.46"), ("unknown_hpxxx_033.png", 45, "42.27"), ("unknown_hpxxx_034.png", 45, "21.97"),
+    ("unknown_hpxxx_035.png", 45, "26.52"),
+    ("eotgallin_poinche_hp004_000.png", 1, "48.00"), ("eotgallin_poinche_hp004_002.png", 1, "46.78"),
+    ("eotgallin_poinche_hp004_004.png", 1, "44.70"), ("eotgallin_poinche_hp004_008.png", 1, "40.31"),
+    ("eotgallin_poinche_hp004_109.png", 1, "46.86"), ("eotgallin_poinche_hp045_003.png", 1, "45.65"),
+    ("eotgallin_poinche_hp047_001.png", 1, "47.43"),
+]
+LOW_HP = [("unknown_hpxxx_042.png", 14), ("unknown_hpxxx_043.png", 14), ("unknown_hpxxx_044.png", 9), ("unknown_hpxxx_045.png", 7)]
+
+
+def _zip_frame(tmp_path, name, top):
+    import zipfile
+    with zipfile.ZipFile(f"tests/data/{ZIP}") as z:
+        z.extract(name, tmp_path)
+    frame = image_io.imread(str(tmp_path / name), cv2.IMREAD_COLOR)[top:top + 37]
+    return frame[:, int(frame.shape[1] * 0.58):]
+
+
+@pytest.mark.parametrize("name,top,text", FRAC_TRUE)
+def test_fraction_matches_screen_text(tmp_path, name, top, text):
+    from mabinogi_addon.detect.boss_hp_reader import read_percent, read_percent_frac
+    reg = _zip_frame(tmp_path, name, top)
+    whole, frac = read_percent_frac(reg)
+    assert f"{whole}.{frac}" == text
+    assert whole == read_percent(reg)  # 정수 경로·결과는 그대로
+
+
+@pytest.mark.parametrize("name,whole", LOW_HP)
+def test_low_hp_shows_integer_only(tmp_path, name, whole):
+    """저HP(빨간 바, 밝기 마스크 경로)는 숫자 샘플이 맞지 않아 소수 없음 — 틀린 소수 대신 정수만."""
+    from mabinogi_addon.detect.boss_hp_reader import read_percent_frac
+    assert read_percent_frac(_zip_frame(tmp_path, name, 45)) == (whole, None)
+
+
+def test_fraction_never_changes_integer_on_all_collected_frames(tmp_path):
+    import zipfile
+    from mabinogi_addon.detect.boss_hp_reader import read_percent, read_percent_frac
+    with zipfile.ZipFile(f"tests/data/{ZIP}") as z:
+        names = [n for n in z.namelist() if n.endswith(".png")]
+        z.extractall(tmp_path, names)
+    for name in names:
+        img = image_io.imread(str(tmp_path / name), cv2.IMREAD_COLOR)
+        reg = (img[45:82] if img.shape[0] == 88 else img)
+        reg = reg[:, int(reg.shape[1] * 0.58):]
+        whole, frac = read_percent_frac(reg)
+        assert whole == read_percent(reg), name
+        assert frac is None or (whole is not None and len(frac) == 2 and frac.isdigit()), name
+
+
+def test_overlay_draws_fraction_for_registered_and_unregistered(tab, tmp_path, monkeypatch):
+    import zipfile
+    state = {}
+    tab._region = {"x": 0, "y": 45, "w": 521, "h": 37}
+    monkeypatch.setattr(tab, "_grab_region", lambda: dict(tab._region))
+    monkeypatch.setattr(tab, "_grab_rect", lambda x, y, w, h: state["img"][y:y + h, x:x + w].copy())
+    with zipfile.ZipFile(f"tests/data/{ZIP}") as z:
+        z.extractall(tmp_path, ["pellom_hp047_106.png", "unknown_hpxxx_034.png", "unknown_hpxxx_045.png"])
+    for name, expected in (("pellom_hp047_106.png", ("펠롬", 47, "58")), ("unknown_hpxxx_034.png", ("보스", 21, "97")),
+                           ("unknown_hpxxx_045.png", ("보스", 7, None))):
+        tab.bar_section.value.reset()
+        state["img"] = image_io.imread(str(tmp_path / name), cv2.IMREAD_COLOR)
+        for _ in range(3):
+            tab._tick()
+        st = tab.bar_section._overlay.state()
+        assert (st[0], st[1], st[4]) == expected, name
