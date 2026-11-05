@@ -51,6 +51,7 @@ docs/
 - `cv2.setNumThreads(1)` 유지.
 - 경로는 `pathlib.Path`로 다룬다 (맥/Windows 공용).
 - 탐지 로직을 바꾸면 `tests/data` 기반 회귀 테스트를 추가하거나 갱신한다.
+- `tests/data`에 가로 1200px 이상 스크린샷을 올리는 커밋은 `tests/test_skillbar_testers.py` CASES에 그 파일의 단축바 위치 기대값도 같이 넣는다(빠지면 `test_case_list_covers_all_large_screenshots` 실패).
 
 ## 화면(UI) 개발 — 반드시 사용자 피드백을 받을 것
 
