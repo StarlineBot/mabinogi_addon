@@ -261,3 +261,102 @@ def test_settings_saved_and_overlay_redraws_only_on_change(tab):
         assert ov.has_content()  # 잠금 해제 = 예시 바
     finally:
         ov.close()
+
+
+# ---- 문제 순간 수집(명세 6절) -------------------------------------------------------------------
+def test_tracker_reports_rule_start_once():
+    v = BossBarValue()
+    v.update(50, None, 0)
+    assert v.rule is None
+    v.update(70, None, 0.3)
+    assert v.rule == "jump"
+    v.update(None, None, 0.6)
+    assert v.rule == "unread"
+    v.update(None, None, 0.9)
+    assert v.rule is None  # 계속 못 읽는 동안은 다시 시작으로 치지 않는다
+
+
+@pytest.fixture
+def collecting(tab, tmp_path):
+    tab._shot_dir = tmp_path
+    tab.diagnostics_btn.setChecked(True)
+    tab.collect_chk.setChecked(True)
+    return tab
+
+
+def _files(path, suffix=".png"):
+    return sorted(p.name for p in path.iterdir() if p.suffix == suffix)
+
+
+def test_rule_start_auto_saves_extended_rect_with_reason_and_json(collecting, tmp_path, monkeypatch):
+    import json
+    tab = collecting
+    monkeypatch.setattr(tab, "_frame_changed", lambda frame: False)  # 바 바뀜 자동 저장은 빼고 규칙 저장만 본다
+    tab.show_screen("스크린샷 2026-10-09 185217.png", (1018, 1248, 521, 37))  # 페타크 100
+    tab._tick()
+    assert _files(tmp_path) == []
+    tab.show_screen("2026-10-11_123333.png", (1658, 1967, 521, 37))  # 못 읽음 시작 → 저장
+    tab._tick()
+    tab._tick()  # 계속 못 읽음 → 다시 저장하지 않음
+    names = _files(tmp_path)
+    assert len(names) == 1 and names[0].startswith("gomok_petak_hpxxx_show100_unread_")
+    img = image_io.imread(str(tmp_path / names[0]), cv2.IMREAD_COLOR)
+    assert img.shape[0] == 37 + 45 + 6  # 오버레이가 읽은 늘린 사각형(한 칸 위 포함)
+    meta = json.loads((tmp_path / names[0]).with_suffix(".json").read_text(encoding="utf-8"))
+    assert meta["rule"] == "unread" and meta["shown"] == 100 and meta["area"] == [1658, 1967 - 45, 521, 88]
+
+
+def test_upper_row_switch_is_tagged(collecting, tmp_path, monkeypatch):
+    tab = collecting
+    monkeypatch.setattr(tab, "_frame_changed", lambda frame: False)
+    name, (x, y, w, h), _ = PELLOM[1]
+    tab.show_screen(name, (x, y + tab.BAR_PITCH, w, h))
+    tab._tick()
+    assert [n for n in _files(tmp_path) if "_upper_" in n]
+
+
+def test_unregistered_boss_saved_in_collect_mode_and_cap(collecting, tmp_path):
+    tab = collecting
+    tab._auto_saved = tab.AUTO_LIMIT - 1
+    for i, (name, _hp) in enumerate(GLASS[:3]):
+        tab.show_screen(name, (1018, 1248, 521, 37))
+        for _ in range(3 if i == 0 else 1):
+            tab._tick()
+    names = _files(tmp_path)
+    assert len(names) == 1 and names[0].startswith("unknown_")  # 미등록 보스도, 상한 200에서 멈춤
+    assert "200장" in tab.collect_label.text()
+
+
+def test_snapshot_saves_recent_ten_readings(collecting, tmp_path):
+    tab = collecting
+    tab.collect_chk.setChecked(False)
+    for i in range(12):
+        name, box, _ = PELLOM[i % 5]
+        tab.show_screen(name, box)
+        tab._tick()
+    tab._save_snapshot()
+    names = _files(tmp_path)
+    assert len(names) == tab.RECENT_SHOTS and all("_show" in n for n in names)
+    assert len(_files(tmp_path, ".json")) == tab.RECENT_SHOTS
+
+
+def test_snapshot_without_overlay_keeps_old_single_shot(collecting, tmp_path):
+    tab = collecting
+    tab.collect_chk.setChecked(False)
+    tab.bar_section.enable.setChecked(False)
+    tab.show_screen(*PELLOM[0][:2])
+    tab._tick()
+    tab._save_snapshot()
+    assert _files(tmp_path) == ["pellom_hp099_000.png"] and _files(tmp_path, ".json") == []
+
+
+def test_shots_are_written_off_the_ui_thread(collecting, tmp_path, monkeypatch):
+    import threading
+    tab = collecting
+    monkeypatch.setattr(type(tab), "INLINE_JOBS", False)
+    threads = []
+    original = image_io.imwrite
+    monkeypatch.setattr(image_io, "imwrite", lambda *a, **k: threads.append(threading.current_thread()) or original(*a, **k))
+    tab._queue_shots([{"frame": np.zeros((10, 10, 3), np.uint8), "boss": None, "raw": None}], auto=False)
+    tab._shot_writer.shutdown(wait=True)
+    assert threads and threads[0] is not threading.main_thread()

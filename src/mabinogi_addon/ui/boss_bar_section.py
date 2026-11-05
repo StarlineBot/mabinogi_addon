@@ -88,12 +88,14 @@ class BossBarSection(QGroupBox):
             return False
 
     # ---- 판독 반영(화면 스레드) ----
-    def feed(self, reading: dict) -> None:
+    def feed(self, reading: dict):
+        """판독 한 번 반영. 그린 상태(Shown)를 돌려준다(보스 탭 수집이 표시값·이유 태그로 씀). 꺼져 있으면 None."""
         if not self.wanted():
-            return
+            return None
         value = reading.get("value") if reading.get("seen") else None
         shown = self.value.update(value, reading.get("boss"), time.monotonic())
         self._show(shown)
+        return shown
 
     def _show(self, shown=None) -> None:
         shown = shown or self.value.shown()

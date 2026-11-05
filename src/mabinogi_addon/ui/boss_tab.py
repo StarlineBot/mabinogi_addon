@@ -538,6 +538,8 @@ class BossTab(QWidget):
             if frame.shape[0] == 0:
                 return out
         out["frame"] = frame
+        if ext is not None:
+            out["full"], out["area"] = full, tuple(int(v) for v in area)  # 수집: 오버레이가 실제로 읽은 늘린 사각형
         w = frame.shape[1]
         name_reg = frame[:, : int(w * 0.60)]  # 왼쪽=이름
         pct_reg = frame[:, int(w * 0.58) :]  # 오른쪽=HP%(가운데 빈 띠는 글자 없음)
@@ -563,13 +565,16 @@ class BossTab(QWidget):
         from ..detect.boss_bar import BAR_BAND_MAX, BAR_BAND_MIN, bar_band_height, has_wide_bar_row
         from ..detect.boss_hp_reader import low_hp_bar_hint
         boss_id, value = out["boss_id"], out["raw_hp"] if out["boss_id"] is not None else out.get("bar_pct")
+        raw, rule = value, None
         frame = out["frame"]
         # 영역에 바 모양이 있으면(보스로 확인 안 된 바 — 에르그·보호막 등 포함) 한 칸 위까지 본다
         seen = boss_id is not None or bool(out.get("bar")) or has_wide_bar_row(frame) or low_hp_bar_hint(frame)
         if not seen:
-            return {"value": None, "boss": None, "seen": False}
+            return {"value": None, "boss": None, "seen": False, "raw": None, "rule": None}
         band = bar_band_height(full, up + h // 2)
         if band is not None and not BAR_BAND_MIN <= band <= BAR_BAND_MAX:
+            if value is not None:
+                rule = "height"
             value = None  # 얇은 일반 체력바(또는 바가 아닌 띠) — 보스 값으로 쓰지 않는다
         top = up - self.BAR_PITCH
         if top >= 0:  # 한 칸 위에도 보스바가 있으면 위가 보스(기믹으로 보스바가 밀려 올라간 경우)
@@ -580,8 +585,8 @@ class BossTab(QWidget):
                 boss_id = identify(above[:, : int(w * 0.60)], self._name_templates, variants=self._name_variants)
                 if boss_id is not None:  # 등록 보스는 숫자 칸 판독(보스 탭과 같은 경로)
                     pct = read_percent(above[:, int(w * 0.58):])
-                value = pct
-        return {"value": value, "boss": boss_id, "seen": True}
+                value, rule = pct, "upper"
+        return {"value": value, "boss": boss_id, "seen": True, "raw": raw, "rule": rule, "band": band}
 
     @perf_meter.timed("보스")
     def _apply_tick(self, out) -> None:
@@ -656,13 +661,15 @@ class BossTab(QWidget):
 
         # 수집 모드: 로그인 사용자가 켠 동안, 보스가 식별된 상태에서 바가 눈에 띄게
         # 바뀌면 자동 저장(오독 프레임 제보). 보스 없는 프레임은 길바닥이라 제외.
+        seen = boss_id is not None or bool(out.get("overlay", {}).get("seen"))  # 오버레이 중이면 미등록 보스도
         if (
             self.collect_chk.isChecked()
             and self._diagnostics_allowed()
-            and boss_id is not None
+            and seen
             and self._frame_changed(frame)
+            and self._auto_room()
         ):
-            self._write_shot(frame)
+            self._write_shot(out.get("full", frame), auto=True)
             self._last_saved_frame = frame
 
         # 실시간 상태 표시(현재 프레임 기준)
@@ -689,7 +696,9 @@ class BossTab(QWidget):
 
         self._update_upcoming(hp)
         if self._bar_overlay_sink is not None and "overlay" in out:
-            timed("오버레이", self._bar_overlay_sink, out["overlay"])
+            shown = timed("오버레이", self._bar_overlay_sink, out["overlay"])
+            if shown is not None:
+                timed("수집", self._collect_overlay, out, shown)
 
     def _run_job(self, work, done, inline=False) -> None:
         """work()는 작업 스레드(테스트·창이 덮을 때는 바로), done(결과)는 화면 스레드. 한 번에 하나만."""
@@ -850,7 +859,9 @@ class BossTab(QWidget):
         g = QVBoxLayout(box)
         g.addWidget(hint_label(
             "'수집 모드'를 켜면 보스 HP바 영역이 바뀔 때마다 자동 저장돼요(보스별로).\n"
-            "실제와 다른 %가 뜰 때(예: 48%인데 30% 알림)를 모아 보내주시면 오독 원인을 잡아요."
+            "실제와 다른 %가 뜰 때(예: 48%인데 30% 알림)를 모아 보내주시면 오독 원인을 잡아요.\n"
+            "보스바 오버레이를 켜 두면 미등록 보스·한 칸 위까지 찍고, 못 읽음·급상승·위 칸 전환·높이 제외 순간을 이유와 함께 저장해요"
+            f"(한 번 실행에 {self.AUTO_LIMIT}장까지). 스냅샷 저장은 최근 약 3초 {self.RECENT_SHOTS}장을 한 번에 저장해요."
         ))
         row = QHBoxLayout()
         self.snap_btn = QPushButton("스냅샷 저장")
@@ -948,23 +959,91 @@ class BossTab(QWidget):
             f"저장 위치: {self._shot_dir}  ·  수집 {self._shot_count}장"
         )
 
+    # ---- 보스바 오버레이 문제 순간 수집(보스바 오버레이 명세 6절) ----
+    RECENT_SHOTS = 10   # 최근 약 3초(판독 10회분) — 스냅샷 버튼이 한 번에 저장
+    AUTO_LIMIT = 200    # 한 번 실행에 자동 저장 상한
+
+    def _collect_overlay(self, out, shown) -> None:
+        """화면 스레드: 오버레이 판독 한 번을 최근 묶음에 넣고, 방어 규칙이 '시작된' 순간이면 자동 저장(수집 모드일 때)."""
+        reading = out["overlay"]
+        rule = reading.get("rule") or self.bar_section.value.rule
+        started = rule if rule != getattr(self, "_last_rule", None) else None
+        self._last_rule = rule
+        record = {"frame": out.get("full", out["frame"]), "main": out["frame"], "area": out.get("area"), "boss": reading.get("boss") or shown.boss,
+                  "raw": reading.get("raw"), "shown": shown.value, "stale": shown.stale, "rule": rule,
+                  "band": reading.get("band"), "time": __import__("time").time()}
+        recent = self.__dict__.setdefault("_recent", __import__("collections").deque(maxlen=self.RECENT_SHOTS))
+        recent.append(record)
+        if (started and self.collect_chk.isChecked() and self._diagnostics_allowed() and self._auto_room()):
+            self._queue_shots([record], auto=True)
+
+    def _auto_room(self) -> bool:
+        if getattr(self, "_auto_saved", 0) < self.AUTO_LIMIT:
+            return True
+        self.collect_label.setText(f"자동 저장이 {self.AUTO_LIMIT}장에 닿아 멈췄어요(앱을 다시 켜면 다시 모아요) · 저장 위치: {self._shot_dir}")
+        return False
+
     def _save_snapshot(self) -> None:
+        recent = list(self.__dict__.get("_recent") or ())
+        if recent and self.bar_section.wanted():  # 오버레이 중: 눈치챈 순간은 지나갔으니 최근 3초 묶음을 한 번에
+            self._queue_shots(recent, auto=False)
+            return
         if self._last_frame is None:
             self.collect_label.setText("저장할 캡처가 없어요 — 먼저 영역을 지정하세요")
             return
         self._write_shot(self._last_frame)
 
-    def _write_shot(self, frame) -> None:
-        try:
-            self._shot_dir.mkdir(parents=True, exist_ok=True)
-        except OSError:
-            return
-        boss = self._cur_boss or "unknown"
-        pct = f"{self._last_raw_hp:03d}" if self._last_raw_hp is not None else "xxx"
-        path = self._shot_dir / f"{boss}_hp{pct}_{self._shot_count:03d}.png"
-        if image_io.imwrite(path, frame):
+    def _write_shot(self, frame, auto: bool = False) -> None:
+        self._queue_shots([{"frame": frame, "boss": self._cur_boss, "raw": self._last_raw_hp}], auto=auto)
+
+    def _queue_shots(self, records, auto: bool) -> None:
+        """파일 이름·번호는 화면 스레드에서 정하고, PNG·JSON 쓰기는 작업 스레드에서(화면 스레드 PNG 쓰기 금지)."""
+        jobs = []
+        for rec in records:
+            boss = rec.get("boss") or "unknown"
+            raw = rec.get("raw")
+            name = f"{boss}_hp{raw:03d}" if raw is not None else f"{boss}_hpxxx"
+            if "shown" in rec:  # 오버레이 판독: 표시값·이유 태그도 이름에
+                name += f"_show{rec['shown']:03d}" if rec.get("shown") is not None else "_showxxx"
+                if rec.get("rule"):
+                    name += f"_{rec['rule']}"
+            jobs.append((self._shot_dir / f"{name}_{self._shot_count:03d}.png", rec))
             self._shot_count += 1
-            self._update_collect_label()
+            if auto:
+                self._auto_saved = getattr(self, "_auto_saved", 0) + 1
+        self._update_collect_label()
+
+        def write():
+            try:
+                self._shot_dir.mkdir(parents=True, exist_ok=True)
+            except OSError:
+                return
+            for path, rec in jobs:
+                if image_io.imwrite(path, rec["frame"]) and "shown" in rec:
+                    meta = {k: rec.get(k) for k in ("time", "boss", "raw", "shown", "stale", "rule", "band", "area")}
+                    meta["score"] = self._shot_score(rec.get("main"))
+                    try:
+                        path.with_suffix(".json").write_text(__import__("json").dumps(meta, ensure_ascii=False), encoding="utf-8")
+                    except OSError:
+                        pass
+        if self.INLINE_JOBS:
+            write()
+            return
+        writer = self.__dict__.get("_shot_writer")
+        if writer is None:
+            from concurrent.futures import ThreadPoolExecutor
+            writer = self._shot_writer = ThreadPoolExecutor(max_workers=1, thread_name_prefix="boss-shot")
+        writer.submit(write)
+
+    @staticmethod
+    def _shot_score(main):
+        """원판독 점수(기본 경로 최저 자리 점수, 숫자 칸) — 저장 작업 스레드에서."""
+        try:
+            from ..detect.boss_hp_reader import main_path_score
+            score = None if main is None else main_path_score(main[:, int(main.shape[1] * 0.58):])
+            return None if score is None else round(float(score), 3)
+        except Exception:  # noqa: BLE001
+            return None
 
     def _frame_changed(self, frame, threshold: float = 4.0) -> bool:
         prev = self._last_saved_frame
@@ -1097,6 +1176,9 @@ class BossTab(QWidget):
 
     def shutdown(self) -> None:
         self._shutting_down = True
+        writer = self.__dict__.pop("_shot_writer", None)
+        if writer is not None:
+            writer.shutdown(wait=True)  # 저장 중인 수집 파일은 끝까지 쓴다
         executor = self.__dict__.pop("_executor", None)
         if executor is not None:
             executor.submit(self._close_worker_mss)  # 작업 스레드의 mss는 그 스레드에서 닫는다

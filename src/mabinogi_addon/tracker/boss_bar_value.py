@@ -30,16 +30,22 @@ class BossBarValue:
         self.stale = False
         self._last_ok = None
         self._pending: int | None = None
+        self.rule: str | None = None  # 이번 update에서 시작된 방어 규칙(수집 태그): "unread" | "jump"
 
     def update(self, value: int | None, boss: str | None, now: float) -> Shown:
+        self.rule = None
         if value is not None and not 0 <= value <= 100:
             value = None
         if value is None:
             self._pending = None
             if self.value is not None:
+                if not self.stale:
+                    self.rule = "unread"  # 못 읽음 시작
                 self.stale = True
                 if self._last_ok is None or now - self._last_ok > self.gone:
+                    rule = self.rule
                     self.reset()
+                    self.rule = rule
             return self.shown()
         if boss is None and self.value is not None:
             boss = self.boss  # 이름 식별이 한 번 깜빡여도(미등록 경로로 읽힘) 같은 보스로 — 이름·패턴 선 유지
@@ -50,6 +56,7 @@ class BossBarValue:
                 self.value, self._pending = value, None
             else:
                 self._pending = value
+                self.rule = "jump"  # 급상승 보류
                 self.stale = False
                 self._last_ok = now
                 return self.shown()
