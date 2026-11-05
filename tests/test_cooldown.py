@@ -447,3 +447,39 @@ def test_boss_bar_overlay_also_stays_while_dragging_with_our_app_front(monkeypat
         assert sec._overlay.isVisible()
     finally:
         tab.shutdown()
+
+
+# ---- 알림음(제작자 시험 11-05: 상태지원 음성이 나던 것) ----------------------------------------------------
+def test_sound_is_dedicated_short_effect_and_off_by_default():
+    import wave
+    from mabinogi_addon import config
+    from mabinogi_addon.ui import cooldown_section
+    from mabinogi_addon.ui.notifier import SOUND_DIR
+    assert cooldown_section.SOUND_FILE != "상태지원 알림.mp3"
+    path = SOUND_DIR / cooldown_section.SOUND_FILE
+    with wave.open(str(path)) as w:
+        assert w.getnframes() / w.getframerate() < 0.6  # 짧은 효과음
+    assert config.load_cooldown()["sound"] is False  # 기본 꺼짐
+    config.save_cooldown({"sound": True})
+    assert config.load_cooldown()["sound"] is True
+
+
+def test_cells_ending_together_sound_once_even_across_observations():
+    row = CooldownRow()
+    row.update({"a": READY, "b": READY}, 0)
+    row.update({"a": COOLING, "b": COOLING}, 1)
+    assert row.update({"a": READY}, 10.0) is True
+    assert row.update({"b": READY}, 10.22) is False  # 다음 관측(0.22초 뒤) — 같은 순간으로 보고 한 번만
+    row.update({"b": COOLING}, 11)
+    assert row.update({"b": READY}, 20.0) is True  # 따로 끝나면 다시 울림
+
+
+def test_same_cell_does_not_repeat_during_highlight_flash():
+    row = CooldownRow()
+    row.update({"a": READY}, 0)
+    row.update({"a": COOLING}, 1)
+    assert row.update({"a": READY}, 10.0) is True
+    row.update({"a": COOLING}, 10.3)  # 강조 중 번쩍임으로 숫자가 다시 보임
+    assert row.update({"a": READY}, 10.6) is False  # 같은 칸, 강조 시간 안 → 반복 안 함
+    assert row.update({"a": COOLING}, 12.0) is False
+    assert row.update({"a": READY}, 30.0) is True  # 실제로 다시 쓴 뒤 끝나면 울림

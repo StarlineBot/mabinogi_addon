@@ -1702,7 +1702,8 @@ def load_cooldown(path: Path = LOCAL_CONFIG_PATH) -> dict:
         return max(lo, min(hi, value)) if type(value) is int else default
     return {"enabled": sec.get("enabled") is True, "slots": slots[:_COOLDOWN_MAX_SLOTS], "pos": pos,
             "scale": clamp("scale", 100, 50, 300), "opacity": clamp("opacity", 100, 30, 100),
-            "locked": sec.get("locked") is not False, "sound": sec.get("sound") is not False}
+            "locked": sec.get("locked") is not False,
+            "sound": sec.get("sound") is True}  # 알림음 기본 꺼짐(11-05) — 칸마다 울리면 잦다, 민트 강조로 충분
 
 
 def save_cooldown(data: dict, path: Path = LOCAL_CONFIG_PATH) -> None:

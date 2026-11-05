@@ -25,7 +25,7 @@ from .widgets import checkbox, hint_label, switch
 _log = logging.getLogger(__name__)
 OBSERVE_INTERVAL = 0.22   # 관측 4~5회/초(9.1-2)
 MAX_SLOTS = 8
-SOUND_FILE = "상태지원 알림.mp3"
+SOUND_FILE = "쿨타임 끝.wav"  # 쿨타임 전용 짧은 효과음(scripts/make_cooldown_sound.py로 합성) — 상태지원 음성 재사용을 바꿈(11-05)
 
 
 def observe(frame, origin, slots, last: dict, with_crops: bool):

@@ -1,7 +1,8 @@
 """쿨타임 오버레이 한 줄 상태(쿨타임 명세 10.1) — 화면과 무관한 순수 로직.
 
 - 등록 칸이 '사용 중'이 되면 줄 끝에 붙는다(쓴 순서).
-- 사용 가능해지면 약 1초 강조 + 알림(여러 개가 같이 끝나도 소리는 한 번) 뒤 빠지고 뒤 칸이 당겨진다.
+- 사용 가능해지면 약 1초 강조 + 알림 뒤 빠지고 뒤 칸이 당겨진다. 소리는 0.5초 안에 끝난 칸들끼리 한 번,
+  같은 칸이 강조 중 번쩍임으로 다시 끝나도 다시 울리지 않는다(알림음은 기본 꺼짐, 쿨타임 전용 효과음).
 - 강조 중 다시 사용 중이 되면 강조를 취소하고 줄 끝으로 간다.
 - 가려짐·페이지 바뀜(hidden)은 사용 가능으로 치지 않는다 → 강조·알림 없이 그 칸만 줄에서 뺀다.
 - 앱 시작·다시 보임: 이미 사용 중이면 바로 줄에, 이미 사용 가능이면 강조·알림 없이 비워 둔다.
@@ -11,6 +12,7 @@ from __future__ import annotations
 
 COOLING, READY, HIDDEN = "cooling", "ready", "hidden"
 HIGHLIGHT_SECONDS = 1.0
+SOUND_GAP = 0.5  # 이 안에 끝난 칸들은 '동시에'로 보고 소리 한 번(관측 0.22초 간격으로 나뉘어 들어와도)
 
 
 class CooldownRow:
@@ -19,6 +21,8 @@ class CooldownRow:
         self.row: list[str] = []
         self.until: dict[str, float] = {}   # 강조 중인 칸 → 끝나는 시각
         self._seen: set[str] = set()         # 이번에 보이기 시작한 뒤 한 번이라도 관측한 칸
+        self._sounded: dict[str, float] = {}  # 칸 → 마지막으로 소리 낸 시각(같은 칸은 강조 시간 안에 다시 울리지 않음)
+        self._last_sound = float("-inf")
 
     def update(self, states: dict[str, str], now: float) -> bool:
         """칸 상태(바뀐 것만이어도 됨)를 반영. 알림음을 낼지(True) 돌려준다."""
@@ -39,8 +43,14 @@ class CooldownRow:
                     self.row.append(sid)
             elif sid in self.row and sid not in self.until and not first:
                 self.until[sid] = now + self.highlight
-                sound = True
+                if now - self._sounded.get(sid, float("-inf")) >= self.highlight:  # 강조 중 번쩍임으로 다시 끝나도 반복 안 함
+                    sound = True
+                    self._sounded[sid] = now
         self.expire(now)
+        if sound and now - self._last_sound < SOUND_GAP:
+            sound = False  # 방금 울렸다(여러 칸이 거의 동시에 끝남) → 한 번만
+        if sound:
+            self._last_sound = now
         return sound
 
     def expire(self, now: float) -> bool:
@@ -62,6 +72,8 @@ class CooldownRow:
         self.row.clear()
         self.until.clear()
         self._seen.clear()
+        self._sounded.clear()
+        self._last_sound = float("-inf")
 
     def _drop(self, sid: str) -> None:
         self.until.pop(sid, None)
