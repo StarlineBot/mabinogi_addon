@@ -49,11 +49,30 @@ def _classify(name, key):
     ("2026-10-30_windowed_wireweb_1.png", {(0, 0, 0, 0), (0, 0, 1, 0), (1, 0, 0, 0)}),
     ("2026-10-30_windowed_wireweb_2.png", {(0, 0, 0, 0), (0, 0, 1, 0), (0, 0, 1, 3), (0, 1, 1, 0), (1, 0, 0, 0)}),
     ("mabinogi_2026_10_30_214648.png", {(0, 1, 0, 0), (0, 1, 0, 1)}),
+    # 제작자 실게임 11-05: 아래부터 차오르는 밝은 게이지 + 가운데 숫자 — 예전 밝기 게이트는 47·21만 잡았다
+    ("스크린샷 2026-11-05 203318.png", {(1, 0, 0, 1), (1, 0, 0, 2), (1, 1, 0, 3), (1, 1, 1, 2), (1, 1, 2, 1)}),  # 47·17·21·4·5
+    ("스크린샷 2026-11-05 203332.png", {(1, 0, 0, 1), (1, 0, 0, 2), (1, 1, 0, 3), (1, 1, 2, 1)}),  # 31·2·6·7
 ])
 def test_cooling_cells_exactly(name, cooling):
     _frame, _box, cells = _screen(name)
     found = {k for k in cells if _classify(name, k) == cd.COOLING}
     assert found == cooling  # 나머지(아이콘·귀퉁이 수량·단축키 글자만 있는 칸)는 사용 가능
+
+
+def test_digit_over_bright_flash_stays_cooling():
+    """0.x초 하얀 번쩍임으로 칸 위쪽까지 밝아도 숫자(검은 테두리)가 남아 있으면 사용 중."""
+    frame, _box, cells = _screen("스크린샷 2026-11-05 203332.png")
+    x, y, w, h = cells[(1, 0, 0, 2)].rect  # '2' — 위쪽 띠 밝기 196
+    cell = frame[y:y + h, x:x + w]
+    assert cv2.cvtColor(cell, cv2.COLOR_BGR2HSV)[: h // 3, :, 2].mean() > 150
+    assert cd.classify(cell) == cd.COOLING
+
+
+def test_old_false_positives_are_ready():
+    """예전 평균 밝기 판정의 오탐: 나눔고딕 1080 흑백 날개 아이콘(흰 곡선 조각)."""
+    name = "2026-11-03_나눔고딕_1080_시간없는목록.png"
+    _frame, _box, cells = _screen(name)
+    assert _classify(name, (1, 0, 1, 0)) == cd.READY and _classify(name, (1, 0, 1, 3)) == cd.READY
 
 
 def test_too_small_or_missing_cell_is_unknown():

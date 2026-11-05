@@ -1,7 +1,9 @@
 """쿨타임 오버레이 판정(쿨타임 명세 10절) — 단축바 칸 하나가 '사용 중'인지, 페이지 번호가 같은지.
 
-- 사용 중 = **회색(어두운) 바탕 + 가운데 숫자**(초·% 구분 없음, 몇 초인지 읽지 않음). 그 밖은 사용 가능.
-  귀퉁이 수량(99)·단축키 글자(F1·1)는 가운데가 아니라 보지 않는다.
+- 사용 중 = **가운데 숫자(흰 글자 + 검은 테두리)**가 있는 칸(초·% 구분 없음, 몇 초인지 읽지 않음). 그 밖은 사용 가능.
+  게임 쿨타임은 '아래부터 차오르는 밝은 게이지 + 가운데 숫자'라 칸 평균 밝기로 먼저 거르면 쿨이 진행될수록 오판했다
+  (제작자 실게임 11-05: 31·17·2·6·4·5초 칸이 사용 가능으로). 그래서 밝기 게이트를 없애고 숫자를 주 신호로 본다.
+  귀퉁이 수량(99)·단축키 글자(F1·1)는 가운데 줄(높이 30~75%)이 아니라 보지 않는다.
 - 페이지 = 그 줄의 `◀N▶` 숫자 상자. 숫자 템플릿 대신 **등록 때 상자 안 흰 글자 모양**을 저장해 두고 같은지만 본다
   (1~8 숫자를 읽을 필요 없음 — 다르면 '가려짐'과 같이 줄에서 뺀다).
 픽셀 반복문 없이 numpy·OpenCV만 쓴다(칸당 1ms 미만).
@@ -12,36 +14,76 @@ import cv2
 import numpy as np
 
 COOLING, READY, UNKNOWN = "cooling", "ready", "unknown"
-# tests/data 실측(1080·창 모드·4K): 사용 중 칸 밝기 59~108·채도 37~109, 가운데 흰 글자 22~88px.
-# 어두운 아이콘(검은 날개 등)은 가운데 흰 글자가 0~8px라 사용 가능으로 남는다.
-# 알려진 한계: 흑백 날개 아이콘 한 종류(나눔고딕 1080 화면)는 흰 곡선 조각이 숫자처럼 보여 사용 중으로 잡힌다 — 정지 화면 한 장으론
-# 구별되지 않아 제작자 실게임 테스트에서 확인한다.
-VAL_MAX = 112
-SAT_MAX = 120
-WHITE_MIN = 18
+# 흰 글자 조각(밝고 무채색, 8방향 연결). 칸 40px 기준 크기 — 큰 칸이면 비례.
+WHITE_V, WHITE_S = 180, 80
+GLYPH_H = (0.20, 0.60)      # 조각 높이(칸 높이 비율)
+GLYPH_CY = (0.30, 0.75)     # 조각 세로 중심(칸 높이 비율) — 가운데 줄만
+GLYPH_W_MAX = 0.45
+# 강한 신호: 조각을 1px 둘러싼 띠가 거의 검은색(중앙값 ≤ 50, 글자와 차이 ≥ 150) = 게임 숫자의 검은 테두리.
+#           밝은 게이지·0.x초 하얀 번쩍임 위에서도 테두리는 남아 숫자가 보이는 동안 사용 중이다.
+STRONG_RING, STRONG_GAP = 50, 150
+# 가는 '1': 2px 획이라 1px 띠에 경계 흐림이 섞인다 → 획 좌우 2px 안이 어두운(< 60) 줄이 90% 이상이면 강한 신호.
+THIN_DARK, THIN_ROWS = 60, 0.9
+# 약한 신호: 테두리가 어두운 회색(중앙값 ≤ 85, 차이 ≥ 120 — 예전 화면·4K) — 이때는 보조로 위쪽 띠(아직 안 찬 쪽)가 어두울 때만(≤ 100).
+WEAK_RING, WEAK_GAP, TOP_DARK = 85, 120, 100
+GLYPH_MIN = 10              # 신호 조각 넓이 합(px, 40px 칸 기준)
+# tests/data 실측(칸 5136개): 라벨 화면 6장 오판 0, 예전 판정(평균 밝기)의 오탐(흑백 날개 아이콘·칸 위 브라우저 글자)은 사라지고
+# 게이지가 찬 칸 124개를 새로 잡음. 남은 놓침: 회색 원 안 '90' 한 칸, 흐린 금색 '1' 한 칸.
+_RING = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+
+
+def _glyph_area(cell: np.ndarray) -> tuple[float, float]:
+    """(강한 신호 넓이, 약한 신호 넓이) — 40px 칸 기준으로 맞춘 값."""
+    h, w = cell.shape[:2]
+    hsv = cv2.cvtColor(cell, cv2.COLOR_BGR2HSV)
+    v = hsv[:, :, 2]
+    white = ((v > WHITE_V) & (hsv[:, :, 1] < WHITE_S)).astype(np.uint8)
+    n, labels, stats, _ = cv2.connectedComponentsWithStats(white, connectivity=8)
+    scale = (w / 40.0) ** 2
+    strong = weak = 0
+    for i in range(1, n):
+        x, y, cw, ch, area = (int(t) for t in stats[i])
+        if area < 4 * scale or not GLYPH_H[0] * h <= ch <= GLYPH_H[1] * h or cw > GLYPH_W_MAX * w:
+            continue
+        if not GLYPH_CY[0] * h <= y + ch / 2 <= GLYPH_CY[1] * h:
+            continue
+        y0, x0 = max(0, y - 1), max(0, x - 1)
+        comp = (labels[y0:y + ch + 1, x0:x + cw + 1] == i).astype(np.uint8)
+        patch = v[y0:y + ch + 1, x0:x + cw + 1]
+        ring = (cv2.dilate(comp, _RING) > 0) & (comp == 0)
+        if not ring.any():
+            continue
+        ring_v = float(np.median(patch[ring]))
+        core_v = float(patch[comp > 0].mean())
+        if ring_v <= STRONG_RING and core_v - ring_v >= STRONG_GAP:
+            strong += area
+            continue
+        if cw <= 0.15 * w and ch >= 0.25 * h and x >= 2 and x + cw + 2 <= w and core_v >= 240:
+            rows = (labels[y:y + ch, x:x + cw] == i).any(axis=1)
+            left = v[y:y + ch, x - 2:x].min(axis=1)
+            right = v[y:y + ch, x + cw:x + cw + 2].min(axis=1)
+            both = ((left < THIN_DARK) & (right < THIN_DARK))[rows]
+            if both.size and float(both.mean()) >= THIN_ROWS:
+                strong += area
+                continue
+        if ring_v <= WEAK_RING and core_v - ring_v >= WEAK_GAP:
+            weak += area
+    return strong / scale, weak / scale
 
 
 def classify(cell: np.ndarray | None) -> str:
     """단축바 칸(BGR, 정사각형 가까움) → cooling | ready | unknown(너무 작음·빈 값)."""
     if cell is None or cell.ndim != 3 or min(cell.shape[:2]) < 16:
         return UNKNOWN
-    h, w = cell.shape[:2]
-    hsv = cv2.cvtColor(cell, cv2.COLOR_BGR2HSV)
-    inner = hsv[4:h - 4, 4:w - 4]
-    sat = float(inner[:, :, 1].mean())
-    val = float(inner[:, :, 2].mean())
-    if val > VAL_MAX or sat > SAT_MAX:
-        return READY
-    # 흰 글자 = 밝고 무채색. 칸 전체에서 덩어리를 나눠, 아이콘의 큰 흰 곡선·띠(폭 40%·높이 60% 넘는 덩어리)는 뺀다.
-    # 숫자 획은 작은 조각으로 끊겨 있어도 그대로 센다(실측 '56'·'6'은 높이 2~10px 조각들).
-    white = ((hsv[:, :, 2] > 190) & (hsv[:, :, 1] < 50)).astype(np.uint8)
-    n, labels, stats, _ = cv2.connectedComponentsWithStats(white, connectivity=8)
-    big = [i for i in range(1, n) if stats[i][2] > 0.4 * w or stats[i][3] > 0.6 * h]
-    if big:
-        white[np.isin(labels, big)] = 0
-    glyphs = int(white[int(h * 0.25):int(h * 0.75), int(w * 0.1):int(w * 0.9)].sum())
-    scale = (w / 40.0) ** 2  # 40px 기준 → 큰 칸이면 비례
-    return COOLING if glyphs >= WHITE_MIN * scale else READY
+    strong, weak = _glyph_area(cell)
+    if strong >= GLYPH_MIN:
+        return COOLING
+    if strong + weak >= GLYPH_MIN:
+        h, w = cell.shape[:2]
+        v = cv2.cvtColor(cell, cv2.COLOR_BGR2HSV)[: int(h * 0.3), int(w * 0.35):, 2]  # 왼쪽 위 단축키 글자 칸 제외
+        if float(v.mean()) <= TOP_DARK:  # 보조: 위쪽(아직 안 찬 쪽)이 어둡다
+            return COOLING
+    return READY
 
 
 # ---- 페이지 번호 상자(◀N▶) ---------------------------------------------------------------------
