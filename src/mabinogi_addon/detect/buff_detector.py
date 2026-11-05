@@ -37,6 +37,11 @@ RESCUE_MIN = 0.78
 RESCUE_BLUR = 0.9
 HOLD_THRESHOLD = 0.75
 HOLD_ROWS = 3
+# 색 확인(제작자 11-05 요새화 추가 때): 회색 비교는 아이콘 테두리(주황·갈색)가 점수를 채워, 색이 전혀 다른 아이콘에도
+# 0.80 안팎이 나왔다(요새화 ↔ '시간 분열: 낮' 0.803·'재생' 0.799). 확실하지 않은(회색 < COLOR_CHECK_BELOW) 검출만 색으로 한 번 더 —
+# tests/data 실제 검출의 색 점수 최저 0.772(4K 흐림), 오인 0.594·0.666.
+COLOR_CHECK_BELOW = 0.95
+COLOR_MIN = 0.72
 
 
 def _soft(img: np.ndarray) -> np.ndarray:
@@ -63,6 +68,17 @@ def detect_buffs(
     soft_strip = None
 
     detections: list[Detection] = []
+
+    def color_ok(template, x, y) -> bool:
+        if template.ndim != 3 or region.ndim != 3:
+            return True
+        t3 = template[:, :, :3]
+        th, tw = t3.shape[:2]
+        win = region[max(0, y - 1):y + th + 1, x0 + max(0, x - 1):x0 + x + tw + 1]
+        if win.shape[0] < th or win.shape[1] < tw:
+            return True
+        return float(cv2.matchTemplate(np.ascontiguousarray(win), t3, cv2.TM_CCOEFF_NORMED).max()) >= COLOR_MIN
+
     for buff_id, template in templates.items():
         t = _gray(template)
         if t.shape[0] > strip.shape[0] or t.shape[1] > strip.shape[1]:
@@ -70,14 +86,16 @@ def detect_buffs(
         scores = cv2.matchTemplate(strip, t, cv2.TM_CCOEFF_NORMED)
         _lo, score, _lo_at, at = cv2.minMaxLoc(scores)
         y = int(at[1])
-        if score >= threshold:
+        sure = score >= COLOR_CHECK_BELOW
+        if score >= threshold and (sure or color_ok(template, at[0], y)):
             detections.append(Detection(buff_id, float(score), y))
             continue
-        if score >= RESCUE_MIN:
+        if threshold > score >= RESCUE_MIN:
             if soft_strip is None:
                 soft_strip = _soft(strip)
             window = soft_strip[y:y + t.shape[0], at[0]:at[0] + t.shape[1]]
-            if window.shape == t.shape and match_icon(window, _soft(t)).score >= RESCUE_BLUR:
+            if (window.shape == t.shape and match_icon(window, _soft(t)).score >= RESCUE_BLUR
+                    and color_ok(template, at[0], y)):
                 detections.append(Detection(buff_id, float(score), y))
                 continue
         if held and buff_id in held:
@@ -92,8 +110,34 @@ def detect_buffs(
                     if soft_strip is None:
                         soft_strip = _soft(strip)
                     window = soft_strip[ky:ky + t.shape[0], kx:kx + t.shape[1]]
-                    if window.shape == t.shape and match_icon(window, _soft(t)).score >= RESCUE_BLUR:
+                    if (window.shape == t.shape and match_icon(window, _soft(t)).score >= RESCUE_BLUR
+                            and (kept >= COLOR_CHECK_BELOW or color_ok(template, kx, ky))):
                         detections.append(Detection(buff_id, float(kept), ky))
 
+    detections = _one_per_row(detections, templates)
     detections.sort(key=lambda d: d.y)
     return detections
+
+
+SAME_ICON = 0.95  # 두 버프 아이콘끼리 이 이상 닮으면 '같은 그림' — 한 줄에 함께 둔다(사용자가 같은 그림으로 두 버프를 등록한 경우)
+
+
+def _one_per_row(detections: list[Detection], templates: dict[str, np.ndarray]) -> list[Detection]:
+    """게임 목록 한 줄(같은 y ± 아이콘 높이 반)에는 버프가 하나뿐 — 점수가 가장 높은 것만 남긴다.
+
+    예전엔 한 줄에 여러 버프가 함께 잡혔다(제작자 11-05: 요새화 줄을 비바체로 오인해 요새화 시간을 비바체로 읽음,
+    y=652 공격력 증가·급소 관통 함께). 같은 그림을 쓰는 버프끼리는 어느 쪽인지 알 수 없으니 함께 둔다."""
+    kept: list[Detection] = []
+    for det in sorted(detections, key=lambda d: -d.score):
+        half = max(1, _gray(templates[det.buff_id]).shape[0] // 2)
+        rivals = [k for k in kept if abs(k.y - det.y) <= half]
+        if all(_same_icon(templates[det.buff_id], templates[k.buff_id]) for k in rivals):
+            kept.append(det)
+    return kept
+
+
+def _same_icon(a: np.ndarray, b: np.ndarray) -> bool:
+    a, b = _gray(a), _gray(b)
+    if a.shape != b.shape:
+        return False
+    return float(cv2.matchTemplate(a, b, cv2.TM_CCOEFF_NORMED).max()) >= SAME_ICON

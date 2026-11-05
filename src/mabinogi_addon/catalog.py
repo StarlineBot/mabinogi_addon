@@ -50,6 +50,8 @@ DEFAULT_BUFF_NAMES: dict[str, str] = {
     "magic_speed": "마법 시전 속도 증가",
     "music_boost": "음악 부스트 포션",
     "speed": "이동 속도 증가 포션",
+    # 제작자 11-05: 요새화 — 등록 안 된 요새화 줄을 비바체로 오인(아이콘 0.735 닮음)하던 것을 막으려 기본 버프로
+    "fortification": "요새화",
 }
 
 # 기본 버프 표시 순서(사용자가 순서를 바꾸기 전 초기값). 앵커(premium_battle)는
@@ -70,6 +72,7 @@ DEFAULT_BUFF_ORDER: tuple[str, ...] = (
     "magic_speed",
     "music_boost",
     "speed",
+    "fortification",
 )
 
 # 기본 디버프 표시 순서(파일명=한글 이름 기준). 없는 이름은 뒤에 가나다순으로 붙는다.

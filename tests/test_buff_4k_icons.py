@@ -38,6 +38,8 @@ def test_4k_march_found_in_123333(catalog):
 
 PNGS = sorted(glob.glob("tests/data/**/*.png", recursive=True))
 RESCUED = {"2026-10-11_123333.png": {"march"}}  # 한 프레임 검출이 예전(0.8 이상)과 다른 유일한 장
+# 회색 0.8은 넘지만 색이 다른 아이콘(색 확인으로 뺌, 11-05 요새화 추가): '시간 분열: 낮' 줄의 요새화 0.803(색 0.666)
+COLOR_REJECTED = {"스크린샷 2026-10-31 174946.png": {"fortification"}}
 
 
 def _shot(path):
@@ -62,7 +64,8 @@ def test_detections_unchanged_except_4k_rescue(catalog, path):
     strip = gray(region[:, 0:50])
     legacy = {bid for bid, t in catalog.items() if match_icon(strip, gray(t)).score >= DEFAULT_THRESHOLD}
     found = detect_buffs(region, catalog, (0, 50))
-    assert {d.buff_id for d in found} == legacy | RESCUED.get(os.path.basename(path), set())
+    name = os.path.basename(path)
+    assert {d.buff_id for d in found} == (legacy - COLOR_REJECTED.get(name, set())) | RESCUED.get(name, set())
     if height >= 2000:
         assert all(d.score >= 0.78 for d in found), found
 

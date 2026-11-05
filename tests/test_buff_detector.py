@@ -63,3 +63,56 @@ def test_icon_absent_in_background_region():
     background = img[900:1300, 700:744]
     detections = detect_buffs(background, {"buff_top": template}, (0, 44))
     assert detections == []
+
+
+# ---- 요새화 기본 버프 + 한 줄 하나(제작자 11-05, image.png·image1.png) -------------------------------------------
+def _status(name):
+    import cv2
+    import numpy as np
+    from mabinogi_addon import image_io
+    from mabinogi_addon.detect.status_panel import anchor_template, locate_status_region
+    frame = image_io.imread(f"tests/data/{name}", cv2.IMREAD_COLOR)
+    x, y, w, h = locate_status_region(frame, anchor_template())
+    return np.ascontiguousarray(frame[y:y + h, x:x + w])
+
+
+def _default_templates():
+    from mabinogi_addon.catalog import DEFAULT_ICON_DIR, DEFAULT_IMAGE_DIR, build_templates, load_catalog
+    return build_templates(load_catalog((DEFAULT_ICON_DIR,), (DEFAULT_IMAGE_DIR,)))
+
+
+def test_fortification_is_default_buff_named_yosaehwa():
+    from mabinogi_addon.catalog import DEFAULT_BUFF_NAMES, DEFAULT_ICON_DIR, DEFAULT_IMAGE_DIR, load_catalog
+    ids = {b.id: b for b in load_catalog((DEFAULT_ICON_DIR,), (DEFAULT_IMAGE_DIR,))}
+    assert "fortification" in ids and DEFAULT_BUFF_NAMES["fortification"] == "요새화"
+
+
+def test_image1_fortification_row_is_not_vivace_even_when_vivace_was_held():
+    from mabinogi_addon.detect import detect_buffs
+    templates = _default_templates()
+    region = _status("image1.png")
+    found = {d.buff_id: d for d in detect_buffs(region, templates, (0, 50))}
+    assert "fortification" in found and "vivace" not in found
+    held = {"vivace": found["fortification"].y}  # 직전 프레임에 그 줄을 비바체로 잡고 있었어도(깜빡임·유지 가설)
+    again = {d.buff_id for d in detect_buffs(region, templates, (0, 50), held=held)}
+    assert "fortification" in again and "vivace" not in again
+
+
+def test_one_buff_per_row_keeps_highest_and_same_picture_pair():
+    import numpy as np
+    from mabinogi_addon.detect.buff_detector import Detection, _one_per_row
+    rng = np.random.default_rng(0)
+    a = rng.integers(0, 255, (16, 16, 3), dtype=np.uint8)
+    b = rng.integers(0, 255, (16, 16, 3), dtype=np.uint8)
+    templates = {"fortification": a, "vivace": b, "same": a.copy(), "other": b}
+    kept = _one_per_row([Detection("vivace", 0.78, 100), Detection("fortification", 1.0, 101),
+                         Detection("same", 1.0, 100), Detection("other", 0.9, 130)], templates)
+    assert {d.buff_id for d in kept} == {"fortification", "same", "other"}  # 같은 그림(same)은 함께, 다른 줄은 그대로
+
+
+def test_color_check_rejects_lookalike_frame_icons():
+    """회색 비교로는 테두리가 같아 0.8 안팎 — '시간 분열: 낮'(0.803)·'재생'(0.799)에 요새화가 붙지 않는다."""
+    from mabinogi_addon.detect import detect_buffs
+    templates = _default_templates()
+    for name in ("스크린샷 2026-10-31 174946.png", "2026-10-30_windowed_wireweb_3.png"):
+        assert "fortification" not in {d.buff_id for d in detect_buffs(_status(name), templates, (0, 50))}, name
