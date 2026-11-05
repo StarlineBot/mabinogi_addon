@@ -497,3 +497,126 @@ def test_same_cell_does_not_repeat_during_highlight_flash():
     assert row.update({"a": READY}, 10.6) is False  # 같은 칸, 강조 시간 안 → 반복 안 함
     assert row.update({"a": COOLING}, 12.0) is False
     assert row.update({"a": READY}, 30.0) is True  # 실제로 다시 쓴 뒤 끝나면 울림
+
+
+# ---- 세트(사용자 결정 11-05, 최대 4) · 사용 가능 순간 커졌다 돌아오기 --------------------------------------------
+def _set_slot(sid, x, set_no=None):
+    slot = {"id": sid, "rect": [x, 0, 40, 40], "label": f"스킬 {sid}"}
+    if set_no is not None:
+        slot["set"] = set_no
+    return slot
+
+
+def test_old_settings_move_to_set_one():
+    from mabinogi_addon import config
+    config.save_cooldown({"slots": [_set_slot("a", 0), _set_slot("b", 50)], "pos": {"x": 300, "y": 400}})  # 세트 없던 예전 설정
+    cfg = config.load_cooldown()
+    assert [s["set"] for s in cfg["slots"]] == [1, 1]
+    assert cfg["positions"][1] == {"x": 300, "y": 400} and cfg["positions"][2] is None
+
+
+def test_set_positions_saved_and_restored_per_set(creator):
+    from mabinogi_addon import config
+    from mabinogi_addon.ui.cooldown_section import CooldownSection
+    config.save_cooldown({"enabled": True, "locked": False, "slots": [_set_slot("a", 0, 1), _set_slot("b", 50, 2)]})
+    sec = CooldownSection(_FrontWatcher(game=True, own=False))
+    try:
+        sec._show_row()
+        o1, o2 = sec._overlays[1], sec._overlays[2]
+        o1.move(100, 200)
+        o1.moved.emit()
+        o2.move(500, 600)
+        o2.moved.emit()
+    finally:
+        sec.shutdown()
+    cfg = config.load_cooldown()
+    assert cfg["positions"][1] == {"x": 100, "y": 200} and cfg["positions"][2] == {"x": 500, "y": 600}
+    again = CooldownSection(_FrontWatcher(game=True, own=False))
+    try:
+        again._show_row()
+        assert again._overlays[1].pos().x() == 100 and again._overlays[2].pos().y() == 600  # 다시 켜도 세트마다 제자리
+    finally:
+        again.shutdown()
+
+
+def test_empty_set_has_no_overlay_and_unlocked_shows_box_per_used_set(creator):
+    from mabinogi_addon import config
+    from mabinogi_addon.ui.cooldown_section import CooldownSection
+    config.save_cooldown({"enabled": True, "locked": False, "slots": [_set_slot("a", 0, 1), _set_slot("b", 50, 3)]})
+    sec = CooldownSection(_FrontWatcher(game=True, own=False))
+    try:
+        sec._show_row()
+        assert {n for n, ov in sec._overlays.items() if ov.isVisible()} == {1, 3}  # 칸 없는 2·4세트는 안 띄움
+        assert sec._overlays[3].set_no == 3
+    finally:
+        sec.shutdown()
+
+
+def test_two_sets_show_their_own_cooling_cells_at_once(creator):
+    from mabinogi_addon import config
+    from mabinogi_addon.ui.cooldown_section import CooldownSection
+    config.save_cooldown({"enabled": True, "locked": True,
+                          "slots": [_set_slot("a", 0, 1), _set_slot("b", 50, 2), _set_slot("c", 100, 2)]})
+    sec = CooldownSection(_FrontWatcher(game=True, own=False))
+    try:
+        sec.row.update({"a": COOLING, "b": COOLING, "c": COOLING}, time.monotonic())
+        sec._show_row()
+        assert sec._overlays[1].items() == [("a", False)]
+        assert sec._overlays[2].items() == [("b", False), ("c", False)]
+        assert sec._overlays[1].isVisible() and sec._overlays[2].isVisible()
+    finally:
+        sec.shutdown()
+
+
+def test_register_uses_chosen_set_and_list_shows_set(creator):
+    from mabinogi_addon.ui.cooldown_section import CooldownSection
+    sec = CooldownSection(_Watcher())
+    try:
+        sec.set_combo.setCurrentIndex(1)
+        slot = sec.register(Target("skill", (0, 0, 40, 40), "단축바 칸", {}), None)
+        assert slot["set"] == 2
+        texts = [sec.list_box.itemAt(i).widget().findChildren(type(sec.status))[0].text()
+                 for i in range(sec.list_box.count()) if sec.list_box.itemAt(i).widget() is not None]
+        assert any(t.startswith("세트 2 ·") for t in texts)
+    finally:
+        sec.shutdown()
+
+
+def test_ready_cell_pops_in_its_own_set_and_timer_stops():
+    from mabinogi_addon.ui.cooldown_overlay import POP_SCALE, POP_SECONDS, CooldownOverlay
+    clock = [0.0]
+    ov = CooldownOverlay(100, 2)
+    ov._now = lambda: clock[0]
+    try:
+        ov.set_items([("a", True), ("b", False)])
+        size_before = ov.size()
+        ov.pop("a")
+        assert ov._pop_timer.isActive() and ov.pop_factor("b") == 1.0
+        clock[0] = POP_SECONDS / 2
+        assert abs(ov.pop_factor("a") - POP_SCALE) < 1e-6  # 가운데에서 1.4배
+        ov._pop_tick()
+        assert ov.size() == size_before  # 커지는 동안 창 크기는 그대로(여백 미리 확보)
+        grown = ov._grown(ov._rects()[0], ov.pop_factor("a"))
+        assert grown.left() >= 0 and grown.top() >= 0 and grown.right() < ov.width()  # 창 안에서 커짐
+        clock[0] = POP_SECONDS + 0.01
+        ov._pop_tick()
+        assert ov.pop_factor("a") == 1.0 and not ov._pop_timer.isActive()  # 끝나면 타이머 멈춤
+    finally:
+        ov.close()
+
+
+def test_section_pops_newly_ready_cell_in_its_set(creator):
+    from mabinogi_addon import config
+    from mabinogi_addon.ui.cooldown_section import CooldownSection
+    config.save_cooldown({"enabled": True, "locked": True, "slots": [_set_slot("a", 0, 1), _set_slot("b", 50, 2)]})
+    sec = CooldownSection(_FrontWatcher(game=True, own=False))
+    popped = []
+    try:
+        sec._on_delivered("cooldown", {"changes": {"a": READY, "b": READY}})  # 처음 관측(강조 없음)
+        sec._on_delivered("cooldown", {"changes": {"a": COOLING, "b": COOLING}})
+        for n, ov in sec._overlays.items():
+            ov.pop = lambda sid, n=n: popped.append((n, sid))
+        sec._on_delivered("cooldown", {"changes": {"b": READY}})
+        assert popped == [(2, "b")]  # 자기 세트 오버레이에서만
+    finally:
+        sec.shutdown()
