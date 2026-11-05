@@ -265,7 +265,7 @@ def test_settings_saved_and_overlay_redraws_only_on_change(tab):
     from mabinogi_addon.ui.boss_bar_overlay import BossBarOverlay
     ov = BossBarOverlay(150)
     try:
-        assert ov.width() == 360 * 1.5 + 4
+        assert ov.width() == 640 * 1.5 + 4  # 새 기준 640×39 = 100%
         assert ov.set_state("펠롬", 87, False, (90, 60, 30)) is True
         assert ov.set_state("펠롬", 87, False, (90, 60, 30)) is False  # 같으면 다시 그리지 않음
         assert ov.has_content()
@@ -540,3 +540,50 @@ def test_overlay_draws_fraction_for_registered_and_unregistered(tab, tmp_path, m
             tab._tick()
         st = tab.bar_section._overlay.state()
         assert (st[0], st[1], st[4]) == expected, name
+
+
+# ---- 기본 크기·25% 줄(제작자 시험 #194, 11-05) ----------------------------------------------------------------
+def test_new_base_size_and_old_scale_converted():
+    from mabinogi_addon.ui.boss_bar_overlay import BossBarOverlay
+    ov = BossBarOverlay(100)
+    try:
+        assert (ov.width() - 4, ov.height() - 4) == (640, 39)  # 예전 150%(540×39) 높이, 길이는 640
+    finally:
+        ov.close()
+    config.save_boss_bar_overlay({"enabled": True})
+    import json
+    from mabinogi_addon.config import LOCAL_CONFIG_PATH
+    raw = json.loads(LOCAL_CONFIG_PATH.read_text(encoding="utf-8"))
+    raw["bossBarOverlay"]["scale"] = 150  # 예전 기준으로 저장된 배율
+    LOCAL_CONFIG_PATH.write_text(json.dumps(raw), encoding="utf-8")
+    assert config.load_boss_bar_overlay()["scale"] == 100  # 같은 높이(39px) = 새 100%
+    config.save_boss_bar_overlay({"scale": 120})
+    assert config.load_boss_bar_overlay()["scale"] == 120  # 새 기준으로 저장한 값은 그대로
+
+
+def test_quarter_lines_inside_bar_under_pattern_lines():
+    """25·50·75%에 옅은 흰 줄 — 바 안쪽만, 노란 패턴 선이 같은 자리면 노란 선이 보인다."""
+    import numpy as np
+    from PySide6.QtGui import QImage
+    from mabinogi_addon.ui.boss_bar_overlay import BossBarOverlay
+
+    def pixels(marks):
+        ov = BossBarOverlay(100)
+        try:
+            ov.set_state("보스", 10, False, marks)  # 채움이 짧아 25% 이후는 빈 바(어두운 바탕)
+            img = ov.grab().toImage().convertToFormat(QImage.Format.Format_RGBA8888)
+            arr = np.frombuffer(img.constBits(), np.uint8).reshape(img.height(), img.bytesPerLine() // 4, 4)
+            return arr[:, :img.width()].copy()
+        finally:
+            ov.close()
+    plain = pixels(())
+    inner_x0, inner_w, mid = 2 + 3, 640 - 6, 2 + 39 // 2
+    x50 = round(inner_x0 + inner_w * 0.5)
+    near = plain[mid, x50 - 1:x50 + 2, :3].astype(int).max()
+    away = plain[mid, x50 + 8, :3].astype(int).max()
+    assert near > away + 20  # 50% 자리에 옅은 줄
+    for y in (0, 1, plain.shape[0] - 1):  # 바 밖(테두리 바깥 여백)은 옆자리와 같음 = 줄이 넘지 않음
+        assert abs(int(plain[y, x50, 3]) - int(plain[y, x50 + 8, 3])) <= 2
+    marked = pixels((50,))
+    r, g, b = marked[mid, x50, :3].astype(int)
+    assert r > 150 and g > 120 and b < 120  # 같은 자리면 노란 패턴 선이 위

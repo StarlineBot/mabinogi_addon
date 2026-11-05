@@ -1741,11 +1741,17 @@ def load_boss_bar_overlay(path: Path = LOCAL_CONFIG_PATH) -> dict:
     def clamp(key, default, lo, hi):
         value = sec.get(key)
         return max(lo, min(hi, value)) if type(value) is int else default
-    return {"enabled": sec.get("enabled") is True, "pos": pos, "scale": clamp("scale", 100, 50, 300),
+    scale = clamp("scale", 100, 50, 300)
+    if type(sec.get("scale")) is int and sec.get("scaleBase") != 2:
+        # 11-05 기본 크기 변경(예전 100% = 360×26 → 새 100% = 640×39): 예전 배율은 같은 높이가 되게 환산(예전 150% → 새 100%)
+        scale = max(50, min(300, round(sec["scale"] * 26 / 39)))
+    return {"enabled": sec.get("enabled") is True, "pos": pos, "scale": scale,
             "opacity": clamp("opacity", 100, 30, 100), "locked": sec.get("locked") is not False}
 
 
 def save_boss_bar_overlay(data: dict, path: Path = LOCAL_CONFIG_PATH) -> None:
+    if "scale" in data:
+        data = {**data, "scaleBase": 2}  # 새 기준(640×39 = 100%)으로 저장한 배율
     cfg = _read_local_config(path)
     sec = cfg.get("bossBarOverlay")
     sec = dict(sec) if isinstance(sec, dict) else {}

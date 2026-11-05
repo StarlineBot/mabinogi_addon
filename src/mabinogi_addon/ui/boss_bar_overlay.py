@@ -13,7 +13,11 @@ from PySide6.QtWidgets import QWidget
 
 from .. import perf_meter
 
-BASE_W, BASE_H = 360, 26
+# 기본 크기(제작자 시험 #194, 11-05): 예전 150%(540×39)를 새 100%로, 길이는 조금 더 길게 640×39.
+# 글자·테두리는 예전 150% 비율 그대로(UNIT). 저장된 예전 배율은 config에서 같은 높이가 되게 환산(예전 150% → 새 100%).
+BASE_W, BASE_H = 640, 39
+UNIT = 1.5
+QUARTER_LINE = QColor(255, 255, 255, 70)  # 25·50·75% 옅은 세로선(바 안쪽만, 노란 패턴 선·글자 아래 층)
 MINT = QColor(0, 209, 167)
 LOW_HP = 20
 EXAMPLE = ("보스", 75, (90, 60, 30))
@@ -84,12 +88,12 @@ class BossBarOverlay(QWidget):
         if example and self._locked:
             return
         name, value, stale, marks, frac = (EXAMPLE[0], EXAMPLE[1], False, EXAMPLE[2], "38") if example else state
-        s = self._scale
+        s = self._scale * UNIT  # 글자·테두리 배율(크기는 BASE_W·BASE_H × 배율)
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         if stale:
             p.setOpacity(0.5)
-        outer = QRectF(2, 2, BASE_W * s, BASE_H * s)
+        outer = QRectF(2, 2, BASE_W * self._scale, BASE_H * self._scale)
         radius = 4 * s
         p.setPen(QPen(QColor(10, 10, 12), max(1.0, 1.5 * s)))
         p.setBrush(QColor(28, 28, 32, 235))
@@ -107,8 +111,12 @@ class BossBarOverlay(QWidget):
             p.setPen(Qt.PenStyle.NoPen)
             p.setBrush(grad)
             p.drawRoundedRect(fill, 2 * s, 2 * s)
+        p.setPen(QPen(QUARTER_LINE, max(1.0, 0.7 * s)))
+        for q in (25, 50, 75):  # 25%마다 옅은 줄 — 바 안쪽 위~아래만
+            x = inner.x() + inner.width() * q / 100
+            p.drawLine(round(x), round(inner.top()), round(x), round(inner.bottom()))
         p.setPen(QPen(QColor(244, 200, 40), max(1.0, 1.6 * s)))
-        for t in marks:  # 패턴 구간(등록 보스만)
+        for t in marks:  # 패턴 구간(등록 보스만) — 옅은 줄 위 층
             if 0 < t < 100:
                 x = inner.x() + inner.width() * t / 100
                 p.drawLine(round(x), round(inner.top()), round(x), round(inner.bottom()))
