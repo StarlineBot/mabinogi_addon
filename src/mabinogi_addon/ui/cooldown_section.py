@@ -23,7 +23,9 @@ from ..tracker.cooldown_row import HIDDEN, CooldownRow
 
 PAGE_DIFF = "page"  # 페이지 숫자 모양이 저장한 것과 다름(가려짐과 같이 줄에서 빼되, 목록엔 따로 알림)
 PAGE_WARN_SECONDS = 3.0  # 이만큼 계속 다르면 목록에 '다른 페이지라 숨김'(실제로 페이지를 넘긴 정상 상황에도 뜨므로 재등록 안내는 하지 않음)
-STATE_TEXT = {cd.COOLING: "사용 중", cd.READY: "사용 가능", HIDDEN: "가려짐", PAGE_DIFF: "가려짐(페이지 다름)"}
+STATE_TEXT = {cd.COOLING: "사용 중", cd.READY: "사용 가능", HIDDEN: "가려짐", PAGE_DIFF: "가려짐(페이지 다름)",
+              cd.UNAVAILABLE: "사용 불가(탈것 등)"}
+COOLING_CONFIRM = 2  # '사용 중'은 연속 관측 이만큼부터 인정(약 0.44초) — 한 프레임 오판으로 줄·강조가 생기지 않게
 from .widgets import checkbox, hint_label, switch
 
 _log = logging.getLogger(__name__)
@@ -63,26 +65,48 @@ def save_icon(sid: str, cell) -> bool:
         return False
 
 
-def _page_differs(frame, ox, oy, slot) -> bool:
-    """칸이 '지금 키를 쓰는 단축바'에 있고 그 단축바가 등록 때와 같을 때만 페이지를 비교(제작자 11-06).
-    키 없는 단축바 칸은 페이지가 없어(늘 같은 스킬) 비교하지 않고, 도중에 키 단축바를 바꿔도 엉뚱한 단축바 페이지와 비교하지 않는다.
-    상자를 못 읽으면(가려짐) 숨기지 않는다. 예전 등록분(page_block 없음)은 칸이 속한 블록 = 등록 때 키 블록으로 보고 저장 자리만 비교."""
-    signature = slot.get("page")
-    if not signature:
-        return False
-
+def _page_state(frame, ox, oy, slot) -> str | None:
+    """페이지·단축바 보임 확인 → None(그대로 판정) | PAGE_DIFF | HIDDEN.
+    - 그 줄 두 선택기 자리 모두 상자가 아니면 단축바가 안 보이는 화면(로그인·캐릭터 선택·로딩) → 그 줄 모든 칸 가려짐(키 없는 블록 칸 포함).
+      둘 다 상자처럼 보일 때(애매)만 비교하지 않는다(453e71d 회귀: None을 '비교 안 함'으로 둬 장면을 칸으로 읽고 민트 강조가 떴다).
+    - 칸이 '지금 키를 쓰는 단축바'에 있고 그 단축바가 등록 때와 같을 때만 페이지를 비교(제작자 11-06). 키 없는 단축바 칸은 페이지가 없어 비교하지 않는다.
+    - 예전 등록분(page_rects 없음)은 저장 자리만 비교하고, 상자를 못 읽으면 가려짐(0.43.0 동작)."""
     def local(rect):
         px, py, pw, ph = rect
         return (px - ox, py - oy, pw, ph)
+    signature = slot.get("page")
     rects = slot.get("page_rects")
-    page_block = slot.get("page_block")
-    if rects and page_block is not None:
-        now = cd.key_block(frame, {int(b): local(r) for b, r in rects.items()})
-        if now is None or now != page_block or slot.get("block") != page_block:
-            return False
-        return cd.same_page(frame, local(rects[str(now)]), signature) is False
+    if rects:
+        seen = cd.selectors_seen(frame, {int(b): local(r) for b, r in rects.items()})
+        if not seen:
+            return HIDDEN
+        page_block = slot.get("page_block")
+        if (not signature or len(seen) != 1 or page_block is None or seen[0] != page_block
+                or slot.get("block") != page_block):
+            return None
+        return PAGE_DIFF if cd.same_page(frame, local(rects[str(page_block)]), signature) is False else None
     page_rect = slot.get("page_rect")
-    return bool(page_rect) and cd.same_page(frame, local(page_rect), signature) is False
+    if not signature or not page_rect:
+        return None
+    same = cd.same_page(frame, local(page_rect), signature)
+    return HIDDEN if same is None else PAGE_DIFF if same is False else None
+
+
+def _reference(slot, refs: dict):
+    """칸의 '사용 가능' 아이콘 기준(채도·밝기 평균) — 작업 스레드에서 한 번 읽어 캐시(매 관측 파일 읽기 금지). 아이콘이 아직 없으면 None."""
+    sid = slot["id"]
+    if not slot.get("icon_ok"):
+        return None
+    if sid not in refs:
+        import cv2
+
+        from .. import image_io
+        try:
+            icon = image_io.imread(icon_path(sid), cv2.IMREAD_COLOR)
+        except Exception:  # noqa: BLE001
+            icon = None
+        refs[sid] = cd.mean_sv(icon)
+    return refs[sid]
 
 
 def observe(frame, origin, slots, last: dict, with_crops: bool, need_icon=frozenset()):
@@ -93,16 +117,25 @@ def observe(frame, origin, slots, last: dict, with_crops: bool, need_icon=frozen
     쿨 중 등록 문제의 원인은 상자 모서리 픽셀로 확정 — 등록 스냅샷의 페이지 모양은 쿨 여부와 무관)."""
     ox, oy = origin
     changes, crops, icons = {}, {}, []
+    streak = last.setdefault("_cooling_streak", {})  # 작업 스레드 전용 보조 값(칸 상태와 같은 사전에 둔다 — 지우면 함께 초기화)
+    refs = last.setdefault("_icon_ref", {})
     for slot in slots:
         x, y, w, h = slot["rect"]
         cx, cy = x - ox, y - oy
         inside = cx >= 0 and cy >= 0  # 음수 인덱스는 numpy가 반대편에서 잘라 오므로 먼저 막는다
         cell = frame[cy:cy + h, cx:cx + w] if inside else frame[:0, :0]
         state = cd.classify(cell) if cell.shape[:2] == (h, w) else cd.UNKNOWN
-        if state != cd.UNKNOWN and _page_differs(frame, ox, oy, slot):
-            state = PAGE_DIFF  # 페이지 숫자가 다름 → 줄에서 빼고(알림 없음) 목록에 따로 알린다
+        if state != cd.UNKNOWN:
+            page = _page_state(frame, ox, oy, slot)
+            if page is not None:
+                state = page  # 페이지 다름 → 줄에서 빼고 목록에 따로 / 단축바 안 보임 → 가려짐
         if state == cd.UNKNOWN:
             state = HIDDEN
+        if state == cd.READY and cd.is_dimmed(cell, _reference(slot, refs)):
+            state = cd.UNAVAILABLE  # 탈것 등으로 칸이 어두움 — 가려짐처럼 줄에서 빼고 강조·알림 없음
+        streak[slot["id"]] = streak.get(slot["id"], 0) + 1 if state == cd.COOLING else 0
+        if state == cd.COOLING and streak[slot["id"]] < COOLING_CONFIRM:
+            continue  # 한 번만 '사용 중' → 아직 인정하지 않고 직전 상태 그대로(다음 관측에서 확인)
         if last.get(slot["id"]) != state:
             changes[slot["id"]] = state
             last[slot["id"]] = state
@@ -111,6 +144,7 @@ def observe(frame, origin, slots, last: dict, with_crops: bool, need_icon=frozen
         if slot["id"] in need_icon and state == cd.READY and cell.size and save_icon(slot["id"], cell.copy()):
             icons.append(slot["id"])
             need_icon = need_icon - {slot["id"]}
+            refs[slot["id"]] = cd.mean_sv(cell)  # 새 기준(다음 관측부터 icon_ok로 넘어온다)
     if not changes and not crops and not icons:
         return None
     return {"changes": changes, "crops": crops, "icons": icons}

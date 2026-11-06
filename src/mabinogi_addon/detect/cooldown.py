@@ -116,10 +116,40 @@ def selector_rects(source_box, row: int) -> dict[int, tuple[int, int, int, int]]
             for block, offset in enumerate(PAGE_OFFSETS)}
 
 
+def selectors_seen(frame: np.ndarray, rects: dict) -> list:
+    """페이지 선택기 상자로 보이는 자리(블록 번호). 비면 그 줄 단축바가 안 보임(로그인·캐릭터 선택·로딩 등), 둘이면 애매."""
+    return [block for block, rect in rects.items() if _box_mask(frame, tuple(rect)) is not None]
+
+
 def key_block(frame: np.ndarray, rects: dict) -> int | None:
     """지금 페이지 선택기가 보이는 블록(= 키를 쓰는 단축바). 하나만 보일 때 그 블록, 아니면 None(못 정함 — 비교하지 않음)."""
-    seen = [block for block, rect in rects.items() if _box_mask(frame, tuple(rect)) is not None]
+    seen = selectors_seen(frame, rects)
     return seen[0] if len(seen) == 1 else None
+
+
+# ---- 사용 불가(탈것 등 — 칸이 고르게 어두워짐) ----------------------------------------------------------
+UNAVAILABLE = "unavailable"
+DIM_V = 0.75            # 저장한 '사용 가능' 아이콘 대비 밝기 비율 미만이면(실측 탈것 중 0.53~0.55, 물약 1.00)
+DIM_S = (0.85, 1.15)    # 채도는 그대로(가려짐·다른 그림과 구분)
+DIM_BORDER = 3          # 칸 테두리 제외(px)
+
+
+def mean_sv(cell: np.ndarray | None) -> tuple[float, float] | None:
+    """칸 안쪽(테두리 3px 제외) HSV 채도·밝기 평균. 너무 작으면 None."""
+    if cell is None or cell.ndim != 3 or min(cell.shape[:2]) <= 2 * DIM_BORDER + 4:
+        return None
+    b = DIM_BORDER
+    hsv = cv2.cvtColor(np.ascontiguousarray(cell[b:-b, b:-b]), cv2.COLOR_BGR2HSV)
+    return float(hsv[:, :, 1].mean()), float(hsv[:, :, 2].mean())
+
+
+def is_dimmed(cell: np.ndarray, reference: tuple[float, float] | None) -> bool:
+    """기준(저장한 '사용 가능' 아이콘의 mean_sv)보다 채도는 그대로·밝기만 고르게 낮으면 사용 불가."""
+    now = mean_sv(cell)
+    if reference is None or now is None or reference[0] <= 1 or reference[1] <= 1:
+        return False
+    s_ratio, v_ratio = now[0] / reference[0], now[1] / reference[1]
+    return v_ratio < DIM_V and DIM_S[0] <= s_ratio <= DIM_S[1]
 
 
 def _box_mask(frame, rect):

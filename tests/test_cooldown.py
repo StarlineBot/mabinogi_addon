@@ -166,8 +166,9 @@ def test_observe_reports_only_changes_and_hides_on_other_page():
     frame, box, cells = _screen("image01.png")
     slots = [_slot(frame, box, cells, (0, 1, 1, 0), "cool"), _slot(frame, box, cells, (0, 0, 0, 0), "ready")]
     last = {}
+    assert observe(frame, (0, 0), slots, last, with_crops=False)["changes"] == {"ready": READY}  # '사용 중'은 2번 연속부터
     out = observe(frame, (0, 0), slots, last, with_crops=False)
-    assert out["changes"] == {"cool": COOLING, "ready": READY}
+    assert out["changes"] == {"cool": COOLING}
     assert observe(frame, (0, 0), slots, last, with_crops=False) is None  # 바뀐 칸만
     slots[0]["page"] = slots[1]["page"]  # 다른 줄 페이지 모양 → 페이지 다름(줄에서 빼되 목록엔 따로 알림, 11-06)
     from mabinogi_addon.ui.cooldown_section import PAGE_DIFF
@@ -179,7 +180,9 @@ def test_observe_with_origin_offset_and_crops():
     frame, box, cells = _screen("image01.png")
     slot = _slot(frame, box, cells, (0, 1, 1, 0), "cool")
     x0, y0 = slot["rect"][0] - 10, slot["page_rect"][1] - 60  # 칸·페이지 상자를 덮는 일부만
-    out = observe(frame[y0:, x0:], (x0, y0), [slot], {}, with_crops=True)
+    last = {}
+    observe(frame[y0:, x0:], (x0, y0), [slot], last, with_crops=True)
+    out = observe(frame[y0:, x0:], (x0, y0), [slot], last, with_crops=True)
     assert out["changes"] == {"cool": COOLING} and out["crops"]["cool"].shape == (40, 40, 3)
     # 칸이 캡처 밖(왼쪽)으로 벗어나면 반대편을 잘라 오지 않고 '가려짐'
     x1 = slot["rect"][0] + 20
@@ -302,6 +305,7 @@ def test_section_registers_snapped_cell_with_page_and_observes(creator, monkeypa
         assert sec.register(cells[(0, 1, 1, 0)], frame, (0, 0)) is None  # 중복
         assert config.load_cooldown()["slots"][0]["rect"] == slot["rect"]
         sec.enable.setChecked(True)  # 켜면 관측 → INLINE 공유 캡처로 바로 판정·전달
+        sec._tick()  # '사용 중'은 2번 연속 관측부터
         assert sec.row.row == [slot["id"]]
         assert sec._overlay is not None and sec._overlay.items() == [(slot["id"], False)]
         sec._remove(slot["id"])
@@ -760,6 +764,7 @@ def test_page_saved_at_registration_is_never_overwritten(creator, monkeypatch):
         assert sec.state_text(slot["id"]) == "가려짐(페이지 다름)"
         frames["img"] = cool  # Shift를 떼면 '1' — 쿨 중
         sec._tick()
+        sec._tick()  # '사용 중'은 2번 연속 관측부터
         assert sec.row.row == [slot["id"]] and sec._overlay.items() == [(slot["id"], False)]
     finally:
         sec.shutdown()
@@ -835,6 +840,7 @@ def _register_on(name, key):
 
 def test_key_block_from_selector_position():
     for name, expected in (("스크린샷 2026-11-06 013739.png", 1), ("스크린샷 2026-11-04 014744.png", 1),
+                           ("스크린샷 2026-11-06 204636.png", 1),  # 탈것 중 화면도 키 블록 1
                            ("mabinogi_2026_10_30_213520.png", 0)):  # 3840 배치(선택기 540) → 왼쪽이 키 블록
         frame, box, _ = _screen(name)
         assert cd.key_block(frame, cd.selector_rects(box, 0)) == expected, name
@@ -877,3 +883,128 @@ def test_no_page_compare_when_key_bar_switched():
     other, _, _ = _screen("스크린샷 2026-11-06 013739.png")  # 같은 좌표에 키 블록 1(선택기 1160)
     out = observe(other, (0, 0), [slot], {}, False)
     assert out["changes"]["a"] != PAGE_DIFF
+
+
+# ---- 단축바가 안 보이는 화면(로그인·캐릭터 선택·로딩) — 453e71d 회귀 ---------------------------------------
+def test_scene_over_skillbar_hides_whole_row_including_keyless_cells(creator):
+    """013739로 F3(키 블록) + 키 없는 블록 칸 등록 → 단축바 자리를 장면으로 덮은 프레임 → 둘 다 가려짐(칸 판정을 쓰지 않음)."""
+    from mabinogi_addon.ui.cooldown_section import observe
+    frame, box, cells = _screen("스크린샷 2026-11-06 013739.png")
+    keyed = _register_on("스크린샷 2026-11-06 013739.png", (1, 0, 0, 2))
+    keyless = _register_on("스크린샷 2026-11-06 013739.png", (0, 0, 0, 2))
+    assert keyed["page"] and keyless["page"] is None
+    x, y, w, h = box
+    scene = frame.copy()
+    scene[y:y + h + 4, :w + 80] = frame[600:600 + h + 4, 900:900 + w + 80]  # 장면(필드 그림)으로 단축바·선택기 자리를 덮음
+    out = observe(scene, (0, 0), [keyed, keyless], {}, False)
+    assert out["changes"] == {keyed["id"]: HIDDEN, keyless["id"]: HIDDEN}
+    last = {}  # 평소 화면은 그대로 판정
+    observe(frame, (0, 0), [keyed, keyless], last, False)
+    assert last[keyless["id"]] == READY
+
+
+def test_both_selectors_look_like_boxes_is_ambiguous_not_hidden():
+    from mabinogi_addon.ui.cooldown_section import _page_state
+    frame, box, _cells = _screen("스크린샷 2026-11-06 013739.png")
+    rects = cd.selector_rects(box, 0)
+    both = frame.copy()
+    x0, y0, w0, h0 = rects[1]
+    x1, y1, _, _ = rects[0]
+    both[y1:y1 + h0, x1:x1 + w0] = frame[y0:y0 + h0, x0:x0 + w0]  # 두 자리 모두 상자처럼
+    slot = {"id": "a", "page": cd.page_signature(frame, rects[1]), "page_block": 1, "block": 1,
+            "page_rects": {str(k): list(v) for k, v in rects.items()}}
+    assert cd.selectors_seen(both, rects) == [0, 1]
+    assert _page_state(both, 0, 0, slot) is None  # 애매 → 비교 안 함
+
+
+def test_old_slot_without_page_rects_hides_when_box_unreadable():
+    from mabinogi_addon.ui.cooldown_section import _page_state
+    frame, box, _cells = _screen("스크린샷 2026-11-06 013739.png")
+    rect = cd.selector_rects(box, 0)[1]
+    slot = {"id": "a", "page": cd.page_signature(frame, rect), "page_rect": list(rect)}
+    blank = frame.copy()
+    x, y, w, h = rect
+    blank[y:y + h, x:x + w] = 128  # 상자를 못 읽음
+    assert _page_state(frame, 0, 0, slot) is None and _page_state(blank, 0, 0, slot) == HIDDEN  # 0.43.0 동작 복원
+
+
+# ---- '사용 중'은 2번 연속 관측부터 ---------------------------------------------------------------------------
+def _ready_and_cool_frames():
+    frame, box, cells = _screen("image01.png")
+    slot = _slot(frame, box, cells, (0, 1, 1, 0), "s")  # 사용 중 칸
+    x, y, w, h = slot["rect"]
+    rx, ry, _, _ = cells[(0, 1, 0, 0)].rect  # 같은 줄 사용 가능 칸
+    ready = frame.copy()
+    ready[y:y + h, x:x + w] = frame[ry:ry + h, rx:rx + w]
+    return slot, ready, frame
+
+
+@pytest.mark.parametrize("cool_frames,highlight", [(1, False), (2, True), (3, True)])
+def test_one_cooling_frame_never_highlights(cool_frames, highlight):
+    from mabinogi_addon.tracker.cooldown_row import CooldownRow
+    from mabinogi_addon.ui.cooldown_section import observe
+    slot, ready, cool = _ready_and_cool_frames()
+    row, last, t = CooldownRow(), {}, 0.0
+    for frame in [ready] + [cool] * cool_frames + [ready]:
+        t += 0.22
+        out = observe(frame, (0, 0), [slot], last, False)
+        if out:
+            row.update(out["changes"], t)
+    assert ("s" in row.until) is highlight
+
+
+# ---- 사용 불가(탈것 등 — 칸이 고르게 어두워짐, QA a313547) ----------------------------------------------------
+MOUNT = "스크린샷 2026-11-06 204636.png"
+
+
+@pytest.mark.parametrize("ref", ["스크린샷 2026-11-04 014744.png", "스크린샷 2026-11-06 013739.png"])
+def test_mounted_dim_cells_are_unavailable_but_potion_stays_ready(ref, tmp_path, monkeypatch):
+    from mabinogi_addon import image_io
+    from mabinogi_addon.ui import cooldown_section as cs
+    monkeypatch.setattr(cs, "icon_dir", lambda: tmp_path)
+    frame, _box, cells = _screen(MOUNT)
+    rframe, _rbox, rcells = _screen(ref)
+    slots = []
+    for key in [k for k in cells if k[0] == 1]:
+        X, Y, W, H = rcells[key].rect
+        icon = rframe[Y:Y + H, X:X + W]
+        if cd.classify(icon) != READY:
+            continue  # 기준은 저장된 '사용 가능' 아이콘만
+        sid = "c%d%d%d%d" % key
+        image_io.imwrite(tmp_path / f"{sid}.png", icon)
+        slots.append({"id": sid, "rect": list(cells[key].rect), "icon_ok": True})
+    last = {}
+    out = cs.observe(frame, (0, 0), slots, last, False)
+    potion = "c1102"  # 아래 줄 3번(물약) — 탈것 중에도 씀
+    assert out["changes"][potion] == READY
+    others = {sid: st for sid, st in out["changes"].items() if sid != potion}
+    assert others and set(others.values()) == {cd.UNAVAILABLE}
+    assert cs.STATE_TEXT[cd.UNAVAILABLE] == "사용 불가(탈것 등)"
+
+
+def test_normal_screen_ready_and_cooling_unchanged_by_dim_check(tmp_path, monkeypatch):
+    from mabinogi_addon import image_io
+    from mabinogi_addon.ui import cooldown_section as cs
+    monkeypatch.setattr(cs, "icon_dir", lambda: tmp_path)
+    frame, _box, cells = _screen("스크린샷 2026-11-04 014744.png")
+    slots, want = [], {}
+    for key in [k for k in cells if k[0] == 1]:
+        x, y, w, h = cells[key].rect
+        sid = "c%d%d%d%d" % key
+        image_io.imwrite(tmp_path / f"{sid}.png", frame[y:y + h, x:x + w])  # 같은 화면 아이콘(사용 가능 기준으로 가정)
+        slots.append({"id": sid, "rect": [x, y, w, h], "icon_ok": True})
+        want[sid] = cd.classify(frame[y:y + h, x:x + w])
+    last = {}
+    cs.observe(frame, (0, 0), slots, last, False)
+    cs.observe(frame, (0, 0), slots, last, False)
+    assert {sid: last[sid] for sid in want} == want and cd.COOLING in want.values()
+
+
+def test_unavailable_drops_from_row_without_highlight():
+    from mabinogi_addon.tracker.cooldown_row import CooldownRow
+    row = CooldownRow()
+    row.update({"a": COOLING}, 0.0)
+    row.update({"a": cd.UNAVAILABLE}, 1.0)  # 탈것 탐 → 줄에서 빠짐(알림 없음)
+    assert row.row == [] and not row.until
+    row.update({"a": READY}, 2.0)  # 내리고 다시 보임 → 첫 관측이라 강조 없음
+    assert not row.until

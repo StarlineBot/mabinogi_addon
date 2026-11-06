@@ -33,13 +33,13 @@
       "tests": [
         "tests/test_cooldown.py"
       ],
-      "reason": "페이지 상자 네 모서리 제외 비교(예전 서명도 맞음)·'1' vs '2' 구분 유지"
+      "reason": "페이지 상자 네 모서리 제외 비교(예전 서명도 맞음)·'1' vs '2' 구분 유지 · 선택기 둘 다 안 보이면 단축바 없음·사용 불가(밝기만 0.75배 미만) 판정"
     },
     "src/mabinogi_addon/ui/cooldown_section.py": {
       "tests": [
         "tests/test_cooldown.py"
       ],
-      "reason": "페이지 모양 재저장 제거(등록 값 유지)·상태 표시·app.log·다른 페이지라 숨김 문구"
+      "reason": "페이지 모양 재저장 제거(등록 값 유지)·상태 표시·app.log·다른 페이지라 숨김 문구 · 단축바 없는 화면 줄 전체 가려짐(453e71d 회귀)·사용 중 2번 연속·사용 불가(탈것 등)"
     },
     "src/mabinogi_addon/config.py": {
       "tests": [
