@@ -20,6 +20,41 @@ import weakref
 _SECTIONS: "weakref.WeakSet[RegionSection]" = weakref.WeakSet()
 
 
+def autofind_text(key: str | None) -> str | None:
+    """'자동(v2)' 한 줄 문구(v2 켜짐일 때만, 아니면 None) — 영역 묶음과 도르카·투아림 영역 문구가 같은 말을 쓰게."""
+    from .. import autofind_regions
+    if key is None or not autofind_regions.active():
+        return None
+    if key in autofind_regions.user_keys():
+        return "자동(v2) 꺼짐 · 이번 실행은 직접 지정한 영역으로 읽어요"
+    if not autofind_regions.wanted(key):
+        return "자동(v2) · 사용 꺼짐 — 읽지 않아요(찾은 자리는 그대로)"
+    if autofind_regions.is_auto(key):
+        return "자동(v2) · 이번 실행에서 찾은 자리로 읽어요(저장된 영역은 그대로)"
+    return "자동(v2) · 자리를 찾는 중이에요(찾기 전엔 쉬어요)"
+
+
+class AutofindLine(QLabel):
+    """영역 문구 위 '자동(v2)' 한 줄(RegionSection을 쓰지 않는 탭 — 도르카·투아림). v2 꺼짐이면 숨김."""
+
+    def __init__(self, parent=None):
+        super().__init__("", parent)
+        self.autofind_key = None
+        self.setWordWrap(True)
+        self.setStyleSheet(f"color:{color('accent')};")
+        self.hide()
+
+    def set_autofind_key(self, key: str) -> None:
+        self.autofind_key = key
+        _SECTIONS.add(self)
+        self.refresh_autofind()
+
+    def refresh_autofind(self) -> None:
+        text = autofind_text(self.autofind_key)
+        self.setText(text or "")
+        self.setVisible(bool(text))
+
+
 def refresh_autofind(key: str | None = None) -> None:
     """자동 찾기 v2 자리가 바뀜 → 그 기능 영역 묶음의 '자동(v2)' 표시 갱신."""
     for section in list(_SECTIONS):
@@ -103,21 +138,9 @@ class RegionSection(QWidget):
 
     def refresh_autofind(self) -> None:
         """v2 켜짐일 때만 한 줄 — 지금 읽는 자리가 v2가 찾은 자리인지(저장 영역은 그대로)."""
-        from .. import autofind_regions
-        key = self.autofind_key
-        if key is None or not autofind_regions.active():
-            self.auto_badge.hide()
-            return
-        if key in autofind_regions.user_keys():
-            text = "자동(v2) 꺼짐 · 이번 실행은 직접 지정한 영역으로 읽어요"
-        elif not autofind_regions.wanted(key):
-            text = "자동(v2) · 사용 꺼짐 — 읽지 않아요(찾은 자리는 그대로)"
-        elif autofind_regions.is_auto(key):
-            text = "자동(v2) · 이번 실행에서 찾은 자리로 읽어요(저장된 영역은 그대로)"
-        else:
-            text = "자동(v2) · 자리를 찾는 중이에요(찾기 전엔 쉬어요)"
-        self.auto_badge.setText(text)
-        self.auto_badge.show()
+        text = autofind_text(self.autofind_key)
+        self.auto_badge.setText(text or "")
+        self.auto_badge.setVisible(bool(text))
 
     def set_summary(self, text: str, tint: str | None = None) -> None:
         if self.summary_label is not None:

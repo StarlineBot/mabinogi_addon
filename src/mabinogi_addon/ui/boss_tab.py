@@ -587,17 +587,24 @@ class BossTab(QWidget):
             if value is not None:
                 rule = "height"
             value = frac = None  # 얇은 일반 체력바(또는 바가 아닌 띠) — 보스 값으로 쓰지 않는다
+        # 등록 영역 % — 두 줄 구간에선 바가 영역보다 몇 px 아래로 그려져 숫자 띠가 잘린다('100.00'을 10으로, QA d52528a).
+        # 확신 없는 판독이면 기억한 세로 위치·후보 위치로 다시 읽어 더 확신 있는 값을 쓴다(정상 화면은 판독 1번 그대로).
+        if value is not None and rule is None and not self._confident(value, out):
+            better = self._read_row(full, up, h, "low")
+            if better is not None:
+                value, frac = better
         top = up - self.BAR_PITCH
         if top >= 0:  # 한 칸 위에도 보스바가 있으면 위가 보스(기믹으로 보스바가 밀려 올라간 경우)
-            above = full[top:top + h]
-            reading = self._boss_bar_reading(above)
-            if reading is not None:
-                pct, above_frac = reading
-                w = above.shape[1]
-                boss_id = identify(above[:, : int(w * 0.60)], self._name_templates, variants=self._name_variants)
-                if boss_id is not None:  # 등록 보스는 숫자 칸 판독(보스 탭과 같은 경로)
-                    pct, above_frac = read_percent_frac(above[:, int(w * 0.58):])
-                value, frac, rule = pct, above_frac, "upper"
+            upper = self._upper_bar(full, top, h)
+            if upper is not None:
+                above_boss, reading = upper
+                boss_id = above_boss  # 위 줄 이름(등록 보스가 아니면 None — 보스 이름 대신 "보스")
+                if reading is not None:
+                    value, frac, rule = reading[0], reading[1], "upper"
+                else:
+                    # 위 줄이 보스바인데 %를 못 읽음(노란 바탕 등) — 아래 줄(다른 바) 값으로 되돌아가지 않는다:
+                    # 이번 판독은 비우고 표시는 직전 값 흐리게(보스바 오버레이 값 규칙의 stale)
+                    value, frac, rule = None, None, "upper_unread"
         return {"value": value, "frac": frac if value is not None else None, "boss": boss_id, "seen": True,
                 "raw": raw, "rule": rule, "band": band}
 
@@ -799,6 +806,74 @@ class BossTab(QWidget):
         shown = " · ".join(f"{name} {ms:.0f}ms" for name, ms in ui.items())
         logging.getLogger(__name__).info("보스 틱 느림 %.0fms(지난 1분 느린 틱 %d회): [계산·%s] %s · [반영·화면] %s",
                                          total, count, thread, work or "-", shown or "-")
+
+    ROW_OFFSETS = (0, 5, -5, 3, -3)  # 두 줄 구간: 바가 등록 영역보다 5px 아래(고목의 페타크 11-06 실측)
+    ROW_EXPLORE_EVERY = 1.0  # 확신 없는 줄의 다른 세로 위치는 1초에 한 번까지만(판독 1번 25~70ms)
+
+    def _confident(self, value, out) -> bool:
+        """등록 영역 판독이 확신인지(모든 자리 강한 점수) — 작업 스레드 판독을 다시 하지 않도록 같은 판독기로 한 번만 확인."""
+        from ..detect.boss_hp_reader import read_percent_scored
+        frame = out.get("frame")
+        if frame is None:
+            return True
+        got, key = read_percent_scored(frame)
+        return got == value and key[0] == len(str(value))
+
+    def _read_row(self, full, top, h, row: str):
+        """full 안 [top, top+h) 줄의 % — 기억한 세로 위치부터, 확신 없으면 다른 위치(1초에 한 번). (정수, 소수|None) 또는 None."""
+        from ..detect.boss_hp_reader import read_percent_scored
+        offsets = self.__dict__.setdefault("_row_offset", {})
+        explore_at = self.__dict__.setdefault("_row_explore_at", {})
+        first = offsets.get(row, 0)
+        order = [first] + [o for o in self.ROW_OFFSETS if o != first]
+        now = monotonic()
+        explore = now >= explore_at.get(row, 0.0)
+        best = None
+        for i, off in enumerate(order):
+            if i and not explore:
+                break
+            y = top + off
+            if y < 0 or y + h > full.shape[0]:
+                continue
+            crop = full[y:y + h]
+            got, key = read_percent_scored(crop)
+            if got is not None and (best is None or key > best[0]):
+                best = (key, got, off, crop)
+            if got is not None and key[0] == len(str(got)):
+                break  # 확신 — 더 볼 필요 없음
+            if i:
+                explore_at[row] = now + self.ROW_EXPLORE_EVERY
+        if best is None:
+            return None
+        key, got, off, crop = best
+        offsets[row] = off
+        w = crop.shape[1]
+        whole, frac = read_percent_frac(crop[:, int(w * 0.58):])
+        return got, (frac if whole == got else None)
+
+    def _upper_bar(self, full, top, h):
+        """한 칸 위 줄이 보스바면 (등록 보스 id|None, (정수, 소수)|None). 보스바가 아니면 None.
+        - 등록 보스 이름이 보이면(세로 ±5px까지) 보스바 — %를 못 읽어도 돌려준다(아래 줄 값으로 되돌아가지 않게, QA d52528a).
+        - 등록 보스가 아니면 예전처럼 %·이름 글자 검증이 통과할 때만(디버프 아이콘 시간 글자·풍경을 보스바로 보지 않게)."""
+        from ..detect.boss_bar import has_wide_bar_row
+        from ..detect.boss_hp_reader import low_hp_bar_hint
+        tried = []
+        for off in (self.__dict__.get("_row_offset", {}).get("up", 0), 0, 5, -5):
+            y = top + off
+            if off in tried or y < 0 or y + h > full.shape[0]:
+                continue
+            tried.append(off)
+            above = full[y:y + h]
+            if not (has_wide_bar_row(above) or low_hp_bar_hint(above)):
+                continue
+            w = above.shape[1]
+            boss = identify(above[:, : int(w * 0.60)], self._name_templates, variants=self._name_variants)
+            if boss is not None:
+                return boss, self._read_row(full, top, h, "up")
+        reading = self._boss_bar_reading(full[top:top + h])  # 미등록 보스: 예전 기준(% + 이름 글자 검증)
+        if reading is not None:
+            return None, reading
+        return None
 
     def _boss_bar_reading(self, frame):
         """보스바면 (정수 %, 소수 두 자리|None), 아니면 None — 보스바 오버레이(미등록 보스 값·소수). 기준은 _boss_bar_visible과 같다."""

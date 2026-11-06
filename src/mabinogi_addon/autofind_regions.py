@@ -112,6 +112,11 @@ def user_set(key: str) -> None:
     _notify(key, user=True)
 
 
+def user_set_key(key: str) -> bool:
+    """이번 실행에서 사용자가 직접 지정했나(v2 켜짐일 때만 의미)."""
+    return key in _user
+
+
 def user_keys() -> set[str]:
     return set(_user)
 

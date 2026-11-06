@@ -75,6 +75,7 @@ class ResourceTab(QWidget):
         il.setContentsMargins(0,0,0,0)
         for name,c in (("도르카 숫자",dorcha),("투아림 %",tuarim)):
             il.addWidget(QLabel(name))
+            il.addWidget(c.auto_line)  # 자동(v2) 한 줄(v2 켜짐일 때만)
             il.addWidget(c.region_label)
             row = QHBoxLayout()
             for button in (c.region_btn,c.view_region_btn,c.clear_region_btn): row.addWidget(button)

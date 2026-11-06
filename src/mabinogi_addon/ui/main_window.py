@@ -2518,6 +2518,8 @@ class MainWindow(QMainWindow):
                          ("halo_timer", self.boss_tab.halo_capture), ("skillbar", self.skillbar_tab),
                          ("stat_bars", self.stat_bars_tab)):
             tab.region_section.set_autofind_key(key)  # 탭 표시 '자동(v2)'
+        self.dorcha_tab.auto_line.set_autofind_key("dorcha")
+        self.tuarim_tab.auto_line.set_autofind_key("tuarim")
         self._autofind_v2 = AutofindV2Controller(self._watcher, self._autofind_wanted, parent=self)
         from .autofind_v2_section import AutofindV2Section
         self.settings_tab.attach_autofind_v2(AutofindV2Section(self._autofind_v2))
@@ -2556,6 +2558,9 @@ class MainWindow(QMainWindow):
                 self._start_debuff_tracking()
         elif key == "dorcha":
             self.dorcha_tab._invalidate_search()
+            self.dorcha_tab._update_region_label()  # 찾기 전 '영역 미지정'이 남지 않게
+        elif key == "tuarim":
+            self.tuarim_tab._update_region_label()
 
     def closeEvent(self, event) -> None:
         import time

@@ -119,6 +119,8 @@ class TuarimTab(QWidget):
         self.region_btn.setToolTip("% 숫자에 휠로 크기 맞춰 클릭 배치(돋보기). 다시 누르면 재지정.")
         self.region_btn.clicked.connect(self._on_region)
         row.addWidget(self.region_btn)
+        from .region_section import AutofindLine
+        self.auto_line = AutofindLine()  # 자동 찾기 v2 켜짐일 때만 보이는 한 줄(영역 문구 위)
         self.region_label = hint_label("")
         row.addWidget(self.region_label, 1)
         self.view_region_btn = QPushButton("지정 영역 보기")
@@ -354,11 +356,13 @@ class TuarimTab(QWidget):
         self.clear_region_btn.setEnabled(self._region is not None)
         if self._region:
             r = self._region
-            self.region_label.setText(f"등록됨 · {r['x']},{r['y']}  {r['w']}×{r['h']}")
+            head = "찾은 자리" if self._afr.is_auto("tuarim") else "등록됨"
+            self.region_label.setText(f"{head} · {r['x']},{r['y']}  {r['w']}×{r['h']}")
             self.region_label.setStyleSheet(f"color:{color('ok')};")
             self.view_region_btn.setEnabled(True)
         else:
-            self.region_label.setText("영역 미지정 — 숫자 두 자리와 % 가 보이게 지정하세요")
+            self.region_label.setText("자동(v2) 자리 찾는 중" if self._afr.active() and not self._afr.user_set_key("tuarim")
+                                      else "영역 미지정 — 숫자 두 자리와 % 가 보이게 지정하세요")
             self.region_label.setStyleSheet(f"color:{color('muted')};")
             self.view_region_btn.setEnabled(False)
 

@@ -94,6 +94,9 @@ class DorchaTab(QWidget):
             row.addWidget(button)
         row.addStretch()
         layout.addLayout(row)
+        from .region_section import AutofindLine
+        self.auto_line = AutofindLine()  # 자동 찾기 v2 켜짐일 때만 보이는 한 줄(영역 문구 위)
+        layout.addWidget(self.auto_line)
         self.region_label = QLabel()
         self.region_label.setWordWrap(True)
         layout.addWidget(self.region_label)
@@ -224,8 +227,10 @@ class DorchaTab(QWidget):
         self.view_region_btn.setEnabled(self._region is not None and not self._shutting_down)
         self._update_value_label()
         self._sync_overlay()
-        self.region_label.setText("영역 미지정" if self._region is None else
-                                 "등록 영역  {x}, {y}  /  {w} × {h}".format(**self._region))
+        self.region_label.setText(("자동(v2) 자리 찾는 중" if self._afr.active() and not self._afr.user_set_key("dorcha")
+                                   else "영역 미지정") if self._region is None else
+                                  ("찾은 자리  " if self._afr.is_auto("dorcha") else "등록 영역  ")
+                                  + "{x}, {y}  /  {w} × {h}".format(**self._region))
         if (reference:=getattr(self,"_resource_view",None)) is not None and (view:=reference()) is not None:
             view.refresh_registration()
 

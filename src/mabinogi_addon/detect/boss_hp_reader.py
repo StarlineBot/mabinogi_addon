@@ -293,6 +293,21 @@ def read_percent(
     return _low_hp_value(region_bgr, templates, band, w, scale, pitch, span, bright_samples)
 
 
+def read_percent_scored(region_bgr: np.ndarray, templates=None) -> tuple[int | None, tuple[int, float]]:
+    """read_percent와 같은 판독 + 확신 키(확신 자리수, 최저 자리 점수) — 세로 위치 후보 중 고를 때 쓴다(보스바 오버레이 두 줄 구간)."""
+    prep = _prep(region_bgr, templates)
+    if prep is None:
+        return None, (-1, -2.0)
+    templates, w, scale, band, pitch, span = prep
+    val, score, _shift = _scan(band, w, scale, pitch, templates, range(-span, span + 1))
+    if val is not None and score >= _ACCEPT:
+        if score < VALUE_MIN_SCORE:
+            return None, (-1, -2.0)
+        return val, ((len(str(val)) if score >= _STRONG else 0), score)
+    low = _low_hp_value(region_bgr, templates, band, w, scale, pitch, span, _BRIGHT_SAMPLES)  # 저HP(빨간 바) 보조 — read_percent와 같음
+    return (low, (0, 0.0)) if low is not None else (None, (-1, -2.0))
+
+
 # 소수 두 자리(보스바 오버레이 표시용, 사용자 확정 11-05) — 정수 판독 경로·결과는 그대로, 같은 글꼴·같은 숫자 샘플.
 # 'XX.YY %'에서 정수 일의 자리 오른쪽 끝 + '.'(약 4px) 뒤 두 칸. 칸 위치가 프레임마다 2~6px 흔들려 첫 칸은 1~7px, 둘째 칸은 첫 칸 기준 ±3px로 맞춘다.
 # 두 칸 모두 _STRONG(0.85) 이상일 때만 — 하나라도 낮으면 None(틀린 소수 대신 정수만). 저HP(빨간 바, 밝기 마스크 경로)는 샘플이 맞지 않아 소수 없음.
