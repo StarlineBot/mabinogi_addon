@@ -229,6 +229,14 @@
 
 ## 열린 문제
 
+- **QA 6a65f9f~5b823b5(2026-11-06, 자동 찾기 v2 제작자 테스트판 + 선행 2건)**: 통과 — **후보 #198 무효**(제품·테스트 변경, 지문 다름) → 0.43.1 verify-only 다시 필요(제품 SHA 5b823b5).
+  - v2 꺼짐(비제작자·제작자 스위치 꺼짐) 경로 대조: `autofind_regions.region_for`는 꺼짐이면 저장 영역 그대로, `region_property` 읽기 = 저장 값, `user_set/report/set_region`은 꺼짐이면 아무것도 안 함,
+    `setup_state.enabled`·`_feature_region`·보스 패턴 `use_on`·버프 워커 `health` 신호·홈 스위치·탭 '자동(v2)' 줄 모두 꺼짐이면 기존과 같음. 비제작자는 컨트롤러·설정 구역 생성 안 함. 투아림 `read_percent`는 기존 동작(100%=None) 유지.
+  - 모든 사용자 영향(자동 찾기 v1): 버프 — 멤버십 아이콘 없을 때 같은 열·24px 간격의 서로 다른 버프 아이콘 3개로 찾기. tests/data에서 이 경로로 찾은 8장(1080 3·image01~04·2560 3) 모두 상태 목록 포함 확인(눈 확인), 못 찾음 1장(2560 195115).
+    헤일로 — 자동 찾기 때만 판독 상한 3600초(전투 시간 15분 넘은 화면), 트래커 판독(900초)은 그대로.
+  - 테스트: 전체 4251 passed·397 skipped(실패 0; 컨테이너 교체로 libEGL 없어 설치 후 실행, tkinter 없음 → test_startup_splash 제외). release checks 0.43.1 704 passed, preflight --sha 5b823b5 통과.
+  - 화면: 개발 렌더(docs/assets/autofind-v2-creator-20261106/impl-home.png·impl-settings.png) 확인 — 제작자 + v2 켜짐일 때만 홈 5줄 스위치·설정 구역.
+  - 미확인(Windows 실게임): 처음 찾기 실제 시간·안정 CPU = v2 꺼짐과 같은지·커서 꼬리(화면 스레드 16ms 초과 없음) — 개발 기록과 같음.
 - **0.43.1 후보: verify-only #198 성공**(run 42139205242, attempt 1, f26a1eb = 제품 453e71d + 문서만, 00:46~00:54 UTC). 후보 verified-windows-42139205242-1(ID 13467706806, 11-07 00:54 UTC 만료),
   exe 164,157,537바이트, 릴리즈 기능 검사·시작 smoke·빌드·후보 보관 모두 success. 사용자 확인 대기(저녁, 집 Windows): 던전↔마을 쿨타임 칸 유지·Shift 동안 위 줄 숨김/복귀·왼쪽 단축바 칸 페이지 무관.
 - **QA c9b433e + 453e71d(2026-11-06, 0.43.1 후보 준비)**: 통과 — 후보 만들 준비 완료(제품 SHA 453e71d).
