@@ -15,9 +15,16 @@ import numpy as np
 ICON = 16
 RING = 2
 SIZES = (16,)             # 화면에 그려지는 아이콘 한 변 — 1080·1440·4K 모두 16(4K 010804 즐겨찾기 줄 실측)
-DIM_GAIN = 0.5            # 꺼진(회색) 아이콘 고리 밝기(실측 0.46~0.54) — 이 밝기의 고리 틀도 함께 본다
-DIM_SNAP_LIMIT = 12.0     # 꺼진 고리 틀 거리 — 꺼진 즐겨찾기 0.2~10.8(1440·2560·4K), 어두운 바탕 15.7 이상(실측)
-SNAP_LIMIT = 30.0         # 켜진 고리 거리(픽셀당 RMS) — tests/data 실측: 켜진 아이콘 0~27.7(4K가 큼), 아이콘 아닌 곳 33.7 이상
+DIM_GAIN = 0.5            # 꺼진(회색) 아이콘 고리 밝기(실측 0.46~0.54) — 이 밝기의 고리 틀도 함께 본다(켜진 틀로 못 찾았을 때)
+# 거리 = 고리 픽셀별 오차 중 **작은 70%만**의 RMS(QA 0f95319): 그림이 테두리를 덮는 아이콘(상태 목록 편집 창 등)도 맞게.
+# 실측(11-06 223407·223416): 켜진 26개 최대 2.5, 꺼진 18개 최대 1.2, 임의 지점 575곳 최소 10.4/11.0, 머리글 100 이상.
+TRIM_KEEP = 0.70
+CANDIDATES = 8            # 1단계(고리 전체 SQDIFF)에서 거리 작은 후보 수 → 2단계에서 다듬은 거리로 고름
+TRIM_LIMIT = 6.0          # 다듬은 거리 기준(켜진 틀·꺼진 틀 같음)
+# 고리 전체 거리(픽셀당 RMS)도 함께 인정 — 4K(010804)·펠롬 디버프 줄 실제 아이콘은 다듬은 거리가 8~13(위 임의 지점 10.4와 겹침)이지만
+# 전체 거리로는 켜진 아이콘 0~27.7, 아이콘 아닌 곳 33.7 이상(0.43.1 첫 실측) → 둘 중 하나라도 기준 안이면 아이콘.
+SNAP_LIMIT = 30.0         # 켜진 틀 전체 거리
+DIM_SNAP_LIMIT = 12.0     # 꺼진 틀 전체 거리 — 꺼진 즐겨찾기 0.2~10.8, 어두운 바탕 15.7 이상
 
 # 2.3 온전함(tests/data 실측, 2026-10-30 창 모드 wireweb 1~3 즐겨찾기 줄)
 # 꺼진(회색) 즐겨찾기는 채도가 아니라 밝기가 절반으로 고르게 어두워진다(쿨타임 '사용 불가'와 같은 현상):
@@ -64,16 +71,48 @@ def _template(size: int, dim: bool = False):
             cv2.resize(mask, (size, size), interpolation=cv2.INTER_NEAREST))
 
 
-def ring_distance(cell: np.ndarray, dim: bool = False) -> float | None:
-    """칸(정사각형, 크기 SIZES 중 하나) 테두리 고리가 내장 틀과 얼마나 다른지(픽셀당 RMS). 크기가 안 맞으면 None."""
+def _trimmed(cell: np.ndarray, rings: np.ndarray, mask: np.ndarray) -> float:
+    """고리 픽셀별 오차(채널 평균 제곱)를 틀마다 구해 작은 TRIM_KEEP만 RMS → 틀 중 최소."""
+    m = mask.astype(bool)
+    err = ((cell.astype(np.float32)[None] - rings) ** 2).mean(axis=3)[:, m]  # (틀, 고리 픽셀)
+    k = max(1, int(round(err.shape[1] * TRIM_KEEP)))
+    kept = np.partition(err, k - 1, axis=1)[:, :k]
+    return float(np.sqrt(kept.mean(axis=1)).min())
+
+
+def _full(cell: np.ndarray, rings: np.ndarray, mask: np.ndarray) -> float:
+    diff = ((cell.astype(np.float32)[None] - rings) ** 2 * mask[None, :, :, None]).sum(axis=(1, 2, 3))
+    return float(np.sqrt(diff.min() / (mask.sum() * 3)))
+
+
+def _distances(cell: np.ndarray, dim: bool = False) -> tuple[float, float] | None:
+    """(고리 전체 거리, 다듬은 거리). 크기가 안 맞으면 None."""
     if cell is None or cell.ndim != 3 or cell.shape[0] != cell.shape[1] or cell.shape[0] not in SIZES:
         return None
     tpl = _template(cell.shape[0], dim)
     if tpl is None:
         return None
     rings, mask = tpl
-    diff = ((cell.astype(np.float32)[None] - rings) ** 2 * mask[None, :, :, None]).sum(axis=(1, 2, 3))
-    return float(np.sqrt(diff.min() / (mask.sum() * 3)))
+    return _full(cell, rings, mask), _trimmed(cell, rings, mask)
+
+
+def _passes(dist: tuple[float, float], dim: bool) -> bool:
+    return dist[0] <= (DIM_SNAP_LIMIT if dim else SNAP_LIMIT) or dist[1] <= TRIM_LIMIT
+
+
+def ring_distance(cell: np.ndarray, dim: bool = False) -> float | None:
+    """칸 테두리 고리가 내장 틀과 얼마나 다른지(다듬은 거리 — 작은 70% 고리 픽셀 RMS). 크기가 안 맞으면 None."""
+    d = _distances(cell, dim)
+    return None if d is None else d[1]
+
+
+def ring_matches(cell: np.ndarray) -> bool:
+    """테두리가 내장 틀(켜진 틀 또는 꺼진 틀)과 맞나 — 전체 거리 또는 다듬은 거리 기준 안."""
+    for dim in (False, True):
+        d = _distances(cell, dim)
+        if d is not None and _passes(d, dim):
+            return True
+    return False
 
 
 def _best(frame: np.ndarray, x: int, y: int, size: int, dim: bool):
@@ -89,10 +128,20 @@ def _best(frame: np.ndarray, x: int, y: int, size: int, dim: bool):
     roi = np.ascontiguousarray(frame[y0:y1, x0:x1]).astype(np.float32)
     mask3 = cv2.merge([mask] * 3)
     res = np.min([cv2.matchTemplate(roi, ring, cv2.TM_SQDIFF, mask=mask3) for ring in rings], axis=0)
-    res = np.where(np.isfinite(res), res, np.inf)
-    iy, ix = np.unravel_index(int(np.argmin(res)), res.shape)
-    dist = float(np.sqrt(max(0.0, float(res[iy, ix])) / (mask.sum() * 3)))
-    return dist, (x0 + int(ix), y0 + int(iy), size, size)
+    res = np.where(np.isfinite(res), res, np.inf).ravel()
+    order = np.argsort(res)[:CANDIDATES]  # 1단계: 고리 전체 거리 작은 후보
+    cols = roi.shape[1] - size + 1
+    iy, ix = divmod(int(order[0]), cols)
+    full = float(np.sqrt(max(0.0, float(res[order[0]])) / (mask.sum() * 3)))
+    if full <= (DIM_SNAP_LIMIT if dim else SNAP_LIMIT):
+        return (full, 0.0), (x0 + ix, y0 + iy, size, size)  # 전체 거리로 맞음(지금까지와 같음)
+    best = None
+    for idx in order:  # 2단계: 후보마다 다듬은 거리(그림이 테두리를 덮는 아이콘)
+        iy, ix = divmod(int(idx), cols)
+        trimmed = _trimmed(roi[iy:iy + size, ix:ix + size], rings, mask)
+        if best is None or trimmed < best[0][1]:
+            best = ((full, trimmed), (x0 + ix, y0 + iy, size, size))
+    return best
 
 
 def find_icon(frame: np.ndarray, x: int, y: int, limit: float = SNAP_LIMIT, dim_limit: float | None = None):
@@ -102,12 +151,10 @@ def find_icon(frame: np.ndarray, x: int, y: int, limit: float = SNAP_LIMIT, dim_
         return None
     dim_limit = DIM_SNAP_LIMIT if dim_limit is None else dim_limit
     for size in SIZES:
-        got = _best(frame, x, y, size, False)
-        if got is not None and got[0] <= limit:
-            return got[1]
-        got = _best(frame, x, y, size, True)
-        if got is not None and got[0] <= dim_limit:
-            return got[1]
+        for dim, lim in ((False, limit), (True, dim_limit)):  # 꺼진 틀은 켜진 틀로 못 찾았을 때만
+            got = _best(frame, x, y, size, dim)
+            if got is not None and (got[0][0] <= lim or got[0][1] <= TRIM_LIMIT):
+                return got[1]
     return None
 
 
@@ -174,7 +221,7 @@ def pick_whole(frames: list, *, check_ring: bool) -> tuple[np.ndarray | None, st
     cells = [_icon_cell(f, check_ring) for f in frames]
     ratio = [None if c is None else ring_brightness(c) for c in cells]
     dim = [r is not None and r < DIM_RATIO for r in ratio]
-    ring_ok = [not check_ring or (ring_distance(f) is not None and ring_distance(f) <= SNAP_LIMIT) for f in frames]
+    ring_ok = [not check_ring or ring_matches(f) for f in frames]
     stable = [False] + [frames[i].shape == frames[i - 1].shape
                         and float(np.abs(frames[i].astype(np.int16) - frames[i - 1].astype(np.int16)).mean()) <= STABLE_DIFF
                         for i in range(1, len(frames))]

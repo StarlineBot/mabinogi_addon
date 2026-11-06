@@ -910,7 +910,8 @@ def test_both_selectors_look_like_boxes_is_ambiguous_not_hidden():
     both = frame.copy()
     x0, y0, w0, h0 = rects[1]
     x1, y1, _, _ = rects[0]
-    both[y1:y1 + h0, x1:x1 + w0] = frame[y0:y0 + h0, x0:x0 + w0]  # 두 자리 모두 상자처럼
+    pad = 12
+    both[y1:y1 + h0, x1 - pad:x1 + w0 + pad] = frame[y0:y0 + h0, x0 - pad:x0 + w0 + pad]  # 두 자리 모두 선택기처럼(상자 + 화살표)
     slot = {"id": "a", "page": cd.page_signature(frame, rects[1]), "page_block": 1, "block": 1,
             "page_rects": {str(k): list(v) for k, v in rects.items()}}
     assert cd.selectors_seen(both, rects) == [0, 1]
@@ -1008,3 +1009,24 @@ def test_unavailable_drops_from_row_without_highlight():
     assert row.row == [] and not row.until
     row.update({"a": READY}, 2.0)  # 내리고 다시 보임 → 첫 관측이라 강조 없음
     assert not row.until
+
+
+# ---- 선택기는 숫자 상자 + 양옆 ◀▶ 화살표(QA 0f95319) ----------------------------------------------------------
+@pytest.mark.parametrize("name", ["스크린샷 2026-11-06 223407.png", "스크린샷 2026-11-06 223416.png"])
+def test_selector_needs_arrows_on_both_sides(name):
+    """상태 목록 편집 창 화면: 가짜(어두운 사각형) 자리 때문에 두 줄이 '애매(2개)'였다 → 화살표 확인으로 둘 다 키 블록 1."""
+    frame, box, _cells = _screen(name)
+    for row in (0, 1):
+        rects = cd.selector_rects(box, row)
+        assert cd.selectors_seen(frame, rects) == [1], row
+        assert cd.key_block(frame, rects) == 1
+
+
+def test_box_without_arrows_is_not_a_selector():
+    frame, box, _cells = _screen("스크린샷 2026-11-06 013739.png")
+    rect = cd.selector_rects(box, 0)[1]
+    assert cd.selectors_seen(frame, {1: rect}) == [1]
+    x, y, w, h = rect
+    no_arrows = frame.copy()
+    no_arrows[y:y + h, x - 12:x - 1] = 30  # 왼쪽 화살표를 어둡게(상자는 그대로)
+    assert cd._box_mask(no_arrows, rect) is not None and cd.selectors_seen(no_arrows, {1: rect}) == []

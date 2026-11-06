@@ -92,6 +92,13 @@ def _page_state(frame, ox, oy, slot) -> str | None:
     return HIDDEN if same is None else PAGE_DIFF if same is False else None
 
 
+def _with_arrows(rect):
+    """선택기 상자 + 양옆 화살표 자리(cd.selectors_seen이 보는 범위) — 공유 캡처가 화살표까지 찍게."""
+    x, y, w, h = rect
+    span = max(1, round(cd.ARROW_SPAN * w / 15.0)) + 1
+    return [x - span, y, w + 2 * span, h]
+
+
 def _reference(slot, refs: dict):
     """칸의 '사용 가능' 아이콘 기준(채도·밝기 평균) — 작업 스레드에서 한 번 읽어 캐시(매 관측 파일 읽기 금지). 아이콘이 아직 없으면 None."""
     sid = slot["id"]
@@ -494,8 +501,9 @@ class CooldownSection(QGroupBox):
                 self._show_row()
             return
         slots = [dict(s) for s in self.slots]
-        rects = ([s["rect"] for s in slots] + [s["page_rect"] for s in slots if s.get("page_rect")]
-                 + [r for s in slots for r in (s.get("page_rects") or {}).values()])  # 키 블록을 정하려고 두 선택기 자리 모두 찍는다
+        selectors = ([s["page_rect"] for s in slots if s.get("page_rect")]
+                     + [r for s in slots for r in (s.get("page_rects") or {}).values()])  # 키 블록을 정하려고 두 선택기 자리 모두 찍는다
+        rects = [s["rect"] for s in slots] + [_with_arrows(r) for r in selectors]  # 선택기는 양옆 ◀▶ 화살표까지
         x0, y0 = min(r[0] for r in rects), min(r[1] for r in rects)
         x1, y1 = max(r[0] + r[2] for r in rects), max(r[1] + r[3] for r in rects)
         last = self._last

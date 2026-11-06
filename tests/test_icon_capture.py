@@ -242,3 +242,39 @@ def test_preview_is_integer_multiple_of_source_pixels(app, dpr, k):
     off = (phys - 16 * k) // 2
     drawn = arr[off:off + 16 * k, off:off + 16 * k]
     assert np.array_equal(drawn, np.repeat(np.repeat(icon, k, axis=0), k, axis=1))  # 원본 한 픽셀 = k×k 블록 그대로
+
+
+# ---- 그림이 테두리를 덮는 아이콘(상태 목록 편집 창) — 다듬은 거리(작은 70%, QA 0f95319) -----------------------------
+EDIT = {"스크린샷 2026-11-06 223407.png": {547, 727}, "스크린샷 2026-11-06 223416.png": {427}}  # 머리글 줄(아이콘 아님)
+
+
+@pytest.mark.parametrize("name", list(EDIT))
+def test_edit_window_icon_rows_all_snap_and_headers_do_not(name):
+    frame = _read(name)
+    snapped = 0
+    for y in range(337, 968, 30):  # 아이콘 x=368, 30px 간격
+        got = snap.find_icon(frame, 376, y + 8)
+        if y in EDIT[name]:
+            assert got is None, y  # 머리글
+        else:
+            assert got == (368, y, 16, 16), y  # 예전엔 337·487·577·817·877줄(그림이 테두리를 덮음)을 못 찾았다
+            assert snap.ring_matches(frame[y:y + 16, 368:384])
+            snapped += 1
+    assert snapped >= 20
+
+
+def test_edit_window_background_finds_nothing():
+    import random
+    rng = random.Random(7)
+    frame = _read("스크린샷 2026-11-06 223416.png")
+    for _ in range(150):
+        x, y = rng.randrange(400, 2540), rng.randrange(20, 1420)  # 아이콘 열·왼쪽 상태 목록 밖
+        assert snap.find_icon(frame, x, y) is None, (x, y)
+
+
+def test_trimmed_distance_ignores_covered_part_of_border():
+    icon = _icon()
+    covered = icon.copy()
+    covered[0:2, 4:12] = (255, 255, 255)  # 그림이 위 테두리 일부를 덮음(고리 픽셀 16/60)
+    assert snap.ring_distance(covered) <= snap.TRIM_LIMIT
+    assert snap.pick_whole([covered] * 6, check_ring=True)[1] is None

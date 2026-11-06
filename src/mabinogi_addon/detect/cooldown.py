@@ -116,9 +116,31 @@ def selector_rects(source_box, row: int) -> dict[int, tuple[int, int, int, int]]
             for block, offset in enumerate(PAGE_OFFSETS)}
 
 
+ARROW_SPAN = 11          # 상자 양옆 화살표(◀▶)를 보는 너비(상자 폭 15 기준 px, 배율 s = 상자 폭/15)
+ARROW_V, ARROW_S = 170, 60
+ARROW_MIN = 20           # 한쪽에 밝고(>170) 무채색(<60)인 픽셀이 이만큼 이상 — 진짜 선택기 양쪽 49 이상, 가짜 한쪽 0~3(QA 0f95319)
+
+
+def _has_arrows(frame: np.ndarray, rect) -> bool:
+    """상자 왼쪽·오른쪽에 흰 화살표가 모두 있어야 선택기(◀n▶). 아이콘·바탕의 어두운 사각형이 상자로 보이는 것을 거른다."""
+    x, y, w, h = (int(v) for v in rect)
+    span = max(1, round(ARROW_SPAN * w / 15.0))
+    if y < 0 or y + h > frame.shape[0]:
+        return False
+    for x0, x1 in ((x - span, x - 1), (x + w + 1, x + w + 1 + span)):
+        x0, x1 = max(0, x0), min(frame.shape[1], x1)
+        if x1 <= x0:
+            return False
+        hsv = cv2.cvtColor(np.ascontiguousarray(frame[y:y + h, x0:x1]), cv2.COLOR_BGR2HSV)
+        if int(np.count_nonzero((hsv[:, :, 2] > ARROW_V) & (hsv[:, :, 1] < ARROW_S))) < ARROW_MIN:
+            return False
+    return True
+
+
 def selectors_seen(frame: np.ndarray, rects: dict) -> list:
-    """페이지 선택기 상자로 보이는 자리(블록 번호). 비면 그 줄 단축바가 안 보임(로그인·캐릭터 선택·로딩 등), 둘이면 애매."""
-    return [block for block, rect in rects.items() if _box_mask(frame, tuple(rect)) is not None]
+    """페이지 선택기(◀n▶)로 보이는 자리(블록 번호): 숫자 상자 + 양옆 화살표. 비면 그 줄 단축바가 안 보임(로그인·캐릭터 선택·로딩 등), 둘이면 애매."""
+    return [block for block, rect in rects.items()
+            if _box_mask(frame, tuple(rect)) is not None and _has_arrows(frame, tuple(rect))]
 
 
 def key_block(frame: np.ndarray, rects: dict) -> int | None:
