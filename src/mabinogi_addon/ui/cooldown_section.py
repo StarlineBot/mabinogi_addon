@@ -25,6 +25,8 @@ PAGE_DIFF = "page"  # 페이지 숫자 모양이 저장한 것과 다름(가려�
 PAGE_WARN_SECONDS = 3.0  # 이만큼 계속 다르면 목록에 '다른 페이지라 숨김'(실제로 페이지를 넘긴 정상 상황에도 뜨므로 재등록 안내는 하지 않음)
 STATE_TEXT = {cd.COOLING: "사용 중", cd.READY: "사용 가능", HIDDEN: "가려짐", PAGE_DIFF: "가려짐(페이지 다름)",
               cd.UNAVAILABLE: "사용 불가(탈것 등)"}
+UNAVAILABLE_HOLD = 3.0  # '사용 중' 칸이 어둡게(사용 불가처럼) 보여도 이 시간까지는 사용 중 유지 — 전투 중 스킬을 쓰는 동안 칸이 어두워져
+                        # 쿨 숫자가 흰 글자 기준에 못 미쳐 '사용 가능 → 사용 불가'로 읽히면 줄에서 빠졌다 붙었다(QA 5a9f431, 후보 #200 app.log)
 COOLING_CONFIRM = 2  # '사용 중'은 연속 관측 이만큼부터 인정(약 0.44초) — 한 프레임 오판으로 줄·강조가 생기지 않게
 from .widgets import checkbox, hint_label, switch
 
@@ -116,7 +118,7 @@ def _reference(slot, refs: dict):
     return refs[sid]
 
 
-def observe(frame, origin, slots, last: dict, with_crops: bool, need_icon=frozenset()):
+def observe(frame, origin, slots, last: dict, with_crops: bool, need_icon=frozenset(), now: float | None = None):
     """작업 스레드: 공유 캡처 한 장(물리 사각형 origin에서 시작)에서 칸마다 상태. 바뀐 칸만 돌려준다(없으면 None).
     last는 이 함수만 쓰는 이전 상태(작업 스레드 안에서만 바뀐다).
     need_icon: 목록 아이콘을 아직 '사용 가능' 그림으로 저장하지 않은 칸 — 사용 가능으로 보이면 여기서(작업 스레드) 저장하고 icons에 알린다.
@@ -126,6 +128,8 @@ def observe(frame, origin, slots, last: dict, with_crops: bool, need_icon=frozen
     changes, crops, icons = {}, {}, []
     streak = last.setdefault("_cooling_streak", {})  # 작업 스레드 전용 보조 값(칸 상태와 같은 사전에 둔다 — 지우면 함께 초기화)
     refs = last.setdefault("_icon_ref", {})
+    dim_since = last.setdefault("_dim_since", {})  # 사용 중 칸이 어둡게 보이기 시작한 시각
+    now = time.monotonic() if now is None else now
     for slot in slots:
         x, y, w, h = slot["rect"]
         cx, cy = x - ox, y - oy
@@ -140,6 +144,11 @@ def observe(frame, origin, slots, last: dict, with_crops: bool, need_icon=frozen
             state = HIDDEN
         if state == cd.READY and cd.is_dimmed(cell, _reference(slot, refs)):
             state = cd.UNAVAILABLE  # 탈것 등으로 칸이 어두움 — 가려짐처럼 줄에서 빼고 강조·알림 없음
+        if state == cd.UNAVAILABLE and last.get(slot["id"]) == cd.COOLING:
+            if now - dim_since.setdefault(slot["id"], now) < UNAVAILABLE_HOLD:
+                continue  # 사용 중 유지(상태 변화 없음) — 3초 넘게 이어지면 그때 사용 불가
+        else:
+            dim_since.pop(slot["id"], None)
         streak[slot["id"]] = streak.get(slot["id"], 0) + 1 if state == cd.COOLING else 0
         if state == cd.COOLING and streak[slot["id"]] < COOLING_CONFIRM:
             continue  # 한 번만 '사용 중' → 아직 인정하지 않고 직전 상태 그대로(다음 관측에서 확인)

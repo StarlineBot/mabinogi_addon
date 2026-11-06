@@ -1030,3 +1030,55 @@ def test_box_without_arrows_is_not_a_selector():
     no_arrows = frame.copy()
     no_arrows[y:y + h, x - 12:x - 1] = 30  # 왼쪽 화살표를 어둡게(상자는 그대로)
     assert cd._box_mask(no_arrows, rect) is not None and cd.selectors_seen(no_arrows, {1: rect}) == []
+
+
+# ---- 전투 중 사용 중 칸이 잠깐 어두워져도 '사용 불가'로 빠지지 않게(QA 5a9f431) --------------------------------------
+def _dim_hold_setup(tmp_path, monkeypatch):
+    from mabinogi_addon import image_io
+    from mabinogi_addon.ui import cooldown_section as cs
+    monkeypatch.setattr(cs, "icon_dir", lambda: tmp_path)
+    key = (1, 0, 0, 0)
+    ref, _b, rcells = _screen("스크린샷 2026-11-04 014744.png")
+    cool, _b2, ccells = _screen("스크린샷 2026-11-06 013739.png")
+    dim, _b3, dcells = _screen(MOUNT)
+    x, y, w, h = rcells[key].rect
+    image_io.imwrite(tmp_path / "s.png", ref[y:y + h, x:x + w])
+    slot = {"id": "s", "rect": list(ccells[key].rect), "icon_ok": True}
+    assert cd.classify(cool[y:y + h, x:x + w]) == COOLING and cd.classify(dim[y:y + h, x:x + w]) == READY
+    return cs, slot, cool, dim
+
+
+def _run_frames(cs, slot, seq, others=()):
+    from mabinogi_addon.tracker.cooldown_row import CooldownRow
+    row, last, log = CooldownRow(), {}, []
+    if others:
+        row.update({o: COOLING for o in others}, 0.0)
+    for t, frame in seq:
+        out = cs.observe(frame, (0, 0), [slot], last, False, now=t)
+        if out:
+            log.append(out["changes"])
+            row.update(out["changes"], t)
+    return row, last, log
+
+
+def test_cooling_cell_dimmed_briefly_stays_cooling(tmp_path, monkeypatch):
+    cs, slot, cool, dim = _dim_hold_setup(tmp_path, monkeypatch)
+    seq = [(i * 0.22, cool) for i in range(4)] + [(1.0 + i * 0.22, dim) for i in range(10)] + [(3.3 + i * 0.22, cool) for i in range(3)]
+    row, last, log = _run_frames(cs, slot, seq, others=("a",))
+    assert log == [{"s": COOLING}]  # 어두운 2초 동안 상태 변화 없음
+    assert row.row == ["a", "s"] and not row.until  # 줄 순서 그대로, 강조 없음
+
+
+def test_cooling_cell_dimmed_over_3s_becomes_unavailable(tmp_path, monkeypatch):
+    cs, slot, cool, dim = _dim_hold_setup(tmp_path, monkeypatch)
+    seq = [(i * 0.22, cool) for i in range(4)] + [(1.0 + i * 0.22, dim) for i in range(19)]  # 약 4초
+    row, last, log = _run_frames(cs, slot, seq)
+    assert log == [{"s": COOLING}, {"s": cd.UNAVAILABLE}] and last["s"] == cd.UNAVAILABLE
+    assert row.row == [] and not row.until  # 줄에서 빠짐, 강조 없음
+
+
+def test_ready_cell_dimmed_is_unavailable_right_away(tmp_path, monkeypatch):
+    cs, slot, cool, dim = _dim_hold_setup(tmp_path, monkeypatch)
+    ref, _b, _c = _screen("스크린샷 2026-11-04 014744.png")
+    row, last, log = _run_frames(cs, slot, [(0.0, ref), (0.22, dim)])
+    assert log == [{"s": READY}, {"s": cd.UNAVAILABLE}]  # 줄에 없던 칸은 지금처럼 바로
