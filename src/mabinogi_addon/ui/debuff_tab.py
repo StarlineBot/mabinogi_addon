@@ -55,6 +55,7 @@ class DebuffTab(QWidget):
     scale_changed = Signal(int)  # 디버프 오버레이 배율(%) 변경
     opacity_changed = Signal(int)  # 오버레이 불투명도(%) 변경(명세 15절)
     window_visible_changed = Signal(bool)  # '오버레이 창 보이기'(0.32.0)
+    boss_only_changed = Signal(bool)  # '보스바가 보일 때만 표시'(2026-11-06)
     gate_mode_changed = Signal(str)  # 탐지 방식(1/2/3차) 변경 또는 바 영역 변경 → 재시작
     bar_region_changed = Signal()  # 보스 HP바 영역 지정 → 보스패턴알림도 반영(공유)
 
@@ -275,6 +276,18 @@ class DebuffTab(QWidget):
         window_row.addWidget(self.window_check)
         window_row.addWidget(self.window_hint, 1)
         v.addLayout(window_row)
+        # 보스바가 보일 때만 표시(2026-11-06): 마을 등 보스가 없을 때 디버프 목록이 뜨지 않게. 보스바 영역이 없으면 항상 표시.
+        self.boss_only_check = checkbox("보스바가 보일 때만 표시")
+        self.boss_only_check.setChecked(config.load_debuff_boss_only())
+        self.boss_only_check.setToolTip("보스 체력바가 사라진 뒤 10초 더 보여요. 숨겨진 동안에도 디버프는 계속 확인해요.\n"
+                                        "보스 체력바 영역을 지정하지 않았으면 항상 보여요.")
+        self.boss_only_check.toggled.connect(self._on_boss_only)
+        self.boss_only_hint = hint_label("보스 체력바 영역이 없으면 항상 보여요")
+        boss_row = QHBoxLayout()
+        boss_row.setSpacing(8)
+        boss_row.addWidget(self.boss_only_check)
+        boss_row.addWidget(self.boss_only_hint, 1)
+        v.addLayout(boss_row)
 
         self._bar_gating_notice = hint_label("")
         self._bar_gating_notice.setStyleSheet(f"color:{color('warn')}; font-size:12px;")
@@ -311,6 +324,10 @@ class DebuffTab(QWidget):
     def _on_scale(self, pct: int) -> None:
         config.set_debuff_scale(pct)
         self.scale_changed.emit(pct)
+
+    def _on_boss_only(self, on: bool) -> None:
+        config.set_debuff_boss_only(on)
+        self.boss_only_changed.emit(on)
 
     def _on_window_visible(self, visible: bool) -> None:
         config.set_debuff_window_visible(visible)

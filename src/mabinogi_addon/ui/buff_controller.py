@@ -184,6 +184,7 @@ class BuffController(QObject):
         self._self_active = False  # 우리 앱 포그라운드
         self._paused = False  # 사용자 일시정지(사냥 안 할 때) → 숨김·알림 억제
         self._window_visible = True  # '오버레이 창 보이기'(0.32.0) — 끄면 창만 숨김, 탐지·알림은 계속
+        self._gate_visible = True  # 디버프: 보스바가 보일 때만 표시(고정 상태에서만 숨김)
         self._generation = 0
         self._last_remaining: dict[str, float] = {}  # 표시 평활용 직전 표시값
         # 사라짐 경고용 상태
@@ -303,6 +304,12 @@ class BuffController(QObject):
         self._paused = paused
         self._apply_visibility()
 
+    def set_gate_visible(self, visible: bool) -> None:
+        """디버프 '보스바가 보일 때만 표시'(2026-11-06): 고정 상태에서 창만 숨긴다(탐지·알림 계속, 위치 조정 중엔 보임)."""
+        if self._gate_visible != bool(visible):
+            self._gate_visible = bool(visible)
+            self._apply_visibility()
+
     def set_window_visible(self, visible: bool) -> None:
         """'오버레이 창 보이기'(0.32.0): 끄면 포그라운드·잠금과 무관하게 창만 숨긴다.
         일시정지와 달리 탐지·알림·소리는 그대로(아이콘 없이 소리 알림만)."""
@@ -418,6 +425,9 @@ class BuffController(QObject):
             self._overlay.hide()
             return
         locked = self._overlay.locked
+        if locked and not self._gate_visible:
+            self._overlay.hide()
+            return
         if self._game_active:
             # 게임이 포그라운드: 버프가 있거나, 해제(편집) 상태면 플레이스홀더 유지.
             show = bool(self._items) or not locked

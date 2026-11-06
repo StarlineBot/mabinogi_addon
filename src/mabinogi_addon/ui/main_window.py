@@ -296,7 +296,8 @@ class MainWindow(QMainWindow):
         # 블랙박스 '전투 녹화'가 켜져 있을 때도 존재 판정이 필요하다(명세 12.2).
         self.boss_tab.set_presence_consumer(
             lambda: self.stat_bars_tab.has_active_alert()
-            or bool(getattr(getattr(self, "blackbox_tools", None), "wants_boss_presence", lambda: False)()))
+            or bool(getattr(getattr(self, "blackbox_tools", None), "wants_boss_presence", lambda: False)())
+            or self._debuff_gate_wants_presence())
         self.skillbar_tab = SkillbarTab(self._watcher)
         self.settings_tab = SettingsTab(self._watcher)
         from .optimization_controller import OptimizationController
@@ -504,6 +505,8 @@ class MainWindow(QMainWindow):
             lambda on: self.buff_controller is not None and self.buff_controller.set_window_visible(on))
         self.debuff_tab.window_visible_changed.connect(
             lambda on: self.debuff_controller is not None and self.debuff_controller.set_window_visible(on))
+        self._debuff_boss_only = config.load_debuff_boss_only()
+        self.debuff_tab.boss_only_changed.connect(self._on_debuff_boss_only)
 
         self._feature_checks = {
             "tuarim": self.tuarim_tab.enable,
@@ -1263,6 +1266,7 @@ class MainWindow(QMainWindow):
         self.buff_tab.set_favorites_info(*self._favorites_info())
         self._remember_favorites_separator()
         self.debuff_tab.set_status(*self._debuff_status())
+        self._update_debuff_gate()
         # 사라짐 경고 가능 여부 안내. 방식과 무관하게 '디버프 영역에서 띠를 한 번이라도
         # 봤는지'(bar_ever_seen)로 표시한다 — 보스가 잠깐 없어도 "인식됨"을 유지해, 영역이
         # 맞는데도 "안 보여요"가 깜빡이던 문제를 없앤다. 1차에서도 동일하게 동작.
@@ -2050,11 +2054,37 @@ class MainWindow(QMainWindow):
         )
         self.debuff_controller.set_paused(self._paused)  # 재생성 시 일시정지 상태 유지
         self.debuff_controller.set_window_visible(config.load_overlay_windows()[1])
+        gate = self.__dict__.get("_debuff_gate")
+        self.debuff_controller.set_gate_visible(True if gate is None else gate.visible)
         # 보스에서 떨어진 디버프(재적용 필요)를 빨리 캐치하도록 150ms 주기.
         # 표시한 것만 매칭이라 비용은 낮다(시간 판독도 없음).
         self.debuff_controller.start(
             source, self._debuff_engine, interval_ms=150, bar_source=bar_source
         )
+
+    # ---- 디버프 오버레이: 보스바가 보일 때만(2026-11-06) ----
+    def _debuff_gate_wants_presence(self) -> bool:
+        """보스 존재 판정이 필요한가 — 디버프 오버레이가 켜져 있고 '보스바가 보일 때만'이 켜졌을 때."""
+        return (bool(getattr(self, "_debuff_boss_only", False)) and getattr(self, "debuff_controller", None) is not None
+                and self.debuff_tab.window_check.isChecked())
+
+    def _on_debuff_boss_only(self, on: bool) -> None:
+        self._debuff_boss_only = bool(on)
+        self._update_debuff_gate()
+
+    def _update_debuff_gate(self) -> None:
+        """상태 타이머(0.7초)마다: 보스바 신호 → 디버프 오버레이 창 보이기(탐지는 계속)."""
+        import time
+
+        from ..debuff_gate import DebuffOverlayGate
+        gate = self.__dict__.get("_debuff_gate")
+        if gate is None:
+            gate = self._debuff_gate = DebuffOverlayGate()
+        present = bool(self.boss_tab.is_boss_present()) if self._watcher.is_game_active() else None
+        visible = gate.update(time.monotonic(), enabled=bool(getattr(self, "_debuff_boss_only", False)),
+                              registered=self.boss_tab.has_region(), present=present)
+        if self.debuff_controller is not None:
+            self.debuff_controller.set_gate_visible(visible)
 
     def _on_debuff_tracking_changed(self) -> None:
         if self._debuff_engine is None:

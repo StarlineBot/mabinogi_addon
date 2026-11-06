@@ -133,6 +133,8 @@ def startup(library, monkeypatch):
             pass
         def set_window_visible(self, value):  # 0.32.0 '오버레이 창 보이기'(실제 컨트롤러와 같은 메서드)
             pass
+        def set_gate_visible(self, value):  # 디버프 '보스바가 보일 때만 표시'
+            pass
         def start(self, source, engine, **kwargs):
             self.engine = engine
             self.bar_source = kwargs.get("bar_source")

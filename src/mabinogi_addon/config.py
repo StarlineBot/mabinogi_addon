@@ -1795,3 +1795,13 @@ def save_autofind_v2_use(key: str, on: bool, path: Path = LOCAL_CONFIG_PATH) -> 
     sec["use"] = use
     data["autofindV2"] = sec
     _write_local_config(data, path)
+
+
+def load_debuff_boss_only(path: Path = LOCAL_CONFIG_PATH) -> bool:
+    """디버프 오버레이를 보스바가 보일 때만 표시(기본 켬, 2026-11-06). 보스 체력바 영역이 없으면 항상 표시."""
+    s = _read_local_config(path).get("overlay") or {}
+    return not isinstance(s, dict) or s.get("debuffBossOnly", True) is not False
+
+
+def set_debuff_boss_only(on: bool, path: Path = LOCAL_CONFIG_PATH) -> None:
+    _set_overlay_value("debuffBossOnly", bool(on), path)

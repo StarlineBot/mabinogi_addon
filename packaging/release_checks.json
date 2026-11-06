@@ -23,7 +23,10 @@
     "tests/test_boss_tab.py",
     "tests/test_dorcha_tab.py",
     "tests/test_stat_bars.py",
-    "tests/test_engine.py"
+    "tests/test_engine.py",
+    "tests/test_debuff_boss_gate.py",
+    "tests/test_debuff_identity.py",
+    "tests/test_pause.py"
   ],
   "coverage": {
     "src/mabinogi_addon/detect/cooldown.py": {
@@ -156,6 +159,26 @@
         "tests/test_engine.py"
       ],
       "reason": "TickResult.seen(v2 판독 상태) 추가"
+    },
+    "src/mabinogi_addon/debuff_gate.py": {
+      "tests": [
+        "tests/test_debuff_boss_gate.py"
+      ],
+      "reason": "디버프 오버레이 보스바 게이트: 보임 표시·10초 유예·숨김·즉시 복귀·영역 없음/옵션 끔 항상·판정 불가 유지"
+    },
+    "src/mabinogi_addon/ui/buff_controller.py": {
+      "tests": [
+        "tests/test_debuff_boss_gate.py",
+        "tests/test_pause.py"
+      ],
+      "reason": "set_gate_visible: 고정 상태에서 창만 숨김(탐지 계속), 일시정지·창 보이기와 함께"
+    },
+    "src/mabinogi_addon/ui/debuff_tab.py": {
+      "tests": [
+        "tests/test_debuff_identity.py",
+        "tests/test_debuff_boss_gate.py"
+      ],
+      "reason": "'보스바가 보일 때만 표시' 체크박스(기본 켬·저장)·디버프 추적 재시작 경로"
     }
   }
 }
