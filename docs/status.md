@@ -229,6 +229,8 @@
 
 ## 열린 문제
 
+- **0.43.1 후보(재): verify-only #199 성공**(run 42161413861, attempt 1, 504031b = 제품 5b823b5 + 문서만, 04:15~04:25 UTC). 후보 verified-windows-42161413861-1(ID 13477740342, **11-07 04:25 UTC = 13:25 KST 만료**),
+  exe 164,205,330바이트, 릴리즈 기능 검사·시작 smoke·빌드·후보 보관 모두 success. #198은 무효(제품 변경 전 후보). 사용자 확인 대기(저녁, 집 Windows): 쿨타임 페이지·자동 찾기 v2(제작자).
 - **QA 6a65f9f~5b823b5(2026-11-06, 자동 찾기 v2 제작자 테스트판 + 선행 2건)**: 통과 — **후보 #198 무효**(제품·테스트 변경, 지문 다름) → 0.43.1 verify-only 다시 필요(제품 SHA 5b823b5).
   - v2 꺼짐(비제작자·제작자 스위치 꺼짐) 경로 대조: `autofind_regions.region_for`는 꺼짐이면 저장 영역 그대로, `region_property` 읽기 = 저장 값, `user_set/report/set_region`은 꺼짐이면 아무것도 안 함,
     `setup_state.enabled`·`_feature_region`·보스 패턴 `use_on`·버프 워커 `health` 신호·홈 스위치·탭 '자동(v2)' 줄 모두 꺼짐이면 기존과 같음. 비제작자는 컨트롤러·설정 구역 생성 안 함. 투아림 `read_percent`는 기존 동작(100%=None) 유지.
