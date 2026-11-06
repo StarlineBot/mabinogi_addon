@@ -72,6 +72,7 @@ class TickResult:
     alerts: list[str]  # 이번 틱에 만료임박(1차) 알림이 발생한 buff_id
     frame_valid: bool  # 정상 프레임 여부(앵커 보임)
     alerts2: list[str] = field(default_factory=list)  # 2차(막차) 알림이 발생한 buff_id
+    seen: bool | None = None  # 이번 틱에 기준 버프나 버프 아이콘이 하나라도 보였나(자동 찾기 v2 판독 상태용, 디버프는 None)
 
 
 class BuffEngine:
@@ -265,7 +266,8 @@ class BuffEngine:
                     OverlayEntry(bid, machine.remaining(now), machine.alerting)
                 )
         return TickResult(
-            entries=entries, alerts=alerts, frame_valid=frame_valid, alerts2=alerts2
+            entries=entries, alerts=alerts, frame_valid=frame_valid, alerts2=alerts2,
+            seen=bool(present),
         )
 
     _ICON_STILL = 0.7  # 그 줄에 아이콘이 그대로 있다고 볼 점수(즐겨찾기 줄 맞춤 기준과 같음)

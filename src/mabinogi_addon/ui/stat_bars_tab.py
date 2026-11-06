@@ -592,6 +592,7 @@ class StatBarsTab(QWidget):
             self._last_saved_frame = frame
         readings = {r.stat_id: r for r in read_stat_bars(frame, require_complete=True)}
         self._display_valid = _complete_readings(readings)
+        self._afr.report("stat_bars", self._display_valid)  # 자동 찾기 v2 판독 상태(꺼짐이면 아무것도 안 함)
         parts = []
         for sid, ov in self._overlays.items():
             r = readings.get(sid)

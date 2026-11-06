@@ -28,7 +28,7 @@ from PySide6.QtWidgets import (
 
 from .palette import color, subtab_underline
 from .palette import custom as palette_custom, on_frame
-from .. import config, paths
+from .. import autofind_regions, config, paths
 from ..capture import Region, create_live_source
 from ..catalog import DEFAULT_HIDDEN_BUFFS, DETECT_ALWAYS_BUFFS, available_catalog, available_debuff_catalog, build_templates
 from ..system.window_watcher import create_window_watcher
@@ -363,6 +363,8 @@ class MainWindow(QMainWindow):
             logging.getLogger(__name__).warning("문의 임시 폴더 정리 실패", exc_info=True)
         self._harp_scroll = _scrolled(self.harp_tab)
         self._refresh_harp_access()
+        self._autofind_v2 = None
+        self._setup_autofind_v2()
 
         tabs = QTabWidget()
         tabs.setObjectName("mainTabs")
@@ -430,7 +432,8 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central)
         # 홈(탐색 구조 명세 12절): 상위 탭이 아니라 앱 창 전체(상태 줄·탭 포함)를 덮는 중앙 위젯의 자식.
         from .home_page import HomePage
-        self.home_page = HomePage(central)
+        from .. import autofind_regions as _afr
+        self.home_page = HomePage(central, extra_switches=self._HOME_V2_SWITCHES if _afr.active() else ())
         self.home_page.hide()
         central.installEventFilter(self)
         self.home_page.menu_requested.connect(self._hide_home)
@@ -526,6 +529,9 @@ class MainWindow(QMainWindow):
     _HOME_NAMES = {"buff": "버프", "debuff": "디버프", "boss": "보스 패턴 알림", "halo": "1분 헤일로",
                    "stat_bars": "체력바", "dorcha": "도르카 표시", "tuarim": "투아림 알림",
                    "custom": "커스텀 오버레이", "skillbar": "단축바", "memo": "메모"}
+
+    # 자동 찾기 v2(제작자, 2.1절): 영역과 별개인 사용 값 스위치를 붙이는 홈 줄
+    _HOME_V2_SWITCHES = ("buff", "debuff", "boss", "halo", "skillbar")
 
     def home_visible(self) -> bool:
         home = getattr(self, "home_page", None)
@@ -642,6 +648,12 @@ class MainWindow(QMainWindow):
             self.blackbox_tools.set_home_enabled(on)
         elif key == "cursor":
             self.cursor_tab.set_enabled(on)  # 마우스 커서 화면 '커서 표시'와 같은 값
+        elif key in self._HOME_V2_SWITCHES and autofind_regions.active():
+            from .. import setup_state
+            try:
+                setup_state.save_enabled(self._HOME_FEATURES[key], on)  # v2 사용 값(영역은 그대로) → 해당 기능 다시 시작
+            except OSError:
+                logging.getLogger(__name__).warning("자동 찾기 v2 사용 값 저장 실패", exc_info=True)
         self.home_page.update_state(self._home_state())
 
     def _refresh_harp_access(self, *_args) -> None:
@@ -744,6 +756,8 @@ class MainWindow(QMainWindow):
             rows[key] = (*shown(key, on, active), on)
         rows["skillbar"] = shown("skillbar")
         rows["memo"] = shown("memo")
+        if autofind_regions.active():
+            self._home_v2_rows(rows, paused, game)
         rows["opt"] = self.optimization_tools.home_state()
         frames = self.optimization_tools.panel.frames_toggle.isChecked()
         rows["fps"] = ("표시 중" if frames else "꺼짐", "ok" if frames else "muted", frames)
@@ -759,6 +773,44 @@ class MainWindow(QMainWindow):
         title = "paused" if paused else "running" if game else "waiting"
         return {"title": title, "combat_on": not paused, "working": working, "needs": needs, "rows": rows,
                 "channel": self.harp_tab.home_summary()}
+
+    def _home_v2_rows(self, rows: dict, paused: bool, game: bool) -> None:
+        """자동 찾기 v2(2.1절): 5줄은 사용 값 스위치 + 위치 상태('꺼짐 · 위치 찾음'). 저장 영역 유무로 '영역 지정 필요'를 띄우지 않는다."""
+        for home_key in self._HOME_V2_SWITCHES:
+            key = self._HOME_FEATURES[home_key]
+            on = autofind_regions.use_on(key)
+            place = self._autofind_place(key)
+            text, kind = rows[home_key][:2]
+            if not on:
+                rows[home_key] = (f"꺼짐 · {place}", "muted", False)
+            elif kind == "warn":  # 저장 영역이 없어서 나온 '영역 지정 필요' → 위치 상태로
+                rows[home_key] = (("대기 중 · 일시정지" if paused else f"대기 중 · {place}"), "muted", True)
+            else:
+                rows[home_key] = (text, kind, True)
+        for key in ("stat_bars", "dorcha", "tuarim"):  # 자기 사용 값이 이미 있는 줄: 스위치는 그대로, 위치 상태만 덧붙임
+            text, kind, on = rows[key]
+            place = self._autofind_place(key)
+            if not on:
+                rows[key] = (f"꺼짐 · {place}", "muted", on)
+            elif kind == "warn":
+                rows[key] = (("대기 중 · 일시정지" if paused else f"대기 중 · {place}"), "muted", on)
+
+    def _autofind_place(self, key: str) -> str:
+        """홈 상태 줄의 위치 상태(v2)."""
+        if key in autofind_regions.user_keys():
+            return "직접 지정"
+        v2 = self._autofind_v2
+        lookup = "boss" if key == "debuff" else key
+        item = None if v2 is None else v2.engine.items.get(lookup)
+        if item is None:
+            return "위치 찾는 중"
+        if autofind_regions.is_auto(lookup) or item.status == "found":
+            return "위치 찾음"
+        if item.status == "waiting":
+            return "나타나면 찾음"
+        if item.status == "missing":
+            return "위치 못 찾음"
+        return "위치 찾는 중"
 
     def _home_channel_changed(self) -> None:
         """채널 측정 결과가 바뀌면 홈 한 줄만 바로 다시(0.7초 상태 타이머를 기다리지 않음)."""
@@ -2408,6 +2460,73 @@ class MainWindow(QMainWindow):
             tour.dismiss()
         super().hideEvent(event)
 
+    # ---- 자동 찾기 v2(제작자 테스트판) ----
+    def _setup_autofind_v2(self) -> None:
+        """제작자 + '자동 찾기 v2' 켜짐일 때만(앱 시작 때 한 번). 아니면 아무것도 만들지 않아 동작이 같다."""
+        from .. import autofind_regions, feature_access
+        try:
+            on = feature_access.is_creator() and config.load_autofind_v2_enabled()
+        except Exception:  # noqa: BLE001
+            on = False
+        autofind_regions.activate(on)
+        try:
+            creator = feature_access.is_creator()
+        except Exception:  # noqa: BLE001
+            creator = False
+        if not on:
+            if creator:  # 제작자: 꺼져 있어도 설정에서 켤 수 있게(다음 실행부터)
+                from .autofind_v2_section import AutofindV2Section
+                self.settings_tab.attach_autofind_v2(AutofindV2Section(None))
+            return
+        from .. import setup_state
+        from .autofind_v2_controller import AutofindV2Controller
+        autofind_regions.set_use_values(setup_state.autofind_v2_use_values(), boss_extra=lambda: (
+            self.stat_bars_tab.has_active_alert()
+            or bool(getattr(getattr(self, "blackbox_tools", None), "wants_boss_presence", lambda: False)())))
+        autofind_regions.subscribe(self._on_autofind_region)
+        for key, tab in (("buff", self.buff_tab), ("debuff", self.debuff_tab), ("boss", self.boss_tab),
+                         ("halo_timer", self.boss_tab.halo_capture), ("skillbar", self.skillbar_tab),
+                         ("stat_bars", self.stat_bars_tab)):
+            tab.region_section.set_autofind_key(key)  # 탭 표시 '자동(v2)'
+        self._autofind_v2 = AutofindV2Controller(self._watcher, self._autofind_wanted, parent=self)
+        from .autofind_v2_section import AutofindV2Section
+        self.settings_tab.attach_autofind_v2(AutofindV2Section(self._autofind_v2))
+        self._autofind_v2.changed.connect(self._on_autofind_changed)
+        self._autofind_v2.start()
+
+    def _on_autofind_changed(self) -> None:
+        """찾기 상태가 바뀜 → 탭 '자동(v2)' 줄·홈 위치 상태 갱신(가벼운 화면 일만)."""
+        from .region_section import refresh_autofind
+        refresh_autofind()
+        if self.home_visible():
+            self.home_page.update_state(self._home_state())
+
+    def _autofind_wanted(self, key: str) -> bool:
+        """다시 찾기·나타나면 찾기는 켜진 기능만(사용 값, 2.1절). 0.5초마다 불려 설정 파일은 읽지 않는다."""
+        from .. import autofind_regions
+        if key == "stat_bars":
+            return self.stat_bars_tab.any_shown()
+        if key in ("dorcha", "tuarim"):
+            return {"dorcha": self.dorcha_tab, "tuarim": self.tuarim_tab}[key].enable.isChecked()
+        return autofind_regions.wanted(key)
+
+    def _on_autofind_region(self, key: str, user: bool) -> None:
+        """v2 자리가 바뀜 → 그 기능을 새 자리로 다시 시작(탭이 매 틱 읽는 기능은 할 일 없음)."""
+        if self._closing:
+            return
+        from .region_section import refresh_autofind
+        refresh_autofind(key)
+        if key == "buff":
+            self._start_buff_tracking()
+        elif key == "skillbar":
+            self.skillbar_tab._update_anchor_label()
+            self.skillbar_tab._apply_visibility()
+        elif key in ("debuff", "boss"):
+            if self.debuff_controller is not None or _feature_region("debuff"):
+                self._start_debuff_tracking()
+        elif key == "dorcha":
+            self.dorcha_tab._invalidate_search()
+
     def closeEvent(self, event) -> None:
         import time
 
@@ -2481,6 +2600,8 @@ class MainWindow(QMainWindow):
 
         # 종료 정리 중 Qt 이벤트가 처리되어도 새 캡처/워커를 만들지 않는다.
         self._closing = True
+        if self._autofind_v2 is not None:
+            self._autofind_v2.shutdown()
         self.creator_dialogue.shutdown()
         self.dungeon_cost_tab.shutdown()
         self.cursor_fx.shutdown()

@@ -473,8 +473,10 @@ class DorchaTab(QWidget):
         value, frame = out["value"], out["frame"]
         self._set_value(value)
         self._show_source(frame)
+        self._afr.report("dorcha", value is not None)  # 자동 찾기 v2 판독 상태(꺼짐이면 아무것도 안 함)
         if value is None:
-            self._start_search()
+            if not self._afr.is_auto("dorcha"):  # v2가 찾은 자리면 다시 찾기는 v2가 한다(저장 영역 덮지 않게)
+                self._start_search()
         else:
             self._search_epoch += 1
             if self._search_worker is not None:

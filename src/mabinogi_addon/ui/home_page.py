@@ -219,8 +219,9 @@ class HomePage(QWidget):
     combat_toggled = Signal(bool)  # 전투 보조 켜짐(True)/일시정지(False)
     channel_refresh = Signal()  # 0.42.0: 가장 빠른 채널 새로고침(1회 측정)
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, extra_switches=()):
         super().__init__(parent)
+        self._extra_switches = frozenset(extra_switches)  # 자동 찾기 v2(제작자): 사용 값 스위치를 붙일 줄(2.1절)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self._apply_style()
         outer = QVBoxLayout(self)
@@ -345,7 +346,7 @@ class HomePage(QWidget):
         grid.setVerticalSpacing(0)
         self.rows: dict[str, FeatureRow] = {}
         for index, (key, name, has_switch) in enumerate(COMBAT_ROWS):
-            grid.addWidget(self._row(key, name, has_switch), index // 2, index % 2)
+            grid.addWidget(self._row(key, name, has_switch or key in self._extra_switches), index // 2, index % 2)
         grid.setColumnStretch(0, 1)
         grid.setColumnStretch(1, 1)
         box.addLayout(grid)

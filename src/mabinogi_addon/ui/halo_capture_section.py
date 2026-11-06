@@ -629,6 +629,8 @@ class HaloCaptureSection(QWidget):
                 return
             self._last_frame = frame
             raw_time = read_seconds(frame)
+            if raw_time is not None:
+                self._afr.report("halo_timer", True)  # 자동 찾기 v2(전투 시간은 나타나면 찾기)
             self.reading.setText('판독 시간: ' + ('—' if raw_time is None else self._time_text(raw_time)))
             self.region_section.set_summary('✓ 영역 지정됨 · 판독 시간 ' + ('—' if raw_time is None else self._time_text(raw_time))
                                             + (' · 레넨의 미이르 : 회한' if self._boss_id == 'lenen_miir_hoehan' else ''))

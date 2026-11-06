@@ -1765,3 +1765,33 @@ def save_boss_bar_overlay(data: dict, path: Path = LOCAL_CONFIG_PATH) -> None:
     sec.update(data)
     cfg["bossBarOverlay"] = sec
     _write_local_config(cfg, path)
+
+
+# ---- 자동 찾기 v2(제작자 테스트판, docs/autofind-v2-creator-spec.md) ----
+def _autofind_v2_section(data: dict) -> dict:
+    sec = data.get("autofindV2")
+    return sec if isinstance(sec, dict) else {}
+
+
+def load_autofind_v2_enabled(path: Path = LOCAL_CONFIG_PATH) -> bool:
+    """제작자 설정 '자동 찾기 v2' 스위치(기본 꺼짐). 바꾸면 다음 실행부터."""
+    return _autofind_v2_section(_read_local_config(path)).get("enabled") is True
+
+
+def save_autofind_v2_enabled(on: bool, path: Path = LOCAL_CONFIG_PATH) -> None:
+    data = _read_local_config(path)
+    sec = dict(_autofind_v2_section(data))
+    sec["enabled"] = bool(on)
+    data["autofindV2"] = sec
+    _write_local_config(data, path)
+
+
+def save_autofind_v2_use(key: str, on: bool, path: Path = LOCAL_CONFIG_PATH) -> None:
+    """v2 사용 값 한 개(2.1절) — 저장 영역은 건드리지 않는다."""
+    data = _read_local_config(path)
+    sec = dict(_autofind_v2_section(data))
+    use = dict(sec.get("use") or {}) if isinstance(sec.get("use"), dict) else {}
+    use[key] = bool(on)
+    sec["use"] = use
+    data["autofindV2"] = sec
+    _write_local_config(data, path)

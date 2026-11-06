@@ -675,6 +675,8 @@ class BossTab(QWidget):
         # 수집 모드: 로그인 사용자가 켠 동안, 보스가 식별된 상태에서 바가 눈에 띄게
         # 바뀌면 자동 저장(오독 프레임 제보). 보스 없는 프레임은 길바닥이라 제외.
         seen = boss_id is not None or bool(out.get("overlay", {}).get("seen"))  # 오버레이 중이면 미등록 보스도
+        if boss_id is not None or bool(out["bar"]):
+            self._afr.report("boss", True)  # 자동 찾기 v2(보스바는 나타나면 찾기 — 없을 땐 알리지 않음)
         if (
             self.collect_chk.isChecked()
             and self._diagnostics_allowed()
@@ -702,12 +704,16 @@ class BossTab(QWidget):
         alerts = []
         if boss_id is not None and self._tracker is not None and hp is not None:
             alerts = self._tracker.observe(hp)
-        if self._region and not self._paused:
+        pattern_on = self._afr.use_on("boss")  # v2 사용 꺼짐: 보스바는 다른 기능 때문에 읽어도 패턴 알림·목록은 멈춤
+        if self._region and not self._paused and pattern_on:
             for alert in alerts:
                 self._overlay.show_message(alert.text, 3000)
                 self._play(alert.sound)
 
-        self._update_upcoming(hp)
+        if pattern_on:
+            self._update_upcoming(hp)
+        else:
+            self._upcoming.hide()
         if self._bar_overlay_sink is not None and "overlay" in out:
             shown = timed("오버레이", self._bar_overlay_sink, out["overlay"])
             if shown is not None:

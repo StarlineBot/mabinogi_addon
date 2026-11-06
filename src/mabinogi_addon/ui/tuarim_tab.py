@@ -423,6 +423,9 @@ class TuarimTab(QWidget):
         self._last_frame = frame  # 스냅샷 저장 대상
         raw = read_percent(frame)
         self._last_value = raw  # 스냅샷 파일명 태그용(원시값)
+        if self._afr.active():  # 자동 찾기 v2 판독 상태 — 100%(숫자 없음)도 읽힌 것으로
+            from ..detect.tuarim_reader import read_observation
+            self._afr.report("tuarim", raw is not None or read_observation(frame) is not None)
         # 안정화: 같은 값이 2번 연속 읽혀야 '확정'으로 채택한다. 게이지는 150ms당
         # 천천히 변하므로, 단발 오탐(한 프레임만 다른 값)은 걸러져 거짓/중복 알림을 막는다.
         value = self._stable_value

@@ -61,7 +61,15 @@ def valid_box(value):
 
 
 def enabled(key, raw=None):
+    from . import autofind_regions
+    if autofind_regions.active() and key in autofind_regions.USE_KEYS:
+        return autofind_regions.use_on(key)  # 자동 찾기 v2: 영역과 별개인 사용 값(2.1절)
     raw = config._read_local_config() if raw is None else raw
+    return region_enabled(key, raw)
+
+
+def region_enabled(key, raw):
+    """지금(v2 꺼짐) 규칙: 버프·디버프·보스 패턴·1분 헤일로·단축바는 영역이 있으면 켜짐."""
     feature = BY_KEY[key]
     if key == "memo":
         return valid_box(section(raw,"memoTracker").get("captureRegion"))
@@ -98,12 +106,34 @@ def save_selection(key, value):
 
 
 def save_enabled(key, value):
+    from . import autofind_regions
+    if autofind_regions.active() and key in autofind_regions.USE_KEYS:
+        config.save_autofind_v2_use(key, value)
+        autofind_regions.set_use(key, value)
+        return
     raw = config._read_local_config()
     feature = BY_KEY[key]
     target = dict(section(raw, feature.section))
     target["enabled"] = bool(value)
     raw[feature.section] = target
     config._write_local_config(raw)
+
+
+def autofind_v2_use_values():
+    """v2 사용 값. 처음 생길 때 한 번 '지금 영역이 있으면 켜짐'으로 채운다(업데이트 뒤 동작 그대로)."""
+    from . import autofind_regions
+    raw = config._read_local_config()
+    sec = section(raw, "autofindV2")
+    use = section(sec, "use")
+    if all(isinstance(use.get(k), bool) for k in autofind_regions.USE_KEYS):
+        return {k: use[k] for k in autofind_regions.USE_KEYS}
+    filled = {k: (use[k] if isinstance(use.get(k), bool) else bool(region_enabled(k, raw)))
+              for k in autofind_regions.USE_KEYS}
+    sec = dict(sec)
+    sec["use"] = filled
+    raw["autofindV2"] = sec
+    config._write_local_config(raw)
+    return filled
 
 
 def remember_order(key, checked):

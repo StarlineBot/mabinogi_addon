@@ -9,7 +9,21 @@
     "tests/test_release_notes.py",
     "tests/test_release_notes_trigger.py",
     "tests/test_release_checks.py",
-    "tests/test_startup_smoke.py"
+    "tests/test_startup_smoke.py",
+    "tests/test_autofind_v2_engine.py",
+    "tests/test_autofind_v2_controller.py",
+    "tests/test_autofind_v2_use.py",
+    "tests/test_home_page.py",
+    "tests/test_status_panel.py",
+    "tests/test_autofind_v2_prereq.py",
+    "tests/test_halo_timer.py",
+    "tests/test_halo_autofind.py",
+    "tests/test_tuarim.py",
+    "tests/test_tuarim_native_autofind.py",
+    "tests/test_boss_tab.py",
+    "tests/test_dorcha_tab.py",
+    "tests/test_stat_bars.py",
+    "tests/test_engine.py"
   ],
   "coverage": {
     "src/mabinogi_addon/detect/cooldown.py": {
@@ -58,6 +72,90 @@
         "tests/test_startup_smoke.py"
       ],
       "reason": "배포 계약: 빌드·후보·Windows CI·시작 확인"
+    },
+    "src/mabinogi_addon/autofind_v2.py": {
+      "tests": [
+        "tests/test_autofind_v2_engine.py"
+      ],
+      "reason": "자동 찾기 v2 찾기 엔진(제작자): 처음 찾기 순서·화면 재사용·CPU 상한·안정 찾기 0·다시 찾기 간격·3초 확정·창 변경"
+    },
+    "src/mabinogi_addon/ui/autofind_v2_controller.py": {
+      "tests": [
+        "tests/test_autofind_v2_controller.py"
+      ],
+      "reason": "v2 화면 쪽 진행: 작업 스레드 캡처·안정 캡처 0·크기 변경 재시작·저장 영역 미변경·사용자 지정 우선·지난 자리"
+    },
+    "src/mabinogi_addon/autofind_regions.py": {
+      "tests": [
+        "tests/test_autofind_v2_use.py",
+        "tests/test_autofind_v2_controller.py"
+      ],
+      "reason": "런타임 영역 제공자: v2 꺼짐이면 저장 영역 그대로, 사용 값 꺼짐 = 읽기 0, 보스바 소비자 조합"
+    },
+    "src/mabinogi_addon/setup_state.py": {
+      "tests": [
+        "tests/test_autofind_v2_use.py"
+      ],
+      "reason": "v2 켜짐일 때만 사용 값(처음 한 번 영역 유무로 채움), 꺼짐이면 영역 = 사용 그대로"
+    },
+    "src/mabinogi_addon/ui/main_window.py": {
+      "tests": [
+        "tests/test_autofind_v2_use.py",
+        "tests/test_home_page.py"
+      ],
+      "reason": "v2 설정·홈 스위치 5개·위치 상태 — 비제작자·v2 꺼짐 변화 0"
+    },
+    "src/mabinogi_addon/ui/home_page.py": {
+      "tests": [
+        "tests/test_home_page.py"
+      ],
+      "reason": "홈 줄 스위치 추가 인자(v2일 때만)"
+    },
+    "src/mabinogi_addon/detect/status_panel.py": {
+      "tests": [
+        "tests/test_status_panel.py",
+        "tests/test_autofind_v2_prereq.py"
+      ],
+      "reason": "1080 상태 목록 아이콘 열 찾기(멤버십 없는 목록)"
+    },
+    "src/mabinogi_addon/detect/halo_timer.py": {
+      "tests": [
+        "tests/test_halo_timer.py",
+        "tests/test_halo_autofind.py",
+        "tests/test_autofind_v2_prereq.py"
+      ],
+      "reason": "헤일로 위치 찾기 3600초·판독 900초 분리"
+    },
+    "src/mabinogi_addon/detect/tuarim_reader.py": {
+      "tests": [
+        "tests/test_tuarim.py",
+        "tests/test_tuarim_native_autofind.py"
+      ],
+      "reason": "투아림 read_observation(100% 판정) 추가, 탭 read_percent 그대로"
+    },
+    "src/mabinogi_addon/ui/boss_tab.py": {
+      "tests": [
+        "tests/test_boss_tab.py"
+      ],
+      "reason": "보스 패턴 사용 꺼짐이면 알림·목록 멈춤(v2), v2 판독 보고"
+    },
+    "src/mabinogi_addon/ui/dorcha_tab.py": {
+      "tests": [
+        "tests/test_dorcha_tab.py"
+      ],
+      "reason": "v2가 찾은 자리면 탭 자체 찾기 생략(저장 영역 덮지 않음)"
+    },
+    "src/mabinogi_addon/ui/stat_bars_tab.py": {
+      "tests": [
+        "tests/test_stat_bars.py"
+      ],
+      "reason": "v2 판독 보고·저장 영역만 저장"
+    },
+    "src/mabinogi_addon/tracker/engine.py": {
+      "tests": [
+        "tests/test_engine.py"
+      ],
+      "reason": "TickResult.seen(v2 판독 상태) 추가"
     }
   }
 }

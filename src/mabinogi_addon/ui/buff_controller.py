@@ -21,7 +21,7 @@ _log = logging.getLogger("mabinogi_addon.close")
 from PySide6.QtCore import QObject, QThread, Signal
 from PySide6.QtGui import QPixmap
 
-from .. import perf_meter
+from .. import autofind_regions, perf_meter
 from ..capture.base import FrameSource
 from ..system.window_watcher import AlwaysActiveWatcher, WindowWatcher
 from ..tracker.engine import BuffEngine
@@ -55,6 +55,7 @@ class _TrackWorker(QThread):
     alerted = Signal(list)  # list[buff_id] (1차 만료임박)
     alerted2 = Signal(list)  # list[buff_id] (2차 막차 경고)
     foreground_changed = Signal(bool, bool)  # (게임 활성, 자기 앱 활성)
+    health = Signal(bool)  # 자동 찾기 v2: 영역에서 버프가 읽혔나(0.5초에 한 번까지, v2 켜짐일 때만)
 
     def __init__(
         self,
@@ -78,6 +79,7 @@ class _TrackWorker(QThread):
         self._bar_capture_failed = False
         self._bar_last_capture = None
         self._bar_frame = None
+        self._health_at = 0.0
 
     def run(self) -> None:
         while self._running:
@@ -130,6 +132,12 @@ class _TrackWorker(QThread):
         else:
             result = self._engine.tick(region, time.monotonic(), foreground=game)
         self.updated.emit(result.entries)
+        seen = getattr(result, "seen", None)
+        if seen is not None and autofind_regions.active():
+            now = time.monotonic()
+            if now - self._health_at >= 0.5:
+                self._health_at = now
+                self.health.emit(bool(seen))
         if result.alerts:
             self.alerted.emit(result.alerts)
         if result.alerts2:
@@ -199,7 +207,8 @@ class BuffController(QObject):
         for signal, callback in ((self._worker.updated, self._on_updated),
                                  (self._worker.alerted, self._on_alerted),
                                  (self._worker.alerted2, self._on_alerted2),
-                                 (self._worker.foreground_changed, self._on_foreground_changed)):
+                                 (self._worker.foreground_changed, self._on_foreground_changed),
+                                 (self._worker.health, lambda ok: autofind_regions.report("buff", ok))):
             signal.connect(lambda *args, callback=callback: callback(*args)
                            if self._generation == generation else None)
         self._worker.start()
@@ -214,7 +223,7 @@ class BuffController(QObject):
         w = self._worker
         if w is None:
             return
-        for signal in (w.updated, w.alerted, w.alerted2, w.foreground_changed):
+        for signal in (w.updated, w.alerted, w.alerted2, w.foreground_changed, w.health):
             try:
                 signal.disconnect()
             except (RuntimeError, TypeError):
@@ -239,7 +248,7 @@ class BuffController(QObject):
         # Qt가 프로세스를 abort시키므로, 참조를 좀비로 보관해 파괴를 막는다. 워커가 실제로
         # 끝나면(grab 반환) finished에서 수거하며 그때 소스를 닫는다(소스도 grab 중엔 못 닫음).
         _log.warning("워커 미정지 → 좀비 보관(앱 abort 방지), 종료 시 수거")
-        for sig in (w.updated, w.alerted, w.alerted2, w.foreground_changed):
+        for sig in (w.updated, w.alerted, w.alerted2, w.foreground_changed, w.health):
             try:
                 sig.disconnect()  # 죽어가는 워커의 늦은 emit이 오버레이를 흔들지 않게
             except (RuntimeError, TypeError):

@@ -874,6 +874,12 @@ class SettingsTab(QWidget):
         self.custom_panel.refresh()
         self.theme_changed.emit()  # 메인이 탭·틀·홈 등 테마색 재적용
 
+    def attach_autofind_v2(self, section) -> None:
+        """제작자에게만: '실행·종료'와 '오버레이 배치' 사이에 자동 찾기 v2 구역."""
+        self._autofind_v2_slot.addSpacing(8)
+        self._autofind_v2_slot.addWidget(section)
+        self.autofind_v2_section = section
+
     def _general_group(self) -> QGroupBox:
         from ..system import autostart
 
@@ -907,6 +913,10 @@ class SettingsTab(QWidget):
             lambda on: config.save_general_flag(_TRAY_MINIMIZE, on)
         )
         v.addWidget(self._min_tray)
+
+        self._autofind_v2_slot = QVBoxLayout()  # 자동 찾기 v2(제작자 전용) 구역 자리 — 비제작자는 비어 있음
+        self._autofind_v2_slot.setContentsMargins(0, 0, 0, 0)
+        v.addLayout(self._autofind_v2_slot)
 
         v.addSpacing(8)
         v.addWidget(section_label("오버레이 배치"))

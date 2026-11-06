@@ -15,6 +15,16 @@ from PySide6.QtWidgets import QGroupBox, QLabel, QToolButton, QVBoxLayout, QWidg
 
 from .palette import color
 
+import weakref
+
+_SECTIONS: "weakref.WeakSet[RegionSection]" = weakref.WeakSet()
+
+
+def refresh_autofind(key: str | None = None) -> None:
+    """자동 찾기 v2 자리가 바뀜 → 그 기능 영역 묶음의 '자동(v2)' 표시 갱신."""
+    for section in list(_SECTIONS):
+        if key is None or section.autofind_key == key:
+            section.refresh_autofind()
 
 
 class RegionSection(QWidget):
@@ -27,6 +37,12 @@ class RegionSection(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(6)
+        self.autofind_key = None  # 자동 찾기 v2(제작자): 이 묶음이 보여 주는 기능 키 — set_autofind_key로
+        self.auto_badge = QLabel("")
+        self.auto_badge.setWordWrap(True)
+        self.auto_badge.setStyleSheet(f"color:{color('accent')};")
+        self.auto_badge.hide()
+        layout.addWidget(self.auto_badge)
         self.box = QGroupBox(box_title)
         box = QVBoxLayout(self.box)
         self.unset_label = QLabel(f'<span style="color:{color('warn')}">●</span> 아직 지정 안 됨 — {unset_text}')
@@ -79,6 +95,29 @@ class RegionSection(QWidget):
             self._set_open(True)
         else:
             self.fold.setVisible(self.toggle.isChecked())
+
+    def set_autofind_key(self, key: str) -> None:
+        self.autofind_key = key
+        _SECTIONS.add(self)
+        self.refresh_autofind()
+
+    def refresh_autofind(self) -> None:
+        """v2 켜짐일 때만 한 줄 — 지금 읽는 자리가 v2가 찾은 자리인지(저장 영역은 그대로)."""
+        from .. import autofind_regions
+        key = self.autofind_key
+        if key is None or not autofind_regions.active():
+            self.auto_badge.hide()
+            return
+        if key in autofind_regions.user_keys():
+            text = "자동(v2) 꺼짐 · 이번 실행은 직접 지정한 영역으로 읽어요"
+        elif not autofind_regions.wanted(key):
+            text = "자동(v2) · 사용 꺼짐 — 읽지 않아요(찾은 자리는 그대로)"
+        elif autofind_regions.is_auto(key):
+            text = "자동(v2) · 이번 실행에서 찾은 자리로 읽어요(저장된 영역은 그대로)"
+        else:
+            text = "자동(v2) · 자리를 찾는 중이에요(찾기 전엔 쉬어요)"
+        self.auto_badge.setText(text)
+        self.auto_badge.show()
 
     def set_summary(self, text: str, tint: str | None = None) -> None:
         if self.summary_label is not None:
