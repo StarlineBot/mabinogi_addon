@@ -107,7 +107,7 @@ def _classify(vec: np.ndarray, refs: np.ndarray, labels: np.ndarray):
     return int(labels[k]), float(scores[k])
 
 
-def _read_padded(region: np.ndarray, threshold: float) -> int | None:
+def _read_padded(region: np.ndarray, threshold: float, *, include_full=False) -> int | None:
     """넓은 입력은 % 기호로 원래 글자 행을 찾는다. 불확실하면 저값으로 폴백하지 않는다."""
     templates = [p for p in (_PERCENT, _PERCENT_PLAIN) if p is not None and p.shape == (CH, 10)]
     if not templates:
@@ -147,7 +147,7 @@ def _read_padded(region: np.ndarray, threshold: float) -> int | None:
             td, ts = _classify(_norm(_cell(v, r, (_ONES[0] - pitch, _ONES[1] - pitch))), Ro, Lo)
             hd, hs = _classify(_norm(_cell(v, r, (_ONES[0] - 2 * pitch, _ONES[1] - 2 * pitch))), Ro, Lo)
             if od == 0 and td == 0 and hd == 1 and min(os, ts) >= 0.65 and hs >= 0.60:
-                return None
+                return 100 if include_full else None
         readings.append((os, r, od))
     if not readings:
         return None
@@ -174,12 +174,13 @@ def _read_padded(region: np.ndarray, threshold: float) -> int | None:
     return None
 
 
-def read_percent(
+def _read_percent(
     region_bgr: np.ndarray,
     templates: dict[str, np.ndarray] | None = None,  # 하위호환(무시)
     threshold: float = NCC_MIN,
+    *, include_full=False,
 ) -> int | None:
-    """리더 박스 영역에서 % 정수(0~99)를 읽는다. 불확실하거나 100% 증거가 있으면 None.
+    """리더 박스 영역을 읽는다. include_full일 때만 확실한 100%도 반환한다.
 
     `templates`는 과거 시그니처 호환용으로 남겨뒀고 더는 쓰지 않는다(레퍼런스 뱅크 사용).
     """
@@ -188,14 +189,14 @@ def read_percent(
     if (isinstance(region_bgr,np.ndarray) and region_bgr.dtype == np.uint8
             and region_bgr.ndim == 3 and region_bgr.shape[2] == 3 and region_bgr.size):
         from .tuarim_small import read_small
-        matched,value = read_small(region_bgr,threshold)
+        matched,value = read_small(region_bgr,threshold,include_full=include_full)
         if matched:
             return value
         if region_bgr.shape[0] >= 20:
-            return _read_padded(region_bgr,threshold)
+            return _read_padded(region_bgr,threshold,include_full=include_full)
     if (region_bgr is not None and region_bgr.ndim == 3 and region_bgr.size
             and region_bgr.shape[1] / region_bgr.shape[0] >= 2.5):
-        return _read_padded(region_bgr, threshold)
+        return _read_padded(region_bgr, threshold,include_full=include_full)
     v = _prep(region_bgr)
     if v is None:
         return None
@@ -237,3 +238,16 @@ def read_percent(
                 return 10 + od
         return None
     return ones_d
+
+
+def read_percent(
+    region_bgr: np.ndarray, templates: dict[str, np.ndarray] | None = None,
+    threshold: float = NCC_MIN,
+) -> int | None:
+    """Keep the tab's legacy observations: confirmed 100% is held as None."""
+    return _read_percent(region_bgr, templates, threshold)
+
+
+def read_observation(region_bgr: np.ndarray, threshold: float = NCC_MIN) -> int | None:
+    """Localization health: include a positively recognized 100%, never an uncertain hold."""
+    return _read_percent(region_bgr, threshold=threshold, include_full=True)
