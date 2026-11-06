@@ -920,9 +920,9 @@ def test_both_selectors_look_like_boxes_is_ambiguous_not_hidden():
 
 def test_old_slot_without_page_rects_hides_when_box_unreadable():
     from mabinogi_addon.ui.cooldown_section import _page_state
-    frame, box, _cells = _screen("스크린샷 2026-11-06 013739.png")
+    frame, box, cells = _screen("스크린샷 2026-11-06 013739.png")
     rect = cd.selector_rects(box, 0)[1]
-    slot = {"id": "a", "page": cd.page_signature(frame, rect), "page_rect": list(rect)}
+    slot = {"id": "a", "rect": list(cells[(1, 0, 0, 1)].rect), "page": cd.page_signature(frame, rect), "page_rect": list(rect)}
     blank = frame.copy()
     x, y, w, h = rect
     blank[y:y + h, x:x + w] = 128  # 상자를 못 읽음
@@ -1118,5 +1118,36 @@ def test_page_guide_and_hidden_tooltip_texts(creator):
         assert cs.PAGE_GUIDE in texts
         assert cs.PAGE_GUIDE.startswith("등록한 단축바 페이지에서만 보여요. Shift·변신 등으로 페이지가 바뀌면 숨겨요.")
         assert cs.PAGE_HIDDEN_TIP == "이 페이지에서도 보려면 지금 한 번 더 등록하세요"
+    finally:
+        sec.shutdown()
+
+
+
+# ---- 예전 방식 등록분(page_rects 없음): 키 블록 밖 칸은 페이지 확인 안 함(QA f835a02) ----------------------------------
+def test_old_format_keyless_block_cell_is_not_page_compared():
+    """사용자 세트 2: 왼쪽(키 없는) 단축바 칸을 예전 방식으로 등록 — page_rect는 가운데 선택기(1196), 등록 때 위 줄 2페이지.
+    지금(232146) 위 줄 1페이지여도 그 칸은 페이지가 없으니 숨기지 않는다. 가운데(키) 블록 칸은 지금처럼 비교."""
+    from mabinogi_addon.ui.cooldown_section import PAGE_DIFF, _in_key_block, observe
+    two, box, _c2 = _screen("스크린샷 2026-11-04 014744.png")  # 위 줄 '2'
+    now, _b, cells = _screen("스크린샷 2026-11-06 232146.png")
+    rect = cd.selector_rects(box, 0)[1]
+    assert rect[0] == 1196
+    sig = cd.page_signature(two, rect)
+    assert cd.same_page(now, rect, sig) is False  # 지금은 다른 페이지
+    left = {"id": "L", "rect": list(cells[(0, 0, 0, 1)].rect), "page_rect": list(rect), "page": sig}
+    mid = {"id": "M", "rect": list(cells[(1, 0, 0, 1)].rect), "page_rect": list(rect), "page": sig}
+    assert not _in_key_block(left["rect"], rect) and _in_key_block(mid["rect"], rect)
+    out = observe(now, (0, 0), [left, mid], {}, False)["changes"]
+    assert out.get("L") != PAGE_DIFF and out["M"] == PAGE_DIFF
+    assert _in_key_block([2, 12, 40, 40], (576, 24, 15, 16)) and not _in_key_block([622, 12, 40, 40], (576, 24, 15, 16))
+
+
+def test_keyless_cell_registration_says_no_page_bar(creator):
+    from mabinogi_addon.ui.cooldown_section import CooldownSection
+    frame, _box, cells = _screen("스크린샷 2026-11-04 014744.png")
+    sec = CooldownSection(_Watcher())
+    try:
+        sec.register(cells[(0, 0, 0, 2)], frame, (0, 0))  # 왼쪽(키 없는) 단축바
+        assert sec.status.text().endswith("(페이지가 없는 단축바라 페이지 확인 없이 봐요)")
     finally:
         sec.shutdown()

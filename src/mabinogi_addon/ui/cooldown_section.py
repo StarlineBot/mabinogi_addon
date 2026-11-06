@@ -94,8 +94,20 @@ def _page_state(frame, ox, oy, slot) -> str | None:
     page_rect = slot.get("page_rect")
     if not signature or not page_rect:
         return None
+    if not _in_key_block(slot["rect"], page_rect):
+        return None  # 예전 등록분: 선택기가 있는 단축바(키 블록) 밖 칸은 페이지가 없다 — 비교하지 않음(QA f835a02)
     same = cd.same_page(frame, local(page_rect), signature)
     return HIDDEN if same is None else PAGE_DIFF if same is False else None
+
+
+KEY_BLOCK_SPAN = 640  # 선택기 왼쪽으로 키 블록 칸이 있는 범위(상자 폭 15 기준 px) — 가운데 선택 1196: 칸 622~1170, 왼쪽 선택 576: 칸 2~550
+
+
+def _in_key_block(cell_rect, page_rect) -> bool:
+    """예전 등록분(page_rects 없음): 칸이 저장한 선택기 자리의 키 블록 범위(선택기 x − 640·s ≤ 칸 x < 선택기 x) 안인가."""
+    sx, _sy, sw, _sh = page_rect
+    s = sw / 15.0
+    return sx - KEY_BLOCK_SPAN * s <= cell_rect[0] < sx
 
 
 def _with_arrows(rect):
@@ -361,7 +373,7 @@ class CooldownSection(QGroupBox):
             self.status.setText(f"이 세트는 최대 {MAX_SLOTS}칸까지 등록할 수 있어요.")
             return None
         page_rect = page = page_block = None
-        page_rects = None
+        page_rects = kb = None
         source, row, block = target.info.get("source"), target.info.get("row", 0), target.info.get("block")
         if frame is not None and source is not None:
             # 페이지는 '키를 쓰는 단축바'에만 있다 — 그 줄 선택기 위치로 키 블록을 정하고, 칸이 키 블록일 때만 페이지 모양 저장
@@ -385,7 +397,10 @@ class CooldownSection(QGroupBox):
         self._save(slots=self.slots + [slot])
         self._last.clear()
         self._render_list()
-        self.status.setText(f"{label}을(를) 세트 {set_no}에 등록했어요." + ("" if page else " (페이지 숫자를 못 읽어 페이지 확인 없이 봐요)"))
+        keyless = page is None and kb is not None and kb != block  # 선택기는 읽었는데 칸이 키 없는 단축바
+        note = "" if page else (" (페이지가 없는 단축바라 페이지 확인 없이 봐요)" if keyless
+                                else " (페이지 숫자를 못 읽어 페이지 확인 없이 봐요)")
+        self.status.setText(f"{label}을(를) 세트 {set_no}에 등록했어요." + note)
         _log.info("쿨타임 칸 등록: %s(세트 %d) 칸 %s 페이지 %s", label, set_no, rect, "있음" if page else "없음")
         return slot
 
