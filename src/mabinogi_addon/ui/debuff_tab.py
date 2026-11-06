@@ -720,6 +720,10 @@ class DebuffTab(QWidget):
         match_row.addWidget(file_btn)
         match_row.addStretch(1)
         iv.addLayout(match_row)
+        self.match_note = hint_label("")  # 아이콘 집기: 저장하지 않은 이유(깜빡임·회색·가려짐) 한 줄
+        self.match_note.setStyleSheet(f"color:{color('warn')};")
+        self.match_note.hide()
+        iv.addWidget(self.match_note)
         v.addWidget(icon_box)
 
         # --- 그룹 2: 표시 ---

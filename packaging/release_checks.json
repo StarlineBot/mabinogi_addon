@@ -26,7 +26,8 @@
     "tests/test_engine.py",
     "tests/test_debuff_boss_gate.py",
     "tests/test_debuff_identity.py",
-    "tests/test_pause.py"
+    "tests/test_pause.py",
+    "tests/test_icon_capture.py"
   ],
   "coverage": {
     "src/mabinogi_addon/detect/cooldown.py": {
@@ -175,10 +176,29 @@
     },
     "src/mabinogi_addon/ui/debuff_tab.py": {
       "tests": [
+        "tests/test_debuff_boss_gate.py",
         "tests/test_debuff_identity.py",
-        "tests/test_debuff_boss_gate.py"
+        "tests/test_icon_capture.py"
       ],
-      "reason": "'보스바가 보일 때만 표시' 체크박스(기본 켬·저장)·디버프 추적 재시작 경로"
+      "reason": "'보스바가 보일 때만 표시' 체크박스(기본 켬·저장)·디버프 추적 재시작 경로 · 아이콘 집기 이유 한 줄"
+    },
+    "src/mabinogi_addon/detect/icon_snap.py": {
+      "tests": [
+        "tests/test_icon_capture.py"
+      ],
+      "reason": "아이콘 테두리 자동 맞춤(1080·2560·4K, 꺼진 아이콘 포함)·온전함 판정(깜빡임·꺼짐·가려짐)·6번 다시 찍기"
+    },
+    "src/mabinogi_addon/ui/region_selector.py": {
+      "tests": [
+        "tests/test_icon_capture.py"
+      ],
+      "reason": "아이콘 집기(제작자): 클릭 = 16×16 그대로 저장·물리 좌표 전달, 아이콘 아닌 곳 클릭 무시, 드래그 크기 그대로, 비제작자 그대로"
+    },
+    "src/mabinogi_addon/ui/buff_tab.py": {
+      "tests": [
+        "tests/test_icon_capture.py"
+      ],
+      "reason": "미리보기 원본 픽셀 정수배(100·125·150·200%)·온전할 때만 저장 연결"
     }
   }
 }

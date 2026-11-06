@@ -25,6 +25,7 @@ from PySide6.QtWidgets import QWidget
 _LOUPE = 150  # 돋보기 박스 변(px)
 _ZOOM = 6  # 확대 배율
 _OFFSET = 28  # 커서에서 돋보기까지 거리
+_ICON_PREVIEW = 128  # 아이콘 집기: 저장될 아이콘 미리보기 변(16×16을 8배)
 
 
 class RegionSelector(QWidget):
@@ -39,6 +40,7 @@ class RegionSelector(QWidget):
     cancelled = Signal()
     captured = Signal(bool)  # 크롭 모드: 저장 성공=True, 취소/너무 작음=False
     snapped = Signal(object)  # 클릭 맞춤으로 확정한 대상(click_targets.Target) — selected 직전에
+    picked = Signal(object)  # 아이콘 집기(icon_snap): {"rect": 화면 물리 (x, y, w, h), "snapped": 테두리 맞춤이면 True} — captured 직전에
     _targets_ready = Signal(int, object)  # 작업 스레드 → 화면 스레드(회차, 대상 목록)
 
     def __init__(
@@ -47,6 +49,7 @@ class RegionSelector(QWidget):
         fixed_size: tuple[int, int] | None = None,
         window_hwnd: int | None = None,
         snap_kinds: tuple[str, ...] | None = None,
+        icon_snap: bool = False,
     ) -> None:
         super().__init__(
             None,
@@ -74,6 +77,9 @@ class RegionSelector(QWidget):
         self._dpr = 1.0  # 스냅샷 배율(물리픽셀=논리×dpr). start()에서 실제값으로 채움
         # 클릭 경계 자동 맞춤(click-snap 명세): 드래그 모드 + 제작자일 때만. 다른 사용자는 지금과 완전히 같다.
         self._snap_kinds = snap_kinds
+        # 아이콘 집기 테두리 자동 맞춤(아이콘 직접 지정 명세 2.1): 크롭 모드 + 호출한 쪽이 켤 때(제작자)만
+        self._icon_snap = bool(icon_snap) and save_path is not None
+        self._icon_frame = None
         self._targets: list = []
         self._hover = None
         self._press: QPoint | None = None
@@ -100,6 +106,8 @@ class RegionSelector(QWidget):
         self._targets, self._hover = [], None
         if self._snap_enabled() and not self._shot.isNull():
             self._find_targets()
+        if self._icon_snap and not self._shot.isNull():
+            self._icon_frame = self._shot_bgr()  # 한 번만 변환(마우스 움직일 때는 작은 자리만 비교, 1ms 아래)
         self.showFullScreen()
         self.raise_()
         self.activateWindow()
@@ -111,15 +119,18 @@ class RegionSelector(QWidget):
         from .. import feature_access
         return feature_access.is_creator()
 
-    def _find_targets(self) -> None:
-        """스냅샷(물리 픽셀)으로 작업 스레드에서 1회 — 새 캡처 없음, 선택창이 닫히면 결과를 버린다."""
-        import threading
-
+    def _shot_bgr(self):
         import numpy as np
         img = self._shot.toImage().convertToFormat(QImage.Format.Format_RGB888)
         w, h, stride = img.width(), img.height(), img.bytesPerLine()
         rgb = np.frombuffer(img.constBits(), np.uint8, count=stride * h).reshape(h, stride)[:, : w * 3].reshape(h, w, 3)
-        frame = np.ascontiguousarray(rgb[:, :, ::-1])  # BGR, 화면 스레드에서 복사(이미지 수명과 분리)
+        return np.ascontiguousarray(rgb[:, :, ::-1])  # BGR, 화면 스레드에서 복사(이미지 수명과 분리)
+
+    def _find_targets(self) -> None:
+        """스냅샷(물리 픽셀)으로 작업 스레드에서 1회 — 새 캡처 없음, 선택창이 닫히면 결과를 버린다."""
+        import threading
+
+        frame = self._shot_bgr()
         self.snapshot_bgr = frame  # 쿨타임 등록: 페이지 번호 상자 모양을 같은 스냅샷에서 읽는다
         self._generation += 1
         generation, kinds = self._generation, tuple(self._snap_kinds)
@@ -141,6 +152,16 @@ class RegionSelector(QWidget):
         self.update()
 
     def _update_hover(self) -> None:
+        if self._icon_snap:
+            self._hover = None
+            if self._icon_frame is not None and self._cursor is not None and not self._dragging:
+                from types import SimpleNamespace
+
+                from ..detect.icon_snap import find_icon
+                box = find_icon(self._icon_frame, round(self._cursor.x() * self._dpr), round(self._cursor.y() * self._dpr))
+                if box is not None:
+                    self._hover = SimpleNamespace(rect=box, label=f"아이콘 {box[2]}×{box[3]}")
+            return
         if not self._targets or self._cursor is None or self._dragging:
             self._hover = None
             return
@@ -247,7 +268,7 @@ class RegionSelector(QWidget):
             if not self._dragging and (self._cursor - self._origin).manhattanLength() > 4:
                 self._dragging = True  # 맞출 곳 위에서도 4px 넘게 움직이면 드래그(직접 지정)
                 self._hover = None
-            if self._dragging or not self._targets:
+            if self._dragging or not (self._targets or self._icon_snap):
                 self._rect = QRect(self._origin, self._cursor).normalized()
         if not self._dragging:
             self._update_hover()
@@ -264,10 +285,28 @@ class RegionSelector(QWidget):
             self.selected.emit(self._screen_geo.x() + rect.x(), self._screen_geo.y() + rect.y(),
                                rect.width(), rect.height())
             return
+        if self._icon_snap and not self._dragging:
+            if self._hover is None:  # 아이콘이 아닌 곳 클릭 → 아무 일 없음(계속 고르기)
+                self._origin, self._rect = None, QRect()
+                self.update()
+                return
+            x, y, w, h = self._hover.rect  # 테두리에 맞춘 원본 크기(16×16) 그대로 저장
+            self._finished = True
+            self.close()
+            ok = self._save_physical(x, y, w, h)
+            ox, oy = self.physical_origin()
+            self.picked.emit({"rect": (ox + x, oy + y, w, h), "snapped": True})
+            self.captured.emit(ok)
+            return
         rect = self._rect
         self._finished = True
         self.close()
         big_enough = rect.width() >= 4 and rect.height() >= 4
+        if self._save_path is not None and self._icon_snap and big_enough:
+            d = self._dpr
+            ox, oy = self.physical_origin()
+            self.picked.emit({"rect": (ox + round(rect.x() * d), oy + round(rect.y() * d),
+                                       round(rect.width() * d), round(rect.height() * d)), "snapped": False})
         if self._save_path is not None:
             # 크롭 모드: 좌표가 아니라 잘라낸 이미지를 저장.
             self.captured.emit(big_enough and self._save_crop(rect))
@@ -297,6 +336,13 @@ class RegionSelector(QWidget):
             return False
         return crop.save(str(self._save_path), "PNG")
 
+    def _save_physical(self, x: int, y: int, w: int, h: int) -> bool:
+        """스냅샷(물리 픽셀)에서 그대로 잘라 저장(테두리 맞춤 — 크기 변환 없음)."""
+        if self._shot.isNull() or self._save_path is None:
+            return False
+        crop = self._shot.copy(x, y, w, h)
+        return not crop.isNull() and crop.save(str(self._save_path), "PNG")
+
     def keyPressEvent(self, event) -> None:
         if event.key() == Qt.Key.Key_Escape:
             self.close()
@@ -317,7 +363,8 @@ class RegionSelector(QWidget):
         if self._fixed is None:
             # 드래그 선택 모드 안내(고정 박스 모드는 아래에서 별도 안내). 맞출 곳을 찾았으면 클릭 안내.
             self._draw_hint(
-                painter, "클릭: 테두리에 맞추기   ·   드래그: 직접 지정   ·   ESC: 취소" if self._targets
+                painter, "아이콘 클릭: 테두리에 맞춰 저장   ·   드래그: 직접 지정   ·   ESC: 취소" if self._icon_snap
+                else "클릭: 테두리에 맞추기   ·   드래그: 직접 지정   ·   ESC: 취소" if self._targets
                 else "드래그해서 영역을 지정하세요   ·   ESC: 취소"
             )
             if self._hover is not None and not self._dragging:
@@ -351,7 +398,36 @@ class RegionSelector(QWidget):
             if not self._rect.isNull() and not self._shot.isNull():
                 self._draw_box_preview(painter, self._rect)
         elif self._cursor is not None and not self._shot.isNull():
-            self._draw_loupe(painter, self._cursor)
+            if self._icon_snap and self._hover is not None and not self._dragging:
+                self._draw_icon_preview(painter, self._cursor, self._hover.rect)
+            else:
+                self._draw_loupe(painter, self._cursor)
+
+    def _draw_icon_preview(self, painter: QPainter, pos: QPoint, box) -> None:
+        """돋보기 자리에 '저장될 아이콘' — 테두리에 맞춘 원본을 8배(최근접, 원본 픽셀 그대로)."""
+        x, y, w, h = box
+        k = max(1, (_ICON_PREVIEW // max(w, h)))
+        zoomed = self._shot.copy(x, y, w, h).scaled(w * k, h * k, Qt.AspectRatioMode.IgnoreAspectRatio,
+                                                    Qt.TransformationMode.FastTransformation)
+        zw, zh = zoomed.width(), zoomed.height()
+        title = f"저장될 아이콘 {w}×{h}"
+        fm = painter.fontMetrics()
+        head = fm.height() + 8
+        lx, ly = pos.x() + _OFFSET, pos.y() + _OFFSET
+        if lx + zw + 12 > self.width():
+            lx = pos.x() - _OFFSET - zw - 12
+        if ly + zh + head + 12 > self.height():
+            ly = pos.y() - _OFFSET - zh - head - 12
+        painter.setOpacity(1.0)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(0, 0, 0, 200))
+        painter.drawRoundedRect(lx, ly, zw + 12, zh + head + 12, 8, 8)
+        painter.setPen(QColor(235, 238, 244))
+        painter.drawText(lx + 6, ly + fm.ascent() + 4, title)
+        painter.drawPixmap(lx + 6, ly + head + 6, zoomed)
+        painter.setPen(QPen(QColor(0, 209, 167), 2))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawRect(lx + 6, ly + head + 6, zw, zh)
 
     def _draw_hover(self, painter: QPainter, rect: QRect, label: str) -> None:
         """맞출 곳: 그 부분만 밝게(원래 화면) + 민트 테두리 + 이름·크기 표."""

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QSize, Qt, Signal
+from PySide6.QtCore import QObject, QSize, Qt, Signal
 from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -66,24 +66,125 @@ def _capture_icon_to(tab: QWidget, item_id: str, on_done) -> None:
     from .region_selector import RegionSelector
 
     tmp = Path(tempfile.gettempdir()) / f"_mabi_icon_{item_id}.png"
-    selector = RegionSelector(save_path=tmp)
+    creator = _creator()
+    selector = RegionSelector(save_path=tmp, icon_snap=creator)
     tab._icon_selector = selector  # 참조 유지(GC 방지)
-    selector.captured.connect(lambda ok: on_done(item_id, tmp, ok))
+    if not creator:  # 다른 사용자는 지금과 완전히 같다(스냅샷 한 장 그대로 저장)
+        selector.captured.connect(lambda ok: on_done(item_id, tmp, ok))
+        selector.start()
+        return
+    picked = {}
+    selector.picked.connect(picked.update)
+    selector.captured.connect(lambda ok: _verify_then_save(tab, item_id, tmp, picked, on_done) if picked else None)
+    _set_capture_note(tab, "")
     selector.start()
 
 
-def _pixmap(path: Path | None, size: int) -> QPixmap | None:
+def _set_capture_note(tab, text: str) -> None:
+    note = getattr(tab, "match_note", None)
+    if note is not None:
+        note.setText(text)
+        note.setVisible(bool(text))
+
+
+class _PickRelay(QObject):
+    done = Signal(object, object)  # (프레임 | None, 이유 키 | None)
+
+
+def _verify_then_save(tab, item_id: str, tmp: Path, picked: dict, on_done) -> None:
+    """선택창이 닫힌 뒤 작업 스레드에서 같은 자리를 약 0.6초 동안 6번 다시 찍어 온전한 프레임만 저장(명세 2.3).
+    없으면 저장하지 않고(기존 아이콘 유지) 이유를 한 줄로 알린다. 화면 스레드는 결과만 받는다."""
+    import threading
+
+    from ..detect import icon_snap
+    rect, snapped = tuple(picked["rect"]), bool(picked.get("snapped"))
+    relay = _PickRelay(tab)
+    tab._icon_relay = relay  # 참조 유지
+
+    def finish(frame, reason):
+        from .. import image_io
+        if frame is not None and image_io.imwrite(tmp, frame):
+            _set_capture_note(tab, "")
+            on_done(item_id, tmp, True)
+        else:
+            _set_capture_note(tab, icon_snap.REASONS.get(reason, "아이콘을 저장하지 못했어요") + " (기존 아이콘은 그대로예요)")
+            on_done(item_id, tmp, False)
+    relay.done.connect(finish)
+
+    def run():
+        try:
+            frame, reason = icon_snap.verify_pick(_grab_physical, rect, snapped=snapped)
+        except Exception:  # noqa: BLE001
+            frame, reason = None, icon_snap.COVERED
+        relay.done.emit(frame, reason)
+    threading.Thread(target=run, name="icon-verify", daemon=True).start()
+
+
+def _grab_physical(x: int, y: int, w: int, h: int):
+    """작업 스레드 전용 캡처(물리 좌표, BGR). mss는 스레드마다 새로 만든다."""
+    import mss
+    import numpy as np
+    with mss.mss() as sct:
+        shot = sct.grab({"left": int(x), "top": int(y), "width": int(w), "height": int(h)})
+    return np.frombuffer(shot.bgra, np.uint8).reshape(shot.height, shot.width, 4)[:, :, :3].copy()
+
+
+def _pixmap(path: Path | None, size: int, dpr: float | None = None) -> QPixmap | None:
     if path is None:
         return None
     pm = QPixmap(str(path))
     if pm.isNull():
         return None
+    if _crisp_preview():
+        return crisp_pixmap(pm.toImage(), size, dpr)
     return pm.scaled(
         size,
         size,
         Qt.AspectRatioMode.KeepAspectRatio,
         Qt.TransformationMode.FastTransformation,
     )
+
+
+def _creator() -> bool:
+    from .. import feature_access
+    return feature_access.is_creator()
+
+
+_crisp_check = None
+
+
+def _crisp_preview() -> bool:
+    """또렷한 미리보기(아이콘 직접 지정 명세 2.2) — 제작자 먼저. 권한 판정은 1초 재사용(목록마다 설정 파일을 읽지 않게)."""
+    global _crisp_check
+    if _crisp_check is None:
+        from .. import feature_access
+        _crisp_check = feature_access.Recheck(lambda: _creator())
+    return bool(_crisp_check())
+
+
+def crisp_pixmap(img, size: int, dpr: float | None = None) -> QPixmap:
+    """칸(논리 size×size)에 원본 픽셀을 **정수배로만** 키워 가운데 정렬(명세 2.2). 칸의 물리 픽셀(size × 화면 배율)에 맞춰 그리고
+    devicePixelRatio를 맞춰 Qt가 다시 늘리지 않게 한다. 예: 150%·칸 40 → 물리 60 → 16×3=48. 칸보다 큰 그림은 부드럽게 줄인다."""
+    from PySide6.QtGui import QGuiApplication, QImage, QPainter
+    if dpr is None:
+        screen = QGuiApplication.primaryScreen()
+        dpr = float(screen.devicePixelRatio()) if screen is not None else 1.0
+    phys = max(1, round(size * dpr))
+    w, h = img.width(), img.height()
+    side = max(1, w, h)
+    if side <= phys:
+        k = max(1, phys // side)
+        scaled = img.scaled(w * k, h * k, Qt.AspectRatioMode.IgnoreAspectRatio, Qt.TransformationMode.FastTransformation)
+    else:
+        scaled = img.scaled(phys, phys, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+    canvas = QImage(phys, phys, QImage.Format.Format_ARGB32_Premultiplied)
+    canvas.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(canvas)
+    painter.drawImage((phys - scaled.width()) // 2, (phys - scaled.height()) // 2, scaled)
+    painter.end()
+    out = QPixmap.fromImage(canvas)
+    out.setDevicePixelRatio(dpr)
+    return out
 
 
 class BuffTab(QWidget):
@@ -602,6 +703,10 @@ class BuffTab(QWidget):
         match_row.addWidget(self.match_file_btn)
         match_row.addStretch(1)
         iv.addLayout(match_row)
+        self.match_note = hint_label("")  # 아이콘 집기: 저장하지 않은 이유(깜빡임·회색·가려짐) 한 줄
+        self.match_note.setStyleSheet(f"color:{color('warn')};")
+        self.match_note.hide()
+        iv.addWidget(self.match_note)
 
         iv.addWidget(section_label("오버레이 아이콘"))
         show_row = QHBoxLayout()
