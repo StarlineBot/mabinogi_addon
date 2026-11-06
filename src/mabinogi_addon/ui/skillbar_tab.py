@@ -52,6 +52,8 @@ HELP_HTML = HELP['단축바']
 
 
 class SkillbarTab(QWidget):
+    from .. import autofind_regions as _afr
+    _anchor = _afr.region_property("skillbar", "_anchor")  # 자동 찾기 v2: 읽기 = 쓸 자리, 쓰기 = 저장 자리
     def __init__(self, watcher) -> None:
         super().__init__()
         self._watcher = watcher
@@ -284,10 +286,12 @@ class SkillbarTab(QWidget):
 
     def _on_anchor_selected(self, x: int, y: int, _w: int, _h: int) -> None:
         config.save_skillbar({"anchor": {"x": x, "y": y}})
+        self._afr.user_set("skillbar")  # 이번 실행 동안 사용자 지정이 이김
         self._anchor = {"x": x, "y": y}
         self._update_anchor_label()
 
     def _region_cleared(self):
+        self._afr.user_set("skillbar")
         self._anchor = None
         for mark in getattr(self,"_source_marks",[]):
             mark.close()
@@ -471,7 +475,7 @@ class SkillbarTab(QWidget):
         config.save_skillbar(
             {
                 "scale": self._scale,
-                "anchor": self._anchor,
+                "anchor": self._afr.saved_of(self, "_anchor"),  # 찾은 자리가 아니라 저장 자리
                 "centerTopY": self._center_top_y,
                 "chunks": self._chunks_cfg,
             }

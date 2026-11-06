@@ -128,6 +128,8 @@ def clear_button(owner, key, changed):
             return
         owner._region_generation = getattr(owner, "_region_generation", 0) + 1
         invalidate_region(key)
+        from .. import autofind_regions
+        autofind_regions.user_set(key)  # 자동 찾기 v2: 지정 해제도 사용자 지정(이번 실행 동안 v2가 덮지 않음)
         selector = getattr(owner, "_selector", None)
         if selector is not None and isValid(selector):
             selector.close()
@@ -149,4 +151,7 @@ def save_boxes(owner, boxes):
     except OSError:
         warn(owner, "영역 저장 실패", "기존 등록 영역을 유지해요.")
         return False
+    from .. import autofind_regions
+    for key in boxes:
+        autofind_regions.user_set(key)  # 자동 찾기 v2: 탭 자동 찾기 결과도 사용자 지정(이번 실행 동안 이김)
     return True

@@ -390,6 +390,8 @@ class BuffTab(QWidget):
 
     def _on_region_selected(self, x: int, y: int, w: int, h: int) -> None:
         config.save_capture_region(x, y, w, h, "buffTracker")
+        from .. import autofind_regions
+        autofind_regions.user_set("buff")  # 자동 찾기 v2: 이번 실행 동안 사용자 지정이 이김
         self._update_region_hint()
         self._flash_region()  # 잡힌 영역을 화면에 점선으로 바로 확인
         self.catalog_changed.emit()

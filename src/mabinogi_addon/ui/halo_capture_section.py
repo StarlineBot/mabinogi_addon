@@ -23,6 +23,8 @@ from .widgets import FeatureHeader, CapturePathLabel, checkbox, wrapping_row, hi
 
 
 class HaloCaptureSection(QWidget):
+    from .. import autofind_regions as _afr
+    _region = _afr.region_property("halo_timer")  # 자동 찾기 v2: 읽기 = 쓸 영역, 쓰기 = 저장 영역
     access_changed = Signal(bool)
 
     def __init__(self, watcher, grab, parent=None):
@@ -485,6 +487,7 @@ class HaloCaptureSection(QWidget):
         config._write_local_config(raw)
         from .region_registration import invalidate_region
         invalidate_region('halo_timer')
+        self._afr.user_set("halo_timer")  # 이번 실행 동안 사용자 지정이 이김
         self._stop()
         self._stop_monitoring()
         self._region = box

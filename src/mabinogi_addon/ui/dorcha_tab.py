@@ -36,6 +36,8 @@ def _note_dorcha(trace, value):
 _last_dorcha_state = None
 
 class DorchaTab(QWidget):
+    from .. import autofind_regions as _afr
+    _region = _afr.region_property("dorcha")  # 자동 찾기 v2: 읽기 = 쓸 영역, 쓰기 = 저장 영역(_cfg["box"]도 저장 영역)
     _job_ready = Signal(object)  # 작업 스레드 → 화면 스레드 결과 전달(대기열 연결)
 
     def __init__(self, watcher):
@@ -757,6 +759,7 @@ class DorchaTab(QWidget):
 
     def _accept_region(self,x,y,w,h):
         region = dict(x=x,y=y,w=w,h=h)
+        self._afr.user_set("dorcha")  # 이번 실행 동안 사용자 지정이 이김
         self._cfg["box"] = self._region = region
         self._invalidate_search()
         self._set_value(None)
@@ -769,6 +772,7 @@ class DorchaTab(QWidget):
         self._apply_gate()
 
     def _region_cleared(self):
+        self._afr.user_set("dorcha")
         self._cfg["box"] = self._region = None
         self._invalidate_search()
         self._set_value(None)

@@ -210,6 +210,15 @@ def _custom_subtab_qss(dark: bool) -> str:
     return qss + "QTabWidget#trackerTabs > QTabBar::tab { padding:6px 9px; }"
 
 
+
+def _feature_region(key: str):
+    """기능이 쓸 영역 — 자동 찾기 v2가 켜져 있으면 이번 실행에서 찾은 자리, 아니면 저장 영역(autofind_regions)."""
+    from .. import autofind_regions
+    saved = {"buff": lambda: config.load_capture_region("buffTracker"),
+             "debuff": lambda: config.load_capture_region("debuffTracker"),
+             "boss": config.load_boss_bar_region}[key]()
+    return autofind_regions.region_for(key, saved)
+
 class MainWindow(QMainWindow):
     # 백그라운드 스레드(업데이트 확인/다운로드)에서 UI 스레드로 안전하게 넘기는 신호.
     _update_found = Signal(dict)  # 새 버전 발견 → 배너 표시
@@ -1137,11 +1146,11 @@ class MainWindow(QMainWindow):
             return
         need_buff = (
             self.buff_controller is None
-            and bool(config.load_capture_region("buffTracker"))
+            and bool(_feature_region("buff"))
         )
         need_debuff = (
             self.debuff_controller is None
-            and bool(config.load_capture_region("debuffTracker"))
+            and bool(_feature_region("debuff"))
         )
         if not (need_buff or need_debuff):
             return
@@ -1238,7 +1247,7 @@ class MainWindow(QMainWindow):
     _INACTIVE_TEXT = "게임 비활성 — 마비노기 창을 맨 앞으로 두면 추적해요"
 
     def _buff_status(self) -> tuple[str, str, str]:
-        if not config.load_capture_region("buffTracker"):
+        if not _feature_region("buff"):
             return ("영역 미지정 — 버프 판독 영역의 '직접 지정'을 먼저 하세요", self._STATUS_WARN, "region")
         if self.buff_controller is None:
             return (self._WAITING_TEXT, self._STATUS_MUTED, "waiting")
@@ -1290,7 +1299,7 @@ class MainWindow(QMainWindow):
         return (text + (f": {listed}" if listed else "") + " — 구분선 아래는 목록으로 읽어요", self._STATUS_OK)
 
     def _debuff_status(self) -> tuple[str, str, str]:
-        if not config.load_capture_region("debuffTracker"):
+        if not _feature_region("debuff"):
             return ("영역 미지정 — 디버프 판독 영역의 '직접 지정'을 먼저 하세요", self._STATUS_WARN, "region")
         if self.debuff_controller is None:
             return (self._WAITING_TEXT, self._STATUS_MUTED, "waiting")
@@ -1794,7 +1803,7 @@ class MainWindow(QMainWindow):
             self.buff_overlay.hide()
             return
 
-        region = config.load_capture_region("buffTracker")
+        region = _feature_region("buff")
         if not region:
             return
         try:
@@ -1936,7 +1945,7 @@ class MainWindow(QMainWindow):
             self.debuff_overlay.hide()
             return
 
-        region = config.load_capture_region("debuffTracker")
+        region = _feature_region("debuff")
         if not region:
             return
         try:
@@ -1967,7 +1976,7 @@ class MainWindow(QMainWindow):
         # 3차(percent): 보스 HP바 영역(보스패턴알림과 공유)을 따로 캡처해 넘긴다.
         bar_source = None
         if gate_mode in ("percent", "auto"):
-            bar_region = config.load_boss_bar_region()
+            bar_region = _feature_region("boss")
             if bar_region:
                 try:
                     from .dpi import to_physical

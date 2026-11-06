@@ -58,6 +58,8 @@ DEFAULT_BOX = {"x": 1017, "y": 1248, "w": 523, "h": 36}
 
 
 class BossTab(QWidget):
+    from .. import autofind_regions as _afr
+    _region = _afr.region_property("boss")  # 자동 찾기 v2: 읽기 = 쓸 영역, 쓰기 = 저장 영역
     # 꼬리 끊김 조사(사용자 app.log 11-04): 보스 틱(300ms)이 화면 스레드에서 캡처·이름 식별·HP 판독·보스바 확인(최대 ~36ms)을 했다.
     # 도르카(0.38.0)처럼 그 계산은 작업 스레드 1개에서, 화면 스레드는 결과 반영(상태·표시·경고)만 한다.
     INLINE_JOBS = False  # 테스트: 같은 계산을 바로(동기로) — 판정 회귀를 그대로 확인
@@ -315,6 +317,7 @@ class BossTab(QWidget):
         # 영역은 '공유 키'(bossPattern.box)에만 저장한다 — _save()가 토글 때마다 box를
         # 통째로 덮어써 디버프 쪽 변경을 날리던 문제 방지(box는 여기서만 쓴다).
         config.save_boss_bar_region(x, y, w, h)
+        self._afr.user_set("boss")  # 이번 실행 동안 사용자 지정이 이김
         self._region = {"x": x, "y": y, "w": w, "h": h}
         self._update_region_label()
         self._flash_region()
@@ -353,7 +356,7 @@ class BossTab(QWidget):
         쓰게 하려면 이렇게 메모리를 갱신해야 한다(매 틱 파일 I/O는 피한다).
         """
         shared = config.load_boss_bar_region()
-        if shared != self._region:
+        if shared != self._afr.saved_of(self):  # 저장 영역끼리 비교(v2가 찾은 자리와 비교하지 않음)
             if shared is None:
                 self._region_cleared()
                 return
@@ -361,6 +364,7 @@ class BossTab(QWidget):
             self._update_region_label()
 
     def _region_cleared(self):
+        self._afr.user_set("boss")  # 지정 해제(여기·디버프 탭) = 사용자 지정
         self.halo_capture.set_boss_context(None)
         self.halo_capture._stop_monitoring()
         self._region = None
@@ -969,6 +973,8 @@ class BossTab(QWidget):
             return
         if not save_boxes(self, {"boss": (lx, ly, lw, lh), "debuff": db}):
             return
+        self._afr.user_set("boss")
+        self._afr.user_set("debuff")
         self._region = {"x": lx, "y": ly, "w": lw, "h": lh}
         self._update_region_label()
         self.bar_region_changed.emit()  # 보스바 공유(패턴알림/3차)

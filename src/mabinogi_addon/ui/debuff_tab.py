@@ -394,6 +394,8 @@ class DebuffTab(QWidget):
 
     def _on_bar_region_selected(self, x: int, y: int, w: int, h: int) -> None:
         config.save_boss_bar_region(x, y, w, h)  # 보스패턴알림과 공유 저장
+        from .. import autofind_regions
+        autofind_regions.user_set("boss")
         self._refresh_method_ui()
         from .region_highlight import RegionHighlight
 
@@ -468,6 +470,8 @@ class DebuffTab(QWidget):
 
     def _on_region_selected(self, x: int, y: int, w: int, h: int) -> None:
         config.save_capture_region(x, y, w, h, "debuffTracker")
+        from .. import autofind_regions
+        autofind_regions.user_set("debuff")  # 자동 찾기 v2: 이번 실행 동안 사용자 지정이 이김
         self._update_region_hint()
         self._flash_region()  # 잡힌 영역을 화면에 점선으로 바로 확인
         self.catalog_changed.emit()  # 영역 생기면 추적 (재)시작

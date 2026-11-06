@@ -62,6 +62,8 @@ HELP_HTML = HELP['체력바']
 
 
 class StatBarsTab(QWidget):
+    from .. import autofind_regions as _afr
+    _region = _afr.region_property("stat_bars")  # 자동 찾기 v2: 읽기 = 쓸 영역, 쓰기 = 저장 영역
     def __init__(self, watcher) -> None:
         super().__init__()
         self._watcher = watcher
@@ -630,6 +632,7 @@ class StatBarsTab(QWidget):
     def _on_selected(self, x: int, y: int, w: int, h: int) -> None:
         region = {"x": x, "y": y, "w": w, "h": h}
         config.save_stat_bars({"box": region})
+        self._afr.user_set("stat_bars")  # 이번 실행 동안 사용자 지정이 이김
         self._region = region
         self._display_valid = False
         self._apply_visibility()
@@ -639,6 +642,7 @@ class StatBarsTab(QWidget):
         self._flash_region()
 
     def _region_cleared(self):
+        self._afr.user_set("stat_bars")
         self._region = None
         self._display_valid = False
         self._last_frame = self._last_saved_frame = None
@@ -804,7 +808,7 @@ class StatBarsTab(QWidget):
         self._sync_bar_locks()
         config.save_stat_bars(
             {
-                "box": self._region,
+                "box": self._afr.saved_of(self),  # 찾은 자리가 아니라 저장 영역
                 "scale": self._scale,
                 "align": self._align,
                 "bars": self._bars_cfg,

@@ -66,6 +66,8 @@ HELP_HTML = """
 
 
 class TuarimTab(QWidget):
+    from .. import autofind_regions as _afr
+    _region = _afr.region_property("tuarim")  # 자동 찾기 v2: 읽기 = 쓸 영역, 쓰기 = 저장 영역
     observed = Signal(object)
 
     def __init__(self, watcher) -> None:
@@ -302,6 +304,7 @@ class TuarimTab(QWidget):
         self._accept_region(x,y,w,h)
 
     def _accept_region(self,x,y,w,h):
+        self._afr.user_set("tuarim")  # 이번 실행 동안 사용자 지정이 이김
         self._region = {"x": x, "y": y, "w": w, "h": h}
         self._tracker.reset_observations()
         self.observed.emit(None)
@@ -320,6 +323,7 @@ class TuarimTab(QWidget):
         self.value_label.setText("최근 확정: —")
 
     def _region_cleared(self):
+        self._afr.user_set("tuarim")
         self._region = None
         self._tracker.reset_observations()
         self._prev_raw = self._stable_value = self._last_value = None
@@ -370,7 +374,7 @@ class TuarimTab(QWidget):
             config.save_tuarim(
                 {
                     "enabled": self.enable.isChecked(),
-                    "box": self._region,
+                    "box": self._afr.saved_of(self),  # 찾은 자리가 아니라 저장 영역
                     "thresholds": self._thresholds,
                     "sounds": self._sounds,
                 }
