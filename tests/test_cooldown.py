@@ -10,7 +10,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 import pytest
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QLabel, QWidget
 
 from mabinogi_addon.detect import cooldown as cd
 from mabinogi_addon.detect.click_targets import Target, skill_cells
@@ -781,11 +781,11 @@ def test_persistent_page_mismatch_is_listed_not_silent(creator, caplog):
         sec._note_states({"a": cs.PAGE_DIFF})
         assert sec.state_text("a") == "가려짐(페이지 다름)"
         sec._page_since["a"] -= cs.PAGE_WARN_SECONDS  # 3초 넘게 계속 다름
-        assert sec.state_text("a") == "가려짐(페이지 다름) — 다른 페이지라 숨김"
+        assert sec.state_text("a") == "다른 페이지라 숨김(Shift·변신 등)"
         sec._render_list()
         from PySide6.QtWidgets import QLabel
         texts = [lb.text() for lb in sec.findChildren(QLabel, "cooldownState")]
-        assert "가려짐(페이지 다름) — 다른 페이지라 숨김" in texts
+        assert "다른 페이지라 숨김(Shift·변신 등)" in texts
         sec._note_states({"a": cs.cd.COOLING})
         assert sec.state_text("a") == "사용 중"
         lines = [r.getMessage() for r in caplog.records if "쿨타임 칸 상태" in r.getMessage()]
@@ -1082,3 +1082,41 @@ def test_ready_cell_dimmed_is_unavailable_right_away(tmp_path, monkeypatch):
     ref, _b, _c = _screen("스크린샷 2026-11-04 014744.png")
     row, last, log = _run_frames(cs, slot, [(0.0, ref), (0.22, dim)])
     assert log == [{"s": READY}, {"s": cd.UNAVAILABLE}]  # 줄에 없던 칸은 지금처럼 바로
+
+
+
+# ---- 변신 등 페이지가 바뀌는 경우: 같은 자리 다른 페이지 등록(사용자 11-06) -------------------------------------
+def test_same_cell_other_page_can_be_registered_and_each_works_on_its_page(creator):
+    from mabinogi_addon.ui.cooldown_section import PAGE_DIFF, CooldownSection, observe
+    two, _b, cells2 = _screen("스크린샷 2026-11-04 014744.png")  # 위 줄 페이지 '2'
+    one, _b1, cells1 = _screen("스크린샷 2026-11-06 013739.png")  # 같은 배치, 위 줄 페이지 '1'
+    key = (1, 0, 0, 2)
+    sec = CooldownSection(_Watcher())
+    try:
+        a = sec.register(cells2[key], two, (0, 0))
+        b = sec.register(cells1[key], one, (0, 0))  # 같은 자리, 다른 페이지 → 허용
+        assert a and b and a["rect"] == b["rect"] and a["page"] != b["page"]
+        assert sec.register(cells1[key], one, (0, 0)) is None  # 같은 자리·같은 페이지 → 중복
+        assert sec.status.text() == "이미 등록한 칸이에요."
+        tips = [w.toolTip() for w in sec.findChildren(QWidget) if w.toolTip()]
+        assert any("같은 자리·다른 페이지" in t for t in tips)
+        slots = [dict(s) for s in sec.slots]
+        on_one = observe(one, (0, 0), slots, {}, False)["changes"]
+        on_two = observe(two, (0, 0), slots, {}, False)["changes"]
+        # 각자 자기 페이지에서만(자기 페이지에선 '사용 중' 첫 관측이라 아직 안 알리거나 사용 가능 — 어느 쪽이든 페이지 다름 아님)
+        assert on_one[a["id"]] == PAGE_DIFF and on_one.get(b["id"]) != PAGE_DIFF
+        assert on_two[b["id"]] == PAGE_DIFF and on_two.get(a["id"]) != PAGE_DIFF
+    finally:
+        sec.shutdown()
+
+
+def test_page_guide_and_hidden_tooltip_texts(creator):
+    from mabinogi_addon.ui import cooldown_section as cs
+    sec = cs.CooldownSection(_Watcher())
+    try:
+        texts = [w.text() for w in sec.findChildren(QLabel)]
+        assert cs.PAGE_GUIDE in texts
+        assert cs.PAGE_GUIDE.startswith("등록한 단축바 페이지에서만 보여요. Shift·변신 등으로 페이지가 바뀌면 숨겨요.")
+        assert cs.PAGE_HIDDEN_TIP == "이 페이지에서도 보려면 지금 한 번 더 등록하세요"
+    finally:
+        sec.shutdown()

@@ -22,6 +22,10 @@ from ..detect import cooldown as cd
 from ..tracker.cooldown_row import HIDDEN, CooldownRow
 
 PAGE_DIFF = "page"  # 페이지 숫자 모양이 저장한 것과 다름(가려짐과 같이 줄에서 빼되, 목록엔 따로 알림)
+PAGE_GUIDE = ("등록한 단축바 페이지에서만 보여요. Shift·변신 등으로 페이지가 바뀌면 숨겨요. "
+              "다른 페이지에서도 보려면 그 페이지에서 한 번 더 등록하세요.")
+PAGE_HIDDEN_TEXT = "다른 페이지라 숨김(Shift·변신 등)"
+PAGE_HIDDEN_TIP = "이 페이지에서도 보려면 지금 한 번 더 등록하세요"
 PAGE_WARN_SECONDS = 3.0  # 이만큼 계속 다르면 목록에 '다른 페이지라 숨김'(실제로 페이지를 넘긴 정상 상황에도 뜨므로 재등록 안내는 하지 않음)
 STATE_TEXT = {cd.COOLING: "사용 중", cd.READY: "사용 가능", HIDDEN: "가려짐", PAGE_DIFF: "가려짐(페이지 다름)",
               cd.UNAVAILABLE: "사용 불가(탈것 등)"}
@@ -182,6 +186,7 @@ class CooldownSection(QGroupBox):
 
         v = QVBoxLayout(self)
         v.addWidget(hint_label("쓴 스킬이 사용 중인 동안 한 줄로 보여 주고, 다시 쓸 수 있게 되면 민트로 강조한 뒤 빼요."))
+        v.addWidget(hint_label(PAGE_GUIDE))
         top = QHBoxLayout()
         self.enable = switch("쿨타임 오버레이 사용")
         self.enable.setChecked(self._cfg["enabled"])
@@ -268,6 +273,8 @@ class CooldownSection(QGroupBox):
             h.setContentsMargins(0, 0, 0, 0)
             x, y, w, hh = slot["rect"]
             tip = f"칸 {w}×{hh} @ ({x},{y})" + ("" if slot.get("page") else " · 페이지 확인 없음")
+            if sum(1 for s in self.slots if s["rect"] == slot["rect"]) > 1:
+                tip += " · 같은 자리·다른 페이지"
             icon = QLabel()
             icon.setFixedSize(LIST_ICON, LIST_ICON)
             icon.setPixmap(self._list_icon(slot["id"]))
@@ -278,6 +285,8 @@ class CooldownSection(QGroupBox):
             h.addWidget(name)
             state = QLabel(self.state_text(slot["id"]))
             state.setStyleSheet("color:palette(mid);")  # 페이지를 넘긴 정상 상황에도 뜨므로 경고색은 쓰지 않음
+            if state.text() == PAGE_HIDDEN_TEXT:
+                state.setToolTip(PAGE_HIDDEN_TIP)
             state.setObjectName("cooldownState")
             h.addWidget(state)
             h.addStretch(1)
@@ -347,9 +356,6 @@ class CooldownSection(QGroupBox):
         ox, oy = origin
         x, y, w, h = target.rect
         rect = [x + ox, y + oy, w, h]
-        if any(s["rect"] == rect for s in self.slots):
-            self.status.setText("이미 등록한 칸이에요.")
-            return None
         set_no = self.set_combo.currentIndex() + 1
         if self._count(set_no) >= MAX_SLOTS:
             self.status.setText(f"이 세트는 최대 {MAX_SLOTS}칸까지 등록할 수 있어요.")
@@ -366,6 +372,9 @@ class CooldownSection(QGroupBox):
                 page = cd.page_signature(frame, rects[kb])
                 if page is not None:
                     page_rect, page_block = page_rects[str(kb)], kb
+        if self._duplicate(rect, page, frame, rects[kb] if page is not None else None):
+            self.status.setText("이미 등록한 칸이에요.")
+            return None
         used = {s["label"] for s in self.slots}
         label = next(f"스킬 {n}" for n in range(1, MAX_SLOTS * MAX_SETS + 2) if f"스킬 {n}" not in used)  # 전체에서 겹치지 않게
         cell = frame[y:y + h, x:x + w] if frame is not None else None
@@ -379,6 +388,15 @@ class CooldownSection(QGroupBox):
         self.status.setText(f"{label}을(를) 세트 {set_no}에 등록했어요." + ("" if page else " (페이지 숫자를 못 읽어 페이지 확인 없이 봐요)"))
         _log.info("쿨타임 칸 등록: %s(세트 %d) 칸 %s 페이지 %s", label, set_no, rect, "있음" if page else "없음")
         return slot
+
+    def _duplicate(self, rect, page, frame, local_page_rect) -> bool:
+        """같은 자리·같은 페이지면 중복. 같은 자리라도 페이지 숫자가 다르면(변신·Shift 페이지) 따로 등록할 수 있다(사용자 11-06)."""
+        for other in (s for s in self.slots if s["rect"] == rect):
+            if not page or not other.get("page"):
+                return True  # 페이지를 모르면 구분할 수 없음
+            if cd.same_page(frame, local_page_rect, other["page"]) is not False:
+                return True
+        return False
 
     # ---- 칸 상태(목록 표시·app.log) ----------------------------------------------------------
     def _name_of(self, sid: str) -> str:
@@ -407,7 +425,7 @@ class CooldownSection(QGroupBox):
     def state_text(self, sid: str) -> str:
         state = self.__dict__.get("_states", {}).get(sid)
         if state == PAGE_DIFF and time.monotonic() - self.__dict__.get("_page_since", {}).get(sid, time.monotonic()) >= PAGE_WARN_SECONDS:
-            return "가려짐(페이지 다름) — 다른 페이지라 숨김"
+            return PAGE_HIDDEN_TEXT
         return STATE_TEXT.get(state, "")
 
     def _remove(self, sid: str) -> None:
