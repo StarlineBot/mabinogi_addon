@@ -547,7 +547,7 @@ def test_new_base_size_and_old_scale_converted():
     from mabinogi_addon.ui.boss_bar_overlay import BossBarOverlay
     ov = BossBarOverlay(100)
     try:
-        assert (ov.width() - 4, ov.height() - 4) == (640, 39)  # 예전 150%(540×39) 높이, 길이는 640
+        assert (ov.width() - 4, ov.height() - 4 - ov._scale_h()) == (640, 39)  # 바는 예전 150%(540×39) 높이, 길이는 640(위에 눈금 글자 줄)
     finally:
         ov.close()
     config.save_boss_bar_overlay({"enabled": True})

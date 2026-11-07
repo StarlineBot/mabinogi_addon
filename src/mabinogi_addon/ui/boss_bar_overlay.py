@@ -18,6 +18,9 @@ from .. import perf_meter
 BASE_W, BASE_H = 640, 39
 UNIT = 1.5
 QUARTER_LINE = QColor(255, 255, 255, 70)  # 25·50·75% 옅은 세로선(바 안쪽만, 노란 패턴 선·글자 아래 층)
+SCALE_TEXT = QColor(185, 190, 200)  # 바 위 눈금 글자(0%·25%·50%·75%·100%) — 작은 회색(사용자 11-07)
+SCALE_H = 9  # 눈금 글자 줄 높이(× UNIT × 배율) — 바 위에 따로 두어 바를 가리지 않는다
+SCALE_MARKS = (0, 25, 50, 75, 100)
 MINT = QColor(0, 209, 167)
 LOW_HP = 20
 EXAMPLE = ("보스", 75, (90, 60, 30))
@@ -60,7 +63,11 @@ class BossBarOverlay(QWidget):
 
     def set_scale(self, percent) -> None:
         self._scale = max(50, min(300, int(percent))) / 100
-        self.resize(round(BASE_W * self._scale) + 4, round(BASE_H * self._scale) + 4)
+        self.resize(round(BASE_W * self._scale) + 4, round(BASE_H * self._scale) + 4 + self._scale_h())
+
+    def _scale_h(self) -> int:
+        """바 위 눈금 글자 줄 높이(px)."""
+        return round(SCALE_H * UNIT * self._scale)
         self.update()
 
     def set_opacity(self, percent) -> None:
@@ -93,7 +100,8 @@ class BossBarOverlay(QWidget):
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         if stale:
             p.setOpacity(0.5)
-        outer = QRectF(2, 2, BASE_W * self._scale, BASE_H * self._scale)
+        top = self._scale_h()
+        outer = QRectF(2, 2 + top, BASE_W * self._scale, BASE_H * self._scale)
         radius = 4 * s
         p.setPen(QPen(QColor(10, 10, 12), max(1.0, 1.5 * s)))
         p.setBrush(QColor(28, 28, 32, 235))
@@ -115,6 +123,7 @@ class BossBarOverlay(QWidget):
         for q in (25, 50, 75):  # 25%마다 옅은 줄 — 바 안쪽 위~아래만
             x = inner.x() + inner.width() * q / 100
             p.drawLine(round(x), round(inner.top()), round(x), round(inner.bottom()))
+        self._draw_scale(p, inner, top, s)
         p.setPen(QPen(QColor(244, 200, 40), max(1.0, 1.6 * s)))
         for t in marks:  # 패턴 구간(등록 보스만) — 옅은 줄 위 층
             if 0 < t < 100:
@@ -155,6 +164,23 @@ class BossBarOverlay(QWidget):
             p.setPen(QPen(MINT, 1, Qt.PenStyle.DashLine))
             p.drawRect(self.rect().adjusted(0, 0, -1, -1))
         p.end()
+
+    def _draw_scale(self, p, inner, top: int, s: float) -> None:
+        """바 위 줄에 0%·25%·50%·75%·100% 작은 회색 글자 — 눈금선과 같은 x. 양 끝은 창 안쪽으로 맞춤."""
+        from PySide6.QtGui import QFontMetrics
+        small = QFont()
+        small.setPixelSize(max(7, round(7 * s)))
+        p.setFont(small)
+        fm = QFontMetrics(small)
+        base = 2 + top - max(1, round(1.5 * s))  # 바 테두리 바로 위
+        for q in SCALE_MARKS:
+            text = f"{q}%"
+            width = fm.horizontalAdvance(text)
+            x = inner.x() + inner.width() * q / 100
+            x = inner.x() if q == 0 else (inner.right() - width if q == 100 else x - width / 2)
+            for dx, dy, color in ((1, 1, QColor(0, 0, 0, 180)), (0, 0, SCALE_TEXT)):
+                p.setPen(color)
+                p.drawText(round(x + dx), round(base + dy), text)
 
     # ---- 드래그(격자 맞춤 공용) ----
     def mousePressEvent(self, event) -> None:

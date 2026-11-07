@@ -98,7 +98,12 @@ _GRAY_V = (45, 85)      # 빈 바 회색 바탕 밝기(실측 50~70) — 글자(
 # 저HP·소수가 오히려 나빠졌다(tests/data 비교표, docs/status.md).
 USE_TEXT_MASK = True  # 보조 판독(회색 바탕 뺀 마스크) 사용 — 비교표용 스위치
 _PREFIX_MIN = 0.80  # 앞자리만 남은 판독 대신 고를 더 긴 판독의 최저 점수
-_NUM_LEFT = 0.78    # 숫자 칸(오른쪽) 시작 — 이 안에 회색 바탕이 있을 때만 보조 판독
+_NUM_SPAN = _FIRST + 2 * _PITCH + _SEARCH  # 숫자 칸 왼쪽 끝 = 바 오른쪽 끝에서 이만큼(기준 해상도 px) — 입력 폭과 무관
+# (앱은 등록 영역 오른쪽 42%만 판독기에 넣는다 — 폭 비율로 숫자 칸을 잡으면 '%' 쪽만 봐서 보조 판독이 안 걸렸다, QA b2b6534)
+
+
+def _num_left(w: int, scale: float) -> int:
+    return max(0, int(round(w - _NUM_SPAN * scale)))
 _GRAY_MIN = 0.05    # 숫자 칸에 회색 바탕과 채움이 둘 다 이만큼 있을 때 = 채움 끝이 숫자 칸 안
 _FILL_S = 120
 
@@ -300,7 +305,7 @@ def _low_hp_aligned(region_bgr, templates, w, scale, pitch, span, val):
         return val
     h = region_bgr.shape[0]
     bright = _bright_mask(region_bgr)
-    rows = np.where((bright[:, int(w * _NUM_LEFT):] > 0).sum(axis=1) >= 3)[0]
+    rows = np.where((bright[:, _num_left(w, scale):] > 0).sum(axis=1) >= 3)[0]
     if rows.size == 0:
         return val
     top, bottom = int(rows.min()), int(rows.max())
@@ -343,7 +348,7 @@ def _extend(region_bgr, prep, val, frac, want_frac: bool):
         return val, frac
     templates, w, scale, _band, pitch, span = prep
     h = region_bgr.shape[0]
-    numbers = (cv2.cvtColor(np.ascontiguousarray(region_bgr[int(h * _YBAND[0]):int(h * _YBAND[1]), int(w * _NUM_LEFT):]),
+    numbers = (cv2.cvtColor(np.ascontiguousarray(region_bgr[int(h * _YBAND[0]):int(h * _YBAND[1]), _num_left(w, scale):]),
                             cv2.COLOR_BGR2HSV))
     gray = (numbers[:, :, 1] <= _GRAY_S) & (numbers[:, :, 2] > _GRAY_V[0]) & (numbers[:, :, 2] <= _GRAY_V[1])
     fill = numbers[:, :, 1] >= _FILL_S
@@ -419,10 +424,25 @@ def _cell_digit(band, right, pitch, templates):
     cell = band[:, left:right]
     if int((cell > 127).sum()) < _MIN_PX:
         return None
+    if USE_TEXT_MASK:
+        cell = _drop_short_parts(cell)  # 소수 첫째 자리 '1'은 좁아서 칸에 '.'이 같이 들어왔다(x.1x 못 읽음, QA b2b6534)
+        if int((cell > 127).sum()) < _MIN_PX:
+            return None
     ys = np.where((cell > 127).any(axis=1))[0]
     xs = np.where((cell > 127).any(axis=0))[0]
     d, sc = _classify(cell[ys.min():ys.max() + 1, xs.min():xs.max() + 1], templates)
     return None if d is None else (d, sc)
+
+
+def _drop_short_parts(cell: np.ndarray) -> np.ndarray:
+    """칸 안 덩어리 중 가장 높은 덩어리의 절반보다 낮은 것('.' 등)을 지운다 — 숫자 모양만 남게."""
+    n, labels, stats, _ = cv2.connectedComponentsWithStats((cell > 127).astype(np.uint8), connectivity=8)
+    if n <= 2:
+        return cell
+    tallest = int(stats[1:, cv2.CC_STAT_HEIGHT].max())
+    keep = np.zeros(n, bool)
+    keep[1:] = stats[1:, cv2.CC_STAT_HEIGHT] * 2 >= tallest
+    return np.where(keep[labels], cell, 0).astype(cell.dtype)
 
 
 def _fraction(band, w, scale, pitch, templates, shift) -> str | None:

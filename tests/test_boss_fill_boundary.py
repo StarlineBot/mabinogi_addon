@@ -14,6 +14,12 @@ from mabinogi_addon.detect import boss_hp_reader as r
 from mabinogi_addon.tracker.boss_bar_value import BossBarValue, truncated
 
 ZIP = "tests/data/unknown_hpxxx_show001_upper_197.zip"
+# 앱 입력과 같게: 등록 보스는 오른쪽 42%(boss_tab pct_reg·_read_row), 미등록은 전체 폭(검증기) — 둘 다 확인(QA b2b6534)
+WIDTHS = pytest.mark.parametrize("part", ["right42", "full"])
+
+
+def _cut(crop, part):
+    return crop[:, int(crop.shape[1] * 0.58):] if part == "right42" else crop
 
 
 def _frame(name):
@@ -21,9 +27,10 @@ def _frame(name):
         return cv2.imdecode(np.frombuffer(z.read(name), np.uint8), cv2.IMREAD_COLOR)
 
 
+@WIDTHS
 @pytest.mark.parametrize("name", ["gomok_petak_hp001_129.png", "gomok_petak_hp001_show017_drop_130.png"])
-def test_fill_edge_through_digit_reads_whole_number(name, monkeypatch):
-    crop = _frame(name)[45:82]  # 등록 영역 줄 — 빨간 채움 끝이 '7' 한가운데
+def test_fill_edge_through_digit_reads_whole_number(name, part, monkeypatch):
+    crop = _cut(_frame(name)[45:82], part)  # 등록 영역 줄 — 빨간 채움 끝이 '7' 한가운데
     monkeypatch.setattr(r, "USE_TEXT_MASK", False)
     assert r.read_percent(crop) == 1  # 예전: 앞자리만
     monkeypatch.setattr(r, "USE_TEXT_MASK", True)
@@ -81,13 +88,74 @@ def test_overlay_value_does_not_confirm_truncated_reading():
     ("gomok_petak_hpxxx_135.png", 6, 15),                     # 15.00 % (위 줄)
     ("gomok_petak_hp010_show015_upper_157.png", 6, 15),
 ])
-def test_low_hp_misaligned_band_reads_two_digits(name, y, expected, monkeypatch):
-    crop = _frame(name)[y:y + 37]
+@WIDTHS
+def test_low_hp_misaligned_band_reads_two_digits(name, y, expected, part, monkeypatch):
+    crop = _cut(_frame(name)[y:y + 37], part)
     monkeypatch.setattr(r, "USE_TEXT_MASK", False)
     assert r.read_percent(crop) == 1  # 예전: 앞자리만
     monkeypatch.setattr(r, "USE_TEXT_MASK", True)
     assert r.read_percent(crop) == expected
 
 
-def test_real_one_percent_stays_one():
-    assert r.read_percent(_frame("gomok_petak_hp001_176.png")[45:82]) == 1  # 화면 1.62 %
+@WIDTHS
+def test_real_one_percent_stays_one(part):
+    assert r.read_percent(_cut(_frame("gomok_petak_hp001_176.png")[45:82], part)) == 1  # 화면 1.62 %
+
+
+# ---- 소수 첫째 자리 '1'(x.1x): 좁은 '1' 칸에 '.'이 같이 들어와 못 읽던 것(QA b2b6534) ------------------------------
+@WIDTHS
+@pytest.mark.parametrize("zip_name,name,expected", [
+    ("eotgallin_poinche_hp004_115.zip", "eotgallin_poinche_hp035_013.png", (35, "10")),
+    ("eotgallin_poinche_hp004_115.zip", "eotgallin_poinche_hp041_007.png", (41, "14")),
+])
+def test_fraction_with_narrow_one_after_dot(zip_name, name, expected, part, monkeypatch):
+    with zipfile.ZipFile(f"tests/data/{zip_name}") as z:
+        crop = cv2.imdecode(np.frombuffer(z.read(name), np.uint8), cv2.IMREAD_COLOR)
+    crop = _cut(crop, part)
+    monkeypatch.setattr(r, "USE_TEXT_MASK", False)
+    assert r.read_percent_frac(crop) == (expected[0], None)  # 예전: 소수 없음
+    monkeypatch.setattr(r, "USE_TEXT_MASK", True)
+    assert r.read_percent_frac(crop) == expected
+
+
+# ---- 보스바 오버레이 눈금 글자(0%·25%·50%·75%·100%, 사용자 11-07) ---------------------------------------------------
+def test_overlay_scale_strip_above_bar_keeps_saved_bar_position(monkeypatch):
+    import os
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtWidgets import QApplication
+
+    from mabinogi_addon.ui import boss_bar_overlay as bo
+    QApplication.instance() or QApplication([])
+    ov = bo.BossBarOverlay(100)
+    strip = ov._scale_h()
+    assert strip > 0 and ov.height() == round(bo.BASE_H) + 4 + strip  # 바 위에 따로 한 줄(바를 가리지 않음)
+    ov.set_scale(200)
+    assert ov._scale_h() == round(bo.SCALE_H * bo.UNIT * 2) and ov.height() == round(bo.BASE_H * 2) + 4 + ov._scale_h()
+    assert bo.SCALE_MARKS == (0, 25, 50, 75, 100)
+    ov.close()
+
+
+def test_saved_position_is_bar_top_so_bar_does_not_move(monkeypatch):
+    """저장 위치는 바 위쪽 — 눈금 글자 줄을 더해도(배율을 바꿔도) 바는 같은 자리."""
+    import os
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtWidgets import QApplication
+
+    from mabinogi_addon import config, feature_access
+    from mabinogi_addon.ui import boss_tab as bt
+    QApplication.instance() or QApplication([])
+    monkeypatch.setattr(feature_access, "is_creator", lambda: True)
+    monkeypatch.setattr(bt.BossTab, "INLINE_JOBS", True)
+    config.save_boss_bar_overlay({"enabled": True, "pos": {"x": 300, "y": 500}})
+    from test_boss_bar_overlay import _Watcher
+    tab = bt.BossTab(_Watcher())
+    try:
+        sec = tab.bar_section
+        ov = sec._ensure_overlay()
+        assert ov.y() + ov._scale_h() == 500  # 바 위쪽 = 저장한 자리(예전과 같음)
+        sec._on_scale(200)
+        assert ov.y() + ov._scale_h() == 500
+        ov.moved.emit()
+        assert config.load_boss_bar_overlay()["pos"]["y"] == 500
+    finally:
+        tab.shutdown()

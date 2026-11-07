@@ -144,10 +144,10 @@ class BossBarSection(QGroupBox):
             ov.set_locked(self._cfg["locked"])
             pos = self._cfg.get("pos")
             if pos:
-                ov.move(pos["x"], pos["y"])
+                ov.move(pos["x"], pos["y"] - ov._scale_h())  # 저장 위치 = 바 위쪽(눈금 글자 줄 추가 전과 같은 자리)
             else:
                 self._default_position(ov)
-            ov.moved.connect(lambda: self._save(pos={"x": ov.x(), "y": ov.y()}))
+            ov.moved.connect(lambda: self._save(pos={"x": ov.x(), "y": ov.y() + ov._scale_h()}))
             self._overlay = ov
         return self._overlay
 
@@ -173,7 +173,10 @@ class BossBarSection(QGroupBox):
     def _on_scale(self, value: int) -> None:
         self._save(scale=int(value))
         if self._overlay is not None:
-            self._overlay.set_scale(value)
+            ov = self._overlay
+            bar_top = ov.y() + ov._scale_h()
+            ov.set_scale(value)
+            ov.move(ov.x(), bar_top - ov._scale_h())  # 배율이 바뀌어도 바 위쪽 자리는 그대로(눈금 글자 줄 높이만 바뀜)
 
     def _on_opacity(self, value: int) -> None:
         self._save(opacity=int(value))
