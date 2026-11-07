@@ -401,8 +401,16 @@ class AutofindV2Controller(QObject):
                     _log.info("[자동 찾기 v2] 다시 찾기 못 찾음: %s(실패 %d번)", v2.NAMES[key], self.engine.items[key].failures)
         elif job["kind"] == "appear":
             for key, box in result["boxes"].items():
-                if box is not None and self.engine.appear_result(job["generation"], key, box):
+                before = self.engine.items[key].box
+                outcome = None if box is None else self.engine.appear_result(job["generation"], key, box)
+                if outcome == "found":
                     _log.info("[자동 찾기 v2] 나타나서 찾음: %s(%s)", v2.NAMES[key], "예상 자리" if job["mode"] == "small" else "화면 전체")
+                elif outcome == "confirmed_last":
+                    _log.info("[자동 찾기 v2] 지난 자리 확인됨: %s %s(화면 전체 확인)", v2.NAMES[key], self.engine.items[key].box)
+                elif outcome == "moved":
+                    _log.info("[자동 찾기 v2] 자리 바뀜: %s %s → %s(화면 전체 확인 — 게임 UI 배율 변경 등)",
+                              v2.NAMES[key], before, self.engine.items[key].box)
+                if outcome:
                     self._save_last()
         self._publish()
         self.changed.emit()
@@ -417,6 +425,9 @@ class AutofindV2Controller(QObject):
         outcome = self.engine.note_read(key, ok, self._clock(), frame_id)
         if outcome == "confirmed":
             _log.info("[자동 찾기 v2] 새 자리 확정: %s %s", v2.NAMES.get(key, key), self.engine.items[key].box)
+            self._save_last()
+        elif outcome == "confirmed_last":
+            _log.info("[자동 찾기 v2] 지난 자리 확인됨: %s %s(그 자리에서 읽힘)", v2.NAMES.get(key, key), self.engine.items[key].box)
             self._save_last()
         elif outcome == "failed":
             _log.info("[자동 찾기 v2] 새 자리에서 읽히지 않아 버림: %s", v2.NAMES.get(key, key))

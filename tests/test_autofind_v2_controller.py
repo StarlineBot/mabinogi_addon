@@ -77,9 +77,11 @@ class Finders:
 
     ui = True  # 게임 UI(단축바·체력바)가 보이나 — False면 로딩·로그인 화면
 
+    reads: dict = {}  # 항목별 지난 자리 판독 결과 바꾸기(기본 True)
+
     def readers(self):
         def read(key):
-            return lambda crop: self.ui if key in ("skillbar", "stat_bars") else True
+            return lambda crop: self.ui if key in ("skillbar", "stat_bars") else self.reads.get(key, True)
         return {k: read(k) for k in ("skillbar", "stat_bars", "buff", "dorcha", "tuarim", "boss", "halo_timer")}
 
 
@@ -283,3 +285,72 @@ def test_real_finders_last_positions_with_margin(app, isolated, loading):
     else:
         assert c.engine.phase == "stable" and c.engine.items["skillbar"].status == "found"
     c.shutdown()
+
+
+BOSS, HALO = (700, 60, 520, 28), (880, 260, 160, 40)
+
+
+def _second_run_without_boss(app, isolated, boss_now=None):
+    """첫 실행에서 보스바·전투 시간을 찾아 지난 자리를 남기고, 보스바가 없는 화면으로 다시 실행."""
+    first = Finders()
+    first.boxes.update(boss=BOSS, halo_timer=HALO)
+    c, clock, *_ = _make(app, finders=first)
+    _run(c, clock, 1.5)
+    assert json.loads(isolated.read_text(encoding="utf-8"))["autofindV2"]["last"]["boss"]["box"]["x"] == 700
+    c.shutdown()
+    autofind_regions.reset_for_tests()
+    autofind_regions.activate(True)
+    autofind_regions.set_use_values({k: True for k in autofind_regions.USE_KEYS})
+    fnd = Finders()
+    fnd.boxes.update(boss=boss_now, halo_timer=None)
+    fnd.reads = {"boss": False, "halo_timer": False}  # 지난 자리에 지금은 보스바·전투 시간이 없음
+    return _make(app, finders=fnd)
+
+
+def test_boss_and_halo_last_spot_used_at_once_without_appear_find(app, isolated, caplog):
+    """사용자 11-07(QA 82db972): 지난 자리 있음 + 보스바 없는 화면 → 바로 찾음(확인 전)·디버프 띠 발행·나타나면 찾기 0."""
+    import logging
+
+    from mabinogi_addon.ui.autofind_v2_section import AutofindV2Section
+    caplog.set_level(logging.INFO, logger="mabinogi_addon.ui.autofind_v2_controller")
+    c, clock, cap, fnd, *_ = _second_run_without_boss(app, isolated)
+    _run(c, clock, 120)
+    for key in ("boss", "halo_timer"):
+        it = c.engine.items[key]
+        assert it.status == "found" and it.pending and it.label() == "찾음 · 지난 자리(나타나면 확인)"
+    assert autofind_regions.region_for("boss", None) == dict(zip("xywh", BOSS))
+    assert autofind_regions.region_for("debuff", None) == dict(zip("xywh", ctl.debuff_from_boss(BOSS)))
+    assert autofind_regions.region_for("halo_timer", None) == dict(zip("xywh", HALO))
+    assert "boss" not in fnd.calls and "halo_timer" not in fnd.calls  # 나타나면 찾기 호출 0
+    assert all(k[2:] == (1920, 1080) for k in cap.calls)  # 예상 자리 작은 조각도 안 찍음(전체 화면은 투아림 다시 찾기뿐)
+    section = AutofindV2Section(c)
+    section.refresh()
+    assert "보스바: 찾음 · 지난 자리(나타나면 확인)" in section.items.text()
+    autofind_regions.report("boss", True)  # 같은 자리에 보스바가 나타나 읽힘
+    assert not c.engine.items["boss"].pending and c.engine.items["boss"].label() == "찾음 · 지난 자리 그대로"
+    assert c.engine.items["halo_timer"].pending  # 전투 시간은 아직 확인 전
+    autofind_regions.report("boss", True)
+    text = [r.getMessage() for r in caplog.records]
+    assert sum("지난 자리 확인됨: 보스바" in t for t in text) == 1  # 한 번만
+
+
+def test_boss_last_spot_moves_after_rare_full_check(app, isolated, caplog):
+    """게임 UI 배율이 바뀐 화면(다른 자리) → 5분에 한 번 화면 전체 확인으로 새 자리('자리 바뀜' 한 줄)."""
+    import logging
+    caplog.set_level(logging.INFO, logger="mabinogi_addon.ui.autofind_v2_controller")
+    moved = (640, 50, 640, 34)
+    c, clock, cap, fnd, *_ = _second_run_without_boss(app, isolated, boss_now=moved)
+    _run(c, clock, 290)
+    assert "boss" not in fnd.calls and c.engine.items["boss"].box == BOSS  # 그 전엔 화면 전체 확인 없음
+    _run(c, clock, 15)
+    assert fnd.calls.count("boss") == 1 and fnd.calls.count("halo_timer") == 1
+    it = c.engine.items["boss"]
+    assert it.box == moved and not it.pending and it.source == "appear"
+    assert autofind_regions.region_for("boss", None) == dict(zip("xywh", moved))
+    assert c.engine.items["halo_timer"].pending  # 전투 시간은 화면에 없음 → 지난 자리 그대로(확인 전)
+    assert json.loads(isolated.read_text(encoding="utf-8"))["autofindV2"]["last"]["boss"]["box"]["x"] == 640
+    text = [r.getMessage() for r in caplog.records]
+    assert sum("자리 바뀜: 보스바" in t for t in text) == 1
+    _run(c, clock, 300)
+    assert fnd.calls.count("boss") == 1 and fnd.calls.count("halo_timer") == 2  # 확인된 보스바는 더 안 봄
+

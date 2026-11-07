@@ -32,6 +32,9 @@ CONFIRM_SECONDS = 3.0
 TRIAL_LIMIT = 10.0      # 새 자리 시험 상한
 APPEAR_SMALL_EVERY = 1.0
 APPEAR_FULL_EVERY = 60.0
+PENDING_FULL_EVERY = 300.0  # 지난 자리(확인 전) 보스바·전투 시간: 화면 전체 확인은 5분에 한 번(게임 UI 배율을 바꾼 경우 대비)
+SAME_BOX_TOLERANCE = 4  # 지난 자리 확인: 이만큼(px) 이내 차이는 같은 자리
+LAST_PENDING = "last_pending"  # 처음 찾기 출처: 지난 자리를 바로 씀(그 자리에서 아직 안 읽힘)
 UI_RETRY_SECONDS = 10.0
 
 FOUND, MISSING, WAITING, PENDING, SEARCHING = "found", "missing", "waiting", "pending", "searching"
@@ -51,12 +54,15 @@ class Item:
     next_try: float = 0.0
     candidate: "Trial | None" = None
     user: bool = False        # 이 실행 동안 사용자 지정이 이김
+    pending: bool = False     # 지난 자리를 바로 씀 — 그 자리에서 아직 읽히지 않음(보스바·전투 시간, 나타나면 확인)
 
     def label(self, now: float | None = None) -> str:
         if self.user:
             return "직접 지정 · 이번 실행 동안 사용"
         if self.candidate is not None:
             return "새 자리 확인 중"
+        if self.pending:
+            return "찾음 · 지난 자리(나타나면 확인)"
         if self.status == FOUND:
             return "찾음 · 지난 자리 그대로" if self.source == "last" else f"찾음 · {self.seconds:.1f}초"
         if self.status == WAITING:
@@ -135,6 +141,10 @@ def run_initial(frame, finders: dict, *, last: dict | None = None, readers: dict
             if ok:
                 out.boxes[key], out.status[key], out.source[key] = tuple(box), FOUND, "last"
                 out.seconds[key] = clock() - t0
+            elif key in APPEAR_KEYS:
+                # 보스바·전투 시간은 앱 시작 땐 보통 안 보인다 — 같은 창 크기의 지난 자리를 바로 쓰고(확인 전), 나타나면 확인(사용자 11-07)
+                out.boxes[key], out.status[key], out.source[key] = tuple(box), FOUND, LAST_PENDING
+                out.seconds[key] = clock() - t0
     # ② 순서대로 찾기
     for group in FIRST_ORDER + APPEAR_KEYS:
         keys = RESOURCE_KEYS if group == "resources" else (group,)
@@ -186,6 +196,7 @@ class Engine:
         self.ui_retry_at = 0.0
         self.next_small = 0.0
         self.next_full = 0.0
+        self.next_confirm = 0.0  # 지난 자리(확인 전) 화면 전체 확인 시각
         self.last_tick: float | None = None
         self.initial_summary = ""
         self.search_calls = 0  # 테스트·기록용(안정 상태에서 늘지 않아야 한다)
@@ -199,6 +210,7 @@ class Engine:
         self.phase = phase
         self.ui_retry_at = now
         self.next_small, self.next_full = now, now + APPEAR_FULL_EVERY
+        self.next_confirm = now + PENDING_FULL_EVERY
         self.last_tick = None
 
     def ui_not_ready(self, now: float) -> None:
@@ -232,8 +244,10 @@ class Engine:
             it.reason = "CPU 상한" if result.stopped_by_cap and it.status == MISSING and key not in result.seconds else ""
             it.lost, it.unhealthy, it.failures = 0.0, False, 0
             it.next_try = now + RETRY_SECONDS if it.status == MISSING else 0.0
+            it.pending = it.status == FOUND and it.source == LAST_PENDING
         self.phase = "stable"
         self.next_small, self.next_full = now, now + APPEAR_FULL_EVERY
+        self.next_confirm = now + PENDING_FULL_EVERY
         counts = {s: sum(1 for it in self.items.values() if it.status == s) for s in (FOUND, WAITING, MISSING)}
         self.initial_summary = (f"처음 찾기 {result.wall:.1f}초(CPU {result.cpu:.1f}초) · 찾음 {counts[FOUND]} · "
                                 f"대기 {counts[WAITING]} · 못 찾음 {counts[MISSING]}")
@@ -254,7 +268,8 @@ class Engine:
                 it.lost += dt
 
     def note_read(self, key: str, ok: bool, now: float, frame_id=None) -> str | None:
-        """기능의 판독 한 번. 시험 중이면 확정 판단 — 'confirmed'/'failed'/None."""
+        """기능의 판독 한 번. 시험 중이면 확정 판단 — 'confirmed'/'failed'/None.
+        지난 자리(확인 전)에서 처음 읽히면 'confirmed_last'."""
         it = self.items.get(key)
         if it is None or self.phase == "off":
             return None
@@ -276,6 +291,9 @@ class Engine:
             it.lost, it.unhealthy, it.failures = 0.0, False, 0
             if it.status in (MISSING, WAITING) and it.box is not None:
                 it.status = FOUND
+            if it.pending and it.status == FOUND:
+                it.pending, it.source = False, "last"
+                return "confirmed_last"
         else:
             it.unhealthy = True
         return None
@@ -326,11 +344,21 @@ class Engine:
 
     # ---- 나타나면 찾기 ------------------------------------------------------------------------
     def appear_due(self, now: float, wanted) -> tuple[list[str], str] | None:
-        """대기 중인 켜진 보스바·전투 시간: 예상 자리 작게(1초 1번) 또는 화면 전체(60초 1번)."""
+        """대기 중인 켜진 보스바·전투 시간: 예상 자리 작게(1초 1번) 또는 화면 전체(60초 1번).
+        지난 자리(확인 전)로 쓰는 항목은 나타나면 찾기를 하지 않고, 게임 UI 배율이 바뀐 경우만 대비해
+        화면 전체 확인을 5분에 한 번(사용자 11-07)."""
         if self.phase != "stable":
             return None
-        keys = [k for k in APPEAR_KEYS if self.items[k].status in (WAITING, MISSING)
-                and not self.items[k].user and wanted(k)]
+        usable = [k for k in APPEAR_KEYS if not self.items[k].user and wanted(k)]
+        keys = [k for k in usable if self.items[k].status in (WAITING, MISSING)]
+        pending = [k for k in usable if self.items[k].pending and self.items[k].status == FOUND]
+        if pending and now >= self.next_confirm:
+            self.next_confirm = now + PENDING_FULL_EVERY
+            if keys and now >= self.next_full:
+                self.next_full = now + APPEAR_FULL_EVERY
+                self.next_small = now + APPEAR_SMALL_EVERY
+            self.search_calls += 1
+            return keys + pending, "full"
         if not keys:
             return None
         if now >= self.next_full:
@@ -343,15 +371,26 @@ class Engine:
             return keys, "small"  # 작게 자른 확인은 '찾기 호출'로 세지 않는다(수 ms)
         return None
 
-    def appear_result(self, generation: int, key: str, box) -> bool:
+    def appear_result(self, generation: int, key: str, box) -> str | None:
+        """나타나면 찾기·지난 자리 확인 결과 — 'found'(나타나서 찾음) / 'confirmed_last'(지난 자리 그대로) /
+        'moved'(지난 자리와 다른 곳에 있음 → 새 자리로) / None(반영 없음)."""
         if generation != self.generation or box is None:
-            return False
+            return None
         it = self.items[key]
         if it.user:
-            return False
-        it.box, it.status, it.source = tuple(box), FOUND, "appear"
+            return None
+        box = tuple(box)
+        outcome = "found"
+        if it.pending and it.box is not None:
+            if all(abs(a - b) <= SAME_BOX_TOLERANCE for a, b in zip(box, it.box)):
+                it.pending, it.source = False, "last"
+                return "confirmed_last"  # 같은 자리 — 지난 자리 그대로(작은 차이는 무시)
+            outcome = "moved"
+        elif it.status == FOUND:
+            return None  # 이미 찾아 쓰는 항목은 덮지 않는다
+        it.box, it.status, it.source, it.pending = box, FOUND, "appear", False
         it.lost, it.unhealthy, it.failures = 0.0, False, 0
-        return True
+        return outcome
 
     # ---- 사용자 지정 ------------------------------------------------------------------------
     def user_override(self, key: str) -> None:

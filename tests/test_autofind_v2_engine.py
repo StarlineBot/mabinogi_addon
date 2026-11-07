@@ -179,3 +179,38 @@ def test_ui_not_ready_retries_after_10s():
     assert e.ready_for_initial(0.0)
     e.ui_not_ready(0.0)
     assert not e.ready_for_initial(9.9) and e.ready_for_initial(10.0)
+
+
+def _pending_engine():
+    e = v2.Engine()
+    e.reset(0.0)
+    gen = e.begin_initial()
+    out = v2.run_initial(_frame(), {}, last={"boss": (10, 10, 50, 8), "halo_timer": (20, 30, 16, 8)},
+                         readers={"boss": lambda c: False, "halo_timer": lambda c: False}, sleep=lambda s: None)
+    assert out.source["boss"] == v2.LAST_PENDING and out.status["boss"] == "found"
+    assert e.finish_initial(gen, out, 0.0)
+    return e
+
+
+def test_last_spot_pending_skips_appear_and_full_checks_every_5_minutes():
+    e = _pending_engine()
+    wanted = lambda k: k in ("boss", "halo_timer")  # noqa: E731
+    due = [(t, e.appear_due(float(t), wanted)) for t in range(0, 601)]
+    assert [(t, d) for t, d in due if d] == [(300, (["boss", "halo_timer"], "full")), (600, (["boss", "halo_timer"], "full"))]
+    assert e.region("boss") == (10, 10, 50, 8)
+    assert e.note_read("boss", False, 601.0) is None and e.items["boss"].pending
+    assert e.note_read("boss", True, 602.0) == "confirmed_last" and not e.items["boss"].pending
+    assert e.note_read("boss", True, 603.0) is None
+    assert e.appear_result(e.generation, "halo_timer", (21, 31, 16, 8)) == "confirmed_last"  # 4px 이내 = 같은 자리
+    assert e.items["halo_timer"].box == (20, 30, 16, 8)
+    assert e.appear_due(900.0, wanted) is None  # 모두 확인됨 → 더 안 봄
+
+
+def test_last_spot_pending_moves_when_full_check_finds_other_place():
+    e = _pending_engine()
+    assert e.appear_result(e.generation, "boss", None) is None and e.items["boss"].pending  # 화면에 없음 → 그대로
+    assert e.appear_result(e.generation, "boss", (5, 40, 60, 10)) == "moved"
+    it = e.items["boss"]
+    assert it.box == (5, 40, 60, 10) and not it.pending and it.source == "appear"
+    assert e.appear_result(e.generation, "boss", (99, 99, 9, 9)) is None  # 확인된 자리는 덮지 않음
+
