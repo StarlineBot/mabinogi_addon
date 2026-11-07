@@ -160,6 +160,7 @@ class AutofindV2Controller(QObject):
         self.job = None
         self.closed = False
         self._frame_seq = 0
+        self._waiting_ui = False
         self.timer = QTimer(self)
         self.timer.setInterval(TICK_MS)
         self.timer.timeout.connect(self._safe_tick)
@@ -270,16 +271,22 @@ class AutofindV2Controller(QObject):
             frame = capture.grab(x, y, w, h)
             if frame is None:
                 return {"capture_failed": True}
-            # 게임 UI가 보이는지 가벼운 확인(단축바·체력바 하나라도) — 로딩·로그인 화면이면 처음 찾기를 미룬다
-            early = {}
+            # 게임 UI가 보이는지 가벼운 확인(단축바·체력바 하나라도) — 로딩·로그인·캐릭터 선택 화면이면 처음 찾기를 미룬다.
+            # 지난 자리가 있어도 늘 확인(게임 재시작 뒤 로딩 화면에서 처음 찾기 → 못 찾음 → 1분 간격에 걸리던 것, QA 7b629b2).
+            # 지난 자리가 있는 항목은 그 자리만 잘라 읽어 보고(수 ms), 없으면 탐지기.
+            early, seen = {}, False
             for key in UI_CHECK_KEYS:
-                if key in last:
-                    continue
                 try:
-                    early[key] = finders[key](frame)
+                    if key in last:
+                        bx, by, bw, bh = last[key]
+                        crop = frame[max(0, by - y):by - y + bh, max(0, bx - x):bx - x + bw]
+                        seen = seen or bool(crop.size and readers[key](crop))
+                    else:
+                        early[key] = finders[key](frame)
+                        seen = seen or bool(early[key])
                 except Exception:  # noqa: BLE001
-                    early[key] = None
-            if not last and not any(early.values()):
+                    early.pop(key, None)
+            if not seen:
                 return {"not_ready": True}
             reuse = dict(finders)
             for key, box in early.items():
@@ -356,10 +363,15 @@ class AutofindV2Controller(QObject):
         if job["kind"] == "initial":
             if result.get("not_ready"):
                 self.engine.ui_not_ready(now)
-                _log.info("[자동 찾기 v2] 게임 UI가 안 보여요(로딩·로그인 화면?) — 10초 뒤 다시 확인")
+                if not self._waiting_ui:  # 기다리기 시작할 때 한 줄(10초마다 반복하지 않음)
+                    _log.info("[자동 찾기 v2] UI 아직 안 보임 — 기다림(로딩·로그인·캐릭터 선택 화면, 10초마다 다시 확인, 실패로 세지 않음)")
+                self._waiting_ui = True
             else:
                 res = result["result"]
-                self.engine.finish_initial(job["generation"], res, now)
+                if self._waiting_ui:
+                    _log.info("[자동 찾기 v2] 게임 UI가 보여요 — 처음 찾기를 해요")
+                self._waiting_ui = False
+                self.engine.finish_initial(job["generation"], res, now)  # 실패 횟수 0·다음 시도는 10초 뒤부터(1분 간격에 걸려 있지 않음)
                 parts = " · ".join(f"{v2.NAMES[k]} {self.engine.items[k].label()}({res.seconds.get(k, 0):.1f}초)"
                                    for k in v2.KEYS)
                 _log.info("[자동 찾기 v2] %s — %s", self.engine.initial_summary, parts)

@@ -69,12 +69,18 @@ class Finders:
         def make(k):
             def run(frame):
                 self.calls.append(k)
+                if k in ("skillbar", "stat_bars") and not self.ui:
+                    return None
                 return self.boxes.get(k)
             return run
         return {k: make(k) for k in ("skillbar", "stat_bars", "buff", "resources", "boss", "halo_timer")}
 
+    ui = True  # 게임 UI(단축바·체력바)가 보이나 — False면 로딩·로그인 화면
+
     def readers(self):
-        return {k: (lambda crop: True) for k in ("skillbar", "stat_bars", "buff", "dorcha", "tuarim", "boss", "halo_timer")}
+        def read(key):
+            return lambda crop: self.ui if key in ("skillbar", "stat_bars") else True
+        return {k: read(k) for k in ("skillbar", "stat_bars", "buff", "dorcha", "tuarim", "boss", "halo_timer")}
 
 
 class Watcher:
@@ -204,3 +210,30 @@ def test_inactive_provider_reports_nothing(app):
     autofind_regions.report("buff", True)
     saved = {"x": 1, "y": 2, "w": 3, "h": 4}
     assert called == [] and autofind_regions.region_for("buff", saved) == saved
+
+
+
+def test_game_restart_with_last_positions_waits_for_ui_then_finds(app, isolated, caplog):
+    """QA 7b629b2: 지난 자리가 있어도(게임 재시작) 로딩 화면에선 처음 찾기를 하지 않고(실패 0), 게임 화면이 되면 바로 처음 찾기."""
+    import logging
+    c, clock, cap, fnd, *_ = _make(app)
+    _run(c, clock, 1.5)  # 첫 실행: 지난 자리 기록
+    c.shutdown()
+    autofind_regions.reset_for_tests()
+    autofind_regions.activate(True)
+    autofind_regions.set_use_values({k: True for k in autofind_regions.USE_KEYS})
+    caplog.set_level(logging.INFO, logger="mabinogi_addon.ui.autofind_v2_controller")
+    fnd2 = Finders()
+    fnd2.ui = False  # 게임 재시작 → 로딩 화면
+    c2, clock2, *_ = _make(app, finders=fnd2)
+    _run(c2, clock2, 25)
+    assert c2.engine.phase == "waiting_ui" and "buff" not in fnd2.calls  # 처음 찾기 안 함
+    assert all(it.failures == 0 for it in c2.engine.items.values())  # 실패로 세지 않음
+    assert autofind_regions.region_for("buff", None) is None
+    fnd2.ui = True  # 게임 화면
+    _run(c2, clock2, 10.5)
+    assert c2.engine.phase == "stable" and c2.engine.items["buff"].status == "found"
+    assert autofind_regions.region_for("buff", None) is not None
+    text = [r.getMessage() for r in caplog.records]
+    assert sum("UI 아직 안 보임" in t for t in text) == 1  # 기다리기 시작할 때 한 줄
+    assert any("게임 UI가 보여요" in t for t in text) and any("처음 찾기" in t and "초(CPU" in t for t in text)
