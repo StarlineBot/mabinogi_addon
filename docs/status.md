@@ -279,6 +279,14 @@
 
 ## 열린 문제
 
+- **QA 4fd7460·53d7acb(2026-11-07)**: 기능은 통과, **성능 회귀 1건 — 후보 전 수정 필요**.
+  - 판독 정확도(모든 사용자 영향 — 숫자 샘플 4개 추가): tests/data 보스 자료 전부(0008·0058·포인세 2개·고목 수집 zip, 2560 스크린샷 보스 자리, 3384건)를 예전/새 샘플로 읽어 비교 —
+    **다른 보스 자료는 결과 변화 0**, 바뀐 88건은 모두 고목의 페타크(5→55 48·10→100 28·5→54·8→85·3→35·4→40·4→45·9→95) — 눈으로 확인한 6장 모두 새 값이 맞음(예전은 두 자리 중 한 자리만 읽음).
+  - 두 줄 구간: 수집 jump/drop 프레임 55 유지·아래 줄 값으로 안 되돌아감(개발 테스트 test_boss_two_rows 통과). 도르카·투아림 '자동(v2)' 줄·문구, 예전 등록 칸 이전·등록 문구, CASES — 확인.
+  - 전체 4340 passed·397 skipped, preflight --sha 53d7acb 통과.
+  - **성능 회귀**: test_collected_frames_replay_shows_true_value(포인세 139프레임×3틱 오버레이 재생) **27초(1a42a58) → 64초(53d7acb)**, release checks 케이스 제한 60초 초과(watchdog case timeout).
+    cProfile: 새로 붙은 `_confident`(틱마다 같은 영역을 read_percent_scored로 한 번 더 판독, 343회 15초) + `_read_row`(세로 위치 탐색, 15회 24초). 오버레이 켠 보스전에서 작업 스레드 판독이 약 2배 → GIL 경합(커서 꼬리) 위험.
+    수정안: ① 확신 여부는 작업 스레드가 이미 한 판독(read_percent_frac)에서 점수를 함께 받아 쓰기(다시 판독 금지). ② 세로 위치 탐색은 '위 줄이 보스바로 보일 때(두 줄 구간)'만, 정상 한 줄 화면은 판독 1번 그대로.
 - **자동 찾기 v2: 도르카·투아림 탭에 '자동(v2)' 표시 없음(사용자 질문 11-06 '도르카투아림은 v2가 아닌가')** — 동작은 v2(찾기 엔진 KEYS·탭 _region이 region_property), 표시만 빠짐.
   main_window._setup_autofind_v2가 '자동(v2)' 줄을 RegionSection 쓰는 6개 탭(버프·디버프·보스·헤일로·단축바·체력바)에만 붙임 — 도르카·투아림은 RegionSection이 아니라 region_label만 있음.
   또 v2 자리 변경 때 두 탭 region_label을 다시 그리지 않음(_on_autofind_region: dorcha는 _invalidate_search만, tuarim은 없음) → 찾기 전 '영역 미지정' 등 저장 영역 기준 문구가 남을 수 있음.
