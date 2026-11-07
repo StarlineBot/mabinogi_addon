@@ -237,3 +237,49 @@ def test_game_restart_with_last_positions_waits_for_ui_then_finds(app, isolated,
     text = [r.getMessage() for r in caplog.records]
     assert sum("UI 아직 안 보임" in t for t in text) == 1  # 기다리기 시작할 때 한 줄
     assert any("게임 UI가 보여요" in t for t in text) and any("처음 찾기" in t and "초(CPU" in t for t in text)
+
+
+def _real_last_setup(isolated, frame):
+    """실제 탐지기로 찾은 단축바·체력바 자리를 autofindV2.last에(같은 게임 창 크기)."""
+    from mabinogi_addon.autofind_replay import detector_assets, run_detector
+    last = {}
+    for key in ("skillbar", "stat_bars"):
+        box = run_detector(key, frame, detector_assets(key), {})
+        assert box is not None, key
+        last[key] = {"box": dict(zip(("x", "y", "w", "h"), (int(v) for v in box))), "size": [frame.shape[1], frame.shape[0]]}
+    raw = json.loads(isolated.read_text(encoding="utf-8"))
+    raw["autofindV2"] = {"last": last}
+    isolated.write_text(json.dumps(raw), encoding="utf-8")
+
+
+class ShotCapture(Capture):
+    def __init__(self, frame):
+        super().__init__()
+        self.frame = frame
+
+    def grab(self, x, y, w, h):
+        self.calls.append((x, y, w, h))
+        return None if self.frame is None else self.frame[y:y + h, x:x + w].copy()
+
+
+@pytest.mark.parametrize("loading", [False, True])
+def test_real_finders_last_positions_with_margin(app, isolated, loading):
+    """QA 92e9ca1(72824a8 회귀): 지난 자리를 딱 맞게 잘라 탐지기에 넣으면 1440에서 늘 False → '게임 화면을 기다리는 중' 고착.
+    이제 둘레 여유로 실제 탐지기 — 게임 화면(013739)은 처음 찾기 진행, 로딩 화면(UI 없음)은 기다림."""
+    from mabinogi_addon import image_io
+    import cv2
+    shot = image_io.imread("tests/data/스크린샷 2026-11-06 013739.png", cv2.IMREAD_COLOR)
+    _real_last_setup(isolated, shot)
+    frame = np.zeros_like(shot) if loading else shot
+    h, w = shot.shape[:2]
+    clock, watcher = Clock(), Watcher()
+    c = ctl.AutofindV2Controller(watcher, None, target_fn=lambda prev: (1, 100, 0, 0, w, h), executor=Inline(),
+                                 capture=ShotCapture(frame), clock=clock)
+    c.engine.reset(0.0)
+    c._finders.finders = (lambda real: (lambda: {k: v for k, v in real().items()}))(c._finders.finders)
+    _run(c, clock, 1.0)
+    if loading:
+        assert c.engine.phase == "waiting_ui"
+    else:
+        assert c.engine.phase == "stable" and c.engine.items["skillbar"].status == "found"
+    c.shutdown()

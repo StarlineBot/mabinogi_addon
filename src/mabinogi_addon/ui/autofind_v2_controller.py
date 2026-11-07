@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import logging
 import time
+
+import numpy as np
 from concurrent.futures import ThreadPoolExecutor
 
 from PySide6.QtCore import QObject, QTimer, Signal
@@ -274,18 +276,33 @@ class AutofindV2Controller(QObject):
             # 게임 UI가 보이는지 가벼운 확인(단축바·체력바 하나라도) — 로딩·로그인·캐릭터 선택 화면이면 처음 찾기를 미룬다.
             # 지난 자리가 있어도 늘 확인(게임 재시작 뒤 로딩 화면에서 처음 찾기 → 못 찾음 → 1분 간격에 걸리던 것, QA 7b629b2).
             # 지난 자리가 있는 항목은 그 자리만 잘라 읽어 보고(수 ms), 없으면 탐지기.
+            # 지난 자리가 있는 항목은 그 둘레에 여유(max(32px, 높이))를 두고 탐지기로 — 딱 맞게 자르면 탐지기가 못 찾았다
+            # (72824a8 회귀: 1440에서 단축바·체력바 모두 False → '게임 화면을 기다리는 중' 고착, QA 92e9ca1).
+            # 여유 자리에서 못 찾으면 전체 화면 탐지기로 한 번 더(10초에 한 번).
             early, seen = {}, False
+            fh, fw = frame.shape[:2]
             for key in UI_CHECK_KEYS:
+                if key not in last:
+                    continue
+                bx, by, bw, bh = last[key]
+                m = max(32, bh)
+                x0, y0 = max(0, bx - x - m), max(0, by - y - m)
+                x1, y1 = min(fw, bx - x + bw + m), min(fh, by - y + bh + m)
                 try:
-                    if key in last:
-                        bx, by, bw, bh = last[key]
-                        crop = frame[max(0, by - y):by - y + bh, max(0, bx - x):bx - x + bw]
-                        seen = seen or bool(crop.size and readers[key](crop))
-                    else:
-                        early[key] = finders[key](frame)
-                        seen = seen or bool(early[key])
+                    if x1 > x0 and y1 > y0 and finders[key](np.ascontiguousarray(frame[y0:y1, x0:x1])):
+                        seen = True
+                        break
                 except Exception:  # noqa: BLE001
-                    early.pop(key, None)
+                    pass
+            if not seen:
+                for key in UI_CHECK_KEYS:
+                    try:
+                        early[key] = finders[key](frame)
+                    except Exception:  # noqa: BLE001
+                        early[key] = None
+                    if early[key]:
+                        seen = True
+                        break
             if not seen:
                 return {"not_ready": True}
             reuse = dict(finders)
