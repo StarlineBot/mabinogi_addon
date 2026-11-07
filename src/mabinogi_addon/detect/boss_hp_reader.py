@@ -89,6 +89,28 @@ def _color_mask(region_bgr: np.ndarray) -> np.ndarray:
     return (hsv[:, :, 1] < _SAT_MAX).astype(np.uint8) * 255
 
 
+_GRAY_S = 15            # 빈 바 회색 바탕: 채도 거의 0
+_GRAY_V = (45, 85)      # 빈 바 회색 바탕 밝기(실측 50~70) — 글자(흰)·테두리(검정)는 이 밖
+# 빈 바(회색, 채도 0·밝기 50~70)는 채도만 보면 글자와 같아 숫자 칸이 통째로 칠해졌다 — 채움 끝이 숫자를 가로지르면
+# 경계 오른쪽 숫자가 사라져 '17.48'을 1로 읽음(QA 8067a9c). 그래서 '회색 바탕 그 자체'(채도 거의 0·밝기 45~85)를 뺀 마스크로
+# 한 번 더 읽어 **기본 판독을 늘리기만** 한다(_extend): 앞자리만 남은 값(1→17, 10→100)을 더 긴 값으로, 못 읽은 소수를 채우기.
+# 기본 판독이 None이면 쓰지 않고(새 오독 없음), 기본 판독과 다른 값으로 바꾸지 않는다 — 이 마스크로 통째로 읽으면
+# 저HP·소수가 오히려 나빠졌다(tests/data 비교표, docs/status.md).
+USE_TEXT_MASK = True  # 보조 판독(회색 바탕 뺀 마스크) 사용 — 비교표용 스위치
+_PREFIX_MIN = 0.80  # 앞자리만 남은 판독 대신 고를 더 긴 판독의 최저 점수
+_NUM_LEFT = 0.78    # 숫자 칸(오른쪽) 시작 — 이 안에 회색 바탕이 있을 때만 보조 판독
+_GRAY_MIN = 0.05    # 숫자 칸에 회색 바탕과 채움이 둘 다 이만큼 있을 때 = 채움 끝이 숫자 칸 안
+_FILL_S = 120
+
+
+def _text_mask(region_bgr: np.ndarray) -> np.ndarray:
+    """보조 판독용: 저채도 마스크에서 회색 빈 바 바탕(채도 ≤15·밝기 45~85)만 뺀다."""
+    hsv = cv2.cvtColor(region_bgr, cv2.COLOR_BGR2HSV)
+    s, v = hsv[:, :, 1], hsv[:, :, 2]
+    gray = (s <= _GRAY_S) & (v > _GRAY_V[0]) & (v <= _GRAY_V[1])
+    return ((s < _SAT_MAX) & ~gray).astype(np.uint8) * 255
+
+
 def _classify(
     glyph: np.ndarray, templates: dict[str, list[np.ndarray]]
 ) -> tuple[str | None, float]:
@@ -253,9 +275,9 @@ def low_hp_bar_hint(region_bgr: np.ndarray) -> bool:
 
 def _low_hp_value(region_bgr, templates, band, w, scale, pitch, span, bright_samples=None) -> int | None:
     """기본 판독이 None일 때의 저HP 보조 판독. 해당 없으면 None(정상 경로 불변)."""
-    if not _flooded(band, w):
-        return None  # flooded 아님 → 저HP 아님 → 개입 안 함
     h = region_bgr.shape[0]
+    if not _flooded(_color_mask(region_bgr)[int(h * _YBAND[0]):int(h * _YBAND[1])], w):
+        return None  # flooded 아님 → 저HP 아님 → 개입 안 함(판정은 예전 마스크 그대로)
     bband = _bright_mask(region_bgr)[int(h * _YBAND[0]):int(h * _YBAND[1])]
     val, score, _ = _scan(
         bband, w, scale, pitch, templates, range(-span, span + 1), strong=_ACCEPT
@@ -288,6 +310,40 @@ def _prep(region_bgr, templates):
     return templates, w, scale, band, pitch, span
 
 
+def _extend(region_bgr, prep, val, frac, want_frac: bool):
+    """기본 판독(val, frac)을 회색 바탕 뺀 마스크로 늘리기만 한다 — (val, frac). 바꾸지 않을 땐 그대로."""
+    if not USE_TEXT_MASK or val is None or (len(str(val)) >= 3 and (frac is not None or not want_frac)):
+        return val, frac
+    templates, w, scale, _band, pitch, span = prep
+    h = region_bgr.shape[0]
+    numbers = (cv2.cvtColor(np.ascontiguousarray(region_bgr[int(h * _YBAND[0]):int(h * _YBAND[1]), int(w * _NUM_LEFT):]),
+                            cv2.COLOR_BGR2HSV))
+    gray = (numbers[:, :, 1] <= _GRAY_S) & (numbers[:, :, 2] > _GRAY_V[0]) & (numbers[:, :, 2] <= _GRAY_V[1])
+    fill = numbers[:, :, 1] >= _FILL_S
+    if float(gray.mean()) < _GRAY_MIN or float(fill.mean()) < _GRAY_MIN:
+        return val, frac  # 채움 끝이 숫자 칸 안에 없음(대부분 — 수집 867프레임 중 25) — 기본 판독 그대로, 추가 판독 없음
+    band = _text_mask(region_bgr)[int(h * _YBAND[0]):int(h * _YBAND[1])]
+    shifts = range(-span, span + 1)
+    head = str(val)
+    best = None
+    for shift in shifts:
+        v, sc, _nd = _read_at(band, w, _FIRST * scale + shift, pitch, templates, 0)
+        if v is None:
+            continue
+        sv = str(v)
+        if (len(sv) > len(head) and sv.startswith(head) and sc >= _PREFIX_MIN) or (sv == head and sc >= _ACCEPT):
+            if best is None or (len(sv), sc) > (len(str(best[0])), best[1]):
+                best = (v, sc, shift)
+    if best is None:
+        return val, frac
+    v, sc, shift = best
+    if v != val:  # 앞자리만 남은 값 → 더 긴 값(정수가 바뀌면 소수도 그 정렬에서)
+        return v, (_fraction(band, w, scale, pitch, templates, shift) if want_frac else None)
+    if want_frac and frac is None:
+        frac = _fraction(band, w, scale, pitch, templates, shift)  # 같은 정수 — 못 읽은 소수만 채움(두 칸 모두 강한 점수일 때만)
+    return val, frac
+
+
 def read_percent(
     region_bgr: np.ndarray,
     templates: dict[str, list[np.ndarray]] | None = None,
@@ -308,7 +364,9 @@ def read_percent(
         # 0.31.0: 겨우 맞춘 판독(0.45~0.6)은 값을 쓰지 않는다 — 4K '86.15%'를 '8'(0.59)로 읽어 패턴 알림이
         # 거짓으로 울릴 뻔했다. 틀린 값 대신 못 읽음(자동 찾기 검증과 같은 하한).
         _LAST.key = _key(val, score) if score >= VALUE_MIN_SCORE else NO_KEY
-        return val if score >= VALUE_MIN_SCORE else None
+        if score < VALUE_MIN_SCORE:
+            return None
+        return _extend(region_bgr, prep, val, None, False)[0]
     low = _low_hp_value(region_bgr, templates, band, w, scale, pitch, span, bright_samples)
     _LAST.key = (0, 0.0) if low is not None else NO_KEY
     return low
@@ -377,7 +435,7 @@ def read_percent_frac(
             _LAST.key = NO_KEY
             return None, None
         _LAST.key = _key(val, score)
-        return val, _fraction(band, w, scale, pitch, templates, shift)
+        return _extend(region_bgr, prep, val, _fraction(band, w, scale, pitch, templates, shift), True)
     low = _low_hp_value(region_bgr, templates, band, w, scale, pitch, span, bright_samples)
     _LAST.key = (0, 0.0) if low is not None else NO_KEY
     return low, None

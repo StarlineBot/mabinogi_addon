@@ -5,6 +5,8 @@
   4가 바로 반영돼 45가 '급상승'으로 막히던 고착을 막는다(11-05 수집). 실제로 크게 깎인 경우는 한 틱(0.3초) 늦게 반영된다.
   작은 하락(10%p 이하)은 바로.
 - 못 읽은 판독(None)은 마지막 값을 '흐림'으로 두고, GONE_SECONDS(1.8초) 넘게 못 읽으면 숨김.
+- 직전 표시값의 앞자리만 남은 값(17→1, 55→5, 100→10)은 확정하지 않고 못 읽음처럼 둔다 — 채움 경계가 숫자를 가로지르면
+  앞자리만 읽혔다(QA 8067a9c). 실제 HP는 사이 값을 지나 내려가므로 이런 꼴로 바로 떨어지지 않는다.
 - 보스가 바뀌면(이름 키가 다르면) 처음부터 — 새 보스의 첫 값은 바로 쓴다(판독 신뢰도 하한은 판독기가 이미 거름).
 """
 from __future__ import annotations
@@ -21,6 +23,12 @@ class Shown:
     value: int | None   # None이면 숨김
     boss: str | None    # 이름 키(등록 보스 id 또는 None=미등록)
     stale: bool         # 흐림(지금은 못 읽는 중)
+
+
+def truncated(value: int, shown: int) -> bool:
+    """value가 shown의 앞자리만 남은 꼴인가(17→1, 55→5, 100→10)."""
+    a, b = str(value), str(shown)
+    return len(a) < len(b) and b.startswith(a)
 
 
 class BossBarValue:
@@ -54,6 +62,15 @@ class BossBarValue:
             return self.shown()
         if boss is None and self.value is not None:
             boss = self.boss  # 이름 식별이 한 번 깜빡여도(미등록 경로로 읽힘) 같은 보스로 — 이름·패턴 선 유지
+        if self.value is not None and boss == self.boss and truncated(value, self.value):
+            self._pending = self._drop = None
+            if self.value is not None:
+                self.rule = "prefix"  # 앞자리만 남은 판독 — 확정하지 않음(흐림)
+                self.stale = True
+                if self._last_ok is None or now - self._last_ok > self.gone:
+                    self.reset()
+                    self.rule = "prefix"
+            return self.shown()
         if self.value is None or boss != self.boss:  # 첫 값·다른 보스
             self.value, self.boss, self._pending, self._drop = value, boss, None, None
         elif self.value - value > DROP_LIMIT:

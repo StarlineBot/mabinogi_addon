@@ -29,7 +29,8 @@
     "tests/test_pause.py",
     "tests/test_icon_capture.py",
     "tests/test_boss_two_rows.py",
-    "tests/test_boss_hp_reader.py"
+    "tests/test_boss_hp_reader.py",
+    "tests/test_boss_fill_boundary.py"
   ],
   "coverage": {
     "src/mabinogi_addon/detect/cooldown.py": {
@@ -205,16 +206,23 @@
     },
     "src/mabinogi_addon/detect/boss_hp_reader.py": {
       "tests": [
-        "tests/test_boss_two_rows.py",
-        "tests/test_boss_hp_reader.py"
+        "tests/test_boss_fill_boundary.py",
+        "tests/test_boss_hp_reader.py",
+        "tests/test_boss_two_rows.py"
       ],
-      "reason": "노란·보라 바탕 숫자 샘플 추가(55·100)·확신 키 판독(read_percent_scored), 기존 판독 그대로 (보스바 오버레이 수집 재생은 케이스 45~52초라 전체 회귀에서)"
+      "reason": "노란·보라 바탕 숫자 샘플 추가(55·100)·확신 키 판독(read_percent_scored), 기존 판독 그대로 (보스바 오버레이 수집 재생은 케이스 45~52초라 전체 회귀에서) · 채움 끝이 숫자 칸 안일 때만 회색 뺀 마스크로 늘리기(17.48→1 수정, 다른 결과 불변)"
     },
     "src/mabinogi_addon/ui/region_section.py": {
       "tests": [
         "tests/test_autofind_v2_use.py"
       ],
       "reason": "자동(v2) 한 줄(도르카·투아림 포함), v2 꺼짐이면 숨김"
+    },
+    "src/mabinogi_addon/tracker/boss_bar_value.py": {
+      "tests": [
+        "tests/test_boss_fill_boundary.py"
+      ],
+      "reason": "직전 표시값의 앞자리만 남은 값(17→1·55→5·100→10) 확정 안 함"
     }
   }
 }
