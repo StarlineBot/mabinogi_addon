@@ -315,6 +315,9 @@
 
 ## 열린 문제
 
+- **0.44.0 publish-existing #207 실패(run 42379290109, 13:57 UTC) — 아무것도 게시 안 됨**(request 단계 'Freeze release request' 실패 → regression·validate·release #287 건너뜀, 원격 태그 v0.44.0 없음).
+  원인: `select_existing`가 같은 SHA(a870316)·같은 버전(0.44.0)의 유효 후보를 **2개** 찾음 — #205(run 42373029818, 12:33 UTC verify-only, 성공)와 #206(run 42374586669, 12:55 UTC) → 'no unique valid candidate … specify candidate_run if ambiguous'.
+  (#205는 QA가 모르던 verify-only 실행 — 같은 코드라 내용 차이는 없음.) 조치: candidate_run=42374586669(#206, QA 확인·사용자 테스트 후보)로 다시 publish-existing.
 - **0.44.0 게시 결정(사용자, 2026-11-07 KST)**: '배포해도됨' — 후보 #206(run 42374586669 attempt 1, verified-windows-42374586669-1, 아직 유효·만료 11-08 13:06 UTC).
   게시 전 QA 확인: origin/main(35aa1d4) 지문 = 73ab770(후보 제품)과 같음, 원격 태그 v0.44.0 없음. publish-existing 명령 안내(사용자가 실행).
 - **0.44.0 후보: verify-only #206 성공**(run 42374586669, attempt 1, a870316 = 제품 73ab770 + 문서, 12:55~13:06 UTC). 후보 verified-windows-42374586669-1(ID 13575077232, **11-08 13:06 UTC = 22:06 KST 만료**),
