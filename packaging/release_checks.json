@@ -210,7 +210,7 @@
         "tests/test_boss_hp_reader.py",
         "tests/test_boss_two_rows.py"
       ],
-      "reason": "노란·보라 바탕 숫자 샘플 추가(55·100)·확신 키 판독(read_percent_scored), 기존 판독 그대로 (보스바 오버레이 수집 재생은 케이스 45~52초라 전체 회귀에서) · 채움 끝이 숫자 칸 안일 때만 회색 뺀 마스크로 늘리기(17.48→1 수정, 다른 결과 불변)"
+      "reason": "노란·보라 바탕 숫자 샘플 추가(55·100)·확신 키 판독(read_percent_scored), 기존 판독 그대로 (보스바 오버레이 수집 재생은 케이스 45~52초라 전체 회귀에서) · 채움 끝이 숫자 칸 안일 때만 회색 뺀 마스크로 늘리기(17.48→1 수정, 다른 결과 불변) · 앱 입력(오른쪽 42%) 숫자 칸·소수 칸 '.' 제거(x.1x)"
     },
     "src/mabinogi_addon/ui/region_section.py": {
       "tests": [
@@ -223,6 +223,18 @@
         "tests/test_boss_fill_boundary.py"
       ],
       "reason": "직전 표시값의 앞자리만 남은 값(17→1·55→5·100→10) 확정 안 함"
+    },
+    "src/mabinogi_addon/ui/boss_bar_overlay.py": {
+      "tests": [
+        "tests/test_boss_fill_boundary.py"
+      ],
+      "reason": "바 위 눈금 글자 줄(배율 비례, 바를 가리지 않음)"
+    },
+    "src/mabinogi_addon/ui/boss_bar_section.py": {
+      "tests": [
+        "tests/test_boss_fill_boundary.py"
+      ],
+      "reason": "저장 위치 = 바 위쪽(눈금 줄 추가·배율 변경에도 바 자리 그대로)"
     }
   }
 }
