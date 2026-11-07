@@ -315,6 +315,10 @@
 
 ## 열린 문제
 
+- **v0.44.0 게시 완료(2026-11-07 23:27 KST)** — windows #208(run 42381561349, publish-existing, candidate_run=42374586669) success → release #288(run 42381596119) success. 태그 v0.44.0 → a870316(후보 SHA).
+  공개 파일 일치(QA): candidate.json = run 42374586669 attempt 1·지문 04669b72…·exe 164,243,473바이트 sha256 98c64b50…6ac9 —
+  본 저장소 릴리즈 exe·공개 저장소(mabinogi_addon-releases) 릴리즈 exe 직접 내려받아 크기·sha256 모두 같음, 공개 저장소 main version.json = 0.44.0(같은 sha256·크기).
+  남은 확인(사용자): 앱 재시작 → 0.44.0 자동 업데이트·릴리즈 노트 표시·실게임 정상.
 - **0.44.0 publish-existing #207 실패(run 42379290109, 13:57 UTC) — 아무것도 게시 안 됨**(request 단계 'Freeze release request' 실패 → regression·validate·release #287 건너뜀, 원격 태그 v0.44.0 없음).
   원인: `select_existing`가 같은 SHA(a870316)·같은 버전(0.44.0)의 유효 후보를 **2개** 찾음 — #205(run 42373029818, 12:33 UTC verify-only, 성공)와 #206(run 42374586669, 12:55 UTC) → 'no unique valid candidate … specify candidate_run if ambiguous'.
   (#205는 QA가 모르던 verify-only 실행 — 같은 코드라 내용 차이는 없음.) 조치: candidate_run=42374586669(#206, QA 확인·사용자 테스트 후보)로 다시 publish-existing.
