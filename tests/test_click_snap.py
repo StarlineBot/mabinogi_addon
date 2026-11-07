@@ -124,17 +124,18 @@ def test_dpr_maps_physical_target_to_logical(selector):
     assert (r.x(), r.y(), r.width(), r.height()) == (100, 100, 40, 40)
 
 
-def test_non_creator_never_runs_detection(monkeypatch):
+def test_non_creator_runs_detection_too(monkeypatch):
+    """0.44.0부터 클릭 자동 맞춤은 모든 사용자."""
     from mabinogi_addon import feature_access
     from mabinogi_addon.ui import region_selector as rs
     monkeypatch.setattr(feature_access, "is_creator", lambda: False)
     called = []
     monkeypatch.setattr(rs.RegionSelector, "_find_targets", lambda self: called.append(1))
     sel = rs.RegionSelector(snap_kinds=("skill",))
-    assert sel._snap_enabled() is False
+    assert sel._snap_enabled() is True
     sel.start()
     sel.close()
-    assert called == [] and sel._targets == []
+    assert called == [1]
 
 
 def test_snap_off_for_crop_fixed_and_plain_modes(monkeypatch, tmp_path):

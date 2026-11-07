@@ -278,3 +278,30 @@ def test_trimmed_distance_ignores_covered_part_of_border():
     covered[0:2, 4:12] = (255, 255, 255)  # 그림이 위 테두리 일부를 덮음(고리 픽셀 16/60)
     assert snap.ring_distance(covered) <= snap.TRIM_LIMIT
     assert snap.pick_whole([covered] * 6, check_ring=True)[1] is None
+
+
+
+def test_non_creator_icon_pick_uses_snap_and_whole_check(monkeypatch, tmp_path, app):
+    """0.44.0부터 모든 사용자: 버프·디버프 아이콘 집기는 테두리 맞춤(icon_snap) + 온전할 때만 저장, 미리보기는 정수배."""
+    from PySide6.QtWidgets import QWidget
+
+    from mabinogi_addon import feature_access
+    from mabinogi_addon.ui import buff_tab, region_selector
+    monkeypatch.setattr(feature_access, "is_creator", lambda: False)
+    made = []
+
+    class Sel:
+        def __init__(self, save_path=None, icon_snap=False, **k):
+            made.append(icon_snap)
+            from PySide6.QtCore import QObject
+            self.picked = self.captured = type("S", (), {"connect": lambda *a: None})()
+
+        def start(self):
+            pass
+    monkeypatch.setattr(region_selector, "RegionSelector", Sel)
+    buff_tab._capture_icon_to(QWidget(), "x", lambda *a: None)
+    assert made == [True]
+    path = tmp_path / "i.png"
+    image_io.imwrite(path, _icon())
+    pm = buff_tab._pixmap(path, 40, 1.5)
+    assert pm.devicePixelRatio() == 1.5 and pm.width() == 60  # 정수배(16×3) 칸

@@ -144,7 +144,7 @@ class SkillbarTab(QWidget):
         display_layout.addWidget(hint_label("빈칸은 오버레이에서 우클릭해 숨길 수 있어요."))
         self._preset_btns = [pr.itemAt(i).widget() for i in range(1, pr.count()) if pr.itemAt(i).widget() is not None]
         from .cooldown_section import CooldownSection
-        self.cooldown = CooldownSection(watcher)  # 제작자 테스트(쿨타임 명세 10절) — 다른 사용자는 숨김
+        self.cooldown = CooldownSection(watcher)  # 쿨타임 오버레이(베타, 쿨타임 명세 10절) — 0.44.0부터 모든 사용자
         v.addWidget(self.cooldown)
         v.addStretch(1)
 

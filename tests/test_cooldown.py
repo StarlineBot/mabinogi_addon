@@ -272,22 +272,31 @@ def creator(monkeypatch):
     monkeypatch.setattr(feature_access, "is_creator", lambda: True)
 
 
-def test_section_hidden_and_idle_for_non_creator(monkeypatch):
+def test_section_visible_and_observing_for_non_creator(monkeypatch):
+    """0.44.0부터 모든 사용자(베타) — 제작자가 아니어도 구역이 보이고, 켜면 관측한다."""
+    import numpy as np
     from mabinogi_addon import config, feature_access
     from mabinogi_addon.ui import skillbar_capture
     from mabinogi_addon.ui.skillbar_tab import SkillbarTab
     monkeypatch.setattr(feature_access, "is_creator", lambda: False)
+    monkeypatch.setattr(skillbar_capture.SkillbarCapture, "_grab", lambda self, x, y, w, h: np.zeros((h, w, 3), np.uint8))
     config.save_cooldown({"enabled": True, "slots": [{"id": "s1", "rect": [0, 0, 40, 40], "label": "스킬 1"}]})
     tab = SkillbarTab(_Watcher())
     try:
         tab.show()
         tab.cooldown._tick()
-        assert tab.cooldown.isHidden()
-        assert not skillbar_capture.shared().active("cooldown")
-        assert tab.cooldown._overlay is None
+        assert not tab.cooldown.isHidden() and tab.cooldown.title() == "쿨타임 오버레이 (베타)"
+        assert tab.cooldown._running()
     finally:
         tab.shutdown()
         tab.close()
+
+
+def test_cooldown_help_lists_beta_limits():
+    from mabinogi_addon.ui.feature_copy import HELP
+    text = HELP["쿨타임 오버레이"]
+    for phrase in ("페이지가 바뀌면", "탈것", "사용 불가", "쓸 수 있는 상태", "위쪽 단축바"):
+        assert phrase in text, phrase
 
 
 def test_section_registers_snapped_cell_with_page_and_observes(creator, monkeypatch):
@@ -299,7 +308,6 @@ def test_section_registers_snapped_cell_with_page_and_observes(creator, monkeypa
                         lambda self, x, y, w, h: frame[y:y + h, x:x + w].copy())
     sec = CooldownSection(_Watcher())
     try:
-        assert sec.allowed()
         slot = sec.register(cells[(0, 1, 1, 0)], frame, (0, 0))
         assert slot["page"] and slot["page_rect"] == [584, 104, 15, 16] and slot["row"] == 1
         assert sec.register(cells[(0, 1, 1, 0)], frame, (0, 0)) is None  # 중복

@@ -12,7 +12,7 @@ import numpy as np
 import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QLabel
 
 from mabinogi_addon import config
 from mabinogi_addon import inquiry_session as inq
@@ -30,13 +30,17 @@ def _frame(value, h=37, w=200):
 
 
 # ---- 카드·분류 -----------------------------------------------------------------------------
-def test_six_cards_and_categories():
+def test_seven_cards_and_categories():
     assert inq.CATEGORIES == ("문제 신고", "기능 요청", "기타")  # 6.3 4항: 버그 → 문제 신고
     assert [c.title for c in inq.CARDS] == ["보스 체력바 · 패턴 알림", "내 체력바", "도르카 · 투아림 숫자",
-                                            "버프 · 디버프", "자동 찾기 · 영역 지정", "그 밖의 문제 · 잘 모르겠어요"]
+                                            "버프 · 디버프", "자동 찾기 · 영역 지정", "쿨타임 오버레이",
+                                            "그 밖의 문제 · 잘 모르겠어요"]
     modes = {c.key: c.mode for c in inq.CARDS}
     assert modes == {"boss": "collect", "stat": "collect", "dorcha": "collect", "buff": "snapshot",
-                     "autofind": "autofind", "other": "game"}
+                     "autofind": "autofind", "cooldown": "collect", "other": "game"}
+    card = inq.CARD_BY_KEY["cooldown"]
+    assert card.regions == ("cooldown",) and card.desc == "단축바 영역을 최대 60초 모아요."
+    assert card.ask == "쿨타임이 이상한 장면을 다시 보여 주세요"
 
 
 # ---- 수집 상한·변경 프레임 ------------------------------------------------------------------
@@ -149,7 +153,7 @@ def test_window_kind_page_and_cards(app, monkeypatch):
     try:
         assert (w.width(), w.height()) == (790, 800)
         assert w.category == "문제 신고" and not w.next_btn.isEnabled()  # 카드를 고르기 전에는 시작 안 함
-        assert len(w.card_buttons) == 6
+        assert len(w.card_buttons) == 7
         w.card_buttons["other"].click()
         assert w.next_btn.isEnabled() and w.next_btn.text() == "자료 모으기 시작"
         w.kind.buttons["기능 요청"].click()
@@ -285,3 +289,82 @@ def test_diagnostic_sections_are_creator_only(window, monkeypatch, creator):
     assert w.resource_tab.diagnostics_btn.isVisibleTo(w.resource_tab) is creator
     assert w.settings_tab.diagnostics_toggle.isVisibleTo(w.settings_tab) is creator
     assert w.stat_bars_tab.collect_chk.isEnabled() is creator
+
+
+
+# ---- 쿨타임 오버레이 카드(0.44.0, 사용자 11-07) --------------------------------------------------------------------
+def _cooldown_config(tmp_icon_dir=None):
+    config.save_cooldown({"enabled": True, "slots": [
+        {"id": "a1", "label": "스킬 1", "rect": [700, 12, 40, 40], "set": 1, "row": 0, "block": 1, "page_block": 1,
+         "page": "15x16:00ff", "page_rect": [1196, 24, 15, 16],
+         "page_rects": {"0": [576, 24, 15, 16], "1": [1196, 24, 15, 16]}, "icon_ok": True}]})
+
+
+def test_cooldown_region_covers_cells_and_both_selectors_with_arrows(monkeypatch):
+    monkeypatch.setattr("mabinogi_addon.ui.dpi.screen_scale", lambda: 1.0)
+    _cooldown_config()
+    box = inq.region_of("cooldown")
+    assert box["x"] <= 576 - 11 and box["x"] + box["w"] >= 1196 + 15 + 11  # 두 선택기 + 양옆 화살표
+    assert box["y"] <= 12 and box["y"] + box["h"] >= 52  # 칸
+    config.save_cooldown({"enabled": False, "slots": []})
+    config.save_skillbar({**config.load_skillbar(), "anchor": {"x": 2, "y": 12}})
+    fallback = inq.region_of("cooldown")
+    assert (fallback["w"], fallback["h"]) == (1168, 89)  # 등록 칸이 없으면 위쪽 단축바 영역
+    assert not inq.has_cooldown_slots()
+
+
+def test_cooldown_card_collects_and_zip_has_slots_icons_and_log(app, monkeypatch):
+    from mabinogi_addon import paths
+    from mabinogi_addon.ui import cooldown_section, inquiry_window as iw
+    monkeypatch.setattr("mabinogi_addon.ui.dpi.screen_scale", lambda: 1.0)
+    _cooldown_config()
+    icon = cooldown_section.icon_path("a1")
+    icon.parent.mkdir(parents=True, exist_ok=True)
+    from mabinogi_addon import image_io
+    image_io.imwrite(icon, _frame(3)[:40, :40])
+    log = paths.user_data_dir() / "logs" / "app.log"
+    log.parent.mkdir(parents=True, exist_ok=True)
+    log.write_text("2026-11-07 10:00:00 INFO x: 쿨타임 칸 상태: 스킬 1 사용 중 → 사용 가능\n"
+                   "2026-11-07 10:00:01 INFO x: 다른 줄\n", encoding="utf-8")
+    rects = []
+    counter = iter(range(1000))
+    monkeypatch.setattr(inq, "grab_physical", lambda rect: (rects.append(rect), _frame(next(counter)))[1])
+    w = iw.InquiryWindow(watcher=NS(is_game_active=lambda: True))
+    try:
+        assert "등록한 칸이 없어요" not in w.card_buttons["cooldown"].findChildren(QLabel)[1].text()
+        w.card_buttons["cooldown"].click()
+        w._next()
+        assert w._collecting
+        w._next_grab = 0.0
+        w._last_tick = None
+        w._tick()
+        w._executor.submit(lambda: None).result(timeout=5)
+        app.processEvents()
+        w.stop_keep.click()
+        names = {a.name for a in w.session.attachments}
+        assert {"cooldown_slots.json", "cooldown_icon_a1.png", "cooldown_log.txt"} <= names
+        assert any(n.startswith("cooldown_") and n.endswith(".png") and "icon" not in n for n in names)
+        assert rects and rects[0][0] <= 565 and rects[0][0] + rects[0][2] >= 1222  # 공유 캡처와 같은 범위
+        _name, data = w.session.build_zip(category="문제 신고", who=inq.sender({"id": "1", "name": "t"}), title="t",
+                                          content="c", logs="")
+        import io, json as _json, zipfile
+        with zipfile.ZipFile(io.BytesIO(data)) as z:
+            slots = _json.loads(z.read("cooldown_slots.json"))
+            assert slots["slots"][0]["page"] is True and "15x16" not in z.read("cooldown_slots.json").decode()  # 서명 원문 제외
+            assert z.read("cooldown_log.txt").decode().strip() == "2026-11-07 10:00:00 INFO x: 쿨타임 칸 상태: 스킬 1 사용 중 → 사용 가능"
+    finally:
+        w.shutdown()
+        w.deleteLater()
+
+
+def test_cooldown_card_without_slots_says_so(app, monkeypatch):
+    from mabinogi_addon.ui import inquiry_window as iw
+    config.save_cooldown({"enabled": False, "slots": []})
+    w = iw.InquiryWindow()
+    try:
+        texts = [l.text() for l in w.card_buttons["cooldown"].findChildren(QLabel)]
+        assert any("등록한 칸이 없어요" in t for t in texts)
+        assert not any("등록한 칸이 없어요" in l.text() for l in w.card_buttons["boss"].findChildren(QLabel))  # 다른 카드 그대로
+    finally:
+        w.shutdown()
+        w.deleteLater()

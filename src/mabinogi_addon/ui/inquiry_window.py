@@ -98,7 +98,10 @@ class CardButton(QPushButton):
         v.setContentsMargins(14, 12, 14, 12)
         v.setSpacing(6)
         title = _label(card.title, size=14, bold=True, wrap=False)
-        desc = _label(card.desc, size=11, muted=True)
+        text = card.desc
+        if card.key == "cooldown" and not inq.has_cooldown_slots():
+            text += " 등록한 칸이 없어요 — 위쪽 단축바 영역으로 대신 모아요."
+        desc = _label(text, size=11, muted=True)
         for w in (title, desc):
             w.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
             v.addWidget(w)
@@ -441,6 +444,8 @@ class InquiryWindow(QWidget):
         self.next_btn.setText("확인하고 보내기")
         self._clear_recent()
         self._elapsed, self._last_tick, self._next_grab = 0.0, None, 0.0
+        if card.key == "cooldown":
+            inq.attach_cooldown(self.session)  # 칸 목록·아이콘(수집 끝에 app.log 쿨타임 줄)
         if card.mode == "collect":
             from .dpi import to_physical
             self._rects = []
@@ -620,6 +625,8 @@ class InquiryWindow(QWidget):
         if not self.session.images:
             self.session.notes.append("영역 자료가 모이지 않아 게임 화면 1장으로 대신함")
             self._capture_game(self.session)
+        if self.card is not None and self.card.key == "cooldown":
+            inq.finish_cooldown(self.session)
         self.session.ended = datetime.now()
         self._collected()
 

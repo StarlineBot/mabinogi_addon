@@ -1,6 +1,4 @@
-"""전투 보조 › 단축바 아래 구역 — 쿨타임 오버레이(쿨타임 명세 10절, **제작자 테스트**).
-
-제작자(`feature_access.is_creator()`)에게만 보인다. 다른 사용자는 구역·관측·오버레이가 전혀 없다.
+"""전투 보조 › 단축바 아래 구역 — 쿨타임 오버레이(쿨타임 명세 10절, **베타** — 0.44.0부터 모든 사용자, 기본 꺼짐).
 
 흐름(코드 → 동작):
 - `스킬 추가` = 클릭 경계 자동 맞춤 선택창(단축바 칸만). 칸을 클릭하면 그 칸 사각형과 **그 줄의 페이지 숫자 모양**을 저장(세트당 최대 8칸).
@@ -184,7 +182,7 @@ def observe(frame, origin, slots, last: dict, with_crops: bool, need_icon=frozen
 
 class CooldownSection(QGroupBox):
     def __init__(self, watcher, parent=None) -> None:
-        super().__init__("쿨타임 오버레이 (제작자 테스트)", parent)
+        super().__init__("쿨타임 오버레이 (베타)", parent)
         self._watcher = watcher
         self._cfg = config.load_cooldown()
         self.row = CooldownRow()
@@ -194,7 +192,6 @@ class CooldownSection(QGroupBox):
         self._overlays: dict = {}  # 세트 번호 → CooldownOverlay
         self._notifier = None
         self._selector = None
-        self._allowed = None
 
         v = QVBoxLayout(self)
         v.addWidget(hint_label("쓴 스킬이 사용 중인 동안 한 줄로 보여 주고, 다시 쓸 수 있게 되면 민트로 강조한 뒤 빼요."))
@@ -205,6 +202,9 @@ class CooldownSection(QGroupBox):
         self.enable.toggled.connect(self._on_enable)
         top.addWidget(self.enable)
         top.addStretch(1)
+        from .feature_copy import HELP
+        from .help_dialog import help_button
+        top.addWidget(help_button("쿨타임 오버레이 사용법", HELP["쿨타임 오버레이"], self))
         v.addLayout(top)
         row = QHBoxLayout()
         self.set_combo = QComboBox()
@@ -252,8 +252,6 @@ class CooldownSection(QGroupBox):
         self.status = hint_label("")
         v.addWidget(self.status)
         self._render_list()
-        if not self.allowed():
-            self.hide()  # 제작자가 아니면 처음부터 숨김(부모에 붙기 전이라 show는 하지 않는다)
 
         self._timer = QTimer(self)
         self._timer.setInterval(200)  # 보이기·강조 끝(가벼움) — 캡처·판정은 공유 캡처 작업 스레드
@@ -479,15 +477,9 @@ class CooldownSection(QGroupBox):
         self._show_row()
 
     # ---- 관측·표시 ------------------------------------------------------------------------------
-    def allowed(self) -> bool:
-        """제작자만. 설정 파일 읽기라 1초 재사용(feature_access.Recheck) — 0.2초 타이머마다 읽지 않게."""
-        if self._allowed is None:
-            from .. import feature_access
-            self._allowed = feature_access.Recheck(lambda: feature_access.is_creator())
-        return bool(self._allowed())
 
     def _enabled(self) -> bool:
-        return not (self._shutting_down or self._paused or not self._cfg["enabled"] or not self.slots or not self.allowed())
+        return not (self._shutting_down or self._paused or not self._cfg["enabled"] or not self.slots)
 
     def _game_active(self) -> bool:
         try:
@@ -531,9 +523,6 @@ class CooldownSection(QGroupBox):
         if not getattr(self, "_connected", False):
             capture.delivered.connect(self._on_delivered)
             self._connected = True
-        allowed = self.allowed()
-        if self.isHidden() == allowed:  # 제작자가 아니면 구역 자체가 안 보인다(로그인이 바뀌면 다음 틱에 반영)
-            self.setVisible(allowed)
         if not self._running():
             capture.clear("cooldown")  # 관측은 멈춘다(게임이 앞일 때만)
             if (self.row.row or self._last) and not (self._enabled() and self._display_active()):

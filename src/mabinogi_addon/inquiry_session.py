@@ -63,14 +63,18 @@ CARDS = (
     Card("autofind", "자동 찾기 · 영역 지정", "최근 자동 찾기 기록과 게임 화면 1장을 준비해요.", "autofind", (),
          "찾으려던 화면이 보이게 게임을 맨 앞에 두세요",
          "최근 자동 찾기 기록을 붙이고, 5초 뒤 게임 화면 1장을 찍어요. 이 창은 그동안 접혀요."),
+    Card("cooldown", "쿨타임 오버레이", "단축바 영역을 최대 60초 모아요.", "collect", ("cooldown",),
+         "쿨타임이 이상한 장면을 다시 보여 주세요",
+         "스킬을 쓰고 쿨이 끝날 때까지 평소처럼 플레이해 주세요. 이 창은 작게 접혀요."),
     Card("other", "그 밖의 문제 · 잘 모르겠어요", "5초 뒤 게임 화면 1장을 찍어요.", "game", (),
          "문제가 보이는 게임 화면을 맨 앞에 두세요",
          "5초 뒤 게임 화면 1장을 찍어요. 이 창은 그동안 접혀요. 애드온 표시(오버레이)는 사진에 안 나올 수 있어요."),
 )
 CARD_BY_KEY = {c.key: c for c in CARDS}
 REGION_LABELS = {"boss": "보스 HP바", "stat": "체력바", "dorcha": "도르카", "tuarim": "투아림",
-                 "buff": "버프", "debuff": "디버프", "game": "게임 화면"}
-_CHANGE = {"boss": 4.0, "stat": 5.0, "dorcha": 6.0, "tuarim": 6.0}  # 기존 수집 모드와 같은 영상 차이 기준
+                 "buff": "버프", "debuff": "디버프", "game": "게임 화면", "cooldown": "쿨타임 칸"}
+_CHANGE = {"boss": 4.0, "stat": 5.0, "dorcha": 6.0, "tuarim": 6.0, "cooldown": 4.0}  # 기존 수집 모드와 같은 영상 차이 기준
+COOLDOWN_LOG_LINES = 200
 
 
 def region_of(name: str) -> dict | None:
@@ -86,6 +90,8 @@ def region_of(name: str) -> dict | None:
             box = config.load_tuarim().get("box")
         elif name in ("buff", "debuff"):
             box = config.load_capture_region("buffTracker" if name == "buff" else "debuffTracker")
+        elif name == "cooldown":
+            box = cooldown_region()
         else:
             return None
     except Exception:  # noqa: BLE001 — 설정이 깨졌으면 '미설정'으로
@@ -94,6 +100,69 @@ def region_of(name: str) -> dict | None:
             and box["w"] > 0 and box["h"] > 0:
         return {k: int(box[k]) for k in ("x", "y", "w", "h")}
     return None
+
+
+def cooldown_region() -> dict | None:
+    """쿨타임 카드 영역(논리 좌표): 등록 칸 + 두 페이지 선택기 자리(화살표 포함)를 덮는 사각형 — 쿨타임 관측과 같은 공유 캡처 범위.
+    등록 칸이 없으면 위쪽 단축바 영역(단축바 미러 원본 1168×89)으로 대신."""
+    from .ui.dpi import to_logical
+    slots = config.load_cooldown().get("slots") or []
+    rects = []
+    for slot in slots:
+        rect = slot.get("rect")
+        if isinstance(rect, (list, tuple)) and len(rect) == 4:
+            rects.append(list(rect))
+        from .ui.cooldown_section import _with_arrows
+        selectors = ([slot["page_rect"]] if slot.get("page_rect") else []) + list((slot.get("page_rects") or {}).values())
+        rects += [_with_arrows(r) for r in selectors if isinstance(r, (list, tuple)) and len(r) == 4]
+    if rects:
+        x0, y0 = min(r[0] for r in rects), min(r[1] for r in rects)
+        x1, y1 = max(r[0] + r[2] for r in rects), max(r[1] + r[3] for r in rects)
+        return dict(zip(("x", "y", "w", "h"), to_logical(x0, y0, x1 - x0, y1 - y0)))  # 칸 좌표는 물리 픽셀
+    anchor = config.load_skillbar().get("anchor")
+    if isinstance(anchor, dict) and all(isinstance(anchor.get(k), int) for k in ("x", "y")):
+        from .ui.skillbar_mirror import SRC_H, SRC_W
+        return {"x": anchor["x"], "y": anchor["y"], "w": SRC_W, "h": SRC_H}
+    return None
+
+
+def has_cooldown_slots() -> bool:
+    return bool(config.load_cooldown().get("slots"))
+
+
+def attach_cooldown(session: "Session") -> None:
+    """쿨타임 카드 함께 첨부: 칸 목록(페이지 서명 원문 제외)·등록 칸 아이콘 PNG·app.log '쿨타임 칸' 줄(최근 200줄 — 수집 동안 칸 상태 변화 포함)."""
+    cfg = config.load_cooldown()
+    slots = [{"id": s.get("id"), "label": s.get("label"), "rect": s.get("rect"), "set": s.get("set", 1), "row": s.get("row"),
+              "block": s.get("block"), "page_block": s.get("page_block"), "page": bool(s.get("page")),
+              "page_rects": s.get("page_rects"), "icon_ok": bool(s.get("icon_ok"))} for s in cfg.get("slots") or []]
+    data = {"enabled": bool(cfg.get("enabled")), "slots": slots}
+    target = session.folder / "cooldown_slots.json"
+    target.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    session.add_file(target, target.name, "쿨타임 칸 목록")
+    if not slots:
+        session.notes.append("쿨타임: 등록한 칸이 없어요 — 위쪽 단축바 영역으로 대신 모음")
+    from .ui.cooldown_section import icon_path
+    for slot in slots:
+        icon = icon_path(str(slot["id"]))
+        if icon.exists():
+            session.add_file(icon, f"cooldown_icon_{slot['id']}.png", f"쿨타임 아이콘 {slot['label']}")
+
+
+def _app_log() -> Path:
+    return paths.user_data_dir() / "logs" / "app.log"
+
+
+def finish_cooldown(session: "Session") -> None:
+    """수집 끝: app.log의 '쿨타임 칸' 줄(최근 200줄)을 붙인다(수집 동안의 칸 상태 변화 포함)."""
+    try:
+        lines = _app_log().read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        lines = []
+    picked = [line for line in lines if "쿨타임 칸" in line][-COOLDOWN_LOG_LINES:]
+    target = session.folder / "cooldown_log.txt"
+    target.write_text("\n".join(picked) + ("\n" if picked else ""), encoding="utf-8")
+    session.add_file(target, target.name, "쿨타임 기록(app.log)")
 
 
 def install_id() -> str:

@@ -75,9 +75,9 @@ class RegionSelector(QWidget):
         self._cursor: QPoint | None = None
         self._shot = QPixmap()  # 선택창 띄우기 전 화면 스냅샷(돋보기 원본)
         self._dpr = 1.0  # 스냅샷 배율(물리픽셀=논리×dpr). start()에서 실제값으로 채움
-        # 클릭 경계 자동 맞춤(click-snap 명세): 드래그 모드 + 제작자일 때만. 다른 사용자는 지금과 완전히 같다.
+        # 클릭 경계 자동 맞춤(click-snap 명세): 드래그 모드에서 맞출 대상 종류(snap_kinds)를 준 선택창 — 0.44.0부터 모든 사용자.
         self._snap_kinds = snap_kinds
-        # 아이콘 집기 테두리 자동 맞춤(아이콘 직접 지정 명세 2.1): 크롭 모드 + 호출한 쪽이 켤 때(제작자)만
+        # 아이콘 집기 테두리 자동 맞춤(아이콘 직접 지정 명세 2.1): 크롭 모드 + 호출한 쪽이 켤 때(버프·디버프 아이콘 집기)
         self._icon_snap = bool(icon_snap) and save_path is not None
         self._icon_frame = None
         self._targets: list = []
@@ -114,10 +114,7 @@ class RegionSelector(QWidget):
 
     # ---- 클릭 경계 자동 맞춤 -----------------------------------------------------------------
     def _snap_enabled(self) -> bool:
-        if not self._snap_kinds or self._fixed is not None or self._save_path is not None:
-            return False
-        from .. import feature_access
-        return feature_access.is_creator()
+        return bool(self._snap_kinds) and self._fixed is None and self._save_path is None  # 0.44.0부터 모든 사용자
 
     def _shot_bgr(self):
         import numpy as np

@@ -56,23 +56,18 @@ HELP_HTML = HELP['버프 트래커']
 
 
 def _capture_icon_to(tab: QWidget, item_id: str, on_done) -> None:
-    """전체화면 선택창(돋보기)으로 아이콘을 드래그해 임시 PNG로 저장한다.
+    """전체화면 선택창으로 아이콘을 집어 임시 PNG로 저장한다(아이콘 직접 지정 명세 2.1·2.3 — 0.44.0부터 모든 사용자).
 
-    저장이 끝나면 on_done(item_id, tmp_path, ok)를 호출한다. 선택창은 GC되지 않도록
-    탭에 참조(_icon_selector)를 붙여 둔다.
+    아이콘 위 클릭 = 테두리에 맞춘 16×16, 드래그 = 직접. 선택창을 닫은 뒤 같은 자리를 6번 다시 찍어 온전할 때만 저장하고
+    on_done(item_id, tmp_path, ok)를 호출한다. 선택창은 GC되지 않도록 탭에 참조(_icon_selector)를 붙여 둔다.
     """
     import tempfile
 
     from .region_selector import RegionSelector
 
     tmp = Path(tempfile.gettempdir()) / f"_mabi_icon_{item_id}.png"
-    creator = _creator()
-    selector = RegionSelector(save_path=tmp, icon_snap=creator)
+    selector = RegionSelector(save_path=tmp, icon_snap=True)
     tab._icon_selector = selector  # 참조 유지(GC 방지)
-    if not creator:  # 다른 사용자는 지금과 완전히 같다(스냅샷 한 장 그대로 저장)
-        selector.captured.connect(lambda ok: on_done(item_id, tmp, ok))
-        selector.start()
-        return
     picked = {}
     selector.picked.connect(picked.update)
     selector.captured.connect(lambda ok: _verify_then_save(tab, item_id, tmp, picked, on_done) if picked else None)
@@ -135,31 +130,7 @@ def _pixmap(path: Path | None, size: int, dpr: float | None = None) -> QPixmap |
     pm = QPixmap(str(path))
     if pm.isNull():
         return None
-    if _crisp_preview():
-        return crisp_pixmap(pm.toImage(), size, dpr)
-    return pm.scaled(
-        size,
-        size,
-        Qt.AspectRatioMode.KeepAspectRatio,
-        Qt.TransformationMode.FastTransformation,
-    )
-
-
-def _creator() -> bool:
-    from .. import feature_access
-    return feature_access.is_creator()
-
-
-_crisp_check = None
-
-
-def _crisp_preview() -> bool:
-    """또렷한 미리보기(아이콘 직접 지정 명세 2.2) — 제작자 먼저. 권한 판정은 1초 재사용(목록마다 설정 파일을 읽지 않게)."""
-    global _crisp_check
-    if _crisp_check is None:
-        from .. import feature_access
-        _crisp_check = feature_access.Recheck(lambda: _creator())
-    return bool(_crisp_check())
+    return crisp_pixmap(pm.toImage(), size, dpr)  # 원본 픽셀 정수배(아이콘 직접 지정 명세 2.2 — 0.44.0부터 모든 사용자)
 
 
 def crisp_pixmap(img, size: int, dpr: float | None = None) -> QPixmap:

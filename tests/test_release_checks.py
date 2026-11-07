@@ -69,17 +69,18 @@ def test_current_plan_maps_every_selected_file_to_changed_code_or_shared_contrac
 
 
 def test_current_release_keeps_feature_boundaries_and_delivery_contracts():
-    """0.43.1: 쿨타임(제작자 전용) 페이지 비교·등록 정리 + 배포 계약. (릴리즈마다 경계를 바꾼다 — 누적하지 않음)"""
+    """0.44.0: 쿨타임 오버레이·아이콘 직접 지정·클릭 자동 맞춤 모든 사용자 공개 + 배포 계약. (릴리즈마다 경계를 바꾼다 — 누적하지 않음)"""
     root = Path(__file__).resolve().parents[1]
     plan = json.loads((root / 'packaging/release_checks.json').read_text(encoding='utf-8'))
     paths = set(plan['tests'])
     assert {
-        'tests/test_cooldown.py', 'tests/test_startup_build.py',
+        'tests/test_cooldown.py', 'tests/test_icon_capture.py', 'tests/test_click_snap.py', 'tests/test_startup_build.py',
         'tests/test_release_checks.py', 'tests/test_release_candidate.py', 'tests/test_windows_ci.py',
         'tests/test_startup_smoke.py',
     } <= paths
     assert {
         'src/mabinogi_addon/detect/cooldown.py', 'src/mabinogi_addon/ui/cooldown_section.py',
+        'src/mabinogi_addon/ui/region_selector.py', 'src/mabinogi_addon/ui/buff_tab.py', 'src/mabinogi_addon/detect/icon_snap.py',
         'packaging/build_windows.py', 'src/mabinogi_addon/assets/release_notes.md',
     } <= set(plan['coverage'])
     # The separate development entry must continue collecting the whole suite.
