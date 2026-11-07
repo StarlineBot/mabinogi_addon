@@ -587,15 +587,14 @@ class BossTab(QWidget):
             if value is not None:
                 rule = "height"
             value = frac = None  # 얇은 일반 체력바(또는 바가 아닌 띠) — 보스 값으로 쓰지 않는다
-        # 등록 영역 % — 두 줄 구간에선 바가 영역보다 몇 px 아래로 그려져 숫자 띠가 잘린다('100.00'을 10으로, QA d52528a).
-        # 확신 없는 판독이면 기억한 세로 위치·후보 위치로 다시 읽어 더 확신 있는 값을 쓴다(정상 화면은 판독 1번 그대로).
-        if value is not None and rule is None and not self._confident(value, out):
-            better = self._read_row(full, up, h, "low")
-            if better is not None:
-                value, frac = better
+        # 등록 영역 값은 작업 스레드 판독 그대로(다시 읽지 않음, QA 6569a44). 세로 위치 탐색은 위 줄이 등록 보스바일 때(두 줄 구간)만 —
+        # 그때는 위 줄 값이 이기므로 아래 줄을 다시 읽을 일이 없다. 정상 한 줄 화면은 판독 1번 그대로.
+        steps = out.setdefault("steps", {})
         top = up - self.BAR_PITCH
         if top >= 0:  # 한 칸 위에도 보스바가 있으면 위가 보스(기믹으로 보스바가 밀려 올라간 경우)
-            upper = self._upper_bar(full, top, h)
+            started = perf_counter()
+            upper = self._upper_bar(full, top, h, steps)
+            steps["오버레이·위 줄"] = steps.get("오버레이·위 줄", 0.0) + (perf_counter() - started) * 1000
             if upper is not None:
                 above_boss, reading = upper
                 boss_id = above_boss  # 위 줄 이름(등록 보스가 아니면 None — 보스 이름 대신 "보스")
@@ -810,48 +809,42 @@ class BossTab(QWidget):
     ROW_OFFSETS = (0, 5, -5, 3, -3)  # 두 줄 구간: 바가 등록 영역보다 5px 아래(고목의 페타크 11-06 실측)
     ROW_EXPLORE_EVERY = 1.0  # 확신 없는 줄의 다른 세로 위치는 1초에 한 번까지만(판독 1번 25~70ms)
 
-    def _confident(self, value, out) -> bool:
-        """등록 영역 판독이 확신인지(모든 자리 강한 점수) — 작업 스레드 판독을 다시 하지 않도록 같은 판독기로 한 번만 확인."""
-        from ..detect.boss_hp_reader import read_percent_scored
-        frame = out.get("frame")
-        if frame is None:
-            return True
-        got, key = read_percent_scored(frame)
-        return got == value and key[0] == len(str(value))
-
-    def _read_row(self, full, top, h, row: str):
-        """full 안 [top, top+h) 줄의 % — 기억한 세로 위치부터, 확신 없으면 다른 위치(1초에 한 번). (정수, 소수|None) 또는 None."""
-        from ..detect.boss_hp_reader import read_percent_scored
+    def _read_row(self, full, top, h, row: str, steps=None):
+        """full 안 [top, top+h) 줄의 % — 기억한 세로 위치부터, 확신 없으면 다른 위치(1초에 한 번). (정수, 소수|None) 또는 None.
+        위치마다 판독 1번(read_percent_frac — 확신 키는 그 판독이 남긴 것, 다시 읽지 않음)."""
+        from ..detect.boss_hp_reader import last_key
         offsets = self.__dict__.setdefault("_row_offset", {})
         explore_at = self.__dict__.setdefault("_row_explore_at", {})
         first = offsets.get(row, 0)
         order = [first] + [o for o in self.ROW_OFFSETS if o != first]
         now = monotonic()
         explore = now >= explore_at.get(row, 0.0)
-        best = None
+        best, searched = None, None
         for i, off in enumerate(order):
             if i and not explore:
                 break
+            if i == 1:
+                searched = perf_counter()  # 기억한 위치 판독 뒤부터 = 세로 위치 탐색
+                explore_at[row] = now + self.ROW_EXPLORE_EVERY
             y = top + off
             if y < 0 or y + h > full.shape[0]:
                 continue
             crop = full[y:y + h]
-            got, key = read_percent_scored(crop)
+            got, frac = read_percent_frac(crop[:, int(crop.shape[1] * 0.58):])
+            key = last_key()
             if got is not None and (best is None or key > best[0]):
-                best = (key, got, off, crop)
+                best = (key, got, frac, off)
             if got is not None and key[0] == len(str(got)):
                 break  # 확신 — 더 볼 필요 없음
-            if i:
-                explore_at[row] = now + self.ROW_EXPLORE_EVERY
+        if searched is not None and steps is not None:
+            steps["오버레이·세로 맞춤"] = steps.get("오버레이·세로 맞춤", 0.0) + (perf_counter() - searched) * 1000
         if best is None:
             return None
-        key, got, off, crop = best
+        _key, got, frac, off = best
         offsets[row] = off
-        w = crop.shape[1]
-        whole, frac = read_percent_frac(crop[:, int(w * 0.58):])
-        return got, (frac if whole == got else None)
+        return got, frac
 
-    def _upper_bar(self, full, top, h):
+    def _upper_bar(self, full, top, h, steps=None):
         """한 칸 위 줄이 보스바면 (등록 보스 id|None, (정수, 소수)|None). 보스바가 아니면 None.
         - 등록 보스 이름이 보이면(세로 ±5px까지) 보스바 — %를 못 읽어도 돌려준다(아래 줄 값으로 되돌아가지 않게, QA d52528a).
         - 등록 보스가 아니면 예전처럼 %·이름 글자 검증이 통과할 때만(디버프 아이콘 시간 글자·풍경을 보스바로 보지 않게)."""
@@ -869,7 +862,7 @@ class BossTab(QWidget):
             w = above.shape[1]
             boss = identify(above[:, : int(w * 0.60)], self._name_templates, variants=self._name_variants)
             if boss is not None:
-                return boss, self._read_row(full, top, h, "up")
+                return boss, self._read_row(full, top, h, "up", steps)
         reading = self._boss_bar_reading(full[top:top + h])  # 미등록 보스: 예전 기준(% + 이름 글자 검증)
         if reading is not None:
             return None, reading

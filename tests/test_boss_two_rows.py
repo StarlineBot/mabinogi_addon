@@ -76,11 +76,27 @@ def test_upper_unreadable_does_not_fall_back_to_lower_value(tab):
     assert r["value"] is None and r["rule"] == "upper_unread" and r["boss"] == "gomok_petak"
 
 
-def test_lower_100_read_after_vertical_realign_when_no_upper_bar(tab):
+def test_lower_100_reads_100_when_aligned():
+    """보라 바탕 '100.00 %': 바에 맞은 위치에서 100(예전 샘플로는 10)."""
+    img = _frame("gomok_petak_hp010_show055_drop_036.png")
+    assert read_percent(img[50:87]) == 100
+
+
+def test_single_row_screen_does_no_extra_reads(tab, monkeypatch):
+    """정상 한 줄 화면: 오버레이 판독은 작업 스레드 값 그대로 — 같은 영역 재판독·세로 위치 탐색 없음(QA 6569a44 2.4배 느려짐)."""
+    from mabinogi_addon.ui import boss_tab as bt
     img = _frame("gomok_petak_hp010_show055_drop_036.png").copy()
-    img[0:44] = (60, 70, 65)  # 위 줄을 어두운 바탕으로 덮음(아래 줄만)
-    low = img[45:82]
-    assert read_percent(low) == 10  # 등록 영역(5px 위로 어긋남) 그대로는 '10'
-    out = {"boss_id": None, "raw_hp": None, "bar_pct": 10, "bar": True, "frame": low}
+    img[0:44] = (60, 70, 65)  # 위 줄 없음
+    calls = []
+    real = bt.read_percent_frac
+    monkeypatch.setattr(bt, "read_percent_frac", lambda *a, **k: (calls.append(1), real(*a, **k))[1])
+    out = {"boss_id": None, "raw_hp": None, "bar_pct": 10, "bar": True, "frame": img[45:82]}
     r = tab._overlay_reading(img, 45, 37, out)
-    assert r["value"] == 100 and r["rule"] is None, (r["rule"], r.get("band"), r["raw"])
+    assert calls == [] and r["value"] == 10 and "오버레이·세로 맞춤" not in out["steps"]
+
+
+def test_two_row_vertical_search_is_timed_for_app_log(tab):
+    img = _frame("gomok_petak_hp090_show055_jump_087.png")
+    out = {"boss_id": None, "raw_hp": None, "bar_pct": 90, "bar": True, "frame": img[45:82]}
+    r = tab._overlay_reading(img, 45, 37, out)
+    assert r["value"] == 55 and "오버레이·위 줄" in out["steps"] and "오버레이·세로 맞춤" in out["steps"]

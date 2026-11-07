@@ -44,6 +44,24 @@ VALUE_MIN_SCORE = 0.6
 UHD_DIGIT_SAMPLES = frozenset({"d0_12", "d1_1", "d6_5", "d7_4", "d6_6", "d8_3"})
 
 
+import threading
+
+_LAST = threading.local()  # 스레드별 마지막 판독의 확신 키(보스바 오버레이가 같은 영역을 다시 읽지 않게, QA 6569a44)
+NO_KEY = (-1, -2.0)
+
+
+def _key(val, score) -> tuple[int, float]:
+    """(확신 자리수, 최저 자리 점수) — 모든 자리가 강한 점수면 자리수, 아니면 0."""
+    if val is None:
+        return NO_KEY
+    return (len(str(val)) if score >= _STRONG else 0), float(score)
+
+
+def last_key() -> tuple[int, float]:
+    """이 스레드에서 마지막으로 한 read_percent·read_percent_frac·read_percent_scored의 확신 키."""
+    return getattr(_LAST, "key", NO_KEY)
+
+
 def _load_digits(pattern="d*_*.png", exclude=frozenset()) -> dict[str, list[np.ndarray]]:
     out: dict[str, list[np.ndarray]] = {}
     if not _DIGIT_DIR.exists():
@@ -289,23 +307,17 @@ def read_percent(
     if val is not None and score >= _ACCEPT:
         # 0.31.0: 겨우 맞춘 판독(0.45~0.6)은 값을 쓰지 않는다 — 4K '86.15%'를 '8'(0.59)로 읽어 패턴 알림이
         # 거짓으로 울릴 뻔했다. 틀린 값 대신 못 읽음(자동 찾기 검증과 같은 하한).
+        _LAST.key = _key(val, score) if score >= VALUE_MIN_SCORE else NO_KEY
         return val if score >= VALUE_MIN_SCORE else None
-    return _low_hp_value(region_bgr, templates, band, w, scale, pitch, span, bright_samples)
+    low = _low_hp_value(region_bgr, templates, band, w, scale, pitch, span, bright_samples)
+    _LAST.key = (0, 0.0) if low is not None else NO_KEY
+    return low
 
 
 def read_percent_scored(region_bgr: np.ndarray, templates=None) -> tuple[int | None, tuple[int, float]]:
     """read_percent와 같은 판독 + 확신 키(확신 자리수, 최저 자리 점수) — 세로 위치 후보 중 고를 때 쓴다(보스바 오버레이 두 줄 구간)."""
-    prep = _prep(region_bgr, templates)
-    if prep is None:
-        return None, (-1, -2.0)
-    templates, w, scale, band, pitch, span = prep
-    val, score, _shift = _scan(band, w, scale, pitch, templates, range(-span, span + 1))
-    if val is not None and score >= _ACCEPT:
-        if score < VALUE_MIN_SCORE:
-            return None, (-1, -2.0)
-        return val, ((len(str(val)) if score >= _STRONG else 0), score)
-    low = _low_hp_value(region_bgr, templates, band, w, scale, pitch, span, _BRIGHT_SAMPLES)  # 저HP(빨간 바) 보조 — read_percent와 같음
-    return (low, (0, 0.0)) if low is not None else (None, (-1, -2.0))
+    val = read_percent(region_bgr, templates)  # 같은 판독(저HP 보조 포함) — 확신 키는 그 판독이 남긴 것
+    return val, last_key()
 
 
 # 소수 두 자리(보스바 오버레이 표시용, 사용자 확정 11-05) — 정수 판독 경로·결과는 그대로, 같은 글꼴·같은 숫자 샘플.
@@ -362,9 +374,13 @@ def read_percent_frac(
     val, score, shift = _scan(band, w, scale, pitch, templates, range(-span, span + 1))
     if val is not None and score >= _ACCEPT:
         if score < VALUE_MIN_SCORE:
+            _LAST.key = NO_KEY
             return None, None
+        _LAST.key = _key(val, score)
         return val, _fraction(band, w, scale, pitch, templates, shift)
-    return _low_hp_value(region_bgr, templates, band, w, scale, pitch, span, bright_samples), None
+    low = _low_hp_value(region_bgr, templates, band, w, scale, pitch, span, bright_samples)
+    _LAST.key = (0, 0.0) if low is not None else NO_KEY
+    return low, None
 
 
 def main_path_score(
