@@ -129,8 +129,8 @@ def test_setup_gating_for_non_creator_and_v2_off(monkeypatch, creator, enabled, 
         assert sections[0]._controller is None and not sections[0].again.isVisibleTo(sections[0])
 
 
-def test_dorcha_tuarim_autofind_line_and_region_label(monkeypatch):
-    """도르카·투아림 영역 문구 위 '자동(v2)' 한 줄(QA 1a42a58) — v2 꺼짐이면 숨김·문구 그대로."""
+def test_dorcha_tuarim_autofind_line_on_top_of_common_tab(monkeypatch):
+    """도르카·투아림 공통 탭 맨 위(접어도 보임)에 '자동(v2) · 도르카 … · 투아림 …' 한 줄(사용자 11-07) — v2 꺼짐이면 숨김·문구 그대로."""
     import os
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     from types import SimpleNamespace
@@ -139,27 +139,31 @@ def test_dorcha_tuarim_autofind_line_and_region_label(monkeypatch):
 
     from mabinogi_addon.ui.dorcha_tab import DorchaTab
     from mabinogi_addon.ui.region_section import refresh_autofind
+    from mabinogi_addon.ui.resource_tab import ResourceTab
     from mabinogi_addon.ui.tuarim_tab import TuarimTab
     QApplication.instance() or QApplication([])
     watcher = SimpleNamespace(is_game_active=lambda: False, is_self_active=lambda: False)
     d, t = DorchaTab(watcher), TuarimTab(watcher)
+    r = ResourceTab(d, t)
     try:
-        d.auto_line.set_autofind_key("dorcha")
-        t.auto_line.set_autofind_key("tuarim")
-        assert d.auto_line.isHidden() and t.auto_line.isHidden()  # v2 꺼짐
+        section = r.region_section
+        section.set_autofind_keys({"dorcha": "도르카", "tuarim": "투아림"})
+        assert section.auto_badge.isHidden()  # v2 꺼짐
         assert d.region_label.text() == "영역 미지정"
         afr.activate(True)
         afr.set_use_values({k: True for k in afr.USE_KEYS})
         afr.set_region("dorcha", {"x": 1180, "y": 96, "w": 120, "h": 30})
-        refresh_autofind()
+        refresh_autofind("dorcha")
+        r.refresh_registration()
         d._update_region_label()
         t._update_region_label()
-        assert not d.auto_line.isHidden() and "찾은 자리로 읽어요" in d.auto_line.text()
-        assert d.region_label.text().startswith("찾은 자리  1180, 96")
-        assert "찾는 중이에요" in t.auto_line.text() and t.region_label.text() == "자동(v2) 자리 찾는 중"
+        assert section.auto_badge.text() == "자동(v2) · 도르카 찾은 자리 · 투아림 찾는 중"
+        assert not section.auto_badge.isHidden() and section.registered  # 접힌 상태에서도 맨 위
+        assert d.region_label.text().startswith("찾은 자리  1180, 96") and t.region_label.text() == "자동(v2) 자리 찾는 중"
         afr.user_set("tuarim")
-        refresh_autofind()
-        assert "직접 지정한 영역으로 읽어요" in t.auto_line.text()
+        refresh_autofind("tuarim")
+        assert section.auto_badge.text() == "자동(v2) · 도르카 찾은 자리 · 투아림 직접 지정"
     finally:
+        r.shutdown()
         d.shutdown()
         t.shutdown()

@@ -34,31 +34,29 @@ def autofind_text(key: str | None) -> str | None:
     return "자동(v2) · 자리를 찾는 중이에요(찾기 전엔 쉬어요)"
 
 
-class AutofindLine(QLabel):
-    """영역 문구 위 '자동(v2)' 한 줄(RegionSection을 쓰지 않는 탭 — 도르카·투아림). v2 꺼짐이면 숨김."""
-
-    def __init__(self, parent=None):
-        super().__init__("", parent)
-        self.autofind_key = None
-        self.setWordWrap(True)
-        self.setStyleSheet(f"color:{color('accent')};")
-        self.hide()
-
-    def set_autofind_key(self, key: str) -> None:
-        self.autofind_key = key
-        _SECTIONS.add(self)
-        self.refresh_autofind()
-
-    def refresh_autofind(self) -> None:
-        text = autofind_text(self.autofind_key)
-        self.setText(text or "")
-        self.setVisible(bool(text))
+def autofind_combined(keys: dict) -> str | None:
+    """여러 기능을 한 묶음에서 보여 줄 때(도르카·투아림): '자동(v2) · 도르카 찾은 자리 · 투아림 찾는 중'. v2 꺼짐이면 None."""
+    from .. import autofind_regions
+    if not keys or not autofind_regions.active():
+        return None
+    parts = []
+    for key, name in keys.items():
+        if key in autofind_regions.user_keys():
+            state = "직접 지정"
+        elif not autofind_regions.wanted(key):
+            state = "사용 꺼짐"
+        elif autofind_regions.is_auto(key):
+            state = "찾은 자리"
+        else:
+            state = "찾는 중"
+        parts.append(f"{name} {state}")
+    return "자동(v2) · " + " · ".join(parts)
 
 
 def refresh_autofind(key: str | None = None) -> None:
     """자동 찾기 v2 자리가 바뀜 → 그 기능 영역 묶음의 '자동(v2)' 표시 갱신."""
     for section in list(_SECTIONS):
-        if key is None or section.autofind_key == key:
+        if key is None or section.autofind_key == key or key in (section.autofind_keys or {}):
             section.refresh_autofind()
 
 
@@ -73,6 +71,7 @@ class RegionSection(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(6)
         self.autofind_key = None  # 자동 찾기 v2(제작자): 이 묶음이 보여 주는 기능 키 — set_autofind_key로
+        self.autofind_keys = None  # 여러 기능을 한 줄로(도르카·투아림) — set_autofind_keys로
         self.auto_badge = QLabel("")
         self.auto_badge.setWordWrap(True)
         self.auto_badge.setStyleSheet(f"color:{color('accent')};")
@@ -136,9 +135,15 @@ class RegionSection(QWidget):
         _SECTIONS.add(self)
         self.refresh_autofind()
 
+    def set_autofind_keys(self, keys: dict) -> None:
+        """{기능 키: 이름} — 한 묶음에 기능이 둘 이상일 때 한 줄로 합쳐 보인다."""
+        self.autofind_keys = dict(keys)
+        _SECTIONS.add(self)
+        self.refresh_autofind()
+
     def refresh_autofind(self) -> None:
         """v2 켜짐일 때만 한 줄 — 지금 읽는 자리가 v2가 찾은 자리인지(저장 영역은 그대로)."""
-        text = autofind_text(self.autofind_key)
+        text = autofind_combined(self.autofind_keys) if self.autofind_keys else autofind_text(self.autofind_key)
         self.auto_badge.setText(text or "")
         self.auto_badge.setVisible(bool(text))
 

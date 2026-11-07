@@ -94,9 +94,6 @@ class DorchaTab(QWidget):
             row.addWidget(button)
         row.addStretch()
         layout.addLayout(row)
-        from .region_section import AutofindLine
-        self.auto_line = AutofindLine()  # 자동 찾기 v2 켜짐일 때만 보이는 한 줄(영역 문구 위)
-        layout.addWidget(self.auto_line)
         self.region_label = QLabel()
         self.region_label.setWordWrap(True)
         layout.addWidget(self.region_label)

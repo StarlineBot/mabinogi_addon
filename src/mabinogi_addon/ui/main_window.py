@@ -2518,8 +2518,7 @@ class MainWindow(QMainWindow):
                          ("halo_timer", self.boss_tab.halo_capture), ("skillbar", self.skillbar_tab),
                          ("stat_bars", self.stat_bars_tab)):
             tab.region_section.set_autofind_key(key)  # 탭 표시 '자동(v2)'
-        self.dorcha_tab.auto_line.set_autofind_key("dorcha")
-        self.tuarim_tab.auto_line.set_autofind_key("tuarim")
+        self.resource_tab.region_section.set_autofind_keys({"dorcha": "도르카", "tuarim": "투아림"})  # 맨 위 한 줄(접어도 보임)
         self._autofind_v2 = AutofindV2Controller(self._watcher, self._autofind_wanted, parent=self)
         from .autofind_v2_section import AutofindV2Section
         self.settings_tab.attach_autofind_v2(AutofindV2Section(self._autofind_v2))
@@ -2559,8 +2558,10 @@ class MainWindow(QMainWindow):
         elif key == "dorcha":
             self.dorcha_tab._invalidate_search()
             self.dorcha_tab._update_region_label()  # 찾기 전 '영역 미지정'이 남지 않게
+            self.resource_tab.refresh_registration()  # 맨 위 '✓ 영역 지정됨' 요약도
         elif key == "tuarim":
             self.tuarim_tab._update_region_label()
+            self.resource_tab.refresh_registration()
 
     def closeEvent(self, event) -> None:
         import time

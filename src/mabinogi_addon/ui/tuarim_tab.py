@@ -119,8 +119,6 @@ class TuarimTab(QWidget):
         self.region_btn.setToolTip("% 숫자에 휠로 크기 맞춰 클릭 배치(돋보기). 다시 누르면 재지정.")
         self.region_btn.clicked.connect(self._on_region)
         row.addWidget(self.region_btn)
-        from .region_section import AutofindLine
-        self.auto_line = AutofindLine()  # 자동 찾기 v2 켜짐일 때만 보이는 한 줄(영역 문구 위)
         self.region_label = hint_label("")
         row.addWidget(self.region_label, 1)
         self.view_region_btn = QPushButton("지정 영역 보기")
