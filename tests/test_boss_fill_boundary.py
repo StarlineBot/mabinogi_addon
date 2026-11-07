@@ -70,3 +70,24 @@ def test_overlay_value_does_not_confirm_truncated_reading():
     v3.update(55, None, 0.0)
     assert v3.update(5, None, 0.3).value == 55
     assert v3.update(5, None, 2.5).value is None  # 계속 그 꼴이면 1.8초 뒤 숨김(직전 값에 매달리지 않음)
+
+
+# ---- 저HP(회색 바탕 위 흰 글자): 등록 영역이 바보다 5px 위로 어긋나면 '15.00'을 1로 읽던 것(사용자 11-07) ----------
+@pytest.mark.parametrize("name,y,expected", [
+    ("gomok_petak_hpxxx_161.png", 45, 13),                    # 13.00 % (아래 줄)
+    ("gomok_petak_hp001_show015_drop_162.png", 45, 13),       # 13.00 % — QA 8067a9c의 162
+    ("unknown_hpxxx_076.png", 45, 15),                        # 15.95 %
+    ("gomok_petak_hp001_show055_drop_077.png", 45, 15),       # 15.95 %
+    ("gomok_petak_hpxxx_135.png", 6, 15),                     # 15.00 % (위 줄)
+    ("gomok_petak_hp010_show015_upper_157.png", 6, 15),
+])
+def test_low_hp_misaligned_band_reads_two_digits(name, y, expected, monkeypatch):
+    crop = _frame(name)[y:y + 37]
+    monkeypatch.setattr(r, "USE_TEXT_MASK", False)
+    assert r.read_percent(crop) == 1  # 예전: 앞자리만
+    monkeypatch.setattr(r, "USE_TEXT_MASK", True)
+    assert r.read_percent(crop) == expected
+
+
+def test_real_one_percent_stays_one():
+    assert r.read_percent(_frame("gomok_petak_hp001_176.png")[45:82]) == 1  # 화면 1.62 %

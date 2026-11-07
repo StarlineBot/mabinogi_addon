@@ -283,13 +283,40 @@ def _low_hp_value(region_bgr, templates, band, w, scale, pitch, span, bright_sam
         bband, w, scale, pitch, templates, range(-span, span + 1), strong=_ACCEPT
     )
     if val is not None and score >= _ACCEPT and val <= _LOW_HP_MAX:
-        return val
+        return _low_hp_aligned(region_bgr, templates, w, scale, pitch, span, val)
     if bright_samples:
         val, score, _ = _scan(bband, w, scale, pitch, bright_samples,
                              range(-span, span + 1), strong=_STRONG)
         if val is not None and score >= _STRONG and val <= _LOW_HP_MAX:
             return val
     return None
+
+
+def _low_hp_aligned(region_bgr, templates, w, scale, pitch, span, val):
+    """저HP 판독을 글자가 실제로 있는 줄에 맞춰 한 번 더 — 늘리기만(1 → 15·13).
+    등록 영역이 바보다 몇 px 위로 어긋나면(두 줄 구간 5px 등) 고정 세로 띠(28~82%)가 숫자 아랫부분을 잘라 '15.00'을 1로 읽었다
+    (사용자 11-07 '20% 아래가 가끔 1', unknown_hpxxx_show001_upper_197.zip). 정상 위치면 추가 판독 없음."""
+    if not USE_TEXT_MASK:
+        return val
+    h = region_bgr.shape[0]
+    bright = _bright_mask(region_bgr)
+    rows = np.where((bright[:, int(w * _NUM_LEFT):] > 0).sum(axis=1) >= 3)[0]
+    if rows.size == 0:
+        return val
+    top, bottom = int(rows.min()), int(rows.max())
+    y0, y1 = int(h * _YBAND[0]), int(h * _YBAND[1])
+    if top >= y0 - 1 and bottom <= y1:
+        return val  # 글자가 기본 띠 안 — 그대로
+    band = bright[max(0, top - 1):bottom + 2]
+    head, best = str(val), None
+    for shift in range(-span, span + 1):
+        v, sc, _nd = _read_at(band, w, _FIRST * scale + shift, pitch, templates, 0)
+        if v is None or v > _LOW_HP_MAX or sc < _ACCEPT:
+            continue
+        sv = str(v)
+        if len(sv) > len(head) and sv.startswith(head) and (best is None or sc > best[1]):
+            best = (v, sc)
+    return best[0] if best is not None else val
 
 
 def _prep(region_bgr, templates):
