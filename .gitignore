@@ -43,3 +43,7 @@ StarlineMabinogiAddonRuntime/
 
 # Local bounded regression watchdog diagnostics (CI uploads only sanitized public files).
 test-diagnostics/
+
+# 배포 검사 결과(scripts.run_release_checks가 만든다 — 커밋하지 않음)
+unit-results.xml
+test-diagnostics/
