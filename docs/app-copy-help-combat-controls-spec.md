@@ -706,3 +706,8 @@
 - 15절 '잠금 줄 한 줄 세 칸'은 위 2줄 왼쪽으로 옮겨 유지(두 칸이 한 칸으로 접히지 않게 하는 조건 그대로).
 - 좁은 창에서 위 2줄이 넘치면 체크박스들을 다음 줄로 내린다(잠금 세 칸은 한 줄 유지).
 - 검토했다가 쓰지 않은 것: 디버프 '남은 시간'을 공통 체크박스로 빼는 안(안 걸린 디버프는 보스에 없어 읽을 시간이 없음 — 사용자 철회).
+- **구현(2026-11-08)**: `RegionSection(header_title=…)` 한 줄 머리(다른 화면 영역 묶음은 그대로), `WrapRow`(잠금 세 칸 + 체크박스, 좁으면 체크박스만 다음 줄), `EqualRow`(세 칸 같은 폭 = 가장 넓은 칸 × 3).
+  왼쪽 칸 최소 폭은 예전처럼 잠금 세 칸 각자 최소 폭의 합(`MinWidthPanel`) — 790에서 두 칸, 600에서 한 칸(15절 조건 그대로). ⓘ 툴팁 = 영역 위치·크기 + 영역 안내.
+  영역 지정 전 큰 상자가 위 전체 폭이라 그동안은 790×864에서 세로 스크롤이 생길 수 있다(지정 후 없음). 렌더: [디버프(제작자·걸린 것)](assets/buff-debuff-layout-20261108/impl-debuff-c-applied-790-set.png) ·
+  [디버프](assets/buff-debuff-layout-20261108/impl-debuff-u-missing-790-set.png) · [버프](assets/buff-debuff-layout-20261108/impl-buff-u-missing-790-set.png) ·
+  [600 한 칸](assets/buff-debuff-layout-20261108/impl-debuff-c-missing-600-set.png) · [지정 전](assets/buff-debuff-layout-20261108/impl-buff-u-missing-790-unset.png).

@@ -62,8 +62,11 @@ def refresh_autofind(key: str | None = None) -> None:
 
 class RegionSection(QWidget):
     def __init__(self, body: QWidget, *, unset_text: str, title: str = "영역 다시 지정",
-                 summary: QWidget | None = None, box_title: str = "영역 지정", parent=None):
+                 summary: QWidget | None = None, box_title: str = "영역 지정", header_title: str | None = None,
+                 parent=None):
+        """header_title: 버프·디버프 탭(명세 17절) — 한 줄 머리 '<굵은 제목> 상태 ⓘ … [영역 다시 지정]', 누르면 아래에 전체 폭으로 펼침."""
         super().__init__(parent)
+        self.header = header_title is not None
         self.body = body
         self.registered = False
         self._keep_open = False
@@ -76,7 +79,8 @@ class RegionSection(QWidget):
         self.auto_badge.setWordWrap(True)
         self.auto_badge.setStyleSheet(f"color:{color('accent')};")
         self.auto_badge.hide()
-        layout.addWidget(self.auto_badge)
+        if not self.header:
+            layout.addWidget(self.auto_badge)
         self.box = QGroupBox(box_title)
         box = QVBoxLayout(self.box)
         self.unset_label = QLabel(f'<span style="color:{color('warn')}">●</span> 아직 지정 안 됨 — {unset_text}')
@@ -94,17 +98,44 @@ class RegionSection(QWidget):
         else:
             self.summary_label = None
         self.summary = summary
-        layout.addWidget(summary)
         self.toggle = QToolButton()
         self.toggle.setText(title)
         self.toggle.setCheckable(True)
-        self.toggle.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        self.toggle.setArrowType(Qt.ArrowType.RightArrow)
-        self.toggle.setAutoRaise(True)
-        layout.addWidget(self.toggle)
+        if self.header:
+            # 한 줄: 제목 · 상태(지금 상태는 툴팁에 숨기지 않음) · 자동(v2) · ⓘ(영역 자세히) … [영역 다시 지정]
+            from PySide6.QtWidgets import QHBoxLayout, QSizePolicy
+            self.header_row = QWidget()
+            row = QHBoxLayout(self.header_row)
+            row.setContentsMargins(0, 0, 0, 0)
+            row.setSpacing(10)
+            self.header_label = QLabel(header_title)
+            self.header_label.setStyleSheet("font-weight:700;")
+            row.addWidget(self.header_label)
+            for label in [summary, *summary.findChildren(QLabel)]:
+                if isinstance(label, QLabel):
+                    label.setWordWrap(False)  # 한 줄 상태 — 줄바꿈하면 좁은 세로 칸으로 찌그러짐
+                    label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)  # 굵은 제목과 같은 줄 높이
+            row.addWidget(summary)
+            self.auto_badge.setWordWrap(False)
+            row.addWidget(self.auto_badge)
+            self.info = QLabel("ⓘ")
+            self.info.setStyleSheet(f"color:{color('muted')};")
+            self.info.setCursor(Qt.CursorShape.WhatsThisCursor)
+            row.addWidget(self.info)
+            row.addStretch(1)
+            self.toggle.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
+            self.toggle.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+            row.addWidget(self.toggle)
+            layout.insertWidget(0, self.header_row)
+        else:
+            layout.addWidget(summary)
+            self.toggle.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+            self.toggle.setArrowType(Qt.ArrowType.RightArrow)
+            self.toggle.setAutoRaise(True)
+            layout.addWidget(self.toggle)
         self.fold = QWidget()
         fold = QVBoxLayout(self.fold)
-        fold.setContentsMargins(14, 0, 0, 0)
+        fold.setContentsMargins(0 if self.header else 14, 0, 0, 0)
         self._fold_layout = fold
         layout.addWidget(self.fold)
         self.toggle.toggled.connect(self._toggled)
@@ -120,6 +151,8 @@ class RegionSection(QWidget):
         self.box.setVisible(not registered)
         self.summary.setVisible(registered)
         self.toggle.setVisible(registered)
+        if self.header:
+            self.info.setVisible(registered and bool(self.info.toolTip()))
         if not registered:
             self._keep_open = False
             self._set_open(False)
@@ -158,8 +191,15 @@ class RegionSection(QWidget):
         self.toggle.blockSignals(False)
         self._toggled(value)
 
+    def set_info(self, text: str) -> None:
+        """한 줄 머리의 ⓘ 툴팁(영역 위치·크기 등 자세한 것) — 지금 상태는 상태 문구에 그대로 보인다."""
+        if self.header:
+            self.info.setToolTip(text)
+            self.info.setVisible(self.registered and bool(text))
+
     def _toggled(self, value: bool) -> None:
-        self.toggle.setArrowType(Qt.ArrowType.DownArrow if value else Qt.ArrowType.RightArrow)
+        if not self.header:
+            self.toggle.setArrowType(Qt.ArrowType.DownArrow if value else Qt.ArrowType.RightArrow)
         self.fold.setVisible(bool(value) and self.registered)
         if not value:
             self._keep_open = False

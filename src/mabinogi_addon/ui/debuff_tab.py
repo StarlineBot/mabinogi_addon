@@ -83,6 +83,7 @@ class DebuffTab(QWidget):
         outer.addWidget(self.header)
         list_panel = self._build_list_panel()
         self.form_panel = self._build_form_panel()
+        outer.addWidget(self.top_area)  # 공통 설정은 위 전체 폭(명세 17절)
         self._columns = TrackerColumns(list_panel, self.form_panel)
         outer.addLayout(self._columns, 1)
 
@@ -125,7 +126,8 @@ class DebuffTab(QWidget):
 
     # ---- 목록 ----
     def _build_list_panel(self) -> QWidget:
-        panel = QWidget()
+        from .widgets import MinWidthPanel
+        panel = MinWidthPanel()
         v = QVBoxLayout(panel)
         v.setContentsMargins(0, 0, 0, 0)
 
@@ -263,13 +265,45 @@ class DebuffTab(QWidget):
         self.bar_adjust_btn = disclosure("공유 보스 영역 개별 조정", self._bar_region_container, v)
         from .region_section import RegionSection
         self.region_section = RegionSection(body, unset_text="지정하면 보스에게 아직 걸리지 않은 디버프를 보여줘요",
-                                            summary=summary)
+                                            summary=summary, header_title="판독 영역 · 디버프 줄")
         v = outer
-        v.addWidget(section_label("판독 영역 · 디버프 줄"))
-        v.addWidget(self.region_section)
+        # 위 전체 폭(명세 17절): 1줄 '판독 영역 · 디버프 줄' 상태 ⓘ [영역 다시 지정] / 2줄 잠금 세 칸 + 체크박스 / 구분선.
+        # 그 아래 목록 | 고른 항목 설정이 같은 높이에서 시작한다(바깥 상자 없음).
+        # '오버레이 창 보이기'(0.32.0): 끄면 창만 숨기고 탐지·알림은 계속 — 아이콘 없이 소리 알림만 쓰는 사람용.
+        self.window_check = checkbox("오버레이 창 보이기")
+        self.window_check.setChecked(config.load_overlay_windows()[1])
+        self.window_check.setToolTip("끄면 창 없이 알림만 받아요. 디버프 오버레이 창만 숨기고 추적·알림·소리는 그대로예요.\n"
+                                     "일시정지와 달리 알림도 계속 울려요.")
+        self.window_check.toggled.connect(self._on_window_visible)
+        # 보스바가 보일 때만 표시(2026-11-06): 마을 등 보스가 없을 때 디버프 목록이 뜨지 않게. 보스바 영역이 없으면 항상 표시.
+        self.boss_only_check = checkbox("보스바가 보일 때만 표시")
+        self.boss_only_check.setChecked(config.load_debuff_boss_only())
+        self.boss_only_check.setToolTip("보스 체력바 영역이 없으면 항상 보여요. 보스 체력바가 사라진 뒤 10초 더 보이고, "
+                                        "숨겨진 동안에도 디버프는 계속 확인해요.")
+        self.boss_only_check.toggled.connect(self._on_boss_only)
+        from .widgets import EqualRow
+        # 위 2줄에서는 세 칸 모두 같은 제 글자 폭(가장 넓은 칸 × 3) — 왼쪽 칸처럼 늘어나지 않아 '불투명도 100 %'가 잘렸다
+        lock_trio = EqualRow(top, (self.lock_btn, self.scale_spin, self.opacity_spin))
+        checks = QWidget()
+        checks_row = QHBoxLayout(checks)
+        checks_row.setContentsMargins(0, 0, 0, 0)
+        checks_row.setSpacing(16)
+        checks_row.addWidget(self.window_check)
+        checks_row.addWidget(self.boss_only_check)
+        from .widgets import WrapRow, divider
+        self.controls_row = WrapRow(lock_trio, checks)  # 좁으면 체크박스만 다음 줄로(잠금 세 칸은 한 줄)
+        self._bar_gating_notice = hint_label("")
+        self._bar_gating_notice.setStyleSheet(f"color:{color('warn')}; font-size:12px;")
+        self.top_area = QWidget()
+        top_area = QVBoxLayout(self.top_area)
+        top_area.setContentsMargins(0, 0, 0, 0)
+        top_area.setSpacing(8)
+        top_area.addWidget(self.region_section)
+        top_area.addWidget(self.controls_row)
+        top_area.addWidget(self._bar_gating_notice)
+        top_area.addWidget(divider())
         self._update_region_hint()
-        v.addLayout(top)
-        # 표시 방식(docs/debuff-applied-overlay-spec.md, 제작자 먼저): 잠금 줄 아래 '표시 [안 걸린 것 | 걸린 것 + 시간]', 기본 안 걸린 것.
+        # 표시 방식(docs/debuff-applied-overlay-spec.md, 제작자 먼저): 목록 위 '표시 [안 걸린 것 | 걸린 것 + 시간]', 기본 안 걸린 것.
         self.display_segments = None
         from .. import feature_access
         if feature_access.is_creator():
@@ -282,38 +316,11 @@ class DebuffTab(QWidget):
             display_row.addWidget(QLabel("표시"))
             display_row.addWidget(self.display_segments, 1)
             v.addLayout(display_row)
-        # '오버레이 창 보이기'(0.32.0): 끄면 창만 숨기고 탐지·알림은 계속 — 아이콘 없이 소리 알림만 쓰는 사람용.
-        # 잠금 줄과 다른 줄이라 두 칸(목록|상세) 최소 폭에 영향 없음(0.31.1).
-        self.window_check = checkbox("오버레이 창 보이기")
-        self.window_check.setChecked(config.load_overlay_windows()[1])
-        self.window_check.setToolTip("끄면 디버프 오버레이 창만 숨겨요. 추적·알림·소리는 그대로예요.\n"
-                                     "일시정지와 달리 알림도 계속 울려요.")
-        self.window_check.toggled.connect(self._on_window_visible)
-        self.window_hint = hint_label("끄면 창 없이 알림만 받아요")
-        window_row = QHBoxLayout()
-        window_row.setSpacing(8)
-        window_row.addWidget(self.window_check)
-        window_row.addWidget(self.window_hint, 1)
-        v.addLayout(window_row)
-        # 보스바가 보일 때만 표시(2026-11-06): 마을 등 보스가 없을 때 디버프 목록이 뜨지 않게. 보스바 영역이 없으면 항상 표시.
-        self.boss_only_check = checkbox("보스바가 보일 때만 표시")
-        self.boss_only_check.setChecked(config.load_debuff_boss_only())
-        self.boss_only_check.setToolTip("보스 체력바가 사라진 뒤 10초 더 보여요. 숨겨진 동안에도 디버프는 계속 확인해요.\n"
-                                        "보스 체력바 영역을 지정하지 않았으면 항상 보여요.")
-        self.boss_only_check.toggled.connect(self._on_boss_only)
-        self.boss_only_hint = hint_label("보스 체력바 영역이 없으면 항상 보여요")
-        boss_row = QHBoxLayout()
-        boss_row.setSpacing(8)
-        boss_row.addWidget(self.boss_only_check)
-        boss_row.addWidget(self.boss_only_hint, 1)
-        v.addLayout(boss_row)
-
-        self._bar_gating_notice = hint_label("")
-        self._bar_gating_notice.setStyleSheet(f"color:{color('warn')}; font-size:12px;")
-        v.addWidget(self._bar_gating_notice)
         self._apply_login_gate()
         self._refresh_method_ui()
         self._apply_display_texts()
+        # 두 칸 → 한 칸 접힘 조건(명세 15절)은 그대로: 잠금 세 칸이 위로 갔어도 왼쪽 칸 최소 폭은 잠금 줄 폭
+        panel.min_width = lambda: top.minimumSize().width()  # 예전 왼쪽 칸 안 잠금 줄의 최소 폭(세 칸 각자 최소의 합)
 
         self.debuff_list = QListWidget()
         self.debuff_list.setIconSize(QSize(28, 28))
@@ -359,6 +366,7 @@ class DebuffTab(QWidget):
         if self.display_segments is None:
             return
         applied = self.effective_display_mode() == "applied"
+        self.boss_only_check.setEnabled(not applied)  # 걸린 디버프는 보스가 있어야만 나옴 — 흐리게(값은 그대로, 명세 17절)
         self.header.description.setText(DISPLAY_DESC["applied" if applied else "missing"])
         unset = DISPLAY_UNSET["applied" if applied else "missing"]
         self.region_section.unset_label.setText(
@@ -511,6 +519,9 @@ class DebuffTab(QWidget):
             )
             self.region_hint.setStyleSheet(f"color:{color('ok')};")
             self.view_region_btn.setEnabled(True)
+            if section is not None:  # 한 줄 머리 ⓘ(명세 17절): 영역 자세히
+                section.set_info(f"디버프 영역 {region['x']},{region['y']}  {region['w']}×{region['h']}\n"
+                                 "자동 찾기는 디버프 줄과 보스 체력바를 함께, 직접 지정은 디버프 줄만 등록해요.")
         else:
             self.region_hint.setText("디버프 영역 미지정")
             self.region_hint.setStyleSheet(f"color:{color('muted')};")

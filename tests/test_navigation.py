@@ -51,10 +51,15 @@ def test_structure_and_default_editor_space(window):
     bar = w._tracker_tabs.tabBar()
     assert all(bar.rect().contains(bar.tabRect(i)) for i in range(8))
     assert w._combat_pages['tuarim'] is w._combat_pages['dorcha']
-    for key in ('buff','debuff'):
+    for key, conf in (('buff','buffTracker'),('debuff','debuffTracker')):
+        # 영역 지정 후(평소) 기본 크기에서 스크롤 없음. 지정 전 큰 '영역 지정' 상자는 위 전체 폭이라(명세 17절) 한 번 하는 설정 동안 아래로 밀 수 있다.
+        config.save_capture_region(10, 20, 300, 80, conf)
         w._open_setup_feature(key)
-        app.processEvents()
         panel = getattr(w,key+'_tab')
+        panel._update_region_hint()
+        panel.region_section._set_open(False)  # 방금 지정해 펼친 묶음은 탭을 다시 열면 접힘
+        for _ in range(4):
+            app.processEvents()
         assert not panel._columns.stacked
         assert w.width() == 790
         assert w._combat_pages[key].horizontalScrollBar().maximum() == 0

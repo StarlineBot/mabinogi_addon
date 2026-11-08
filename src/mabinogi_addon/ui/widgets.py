@@ -96,6 +96,86 @@ class TrackerColumns(QBoxLayout):
             self.setDirection(direction)
 
 
+class WrapRow(QWidget):
+    """한 줄에 두 묶음 — 좁아 다 안 들어가면 두 번째 묶음만 다음 줄로(버프·디버프 탭 위 2줄: 잠금 세 칸 + 체크박스, 명세 17절)."""
+
+    def __init__(self, first, second, spacing: int = 16, parent=None):
+        super().__init__(parent)
+        self.first, self.second = first, second
+        self._box = QBoxLayout(QBoxLayout.Direction.LeftToRight, self)
+        self._box.setContentsMargins(0, 0, 0, 0)
+        self._box.setSpacing(spacing)
+        self._box.addWidget(first)
+        self._box.addWidget(second)
+        self._box.addStretch(1)
+
+    @property
+    def wrapped(self) -> bool:
+        return self._box.direction() == QBoxLayout.Direction.TopToBottom
+
+    def _need(self) -> int:
+        return self.first.minimumSizeHint().width() + 16 + self.second.sizeHint().width()
+
+    def minimumSizeHint(self):
+        hint = super().minimumSizeHint()
+        hint.setWidth(max(self.first.minimumSizeHint().width(), self.second.minimumSizeHint().width()))
+        return hint
+
+    def resizeEvent(self, event):
+        direction = (QBoxLayout.Direction.TopToBottom if self._need() > event.size().width()
+                     else QBoxLayout.Direction.LeftToRight)
+        if direction != self._box.direction():
+            self._box.setDirection(direction)
+            self._box.setSpacing(4 if direction == QBoxLayout.Direction.TopToBottom else 16)
+        super().resizeEvent(event)
+
+
+class EqualRow(QWidget):
+    """같은 너비 칸 한 줄(잠금 세 칸) — 최소 폭 = 가장 넓은 칸 × 칸 수(스타일·글꼴·배율이 바뀌어도 그때 다시 계산).
+    위 2줄(명세 17절)에서 늘어나지 않는 자리에 놓여도 '불투명도 100 %'가 잘리지 않게."""
+
+    def __init__(self, layout, widgets, parent=None):
+        super().__init__(parent)
+        self._widgets = tuple(widgets)
+        layout.setContentsMargins(0, 0, 0, 0)
+        self.setLayout(layout)
+
+    def _width(self) -> int:
+        widest = max(max(w.sizeHint().width(), w.minimumSizeHint().width(), w.minimumWidth()) for w in self._widgets)
+        return widest * len(self._widgets) + self.layout().spacing() * (len(self._widgets) - 1)
+
+    def minimumSizeHint(self):
+        hint = super().minimumSizeHint()
+        hint.setWidth(max(hint.width(), self._width()))
+        return hint
+
+    def sizeHint(self):
+        hint = super().sizeHint()
+        hint.setWidth(max(hint.width(), self._width()))
+        return hint
+
+
+class MinWidthPanel(QWidget):
+    """최소 폭을 함수로 더 거는 칸 — 버프·디버프 왼쪽 칸(명세 17절): 잠금 줄이 위로 갔어도 두 칸 → 한 칸 접힘 조건(15절)은
+    예전처럼 '잠금 세 칸 각자 최소 폭의 합'으로 둔다."""
+
+    min_width = None
+
+    def minimumSizeHint(self):
+        hint = super().minimumSizeHint()
+        if self.min_width is not None:
+            hint.setWidth(max(hint.width(), self.min_width()))
+        return hint
+
+
+def divider() -> QWidget:
+    """탭 머리 구분선과 같은 모양의 가로줄."""
+    line = QWidget()
+    line.setFixedHeight(1)
+    line.setStyleSheet("background:palette(mid);")
+    return line
+
+
 class SuffixSpinBox(QSpinBox):
     """suffix(' 만' 등)가 있어도 숫자 입력이 막히지 않는 스핀박스.
 

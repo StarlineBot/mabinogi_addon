@@ -12,7 +12,9 @@ from mabinogi_addon.ui.main_window import MainWindow
 @pytest.fixture
 def window(monkeypatch):
     app = QApplication.instance() or QApplication([])
-    raw = {"general": {"skipSetup": True}}
+    # 영역 지정 후(평소) 배치를 잰다 — 지정 전 큰 '영역 지정' 상자는 위 전체 폭(명세 17절)
+    raw = {"general": {"skipSetup": True}, "buffTracker": {"captureRegion": {"x": 10, "y": 20, "w": 300, "h": 600}},
+           "debuffTracker": {"captureRegion": {"x": 10, "y": 20, "w": 520, "h": 88}}}
     monkeypatch.setattr(config, "_read_local_config", lambda *a, **k: deepcopy(raw))
     monkeypatch.setattr(config, "_write_local_config", lambda *a, **k: None)
     monkeypatch.setattr(config, "load_discord_user", lambda: {"id": "test", "name": "테스트"})
@@ -60,11 +62,18 @@ def test_only_list_grows_settings_face_and_rows_stay_fixed(window, index):
     form_origin = form.mapTo(w, QPoint())
     form_width = form.width()
     row_height = items.sizeHintForRow(0)
+    baseline_scrolled = w._tracker_tabs.widget(index).verticalScrollBar().maximum() > 0  # 버프: 비교 기준(바닥 고정)에서 스크롤 막대
     w.creator_dialogue.refresh()
-    app.processEvents()
-    assert items.height() == height + 64
+    for _ in range(3):  # 명세 17절: 위 두 줄이 생겨 배치 요청이 한 번 더 돌아야 띄움이 확정된다(눈에 보이지 않는 한 틱)
+        app.processEvents()
+    # 명세 17절: 오른쪽 설정이 위 두 줄 아래에서 시작해, 편집 칸이 큰 버프 탭은 예전 바닥 고정 배치(비교 기준)에서 이미 조금 스크롤됐다 —
+    # 그래서 늘어나는 양은 탭마다 다르고(디버프 +64), 줄어들거나 다른 것이 움직이지 않는지·스크롤이 없는지를 본다
+    assert height <= items.height() <= height + 64
     assert items.sizeHintForRow(0) == row_height
-    assert form.mapTo(w, QPoint()) == form_origin and form.width() == form_width
+    if baseline_scrolled:  # 기준에만 세로 스크롤 막대가 있어 가로는 막대 폭만큼 달랐다 — 세로 자리만 같아야 함
+        assert form.mapTo(w, QPoint()).y() == form_origin.y()
+    else:
+        assert form.mapTo(w, QPoint()) == form_origin and form.width() == form_width
     assert w.creator_dialogue.face.mapTo(w, QPoint()) == face
     assert w.size().width() == 790 and w.size().height() == 864
     assert w._tracker_tabs.widget(index).verticalScrollBar().maximum() == 0
@@ -91,7 +100,8 @@ def test_other_pages_keep_reserved_space_and_switches_do_not_drift(window):
             assert w.centralWidget().layout().indexOf(d.footer) >= 0
         w._tabs.setCurrentIndex(0)
         w._tracker_tabs.setCurrentIndex(0)
-        app.processEvents()
+        for _ in range(3):  # 명세 17절: 띄움 재판정이 한 틱 더 돈 뒤 같은 높이
+            app.processEvents()
         assert w.buff_tab.buff_list.height() == height
         assert d.face.mapTo(w, QPoint()) == face
         assert w.buff_tab.buff_list.currentRow() == row
@@ -389,7 +399,7 @@ def test_bubble_does_not_resize_expanded_list_or_expand_visibility_region(window
 def test_growing_notice_reevaluates_footer_without_tab_switch(window):
     w, app = window
     d = w.creator_dialogue
-    label = w.buff_tab.region_guide  # 0.27.0: 상태 줄은 지정 후 요약 줄(지정 전 숨김)
+    label = w.buff_tab.status_label  # 명세 17절: 지정 후 위 1줄 상태 문구(영역 안내는 접힌 묶음 안)
     original = label.text()
     assert d._floating_footer
     label.setText("여러 줄 상태 안내입니다.\n" * 40)

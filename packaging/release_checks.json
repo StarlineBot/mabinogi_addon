@@ -23,7 +23,11 @@
     "tests/test_debuff_identity.py",
     "tests/test_debuff_live_detection.py",
     "tests/test_overlay_spec.py",
-    "tests/test_debuff_boss_gate.py"
+    "tests/test_buff_opacity_reorder.py",
+    "tests/test_debuff_boss_gate.py",
+    "tests/test_navigation.py",
+    "tests/test_tracker_layout.py",
+    "tests/test_screen_polish.py"
   ],
   "coverage": {
     "src/mabinogi_addon/detect/boss_hp_reader.py": {
@@ -62,7 +66,7 @@
         "tests/test_release_notes.py",
         "tests/test_release_notes_trigger.py"
       ],
-      "reason": "0.44.2 노트 파싱·새 버전 표시(디버프 사라짐 소리 한 줄 + 제작자 시험 기능 한 줄, 게시된 0.44.1 섹션은 그대로)"
+      "reason": "0.44.2 노트 파싱·새 버전 표시(탭 배치·디버프 사라짐 소리·제작자 시험 기능, 게시된 0.44.1 섹션 그대로)"
     },
     "packaging/release_checks.json": {
       "tests": [
@@ -129,10 +133,13 @@
     },
     "src/mabinogi_addon/ui/debuff_tab.py": {
       "tests": [
+        "tests/test_buff_opacity_reorder.py",
         "tests/test_debuff_applied.py",
-        "tests/test_debuff_boss_gate.py"
+        "tests/test_debuff_boss_gate.py",
+        "tests/test_navigation.py",
+        "tests/test_tracker_layout.py"
       ],
-      "reason": "디버프 '걸린 것 + 시간' 보기(제작자 먼저, docs/debuff-applied-overlay-spec.md): 제작자만 '표시' 선택·설명 문구, 비제작자 그대로"
+      "reason": "디버프 '걸린 것 + 시간' 보기(제작자 먼저, docs/debuff-applied-overlay-spec.md): 제작자만 '표시' 선택·설명 문구, 비제작자 그대로 · 버프·디버프 탭 배치(명세 17절): 위 두 줄(영역 한 줄 + 잠금 세 칸·체크박스) + 구분선, 목록|항목 설정 같은 높이, 두 칸 접힘 조건 그대로 · 걸린 것 + 시간이면 '보스바가 보일 때만' 흐리게"
     },
     "src/mabinogi_addon/config.py": {
       "tests": [
@@ -158,6 +165,30 @@
         "tests/test_warn_gone.py"
       ],
       "reason": "사용자가 올린 원본(tests/data/universfield-new-notification-035-485894.mp3) 그대로"
+    },
+    "src/mabinogi_addon/ui/buff_tab.py": {
+      "tests": [
+        "tests/test_buff_opacity_reorder.py",
+        "tests/test_navigation.py",
+        "tests/test_screen_polish.py",
+        "tests/test_tracker_layout.py"
+      ],
+      "reason": "버프·디버프 탭 배치(명세 17절): 위 두 줄(영역 한 줄 + 잠금 세 칸·체크박스) + 구분선, 목록|항목 설정 같은 높이, 두 칸 접힘 조건 그대로"
+    },
+    "src/mabinogi_addon/ui/region_section.py": {
+      "tests": [
+        "tests/test_tracker_layout.py",
+        "tests/test_screen_polish.py",
+        "tests/test_navigation.py"
+      ],
+      "reason": "한 줄 머리 모드(제목·상태·ⓘ·[영역 다시 지정], 버프·디버프만) — 다른 화면의 영역 묶음은 그대로"
+    },
+    "src/mabinogi_addon/ui/widgets.py": {
+      "tests": [
+        "tests/test_tracker_layout.py",
+        "tests/test_buff_opacity_reorder.py"
+      ],
+      "reason": "WrapRow(좁으면 체크박스만 다음 줄)·EqualRow(잠금 세 칸 같은 폭)·MinWidthPanel(접힘 조건 유지)·divider"
     }
   }
 }

@@ -76,9 +76,8 @@ def test_lock_row_is_three_equal_columns(window):
     w, app = window
     for tab in (w.buff_tab, w.debuff_tab):
         row = [tab.lock_btn, tab.scale_spin, tab.opacity_spin]
-        layout = tab.lock_btn.parentWidget().layout()
-        top = next(item.layout() for item in (layout.itemAt(i) for i in range(layout.count()))
-                   if item.layout() is not None and item.layout().indexOf(tab.opacity_spin) >= 0)
+        top = tab.lock_btn.parentWidget().layout()  # 명세 17절: 잠금 세 칸은 위 2줄의 자기 묶음
+        assert top.indexOf(tab.opacity_spin) >= 0
         assert [top.stretch(top.indexOf(widget)) for widget in row] == [1, 1, 1]
         assert tab.opacity_spin.prefix() == "불투명도 " and tab.opacity_spin.suffix() == " %"
         tab.lock_btn.setChecked(True)  # '위치 잠금됨'으로 길어져도 같은 너비

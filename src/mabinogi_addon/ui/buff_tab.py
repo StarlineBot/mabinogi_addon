@@ -186,6 +186,7 @@ class BuffTab(QWidget):
             "등록한 버프의 남은 시간을 오버레이로 표시", HELP_TITLE, HELP_HTML, self
         ))
         list_panel = self._build_list_panel()
+        outer.addWidget(self.top_area)  # 공통 설정은 위 전체 폭(명세 17절)
         self._buff_editor = self._build_form_panel()
         self.form_panel = QWidget()
         form_layout = QVBoxLayout(self.form_panel)
@@ -270,7 +271,8 @@ class BuffTab(QWidget):
 
     # ---- 목록 ----
     def _build_list_panel(self) -> QWidget:
-        panel = QWidget()
+        from .widgets import MinWidthPanel
+        panel = MinWidthPanel()
         v = QVBoxLayout(panel)
         v.setContentsMargins(0, 0, 0, 0)
 
@@ -339,24 +341,29 @@ class BuffTab(QWidget):
         summary.setLayout(status)
         from .region_section import RegionSection
         self.region_section = RegionSection(body, unset_text="지정하면 버프 남은 시간을 오버레이로 보여줘요",
-                                            summary=summary)
-        v.addWidget(section_label("판독 영역 · 버프 목록"))
-        v.addWidget(self.region_section)
-        self._update_region_hint()
-        v.addLayout(top)
+                                            summary=summary, header_title="판독 영역 · 버프 목록")
+        # 위 전체 폭(명세 17절): 1줄 '판독 영역 · 버프 목록' 상태 ⓘ [영역 다시 지정] / 2줄 잠금 세 칸 + 체크박스 / 구분선.
         # '오버레이 창 보이기'(0.32.0): 끄면 창만 숨기고 탐지·알림은 계속 — 아이콘 없이 소리 알림만 쓰는 사람용.
-        # 잠금 줄과 다른 줄이라 두 칸(목록|상세) 최소 폭에 영향 없음(0.31.1).
         self.window_check = checkbox("오버레이 창 보이기")
         self.window_check.setChecked(config.load_overlay_windows()[0])
-        self.window_check.setToolTip("끄면 버프 오버레이 창만 숨겨요. 추적·알림·소리는 그대로예요.\n"
+        self.window_check.setToolTip("끄면 창 없이 알림만 받아요. 버프 오버레이 창만 숨기고 추적·알림·소리는 그대로예요.\n"
                                      "일시정지와 달리 알림도 계속 울려요.")
         self.window_check.toggled.connect(self._on_window_visible)
-        self.window_hint = hint_label("끄면 창 없이 알림만 받아요")
-        window_row = QHBoxLayout()
-        window_row.setSpacing(8)
-        window_row.addWidget(self.window_check)
-        window_row.addWidget(self.window_hint, 1)
-        v.addLayout(window_row)
+        from .widgets import EqualRow
+        # 위 2줄에서는 세 칸 모두 같은 제 글자 폭(가장 넓은 칸 × 3) — 왼쪽 칸처럼 늘어나지 않아 '불투명도 100 %'가 잘렸다
+        lock_trio = EqualRow(top, (self.lock_btn, self.scale_spin, self.opacity_spin))
+        from .widgets import WrapRow, divider
+        self.controls_row = WrapRow(lock_trio, self.window_check)  # 좁으면 체크박스만 다음 줄로(잠금 세 칸은 한 줄)
+        self.top_area = QWidget()
+        top_area = QVBoxLayout(self.top_area)
+        top_area.setContentsMargins(0, 0, 0, 0)
+        top_area.setSpacing(8)
+        top_area.addWidget(self.region_section)
+        top_area.addWidget(self.controls_row)
+        top_area.addWidget(divider())
+        self._update_region_hint()
+        # 두 칸 → 한 칸 접힘 조건(명세 15절)은 그대로: 잠금 세 칸이 위로 갔어도 왼쪽 칸 최소 폭은 잠금 줄 폭
+        panel.min_width = lambda: top.minimumSize().width()  # 예전 왼쪽 칸 안 잠금 줄의 최소 폭(세 칸 각자 최소의 합)
 
         self.buff_list = QListWidget()
         self.buff_list.setIconSize(QSize(32, 32))
@@ -447,6 +454,8 @@ class BuffTab(QWidget):
             )
             self.region_hint.setStyleSheet(f"color:{color('ok')};")
             self.view_region_btn.setEnabled(True)
+            if section is not None:  # 한 줄 머리 ⓘ(명세 17절): 영역 자세히
+                section.set_info(f"버프 영역 {region['x']},{region['y']}  {region['w']}×{region['h']}\n{REGION_GUIDE}")
         else:
             self.region_hint.setText(f"영역 미지정 — {REGION_CRITERION}")
             self.region_hint.setStyleSheet(f"color:{color('muted')};")
