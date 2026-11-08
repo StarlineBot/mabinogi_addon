@@ -69,20 +69,17 @@ def test_current_plan_maps_every_selected_file_to_changed_code_or_shared_contrac
 
 
 def test_current_release_keeps_feature_boundaries_and_delivery_contracts():
-    """0.44.1: 마우스 원·꼬리 색 분리 + 자동 찾기 v2(제작자) 지난 자리 + 배포 계약. (릴리즈마다 경계를 바꾼다 — 누적하지 않음)"""
+    """0.44.2: 보스바 저HP 소수(제작자 오버레이) + 배포 계약. (릴리즈마다 경계를 바꾼다 — 누적하지 않음)"""
     root = Path(__file__).resolve().parents[1]
     plan = json.loads((root / 'packaging/release_checks.json').read_text(encoding='utf-8'))
     paths = set(plan['tests'])
     assert {
-        'tests/test_cursor_fx.py', 'tests/test_cursor_front.py', 'tests/test_autofind_v2_engine.py',
-        'tests/test_autofind_v2_controller.py', 'tests/test_startup_build.py',
-        'tests/test_release_checks.py', 'tests/test_release_candidate.py', 'tests/test_windows_ci.py',
-        'tests/test_startup_smoke.py',
+        'tests/test_boss_low_hp_fraction.py', 'tests/test_boss_bar_overlay.py', 'tests/test_boss_hp_reader.py',
+        'tests/test_startup_build.py', 'tests/test_release_checks.py', 'tests/test_release_candidate.py',
+        'tests/test_windows_ci.py', 'tests/test_startup_smoke.py',
     } <= paths
     assert {
-        'src/mabinogi_addon/cursor_fx.py', 'src/mabinogi_addon/ui/cursor_tab.py', 'src/mabinogi_addon/ui/cursor_overlay.py',
-        'src/mabinogi_addon/autofind_v2.py', 'src/mabinogi_addon/ui/autofind_v2_controller.py',
-        'packaging/build_windows.py', 'src/mabinogi_addon/assets/release_notes.md',
+        'src/mabinogi_addon/detect/boss_hp_reader.py', 'packaging/build_windows.py', 'src/mabinogi_addon/assets/release_notes.md',
     } <= set(plan['coverage'])
     # The separate development entry must continue collecting the whole suite.
     regression = (root / '.github/workflows/regression.yml').read_text(encoding='utf-8')

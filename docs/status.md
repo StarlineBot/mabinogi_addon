@@ -6,6 +6,9 @@
 
 ## 배포와 검증
 
+- **0.44.2 배포 준비(사용자 11-08, 8f0df19 보스바 저HP 소수 — QA 790e596 통과)**: release_checks.json 0.44.2 —
+  boss_hp_reader.py → test_boss_low_hp_fraction·test_boss_bar_overlay·test_boss_hp_reader·test_boss_fill_boundary·test_boss_two_rows, gray 샘플·생성 스크립트 → test_boss_low_hp_fraction, 노트·배포 계약.
+  노트 맨 위 '## v0.44.2'(보스바 오버레이는 제작자 전용이라 '제작자가 시험 중인 기능을 다듬었어요' 한 줄), 게시된 0.44.1 섹션은 그대로. 다음: Windows 후보 검증.
 - **마우스 원·꼬리 색 분리(2026-11-07 사용자 결정 → 구현, main, 0.44.1)**: [명세 7절](mouse-cursor-spec.md) A안.
   모양 → 꼬리 → 흔들어 찾기 → 원 크기·꼬리 길이·불투명도 → 구분선 → 원 색 → 꼬리 색 → 미리보기. 키 `ringColor`·`tailColor`·`tailColorChosen`(예전 `color`→두 색, `colorChosen`→꼬리).
   흐림: 꼬리 없음·무지개 선 → 꼬리 줄, 모양 없음+흔들기 꺼짐 → 원 줄(견본 옅게·이유 한 줄·저장 색 유지). 미리보기·오버레이가 같은 `ring_color`/`tail_color` 사용(테스트로 비교).
