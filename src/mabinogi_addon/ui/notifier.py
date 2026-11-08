@@ -133,7 +133,7 @@ def set_master_volume(percent) -> int:
     config.save_alert_volume(_master_volume)
     for notifier in list(_live):
         notifier.apply_master_volume()
-    for player in (_update_player, _warn_gone_player, _blackbox_player):
+    for player in (_update_player, *_gone_players.values(), _blackbox_player):
         _set_player_volume(player)
     return _master_volume
 
@@ -177,41 +177,52 @@ def play_update_sound() -> bool:
         return False
 
 
-# 버프 사라짐 경고 효과음(assets/sounds/에 이 이름으로 두면 재생, 없으면 조용히 생략).
+# 사라짐 경고 효과음(assets/sounds/에 이 이름으로 두면 재생, 없으면 조용히 생략).
 WARN_GONE_SOUND_FILE = "버프 사라짐.mp3"
-_warn_gone_player = None  # 일회성 재생기(모듈에 보관해 재생 전 GC 방지)
+# 디버프가 보스에서 떨어짐 — 버프 사라짐과 구분되는 소리(사용자 11-08, tests/data/universfield-new-notification-035-485894.mp3)
+DEBUFF_GONE_SOUND_FILE = "디버프 사라짐.mp3"
+_gone_players: dict[str, object] = {}  # 소리별 일회성 재생기(모듈에 보관해 재생 전 GC 방지, 버프·디버프가 서로 끊지 않게 따로)
 
 
 def stop_warn_gone_sound():
-    if _warn_gone_player is not None:
+    for player in _gone_players.values():
         try:
-            _warn_gone_player.stop()
+            player.stop()
         except Exception:
             pass
 
 
-def play_warn_gone_sound() -> bool:
-    """사라짐 경고 버프가 사라졌을 때 효과음 재생. 파일/오디오 없으면 False."""
-    global _warn_gone_player
-    path = sound_path(WARN_GONE_SOUND_FILE)
+def _play_gone(filename: str) -> bool:
+    path = sound_path(filename)
     if not path.exists():
         return False
     try:
         from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 
-        if _warn_gone_player is None:
+        player = _gone_players.get(filename)
+        if player is None:
             audio = QAudioOutput()
             player = QMediaPlayer()
             player.setAudioOutput(audio)
             player._audio = audio  # 오디오 출력도 함께 보관(재생 중 끊김 방지)
-            _warn_gone_player = player
-        _sync_default_device(_warn_gone_player._audio)
-        _set_player_volume(_warn_gone_player)  # 전체 알림 음량  # 지금 쓰는 출력 장치로 맞춤
-        _warn_gone_player.setSource(QUrl.fromLocalFile(str(path)))
-        _warn_gone_player.play()
+            _gone_players[filename] = player
+        _sync_default_device(player._audio)  # 지금 쓰는 출력 장치로 맞춤
+        _set_player_volume(player)  # 전체 알림 음량
+        player.setSource(QUrl.fromLocalFile(str(path)))
+        player.play()
         return True
     except Exception:  # noqa: BLE001 — 오디오 없으면 무음(시각 경고는 그대로 뜸)
         return False
+
+
+def play_warn_gone_sound() -> bool:
+    """사라짐 경고 버프가 사라졌을 때 효과음 재생. 파일/오디오 없으면 False."""
+    return _play_gone(WARN_GONE_SOUND_FILE)
+
+
+def play_debuff_gone_sound() -> bool:
+    """사라짐 경고 디버프가 보스에서 떨어졌을 때 효과음 — 버프 사라짐과 다른 소리. 파일/오디오 없으면 False."""
+    return _play_gone(DEBUFF_GONE_SOUND_FILE)
 
 
 class SoundNotifier(QObject):

@@ -131,3 +131,23 @@ def test_warn_gone_suppressed_when_not_foreground(monkeypatch):
     clock["t"] = 14.0  # 확정 시간이 지나도
     c._on_updated([_entry("march")])
     assert not any(it.gone for it in c._items)  # 비포커스 → 경고 안 뜸
+
+
+def test_debuff_gone_uses_its_own_sound(monkeypatch):
+    """디버프 떨어짐은 버프 사라짐과 다른 소리(사용자 11-08) — 사용자가 올린 파일 그대로 묶음."""
+    import hashlib
+    from pathlib import Path
+    from types import SimpleNamespace
+
+    from mabinogi_addon import paths
+    from mabinogi_addon.ui import notifier
+    from mabinogi_addon.ui.main_window import MainWindow
+    source = Path(__file__).parent / "data/universfield-new-notification-035-485894.mp3"
+    packaged = paths.resource_dir() / "sounds" / notifier.DEBUFF_GONE_SOUND_FILE
+    assert hashlib.sha256(source.read_bytes()).digest() == hashlib.sha256(packaged.read_bytes()).digest()
+    assert packaged.read_bytes() != (paths.resource_dir() / "sounds" / notifier.WARN_GONE_SOUND_FILE).read_bytes()
+    played = []
+    monkeypatch.setattr(notifier, "_play_gone", lambda name: played.append(name) or True)
+    MainWindow._on_debuff_gone(SimpleNamespace(), ["모모"])
+    notifier.play_warn_gone_sound()
+    assert played == ["디버프 사라짐.mp3", "버프 사라짐.mp3"]
