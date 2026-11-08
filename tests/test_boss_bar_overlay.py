@@ -482,7 +482,8 @@ FRAC_TRUE = [  # (zip 안 파일, 판독 영역 위 여백, 화면 글자) — �
     ("eotgallin_poinche_hp004_109.png", 1, "46.86"), ("eotgallin_poinche_hp045_003.png", 1, "45.65"),
     ("eotgallin_poinche_hp047_001.png", 1, "47.43"),
 ]
-LOW_HP = [("unknown_hpxxx_042.png", 14), ("unknown_hpxxx_043.png", 14), ("unknown_hpxxx_044.png", 9), ("unknown_hpxxx_045.png", 7)]
+LOW_HP = [("unknown_hpxxx_042.png", "14.87"), ("unknown_hpxxx_043.png", "14.23"), ("unknown_hpxxx_044.png", "9.42"),
+          ("unknown_hpxxx_045.png", "7.70")]  # 화면 글자
 
 
 def _zip_frame(tmp_path, name, top):
@@ -502,11 +503,13 @@ def test_fraction_matches_screen_text(tmp_path, name, top, text):
     assert whole == read_percent(reg)  # 정수 경로·결과는 그대로
 
 
-@pytest.mark.parametrize("name,whole", LOW_HP)
-def test_low_hp_shows_integer_only(tmp_path, name, whole):
-    """저HP(빨간 바, 밝기 마스크 경로)는 숫자 샘플이 맞지 않아 소수 없음 — 틀린 소수 대신 정수만."""
-    from mabinogi_addon.detect.boss_hp_reader import read_percent_frac
-    assert read_percent_frac(_zip_frame(tmp_path, name, 45)) == (whole, None)
+@pytest.mark.parametrize("name,text", LOW_HP)
+def test_low_hp_shows_fraction_from_white_text(tmp_path, name, text):
+    """저HP(회색 빈 바 위 흰 숫자)도 소수 — 흰 글자 샘플로(사용자 11-08, QA dee7b93). 예전엔 정수만."""
+    from mabinogi_addon.detect.boss_hp_reader import read_percent, read_percent_frac
+    reg = _zip_frame(tmp_path, name, 45)
+    whole, frac = read_percent_frac(reg)
+    assert f"{whole}.{frac}" == text and whole == read_percent(reg)
 
 
 def test_fraction_never_changes_integer_on_all_collected_frames(tmp_path):
@@ -533,7 +536,7 @@ def test_overlay_draws_fraction_for_registered_and_unregistered(tab, tmp_path, m
     with zipfile.ZipFile(f"tests/data/{ZIP}") as z:
         z.extractall(tmp_path, ["pellom_hp047_106.png", "unknown_hpxxx_034.png", "unknown_hpxxx_045.png"])
     for name, expected in (("pellom_hp047_106.png", ("펠롬", 47, "58")), ("unknown_hpxxx_034.png", ("보스", 21, "97")),
-                           ("unknown_hpxxx_045.png", ("보스", 7, None))):
+                           ("unknown_hpxxx_045.png", ("보스", 7, "70"))):  # 저HP 회색 바탕도 소수(11-08)
         tab.bar_section.value.reset()
         state["img"] = image_io.imread(str(tmp_path / name), cv2.IMREAD_COLOR)
         for _ in range(3):

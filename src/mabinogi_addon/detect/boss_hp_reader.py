@@ -73,13 +73,16 @@ def _load_digits(pattern="d*_*.png", exclude=frozenset()) -> dict[str, list[np.n
         if img is None:
             continue
         _, b = cv2.threshold(img, 127, 255, cv2.THRESH_BINARY)
-        out.setdefault(p.stem.removeprefix("bright_")[1], []).append(b)
+        out.setdefault(p.stem.removeprefix("bright_").removeprefix("gray_")[1], []).append(b)
     return out
 
 
 _DIGITS = _load_digits()
 # Bright-only glyphs never compete with normal saturation-mask samples.
 _BRIGHT_SAMPLES = _load_digits("bright_d*_*.png")
+# 밝기 마스크(흰 글자만) 숫자 0~9 — 저HP 회색 바탕 위 소수 두 칸 전용(사용자 11-08, QA dee7b93). 정수 판독엔 쓰지 않는다(정수 결과 그대로).
+# scripts/build_boss_digits_20261108.py: tests/data 보스 수집에서 기본 경로가 정수·소수를 다 읽은 프레임의 흰 글자를 그 값으로 이름 붙여 골랐다.
+_GRAY_SAMPLES = _load_digits("gray_d*_*.png")
 
 
 def _color_mask(region_bgr: np.ndarray) -> np.ndarray:
@@ -412,7 +415,8 @@ def read_percent_scored(region_bgr: np.ndarray, templates=None) -> tuple[int | N
 
 # 소수 두 자리(보스바 오버레이 표시용, 사용자 확정 11-05) — 정수 판독 경로·결과는 그대로, 같은 글꼴·같은 숫자 샘플.
 # 'XX.YY %'에서 정수 일의 자리 오른쪽 끝 + '.'(약 4px) 뒤 두 칸. 칸 위치가 프레임마다 2~6px 흔들려 첫 칸은 1~7px, 둘째 칸은 첫 칸 기준 ±3px로 맞춘다.
-# 두 칸 모두 _STRONG(0.85) 이상일 때만 — 하나라도 낮으면 None(틀린 소수 대신 정수만). 저HP(빨간 바, 밝기 마스크 경로)는 샘플이 맞지 않아 소수 없음.
+# 두 칸 모두 _STRONG(0.85) 이상일 때만 — 하나라도 낮으면 None(틀린 소수 대신 정수만).
+# 저HP(20% 이하) 회색 바탕 위 흰 숫자는 밝기 마스크 + 흰 글자 샘플로 따로 읽는다(_bright_fraction, 11-08).
 _FRAC_GAP = range(1, 8)
 _FRAC_JITTER = 3
 
@@ -465,6 +469,75 @@ def _fraction(band, w, scale, pitch, templates, shift) -> str | None:
     return first[0] + second[0]
 
 
+def _text_rows(numbers: np.ndarray) -> tuple[int, int] | None:
+    """숫자 칸 밝기 마스크에서 글자 줄(흰 픽셀 3개 이상인 줄이 가장 길게 이어진 구간) — (위, 아래).
+    빨간 바 위쪽 흰 테두리 한 줄이 글자로 잡혀 띠가 통째로 늘던 것(포인셰 17.64를 소수 없이) 제외."""
+    on = (numbers > 0).sum(axis=1) >= 3
+    best, start = None, None
+    for y, v in enumerate([*on, False]):
+        if v and start is None:
+            start = y
+        elif not v and start is not None:
+            if best is None or y - start > best[1] - best[0] + 1:
+                best = (start, y - 1)
+            start = None
+    return best
+
+
+def _digits_before_dot(numbers: np.ndarray) -> int | None:
+    """숫자 칸 밝기 마스크에서 '.'(아래쪽 작은 덩어리, 딱 하나) 왼쪽의 키 큰 글자 덩어리 수. '.'을 못 찾으면 None."""
+    n, _lab, st, _ = cv2.connectedComponentsWithStats((numbers > 127).astype(np.uint8), connectivity=8)
+    if n <= 1:
+        return None
+    tall = int(st[1:, cv2.CC_STAT_HEIGHT].max())
+    dots = [st[i] for i in range(1, n) if st[i][4] >= 2 and st[i][3] * 3 <= tall
+            and st[i][1] + st[i][3] >= tall * 0.7 and st[i][2] * 3 <= tall]
+    if len(dots) != 1:
+        return None
+    dot_x = dots[0][0]
+    return sum(1 for i in range(1, n) if st[i][3] * 2 >= tall and st[i][4] >= 8 and st[i][0] + st[i][2] <= dot_x)
+
+
+def _bright_fraction(region_bgr, prep, val) -> str | None:
+    """저HP(20% 이하) 소수 두 칸을 밝기 마스크(흰 글자만)로 — 채움이 숫자 칸 왼쪽에서 끝나 숫자가 회색 빈 바 위 흰 글자일 때
+    채도 마스크로는 소수를 못 읽었다(사용자 11-08 '15% 아래로도 소수', QA dee7b93). 같은 마스크에서 정수가 val로 강하게 읽히는 정렬을 찾고,
+    그 자리에서 두 칸 모두 강한 점수일 때만 — 아니면 None(틀린 소수 대신 정수만)."""
+    if not USE_TEXT_MASK or not _GRAY_SAMPLES or val is None or val > _LOW_HP_MAX:
+        return None
+    _templates, w, scale, _band, pitch, span = prep
+    h = region_bgr.shape[0]
+    bright = _bright_mask(region_bgr)
+    band = bright[int(h * _YBAND[0]):int(h * _YBAND[1])]
+    text = _text_rows(bright[:, _num_left(w, scale):])
+    if text is not None and (text[0] < int(h * _YBAND[0]) - 1 or text[1] > int(h * _YBAND[1])):
+        band = bright[max(0, text[0] - 1):text[1] + 2]  # 글자가 기본 띠 밖(등록 영역이 몇 px 어긋남) — 글자 줄에 맞춤
+    if _digits_before_dot(band[:, _num_left(w, scale):]) != len(str(val)):
+        return None  # '.' 왼쪽 글자 수가 정수 자리 수와 다름 = 앞자리만 남은 오독(74.10을 7로) — 소수를 붙이면 틀린 값이 그럴듯해진다
+    # 같은 마스크에서 정수 자리들이 val과 같게 강하게 읽히는 정렬을 찾는다 — 칸마다 '.' 같은 작은 조각은 지우고(_cell_digit)
+    # ('12.85'에서 2 칸에 '.'이 같이 들어와 2를 못 읽던 것, 2560 두 줄 수집). 그래야 소수 칸 위치를 믿는다.
+    digits = str(val)[::-1]
+    jitter = max(1, round(pitch * _DIGIT_JITTER))
+    best = None
+    for shift in range(-span, span + 1):
+        right, worst = w - (_FIRST * scale + shift), 1.0
+        for k, want in enumerate(digits):
+            got = None
+            for dj in ((0,) if k == 0 else range(-jitter, jitter + 1)):
+                cand = _cell_digit(band, right + dj, pitch, _GRAY_SAMPLES)
+                if cand is not None and cand[0] == want and (got is None or cand[1] > got[1]):
+                    got = (cand[0], cand[1], right + dj)
+            if got is None:
+                worst = -1.0
+                break
+            worst = min(worst, got[1])
+            right = got[2] - pitch
+        if worst >= _STRONG and (best is None or worst > best[0]):
+            best = (worst, shift)
+    if best is None:
+        return None
+    return _fraction(band, w, scale, pitch, _GRAY_SAMPLES, best[1])
+
+
 def read_percent_frac(
     region_bgr: np.ndarray,
     templates: dict[str, list[np.ndarray]] | None = None,
@@ -472,6 +545,7 @@ def read_percent_frac(
 ) -> tuple[int | None, str | None]:
     """(read_percent와 같은 정수, 소수 두 자리 글자 또는 None). 소수는 보스바 오버레이 표시용 — 경고 판정은 정수만 쓴다."""
     bright_samples = (_BRIGHT_SAMPLES if templates is None else {}) if bright_samples is None else bright_samples
+    gray = templates is None  # 흰 글자 소수 샘플은 기본 숫자 묶음과 한 세트(다른 템플릿을 넘기면 예전 그대로)
     prep = _prep(region_bgr, templates)
     if prep is None:
         return None, None
@@ -482,10 +556,13 @@ def read_percent_frac(
             _LAST.key = NO_KEY
             return None, None
         _LAST.key = _key(val, score)
-        return _extend(region_bgr, prep, val, _fraction(band, w, scale, pitch, templates, shift), True)
+        val, frac = _extend(region_bgr, prep, val, _fraction(band, w, scale, pitch, templates, shift), True)
+        if frac is None and gray:
+            frac = _bright_fraction(region_bgr, prep, val)
+        return val, frac
     low = _low_hp_value(region_bgr, templates, band, w, scale, pitch, span, bright_samples)
     _LAST.key = (0, 0.0) if low is not None else NO_KEY
-    return low, None
+    return low, (_bright_fraction(region_bgr, prep, low) if low is not None and gray else None)
 
 
 def main_path_score(
