@@ -19,7 +19,7 @@ from PySide6.QtGui import QColor, QGuiApplication, QPainter
 from PySide6.QtWidgets import QWidget
 
 from .. import config
-from ..cursor_fx import PARTICLE_KINDS, SHAKE_SCALE, TAIL_SECONDS, Particles, particle_bounds, ShakeDetector, Trail, bounds, clean_settings, shake_scale, sparkle_multicolor
+from ..cursor_fx import PARTICLE_KINDS, SHAKE_SCALE, TAIL_SECONDS, Particles, particle_bounds, ShakeDetector, Trail, bounds, clean_settings, ring_color, shake_scale, sparkle_multicolor, tail_color
 from ..system import cursor as cursor_sys
 from .cursor_paint import paint_particles, paint_ring, paint_scope, paint_tail
 
@@ -321,20 +321,20 @@ class CursorFx(QObject):
         scale = getattr(self, "_ring_scale", 1.0)
         size = s["size"] * scale
         if s["shape"] == "scope" and scale <= 1.0:
-            paint_scope(p, center, size, s["color"], self._opacity())
+            paint_scope(p, center, size, ring_color(s), self._opacity())
         else:
-            paint_ring(p, center, size, s["color"], self._opacity())
+            paint_ring(p, center, size, ring_color(s), self._opacity())
 
     def _paint_line(self, p: QPainter, w: QWidget) -> None:
-        c = QColor(self.settings["color"])
+        c = QColor(ring_color(self.settings))
         c.setAlphaF(self._opacity() * 0.8)
         p.fillRect(w.rect(), c)
 
     def _paint_tail(self, p: QPainter, w: QWidget) -> None:
         s = self.settings
         if s["tail"] in PARTICLE_KINDS:
-            paint_particles(p, self._tail_points, s["tail"], s["color"], self._opacity(), self._tail_origin,
+            paint_particles(p, self._tail_points, s["tail"], tail_color(s), self._opacity(), self._tail_origin,
                             multicolor=sparkle_multicolor(s))
             return
-        paint_tail(p, self._tail_points, s["tail"], s["color"], s["size"], self._opacity(), self._tail_origin,
+        paint_tail(p, self._tail_points, s["tail"], tail_color(s), s["size"], self._opacity(), self._tail_origin,
                    multicolor=sparkle_multicolor(s))

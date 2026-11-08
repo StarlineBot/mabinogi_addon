@@ -20,9 +20,12 @@ TAILS = ("none", "dots", "line", "rainbow", "sparkle", "fire")  # 0.37.0: 반짝
 TAIL_SECONDS = {"short": 0.2, "normal": 0.3, "long": 0.45}
 PRESET_COLORS = ("#1DD3B0", "#FFD43B", "#FF5A5F", "#FFFFFF", "#A78BFA")  # 민트·노랑·빨강·흰색·보라
 # 0.36.1: 흔들어 찾기 기본 꺼짐(오판·렉 — QA·사용자 실측)
-DEFAULTS = {"enabled": False, "shape": "ring", "tail": "none", "shake": False, "color": "#FFD43B",
-            "size": 40, "tailLength": "normal", "opacity": 100,
-            "colorChosen": False}  # 사용자가 색을 직접 고른 적 있는지 — 아니면 반짝이는 여러 색(0.36.0 QA)
+DEFAULT_COLOR = "#FFD43B"  # 노랑(기본)
+# 원·꼬리 색 분리(사용자 결정 11-07, 마우스 커서 명세 7절): 원 색 = 원·스코프·흔들어 찾기 원, 꼬리 색 = 점·선·반짝이·불꽃.
+# tailColorChosen: 꼬리 색을 직접 고른 적 있는지 — 아니면(노랑 기본) 반짝이 여러 색·기본 불꽃색(0.36.0 QA·0.38.1). 꼬리에만 있다.
+DEFAULTS = {"enabled": False, "shape": "ring", "tail": "none", "shake": False,
+            "ringColor": DEFAULT_COLOR, "tailColor": DEFAULT_COLOR, "tailColorChosen": False,
+            "size": 40, "tailLength": "normal", "opacity": 100}
 SIZE_RANGE = (20, 120)
 OPACITY_RANGE = (20, 100)
 SHAKE_SECONDS = 1.0  # 흔들면 원이 커졌다 돌아오는 시간
@@ -31,28 +34,39 @@ SPARKLE_LIMIT = 40  # 반짝이 조각 수 제한(CPU)
 FIRE_LIMIT = 70  # 불꽃 조각 수 제한
 
 
+def _hex(value) -> str | None:
+    """'#RRGGBB'면 대문자로, 아니면 None(손상된 색은 기본 노랑으로 보정)."""
+    if isinstance(value, str) and len(value) == 7 and value.startswith("#"):
+        try:
+            int(value[1:], 16)
+            return value.upper()
+        except ValueError:
+            return None
+    return None
+
+
 def clean_settings(raw) -> dict:
     """저장값을 안전한 설정으로. 모르는 값·범위 밖은 기본값/가장자리로."""
     raw = raw if isinstance(raw, dict) else {}
     out = dict(DEFAULTS)
     if isinstance(raw.get("enabled"), bool):
         out["enabled"] = raw["enabled"]
-    for key in ("shake", "colorChosen"):
+    if isinstance(raw.get("shake"), bool):
+        out["shake"] = raw["shake"]
+    # 예전 설정(한 색 color·colorChosen)은 두 색으로 복사, colorChosen은 꼬리로 — 업데이트 직후 모습 그대로. 새 키가 있으면 새 키.
+    legacy = _hex(raw.get("color")) or DEFAULT_COLOR
+    out["ringColor"] = _hex(raw.get("ringColor")) or legacy
+    out["tailColor"] = _hex(raw.get("tailColor")) or legacy
+    for key in ("tailColorChosen", "colorChosen"):
         if isinstance(raw.get(key), bool):
-            out[key] = raw[key]
+            out["tailColorChosen"] = raw[key]
+            break
     if raw.get("shape") in SHAPES:
         out["shape"] = raw["shape"]
     if raw.get("tail") in TAILS:
         out["tail"] = raw["tail"]
     if raw.get("tailLength") in TAIL_SECONDS:
         out["tailLength"] = raw["tailLength"]
-    color = raw.get("color")
-    if isinstance(color, str) and len(color) == 7 and color.startswith("#"):
-        try:
-            int(color[1:], 16)
-            out["color"] = color.upper()
-        except ValueError:
-            pass
     for key, (low, high) in (("size", SIZE_RANGE), ("opacity", OPACITY_RANGE)):
         value = raw.get(key)
         if isinstance(value, (int, float)) and not isinstance(value, bool):
@@ -126,9 +140,20 @@ def smooth(points, steps: int = 3, min_gap: float = 12.0) -> list[TailPoint]:
     return out
 
 
+def ring_color(settings: dict) -> str:
+    """원·스코프(짧은 십자·화면 선)·흔들어 찾기 원의 색 — 미리보기·오버레이가 같이 쓴다."""
+    return settings["ringColor"]
+
+
+def tail_color(settings: dict) -> str:
+    """점·선·반짝이·불꽃 꼬리의 색(무지개 선은 고유 색) — 미리보기·오버레이가 같이 쓴다."""
+    return settings["tailColor"]
+
+
 def sparkle_multicolor(settings: dict) -> bool:
-    """반짝이 색: 색을 직접 고르기 전(기본)이면 여러 색, 고른 뒤에는 그 색만(흰색도 흰색만)."""
-    return not settings.get("colorChosen", False)
+    """반짝이·불꽃 색: 꼬리 색을 직접 고르기 전(노랑 기본)이면 여러 색·기본 불꽃색, 고른 뒤에는 그 색(흰색도 흰색만).
+    원 색과는 무관하다(원 색 변경·복원은 꼬리 팔레트를 바꾸지 않음)."""
+    return not settings.get("tailColorChosen", False)
 
 
 def bounds(points, pad: float) -> tuple[int, int, int, int] | None:

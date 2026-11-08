@@ -18,8 +18,10 @@ from mabinogi_addon.cursor_fx import (
 def test_defaults_match_spec():
     # 0.36.0 QA: colorChosen(색을 직접 고른 적 있는지, 기본 False — 반짝이 여러 색 규칙) 추가
     # 0.36.1 명세 변경(QA·사용자 실측 렉): 흔들어 찾기 기본 꺼짐
-    assert DEFAULTS == {"enabled": False, "shape": "ring", "tail": "none", "shake": False, "color": "#FFD43B",
-                        "size": 40, "tailLength": "normal", "opacity": 100, "colorChosen": False}
+    # 11-07 원·꼬리 색 분리: color·colorChosen → ringColor·tailColor·tailColorChosen
+    assert DEFAULTS == {"enabled": False, "shape": "ring", "tail": "none", "shake": False,
+                        "ringColor": "#FFD43B", "tailColor": "#FFD43B", "tailColorChosen": False,
+                        "size": 40, "tailLength": "normal", "opacity": 100}
     assert clean_settings(None) == DEFAULTS
 
 
@@ -27,11 +29,12 @@ def test_clean_settings_bounds_and_unknowns():
     s = clean_settings({"shape": "star", "tail": "dots", "size": 500, "opacity": 3, "color": "#12abZZ",
                         "tailLength": "long", "enabled": 1, "shake": False})
     assert s["shape"] == "ring" and s["tail"] == "dots" and s["size"] == 120 and s["opacity"] == 20
-    assert s["color"] == DEFAULTS["color"] and s["tailLength"] == "long"
+    assert s["ringColor"] == s["tailColor"] == "#FFD43B" and s["tailLength"] == "long"
     assert s["enabled"] is False  # 불리언만 받는다
     assert s["shake"] is False
     assert clean_settings({"opacity": 74})["opacity"] == 70  # 10%씩
-    assert clean_settings({"color": "#a78bfa"})["color"] == "#A78BFA"
+    assert clean_settings({"tailColor": "#a78bfa"})["tailColor"] == "#A78BFA"
+    assert clean_settings({"ringColor": "#12abZZ", "color": "#1dd3b0"})["ringColor"] == "#1DD3B0"  # 손상 → 예전 색
 
 
 @pytest.mark.parametrize("length", list(TAIL_SECONDS))
@@ -133,9 +136,10 @@ def _run(f, clock, seconds, step=1 / 60, move=None):
 
 def test_settings_saved_and_restored(fx):
     f, *_ = fx
-    f.update_settings(enabled=True, shape="scope", tail="sparkle", color="#1dd3b0", size=60, opacity=50)
+    f.update_settings(enabled=True, shape="scope", tail="sparkle", ringColor="#1dd3b0", tailColor="#ff5a5f", size=60, opacity=50)
     saved = clean_settings(config.load_cursor_fx())
-    assert saved["shape"] == "scope" and saved["tail"] == "sparkle" and saved["color"] == "#1DD3B0"
+    assert saved["shape"] == "scope" and saved["tail"] == "sparkle" and saved["ringColor"] == "#1DD3B0"
+    assert saved["tailColor"] == "#FF5A5F"
     from mabinogi_addon.ui.cursor_overlay import CursorFx
     again = CursorFx(_Watcher())
     try:
@@ -327,8 +331,9 @@ def test_smooth_passes_through_points_and_rounds_corners():
 
 def test_sparkle_color_rule_default_multi_chosen_single():
     assert sparkle_multicolor(clean_settings({})) is True  # 기본(색을 고르기 전) = 여러 색
-    assert sparkle_multicolor(clean_settings({"color": "#FFFFFF", "colorChosen": True})) is False  # 흰색 골라도 흰색만
-    assert sparkle_multicolor(clean_settings({"color": "#FF5A5F", "colorChosen": True})) is False
+    assert sparkle_multicolor(clean_settings({"tailColor": "#FFFFFF", "tailColorChosen": True})) is False  # 흰색 골라도 흰색만
+    assert sparkle_multicolor(clean_settings({"color": "#FF5A5F", "colorChosen": True})) is False  # 예전 설정도
+    assert sparkle_multicolor(clean_settings({"ringColor": "#FF5A5F"})) is True  # 원 색은 꼬리 팔레트와 무관
 
 
 @pytest.mark.parametrize("multicolor,expect_many", [(True, True), (False, False)])
@@ -356,10 +361,13 @@ def test_choosing_color_in_tab_marks_chosen(fx):
     f, *_ = fx
     tab = CursorTab(f)
     try:
-        assert f.settings["colorChosen"] is False
-        tab.swatches[3].click()  # 흰색
-        assert f.settings["color"] == "#FFFFFF" and f.settings["colorChosen"] is True
-        assert clean_settings(config.load_cursor_fx())["colorChosen"] is True
+        assert f.settings["tailColorChosen"] is False
+        tab.tail_row.swatches[3].click()  # 꼬리 없음 → 흐려진 줄은 눌리지 않음
+        assert f.settings["tailColor"] == "#FFD43B"
+        tab.tail.buttons["line"].click()
+        tab.tail_row.swatches[3].click()  # 흰색
+        assert f.settings["tailColor"] == "#FFFFFF" and f.settings["tailColorChosen"] is True
+        assert clean_settings(config.load_cursor_fx())["tailColorChosen"] is True
     finally:
         tab.close()
 
@@ -563,3 +571,161 @@ def test_lag_log_skips_first_tick_after_idle(fx, monkeypatch, caplog):
             f.tick()
     lines = [r.getMessage() for r in caplog.records if "마우스 커서 틱" in r.getMessage()]
     assert lines and all("늦은 틱(>33ms) 0(" in line for line in lines), lines
+
+
+# ---- 원·꼬리 색 분리(사용자 결정 11-07, 마우스 커서 명세 7절 A안) ------------------------------------------
+@pytest.mark.parametrize("old,ring,tail,chosen", [
+    ({"color": "#1dd3b0", "colorChosen": True}, "#1DD3B0", "#1DD3B0", True),
+    ({"color": "#FFD43B", "colorChosen": True}, "#FFD43B", "#FFD43B", True),  # 노랑 + 고름 → 단색 노랑 그대로(팔레트로 안 바뀜)
+    ({"color": "#FFD43B"}, "#FFD43B", "#FFD43B", False),
+    ({"color": "bad"}, "#FFD43B", "#FFD43B", False),
+    ({"color": "#1DD3B0", "colorChosen": True, "ringColor": "#FF5A5F"}, "#FF5A5F", "#1DD3B0", True),  # 새 키 우선·빠진 키만 보완
+])
+def test_old_single_color_migrates_to_ring_and_tail(old, ring, tail, chosen):
+    s = clean_settings(old)
+    assert (s["ringColor"], s["tailColor"], s["tailColorChosen"]) == (ring, tail, chosen)
+    assert sparkle_multicolor(s) is (not chosen)
+    assert "color" not in s and "colorChosen" not in s
+
+
+def test_ring_and_tail_rows_change_independently(fx):
+    from mabinogi_addon.ui.cursor_tab import CursorTab
+    f, *_ = fx
+    f.update_settings(shape="ring", tail="sparkle")
+    tab = CursorTab(f)
+    try:
+        r, t = tab.ring_row, tab.tail_row
+        assert [w.hex for w in r.swatches] == [w.hex for w in t.swatches]
+        r.swatches[0].click()  # 원 민트
+        assert f.settings["ringColor"] == "#1DD3B0" and f.settings["tailColor"] == "#FFD43B"
+        assert f.settings["tailColorChosen"] is False  # 원 색 변경은 꼬리 팔레트에 영향 없음
+        t.swatches[2].click()  # 꼬리 빨강
+        assert f.settings["ringColor"] == "#1DD3B0" and (f.settings["tailColor"], f.settings["tailColorChosen"]) == ("#FF5A5F", True)
+        r.default.click()  # 원만 노랑
+        assert f.settings["ringColor"] == "#FFD43B" and (f.settings["tailColor"], f.settings["tailColorChosen"]) == ("#FF5A5F", True)
+        r.swatches[4].click()
+        t.default.click()  # 꼬리만 노랑 + 기본 팔레트
+        assert f.settings["ringColor"] == "#A78BFA" and (f.settings["tailColor"], f.settings["tailColorChosen"]) == ("#FFD43B", False)
+        assert r.swatches[4].isChecked() and t.swatches[1].isChecked() and not t.swatches[2].isChecked()
+        saved = clean_settings(config.load_cursor_fx())
+        assert (saved["ringColor"], saved["tailColor"]) == ("#A78BFA", "#FFD43B")
+        # 같은 세로줄: 두 줄의 견본·'+'·'기본 색' 가로 위치가 같다
+        tab.resize(790, 600)
+        tab.show()
+        for a, b in zip([*r.swatches, r.custom, r.default], [*t.swatches, t.custom, t.default]):
+            assert a.mapTo(tab, a.rect().topLeft()).x() == b.mapTo(tab, b.rect().topLeft()).x()
+    finally:
+        tab.close()
+
+
+@pytest.mark.parametrize("settings,ring_note,tail_note", [
+    ({"shape": "ring", "tail": "line"}, "", ""),
+    ({"shape": "none", "shake": False, "tail": "none"}, "모양과 흔들어 찾기가 꺼져 있어요.", "꼬리가 꺼져 있어요."),
+    ({"shape": "none", "shake": True, "tail": "rainbow"}, "", "무지개 선은 고유 색을 사용해요."),
+    ({"shape": "lines", "tail": "fire"}, "", ""),
+])
+def test_rows_dim_with_reason_and_keep_saved_color(fx, settings, ring_note, tail_note):
+    from mabinogi_addon.ui.cursor_tab import CursorTab
+    f, *_ = fx
+    f.update_settings(ringColor="#1DD3B0", tailColor="#FF5A5F", tailColorChosen=True, **settings)
+    tab = CursorTab(f)
+    try:
+        for row, note in ((tab.ring_row, ring_note), (tab.tail_row, tail_note)):
+            assert row.note.text() == note
+            assert all(w.isEnabled() is (not note) for w in (row.label, *row.swatches, row.custom, row.default))
+        assert tab.ring_row.swatches[0].isChecked() and tab.tail_row.swatches[2].isChecked()  # 흐려도 저장 색 표시·유지
+        assert (f.settings["ringColor"], f.settings["tailColor"]) == ("#1DD3B0", "#FF5A5F")
+        hint = {"sparkle": "노랑(기본): 여러 색 반짝이", "fire": "노랑(기본): 기본 불꽃색"}.get(settings["tail"])
+        assert tab.tail_row.default.toolTip() == (hint or "노랑으로 되돌려요")
+    finally:
+        tab.close()
+
+
+@pytest.mark.parametrize("key,title", [("ring", "원 색상"), ("tail", "꼬리 색상")])
+def test_custom_color_dialog_saves_only_on_apply(fx, monkeypatch, key, title):
+    from mabinogi_addon.ui import theme_panel
+    from mabinogi_addon.ui.cursor_tab import CursorTab
+    f, *_ = fx
+    f.update_settings(shape="ring", tail="line")
+    seen, answer = [], {"ok": False}
+
+    class Dialog:
+        DialogCode = theme_panel.ColorPickerDialog.DialogCode
+
+        def __init__(self, t, value, parent):
+            seen.append((t, value))
+
+        def exec(self):
+            return self.DialogCode.Accepted if answer["ok"] else self.DialogCode.Rejected
+
+        def value(self):
+            return "#123456"
+    monkeypatch.setattr(theme_panel, "ColorPickerDialog", Dialog)
+    tab = CursorTab(f)
+    try:
+        row = tab.ring_row if key == "ring" else tab.tail_row
+        name = "ringColor" if key == "ring" else "tailColor"
+        row.custom.click()  # 취소 → 그대로
+        assert seen == [(title, "#FFD43B")] and f.settings[name] == "#FFD43B"
+        answer["ok"] = True
+        row.custom.click()
+        assert f.settings[name] == "#123456" and clean_settings(config.load_cursor_fx())[name] == "#123456"
+        other = "tailColor" if key == "ring" else "ringColor"
+        assert f.settings[other] == "#FFD43B"
+        assert f.settings["tailColorChosen"] is (key == "tail")
+        assert "#123456" in row.custom.styleSheet()  # 직접 고른 색은 '+'에 표시
+    finally:
+        tab.close()
+
+
+@pytest.mark.parametrize("shape,tail,shake", [("ring", "line", False), ("scope", "sparkle", False),
+                                              ("lines", "fire", False), ("none", "dots", True)])
+def test_preview_and_overlay_use_same_ring_tail_split(fx, monkeypatch, shape, tail, shake):
+    """미리보기(cursor_tab)와 실제 오버레이(cursor_overlay)가 같은 분리 규칙: 원·스코프·화면 선·흔들기 원 = 원 색, 꼬리 = 꼬리 색."""
+    from PySide6.QtGui import QImage, QPainter
+    from PySide6.QtWidgets import QWidget
+
+    from mabinogi_addon.ui import cursor_overlay, cursor_tab
+    f, *_ = fx
+    f.update_settings(shape=shape, tail=tail, shake=shake, ringColor="#1DD3B0", tailColor="#FF5A5F", tailColorChosen=True)
+    calls = {"tab": [], "overlay": []}
+    for where, mod in (("tab", cursor_tab), ("overlay", cursor_overlay)):
+        def rec(kind, where=where):
+            def fn(p, *a, **k):
+                color = a[2]  # paint_*(p, 위치/점, 크기/종류, 색, ...)
+                calls[where].append((kind if kind in ("tail", "particles") else "ring", color, k.get("multicolor")))
+            return fn
+        for kind in ("ring", "scope", "tail", "particles"):
+            monkeypatch.setattr(mod, f"paint_{kind}", rec(kind))
+    img = QImage(300, 120, QImage.Format.Format_ARGB32)
+    tab = cursor_tab.CursorTab(f)
+    try:
+        tab.preview._shake_at = 0.2 if shake else -10.0  # 흔들기 원이 커진 순간
+        tab.preview._t = 0.3
+        tab.preview.render(img)
+        if shape == "lines":  # 화면 선은 paint_* 없이 직접 칠함 — 픽셀로 확인(미리보기 가로선 · 오버레이 선 창)
+            y = int(tab.preview._path(0.3).y())
+            assert img.pixelColor(5, y).green() > img.pixelColor(5, y + 4).green() + 40  # 민트 선
+            line = QImage(4, 4, QImage.Format.Format_ARGB32)
+            line.fill(0)
+            lw = QWidget()
+            lw.resize(4, 4)
+            lp = QPainter(line)
+            f._paint_line(lp, lw)
+            lp.end()
+            got = line.pixelColor(1, 1)
+            assert got.green() > got.red() + 80 and got.blue() > 80  # 민트(#1DD3B0) — 꼬리 빨강 아님
+        w = QWidget()
+        w.resize(80, 80)
+        p = QPainter(img)
+        f._ring_scale = 2.0 if shake else 1.0
+        if shape in ("ring", "scope") or shake:
+            f._paint_ring(p, w)
+        f._tail_points, f._tail_origin = [], cursor_overlay.QPointF(0, 0)
+        f._paint_tail(p, w)
+        p.end()
+    finally:
+        tab.close()
+    assert set(calls["tab"]) == set(calls["overlay"])
+    assert (("ring", "#1DD3B0", None) in calls["tab"]) is (shape != "lines")
+    assert ("particles" if tail in ("sparkle", "fire") else "tail", "#FF5A5F", False) in calls["tab"]

@@ -129,21 +129,22 @@ def test_yellow_swatch_returns_to_default_colors(fx):
     f, *_ = fx
     tab = CursorTab(f)
     try:
-        sw = {w.hex: w for w in tab.findChildren(_Swatch)}
-        tab.settings["tail"] = "sparkle"
+        sw = {w.hex: w for w in tab.tail_row.swatches}
+        assert all(isinstance(w, _Swatch) for w in sw.values())
+        tab.tail.buttons["sparkle"].click()
         seen = []
         for hex_color in ("#FFD43B", "#1DD3B0", "#FFD43B"):
             sw[hex_color].click()
             saved = clean_settings(config.load_cursor_fx())
-            seen.append((saved["color"], saved["colorChosen"], sparkle_multicolor(saved)))
+            seen.append((saved["tailColor"], saved["tailColorChosen"], sparkle_multicolor(saved)))
         assert seen == [("#FFD43B", False, True), ("#1DD3B0", True, False), ("#FFD43B", False, True)]
         # 불꽃: 기본 상태면 기본 불꽃색(fire_stops(None)), 고른 색이면 그 색 계열
         assert fire_stops(None) == FIRE_STOPS and fire_stops("#1DD3B0") != FIRE_STOPS
         # '+'(직접 고르기)로 정확히 노랑을 골라도 같은 규칙(대소문자 무관)
-        tab._choose_color("#A78BFA")
-        assert f.settings["colorChosen"] is True
-        tab._choose_color("#ffd43b")
-        assert f.settings["colorChosen"] is False and f.settings["color"] == "#FFD43B"
-        assert tab.color_note.text() == "노랑(기본)을 고르면 반짝이는 여러 색, 불꽃은 기본 불꽃색으로 보여요."
+        tab._choose_color("tail", "#A78BFA")
+        assert f.settings["tailColorChosen"] is True
+        tab._choose_color("tail", "#ffd43b")
+        assert f.settings["tailColorChosen"] is False and f.settings["tailColor"] == "#FFD43B"
+        assert tab.tail_row.default.toolTip() == "노랑(기본): 여러 색 반짝이"
     finally:
         tab.deleteLater()

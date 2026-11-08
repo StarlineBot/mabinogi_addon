@@ -8,14 +8,14 @@ from __future__ import annotations
 
 import math
 
-from PySide6.QtCore import QPointF, Qt, QTimer, Signal
+from PySide6.QtCore import QEvent, QObject, QPointF, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QPainter
 from PySide6.QtWidgets import (
-    QButtonGroup, QCheckBox, QGroupBox, QGridLayout, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QVBoxLayout,
+    QButtonGroup, QCheckBox, QFrame, QGroupBox, QGridLayout, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QVBoxLayout,
     QWidget,
 )
 
-from ..cursor_fx import DEFAULTS, PARTICLE_KINDS, PRESET_COLORS, Particles, SHAPES, TAIL_SECONDS, TAILS, Trail, shake_scale, sparkle_multicolor
+from ..cursor_fx import DEFAULT_COLOR, PARTICLE_KINDS, PRESET_COLORS, Particles, SHAPES, TAIL_SECONDS, TAILS, Trail, ring_color, shake_scale, sparkle_multicolor, tail_color
 from .cursor_paint import paint_particles, paint_ring, paint_scope, paint_tail
 from .help_dialog import help_button
 from .palette import color
@@ -84,7 +84,17 @@ class _Swatch(QPushButton):
 
     def _style(self, on: bool) -> None:
         ring = f"3px solid {color('accent')}" if on else "1px solid palette(mid)"
-        self.setStyleSheet(f"QPushButton {{ background:{self.hex}; border:{ring}; border-radius:13px; }}")
+        fill = self.hex
+        if not self.isEnabled():  # 흐려진 줄(원 색·꼬리 색): 견본도 옅게 — 저장 색 표시는 그대로
+            c = QColor(self.hex)
+            fill = f"rgba({c.red()},{c.green()},{c.blue()},90)"
+            ring = "3px solid palette(mid)" if on else "1px solid palette(midlight)"
+        self.setStyleSheet(f"QPushButton {{ background:{fill}; border:{ring}; border-radius:13px; }}")
+
+    def changeEvent(self, event) -> None:
+        super().changeEvent(event)
+        if event.type() == QEvent.Type.EnabledChange:
+            self._style(self.isChecked())
 
     def set_on(self, on: bool) -> None:
         self.setChecked(on)
@@ -151,21 +161,22 @@ class CursorPreview(QWidget):
         opacity = s["opacity"] / 100
         pos = self._path(self._t)
         points = self._trail.points(self._t, TAIL_SECONDS[s["tailLength"]])
+        ring, tail = ring_color(s), tail_color(s)  # 오버레이와 같은 분리 규칙(cursor_fx)
         if s["tail"] in self._particles:
-            paint_particles(p, self._particles[s["tail"]].alive(self._t), s["tail"], s["color"], opacity,
+            paint_particles(p, self._particles[s["tail"]].alive(self._t), s["tail"], tail, opacity,
                             multicolor=sparkle_multicolor(s))
         else:
-            paint_tail(p, points, s["tail"], s["color"], s["size"], opacity, multicolor=sparkle_multicolor(s))
+            paint_tail(p, points, s["tail"], tail, s["size"], opacity, multicolor=sparkle_multicolor(s))
         scale = shake_scale(self._t - self._shake_at) if s["shake"] else 1.0
         if s["shape"] == "lines":
-            c = QColor(s["color"])
+            c = QColor(ring)
             c.setAlphaF(opacity * 0.8)
             p.fillRect(0, int(pos.y()), self.width(), 1, c)
             p.fillRect(int(pos.x()), 0, 1, self.height(), c)
         if s["shape"] == "scope" and scale <= 1.0:
-            paint_scope(p, pos, s["size"], s["color"], opacity)
+            paint_scope(p, pos, s["size"], ring, opacity)
         elif s["shape"] == "ring" or scale > 1.0:
-            paint_ring(p, pos, s["size"] * scale, s["color"], opacity)
+            paint_ring(p, pos, s["size"] * scale, ring, opacity)
         # 커서 화살표(간단한 모양)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         p.setPen(QColor("black"))
@@ -223,24 +234,6 @@ class CursorTab(QWidget):
         self.shake.toggled.connect(lambda on: self._change(shake=bool(on)))
         grid.addWidget(self.shake, 2, 1)
 
-        colors = QHBoxLayout()
-        colors.setSpacing(8)
-        self.swatches: list[_Swatch] = []
-        for hex_color in PRESET_COLORS:
-            sw = _Swatch(hex_color)
-            sw.clicked.connect(lambda _=False, h=hex_color: self._choose_color(h))
-            self.swatches.append(sw)
-            colors.addWidget(sw)
-        self.custom_color = QPushButton("+")
-        self.custom_color.setFixedSize(26, 26)
-        self.custom_color.setToolTip("색 직접 고르기")
-        self.custom_color.clicked.connect(self._pick_color)
-        colors.addWidget(self.custom_color)
-        self.color_note = hint_label("")
-        colors.addWidget(self.color_note, 1)
-        grid.addWidget(QLabel("색"), 3, 0)
-        grid.addLayout(colors, 3, 1)
-
         sizes = QHBoxLayout()
         sizes.setSpacing(8)
         self.size = SuffixSpinBox()
@@ -264,12 +257,25 @@ class CursorTab(QWidget):
         self.opacity.valueChanged.connect(lambda n: self._change(opacity=n))
         sizes.addWidget(self.opacity)
         sizes.addStretch(1)
-        grid.addWidget(QLabel("원 크기"), 4, 0)
-        grid.addLayout(sizes, 4, 1)
+        grid.addWidget(QLabel("원 크기"), 3, 0)
+        grid.addLayout(sizes, 3, 1)
+
+        # 확정 배치(A안, 사용자 결정 11-07): 모양 묶음 → 구분선 → 원 색 → 꼬리 색 → 미리보기.
+        # 두 줄은 같은 격자 칸이라 견본 5개·'+'·'기본 색'이 같은 세로줄에 온다.
+        line = QFrame()
+        line.setFrameShape(QFrame.Shape.HLine)
+        line.setFrameShadow(QFrame.Shadow.Sunken)
+        grid.addWidget(line, 4, 0, 1, 2)
+        self.ring_row = _ColorRow("원 색", "원 색상", self)
+        self.tail_row = _ColorRow("꼬리 색", "꼬리 색상", self)
+        for r, row in ((5, self.ring_row), (6, self.tail_row)):
+            grid.addWidget(row.label, r, 0)
+            grid.addLayout(row.row, r, 1)
+            row.chosen.connect(lambda hex_color, k=row.key: self._choose_color(k, hex_color))
 
         self.preview = CursorPreview(self)
-        grid.addWidget(QLabel("미리보기"), 5, 0, Qt.AlignmentFlag.AlignTop)
-        grid.addWidget(self.preview, 5, 1, Qt.AlignmentFlag.AlignLeft)
+        grid.addWidget(QLabel("미리보기"), 7, 0, Qt.AlignmentFlag.AlignTop)
+        grid.addWidget(self.preview, 7, 1, Qt.AlignmentFlag.AlignLeft)
         g.addLayout(grid)
         g.addWidget(hint_label("일시정지 중이거나 게임이 뒤에 있을 때는 숨겨요."))
         v.addWidget(box)
@@ -301,15 +307,12 @@ class CursorTab(QWidget):
 
     def _refresh(self) -> None:
         s = self.settings
-        for sw in self.swatches:
-            sw.set_on(sw.hex == s["color"])
-        custom = s["color"] not in PRESET_COLORS
-        self.custom_color.setStyleSheet(
-            f"QPushButton {{ background:{s['color']}; border:3px solid {color('accent')}; border-radius:5px; }}"
-            if custom else "")
-        self.color_note.setText("무지개 선은 색 설정을 쓰지 않아요." if s["tail"] == "rainbow"
-                                else "노랑(기본)을 고르면 반짝이는 여러 색, 불꽃은 기본 불꽃색으로 보여요."
-                                if s["tail"] in ("sparkle", "fire") else "")
+        self.ring_row.show_value(ring_color(s), "" if s["shape"] != "none" or s["shake"]
+                                 else "모양과 흔들어 찾기가 꺼져 있어요.")
+        self.tail_row.show_value(tail_color(s), "꼬리가 꺼져 있어요." if s["tail"] == "none"
+                                 else "무지개 선은 고유 색을 사용해요." if s["tail"] == "rainbow" else "")
+        palette = {"sparkle": "노랑(기본): 여러 색 반짝이", "fire": "노랑(기본): 기본 불꽃색"}.get(s["tail"], "")
+        self.tail_row.set_default_hint(palette)
         self.size.setEnabled(s["shape"] in ("ring", "scope") or s["shake"] or s["tail"] != "none")
         self.length.setEnabled(s["tail"] != "none")
         on = s["enabled"]
@@ -334,15 +337,73 @@ class CursorTab(QWidget):
         self.fx.update_settings(**changes)
         self._refresh()
 
-    def _pick_color(self) -> None:
+    def _pick_color(self, key: str) -> None:
+        """'+': 기존 색 선택 창(제목 '원 색상'/'꼬리 색상'). 적용을 눌러야 저장·반영, 취소·닫기·Esc는 그대로."""
         from .theme_panel import ColorPickerDialog
 
-        dlg = ColorPickerDialog("커서 색", self.settings["color"], self)
+        row = self.ring_row if key == "ring" else self.tail_row
+        current = ring_color(self.settings) if key == "ring" else tail_color(self.settings)
+        dlg = ColorPickerDialog(row.dialog_title, current, self)
         if dlg.exec() == ColorPickerDialog.DialogCode.Accepted:
-            self._choose_color(dlg.value())
+            self._choose_color(key, dlg.value())
 
-    def _choose_color(self, hex_color: str) -> None:
-        """0.38.1: 기본색(노랑)을 고르면 기본 상태(colorChosen=False — 반짝이 여러 색·기본 불꽃색)로 되돌린다.
-        다른 색(견본·직접 고르기 모두)은 고른 색. 예전엔 한 번 고르면 기본으로 돌아갈 길이 없었다."""
-        chosen = hex_color.upper() != DEFAULTS["color"].upper()
-        self._change(color=hex_color, colorChosen=chosen)
+    def _choose_color(self, key: str, hex_color: str) -> None:
+        """그 줄만 바꾼다. 꼬리: 노랑(기본)을 고르면 기본 팔레트(tailColorChosen=False — 반짝이 여러 색·기본 불꽃색, 0.38.1),
+        다른 색은 고른 색. 원: 색만(꼬리 팔레트에 영향 없음)."""
+        if key == "ring":
+            self._change(ringColor=hex_color)
+        else:
+            self._change(tailColor=hex_color, tailColorChosen=hex_color.upper() != DEFAULT_COLOR)
+
+
+class _ColorRow(QObject):
+    """원 색·꼬리 색 한 줄: 견본 5개 · '+' · '기본 색' · (흐려질 때) 이유 한 줄."""
+
+    chosen = Signal(str)
+
+    def __init__(self, label: str, dialog_title: str, tab: "CursorTab") -> None:
+        super().__init__(tab)  # 신호용 객체 — 화면에는 label·row(가로 묶음)만 격자에 놓인다
+        self.key = "ring" if label == "원 색" else "tail"
+        self.dialog_title = dialog_title
+        self.label = QLabel(label)
+        self.row = QHBoxLayout()
+        self.row.setSpacing(8)
+        self.swatches: list[_Swatch] = []
+        for hex_color in PRESET_COLORS:
+            sw = _Swatch(hex_color)
+            sw.clicked.connect(lambda _=False, h=hex_color: self.chosen.emit(h))
+            self.swatches.append(sw)
+            self.row.addWidget(sw)
+        self.custom = QPushButton("+")
+        self.custom.setFixedSize(26, 26)
+        self.custom.setToolTip(f"{dialog_title} 직접 고르기")
+        self.custom.clicked.connect(lambda: tab._pick_color(self.key))
+        self.row.addWidget(self.custom)
+        self.row.addSpacing(8)
+        self.default = QPushButton("기본 색")
+        self.default.setFixedWidth(80)
+        self.default.clicked.connect(lambda: self.chosen.emit(DEFAULT_COLOR))
+        self.row.addWidget(self.default)
+        self.row.addSpacing(8)
+        self.note = hint_label("")
+        self.row.addWidget(self.note, 1)
+        self._base_tip = "노랑으로 되돌려요"
+
+    def show_value(self, hex_color: str, disabled_reason: str) -> None:
+        """고른 색 표시 + 흐림(저장 색은 그대로, 이유는 줄 오른쪽에 한 줄)."""
+        for sw in self.swatches:
+            sw.set_on(sw.hex == hex_color)
+        custom = hex_color not in PRESET_COLORS
+        self.custom.setStyleSheet(
+            f"QPushButton {{ background:{hex_color}; border:3px solid {color('accent')}; border-radius:5px; }}"
+            if custom else "")
+        on = not disabled_reason
+        for w in (self.label, *self.swatches, self.custom, self.default):
+            w.setEnabled(on)
+        self.note.setText(disabled_reason)
+
+    def set_default_hint(self, hint: str) -> None:
+        """반짝이·불꽃: 노랑(기본) 견본·'기본 색'의 뜻(기본 팔레트)을 말풍선으로 — 오른쪽 안내 문구는 흐릴 때만."""
+        tip = hint or self._base_tip
+        self.default.setToolTip(tip)
+        self.swatches[PRESET_COLORS.index(DEFAULT_COLOR)].setToolTip(f"노랑 — {hint}" if hint else "노랑")
