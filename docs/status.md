@@ -31,6 +31,10 @@
   렌더 [쿨타임 구역](assets/release-0440/cooldown-section.png)·[도움말](assets/release-0440/cooldown-help.png)·[아이콘 집기](assets/release-0440/icon-pick.png).
 - **문의하기 '쿨타임 오버레이' 카드(사용자 11-07, 0.44.0)**: 영역 = 등록 칸 + 두 페이지 선택기(화살표 포함) 사각형(관측과 같은 공유 캡처 범위), 칸이 없으면 위쪽 단축바 영역으로 대신(카드에 안내).
   함께 첨부: cooldown_slots.json(페이지 서명 원문 제외)·등록 칸 아이콘 PNG·cooldown_log.txt(app.log '쿨타임 칸' 최근 200줄 — 수집 동안 상태 변화 포함). 렌더 [카드 7개](assets/release-0440/inquiry-cards.png).
+- **v0.44.1 게시 완료(2026-11-08 11:28 KST 무렵)** — windows #210(run 42438587755, publish-existing, candidate_run=42431933884) success → release #290(run 42438634214) success. 태그 v0.44.1 → 477581c(후보 SHA).
+  공개 파일 일치(QA): candidate.json = run 42431933884 attempt 1·지문 f0cb04c1…·exe 164,246,797바이트 sha256 88c3d251…6e18 —
+  본 저장소 릴리즈 exe·공개 저장소 릴리즈 exe 직접 내려받아 크기·sha256 같음, 공개 저장소 main version.json = 0.44.1(같은 sha256·크기).
+  남은 확인(사용자): 앱 재시작 → 0.44.1 자동 업데이트·노트 표시. 다음 버전 후보: 피닉스 오검출(버프 줄 글자 확인), v2 표시 다듬기, 추가 단축바 클릭 맞춤.
 - **0.44.1 게시 결정(사용자, 2026-11-08 KST)**: '배포해도됨' — 후보 #209(run 42431933884). 게시 전 QA: main(87a80dd) 지문 = 744c5f5, 원격 태그 v0.44.1 없음,
   유효 후보 중 이 지문은 #209 하나(#206은 0.44.0·다른 지문). publish-existing에 candidate_run 지정해 안내(0.44.0 #207 같은 모호함 예방).
 - **0.44.1 후보: verify-only #209 성공**(run 42431933884, attempt 1, 477581c = 제품 744c5f5 + 문서, 00:54~01:02 UTC, 같은 코드 후보 하나뿐). 후보 verified-windows-42431933884-1(ID 13597697637, **11-09 01:02 UTC = 10:02 KST 만료**),
