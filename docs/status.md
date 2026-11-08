@@ -42,7 +42,7 @@
   남은 것(이번 대상 아님): 영역이 바와 7px 넘게 어긋나면 20% 넘는 바도 1 등으로 읽힘 — 오버레이 급하락 규칙이 한 번은 막지만 계속 같은 값이면 반영. 실제 등록이 그만큼 어긋나는지는 미확인.
 - **0.44.2 배포 준비(사용자 11-08, 8f0df19 보스바 저HP 소수 — QA 790e596 통과)**: release_checks.json 0.44.2 —
   boss_hp_reader.py → test_boss_low_hp_fraction·test_boss_bar_overlay·test_boss_hp_reader·test_boss_fill_boundary·test_boss_two_rows, gray 샘플·생성 스크립트 → test_boss_low_hp_fraction, 노트·배포 계약.
-  노트 맨 위 '## v0.44.2'(보스바 오버레이는 제작자 전용이라 '제작자가 시험 중인 기능을 다듬었어요' 한 줄), 게시된 0.44.1 섹션은 그대로. 저HP '1' 세로 어긋남 수정도 포함(boss_tab → 오버레이 테스트). 자동 찾기 v2 지난 자리 여백 확인(4c5b907)도 0.44.2 검사 목록에 추가(QA 72c772f — autofind_v2 → engine 테스트, controller → controller 테스트, 노트·버전 그대로). 다음: Windows 후보 검증.
+  노트 맨 위 '## v0.44.2'(보스바 오버레이는 제작자 전용이라 '제작자가 시험 중인 기능을 다듬었어요' 한 줄), 게시된 0.44.1 섹션은 그대로. 저HP '1' 세로 어긋남 수정도 포함(boss_tab → 오버레이 테스트). 자동 찾기 v2 지난 자리 여백 확인(4c5b907)도 0.44.2 검사 목록에 추가(QA 72c772f — autofind_v2 → engine 테스트, controller → controller 테스트, 노트·버전 그대로). 보스바 전수 테스트 시간 줄임(QA dc81399, 테스트만): 소수·정수 전수 311장을 4묶음(각 10~13초, 묶음 합 = 전부를 따로 확인)·메모리에서 읽기, 재생 139장을 보스별 2묶음(미등록 47·펠롬 92, 17·14초) — 범위·제한 시간 그대로. 다음: Windows 후보 검증.
 - **마우스 원·꼬리 색 분리(2026-11-07 사용자 결정 → 구현, main, 0.44.1)**: [명세 7절](mouse-cursor-spec.md) A안.
   모양 → 꼬리 → 흔들어 찾기 → 원 크기·꼬리 길이·불투명도 → 구분선 → 원 색 → 꼬리 색 → 미리보기. 키 `ringColor`·`tailColor`·`tailColorChosen`(예전 `color`→두 색, `colorChosen`→꼬리).
   흐림: 꼬리 없음·무지개 선 → 꼬리 줄, 모양 없음+흔들기 꺼짐 → 원 줄(견본 옅게·이유 한 줄·저장 색 유지). 미리보기·오버레이가 같은 `ring_color`/`tail_color` 사용(테스트로 비교).

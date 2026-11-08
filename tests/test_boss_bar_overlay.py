@@ -405,9 +405,20 @@ def _truth(name, prev):
     return int(m.group(1)) if m else prev  # 못 읽는 순간(가려짐) = 직전 값 흐리게
 
 
-def test_collected_frames_replay_shows_true_value(tab, tmp_path, monkeypatch):
-    frames = _replay_frames(tmp_path)
-    assert len(frames) == 139 and all(f.shape[:2] == (88, 521) for _n, f in frames)
+def test_replay_frames_split_by_boss_cover_all():
+    """재생은 보스별 두 묶음(미등록 보스 000~046 → 펠롬 047~138, 이어진 구간) — 묶음 합 = 수집 139장 전부(QA dc81399: 한 건 35~59초)."""
+    import re
+    import zipfile
+    with zipfile.ZipFile(f"tests/data/{ZIP}") as z:
+        names = sorted((n for n in z.namelist() if re.match(r"(unknown|pellom)_hp.*_(\d{3})\.png$", n)), key=lambda n: int(n[-7:-4]))
+    split = [n.split("_")[0] for n in names]
+    assert len(names) == 139 and split == ["unknown"] * 47 + ["pellom"] * 92
+
+
+@pytest.mark.parametrize("boss", ["unknown", "pellom"])
+def test_collected_frames_replay_shows_true_value(tab, tmp_path, monkeypatch, boss):
+    frames = [(n, f) for n, f in _replay_frames(tmp_path) if n.startswith(boss)]
+    assert len(frames) == {"unknown": 47, "pellom": 92}[boss] and all(f.shape[:2] == (88, 521) for _n, f in frames)
     state = {}
     tab._region = {"x": 0, "y": 45, "w": 521, "h": 37}
     monkeypatch.setattr(tab, "_grab_region", lambda: dict(tab._region))
@@ -512,19 +523,36 @@ def test_low_hp_shows_fraction_from_white_text(tmp_path, name, text):
     assert f"{whole}.{frac}" == text and whole == read_percent(reg)
 
 
-def test_fraction_never_changes_integer_on_all_collected_frames(tmp_path):
+ALL_FRAMES_SHARDS = 4  # 수집 프레임 전부를 4묶음으로 — 한 건 60초 제한에 닿던 것(단독 58.8초, QA dc81399). 범위는 그대로(묶음 합 = 전부)
+
+
+def _collected_frame_names():
     import zipfile
-    from mabinogi_addon.detect.boss_hp_reader import read_percent, read_percent_frac
     with zipfile.ZipFile(f"tests/data/{ZIP}") as z:
-        names = [n for n in z.namelist() if n.endswith(".png")]
-        z.extractall(tmp_path, names)
-    for name in names:
-        img = image_io.imread(str(tmp_path / name), cv2.IMREAD_COLOR)
-        reg = (img[45:82] if img.shape[0] == 88 else img)
-        reg = reg[:, int(reg.shape[1] * 0.58):]
-        whole, frac = read_percent_frac(reg)
-        assert whole == read_percent(reg), name
-        assert frac is None or (whole is not None and len(frac) == 2 and frac.isdigit()), name
+        return sorted(n for n in z.namelist() if n.endswith(".png"))
+
+
+def test_fraction_shards_cover_all_collected_frames():
+    names = _collected_frame_names()
+    shards = [names[i::ALL_FRAMES_SHARDS] for i in range(ALL_FRAMES_SHARDS)]
+    assert sorted(n for shard in shards for n in shard) == names and len(names) > 300
+
+
+@pytest.mark.parametrize("shard", range(ALL_FRAMES_SHARDS))
+def test_fraction_never_changes_integer_on_all_collected_frames(shard):
+    import zipfile
+
+    import numpy as np
+    from mabinogi_addon.detect.boss_hp_reader import read_percent, read_percent_frac
+    names = _collected_frame_names()[shard::ALL_FRAMES_SHARDS]
+    with zipfile.ZipFile(f"tests/data/{ZIP}") as z:
+        for name in names:
+            img = cv2.imdecode(np.frombuffer(z.read(name), np.uint8), cv2.IMREAD_COLOR)  # 압축을 풀어 쓰지 않고 메모리에서
+            reg = (img[45:82] if img.shape[0] == 88 else img)
+            reg = reg[:, int(reg.shape[1] * 0.58):]
+            whole, frac = read_percent_frac(reg)
+            assert whole == read_percent(reg), name
+            assert frac is None or (whole is not None and len(frac) == 2 and frac.isdigit()), name
 
 
 def test_overlay_draws_fraction_for_registered_and_unregistered(tab, tmp_path, monkeypatch):
