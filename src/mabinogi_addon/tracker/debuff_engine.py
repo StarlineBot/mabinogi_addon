@@ -92,7 +92,7 @@ _PERCENT_READ_INTERVAL = 0.6
 # 표시 방식(docs/debuff-applied-overlay-spec.md, 제작자 먼저). missing = 안 걸린 것(지금), applied = 걸린 것 + 시간.
 MODE_MISSING, MODE_APPLIED = "missing", "applied"
 DISPLAY_MODES = (MODE_MISSING, MODE_APPLIED)
-# 'M' 없는 숫자만 보이는 시간은 초일 수도, 분일 수도 있다(4K 화면은 분도 '4'처럼 M 없이 보임 — tests/data 4K 6장).
+# 'M' 없는 숫자만 보이는 시간은 초일 수도, 분일 수도 있다(게임 글꼴에 따라 분도 M 없이 숫자만 보임 — 10-30·10-31 4K 6장(매끈한 큰 글꼴)은 '4'·'9', 같은 4K·같은 자리 11-09(픽셀 글꼴)는 '4M' — 해상도가 아니라 글꼴 차이, QA e98aac6).
 # 그래서 초로 보이려면 숫자가 실제로 줄어드는 것을 봐야 한다(초는 1초마다 줄고, M 없는 분은 1분 동안 그대로) — 틀린 숫자 금지.
 _COUNT_DROP_MAX = 5  # 한 번에 이만큼까지 줄어든 것만 초 카운트다운으로 본다(판독 간격·놓친 틱)
 _COUNT_STALE_SEC = 2.5  # 이 시간 넘게 그대로면 카운트다운이 아님(M 없는 분 등) — 숫자 숨김

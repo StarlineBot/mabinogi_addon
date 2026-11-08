@@ -26,7 +26,7 @@ _VALID = re.compile(r"^(?:[1-9]M|\d{1,2})$")
 
 
 def _load() -> list[tuple[str, np.ndarray]]:
-    """(글자, 0/1 그림) — 파일 이름 '{글자}_{크기}{번호}.png': s = 7px 글꼴, t = 9px 글꼴(같은 2560에서도 두 크기가 보임 — 10-09·11-03·4K 화면)."""
+    """(글자, 0/1 그림) — 파일 이름 '{글자}_{크기}{번호}.png': s = 7px 글꼴, t = 9px 글꼴(같은 2560에서도 두 크기가 보임 — 10-09·11-03·11-09 4K 화면)."""
     out = []
     if _GLYPH_DIR.exists():
         for p in sorted(_GLYPH_DIR.glob("*.png")):
