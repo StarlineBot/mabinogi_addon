@@ -300,7 +300,7 @@ class DebuffTab(QWidget):
         self.top_area = QWidget()
         top_area = QVBoxLayout(self.top_area)
         top_area.setContentsMargins(0, 0, 0, 0)
-        top_area.setSpacing(8)
+        top_area.setSpacing(4)  # 글꼴이 달라도 790×864에서 넘치지 않게 여유(CI 글꼴 2px 넘침, QA 644433c)
         top_area.addWidget(self.region_section)
         top_area.addWidget(self.controls_row)
         top_area.addWidget(self._bar_gating_notice)

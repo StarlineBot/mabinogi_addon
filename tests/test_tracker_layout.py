@@ -151,13 +151,13 @@ def test_small_buff_uses_reserved_footer_and_restores_without_drift(window, monk
     reserved = w.centralWidget().layout().indexOf(d.footer) >= 0
     fits = state["needed"] + 64 - w.buff_tab.form_panel.layout().contentsMargins().bottom() <= state["viewport"] + (64 if reserved else 0)
     assert d._floating_footer == (not w.buff_tab._columns.stacked and fits)
-    # 0.27.0(명세 11절): 상태 줄은 지정 후 요약 줄이라 지정 전엔 숨는다 → 지정 전에도 보이는 영역 안내 줄로 늘어나는 안내를 만든다
-    notice = w.buff_tab.region_guide.text()
+    # 명세 17절: 영역 지정 후(픽스처) 보이는 위 1줄 상태 문구로 늘어나는 안내를 만든다(영역 안내는 접힌 묶음 안이라 안 보임)
+    notice = w.buff_tab.status_label.text()
     # QLabel의 양쪽 내용 배치가 처리된 뒤 반복 전환의 기준 높이를 잰다.
-    w.buff_tab.region_guide.setText("status\n" * 80)
+    w.buff_tab.status_label.setText("status\n" * 80)
     for _ in range(8):
         app.processEvents()
-    w.buff_tab.region_guide.setText(notice)
+    w.buff_tab.status_label.setText(notice)
     for _ in range(8):
         app.processEvents()
     state = layout_state(w, w.buff_tab)
@@ -168,7 +168,7 @@ def test_small_buff_uses_reserved_footer_and_restores_without_drift(window, monk
     height = w.buff_tab.buff_list.height()
     for _ in range(4):
         # 글꼴에 관계없이 실제 내용이 작은 viewport에 들어가지 않는 조건을 만든다.
-        w.buff_tab.region_guide.setText("status\n" * 80)
+        w.buff_tab.status_label.setText("status\n" * 80)
         monkeypatch.setattr(w, "screen", lambda: SimpleNamespace(availableGeometry=lambda: QRect(0, 0, 1100, 730)))
         d.refresh()
         for _ in range(6):  # 0.27.0: 영역 묶음 안 안내 줄의 배치 요청이 탭까지 올라오도록
@@ -184,7 +184,7 @@ def test_small_buff_uses_reserved_footer_and_restores_without_drift(window, monk
         scroll.verticalScrollBar().setValue(scroll.verticalScrollBar().maximum())
         app.processEvents()
         assert d.face.mapTo(w, QPoint()).y() > scroll.mapTo(w, scroll.rect().bottomLeft()).y()
-        w.buff_tab.region_guide.setText(notice)
+        w.buff_tab.status_label.setText(notice)
         monkeypatch.setattr(w, "screen", lambda: SimpleNamespace(availableGeometry=lambda: QRect(0, 0, 1600, 1100)))
         d.refresh()
         for _ in range(8):
