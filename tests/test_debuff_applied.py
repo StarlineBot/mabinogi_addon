@@ -202,3 +202,44 @@ def test_main_window_passes_display_mode_to_engine(monkeypatch):
     MainWindow._on_debuff_display_mode(me, "applied")
     assert eng.display_mode == "missing"
     MainWindow._on_debuff_display_mode(SimpleNamespace(_debuff_engine=None, debuff_tab=me.debuff_tab), "applied")  # 추적 안 하면 무시
+
+
+def test_seconds_countdown_does_not_jump_to_minutes_on_one_read():
+    """실게임 '10s 9s 9m 8s'(QA f5ba724, 재현 못 함) 방어 — 초 카운트다운 중 'NM'은 같은 글자가 한 번 더 읽힐 때만."""
+    from mabinogi_addon.tracker.debuff_engine import DebuffEngine
+    eng = DebuffEngine({}, [])
+    seen = [eng._time_label("a", g, t) for t, g in enumerate(("11", "10", "9", "9M", "8"))]
+    assert [s[0] for s in seen] == [None, "10s", "9s", "9s", "8s"]  # 한 번 읽힌 9M은 무시, 9s 유지
+    assert eng._suspects == [("a", "9M")]  # 진단 저장 대상
+    eng2 = DebuffEngine({}, [])
+    seen = [eng2._time_label("b", g, t) for t, g in enumerate(("11", "10", "9M", "9M"))]
+    assert [s[0] for s in seen] == [None, "10s", "10s", "9m"]  # 두 번 연속이면 9m
+    eng3 = DebuffEngine({}, [])
+    assert eng3._time_label("c", "4M", 0) == ("4m", False)  # 카운트다운 아니면 'NM'은 바로
+
+
+def test_suspect_read_is_saved_for_creator_with_limit(tmp_path, monkeypatch):
+    import numpy as np
+
+    from mabinogi_addon.ui import main_window as mw
+    monkeypatch.setattr(mw, "_debuff_time_shots", [0])
+    region = np.zeros((88, 300, 3), np.uint8)
+    base = mw.save_debuff_time_suspect("모모", "9M", region, (25, 17, 16, 16), folder=tmp_path)
+    assert (tmp_path / f"{base.name}_icon.png").exists() and (tmp_path / f"{base.name}_region.png").exists()
+    for _ in range(mw.DEBUFF_TIME_SHOT_LIMIT + 3):
+        mw.save_debuff_time_suspect("모모", "9M", region, (25, 17, 16, 16), folder=tmp_path)
+    assert len(list(tmp_path.glob("*_region.png"))) == mw.DEBUFF_TIME_SHOT_LIMIT  # 실행당 상한
+
+
+def test_engine_hands_suspect_to_saver(monkeypatch):
+    region = _region("스크린샷 2026-10-18 001801.png")
+    eng = _engine(ORDER)
+    eng.set_display_mode("applied")
+    got = []
+    eng.on_time_suspect = lambda bid, game, reg, box: got.append((bid, game, reg.shape, box))
+    for t in (0.0, 0.2, 0.4):
+        eng.tick(region, t)
+    eng._time_state["모모"] = [12, 0.3, True, 0.4, None]  # 모모가 초 카운트다운 중이었다고 하고 화면은 '4M'
+    res = eng.tick(region, 0.6)
+    assert got and got[0][0] == "모모" and got[0][1] == "4M" and got[0][3] is not None
+    assert [e.time_text for e in res.entries if e.buff_id == "모모"] == ["12s"]  # 한 번은 초 그대로

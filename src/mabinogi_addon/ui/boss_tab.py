@@ -572,12 +572,14 @@ class BossTab(QWidget):
     LOW_HP_PAD = 6  # 저HP 한 자리 판독을 다시 읽을 위아래 여유(px, 오버레이 늘린 캡처 안) — 등록 영역이 바와 1~6px 어긋나면 숫자가 잘려 '1'(QA 4f106aa)
 
     def _recheck_low_hp(self, full, top, h, value, frac):
-        """20% 이하 한 자리 판독('1' 등)만 등록 영역 ±LOW_HP_PAD px의 숫자 칸에서 흰 글자로 다시 — 늘리기만(1 → 17). 평소엔 그대로."""
+        """20% 이하 판독만 등록 영역 ±LOW_HP_PAD px의 숫자 칸에서 흰 글자로 다시(QA 4f106aa·f5ba724) — 한 자리 '1' → 17,
+        두 자리 오독(17→11·19→10)도. 다시 읽은 글자 줄이 등록 영역 줄과 절반 이상 겹칠 때만(두 줄 화면의 다른 바 숫자 제외). 평소엔 그대로."""
         from ..detect.boss_hp_reader import recheck_low_hp
-        if value is None or value > 20 or len(str(value)) != 1:
+        if value is None or value > 20:
             return value, frac
-        crop = full[max(0, top - self.LOW_HP_PAD):top + h + self.LOW_HP_PAD]
-        return recheck_low_hp(crop[:, int(crop.shape[1] * 0.58):], value, frac)
+        start = max(0, top - self.LOW_HP_PAD)
+        crop = full[start:top + h + self.LOW_HP_PAD]
+        return recheck_low_hp(crop[:, int(crop.shape[1] * 0.58):], value, frac, region_rows=(top - start, h))
 
     BAR_EXT_UP, BAR_EXT_DOWN = 45, 6
     LOW_HP_SKIP_HEIGHT = 20  # 이 % 이하는 띠 높이 규칙을 쓰지 않는다

@@ -625,6 +625,7 @@ def test_quarter_lines_inside_bar_under_pattern_lines():
     ("unknown_hpxxx_show001_upper_197.zip", "gomok_petak_hp018_128.png", 38, 37, ("고목의 페타크", 18, "23")),
     ("eotgallin_poinche_hp098_058.zip", "unknown_hpxxx_041.png", 40, 37, ("보스", 19, "55")),  # 미등록(보스바 확인 경로)
     ("gomok_petak_hp019_158.zip", "gomok_petak_hp017_159.png", 50, 37, ("고목의 페타크", 17, "74")),  # 원래 맞던 자리는 그대로
+    ("gomok_petak_hp019_158.zip", "gomok_petak_hpxxx_184.png", 40, 41, ("보스", 12, None)),  # 두 자리 오독 12.84 → 19(QA f5ba724)
 ])
 @pytest.mark.parametrize("fix", [False, True])
 def test_overlay_rereads_low_hp_one_when_region_is_shifted(tab, tmp_path, monkeypatch, zip_name, name, y, h, expected, fix):
@@ -633,7 +634,7 @@ def test_overlay_rereads_low_hp_one_when_region_is_shifted(tab, tmp_path, monkey
 
     from mabinogi_addon.detect import boss_hp_reader
     if not fix:
-        monkeypatch.setattr(boss_hp_reader, "recheck_low_hp", lambda p, v, f=None: (v, f))
+        monkeypatch.setattr(boss_hp_reader, "recheck_low_hp", lambda p, v, f=None, region_rows=None: (v, f))
     state = {}
     tab._region = {"x": 0, "y": y, "w": 521, "h": h}
     monkeypatch.setattr(tab, "_grab_region", lambda: dict(tab._region))
@@ -648,4 +649,4 @@ def test_overlay_rereads_low_hp_one_when_region_is_shifted(tab, tmp_path, monkey
     if fix or y == 50:
         assert (st[0], st[1], st[4]) == expected
     else:
-        assert st[1] == 1  # 수정 전 현상
+        assert st[1] != expected[1]  # 수정 전 현상(1 또는 19 등 오독)

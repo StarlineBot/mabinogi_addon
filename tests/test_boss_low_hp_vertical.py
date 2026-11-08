@@ -68,3 +68,42 @@ def test_recheck_only_extends_low_one_digit_values():
     assert r.recheck_low_hp(pad, 13, "50") == (13, "50")  # 두 자리는 다시 읽지 않음
     assert r.recheck_low_hp(pad, 40) == (40, None)  # 20% 넘음
     assert r.recheck_low_hp(pad, None) == (None, None)
+
+
+# ---- 두 자리 오독(QA f5ba724): 영역이 바보다 4~7px 위·높이 작을 때 17→11·19→10·14→12/17 ----------------------------------
+SHIFTS = [(s, h) for s in (39, 40, 41, 45, 48, 51) for h in (33, 37, 41)]  # 세로 ±6px · 높이 3가지
+
+
+def _read_app(im, start, h):
+    """앱(보스바 오버레이)과 같게: 영역 판독 → 20% 이하면 ±6px 여유에서 흰 글자로 다시(영역 줄 = 겹침 조건)."""
+    reg = im[start:start + h]
+    value, frac = r.read_percent_frac(reg[:, int(reg.shape[1] * 0.58):])
+    p0 = max(0, start - PAD)
+    pad = im[p0:start + h + PAD]
+    return r.recheck_low_hp(pad[:, int(pad.shape[1] * 0.58):], value, frac, region_rows=(start - p0, h))
+
+
+@pytest.mark.parametrize("zip_name,name,truth", [
+    (GOMOK, "gomok_petak_hp017_159.png", 17), (GOMOK, "gomok_petak_hp019_158.png", 19), (GOMOK, "gomok_petak_hp014_160.png", 14),
+    (GOMOK, "gomok_petak_hpxxx_184.png", 12),  # 화면 12.84 — 2560 '8' 모양이 달라 소수 못 읽어도 정수는 바로잡음
+    ("eotgallin_poinche_hp098_058.zip", "unknown_hpxxx_041.png", 19), ("eotgallin_poinche_hp098_058.zip", "unknown_hpxxx_042.png", 14),
+    ("eotgallin_poinche_hp098_058.zip", "unknown_hpxxx_043.png", 14),
+    (UPPER, "gomok_petak_hp001_show055_drop_077.png", 15),  # 화면 15.95 — 0·6으로 읽던 것
+])
+def test_shifted_region_has_no_low_hp_misread(zip_name, name, truth):
+    im = _img(zip_name, name)
+    for start, h in SHIFTS:
+        got, _frac = _read_app(im, start, h)
+        assert got is None or got > 20 or got == truth, (start, h, got)
+
+
+@pytest.mark.parametrize("zip_name,name,truth", [
+    (UPPER, "gomok_petak_hpxxx_077.png", 2),  # 위 줄 바 '55.00'(노랑), 아래 줄 2.25
+    (UPPER, "unknown_hpxxx_069.png", 9),  # 위 줄 55.00, 아래 줄 9.08
+    (UPPER, "gomok_petak_hp008_171.png", 8),  # 위에 디버프 시간 글자, 아래 줄 8.32
+])
+def test_two_row_screen_never_takes_other_bar_value(zip_name, name, truth):
+    im = _img(zip_name, name)
+    for start, h in SHIFTS:
+        got, _frac = _read_app(im, start, h)
+        assert got is None or got > 20 or got == truth, (start, h, got)

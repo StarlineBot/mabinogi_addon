@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 from PySide6.QtCore import QEvent, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QIcon, QPainter, QPen
@@ -218,6 +219,35 @@ def _feature_region(key: str):
              "debuff": lambda: config.load_capture_region("debuffTracker"),
              "boss": config.load_boss_bar_region}[key]()
     return autofind_regions.region_for(key, saved)
+
+DEBUFF_TIME_SHOT_LIMIT = 20  # 실행당 저장 상한
+_debuff_time_shots = [0]
+
+
+def save_debuff_time_suspect(bid: str, game: str, region, box, folder=None) -> "Path | None":
+    """디버프 '걸린 것 + 시간'에서 초 카운트다운 중 'NM'이 읽힌 순간(작업 스레드) — 아이콘·아래 띠와 디버프 영역 전체를 PNG로, app.log 한 줄.
+    제작자 수집 폴더(user_data/debuff_time_shots), 실행당 DEBUFF_TIME_SHOT_LIMIT장까지."""
+    import logging
+    import re
+    from datetime import datetime
+
+    from .. import image_io, paths
+    if _debuff_time_shots[0] >= DEBUFF_TIME_SHOT_LIMIT or region is None or getattr(region, "size", 0) == 0:
+        return None
+    _debuff_time_shots[0] += 1
+    folder = Path(folder) if folder is not None else paths.user_data_dir() / "debuff_time_shots"
+    folder.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
+    name = re.sub(r"[^\w가-힣()]+", "_", bid)
+    base = folder / f"{stamp}_{_debuff_time_shots[0]:02d}_{name}_{game}"  # 같은 밀리초에도 덮어쓰지 않게 번호
+    if box is not None:
+        x, y, w, h = box
+        crop = region[max(0, y - 2):y + h + 16, max(0, x - 20):x + w + 20]
+        image_io.imwrite(Path(f"{base}_icon.png"), crop)
+    image_io.imwrite(Path(f"{base}_region.png"), region)
+    logging.getLogger(__name__).info("디버프 시간 초→분 의심 판독 저장: %s '%s' 자리 %s → %s", bid, game, box, base.name)
+    return base
+
 
 class MainWindow(QMainWindow):
     # 백그라운드 스레드(업데이트 확인/다운로드)에서 UI 스레드로 안전하게 넘기는 신호.
@@ -2032,6 +2062,9 @@ class MainWindow(QMainWindow):
         self._debuff_engine.set_warn_gone_ids(self._debuff_warn_gone_ids())
         mode = getattr(self.debuff_tab, "effective_display_mode", lambda: "missing")()
         self._debuff_engine.set_display_mode(mode)  # 제작자만 '걸린 것 + 시간'
+        from .. import feature_access
+        if feature_access.is_creator():  # 초 → 분으로 바뀌려는 판독 자동 저장(제작자 진단, QA f5ba724)
+            self._debuff_engine.on_time_suspect = save_debuff_time_suspect
         # 3차(percent): 보스 HP바 영역(보스패턴알림과 공유)을 따로 캡처해 넘긴다.
         bar_source = None
         if gate_mode in ("percent", "auto"):

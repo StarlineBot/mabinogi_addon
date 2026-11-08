@@ -508,7 +508,7 @@ def _bright_fraction(region_bgr, prep, val) -> str | None:
     return None if got is None else got[1]
 
 
-def _bright_read(region_bgr, prep, want: str | None) -> tuple[int, str | None] | None:
+def _bright_read(region_bgr, prep, want: str | None, info: dict | None = None) -> tuple[int, str | None] | None:
     """밝기 마스크(흰 글자)로 'XX.YY' — (정수, 소수 두 자리|None) 또는 None. want = 이미 아는 정수 글자(소수만 찾을 때),
     None이면 정수도 여기서 읽는다(자리 수는 '.' 왼쪽 글자 수, 자리마다 강한 점수). 소수는 두 칸 모두 강할 때만, 아니면 None."""
     if not USE_TEXT_MASK or not _GRAY_SAMPLES:
@@ -518,6 +518,8 @@ def _bright_read(region_bgr, prep, want: str | None) -> tuple[int, str | None] |
     bright = _bright_mask(region_bgr)
     band = bright[int(h * _YBAND[0]):int(h * _YBAND[1])]
     text = _text_rows(bright[:, _num_left(w, scale):])
+    if info is not None:
+        info["text_rows"] = text  # 글자 줄(위, 아래) — 다시 읽기가 원래 영역 글자인지 볼 때
     if text is not None and (want is None or text[0] < int(h * _YBAND[0]) - 1 or text[1] > int(h * _YBAND[1])):
         band = bright[max(0, text[0] - 1):text[1] + 2]  # 글자가 기본 띠 밖(등록 영역이 몇 px 어긋남) — 글자 줄에 맞춤
     count = _digits_before_dot(band[:, _num_left(w, scale):])
@@ -551,22 +553,45 @@ def _bright_read(region_bgr, prep, want: str | None) -> tuple[int, str | None] |
     return int(best[2]), _fraction(band, w, scale, pitch, _GRAY_SAMPLES, best[1])
 
 
-def recheck_low_hp(padded_bgr: np.ndarray, value: int | None, frac: str | None = None) -> tuple[int | None, str | None]:
-    """저HP 한 자리 판독('1' 등)을 위아래로 여유를 둔 숫자 칸(padded_bgr — 등록 영역 ±몇 px)에서 흰 글자로 다시 — (정수, 소수).
-    등록 영역이 바와 1~6px 어긋나면 고정 띠가 숫자를 잘라 '17.74'를 1로 읽었다(QA 4f106aa, 세로 옮겨 읽기 146칸).
-    여유 칸에서 글자 줄을 찾아 '.' 왼쪽 글자 수만큼 정수 자리를 모두 강하게 읽었고 원래 값으로 시작할 때만 바꾼다(늘리기만 — 1 → 17),
-    소수는 두 칸 모두 강할 때만. 아니면 그대로.
-    20% 이하·한 자리일 때만 판독 1번(약 10ms) 더 — 평소 판독은 그대로. 다른 템플릿·회색 샘플 없음이면 그대로."""
-    if value is None or value > _LOW_HP_MAX or len(str(value)) != 1 or padded_bgr is None or padded_bgr.size == 0:
+_OWN_TEXT = 0.5  # 두 자리 다시 읽기: 찾은 글자 줄의 이 비율 이상이 원래 등록 영역 줄 안이어야(여유 칸의 다른 바 숫자 제외)
+
+
+def recheck_low_hp(padded_bgr: np.ndarray, value: int | None, frac: str | None = None,
+                   region_rows: tuple[int, int] | None = None) -> tuple[int | None, str | None]:
+    """저HP 판독을 위아래로 여유를 둔 숫자 칸(padded_bgr — 등록 영역 ±몇 px)에서 흰 글자로 다시 — (정수, 소수).
+    등록 영역이 바와 어긋나면 고정 띠가 숫자를 잘라 '17.74'를 1로(QA 4f106aa), 17을 11·19를 10으로(QA f5ba724) 읽었다.
+    - 한 자리: 여유 칸에서 글자 줄을 찾아 '.' 왼쪽 글자 수만큼 정수 자리를 모두 강하게 읽었고 원래 값으로 시작할 때만 바꾼다(1 → 17).
+    - 그 밖(두 자리 오독, 앞자리가 아닌 한 자리 15→0 등 — region_rows = 여유 칸 안 원래 영역 줄(위, 높이)을 줄 때만): '.' 왼쪽 글자 수만큼
+      정수 자리가 모두 강하게 읽혔고(소수는 두 칸 강할 때만), 찾은 글자 줄이 원래 영역 줄과 절반 이상 겹칠 때만 — 두 줄 화면에서 여유 칸에
+      들어온 다른 바 숫자(19→12 등)로 바꾸지 않는다. 88px 수집 704장 × 세로 ±6px·높이 3가지: 저HP 오독 248 → 0, 맞던 칸이 틀려진 것 0.
+    20% 이하일 때만 판독 1번(약 10ms) 더 — 평소 판독은 그대로. 다른 템플릿·회색 샘플 없음이면 그대로."""
+    if value is None or value > _LOW_HP_MAX or padded_bgr is None or padded_bgr.size == 0:
+        return value, frac
+    one = len(str(value)) == 1
+    if not one and region_rows is None:
         return value, frac
     prep = _prep(padded_bgr, None)
     if prep is None:
         return value, frac
-    got = _bright_read(padded_bgr, prep, None)
-    if got is None or got[0] > _LOW_HP_MAX or not str(got[0]).startswith(str(value)):
+    info: dict = {}
+    got = _bright_read(padded_bgr, prep, None, info)
+    if got is None or got[0] > _LOW_HP_MAX:
         return value, frac
-    if got[0] == value and got[1] is None:
-        return value, frac  # 같은 정수·소수 못 읽음 — 원래 판독 그대로
+    if one and str(got[0]).startswith(str(value)):
+        if got[0] == value and got[1] is None:
+            return value, frac  # 같은 정수·소수 못 읽음 — 원래 판독 그대로
+        return got
+    if one and region_rows is None:
+        return value, frac  # 앞자리로 시작하지 않는 한 자리(15를 0·6으로 등)는 아래 겹침 조건이 있을 때만
+    if (got[0], got[1]) == (value, frac) or (got[0] == value and got[1] is None):
+        return value, frac
+    text = info.get("text_rows")
+    if text is None:
+        return value, frac
+    top, h = region_rows
+    inside = max(0, min(text[1], top + h - 1) - max(text[0], top) + 1)
+    if inside < _OWN_TEXT * (text[1] - text[0] + 1):
+        return value, frac  # 글자 줄이 대부분 여유 칸 — 다른 바 숫자일 수 있음
     return got
 
 

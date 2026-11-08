@@ -169,8 +169,12 @@ class DebuffEngine:
         self._fell_since: dict[str, float] = {}  # 떨어지기 시작한 시각(확정 대기)
         self._warn_until: dict[str, float] = {}  # 확정 → 경고 노출 종료 시각
         self._mode = MODE_MISSING
-        # 시간 판독 기록(걸린 것 + 시간): id → [마지막 숫자(초 후보), 마지막으로 줄어든 시각, 카운트다운 확인, 마지막 판독 시각]
+        # 시간 판독 기록(걸린 것 + 시간): id → [마지막 숫자(초 후보), 마지막으로 줄어든 시각, 카운트다운 확인, 마지막 판독 시각,
+        #   초 카운트다운 중 한 번 읽힌 'NM'(확인 대기)]
         self._time_state: dict[str, list] = {}
+        # 초 → 분으로 바뀌려는 수상한 판독(제작자 진단) — (id, 읽은 글자) 를 틱마다 모아 on_time_suspect(id, 글자, 영역, 아이콘 자리)로 넘긴다
+        self.on_time_suspect = None
+        self._suspects: list[tuple[str, str]] = []
 
     @property
     def display_mode(self) -> str:
@@ -189,21 +193,26 @@ class DebuffEngine:
                 self._time_state.pop(bid, None)
             return None, False
         if game.endswith("M"):
+            if st is not None and st[2] and st[4] != game:
+                # 초 카운트다운 중에 'NM' 한 번 — 바로 바꾸지 않고 같은 글자가 한 번 더 읽힐 때만(실게임 '10s 9s 9m 8s', QA f5ba724)
+                st[4], st[3] = game, now
+                self._suspects.append((bid, game))
+                return f"{st[0]}s", True
             self._time_state.pop(bid, None)
             shown = display_text(game)
             return shown[0], shown[1]
         value = int(game)
         if st is None:
-            self._time_state[bid] = [value, now, False, now]
+            self._time_state[bid] = [value, now, False, now, None]
             return None, False
-        last, changed_at, counting, _seen = st
+        last, changed_at, counting, _seen, _pending = st
         if value < last and last - value <= _COUNT_DROP_MAX:
             counting, changed_at = True, now
         elif value > last:
             counting, changed_at = False, now  # 다시 걸림(시간 늘어남) — 다시 확인
         elif now - changed_at > _COUNT_STALE_SEC:
             counting = False  # 오래 그대로 = 초가 아님
-        self._time_state[bid] = [value, changed_at, counting, now]
+        self._time_state[bid] = [value, changed_at, counting, now, None]
         if not counting:
             return None, False
         shown = display_text(game)
@@ -214,6 +223,7 @@ class DebuffEngine:
         경고를 끈 디버프는 걸림이 풀리면 바로 빠진다."""
         applied = [bid for bid in self._order if not self._shown.get(bid, True)]
         times = read_times(region, {bid: self._pos.get(bid) for bid in applied}) if applied else {}
+        self._suspects.clear()
         entries = []
         for bid in self._order:
             if bid in self._warn_until:
@@ -224,6 +234,12 @@ class DebuffEngine:
         for bid in [b for b in self._time_state if b not in times]:
             if now - self._time_state[bid][3] > _TIME_FORGET_SEC:
                 del self._time_state[bid]
+        if self._suspects and self.on_time_suspect is not None:
+            for bid, game in self._suspects:
+                try:
+                    self.on_time_suspect(bid, game, region, self._pos.get(bid))
+                except Exception:  # noqa: BLE001 — 진단 저장 실패가 추적을 막지 않게
+                    pass
         return entries
 
     @property
