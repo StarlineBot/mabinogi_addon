@@ -711,3 +711,4 @@
   영역 지정 전 큰 상자가 위 전체 폭이라 그동안은 790×864에서 세로 스크롤이 생길 수 있다(지정 후 없음). 렌더: [디버프(제작자·걸린 것)](assets/buff-debuff-layout-20261108/impl-debuff-c-applied-790-set.png) ·
   [디버프](assets/buff-debuff-layout-20261108/impl-debuff-u-missing-790-set.png) · [버프](assets/buff-debuff-layout-20261108/impl-buff-u-missing-790-set.png) ·
   [600 한 칸](assets/buff-debuff-layout-20261108/impl-debuff-c-missing-600-set.png) · [지정 전](assets/buff-debuff-layout-20261108/impl-buff-u-missing-790-unset.png).
+  머리 줄의 자동 찾기 v2 표시는 짧게 `자동(v2)`(긴 설명은 툴팁), 상태 문구는 넘치면 '…' + 툴팁 — 제작자·v2 켬에서 최소 폭 936px이던 것(QA 50a07f9) → 656/644px.

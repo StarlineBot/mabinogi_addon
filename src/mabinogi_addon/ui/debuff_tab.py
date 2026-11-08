@@ -189,7 +189,10 @@ class DebuffTab(QWidget):
         v.addWidget(hint_label("자동 찾기는 디버프 줄과 보스 체력바를 함께, 직접 지정은 디버프 줄만 등록해요."))
         self.shared_region_hint = hint_label("")
 
-        self.status_label = hint_label("")  # 진단 상태(추적 중/게임 비활성 등) = 지정 후 요약 줄
+        from .widgets import ElidedLabel
+        # 진단 상태(추적 중/게임 비활성 등) = 지정 후 위 1줄 상태 문구 — 넘치면 '…' + 툴팁(명세 17절, QA 50a07f9)
+        self.status_label = ElidedLabel("")
+        self.status_label.setStyleSheet(f"color:{color('muted')};")
 
         # 일반 화면은 자동 판단. 기존 강제 방식은 접힌 진단 설정에 보존한다.
         auto_row = QHBoxLayout()

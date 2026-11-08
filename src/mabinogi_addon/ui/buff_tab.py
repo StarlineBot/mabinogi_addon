@@ -334,7 +334,10 @@ class BuffTab(QWidget):
         self.favorites_info = hint_label("")
         region.addWidget(self.favorites_info)
 
-        self.status_label = hint_label("")  # 진단 상태(추적 중/게임 비활성 등) = 지정 후 요약 줄
+        from .widgets import ElidedLabel
+        # 진단 상태(추적 중/게임 비활성 등) = 지정 후 위 1줄 상태 문구 — 넘치면 '…' + 툴팁(명세 17절, QA 50a07f9)
+        self.status_label = ElidedLabel("")
+        self.status_label.setStyleSheet(f"color:{color('muted')};")
         from .status_icon import status_row
         status, self.status_icon = status_row(self.status_label)  # B안: 앞 기호 대신 그린 아이콘
         summary = QWidget()

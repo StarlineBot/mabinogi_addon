@@ -168,6 +168,49 @@ class MinWidthPanel(QWidget):
         return hint
 
 
+class ElidedLabel(QLabel):
+    """넘치면 줄마다 끝을 '…'로 줄이고 전체 글자는 툴팁으로(버프·디버프 위 1줄 상태 문구, 명세 17절 — QA 50a07f9).
+    높이는 그대로 줄 수만큼(여러 줄 안내도 배치 재판정에 그대로 전달), 최소 폭만 작게."""
+
+    MIN_CHARS = 8
+
+    def __init__(self, text: str = "", parent=None):
+        super().__init__(text, parent)
+        self.setWordWrap(False)
+
+    def minimumSizeHint(self):
+        from PySide6.QtCore import QSize
+        fm = self.fontMetrics()
+        m = self.contentsMargins()
+        return QSize(fm.averageCharWidth() * self.MIN_CHARS + fm.horizontalAdvance("…") + m.left() + m.right(),
+                     super().sizeHint().height())
+
+    def _lines(self, width: int) -> list[str]:
+        from PySide6.QtCore import Qt
+        fm = self.fontMetrics()
+        return [fm.elidedText(line, Qt.TextElideMode.ElideRight, width) for line in self.text().split("\n")]
+
+    def _update_tip(self) -> None:
+        full = self.text()
+        self.setToolTip(full if self._lines(self.contentsRect().width()) != full.split("\n") else "")
+
+    def setText(self, text: str) -> None:
+        super().setText(text)
+        self._update_tip()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._update_tip()
+
+    def paintEvent(self, _event):
+        from PySide6.QtGui import QPainter
+        rect = self.contentsRect()
+        painter = QPainter(self)
+        self.style().drawItemText(painter, rect, int(self.alignment()), self.palette(), self.isEnabled(),
+                                  "\n".join(self._lines(rect.width())), self.foregroundRole())
+        painter.end()
+
+
 def divider() -> QWidget:
     """탭 머리 구분선과 같은 모양의 가로줄."""
     line = QWidget()

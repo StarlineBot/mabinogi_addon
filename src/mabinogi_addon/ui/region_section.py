@@ -177,7 +177,11 @@ class RegionSection(QWidget):
     def refresh_autofind(self) -> None:
         """v2 켜짐일 때만 한 줄 — 지금 읽는 자리가 v2가 찾은 자리인지(저장 영역은 그대로)."""
         text = autofind_combined(self.autofind_keys) if self.autofind_keys else autofind_text(self.autofind_key)
-        self.auto_badge.setText(text or "")
+        if self.header:  # 버프·디버프 한 줄 머리(명세 17절): 짧게 '자동(v2)', 긴 설명은 툴팁 — 긴 문구로 탭 최소 폭이 936px까지 늘던 것(QA 50a07f9)
+            self.auto_badge.setText("자동(v2)" if text else "")
+            self.auto_badge.setToolTip(text or "")
+        else:
+            self.auto_badge.setText(text or "")
         self.auto_badge.setVisible(bool(text))
 
     def set_summary(self, text: str, tint: str | None = None) -> None:

@@ -27,6 +27,7 @@
     "tests/test_debuff_boss_gate.py",
     "tests/test_navigation.py",
     "tests/test_tracker_layout.py",
+    "tests/test_tracker_top_width.py",
     "tests/test_screen_polish.py"
   ],
   "coverage": {
@@ -137,7 +138,8 @@
         "tests/test_debuff_applied.py",
         "tests/test_debuff_boss_gate.py",
         "tests/test_navigation.py",
-        "tests/test_tracker_layout.py"
+        "tests/test_tracker_layout.py",
+        "tests/test_tracker_top_width.py"
       ],
       "reason": "디버프 '걸린 것 + 시간' 보기(제작자 먼저, docs/debuff-applied-overlay-spec.md): 제작자만 '표시' 선택·설명 문구, 비제작자 그대로 · 버프·디버프 탭 배치(명세 17절): 위 두 줄(영역 한 줄 + 잠금 세 칸·체크박스) + 구분선, 목록|항목 설정 같은 높이, 두 칸 접힘 조건 그대로 · 걸린 것 + 시간이면 '보스바가 보일 때만' 흐리게"
     },
@@ -171,24 +173,27 @@
         "tests/test_buff_opacity_reorder.py",
         "tests/test_navigation.py",
         "tests/test_screen_polish.py",
-        "tests/test_tracker_layout.py"
+        "tests/test_tracker_layout.py",
+        "tests/test_tracker_top_width.py"
       ],
       "reason": "버프·디버프 탭 배치(명세 17절): 위 두 줄(영역 한 줄 + 잠금 세 칸·체크박스) + 구분선, 목록|항목 설정 같은 높이, 두 칸 접힘 조건 그대로"
     },
     "src/mabinogi_addon/ui/region_section.py": {
       "tests": [
-        "tests/test_tracker_layout.py",
+        "tests/test_navigation.py",
         "tests/test_screen_polish.py",
-        "tests/test_navigation.py"
+        "tests/test_tracker_layout.py",
+        "tests/test_tracker_top_width.py"
       ],
-      "reason": "한 줄 머리 모드(제목·상태·ⓘ·[영역 다시 지정], 버프·디버프만) — 다른 화면의 영역 묶음은 그대로"
+      "reason": "한 줄 머리 모드(제목·상태·ⓘ·[영역 다시 지정], 버프·디버프만) — 다른 화면의 영역 묶음은 그대로 · 머리 줄 v2는 짧게 '자동(v2)'+툴팁(QA 50a07f9)"
     },
     "src/mabinogi_addon/ui/widgets.py": {
       "tests": [
+        "tests/test_buff_opacity_reorder.py",
         "tests/test_tracker_layout.py",
-        "tests/test_buff_opacity_reorder.py"
+        "tests/test_tracker_top_width.py"
       ],
-      "reason": "WrapRow(좁으면 체크박스만 다음 줄)·EqualRow(잠금 세 칸 같은 폭)·MinWidthPanel(접힘 조건 유지)·divider"
+      "reason": "WrapRow(좁으면 체크박스만 다음 줄)·EqualRow(잠금 세 칸 같은 폭)·MinWidthPanel(접힘 조건 유지)·divider · ElidedLabel(상태 문구 말줄임 + 툴팁)"
     }
   }
 }
