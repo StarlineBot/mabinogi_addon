@@ -1,71 +1,66 @@
 {
-  "version": "0.44.0",
+  "version": "0.44.1",
   "tests": [
-    "tests/test_cooldown.py",
-    "tests/test_skillbar_testers.py",
-    "tests/test_startup_build.py",
-    "tests/test_release_candidate.py",
-    "tests/test_windows_ci.py",
-    "tests/test_release_notes.py",
-    "tests/test_release_notes_trigger.py",
-    "tests/test_release_checks.py",
-    "tests/test_startup_smoke.py",
+    "tests/test_cursor_fx.py",
+    "tests/test_cursor_front.py",
     "tests/test_autofind_v2_engine.py",
     "tests/test_autofind_v2_controller.py",
     "tests/test_autofind_v2_use.py",
-    "tests/test_home_page.py",
-    "tests/test_status_panel.py",
-    "tests/test_autofind_v2_prereq.py",
-    "tests/test_halo_timer.py",
-    "tests/test_halo_autofind.py",
-    "tests/test_tuarim.py",
-    "tests/test_tuarim_native_autofind.py",
-    "tests/test_boss_tab.py",
-    "tests/test_dorcha_tab.py",
-    "tests/test_stat_bars.py",
-    "tests/test_engine.py",
-    "tests/test_debuff_boss_gate.py",
-    "tests/test_debuff_identity.py",
-    "tests/test_pause.py",
-    "tests/test_icon_capture.py",
-    "tests/test_boss_two_rows.py",
-    "tests/test_boss_hp_reader.py",
-    "tests/test_boss_fill_boundary.py",
-    "tests/test_click_snap.py",
-    "tests/test_inquiry_unified.py"
+    "tests/test_skillbar_testers.py",
+    "tests/test_release_notes.py",
+    "tests/test_release_notes_trigger.py",
+    "tests/test_release_checks.py",
+    "tests/test_startup_build.py",
+    "tests/test_release_candidate.py",
+    "tests/test_windows_ci.py",
+    "tests/test_startup_smoke.py"
   ],
   "coverage": {
-    "src/mabinogi_addon/detect/cooldown.py": {
+    "src/mabinogi_addon/cursor_fx.py": {
       "tests": [
-        "tests/test_cooldown.py"
+        "tests/test_cursor_fx.py",
+        "tests/test_cursor_front.py"
       ],
-      "reason": "페이지 상자 네 모서리 제외 비교(예전 서명도 맞음)·'1' vs '2' 구분 유지 · 선택기 둘 다 안 보이면 단축바 없음·사용 불가(밝기만 0.75배 미만) 판정 · 선택기 = 숫자 상자 + 양옆 ◀▶ 화살표(가짜 상자 거름)"
+      "reason": "원·꼬리 색 분리: ringColor·tailColor·tailColorChosen 기본값·정리, 예전 color→두 색·colorChosen→꼬리 이전(새 키 우선), ring_color·tail_color·sparkle_multicolor(꼬리만)"
     },
-    "src/mabinogi_addon/ui/cooldown_section.py": {
+    "src/mabinogi_addon/ui/cursor_tab.py": {
       "tests": [
-        "tests/test_cooldown.py"
+        "tests/test_cursor_fx.py",
+        "tests/test_cursor_front.py"
       ],
-      "reason": "페이지 모양 재저장 제거(등록 값 유지)·상태 표시·app.log·다른 페이지라 숨김 문구 · 단축바 없는 화면 줄 전체 가려짐(453e71d 회귀)·사용 중 2번 연속·사용 불가(탈것 등) · 공유 캡처가 선택기 화살표까지 찍음 · 사용 중 칸이 어두워져도 3초까지는 사용 중 유지(전투 중 빠짐 방지) · 같은 자리 다른 페이지 등록 허용·같은 페이지 중복 거부·페이지 안내 문구 · 0.44.0 모든 사용자(베타)·도움말"
+      "reason": "A안 배치(원 색·꼬리 색 두 줄 같은 세로줄)·줄별 견본/기본 색/'+'(원 색상·꼬리 색상 창, 적용 시에만 저장)·흐림 조건과 이유·저장 색 유지·노랑=기본 팔레트는 꼬리 줄만·미리보기 분리"
     },
-    "src/mabinogi_addon/config.py": {
+    "src/mabinogi_addon/ui/cursor_overlay.py": {
       "tests": [
-        "tests/test_cooldown.py"
+        "tests/test_cursor_fx.py"
       ],
-      "reason": "cooldown 칸 읽기(recheck 필드 제거, 세트·아이콘 필드)"
+      "reason": "실제 오버레이가 미리보기와 같은 원·꼬리 색 규칙(원·스코프·화면 선·흔들기 원 = 원 색, 꼬리 = 꼬리 색)"
     },
-    "tests/data/스크린샷 2026-11-06 013726.png": {
+    "src/mabinogi_addon/autofind_v2.py": {
       "tests": [
-        "tests/test_skillbar_testers.py",
-        "tests/test_cooldown.py"
+        "tests/test_autofind_v2_engine.py"
       ],
-      "reason": "새 2560 스크린샷 — 단축바 CASES·쿨 중 등록 회귀"
+      "reason": "자동 찾기 v2(제작자): 보스바·전투 시간 지난 자리 바로 쓰기(확인 전)·판독 시 확인됨·5분 화면 전체 확인·자리 바뀜"
+    },
+    "src/mabinogi_addon/ui/autofind_v2_controller.py": {
+      "tests": [
+        "tests/test_autofind_v2_controller.py",
+        "tests/test_autofind_v2_use.py"
+      ],
+      "reason": "v2 지난 자리 바로 발행(디버프 띠 포함)·나타나면 찾기 0·확인됨/자리 바뀜 app.log·설정 구역 문구, v2 꺼짐·비제작자 변화 0"
+    },
+    "tests/data/스크린샷 2026-11-07 225848.png": {
+      "tests": [
+        "tests/test_skillbar_testers.py"
+      ],
+      "reason": "새 2560 스크린샷 — 단축바 CASES(큰 스크린샷 목록 일치)"
     },
     "src/mabinogi_addon/assets/release_notes.md": {
       "tests": [
         "tests/test_release_notes.py",
         "tests/test_release_notes_trigger.py"
       ],
-      "reason": "0.44.0 노트 파싱·새 버전 표시"
+      "reason": "0.44.1 노트 파싱·새 버전 표시(게시된 0.44.0 섹션은 그대로)"
     },
     "packaging/release_checks.json": {
       "tests": [
@@ -81,187 +76,6 @@
         "tests/test_startup_smoke.py"
       ],
       "reason": "배포 계약: 빌드·후보·Windows CI·시작 확인"
-    },
-    "src/mabinogi_addon/autofind_v2.py": {
-      "tests": [
-        "tests/test_autofind_v2_engine.py"
-      ],
-      "reason": "자동 찾기 v2 찾기 엔진(제작자): 처음 찾기 순서·화면 재사용·CPU 상한·안정 찾기 0·다시 찾기 간격·3초 확정·창 변경"
-    },
-    "src/mabinogi_addon/ui/autofind_v2_controller.py": {
-      "tests": [
-        "tests/test_autofind_v2_controller.py"
-      ],
-      "reason": "v2 화면 쪽 진행: 작업 스레드 캡처·안정 캡처 0·크기 변경 재시작·저장 영역 미변경·사용자 지정 우선·지난 자리"
-    },
-    "src/mabinogi_addon/autofind_regions.py": {
-      "tests": [
-        "tests/test_autofind_v2_use.py",
-        "tests/test_autofind_v2_controller.py"
-      ],
-      "reason": "런타임 영역 제공자: v2 꺼짐이면 저장 영역 그대로, 사용 값 꺼짐 = 읽기 0, 보스바 소비자 조합"
-    },
-    "src/mabinogi_addon/setup_state.py": {
-      "tests": [
-        "tests/test_autofind_v2_use.py"
-      ],
-      "reason": "v2 켜짐일 때만 사용 값(처음 한 번 영역 유무로 채움), 꺼짐이면 영역 = 사용 그대로"
-    },
-    "src/mabinogi_addon/ui/main_window.py": {
-      "tests": [
-        "tests/test_autofind_v2_use.py",
-        "tests/test_home_page.py"
-      ],
-      "reason": "v2 설정·홈 스위치 5개·위치 상태 — 비제작자·v2 꺼짐 변화 0"
-    },
-    "src/mabinogi_addon/ui/home_page.py": {
-      "tests": [
-        "tests/test_home_page.py"
-      ],
-      "reason": "홈 줄 스위치 추가 인자(v2일 때만)"
-    },
-    "src/mabinogi_addon/detect/status_panel.py": {
-      "tests": [
-        "tests/test_status_panel.py",
-        "tests/test_autofind_v2_prereq.py"
-      ],
-      "reason": "1080 상태 목록 아이콘 열 찾기(멤버십 없는 목록)"
-    },
-    "src/mabinogi_addon/detect/halo_timer.py": {
-      "tests": [
-        "tests/test_halo_timer.py",
-        "tests/test_halo_autofind.py",
-        "tests/test_autofind_v2_prereq.py"
-      ],
-      "reason": "헤일로 위치 찾기 3600초·판독 900초 분리"
-    },
-    "src/mabinogi_addon/detect/tuarim_reader.py": {
-      "tests": [
-        "tests/test_tuarim.py",
-        "tests/test_tuarim_native_autofind.py"
-      ],
-      "reason": "투아림 read_observation(100% 판정) 추가, 탭 read_percent 그대로"
-    },
-    "src/mabinogi_addon/ui/boss_tab.py": {
-      "tests": [
-        "tests/test_boss_tab.py",
-        "tests/test_boss_two_rows.py"
-      ],
-      "reason": "보스 패턴 사용 꺼짐이면 알림·목록 멈춤(v2), v2 판독 보고 · 두 줄 구간 위 줄 등록 보스 % 못 읽으면 아래 줄 값으로 안 돌아감·세로 위치 다시 맞춤 (보스바 오버레이 수집 재생은 케이스 45~52초라 전체 회귀에서)"
-    },
-    "src/mabinogi_addon/ui/dorcha_tab.py": {
-      "tests": [
-        "tests/test_dorcha_tab.py"
-      ],
-      "reason": "v2가 찾은 자리면 탭 자체 찾기 생략(저장 영역 덮지 않음)"
-    },
-    "src/mabinogi_addon/ui/stat_bars_tab.py": {
-      "tests": [
-        "tests/test_stat_bars.py"
-      ],
-      "reason": "v2 판독 보고·저장 영역만 저장"
-    },
-    "src/mabinogi_addon/tracker/engine.py": {
-      "tests": [
-        "tests/test_engine.py"
-      ],
-      "reason": "TickResult.seen(v2 판독 상태) 추가"
-    },
-    "src/mabinogi_addon/debuff_gate.py": {
-      "tests": [
-        "tests/test_debuff_boss_gate.py"
-      ],
-      "reason": "디버프 오버레이 보스바 게이트: 보임 표시·10초 유예·숨김·즉시 복귀·영역 없음/옵션 끔 항상·판정 불가 유지"
-    },
-    "src/mabinogi_addon/ui/buff_controller.py": {
-      "tests": [
-        "tests/test_debuff_boss_gate.py",
-        "tests/test_pause.py"
-      ],
-      "reason": "set_gate_visible: 고정 상태에서 창만 숨김(탐지 계속), 일시정지·창 보이기와 함께"
-    },
-    "src/mabinogi_addon/ui/debuff_tab.py": {
-      "tests": [
-        "tests/test_debuff_boss_gate.py",
-        "tests/test_debuff_identity.py",
-        "tests/test_icon_capture.py"
-      ],
-      "reason": "'보스바가 보일 때만 표시' 체크박스(기본 켬·저장)·디버프 추적 재시작 경로 · 아이콘 집기 이유 한 줄"
-    },
-    "src/mabinogi_addon/detect/icon_snap.py": {
-      "tests": [
-        "tests/test_icon_capture.py"
-      ],
-      "reason": "아이콘 테두리 자동 맞춤(1080·2560·4K, 꺼진 아이콘 포함)·온전함 판정(깜빡임·꺼짐·가려짐)·6번 다시 찍기 · 그림이 테두리를 덮는 아이콘(다듬은 거리 작은 70%·후보 8곳, 상태 목록 편집 창 223407·223416)"
-    },
-    "src/mabinogi_addon/ui/region_selector.py": {
-      "tests": [
-        "tests/test_click_snap.py",
-        "tests/test_icon_capture.py"
-      ],
-      "reason": "아이콘 집기(제작자): 클릭 = 16×16 그대로 저장·물리 좌표 전달, 아이콘 아닌 곳 클릭 무시, 드래그 크기 그대로, 비제작자 그대로 · 0.44.0 클릭 자동 맞춤 모든 사용자"
-    },
-    "src/mabinogi_addon/ui/buff_tab.py": {
-      "tests": [
-        "tests/test_icon_capture.py"
-      ],
-      "reason": "미리보기 원본 픽셀 정수배(100·125·150·200%)·온전할 때만 저장 연결 · 0.44.0 아이콘 집기·정수배 미리보기 모든 사용자"
-    },
-    "src/mabinogi_addon/detect/boss_hp_reader.py": {
-      "tests": [
-        "tests/test_boss_fill_boundary.py",
-        "tests/test_boss_hp_reader.py",
-        "tests/test_boss_two_rows.py"
-      ],
-      "reason": "노란·보라 바탕 숫자 샘플 추가(55·100)·확신 키 판독(read_percent_scored), 기존 판독 그대로 (보스바 오버레이 수집 재생은 케이스 45~52초라 전체 회귀에서) · 채움 끝이 숫자 칸 안일 때만 회색 뺀 마스크로 늘리기(17.48→1 수정, 다른 결과 불변) · 앱 입력(오른쪽 42%) 숫자 칸·소수 칸 '.' 제거(x.1x)"
-    },
-    "src/mabinogi_addon/ui/region_section.py": {
-      "tests": [
-        "tests/test_autofind_v2_use.py"
-      ],
-      "reason": "자동(v2) 한 줄(도르카·투아림 포함), v2 꺼짐이면 숨김"
-    },
-    "src/mabinogi_addon/tracker/boss_bar_value.py": {
-      "tests": [
-        "tests/test_boss_fill_boundary.py"
-      ],
-      "reason": "직전 표시값의 앞자리만 남은 값(17→1·55→5·100→10) 확정 안 함"
-    },
-    "src/mabinogi_addon/ui/boss_bar_overlay.py": {
-      "tests": [
-        "tests/test_boss_fill_boundary.py"
-      ],
-      "reason": "바 위 눈금 글자 줄(배율 비례, 바를 가리지 않음)"
-    },
-    "src/mabinogi_addon/ui/boss_bar_section.py": {
-      "tests": [
-        "tests/test_boss_fill_boundary.py"
-      ],
-      "reason": "저장 위치 = 바 위쪽(눈금 줄 추가·배율 변경에도 바 자리 그대로)"
-    },
-    "src/mabinogi_addon/ui/feature_copy.py": {
-      "tests": [
-        "tests/test_cooldown.py"
-      ],
-      "reason": "쿨타임 오버레이 도움말(베타 한계)"
-    },
-    "src/mabinogi_addon/ui/skillbar_tab.py": {
-      "tests": [
-        "tests/test_cooldown.py"
-      ],
-      "reason": "쿨타임 구역 주석만(모든 사용자)"
-    },
-    "src/mabinogi_addon/inquiry_session.py": {
-      "tests": [
-        "tests/test_inquiry_unified.py"
-      ],
-      "reason": "쿨타임 오버레이 카드·영역(칸+선택기 화살표)·첨부(칸 목록·아이콘·app.log 쿨타임 줄)"
-    },
-    "src/mabinogi_addon/ui/inquiry_window.py": {
-      "tests": [
-        "tests/test_inquiry_unified.py"
-      ],
-      "reason": "카드 7개·쿨타임 카드 수집·등록 칸 없음 안내"
     }
   }
 }
