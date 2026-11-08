@@ -16,7 +16,14 @@
     "tests/test_windows_ci.py",
     "tests/test_startup_smoke.py",
     "tests/test_autofind_v2_engine.py",
-    "tests/test_autofind_v2_controller.py"
+    "tests/test_autofind_v2_controller.py",
+    "tests/test_debuff_applied.py",
+    "tests/test_debuff_engine.py",
+    "tests/test_warn_gone.py",
+    "tests/test_debuff_identity.py",
+    "tests/test_debuff_live_detection.py",
+    "tests/test_overlay_spec.py",
+    "tests/test_debuff_boss_gate.py"
   ],
   "coverage": {
     "src/mabinogi_addon/detect/boss_hp_reader.py": {
@@ -55,7 +62,7 @@
         "tests/test_release_notes.py",
         "tests/test_release_notes_trigger.py"
       ],
-      "reason": "0.44.2 노트 파싱·새 버전 표시(게시된 0.44.1 섹션은 그대로)"
+      "reason": "0.44.2 노트 파싱·새 버전 표시(디버프 사라짐 소리 한 줄 + 제작자 시험 기능 한 줄, 게시된 0.44.1 섹션은 그대로)"
     },
     "packaging/release_checks.json": {
       "tests": [
@@ -83,6 +90,74 @@
         "tests/test_autofind_v2_controller.py"
       ],
       "reason": "지난 자리 확인을 여백 조각에서 — 단축바·체력바·버프 '지난 자리 그대로'(4px 이내), 움직이면 새 자리, 여백에서 못 찾으면 화면 전체, UI 확인 결과 재사용(QA 536ec7c) · 실제 탐지기 1080·2560"
+    },
+    "src/mabinogi_addon/detect/debuff_time.py": {
+      "tests": [
+        "tests/test_debuff_applied.py"
+      ],
+      "reason": "디버프 '걸린 것 + 시간' 보기(제작자 먼저, docs/debuff-applied-overlay-spec.md): 아이콘 아래 시간 판독(7px·9px 글꼴, 붙은 글자 칸 나누기, 밝은 바닥 → 비움)"
+    },
+    "src/mabinogi_addon/assets/debuff_time_glyphs/M_s0.png": {
+      "tests": [
+        "tests/test_debuff_applied.py"
+      ],
+      "reason": "시간 글자 템플릿(0~9·M, 두 크기) — tests/data 디버프 줄 판독 회귀"
+    },
+    "src/mabinogi_addon/tracker/debuff_engine.py": {
+      "tests": [
+        "tests/test_debuff_applied.py",
+        "tests/test_debuff_engine.py",
+        "tests/test_warn_gone.py",
+        "tests/test_debuff_identity.py",
+        "tests/test_debuff_live_detection.py"
+      ],
+      "reason": "디버프 '걸린 것 + 시간' 보기(제작자 먼저, docs/debuff-applied-overlay-spec.md): 표시 방식(걸린 것만·정한 순서·시간, M 없는 숫자는 줄어드는 걸 봐야 초), 떨어짐 경고 뒤 빠짐 · 걸림 판정·안 걸린 것 보기 그대로(아이콘 자리 기록만 추가)"
+    },
+    "src/mabinogi_addon/tracker/engine.py": {
+      "tests": [
+        "tests/test_overlay_spec.py",
+        "tests/test_debuff_applied.py"
+      ],
+      "reason": "OverlayEntry에 시간 글자(time_text·time_warn) 추가 — 버프 표시 그대로"
+    },
+    "src/mabinogi_addon/ui/overlay.py": {
+      "tests": [
+        "tests/test_overlay_spec.py",
+        "tests/test_debuff_applied.py"
+      ],
+      "reason": "게임 시간 글자를 그대로 그림(1분 미만 빨강), 버프 지속시간 표시 그대로"
+    },
+    "src/mabinogi_addon/ui/debuff_tab.py": {
+      "tests": [
+        "tests/test_debuff_applied.py",
+        "tests/test_debuff_boss_gate.py"
+      ],
+      "reason": "디버프 '걸린 것 + 시간' 보기(제작자 먼저, docs/debuff-applied-overlay-spec.md): 제작자만 '표시' 선택·설명 문구, 비제작자 그대로"
+    },
+    "src/mabinogi_addon/config.py": {
+      "tests": [
+        "tests/test_debuff_applied.py"
+      ],
+      "reason": "overlay.debuffDisplay(missing|applied, 기본 missing)"
+    },
+    "src/mabinogi_addon/ui/main_window.py": {
+      "tests": [
+        "tests/test_debuff_applied.py",
+        "tests/test_warn_gone.py"
+      ],
+      "reason": "표시 방식을 엔진에 전달(재시작 없이) · 디버프 떨어짐 확정 → 디버프 사라짐 소리"
+    },
+    "src/mabinogi_addon/ui/notifier.py": {
+      "tests": [
+        "tests/test_warn_gone.py"
+      ],
+      "reason": "디버프 떨어짐은 '디버프 사라짐.mp3'(버프 사라짐과 다른 소리, 사용자 11-08) — 버프·디버프 재생기 따로, 음량·정지 그대로"
+    },
+    "src/mabinogi_addon/assets/sounds/디버프 사라짐.mp3": {
+      "tests": [
+        "tests/test_warn_gone.py"
+      ],
+      "reason": "사용자가 올린 원본(tests/data/universfield-new-notification-035-485894.mp3) 그대로"
     }
   }
 }

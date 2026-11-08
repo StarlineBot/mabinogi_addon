@@ -33,6 +33,9 @@ def overlay_spec(
     """
     specs: list[tuple[str, str | None, bool, bool]] = []
     for entry in entries:
+        if getattr(entry, "time_text", None):  # 디버프 '걸린 것 + 시간' — 게임 시간 글자를 그대로(지속시간 표시 설정과 무관)
+            specs.append((entry.buff_id, entry.time_text, bool(entry.time_warn), entry.gone))
+            continue
         show = show_duration.get(entry.buff_id, True)
         has_time = show and entry.remaining is not None
         text = format_duration(entry.remaining) if has_time else None

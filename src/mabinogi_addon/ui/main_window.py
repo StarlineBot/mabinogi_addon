@@ -467,6 +467,7 @@ class MainWindow(QMainWindow):
         self.debuff_tab.tracking_changed.connect(self._on_debuff_tracking_changed)
         self.debuff_tab.catalog_changed.connect(self._on_debuff_catalog_changed)
         self.debuff_tab.gate_mode_changed.connect(self._on_debuff_gate_mode)
+        self.debuff_tab.display_mode_changed.connect(self._on_debuff_display_mode)
         # 디버프 탭에서 보스 HP바 영역을 바꾸면 보스패턴알림(메모리)도 즉시 반영(양방향 공유).
         self.debuff_tab.bar_region_changed.connect(self.boss_tab.reload_region)
         self.debuff_overlay.moved.connect(self._save_debuff_overlay_state)
@@ -2029,6 +2030,8 @@ class MainWindow(QMainWindow):
             reference_templates=build_templates(references),
         )
         self._debuff_engine.set_warn_gone_ids(self._debuff_warn_gone_ids())
+        mode = getattr(self.debuff_tab, "effective_display_mode", lambda: "missing")()
+        self._debuff_engine.set_display_mode(mode)  # 제작자만 '걸린 것 + 시간'
         # 3차(percent): 보스 HP바 영역(보스패턴알림과 공유)을 따로 캡처해 넘긴다.
         bar_source = None
         if gate_mode in ("percent", "auto"):
@@ -2111,15 +2114,20 @@ class MainWindow(QMainWindow):
         if not self._booting:
             self._start_debuff_tracking()
 
+    def _on_debuff_display_mode(self, _mode: str) -> None:
+        """표시 방식 전환(제작자) — 엔진은 그대로 두고 보이는 것만 바꾼다(다음 틱부터)."""
+        if self._debuff_engine is not None:
+            self._debuff_engine.set_display_mode(self.debuff_tab.effective_display_mode())
+
     def _debuff_warn_gone_ids(self) -> set[str]:
         """'사라짐 경고'를 켠 디버프 id 집합(보스에서 떨어지면 빨간 테두리+X+소리)."""
         return {s.id for s in config.load_debuff_settings() if s.alert.warn_gone}
 
     def _on_debuff_gone(self, _ids) -> None:
-        """디버프 떨어짐 확정 → 사라짐 경고음(여러 개 동시 확정돼도 한 번)."""
-        from .notifier import play_warn_gone_sound
+        """디버프 떨어짐 확정 → 디버프 사라짐 경고음(버프 사라짐과 다른 소리, 사용자 11-08 — 여러 개 동시 확정돼도 한 번)."""
+        from .notifier import play_debuff_gone_sound
 
-        play_warn_gone_sound()
+        play_debuff_gone_sound()
 
     def _on_debuff_catalog_changed(self) -> None:
         self._start_debuff_tracking()

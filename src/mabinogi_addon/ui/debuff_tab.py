@@ -48,6 +48,12 @@ HELP_TITLE = '디버프 트래커 사용법'
 HELP_HTML = HELP['디버프 트래커']
 
 
+DISPLAY_TEXT = {"missing": "안 걸린 것", "applied": "걸린 것 + 시간"}
+DISPLAY_DESC = {"missing": "보스에게 아직 걸리지 않은 디버프를 보여줘요.", "applied": "보스에게 걸린 디버프와 남은 시간을 보여줘요."}
+DISPLAY_UNSET = {"missing": "지정하면 보스에게 아직 걸리지 않은 디버프를 보여줘요",
+                 "applied": "지정하면 보스에게 걸린 디버프와 남은 시간을 보여줘요"}
+
+
 class DebuffTab(QWidget):
     lock_toggled = Signal(bool)  # 디버프 오버레이 고정 토글
     tracking_changed = Signal()  # 순서·노출 변경 → 라이브 반영
@@ -56,6 +62,7 @@ class DebuffTab(QWidget):
     opacity_changed = Signal(int)  # 오버레이 불투명도(%) 변경(명세 15절)
     window_visible_changed = Signal(bool)  # '오버레이 창 보이기'(0.32.0)
     boss_only_changed = Signal(bool)  # '보스바가 보일 때만 표시'(2026-11-06)
+    display_mode_changed = Signal(str)  # 표시 방식 '안 걸린 것' | '걸린 것 + 시간'(제작자 먼저, 2026-11-08)
     gate_mode_changed = Signal(str)  # 탐지 방식(1/2/3차) 변경 또는 바 영역 변경 → 재시작
     bar_region_changed = Signal()  # 보스 HP바 영역 지정 → 보스패턴알림도 반영(공유)
 
@@ -72,9 +79,8 @@ class DebuffTab(QWidget):
         outer = QVBoxLayout(self)
         outer.setContentsMargins(12, 12, 12, 12)
         outer.setSpacing(10)
-        outer.addWidget(tab_header(
-            "아직 안 걸린 디버프만 오버레이로 표시", HELP_TITLE, HELP_HTML, self
-        ))
+        self.header = tab_header("아직 안 걸린 디버프만 오버레이로 표시", HELP_TITLE, HELP_HTML, self)
+        outer.addWidget(self.header)
         list_panel = self._build_list_panel()
         self.form_panel = self._build_form_panel()
         self._columns = TrackerColumns(list_panel, self.form_panel)
@@ -263,6 +269,19 @@ class DebuffTab(QWidget):
         v.addWidget(self.region_section)
         self._update_region_hint()
         v.addLayout(top)
+        # 표시 방식(docs/debuff-applied-overlay-spec.md, 제작자 먼저): 잠금 줄 아래 '표시 [안 걸린 것 | 걸린 것 + 시간]', 기본 안 걸린 것.
+        self.display_segments = None
+        from .. import feature_access
+        if feature_access.is_creator():
+            from .cursor_tab import _Segments
+            self.display_segments = _Segments(DISPLAY_TEXT)
+            self.display_segments.set_value(config.load_debuff_display_mode())
+            self.display_segments.changed.connect(self._on_display_mode)
+            display_row = QHBoxLayout()
+            display_row.setSpacing(8)
+            display_row.addWidget(QLabel("표시"))
+            display_row.addWidget(self.display_segments, 1)
+            v.addLayout(display_row)
         # '오버레이 창 보이기'(0.32.0): 끄면 창만 숨기고 탐지·알림은 계속 — 아이콘 없이 소리 알림만 쓰는 사람용.
         # 잠금 줄과 다른 줄이라 두 칸(목록|상세) 최소 폭에 영향 없음(0.31.1).
         self.window_check = checkbox("오버레이 창 보이기")
@@ -294,6 +313,7 @@ class DebuffTab(QWidget):
         v.addWidget(self._bar_gating_notice)
         self._apply_login_gate()
         self._refresh_method_ui()
+        self._apply_display_texts()
 
         self.debuff_list = QListWidget()
         self.debuff_list.setIconSize(QSize(28, 28))
@@ -324,6 +344,25 @@ class DebuffTab(QWidget):
     def _on_scale(self, pct: int) -> None:
         config.set_debuff_scale(pct)
         self.scale_changed.emit(pct)
+
+    def effective_display_mode(self) -> str:
+        """엔진에 줄 표시 방식 — 제작자가 아니면 늘 '안 걸린 것'(지금과 같음)."""
+        return config.load_debuff_display_mode() if self.display_segments is not None else "missing"
+
+    def _on_display_mode(self, mode: str) -> None:
+        config.set_debuff_display_mode(mode)
+        self._apply_display_texts()
+        self.display_mode_changed.emit(mode)
+
+    def _apply_display_texts(self) -> None:
+        """탭 설명·영역 안내를 방식에 맞게(제작자만 — 비제작자는 지금 문구 그대로)."""
+        if self.display_segments is None:
+            return
+        applied = self.effective_display_mode() == "applied"
+        self.header.description.setText(DISPLAY_DESC["applied" if applied else "missing"])
+        unset = DISPLAY_UNSET["applied" if applied else "missing"]
+        self.region_section.unset_label.setText(
+            f'<span style="color:{color("warn")}">●</span> 아직 지정 안 됨 — {unset}')
 
     def _on_boss_only(self, on: bool) -> None:
         config.set_debuff_boss_only(on)

@@ -17,6 +17,7 @@ import logging
 
 from ..detect import match_icon
 from ..detect.boss_hp_reader import read_percent_cached
+from ..detect.debuff_time import display_text, read_times
 from .engine import OverlayEntry, TickResult
 
 # 디버프 탐지 방식(게이팅). 사용자가 1차/2차/3차로 따로 골라 비교·테스트할 수 있다.
@@ -88,6 +89,14 @@ _DETECT_CONFIRM_SEC = 0.3
 # 크게 넘긴다. 보스 유무는 천천히 바뀌므로 이 간격마다만 재판독하고 그 사이엔 캐시 사용.
 _PERCENT_READ_INTERVAL = 0.6
 
+# 표시 방식(docs/debuff-applied-overlay-spec.md, 제작자 먼저). missing = 안 걸린 것(지금), applied = 걸린 것 + 시간.
+MODE_MISSING, MODE_APPLIED = "missing", "applied"
+DISPLAY_MODES = (MODE_MISSING, MODE_APPLIED)
+# 'M' 없는 숫자만 보이는 시간은 초일 수도, 분일 수도 있다(4K 화면은 분도 '4'처럼 M 없이 보임 — tests/data 4K 6장).
+# 그래서 초로 보이려면 숫자가 실제로 줄어드는 것을 봐야 한다(초는 1초마다 줄고, M 없는 분은 1분 동안 그대로) — 틀린 숫자 금지.
+_COUNT_DROP_MAX = 5  # 한 번에 이만큼까지 줄어든 것만 초 카운트다운으로 본다(판독 간격·놓친 틱)
+_COUNT_STALE_SEC = 2.5  # 이 시간 넘게 그대로면 카운트다운이 아님(M 없는 분 등) — 숫자 숨김
+_TIME_FORGET_SEC = 2.0  # 시간을 이만큼 못 읽으면 기록을 버린다
 
 def _variant(template: np.ndarray, target_h: int) -> np.ndarray:
     h, w = template.shape[:2]
@@ -138,6 +147,7 @@ class DebuffEngine:
         self._matched = {bid: False for bid in templates}  # 이력 임계용 직전 판정
         # 검출 디바운스: 검출이 처음 True가 된 시각(이만큼 연속돼야 '걸림' 확정).
         self._detect_since: dict[str, float | None] = {bid: None for bid in templates}
+        self._pos: dict[str, tuple[int, int, int, int] | None] = {}
         self._absent_since: dict[str, float | None] = {bid: None for bid in templates}
         # 보스 HP바 앵커: 영역에서 바를 한 번이라도 본 뒤부터 게이팅(버프 앵커와 동일).
         # 한 번도 못 봤으면(= 바를 안 넣은 기존 영역) 게이팅 안 함 → 기존처럼 항상 탐지.
@@ -158,6 +168,63 @@ class DebuffEngine:
         self._applied_prev = {bid: False for bid in templates}  # 직전 틱 '걸림' 여부
         self._fell_since: dict[str, float] = {}  # 떨어지기 시작한 시각(확정 대기)
         self._warn_until: dict[str, float] = {}  # 확정 → 경고 노출 종료 시각
+        self._mode = MODE_MISSING
+        # 시간 판독 기록(걸린 것 + 시간): id → [마지막 숫자(초 후보), 마지막으로 줄어든 시각, 카운트다운 확인, 마지막 판독 시각]
+        self._time_state: dict[str, list] = {}
+
+    @property
+    def display_mode(self) -> str:
+        return self._mode
+
+    def set_display_mode(self, mode: str) -> None:
+        """표시 방식 전환 — 걸림 판정·상태는 그대로, 무엇을 보이느냐만 바뀐다."""
+        self._mode = mode if mode in DISPLAY_MODES else MODE_MISSING
+        self._time_state.clear()
+
+    def _time_label(self, bid: str, game: str | None, now: float) -> tuple[str | None, bool]:
+        """게임 시간 글자 → (표시 글자|None, 빨강). 'NM'은 바로 'Nm'. M 없는 숫자는 줄어드는 것을 본 뒤에만 'Ns'(빨강)."""
+        st = self._time_state.get(bid)
+        if game is None:
+            if st is not None and now - st[3] > _TIME_FORGET_SEC:
+                self._time_state.pop(bid, None)
+            return None, False
+        if game.endswith("M"):
+            self._time_state.pop(bid, None)
+            shown = display_text(game)
+            return shown[0], shown[1]
+        value = int(game)
+        if st is None:
+            self._time_state[bid] = [value, now, False, now]
+            return None, False
+        last, changed_at, counting, _seen = st
+        if value < last and last - value <= _COUNT_DROP_MAX:
+            counting, changed_at = True, now
+        elif value > last:
+            counting, changed_at = False, now  # 다시 걸림(시간 늘어남) — 다시 확인
+        elif now - changed_at > _COUNT_STALE_SEC:
+            counting = False  # 오래 그대로 = 초가 아님
+        self._time_state[bid] = [value, changed_at, counting, now]
+        if not counting:
+            return None, False
+        shown = display_text(game)
+        return shown[0], shown[1]
+
+    def _applied_entries(self, region: np.ndarray, now: float) -> list[OverlayEntry]:
+        """걸린 것 + 시간: 걸린 등록 디버프를 정한 순서대로(떨어짐 확정 대기 중인 것 포함), 떨어짐 경고는 잠깐 보인 뒤 빠진다.
+        경고를 끈 디버프는 걸림이 풀리면 바로 빠진다."""
+        applied = [bid for bid in self._order if not self._shown.get(bid, True)]
+        times = read_times(region, {bid: self._pos.get(bid) for bid in applied}) if applied else {}
+        entries = []
+        for bid in self._order:
+            if bid in self._warn_until:
+                entries.append(OverlayEntry(bid, None, False, gone=True))
+            elif bid in times or bid in self._fell_since:
+                text, warn = self._time_label(bid, times.get(bid), now)
+                entries.append(OverlayEntry(bid, None, False, time_text=text, time_warn=warn))
+        for bid in [b for b in self._time_state if b not in times]:
+            if now - self._time_state[bid][3] > _TIME_FORGET_SEC:
+                del self._time_state[bid]
+        return entries
 
     @property
     def bar_seen(self) -> bool:
@@ -294,6 +361,7 @@ class DebuffEngine:
         best = -1.0
         if small.size == 0:
             return best
+        best_pos = None
         if gray is None:
             gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
         for variant, gray_variant in zip(self._variants.get(bid, ()), self._gray_variants.get(bid, ())):
@@ -316,10 +384,11 @@ class DebuffEngine:
                     ambiguous = any(peer.shape == patch.shape
                                     and match_icon(patch, peer).score >= score - 1e-6
                                     for peer in peers)
-                    if not ambiguous:
-                        best = max(best, score)
+                    if not ambiguous and score > best:
+                        best, best_pos = score, (x, y, w, h)
                     scores[max(0, y - h // 2):y + h // 2 + 1,
                            max(0, x - w // 2):x + w // 2 + 1] = -1
+        self._pos[bid] = best_pos  # 가장 잘 맞은 자리(영역 좌표) — '걸린 것 + 시간' 보기에서 아이콘 아래 시간 칸을 읽는다
         return best
 
     def detect_threshold_for(self, bid: str) -> float:
@@ -529,7 +598,8 @@ class DebuffEngine:
                 OverlayEntry(bid, None, False, gone=False)
                 for bid in self._order
                 if self._shown.get(bid, False)
-            ]
+            ] if self._mode == MODE_MISSING else []  # 걸린 것 보기: 보스 없음 = 걸린 것 없음
+            self._time_state.clear()
             return TickResult(entries=entries, alerts=[], frame_valid=True)
 
         for bid in self._templates:
@@ -574,6 +644,8 @@ class DebuffEngine:
         # 노출 시간 지난 경고 정리
         self._warn_until = {b: t for b, t in self._warn_until.items() if now < t}
 
+        if self._mode == MODE_APPLIED:
+            return TickResult(entries=self._applied_entries(region, now), alerts=alerts, frame_valid=True)
         entries = []
         for bid in self._order:
             gone = bid in self._warn_until  # 사라짐 경고 노출 중

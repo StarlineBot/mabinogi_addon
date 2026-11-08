@@ -1805,3 +1805,14 @@ def load_debuff_boss_only(path: Path = LOCAL_CONFIG_PATH) -> bool:
 
 def set_debuff_boss_only(on: bool, path: Path = LOCAL_CONFIG_PATH) -> None:
     _set_overlay_value("debuffBossOnly", bool(on), path)
+
+
+def load_debuff_display_mode(path: Path = LOCAL_CONFIG_PATH) -> str:
+    """디버프 오버레이 표시 방식(제작자 먼저, 2026-11-08): 'missing'(안 걸린 것, 기본) | 'applied'(걸린 것 + 시간)."""
+    s = _read_local_config(path).get("overlay") or {}
+    mode = s.get("debuffDisplay") if isinstance(s, dict) else None
+    return mode if mode in ("missing", "applied") else "missing"
+
+
+def set_debuff_display_mode(mode: str, path: Path = LOCAL_CONFIG_PATH) -> None:
+    _set_overlay_value("debuffDisplay", mode if mode in ("missing", "applied") else "missing", path)
