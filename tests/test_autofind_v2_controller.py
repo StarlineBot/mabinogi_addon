@@ -66,12 +66,23 @@ class Finders:
         self.calls = []
 
     def finders(self):
+        from mabinogi_addon import autofind_v2 as v2
+
         def make(k):
             def run(frame):
+                box = self.boxes.get(k)
+                if frame.shape[1] < 1900:  # 지난 자리 여백 조각(화면 전체는 1920·2560) — 그 조각 안의 자리로 돌려준다
+                    self.calls.append(k + "@margin")
+                    if k in ("skillbar", "stat_bars") and not self.ui or not isinstance(box, tuple):
+                        return None
+                    x0, y0, x1, y1 = v2.margin_rect(box, TARGET[4], TARGET[5])
+                    if frame.shape[:2] != (y1 - y0, x1 - x0):
+                        return None  # 다른 자리 둘레 — 거기엔 없음
+                    return (box[0] - x0, box[1] - y0, box[2], box[3])
                 self.calls.append(k)
                 if k in ("skillbar", "stat_bars") and not self.ui:
                     return None
-                return self.boxes.get(k)
+                return box
             return run
         return {k: make(k) for k in ("skillbar", "stat_bars", "buff", "resources", "boss", "halo_timer")}
 
@@ -203,6 +214,7 @@ def test_last_positions_used_for_same_window_size(app, isolated):
     c2, clock2, *_ = _make(app, finders=fnd2)
     _run(c2, clock2, 1.5)
     assert "buff" not in fnd2.calls and c2.engine.items["buff"].source == "last"
+    assert "buff@margin" in fnd2.calls  # 지난 자리 둘레 여백 조각에서만 찾음(화면 전체 탐지 없음)
 
 
 def test_inactive_provider_reports_nothing(app):
@@ -354,3 +366,62 @@ def test_boss_last_spot_moves_after_rare_full_check(app, isolated, caplog):
     _run(c, clock, 300)
     assert fnd.calls.count("boss") == 1 and fnd.calls.count("halo_timer") == 2  # 확인된 보스바는 더 안 봄
 
+
+
+def _real_initial(isolated, shot, last_boxes):
+    """실제 탐지기·스크린샷으로 처음 찾기 한 번 — (컨트롤러, 탐지기 호출 [(항목, 화면 전체인지)])."""
+    raw = json.loads(isolated.read_text(encoding="utf-8"))
+    raw["autofindV2"] = {"last": {k: {"box": dict(zip("xywh", map(int, b))), "size": [shot.shape[1], shot.shape[0]]}
+                                  for k, b in last_boxes.items()}}
+    isolated.write_text(json.dumps(raw), encoding="utf-8")
+    h, w = shot.shape[:2]
+    clock, calls = Clock(), []
+    c = ctl.AutofindV2Controller(Watcher(), None, target_fn=lambda prev: (1, 100, 0, 0, w, h), executor=Inline(),
+                                 capture=ShotCapture(shot), clock=clock)
+    c.engine.reset(0.0)
+    real = c._finders.finders
+
+    def spied():
+        def wrap(k, f):
+            return lambda frame: calls.append((k, frame.shape[:2] == (h, w))) or f(frame)
+        return {k: wrap(k, f) for k, f in real().items()}
+    c._finders.finders = spied
+    _run(c, clock, 1.0)
+    return c, calls
+
+
+@pytest.mark.parametrize("shot_name", ["image.png", "스크린샷 2026-11-06 013739.png"])  # 1080·2560
+def test_real_last_positions_kept_without_full_search(app, isolated, shot_name):
+    """QA 536ec7c: 단축바·체력바(·버프)는 지난 자리 딱 맞는 조각에선 탐지기가 못 찾아 매번 화면 전체 탐지(0.1초씩)로 넘어갔다.
+    이제 둘레 여백 조각에서 찾아 4px 이내면 '지난 자리 그대로' — 화면 전체 탐지 호출 없음."""
+    from mabinogi_addon import image_io
+    import cv2
+    shot = image_io.imread(f"tests/data/{shot_name}", cv2.IMREAD_COLOR)
+    finders = ctl.Finders().finders()
+    boxes = {k: finders[k](shot) for k in ("skillbar", "stat_bars", "buff")}
+    c, calls = _real_initial(isolated, shot, boxes)
+    try:
+        assert c.engine.phase == "stable"
+        for key in ("skillbar", "stat_bars", "buff"):
+            it = c.engine.items[key]
+            assert (it.status, it.source) == ("found", "last"), key
+            assert it.label() == "찾음 · 지난 자리 그대로"
+            assert (key, True) not in calls, key  # 화면 전체 탐지 없음
+    finally:
+        c.shutdown()
+
+
+def test_real_last_position_moved_uses_new_spot(app, isolated):
+    """지난 자리와 자리가 달라졌으면(여기선 지난 자리를 20px 옮겨 둠) 지금 찾은 새 자리 — '지난 자리 그대로'가 아님."""
+    from mabinogi_addon import image_io
+    import cv2
+    shot = image_io.imread("tests/data/image.png", cv2.IMREAD_COLOR)
+    real = ctl.Finders().finders()["skillbar"](shot)
+    moved = (real[0] + 20, real[1] - 20, real[2], real[3])
+    c, calls = _real_initial(isolated, shot, {"skillbar": moved})
+    try:
+        it = c.engine.items["skillbar"]
+        assert it.status == "found" and it.source == "search" and it.box == tuple(real)
+        assert ("skillbar", True) not in calls  # 여백 조각 안에 있어 화면 전체 탐지 없음
+    finally:
+        c.shutdown()

@@ -39,9 +39,55 @@ def test_initial_order_reuses_one_frame_and_waits_for_appear_items():
 def test_last_position_checked_first_and_skips_search():
     frame = _frame()
     calls = []
-    out = v2.run_initial(frame, {"skillbar": lambda f: calls.append(1)}, last={"skillbar": (0, 0, 10, 10)},
-                         readers={"skillbar": lambda crop: crop.shape == (10, 10, 3)}, sleep=lambda s: None)
-    assert out.status["skillbar"] == "found" and out.source["skillbar"] == "last" and calls == []
+    out = v2.run_initial(frame, {"dorcha": lambda f: calls.append(1)}, last={"dorcha": (0, 0, 10, 10)},
+                         readers={"dorcha": lambda crop: crop.shape == (10, 10, 3)}, sleep=lambda s: None)
+    assert out.status["dorcha"] == "found" and out.source["dorcha"] == "last" and calls == []
+
+
+def _margin_finder(at, calls):
+    """여백 조각이면 그 안의 자리(at은 화면 좌표), 화면 전체면 at 그대로 — 호출 크기를 기록."""
+    def run(f):
+        calls.append(f.shape[:2])
+        if f.shape[:2] == (100, 200):
+            return at
+        x0, y0, x1, y1 = v2.margin_rect(LAST, 200, 100)
+        return (at[0] - x0, at[1] - y0, at[2], at[3]) if f.shape[:2] == (y1 - y0, x1 - x0) else None
+    return run
+
+
+LAST = (40, 30, 50, 12)
+
+
+def test_detector_items_check_last_spot_in_margin_crop():
+    """QA 536ec7c: 단축바·체력바·버프는 지난 자리 딱 맞는 조각이 아니라 둘레 여백 조각에 탐지기 — 4px 이내면 '지난 자리 그대로'."""
+    calls = []
+    out = v2.run_initial(_frame(), {"skillbar": _margin_finder((42, 31, 50, 12), calls)}, last={"skillbar": LAST},
+                         sleep=lambda s: None)
+    assert out.status["skillbar"] == "found" and out.source["skillbar"] == "last"
+    assert out.boxes["skillbar"] == (42, 31, 50, 12)  # 쓰는 자리는 지금 찾은 자리
+    assert (100, 200) not in calls and len(calls) == 1  # 화면 전체 탐지 없음
+
+
+def test_detector_item_moved_within_margin_is_new_spot():
+    calls = []
+    out = v2.run_initial(_frame(), {"stat_bars": _margin_finder((60, 40, 50, 12), calls)}, last={"stat_bars": LAST},
+                         sleep=lambda s: None)
+    assert out.status["stat_bars"] == "found" and out.source["stat_bars"] == "search" and out.boxes["stat_bars"] == (60, 40, 50, 12)
+
+
+def test_detector_item_not_in_margin_falls_back_to_full_search():
+    calls = []
+    out = v2.run_initial(_frame(), {"buff": _margin_finder((150, 80, 20, 10), calls)}, last={"buff": (0, 0, 20, 10)},
+                         sleep=lambda s: None)
+    assert out.source["buff"] == "search" and out.boxes["buff"] == (150, 80, 20, 10)
+    assert calls[-1] == (100, 200)  # 여백에서 못 찾아 화면 전체
+
+
+def test_known_spot_from_ui_check_is_reused():
+    calls = []
+    out = v2.run_initial(_frame(), {"skillbar": _margin_finder(LAST, calls)}, last={"skillbar": LAST},
+                         known={"skillbar": (41, 30, 50, 12)}, sleep=lambda s: None)
+    assert out.source["skillbar"] == "last" and calls == []  # 앞의 'UI 보이나' 확인 결과 그대로
 
 
 def test_cpu_cap_marks_rest_missing():

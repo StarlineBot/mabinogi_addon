@@ -97,13 +97,8 @@ class Finders:
             from ..detect.boss_bar import make_validator
             return bool(make_validator()(crop))
 
-        def buff(crop):
-            return self._run("buff", crop) is not None
-
-        def fixed(feature):
-            return lambda crop: self._run(feature, crop) is not None
-        return {"dorcha": dorcha, "tuarim": tuarim, "halo_timer": halo, "boss": boss, "buff": buff,
-                "skillbar": fixed("skillbar"), "stat_bars": fixed("stat_bars")}
+        # 단축바·체력바·버프(탐지기 항목)는 판독기가 없다 — 처음 찾기가 finders를 여백 조각에 돌린다(v2.MARGIN_KEYS, QA 536ec7c)
+        return {"dorcha": dorcha, "tuarim": tuarim, "halo_timer": halo, "boss": boss}
 
 
 def expected_crop(key, target):
@@ -275,25 +270,23 @@ class AutofindV2Controller(QObject):
                 return {"capture_failed": True}
             # 게임 UI가 보이는지 가벼운 확인(단축바·체력바 하나라도) — 로딩·로그인·캐릭터 선택 화면이면 처음 찾기를 미룬다.
             # 지난 자리가 있어도 늘 확인(게임 재시작 뒤 로딩 화면에서 처음 찾기 → 못 찾음 → 1분 간격에 걸리던 것, QA 7b629b2).
-            # 지난 자리가 있는 항목은 그 자리만 잘라 읽어 보고(수 ms), 없으면 탐지기.
-            # 지난 자리가 있는 항목은 그 둘레에 여유(max(32px, 높이))를 두고 탐지기로 — 딱 맞게 자르면 탐지기가 못 찾았다
+            # 지난 자리가 있는 항목은 그 둘레에 여유(max(96px, 높이), v2.margin_rect)를 두고 탐지기로 — 딱 맞게 자르면 탐지기가 못 찾았다
             # (72824a8 회귀: 1440에서 단축바·체력바 모두 False → '게임 화면을 기다리는 중' 고착, QA 92e9ca1).
             # 여유 자리에서 못 찾으면 전체 화면 탐지기로 한 번 더(10초에 한 번).
-            early, seen = {}, False
-            fh, fw = frame.shape[:2]
+            # 여백 조각에서 찾은 자리는 버리지 않고 처음 찾기 ① 지난 자리 확인에 넘긴다(QA 536ec7c — 다시 찾지 않음).
+            early, seen, known = {}, False, {}
             for key in UI_CHECK_KEYS:
                 if key not in last:
                     continue
                 bx, by, bw, bh = last[key]
-                m = max(32, bh)
-                x0, y0 = max(0, bx - x - m), max(0, by - y - m)
-                x1, y1 = min(fw, bx - x + bw + m), min(fh, by - y + bh + m)
                 try:
-                    if x1 > x0 and y1 > y0 and finders[key](np.ascontiguousarray(frame[y0:y1, x0:x1])):
-                        seen = True
-                        break
+                    got = v2.find_in_margin(frame, (bx - x, by - y, bw, bh), finders[key])
                 except Exception:  # noqa: BLE001
-                    pass
+                    got = None
+                if got:
+                    known[key] = got
+                    seen = True
+                    break
             if not seen:
                 for key in UI_CHECK_KEYS:
                     try:
@@ -308,8 +301,10 @@ class AutofindV2Controller(QObject):
             reuse = dict(finders)
             for key, box in early.items():
                 reuse[key] = (lambda b: (lambda f: b))(box)  # 이미 본 결과 재사용(같은 화면)
+                if box:
+                    known.setdefault(key, tuple(box))  # 화면 전체에서 찾은 자리 — 지난 자리와 4px 이내면 '지난 자리 그대로'(여백 조각 다시 안 봄)
             local_last = {k: (b[0] - x, b[1] - y, b[2], b[3]) for k, b in last.items()}
-            result = v2.run_initial(frame, reuse, last=local_last, readers=readers)
+            result = v2.run_initial(frame, reuse, last=local_last, readers=readers, known=known)
             result.boxes = {k: (b[0] + x, b[1] + y, b[2], b[3]) for k, b in result.boxes.items()}  # 화면(물리) 좌표로
             return {"result": result}
         self._submit({"kind": "initial"}, work)

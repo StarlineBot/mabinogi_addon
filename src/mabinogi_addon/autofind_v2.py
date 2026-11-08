@@ -34,6 +34,31 @@ APPEAR_SMALL_EVERY = 1.0
 APPEAR_FULL_EVERY = 60.0
 PENDING_FULL_EVERY = 300.0  # 지난 자리(확인 전) 보스바·전투 시간: 화면 전체 확인은 5분에 한 번(게임 UI 배율을 바꾼 경우 대비)
 SAME_BOX_TOLERANCE = 4  # 지난 자리 확인: 이만큼(px) 이내 차이는 같은 자리
+# 탐지기로 지난 자리를 확인하는 항목 — 딱 맞는 조각이 아니라 둘레 여백을 둔 조각에 탐지기를 돌린다(QA 536ec7c: 딱 맞으면 단축바·체력바를 못 찾아
+# 매번 화면 전체 탐지로 넘어감). 여백 max(96px, 높이): tests/data 125장에서 단축바·버프 전부, 체력바 111/113(32px은 105/113).
+MARGIN_KEYS = ("skillbar", "stat_bars", "buff")
+MARGIN_MIN = 96
+
+
+def margin_rect(box, frame_w: int, frame_h: int) -> tuple[int, int, int, int]:
+    """지난 자리 둘레 여백 조각(x0, y0, x1, y1) — 화면 밖은 자른다."""
+    x, y, w, h = box
+    m = max(MARGIN_MIN, h)
+    return max(0, x - m), max(0, y - m), min(frame_w, x + w + m), min(frame_h, y + h + m)
+
+
+def find_in_margin(frame, box, finder):
+    """여백 조각에서 탐지기 — 찾은 자리(frame 좌표) 또는 None."""
+    import numpy as np
+    x0, y0, x1, y1 = margin_rect(box, frame.shape[1], frame.shape[0])
+    if x1 <= x0 or y1 <= y0:
+        return None
+    got = finder(np.ascontiguousarray(frame[y0:y1, x0:x1]))
+    return None if not got else (got[0] + x0, got[1] + y0, got[2], got[3])
+
+
+def same_box(a, b) -> bool:
+    return all(abs(p - q) <= SAME_BOX_TOLERANCE for p, q in zip(a, b))
 LAST_PENDING = "last_pending"  # 처음 찾기 출처: 지난 자리를 바로 씀(그 자리에서 아직 안 읽힘)
 UI_RETRY_SECONDS = 10.0
 
@@ -113,19 +138,36 @@ class InitialResult:
 
 
 def run_initial(frame, finders: dict, *, last: dict | None = None, readers: dict | None = None,
+                known: dict | None = None,
                 cpu_clock=time.thread_time, clock=time.perf_counter, sleep=time.sleep,
                 cpu_limit: float = CPU_LIMIT, rest: float = REST) -> InitialResult:
     """작업 스레드: 한 번 찍은 화면(frame) 하나로 처음 찾기. finders[key](frame) → box|None
-    (resources는 {'dorcha': box, 'tuarim': box}), readers[key](crop) → bool(지난 자리 확인용)."""
-    last, readers = last or {}, readers or {}
+    (resources는 {'dorcha': box, 'tuarim': box}), readers[key](crop) → bool(지난 자리 확인용, 판독기 항목).
+    탐지기 항목(MARGIN_KEYS)의 지난 자리 확인은 finders[key]를 여백 조각에 — known[key]는 이미 여백 조각에서 찾은 자리(앞의 'UI 보이나' 확인 결과 재사용)."""
+    last, readers, known = last or {}, readers or {}, known or {}
     out = InitialResult()
     wall0, cpu0 = clock(), cpu_clock()
 
     def over() -> bool:
         return cpu_clock() - cpu0 > cpu_limit
 
-    # ① 지난 자리 확인 — 그 자리만 잘라 판독(수 ms)
+    # ① 지난 자리 확인 — 그 자리만 잘라 판독(수 ms), 탐지기 항목은 둘레 여백 조각에서 찾아 4px 이내면 '지난 자리 그대로'
     for key, box in last.items():
+        if key in MARGIN_KEYS:
+            finder = finders.get(key)
+            if box is None or (finder is None and key not in known):
+                continue
+            t0 = clock()
+            try:
+                got = known[key] if key in known else find_in_margin(frame, box, finder)
+            except Exception:  # noqa: BLE001 — 지난 자리 확인 실패는 찾기로 넘김
+                got = None
+            if got:
+                # 쓰는 자리는 지금 찾은 자리. 4px 이내면 '지난 자리 그대로', 더 움직였으면 새 자리(찾음)
+                out.boxes[key], out.status[key] = tuple(got), FOUND
+                out.source[key] = "last" if same_box(got, box) else "search"
+                out.seconds[key] = clock() - t0
+            continue
         reader = readers.get(key)
         if reader is None or box is None:
             continue
