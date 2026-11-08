@@ -6,6 +6,12 @@
 
 ## 배포와 검증
 
+- **0.44.2 후보 #215(run 42497683702, SHA 1114da8) 실패 — 배포 검사에서 버프·디버프 배치 테스트 실패(CI 글꼴)**: tests/test_tracker_layout.py
+  test_only_list_grows_settings_face_and_rows_stay_fixed[0](버프 탭 세로 스크롤 최대 2 ≠ 0)·test_footer_does_not_intercept_lower_left…·test_overwide_columns_stack…[0](제작자 잡담 바닥 띄움 안 됨), 3개에서 중단.
+  QA 재현: CI는 fonts-noto-cjk + 기본 라틴 DejaVu Sans, QA 컨테이너는 Inter·WenQuanYi라 통과했었음. 같은 글꼴(fontconfig로 Inter·WenQuanYi·Unifont 제외)이면 **현재 main 5개 실패**
+  (위 3 + test_bubble_does_not_resize_expanded_list…·test_growing_notice_reevaluates_footer…), **후보 #214 코드(dcb116f)는 22개 모두 통과** → 4928b1a·c0bf174 배치 변경으로 생긴 회귀.
+  790×864 기본 크기에서 버프 탭이 2px 넘쳐 세로 스크롤·잡담 바닥 띄움 판정이 깨짐 — 실제 Windows(맑은 고딕)에서도 글꼴에 따라 생길 수 있음.
+  QA 반성: 배치 테스트를 QA 컨테이너 글꼴로만 돌림. 이후 화면 배치 QA는 CI 글꼴(fonts-noto-cjk + DejaVu)로도 돌린다.
 - **QA 4c2132c·385f3f5(보스 두 자리 오독·디버프 초/분 방어·11-09 4K CASES) + 사용자 수집 tests/data/unknown_hpxxx_047.zip(07925b2, 226파일: png 200·json 26)**: 통과.
   보스: 88px 수집 위치 옮겨 읽기(시작 39~51·높이 33/37/41, 20% 이하 1531칸) 바뀐 346칸 중 무작위 24건 화면 대조 — 24/24 '영역이 걸친 바' 값과 같음(19→12는 영역이 12.85 % 바 위).
   남은 '1' 89칸 = 실제 1.62 %·풍경·바와 7px 넘게 어긋난 칸(전과 같음). 배포 검사 705 passed·1 skipped, 사전 점검 통과, CASES 4K 통과.
