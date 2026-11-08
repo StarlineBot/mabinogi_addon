@@ -590,3 +590,34 @@ def test_quarter_lines_inside_bar_under_pattern_lines():
     marked = pixels((50,))
     r, g, b = marked[mid, x50, :3].astype(int)
     assert r > 150 and g > 120 and b < 120  # 같은 자리면 노란 패턴 선이 위
+
+
+@pytest.mark.parametrize("zip_name,name,y,h,expected", [
+    ("gomok_petak_hp019_158.zip", "gomok_petak_hp017_159.png", 38, 37, ("고목의 페타크", 17, "74")),  # 등록 보스
+    ("unknown_hpxxx_show001_upper_197.zip", "gomok_petak_hp018_128.png", 38, 37, ("고목의 페타크", 18, "23")),
+    ("eotgallin_poinche_hp098_058.zip", "unknown_hpxxx_041.png", 40, 37, ("보스", 19, "55")),  # 미등록(보스바 확인 경로)
+    ("gomok_petak_hp019_158.zip", "gomok_petak_hp017_159.png", 50, 37, ("고목의 페타크", 17, "74")),  # 원래 맞던 자리는 그대로
+])
+@pytest.mark.parametrize("fix", [False, True])
+def test_overlay_rereads_low_hp_one_when_region_is_shifted(tab, tmp_path, monkeypatch, zip_name, name, y, h, expected, fix):
+    """등록 영역이 바와 세로로 어긋나면(위 7px·아래 5px) 숫자가 잘려 '1'로 읽던 것 — 늘린 캡처의 ±6px에서 흰 글자로 다시(QA 4f106aa)."""
+    import zipfile
+
+    from mabinogi_addon.detect import boss_hp_reader
+    if not fix:
+        monkeypatch.setattr(boss_hp_reader, "recheck_low_hp", lambda p, v, f=None: (v, f))
+    state = {}
+    tab._region = {"x": 0, "y": y, "w": 521, "h": h}
+    monkeypatch.setattr(tab, "_grab_region", lambda: dict(tab._region))
+    monkeypatch.setattr(tab, "_grab_rect", lambda x, yy, w, hh: state["img"][yy:yy + hh, x:x + w].copy())
+    with zipfile.ZipFile(f"tests/data/{zip_name}") as z:
+        z.extract(name, tmp_path)
+    state["img"] = image_io.imread(str(tmp_path / name), cv2.IMREAD_COLOR)
+    tab.bar_section.value.reset()
+    for _ in range(3):
+        tab._tick()
+    st = tab.bar_section._overlay.state()
+    if fix or y == 50:
+        assert (st[0], st[1], st[4]) == expected
+    else:
+        assert st[1] == 1  # 수정 전 현상

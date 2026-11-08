@@ -6,6 +6,8 @@
     "tests/test_boss_hp_reader.py",
     "tests/test_boss_fill_boundary.py",
     "tests/test_boss_two_rows.py",
+    "tests/test_boss_low_hp_vertical.py",
+    "tests/test_boss_tab.py",
     "tests/test_release_notes.py",
     "tests/test_release_notes_trigger.py",
     "tests/test_release_checks.py",
@@ -21,9 +23,18 @@
         "tests/test_boss_bar_overlay.py",
         "tests/test_boss_hp_reader.py",
         "tests/test_boss_fill_boundary.py",
+        "tests/test_boss_two_rows.py",
+        "tests/test_boss_low_hp_vertical.py"
+      ],
+      "reason": "저HP(20% 이하) 회색 바탕 흰 숫자 소수(_bright_fraction): 정수 같게 강하게·'.' 왼쪽 글자 수·두 칸 강한 점수일 때만, 앞자리만 남은 오독엔 소수 없음, 흰 테두리 줄 제외 · 정수 경로·결과 그대로(기존 판독·채움 경계·두 줄 구간) · 저HP 한 자리('1')를 영역 ±6px 흰 글자로 다시(recheck_low_hp, 늘리기만 1→17)"
+    },
+    "src/mabinogi_addon/ui/boss_tab.py": {
+      "tests": [
+        "tests/test_boss_bar_overlay.py",
+        "tests/test_boss_tab.py",
         "tests/test_boss_two_rows.py"
       ],
-      "reason": "저HP(20% 이하) 회색 바탕 흰 숫자 소수(_bright_fraction): 정수 같게 강하게·'.' 왼쪽 글자 수·두 칸 강한 점수일 때만, 앞자리만 남은 오독엔 소수 없음, 흰 테두리 줄 제외 · 정수 경로·결과 그대로(기존 판독·채움 경계·두 줄 구간)"
+      "reason": "보스바 오버레이(늘린 캡처)에서만 저HP 한 자리 판독을 ±6px로 다시(등록·미등록·두 줄 위 줄) — 오버레이를 안 쓰면 캡처·판독 예전 그대로"
     },
     "src/mabinogi_addon/assets/boss_hp_digits/gray_d0_0.png": {
       "tests": [

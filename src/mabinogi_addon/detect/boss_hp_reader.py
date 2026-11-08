@@ -502,40 +502,72 @@ def _bright_fraction(region_bgr, prep, val) -> str | None:
     """저HP(20% 이하) 소수 두 칸을 밝기 마스크(흰 글자만)로 — 채움이 숫자 칸 왼쪽에서 끝나 숫자가 회색 빈 바 위 흰 글자일 때
     채도 마스크로는 소수를 못 읽었다(사용자 11-08 '15% 아래로도 소수', QA dee7b93). 같은 마스크에서 정수가 val로 강하게 읽히는 정렬을 찾고,
     그 자리에서 두 칸 모두 강한 점수일 때만 — 아니면 None(틀린 소수 대신 정수만)."""
-    if not USE_TEXT_MASK or not _GRAY_SAMPLES or val is None or val > _LOW_HP_MAX:
+    if val is None or val > _LOW_HP_MAX:
+        return None
+    got = _bright_read(region_bgr, prep, str(val))
+    return None if got is None else got[1]
+
+
+def _bright_read(region_bgr, prep, want: str | None) -> tuple[int, str | None] | None:
+    """밝기 마스크(흰 글자)로 'XX.YY' — (정수, 소수 두 자리|None) 또는 None. want = 이미 아는 정수 글자(소수만 찾을 때),
+    None이면 정수도 여기서 읽는다(자리 수는 '.' 왼쪽 글자 수, 자리마다 강한 점수). 소수는 두 칸 모두 강할 때만, 아니면 None."""
+    if not USE_TEXT_MASK or not _GRAY_SAMPLES:
         return None
     _templates, w, scale, _band, pitch, span = prep
     h = region_bgr.shape[0]
     bright = _bright_mask(region_bgr)
     band = bright[int(h * _YBAND[0]):int(h * _YBAND[1])]
     text = _text_rows(bright[:, _num_left(w, scale):])
-    if text is not None and (text[0] < int(h * _YBAND[0]) - 1 or text[1] > int(h * _YBAND[1])):
+    if text is not None and (want is None or text[0] < int(h * _YBAND[0]) - 1 or text[1] > int(h * _YBAND[1])):
         band = bright[max(0, text[0] - 1):text[1] + 2]  # 글자가 기본 띠 밖(등록 영역이 몇 px 어긋남) — 글자 줄에 맞춤
-    if _digits_before_dot(band[:, _num_left(w, scale):]) != len(str(val)):
+    count = _digits_before_dot(band[:, _num_left(w, scale):])
+    if count is None or count < 1 or count > 2 or (want is not None and count != len(want)):
         return None  # '.' 왼쪽 글자 수가 정수 자리 수와 다름 = 앞자리만 남은 오독(74.10을 7로) — 소수를 붙이면 틀린 값이 그럴듯해진다
-    # 같은 마스크에서 정수 자리들이 val과 같게 강하게 읽히는 정렬을 찾는다 — 칸마다 '.' 같은 작은 조각은 지우고(_cell_digit)
+    # 같은 마스크에서 정수 자리들이 강하게 읽히는 정렬을 찾는다 — 칸마다 '.' 같은 작은 조각은 지우고(_cell_digit)
     # ('12.85'에서 2 칸에 '.'이 같이 들어와 2를 못 읽던 것, 2560 두 줄 수집). 그래야 소수 칸 위치를 믿는다.
-    digits = str(val)[::-1]
     jitter = max(1, round(pitch * _DIGIT_JITTER))
     best = None
     for shift in range(-span, span + 1):
-        right, worst = w - (_FIRST * scale + shift), 1.0
-        for k, want in enumerate(digits):
+        right, worst, read = w - (_FIRST * scale + shift), 1.0, ""
+        for k in range(count):
+            target = None if want is None else want[::-1][k]
             got = None
             for dj in ((0,) if k == 0 else range(-jitter, jitter + 1)):
                 cand = _cell_digit(band, right + dj, pitch, _GRAY_SAMPLES)
-                if cand is not None and cand[0] == want and (got is None or cand[1] > got[1]):
+                if cand is not None and (target is None or cand[0] == target) and (got is None or cand[1] > got[1]):
                     got = (cand[0], cand[1], right + dj)
             if got is None:
                 worst = -1.0
                 break
             worst = min(worst, got[1])
+            read = got[0] + read
             right = got[2] - pitch
         if worst >= _STRONG and (best is None or worst > best[0]):
-            best = (worst, shift)
+            best = (worst, shift, read)
     if best is None:
         return None
-    return _fraction(band, w, scale, pitch, _GRAY_SAMPLES, best[1])
+    if len(best[2]) > 1 and best[2][0] == "0":
+        return None
+    return int(best[2]), _fraction(band, w, scale, pitch, _GRAY_SAMPLES, best[1])
+
+
+def recheck_low_hp(padded_bgr: np.ndarray, value: int | None, frac: str | None = None) -> tuple[int | None, str | None]:
+    """저HP 한 자리 판독('1' 등)을 위아래로 여유를 둔 숫자 칸(padded_bgr — 등록 영역 ±몇 px)에서 흰 글자로 다시 — (정수, 소수).
+    등록 영역이 바와 1~6px 어긋나면 고정 띠가 숫자를 잘라 '17.74'를 1로 읽었다(QA 4f106aa, 세로 옮겨 읽기 146칸).
+    여유 칸에서 글자 줄을 찾아 '.' 왼쪽 글자 수만큼 정수 자리를 모두 강하게 읽었고 원래 값으로 시작할 때만 바꾼다(늘리기만 — 1 → 17),
+    소수는 두 칸 모두 강할 때만. 아니면 그대로.
+    20% 이하·한 자리일 때만 판독 1번(약 10ms) 더 — 평소 판독은 그대로. 다른 템플릿·회색 샘플 없음이면 그대로."""
+    if value is None or value > _LOW_HP_MAX or len(str(value)) != 1 or padded_bgr is None or padded_bgr.size == 0:
+        return value, frac
+    prep = _prep(padded_bgr, None)
+    if prep is None:
+        return value, frac
+    got = _bright_read(padded_bgr, prep, None)
+    if got is None or got[0] > _LOW_HP_MAX or not str(got[0]).startswith(str(value)):
+        return value, frac
+    if got[0] == value and got[1] is None:
+        return value, frac  # 같은 정수·소수 못 읽음 — 원래 판독 그대로
+    return got
 
 
 def read_percent_frac(

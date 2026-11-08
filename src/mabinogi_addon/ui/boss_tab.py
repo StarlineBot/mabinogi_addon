@@ -559,9 +559,25 @@ class BossTab(QWidget):
             out["bar"] = out["bar_pct"] is not None
         elif presence:  # 미등록 보스 존재 확인(이름 글자 + % 판독 — 바가 보일 때만 ~36ms)
             out["bar"] = timed("보스바 확인", self._boss_bar_visible, frame)
-        if ext is not None:
+        if ext is not None:  # 보스바 오버레이(제작자)만 — 늘린 캡처에 위아래 여유가 있다. 오버레이를 안 쓰면 캡처·판독 예전 그대로
+            if out.get("raw_hp") is not None:
+                out["raw_hp"], out["raw_frac"] = timed("HP 세로 다시", self._recheck_low_hp, full, ext[0], frame.shape[0],
+                                                       out["raw_hp"], out.get("raw_frac"))
+            if out.get("bar_pct") is not None:
+                out["bar_pct"], out["bar_frac"] = timed("HP 세로 다시", self._recheck_low_hp, full, ext[0], frame.shape[0],
+                                                        out["bar_pct"], out.get("bar_frac"))
             out["overlay"] = timed("오버레이", self._overlay_reading, full, ext[0], frame.shape[0], out)
         return out
+
+    LOW_HP_PAD = 6  # 저HP 한 자리 판독을 다시 읽을 위아래 여유(px, 오버레이 늘린 캡처 안) — 등록 영역이 바와 1~6px 어긋나면 숫자가 잘려 '1'(QA 4f106aa)
+
+    def _recheck_low_hp(self, full, top, h, value, frac):
+        """20% 이하 한 자리 판독('1' 등)만 등록 영역 ±LOW_HP_PAD px의 숫자 칸에서 흰 글자로 다시 — 늘리기만(1 → 17). 평소엔 그대로."""
+        from ..detect.boss_hp_reader import recheck_low_hp
+        if value is None or value > 20 or len(str(value)) != 1:
+            return value, frac
+        crop = full[max(0, top - self.LOW_HP_PAD):top + h + self.LOW_HP_PAD]
+        return recheck_low_hp(crop[:, int(crop.shape[1] * 0.58):], value, frac)
 
     BAR_EXT_UP, BAR_EXT_DOWN = 45, 6
     LOW_HP_SKIP_HEIGHT = 20  # 이 % 이하는 띠 높이 규칙을 쓰지 않는다
@@ -842,7 +858,7 @@ class BossTab(QWidget):
             return None
         _key, got, frac, off = best
         offsets[row] = off
-        return got, frac
+        return self._recheck_low_hp(full, top + off, h, got, frac)
 
     def _upper_bar(self, full, top, h, steps=None):
         """한 칸 위 줄이 보스바면 (등록 보스 id|None, (정수, 소수)|None). 보스바가 아니면 None.
