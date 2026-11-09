@@ -30,6 +30,7 @@ _saved: dict[str, dict | None] = {}  # 기능이 마지막으로 넘긴 저장 �
 _fixed_saver = None  # 직접 지정 고정 목록 저장(config autofindV2.fixed) — 앱이 연결
 _use_saver = None    # 사용 값 저장(config autofindV2.use) — 직접 지정으로 사용을 켤 때
 _state_fn = None     # 찾기 엔진 항목 상태(컨트롤러) — place() 문구용
+_detail_fn = None    # 찾기 엔진 항목 자세히(컨트롤러) — 문의 info.json용
 
 
 def activate(on: bool, fixed=()) -> None:
@@ -169,6 +170,42 @@ def set_state_source(fn) -> None:
     _state_fn = fn
 
 
+def set_detail_source(fn) -> None:
+    """fn() → {'phase': …, 'ui_hidden': …, 'items': {key: {status, source, box, failures, reason, seconds}}}."""
+    global _detail_fn
+    _detail_fn = fn
+
+
+def snapshot() -> dict:
+    """문의 ZIP info.json의 자동 찾기 상태(first-use-v3 6절 6): 항목별 자리·출처(last/search/research/appear/v1/user)·마지막 실패 이유."""
+    out = {"enabled": _active, "fixed": sorted(_user), "use": {k: _use.get(k, False) for k in USE_KEYS} if _active else {}}
+    if not _active:
+        return out
+    try:
+        detail = _detail_fn() if _detail_fn is not None else {}
+    except Exception:  # noqa: BLE001 — 문의 보내기를 막지 않게
+        detail = {"error": "엔진 상태를 읽지 못함"}
+    engine_items = detail.get("items", {}) if isinstance(detail, dict) else {}
+    out["phase"] = detail.get("phase") if isinstance(detail, dict) else None
+    out["ui_hidden"] = detail.get("ui_hidden") if isinstance(detail, dict) else None
+    items = {}
+    for key in KEYS:
+        eng = engine_items.get("boss" if key == "debuff" else key, {})
+        uses = source(key)
+        if uses == "user":
+            origin = "user"
+        elif uses == "v1":
+            origin = "v1"
+        else:
+            origin = eng.get("source") or None
+        box = _runtime.get(key) if uses == "auto" else _saved.get(key)
+        items[key] = {"place": place(key), "uses": uses, "source": origin, "box": dict(box) if box else None,
+                      "wanted": wanted(key), "status": eng.get("status"), "failures": eng.get("failures"),
+                      "last_failure": eng.get("reason") or None}
+    out["items"] = items
+    return out
+
+
 def place(key: str) -> str | None:
     """화면 문구용 위치 상태 — 'user'(직접 지정) · 'found'(위치 찾음) · 'wait'(화면에 보이면 찾아요) · 'hidden'(게임 UI 안 보임 — 접속하면 찾아요) ·
     'v1'(저장된 영역 사용 · 자동으로 못 찾음) · 'missing'(못 찾음) · 'searching'(찾는 중). 자동 찾기 꺼짐이면 None. 디버프 줄은 보스바 상태를 따른다."""
@@ -296,9 +333,9 @@ def saved_of(owner, attr: str = "_region"):
 
 
 def reset_for_tests() -> None:
-    global _reporter, _boss_extra, _fixed_saver, _use_saver, _state_fn
+    global _reporter, _boss_extra, _fixed_saver, _use_saver, _state_fn, _detail_fn
     activate(False)
-    _fixed_saver = _use_saver = _state_fn = None
+    _fixed_saver = _use_saver = _state_fn = _detail_fn = None
     _listeners.clear()
     _reporter = None
     _boss_extra = None

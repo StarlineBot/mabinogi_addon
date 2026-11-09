@@ -163,3 +163,27 @@ def test_inquiry_collects_region_in_use(monkeypatch):
     autofind_regions.set_region("buff", FOUND)
     autofind_regions.set_use("buff", False)
     assert inq.region_of("buff") == FOUND
+
+
+def test_inquiry_info_json_has_autofind_state():
+    """문의 ZIP info.json: 항목별 자리·출처(last/search/v1/user)·마지막 실패 이유(first-use-v3 6절 6)."""
+    from mabinogi_addon import autofind_v2 as v2
+    from mabinogi_addon import inquiry_session as inq
+    engine = v2.Engine()
+    engine.items["buff"].status, engine.items["buff"].source, engine.items["buff"].box = "found", "last", (1, 2, 3, 4)
+    engine.items["tuarim"].status, engine.items["tuarim"].reason, engine.items["tuarim"].failures = "missing", "화면에서 못 찾음", 3
+    autofind_regions.set_detail_source(lambda: {"phase": "stable", "ui_hidden": False, "items": {
+        k: {"status": it.status, "source": it.source, "failures": it.failures, "reason": it.reason}
+        for k, it in engine.items.items()}})
+    autofind_regions.set_region("buff", FOUND)
+    autofind_regions.region_for("tuarim", SAVED)
+    autofind_regions.user_set("boss")
+    autofind_regions.region_for("boss", {"x": 5, "y": 5, "w": 50, "h": 10})
+    state = inq._autofind_state()
+    assert state["enabled"] and state["fixed"] == ["boss"] and state["phase"] == "stable"
+    items = state["items"]
+    assert items["buff"]["source"] == "last" and items["buff"]["box"] == FOUND and items["buff"]["uses"] == "auto"
+    assert items["tuarim"]["source"] == "v1" and items["tuarim"]["last_failure"] == "화면에서 못 찾음"
+    assert items["boss"]["source"] == "user"
+    autofind_regions.activate(False)
+    assert inq._autofind_state() == {"enabled": False, "fixed": [], "use": {}}

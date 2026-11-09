@@ -96,7 +96,7 @@ def test_zip_has_info_body_logs_and_images(tmp_path):
     assert {"info.json", "본문.txt", "logs.txt", "boss_01.png", "boss_02.png", "boss_03.png"} <= names
     info = json.loads(archive.read("info.json"))
     assert info["session_id"] == s.id and info["install_id"] == who["install_id"] and info["card"] == "boss"
-    assert info["category"] == "문제 신고" and len(info["attachments"]) == 3 and "체력바 영역 미설정" in info["notes"]
+    assert info["category"] == "문제 신고" and len(info["attachments"]) == 3 and "체력바 영역 미설정" in info["notes"] and info["autofind"]["enabled"] is False  # 자동 찾기 상태(first-use-v3 6절 6)
     assert info["collect_started"] == "2026-11-05T21:40:00"
     body = archive.read("본문.txt").decode()
     assert body.splitlines()[0] == f"guest-3f9a2c1e · 회차 {s.id[:6]} · 문제 신고 · 보스 체력바 · 패턴 알림"

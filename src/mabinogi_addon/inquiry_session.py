@@ -107,6 +107,15 @@ def region_of(name: str) -> dict | None:
     return None
 
 
+def _autofind_state() -> dict:
+    """자동 찾기 상태(항목별 자리·출처 last/search/v1/user·마지막 실패 이유, first-use-v3 6절 6). 실패해도 문의는 보낸다."""
+    try:
+        from . import autofind_regions
+        return autofind_regions.snapshot()
+    except Exception as exc:  # noqa: BLE001
+        return {"error": f"{type(exc).__name__}: {exc}"}
+
+
 def cooldown_region() -> dict | None:
     """쿨타임 카드 영역(논리 좌표): 등록 칸 + 두 페이지 선택기 자리(화살표 포함)를 덮는 사각형 — 쿨타임 관측과 같은 공유 캡처 범위.
     등록 칸이 없으면 위쪽 단축바 영역(단축바 미러 원본 1168×89)으로 대신."""
@@ -321,6 +330,7 @@ class Session:
             "collect_ended": self.ended.isoformat(timespec="seconds") if self.ended else None,
             "notes": list(self.notes),
             "attachments": [{"name": a.name, "label": a.label, "bytes": a.size, "kind": a.kind} for a in self.attachments],
+            "autofind": _autofind_state(),
         }
 
     def build_zip(self, *, category: str, who: dict, title: str, content: str, logs: str,
