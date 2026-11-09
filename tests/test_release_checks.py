@@ -69,19 +69,24 @@ def test_current_plan_maps_every_selected_file_to_changed_code_or_shared_contrac
 
 
 def test_current_release_keeps_feature_boundaries_and_delivery_contracts():
-    """0.45.1: 보스 HP 글자 분류 CPU(결과 같음) + 자동 찾기 perf_meter + 배포 계약. (릴리즈마다 경계를 바꾼다 — 누적하지 않음)"""
+    """0.45.0: 자동 찾기 모든 사용자(v1 대비·직접 지정 고정·계기) + 홈·첫 사용 v3·둘러보기 + 0.44.2(게시 안 함)의 보스바·디버프 '걸린 것 + 시간' + 보스 HP 글자 분류 CPU(결과 같음) + 배포 계약.
+    (릴리즈마다 경계를 바꾼다 — 누적하지 않음)"""
     root = Path(__file__).resolve().parents[1]
     plan = json.loads((root / 'packaging/release_checks.json').read_text(encoding='utf-8'))
     paths = set(plan['tests'])
     assert {
-        'tests/test_boss_hp_classify_speed.py', 'tests/test_boss_hp_reader.py', 'tests/test_boss_low_hp_fraction.py',
-        'tests/test_debuff_engine.py', 'tests/test_autofind_v2_controller.py',
+        'tests/test_boss_low_hp_fraction.py', 'tests/test_boss_bar_overlay.py', 'tests/test_boss_hp_reader.py',
+        'tests/test_autofind_v2_engine.py', 'tests/test_autofind_v2_controller.py',
+        'tests/test_debuff_applied.py', 'tests/test_autofind_fallback.py', 'tests/test_first_use.py', 'tests/test_home_page.py',
+        'tests/test_boss_hp_classify_speed.py',
         'tests/test_startup_build.py', 'tests/test_release_checks.py', 'tests/test_release_candidate.py',
         'tests/test_windows_ci.py', 'tests/test_startup_smoke.py',
     } <= paths
     assert {
         'src/mabinogi_addon/detect/boss_hp_reader.py', 'packaging/build_windows.py', 'src/mabinogi_addon/assets/release_notes.md',
-        'src/mabinogi_addon/ui/autofind_v2_controller.py',
+        'src/mabinogi_addon/autofind_v2.py', 'src/mabinogi_addon/ui/autofind_v2_controller.py',
+        'src/mabinogi_addon/detect/debuff_time.py', 'src/mabinogi_addon/tracker/debuff_engine.py', 'src/mabinogi_addon/ui/debuff_tab.py',
+        'src/mabinogi_addon/autofind_regions.py', 'src/mabinogi_addon/ui/first_use.py', 'src/mabinogi_addon/setup_state.py',
     } <= set(plan['coverage'])
     # The separate development entry must continue collecting the whole suite.
     regression = (root / '.github/workflows/regression.yml').read_text(encoding='utf-8')
