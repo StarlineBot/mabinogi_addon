@@ -52,6 +52,9 @@
 - **QA 644433c 수정(후보 #215 실패 — CI 글꼴에서 버프 탭 2px 넘침)**: 위 두 줄·구분선 사이 간격 8 → 4px(버프 탭 높이 여유 +8px — Inter 26 → 34px, DejaVu 68px).
   test_tracker_layout의 '늘어나는 안내'는 영역 지정 후에도 보이는 위 1줄 상태 문구로(영역 안내는 접힌 묶음 안이라 늘려도 안 보였음 — 기준 완화 아님).
   두 글꼴 환경(QA fontconfig: Inter·WenQuanYi·Unifont 제외 = DejaVu + Noto CJK / 기본 Inter)에서 test_tracker_layout·test_tracker_top_width·test_navigation 45개 통과.
+- **0.45.0 후보 #216(run 42574521325, verify-only, SHA 969fd37, 실행 계정 kerenice) success(2026-11-09 15:51 KST)** — 배포 검사·Windows 시작·exe 빌드·후보 보관 모두 success.
+  969fd37 = QA한 32ed10d + 문서만. 후보 artifact verified-windows-42574521325-1, 보관 11-10 15:51 KST까지. 실행 계정이 평소(StarlineBot)와 다르지만 게시 조건에 계정 제한은 없음(release_automation 확인).
+  남은 것(사용자, 후보 exe): 기존 설정 업데이트 동작·게임 재시작 후 바로 찾기·첫 사용 안내(설정 › 일반 › 안내 다시 보기)·1시간 CPU·커서 끊김 → 게시 결정(publish-existing, candidate_run=42574521325).
 - **QA 32ed10d(0.45.0 QA 0429c66 수정)**: 통과. 체력바 사용 값(USE_KEYS, 처음 값 = 저장 영역 + 표시 바 하나 이상, 새 설치 꺼짐) — QA 렌더 새 설치 2단계 체력바 꺼짐,
   켜면 '켠 기능: 버프 · 보스 패턴 알림 · 체력바'. 3단계 둘러보기 목록 8줄(3절과 같은 순서), 1단계 창 제목 표시(해상도는 창이 있을 때). 영역 안내 v3 문구(set_guide).
   CI 글꼴 배포 검사 0.45.0 982 passed·1 skipped, 사전 점검 통과, CI 글꼴 전체 4403 passed·397 skipped(첫 실행 오류 3 — 목록을 남기지 못함, 다시 실행 0 — 흔들림으로 기록).
