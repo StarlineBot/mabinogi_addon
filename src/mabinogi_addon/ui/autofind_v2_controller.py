@@ -14,11 +14,14 @@ from concurrent.futures import ThreadPoolExecutor
 
 from PySide6.QtCore import QObject, QTimer, Signal
 
-from .. import autofind_regions, autofind_v2 as v2, config
+from .. import autofind_regions, autofind_v2 as v2, config, perf_meter
 
 _log = logging.getLogger(__name__)
 TICK_MS = 500
 UI_CHECK_KEYS = ("skillbar", "stat_bars")
+# perf_meter 기능 이름(app.log 1분 줄) — 무거운 처음 찾기와 가벼운 확인을 구분해 본다
+PERF_NAMES = {"initial": "자동 찾기·처음", "research": "자동 찾기·다시 찾기", "appear": "자동 찾기·나타나면",
+              "ui": "자동 찾기·UI 확인"}
 
 
 # ---- 작업 스레드 부품 ---------------------------------------------------------------------------
@@ -239,6 +242,7 @@ class AutofindV2Controller(QObject):
         except Exception:  # noqa: BLE001 — 틱 격리(앱 생존 우선)
             _log.exception("[자동 찾기 v2] 상태 갱신 실패")
 
+    @perf_meter.timed("자동 찾기")  # 화면 스레드 상태 갱신(가벼워야 함 — 캡처·탐지는 작업 스레드)
     def tick(self) -> None:
         if self.closed:
             return
@@ -297,7 +301,12 @@ class AutofindV2Controller(QObject):
         job["generation"] = self.engine.generation
         job["target"] = self.target
         self.job = job
-        self.future = self._executor.submit(work)
+        name = PERF_NAMES.get(job["kind"], "자동 찾기")
+
+        def measured():
+            with perf_meter.measure(name):  # app.log 기능별 처리 시간(작업 스레드) — 처음 찾기·다시 찾기·UI 보이나 따로
+                return work()
+        self.future = self._executor.submit(measured)
 
     # ---- 처음 찾기 ---------------------------------------------------------------------------
     def _start_initial(self) -> None:

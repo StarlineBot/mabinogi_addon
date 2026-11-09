@@ -513,3 +513,14 @@ def test_fixed_from_previous_run_and_auto_return(app):
     _run(c, clock, 2.0)  # 'UI 보이나' 확인 한 번 + 다시 찾기(새 자리는 시험 중에도 그 자리로 읽어 봄)
     assert autofind_regions.region_for("buff", saved) == {"x": 1700, "y": 200, "w": 30, "h": 300}
     c.shutdown()
+
+
+def test_perf_meter_lists_autofind_jobs(app):
+    """app.log 기능별 처리 시간에 자동 찾기 v2(처음 찾기·UI 확인·화면 스레드 갱신)가 따로 보인다."""
+    from mabinogi_addon import perf_meter
+    perf_meter.take()
+    c, clock, *_ = _make(app)
+    _run(c, clock, 4.0)
+    names = {name for name, _thread in perf_meter.take()}
+    assert {"자동 찾기", "자동 찾기·처음", "자동 찾기·UI 확인"} <= names
+    c.shutdown()

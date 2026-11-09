@@ -119,18 +119,63 @@ def _text_mask(region_bgr: np.ndarray) -> np.ndarray:
     return ((s < _SAT_MAX) & ~gray).astype(np.uint8) * 255
 
 
+_BANKS: dict[int, tuple] = {}
+_SEEN: dict[tuple, tuple] = {}  # 글자 모양 → 결과(템플릿 묶음별). 가득 차면 비운다(메모리 상한)
+_SEEN_MAX = 4096
+
+
+def _bank(templates: dict[str, list[np.ndarray]]):
+    """템플릿을 크기별로 묶어 둔다(한 번만) — 글자를 크기마다 한 번만 늘리고, 같은 크기 템플릿 전부와 한 번에 상관계수를 낸다.
+    (digits, [(shape, 순서 번호들, 평균 뺀 템플릿 행렬, 각 노름)])."""
+    cached = _BANKS.get(id(templates))
+    if cached is not None and cached[0] is templates:
+        return cached[1]
+    digits, groups = [], {}
+    for d, samples in templates.items():
+        for t in samples:
+            groups.setdefault(t.shape, []).append((len(digits), t))
+            digits.append(d)
+    built = []
+    for shape, items in groups.items():
+        mat = np.stack([t.astype(np.float64).ravel() for _, t in items])
+        mat -= mat.mean(axis=1, keepdims=True)
+        built.append((shape, np.array([i for i, _ in items]), mat, np.sqrt((mat * mat).sum(axis=1))))
+    bank = (digits, built)
+    _BANKS[id(templates)] = (templates, bank)
+    return bank
+
+
 def _classify(
     glyph: np.ndarray, templates: dict[str, list[np.ndarray]]
 ) -> tuple[str | None, float]:
-    best, best_score = None, -2.0
-    for d, samples in templates.items():
-        for t in samples:
-            g = cv2.resize(glyph, (t.shape[1], t.shape[0]), interpolation=cv2.INTER_NEAREST)
-            _, g = cv2.threshold(g, 127, 255, cv2.THRESH_BINARY)
-            score = float(cv2.matchTemplate(g, t, cv2.TM_CCOEFF_NORMED).max())
-            if score > best_score:
-                best, best_score = d, score
-    return best, best_score
+    """가장 닮은 숫자(템플릿 순서상 처음 나온 최고 점수)와 점수. 같은 크기 이미지끼리의 TM_CCOEFF_NORMED(피어슨 상관계수)를
+    크기별로 한 번에 계산한다 — 예전엔 템플릿 72개마다 resize·threshold·matchTemplate를 따로 불러 저HP·못 읽음 구간 판독 1번이
+    0.1~0.4초였다(사용자 app.log 11-09 'HP 판독' 296~359ms). 결과는 예전과 같다(수집 프레임 전부 같은 값 — 회귀 테스트)."""
+    digits, groups = _bank(templates)
+    if not digits:
+        return None, -2.0
+    glyph = np.ascontiguousarray(glyph)
+    key = (id(templates), glyph.shape, glyph.dtype.str, glyph.tobytes())
+    hit = _SEEN.get(key)
+    if hit is not None and hit[0] is templates:  # 정렬 오프셋을 옮겨도 같은 글자 모양을 자르는 일이 많다 — 같은 모양은 다시 계산하지 않는다(결과 같음)
+        return hit[1]
+    scores = np.empty(len(digits))
+    for (th, tw), idx, mat, norms in groups:
+        g = cv2.resize(glyph, (tw, th), interpolation=cv2.INTER_NEAREST)
+        _, g = cv2.threshold(g, 127, 255, cv2.THRESH_BINARY)
+        gv = g.astype(np.float64).ravel()
+        gv -= gv.mean()
+        gn = float(np.sqrt(gv @ gv))
+        denom = norms * gn
+        with np.errstate(invalid="ignore", divide="ignore"):
+            s = np.where(denom > 0, (mat @ gv) / np.where(denom > 0, denom, 1.0), 0.0)  # 한쪽이 한 색이면 0(OpenCV와 같게)
+        scores[idx] = s
+    k = int(np.argmax(scores))
+    result = (digits[k], float(scores[k]))
+    if len(_SEEN) >= _SEEN_MAX:
+        _SEEN.clear()
+    _SEEN[key] = (templates, result)  # 템플릿 묶음 자체도 들고 있어 id 재사용으로 섞이지 않는다
+    return result
 
 
 def _read_at(
