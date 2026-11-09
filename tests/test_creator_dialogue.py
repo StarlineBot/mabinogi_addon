@@ -401,7 +401,7 @@ def test_recheck_before_display_and_excluded_screens(window):
     assert not d.request(automatic=True)
     assert not d.session.shown
     d.visibility = lambda *args: True
-    window._pages.setCurrentWidget(window.setup_guide)
+    window._pages.setCurrentWidget(window.first_use)
     assert not d.request()
     assert not d.footer.isVisible()
 

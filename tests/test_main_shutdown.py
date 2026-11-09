@@ -79,7 +79,7 @@ def test_tray_hide_keeps_status_and_capture_retry_alive(window, monkeypatch):
     window.start()
     monkeypatch.setattr(window, "_minimize_to_tray_enabled", lambda: True)
     window.close()
-    assert not window._closing and not window._setup_flow.closed
+    assert not window._closing
     assert window._status_timer.isActive()
     provide_regions()
     calls = []

@@ -866,6 +866,17 @@ def save_general_flag(key: str, value: bool, path: Path = LOCAL_CONFIG_PATH) -> 
     _write_local_config(data, path)
 
 
+def save_general_value(key: str, value, path: Path = LOCAL_CONFIG_PATH) -> None:
+    """general 섹션의 값 하나(문자열 등)."""
+    data = _read_local_config(path)
+    g = data.get("general")
+    if not isinstance(g, dict):
+        g = {}
+    g[key] = value
+    data["general"] = g
+    _write_local_config(data, path)
+
+
 def load_window_pos(path: Path = LOCAL_CONFIG_PATH) -> dict | None:
     """메인 창 위치 {x,y}. 없으면 None(→ 중앙 배치)."""
     g = _read_local_config(path).get("general") or {}

@@ -35,8 +35,7 @@ def test_registered_commands_fit_the_actual_window(app, settings, window, large,
         scroll.verticalScrollBar().setValue(0)
         app.processEvents()
         assert w.grab().save(str(output / (key + ('-large' if large else '') + '.png')))
-    w.setup_guide.stage = 1
-    w._pages.setCurrentWidget(w.setup_guide)
-    w.setup_guide.refresh()
+    w._open_guide()  # 첫 사용 안내 v3 2단계(쓸 기능 켜기)
+    w.first_use.go(1)
     app.processEvents()
     assert w.grab().save(str(output / ('guide-large.png' if large else 'guide.png')))

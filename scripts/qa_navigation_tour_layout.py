@@ -85,7 +85,8 @@ def test_seeded_navigation_and_tour(area, large_font, finish, monkeypatch, tmp_p
         window._convenience_tabs.setCurrentIndex(1)  # 0.35.0 편의기능 B안(마우스 커서 명세 1절): 2단 계산기·그림대화 — 예전 3번째 계산기 탭 대신 그림대화(1)
         window._run_tour()
         tour = window._tour
-        for index in list(range(7)) + list(reversed(range(7))):
+        count = len(tour._steps)  # 둘러보기 8단계(first-use-v3 3절)
+        for index in list(range(count)) + list(reversed(range(count))):
             tour._i = index
             tour._show_step()
             initial_target = tour._target_rect()
@@ -118,7 +119,7 @@ def test_seeded_navigation_and_tour(area, large_font, finish, monkeypatch, tmp_p
                 assert button.isVisible() and tour.rect().contains(rect)
             assert not window.creator_dialogue._eligible()
         if finish == "complete":
-            tour._i = 6
+            tour._i = count - 1
             tour._go_next()
         else:
             tour._skip.click()

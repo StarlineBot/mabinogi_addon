@@ -222,9 +222,9 @@ def test_creator_tour_settings_target_is_stable_when_optimization_is_inserted(wi
     w,app=window;c=w.optimization_tools
     monkeypatch.setattr(module, 'optimization_available',lambda:True);c.refresh_access()
     assert w._tabs.indexOf(w._settings_scroll)==w._tabs.count()-1==5  # 0.16.0: 블랙박스 탭 포함
-    w._run_tour();tour=w._tour;tour._i=5;tour._show_step();app.processEvents()
+    w._run_tour();tour=w._tour;tour._i=7;tour._show_step();app.processEvents()
     assert w._tabs.currentWidget() is w._settings_scroll
-    assert tour._steps[5].target is w.settings_tab.setup_btn
+    assert tour._steps[7].target is w.settings_tab.setup_btn
     tour.dismiss()
 
 

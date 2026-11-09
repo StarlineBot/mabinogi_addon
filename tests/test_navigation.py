@@ -118,24 +118,28 @@ def test_tour_both_directions_and_approved_return(window, from_guide, finish):
     paused = w._paused
     w._run_tour(from_guide=from_guide)
     tour = w._tour
-    assert len(tour._steps) == 7
+    assert len(tour._steps) == 8  # 둘러보기 8단계(first-use-v3 3절)
     assert tour._section_title == ''
-    expected = [w._tracker_tabs,w._convenience_tabs,w._tracker_tabs,w._tracker_tabs,
-                w._tracker_tabs,w._settings_scroll,w._tracker_tabs]
-    for index in list(range(7)) + list(reversed(range(7))) + list(range(7)):
+    home, tracker, settings = 'home', w._tracker_tabs, w._settings_scroll
+    expected = [home, home, tracker, tracker, tracker, tracker, tracker, settings]
+    for index in list(range(8)) + list(reversed(range(8))) + list(range(8)):
         tour._i = index
         tour._show_step()
         app.processEvents()
         assert tour._step_lbl.text() == f'{index + 1} / {len(tour._steps)}'
-        assert w._tabs.currentWidget() is expected[index]
+        if expected[index] == 'home':
+            assert w.home_visible()
+        else:
+            assert not w.home_visible() and w._tabs.currentWidget() is expected[index]
         if tour._steps[index].target is not None:
             rect = tour._target_rect()
-            assert rect is not None and not rect.isEmpty()
+            assert rect is not None and not rect.isEmpty(), index
             assert tour.rect().contains(rect)
             assert not rect.intersects(tour._card.geometry())
         assert not w.creator_dialogue._eligible()
+    assert w._tracker_tabs.currentWidget() is not None
     if finish == 'complete':
-        tour._i = 6
+        tour._i = 7
         tour._go_next()
     else:
         tour._skip.click()
@@ -179,10 +183,10 @@ def test_logged_out_dorcha_and_tour_settings_keep_access_rules(window, monkeypat
     assert getattr(w,'_tour',None) is not None
     w._run_tour()
     tour = w._tour
-    tour._i = 5
+    tour._i = 7
     tour._show_step()
     app.processEvents()
-    assert tour._steps[5].target is w.settings_tab.setup_btn
+    assert tour._steps[7].target is w.settings_tab.setup_btn
     assert tour._target_rect() is not None
 
 

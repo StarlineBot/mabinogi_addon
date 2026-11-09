@@ -157,19 +157,20 @@ def test_creator_stays_on_home_and_window_height_follows_dialogue(window):
 
 
 def test_app_starts_on_home_unless_guide_comes_first(window, monkeypatch):
+    """첫 사용 안내 v3는 새 설치(firstUse=pending)에만 — 기존 사용자·끝냄·나중에 하기는 홈부터(first-use-v3 4절)."""
     from mabinogi_addon.ui.main_window import MainWindow
     w, app = window
-    config.save_general_flag("skipSetup", True)
+    config.save_general_value("firstUse", "done")
     second = MainWindow()
     try:
         assert second.home_visible()
     finally:
         second._force_quit = True
         second.close()
-    config.save_general_flag("skipSetup", False)
+    config.save_general_value("firstUse", "pending")
     third = MainWindow()
     try:
-        assert not third.home_visible() and third._pages.currentWidget() is third.setup_guide
+        assert not third.home_visible() and third._pages.currentWidget() is third.first_use
     finally:
         third._force_quit = True
         third.close()
@@ -203,7 +204,7 @@ def test_moving_to_another_screen_from_code_closes_home(window):
     assert not w.home_visible() and w._tabs.currentWidget() is w._party_scroll
     w._show_home()
     w._open_guide()  # 설정 > 안내 다시 보기 등
-    assert not w.home_visible() and w._pages.currentWidget() is w.setup_guide
+    assert not w.home_visible() and w._pages.currentWidget() is w.first_use
 
 
 def test_many_needs_scroll_with_dark_scrollbar():

@@ -148,20 +148,6 @@ def test_failed_or_cancelled_clear_preserves_disk_and_memory(panels, monkeypatch
         assert bool(warnings) == (failure == "permission")
 
 
-def test_selection_changes_no_execution_option_or_region(registered):
-    w, _ = registered
-    before = deepcopy(config._read_local_config())
-    for key in setup_state.BY_KEY:
-        w._set_feature_enabled(key, True)
-        assert setup_state.selected(key)
-        w._set_feature_enabled(key, False)
-        assert not setup_state.selected(key)
-    after = config._read_local_config()
-    for key, value in before.items():
-        if key != "general":
-            assert after[key] == value
-    for key in ("buff", "debuff", "boss", "stat_bars", "skillbar"):
-        assert setup_state.enabled(key)
 
 
 def test_shared_clear_discards_late_selector_and_updates_other_consumers(registered, monkeypatch):

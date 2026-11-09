@@ -231,8 +231,7 @@ class CreatorDialogue(QObject):
             return bool(self.enabled)
         normal = self.window._pages.currentWidget() is self.window._tabs
         # 설정 탭은 위치가 아니라 위젯으로 판단(블랙박스·최적화 탭이 생기면 순서가 밀린다)
-        return (normal and self.window._tabs.currentWidget() is not self.window._settings_scroll
-                and not self.window._guide_return_btn.isVisible())
+        return normal and self.window._tabs.currentWidget() is not self.window._settings_scroll
 
     def _can_expand(self, footer, height):
         if self._home():
@@ -316,7 +315,6 @@ class CreatorDialogue(QObject):
                 or not w.isVisible() or w.isMinimized()
                 or w._pages.currentWidget() is not w._tabs
                 or getattr(w, "_tour", None) is not None
-                or w._guide_return_btn.isVisible()
                 or QApplication.activeModalWidget() is not None
                 or QApplication.activePopupWidget() is not None):
             return False

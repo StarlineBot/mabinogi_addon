@@ -78,22 +78,6 @@ def test_each_tab_help_starts_with_its_own_figure(qapp, title, name, monkeypatch
     assert opened[0].image.pixmap().width() == min(1200, int(screen * 0.9))  # 약 1200px, 화면보다 크면 줄임
 
 
-def test_setup_guide_shows_full_figure_in_feature_stages(qapp, monkeypatch):
-    from mabinogi_addon.ui import guide_figure
-    from mabinogi_addon.ui.setup_guide import SetupGuide, GUIDE_FIGURE_TEXT
-    page = SetupGuide()
-    page.show()
-    for stage, visible in ((0, False), (1, True), (2, True)):
-        page.stage = stage
-        page.refresh()
-        assert page.figure.isVisible() is visible and page.figure_caption.isVisible() is visible
-    assert page.figure.name == 'all' and page.figure.pixmap().width() == 420
-    assert '연습 모드' in GUIDE_FIGURE_TEXT and '보스 체력바' in GUIDE_FIGURE_TEXT
-    assert guide_images.caption('all') in page.figure_caption.text()
-    opened = []
-    monkeypatch.setattr(guide_figure.ZoomDialog, 'exec', lambda self: opened.append(self) or 0)
-    page.figure.clicked.emit()
-    assert opened
 
 
 def test_resource_tab_help_starts_with_dorcha_tuarim_figure():

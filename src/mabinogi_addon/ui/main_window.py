@@ -423,43 +423,23 @@ class MainWindow(QMainWindow):
         self._update_found.connect(self._on_update_found)
         cv.addWidget(self._update_banner)
         cv.addWidget(self._build_status_bar())  # 탭 위 최상단: 재생/일시정지 + 상태
-        from .setup_page import SetupPage
-        from .setup_flow import SetupFlow
-        from .setup_guide import SetupGuide
-        self.setup_page = SetupPage()
-        self.setup_guide = SetupGuide()
+        # 첫 사용 안내 v3(docs/first-use-v3-spec.md 2절): 1 시작 · 2 쓸 기능 켜기 · 3 준비 끝 — 영역 지정 단계 없음
+        from .first_use import FirstUseGuide
+        from ..system.window_watcher import list_windows
+        self.first_use = FirstUseGuide(state_fn=self._first_use_state, windows_fn=list_windows, game_fn=config.load_game_exe)
         self._pages = QStackedWidget()
         self._pages.addWidget(tabs)
-        self._pages.addWidget(self.setup_page)
-        self._pages.addWidget(self.setup_guide)
+        self._pages.addWidget(self.first_use)
         cv.addWidget(self._pages)
-        self._guide_return_btn = QPushButton("첫 사용 안내로 돌아가기")
-        self._guide_return_btn.clicked.connect(self._resume_guide)
-        self._guide_return_btn.hide()
-        cv.addWidget(self._guide_return_btn)
-        self._pages.currentChanged.connect(self._refresh_guide_return)
-        self._setup_flow = SetupFlow(self.setup_page, self._apply_setup_region)
-        self.setup_page.leave_requested.connect(self._leave_setup)
-        self.setup_page.open_feature.connect(self._open_setup_feature)
-        self.setup_page.register_game.connect(self._register_setup_game)
-        self.setup_page.login_requested.connect(self._open_setup_login)
-        self.setup_page.feature_changed.connect(self._set_feature_enabled)
-        self.settings_tab.reopen_setup.connect(self._open_setup)
+        self.first_use.feature_toggled.connect(self._home_switch)  # 홈 스위치와 같은 값·같은 경로
+        self.first_use.game_connected.connect(self._first_use_game)
+        self.first_use.later.connect(lambda: self._finish_first_use("later", tour=False))
+        self.first_use.finished.connect(lambda tour: self._finish_first_use("done", tour=tour))
+        self.settings_tab.reopen_setup.connect(self._open_guide)
         self.settings_tab.reopen_guide.connect(self._open_guide)
-        self.setup_guide.open_feature.connect(self._open_setup_feature)
-        self.setup_guide.open_tab.connect(self._open_guide_tab)
-        self.setup_guide.feature_changed.connect(self._set_feature_enabled)
-        self.setup_guide.register_game.connect(self._register_setup_game)
-        self.setup_guide.run_requested.connect(self._run_guide_setup)
-        self.setup_guide.cancel_requested.connect(self._setup_flow.cancel)
-        self.setup_guide.finished.connect(self._finish_guide)
-        self.settings_tab.login_changed.connect(self.setup_page.refresh)
         self.settings_tab.login_changed.connect(self.dorcha_tab.login_refresh)
         self.settings_tab.login_changed.connect(self.boss_tab.halo_capture.login_refresh)
-        self.settings_tab.login_changed.connect(self._guide_login_changed)
         self.settings_tab.login_changed.connect(self._refresh_harp_access)
-        self.settings_tab.game_registered.connect(self.setup_page.refresh)
-        self.settings_tab.game_registration_finished.connect(self._setup_game_finished)
         self.setCentralWidget(central)
         # 홈(탐색 구조 명세 12절): 상위 탭이 아니라 앱 창 전체(상태 줄·탭 포함)를 덮는 중앙 위젯의 자식.
         from .home_page import HomePage
@@ -549,7 +529,7 @@ class MainWindow(QMainWindow):
         from ..setup_state import needs_start_screen
         if needs_start_screen():
             # 실제 첫 표시에 노트를 먼저 처리하고 안내를 활성화한다.
-            self._pages.setCurrentWidget(self.setup_guide)
+            self._pages.setCurrentWidget(self.first_use)
         from .creator_dialogue import CreatorDialogue
         self.creator_dialogue = CreatorDialogue(self)
         self._apply_frame_colors()  # 저장된 테마(개인화면 틀/내용 칸)로 처음 칠하기
@@ -572,11 +552,11 @@ class MainWindow(QMainWindow):
         home = getattr(self, "home_page", None)
         return home is not None and not home.isHidden()
 
-    def _show_home(self) -> None:
+    def _show_home(self, *, for_tour: bool = False) -> None:
         if self._closing or self._config_pending_restart:
             return
         tour = getattr(self, "_tour", None)
-        if tour is not None:  # 둘러보기 중에는 그 화면을 가리지 않는다
+        if tour is not None and not for_tour:  # 둘러보기 중에는 그 화면을 가리지 않는다(홈을 가리키는 단계만 예외)
             return
         self.home_page.setGeometry(self._home_rect())
         self.home_page.update_state(self._home_state())
@@ -628,7 +608,7 @@ class MainWindow(QMainWindow):
         if key in self._HOME_FEATURES:
             self._open_setup_feature(self._HOME_FEATURES[key])  # 성공하면 홈을 닫는다
             return
-        if self._setup_busy() or self._config_pending_restart or self._setup_flow.closed:
+        if self._setup_busy() or self._config_pending_restart:
             return
         self._hide_home()
         self._pages.setCurrentWidget(self._tabs)
@@ -659,7 +639,7 @@ class MainWindow(QMainWindow):
             page.ensureWidgetVisible(section)
 
     def _home_open_combat_tab(self) -> None:
-        if self._setup_busy() or self._config_pending_restart or self._setup_flow.closed:
+        if self._setup_busy() or self._config_pending_restart:
             return
         self._hide_home()
         self._pages.setCurrentWidget(self._tabs)
@@ -920,7 +900,7 @@ class MainWindow(QMainWindow):
     def _open_setup_feature(self, key):
         page = self._combat_pages.get('boss' if key == 'halo_timer' else "dorcha" if key == "tuarim" else key)
         if (page is None or self._setup_busy() or self._closing
-                or self._config_pending_restart or self._setup_flow.closed):
+                or self._config_pending_restart):
             return False
         self._hide_home()  # 다른 화면으로 가면 홈을 닫는다
         self._pages.setCurrentWidget(self._tabs)
@@ -932,142 +912,61 @@ class MainWindow(QMainWindow):
             page.ensureWidgetVisible(self.tuarim_tab.threshold_box)
         return True
 
-    def _open_guide_tab(self, name):
-        """첫 사용 안내 4단계 카드의 '… 탭 열기'. 안내는 진행 중으로 남아 '첫 사용 안내로 돌아가기'가 보인다."""
-        if self._setup_busy() or self._closing or self._config_pending_restart or self._setup_flow.closed:
-            return False
-        if name != 'optimization' or self._tabs.indexOf(self.optimization_tools.panel) < 0:
-            return False
-        self._hide_home()  # 다른 화면으로 가면 홈을 닫는다
-        self._pages.setCurrentWidget(self._tabs)
-        self.optimization_tools._open_tab()
-        return True
-
-    def _open_buff_region_for_tour(self):
-        """둘러보기 '개별 기능 설정': 영역이 이미 지정돼 접혀 있으면 펼쳐 '직접 지정'을 보여 준다(탭을 떠나면 다시 접힘)."""
-        section = self.buff_tab.region_section
-        if section.registered and not section.toggle.isChecked():
-            section.set_registered(True, just_set=True)
-
-    def _register_setup_game(self):
-        self.settings_tab._start_detect()
-        self.setup_page.game_btn.setEnabled(False)
-        self.setup_guide.game_btn.setEnabled(False)
-        self.setup_page.progress.setText("3초 안에 게임창을 선택하세요. 등록 결과는 이 화면에 반영돼요.")
-        self.setup_guide.progress.setText(self.setup_page.progress.text())
-        self.setup_guide.refresh()
-
-    def _open_setup_login(self):
-        if self._setup_busy() or self._config_pending_restart or self._setup_flow.closed:
-            return
-        self._hide_home()  # 다른 화면으로 가면 홈을 닫는다
-        self._pages.setCurrentWidget(self._tabs)
-        scroll = self._tabs.widget(self._tabs.count() - 1)
-        self._tabs.setCurrentWidget(scroll)
-        scroll.ensureWidgetVisible(self.settings_tab._login_btn)
-        self.settings_tab._login_btn.setFocus()
-
-    def _setup_game_finished(self, success):
-        self.setup_page.game_btn.setEnabled(not self.setup_page.busy)
-        self.setup_page.refresh()
-        self.setup_page.progress.setText("게임창을 등록했어요. 이번에 자동설정할 기능을 골라주세요." if success else
-                                         "게임창을 등록하지 못했어요. 마비노기 창을 선택한 뒤 다시 시도해 주세요.")
-        self.setup_guide.refresh()
-        self.setup_guide.progress.setText(self.setup_page.progress.text())
-        self.setup_guide.refresh()
-
-    def _set_feature_enabled(self, key, value):
-        from ..setup_state import save_selection
-        try:
-            save_selection(key, value)
-        except OSError:
-            QMessageBox.warning(self, "설정 저장 실패", "자동설정 대상 선택을 저장하지 못했어요.")
-        self.setup_page.refresh()
-        self.setup_guide.refresh()
-
     def _feature_changed(self, key):
         if not self._booting:
             if key == "buff":
                 self._start_buff_tracking()
             elif key == "debuff":
                 self._start_debuff_tracking()
-        self.setup_page.refresh()
-        self.setup_guide.refresh()
 
     def _setup_busy(self):
-        return self.setup_page.busy or self.setup_guide.busy or self._setup_flow.running
-
-    def _refresh_guide_return(self):
-        self._guide_return_btn.setVisible(self.setup_guide.active
-                                          and self._pages.currentWidget() is not self.setup_guide)
-
-    def _guide_login_changed(self):
-        self.settings_tab.guide_btn.setVisible(True)
-        self.setup_guide.refresh()
-        self._refresh_guide_return()
+        return False  # 일괄 자동설정(영역 승인 창)은 첫 사용 v3와 함께 없앰 — 호출하는 곳의 막기 조건은 그대로 둔다
 
     def _open_guide(self, *, first_run=False):
-        if self._setup_busy() or self._config_pending_restart or self._setup_flow.closed:
+        """첫 사용 안내 v3 열기(새 설치 첫 실행·설정 › 일반 '안내 다시 보기')."""
+        if self._config_pending_restart or self._closing:
             return
         previous = getattr(self, "_tour", None)
         if previous is not None:
             previous.dismiss()
             self._tour = None
-        self.setup_guide.reset(first_run=first_run)
         self._hide_home()  # 다른 화면으로 가면 홈을 닫는다
-        self._pages.setCurrentWidget(self.setup_guide)
-        self._refresh_guide_return()
+        self._pages.setCurrentWidget(self.first_use)
+        self.first_use.start()
 
-    def _resume_guide(self):
-        if self._setup_busy() or self._config_pending_restart or self._setup_flow.closed:
-            return
-        self.setup_guide.refresh()
-        self._hide_home()  # 다른 화면으로 가면 홈을 닫는다
-        self._pages.setCurrentWidget(self.setup_guide)
+    def _first_use_state(self) -> dict:
+        """2단계 스위치 = 홈과 같은 값 + 화면을 읽는 8개 줄의 찾기 상태(autofind_regions.place)."""
+        rows = self._home_state()["rows"]
+        out = {}
+        for key, value in rows.items():
+            on = bool(value[2]) if len(value) > 2 else False
+            place_key = self._HOME_PLACE_KEYS.get(key)
+            out[key] = (on, autofind_regions.place(place_key) if place_key else None)
+        return out
 
-    def _run_guide_setup(self):
-        self._setup_flow.run(page=self.setup_guide, feature_keys=self.setup_guide.feature_keys,
-                             on_result=self.setup_guide.record_result)
-        if not self._setup_flow.closed:
-            self.setup_guide.refresh()
-            if config.load_discord_user() is None:
-                self._guide_login_changed()
-
-    def _finish_guide(self):
+    def _first_use_game(self, exe: str) -> None:
+        """첫 사용 1단계: 마비노기 창이 하나면 자동 연결·여러 개면 고른 창(D6)."""
         try:
+            config.save_game_exe(exe)
+        except OSError:
+            _log.warning("게임 창 저장 실패", exc_info=True)
+            return
+        self._watcher.set_game_exe(exe)
+        self.settings_tab.refresh_game_label()
+
+    def _finish_first_use(self, outcome: str, *, tour: bool) -> None:
+        """나중에 하기(later)·준비 끝(done) — 다시 저절로 뜨지 않는다(설정 › 일반 '안내 다시 보기'로 다시)."""
+        self.first_use.stop()
+        try:
+            config.save_general_value("firstUse", outcome)
             config.save_general_flag("firstUseGuideShown", True)
         except OSError:
-            _log.warning("첫 사용 안내 표시 기록을 저장하지 못했습니다")
+            _log.warning("첫 사용 안내 기록을 저장하지 못했습니다")
         self._leave_setup()
-        self._refresh_guide_return()
-        self._run_tour(from_guide=True)
-
-    def _apply_setup_region(self, key, box):
-        if self._config_pending_restart or self._setup_flow.closed:
-            raise RuntimeError("종료 또는 설정 재시작 대기 중에는 등록할 수 없습니다")
-        if key in ("buff", "debuff"):
-            section = "buffTracker" if key == "buff" else "debuffTracker"
-            config.save_capture_region(*box, section)
-            if key == "buff":
-                self.buff_tab._update_region_hint()
-                self._start_buff_tracking()
-            else:
-                self.debuff_tab.refresh_region_hint()
-                self._start_debuff_tracking()
-        elif key == "boss":
-            config.save_boss_bar_region(*box)
-            self.boss_tab.reload_region()
-            self._on_boss_bar_region_changed()
-        elif key == 'halo_timer':
-            self.boss_tab.halo_capture._save_region(*box)
-        elif key == "tuarim":
-            self.tuarim_tab._apply_region(*box)
-        elif key == "dorcha":
-            self.dorcha_tab._apply_region(*box)
-        elif key == "stat_bars":
-            self.stat_bars_tab._on_selected(*box)
-        elif key == "skillbar":
-            self.skillbar_tab._on_anchor_selected(*box)
+        if tour:
+            self._run_tour(from_guide=True)
+        else:
+            self._show_home()
 
     # ---- 상단 업데이트 배너(새 버전 있을 때만) ----
     def _build_update_banner(self) -> QWidget:
@@ -1239,8 +1138,7 @@ class MainWindow(QMainWindow):
                                      + " }")
         self._home_btn.setIcon(QIcon(house_icon(on_frame(color("accent")) if not custom else custom["on_frame"]["accent"])))
         # 틀 위가 아닌 화면(첫 사용 안내 등)과 제작자 줄은 내용 칸 바탕
-        for widget in (self.setup_page, self.setup_guide):
-            widget.setAutoFillBackground(custom is not None)
+        self.first_use.setAutoFillBackground(custom is not None)
         self._sync_creator_fill()
         self._update_header_status()
         home = getattr(self, "home_page", None)
@@ -1444,7 +1342,7 @@ class MainWindow(QMainWindow):
         return ("추적 중 — 표시할 디버프 없음", self._STATUS_OK, "ok")
 
     def _maybe_run_tour(self) -> None:
-        """시청 기록과 무관하게 명시적 숨김만 존중하는 베타 시작 안내."""
+        """새 설치 첫 실행에만 첫 사용 안내 v3(needs_start_screen)."""
         from ..setup_state import needs_start_screen
 
         if not self.isVisible():
@@ -1485,13 +1383,13 @@ class MainWindow(QMainWindow):
             ReleaseNotesDialog(body, __version__, self).exec()
 
     def _replay_tour(self) -> None:
-        if self._setup_busy() or self._config_pending_restart or self._setup_flow.closed:
+        if self._setup_busy() or self._config_pending_restart:
             return
         self._run_tour()
 
     def _run_tour(self, *, from_guide=False) -> None:
         """단계별 설정과 구별되는 앱 둘러보기."""
-        if self._setup_busy() or self._config_pending_restart or self._setup_flow.closed:
+        if self._setup_busy() or self._config_pending_restart:
             return
         self.creator_dialogue.dismiss()
         self._hide_home()  # 둘러보기는 탭 화면을 가리킨다
@@ -1513,11 +1411,6 @@ class MainWindow(QMainWindow):
             go_tracker()
             self._combat_pages["buff"].ensureWidgetVisible(control)
 
-        def go_convenience():
-            self._hide_home()  # 다른 화면으로 가면 홈을 닫는다
-            self._pages.setCurrentWidget(self._tabs)
-            self._tabs.setCurrentWidget(self._convenience_tabs)
-
         def go_settings():
             self._hide_home()  # 다른 화면으로 가면 홈을 닫는다
             self._pages.setCurrentWidget(self._tabs)
@@ -1527,27 +1420,47 @@ class MainWindow(QMainWindow):
             settings_step.body = "‘설정 > 일반 > 안내 다시 보기’에서 첫 사용 안내와 앱 둘러보기를 다시 열 수 있어요."
             scroll.ensureWidgetVisible(settings_step.target)
 
-        settings_step = TourStep(self.settings_tab.setup_btn, "설정에서 다시 열기",
+        settings_step = TourStep(self.settings_tab.setup_btn, "다시 열기",
                                  "‘설정 > 일반 > 안내 다시 보기’에서 첫 사용 안내와 앱 둘러보기를 다시 열 수 있어요.",
                                  before=go_settings)
 
+        def go_home():
+            self._show_home(for_tour=True)
+
+        def go_custom():
+            self._open_setup_feature("custom")
+
+        def go_tabs():
+            self._hide_home()
+            self._pages.setCurrentWidget(self._tabs)
+            self._tabs.setCurrentWidget(self._tracker_tabs)
+
+        def go_region():
+            # 자리가 있으면 '영역 다시 지정' 버튼, 아직 없으면(펼친 영역 상자) 그 상자 — 숨은 버튼을 가리키지 않게
+            section = self.buff_tab.region_section
+            region_step.target = section.toggle if section.registered else section
+            go_buff_control(region_step.target)
+
+        region_step = TourStep(self.buff_tab.region_section.toggle, "위치가 틀릴 때",
+                               "앱이 잘못 찾았으면 여기서 다시 찾거나 직접 맞출 수 있어요.", before=go_region)
+
+        # 둘러보기 8단계(first-use-v3 3절)
         steps = [
-            TourStep(self._tracker_tabs.tabBar(), "전투 보조",
-                     "버프·디버프·보스 패턴 알림부터 수치 표시·단축바·메모까지, 아래 탭에서 설정할 수 있어요.", before=go_tracker),
-            TourStep(self._convenience_tabs.tabBar(), "편의기능",
-                     "게임 중 번거로웠던 일을 도와주는 편의 도구를 모아뒀어요. 필요한 도구를 골라 사용해 보세요.",
-                     before=go_convenience),
-            TourStep(self.buff_tab.region_btn, "개별 기능 설정",
-                     "아직 등록하지 않은 영역은 해당 기능 화면에서 직접 지정할 수 있어요.",
-                     before=lambda: (self._open_buff_region_for_tour(), go_buff_control(self.buff_tab.region_btn))),
+            TourStep(self.home_page.combat_box, "기능 켜고 끄기",
+                     "여기서 기능을 켜고 꺼요. 줄마다 지금 상태(동작 중·화면에 보이면 찾아요)가 보여요.", before=go_home),
+            TourStep(self.home_page.rows["buff"], "세부 설정",
+                     "줄을 누르면 그 기능 화면으로 가요. 알림 시간·소리·오버레이 크기를 바꿀 수 있어요.", before=go_home),
+            region_step,
             TourStep(self.buff_tab.lock_btn, "오버레이 위치 잠금",
-                     "오버레이를 원하는 위치로 옮긴 뒤 잠그면 클릭이 게임으로 통과해요.",
+                     "오버레이를 원하는 곳에 옮긴 뒤 잠그면 클릭이 게임으로 통과해요.",
                      before=lambda: go_buff_control(self.buff_tab.lock_btn)),
-            TourStep(self._combat_status, "전체 일시정지",
+            TourStep(self._tracker_tabs.tabBar(), "직접 고르는 기능",
+                     "게임 화면 일부를 따로 띄우는 커스텀 오버레이와 메모는 원하는 곳을 직접 골라 써요.", before=go_custom),
+            TourStep(self._tabs.tabBar(), "그 밖의 기능",
+                     "파티 모집·편의기능(계산기·그림대화 만들기)·최적화·블랙박스도 둘러보세요.", before=go_tabs),
+            TourStep(self._combat_status, "잠깐 쉬기",
                      "잠시 쉬고 싶다면 상단의 「● 전투 보조: 켜짐」을 눌러주세요. 전투 보조의 오버레이와 소리 알림만 멈추고, 다시 누르면 이어서 사용할 수 있어요.", before=go_tracker),
             settings_step,
-            TourStep(None, "사용 안내 종료",
-                     "준비됐어요. 남은 설정은 각 기능 화면에서 이어서 할 수 있어요.", before=go_tracker),
         ]
 
         def done():
@@ -1560,6 +1473,8 @@ class MainWindow(QMainWindow):
                 self._open_setup_feature("buff")
                 self._show_home()  # 안내를 마치면 홈(명세 12.1)
             else:
+                self._hide_home()  # 1·2단계는 홈을 가리킨다 — 둘러보기 전 화면으로
+                self._pages.setCurrentWidget(self._tabs)
                 self._tracker_tabs.setCurrentWidget(entry[1])
                 self._convenience_tabs.setCurrentWidget(entry[2])
                 self._tabs.setCurrentWidget(entry[0])
@@ -2485,9 +2400,8 @@ class MainWindow(QMainWindow):
         """
         self._config_pending_restart = True
         self.custom_overlay_tab.suspend_for_config_replacement()
-        self._setup_flow.shutdown()
         self._memo_timer.stop()
-        self.setup_page.setEnabled(False)
+        self.first_use.setEnabled(False)
 
     def _minimize_to_tray_enabled(self) -> bool:
         return self._tray is not None and config.load_general_flag(
@@ -2673,7 +2587,7 @@ class MainWindow(QMainWindow):
             self._tracker_tabs.setCurrentWidget(self._combat_pages["custom"])
             self.show()
             return
-        self._setup_flow.cancel(hide=True)
+        self.first_use.stop()
         tour = getattr(self, "_tour", None)
         if tour is not None:
             self._tour = None
@@ -2755,7 +2669,7 @@ class MainWindow(QMainWindow):
             _log.info("종료 단계 '%s' %.0fms", name, (time.perf_counter() - t) * 1000)
 
         total = time.perf_counter()
-        self._setup_flow.shutdown()
+        self.first_use.stop()
         self._memo_timer.stop()
         _step("공통 자원 설정 정지",self.resource_tab.shutdown)
         _step("메모 설정 정지",self.memo_tab.shutdown)

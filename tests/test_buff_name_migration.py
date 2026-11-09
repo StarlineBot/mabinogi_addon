@@ -153,7 +153,8 @@ def test_new_user_initialization_and_first_ui_load_then_restart(monkeypatch):
     monkeypatch.setattr(QApplication, 'quit', lambda: None)
     initialize_new_user()
     data = config._read_local_config()
-    assert all(not value['enabled'] for key, value in data.items())
+    assert all(not value['enabled'] for key, value in data.items() if key != 'general')
+    assert data['general'] == {'firstUse': 'pending'}  # 첫 사용 안내 v3는 새 설치에만
     data['warnGoneSeeded'] = True
     data['buffTracker']['buffs'] = [
         {'id': 'premium_battle', 'name': 'premium_battle'},

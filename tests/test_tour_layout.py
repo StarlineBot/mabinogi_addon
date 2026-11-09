@@ -75,12 +75,12 @@ def test_scroll_updates_card_without_host_move_or_resize(window):
     w, app = window
     w._run_tour()
     tour = w._tour
-    tour._i = 5
+    tour._i = 7
     tour._show_step()
     settle(app)
     old_host = w.geometry()
     scroll = w._settings_scroll
-    target = tour._steps[5].target
+    target = tour._steps[7].target
     old = tour._target_rect()
     value = scroll.verticalScrollBar().value()
     scroll.verticalScrollBar().setValue(value + 35)
@@ -118,9 +118,9 @@ def test_step_change_detaches_old_targets_and_uses_current_target(window):
     w, app = window
     w._run_tour()
     tour = w._tour
-    tour._i = 5
+    tour._i = 7
     tour._show_step()
-    old_target = tour._steps[5].target
+    old_target = tour._steps[7].target
     assert tour._layout_timer.isActive()
     tour._i = 3
     tour._show_step()
@@ -136,7 +136,7 @@ def test_hide_cancels_pending_refresh_and_reopen_has_no_old_callback(window, mon
     w, app = window
     w._run_tour()
     old = w._tour
-    old._i = 5
+    old._i = 7
     old._show_step()
     assert old._layout_timer.isActive()
     calls = []
@@ -159,7 +159,7 @@ def test_close_cancels_pending_refresh(window):
     w, app = window
     w._run_tour()
     tour = w._tour
-    tour._i = 5
+    tour._i = 7
     tour._show_step()
     assert tour._layout_timer.isActive()
     w._force_quit = True

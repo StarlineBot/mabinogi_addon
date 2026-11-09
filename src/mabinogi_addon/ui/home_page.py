@@ -338,6 +338,7 @@ class HomePage(QWidget):
 
         # 4. 전투 보조 2열 10줄
         combat = _box()
+        self.combat_box = combat  # 둘러보기 1단계가 가리키는 곳
         box = QVBoxLayout(combat)
         box.setContentsMargins(16, 10, 16, 6)
         box.setSpacing(4)

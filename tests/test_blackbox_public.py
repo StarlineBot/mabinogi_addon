@@ -307,7 +307,7 @@ def test_combat_status_button_toggles_pause_and_syncs_with_tray(main):
 def test_first_run_tour_pause_step_targets_status_button(main):
     main._run_tour()
     try:
-        step = next(step for step in main._tour._steps if step.title == '전체 일시정지')
+        step = next(step for step in main._tour._steps if step.title == '잠깐 쉬기')
         assert step.target is main._combat_status
         assert '「● 전투 보조: 켜짐」을 눌러주세요' in step.body
     finally:

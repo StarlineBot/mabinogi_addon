@@ -8,13 +8,12 @@ import numpy as np
 import pytest
 from PySide6.QtWidgets import QMessageBox
 
-from mabinogi_addon import config, image_io, setup_state, autofind_diagnostics as diag
+from mabinogi_addon import config, image_io, autofind_diagnostics as diag
 from mabinogi_addon.autofind_replay import detector_assets,run_detector,replay
 from mabinogi_addon.detect.halo_timer import read_seconds
 from mabinogi_addon.system import window_capture
 from mabinogi_addon.ui import autofind_confirm, screen_grab
-from mabinogi_addon.ui import setup_flow
-from test_halo_presentation import creator_section,window
+from test_halo_presentation import creator_section, window  # noqa: F401 — fixture
 from test_halo_timer import frame as timer_frame
 
 
@@ -136,27 +135,6 @@ def test_approval_is_transactional(window,monkeypatch,storage,outcome):
         assert s._region==before
 
 
-def test_setup_selection_dependency_and_navigation(window,monkeypatch):
-    w,app = window
-    raw = config._read_local_config()
-    assert setup_state.missing('halo_timer',raw)==['boss','halo_timer']
-    setup_state.save_selection('halo_timer',True)
-    assert setup_state.pending(feature_keys=('halo_timer',),automatic_only=True)==['boss','halo_timer']
-    w.setup_guide.stage=1
-    w.setup_guide.refresh()
-    keys = list(w.setup_guide.checks)
-    assert keys.index('halo_timer')==keys.index('boss')+1
-    assert w.setup_guide.checks['halo_timer'].isChecked()
-    assert w._open_setup_feature('halo_timer')
-    assert w.boss_tab.pattern_tabs.currentIndex()==1
-    w._apply_setup_region('boss',(0,0,300,30))
-    assert setup_state.pending(feature_keys=('halo_timer',))==['halo_timer']
-    w._apply_setup_region('halo_timer',(440,70,119,42))
-    assert setup_state.missing('halo_timer')==[]
-    w.setup_guide.refresh()
-    assert w.setup_guide.statuses['halo_timer'].text()=='등록됨'
-    w.setup_page.refresh()
-    assert w.setup_page.feature_rows['halo_timer'][1].text()=='영역 등록됨'
 
 
 def test_window_position_write_failure_cannot_abort_shutdown(window,monkeypatch):
@@ -169,40 +147,6 @@ def test_window_position_write_failure_cannot_abort_shutdown(window,monkeypatch)
     assert w._closing and not w.boss_tab.halo_capture._timer.isActive()
 
 
-@pytest.mark.parametrize('choice',['accept','reject_halo','target_change'])
-def test_sequential_setup_registers_boss_before_timer(window,monkeypatch,storage,choice):
-    w,_ = window
-    raw = config._read_local_config()
-    raw.setdefault('general',{})['gameExe']='Client.exe'
-    config._write_local_config(raw)
-    setup_state.save_selection('halo_timer',True)
-    target = (11,22,0,0,1000,600)
-    captures,approvals = [],[]
-    def capture(**kwargs):
-        captures.append(kwargs)
-        diag.capture_info.get()['game_target']=list(target)
-        return canvas(),0,0
-    def approve(key,box):
-        approvals.append(key)
-        if key=='halo_timer' and choice=='reject_halo':
-            return None
-        if key=='halo_timer' and choice=='target_change':
-            monkeypatch.setattr(window_capture,'registered_game_target',lambda *a:None)
-        return box
-    monkeypatch.setattr(window_capture,'registered_game_target',lambda *a:target)
-    monkeypatch.setattr(setup_flow,'capture_for_autofind',capture)
-    monkeypatch.setattr(w._setup_flow,'_approve',approve)
-    monkeypatch.setattr(w._setup_flow,'_detect',lambda key,*args:(10,250,300,30) if key=='boss' else (440,70,119,42))
-    monkeypatch.setattr(w._setup_flow,'_notice',lambda *a:None)
-    results = []
-    w.setup_guide.stage=1
-    w._setup_flow.run(page=w.setup_guide,feature_keys=('halo_timer',),on_result=lambda *args:results.append(args))
-    assert approvals==['boss','halo_timer']
-    assert 'strict_game' not in captures[0] and captures[1]['strict_game']
-    assert setup_state.valid_box(config.load_boss_bar_region())
-    assert (w.boss_tab.halo_capture._region is not None)==(choice=='accept')
-    assert not w.setup_guide.busy and not w._setup_flow.running
-    assert [key for key,status in results]==['boss','halo_timer']
 
 
 def test_capture_revocation_before_native_read_never_grabs(window,monkeypatch):

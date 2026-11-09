@@ -46,7 +46,9 @@ def initialize_new_user(path=None):
     # 누락된 enabled 값이나 손상된 본 파일을 신규 사용자로 해석하지 않는다.
     if path.exists() or path.with_name(path.name + ".bak").exists() or config._read_local_config(path):
         return
-    config._write_local_config({feature.section: {"enabled": False} for feature in FEATURES}, path)
+    data = {feature.section: {"enabled": False} for feature in FEATURES}
+    data["general"] = {"firstUse": "pending"}  # 첫 사용 안내 v3는 새 설치에만(first-use-v3 4절)
+    config._write_local_config(data, path)
 
 
 def section(raw, name):
@@ -205,8 +207,8 @@ def pending(raw=None, *, automatic_only=False, feature_keys=None):
 
 def needs_start_screen(raw=None):
     raw = config._read_local_config() if raw is None else raw
-    # 베타 검증 중에는 등록 완료 여부와 무관하게 명시적으로 숨긴 경우만 건너뛴다.
-    return section(raw, "general").get("skipSetup") is not True
+    # 첫 사용 안내 v3(first-use-v3 4절): 새 설치(처음 만든 설정에 firstUse=pending)에만. 기존 사용자·나중에 하기·끝냄은 다시 띄우지 않는다.
+    return section(raw, "general").get("firstUse") == "pending"
 
 
 # 일괄 자동설정에서 제외할(접근이 제한된) 기능. 2026-10-28 기능 공개 정책 7절: 1분 헤일로 포함 모두 로그인 없이 → 비어 있음.
