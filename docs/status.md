@@ -21,6 +21,9 @@
   분류 결과 = 예전 계산(테스트 test_boss_hp_classify_speed). 시간(차가운 캐시, 이 컨테이너): HP≤20% read_percent 10·frac 14ms(p90 13/18),
   못 읽음 9/8ms(p90 12/14), HP>20% 9/13ms, 디버프 HP med 9·p90 12ms. perf_meter에 자동 찾기(화면 갱신 '자동 찾기'·작업 '자동 찾기·처음/다시 찾기/나타나면/UI 확인') 추가.
   기대: 튄 분의 보스 ≈170~205ms/회 → 평소(≈36ms/회) 수준, 디버프 57~125 → 평소(≈14ms) 수준 — Windows app.log로 확인 필요(1분 평균 5% 안팎, 8~9% 튐 없음).
+- **QA 8ca545e(0.45.0 유지 — CPU 수정 합침): 통과 — 0.45.0 후보 다시 만들기 준비 완료(제품 SHA 8ca545e)**. 노트 v0.45.1 섹션 없음·v0.45.0 '조용히 다듬은 것들'에 두 줄,
+  release_checks 0.45.0 목록 = 이전 0.45.0 목록 + test_boss_hp_classify_speed(빠진 것 없음), 경계 테스트 0.45.0 기준. run_release_checks 0.45.0 987 통과·preflight rc=0.
+  969fd37(후보 #216) 대비 제품 변경은 boss_hp_reader._classify·자동 찾기 perf_meter·노트뿐. 후보 #216은 무효 → 새 verify-only.
 - **QA b6c0452(CPU 수정) — 코드 통과, 버전·검사 목록 고칠 것(공개 보류)**: 개발 검사 530 통과·preflight rc=0. QA 별도 대조: 보스 zip 5개 1230프레임 × (전체·오버레이식 자름) 2460회
   read_percent+read_percent_frac 예전 계산(템플릿마다 matchTemplate) vs 새 계산 **다른 값 0**, 1회(둘 합) 중앙 221→6.5ms·p90 391→13ms·최대 761→34ms(QA 컨테이너).
   캐시: 운영 경로는 모듈 템플릿 묶음만 써서 _BANKS 커지지 않음(autofind_replay 등 임시 묶음은 항목이 남지만 개발 도구라 문제 없음), 여러 스레드 dict 접근은 GIL 안 단순 get/set — 문제 없음.
