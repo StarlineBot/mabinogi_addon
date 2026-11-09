@@ -9,6 +9,9 @@
 - **QA 644433c 수정(후보 #215 실패 — CI 글꼴에서 버프 탭 2px 넘침)**: 위 두 줄·구분선 사이 간격 8 → 4px(버프 탭 높이 여유 +8px — Inter 26 → 34px, DejaVu 68px).
   test_tracker_layout의 '늘어나는 안내'는 영역 지정 후에도 보이는 위 1줄 상태 문구로(영역 안내는 접힌 묶음 안이라 늘려도 안 보였음 — 기준 완화 아님).
   두 글꼴 환경(QA fontconfig: Inter·WenQuanYi·Unifont 제외 = DejaVu + Noto CJK / 기본 Inter)에서 test_tracker_layout·test_tracker_top_width·test_navigation 45개 통과.
+- **QA 4a5a8e6(위 두 줄 간격 8→4px)**: 통과. CI 글꼴(fonts-noto-cjk + DejaVu, Inter·WenQuanYi·Unifont 제외)·기본 글꼴 두 환경에서 test_tracker_layout·top_width·navigation 45 passed,
+  CI 글꼴로 배포 검사 0.44.2 705 passed·1 skipped, **CI 글꼴로 전체 4494 passed·397 skipped**, 사전 점검 통과. 테스트 변경('늘어나는 안내'를 보이는 상태 문구로)은 기준 완화 아님.
+  개발 참고: 개발 쪽 QA 설정으론 수정 전 1개만 실패(QA 5개·CI 3개에서 중단) — 환경마다 글꼴·배율이 조금씩 다름. CI가 기준.
 - **0.44.2 후보 #215(run 42497683702, SHA 1114da8) 실패 — 배포 검사에서 버프·디버프 배치 테스트 실패(CI 글꼴)**: tests/test_tracker_layout.py
   test_only_list_grows_settings_face_and_rows_stay_fixed[0](버프 탭 세로 스크롤 최대 2 ≠ 0)·test_footer_does_not_intercept_lower_left…·test_overwide_columns_stack…[0](제작자 잡담 바닥 띄움 안 됨), 3개에서 중단.
   QA 재현: CI는 fonts-noto-cjk + 기본 라틴 DejaVu Sans, QA 컨테이너는 Inter·WenQuanYi라 통과했었음. 같은 글꼴(fontconfig로 Inter·WenQuanYi·Unifont 제외)이면 **현재 main 5개 실패**
