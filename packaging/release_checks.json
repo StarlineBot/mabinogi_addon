@@ -1,5 +1,5 @@
 {
-  "version": "0.44.2",
+  "version": "0.45.0",
   "tests": [
     "tests/test_boss_low_hp_fraction.py",
     "tests/test_boss_bar_overlay.py",
@@ -28,7 +28,17 @@
     "tests/test_navigation.py",
     "tests/test_tracker_layout.py",
     "tests/test_tracker_top_width.py",
-    "tests/test_screen_polish.py"
+    "tests/test_screen_polish.py",
+    "tests/test_autofind_fallback.py",
+    "tests/test_autofind_v2_use.py",
+    "tests/test_first_use.py",
+    "tests/test_home_page.py",
+    "tests/test_setup.py",
+    "tests/test_tour_layout.py",
+    "tests/test_inquiry_unified.py",
+    "tests/test_creator_dialogue.py",
+    "tests/test_region_registration.py",
+    "tests/test_settings_grouping.py"
   ],
   "coverage": {
     "src/mabinogi_addon/detect/boss_hp_reader.py": {
@@ -68,7 +78,7 @@
         "tests/test_release_notes.py",
         "tests/test_release_notes_trigger.py"
       ],
-      "reason": "0.44.2 노트 파싱·새 버전 표시(탭 배치·디버프 사라짐 소리·제작자 시험 기능, 게시된 0.44.1 섹션 그대로)"
+      "reason": "0.45.0 노트 파싱·새 버전 표시(헤드라인 '이제 위치를 앱이 알아서 찾아요' + 게시 안 된 0.44.2 줄을 합침, 게시된 0.44.1 섹션 그대로)"
     },
     "packaging/release_checks.json": {
       "tests": [
@@ -87,15 +97,17 @@
     },
     "src/mabinogi_addon/autofind_v2.py": {
       "tests": [
-        "tests/test_autofind_v2_engine.py"
+        "tests/test_autofind_v2_engine.py",
+        "tests/test_autofind_v2_controller.py"
       ],
-      "reason": "지난 자리 확인을 여백 조각에서 — 단축바·체력바·버프 '지난 자리 그대로'(4px 이내), 움직이면 새 자리, 여백에서 못 찾으면 화면 전체, UI 확인 결과 재사용(QA 536ec7c)"
+      "reason": "0.44.2 지난 자리 여백 확인 + 0.45.0 명세 6.1 '계기': UI 보이나 2.5초(로그인·로딩 10초 대체), UI 안 보이는 동안 실패·다시 찾기 멈춤, 상태창 닫힘 간격 유지, 직접 지정 해제(user_release)"
     },
     "src/mabinogi_addon/ui/autofind_v2_controller.py": {
       "tests": [
-        "tests/test_autofind_v2_controller.py"
+        "tests/test_autofind_v2_controller.py",
+        "tests/test_autofind_fallback.py"
       ],
-      "reason": "지난 자리 확인을 여백 조각에서 — 단축바·체력바·버프 '지난 자리 그대로'(4px 이내), 움직이면 새 자리, 여백에서 못 찾으면 화면 전체, UI 확인 결과 재사용(QA 536ec7c) · 실제 탐지기 1080·2560"
+      "reason": "'UI 보이나' 작업(찾아 둔 단축바·체력바 여백만 캡처) · v1·고정 자리 판독은 UI 보임 신호로만 · 위치 상태(place)·문의 상태(detail) · 고정 해제 시 바로 다시 찾기"
     },
     "src/mabinogi_addon/detect/debuff_time.py": {
       "tests": [
@@ -153,9 +165,15 @@
     "src/mabinogi_addon/ui/main_window.py": {
       "tests": [
         "tests/test_debuff_applied.py",
-        "tests/test_warn_gone.py"
+        "tests/test_warn_gone.py",
+        "tests/test_autofind_fallback.py",
+        "tests/test_first_use.py",
+        "tests/test_navigation.py",
+        "tests/test_tour_layout.py",
+        "tests/test_autofind_v2_use.py",
+        "tests/test_creator_dialogue.py"
       ],
-      "reason": "표시 방식을 엔진에 전달(재시작 없이) · 디버프 떨어짐 확정 → 디버프 사라짐 소리 · 의심 판독 자동 저장(제작자, 실행당 20장)"
+      "reason": "0.44.2 디버프 표시·사라짐 소리·의심 저장 + 0.45.0 자동 찾기 모든 사용자 켬·홈 줄 위치 문구·위치 요약·위치 다시 찾기·첫 사용 v3 연결·둘러보기 8단계·5단계 안내/영역 승인 창 삭제"
     },
     "src/mabinogi_addon/ui/notifier.py": {
       "tests": [
@@ -184,9 +202,10 @@
         "tests/test_navigation.py",
         "tests/test_screen_polish.py",
         "tests/test_tracker_layout.py",
-        "tests/test_tracker_top_width.py"
+        "tests/test_tracker_top_width.py",
+        "tests/test_autofind_v2_use.py"
       ],
-      "reason": "한 줄 머리 모드(제목·상태·ⓘ·[영역 다시 지정], 버프·디버프만) — 다른 화면의 영역 묶음은 그대로 · 머리 줄 v2는 짧게 '자동(v2)'+툴팁(QA 50a07f9)"
+      "reason": "0.44.2 한 줄 머리 모드 + 0.45.0 위치 상태 문구('직접 지정' 전제 문구 교체)·출처 한 줄·[자동으로 돌아가기], 머리 줄은 짧게('자동'·'직접 지정 ·')"
     },
     "src/mabinogi_addon/ui/widgets.py": {
       "tests": [
@@ -195,6 +214,59 @@
         "tests/test_tracker_top_width.py"
       ],
       "reason": "WrapRow(좁으면 체크박스만 다음 줄)·EqualRow(잠금 세 칸 같은 폭)·MinWidthPanel(접힘 조건 유지)·divider · ElidedLabel(상태 문구 말줄임 + 툴팁)"
+    },
+    "src/mabinogi_addon/autofind_regions.py": {
+      "tests": [
+        "tests/test_autofind_fallback.py",
+        "tests/test_autofind_v2_use.py",
+        "tests/test_autofind_v2_controller.py"
+      ],
+      "reason": "모든 사용자 항상 켬(비상 값 autofind.disabled) · 쓰는 순서 고정→자동→저장 영역(v1)→없음 · 직접 지정 고정(다음 실행에도)·자동으로 돌아가기 · 직접 지정하면 사용 켬 · 공유 보스바·디버프 줄 · 문의 snapshot"
+    },
+    "src/mabinogi_addon/ui/first_use.py": {
+      "tests": [
+        "tests/test_first_use.py"
+      ],
+      "reason": "첫 사용 안내 v3 3장(시작·쓸 기능 켜기·준비 끝), 게임 창 자동 연결, 찾기 상태, 790×744 안 넘침"
+    },
+    "src/mabinogi_addon/setup_state.py": {
+      "tests": [
+        "tests/test_setup.py",
+        "tests/test_first_use.py"
+      ],
+      "reason": "새 설치에만 첫 사용 안내(general.firstUse=pending) — 기존 사용자·끝냄·나중에 하기는 다시 안 띄움"
+    },
+    "src/mabinogi_addon/ui/home_page.py": {
+      "tests": [
+        "tests/test_home_page.py"
+      ],
+      "reason": "상태 카드 위치 요약(켜진 기능 기준) + 위치 다시 찾기(도는 동안 비활성), 자동 찾기 켜짐이면 설정 필요 상자 없음"
+    },
+    "src/mabinogi_addon/ui/region_registration.py": {
+      "tests": [
+        "tests/test_region_registration.py"
+      ],
+      "reason": "탭 자동 찾기 결과 = 직접 지정 고정(사용 값은 부른 화면이), 지정 해제 = 자동으로 돌아가기"
+    },
+    "src/mabinogi_addon/inquiry_session.py": {
+      "tests": [
+        "tests/test_inquiry_unified.py",
+        "tests/test_autofind_fallback.py"
+      ],
+      "reason": "자료 모으기 = 지금 읽는 자리(자동→v1→고정), info.json autofind 상태"
+    },
+    "src/mabinogi_addon/ui/creator_dialogue.py": {
+      "tests": [
+        "tests/test_creator_dialogue.py"
+      ],
+      "reason": "'첫 사용 안내로 돌아가기' 버튼 삭제에 맞춰 바닥·표시 조건 정리(첫 사용 화면에서는 그대로 안 뜸)"
+    },
+    "src/mabinogi_addon/ui/settings_tab.py": {
+      "tests": [
+        "tests/test_settings_grouping.py",
+        "tests/test_autofind_v2_use.py"
+      ],
+      "reason": "자동 찾기 스위치 없앰, 제작자 진단을 맨 아래 접힌 '진단 · 자동 찾기'로"
     }
   }
 }
