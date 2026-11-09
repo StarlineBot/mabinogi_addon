@@ -2531,21 +2531,28 @@ class MainWindow(QMainWindow):
             tour.dismiss()
         super().hideEvent(event)
 
-    # ---- 자동 찾기 v2(제작자 테스트판) ----
+    # ---- 자동 찾기(0.45.0부터 모든 사용자·항상 켬, docs/first-use-v3-spec.md 4.1·6절) ----
     def _setup_autofind_v2(self) -> None:
-        """제작자 + '자동 찾기 v2' 켜짐일 때만(앱 시작 때 한 번). 아니면 아무것도 만들지 않아 동작이 같다."""
+        """앱 시작 때 한 번. 숨은 비상 값 config `autofind.disabled`가 true일 때만 꺼짐(저장 영역 그대로 — 예전 동작)."""
         from .. import autofind_regions, feature_access
         try:
-            on = feature_access.is_creator() and config.load_autofind_v2_enabled()
+            on = not config.load_autofind_disabled()
         except Exception:  # noqa: BLE001
-            on = False
-        autofind_regions.activate(on)
+            on = True
+        try:
+            fixed = config.load_autofind_fixed() if on else []
+        except Exception:  # noqa: BLE001
+            fixed = []
+        autofind_regions.activate(on, fixed)
+        autofind_regions.set_fixed_saver(config.save_autofind_fixed)
+        autofind_regions.set_use_saver(config.save_autofind_v2_use)
         try:
             creator = feature_access.is_creator()
         except Exception:  # noqa: BLE001
             creator = False
         if not on:
-            if creator:  # 제작자: 꺼져 있어도 설정에서 켤 수 있게(다음 실행부터)
+            logging.getLogger("mabinogi_addon.autofind").warning("[자동 찾기] 비상 설정(autofind.disabled)으로 꺼짐 — 저장된 영역으로 읽어요")
+            if creator:
                 from .autofind_v2_section import AutofindV2Section
                 self.settings_tab.attach_autofind_v2(AutofindV2Section(None))
             return
@@ -2561,8 +2568,9 @@ class MainWindow(QMainWindow):
             tab.region_section.set_autofind_key(key)  # 탭 표시 '자동(v2)'
         self.resource_tab.region_section.set_autofind_keys({"dorcha": "도르카", "tuarim": "투아림"})  # 맨 위 한 줄(접어도 보임)
         self._autofind_v2 = AutofindV2Controller(self._watcher, self._autofind_wanted, parent=self)
-        from .autofind_v2_section import AutofindV2Section
-        self.settings_tab.attach_autofind_v2(AutofindV2Section(self._autofind_v2))
+        if creator:  # 진단 구역은 제작자만(맨 아래 접힘)
+            from .autofind_v2_section import AutofindV2Section
+            self.settings_tab.attach_autofind_v2(AutofindV2Section(self._autofind_v2))
         self._autofind_v2.changed.connect(self._on_autofind_changed)
         self._autofind_v2.start()
 

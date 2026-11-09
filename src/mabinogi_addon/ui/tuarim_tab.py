@@ -304,7 +304,7 @@ class TuarimTab(QWidget):
         self._accept_region(x,y,w,h)
 
     def _accept_region(self,x,y,w,h):
-        self._afr.user_set("tuarim")  # 이번 실행 동안 사용자 지정이 이김
+        self._afr.user_set("tuarim")  # 직접 지정 고정(다음 실행에도) + 그 기능 사용 켬
         self._region = {"x": x, "y": y, "w": w, "h": h}
         self._tracker.reset_observations()
         self.observed.emit(None)
@@ -323,7 +323,7 @@ class TuarimTab(QWidget):
         self.value_label.setText("최근 확정: —")
 
     def _region_cleared(self):
-        self._afr.user_set("tuarim")
+        self._afr.auto_return("tuarim")  # 지정 해제 = 직접 지정 고정 풀기
         self._region = None
         self._tracker.reset_observations()
         self._prev_raw = self._stable_value = self._last_value = None

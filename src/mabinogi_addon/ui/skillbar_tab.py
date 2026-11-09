@@ -286,12 +286,12 @@ class SkillbarTab(QWidget):
 
     def _on_anchor_selected(self, x: int, y: int, _w: int, _h: int) -> None:
         config.save_skillbar({"anchor": {"x": x, "y": y}})
-        self._afr.user_set("skillbar")  # 이번 실행 동안 사용자 지정이 이김
+        self._afr.user_set("skillbar")  # 직접 지정 고정(다음 실행에도) + 그 기능 사용 켬
         self._anchor = {"x": x, "y": y}
         self._update_anchor_label()
 
     def _region_cleared(self):
-        self._afr.user_set("skillbar")
+        self._afr.auto_return("skillbar")  # 지정 해제 = 직접 지정 고정 풀기
         self._anchor = None
         for mark in getattr(self,"_source_marks",[]):
             mark.close()

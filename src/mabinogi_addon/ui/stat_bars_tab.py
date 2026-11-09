@@ -633,7 +633,7 @@ class StatBarsTab(QWidget):
     def _on_selected(self, x: int, y: int, w: int, h: int) -> None:
         region = {"x": x, "y": y, "w": w, "h": h}
         config.save_stat_bars({"box": region})
-        self._afr.user_set("stat_bars")  # 이번 실행 동안 사용자 지정이 이김
+        self._afr.user_set("stat_bars")  # 직접 지정 고정(다음 실행에도) + 그 기능 사용 켬
         self._region = region
         self._display_valid = False
         self._apply_visibility()
@@ -643,7 +643,7 @@ class StatBarsTab(QWidget):
         self._flash_region()
 
     def _region_cleared(self):
-        self._afr.user_set("stat_bars")
+        self._afr.auto_return("stat_bars")  # 지정 해제 = 직접 지정 고정 풀기
         self._region = None
         self._display_valid = False
         self._last_frame = self._last_saved_frame = None

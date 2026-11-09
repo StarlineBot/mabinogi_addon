@@ -763,7 +763,7 @@ class DorchaTab(QWidget):
 
     def _accept_region(self,x,y,w,h):
         region = dict(x=x,y=y,w=w,h=h)
-        self._afr.user_set("dorcha")  # 이번 실행 동안 사용자 지정이 이김
+        self._afr.user_set("dorcha")  # 직접 지정 고정(다음 실행에도) + 그 기능 사용 켬
         self._cfg["box"] = self._region = region
         self._invalidate_search()
         self._set_value(None)
@@ -776,7 +776,7 @@ class DorchaTab(QWidget):
         self._apply_gate()
 
     def _region_cleared(self):
-        self._afr.user_set("dorcha")
+        self._afr.auto_return("dorcha")  # 지정 해제 = 직접 지정 고정 풀기
         self._cfg["box"] = self._region = None
         self._invalidate_search()
         self._set_value(None)

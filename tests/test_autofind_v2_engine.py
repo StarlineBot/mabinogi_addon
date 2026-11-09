@@ -219,12 +219,74 @@ def test_appear_small_every_second_full_every_minute():
     assert e.appear_due(200.0, wanted) is None  # 찾으면 대기 끝
 
 
-def test_ui_not_ready_retries_after_10s():
+def test_ui_not_ready_retries_after_2_5s():
+    """명세 6.1 계기: 로딩·로그인 화면 가벼운 확인은 2.5초마다(11-08 '10초 재확인'을 대체 — 접속 뒤 늦게 찾던 것)."""
     e = v2.Engine()
     e.reset(0.0)
     assert e.ready_for_initial(0.0)
     e.ui_not_ready(0.0)
-    assert not e.ready_for_initial(9.9) and e.ready_for_initial(10.0)
+    assert not e.ready_for_initial(2.4) and e.ready_for_initial(2.5)
+
+
+def _ui_engine():
+    e = v2.Engine()
+    e.reset(0.0)
+    gen = e.begin_initial()
+    res = v2.InitialResult(boxes={"skillbar": (0, 900, 400, 60), "buff": (1700, 200, 30, 300)},
+                           status={"skillbar": v2.FOUND, "buff": v2.FOUND, "tuarim": v2.MISSING},
+                           source={"skillbar": "search", "buff": "search"})
+    e.finish_initial(gen, res, 0.0)
+    return e
+
+
+def test_ui_hidden_freezes_lost_time_and_research():
+    """UI가 통째로 안 보이는 동안(로딩) 못 읽은 시간·다시 찾기 없음, 다시 보이면 그동안의 못 읽음은 지운다."""
+    e = _ui_engine()
+    t = 0.0
+    for _ in range(4):  # 2초 읽힘
+        t += 0.5
+        e.tick(t, True)
+        e.note_read("buff", True, t)
+    assert not e.ui_check_due(t)  # 읽히는 중 — 확인 안 함
+    for _ in range(6):  # 로딩 시작: 못 읽음
+        t += 0.5
+        e.tick(t, True)
+        e.note_read("buff", False, t)
+    assert e.ui_check_due(t)
+    assert e.set_ui_visible(False, t) == "hidden"
+    for _ in range(120):  # 60초 로딩
+        t += 0.5
+        e.tick(t, True)
+        e.note_read("buff", False, t)
+        assert e.due(t, lambda k: True) == [] and e.appear_due(t, lambda k: True) is None
+    assert e.items["buff"].lost < v2.LOST_SECONDS
+    assert e.set_ui_visible(True, t) == "visible"
+    assert not e.items["buff"].unhealthy and e.items["buff"].lost == 0.0
+
+
+def test_missing_item_keeps_interval_across_loading():
+    """UI는 보이는데 없던 항목(상태창 닫음)은 로딩을 지나도 10초×3 → 1분 간격 그대로."""
+    e = _ui_engine()
+    it = e.items["tuarim"]
+    before = it.next_try
+    e.set_ui_visible(False, 1.0)
+    e.set_ui_visible(True, 4.0)
+    assert it.status == v2.MISSING and it.next_try == before
+    e.search_result(e.generation, "tuarim", None, 10.0)
+    e.search_result(e.generation, "tuarim", None, 20.0)
+    e.search_result(e.generation, "tuarim", None, 30.0)
+    e.set_ui_visible(False, 31.0)
+    e.set_ui_visible(True, 34.0)
+    assert it.next_try == 30.0 + v2.SLOW_RETRY_SECONDS
+
+
+def test_ui_check_immediately_when_game_returns_to_front():
+    e = _ui_engine()
+    e.tick(1.0, True)
+    e.note_read("buff", True, 1.0)
+    e.tick(2.0, False)  # 다른 창
+    e.tick(60.0, True)  # 게임 다시 앞으로
+    assert e.ui_check_due(60.0)
 
 
 def _pending_engine():

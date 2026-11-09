@@ -81,6 +81,12 @@ def _isolated_runtime(request, tmp_path):
     app = QApplication.instance()
     before = set(app.topLevelWidgets()) if app is not None else set()
     native = request.node.get_closest_marker("windows_integration") is not None
+    from mabinogi_addon import autofind_regions
+    autofind_regions.reset_for_tests()  # 모듈 전역(자동 찾기 켜짐·고정·사용 값)이 테스트 사이에 새지 않게
+    # 0.45.0부터 앱은 자동 찾기를 늘 켠다. 저장 영역(v1) 동작을 보는 예전 창 테스트는 숨은 비상 값(autofind.disabled = 예전 동작)으로 돈다.
+    # 기본 켜짐 경로를 창 단위로 보는 테스트는 @pytest.mark.autofind_default.
+    autofind_default = request.node.get_closest_marker("autofind_default") is not None
+    original_disabled = config.load_autofind_disabled
     original_path = config.LOCAL_CONFIG_PATH
     read, write = config._read_local_config, config._write_local_config
     target = tmp_path / "app" / "config.local.json"
@@ -95,7 +101,9 @@ def _isolated_runtime(request, tmp_path):
             patch.object(config, "ENV_PATH", tmp_path / ".env"), \
             patch.object(config, "_read_local_config", lambda path=original_path: read(redirect(path))), \
             patch.object(config, "_write_local_config", lambda data, path=original_path: write(data, redirect(path))), \
-            patch.object(paths, "user_data_dir", lambda: user_dir):
+            patch.object(paths, "user_data_dir", lambda: user_dir), \
+            patch.object(config, "load_autofind_disabled",
+                         original_disabled if autofind_default else (lambda path=None: True)):
         yield boundary
         app = QApplication.instance()
         if app is not None:
@@ -116,6 +124,7 @@ def _isolated_runtime(request, tmp_path):
                 widget.deleteLater()
             QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
             app.processEvents()
+        autofind_regions.reset_for_tests()
         assert not boundary.violations, f"unisolated external operations: {boundary.violations}"
 
 
@@ -198,3 +207,7 @@ def _skillbar_capture_inline():
     saved, SkillbarCapture.INLINE = SkillbarCapture.INLINE, True
     yield
     SkillbarCapture.INLINE = saved
+
+
+def pytest_configure(config):
+    config.addinivalue_line("markers", "autofind_default: 창 테스트를 앱 기본(자동 찾기 켜짐)으로 — 기본은 비상 값 꺼짐(저장 영역 v1 동작)")

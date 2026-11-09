@@ -1,8 +1,15 @@
-"""자동 찾기 v2 — 런타임 영역 제공자(docs/autofind-v2-creator-spec.md 2절).
+"""자동 찾기 — 런타임 영역 제공자(docs/autofind-v2-creator-spec.md 2절, docs/first-use-v3-spec.md 4.1·6절).
 
-각 탭이 영역을 읽는 한 곳. v2가 꺼져 있으면(비제작자 포함) 저장된 영역을 그대로 돌려줘 동작이 같다.
-v2가 켜져 있으면 저장된 영역을 위치로 쓰지 않고 이번 실행에서 찾은 자리를 준다(못 찾았으면 None — 그 기능은 쉰다).
-저장된 영역은 읽기만 하고 덮지 않는다. 탭에서 직접 지정·자동 찾기를 하면 그 실행 동안은 사용자 지정(저장 영역)이 이긴다.
+각 탭이 영역을 읽는 한 곳. 0.45.0부터 모든 사용자에게 항상 켬(숨은 비상 값 config `autofind.disabled`면 꺼짐 = 저장 영역 그대로).
+켜져 있으면 쓰는 순서(6절 v1 대비책):
+  1. 직접 지정 고정 — 기능 화면에서 직접 지정·탭 자동 찾기를 하면 그 기능은 저장 영역(v1)이 1순위(다음 실행에도, `자동으로 돌아가기`로 해제)
+  2. 자동으로 찾은 자리(지난 자리·화면 전체 찾기 — 찾기 엔진이 set_region)
+  3. 못 찾음 → 저장 영역(v1)이 있으면 그 자리('저장된 영역 사용 · 자동으로 못 찾음'). 엔진은 계속 찾고, 찾아 3초 확인되면 2로
+  4. 없으면 None(그 기능은 쉰다)
+저장된 영역은 읽기만 하고 덮지 않는다.
+
+공유 영역: 보스바 = 보스 패턴·디버프(보스 확인)·보스바 오버레이·체력바 보스전 알림이 같은 'boss' 하나를 쓴다 — 고정도 하나.
+디버프 줄은 따로 고정할 수 있고, 고정 안 했으면 자동 보스바에서 계산(보스바만 고정했으면 고정한 보스바에서 계산).
 
 영역은 저장 영역과 같은 논리 좌표 dict {x, y, w, h}(단축바는 {x, y}). 모든 호출은 화면 스레드.
 """
@@ -19,16 +26,43 @@ _listeners: list = []
 _reporter = None
 _use: dict[str, bool] = {}
 _boss_extra = None  # 보스바를 쓰는 다른 소비자(체력바 보스전 알림·블랙박스)가 지금 켜졌나
+_saved: dict[str, dict | None] = {}  # 기능이 마지막으로 넘긴 저장 영역(v1) — 상태 문구·디버프 계산용
+_fixed_saver = None  # 직접 지정 고정 목록 저장(config autofindV2.fixed) — 앱이 연결
+_use_saver = None    # 사용 값 저장(config autofindV2.use) — 직접 지정으로 사용을 켤 때
 
 
-def activate(on: bool) -> None:
-    """앱 시작 때 한 번(제작자 + v2 켜짐). 바꾸면 다음 실행부터."""
+def activate(on: bool, fixed=()) -> None:
+    """앱 시작 때 한 번. fixed = 지난 실행까지의 직접 지정 고정 항목(config autofindV2.fixed)."""
     global _active
     _active = bool(on)
+    _runtime.clear()
+    _user.clear()
+    _saved.clear()
     if not _active:
-        _runtime.clear()
-        _user.clear()
         _use.clear()
+        return
+    _user.update(k for k in fixed if k in KEYS)
+
+
+def set_fixed_saver(fn) -> None:
+    """fn(sorted keys) — 직접 지정 고정이 바뀌면 저장(다음 실행에도 유지)."""
+    global _fixed_saver
+    _fixed_saver = fn
+
+
+def set_use_saver(fn) -> None:
+    """fn(key, on) — 기능 화면에서 직접 지정해 그 기능 사용을 켤 때 저장."""
+    global _use_saver
+    _use_saver = fn
+
+
+def _save_fixed() -> None:
+    if _fixed_saver is not None:
+        try:
+            _fixed_saver(sorted(_user))
+        except Exception:  # noqa: BLE001 — 저장 실패해도 이번 실행 동작은 유지
+            import logging
+            logging.getLogger(__name__).warning("직접 지정 고정 저장 실패", exc_info=True)
 
 
 def active() -> bool:
@@ -36,16 +70,46 @@ def active() -> bool:
 
 
 def region_for(key: str, saved):
-    """기능이 쓸 영역. v2 꺼짐 = 저장 영역. v2 켜짐: 사용 꺼짐이면 None(그 기능은 쉰다 — CPU 0),
-    사용자 지정이면 저장 영역, 아니면 찾은 자리(없으면 None)."""
+    """기능이 쓸 영역. 자동 찾기 꺼짐(비상 값) = 저장 영역. 켜짐: 사용 꺼짐이면 None(그 기능은 쉰다 — CPU 0),
+    직접 지정 고정이면 저장 영역, 아니면 찾은 자리, 못 찾았으면 저장 영역(v1, 없으면 None)."""
     if not _active:
         return saved
+    _saved[key] = dict(saved) if isinstance(saved, dict) else None
     if not wanted(key):
         return None
+    return _resolve(key, saved)
+
+
+def _resolve(key: str, saved):
     if key in _user:
         return saved
     box = _runtime.get(key)
-    return dict(box) if box is not None else None
+    if box is not None:
+        return dict(box)
+    if key == "debuff" and "boss" in _user and _saved.get("boss"):
+        return _debuff_from_boss(_saved["boss"])  # 보스바만 고정 → 고정한 보스바 위 띠
+    return dict(saved) if isinstance(saved, dict) else saved
+
+
+def _debuff_from_boss(boss: dict) -> dict:
+    """보스바 위 디버프 줄 — 컨트롤러 debuff_from_boss와 같은 규칙(논리 좌표)."""
+    x, y, w, h = (boss[k] for k in ("x", "y", "w", "h"))
+    top = max(0, y - int(h * 1.4))
+    return {"x": x, "y": top, "w": w, "h": y + h - top}
+
+
+def source(key: str) -> str | None:
+    """지금 쓰는 자리의 출처 — 'user'(직접 지정 고정) · 'auto'(자동으로 찾음) · 'v1'(못 찾아 저장 영역) · None(쓸 자리 없음).
+    자동 찾기 꺼짐(비상 값)이면 저장 영역이 있으면 'v1'."""
+    if not _active:
+        return "v1" if _saved.get(key) else None
+    if key in _user:
+        return "user"
+    if key in _runtime:
+        return "auto"
+    if key == "debuff" and "boss" in _user and _saved.get("boss"):
+        return "user"
+    return "v1" if _saved.get(key) else None
 
 
 def set_use_values(values: dict, boss_extra=None) -> None:
@@ -86,8 +150,13 @@ def wanted(key: str) -> bool:
 
 
 def is_auto(key: str) -> bool:
-    """탭 표시용 — 지금 쓰는 영역이 v2가 찾은 자리인지('자동(v2)')."""
+    """탭 표시용 — 지금 쓰는 영역이 자동으로 찾은 자리인지."""
     return _active and key not in _user and key in _runtime
+
+
+def is_fixed(key: str) -> bool:
+    """직접 지정 고정(자동이 덮지 않음 — 다음 실행에도)."""
+    return _active and key in _user
 
 
 def set_region(key: str, box) -> None:
@@ -103,17 +172,39 @@ def set_region(key: str, box) -> None:
         _notify(key)
 
 
-def user_set(key: str) -> None:
-    """탭에서 직접 지정·자동 찾기·해제 → 이번 실행 동안 사용자 지정이 이긴다."""
-    if not _active or key in _user:
+def user_set(key: str, enable: str | None = "") -> None:
+    """기능 화면에서 직접 지정·탭 자동 찾기 → 그 기능은 직접 지정 고정(자동이 덮지 않음, 다음 실행에도 유지).
+    그 화면의 기능을 쓰려는 것이므로 사용 값도 켠다(enable — 기본은 key, 디버프 화면에서 공유 보스바를 지정하면 'debuff', None이면 안 켬)."""
+    if not _active:
+        return
+    use_key = key if enable == "" else enable
+    if use_key in USE_KEYS and not _use.get(use_key, False):
+        if _use_saver is not None:
+            try:
+                _use_saver(use_key, True)
+            except Exception:  # noqa: BLE001
+                import logging
+                logging.getLogger(__name__).warning("사용 값 저장 실패: %s", use_key, exc_info=True)
+        set_use(use_key, True)
+    if key in _user:
         return
     _user.add(key)
     _runtime.pop(key, None)
+    _save_fixed()
     _notify(key, user=True)
 
 
+def auto_return(key: str) -> None:
+    """`자동으로 돌아가기`·영역 지정 해제 → 고정을 풀고 자동으로 찾은 자리로(엔진이 바로 다시 찾는다)."""
+    if not _active or key not in _user:
+        return
+    _user.discard(key)
+    _save_fixed()
+    _notify(key, user=False)
+
+
 def user_set_key(key: str) -> bool:
-    """이번 실행에서 사용자가 직접 지정했나(v2 켜짐일 때만 의미)."""
+    """직접 지정 고정인가(자동 찾기 켜짐일 때만 의미)."""
     return key in _user
 
 
@@ -142,9 +233,10 @@ def set_reporter(fn) -> None:
 
 
 def report(key: str, ok: bool, frame_id=None) -> None:
-    """기능이 자기 영역을 한 번 읽은 결과(찾기 엔진의 다시 찾기·확정 판단용). v2 꺼짐이면 아무것도 안 함(비용 0)."""
+    """기능이 자기 영역을 한 번 읽은 결과(찾기 엔진의 다시 찾기·확정 판단용). 꺼짐이면 아무것도 안 함(비용 0).
+    자동으로 찾은 자리가 아닌 데서(직접 지정 고정·저장 영역 v1) 읽은 결과는 'UI 보임' 신호로만 쓴다(auto=False)."""
     if _active and _reporter is not None:
-        _reporter(key, bool(ok), frame_id)
+        _reporter(key, bool(ok), frame_id, source(key) == "auto" or key not in _saved)
 
 
 def region_property(key: str, attr: str = "_region"):
@@ -166,8 +258,9 @@ def saved_of(owner, attr: str = "_region"):
 
 
 def reset_for_tests() -> None:
-    global _reporter, _boss_extra
+    global _reporter, _boss_extra, _fixed_saver, _use_saver
     activate(False)
+    _fixed_saver = _use_saver = None
     _listeners.clear()
     _reporter = None
     _boss_extra = None

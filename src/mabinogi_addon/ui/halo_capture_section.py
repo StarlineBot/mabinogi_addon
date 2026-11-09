@@ -487,7 +487,7 @@ class HaloCaptureSection(QWidget):
         config._write_local_config(raw)
         from .region_registration import invalidate_region
         invalidate_region('halo_timer')
-        self._afr.user_set("halo_timer")  # 이번 실행 동안 사용자 지정이 이김
+        self._afr.user_set("halo_timer")  # 직접 지정 고정(다음 실행에도) + 그 기능 사용 켬
         self._stop()
         self._stop_monitoring()
         self._region = box

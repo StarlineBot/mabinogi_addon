@@ -165,13 +165,25 @@ class AutofindV2Controller(QObject):
         autofind_regions.subscribe(self._on_region_event)
 
     def _on_region_event(self, key, user) -> None:
-        """탭에서 직접 지정·자동 찾기 → 이번 실행 동안 그 항목은 엔진이 손대지 않는다."""
-        if user and key in self.engine.items:
-            self.engine.user_override(key)
-            self.changed.emit()
+        """직접 지정 고정 → 그 항목은 엔진이 손대지 않는다. `자동으로 돌아가기` → 바로 다시 찾는다."""
+        if user:
+            if key in self.engine.items:
+                self.engine.user_override(key)
+                self.changed.emit()
+            return
+        if autofind_regions.is_fixed(key):
+            return
+        if key in self.engine.items and self.engine.items[key].user:
+            self.engine.user_release(key, self._clock())
+        elif key != "debuff":
+            return  # 자리 바뀜 알림(엔진 자신이 보낸 것) 등
+        self._publish()  # 디버프 줄 고정 해제 → 자동 보스바에서 계산한 띠 다시 발행
+        self.changed.emit()
 
     def start(self) -> None:
         self.engine.reset(self._clock())
+        for key in autofind_regions.user_keys():  # 지난 실행의 직접 지정 고정
+            self.engine.user_override(key)
         self.timer.start()
         _log.info("[자동 찾기 v2] 켜짐 — 저장 영역 대신 이번 실행에서 찾은 자리로 읽어요")
 
@@ -231,6 +243,9 @@ class AutofindV2Controller(QObject):
         if self.engine.ready_for_initial(now):
             self._start_initial()
             return
+        if self.engine.ui_check_due(now):
+            if self._start_ui_check():
+                return
         due = self.engine.due(now, self._wanted)
         if due:
             group = "resources" if due[0] in v2.RESOURCE_KEYS else due[0]
@@ -323,6 +338,33 @@ class AutofindV2Controller(QObject):
                 out[key] = tuple(to_physical(box))
         return out
 
+    # ---- 'UI 보이나'(명세 6.1 계기) ------------------------------------------------------------
+    def _start_ui_check(self) -> bool:
+        """찾아 둔 단축바·체력바 자리 둘레(여유)만 탐지기로 — 하나라도 있으면 UI 보임. 화면 전체 찾기는 하지 않는다(수 ms).
+        둘 다 자리가 없으면 확인할 데가 없어 '보임'으로 둔다(예전처럼 못 읽은 시간을 센다)."""
+        boxes = {k: self.engine.items[k].box for k in UI_CHECK_KEYS
+                 if self.engine.items[k].box is not None and self.engine.items[k].status == v2.FOUND}
+        if not boxes:
+            return False
+        target = self.target
+        finders, capture = self._finders.finders(), self._capture
+
+        def work():
+            _, _, x, y, w, h = target
+            for key, (bx, by, bw, bh) in boxes.items():
+                x0, y0, x1, y1 = v2.margin_rect((bx - x, by - y, bw, bh), w, h)  # 그 둘레만 캡처(화면 전체 X)
+                crop = capture.grab(x + x0, y + y0, x1 - x0, y1 - y0)
+                if crop is None:
+                    continue
+                try:
+                    if finders[key](crop):
+                        return {"visible": True}
+                except Exception:  # noqa: BLE001
+                    continue
+            return {"visible": False}
+        self._submit({"kind": "ui"}, work)
+        return True
+
     # ---- 다시 찾기·나타나면 찾기 --------------------------------------------------------------
     def _start_research(self, group: str, keys: list) -> None:
         target = self.target
@@ -372,11 +414,20 @@ class AutofindV2Controller(QObject):
             if job["kind"] == "initial":
                 self.engine.reset(now)  # 다음 틱에 다시
             return
+        if job["kind"] == "ui":
+            change = self.engine.set_ui_visible(result["visible"], now)
+            if change == "hidden":
+                _log.info("[자동 찾기 v2] 게임 UI가 안 보여요(로딩·로그인 화면 등) — 실패로 세지 않고 2.5초마다 가볍게 확인")
+            elif change == "visible":
+                _log.info("[자동 찾기 v2] 게임 UI가 다시 보여요 — 지난 자리로 바로 읽어요")
+            if change:
+                self.changed.emit()
+            return
         if job["kind"] == "initial":
             if result.get("not_ready"):
                 self.engine.ui_not_ready(now)
                 if not self._waiting_ui:  # 기다리기 시작할 때 한 줄(10초마다 반복하지 않음)
-                    _log.info("[자동 찾기 v2] UI 아직 안 보임 — 기다림(로딩·로그인·캐릭터 선택 화면, 10초마다 다시 확인, 실패로 세지 않음)")
+                    _log.info("[자동 찾기 v2] UI 아직 안 보임 — 기다림(로딩·로그인·캐릭터 선택 화면, 2.5초마다 다시 확인, 실패로 세지 않음)")
                 self._waiting_ui = True
             else:
                 res = result["result"]
@@ -410,9 +461,14 @@ class AutofindV2Controller(QObject):
         self._publish()
         self.changed.emit()
 
-    def note_read(self, key: str, ok: bool, frame_id=None) -> None:
-        """기능의 판독 결과(autofind_regions.report) — 확정·실패만 기록하고 표시 갱신."""
+    def note_read(self, key: str, ok: bool, frame_id=None, auto: bool = True) -> None:
+        """기능의 판독 결과(autofind_regions.report) — 확정·실패만 기록하고 표시 갱신.
+        auto=False(직접 지정 고정·저장 영역 v1에서 읽음): 엔진 항목 상태는 건드리지 않고 'UI 보임' 신호로만."""
         if self.closed:
+            return
+        if not auto:
+            if ok:
+                self.engine.last_ok = self._clock()
             return
         if frame_id is None:
             self._frame_seq += 1

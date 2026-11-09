@@ -133,7 +133,9 @@ def test_initial_find_publishes_runtime_regions_and_keeps_saved_config(app, isol
     assert c.engine.phase == "stable"
     assert autofind_regions.region_for("buff", {"x": 1, "y": 2, "w": 3, "h": 4}) == {"x": 1700, "y": 200, "w": 30, "h": 300}
     assert autofind_regions.region_for("skillbar", None) == {"x": 10, "y": 900}
-    assert autofind_regions.region_for("tuarim", {"x": 9, "y": 9, "w": 9, "h": 9}) is None  # 못 찾음 → 쉰다
+    assert autofind_regions.region_for("tuarim", None) is None  # 못 찾음 + 저장 영역 없음 → 쉰다
+    assert autofind_regions.region_for("tuarim", {"x": 9, "y": 9, "w": 9, "h": 9}) == {"x": 9, "y": 9, "w": 9, "h": 9}  # v1 대비책
+    assert autofind_regions.source("tuarim") == "v1" and autofind_regions.source("buff") == "auto"
     after = json.loads(isolated.read_text(encoding="utf-8"))
     assert after["buffRegion"] == before["buffRegion"]  # 저장 영역 그대로
     assert set(after) == {"buffRegion", "autofindV2"}  # 찾은 자리는 autofindV2.last에만
@@ -160,7 +162,7 @@ def test_lost_item_researched_after_10s_and_only_that_group(app):
     fnd.calls.clear()
     autofind_regions.report("buff", False)
     _run(c, clock, 11)
-    assert fnd.calls == ["buff"]
+    assert [k for k in fnd.calls if not k.endswith("@margin")] == ["buff"]  # 'UI 보이나' 여백 확인 말고는 버프만
 
 
 def test_window_resize_restarts_initial_find(app):
@@ -181,15 +183,74 @@ def test_paused_when_game_not_in_front(app):
     assert cap.calls == [] and c.engine.phase == "waiting_ui"
 
 
-def test_loading_screen_waits_10s(app):
+def test_loading_screen_rechecks_every_2_5s(app):
     fnd = Finders(boxes={})
     c, clock, cap, *_ = _make(app, finders=fnd)
     _run(c, clock, 1.0)
     assert len(cap.calls) == 1 and c.engine.phase == "waiting_ui"
-    _run(c, clock, 9.5)  # 결과는 다음 틱(t=1)에 반영 → 다시 확인은 t=11
+    _run(c, clock, 2.0)  # 결과는 다음 틱(t=1)에 반영 → 다시 확인은 t=3.5
     assert len(cap.calls) == 1
     _run(c, clock, 0.5)
     assert len(cap.calls) == 2
+
+
+def _full_finds(fnd):
+    return [k for k in fnd.calls if not k.endswith("@margin")]
+
+
+def test_loading_between_games_makes_no_full_screen_find(app):
+    """게임 → 로딩 3초 → 게임: 화면 전체 찾기 0번(명세 6.1 시험)."""
+    c, clock, cap, fnd, *_ = _make(app, wanted=lambda k: k in ("buff", "skillbar", "stat_bars"))
+    _run(c, clock, 1.5)
+    assert c.engine.phase == "stable"
+    fnd.calls.clear()
+    full_before = [k for k in cap.calls if k[2:] == (1920, 1080)]
+
+    def play(seconds, ok):
+        end = clock.t + seconds
+        while clock.t < end:
+            clock.t += 0.5
+            for k in ("buff", "skillbar", "stat_bars"):
+                autofind_regions.report(k, ok)
+            c.tick()
+    play(20, True)
+    fnd.ui = False
+    play(3, False)
+    assert c.engine.ui_hidden
+    fnd.ui = True
+    play(20, True)
+    assert not c.engine.ui_hidden
+    assert _full_finds(fnd) == []
+    assert [k for k in cap.calls if k[2:] == (1920, 1080)] == full_before
+
+
+def test_long_loading_never_counts_failures(app):
+    """로딩 2분: 실패 0번, 다시 찾기 0번 — 다시 보이면 지난 자리로 바로 읽는다."""
+    c, clock, cap, fnd, *_ = _make(app, wanted=lambda k: k in ("buff", "skillbar", "stat_bars"))
+    _run(c, clock, 1.5)
+    fnd.calls.clear()
+    fnd.ui = False
+    for _ in range(240):
+        clock.t += 0.5
+        autofind_regions.report("buff", False)
+        c.tick()
+    assert _full_finds(fnd) == [] and c.engine.items["buff"].failures == 0
+    assert autofind_regions.region_for("buff", None) == {"x": 1700, "y": 200, "w": 30, "h": 300}
+    fnd.ui = True
+    _run(c, clock, 3.0)
+    assert not c.engine.ui_hidden and not c.engine.items["buff"].unhealthy
+
+
+def test_login_then_connect_finds_within_3s(app):
+    """로그인 화면 2분 → 접속: 3초 안에 처음 찾기."""
+    fnd = Finders()
+    fnd.ui = False
+    c, clock, cap, *_ = _make(app, finders=fnd)
+    _run(c, clock, 120)
+    assert c.engine.phase == "waiting_ui"
+    fnd.ui = True
+    _run(c, clock, 3.0)
+    assert c.engine.phase == "stable" and c.engine.items["buff"].status == "found"
 
 
 def test_user_override_wins(app):
@@ -319,6 +380,12 @@ def _second_run_without_boss(app, isolated, boss_now=None):
     return _make(app, finders=fnd)
 
 
+def _ui_crop(c, key):
+    from mabinogi_addon import autofind_v2 as v2
+    x0, y0, x1, y1 = v2.margin_rect(c.engine.items[key].box, TARGET[4], TARGET[5])
+    return (x0, y0, x1 - x0, y1 - y0)
+
+
 def test_boss_and_halo_last_spot_used_at_once_without_appear_find(app, isolated, caplog):
     """사용자 11-07(QA 82db972): 지난 자리 있음 + 보스바 없는 화면 → 바로 찾음(확인 전)·디버프 띠 발행·나타나면 찾기 0."""
     import logging
@@ -334,7 +401,8 @@ def test_boss_and_halo_last_spot_used_at_once_without_appear_find(app, isolated,
     assert autofind_regions.region_for("debuff", None) == dict(zip("xywh", ctl.debuff_from_boss(BOSS)))
     assert autofind_regions.region_for("halo_timer", None) == dict(zip("xywh", HALO))
     assert "boss" not in fnd.calls and "halo_timer" not in fnd.calls  # 나타나면 찾기 호출 0
-    assert all(k[2:] == (1920, 1080) for k in cap.calls)  # 예상 자리 작은 조각도 안 찍음(전체 화면은 투아림 다시 찾기뿐)
+    ui_crops = {_ui_crop(c, k) for k in ("skillbar", "stat_bars")}  # 'UI 보이나' 여백 확인(명세 6.1 — 아무것도 안 읽히는 시험)
+    assert all(k[2:] == (1920, 1080) or k in ui_crops for k in cap.calls)  # 예상 자리 작은 조각도 안 찍음(전체 화면은 투아림 다시 찾기뿐)
     section = AutofindV2Section(c)
     section.refresh()
     assert "보스바: 찾음 · 지난 자리(나타나면 확인)" in section.items.text()
@@ -425,3 +493,23 @@ def test_real_last_position_moved_uses_new_spot(app, isolated):
         assert ("skillbar", True) not in calls  # 여백 조각 안에 있어 화면 전체 탐지 없음
     finally:
         c.shutdown()
+
+
+def test_fixed_from_previous_run_and_auto_return(app):
+    """직접 지정 고정은 다음 실행에도 이기고, `자동으로 돌아가기`면 바로 다시 찾아 자동 자리로."""
+    autofind_regions.reset_for_tests()
+    autofind_regions.activate(True, ["buff"])
+    autofind_regions.set_use_values({k: True for k in autofind_regions.USE_KEYS})
+    c, clock, cap, fnd, *_ = _make(app)
+    c.start()
+    c.engine.reset(0.0)
+    for key in autofind_regions.user_keys():
+        c.engine.user_override(key)
+    _run(c, clock, 1.5)
+    saved = {"x": 1, "y": 2, "w": 3, "h": 4}
+    assert c.engine.items["buff"].user and autofind_regions.region_for("buff", saved) == saved
+    autofind_regions.auto_return("buff")
+    assert not c.engine.items["buff"].user
+    _run(c, clock, 2.0)  # 'UI 보이나' 확인 한 번 + 다시 찾기(새 자리는 시험 중에도 그 자리로 읽어 봄)
+    assert autofind_regions.region_for("buff", saved) == {"x": 1700, "y": 200, "w": 30, "h": 300}
+    c.shutdown()

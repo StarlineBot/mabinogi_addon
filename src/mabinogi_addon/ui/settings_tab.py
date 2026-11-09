@@ -247,6 +247,12 @@ class SettingsTab(QWidget):
         diagnostics.addWidget(self._autofind_diagnostic_group())
         from .settings_layout import disclosure
         self.diagnostics_toggle = disclosure("진단 · 오류 신고용 자료", self.diagnostics_body, v)
+        # 자동 찾기 진단(제작자, 맨 아래 접힘 — first-use-v3 4.1): 항목별 상태·처음 찾기 시간·찾은 자리 보기
+        self._autofind_v2_body = QWidget()
+        self._autofind_v2_slot = QVBoxLayout(self._autofind_v2_body)
+        self._autofind_v2_slot.setContentsMargins(0, 0, 0, 0)
+        self.autofind_v2_toggle = disclosure("진단 · 자동 찾기", self._autofind_v2_body, v)
+        self.autofind_v2_toggle.hide()  # 제작자에게만(attach_autofind_v2)
         self._refresh_diag()
         v.addStretch(1)
 
@@ -875,10 +881,10 @@ class SettingsTab(QWidget):
         self.theme_changed.emit()  # 메인이 탭·틀·홈 등 테마색 재적용
 
     def attach_autofind_v2(self, section) -> None:
-        """제작자에게만: '실행·종료'와 '오버레이 배치' 사이에 자동 찾기 v2 구역."""
-        self._autofind_v2_slot.addSpacing(8)
+        """제작자에게만: 맨 아래 접힌 '진단 · 자동 찾기' 구역."""
         self._autofind_v2_slot.addWidget(section)
         self.autofind_v2_section = section
+        self.autofind_v2_toggle.show()
 
     def _general_group(self) -> QGroupBox:
         from ..system import autostart
@@ -914,9 +920,6 @@ class SettingsTab(QWidget):
         )
         v.addWidget(self._min_tray)
 
-        self._autofind_v2_slot = QVBoxLayout()  # 자동 찾기 v2(제작자 전용) 구역 자리 — 비제작자는 비어 있음
-        self._autofind_v2_slot.setContentsMargins(0, 0, 0, 0)
-        v.addLayout(self._autofind_v2_slot)
 
         v.addSpacing(8)
         v.addWidget(section_label("오버레이 배치"))

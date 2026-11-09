@@ -1786,6 +1786,26 @@ def save_autofind_v2_enabled(on: bool, path: Path = LOCAL_CONFIG_PATH) -> None:
     _write_local_config(data, path)
 
 
+def load_autofind_disabled(path: Path = LOCAL_CONFIG_PATH) -> bool:
+    """숨은 비상 값 `autofind.disabled`(문의 응대용·화면 없음, first-use-v3 6절 7) — true면 자동 찾기를 끄고 저장 영역 그대로."""
+    sec = _read_local_config(path).get("autofind")
+    return isinstance(sec, dict) and sec.get("disabled") is True
+
+
+def load_autofind_fixed(path: Path = LOCAL_CONFIG_PATH) -> list[str]:
+    """직접 지정 고정 항목(autofindV2.fixed) — 기능 화면에서 직접 지정한 기능은 자동이 덮지 않는다(다음 실행에도)."""
+    fixed = _autofind_v2_section(_read_local_config(path)).get("fixed")
+    return [k for k in fixed if isinstance(k, str)] if isinstance(fixed, list) else []
+
+
+def save_autofind_fixed(keys, path: Path = LOCAL_CONFIG_PATH) -> None:
+    data = _read_local_config(path)
+    sec = dict(_autofind_v2_section(data))
+    sec["fixed"] = sorted(set(keys))
+    data["autofindV2"] = sec
+    _write_local_config(data, path)
+
+
 def save_autofind_v2_use(key: str, on: bool, path: Path = LOCAL_CONFIG_PATH) -> None:
     """v2 사용 값 한 개(2.1절) — 저장 영역은 건드리지 않는다."""
     data = _read_local_config(path)

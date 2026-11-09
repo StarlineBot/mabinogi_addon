@@ -60,7 +60,8 @@ def find_in_margin(frame, box, finder):
 def same_box(a, b) -> bool:
     return all(abs(p - q) <= SAME_BOX_TOLERANCE for p, q in zip(a, b))
 LAST_PENDING = "last_pending"  # 처음 찾기 출처: 지난 자리를 바로 씀(그 자리에서 아직 안 읽힘)
-UI_RETRY_SECONDS = 10.0
+UI_RETRY_SECONDS = 2.5  # 로딩·로그인 화면: 'UI 보이나' 가벼운 확인 간격(수 ms) — 10초면 접속 뒤 늦게 찾았다(11-08, 명세 6.1 '계기')
+UI_CHECK_EVERY = 2.5    # 안정 상태: 기능 판독이 이만큼 하나도 안 읽히면 'UI 보이나' 확인(UI가 통째로 안 보이는 동안은 실패로 세지 않음)
 
 FOUND, MISSING, WAITING, PENDING, SEARCHING = "found", "missing", "waiting", "pending", "searching"
 
@@ -80,10 +81,12 @@ class Item:
     candidate: "Trial | None" = None
     user: bool = False        # 이 실행 동안 사용자 지정이 이김
     pending: bool = False     # 지난 자리를 바로 씀 — 그 자리에서 아직 읽히지 않음(보스바·전투 시간, 나타나면 확인)
+    bad_since: float = 0.0    # 못 읽기 시작한 시각
+    hidden_since_ok: bool = False  # UI가 안 보이기 전에, 다른 것은 읽히는데 이것만 못 읽던 항목(다시 보여도 그대로 — 간격 유지)
 
     def label(self, now: float | None = None) -> str:
         if self.user:
-            return "직접 지정 · 이번 실행 동안 사용"
+            return "직접 지정 고정"
         if self.candidate is not None:
             return "새 자리 확인 중"
         if self.pending:
@@ -242,6 +245,10 @@ class Engine:
         self.last_tick: float | None = None
         self.initial_summary = ""
         self.search_calls = 0  # 테스트·기록용(안정 상태에서 늘지 않아야 한다)
+        # 명세 6.1 '계기': 게임 UI가 통째로 안 보이는 동안(로딩·로그인·캐릭터 선택)은 못 읽은 시간·실패를 세지 않고 다시 찾기도 하지 않는다
+        self.ui_hidden = False
+        self.last_ok = float("-inf")  # 기능 판독이 마지막으로 읽힌 시각(하나라도 읽히면 UI 보임)
+        self.next_ui_check = 0.0
 
     # ---- 단계 -------------------------------------------------------------------------------
     def reset(self, now: float, phase: str = "waiting_ui") -> None:
@@ -256,7 +263,7 @@ class Engine:
         self.last_tick = None
 
     def ui_not_ready(self, now: float) -> None:
-        """로딩·로그인 화면: 처음 찾기를 미루고 10초 뒤 가벼운 확인만."""
+        """로딩·로그인 화면: 처음 찾기를 미루고 UI_RETRY_SECONDS 뒤 가벼운 확인만."""
         self.phase = "waiting_ui"
         self.ui_retry_at = now + UI_RETRY_SECONDS
 
@@ -298,6 +305,8 @@ class Engine:
     # ---- 기능이 알려 주는 판독 결과 --------------------------------------------------------------
     def tick(self, now: float, running: bool) -> None:
         """0.5초쯤마다. 게임이 앞에 없으면 시간을 세지 않는다(못 읽은 시간·시험 시간 모두)."""
+        if running and self.last_tick is None:
+            self.next_ui_check = now  # 게임 창이 다시 앞에 옴 → 바로 'UI 보이나' 확인(명세 6.1 ③)
         dt = 0.0 if self.last_tick is None else min(1.0, max(0.0, now - self.last_tick))
         self.last_tick = now if running else None
         if not running:
@@ -305,6 +314,8 @@ class Engine:
                 if it.candidate is not None:
                     it.candidate.pause()
             return
+        if self.ui_hidden:
+            return  # UI가 통째로 안 보이는 동안 못 읽은 시간은 세지 않는다
         for it in self.items.values():
             if it.unhealthy and it.candidate is None:
                 it.lost += dt
@@ -315,6 +326,8 @@ class Engine:
         it = self.items.get(key)
         if it is None or self.phase == "off":
             return None
+        if ok:
+            self.last_ok = now
         if it.candidate is not None:
             if it.candidate.generation != self.generation:
                 it.candidate = None
@@ -337,6 +350,8 @@ class Engine:
                 it.pending, it.source = False, "last"
                 return "confirmed_last"
         else:
+            if not it.unhealthy:
+                it.bad_since = now
             it.unhealthy = True
         return None
 
@@ -348,9 +363,38 @@ class Engine:
             it.status = MISSING
 
     # ---- 다시 찾기 ---------------------------------------------------------------------------
+    # ---- 'UI 보이나'(명세 6.1 계기) -------------------------------------------------------------
+    def ui_check_due(self, now: float) -> bool:
+        """안정 상태에서 기능 판독이 UI_CHECK_EVERY 동안 하나도 안 읽혔거나(또는 이미 안 보임) 게임이 다시 앞에 왔을 때 — 가벼운 확인."""
+        if self.phase != "stable" or now < self.next_ui_check:
+            return False
+        if not self.ui_hidden and now - self.last_ok < UI_CHECK_EVERY:
+            self.next_ui_check = now + UI_CHECK_EVERY
+            return False  # 무엇이든 읽히고 있음 = UI 보임
+        self.next_ui_check = now + UI_CHECK_EVERY
+        return True
+
+    def set_ui_visible(self, visible: bool, now: float) -> str | None:
+        """'UI 보이나' 결과. 안 보이면 못 읽은 시간·다시 찾기를 멈춘다. 다시 보이면 그동안 생긴 '못 읽음'만 지운다
+        (UI가 보이는데 없던 항목의 다시 찾기 간격은 그대로 — 로딩마다 화면 전체 찾기를 다시 하지 않게). 바뀌면 'hidden'/'visible'."""
+        if not visible and not self.ui_hidden:
+            self.ui_hidden = True
+            for it in self.items.values():
+                # 다른 것이 읽히던 때부터 이미 못 읽던 항목(상태창 닫음 등)은 그대로 둔다 — 로딩과 함께 못 읽게 된 것만 나중에 지운다
+                it.hidden_since_ok = it.unhealthy and it.bad_since < self.last_ok
+            return "hidden"
+        if visible and self.ui_hidden:
+            self.ui_hidden = False
+            for it in self.items.values():
+                if it.unhealthy and not it.hidden_since_ok:
+                    it.unhealthy, it.lost = False, 0.0  # 안 보이는 동안 생긴 못 읽음 — 세지 않음
+            self.next_ui_check = now + UI_CHECK_EVERY
+            return "visible"
+        return None
+
     def due(self, now: float, wanted) -> list[str]:
-        """다시 찾을 항목(켜진 기능만): 10초 넘게 못 읽음, 또는 처음에 못 찾음 — 다음 시도 시각이 됐을 때."""
-        if self.phase != "stable":
+        """다시 찾을 항목(켜진 기능만): 10초 넘게 못 읽음, 또는 처음에 못 찾음 — 다음 시도 시각이 됐을 때. UI가 안 보이면 없음."""
+        if self.phase != "stable" or self.ui_hidden:
             return []
         out = []
         for key, it in self.items.items():
@@ -389,7 +433,7 @@ class Engine:
         """대기 중인 켜진 보스바·전투 시간: 예상 자리 작게(1초 1번) 또는 화면 전체(60초 1번).
         지난 자리(확인 전)로 쓰는 항목은 나타나면 찾기를 하지 않고, 게임 UI 배율이 바뀐 경우만 대비해
         화면 전체 확인을 5분에 한 번(사용자 11-07)."""
-        if self.phase != "stable":
+        if self.phase != "stable" or self.ui_hidden:
             return None
         usable = [k for k in APPEAR_KEYS if not self.items[k].user and wanted(k)]
         keys = [k for k in usable if self.items[k].status in (WAITING, MISSING)]
@@ -441,6 +485,15 @@ class Engine:
         if it is not None:
             it.user, it.candidate = True, None
 
+    def user_release(self, key: str, now: float) -> None:
+        """`자동으로 돌아가기` — 고정을 풀고 바로 다시 찾기(나타나면 찾기 항목은 대기)."""
+        it = self.items.get(key)
+        if it is None or not it.user:
+            return
+        self.items[key] = Item(key, status=WAITING if key in APPEAR_KEYS else MISSING, next_try=now)
+        if key in APPEAR_KEYS:
+            self.next_small = self.next_full = now
+
     # ---- 표시 ---------------------------------------------------------------------------------
     def region(self, key: str):
         it = self.items.get(key)
@@ -454,7 +507,7 @@ class Engine:
         if self.phase == "off":
             return "꺼짐"
         if self.phase == "waiting_ui":
-            return "게임 화면을 기다리는 중(로딩·로그인 화면이면 10초 뒤 다시 확인)"
+            return "게임 화면을 기다리는 중(로딩·로그인 화면이면 2.5초마다 다시 확인)"
         if self.phase == "initial":
             done = sum(1 for it in self.items.values() if it.status not in (SEARCHING, PENDING))
             return f"처음 찾는 중 · {done}/{len(KEYS)}"

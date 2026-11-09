@@ -1,7 +1,7 @@
-"""설정 › 일반 '자동 찾기 v2' 구역(제작자 전용, docs/autofind-v2-creator-spec.md 5절).
+"""설정 맨 아래 '진단 · 자동 찾기'(제작자 전용, 접힘 — docs/first-use-v3-spec.md 4.1).
 
-스위치(기본 꺼짐, 다음 실행부터) · 단계 상태 한 줄 · 항목별 상태 · '지금 다시 찾기' · '찾은 자리 보기'.
-비제작자에게는 만들지 않는다(설정 화면 변화 0). 표시만 하고 화면 스레드에서 캡처·탐지는 하지 않는다.
+자동 찾기는 모든 사용자에게 항상 켬(스위치 없음). 여기는 진단만: 단계 상태 한 줄 · 항목별 상태(출처) · '지금 다시 찾기' · '찾은 자리 보기'.
+숨은 비상 값(config autofind.disabled)으로 꺼져 있으면 그 사실만 보인다. 표시만 하고 화면 스레드에서 캡처·탐지는 하지 않는다.
 """
 from __future__ import annotations
 
@@ -9,9 +9,9 @@ import time
 
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
-from .. import autofind_v2 as v2, config
+from .. import autofind_v2 as v2
 from .palette import color
-from .widgets import hint_label, section_label, switch
+from .widgets import hint_label
 
 
 class AutofindV2Section(QWidget):
@@ -22,12 +22,8 @@ class AutofindV2Section(QWidget):
         self._highlights = []
         v = QVBoxLayout(self)
         v.setContentsMargins(0, 0, 0, 0)
-        v.addWidget(section_label("자동 찾기 v2 (제작자 테스트)"))
-        self.toggle = switch("자동 찾기 v2 사용 (다음 실행부터)")
-        self.toggle.setChecked(config.load_autofind_v2_enabled())
-        self.toggle.toggled.connect(self._on_toggled)
-        v.addWidget(self.toggle)
-        v.addWidget(hint_label("켜면 저장된 영역 대신 이번 실행에서 찾은 자리로 읽어요. 저장된 영역은 바뀌지 않아요."))
+        v.addWidget(hint_label("위치는 앱이 알아서 찾아요(항상 켬). 못 찾으면 저장된 영역을 쓰고, "
+                               "기능 화면에서 직접 지정한 기능은 고정돼요. 저장된 영역은 바뀌지 않아요."))
         self.phase = QLabel("")
         self.phase.setWordWrap(True)
         v.addWidget(self.phase)
@@ -48,15 +44,6 @@ class AutofindV2Section(QWidget):
             controller.changed.connect(self.refresh)
         self.refresh()
 
-    def _on_toggled(self, on: bool) -> None:
-        try:
-            config.save_autofind_v2_enabled(on)
-        except OSError:
-            self.toggle.blockSignals(True)
-            self.toggle.setChecked(not on)
-            self.toggle.blockSignals(False)
-        self.refresh()
-
     def refresh(self) -> None:
         c = self._controller
         running = c is not None
@@ -64,17 +51,13 @@ class AutofindV2Section(QWidget):
         self.show_btn.setVisible(running)
         self.items.setVisible(running)
         if not running:
-            self.phase.setText("다음 실행부터 켜져요." if self.toggle.isChecked() else "꺼짐 · 지금 설정 그대로 동작해요.")
+            self.phase.setText("꺼짐(비상 설정 autofind.disabled) · 저장된 영역 그대로 동작해요.")
             self.phase.setStyleSheet(f"color:{color('muted')};")
             return
-        if not self.toggle.isChecked():
-            note = " · 다음 실행부터 꺼져요"
-        else:
-            note = ""
         now = self._clock()
-        self.phase.setText(c.engine.summary(now) + note)
+        self.phase.setText(c.engine.summary(now))
         self.phase.setStyleSheet(f"color:{color('ok') if c.engine.phase == 'stable' else color('muted')};")
-        self.items.setText("\n".join(f"{v2.NAMES[k]}: {it.label(now)}" for k, it in c.engine.items.items()))
+        self.items.setText("\n".join(f"{v2.NAMES[k]}: {it.label(now)}{_source_note(k)}" for k, it in c.engine.items.items()))
         self.show_btn.setEnabled(any(c.engine.region(k) is not None for k in v2.KEYS))
 
     def showEvent(self, event) -> None:
@@ -102,3 +85,10 @@ class AutofindV2Section(QWidget):
             hl = RegionHighlight()
             hl.flash(x, y, w, h, f"자동(v2) · {v2.NAMES[key]}", "", 3000)
             self._highlights.append(hl)
+
+
+def _source_note(key: str) -> str:
+    """지금 기능이 읽는 자리의 출처가 자동이 아니면 덧붙임(저장된 영역 v1 대비)."""
+    from .. import autofind_regions
+    src = autofind_regions.source(key)
+    return " · 저장된 영역 사용" if src == "v1" else ""

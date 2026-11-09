@@ -105,11 +105,12 @@ def test_home_rows_show_switch_and_location_only_with_v2():
     assert rows["tuarim"] == ("대기 중 · 위치 찾는 중", "muted", True)
 
 
-@pytest.mark.parametrize("creator,enabled,attached,active", [
-    (False, True, False, False),  # 비제작자: 설정 화면·동작 변화 0
-    (True, False, True, False),   # 제작자 + 꺼짐: 스위치만(다음 실행부터)
+@pytest.mark.parametrize("creator,disabled,attached,active", [
+    (False, True, False, False),  # 비상 값으로 꺼짐(비제작자): 진단 구역 없음, 저장 영역 그대로
+    (True, True, True, False),    # 비상 값으로 꺼짐(제작자): 진단 구역에 '꺼짐'만
 ])
-def test_setup_gating_for_non_creator_and_v2_off(monkeypatch, creator, enabled, attached, active):
+def test_setup_off_only_with_emergency_value(monkeypatch, creator, disabled, attached, active):
+    """0.45.0: 모든 사용자 항상 켬 — 숨은 비상 값 autofind.disabled일 때만 꺼짐(first-use-v3 4.1·6절 7)."""
     import os
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     from types import SimpleNamespace
@@ -120,13 +121,61 @@ def test_setup_gating_for_non_creator_and_v2_off(monkeypatch, creator, enabled, 
     from mabinogi_addon.ui.main_window import MainWindow
     QApplication.instance() or QApplication([])
     monkeypatch.setattr(feature_access, "is_creator", lambda: creator)
-    monkeypatch.setattr(config, "load_autofind_v2_enabled", lambda *a: enabled)
+    monkeypatch.setattr(config, "load_autofind_disabled", lambda *a: disabled)
     sections = []
     me = SimpleNamespace(settings_tab=SimpleNamespace(attach_autofind_v2=sections.append), _autofind_v2=None)
     MainWindow._setup_autofind_v2(me)
     assert bool(sections) is attached and afr.active() is active and me._autofind_v2 is None
     if sections:
         assert sections[0]._controller is None and not sections[0].again.isVisibleTo(sections[0])
+        assert "autofind.disabled" in sections[0].phase.text()
+
+
+def test_setup_on_for_non_creator_with_fixed_from_config(monkeypatch):
+    """비제작자도 켜짐 + 지난 실행의 직접 지정 고정을 읽어 시작, 진단 구역은 만들지 않음."""
+    import os
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from mabinogi_addon import feature_access
+    from mabinogi_addon.ui import main_window
+    from mabinogi_addon.ui.main_window import MainWindow
+    monkeypatch.setattr(feature_access, "is_creator", lambda: False)
+    monkeypatch.setattr(config, "load_autofind_disabled", lambda *a: False)
+    monkeypatch.setattr(config, "load_autofind_fixed", lambda *a: ["buff"])
+    started = []
+
+    class Controller:
+        def __init__(self, *a, **k):
+            from types import SimpleNamespace
+            self.changed = SimpleNamespace(connect=lambda fn: None)
+
+        def start(self):
+            started.append(True)
+
+    monkeypatch.setattr("mabinogi_addon.ui.autofind_v2_controller.AutofindV2Controller", Controller)
+    monkeypatch.setattr("mabinogi_addon.setup_state.autofind_v2_use_values", lambda *a: {k: True for k in afr.USE_KEYS})
+    sections = []
+
+    class Section:
+        def __init__(self):
+            self.calls = []
+
+        def set_autofind_key(self, key):
+            pass
+
+        def set_autofind_keys(self, keys):
+            pass
+
+    from types import SimpleNamespace
+    tab = lambda: SimpleNamespace(region_section=Section())  # noqa: E731
+    boss = tab()
+    boss.halo_capture = tab()
+    me = SimpleNamespace(settings_tab=SimpleNamespace(attach_autofind_v2=sections.append), _autofind_v2=None,
+                         buff_tab=tab(), debuff_tab=tab(), boss_tab=boss, skillbar_tab=tab(), stat_bars_tab=tab(),
+                         resource_tab=tab(), _watcher=None, _autofind_wanted=lambda k: True,
+                         _on_autofind_region=lambda *a: None, _on_autofind_changed=lambda: None)
+    MainWindow._setup_autofind_v2(me)
+    assert afr.active() and afr.is_fixed("buff") and started == [True] and sections == []
+    assert main_window is not None
 
 
 def test_dorcha_tuarim_autofind_line_on_top_of_common_tab(monkeypatch):

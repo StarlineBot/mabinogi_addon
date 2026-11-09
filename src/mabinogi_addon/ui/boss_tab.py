@@ -317,7 +317,7 @@ class BossTab(QWidget):
         # 영역은 '공유 키'(bossPattern.box)에만 저장한다 — _save()가 토글 때마다 box를
         # 통째로 덮어써 디버프 쪽 변경을 날리던 문제 방지(box는 여기서만 쓴다).
         config.save_boss_bar_region(x, y, w, h)
-        self._afr.user_set("boss")  # 이번 실행 동안 사용자 지정이 이김
+        self._afr.user_set("boss")  # 직접 지정 고정(다음 실행에도) + 보스 패턴 사용 켬
         self._region = {"x": x, "y": y, "w": w, "h": h}
         self._update_region_label()
         self._flash_region()
@@ -364,7 +364,7 @@ class BossTab(QWidget):
             self._update_region_label()
 
     def _region_cleared(self):
-        self._afr.user_set("boss")  # 지정 해제(여기·디버프 탭) = 사용자 지정
+        self._afr.auto_return("boss")  # 지정 해제(여기·디버프 탭) = 직접 지정 고정 풀기
         self.halo_capture.set_boss_context(None)
         self.halo_capture._stop_monitoring()
         self._region = None
@@ -1066,7 +1066,7 @@ class BossTab(QWidget):
         if not save_boxes(self, {"boss": (lx, ly, lw, lh), "debuff": db}):
             return
         self._afr.user_set("boss")
-        self._afr.user_set("debuff")
+        self._afr.user_set("debuff", enable=None)  # 함께 저장한 디버프 줄 — 디버프 사용은 켜지 않음
         self._region = {"x": lx, "y": ly, "w": lw, "h": lh}
         self._update_region_label()
         self.bar_region_changed.emit()  # 보스바 공유(패턴알림/3차)
