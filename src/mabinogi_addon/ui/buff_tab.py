@@ -345,6 +345,7 @@ class BuffTab(QWidget):
         from .region_section import RegionSection
         self.region_section = RegionSection(body, unset_text="지정하면 버프 남은 시간을 오버레이로 보여줘요",
                                             summary=summary, header_title="판독 영역 · 버프 목록")
+        self.region_section.set_guide(self.region_guide, "위치는 앱이 알아서 찾아요. 틀리면 '직접 지정'으로 상태목록창을 맨 위(즐겨찾기 칸 포함)부터 잡으면 고정돼요. 즐겨찾기 칸은 구분선을 찾아 따로 읽어요.")  # 자동 찾기 켜짐: v3 안내(QA 0429c66 4)
         # 위 전체 폭(명세 17절): 1줄 '판독 영역 · 버프 목록' 상태 ⓘ [영역 다시 지정] / 2줄 잠금 세 칸 + 체크박스 / 구분선.
         # '오버레이 창 보이기'(0.32.0): 끄면 창만 숨기고 탐지·알림은 계속 — 아이콘 없이 소리 알림만 쓰는 사람용.
         self.window_check = checkbox("오버레이 창 보이기")

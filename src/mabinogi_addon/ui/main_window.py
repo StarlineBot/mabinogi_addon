@@ -212,6 +212,13 @@ def _custom_subtab_qss(dark: bool) -> str:
 
 
 
+def _game_window_size():
+    """연결한 게임 창 크기(물리 픽셀) — 첫 사용 1단계 '<창 이름> (<해상도>)'."""
+    from ..system.window_capture import registered_game_target
+    target = registered_game_target()
+    return None if target is None else (target[4], target[5])
+
+
 def _feature_region(key: str):
     """기능이 쓸 영역 — 자동 찾기 v2가 켜져 있으면 이번 실행에서 찾은 자리, 아니면 저장 영역(autofind_regions)."""
     from .. import autofind_regions
@@ -426,7 +433,8 @@ class MainWindow(QMainWindow):
         # 첫 사용 안내 v3(docs/first-use-v3-spec.md 2절): 1 시작 · 2 쓸 기능 켜기 · 3 준비 끝 — 영역 지정 단계 없음
         from .first_use import FirstUseGuide
         from ..system.window_watcher import list_windows
-        self.first_use = FirstUseGuide(state_fn=self._first_use_state, windows_fn=list_windows, game_fn=config.load_game_exe)
+        self.first_use = FirstUseGuide(state_fn=self._first_use_state, windows_fn=list_windows, game_fn=config.load_game_exe,
+                                       size_fn=_game_window_size)
         self._pages = QStackedWidget()
         self._pages.addWidget(tabs)
         self._pages.addWidget(self.first_use)
@@ -546,7 +554,7 @@ class MainWindow(QMainWindow):
                    "custom": "커스텀 오버레이", "skillbar": "단축바", "memo": "메모"}
 
     # 자동 찾기 v2(제작자, 2.1절): 영역과 별개인 사용 값 스위치를 붙이는 홈 줄
-    _HOME_V2_SWITCHES = ("buff", "debuff", "boss", "halo", "skillbar")
+    _HOME_V2_SWITCHES = ("buff", "debuff", "boss", "halo", "skillbar", "stat_bars")
 
     def home_visible(self) -> bool:
         home = getattr(self, "home_page", None)
@@ -647,7 +655,7 @@ class MainWindow(QMainWindow):
 
     def _home_switch(self, key, on) -> None:
         """홈 스위치 = 해당 화면의 기존 설정(양쪽 동기화). 새 켜기/끄기 기능은 만들지 않는다(명세 12.3)."""
-        if key == "stat_bars":
+        if key == "stat_bars" and not autofind_regions.active():
             self.stat_bars_tab.set_all_shown(on)
         elif key in ("dorcha", "tuarim", "custom"):
             check = {"dorcha": self.dorcha_tab, "tuarim": self.tuarim_tab, "custom": self.custom_overlay_tab}[key].enable
@@ -669,6 +677,8 @@ class MainWindow(QMainWindow):
                 setup_state.save_enabled(self._HOME_FEATURES[key], on)  # v2 사용 값(영역은 그대로) → 해당 기능 다시 시작
             except OSError:
                 logging.getLogger(__name__).warning("자동 찾기 v2 사용 값 저장 실패", exc_info=True)
+            if key == "stat_bars" and on and not self.stat_bars_tab.any_shown():
+                self.stat_bars_tab.set_all_shown(True)  # 켰는데 표시할 바가 하나도 없으면 세 바 모두(바별 선택은 체력바 화면에서)
         self.home_page.update_state(self._home_state())
 
     def _refresh_harp_access(self, *_args) -> None:
@@ -822,7 +832,7 @@ class MainWindow(QMainWindow):
         if home_key in self._HOME_V2_SWITCHES:
             return autofind_regions.use_on(self._HOME_FEATURES[home_key])
         if home_key == "stat_bars":
-            return self.stat_bars_tab.any_shown()
+            return self.stat_bars_tab.any_shown()  # 자동 찾기 꺼짐(비상 값): 예전처럼 바별 표시
         return {"dorcha": self.dorcha_tab, "tuarim": self.tuarim_tab}[home_key].enable.isChecked()
 
     def _home_refind(self) -> None:
@@ -837,7 +847,7 @@ class MainWindow(QMainWindow):
     def _home_v2_rows(self, rows: dict, paused: bool, game: bool) -> None:
         """자동 찾기(first-use-v3 1·4.1절): 줄 상태 = 켜짐/꺼짐 + 위치('꺼짐 · 위치 찾음' · '켜짐 · 동작 중' · '켜짐 · 화면에 보이면 찾아요' ·
         '켜짐 · 저장된 영역 사용' · '켜짐 · 못 찾음 — 기능 화면에서 맞추기'). 저장 영역 유무로 '영역 지정 필요'를 띄우지 않는다."""
-        for home_key in (*self._HOME_V2_SWITCHES, "stat_bars", "dorcha", "tuarim"):
+        for home_key in (*self._HOME_V2_SWITCHES, "dorcha", "tuarim"):
             key = self._HOME_FEATURES[home_key]
             on = self._home_feature_on(home_key)
             text, kind = rows[home_key][:2]
@@ -2545,7 +2555,7 @@ class MainWindow(QMainWindow):
         """다시 찾기·나타나면 찾기는 켜진 기능만(사용 값, 2.1절). 0.5초마다 불려 설정 파일은 읽지 않는다."""
         from .. import autofind_regions
         if key == "stat_bars":
-            return self.stat_bars_tab.any_shown()
+            return autofind_regions.wanted(key) and self.stat_bars_tab.any_shown()
         if key in ("dorcha", "tuarim"):
             return {"dorcha": self.dorcha_tab, "tuarim": self.tuarim_tab}[key].enable.isChecked()
         return autofind_regions.wanted(key)

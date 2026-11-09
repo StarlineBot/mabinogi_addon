@@ -134,7 +134,8 @@ class StatBarsTab(QWidget):
         commands.addWidget(self.clear_region_btn)
         self.region_row = wrapping_row(row, commands)
         v.addLayout(self.region_row)
-        v.addWidget(hint_label("생명력·마나·스태미나 세 바를 포함하고, 아래 경험치 바는 제외하세요."))
+        self.region_guide = hint_label("생명력·마나·스태미나 세 바를 포함하고, 아래 경험치 바는 제외하세요.")
+        v.addWidget(self.region_guide)
 
         # 미리보기 + 현재 값
         source_group = QGroupBox("판독 미리보기")
@@ -156,6 +157,7 @@ class StatBarsTab(QWidget):
         from .region_section import RegionSection
         self.region_section = RegionSection(region_body, unset_text="지정하면 생명력·마나·스태미나를 보기 편한 위치에 보여줘요",
                                             title="영역 다시 지정 · 판독 확인")
+        self.region_section.set_guide(self.region_guide, '체력바 위치는 앱이 알아서 찾아요. 틀리면 생명력·마나·스태미나 세 바를 감싸게(아래 경험치 바 제외) 직접 지정하면 고정돼요.')  # 자동 찾기 켜짐: v3 안내(QA 0429c66 4)
         v = outer
         v.addWidget(self.region_section)
 

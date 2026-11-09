@@ -17,7 +17,7 @@ from __future__ import annotations
 
 KEYS = ("buff", "debuff", "boss", "halo_timer", "stat_bars", "skillbar", "dorcha", "tuarim")
 # 사용 값(2.1절) — v2 켜짐일 때만: 영역과 별개로 '이 기능을 쓰나'. 꺼지면 영역은 두고 읽기·알림·오버레이 멈춤(영역 None).
-USE_KEYS = ("buff", "debuff", "boss", "halo_timer", "skillbar")
+USE_KEYS = ("buff", "debuff", "boss", "halo_timer", "skillbar", "stat_bars")  # 체력바도(QA 0429c66 — 바별 표시만으론 저절로 켜졌음)
 
 _active = False
 _runtime: dict[str, dict] = {}

@@ -123,6 +123,7 @@ class HaloCaptureSection(QWidget):
         self.region_row = wrapping_row(row, commands)
         v.addLayout(self.region_row)
         guide = hint_label('게임 상단의 남은 시간이 분·초까지 모두 들어오도록 지정해 주세요.')  # 안내 = 회색(명세 14.2)
+        self.region_guide = guide
         v.addWidget(guide)
         self.region_btn.clicked.connect(self._pick)
         self.view_btn.clicked.connect(self._view)
@@ -145,6 +146,7 @@ class HaloCaptureSection(QWidget):
         from .region_section import RegionSection
         self.region_section = RegionSection(region_body, unset_text="지정하면 다음 헤일로까지 남은 시간을 보여주고 5초 전에 알려줘요",
                                             title="영역 다시 지정 · 판독 확인")
+        self.region_section.set_guide(self.region_guide, '전투 시간은 화면에 보이면 앱이 알아서 찾아요. 틀리면 남은 시간이 분·초까지 들어오게 직접 지정하면 고정돼요.')  # 자동 찾기 켜짐: v3 안내(QA 0429c66 4)
         v = outer
         v.addWidget(self.region_section)
         v.addWidget(display_group)

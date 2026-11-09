@@ -121,6 +121,15 @@ def save_enabled(key, value):
     config._write_local_config(raw)
 
 
+def _initial_use(key, raw) -> bool:
+    """사용 값 처음 값 = 업데이트 전 동작 그대로. 체력바는 저장된 영역이 있고 표시할 바가 하나라도 켜져 있을 때만(바별 show 기본 True라 영역만으론 안 됨)."""
+    if key == "stat_bars":
+        bars = section(section(raw, "statBars"), "bars")
+        shown = any(section(bars, sid).get("show", True) is not False for sid in ("hp", "mp", "sta"))
+        return bool(region_enabled(key, raw)) and shown
+    return bool(region_enabled(key, raw))
+
+
 def autofind_v2_use_values():
     """v2 사용 값. 처음 생길 때 한 번 '지금 영역이 있으면 켜짐'으로 채운다(업데이트 뒤 동작 그대로)."""
     from . import autofind_regions
@@ -129,7 +138,7 @@ def autofind_v2_use_values():
     use = section(sec, "use")
     if all(isinstance(use.get(k), bool) for k in autofind_regions.USE_KEYS):
         return {k: use[k] for k in autofind_regions.USE_KEYS}
-    filled = {k: (use[k] if isinstance(use.get(k), bool) else bool(region_enabled(k, raw)))
+    filled = {k: (use[k] if isinstance(use.get(k), bool) else _initial_use(k, raw))
               for k in autofind_regions.USE_KEYS}
     sec = dict(sec)
     sec["use"] = filled

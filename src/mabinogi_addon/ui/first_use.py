@@ -33,6 +33,15 @@ OTHERS = (("opt", "게임 최적화", "게임 우선순위·CPU 배치로 끊김
           ("fps", "게임 위 정보", "FPS·현재 시각을 게임 위에"),
           ("cursor", "마우스 커서", "커서를 잘 보이게 표시"),
           ("blackbox", "최근 영상 보관", "방금 장면을 저장할 수 있게 보관"))
+# 둘러보기 8단계(명세 3절) — 3단계 '둘러보기에서 알려 드릴 것'과 둘러보기 카드 제목이 같은 순서·같은 말을 쓴다(main_window._run_tour)
+TOUR = (("기능 켜고 끄기", "홈에서 기능을 켜고 끄고, 줄마다 지금 상태를 봐요"),
+        ("세부 설정", "줄을 누르면 알림 시간·소리·오버레이 크기를 바꾸는 화면으로 가요"),
+        ("위치가 틀릴 때", "기능 화면 '영역 다시 지정'에서 다시 찾거나 직접 맞춰요"),
+        ("오버레이 위치 잠금", "오버레이를 옮긴 뒤 잠그면 클릭이 게임으로 통과해요"),
+        ("직접 고르는 기능", "커스텀 오버레이·메모는 원하는 곳을 직접 골라 써요"),
+        ("그 밖의 기능", "파티 모집·편의기능·최적화·블랙박스"),
+        ("잠깐 쉬기", "상단 '전투 보조: 켜짐'으로 오버레이·소리만 잠시 멈춰요"),
+        ("다시 열기", "설정 › 일반 '안내 다시 보기'"))
 READ_KEYS = tuple(k for k, *_ in COMBAT + SCREEN)  # 화면을 읽는 8개 — 찾기 상태 표시
 NAMES = {k: n for k, n, _ in COMBAT + SCREEN + OTHERS}
 
@@ -119,10 +128,11 @@ class FirstUseGuide(QWidget):
     later = Signal()                     # 1단계 '나중에 하기'
     finished = Signal(bool)              # 3단계: True = 앱 둘러보기 시작
 
-    def __init__(self, *, state_fn=None, windows_fn=None, game_fn=None, parent=None):
+    def __init__(self, *, state_fn=None, windows_fn=None, game_fn=None, size_fn=None, parent=None):
         """state_fn() → {홈 줄 키: (켬, place)} (place = autofind_regions.place 값 또는 None),
-        windows_fn() → [(제목, exe)], game_fn() → 등록된 게임 exe 또는 None."""
+        windows_fn() → [(제목, exe)], game_fn() → 등록된 게임 exe 또는 None, size_fn() → 연결한 게임 창 (가로, 세로) 또는 None."""
         super().__init__(parent)
+        self._size_fn = size_fn or (lambda: None)
         self._state_fn = state_fn or (lambda: {})
         self._windows_fn = windows_fn or (lambda: [])
         self._game_fn = game_fn or (lambda: None)
@@ -242,6 +252,14 @@ class FirstUseGuide(QWidget):
         self.ready_list = _label("")
         v.addWidget(self.ready_list)
         v.addWidget(_label("게임 화면에 보이면 앱이 위치를 찾고 바로 동작해요.", role="muted"))
+        v.addSpacing(6)
+        v.addWidget(_label("둘러보기에서 알려 드릴 것", bold=True))
+        self.tour_list = QLabel("<br>".join(
+            f'<span style="color:{color("accent")}"><b>{i}</b></span>&nbsp; <b>{escape(title)}</b>'
+            f'<span style="color:{color("muted")}"> — {escape(text)}</span>' for i, (title, text) in enumerate(TOUR, 1)))
+        self.tour_list.setTextFormat(Qt.TextFormat.RichText)
+        self.tour_list.setWordWrap(True)
+        v.addWidget(self.tour_list)
         v.addStretch(1)
         v.addWidget(_label("둘러보기는 설정 › 일반에서 언제든 다시 볼 수 있어요.", size=12, role="muted"))
         return page
@@ -319,11 +337,17 @@ class FirstUseGuide(QWidget):
         if not game and len(found) == 1:
             self.game_connected.emit(found[0][1])
             game = self._game_fn()
-        title = next((t for t, e in found if e == game), None)
+        title = next((t for t, e in found if game and e.lower() == str(game).lower()), None)
         ok, warn = color("ok"), color("warn")
-        if game:
-            name = escape(title or str(game))
-            self.game_status.setText(f'<span style="color:{ok}">●</span> 마비노기 창을 찾았어요 — {name}')
+        if game and title:  # 명세 2.1: '<창 이름> (<해상도>)'
+            try:
+                size = self._size_fn()
+            except Exception:  # noqa: BLE001
+                size = None
+            res = f" ({size[0]}×{size[1]})" if size else ""
+            self.game_status.setText(f'<span style="color:{ok}">●</span> 마비노기 창을 찾았어요 — {escape(title)}{res}')
+        elif game:  # 연결해 둔 창이 지금 꺼져 있음
+            self.game_status.setText(f'<span style="color:{warn}">●</span> 마비노기를 켜 주세요 — 켜면 자동으로 연결돼요')
         elif len(found) > 1:
             self.game_status.setText(f'<span style="color:{warn}">●</span> 마비노기 창이 여러 개예요 — 쓸 창을 골라 주세요')
         else:

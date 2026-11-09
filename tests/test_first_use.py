@@ -135,3 +135,27 @@ def test_pages_fit_default_window_without_scroll(app, page):
     assert g.layout().sizeHint().height() <= 744 - 8
     g.stop()
     g.close()
+
+
+def test_ready_page_lists_tour_in_same_order(app):
+    """3단계 '둘러보기에서 알려 드릴 것'(명세 2.3) = 둘러보기 8단계(3절) 순서."""
+    from mabinogi_addon.ui.first_use import TOUR
+    g, _ = _guide()
+    g.go(2)
+    text = g.tour_list.text()
+    positions = [text.index(title) for title, _ in TOUR]
+    assert len(TOUR) == 8 and positions == sorted(positions)
+
+
+def test_game_box_shows_window_title_and_resolution(app):
+    """1단계 게임 창 상자: '<창 이름> (<해상도>)'(명세 2.1) — 실행 파일 이름이 아니라 창 제목. 등록 exe 대소문자가 달라도 같은 창."""
+    store = {"exe": "mabinogimobile.exe"}
+    g = FirstUseGuide(windows_fn=lambda: [GAME], game_fn=lambda: store["exe"], size_fn=lambda: (2560, 1440))
+    g.start()
+    assert "마비노기 창을 찾았어요 — 마비노기 모바일 (2560×1440)" in g.game_status.text()
+    assert "MabinogiMobile.exe" not in g.game_status.text()
+    g.stop()
+    off = FirstUseGuide(windows_fn=lambda: [], game_fn=lambda: "MabinogiMobile.exe")
+    off.start()
+    assert "마비노기를 켜 주세요" in off.game_status.text()  # 연결해 둔 창이 꺼져 있음
+    off.stop()

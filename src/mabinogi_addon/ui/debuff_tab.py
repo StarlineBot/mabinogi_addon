@@ -186,7 +186,8 @@ class DebuffTab(QWidget):
         hint_row.removeWidget(self.region_hint)
         hint_row.addStretch()
         v.addLayout(hint_row)
-        v.addWidget(hint_label("자동 찾기는 디버프 줄과 보스 체력바를 함께, 직접 지정은 디버프 줄만 등록해요."))
+        self.region_guide = hint_label("자동 찾기는 디버프 줄과 보스 체력바를 함께, 직접 지정은 디버프 줄만 등록해요.")
+        v.addWidget(self.region_guide)
         self.shared_region_hint = hint_label("")
 
         from .widgets import ElidedLabel
@@ -269,6 +270,7 @@ class DebuffTab(QWidget):
         from .region_section import RegionSection
         self.region_section = RegionSection(body, unset_text="지정하면 보스에게 아직 걸리지 않은 디버프를 보여줘요",
                                             summary=summary, header_title="판독 영역 · 디버프 줄")
+        self.region_section.set_guide(self.region_guide, "디버프 줄은 보스 체력바 위에서 앱이 알아서 찾아요. 틀리면 '자동 찾기'(디버프 줄 + 보스 체력바)나 '직접 지정'(디버프 줄만)으로 맞추면 고정돼요.")  # 자동 찾기 켜짐: v3 안내(QA 0429c66 4)
         v = outer
         # 위 전체 폭(명세 17절): 1줄 '판독 영역 · 디버프 줄' 상태 ⓘ [영역 다시 지정] / 2줄 잠금 세 칸 + 체크박스 / 구분선.
         # 그 아래 목록 | 고른 항목 설정이 같은 높이에서 시작한다(바깥 상자 없음).

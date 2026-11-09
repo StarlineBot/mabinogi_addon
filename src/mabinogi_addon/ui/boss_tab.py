@@ -173,7 +173,8 @@ class BossTab(QWidget):
         commands.addWidget(self.clear_region_btn)
         self.region_row = wrapping_row(row, commands)
         cv.addLayout(self.region_row)
-        cv.addWidget(hint_label("이름과 체력 비율이 보이는 보스 체력바를 지정해 주세요."))
+        self.region_guide = hint_label("이름과 체력 비율이 보이는 보스 체력바를 지정해 주세요.")
+        cv.addWidget(self.region_guide)
 
         preview_group = QGroupBox("판독 미리보기")
         preview_layout = QVBoxLayout(preview_group)
@@ -191,6 +192,7 @@ class BossTab(QWidget):
         from .region_section import RegionSection
         self.region_section = RegionSection(region_body, unset_text="지정하면 보스 체력이 패턴 기준에 가까워질 때 알려줘요",
                                             title="영역 다시 지정 · 판독 확인")
+        self.region_section.set_guide(self.region_guide, '보스 체력바는 화면에 처음 나타날 때 앱이 알아서 찾아요. 틀리면 이름과 체력 비율이 보이게 직접 지정하면 고정돼요.')  # 자동 찾기 켜짐: v3 안내(QA 0429c66 4)
         controls.addWidget(QLabel("판독 영역 · 보스 체력바"))
         controls.addWidget(self.region_section)
 

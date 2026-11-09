@@ -103,9 +103,11 @@ class SkillbarTab(QWidget):
         row.addStretch()
         row.addWidget(self.clear_region_btn)
         v.addLayout(row)
-        v.addWidget(hint_label("원본 단축바를 보이게 한 뒤 자동 찾기 · 직접 지정은 맨 왼쪽 위 첫 칸에 맞추세요."))
+        self.region_guide = hint_label("원본 단축바를 보이게 한 뒤 자동 찾기 · 직접 지정은 맨 왼쪽 위 첫 칸에 맞추세요.")
+        v.addWidget(self.region_guide)
         from .region_section import RegionSection
         self.region_section = RegionSection(region_body, unset_text="지정하면 단축바를 그룹별로 원하는 위치에 보여줘요")
+        self.region_section.set_guide(self.region_guide, "단축바 위치는 앱이 알아서 찾아요. 틀리면 원본 단축바를 보이게 한 뒤 '직접 지정'으로 맨 왼쪽 위 첫 칸에 맞추면 고정돼요.")  # 자동 찾기 켜짐: v3 안내(QA 0429c66 4)
         v = outer
         v.addWidget(self.region_section)
 

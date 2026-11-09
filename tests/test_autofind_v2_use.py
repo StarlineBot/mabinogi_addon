@@ -30,7 +30,8 @@ def test_v2_off_keeps_region_means_enabled_and_saved_region(isolated):
 def test_initial_use_values_filled_once_from_saved_regions(isolated):
     afr.activate(True)
     use = setup_state.autofind_v2_use_values()
-    assert use == {"buff": True, "debuff": False, "boss": False, "halo_timer": False, "skillbar": True}
+    assert use == {"buff": True, "debuff": False, "boss": False, "halo_timer": False, "skillbar": True,
+                   "stat_bars": False}  # 체력바 저장 영역 없음 → 꺼짐(QA 0429c66)
     raw = json.loads(isolated.read_text(encoding="utf-8"))
     raw["debuffTracker"] = {"captureRegion": BOX}  # 나중에 영역이 생겨도 이미 채운 값은 그대로
     isolated.write_text(json.dumps(raw), encoding="utf-8")

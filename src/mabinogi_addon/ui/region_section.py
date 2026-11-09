@@ -225,6 +225,7 @@ class RegionSection(QWidget):
         """자동 찾기 켜짐일 때만 한 줄 — 지금 읽는 자리의 출처(자동·저장된 영역·직접 지정) + 고정이면 [자동으로 돌아가기].
         자리가 아직 없으면 '아직 지정 안 됨' 대신 위치 상태(찾는 중·보이면 찾아요·못 찾음)."""
         from .. import autofind_regions
+        self._apply_guide()
         text = autofind_combined(self.autofind_keys) if self.autofind_keys else autofind_text(self.autofind_key)
         if self.header:  # 버프·디버프 한 줄 머리(명세 17절): 짧은 말, 긴 설명은 툴팁 — 긴 문구로 탭 최소 폭이 936px까지 늘던 것(QA 50a07f9)
             self.auto_badge.setText(_short(self.autofind_key) if text else "")
@@ -243,6 +244,22 @@ class RegionSection(QWidget):
             tone = color('warn') if warn else color('muted')
             self.unset_label.setText(f'<span style="color:{tone}">●</span> {unplaced_text(key, "")}')
             self.unset_label.setStyleSheet(f"color:{tone};")
+
+    def set_guide(self, label: QLabel, auto_text: str) -> None:
+        """영역 지정 안내(회색 한 줄)를 자동 찾기 켜짐이면 v3 문구('앱이 알아서 찾아요 · 틀리면 직접 지정하면 고정')로(QA 0429c66 4).
+        자동 찾기 꺼짐(비상 값)이면 예전 안내 그대로."""
+        self._guide = (label, label.text(), auto_text)
+        _SECTIONS.add(self)
+        self._apply_guide()
+
+    def _apply_guide(self) -> None:
+        from .. import autofind_regions
+        guide = getattr(self, "_guide", None)
+        if guide is not None:
+            label, legacy, auto = guide
+            text = auto if autofind_regions.active() else legacy
+            if label.text() != text:
+                label.setText(text)
 
     def _auto_return(self) -> None:
         from .. import autofind_regions

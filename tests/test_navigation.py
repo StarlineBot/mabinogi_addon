@@ -119,6 +119,8 @@ def test_tour_both_directions_and_approved_return(window, from_guide, finish):
     w._run_tour(from_guide=from_guide)
     tour = w._tour
     assert len(tour._steps) == 8  # 둘러보기 8단계(first-use-v3 3절)
+    from mabinogi_addon.ui.first_use import TOUR
+    assert [step.title for step in tour._steps] == [title for title, _ in TOUR]  # 첫 사용 3단계 목록과 같은 순서·같은 말
     assert tour._section_title == ''
     home, tracker, settings = 'home', w._tracker_tabs, w._settings_scroll
     expected = [home, home, tracker, tracker, tracker, tracker, tracker, settings]

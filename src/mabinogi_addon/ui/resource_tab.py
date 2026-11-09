@@ -56,6 +56,7 @@ class ResourceTab(QWidget):
         self.region_status.setWordWrap(True)
         layout.addWidget(self.region_status)
         guide = hint_label("보라색 원과 오른쪽 아래의 투아림 숫자·%가 함께 들어오도록 지정해 주세요.")  # 안내 = 회색(명세 14.2)
+        self.region_guide = guide
         layout.addWidget(guide)
         row = QHBoxLayout()
         for attr,text in (("auto_find_btn","자동 찾기"),("region_btn","직접 지정"),
@@ -97,6 +98,7 @@ class ResourceTab(QWidget):
         from .region_section import RegionSection
         self.region_section = RegionSection(region_body, unset_text="지정하면 도르카와 투아림을 보기 편한 위치에 보여줘요",
                                             title="영역 다시 지정 · 판독 확인")
+        self.region_section.set_guide(self.region_guide, '도르카·투아림 위치는 앱이 알아서 찾아요. 틀리면 보라색 원과 투아림 숫자·%가 함께 들어오게 직접 지정하면 고정돼요.')  # 자동 찾기 켜짐: v3 안내(QA 0429c66 4)
         layout = outer
         layout.addWidget(self.region_section)
         # 화면 표시(명세 11.2): 1줄 표시 체크 + 잠금, 2줄 배율. 표시 미리보기는 없앰.
