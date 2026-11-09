@@ -718,7 +718,8 @@ class StatBarsTab(QWidget):
             self.region_label.setStyleSheet(f"color:{color('ok')};")
             self.view_region_btn.setEnabled(True)
         else:
-            self.region_label.setText("영역 미지정 — 세 바를 감싸게 지정하세요")
+            from .region_section import unplaced_text
+            self.region_label.setText(unplaced_text("stat_bars", "영역 미지정 — 세 바를 감싸게 지정하세요"))
             self.region_label.setStyleSheet(f"color:{color('muted')};")
             self.view_region_btn.setEnabled(False)
         section = self.region_section  # 영역 묶음(명세 11절): 지정 후 한 줄 요약 + 접힘, 막 지정했으면 펼침

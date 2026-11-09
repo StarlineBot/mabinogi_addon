@@ -216,3 +216,23 @@ def test_many_needs_scroll_with_dark_scrollbar():
     assert bar.maximum() > 0  # 아주 많을 때만 스크롤
     assert "QScrollBar::handle:vertical" in page.styleSheet()  # 밝은 기본 스크롤바 대신 어두운 모양
     page.close()
+
+
+def test_location_summary_and_refind_button():
+    """자동 찾기 켜짐(first-use-v3 4.1): 상태 카드에 켜진 기능 기준 위치 요약 + 위치 다시 찾기(도는 동안 비활성), 설정 필요 상자 없음."""
+    from mabinogi_addon.ui.home_page import location_summary
+    page = HomePage()
+    fired = []
+    page.refind_requested.connect(lambda: fired.append(True))
+    page.update_state({"title": "running", "working": 3, "locations": {"found": 6, "wait": 2, "missing": 0, "busy": False}})
+    assert page.summary.text() == "전투 보조 3개 동작 중 · 게임 UI 위치 6곳 찾음, 2곳은 보이면 찾아요"
+    assert not page.refind_btn.isHidden() and page.refind_btn.isEnabled() and page.warn_box.isHidden()
+    page.refind_btn.click()
+    assert fired == [True]
+    page.update_state({"title": "running", "locations": {"busy": True}})
+    assert not page.refind_btn.isEnabled() and page.refind_btn.text() == "찾는 중…"
+    assert location_summary({"found": 1, "missing": 1}) == "게임 UI 위치 1곳 찾음, 1곳 못 찾음"
+    assert location_summary({}) == "켜진 기능이 없어 위치를 찾지 않아요"
+    page.update_state({"title": "running"})  # 자동 찾기 꺼짐(비상 값): 버튼 없음
+    assert page.refind_btn.isHidden()
+    page.close()

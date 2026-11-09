@@ -339,7 +339,8 @@ class BossTab(QWidget):
             r = self._region
             self.region_label.setText(f"등록됨 · {r['w']}×{r['h']}")
         else:
-            self.region_label.setText("영역 미지정")
+            from .region_section import unplaced_text
+            self.region_label.setText(unplaced_text("boss", "영역 미지정"))
         section = getattr(self, "region_section", None)
         if section is not None:  # 영역 묶음(명세 11절): 지정 후 한 줄 요약 + 접힘, 막 지정했으면 펼쳐 판독 확인
             newly = bool(self._region) and not section.registered and getattr(self, "_region_ready", False)

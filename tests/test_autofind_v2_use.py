@@ -88,21 +88,32 @@ def test_home_rows_show_switch_and_location_only_with_v2():
     engine.items["boss"].status = "found"
     engine.items["boss"].box = (1, 2, 3, 4)
     engine.items["halo_timer"].status = "waiting"
+    engine.items["skillbar"].status = "missing"
+    engine.phase = "stable"
     afr.set_region("boss", BOX)
+    afr.set_state_source(lambda key: {"found": "found", "waiting": "waiting", "missing": "missing"}.get(
+        engine.items[key].status, "searching"))
+    afr.region_for("tuarim", {"x": 1, "y": 1, "w": 5, "h": 5})  # 투아림: 못 찾았지만 저장 영역(v1)
+    engine.items["tuarim"].status = "missing"
+    shown = {"stat_bars": False, "dorcha": True, "tuarim": True}
     me = SimpleNamespace(_HOME_V2_SWITCHES=MainWindow._HOME_V2_SWITCHES, _HOME_FEATURES=MainWindow._HOME_FEATURES,
                          _autofind_v2=SimpleNamespace(engine=engine))
     me._autofind_place = lambda key: MainWindow._autofind_place(me, key)
+    me._home_place_row = lambda *a: MainWindow._home_place_row(me, *a)
+    me._home_feature_on = lambda k: (afr.use_on(MainWindow._HOME_FEATURES[k]) if k in MainWindow._HOME_V2_SWITCHES
+                                     else shown[k])
     rows = {"buff": ("추적 중", "ok"), "debuff": ("영역 지정 필요", "warn"), "boss": ("영역 지정 필요", "warn"),
             "halo": ("영역 지정 필요", "warn"), "skillbar": ("영역 지정 필요", "warn"),
             "stat_bars": ("꺼짐", "muted", False), "dorcha": ("표시 중", "ok", True), "tuarim": ("영역 지정 필요", "warn", True)}
     MainWindow._home_v2_rows(me, rows, False, True)
-    assert rows["buff"] == ("추적 중", "ok", True)
+    assert rows["buff"] == ("켜짐 · 동작 중", "ok", True)
     assert rows["debuff"] == ("꺼짐 · 위치 찾음", "muted", False)  # 디버프 자리 = 보스바 위
-    assert rows["boss"] == ("대기 중 · 위치 찾음", "muted", True)
-    assert rows["halo"] == ("꺼짐 · 나타나면 찾음", "muted", False)
-    assert rows["skillbar"] == ("대기 중 · 위치 찾는 중", "muted", True)
-    assert rows["stat_bars"] == ("꺼짐 · 위치 찾는 중", "muted", False) and rows["dorcha"] == ("표시 중", "ok", True)
-    assert rows["tuarim"] == ("대기 중 · 위치 찾는 중", "muted", True)
+    assert rows["boss"] == ("켜짐 · 위치 찾음", "muted", True)
+    assert rows["halo"] == ("꺼짐 · 화면에 보이면 찾아요", "muted", False)
+    assert rows["skillbar"] == ("켜짐 · 못 찾음 — 기능 화면에서 맞추기", "warn", True)
+    assert rows["stat_bars"] == ("꺼짐 · 위치 찾는 중", "muted", False)
+    assert rows["dorcha"] == ("켜짐 · 동작 중", "ok", True)
+    assert rows["tuarim"] == ("켜짐 · 저장된 영역 사용", "muted", True)
 
 
 @pytest.mark.parametrize("creator,disabled,attached,active", [
@@ -206,12 +217,12 @@ def test_dorcha_tuarim_autofind_line_on_top_of_common_tab(monkeypatch):
         r.refresh_registration()
         d._update_region_label()
         t._update_region_label()
-        assert section.auto_badge.text() == "자동(v2) · 도르카 찾은 자리 · 투아림 찾는 중"
+        assert section.auto_badge.text() == "자동으로 찾기 · 도르카 위치 찾음 · 투아림 찾는 중"
         assert not section.auto_badge.isHidden() and section.registered  # 접힌 상태에서도 맨 위
-        assert d.region_label.text().startswith("찾은 자리  1180, 96") and t.region_label.text() == "자동(v2) 자리 찾는 중"
+        assert d.region_label.text().startswith("찾은 자리  1180, 96") and t.region_label.text() == "위치 찾는 중이에요"
         afr.user_set("tuarim")
         refresh_autofind("tuarim")
-        assert section.auto_badge.text() == "자동(v2) · 도르카 찾은 자리 · 투아림 직접 지정"
+        assert section.auto_badge.text() == "자동으로 찾기 · 도르카 위치 찾음 · 투아림 직접 지정"
     finally:
         r.shutdown()
         d.shutdown()

@@ -473,6 +473,7 @@ class MainWindow(QMainWindow):
         self.home_page.open_combat_tab.connect(self._home_open_combat_tab)
         self.home_page.switch_toggled.connect(self._home_switch)
         self.home_page.combat_toggled.connect(lambda on: self._set_paused(not on))
+        self.home_page.refind_requested.connect(self._home_refind)
         self.home_page.channel_refresh.connect(self._home_refresh_channels)
         self.harp_tab.summary_changed.connect(self._home_channel_changed)
         self._refresh_cursor_access()
@@ -790,8 +791,10 @@ class MainWindow(QMainWindow):
             rows[key] = (*shown(key, on, active), on)
         rows["skillbar"] = shown("skillbar")
         rows["memo"] = shown("memo")
+        locations = None
         if autofind_regions.active():
             self._home_v2_rows(rows, paused, game)
+            locations = self._home_locations()
         rows["opt"] = self.optimization_tools.home_state()
         frames = self.optimization_tools.panel.frames_toggle.isChecked()
         rows["fps"] = ("표시 중" if frames else "꺼짐", "ok" if frames else "muted", frames)
@@ -800,51 +803,90 @@ class MainWindow(QMainWindow):
         cursor_on = self.cursor_fx.is_enabled()
         rows["cursor"] = (("꺼짐", "muted") if not cursor_on else ("대기 중 · 일시정지", "muted") if paused
                           else ("표시 중", "ok") if game else waiting_game) + (cursor_on,)
-        # 설정 필요: 사용자가 쓰기로 고른 기능 중 영역이 없는 것만(명세 12.2-3)
-        needs = [(key, self._HOME_NAMES[key]) for key in self._HOME_FEATURES
-                 if setup_state.selected(self._HOME_FEATURES[key], raw) and missing(key)]
+        # 설정 필요: 사용자가 쓰기로 고른 기능 중 영역이 없는 것만(명세 12.2-3). 자동 찾기 켜짐이면 없음 — 위치 요약·줄 상태로 대신(first-use-v3 4.1)
+        needs = [] if locations is not None else [
+            (key, self._HOME_NAMES[key]) for key in self._HOME_FEATURES
+            if setup_state.selected(self._HOME_FEATURES[key], raw) and missing(key)]
         working = sum(1 for key in self._HOME_FEATURES if rows[key][1] == "ok")
         title = "paused" if paused else "running" if game else "waiting"
-        return {"title": title, "combat_on": not paused, "working": working, "needs": needs, "rows": rows,
-                "channel": self.harp_tab.home_summary()}
+        state = {"title": title, "combat_on": not paused, "working": working, "needs": needs, "rows": rows,
+                 "channel": self.harp_tab.home_summary()}
+        if locations is not None:
+            state["locations"] = locations
+        return state
+
+    # 화면을 읽는 기능(홈 줄 키 → 자동 찾기 키). 디버프 줄은 보스바에서 계산 — 위치로는 보스바 하나로 센다.
+    _HOME_PLACE_KEYS = {"buff": "buff", "debuff": "boss", "boss": "boss", "halo": "halo_timer",
+                        "stat_bars": "stat_bars", "skillbar": "skillbar", "dorcha": "dorcha", "tuarim": "tuarim"}
+
+    def _home_locations(self) -> dict:
+        """상태 카드 위치 요약 — 켜진 기능 기준(first-use-v3 6절 8). 같은 자리(디버프·보스 패턴 = 보스바)는 한 곳."""
+        counts = {"found": 0, "wait": 0, "missing": 0}
+        seen = set()
+        for home_key, key in self._HOME_PLACE_KEYS.items():
+            if not self._home_feature_on(home_key) or key in seen:
+                continue
+            seen.add(key)
+            state = autofind_regions.place(key)
+            if state in ("found", "user", "v1"):
+                counts["found"] += 1
+            elif state in ("wait", "hidden"):
+                counts["wait"] += 1
+            elif state == "missing":
+                counts["missing"] += 1
+        controller = getattr(self, "_autofind_v2", None)
+        counts["busy"] = bool(controller is not None and controller.busy)
+        return counts
+
+    def _home_feature_on(self, home_key: str) -> bool:
+        if home_key in self._HOME_V2_SWITCHES:
+            return autofind_regions.use_on(self._HOME_FEATURES[home_key])
+        if home_key == "stat_bars":
+            return self.stat_bars_tab.any_shown()
+        return {"dorcha": self.dorcha_tab, "tuarim": self.tuarim_tab}[home_key].enable.isChecked()
+
+    def _home_refind(self) -> None:
+        """홈 '위치 다시 찾기' — 처음 찾기 한 번 더(도는 동안 버튼 비활성, 끝나면 요약 한 줄)."""
+        controller = getattr(self, "_autofind_v2", None)
+        if controller is None or controller.busy:
+            return
+        controller.restart()
+        if self.home_visible():
+            self.home_page.update_state(self._home_state())
 
     def _home_v2_rows(self, rows: dict, paused: bool, game: bool) -> None:
-        """자동 찾기 v2(2.1절): 5줄은 사용 값 스위치 + 위치 상태('꺼짐 · 위치 찾음'). 저장 영역 유무로 '영역 지정 필요'를 띄우지 않는다."""
-        for home_key in self._HOME_V2_SWITCHES:
+        """자동 찾기(first-use-v3 1·4.1절): 줄 상태 = 켜짐/꺼짐 + 위치('꺼짐 · 위치 찾음' · '켜짐 · 동작 중' · '켜짐 · 화면에 보이면 찾아요' ·
+        '켜짐 · 저장된 영역 사용' · '켜짐 · 못 찾음 — 기능 화면에서 맞추기'). 저장 영역 유무로 '영역 지정 필요'를 띄우지 않는다."""
+        for home_key in (*self._HOME_V2_SWITCHES, "stat_bars", "dorcha", "tuarim"):
             key = self._HOME_FEATURES[home_key]
-            on = autofind_regions.use_on(key)
-            place = self._autofind_place(key)
+            on = self._home_feature_on(home_key)
             text, kind = rows[home_key][:2]
-            if not on:
-                rows[home_key] = (f"꺼짐 · {place}", "muted", False)
-            elif kind == "warn":  # 저장 영역이 없어서 나온 '영역 지정 필요' → 위치 상태로
-                rows[home_key] = (("대기 중 · 일시정지" if paused else f"대기 중 · {place}"), "muted", True)
-            else:
-                rows[home_key] = (text, kind, True)
-        for key in ("stat_bars", "dorcha", "tuarim"):  # 자기 사용 값이 이미 있는 줄: 스위치는 그대로, 위치 상태만 덧붙임
-            text, kind, on = rows[key]
-            place = self._autofind_place(key)
-            if not on:
-                rows[key] = (f"꺼짐 · {place}", "muted", on)
-            elif kind == "warn":
-                rows[key] = (("대기 중 · 일시정지" if paused else f"대기 중 · {place}"), "muted", on)
+            rows[home_key] = (*self._home_place_row(key, on, text, kind, paused), on)
+
+    def _home_place_row(self, key: str, on: bool, text: str, kind: str, paused: bool) -> tuple[str, str]:
+        place = self._autofind_place(key)
+        state = autofind_regions.place(key)
+        if not on:
+            return f"꺼짐 · {place}", "muted"
+        if paused:
+            return "대기 중 · 일시정지", "muted"
+        if kind == "ok":
+            return "켜짐 · 동작 중", "ok"
+        if state in ("wait", "hidden"):
+            return "켜짐 · 화면에 보이면 찾아요", "muted"
+        if state == "missing":
+            return "켜짐 · 못 찾음 — 기능 화면에서 맞추기", "warn"
+        if state == "v1":
+            return "켜짐 · 저장된 영역 사용", "muted"
+        if state == "searching":
+            return "켜짐 · 위치 찾는 중", "muted"
+        return (text, kind) if kind != "warn" else (f"켜짐 · {place}", "muted")
 
     def _autofind_place(self, key: str) -> str:
-        """홈 상태 줄의 위치 상태(v2)."""
-        if key in autofind_regions.user_keys():
-            return "직접 지정"
-        v2 = self._autofind_v2
-        lookup = "boss" if key == "debuff" else key
-        item = None if v2 is None else v2.engine.items.get(lookup)
-        if item is None:
-            return "위치 찾는 중"
-        if autofind_regions.is_auto(lookup) or item.status == "found":
-            return "위치 찾음"
-        if item.status == "waiting":
-            return "나타나면 찾음"
-        if item.status == "missing":
-            return "위치 못 찾음"
-        return "위치 찾는 중"
+        """홈 상태 줄의 위치 문구(꺼진 줄 '꺼짐 · …')."""
+        from .region_section import place_text
+        text = place_text(key) or "위치 찾는 중"
+        return {"찾는 중": "위치 찾는 중", "못 찾음": "위치 못 찾음"}.get(text, text)
 
     def _home_channel_changed(self) -> None:
         """채널 측정 결과가 바뀌면 홈 한 줄만 바로 다시(0.7초 상태 타이머를 기다리지 않음)."""
@@ -1335,7 +1377,9 @@ class MainWindow(QMainWindow):
 
     def _buff_status(self) -> tuple[str, str, str]:
         if not _feature_region("buff"):
-            return ("영역 미지정 — 버프 판독 영역의 '직접 지정'을 먼저 하세요", self._STATUS_WARN, "region")
+            from .region_section import unplaced_text
+            text = unplaced_text("buff", "영역 미지정 — 버프 판독 영역의 '직접 지정'을 먼저 하세요")
+            return (text, self._STATUS_WARN if autofind_regions.place("buff") in (None, "missing") else self._STATUS_MUTED, "region")
         if self.buff_controller is None:
             return (self._WAITING_TEXT, self._STATUS_MUTED, "waiting")
         if not self._watcher.is_game_active():
@@ -1387,7 +1431,9 @@ class MainWindow(QMainWindow):
 
     def _debuff_status(self) -> tuple[str, str, str]:
         if not _feature_region("debuff"):
-            return ("영역 미지정 — 디버프 판독 영역의 '직접 지정'을 먼저 하세요", self._STATUS_WARN, "region")
+            from .region_section import unplaced_text
+            text = unplaced_text("debuff", "영역 미지정 — 디버프 판독 영역의 '직접 지정'을 먼저 하세요")
+            return (text, self._STATUS_WARN if autofind_regions.place("debuff") in (None, "missing") else self._STATUS_MUTED, "region")
         if self.debuff_controller is None:
             return (self._WAITING_TEXT, self._STATUS_MUTED, "waiting")
         if not self._watcher.is_game_active():

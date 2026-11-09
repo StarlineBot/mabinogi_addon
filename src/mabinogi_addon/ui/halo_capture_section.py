@@ -425,7 +425,8 @@ class HaloCaptureSection(QWidget):
         allowed = self._allowed()
         self.setVisible(allowed)
         self.access_changed.emit(allowed)
-        self.region_label.setText("영역 미지정" if self._region is None else
+        from .region_section import unplaced_text
+        self.region_label.setText(unplaced_text("halo_timer", "영역 미지정") if self._region is None else
             "등록 영역 {x}, {y} / {w} × {h}".format(**self._region))
         section = self.region_section  # 영역 묶음(명세 11절): 지정 후 한 줄 요약 + 접힘, 막 지정했으면 펼침
         registered = self._region is not None

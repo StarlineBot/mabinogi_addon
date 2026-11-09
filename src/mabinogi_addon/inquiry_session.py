@@ -78,7 +78,8 @@ COOLDOWN_LOG_LINES = 200
 
 
 def region_of(name: str) -> dict | None:
-    """저장된 영역(논리 좌표) — 없거나 잘못됐으면 None. 설정을 바꾸지 않는다(자동 찾기를 몰래 돌리지 않음)."""
+    """그 기능이 지금 읽는 자리(논리 좌표) — 자동 찾기가 찾은 자리, 못 찾았으면 저장된 영역(v1), 직접 지정 고정이면 그 영역.
+    없거나 잘못됐으면 None. 설정을 바꾸지 않는다(자동 찾기를 몰래 돌리지 않음)."""
     try:
         if name == "boss":
             box = config.load_boss_bar_region()
@@ -96,6 +97,10 @@ def region_of(name: str) -> dict | None:
             return None
     except Exception:  # noqa: BLE001 — 설정이 깨졌으면 '미설정'으로
         return None
+    key = {"stat": "stat_bars"}.get(name, name)
+    from . import autofind_regions
+    if key in autofind_regions.KEYS:
+        box = autofind_regions.current_region(key, box if isinstance(box, dict) else None)
     if isinstance(box, dict) and all(isinstance(box.get(k), int) for k in ("x", "y", "w", "h")) \
             and box["w"] > 0 and box["h"] > 0:
         return {k: int(box[k]) for k in ("x", "y", "w", "h")}

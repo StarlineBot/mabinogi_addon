@@ -359,8 +359,8 @@ class TuarimTab(QWidget):
             self.region_label.setStyleSheet(f"color:{color('ok')};")
             self.view_region_btn.setEnabled(True)
         else:
-            self.region_label.setText("자동(v2) 자리 찾는 중" if self._afr.active() and not self._afr.user_set_key("tuarim")
-                                      else "영역 미지정 — 숫자 두 자리와 % 가 보이게 지정하세요")
+            from .region_section import unplaced_text
+            self.region_label.setText(unplaced_text("tuarim", "영역 미지정 — 숫자 두 자리와 % 가 보이게 지정하세요"))
             self.region_label.setStyleSheet(f"color:{color('muted')};")
             self.view_region_btn.setEnabled(False)
 

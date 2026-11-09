@@ -162,7 +162,23 @@ class AutofindV2Controller(QObject):
         self.timer.setInterval(TICK_MS)
         self.timer.timeout.connect(self._safe_tick)
         autofind_regions.set_reporter(self.note_read)
+        autofind_regions.set_state_source(self.place)
         autofind_regions.subscribe(self._on_region_event)
+
+    def place(self, key: str) -> str:
+        """화면 문구용 엔진 상태 — 'found'|'waiting'|'hidden'|'missing'|'searching'."""
+        e = self.engine
+        it = e.items.get(key)
+        if it is None or e.phase in ("off", "waiting_ui") or (e.ui_hidden and it.status != v2.FOUND):
+            return "hidden" if e.phase != "off" else "searching"
+        if e.phase == "initial" and not it.user:
+            return "searching"
+        return {v2.FOUND: "found", v2.WAITING: "waiting", v2.MISSING: "missing"}.get(it.status, "searching")
+
+    @property
+    def busy(self) -> bool:
+        """처음 찾기 중(홈 '위치 다시 찾기' 비활성)."""
+        return self.engine.phase == "initial"
 
     def _on_region_event(self, key, user) -> None:
         """직접 지정 고정 → 그 항목은 엔진이 손대지 않는다. `자동으로 돌아가기` → 바로 다시 찾는다."""
@@ -199,6 +215,7 @@ class AutofindV2Controller(QObject):
         self.closed = True
         self.timer.stop()
         autofind_regions.set_reporter(None)
+        autofind_regions.set_state_source(None)
         if self._executor is not None and not getattr(self._executor, "inline", False):
             self._executor.submit(self._capture.close)  # 작업 스레드의 mss는 그 스레드에서 닫는다
             self._executor.shutdown(wait=False)

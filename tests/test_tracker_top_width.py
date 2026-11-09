@@ -1,6 +1,7 @@
 """버프·디버프 위 1줄(명세 17절)이 제작자·자동 찾기 v2 켬에서도 탭을 넓히지 않는다 — QA 50a07f9(최소 폭 936px).
 
-머리 줄의 v2 표시는 짧게 '자동(v2)'(긴 설명은 툴팁), 상태 문구는 넘치면 '…' + 툴팁. 다른 화면의 v2 줄은 그대로.
+머리 줄의 자동 찾기 표시는 짧게 '자동'·'직접 지정 · [자동으로 돌아가기]'(긴 설명은 툴팁), 상태 문구는 넘치면 '…' + 툴팁.
+다른 화면의 자동 찾기 줄은 긴 한 줄.
 """
 import json
 import os
@@ -29,8 +30,9 @@ def app(monkeypatch):
     autofind_regions.reset_for_tests()
 
 
+@pytest.mark.parametrize("fixed", [False, True])
 @pytest.mark.parametrize("kind", ["buff", "debuff"])
-def test_creator_v2_header_keeps_tab_within_790(app, monkeypatch, kind):
+def test_creator_v2_header_keeps_tab_within_790(app, monkeypatch, kind, fixed):
     from mabinogi_addon import feature_access
     from mabinogi_addon.ui.buff_tab import BuffTab
     from mabinogi_addon.ui.debuff_tab import DebuffTab
@@ -40,7 +42,11 @@ def test_creator_v2_header_keeps_tab_within_790(app, monkeypatch, kind):
         autofind_regions.set_region(kind, {"x": 1, "y": 2, "w": 300, "h": 80})
         tab.region_section.set_autofind_key(kind)
         badge = tab.region_section.auto_badge
-        assert badge.text() == "자동(v2)" and "저장된 영역은 그대로" in badge.toolTip()  # 긴 설명은 툴팁
+        assert badge.text() == "자동" and "자동으로 찾은 자리" in badge.toolTip()  # 긴 설명은 툴팁
+        if fixed:  # 직접 지정 고정: '직접 지정 · [자동으로 돌아가기]'(first-use-v3 4.1)
+            autofind_regions.user_set(kind)
+            tab.region_section.refresh_autofind()
+            assert badge.text() == "직접 지정 ·" and not tab.region_section.auto_return.isHidden()
         tab.set_status(LONGEST[kind], "#e0a000")
         tab.resize(790, 760)
         tab.show()
@@ -65,4 +71,10 @@ def test_other_screens_keep_long_v2_line(app):
     section.set_registered(True)
     autofind_regions.set_region("dorcha", {"x": 1, "y": 2, "w": 30, "h": 10})
     section.set_autofind_key("dorcha")
-    assert section.auto_badge.text().startswith("자동(v2) · ")  # 도르카·투아림 등은 지금처럼 긴 줄
+    assert section.auto_badge.text() == "자동으로 찾은 자리로 읽어요"  # 도르카·투아림 등은 긴 한 줄
+    assert section.auto_return.isHidden()
+    autofind_regions.user_set("dorcha")
+    section.refresh_autofind()
+    assert section.auto_badge.text().startswith("직접 지정") and not section.auto_return.isHidden()
+    section.auto_return.click()  # 자동으로 돌아가기
+    assert not autofind_regions.is_fixed("dorcha") and section.auto_return.isHidden()

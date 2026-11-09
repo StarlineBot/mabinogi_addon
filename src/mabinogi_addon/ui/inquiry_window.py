@@ -452,11 +452,11 @@ class InquiryWindow(QWidget):
             for name in card.regions:
                 box = inq.region_of(name)
                 if box is None:
-                    self.session.notes.append(f"{inq.REGION_LABELS[name]} 영역 미설정")
+                    self.session.notes.append(f"{inq.REGION_LABELS[name]} 위치 없음(못 찾음·미지정)")
                     continue
                 self._rects.append((name, to_physical(box)))
             if not self._rects:  # 영역이 하나도 없으면 미리 알린 대로 게임 1장으로
-                self._begin_countdown("영역이 지정되지 않아 5초 뒤 게임 화면 1장을 찍어요.")
+                self._begin_countdown("위치를 아직 못 찾아 5초 뒤 게임 화면 1장을 찍어요.")
                 return
             self._collecting = True
             self.progress_note.setText("60초 또는 20장이 되면 자동으로 끝나요. 아직 보내지 않았어요.")
@@ -571,7 +571,7 @@ class InquiryWindow(QWidget):
                 for name in card.regions:
                     box = inq.region_of(name)
                     if box is None:
-                        s.notes.append(f"{inq.REGION_LABELS[name]} 영역 미설정")
+                        s.notes.append(f"{inq.REGION_LABELS[name]} 위치 없음(못 찾음·미지정)")
                         continue
                     frame = inq.grab_physical(to_physical(box))
                     if frame is not None:

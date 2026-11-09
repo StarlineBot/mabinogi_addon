@@ -218,6 +218,7 @@ class HomePage(QWidget):
     switch_toggled = Signal(str, bool)  # 스위치(기능 키, 켬)
     combat_toggled = Signal(bool)  # 전투 보조 켜짐(True)/일시정지(False)
     channel_refresh = Signal()  # 0.42.0: 가장 빠른 채널 새로고침(1회 측정)
+    refind_requested = Signal()  # 0.45.0: 위치 다시 찾기(처음 찾기 한 번 더 — first-use-v3 4.1)
 
     def __init__(self, parent=None, extra_switches=()):
         super().__init__(parent)
@@ -299,6 +300,14 @@ class HomePage(QWidget):
         text.addWidget(self.title)
         text.addWidget(self.summary)
         row.addLayout(text, 1)
+        self.refind_btn = QPushButton("위치 다시 찾기")
+        self.refind_btn.setObjectName("homeRefind")
+        self.refind_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.refind_btn.setToolTip("게임 UI 위치를 처음부터 한 번 더 찾아요")
+        self.refind_btn.clicked.connect(self.refind_requested.emit)
+        self.refind_btn.hide()  # 자동 찾기 켜짐일 때만(update_state의 locations)
+        row.addWidget(self.refind_btn)
+        row.addSpacing(4)
         row.addWidget(_label("전투 보조", 12, "text"))
         self.combat_switch = Switch()
         self.combat_switch.toggled.connect(self.combat_toggled.emit)
@@ -398,6 +407,10 @@ class HomePage(QWidget):
             QPushButton#homeChannelRefresh:hover {{ border-color:{d['accent']}; }}
             QPushButton#homeChannelRefresh:disabled {{ color:{d['muted']}; }}
             QPushButton#homeLink {{ color:{d['accent']}; background:transparent; border:none; font-size:12px; padding:0; }}
+            QPushButton#homeRefind {{ color:{d['text']}; background:transparent; border:1px solid {d['border']}; border-radius:6px;
+                                      padding:5px 10px; font-size:12px; }}
+            QPushButton#homeRefind:hover {{ border-color:{d['accent']}; }}
+            QPushButton#homeRefind:disabled {{ color:{d['muted']}; }}
             QPushButton#homeRegion {{ color:{d['warn_text']}; background:transparent; border:1px solid {d['warn']}; border-radius:6px;
                                       padding:5px 12px; font-size:12px; }}
             QScrollArea, #homeContent {{ background:transparent; border:none; }}
@@ -461,7 +474,8 @@ class HomePage(QWidget):
         p.end()
 
     def update_state(self, state: dict) -> None:
-        """state: title('running'|'waiting'|'paused'), combat_on, working, needs[(키, 이름)], rows{키: (문구, 종류, 스위치)}."""
+        """state: title('running'|'waiting'|'paused'), combat_on, working, needs[(키, 이름)], rows{키: (문구, 종류, 스위치)},
+        locations(자동 찾기 켜짐일 때): {found, wait, missing, busy} — 켜진 기능 기준 위치 요약 + 위치 다시 찾기(도는 동안 비활성)."""
         title, icon = TITLES[state.get("title", "waiting")]
         self.title.setText(title)
         self.state_icon.set_kind(icon)
@@ -469,6 +483,13 @@ class HomePage(QWidget):
         summary = f"전투 보조 {state.get('working', 0)}개 동작 중"
         if needs:
             summary += f" · {len(needs)}개 설정 필요"
+        places = state.get("locations")
+        if places is not None:
+            summary += " · " + location_summary(places)
+            busy = bool(places.get("busy"))
+            self.refind_btn.setEnabled(not busy)
+            self.refind_btn.setText("찾는 중…" if busy else "위치 다시 찾기")
+        self.refind_btn.setVisible(places is not None)
         self.summary.setText(summary)
         on = bool(state.get("combat_on", True))
         if self.combat_switch.isChecked() != on:
@@ -530,3 +551,18 @@ class HomePage(QWidget):
     def _warn_widgets(self):
         return [self._warn_rows.itemAt(i).widget() for i in range(self._warn_rows.count())
                 if self._warn_rows.itemAt(i).widget() is not None]
+
+
+def location_summary(places: dict) -> str:
+    """상태 카드 위치 요약(켜진 기능 기준, first-use-v3 6절 8): '게임 UI 위치 3곳 찾음, 1곳은 보이면 찾아요'."""
+    if places.get("busy"):
+        return "게임 UI 위치 찾는 중…"
+    found, wait, missing = (int(places.get(k, 0)) for k in ("found", "wait", "missing"))
+    if found + wait + missing == 0:
+        return "켜진 기능이 없어 위치를 찾지 않아요" if not places.get("searching") else "게임 UI 위치 찾는 중…"
+    parts = [f"게임 UI 위치 {found}곳 찾음"]
+    if wait:
+        parts.append(f"{wait}곳은 보이면 찾아요")
+    if missing:
+        parts.append(f"{missing}곳 못 찾음")
+    return ", ".join(parts)

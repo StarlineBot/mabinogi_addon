@@ -29,6 +29,7 @@ _boss_extra = None  # 보스바를 쓰는 다른 소비자(체력바 보스전 �
 _saved: dict[str, dict | None] = {}  # 기능이 마지막으로 넘긴 저장 영역(v1) — 상태 문구·디버프 계산용
 _fixed_saver = None  # 직접 지정 고정 목록 저장(config autofindV2.fixed) — 앱이 연결
 _use_saver = None    # 사용 값 저장(config autofindV2.use) — 직접 지정으로 사용을 켤 때
+_state_fn = None     # 찾기 엔진 항목 상태(컨트롤러) — place() 문구용
 
 
 def activate(on: bool, fixed=()) -> None:
@@ -77,6 +78,14 @@ def region_for(key: str, saved):
     _saved[key] = dict(saved) if isinstance(saved, dict) else None
     if not wanted(key):
         return None
+    return _resolve(key, saved)
+
+
+def current_region(key: str, saved):
+    """사용 값과 상관없이 지금 그 기능이 읽을 자리(문의 자료 모으기 등) — 고정 → 자동 → 저장 영역(v1). 꺼짐이면 저장 영역."""
+    if not _active:
+        return saved
+    _saved[key] = dict(saved) if isinstance(saved, dict) else None
     return _resolve(key, saved)
 
 
@@ -152,6 +161,35 @@ def wanted(key: str) -> bool:
 def is_auto(key: str) -> bool:
     """탭 표시용 — 지금 쓰는 영역이 자동으로 찾은 자리인지."""
     return _active and key not in _user and key in _runtime
+
+
+def set_state_source(fn) -> None:
+    """fn(key) → 'found'|'waiting'|'hidden'|'missing'|'searching' (찾기 엔진 상태, 컨트롤러가 연결)."""
+    global _state_fn
+    _state_fn = fn
+
+
+def place(key: str) -> str | None:
+    """화면 문구용 위치 상태 — 'user'(직접 지정) · 'found'(위치 찾음) · 'wait'(화면에 보이면 찾아요) · 'hidden'(게임 UI 안 보임 — 접속하면 찾아요) ·
+    'v1'(저장된 영역 사용 · 자동으로 못 찾음) · 'missing'(못 찾음) · 'searching'(찾는 중). 자동 찾기 꺼짐이면 None. 디버프 줄은 보스바 상태를 따른다."""
+    if not _active:
+        return None
+    if key in _user:
+        return "user"
+    if key in _runtime:
+        return "found"
+    lookup = "boss" if key == "debuff" else key
+    if key == "debuff" and "boss" in _user and _saved.get("boss"):
+        return "user"
+    try:
+        state = _state_fn(lookup) if _state_fn is not None else "searching"
+    except Exception:  # noqa: BLE001
+        state = "searching"
+    if state == "found":
+        return "found"
+    if _saved.get(key):
+        return "v1"
+    return {"waiting": "wait", "hidden": "hidden", "missing": "missing"}.get(state, "searching")
 
 
 def is_fixed(key: str) -> bool:
@@ -258,9 +296,9 @@ def saved_of(owner, attr: str = "_region"):
 
 
 def reset_for_tests() -> None:
-    global _reporter, _boss_extra, _fixed_saver, _use_saver
+    global _reporter, _boss_extra, _fixed_saver, _use_saver, _state_fn
     activate(False)
-    _fixed_saver = _use_saver = None
+    _fixed_saver = _use_saver = _state_fn = None
     _listeners.clear()
     _reporter = None
     _boss_extra = None

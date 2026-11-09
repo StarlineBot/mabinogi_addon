@@ -142,7 +142,24 @@ def test_main_window_default_on_for_everyone(monkeypatch):
         saved = config._read_local_config()["autofindV2"]
         assert saved["fixed"] == ["buff"] and saved["use"]["buff"] is True
         assert w._autofind_v2.engine.items["buff"].user
+        state = w._home_state()  # 홈: 설정 필요 상자 대신 위치 요약 + 줄 상태(first-use-v3 4.1)
+        assert state["needs"] == [] and "locations" in state
+        assert state["rows"]["debuff"][0] == "켜짐 · 저장된 영역 사용" and state["rows"]["buff"][1] != "warn"
+        assert state["rows"]["halo"][0].startswith("꺼짐 · ")
+        gen = w._autofind_v2.engine.generation
+        w._home_refind()  # 위치 다시 찾기 = 처음 찾기 한 번 더
+        assert w._autofind_v2.engine.generation == gen + 1
     finally:
         w._force_quit = True
         w.close()
         app.processEvents()
+
+
+def test_inquiry_collects_region_in_use(monkeypatch):
+    """문의 자료 모으기: 자동으로 찾은 자리 → 없으면 저장 영역(v1). 사용 값이 꺼져 있어도 지금 자리."""
+    from mabinogi_addon import inquiry_session as inq
+    monkeypatch.setattr(config, "load_capture_region", lambda name: dict(SAVED))
+    assert inq.region_of("buff") == SAVED
+    autofind_regions.set_region("buff", FOUND)
+    autofind_regions.set_use("buff", False)
+    assert inq.region_of("buff") == FOUND

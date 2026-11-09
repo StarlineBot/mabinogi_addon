@@ -20,41 +20,71 @@ import weakref
 _SECTIONS: "weakref.WeakSet[RegionSection]" = weakref.WeakSet()
 
 
+# 위치 상태 문구(first-use-v3 1·4.1절) — 홈 줄·기능 화면이 같은 말을 쓰게
+PLACE_TEXT = {"user": "직접 지정", "found": "위치 찾음", "wait": "화면에 보이면 찾아요", "hidden": "화면에 보이면 찾아요",
+              "v1": "저장된 영역 사용", "missing": "못 찾음", "searching": "찾는 중"}
+
+
+def place_text(key: str | None) -> str | None:
+    """'위치 찾음' · '화면에 보이면 찾아요' · '저장된 영역 사용' · '못 찾음' · '직접 지정' · '찾는 중'. 자동 찾기 꺼짐(비상 값)이면 None."""
+    from .. import autofind_regions
+    if key is None:
+        return None
+    state = autofind_regions.place(key)
+    return None if state is None else PLACE_TEXT[state]
+
+
+def unplaced_text(key: str, legacy: str) -> str:
+    """영역(자리)이 아직 없을 때 기능 화면 상태 문구. 자동 찾기 꺼짐이면 예전 '직접 지정' 안내(legacy) 그대로(QA 11-09 ③)."""
+    from .. import autofind_regions
+    state = autofind_regions.place(key)
+    if state is None:
+        return legacy
+    if not autofind_regions.wanted(key):
+        return "꺼짐 — 홈에서 켜면 위치를 찾아요"
+    if state in ("wait", "hidden"):
+        return "위치 — 게임 화면에 보이면 찾아요"
+    if state == "missing":
+        return "위치를 못 찾았어요 — '영역 다시 지정'에서 직접 맞추면 고정돼요"
+    return "위치 찾는 중이에요"
+
+
 def autofind_text(key: str | None) -> str | None:
-    """'자동(v2)' 한 줄 문구(v2 켜짐일 때만, 아니면 None) — 영역 묶음과 도르카·투아림 영역 문구가 같은 말을 쓰게."""
+    """영역 묶음 한 줄(자동 찾기 켜짐일 때만, 아니면 None) — 지금 읽는 자리의 출처."""
     from .. import autofind_regions
     if key is None or not autofind_regions.active():
         return None
-    if key in autofind_regions.user_keys():
-        return "자동(v2) 꺼짐 · 이번 실행은 직접 지정한 영역으로 읽어요"
+    if autofind_regions.is_fixed(key):
+        return "직접 지정 · 자동으로 찾지 않아요"
     if not autofind_regions.wanted(key):
-        return "자동(v2) · 사용 꺼짐 — 읽지 않아요(찾은 자리는 그대로)"
-    if autofind_regions.is_auto(key):
-        return "자동(v2) · 이번 실행에서 찾은 자리로 읽어요(저장된 영역은 그대로)"
-    return "자동(v2) · 자리를 찾는 중이에요(찾기 전엔 쉬어요)"
+        return "자동으로 찾기 · 꺼짐 — 읽지 않아요"
+    state = autofind_regions.place(key)
+    if state == "found":
+        return "자동으로 찾은 자리로 읽어요"
+    if state == "v1":
+        return "저장된 영역 사용 · 자동으로 못 찾음"
+    if state == "user":  # 디버프 줄 — 고정한 보스바에서 계산
+        return "직접 지정한 보스바에서 계산해요"
+    return f"자동으로 찾기 · {PLACE_TEXT[state]}"
 
 
 def autofind_combined(keys: dict) -> str | None:
-    """여러 기능을 한 묶음에서 보여 줄 때(도르카·투아림): '자동(v2) · 도르카 찾은 자리 · 투아림 찾는 중'. v2 꺼짐이면 None."""
+    """여러 기능을 한 묶음에서 보여 줄 때(도르카·투아림): '자동으로 찾기 · 도르카 위치 찾음 · 투아림 찾는 중'. 꺼짐이면 None."""
     from .. import autofind_regions
     if not keys or not autofind_regions.active():
         return None
     parts = []
     for key, name in keys.items():
-        if key in autofind_regions.user_keys():
-            state = "직접 지정"
-        elif not autofind_regions.wanted(key):
-            state = "사용 꺼짐"
-        elif autofind_regions.is_auto(key):
-            state = "찾은 자리"
+        if not autofind_regions.wanted(key):
+            state = "꺼짐"
         else:
-            state = "찾는 중"
+            state = PLACE_TEXT[autofind_regions.place(key)]
         parts.append(f"{name} {state}")
-    return "자동(v2) · " + " · ".join(parts)
+    return "자동으로 찾기 · " + " · ".join(parts)
 
 
 def refresh_autofind(key: str | None = None) -> None:
-    """자동 찾기 v2 자리가 바뀜 → 그 기능 영역 묶음의 '자동(v2)' 표시 갱신."""
+    """자동 찾기 자리가 바뀜 → 그 기능 영역 묶음의 위치 표시 갱신."""
     for section in list(_SECTIONS):
         if key is None or section.autofind_key == key or key in (section.autofind_keys or {}):
             section.refresh_autofind()
@@ -73,14 +103,30 @@ class RegionSection(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(6)
-        self.autofind_key = None  # 자동 찾기 v2(제작자): 이 묶음이 보여 주는 기능 키 — set_autofind_key로
+        self.autofind_key = None  # 자동 찾기: 이 묶음이 보여 주는 기능 키 — set_autofind_key로
         self.autofind_keys = None  # 여러 기능을 한 줄로(도르카·투아림) — set_autofind_keys로
         self.auto_badge = QLabel("")
         self.auto_badge.setWordWrap(True)
         self.auto_badge.setStyleSheet(f"color:{color('accent')};")
         self.auto_badge.hide()
+        from PySide6.QtWidgets import QPushButton
+        self.auto_return = QPushButton("자동으로 돌아가기")  # 직접 지정 고정 풀기(first-use-v3 4.1)
+        self.auto_return.setObjectName("autoReturn")
+        self.auto_return.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.auto_return.setFlat(True)
+        self.auto_return.setStyleSheet(f"QPushButton#autoReturn {{ color:{color('accent')}; text-decoration: underline;"
+                                       " border:none; padding:0 2px; }")
+        self.auto_return.clicked.connect(self._auto_return)
+        self.auto_return.hide()
+        self._unset_text = unset_text
         if not self.header:
-            layout.addWidget(self.auto_badge)
+            from PySide6.QtWidgets import QHBoxLayout
+            badge_row = QHBoxLayout()
+            badge_row.setContentsMargins(0, 0, 0, 0)
+            badge_row.setSpacing(6)
+            badge_row.addWidget(self.auto_badge, 1)
+            badge_row.addWidget(self.auto_return, 0, Qt.AlignmentFlag.AlignTop)
+            layout.addLayout(badge_row)
         self.box = QGroupBox(box_title)
         box = QVBoxLayout(self.box)
         self.unset_label = QLabel(f'<span style="color:{color('warn')}">●</span> 아직 지정 안 됨 — {unset_text}')
@@ -118,6 +164,7 @@ class RegionSection(QWidget):
             row.addWidget(summary)
             self.auto_badge.setWordWrap(False)
             row.addWidget(self.auto_badge)
+            row.addWidget(self.auto_return)
             self.info = QLabel("ⓘ")
             self.info.setStyleSheet(f"color:{color('muted')};")
             self.info.setCursor(Qt.CursorShape.WhatsThisCursor)
@@ -175,14 +222,33 @@ class RegionSection(QWidget):
         self.refresh_autofind()
 
     def refresh_autofind(self) -> None:
-        """v2 켜짐일 때만 한 줄 — 지금 읽는 자리가 v2가 찾은 자리인지(저장 영역은 그대로)."""
+        """자동 찾기 켜짐일 때만 한 줄 — 지금 읽는 자리의 출처(자동·저장된 영역·직접 지정) + 고정이면 [자동으로 돌아가기].
+        자리가 아직 없으면 '아직 지정 안 됨' 대신 위치 상태(찾는 중·보이면 찾아요·못 찾음)."""
+        from .. import autofind_regions
         text = autofind_combined(self.autofind_keys) if self.autofind_keys else autofind_text(self.autofind_key)
-        if self.header:  # 버프·디버프 한 줄 머리(명세 17절): 짧게 '자동(v2)', 긴 설명은 툴팁 — 긴 문구로 탭 최소 폭이 936px까지 늘던 것(QA 50a07f9)
-            self.auto_badge.setText("자동(v2)" if text else "")
+        if self.header:  # 버프·디버프 한 줄 머리(명세 17절): 짧은 말, 긴 설명은 툴팁 — 긴 문구로 탭 최소 폭이 936px까지 늘던 것(QA 50a07f9)
+            self.auto_badge.setText(_short(self.autofind_key) if text else "")
             self.auto_badge.setToolTip(text or "")
         else:
             self.auto_badge.setText(text or "")
         self.auto_badge.setVisible(bool(text))
+        fixed = [k for k in ([self.autofind_key] if self.autofind_key else list(self.autofind_keys or {}))
+                 if k and autofind_regions.is_fixed(k)]
+        self.auto_return.setVisible(bool(fixed))
+        self._fixed_keys = fixed
+        key = self.autofind_key or next(iter(self.autofind_keys or {}), None)
+        if key is not None and autofind_regions.active():
+            state = autofind_regions.place(key)
+            warn = state == "missing" and autofind_regions.wanted(key)
+            tone = color('warn') if warn else color('muted')
+            self.unset_label.setText(f'<span style="color:{tone}">●</span> {unplaced_text(key, "")}')
+            self.unset_label.setStyleSheet(f"color:{tone};")
+
+    def _auto_return(self) -> None:
+        from .. import autofind_regions
+        for key in list(getattr(self, "_fixed_keys", ())):
+            autofind_regions.auto_return(key)
+        refresh_autofind()
 
     def set_summary(self, text: str, tint: str | None = None) -> None:
         if self.summary_label is not None:
@@ -214,3 +280,16 @@ class RegionSection(QWidget):
             self._keep_open = False
             self._set_open(False)
         super().hideEvent(event)
+
+
+def _short(key: str | None) -> str:
+    """한 줄 머리(버프·디버프)용 짧은 출처 — '자동' · '저장된 영역' · '직접 지정' · 위치 상태."""
+    from .. import autofind_regions
+    if key is None:
+        return ""
+    if autofind_regions.is_fixed(key):
+        return "직접 지정 ·"
+    if not autofind_regions.wanted(key):
+        return "꺼짐"
+    state = autofind_regions.place(key)
+    return {"found": "자동", "v1": "저장된 영역", "user": "직접 지정"}.get(state, PLACE_TEXT.get(state, ""))

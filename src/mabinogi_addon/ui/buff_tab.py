@@ -460,7 +460,8 @@ class BuffTab(QWidget):
             if section is not None:  # 한 줄 머리 ⓘ(명세 17절): 영역 자세히
                 section.set_info(f"버프 영역 {region['x']},{region['y']}  {region['w']}×{region['h']}\n{REGION_GUIDE}")
         else:
-            self.region_hint.setText(f"영역 미지정 — {REGION_CRITERION}")
+            from .region_section import unplaced_text
+            self.region_hint.setText(unplaced_text("buff", f"영역 미지정 — {REGION_CRITERION}"))
             self.region_hint.setStyleSheet(f"color:{color('muted')};")
             self.view_region_btn.setEnabled(False)
 

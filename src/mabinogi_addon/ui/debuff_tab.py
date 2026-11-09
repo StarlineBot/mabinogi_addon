@@ -526,7 +526,8 @@ class DebuffTab(QWidget):
                 section.set_info(f"디버프 영역 {region['x']},{region['y']}  {region['w']}×{region['h']}\n"
                                  "자동 찾기는 디버프 줄과 보스 체력바를 함께, 직접 지정은 디버프 줄만 등록해요.")
         else:
-            self.region_hint.setText("디버프 영역 미지정")
+            from .region_section import unplaced_text
+            self.region_hint.setText(unplaced_text("debuff", "디버프 영역 미지정"))
             self.region_hint.setStyleSheet(f"color:{color('muted')};")
             self.view_region_btn.setEnabled(False)
 
