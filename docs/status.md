@@ -31,6 +31,9 @@
   분류 결과 = 예전 계산(테스트 test_boss_hp_classify_speed). 시간(차가운 캐시, 이 컨테이너): HP≤20% read_percent 10·frac 14ms(p90 13/18),
   못 읽음 9/8ms(p90 12/14), HP>20% 9/13ms, 디버프 HP med 9·p90 12ms. perf_meter에 자동 찾기(화면 갱신 '자동 찾기'·작업 '자동 찾기·처음/다시 찾기/나타나면/UI 확인') 추가.
   기대: 튄 분의 보스 ≈170~205ms/회 → 평소(≈36ms/회) 수준, 디버프 57~125 → 평소(≈14ms) 수준 — Windows app.log로 확인 필요(1분 평균 5% 안팎, 8~9% 튐 없음).
+- **0.45.0 공개 완료(2026-11-10 23:00 KST)**: publish-existing #220(run 42829479064) → 게시 run 42829600605 성공(약 1분). 태그 v0.45.0 = cef6bf9(후보 #219 SHA).
+  releases 저장소 f076b72 'release: v0.45.0'(version.json·CHANGELOG·README). raw version.json 0.45.0, sha256 a24e4b08…bd0f, 164,314,005바이트 —
+  QA가 공개 exe를 내려받아 sha256·크기 직접 대조 일치. 후보 일치는 release_automation이 candidate.json 다이제스트·승인으로 강제(QA 컨테이너는 Actions 산출물 blob 접근 403이라 후보 exe 직접 대조는 못 함).
 - **0.45.0 후보 #219 성공 → 게시 진행(사용자 조건부 승인 11-10)**: run 42825983140, SHA cef6bf9(제품 = 9fde7eb), 산출물 verified-windows-42825983140-1,
   만료 2026-11-11 22:46 KST, 소요 10분 46초. main 지문 = 후보, v0.45.0 태그 없음. #216~#218 무효 → publish-existing candidate_run=42825983140 명시.
 - **QA 9fde7eb(디버프 탭 톤 맞춤 A·B·C): 통과 — 0.45.0 후보 다시 만들기 준비 완료(제품 SHA 9fde7eb, #218 무효)**. 배포 검사 1070 통과·preflight rc=0,
