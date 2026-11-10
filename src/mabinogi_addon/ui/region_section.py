@@ -85,7 +85,11 @@ def autofind_combined(keys: dict) -> str | None:
 
 def refresh_autofind(key: str | None = None) -> None:
     """자동 찾기 자리가 바뀜 → 그 기능 영역 묶음의 위치 표시 갱신."""
+    from shiboken6 import isValid
     for section in list(_SECTIONS):
+        if not isValid(section):  # 지워진 화면(파이썬 객체만 남음) — 건너뛰어 뒤의 묶음까지 갱신되게
+            _SECTIONS.discard(section)
+            continue
         if key is None or section.autofind_key == key or key in (section.autofind_keys or {}):
             section.refresh_autofind()
 
@@ -265,6 +269,7 @@ class RegionSection(QWidget):
         from .. import autofind_regions
         for key in list(getattr(self, "_fixed_keys", ())):
             autofind_regions.auto_return(key)
+        self.refresh_autofind()
         refresh_autofind()
 
     def set_summary(self, text: str, tint: str | None = None) -> None:

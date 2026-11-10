@@ -164,18 +164,16 @@ def app():
 
 
 @pytest.mark.parametrize("creator", [False, True])
-def test_display_choice_only_for_creator(app, monkeypatch, creator):
+def test_display_choice_for_everyone(app, monkeypatch, creator):
+    """0.45.0(사용자 결정 11-10): '표시 [안 걸린 것 | 걸린 것 + 시간]'은 모든 사용자, 기본 '안 걸린 것'."""
     from mabinogi_addon import config, feature_access
     from mabinogi_addon.ui.debuff_tab import DebuffTab
     monkeypatch.setattr(feature_access, "is_creator", lambda: creator)
     tab = DebuffTab()
     try:
-        before = tab.header.description.text()
-        if not creator:
-            assert tab.display_segments is None and tab.effective_display_mode() == "missing"
-            assert before == "보스에게 아직 걸리지 않은 디버프를 보여줘요."  # 지금과 같음
-            return
-        assert tab.display_segments.buttons["missing"].isChecked()  # 기본 안 걸린 것
+        assert tab.display_segments is not None and tab.display_segments.buttons["missing"].isChecked()  # 기본 안 걸린 것
+        assert tab.effective_display_mode() == "missing"
+        assert tab.header.description.text() == "보스에게 아직 걸리지 않은 디버프를 보여줘요."
         seen = []
         tab.display_mode_changed.connect(seen.append)
         tab.display_segments.buttons["applied"].click()
@@ -244,3 +242,30 @@ def test_engine_hands_suspect_to_saver(monkeypatch):
     res = eng.tick(region, 0.6)
     assert got and got[0][0] == "모모" and got[0][1] == "4M" and got[0][3] is not None
     assert [e.time_text for e in res.entries if e.buff_id == "모모"] == ["12s"]  # 한 번은 초 그대로
+
+
+@pytest.mark.parametrize("creator", [False, True])
+def test_suspect_autosave_stays_creator_only(app, monkeypatch, creator):
+    """'걸린 것 + 시간'은 모든 사용자(0.45.0)지만 초→분 의심 판독 자동 저장(진단)은 제작자만 그대로."""
+    from types import SimpleNamespace
+
+    from mabinogi_addon import config, feature_access
+    from mabinogi_addon.ui import main_window as mw
+    monkeypatch.setattr(feature_access, "is_creator", lambda: creator)
+    monkeypatch.setattr(config, "load_discord_user", lambda: {"id": "test", "name": "테스트"})
+    monkeypatch.setattr(mw, "create_live_source", lambda *a, **k: SimpleNamespace(close=lambda: None, grab=lambda: None))
+    raw = config._read_local_config()
+    raw["debuffTracker"] = {"captureRegion": {"x": 10, "y": 10, "w": 300, "h": 60}, "enabled": True}
+    config._write_local_config(raw)
+    w = mw.MainWindow()
+    try:
+        monkeypatch.setattr(w.debuff_tab, "tracked_ids", lambda: ["마법 방어력 보호 감소"], raising=False)
+        w._start_debuff_tracking()
+        engine = w._debuff_engine
+        if engine is None:
+            pytest.skip("디버프 추적을 시작할 등록 디버프가 없음(환경)")
+        assert (getattr(engine, "on_time_suspect", None) is mw.save_debuff_time_suspect) is creator
+        assert w.debuff_tab.display_segments is not None  # 표시 선택은 모두에게
+    finally:
+        w._force_quit = True
+        w.close()

@@ -308,19 +308,17 @@ class DebuffTab(QWidget):
         top_area.addWidget(self._bar_gating_notice)
         top_area.addWidget(divider())
         self._update_region_hint()
-        # 표시 방식(docs/debuff-applied-overlay-spec.md, 제작자 먼저): 목록 위 '표시 [안 걸린 것 | 걸린 것 + 시간]', 기본 안 걸린 것.
-        self.display_segments = None
-        from .. import feature_access
-        if feature_access.is_creator():
-            from .cursor_tab import _Segments
-            self.display_segments = _Segments(DISPLAY_TEXT)
-            self.display_segments.set_value(config.load_debuff_display_mode())
-            self.display_segments.changed.connect(self._on_display_mode)
-            display_row = QHBoxLayout()
-            display_row.setSpacing(8)
-            display_row.addWidget(QLabel("표시"))
-            display_row.addWidget(self.display_segments, 1)
-            v.addLayout(display_row)
+        # 표시 방식(docs/debuff-applied-overlay-spec.md): 목록 위 '표시 [안 걸린 것 | 걸린 것 + 시간]', 기본 안 걸린 것.
+        # 0.45.0부터 모든 사용자(사용자 결정 11-10, 노트에 베타 표기). 초→분 의심 자동 저장은 main_window에서 제작자 전용 그대로.
+        from .cursor_tab import _Segments
+        self.display_segments = _Segments(DISPLAY_TEXT)
+        self.display_segments.set_value(config.load_debuff_display_mode())
+        self.display_segments.changed.connect(self._on_display_mode)
+        display_row = QHBoxLayout()
+        display_row.setSpacing(8)
+        display_row.addWidget(QLabel("표시"))
+        display_row.addWidget(self.display_segments, 1)
+        v.addLayout(display_row)
         self._apply_login_gate()
         self._refresh_method_ui()
         self._apply_display_texts()
@@ -358,7 +356,7 @@ class DebuffTab(QWidget):
         self.scale_changed.emit(pct)
 
     def effective_display_mode(self) -> str:
-        """엔진에 줄 표시 방식 — 제작자가 아니면 늘 '안 걸린 것'(지금과 같음)."""
+        """엔진에 줄 표시 방식(기본 '안 걸린 것')."""
         return config.load_debuff_display_mode() if self.display_segments is not None else "missing"
 
     def _on_display_mode(self, mode: str) -> None:
@@ -367,12 +365,16 @@ class DebuffTab(QWidget):
         self.display_mode_changed.emit(mode)
 
     def _apply_display_texts(self) -> None:
-        """탭 설명·영역 안내를 방식에 맞게(제작자만 — 비제작자는 지금 문구 그대로)."""
+        """탭 설명·영역 안내를 방식에 맞게."""
         if self.display_segments is None:
             return
         applied = self.effective_display_mode() == "applied"
         self.boss_only_check.setEnabled(not applied)  # 걸린 디버프는 보스가 있어야만 나옴 — 흐리게(값은 그대로, 명세 17절)
         self.header.description.setText(DISPLAY_DESC["applied" if applied else "missing"])
+        from .. import autofind_regions
+        if autofind_regions.active():  # 자동 찾기 켜짐: 영역 상자 첫 줄은 위치 상태('아직 지정 안 됨' 대신, first-use v3)
+            self.region_section.refresh_autofind()
+            return
         unset = DISPLAY_UNSET["applied" if applied else "missing"]
         self.region_section.unset_label.setText(
             f'<span style="color:{color("warn")}">●</span> 아직 지정 안 됨 — {unset}')

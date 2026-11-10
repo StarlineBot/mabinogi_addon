@@ -1,6 +1,7 @@
-"""전투 보조 › 보스의 '보스바 오버레이' 구역(보스바 오버레이 명세, **제작자 테스트**).
+"""전투 보조 › 보스의 '보스바 오버레이' 구역(보스바 오버레이 명세). 0.45.0부터 모든 사용자(사용자 결정 11-10, 노트에 베타 표기).
 
-제작자(`feature_access.is_creator()`)에게만 보인다. 다른 사용자는 구역·판독 추가·오버레이가 전혀 없다.
+기본 꺼짐(`bossBarOverlay.enabled=False`) — 켜기 전엔 늘린 캡처·판독 추가·오버레이가 없다(보스 탭 판독은 예전 그대로).
+보스 HP바 수집(진단)은 보스 탭에서 제작자 전용 그대로.
 
 흐름(코드 → 동작):
 - 켜면 보스 탭에 `set_bar_overlay`로 연결 → 보스 탭 작업 스레드(0.3초)가 등록 영역을 위아래로 조금 늘려 한 번 찍고,
@@ -22,7 +23,7 @@ from .widgets import hint_label, switch
 
 class BossBarSection(QGroupBox):
     def __init__(self, boss_tab, parent=None) -> None:
-        super().__init__("보스바 오버레이 (제작자 테스트)", parent)
+        super().__init__("보스바 오버레이", parent)
         self._tab = boss_tab
         self._cfg = config.load_boss_bar_overlay()
         self.value = BossBarValue()
@@ -60,8 +61,6 @@ class BossBarSection(QGroupBox):
         opts.addWidget(self.lock_btn)
         opts.addStretch(1)
         v.addLayout(opts)
-        if not self.allowed():
-            self.hide()  # 제작자가 아니면 처음부터 숨김(부모에 붙기 전이라 show는 하지 않는다)
 
         boss_tab.set_bar_overlay(self.wanted, self.feed)
         self._timer = QTimer(self)
@@ -71,11 +70,8 @@ class BossBarSection(QGroupBox):
 
     # ---- 상태 ----
     def allowed(self) -> bool:
-        """제작자만. 설정 파일 읽기라 1초 재사용(feature_access.Recheck)."""
-        if self._allowed is None:
-            from .. import feature_access
-            self._allowed = feature_access.Recheck(lambda: feature_access.is_creator())
-        return bool(self._allowed())
+        """0.45.0부터 모든 사용자(예전 제작자 전용 조건 — 호출하는 곳은 그대로 둔다)."""
+        return True
 
     def wanted(self) -> bool:
         """보스 탭이 오버레이용 판독(늘린 캡처·존재 확인 %)을 할지. 작업 스레드 계획 단계(화면 스레드)에서 부른다."""

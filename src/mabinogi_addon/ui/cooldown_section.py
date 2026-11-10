@@ -182,7 +182,7 @@ def observe(frame, origin, slots, last: dict, with_crops: bool, need_icon=frozen
 
 class CooldownSection(QGroupBox):
     def __init__(self, watcher, parent=None) -> None:
-        super().__init__("쿨타임 오버레이 (베타)", parent)
+        super().__init__("쿨타임 오버레이", parent)  # 앱 화면에 '베타' 표기 안 함(ui-rules 7절 — 노트에만)
         self._watcher = watcher
         self._cfg = config.load_cooldown()
         self.row = CooldownRow()

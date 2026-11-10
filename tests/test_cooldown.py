@@ -285,7 +285,7 @@ def test_section_visible_and_observing_for_non_creator(monkeypatch):
     try:
         tab.show()
         tab.cooldown._tick()
-        assert not tab.cooldown.isHidden() and tab.cooldown.title() == "쿨타임 오버레이 (베타)"
+        assert not tab.cooldown.isHidden() and tab.cooldown.title() == "쿨타임 오버레이"
         assert tab.cooldown._running()
     finally:
         tab.shutdown()

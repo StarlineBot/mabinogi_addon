@@ -40,7 +40,9 @@
     "tests/test_region_registration.py",
     "tests/test_settings_grouping.py",
     "tests/test_autofind_default_window.py",
-    "tests/test_boss_hp_classify_speed.py"
+    "tests/test_boss_hp_classify_speed.py",
+    "tests/test_cooldown.py",
+    "tests/test_no_beta_on_screen.py"
   ],
   "coverage": {
     "src/mabinogi_addon/detect/boss_hp_reader.py": {
@@ -63,7 +65,7 @@
         "tests/test_boss_two_rows.py",
         "tests/test_autofind_default_window.py"
       ],
-      "reason": "보스바 오버레이(늘린 캡처)에서만 저HP 한 자리 판독을 ±6px로 다시(등록·미등록·두 줄 위 줄) — 오버레이를 안 쓰면 캡처·판독 예전 그대로 · 20% 이하 판독 전부 영역 줄 넘겨 다시(두 자리 포함) · 영역 지정 안내 v3 문구(set_guide)"
+      "reason": "보스바 오버레이(늘린 캡처)에서만 저HP 한 자리 판독을 ±6px로 다시(등록·미등록·두 줄 위 줄) — 오버레이를 안 쓰면 캡처·판독 예전 그대로 · 20% 이하 판독 전부 영역 줄 넘겨 다시(두 자리 포함) · 영역 지정 안내 v3 문구(set_guide) · 보스바 오버레이 구역 모든 사용자(주석), HP바 수집 진단 제작자 전용 그대로"
     },
     "src/mabinogi_addon/assets/boss_hp_digits/gray_d0_0.png": {
       "tests": [
@@ -159,7 +161,7 @@
         "tests/test_tracker_top_width.py",
         "tests/test_autofind_default_window.py"
       ],
-      "reason": "디버프 '걸린 것 + 시간' 보기(제작자 먼저, docs/debuff-applied-overlay-spec.md): 제작자만 '표시' 선택·설명 문구, 비제작자 그대로 · 버프·디버프 탭 배치(명세 17절): 위 두 줄(영역 한 줄 + 잠금 세 칸·체크박스) + 구분선, 목록|항목 설정 같은 높이, 두 칸 접힘 조건 그대로 · 걸린 것 + 시간이면 '보스바가 보일 때만' 흐리게 · 영역 지정 안내 v3 문구(set_guide)"
+      "reason": "디버프 '걸린 것 + 시간' 보기(제작자 먼저, docs/debuff-applied-overlay-spec.md): 제작자만 '표시' 선택·설명 문구, 비제작자 그대로 · 버프·디버프 탭 배치(명세 17절): 위 두 줄(영역 한 줄 + 잠금 세 칸·체크박스) + 구분선, 목록|항목 설정 같은 높이, 두 칸 접힘 조건 그대로 · 걸린 것 + 시간이면 '보스바가 보일 때만' 흐리게 · 영역 지정 안내 v3 문구(set_guide) · '표시 [안 걸린 것 | 걸린 것 + 시간]' 모든 사용자(제작자 조건 해제, 기본 안 걸린 것) · 방식 바꿀 때 자동 찾기 켜짐이면 영역 상자 첫 줄은 위치 상태"
     },
     "src/mabinogi_addon/config.py": {
       "tests": [
@@ -177,9 +179,10 @@
         "tests/test_tour_layout.py",
         "tests/test_autofind_v2_use.py",
         "tests/test_creator_dialogue.py",
-        "tests/test_autofind_default_window.py"
+        "tests/test_autofind_default_window.py",
+        "tests/test_no_beta_on_screen.py"
       ],
-      "reason": "0.44.2 디버프 표시·사라짐 소리·의심 저장 + 0.45.0 자동 찾기 모든 사용자 켬·홈 줄 위치 문구·위치 요약·위치 다시 찾기·첫 사용 v3 연결·둘러보기 8단계·5단계 안내/영역 승인 창 삭제"
+      "reason": "0.44.2 디버프 표시·사라짐 소리·의심 저장 + 0.45.0 자동 찾기 모든 사용자 켬·홈 줄 위치 문구·위치 요약·위치 다시 찾기·첫 사용 v3 연결·둘러보기 8단계·5단계 안내/영역 승인 창 삭제 · 디버프 표시 방식 모든 사용자, 초→분 의심 자동 저장은 제작자 전용 그대로"
     },
     "src/mabinogi_addon/ui/notifier.py": {
       "tests": [
@@ -213,7 +216,7 @@
         "tests/test_autofind_v2_use.py",
         "tests/test_autofind_default_window.py"
       ],
-      "reason": "0.44.2 한 줄 머리 모드 + 0.45.0 위치 상태 문구('직접 지정' 전제 문구 교체)·출처 한 줄·[자동으로 돌아가기], 머리 줄은 짧게('자동'·'직접 지정 ·') · 영역 지정 안내를 v3 문구로(set_guide, 8개 화면)"
+      "reason": "0.44.2 한 줄 머리 모드 + 0.45.0 위치 상태 문구('직접 지정' 전제 문구 교체)·출처 한 줄·[자동으로 돌아가기], 머리 줄은 짧게('자동'·'직접 지정 ·') · 영역 지정 안내를 v3 문구로(set_guide, 8개 화면) · 지워진 영역 묶음은 건너뛰고 갱신(이후 묶음까지 갱신되게)"
     },
     "src/mabinogi_addon/ui/widgets.py": {
       "tests": [
@@ -301,6 +304,27 @@
         "tests/test_autofind_default_window.py"
       ],
       "reason": "영역 지정 안내를 v3 문구로(자동 찾기 켜짐 — '앱이 알아서 찾아요 · 틀리면 직접 지정하면 고정'), 비상 값이면 예전 안내"
+    },
+    "src/mabinogi_addon/ui/boss_bar_section.py": {
+      "tests": [
+        "tests/test_boss_bar_overlay.py",
+        "tests/test_no_beta_on_screen.py"
+      ],
+      "reason": "보스바 오버레이 구역 모든 사용자(제작자 조건 해제, 사용자 결정 11-10) · 제목 '보스바 오버레이' · 기본 꺼짐(켜기 전 판독 추가·오버레이 없음) · HP바 수집 진단은 제작자 전용 그대로"
+    },
+    "src/mabinogi_addon/ui/cooldown_section.py": {
+      "tests": [
+        "tests/test_cooldown.py",
+        "tests/test_no_beta_on_screen.py"
+      ],
+      "reason": "구역 제목에서 '(베타)' 빼기(ui-rules 7절 — 앱 화면에 베타 표기 안 함, 노트에만)"
+    },
+    "src/mabinogi_addon/ui/feature_copy.py": {
+      "tests": [
+        "tests/test_cooldown.py",
+        "tests/test_no_beta_on_screen.py"
+      ],
+      "reason": "쿨타임 도움말 '알아두세요(베타)' → '알아두세요'(앱 화면 베타 표기 없음) · 쿨타임 도움말 '(베타)' 표기 빼기(앱 화면 베타 표기 없음)"
     }
   }
 }

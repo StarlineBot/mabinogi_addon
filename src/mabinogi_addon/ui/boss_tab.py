@@ -229,7 +229,7 @@ class BossTab(QWidget):
         self._sync_upcoming_btn()
         v.addWidget(self._controls)
         from .boss_bar_section import BossBarSection
-        self.bar_section = BossBarSection(self)  # 제작자 테스트(보스바 오버레이 명세) — 다른 사용자는 숨김
+        self.bar_section = BossBarSection(self)  # 보스바 오버레이(명세) — 0.45.0부터 모든 사용자, 기본 꺼짐
         v.addWidget(self.bar_section)
 
         # 보스 HP바 수집(오독 제보용) — 로그인 사용자만.

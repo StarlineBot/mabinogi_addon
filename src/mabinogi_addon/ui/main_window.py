@@ -2032,7 +2032,7 @@ class MainWindow(QMainWindow):
         )
         self._debuff_engine.set_warn_gone_ids(self._debuff_warn_gone_ids())
         mode = getattr(self.debuff_tab, "effective_display_mode", lambda: "missing")()
-        self._debuff_engine.set_display_mode(mode)  # 제작자만 '걸린 것 + 시간'
+        self._debuff_engine.set_display_mode(mode)  # 0.45.0부터 모든 사용자(기본 안 걸린 것)
         from .. import feature_access
         if feature_access.is_creator():  # 초 → 분으로 바뀌려는 판독 자동 저장(제작자 진단, QA f5ba724)
             self._debuff_engine.on_time_suspect = save_debuff_time_suspect

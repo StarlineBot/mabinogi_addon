@@ -227,18 +227,24 @@ def test_overlay_on_captures_one_taller_rect(monkeypatch, tab):
 
 
 # ---- 구역·제작자 전용 ----------------------------------------------------------------------------
-def test_non_creator_has_no_section_and_no_overlay_reading(monkeypatch):
+@pytest.mark.parametrize("creator", [False, True])
+def test_section_for_everyone_default_off_and_collection_creator_only(monkeypatch, creator):
+    """0.45.0(사용자 결정 11-10): 보스바 오버레이 구역은 모든 사용자, 기본 꺼짐(켜기 전 판독 추가·오버레이 없음).
+    '진단 · 보스 HP바 수집'은 제작자 전용 그대로. 화면에 '베타'·'제작자 테스트' 표기 없음."""
     from mabinogi_addon import feature_access
     from mabinogi_addon.ui import boss_tab as bt
-    monkeypatch.setattr(feature_access, "is_creator", lambda: False)
-    config.save_boss_bar_overlay({"enabled": True})
+    monkeypatch.setattr(feature_access, "is_creator", lambda: creator)
     t = bt.BossTab(_Watcher())
     try:
         t.show()
         t.bar_section._tick()
-        assert t.bar_section.isHidden()
-        assert not t.bar_section.wanted() and not t._bar_overlay_on()
-        assert t.bar_section._overlay is None
+        assert not t.bar_section.isHidden() and t.bar_section.title() == "보스바 오버레이"
+        assert "베타" not in t.bar_section.title() and "제작자" not in t.bar_section.title()
+        assert not t.bar_section.enable.isChecked()  # 기본 꺼짐
+        assert not t.bar_section.wanted() and not t._bar_overlay_on() and t.bar_section._overlay is None
+        assert t._diagnostics_allowed() is creator  # 수집·진단은 제작자만
+        t.bar_section.enable.setChecked(True)
+        assert t.bar_section.wanted()
     finally:
         t.shutdown()
         t.close()
