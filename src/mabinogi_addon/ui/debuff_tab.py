@@ -289,14 +289,10 @@ class DebuffTab(QWidget):
         from .widgets import EqualRow
         # 위 2줄에서는 세 칸 모두 같은 제 글자 폭(가장 넓은 칸 × 3) — 왼쪽 칸처럼 늘어나지 않아 '불투명도 100 %'가 잘렸다
         lock_trio = EqualRow(top, (self.lock_btn, self.scale_spin, self.opacity_spin))
-        checks = QWidget()
-        checks_row = QHBoxLayout(checks)
-        checks_row.setContentsMargins(0, 0, 0, 0)
-        checks_row.setSpacing(16)
-        checks_row.addWidget(self.window_check)
-        checks_row.addWidget(self.boss_only_check)
         from .widgets import WrapRow, divider
-        self.controls_row = WrapRow(lock_trio, checks)  # 좁으면 체크박스만 다음 줄로(잠금 세 칸은 한 줄)
+        # 버프 탭과 같은 구성·같은 칸 폭(사용자 확정 11-10): [위치 잠금][배율][불투명도] ☑ 오버레이 창 보이기 —
+        # 체크박스 2개였을 땐 줄바꿈돼 잠금 세 칸이 전체 폭으로 늘어났다. '보스바가 보일 때만 표시'는 아래 '표시' 줄로.
+        self.controls_row = WrapRow(lock_trio, self.window_check)  # 좁으면 체크박스만 다음 줄로(잠금 세 칸은 한 줄)
         self._bar_gating_notice = hint_label("")
         self._bar_gating_notice.setStyleSheet(f"color:{color('warn')}; font-size:12px;")
         self.top_area = QWidget()
@@ -305,6 +301,8 @@ class DebuffTab(QWidget):
         top_area.setSpacing(4)  # 글꼴이 달라도 790×864에서 넘치지 않게 여유(CI 글꼴 2px 넘침, QA 644433c)
         top_area.addWidget(self.region_section)
         top_area.addWidget(self.controls_row)
+        self.display_row = QWidget()  # '표시' 줄(아래에서 채움) — 잠금 줄 아래·구분선 위 전체 폭
+        top_area.addWidget(self.display_row)
         top_area.addWidget(self._bar_gating_notice)
         top_area.addWidget(divider())
         self._update_region_hint()
@@ -314,11 +312,16 @@ class DebuffTab(QWidget):
         self.display_segments = _Segments(DISPLAY_TEXT)
         self.display_segments.set_value(config.load_debuff_display_mode())
         self.display_segments.changed.connect(self._on_display_mode)
-        display_row = QHBoxLayout()
+        # 위쪽 전체 폭 한 줄(사용자 확정 11-10): 표시 [안 걸린 것 | 걸린 것 + 시간]   ☑ 보스바가 보일 때만 표시
+        # ('걸린 것 + 시간'이면 체크박스 흐림 — _apply_display_texts). 아래 목록 | 상세는 같은 높이에서 시작.
+        display_row = QHBoxLayout(self.display_row)
+        display_row.setContentsMargins(0, 0, 0, 0)
         display_row.setSpacing(8)
         display_row.addWidget(QLabel("표시"))
-        display_row.addWidget(self.display_segments, 1)
-        v.addLayout(display_row)
+        display_row.addWidget(self.display_segments)
+        display_row.addSpacing(16)
+        display_row.addWidget(self.boss_only_check)
+        display_row.addStretch(1)
         self._apply_login_gate()
         self._refresh_method_ui()
         self._apply_display_texts()
@@ -326,7 +329,7 @@ class DebuffTab(QWidget):
         panel.min_width = lambda: top.minimumSize().width()  # 예전 왼쪽 칸 안 잠금 줄의 최소 폭(세 칸 각자 최소의 합)
 
         self.debuff_list = QListWidget()
-        self.debuff_list.setIconSize(QSize(28, 28))
+        self.debuff_list.setIconSize(QSize(32, 32))  # 버프 목록과 같은 칸 — 16px 그림 정수배 2배(28이면 1배 16px로 작게 보였다)
         self.debuff_list.currentRowChanged.connect(self._on_select)
         v.addWidget(self.debuff_list, 1)
         from .settings_layout import enable_drag_reorder
@@ -658,7 +661,7 @@ class DebuffTab(QWidget):
         from .settings_layout import style_tracked_item
         buff = self._catalog.get(did)
         settings = self._settings.get(did)
-        pm = _pixmap(buff.display_image or buff.match_icon, 28) if buff is not None else None
+        pm = _pixmap(buff.display_image or buff.match_icon, 32) if buff is not None else None  # 목록 칸(32)과 같게
         style_tracked_item(item, self._display_name(did), pm, settings is not None and settings.hidden, "디버프")
 
     def _current_id(self) -> str | None:

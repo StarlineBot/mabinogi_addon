@@ -269,3 +269,29 @@ def test_suspect_autosave_stays_creator_only(app, monkeypatch, creator):
     finally:
         w._force_quit = True
         w.close()
+
+
+def test_debuff_tab_tone_matches_buff_tab(app):
+    """버프·디버프 탭 톤 맞춤(사용자 확정 11-10): 목록 아이콘 32(16px 그림 2배), 잠금 줄 = 잠금 세 칸 + 체크박스 1개(버프와 같음),
+    '보스바가 보일 때만 표시'는 위쪽 전체 폭 '표시' 줄에 — '걸린 것 + 시간'이면 흐림."""
+    from PySide6.QtWidgets import QCheckBox
+
+    from mabinogi_addon.ui.buff_tab import BuffTab
+    from mabinogi_addon.ui.debuff_tab import DebuffTab
+    tab, buff = DebuffTab(), BuffTab()
+    try:
+        assert tab.debuff_list.iconSize().width() == buff.buff_list.iconSize().width() == 32
+        lock_checks = [c for c in tab.controls_row.findChildren(QCheckBox)]
+        assert lock_checks == [tab.window_check]  # 체크박스 1개 → 줄바꿈으로 잠금 세 칸이 늘어나지 않음
+        assert [type(c) for c in buff.controls_row.findChildren(QCheckBox)] == [type(tab.window_check)]
+        assert tab.boss_only_check.parentWidget() is tab.display_row and tab.display_segments.parentWidget() is tab.display_row
+        top = tab.top_area.layout()
+        order = [top.itemAt(i).widget() for i in range(top.count())]
+        assert order.index(tab.controls_row) < order.index(tab.display_row) < order.index(tab._bar_gating_notice)
+        tab.display_segments.buttons["applied"].click()
+        assert not tab.boss_only_check.isEnabled()
+        tab.display_segments.buttons["missing"].click()
+        assert tab.boss_only_check.isEnabled()
+    finally:
+        tab.deleteLater()
+        buff.deleteLater()
