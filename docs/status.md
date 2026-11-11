@@ -18,6 +18,16 @@
   화면(설정 › 계정): 디스코드로 로그인/로그아웃, ☑ 설정 동기화(로그인하면 기본 켬), 회색 '마지막 동기화: n분 전'(비로그인은 안내 한 줄만). DM 백업·내보내기·가져오기 그대로. 비로그인 통신 0회(테스트).
   테스트(가짜 서버 = 4a4c5de 규격): test_account·test_discord_auth·test_cloud_sync 27개(위조·만료·다른 키·iss·aud·alg 거절, 제작자 흉내 차단, 7일 유예, 로그아웃 204, 로그인 error 3종, 30초·종료 시 올림, If-Match 0, 쿼리 device·resolution, 빼는 값, 해상도, 409, 새 PC, 둘 다 바뀜, 비로그인 0회, 2MB).
   **실서버 확인 못 함**: 이 개발 컨테이너의 네트워크 정책이 starline-bot.duckdns.org를 막음(프록시 403) — Windows에서 실제 로그인·두 PC 동기화 확인 필요(명세 5절 Windows 항목).
+  **독립 QA(ca5fead, 11-11): 보류 — 막는 문제 1 + 고칠 것 2, 후보 만들지 않음.**
+  통과: 배포 검사 `run_release_checks --version 0.46.0` 422 통과 · preflight 0, 전체 테스트 4441 통과(397 건너뜀, tkinter 없는 test_startup_splash 제외) — **소켓 감시를 걸고 돌려 외부 연결 0건**(테스트가 실서버로 나가지 않음).
+  ed25519 차등 시험 363건: 참조 구현과 같고, 다른 점은 비정규 공개 키를 더 엄격히 거절하는 것 1가지(안전 쪽). 계정 묶음 렌더 4상태(비로그인·로그인·동기화 실패·동기화 끔) 이상 없음.
+  ① **막는 문제 — 로그인 토큰이 '설정 내보내기'에 그대로 들어가고 '가져오기'로 남의 PC 토큰을 덮음**: `config._SECRET_KEYS`(nexonApiKey·두 웹후크)·`_MACHINE_KEYS`에 `discordAccount`가 없음.
+  재현: 로그인한 설정을 `export_bundle` → 묶음 config.json에 `discordAccount.token` 있음(묶음 키 buffTracker·discordAccount·installId·settingsSync), 다른 PC에서 `import_bundle` → 그 PC의 토큰이 묶음 토큰으로 바뀜.
+  영향: 설정 파일을 디스코드 문의·DM 백업·남에게 공유하면 받은 사람이 30일 동안 그 계정으로 로그인(제작자 토큰이면 제작자 기능까지) + 그 계정 서버 설정 덮어쓰기. 동기화 올림은 `cloud_sync.strip_for_sync`가 빼서 안전 — 파일 내보내기 경로만 문제.
+  고침: `discordAccount`·`discordUser`·`settingsSync`·`installId`를 내보내기에서 빼고 가져오기 때 이 PC 값 유지(없으면 지우지도 넣지도 않음) + 테스트(내보낸 묶음에 토큰 없음, 토큰 든 묶음 가져와도 이 PC 토큰·동기화 기록 그대로).
+  ② 로그인 콜백 페이지가 `error=`·state 불일치·서명 틀림이어도 항상 '로그인 완료'(`do_GET`이 판단 전에 `_SUCCESS_BODY`) → 브라우저엔 성공, 앱은 실패로 엇갈림. 실패면 실패 문구(앱으로 돌아가 다시 시도) 페이지.
+  ③ '설정 동기화' 물음 창을 X·Esc로 닫으면 `RejectRole` 버튼('이 PC 설정 쓰기')으로 처리 → `resolve("keep")` → **이 PC 설정으로 서버 덮어씀**(새 PC에서 무심코 닫으면 다른 PC 설정이 사라짐). 닫기는 아무것도 안 하고 다음 시작 때 다시 묻기, 덮어쓰기는 버튼을 눌렀을 때만.
+  Windows 확인 항목(고친 뒤 후보): 실제 로그인·취소, 두 PC 동기화(같은/다른 해상도), 서버 꺼짐(유예), 불러온 뒤 다시 켜기.
 - **사용자 계정 관리 확정(2026-11-11, 사용자 결정 — 1단계 개발 대상)**: [명세](account-management-spec.md). 1단계 = 디스코드 로그인(서버 경유·서명 토큰, 제작자 흉내 차단) + **설정 동기화**(로그인만, 30초 모아 올림·새 PC 불러오기, 오버레이 위치는 해상도 같을 때만, DM 백업·파일 내보내기 유지).
   서버 A안: 봇 GCP VM(무료 e2-micro, 여유 495MB+스왑 1GB) + SQLite + Caddy, 주소 `https://starline-bot.duckdns.org`(VM 연결 확인), 코드는 **discord_bot 저장소 `addon_server/`**(11-11 변경 — 새 저장소 없음, 봇과 별도 서비스). 비로그인은 통신 없음.
   VM 준비 완료(11-11 사용자): 스왑·주소·방화벽 80/443·Caddy 인증서(`ok` 응답)·DuckDNS 자동 갱신. 다음: discord_bot 저장소에서 서버 개발 → 앱 개발.
