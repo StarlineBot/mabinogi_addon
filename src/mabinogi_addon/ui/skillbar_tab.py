@@ -165,7 +165,8 @@ class SkillbarTab(QWidget):
     # ---- 베타 게이팅 ----
     @staticmethod
     def _logged_in() -> bool:
-        return config.load_discord_user() is not None
+        from .. import feature_access
+        return feature_access.is_logged_in()
 
     def _apply_login_gate(self) -> None:
         ok = self._logged_in()

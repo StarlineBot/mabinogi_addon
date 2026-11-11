@@ -342,6 +342,15 @@ class MainWindow(QMainWindow):
         self.settings_tab.theme_changed.connect(self.optimization_tools.apply_theme)
         self.settings_tab.login_changed.connect(self.optimization_tools.refresh_access)
         self.settings_tab.config_imported.connect(self._on_config_imported)
+        # 계정(서버 경유 로그인 + 설정 동기화, 계정 관리 명세 3.2·3.3) — 네트워크는 작업 스레드, 비로그인은 통신 0회
+        from ..version import __version__
+        from .account_controller import AccountController
+        self._account = AccountController(self, app_version=__version__)
+        self._account.ask.connect(self._on_account_ask)
+        self._account.applied.connect(self._on_account_applied)
+        self._account.logged_out.connect(lambda: self.settings_tab.login_changed.emit())
+        self.settings_tab.attach_account(self._account)
+        QTimer.singleShot(5000, self._account.start)  # 트레이로 시작해 창이 안 떠도(첫 표시 때 이미 시작했으면 아무것도 안 함)
         self.settings_tab.voice_pack_changed.connect(self._on_voice_pack_changed)
         self.settings_tab.replay_tour.connect(self._replay_tour)
         self.settings_tab.theme_changed.connect(self._apply_tab_styles)
@@ -1799,6 +1808,7 @@ class MainWindow(QMainWindow):
             return
         self._maybe_show_release_notes()  # 버전 바뀌었으면 업데이트 노트
         self._maybe_run_tour()  # 단계별 베타 준비 안내
+        self._account.start()  # 로그인했으면 토큰 새로 받기·설정 동기화(작업 스레드)
 
     def _compute_tracking(
         self, catalog
@@ -2400,6 +2410,25 @@ class MainWindow(QMainWindow):
         self.tuarim_tab.refresh_sound()
         # 파티 알림음은 보이스팩과 무관(기본 소리 고정)이라 갱신 불필요.
 
+    def _on_account_ask(self, info: dict, reason: str) -> None:
+        """서버에 저장된 설정이 있어요(새 PC·재설치·둘 다 바뀜·충돌) → 불러오기 / 이 PC 설정 쓰기."""
+        if self._closing or self._config_pending_restart:
+            return
+        from PySide6.QtWidgets import QMessageBox
+        box = QMessageBox(self)
+        box.setWindowTitle("설정 동기화")
+        box.setText(account_ask_text(info, reason))
+        load = box.addButton("불러오기", QMessageBox.ButtonRole.AcceptRole)
+        box.addButton("이 PC 설정 쓰기", QMessageBox.ButtonRole.RejectRole)
+        box.exec()
+        self._account.resolve("load" if box.clickedButton() is load else "keep")
+
+    def _on_account_applied(self, positions: bool) -> None:
+        """서버 설정을 적용함 — 가져오기와 같게 저장을 막고 다시 켜기 안내."""
+        self.settings_tab._offer_restart(
+            "설정 동기화", "서버에 저장된 설정을 불러왔어요." + ("" if positions else
+                                                       "\n화면 해상도가 달라 오버레이 위치는 이 PC 것을 그대로 썼어요."))
+
     def _on_config_imported(self) -> None:
         """설정 가져오기/초기화 직후: 종료 시 낡은 상태로 덮어쓰지 않도록 저장을 막는다.
 
@@ -2688,6 +2717,8 @@ class MainWindow(QMainWindow):
             self._save_debuff_overlay_state(),
             self._save_memo(),
         ))
+        # 설정 동기화: 바뀐 게 있으면 한 번 올림(최대 5초, 비로그인·동기화 끔이면 통신 없음). 서버 설정을 막 받았으면 올리지 않음
+        _step("설정 동기화", lambda: self._account.shutdown(flush=not self._config_pending_restart))
         _step("파티 폴링 정지", lambda: self.party_tab.stop_polling(wait_ms=600))
         _step("진단 UI 정지", self.settings_tab.shutdown)
         # 두 캡처 워커에 먼저 정지 신호를 보내고, '공유 마감시한'으로 대기를 겹친다.
@@ -2737,3 +2768,27 @@ class MainWindow(QMainWindow):
 
         _logging.shutdown()
         _os._exit(0)
+
+
+def account_ask_text(info: dict, reason: str) -> str:
+    """'서버에 저장된 설정이 있어요 (마지막 저장: 11월 9일 · <PC 이름>). 불러올까요?'(명세 3.3)."""
+    import datetime
+    import urllib.parse
+    parts = []
+    updated = info.get("updated")
+    try:  # 서버는 UTC ISO8601('2026-11-11T01:02:03Z') → 현지 시각으로
+        when = datetime.datetime.fromtimestamp(float(updated)) if isinstance(updated, (int, float)) else \
+            datetime.datetime.fromisoformat(str(updated).replace("Z", "+00:00")) if updated else None
+        if when is not None and when.tzinfo is not None:
+            when = when.astimezone()
+    except (ValueError, OSError):
+        when = None
+    if when is not None:
+        parts.append(f"{when.month}월 {when.day}일")
+    device = urllib.parse.unquote(str(info.get("device") or "")).strip()
+    if device:
+        parts.append(device)
+    head = "서버에 저장된 설정이 있어요" + (f" (마지막 저장: {' · '.join(parts)})" if parts else "") + "."
+    if reason in ("both_changed", "conflict"):
+        head += "\n이 PC에도 아직 올리지 않은 변경이 있어요."
+    return head + "\n불러올까요?"

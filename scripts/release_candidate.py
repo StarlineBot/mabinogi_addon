@@ -93,9 +93,20 @@ def notes_for(root, version):
     return '## v' + sections[1]
 
 
+def account_key_ready(root):
+    """로그인 토큰 확인용 공개 키가 개발 시험 키가 아니어야 배포한다(시험 키의 비밀 키는 테스트에 있다 — 누구나 제작자 토큰을 만들 수 있음).
+    account.py가 없는 예전 소스는 해당 없음."""
+    from pathlib import Path
+    source = Path(root) / 'src/mabinogi_addon/account.py'
+    if not source.is_file():
+        return True
+    return 'PUBLIC_KEY_IS_TEST = True' not in source.read_text(encoding='utf-8')
+
+
 def preflight(root, sha, version):
     identity(sha, version)
     notes_for(root, version)
+    require(account_key_ready(root), 'account public key is the development test key; set the server key first')
     # Reserve the version only after validation and explicit publication approval.
     tags = subprocess.check_output(['git','tag','--list',f'v{version}'],cwd=root,text=True)
     require(not tags.strip(), 'version tag already used; select an unused version')

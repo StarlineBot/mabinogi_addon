@@ -17,7 +17,9 @@ def application():
 
 
 @pytest.mark.parametrize('user,expected', [(None,False), ({'id':'other'},False),
-    ({'id':'other','name':'HP Starline'},False), ({'id':feature_access.CREATOR_DISCORD_ID},True)])
+    ({'id':'other','name':'HP Starline'},False), ({'id': feature_access.CREATOR_DISCORD_ID, 'tier': 'creator'},True),
+    ({'id': feature_access.CREATOR_DISCORD_ID},False), ({'id': feature_access.CREATOR_DISCORD_ID, 'tier': 'user'},False),
+    ({'id': 'other', 'tier': 'creator'},True)])
 def test_numeric_creator_identity(monkeypatch, user, expected):
     monkeypatch.setattr(config,'load_discord_user',lambda:user)
     assert feature_access.is_creator() is expected
@@ -63,7 +65,7 @@ def test_failed_migration_never_marks_complete(monkeypatch):
     assert config._read_local_config()['dorcha']['tuarimAlphaReset'] == 1
 
 
-@pytest.mark.parametrize('user',[None, {'id':'regular'}, {'id':feature_access.CREATOR_DISCORD_ID}])
+@pytest.mark.parametrize('user',[None, {'id':'regular'}, {'id': feature_access.CREATOR_DISCORD_ID, 'tier': 'creator'}])
 def test_basic_controls_and_alpha_are_independent(window,monkeypatch,user):
     w,app = window
     monkeypatch.setattr(config,'load_discord_user',lambda:user)
@@ -79,7 +81,7 @@ def test_basic_controls_and_alpha_are_independent(window,monkeypatch,user):
     assert w.resource_tab.percent_chk.isHidden() is (not d._alpha_ready)  # 2026-10-28: 투아림 %는 로그인과 무관(판독 자료가 있으면)
     assert d.auto_find_btn.isEnabled()
     # 문의 일원화 6.3: 수집·진단 구역은 제작자만(일반·로그인 사용자는 문의하기가 입구)
-    assert w.stat_bars_tab.collect_chk.isEnabled() is (user is not None and user['id'] == feature_access.CREATOR_DISCORD_ID)
+    assert w.stat_bars_tab.collect_chk.isEnabled() is (user is not None and user.get('tier') == 'creator')
     assert w.skillbar_tab.auto_find_btn.isEnabled()
 
 

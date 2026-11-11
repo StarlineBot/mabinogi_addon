@@ -27,7 +27,7 @@ def runtime(window,monkeypatch):
                             percent_captures=0,dorcha_captures=0,frame=True,fired=[])
     watcher = SimpleNamespace(is_game_active=lambda:state.game,is_self_active=lambda:state.own)
     t._watcher = d._watcher = watcher
-    monkeypatch.setattr(config,'load_discord_user',lambda:{'id':CREATOR_DISCORD_ID} if state.logged else None)
+    monkeypatch.setattr(config,'load_discord_user',lambda:{'id': CREATOR_DISCORD_ID, 'tier': 'creator'} if state.logged else None)
     monkeypatch.setattr(tuarim_tab,'read_percent',lambda frame:state.raw)
     monkeypatch.setattr(dorcha_tab,'read_dorcha',lambda frame,*_:state.dorcha if frame is not None else None)
     monkeypatch.setattr(t,'_play',state.fired.append)

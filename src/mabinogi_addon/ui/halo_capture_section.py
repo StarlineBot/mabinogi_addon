@@ -9,7 +9,7 @@ from PySide6.QtWidgets import QFrame, QGroupBox, QHBoxLayout, QLabel, QPushButto
 import numpy as np
 
 from .settings_layout import set_lock_text
-from .. import config, paths
+from .. import config, feature_access, paths
 from ..feature_access import Recheck, is_creator
 from ..halo_capture import CaptureSession, MAX_PIXELS, MAX_SHOTS, MAX_BYTES
 from ..setup_state import valid_box
@@ -374,7 +374,7 @@ class HaloCaptureSection(QWidget):
         """로그인·제작자 판정(config.json 읽기)을 500ms 타이머마다 하지 않고 1초 동안 재사용한다(0.17.2)."""
         checks = self.__dict__.get('_access_checks')
         if checks is None:
-            checks = self.__dict__['_access_checks'] = (Recheck(lambda: bool(config.load_discord_user())),
+            checks = self.__dict__['_access_checks'] = (Recheck(lambda: feature_access.is_logged_in()),
                                                         Recheck(lambda: is_creator()))
         return checks
 

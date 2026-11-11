@@ -20,7 +20,7 @@ native_target = HaloCaptureSection._foreground_target
 @pytest.mark.parametrize('boss_id', [None, 'lenen_miir', 'petach'])
 def test_timer_alone_never_arms_halo(window, monkeypatch, boss_id):
     section = window[0].boss_tab.halo_capture
-    monkeypatch.setattr(config, 'load_discord_user', lambda: {'id': feature_access.CREATOR_DISCORD_ID})
+    monkeypatch.setattr(config, 'load_discord_user', lambda: {'id': feature_access.CREATOR_DISCORD_ID, 'tier': 'creator'})
     section.set_boss_context(boss_id)
     section._monitor(900)
     assert not section._clock.armed
@@ -30,7 +30,7 @@ def test_timer_alone_never_arms_halo(window, monkeypatch, boss_id):
 def test_identified_hoehan_arms_automatically_and_other_boss_resets(window, monkeypatch):
     import mabinogi_addon.ui.halo_capture_section as module
     section = window[0].boss_tab.halo_capture
-    monkeypatch.setattr(config, 'load_discord_user', lambda: {'id': feature_access.CREATOR_DISCORD_ID})
+    monkeypatch.setattr(config, 'load_discord_user', lambda: {'id': feature_access.CREATOR_DISCORD_ID, 'tier': 'creator'})
     now = [100.0]
     monkeypatch.setattr(module.time, 'monotonic', lambda: now[0])
     section._target = (11,22,0,0,1920,1080)
@@ -165,7 +165,7 @@ def test_limits_and_cancellation(tmp_path,monkeypatch):
 
 def test_creator_only_region_capture_and_stop(window,monkeypatch,tmp_path):
     w,app = window
-    user = {'id':feature_access.CREATOR_DISCORD_ID}
+    user = {'id': feature_access.CREATOR_DISCORD_ID, 'tier': 'creator'}
     monkeypatch.setattr(config,'load_discord_user',lambda:user)
     section = w.boss_tab.halo_capture
     section._root = tmp_path / '수집'
@@ -200,7 +200,7 @@ def test_creator_only_region_capture_and_stop(window,monkeypatch,tmp_path):
 
 def test_capture_failure_and_region_change_do_not_mix_sessions(window,monkeypatch):
     w,_ = window
-    monkeypatch.setattr(config,'load_discord_user',lambda:{'id':feature_access.CREATOR_DISCORD_ID})
+    monkeypatch.setattr(config,'load_discord_user',lambda:{'id': feature_access.CREATOR_DISCORD_ID, 'tier': 'creator'})
     s = w.boss_tab.halo_capture
     s._watcher = SimpleNamespace(is_game_active=lambda:True)
     s._save_region(0,0,100,20)
@@ -218,7 +218,7 @@ def test_capture_failure_and_region_change_do_not_mix_sessions(window,monkeypatc
 
 def test_write_failure_stops_collection(window,monkeypatch):
     w,_ = window
-    monkeypatch.setattr(config,'load_discord_user',lambda:{'id':feature_access.CREATOR_DISCORD_ID})
+    monkeypatch.setattr(config,'load_discord_user',lambda:{'id': feature_access.CREATOR_DISCORD_ID, 'tier': 'creator'})
     s = w.boss_tab.halo_capture
     s._watcher = SimpleNamespace(is_game_active=lambda:True)
     s._save_region(0,0,100,20)
@@ -287,7 +287,7 @@ def test_logged_out_user_never_collects_saved_region(window,monkeypatch,tmp_path
 
 def test_outside_game_or_target_change_never_saves(window,monkeypatch):
     w,_ = window
-    monkeypatch.setattr(config,'load_discord_user',lambda:{'id':feature_access.CREATOR_DISCORD_ID})
+    monkeypatch.setattr(config,'load_discord_user',lambda:{'id': feature_access.CREATOR_DISCORD_ID, 'tier': 'creator'})
     s = w.boss_tab.halo_capture
     s._watcher = SimpleNamespace(is_game_active=lambda:True)
     s._save_region(0,0,100,20)
@@ -307,7 +307,7 @@ def test_outside_game_or_target_change_never_saves(window,monkeypatch):
 def test_collection_requires_fresh_target_boss(window,monkeypatch,boss_id):
     import mabinogi_addon.ui.halo_capture_section as module
     s = window[0].boss_tab.halo_capture
-    monkeypatch.setattr(config,'load_discord_user',lambda:{'id':feature_access.CREATOR_DISCORD_ID})
+    monkeypatch.setattr(config,'load_discord_user',lambda:{'id': feature_access.CREATOR_DISCORD_ID, 'tier': 'creator'})
     s._save_region(0,0,100,20)
     now = [0.0]
     monkeypatch.setattr(module.time,'monotonic',lambda:now[0])
@@ -331,7 +331,7 @@ def test_native_target_requires_real_foreground_window(window,monkeypatch,foregr
 @pytest.mark.parametrize('pixels',[12,20])
 def test_creator_halo_layout_has_no_horizontal_scroll(window,monkeypatch,pixels):
     w,app = window
-    monkeypatch.setattr(config,'load_discord_user',lambda:{'id':feature_access.CREATOR_DISCORD_ID})
+    monkeypatch.setattr(config,'load_discord_user',lambda:{'id': feature_access.CREATOR_DISCORD_ID, 'tier': 'creator'})
     section = w.boss_tab.halo_capture
     section._refresh()
     section.disclosure.setChecked(True)
@@ -351,7 +351,7 @@ def test_creator_halo_layout_has_no_horizontal_scroll(window,monkeypatch,pixels)
 
 def test_third_tabs_follow_beta_access_without_resetting_settings(window,monkeypatch):
     w,app = window
-    user = {'id':feature_access.CREATOR_DISCORD_ID}
+    user = {'id': feature_access.CREATOR_DISCORD_ID, 'tier': 'creator'}
     monkeypatch.setattr(config,'load_discord_user',lambda:user or None)
     boss = w.boss_tab
     tabs = boss.pattern_tabs
@@ -367,7 +367,7 @@ def test_third_tabs_follow_beta_access_without_resetting_settings(window,monkeyp
         tabs.setCurrentIndex(0)
         assert not boss.halo_capture.isVisible()
     tabs.setCurrentIndex(1)
-    user['id'] = 'ordinary'
+    user.update(id='ordinary', tier='user')  # 제작자 = 토큰 등급(0.46.0)
     boss.halo_capture._tick()
     assert tabs.isTabVisible(1)
     assert not boss.halo_capture.disclosure.isVisible()

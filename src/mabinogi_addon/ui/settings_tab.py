@@ -33,7 +33,7 @@ from PySide6.QtWidgets import (
 )
 
 from .palette import color
-from .. import config, discord_auth, paths
+from .. import config, discord_auth, feature_access, paths
 from ..system.window_watcher import WindowWatcher
 from .widgets import checkbox, hint_label, section_label
 
@@ -122,22 +122,18 @@ _TOAST_CORNER_CHOICES = [
 
 
 class _LoginThread(QThread):
-    """디스코드 로그인(브라우저 콜백 대기)을 백그라운드로. QThread라야 done 시그널이
+    """디스코드 로그인(서버 경유, 브라우저 콜백 대기)을 백그라운드로. QThread라야 done 시그널이
     UI 스레드로 확실히 전달된다(일반 threading.Thread는 전달이 안 됐다)."""
 
-    done = Signal(bool, str, str)  # (성공, user_id, 이름)
+    done = Signal(bool, str)  # (성공, 서명 확인된 토큰)
 
     def run(self) -> None:
         try:
-            result = discord_auth.login()
+            token = discord_auth.login()
         except Exception:  # noqa: BLE001 — 포트 사용 중·네트워크 오류 등
-            result = None
-        if result:
-            _log.info("워커: login() 반환 성공 → UI로 전달")
-            self.done.emit(True, result[0], result[1])
-        else:
-            _log.info("워커: login() 반환 실패/None → UI로 전달")
-            self.done.emit(False, "", "")
+            token = None
+        _log.info("워커: login() %s → UI로 전달", "성공" if token else "실패/None")
+        self.done.emit(bool(token), token or "")
 
 
 class _ConfigExportThread(QThread):
@@ -435,7 +431,7 @@ class SettingsTab(QWidget):
     def _refresh_dm_export(self) -> None:
         """로그인 상태에 따라 'DM 내보내기' 버튼 활성/비활성."""
         if hasattr(self, "_dm_export_btn"):
-            logged_in = config.load_discord_user() is not None
+            logged_in = feature_access.is_logged_in()
             self._dm_export_btn.setEnabled(logged_in and not self._export_busy() and not self._export_closing)
             self._dm_export_btn.setToolTip(
                 "" if logged_in else "먼저 디스코드 로그인이 필요해요"
@@ -486,7 +482,7 @@ class SettingsTab(QWidget):
         for button in (self._file_export_btn,self._import_btn,self._reset_btn): button.setEnabled(True)
         self._refresh_dm_export()
         if worker.user is not None:
-            current = config.load_discord_user()
+            current = feature_access.current_user()
             if current is None or current.get('id') != worker.user.get('id'): return
         if result is not None:
             ok, message = result
@@ -495,7 +491,7 @@ class SettingsTab(QWidget):
 
     def _on_export_discord(self):
         if self._export_busy() or self._export_closing: return
-        user = config.load_discord_user()
+        user = feature_access.current_user()
         if user is None:
             QMessageBox.information(self,'디스코드로 내보내기','먼저 디스코드 로그인을 해 주세요.')
             return
@@ -558,28 +554,43 @@ class SettingsTab(QWidget):
             "지금 창을 닫아도 가져온 설정은 안전하게 유지돼요.",
         )
 
-    # ---- Discord 계정(로그인) ----
+    # ---- 계정(서버 경유 로그인 + 설정 동기화, 계정 관리 명세 3.2·3.3) ----
     def _discord_group(self) -> QGroupBox:
-        box = QGroupBox("디스코드 계정")
+        box = QGroupBox("계정")
         v = QVBoxLayout(box)
-        self._login_status = hint_label("")
-        v.addWidget(self._login_status)
         row = QHBoxLayout()
+        self._login_status = QLabel("")
+        row.addWidget(self._login_status)
+        row.addStretch(1)
         self._login_btn = QPushButton("")
         self._login_btn.clicked.connect(self._on_login_clicked)
         row.addWidget(self._login_btn)
-        row.addStretch(1)
         v.addLayout(row)
-        v.addWidget(
-            hint_label(
-                "로그인하면 디스코드로 설정을 백업하고, 문의 답변을 디스코드로 받을 수 있어요."
-            )
-        )
+        self._sync_check = _checked("설정 동기화", True)
+        self._sync_check.setToolTip("로그인한 PC끼리 설정을 맞춰요. 바뀌면 30초 뒤와 앱을 끌 때 올려요.\n"
+                                    "오버레이 위치는 화면 해상도가 같을 때만 따라가요.")
+        self._sync_check.toggled.connect(self._on_sync_toggled)
+        v.addWidget(self._sync_check)
+        self._sync_status = hint_label("")
+        v.addWidget(self._sync_status)
+        v.addWidget(hint_label("로그인하면 다른 PC에서도 같은 설정을 쓰고, 문의 답변을 디스코드로 받을 수 있어요."))
+        self._sync_timer = QTimer(self)
+        self._sync_timer.setInterval(30_000)  # '마지막 동기화: n분 전'만 다시 씀(통신 없음)
+        self._sync_timer.timeout.connect(self._refresh_sync_status)
+        self._sync_timer.start()
+        self._account = None
         self._refresh_login()
         return box
 
+    def attach_account(self, controller) -> None:
+        """앱이 계정 일(서버) 담당을 연결 — 로그인·로그아웃·동기화 상태."""
+        self._account = controller
+        controller.changed.connect(self._refresh_login)
+        controller.logged_out.connect(self._on_server_logged_out)
+        self._refresh_login()
+
     def _refresh_login(self) -> None:
-        user = config.load_discord_user()
+        user = feature_access.current_user()
         worker = self._export_thread
         if worker is not None and worker.user is not None and (user is None or user.get('id') != worker.user.get('id')):
             worker.requestInterruption()
@@ -592,13 +603,41 @@ class SettingsTab(QWidget):
         else:
             self._login_status.setText("로그인하지 않음")
             self._login_status.setStyleSheet(f"color:{color('muted')};")
-            self._login_btn.setText("디스코드 로그인")
+            self._login_btn.setText("디스코드로 로그인")
+        from .. import cloud_sync
+        self._sync_check.blockSignals(True)
+        self._sync_check.setChecked(cloud_sync.enabled(config._read_local_config()))
+        self._sync_check.blockSignals(False)
+        self._sync_check.setVisible(user is not None)  # 비로그인: 동기화 줄 없이 안내 한 줄만
+        self._sync_status.setVisible(user is not None)
+        self._refresh_sync_status()
         self._refresh_dm_export()  # 로그인 상태에 맞춰 DM 내보내기 버튼 갱신
         self._refresh_diag()  # 진단 스냅샷(디버깅)도 로그인 시에만 노출
 
+    def _refresh_sync_status(self) -> None:
+        label = getattr(self, "_sync_status", None)
+        if label is None:
+            return
+        label.setText(sync_status_text(feature_access.is_logged_in(), self._sync_check.isChecked(), self._account))
+
+    def _on_sync_toggled(self, on: bool) -> None:
+        if self._account is not None:
+            self._account.set_sync_enabled(on)
+        else:
+            from .. import cloud_sync
+            cloud_sync.save_record(enabled=bool(on))
+        self._refresh_sync_status()
+
+    def _on_server_logged_out(self) -> None:
+        self._refresh_login()
+        self.login_changed.emit()
+
     def _on_login_clicked(self) -> None:
-        if config.load_discord_user():
-            config.clear_discord_user()
+        if feature_access.is_logged_in():
+            if self._account is not None:
+                self._account.logout()
+            else:
+                config.clear_discord_user()
             self._refresh_login()
             self.login_changed.emit()
             return
@@ -609,20 +648,24 @@ class SettingsTab(QWidget):
         self._login_thread.done.connect(self._on_login_done)
         self._login_thread.start()
 
-    def _on_login_done(self, ok: bool, user_id: str, name: str) -> None:
-        _log.info("UI 로그인 결과 수신: ok=%s id=%s", ok, user_id)
+    def _on_login_done(self, ok: bool, token: str) -> None:
+        _log.info("UI 로그인 결과 수신: ok=%s", ok)
         self._login_btn.setEnabled(True)
         if ok:
             try:
-                config.save_discord_user(user_id, name)
+                if self._account is not None:
+                    self._account.logged_in(token)  # 저장 + 동기화 시작
+                else:
+                    config.save_account_token(token)
             except Exception as exc:  # noqa: BLE001 — 저장 실패도 UI엔 알림
-                _log.warning("사용자 저장 실패: %r", exc)
+                _log.warning("토큰 저장 실패: %r", exc)
                 self._login_status.setText("로그인됐지만 저장 실패 — 다시 시도하세요.")
                 self._login_status.setStyleSheet(f"color:{color('warn')};")
                 return
         else:
-            self._login_status.setText("로그인 실패/취소 — 다시 시도하세요.")
+            self._login_status.setText(discord_auth.ERROR_TEXT.get(discord_auth.last_error[0], "로그인하지 못했어요 — 다시 시도해 주세요."))
             self._login_status.setStyleSheet(f"color:{color('warn')};")
+            return
         self._refresh_login()
         self.login_changed.emit()
 
@@ -1203,3 +1246,25 @@ class SettingsTab(QWidget):
             self._game_hint.setText("자동 찾기 실패(창 정보를 못 읽음). Windows에서 시도하세요.")
             self._game_hint.setStyleSheet(f"color:{color('warn')};")
         self.game_registration_finished.emit(bool(exe))
+
+
+def sync_status_text(logged_in: bool, enabled: bool, controller, now: float | None = None) -> str:
+    """설정 › 계정 회색 한 줄: '마지막 동기화: 3분 전' 등(통신 없음 — 기록만 읽음)."""
+    import time
+    if not logged_in:
+        return "로그인하면 설정을 동기화할 수 있어요."
+    if not enabled:
+        return "설정 동기화 꺼짐 — 이 PC 설정만 써요."
+    if controller is not None and controller.last_error:
+        return f"동기화 못 함: {controller.last_error} — 잠시 뒤 다시 해요."
+    at = controller.last_sync() if controller is not None else None
+    if at is None:
+        return "아직 동기화하지 않았어요."
+    minutes = int(max(0.0, (time.time() if now is None else now) - at) // 60)
+    if minutes < 1:
+        return "마지막 동기화: 방금"
+    if minutes < 60:
+        return f"마지막 동기화: {minutes}분 전"
+    if minutes < 24 * 60:
+        return f"마지막 동기화: {minutes // 60}시간 전"
+    return f"마지막 동기화: {minutes // (24 * 60)}일 전"

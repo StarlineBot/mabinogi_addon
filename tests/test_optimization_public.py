@@ -69,7 +69,7 @@ def test_everyone_sees_tab_but_collection_only_for_creator(window, monkeypatch):
     assert c.panel.collect_box.isHidden()
     c.panel.summary_collect.setChecked(True)
     assert not c.panel.summary_collect.isChecked() and not c._summary_collecting
-    user[0] = {'id': feature_access.CREATOR_DISCORD_ID}
+    user[0] = {'id': feature_access.CREATOR_DISCORD_ID, 'tier': 'creator'}
     c.refresh_access()
     assert not c.panel.collect_box.isHidden() and c.panel.collect_toggle.text() == '진단 · 프레임 수집(구간 요약 파일)'  # 0.29.0(명세 14.4): 맨 아래 접힘
 
@@ -85,7 +85,7 @@ def test_no_alpha_or_beta_words_on_screen_and_no_basis_line(window, monkeypatch)
     for widget in (c.panel, w.settings_tab):
         joined = ' '.join(_texts(widget))
         assert '알파' not in joined and '베타' not in joined and '근거' not in joined
-    assert '로그인하면 디스코드로 설정을 백업하고, 문의 답변을 디스코드로 받을 수 있어요.' in _texts(w.settings_tab)  # 2026-10-28 정책 7절 문구 → 문의 일원화 6.3(수집 도구는 문의하기로)
+    assert '로그인하면 다른 PC에서도 같은 설정을 쓰고, 문의 답변을 디스코드로 받을 수 있어요.' in _texts(w.settings_tab)  # 2026-10-28 정책 7절 문구 → 문의 일원화 6.3(수집 도구는 문의하기로)
 
 
 def test_auto_game_end_shows_applying_line_when_fastping_was_applied_at_start(tmp_path):

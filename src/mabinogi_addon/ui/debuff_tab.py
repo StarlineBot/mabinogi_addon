@@ -397,7 +397,8 @@ class DebuffTab(QWidget):
     # ---- 탐지 방식(1/2/3차) ----
     @staticmethod
     def _logged_in() -> bool:
-        return config.load_discord_user() is not None
+        from .. import feature_access
+        return feature_access.is_logged_in()
 
     def _selected_mode(self) -> str:
         return self.method_combo.currentData() or "auto"

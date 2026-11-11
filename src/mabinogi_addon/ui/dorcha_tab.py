@@ -138,7 +138,8 @@ class DorchaTab(QWidget):
         self._timer.start()
 
     def _logged_in(self):
-        return bool(config.load_discord_user())
+        from .. import feature_access
+        return feature_access.is_logged_in()
 
     def _active(self):
         return self._watcher.is_game_active() or (self._watcher.is_self_active() and self._view.isVisible())

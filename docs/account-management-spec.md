@@ -1,6 +1,6 @@
 # 사용자 계정 관리 — 로그인·설정 동기화 (확정)
 
-- 작성: 2026-11-07 초안 → **2026-11-11 확정(사용자 결정 11-09~11)**. 상태: 미구현, **1단계 개발 대상**.
+- 작성: 2026-11-07 초안 → **2026-11-11 확정(사용자 결정 11-09~11)**. 상태: **1단계 — 서버 준비 완료(addon_server 4a4c5de), 앱 0.46.0 구현(11-11)**. 규격은 3.4.1.
 - 사용자 목적: ① 설정을 사람이 직접 관리하지 않고 **동기화** ② **누가 어떤 기능을 쓰는지**는 동기화된 설정으로 보기 ③ 쓰지 않았으면 하는 사용자 **차단**(동기화 이후).
 - [기능 공개 정책 7절](feature-release-stage-review.md#7-사용-기능-전체-공개-2026-10-28-사용자-결정--16절의-로그인제작자-제한에-우선)(10-28 사용 기능 전체 공개)은 **2단계부터** 이 문서 4절로 대체된다. 1단계에서는 공개 범위가 지금과 같다.
 
@@ -76,6 +76,21 @@
 - 요청 수 제한(사용자당 분당 수십 회), 묶음 크기·형식 확인, 토큰 서명·만료 확인.
 - SQLite(WAL): `users(discord_id, name, created, last_seen, logged_out, tier, status)`, `settings(discord_id, rev, updated, device, resolution, size, features)` — `features`는 받은 설정에서 기능 사용 값만 읽어 둔 것(봇 보기용).
 - 비밀값: `~/project/discord_bot/addon_server/.env`(권한 600, git 제외 — 봇의 .env와 분리) — 디스코드 client secret, 서명 비밀 키. 공개 키는 앱 코드에 넣는다.
+
+### 3.4.1 앱 ↔ 서버 규격(서버 discord_bot/addon_server 커밋 4a4c5de, 상세는 그 저장소 addon_server/README.md 1절) — 앱 0.46.0이 이대로 구현
+- **로그인**: 브라우저 `GET /auth/start?state=<8~128자 [A-Za-z0-9_-]>&port=53123` → 항상 `http://localhost:<port>/callback`으로 돌아옴:
+  성공 `?token=…&state=…` / 취소 `?error=access_denied` / 실패 `?error=login_failed` / 차단(2단계) `?error=blocked`(모두 `&state=`). 앱은 state를 반드시 확인. 요청은 10분 안·1회만.
+- **토큰**: JWT, `alg=EdDSA`(Ed25519), header `kid="k1"`, 클레임 `iss="starline-bot"`, `aud="mabinogi-addon"`, `sub`(디스코드 ID), `name`, `tier`("user"|"creator", 서버가 CREATOR_IDS로 /me마다 정함), `iat`, `exp`(+30일).
+  앱 확인: 서명(`header.payload`) + alg + iss + aud + exp — 앱은 순수 파이썬 Ed25519(`ed25519.py`)로 확인(의존성 추가 없음).
+- **공개 키(앱 내장)**: raw base64 `wpSDRfPaiTpyr1+SXsJq8ZNKc7evZYmFHGujnapR18Y=` → `account.PUBLIC_KEY_HEX`(hex), `PUBLIC_KEY_IS_TEST = False`.
+- **공통 오류**(헤더 `Authorization: Bearer <토큰>`): 401(토큰 없음·틀림·만료·서버에 없는 사용자 → 앱은 비로그인), 403(차단·2단계 → 비로그인), 429(분당 60회 초과 → 다음에 다시). 연결 실패·5xx는 앱이 7일 유예.
+- `GET /me` → `{id, name, tier, status, token, expiresAt}` — 앱은 `token`만 받아 서명 확인 후 교체.  `POST /auth/logout` → 204.
+- `GET /settings` → `{exists:false, rev:0}` 또는 `{exists:true, rev, updated(UTC ISO8601 'Z'), device, resolution, size}` — 앱은 날짜를 현지 시각으로 표시.
+- `GET /settings/blob` → ZIP(헤더 `X-Settings-Rev`), 없으면 404.
+- `PUT /settings?device=<PC 이름 64자>&resolution=<2560x1440>`, 헤더 `If-Match: <마지막 rev, 처음 0>`, 본문 ZIP → `{rev, updated, size}`(앱이 rev 저장).
+  `409 {detail, rev}` = 둘 다 바뀜 → 앱이 `GET /settings`를 한 번 더 읽어 '마지막 저장: 날짜 · PC'와 함께 물음, '이 PC 설정 쓰기'면 응답 rev로 다시 PUT. 428·400·413(2MB 초과 등)·422(형식·비밀값 키).
+- **묶음**: export_bundle 형식(`config.json` + `userdata/…`, 앱은 `sync.json`도 넣음 — 서버는 모르는 이름 무시). 압축 2MB·config.json 1MB·풀어서 64MB·4096개, 절대경로·`..`·역슬래시 금지, 비밀값 키 있으면 422.
+  빼는 값(3.3)은 서버가 검사하지 않음 → 앱이 뺀다. 봇 '켠 기능'은 `{"<기능>": {"enabled": bool}}`·최상위 `…Enabled` 불값만 읽음(앱 설정 모양 그대로).
 
 ### 3.5 VM 운영
 - **준비 상태(2026-11-11 사용자 확인)**: 스왑 1GB ✓, `starline-bot.duckdns.org` → VM ✓, GCP 방화벽 80·443 ✓, Caddy 설치·인증서 발급(테스트 응답 `ok`) ✓, DuckDNS 5분 자동 갱신(cron) ✓. 남은 것: 서버 코드·systemd·백업·디스코드 포털 Redirect.

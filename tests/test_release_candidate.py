@@ -843,3 +843,18 @@ def test_release_announcement_sends_user_agent_and_falls_back_for_text_channels(
         raise urllib.error.HTTPError('https://hook', 403, 'forbidden', {}, None)
     assert not d.announce('https://hook', 'v0.43.0', '노트', urlopen=blocked)
     assert 'HTTP 403' in capsys.readouterr().out
+
+
+def test_preflight_refuses_development_account_key(bundle, monkeypatch):
+    """로그인 토큰 공개 키가 개발 시험 키(PUBLIC_KEY_IS_TEST = True)면 배포 거절 — 시험 비밀 키는 테스트에 있어 누구나 제작자 토큰을 만들 수 있다."""
+    root, _, _, _ = bundle
+    monkeypatch.setattr(c.subprocess, 'check_output', lambda *a, **kw: '')
+    source = root / 'src/mabinogi_addon/account.py'
+    source.parent.mkdir(parents=True, exist_ok=True)
+    source.write_text('PUBLIC_KEY_HEX = "00"\nPUBLIC_KEY_IS_TEST = True\n', encoding='utf-8')
+    with pytest.raises(ValueError, match='test key'):
+        c.preflight(root, SHA, '0.6.0')
+    source.write_text('PUBLIC_KEY_HEX = "11"\nPUBLIC_KEY_IS_TEST = False\n', encoding='utf-8')
+    c.preflight(root, SHA, '0.6.0')
+    source.unlink()  # account.py가 없는 예전 소스는 해당 없음
+    c.preflight(root, SHA, '0.6.0')

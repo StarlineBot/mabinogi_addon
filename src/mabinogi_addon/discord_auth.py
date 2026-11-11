@@ -1,20 +1,17 @@
-"""Discord 로그인 (OAuth2 Implicit Grant).
+"""디스코드 로그인 — 서버 경유(계정 관리 명세 3.2, 0.46.0부터).
 
-애드온 사용자가 Discord로 로그인해 자신의 user_id를 앱에 넘긴다 → 문의 글에 그
-user_id가 실려, 제작자가 디스코드에서 답하면 봇이 그 사용자에게 DM으로 전달한다.
+1. 앱이 `localhost:53123`에서 잠깐 기다리고, 브라우저로 서버 `/auth/start?state=…&port=53123`을 연다.
+2. 서버가 디스코드 인증(Authorization Code — client secret은 서버에만)·코드 교환·사용자 확인 뒤 **서명한 앱 토큰**을 만든다.
+3. 서버가 브라우저를 `http://localhost:53123/callback?token=…&state=…`로 보낸다 → 앱이 state를 확인하고
+   내장 공개 키로 토큰 서명을 확인(account.verify_token)한 뒤 돌려준다(저장은 화면 쪽).
 
-Implicit grant(response_type=token)를 쓰므로 **client secret이 필요 없다**(배포 앱에
-비밀을 넣지 않는다). 토큰은 리다이렉트 URL의 fragment(#...)로 와서 서버가 직접 못
-읽으므로, 콜백 페이지의 작은 JS가 fragment를 질의문자열로 바꿔 로컬 서버에 되돌린다.
-
-로그인 흐름 전체가 사용자 PC(localhost)에서 일어난다. 네트워크 호출(사용자 조회)이
-있으므로 UI 스레드가 아니라 백그라운드 스레드에서 login()을 호출한다.
+예전(0.45.x까지)은 디스코드 Implicit Grant로 앱이 사용자 정보를 직접 받아 config에 적었다 — 서명이 없어 파일을 고치면
+로그인·제작자 흉내가 됐다. 로그인 흐름은 사용자 PC(localhost)와 서버만 오가고, 네트워크를 기다리므로 작업 스레드에서 부른다.
 """
 
 from __future__ import annotations
 
 import http.server
-import json
 import logging
 import secrets
 import socketserver
@@ -24,15 +21,16 @@ import urllib.parse
 import urllib.request
 import webbrowser
 
+from . import account
+
 _log = logging.getLogger("mabinogi_addon.discord")
 
-# 공개값(비밀 아님). 포털 OAuth2 → Redirects에 REDIRECT_URI를 '똑같이' 등록해야 한다.
-CLIENT_ID = "1172437289339727913"
-PORT = 53123
-REDIRECT_URI = f"http://localhost:{PORT}/callback"
+PORT = account.PORT
 
-AUTH_BASE = "https://discord.com/api/oauth2/authorize"
-USER_URL = "https://discord.com/api/users/@me"
+# 마지막 로그인 실패 이유(화면 문구) — 서버 콜백 error= 값 그대로 + timeout
+ERROR_TEXT = {"access_denied": "로그인을 취소했어요.", "login_failed": "로그인하지 못했어요 — 다시 시도해 주세요.",
+              "blocked": "이 계정은 지금 로그인할 수 없어요.", "timeout": "로그인 시간이 지났어요 — 다시 시도해 주세요."}
+last_error = ["timeout"]
 
 # 로그인 성공 시 브라우저에 보여줄 페이지(라이트/다크 모두 대응하는 카드).
 _SUCCESS_BODY = """
@@ -81,42 +79,6 @@ _SUCCESS_BODY = """
 """
 
 
-def authorize_url(state: str) -> str:
-    """Discord 인증 페이지 URL(implicit: 토큰을 fragment로 돌려줌)."""
-    query = urllib.parse.urlencode(
-        {
-            "client_id": CLIENT_ID,
-            "redirect_uri": REDIRECT_URI,
-            "response_type": "token",
-            "scope": "identify",
-            "state": state,
-        }
-    )
-    return f"{AUTH_BASE}?{query}"
-
-
-def fetch_user(
-    access_token: str, *, urlopen=urllib.request.urlopen, timeout: float = 5.0
-) -> tuple[str, str]:
-    """액세스 토큰으로 내 (user_id, 표시이름) 조회."""
-    req = urllib.request.Request(
-        USER_URL,
-        headers={
-            "Authorization": f"Bearer {access_token}",
-            # Discord API는 User-Agent를 요구(없으면 Cloudflare 403).
-            "User-Agent": (
-                "mabinogi-addon "
-                "(https://github.com/StarlineBot/mabinogi_addon, 1.0)"
-            ),
-        },
-    )
-    with urlopen(req, timeout=timeout) as resp:
-        data = json.loads(resp.read().decode("utf-8"))
-    uid = str(data.get("id", ""))
-    name = data.get("global_name") or data.get("username") or uid
-    return uid, name
-
-
 class _ReuseTCPServer(socketserver.ThreadingTCPServer):
     # ThreadingTCPServer: 요청마다 스레드로 처리 → serve_forever가 select 루프에 머물러
     # shutdown()이 교착되지 않는다(단일 스레드 TCPServer는 연결이 물리면 shutdown이 멈춤).
@@ -124,12 +86,11 @@ class _ReuseTCPServer(socketserver.ThreadingTCPServer):
     daemon_threads = True  # 남은 요청 스레드가 종료를 막지 않게
 
 
-def login(*, open_browser=webbrowser.open, timeout: float = 120.0):
-    """브라우저로 Discord 로그인 → (user_id, 이름). 실패/취소 시 None.
-
-    로컬 루프백 서버를 잠깐 띄워 콜백을 받고, 사용자 조회까지 마친 뒤 닫는다.
-    """
-    state = secrets.token_urlsafe(16)
+def login(*, open_browser=webbrowser.open, timeout: float = 120.0, base: str | None = None,
+          public_key_hex: str | None = None) -> str | None:
+    """브라우저로 서버 경유 디스코드 로그인 → 서명 확인된 토큰 문자열. 실패·취소·state 불일치·서명 틀림이면 None."""
+    state = secrets.token_urlsafe(16)  # 22자 [A-Za-z0-9_-] — 서버 규격 8~128자
+    last_error[0] = "timeout"
     captured: dict[str, str | None] = {}
     done = threading.Event()
 
@@ -140,20 +101,12 @@ def login(*, open_browser=webbrowser.open, timeout: float = 120.0):
         def do_GET(self):
             parsed = urllib.parse.urlparse(self.path)
             if parsed.path == "/callback":
-                # fragment(#access_token=...)는 서버가 못 보므로 JS로 질의문자열화해 재요청.
-                self._send(
-                    "<script>location.replace('/token?'"
-                    "+location.hash.substring(1))</script>"
-                )
-            elif parsed.path == "/token":
                 params = urllib.parse.parse_qs(parsed.query)
-                captured["access_token"] = (params.get("access_token") or [None])[0]
+                captured["token"] = (params.get("token") or [None])[0]
                 captured["state"] = (params.get("state") or [None])[0]
-                _log.info(
-                    "콜백 수신: token=%s state=%s",
-                    "있음" if captured["access_token"] else "없음",
-                    "있음" if captured["state"] else "없음",
-                )
+                captured["error"] = (params.get("error") or [None])[0]  # access_denied·login_failed·blocked
+                _log.info("콜백 수신: token=%s state=%s", "있음" if captured["token"] else "없음",
+                          "있음" if captured["state"] else "없음")
                 self._send(_SUCCESS_BODY)
                 done.set()
             else:
@@ -168,40 +121,44 @@ def login(*, open_browser=webbrowser.open, timeout: float = 120.0):
             self.end_headers()
             self.wfile.write(data)
 
-    try:
-        server = _ReuseTCPServer(("127.0.0.1", PORT), Handler)
-    except OSError as exc:
-        _log.warning("로컬 서버 바인드 실패(포트 %d): %s", PORT, exc)
-        return None
+    server = None
+    for attempt in range(20):  # 바로 전 로그인의 로컬 서버가 닫히는 중이면 잠깐 기다렸다 다시(최대 약 2초)
+        try:
+            server = _ReuseTCPServer(("127.0.0.1", PORT), Handler)
+            break
+        except OSError as exc:
+            if attempt == 19:
+                _log.warning("로컬 서버 바인드 실패(포트 %d): %s", PORT, exc)
+                last_error[0] = "login_failed"
+                return None
+            import time
+            time.sleep(0.1)
     server.timeout = 1.0
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
-        _log.info("로그인 시작: 브라우저 열기")
-        open_browser(authorize_url(state))
+        _log.info("로그인 시작: 브라우저 열기(서버 경유)")
+        open_browser(account.start_url(state, base=base or account.SERVER_URL))
         if not done.wait(timeout):
             _log.warning("로그인 시간 초과(%.0fs) — 승인 안 됨", timeout)
-            return None  # 시간 초과(사용자가 승인 안 함)
-        token = captured.get("access_token")
-        if not token:
-            _log.warning("콜백에 access_token 없음")
             return None
+        token = captured.get("token")
         if captured.get("state") != state:
             _log.warning("state 불일치 — 변조 의심(무시)")
+            last_error[0] = "login_failed"
             return None
-        try:
-            uid, name = fetch_user(token)
-        except urllib.error.HTTPError as exc:
-            _log.warning("사용자 조회 실패(HTTP %s): %s", exc.code, exc.reason)
+        if captured.get("error"):
+            _log.info("서버 로그인 결과: %s", captured["error"])
+            last_error[0] = captured["error"] if captured["error"] in ERROR_TEXT else "login_failed"
             return None
-        except Exception as exc:  # noqa: BLE001 — 네트워크/파싱 오류
-            _log.warning("사용자 조회 실패: %r", exc)
+        if not token or account.verify_token(token, public_key_hex=public_key_hex) is None:
+            _log.warning("토큰 없음·서명 확인 실패 — 로그인 안 함")
+            last_error[0] = "login_failed"
             return None
-        _log.info("로그인 성공: %s (%s)", name, uid)
-        return uid, name
+        _log.info("로그인 성공(토큰 서명 확인)")
+        return token
     finally:
-        # 정리는 데몬 스레드로 — shutdown()이 혹시 늦어져도 login() 반환(=결과 전달)을
-        # 막지 않는다. 이게 막히면 UI가 로그인 결과를 못 받아 저장·표시가 안 된다.
+        # 정리는 데몬 스레드로 — shutdown()이 늦어져도 login() 반환(=결과 전달)을 막지 않는다.
         def _cleanup() -> None:
             try:
                 server.shutdown()

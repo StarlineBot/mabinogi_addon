@@ -1,90 +1,108 @@
 {
-  "version": "0.45.0",
+  "version": "0.46.0",
   "tests": [
-    "tests/test_boss_low_hp_fraction.py",
-    "tests/test_boss_bar_overlay.py",
-    "tests/test_boss_hp_reader.py",
-    "tests/test_boss_fill_boundary.py",
-    "tests/test_boss_two_rows.py",
-    "tests/test_boss_low_hp_vertical.py",
-    "tests/test_boss_tab.py",
+    "tests/test_account.py",
+    "tests/test_discord_auth.py",
+    "tests/test_cloud_sync.py",
+    "tests/test_feature_release_policy.py",
+    "tests/test_access_cache.py",
+    "tests/test_blackbox_access.py",
+    "tests/test_halo_capture.py",
+    "tests/test_inquiry_unified.py",
+    "tests/test_settings_export.py",
     "tests/test_release_notes.py",
     "tests/test_release_notes_trigger.py",
     "tests/test_release_checks.py",
     "tests/test_startup_build.py",
     "tests/test_release_candidate.py",
     "tests/test_windows_ci.py",
-    "tests/test_startup_smoke.py",
-    "tests/test_autofind_v2_engine.py",
-    "tests/test_autofind_v2_controller.py",
-    "tests/test_debuff_applied.py",
-    "tests/test_debuff_engine.py",
-    "tests/test_warn_gone.py",
-    "tests/test_debuff_identity.py",
-    "tests/test_debuff_live_detection.py",
-    "tests/test_overlay_spec.py",
-    "tests/test_buff_opacity_reorder.py",
-    "tests/test_debuff_boss_gate.py",
-    "tests/test_navigation.py",
-    "tests/test_tracker_layout.py",
-    "tests/test_tracker_top_width.py",
-    "tests/test_screen_polish.py",
-    "tests/test_autofind_fallback.py",
-    "tests/test_autofind_v2_use.py",
-    "tests/test_first_use.py",
-    "tests/test_home_page.py",
-    "tests/test_setup.py",
-    "tests/test_tour_layout.py",
-    "tests/test_inquiry_unified.py",
-    "tests/test_creator_dialogue.py",
-    "tests/test_region_registration.py",
-    "tests/test_settings_grouping.py",
-    "tests/test_autofind_default_window.py",
-    "tests/test_boss_hp_classify_speed.py",
-    "tests/test_cooldown.py",
-    "tests/test_no_beta_on_screen.py"
+    "tests/test_startup_smoke.py"
   ],
   "coverage": {
-    "src/mabinogi_addon/detect/boss_hp_reader.py": {
+    "src/mabinogi_addon/ed25519.py": {
       "tests": [
-        "tests/test_boss_low_hp_fraction.py",
-        "tests/test_boss_bar_overlay.py",
-        "tests/test_boss_hp_reader.py",
-        "tests/test_boss_fill_boundary.py",
-        "tests/test_boss_two_rows.py",
-        "tests/test_boss_low_hp_vertical.py",
-        "tests/test_boss_hp_classify_speed.py"
+        "tests/test_account.py"
       ],
-      "reason": "저HP(20% 이하) 회색 바탕 흰 숫자 소수(_bright_fraction): 정수 같게 강하게·'.' 왼쪽 글자 수·두 칸 강한 점수일 때만, 앞자리만 남은 오독엔 소수 없음, 흰 테두리 줄 제외 · 정수 경로·결과 그대로(기존 판독·채움 경계·두 줄 구간) · 저HP 한 자리('1')를 영역 ±6px 흰 글자로 다시(recheck_low_hp, 늘리기만 1→17) · 저HP 두 자리 오독도 다시(글자 줄이 영역 줄과 겹칠 때만, QA f5ba724) · 0.45.0 CPU: _classify를 크기별 묶음 상관계수 + 같은 글자 모양 캐시로(결과 같음 — 예전 계산과 비교 테스트)"
+      "reason": "토큰 서명 확인(Ed25519, 순수 파이썬 — RFC 8032 시험 값)"
     },
-    "src/mabinogi_addon/ui/boss_tab.py": {
+    "src/mabinogi_addon/account.py": {
       "tests": [
-        "tests/test_boss_bar_overlay.py",
-        "tests/test_boss_low_hp_vertical.py",
-        "tests/test_boss_tab.py",
-        "tests/test_boss_two_rows.py",
-        "tests/test_autofind_default_window.py"
+        "tests/test_account.py",
+        "tests/test_discord_auth.py",
+        "tests/test_cloud_sync.py",
+        "tests/test_release_candidate.py"
       ],
-      "reason": "보스바 오버레이(늘린 캡처)에서만 저HP 한 자리 판독을 ±6px로 다시(등록·미등록·두 줄 위 줄) — 오버레이를 안 쓰면 캡처·판독 예전 그대로 · 20% 이하 판독 전부 영역 줄 넘겨 다시(두 자리 포함) · 영역 지정 안내 v3 문구(set_guide) · 보스바 오버레이 구역 모든 사용자(주석), HP바 수집 진단 제작자 전용 그대로"
+      "reason": "서버 토큰 확인·보관·7일 유예·서버 API(위조·만료·다른 키 거절, 개발 시험 키는 preflight가 배포 거절)"
     },
-    "src/mabinogi_addon/assets/boss_hp_digits/gray_d0_0.png": {
+    "src/mabinogi_addon/discord_auth.py": {
       "tests": [
-        "tests/test_boss_low_hp_fraction.py"
+        "tests/test_discord_auth.py"
       ],
-      "reason": "흰 글자 숫자 샘플 gray_d0~9(14개) 묶음 — 0~9 모두·소수 전용(정수 보조 샘플 그대로)"
+      "reason": "서버 경유 로그인(state·서명 확인) — 예전 Implicit Grant 대체"
     },
-    "scripts/build_boss_digits_20261108.py": {
+    "src/mabinogi_addon/feature_access.py": {
       "tests": [
-        "tests/test_boss_low_hp_fraction.py"
+        "tests/test_account.py",
+        "tests/test_feature_release_policy.py",
+        "tests/test_access_cache.py",
+        "tests/test_blackbox_access.py",
+        "tests/test_halo_capture.py"
       ],
-      "reason": "gray 샘플 생성 스크립트(앱 실행 경로 아님) — 만든 샘플로 화면 값 판독 확인"
+      "reason": "등급 판정을 토큰 등급으로(current_user·is_logged_in·tier·is_creator) — config에 제작자 ID를 적어도 제작자 아님"
+    },
+    "src/mabinogi_addon/config.py": {
+      "tests": [
+        "tests/test_account.py",
+        "tests/test_cloud_sync.py",
+        "tests/test_settings_export.py"
+      ],
+      "reason": "load_discord_user = 서명 토큰만, 토큰 저장·지우기, 설정 쓰기 알림, 묶음에 transform·extra(동기화용, 내보내기 결과 그대로)"
+    },
+    "src/mabinogi_addon/cloud_sync.py": {
+      "tests": [
+        "tests/test_cloud_sync.py"
+      ],
+      "reason": "동기화 묶음(빼는 값 없음·2MB)·적용(이 PC 값 유지·해상도 다르면 위치 유지·import_bundle 검사)"
+    },
+    "src/mabinogi_addon/ui/account_controller.py": {
+      "tests": [
+        "tests/test_cloud_sync.py",
+        "tests/test_account.py"
+      ],
+      "reason": "작업 스레드에서 /me·동기화(30초 모으기·종료 시 올림·새 PC·둘 다 바뀜·409 물음·비로그인 통신 0회)"
+    },
+    "src/mabinogi_addon/ui/settings_tab.py": {
+      "tests": [
+        "tests/test_cloud_sync.py",
+        "tests/test_settings_export.py"
+      ],
+      "reason": "설정 › 계정: 디스코드로 로그인/로그아웃·☑ 설정 동기화·마지막 동기화, DM 백업·내보내기·가져오기 그대로"
+    },
+    "src/mabinogi_addon/ui/main_window.py": {
+      "tests": [
+        "tests/test_cloud_sync.py",
+        "tests/test_account.py"
+      ],
+      "reason": "계정 담당 연결·시작 때 동기화·물음(불러오기/이 PC 설정 쓰기)·받은 뒤 다시 켜기 안내·종료 때 올림"
+    },
+    "src/mabinogi_addon/inquiry_session.py": {
+      "tests": [
+        "tests/test_inquiry_unified.py"
+      ],
+      "reason": "문의 보낸 사람 = feature_access.current_user(동작 같음)"
+    },
+    "scripts/release_candidate.py": {
+      "tests": [
+        "tests/test_release_candidate.py"
+      ],
+      "reason": "preflight: 로그인 공개 키가 개발 시험 키면 배포 거절"
     },
     "src/mabinogi_addon/assets/release_notes.md": {
       "tests": [
         "tests/test_release_notes.py",
         "tests/test_release_notes_trigger.py"
       ],
-      "reason": "0.45.0 노트 파싱·새 버전 표시(헤드라인 '이제 위치를 앱이 알아서 찾아요' + 게시 안 된 0.44.2 줄을 합침, 게시된 0.44.1 섹션 그대로)"
+      "reason": "0.46.0 노트 파싱·새 버전 표시(게시된 0.45.0 섹션 그대로)"
     },
     "packaging/release_checks.json": {
       "tests": [
@@ -100,231 +118,6 @@
         "tests/test_startup_smoke.py"
       ],
       "reason": "배포 계약: 빌드·후보·Windows CI·시작 확인"
-    },
-    "src/mabinogi_addon/autofind_v2.py": {
-      "tests": [
-        "tests/test_autofind_v2_engine.py",
-        "tests/test_autofind_v2_controller.py"
-      ],
-      "reason": "0.44.2 지난 자리 여백 확인 + 0.45.0 명세 6.1 '계기': UI 보이나 2.5초(로그인·로딩 10초 대체), UI 안 보이는 동안 실패·다시 찾기 멈춤, 상태창 닫힘 간격 유지, 직접 지정 해제(user_release)"
-    },
-    "src/mabinogi_addon/ui/autofind_v2_controller.py": {
-      "tests": [
-        "tests/test_autofind_v2_controller.py",
-        "tests/test_autofind_fallback.py"
-      ],
-      "reason": "'UI 보이나' 작업(찾아 둔 단축바·체력바 여백만 캡처) · v1·고정 자리 판독은 UI 보임 신호로만 · 위치 상태(place)·문의 상태(detail) · 고정 해제 시 바로 다시 찾기 · perf_meter 기능 목록에 자동 찾기(화면 갱신·처음·다시 찾기·나타나면·UI 확인) — 동작 변화 없음"
-    },
-    "src/mabinogi_addon/detect/debuff_time.py": {
-      "tests": [
-        "tests/test_debuff_applied.py"
-      ],
-      "reason": "디버프 '걸린 것 + 시간' 보기(제작자 먼저, docs/debuff-applied-overlay-spec.md): 아이콘 아래 시간 판독(7px·9px 글꼴, 붙은 글자 칸 나누기, 밝은 바닥 → 비움)"
-    },
-    "src/mabinogi_addon/assets/debuff_time_glyphs/M_s0.png": {
-      "tests": [
-        "tests/test_debuff_applied.py"
-      ],
-      "reason": "시간 글자 템플릿(0~9·M, 두 크기) — tests/data 디버프 줄 판독 회귀"
-    },
-    "src/mabinogi_addon/tracker/debuff_engine.py": {
-      "tests": [
-        "tests/test_debuff_applied.py",
-        "tests/test_debuff_engine.py",
-        "tests/test_warn_gone.py",
-        "tests/test_debuff_identity.py",
-        "tests/test_debuff_live_detection.py"
-      ],
-      "reason": "디버프 '걸린 것 + 시간' 보기(제작자 먼저, docs/debuff-applied-overlay-spec.md): 표시 방식(걸린 것만·정한 순서·시간, M 없는 숫자는 줄어드는 걸 봐야 초), 떨어짐 경고 뒤 빠짐 · 걸림 판정·안 걸린 것 보기 그대로(아이콘 자리 기록만 추가) · 초 카운트다운 중 'NM'은 두 번 읽혀야 반영·의심 판독 넘김"
-    },
-    "src/mabinogi_addon/tracker/engine.py": {
-      "tests": [
-        "tests/test_overlay_spec.py",
-        "tests/test_debuff_applied.py"
-      ],
-      "reason": "OverlayEntry에 시간 글자(time_text·time_warn) 추가 — 버프 표시 그대로"
-    },
-    "src/mabinogi_addon/ui/overlay.py": {
-      "tests": [
-        "tests/test_overlay_spec.py",
-        "tests/test_debuff_applied.py"
-      ],
-      "reason": "게임 시간 글자를 그대로 그림(1분 미만 빨강), 버프 지속시간 표시 그대로"
-    },
-    "src/mabinogi_addon/ui/debuff_tab.py": {
-      "tests": [
-        "tests/test_buff_opacity_reorder.py",
-        "tests/test_debuff_applied.py",
-        "tests/test_debuff_boss_gate.py",
-        "tests/test_navigation.py",
-        "tests/test_tracker_layout.py",
-        "tests/test_tracker_top_width.py",
-        "tests/test_autofind_default_window.py"
-      ],
-      "reason": "디버프 '걸린 것 + 시간' 보기(제작자 먼저, docs/debuff-applied-overlay-spec.md): 제작자만 '표시' 선택·설명 문구, 비제작자 그대로 · 버프·디버프 탭 배치(명세 17절): 위 두 줄(영역 한 줄 + 잠금 세 칸·체크박스) + 구분선, 목록|항목 설정 같은 높이, 두 칸 접힘 조건 그대로 · 걸린 것 + 시간이면 '보스바가 보일 때만' 흐리게 · 영역 지정 안내 v3 문구(set_guide) · '표시 [안 걸린 것 | 걸린 것 + 시간]' 모든 사용자(제작자 조건 해제, 기본 안 걸린 것) · 방식 바꿀 때 자동 찾기 켜짐이면 영역 상자 첫 줄은 위치 상태 · 버프 탭과 톤 맞춤(사용자 확정 11-10): 목록 아이콘 32(16px 2배), 잠금 줄 = 잠금 세 칸 + 오버레이 창 보이기(줄바꿈 없음), '보스바가 보일 때만 표시'는 위쪽 '표시' 줄로 — 동작·설정값 그대로"
-    },
-    "src/mabinogi_addon/config.py": {
-      "tests": [
-        "tests/test_debuff_applied.py"
-      ],
-      "reason": "overlay.debuffDisplay(missing|applied, 기본 missing)"
-    },
-    "src/mabinogi_addon/ui/main_window.py": {
-      "tests": [
-        "tests/test_debuff_applied.py",
-        "tests/test_warn_gone.py",
-        "tests/test_autofind_fallback.py",
-        "tests/test_first_use.py",
-        "tests/test_navigation.py",
-        "tests/test_tour_layout.py",
-        "tests/test_autofind_v2_use.py",
-        "tests/test_creator_dialogue.py",
-        "tests/test_autofind_default_window.py",
-        "tests/test_no_beta_on_screen.py"
-      ],
-      "reason": "0.44.2 디버프 표시·사라짐 소리·의심 저장 + 0.45.0 자동 찾기 모든 사용자 켬·홈 줄 위치 문구·위치 요약·위치 다시 찾기·첫 사용 v3 연결·둘러보기 8단계·5단계 안내/영역 승인 창 삭제 · 디버프 표시 방식 모든 사용자, 초→분 의심 자동 저장은 제작자 전용 그대로"
-    },
-    "src/mabinogi_addon/ui/notifier.py": {
-      "tests": [
-        "tests/test_warn_gone.py"
-      ],
-      "reason": "디버프 떨어짐은 '디버프 사라짐.mp3'(버프 사라짐과 다른 소리, 사용자 11-08) — 버프·디버프 재생기 따로, 음량·정지 그대로"
-    },
-    "src/mabinogi_addon/assets/sounds/디버프 사라짐.mp3": {
-      "tests": [
-        "tests/test_warn_gone.py"
-      ],
-      "reason": "사용자가 올린 원본(tests/data/universfield-new-notification-035-485894.mp3) 그대로"
-    },
-    "src/mabinogi_addon/ui/buff_tab.py": {
-      "tests": [
-        "tests/test_buff_opacity_reorder.py",
-        "tests/test_navigation.py",
-        "tests/test_screen_polish.py",
-        "tests/test_tracker_layout.py",
-        "tests/test_tracker_top_width.py",
-        "tests/test_autofind_default_window.py"
-      ],
-      "reason": "버프·디버프 탭 배치(명세 17절): 위 두 줄(영역 한 줄 + 잠금 세 칸·체크박스) + 구분선, 목록|항목 설정 같은 높이, 두 칸 접힘 조건 그대로 · 영역 지정 안내 v3 문구(set_guide)"
-    },
-    "src/mabinogi_addon/ui/region_section.py": {
-      "tests": [
-        "tests/test_navigation.py",
-        "tests/test_screen_polish.py",
-        "tests/test_tracker_layout.py",
-        "tests/test_tracker_top_width.py",
-        "tests/test_autofind_v2_use.py",
-        "tests/test_autofind_default_window.py"
-      ],
-      "reason": "0.44.2 한 줄 머리 모드 + 0.45.0 위치 상태 문구('직접 지정' 전제 문구 교체)·출처 한 줄·[자동으로 돌아가기], 머리 줄은 짧게('자동'·'직접 지정 ·') · 영역 지정 안내를 v3 문구로(set_guide, 8개 화면) · 지워진 영역 묶음은 건너뛰고 갱신(이후 묶음까지 갱신되게)"
-    },
-    "src/mabinogi_addon/ui/widgets.py": {
-      "tests": [
-        "tests/test_buff_opacity_reorder.py",
-        "tests/test_tracker_layout.py",
-        "tests/test_tracker_top_width.py"
-      ],
-      "reason": "WrapRow(좁으면 체크박스만 다음 줄)·EqualRow(잠금 세 칸 같은 폭)·MinWidthPanel(접힘 조건 유지)·divider · ElidedLabel(상태 문구 말줄임 + 툴팁)"
-    },
-    "src/mabinogi_addon/autofind_regions.py": {
-      "tests": [
-        "tests/test_autofind_fallback.py",
-        "tests/test_autofind_v2_use.py",
-        "tests/test_autofind_v2_controller.py",
-        "tests/test_autofind_default_window.py"
-      ],
-      "reason": "모든 사용자 항상 켬(비상 값 autofind.disabled) · 쓰는 순서 고정→자동→저장 영역(v1)→없음 · 직접 지정 고정(다음 실행에도)·자동으로 돌아가기 · 직접 지정하면 사용 켬 · 공유 보스바·디버프 줄 · 문의 snapshot · 체력바도 사용 값(QA 0429c66 — 바별 표시만으론 저절로 켜짐)"
-    },
-    "src/mabinogi_addon/ui/first_use.py": {
-      "tests": [
-        "tests/test_first_use.py"
-      ],
-      "reason": "첫 사용 안내 v3 3장(시작·쓸 기능 켜기·준비 끝), 게임 창 자동 연결, 찾기 상태, 790×744 안 넘침 · 3단계 '둘러보기에서 알려 드릴 것'(둘러보기와 같은 순서) · 1단계 '<창 이름> (<해상도>)'"
-    },
-    "src/mabinogi_addon/setup_state.py": {
-      "tests": [
-        "tests/test_setup.py",
-        "tests/test_first_use.py",
-        "tests/test_autofind_default_window.py"
-      ],
-      "reason": "새 설치에만 첫 사용 안내(general.firstUse=pending) — 기존 사용자·끝냄·나중에 하기는 다시 안 띄움 · 체력바 처음 사용 값 = 저장 영역 + 표시 바 하나 이상"
-    },
-    "src/mabinogi_addon/ui/home_page.py": {
-      "tests": [
-        "tests/test_home_page.py"
-      ],
-      "reason": "상태 카드 위치 요약(켜진 기능 기준) + 위치 다시 찾기(도는 동안 비활성), 자동 찾기 켜짐이면 설정 필요 상자 없음"
-    },
-    "src/mabinogi_addon/ui/region_registration.py": {
-      "tests": [
-        "tests/test_region_registration.py"
-      ],
-      "reason": "탭 자동 찾기 결과 = 직접 지정 고정(사용 값은 부른 화면이), 지정 해제 = 자동으로 돌아가기"
-    },
-    "src/mabinogi_addon/inquiry_session.py": {
-      "tests": [
-        "tests/test_inquiry_unified.py",
-        "tests/test_autofind_fallback.py"
-      ],
-      "reason": "자료 모으기 = 지금 읽는 자리(자동→v1→고정), info.json autofind 상태"
-    },
-    "src/mabinogi_addon/ui/creator_dialogue.py": {
-      "tests": [
-        "tests/test_creator_dialogue.py"
-      ],
-      "reason": "'첫 사용 안내로 돌아가기' 버튼 삭제에 맞춰 바닥·표시 조건 정리(첫 사용 화면에서는 그대로 안 뜸)"
-    },
-    "src/mabinogi_addon/ui/settings_tab.py": {
-      "tests": [
-        "tests/test_settings_grouping.py",
-        "tests/test_autofind_v2_use.py"
-      ],
-      "reason": "자동 찾기 스위치 없앰, 제작자 진단을 맨 아래 접힌 '진단 · 자동 찾기'로"
-    },
-    "src/mabinogi_addon/ui/halo_capture_section.py": {
-      "tests": [
-        "tests/test_autofind_default_window.py"
-      ],
-      "reason": "영역 지정 안내를 v3 문구로(자동 찾기 켜짐 — '앱이 알아서 찾아요 · 틀리면 직접 지정하면 고정'), 비상 값이면 예전 안내"
-    },
-    "src/mabinogi_addon/ui/resource_tab.py": {
-      "tests": [
-        "tests/test_autofind_default_window.py"
-      ],
-      "reason": "영역 지정 안내를 v3 문구로(자동 찾기 켜짐 — '앱이 알아서 찾아요 · 틀리면 직접 지정하면 고정'), 비상 값이면 예전 안내"
-    },
-    "src/mabinogi_addon/ui/skillbar_tab.py": {
-      "tests": [
-        "tests/test_autofind_default_window.py"
-      ],
-      "reason": "영역 지정 안내를 v3 문구로(자동 찾기 켜짐 — '앱이 알아서 찾아요 · 틀리면 직접 지정하면 고정'), 비상 값이면 예전 안내"
-    },
-    "src/mabinogi_addon/ui/stat_bars_tab.py": {
-      "tests": [
-        "tests/test_autofind_default_window.py"
-      ],
-      "reason": "영역 지정 안내를 v3 문구로(자동 찾기 켜짐 — '앱이 알아서 찾아요 · 틀리면 직접 지정하면 고정'), 비상 값이면 예전 안내"
-    },
-    "src/mabinogi_addon/ui/boss_bar_section.py": {
-      "tests": [
-        "tests/test_boss_bar_overlay.py",
-        "tests/test_no_beta_on_screen.py"
-      ],
-      "reason": "보스바 오버레이 구역 모든 사용자(제작자 조건 해제, 사용자 결정 11-10) · 제목 '보스바 오버레이' · 기본 꺼짐(켜기 전 판독 추가·오버레이 없음) · HP바 수집 진단은 제작자 전용 그대로"
-    },
-    "src/mabinogi_addon/ui/cooldown_section.py": {
-      "tests": [
-        "tests/test_cooldown.py",
-        "tests/test_no_beta_on_screen.py"
-      ],
-      "reason": "구역 제목에서 '(베타)' 빼기(ui-rules 7절 — 앱 화면에 베타 표기 안 함, 노트에만)"
-    },
-    "src/mabinogi_addon/ui/feature_copy.py": {
-      "tests": [
-        "tests/test_cooldown.py",
-        "tests/test_no_beta_on_screen.py"
-      ],
-      "reason": "쿨타임 도움말 '알아두세요(베타)' → '알아두세요'(앱 화면 베타 표기 없음) · 쿨타임 도움말 '(베타)' 표기 빼기(앱 화면 베타 표기 없음)"
     }
   }
 }

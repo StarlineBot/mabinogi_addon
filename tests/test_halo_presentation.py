@@ -10,7 +10,7 @@ from test_navigation import window
 
 def creator_section(window, monkeypatch):
     w, app = window
-    monkeypatch.setattr(config, 'load_discord_user', lambda: {'id': feature_access.CREATOR_DISCORD_ID})
+    monkeypatch.setattr(config, 'load_discord_user', lambda: {'id': feature_access.CREATOR_DISCORD_ID, 'tier': 'creator'})
     s = w.boss_tab.halo_capture
     s._save_region(1229, 134, 119, 42)
     s._refresh()

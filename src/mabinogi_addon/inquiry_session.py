@@ -193,7 +193,8 @@ def install_id() -> str:
 
 def sender(user: dict | None = None) -> dict:
     """보낸 사람 — 디스코드 로그인이면 ID·이름, 아니면 guest-설치ID앞8자."""
-    user = config.load_discord_user() if user is None else user
+    from . import feature_access
+    user = feature_access.current_user() if user is None else user
     iid = install_id()
     if user:
         return {"discord_id": str(user.get("id")), "discord_name": str(user.get("name") or ""), "install_id": iid,

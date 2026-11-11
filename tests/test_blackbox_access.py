@@ -20,7 +20,7 @@ def window():
     return app, host
 
 
-@pytest.mark.parametrize('user', [None, {}, {'id': 'ordinary'}, {'id': CREATOR_DISCORD_ID}])
+@pytest.mark.parametrize('user', [None, {}, {'id': 'ordinary'}, {'id': CREATOR_DISCORD_ID, 'tier': 'creator'}])
 def test_top_level_tab_and_direct_commands_are_public(monkeypatch, user):
     # 2026-10-28 기능 공개 정책 7절: 블랙박스는 로그인과 무관하게 모든 사용자(이전: 디스코드 로그인 사용자).
     monkeypatch.setattr(config, 'load_discord_user', lambda: user)
@@ -81,7 +81,7 @@ def test_repeated_access_changes_do_not_leave_duplicate_tabs(monkeypatch):
     app, host = window()
     tools = BlackboxController(host)
     for _ in range(100):
-        user[0] = {'id': CREATOR_DISCORD_ID}
+        user[0] = {'id': CREATOR_DISCORD_ID, 'tier': 'creator'}
         tools.refresh_access()
         tools.refresh_access()
         assert host._tabs.count() == 4
@@ -110,7 +110,7 @@ def test_real_main_window_uses_top_level_tab_and_follows_access(monkeypatch):
         for timer in host.findChildren(QTimer):
             timer.stop()
         assert host.blackbox_tools.panel is None
-        user[0] = {'id': CREATOR_DISCORD_ID}
+        user[0] = {'id': CREATOR_DISCORD_ID, 'tier': 'creator'}
         host.settings_tab.login_changed.emit()
         page = host.blackbox_tools._page
         assert host._tabs.indexOf(page) >= 0

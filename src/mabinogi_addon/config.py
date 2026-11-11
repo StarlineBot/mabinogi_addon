@@ -87,6 +87,25 @@ def _write_local_config(data: dict, path: Path = LOCAL_CONFIG_PATH) -> None:
         except (OSError, ValueError):  # 백업 실패해도 본 저장은 진행
             pass
     os.replace(tmp, path)  # 원자적 교체
+    for listener in list(_WRITE_LISTENERS):  # 설정 동기화: 바뀌면 30초 모아 올리기(cloud_sync_controller)
+        try:
+            listener(path)
+        except Exception:  # noqa: BLE001 — 알림 실패가 저장을 막지 않게
+            pass
+
+
+_WRITE_LISTENERS: list = []
+
+
+def add_write_listener(fn) -> None:
+    """fn(path) — 설정 파일을 쓸 때마다(어느 스레드에서든). 가볍게: 화면 쪽으로 신호만 보낼 것."""
+    if fn not in _WRITE_LISTENERS:
+        _WRITE_LISTENERS.append(fn)
+
+
+def remove_write_listener(fn) -> None:
+    if fn in _WRITE_LISTENERS:
+        _WRITE_LISTENERS.remove(fn)
 
 
 # 내보내기에서 제외할 비밀값(공유·이동 시 유출 방지). 가져올 때도 덮어쓰지 않음.
@@ -205,7 +224,7 @@ class _BundleSink:
     def __getattr__(self, name): return getattr(self.raw, name)
 
 
-def _write_bundle(raw, path, user_dir, limits, cancelled):
+def _write_bundle(raw, path, user_dir, limits, cancelled, transform=None, extra=None):
     import stat
     import zipfile
     budget = _BundleBudget(limits, cancelled)
@@ -214,7 +233,10 @@ def _write_bundle(raw, path, user_dir, limits, cancelled):
     for candidate in (path, path.with_name(path.name + '.bak')):
         if candidate.exists() and candidate.stat().st_size > min(limits.max_config_bytes,limits.max_source_bytes):
             raise ValueError('설정 원본 크기 한도를 넘었어요.')
-    document = config_json_for_export(path).encode('utf-8')
+    document = config_json_for_export(path)
+    if transform is not None:  # 서버 동기화: PC마다 다른 값 빼기(cloud_sync.strip_for_sync)
+        document = json.dumps(transform(json.loads(document)), ensure_ascii=False, indent=2)
+    document = document.encode('utf-8')
     files = []
     total = len(document)
     for asset in _iter_user_files(user_dir, path.name, budget=budget):
@@ -228,6 +250,8 @@ def _write_bundle(raw, path, user_dir, limits, cancelled):
     sink = _BundleSink(raw, budget)
     with zipfile.ZipFile(sink, 'w', zipfile.ZIP_DEFLATED) as archive:
         archive.writestr(_BUNDLE_CONFIG_NAME, document)
+        for name, text in (extra or {}).items():  # 동기화 정보(sync.json) — import_bundle은 모르는 이름을 무시
+            archive.writestr(name, text)
         for asset, before in files:
             budget.check()
             flags = os.O_RDONLY | getattr(os, 'O_BINARY', 0) | getattr(os, 'O_NOFOLLOW', 0)
@@ -253,13 +277,13 @@ def _write_bundle(raw, path, user_dir, limits, cancelled):
 
 
 def export_bundle_bytes(path: Path = LOCAL_CONFIG_PATH, user_dir: Path | None = None,
-                        *, limits: BundleLimits | None = None, cancelled=None) -> bytes:
+                        *, limits: BundleLimits | None = None, cancelled=None, transform=None, extra=None) -> bytes:
     """Bounded compatibility API; production file/DM exports use disk ZIPs."""
     import tempfile
     user_dir = paths.user_data_dir() if user_dir is None else Path(user_dir)
     limits = limits or BundleLimits()
     with tempfile.SpooledTemporaryFile(max_size=1024*1024) as raw:
-        _write_bundle(raw, Path(path), user_dir, limits, cancelled)
+        _write_bundle(raw, Path(path), user_dir, limits, cancelled, transform, extra)
         raw.seek(0)
         return raw.read(limits.max_zip_bytes + 1)
 
@@ -399,21 +423,31 @@ def get_config_webhook_url() -> str | None:
 
 
 def load_discord_user(path: Path = LOCAL_CONFIG_PATH) -> dict | None:
-    """로그인한 Discord 사용자 {id, name} 또는 None(비로그인)."""
-    u = _read_local_config(path).get("discordUser")
-    return u if isinstance(u, dict) and u.get("id") else None
+    """로그인한 Discord 사용자 {id, name, tier} 또는 None(비로그인).
+
+    0.46.0부터 서버가 서명한 토큰(`discordAccount`)으로만 판정한다(계정 관리 명세 3.2) — 서명·만료·마지막 확인 7일.
+    예전 `discordUser {id, name}`(서명 없음)은 로그인으로 보지 않는다(파일을 고쳐 로그인·제작자 흉내 차단).
+    권한 판정은 이 함수를 직접 부르지 말고 feature_access(current_user·is_logged_in·is_creator)로."""
+    from . import account
+    return account.user_from_config(_read_local_config(path))
 
 
-def save_discord_user(user_id: str, name: str, path: Path = LOCAL_CONFIG_PATH) -> None:
-    data = _read_local_config(path)
-    data["discordUser"] = {"id": str(user_id), "name": str(name)}
-    _write_local_config(data, path)
+def load_account_token(path: Path = LOCAL_CONFIG_PATH) -> str | None:
+    """보관 중인 서버 토큰(서명 확인 전 문자열) — /me·동기화 요청에만 쓴다."""
+    from . import account
+    return account.token_from_config(_read_local_config(path))
+
+
+def save_account_token(token: str, path: Path = LOCAL_CONFIG_PATH, *, now: float | None = None) -> None:
+    """서명을 확인한 토큰 + 지금을 '마지막 확인'으로 저장(로그인·/me 새 토큰)."""
+    from . import account
+    _write_local_config(account.store(_read_local_config(path), token, now=now), path)
 
 
 def clear_discord_user(path: Path = LOCAL_CONFIG_PATH) -> None:
-    data = _read_local_config(path)
-    data.pop("discordUser", None)
-    _write_local_config(data, path)
+    """로그아웃 — 토큰·예전 로그인 기록을 지운다."""
+    from . import account
+    _write_local_config(account.forget(_read_local_config(path)), path)
 
 
 def _clean_word_list(value) -> list[str]:

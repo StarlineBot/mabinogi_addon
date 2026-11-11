@@ -60,7 +60,7 @@ def test_fps_lines_read_settings_a_constant_number_of_times(window, monkeypatch,
     # QA(qa_0171_fps_line_cost): 줄마다 is_creator → config.json 읽기(분당 2만 줄 중 95%). 이제 1초에 한 번 이하.
     c = window[0].optimization_tools; c.timer.stop()
     reads = []
-    monkeypatch.setattr(config, 'load_discord_user', lambda *a: reads.append(1) or {'id': feature_access.CREATOR_DISCORD_ID})
+    monkeypatch.setattr(config, 'load_discord_user', lambda *a: reads.append(1) or {'id': feature_access.CREATOR_DISCORD_ID, 'tier': 'creator'})
     c.refresh_access()
     reads.clear()
     started = time.monotonic()
@@ -72,7 +72,7 @@ def test_fps_lines_read_settings_a_constant_number_of_times(window, monkeypatch,
 
 def test_logout_stops_fps_measurement_immediately_through_login_changed(window, monkeypatch, real_interval):
     c = window[0].optimization_tools; c.timer.stop()
-    user = [{'id': feature_access.CREATOR_DISCORD_ID}]
+    user = [{'id': feature_access.CREATOR_DISCORD_ID, 'tier': 'creator'}]
     # 2026-10-28부터 최적화·FPS 표시는 전체 공개 — 접근 판정 함수를 직접 바꿔 캐시 무효화·회수 경로를 확인한다
     monkeypatch.setattr(config, 'load_discord_user', lambda *a: user[0])
     monkeypatch.setattr(module, 'optimization_available', lambda: user[0] is not None)
@@ -86,7 +86,7 @@ def test_logout_stops_fps_measurement_immediately_through_login_changed(window, 
 
 def test_access_revoked_outside_login_signal_is_seen_within_one_second(window, monkeypatch, real_interval):
     c = window[0].optimization_tools; c.timer.stop()
-    user = [{'id': feature_access.CREATOR_DISCORD_ID}]
+    user = [{'id': feature_access.CREATOR_DISCORD_ID, 'tier': 'creator'}]
     # 2026-10-28부터 최적화·FPS 표시는 전체 공개 — 접근 판정 함수를 직접 바꿔 캐시 무효화·회수 경로를 확인한다
     monkeypatch.setattr(config, 'load_discord_user', lambda *a: user[0])
     monkeypatch.setattr(module, 'optimization_available', lambda: user[0] is not None)

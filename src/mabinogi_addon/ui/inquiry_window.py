@@ -269,7 +269,8 @@ class InquiryWindow(QWidget):
     # ---- 공통 ---------------------------------------------------------------------------------
     @staticmethod
     def _reply_text():
-        user = config.load_discord_user()
+        from .. import feature_access
+        user = feature_access.current_user()
         if user:
             return f"답변은 디스코드 계정({user.get('name')})으로 드려요. 보내기 전까지는 아무것도 전송하지 않아요."
         return "로그인하지 않으면 답변을 디스코드로 받을 수 없어요(설정 탭에서 로그인). 보내기 전까지는 아무것도 전송하지 않아요."

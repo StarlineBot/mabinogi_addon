@@ -1,74 +1,51 @@
-"""Discord 로그인 테스트. 순수 함수 + 로컬 서버 end-to-end(루프백)."""
-
-import json
+"""서버 경유 디스코드 로그인(계정 관리 명세 3.2) — 앱이 state·토큰 서명을 확인한다."""
 import threading
 import urllib.parse
 import urllib.request
 
-from mabinogi_addon import discord_auth
+import pytest
+
+from account_fakes import test_key, OTHER_SECRET, make_token
+from mabinogi_addon import account, discord_auth
 
 
-class _Resp:
-    def __init__(self, payload):
-        self._b = json.dumps(payload).encode("utf-8")
+def _browser(token_for):
+    """가짜 브라우저: 서버 시작 주소를 받아(state·port) 서버가 하듯 localhost 콜백으로 토큰을 보낸다."""
+    def open_browser(url):
+        q = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
+        assert url.startswith(account.SERVER_URL + "/auth/start?") and q["port"] == [str(discord_auth.PORT)]
+        token, state = token_for(q["state"][0])
 
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *a):
-        return False
-
-    def read(self):
-        return self._b
-
-
-def test_authorize_url_has_implicit_params():
-    url = discord_auth.authorize_url("st8")
-    q = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
-    assert q["client_id"] == [discord_auth.CLIENT_ID]
-    assert q["redirect_uri"] == [discord_auth.REDIRECT_URI]
-    assert q["response_type"] == ["token"]  # implicit(=secret 불필요)
-    assert q["scope"] == ["identify"]
-    assert q["state"] == ["st8"]
+        def go():
+            cb = f"http://127.0.0.1:{discord_auth.PORT}/callback?" + urllib.parse.urlencode({"token": token, "state": state})
+            urllib.request.urlopen(cb, timeout=5).read()
+        threading.Thread(target=go, daemon=True).start()
+        return True
+    return open_browser
 
 
-def test_fetch_user_prefers_global_name():
-    def fake_urlopen(req, timeout=None):
-        assert req.headers["Authorization"] == "Bearer TKN"
-        return _Resp({"id": "123", "username": "legacy", "global_name": "하프별"})
-
-    uid, name = discord_auth.fetch_user("TKN", urlopen=fake_urlopen)
-    assert uid == "123"
-    assert name == "하프별"
+def test_login_returns_verified_token():
+    token = make_token()
+    assert discord_auth.login(open_browser=_browser(lambda st: (token, st)), timeout=10.0) == token
 
 
-def test_fetch_user_falls_back_to_username():
-    def fake_urlopen(req, timeout=None):
-        return _Resp({"id": "9", "username": "starline", "global_name": None})
+@pytest.mark.parametrize("case", ["state", "forged", "other_key", "expired"])
+def test_login_rejects_bad_callback(case):
+    token = {"state": make_token(), "forged": make_token()[:-4] + "AAAA", "other_key": make_token(secret=OTHER_SECRET),
+             "expired": make_token(ttl=-10)}[case]
+    result = discord_auth.login(open_browser=_browser(lambda st: (token, "WRONG" if case == "state" else st)), timeout=10.0)
+    assert result is None
 
-    uid, name = discord_auth.fetch_user("TKN", urlopen=fake_urlopen)
-    assert (uid, name) == ("9", "starline")
 
-
-def test_login_end_to_end_returns_user(monkeypatch):
-    """실제 로컬 서버를 띄워 콜백→조회→서버종료까지. 종료 교착이면 여기서 멈춰 실패."""
-    monkeypatch.setattr(discord_auth, "fetch_user", lambda tok, **k: ("42", "Star"))
-
-    def fake_open(url):
-        # authorize_url의 state를 그대로 실어 /token 콜백을 흉내(프래그먼트→질의문자열).
+@pytest.mark.parametrize("error,text", [("access_denied", "취소"), ("login_failed", "다시 시도"), ("blocked", "로그인할 수 없어요")])
+def test_login_error_from_server_is_reported(error, text):
+    """서버 콜백 ?error=access_denied|login_failed|blocked&state=… → 로그인 안 함 + 화면 문구."""
+    def open_browser(url):
         st = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)["state"][0]
-        target = (
-            f"http://127.0.0.1:{discord_auth.PORT}"
-            f"/token?access_token=TKN&state={st}"
-        )
 
-        def hit():
-            opener = urllib.request.build_opener(  # 로컬은 프록시 우회
-                urllib.request.ProxyHandler({})
-            )
-            opener.open(target, timeout=5).read()
-
-        threading.Thread(target=hit, daemon=True).start()
-
-    result = discord_auth.login(open_browser=fake_open, timeout=10.0)
-    assert result == ("42", "Star")
+        def go():
+            cb = f"http://127.0.0.1:{discord_auth.PORT}/callback?" + urllib.parse.urlencode({"error": error, "state": st})
+            urllib.request.urlopen(cb, timeout=5).read()
+        threading.Thread(target=go, daemon=True).start()
+    assert discord_auth.login(open_browser=open_browser, timeout=10.0) is None
+    assert discord_auth.last_error[0] == error and text in discord_auth.ERROR_TEXT[error]

@@ -1,4 +1,5 @@
-"""기능 접근 판정. 2026-10-28부터 사용 기능은 모두 공개, 수집·진단만 로그인·제작자 제한(기능 공개 정책 7절)."""
+"""기능 접근 판정. 2026-10-28부터 사용 기능은 모두 공개, 수집·진단만 로그인·제작자 제한(기능 공개 정책 7절).
+로그인·등급은 0.46.0부터 서버가 서명한 토큰으로(계정 관리 명세 3.2) — current_user·is_logged_in·tier·is_creator."""
 
 from . import config
 
@@ -20,10 +21,27 @@ def cursor_fx_available() -> bool:
     return True
 
 
-def is_creator() -> bool:
+# ---- 등급 판정(계정 관리 명세 3.2) — 앱 안 로그인·제작자 판정은 모두 여기로 모은다 ----
+def current_user() -> dict | None:
+    """로그인 사용자 {id, name, tier} 또는 None. 서버가 서명한 토큰으로만(config.load_discord_user)."""
     user = config.load_discord_user()
-    return (isinstance(CREATOR_DISCORD_ID, str) and CREATOR_DISCORD_ID.isdecimal()
-            and isinstance(user, dict) and user.get("id") == CREATOR_DISCORD_ID)
+    return user if isinstance(user, dict) and user.get("id") else None
+
+
+def is_logged_in() -> bool:
+    return current_user() is not None
+
+
+def tier() -> str | None:
+    """'user' · 'creator' · None(비로그인)."""
+    user = current_user()
+    return None if user is None else (user.get("tier") or "user")
+
+
+def is_creator() -> bool:
+    """제작자 = **토큰 등급**이 creator. config.json에 제작자 ID를 적어도 제작자가 아니다(서명 없는 값은 로그인도 아님).
+    CREATOR_DISCORD_ID는 화면 표시(제작자 캐릭터 등)에만 남긴다."""
+    return tier() == "creator"
 
 
 class Recheck:
