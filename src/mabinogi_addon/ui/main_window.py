@@ -2419,9 +2419,15 @@ class MainWindow(QMainWindow):
         box.setWindowTitle("설정 동기화")
         box.setText(account_ask_text(info, reason))
         load = box.addButton("불러오기", QMessageBox.ButtonRole.AcceptRole)
-        box.addButton("이 PC 설정 쓰기", QMessageBox.ButtonRole.RejectRole)
+        keep = box.addButton("이 PC 설정 쓰기", QMessageBox.ButtonRole.ActionRole)
+        # X·Esc = 아무것도 안 함(QA 866817b — RejectRole이던 '이 PC 설정 쓰기'로 처리돼 서버를 덮었다).
+        # 보이지 않는 닫기 버튼을 Esc 버튼으로 두고, 이번 실행 동안 올리기를 멈춘다(다음 시작 때 다시 물음).
+        closer = box.addButton(QMessageBox.StandardButton.Cancel)
+        closer.hide()
+        box.setEscapeButton(closer)
         box.exec()
-        self._account.resolve("load" if box.clickedButton() is load else "keep")
+        clicked = box.clickedButton()
+        self._account.resolve("load" if clicked is load else "keep" if clicked is keep else None)
 
     def _on_account_applied(self, positions: bool) -> None:
         """서버 설정을 적용함 — 가져오기와 같게 저장을 막고 다시 켜기 안내."""

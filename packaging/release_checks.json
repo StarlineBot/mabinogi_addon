@@ -38,7 +38,7 @@
       "tests": [
         "tests/test_discord_auth.py"
       ],
-      "reason": "서버 경유 로그인(state·서명 확인) — 예전 Implicit Grant 대체"
+      "reason": "서버 경유 로그인(state·서명 확인) — 예전 Implicit Grant 대체 · 콜백 페이지는 판정 뒤 — 실패(error=·state·서명)는 실패 페이지(QA 866817b)"
     },
     "src/mabinogi_addon/feature_access.py": {
       "tests": [
@@ -56,7 +56,7 @@
         "tests/test_cloud_sync.py",
         "tests/test_settings_export.py"
       ],
-      "reason": "load_discord_user = 서명 토큰만, 토큰 저장·지우기, 설정 쓰기 알림, 묶음에 transform·extra(동기화용, 내보내기 결과 그대로)"
+      "reason": "load_discord_user = 서명 토큰만, 토큰 저장·지우기, 설정 쓰기 알림, 묶음에 transform·extra(동기화용, 내보내기 결과 그대로) · 로그인 토큰·예전 로그인 기록·동기화 기록·설치 ID는 내보내기(파일·DM 백업)에서 빼고 가져오기 때 이 PC 값 유지(QA 866817b)"
     },
     "src/mabinogi_addon/cloud_sync.py": {
       "tests": [
@@ -69,21 +69,21 @@
         "tests/test_cloud_sync.py",
         "tests/test_account.py"
       ],
-      "reason": "작업 스레드에서 /me·동기화(30초 모으기·종료 시 올림·새 PC·둘 다 바뀜·409 물음·비로그인 통신 0회)"
+      "reason": "작업 스레드에서 /me·동기화(30초 모으기·종료 시 올림·새 PC·둘 다 바뀜·409 물음·비로그인 통신 0회) · 물음 창을 닫으면 이번 실행 동안 올리지 않음(종료 때도), 다음 시작 때 다시 물음(QA 866817b)"
     },
     "src/mabinogi_addon/ui/settings_tab.py": {
       "tests": [
         "tests/test_cloud_sync.py",
         "tests/test_settings_export.py"
       ],
-      "reason": "설정 › 계정: 디스코드로 로그인/로그아웃·☑ 설정 동기화·마지막 동기화, DM 백업·내보내기·가져오기 그대로"
+      "reason": "설정 › 계정: 디스코드로 로그인/로그아웃·☑ 설정 동기화·마지막 동기화, DM 백업·내보내기·가져오기 그대로 · DM 백업 묶음에 토큰 없음(QA 866817b)"
     },
     "src/mabinogi_addon/ui/main_window.py": {
       "tests": [
         "tests/test_cloud_sync.py",
         "tests/test_account.py"
       ],
-      "reason": "계정 담당 연결·시작 때 동기화·물음(불러오기/이 PC 설정 쓰기)·받은 뒤 다시 켜기 안내·종료 때 올림"
+      "reason": "계정 담당 연결·시작 때 동기화·물음(불러오기/이 PC 설정 쓰기)·받은 뒤 다시 켜기 안내·종료 때 올림 · X·Esc = 아무것도 안 함, 서버 덮어쓰기는 '이 PC 설정 쓰기'만(QA 866817b)"
     },
     "src/mabinogi_addon/inquiry_session.py": {
       "tests": [

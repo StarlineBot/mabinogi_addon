@@ -49,3 +49,45 @@ def test_login_error_from_server_is_reported(error, text):
         threading.Thread(target=go, daemon=True).start()
     assert discord_auth.login(open_browser=open_browser, timeout=10.0) is None
     assert discord_auth.last_error[0] == error and text in discord_auth.ERROR_TEXT[error]
+
+
+@pytest.mark.parametrize("case", ["access_denied", "state", "forged"])
+def test_callback_page_says_failure_not_done(case):
+    """QA 866817b ②: 실패 콜백(error=·state 불일치·서명 실패)에는 '완료' 페이지 대신 실패 페이지."""
+    pages = []
+
+    def open_browser(url):
+        st = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)["state"][0]
+        q = {"access_denied": {"error": "access_denied", "state": st},
+             "state": {"token": make_token(), "state": "WRONG"},
+             "forged": {"token": make_token(secret=OTHER_SECRET), "state": st}}[case]
+
+        def go():
+            cb = f"http://127.0.0.1:{discord_auth.PORT}/callback?" + urllib.parse.urlencode(q)
+            pages.append(urllib.request.urlopen(cb, timeout=5).read().decode("utf-8"))
+        threading.Thread(target=go, daemon=True).start()
+    assert discord_auth.login(open_browser=open_browser, timeout=10.0) is None
+    for _ in range(50):
+        if pages:
+            break
+        threading.Event().wait(0.05)
+    assert pages and "완료" not in pages[0] and "로그인하지 못했어요" in pages[0]
+
+
+def test_callback_page_success_says_done():
+    pages = []
+    token = make_token()
+
+    def open_browser(url):
+        st = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)["state"][0]
+
+        def go():
+            cb = f"http://127.0.0.1:{discord_auth.PORT}/callback?" + urllib.parse.urlencode({"token": token, "state": st})
+            pages.append(urllib.request.urlopen(cb, timeout=5).read().decode("utf-8"))
+        threading.Thread(target=go, daemon=True).start()
+    assert discord_auth.login(open_browser=open_browser, timeout=10.0) == token
+    for _ in range(50):
+        if pages:
+            break
+        threading.Event().wait(0.05)
+    assert pages and "완료" in pages[0] and "로그인하지 못했어요" not in pages[0]

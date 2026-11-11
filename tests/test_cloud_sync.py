@@ -4,6 +4,7 @@ import json
 import os
 import time
 import zipfile
+from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -277,3 +278,153 @@ def test_account_box_states(app):
         c.shutdown(flush=False)
     finally:
         tab.deleteLater()
+
+
+# ---- QA 866817b ① 로그인 토큰은 설정 내보내기·가져오기(파일·DM 백업)로 옮겨 가지 않는다 ----
+
+_ACCOUNT = ("discordAccount", "discordUser", "settingsSync", "installId")
+
+
+def _bundle_config(blob: bytes) -> dict:
+    return json.loads(zipfile.ZipFile(io.BytesIO(blob)).read("config.json"))
+
+
+def _logged_in_local():
+    _local()
+    _login()  # 로그인하면 예전 discordUser는 지워지므로, 남아 있는 경우까지 보려고 뒤에 직접 넣는다
+    cloud_sync.save_record(rev=3, hash="이 PC 지문")
+    raw = config._read_local_config()
+    raw["discordUser"] = {"id": "1", "name": "예전"}
+    config._write_local_config(raw)
+    assert all(k in raw for k in _ACCOUNT)
+    return raw
+
+
+def test_export_while_logged_in_has_no_token_sync_record_or_install_id(app, tmp_path):
+    raw = _logged_in_local()
+    token = raw["discordAccount"]["token"]
+    path = config.LOCAL_CONFIG_PATH
+    assert not any(k in json.loads(config.config_json_for_export(path)) for k in _ACCOUNT)
+    blob = config.export_bundle_bytes(path, user_dir=tmp_path / "u")
+    dest = tmp_path / "backup.zip"
+    config.export_bundle(dest, path=path, user_dir=tmp_path / "u")
+    for data in (blob, dest.read_bytes()):
+        assert token.encode() not in data and b"pc-1" not in data
+        exported = _bundle_config(data)
+        assert not any(k in exported for k in _ACCOUNT) and exported["buffTracker"]["scale"] == 150
+
+
+def test_dm_backup_bundle_has_no_token(app, tmp_path, monkeypatch):
+    """DM 백업(릴레이 전송)도 같은 내보내기 길 — 보내는 ZIP에 토큰·동기화 기록·설치 ID가 없다."""
+    from mabinogi_addon import settings_sync
+    from mabinogi_addon.ui.settings_tab import _ConfigExportThread
+    raw = _logged_in_local()
+    sent = []
+    monkeypatch.setattr(settings_sync, "send_config_backup_file",
+                        lambda webhook, uid, bundle, **kw: sent.append(Path(bundle).read_bytes()))
+    t = _ConfigExportThread(None, webhook="https://relay.invalid/x", user={"id": "1", "name": "테스터"})
+    results = []
+    t.done.connect(lambda ok, msg: results.append(ok))
+    t.run()
+    assert results == [True] and len(sent) == 1
+    assert raw["discordAccount"]["token"].encode() not in sent[0]
+    assert not any(k in _bundle_config(sent[0]) for k in _ACCOUNT)
+
+
+@pytest.mark.parametrize("this_pc_logged_in", [True, False])
+def test_import_bundle_with_token_keeps_this_pc_account(app, tmp_path, this_pc_logged_in):
+    """토큰·동기화 기록·설치 ID가 든 묶음(직접 만든 것)을 가져와도 이 PC 값은 그대로 — 없으면 넣지도 않는다."""
+    other = make_token(sub="999888777", name="남의 계정", tier="creator")
+    bundle = tmp_path / "other.zip"
+    with zipfile.ZipFile(bundle, "w") as z:
+        z.writestr("config.json", json.dumps({
+            "discordAccount": {"token": other, "checked": time.time()}, "discordUser": {"id": "9", "name": "남"},
+            "settingsSync": {"rev": 99, "hash": "남의 지문"}, "installId": "pc-other",
+            "buffTracker": {"scale": 77}}, ensure_ascii=False))
+    if this_pc_logged_in:
+        before = _logged_in_local()
+    else:
+        _local()
+        before = config._read_local_config()
+        before.pop("installId")
+        config._write_local_config(before)
+    config.import_bundle(bundle, path=config.LOCAL_CONFIG_PATH, user_dir=tmp_path / "u")
+    after = config._read_local_config()
+    assert after["buffTracker"] == {"scale": 77}  # 일반 설정은 들어옴
+    for key in _ACCOUNT:
+        assert after.get(key) == before.get(key)  # 이 PC 값 유지(없던 것은 계속 없음)
+    from mabinogi_addon import feature_access
+    assert config.load_account_token() != other and not feature_access.is_creator()
+    assert feature_access.is_logged_in() is this_pc_logged_in
+
+
+# ---- QA 866817b ③ 물음 창을 그냥 닫으면(X·Esc) 서버를 덮지 않는다 ----
+
+def test_closing_ask_window_puts_nothing_and_asks_again_next_start(app):
+    _local()
+    _login()
+    server = _server_with(_remote_doc(), resolution="2560x1440")
+    c = _controller(server)
+    asked = []
+    c.ask.connect(lambda info, reason: asked.append(reason))
+    c.start()
+    assert asked and server.rev == 5
+    c.resolve(None)  # 창 닫음
+    raw = config._read_local_config()
+    raw["buffTracker"]["scale"] = 123
+    config._write_local_config(raw)  # 이번 실행 중 바꿔도
+    c.upload_now()
+    c._schedule()
+    c.shutdown(flush=True)  # 끌 때도
+    assert [m for m, p, _ in server.calls if p == "/settings" and m == "PUT"] == []
+    assert server.rev == 5
+    again = _controller(server)
+    asked2 = []
+    again.ask.connect(lambda info, reason: asked2.append(reason))
+    again.start()
+    assert asked2  # 다음 시작 때 다시 물음
+    again.shutdown(flush=False)
+
+
+def test_ask_dialog_x_and_esc_map_to_nothing(app, monkeypatch):
+    """메인 창의 물음 창: X·Esc → resolve(None), '이 PC 설정 쓰기'만 'keep'."""
+    from PySide6.QtCore import QTimer, Qt
+    from PySide6.QtWidgets import QMessageBox
+    from PySide6.QtTest import QTest
+    from mabinogi_addon.ui import main_window
+
+    class Host:
+        def __init__(self):
+            self.choices, self._closing, self._config_pending_restart = [], False, False
+            self._account = self
+
+        def resolve(self, choice):
+            self.choices.append(choice)
+
+    def run(action):
+        host = Host()
+
+        def act():
+            box = next(w for w in QApplication.topLevelWidgets() if isinstance(w, QMessageBox) and w.isVisible())
+            if action == "esc":
+                QTest.keyClick(box, Qt.Key.Key_Escape)
+            elif action == "x":
+                box.close()
+            else:
+                next(b for b in box.buttons() if b.text() == action).click()
+        QTimer.singleShot(50, act)
+        main_window.MainWindow._on_account_ask(host, {"rev": 5, "updated": "2026-11-11T01:02:03Z",
+                                                      "device": "노트북"}, "new_pc")
+        return host.choices
+
+    monkeypatch.setattr(QMessageBox, "__init__", _parentless(QMessageBox.__init__))
+    assert run("esc") == [None]
+    assert run("x") == [None]
+    assert run("이 PC 설정 쓰기") == ["keep"]
+    assert run("불러오기") == ["load"]
+
+
+def _parentless(init):
+    def wrapped(self, *a, **kw):
+        init(self)
+    return wrapped

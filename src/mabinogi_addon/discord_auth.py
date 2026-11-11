@@ -86,6 +86,14 @@ class _ReuseTCPServer(socketserver.ThreadingTCPServer):
     daemon_threads = True  # 남은 요청 스레드가 종료를 막지 않게
 
 
+# 로그인 실패 페이지(취소·실패·차단·state 불일치·서명 확인 실패) — 성공 카드와 같은 모양, '완료'라는 말 없음
+_FAIL_BODY = (_SUCCESS_BODY.replace("<title>로그인 완료</title>", "<title>로그인하지 못했어요</title>")
+              .replace("background:#00B894;", "background:#E5534B;")
+              .replace("&#10003;", "!")
+              .replace("<h1>로그인 완료</h1>", "<h1>로그인하지 못했어요</h1>")
+              .replace("디스코드 계정이 연결되었어요.", "앱으로 돌아가 다시 시도해 주세요."))
+
+
 def login(*, open_browser=webbrowser.open, timeout: float = 120.0, base: str | None = None,
           public_key_hex: str | None = None) -> str | None:
     """브라우저로 서버 경유 디스코드 로그인 → 서명 확인된 토큰 문자열. 실패·취소·state 불일치·서명 틀림이면 None."""
@@ -105,9 +113,13 @@ def login(*, open_browser=webbrowser.open, timeout: float = 120.0, base: str | N
                 captured["token"] = (params.get("token") or [None])[0]
                 captured["state"] = (params.get("state") or [None])[0]
                 captured["error"] = (params.get("error") or [None])[0]  # access_denied·login_failed·blocked
-                _log.info("콜백 수신: token=%s state=%s", "있음" if captured["token"] else "없음",
-                          "있음" if captured["state"] else "없음")
-                self._send(_SUCCESS_BODY)
+                _log.info("콜백 수신: token=%s state=%s error=%s", "있음" if captured["token"] else "없음",
+                          "있음" if captured["state"] else "없음", captured["error"] or "-")
+                # 판단을 먼저 하고 그에 맞는 페이지(QA 866817b — 실패해도 '로그인 완료'가 뜨던 것)
+                ok = (captured["state"] == state and not captured["error"] and bool(captured["token"])
+                      and account.verify_token(captured["token"], public_key_hex=public_key_hex) is not None)
+                captured["ok"] = ok
+                self._send(_SUCCESS_BODY if ok else _FAIL_BODY)
                 done.set()
             else:
                 self.send_response(404)
@@ -143,6 +155,9 @@ def login(*, open_browser=webbrowser.open, timeout: float = 120.0, base: str | N
             _log.warning("로그인 시간 초과(%.0fs) — 승인 안 됨", timeout)
             return None
         token = captured.get("token")
+        if captured.get("ok"):
+            _log.info("로그인 성공(토큰 서명 확인)")
+            return token
         if captured.get("state") != state:
             _log.warning("state 불일치 — 변조 의심(무시)")
             last_error[0] = "login_failed"

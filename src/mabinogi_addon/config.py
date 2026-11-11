@@ -115,10 +115,16 @@ _SECRET_KEYS = ("nexonApiKey", "inquiryWebhookUrl", "configWebhookUrl")
 # 이 PC의 장치에 묶인 값(다른 PC로 옮기면 뜻이 달라짐). 내보내기에서 빼고 가져올 때도 덮어쓰지 않는다.
 _MACHINE_KEYS = ("optimizationSelection",)
 
+# 이 PC의 계정·설치 값(0.46.0, QA 866817b): 로그인 토큰·예전 로그인 기록·동기화 기록·설치 ID.
+# 내보내기(파일·DM 백업)에서 빼고, 가져오기 때는 이 PC 값을 그대로 둔다(없으면 넣지도 지우지도 않음) —
+# 묶음에 든 토큰으로 다른 PC가 로그인되거나, 이 PC 로그인이 바뀌지 않게.
+_ACCOUNT_KEYS = ("discordAccount", "discordUser", "settingsSync", "installId")
+_LOCAL_ONLY_KEYS = _SECRET_KEYS + _MACHINE_KEYS + _ACCOUNT_KEYS
+
 
 def config_json_for_export(path: Path = LOCAL_CONFIG_PATH) -> str:
     """내보낼 설정 JSON 문자열(비밀값·장치 고유 값 제외). 파일 저장·디스코드 전송 공용."""
-    data = {k: v for k, v in _read_local_config(path).items() if k not in _SECRET_KEYS + _MACHINE_KEYS}
+    data = {k: v for k, v in _read_local_config(path).items() if k not in _LOCAL_ONLY_KEYS}
     return json.dumps(data, ensure_ascii=False, indent=2)
 
 
@@ -129,7 +135,7 @@ def _merge_config_text(text: str, path: Path) -> None:
         raise ValueError("설정 파일 형식이 올바르지 않습니다")  # noqa: TRY004
     data = _read_local_config(path)
     for key, value in incoming.items():
-        if key not in _SECRET_KEYS + _MACHINE_KEYS:
+        if key not in _LOCAL_ONLY_KEYS:
             data[key] = value
     _write_local_config(data, path)
 

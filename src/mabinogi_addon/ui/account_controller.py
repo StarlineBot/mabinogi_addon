@@ -46,6 +46,7 @@ class AccountController(QObject):
         self._app_version = app_version
         self._pending_ask = None
         self.closed = False
+        self.held = False  # 물음 창을 닫음 → 이번 실행 동안 올리기 멈춤
         self.started = False
         self.busy = False
         self.last_error = ""
@@ -83,7 +84,7 @@ class AccountController(QObject):
         config.remove_write_listener(self._on_write)
         self._debounce.stop()
         self._refresh_timer.stop()
-        if flush and self._token() is not None and self.sync_enabled():
+        if flush and not self.held and self._token() is not None and self.sync_enabled():
             future = self._executor_or_new().submit(self._job_upload, None, False)
             try:
                 future.result(timeout=FLUSH_TIMEOUT)
@@ -134,21 +135,29 @@ class AccountController(QObject):
             self._wrote.emit()  # 어느 스레드에서 불려도 화면 스레드로(Qt 대기열)
 
     def _schedule(self) -> None:
-        if self.closed or self._token() is None or not self.sync_enabled():
+        if self.closed or self.held or self._token() is None or not self.sync_enabled():
             return
         self._debounce.start()  # 다시 시작 = 마지막 변경 뒤 30초
 
     def upload_now(self) -> None:
-        if self.closed or self._token() is None or not self.sync_enabled():
+        if self.closed or self.held or self._token() is None or not self.sync_enabled():
             return
         self._submit("upload", lambda: self._job_upload(None, False))
 
     # ---- 물음 답 ---------------------------------------------------------------------------------
-    def resolve(self, choice: str) -> None:
-        """'load' = 서버 설정 불러오기, 'keep' = 이 PC 설정으로 서버를 덮기."""
+    def resolve(self, choice: str | None) -> None:
+        """'load' = 서버 설정 불러오기, 'keep' = 이 PC 설정으로 서버를 덮기, None = 창을 닫음(아무것도 안 함 —
+        이번 실행 동안 올리기를 멈추고 다음 시작 때 다시 묻는다. 서버 덮어쓰기는 'keep'을 눌렀을 때만)."""
         info, self._pending_ask = self._pending_ask, None
+        if choice not in ("load", "keep"):
+            self.held = True
+            self._debounce.stop()
+            _log.info("[동기화] 물음 창을 닫음 — 이번 실행 동안 올리지 않음(다음 시작 때 다시 물음)")
+            self.changed.emit()
+            return
         if info is None or self._token() is None:
             return
+        self.held = False
         if choice == "load":
             self._submit("download", lambda: self._job_download(info))
         else:
