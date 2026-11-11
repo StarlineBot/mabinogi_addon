@@ -300,6 +300,7 @@ class MainWindow(QMainWindow):
         # 설정 가져오기/초기화 후: 이 세션의 (가져오기 전) 낡은 오버레이·메모 상태가
         # 종료 시 방금 가져온 설정을 덮어쓰지 않도록 저장을 막는다. 다음 실행에서 반영.
         self._config_pending_restart = False
+        self._relaunch_on_exit = False  # 적용 뒤 다시 켜기: 종료 정리 끝에 자기 자신 실행
         self._closing = False
         self._started = False
         self._status_timer = None
@@ -342,6 +343,7 @@ class MainWindow(QMainWindow):
         self.settings_tab.theme_changed.connect(self.optimization_tools.apply_theme)
         self.settings_tab.login_changed.connect(self.optimization_tools.refresh_access)
         self.settings_tab.config_imported.connect(self._on_config_imported)
+        self.settings_tab.restart_requested.connect(self._restart_app)
         # 계정(서버 경유 로그인 + 설정 동기화, 계정 관리 명세 3.2·3.3) — 네트워크는 작업 스레드, 비로그인은 통신 0회
         from ..version import __version__
         from .account_controller import AccountController
@@ -2431,22 +2433,46 @@ class MainWindow(QMainWindow):
 
     def _on_account_applied(self, positions: bool) -> None:
         """서버 설정을 적용함 — 가져오기와 같게 저장을 막고 다시 켜기 안내."""
-        self.settings_tab._offer_restart(
-            "설정 동기화", "서버에 저장된 설정을 불러왔어요." + ("" if positions else
-                                                       "\n화면 해상도가 달라 오버레이 위치는 이 PC 것을 그대로 썼어요."))
+        if not positions:
+            _log.info("[동기화] 화면 해상도가 달라 오버레이 위치는 이 PC 것을 그대로 씀")
+        self.settings_tab._applied_restart("설정 동기화", "서버에 저장된 설정을 불러왔어요.")
 
     def _on_config_imported(self) -> None:
-        """설정 가져오기/초기화 직후: 종료 시 낡은 상태로 덮어쓰지 않도록 저장을 막는다.
-
-        자동 재시작(QProcess로 자기 자신 재실행)은 PyInstaller onefile에서 기존
-        인스턴스의 _MEI 임시폴더 추출/정리와 충돌해 새 프로세스의 네이티브 모듈
-        (cv2 등) 로드가 깨졌다. 그래서 재실행은 하지 않고, 이 세션은 상태 저장만
-        멈춘 뒤 사용자가 직접 종료→재실행하면 바뀐 설정·자산이 깨끗이 반영된다.
-        """
+        """설정 가져오기·초기화·서버 설정 불러오기 직후: 종료 때 낡은 상태로 덮어쓰거나 동기화로 올리지 않게 막는다.
+        이어서 _restart_app이 정상 종료 경로로 정리하고 자기 자신을 다시 실행한다."""
         self._config_pending_restart = True
         self.custom_overlay_tab.suspend_for_config_replacement()
         self._memo_timer.stop()
         self.first_use.setEnabled(False)
+
+    def _restart_app(self, title: str, msg: str) -> None:
+        """적용 뒤 바로 다시 켜기(0.46.0): 트레이 '종료'와 같은 정리(최적화 원복·블랙박스·오버레이 닫기) →
+        closeEvent 끝에서 자기 자신을 다시 켜기 표시와 함께 실행. 새 프로세스는 이 프로세스가 끝날 때까지
+        단일 인스턴스 자리를 기다린다. 개발 실행(exe 아님)은 다시 켤 수 없어 안내 문구로 대신한다."""
+        from PySide6.QtWidgets import QMessageBox
+
+        from ..system import updater
+        if self._closing:
+            return
+        if not updater.can_relaunch_self():
+            QMessageBox.information(self, title, f"{msg}\n\n개발 실행이라 자동으로 다시 켜지 않아요. 앱을 종료한 뒤 다시 실행하세요.")
+            return
+        _log.info("[다시 켜기] %s — 정리 뒤 다시 실행", title)
+        self._relaunch_on_exit = True
+        self._force_quit = True
+        QTimer.singleShot(0, self.close)
+
+    def _relaunch_after_cleanup(self) -> None:
+        """정리를 마친 뒤 새 프로세스 실행. 실패하면(UAC 취소 등) 직접 다시 켜 달라고 안내한다."""
+        from PySide6.QtWidgets import QMessageBox
+
+        from ..system import updater
+        try:
+            updater.relaunch_self()
+            _log.info("[다시 켜기] 새 프로세스 실행함")
+        except Exception as exc:  # noqa: BLE001 — 설정은 이미 적용됨, 안내로 대신
+            _log.warning("[다시 켜기] 실패: %s", exc)
+            QMessageBox.information(None, "다시 켜기", RELAUNCH_FAILED_TEXT)
 
     def _minimize_to_tray_enabled(self) -> bool:
         return self._tray is not None and config.load_general_flag(
@@ -2640,8 +2666,8 @@ class MainWindow(QMainWindow):
         self._save_window_pos()  # 트레이 최소화·완전 종료 모두에서 현재 위치 기억
 
         # 트레이 최소화: X를 눌러도 종료하지 않고 트레이로 숨긴다(백그라운드 계속 동작).
-        # 단, 설정 가져오기/초기화 후엔 낡은 인스턴스가 남지 않게 X로도 완전 종료한다
-        # (재실행해야 반영되므로 트레이에 숨겨두면 혼란 — 재실행 시 중복 실행됨).
+        # 단, 설정 가져오기·초기화·불러오기 후엔(보통 바로 다시 켜지지만, 개발 실행·다시 켜기 실패 때)
+        # 낡은 인스턴스가 남지 않게 X로도 완전 종료한다.
         if (
             self._minimize_to_tray_enabled()
             and not self._force_quit
@@ -2759,10 +2785,12 @@ class MainWindow(QMainWindow):
             self._tray.hide()
         _log.info("종료 총 %.0fms", (time.perf_counter() - total) * 1000)
         super().closeEvent(event)
+        if self._relaunch_on_exit:  # 정리를 다 마친 뒤 — 새 프로세스는 이 프로세스가 끝날 때까지 기다린다
+            self._relaunch_after_cleanup()
         # 남은 워커(파티/캡처 좀비)가 grab·HTTP에 막혀 아직 돌고 있으면, 인터프리터 teardown에서
         # Qt가 '실행 중인 QThread'를 파괴하며 프로세스를 abort(rc=134)시킨다. 상태 저장·정지
         # 신호는 위에서 끝냈으니, 로그만 flush하고 **정리 없이 즉시 종료**해 abort를 원천 차단한다.
-        # (설정 가져오기는 재실행에 의존하지 않음 — 안전.) 단 테스트 중엔 프로세스를 죽이면
+        # (다시 켜기는 위에서 새 프로세스를 이미 띄웠고, 그쪽이 이 프로세스 종료를 기다린다.) 단 테스트 중엔 프로세스를 죽이면
         # 안 되므로 종전처럼 quit만 한다.
         import sys as _sys
 
@@ -2774,6 +2802,9 @@ class MainWindow(QMainWindow):
 
         _logging.shutdown()
         _os._exit(0)
+
+
+RELAUNCH_FAILED_TEXT = "설정을 적용했어요.\n앱이 자동으로 다시 켜지지 못했어요. 앱을 다시 실행해 주세요."
 
 
 def account_ask_text(info: dict, reason: str) -> str:
@@ -2797,4 +2828,5 @@ def account_ask_text(info: dict, reason: str) -> str:
     head = "서버에 저장된 설정이 있어요" + (f" (마지막 저장: {' · '.join(parts)})" if parts else "") + "."
     if reason in ("both_changed", "conflict"):
         head += "\n이 PC에도 아직 올리지 않은 변경이 있어요."
-    return head + "\n불러올까요?"
+    from .settings_tab import RESTART_NOTICE
+    return head + "\n불러올까요?\n" + RESTART_NOTICE["load"]

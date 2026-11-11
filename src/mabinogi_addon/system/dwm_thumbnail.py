@@ -14,6 +14,7 @@ Windows 전용. 다른 OS에서는 import는 되지만 `available()`이 False이
 from __future__ import annotations
 
 import logging
+import os
 import sys
 
 _log = logging.getLogger("mabinogi_addon.mirror")
@@ -77,7 +78,7 @@ def find_game_window(exe: str | None, titles: tuple[str, ...]) -> int:
         import win32gui
         import win32process
 
-        from .window_watcher import _exe_basename_of_pid
+        from .window_watcher import _exe_basename_of_pid, is_game_title
     except Exception:  # noqa: BLE001
         return 0
 
@@ -98,8 +99,14 @@ def find_game_window(exe: str | None, titles: tuple[str, ...]) -> int:
                 found.append(hwnd)
                 return False  # 중단
         elif any(t in title for t in low_titles):
-            found.append(hwnd)
-            return False
+            # 제목 폴백: 브라우저·탐색기·메신저·앱 자신은 게임 창이 아님(0.46.0)
+            try:
+                _, pid = win32process.GetWindowThreadProcessId(hwnd)
+            except Exception:  # noqa: BLE001
+                pid = 0
+            if pid != os.getpid() and is_game_title(title, _exe_basename_of_pid(pid) if pid else "", titles):
+                found.append(hwnd)
+                return False
         return True
 
     try:

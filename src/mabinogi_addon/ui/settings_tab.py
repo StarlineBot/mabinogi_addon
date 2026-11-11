@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+import time
+
 import logging
 from datetime import datetime
 
@@ -136,6 +138,14 @@ class _LoginThread(QThread):
         self.done.emit(bool(token), token or "")
 
 
+# 적용하면 앱이 바로 다시 켜진다는 안내(확인 창·서버 설정 물음 창 공용, 0.46.0).
+RESTART_NOTICE = {
+    "reset": "적용하려고 앱이 바로 다시 켜져요.",
+    "import": "가져오면 앱이 바로 다시 켜져요.",
+    "load": "불러오면 앱이 바로 다시 켜져요.",
+}
+
+
 class _ConfigExportThread(QThread):
     """Own enumeration, compression, atomic save and optional relay transport."""
     progress = Signal(str)
@@ -183,6 +193,8 @@ class SettingsTab(QWidget):
     login_changed = Signal()
     # 설정 가져오기/초기화 직후 메인에 알려, 종료 시 낡은 상태로 덮어쓰지 않게 한다.
     config_imported = Signal()
+    # 적용 뒤 앱 다시 켜기 요청(제목, 적용 문구) — 메인이 정상 종료 경로로 정리한 뒤 자기 자신을 다시 실행(0.46.0).
+    restart_requested = Signal(str, str)
     # 알림 목소리 팩 변경 → 메인이 실행 중 재생기들을 새 팩으로 갱신(바로 적용).
     voice_pack_changed = Signal()
     # '앱 둘러보기 다시 열기' → 메인이 온보딩 투어를 다시 실행.
@@ -196,8 +208,10 @@ class SettingsTab(QWidget):
     def __init__(self, watcher: WindowWatcher) -> None:
         super().__init__()
         self._watcher = watcher
-        self._detect_count = 0
+        self._detect_deadline = 0.0
+        self._detect_rejected = ""
         self._detect_timer: QTimer | None = None
+        self._detect_clock = time.monotonic
         self._login_thread: _LoginThread | None = None
         self._export_thread: _ConfigExportThread | None = None
         self._export_closing = False
@@ -513,46 +527,50 @@ class SettingsTab(QWidget):
             self, "설정 가져오기", "", "설정 백업 (*.zip *.json)"
         )
         if not path:
+            return  # 파일 고르기 취소 = 아무것도 안 함
+        if not self._confirm_restart("설정 가져오기",
+                                     f"'{Path(path).name}'의 설정을 가져와요.\n{RESTART_NOTICE['import']}",
+                                     "가져오고 다시 켜기"):
             return
         try:
             config.import_bundle(Path(path))
         except (OSError, ValueError) as exc:
             QMessageBox.warning(self, "설정 가져오기", f"불러오기 실패: {exc}")
             return
-        self._offer_restart("설정 가져오기", "설정을 가져왔어요.")
+        self._applied_restart("설정 가져오기", "설정을 가져왔어요.")
 
     def _on_reset_config(self) -> None:
         if self._export_busy() or self._export_closing: return
-        if (
-            QMessageBox.question(
-                self,
-                "설정 초기화",
-                "모든 설정을 지우고 처음 상태로 되돌려요.\n계속할까요?",
-            )
-            != QMessageBox.StandardButton.Yes
-        ):
-            return
+        if not self._confirm_restart("설정 초기화",
+                                     f"모든 설정을 지우고 처음 상태로 되돌려요.\n{RESTART_NOTICE['reset']}",
+                                     "초기화하고 다시 켜기"):
+            return  # 취소·X·Esc = 초기화 자체를 안 함
         try:
             config.reset_config()
         except OSError as exc:
             QMessageBox.warning(self, "설정 초기화", f"초기화 실패: {exc}")
             return
-        self._offer_restart("설정 초기화", "설정을 초기화했어요.")
+        self._applied_restart("설정 초기화", "설정을 초기화했어요.")
 
-    def _offer_restart(self, title: str, msg: str) -> None:
-        """가져오기/초기화 후: 종료 시 덮어쓰기 방지 신호를 보내고, 재실행을 안내한다.
+    def _confirm_restart(self, title: str, text: str, ok_label: str) -> bool:
+        """'다시 켜져요'를 미리 알리는 확인 창. [ok_label] [취소] — 취소·X·Esc는 False."""
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Question)
+        box.setWindowTitle(title)
+        box.setText(text)
+        ok = box.addButton(ok_label, QMessageBox.ButtonRole.AcceptRole)
+        cancel = box.addButton("취소", QMessageBox.ButtonRole.RejectRole)
+        box.setDefaultButton(cancel)
+        box.setEscapeButton(cancel)
+        box.exec()
+        return box.clickedButton() is ok
 
-        자동 재시작은 하지 않는다(onefile exe 자가 재실행이 임시폴더 충돌로 깨짐).
-        대신 사용자가 직접 '완전히 종료 후 다시 실행'하면 바뀐 설정·자산이 반영된다.
-        """
+    def _applied_restart(self, title: str, msg: str) -> None:
+        """가져오기·초기화·서버 설정 불러오기 적용 직후: 종료 때 덮어쓰기·동기화 올리기를 막고(config_imported),
+        메인에 다시 켜기를 요청한다. 메인은 트레이 '종료'와 같은 정리 뒤 자기 자신을 다시 실행한다
+        (업데이트 재실행과 같은 길 — _MEI 상속을 끊어 onefile 자가 재실행 문제를 피함)."""
         self.config_imported.emit()
-        QMessageBox.information(
-            self,
-            title,
-            f"{msg}\n\n전부 반영하려면 앱을 완전히 종료한 뒤 다시 실행하세요.\n"
-            "(트레이로 최소화가 아니라 트레이 아이콘 → '종료' 후 재실행)\n"
-            "지금 창을 닫아도 가져온 설정은 안전하게 유지돼요.",
-        )
+        self.restart_requested.emit(title, msg)
 
     # ---- 계정(서버 경유 로그인 + 설정 동기화, 계정 관리 명세 3.2·3.3) ----
     def _discord_group(self) -> QGroupBox:
@@ -1184,12 +1202,12 @@ class SettingsTab(QWidget):
         row.addWidget(self._detect_btn)
         row.addStretch(1)
         v.addLayout(row)
+        self._detect_status = QLabel("")  # 찾았어요·거절·시간 초과(평소엔 숨김)
+        self._detect_status.setWordWrap(True)
+        self._detect_status.hide()
+        v.addWidget(self._detect_status)
 
-        v.addWidget(
-            hint_label(
-                "‘게임창 등록 시작’을 누른 뒤 3초 안에 마비노기 창을 선택해 주세요. 실행 파일명으로 등록해요."
-            )
-        )
+        v.addWidget(hint_label(GAME_DETECT_HINT))
         return box
 
     def refresh_game_label(self) -> None:
@@ -1203,49 +1221,89 @@ class SettingsTab(QWidget):
             self._game_hint.setStyleSheet(f"color:{color('ok')};")
         else:
             self._game_hint.setText(
-                "미등록 — 창 제목에 '마비노기'가 들어가면 게임으로 판정(폴더 창 등 오인 가능)"
+                "미등록 — 창 제목에 '마비노기'가 들어가면 게임으로 판정(브라우저·탐색기·메신저 창은 빼고)"
             )
             self._game_hint.setStyleSheet(f"color:{color('muted')};")
 
+    def _detect_say(self, text: str, tone: str) -> None:
+        self._detect_status.setText(text)
+        self._detect_status.setStyleSheet(f"color:{color(tone)};")
+        self._detect_status.setVisible(bool(text))
+
     def _start_detect(self) -> None:
+        """게임창 등록(0.46.0): 켜져 있는 마비노기 창이 딱 하나면 바로 등록, 아니면 마비노기 창을
+        클릭할 때까지 최대 GAME_DETECT_SECONDS초 기다린다(앱 자신·브라우저·탐색기·메신저는 거절)."""
         if self._detect_timer is not None and self._detect_timer.isActive():
             return
-        self._detect_count = 3
+        from ..system import window_watcher
+        try:
+            found = window_watcher.find_running_game(window_watcher.list_windows())
+        except Exception:  # noqa: BLE001 — 목록을 못 읽으면 기다리기로
+            found = None
+        if found:
+            self._register_game(found, f"찾았어요: {found}")
+            return
+        self._detect_rejected = ""
+        self._detect_deadline = self._detect_clock() + GAME_DETECT_SECONDS
         self._detect_btn.setEnabled(False)
-        self._detect_btn.setText("3초 후 현재 창 등록…")
+        self._detect_say("", "muted")
+        self._detect_btn.setText(f"마비노기 창을 클릭하세요… ({GAME_DETECT_SECONDS}초)")
         self._detect_timer = QTimer(self)
-        self._detect_timer.setInterval(1000)
+        self._detect_timer.setInterval(GAME_DETECT_POLL_MS)
         self._detect_timer.timeout.connect(self._tick_detect)
         self._detect_timer.start()
 
-    def _tick_detect(self) -> None:
-        self._detect_count -= 1
-        if self._detect_count > 0:
-            self._detect_btn.setText(f"{self._detect_count}초 후 현재 창 등록…")
-            return
+    def _stop_detect(self) -> None:
         if self._detect_timer is not None:
             self._detect_timer.stop()
             self._detect_timer.deleteLater()
             self._detect_timer = None
-        try:
-            _title, exe = self._watcher.foreground_info()
-        except Exception:
-            exe = None
         self._detect_btn.setEnabled(True)
         self._detect_btn.setText("게임창 등록 시작")
-        if exe:
-            try:
-                config.save_game_exe(exe)
-                self._watcher.set_game_exe(exe)
-                self._update_game_label()
-                self.game_registered.emit()
-            except Exception:
-                exe = None
-                self._game_hint.setText("게임창 등록을 저장하지 못했어요. 쓰기 권한과 창 정보를 확인하세요.")
-        else:
-            self._game_hint.setText("자동 찾기 실패(창 정보를 못 읽음). Windows에서 시도하세요.")
-            self._game_hint.setStyleSheet(f"color:{color('warn')};")
-        self.game_registration_finished.emit(bool(exe))
+
+    def _tick_detect(self) -> None:
+        from ..system.window_watcher import is_acceptable_game_exe
+        left = self._detect_deadline - self._detect_clock()
+        try:
+            own = self._watcher.is_self_active()
+            exe = "" if own else (self._watcher.foreground_info()[1] or "")
+        except Exception:  # noqa: BLE001
+            own, exe = False, ""
+        if exe and is_acceptable_game_exe(exe):
+            self._register_game(exe, "")
+            return
+        if exe and exe.lower() != self._detect_rejected:  # 앱이 아닌 창이 앞으로 왔는데 게임이 아님 → 거절, 계속 기다림
+            self._detect_rejected = exe.lower()
+            self._detect_say(GAME_DETECT_REJECTED, "warn")
+        if left <= 0:
+            self._stop_detect()
+            self._detect_say(GAME_DETECT_TIMEOUT, "warn")
+            self.game_registration_finished.emit(False)
+            return
+        self._detect_btn.setText(f"마비노기 창을 클릭하세요… ({max(1, int(left + 0.999))}초)")
+
+    def _register_game(self, exe: str, note: str) -> None:
+        self._stop_detect()
+        ok = True
+        try:
+            config.save_game_exe(exe)
+            self._watcher.set_game_exe(exe)
+            self._update_game_label()
+            self._detect_say(note, "ok")
+            self.game_registered.emit()
+        except Exception:  # noqa: BLE001
+            ok = False
+            self._detect_say("게임창 등록을 저장하지 못했어요. 쓰기 권한과 창 정보를 확인하세요.", "warn")
+        self.game_registration_finished.emit(ok)
+
+
+# 게임창 등록(0.46.0) — 3초 뒤 맨 앞 창을 검사 없이 저장하던 것을 바꿈(#221: 앱 자신이 등록됨)
+GAME_DETECT_SECONDS = 15
+GAME_DETECT_POLL_MS = 300
+GAME_DETECT_HINT = ("‘게임창 등록 시작’을 누르면 켜져 있는 마비노기를 찾아 등록해요. "
+                    "못 찾으면 15초 안에 마비노기 창을 클릭해 주세요. 실행 파일명으로 등록해요.")
+GAME_DETECT_REJECTED = "마비노기 창이 아니에요. 버튼을 누르고 마비노기 창을 클릭해 주세요."
+GAME_DETECT_TIMEOUT = "시간이 지났어요. 다시 눌러 주세요."
 
 
 def sync_status_text(logged_in: bool, enabled: bool, controller, now: float | None = None) -> str:

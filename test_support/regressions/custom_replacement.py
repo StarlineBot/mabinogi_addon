@@ -33,6 +33,7 @@ def test_import_or_reset_wins_over_previous_session_custom_autosave(
 
     monkeypatch.setattr(QMessageBox, "information", lambda *args, **kwargs: QMessageBox.StandardButton.Ok)
     monkeypatch.setattr(QMessageBox, "question", lambda *args, **kwargs: QMessageBox.StandardButton.Yes)
+    monkeypatch.setattr(type(w.settings_tab), "_confirm_restart", lambda *args, **kwargs: True)  # 0.46.0 확인 창
     if action.startswith("import"):
         incoming = tmp_path / "incoming.json"
         name = "old-A" if "same-name" in action else "imported-B"
@@ -67,6 +68,7 @@ def test_clean_custom_save_control_preserves_replacement(window, monkeypatch, tm
     assert panel._apply_preset("old-A") and not panel._dirty
     monkeypatch.setattr(QMessageBox, "information", lambda *args, **kwargs: QMessageBox.StandardButton.Ok)
     monkeypatch.setattr(QMessageBox, "question", lambda *args, **kwargs: QMessageBox.StandardButton.Yes)
+    monkeypatch.setattr(type(w.settings_tab), "_confirm_restart", lambda *args, **kwargs: True)  # 0.46.0 확인 창
     if action == "import":
         incoming = tmp_path / "clean-incoming.json"
         config.save_custom_edit([box(99)], "old-A", path=incoming)

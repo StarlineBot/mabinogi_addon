@@ -24,7 +24,7 @@ SYNC_KEY = "settingsSync"
 META_NAME = "sync.json"
 # 빼는 값(명세 3.3): 비밀·장치 값(_SECRET_KEYS·_MACHINE_KEYS — export가 이미 뺌) + 아래
 EXCLUDE_TOP = ("installId", "discordUser", "discordAccount", SYNC_KEY)
-EXCLUDE_NESTED = {"general": ("gameExe", "lastSeenVersion", "firstUse", "firstUseGuideShown", "tourShown"),
+EXCLUDE_NESTED = {"general": ("lastSeenVersion", "firstUse", "firstUseGuideShown", "tourShown"),
                   "autofindV2": ("last",)}
 # 해상도가 다르면 이 PC 것을 유지하는 값 — 좌표 dict({x, y}·{x, y, w, h}) 전부 + 직접 지정 고정 목록(영역과 한 묶음)
 POSITION_LISTS = {"autofindV2": ("fixed",)}
@@ -38,6 +38,11 @@ def strip_for_sync(doc: dict) -> dict:
         sec = out.get(section)
         if isinstance(sec, dict):
             out[section] = {k: v for k, v in sec.items() if k not in keys}
+    gen = out.get("general")
+    if isinstance(gen, dict) and "gameExe" in gen:  # 게임이 아닌 이름(앱 자신·브라우저 등)은 올리지 않음
+        from .system.window_watcher import is_acceptable_game_exe
+        if not (isinstance(gen["gameExe"], str) and is_acceptable_game_exe(gen["gameExe"])):
+            out["general"] = {k: v for k, v in gen.items() if k != "gameExe"}
     return out
 
 
@@ -112,7 +117,26 @@ def merge_incoming(incoming: dict, local: dict, *, same_resolution: bool) -> dic
             if key in sec_local:
                 sec[key] = copy.deepcopy(sec_local[key])
         merged[section] = sec
+    _keep_local_game_exe(merged, incoming, local)
     return merged
+
+
+def _keep_local_game_exe(merged: dict, incoming: dict, local: dict) -> None:
+    """게임창 등록(gameExe, 실행파일 이름 — PC마다 같음)은 따라온다(0.46.0). 받은 값이 없거나 게임이 아닌
+    이름(브라우저·탐색기·메신저·앱 자신)이면 무시하고 이 PC 값을 그대로 둔다(없으면 넣지도 지우지도 않음)."""
+    from .system.window_watcher import is_acceptable_game_exe
+    inc = (incoming.get("general") or {}).get("gameExe") if isinstance(incoming.get("general"), dict) else None
+    if isinstance(inc, str) and is_acceptable_game_exe(inc):
+        return
+    loc = (local.get("general") or {}).get("gameExe") if isinstance(local.get("general"), dict) else None
+    gen = merged.get("general")
+    gen = dict(gen) if isinstance(gen, dict) else {}
+    if loc is not None:
+        gen["gameExe"] = copy.deepcopy(loc)
+    else:
+        gen.pop("gameExe", None)
+    if gen or "general" in merged:
+        merged["general"] = gen
 
 
 def content_hash(doc: dict, assets: list[tuple[str, int]]) -> str:

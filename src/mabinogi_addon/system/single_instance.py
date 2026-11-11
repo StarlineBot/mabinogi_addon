@@ -11,6 +11,7 @@ QSharedMemory(QtCore) 한 조각을 만들어, 두 번째 인스턴스는 생성
 from __future__ import annotations
 
 import logging
+import time
 
 _log = logging.getLogger("mabinogi_addon.single")
 _KEY = "StarlineMabinogiAddon.singleton"
@@ -32,3 +33,20 @@ class SingleInstance:
         self.already_running = not self._shm.create(1)
         if self.already_running:
             _log.info("이미 실행 중인 인스턴스 감지 → 이 인스턴스는 종료")
+
+
+def acquire(*, wait: float = 0.0, key: str = _KEY, interval: float = 0.25,
+            clock=time.monotonic, sleep=time.sleep) -> SingleInstance | None:
+    """단일 인스턴스 자리를 잡는다. 잡으면 그 가드(참조 보관 필요), 못 잡으면 None.
+
+    wait=0(평소 두 번째 실행) → 한 번만 보고 바로 포기. 다시 켜기(설정 초기화·가져오기·불러오기 뒤,
+    0.46.0)는 옛 프로세스가 정리하고 끝날 때까지 wait초 동안 다시 시도한다.
+    """
+    deadline = clock() + wait
+    while True:
+        guard = SingleInstance(key)
+        if not guard.already_running:
+            return guard
+        if clock() >= deadline:
+            return None
+        sleep(interval)

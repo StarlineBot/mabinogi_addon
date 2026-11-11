@@ -71,10 +71,11 @@ def test_blob_has_no_excluded_values(app):
         doc = json.loads(z.read("config.json"))
         meta = json.loads(z.read("sync.json"))
     text = json.dumps(doc, ensure_ascii=False)
-    for word in ("installId", "nexonApiKey", "optimizationSelection", "discordAccount", "settingsSync", "gameExe",
+    for word in ("installId", "nexonApiKey", "optimizationSelection", "discordAccount", "settingsSync",
                  "lastSeenVersion", '"last"', "firstUse", "SECRET"):
         assert word not in text, word
     assert doc["buffTracker"]["scale"] == 150 and doc["autofindV2"]["use"] == {"buff": True}
+    assert doc["general"]["gameExe"] == "Client.exe"  # 게임창 등록은 따라감(0.46.0, #221)
     assert meta["resolution"] == "2560x1440" and meta["device"] == "내 PC"
 
 
@@ -153,7 +154,8 @@ def test_new_pc_asks_then_load_applies_and_keeps_pc_values(app):
     assert applied == [True]
     assert raw["general"]["theme"] == "light" and raw["buffTracker"]["scale"] == 90
     assert raw["buffTracker"]["pos"] == POS_B and raw["statBars"]["bars"]["hp"]["pos"] == POS_B  # 같은 해상도 → 위치도
-    assert raw["general"]["gameExe"] == "Client.exe" and raw["installId"] == "pc-1"  # 이 PC 값 유지
+    assert raw["general"]["gameExe"] == "Other.exe"  # 게임창 등록은 받은 값(0.46.0, #221)
+    assert raw["installId"] == "pc-1"  # 이 PC 값 유지
     assert raw["nexonApiKey"] == "SECRET" and raw["general"]["lastSeenVersion"] == "0.45.0"
     assert raw["autofindV2"]["last"]["buff"]["box"] == {"x": 1, "y": 2, "w": 3, "h": 4}
     assert raw["settingsSync"]["rev"] == 5
@@ -428,3 +430,30 @@ def _parentless(init):
     def wrapped(self, *a, **kw):
         init(self)
     return wrapped
+
+
+# ---- 게임창 등록(gameExe)도 동기화(0.46.0, #221) — 받은 값이 없거나 게임이 아니면 이 PC 값 유지 ----
+
+@pytest.mark.parametrize("incoming,expected", [
+    ("client.exe", "client.exe"),            # 받은 값 적용
+    (None, "Client.exe"),                    # 받은 설정에 없음 → 이 PC 값 그대로
+    ("mabinogi-addon.exe", "Client.exe"),    # 앱 자신 → 무시
+    ("chrome.exe", "Client.exe"),            # 브라우저 → 무시
+    ("", "Client.exe"),
+])
+def test_merge_game_exe(incoming, expected):
+    local = {"general": {"gameExe": "Client.exe", "theme": "dark"}}
+    general = {"theme": "light"} if incoming is None else {"theme": "light", "gameExe": incoming}
+    merged = cloud_sync.merge_incoming({"general": general}, local, same_resolution=True)
+    assert merged["general"]["gameExe"] == expected and merged["general"]["theme"] == "light"
+
+
+def test_merge_game_exe_absent_everywhere_stays_absent():
+    merged = cloud_sync.merge_incoming({"general": {"gameExe": "chrome.exe"}}, {"general": {}}, same_resolution=True)
+    assert "gameExe" not in merged["general"]
+    assert "gameExe" not in cloud_sync.merge_incoming({"x": 1}, {}, same_resolution=True).get("general", {})
+
+
+def test_invalid_game_exe_is_not_uploaded():
+    assert "gameExe" not in cloud_sync.strip_for_sync({"general": {"gameExe": "mabinogi-addon.exe"}})["general"]
+    assert cloud_sync.strip_for_sync({"general": {"gameExe": "client.exe"}})["general"]["gameExe"] == "client.exe"

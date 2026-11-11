@@ -17,6 +17,8 @@ def dialogs(monkeypatch):
     monkeypatch.setattr(QMessageBox, "information", lambda *a, **k: QMessageBox.StandardButton.Ok)
     monkeypatch.setattr(QMessageBox, "warning", lambda *a, **k: QMessageBox.StandardButton.Ok)
     monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.StandardButton.Yes)
+    from mabinogi_addon.ui.settings_tab import SettingsTab
+    monkeypatch.setattr(SettingsTab, "_confirm_restart", lambda *a, **k: True)
 
 
 @pytest.mark.parametrize("action", ["import", "reset"])
@@ -88,7 +90,8 @@ def test_unsuccessful_replacement_keeps_pending_custom_edit(window, monkeypatch,
         w.settings_tab._on_import_config()
     else:
         if action.endswith("cancel"):
-            monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.StandardButton.No)
+            from mabinogi_addon.ui.settings_tab import SettingsTab
+            monkeypatch.setattr(SettingsTab, "_confirm_restart", lambda *a, **k: False)
         else:
             def denied():
                 raise PermissionError("reset denied")

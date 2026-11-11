@@ -22,10 +22,9 @@ from PySide6.QtWidgets import (
 
 from .palette import color
 from .. import config
-from ..system.window_watcher import list_windows
+from ..system.window_watcher import is_game_window, list_windows
 from .notifier import SoundNotifier, sound_path
 
-_GAME_HINTS = ("마비노기", "mabinogi")
 # 팝업이 뜰 때 울릴 '경고음'. 전용 사운드는 나중에 교체 예정 → 일단 파티 알림 기본음 사용.
 _ALERT_SOUND = "파티 알림.mp3"
 
@@ -133,16 +132,15 @@ class GameWindowDialog(QDialog):
             return
         self._empty.hide()
         self._combo.show()
-        pre = 0
+        pre = None
         for i, (win_title, exe) in enumerate(windows):
             self._combo.addItem(f"{win_title}  —  {exe}", exe)
-            low = f"{win_title} {exe}".lower()
-            if pre == 0 and any(h in low for h in _GAME_HINTS):
-                pre = i  # 마비노기로 보이는 창을 기본 선택
+            if pre is None and is_game_window(win_title, exe):
+                pre = i  # 마비노기 게임 창으로 보이는 창을 기본 선택(브라우저 '마비노기 - 나무위키' 탭 등 제외, 0.46.0)
         # 이전에 고르던 게 아직 있으면 그대로, 없으면 마비노기 추정 창.
         keep = next((i for i in range(self._combo.count())
                      if self._combo.itemData(i) == prev), None) if prev else None
-        self._combo.setCurrentIndex(keep if keep is not None else pre)
+        self._combo.setCurrentIndex(keep if keep is not None else (pre or 0))
 
     def done(self, result: int) -> None:
         self._timer.stop()  # 닫히면 폴링 중단

@@ -16,7 +16,15 @@
     "tests/test_startup_build.py",
     "tests/test_release_candidate.py",
     "tests/test_windows_ci.py",
-    "tests/test_startup_smoke.py"
+    "tests/test_startup_smoke.py",
+    "tests/test_restart_after_apply.py",
+    "tests/test_game_window_judge.py",
+    "tests/test_custom_config_replacement.py",
+    "tests/test_updater_relaunch_env.py",
+    "tests/test_single_instance.py",
+    "tests/test_startup_integration.py",
+    "tests/test_dwm_thumbnail.py",
+    "tests/test_game_window_dialog.py"
   ],
   "coverage": {
     "src/mabinogi_addon/ed25519.py": {
@@ -62,7 +70,7 @@
       "tests": [
         "tests/test_cloud_sync.py"
       ],
-      "reason": "동기화 묶음(빼는 값 없음·2MB)·적용(이 PC 값 유지·해상도 다르면 위치 유지·import_bundle 검사)"
+      "reason": "동기화 묶음(빼는 값 없음·2MB)·적용(이 PC 값 유지·해상도 다르면 위치 유지·import_bundle 검사) · 게임 창 판단(0.46.0, #221): gameExe도 동기화, 받은 값이 없거나 게임이 아닌 이름이면 이 PC 값 유지·그런 값은 올리지 않음"
     },
     "src/mabinogi_addon/ui/account_controller.py": {
       "tests": [
@@ -74,16 +82,20 @@
     "src/mabinogi_addon/ui/settings_tab.py": {
       "tests": [
         "tests/test_cloud_sync.py",
-        "tests/test_settings_export.py"
+        "tests/test_settings_export.py",
+        "tests/test_restart_after_apply.py",
+        "tests/test_custom_config_replacement.py",
+        "tests/test_game_window_judge.py"
       ],
-      "reason": "설정 › 계정: 디스코드로 로그인/로그아웃·☑ 설정 동기화·마지막 동기화, DM 백업·내보내기·가져오기 그대로 · DM 백업 묶음에 토큰 없음(QA 866817b)"
+      "reason": "설정 › 계정: 디스코드로 로그인/로그아웃·☑ 설정 동기화·마지막 동기화, DM 백업·내보내기·가져오기 그대로 · DM 백업 묶음에 토큰 없음(QA 866817b) · 적용 뒤 바로 다시 켜기(0.46.0): 초기화·가져오기 확인 창(취소·X·Esc = 안 함) · 게임 창 판단(0.46.0, #221): 게임창 등록 = 켜진 게임 하나면 바로, 아니면 15초 기다리며 클릭한 창 검사(앱 자신·제외 목록 거절, 시간 초과 시 값 그대로)"
     },
     "src/mabinogi_addon/ui/main_window.py": {
       "tests": [
         "tests/test_cloud_sync.py",
-        "tests/test_account.py"
+        "tests/test_account.py",
+        "tests/test_restart_after_apply.py"
       ],
-      "reason": "계정 담당 연결·시작 때 동기화·물음(불러오기/이 PC 설정 쓰기)·받은 뒤 다시 켜기 안내·종료 때 올림 · X·Esc = 아무것도 안 함, 서버 덮어쓰기는 '이 PC 설정 쓰기'만(QA 866817b)"
+      "reason": "계정 담당 연결·시작 때 동기화·물음(불러오기/이 PC 설정 쓰기)·받은 뒤 다시 켜기 안내·종료 때 올림 · X·Esc = 아무것도 안 함, 서버 덮어쓰기는 '이 PC 설정 쓰기'만(QA 866817b) · 적용 뒤 바로 다시 켜기(0.46.0): 정상 종료 정리 → 자기 자신 다시 실행, 실패 시 안내, 물음 창에 '다시 켜져요'"
     },
     "src/mabinogi_addon/inquiry_session.py": {
       "tests": [
@@ -118,6 +130,47 @@
         "tests/test_startup_smoke.py"
       ],
       "reason": "배포 계약: 빌드·후보·Windows CI·시작 확인"
+    },
+    "src/mabinogi_addon/system/updater.py": {
+      "tests": [
+        "tests/test_restart_after_apply.py",
+        "tests/test_updater_relaunch_env.py"
+      ],
+      "reason": "적용 뒤 바로 다시 켜기(0.46.0): relaunch_self = 업데이트 재실행 길 + --restart 표시"
+    },
+    "src/mabinogi_addon/system/single_instance.py": {
+      "tests": [
+        "tests/test_restart_after_apply.py",
+        "tests/test_single_instance.py"
+      ],
+      "reason": "적용 뒤 바로 다시 켜기(0.46.0): --restart면 옛 프로세스 종료까지 최대 15초 자리 기다림, 평소엔 바로 꺼짐"
+    },
+    "src/mabinogi_addon/__init__.py": {
+      "tests": [
+        "tests/test_restart_after_apply.py",
+        "tests/test_startup_integration.py"
+      ],
+      "reason": "적용 뒤 바로 다시 켜기(0.46.0): --restart면 트레이로 시작이어도 창 표시·업데이트 확인 건너뜀"
+    },
+    "src/mabinogi_addon/system/window_watcher.py": {
+      "tests": [
+        "tests/test_game_window_judge.py"
+      ],
+      "reason": "게임 창 판단(0.46.0, #221): 제목 폴백에서 브라우저·탐색기·메신저·앱 자신 제외(is_game_title·is_game_window·find_running_game), 등록돼 있으면 실행파일로만"
+    },
+    "src/mabinogi_addon/system/dwm_thumbnail.py": {
+      "tests": [
+        "tests/test_game_window_judge.py",
+        "tests/test_dwm_thumbnail.py"
+      ],
+      "reason": "게임 창 판단(0.46.0, #221): find_game_window 제목 폴백도 같은 판단"
+    },
+    "src/mabinogi_addon/ui/game_window_dialog.py": {
+      "tests": [
+        "tests/test_game_window_judge.py",
+        "tests/test_game_window_dialog.py"
+      ],
+      "reason": "게임 창 판단(0.46.0, #221): 첫 실행 고르기 창 기본 선택이 브라우저 탭이 아니라 게임 창"
     }
   }
 }

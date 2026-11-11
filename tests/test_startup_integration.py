@@ -114,7 +114,7 @@ def test_real_main_startup_lifetime_and_existing_entry_policy(
     monkeypatch.setattr(
         single_instance,
         "SingleInstance",
-        lambda: SimpleNamespace(already_running=case == "duplicate"),
+        lambda *a: SimpleNamespace(already_running=case == "duplicate"),
     )
     monkeypatch.setattr(splash, "Splash", lambda: pytest.fail("second loading window"))
 

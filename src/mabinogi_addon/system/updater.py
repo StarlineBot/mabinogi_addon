@@ -69,6 +69,22 @@ def can_update() -> bool:
     return paths.is_frozen() and __version__ != "0.0.0"
 
 
+# 설정 초기화·가져오기·서버 설정 불러오기 뒤 자기 자신을 다시 켤 때 새 프로세스에 넘기는 표시(0.46.0).
+# 이 표시가 있으면 새 프로세스는 옛 프로세스가 끝날 때까지 단일 인스턴스 자리를 잠깐 기다리고,
+# '트레이로 시작'이어도 창을 보여준다.
+RESTART_ARG = "--restart"
+
+
+def can_relaunch_self() -> bool:
+    """자기 자신 다시 실행이 되는 실행인지(배포본 exe만 — 개발 실행은 안내 문구로 대신)."""
+    return paths.is_frozen()
+
+
+def relaunch_self() -> None:
+    """지금 exe를 다시 켜기 표시와 함께 띄운다(업데이트 재실행과 같은 길: _MEI 상속 끊기·관리자 권한 이어받기)."""
+    _relaunch(Path(sys.executable), args=(RESTART_ARG,))
+
+
 def _parse(v: str) -> tuple[int, ...]:
     return tuple(int(x) for x in re.findall(r"\d+", v)[:3])
 
@@ -196,7 +212,7 @@ def apply_update(new_path: Path) -> None:
         raise RelaunchError(f"새 버전을 자동으로 시작하지 못했어요({exc}).") from exc
 
 
-def _relaunch(exe: Path) -> None:
+def _relaunch(exe: Path, args: tuple[str, ...] = ()) -> None:
     """새 exe를 띄운다. 새 exe는 관리자 권한 필요(requireAdministrator)라, 일반 권한 부모의
     CreateProcess(Popen)는 ERROR_ELEVATION_REQUIRED(740)로 실패한다(0.11.3 실측: 업데이트 후
     재실행 안 됨 — 0.11.2 이하 일반 권한으로 실행 중이던 앱이 업데이트한 경우). 관리자가 아니거나
@@ -204,12 +220,12 @@ def _relaunch(exe: Path) -> None:
     import subprocess
 
     if sys.platform == "win32" and not _is_admin():
-        _launch_elevated(exe)
+        _launch_elevated(exe, *([args] if args else []))
         return
     creationflags = 0x00000008 if sys.platform == "win32" else 0  # DETACHED_PROCESS
     try:
         subprocess.Popen(  # 고정 경로(자기 자신), 사용자 입력 없음
-            [str(exe)],
+            [str(exe), *args],
             close_fds=True,
             creationflags=creationflags,
             env=_relaunch_env(),
@@ -217,7 +233,7 @@ def _relaunch(exe: Path) -> None:
     except OSError as exc:
         if getattr(exc, "winerror", None) != 740:
             raise
-        _launch_elevated(exe)
+        _launch_elevated(exe, *([args] if args else []))
 
 
 def _is_admin() -> bool:
@@ -229,7 +245,7 @@ def _is_admin() -> bool:
         return False
 
 
-def _launch_elevated(exe: Path) -> None:
+def _launch_elevated(exe: Path, args: tuple[str, ...] = ()) -> None:
     """ShellExecuteEx(runas). 환경을 따로 넘길 수 없어, 자식이 옛 _MEI 폴더를 재사용하지 않도록
     현재 프로세스 환경에서 PyInstaller 내부 변수를 먼저 지운다(이 프로세스는 곧 종료한다)."""
     import ctypes
@@ -251,6 +267,7 @@ def _launch_elevated(exe: Path) -> None:
     info.fMask = 0x00000100  # SEE_MASK_NOASYNC: 반환 전에 실행 요청을 끝낸다(곧 종료하므로)
     info.lpVerb = "runas"
     info.lpFile = str(exe)
+    info.lpParameters = " ".join(args) or None
     info.lpDirectory = str(exe.parent)
     info.nShow = 1  # SW_SHOWNORMAL
     shell = ctypes.WinDLL("shell32", use_last_error=True)

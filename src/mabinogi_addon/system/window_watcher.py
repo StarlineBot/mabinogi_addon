@@ -19,6 +19,48 @@ from abc import ABC, abstractmethod
 # 포그라운드 창 제목에 이 중 하나가 들어가면 '게임 활성'으로 본다(대소문자 무시).
 DEFAULT_GAME_TITLES = ("mabinogi", "마비노기")
 
+# 제목에 '마비노기'가 있어도 게임이 아닌 프로그램(0.46.0, #221 실측: '마비노기 - 나무위키' 크롬 탭에 오버레이가 뜸).
+# 게임창 미등록일 때의 제목 폴백·게임창 등록·받은 설정의 gameExe 검사에 같이 쓴다.
+NOT_GAME_EXES = frozenset({
+    "chrome.exe", "msedge.exe", "whale.exe", "firefox.exe", "opera.exe", "brave.exe",  # 브라우저
+    "explorer.exe",  # 탐색기('마비노기' 폴더 창)
+    "discord.exe", "kakaotalk.exe",  # 메신저('마비노기 길드' 채널 창)
+})
+APP_EXE = "mabinogi-addon.exe"  # 이 앱 배포본 실행파일 — 앱 자신을 게임으로 등록하지 않게
+
+
+def _own_exe() -> str:
+    return os.path.basename(sys.executable).lower() if getattr(sys, "frozen", False) else APP_EXE
+
+
+def is_acceptable_game_exe(exe: str | None) -> bool:
+    """게임 실행파일로 등록해도 되는 이름인지(빈 값·제외 목록·앱 자신이면 False). 순수 함수."""
+    low = (exe or "").strip().lower()
+    return bool(low) and low not in NOT_GAME_EXES and low not in (APP_EXE, _own_exe())
+
+
+def is_game_title(title: str, exe: str | None, titles: tuple[str, ...] = DEFAULT_GAME_TITLES) -> bool:
+    """게임창 미등록 때 쓰는 제목 폴백 판단: 제목에 '마비노기'가 있고 제외 프로그램이 아니면 게임.
+    exe를 못 읽었으면(빈 값) 예전처럼 제목만 본다. 순수 함수(맥에서 테스트)."""
+    low = (title or "").lower()
+    if not any(t.lower() in low for t in titles):
+        return False
+    return not exe or is_acceptable_game_exe(exe)
+
+
+def is_game_window(title: str, exe: str | None, pid: int = 0, own_pid: int | None = None,
+                   titles: tuple[str, ...] = DEFAULT_GAME_TITLES) -> bool:
+    """떠 있는 창이 '마비노기 게임 창'으로 보이는지: 앱 자신 아님 + 제목 마비노기 + 제외 목록 아님(실행파일 필요)."""
+    if pid and pid == (os.getpid() if own_pid is None else own_pid):
+        return False
+    return bool(exe) and is_game_title(title, exe, titles)
+
+
+def find_running_game(windows: list[tuple[str, str]], titles: tuple[str, ...] = DEFAULT_GAME_TITLES) -> str | None:
+    """list_windows() 결과에서 게임 창 실행파일이 딱 하나면 그 이름, 없거나 둘 이상이면 None."""
+    found = {exe.lower() for title, exe in windows if is_game_window(title, exe, titles=titles)}
+    return found.pop() if len(found) == 1 else None
+
 
 def is_main_window_foreground(hwnd: int, *, diagnostic=None) -> bool:
     """Read exact foreground HWND and ownership; never use the game-active fallback.
@@ -153,8 +195,8 @@ def list_windows() -> list[tuple[str, str]]:
 class WindowsWatcher(WindowWatcher):
     """포그라운드 창을 프로세스(실행파일)로 판정. 미등록 시 제목으로 폴백.
 
-    실행파일 기반이라 '마비노기'라는 이름의 폴더(탐색기) 창은 explorer.exe라서
-    게임으로 오판하지 않는다. 사용자가 '자동 찾기'로 게임 실행파일을 등록하면 그걸 쓴다.
+    등록된 실행파일이 있으면 그걸로만 판정한다. 미등록이면 제목 폴백(is_game_title) — 제목에 '마비노기'가
+    있어도 브라우저·탐색기·메신저(NOT_GAME_EXES)와 앱 자신은 게임이 아니다.
     """
 
     def __init__(
@@ -202,8 +244,9 @@ class WindowsWatcher(WindowWatcher):
             return "self"
         if self._game_exe:  # 등록된 실행파일이 있으면 그걸로 판정(정확)
             return "game" if _exe_basename_of_pid(pid) == self._game_exe else "other"
-        low = title.lower()  # 폴백: 제목 매칭(폴더 창 등 오판 가능)
-        return "game" if any(t in low for t in self._titles) else "other"
+        # 폴백: 제목 매칭 + 브라우저·탐색기·메신저 제외(실행파일을 못 읽으면 제목만)
+        exe = _exe_basename_of_pid(pid) if any(t in title.lower() for t in self._titles) else ""
+        return "game" if is_game_title(title, exe, self._titles) else "other"
 
     def is_game_active(self) -> bool:
         return self._classify() == "game"

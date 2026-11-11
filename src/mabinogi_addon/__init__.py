@@ -115,7 +115,10 @@ def _main(startup) -> None:
     # 트레이 최소화를 위해, 창을 숨겨도(마지막 창 닫혀도) 앱이 종료되지 않게 한다.
     app.setQuitOnLastWindowClosed(False)
 
-    start_in_tray = config.load_general_flag("startInTray", False)
+    # 다시 켜기(설정 초기화·가져오기·서버 설정 불러오기 뒤 앱이 자기 자신을 다시 실행, 0.46.0):
+    # '트레이로 시작'이어도 창을 보여 주고, 옛 프로세스가 끝날 때까지 단일 인스턴스 자리를 기다린다.
+    restarted = updater.RESTART_ARG in sys.argv[1:]
+    start_in_tray = config.load_general_flag("startInTray", False) and not restarted
     # Keep the bootloader's actual window through Python initialization. Source
     # runs use the same-design Qt fallback; tray startup opens no follow-up screen.
     startup.configure(start_in_tray=start_in_tray)
@@ -123,15 +126,16 @@ def _main(startup) -> None:
 
     # 실행 전 업데이트 선적용: 새 버전이 있으면 스플래시에서 받아 교체·재실행한다.
     # (옛 버전 창을 먼저 보여준 뒤 배너로 안내하던 흐름을 대체)
-    if _apply_update_before_launch(splash):
+    if not restarted and _apply_update_before_launch(splash):
         return  # 교체 + 새 exe 재실행됨 → 이 프로세스는 조용히 종료
 
     # 단일 인스턴스 가드: 이미 떠 있으면 두 번째는 조용히 종료(트레이 아이콘 둘 방지).
     # 업데이트 자가-재실행 '이후'에 둬서, 재실행 과도기의 세그먼트 경합을 피한다.
-    from mabinogi_addon.system.single_instance import SingleInstance
+    # 다시 켜기 표시가 있으면 옛 프로세스 종료까지 최대 RESTART_WAIT초 다시 시도, 없으면 바로 꺼짐.
+    from mabinogi_addon.system.single_instance import acquire
 
-    single = SingleInstance()
-    if single.already_running:
+    single = acquire(wait=RESTART_WAIT if restarted else 0.0)
+    if single is None:
         if splash is not None:
             splash.close()
         return
@@ -148,6 +152,9 @@ def _main(startup) -> None:
     if not start_in_tray:
         window.show()  # '트레이로 시작'이면 창 없이 트레이만
     sys.exit(app.exec())
+
+
+RESTART_WAIT = 15.0  # 다시 켜기: 옛 프로세스가 정리하고 끝날 때까지 기다리는 최대 시간(초)
 
 
 def _apply_update_before_launch(splash) -> bool:
