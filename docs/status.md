@@ -6,6 +6,8 @@
 
 ## 배포와 검증
 
+- **v0.46.0 게시 완료(11-11)**: publish-existing #223(run 43030483437) 성공 → Publish approved Windows candidate #303(run 43030588313) 성공. 태그 v0.46.0 = 86ff5a5(검증 SHA, 제품 9575f12). 공개 version.json 0.46.0 · sha256 348530518b39…e17e · 164,355,720바이트 — 공개 exe를 받아 해시·크기 일치 확인.
+  다음 버전 묶음(결정됨): 두 줄 보스바 이름 다르면 표시 안 함, 저HP 다시 읽기를 오버레이 끈 패턴 알림까지, 게임창 등록 작은 2건(기다리는 중 거절 문구, 제외 목록 밖 프로그램 등록) — 사용자 선택 대기.
 - **0.46.0 계정 관리 1단계 — 앱(개발, 11-11, 서버 addon_server 4a4c5de 규격대로)**: 명세 3.2·3.3·5절, 규격은 명세 3.4.1.
   로그인: `discord_auth.login`이 서버 `/auth/start?state&port=53123` → localhost 콜백 `token·state`(또는 `error=access_denied·login_failed·blocked` → 화면 문구) → state 확인 →
   **JWT(EdDSA) 서명·iss·aud·exp 확인**(순수 파이썬 `ed25519.py`, RFC 8032 시험 값 통과, 1회 약 4ms·같은 토큰 캐시) → config `discordAccount {token, checked}`.
