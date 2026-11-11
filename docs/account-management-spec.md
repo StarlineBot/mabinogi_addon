@@ -21,22 +21,22 @@
 | 동기화 범위 | 오버레이 위치는 **해상도가 같을 때만** 적용. **DM 백업·파일 내보내기·가져오기는 그대로**(사용 편의) |
 | 서버 | **A안: 디스코드 봇이 도는 GCP VM(무료 e2-micro)에 같이**, DB는 **SQLite**(별도 DB 서버 없음) |
 | 주소 | **`https://starline-bot.duckdns.org`**(DuckDNS 무료, VM 136.119.121.58 연결 확인 11-11) |
-| 서버 코드 | **별도 저장소**, VM의 `~/project/server`(봇은 `~/project/discord_bot`) |
+| 서버 코드 | **discord_bot 저장소 안의 `addon_server/` 폴더**(사용자 결정 11-11 — 새 저장소 만들지 않음), VM `~/project/discord_bot/addon_server`, 봇과 **별도 프로세스(systemd 서비스)** |
 | 차단 | **동기화 이후**(2단계) |
 | 비로그인 기능 제한 | **2단계**(4절 목록) |
 | 단계 | 1단계 = 로그인 + 설정 동기화 / 2단계 = 기능 나누기 + 첫 사용 로그인 카드 + 기존 사용자 안내 + 차단·테스터 |
 
 - VM 여유(11-10 확인): 전체 952MB 중 쓸 수 있는 메모리 약 495MB, 스왑 1GB 설정 완료. 추가분(API + Caddy) 약 70~120MB.
-- 서버 코드를 앱 저장소에 두지 않는 이유: VM에 앱 저장소(테스트 자료 포함 .git 약 900MB)를 받을 필요가 없고, VM 폴더 구성(`project/discord_bot`·`project/server`)과 맞다.
+- 서버 코드를 앱 저장소에 두지 않는 이유: VM에 앱 저장소(테스트 자료 포함 .git 약 900MB)를 받을 필요가 없다. discord_bot 저장소에 두면 봇 명령과 같은 DB 접근 코드를 함께 쓰고, VM에서 `git pull` 한 번으로 둘 다 받는다(재시작은 각각).
 
 ## 3. 1단계 — 로그인 + 설정 동기화
 
 ### 3.1 구조
 ```
-앱(PC) ──HTTPS──> starline-bot.duckdns.org ─ Caddy(443, 인증서 자동) ─> 서버 API(127.0.0.1:8000, ~/project/server)
+앱(PC) ──HTTPS──> starline-bot.duckdns.org ─ Caddy(443, 인증서 자동) ─> 서버 API(127.0.0.1:8000, ~/project/discord_bot/addon_server)
                                                                           ├─ SQLite: 사용자·동기화 기록
                                                                           └─ data/settings/<디스코드ID>.zip
-디스코드 봇(~/project/discord_bot) ──같은 SQLite 읽기──> /애드온 사용자 (1단계는 읽기만, 선택)
+디스코드 봇(~/project/discord_bot, 같은 저장소) ──같은 SQLite 읽기──> /애드온 사용자 (1단계는 읽기만, 선택)
 ```
 
 ### 3.2 로그인 흐름 (비밀값은 서버에만)
@@ -75,7 +75,7 @@
 | `GET /health` | 살아 있는지(운영 확인용) |
 - 요청 수 제한(사용자당 분당 수십 회), 묶음 크기·형식 확인, 토큰 서명·만료 확인.
 - SQLite(WAL): `users(discord_id, name, created, last_seen, logged_out, tier, status)`, `settings(discord_id, rev, updated, device, resolution, size, features)` — `features`는 받은 설정에서 기능 사용 값만 읽어 둔 것(봇 보기용).
-- 비밀값: `~/project/server/.env`(권한 600, git 제외) — 디스코드 client secret, 서명 비밀 키. 공개 키는 앱 코드에 넣는다.
+- 비밀값: `~/project/discord_bot/addon_server/.env`(권한 600, git 제외 — 봇의 .env와 분리) — 디스코드 client secret, 서명 비밀 키. 공개 키는 앱 코드에 넣는다.
 
 ### 3.5 VM 운영
 - **준비 상태(2026-11-11 사용자 확인)**: 스왑 1GB ✓, `starline-bot.duckdns.org` → VM ✓, GCP 방화벽 80·443 ✓, Caddy 설치·인증서 발급(테스트 응답 `ok`) ✓, DuckDNS 5분 자동 갱신(cron) ✓. 남은 것: 서버 코드·systemd·백업·디스코드 포털 Redirect.
@@ -84,7 +84,7 @@
 - DuckDNS: 5분마다 IP 갱신(cron, 토큰은 VM에만) — VM IP가 바뀌어도 주소 유지.
 - 서버: systemd 서비스(자동 시작·재시작), 로그는 journald.
 - 백업: 하루 1번 SQLite `.backup` + 설정 폴더를 묶어 7일치 보관(제안: Cloud Storage 무료 범위로도 복사).
-- 배포: 처음엔 사용자가 VM에서 `git pull` + 재시작(자동 배포는 CI 동결 규칙상 별도 승인).
+- 배포: 처음엔 사용자가 VM에서 `~/project/discord_bot`에서 `git pull` + 서버 서비스만 재시작(봇은 봇 코드가 바뀔 때만). 자동 배포는 별도 승인.
 
 ### 3.6 봇 (1단계, 선택)
 - `/애드온 사용자`: 사용자별 `이름 · 마지막 접속 · 마지막 동기화 · 켠 기능`. `/애드온 사용자 @사람`: 설정 요약. 제작자만.
