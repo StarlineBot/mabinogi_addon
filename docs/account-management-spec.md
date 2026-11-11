@@ -78,6 +78,7 @@
 - 비밀값: `~/project/server/.env`(권한 600, git 제외) — 디스코드 client secret, 서명 비밀 키. 공개 키는 앱 코드에 넣는다.
 
 ### 3.5 VM 운영
+- **준비 상태(2026-11-11 사용자 확인)**: 스왑 1GB ✓, `starline-bot.duckdns.org` → VM ✓, GCP 방화벽 80·443 ✓, Caddy 설치·인증서 발급(테스트 응답 `ok`) ✓, DuckDNS 5분 자동 갱신(cron) ✓. 남은 것: 서버 코드·systemd·백업·디스코드 포털 Redirect.
 - Caddy: `starline-bot.duckdns.org { reverse_proxy 127.0.0.1:8000 }` — Let's Encrypt 인증서 자동 발급·갱신.
 - GCP 방화벽: tcp 80(인증서 확인용)·443 열기. API(8000)는 VM 안에서만.
 - DuckDNS: 5분마다 IP 갱신(cron, 토큰은 VM에만) — VM IP가 바뀌어도 주소 유지.
