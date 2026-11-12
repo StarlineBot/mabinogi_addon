@@ -95,5 +95,25 @@
       "id": "forgotten-thought",
       "parts": ["...방금 무슨 생각 하고 있었지?"]
     }
+  ],
+  "tips": [
+    {"id": "tip-buff", "feature": "buff", "parts": ["버프 끝나기 전에 알려 드릴까요? 버프 트래커에서 쓸 버프만 고르면 돼요"]},
+    {"id": "tip-debuff", "feature": "debuff", "parts": ["보스에게 아직 안 걸린 디버프, 디버프 트래커가 한눈에 보여 드려요"]},
+    {"id": "tip-boss", "feature": "boss", "parts": ["보스 패턴 알림 켜 두면 패턴 오기 전에 알려 드려요. 한번 켜 보실래요?"]},
+    {"id": "tip-halo", "feature": "halo", "parts": ["믿음의 균열 헤일로, 1분 헤일로 알림이 미리 알려 드려요"]},
+    {"id": "tip-stat-bars", "feature": "stat_bars", "parts": ["체력바를 보기 편한 곳에 크게 띄워 보셨어요?"]},
+    {"id": "tip-dorcha", "feature": "dorcha", "parts": ["도르카 수치, 화면 원하는 곳에 크게 띄울 수 있어요"]},
+    {"id": "tip-tuarim", "feature": "tuarim", "parts": ["투아림 비율 정해 두면 그때 딱 알려 드려요"]},
+    {"id": "tip-custom", "feature": "custom", "parts": ["커스텀 오버레이 써 보셨어요? 게임 화면 일부를 원하는 곳에 띄울 수 있어요"]},
+    {"id": "tip-skillbar", "feature": "skillbar", "parts": ["단축바를 캐릭터 가까이 옮겨 보는 건 어때요? 단축바 미러가 있어요"]},
+    {"id": "tip-memo", "feature": "memo", "parts": ["공략 메모, 게임 위에 띄워 두고 보면 편해요"]},
+    {"id": "tip-opt", "feature": "opt", "parts": ["게임 최적화 켜 보셨어요? 우선순위·CPU 배치로 끊김을 줄여요"]},
+    {"id": "tip-fps", "feature": "fps", "parts": ["FPS랑 현재 시각, 게임 위에 띄울 수 있어요"]},
+    {"id": "tip-cursor", "feature": "cursor", "parts": ["전투 중에 커서 자꾸 잃어버리면 마우스 커서 표시 켜 보세요"]},
+    {"id": "tip-blackbox", "feature": "blackbox", "parts": ["방금 그 장면! 최근 영상 보관 켜 두면 저장할 수 있어요"]},
+    {"id": "tip-keywords", "feature": "keywords", "parts": ["원하는 파티만 골라 알려 드려요. 파티 모집 키워드 알림 써 보세요"]},
+    {"id": "tip-calc", "feature": "calc", "parts": ["분배·환전 비율 계산, 편의기능 계산기로 바로 돼요"]},
+    {"id": "tip-sketch", "feature": "sketch", "parts": ["그림대화 직접 그려 보셨어요? 그림대화 만들기로 쉽게 만들어요"]},
+    {"id": "tip-harp", "feature": "harp", "parts": ["어느 채널이 제일 빠른지, 서버별 채널 상태에서 볼 수 있어요"]}
   ]
 }

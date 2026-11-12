@@ -551,6 +551,9 @@ class MainWindow(QMainWindow):
             self._pages.setCurrentWidget(self.first_use)
         from .creator_dialogue import CreatorDialogue
         self.creator_dialogue = CreatorDialogue(self)
+        # 도구 화면을 처음 열면 기록(잡담 기능 추천 17.3 — 연 적 있는 도구는 추천하지 않음)
+        for tabs in (self._tabs, self._tracker_tabs, self._convenience_tabs, self.optimization_tools.panel.tabs):
+            tabs.currentChanged.connect(self._record_tool_opened)
         self._apply_frame_colors()  # 저장된 테마(개인화면 틀/내용 칸)로 처음 칠하기
         if not needs_start_screen():
             self._show_home()  # 앱을 새로 띄우면 홈부터(명세 12.1). 안내가 먼저면 안내·둘러보기 뒤에 홈.
@@ -644,6 +647,79 @@ class MainWindow(QMainWindow):
         elif key == "channels":
             self.optimization_tools._open_tab()
             self.optimization_tools.panel.tabs.setCurrentWidget(self._harp_scroll)
+
+    # ---- 잡담 기능 추천(잡담 명세 17절, 0.47.0) ----
+    def _current_tool(self):
+        """지금 보이는 도구 화면 키(memo·calc·sketch·harp) 또는 None."""
+        if self.home_visible() or self._pages.currentWidget() is not self._tabs:
+            return None
+        tab = self._tabs.currentWidget()
+        if tab is self._tracker_tabs:
+            return "memo" if self._tracker_tabs.currentWidget() is self._combat_pages["memo"] else None
+        if tab is self._convenience_tabs:
+            return "sketch" if self._convenience_tabs.currentWidget() is self._sketch_scroll else "calc"
+        panel = getattr(self.optimization_tools, "panel", None)
+        if panel is not None and tab is panel:
+            return "harp" if panel.tabs.currentWidget() is self._harp_scroll else None
+        return None
+
+    def _record_tool_opened(self, *_args) -> None:
+        tool = self._current_tool()
+        if tool is None:
+            return
+        try:
+            if config.mark_tool_opened(tool):
+                logging.getLogger(__name__).info("[잡담 추천] 도구 화면 처음 열기: %s", tool)
+        except OSError:
+            logging.getLogger(__name__).debug("도구 열기 기록 실패", exc_info=True)
+
+    def feature_in_use(self, key: str) -> bool:
+        """기능을 지금 쓰는지(17.3) — 켜고 끄는 기능은 홈 스위치·사용 값과 같은 기준, 도구는 연 적 있는지."""
+        from .. import setup_state
+        from ..creator_dialogue import TOOL_FEATURES
+        if key in TOOL_FEATURES:
+            return key in config.load_opened_tools()
+        if key in ("dorcha", "tuarim", "custom"):
+            return {"dorcha": self.dorcha_tab, "tuarim": self.tuarim_tab, "custom": self.custom_overlay_tab}[key].enable.isChecked()
+        if key == "stat_bars":
+            return self._home_feature_on("stat_bars")
+        if key in self._HOME_FEATURES:
+            return bool(setup_state.enabled(self._HOME_FEATURES[key]))
+        if key == "opt":
+            return bool(self.optimization_tools.home_state()[2])
+        if key == "fps":
+            return self.optimization_tools.panel.frames_toggle.isChecked()
+        if key == "cursor":
+            return self.cursor_fx.is_enabled()
+        if key == "blackbox":
+            return bool(self.blackbox_tools.home_state()[2])
+        if key == "keywords":
+            return bool(self.party_tab._keywords)
+        return True  # 모르는 키는 추천하지 않음
+
+    def unused_tip_features(self) -> set:
+        from ..creator_dialogue import TIP_FEATURES
+        return {key for key in TIP_FEATURES if not self.feature_in_use(key)}
+
+    def open_tip_feature(self, key: str) -> None:
+        """잡담 '보러 가기' → 그 기능 화면(홈 줄을 누른 것과 같은 길)."""
+        if key == "calc":
+            if self._setup_busy() or self._config_pending_restart:
+                return
+            self._hide_home()
+            self._pages.setCurrentWidget(self._tabs)
+            self._tabs.setCurrentWidget(self._convenience_tabs)
+            self._convenience_tabs.setCurrentIndex(0)
+        elif key == "sketch":
+            if self._setup_busy() or self._config_pending_restart:
+                return
+            self._hide_home()
+            self._pages.setCurrentWidget(self._tabs)
+            self._tabs.setCurrentWidget(self._convenience_tabs)
+            self._convenience_tabs.setCurrentWidget(self._sketch_scroll)
+        else:
+            self._home_open_feature("channels" if key == "harp" else key)
+        self._record_tool_opened()
 
     def _home_open_region(self, key) -> None:
         """설정 필요 상자의 '영역 지정': 그 화면의 영역 지정 상자(0.27.0)로."""

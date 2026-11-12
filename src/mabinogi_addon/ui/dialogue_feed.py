@@ -6,7 +6,7 @@ from PySide6.QtCore import QObject, QSaveFile, QIODevice, QTimer, QUrl, Signal
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequest
 
 from .. import paths
-from ..creator_dialogue import MAX_BYTES, RAW_URL, parse, read
+from ..creator_dialogue import MAX_BYTES, RAW_URL, parse, parse_tips, read, read_tips
 
 _log = logging.getLogger(__name__)
 
@@ -14,18 +14,23 @@ _log = logging.getLogger(__name__)
 class DialogueFeed(QObject):
     updated = Signal(object)
 
-    def __init__(self, parent=None, *, validate=None):
+    def __init__(self, parent=None, *, validate=None, validate_tips=None):
         super().__init__(parent)
         self.validate = validate or (lambda entries: entries)
+        self.validate_tips = validate_tips or (lambda tips: tips)
         self.entries = ()
+        self.tips = ()  # 기능 추천(잡담 명세 17.4) — 파일에 `tips` 칸이 없으면 내장 추천을 그대로 둔다
+        builtin = paths.resource_dir() / "dialogues.json"
         try:
-            self.entries = self._accepted(read(paths.resource_dir() / "dialogues.json"))
+            self.entries = self._accepted(read(builtin))
+            self._take_tips(read_tips(builtin))
         except (OSError, ValueError, UnicodeError):
             _log.debug("내장 제작자 대사 읽기 실패", exc_info=True)
         self.cache = None
         try:
             self.cache = paths.user_data_dir() / "creator-dialogues.json"
             self.entries = self._accepted(read(self.cache))
+            self._take_tips(read_tips(self.cache))
         except (OSError, ValueError, UnicodeError):
             pass
         self.network = QNetworkAccessManager(self)
@@ -36,6 +41,16 @@ class DialogueFeed(QObject):
         self.timer = QTimer(self)
         self.timer.setSingleShot(True)
         self.timer.timeout.connect(self._abort)
+
+    def _take_tips(self, tips):
+        """None(칸 없음) = 지금 추천 유지, () 또는 잘못된 칸 = 기능 추천만 끔. 말풍선 두 줄 넘는 항목은 건너뜀."""
+        if tips is None:
+            return
+        try:
+            self.tips = tuple(self.validate_tips(tips))
+        except Exception:  # noqa: BLE001 — 추천만 끄고 일반 대사는 그대로
+            _log.debug("기능 추천 문장 검사 실패", exc_info=True)
+            self.tips = ()
 
     def _accepted(self, entries):
         usable = self.validate(entries)
@@ -87,6 +102,7 @@ class DialogueFeed(QObject):
                 return
             entries = self._accepted(parse(bytes(self.buffer)))
             self.entries = entries
+            self._take_tips(parse_tips(bytes(self.buffer)))
             self.updated.emit(entries)
             if self.cache is not None:
                 file = QSaveFile(str(self.cache))

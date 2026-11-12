@@ -69,18 +69,18 @@ def test_current_plan_maps_every_selected_file_to_changed_code_or_shared_contrac
 
 
 def test_current_release_keeps_feature_boundaries_and_delivery_contracts():
-    """0.46.0: 계정 관리 1단계(서버 경유 로그인·토큰 등급·설정 동기화) + 배포 계약. (릴리즈마다 경계를 바꾼다 — 누적하지 않음)"""
+    """0.47.0: 잡담 기능 추천·디스코드 권유(잡담 명세 17절) + 배포 계약. (릴리즈마다 경계를 바꾼다 — 누적하지 않음)"""
     root = Path(__file__).resolve().parents[1]
     plan = json.loads((root / 'packaging/release_checks.json').read_text(encoding='utf-8'))
     paths = set(plan['tests'])
     assert {
-        'tests/test_account.py', 'tests/test_discord_auth.py', 'tests/test_cloud_sync.py', 'tests/test_feature_release_policy.py',
+        'tests/test_creator_dialogue.py', 'tests/test_dialogue_tips.py', 'tests/test_dialogue_network_lifecycle.py',
         'tests/test_startup_build.py', 'tests/test_release_checks.py', 'tests/test_release_candidate.py',
         'tests/test_windows_ci.py', 'tests/test_startup_smoke.py',
     } <= paths
     assert {
-        'src/mabinogi_addon/account.py', 'src/mabinogi_addon/ed25519.py', 'src/mabinogi_addon/cloud_sync.py',
-        'src/mabinogi_addon/feature_access.py', 'src/mabinogi_addon/ui/account_controller.py',
+        'src/mabinogi_addon/creator_dialogue.py', 'src/mabinogi_addon/ui/creator_dialogue.py',
+        'src/mabinogi_addon/ui/dialogue_feed.py', 'src/mabinogi_addon/assets/dialogues.json',
         'packaging/build_windows.py', 'src/mabinogi_addon/assets/release_notes.md',
     } <= set(plan['coverage'])
     # The separate development entry must continue collecting the whole suite.

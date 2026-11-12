@@ -1,120 +1,79 @@
 {
-  "version": "0.46.0",
+  "version": "0.47.0",
   "tests": [
-    "tests/test_account.py",
-    "tests/test_discord_auth.py",
-    "tests/test_cloud_sync.py",
-    "tests/test_feature_release_policy.py",
-    "tests/test_access_cache.py",
-    "tests/test_blackbox_access.py",
-    "tests/test_halo_capture.py",
-    "tests/test_inquiry_unified.py",
-    "tests/test_settings_export.py",
+    "tests/test_creator_dialogue.py",
+    "tests/test_dialogue_tips.py",
+    "tests/test_dialogue_display_policy.py",
+    "tests/test_dialogue_desktop_failure.py",
+    "tests/test_dialogue_window_region.py",
+    "tests/test_dialogue_transparent_occlusion.py",
+    "tests/test_dialogue_network_lifecycle.py",
+    "tests/test_navigation.py",
     "tests/test_release_notes.py",
     "tests/test_release_notes_trigger.py",
     "tests/test_release_checks.py",
     "tests/test_startup_build.py",
     "tests/test_release_candidate.py",
     "tests/test_windows_ci.py",
-    "tests/test_startup_smoke.py",
-    "tests/test_restart_after_apply.py",
-    "tests/test_game_window_judge.py",
-    "tests/test_custom_config_replacement.py",
-    "tests/test_updater_relaunch_env.py",
-    "tests/test_single_instance.py",
-    "tests/test_startup_integration.py",
-    "tests/test_dwm_thumbnail.py",
-    "tests/test_game_window_dialog.py"
+    "tests/test_startup_smoke.py"
   ],
   "coverage": {
-    "src/mabinogi_addon/ed25519.py": {
+    "src/mabinogi_addon/creator_dialogue.py": {
       "tests": [
-        "tests/test_account.py"
+        "tests/test_creator_dialogue.py",
+        "tests/test_dialogue_tips.py"
       ],
-      "reason": "토큰 서명 확인(Ed25519, 순수 파이썬 — RFC 8032 시험 값)"
+      "reason": "잡담 기능 추천·디스코드 권유(17절): tips 칸 읽기(옛 parse는 entries만 — 호환, tips만 잘못되면 추천만 끔), 25% 추첨·직전 기능 빼기·권유 주기(참가 후 없음·괜찮아요 45일·30일에 한 번)"
     },
-    "src/mabinogi_addon/account.py": {
+    "src/mabinogi_addon/ui/creator_dialogue.py": {
       "tests": [
-        "tests/test_account.py",
-        "tests/test_discord_auth.py",
-        "tests/test_cloud_sync.py",
-        "tests/test_release_candidate.py"
+        "tests/test_creator_dialogue.py",
+        "tests/test_dialogue_tips.py",
+        "tests/test_dialogue_display_policy.py",
+        "tests/test_dialogue_desktop_failure.py",
+        "tests/test_dialogue_window_region.py",
+        "tests/test_dialogue_transparent_occlusion.py"
       ],
-      "reason": "서버 토큰 확인·보관·7일 유예·서버 API(위조·만료·다른 키 거절, 개발 시험 키는 preflight가 배포 거절)"
+      "reason": "말풍선 버튼(보러 가기·참가하기·괜찮아요)·같은 날 겹치지 않게·버튼 있는 말풍선 8초·기존 잡담 표시 규칙 그대로"
     },
-    "src/mabinogi_addon/discord_auth.py": {
+    "src/mabinogi_addon/ui/dialogue_feed.py": {
       "tests": [
-        "tests/test_discord_auth.py"
+        "tests/test_dialogue_network_lifecycle.py",
+        "tests/test_creator_dialogue.py",
+        "tests/test_dialogue_tips.py"
       ],
-      "reason": "서버 경유 로그인(state·서명 확인) — 예전 Implicit Grant 대체 · 콜백 페이지는 판정 뒤 — 실패(error=·state·서명)는 실패 페이지(QA 866817b)"
+      "reason": "내장·캐시·원격 파일의 tips(칸 없으면 내장 추천 유지, 두 줄 넘는 문장 건너뜀)"
     },
-    "src/mabinogi_addon/feature_access.py": {
+    "src/mabinogi_addon/assets/dialogues.json": {
       "tests": [
-        "tests/test_account.py",
-        "tests/test_feature_release_policy.py",
-        "tests/test_access_cache.py",
-        "tests/test_blackbox_access.py",
-        "tests/test_halo_capture.py"
+        "tests/test_creator_dialogue.py",
+        "tests/test_dialogue_tips.py"
       ],
-      "reason": "등급 판정을 토큰 등급으로(current_user·is_logged_in·tier·is_creator) — config에 제작자 ID를 적어도 제작자 아님"
+      "reason": "내장 대사 파일에 17.5 초안 추천 18개(entries 12개 그대로)"
     },
     "src/mabinogi_addon/config.py": {
       "tests": [
-        "tests/test_account.py",
-        "tests/test_cloud_sync.py",
-        "tests/test_settings_export.py"
+        "tests/test_dialogue_tips.py"
       ],
-      "reason": "load_discord_user = 서명 토큰만, 토큰 저장·지우기, 설정 쓰기 알림, 묶음에 transform·extra(동기화용, 내보내기 결과 그대로) · 로그인 토큰·예전 로그인 기록·동기화 기록·설치 ID는 내보내기(파일·DM 백업)에서 빼고 가져오기 때 이 PC 값 유지(QA 866817b)"
+      "reason": "권유 기록(discordInvite)·추천 날짜·연 도구 기록(openedTools) — 설정 동기화 대상"
     },
-    "src/mabinogi_addon/cloud_sync.py": {
+    "tests/conftest.py": {
       "tests": [
-        "tests/test_cloud_sync.py"
+        "tests/test_creator_dialogue.py",
+        "tests/test_dialogue_tips.py",
+        "tests/test_dialogue_display_policy.py",
+        "tests/test_dialogue_desktop_failure.py",
+        "tests/test_dialogue_window_region.py",
+        "tests/test_dialogue_transparent_occlusion.py"
       ],
-      "reason": "동기화 묶음(빼는 값 없음·2MB)·적용(이 PC 값 유지·해상도 다르면 위치 유지·import_bundle 검사) · 게임 창 판단(0.46.0, #221): gameExe도 동기화, 받은 값이 없거나 게임이 아닌 이름이면 이 PC 값 유지·그런 값은 올리지 않음"
-    },
-    "src/mabinogi_addon/ui/account_controller.py": {
-      "tests": [
-        "tests/test_cloud_sync.py",
-        "tests/test_account.py"
-      ],
-      "reason": "작업 스레드에서 /me·동기화(30초 모으기·종료 시 올림·새 PC·둘 다 바뀜·409 물음·비로그인 통신 0회) · 물음 창을 닫으면 이번 실행 동안 올리지 않음(종료 때도), 다음 시작 때 다시 물음(QA 866817b)"
-    },
-    "src/mabinogi_addon/ui/settings_tab.py": {
-      "tests": [
-        "tests/test_cloud_sync.py",
-        "tests/test_settings_export.py",
-        "tests/test_restart_after_apply.py",
-        "tests/test_custom_config_replacement.py",
-        "tests/test_game_window_judge.py"
-      ],
-      "reason": "설정 › 계정: 디스코드로 로그인/로그아웃·☑ 설정 동기화·마지막 동기화, DM 백업·내보내기·가져오기 그대로 · DM 백업 묶음에 토큰 없음(QA 866817b) · 적용 뒤 바로 다시 켜기(0.46.0): 초기화·가져오기 확인 창(취소·X·Esc = 안 함) · 게임 창 판단(0.46.0, #221): 게임창 등록 = 켜진 게임 하나면 바로, 아니면 15초 기다리며 클릭한 창 검사(앱 자신·제외 목록 거절, 시간 초과 시 값 그대로)"
-    },
-    "src/mabinogi_addon/ui/main_window.py": {
-      "tests": [
-        "tests/test_cloud_sync.py",
-        "tests/test_account.py",
-        "tests/test_restart_after_apply.py"
-      ],
-      "reason": "계정 담당 연결·시작 때 동기화·물음(불러오기/이 PC 설정 쓰기)·받은 뒤 다시 켜기 안내·종료 때 올림 · X·Esc = 아무것도 안 함, 서버 덮어쓰기는 '이 PC 설정 쓰기'만(QA 866817b) · 적용 뒤 바로 다시 켜기(0.46.0): 정상 종료 정리 → 자기 자신 다시 실행, 실패 시 안내, 물음 창에 '다시 켜져요'"
-    },
-    "src/mabinogi_addon/inquiry_session.py": {
-      "tests": [
-        "tests/test_inquiry_unified.py"
-      ],
-      "reason": "문의 보낸 사람 = feature_access.current_user(동작 같음)"
-    },
-    "scripts/release_candidate.py": {
-      "tests": [
-        "tests/test_release_candidate.py"
-      ],
-      "reason": "preflight: 로그인 공개 키가 개발 시험 키면 배포 거절"
+      "reason": "기존 잡담·화면 이동 테스트는 추천 추첨과 도구 열기 기록을 끔(dialogue_tips 표시가 있으면 켬)"
     },
     "src/mabinogi_addon/assets/release_notes.md": {
       "tests": [
         "tests/test_release_notes.py",
         "tests/test_release_notes_trigger.py"
       ],
-      "reason": "0.46.0 노트 파싱·새 버전 표시(게시된 0.45.0 섹션 그대로)"
+      "reason": "0.47.0 노트 파싱·새 버전 표시(게시된 0.46.0 섹션 그대로)"
     },
     "packaging/release_checks.json": {
       "tests": [
@@ -131,46 +90,12 @@
       ],
       "reason": "배포 계약: 빌드·후보·Windows CI·시작 확인"
     },
-    "src/mabinogi_addon/system/updater.py": {
+    "src/mabinogi_addon/ui/main_window.py": {
       "tests": [
-        "tests/test_restart_after_apply.py",
-        "tests/test_updater_relaunch_env.py"
+        "tests/test_dialogue_tips.py",
+        "tests/test_navigation.py"
       ],
-      "reason": "적용 뒤 바로 다시 켜기(0.46.0): relaunch_self = 업데이트 재실행 길 + --restart 표시"
-    },
-    "src/mabinogi_addon/system/single_instance.py": {
-      "tests": [
-        "tests/test_restart_after_apply.py",
-        "tests/test_single_instance.py"
-      ],
-      "reason": "적용 뒤 바로 다시 켜기(0.46.0): --restart면 옛 프로세스 종료까지 최대 15초 자리 기다림, 평소엔 바로 꺼짐"
-    },
-    "src/mabinogi_addon/__init__.py": {
-      "tests": [
-        "tests/test_restart_after_apply.py",
-        "tests/test_startup_integration.py"
-      ],
-      "reason": "적용 뒤 바로 다시 켜기(0.46.0): --restart면 트레이로 시작이어도 창 표시·업데이트 확인 건너뜀"
-    },
-    "src/mabinogi_addon/system/window_watcher.py": {
-      "tests": [
-        "tests/test_game_window_judge.py"
-      ],
-      "reason": "게임 창 판단(0.46.0, #221): 제목 폴백에서 브라우저·탐색기·메신저·앱 자신 제외(is_game_title·is_game_window·find_running_game), 등록돼 있으면 실행파일로만"
-    },
-    "src/mabinogi_addon/system/dwm_thumbnail.py": {
-      "tests": [
-        "tests/test_game_window_judge.py",
-        "tests/test_dwm_thumbnail.py"
-      ],
-      "reason": "게임 창 판단(0.46.0, #221): find_game_window 제목 폴백도 같은 판단"
-    },
-    "src/mabinogi_addon/ui/game_window_dialog.py": {
-      "tests": [
-        "tests/test_game_window_judge.py",
-        "tests/test_game_window_dialog.py"
-      ],
-      "reason": "게임 창 판단(0.46.0, #221): 첫 실행 고르기 창 기본 선택이 브라우저 탭이 아니라 게임 창"
+      "reason": "안 쓰는 기능 판정(홈 스위치·사용 값 기준, 도구는 연 적 있는지)·보러 가기 화면 이동·도구 처음 열기 기록(기존 화면 이동 테스트에선 기록을 끔)"
     }
   }
 }

@@ -323,7 +323,7 @@ def test_final_display_denial_is_logged_once_per_actual_request(window, monkeypa
         assert diagnose is (not automatic)
         return next(checks)
     monkeypatch.setattr(d, "_eligible", eligible)
-    monkeypatch.setattr(d, "_position", lambda text: stage != "position")
+    monkeypatch.setattr(d, "_position", lambda text, buttons=(): stage != "position")
     displayed = Mock()
     monkeypatch.setattr(d.session, "displayed", displayed)
     caplog.set_level(logging.INFO, logger="mabinogi_addon.ui.creator_dialogue")

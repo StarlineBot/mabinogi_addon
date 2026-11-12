@@ -107,6 +107,11 @@ https://raw.githubusercontent.com/StarlineBot/mabinogi_addon-releases/refs/heads
 
 ## 4. 나중에 대사 추가/수정하기
 
+> **기능 추천 `tips`(0.47.0, [잡담 명세 17.4](creator-dialogue-spec.md))**: 원격 파일에 `tips` 칸이 **없으면** 앱은 내장 추천 18개를 그대로 쓴다.
+> 칸을 넣으면 그 내용으로 바뀌고, 칸이 잘못되면 기능 추천만 꺼진다(일반 대사 `entries`는 그대로). 그래서 원격 파일을 고칠 땐
+> `docs/examples/creator-dialogues/dialogues.json`(= 앱 내장 파일)의 `tips`를 함께 옮기거나, `tips` 칸을 아예 빼 둔다.
+
+
 1. `mabinogi_addon-releases`의 `main`에서 `data/dialogues.json`을 연다.
 2. 파일 편집 버튼을 눌러 `entries`에 항목을 추가하거나 기존 `parts`를 수정한다.
 3. 새 항목에는 새로운 `id`를 부여한다. 기존 ID를 다른 소재에 재활용하지 않는다.

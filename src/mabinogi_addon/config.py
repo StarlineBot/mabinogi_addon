@@ -1887,3 +1887,55 @@ def load_debuff_display_mode(path: Path = LOCAL_CONFIG_PATH) -> str:
 
 def set_debuff_display_mode(mode: str, path: Path = LOCAL_CONFIG_PATH) -> None:
     _set_overlay_value("debuffDisplay", mode if mode in ("missing", "applied") else "missing", path)
+
+
+# ---- 잡담 기능 추천·디스코드 권유(잡담 명세 17절, 0.47.0) — 설정 동기화 대상 ----
+def load_discord_invite(path: Path = LOCAL_CONFIG_PATH) -> dict:
+    """{'joined': bool, 'declinedAt': 초, 'shownAt': 초}."""
+    value = _read_local_config(path).get("discordInvite")
+    return dict(value) if isinstance(value, dict) else {}
+
+
+def save_discord_invite(path: Path = LOCAL_CONFIG_PATH, **changes) -> None:
+    data = _read_local_config(path)
+    value = data.get("discordInvite")
+    value = dict(value) if isinstance(value, dict) else {}
+    value.update(changes)
+    data["discordInvite"] = value
+    _write_local_config(data, path)
+
+
+def load_dialogue_tip_day(path: Path = LOCAL_CONFIG_PATH) -> str | None:
+    value = _read_local_config(path).get("dialogueTips")
+    day = value.get("day") if isinstance(value, dict) else None
+    return day if isinstance(day, str) else None
+
+
+def save_dialogue_tip_day(day: str, path: Path = LOCAL_CONFIG_PATH) -> None:
+    data = _read_local_config(path)
+    value = data.get("dialogueTips")
+    value = dict(value) if isinstance(value, dict) else {}
+    if value.get("day") == day:
+        return
+    value["day"] = day
+    data["dialogueTips"] = value
+    _write_local_config(data, path)
+
+
+def load_opened_tools(path: Path = LOCAL_CONFIG_PATH) -> set[str]:
+    """한 번이라도 연 도구 화면(메모·계산기·그림대화 만들기·서버별 채널 상태, 17.3)."""
+    value = _read_local_config(path).get("openedTools")
+    return {k for k, v in value.items() if v is True} if isinstance(value, dict) else set()
+
+
+def mark_tool_opened(key: str, path: Path = LOCAL_CONFIG_PATH) -> bool:
+    """처음 열 때만 기록(이미 있으면 쓰지 않음). 기록했으면 True."""
+    data = _read_local_config(path)
+    value = data.get("openedTools")
+    value = dict(value) if isinstance(value, dict) else {}
+    if value.get(key) is True:
+        return False
+    value[key] = True
+    data["openedTools"] = value
+    _write_local_config(data, path)
+    return True

@@ -211,3 +211,17 @@ def _skillbar_capture_inline():
 
 def pytest_configure(config):
     config.addinivalue_line("markers", "autofind_default: 창 테스트를 앱 기본(자동 찾기 켜짐)으로 — 기본은 비상 값 꺼짐(저장 영역 v1 동작)")
+    config.addinivalue_line("markers", "dialogue_tips: 잡담 기능 추천·권유를 켠 채로 시험")
+
+
+@pytest.fixture(autouse=True)
+def _no_dialogue_tips(request, monkeypatch):
+    """잡담 기능 추천·디스코드 권유(17절)는 25% 추첨이라, 일반 대사를 보는 기존 테스트에선 끈다(도구 열기 기록 포함).
+    추천을 시험하는 테스트는 `@pytest.mark.dialogue_tips`로 켠다."""
+    if request.node.get_closest_marker("dialogue_tips") is not None:
+        return
+    from mabinogi_addon.ui import creator_dialogue, main_window
+    monkeypatch.setattr(creator_dialogue.CreatorDialogue, "_pick_extra", lambda self: None)
+    # 도구 화면 처음 열기 기록(17.3)도 끈다 — 화면 이동만으로 설정을 쓰지 않는지 보는 기존 테스트가 많다.
+    monkeypatch.setattr(main_window.MainWindow, "_record_tool_opened", lambda self, *a: None)
+
