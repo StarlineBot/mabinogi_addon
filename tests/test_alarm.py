@@ -264,3 +264,70 @@ def test_blackbox_message_unchanged(app):
     assert not t._timer.isActive() and t.sticky
     t.hide_message()
     assert not t.isVisible()
+
+
+# ---- 0.48.0 사용자 요청 11-14: 시각 칸 기본값·숫자로 바로 입력·소리 파일 ----
+
+@pytest.mark.parametrize("text,expected", [("0745", (7, 45)), ("745", (7, 45)), ("7:45", (7, 45)), ("07:45", (7, 45)),
+                                           ("2359", (23, 59)), ("21", (21, 0)), ("2460", None), ("99", None),
+                                           ("7:5", None), ("abc", None), ("", None)])
+def test_parse_hhmm(text, expected):
+    assert m.parse_hhmm(text) == expected
+
+
+@pytest.mark.parametrize("hh,mm,expected", [(7, 42, (7, 45)), (7, 45, (7, 50)), (23, 58, (0, 0)), (0, 0, (0, 5))])
+def test_default_time_next_5_minutes(hh, mm, expected):
+    assert m.default_time(at(THU, hh, mm, 30)) == expected
+
+
+def _type(box, app, text):
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    box.lineEdit().selectAll()
+    QTest.keyClicks(box.lineEdit(), text)
+    QTest.keyClick(box.lineEdit(), Qt.Key.Key_Return)
+    app.processEvents()
+
+
+@pytest.mark.parametrize("text,expected", [("0745", "07:45"), ("745", "07:45"), ("7:45", "07:45"), ("07:45", "07:45"),
+                                           ("2460", "07:45"), ("99", "07:45")])
+def test_time_box_typing(app, text, expected):
+    clock = [at(THU, 7, 42)]
+    tab, _ = make_tab(clock)
+    box = tab.time_edit
+    assert box.text() == "07:45"  # 기본값 07:42 → 07:45
+    _type(box, app, text)
+    assert box.text() == expected  # 잘못된 값은 원래 값
+    box.stepBy(1)
+    assert box.text() == "07:50"  # 위아래 화살표 5분
+    tab.shutdown()
+
+
+def test_default_recomputed_after_add_and_on_open(app):
+    clock = [at(THU, 7, 42)]
+    tab, _ = make_tab(clock)
+    _type(tab.time_edit, app, "0900")
+    assert tab.time_edit.text() == "09:00"  # 직접 고친 값 유지
+    clock[0] = at(THU, 8, 3)
+    tab.add_btn.click()
+    assert tab.clock.alarms[-1].hour == 9 and tab.time_edit.text() == "08:05"  # 추가한 뒤 다시 계산
+    _type(tab.time_edit, app, "1000")
+    clock[0] = at(THU, 8, 11)
+    tab.show()  # 탭을 다시 열면 다시 계산
+    app.processEvents()
+    assert tab.time_edit.text() == "08:15"
+    tab.shutdown()
+
+
+def test_alarm_and_timer_sound_files_are_packaged():
+    import hashlib
+    from pathlib import Path
+
+    from mabinogi_addon import paths
+    from mabinogi_addon.ui import notifier
+    data = Path(__file__).parent / "data"
+    for name, source in (("알람.mp3", "universfield-ringtone-073-496299.mp3"), ("타이머.mp3", "universfield-ringtone-055-494939.mp3")):
+        packaged = paths.resource_dir() / "sounds" / name
+        assert hashlib.sha256(packaged.read_bytes()).digest() == hashlib.sha256((data / source).read_bytes()).digest()
+    assert notifier.alarm_sound_file("time") == "알람.mp3" and notifier.alarm_sound_file("pre") == "알람.mp3"
+    assert notifier.alarm_sound_file("timer") == "타이머.mp3"

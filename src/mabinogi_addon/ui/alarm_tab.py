@@ -12,9 +12,10 @@ from __future__ import annotations
 import logging
 import time
 
-from PySide6.QtCore import QTime
+from PySide6.QtCore import QTime, QTimer
+from PySide6.QtGui import QValidator
 from PySide6.QtWidgets import (QComboBox, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QPushButton, QSpinBox,
-                               QStackedWidget, QTimeEdit, QVBoxLayout, QWidget)
+                               QStackedWidget, QVBoxLayout, QWidget)
 
 from .. import alarm as model
 from .. import config
@@ -49,6 +50,44 @@ def _wrap(first, second) -> WrapRow:
     row._box.setStretchFactor(first, 1)
     row._box.setStretch(2, 0)  # WrapRow 끝의 빈 늘림은 쓰지 않음(첫 묶음이 남는 폭을 다 가짐)
     return row
+
+
+class TimeBox(QSpinBox):
+    """시각 칸(HH:mm) — 숫자로 바로 입력(0745·745·7:45·07:45 → 07:45), 누르면 전체 선택, Enter·포커스가 빠질 때 확정.
+    잘못된 값(2460·99 등)은 원래 값으로 되돌림. 위아래 화살표는 5분씩(자정을 넘어 돈다). 값 = 0시부터 분."""
+
+    def __init__(self, hour: int = 21, minute: int = 0, parent=None) -> None:
+        super().__init__(parent)
+        self.setRange(0, 24 * 60 - 1)
+        self.setSingleStep(5)
+        self.setWrapping(True)
+        self.setKeyboardTracking(False)
+        self.setCorrectionMode(QSpinBox.CorrectionMode.CorrectToPreviousValue)
+        self.setValue(hour * 60 + minute)
+
+    def textFromValue(self, value: int) -> str:
+        return f"{value // 60:02d}:{value % 60:02d}"
+
+    def valueFromText(self, text: str) -> int:
+        got = model.parse_hhmm(text)
+        return self.value() if got is None else got[0] * 60 + got[1]
+
+    def validate(self, text: str, pos: int):
+        if model.parse_hhmm(text) is not None:
+            return QValidator.State.Acceptable, text, pos
+        if len(text) <= 5 and all(c.isdigit() or c in ":：" for c in text):
+            return QValidator.State.Intermediate, text, pos  # 입력 중(Enter·포커스 빠질 때 확정, 틀리면 되돌림)
+        return QValidator.State.Invalid, text, pos
+
+    def focusInEvent(self, event) -> None:
+        super().focusInEvent(event)
+        QTimer.singleShot(0, self.selectAll)  # 누르면 전체 선택 — 바로 0745처럼 덮어 쓰기
+
+    def time(self) -> QTime:
+        return QTime(self.value() // 60, self.value() % 60)
+
+    def setTime(self, t: QTime) -> None:
+        self.setValue(t.hour() * 60 + t.minute())
 
 
 def _find_game_hwnd() -> int:
@@ -137,8 +176,7 @@ class AlarmTab(QWidget):
         page = QWidget()
         col = QVBoxLayout(page)
         col.setContentsMargins(0, 0, 0, 0)
-        self.time_edit = QTimeEdit(QTime(21, 0))
-        self.time_edit.setDisplayFormat("HH:mm")
+        self.time_edit = TimeBox(*model.default_time(self._now()))
         self.repeat = QComboBox()
         for key, text in REPEAT_CHOICES:
             self.repeat.addItem(text, key)
@@ -287,7 +325,18 @@ class AlarmTab(QWidget):
                                      pre=self.pre.currentData())
         self.clock.alarms.append(alarm)
         self.time_name.clear()
+        self._reset_time()  # 추가한 뒤 다시 '지금 다음 5분'
         self._changed()
+
+    def _reset_time(self) -> None:
+        hour, minute = model.default_time(self._now())
+        self.time_edit.setValue(hour * 60 + minute)
+
+    def showEvent(self, event) -> None:
+        """탭을 열 때마다 시각 칸을 '지금 다음 5분'으로(직접 고친 값은 다시 열기 전까지 유지)."""
+        super().showEvent(event)
+        if not event.spontaneous():
+            self._reset_time()
 
     def _add_timer(self) -> None:
         self.clock.alarms.append(model.new_timer(self.minutes.value(), self._now(), name=self.timer_name.text()))

@@ -234,3 +234,30 @@ def list_line(t: float, alarm: Alarm, now: float) -> tuple[str, str, str]:
     if alarm.kind == "timer":
         return f"{int(left // 60)}분 뒤", alarm.label, "timer"
     return clock_text(t), alarm.label, "time"
+
+
+# ---- 시각 칸(0.48.0, 사용자 요청 11-14) ----
+def parse_hhmm(text: str) -> tuple[int, int] | None:
+    """'0745'·'745'·'7:45'·'07:45'(또는 '7'·'21' = 정각) → (7, 45). 잘못되면 None(2460·99 등)."""
+    text = (text or "").strip().replace("：", ":")
+    if ":" in text:
+        head, _, tail = text.partition(":")
+        if not (head.isdigit() and tail.isdigit()) or not 1 <= len(head) <= 2 or len(tail) != 2:
+            return None
+        hour, minute = int(head), int(tail)
+    elif text.isdigit() and 1 <= len(text) <= 4:
+        if len(text) <= 2:
+            hour, minute = int(text), 0
+        else:
+            hour, minute = int(text[:-2]), int(text[-2:])
+    else:
+        return None
+    return (hour, minute) if 0 <= hour <= 23 and 0 <= minute <= 59 else None
+
+
+def default_time(now: float) -> tuple[int, int]:
+    """지금 시각을 5분 단위로 올린 다음 시각(07:42 → 07:45, 07:45 → 07:50, 23:58 → 00:00)."""
+    local = _time.localtime(now)
+    total = (local.tm_hour * 60 + local.tm_min) // 5 * 5 + 5
+    total %= 24 * 60
+    return total // 60, total % 60
