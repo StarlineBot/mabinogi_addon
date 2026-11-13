@@ -1216,7 +1216,11 @@ class SettingsTab(QWidget):
 
     def _update_game_label(self) -> None:
         exe = config.load_game_exe()
-        if exe:
+        bad = config.invalid_game_exe()
+        if bad:  # 0.48.0: 저장된 값이 게임이 아님(앱 자신 등) — 읽을 때 무시 중, 다시 등록 안내
+            self._game_hint.setText(f"등록된 값({bad})은 게임이 아니에요. '게임창 등록 시작'으로 다시 등록해 주세요.")
+            self._game_hint.setStyleSheet(f"color:{color('warn')};")
+        elif exe:
             self._game_hint.setText(f"등록된 게임: {exe}")
             self._game_hint.setStyleSheet(f"color:{color('ok')};")
         else:

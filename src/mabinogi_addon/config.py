@@ -134,9 +134,22 @@ def _merge_config_text(text: str, path: Path) -> None:
     if not isinstance(incoming, dict):
         raise ValueError("설정 파일 형식이 올바르지 않습니다")  # noqa: TRY004
     data = _read_local_config(path)
+    local_exe = (data.get("general") or {}).get("gameExe") if isinstance(data.get("general"), dict) else None
     for key, value in incoming.items():
         if key not in _LOCAL_ONLY_KEYS:
             data[key] = value
+    # 0.48.0: 들어온 게임창 등록이 게임이 아닌 이름(앱 자신·브라우저 등)이면 이 PC 값 유지(동기화 받기와 같은 규칙)
+    general = data.get("general")
+    if isinstance(general, dict) and isinstance(incoming.get("general"), dict) and "gameExe" in incoming["general"]:
+        from .system.window_watcher import is_acceptable_game_exe
+        got = incoming["general"]["gameExe"]
+        if not (isinstance(got, str) and is_acceptable_game_exe(got)):
+            general = dict(general)
+            if local_exe is not None:
+                general["gameExe"] = local_exe
+            else:
+                general.pop("gameExe", None)
+            data["general"] = general
     _write_local_config(data, path)
 
 
@@ -987,11 +1000,37 @@ def save_grid_size(px: int, path: Path = LOCAL_CONFIG_PATH) -> None:
     _write_local_config(data, path)
 
 
-def load_game_exe(path: Path = LOCAL_CONFIG_PATH) -> str | None:
-    """포그라운드 판정에 쓸 게임 실행파일명(basename). 없으면 None(제목 폴백)."""
+_bad_game_exe_logged: set[str] = set()
+
+
+def load_game_exe_raw(path: Path = LOCAL_CONFIG_PATH) -> str | None:
+    """저장된 게임창 등록 값 그대로(검사 전). 없으면 None."""
     g = _read_local_config(path).get("general") or {}
-    exe = g.get("gameExe")
+    exe = g.get("gameExe") if isinstance(g, dict) else None
     return exe.strip().lower() if isinstance(exe, str) and exe.strip() else None
+
+
+def invalid_game_exe(path: Path = LOCAL_CONFIG_PATH) -> str | None:
+    """저장된 값이 게임이 아닌 이름(앱 자신·브라우저·탐색기·메신저)이면 그 이름, 아니면 None."""
+    from .system.window_watcher import is_acceptable_game_exe
+    exe = load_game_exe_raw(path)
+    return exe if exe is not None and not is_acceptable_game_exe(exe) else None
+
+
+def load_game_exe(path: Path = LOCAL_CONFIG_PATH) -> str | None:
+    """포그라운드 판정에 쓸 게임 실행파일명(basename). 없으면 None(제목 폴백).
+
+    0.48.0: 저장값이 게임이 아닌 이름(0.46.0 전 3초 방식으로 저장된 앱 자신·브라우저, 가져오기로 들어온 값)이면
+    읽을 때만 무시하고 None(미등록) — 제목 폴백으로 동작해 오버레이가 보인다. 저장값은 지우지 않는다(다시 등록하면 덮어씀)."""
+    exe = load_game_exe_raw(path)
+    bad = invalid_game_exe(path) if exe is not None else None
+    if bad is not None:
+        if bad not in _bad_game_exe_logged:
+            _bad_game_exe_logged.add(bad)
+            logging.getLogger("mabinogi_addon.config").warning(
+                "[게임창] 등록된 값 %s는 게임이 아니라 무시 — 다시 등록 필요", bad)
+        return None
+    return exe
 
 
 def save_game_exe(exe: str, path: Path = LOCAL_CONFIG_PATH) -> None:

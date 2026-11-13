@@ -167,3 +167,47 @@ def test_running_game_found_registers_at_once(tab, monkeypatch, windows, registe
         assert t._detect_status.text() == "찾았어요: client.exe" and t._detect_timer is None
     else:
         assert config.load_game_exe() == "before.exe" and t._detect_timer is not None and results == []
+
+
+# ---- 0.48.0: 저장된 잘못된 게임창 등록 값(앱 자신·브라우저 등)은 읽을 때 무시 ----
+
+@pytest.mark.parametrize("bad", ["mabinogi-addon.exe", "chrome.exe"])
+def test_saved_bad_game_exe_is_ignored_with_warning_once(bad, caplog, monkeypatch):
+    import logging
+    QApplication.instance() or QApplication([])
+    monkeypatch.setattr(config, "_bad_game_exe_logged", set())
+    caplog.set_level(logging.WARNING, logger="mabinogi_addon.config")
+    config.save_game_exe(bad)
+    assert config.load_game_exe() is None and config.load_game_exe() is None  # 미등록처럼 → 제목 폴백
+    assert config.load_game_exe_raw() == bad  # 저장값은 지우지 않음
+    lines = [r.getMessage() for r in caplog.records if "[게임창]" in r.getMessage()]
+    assert lines == [f"[게임창] 등록된 값 {bad}는 게임이 아니라 무시 — 다시 등록 필요"]
+    from mabinogi_addon.ui.settings_tab import SettingsTab
+    t = SettingsTab(_Watcher())
+    assert t._game_hint.text() == f"등록된 값({bad})은 게임이 아니에요. '게임창 등록 시작'으로 다시 등록해 주세요."
+    t.deleteLater()
+
+
+def test_saved_good_game_exe_is_kept():
+    config.save_game_exe("client.exe")
+    assert config.load_game_exe() == "client.exe" and config.invalid_game_exe() is None
+
+
+@pytest.mark.parametrize("local", ["client.exe", None])
+def test_import_bundle_keeps_this_pc_game_exe_when_incoming_is_bad(tmp_path, local):
+    import json
+    import zipfile
+    raw = {"general": {"theme": "dark"}}
+    if local:
+        raw["general"]["gameExe"] = local
+    config._write_local_config(raw)
+    bundle = tmp_path / "b.zip"
+    with zipfile.ZipFile(bundle, "w") as z:
+        z.writestr("config.json", json.dumps({"general": {"theme": "light", "gameExe": "mabinogi-addon.exe"}}))
+    config.import_bundle(bundle, path=config.LOCAL_CONFIG_PATH, user_dir=tmp_path / "u")
+    general = config._read_local_config()["general"]
+    assert general["theme"] == "light" and general.get("gameExe") == local
+    with zipfile.ZipFile(bundle, "w") as z:  # 올바른 값은 들어옴
+        z.writestr("config.json", json.dumps({"general": {"gameExe": "client2.exe"}}))
+    config.import_bundle(bundle, path=config.LOCAL_CONFIG_PATH, user_dir=tmp_path / "u")
+    assert config._read_local_config()["general"]["gameExe"] == "client2.exe"

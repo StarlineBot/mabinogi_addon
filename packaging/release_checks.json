@@ -21,7 +21,8 @@
     "tests/test_cursor_fx.py",
     "tests/test_overlay_capture.py",
     "tests/test_navigation_all_widths.py",
-    "tests/test_perf_meter.py"
+    "tests/test_perf_meter.py",
+    "tests/test_game_window_judge.py"
   ],
   "coverage": {
     "src/mabinogi_addon/alarm.py": {
@@ -75,9 +76,10 @@
     "src/mabinogi_addon/config.py": {
       "tests": [
         "tests/test_alarm.py",
-        "tests/test_dialogue_tips.py"
+        "tests/test_dialogue_tips.py",
+        "tests/test_game_window_judge.py"
       ],
-      "reason": "알람 저장(설정 동기화 대상)·콕 집어 묻기 하루 1번 기록"
+      "reason": "알람 저장(설정 동기화 대상)·콕 집어 묻기 하루 1번 기록 · 저장된 게임창 값이 게임이 아니면 읽을 때 무시(로그 1번)·가져오기 때 이 PC 값 유지"
     },
     "src/mabinogi_addon/creator_dialogue.py": {
       "tests": [
@@ -150,6 +152,12 @@
         "tests/test_overlay_capture.py"
       ],
       "reason": "게임 위 알림·알람 목록 판독 캡처 제외(BlackboxToast는 부모 GameNotice로)"
+    },
+    "src/mabinogi_addon/ui/settings_tab.py": {
+      "tests": [
+        "tests/test_game_window_judge.py"
+      ],
+      "reason": "게임창 등록: 저장값이 게임이 아니면 경고 문구"
     }
   }
 }
