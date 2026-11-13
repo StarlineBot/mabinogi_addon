@@ -627,9 +627,15 @@ def test_whitespace_choices_do_not_hide_nonempty_completion(window):
 
 
 def test_dialogue_uses_the_only_unused_uploaded_sound():
+    """원본 tests/data/universfield-bright-notification-352449.mp3에서 앞 무음 0.30초만 잘라 낸 파일(0.48.0, 사용자 요청 11-14 —
+    누르는 순간 바로 들리게). 만든 방법: ffmpeg -af "atrim=start=0.295" -map_metadata -1 -id3v2_version 0 -c:a libmp3lame -b:a 256k -ar 48000 -ac 2."""
+    import hashlib
     from mabinogi_addon.ui.notifier import CREATOR_DIALOGUE_SOUND_FILE
     source = paths.project_root() / 'tests/data/universfield-bright-notification-352449.mp3'
-    assert CREATOR_DIALOGUE_SOUND_FILE.read_bytes() == source.read_bytes()
+    assert source.is_file()  # 원본은 그대로 보관
+    assert hashlib.sha256(CREATOR_DIALOGUE_SOUND_FILE.read_bytes()).hexdigest() == \
+        'fc05a40aa139ca4ea5b8660471dcf3235151a9471e06c5a091a1661dcceb2b40'
+    assert CREATOR_DIALOGUE_SOUND_FILE.read_bytes() != source.read_bytes()
 
 
 @pytest.mark.parametrize('trigger', ['footer', 'settings', 'automatic'])

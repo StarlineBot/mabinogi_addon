@@ -316,11 +316,35 @@ class CreatorDialogue(QObject):
         self.enabled = enabled
         if not enabled:
             self.dismiss()
+        else:
+            self.prepare_sound()
         if self._home():
             self.refresh()
 
-    def _play_sound(self, text):
+    def _ensure_notifier(self):
+        """잡담 소리 재생기를 만들고 파일을 한 번 열어 둔다(첫 잡담 소리도 바로 — 0.48.0, 사용자 요청 11-14)."""
         from .notifier import CREATOR_DIALOGUE_SOUND_FILE, SoundNotifier
+
+        if not CREATOR_DIALOGUE_SOUND_FILE.exists():
+            return None
+        if self._notifier is None:
+            self._notifier = SoundNotifier(
+                {"dialogue": CREATOR_DIALOGUE_SOUND_FILE}, parent=self, volume=0.5
+            )
+            self._notifier.prepare("dialogue")
+        return self._notifier
+
+    def prepare_sound(self) -> None:
+        """잡담·잡담 소리가 켜져 있으면 재생기를 미리 준비(앱 시작·켤 때)."""
+        if self.closed or not self.enabled or not self.window.settings_tab.dialogue_sound_enabled.isChecked():
+            return
+        try:
+            self._ensure_notifier()
+        except Exception:  # noqa: BLE001
+            _log.debug("잡담 소리 미리 준비 실패", exc_info=True)
+
+    def _play_sound(self, text):
+        from .notifier import CREATOR_DIALOGUE_SOUND_FILE
 
         self._audio_stage = "asset_check"
         if not CREATOR_DIALOGUE_SOUND_FILE.exists():
@@ -328,9 +352,7 @@ class CreatorDialogue(QObject):
             return False
         if self._notifier is None:
             self._audio_stage = "player_preparation"
-            self._notifier = SoundNotifier(
-                {"dialogue": CREATOR_DIALOGUE_SOUND_FILE}, parent=self, volume=0.5
-            )
+        self._ensure_notifier()
         if self._notifier._player is None:
             self._audio_stage = "backend_unavailable"
             return False
@@ -342,6 +364,8 @@ class CreatorDialogue(QObject):
     def set_sound_enabled(self, enabled):
         if not enabled and self._notifier is not None:
             self._notifier.stop()
+        elif enabled:
+            self.prepare_sound()
 
     def _scrolled(self, *_):
         self.dismiss()
@@ -487,6 +511,7 @@ class CreatorDialogue(QObject):
         if self.started or self.closed:
             return
         self.started = True
+        self.prepare_sound()  # 잡담 소리가 켜져 있으면 재생기·파일을 미리(첫 소리도 바로)
         if sys.platform == "win32":
             try:
                 import win32ts
@@ -515,6 +540,8 @@ class CreatorDialogue(QObject):
 
     def request(self, *, automatic=False):
         self._audio_stage = "not_requested"
+        self._request_started = time.perf_counter()
+        self._sound_ms = None
         if not self._eligible(diagnose=not automatic):
             self._log_request(automatic, "display_blocked")
             self.dismiss()
@@ -539,14 +566,7 @@ class CreatorDialogue(QObject):
             return False
         self.bubble.show()
         self.bubble.raise_()
-        now = self.clock()
-        seconds = ACTION_SECONDS if buttons else 3
-        self.deadline = now + seconds
-        self.expiry.start(seconds * 1000)
-        self.session.displayed(text, now, automatic=automatic)
-        self.current_extra = extra
-        if extra is not None:
-            self._extra_shown(extra)
+        # 소리는 말풍선을 띄우기로 확정한 바로 이 자리에서(기록 저장 등 뒤 일보다 먼저, 0.48.0) — 소리 규칙은 그대로
         outcome = "muted"
         if not self.window.settings_tab.dialogue_sound_enabled.isChecked():
             outcome = "sound_disabled"
@@ -557,6 +577,15 @@ class CreatorDialogue(QObject):
             except Exception:
                 outcome = "failed"
                 _log.debug("선택적 잡담 소리 재생 실패", exc_info=True)
+            self._sound_ms = (time.perf_counter() - self._request_started) * 1000
+        now = self.clock()
+        seconds = ACTION_SECONDS if buttons else 3
+        self.deadline = now + seconds
+        self.expiry.start(seconds * 1000)
+        self.session.displayed(text, now, automatic=automatic)
+        self.current_extra = extra
+        if extra is not None:
+            self._extra_shown(extra)
         self._log_request(automatic, outcome)
         return True
 
@@ -565,11 +594,13 @@ class CreatorDialogue(QObject):
         # dialogue text, external titles, paths or screen contents are collected.
         reason = {"no_space": "말풍선 배치 공간 부족", "no_text": "선택 가능한 대사 없음",
                   "display_blocked": self._ineligible_reason}.get(outcome, "")
-        _log.info("제작자 잡담 요청: mode=%s visibility=%s foreground=%s sound_allowed=%s reason=%s audio_stage=%s result=%s foreground_error=%s %s (유효 대사 %d개)",
+        sound_ms = getattr(self, "_sound_ms", None)
+        _log.info("제작자 잡담 요청: mode=%s visibility=%s foreground=%s sound_allowed=%s reason=%s audio_stage=%s result=%s foreground_error=%s %s (유효 대사 %d개) 소리 요청까지=%s",
                   "automatic" if automatic else "click", self._visibility_state,
                   self._foreground_detail.get("foreground", "not_required"),
                   self._sound_allowed, self._sound_reason, self._audio_stage, outcome,
-                  self._foreground_detail.get("foreground_error", "none"), reason, len(self.session.entries))
+                  self._foreground_detail.get("foreground_error", "none"), reason, len(self.session.entries),
+                  "없음" if sound_ms is None else f"{sound_ms:.1f}ms")
 
     def dismiss(self):
         if self._notifier is not None:

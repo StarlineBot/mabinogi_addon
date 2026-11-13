@@ -22,7 +22,13 @@
     "tests/test_overlay_capture.py",
     "tests/test_navigation_all_widths.py",
     "tests/test_perf_meter.py",
-    "tests/test_game_window_judge.py"
+    "tests/test_game_window_judge.py",
+    "tests/test_alert_volume.py",
+    "tests/test_cooldown.py",
+    "tests/test_dialogue_sound_ready.py",
+    "tests/test_halo_live.py",
+    "tests/test_dialogue_desktop_failure.py",
+    "tests/test_test_boundaries.py"
   ],
   "coverage": {
     "src/mabinogi_addon/alarm.py": {
@@ -61,9 +67,15 @@
     },
     "src/mabinogi_addon/ui/notifier.py": {
       "tests": [
-        "tests/test_alarm.py"
+        "tests/test_alarm.py",
+        "tests/test_alert_volume.py",
+        "tests/test_cooldown.py",
+        "tests/test_creator_dialogue.py",
+        "tests/test_dialogue_display_policy.py",
+        "tests/test_dialogue_sound_ready.py",
+        "tests/test_halo_live.py"
       ],
-      "reason": "알람.mp3·타이머.mp3, 없으면 기본 알림음"
+      "reason": "알람.mp3·타이머.mp3, 없으면 기본 알림음 · 같은 파일은 다시 열지 않고 처음 위치로 돌려 재생(prepare로 미리 열기)"
     },
     "src/mabinogi_addon/ui/optimization_controller.py": {
       "tests": [
@@ -90,11 +102,13 @@
     },
     "src/mabinogi_addon/ui/creator_dialogue.py": {
       "tests": [
-        "tests/test_dialogue_tips.py",
         "tests/test_creator_dialogue.py",
-        "tests/test_dialogue_display_policy.py"
+        "tests/test_dialogue_desktop_failure.py",
+        "tests/test_dialogue_display_policy.py",
+        "tests/test_dialogue_sound_ready.py",
+        "tests/test_dialogue_tips.py"
       ],
-      "reason": "[문의하기] 버튼 → 문의 창·그 기능 문제 신고 칸"
+      "reason": "[문의하기] 버튼 → 문의 창·그 기능 문제 신고 칸 · 잡담 소리 재생기 미리 준비(시작·켤 때), 말풍선 띄운 자리에서 바로 소리 요청, 로그에 소리 요청까지 ms"
     },
     "src/mabinogi_addon/assets/dialogues.json": {
       "tests": [
@@ -170,6 +184,21 @@
         "tests/test_alarm.py"
       ],
       "reason": "타이머 소리 — tests/data 원본과 같음, 패키지 자산"
+    },
+    "src/mabinogi_addon/assets/sounds/제작자 잡담.mp3": {
+      "tests": [
+        "tests/test_creator_dialogue.py",
+        "tests/test_dialogue_sound_ready.py"
+      ],
+      "reason": "원본에서 앞 무음 0.30초만 잘라 냄(0.02초 이하)"
+    },
+    "test_support/boundaries.py": {
+      "tests": [
+        "tests/test_test_boundaries.py",
+        "tests/test_dialogue_sound_ready.py",
+        "tests/test_creator_dialogue.py"
+      ],
+      "reason": "가짜 재생기에 setPosition·setSource 횟수"
     }
   }
 }

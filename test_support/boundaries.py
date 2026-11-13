@@ -22,11 +22,19 @@ class AudioOutput(QObject):
 
 
 class MediaPlayer(QObject):
+    _playing = False
+    _position = 0
+    source_sets = 0  # setSource 횟수(같은 파일은 다시 열지 않는지 확인, 0.48.0)
+
+    def setPosition(self, ms):
+        self._position = ms
+
     def setAudioOutput(self, audio):
         self._output = audio
 
     def setSource(self, source):
         self._source = source
+        self.source_sets += 1
 
     def source(self):
         return getattr(self, "_source", QUrl())

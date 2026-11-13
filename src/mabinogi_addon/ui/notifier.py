@@ -255,6 +255,7 @@ class SoundNotifier(QObject):
         self._sounds = dict(sounds)
         self._player = None
         self._audio = None
+        self._loaded: str | None = None  # 지금 재생기에 열려 있는 파일(같은 파일이면 다시 열지 않음)
         self._base_volume = max(0.0, min(1.0, volume))  # 소리별 기본값(전체 음량을 곱하기 전)
         _live.add(self)
         try:
@@ -285,6 +286,27 @@ class SoundNotifier(QObject):
             except Exception:
                 pass
 
+    def _load(self, path: Path) -> None:
+        """그 파일을 재생기에 연다 — 이미 열려 있으면 다시 열지 않는다(0.48.0: Windows Media Foundation이 매번 파일을
+        다시 열어 소리가 늦던 것). 같은 소리를 다시 낼 땐 처음 위치로만 돌린다."""
+        key = str(path)
+        if key != self._loaded:
+            self._player.setSource(QUrl.fromLocalFile(key))
+            self._loaded = key
+        else:
+            self._player.setPosition(0)
+
+    def prepare(self, buff_id: str) -> bool:
+        """미리 열어 두기(첫 재생도 바로). 재생은 하지 않는다."""
+        if self._player is None:
+            return False
+        path = self._sounds.get(buff_id)
+        if path is None or not path.exists():
+            return False
+        if str(path) != self._loaded:
+            self._load(path)
+        return True
+
     def play(self, buff_id: str) -> bool:
         """해당 버프 사운드 재생. 재생 시도하면 True."""
         if self._player is None:
@@ -293,7 +315,7 @@ class SoundNotifier(QObject):
         if path is None or not path.exists():
             return False
         _sync_default_device(self._audio)  # 지금 쓰는 출력 장치로 맞춤
-        self._player.setSource(QUrl.fromLocalFile(str(path)))
+        self._load(path)
         self._player.play()
         return True
 
