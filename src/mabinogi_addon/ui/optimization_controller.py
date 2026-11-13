@@ -179,6 +179,9 @@ class OptimizationController(QObject):
         self.timer = QTimer(self)
         self.timer.setInterval(250)
         self.timer.timeout.connect(self._tick)
+        # 같은 0.25초 주기를 쓰는 가벼운 일(알람 시각 비교 — 새 타이머를 만들지 않음, alarm-spec 4절)
+        self.tick_hooks: list = []
+        self.timer.timeout.connect(self._run_tick_hooks)
         self.timer.start()
         self._wire_panel()
         self._restore_selection()
@@ -1090,6 +1093,14 @@ class OptimizationController(QObject):
             self.overlay.set_items(items)
             self.overlay.show()
         else: self._hide_overlay()
+
+    @perf_meter.timed("알람")  # 같은 0.25초 주기의 가벼운 일(알람 시각 비교)도 기능별 처리 시간에
+    def _run_tick_hooks(self):
+        for hook in list(self.tick_hooks):
+            try:
+                hook()
+            except Exception:  # noqa: BLE001 — 한 일의 실패가 FPS 판정 주기를 멈추지 않게
+                _log.exception('0.25초 주기 작업 실패')
 
     @perf_meter.timed("FPS·최적화")  # 앱 CPU 절감 1단계: 기능별 처리 시간(측정만)
     def _tick(self):

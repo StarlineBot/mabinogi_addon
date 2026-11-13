@@ -44,7 +44,7 @@ def test_structure_and_default_editor_space(window):
     assert [w._tracker_tabs.tabText(i) for i in range(w._tracker_tabs.count())] == LABELS
     # 0.37.0 명세 변경(사용자 결정 안 A): 편의기능 2단 한 줄(탭 이름 = 화면 제목), 마우스 커서는 최적화 2단 세 번째
     assert [w._convenience_tabs.tabText(i) for i in range(w._convenience_tabs.count())] == [
-        '분배 계산기','구슬 분배 계산기','환전비율 계산기','던전 입장 계산기','그림대화 만들기']
+        '분배 계산기','구슬 분배 계산기','환전비율 계산기','던전 입장 계산기','그림대화 만들기','알람']
     panel_tabs = w.optimization_tools.panel.tabs
     # 0.42.0 사용자 결정: 서버별 채널 상태(옛 하프 채널 연결) 모두에게 공개 → 최적화 2단 네 번째
     assert [panel_tabs.tabText(i) for i in range(panel_tabs.count())] == ['최적화','FPS 측정','마우스 커서','서버별 채널 상태']

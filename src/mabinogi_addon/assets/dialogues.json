@@ -114,6 +114,15 @@
     {"id": "tip-keywords", "feature": "keywords", "parts": ["원하는 파티만 골라 알려 드려요. 파티 모집 키워드 알림 써 보세요"]},
     {"id": "tip-calc", "feature": "calc", "parts": ["분배·환전 비율 계산, 편의기능 계산기로 바로 돼요"]},
     {"id": "tip-sketch", "feature": "sketch", "parts": ["그림대화 직접 그려 보셨어요? 그림대화 만들기로 쉽게 만들어요"]},
-    {"id": "tip-harp", "feature": "harp", "parts": ["어느 채널이 제일 빠른지, 서버별 채널 상태에서 볼 수 있어요"]}
+    {"id": "tip-harp", "feature": "harp", "parts": ["어느 채널이 제일 빠른지, 서버별 채널 상태에서 볼 수 있어요"]},
+    {"id": "tip-inquiry", "feature": "inquiry", "parts": ["잘 안 되는 기능 있으면 문의하기로 알려 주세요. 제가 직접 봐요!"]},
+    {"id": "ask-buff", "feature": "buff", "when": "failing", "parts": ["버프가 잘 안 읽히나요? 문의하기로 알려 주시면 고쳐 볼게요"]},
+    {"id": "ask-debuff", "feature": "debuff", "when": "failing", "parts": ["디버프가 잘 안 읽히나요? 문의하기로 알려 주시면 고쳐 볼게요"]},
+    {"id": "ask-boss", "feature": "boss", "when": "failing", "parts": ["보스 체력이 잘 안 읽히나요? 문의하기로 알려 주시면 고쳐 볼게요"]},
+    {"id": "ask-halo", "feature": "halo", "when": "failing", "parts": ["헤일로 시간이 잘 안 읽히나요? 문의하기로 알려 주시면 고쳐 볼게요"]},
+    {"id": "ask-stat-bars", "feature": "stat_bars", "when": "failing", "parts": ["체력바가 잘 안 읽히나요? 문의하기로 알려 주시면 고쳐 볼게요"]},
+    {"id": "ask-dorcha", "feature": "dorcha", "when": "failing", "parts": ["도르카 수치가 잘 안 읽히나요? 문의하기로 알려 주시면 고쳐 볼게요"]},
+    {"id": "ask-tuarim", "feature": "tuarim", "when": "failing", "parts": ["투아림 수치가 잘 안 읽히나요? 문의하기로 알려 주시면 고쳐 볼게요"]},
+    {"id": "ask-skillbar", "feature": "skillbar", "when": "failing", "parts": ["단축바 위치를 못 찾나요? 문의하기로 알려 주시면 고쳐 볼게요"]}
   ]
 }

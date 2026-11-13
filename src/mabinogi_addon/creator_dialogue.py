@@ -97,7 +97,10 @@ class DialogueSession:
 # 추천할 수 있는 기능 키(17.3·17.5). 모르는 키는 tips에서 건너뛴다.
 TIP_FEATURES = ("buff", "debuff", "boss", "halo", "stat_bars", "dorcha", "tuarim", "custom", "skillbar",
                 "memo", "opt", "fps", "cursor", "blackbox", "keywords", "calc", "sketch", "harp")
-TOOL_FEATURES = ("memo", "calc", "sketch", "harp")  # 켜고 끄는 값이 없는 도구 = 화면을 연 적 있는지로 판정
+TOOL_FEATURES = ("memo", "calc", "sketch", "harp")
+INQUIRY = "inquiry"  # 일반 문의 권유(17.7) — 기능 사용 여부와 무관
+FAILING_FEATURES = ("buff", "debuff", "boss", "halo", "stat_bars", "dorcha", "tuarim", "skillbar")  # 콕 집어 묻기 대상
+INQUIRY_BUTTON = "문의하기"  # 켜고 끄는 값이 없는 도구 = 화면을 연 적 있는지로 판정
 TIP_CHANCE = 0.25  # 대사를 띄우기로 정해졌을 때 약 4번에 1번꼴
 MAX_BUTTON = 8
 DEFAULT_BUTTON = "보러 가기"
@@ -108,16 +111,22 @@ INVITE_REPEAT_DAYS = 30
 
 
 class Tip(tuple):
-    """(id, feature, parts, button) — parts는 entries와 같은 조합 모양(tuple of tuple)."""
+    """(id, feature, parts, button, when) — parts는 entries와 같은 조합 모양(tuple of tuple).
+    when: None = 기능 추천(안 쓰는 기능)·일반 문의 권유(feature 'inquiry'), 'failing' = 그 기능이 한동안 못 찾음·못 읽음일 때 콕 집어 묻기."""
     __slots__ = ()
 
-    def __new__(cls, ident, feature, parts, button):
-        return super().__new__(cls, (ident, feature, parts, button))
+    def __new__(cls, ident, feature, parts, button, when=None):
+        return super().__new__(cls, (ident, feature, parts, button, when))
 
     ident = property(lambda self: self[0])
     feature = property(lambda self: self[1])
     parts = property(lambda self: self[2])
     button = property(lambda self: self[3])
+    when = property(lambda self: self[4])
+
+    @property
+    def asks_inquiry(self) -> bool:
+        return self.feature == INQUIRY or self.when == "failing"
 
 
 def _parts(parts):
@@ -155,16 +164,19 @@ def parse_tips(data: bytes):
     for tip in tips:
         if not isinstance(tip, dict):
             continue
-        ident, feature, button = tip.get("id"), tip.get("feature"), tip.get("button", DEFAULT_BUTTON)
-        if (not isinstance(ident, str) or not 1 <= len(ident) <= 100 or ident in seen
-                or feature not in TIP_FEATURES
+        ident, feature, when = tip.get("id"), tip.get("feature"), tip.get("when")
+        if when not in (None, "failing") or (when == "failing" and feature not in FAILING_FEATURES):
+            continue  # 모르는 조건·대상 아닌 기능은 건너뜀
+        known = feature in TIP_FEATURES or (feature == INQUIRY and when is None)
+        button = tip.get("button", INQUIRY_BUTTON if (feature == INQUIRY or when == "failing") else DEFAULT_BUTTON)
+        if (not isinstance(ident, str) or not 1 <= len(ident) <= 100 or ident in seen or not known
                 or not isinstance(button, str) or not 1 <= len(button) <= MAX_BUTTON or not button.strip()):
             continue
         parts = _parts(tip.get("parts"))
         if parts is None:
             continue
         seen.add(ident)
-        result.append(Tip(ident, feature, parts, button))
+        result.append(Tip(ident, feature, parts, button, when))
     return tuple(result)
 
 
@@ -194,15 +206,20 @@ class TipPicker:
         self.rng = rng or random.Random()
         self.last_feature = None
 
-    def pick(self, unused, *, invite_ok: bool, tip_ok: bool = True):
-        """('invite', None) / ('tip', Tip) / None(일반 대사). 25% 차례에서 권유가 먼저, 직전 추천 기능만 뺀다."""
+    def pick(self, unused, *, invite_ok: bool, tip_ok: bool = True, failing=()):
+        """('invite', None) / ('tip', Tip) / None(일반 대사). 25% 차례에서: 콕 집어 묻기(failing — 오늘 아직 안 물은
+        못 찾음·못 읽음 기능) → 디스코드 권유 → 기능 추천·일반 문의 권유(직전 것만 뺌)."""
         if self.rng.random() >= TIP_CHANCE:
             return None
+        asks = [t for t in self.tips if t.when == "failing" and t.feature in failing]
+        if asks:
+            return ("tip", self.rng.choice(asks))
         if invite_ok:
             return ("invite", None)
         if not tip_ok:
             return None
-        candidates = [t for t in self.tips if t.feature in unused and t.feature != self.last_feature]
+        candidates = [t for t in self.tips if t.when is None and (t.feature in unused or t.feature == INQUIRY)
+                      and t.feature != self.last_feature]
         if not candidates:
             return None
         tip = self.rng.choice(candidates)

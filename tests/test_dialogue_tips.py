@@ -7,7 +7,7 @@ import pytest
 from PySide6.QtWidgets import QApplication
 
 from mabinogi_addon import config, paths
-from mabinogi_addon.creator_dialogue import (INVITE_URL, TIP_FEATURES, TipPicker, Tip, invite_due, parse,
+from mabinogi_addon.creator_dialogue import (FAILING_FEATURES, INVITE_URL, TIP_FEATURES, TipPicker, Tip, invite_due, parse,
                                              parse_tips, read, read_tips)
 
 DAY = 86400
@@ -73,13 +73,17 @@ BUILTIN = paths.resource_dir() / "dialogues.json"
 
 def test_builtin_has_18_draft_tips_and_old_parse_ignores_them():
     raw = json.loads(BUILTIN.read_text(encoding="utf-8"))
-    assert {t["feature"] for t in raw["tips"]} == set(TIP_FEATURES) and len(raw["tips"]) == 18
+    recommend = [t for t in raw["tips"] if "when" not in t and t["feature"] != "inquiry"]
+    assert {t["feature"] for t in recommend} == set(TIP_FEATURES) and len(recommend) == 18
+    # 0.48.0(17.7): 일반 문의 권유 1 + 콕 집어 묻기 8
+    assert sum(t["feature"] == "inquiry" for t in raw["tips"]) == 1
+    assert {t["feature"] for t in raw["tips"] if t.get("when") == "failing"} == set(FAILING_FEATURES)
     entries = read(BUILTIN)  # 지금 배포된 앱의 parse는 entries만 읽는다
     assert len(entries) == 12
     without = dict(raw)
     without.pop("tips")
     assert parse(json.dumps(without, ensure_ascii=False).encode()) == entries
-    assert len(read_tips(BUILTIN)) == 18
+    assert len(read_tips(BUILTIN)) == 27
 
 
 @pytest.mark.parametrize("tips,expected", [
@@ -106,7 +110,7 @@ def test_missing_tips_key_keeps_builtin_tips_in_feed(monkeypatch, tmp_path):
     monkeypatch.setattr(paths, "user_data_dir", lambda: tmp_path)
     (tmp_path / "creator-dialogues.json").write_text(json.dumps(raw, ensure_ascii=False), encoding="utf-8")
     feed = DialogueFeed()
-    assert len(feed.tips) == 18 and len(feed.entries) == 12
+    assert len(feed.tips) == 27 and len(feed.entries) == 12
     feed.shutdown()
     raw["tips"] = {"잘못": True}
     (tmp_path / "creator-dialogues.json").write_text(json.dumps(raw, ensure_ascii=False), encoding="utf-8")
@@ -137,7 +141,7 @@ def window(monkeypatch):
 def test_all_draft_tips_fit_two_lines(window):
     w, _ = window
     d = w.creator_dialogue
-    assert len(d.feed.tips) == 18  # 17.5 문장 전부 말풍선 두 줄 안(넘치면 건너뜀)
+    assert len(d.feed.tips) == 27  # 17.5 문장 18 + 17.7 문의 권유 9 전부 말풍선 두 줄 안(넘치면 건너뜀)
     assert all(d.bubble.measure(d._shortest(t.parts))[2] for t in d.feed.tips)
     too_long = Tip("x", "buff", (("가나다라마바사아자차카타파하 " * 4,),), "보러 가기")
     assert d._usable_tips((too_long,)) == ()
@@ -218,3 +222,75 @@ def test_real_pick_respects_same_day_and_disabled_dialogue(window, monkeypatch):
     assert kinds == {"normal", "invite"}  # 권유 차례가 먼저
     w.settings_tab.dialogue_enabled.setChecked(False)  # 잡담 끄면 말풍선 자체가 없음
     assert not d.request()
+
+
+# ---- 17.7 문의 권유(0.48.0) ----
+
+def test_failing_asks_first_inquiry_mixes_with_tips_and_bad_when_skipped():
+    tips = _tips("buff") + (Tip("tip-inquiry", "inquiry", (("문의",),), "문의하기"),
+                            Tip("ask-buff", "buff", (("버프가?",),), "문의하기", "failing"))
+    picker = TipPicker(tips, rng=random.Random(4))
+    got = {picker.pick({"buff"}, invite_ok=True, failing={"buff"}) for _ in range(300)} - {None}
+    assert got == {("tip", tips[2])}  # 콕 집어 묻기가 권유·추천보다 먼저
+    picker.rng = random.Random(9)
+    seen = set()
+    for _ in range(400):
+        r = picker.pick(set(), invite_ok=False)
+        if r:
+            seen.add(r[1].feature)
+    assert seen == {"inquiry"}  # 모든 기능을 써도 일반 문의 권유는 가끔
+    raw = json.loads(BUILTIN.read_text(encoding="utf-8"))
+    raw["tips"] = [{"id": "x", "feature": "memo", "when": "failing", "parts": ["a"]},
+                   {"id": "y", "feature": "buff", "when": "someday", "parts": ["a"]},
+                   {"id": "z", "feature": "buff", "when": "failing", "parts": ["버프?"]}]
+    parsed = parse_tips(json.dumps(raw, ensure_ascii=False).encode())
+    assert [(t.ident, t.button, t.when) for t in parsed] == [("z", "문의하기", "failing")]
+
+
+@pytest.mark.dialogue_tips
+def test_inquiry_button_opens_window_and_failing_opens_card_once_a_day(window, monkeypatch):
+    w, app = window
+    d = w.creator_dialogue
+    opened = []
+    monkeypatch.setattr(w, "open_inquiry_for", lambda feature: opened.append(feature))
+    general = next(t for t in d.feed.tips if t.feature == "inquiry")
+    _force(d, monkeypatch, ("tip", general))
+    assert d.request() and [b.text() for b in d.bubble.buttons] == ["문의하기"]
+    d.bubble.buttons[0].click()
+    app.processEvents()
+    assert opened == [None]  # 일반 권유 = 문의 창만
+    ask = next(t for t in d.feed.tips if t.when == "failing" and t.feature == "buff")
+    _force(d, monkeypatch, ("tip", ask))
+    assert d.request() and d.bubble.text.text() == "버프가 잘 안 읽히나요? 문의하기로 알려 주시면 고쳐 볼게요"
+    d.bubble.buttons[0].click()
+    app.processEvents()
+    assert opened == [None, "buff"]  # 콕 집어 묻기 = 그 기능 문제 신고 칸
+    assert config.load_failing_asked() == {"buff": time.strftime("%Y-%m-%d")}
+    monkeypatch.undo()  # 진짜 _pick_extra: 오늘 물은 기능은 빼고
+    monkeypatch.setattr(w, "failing_tip_features", lambda: {"buff"})
+    d.picker.rng = random.Random(1)
+    kinds = {(d._pick_extra() or ("normal", None))[1] for _ in range(200)}
+    assert all(k is None or k.when != "failing" for k in kinds)
+
+
+def test_failing_needs_ten_minutes_and_opens_card(window, monkeypatch):
+    w, _ = window
+    from mabinogi_addon.ui import main_window as mw
+    now = [1000.0]
+    monkeypatch.setattr(mw.MainWindow, "_failing_now", lambda self: {"boss"})
+    monkeypatch.setattr(w._watcher, "is_game_active", lambda: True, raising=False)
+    import time as _t
+    monkeypatch.setattr(_t, "monotonic", lambda: now[0])
+    w._failing_sampled = 0.0
+    w._sample_failing()
+    now[0] += 599
+    w._sample_failing()
+    assert w.failing_tip_features() == set()
+    now[0] += 2
+    assert w.failing_tip_features() == {"boss"}
+    w.open_inquiry_for("boss")
+    try:
+        assert w._inquiry.card.key == "boss" and w._inquiry.card_buttons["boss"].isChecked()
+    finally:
+        w._inquiry.shutdown()
+        w._inquiry.close()

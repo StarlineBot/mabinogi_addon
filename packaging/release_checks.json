@@ -1,93 +1,127 @@
 {
-  "version": "0.47.1",
+  "version": "0.48.0",
   "tests": [
-    "tests/test_buff_gone_focus.py",
-    "tests/test_warn_gone.py",
-    "tests/test_pause.py",
-    "tests/test_tracking_callback_generation.py",
-    "tests/test_overlay_window_visible.py",
-    "tests/test_debuff_boss_gate.py",
-    "tests/test_lifecycle.py",
-    "tests/test_buff_favorites.py",
-    "tests/test_favorites_hold.py",
-    "tests/test_buff_4k_icons.py",
+    "tests/test_alarm.py",
+    "tests/test_blackbox_combat.py",
+    "tests/test_overlay_metrics.py",
+    "tests/test_optimization_ui.py",
+    "tests/test_dialogue_tips.py",
+    "tests/test_creator_dialogue.py",
+    "tests/test_dialogue_display_policy.py",
     "tests/test_inquiry_unified.py",
-    "tests/test_boss_bar_overlay.py",
-    "tests/test_boss_fill_boundary.py",
-    "tests/test_boss_tab.py",
-    "tests/test_boss_low_hp_vertical.py",
-    "tests/test_boss_two_rows.py",
-    "tests/test_release_notes.py",
-    "tests/test_release_notes_trigger.py",
+    "tests/test_navigation.py",
+    "tests/test_startup_smoke.py",
+    "tests/test_color_switch_polish.py",
     "tests/test_release_checks.py",
     "tests/test_startup_build.py",
     "tests/test_release_candidate.py",
     "tests/test_windows_ci.py",
-    "tests/test_startup_smoke.py"
+    "tests/test_release_notes.py",
+    "tests/test_release_notes_trigger.py",
+    "tests/test_cursor_fx.py",
+    "tests/test_overlay_capture.py",
+    "tests/test_navigation_all_widths.py",
+    "tests/test_perf_meter.py"
   ],
   "coverage": {
-    "src/mabinogi_addon/tracker/gone_watch.py": {
+    "src/mabinogi_addon/alarm.py": {
       "tests": [
-        "tests/test_buff_gone_focus.py",
-        "tests/test_warn_gone.py"
+        "tests/test_alarm.py"
       ],
-      "reason": "포커스 복귀 유예: 확정 = max(사라진 시각+3초, 복귀+5초), 안 보는 사이 빠짐·나갈 때 있던 버프도 대상, 다시 보이면 취소"
+      "reason": "알람 판정(한 번·매일·요일·미리 알림·타이머·자정·절전 건너뜀·재시작 뒤 지난 것 안 울림)·문구"
     },
-    "src/mabinogi_addon/ui/buff_controller.py": {
+    "src/mabinogi_addon/ui/alarm_tab.py": {
       "tests": [
-        "tests/test_buff_gone_focus.py",
-        "tests/test_warn_gone.py",
-        "tests/test_pause.py",
-        "tests/test_tracking_callback_generation.py",
-        "tests/test_overlay_window_visible.py",
-        "tests/test_debuff_boss_gate.py",
-        "tests/test_lifecycle.py"
+        "tests/test_alarm.py",
+        "tests/test_navigation_all_widths.py"
       ],
-      "reason": "사라짐 확정 진단 로그·PNG(10초에 1번·최근 10장), 포커스 전환 로그, 유예 규칙 연결(디버프 컨트롤러는 동작 같음)"
+      "reason": "편의기능 › 알람 탭: 추가·삭제·취소, 울릴 때 게임 위 알림/토스트·소리, 저장"
     },
-    "src/mabinogi_addon/tracker/engine.py": {
+    "src/mabinogi_addon/ui/alarm_overlay.py": {
       "tests": [
-        "tests/test_buff_gone_focus.py",
-        "tests/test_buff_favorites.py",
-        "tests/test_favorites_hold.py",
-        "tests/test_buff_4k_icons.py"
+        "tests/test_alarm.py"
       ],
-      "reason": "경고 켠 버프 ABSENT 사유 로그·마지막 틱 정보(참조만) — 판정은 그대로"
+      "reason": "게임 위 알람 목록(정렬·최대 3·1분 안 빨강·게임 뒤면 숨김·잠금)"
     },
-    "src/mabinogi_addon/inquiry_session.py": {
+    "src/mabinogi_addon/ui/game_notice.py": {
       "tests": [
-        "tests/test_inquiry_unified.py"
+        "tests/test_alarm.py",
+        "tests/test_blackbox_combat.py"
       ],
-      "reason": "'버프 · 디버프' 문의에 사라짐 순간 PNG·진단 줄 첨부"
+      "reason": "② 게임 위 알림 공용 부품(보통·크게, 겹치면 아래로)"
+    },
+    "src/mabinogi_addon/ui/blackbox_toast.py": {
+      "tests": [
+        "tests/test_alarm.py",
+        "tests/test_blackbox_combat.py",
+        "tests/test_overlay_metrics.py"
+      ],
+      "reason": "블랙박스 메시지를 공용 부품으로 — 모양·자리·시간 그대로(회귀)"
+    },
+    "src/mabinogi_addon/ui/notifier.py": {
+      "tests": [
+        "tests/test_alarm.py"
+      ],
+      "reason": "알람.mp3·타이머.mp3, 없으면 기본 알림음"
+    },
+    "src/mabinogi_addon/ui/optimization_controller.py": {
+      "tests": [
+        "tests/test_alarm.py",
+        "tests/test_optimization_ui.py",
+        "tests/test_perf_meter.py"
+      ],
+      "reason": "0.25초 주기에 가벼운 일(알람) 연결(tick_hooks)"
+    },
+    "src/mabinogi_addon/config.py": {
+      "tests": [
+        "tests/test_alarm.py",
+        "tests/test_dialogue_tips.py"
+      ],
+      "reason": "알람 저장(설정 동기화 대상)·콕 집어 묻기 하루 1번 기록"
+    },
+    "src/mabinogi_addon/creator_dialogue.py": {
+      "tests": [
+        "tests/test_dialogue_tips.py",
+        "tests/test_creator_dialogue.py"
+      ],
+      "reason": "tips에 feature 'inquiry'·when 'failing'(옛 앱은 tips 무시), 콕 집어 묻기가 먼저"
+    },
+    "src/mabinogi_addon/ui/creator_dialogue.py": {
+      "tests": [
+        "tests/test_dialogue_tips.py",
+        "tests/test_creator_dialogue.py",
+        "tests/test_dialogue_display_policy.py"
+      ],
+      "reason": "[문의하기] 버튼 → 문의 창·그 기능 문제 신고 칸"
+    },
+    "src/mabinogi_addon/assets/dialogues.json": {
+      "tests": [
+        "tests/test_dialogue_tips.py",
+        "tests/test_creator_dialogue.py"
+      ],
+      "reason": "일반 문의 권유 1 + 콕 집어 묻기 8"
     },
     "src/mabinogi_addon/ui/inquiry_window.py": {
       "tests": [
+        "tests/test_dialogue_tips.py",
         "tests/test_inquiry_unified.py"
       ],
-      "reason": "버프 카드 시작 때 사라짐 진단 첨부"
+      "reason": "preselect(기능 카드 골라 둔 채로 열기)"
     },
-    "src/mabinogi_addon/tracker/boss_bar_value.py": {
+    "src/mabinogi_addon/ui/main_window.py": {
       "tests": [
-        "tests/test_boss_bar_overlay.py",
-        "tests/test_boss_fill_boundary.py"
+        "tests/test_dialogue_tips.py",
+        "tests/test_navigation.py",
+        "tests/test_startup_smoke.py",
+        "tests/test_cursor_fx.py"
       ],
-      "reason": "두 줄 보스바: 식별한 보스와 이름이 다르거나 못 읽으면 오버레이 값 숨김"
+      "reason": "편의기능 › 알람 탭·0.25초 연결·종료, 못 찾음·못 읽음 10분 판정·문의 창 열기"
     },
-    "src/mabinogi_addon/ui/boss_tab.py": {
+    "tests/test_color_switch_polish.py": {
       "tests": [
-        "tests/test_boss_bar_overlay.py",
-        "tests/test_boss_tab.py",
-        "tests/test_boss_low_hp_vertical.py",
-        "tests/test_boss_two_rows.py"
+        "tests/test_color_switch_polish.py"
       ],
-      "reason": "오버레이를 끈 패턴 알림 경로도 ±6px 캡처 + 20% 이하만 저HP 다시 읽기"
-    },
-    "src/mabinogi_addon/assets/release_notes.md": {
-      "tests": [
-        "tests/test_release_notes.py",
-        "tests/test_release_notes_trigger.py"
-      ],
-      "reason": "0.47.1 노트 파싱·새 버전 표시(게시된 0.47.0 섹션 그대로)"
+      "reason": "게임 위 오버레이(game_notice·alarm_overlay)는 색 이름 규칙 예외"
     },
     "packaging/release_checks.json": {
       "tests": [
@@ -103,6 +137,19 @@
         "tests/test_startup_smoke.py"
       ],
       "reason": "배포 계약: 빌드·후보·Windows CI·시작 확인"
+    },
+    "src/mabinogi_addon/assets/release_notes.md": {
+      "tests": [
+        "tests/test_release_notes.py",
+        "tests/test_release_notes_trigger.py"
+      ],
+      "reason": "0.48.0 노트 파싱·새 버전 표시(게시된 0.47.x 섹션 그대로)"
+    },
+    "src/mabinogi_addon/ui/overlay_capture.py": {
+      "tests": [
+        "tests/test_overlay_capture.py"
+      ],
+      "reason": "게임 위 알림·알람 목록 판독 캡처 제외(BlackboxToast는 부모 GameNotice로)"
     }
   }
 }

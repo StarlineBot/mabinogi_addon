@@ -25,7 +25,7 @@ def test_screen_code_uses_names_instead_of_merged_hex_values():
     merged = ["#00D1A7", "#00B894", "#1ABC9C", "#2DD4BF", "#5EEAD4", "#14B8A6", "#06281E", "#04201C",
               "#7D828B", "#9AA0AA", "#C7CCD4", "#9CA3AF", "#34D399", "#FBBF24", "#F59E0B", "#D98A1A",
               "#E74C3C", "#D35B58", "#E06C75", "#EF8585"]
-    outside = {"memo_overlay.py", "frame_overlay.py", "blackbox_toast.py", "toast.py", "guide_figure.py",
+    outside = {"memo_overlay.py", "frame_overlay.py", "blackbox_toast.py", "game_notice.py", "alarm_overlay.py", "toast.py", "guide_figure.py",
                "markdown_highlighter.py", "palette.py"}
     found = [f"{path.name}: {value}" for path in UI.glob("*.py") if path.name not in outside
              for value in merged if value.lower() in path.read_text(encoding="utf-8").lower()]

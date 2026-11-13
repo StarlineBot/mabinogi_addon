@@ -1922,6 +1922,25 @@ def save_dialogue_tip_day(day: str, path: Path = LOCAL_CONFIG_PATH) -> None:
     _write_local_config(data, path)
 
 
+def load_failing_asked(path: Path = LOCAL_CONFIG_PATH) -> dict:
+    """잡담 콕 집어 묻기(17.7)를 기능별로 마지막에 물은 날 {기능: 'YYYY-MM-DD'} — 같은 기능은 하루 1번까지."""
+    value = _read_local_config(path).get("dialogueTips")
+    asked = value.get("asked") if isinstance(value, dict) else None
+    return {k: v for k, v in asked.items() if isinstance(v, str)} if isinstance(asked, dict) else {}
+
+
+def save_failing_asked(feature: str, day: str, path: Path = LOCAL_CONFIG_PATH) -> None:
+    data = _read_local_config(path)
+    value = data.get("dialogueTips")
+    value = dict(value) if isinstance(value, dict) else {}
+    asked = value.get("asked")
+    asked = dict(asked) if isinstance(asked, dict) else {}
+    asked[feature] = day
+    value["asked"] = asked
+    data["dialogueTips"] = value
+    _write_local_config(data, path)
+
+
 def load_opened_tools(path: Path = LOCAL_CONFIG_PATH) -> set[str]:
     """한 번이라도 연 도구 화면(메모·계산기·그림대화 만들기·서버별 채널 상태, 17.3)."""
     value = _read_local_config(path).get("openedTools")
@@ -1939,3 +1958,41 @@ def mark_tool_opened(key: str, path: Path = LOCAL_CONFIG_PATH) -> bool:
     data["openedTools"] = value
     _write_local_config(data, path)
     return True
+
+
+# ---- 알람(편의기능 › 알람, docs/alarm-spec.md, 0.48.0) — 설정 동기화 대상 ----
+def load_alarms(path: Path = LOCAL_CONFIG_PATH) -> dict:
+    """{enabled, items[list of dict], overlay{show, pos{x,y}|None, scale, opacity, locked}}."""
+    sec = _read_local_config(path).get("alarms")
+    sec = sec if isinstance(sec, dict) else {}
+    items = sec.get("items")
+    ov = sec.get("overlay")
+    ov = ov if isinstance(ov, dict) else {}
+    pos = ov.get("pos")
+    pos = {"x": int(pos["x"]), "y": int(pos["y"])} if isinstance(pos, dict) and all(type(pos.get(k)) is int for k in ("x", "y")) else None
+
+    def clamp(key, default, lo, hi):
+        value = ov.get(key)
+        return max(lo, min(hi, value)) if type(value) is int else default
+    return {"enabled": sec.get("enabled") is not False,
+            "items": [d for d in items if isinstance(d, dict)] if isinstance(items, list) else [],
+            "overlay": {"show": ov.get("show") is True, "pos": pos, "scale": clamp("scale", 100, 50, 300),
+                        "opacity": clamp("opacity", 100, 30, 100), "locked": ov.get("locked") is not False}}
+
+
+def save_alarms(*, enabled: bool | None = None, items: list | None = None, overlay: dict | None = None,
+                path: Path = LOCAL_CONFIG_PATH) -> None:
+    cfg = _read_local_config(path)
+    sec = cfg.get("alarms")
+    sec = dict(sec) if isinstance(sec, dict) else {}
+    if enabled is not None:
+        sec["enabled"] = bool(enabled)
+    if items is not None:
+        sec["items"] = list(items)
+    if overlay is not None:
+        ov = sec.get("overlay")
+        ov = dict(ov) if isinstance(ov, dict) else {}
+        ov.update(overlay)
+        sec["overlay"] = ov
+    cfg["alarms"] = sec
+    _write_local_config(cfg, path)

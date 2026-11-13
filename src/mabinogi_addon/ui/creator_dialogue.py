@@ -240,8 +240,15 @@ class CreatorDialogue(QObject):
         except Exception:  # noqa: BLE001 — 판정 실패면 추천 없이 일반 대사
             _log.debug("안 쓰는 기능 판정 실패", exc_info=True)
             unused = set()
+        failing_fn = getattr(self.window, "failing_tip_features", None)
+        try:
+            asked = config.load_failing_asked()
+            failing = {k for k in (failing_fn() if failing_fn is not None else ()) if asked.get(k) != today}
+        except Exception:  # noqa: BLE001
+            _log.debug("못 찾음·못 읽음 판정 실패", exc_info=True)
+            failing = set()
         return self.picker.pick(unused, invite_ok=invite_due(invite, now) and not tip_today,
-                                tip_ok=not invite_today)
+                                tip_ok=not invite_today, failing=failing)
 
     def _extra_message(self, extra):
         if extra[0] == "invite":
@@ -250,12 +257,16 @@ class CreatorDialogue(QObject):
         text = "".join(self.session.rng.choice(choices) for choices in tip.parts)
         if not self.bubble.measure(text)[2]:
             text = self._shortest(tip.parts)
+        if tip.asks_inquiry:  # 문의 권유(17.7): 일반은 문의 창, 콕 집어 묻기는 그 기능 문제 신고 칸으로
+            return text, [("inquiry:" + tip.feature, tip.button, True)]
         return text, [("tip:" + tip.feature, tip.button, True)]
 
     def _extra_shown(self, extra):
         try:
             if extra[0] == "invite":
                 config.save_discord_invite(shownAt=self.wall())
+            elif extra[1].when == "failing":
+                config.save_failing_asked(extra[1].feature, self._today())  # 같은 기능은 하루 1번까지
             else:
                 self.picker.shown(extra[1])
                 config.save_dialogue_tip_day(self._today())
@@ -271,6 +282,11 @@ class CreatorDialogue(QObject):
                 config.save_discord_invite(joined=True)
             elif key == "decline":
                 config.save_discord_invite(declinedAt=self.wall())
+            elif key.startswith("inquiry:"):
+                feature = key[len("inquiry:"):]
+                opener = getattr(self.window, "open_inquiry_for", None)
+                if opener is not None:
+                    opener(None if feature == "inquiry" else feature)
             elif key.startswith("tip:"):
                 opener = getattr(self.window, "open_tip_feature", None)
                 if opener is not None:

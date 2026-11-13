@@ -215,6 +215,23 @@ def _play_gone(filename: str) -> bool:
         return False
 
 
+# 알람(alarm-spec 2절): 사용자가 넣는 파일 — 없으면 기본 알림음(파티 알림과 같은 소리)
+ALARM_SOUND_FILE = "알람.mp3"  # 시각 알람·미리 알림
+TIMER_SOUND_FILE = "타이머.mp3"  # 몇 분 뒤 타이머
+ALARM_FALLBACK_SOUND_FILE = "파티 알림.mp3"
+
+
+def alarm_sound_file(kind: str) -> str:
+    """kind: 'time'|'pre'|'timer' → 재생할 파일 이름(넣은 파일이 없으면 기본 알림음)."""
+    name = TIMER_SOUND_FILE if kind == "timer" else ALARM_SOUND_FILE
+    return name if sound_path(name).exists() else ALARM_FALLBACK_SOUND_FILE
+
+
+def play_alarm_sound(kind: str) -> bool:
+    """알람 소리 — 전투 보조 일시정지와 무관하게 늘 울린다. 음량은 앱 알림 음량."""
+    return _play_gone(alarm_sound_file(kind))
+
+
 def play_warn_gone_sound() -> bool:
     """사라짐 경고 버프가 사라졌을 때 효과음 재생. 파일/오디오 없으면 False."""
     return _play_gone(WARN_GONE_SOUND_FILE)

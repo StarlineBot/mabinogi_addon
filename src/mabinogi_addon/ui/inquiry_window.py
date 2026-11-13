@@ -358,6 +358,17 @@ class InquiryWindow(QWidget):
         self.card = card
         self.next_btn.setEnabled(True)
 
+    def preselect(self, card_key: str) -> None:
+        """잡담 '콕 집어 묻기'(17.7): 문제 신고 + 그 기능 카드를 골라 둔 채로 연다(자료 모으기는 사용자가 시작)."""
+        card = next((c for c in inq.CARDS if c.key == card_key), None)
+        if card is None or self._collecting or self._pending:
+            return
+        self.category = inq.BUG
+        self.kind.set_value(inq.BUG)
+        self.card_buttons[card.key].setChecked(True)
+        self._pick(card)
+        self._show_kind()
+
     def _show_kind(self):
         self.stack.setCurrentWidget(self.page_kind)
         bug = self.category == inq.BUG

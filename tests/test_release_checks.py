@@ -69,18 +69,18 @@ def test_current_plan_maps_every_selected_file_to_changed_code_or_shared_contrac
 
 
 def test_current_release_keeps_feature_boundaries_and_delivery_contracts():
-    """0.47.1: 버프 사라짐 진단·포커스 복귀 유예, 두 줄 보스바 값 숨김, 저HP 다시 읽기 확대 + 배포 계약. (릴리즈마다 경계를 바꾼다 — 누적하지 않음)"""
+    """0.48.0: 알람(편의기능)·게임 위 알림 공용 부품·잡담 문의 권유 + 배포 계약. (릴리즈마다 경계를 바꾼다 — 누적하지 않음)"""
     root = Path(__file__).resolve().parents[1]
     plan = json.loads((root / 'packaging/release_checks.json').read_text(encoding='utf-8'))
     paths = set(plan['tests'])
     assert {
-        'tests/test_buff_gone_focus.py', 'tests/test_warn_gone.py', 'tests/test_boss_bar_overlay.py',
+        'tests/test_alarm.py', 'tests/test_dialogue_tips.py', 'tests/test_blackbox_combat.py',
         'tests/test_startup_build.py', 'tests/test_release_checks.py', 'tests/test_release_candidate.py',
         'tests/test_windows_ci.py', 'tests/test_startup_smoke.py',
     } <= paths
     assert {
-        'src/mabinogi_addon/tracker/gone_watch.py', 'src/mabinogi_addon/ui/buff_controller.py',
-        'src/mabinogi_addon/tracker/boss_bar_value.py', 'src/mabinogi_addon/ui/boss_tab.py',
+        'src/mabinogi_addon/alarm.py', 'src/mabinogi_addon/ui/alarm_tab.py', 'src/mabinogi_addon/ui/game_notice.py',
+        'src/mabinogi_addon/ui/blackbox_toast.py', 'src/mabinogi_addon/creator_dialogue.py',
         'packaging/build_windows.py', 'src/mabinogi_addon/assets/release_notes.md',
     } <= set(plan['coverage'])
     # The separate development entry must continue collecting the whole suite.

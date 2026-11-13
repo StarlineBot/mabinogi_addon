@@ -389,6 +389,11 @@ class MainWindow(QMainWindow):
                             (self.exchange_tab, "환전비율 계산기"), (self.dungeon_cost_tab, "던전 입장 계산기")):
             self._convenience_tabs.addTab(_scrolled(page), title)
         self._convenience_tabs.addTab(self._sketch_scroll, "그림대화 만들기")
+        # 알람(alarm-spec, 0.48.0): PC 시계 기준. 판정은 최적화 화면의 0.25초 주기에서(아래 tick_hooks)
+        from .alarm_tab import AlarmTab
+        self.alarm_tab = AlarmTab(self._watcher)
+        self._alarm_scroll = _scrolled(self.alarm_tab)
+        self._convenience_tabs.addTab(self._alarm_scroll, "알람")
         # 마우스 커서 표시(마우스 커서 명세): 0.37.0부터 최적화 2단 세 번째(`최적화 · FPS 측정 · 마우스 커서`), 모두에게 공개.
         # 오버레이(CursorFx)는 창과 함께 살며 최적화 시작·종료와 무관하게 켜는 즉시 동작한다.
         from .cursor_overlay import CursorFx
@@ -426,6 +431,10 @@ class MainWindow(QMainWindow):
         tabs.addTab(self._settings_scroll, "설정")
         self.optimization_tools.refresh_access()
         self.optimization_tools.apply_theme()
+        self.optimization_tools.tick_hooks.append(self.alarm_tab.tick)
+        self._failing_since: dict[str, float] = {}  # 잡담 콕 집어 묻기(17.7): 켜 둔 기능이 못 찾음·못 읽음이 된 시각
+        self._failing_sampled = 0.0
+        self.optimization_tools.tick_hooks.append(self._sample_failing)
         from .blackbox_controller import BlackboxController
         self.blackbox_tools = BlackboxController(self)
         self.settings_tab.login_changed.connect(self.blackbox_tools.refresh_access)
@@ -657,7 +666,10 @@ class MainWindow(QMainWindow):
         if tab is self._tracker_tabs:
             return "memo" if self._tracker_tabs.currentWidget() is self._combat_pages["memo"] else None
         if tab is self._convenience_tabs:
-            return "sketch" if self._convenience_tabs.currentWidget() is self._sketch_scroll else "calc"
+            current = self._convenience_tabs.currentWidget()
+            if current is self._sketch_scroll:
+                return "sketch"
+            return None if current is getattr(self, "_alarm_scroll", None) else "calc"
         panel = getattr(self.optimization_tools, "panel", None)
         if panel is not None and tab is panel:
             return "harp" if panel.tabs.currentWidget() is self._harp_scroll else None
@@ -696,6 +708,57 @@ class MainWindow(QMainWindow):
         if key == "keywords":
             return bool(self.party_tab._keywords)
         return True  # 모르는 키는 추천하지 않음
+
+    # 잡담 콕 집어 묻기(17.7): 켜 둔 기능이 이만큼 계속 '못 찾음·못 읽음'이면 다음 추천 차례에 물어본다
+    FAILING_SEC = 600
+    FAILING_SAMPLE_SEC = 30
+    _INQUIRY_CARDS = {"buff": "buff", "debuff": "buff", "boss": "boss", "halo": "boss", "stat_bars": "stat",
+                      "dorcha": "dorcha", "tuarim": "dorcha", "skillbar": "autofind"}
+
+    def _failing_now(self) -> set:
+        """지금 '못 찾음·못 읽음'인 켜 둔 기능(게임이 앞에 있을 때만 판단). 자동 찾기 '못 찾음' + 버프 시간 못 읽음."""
+        failing = set()
+        if autofind_regions.active():
+            for home_key, key in self._HOME_PLACE_KEYS.items():
+                try:
+                    on = self._home_feature_on(home_key)
+                except Exception:  # noqa: BLE001
+                    on = False
+                if on and autofind_regions.place(key) == "missing":
+                    failing.add(home_key)
+        engine = getattr(self, "_engine", None)
+        if engine is not None and getattr(engine, "time_unreadable", False):
+            failing.add("buff")
+        return failing
+
+    def _sample_failing(self) -> None:
+        import time as _time
+        now = _time.monotonic()
+        if now - self._failing_sampled < self.FAILING_SAMPLE_SEC:
+            return
+        self._failing_sampled = now
+        try:
+            if not self._watcher.is_game_active():
+                return  # 게임을 안 보는 동안은 판단하지 않음(기록 유지)
+            current = self._failing_now()
+        except Exception:  # noqa: BLE001
+            return
+        for key in current:
+            self._failing_since.setdefault(key, now)
+        for key in [k for k in self._failing_since if k not in current]:
+            del self._failing_since[key]
+
+    def failing_tip_features(self) -> set:
+        import time as _time
+        now = _time.monotonic()
+        return {k for k, since in self._failing_since.items() if now - since >= self.FAILING_SEC}
+
+    def open_inquiry_for(self, feature) -> None:
+        """잡담 [문의하기]: 일반은 문의 창, 콕 집어 묻기는 그 기능의 문제 신고 칸으로."""
+        self.open_inquiry()
+        card = self._INQUIRY_CARDS.get(feature) if feature else None
+        if card is not None:
+            self._inquiry.preselect(card)
 
     def unused_tip_features(self) -> set:
         from ..creator_dialogue import TIP_FEATURES
@@ -2798,6 +2861,7 @@ class MainWindow(QMainWindow):
         self.dungeon_cost_tab.shutdown()
         self.cursor_fx.shutdown()
         self.harp_tab.shutdown()
+        self.alarm_tab.shutdown()
         inquiry = getattr(self, "_inquiry", None)
         if inquiry is not None:  # 문의 회차 정리(모은 자료·진행 표시)
             inquiry.shutdown()
