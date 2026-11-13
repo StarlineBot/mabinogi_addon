@@ -73,13 +73,29 @@ def test_unreadable_dims_then_hides_after_1_8s():
     assert v.tick(3.9).value is None  # 판독이 멈춰도 시간으로 숨김
 
 
-def test_boss_change_resets_and_name_flicker_keeps_boss():
+def test_other_or_unread_name_hides_value_until_same_boss_or_gone():
+    """두 줄 보스바(사용자 결정 11-11, 0.47.1): 식별한 보스와 이름이 다르거나 못 읽으면(아래 줄 값으로 되돌아감) 그리지 않는다."""
     v = BossBarValue()
     v.update(30, "pellom", 0)
-    assert v.update(29, None, 0.3).boss == "pellom"  # 이름 식별 한 번 깜빡 → 같은 보스
-    s = v.update(95, "lenen_miir", 0.6)  # 다른 등록 보스 → 처음부터(오름 확인 없이)
+    s = v.update(62, None, 0.3)  # 이름 못 읽음 → 등록 영역(아래 줄) 값 — 그리지 않음
+    assert s.value is None and v.rule == "other_boss"
+    s = v.update(95, "lenen_miir", 0.6)  # 다른 등록 보스 → 그리지 않음
+    assert s.value is None
+    s = v.update(29, "pellom", 0.9)  # 같은 보스가 다시 → 그대로 이어서(29)
+    assert (s.value, s.boss, s.stale) == (29, "pellom", False)
+    for t in (1.2, 1.5, 2.0, 2.6, 2.8):  # 다른 보스가 1.8초 넘게 이어짐 → 처음부터
+        s = v.update(95, "lenen_miir", t)
+    assert s.value is None
+    s = v.update(95, "lenen_miir", 2.9)  # 그다음 판독(새 보스)은 첫 값 바로
     assert (s.value, s.boss) == (95, "lenen_miir")
-    assert v.update(120, "lenen_miir", 0.9).stale  # 범위 밖 = 못 읽음
+    assert v.update(120, "lenen_miir", 3.2).stale  # 범위 밖 = 못 읽음
+
+
+def test_unregistered_then_registered_is_new_boss():
+    v = BossBarValue()
+    v.update(50, None, 0)  # 미등록(이름 None)으로 먼저 보임
+    s = v.update(49, "pellom", 0.3)  # 이름이 읽히면 새 보스로 바로
+    assert (s.value, s.boss) == (49, "pellom")
 
 
 # ---- 띠 높이(명세 3절-3) ---------------------------------------------------------------------------
@@ -212,7 +228,8 @@ def test_overlay_off_keeps_old_capture_and_reading(monkeypatch, tab):
     tab.show_screen(*PELLOM[0][:2])
     monkeypatch.setattr(tab, "_grab_rect", lambda x, y, w, h: sizes.append((x, y, w, h)) or img[y:y + h, x:x + w].copy())
     tab._tick()
-    assert sizes == [(1018, 1248, 521, 37)]  # 오버레이를 안 쓰면 늘린 캡처 없음
+    # 0.47.1(사용자 결정 11-11): 오버레이를 꺼도 저HP 다시 읽기용으로 위아래 6px만 늘려 찍는다(평소 판독은 원래 영역 그대로)
+    assert sizes == [(1018, 1248 - 6, 521, 37 + 12)]
     assert tab._last_raw_hp == 99
 
 
@@ -656,3 +673,43 @@ def test_overlay_rereads_low_hp_one_when_region_is_shifted(tab, tmp_path, monkey
         assert (st[0], st[1], st[4]) == expected
     else:
         assert st[1] != expected[1]  # 수정 전 현상(1 또는 19 등 오독)
+
+
+@pytest.mark.parametrize("y,h,truth", [(38, 37, 17), (50, 37, 17)])
+@pytest.mark.parametrize("fix", [False, True])
+def test_overlay_off_pattern_path_rereads_low_hp(tab, tmp_path, monkeypatch, y, h, truth, fix):
+    """0.47.1(사용자 결정 11-11): 보스바 오버레이를 끈 사용자도 패턴 알림 경로에서 저HP 다시 읽기 — 영역 어긋남 오독(17→11 등)을 바로잡는다."""
+    import zipfile
+
+    from mabinogi_addon.detect import boss_hp_reader
+    tab.bar_section.enable.setChecked(False)
+    calls = []
+    real = boss_hp_reader.recheck_low_hp
+    monkeypatch.setattr(boss_hp_reader, "recheck_low_hp",
+                        (lambda p, v, f=None, region_rows=None: calls.append(v) or real(p, v, f, region_rows=region_rows))
+                        if fix else (lambda p, v, f=None, region_rows=None: calls.append(v) or (v, f)))
+    state = {}
+    tab._region = {"x": 0, "y": y, "w": 521, "h": h}
+    monkeypatch.setattr(tab, "_grab_region", lambda: dict(tab._region))
+    monkeypatch.setattr(tab, "_grab_rect", lambda x, yy, w, hh: state["img"][yy:yy + hh, x:x + w].copy())
+    with zipfile.ZipFile("tests/data/gomok_petak_hp019_158.zip") as z:
+        z.extract("gomok_petak_hp017_159.png", tmp_path)
+    state["img"] = image_io.imread(str(tmp_path / "gomok_petak_hp017_159.png"), cv2.IMREAD_COLOR)
+    tab._tick()
+    assert tab._cur_boss == "gomok_petak" and calls  # 20% 이하라 다시 읽음(패턴 알림이 쓰는 판독값)
+    if fix or y == 50:
+        assert tab._last_raw_hp == truth
+    else:
+        assert tab._last_raw_hp != truth  # 수정 전 현상(잘린 숫자 오독)
+
+
+def test_overlay_off_high_hp_does_not_reread(monkeypatch, tab):
+    """다시 읽기는 HP 20% 이하일 때만(CPU) — 99%는 다시 읽지 않는다."""
+    from mabinogi_addon.detect import boss_hp_reader
+    tab.bar_section.enable.setChecked(False)
+    monkeypatch.setattr(boss_hp_reader, "recheck_low_hp", lambda *a, **k: pytest.fail("높은 HP에서 다시 읽음"))
+    img = _img(PELLOM[0][0])
+    tab.show_screen(*PELLOM[0][:2])
+    monkeypatch.setattr(tab, "_grab_rect", lambda x, y, w, h: img[y:y + h, x:x + w].copy())
+    tab._tick()
+    assert tab._last_raw_hp == 99

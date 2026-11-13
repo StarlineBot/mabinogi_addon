@@ -124,7 +124,7 @@ def test_warn_gone_suppressed_when_not_foreground(monkeypatch):
     monkeypatch.setattr(bc_mod.time, "monotonic", lambda: clock["t"])
     c = _controller()
     c.set_warn_gone_ids({"han_adrenaline"})
-    c._game_active = False  # 비포커스
+    c._on_foreground_changed(False, False)  # 비포커스(0.47.1: 판단은 기억하되 확정은 포커스일 때만)
     c._on_updated([_entry("march"), _entry("han_adrenaline")])
     clock["t"] = 10.0
     c._on_updated([_entry("march")])  # han 사라짐(비포커스)

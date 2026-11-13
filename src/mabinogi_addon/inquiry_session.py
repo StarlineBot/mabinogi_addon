@@ -163,6 +163,33 @@ def attach_cooldown(session: "Session") -> None:
             session.add_file(icon, f"cooldown_icon_{slot['id']}.png", f"쿨타임 아이콘 {slot['label']}")
 
 
+BUFF_GONE_LOG_LINES = 200
+
+
+def buff_gone_dir() -> Path:
+    return paths.user_data_dir() / "logs" / "buff-gone"
+
+
+def attach_buff_gone(session: "Session") -> None:
+    """'버프 · 디버프' 문의(0.47.1): 사라짐 경고 확정 순간 버프 영역 PNG(최근 10장, 이 PC에만 있던 것)와
+    app.log의 사라짐·포커스 진단 줄(최근 200줄)을 함께 붙인다."""
+    try:
+        pngs = sorted(buff_gone_dir().glob("*.png"))[-10:]
+    except OSError:
+        pngs = []
+    for png in pngs:
+        session.add_file(png, f"buff_gone_{png.name}", "사라짐 경고 순간 버프 영역")
+    try:
+        lines = _app_log().read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        lines = []
+    picked = [line for line in lines if "[사라짐" in line or "[포커스]" in line][-BUFF_GONE_LOG_LINES:]
+    if picked:
+        target = session.folder / "buff_gone_log.txt"
+        target.write_text("\n".join(picked) + "\n", encoding="utf-8")
+        session.add_file(target, target.name, "사라짐 경고 기록(app.log)")
+
+
 def _app_log() -> Path:
     return paths.user_data_dir() / "logs" / "app.log"
 

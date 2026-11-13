@@ -25,6 +25,10 @@ from .buff_state import BuffStateMachine, Event, State
 _log = logging.getLogger(__name__)
 
 
+def _fmt(value) -> str:
+    return "없음" if value is None else f"{value:.1f}"
+
+
 def _timelike_cluster(part: np.ndarray) -> bool:
     rows = np.flatnonzero(part.any(axis=1))
     if rows.size == 0 or not 7 <= rows[-1] - rows[0] + 1 <= 14:
@@ -139,6 +143,11 @@ class BuffEngine:
         self._present_prev: set[str] = set()
         self._last_read_at: dict[str, float] = {}
         self._last_y: dict[str, int] = {}  # 마지막으로 아이콘을 본 행(미검출 시 시간-확정용)
+        # 사라짐 경고 진단(0.47.1): 경고 켠 버프만 ABSENT 사유 로그·직전 상태 기억, 마지막 틱 정보(참조만 — 복사 없음)
+        self.log_gone_ids: set[str] = set()
+        self.gone_info: dict[str, dict] = {}
+        self.last_diag: dict | None = None
+        self._prev_region: np.ndarray | None = None
 
     # 초. 임박 근처가 아니면 이 간격으로만 시간 판독(OCR 비용 절약). 단 이 값이 크면
     # 임박 전에 '재버프(연장)'한 경우 반영이 이만큼 늦어 보인다(옛 클럭이 계속 내려가다
@@ -244,6 +253,8 @@ class BuffEngine:
             # 진짜 목록 버프는 임박 구간에서 매 틱 시간을 읽으므로 그대로 울린다. 보류는 '포그라운드 아님'과 같게 소비하지 않는다.
             hold = (detected and self.favorites is not None and self.favorites.boundary is None
                     and not self._read_ok.get(bid, False))
+            before = ((machine.state, machine._last_read, machine._last_read_at, machine.remaining(now))
+                      if bid in self.log_gone_ids and machine.state is not State.ABSENT else None)
             event = machine.observe(
                 detected=detected,
                 reading=reading,
@@ -251,6 +262,8 @@ class BuffEngine:
                 frame_valid=frame_valid,
                 foreground=foreground and not hold,
             )
+            if before is not None and event in (Event.EXPIRED, Event.RELEASED):
+                self._note_gone(bid, event, frame_valid, before, now)
             if event is Event.ALERT:
                 alerts.append(bid)
             # 2차 알림: 더 가까운 기준 교차 시 1회 더(놓침·오독 대비). 포그라운드일 때만.
@@ -259,6 +272,11 @@ class BuffEngine:
                 alerts2.append(bid)
 
         self._present_prev = set(present)  # 다음 틱의 '방금 등장' 판정용
+        # 진단용 마지막 틱(사라짐 확정 순간에만 컨트롤러가 읽음 — 참조만 담아 틱 비용 없음)
+        self.last_diag = {"now": now, "frame_valid": frame_valid, "anchor": anchor_present, "detections": detections,
+                          "boundary": self.favorites.boundary if self.favorites is not None else None,
+                          "region": region, "prev_region": self._prev_region}
+        self._prev_region = region
 
         entries = []
         for bid in self._order:
@@ -271,6 +289,44 @@ class BuffEngine:
             entries=entries, alerts=alerts, frame_valid=frame_valid, alerts2=alerts2,
             seen=bool(present),
         )
+
+    _GONE_REASONS = {"invalid": "판정 불가 중 만료(내부 시계 0)", Event.EXPIRED: "내부 시계 0(미검출)",
+                     Event.RELEASED: "미검출 시간 초과"}
+
+    def _note_gone(self, bid: str, event, frame_valid: bool, before, now: float) -> None:
+        """경고 켠 버프가 ABSENT로 바뀐 순간 사유 1줄(전환 때만)."""
+        state, last_read, last_read_at, remaining = before
+        reason = self._GONE_REASONS["invalid" if not frame_valid else event]
+        self.gone_info[bid] = {"reason": reason, "at": now, "state": state.name, "last_read": last_read,
+                               "last_read_at": last_read_at, "remaining": remaining, "last_y": self._last_y.get(bid)}
+        _log.info("[사라짐 사유] %s: %s (이전 상태=%s 남은=%s 마지막 판독=%s, %s초 전 · 마지막 y=%s)", bid, reason,
+                  state.name, _fmt(remaining), _fmt(last_read),
+                  _fmt(now - last_read_at if last_read_at is not None else None), self._last_y.get(bid))
+
+    def machine_snapshot(self, bid: str, now: float) -> dict | None:
+        machine = self._machines.get(bid)
+        if machine is None:
+            return None
+        return {"state": machine.state.name, "remaining": machine.remaining(now), "last_read": machine._last_read,
+                "last_read_at": machine._last_read_at}
+
+    def last_y(self, bid: str) -> int | None:
+        return self._last_y.get(bid)
+
+    def icon_score_at(self, region: np.ndarray, bid: str, y: int) -> float | None:
+        """진단: 그 줄(y±3) 아이콘 열에서 그 버프 아이콘 점수."""
+        from ..detect.icon_matcher import match_icon
+
+        template = self._templates.get(bid)
+        if template is None or region is None:
+            return None
+        t = template if template.ndim == 2 else cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
+        g = region if region.ndim == 2 else cv2.cvtColor(region, cv2.COLOR_BGR2GRAY)
+        x0, x1 = self._icon_column
+        win = g[max(0, y - 3):y + t.shape[0] + 3, x0:x1]
+        if win.shape[0] < t.shape[0] or win.shape[1] < t.shape[1]:
+            return None
+        return float(match_icon(win, t).score)
 
     _ICON_STILL = 0.7  # 그 줄에 아이콘이 그대로 있다고 볼 점수(즐겨찾기 줄 맞춤 기준과 같음)
 

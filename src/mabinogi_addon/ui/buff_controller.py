@@ -25,6 +25,7 @@ from .. import autofind_regions, perf_meter
 from ..capture.base import FrameSource
 from ..system.window_watcher import AlwaysActiveWatcher, WindowWatcher
 from ..tracker.engine import BuffEngine
+from ..tracker.gone_watch import GoneWatch
 from .overlay import BuffOverlay, OverlayItem, overlay_spec
 
 # 표시 평활: 판독 지터로 남은 시간이 이 값 이하만큼 '올라가는' 건 무시(단조 감소).
@@ -41,8 +42,13 @@ _IDLE_INTERVAL_MS = 500
 # - 확정 대기: 버프가 목록에서 사라져도 이만큼(초) 연속으로 없어야 '완전히 사라짐'으로
 #   확정한다(짧은 미검출·깜빡임 오탐 방지). 이 안에 다시 뜨면 아무 일도 없던 것으로.
 # - 노출: 확정된 순간 빨간 테두리+X를 띄우고 소리를 1회 내며, 이만큼(초) 보여준 뒤 지운다.
+#   포커스가 나갔다 돌아오면 확정을 '복귀 + 5초'까지 미룬다(판단은 버리지 않음 — tracker/gone_watch.py, 0.47.1).
 _GONE_CONFIRM_SEC = 3.0
 _GONE_SHOW_SEC = 5.0
+# 사라짐 확정 진단(0.47.1): 같은 버프 확정 로그·PNG는 이 간격에 1번까지, PNG는 최근 이만큼만 보관
+_GONE_DIAG_GAP = 10.0
+_GONE_PNG_KEEP = 10
+_diag_log = logging.getLogger("mabinogi_addon.buff_gone")
 
 # 제때(타임아웃 내) 안 멈춘 워커 보관소 — **모듈 전역**. 컨트롤러가 재시작/교체로 버려져도
 # (예: main_window가 controller=None) 이 전역이 참조를 유지해, 실행 중인 QThread가 파괴돼
@@ -190,9 +196,11 @@ class BuffController(QObject):
         # 사라짐 경고용 상태
         self._order: list[str] = []  # 표시 순서(고스트를 제자리에 끼우기 위함)
         self._warn_gone_ids: set[str] = set()  # '사라짐 경고' 켠 버프
-        self._present_prev: set[str] = set()  # 직전 틱에 떠 있던 버프(사라짐 시작 감지)
-        self._absent_since: dict[str, float] = {}  # 사라진 버프 → 사라지기 시작한 시각
+        self._gone = GoneWatch(_GONE_CONFIRM_SEC)  # 사라짐 확정 판단(포커스 복귀 유예 포함)
         self._gone_show_until: dict[str, float] = {}  # 확정된 버프 → 경고 표시 종료 시각
+        self._engine: BuffEngine | None = None
+        self._diag_at: dict[str, float] = {}  # 버프별 마지막 확정 진단 시각(10초에 1번)
+        self.gone_png_dir = None  # 테스트에서 바꿈(기본: user_data_dir/logs/buff-gone)
 
     def start(
         self, source: FrameSource, engine: BuffEngine, interval_ms: int = 200,
@@ -201,6 +209,9 @@ class BuffController(QObject):
         self.stop()
         self._source = source
         self._bar_source = bar_source
+        self._engine = engine
+        if hasattr(engine, "log_gone_ids"):
+            engine.log_gone_ids = set(self._warn_gone_ids)
         self._worker = _TrackWorker(
             source, engine, self._watcher, interval_ms, bar_source=bar_source, name=self._meter_name
         )
@@ -327,6 +338,8 @@ class BuffController(QObject):
     def set_warn_gone_ids(self, ids: set[str]) -> None:
         """'사라짐 경고' 켠 버프 집합 갱신."""
         self._warn_gone_ids = set(ids)
+        if self._engine is not None and hasattr(self._engine, "log_gone_ids"):
+            self._engine.log_gone_ids = set(ids)  # 엔진은 경고 켠 버프만 사라짐 사유 로그
 
     def _pixmap(self, buff_id: str):
         buff = self._catalog.get(buff_id)
@@ -380,33 +393,24 @@ class BuffController(QObject):
         self._smooth(entries)
         now = time.monotonic()
         active_ids = {e.buff_id for e in entries}
-        # 다시 보이면(또는 아직 보이면) 사라짐 진행/확정 모두 취소 — 오탐 방지.
+        # 다시 보이면(또는 아직 보이면) 경고 표시 취소.
         for bid in active_ids:
-            self._absent_since.pop(bid, None)
             self._gone_show_until.pop(bid, None)
-        # 사라짐 경고는 '게임이 포그라운드일 때만' 판정·발동한다 — 안 보는 동안(알트탭·
-        # 가림)엔 떨어짐으로 보지 않는다(거짓 경고 방지). 비포커스면 진행 중인 확정 대기도
-        # 비워, 복귀 시 깨끗이 다시 판정한다.
-        if not self._game_active:
-            self._absent_since.clear()
-            self._present_prev = active_ids
-            self._items = self.build_items(entries, now)
-            self._overlay.set_items(self._items)
-            self._apply_visibility()
-            return
-        # 사라지기 시작: 직전 틱엔 있었는데 이번엔 없는 '사라짐 경고' 버프 → 확정 대기 시작.
-        for bid in (self._present_prev - active_ids):
-            if bid in self._warn_gone_ids and bid not in self._gone_show_until:
-                self._absent_since.setdefault(bid, now)
-        self._present_prev = active_ids
-        # 확정: 확정 대기 시간(_GONE_CONFIRM_SEC) 연속으로 없으면 '완전히 사라짐' 확정 →
-        # 경고 아이콘 노출 시작 + 소리 1회. (그 전에 다시 뜨면 위에서 취소되어 조용.)
+        # 사라짐 확정: 게임을 안 보는 동안에도 '사라진 시각'은 기억하고, 확정은 게임을 볼 때만 —
+        # max(사라진 시각 + 3초, 포커스 복귀 + 5초)(0.47.1). 그 전에 다시 뜨면 조용히 취소.
+        confirmed, cancelled = self._gone.update(active_ids, self._warn_gone_ids, now,
+                                                 skip=set(self._gone_show_until))
+        for bid, absent in cancelled:
+            _diag_log.info("[사라짐 취소] %s: 포커스 복귀 유예 중 다시 보임(안 보인 %.1f초, 복귀 뒤 %s)",
+                           bid, absent, self._since_back(now))
         just_confirmed = []
-        for bid, since in list(self._absent_since.items()):
-            if now - since >= _GONE_CONFIRM_SEC:
-                self._gone_show_until[bid] = now + _GONE_SHOW_SEC
-                del self._absent_since[bid]
-                just_confirmed.append(bid)
+        for bid, absent in confirmed:
+            self._gone_show_until[bid] = now + _GONE_SHOW_SEC
+            just_confirmed.append(bid)
+            try:
+                self._log_gone(bid, absent, now)
+            except Exception:  # noqa: BLE001 — 진단 실패가 경고를 막지 않게
+                _diag_log.debug("사라짐 진단 기록 실패", exc_info=True)
         if just_confirmed and not self._paused:
             from .notifier import play_warn_gone_sound
 
@@ -415,7 +419,76 @@ class BuffController(QObject):
         self._overlay.set_items(self._items)
         self._apply_visibility()
 
+    def _since_back(self, now: float) -> str:
+        back = self._gone.back_at
+        return "포커스 전환 없음" if back is None else f"{now - back:.1f}초"
+
+    def _log_gone(self, bid: str, absent: float, now: float) -> None:
+        """사라짐 경고 확정 순간 진단 1줄 + 버프 영역 PNG(같은 버프 10초에 1번, 틱마다 아님)."""
+        last = self._diag_at.get(bid)
+        if last is not None and now - last < _GONE_DIAG_GAP:
+            return
+        self._diag_at[bid] = now
+        engine = self._engine
+        diag = getattr(engine, "last_diag", None) or {}
+        snap = engine.machine_snapshot(bid, now) if hasattr(engine, "machine_snapshot") else None
+        info = getattr(engine, "gone_info", {}).get(bid) if engine is not None else None
+        region = diag.get("region")
+        prev = diag.get("prev_region")
+        y = engine.last_y(bid) if hasattr(engine, "last_y") else None
+        near = engine.icon_score_at(region, bid, y) if (region is not None and y is not None
+                                                        and hasattr(engine, "icon_score_at")) else None
+        dets = ", ".join(f"{d.buff_id}@{d.y}:{d.score:.2f}" for d in diag.get("detections") or []) or "없음"
+
+        def num(value):
+            return "없음" if value is None else f"{value:.1f}"
+
+        state = (f"상태={snap['state']} 남은={num(snap['remaining'])} 마지막 판독={num(snap['last_read'])}"
+                 f"({num(now - snap['last_read_at']) if snap['last_read_at'] is not None else '없음'}초 전)") if snap else "상태=없음"
+        if info:
+            state += (f" | 엔진 사유={info['reason']}({num(now - info['at'])}초 전, 그때 상태={info['state']} "
+                      f"남은={num(info['remaining'])} 마지막 판독={num(info['last_read'])})")
+        if region is not None:
+            capture = (f"{region.shape[1]}x{region.shape[0]} 밝기={float(region.mean()):.1f} "
+                       f"멈춘 프레임={prev is not None and prev.shape == region.shape and bool((prev == region).all())}")
+        else:
+            capture = "없음"
+        png = self._save_gone_png(bid, region)
+        boundary = diag.get("boundary")
+        _diag_log.info(
+            "[사라짐 확정] %s: 복귀 뒤 %s · 안 보인 %.1f초 · %s | 틱: frame_valid=%s 앵커=%s 잡힘=[%s] 구분선 y=%s "
+            "마지막 y=%s 근처 점수=%s | 캡처: %s | PNG=%s",
+            bid, self._since_back(now), absent, state, diag.get("frame_valid"), diag.get("anchor"), dets,
+            "없음" if boundary is None else boundary, y, "없음" if near is None else f"{near:.2f}", capture, png or "없음")
+
+    def _save_gone_png(self, bid: str, region):
+        """확정 순간 버프 영역만 logs/buff-gone/에(이 PC에만, 최근 10장)."""
+        if region is None:
+            return None
+        from datetime import datetime
+        from pathlib import Path
+
+        from .. import image_io, paths
+        folder = Path(self.gone_png_dir) if self.gone_png_dir is not None else paths.user_data_dir() / "logs" / "buff-gone"
+        folder.mkdir(parents=True, exist_ok=True)
+        name = f"{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}_{bid}.png"
+        if not image_io.imwrite(folder / name, region):
+            return None
+        for old in sorted(folder.glob("*.png"))[:-_GONE_PNG_KEEP]:
+            try:
+                old.unlink()
+            except OSError:
+                pass
+        return name
+
     def _on_foreground_changed(self, game: bool, selfa: bool) -> None:
+        now = time.monotonic()
+        if self._gone.focus(game, now, self._warn_gone_ids) and self._meter_name == "버프":
+            if game:
+                _diag_log.info("[포커스] 게임 비활성 → 활성 (사라짐 경고 확정은 %.0f초 뒤부터)", self._gone.grace_sec)
+            else:
+                _diag_log.info("[포커스] 게임 활성 → 비활성 (그때 떠 있던 경고 버프: %s)",
+                               ", ".join(sorted(self._gone.away_present)) or "없음")
         self._game_active = game
         self._self_active = selfa
         self._apply_visibility()

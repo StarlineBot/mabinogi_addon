@@ -1,14 +1,22 @@
 {
-  "version": "0.47.0",
+  "version": "0.47.1",
   "tests": [
-    "tests/test_creator_dialogue.py",
-    "tests/test_dialogue_tips.py",
-    "tests/test_dialogue_display_policy.py",
-    "tests/test_dialogue_desktop_failure.py",
-    "tests/test_dialogue_window_region.py",
-    "tests/test_dialogue_transparent_occlusion.py",
-    "tests/test_dialogue_network_lifecycle.py",
-    "tests/test_navigation.py",
+    "tests/test_buff_gone_focus.py",
+    "tests/test_warn_gone.py",
+    "tests/test_pause.py",
+    "tests/test_tracking_callback_generation.py",
+    "tests/test_overlay_window_visible.py",
+    "tests/test_debuff_boss_gate.py",
+    "tests/test_lifecycle.py",
+    "tests/test_buff_favorites.py",
+    "tests/test_favorites_hold.py",
+    "tests/test_buff_4k_icons.py",
+    "tests/test_inquiry_unified.py",
+    "tests/test_boss_bar_overlay.py",
+    "tests/test_boss_fill_boundary.py",
+    "tests/test_boss_tab.py",
+    "tests/test_boss_low_hp_vertical.py",
+    "tests/test_boss_two_rows.py",
     "tests/test_release_notes.py",
     "tests/test_release_notes_trigger.py",
     "tests/test_release_checks.py",
@@ -18,62 +26,68 @@
     "tests/test_startup_smoke.py"
   ],
   "coverage": {
-    "src/mabinogi_addon/creator_dialogue.py": {
+    "src/mabinogi_addon/tracker/gone_watch.py": {
       "tests": [
-        "tests/test_creator_dialogue.py",
-        "tests/test_dialogue_tips.py"
+        "tests/test_buff_gone_focus.py",
+        "tests/test_warn_gone.py"
       ],
-      "reason": "잡담 기능 추천·디스코드 권유(17절): tips 칸 읽기(옛 parse는 entries만 — 호환, tips만 잘못되면 추천만 끔), 25% 추첨·직전 기능 빼기·권유 주기(참가 후 없음·괜찮아요 45일·30일에 한 번)"
+      "reason": "포커스 복귀 유예: 확정 = max(사라진 시각+3초, 복귀+5초), 안 보는 사이 빠짐·나갈 때 있던 버프도 대상, 다시 보이면 취소"
     },
-    "src/mabinogi_addon/ui/creator_dialogue.py": {
+    "src/mabinogi_addon/ui/buff_controller.py": {
       "tests": [
-        "tests/test_creator_dialogue.py",
-        "tests/test_dialogue_tips.py",
-        "tests/test_dialogue_display_policy.py",
-        "tests/test_dialogue_desktop_failure.py",
-        "tests/test_dialogue_window_region.py",
-        "tests/test_dialogue_transparent_occlusion.py"
+        "tests/test_buff_gone_focus.py",
+        "tests/test_warn_gone.py",
+        "tests/test_pause.py",
+        "tests/test_tracking_callback_generation.py",
+        "tests/test_overlay_window_visible.py",
+        "tests/test_debuff_boss_gate.py",
+        "tests/test_lifecycle.py"
       ],
-      "reason": "말풍선 버튼(보러 가기·참가하기·괜찮아요)·같은 날 겹치지 않게·버튼 있는 말풍선 8초·기존 잡담 표시 규칙 그대로"
+      "reason": "사라짐 확정 진단 로그·PNG(10초에 1번·최근 10장), 포커스 전환 로그, 유예 규칙 연결(디버프 컨트롤러는 동작 같음)"
     },
-    "src/mabinogi_addon/ui/dialogue_feed.py": {
+    "src/mabinogi_addon/tracker/engine.py": {
       "tests": [
-        "tests/test_dialogue_network_lifecycle.py",
-        "tests/test_creator_dialogue.py",
-        "tests/test_dialogue_tips.py"
+        "tests/test_buff_gone_focus.py",
+        "tests/test_buff_favorites.py",
+        "tests/test_favorites_hold.py",
+        "tests/test_buff_4k_icons.py"
       ],
-      "reason": "내장·캐시·원격 파일의 tips(칸 없으면 내장 추천 유지, 두 줄 넘는 문장 건너뜀)"
+      "reason": "경고 켠 버프 ABSENT 사유 로그·마지막 틱 정보(참조만) — 판정은 그대로"
     },
-    "src/mabinogi_addon/assets/dialogues.json": {
+    "src/mabinogi_addon/inquiry_session.py": {
       "tests": [
-        "tests/test_creator_dialogue.py",
-        "tests/test_dialogue_tips.py"
+        "tests/test_inquiry_unified.py"
       ],
-      "reason": "내장 대사 파일에 17.5 초안 추천 18개(entries 12개 그대로)"
+      "reason": "'버프 · 디버프' 문의에 사라짐 순간 PNG·진단 줄 첨부"
     },
-    "src/mabinogi_addon/config.py": {
+    "src/mabinogi_addon/ui/inquiry_window.py": {
       "tests": [
-        "tests/test_dialogue_tips.py"
+        "tests/test_inquiry_unified.py"
       ],
-      "reason": "권유 기록(discordInvite)·추천 날짜·연 도구 기록(openedTools) — 설정 동기화 대상"
+      "reason": "버프 카드 시작 때 사라짐 진단 첨부"
     },
-    "tests/conftest.py": {
+    "src/mabinogi_addon/tracker/boss_bar_value.py": {
       "tests": [
-        "tests/test_creator_dialogue.py",
-        "tests/test_dialogue_tips.py",
-        "tests/test_dialogue_display_policy.py",
-        "tests/test_dialogue_desktop_failure.py",
-        "tests/test_dialogue_window_region.py",
-        "tests/test_dialogue_transparent_occlusion.py"
+        "tests/test_boss_bar_overlay.py",
+        "tests/test_boss_fill_boundary.py"
       ],
-      "reason": "기존 잡담·화면 이동 테스트는 추천 추첨과 도구 열기 기록을 끔(dialogue_tips 표시가 있으면 켬)"
+      "reason": "두 줄 보스바: 식별한 보스와 이름이 다르거나 못 읽으면 오버레이 값 숨김"
+    },
+    "src/mabinogi_addon/ui/boss_tab.py": {
+      "tests": [
+        "tests/test_boss_bar_overlay.py",
+        "tests/test_boss_tab.py",
+        "tests/test_boss_low_hp_vertical.py",
+        "tests/test_boss_two_rows.py"
+      ],
+      "reason": "오버레이를 끈 패턴 알림 경로도 ±6px 캡처 + 20% 이하만 저HP 다시 읽기"
     },
     "src/mabinogi_addon/assets/release_notes.md": {
       "tests": [
         "tests/test_release_notes.py",
         "tests/test_release_notes_trigger.py"
       ],
-      "reason": "0.47.0 노트 파싱·새 버전 표시(게시된 0.46.0 섹션 그대로)"
+      "reason": "0.47.1 노트 파싱·새 버전 표시(게시된 0.47.0 섹션 그대로)"
     },
     "packaging/release_checks.json": {
       "tests": [
@@ -89,13 +103,6 @@
         "tests/test_startup_smoke.py"
       ],
       "reason": "배포 계약: 빌드·후보·Windows CI·시작 확인"
-    },
-    "src/mabinogi_addon/ui/main_window.py": {
-      "tests": [
-        "tests/test_dialogue_tips.py",
-        "tests/test_navigation.py"
-      ],
-      "reason": "안 쓰는 기능 판정(홈 스위치·사용 값 기준, 도구는 연 적 있는지)·보러 가기 화면 이동·도구 처음 열기 기록(기존 화면 이동 테스트에선 기록을 끔)"
     }
   }
 }

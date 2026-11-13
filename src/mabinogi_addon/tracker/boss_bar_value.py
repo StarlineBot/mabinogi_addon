@@ -7,7 +7,9 @@
 - 못 읽은 판독(None)은 마지막 값을 '흐림'으로 두고, GONE_SECONDS(1.8초) 넘게 못 읽으면 숨김.
 - 직전 표시값의 앞자리만 남은 값(17→1, 55→5, 100→10)은 확정하지 않고 못 읽음처럼 둔다 — 채움 경계가 숫자를 가로지르면
   앞자리만 읽혔다(QA 8067a9c). 실제 HP는 사이 값을 지나 내려가므로 이런 꼴로 바로 떨어지지 않는다.
-- 보스가 바뀌면(이름 키가 다르면) 처음부터 — 새 보스의 첫 값은 바로 쓴다(판독 신뢰도 하한은 판독기가 이미 거름).
+- 이미 식별한 보스가 있는데 이번 판독 이름이 다르거나 못 읽었으면(None) 그 값을 그리지 않는다(숨김, 0.47.1 — 두 줄 보스바에서
+  위 줄을 못 읽으면 등록 영역 값(아래 줄 다른 바)으로 되돌아가 다른 보스 체력이 그려졌다). 같은 보스가 다시 읽히면 그대로 이어서,
+  GONE_SECONDS 넘게 계속 다르면 처음부터 — 그다음 판독(새 보스)의 첫 값은 바로 쓴다. 미등록(이름 None)에서 등록 보스로 바뀌는 건 새 보스.
 """
 from __future__ import annotations
 
@@ -43,6 +45,7 @@ class BossBarValue:
         self._last_ok = None
         self._pending: int | None = None
         self._drop: int | None = None  # 확인 대기 중인 큰 하락 값
+        self._other = False  # 이번 판독이 식별한 보스와 다름/이름 못 읽음 → 숨김
         self.rule: str | None = None  # 이번 update에서 시작된 방어 규칙(수집 태그): "unread" | "jump"
 
     def update(self, value: int | None, boss: str | None, now: float) -> Shown:
@@ -60,8 +63,16 @@ class BossBarValue:
                     self.reset()
                     self.rule = rule
             return self.shown()
-        if boss is None and self.value is not None:
-            boss = self.boss  # 이름 식별이 한 번 깜빡여도(미등록 경로로 읽힘) 같은 보스로 — 이름·패턴 선 유지
+        if self.value is not None and self.boss is not None and boss != self.boss:
+            # 식별한 보스와 이름이 다르거나 못 읽음(두 줄 보스바의 아래 줄 등) → 이 값은 그리지 않는다
+            self._pending = self._drop = None
+            self.rule = "other_boss"
+            self._other = True
+            if self._last_ok is None or now - self._last_ok > self.gone:
+                self.reset()
+                self.rule = "other_boss"
+            return self.shown()
+        self._other = False
         if self.value is not None and boss == self.boss and truncated(value, self.value):
             self._pending = self._drop = None
             if self.value is not None:
@@ -104,4 +115,6 @@ class BossBarValue:
         return self.shown()
 
     def shown(self) -> Shown:
+        if self._other:
+            return Shown(None, self.boss, False)
         return Shown(self.value, self.boss, self.stale)

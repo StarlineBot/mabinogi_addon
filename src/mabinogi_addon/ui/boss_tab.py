@@ -503,6 +503,13 @@ class BossTab(QWidget):
             up = max(0, min(self.BAR_EXT_UP, area[1]))
             ext = (up, self.BAR_EXT_DOWN)
             area = (area[0], area[1] - up, area[2], area[3] + up + self.BAR_EXT_DOWN)
+        pad = None
+        if ext is None:
+            # 0.47.1(사용자 결정 11-11): 오버레이를 끈 패턴 알림 경로도 저HP 다시 읽기 — 위아래 LOW_HP_PAD만 늘려 찍고,
+            # 다시 읽기는 HP 20% 이하일 때만(평소 판독은 원래 영역 그대로)
+            up = max(0, min(self.LOW_HP_PAD, area[1]))
+            pad = (up, self.LOW_HP_PAD)
+            area = (area[0], area[1] - up, area[2], area[3] + up + self.LOW_HP_PAD)
         if presence and self._bar_absent > self._UPCOMING_GONE_FRAMES:
             # 보스바 확인(이름 글자 + % 판독)은 사전 판정을 통과하면 1회 평균 80ms(최대 150ms, 게임 화면 525곳 측정 — 61% 통과).
             # 바가 이미 안 보이는 동안에는 BAR_CHECK_EVERY틱에 한 번만(약 0.9초 — 저체력 알림 게이트 반응은 1초 안).
@@ -514,10 +521,10 @@ class BossTab(QWidget):
         # 이때만 예전처럼 화면 스레드에서(오버레이는 상시 캡처 제외라 해당 없음). 도르카와 같은 기준.
         guarded = own_window_over(area)
         grab = self._grab_rect if (guarded or self.INLINE_JOBS) else self._grab_worker
-        self._run_job(lambda: self._compute_tick(area, grab, presence, ext), self._apply_tick, inline=guarded)
+        self._run_job(lambda: self._compute_tick(area, grab, presence, ext, pad), self._apply_tick, inline=guarded)
 
     @perf_meter.timed("보스")  # 기능별 처리 시간 — 계산(작업 스레드)과 반영(화면)을 따로 센다
-    def _compute_tick(self, area, grab, presence, ext=None) -> dict:
+    def _compute_tick(self, area, grab, presence, ext=None, pad=None) -> dict:
         """작업 스레드: 캡처 → 이름 식별 → (식별되면) HP 판독 → (필요하면) 보스바 확인. 위젯·상태는 건드리지 않는다."""
         steps: dict[str, float] = {}
 
@@ -539,8 +546,9 @@ class BossTab(QWidget):
         if frame is None:
             return out
         full = frame
-        if ext is not None:  # 늘린 캡처 → 원래 영역만 잘라 기존 판독은 그대로
-            up, down = ext
+        cut = ext if ext is not None else pad
+        if cut is not None:  # 늘린 캡처 → 원래 영역만 잘라 기존 판독은 그대로
+            up, down = cut
             frame = full[up:full.shape[0] - down]
             if frame.shape[0] == 0:
                 return out
@@ -556,6 +564,10 @@ class BossTab(QWidget):
             out["raw_hp"], out["raw_frac"] = timed("HP 판독", read_percent_frac, pct_reg)
         elif boss_id is not None:
             out["raw_hp"] = timed("HP 판독", read_percent, pct_reg)
+            if pad is not None and out["raw_hp"] is not None and out["raw_hp"] <= 20:
+                # 패턴 알림 경로 저HP 다시 읽기(0.47.1) — 영역이 바와 1~6px 어긋나 잘린 숫자(17→11 등)를 바로잡는다
+                out["raw_hp"], _ = timed("HP 세로 다시", self._recheck_low_hp, full, pad[0], frame.shape[0],
+                                         out["raw_hp"], None)
         elif presence and ext is not None:  # 오버레이: 존재 확인에서 읽은 %(+소수)도 받는다(추가 판독 없음)
             reading = timed("보스바 확인", self._boss_bar_reading, frame)
             out["bar_pct"], out["bar_frac"] = reading if reading is not None else (None, None)

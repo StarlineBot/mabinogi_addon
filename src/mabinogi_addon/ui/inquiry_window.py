@@ -447,6 +447,8 @@ class InquiryWindow(QWidget):
         self._elapsed, self._last_tick, self._next_grab = 0.0, None, 0.0
         if card.key == "cooldown":
             inq.attach_cooldown(self.session)  # 칸 목록·아이콘(수집 끝에 app.log 쿨타임 줄)
+        if card.key == "buff":
+            inq.attach_buff_gone(self.session)  # 사라짐 경고 순간 PNG·진단 줄(0.47.1)
         if card.mode == "collect":
             from .dpi import to_physical
             self._rects = []
