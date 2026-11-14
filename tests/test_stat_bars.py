@@ -51,7 +51,9 @@ def _synthetic(ratios, hues):
         bright = cv2.cvtColor(
             np.uint8([[[hue, 200, 220]]]), cv2.COLOR_HSV2BGR
         )[0, 0]
-        dark = cv2.cvtColor(np.uint8([[[hue, 200, 60]]]), cv2.COLOR_HSV2BGR)[0, 0]
+        # 소모 색: 게임 실측(0.49.1) — MP H126·S170·V78(남색), HP H171·S178·V119, STA(자료 없음)는 같은 색조로 어둡게
+        dhue, dsat, dval = {115: (126, 170, 78), 114: (126, 170, 78), 163: (171, 178, 60)}.get(hue, (hue, 200, 60))
+        dark = cv2.cvtColor(np.uint8([[[dhue, dsat, dval]]]), cv2.COLOR_HSV2BGR)[0, 0]
         img[y : y + h_each, :] = dark
         img[y : y + h_each, : int(w * ratio)] = bright
     return img
@@ -161,3 +163,65 @@ def test_interface_colours_locate_three_bars(name):
 def test_interface_colours_read_three_bars(name, box):
     f = image_io.imread(_SHOTS / name, cv2.IMREAD_COLOR)
     _assert_full_read(f, box, _IFACE[name])
+
+
+# ---- 덜 찬 바(0.49.1 QA 5ece564) — 소모 색(MP H126·S170·V78 남색)도 바 색, 어두워진 채움·흐린 화면·글자 번짐 ----
+_PARTIAL = {  # 파일 → (바, 실제 값)
+    "mabinogi_2026_10_30_214051.png": ("mp", 2456 / 5487),  # 4K, 마나 0.448
+    "스크린샷 2026-10-18 001541.png": ("mp", 3774 / 8584),  # 채움 위가 반투명하게 어두움(H114·V68)
+    "image55.png": ("hp", 0.656),  # HP 소모 H171·S178·V119
+    "스크린샷 2026-10-09 200614.png": ("mp", 292 / 6328),  # 거의 빈 마나 — 남색 위 흰 글자 둘레 번짐은 채움 아님
+    "스크린샷 2026-11-05 203332.png": ("hp", 4039 / 9639),
+    "image02.png": ("mp", 5241 / 5380),
+}
+
+
+@pytest.mark.parametrize("name", sorted(_PARTIAL))
+def test_partial_bars_locate_and_read(name):
+    from mabinogi_addon.detect.stat_bars import locate_stat_bars
+    f = image_io.imread(_SHOTS / name, cv2.IMREAD_COLOR)
+    box = locate_stat_bars(f)
+    assert box is not None
+    x, y, w, h = box
+    got = {r.stat_id: r.ratio for r in read_stat_bars(f[y:y + h, x:x + w], require_complete=True)}
+    assert set(got) == {"hp", "mp", "sta"}
+    stat, want = _PARTIAL[name]
+    assert abs(got[stat] - want) <= 0.02, got
+
+
+def test_blurry_screenshot_locates_full_width():
+    """흐린 화면(195115): 숫자 글자 번짐으로 바 왼쪽 채도가 떨어져도 바 전체 폭(짧은 MP 덩어리 둘레 창에 잘리지 않음)."""
+    from mabinogi_addon.detect.stat_bars import locate_stat_bars
+    f = image_io.imread(_SHOTS / "스크린샷 2026-10-09 195115.png", cv2.IMREAD_COLOR)
+    box = locate_stat_bars(f)
+    assert box is not None and abs(box[0] - 931) <= 3 and abs(box[2] - 104) <= 4
+
+
+# 기존 스크린샷(가로 800px 이상)은 자동 찾기 + 세 바 완전 판독이 줄지 않아야 한다(0.49.0: 116장 → 0.49.1: 122장).
+# 아래는 지금도 못 찾는 장(체력바가 안 보이거나 가려진 화면) — 새로 찾게 되면 목록에서 빼면 된다.
+_LOCATE_MISSING = {
+    "mabinogi_2026_10_30_213927.png", "mabinogi_2026_10_30_213942.png", "mabinogi_2026_10_30_214016.png",
+    "스크린샷 2026-10-16 205627.png", "스크린샷 2026-10-17 012459.png", "스크린샷 2026-10-18 124011.png",
+}
+
+
+def _png_width(p: Path) -> int:
+    head = p.read_bytes()[:24]  # PNG 헤더: 16~20바이트가 가로(빅 엔디언)
+    return int.from_bytes(head[16:20], "big") if head[:8] == b"\x89PNG\r\n\x1a\n" else 0
+
+
+_LARGE = sorted(str(p.relative_to(_SHOTS)) for p in _SHOTS.rglob("*.png") if _png_width(p) >= 800)
+
+
+def test_large_screenshot_list_matches_baseline():
+    assert len(_LARGE) >= 128 and _LOCATE_MISSING <= set(_LARGE)
+
+
+@pytest.mark.parametrize("name", [n for n in _LARGE if n not in _LOCATE_MISSING])
+def test_existing_screenshots_still_locate(name):
+    from mabinogi_addon.detect.stat_bars import locate_stat_bars
+    f = image_io.imread(_SHOTS / name, cv2.IMREAD_COLOR)
+    box = locate_stat_bars(f)
+    assert box is not None
+    x, y, w, h = box
+    assert len(read_stat_bars(f[y:y + h, x:x + w], require_complete=True)) == 3
