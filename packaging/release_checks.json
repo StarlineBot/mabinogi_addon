@@ -25,14 +25,14 @@
         "tests/test_autofind_diagnostics.py",
         "tests/test_skillbar_testers.py"
       ],
-      "reason": "하늘색 인터페이스: MP는 채도 110 이상만(읽기·찾기), 띠 이름은 색조로(안 맞는 띠 버림·같은 색 둘이면 확정 안 함), 찾기는 HP·STA 쌍으로도"
+      "reason": "인터페이스 색(하늘·빨강·노랑·베이지): 바마다 색조 ±8 + 채도 하한(HP 110·MP 110·STA 140)으로 읽기·찾기, 띠 이름은 색조로, 찾기 후보(MP·STA 쌍·MP 둘레 창·HP·STA 쌍)를 세 바 범위 가운데 값으로 다듬어 검증"
     },
     "tests/test_stat_bars.py": {
       "tests": [
         "tests/test_stat_bars.py",
         "tests/test_stat_bars_stability.py"
       ],
-      "reason": "새 스크린샷 두 영역·찾기·색조 매핑 테스트(순서 매핑 테스트는 색조로)"
+      "reason": "인터페이스 색 스크린샷 7장: 찾기·바만/테두리 포함 두 영역 완전 판독, 색조 매핑 테스트"
     },
     "packaging/release_checks.json": {
       "tests": [

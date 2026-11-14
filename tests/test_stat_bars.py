@@ -121,3 +121,43 @@ def test_bands_named_by_hue_and_unknown_band_dropped():
     region = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
     got = read_stat_bars(region, require_complete=True)
     assert [(r.stat_id, r.ratio) for r in got] == [("hp", 1.0), ("mp", 1.0), ("sta", 1.0)]
+
+
+# ---- 인터페이스 색별(사용자 제보 11-15, 2560×1440) — 빨강·노랑·베이지 등 테두리 색이 바 색조에 섞이지 않게 ----
+_IFACE = {  # 파일 → MP 기대값(나머지 바는 가득)
+    "스크린샷 2026-11-15 010135.png": 1.0,  # 빨강
+    "스크린샷 2026-11-15 010144.png": 1.0,
+    "스크린샷 2026-11-15 010202.png": 1.0,
+    "스크린샷 2026-11-15 010211.png": 1.0,
+    "스크린샷 2026-11-15 010216.png": 1.0,  # 노랑
+    "스크린샷 2026-11-15 010223.png": 1.0,  # 베이지
+    "스크린샷 2026-11-14 230836.png": 6908 / 7774,  # 하늘
+}
+
+
+def _assert_full_read(f, box, mp):
+    from mabinogi_addon.detect.stat_bars import read_stat_bars
+    x, y, w, h = box
+    got = read_stat_bars(f[y:y + h, x:x + w], require_complete=True)
+    assert [r.stat_id for r in got] == ["hp", "mp", "sta"]
+    got = {r.stat_id: r.ratio for r in got}
+    assert got["hp"] == 1.0 and got["sta"] == 1.0
+    assert abs(got["mp"] - mp) <= 0.02
+
+
+@pytest.mark.parametrize("name", sorted(_IFACE))
+def test_interface_colours_locate_three_bars(name):
+    from mabinogi_addon.detect.stat_bars import locate_stat_bars
+    f = image_io.imread(_SHOTS / name, cv2.IMREAD_COLOR)
+    box = locate_stat_bars(f)
+    assert box is not None
+    x, y, w, h = box
+    assert abs(x - 932) <= 3 and abs(y - 1403) <= 3 and abs(w - 103) <= 4  # 테두리 장식·이음새로 넓어지지 않음
+    _assert_full_read(f, box, _IFACE[name])
+
+
+@pytest.mark.parametrize("box", [(932, 1403, 103, 32), (928, 1398, 110, 40)])  # 바만 / 테두리 포함
+@pytest.mark.parametrize("name", sorted(_IFACE))
+def test_interface_colours_read_three_bars(name, box):
+    f = image_io.imread(_SHOTS / name, cv2.IMREAD_COLOR)
+    _assert_full_read(f, box, _IFACE[name])

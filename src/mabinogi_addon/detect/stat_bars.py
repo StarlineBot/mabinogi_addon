@@ -41,17 +41,27 @@ _FILL_V = 120
 # (바 오른쪽 끝 둥근 캡·안티앨리어싱으로 꽉 찬 바가 99%로 읽히던 것 방지)
 _FULL_SNAP_PX = 2
 _FULL_SNAP_RATIO = 0.02
-# 띠 이름 = 가장 가까운 기준 색조(_BAR_HUE_TOL 안), 안 맞으면 버림. MP 색조대(_MP_HUE)는 채도 _MP_SAT_MIN 이상만 바.
-_BAR_HUE = {"hp": 163, "mp": 114, "sta": 23}
-_BAR_HUE_TOL = 25
-_MP_HUE = (88, 130)
-_MP_SAT_MIN = 110
+# 바마다 색조 중심 ±_BAR_HUE_TOL + 채도 하한(0.49.1 — 인터페이스 색별 테두리 제외, 사용자 제보 11-14·15).
+# 기존 118장 실측: HP H163~167·S126~176, MP H113~114·S125~132, STA H22~23·S179~220.
+# 테두리: 하늘 H92~99·S89~100, 빨강 H1~2·S145~154, 노랑 H21~25·S103~114, 베이지 H15~18·S33~93 — 모두 어느 바에도 안 맞음.
+_BAR_HUE = {"hp": 165, "mp": 114, "sta": 23}
+_BAR_HUE_TOL = 8
+_BAR_SAT_MIN = {"hp": 110, "mp": 110, "sta": 140}
+_MP_SAT_MIN = _BAR_SAT_MIN["mp"]
+
+
+def _bar_mask(h, s, stat: str, slack: int = 0) -> np.ndarray:
+    """그 바의 색조(±_BAR_HUE_TOL)·채도(하한 − slack) 픽셀."""
+    c = _BAR_HUE[stat]
+    d = np.abs(h.astype(int) - c)
+    d = np.minimum(d, 180 - d)
+    return (d <= _BAR_HUE_TOL) & (s >= _BAR_SAT_MIN[stat] - slack)
 
 
 def _bar_pixels(h, s, v, sat_min: int = _SAT_MIN) -> np.ndarray:
-    """바로 볼 유채색 픽셀 — MP 색조대는 채도 _MP_SAT_MIN 이상만(하늘색 인터페이스 테두리 제외)."""
-    mp_hue = (h >= _MP_HUE[0]) & (h <= _MP_HUE[1])
-    return (s > sat_min) & (v > _V_MIN) & (~mp_hue | (s >= _MP_SAT_MIN))
+    """바로 볼 유채색 픽셀 — 세 바 중 하나의 색조·채도에 맞는 것만(인터페이스 테두리 제외). sat_min은 예전 인자 호환."""
+    any_bar = _bar_mask(h, s, "hp") | _bar_mask(h, s, "mp") | _bar_mask(h, s, "sta")
+    return any_bar & (v > _V_MIN)
 
 
 def _stat_of(hue: int) -> str | None:
@@ -104,6 +114,55 @@ def _bands(region: np.ndarray) -> list[tuple[int, int]]:
     return bands
 
 
+_MIN_BAR_WIDTH = 40
+
+
+def _band_span(region: np.ndarray, r0: int, r1: int) -> tuple[str, int, int] | None:
+    """한 띠의 (바 이름, 왼쪽, 오른쪽) — 채움·소모를 합친 가로 범위. 바 색이 아니면 None."""
+    hsv = cv2.cvtColor(region[r0:r1], cv2.COLOR_BGR2HSV)
+    bh, bs, bv = hsv[:, :, 0].astype(int), hsv[:, :, 1].astype(int), hsv[:, :, 2]
+    colored = _bar_pixels(bh, bs, bv)
+    if not colored.any():
+        return None
+    hue = int(np.median(bh[colored]))
+    stat = _stat_of(hue)
+    if stat is None:
+        return None
+    cols = np.where(((np.abs(bh - hue) <= _HUE_TOL) & (bs >= _BAR_SAT_MIN[stat])).any(axis=0))[0]
+    if not cols.size:
+        return None
+    # 가장 긴 연속 구간만(틈 2px까지 이어 봄) — 바 옆 테두리 이음새(빨강 H177~179 등)가 떨어져 붙어도 범위에 안 넣는다.
+    runs = np.split(cols, np.where(np.diff(cols) > 3)[0] + 1)
+    best = max(runs, key=lambda r: (r[-1] - r[0], r.size))
+    return (stat, int(best[0]), int(best[-1]))
+
+
+def _refine(frame: np.ndarray, box) -> tuple[int, int, int, int] | None:
+    """후보 사각형 → 세 바 띠만 딱 감싸는 사각형(0.49.1). 좌우는 세 바 범위의 가운데 값 — 바 옆 인터페이스 장식(바와 같은 색)이
+    한 바에만 붙어 넓어져도 끌려가지 않는다. 세 바(HP·MP·STA)가 다 없으면 None."""
+    H, W = frame.shape[:2]
+    x, y, w, h = (int(v) for v in box)
+    x, y = max(0, x), max(0, y)
+    w, h = min(w, W - x), min(h, H - y)
+    if w < 20 or h < 6:
+        return None
+    region = frame[y:y + h, x:x + w]
+    found = {}
+    for r0, r1 in _bands(region):
+        got = _band_span(region, r0, r1)
+        if got is not None and got[0] not in found:
+            found[got[0]] = (r0, r1, got[1], got[2])
+    if len(found) != 3:
+        return None
+    tops = [v[0] for v in found.values()]
+    bottoms = [v[1] for v in found.values()]
+    left = int(np.median([v[2] for v in found.values()]))
+    right = int(np.median([v[3] for v in found.values()]))
+    if right - left < _MIN_BAR_WIDTH:  # 체력바는 해상도와 무관하게 약 100px — 아이콘 속 작은 색 띠 오탐 제외
+        return None
+    return (x + left, y + min(tops), right - left + 1, max(bottoms) - min(tops))
+
+
 def _ratio(region: np.ndarray, r0: int, r1: int) -> tuple[float, int]:
     """한 띠(r0:r1)의 채움 비율과 대표 색조."""
     band = region[r0:r1]
@@ -114,7 +173,10 @@ def _ratio(region: np.ndarray, r0: int, r1: int) -> tuple[float, int]:
         return 0.0, -1
     hue = int(np.median(bh[colored]))
     # 그 색조에 해당하는(채움/소모 둘 다) 픽셀 → 바의 가로 범위. MP는 테두리(채도 ≤ 100)를 빼고.
-    huematch = (np.abs(bh - hue) <= _HUE_TOL) & _bar_pixels(bh, bs, np.full_like(bv, 255), _SAT_MIN - 10)
+    # 채움/소모의 가로 범위는 그 띠 색조 ±_HUE_TOL(소모 쪽은 색조가 조금 다름 — MP 소모 H126) + 그 바의 채도 하한(테두리 제외).
+    stat = _stat_of(hue)
+    sat_floor = _BAR_SAT_MIN[stat] if stat is not None else _SAT_MIN - 10
+    huematch = (np.abs(bh - hue) <= _HUE_TOL) & (bs >= sat_floor)
     cols = np.where(huematch.any(axis=0))[0]
     if cols.size == 0:
         return 0.0, hue
@@ -143,9 +205,9 @@ def _ratio(region: np.ndarray, r0: int, r1: int) -> tuple[float, int]:
 # 색(마젠타 HP / 파랑 MP / 노랑 STA) + 기하(가로로 긴 바가 세로로 근접 스택)로 찾는다.
 # 바 위에 current/max 숫자가 겹쳐 색이 조각나므로, 가로 모폴로지 클로즈로 이어붙인 뒤 찾는다.
 # 보통 꽉 차 있는 MP(파랑)·STA(노랑) 쌍을 앵커로 잡고 HP는 한 피치 위로 유도(HP가 비어도 OK).
-_LOC_HUE = {"hp": (150, 172), "mp": (98, 118), "sta": (16, 34)}  # OpenCV H(0~180)
+_LOC_HUE = {k: (_BAR_HUE[k] - _BAR_HUE_TOL, _BAR_HUE[k] + _BAR_HUE_TOL) for k in _BAR_HUE}  # OpenCV H(0~180) — 읽기와 같은 기준
 _LOC_SAT_MIN = 90
-_LOC_SAT = {"mp": _MP_SAT_MIN}  # MP는 채도 110 이상만(하늘색 인터페이스 테두리가 MP 바에 붙어 한 덩어리가 되던 것)
+_LOC_SAT = dict(_BAR_SAT_MIN)  # 바마다 채도 하한(인터페이스 테두리가 바에 붙어 한 덩어리가 되던 것)
 _LOC_VAL_MIN = 90
 # 체력바는 게임 화면 '하단'에 붙어 있다. 프레임 위쪽(상단 스킬바·버프 아이콘 줄)에서 파랑/
 # 노랑 아이콘이 MP/STA 쌍처럼 잡혀 엉뚱한 곳(예: (765,36))을 체력바로 오검출하던 것을 막기
@@ -186,15 +248,15 @@ def locate_stat_bars(frame: np.ndarray, *, diagnostics: dict | None = None) -> t
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
     y_min = int(H * _LOC_BOTTOM_FRAC)  # 하단 구역만(상단 스킬바 아이콘 오검출 방지)
     mps = [b for b in _color_bars(hsv, *_LOC_HUE["mp"], min_w, close_w, max_h, _LOC_SAT["mp"]) if b[1] >= y_min]
-    stas = [b for b in _color_bars(hsv, *_LOC_HUE["sta"], min_w, close_w, max_h) if b[1] >= y_min]
+    stas = [b for b in _color_bars(hsv, *_LOC_HUE["sta"], min_w, close_w, max_h, _LOC_SAT["sta"]) if b[1] >= y_min]
     if diagnostics is not None:
         diagnostics.update(transforms=["BGR to HSV", "hue mask", "horizontal morphology close", "connected components"],
                            search_region=[0, y_min, W, H - y_min],
-                           thresholds={"hue": _LOC_HUE, "saturation_min": _LOC_SAT_MIN, "mp_saturation_min": _LOC_SAT["mp"],
+                           thresholds={"hue": _LOC_HUE, "saturation_min": _LOC_SAT_MIN, "bar_saturation_min": _LOC_SAT,
                                        "value_min": _LOC_VAL_MIN, "min_width": min_w,
                                        "close_width": close_w, "max_height": max_h},
                            mp_candidates=mps, sta_candidates=stas, rejection="no_matching_stack")
-    best: tuple[int, int, int, int] | None = None
+    candidates: list[tuple[int, int, int, int]] = []
     for bx, by, bw, bh in mps:  # MP(파랑) 위
         for cx, cy, cw, ch in stas:  # STA(노랑) 아래
             gap = cy - by
@@ -202,30 +264,38 @@ def locate_stat_bars(frame: np.ndarray, *, diagnostics: dict | None = None) -> t
                 continue
             x = min(bx, cx)
             top = max(0, by - gap)  # HP는 MP 한 피치 위
-            w = max(bx + bw, cx + cw) - x
-            box = (x, top, w, cy + ch - top)
-            if best is None or box[1] > best[1]:  # 더 아래(맨 아래=원본)
-                best = box
-    if best is None:
-        # 대신 HP(분홍)·STA(노랑) 쌍으로(0.49.0): 하늘색 인터페이스에선 MP 바가 주변 파란 테두리와 붙어 한 덩어리가 돼
-        # MP 후보로 안 잡힌다. HP 위·STA 아래(MP 한 칸 사이)면 그 사이가 MP — 아래 세 바 읽기 검증은 그대로.
-        hps = [b for b in _color_bars(hsv, *_LOC_HUE["hp"], min_w, close_w, max_h) if b[1] >= y_min]
-        if diagnostics is not None:
-            diagnostics["hp_candidates"] = hps
-        for ax, ay, aw, ah in hps:
-            for cx, cy, cw, ch in stas:
-                gap = cy - ay
-                if abs(ax - cx) > max(20, int(W * 0.01)) or not (ah < gap < 2 * (max_h + 20)):
-                    continue
-                x = min(ax, cx)
-                box = (x, ay, max(ax + aw, cx + cw) - x, cy + ch - ay)
-                if best is None or box[1] > best[1]:
-                    best = box
-    if best is None:
+            candidates.append((x, top, max(bx + bw, cx + cw) - x, cy + ch - top))
+    # 0.49.1: MP 바 둘레 창도 후보로 — 인터페이스 장식(바와 같은 색)이 STA·HP 쪽에 붙어 짝이 안 맞는 화면(빨강·노랑)
+    for bx, by, bw, bh in mps:
+        pad = max(4, bw // 4)
+        candidates.append((bx - pad, by - 2 * bh - 8, bw + 2 * pad, 5 * bh + 16))
+    # 대신 HP(분홍)·STA(노랑) 쌍으로(0.49.0): 하늘색 인터페이스에선 MP 바가 주변 파란 테두리와 붙어 한 덩어리가 돼
+    # MP 후보로 안 잡힌다. HP 위·STA 아래(MP 한 칸 사이)면 그 사이가 MP.
+    hps = [b for b in _color_bars(hsv, *_LOC_HUE["hp"], min_w, close_w, max_h, _LOC_SAT["hp"]) if b[1] >= y_min]
+    if diagnostics is not None:
+        diagnostics["hp_candidates"] = hps
+    for ax, ay, aw, ah in hps:
+        for cx, cy, cw, ch in stas:
+            gap = cy - ay
+            if abs(ax - cx) > max(20, int(W * 0.01)) or not (ah < gap < 2 * (max_h + 20)):
+                continue
+            x = min(ax, cx)
+            candidates.append((x, ay, max(ax + aw, cx + cw) - x, cy + ch - ay))
+    if not candidates:
         return None
-    # 검증: 그 박스에서 실제로 3개 바를 읽어야 진짜 체력바(디버프 아이콘 줄 오탐 제거).
-    bx, by, bw, bh = best
-    if len(read_stat_bars(frame[by : by + bh, bx : bx + bw], require_complete=True)) < 3:
+    # 검증: 세 바만 딱 감싸게 다듬은 사각형에서 실제로 3개 바를 읽어야 진짜 체력바(디버프 아이콘 줄 오탐 제거).
+    # 여럿이면 맨 아래(게임 원본 바는 하단 메뉴바에 붙어 있다).
+    best = None
+    for cand in candidates:
+        box = _refine(frame, cand)
+        if box is None or box[1] + box[3] // 2 < y_min:  # 가운데(MP 줄)가 하단 구역 — HP 줄은 경계 위에 걸쳐도 된다
+            continue
+        bx, by, bw, bh = box
+        if len(read_stat_bars(frame[by:by + bh, bx:bx + bw], require_complete=True)) < 3:
+            continue
+        if best is None or box[1] > best[1]:
+            best = box
+    if best is None:
         if diagnostics is not None:
             diagnostics["rejection"] = "fewer_than_three_readable_bars"
         return None
