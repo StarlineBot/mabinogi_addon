@@ -78,20 +78,36 @@ class AccountController(QObject):
 
     def shutdown(self, *, flush: bool = True) -> None:
         """앱 종료: 바뀐 설정이 있으면 한 번 올리고(최대 FLUSH_TIMEOUT초), 작업 스레드를 닫는다."""
+        self.begin_shutdown(flush=flush)
+        self.finish_shutdown()
+
+    def begin_shutdown(self, *, flush: bool = True) -> None:
+        """종료 정리 앞쪽(0.49.0): 올리기를 작업 스레드에서 시작만 한다 — 다른 정리와 겹치고, 끝에서 finish_shutdown이 남은 시간만 기다림."""
         if self.closed:
             return
         self.closed = True
         config.remove_write_listener(self._on_write)
         self._debounce.stop()
         self._refresh_timer.stop()
+        self._flush_future = None
+        self._flush_started = time.monotonic()
         if flush and not self.held and self._token() is not None and self.sync_enabled():
-            future = self._executor_or_new().submit(self._job_upload, None, False)
+            self._flush_future = self._executor_or_new().submit(self._job_upload, None, False)
+
+    def finish_shutdown(self) -> float:
+        """올리기가 끝나길 기다린다(시작부터 최대 FLUSH_TIMEOUT초 — 올림이 끝나기 전에 꺼지지 않게). 기다린 ms를 돌려준다."""
+        started = time.monotonic()
+        future = getattr(self, "_flush_future", None)
+        self._flush_future = None
+        if future is not None:
+            left = max(0.0, FLUSH_TIMEOUT - (started - getattr(self, "_flush_started", started)))
             try:
-                future.result(timeout=FLUSH_TIMEOUT)
-            except Exception:  # noqa: BLE001 — 끄는 중: 실패는 다음 실행 때 다시
+                future.result(timeout=left)
+            except Exception:  # noqa: BLE001 — 끄는 중: 실패·시간 초과는 다음 실행 때 다시
                 _log.warning("[동기화] 종료 때 올리기 실패", exc_info=True)
         if self._executor is not None and not getattr(self._executor, "inline", False):
             self._executor.shutdown(wait=False)
+        return (time.monotonic() - started) * 1000
 
     # ---- 상태 ---------------------------------------------------------------------------------
     def _token(self) -> str | None:

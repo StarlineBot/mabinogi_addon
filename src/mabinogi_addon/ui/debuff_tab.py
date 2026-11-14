@@ -285,8 +285,8 @@ class DebuffTab(QWidget):
         # 보스바가 보일 때만 표시(2026-11-06): 마을 등 보스가 없을 때 디버프 목록이 뜨지 않게. 보스바 영역이 없으면 항상 표시.
         self.boss_only_check = checkbox("보스바가 보일 때만 표시")
         self.boss_only_check.setChecked(config.load_debuff_boss_only())
-        self.boss_only_check.setToolTip("보스 체력바 영역이 없으면 항상 보여요. 보스 체력바가 사라진 뒤 10초 더 보이고, "
-                                        "숨겨진 동안에도 디버프는 계속 확인해요.")
+        self.boss_only_check.setToolTip("보스 체력바 영역이 없으면 항상 보여요. 보스 체력바가 사라지면 같이 숨고(2~3초 안), "
+                                        "다시 보이면 바로 보여요. 숨겨진 동안에도 디버프는 계속 확인해요.")
         self.boss_only_check.toggled.connect(self._on_boss_only)
         from .widgets import EqualRow
         # 위 2줄에서는 세 칸 모두 같은 제 글자 폭(가장 넓은 칸 × 3) — 왼쪽 칸처럼 늘어나지 않아 '불투명도 100 %'가 잘렸다

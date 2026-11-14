@@ -18,7 +18,12 @@
     "tests/test_release_candidate.py",
     "tests/test_windows_ci.py",
     "tests/test_release_notes.py",
-    "tests/test_release_notes_trigger.py"
+    "tests/test_release_notes_trigger.py",
+    "tests/test_close_overlap.py",
+    "tests/test_main_shutdown.py",
+    "tests/test_restart_after_apply.py",
+    "tests/test_cloud_sync.py",
+    "tests/test_account.py"
   ],
   "coverage": {
     "src/mabinogi_addon/tracker/debuff_engine.py": {
@@ -59,7 +64,7 @@
         "tests/test_debuff_applied.py",
         "tests/test_navigation.py"
       ],
-      "reason": "표시 [안 걸린 것 | 걸린 것 + 시간 | 전부] — 전부는 제작자만, 아니면 '안 걸린 것'"
+      "reason": "표시 [안 걸린 것 | 걸린 것 + 시간 | 전부] — 전부는 제작자만, 아니면 '안 걸린 것' · '보스바가 보일 때만' 툴팁(10초 문구 고침)"
     },
     "src/mabinogi_addon/config.py": {
       "tests": [
@@ -69,10 +74,13 @@
     },
     "src/mabinogi_addon/ui/main_window.py": {
       "tests": [
+        "tests/test_close_overlap.py",
         "tests/test_debuff_applied.py",
+        "tests/test_main_shutdown.py",
+        "tests/test_restart_after_apply.py",
         "tests/test_startup_smoke.py"
       ],
-      "reason": "로그인이 바뀌면 디버프 표시 방식 다시(전부 → 제작자 아니면 안 걸린 것)"
+      "reason": "로그인이 바뀌면 디버프 표시 방식 다시(전부 → 제작자 아니면 안 걸린 것) · 종료: 상태 저장 뒤 올림 시작 → 다른 정리 → 끝에서 기다림, '종료 요청 → 끝'·prepare_close 대기 기록"
     },
     "packaging/release_checks.json": {
       "tests": [
@@ -95,6 +103,20 @@
         "tests/test_release_notes_trigger.py"
       ],
       "reason": "0.49.0 노트 파싱·새 버전 표시(게시된 0.48.0 섹션 그대로)"
+    },
+    "src/mabinogi_addon/debuff_gate.py": {
+      "tests": [
+        "tests/test_debuff_boss_gate.py"
+      ],
+      "reason": "추가 10초 유예 없앰 — 보스 존재 신호를 그대로 따름(블랙박스 60초 유예는 그대로)"
+    },
+    "src/mabinogi_addon/ui/account_controller.py": {
+      "tests": [
+        "tests/test_close_overlap.py",
+        "tests/test_cloud_sync.py",
+        "tests/test_account.py"
+      ],
+      "reason": "종료 올리기 begin/finish로 나눔(겹치고 끝에서 남은 시간만, 최대 5초)"
     }
   }
 }

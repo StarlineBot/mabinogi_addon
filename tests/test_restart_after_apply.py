@@ -46,7 +46,7 @@ def _guard_close(monkeypatch, w):
     original = config._write_local_config
     monkeypatch.setattr(config, "_write_local_config",
                         lambda data, *a, **k: (writes.append(1), original(data, *a, **k)))
-    monkeypatch.setattr(w._account, "shutdown", lambda flush=True: flushes.append(flush))
+    monkeypatch.setattr(w._account, "begin_shutdown", lambda flush=True: flushes.append(flush))  # 0.49.0: 종료 올림 시작
     return writes, flushes
 
 

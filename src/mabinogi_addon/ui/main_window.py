@@ -2619,6 +2619,19 @@ class MainWindow(QMainWindow):
             _log.warning("[다시 켜기] 실패: %s", exc)
             QMessageBox.information(None, "다시 켜기", RELAUNCH_FAILED_TEXT)
 
+    def _close_wait(self, name: str, ok: bool) -> bool:
+        """종료 앞쪽 prepare_close 대기 기록: [처음 기다린 시각, 다시 시도 횟수, 기다린 초]."""
+        import time
+        waits = self.__dict__.setdefault("_close_waits", {})
+        now = time.perf_counter()
+        if not ok:
+            rec = waits.setdefault(name, [now, 0, 0.0])
+            rec[1] += 1
+            rec[2] = now - rec[0]
+        elif name in waits:
+            waits[name][2] = now - waits[name][0]
+        return ok
+
     def _minimize_to_tray_enabled(self) -> bool:
         return self._tray is not None and config.load_general_flag(
             "minimizeToTray", True
@@ -2829,7 +2842,12 @@ class MainWindow(QMainWindow):
                 )
             return
 
-        if not self.blackbox_tools.prepare_close():
+        # 종료 기록(0.49.0): '종료 요청 → 끝' 전체와 앞쪽 대기(블랙박스·설정·최적화 prepare_close — 0.2초마다 다시 시도)
+        if getattr(self, "_close_requested_at", None) is None:
+            self._close_requested_at = time.perf_counter()
+            self._close_waits = {}
+
+        if not self._close_wait("블랙박스", self.blackbox_tools.prepare_close()):
             event.ignore()
             self._force_quit = True
             # 녹화 중지만 진행 중이면 창 없이 자동 재시도(0.14.1: 녹화 중 종료마다 복구 창+종료 취소 회귀).
@@ -2847,13 +2865,13 @@ class MainWindow(QMainWindow):
             return
         self._blackbox_close_deadline = None
 
-        if not self.settings_tab.prepare_close():
+        if not self._close_wait("설정", self.settings_tab.prepare_close()):
             event.ignore()
             self._force_quit = True
             QTimer.singleShot(200, self.close)
             return
 
-        if not self.optimization_tools.prepare_close():
+        if not self._close_wait("최적화", self.optimization_tools.prepare_close()):
             event.ignore()
             self._force_quit = True
             QTimer.singleShot(200, self.close)
@@ -2895,8 +2913,9 @@ class MainWindow(QMainWindow):
             self._save_debuff_overlay_state(),
             self._save_memo(),
         ))
-        # 설정 동기화: 바뀐 게 있으면 한 번 올림(최대 5초, 비로그인·동기화 끔이면 통신 없음). 서버 설정을 막 받았으면 올리지 않음
-        _step("설정 동기화", lambda: self._account.shutdown(flush=not self._config_pending_restart))
+        # 설정 동기화(0.49.0): 마지막 상태까지 저장한 바로 다음에 올리기를 작업 스레드에서 '시작'만 하고, 아래 다른 정리와 겹친 뒤
+        # 맨 끝에서 남은 시간만 기다린다(시작부터 최대 5초 — 올림이 끝나기 전에 꺼지지 않음). 서버 설정을 막 받았으면 올리지 않음
+        _step("설정 동기화 시작", lambda: self._account.begin_shutdown(flush=not self._config_pending_restart))
         _step("파티 폴링 정지", lambda: self.party_tab.stop_polling(wait_ms=600))
         _step("진단 UI 정지", self.settings_tab.shutdown)
         # 두 캡처 워커에 먼저 정지 신호를 보내고, '공유 마감시한'으로 대기를 겹친다.
@@ -2927,9 +2946,12 @@ class MainWindow(QMainWindow):
             self.dorcha_tab.shutdown(),
             self.skillbar_tab.shutdown(),
         ))
+        sync_wait = [0.0]
+        _step("설정 동기화 기다림", lambda: sync_wait.__setitem__(0, self._account.finish_shutdown()))
         if self._tray is not None:
             self._tray.hide()
         _log.info("종료 총 %.0fms", (time.perf_counter() - total) * 1000)
+        _log.info(close_summary(time.perf_counter() - self._close_requested_at, self._close_waits, sync_wait[0]))
         super().closeEvent(event)
         if self._relaunch_on_exit:  # 정리를 다 마친 뒤 — 새 프로세스는 이 프로세스가 끝날 때까지 기다린다
             self._relaunch_after_cleanup()
@@ -2951,6 +2973,19 @@ class MainWindow(QMainWindow):
 
 
 RELAUNCH_FAILED_TEXT = "설정을 적용했어요.\n앱이 자동으로 다시 켜지지 못했어요. 앱을 다시 실행해 주세요."
+
+
+def close_summary(total_sec: float, waits: dict, sync_wait_ms: float) -> str:
+    """'종료 요청 → 끝 2310ms · 블랙박스 대기 410ms(다시 시도 2번) · 설정 대기 0ms · 최적화 대기 0ms · 동기화 남은 기다림 120ms'."""
+    parts = [f"종료 요청 → 끝 {total_sec * 1000:.0f}ms"]
+    for name in ("블랙박스", "설정", "최적화"):
+        wait = waits.get(name)
+        if wait is None:
+            parts.append(f"{name} 대기 0ms")
+        else:
+            parts.append(f"{name} 대기 {wait[2] * 1000:.0f}ms(다시 시도 {wait[1]}번)")
+    parts.append(f"동기화 남은 기다림 {sync_wait_ms:.0f}ms")
+    return " · ".join(parts)
 
 
 def account_ask_text(info: dict, reason: str) -> str:
