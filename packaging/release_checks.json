@@ -30,7 +30,13 @@
     "tests/test_settings_grouping.py",
     "tests/test_navigation_all_widths.py",
     "tests/test_region_registration.py",
-    "tests/test_autofind_v2_use.py"
+    "tests/test_autofind_v2_use.py",
+    "tests/test_stat_bars.py",
+    "tests/test_stat_bars_locate.py",
+    "tests/test_stat_bars_stability.py",
+    "tests/test_autofind_v2_engine.py",
+    "tests/test_autofind_diagnostics.py",
+    "tests/test_skillbar_testers.py"
   ],
   "coverage": {
     "src/mabinogi_addon/tracker/debuff_engine.py": {
@@ -153,6 +159,17 @@
         "tests/test_cooldown.py"
       ],
       "reason": "묶음 이름(게임 번호), 숨긴 칸은 잠금 해제면 흐린 자리(우클릭 가능)·잠금이면 투명"
+    },
+    "src/mabinogi_addon/detect/stat_bars.py": {
+      "tests": [
+        "tests/test_stat_bars.py",
+        "tests/test_stat_bars_locate.py",
+        "tests/test_stat_bars_stability.py",
+        "tests/test_autofind_v2_engine.py",
+        "tests/test_autofind_diagnostics.py",
+        "tests/test_skillbar_testers.py"
+      ],
+      "reason": "하늘색 인터페이스: MP는 채도 110 이상만(읽기·찾기), 띠 이름은 색조로(안 맞는 띠 버림·같은 색 둘이면 확정 안 함), 찾기는 HP·STA 쌍으로도"
     }
   }
 }

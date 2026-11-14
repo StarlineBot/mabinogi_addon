@@ -8,6 +8,7 @@
 from pathlib import Path
 
 import cv2
+import pytest
 import numpy as np
 
 from mabinogi_addon import image_io
@@ -56,14 +57,15 @@ def _synthetic(ratios, hues):
     return img
 
 
-def test_maps_top_to_bottom_order_regardless_of_color():
-    # 색을 일부러 섞어도(파랑·노랑·분홍) 위→아래 순서로 hp/mp/sta.
+def test_names_bars_by_hue_regardless_of_order():
+    # 0.49.0(하늘색 인터페이스, 사용자 제보 11-14): 이름은 위→아래 순서가 아니라 색조로(HP ~163·MP ~114·STA ~23).
     img = _synthetic([0.5, 0.75, 1.0], hues=[115, 23, 163])
     rs = read_stat_bars(img)
     assert [r.stat_id for r in rs] == ["hp", "mp", "sta"]
-    assert abs(rs[0].ratio - 0.5) <= 0.06
-    assert abs(rs[1].ratio - 0.75) <= 0.06
-    assert rs[2].ratio >= 0.95
+    got = {r.stat_id: r.ratio for r in rs}
+    assert abs(got["mp"] - 0.5) <= 0.06
+    assert abs(got["sta"] - 0.75) <= 0.06
+    assert got["hp"] >= 0.95
 
 
 def test_nearly_full_snaps_to_100():
@@ -83,3 +85,39 @@ def test_partial_not_snapped():
 
 def test_empty_region_returns_nothing():
     assert read_stat_bars(np.zeros((4, 10, 3), np.uint8)) == []
+
+
+# ---- 하늘색 인터페이스(사용자 제보 11-14, 2560×1440, MP 실제 6908/7774 = 88.9%) ----
+SKY = "tests/data/스크린샷 2026-11-14 230836.png"
+
+
+@pytest.mark.parametrize("box", [(931, 1403, 105, 32), (928, 1398, 110, 40)])  # 바만 / 테두리 포함
+def test_sky_blue_interface_reads_mp_without_border(box):
+    from mabinogi_addon import image_io
+    from mabinogi_addon.detect.stat_bars import read_stat_bars
+    f = image_io.imread(SKY, cv2.IMREAD_COLOR)
+    x, y, w, h = box
+    got = {r.stat_id: r.ratio for r in read_stat_bars(f[y:y + h, x:x + w], require_complete=True)}
+    assert got["hp"] == 1.0 and got["sta"] == 1.0
+    assert abs(got["mp"] - 6908 / 7774) <= 0.02  # 테두리(H 92~99·S 89~100)를 MP로 섞지 않음
+
+
+def test_sky_blue_interface_locates_three_bars():
+    from mabinogi_addon import image_io
+    from mabinogi_addon.detect.stat_bars import locate_stat_bars, read_stat_bars
+    f = image_io.imread(SKY, cv2.IMREAD_COLOR)
+    box = locate_stat_bars(f)
+    assert box is not None
+    x, y, w, h = box
+    assert abs(x - 932) <= 3 and abs(y - 1403) <= 3
+    assert [r.stat_id for r in read_stat_bars(f[y:y + h, x:x + w], require_complete=True)] == ["hp", "mp", "sta"]
+
+
+def test_bands_named_by_hue_and_unknown_band_dropped():
+    from mabinogi_addon.detect.stat_bars import read_stat_bars
+    rows = [((60, 200, 200), 6), ((0, 0, 0), 2), ((163, 176, 207), 8), ((0, 0, 0), 2),
+            ((114, 128, 182), 8), ((0, 0, 0), 2), ((23, 220, 233), 8)]  # 맨 위 = 어느 바도 아닌 초록 띠
+    hsv = np.concatenate([np.full((n, 120, 3), c, np.uint8) for c, n in rows])
+    region = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
+    got = read_stat_bars(region, require_complete=True)
+    assert [(r.stat_id, r.ratio) for r in got] == [("hp", 1.0), ("mp", 1.0), ("sta", 1.0)]
