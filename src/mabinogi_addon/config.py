@@ -66,10 +66,62 @@ def _read_local_config(path: Path = LOCAL_CONFIG_PATH) -> dict:
     return data if data is not None else {}
 
 
+# 설정 파일 잠금(0.48.0, 0.46.0부터 있던 거짓 '설정 불러올까요?' — QA 997c8a7): 화면 스레드와 동기화 작업 스레드가
+# 같은 파일을 읽고-고치고-쓴다. 쓰기(임시 파일 config.json.tmp 포함)는 늘 이 잠금 안에서 하고, 작업 스레드가 고치는 칸
+# (동기화 기록)은 '주인 값'으로 기억해 다른 쪽이 옛 내용을 통째로 써도 되돌아가지 않게 한다.
+import threading as _threading
+from contextlib import contextmanager as _contextmanager
+
+_CONFIG_LOCK = _threading.RLock()
+_OWNED: dict[tuple[str, str], object] = {}  # (파일, 최상위 키) → 그 칸의 주인이 마지막으로 쓴 값(None = 지움)
+
+
+@_contextmanager
+def editing(path: Path = LOCAL_CONFIG_PATH):
+    """읽고-고치고-쓰기를 한 잠금 안에서: `with config.editing() as data: data[...] = ...`."""
+    with _CONFIG_LOCK:
+        data = _read_local_config(path)
+        yield data
+        _write_local_config(data, path)
+
+
+def write_owned_section(key: str, value, path: Path = LOCAL_CONFIG_PATH) -> None:
+    """작업 스레드가 주인인 최상위 칸(동기화 기록)을 쓴다. 이후 다른 쓰기가 옛 값을 담아 와도 이 값을 지킨다."""
+    import copy
+    with _CONFIG_LOCK:
+        _OWNED[(str(path), key)] = copy.deepcopy(value)
+        data = _read_local_config(path)
+        if value is None:
+            data.pop(key, None)
+        else:
+            data[key] = copy.deepcopy(value)
+        _write_local_config(data, path)
+
+
+def forget_owned() -> None:
+    """설정을 통째로 바꿀 때(초기화 등) 주인 값도 잊는다 — 지운 기록이 되살아나지 않게."""
+    with _CONFIG_LOCK:
+        _OWNED.clear()
+
+
 def _write_local_config(data: dict, path: Path = LOCAL_CONFIG_PATH) -> None:
     """원자적 저장: 임시 파일에 쓰고 flush+fsync 후 os.replace로 교체한다. 쓰는
     도중 전원이 끊겨도 본 파일은 '이전 정상본' 아니면 '새 완본'이라 절대 깨지지
     않는다(빈 파일로 초기화되던 문제 방지). 교체 직전 직전본을 .bak로 보존한다."""
+    with _CONFIG_LOCK:
+        _write_local_config_locked(data, path)
+
+
+def _write_local_config_locked(data: dict, path: Path) -> None:
+    owned = {key: value for (p, key), value in _OWNED.items() if p == str(path)}
+    if owned:
+        import copy
+        data = dict(data)
+        for key, value in owned.items():  # 옛 읽기로 만든 내용이 동기화 기록을 되돌리지 않게
+            if value is None:
+                data.pop(key, None)
+            elif data.get(key) != value:
+                data[key] = copy.deepcopy(value)
     text = json.dumps(data, ensure_ascii=False, indent=2)
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
@@ -380,9 +432,11 @@ def import_bundle(
 
 def reset_config(path: Path = LOCAL_CONFIG_PATH) -> None:
     """모든 사용자 설정을 지운다(비밀값은 유지해 API 키·웹훅은 보존)."""
-    data = _read_local_config(path)
-    kept = {k: v for k, v in data.items() if k in _SECRET_KEYS}
-    _write_local_config(kept, path)
+    with _CONFIG_LOCK:
+        forget_owned()  # 초기화는 동기화 기록도 지운다(다음 시작 때 '불러올까요?')
+        data = _read_local_config(path)
+        kept = {k: v for k, v in data.items() if k in _SECRET_KEYS}
+        _write_local_config(kept, path)
 
 
 def _bundled(name: str) -> str | None:

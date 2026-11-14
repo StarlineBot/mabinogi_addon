@@ -218,7 +218,9 @@ class AccountController(QObject):
         if info["rev"] == rec["rev"]:
             return self._job_upload(rec["rev"], False) if digest != rec.get("hash") else ("same", info)
         if info["rev"] > rec["rev"]:
-            return self._job_download(info) if digest == rec.get("hash") else ("ask", info, "both_changed")
+            if digest == rec.get("hash"):
+                return self._job_download(info)
+            return self._same_as_server(client, info, digest, rec) or ("ask", info, "both_changed")
         return self._job_upload(rec["rev"], False)
 
     def _job_upload(self, rev, force: bool):
@@ -238,13 +240,30 @@ class AccountController(QObject):
         except account.Conflict as exc:
             # 409 본문은 {detail, rev}뿐 — 물음에 '마지막 저장: 날짜 · PC'를 보이려고 한 번 더 읽는다(실패하면 rev만)
             info = dict(exc.info)
+            client = self._client(token)
             try:
-                info.update(self._client(token).settings_info())
+                info.update(client.settings_info())
             except (account.ServerError, account.NotFound):
                 pass
-            return ("ask", info, "conflict")
+            return self._same_as_server(client, info, digest, rec) or ("ask", info, "conflict")
         cloud_sync.save_record(rev=info["rev"], hash=digest, at=self._clock(), device=cloud_sync.device_name())
         return ("uploaded", info)
+
+    def _same_as_server(self, client, info, digest, rec):
+        """거짓 충돌 자동 해소(0.48.0): 서버 묶음 내용이 이 PC 지금 내용과 같으면 묻지 않고 기록 rev만 서버 값으로.
+        (예: 기록 rev가 옛값으로 되돌아갔거나, 종료 때 올렸는데 기록을 못 남김.) 다르면 None → 지금처럼 묻는다."""
+        rev = info.get("rev")
+        if not isinstance(rev, int):
+            return None
+        try:
+            server = cloud_sync.blob_hash(client.settings_blob())
+        except (account.ServerError, account.NotFound):
+            return None
+        if server is None or server != digest:
+            return None
+        cloud_sync.save_record(rev=rev, hash=digest, at=self._clock())
+        _log.info("[동기화] 서버 내용이 이 PC와 같아 묻지 않고 기록 rev만 맞춤(이 PC 기록 rev=%s → 서버 rev=%s)", rec.get("rev"), rev)
+        return ("same", info)
 
     def _job_download(self, info):
         token = config.load_account_token()
@@ -274,6 +293,12 @@ class AccountController(QObject):
             self.logged_out.emit()
         elif isinstance(result, tuple) and result[0] == "ask":
             self._pending_ask = result[1] or {}
+            try:
+                local_rev = cloud_sync.record(config._read_local_config()).get("rev")
+            except Exception:  # noqa: BLE001
+                local_rev = None
+            _log.info("[동기화] 물음: 이유=%s 이 PC 기록 rev=%s 서버 rev=%s 서버 PC=%s", result[2], local_rev,
+                      self._pending_ask.get("rev"), self._pending_ask.get("device") or "모름")
             self.ask.emit(dict(self._pending_ask), result[2])
         elif isinstance(result, tuple) and result[0] == "downloaded":
             _log.info("[동기화] 서버 설정을 받아 적용(위치 %s)", "적용" if result[1] else "이 PC 유지(해상도 다름)")

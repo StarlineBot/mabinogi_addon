@@ -33,7 +33,8 @@ POSITION_LISTS = {"autofindV2": ("fixed",)}
 # ---- 내용 다루기(순수) ----------------------------------------------------------------------------
 def strip_for_sync(doc: dict) -> dict:
     """올릴 설정에서 PC마다 다른 값을 뺀다."""
-    out = {k: copy.deepcopy(v) for k, v in doc.items() if k not in EXCLUDE_TOP}
+    # 비밀값·장치 값(config._LOCAL_ONLY_KEYS)은 내보내기가 이미 빼므로 지문에서도 뺀다 — 서버 묶음 지문과 같은 계산(0.48.0)
+    out = {k: copy.deepcopy(v) for k, v in doc.items() if k not in EXCLUDE_TOP and k not in config._LOCAL_ONLY_KEYS}
     for section, keys in EXCLUDE_NESTED.items():
         sec = out.get(section)
         if isinstance(sec, dict):
@@ -147,6 +148,18 @@ def content_hash(doc: dict, assets: list[tuple[str, int]]) -> str:
     return h.hexdigest()
 
 
+def blob_hash(blob: bytes) -> str | None:
+    """서버 묶음의 내용 지문(이 PC `local_state`의 지문과 같은 계산 — 설정은 빼는 값을 뺀 것, 아이콘은 이름·크기)."""
+    try:
+        with zipfile.ZipFile(io.BytesIO(blob)) as z:
+            doc = json.loads(z.read(config._BUNDLE_CONFIG_NAME).decode("utf-8"))
+            assets = [(i.filename[len(config._BUNDLE_USERDATA_PREFIX):], i.file_size) for i in z.infolist()
+                      if i.filename.startswith(config._BUNDLE_USERDATA_PREFIX) and not i.filename.endswith("/")]
+    except Exception:  # noqa: BLE001
+        return None
+    return content_hash(doc, assets) if isinstance(doc, dict) else None
+
+
 # ---- 동기화 기록 ----------------------------------------------------------------------------------
 def record(raw: dict) -> dict:
     sec = raw.get(SYNC_KEY)
@@ -160,11 +173,10 @@ def enabled(raw: dict) -> bool:
 
 def save_record(path: Path = None, **values) -> None:
     path = config.LOCAL_CONFIG_PATH if path is None else path
-    raw = config._read_local_config(path)
-    sec = record(raw)
-    sec.update(values)
-    raw[SYNC_KEY] = sec
-    config._write_local_config(raw, path)
+    with config._CONFIG_LOCK:  # 작업 스레드가 주인인 칸 — 화면 스레드의 옛 내용 쓰기가 되돌리지 못하게(0.48.0)
+        sec = record(config._read_local_config(path))
+        sec.update(values)
+        config.write_owned_section(SYNC_KEY, sec, path)
 
 
 # ---- 묶음 만들기·적용(작업 스레드) -------------------------------------------------------------------

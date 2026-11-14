@@ -457,3 +457,110 @@ def test_merge_game_exe_absent_everywhere_stays_absent():
 def test_invalid_game_exe_is_not_uploaded():
     assert "gameExe" not in cloud_sync.strip_for_sync({"general": {"gameExe": "mabinogi-addon.exe"}})["general"]
     assert cloud_sync.strip_for_sync({"general": {"gameExe": "client.exe"}})["general"]["gameExe"] == "client.exe"
+
+
+# ---- 0.48.0: 한 PC에서도 '설정 불러올까요?' 거짓 물음(QA 997c8a7) ----
+
+def test_stale_ui_write_does_not_roll_back_sync_record(app):
+    """화면 쪽 읽기 → (작업 스레드) 기록 rev 6 저장 → 화면 쪽 쓰기 — 기록 rev는 6 그대로."""
+    _local()
+    cloud_sync.save_record(rev=5, hash="h5")
+    stale = config._read_local_config()  # 화면 스레드가 먼저 읽음
+    cloud_sync.save_record(rev=6, hash="h6")  # 작업 스레드가 올린 뒤 기록
+    stale["buffTracker"]["scale"] = 123
+    config._write_local_config(stale)  # 화면 스레드가 옛 내용으로 씀
+    raw = config._read_local_config()
+    assert raw["settingsSync"]["rev"] == 6 and raw["settingsSync"]["hash"] == "h6"
+    assert raw["buffTracker"]["scale"] == 123  # 화면 쪽 변경도 그대로
+
+
+def test_concurrent_writers_keep_record_and_never_corrupt(app):
+    import threading
+    _local()
+    cloud_sync.save_record(rev=0)
+    stop = threading.Event()
+    errors = []
+
+    def ui():
+        n = 0
+        while not stop.is_set():
+            raw = config._read_local_config()
+            raw.setdefault("misc", {})["n"] = n
+            n += 1
+            try:
+                config._write_local_config(raw)
+            except Exception as exc:  # noqa: BLE001
+                errors.append(exc)
+
+    t = threading.Thread(target=ui)
+    t.start()
+    try:
+        for rev in range(1, 60):
+            cloud_sync.save_record(rev=rev)
+    finally:
+        stop.set()
+        t.join()
+    assert errors == [] and config._read_local_config()["settingsSync"]["rev"] == 59
+
+
+def test_reset_clears_sync_record(app):
+    _local()
+    cloud_sync.save_record(rev=7, hash="x")
+    config.reset_config()
+    assert "settingsSync" not in config._read_local_config()
+    config._write_local_config({"a": 1})
+    assert "settingsSync" not in config._read_local_config()  # 잊은 기록이 되살아나지 않음
+
+
+def _same_content_server(rev):
+    """이 PC 지금 내용과 똑같은 묶음을 가진 서버(다른 rev)."""
+    blob, _ = cloud_sync.build_blob(resolution="2560x1440", device="내 PC")
+    server = FakeServer()
+    server.rev, server.blob = rev, blob
+    server.info = {"rev": rev, "updated": "2026-11-14T01:00:00Z", "device": "내 PC", "resolution": "2560x1440",
+                   "size": len(blob)}
+    return server
+
+
+def test_conflict_with_same_server_content_resolves_without_asking(app, caplog):
+    import logging
+    _local()
+    _login()
+    caplog.set_level(logging.INFO, logger="mabinogi_addon.account")
+    server = _same_content_server(9)
+    cloud_sync.save_record(rev=8, hash="이 PC 지문")  # 기록 rev가 옛값으로 되돌아간 상태
+    c = _controller(server)
+    asked = []
+    c.ask.connect(lambda info, reason: asked.append(reason))
+    c.started = True
+    c.upload_now()
+    assert asked == [] and config._read_local_config()["settingsSync"]["rev"] == 9
+    assert any("기록 rev만 맞춤" in r.getMessage() and "8" in r.getMessage() and "9" in r.getMessage() for r in caplog.records)
+    assert [m for m, p, _ in server.calls if m == "PUT"] == ["PUT"]  # 409 한 번 뒤 다시 올리지 않음
+    c.shutdown(flush=False)
+
+
+def test_both_changed_with_same_content_resolves_and_different_content_asks(app, caplog):
+    import logging
+    _local()
+    _login()
+    caplog.set_level(logging.INFO, logger="mabinogi_addon.account")
+    server = _same_content_server(9)
+    cloud_sync.save_record(rev=8, hash="예전 지문")  # 종료 때 올렸는데 기록을 못 남긴 경우
+    c = _controller(server)
+    asked = []
+    c.ask.connect(lambda info, reason: asked.append(reason))
+    c.start()
+    assert asked == [] and config._read_local_config()["settingsSync"]["rev"] == 9
+    c.shutdown(flush=False)
+    raw = config._read_local_config()
+    raw["buffTracker"]["scale"] = 77  # 이번엔 내용이 다름
+    config._write_local_config(raw)
+    server.rev = server.info["rev"] = 10
+    c2 = _controller(server)
+    c2.ask.connect(lambda info, reason: asked.append(reason))
+    c2.start()
+    assert asked == ["both_changed"]
+    line = [r.getMessage() for r in caplog.records if r.getMessage().startswith("[동기화] 물음")][-1]
+    assert "이유=both_changed" in line and "이 PC 기록 rev=9" in line and "서버 rev=10" in line and "서버 PC=내 PC" in line
+    c2.shutdown(flush=False)

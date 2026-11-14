@@ -28,7 +28,10 @@
     "tests/test_dialogue_sound_ready.py",
     "tests/test_halo_live.py",
     "tests/test_dialogue_desktop_failure.py",
-    "tests/test_test_boundaries.py"
+    "tests/test_test_boundaries.py",
+    "tests/test_cloud_sync.py",
+    "tests/test_settings_export.py",
+    "tests/test_account.py"
   ],
   "coverage": {
     "src/mabinogi_addon/alarm.py": {
@@ -88,10 +91,12 @@
     "src/mabinogi_addon/config.py": {
       "tests": [
         "tests/test_alarm.py",
+        "tests/test_cloud_sync.py",
         "tests/test_dialogue_tips.py",
-        "tests/test_game_window_judge.py"
+        "tests/test_game_window_judge.py",
+        "tests/test_settings_export.py"
       ],
-      "reason": "알람 저장(설정 동기화 대상)·콕 집어 묻기 하루 1번 기록 · 저장된 게임창 값이 게임이 아니면 읽을 때 무시(로그 1번)·가져오기 때 이 PC 값 유지"
+      "reason": "알람 저장(설정 동기화 대상)·콕 집어 묻기 하루 1번 기록 · 저장된 게임창 값이 게임이 아니면 읽을 때 무시(로그 1번)·가져오기 때 이 PC 값 유지 · 설정 파일 쓰기 잠금(RLock)·작업 스레드가 주인인 동기화 기록은 옛 내용 쓰기가 되돌리지 못함·초기화는 기록도 지움"
     },
     "src/mabinogi_addon/creator_dialogue.py": {
       "tests": [
@@ -199,6 +204,20 @@
         "tests/test_creator_dialogue.py"
       ],
       "reason": "가짜 재생기에 setPosition·setSource 횟수"
+    },
+    "src/mabinogi_addon/cloud_sync.py": {
+      "tests": [
+        "tests/test_cloud_sync.py",
+        "tests/test_account.py"
+      ],
+      "reason": "기록 저장은 주인 칸 쓰기, 서버 묶음 지문(blob_hash)·지문에서 비밀·장치 값 제외"
+    },
+    "src/mabinogi_addon/ui/account_controller.py": {
+      "tests": [
+        "tests/test_cloud_sync.py",
+        "tests/test_account.py"
+      ],
+      "reason": "409·둘 다 바뀜에서 서버 내용 = 이 PC면 묻지 않고 rev만 맞춤, 물을 때 [동기화] 1줄"
     }
   }
 }
