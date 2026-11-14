@@ -1,148 +1,78 @@
 {
-  "version": "0.48.0",
+  "version": "0.49.0",
   "tests": [
-    "tests/test_alarm.py",
-    "tests/test_blackbox_combat.py",
+    "tests/test_debuff_applied.py",
+    "tests/test_debuff_engine.py",
+    "tests/test_debuff_auto.py",
+    "tests/test_debuff_identity.py",
+    "tests/test_debuff_live_detection.py",
+    "tests/test_buff_gone_focus.py",
     "tests/test_overlay_metrics.py",
-    "tests/test_optimization_ui.py",
-    "tests/test_dialogue_tips.py",
-    "tests/test_creator_dialogue.py",
-    "tests/test_dialogue_display_policy.py",
-    "tests/test_inquiry_unified.py",
+    "tests/test_overlay_spec.py",
+    "tests/test_warn_gone.py",
+    "tests/test_debuff_boss_gate.py",
     "tests/test_navigation.py",
     "tests/test_startup_smoke.py",
-    "tests/test_color_switch_polish.py",
     "tests/test_release_checks.py",
     "tests/test_startup_build.py",
     "tests/test_release_candidate.py",
     "tests/test_windows_ci.py",
     "tests/test_release_notes.py",
-    "tests/test_release_notes_trigger.py",
-    "tests/test_cursor_fx.py",
-    "tests/test_overlay_capture.py",
-    "tests/test_navigation_all_widths.py",
-    "tests/test_perf_meter.py",
-    "tests/test_game_window_judge.py",
-    "tests/test_alert_volume.py",
-    "tests/test_cooldown.py",
-    "tests/test_dialogue_sound_ready.py",
-    "tests/test_halo_live.py",
-    "tests/test_dialogue_desktop_failure.py",
-    "tests/test_test_boundaries.py",
-    "tests/test_cloud_sync.py",
-    "tests/test_settings_export.py",
-    "tests/test_account.py"
+    "tests/test_release_notes_trigger.py"
   ],
   "coverage": {
-    "src/mabinogi_addon/alarm.py": {
+    "src/mabinogi_addon/tracker/debuff_engine.py": {
       "tests": [
-        "tests/test_alarm.py"
+        "tests/test_debuff_applied.py",
+        "tests/test_debuff_engine.py",
+        "tests/test_debuff_auto.py",
+        "tests/test_debuff_identity.py",
+        "tests/test_debuff_live_detection.py"
       ],
-      "reason": "알람 판정(한 번·매일·요일·미리 알림·타이머·자정·절전 건너뜀·재시작 뒤 지난 것 안 울림)·문구 · 시각 칸 입력 해석(0745·745·7:45)·기본값(지금 다음 5분)"
+      "reason": "세 번째 '전부'(목록 순서 고정·안 걸린 것 dim·떨어짐 경고 뒤 회색·보스 없음 전부 회색), 앞의 두 방식 그대로"
     },
-    "src/mabinogi_addon/ui/alarm_tab.py": {
+    "src/mabinogi_addon/tracker/engine.py": {
       "tests": [
-        "tests/test_alarm.py",
-        "tests/test_navigation_all_widths.py"
+        "tests/test_debuff_applied.py",
+        "tests/test_buff_gone_focus.py"
       ],
-      "reason": "편의기능 › 알람 탭: 추가·삭제·취소, 울릴 때 게임 위 알림/토스트·소리, 저장 · 시각 칸 TimeBox(숫자 바로 입력·전체 선택·잘못되면 되돌림·5분 화살표), 탭 열 때·추가 뒤 기본값"
+      "reason": "OverlayEntry.dim"
     },
-    "src/mabinogi_addon/ui/alarm_overlay.py": {
+    "src/mabinogi_addon/ui/overlay.py": {
       "tests": [
-        "tests/test_alarm.py"
+        "tests/test_debuff_applied.py",
+        "tests/test_overlay_metrics.py",
+        "tests/test_overlay_spec.py"
       ],
-      "reason": "게임 위 알람 목록(정렬·최대 3·1분 안 빨강·게임 뒤면 숨김·잠금)"
+      "reason": "흐린 회색 그리기(흑백 + 반투명, 같은 아이콘 캐시)"
     },
-    "src/mabinogi_addon/ui/game_notice.py": {
+    "src/mabinogi_addon/ui/buff_controller.py": {
       "tests": [
-        "tests/test_alarm.py",
-        "tests/test_blackbox_combat.py"
+        "tests/test_debuff_applied.py",
+        "tests/test_warn_gone.py",
+        "tests/test_debuff_boss_gate.py"
       ],
-      "reason": "② 게임 위 알림 공용 부품(보통·크게, 겹치면 아래로)"
+      "reason": "dim을 OverlayItem으로"
     },
-    "src/mabinogi_addon/ui/blackbox_toast.py": {
+    "src/mabinogi_addon/ui/debuff_tab.py": {
       "tests": [
-        "tests/test_alarm.py",
-        "tests/test_blackbox_combat.py",
-        "tests/test_overlay_metrics.py"
+        "tests/test_debuff_applied.py",
+        "tests/test_navigation.py"
       ],
-      "reason": "블랙박스 메시지를 공용 부품으로 — 모양·자리·시간 그대로(회귀)"
-    },
-    "src/mabinogi_addon/ui/notifier.py": {
-      "tests": [
-        "tests/test_alarm.py",
-        "tests/test_alert_volume.py",
-        "tests/test_cooldown.py",
-        "tests/test_creator_dialogue.py",
-        "tests/test_dialogue_display_policy.py",
-        "tests/test_dialogue_sound_ready.py",
-        "tests/test_halo_live.py"
-      ],
-      "reason": "알람.mp3·타이머.mp3, 없으면 기본 알림음 · 같은 파일은 다시 열지 않고 처음 위치로 돌려 재생(prepare로 미리 열기)"
-    },
-    "src/mabinogi_addon/ui/optimization_controller.py": {
-      "tests": [
-        "tests/test_alarm.py",
-        "tests/test_optimization_ui.py",
-        "tests/test_perf_meter.py"
-      ],
-      "reason": "0.25초 주기에 가벼운 일(알람) 연결(tick_hooks)"
+      "reason": "표시 [안 걸린 것 | 걸린 것 + 시간 | 전부] — 전부는 제작자만, 아니면 '안 걸린 것'"
     },
     "src/mabinogi_addon/config.py": {
       "tests": [
-        "tests/test_alarm.py",
-        "tests/test_cloud_sync.py",
-        "tests/test_dialogue_tips.py",
-        "tests/test_game_window_judge.py",
-        "tests/test_settings_export.py"
+        "tests/test_debuff_applied.py"
       ],
-      "reason": "알람 저장(설정 동기화 대상)·콕 집어 묻기 하루 1번 기록 · 저장된 게임창 값이 게임이 아니면 읽을 때 무시(로그 1번)·가져오기 때 이 PC 값 유지 · 설정 파일 쓰기 잠금(RLock)·작업 스레드가 주인인 동기화 기록은 옛 내용 쓰기가 되돌리지 못함·초기화는 기록도 지움"
-    },
-    "src/mabinogi_addon/creator_dialogue.py": {
-      "tests": [
-        "tests/test_dialogue_tips.py",
-        "tests/test_creator_dialogue.py"
-      ],
-      "reason": "tips에 feature 'inquiry'·when 'failing'(옛 앱은 tips 무시), 콕 집어 묻기가 먼저"
-    },
-    "src/mabinogi_addon/ui/creator_dialogue.py": {
-      "tests": [
-        "tests/test_creator_dialogue.py",
-        "tests/test_dialogue_desktop_failure.py",
-        "tests/test_dialogue_display_policy.py",
-        "tests/test_dialogue_sound_ready.py",
-        "tests/test_dialogue_tips.py"
-      ],
-      "reason": "[문의하기] 버튼 → 문의 창·그 기능 문제 신고 칸 · 잡담 소리 재생기 미리 준비(시작·켤 때), 말풍선 띄운 자리에서 바로 소리 요청, 로그에 소리 요청까지 ms"
-    },
-    "src/mabinogi_addon/assets/dialogues.json": {
-      "tests": [
-        "tests/test_dialogue_tips.py",
-        "tests/test_creator_dialogue.py"
-      ],
-      "reason": "일반 문의 권유 1 + 콕 집어 묻기 8"
-    },
-    "src/mabinogi_addon/ui/inquiry_window.py": {
-      "tests": [
-        "tests/test_dialogue_tips.py",
-        "tests/test_inquiry_unified.py"
-      ],
-      "reason": "preselect(기능 카드 골라 둔 채로 열기)"
+      "reason": "표시 방식 'all' 저장"
     },
     "src/mabinogi_addon/ui/main_window.py": {
       "tests": [
-        "tests/test_dialogue_tips.py",
-        "tests/test_navigation.py",
-        "tests/test_startup_smoke.py",
-        "tests/test_cursor_fx.py"
+        "tests/test_debuff_applied.py",
+        "tests/test_startup_smoke.py"
       ],
-      "reason": "편의기능 › 알람 탭·0.25초 연결·종료, 못 찾음·못 읽음 10분 판정·문의 창 열기"
-    },
-    "tests/test_color_switch_polish.py": {
-      "tests": [
-        "tests/test_color_switch_polish.py"
-      ],
-      "reason": "게임 위 오버레이(game_notice·alarm_overlay)는 색 이름 규칙 예외"
+      "reason": "로그인이 바뀌면 디버프 표시 방식 다시(전부 → 제작자 아니면 안 걸린 것)"
     },
     "packaging/release_checks.json": {
       "tests": [
@@ -164,60 +94,7 @@
         "tests/test_release_notes.py",
         "tests/test_release_notes_trigger.py"
       ],
-      "reason": "0.48.0 노트 파싱·새 버전 표시(게시된 0.47.x 섹션 그대로)"
-    },
-    "src/mabinogi_addon/ui/overlay_capture.py": {
-      "tests": [
-        "tests/test_overlay_capture.py"
-      ],
-      "reason": "게임 위 알림·알람 목록 판독 캡처 제외(BlackboxToast는 부모 GameNotice로)"
-    },
-    "src/mabinogi_addon/ui/settings_tab.py": {
-      "tests": [
-        "tests/test_game_window_judge.py"
-      ],
-      "reason": "게임창 등록: 저장값이 게임이 아니면 경고 문구"
-    },
-    "src/mabinogi_addon/assets/sounds/알람.mp3": {
-      "tests": [
-        "tests/test_alarm.py"
-      ],
-      "reason": "알람 소리(시각 알람·미리 알림) — 벨 두 번(tests/data …073-496299-2rings.mp3와 같음), 패키지 자산"
-    },
-    "src/mabinogi_addon/assets/sounds/타이머.mp3": {
-      "tests": [
-        "tests/test_alarm.py"
-      ],
-      "reason": "타이머 소리 — 벨 두 번(tests/data …055-494939-2rings.mp3와 같음), 패키지 자산"
-    },
-    "src/mabinogi_addon/assets/sounds/제작자 잡담.mp3": {
-      "tests": [
-        "tests/test_creator_dialogue.py",
-        "tests/test_dialogue_sound_ready.py"
-      ],
-      "reason": "원본에서 앞 무음 0.30초만 잘라 냄(0.02초 이하)"
-    },
-    "test_support/boundaries.py": {
-      "tests": [
-        "tests/test_test_boundaries.py",
-        "tests/test_dialogue_sound_ready.py",
-        "tests/test_creator_dialogue.py"
-      ],
-      "reason": "가짜 재생기에 setPosition·setSource 횟수"
-    },
-    "src/mabinogi_addon/cloud_sync.py": {
-      "tests": [
-        "tests/test_cloud_sync.py",
-        "tests/test_account.py"
-      ],
-      "reason": "기록 저장은 주인 칸 쓰기, 서버 묶음 지문(blob_hash)·지문에서 비밀·장치 값 제외"
-    },
-    "src/mabinogi_addon/ui/account_controller.py": {
-      "tests": [
-        "tests/test_cloud_sync.py",
-        "tests/test_account.py"
-      ],
-      "reason": "409·둘 다 바뀜에서 서버 내용 = 이 PC면 묻지 않고 rev만 맞춤, 물을 때 [동기화] 1줄"
+      "reason": "0.49.0 노트 파싱·새 버전 표시(게시된 0.48.0 섹션 그대로)"
     }
   }
 }

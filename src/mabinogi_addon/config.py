@@ -1972,14 +1972,15 @@ def set_debuff_boss_only(on: bool, path: Path = LOCAL_CONFIG_PATH) -> None:
 
 
 def load_debuff_display_mode(path: Path = LOCAL_CONFIG_PATH) -> str:
-    """디버프 오버레이 표시 방식(제작자 먼저, 2026-11-08): 'missing'(안 걸린 것, 기본) | 'applied'(걸린 것 + 시간)."""
+    """디버프 오버레이 표시 방식: 'missing'(안 걸린 것, 기본) | 'applied'(걸린 것 + 시간) | 'all'(전부 — 제작자 알파, 0.49.0).
+    'all'을 쓸 수 있는지(제작자)는 화면 쪽 effective_display_mode가 판단한다."""
     s = _read_local_config(path).get("overlay") or {}
     mode = s.get("debuffDisplay") if isinstance(s, dict) else None
-    return mode if mode in ("missing", "applied") else "missing"
+    return mode if mode in ("missing", "applied", "all") else "missing"
 
 
 def set_debuff_display_mode(mode: str, path: Path = LOCAL_CONFIG_PATH) -> None:
-    _set_overlay_value("debuffDisplay", mode if mode in ("missing", "applied") else "missing", path)
+    _set_overlay_value("debuffDisplay", mode if mode in ("missing", "applied", "all") else "missing", path)
 
 
 # ---- 잡담 기능 추천·디스코드 권유(잡담 명세 17절, 0.47.0) — 설정 동기화 대상 ----
