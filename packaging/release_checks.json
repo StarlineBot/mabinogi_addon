@@ -23,7 +23,14 @@
     "tests/test_main_shutdown.py",
     "tests/test_restart_after_apply.py",
     "tests/test_cloud_sync.py",
-    "tests/test_account.py"
+    "tests/test_account.py",
+    "tests/test_skillbar_groups.py",
+    "tests/test_cooldown.py",
+    "tests/test_interaction_polish.py",
+    "tests/test_settings_grouping.py",
+    "tests/test_navigation_all_widths.py",
+    "tests/test_region_registration.py",
+    "tests/test_autofind_v2_use.py"
   ],
   "coverage": {
     "src/mabinogi_addon/tracker/debuff_engine.py": {
@@ -117,6 +124,35 @@
         "tests/test_account.py"
       ],
       "reason": "종료 올리기 begin/finish로 나눔(겹치고 끝에서 남은 시간만, 최대 5초)"
+    },
+    "src/mabinogi_addon/ui/skillbar_groups.py": {
+      "tests": [
+        "tests/test_skillbar_groups.py",
+        "tests/test_cooldown.py",
+        "tests/test_interaction_polish.py",
+        "tests/test_settings_grouping.py",
+        "tests/test_navigation_all_widths.py"
+      ],
+      "reason": "단축바 묶음 목록(12묶음 표시·잠금·칸 숨기기/되살리기, 좁으면 두 열 → 한 열)"
+    },
+    "src/mabinogi_addon/ui/skillbar_tab.py": {
+      "tests": [
+        "tests/test_skillbar_groups.py",
+        "tests/test_cooldown.py",
+        "tests/test_interaction_polish.py",
+        "tests/test_settings_grouping.py",
+        "tests/test_navigation_all_widths.py",
+        "tests/test_region_registration.py",
+        "tests/test_autofind_v2_use.py"
+      ],
+      "reason": "묶음 목록 연결, 칸 4개 모두 캡처·목록 그림 1초에 한 번, 탭·오버레이 같은 chunks 값"
+    },
+    "src/mabinogi_addon/ui/skillbar_mirror.py": {
+      "tests": [
+        "tests/test_skillbar_groups.py",
+        "tests/test_cooldown.py"
+      ],
+      "reason": "묶음 이름(게임 번호), 숨긴 칸은 잠금 해제면 흐린 자리(우클릭 가능)·잠금이면 투명"
     }
   }
 }

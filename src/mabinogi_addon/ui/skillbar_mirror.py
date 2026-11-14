@@ -49,6 +49,16 @@ class GroupDef:
         return f"b{self.block}r{self.row}c{self.col}"
 
 
+BLOCK_NAMES = ("왼쪽", "오른쪽")
+ROW_NAMES = ("윗줄", "아랫줄")
+
+
+def group_name(gdef: "GroupDef") -> str:
+    """사람이 알아볼 이름(0.49.0): 게임 단축바 번호와 같게 — '왼쪽 윗줄 1~4' · '오른쪽 아랫줄 9~12'."""
+    first = gdef.col * CELLS + 1
+    return f"{BLOCK_NAMES[gdef.block]} {ROW_NAMES[gdef.row]} {first}~{first + CELLS - 1}"
+
+
 def group_defs() -> list[GroupDef]:
     out: list[GroupDef] = []
     for bi, bx in enumerate(BLOCK_X):
@@ -94,7 +104,8 @@ class ChunkOverlay(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
         self._gdef = gdef
         self._scale = scale
-        self._cells: list[QPixmap | None] = [None] * CELLS  # 각 칸 아이콘(없으면 숨김)
+        self._cells: list[QPixmap | None] = [None] * CELLS  # 각 칸 아이콘(없으면 빈 칸)
+        self._hidden: list[bool] = [False] * CELLS  # 숨긴 칸(0.49.0: 잠금 해제면 흐린 자리로 그려 우클릭이 먹게)
         self._locked = False
         self._drag_offset = None
 
@@ -105,6 +116,17 @@ class ChunkOverlay(QWidget):
     def set_cells(self, cells: list[QPixmap | None]) -> None:
         self._cells = cells
         self._relayout()
+
+    def set_hidden(self, cells_on: list[bool]) -> None:
+        """칸별 표시 값(설정 chunks.<key>.cells) — False인 칸은 숨김."""
+        hidden = [not bool(on) for on in cells_on]
+        if hidden != self._hidden:
+            self._hidden = hidden
+            self.update()
+
+    @property
+    def hidden(self) -> list[bool]:
+        return list(self._hidden)
 
     def set_scale(self, scale: float) -> None:
         self._scale = max(0.3, min(3.0, scale))
@@ -137,7 +159,7 @@ class ChunkOverlay(QWidget):
         if self._locked:
             return
         if event.button() == Qt.MouseButton.RightButton:
-            # 우클릭한 칸 표시/숨김 토글(빈 슬롯 돌바닥 숨기기용).
+            # 우클릭한 칸 표시/숨김 토글(빈 슬롯 돌바닥 숨기기용). 숨긴 칸은 잠금 해제 때 흐린 자리라 다시 우클릭으로 되살린다.
             i = int(event.position().x() / max(1, IPITCH * self._scale))
             if 0 <= i < CELLS:
                 self.cell_toggled.emit(i)
@@ -182,9 +204,24 @@ class ChunkOverlay(QWidget):
         painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, False)
         isz = round(ICON * s)
         for i, pm in enumerate(self._cells):
-            if pm is None:
-                continue  # 숨김/빈 칸 → 투명
             x = round(i * IPITCH * s)
+            if self._hidden[i]:
+                if self._locked:
+                    continue  # 잠금: 숨긴 칸은 투명(지금처럼)
+                # 잠금 해제: 흐린 자리로 그려 우클릭이 먹게(완전 투명이면 Windows가 클릭을 게임으로 넘긴다)
+                from PySide6.QtGui import QColor
+                painter.fillRect(x, 0, isz, isz, QColor(0, 0, 0, 90))
+                if pm is not None:
+                    painter.setOpacity(0.25)
+                    painter.drawPixmap(x, 0, pm.scaled(isz, isz, Qt.AspectRatioMode.IgnoreAspectRatio,
+                                                       Qt.TransformationMode.FastTransformation))
+                    painter.setOpacity(1.0)
+                painter.setPen(QColor(255, 255, 255, 170))
+                painter.drawLine(x + 4, 4, x + isz - 5, isz - 5)
+                continue
+            if pm is None:
+                continue  # 빈 칸 → 투명
+
             scaled = pm.scaled(
                 isz, isz,
                 Qt.AspectRatioMode.IgnoreAspectRatio,
