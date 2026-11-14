@@ -69,17 +69,17 @@ def test_current_plan_maps_every_selected_file_to_changed_code_or_shared_contrac
 
 
 def test_current_release_keeps_feature_boundaries_and_delivery_contracts():
-    """0.49.0: 디버프 표시 '전부'(제작자 알파) + 배포 계약. (릴리즈마다 경계를 바꾼다 — 누적하지 않음)"""
+    """0.49.1: 하늘색 인터페이스 마나 판독(체력바) + 배포 계약. (릴리즈마다 경계를 바꾼다 — 누적하지 않음)"""
     root = Path(__file__).resolve().parents[1]
     plan = json.loads((root / 'packaging/release_checks.json').read_text(encoding='utf-8'))
     paths = set(plan['tests'])
     assert {
-        'tests/test_debuff_applied.py', 'tests/test_debuff_engine.py',
+        'tests/test_stat_bars.py', 'tests/test_stat_bars_locate.py', 'tests/test_stat_bars_stability.py',
         'tests/test_startup_build.py', 'tests/test_release_checks.py', 'tests/test_release_candidate.py',
         'tests/test_windows_ci.py', 'tests/test_startup_smoke.py',
     } <= paths
     assert {
-        'src/mabinogi_addon/tracker/debuff_engine.py', 'src/mabinogi_addon/ui/debuff_tab.py', 'src/mabinogi_addon/ui/overlay.py',
+        'src/mabinogi_addon/detect/stat_bars.py',
         'packaging/build_windows.py', 'src/mabinogi_addon/assets/release_notes.md',
     } <= set(plan['coverage'])
     # The separate development entry must continue collecting the whole suite.

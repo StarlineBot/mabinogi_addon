@@ -1,99 +1,38 @@
 {
-  "version": "0.49.0",
+  "version": "0.49.1",
   "tests": [
-    "tests/test_debuff_applied.py",
-    "tests/test_debuff_engine.py",
-    "tests/test_debuff_auto.py",
-    "tests/test_debuff_identity.py",
-    "tests/test_debuff_live_detection.py",
-    "tests/test_buff_gone_focus.py",
-    "tests/test_overlay_metrics.py",
-    "tests/test_overlay_spec.py",
-    "tests/test_warn_gone.py",
-    "tests/test_debuff_boss_gate.py",
-    "tests/test_navigation.py",
-    "tests/test_startup_smoke.py",
-    "tests/test_release_checks.py",
-    "tests/test_startup_build.py",
-    "tests/test_release_candidate.py",
-    "tests/test_windows_ci.py",
-    "tests/test_release_notes.py",
-    "tests/test_release_notes_trigger.py",
-    "tests/test_close_overlap.py",
-    "tests/test_main_shutdown.py",
-    "tests/test_restart_after_apply.py",
-    "tests/test_cloud_sync.py",
-    "tests/test_account.py",
-    "tests/test_skillbar_groups.py",
-    "tests/test_cooldown.py",
-    "tests/test_interaction_polish.py",
-    "tests/test_settings_grouping.py",
-    "tests/test_navigation_all_widths.py",
-    "tests/test_region_registration.py",
-    "tests/test_autofind_v2_use.py",
     "tests/test_stat_bars.py",
     "tests/test_stat_bars_locate.py",
     "tests/test_stat_bars_stability.py",
     "tests/test_autofind_v2_engine.py",
     "tests/test_autofind_diagnostics.py",
-    "tests/test_skillbar_testers.py"
+    "tests/test_skillbar_testers.py",
+    "tests/test_release_checks.py",
+    "tests/test_startup_build.py",
+    "tests/test_release_candidate.py",
+    "tests/test_windows_ci.py",
+    "tests/test_startup_smoke.py",
+    "tests/test_release_notes.py",
+    "tests/test_release_notes_trigger.py"
   ],
   "coverage": {
-    "src/mabinogi_addon/tracker/debuff_engine.py": {
+    "src/mabinogi_addon/detect/stat_bars.py": {
       "tests": [
-        "tests/test_debuff_applied.py",
-        "tests/test_debuff_engine.py",
-        "tests/test_debuff_auto.py",
-        "tests/test_debuff_identity.py",
-        "tests/test_debuff_live_detection.py"
+        "tests/test_stat_bars.py",
+        "tests/test_stat_bars_locate.py",
+        "tests/test_stat_bars_stability.py",
+        "tests/test_autofind_v2_engine.py",
+        "tests/test_autofind_diagnostics.py",
+        "tests/test_skillbar_testers.py"
       ],
-      "reason": "세 번째 '전부'(목록 순서 고정·안 걸린 것 dim·떨어짐 경고 뒤 회색·보스 없음 전부 회색), 앞의 두 방식 그대로"
+      "reason": "하늘색 인터페이스: MP는 채도 110 이상만(읽기·찾기), 띠 이름은 색조로(안 맞는 띠 버림·같은 색 둘이면 확정 안 함), 찾기는 HP·STA 쌍으로도"
     },
-    "src/mabinogi_addon/tracker/engine.py": {
+    "tests/test_stat_bars.py": {
       "tests": [
-        "tests/test_debuff_applied.py",
-        "tests/test_buff_gone_focus.py"
+        "tests/test_stat_bars.py",
+        "tests/test_stat_bars_stability.py"
       ],
-      "reason": "OverlayEntry.dim"
-    },
-    "src/mabinogi_addon/ui/overlay.py": {
-      "tests": [
-        "tests/test_debuff_applied.py",
-        "tests/test_overlay_metrics.py",
-        "tests/test_overlay_spec.py"
-      ],
-      "reason": "흐린 회색 그리기(흑백 + 반투명, 같은 아이콘 캐시)"
-    },
-    "src/mabinogi_addon/ui/buff_controller.py": {
-      "tests": [
-        "tests/test_debuff_applied.py",
-        "tests/test_warn_gone.py",
-        "tests/test_debuff_boss_gate.py"
-      ],
-      "reason": "dim을 OverlayItem으로"
-    },
-    "src/mabinogi_addon/ui/debuff_tab.py": {
-      "tests": [
-        "tests/test_debuff_applied.py",
-        "tests/test_navigation.py"
-      ],
-      "reason": "표시 [안 걸린 것 | 걸린 것 + 시간 | 전부] — 전부는 제작자만, 아니면 '안 걸린 것' · '보스바가 보일 때만' 툴팁(10초 문구 고침)"
-    },
-    "src/mabinogi_addon/config.py": {
-      "tests": [
-        "tests/test_debuff_applied.py"
-      ],
-      "reason": "표시 방식 'all' 저장"
-    },
-    "src/mabinogi_addon/ui/main_window.py": {
-      "tests": [
-        "tests/test_close_overlap.py",
-        "tests/test_debuff_applied.py",
-        "tests/test_main_shutdown.py",
-        "tests/test_restart_after_apply.py",
-        "tests/test_startup_smoke.py"
-      ],
-      "reason": "로그인이 바뀌면 디버프 표시 방식 다시(전부 → 제작자 아니면 안 걸린 것) · 종료: 상태 저장 뒤 올림 시작 → 다른 정리 → 끝에서 기다림, '종료 요청 → 끝'·prepare_close 대기 기록"
+      "reason": "새 스크린샷 두 영역·찾기·색조 매핑 테스트(순서 매핑 테스트는 색조로)"
     },
     "packaging/release_checks.json": {
       "tests": [
@@ -115,61 +54,7 @@
         "tests/test_release_notes.py",
         "tests/test_release_notes_trigger.py"
       ],
-      "reason": "0.49.0 노트 파싱·새 버전 표시(게시된 0.48.0 섹션 그대로)"
-    },
-    "src/mabinogi_addon/debuff_gate.py": {
-      "tests": [
-        "tests/test_debuff_boss_gate.py"
-      ],
-      "reason": "추가 10초 유예 없앰 — 보스 존재 신호를 그대로 따름(블랙박스 60초 유예는 그대로)"
-    },
-    "src/mabinogi_addon/ui/account_controller.py": {
-      "tests": [
-        "tests/test_close_overlap.py",
-        "tests/test_cloud_sync.py",
-        "tests/test_account.py"
-      ],
-      "reason": "종료 올리기 begin/finish로 나눔(겹치고 끝에서 남은 시간만, 최대 5초)"
-    },
-    "src/mabinogi_addon/ui/skillbar_groups.py": {
-      "tests": [
-        "tests/test_skillbar_groups.py",
-        "tests/test_cooldown.py",
-        "tests/test_interaction_polish.py",
-        "tests/test_settings_grouping.py",
-        "tests/test_navigation_all_widths.py"
-      ],
-      "reason": "단축바 묶음 목록(12묶음 표시·잠금·칸 숨기기/되살리기, 좁으면 두 열 → 한 열)"
-    },
-    "src/mabinogi_addon/ui/skillbar_tab.py": {
-      "tests": [
-        "tests/test_skillbar_groups.py",
-        "tests/test_cooldown.py",
-        "tests/test_interaction_polish.py",
-        "tests/test_settings_grouping.py",
-        "tests/test_navigation_all_widths.py",
-        "tests/test_region_registration.py",
-        "tests/test_autofind_v2_use.py"
-      ],
-      "reason": "묶음 목록 연결, 칸 4개 모두 캡처·목록 그림 1초에 한 번, 탭·오버레이 같은 chunks 값"
-    },
-    "src/mabinogi_addon/ui/skillbar_mirror.py": {
-      "tests": [
-        "tests/test_skillbar_groups.py",
-        "tests/test_cooldown.py"
-      ],
-      "reason": "묶음 이름(게임 번호), 숨긴 칸은 잠금 해제면 흐린 자리(우클릭 가능)·잠금이면 투명"
-    },
-    "src/mabinogi_addon/detect/stat_bars.py": {
-      "tests": [
-        "tests/test_stat_bars.py",
-        "tests/test_stat_bars_locate.py",
-        "tests/test_stat_bars_stability.py",
-        "tests/test_autofind_v2_engine.py",
-        "tests/test_autofind_diagnostics.py",
-        "tests/test_skillbar_testers.py"
-      ],
-      "reason": "하늘색 인터페이스: MP는 채도 110 이상만(읽기·찾기), 띠 이름은 색조로(안 맞는 띠 버림·같은 색 둘이면 확정 안 함), 찾기는 HP·STA 쌍으로도"
+      "reason": "0.49.1 노트(헤드라인 없이 조용히 다듬은 것들) 파싱·새 버전 표시, 게시된 v0.49.0 섹션은 태그 그대로"
     }
   }
 }
