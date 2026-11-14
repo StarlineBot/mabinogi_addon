@@ -326,7 +326,9 @@ def test_alarm_and_timer_sound_files_are_packaged():
     from mabinogi_addon import paths
     from mabinogi_addon.ui import notifier
     data = Path(__file__).parent / "data"
-    for name, source in (("알람.mp3", "universfield-ringtone-073-496299.mp3"), ("타이머.mp3", "universfield-ringtone-055-494939.mp3")):
+    # 벨 두 번만(사용자 요청 11-14 — QA가 잘라 둔 파일 그대로: 알람 3.45초·타이머 4.05초, 끝 페이드아웃)
+    for name, source in (("알람.mp3", "universfield-ringtone-073-496299-2rings.mp3"),
+                         ("타이머.mp3", "universfield-ringtone-055-494939-2rings.mp3")):
         packaged = paths.resource_dir() / "sounds" / name
         assert hashlib.sha256(packaged.read_bytes()).digest() == hashlib.sha256((data / source).read_bytes()).digest()
     assert notifier.alarm_sound_file("time") == "알람.mp3" and notifier.alarm_sound_file("pre") == "알람.mp3"

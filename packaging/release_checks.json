@@ -182,13 +182,13 @@
       "tests": [
         "tests/test_alarm.py"
       ],
-      "reason": "알람 소리(시각 알람·미리 알림) — tests/data 원본과 같음, 패키지 자산"
+      "reason": "알람 소리(시각 알람·미리 알림) — 벨 두 번(tests/data …073-496299-2rings.mp3와 같음), 패키지 자산"
     },
     "src/mabinogi_addon/assets/sounds/타이머.mp3": {
       "tests": [
         "tests/test_alarm.py"
       ],
-      "reason": "타이머 소리 — tests/data 원본과 같음, 패키지 자산"
+      "reason": "타이머 소리 — 벨 두 번(tests/data …055-494939-2rings.mp3와 같음), 패키지 자산"
     },
     "src/mabinogi_addon/assets/sounds/제작자 잡담.mp3": {
       "tests": [
