@@ -131,26 +131,32 @@ class CraftTab(QWidget):
         self.weapon.setItemDelegate(self._menu_delegate)
         self.weapon.setMaxVisibleItems(20)  # 분류 머리까지 33줄 — 펼치면 20줄, 나머지는 스크롤
         head.addWidget(self.weapon, 1)
-        # 공정형(세트): 부위 체크 4개 + 공정 [7회] — simple 시리즈에서는 숨김
-        self.part_checks = []
-        for _ in range(PART_SLOTS):
-            box = QCheckBox()
-            box.toggled.connect(self._on_choice)
-            head.addWidget(box)
-            self.part_checks.append(box)
-        self.process_label = QLabel("공정")
-        head.addSpacing(6)
-        head.addWidget(self.process_label)
-        self.processes = QSpinBox()
-        self.processes.setRange(craft.PROCESS_MIN, craft.PROCESS_MAX)
-        self.processes.setSuffix("회")
-        self.processes.valueChanged.connect(self._on_choice)
-        head.addWidget(self.processes)
         head.addStretch(0)
         self.refresh = refresh_button(REFRESH_TIP)
         self.refresh.clicked.connect(lambda: self._request(force=True))
         head.addWidget(self.refresh)
         right.addLayout(head)
+        # 공정형(세트): 둘째 줄에 부위 체크 4개 + 공정 [7회] — simple 시리즈는 이 줄 없음.
+        # 0.50.1(사용자 실화면 11-16): 윗줄 한 줄에 다 넣으면 탭 최소 폭이 창보다 넓어져 새로고침·가격 칸이 잘렸다.
+        self.choice_row = QWidget()
+        choice = QHBoxLayout(self.choice_row)
+        choice.setContentsMargins(0, 0, 0, 0)
+        self.part_checks = []
+        for _ in range(PART_SLOTS):
+            box = QCheckBox()
+            box.toggled.connect(self._on_choice)
+            choice.addWidget(box)
+            self.part_checks.append(box)
+        self.process_label = QLabel("공정")
+        choice.addSpacing(10)
+        choice.addWidget(self.process_label)
+        self.processes = QSpinBox()
+        self.processes.setRange(craft.PROCESS_MIN, craft.PROCESS_MAX)
+        self.processes.setSuffix("회")
+        self.processes.valueChanged.connect(self._on_choice)
+        choice.addWidget(self.processes)
+        choice.addStretch(1)
+        right.addWidget(self.choice_row)
 
         skill_row = QHBoxLayout()
         skill_label = QLabel("제작 방법")
@@ -178,7 +184,12 @@ class CraftTab(QWidget):
         self.table.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.table.setAlternatingRowColors(True)
         self.table.setMinimumWidth(0)
+        # 0.50.1: 재료 칸은 남는 폭만 — 숫자 칸(필요·보유·남음·개당 최저가·남은 가격)이 먼저 자리를 잡고, 긴 재료 이름은 말줄임 + 툴팁
+        self.table.setTextElideMode(Qt.TextElideMode.ElideRight)
+        self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.table.setWordWrap(False)
         header = self.table.horizontalHeader()
+        header.setMinimumSectionSize(40)
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         for col in range(1, len(COLUMNS)):
             header.setSectionResizeMode(col, QHeaderView.ResizeMode.ResizeToContents)
@@ -253,10 +264,7 @@ class CraftTab(QWidget):
                 self.weapon.setCurrentIndex(first)
         self.weapon.blockSignals(False)
         process = self.is_process()
-        for box in self.part_checks:
-            box.setVisible(process)
-        self.process_label.setVisible(process)
-        self.processes.setVisible(process)
+        self.choice_row.setVisible(process)  # 부위·공정 줄은 공정형만
         self.note.setText(PROCESS_NOTE if process else OWNED_NOTE)
         self._on_weapon()
 
@@ -439,6 +447,8 @@ class CraftTab(QWidget):
                     continue
                 cell = self.table.item(i, col)
                 cell.setText(text)
+                if col == 0:
+                    cell.setToolTip(text)  # 좁으면 말줄임 — 전체 이름은 툴팁
                 if r.done:
                     cell.setForeground(muted)
                 elif col == 4:

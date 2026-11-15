@@ -1,14 +1,10 @@
 {
-  "version": "0.50.0",
+  "version": "0.50.1",
   "tests": [
-    "tests/test_debuff_applied.py",
-    "tests/test_debuff_engine.py",
-    "tests/test_no_beta_on_screen.py",
+    "tests/test_craft_width.py",
     "tests/test_craft_calculator.py",
     "tests/test_navigation.py",
     "tests/test_navigation_all_widths.py",
-    "tests/test_cursor_fx.py",
-    "tests/test_dungeon_cost.py",
     "tests/test_release_checks.py",
     "tests/test_startup_build.py",
     "tests/test_release_candidate.py",
@@ -18,32 +14,20 @@
     "tests/test_release_notes_trigger.py"
   ],
   "coverage": {
-    "src/mabinogi_addon/ui/debuff_tab.py": {
+    "src/mabinogi_addon/ui/craft_tab.py": {
       "tests": [
-        "tests/test_debuff_applied.py",
-        "tests/test_no_beta_on_screen.py"
-      ],
-      "reason": "표시 [안 걸린 것 | 한눈에 보기] 두 칸 모든 사용자(제작자 전용 처리 제거), 설명 문구, 보스바 체크박스 두 방식 모두 켬, 화면에 베타 글자 없음"
-    },
-    "src/mabinogi_addon/config.py": {
-      "tests": [
+        "tests/test_craft_width.py",
         "tests/test_craft_calculator.py",
-        "tests/test_debuff_applied.py"
+        "tests/test_navigation.py",
+        "tests/test_navigation_all_widths.py"
       ],
-      "reason": "디버프 표시 저장값 missing|all, 옛 applied(저장·설정 동기화) → all; craftOwned(재료별 보유, 내보내기·동기화)·craftCalculator.hideDone; craftChoice(세트별 부위·공정); craftCalculator.lastSeries·lastItem"
+      "reason": "윗줄 [세트 드롭다운 … 새로고침], 부위 체크·공정은 둘째 줄(공정형만), 재료 칸은 남는 폭만(말줄임·툴팁) — 기본 창·글자 16·20px에서 가로 잘림 없음"
     },
-    "src/mabinogi_addon/tracker/debuff_engine.py": {
+    "tests/test_craft_width.py": {
       "tests": [
-        "tests/test_debuff_applied.py",
-        "tests/test_debuff_engine.py"
+        "tests/test_craft_width.py"
       ],
-      "reason": "applied 표시 경로 제거(applied → all), 한눈에 보기의 걸린 것도 초→분 의심 판독을 진단 저장으로 넘김"
-    },
-    "tests/test_debuff_applied.py": {
-      "tests": [
-        "tests/test_debuff_applied.py"
-      ],
-      "reason": "두 방식 비교·이전·탭 테스트로 갱신"
+      "reason": "제작 재료 계산기 폭 회귀(두 시리즈 모든 장비 × 글자 크기)"
     },
     "packaging/release_checks.json": {
       "tests": [
@@ -65,55 +49,7 @@
         "tests/test_release_notes.py",
         "tests/test_release_notes_trigger.py"
       ],
-      "reason": "0.50.0 노트(한눈에 보기·제작 재료 계산기) 파싱·새 버전 표시, 게시된 v0.49.2 이하 섹션은 태그 그대로"
-    },
-    "src/mabinogi_addon/ui/craft_tab.py": {
-      "tests": [
-        "tests/test_craft_calculator.py",
-        "tests/test_navigation.py",
-        "tests/test_navigation_all_widths.py",
-        "tests/test_cursor_fx.py"
-      ],
-      "reason": "제작 재료 계산기 화면: 시리즈·무기·제작 방법·합계·표, 입력 중 정렬 안 함, 다 모은 재료 숨기기, 작업 스레드 시세·10분 캐시, 편의기능 맨 뒤 탭·글자 커도 가로 넘침 없음; kind 분기(simple/process) — 세트·부위 체크·공정 횟수·공정/마감 묶음 줄; 분류 머리 드롭다운(고를 수 없음·키보드 건너뜀)·마지막 선택 복원"
-    },
-    "src/mabinogi_addon/market/craft.py": {
-      "tests": [
-        "tests/test_craft_calculator.py"
-      ],
-      "reason": "데이터 읽기(29종×8)·계산(남음·가격·합계·매물 없음/실패 제외·정렬)·시세 캐시; 공정형 필요 수량(1공정 × 공정 × 부위, 마감 × 부위)·묶음 정렬·order"
-    },
-    "src/mabinogi_addon/market/auction.py": {
-      "tests": [
-        "tests/test_craft_calculator.py",
-        "tests/test_dungeon_cost.py"
-      ],
-      "reason": "fetch_min_prices urlopen·failed 선택 인자(기본 동작 그대로)"
-    },
-    "src/mabinogi_addon/assets/craft/soul_liberate.json": {
-      "tests": [
-        "tests/test_craft_calculator.py"
-      ],
-      "reason": "소울 리버레이트 29종 재료 데이터(워리어 실드 인게임 대조); 무기 분류(근접·마법·원거리·악기) categories"
-    },
-    "src/mabinogi_addon/ui/main_window.py": {
-      "tests": [
-        "tests/test_navigation.py",
-        "tests/test_cursor_fx.py",
-        "tests/test_debuff_applied.py"
-      ],
-      "reason": "편의기능 탭 추가·종료 정리, 디버프 표시 방식 전달"
-    },
-    "tests/test_craft_calculator.py": {
-      "tests": [
-        "tests/test_craft_calculator.py"
-      ],
-      "reason": "명세 5절 테스트"
-    },
-    "src/mabinogi_addon/assets/craft/dusk_bound.json": {
-      "tests": [
-        "tests/test_craft_calculator.py"
-      ],
-      "reason": "더스크 바운드 3세트 × 4부위 공정형 데이터"
+      "reason": "0.50.1 노트(조용히 다듬은 것들) 파싱·새 버전 표시, 게시된 v0.50.0 이하 섹션은 태그 그대로"
     }
   }
 }
