@@ -1,12 +1,15 @@
 {
-  "version": "0.49.1",
+  "version": "0.49.2",
   "tests": [
-    "tests/test_stat_bars.py",
-    "tests/test_stat_bars_locate.py",
-    "tests/test_stat_bars_stability.py",
-    "tests/test_autofind_v2_engine.py",
-    "tests/test_autofind_diagnostics.py",
-    "tests/test_skillbar_testers.py",
+    "tests/test_favorites_misread.py",
+    "tests/test_buff_favorites.py",
+    "tests/test_buff_favorites_public.py",
+    "tests/test_buff_favorites_ui.py",
+    "tests/test_favorites_hold.py",
+    "tests/test_favorites_windowed.py",
+    "tests/test_buff_4k_icons.py",
+    "tests/test_icon_capture.py",
+    "tests/test_time_nanum.py",
     "tests/test_release_checks.py",
     "tests/test_startup_build.py",
     "tests/test_release_candidate.py",
@@ -16,23 +19,25 @@
     "tests/test_release_notes_trigger.py"
   ],
   "coverage": {
-    "src/mabinogi_addon/detect/stat_bars.py": {
+    "src/mabinogi_addon/detect/favorites.py": {
       "tests": [
-        "tests/test_stat_bars.py",
-        "tests/test_stat_bars_locate.py",
-        "tests/test_stat_bars_stability.py",
-        "tests/test_autofind_v2_engine.py",
-        "tests/test_autofind_diagnostics.py",
-        "tests/test_skillbar_testers.py"
+        "tests/test_favorites_misread.py",
+        "tests/test_buff_favorites.py",
+        "tests/test_buff_favorites_public.py",
+        "tests/test_buff_favorites_ui.py",
+        "tests/test_favorites_hold.py",
+        "tests/test_favorites_windowed.py",
+        "tests/test_buff_4k_icons.py",
+        "tests/test_icon_capture.py",
+        "tests/test_time_nanum.py"
       ],
-      "reason": "인터페이스 색(하늘·빨강·노랑·베이지): 바마다 색조 ±8 + 채도 하한(HP 110·MP 110·STA 140)으로 읽기·찾기, 띠 이름은 색조로, 찾기 후보(MP·STA 쌍·MP 둘레 창·HP·STA 쌍)를 세 바 범위 가운데 값으로 다듬어 검증, 소모 색(MP H126·HP H171)도 바 색 + 채움/소모를 색조로도 가름(어두워진 채움), 흐린 화면 낮은 채도 이어 보기"
+      "reason": "즐겨찾기 줄은 칸 안(구분선 위 16줄·줄 격자·창 위 테두리 아래)에서만 맞춤, 켜짐은 그 순간 아이콘 0.80 이상일 때만, 같은 다시 맞춤 로그 반복 억제 — 엔진 즐겨찾기 경로 전체"
     },
-    "tests/test_stat_bars.py": {
+    "tests/test_favorites_misread.py": {
       "tests": [
-        "tests/test_stat_bars.py",
-        "tests/test_stat_bars_stability.py"
+        "tests/test_favorites_misread.py"
       ],
-      "reason": "인터페이스 색 7장 찾기·두 영역 완전 판독, 덜 찬 바 6장 값(±0.02), 흐린 화면 폭, 기존 스크린샷 122장 찾기 유지, 합성 영상 소모 색 실측값"
+      "reason": "사용자 영역(y=161~) 재현: 정화의 고동 켜짐 ≠ 마나 피어스, 패널 위 장면 피닉스 없음, 경고 그림, 목록의 진짜 마나 피어스 유지, 로그 억제"
     },
     "packaging/release_checks.json": {
       "tests": [
@@ -54,7 +59,7 @@
         "tests/test_release_notes.py",
         "tests/test_release_notes_trigger.py"
       ],
-      "reason": "0.49.1 노트(헤드라인 없이 조용히 다듬은 것들) 파싱·새 버전 표시, 게시된 v0.49.0 섹션은 태그 그대로"
+      "reason": "0.49.2 노트(조용히 다듬은 것들) 파싱·새 버전 표시, 게시된 v0.49.1 이하 섹션은 태그 그대로"
     }
   }
 }
