@@ -2093,3 +2093,42 @@ def save_alarms(*, enabled: bool | None = None, items: list | None = None, overl
         sec["overlay"] = ov
     cfg["alarms"] = sec
     _write_local_config(cfg, path)
+
+
+# ---- 제작 재료 계산기(docs/craft-material-calculator-spec.md, 0.50.0) — 설정 내보내기·동기화 대상 ----
+def load_craft_owned(path: Path = LOCAL_CONFIG_PATH) -> dict[str, int]:
+    """재료 이름별 보유 개수(무기끼리 공유). 0·잘못된 값은 빼고 돌려준다."""
+    raw = _read_local_config(path).get("craftOwned")
+    if not isinstance(raw, dict):
+        return {}
+    out = {}
+    for name, value in raw.items():
+        if isinstance(name, str) and isinstance(value, int) and not isinstance(value, bool) and 0 < value <= 9999:
+            out[name] = value
+    return out
+
+
+def set_craft_owned(name: str, count: int, path: Path = LOCAL_CONFIG_PATH) -> None:
+    """재료 하나의 보유 개수(0~9999). 0이면 지운다."""
+    data = _read_local_config(path)
+    owned = data.get("craftOwned") if isinstance(data.get("craftOwned"), dict) else {}
+    count = max(0, min(9999, int(count)))
+    if count:
+        owned[name] = count
+    else:
+        owned.pop(name, None)
+    data["craftOwned"] = owned
+    _write_local_config(data, path)
+
+
+def load_craft_hide_done(path: Path = LOCAL_CONFIG_PATH) -> bool:
+    raw = _read_local_config(path).get("craftCalculator")
+    return isinstance(raw, dict) and raw.get("hideDone") is True
+
+
+def set_craft_hide_done(on: bool, path: Path = LOCAL_CONFIG_PATH) -> None:
+    data = _read_local_config(path)
+    sec = data.get("craftCalculator") if isinstance(data.get("craftCalculator"), dict) else {}
+    sec["hideDone"] = bool(on)
+    data["craftCalculator"] = sec
+    _write_local_config(data, path)

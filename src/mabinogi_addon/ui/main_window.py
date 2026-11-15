@@ -394,6 +394,10 @@ class MainWindow(QMainWindow):
         self.alarm_tab = AlarmTab(self._watcher)
         self._alarm_scroll = _scrolled(self.alarm_tab)
         self._convenience_tabs.addTab(self._alarm_scroll, "알람")
+        # 제작 재료 계산기(docs/craft-material-calculator-spec.md, 0.50.0 모든 사용자): 편의기능 맨 뒤
+        from .craft_tab import CraftTab
+        self.craft_tab = CraftTab()
+        self._convenience_tabs.addTab(_scrolled(self.craft_tab), "제작 재료 계산기")
         # 마우스 커서 표시(마우스 커서 명세): 0.37.0부터 최적화 2단 세 번째(`최적화 · FPS 측정 · 마우스 커서`), 모두에게 공개.
         # 오버레이(CursorFx)는 창과 함께 살며 최적화 시작·종료와 무관하게 켜는 즉시 동작한다.
         from .cursor_overlay import CursorFx
@@ -2877,6 +2881,7 @@ class MainWindow(QMainWindow):
             self._autofind_v2.shutdown()
         self.creator_dialogue.shutdown()
         self.dungeon_cost_tab.shutdown()
+        self.craft_tab.shutdown()
         self.cursor_fx.shutdown()
         self.harp_tab.shutdown()
         self.alarm_tab.shutdown()

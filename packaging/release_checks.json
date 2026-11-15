@@ -4,6 +4,11 @@
     "tests/test_debuff_applied.py",
     "tests/test_debuff_engine.py",
     "tests/test_no_beta_on_screen.py",
+    "tests/test_craft_calculator.py",
+    "tests/test_navigation.py",
+    "tests/test_navigation_all_widths.py",
+    "tests/test_cursor_fx.py",
+    "tests/test_dungeon_cost.py",
     "tests/test_release_checks.py",
     "tests/test_startup_build.py",
     "tests/test_release_candidate.py",
@@ -22,9 +27,10 @@
     },
     "src/mabinogi_addon/config.py": {
       "tests": [
+        "tests/test_craft_calculator.py",
         "tests/test_debuff_applied.py"
       ],
-      "reason": "디버프 표시 저장값 missing|all, 옛 applied(저장·설정 동기화) → all"
+      "reason": "디버프 표시 저장값 missing|all, 옛 applied(저장·설정 동기화) → all; craftOwned(재료별 보유, 내보내기·동기화)·craftCalculator.hideDone"
     },
     "src/mabinogi_addon/tracker/debuff_engine.py": {
       "tests": [
@@ -59,7 +65,49 @@
         "tests/test_release_notes.py",
         "tests/test_release_notes_trigger.py"
       ],
-      "reason": "0.50.0 노트(헤드라인 + 인용) 파싱·새 버전 표시, 게시된 v0.49.2 이하 섹션은 태그 그대로"
+      "reason": "0.50.0 노트(한눈에 보기·제작 재료 계산기) 파싱·새 버전 표시, 게시된 v0.49.2 이하 섹션은 태그 그대로"
+    },
+    "src/mabinogi_addon/ui/craft_tab.py": {
+      "tests": [
+        "tests/test_craft_calculator.py",
+        "tests/test_navigation.py",
+        "tests/test_navigation_all_widths.py",
+        "tests/test_cursor_fx.py"
+      ],
+      "reason": "제작 재료 계산기 화면: 시리즈·무기·제작 방법·합계·표, 입력 중 정렬 안 함, 다 모은 재료 숨기기, 작업 스레드 시세·10분 캐시, 편의기능 맨 뒤 탭·글자 커도 가로 넘침 없음"
+    },
+    "src/mabinogi_addon/market/craft.py": {
+      "tests": [
+        "tests/test_craft_calculator.py"
+      ],
+      "reason": "데이터 읽기(29종×8)·계산(남음·가격·합계·매물 없음/실패 제외·정렬)·시세 캐시"
+    },
+    "src/mabinogi_addon/market/auction.py": {
+      "tests": [
+        "tests/test_craft_calculator.py",
+        "tests/test_dungeon_cost.py"
+      ],
+      "reason": "fetch_min_prices urlopen·failed 선택 인자(기본 동작 그대로)"
+    },
+    "src/mabinogi_addon/assets/craft/soul_liberate.json": {
+      "tests": [
+        "tests/test_craft_calculator.py"
+      ],
+      "reason": "소울 리버레이트 29종 재료 데이터(워리어 실드 인게임 대조)"
+    },
+    "src/mabinogi_addon/ui/main_window.py": {
+      "tests": [
+        "tests/test_navigation.py",
+        "tests/test_cursor_fx.py",
+        "tests/test_debuff_applied.py"
+      ],
+      "reason": "편의기능 탭 추가·종료 정리, 디버프 표시 방식 전달"
+    },
+    "tests/test_craft_calculator.py": {
+      "tests": [
+        "tests/test_craft_calculator.py"
+      ],
+      "reason": "명세 5절 테스트"
     }
   }
 }

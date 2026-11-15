@@ -59,17 +59,20 @@ def fetch_min_prices(
     *,
     timeout: float = 10.0,
     max_workers: int = 8,
+    urlopen: Callable = urllib.request.urlopen,
+    failed=None,
 ) -> dict[str, int | None]:
     """여러 아이템의 현재 경매장 최저 개당가를 병렬 조회(브리레흐 등 재료가 많아
-    순차로는 느림). 각 이름 → 최저가(없으면 None). 개별 실패는 None 처리."""
+    순차로는 느림). 각 이름 → 최저가(없으면 None). 개별 실패는 `failed`(기본 None — 매물 없음과 같게) 처리.
+    제작 재료 계산기(0.50.0)는 매물 없음과 조회 실패를 따로 보이려고 failed에 표시값을 넘긴다."""
     names = list(names)
 
-    def _one(name: str) -> tuple[str, int | None]:
+    def _one(name: str):
         try:
-            items = fetch_items_by_name(name, api_key, timeout=timeout)
+            items = fetch_items_by_name(name, api_key, timeout=timeout, urlopen=urlopen)
             return name, min_unit_price(items, name)
         except Exception:  # noqa: BLE001 — 한 아이템 실패가 전체를 막지 않게
-            return name, None
+            return name, failed
 
     if not names:
         return {}
