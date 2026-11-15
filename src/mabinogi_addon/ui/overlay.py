@@ -33,7 +33,7 @@ def overlay_spec(
     """
     specs: list[tuple[str, str | None, bool, bool]] = []
     for entry in entries:
-        if getattr(entry, "time_text", None):  # 디버프 '걸린 것 + 시간' — 게임 시간 글자를 그대로(지속시간 표시 설정과 무관)
+        if getattr(entry, "time_text", None):  # 디버프 '한눈에 보기'의 걸린 것 — 게임 시간 글자를 그대로(지속시간 표시 설정과 무관)
             specs.append((entry.buff_id, entry.time_text, bool(entry.time_warn), entry.gone))
             continue
         show = show_duration.get(entry.buff_id, True)
@@ -43,7 +43,7 @@ def overlay_spec(
         specs.append((entry.buff_id, text, warn, entry.gone))
     return specs
 
-DIM_OPACITY = 0.45  # 디버프 '전부'의 안 걸린 것(흐린 회색) 불투명도
+DIM_OPACITY = 0.45  # 디버프 '한눈에 보기'의 안 걸린 것(흐린 회색) 불투명도
 _GRAY_CACHE: dict[int, QPixmap] = {}
 
 
@@ -75,7 +75,7 @@ class OverlayItem:
     duration_text: str | None  # None=칸만 비움(아이콘 높이 맞춤)
     warn: bool = False  # 남은 시간 1분 미만 → 숫자 빨갛게
     gone: bool = False  # 사라짐 경고: 아이콘 흐리게 + 빨간 테두리 + X(잠깐 표시)
-    dim: bool = False  # 흐린 회색(흑백 + 반투명) — 디버프 '전부'의 안 걸린 것
+    dim: bool = False  # 흐린 회색(흑백 + 반투명) — 디버프 '한눈에 보기'의 안 걸린 것
 
 
 class BuffOverlay(QWidget):

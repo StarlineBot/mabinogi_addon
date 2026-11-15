@@ -351,7 +351,7 @@ class BuffController(QObject):
         # 활성 항목: id -> OverlayItem. warn=남은시간<60s(숫자 빨강),
         # gone=엔진이 표시한 사라짐 경고(디버프가 보스에서 떨어짐) → 빨간 테두리+X.
         active: dict[str, OverlayItem] = {}
-        dims = {e.buff_id for e in entries if getattr(e, "dim", False)}  # 디버프 '전부'의 안 걸린 것(흐린 회색)
+        dims = {e.buff_id for e in entries if getattr(e, "dim", False)}  # 디버프 '한눈에 보기'의 안 걸린 것(흐린 회색)
         for buff_id, text, warn, gone in overlay_spec(entries, self._show_duration):
             pm = self._pixmap(buff_id)
             if pm is not None:

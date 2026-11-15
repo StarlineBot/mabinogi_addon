@@ -232,7 +232,7 @@ _debuff_time_shots = [0]
 
 
 def save_debuff_time_suspect(bid: str, game: str, region, box, folder=None) -> "Path | None":
-    """디버프 '걸린 것 + 시간'에서 초 카운트다운 중 'NM'이 읽힌 순간(작업 스레드) — 아이콘·아래 띠와 디버프 영역 전체를 PNG로, app.log 한 줄.
+    """디버프 '한눈에 보기'에서 초 카운트다운 중 'NM'이 읽힌 순간(작업 스레드) — 아이콘·아래 띠와 디버프 영역 전체를 PNG로, app.log 한 줄.
     제작자 수집 폴더(user_data/debuff_time_shots), 실행당 DEBUFF_TIME_SHOT_LIMIT장까지."""
     import logging
     import re
@@ -466,8 +466,6 @@ class MainWindow(QMainWindow):
         self.settings_tab.reopen_setup.connect(self._open_guide)
         self.settings_tab.reopen_guide.connect(self._open_guide)
         self.settings_tab.login_changed.connect(self.dorcha_tab.login_refresh)
-        # 디버프 '전부'는 제작자 알파 — 로그인이 바뀌면 세 번째 칸·표시 방식을 다시(제작자가 아니면 '안 걸린 것')
-        self.settings_tab.login_changed.connect(self._refresh_debuff_display_access)
         self.settings_tab.login_changed.connect(self.boss_tab.halo_capture.login_refresh)
         self.settings_tab.login_changed.connect(self._refresh_harp_access)
         self.setCentralWidget(central)
@@ -2271,12 +2269,8 @@ class MainWindow(QMainWindow):
         if not self._booting:
             self._start_debuff_tracking()
 
-    def _refresh_debuff_display_access(self) -> None:
-        self.debuff_tab._apply_display_texts()
-        self._on_debuff_display_mode(self.debuff_tab.effective_display_mode())
-
     def _on_debuff_display_mode(self, _mode: str) -> None:
-        """표시 방식 전환(제작자) — 엔진은 그대로 두고 보이는 것만 바꾼다(다음 틱부터)."""
+        """표시 방식 전환 — 엔진은 그대로 두고 보이는 것만 바꾼다(다음 틱부터)."""
         if self._debuff_engine is not None:
             self._debuff_engine.set_display_mode(self.debuff_tab.effective_display_mode())
 

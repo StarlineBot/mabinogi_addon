@@ -1,8 +1,9 @@
-"""디버프 오버레이 '걸린 것 + 시간' 보기(docs/debuff-applied-overlay-spec.md, 제작자 먼저, 사용자 결정 11-08).
+"""디버프 오버레이 걸린 디버프 시간 판독과 표시 방식(docs/debuff-applied-overlay-spec.md). 0.50.0(사용자 결정 11-15): 표시는
+[안 걸린 것 | 한눈에 보기] 두 칸 — '걸린 것 + 시간'은 한눈에 보기(저장값 'all')에 합쳐 모든 사용자에게.
 
 - 시간 판독: 아이콘 바로 아래 칸의 게임 시간 글자(7px·9px 두 글꼴, 0~9·M) — tests/data 보스 화면 디버프 줄(몽타주로 화면과 같음 확인).
 - M 없는 숫자는 줄어드는 것을 봐야 초(게임 글꼴에 따라 분도 M 없이 '4' — 10-30 4K 6장, 11-09 4K는 '4M') — 틀린 숫자 금지.
-- 방식 전환: 같은 프레임으로 '안 걸린 것'/'걸린 것' 결과가 서로 보완. 떨어짐: 경고 켠 것은 3초 확정 → 경고 5초 → 빠짐, 끈 것은 바로 빠짐.
+- 방식 전환: 같은 프레임으로 '안 걸린 것'은 한눈에 보기의 흐린 칸과 같다. 떨어짐: 경고 켠 것은 3초 확정 → 경고 5초 → 회색.
 """
 import os
 
@@ -97,31 +98,39 @@ ORDER = ["물리 방어력 보호 감소", "방해 카드", "받는 대미지 �
 APPLIED = ["물리 방어력 보호 감소", "받는 대미지 증가", "모모", "프라가라흐(물리)", "케라"]  # 001801 화면에 걸린 것
 
 
-def test_modes_complement_each_other_in_user_order():
+def test_missing_mode_equals_dim_items_of_glance_mode():
+    """두 방식 비교(0.50.0): 같은 프레임에서 '안 걸린 것'은 한눈에 보기의 흐린 칸과 같고, 한눈에 보기는 추적 대상 전체(사용자 순서)."""
     region = _region("스크린샷 2026-10-18 001801.png")
     result = {}
-    for mode in ("missing", "applied"):
+    for mode in ("missing", "all"):
         eng = _engine(ORDER)
         eng.set_display_mode(mode)
         for t in (0.0, 0.2, 0.4, 0.6):
             res = eng.tick(region, t)
-        result[mode] = [e.buff_id for e in res.entries]
-    assert not set(result["missing"]) & set(result["applied"])
-    assert sorted(result["missing"] + result["applied"]) == sorted(ORDER)  # 합치면 추적 대상 전체
-    for ids in result.values():
-        assert ids == [b for b in ORDER if b in ids]  # 사용자 순서
-    assert result["applied"] == APPLIED and result["missing"] == ["방해 카드", "와이어웹"]
+        result[mode] = res.entries
+    missing = [e.buff_id for e in result["missing"]]
+    assert missing == ["방해 카드", "와이어웹"]
+    assert [e.buff_id for e in result["all"]] == ORDER
+    assert [e.buff_id for e in result["all"] if e.dim] == missing
+    assert [e.buff_id for e in result["all"] if not e.dim] == APPLIED
 
 
-def test_applied_mode_shows_game_time_under_icons():
+def test_glance_mode_shows_game_time_under_icons():
     region = _region("스크린샷 2026-10-18 001801.png")
     eng = _engine(ORDER)
-    eng.set_display_mode("applied")
+    eng.set_display_mode("all")
     for t in (0.0, 0.2, 0.4):
         res = eng.tick(region, t)
-    assert [(e.buff_id, e.time_text, e.time_warn) for e in res.entries] == [  # 화면: 3M · 4M · 4M · (없음) · 9M
+    assert [(e.buff_id, e.time_text, e.time_warn) for e in res.entries if not e.dim] == [  # 화면: 3M · 4M · 4M · (없음) · 9M
         ("물리 방어력 보호 감소", "3m", False), ("받는 대미지 증가", "4m", False), ("모모", "4m", False),
         ("프라가라흐(물리)", None, False), ("케라", "9m", False)]  # 프라가라흐는 시간 없음 → 아이콘만
+
+
+def test_old_applied_mode_value_runs_as_glance():
+    from mabinogi_addon.tracker.debuff_engine import DebuffEngine
+    eng = DebuffEngine({}, [])
+    eng.set_display_mode("applied")
+    assert eng.display_mode == "all"
 
 
 def _without_icons(region):
@@ -130,33 +139,7 @@ def _without_icons(region):
     return out
 
 
-def test_falloff_warning_then_removed_and_warn_off_removed_at_once():
-    region = _region("스크린샷 2026-10-18 001801.png")
-    bare = _without_icons(region)
-    eng = _engine(ORDER, warn={"모모"})
-    eng.set_display_mode("applied")
-    t = 0.0
-    for t in (0.0, 0.2, 0.4, 0.6):
-        eng.tick(region, t)
-
-    def shown(now):
-        res = eng.tick(bare, now)
-        return {e.buff_id: e.gone for e in res.entries}, res.alerts
-    s, _ = shown(1.0)
-    assert s == {b: False for b in APPLIED}  # 깜빡임 방지(0.4초)까지는 그대로
-    s, _ = shown(1.5)
-    assert s == {"모모": False}  # 경고 켠 '모모'는 떨어짐 확정(3초)까지 그대로, 끈 것은 바로 빠짐
-    s, _ = shown(2.0)
-    assert s == {"모모": False}
-    s, alerts = shown(4.1)
-    assert s == {"모모": True} and alerts == ["모모"]  # 확정 → 빨간 테두리+X
-    s, _ = shown(8.0)
-    assert s == {"모모": True}
-    s, _ = shown(9.2)
-    assert s == {}  # 경고 5초 뒤 빠짐
-
-
-# ---- 탭: 제작자만 '표시' 선택 ----------------------------------------------------------------------------------
+# ---- 탭: '표시 [안 걸린 것 | 한눈에 보기]' — 모든 사용자 ----------------------------------------------------------------------------------
 @pytest.fixture
 def app():
     from PySide6.QtWidgets import QApplication
@@ -165,42 +148,76 @@ def app():
 
 @pytest.mark.parametrize("creator", [False, True])
 def test_display_choice_for_everyone(app, monkeypatch, creator):
-    """0.45.0(사용자 결정 11-10): '표시 [안 걸린 것 | 걸린 것 + 시간]'은 모든 사용자, 기본 '안 걸린 것'."""
+    """0.50.0(사용자 결정 11-15): '표시 [안 걸린 것 | 한눈에 보기]' 두 칸은 모든 사용자, 기본 '안 걸린 것', '걸린 것 + 시간' 칸 없음."""
     from mabinogi_addon import config, feature_access
     from mabinogi_addon.ui.debuff_tab import DebuffTab
     monkeypatch.setattr(feature_access, "is_creator", lambda: creator)
     tab = DebuffTab()
     try:
-        assert tab.display_segments is not None and tab.display_segments.buttons["missing"].isChecked()  # 기본 안 걸린 것
+        assert list(tab.display_segments.buttons) == ["missing", "all"]  # 'applied' 칸 없음
+        assert tab.display_segments.buttons["all"].text() == "한눈에 보기"
+        assert tab.display_segments.buttons["all"].isVisibleTo(tab)  # 제작자가 아니어도 보임
+        assert tab.display_segments.buttons["missing"].isChecked()  # 기본 안 걸린 것
         assert tab.effective_display_mode() == "missing"
         assert tab.header.description.text() == "보스에게 아직 걸리지 않은 디버프를 보여줘요."
         seen = []
         tab.display_mode_changed.connect(seen.append)
-        tab.display_segments.buttons["applied"].click()
-        assert seen == ["applied"] and config.load_debuff_display_mode() == "applied"
-        assert tab.effective_display_mode() == "applied"
-        assert tab.header.description.text() == "보스에게 걸린 디버프와 남은 시간을 보여줘요."
-        assert "걸린 디버프와 남은 시간" in tab.region_section.unset_label.text()
+        tab.display_segments.buttons["all"].click()
+        assert seen == ["all"] and config.load_debuff_display_mode() == "all"
+        assert tab.effective_display_mode() == "all"
+        assert tab.header.description.text() == "추적하는 디버프를 한눈에 보여줘요. 걸린 것은 남은 시간과 함께, 안 걸린 것은 흐리게요."
+        assert tab.boss_only_check.isEnabled()  # '보스바가 보일 때만 표시'는 그대로 쓸 수 있음
         tab.display_segments.buttons["missing"].click()
         assert tab.header.description.text() == "보스에게 아직 걸리지 않은 디버프를 보여줘요."
     finally:
         tab.deleteLater()
 
 
+@pytest.mark.parametrize("creator", [False, True])
+def test_saved_applied_opens_as_glance(app, monkeypatch, creator):
+    """예전에 '걸린 것 + 시간'(applied)을 저장한 사용자는 한눈에 보기로(제작자 여부 무관)."""
+    from mabinogi_addon import config, feature_access
+    from mabinogi_addon.ui.debuff_tab import DebuffTab
+    monkeypatch.setattr(feature_access, "is_creator", lambda: creator)
+    raw = config._read_local_config()
+    raw.setdefault("overlay", {})["debuffDisplay"] = "applied"
+    config._write_local_config(raw)
+    assert config.load_debuff_display_mode() == "all"
+    tab = DebuffTab()
+    try:
+        assert tab.effective_display_mode() == "all" and tab.display_segments.buttons["all"].isChecked()
+    finally:
+        tab.deleteLater()
+
+
+def test_display_mode_values_and_sync_migration():
+    """저장은 missing|all만(옛 applied → all). 설정 동기화로 받은 옛 값 'applied'도 all로 읽는다."""
+    from mabinogi_addon import cloud_sync, config
+    config.set_debuff_display_mode("applied")
+    assert config._read_local_config()["overlay"]["debuffDisplay"] == "all"
+    config.set_debuff_display_mode("weird")
+    assert config.load_debuff_display_mode() == "missing"
+    local = config._read_local_config()
+    merged = cloud_sync.merge_incoming({"overlay": {"debuffDisplay": "applied"}}, local, same_resolution=True)
+    assert merged["overlay"]["debuffDisplay"] == "applied"  # 받은 값은 그대로 들어오고
+    config._write_local_config(merged)
+    assert config.load_debuff_display_mode() == "all"  # 읽을 때 한눈에 보기로
+
+
 def test_main_window_passes_display_mode_to_engine(monkeypatch):
-    """탭에서 방식을 바꾸면 엔진에 바로(재시작 없이) — 제작자가 아니면 탭이 늘 '안 걸린 것'을 준다."""
+    """탭에서 방식을 바꾸면 엔진에 바로(재시작 없이)."""
     from types import SimpleNamespace
 
     from mabinogi_addon.tracker.debuff_engine import DebuffEngine
     from mabinogi_addon.ui.main_window import MainWindow
     eng = DebuffEngine({}, [])
-    me = SimpleNamespace(_debuff_engine=eng, debuff_tab=SimpleNamespace(effective_display_mode=lambda: "applied"))
-    MainWindow._on_debuff_display_mode(me, "applied")
-    assert eng.display_mode == "applied"
+    me = SimpleNamespace(_debuff_engine=eng, debuff_tab=SimpleNamespace(effective_display_mode=lambda: "all"))
+    MainWindow._on_debuff_display_mode(me, "all")
+    assert eng.display_mode == "all"
     me.debuff_tab.effective_display_mode = lambda: "missing"
-    MainWindow._on_debuff_display_mode(me, "applied")
+    MainWindow._on_debuff_display_mode(me, "missing")
     assert eng.display_mode == "missing"
-    MainWindow._on_debuff_display_mode(SimpleNamespace(_debuff_engine=None, debuff_tab=me.debuff_tab), "applied")  # 추적 안 하면 무시
+    MainWindow._on_debuff_display_mode(SimpleNamespace(_debuff_engine=None, debuff_tab=me.debuff_tab), "all")  # 추적 안 하면 무시
 
 
 def test_seconds_countdown_does_not_jump_to_minutes_on_one_read():
@@ -233,7 +250,7 @@ def test_suspect_read_is_saved_for_creator_with_limit(tmp_path, monkeypatch):
 def test_engine_hands_suspect_to_saver(monkeypatch):
     region = _region("스크린샷 2026-10-18 001801.png")
     eng = _engine(ORDER)
-    eng.set_display_mode("applied")
+    eng.set_display_mode("all")  # 한눈에 보기의 걸린 것도 의심 판독을 넘긴다
     got = []
     eng.on_time_suspect = lambda bid, game, reg, box: got.append((bid, game, reg.shape, box))
     for t in (0.0, 0.2, 0.4):
@@ -246,7 +263,7 @@ def test_engine_hands_suspect_to_saver(monkeypatch):
 
 @pytest.mark.parametrize("creator", [False, True])
 def test_suspect_autosave_stays_creator_only(app, monkeypatch, creator):
-    """'걸린 것 + 시간'은 모든 사용자(0.45.0)지만 초→분 의심 판독 자동 저장(진단)은 제작자만 그대로."""
+    """한눈에 보기는 모든 사용자(0.50.0)지만 초→분 의심 판독 자동 저장(진단)은 제작자만 그대로."""
     from types import SimpleNamespace
 
     from mabinogi_addon import config, feature_access
@@ -273,7 +290,7 @@ def test_suspect_autosave_stays_creator_only(app, monkeypatch, creator):
 
 def test_debuff_tab_tone_matches_buff_tab(app):
     """버프·디버프 탭 톤 맞춤(사용자 확정 11-10): 목록 아이콘 32(16px 그림 2배), 잠금 줄 = 잠금 세 칸 + 체크박스 1개(버프와 같음),
-    '보스바가 보일 때만 표시'는 위쪽 전체 폭 '표시' 줄에 — '걸린 것 + 시간'이면 흐림."""
+    '보스바가 보일 때만 표시'는 위쪽 전체 폭 '표시' 줄에 — 두 방식 모두 켤 수 있음."""
     from PySide6.QtWidgets import QCheckBox
 
     from mabinogi_addon.ui.buff_tab import BuffTab
@@ -288,8 +305,8 @@ def test_debuff_tab_tone_matches_buff_tab(app):
         top = tab.top_area.layout()
         order = [top.itemAt(i).widget() for i in range(top.count())]
         assert order.index(tab.controls_row) < order.index(tab.display_row) < order.index(tab._bar_gating_notice)
-        tab.display_segments.buttons["applied"].click()
-        assert not tab.boss_only_check.isEnabled()
+        tab.display_segments.buttons["all"].click()
+        assert tab.boss_only_check.isEnabled()
         tab.display_segments.buttons["missing"].click()
         assert tab.boss_only_check.isEnabled()
     finally:
@@ -297,14 +314,14 @@ def test_debuff_tab_tone_matches_buff_tab(app):
         buff.deleteLater()
 
 
-# ---- 세 번째 '전부'(명세 5절, 제작자 알파 0.49.0) ----------------------------------------------------------------
+# ---- 한눈에 보기(명세 5절, 0.50.0 모든 사용자) ----------------------------------------------------------------
 def test_all_mode_is_union_in_fixed_list_order():
     region = _region("스크린샷 2026-10-18 001801.png")
     eng = _engine(ORDER)
     eng.set_display_mode("all")
     for t in (0.0, 0.2, 0.4, 0.6):
         res = eng.tick(region, t)
-    assert [e.buff_id for e in res.entries] == ORDER  # 전부 = 안 걸린 것 ∪ 걸린 것, 목록 순서 그대로
+    assert [e.buff_id for e in res.entries] == ORDER  # 한눈에 보기 = 안 걸린 것 ∪ 걸린 것, 목록 순서 그대로
     dim = {e.buff_id for e in res.entries if e.dim}
     assert dim == {"방해 카드", "와이어웹"} and not any(e.gone for e in res.entries)  # 안 걸린 것 = 흐린 회색
     times = {e.buff_id: e.time_text for e in res.entries if not e.dim}
@@ -341,22 +358,6 @@ def test_all_mode_without_boss_shows_all_gray():
     eng._scale = lambda region: region
     res = eng.tick(np.zeros((40, 80, 3), np.uint8), 0.0)
     assert [(e.buff_id, e.dim) for e in res.entries] == [("a", True), ("b", True)]
-
-
-@pytest.mark.parametrize("creator", [False, True])
-def test_all_choice_creator_only(app, monkeypatch, creator):
-    from mabinogi_addon import config, feature_access
-    from mabinogi_addon.ui.debuff_tab import DebuffTab
-    monkeypatch.setattr(feature_access, "is_creator", lambda: creator)
-    config.set_debuff_display_mode("all")  # 제작자가 고른 뒤 제작자가 아니게 된 경우 포함
-    tab = DebuffTab()
-    try:
-        assert tab.display_segments.buttons["all"].isVisibleTo(tab) is creator
-        assert tab.effective_display_mode() == ("all" if creator else "missing")
-        assert tab.display_segments.buttons["all" if creator else "missing"].isChecked()
-        assert tab.boss_only_check.isEnabled()  # '보스바가 보일 때만'은 안 걸린 것과 같이
-    finally:
-        tab.deleteLater()
 
 
 def test_dim_items_paint_gray_and_translucent(app, monkeypatch):

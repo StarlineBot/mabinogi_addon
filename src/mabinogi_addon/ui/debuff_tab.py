@@ -48,12 +48,12 @@ HELP_TITLE = '디버프 트래커 사용법'
 HELP_HTML = HELP['디버프 트래커']
 
 
-DISPLAY_TEXT = {"missing": "안 걸린 것", "applied": "걸린 것 + 시간", "all": "전부"}  # '전부'는 제작자 알파(0.49.0)
-DISPLAY_DESC = {"missing": "보스에게 아직 걸리지 않은 디버프를 보여줘요.", "applied": "보스에게 걸린 디버프와 남은 시간을 보여줘요.",
-                "all": "추적하는 디버프를 모두 보여줘요. 걸린 것은 남은 시간과 함께, 안 걸린 것은 흐리게요."}
+# 표시 방식(docs/debuff-applied-overlay-spec.md 5절, 0.50.0): [안 걸린 것 | 한눈에 보기(베타)] — 모든 사용자, 저장값 키 'all'.
+DISPLAY_TEXT = {"missing": "안 걸린 것", "all": "한눈에 보기"}
+DISPLAY_DESC = {"missing": "보스에게 아직 걸리지 않은 디버프를 보여줘요.",
+                "all": "추적하는 디버프를 한눈에 보여줘요. 걸린 것은 남은 시간과 함께, 안 걸린 것은 흐리게요."}
 DISPLAY_UNSET = {"missing": "지정하면 보스에게 아직 걸리지 않은 디버프를 보여줘요",
-                 "applied": "지정하면 보스에게 걸린 디버프와 남은 시간을 보여줘요",
-                 "all": "지정하면 추적하는 디버프를 모두 보여줘요"}
+                 "all": "지정하면 추적하는 디버프를 한눈에 보여줘요"}
 
 
 class DebuffTab(QWidget):
@@ -64,7 +64,7 @@ class DebuffTab(QWidget):
     opacity_changed = Signal(int)  # 오버레이 불투명도(%) 변경(명세 15절)
     window_visible_changed = Signal(bool)  # '오버레이 창 보이기'(0.32.0)
     boss_only_changed = Signal(bool)  # '보스바가 보일 때만 표시'(2026-11-06)
-    display_mode_changed = Signal(str)  # 표시 방식 '안 걸린 것' | '걸린 것 + 시간'(제작자 먼저, 2026-11-08)
+    display_mode_changed = Signal(str)  # 표시 방식 'missing'(안 걸린 것) | 'all'(한눈에 보기, 0.50.0)
     gate_mode_changed = Signal(str)  # 탐지 방식(1/2/3차) 변경 또는 바 영역 변경 → 재시작
     bar_region_changed = Signal()  # 보스 HP바 영역 지정 → 보스패턴알림도 반영(공유)
 
@@ -308,14 +308,14 @@ class DebuffTab(QWidget):
         top_area.addWidget(self._bar_gating_notice)
         top_area.addWidget(divider())
         self._update_region_hint()
-        # 표시 방식(docs/debuff-applied-overlay-spec.md): 목록 위 '표시 [안 걸린 것 | 걸린 것 + 시간]', 기본 안 걸린 것.
-        # 0.45.0부터 모든 사용자(사용자 결정 11-10, 노트에 베타 표기). 초→분 의심 자동 저장은 main_window에서 제작자 전용 그대로.
+        # 표시 방식(docs/debuff-applied-overlay-spec.md 5절): 목록 위 '표시 [안 걸린 것 | 한눈에 보기]', 기본 안 걸린 것.
+        # 0.50.0부터 두 칸 모두 모든 사용자(한눈에 보기는 베타). 초→분 의심 자동 저장은 main_window에서 제작자 전용 그대로.
         from .cursor_tab import _Segments
         self.display_segments = _Segments(DISPLAY_TEXT)
         self.display_segments.set_value(self.effective_display_mode())
         self.display_segments.changed.connect(self._on_display_mode)
-        # 위쪽 전체 폭 한 줄(사용자 확정 11-10): 표시 [안 걸린 것 | 걸린 것 + 시간]   ☑ 보스바가 보일 때만 표시
-        # ('걸린 것 + 시간'이면 체크박스 흐림 — _apply_display_texts). 아래 목록 | 상세는 같은 높이에서 시작.
+        # 위쪽 전체 폭 한 줄(사용자 확정 11-10): 표시 [안 걸린 것 | 한눈에 보기]   ☑ 보스바가 보일 때만 표시
+        # (두 방식 모두 체크박스 켜진 상태로 쓸 수 있음). 아래 목록 | 상세는 같은 높이에서 시작.
         display_row = QHBoxLayout(self.display_row)
         display_row.setContentsMargins(0, 0, 0, 0)
         display_row.setSpacing(8)
@@ -361,15 +361,10 @@ class DebuffTab(QWidget):
         self.scale_changed.emit(pct)
 
     def effective_display_mode(self) -> str:
-        """엔진에 줄 표시 방식(기본 '안 걸린 것'). '전부'는 제작자만 — 제작자가 아니면 '안 걸린 것'으로(명세 5절)."""
+        """엔진에 줄 표시 방식(기본 '안 걸린 것'). 0.50.0부터 '한눈에 보기'도 모든 사용자(명세 5절)."""
         if getattr(self, "display_segments", None) is None:
             return "missing"
-        mode = config.load_debuff_display_mode()
-        if mode == "all":
-            from .. import feature_access
-            if not feature_access.is_creator():
-                return "missing"
-        return mode
+        return config.load_debuff_display_mode()
 
     def _on_display_mode(self, mode: str) -> None:
         config.set_debuff_display_mode(mode)
@@ -381,11 +376,8 @@ class DebuffTab(QWidget):
         if self.display_segments is None:
             return
         mode = self.effective_display_mode()
-        applied = mode == "applied"
-        from .. import feature_access
-        self.display_segments.buttons["all"].setVisible(feature_access.is_creator())  # 세 번째 칸은 제작자만(알파)
         self.display_segments.set_value(mode)
-        self.boss_only_check.setEnabled(not applied)  # 걸린 디버프는 보스가 있어야만 나옴 — 흐리게(값은 그대로, 명세 17절). 전부는 안 걸린 것과 같이
+        self.boss_only_check.setEnabled(True)  # '보스바가 보일 때만 표시'는 두 방식 모두 쓸 수 있다
         self.header.description.setText(DISPLAY_DESC[mode])
         from .. import autofind_regions
         if autofind_regions.active():  # 자동 찾기 켜짐: 영역 상자 첫 줄은 위치 상태('아직 지정 안 됨' 대신, first-use v3)
