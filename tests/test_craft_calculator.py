@@ -18,7 +18,8 @@ WARRIOR_SHIELD = [  # 인게임 화면(11-15)과 대조
 # ---- 데이터 ----
 def _series():
     series = craft.load_series()
-    assert [s.name for s in series] == ["소울 리버레이트"]
+    assert [s.name for s in series] == ["소울 리버레이트", "더스크 바운드"]  # 파일의 order 순
+    assert [s.kind for s in series] == [craft.SIMPLE, craft.PROCESS]
     return series[0]
 
 
@@ -48,7 +49,7 @@ def test_series_grow_by_adding_a_data_file(tmp_path):
 def test_screen_code_has_no_weapon_names():
     from pathlib import Path
     src = (Path(craft.__file__).parents[1] / "ui" / "craft_tab.py").read_text(encoding="utf-8")
-    assert "소울" not in src and "리버레이트" not in src
+    assert not any(word in src for word in ("소울", "리버레이트", "더스크", "이지스", "비고러스", "에테리얼", "광두정"))
 
 
 # ---- 계산 ----
@@ -203,9 +204,9 @@ def test_tab_typing_does_not_reorder_and_hide_done(tab_env):
         assert config.load_craft_owned()[first] == need
         assert "남은 재료 7종" in tab.summary.text()
         tab._resort()  # 탭에 다시 들어오면
-        assert tab._order[-1] == first
+        assert tab._order[-1] == ("row", first)
         tab.hide_done.setChecked(True)
-        assert first not in tab._order and config.load_craft_hide_done()
+        assert ("row", first) not in tab._order and config.load_craft_hide_done()
     finally:
         tab.shutdown()
         tab.deleteLater()
@@ -223,6 +224,110 @@ def test_tab_shows_no_listing_and_failed(tab_env):
         texts = {tab.table.item(r, 0).text(): tab.table.item(r, 4).text() for r in range(tab.table.rowCount())}
         assert texts[names[0]] == "매물 없음" and texts[names[1]] == "조회 실패"
         assert "매물 없는 재료 1종" in tab.status.text() and "조회에 실패한 재료 1종" in tab.status.text()
+    finally:
+        tab.shutdown()
+        tab.deleteLater()
+
+
+# ---- 더스크 바운드(공정형 세트, 명세 5절·6절) ----
+def _dusk():
+    return craft.load_series()[1]
+
+
+def _set(name):
+    return next(i for i in _dusk().items if i.name == name)
+
+
+def test_dusk_three_sets_four_parts():
+    d = _dusk()
+    assert d.item_label == "세트" and d.default_processes == 7
+    assert [i.label for i in d.items] == ["이지스 · 중갑", "비고러스 · 경갑", "에테리얼 · 천옷"]
+    assert [i.skill for i in d.items] == ["블랙스미스", "블랙스미스", "천옷 만들기"]
+    for item in d.items:
+        assert len(item.parts) == 4
+        assert [m for m, _ in item.finish_materials] == ["고리아스 동력원", "희미한 에너지 조각"]
+        names = item.material_names()
+        assert len(names) == len(set(names))
+
+
+def test_dusk_required_quantities():
+    aegis = _set("이지스")
+    need = {m: n for _g, mats in craft.requirements(aegis, parts=4, processes=7) for m, n in mats}
+    assert need["달아오른 광두정"] == 840 and need["고리아스 동력원"] == 4  # 30 × 7 × 4, 1 × 4
+    assert need["희미한 에너지 조각"] == 400 and need["순도 높은 힐웬 주괴 조각"] == 84
+    two = {m: n for _g, mats in craft.requirements(aegis, parts=2, processes=3) for m, n in mats}
+    assert two["달아오른 광두정"] == 180 and two["고리아스 동력원"] == 2
+    assert craft.requirements(aegis, parts=0, processes=7) == []
+    groups = [g for g, _ in craft.requirements(aegis, parts=1, processes=1)]
+    assert groups == [craft.GROUP_PROCESS, craft.GROUP_FINISH]
+
+
+def test_dusk_rows_grouped_left_first_within_group():
+    aegis = _set("이지스")
+    s = craft.compute(aegis, {"미스릴 대못": 9999, "고리아스 동력원": 4}, {}, parts=4, processes=7)
+    order = [(r.group, r.material) for r in s.rows]
+    assert order[:5] == [(craft.GROUP_PROCESS, m) for m in
+                         ("달아오른 광두정", "미스릴판", "빛바랜 에너지 회로", "순도 높은 힐웬 주괴 조각", "미스릴 대못")]
+    assert order[5:] == [(craft.GROUP_FINISH, "희미한 에너지 조각"), (craft.GROUP_FINISH, "고리아스 동력원")]
+
+
+def test_choice_saved_per_set():
+    config.set_craft_choice("더스크 바운드", "이지스", [True, False, True, False], 9)
+    assert config.load_craft_choice("더스크 바운드", "이지스", 4, 7) == ([True, False, True, False], 9)
+    assert config.load_craft_choice("더스크 바운드", "비고러스", 4, 7) == ([True] * 4, 7)  # 다른 세트는 기본
+    from mabinogi_addon import cloud_sync
+    assert "craftChoice" in cloud_sync.strip_for_sync(config._read_local_config())
+
+
+def _open_dusk(ct, started):
+    tab = ct.CraftTab()
+    _finish(tab, started, {})  # 처음 열린 소울 리버레이트 조회를 끝내고
+    tab.series_list.setCurrentRow(1)
+    return tab
+
+
+def test_dusk_tab_parts_processes_and_group_rows(tab_env):
+    ct, started = tab_env
+    tab = _open_dusk(ct, started)
+    try:
+        assert tab.item_label.text() == "세트" and tab.weapon.currentText() == "이지스 · 중갑"
+        assert [b.text() for b in tab.part_checks] == ["가드", "헬멧", "건틀릿", "그리브"]
+        assert all(b.isChecked() for b in tab.part_checks) and tab.processes.value() == 7
+        assert tab.note.text() == ct.PROCESS_NOTE
+        names = _set("이지스").material_names()
+        assert sorted(started[-1][1][1]) == sorted(names)  # 세트 재료 전부 조회
+        _finish(tab, started, {n: 1000 for n in names})
+        heads = [tab.table.item(i, 0).text() for i, (k, _m) in enumerate(tab._order) if k == "head"]
+        assert heads == ["공정 재료 · 1공정 수량 × 공정 7회 × 4부위", "마감 재료 · 부위마다 1번 × 4부위"]
+        need = {m: tab.table.item(i, 1).text() for i, (k, m) in enumerate(tab._order) if k == "row"}
+        assert need["달아오른 광두정"] == "840" and need["고리아스 동력원"] == "4"
+        tab.part_checks[1].setChecked(False)  # 헬멧 빼기 → 3부위
+        tab.processes.setValue(5)
+        need = {m: tab.table.item(i, 1).text() for i, (k, m) in enumerate(tab._order) if k == "row"}
+        assert need["달아오른 광두정"] == "450" and need["고리아스 동력원"] == "3"  # 30 × 5 × 3
+        assert config.load_craft_choice("더스크 바운드", "이지스", 4, 7) == ([True, False, True, True], 5)
+        for box in tab.part_checks:
+            box.setChecked(False)
+        assert tab.table.rowCount() == 0 and tab.summary.text() == ct.NO_PARTS
+    finally:
+        tab.shutdown()
+        tab.deleteLater()
+
+
+def test_dusk_shared_owned_across_sets_and_simple_hides_choice(tab_env):
+    ct, started = tab_env
+    tab = _open_dusk(ct, started)
+    try:
+        tab._spins["빛바랜 에너지 회로"].setValue(5)
+        tab.weapon.setCurrentIndex(2)  # 에테리얼
+        assert tab.skill.text() == "천옷 만들기"
+        assert tab._spins["빛바랜 에너지 회로"].value() == 5  # 공통 재료 보유 공유
+        assert [b.text() for b in tab.part_checks] == ["슈트", "튜더 베레모", "글러브", "슈즈"]
+        tab.series_list.setCurrentRow(0)  # 소울 리버레이트
+        assert tab.item_label.text() == "무기"
+        assert not any(b.isVisibleTo(tab) for b in tab.part_checks) and not tab.processes.isVisibleTo(tab)
+        assert tab.note.text() == ct.OWNED_NOTE
+        assert all(k == "row" for k, _m in tab._order)  # simple은 묶음 줄 없음
     finally:
         tab.shutdown()
         tab.deleteLater()

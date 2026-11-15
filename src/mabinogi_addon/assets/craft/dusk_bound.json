@@ -2,6 +2,7 @@
  "series": "더스크 바운드",
  "kind": "process",
  "item_label": "세트",
+ "order": 2,
  "default_processes": 7,
  "source": "사용자 제공 인게임 재료(2026-11-15) — 갑옷 재료표, 같은 세트의 다른 부위도 같음(사용자 확인)",
  "items": [

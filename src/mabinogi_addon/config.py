@@ -2132,3 +2132,30 @@ def set_craft_hide_done(on: bool, path: Path = LOCAL_CONFIG_PATH) -> None:
     sec["hideDone"] = bool(on)
     data["craftCalculator"] = sec
     _write_local_config(data, path)
+
+
+def load_craft_choice(series: str, item: str, parts: int, default_processes: int,
+                      path: Path = LOCAL_CONFIG_PATH) -> tuple[list[bool], int]:
+    """공정형 세트(더스크 바운드)의 체크한 부위·공정 횟수(명세 5절, config craftChoice). 없으면 모두 체크·기본 공정."""
+    raw = _read_local_config(path).get("craftChoice")
+    sec = raw.get(series, {}).get(item) if isinstance(raw, dict) and isinstance(raw.get(series), dict) else None
+    checked = [True] * parts
+    processes = default_processes
+    if isinstance(sec, dict):
+        got = sec.get("parts")
+        if isinstance(got, list) and len(got) == parts and all(isinstance(v, bool) for v in got):
+            checked = list(got)
+        p = sec.get("processes")
+        if isinstance(p, int) and not isinstance(p, bool) and 1 <= p <= 30:
+            processes = p
+    return checked, processes
+
+
+def set_craft_choice(series: str, item: str, parts: list[bool], processes: int, path: Path = LOCAL_CONFIG_PATH) -> None:
+    data = _read_local_config(path)
+    raw = data.get("craftChoice") if isinstance(data.get("craftChoice"), dict) else {}
+    sec = raw.get(series) if isinstance(raw.get(series), dict) else {}
+    sec[item] = {"parts": [bool(v) for v in parts], "processes": max(1, min(30, int(processes)))}
+    raw[series] = sec
+    data["craftChoice"] = raw
+    _write_local_config(data, path)

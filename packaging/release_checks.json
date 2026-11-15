@@ -30,7 +30,7 @@
         "tests/test_craft_calculator.py",
         "tests/test_debuff_applied.py"
       ],
-      "reason": "디버프 표시 저장값 missing|all, 옛 applied(저장·설정 동기화) → all; craftOwned(재료별 보유, 내보내기·동기화)·craftCalculator.hideDone"
+      "reason": "디버프 표시 저장값 missing|all, 옛 applied(저장·설정 동기화) → all; craftOwned(재료별 보유, 내보내기·동기화)·craftCalculator.hideDone; craftChoice(세트별 부위·공정)"
     },
     "src/mabinogi_addon/tracker/debuff_engine.py": {
       "tests": [
@@ -74,13 +74,13 @@
         "tests/test_navigation_all_widths.py",
         "tests/test_cursor_fx.py"
       ],
-      "reason": "제작 재료 계산기 화면: 시리즈·무기·제작 방법·합계·표, 입력 중 정렬 안 함, 다 모은 재료 숨기기, 작업 스레드 시세·10분 캐시, 편의기능 맨 뒤 탭·글자 커도 가로 넘침 없음"
+      "reason": "제작 재료 계산기 화면: 시리즈·무기·제작 방법·합계·표, 입력 중 정렬 안 함, 다 모은 재료 숨기기, 작업 스레드 시세·10분 캐시, 편의기능 맨 뒤 탭·글자 커도 가로 넘침 없음; kind 분기(simple/process) — 세트·부위 체크·공정 횟수·공정/마감 묶음 줄"
     },
     "src/mabinogi_addon/market/craft.py": {
       "tests": [
         "tests/test_craft_calculator.py"
       ],
-      "reason": "데이터 읽기(29종×8)·계산(남음·가격·합계·매물 없음/실패 제외·정렬)·시세 캐시"
+      "reason": "데이터 읽기(29종×8)·계산(남음·가격·합계·매물 없음/실패 제외·정렬)·시세 캐시; 공정형 필요 수량(1공정 × 공정 × 부위, 마감 × 부위)·묶음 정렬·order"
     },
     "src/mabinogi_addon/market/auction.py": {
       "tests": [
@@ -108,6 +108,12 @@
         "tests/test_craft_calculator.py"
       ],
       "reason": "명세 5절 테스트"
+    },
+    "src/mabinogi_addon/assets/craft/dusk_bound.json": {
+      "tests": [
+        "tests/test_craft_calculator.py"
+      ],
+      "reason": "더스크 바운드 3세트 × 4부위 공정형 데이터"
     }
   }
 }

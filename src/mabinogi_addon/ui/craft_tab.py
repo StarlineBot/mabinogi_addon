@@ -1,7 +1,8 @@
 """제작 재료 계산기(docs/craft-material-calculator-spec.md, 0.50.0 모든 사용자).
 
-왼쪽 시리즈 목록 · 무기 드롭다운 · 제작 방법 · 남은 재료 합계 · 표(재료 | 필요 | 보유 | 남음 | 개당 최저가 | 남은 가격).
-- 무기·재료 이름은 데이터 파일(assets/craft/*.json)에서만 온다.
+왼쪽 시리즈 목록 · 무기/세트 드롭다운 · 제작 방법 · 남은 재료 합계 · 표(재료 | 필요 | 보유 | 남음 | 개당 최저가 | 남은 가격).
+- 장비·재료 이름은 데이터 파일(assets/craft/*.json)에서만 온다. 파일의 kind로 모양을 고른다:
+  simple(무기 — 재료 × 1), process(세트 — 부위 체크 4개 + 공정 횟수, 표는 '공정 재료'·'마감 재료' 묶음 줄로 나눔, 명세 5절).
 - 보유 개수는 재료 이름별 저장(config craftOwned, 무기끼리 공유). 입력하면 바로 다시 계산하되 줄은 움직이지 않는다
   (남은 재료 위·다 모은 재료 아래 정렬은 무기를 바꿀 때·탭에 다시 들어올 때만).
 - 시세는 작업 스레드(던전 입장 계산기와 같은 _fetch·_receive 구조 — 작업 스레드는 Qt 객체를 건드리지 않음), 재료별 10분 세션 캐시.
@@ -27,9 +28,12 @@ from .palette import color
 from .widgets import FeatureHeader
 
 TITLE = "제작 재료 계산기"
-DESCRIPTION = "무기별 필요 재료를 보고, 가진 개수를 적어 두면 남은 재료와 경매장 가격 합계를 보여 줘요."
+DESCRIPTION = "장비별 필요 재료를 보고, 가진 개수를 적어 두면 남은 재료와 경매장 가격 합계를 보여 줘요."
 REFRESH_TIP = "최저가 기준이에요. 많이 사면 실제 비용은 더 들 수 있어요."
 OWNED_NOTE = "보유 개수는 재료별로 저장돼 다른 무기에도 같이 적용돼요."
+PROCESS_NOTE = "공정 횟수는 예상치예요. 99%가 되기까지 실제 횟수는 달라질 수 있어요."
+NO_PARTS = "만들 부위를 골라 주세요."
+PART_SLOTS = 4
 NO_KEY = "넥슨 API 키가 없어 시세를 조회할 수 없어요."
 LOADING = "시세 조회 중…"
 FAILED_ALL = "시세 조회에 실패했어요. 다시 시도해 주세요."
@@ -68,7 +72,7 @@ class CraftTab(QWidget):
         self._pending = None
         self._pending_names: list[str] = []
         self._cancelled = threading.Event()
-        self._order: list[str] = []  # 지금 표의 재료 순서(입력 중에는 그대로)
+        self._order: list[tuple[str, str]] = []  # 지금 표의 줄 ("head", 묶음) | ("row", 재료) — 입력 중에는 그대로
         self._spins: dict[str, QSpinBox] = {}
         self._poll = QTimer(self)
         self._poll.setInterval(100)
@@ -86,14 +90,29 @@ class CraftTab(QWidget):
         layout.addLayout(right, 1)
 
         head = QHBoxLayout()
-        weapon = QLabel("무기")
-        weapon.setStyleSheet("font-size:15px;font-weight:800;")
-        head.addWidget(weapon)
+        self.item_label = QLabel("무기")
+        self.item_label.setStyleSheet("font-size:15px;font-weight:800;")
+        head.addWidget(self.item_label)
         self.weapon = QComboBox()
         self.weapon.setMinimumContentsLength(8)  # 글자가 커도 가로 넘침 없게(넓으면 늘어남)
         self.weapon.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
         self.weapon.setMaximumWidth(360)
         head.addWidget(self.weapon, 1)
+        # 공정형(세트): 부위 체크 4개 + 공정 [7회] — simple 시리즈에서는 숨김
+        self.part_checks = []
+        for _ in range(PART_SLOTS):
+            box = QCheckBox()
+            box.toggled.connect(self._on_choice)
+            head.addWidget(box)
+            self.part_checks.append(box)
+        self.process_label = QLabel("공정")
+        head.addSpacing(6)
+        head.addWidget(self.process_label)
+        self.processes = QSpinBox()
+        self.processes.setRange(craft.PROCESS_MIN, craft.PROCESS_MAX)
+        self.processes.setSuffix("회")
+        self.processes.valueChanged.connect(self._on_choice)
+        head.addWidget(self.processes)
         head.addStretch(0)
         self.refresh = refresh_button(REFRESH_TIP)
         self.refresh.clicked.connect(lambda: self._request(force=True))
@@ -137,11 +156,11 @@ class CraftTab(QWidget):
         self.hide_done.setChecked(config.load_craft_hide_done())
         self.hide_done.toggled.connect(self._on_hide_done)
         foot.addWidget(self.hide_done, 0, Qt.AlignmentFlag.AlignTop)
-        note = QLabel(OWNED_NOTE)
-        note.setWordWrap(True)
-        note.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop)
-        note.setStyleSheet(f"color:{color('muted')};")
-        foot.addWidget(note, 1)
+        self.note = QLabel(OWNED_NOTE)
+        self.note.setWordWrap(True)
+        self.note.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop)
+        self.note.setStyleSheet(f"color:{color('muted')};")
+        foot.addWidget(self.note, 1)
         right.addLayout(foot)
 
         self.series_list.currentRowChanged.connect(self._on_series)
@@ -159,22 +178,70 @@ class CraftTab(QWidget):
         i = self.weapon.currentIndex()
         return series.items[i] if series is not None and 0 <= i < len(series.items) else None
 
+    def is_process(self) -> bool:
+        series = self.current_series()
+        return series is not None and series.kind == craft.PROCESS
+
     def _on_series(self, _row: int) -> None:
         series = self.current_series()
         self.weapon.blockSignals(True)
         self.weapon.clear()
         if series is not None:
-            self.weapon.addItems([item.name for item in series.items])
+            self.weapon.addItems([item.label for item in series.items])
+            self.item_label.setText(series.item_label)
         self.weapon.blockSignals(False)
+        process = self.is_process()
+        for box in self.part_checks:
+            box.setVisible(process)
+        self.process_label.setVisible(process)
+        self.processes.setVisible(process)
+        self.note.setText(PROCESS_NOTE if process else OWNED_NOTE)
         self._on_weapon()
+
+    def parts_checked(self) -> list[bool]:
+        item = self.current_item()
+        return [box.isChecked() for box in self.part_checks[:len(item.parts)]] if item is not None else []
+
+    def _choice(self) -> tuple[int, int]:
+        """(체크한 부위 수, 공정 횟수). simple은 (1, 1)."""
+        if not self.is_process():
+            return 1, 1
+        return sum(self.parts_checked()), self.processes.value()
+
+    def _load_choice(self, item: craft.Item) -> None:
+        """세트별로 기억한 체크 부위·공정 횟수를 칸에 넣는다(신호는 내보내지 않음)."""
+        series = self.current_series()
+        checked, processes = config.load_craft_choice(series.name, item.name, len(item.parts), series.default_processes)
+        for i, box in enumerate(self.part_checks):
+            box.blockSignals(True)
+            if i < len(item.parts):
+                box.setText(item.parts[i][0])
+                box.setToolTip(item.parts[i][1])
+                box.setChecked(checked[i])
+                box.setVisible(True)
+            else:
+                box.setVisible(False)
+            box.blockSignals(False)
+        self.processes.blockSignals(True)
+        self.processes.setValue(processes)
+        self.processes.blockSignals(False)
+
+    def _on_choice(self, *_):
+        item = self.current_item()
+        if item is None or not self.is_process():
+            return
+        config.set_craft_choice(self.current_series().name, item.name, self.parts_checked(), self.processes.value())
+        self._resort()  # 필요 수량이 바뀌므로 다시 늘어놓는다(보유 입력 중이 아님)
 
     def _on_weapon(self, *_):
         item = self.current_item()
         if item is None:
             return
         self.skill.setText(item.skill)
+        if self.is_process():
+            self._load_choice(item)
         self._resort()
-        names = [m for m, _ in item.materials]
+        names = item.material_names()
         if self._cache.missing(names):
             self._request(force=False)
         else:
@@ -193,7 +260,7 @@ class CraftTab(QWidget):
     # ---- 계산·표 ----
     def _prices(self, item: craft.Item) -> dict:
         out = {}
-        for material, _ in item.materials:
+        for material in item.material_names():
             hit, value = self._cache.get(material)
             if hit:
                 out[material] = value
@@ -203,23 +270,53 @@ class CraftTab(QWidget):
 
     def summary_now(self) -> craft.Summary | None:
         item = self.current_item()
-        return None if item is None else craft.compute(item, config.load_craft_owned(), self._prices(item))
+        if item is None:
+            return None
+        parts, processes = self._choice()
+        return craft.compute(item, config.load_craft_owned(), self._prices(item), parts=parts, processes=processes)
+
+    def _group_title(self, group: str) -> str:
+        parts, processes = self._choice()
+        if group == craft.GROUP_PROCESS:
+            return f"공정 재료 · 1공정 수량 × 공정 {processes}회 × {parts}부위"
+        if group == craft.GROUP_FINISH:
+            return f"마감 재료 · 부위마다 1번 × {parts}부위"
+        return ""
 
     def _resort(self) -> None:
-        """남은 재료 위·다 모은 재료 아래로 다시 늘어놓고 표를 새로 만든다(무기 변경·탭 진입·숨기기 토글 때만)."""
+        """남은 재료 위·다 모은 재료 아래로 다시 늘어놓고 표를 새로 만든다(장비·부위·공정 변경, 탭 진입, 숨기기 토글 때만).
+        공정형은 묶음 줄('공정 재료'·'마감 재료')을 칸 합쳐 넣는다."""
         summary = self.summary_now()
         if summary is None:
             return
         rows = [r for r in summary.rows if not (self.hide_done.isChecked() and r.done)]
-        self._order = [r.material for r in rows]
+        layout: list[tuple[str, str]] = []
+        group = None
+        for r in rows:  # summary.rows는 묶음 순서대로 — 묶음이 바뀌면 묶음 줄
+            if r.group and r.group != group:
+                layout.append(("head", r.group))
+            group = r.group
+            layout.append(("row", r.material))
+        self._order = layout
         self._spins = {}
         for spin in self.table.findChildren(QSpinBox):  # 예전 칸 위젯이 자리에 남지 않게 모두 지우고 새로
             spin.hide()
             spin.deleteLater()
+        self.table.clearSpans()
         self.table.clearContents()
         self.table.setRowCount(0)
-        self.table.setRowCount(len(rows))
-        for i, row in enumerate(rows):
+        self.table.setRowCount(len(layout))
+        by_name = {r.material: r for r in rows}
+        for i, (kind, key) in enumerate(layout):
+            if kind == "head":
+                cell = QTableWidgetItem()
+                font = cell.font()
+                font.setBold(True)
+                cell.setFont(font)
+                self.table.setItem(i, 0, cell)
+                self.table.setSpan(i, 0, 1, len(COLUMNS))
+                continue
+            row = by_name[key]
             for col in range(len(COLUMNS)):
                 if col == _OWNED_COL:
                     spin = QSpinBox()
@@ -249,7 +346,12 @@ class CraftTab(QWidget):
         by_name = {r.material: r for r in summary.rows}
         muted, accent, warn = QColor(color("muted")), QColor(color("accent")), QColor(color("warn"))
         default = self.table.palette().text().color()
-        for i, material in enumerate(self._order):
+        for i, (kind, material) in enumerate(self._order):
+            if kind == "head":
+                cell = self.table.item(i, 0)
+                cell.setText(self._group_title(material))
+                cell.setForeground(muted)
+                continue
             r = by_name.get(material)
             if r is None:
                 continue
@@ -278,6 +380,11 @@ class CraftTab(QWidget):
                 else:
                     cell.setForeground(default)
         total = auction.korean_gold(summary.total) if summary.total or self._known(summary) else "—"
+        self.refresh.setEnabled(self._pending is None)
+        if not summary.rows and self.is_process():  # 부위 0개
+            self.summary.setText(NO_PARTS)
+            self.status.setText(self._status_text(summary))
+            return
         self.summary.setText(
             f"남은 재료 {summary.left_kinds}종 · 경매장 최저가 합계 "
             f"<span style='color:{color('accent')};font-size:17px;font-weight:800;'>{total}</span> 골드")
@@ -292,7 +399,7 @@ class CraftTab(QWidget):
         if self._status_override:
             return self._status_override
         item = self.current_item()
-        stamps = sorted(self._stamp[m] for m, _ in item.materials if m in self._stamp)
+        stamps = sorted(self._stamp[m] for m in item.material_names() if m in self._stamp)
         if not stamps:
             return ""
         text = f"조회 {stamps[0]} · 경매 시세는 약 10분 지연돼요."
@@ -313,7 +420,7 @@ class CraftTab(QWidget):
             self._status_override = LOADING
             self._update()
             return
-        names = [m for m, _ in item.materials]
+        names = item.material_names()
         if force:
             self._cache.drop(names)
         else:
@@ -351,7 +458,7 @@ class CraftTab(QWidget):
         all_failed = bool(self._pending_names) and all(prices.get(n, craft.FAILED) == craft.FAILED for n in self._pending_names)
         self._status_override = FAILED_ALL if all_failed else None
         item = self.current_item()
-        if item is not None and self._cache.missing(m for m, _ in item.materials if m not in self._failed):
+        if item is not None and self._cache.missing(m for m in item.material_names() if m not in self._failed):
             self._request(force=False)  # 조회 중에 무기를 바꿨으면 그 무기 재료를 이어서
             return
         self._update()
