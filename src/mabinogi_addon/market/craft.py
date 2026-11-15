@@ -5,6 +5,7 @@
   · process(더스크 바운드): `{series, kind, item_label, default_processes, items: [{name, class, skill, parts: [[짧은 이름, 이름], …],
     process_materials, finish_materials}]}` — 공정 재료 = 1공정 × 공정 횟수 × 부위 수, 마감 재료 = 수량 × 부위 수(명세 5절).
   시리즈는 파일만 늘리면 된다(화면 코드에 장비 이름을 쓰지 않는다). 순서는 파일의 `order`(없으면 파일 이름).
+  `categories: [{name, items: [장비 이름]}]`가 있으면 드롭다운을 분류 머리로 묶는다(소울 리버레이트: 근접·마법·원거리·악기).
 - 계산은 순수 함수(네트워크 없음). 시세는 재료별 10분 세션 메모리 캐시(장비끼리 공유, 영구 저장 안 함).
 """
 from __future__ import annotations
@@ -53,6 +54,18 @@ class Series:
     kind: str = SIMPLE
     item_label: str = "무기"
     default_processes: int = 7
+    # 드롭다운 분류(0.50.0, 사용자 결정 11-15): ((분류 이름, (items 순번, …)), …). 비면 분류 없이 데이터 순서.
+    categories: tuple[tuple[str, tuple[int, ...]], ...] = ()
+
+    def menu(self) -> list[tuple[str, int | None]]:
+        """드롭다운 줄: [(글자, items 순번 | None=분류 머리)]. 분류가 없으면 장비만."""
+        if not self.categories:
+            return [(item.label, i) for i, item in enumerate(self.items)]
+        out: list[tuple[str, int | None]] = []
+        for name, indexes in self.categories:
+            out.append((name, None))
+            out += [(self.items[i].label, i) for i in indexes]
+        return out
 
 
 def data_dir() -> Path:
@@ -74,6 +87,18 @@ def _item(raw: dict, kind: str) -> Item:
     return Item(str(raw["name"]), str(raw["skill"]), materials=_pairs(raw["materials"]))
 
 
+def _categories(raw, items: tuple[Item, ...]) -> tuple[tuple[str, tuple[int, ...]], ...]:
+    """`categories: [{name, items: [장비 이름, …]}]` → 순번. 모든 장비가 정확히 한 번씩이 아니면 분류를 쓰지 않는다."""
+    if not raw:
+        return ()
+    index = {item.name: i for i, item in enumerate(items)}
+    out = tuple((str(c["name"]), tuple(index[str(n)] for n in c["items"])) for c in raw)
+    flat = [i for _n, idx in out for i in idx]
+    if sorted(flat) != list(range(len(items))):
+        raise ValueError("분류에 모든 장비가 정확히 한 번씩 있어야 함")
+    return out
+
+
 def load_series(directory: Path | None = None) -> list[Series]:
     """시리즈 목록(`order`, 그다음 파일 이름 순). 형식이 틀린 파일은 건너뛴다."""
     directory = data_dir() if directory is None else Path(directory)
@@ -86,9 +111,13 @@ def load_series(directory: Path | None = None) -> list[Series]:
                 continue
             items = tuple(_item(i, kind) for i in raw["items"])
             if items:
+                try:
+                    categories = _categories(raw.get("categories"), items)
+                except (KeyError, TypeError, ValueError):
+                    categories = ()  # 분류가 틀리면 분류 없이(장비는 그대로 보임)
                 series = Series(str(raw["series"]), str(raw.get("source", "")), items, kind,
                                 str(raw.get("item_label") or ("세트" if kind == PROCESS else "무기")),
-                                int(raw.get("default_processes", 7)))
+                                int(raw.get("default_processes", 7)), categories)
                 found.append((int(raw.get("order", 100)), path.name, series))
         except (OSError, ValueError, KeyError, TypeError):
             continue

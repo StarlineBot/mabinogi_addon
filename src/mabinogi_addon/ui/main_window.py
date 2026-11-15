@@ -385,14 +385,14 @@ class MainWindow(QMainWindow):
         self._sketch_scroll = _scrolled(self.sketch_tab)
         self._convenience_tabs = QTabWidget()
         self._convenience_tabs.setObjectName("convenienceTabs")
-        for page, title in ((self.distribution_tab, "분배 계산기"), (self.bead_split_tab, "구슬 분배 계산기"),
-                            (self.exchange_tab, "환전비율 계산기"), (self.dungeon_cost_tab, "던전 입장 계산기")):
-            self._convenience_tabs.addTab(_scrolled(page), title)
-        self._convenience_tabs.addTab(self._sketch_scroll, "그림대화 만들기")
-        # 제작 재료 계산기(docs/craft-material-calculator-spec.md, 0.50.0 모든 사용자): 알람 앞(사용자 지시 11-15 — 알람이 맨 뒤)
+        # 제작 재료 계산기(docs/craft-material-calculator-spec.md, 0.50.0 모든 사용자): 환전비율·던전 입장 사이(사용자 결정 11-15)
         from .craft_tab import CraftTab
         self.craft_tab = CraftTab()
-        self._convenience_tabs.addTab(_scrolled(self.craft_tab), "제작 재료 계산기")
+        for page, title in ((self.distribution_tab, "분배 계산기"), (self.bead_split_tab, "구슬 분배 계산기"),
+                            (self.exchange_tab, "환전비율 계산기"), (self.craft_tab, "제작 재료 계산기"),
+                            (self.dungeon_cost_tab, "던전 입장 계산기")):
+            self._convenience_tabs.addTab(_scrolled(page), title)
+        self._convenience_tabs.addTab(self._sketch_scroll, "그림대화 만들기")
         # 알람(alarm-spec, 0.48.0): PC 시계 기준. 판정은 최적화 화면의 0.25초 주기에서(아래 tick_hooks)
         from .alarm_tab import AlarmTab
         self.alarm_tab = AlarmTab(self._watcher)

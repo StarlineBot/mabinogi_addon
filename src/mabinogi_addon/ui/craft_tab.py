@@ -15,8 +15,9 @@ import time
 import urllib.request
 
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QColor
+from PySide6.QtGui import QColor, QStandardItem, QStandardItemModel
 from PySide6.QtWidgets import (
+    QStyledItemDelegate,
     QAbstractItemView, QAbstractSpinBox, QCheckBox, QComboBox, QHBoxLayout, QHeaderView, QLabel, QSpinBox,
     QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
@@ -39,6 +40,33 @@ LOADING = "시세 조회 중…"
 FAILED_ALL = "시세 조회에 실패했어요. 다시 시도해 주세요."
 COLUMNS = ["재료", "필요", "보유", "남음", "개당 최저가", "남은 가격"]
 _OWNED_COL = 2
+
+
+_INDENT = 14  # 분류 머리 아래 장비 줄 들여쓰기(px)
+
+
+class _MenuDelegate(QStyledItemDelegate):
+    """드롭다운 펼친 목록: 분류 머리는 굵게·흐리게(고를 수 없음), 장비 줄은 들여쓰기. 줄 높이는 글자에 맞춰 넉넉히."""
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self.indent = False
+
+    def initStyleOption(self, option, index) -> None:
+        super().initStyleOption(option, index)
+        if index.data(Qt.ItemDataRole.UserRole) is None:  # 분류 머리
+            option.font.setBold(True)
+            option.palette.setColor(option.palette.ColorRole.Text, QColor(color("muted")))
+
+    def sizeHint(self, option, index):
+        size = super().sizeHint(option, index)
+        size.setHeight(max(size.height(), option.fontMetrics.height() + 10))
+        return size
+
+    def paint(self, painter, option, index) -> None:
+        if self.indent and index.data(Qt.ItemDataRole.UserRole) is not None:
+            option.rect.adjust(_INDENT, 0, 0, 0)
+        super().paint(painter, option, index)
 
 
 def _fetch(result, names, key, cancelled):
@@ -97,6 +125,11 @@ class CraftTab(QWidget):
         self.weapon.setMinimumContentsLength(8)  # 글자가 커도 가로 넘침 없게(넓으면 늘어남)
         self.weapon.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
         self.weapon.setMaximumWidth(360)
+        self._menu_model = QStandardItemModel(self)
+        self.weapon.setModel(self._menu_model)
+        self._menu_delegate = _MenuDelegate(self.weapon)
+        self.weapon.setItemDelegate(self._menu_delegate)
+        self.weapon.setMaxVisibleItems(20)  # 분류 머리까지 33줄 — 펼치면 20줄, 나머지는 스크롤
         head.addWidget(self.weapon, 1)
         # 공정형(세트): 부위 체크 4개 + 공정 [7회] — simple 시리즈에서는 숨김
         self.part_checks = []
@@ -166,7 +199,9 @@ class CraftTab(QWidget):
         self.series_list.currentRowChanged.connect(self._on_series)
         self.weapon.currentIndexChanged.connect(self._on_weapon)
         if self._series:
-            self.series_list.setCurrentRow(0)
+            last_series, _ = config.load_craft_last()  # 마지막으로 본 시리즈·장비를 그대로
+            names = [s.name for s in self._series]
+            self.series_list.setCurrentRow(names.index(last_series) if last_series in names else 0)
 
     # ---- 선택 ----
     def current_series(self) -> craft.Series | None:
@@ -175,8 +210,31 @@ class CraftTab(QWidget):
 
     def current_item(self) -> craft.Item | None:
         series = self.current_series()
-        i = self.weapon.currentIndex()
-        return series.items[i] if series is not None and 0 <= i < len(series.items) else None
+        i = self.weapon.currentData(Qt.ItemDataRole.UserRole)
+        return series.items[i] if series is not None and isinstance(i, int) and 0 <= i < len(series.items) else None
+
+    def select_item(self, name: str) -> bool:
+        """장비 이름으로 고르기(분류 머리는 건너뜀)."""
+        series = self.current_series()
+        for row in range(self._menu_model.rowCount()):
+            i = self._menu_model.item(row).data(Qt.ItemDataRole.UserRole)
+            if isinstance(i, int) and series.items[i].name == name:
+                self.weapon.setCurrentIndex(row)
+                return True
+        return False
+
+    def _fill_menu(self, series: craft.Series) -> None:
+        """드롭다운: 분류가 있으면 고를 수 없는 머리 줄(근접·마법…) + 들여쓴 장비 줄."""
+        self._menu_model.clear()
+        for text, index in series.menu():
+            entry = QStandardItem(text)
+            if index is None:
+                entry.setFlags(Qt.ItemFlag.NoItemFlags)  # 고를 수 없음 — 키보드 위아래도 건너뜀
+                entry.setData(None, Qt.ItemDataRole.UserRole)
+            else:
+                entry.setData(index, Qt.ItemDataRole.UserRole)
+            self._menu_model.appendRow(entry)
+        self._menu_delegate.indent = bool(series.categories)
 
     def is_process(self) -> bool:
         series = self.current_series()
@@ -185,10 +243,14 @@ class CraftTab(QWidget):
     def _on_series(self, _row: int) -> None:
         series = self.current_series()
         self.weapon.blockSignals(True)
-        self.weapon.clear()
         if series is not None:
-            self.weapon.addItems([item.label for item in series.items])
+            self._fill_menu(series)
             self.item_label.setText(series.item_label)
+            _, last_items = config.load_craft_last()
+            if not self.select_item(last_items.get(series.name, "")):
+                first = next(r for r in range(self._menu_model.rowCount())
+                             if self._menu_model.item(r).data(Qt.ItemDataRole.UserRole) is not None)
+                self.weapon.setCurrentIndex(first)
         self.weapon.blockSignals(False)
         process = self.is_process()
         for box in self.part_checks:
@@ -236,7 +298,13 @@ class CraftTab(QWidget):
     def _on_weapon(self, *_):
         item = self.current_item()
         if item is None:
+            row = self.weapon.currentIndex()
+            nxt = next((r for r in range(row + 1, self._menu_model.rowCount())
+                        if self._menu_model.item(r).data(Qt.ItemDataRole.UserRole) is not None), None)
+            if row >= 0 and nxt is not None:  # 분류 머리가 골라졌으면(코드에서) 그 아래 첫 장비로
+                self.weapon.setCurrentIndex(nxt)
             return
+        config.set_craft_last(self.current_series().name, item.name)
         self.skill.setText(item.skill)
         if self.is_process():
             self._load_choice(item)

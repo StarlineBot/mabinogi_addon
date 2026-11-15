@@ -30,7 +30,7 @@
         "tests/test_craft_calculator.py",
         "tests/test_debuff_applied.py"
       ],
-      "reason": "디버프 표시 저장값 missing|all, 옛 applied(저장·설정 동기화) → all; craftOwned(재료별 보유, 내보내기·동기화)·craftCalculator.hideDone; craftChoice(세트별 부위·공정)"
+      "reason": "디버프 표시 저장값 missing|all, 옛 applied(저장·설정 동기화) → all; craftOwned(재료별 보유, 내보내기·동기화)·craftCalculator.hideDone; craftChoice(세트별 부위·공정); craftCalculator.lastSeries·lastItem"
     },
     "src/mabinogi_addon/tracker/debuff_engine.py": {
       "tests": [
@@ -74,7 +74,7 @@
         "tests/test_navigation_all_widths.py",
         "tests/test_cursor_fx.py"
       ],
-      "reason": "제작 재료 계산기 화면: 시리즈·무기·제작 방법·합계·표, 입력 중 정렬 안 함, 다 모은 재료 숨기기, 작업 스레드 시세·10분 캐시, 편의기능 맨 뒤 탭·글자 커도 가로 넘침 없음; kind 분기(simple/process) — 세트·부위 체크·공정 횟수·공정/마감 묶음 줄"
+      "reason": "제작 재료 계산기 화면: 시리즈·무기·제작 방법·합계·표, 입력 중 정렬 안 함, 다 모은 재료 숨기기, 작업 스레드 시세·10분 캐시, 편의기능 맨 뒤 탭·글자 커도 가로 넘침 없음; kind 분기(simple/process) — 세트·부위 체크·공정 횟수·공정/마감 묶음 줄; 분류 머리 드롭다운(고를 수 없음·키보드 건너뜀)·마지막 선택 복원"
     },
     "src/mabinogi_addon/market/craft.py": {
       "tests": [
@@ -93,7 +93,7 @@
       "tests": [
         "tests/test_craft_calculator.py"
       ],
-      "reason": "소울 리버레이트 29종 재료 데이터(워리어 실드 인게임 대조)"
+      "reason": "소울 리버레이트 29종 재료 데이터(워리어 실드 인게임 대조); 무기 분류(근접·마법·원거리·악기) categories"
     },
     "src/mabinogi_addon/ui/main_window.py": {
       "tests": [

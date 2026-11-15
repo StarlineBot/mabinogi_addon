@@ -170,7 +170,7 @@ def test_tab_fetches_weapon_materials_and_reuses_cache(tab_env):
         assert tab.status.text() == ct.LOADING and started[0][1][1] == names  # 무기 재료 8종 조회
         _finish(tab, started, {n: 1000 for n in names})
         assert "경매 시세는 약 10분 지연돼요." in tab.status.text()
-        tab.weapon.setCurrentIndex(0)
+        tab.select_item(item.name)
         tab._on_weapon()
         assert not started  # 10분 안 — 캐시 재사용
         tab.refresh.click()
@@ -331,3 +331,73 @@ def test_dusk_shared_owned_across_sets_and_simple_hides_choice(tab_env):
     finally:
         tab.shutdown()
         tab.deleteLater()
+
+
+# ---- 소울 리버레이트 무기 분류(0.50.0 사용자 결정 11-15) ----
+CATEGORIES = [
+    ("근접", ["소드", "해머", "액스", "실드", "워리어 실드", "블레이드", "랜스", "워리어 해머", "워리어 액스", "너클", "핸들",
+              "콜로서스 미니어처", "피에로 미니어처", "체인 블레이드"]),
+    ("마법", ["스태프", "원드", "힐링 원드", "마도서", "실린더", "가드실린더", "사이드", "오브"]),
+    ("원거리", ["보우", "이터널 애로우", "크로스보우", "이터널 볼트", "스로잉 스타", "듀얼건"]),
+    ("악기", ["리라"]),
+]
+
+
+def test_soul_categories_cover_each_weapon_once_in_order():
+    s = _series()
+    got = [(name, [s.items[i].name.replace("소울리버레이트 ", "") for i in idx]) for name, idx in s.categories]
+    assert got == CATEGORIES
+    flat = [i for _n, idx in s.categories for i in idx]
+    assert sorted(flat) == list(range(29))  # 29종 모두 정확히 한 번
+    assert not _dusk().categories and [i for _t, i in _dusk().menu()] == [0, 1, 2]  # 분류 없는 시리즈는 그대로
+
+
+def test_bad_categories_fall_back_to_plain_list(tmp_path):
+    (tmp_path / "a.json").write_text(json.dumps({"series": "x", "categories": [{"name": "근접", "items": ["무기"]}], "items": [
+        {"name": "무기", "skill": "s", "materials": [["재료", 1]]}, {"name": "둘", "skill": "s", "materials": [["재료", 1]]}]},
+        ensure_ascii=False), encoding="utf-8")
+    s = craft.load_series(tmp_path)[0]
+    assert s.categories == () and [t for t, _i in s.menu()] == ["무기", "둘"]
+
+
+def test_menu_headers_not_selectable_and_keys_skip_them(tab_env):
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    ct, started = tab_env
+    tab = ct.CraftTab()
+    try:
+        model = tab.weapon.model()
+        texts = [model.item(r).text() for r in range(model.rowCount())]
+        assert texts[0] == "근접" and len(texts) == 33
+        heads = [r for r in range(model.rowCount()) if model.item(r).data(Qt.ItemDataRole.UserRole) is None]
+        assert [texts[r] for r in heads] == ["근접", "마법", "원거리", "악기"]
+        assert all(not model.item(r).isSelectable() and not model.item(r).isEnabled() for r in heads)
+        assert tab.weapon.currentIndex() == 1 and tab.current_item().name.endswith(" 소드")
+        tab.select_item("소울리버레이트 체인 블레이드")  # 근접 마지막
+        QTest.keyClick(tab.weapon, Qt.Key.Key_Down)
+        assert tab.current_item().name.endswith(" 스태프")  # '마법' 머리 건너뜀
+        QTest.keyClick(tab.weapon, Qt.Key.Key_Up)
+        assert tab.current_item().name.endswith(" 체인 블레이드")
+        tab.weapon.setCurrentIndex(heads[2])  # 코드에서 머리를 골라도 그 아래 첫 무기로
+        assert tab.current_item().name.endswith(" 보우")
+    finally:
+        tab.shutdown()
+        tab.deleteLater()
+
+
+def test_last_selection_restored(tab_env):
+    ct, started = tab_env
+    tab = ct.CraftTab()
+    tab.select_item("소울리버레이트 리라")
+    tab.series_list.setCurrentRow(1)
+    tab.weapon.setCurrentIndex(2)  # 에테리얼
+    tab.shutdown()
+    tab.deleteLater()
+    again = ct.CraftTab()  # 다시 열면 마지막 시리즈·세트
+    try:
+        assert again.current_series().name == "더스크 바운드" and again.current_item().name == "에테리얼"
+        again.series_list.setCurrentRow(0)
+        assert again.current_item().name == "소울리버레이트 리라"  # 시리즈마다 마지막 장비
+    finally:
+        again.shutdown()
+        again.deleteLater()

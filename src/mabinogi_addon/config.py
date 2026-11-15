@@ -2159,3 +2159,23 @@ def set_craft_choice(series: str, item: str, parts: list[bool], processes: int, 
     raw[series] = sec
     data["craftChoice"] = raw
     _write_local_config(data, path)
+
+
+def load_craft_last(path: Path = LOCAL_CONFIG_PATH) -> tuple[str, dict[str, str]]:
+    """제작 재료 계산기 마지막 선택: (시리즈 이름, {시리즈: 장비 이름})."""
+    raw = _read_local_config(path).get("craftCalculator")
+    if not isinstance(raw, dict):
+        return "", {}
+    items = raw.get("lastItem") if isinstance(raw.get("lastItem"), dict) else {}
+    return (raw.get("lastSeries") if isinstance(raw.get("lastSeries"), str) else "",
+            {k: v for k, v in items.items() if isinstance(k, str) and isinstance(v, str)})
+
+
+def set_craft_last(series: str, item: str, path: Path = LOCAL_CONFIG_PATH) -> None:
+    data = _read_local_config(path)
+    sec = data.get("craftCalculator") if isinstance(data.get("craftCalculator"), dict) else {}
+    items = sec.get("lastItem") if isinstance(sec.get("lastItem"), dict) else {}
+    items[series] = item
+    sec["lastSeries"], sec["lastItem"] = series, items
+    data["craftCalculator"] = sec
+    _write_local_config(data, path)
