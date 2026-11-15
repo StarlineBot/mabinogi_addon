@@ -75,7 +75,7 @@
 - 화면: 오프스크린 렌더(시세 있음·조회 중·키 없음·다 모음 숨기기, 더스크 바운드 세 세트·부위 일부 체크) 사용자 확인.
 
 ## 7. 구현 메모 (0.50.0)
-- `market/craft.py`(데이터·계산·10분 캐시), `ui/craft_tab.py`(화면), config `craftOwned`·`craftCalculator.hideDone`. 편의기능 탭 **맨 뒤**(알람 다음 — 사용자 지시 11-15).
+- `market/craft.py`(데이터·계산·10분 캐시), `ui/craft_tab.py`(화면), config `craftOwned`·`craftCalculator.hideDone`. 편의기능 탭 알람 바로 앞(그림대화 만들기 다음 — 사용자 지시 11-15: 알람이 맨 뒤).
 - 매물 없음과 조회 실패를 가르려고 `auction.fetch_min_prices`에 `failed`·`urlopen` 선택 인자(기본은 예전 그대로 None).
 - 렌더: `docs/assets/craft-materials-20261115/render/`(시세 있음·조회 중·키 없음·다 모음 숨기기).
 - 더스크 바운드(0.50.0): `kind`로 화면 분기, 공정형은 부위 체크 4개(세트마다 이름)·`공정 [N회]`(1~30)·묶음 줄(칸 합침). 시리즈 순서는 파일의 `order`(소울 1·더스크 2). 세트별 체크·공정 = config `craftChoice`. 렌더 `render/dusk_aegis·dusk_vigorous·dusk_ethereal.png`, 위치 `render/craft_location.png`.
