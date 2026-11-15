@@ -161,13 +161,26 @@ class FavoriteRow:
     size: int
 
 
-_GRID_TOL = 3  # 줄 격자 허용(px): 즐겨찾기 줄 y = 구분선 − 1 − k × 줄 간격(tests/data 실측 1~2px 어긋남)
+_GRID_TOL = 3  # 줄 격자 허용(px) — tests/data 실측 1~2px 어긋남
+MAP_MAX_ROWS = 24  # 줄 맞춤 범위(구분선 위 줄 수). 즐겨찾기 17줄 이상 화면(1080 행진곡 장면 — 맨 윗줄이 구분선 위 21줄)
+_BELOW_OFFSET = 9 / 16  # 가로선 바로 아래 첫 줄: 선 + 아이콘 크기 × 이 값(16px 아이콘 = 9px, tests/data 실측 8~9)
 
 
-def _on_grid(bottom: int, y: int, size: int) -> bool:
+def _grid_dist(d: int, pitch: int) -> int:
+    d %= pitch
+    return min(d, pitch - d)
+
+
+def _on_grid(lines: list[int], y: int, size: int) -> bool:
+    """줄 격자 위인가 — 바로 아래 가로선 기준 '선 − 1 − k×줄 간격', 또는 바로 위 가로선 기준 '선 + 오프셋 + k×줄 간격'.
+    0.49.2 QA(1080 행진곡 장면): 화면에 가로선이 둘(678 즐겨찾기 구분선·797 상태목록창 아래 끝)이라 맨 아래 선 하나로 재면
+    두 선 사이 목록 줄(비바체·굳건한 의지 — 예전엔 이 경로로 켜짐)이 13px 어긋나 빠졌다."""
     pitch = max(8, round(size * 1.5))
-    d = (bottom - 1 - y) % pitch
-    return min(d, pitch - d) <= _GRID_TOL
+    below = [line for line in lines if line > y]
+    above = [line for line in lines if line < y]
+    if below and _grid_dist(min(below) - 1 - y, pitch) <= _GRID_TOL:
+        return True
+    return bool(above) and _grid_dist(y - max(above) - round(size * _BELOW_OFFSET), pitch) <= _GRID_TOL
 
 
 def map_rows(gray: np.ndarray, templates: dict[str, np.ndarray], icon_column: tuple[int, int],
@@ -175,24 +188,25 @@ def map_rows(gray: np.ndarray, templates: dict[str, np.ndarray], icon_column: tu
     """구분선 위 즐겨찾기 칸의 줄을 등록 버프 아이콘과 맞춘다. 등록 안 된 줄은 무시, 한 줄에 버프 하나.
 
     0.49.2(사용자 거짓 '사라짐' 경고·안 건 피닉스 표시): 구분선 위 띠 전체를 훑으면 상태목록창 위 게임 장면의 아이콘까지
-    맞췄다(225848 + 위로 넓은 영역 → 화면 y=188에 피닉스). 이제 칸 안에서만 — 구분선 위 MAX_ROWS줄 안, 줄 격자 위,
-    창 위 테두리가 보이면 그 아래. 다만 테두리 위에서 목록 기준(0.80) 이상으로 맞는 줄이 있으면 그 '테두리'는 칸 안
-    바닥 금 등을 잘못 잡은 것이라(창 모드 wireweb_3) 자르지 않는다."""
+    맞췄다(225848 + 위로 넓은 영역 → 화면 y=188에 피닉스). 이제 칸 안에서만 — 구분선 위 MAP_MAX_ROWS줄 안, 줄 격자 위
+    (구분선과 그 위 가로선들 기준), 창 위 테두리가 보이면 그 아래. 다만 테두리 위에서 목록 기준(0.80) 이상으로 맞는 줄이
+    있으면 그 '테두리'는 칸 안 바닥 금·다른 가로선을 잘못 잡은 것이라(창 모드 wireweb_3, 1080 행진곡) 자르지 않는다."""
     gray = _gray(gray)
     x0, x1 = icon_column
     bottom = max(0, bottom)
+    lines = sorted({*[line for line in find_separators(gray[:bottom]) if line < bottom - 4], bottom})
     found: list[tuple[float, str, int, int, int]] = []
     for bid, template in templates.items():
         t = _gray(template)
         size = t.shape[0]
         pitch = max(8, round(size * 1.5))
-        lo = max(0, bottom - MAX_ROWS * pitch - _GRID_TOL - 1)
+        lo = max(0, bottom - MAP_MAX_ROWS * pitch - _GRID_TOL - 1)
         strip = gray[lo:bottom, x0:x1]
         if strip.shape[0] < t.shape[0] or strip.shape[1] < t.shape[1]:
             continue
         result = match_icon(strip, t)
         y = lo + result.y
-        if result.score >= threshold and _on_grid(bottom, y, size):
+        if result.score >= threshold and _on_grid(lines, y, size):
             found.append((result.score, bid, x0 + result.x, y, size))
     if found:
         pitch = max(8, round(found[0][4] * 1.5))

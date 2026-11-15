@@ -97,3 +97,17 @@ def test_repeated_remap_log_is_suppressed(caplog):
     # 1000프레임(0.3초 주기면 약 5분) 동안 200줄 → 같은 결과는 LOG_REPEAT_FRAMES(240)마다 한 번씩만: 두 결과 × 5 = 10줄
     assert 2 <= len(lines) <= 2 * (1000 // FavoritesReader.LOG_REPEAT_FRAMES + 1), lines
     assert any("생략" in line for line in lines)
+
+
+def test_two_lines_and_many_favorites_keep_lit_rows(catalog):
+    """0.49.2 QA(d79af116 회귀): 1080 장면 — 즐겨찾기 17줄, 가로선 둘(678 진짜 구분선·797 상태목록창 아래 끝, 구분선은 797로 잡힘).
+    줄 맞춤을 맨 아래 선 하나의 격자·16줄로 재면 행진곡·전장의 서곡(16줄 밖)과 두 선 사이 비바체·굳건한 의지(격자 13px 어긋남)가
+    빠져 오버레이에서 사라지고 거짓 '사라짐' 경고가 났다."""
+    image = image_io.imread(DATA / "2026-11-03_나눔고딕_1080_행진곡59초빨강_밝은배경.png", cv2.IMREAD_COLOR)
+    x, _y, w, _h = locate_status_region(image, anchor_template())
+    region = np.ascontiguousarray(image[:, x:x + w])
+    reader = _reader(region, catalog)
+    lit = {bid for bid, on in reader.on.items() if on}
+    assert {"march", "overture_of_the_battlefield", "vivace", "enduring_will"} <= lit
+    assert {"han_adrenaline", "manashield", "penet"} <= lit
+    assert not lit & {"tuan", "sharp", "speed", "fragarach", "snow_storm"}  # 회색(꺼짐) 줄
