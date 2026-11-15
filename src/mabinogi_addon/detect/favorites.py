@@ -36,6 +36,10 @@ _VISIBLE_BG = 20.0  # 주변이 이보다 밝은데 선이 없으면 '선이 정
 
 FAV_MATCH_THRESHOLD = 0.7  # 꺼진(회색) 아이콘도 켜진 템플릿과 0.79~1.0으로 맞음(실측) → 목록보다 낮게
 VERIFY_THRESHOLD = 0.6  # 기억한 줄 아이콘이 이 아래면 순서가 바뀐 것으로 보고 다시 맞춤
+# 켜짐 인정(0.49.2): 이름 글자가 흰색이어도 그 순간 아이콘이 목록 기준(0.80) 이상일 때만 켜짐. 줄 위치 기억은 0.70이라 꺼진 회색
+# '정화의 고동'이 마나 피어스로 0.714에 맞아 기억되고, 정화의 고동이 켜지면 '마나 피어스 켜짐', 꺼지면 '사라짐'이 됐다
+# (001307·213313, 사용자 경고 그림 0.721). 켜진 진짜 줄은 0.95 이상.
+ON_THRESHOLD = 0.8
 _ON_LEVEL = 200  # 이름 글자 최대 채널이 이 이상인 픽셀 = 흰 글자
 _ON_MIN_PIXELS = 6
 _TEXT_WIDTH = 100  # 아이콘 오른쪽 이름 영역 너비(오른쪽 남은 시간 숫자는 제외)
@@ -157,18 +161,58 @@ class FavoriteRow:
     size: int
 
 
+_GRID_TOL = 3  # 줄 격자 허용(px) — tests/data 실측 1~2px 어긋남
+MAP_MAX_ROWS = 24  # 줄 맞춤 범위(구분선 위 줄 수). 즐겨찾기 17줄 이상 화면(1080 행진곡 장면 — 맨 윗줄이 구분선 위 21줄)
+_BELOW_OFFSET = 9 / 16  # 가로선 바로 아래 첫 줄: 선 + 아이콘 크기 × 이 값(16px 아이콘 = 9px, tests/data 실측 8~9)
+
+
+def _grid_dist(d: int, pitch: int) -> int:
+    d %= pitch
+    return min(d, pitch - d)
+
+
+def _on_grid(lines: list[int], y: int, size: int) -> bool:
+    """줄 격자 위인가 — 바로 아래 가로선 기준 '선 − 1 − k×줄 간격', 또는 바로 위 가로선 기준 '선 + 오프셋 + k×줄 간격'.
+    0.49.2 QA(1080 행진곡 장면): 화면에 가로선이 둘(678 즐겨찾기 구분선·797 상태목록창 아래 끝)이라 맨 아래 선 하나로 재면
+    두 선 사이 목록 줄(비바체·굳건한 의지 — 예전엔 이 경로로 켜짐)이 13px 어긋나 빠졌다."""
+    pitch = max(8, round(size * 1.5))
+    below = [line for line in lines if line > y]
+    above = [line for line in lines if line < y]
+    if below and _grid_dist(min(below) - 1 - y, pitch) <= _GRID_TOL:
+        return True
+    return bool(above) and _grid_dist(y - max(above) - round(size * _BELOW_OFFSET), pitch) <= _GRID_TOL
+
+
 def map_rows(gray: np.ndarray, templates: dict[str, np.ndarray], icon_column: tuple[int, int],
              bottom: int, threshold: float = FAV_MATCH_THRESHOLD) -> dict[str, FavoriteRow]:
-    """구분선 위(0~bottom) 줄을 등록 버프 아이콘과 맞춘다. 등록 안 된 줄은 무시, 한 줄에 버프 하나."""
+    """구분선 위 즐겨찾기 칸의 줄을 등록 버프 아이콘과 맞춘다. 등록 안 된 줄은 무시, 한 줄에 버프 하나.
+
+    0.49.2(사용자 거짓 '사라짐' 경고·안 건 피닉스 표시): 구분선 위 띠 전체를 훑으면 상태목록창 위 게임 장면의 아이콘까지
+    맞췄다(225848 + 위로 넓은 영역 → 화면 y=188에 피닉스). 이제 칸 안에서만 — 구분선 위 MAP_MAX_ROWS줄 안, 줄 격자 위
+    (구분선과 그 위 가로선들 기준), 창 위 테두리가 보이면 그 아래. 다만 테두리 위에서 목록 기준(0.80) 이상으로 맞는 줄이
+    있으면 그 '테두리'는 칸 안 바닥 금·다른 가로선을 잘못 잡은 것이라(창 모드 wireweb_3, 1080 행진곡) 자르지 않는다."""
     gray = _gray(gray)
     x0, x1 = icon_column
-    strip = gray[:max(0, bottom), x0:x1]
+    bottom = max(0, bottom)
+    lines = sorted({*[line for line in find_separators(gray[:bottom]) if line < bottom - 4], bottom})
     found: list[tuple[float, str, int, int, int]] = []
     for bid, template in templates.items():
         t = _gray(template)
+        size = t.shape[0]
+        pitch = max(8, round(size * 1.5))
+        lo = max(0, bottom - MAP_MAX_ROWS * pitch - _GRID_TOL - 1)
+        strip = gray[lo:bottom, x0:x1]
+        if strip.shape[0] < t.shape[0] or strip.shape[1] < t.shape[1]:
+            continue
         result = match_icon(strip, t)
-        if result.score >= threshold:
-            found.append((result.score, bid, x0 + result.x, result.y, t.shape[0]))
+        y = lo + result.y
+        if result.score >= threshold and _on_grid(lines, y, size):
+            found.append((result.score, bid, x0 + result.x, y, size))
+    if found:
+        pitch = max(8, round(found[0][4] * 1.5))
+        top = panel_top(gray, bottom, pitch)
+        if top is not None and not any(score >= ON_THRESHOLD and y < top - _GRID_TOL for score, _b, _x, y, _s in found):
+            found = [f for f in found if f[3] >= top - _GRID_TOL]
     rows: dict[str, FavoriteRow] = {}
     for score, bid, x, y, size in sorted(found, reverse=True):
         if all(abs(row.y - y) >= size // 2 for row in rows.values()):
@@ -213,6 +257,8 @@ class FavoritesReader:
         self._dropped: dict[str, int] = {}  # 유지 시간을 넘겨 빠진 줄 → 빠진 프레임(다시 찾으면 지움, GIVE_UP_FRAMES 뒤 포기)
         self._returns: dict[str, tuple[int, int]] = {}  # 빠졌다 같은 자리로 돌아온 줄 → (y, 횟수)
         self._sticky: dict[str, int] = {}  # 깜빡이는 진짜 줄(같은 자리로 STICKY_RETURNS번 돌아옴) → y. 구분선이 바뀌면 비움
+        self._logged: dict[str, int] = {}  # 다시 맞춤 로그 결과 → 찍은 프레임(같은 결과 반복 억제)
+        self._log_skipped = 0
         self.top_cut = False  # 맨 위 즐겨찾기 줄이 영역 위 끝에 걸림(아이콘 잘림 → 다른 버프로 오인) → 자동 찾기 다시 안내
 
     @property
@@ -252,8 +298,17 @@ class FavoritesReader:
             self._remap(gray, reason="구분선 이동" if before is not None and self.separator != before else "줄 확인")
         if remapped or self._frame % (self.SCAN_EVERY * 4) == 0:
             self.row_count = count_rows(gray, self.separator, self.rows, self._pitch())
-        self.on = {bid: row_is_on(region, row.x, row.y, row.size) for bid, row in self.rows.items()}
+        self.on = {bid: row_is_on(region, row.x, row.y, row.size) and self._row_score(gray, bid, row) >= ON_THRESHOLD
+                   for bid, row in self.rows.items()}
         return self.separator
+
+    def _row_score(self, gray: np.ndarray, bid: str, row: FavoriteRow) -> float:
+        """기억한 줄 자리(±3px)에서 그 버프 아이콘 점수."""
+        t = _gray(self._templates[bid])
+        win = gray[max(0, row.y - 3):row.y + row.size + 3, max(0, row.x - 3):row.x + row.size + 3]
+        if win.shape[0] < t.shape[0] or win.shape[1] < t.shape[1]:
+            return 0.0
+        return match_icon(win, t).score
 
     def _track(self, gray: np.ndarray, list_ys: list[int]) -> None:
         state = None
@@ -349,11 +404,25 @@ class FavoritesReader:
             if bid in found and found[bid].y != self._sticky[bid]:
                 self._sticky.pop(bid)  # 줄이 다른 자리로 옮겨 감 — 붙잡기 해제
         if set(rows) != set(self.rows) or any(rows[b].y != self.rows[b].y for b in rows):
-            _log.info("즐겨찾기 줄 다시 맞춤(%s): %s", reason,
-                      ", ".join(f"{b}@{r.y}{'(유지)' if b in self._missing else ''}"
-                                for b, r in sorted(rows.items(), key=lambda i: i[1].y)) or "등록 버프 없음")
+            self._log_remap(reason, ", ".join(f"{b}@{r.y}{'(유지)' if b in self._missing else ''}"
+                                              for b, r in sorted(rows.items(), key=lambda i: i[1].y)) or "등록 버프 없음")
         self.rows = rows
         self._check_top_cut(gray)
+
+    # 0.49.2(사용자 app.log): 줄 하나가 들어왔다 빠졌다 하면 같은 두 결과가 0.3~0.5초마다 수 분간 번갈아 찍혔다.
+    # 같은 결과는 이 프레임 안에 다시 찍지 않고, 다음에 찍을 때 건너뛴 횟수를 붙인다.
+    LOG_REPEAT_FRAMES = 240
+
+    def _log_remap(self, reason: str, summary: str) -> None:
+        last = self._logged.get(summary)
+        if last is not None and self._frame - last < self.LOG_REPEAT_FRAMES:
+            self._log_skipped += 1
+            return
+        self._logged = {k: f for k, f in self._logged.items() if self._frame - f < self.LOG_REPEAT_FRAMES}
+        self._logged[summary] = self._frame
+        extra = f" (그사이 같은 결과 반복 {self._log_skipped}번 생략)" if self._log_skipped else ""
+        self._log_skipped = 0
+        _log.info("즐겨찾기 줄 다시 맞춤(%s): %s%s", reason, summary, extra)
 
     _CUT_TEXTURE = 25.0  # 잘린 아이콘 띠의 밝기 편차(아이콘 37~40, 빈 칸 배경 12 안팎 — 010804 실측)
 

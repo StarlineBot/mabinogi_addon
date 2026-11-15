@@ -295,3 +295,85 @@ def test_debuff_tab_tone_matches_buff_tab(app):
     finally:
         tab.deleteLater()
         buff.deleteLater()
+
+
+# ---- 세 번째 '전부'(명세 5절, 제작자 알파 0.49.0) ----------------------------------------------------------------
+def test_all_mode_is_union_in_fixed_list_order():
+    region = _region("스크린샷 2026-10-18 001801.png")
+    eng = _engine(ORDER)
+    eng.set_display_mode("all")
+    for t in (0.0, 0.2, 0.4, 0.6):
+        res = eng.tick(region, t)
+    assert [e.buff_id for e in res.entries] == ORDER  # 전부 = 안 걸린 것 ∪ 걸린 것, 목록 순서 그대로
+    dim = {e.buff_id for e in res.entries if e.dim}
+    assert dim == {"방해 카드", "와이어웹"} and not any(e.gone for e in res.entries)  # 안 걸린 것 = 흐린 회색
+    times = {e.buff_id: e.time_text for e in res.entries if not e.dim}
+    assert times == {"물리 방어력 보호 감소": "3m", "받는 대미지 증가": "4m", "모모": "4m", "프라가라흐(물리)": None, "케라": "9m"}
+
+
+def test_all_mode_positions_do_not_move_on_falloff_and_warning_then_gray():
+    region = _region("스크린샷 2026-10-18 001801.png")
+    bare = _without_icons(region)
+    eng = _engine(ORDER, warn={"모모"})
+    eng.set_display_mode("all")
+    for t in (0.0, 0.2, 0.4, 0.6):
+        eng.tick(region, t)
+
+    def state(now):
+        res = eng.tick(bare, now)
+        assert [e.buff_id for e in res.entries] == ORDER  # 걸림·빠짐에도 자리 그대로
+        return {e.buff_id: ("gone" if e.gone else "dim" if e.dim else "on") for e in res.entries}
+    state(1.0)
+    s15 = state(1.5)
+    assert s15["모모"] == "on" and s15["케라"] == "dim"  # 경고 끈 것은 깜빡임 방지 뒤 회색, 켠 것은 확정까지
+    assert state(4.1)["모모"] == "gone"  # 떨어짐 경고(빨간 테두리 + X)
+    assert state(9.2)["모모"] == "dim"  # 경고 뒤 흐린 회색으로
+
+
+def test_all_mode_without_boss_shows_all_gray():
+    from mabinogi_addon.tracker.debuff_engine import DebuffEngine
+    eng = DebuffEngine({}, ["a", "b"])
+    eng.set_display_mode("all")
+    eng._order = ["a", "b"]
+    eng._templates = {"a": None, "b": None}
+    eng._gate_absent = lambda *a, **k: True
+    eng._bar_present = lambda region: False
+    eng._scale = lambda region: region
+    res = eng.tick(np.zeros((40, 80, 3), np.uint8), 0.0)
+    assert [(e.buff_id, e.dim) for e in res.entries] == [("a", True), ("b", True)]
+
+
+@pytest.mark.parametrize("creator", [False, True])
+def test_all_choice_creator_only(app, monkeypatch, creator):
+    from mabinogi_addon import config, feature_access
+    from mabinogi_addon.ui.debuff_tab import DebuffTab
+    monkeypatch.setattr(feature_access, "is_creator", lambda: creator)
+    config.set_debuff_display_mode("all")  # 제작자가 고른 뒤 제작자가 아니게 된 경우 포함
+    tab = DebuffTab()
+    try:
+        assert tab.display_segments.buttons["all"].isVisibleTo(tab) is creator
+        assert tab.effective_display_mode() == ("all" if creator else "missing")
+        assert tab.display_segments.buttons["all" if creator else "missing"].isChecked()
+        assert tab.boss_only_check.isEnabled()  # '보스바가 보일 때만'은 안 걸린 것과 같이
+    finally:
+        tab.deleteLater()
+
+
+def test_dim_items_paint_gray_and_translucent(app, monkeypatch):
+    from PySide6.QtGui import QColor, QPixmap
+    from mabinogi_addon.ui import overlay as ovm
+    pm = QPixmap(16, 16)
+    pm.fill(QColor(220, 40, 40))
+    gray = ovm.gray_pixmap(pm).toImage().pixelColor(5, 5)
+    assert gray.red() == gray.green() == gray.blue()  # 흑백
+    assert ovm.gray_pixmap(pm) is ovm.gray_pixmap(pm)  # 같은 아이콘은 한 번만 만든다
+    drawn = []
+    real = ovm.gray_pixmap
+    monkeypatch.setattr(ovm, "gray_pixmap", lambda p: drawn.append(p) or real(p))
+    ov = ovm.BuffOverlay()
+    ov.set_locked(True)
+    ov.set_items([ovm.OverlayItem(pm, "4m"), ovm.OverlayItem(pm, None, dim=True)])
+    ov.grab()
+    assert len(drawn) == 1  # 안 걸린 것만 흑백으로 그림(걸린 것은 원래 색)
+    assert ovm.DIM_OPACITY < 0.7  # 반투명(사라짐 경고 0.7보다 흐리게)
+    ov.close()

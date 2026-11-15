@@ -90,8 +90,9 @@ _DETECT_CONFIRM_SEC = 0.3
 _PERCENT_READ_INTERVAL = 0.6
 
 # 표시 방식(docs/debuff-applied-overlay-spec.md, 제작자 먼저). missing = 안 걸린 것(지금), applied = 걸린 것 + 시간.
-MODE_MISSING, MODE_APPLIED = "missing", "applied"
-DISPLAY_MODES = (MODE_MISSING, MODE_APPLIED)
+MODE_MISSING, MODE_APPLIED, MODE_ALL = "missing", "applied", "all"
+# 전부(명세 5절, 제작자 알파 0.49.0): 추적 디버프 전부를 목록 순서 고정 자리에 — 걸린 것 = 원래 색 + 시간, 안 걸린 것 = 흐린 회색
+DISPLAY_MODES = (MODE_MISSING, MODE_APPLIED, MODE_ALL)
 # 'M' 없는 숫자만 보이는 시간은 초일 수도, 분일 수도 있다(게임 글꼴에 따라 분도 M 없이 숫자만 보임 — 10-30·10-31 4K 6장(매끈한 큰 글꼴)은 '4'·'9', 같은 4K·같은 자리 11-09(픽셀 글꼴)는 '4M' — 해상도가 아니라 글꼴 차이, QA e98aac6).
 # 그래서 초로 보이려면 숫자가 실제로 줄어드는 것을 봐야 한다(초는 1초마다 줄고, M 없는 분은 1분 동안 그대로) — 틀린 숫자 금지.
 _COUNT_DROP_MAX = 5  # 한 번에 이만큼까지 줄어든 것만 초 카운트다운으로 본다(판독 간격·놓친 틱)
@@ -240,6 +241,26 @@ class DebuffEngine:
                     self.on_time_suspect(bid, game, region, self._pos.get(bid))
                 except Exception:  # noqa: BLE001 — 진단 저장 실패가 추적을 막지 않게
                     pass
+        return entries
+
+    def _all_entries(self, region: np.ndarray, now: float) -> list[OverlayEntry]:
+        """전부(명세 5절): 목록 순서 그대로 모든 추적 디버프 — 자리는 걸림·빠짐에도 그대로.
+        떨어짐 경고 중이면 경고(빨간 테두리 + X), 걸린 것 = 원래 색 + '걸린 것 + 시간'과 같은 시간, 안 걸린 것 = 흐린 회색."""
+        applied = {bid for bid in self._order if not self._shown.get(bid, True) or bid in self._fell_since}
+        times = read_times(region, {bid: self._pos.get(bid) for bid in applied}) if applied else {}
+        self._suspects.clear()
+        entries = []
+        for bid in self._order:
+            if bid in self._warn_until:
+                entries.append(OverlayEntry(bid, None, False, gone=True))
+            elif bid in applied:
+                text, warn = self._time_label(bid, times.get(bid), now)
+                entries.append(OverlayEntry(bid, None, False, time_text=text, time_warn=warn))
+            else:
+                entries.append(OverlayEntry(bid, None, False, dim=True))
+        for bid in [b for b in self._time_state if b not in times]:
+            if now - self._time_state[bid][3] > _TIME_FORGET_SEC:
+                del self._time_state[bid]
         return entries
 
     @property
@@ -614,7 +635,9 @@ class DebuffEngine:
                 OverlayEntry(bid, None, False, gone=False)
                 for bid in self._order
                 if self._shown.get(bid, False)
-            ] if self._mode == MODE_MISSING else []  # 걸린 것 보기: 보스 없음 = 걸린 것 없음
+            ] if self._mode == MODE_MISSING else [
+                OverlayEntry(bid, None, False, dim=True) for bid in self._order  # 전부: 보스 없음 = 전부 안 걸림(회색)
+            ] if self._mode == MODE_ALL else []  # 걸린 것 보기: 보스 없음 = 걸린 것 없음
             self._time_state.clear()
             return TickResult(entries=entries, alerts=[], frame_valid=True)
 
@@ -662,6 +685,8 @@ class DebuffEngine:
 
         if self._mode == MODE_APPLIED:
             return TickResult(entries=self._applied_entries(region, now), alerts=alerts, frame_valid=True)
+        if self._mode == MODE_ALL:
+            return TickResult(entries=self._all_entries(region, now), alerts=alerts, frame_valid=True)
         entries = []
         for bid in self._order:
             gone = bid in self._warn_until  # 사라짐 경고 노출 중

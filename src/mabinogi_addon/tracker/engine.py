@@ -70,6 +70,7 @@ class OverlayEntry:
     gone: bool = False  # 사라짐 경고(디버프: 보스에서 떨어짐) → 빨간 테두리+X
     time_text: str | None = None  # 이미 정한 시간 글자(디버프 '걸린 것 + 시간': 게임 표시 '4M' → '4m', 초 → '43s')
     time_warn: bool = False  # time_text를 빨갛게(1분 미만)
+    dim: bool = False  # 흐린 회색(흑백 + 반투명) — 디버프 '전부'의 안 걸린 것(0.49.0)
 
 
 @dataclass

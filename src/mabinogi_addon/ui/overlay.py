@@ -43,6 +43,26 @@ def overlay_spec(
         specs.append((entry.buff_id, text, warn, entry.gone))
     return specs
 
+DIM_OPACITY = 0.45  # 디버프 '전부'의 안 걸린 것(흐린 회색) 불투명도
+_GRAY_CACHE: dict[int, QPixmap] = {}
+
+
+def gray_pixmap(pixmap: QPixmap) -> QPixmap:
+    """흑백 아이콘(같은 아이콘은 한 번만 만든다)."""
+    key = pixmap.cacheKey()
+    cached = _GRAY_CACHE.get(key)
+    if cached is None:
+        from PySide6.QtGui import QImage
+        image = pixmap.toImage()
+        alpha = image.convertToFormat(QImage.Format.Format_ARGB32)
+        gray = image.convertToFormat(QImage.Format.Format_Grayscale8).convertToFormat(QImage.Format.Format_ARGB32)
+        gray.setAlphaChannel(alpha.convertToFormat(QImage.Format.Format_Alpha8))
+        cached = _GRAY_CACHE[key] = QPixmap.fromImage(gray)
+        if len(_GRAY_CACHE) > 256:
+            _GRAY_CACHE.pop(next(iter(_GRAY_CACHE)))
+    return cached
+
+
 _ICON_BASE = 40  # 100% 기준 아이콘 변
 _GAP_BASE = 3  # 아이콘 사이 간격(100% 기준)
 _TEXT_BASE = 16  # 아이콘 아래 글자 칸 높이
@@ -55,6 +75,7 @@ class OverlayItem:
     duration_text: str | None  # None=칸만 비움(아이콘 높이 맞춤)
     warn: bool = False  # 남은 시간 1분 미만 → 숫자 빨갛게
     gone: bool = False  # 사라짐 경고: 아이콘 흐리게 + 빨간 테두리 + X(잠깐 표시)
+    dim: bool = False  # 흐린 회색(흑백 + 반투명) — 디버프 '전부'의 안 걸린 것
 
 
 class BuffOverlay(QWidget):
@@ -187,8 +208,8 @@ class BuffOverlay(QWidget):
         for item in self._items:
             # 사라짐 경고 칸도 아이콘을 또렷하게(어떤 버프/디버프였는지 보이게) 그린다.
             # 살짝만 흐리게(0.7) + 가운데 비운 모서리 X로 '떨어짐'을 표시한다.
-            painter.setOpacity(0.7 if item.gone else 1.0)
-            scaled = item.pixmap.scaled(
+            painter.setOpacity(0.7 if item.gone else DIM_OPACITY if item.dim else 1.0)
+            scaled = (gray_pixmap(item.pixmap) if item.dim else item.pixmap).scaled(
                 icon,
                 icon,
                 Qt.AspectRatioMode.KeepAspectRatio,

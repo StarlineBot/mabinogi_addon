@@ -143,8 +143,18 @@ class SkillbarTab(QWidget):
             pr.addWidget(b)
         pr.addStretch(1)
         display_layout.addLayout(pr)
-        display_layout.addWidget(hint_label("빈칸은 오버레이에서 우클릭해 숨길 수 있어요."))
+        display_layout.addWidget(hint_label("빈칸은 오버레이에서 우클릭하거나 아래 묶음 목록에서 숨길 수 있어요."))
         self._preset_btns = [pr.itemAt(i).widget() for i in range(1, pr.count()) if pr.itemAt(i).widget() is not None]
+        # 묶음 목록(0.49.0, 사용자 결정 11-14): 커스텀 오버레이처럼 탭에서 12묶음·칸 숨기기/되살리기
+        from .skillbar_groups import SkillbarGroupsSection
+        self._thumbs: dict = {}  # key -> 지금 단축바 아이콘 4칸(QPixmap|None)
+        self._thumbs_at = 0.0
+        self.groups = SkillbarGroupsSection(self._defs)
+        self.groups.toggle_cell.connect(self._toggle_cell)
+        self.groups.toggle_show.connect(self._set_show)
+        self.groups.toggle_lock.connect(self._set_lock)
+        v.addWidget(self.groups)
+        self.groups.refresh(self._chunks_cfg, self._thumbs)
         from .cooldown_section import CooldownSection
         self.cooldown = CooldownSection(watcher)  # 쿨타임 오버레이(베타, 쿨타임 명세 10절) — 0.44.0부터 모든 사용자
         v.addWidget(self.cooldown)
@@ -189,6 +199,7 @@ class SkillbarTab(QWidget):
             if pos:
                 ov.move(int(pos["x"]), int(pos["y"]))
             ov.set_locked(bool(c.get("locked", False)))
+            ov.set_hidden(self._cells_on(key))
             self._overlays[key] = ov
         if not any(self._chunks_cfg.get(k, {}).get("pos") for k in self._defs):
             self._initializing_layout = True
@@ -238,17 +249,19 @@ class SkillbarTab(QWidget):
         )
         # 쿨타임 명세 9.1: 캡처·크기 조정·자르기는 공유 캡처의 작업 스레드에서(화면 스레드는 칸 그림만 바꾼다).
         keys = [key for key, ov in self._overlays.items() if ov.isVisible()]
+        if self.groups.isVisible():  # 묶음 목록이 보이면 꺼 둔 묶음의 아이콘도(목록 칸 그림)
+            keys = list(self._defs)
         if not keys:
             self._capture().clear("mirror")
             return
-        cells = {key: list(self._cells_on(key)) for key in keys}
         defs = self._defs
+        every = [True] * CELLS  # 4칸 모두 자른다 — 숨긴 칸은 오버레이가 안 그림(잠금 해제면 흐린 자리), 목록은 흐리게
 
         def crop(frame):  # 작업 스레드
             if frame.shape[1] != SRC_W or frame.shape[0] != SRC_H:  # 물리픽셀 → 논리 격자(150% 보정)
                 import cv2
                 frame = cv2.resize(frame, (SRC_W, SRC_H), interpolation=cv2.INTER_AREA)
-            return {key: slice_group_np(frame, defs[key], cells[key]) for key in keys}
+            return {key: slice_group_np(frame, defs[key], every) for key in keys}
         self._capture().set_request("mirror", rect, MIRROR_INTERVAL, crop, grab=self._grab_rect)
 
     def _capture(self):
@@ -262,11 +275,21 @@ class SkillbarTab(QWidget):
     def _on_captured(self, name, data) -> None:
         if name != "mirror" or self._shutting_down or self._paused:
             return
+        import time
+
         from .skillbar_mirror import _np_to_pixmap
+        thumbs_due = self.groups.isVisible() and time.monotonic() - self._thumbs_at >= 1.0  # 목록 칸 그림은 1초에 한 번
         for key, crops in data.items():
             ov = self._overlays.get(key)
+            pms = None
             if ov is not None and ov.isVisible():
-                ov.set_cells([None if c is None else _np_to_pixmap(c) for c in crops])
+                pms = [None if c is None else _np_to_pixmap(c) for c in crops]
+                ov.set_cells(pms)
+            if thumbs_due:
+                self._thumbs[key] = pms or [None if c is None else _np_to_pixmap(c) for c in crops]
+        if thumbs_due:
+            self._thumbs_at = time.monotonic()
+            self.groups.refresh(self._chunks_cfg, self._thumbs)
 
     # ---- 앵커 지정 ----
     def _on_anchor(self) -> None:
@@ -300,6 +323,8 @@ class SkillbarTab(QWidget):
             mark.close()
         for overlay in self._overlays.values():
             overlay.set_cells([None] * CELLS)
+        self._thumbs.clear()
+        self.groups.refresh(self._chunks_cfg, self._thumbs)
         self._update_anchor_label()
         self._apply_visibility()
 
@@ -354,6 +379,7 @@ class SkillbarTab(QWidget):
             ov.set_locked(locked)
             self._chunks_cfg.setdefault(key, {})["locked"] = locked
         self._save()
+        self.groups.refresh(self._chunks_cfg, self._thumbs)
 
     def _sync_lock_all(self) -> None:
         """모든 묶음이 잠겼으면 '전체 위치 잠금됨', 하나라도 풀리면 '전체 위치 잠금'."""
@@ -362,10 +388,31 @@ class SkillbarTab(QWidget):
         set_lock_text(self.lock_all_btn, locked)
 
     def _toggle_cell(self, key: str, i: int) -> None:
+        """칸 숨김 ↔ 보임 — 오버레이 우클릭·묶음 목록 둘 다 여기(같은 chunks.<key>.cells, 바로 서로 맞춤)."""
         cells = list(self._cells_on(key))
         cells[i] = not cells[i]
         self._chunks_cfg.setdefault(key, {})["cells"] = cells
+        ov = self._overlays.get(key)
+        if ov is not None:
+            ov.set_hidden(cells)
         self._save()
+        self.groups.refresh(self._chunks_cfg, self._thumbs)
+
+    def _set_show(self, key: str, on: bool) -> None:
+        """묶음 표시 끔/켬(chunks.<key>.show) — 끄면 그 오버레이를 숨긴다."""
+        self._chunks_cfg.setdefault(key, {})["show"] = bool(on)
+        self._save()
+        self._apply_visibility()
+        self.groups.refresh(self._chunks_cfg, self._thumbs)
+
+    def _set_lock(self, key: str, locked: bool) -> None:
+        self._ensure_overlays()
+        ov = self._overlays.get(key)
+        if ov is not None:
+            ov.set_locked(bool(locked))
+        self._chunks_cfg.setdefault(key, {})["locked"] = bool(locked)
+        self._save()
+        self.groups.refresh(self._chunks_cfg, self._thumbs)
 
     # ---- 프리셋(기본 배치) ----
     def _screen_origin(self) -> tuple[int, int, int, int]:
