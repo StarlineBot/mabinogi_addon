@@ -267,3 +267,30 @@ def test_columns_fold_only_when_too_narrow(qapp):
     assert tab.minimumSizeHint().width() <= 766
     assert tab.songs.folded or tab.columns.folded
     tab.close()
+
+
+def test_reforge_level_capped_by_option_max(qapp):
+    """명세 2절 보완(9ef3051): Lv 상한 = 옵션 max, 옵션 바꿔 넘치면 낮춤, '없음'이면 Lv 0·비활성."""
+    from mabinogi_addon.ui.music_buff_tab import MusicBuffTab
+    tab = MusicBuffTab()
+    t = mb.tables()
+    for key, lines in tab.reforges.items():
+        for opt in mb.reforge_options(key, t):
+            line = lines[0]
+            line.option.set_value(opt["id"])
+            assert line.level.isEnabled() and line.level.maximum() == opt["max"], (key, opt["id"])
+            line.level.setValue(99)
+            assert line.level.value() == opt["max"]
+    line = tab.reforges["inst_reforge"][0]
+    line.option.set_value("inst_music_buff")
+    line.level.setValue(25)
+    line.option.set_value("inst_divine_rate")  # 최대 8
+    assert line.level.value() == 8 and config.load_music_buff()["inst_reforge"][0] == ["inst_divine_rate", 8]
+    line.option.set_value(None)
+    assert line.level.value() == 0 and not line.level.isEnabled()
+    assert config.load_music_buff()["inst_reforge"][0] == [None, 0]
+
+
+def test_same_option_on_two_lines_adds_levels():
+    two = _state(inst_reforge=[["inst_music_buff", 10], ["inst_music_buff", 5]])
+    assert mb.song_total(two) == mb.song_total(_state(inst_reforge=[["inst_music_buff", 15]]))
