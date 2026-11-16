@@ -263,14 +263,29 @@ def test_wide_region_matches_tight_reading(name):
     assert all(abs(tight[k] - wide[k]) <= 0.03 for k in tight), (tight, wide)
 
 
-# ---- 넓은 영역: 확신 없으면 빈 값(0.51.0 QA db6bc1f — 덜 찬 바가 틀린 값으로 읽힌 11건) ----
-_GRID = [(200, 46), (250, 58), (300, 69), (400, 92)]
+# ---- 넓은 영역: 확신 없으면 빈 값(0.51.0 QA db6bc1f·88ee828 — 덜 찬 바가 틀린 값으로 읽힌 것) ----
+_GRID = [(200, 46), (250, 58), (300, 69), (400, 92), (180, 40), (220, 52), (275, 62), (350, 80), (450, 104), (520, 120)]
 _LARGE_SCENES = sorted(str(p.relative_to(_SHOTS)) for p in _SHOTS.rglob("*.png") if _png_width(p) >= 800)
+
+
+def _grid_boxes(box, size, frame_shape):
+    """바를 품는 상자 위치 5가지(바 왼쪽 위 −4, 가운데, 오른쪽 위, 왼쪽 아래, 오른쪽 아래) — 화면 밖이면 잘라 내지 않고 화면
+    안으로 민다(바는 늘 화면 아래쪽이라 실제 직접 지정 상자는 위로 밀려 놓임 — QA 88ee828 재현 조건)."""
+    x, y, w, h = box
+    W, H = size
+    FH, FW = frame_shape[:2]
+    out = []
+    for x0, y0 in ((x - 4, y - 4), (x + w // 2 - W // 2, y + h // 2 - H // 2), (x + w + 4 - W, y - 4),
+                   (x - 4, y + h + 4 - H), (x + w + 4 - W, y + h + 4 - H)):
+        x0, y0 = min(max(0, x0), FW - W), min(max(0, y0), FH - H)
+        if x0 <= x and y0 <= y and x0 + W >= x + w and y0 + H >= y + h:
+            out.append((x0, y0))
+    return out
 
 
 @pytest.mark.parametrize("name", _LARGE_SCENES)
 def test_wide_grid_never_reads_a_wrong_value(name):
-    """찾은 바 둘레 W×H ∈ {200×46, 250×58, 300×69, 400×92} × (바 왼쪽 위 −4 / 가운데 맞춤): 읽으면 바에 맞춘 영역 판독과 ±3% 안.
+    """찾은 바 둘레 10가지 크기 × 5가지 위치(화면 안으로 민 상자): 읽으면 바에 맞춘 영역 판독과 ±3% 안.
     빈 값은 괜찮다 — 틀린 값(덜 찬 HP를 1.0, 덜 찬 MP를 0.0)은 낮은 체력 알림을 놓치거나 거짓 알림을 낸다."""
     from mabinogi_addon.detect.stat_bars import locate_stat_bars, read_stat_bars
     f = image_io.imread(_SHOTS / name, cv2.IMREAD_COLOR)
@@ -282,13 +297,23 @@ def test_wide_grid_never_reads_a_wrong_value(name):
     if len(truth) != 3:
         pytest.skip("바에 맞춘 영역도 완전 판독 아님")
     wrong = []
-    for W, H in _GRID:
-        for x0, y0 in ((x - 4, y - 4), (x + w // 2 - W // 2, y + h // 2 - H // 2)):
-            x0, y0 = max(0, x0), max(0, y0)
+    for size in _GRID:
+        for x0, y0 in _grid_boxes(box, size, f.shape):
+            W, H = size
             got = {r.stat_id: r.ratio for r in read_stat_bars(f[y0:y0 + H, x0:x0 + W], require_complete=True)}
             if got and any(abs(got[k] - truth[k]) > 0.03 for k in truth):
-                wrong.append((W, H, x0 - x, got, truth))
+                wrong.append((size, x0 - x, y0 - y, got, truth))
     assert not wrong, wrong
+
+
+def test_box_pushed_up_into_screen_keeps_partial_mp():
+    """QA 88ee828 재현: 001541(2560×1436) 바 (930,1401,103,32), 400×92 상자를 화면 안으로 민 자리(Y = 1344) — 바 왼쪽
+    숫자 글자 때문에 구간을 바 오른쪽 절반만 잡아 MP 0.43 → 0.0이던 것. 이제 맞는 값이거나 빈 값."""
+    from mabinogi_addon.detect.stat_bars import read_stat_bars
+    f = image_io.imread(_SHOTS / "스크린샷 2026-10-18 001541.png", cv2.IMREAD_COLOR)
+    for x0 in (930 - 4, 930 - 149):
+        got = {r.stat_id: r.ratio for r in read_stat_bars(f[1344:1344 + 92, x0:x0 + 400], require_complete=True)}
+        assert not got or abs(got["mp"] - 3774 / 8584) <= 0.03, got
 
 
 def test_image31_all_sizes_read_full():

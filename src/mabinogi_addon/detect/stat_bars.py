@@ -382,14 +382,10 @@ _RUN_JOIN = 8  # 한 바 안의 작은 틈(글자 외곽선 등)
 _TEXT_GAP = 16  # 바 왼쪽 숫자 글자(흰색) 틈 — 왼쪽으로는 이만큼까지 이어 본다(숫자는 늘 바 왼쪽에 있음)
 
 
-def _bar_columns(region: np.ndarray) -> tuple[int, int] | None:
-    """직접 지정 영역이 바보다 넓을 때 바 가로 구간(왼쪽, 오른쪽).
-    행마다 바 색 픽셀의 가장 긴 연속 구간(틈 _RUN_JOIN px, 왼쪽으로는 숫자 글자 틈 _TEXT_GAP px까지 이어 봄)을 구해, 길이가 _MIN_BAR_WIDTH 이상인 행들의
-    왼쪽·오른쪽 끝 가운데 값. 바 행이 바깥 행(같은 색조 인터페이스 배경 등)보다 많아 가운데 값이 바 자리를 가리킨다.
-    바 색에는 소모(빈 부분) 색도 들어 있어 덜 찬 바도 바 전체 폭이 잡힌다. 그런 행이 _MIN_ROWS×2 미만이면 None."""
-    hsv = cv2.cvtColor(region, cv2.COLOR_BGR2HSV)
-    colored = _bar_pixels(hsv[:, :, 0], hsv[:, :, 1].astype(int), hsv[:, :, 2])
-    lefts, rights = [], []
+def _row_runs(colored: np.ndarray) -> list[tuple[int, int]]:
+    """행마다 바 색 픽셀의 가장 긴 연속 구간(틈 _RUN_JOIN px, 왼쪽으로는 숫자 글자 틈 _TEXT_GAP px까지 이어 봄) —
+    길이가 _MIN_BAR_WIDTH 이상인 행만 (왼쪽, 오른쪽)."""
+    out = []
     for row in colored:
         cols = np.flatnonzero(row)
         if cols.size < _MIN_BAR_WIDTH // 2:
@@ -401,11 +397,34 @@ def _bar_columns(region: np.ndarray) -> tuple[int, int] | None:
             i -= 1
             left = int(runs[i][0])
         if right - left + 1 >= _MIN_BAR_WIDTH:
-            lefts.append(left)
-            rights.append(right)
-    if len(lefts) < 2 * _MIN_ROWS:
+            out.append((left, right))
+    return out
+
+
+def _strict_colored(region: np.ndarray) -> np.ndarray:
+    hsv = cv2.cvtColor(region, cv2.COLOR_BGR2HSV)
+    return _bar_pixels(hsv[:, :, 0], hsv[:, :, 1].astype(int), hsv[:, :, 2])
+
+
+def _bar_columns(region: np.ndarray) -> tuple[int, int] | None:
+    """직접 지정 영역이 바보다 넓을 때 바 가로 구간(왼쪽, 오른쪽): 행마다 가장 긴 바 색 구간(`_row_runs`) 중 길이가
+    _MIN_BAR_WIDTH 이상인 행들의 왼쪽·오른쪽 끝 가운데 값. 바 행이 바깥 행(같은 색조 인터페이스 배경 등)보다 많아 가운데 값이
+    바 자리를 가리킨다(숫자 글자에 끊긴 행이 많으면 왼쪽 끝을 놓칠 수 있어 — 읽은 뒤 `_band_extent`로 다시 확인).
+    그런 행이 _MIN_ROWS×2 미만이면 None."""
+    runs = _row_runs(_strict_colored(region))
+    if len(runs) < 2 * _MIN_ROWS:
         return None
-    return int(np.median(lefts)), int(np.median(rights))
+    return int(np.median([a for a, _b in runs])), int(np.median([b for _a, b in runs]))
+
+
+def _band_extent(region: np.ndarray, r0: int, r1: int) -> tuple[int, int] | None:
+    """한 띠의 바 가로 범위(바 색 확실한 픽셀만): 띠 행들의 가장 긴 구간의 왼쪽 끝 20% 분위·오른쪽 끝 80% 분위 — 숫자 글자가
+    없는 띠 위·아래 행이 바 끝을 보여 준다(0.51.0 QA 88ee828 — 글자에 끊겨 바 오른쪽 절반만 잡던 것)."""
+    runs = _row_runs(_strict_colored(region[r0:r1]))
+    if not runs:
+        return None
+    k = len(runs) // 5  # 한두 행에만 붙은 같은 색 줄(인터페이스 선)에 끌려가지 않게 — 20%·80% 분위
+    return sorted(a for a, _b in runs)[k], sorted(b for _a, b in runs)[-1 - k]
 
 
 _SAME_PX = 4  # 넓은 영역 확인: 세 바 왼쪽·오른쪽 끝·폭이 이 안에서 같아야(맞는 판독 ≤4px, 틀린 판독 11px — tests/data 그리드 실측)
@@ -415,19 +434,9 @@ def _consistent(region: np.ndarray, rows: list[tuple[int, int]], width: int) -> 
     """넓은 영역에서 자른 세 띠가 진짜 체력바인지(0.51.0 QA db6bc1f — 넓은 영역에서 덜 찬 바가 틀린 값으로 읽힌 11건).
     세 바의 가로 범위(채움 + 소모 색, `_span`)가 같은 왼쪽·오른쪽 끝·같은 폭(±_SAME_PX)이고 그 폭이 바 가로 구간(`_bar_columns`)과
     같아야 한다. 하나라도 어긋나면(같은 색조 배경이 바 옆에 붙음, 소모 부분이 덜 잡힘 등) 확신 없음."""
-    spans = []
-    for r0, r1 in rows:
-        hsv = cv2.cvtColor(region[r0:r1], cv2.COLOR_BGR2HSV)
-        bh, bs, bv = hsv[:, :, 0].astype(int), hsv[:, :, 1].astype(int), hsv[:, :, 2]
-        colored = _bar_pixels(bh, bs, bv)
-        if not colored.any():
-            return False
-        hue = int(np.median(bh[colored]))
-        stat = _stat_of(hue)
-        got = _span(bh, bs, bv, stat, hue) if stat is not None else None
-        if got is None:
-            return False
-        spans.append(got)
+    spans = _band_ranges(region, rows)
+    if spans is None:
+        return False
     return _deviation(spans, width) <= _SAME_PX
 
 
@@ -439,23 +448,28 @@ def _deviation(spans: list[tuple[int, int]], width: int) -> int:
     return max(max(lefts) - min(lefts), max(rights) - min(rights), max(abs(w - width) for w in widths))
 
 
-def read_stat_bars(region: np.ndarray, *, require_complete: bool = False) -> list[StatReading]:
-    """영역(BGR)에서 띠를 찾아 색조로 이름을 붙여 [HP, MP, STA] 순(찾은 것만) 반환.
+def _band_ranges(region: np.ndarray, rows: list[tuple[int, int]]) -> list[tuple[int, int]] | None:
+    """띠마다 바 가로 범위(채움 + 소모, `_span`) — 하나라도 못 잡으면 None."""
+    spans = []
+    for r0, r1 in rows:
+        hsv = cv2.cvtColor(region[r0:r1], cv2.COLOR_BGR2HSV)
+        bh, bs, bv = hsv[:, :, 0].astype(int), hsv[:, :, 1].astype(int), hsv[:, :, 2]
+        colored = _bar_pixels(bh, bs, bv)
+        if not colored.any():
+            return None
+        hue = int(np.median(bh[colored]))
+        stat = _stat_of(hue)
+        got = _span(bh, bs, bv, stat, hue) if stat is not None else None
+        if got is None:
+            return None
+        spans.append(got)
+    return spans
 
-    어느 바 색조에도 안 맞는 띠(인터페이스 테두리·경험치 바 등)는 버리고, 같은 바로 보이는 띠가 둘이면 기준 색조에 더
-    가까운 것. 표시/알림/자동찾기는 require_complete=True로 세 바가 모두 있을 때만 쓴다.
-    """
-    if region is None or region.shape[0] < 6 or region.shape[1] < 20:
-        return []
-    # 0.51.0(테스터 문의 image (31)): 직접 지정 영역이 바보다 많이 넓으면(4K·작은 UI에 고정 크기 상자) 바 행 비율
-    # (바 색 픽셀 / 영역 전체 폭)이 _ROW_RATIO에 못 미쳐 판독 0이었다 → 바 가로 구간을 먼저 찾아 그 구간으로 잘라 읽는다.
-    # 영역이 바에 딱 맞으면(구간이 폭의 80% 이상) 예전 그대로.
-    span = _bar_columns(region)
-    wide = span is not None and span[1] - span[0] + 1 < region.shape[1] * _WIDE_RATIO
-    if wide:
-        region = region[:, max(0, span[0] - _SPAN_MARGIN):span[1] + 1 + _SPAN_MARGIN]
+
+def _read_bands(region: np.ndarray, wide: bool) -> tuple[dict, bool, dict]:
+    """(찾은 바 {이름: (거리, 판독)}, 같은 바 띠가 둘인가, id(판독) → 띠 행)."""
     named: list[StatReading] = []
-    rows_of: dict[int, tuple[int, int]] = {}  # id(판독) → 띠 행(넓은 영역 확인용)
+    rows_of: dict[int, tuple[int, int]] = {}
     for r0, r1 in _bands(region):
         ratio, hue = _ratio(region, r0, r1)
         stat = _stat_of(hue) if hue >= 0 else None
@@ -479,9 +493,47 @@ def read_stat_bars(region: np.ndarray, *, require_complete: bool = False) -> lis
         if stacks:
             found = {r.stat_id: (0, r) for r in stacks[-1]}
             duplicate = False
-    if require_complete and (len(found) != 3 or duplicate):
-        return []  # 같은 바 색 띠가 둘이면(이어 붙은 세 띠도 없으면) 어느 쪽이 진짜인지 모름 — 표시·알림엔 쓰지 않는다
-    if wide and len(found) == 3 and not _consistent(region, [rows_of[id(found[k][1])] for k in STAT_IDS],
-                                                    span[1] - span[0] + 1):
+    return found, duplicate, rows_of
+
+
+def read_stat_bars(region: np.ndarray, *, require_complete: bool = False) -> list[StatReading]:
+    """영역(BGR)에서 띠를 찾아 색조로 이름을 붙여 [HP, MP, STA] 순(찾은 것만) 반환.
+
+    어느 바 색조에도 안 맞는 띠(인터페이스 테두리·경험치 바 등)는 버리고, 같은 바로 보이는 띠가 둘이면 기준 색조에 더
+    가까운 것. 표시/알림/자동찾기는 require_complete=True로 세 바가 모두 있을 때만 쓴다.
+    """
+    if region is None or region.shape[0] < 6 or region.shape[1] < 20:
+        return []
+    # 0.51.0(테스터 문의 image (31)): 직접 지정 영역이 바보다 많이 넓으면(4K·작은 UI에 고정 크기 상자) 바 행 비율
+    # (바 색 픽셀 / 영역 전체 폭)이 _ROW_RATIO에 못 미쳐 판독 0이었다 → 바 가로 구간을 먼저 찾아 그 구간으로 잘라 읽는다.
+    # 영역이 바에 딱 맞으면(구간이 폭의 80% 이상) 예전 그대로.
+    span = _bar_columns(region)
+    if span is None or span[1] - span[0] + 1 >= region.shape[1] * _WIDE_RATIO:
+        found, duplicate, _rows = _read_bands(region, False)
+        if require_complete and (len(found) != 3 or duplicate):
+            return []  # 같은 바 색 띠가 둘이면 어느 쪽이 진짜인지 모름 — 표시·알림엔 쓰지 않는다
+        return [found[k][1] for k in STAT_IDS if k in found]
+    original = region
+    for attempt in range(2):
+        left = max(0, span[0] - _SPAN_MARGIN)
+        region = original[:, left:span[1] + 1 + _SPAN_MARGIN]
+        found, duplicate, rows_of = _read_bands(region, True)
+        if len(found) != 3 or duplicate:
+            return [] if require_complete else [found[k][1] for k in STAT_IDS if k in found]
+        rows = [rows_of[id(found[k][1])] for k in STAT_IDS]
+        # 0.51.0 QA 88ee828: 바 왼쪽 숫자 글자(2560 글꼴) 때문에 구간을 바 오른쪽 절반만 잡으면, 자른 영역 안에서는 세 띠가
+        # 서로 맞아 보여도 채움(왼쪽)이 잘려 MP 0.43 → 0.0. 자르기 전 원래 영역에서 세 띠의 가로 범위를 다시 재서
+        # 바가 구간 밖으로 이어지면: 두 띠 이상이 같은 범위일 때 그 범위로 한 번 더 자르고, 아니면(또는 다시 잘라도 넘치면) 빈 값.
+        ranges = [_band_extent(original, r0, r1) for r0, r1 in rows]
+        if any(r is None for r in ranges):
+            return []
+        if all(a >= span[0] - _SAME_PX and b <= span[1] + _SAME_PX for a, b in ranges):
+            break  # 자른 구간이 세 띠를 다 품음(넘치는 바 없음)
+        full = (min(a for a, _b in ranges), max(b for _a, b in ranges))
+        agree = sum(abs(a - full[0]) <= _SAME_PX and abs(b - full[1]) <= _SAME_PX for a, b in ranges)
+        if attempt == 1 or agree < 2:
+            return []  # 바가 구간 밖으로 이어지는데 두 띠 이상이 같은 범위가 아님 — 어디까지가 바인지 모름
+        span = full  # 두 띠 이상이 같은 범위(나머지는 그 안 — 흐린 화면에서 채도가 떨어진 바)
+    if not _consistent(region, rows, span[1] - span[0] + 1):
         return []  # 넓은 영역: 확신 없으면 빈 값 — 틀린 값 금지(덜 찬 바에서 낮은 체력 알림을 놓치거나 거짓 알림)
-    return [found[k][1] for k in STAT_IDS if k in found]
+    return [found[k][1] for k in STAT_IDS]
