@@ -86,3 +86,14 @@ def test_v2_guide_notes_are_new_and_do_not_rewrite_published_069():
     assert "로그인 사용자용 베타" in upgrade
     assert "다시 보지 않기" in upgrade
     assert "종료 정리를 보강" not in upgrade
+
+
+def test_unpublished_0501_folded_into_0510():
+    """0.50.1은 후보·태그 없이 0.51.0으로 넘어감 — 섹션은 v0.51.0이 새것, 가로 잘림 줄은 그 아래 '조용히 다듬은 것들'(0.51.0 QA 11-16)."""
+    text = Path(release_notes.RELEASE_NOTES_FILE).read_text(encoding="utf-8")
+    versions = [v for v, _body in release_notes._parse_sections(text)]
+    assert versions[:2] == ["0.51.0", "0.50.0"] and "0.50.1" not in versions
+    body = dict(release_notes._parse_sections(text))["0.51.0"]
+    assert "조용히 다듬은 것들" in body and "가격 칸이 잘리던 문제" in body
+    shown = release_notes.notes_since("0.50.0", "0.51.0")
+    assert "v0.51.0" in shown and "v0.50.0" not in shown and "v0.50.1" not in shown

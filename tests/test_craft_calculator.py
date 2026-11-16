@@ -501,6 +501,7 @@ def test_tree_expand_two_levels_compare_row_and_top_total_unchanged(tab_env):
         assert crystal.child(0).isFirstColumnSpanned()
         assert crystal.child(0).text(0).startswith("만들기 · ") and "직접 만들면 약 1,785만 (사면 5,999만)" in crystal.child(0).text(0)
         assert crystal.child(0).text(0).endswith("· 상점 재료 제외")
+        assert crystal.child(0).toolTip(0) == crystal.child(0).text(0)  # 좁으면 말줄임 — 전체 문장은 툴팁
         kids = {crystal.child(i).text(0): crystal.child(i) for i in range(1, crystal.childCount())}
         assert kids["마력이 깃든 융합제"].text(4) == "상점" and kids["오피먼트"].text(1) == "30"
         gem = kids["퓨어 젬스톤"]

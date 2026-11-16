@@ -589,7 +589,9 @@ class CraftTab(QWidget):
             child = entry.child(i)
             data = child.data(0, _ROLE)
             if data[0] == "cmp":
-                child.setText(0, self._compare_text(craft.make_compare(series, parent_row, children)))
+                text = self._compare_text(craft.make_compare(series, parent_row, children))
+                child.setText(0, text)
+                child.setToolTip(0, text)  # 칸 합친 줄도 좁으면 말줄임 — '상점 재료 제외' 같은 끝 단서는 툴팁으로
                 child.setForeground(0, QColor(color("accent")))
                 font = child.font(0)
                 font.setBold(True)
