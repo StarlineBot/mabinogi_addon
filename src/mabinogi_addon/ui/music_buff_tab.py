@@ -4,12 +4,21 @@
   보너스뎀 줄은 세인트 바드 링크 개방 10단계를 켰을 때만.
 - 아래(스크롤): 입력 2단. 왼쪽 2차 타이틀→악기→모자→옷→장갑→신발, 오른쪽 액세서리 1·2→에코스톤→주화·유물→기타→기타 보너스.
 - 입력을 바꾸면 즉시 다시 계산(순수 계산 `market.music_buff`)하고 config `musicBuff`에 자동 저장.
+- 장비 구역 제목 오른쪽 [경매장](명세 6절): 누르면 작업 스레드가 그 부위 매물을 받아 고른 옵션 그대로인 최저가를
+  구역 아래 한 줄로. 옵션을 바꾸면 그 줄을 지우고(늦게 온 결과도 버림) 저장하지 않는다.
 
-런타임: 네트워크·타이머 없음. 칸 하나 바뀔 때마다 계산 1회(수십 번 곱셈)와 config 파일 쓰기 1회뿐.
+런타임: 평소엔 네트워크·타이머 없음. 칸 하나 바뀔 때마다 계산 1회와 config 쓰기 1회.
+경매장 버튼을 누른 동안만 작업 스레드 1개 + 결과 확인 타이머(0.1초)가 돈다.
 """
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+import queue
+import threading
+import time
+import urllib.request
+
+from PySide6.QtCore import QRectF, QSize, Qt, QTimer
+from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
     QBoxLayout,
     QComboBox,
@@ -17,6 +26,7 @@ from PySide6.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
     QLabel,
+    QPushButton,
     QScrollArea,
     QSizePolicy,
     QSpinBox,
@@ -25,6 +35,8 @@ from PySide6.QtWidgets import (
 )
 
 from .. import config
+from ..market import auction
+from ..market import music_auction as ma
 from ..market import music_buff as mb
 from .palette import color
 from .widgets import FeatureHeader, checkbox, divider
@@ -37,6 +49,52 @@ CHECK_LABELS = (("cloud_cushion", "구름방석 4단계 (+1)"), ("music_boost_po
                 ("rose_couple_bracelet", "로즈 커플 팔찌 (+1)"),
                 ("saint_bard_arcana", "세인트 바드 링크 개방 10단계 (+3, 보너스뎀)"),
                 ("grandmaster", "그랜마 음유시인 (+5)"))
+
+
+AUCTION_TIP = "고른 인챈트·세공 그대로인 매물의 경매장 최저가를 조회해요"
+AUCTION_TEXT = {"loading": "찾는 중…", "none": "이 옵션 그대로인 매물이 없어요",
+                "fail": "경매장 조회에 실패했어요", "nokey": "넥슨 API 키가 없어 조회할 수 없어요"}
+
+
+def coin_icon(size: int = 16) -> QIcon:
+    """코드로 그린 노란 동전 + G(게임 그림 아님, 명세 6절)."""
+    icon = QIcon()
+    for scale in (1, 2):
+        pm = QPixmap(size * scale, size * scale)
+        pm.setDevicePixelRatio(scale)
+        pm.fill(Qt.GlobalColor.transparent)
+        p = QPainter(pm)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setPen(QPen(QColor("#B8860B"), 1.2))
+        p.setBrush(QColor("#F4C430"))
+        p.drawEllipse(QRectF(1, 1, size - 2, size - 2))
+        font = QFont()
+        font.setPixelSize(round(size * 0.62))
+        font.setBold(True)
+        p.setFont(font)
+        p.setPen(QColor("#7A5A00"))
+        p.drawText(QRectF(0, 0, size, size), Qt.AlignmentFlag.AlignCenter, "G")
+        p.end()
+        icon.addPixmap(pm)
+    return icon
+
+
+def _lookup(result: queue.Queue, crit, key: str, cancelled: threading.Event) -> None:
+    """작업 스레드: 매물 받기 → 최저가. 화면 스레드는 result만 읽는다."""
+    try:
+        deadline = time.monotonic() + 60
+
+        def open_page(request, timeout):
+            remaining = deadline - time.monotonic()
+            if cancelled.is_set() or remaining <= 0:
+                raise TimeoutError("auction request cancelled or expired")
+            return urllib.request.urlopen(request, timeout=min(timeout, remaining))
+
+        items = ma.fetch(crit.queries, key, urlopen=open_page)
+        price = ma.lowest(items, crit)
+        result.put(("found", price) if price is not None else ("none", None))
+    except Exception:  # noqa: BLE001 — 어떤 실패든 화면엔 "조회 실패" 한 줄
+        result.put(("fail", None))
 
 
 def _muted(text: str = "", wrap: bool = False) -> QLabel:
@@ -178,12 +236,18 @@ class _ReforgeLine(QWidget):
 class _Section(QWidget):
     """구역: 제목 + (흐린 이름 | 입력) 줄들."""
 
-    def __init__(self, title: str):
+    def __init__(self, title: str, auction_button: QPushButton | None = None):
         super().__init__()
         v = QVBoxLayout(self)
         v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(6)
-        v.addWidget(_section_title(title))
+        head = QHBoxLayout()
+        head.setContentsMargins(0, 0, 0, 0)
+        head.addWidget(_section_title(title))
+        head.addStretch(1)
+        if auction_button is not None:
+            head.addWidget(auction_button)
+        v.addLayout(head)
         self.grid = QGridLayout()
         self.grid.setContentsMargins(0, 0, 0, 0)
         self.grid.setHorizontalSpacing(8)
@@ -191,6 +255,13 @@ class _Section(QWidget):
         self.grid.setColumnStretch(1, 1)
         v.addLayout(self.grid)
         self._rows = 0
+        self.auction_line = None
+        if auction_button is not None:  # 그 부위 옵션 바로 아래 한 줄(누르기 전엔 없음)
+            self.auction_line = QLabel()
+            self.auction_line.setTextFormat(Qt.TextFormat.RichText)
+            self.auction_line.setWordWrap(True)
+            self.auction_line.hide()
+            v.addWidget(self.auction_line)
 
     def row(self, label: str, *widgets: QWidget) -> None:
         if label:
@@ -212,6 +283,10 @@ class _Section(QWidget):
         return lbl
 
 
+def _pet_name(e: dict) -> str:
+    return e["name"] if not e["baseBuff"] else f"{e['name']} (+{e['baseBuff']})"
+
+
 class MusicBuffTab(QWidget):
     def __init__(self, tables: dict | None = None) -> None:
         super().__init__()
@@ -220,6 +295,15 @@ class MusicBuffTab(QWidget):
         self.combos: dict[str, _Combo] = {}
         self.reforges: dict[str, list[_ReforgeLine]] = {}
         self.checks = {}
+        self.auction_buttons: dict[str, QPushButton] = {}
+        self.auction_lines: dict[str, QLabel] = {}
+        self.auction_state: dict[str, str | None] = {p: None for p in ma.PARTS}
+        self._snap: dict[str, tuple] = {}
+        self._pending: dict[str, queue.Queue] = {}
+        self._cancelled = threading.Event()
+        self._poll = QTimer(self)
+        self._poll.setInterval(100)
+        self._poll.timeout.connect(self._receive)
 
         v = QVBoxLayout(self)
         v.setContentsMargins(12, 12, 12, 12)
@@ -302,7 +386,7 @@ class MusicBuffTab(QWidget):
         s = _Section("2차 타이틀")
         s.row("타이틀", self._combo("secondary_title"))
         left.addWidget(s)
-        s = _Section("악기")
+        s = self._part_section("악기", "instrument")
         s.row("악기", self._value_combo("instrument", [(e["name"], e["id"]) for e in t["instruments"]]))
         s.row("인챈트", self._combo("inst_prefix", "접두 없음"), self._combo("inst_suffix", "접미 없음"))
         self.special_mod = _Spin(0, len(t["special_mod_bonus"]) - 1, suffix="단계")
@@ -312,26 +396,26 @@ class MusicBuffTab(QWidget):
         self._reforge(s, "inst_reforge")
         s.note(INSTRUMENT_NOTE)
         left.addWidget(s)
-        s = _Section("모자")
+        s = self._part_section("모자", "head")
         s.row("장비", self._combo("head_equipment"))
         s.row("접미", self._combo("head_suffix", "접미 없음"))
         left.addWidget(s)
-        for title, key in (("옷", "armor_prefix"), ("장갑", "gloves_prefix")):
-            s = _Section(title)
+        for title, key, part in (("옷", "armor_prefix", "armor"), ("장갑", "gloves_prefix", "gloves")):
+            s = self._part_section(title, part)
             s.row("접두", self._combo(key, "접두 없음"))
             left.addWidget(s)
-        s = _Section("신발")
+        s = self._part_section("신발", "shoes")
         s.row("접두", self._combo("shoes_prefix", "접두 없음"))
         self._reforge(s, "shoes_reforge")
         left.addWidget(s)
         left.addStretch(1)
         # 오른쪽
         for n in (1, 2):
-            s = _Section(f"액세서리 {n}")
+            s = self._part_section(f"액세서리 {n}", f"acc{n}")
             s.row("인챈트", self._combo(f"acc{n}_prefix", "접두 없음"), self._combo(f"acc{n}_suffix", "접미 없음"))
             self._reforge(s, f"acc{n}_reforge")
             right.addWidget(s)
-        s = _Section("에코스톤")
+        s = self._part_section("에코스톤", "eco")
         self._reforge(s, "eco_reforge")
         right.addWidget(s)
         s = _Section("주화 · 유물")
@@ -365,6 +449,18 @@ class MusicBuffTab(QWidget):
         outer.setContentsMargins(0, 4, 4, 8)
         outer.addWidget(self.columns)
         return page
+
+    def _part_section(self, title: str, part: str) -> _Section:
+        button = QPushButton("경매장")
+        button.setIcon(coin_icon())
+        button.setIconSize(QSize(16, 16))
+        button.setToolTip(AUCTION_TIP)
+        button.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        button.clicked.connect(lambda _=False, part=part: self.request_auction(part))
+        sec = _Section(title, button)
+        self.auction_buttons[part] = button
+        self.auction_lines[part] = sec.auction_line
+        return sec
 
     @staticmethod
     def _left(widget: QWidget) -> QWidget:
@@ -404,6 +500,7 @@ class MusicBuffTab(QWidget):
         s = self.state()
         if save:
             config.save_music_buff(s)
+        self._sync_auction(s)
         r = mb.calc(s, self._t)
         p = r["prob"]
         self.prob_label.setText(f"값은 보통 · 훌륭 · <b>신들린</b> 순 · 확률 {p['normal']:.1f}% · "
@@ -420,5 +517,68 @@ class MusicBuffTab(QWidget):
                         f"{mb.fmt(vals[0])} · {mb.fmt(vals[1])} · <b>{mb.fmt(vals[2])}%</b>")
 
 
-def _pet_name(e: dict) -> str:
-    return e["name"] if not e["baseBuff"] else f"{e['name']} (+{e['baseBuff']})"
+    # ---- 경매장 최저가(명세 6절) ----
+    def _sync_auction(self, s: dict) -> None:
+        """옵션을 바꾼 부위는 결과 줄을 지우고(진행 중 조회도 버림), 버튼 활성은 고른 옵션이 있고 조회 중이 아닐 때."""
+        for part in ma.PARTS:
+            snap = ma.part_snapshot(part, s)
+            if self._snap.get(part) is not None and snap != self._snap[part]:
+                self._pending.pop(part, None)
+                self._show_auction(part, None)
+            self._snap[part] = snap
+            self.auction_buttons[part].setEnabled(
+                part not in self._pending and not ma.criteria(part, s, self._t).empty)
+
+    def request_auction(self, part: str) -> None:
+        if part in self._pending or self._cancelled.is_set():
+            return
+        crit = ma.criteria(part, self.state(), self._t)
+        if crit.empty:
+            return
+        key = config.get_nexon_api_key()
+        if not key:
+            self._show_auction(part, "nokey")
+            return
+        result: queue.Queue = queue.Queue(maxsize=1)
+        self._pending[part] = result
+        self.auction_buttons[part].setEnabled(False)
+        self._show_auction(part, "loading")
+        threading.Thread(target=_lookup, args=(result, crit, key, self._cancelled), daemon=True).start()
+        self._poll.start()
+
+    def _receive(self) -> None:
+        for part, result in list(self._pending.items()):
+            try:
+                status, price = result.get_nowait()
+            except queue.Empty:
+                continue
+            del self._pending[part]
+            self._show_auction(part, status, price)
+            self.auction_buttons[part].setEnabled(not ma.criteria(part, self.state(), self._t).empty)
+        if not self._pending:
+            self._poll.stop()
+
+    def _show_auction(self, part: str, status: str | None, price: int | None = None) -> None:
+        self.auction_state[part] = status
+        line = self.auction_lines[part]
+        if status is None:
+            line.clear()
+            line.hide()
+            return
+        if status == "found":
+            line.setText(f"경매장 최저가 <span style='color:{color('accent')}; font-weight:700;'>"
+                         f"{auction.korean_gold(price)}</span> 골드 · 조회 {time.strftime('%H:%M')}")
+            line.setStyleSheet("")
+        else:
+            line.setText(AUCTION_TEXT[status])
+            line.setStyleSheet(f"color:{color('muted' if status == 'loading' else 'warn')};")
+        line.show()
+
+    def shutdown(self) -> None:
+        self._cancelled.set()
+        self._poll.stop()
+        self._pending.clear()
+
+    def closeEvent(self, event):
+        self.shutdown()
+        super().closeEvent(event)

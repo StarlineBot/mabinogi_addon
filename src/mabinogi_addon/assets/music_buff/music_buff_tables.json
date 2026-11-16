@@ -237,153 +237,182 @@
    {
     "id": "inst_music_buff",
     "name": "악기 연주 효과",
-    "max": 25
+    "max": 25,
+    "auction_name": "악기 연주 효과"
    },
    {
     "id": "inst_divine_rate",
     "name": "신들린 연주 비율",
-    "max": 8
+    "max": 8,
+    "auction_name": "음악적 지식 신들린 연주 비율"
    },
    {
     "id": "inst_divine_effect",
     "name": "신들린 연주 효과",
-    "max": 13
+    "max": 13,
+    "auction_name": "음악적 지식 신들린 연주 효과"
    },
    {
     "id": "inst_excellent_rate",
     "name": "훌륭한 연주 비율",
-    "max": 9
+    "max": 9,
+    "auction_name": "음악적 지식 훌륭한 연주 비율"
    },
    {
     "id": "inst_excellent_effect",
     "name": "훌륭한 연주 효과",
-    "max": 13
+    "max": 13,
+    "auction_name": "음악적 지식 훌륭한 연주 효과"
    },
    {
     "id": "inst_normal_effect",
     "name": "보통 연주 효과",
-    "max": 13
+    "max": 13,
+    "auction_name": "음악적 지식 보통 연주 효과"
    }
   ],
   "shoes": [
    {
     "id": "shoes_vivace_magic",
     "name": "비바체 마법 시전 속도",
-    "max": 4
+    "max": 4,
+    "auction_name": "비바체 마법 시전속도"
    },
    {
     "id": "shoes_vivace_attack",
     "name": "비바체 공격 속도",
-    "max": 4
+    "max": 4,
+    "auction_name": "비바체 공격 속도"
    },
    {
     "id": "shoes_vivace_alchemy",
     "name": "비바체 연금술 시전 속도",
-    "max": 4
+    "max": 4,
+    "auction_name": "비바체 연금술 시전속도"
    },
    {
     "id": "shoes_march_move",
     "name": "행진곡 도보 이동 속도",
-    "max": 4
+    "max": 4,
+    "auction_name": "행진곡 도보 이동속도"
    }
   ],
   "accessory": [
    {
     "id": "acc_divine_rate",
     "name": "신들린 연주 비율",
-    "max": 4
+    "max": 4,
+    "auction_name": "음악적 지식 신들린 연주 비율"
    },
    {
     "id": "acc_divine_effect",
     "name": "신들린 연주 효과",
-    "max": 4
+    "max": 4,
+    "auction_name": "음악적 지식 신들린 연주 효과"
    },
    {
     "id": "acc_excellent_rate",
     "name": "훌륭한 연주 비율",
-    "max": 4
+    "max": 4,
+    "auction_name": "음악적 지식 훌륭한 연주 비율"
    },
    {
     "id": "acc_excellent_effect",
     "name": "훌륭한 연주 효과",
-    "max": 4
+    "max": 4,
+    "auction_name": "음악적 지식 훌륭한 연주 효과"
    },
    {
     "id": "acc_normal_effect",
     "name": "보통 연주 효과",
-    "max": 4
+    "max": 4,
+    "auction_name": "음악적 지식 보통 연주 효과"
    },
    {
     "id": "acc_vivace_magic",
     "name": "비바체 마법 시전 속도",
-    "max": 4
+    "max": 4,
+    "auction_name": "비바체 마법 시전속도"
    },
    {
     "id": "acc_vivace_attack",
     "name": "비바체 공격 속도",
-    "max": 4
+    "max": 4,
+    "auction_name": "비바체 공격 속도"
    },
    {
     "id": "acc_vivace_alchemy",
     "name": "비바체 연금술 시전 속도",
-    "max": 4
+    "max": 4,
+    "auction_name": "비바체 연금술 시전속도"
    },
    {
     "id": "acc_march_move",
     "name": "행진곡 도보 이동 속도",
-    "max": 4
+    "max": 4,
+    "auction_name": "행진곡 도보 이동속도"
    }
   ],
   "ecostone": [
    {
     "id": "eco_music_buff",
     "name": "악기 연주 효과",
-    "max": 20
+    "max": 20,
+    "auction_name": "악기 연주 효과"
    },
    {
     "id": "eco_divine_rate",
     "name": "신들린 연주 비율",
-    "max": 6
+    "max": 6,
+    "auction_name": "음악적 지식 신들린 연주 비율"
    },
    {
     "id": "eco_divine_effect",
     "name": "신들린 연주 효과",
-    "max": 10
+    "max": 10,
+    "auction_name": "음악적 지식 신들린 연주 효과"
    },
    {
     "id": "eco_excellent_rate",
     "name": "훌륭한 연주 비율",
-    "max": 6
+    "max": 6,
+    "auction_name": "음악적 지식 훌륭한 연주 비율"
    },
    {
     "id": "eco_excellent_effect",
     "name": "훌륭한 연주 효과",
-    "max": 10
+    "max": 10,
+    "auction_name": "음악적 지식 훌륭한 연주 효과"
    },
    {
     "id": "eco_normal_effect",
     "name": "보통 연주 효과",
-    "max": 10
+    "max": 10,
+    "auction_name": "음악적 지식 보통 연주 효과"
    },
    {
     "id": "eco_vivace_magic",
     "name": "비바체 마법 시전 속도",
-    "max": 6
+    "max": 6,
+    "auction_name": "비바체 마법 시전속도"
    },
    {
     "id": "eco_vivace_attack",
     "name": "비바체 공격 속도",
-    "max": 6
+    "max": 6,
+    "auction_name": "비바체 공격 속도"
    },
    {
     "id": "eco_vivace_alchemy",
     "name": "비바체 연금술 시전 속도",
-    "max": 6
+    "max": 6,
+    "auction_name": "비바체 연금술 시전속도"
    },
    {
     "id": "eco_march_move",
     "name": "행진곡 도보 이동 속도",
-    "max": 6
+    "max": 6,
+    "auction_name": "행진곡 도보 이동속도"
    }
   ]
  },

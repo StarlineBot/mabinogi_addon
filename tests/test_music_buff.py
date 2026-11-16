@@ -36,8 +36,11 @@ def test_vectors_match_to_four_decimals(vec):
 
 
 def test_app_table_is_same_as_planning_table():
-    assert json.loads(mb.tables_path().read_text(encoding="utf-8")) == json.loads(
-        (DOC / "music_buff_tables.json").read_text(encoding="utf-8"))
+    """앱 표 = 기획 표 + 세공 auction_name(명세 6.1 게임 표기)뿐."""
+    app = json.loads(mb.tables_path().read_text(encoding="utf-8"))
+    names = [o.pop("auction_name") for grp in app["reforge_options"].values() for o in grp]
+    assert all(names)
+    assert app == json.loads((DOC / "music_buff_tables.json").read_text(encoding="utf-8"))
 
 
 def test_site_default_screen_rounded():

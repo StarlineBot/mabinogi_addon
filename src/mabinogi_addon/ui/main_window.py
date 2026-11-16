@@ -2902,6 +2902,7 @@ class MainWindow(QMainWindow):
         self.creator_dialogue.shutdown()
         self.dungeon_cost_tab.shutdown()
         self.craft_tab.shutdown()
+        self.music_buff_tab.shutdown()
         self.cursor_fx.shutdown()
         self.harp_tab.shutdown()
         self.alarm_tab.shutdown()
