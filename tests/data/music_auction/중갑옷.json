@@ -1,0 +1,321 @@
+{
+ "query": [
+  "category",
+  "중갑옷"
+ ],
+ "total": 537,
+ "music": 7,
+ "option_types": {
+  "아이템 색상": 2123,
+  "세트 효과": 853,
+  "세공 옵션": 683,
+  "방어력": 537,
+  "내구력": 537,
+  "보호": 536,
+  "인챈트": 269,
+  "마법 방어력": 237,
+  "마법 보호": 237,
+  "숙련": 144,
+  "남은 전용 해제 가능 횟수": 83,
+  "아이템 보호": 81,
+  "일반 개조": 79,
+  "장인 개조": 66,
+  "보석 개조": 17
+ },
+ "items": [
+  {
+   "item_name": "얼티밋 기아스 크러스티 가드(남성용)",
+   "item_display_name": "신성한 안락의 챔피언 얼티밋 기아스 크러스티 가드(남성용)",
+   "auction_price_per_unit": 30000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "안락의 (랭크 7)",
+     "option_value2": null,
+     "option_desc": "음악 버프 스킬 지속시간 8 증가,음악 버프 스킬 효과 4 증가,모든 속성 연금술 대미지 5 증가,마법 공격력 6 증가,최대대미지 22 증가"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "챔피언 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 100% 증가,최대스태미나 60 감소,방어 3 증가,레벨이 40 이상일때 체력 34 증가,카운터 어택 랭크 1 이상일 때 최대대미지 15 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "다운 어택 대미지(20레벨:80 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "마리오네트 최소 대미지(19레벨:9.50 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "아이스 스피어 공격 폭(2레벨:0.10 m 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블리안 엔더스 듀러블 가드(남성용)",
+   "item_display_name": "안락의 증오 블리안 엔더스 듀러블 가드(남성용)",
+   "auction_price_per_unit": 50000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "안락의 (랭크 7)",
+     "option_value2": null,
+     "option_desc": "음악 버프 스킬 지속시간 8 증가,음악 버프 스킬 효과 4 증가,모든 속성 연금술 대미지 5 증가,마법 공격력 6 증가,최대대미지 22 증가"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "증오 (랭크 D)",
+     "option_value2": null,
+     "option_desc": "마법 보호 5 증가,보호 2 증가,마리오네트 최대 대미지 16 증가,모든 속성 연금술 대미지 7 증가,마법 공격력 5 증가,최대대미지 16 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "회피 누적 쿨타임 한계량(11레벨:4.40 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "파 어웨이 1발당 대미지 배율(18레벨:18 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "스타 데토네이션 대미지(20레벨:200 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블리안 엔더스 듀러블 가드(여성용)",
+   "item_display_name": "신성한 안락의 증오 블리안 엔더스 듀러블 가드(여성용)",
+   "auction_price_per_unit": 60000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "안락의 (랭크 7)",
+     "option_value2": null,
+     "option_desc": "음악 버프 스킬 지속시간 8 증가,음악 버프 스킬 효과 4 증가,모든 속성 연금술 대미지 5 증가,마법 공격력 6 증가,최대대미지 22 증가"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "증오 (랭크 D)",
+     "option_value2": null,
+     "option_desc": "마법 보호 5 증가,보호 2 증가,마리오네트 최대 대미지 16 증가,모든 속성 연금술 대미지 7 증가,마법 공격력 5 증가,최대대미지 16 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "독 면역 세트 효과 수치(4레벨:4 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "방어(4레벨:4 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "다운 어택 대미지(19레벨:76 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "@리파인드 로열 나이트 아머",
+   "item_display_name": "소나타 철옹성 리파인드 로열 나이트 아머",
+   "auction_price_per_unit": 90000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "소나타 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,체력 25 증가,솜씨 25 증가,음악적 지식 랭크 1 이상일 때 음악 버프 스킬 지속시간 10 증가,작곡 랭크 1 이상일 때 음악 버프 스킬 효과 6 증가,전장의 서곡 랭크 1 이상일 때 최대대미지 18 증가"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "철옹성 (랭크 9)",
+     "option_value2": null,
+     "option_desc": "최대대미지 5 증가,충격 상쇄 발동 시 마법 방어 30 증가,충격 상쇄 발동 시 방어 70 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "행진곡 지속시간(5레벨:25 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "비바체 지속시간(5레벨:25 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "소드 마스터리 크리티컬(5레벨:1.50 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블리안 엔더스 듀러블 가드(여성용)",
+   "item_display_name": "안락의 낙원 블리안 엔더스 듀러블 가드(여성용)",
+   "auction_price_per_unit": 100000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "안락의 (랭크 7)",
+     "option_value2": null,
+     "option_desc": "음악 버프 스킬 지속시간 8 증가,음악 버프 스킬 효과 4 증가,모든 속성 연금술 대미지 5 증가,마법 공격력 6 증가,최대대미지 22 증가"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "낙원 (랭크 4)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,대미지밸런스 20 감소,방어 10 증가,재생의 영역 특성 5레벨 이상일 때 최대스태미나 25 증가,굳건한 의지 특성 8레벨 이상일 때 최대대미지 25 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "회피 누적 쿨타임 한계량(16레벨:6.40 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "연속기 : 스크류 어퍼 방어/보호 파괴 성공률(15레벨:15 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "보호(5레벨:5 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블리안 엔더스 듀러블 가드(남성용)",
+   "item_display_name": "안락의 증오 블리안 엔더스 듀러블 가드(남성용)",
+   "auction_price_per_unit": 100000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "안락의 (랭크 7)",
+     "option_value2": null,
+     "option_desc": "음악 버프 스킬 지속시간 8 증가,음악 버프 스킬 효과 4 증가,모든 속성 연금술 대미지 5 증가,마법 공격력 6 증가,최대대미지 22 증가"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "증오 (랭크 D)",
+     "option_value2": null,
+     "option_desc": "마법 보호 5 증가,보호 2 증가,마리오네트 최대 대미지 16 증가,모든 속성 연금술 대미지 7 증가,마법 공격력 5 증가,최대대미지 16 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "그림자 은신 회오리 대미지 배율(11레벨:11 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "크로스 버스터 대미지 배율(20레벨:100 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "마리오네트 최대 대미지(18레벨:18 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블리안 엔더스 듀러블 가드(남성용)",
+   "item_display_name": "안락의 의기로운 블리안 엔더스 듀러블 가드(남성용)",
+   "auction_price_per_unit": 150000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "안락의 (랭크 7)",
+     "option_value2": null,
+     "option_desc": "음악 버프 스킬 지속시간 8 증가,음악 버프 스킬 효과 4 증가,모든 속성 연금술 대미지 5 증가,마법 공격력 6 증가,최대대미지 22 증가"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "의기로운 (랭크 4)",
+     "option_value2": null,
+     "option_desc": "수리비 100% 증가,잿빛 연막술 랭크 2 이상일 때 최대생명력 20 증가,그림자 속박 랭크 1 이상일 때 최대스태미나 19 증가,수리검 폭쇄 랭크 1 이상일 때 의지 15 증가,수리검 마스터리 랭크 1 이상일 때 최대대미지 18 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "클로져 대미지 배율(20레벨:80 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "풍년가 지속시간(5레벨:25 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "최대마나(19레벨:95 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  }
+ ]
+}

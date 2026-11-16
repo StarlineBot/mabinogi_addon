@@ -1,0 +1,1394 @@
+{
+ "query": [
+  "category",
+  "천옷"
+ ],
+ "total": 8134,
+ "music": 50,
+ "option_types": {
+  "아이템 색상": 38055,
+  "내구력": 8134,
+  "방어력": 8126,
+  "의장 등급": 6755,
+  "세공 옵션": 1611,
+  "세트 효과": 1304,
+  "숙련": 835,
+  "보호": 573,
+  "인챈트": 507,
+  "마법 방어력": 156,
+  "마법 보호": 156,
+  "아이템 보호": 109,
+  "남은 전용 해제 가능 횟수": 75,
+  "일반 개조": 31,
+  "장인 개조": 27,
+  "인챈트 불가능": 4,
+  "보석 개조": 3
+ },
+ "items": [
+  {
+   "item_name": "마법학교 교복",
+   "item_display_name": "앙코르 마법학교 교복",
+   "auction_price_per_unit": 13000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "앙코르 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,최대스태미나 50 증가,인내의 노래 랭크 1 이상일 때 최대생명력 50 증가,음악적 지식 랭크 1 이상일 때 음악 버프 스킬 지속시간 7 증가,작곡 랭크 1 이상일 때 음악 버프 스킬 효과 3 증가,자장가 랭크 1 이상일 때 최대대미지 10 증가"
+    }
+   ]
+  },
+  {
+   "item_name": "마법학교 교복",
+   "item_display_name": "앙코르 마법학교 교복",
+   "auction_price_per_unit": 13800,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "앙코르 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,최대스태미나 50 증가,인내의 노래 랭크 1 이상일 때 최대생명력 50 증가,음악적 지식 랭크 1 이상일 때 음악 버프 스킬 지속시간 5 증가,작곡 랭크 1 이상일 때 음악 버프 스킬 효과 3 증가,자장가 랭크 1 이상일 때 최대대미지 12 증가"
+    }
+   ]
+  },
+  {
+   "item_name": "마법학교 교복",
+   "item_display_name": "앙코르 마법학교 교복",
+   "auction_price_per_unit": 13800,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "앙코르 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,최대스태미나 50 증가,인내의 노래 랭크 1 이상일 때 최대생명력 50 증가,음악적 지식 랭크 1 이상일 때 음악 버프 스킬 지속시간 5 증가,작곡 랭크 1 이상일 때 음악 버프 스킬 효과 3 증가,자장가 랭크 1 이상일 때 최대대미지 11 증가"
+    }
+   ]
+  },
+  {
+   "item_name": "마법학교 교복",
+   "item_display_name": "앙코르 마법학교 교복",
+   "auction_price_per_unit": 13900,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "앙코르 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,최대스태미나 50 증가,인내의 노래 랭크 1 이상일 때 최대생명력 50 증가,음악적 지식 랭크 1 이상일 때 음악 버프 스킬 지속시간 8 증가,작곡 랭크 1 이상일 때 음악 버프 스킬 효과 3 증가,자장가 랭크 1 이상일 때 최대대미지 15 증가"
+    }
+   ]
+  },
+  {
+   "item_name": "마법학교 교복",
+   "item_display_name": "앙코르 마법학교 교복",
+   "auction_price_per_unit": 13900,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "앙코르 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,최대스태미나 50 증가,인내의 노래 랭크 1 이상일 때 최대생명력 50 증가,음악적 지식 랭크 1 이상일 때 음악 버프 스킬 지속시간 8 증가,작곡 랭크 1 이상일 때 음악 버프 스킬 효과 3 증가,자장가 랭크 1 이상일 때 최대대미지 10 증가"
+    }
+   ]
+  },
+  {
+   "item_name": "마법학교 교복",
+   "item_display_name": "앙코르 마법학교 교복",
+   "auction_price_per_unit": 15000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "앙코르 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,최대스태미나 50 증가,인내의 노래 랭크 1 이상일 때 최대생명력 50 증가,음악적 지식 랭크 1 이상일 때 음악 버프 스킬 지속시간 5 증가,작곡 랭크 1 이상일 때 음악 버프 스킬 효과 3 증가,자장가 랭크 1 이상일 때 최대대미지 13 증가"
+    }
+   ]
+  },
+  {
+   "item_name": "@엘레노아 큐트 프릴 스커트",
+   "item_display_name": "축복받은 단조의 오페라 엘레노아 큐트 프릴 스커트",
+   "auction_price_per_unit": 500000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "단조의 (랭크 D)",
+     "option_value2": null,
+     "option_desc": "최대스태미나 4 증가,최대생명력 4 증가,자장가 랭크 C 이상일 때 최대생명력 2 증가,악기 연주 랭크 9 이상일 때 최대스태미나 5 증가"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "오페라 (랭크 7)",
+     "option_value2": null,
+     "option_desc": "최대스태미나 20 증가,최대마나 15 증가,인내의 노래 랭크 7 이상일 때 최대생명력 10 증가,악기 연주 랭크 7 이상일 때 음악 버프 스킬 지속시간 2 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "크로스 버스터 대미지 배율(3레벨:15 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "조로의 의상(남성)",
+   "item_display_name": "오페라 조로의 의상(남성)",
+   "auction_price_per_unit": 900000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "오페라 (랭크 7)",
+     "option_value2": null,
+     "option_desc": "최대스태미나 20 증가,최대마나 15 증가,인내의 노래 랭크 7 이상일 때 최대생명력 10 증가,악기 연주 랭크 7 이상일 때 음악 버프 스킬 지속시간 2 증가"
+    }
+   ]
+  },
+  {
+   "item_name": "조로의 의상(여성)",
+   "item_display_name": "오페라 조로의 의상(여성)",
+   "auction_price_per_unit": 2000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "오페라 (랭크 7)",
+     "option_value2": null,
+     "option_desc": "최대스태미나 20 증가,최대마나 15 증가,인내의 노래 랭크 7 이상일 때 최대생명력 10 증가,악기 연주 랭크 7 이상일 때 음악 버프 스킬 지속시간 2 증가"
+    }
+   ]
+  },
+  {
+   "item_name": "벨몬트 웨어(남성용)",
+   "item_display_name": "신성한 앙코르 화이트호스 벨몬트 웨어(남성용)",
+   "auction_price_per_unit": 5000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "앙코르 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,최대스태미나 50 증가,인내의 노래 랭크 1 이상일 때 최대생명력 50 증가,음악적 지식 랭크 1 이상일 때 음악 버프 스킬 지속시간 9 증가,작곡 랭크 1 이상일 때 음악 버프 스킬 효과 3 증가,자장가 랭크 1 이상일 때 최대대미지 13 증가"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "화이트호스 (랭크 7)",
+     "option_value2": null,
+     "option_desc": "수리비 120% 증가,야생 동물 조련 랭크 9 이상일 때 최대대미지 7 증가,야생 동물 조련 랭크 C 이상일 때 최소대미지 3 증가,행운 20 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "디펜스 성공 시 방어 능력(1레벨:0.60 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "디바 서클 의상(남성용)",
+   "item_display_name": "축복받은 앙코르 쉽지않은 디바 서클 의상(남성용)",
+   "auction_price_per_unit": 5000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "앙코르 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,최대스태미나 50 증가,인내의 노래 랭크 1 이상일 때 최대생명력 50 증가,음악적 지식 랭크 1 이상일 때 음악 버프 스킬 지속시간 5 증가,작곡 랭크 1 이상일 때 음악 버프 스킬 효과 3 증가,자장가 랭크 1 이상일 때 최대대미지 14 증가"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "쉽지않은 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 100% 증가,최대생명력 50 증가,행운 19 증가,제련 랭크 1 이상일 때 최대대미지 11 증가,블랙스미스 랭크 1 이상일 때 생산품 품질 2 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "연속기 : 차징 피스트 대미지 8 레벨",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "블레이즈 폭발 반경 14 레벨",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "체인 스위핑 공격 범위 18 레벨",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "스페셜 뉴비웨어 A타입(여성용)",
+   "item_display_name": "축복받은 앙코르 쉽지않은 스페셜 뉴비웨어 A타입(여성용)",
+   "auction_price_per_unit": 5000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "앙코르 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,최대스태미나 50 증가,인내의 노래 랭크 1 이상일 때 최대생명력 50 증가,음악적 지식 랭크 1 이상일 때 음악 버프 스킬 지속시간 5 증가,작곡 랭크 1 이상일 때 음악 버프 스킬 효과 3 증가,자장가 랭크 1 이상일 때 최대대미지 14 증가"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "쉽지않은 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 100% 증가,최대생명력 50 증가,행운 23 증가,제련 랭크 1 이상일 때 최대대미지 14 증가,블랙스미스 랭크 1 이상일 때 생산품 품질 2 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "파이널 히트 지속시간 20 레벨",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "데몬 오브 피시스 지속 시간 9 레벨",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "최대스태미나 8 레벨",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "@포포 셔츠와 바지",
+   "item_display_name": "소나타 포포 셔츠와 바지",
+   "auction_price_per_unit": 5000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "소나타 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,체력 25 증가,솜씨 25 증가,음악적 지식 랭크 1 이상일 때 음악 버프 스킬 지속시간 10 증가,작곡 랭크 1 이상일 때 음악 버프 스킬 효과 5 증가,전장의 서곡 랭크 1 이상일 때 최대대미지 16 증가"
+    }
+   ]
+  },
+  {
+   "item_name": "@포포 셔츠와 바지",
+   "item_display_name": "소나타 포포 셔츠와 바지",
+   "auction_price_per_unit": 5000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "소나타 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,체력 25 증가,솜씨 25 증가,음악적 지식 랭크 1 이상일 때 음악 버프 스킬 지속시간 10 증가,작곡 랭크 1 이상일 때 음악 버프 스킬 효과 5 증가,전장의 서곡 랭크 1 이상일 때 최대대미지 16 증가"
+    }
+   ]
+  },
+  {
+   "item_name": "@포포 셔츠와 바지",
+   "item_display_name": "소나타 포포 셔츠와 바지",
+   "auction_price_per_unit": 5000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "소나타 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,체력 25 증가,솜씨 25 증가,음악적 지식 랭크 1 이상일 때 음악 버프 스킬 지속시간 10 증가,작곡 랭크 1 이상일 때 음악 버프 스킬 효과 5 증가,전장의 서곡 랭크 1 이상일 때 최대대미지 17 증가"
+    }
+   ]
+  },
+  {
+   "item_name": "스페셜 뉴비웨어 C타입(여성용)",
+   "item_display_name": "축복받은 소나타 스페셜 뉴비웨어 C타입(여성용)",
+   "auction_price_per_unit": 6000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "소나타 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,체력 25 증가,솜씨 25 증가,음악적 지식 랭크 1 이상일 때 음악 버프 스킬 지속시간 10 증가,작곡 랭크 1 이상일 때 음악 버프 스킬 효과 6 증가,전장의 서곡 랭크 1 이상일 때 최대대미지 17 증가"
+    }
+   ]
+  },
+  {
+   "item_name": "@포포 셔츠와 바지",
+   "item_display_name": "소나타 포포 셔츠와 바지",
+   "auction_price_per_unit": 6900000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "소나타 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,체력 25 증가,솜씨 25 증가,음악적 지식 랭크 1 이상일 때 음악 버프 스킬 지속시간 10 증가,작곡 랭크 1 이상일 때 음악 버프 스킬 효과 6 증가,전장의 서곡 랭크 1 이상일 때 최대대미지 18 증가"
+    }
+   ]
+  },
+  {
+   "item_name": "@포포 셔츠와 바지",
+   "item_display_name": "소나타 포포 셔츠와 바지",
+   "auction_price_per_unit": 6900000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "소나타 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,체력 25 증가,솜씨 25 증가,음악적 지식 랭크 1 이상일 때 음악 버프 스킬 지속시간 10 증가,작곡 랭크 1 이상일 때 음악 버프 스킬 효과 6 증가,전장의 서곡 랭크 1 이상일 때 최대대미지 15 증가"
+    }
+   ]
+  },
+  {
+   "item_name": "@포포 셔츠와 바지",
+   "item_display_name": "소나타 포포 셔츠와 바지",
+   "auction_price_per_unit": 6940000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "소나타 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,체력 25 증가,솜씨 25 증가,음악적 지식 랭크 1 이상일 때 음악 버프 스킬 지속시간 10 증가,작곡 랭크 1 이상일 때 음악 버프 스킬 효과 6 증가,전장의 서곡 랭크 1 이상일 때 최대대미지 16 증가"
+    }
+   ]
+  },
+  {
+   "item_name": "@포포 셔츠와 바지",
+   "item_display_name": "소나타 포포 셔츠와 바지",
+   "auction_price_per_unit": 6940000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "소나타 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,체력 25 증가,솜씨 25 증가,음악적 지식 랭크 1 이상일 때 음악 버프 스킬 지속시간 10 증가,작곡 랭크 1 이상일 때 음악 버프 스킬 효과 6 증가,전장의 서곡 랭크 1 이상일 때 최대대미지 17 증가"
+    }
+   ]
+  },
+  {
+   "item_name": "@포포 셔츠와 바지",
+   "item_display_name": "소나타 포포 셔츠와 바지",
+   "auction_price_per_unit": 7140000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "소나타 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,체력 25 증가,솜씨 25 증가,음악적 지식 랭크 1 이상일 때 음악 버프 스킬 지속시간 10 증가,작곡 랭크 1 이상일 때 음악 버프 스킬 효과 6 증가,전장의 서곡 랭크 1 이상일 때 최대대미지 17 증가"
+    }
+   ]
+  },
+  {
+   "item_name": "@포포 셔츠와 바지",
+   "item_display_name": "소나타 포포 셔츠와 바지",
+   "auction_price_per_unit": 7140000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "소나타 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,체력 25 증가,솜씨 25 증가,음악적 지식 랭크 1 이상일 때 음악 버프 스킬 지속시간 10 증가,작곡 랭크 1 이상일 때 음악 버프 스킬 효과 6 증가,전장의 서곡 랭크 1 이상일 때 최대대미지 15 증가"
+    }
+   ]
+  },
+  {
+   "item_name": "@포포 셔츠와 바지",
+   "item_display_name": "소나타 포포 셔츠와 바지",
+   "auction_price_per_unit": 7140000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "소나타 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,체력 25 증가,솜씨 25 증가,음악적 지식 랭크 1 이상일 때 음악 버프 스킬 지속시간 10 증가,작곡 랭크 1 이상일 때 음악 버프 스킬 효과 6 증가,전장의 서곡 랭크 1 이상일 때 최대대미지 18 증가"
+    }
+   ]
+  },
+  {
+   "item_name": "@포포 셔츠와 바지",
+   "item_display_name": "소나타 포포 셔츠와 바지",
+   "auction_price_per_unit": 7140000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "소나타 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,체력 25 증가,솜씨 25 증가,음악적 지식 랭크 1 이상일 때 음악 버프 스킬 지속시간 10 증가,작곡 랭크 1 이상일 때 음악 버프 스킬 효과 6 증가,전장의 서곡 랭크 1 이상일 때 최대대미지 17 증가"
+    }
+   ]
+  },
+  {
+   "item_name": "샤말라 의상(여성용)",
+   "item_display_name": "축복받은 앙코르 매복 샤말라 의상(여성용)",
+   "auction_price_per_unit": 10000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "앙코르 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,최대스태미나 50 증가,인내의 노래 랭크 1 이상일 때 최대생명력 50 증가,음악적 지식 랭크 1 이상일 때 음악 버프 스킬 지속시간 5 증가,작곡 랭크 1 이상일 때 음악 버프 스킬 효과 3 증가,자장가 랭크 1 이상일 때 최대대미지 14 증가"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "매복 (랭크 9)",
+     "option_value2": null,
+     "option_desc": "액스 마스터리 랭크 1 이상일 때 최소대미지 5 증가,블런트 마스터리 랭크 1 이상일 때 최대대미지 11 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "골렘 연성 골렘 최대 생명력 8 레벨",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "소울 오브 카오스 지속 시간 17 레벨",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "파이널 히트 지속시간 19 레벨",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "샤말라 의상(여성용)",
+   "item_display_name": "신성한 앙코르 의기로운 샤말라 의상(여성용)",
+   "auction_price_per_unit": 10000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "앙코르 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,최대스태미나 50 증가,인내의 노래 랭크 1 이상일 때 최대생명력 50 증가,음악적 지식 랭크 1 이상일 때 음악 버프 스킬 지속시간 6 증가,작곡 랭크 1 이상일 때 음악 버프 스킬 효과 3 증가,자장가 랭크 1 이상일 때 최대대미지 13 증가"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "의기로운 (랭크 4)",
+     "option_value2": null,
+     "option_desc": "수리비 100% 증가,잿빛 연막술 랭크 2 이상일 때 최대생명력 20 증가,그림자 속박 랭크 1 이상일 때 최대스태미나 20 증가,수리검 폭쇄 랭크 1 이상일 때 의지 15 증가,수리검 마스터리 랭크 1 이상일 때 최대대미지 20 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "실드 오브 피시스 [변신 중] 최대 생명력 12 레벨",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "수리검 폭풍 대미지 배율 18 레벨",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "퓨리 오브 콘누스 지속 시간 8 레벨",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "페이트런 웨어",
+   "item_display_name": "소나타 페이트런 웨어",
+   "auction_price_per_unit": 14000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "소나타 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,체력 25 증가,솜씨 25 증가,음악적 지식 랭크 1 이상일 때 음악 버프 스킬 지속시간 10 증가,작곡 랭크 1 이상일 때 음악 버프 스킬 효과 6 증가,전장의 서곡 랭크 1 이상일 때 최대대미지 15 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "풍년가 지속시간(5레벨:25 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "체인 스위핑 공격 범위(2레벨:0.20 m 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "소울 오브 카오스 [변신 중] 최대 스태미나(17레벨:170 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "크레시다 웨어",
+   "item_display_name": "소나타 크레시다 웨어",
+   "auction_price_per_unit": 14000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "소나타 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,체력 25 증가,솜씨 25 증가,음악적 지식 랭크 1 이상일 때 음악 버프 스킬 지속시간 10 증가,작곡 랭크 1 이상일 때 음악 버프 스킬 효과 6 증가,전장의 서곡 랭크 1 이상일 때 최대대미지 15 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "클로져 대미지 배율(15레벨:60 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "최대마나(15레벨:75 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "풍년가 지속시간(5레벨:25 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "크레시다 웨어",
+   "item_display_name": "소나타 크레시다 웨어",
+   "auction_price_per_unit": 15000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "소나타 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,체력 25 증가,솜씨 25 증가,음악적 지식 랭크 1 이상일 때 음악 버프 스킬 지속시간 10 증가,작곡 랭크 1 이상일 때 음악 버프 스킬 효과 6 증가,전장의 서곡 랭크 1 이상일 때 최대대미지 18 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "최대생명력(2레벨:5.00 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "전장의 서곡 지속시간(3레벨:15 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "방호벽 최대 생명력(5레벨:75 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "크레시다 웨어",
+   "item_display_name": "소나타 크레시다 웨어",
+   "auction_price_per_unit": 15000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "소나타 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,체력 25 증가,솜씨 25 증가,음악적 지식 랭크 1 이상일 때 음악 버프 스킬 지속시간 10 증가,작곡 랭크 1 이상일 때 음악 버프 스킬 효과 6 증가,전장의 서곡 랭크 1 이상일 때 최대대미지 15 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "내츄럴 매직 실드 쿨타임 감소(18레벨:7.20 초 감소)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "전장의 서곡 지속시간(3레벨:15 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "연속기 : 차징 피스트 대미지(11레벨:33 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "보헤미안 웨어(여성용)",
+   "item_display_name": "축복받은 앙코르 의기로운 보헤미안 웨어(여성용)",
+   "auction_price_per_unit": 15000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "앙코르 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,최대스태미나 50 증가,인내의 노래 랭크 1 이상일 때 최대생명력 50 증가,음악적 지식 랭크 1 이상일 때 음악 버프 스킬 지속시간 7 증가,작곡 랭크 1 이상일 때 음악 버프 스킬 효과 3 증가,자장가 랭크 1 이상일 때 최대대미지 13 증가"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "의기로운 (랭크 4)",
+     "option_value2": null,
+     "option_desc": "수리비 100% 증가,잿빛 연막술 랭크 2 이상일 때 최대생명력 20 증가,그림자 속박 랭크 1 이상일 때 최대스태미나 20 증가,수리검 폭쇄 랭크 1 이상일 때 의지 15 증가,수리검 마스터리 랭크 1 이상일 때 최대대미지 17 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "파이널 히트 지속시간(6레벨:9.00 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "마리오네트 보호(2레벨:2 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "행진곡 지속시간(5레벨:25 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "페이트런 웨어",
+   "item_display_name": "소나타 페이트런 웨어",
+   "auction_price_per_unit": 19000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "소나타 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,체력 25 증가,솜씨 25 증가,음악적 지식 랭크 1 이상일 때 음악 버프 스킬 지속시간 10 증가,작곡 랭크 1 이상일 때 음악 버프 스킬 효과 6 증가,전장의 서곡 랭크 1 이상일 때 최대대미지 18 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "수리검 폭쇄 기폭찰 대미지 배율(5레벨:5 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "파이널 스트라이크 지속시간(1레벨:1.00 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "비바체 지속시간(4레벨:20 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "벨몬트 웨어(남성용)",
+   "item_display_name": "신성한 앙코르 오페라 벨몬트 웨어(남성용)",
+   "auction_price_per_unit": 20000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "앙코르 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,최대스태미나 50 증가,인내의 노래 랭크 1 이상일 때 최대생명력 50 증가,음악적 지식 랭크 1 이상일 때 음악 버프 스킬 지속시간 10 증가,작곡 랭크 1 이상일 때 음악 버프 스킬 효과 3 증가,자장가 랭크 1 이상일 때 최대대미지 14 증가"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "오페라 (랭크 7)",
+     "option_value2": null,
+     "option_desc": "최대스태미나 20 증가,최대마나 15 증가,인내의 노래 랭크 7 이상일 때 최대생명력 10 증가,악기 연주 랭크 7 이상일 때 음악 버프 스킬 지속시간 2 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "풍년가 버프 준비시간(1레벨:1 초 감소)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "크레시다 웨어",
+   "item_display_name": "축복받은 소나타 철옹성 크레시다 웨어",
+   "auction_price_per_unit": 26300000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "소나타 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,체력 25 증가,솜씨 25 증가,음악적 지식 랭크 1 이상일 때 음악 버프 스킬 지속시간 10 증가,작곡 랭크 1 이상일 때 음악 버프 스킬 효과 6 증가,전장의 서곡 랭크 1 이상일 때 최대대미지 18 증가"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "철옹성 (랭크 9)",
+     "option_value2": null,
+     "option_desc": "최대대미지 5 증가,충격 상쇄 발동 시 마법 방어 30 증가,충격 상쇄 발동 시 방어 70 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "전장의 서곡 지속시간(5레벨:25 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "연속기 : 스크류 어퍼 방어/보호 파괴 성공률(7레벨:7 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "라이프 드레인 라이프 흡수량(5레벨:20 증가(초당))",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "페이트런 웨어",
+   "item_display_name": "소나타 페이트런 웨어",
+   "auction_price_per_unit": 27500000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "소나타 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,체력 25 증가,솜씨 25 증가,음악적 지식 랭크 1 이상일 때 음악 버프 스킬 지속시간 10 증가,작곡 랭크 1 이상일 때 음악 버프 스킬 효과 6 증가,전장의 서곡 랭크 1 이상일 때 최대대미지 16 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "크로스 버스터 대미지 배율(18레벨:90 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "파이어 매직 실드 쿨타임 감소(16레벨:6.40 초 감소)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "비바체 지속시간(5레벨:25 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "크레시다 웨어",
+   "item_display_name": "소나타 크레시다 웨어",
+   "auction_price_per_unit": 28000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "소나타 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,체력 25 증가,솜씨 25 증가,음악적 지식 랭크 1 이상일 때 음악 버프 스킬 지속시간 10 증가,작곡 랭크 1 이상일 때 음악 버프 스킬 효과 6 증가,전장의 서곡 랭크 1 이상일 때 최대대미지 18 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "인내의 노래 지속시간(3레벨:15 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "빛의 각성 수련 경험치(5레벨:1.50 배 수련 경험치 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "비바체 지속시간(5레벨:25 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "페이트런 웨어",
+   "item_display_name": "축복받은 소나타 페이트런 웨어",
+   "auction_price_per_unit": 28500000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "소나타 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,체력 25 증가,솜씨 25 증가,음악적 지식 랭크 1 이상일 때 음악 버프 스킬 지속시간 10 증가,작곡 랭크 1 이상일 때 음악 버프 스킬 효과 6 증가,전장의 서곡 랭크 1 이상일 때 최대대미지 17 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "체인 스위핑 공격 범위(17레벨:1.70 m 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "레인지 컴뱃 마스터리 원거리 공격 최대 대미지(16레벨:16 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "전장의 서곡 지속시간(4레벨:20 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "페이트런 웨어",
+   "item_display_name": "소나타 페이트런 웨어",
+   "auction_price_per_unit": 29000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "소나타 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,체력 25 증가,솜씨 25 증가,음악적 지식 랭크 1 이상일 때 음악 버프 스킬 지속시간 10 증가,작곡 랭크 1 이상일 때 음악 버프 스킬 효과 6 증가,전장의 서곡 랭크 1 이상일 때 최대대미지 16 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "수리검 폭풍 대미지 배율(5레벨:5 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "체력(20레벨:30.00 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "비바체 지속시간(5레벨:25 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "크레시다 웨어",
+   "item_display_name": "축복받은 소나타 크레시다 웨어",
+   "auction_price_per_unit": 29800000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "소나타 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,체력 25 증가,솜씨 25 증가,음악적 지식 랭크 1 이상일 때 음악 버프 스킬 지속시간 10 증가,작곡 랭크 1 이상일 때 음악 버프 스킬 효과 6 증가,전장의 서곡 랭크 1 이상일 때 최대대미지 17 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "솜씨(20레벨:50.00 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "전장의 서곡 지속시간(5레벨:25 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "랜스 마스터리 크리티컬(4레벨:1.20 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "크레시다 웨어",
+   "item_display_name": "축복받은 소나타 크레시다 웨어",
+   "auction_price_per_unit": 30000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "소나타 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,체력 25 증가,솜씨 25 증가,음악적 지식 랭크 1 이상일 때 음악 버프 스킬 지속시간 10 증가,작곡 랭크 1 이상일 때 음악 버프 스킬 효과 6 증가,전장의 서곡 랭크 1 이상일 때 최대대미지 18 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "행진곡 지속시간(3레벨:15 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "아이스 매직 실드 쿨타임 감소(1레벨:0.40 초 감소)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "전장의 서곡 지속시간(4레벨:20 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "크레시다 웨어",
+   "item_display_name": "축복받은 소나타 크레시다 웨어",
+   "auction_price_per_unit": 30000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "소나타 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,체력 25 증가,솜씨 25 증가,음악적 지식 랭크 1 이상일 때 음악 버프 스킬 지속시간 10 증가,작곡 랭크 1 이상일 때 음악 버프 스킬 효과 5 증가,전장의 서곡 랭크 1 이상일 때 최대대미지 17 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "비바체 지속시간(5레벨:25 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "회피 누적 쿨타임 한계량(10레벨:4.00 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "랜스 차지 마상 차지 범위 폭(19레벨:9.50 cm 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "브리엘의 의상",
+   "item_display_name": "소나타 브리엘의 의상",
+   "auction_price_per_unit": 32000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "소나타 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,체력 25 증가,솜씨 25 증가,음악적 지식 랭크 1 이상일 때 음악 버프 스킬 지속시간 10 증가,작곡 랭크 1 이상일 때 음악 버프 스킬 효과 6 증가,전장의 서곡 랭크 1 이상일 때 최대대미지 16 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "전장의 서곡 지속시간(4레벨:20 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "폭발 저항 세트 효과 수치(4레벨:4 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "스타사인 스프레드 디버프 유지 시간(11레벨:2.75 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "크레시다 웨어",
+   "item_display_name": "축복받은 소나타 크레시다 웨어",
+   "auction_price_per_unit": 32000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "소나타 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,체력 25 증가,솜씨 25 증가,음악적 지식 랭크 1 이상일 때 음악 버프 스킬 지속시간 10 증가,작곡 랭크 1 이상일 때 음악 버프 스킬 효과 6 증가,전장의 서곡 랭크 1 이상일 때 최대대미지 15 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "행진곡 지속시간(5레벨:25 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "파티 힐링 방어(10레벨:2.50 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "의지(1레벨:1.50 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "브리엘의 의상",
+   "item_display_name": "소나타 브리엘의 의상",
+   "auction_price_per_unit": 33000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "소나타 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,체력 25 증가,솜씨 25 증가,음악적 지식 랭크 1 이상일 때 음악 버프 스킬 지속시간 10 증가,작곡 랭크 1 이상일 때 음악 버프 스킬 효과 6 증가,전장의 서곡 랭크 1 이상일 때 최대대미지 18 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "비바체 지속시간(5레벨:25 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "내츄럴 매직 실드 쿨타임 감소(13레벨:5.20 초 감소)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "교역 중 이동 속도(교역 강화 의상)(5레벨:15 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "보헤미안 웨어(여성용)",
+   "item_display_name": "축복받은 앙코르 쉽지않은 보헤미안 웨어(여성용)",
+   "auction_price_per_unit": 35000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "앙코르 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,최대스태미나 50 증가,인내의 노래 랭크 1 이상일 때 최대생명력 50 증가,음악적 지식 랭크 1 이상일 때 음악 버프 스킬 지속시간 7 증가,작곡 랭크 1 이상일 때 음악 버프 스킬 효과 3 증가,자장가 랭크 1 이상일 때 최대대미지 10 증가"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "쉽지않은 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 100% 증가,최대생명력 50 증가,행운 20 증가,제련 랭크 1 이상일 때 최대대미지 10 증가,블랙스미스 랭크 1 이상일 때 생산품 품질 2 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "액스 마스터리 크리티컬 2 레벨",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "파이널 샷 지속 시간 20 레벨",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "연속기 : 드롭킥 스플래시 대미지 19 레벨",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "크레시다 웨어",
+   "item_display_name": "소나타 크레시다 웨어",
+   "auction_price_per_unit": 40000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "소나타 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,체력 25 증가,솜씨 25 증가,음악적 지식 랭크 1 이상일 때 음악 버프 스킬 지속시간 10 증가,작곡 랭크 1 이상일 때 음악 버프 스킬 효과 6 증가,전장의 서곡 랭크 1 이상일 때 최대대미지 15 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "행진곡 지속시간(5레벨:25 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "카운터 어택 수련 경험치(7레벨:1.70 배 수련 경험치 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "자장가 지속시간(2레벨:1.00 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "스페셜 트루바두르 로맨스 롱 웨어(여성용)",
+   "item_display_name": "소나타 스페셜 트루바두르 로맨스 롱 웨어(여성용)",
+   "auction_price_per_unit": 40000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "소나타 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,체력 25 증가,솜씨 25 증가,음악적 지식 랭크 1 이상일 때 음악 버프 스킬 지속시간 10 증가,작곡 랭크 1 이상일 때 음악 버프 스킬 효과 6 증가,전장의 서곡 랭크 1 이상일 때 최대대미지 16 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "행진곡 지속시간(3레벨:15 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "비바체 지속시간(4레벨:20 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "마리오네트 최대 생명력(20레벨:200 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "크레시다 웨어",
+   "item_display_name": "축복받은 소나타 크레시다 웨어",
+   "auction_price_per_unit": 69990000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "소나타 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,체력 25 증가,솜씨 25 증가,음악적 지식 랭크 1 이상일 때 음악 버프 스킬 지속시간 10 증가,작곡 랭크 1 이상일 때 음악 버프 스킬 효과 6 증가,전장의 서곡 랭크 1 이상일 때 최대대미지 17 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "클로져 대미지 배율(7레벨:28 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "크로스보우 마스터리 크리티컬(2레벨:1.00 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "전장의 서곡 지속시간(5레벨:25 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "보헤미안 웨어(여성용)",
+   "item_display_name": "축복받은 안락의 의기로운 보헤미안 웨어(여성용)",
+   "auction_price_per_unit": 75000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "안락의 (랭크 7)",
+     "option_value2": null,
+     "option_desc": "음악 버프 스킬 지속시간 8 증가,음악 버프 스킬 효과 4 증가,모든 속성 연금술 대미지 5 증가,마법 공격력 6 증가,최대대미지 22 증가"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "의기로운 (랭크 4)",
+     "option_value2": null,
+     "option_desc": "수리비 100% 증가,잿빛 연막술 랭크 2 이상일 때 최대생명력 20 증가,그림자 속박 랭크 1 이상일 때 최대스태미나 15 증가,수리검 폭쇄 랭크 1 이상일 때 의지 15 증가,수리검 마스터리 랭크 1 이상일 때 최대대미지 17 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "파이널 샷 지속 시간(23레벨:11.50 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "수리검 폭쇄 기폭찰 대미지 배율(18레벨:18 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "독 면역 세트 효과 수치(2레벨:2 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "윌리엄의 프레피룩",
+   "item_display_name": "축복받은 소나타 윌리엄의 프레피룩",
+   "auction_price_per_unit": 100000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "소나타 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,체력 25 증가,솜씨 25 증가,음악적 지식 랭크 1 이상일 때 음악 버프 스킬 지속시간 10 증가,작곡 랭크 1 이상일 때 음악 버프 스킬 효과 6 증가,전장의 서곡 랭크 1 이상일 때 최대대미지 17 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "교역 중 이동 속도 20 레벨",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "다운 어택 대미지 19 레벨",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "전장의 서곡 지속시간 5 레벨",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  }
+ ]
+}

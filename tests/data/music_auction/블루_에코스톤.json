@@ -1,0 +1,1696 @@
+{
+ "query": [
+  "name",
+  "블루 에코스톤"
+ ],
+ "total": 434,
+ "music": 83,
+ "option_types": {
+  "에코스톤 등급": 434,
+  "에코스톤 고유 능력": 434,
+  "남은 전용 해제 가능 횟수": 407,
+  "에코스톤 각성 능력": 396
+ },
+ "items": [
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 9000000,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "96",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "악기 연주 효과 10 레벨 \n(10.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 11000000,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "95",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "음악적 지식 훌륭한 연주 비율 6 레벨 \n(15.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 13900000,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "92",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "음악적 지식 신들린 연주 효과 9 레벨 \n(9.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 14000000,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "95",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "악기 연주 효과 14 레벨 \n(14.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 14000000,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "85",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "행진곡 도보 이동속도 6 레벨 \n(6.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 14000000,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "91",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "비바체 마법 시전속도 6 레벨 \n(6.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 14700000,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "89",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "음악적 지식 훌륭한 연주 효과 9 레벨 \n(9.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 15000000,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "99",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "음악적 지식 훌륭한 연주 효과 9 레벨 \n(9.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 15000000,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "89",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "음악적 지식 신들린 연주 효과 9 레벨 \n(9.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 15000000,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "97",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "음악적 지식 훌륭한 연주 효과 9 레벨 \n(9.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 15500000,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "94",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "비바체 마법 시전속도 6 레벨 \n(6.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 16000000,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "96",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "음악적 지식 신들린 연주 효과 9 레벨 \n(9.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 16000000,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "91",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "음악적 지식 신들린 연주 효과 8 레벨 \n(8.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 18000000,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "83",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "행진곡 도보 이동속도 6 레벨 \n(6.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 18000000,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "107",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "음악적 지식 신들린 연주 비율 5 레벨 \n(5.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 18000000,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "84",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "음악적 지식 신들린 연주 효과 7 레벨 \n(7.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 18000000,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "85",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "음악적 지식 신들린 연주 비율 4 레벨 \n(4.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 19000000,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "90",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "음악적 지식 신들린 연주 효과 9 레벨 \n(9.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 19000000,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "93",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "음악적 지식 신들린 연주 효과 6 레벨 \n(6.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 19000000,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "87",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "음악적 지식 신들린 연주 비율 5 레벨 \n(5.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 20000000,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "100",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "음악적 지식 신들린 연주 효과 9 레벨 \n(9.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 20000000,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "96",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "음악적 지식 훌륭한 연주 효과 10 레벨 \n(10.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 20000000,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "102",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "음악적 지식 신들린 연주 효과 1 레벨 \n(1.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 20000000,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "95",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "음악적 지식 신들린 연주 효과 9 레벨 \n(9.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 20000000,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "93",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "음악적 지식 신들린 연주 효과 9 레벨 \n(9.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 20000000,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "96",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "비바체 마법 시전속도 6 레벨 \n(6.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 20000000,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "103",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "음악적 지식 신들린 연주 비율 5 레벨 \n(5.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 22000000,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "94",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "음악적 지식 신들린 연주 비율 5 레벨 \n(5.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 22000000,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "96",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "음악적 지식 훌륭한 연주 효과 10 레벨 \n(10.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 24990001,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "93",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "악기 연주 효과 8 레벨 \n(8.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 24990001,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "95",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "악기 연주 효과 9 레벨 \n(9.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 25000000,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "101",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "음악적 지식 훌륭한 연주 효과 9 레벨 \n(9.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 25000000,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "97",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "악기 연주 효과 1 레벨 \n(1.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 25000000,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "95",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "악기 연주 효과 8 레벨 \n(8.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 25000000,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "92",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "악기 연주 효과 3 레벨 \n(3.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 25000000,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "94",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "악기 연주 효과 2 레벨 \n(2.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 25000000,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "91",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "악기 연주 효과 2 레벨 \n(2.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 27000000,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "86",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "악기 연주 효과 16 레벨 \n(16.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 28000000,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "101",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "음악적 지식 훌륭한 연주 효과 10 레벨 \n(10.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 28000000,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "96",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "악기 연주 효과 8 레벨 \n(8.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 28000000,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "96",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "악기 연주 효과 6 레벨 \n(6.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 28000000,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "96",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "악기 연주 효과 5 레벨 \n(5.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 30000000,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "97",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "음악적 지식 보통 연주 효과 10 레벨 \n(10.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 30000000,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "85",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "비바체 공격 속도 6 레벨 \n(6.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 30000000,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "94",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "악기 연주 효과 9 레벨 \n(9.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 30000000,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "95",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "악기 연주 효과 10 레벨 \n(10.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 30000000,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "95",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "악기 연주 효과 16 레벨 \n(16.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 30000000,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "101",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "음악적 지식 훌륭한 연주 효과 10 레벨 \n(10.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 32000000,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "95",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "악기 연주 효과 12 레벨 \n(12.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 32000000,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "95",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "악기 연주 효과 12 레벨 \n(12.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 35000000,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "89",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "음악적 지식 신들린 연주 비율 5 레벨 \n(5.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 35000000,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "95",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "음악적 지식 신들린 연주 효과 10 레벨 \n(10.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 35000000,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "96",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "악기 연주 효과 14 레벨 \n(14.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 38000000,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "101",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "악기 연주 효과 16 레벨 \n(16.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 40000000,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "104",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "악기 연주 효과 17 레벨 \n(17.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 42000000,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "96",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "음악적 지식 보통 연주 효과 9 레벨 \n(9.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 42000000,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "91",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "음악적 지식 신들린 연주 효과 10 레벨 \n(10.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 44000000,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "99",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "악기 연주 효과 17 레벨 \n(17.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 45000000,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "99",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "음악적 지식 신들린 연주 효과 10 레벨 \n(10.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블루 에코스톤",
+   "item_display_name": "블루 에코스톤",
+   "auction_price_per_unit": 45000000,
+   "item_option": [
+    {
+     "option_type": "에코스톤 등급",
+     "option_sub_type": null,
+     "option_value": "30",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 고유 능력",
+     "option_sub_type": "지력",
+     "option_value": "100",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "에코스톤 각성 능력",
+     "option_sub_type": null,
+     "option_value": "악기 연주 효과 17 레벨 \n(17.00 )",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  }
+ ]
+}

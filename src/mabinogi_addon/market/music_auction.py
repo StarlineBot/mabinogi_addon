@@ -8,10 +8,13 @@
 - 세공: `option_type` '세공 옵션'(에코스톤은 '에코스톤 각성 능력'도), `option_value` '옵션명(N레벨:…)' 또는 '옵션명 N 레벨'.
   이름은 표의 `auction_name`(게임 표기)과 띄어쓰기를 빼고 비교. 같은 옵션을 두 줄 고르면 레벨 합 이상.
 - 인챈트: `option_type` '인챈트', `option_sub_type` 접두/접미, `option_value`에 인챈트 이름(랭크 표기는 무시) — 이름 포함이면 맞음.
-  같은 이름 여러 수치(폴리포니 +6~9 등)는 `option_desc`에 '음악 버프 … N' 숫자가 **있을 때만** 그 숫자로 가른다.
+  같은 이름 여러 수치(폴리포니 +6~9 등)는 `option_desc`의 '음악 버프 스킬 효과 N' 숫자로 가른다(문구가 없을 때만 이름만).
 - 특개: `option_type` '특별 개조', `option_value` 단계 숫자 — 고른 단계 이상.
-- 모자 장비(플루아의 풀잎 관): 아이템 이름에 장비명 포함 + 매물 옵션 글자에 음악 버프 숫자가 있으면 같은 +N.
-※ 실제 매물 픽스처로 확정 전(이 개발 환경에서 넥슨 API 접속 불가) — `scripts/fetch_music_auction_fixtures.py`.
+- 모자 장비(플루아의 풀잎 관): 아이템 이름에 장비명 포함 + 매물 옵션 글자에 '음악 버프 스킬 효과 N'이 있으면 같은 +N.
+실제 매물로 확인(11-16, `tests/data/music_auction/`): 세공 '옵션명(N레벨:…)'·'옵션명 N 레벨' 두 형태, 인챈트
+option_value '이름 (랭크 R)' + option_desc 효과 문구(같은 이름·같은 랭크에 다른 수치 있음 — 소나타 랭크 5가 +5·+6),
+'조화'(앙상블 아님), 특별 개조 option_value '7'(sub_type R/S), 블루 에코스톤은 '에코스톤 각성 능력' 'X N 레벨 \n(…)'.
+플루아의 풀잎 관은 매물이 없어 +N 표기 미확인(이름만 맞춤, 효과 숫자가 보이면 같은 +N).
 """
 from __future__ import annotations
 
@@ -63,7 +66,9 @@ _REFORGE_KEY = {"instrument": "inst_reforge", "shoes": "shoes_reforge", "acc1": 
 _ENCHANT_ALIASES = {"조화(앙상블)": ("앙상블", "조화")}
 _REFORGE_TYPES = ("세공 옵션", "에코스톤 각성 능력")
 _LEVEL = re.compile(r"^(.*?)\s*\(?\s*(\d+)\s*레벨")
-_MUSIC_N = re.compile(r"음악 버프[^\d\n]*?(\d+)")
+# 실제 매물(11-16 픽스처): 인챈트 효과 문구에 '음악 버프 스킬 지속시간 N 증가'와 '음악 버프 스킬 효과 N 증가'가
+# 함께 있다(앙코르 등) → '효과' 숫자만 읽는다.
+_MUSIC_N = re.compile(r"음악 버프 스킬 효과\s*(\d+)")
 
 
 def _plain(text: str) -> str:
@@ -163,8 +168,8 @@ def _enchant_ok(item: dict, want: Enchant) -> bool:
         value = str(o.get("option_value") or "")
         if not any(n in value for n in want.names):
             continue
-        # 매물 인챈트는 보통 이름(+랭크)만 담긴다 → 이름으로 맞춘다. 효과 문구에 음악 버프 숫자가 있을 때만
-        # 같은 이름 다른 수치(폴리포니 +8/+9 등)를 그 숫자로 가른다(없으면 수치 구분 없이 이름만).
+        # option_value는 '이름 (랭크 R)'뿐이라 이름으로 맞추고, 같은 이름 다른 수치(소나타 +5/+6 — 같은 랭크 5에도
+        # 둘 다 있음)는 option_desc의 '음악 버프 스킬 효과 N'으로 가른다. 효과 문구가 없으면 이름만(실제 매물엔 늘 있음).
         n = _music_number(o.get("option_desc"))
         if want.buff is None or n is None or n == want.buff:
             return True

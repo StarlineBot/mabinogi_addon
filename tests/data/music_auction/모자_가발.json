@@ -1,0 +1,225 @@
+{
+ "query": [
+  "category",
+  "모자/가발"
+ ],
+ "total": 6085,
+ "music": 5,
+ "option_types": {
+  "아이템 색상": 13924,
+  "내구력": 6084,
+  "방어력": 4655,
+  "세공 옵션": 4527,
+  "보호": 4279,
+  "의장 등급": 3743,
+  "세트 효과": 3285,
+  "인챈트": 1329,
+  "마법 방어력": 791,
+  "마법 보호": 791,
+  "아이템 보호": 388,
+  "남은 전용 해제 가능 횟수": 314,
+  "인챈트 불가능": 12,
+  "전용 해제 거래 보증서 사용 불가": 8,
+  "남은 거래 횟수": 6,
+  "숙련": 1,
+  "일반 개조": 1
+ },
+ "items": [
+  {
+   "item_name": "워보카 가발",
+   "item_display_name": "축복받은 광포한 코러스 워보카 가발",
+   "auction_price_per_unit": 10000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "광포한 (랭크 7)",
+     "option_value2": null,
+     "option_desc": "대미지밸런스 1 감소,매직 마스터리 랭크 1 이상일 때 마법 공격력 5 증가,컴뱃 마스터리 랭크 1 이상일 때 최대대미지 12 증가"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "코러스 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,행운 10 증가,악기 연주 랭크 1 이상일 때 음악 버프 스킬 효과 3 증가,행진곡 랭크 1 이상일 때 음악 버프 스킬 지속시간 6 증가,전장의 서곡 랭크 1 이상일 때 최대대미지 13 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "파이널 히트 쿨타임 감소 18 레벨",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "윈드밀 수련 경험치 8 레벨",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "돌진 인간 및 엘프일 때 방패 없이 사용 가능",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "쥬얼러 밸류 글라스",
+   "item_display_name": "축복받은 기억상실 코러스 쥬얼러 밸류 글라스",
+   "auction_price_per_unit": 15000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "기억상실 (랭크 9)",
+     "option_value2": null,
+     "option_desc": "수리비 100% 증가,최대대미지 13 증가,최대생명력 5 증가"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "코러스 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,행운 10 증가,악기 연주 랭크 1 이상일 때 음악 버프 스킬 효과 2 증가,행진곡 랭크 1 이상일 때 음악 버프 스킬 지속시간 8 증가,전장의 서곡 랭크 1 이상일 때 최대대미지 13 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "랜스 차지 쿨타임 감소(5레벨:5 초 감소)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "볼트 마스터리 대미지(14레벨:14 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "6막: 유혹의 올가미 스킬 범위 반지름(11레벨:0.55 m 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "빈티지 꼬리 모자",
+   "item_display_name": "거센 코러스 빈티지 꼬리 모자",
+   "auction_price_per_unit": 16000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "거센 (랭크 9)",
+     "option_value2": null,
+     "option_desc": "라이트닝볼트 랭크 A 이상일 때 솜씨 10 감소,스매시 랭크 9 이상일 때 최대부상률 10 증가,크리티컬 10 증가"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "코러스 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,행운 10 증가,악기 연주 랭크 1 이상일 때 음악 버프 스킬 효과 3 증가,행진곡 랭크 1 이상일 때 음악 버프 스킬 지속시간 8 증가,전장의 서곡 랭크 1 이상일 때 최대대미지 13 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "랜스 차지 쿨타임 감소(2레벨:2 초 감소)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "스톰프 저항 세트 효과 수치(3레벨:3 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "전장의 서곡 작용 반경(5레벨:5 m 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "로열 프린세스 써클릿",
+   "item_display_name": "덩굴 코러스 로열 프린세스 써클릿",
+   "auction_price_per_unit": 20000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "덩굴 (랭크 C)",
+     "option_value2": null,
+     "option_desc": "행운 20 감소,크리티컬 14 증가"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "코러스 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,행운 10 증가,악기 연주 랭크 1 이상일 때 음악 버프 스킬 효과 2 증가,행진곡 랭크 1 이상일 때 음악 버프 스킬 지속시간 5 증가,전장의 서곡 랭크 1 이상일 때 최대대미지 13 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "프렌지 지속 시간(10레벨:5.00 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "쥬얼러 밸류 글라스",
+   "item_display_name": "축복받은 기억 코러스 쥬얼러 밸류 글라스",
+   "auction_price_per_unit": 100000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "기억 (랭크 9)",
+     "option_value2": null,
+     "option_desc": "행운 5 증가,레벨이 20 이상일때 최대대미지 9 증가,마리오네트 최대 대미지 6 증가"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "코러스 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,행운 10 증가,악기 연주 랭크 1 이상일 때 음악 버프 스킬 효과 3 증가,행진곡 랭크 1 이상일 때 음악 버프 스킬 지속시간 9 증가,전장의 서곡 랭크 1 이상일 때 최대대미지 13 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "파이널 스트라이크 쿨타임 감소(25레벨:150 초 감소)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "프렌지 공격 속도(7레벨:0.07 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "아머 오브 콘누스 [변신 중] 방어(7레벨:1.75 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  }
+ ]
+}

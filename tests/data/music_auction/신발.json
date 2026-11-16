@@ -1,0 +1,1881 @@
+{
+ "query": [
+  "category",
+  "신발"
+ ],
+ "total": 4066,
+ "music": 143,
+ "option_types": {
+  "아이템 색상": 12207,
+  "내구력": 4065,
+  "방어력": 4046,
+  "세공 옵션": 2999,
+  "세트 효과": 2410,
+  "의장 등급": 2312,
+  "인챈트": 1041,
+  "보호": 750,
+  "마법 방어력": 389,
+  "마법 보호": 361,
+  "아이템 보호": 283,
+  "남은 전용 해제 가능 횟수": 233,
+  "전용 해제 거래 보증서 사용 불가": 3,
+  "인챈트 불가능": 2
+ },
+ "items": [
+  {
+   "item_name": "보헤미안 슈즈(남성용)",
+   "item_display_name": "보헤미안 슈즈(남성용)",
+   "auction_price_per_unit": 300000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "행진곡 도보 이동속도(1레벨:1 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "바람 연금술 마스터리 효율(10레벨:5.00 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "흙 연금술 마스터리 효율(16레벨:3.20 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "헤보나 슈즈",
+   "item_display_name": "헤보나 슈즈",
+   "auction_price_per_unit": 400000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "인내의 노래 마나 회복속도(4레벨:40 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "골렘 연성 골렘 방어(19레벨:2.85 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "비바체 연금술 시전속도(3레벨:3 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "헤보나 슈즈",
+   "item_display_name": "헤보나 슈즈",
+   "auction_price_per_unit": 400000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "퓨리 오브 라이트 공격 범위(17레벨:2.55 m 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "비바체 연금술 시전속도(3레벨:3 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "골렘 연성 골렘 보호(11레벨:1.65 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "페이트런 슈즈",
+   "item_display_name": "페이트런 슈즈",
+   "auction_price_per_unit": 400000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "비바체 연금술 시전속도(3레벨:3 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "스톰프 저항 세트 효과 수치(4레벨:4 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "스피리트 오브 오더 [변신 중] 최대 스태미나(13레벨:130 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "헤보나 슈즈",
+   "item_display_name": "헤보나 슈즈",
+   "auction_price_per_unit": 500000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "비바체 마법 시전속도(1레벨:1 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "발구르기 공격 범위(20레벨:2.50 m 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "스피리트 오브 오더 [변신 중] 최대 스태미나(18레벨:180 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "타라 돌격 보병 부츠(자이언트 여성용)",
+   "item_display_name": "우아한 타라 돌격 보병 부츠(자이언트 여성용)",
+   "auction_price_per_unit": 700000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "우아한 (랭크 A)",
+     "option_value2": null,
+     "option_desc": "최대마나 20 감소,대미지밸런스 10 증가,크리티컬 5 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "비바체 연금술 시전속도 1 레벨",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "페이트런 슈즈",
+   "item_display_name": "페이트런 슈즈",
+   "auction_price_per_unit": 1000000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "그림자 속박 지속 시간(12레벨:6.00 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "발구르기 수련 경험치(4레벨:1.40 배 수련 경험치 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "비바체 연금술 시전속도(3레벨:3 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "버넘 플레이트 부츠",
+   "item_display_name": "버넘 플레이트 부츠",
+   "auction_price_per_unit": 1200000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "돌진 최소 사용 거리(2레벨:2.54 m 감소)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "레이지 오브 윙스 사정 거리(19레벨:10.00 m 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "비바체 공격 속도(2레벨:2 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "헤보나 슈즈",
+   "item_display_name": "헤보나 슈즈",
+   "auction_price_per_unit": 1500000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "골렘 연성 골렘 보호(15레벨:2.25 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "비바체 마법 시전속도(2레벨:2 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "앵커 러시 최대 이동 거리(5레벨:0.50 m 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "스페셜 뉴비 슈즈 B타입(남성용)",
+   "item_display_name": "호크 스페셜 뉴비 슈즈 B타입(남성용)",
+   "auction_price_per_unit": 1600000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "호크 (랭크 A)",
+     "option_value2": null,
+     "option_desc": "탐험 레벨이 10 이상일때 최대대미지 5 증가,공격 속도 증가 세트 효과 수치 2 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "비바체 공격 속도 1 레벨",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "페이트런 슈즈",
+   "item_display_name": "페이트런 슈즈",
+   "auction_price_per_unit": 1800000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "수리검 폭쇄 적 이동 속도 감소 시간(6레벨:6.00 초 추가 감소)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "소울 오브 카오스 [변신 중] 최대 마나(5레벨:50 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "행진곡 도보 이동속도(2레벨:2 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "@콜린 플레이트 부츠",
+   "item_display_name": "콜린 플레이트 부츠",
+   "auction_price_per_unit": 2000000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "파이널 스트라이크 순간이동 거리(18레벨:4.50 m 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "비바체 공격 속도(1레벨:1 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "연속기 : 차징 피스트 차지 공격 거리(2레벨:2.00 m 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "페이트런 슈즈",
+   "item_display_name": "페이트런 슈즈",
+   "auction_price_per_unit": 3000000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "연속기 : 차징 피스트 차지 공격 거리(1레벨:1.00 m 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "비바체 마법 시전속도(2레벨:2 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "스피리트 오브 오더 [변신 중] 최대 스태미나(19레벨:190 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "가죽 신발",
+   "item_display_name": "피그헌터 워터 가죽 신발",
+   "auction_price_per_unit": 3200000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "피그헌터 (랭크 D)",
+     "option_value2": null,
+     "option_desc": "최대대미지 6 감소"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "워터 (랭크 D)",
+     "option_value2": null,
+     "option_desc": "최대마나 2 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "비바체 공격 속도(3레벨:3 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "스핀 스퍼트 대미지(18레벨:216 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "연속기 : 대쉬 펀치 사정 거리(3레벨:3.00 m 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "스페셜 뉴비 슈즈 B타입(남성용)",
+   "item_display_name": "축복받은 기억 호크 스페셜 뉴비 슈즈 B타입(남성용)",
+   "auction_price_per_unit": 3800000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "기억 (랭크 9)",
+     "option_value2": null,
+     "option_desc": "행운 5 증가,레벨이 20 이상일때 최대대미지 9 증가,마리오네트 최대 대미지 6 증가"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "호크 (랭크 A)",
+     "option_value2": null,
+     "option_desc": "탐험 레벨이 10 이상일때 최대대미지 5 증가,공격 속도 증가 세트 효과 수치 3 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "인내의 노래 스태미나 회복속도(5레벨:50 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "그림자 은신 지속 시간(19레벨:9.50 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "행진곡 도보 이동속도(1레벨:1 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "헤보나 슈즈",
+   "item_display_name": "헤보나 슈즈",
+   "auction_price_per_unit": 4000000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "스타 데토네이션 쿨타임 감소(5레벨:1.00 초 감소)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "비바체 연금술 시전속도(2레벨:2 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "바람 연금술 마스터리 효율(20레벨:10.00 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "가죽 신발",
+   "item_display_name": "피그헌터 워터 가죽 신발",
+   "auction_price_per_unit": 5000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "피그헌터 (랭크 D)",
+     "option_value2": null,
+     "option_desc": "최대대미지 7 감소"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "워터 (랭크 D)",
+     "option_value2": null,
+     "option_desc": "최대마나 2 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "그림자 속박 지속 시간(6레벨:3.00 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "행진곡 도보 이동속도(1레벨:1 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "레인지 컴뱃 마스터리 원거리 공격 최대 대미지(20레벨:20 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "벨몬트 슈즈(여성용)",
+   "item_display_name": "솔리스트 카모플라쥬 벨몬트 슈즈(여성용)",
+   "auction_price_per_unit": 5000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "솔리스트 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 100% 증가,크리티컬 5 증가,전장의 서곡 랭크 1 이상일 때 음악 버프 스킬 효과 2 증가,풍년가 랭크 1 이상일 때 행운 25 증가,비바체 랭크 1 이상일 때 최대대미지 10 증가"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "카모플라쥬 (랭크 9)",
+     "option_value2": null,
+     "option_desc": "듀얼건 마스터리 랭크 3 이상일 때 최대대미지 8 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "최대생명력 8 레벨",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "체인 스위핑 대미지 19 레벨",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "비바체 연금술 시전속도 3 레벨",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "헤보나 슈즈",
+   "item_display_name": "헤보나 슈즈",
+   "auction_price_per_unit": 5000000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "랜스 카운터 크리티컬 대미지(5레벨:2.50 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "불 연금술 마스터리 효율(19레벨:9.50 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "비바체 연금술 시전속도(1레벨:1 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "@발렌시아 크로스 라인 플레이트 부츠",
+   "item_display_name": "축복받은 메모리 자작 발렌시아 크로스 라인 플레이트 부츠",
+   "auction_price_per_unit": 5000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "메모리 (랭크 9)",
+     "option_value2": null,
+     "option_desc": "행운 5 증가,레벨이 20 이상일때 최대대미지 5 증가,마리오네트 최대 대미지 6 증가"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "자작 (랭크 A)",
+     "option_value2": null,
+     "option_desc": "카운터 어택 랭크 3 이상일 때 최대대미지 8 증가,공격 속도 증가 세트 효과 수치 2 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "그림자 은신 지속 시간 18 레벨",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "자이언트 풀 스윙 전용 무기 범위 20 레벨",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "비바체 연금술 시전속도 2 레벨",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "쥬얼러 슈즈(여성용)",
+   "item_display_name": "쥬얼러 슈즈(여성용)",
+   "auction_price_per_unit": 5000000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "랜스 차지 최대 거리(16레벨:17.00 m 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "9막: 깨어나는 생명 지속 시간(4레벨:4 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "비바체 공격 속도(3레벨:3 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "스페셜 뉴비 슈즈 C타입(남성용)",
+   "item_display_name": "나비 스페셜 뉴비 슈즈 C타입(남성용)",
+   "auction_price_per_unit": 5500000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "나비 (랭크 A)",
+     "option_value2": null,
+     "option_desc": "마나실드 상태일때 최대대미지 10 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "크리티컬(1레벨:1 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "파이널 스트라이크 순간이동 거리(20레벨:5.00 m 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "비바체 공격 속도(2레벨:2 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "@콜린 플레이트 부츠",
+   "item_display_name": "콜린 플레이트 부츠",
+   "auction_price_per_unit": 6000000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "자이언트 풀 스윙 공격 범위(1레벨:0.05 m 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "돌진 최대 거리(19레벨:9.50 m 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "행진곡 도보 이동속도(1레벨:1 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "@로리카 샌들",
+   "item_display_name": "로리카 샌들",
+   "auction_price_per_unit": 7000000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "레인지 컴뱃 마스터리 원거리 공격 최대 대미지(20레벨:20 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "1막: 우연한 충돌 경직시간(8레벨:0.80 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "비바체 마법 시전속도(3레벨:3 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "가죽 부츠",
+   "item_display_name": "가죽 부츠",
+   "auction_price_per_unit": 7000000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "체력(10레벨:15.00 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "비바체 마법 시전속도(3레벨:3 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "도르카 컨버전 소비 생명력(15레벨:30 % 감소)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "@레더슈즈",
+   "item_display_name": "레더슈즈",
+   "auction_price_per_unit": 7770000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "연속기 : 차징 피스트 차지 공격 거리(2레벨:2.00 m 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "비바체 마법 시전속도(3레벨:3 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "최대생명력(19레벨:47.50 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "쥬얼러 슈즈(여성용)",
+   "item_display_name": "쥬얼러 슈즈(여성용)",
+   "auction_price_per_unit": 8000000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "비바체 공격 속도(2레벨:2 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "리스토어 스태미나 회복(3레벨:3 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "레인 캐스팅 쿨타임 감소(18레벨:54 초 감소)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "헤보나 슈즈",
+   "item_display_name": "헤보나 슈즈",
+   "auction_price_per_unit": 8000000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "리스토어 스태미나 회복(2레벨:2 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "비바체 마법 시전속도(3레벨:3 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "레인지 컴뱃 마스터리 원거리 공격 최대 대미지(11레벨:11 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "보헤미안 슈즈(여성용)",
+   "item_display_name": "보헤미안 슈즈(여성용)",
+   "auction_price_per_unit": 8000000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "이동 속도(1레벨:3 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "비바체 공격 속도(1레벨:1 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "레인지 컴뱃 마스터리 원거리 공격 최대 대미지(19레벨:19 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "헤보나 슈즈",
+   "item_display_name": "헤보나 슈즈",
+   "auction_price_per_unit": 8000000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "의지(17레벨:25.50 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "비바체 마법 시전속도(1레벨:1 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "다운 어택 공격 거리(19레벨:5.50 m 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "헤보나 슈즈",
+   "item_display_name": "헤보나 슈즈",
+   "auction_price_per_unit": 8000000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "보호(5레벨:5 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "비바체 연금술 시전속도(3레벨:3 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "흙 연금술 마스터리 효율(5레벨:1.00 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "사냥꾼 신발",
+   "item_display_name": "사냥꾼 신발",
+   "auction_price_per_unit": 8000000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "7막: 광란의 질주 시전시간(7레벨:0.14 초 감소)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "보호(2레벨:2 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "비바체 마법 시전속도(3레벨:3 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "@롱그리브 부츠",
+   "item_display_name": "롱그리브 부츠",
+   "auction_price_per_unit": 8000000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "지력(9레벨:22.50 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "슈팅 러쉬 공격 거리(20레벨:2.00 m 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "비바체 공격 속도(3레벨:3 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "@실러릿 슈즈",
+   "item_display_name": "실러릿 슈즈",
+   "auction_price_per_unit": 8000000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "행진곡 도보 이동속도(1레벨:1 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "돌진 최소 사용 거리(3레벨:3.81 m 감소)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "비바체 마법 시전속도(3레벨:3 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "로얄 다이아몬드 가죽 경갑 부츠",
+   "item_display_name": "축복받은 폭스헌터 로얄 다이아몬드 가죽 경갑 부츠",
+   "auction_price_per_unit": 8500000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "폭스헌터 (랭크 E)",
+     "option_value2": null,
+     "option_desc": "레벨이 3 이상일때 최대대미지 3 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "스피리트 오브 오더 [변신 중] 최대 스태미나(11레벨:110 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "비바체 마법 시전속도(3레벨:3 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "골렘 연성 골렘 방어(13레벨:1.95 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "@실러릿 슈즈",
+   "item_display_name": "실러릿 슈즈",
+   "auction_price_per_unit": 8800000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "석화 면역 세트 효과 수치(4레벨:4 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "비바체 마법 시전속도(3레벨:3 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "윈드 블래스트 수련 경험치(5레벨:1.50 배 수련 경험치 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "헤보나 슈즈",
+   "item_display_name": "헤보나 슈즈",
+   "auction_price_per_unit": 8888888,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "방어(4레벨:4 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "레이징 쓰러스트 대미지(15레벨:30 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "비바체 마법 시전속도(3레벨:3 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블리안 엔더스 클래시 슈즈",
+   "item_display_name": "축복받은 블리안 엔더스 클래시 슈즈",
+   "auction_price_per_unit": 9000000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "도르카 컨버전 소비 생명력(20레벨:40 % 감소)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "비바체 공격 속도(2레벨:2 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "수리검 폭쇄 적 이동 속도 감소 시간(9레벨:9.00 초 추가 감소)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "알터 그리브",
+   "item_display_name": "축복받은 솔리스트 자작 알터 그리브",
+   "auction_price_per_unit": 9500000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "솔리스트 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 100% 증가,크리티컬 5 증가,전장의 서곡 랭크 1 이상일 때 음악 버프 스킬 효과 2 증가,풍년가 랭크 1 이상일 때 행운 25 증가,비바체 랭크 1 이상일 때 최대대미지 10 증가"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "자작 (랭크 A)",
+     "option_value2": null,
+     "option_desc": "카운터 어택 랭크 3 이상일 때 최대대미지 8 증가,공격 속도 증가 세트 효과 수치 2 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "멜로디 쇼크 이동속도 감소(3레벨:6 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "@실러릿 슈즈",
+   "item_display_name": "실러릿 슈즈",
+   "auction_price_per_unit": 10000000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "골렘 연성 골렘 방어(9레벨:1.35 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "비바체 공격 속도(3레벨:3 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "비바체 연금술 시전속도(3레벨:3 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "견습 연금술사 신발",
+   "item_display_name": "산들바람 견습 연금술사 신발",
+   "auction_price_per_unit": 10000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "산들바람 (랭크 A)",
+     "option_value2": null,
+     "option_desc": "수리비 100% 증가,바람 속성 연금술 대미지 5 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "슈팅 러쉬 1발당 대미지 배율(20레벨:20 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "다운 어택 공격 거리(17레벨:5.00 m 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "비바체 연금술 시전속도(1레벨:1 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "스페셜 뉴비 슈즈 C타입(여성용)",
+   "item_display_name": "축복받은 나비 스페셜 뉴비 슈즈 C타입(여성용)",
+   "auction_price_per_unit": 10000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "나비 (랭크 A)",
+     "option_value2": null,
+     "option_desc": "마나실드 상태일때 최대대미지 12 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "멜로디 쇼크 이동속도 감소(2레벨:4 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "폭발 저항 세트 효과 수치(4레벨:4 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "비바체 마법 시전속도(3레벨:3 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "사냥꾼 신발",
+   "item_display_name": "사냥꾼 신발",
+   "auction_price_per_unit": 10000000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "행진곡 도보 이동속도(2레벨:2 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "회피 스태미나 소모량(9레벨:6.30 감소)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "비바체 마법 시전속도(3레벨:3 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "보헤미안 슈즈(여성용)",
+   "item_display_name": "축복받은 기억 나비 보헤미안 슈즈(여성용)",
+   "auction_price_per_unit": 12860000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "기억 (랭크 9)",
+     "option_value2": null,
+     "option_desc": "행운 5 증가,레벨이 20 이상일때 최대대미지 9 증가,마리오네트 최대 대미지 6 증가"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "나비 (랭크 A)",
+     "option_value2": null,
+     "option_desc": "마나실드 상태일때 최대대미지 9 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "돌진 최소 사용 거리(3레벨:3.81 m 감소)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "플레이머 몬스터 경직 시간(7레벨:0.18 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "행진곡 도보 이동속도(1레벨:1 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "스페셜 뉴비 슈즈 C타입(여성용)",
+   "item_display_name": "축복받은 나비 스페셜 뉴비 슈즈 C타입(여성용)",
+   "auction_price_per_unit": 13500000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "나비 (랭크 A)",
+     "option_value2": null,
+     "option_desc": "마나실드 상태일때 최대대미지 7 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "랜스 차지 마상 돌진 추가 돌진 거리(20레벨:4.80 m 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "행진곡 도보 이동속도(1레벨:1 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "행진곡 펫 탑승 이동속도(1레벨:1 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "@실러릿 슈즈",
+   "item_display_name": "실러릿 슈즈",
+   "auction_price_per_unit": 13800000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "행진곡 도보 이동속도(3레벨:3 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "원거리 자동 방어(2레벨:2 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "샌드 버스트 최대 실명 시간(16레벨:4.00 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "@실러릿 슈즈",
+   "item_display_name": "실러릿 슈즈",
+   "auction_price_per_unit": 13800000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "1막: 우연한 충돌 경직시간(10레벨:1.00 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "윈드 블래스트 수련 경험치(10레벨:2.00 배 수련 경험치 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "행진곡 도보 이동속도(3레벨:3 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "@실러릿 슈즈",
+   "item_display_name": "실러릿 슈즈",
+   "auction_price_per_unit": 15000000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "스텔라 브레이크 초당 차지 거리(7레벨:1.40 m 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "보호(5레벨:5 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "행진곡 도보 이동속도(3레벨:3 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "로얄 다이아몬드 가죽 경갑 부츠",
+   "item_display_name": "축복받은 재빠른 자작 로얄 다이아몬드 가죽 경갑 부츠",
+   "auction_price_per_unit": 15000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "재빠른 (랭크 9)",
+     "option_value2": null,
+     "option_desc": "솜씨 15 감소,돌진 랭크 6 이상일 때 크리티컬 2 증가,돌진 랭크 8 이상일 때 최대대미지 4 증가,돌진 랭크 B 이상일 때 최대대미지 5 증가"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "자작 (랭크 A)",
+     "option_value2": null,
+     "option_desc": "카운터 어택 랭크 3 이상일 때 최대대미지 8 증가,공격 속도 증가 세트 효과 수치 1 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "불 연금술 마스터리 효율(1레벨:0.50 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "비바체 연금술 시전속도(3레벨:3 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "윈드 블래스트 공격 범위(17레벨:2.55 m 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "@롱그리브 부츠",
+   "item_display_name": "롱그리브 부츠",
+   "auction_price_per_unit": 15000000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "비바체 연금술 시전속도(3레벨:3 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "랜스 차지 마상 돌진 추가 돌진 거리(3레벨:1.40 m 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "체인 스위핑 대미지(18레벨:36 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "로얄 다이아몬드 가죽 경갑 부츠",
+   "item_display_name": "축복받은 기억 로얄 다이아몬드 가죽 경갑 부츠",
+   "auction_price_per_unit": 15000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "기억 (랭크 9)",
+     "option_value2": null,
+     "option_desc": "행운 5 증가,레벨이 20 이상일때 최대대미지 5 증가,마리오네트 최대 대미지 6 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "6막: 유혹의 올가미 시전시간(6레벨:0.12 초 감소)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "근접 자동 방어(4레벨:4 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "행진곡 도보 이동속도(1레벨:1 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "라멜라 무사 부츠",
+   "item_display_name": "축복받은 솔리스트 나비 라멜라 무사 부츠",
+   "auction_price_per_unit": 15000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "솔리스트 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 100% 증가,크리티컬 5 증가,전장의 서곡 랭크 1 이상일 때 음악 버프 스킬 효과 2 증가,풍년가 랭크 1 이상일 때 행운 25 증가,비바체 랭크 1 이상일 때 최대대미지 10 증가"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "나비 (랭크 A)",
+     "option_value2": null,
+     "option_desc": "마나실드 상태일때 최대대미지 12 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "도르카 컨버전 소비 생명력 8 레벨",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "랜스 차지 최대 거리 11 레벨",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "연속기 : 차징 피스트 차지 공격 거리 3 레벨",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "쥬얼러 슈즈(여성용)",
+   "item_display_name": "축복받은 솔리스트 카모플라쥬 쥬얼러 슈즈(여성용)",
+   "auction_price_per_unit": 15000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "솔리스트 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 100% 증가,크리티컬 5 증가,전장의 서곡 랭크 1 이상일 때 음악 버프 스킬 효과 2 증가,풍년가 랭크 1 이상일 때 행운 25 증가,비바체 랭크 1 이상일 때 최대대미지 10 증가"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "카모플라쥬 (랭크 9)",
+     "option_value2": null,
+     "option_desc": "듀얼건 마스터리 랭크 3 이상일 때 최대대미지 7 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "그림자 은신 지속 시간(10레벨:5.00 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "다운 어택 공격 거리(20레벨:5.75 m 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "이동 속도(2레벨:6 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "헤보나 슈즈",
+   "item_display_name": "헤보나 슈즈",
+   "auction_price_per_unit": 15111111,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "보호(5레벨:5 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "행진곡 도보 이동속도(2레벨:2 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "이동 속도(5레벨:15 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "사냥꾼 신발",
+   "item_display_name": "사냥꾼 신발",
+   "auction_price_per_unit": 18000000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "행진곡 도보 이동속도(3레벨:3 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "랜스 차지 최대 거리(10레벨:11.00 m 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "행진곡 펫 탑승 이동속도(1레벨:1 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "헤보나 슈즈",
+   "item_display_name": "헤보나 슈즈",
+   "auction_price_per_unit": 18000000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "스피리트 오브 오더 [변신 중] 최대 스태미나(7레벨:70 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "행진곡 도보 이동속도(3레벨:3 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "레인지 컴뱃 마스터리 원거리 공격 최대 대미지(10레벨:10 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "@샌달",
+   "item_display_name": "다이어 울프 샌달",
+   "auction_price_per_unit": 18000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "다이어 울프 (랭크 B)",
+     "option_value2": null,
+     "option_desc": "휴식 랭크가 연습 이하일때 방어 3 증가,레벨이 10 이상일때 최대스태미나 5 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "비바체 연금술 시전속도(3레벨:3 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "바람 연금술 마스터리 효율(18레벨:9.00 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "6막: 유혹의 올가미 시전시간(2레벨:0.04 초 감소)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "쥬얼러 롱 부츠(남성용)",
+   "item_display_name": "축복받은 쥬얼러 롱 부츠(남성용)",
+   "auction_price_per_unit": 18000000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "비바체 마법 시전속도(2레벨:2 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "돌진 수련 경험치(4레벨:1.40 배 수련 경험치 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "이동 속도(5레벨:15 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "로열 프린스 부츠",
+   "item_display_name": "축복받은 재빠른 우아한 로열 프린스 부츠",
+   "auction_price_per_unit": 18500000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "재빠른 (랭크 9)",
+     "option_value2": null,
+     "option_desc": "솜씨 15 감소,돌진 랭크 6 이상일 때 크리티컬 2 증가,돌진 랭크 8 이상일 때 최대대미지 3 증가,돌진 랭크 B 이상일 때 최대대미지 5 증가"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "우아한 (랭크 A)",
+     "option_value2": null,
+     "option_desc": "최대마나 20 감소,대미지밸런스 10 증가,크리티컬 5 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "행진곡 도보 이동속도(2레벨:2 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "돌진 최대 거리(11레벨:5.50 m 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "비바체 마법 시전속도(3레벨:3 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "헤보나 슈즈",
+   "item_display_name": "헤보나 슈즈",
+   "auction_price_per_unit": 19000000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "연속기 : 섬머솔트 대미지(14레벨:84 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "그라비테이셔널 풀 최대 범위(12레벨:1.20 m 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "행진곡 도보 이동속도(3레벨:3 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  }
+ ]
+}

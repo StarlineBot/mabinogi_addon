@@ -1,0 +1,1696 @@
+{
+ "query": [
+  "category",
+  "액세서리"
+ ],
+ "total": 5407,
+ "music": 825,
+ "option_types": {
+  "아이템 색상": 12167,
+  "세공 옵션": 10863,
+  "내구력": 5182,
+  "보호": 4695,
+  "방어력": 4003,
+  "인챈트": 2383,
+  "아이템 보호": 822,
+  "남은 전용 해제 가능 횟수": 414,
+  "피어싱 레벨": 29,
+  "세트 효과": 20,
+  "인챈트 불가능": 1
+ },
+ "items": [
+  {
+   "item_name": "꼬꼬 병아리 플라잉 퍼핏",
+   "item_display_name": "축복받은 꼬꼬 병아리 플라잉 퍼핏",
+   "auction_price_per_unit": 200000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "비바체 마법 시전속도(2레벨:2 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "페트록 펜던트",
+   "item_display_name": "페트록 펜던트",
+   "auction_price_per_unit": 250000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "스피리트 오브 오더 [변신 중] 최대 마나(3레벨:45 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "크로스 버스터 대미지 배율(2레벨:10 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "비바체 공격 속도(2레벨:2 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "고대의 뿔 반지",
+   "item_display_name": "고대의 뿔 반지",
+   "auction_price_per_unit": 290000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "액스 마스터리 최대 대미지(3레벨:3 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "비바체 공격 속도(3레벨:3 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "브레인 오브 카오스 [변신 중] 크리티컬(2레벨:2 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "고대의 뿔 반지",
+   "item_display_name": "고대의 뿔 반지",
+   "auction_price_per_unit": 290000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "최대부상률(2레벨:3.00 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "비바체 공격 속도(3레벨:3 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "슈팅 러쉬 1발당 대미지 배율(1레벨:1 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "@데브캣 브로치",
+   "item_display_name": "축복받은 데브캣 브로치",
+   "auction_price_per_unit": 299999,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "라이프 오브 피시스 [변신 중] 체력(3레벨:3 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "비바체 연금술 시전속도(3레벨:3 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "전장의 서곡 작용 반경(3레벨:3 m 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "반지",
+   "item_display_name": "반지",
+   "auction_price_per_unit": 300000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "와이어 바인딩 사정거리(2레벨:0.20 m 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "인내의 노래 작용 반경(3레벨:1.50 m 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "음악적 지식 훌륭한 연주 효과(1레벨:1 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "반지",
+   "item_display_name": "럭셔리한 반지",
+   "auction_price_per_unit": 300000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "럭셔리한 (랭크 9)",
+     "option_value2": null,
+     "option_desc": "솜씨 5 증가,최대생명력 7 증가,의지 5 감소,행운 15 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "비바체 공격 속도(3레벨:3 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "컨트롤 오브 다크니스 지속 시간(2레벨:30 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "라이프 오브 피시스 [변신 중] 체력(2레벨:2 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "리본",
+   "item_display_name": "리본",
+   "auction_price_per_unit": 300000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "흙 속성 연금술 대미지(1레벨:1 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "컴뱃 마스터리 최대 대미지(3레벨:3 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "음악적 지식 훌륭한 연주 비율(1레벨:5 비율 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "@켈트 십자가",
+   "item_display_name": "켈트 십자가",
+   "auction_price_per_unit": 300000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "아이스볼트 최대 대미지(2레벨:0.20 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "비바체 공격 속도(3레벨:3 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "워터 캐논 최소 대미지(1레벨:0.30 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "고대의 뿔 반지",
+   "item_display_name": "고대의 뿔 반지",
+   "auction_price_per_unit": 390000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "소드 오브 오더 [변신 중] 대미지(1레벨:4 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "비바체 연금술 시전속도(3레벨:3 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "마리오네트 최소 대미지(3레벨:1.50 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "리본",
+   "item_display_name": "리본",
+   "auction_price_per_unit": 400000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "비바체 연금술 시전속도(3레벨:3 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "풍년가 버프 준비시간(1레벨:1 초 감소)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "와이어 바인딩 경직 후 지속 피해량(1레벨:3 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "나오 얼굴 모양 펜던트",
+   "item_display_name": "나오 얼굴 모양 펜던트",
+   "auction_price_per_unit": 400000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "행진곡 펫 탑승 이동속도(2레벨:2 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "자이언트 풀 스윙 전용 무기 대미지(3레벨:7.50 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "비바체 연금술 시전속도(1레벨:1 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "@버클",
+   "item_display_name": "축복받은 버클",
+   "auction_price_per_unit": 400000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "비바체 연금술 시전속도(3레벨:3 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "파이어 마스터리 대미지(3레벨:1.50 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "행진곡 지속시간(1레벨:5 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "페트록 펜던트",
+   "item_display_name": "축복받은 페트록 펜던트",
+   "auction_price_per_unit": 400000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "음악적 지식 신들린 연주 비율(2레벨:2 비율 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "아이스 해츨링 플라잉 퍼핏",
+   "item_display_name": "축복받은 아이스 해츨링 플라잉 퍼핏",
+   "auction_price_per_unit": 400000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "음악적 지식 신들린 연주 비율(2레벨:2 비율 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "흰 부엉이 브로치",
+   "item_display_name": "게자리의 흰 부엉이 브로치",
+   "auction_price_per_unit": 444444,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "게자리의 (랭크 8)",
+     "option_value2": null,
+     "option_desc": "방어 1 증가,솜씨 5 증가,최대스태미나 10 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "음악적 지식 신들린 연주 비율(2레벨:2 비율 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "7막: 광란의 질주 시전시간(1레벨:0.02 초 감소)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "엘븐 매직 미사일 원거리 공격 대미지(1레벨:4 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "리본",
+   "item_display_name": "축복받은 리본",
+   "auction_price_per_unit": 444444,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "브레인 오브 카오스 [변신 중] 지력(2레벨:6 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "음악적 지식 신들린 연주 비율(2레벨:2 비율 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "인내의 노래 작용 반경(1레벨:0.50 m 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "리본",
+   "item_display_name": "리본",
+   "auction_price_per_unit": 500000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "스피리트 오브 오더 [변신 중] 최대 마나(1레벨:15 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "비바체 연금술 시전속도(1레벨:1 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "랜스 마스터리 최대 대미지(3레벨:3 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "@켈트 십자가",
+   "item_display_name": "축복받은 켈트 십자가",
+   "auction_price_per_unit": 500000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "비바체 공격 속도(3레벨:3 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "인내의 노래 지속시간(3레벨:15 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "음악적 지식 신들린 연주 비율(1레벨:1 비율 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "리본",
+   "item_display_name": "리본",
+   "auction_price_per_unit": 500000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "비바체 마법 시전속도(1레벨:1 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "허리띠 장식",
+   "item_display_name": "허리띠 장식",
+   "auction_price_per_unit": 500000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "미라지 미사일 최소 대미지(3레벨:4.50 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "라이트닝볼트 원드 영향력(3레벨:0.09 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "비바체 공격 속도(3레벨:3 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "귀걸이",
+   "item_display_name": "귀걸이",
+   "auction_price_per_unit": 500000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "마법 공격력(3레벨:12 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "소드 오브 오더 [변신 중] 대미지(1레벨:4 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "음악적 지식 신들린 연주 효과(2레벨:2 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "@데브캣 브로치",
+   "item_display_name": "데브캣 브로치",
+   "auction_price_per_unit": 500000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "크로스보우 마스터리 최대 대미지(1레벨:1 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "비바체 마법 시전속도(2레벨:2 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "마리오네트 방어(3레벨:3 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "@켈트 십자가",
+   "item_display_name": "켈트 십자가",
+   "auction_price_per_unit": 500000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "음악적 지식 신들린 연주 효과(1레벨:1 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "실드 오브 피시스 [변신 중] 최대 생명력(1레벨:10 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "수리검 폭쇄 적 이동 속도 감소 시간(1레벨:1.00 초 추가 감소)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "리본",
+   "item_display_name": "리본",
+   "auction_price_per_unit": 600000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "음악적 지식 신들린 연주 효과(1레벨:1 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "퓨리 오브 콘누스 [변신 중] 최대 대미지(2레벨:4 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "불 속성 연금술 대미지(3레벨:3 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "고대의 뿔 반지",
+   "item_display_name": "축복받은 고대의 뿔 반지",
+   "auction_price_per_unit": 600000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "음악적 지식 훌륭한 연주 비율(3레벨:9 비율 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "엘븐 매직 미사일 원거리 공격 대미지(1레벨:4 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "소울 오브 카오스 [변신 중] 최대 스태미나(1레벨:10 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "리본",
+   "item_display_name": "축복받은 리본",
+   "auction_price_per_unit": 600000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "최대생명력(3레벨:7.50 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "음악적 지식 훌륭한 연주 비율(3레벨:9 비율 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "핸즈 오브 카오스 [변신 중] 부상률(3레벨:3 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "반지",
+   "item_display_name": "반지",
+   "auction_price_per_unit": 699900,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "그라비테이셔널 풀 초당 차지 범위(1레벨:0.40 m 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "비바체 연금술 시전속도(3레벨:3 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "아머 오브 콘누스 [변신 중] 방어(2레벨:0.50 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "꼬꼬 병아리 플라잉 퍼핏",
+   "item_display_name": "축복받은 꼬꼬 병아리 플라잉 퍼핏",
+   "auction_price_per_unit": 700000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "음악적 지식 보통 연주 효과(2레벨:2 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "리본",
+   "item_display_name": "리본",
+   "auction_price_per_unit": 700000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "행진곡 지속시간(3레벨:15 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "음악적 지식 훌륭한 연주 효과(1레벨:1 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "스펠 오브 피시스 [변신 중] 크리티컬(3레벨:2.25 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "@켈트 십자가",
+   "item_display_name": "코스모스 켈트 십자가",
+   "auction_price_per_unit": 700000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "코스모스 (랭크 6)",
+     "option_value2": null,
+     "option_desc": "솜씨 15 감소,방어 2 증가,체력 10 증가,최대생명력 15 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "비바체 연금술 시전속도(3레벨:3 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "수리검 폭풍 대미지 배율(3레벨:3 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "음악적 지식 훌륭한 연주 비율(2레벨:7 비율 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "반지",
+   "item_display_name": "반지",
+   "auction_price_per_unit": 759000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "음악적 지식 신들린 연주 효과(1레벨:1 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "불릿 스톰 공격 거리(3레벨:0.30 m 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "스피리트 오브 오더 [변신 중] 최대 마나(3레벨:45 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "고대의 뿔 반지",
+   "item_display_name": "고대의 뿔 반지",
+   "auction_price_per_unit": 770000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "파이널 히트 최대 대미지(3레벨:30 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "음악적 지식 보통 연주 효과(1레벨:1 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "인내의 노래 마나 회복속도(1레벨:10 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "리본",
+   "item_display_name": "리본",
+   "auction_price_per_unit": 780000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "인내의 노래 보호(2레벨:2 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "퓨리 오브 콘누스 [변신 중] 최대 생명력(1레벨:5 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "음악적 지식 보통 연주 효과(2레벨:2 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "반지",
+   "item_display_name": "축복받은 반지",
+   "auction_price_per_unit": 780000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "파이널 히트 최소 대미지(3레벨:15 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "인내의 노래 보호(1레벨:1 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "음악적 지식 보통 연주 효과(2레벨:2 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "리본",
+   "item_display_name": "리본",
+   "auction_price_per_unit": 799999,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "비바체 마법 시전속도(2레벨:2 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "블랙스미스 성공률(2레벨:2 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "의지(4레벨:6.00 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "@켈트 십자가",
+   "item_display_name": "켈트 십자가",
+   "auction_price_per_unit": 800000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "비바체 마법 시전속도(3레벨:3 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "윈드 블래스트 최대 대미지(3레벨:1.05 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "듀얼건 최소 대미지(3레벨:9 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "@어뮬렛",
+   "item_display_name": "축복받은 어뮬렛",
+   "auction_price_per_unit": 800000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "크로스보우 마스터리 최소 대미지(3레벨:1.50 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "비바체 마법 시전속도(3레벨:3 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "리볼브 쇼크 쿨타임 감소(2레벨:0.60 초 감소)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "@켈트 십자가",
+   "item_display_name": "켈트 십자가",
+   "auction_price_per_unit": 800000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "목공 장작 패기 성공률(3레벨:2.25 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "비바체 공격 속도(3레벨:3 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "미라지 미사일 최대 대미지(2레벨:4 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "리본",
+   "item_display_name": "리본",
+   "auction_price_per_unit": 800000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "윈드 블래스트 최소 대미지(1레벨:0.15 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "히트 버스터 최대 대미지(3레벨:3.00 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "음악적 지식 보통 연주 효과(2레벨:2 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "리본",
+   "item_display_name": "리본",
+   "auction_price_per_unit": 800000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "음악적 지식 보통 연주 효과(2레벨:2 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "1막: 우연한 충돌 대미지 배율(2레벨:10 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "7막: 광란의 질주 돌진 폭(1레벨:0.10 m 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "디멘션 블랙홀 블러드 헤일로",
+   "item_display_name": "축복받은 디멘션 블랙홀 블러드 헤일로",
+   "auction_price_per_unit": 800000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "비바체 마법 시전속도 3 레벨",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "클로져 대미지 배율 3 레벨",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "최소 공격력 3 레벨",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "@버클",
+   "item_display_name": "버클",
+   "auction_price_per_unit": 850000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "불릿 스톰 공격 거리(2레벨:0.20 m 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "비바체 연금술 시전속도(3레벨:3 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "윈드 블래스트 최소 대미지(2레벨:0.30 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "@버클",
+   "item_display_name": "버클",
+   "auction_price_per_unit": 900000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "마리오네트 조종술 인형 연결시 최소 대미지 보너스(3레벨:1.50 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "음악적 지식 훌륭한 연주 효과(3레벨:3 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "전장의 서곡 지속시간(1레벨:5 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "페트록 펜던트",
+   "item_display_name": "페트록 펜던트",
+   "auction_price_per_unit": 900000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "야금술 성공률(2레벨:2.50 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "음악적 지식 보통 연주 효과(2레벨:2 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "마리오네트 조종술 인형 연결시 최대 대미지 보너스(3레벨:3 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "반지",
+   "item_display_name": "축복받은 반지",
+   "auction_price_per_unit": 930000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "자이언트 풀 스윙 대미지(2레벨:5.00 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "음악적 지식 보통 연주 효과(2레벨:2 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "음악적 지식 훌륭한 연주 효과(1레벨:1 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "리본",
+   "item_display_name": "리본",
+   "auction_price_per_unit": 950000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "스피리트 오브 오더 지속 시간(3레벨:36 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "비바체 마법 시전속도(1레벨:1 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "도르카 컨버전 쿨타임(3레벨:60 초 감소)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "고대의 뿔 반지",
+   "item_display_name": "고대의 뿔 반지",
+   "auction_price_per_unit": 980000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "비바체 연금술 시전속도(1레벨:1 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "인내의 노래 작용 반경(2레벨:1.00 m 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "그림자 은신 지속 시간(3레벨:1.50 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "@켈트 십자가",
+   "item_display_name": "켈트 십자가",
+   "auction_price_per_unit": 990000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "스파크 최대 대미지(2레벨:2.00 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "음악적 지식 훌륭한 연주 효과(3레벨:3 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "라이트닝볼트 원드 영향력(3레벨:0.09 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "부적",
+   "item_display_name": "부적",
+   "auction_price_per_unit": 990000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "아머 오브 콘누스 [변신 중] 방어(1레벨:0.25 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "음악적 지식 훌륭한 연주 효과(3레벨:3 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "불릿 스톰 공격 폭(3레벨:0.15 m 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "@링 토크",
+   "item_display_name": "축복받은 스타우트 지진의 링 토크",
+   "auction_price_per_unit": 990000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "스타우트 (랭크 A)",
+     "option_value2": null,
+     "option_desc": "체력 20 증가"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "지진의 (랭크 9)",
+     "option_value2": null,
+     "option_desc": "체력 15 증가,최대스태미나 5 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "매그넘 샷 대미지(3레벨:30 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "브레인 오브 카오스 [변신 중] 크리티컬(2레벨:2 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "비바체 마법 시전속도(3레벨:3 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "고대의 뿔 반지",
+   "item_display_name": "고대의 뿔 반지",
+   "auction_price_per_unit": 1000000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "음악적 지식 신들린 연주 효과(1레벨:1 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "윈드 블래스트 최대 대미지(2레벨:0.70 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "도르카 컨버전 획득 도르카(3레벨:1.50 도르카 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "@버클",
+   "item_display_name": "버클",
+   "auction_price_per_unit": 1000000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "듀얼건 최소 대미지(1레벨:3 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "샤프니스 오브 콘누스 [변신 중] 솜씨(3레벨:7.50 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "음악적 지식 신들린 연주 효과(2레벨:2 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "반지",
+   "item_display_name": "놀라운 수레국화 반지",
+   "auction_price_per_unit": 1000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "놀라운 (랭크 9)",
+     "option_value2": null,
+     "option_desc": "행운 25 증가"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "수레국화 (랭크 6)",
+     "option_value2": null,
+     "option_desc": "방어 1 증가,행운 10 증가,의지 10 증가,최대마나 10 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "비바체 공격 속도(3레벨:3 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "자장가 기본 수면확률(2레벨:4 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "퓨리 오브 콘누스 지속 시간(2레벨:18 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "고대의 뿔 반지",
+   "item_display_name": "고대의 뿔 반지",
+   "auction_price_per_unit": 1000000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "스텔라 브레이크 대미지(1레벨:25 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "자이언트 풀 스윙 공격 범위(2레벨:0.10 m 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "음악적 지식 보통 연주 효과(2레벨:2 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "@켈트 십자가",
+   "item_display_name": "켈트 십자가",
+   "auction_price_per_unit": 1000000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "파워 오브 오더 [변신 중] 의지(3레벨:0.75 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "음악적 지식 신들린 연주 비율(1레벨:1 비율 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "히트 버스터 최대 대미지(3레벨:3.00 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "반지",
+   "item_display_name": "놀라운 폭풍의 반지",
+   "auction_price_per_unit": 1000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "놀라운 (랭크 9)",
+     "option_value2": null,
+     "option_desc": "행운 25 증가"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "폭풍의 (랭크 7)",
+     "option_value2": null,
+     "option_desc": "의지 7 증가,솜씨 7 증가,지력 7 증가,체력 7 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "돌진 인간 및 엘프일 때 방패 없이 사용 가능",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "음악적 지식 훌륭한 연주 효과(2레벨:2 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "불 속성 연금술 대미지(3레벨:3 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "나오 얼굴 모양 펜던트",
+   "item_display_name": "나오 얼굴 모양 펜던트",
+   "auction_price_per_unit": 1000000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "데몬 오브 피시스 지속 시간(3레벨:27 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "음악적 지식 훌륭한 연주 비율(3레벨:9 비율 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "퓨리 오브 콘누스 [변신 중] 최대 생명력(1레벨:5 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "반지",
+   "item_display_name": "반지",
+   "auction_price_per_unit": 1100000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "비바체 마법 시전속도(3레벨:3 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "자이언트 풀 스윙 전용 무기 범위(2레벨:0.20 m 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "마리오네트 방어(2레벨:2 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "아이스 해츨링 서포트 퍼핏",
+   "item_display_name": "아이스 해츨링 서포트 퍼핏",
+   "auction_price_per_unit": 1100000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "크로스 버스터 대미지 배율(1레벨:5 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "비바체 공격 속도(1레벨:1 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "4막: 질투의 화신 스킬 범위 반지름(2레벨:0.10 m 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  }
+ ]
+}

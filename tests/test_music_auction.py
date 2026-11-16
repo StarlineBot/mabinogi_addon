@@ -1,9 +1,8 @@
 """음악 버프 계산기 — 부위별 경매장 최저가(docs/music-buff-calculator-spec.md 6.2, 0.52.0).
 
 매물 글자는 명세 6.1 + 디스코드 봇 modules/auction.js(세공 '옵션명(N레벨:…)', 인챈트 option_type '인챈트'·
-option_sub_type 접두/접미·option_desc, 특별 개조 option_value)의 형식대로 만든 **형식 예시**다(실제 매물 아님).
-실제 매물 픽스처(`tests/data/music_auction/*.json`, scripts/fetch_music_auction_fixtures.py)가 생기면
-`test_real_fixtures_parse` 가 그 자료로 글자 규칙을 확인한다.
+option_sub_type 접두/접미·option_desc, 특별 개조 option_value)의 형식대로 만든 **형식 예시**다.
+아래 '실제 매물 픽스처' 테스트는 2026-11-16 넥슨 API로 받은 매물(`tests/data/music_auction/`)로 글자 규칙을 확인한다.
 """
 import io
 import json
@@ -94,8 +93,8 @@ def test_ensemble_matches_either_name():
 
 
 def test_conditions_and_special_mod_all_required():
-    state = dict(inst_prefix="inst_polyphony_7", inst_suffix="inst_tempo_3", special_mod=6,
-                 inst_reforge=[["inst_music_buff", 20], ["inst_divine_effect", 10]])
+    state = {"inst_prefix": "inst_polyphony_7", "inst_suffix": "inst_tempo_3", "special_mod": 6,
+             "inst_reforge": [["inst_music_buff", 20], ["inst_divine_effect", 10]]}
     c = _crit("instrument", **state)
     full = [_ench("접두", "폴리포니", 9), _ench("접미", "템포", 5), _ref("악기 연주 효과", 20),
             _ref("음악적 지식 신들린 연주 효과", 10), {"option_type": "특별 개조", "option_sub_type": "R", "option_value": "6"}]
@@ -161,20 +160,74 @@ def test_fetch_follows_cursor_and_merges_armor_categories():
     assert len(calls) == 4
 
 
-# ---- 실제 매물 픽스처(받은 뒤 자동으로 켜짐) ----
-@pytest.mark.skipif(not FIXTURES.exists(), reason="실제 매물 픽스처 없음 — scripts/fetch_music_auction_fixtures.py")
-def test_real_fixtures_parse():
-    names = {n.replace(" ", "") for grp in mb.tables()["reforge_options"].values() for n in
-             (o["auction_name"] for o in grp)}
+# ---- 실제 매물 픽스처(2026-11-16 넥슨 API, scripts/fetch_music_auction_fixtures.py) ----
+def _fixture(name):
+    return json.loads((FIXTURES / f"{name}.json").read_text(encoding="utf-8"))["items"]
+
+
+def test_real_fixtures_reforge_and_enchant_text():
+    """실제 매물 글자: 음악 세공은 모두 이름·레벨이 읽히고, 음악 인챈트의 효과 숫자는 우리 표의 같은 이름 수치 중 하나."""
+    t = mb.tables()
+    names = {o["auction_name"].replace(" ", "") for grp in t["reforge_options"].values() for o in grp}
+    table = {}
+    for key in ma._ENCHANT_KEYS.values():
+        for k, affix in key:
+            for e in mb.options(k, t):
+                table.setdefault((affix, ma._base(e["name"])), set()).add(e["buff"])
+    table[("접두", "조화")] = table[("접두", "조화(앙상블)")]
+    seen_reforge = seen_enchant = 0
     for path in sorted(FIXTURES.glob("*.json")):
-        data = json.loads(path.read_text(encoding="utf-8"))
-        for item in data["items"]:
-            music = [o for o in item["item_option"] if o["option_type"] in ("세공 옵션", "에코스톤 각성 능력")
-                     and any(n in o["option_value"].replace(" ", "") for n in names)]
-            assert len(ma.reforge_levels(item)) >= len({o["option_value"] for o in music}) > 0 or not music, item
+        for item in json.loads(path.read_text(encoding="utf-8"))["items"]:
+            levels = ma.reforge_levels(item)
             for o in item["item_option"]:
-                if o["option_type"] == "인챈트" and "음악" in str(o.get("option_desc")):
-                    assert ma._music_number(o["option_desc"]) is not None, o
+                if o["option_type"] in ("세공 옵션", "에코스톤 각성 능력"):
+                    plain = o["option_value"].replace(" ", "")
+                    hit = [n for n in names if plain.startswith(n)]
+                    if hit:
+                        assert max(hit, key=len) in levels, o
+                        seen_reforge += 1
+                if o["option_type"] == "인챈트" and "음악 버프 스킬 효과" in (o["option_desc"] or ""):
+                    base = o["option_value"].split(" (랭크")[0]
+                    n = ma._music_number(o["option_desc"])
+                    if (o["option_sub_type"], base) in table:
+                        assert n in table[(o["option_sub_type"], base)], (path.name, o)
+                        seen_enchant += 1
+    assert seen_reforge > 300 and seen_enchant > 50  # 11-16 픽스처: 세공 328 · 음악 인챈트 129
+
+
+def test_real_fixture_duration_is_not_effect():
+    """앙코르: '음악 버프 스킬 지속시간 10 증가'가 '효과 3 증가'보다 앞에 있어도 효과 3."""
+    enc = next(o for it in _fixture("경갑옷") for o in it["item_option"]
+               if o["option_type"] == "인챈트" and o["option_value"].startswith("앙코르"))
+    assert enc["option_desc"].index("지속시간") < enc["option_desc"].index("스킬 효과")
+    assert ma._music_number(enc["option_desc"]) == 3
+    c = _crit("armor", armor_prefix="armor_encore")
+    assert ma.lowest(_fixture("경갑옷") + _fixture("중갑옷") + _fixture("천옷"), c) is not None
+
+
+def test_real_fixture_same_rank_different_value():
+    """소나타 랭크 5에 +5·+6이 함께 있음 → 효과 숫자로 가른다(랭크로는 못 가름)."""
+    cloth = _fixture("천옷") + _fixture("경갑옷") + _fixture("중갑옷")
+    p6 = ma.lowest(cloth, _crit("armor", armor_prefix="armor_sonata_6"))
+    p5 = ma.lowest(cloth, _crit("armor", armor_prefix="armor_sonata_5"))
+    assert p6 is not None and p5 is not None and p5 != p6
+    six = [it for it in cloth if ma.matches(it, _crit("armor", armor_prefix="armor_sonata_6"))]
+    assert all("음악 버프 스킬 효과 6" in o["option_desc"] for it in six for o in it["item_option"]
+               if o["option_type"] == "인챈트" and o["option_value"].startswith("소나타"))
+
+
+def test_real_fixture_instrument_and_echostone():
+    lyre = _fixture("소울_리버레이트_리라")
+    c = _crit("instrument", inst_reforge=[["inst_divine_effect", 10]], special_mod=7)
+    got = [it for it in lyre if ma.matches(it, c)]
+    assert got and all(ma._special_mod(it) >= 7 and ma.reforge_levels(it)["음악적지식신들린연주효과"] >= 10 for it in got)
+    assert ma.lowest(lyre, c) == min(it["auction_price_per_unit"] for it in got)
+    eco = _fixture("블루_에코스톤")
+    c = _crit("eco", eco_reforge=[["eco_music_buff", 10]])
+    got = [it for it in eco if ma.matches(it, c)]
+    assert got and all(ma.reforge_levels(it)["악기연주효과"] >= 10 for it in got)
+    assert ma.matches({"item_option": [{"option_type": "에코스톤 각성 능력",
+                                        "option_value": "악기 연주 효과 10 레벨 \n(10.00 )"}]}, c)
 
 
 # ---- 화면 ----

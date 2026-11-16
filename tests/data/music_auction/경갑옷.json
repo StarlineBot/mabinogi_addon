@@ -1,0 +1,588 @@
+{
+ "query": [
+  "category",
+  "경갑옷"
+ ],
+ "total": 837,
+ "music": 14,
+ "option_types": {
+  "아이템 색상": 3589,
+  "세트 효과": 1584,
+  "세공 옵션": 1582,
+  "방어력": 837,
+  "보호": 837,
+  "내구력": 837,
+  "마법 방어력": 476,
+  "마법 보호": 476,
+  "인챈트": 386,
+  "숙련": 248,
+  "아이템 보호": 179,
+  "남은 전용 해제 가능 횟수": 110,
+  "일반 개조": 56,
+  "장인 개조": 28,
+  "보석 개조": 17,
+  "인챈트 불가능": 2
+ },
+ "items": [
+  {
+   "item_name": "위자드 로브 아머(여성용)",
+   "item_display_name": "신성한 앙코르 챔피언 위자드 로브 아머(여성용)",
+   "auction_price_per_unit": 6000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "앙코르 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,최대스태미나 50 증가,인내의 노래 랭크 1 이상일 때 최대생명력 50 증가,음악적 지식 랭크 1 이상일 때 음악 버프 스킬 지속시간 10 증가,작곡 랭크 1 이상일 때 음악 버프 스킬 효과 3 증가,자장가 랭크 1 이상일 때 최대대미지 15 증가"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "챔피언 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 100% 증가,최대스태미나 60 감소,방어 3 증가,레벨이 40 이상일때 체력 35 증가,카운터 어택 랭크 1 이상일 때 최대대미지 15 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "체인 스위핑 공격 범위(20레벨:2.00 m 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "크로스보우 마스터리 크리티컬(5레벨:2.50 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "지력(10레벨:25.00 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "위자드 로브 아머(여성용)",
+   "item_display_name": "축복받은 앙코르 챔피언 위자드 로브 아머(여성용)",
+   "auction_price_per_unit": 9990000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "앙코르 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,최대스태미나 50 증가,인내의 노래 랭크 1 이상일 때 최대생명력 50 증가,음악적 지식 랭크 1 이상일 때 음악 버프 스킬 지속시간 5 증가,작곡 랭크 1 이상일 때 음악 버프 스킬 효과 3 증가,자장가 랭크 1 이상일 때 최대대미지 15 증가"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "챔피언 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 100% 증가,최대스태미나 60 감소,방어 3 증가,레벨이 40 이상일때 체력 29 증가,카운터 어택 랭크 1 이상일 때 최대대미지 11 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "소울 오브 카오스 수련 경험치(1레벨:1.10 배 수련 경험치 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "파이널 히트 지속시간(19레벨:28.50 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "파이널 샷 지속 시간(14레벨:7.00 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "랑그히리스 체이서 아머 (남성용)",
+   "item_display_name": "축복받은 안락의 의기로운 랑그히리스 체이서 아머 (남성용)",
+   "auction_price_per_unit": 20000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "안락의 (랭크 7)",
+     "option_value2": null,
+     "option_desc": "음악 버프 스킬 지속시간 8 증가,음악 버프 스킬 효과 4 증가,모든 속성 연금술 대미지 5 증가,마법 공격력 6 증가,최대대미지 22 증가"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "의기로운 (랭크 4)",
+     "option_value2": null,
+     "option_desc": "수리비 100% 증가,잿빛 연막술 랭크 2 이상일 때 최대생명력 20 증가,그림자 속박 랭크 1 이상일 때 최대스태미나 19 증가,수리검 폭쇄 랭크 1 이상일 때 의지 15 증가,수리검 마스터리 랭크 1 이상일 때 최대대미지 16 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "크로스 버스터 대미지 배율(17레벨:85 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "레인지 컴뱃 마스터리 원거리 공격 최소 대미지(3레벨:1.50 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "방어(7레벨:7 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "스페셜 포레스트 레인저 웨어(남성용)",
+   "item_display_name": "소나타 스페셜 포레스트 레인저 웨어(남성용)",
+   "auction_price_per_unit": 25000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "소나타 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,체력 25 증가,솜씨 25 증가,음악적 지식 랭크 1 이상일 때 음악 버프 스킬 지속시간 10 증가,작곡 랭크 1 이상일 때 음악 버프 스킬 효과 6 증가,전장의 서곡 랭크 1 이상일 때 최대대미지 18 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "파 어웨이 1발당 대미지 배율(13레벨:13 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "메디테이션 마나 회복 속도(19레벨:380 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "전장의 서곡 지속시간(5레벨:25 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "스페셜 포레스트 레인저 웨어(여성용)",
+   "item_display_name": "소나타 스페셜 포레스트 레인저 웨어(여성용)",
+   "auction_price_per_unit": 26000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "소나타 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,체력 25 증가,솜씨 25 증가,음악적 지식 랭크 1 이상일 때 음악 버프 스킬 지속시간 10 증가,작곡 랭크 1 이상일 때 음악 버프 스킬 효과 6 증가,전장의 서곡 랭크 1 이상일 때 최대대미지 18 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "크로스 버스터 대미지 배율(15레벨:75 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "자장가 지속시간(4레벨:2.00 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "비바체 지속시간(5레벨:25 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "스페셜 포레스트 레인저 웨어(여성용)",
+   "item_display_name": "소나타 철옹성 스페셜 포레스트 레인저 웨어(여성용)",
+   "auction_price_per_unit": 28000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "소나타 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,체력 25 증가,솜씨 25 증가,음악적 지식 랭크 1 이상일 때 음악 버프 스킬 지속시간 10 증가,작곡 랭크 1 이상일 때 음악 버프 스킬 효과 6 증가,전장의 서곡 랭크 1 이상일 때 최대대미지 17 증가"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "철옹성 (랭크 9)",
+     "option_value2": null,
+     "option_desc": "최대대미지 5 증가,충격 상쇄 발동 시 마법 방어 30 증가,충격 상쇄 발동 시 방어 70 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "레인지 컴뱃 마스터리 원거리 공격 최대 대미지(11레벨:11 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "크래시 샷 최대 파편 수(3레벨:3 개 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "전장의 서곡 지속시간(5레벨:25 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "위자드 로브 아머(남성용)",
+   "item_display_name": "앙코르 오페라 위자드 로브 아머(남성용)",
+   "auction_price_per_unit": 30000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "앙코르 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,최대스태미나 50 증가,인내의 노래 랭크 1 이상일 때 최대생명력 50 증가,음악적 지식 랭크 1 이상일 때 음악 버프 스킬 지속시간 10 증가,작곡 랭크 1 이상일 때 음악 버프 스킬 효과 3 증가,자장가 랭크 1 이상일 때 최대대미지 14 증가"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "오페라 (랭크 7)",
+     "option_value2": null,
+     "option_desc": "최대스태미나 20 증가,최대마나 15 증가,인내의 노래 랭크 7 이상일 때 최대생명력 10 증가,악기 연주 랭크 7 이상일 때 음악 버프 스킬 지속시간 2 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "레인 캐스팅 워터캐논 대미지(12레벨:60 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "행진곡 지속시간(5레벨:25 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "수리검 폭풍 대미지 배율(6레벨:6 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "스페셜 포레스트 레인저 웨어(여성용)",
+   "item_display_name": "소나타 스페셜 포레스트 레인저 웨어(여성용)",
+   "auction_price_per_unit": 40000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "소나타 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,체력 25 증가,솜씨 25 증가,음악적 지식 랭크 1 이상일 때 음악 버프 스킬 지속시간 10 증가,작곡 랭크 1 이상일 때 음악 버프 스킬 효과 6 증가,전장의 서곡 랭크 1 이상일 때 최대대미지 15 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "연속기 : 드롭킥 스플래시 대미지(9레벨:9 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "행진곡 지속시간(7레벨:35 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "석화 면역 세트 효과 수치(2레벨:2 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "위자드 로브 아머(남성용)",
+   "item_display_name": "신성한 앙코르 챔피언 위자드 로브 아머(남성용)",
+   "auction_price_per_unit": 50000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "앙코르 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,최대스태미나 50 증가,인내의 노래 랭크 1 이상일 때 최대생명력 50 증가,음악적 지식 랭크 1 이상일 때 음악 버프 스킬 지속시간 8 증가,작곡 랭크 1 이상일 때 음악 버프 스킬 효과 3 증가,자장가 랭크 1 이상일 때 최대대미지 15 증가"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "챔피언 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 100% 증가,최대스태미나 60 감소,방어 3 증가,레벨이 40 이상일때 체력 34 증가,카운터 어택 랭크 1 이상일 때 최대대미지 12 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "연속기 : 섬머솔트 쿨타임 감소 2 레벨",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "연속기 : 스크류 어퍼 대미지 20 레벨",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "랜스 차지 범위 폭(인간) 18 레벨",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "위자드 로브 아머(여성용)",
+   "item_display_name": "축복받은 앙코르 오페라 위자드 로브 아머(여성용)",
+   "auction_price_per_unit": 68900000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "앙코르 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,최대스태미나 50 증가,인내의 노래 랭크 1 이상일 때 최대생명력 50 증가,음악적 지식 랭크 1 이상일 때 음악 버프 스킬 지속시간 9 증가,작곡 랭크 1 이상일 때 음악 버프 스킬 효과 3 증가,자장가 랭크 1 이상일 때 최대대미지 15 증가"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "오페라 (랭크 7)",
+     "option_value2": null,
+     "option_desc": "최대스태미나 20 증가,최대마나 15 증가,인내의 노래 랭크 7 이상일 때 최대생명력 10 증가,악기 연주 랭크 7 이상일 때 음악 버프 스킬 지속시간 2 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "힐링 생명력 회복(20레벨:44 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "스피리트 오브 오더 수련 경험치(7레벨:1.70 배 수련 경험치 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "파이어 매직 실드 쿨타임 감소(12레벨:4.80 초 감소)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "위자드 로브 아머(여성용)",
+   "item_display_name": "축복받은 앙코르 챔피언 위자드 로브 아머(여성용)",
+   "auction_price_per_unit": 70000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "앙코르 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,최대스태미나 50 증가,인내의 노래 랭크 1 이상일 때 최대생명력 50 증가,음악적 지식 랭크 1 이상일 때 음악 버프 스킬 지속시간 8 증가,작곡 랭크 1 이상일 때 음악 버프 스킬 효과 3 증가,자장가 랭크 1 이상일 때 최대대미지 11 증가"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "챔피언 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 100% 증가,최대스태미나 60 감소,방어 3 증가,레벨이 40 이상일때 체력 35 증가,카운터 어택 랭크 1 이상일 때 최대대미지 15 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "파이널 스트라이크 지속시간(14레벨:14.00 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "그림자 은신 회오리 대미지 배율(11레벨:11 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "파이널 히트 지속시간(20레벨:30.00 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "@리파인드 마제스틱 나이트 아머(남성용)",
+   "item_display_name": "안락의 궤적 리파인드 마제스틱 나이트 아머(남성용)",
+   "auction_price_per_unit": 130000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "안락의 (랭크 7)",
+     "option_value2": null,
+     "option_desc": "음악 버프 스킬 지속시간 8 증가,음악 버프 스킬 효과 4 증가,모든 속성 연금술 대미지 5 증가,마법 공격력 6 증가,최대대미지 22 증가"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "궤적 (랭크 6)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,마법 보호 3 증가,대미지밸런스 10 증가,최대마나 25 증가,마법 공격력 20 감소,마리오네트 최대 대미지 22 증가,최대대미지 55 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "다운 어택 대미지(9레벨:36 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "인내의 노래 지속시간(1레벨:5 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "보호(4레벨:4 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "랑그히리스 체이서 아머 (여성용)",
+   "item_display_name": "안락의 증오 랑그히리스 체이서 아머 (여성용)",
+   "auction_price_per_unit": 140000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "안락의 (랭크 7)",
+     "option_value2": null,
+     "option_desc": "음악 버프 스킬 지속시간 8 증가,음악 버프 스킬 효과 4 증가,모든 속성 연금술 대미지 5 증가,마법 공격력 6 증가,최대대미지 22 증가"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "증오 (랭크 D)",
+     "option_value2": null,
+     "option_desc": "마법 보호 5 증가,보호 2 증가,마리오네트 최대 대미지 16 증가,모든 속성 연금술 대미지 7 증가,마법 공격력 5 증가,최대대미지 16 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "마리오네트 최대 대미지(20레벨:20 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "골렘 연성 골렘 최대 생명력(1레벨:3 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "대미지밸런스(14레벨:14 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "스페셜 포레스트 레인저 머플러 웨어(여성용)",
+   "item_display_name": "신성한 소나타 스페셜 포레스트 레인저 머플러 웨어(여성용)",
+   "auction_price_per_unit": 250000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "소나타 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 200% 증가,체력 25 증가,솜씨 25 증가,음악적 지식 랭크 1 이상일 때 음악 버프 스킬 지속시간 10 증가,작곡 랭크 1 이상일 때 음악 버프 스킬 효과 6 증가,전장의 서곡 랭크 1 이상일 때 최대대미지 18 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "랜스 차지 마상 차지 범위 폭(10레벨:5.00 cm 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "비바체 지속시간(7레벨:35 초 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "스피닝 슬래시 대미지(19레벨:57 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  }
+ ]
+}

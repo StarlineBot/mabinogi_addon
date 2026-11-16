@@ -1,0 +1,1712 @@
+{
+ "query": [
+  "name",
+  "데모닉 글루미 선데이"
+ ],
+ "total": 356,
+ "music": 323,
+ "option_types": {
+  "아이템 색상": 1068,
+  "세공 옵션": 999,
+  "공격": 356,
+  "크리티컬": 356,
+  "밸런스": 356,
+  "내구력": 356,
+  "숙련": 75,
+  "인챈트": 72,
+  "일반 개조": 57,
+  "보석 개조": 48,
+  "아이템 보호": 34,
+  "남은 전용 해제 가능 횟수": 30,
+  "장인 개조": 3
+ },
+ "items": [
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "데모닉 글루미 선데이",
+   "auction_price_per_unit": 1390000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "의지(10레벨:15.00 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "지력(17레벨:42.50 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "음악적 지식 훌륭한 연주 비율(5레벨:13 비율 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "데모닉 글루미 선데이",
+   "auction_price_per_unit": 1400000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "악기 연주 효과(9레벨:9 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "마법 공격력(18레벨:72 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "대미지밸런스(15레벨:15 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "데모닉 글루미 선데이",
+   "auction_price_per_unit": 1800000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "음악적 지식 신들린 연주 효과(10레벨:10 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "최대생명력(18레벨:45.00 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "자장가 수면 중 타격대미지(4레벨:80 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "데모닉 글루미 선데이",
+   "auction_price_per_unit": 1800000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "최대마나(9레벨:45 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "음악적 지식 신들린 연주 효과(7레벨:7 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "최대생명력(2레벨:5.00 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "데모닉 글루미 선데이",
+   "auction_price_per_unit": 1950000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "음악적 지식 훌륭한 연주 비율(3레벨:9 비율 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "공격 속도 증가 세트 효과 수치(5레벨:5 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "음악적 지식 신들린 연주 효과(10레벨:10 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "데모닉 글루미 선데이",
+   "auction_price_per_unit": 2000000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "자장가 수면 중 타격대미지(4레벨:80 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "음악적 지식 신들린 연주 효과(10레벨:10 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "멜로디 쇼크 순간대미지(6레벨:60 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "데모닉 글루미 선데이",
+   "auction_price_per_unit": 2500000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "마법 공격력(14레벨:56 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "음악적 지식 신들린 연주 효과(10레벨:10 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "최대생명력(16레벨:40.00 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "데모닉 글루미 선데이",
+   "auction_price_per_unit": 2500000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "멜로디 쇼크 지속대미지(6레벨:12 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "최대마나(16레벨:80 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "음악적 지식 신들린 연주 효과(10레벨:10 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "데모닉 글루미 선데이",
+   "auction_price_per_unit": 3000000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "현혹의 연주 현혹 파워 강화(13레벨:390 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "공격 속도 증가 세트 효과 수치(5레벨:5 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "음악적 지식 신들린 연주 효과(10레벨:10 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "데모닉 글루미 선데이",
+   "auction_price_per_unit": 3000000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "지력(12레벨:30.00 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "음악적 지식 신들린 연주 효과(10레벨:10 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "의지(7레벨:10.50 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "데모닉 글루미 선데이",
+   "auction_price_per_unit": 3000000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "솜씨(5레벨:12.50 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "음악적 지식 보통 연주 효과(7레벨:7 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "음악적 지식 훌륭한 연주 효과(10레벨:10 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "데모닉 글루미 선데이",
+   "auction_price_per_unit": 3000000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "최소 공격력(16레벨:16 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "음악적 지식 훌륭한 연주 효과(9레벨:9 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "음악적 지식 신들린 연주 효과(10레벨:10 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "데모닉 글루미 선데이",
+   "auction_price_per_unit": 3000000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "최소 공격력(14레벨:14 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "현혹의 연주 쿨타임 감소(18레벨:4.50 초 감소)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "음악적 지식 보통 연주 효과(10레벨:10 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "데모닉 글루미 선데이",
+   "auction_price_per_unit": 3400000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "음악적 지식 보통 연주 효과(1레벨:1 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "대미지밸런스(16레벨:16 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "음악적 지식 훌륭한 연주 효과(10레벨:10 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "데모닉 글루미 선데이",
+   "auction_price_per_unit": 3500000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "현혹의 연주 적용 반경(13레벨:7.00 m 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "솜씨(19레벨:47.50 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "음악적 지식 훌륭한 연주 효과(10레벨:10 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "데모닉 글루미 선데이",
+   "auction_price_per_unit": 3500000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "현혹의 연주 적용 반경(4레벨:2.50 m 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "솜씨(11레벨:27.50 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "음악적 지식 훌륭한 연주 효과(10레벨:10 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "데모닉 글루미 선데이",
+   "auction_price_per_unit": 3500000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "멜로디 쇼크 순간대미지(9레벨:90 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "현혹의 연주 수련 경험치(3레벨:1.30 배 수련 경험치 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "음악적 지식 훌륭한 연주 효과(10레벨:10 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "데모닉 글루미 선데이",
+   "auction_price_per_unit": 3800000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "최대마나(13레벨:65 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "자장가 수면 중 타격대미지(5레벨:100 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "악기 연주 효과(18레벨:18 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "데모닉 글루미 선데이",
+   "auction_price_per_unit": 4000000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "지력(1레벨:2.50 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "음악적 지식 훌륭한 연주 비율(4레벨:11 비율 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "악기 연주 효과(19레벨:19 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "데모닉 글루미 선데이",
+   "auction_price_per_unit": 4000000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "음악적 지식 신들린 연주 비율(6레벨:6 비율 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "대미지밸런스(18레벨:18 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "멜로디 쇼크 순간대미지(6레벨:60 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "데모닉 글루미 선데이",
+   "auction_price_per_unit": 4179999,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "현혹의 연주 현혹 파워 강화(15레벨:450 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "체력(14레벨:21.00 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "음악적 지식 보통 연주 효과(5레벨:5 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "데모닉 글루미 선데이",
+   "auction_price_per_unit": 4500000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "음악적 지식 보통 연주 효과(10레벨:10 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "음악적 지식 훌륭한 연주 효과(4레벨:4 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "체력(17레벨:25.50 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "데모닉 글루미 선데이",
+   "auction_price_per_unit": 4500000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "체력(18레벨:27.00 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "멜로디 쇼크 순간대미지(9레벨:90 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "음악적 지식 훌륭한 연주 효과(10레벨:10 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "데모닉 글루미 선데이",
+   "auction_price_per_unit": 4900000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "음악적 지식 보통 연주 효과(7레벨:7 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "현혹의 연주 쿨타임 감소(16레벨:4.00 초 감소)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "음악적 지식 신들린 연주 효과(10레벨:10 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "데모닉 글루미 선데이",
+   "auction_price_per_unit": 4900000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "현혹의 연주 쿨타임 감소(18레벨:4.50 초 감소)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "체력(7레벨:10.50 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "음악적 지식 신들린 연주 효과(10레벨:10 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "데모닉 글루미 선데이",
+   "auction_price_per_unit": 4990000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "최대 공격력(5레벨:10 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "최대스태미나(18레벨:45.00 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "악기 연주 효과(19레벨:19 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "데모닉 글루미 선데이",
+   "auction_price_per_unit": 5000000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "음악적 지식 훌륭한 연주 효과(8레벨:8 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "음악적 지식 신들린 연주 효과(10레벨:10 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "지력(19레벨:47.50 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "데모닉 글루미 선데이",
+   "auction_price_per_unit": 5000000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "음악적 지식 훌륭한 연주 효과(6레벨:6 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "솜씨(5레벨:12.50 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "음악적 지식 신들린 연주 효과(7레벨:7 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "데모닉 글루미 선데이",
+   "auction_price_per_unit": 5000000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "음악적 지식 신들린 연주 비율(3레벨:3 비율 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "의지(12레벨:18.00 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "음악적 지식 신들린 연주 효과(8레벨:8 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "데모닉 글루미 선데이",
+   "auction_price_per_unit": 5000000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "공격 속도 증가 세트 효과 수치(3레벨:3 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "음악적 지식 신들린 연주 효과(9레벨:9 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "음악적 지식 보통 연주 효과(8레벨:8 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "데모닉 글루미 선데이",
+   "auction_price_per_unit": 5000000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "행운(15레벨:22.50 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "음악적 지식 훌륭한 연주 효과(7레벨:7 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "음악적 지식 훌륭한 연주 비율(6레벨:15 비율 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "축복받은 데모닉 글루미 선데이",
+   "auction_price_per_unit": 5000000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "악기 연주 효과(14레벨:14 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "행운(3레벨:4.50 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "음악적 지식 신들린 연주 비율(6레벨:6 비율 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "데모닉 글루미 선데이",
+   "auction_price_per_unit": 5000000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "음악적 지식 신들린 연주 비율(6레벨:6 비율 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "음악적 지식 훌륭한 연주 효과(6레벨:6 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "의지(18레벨:27.00 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "데모닉 글루미 선데이",
+   "auction_price_per_unit": 5000000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "음악적 지식 신들린 연주 비율(5레벨:5 비율 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "체력(14레벨:21.00 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "음악적 지식 보통 연주 효과(7레벨:7 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "데모닉 글루미 선데이",
+   "auction_price_per_unit": 5000000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "최대마나(9레벨:45 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "음악적 지식 신들린 연주 효과(10레벨:10 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "멜로디 쇼크 순간대미지(8레벨:80 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "데모닉 글루미 선데이",
+   "auction_price_per_unit": 5400000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "현혹의 연주 쿨타임 감소(16레벨:4.00 초 감소)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "음악적 지식 보통 연주 효과(10레벨:10 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "멜로디 쇼크 지속대미지(5레벨:10 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "데모닉 글루미 선데이",
+   "auction_price_per_unit": 5500000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "음악적 지식 훌륭한 연주 비율(7레벨:17 비율 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "음악적 지식 훌륭한 연주 효과(6레벨:6 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "현혹의 연주 현혹 파워 강화(3레벨:90 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "데모닉 글루미 선데이",
+   "auction_price_per_unit": 5500000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "음악적 지식 훌륭한 연주 비율(4레벨:11 비율 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "음악적 지식 훌륭한 연주 효과(10레벨:10 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "현혹의 연주 수련 경험치(7레벨:1.70 배 수련 경험치 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "데모닉 글루미 선데이",
+   "auction_price_per_unit": 5500000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "음악적 지식 보통 연주 효과(10레벨:10 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "지력(13레벨:32.50 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "체력(1레벨:1.50 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "데모닉 글루미 선데이",
+   "auction_price_per_unit": 6000000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "음악적 지식 보통 연주 효과(5레벨:5 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "음악적 지식 신들린 연주 효과(9레벨:9 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "음악적 지식 훌륭한 연주 효과(8레벨:8 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "데모닉 글루미 선데이",
+   "auction_price_per_unit": 6500000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "악기 연주 효과(14레벨:14 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "최대 공격력(19레벨:38 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "음악적 지식 신들린 연주 효과(7레벨:7 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "데모닉 글루미 선데이",
+   "auction_price_per_unit": 6900000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "음악적 지식 훌륭한 연주 효과(8레벨:8 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "의지(6레벨:9.00 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "음악적 지식 신들린 연주 효과(10레벨:10 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "데모닉 글루미 선데이",
+   "auction_price_per_unit": 7000000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "최대마나(15레벨:75 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "악기 연주 효과(18레벨:18 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "음악적 지식 신들린 연주 효과(5레벨:5 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "데모닉 글루미 선데이",
+   "auction_price_per_unit": 7000000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "악기 연주 효과(14레벨:14 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "현혹의 연주 수련 경험치(9레벨:1.90 배 수련 경험치 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "음악적 지식 신들린 연주 효과(9레벨:9 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "축복받은 데모닉 글루미 선데이",
+   "auction_price_per_unit": 7000000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "음악적 지식 신들린 연주 효과(5레벨:5 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "악기 연주 효과(18레벨:18 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "최대마나(20레벨:100 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "축복받은 데모닉 글루미 선데이",
+   "auction_price_per_unit": 7000000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "체력(15레벨:22.50 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "음악적 지식 보통 연주 효과(10레벨:10 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "음악적 지식 신들린 연주 비율(6레벨:6 비율 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "데모닉 글루미 선데이",
+   "auction_price_per_unit": 7000000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "음악적 지식 훌륭한 연주 비율(7레벨:17 비율 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "지력(19레벨:47.50 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "음악적 지식 훌륭한 연주 효과(6레벨:6 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "데모닉 글루미 선데이",
+   "auction_price_per_unit": 7000000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "악기 연주 연주 성공률(13레벨:6.50 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "음악적 지식 훌륭한 연주 효과(6레벨:6 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "음악적 지식 훌륭한 연주 비율(7레벨:17 비율 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "데모닉 글루미 선데이",
+   "auction_price_per_unit": 7400000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "현혹의 연주 수련 경험치(4레벨:1.40 배 수련 경험치 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "악기 연주 효과(20레벨:20 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "멜로디 쇼크 순간대미지(6레벨:60 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "데모닉 글루미 선데이",
+   "auction_price_per_unit": 7500000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "악기 연주 효과(20레벨:20 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "지력(13레벨:32.50 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "의지(11레벨:16.50 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "데모닉 글루미 선데이",
+   "auction_price_per_unit": 7500000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "음악적 지식 보통 연주 효과(7레벨:7 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "현혹의 연주 쿨타임 감소(2레벨:0.50 초 감소)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "악기 연주 효과(10레벨:10 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "데모닉 글루미 선데이",
+   "auction_price_per_unit": 7500000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "크리티컬(5레벨:5 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "악기 연주 효과(20레벨:20 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "멜로디 쇼크 지속대미지(10레벨:20 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "축복받은 데모닉 글루미 선데이",
+   "auction_price_per_unit": 7700000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "악기 연주 효과(20레벨:20 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "음악적 지식 신들린 연주 비율(2레벨:2 비율 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "현혹의 연주 쿨타임 감소(10레벨:2.50 초 감소)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "축복받은 데모닉 글루미 선데이",
+   "auction_price_per_unit": 7900000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "악기 연주 효과(20레벨:20 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "대미지밸런스(8레벨:8 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "멜로디 쇼크 순간대미지(1레벨:10 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "데모닉 글루미 선데이",
+   "auction_price_per_unit": 8000000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "악기 연주 효과(15레벨:15 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "현혹의 연주 쿨타임 감소(9레벨:2.25 초 감소)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "음악적 지식 신들린 연주 비율(6레벨:6 비율 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "데모닉 글루미 선데이",
+   "auction_price_per_unit": 8000000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "현혹의 연주 현혹 파워 강화(20레벨:600 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "음악적 지식 신들린 연주 효과(7레벨:7 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "악기 연주 효과(16레벨:16 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "데모닉 글루미 선데이",
+   "auction_price_per_unit": 8000000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "지력(18레벨:45.00 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "음악적 지식 신들린 연주 효과(10레벨:10 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "음악적 지식 보통 연주 효과(6레벨:6 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "안단테 데모닉 글루미 선데이",
+   "auction_price_per_unit": 8500000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "안단테 (랭크 D)",
+     "option_value2": null,
+     "option_desc": "최대스태미나 12 증가,최대대미지 3 증가,자장가 랭크 B 이상일 때 최대생명력 4 증가,악기 연주 랭크 B 이상일 때 음악 버프 스킬 효과 1 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "대미지밸런스(4레벨:4 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "현혹의 연주 현혹 파워 강화(4레벨:120 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "최대 공격력(1레벨:2 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "데모닉 글루미 선데이",
+   "auction_price_per_unit": 8990000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "현혹의 연주 쿨타임 감소(17레벨:4.25 초 감소)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "음악적 지식 신들린 연주 효과(7레벨:7 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "음악적 지식 훌륭한 연주 효과(10레벨:10 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "데모닉 글루미 선데이",
+   "item_display_name": "데모닉 글루미 선데이",
+   "auction_price_per_unit": 9000000,
+   "item_option": [
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "마법 공격력(7레벨:28 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "음악적 지식 보통 연주 효과(8레벨:8 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "악기 연주 효과(14레벨:14 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  }
+ ]
+}

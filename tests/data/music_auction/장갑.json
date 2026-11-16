@@ -1,0 +1,645 @@
+{
+ "query": [
+  "category",
+  "장갑"
+ ],
+ "total": 3883,
+ "music": 16,
+ "option_types": {
+  "아이템 색상": 9946,
+  "세공 옵션": 5029,
+  "내구력": 3883,
+  "방어력": 3772,
+  "세트 효과": 3576,
+  "의장 등급": 1488,
+  "인챈트": 1420,
+  "보호": 1307,
+  "마법 방어력": 707,
+  "마법 보호": 681,
+  "아이템 보호": 368,
+  "남은 전용 해제 가능 횟수": 352,
+  "남은 거래 횟수": 7,
+  "인챈트 불가능": 4,
+  "전용 해제 거래 보증서 사용 불가": 4,
+  "숙련": 2,
+  "일반 개조": 1
+ },
+ "items": [
+  {
+   "item_name": "트리니티 장갑",
+   "item_display_name": "솔리스트 모래시계 트리니티 장갑",
+   "auction_price_per_unit": 6000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "솔리스트 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 100% 증가,크리티컬 5 증가,전장의 서곡 랭크 1 이상일 때 음악 버프 스킬 효과 2 증가,풍년가 랭크 1 이상일 때 행운 25 증가,비바체 랭크 1 이상일 때 최대대미지 10 증가"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "모래시계 (랭크 9)",
+     "option_value2": null,
+     "option_desc": "최대대미지 4 증가,시간 왜곡 쿨타임 무시 횟수 1 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "마리오네트 조종술 인형 연결시 최소 대미지 보너스(13레벨:6.50 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "의지(12레벨:18.00 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "아이스 스피어 폭발 범위(18레벨:3.60 m 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "@브레이슬렛",
+   "item_display_name": "솔리스트 솔져 브레이슬렛",
+   "auction_price_per_unit": 7900000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "솔리스트 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 100% 증가,크리티컬 5 증가,전장의 서곡 랭크 1 이상일 때 음악 버프 스킬 효과 2 증가,풍년가 랭크 1 이상일 때 행운 25 증가,비바체 랭크 1 이상일 때 최대대미지 10 증가"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "솔져 (랭크 C)",
+     "option_value2": null,
+     "option_desc": "레벨이 2 이상일때 체력 1 증가"
+    }
+   ]
+  },
+  {
+   "item_name": "누아자 건틀렛",
+   "item_display_name": "축복받은 솔리스트 누아자 건틀렛",
+   "auction_price_per_unit": 12000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "솔리스트 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 100% 증가,크리티컬 5 증가,전장의 서곡 랭크 1 이상일 때 음악 버프 스킬 효과 2 증가,풍년가 랭크 1 이상일 때 행운 25 증가,비바체 랭크 1 이상일 때 최대대미지 10 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "크래시 샷 파편 대미지(18레벨:63.00 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "마리오네트 조종술 인형 연결시 크리티컬 확률(18레벨:18 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "풍년가 채집 속도(3레벨:3 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "@브레이슬렛",
+   "item_display_name": "솔리스트 브레이슬렛",
+   "auction_price_per_unit": 20000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "솔리스트 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 100% 증가,크리티컬 5 증가,전장의 서곡 랭크 1 이상일 때 음악 버프 스킬 효과 2 증가,풍년가 랭크 1 이상일 때 행운 25 증가,비바체 랭크 1 이상일 때 최대대미지 10 증가"
+    }
+   ]
+  },
+  {
+   "item_name": "코코의 손목 장식",
+   "item_display_name": "축복받은 솔리스트 카모플라쥬 코코의 손목 장식",
+   "auction_price_per_unit": 30000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "솔리스트 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 100% 증가,크리티컬 5 증가,전장의 서곡 랭크 1 이상일 때 음악 버프 스킬 효과 2 증가,풍년가 랭크 1 이상일 때 행운 25 증가,비바체 랭크 1 이상일 때 최대대미지 10 증가"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "카모플라쥬 (랭크 9)",
+     "option_value2": null,
+     "option_desc": "듀얼건 마스터리 랭크 3 이상일 때 최대대미지 8 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "블런트 마스터리 최대 대미지 20 레벨",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "컴뱃 마스터리 최대 대미지 13 레벨",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "스피어 오브 라이트 사정 거리 13 레벨",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "보헤미안 밴드(남성용)",
+   "item_display_name": "신성한 솔리스트 힘든 보헤미안 밴드(남성용)",
+   "auction_price_per_unit": 30000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "솔리스트 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 100% 증가,크리티컬 5 증가,전장의 서곡 랭크 1 이상일 때 음악 버프 스킬 효과 2 증가,풍년가 랭크 1 이상일 때 행운 25 증가,비바체 랭크 1 이상일 때 최대대미지 10 증가"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "힘든 (랭크 4)",
+     "option_value2": null,
+     "option_desc": "수리비 100% 증가,최대마나 40 증가,야금술 랭크 1 이상일 때 크리티컬 5 증가,목공 랭크 1 이상일 때 최대스태미나 30 증가,요리 랭크 6 이상일 때 솜씨 14 증가,제련 랭크 1 이상일 때 최대대미지 11 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "연속기 : 차징 피스트 쿨타임 감소 3 레벨",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "매그넘 샷 대미지 20 레벨",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "연속기 : 스크류 어퍼 보호 파괴 2 레벨",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "죽음의 인도자 장갑(남성용)",
+   "item_display_name": "신성한 솔리스트 올빼미 죽음의 인도자 장갑(남성용)",
+   "auction_price_per_unit": 33000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "솔리스트 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 100% 증가,크리티컬 5 증가,전장의 서곡 랭크 1 이상일 때 음악 버프 스킬 효과 2 증가,풍년가 랭크 1 이상일 때 행운 25 증가,비바체 랭크 1 이상일 때 최대대미지 10 증가"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "올빼미 (랭크 A)",
+     "option_value2": null,
+     "option_desc": "크리티컬 3 증가,공격 속도 증가 세트 효과 수치 3 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "윈드밀 공격 범위(20레벨:15.00 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "분해 수련 경험치(9레벨:1.90 배 수련 경험치 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "랜스 차지 차지 대미지(19레벨:76 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "보헤미안 플라워 밴드(여성용)",
+   "item_display_name": "축복받은 솔리스트 힘든 보헤미안 플라워 밴드(여성용)",
+   "auction_price_per_unit": 60000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "솔리스트 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 100% 증가,크리티컬 5 증가,전장의 서곡 랭크 1 이상일 때 음악 버프 스킬 효과 2 증가,풍년가 랭크 1 이상일 때 행운 25 증가,비바체 랭크 1 이상일 때 최대대미지 10 증가"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "힘든 (랭크 4)",
+     "option_value2": null,
+     "option_desc": "수리비 100% 증가,최대마나 40 증가,야금술 랭크 1 이상일 때 크리티컬 5 증가,목공 랭크 1 이상일 때 최대스태미나 30 증가,요리 랭크 6 이상일 때 솜씨 10 증가,제련 랭크 1 이상일 때 최대대미지 14 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "제련 성공률 10 레벨",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "매그넘 샷 대미지 20 레벨",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "크래시 샷 파편 대미지 9 레벨",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "벨몬트 장갑",
+   "item_display_name": "축복받은 솔리스트 올빼미 벨몬트 장갑",
+   "auction_price_per_unit": 80000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "솔리스트 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 100% 증가,크리티컬 5 증가,전장의 서곡 랭크 1 이상일 때 음악 버프 스킬 효과 2 증가,풍년가 랭크 1 이상일 때 행운 25 증가,비바체 랭크 1 이상일 때 최대대미지 10 증가"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "올빼미 (랭크 A)",
+     "option_value2": null,
+     "option_desc": "크리티컬 3 증가,공격 속도 증가 세트 효과 수치 3 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "컴뱃 마스터리 최소 대미지 17 레벨",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "컴뱃 마스터리 최대 대미지 20 레벨",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "체인 임페일 대미지 19 레벨",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "@펄 샤인 브레이슬렛",
+   "item_display_name": "축복받은 솔리스트 힘든 펄 샤인 브레이슬렛",
+   "auction_price_per_unit": 130000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "솔리스트 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 100% 증가,크리티컬 5 증가,전장의 서곡 랭크 1 이상일 때 음악 버프 스킬 효과 2 증가,풍년가 랭크 1 이상일 때 행운 25 증가,비바체 랭크 1 이상일 때 최대대미지 10 증가"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "힘든 (랭크 4)",
+     "option_value2": null,
+     "option_desc": "수리비 100% 증가,최대마나 40 증가,야금술 랭크 1 이상일 때 크리티컬 5 증가,목공 랭크 1 이상일 때 최대스태미나 30 증가,요리 랭크 6 이상일 때 솜씨 14 증가,제련 랭크 1 이상일 때 최대대미지 14 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "크래시 샷 파편 대미지 20 레벨",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "매그넘 샷 대미지 12 레벨",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "던지기 공격 대미지 20 레벨",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "어비스 드래곤 건틀렛(여성용)",
+   "item_display_name": "신성한 솔리스트 힘든 어비스 드래곤 건틀렛(여성용)",
+   "auction_price_per_unit": 135000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "솔리스트 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 100% 증가,크리티컬 5 증가,전장의 서곡 랭크 1 이상일 때 음악 버프 스킬 효과 2 증가,풍년가 랭크 1 이상일 때 행운 25 증가,비바체 랭크 1 이상일 때 최대대미지 10 증가"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "힘든 (랭크 4)",
+     "option_value2": null,
+     "option_desc": "수리비 100% 증가,최대마나 40 증가,야금술 랭크 1 이상일 때 크리티컬 5 증가,목공 랭크 1 이상일 때 최대스태미나 30 증가,요리 랭크 6 이상일 때 솜씨 13 증가,제련 랭크 1 이상일 때 최대대미지 14 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "스피닝 슬래시 유효 범위 20 레벨",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "미라지 미사일 효과 범위 19 레벨",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "너클 마스터리 밸런스 11 레벨",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "블리안 엔더스 인텐스 글러브",
+   "item_display_name": "솔리스트 힘든 블리안 엔더스 인텐스 글러브",
+   "auction_price_per_unit": 155000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "솔리스트 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 100% 증가,크리티컬 5 증가,전장의 서곡 랭크 1 이상일 때 음악 버프 스킬 효과 2 증가,풍년가 랭크 1 이상일 때 행운 25 증가,비바체 랭크 1 이상일 때 최대대미지 10 증가"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "힘든 (랭크 4)",
+     "option_value2": null,
+     "option_desc": "수리비 100% 증가,최대마나 40 증가,야금술 랭크 1 이상일 때 크리티컬 5 증가,목공 랭크 1 이상일 때 최대스태미나 30 증가,요리 랭크 6 이상일 때 솜씨 14 증가,제련 랭크 1 이상일 때 최대대미지 15 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "너클 마스터리 최대 대미지(17레벨:17 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "컴뱃 마스터리 최대 대미지(19레벨:19 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "의지(16레벨:24.00 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "랑그히리스 체이서 글러브",
+   "item_display_name": "신성한 솔리스트 힘든 랑그히리스 체이서 글러브",
+   "auction_price_per_unit": 250000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "솔리스트 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 100% 증가,크리티컬 5 증가,전장의 서곡 랭크 1 이상일 때 음악 버프 스킬 효과 2 증가,풍년가 랭크 1 이상일 때 행운 25 증가,비바체 랭크 1 이상일 때 최대대미지 10 증가"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "힘든 (랭크 4)",
+     "option_value2": null,
+     "option_desc": "수리비 100% 증가,최대마나 40 증가,야금술 랭크 1 이상일 때 크리티컬 5 증가,목공 랭크 1 이상일 때 최대스태미나 30 증가,요리 랭크 6 이상일 때 솜씨 15 증가,제련 랭크 1 이상일 때 최대대미지 14 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "액스 마스터리 최소 대미지 11 레벨",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "너클 마스터리 최대 대미지 18 레벨",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "연속기 마스터리 대미지 10 레벨",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "트레저 헌터 장갑(남성용)",
+   "item_display_name": "축복받은 솔리스트 힘든 트레저 헌터 장갑(남성용)",
+   "auction_price_per_unit": 400000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "솔리스트 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 100% 증가,크리티컬 5 증가,전장의 서곡 랭크 1 이상일 때 음악 버프 스킬 효과 2 증가,풍년가 랭크 1 이상일 때 행운 25 증가,비바체 랭크 1 이상일 때 최대대미지 10 증가"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "힘든 (랭크 4)",
+     "option_value2": null,
+     "option_desc": "수리비 100% 증가,최대마나 40 증가,야금술 랭크 1 이상일 때 크리티컬 5 증가,목공 랭크 1 이상일 때 최대스태미나 30 증가,요리 랭크 6 이상일 때 솜씨 10 증가,제련 랭크 1 이상일 때 최대대미지 15 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "크래시 샷 파편 대미지(18레벨:63.00 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "불릿 스톰 공격 거리(9레벨:0.90 m 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "보우 마스터리 최대 대미지(17레벨:17 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "보헤미안 플라워 밴드(여성용)",
+   "item_display_name": "축복받은 솔리스트 힘든 보헤미안 플라워 밴드(여성용)",
+   "auction_price_per_unit": 450000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "솔리스트 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 100% 증가,크리티컬 5 증가,전장의 서곡 랭크 1 이상일 때 음악 버프 스킬 효과 2 증가,풍년가 랭크 1 이상일 때 행운 25 증가,비바체 랭크 1 이상일 때 최대대미지 10 증가"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "힘든 (랭크 4)",
+     "option_value2": null,
+     "option_desc": "수리비 100% 증가,최대마나 40 증가,야금술 랭크 1 이상일 때 크리티컬 5 증가,목공 랭크 1 이상일 때 최대스태미나 30 증가,요리 랭크 6 이상일 때 솜씨 12 증가,제련 랭크 1 이상일 때 최대대미지 12 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "매그넘 샷 대미지 18 레벨",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "크로스보우 마스터리 최대 대미지 11 레벨",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "크래시 샷 파편 대미지 19 레벨",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  },
+  {
+   "item_name": "CL 반지",
+   "item_display_name": "축복받은 솔리스트 모래시계 CL 반지",
+   "auction_price_per_unit": 2500000000,
+   "item_option": [
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접두",
+     "option_value": "솔리스트 (랭크 5)",
+     "option_value2": null,
+     "option_desc": "수리비 100% 증가,크리티컬 5 증가,전장의 서곡 랭크 1 이상일 때 음악 버프 스킬 효과 2 증가,풍년가 랭크 1 이상일 때 행운 25 증가,비바체 랭크 1 이상일 때 최대대미지 10 증가"
+    },
+    {
+     "option_type": "인챈트",
+     "option_sub_type": "접미",
+     "option_value": "모래시계 (랭크 9)",
+     "option_value2": null,
+     "option_desc": "최대대미지 5 증가,시간 왜곡 쿨타임 무시 횟수 1 증가"
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "1",
+     "option_value": "너클 마스터리 최소 대미지(19레벨:19 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "2",
+     "option_value": "데스 마커 대미지 증폭(19레벨:4.75 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    },
+    {
+     "option_type": "세공 옵션",
+     "option_sub_type": "3",
+     "option_value": "체인 임페일 대미지(23레벨:69 % 증가)",
+     "option_value2": null,
+     "option_desc": null
+    }
+   ]
+  }
+ ]
+}
