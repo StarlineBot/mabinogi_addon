@@ -312,3 +312,24 @@ def test_reforge_level_capped_by_option_max(qapp):
 def test_same_option_on_two_lines_adds_levels():
     two = _state(inst_reforge=[["inst_music_buff", 10], ["inst_music_buff", 5]])
     assert mb.song_total(two) == mb.song_total(_state(inst_reforge=[["inst_music_buff", 15]]))
+
+
+# ---- 게임 실측(사용자 11-16, 같은 장비·소환) — 앱 계산이 게임 화면과 맞는지 ----
+_GAME_SET = {"secondary_title": "ivona", "instrument": "gloomy", "inst_prefix": "inst_ensemble",
+             "inst_suffix": "inst_code", "special_mod": 7,
+             "inst_reforge": [["inst_music_buff", 19], ["inst_normal_effect", 10]],
+             "acc1_reforge": [["acc_normal_effect", 3]], "acc2_reforge": [["acc_normal_effect", 2]],
+             "head_suffix": "head_chorus_3", "armor_prefix": "armor_sonata_6", "gloves_prefix": "gloves_soloist",
+             "shoes_prefix": "shoes_soloist", "murias_holy_water": 3, "extra_miniature": "golden_trophy",
+             "normal_miniature": "bain", "cloud_cushion": True}
+
+
+@pytest.mark.parametrize("change,game", [
+    ({"pet": "fairy_dragon"}, 50.47),                                              # 액세서리 3%·2%
+    ({"pet": "blue_fairy_dragon"}, 50.89),                                         # + 비바체 하모니
+    ({"pet": "fairy_dragon", "acc2_reforge": []}, 49.57),                          # 2% 액세서리 뺌
+    ({"pet": "blue_fairy_dragon", "acc1_reforge": [], "acc2_reforge": []}, 48.7),  # 둘 다 뺌
+])
+def test_matches_in_game_vivace_magic_attack(change, game):
+    got = mb.calc(mb.normalize({**_GAME_SET, **change}))["vivace"]["normal"]["magic_attack"]
+    assert got == pytest.approx(game, abs=0.05)
