@@ -333,3 +333,28 @@ _GAME_SET = {"secondary_title": "ivona", "instrument": "gloomy", "inst_prefix": 
 def test_matches_in_game_vivace_magic_attack(change, game):
     got = mb.calc(mb.normalize({**_GAME_SET, **change}))["vivace"]["normal"]["magic_attack"]
     assert got == pytest.approx(game, abs=0.05)
+
+
+@pytest.mark.parametrize("style", ["Fusion", "Windows"])  # Windows 스타일은 위아래 버튼이 가로로 나란히(사용자 화면 11-16)
+def test_level_spin_shows_whole_text(qapp, style):
+    """세공 Lv·특개 칸이 'Lv 25'·'8단계'와 버튼을 다 담는다 — 고정 64px이면 'Lv '가 잘렸다."""
+    from PySide6.QtWidgets import QStyleFactory
+
+    from mabinogi_addon.ui.music_buff_tab import MusicBuffTab
+    tab = MusicBuffTab()
+    st = QStyleFactory.create(style)
+    if st is None:
+        pytest.skip(f"{style} 스타일 없음")
+    spins = [line.level for lines in tab.reforges.values() for line in lines] + [tab.special_mod]
+    for spin in spins:
+        spin.setStyle(st)
+    for spin in spins:
+        hi = spin.maximum()
+        spin.setMaximum(max(hi, spin._widest))
+        need = spin.sizeHint().width()
+        spin.setMaximum(hi)
+        assert spin.width() >= need, (spin.prefix(), spin.width(), need)
+    line = tab.reforges["inst_reforge"][0]
+    w0 = line.level.width()
+    line.set_value(["inst_music_buff", 25])
+    assert line.level.width() == w0  # 상한이 바뀌어도 폭은 그대로(줄이 흔들리지 않음)

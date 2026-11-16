@@ -17,7 +17,7 @@ import threading
 import time
 import urllib.request
 
-from PySide6.QtCore import QRectF, QSize, Qt, QTimer
+from PySide6.QtCore import QEvent, QRectF, QSize, Qt, QTimer
 from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
     QBoxLayout,
@@ -189,12 +189,29 @@ class _Combo(QComboBox):
 
 
 class _Spin(QSpinBox):
-    def __init__(self, lo: int, hi: int, prefix: str = "", suffix: str = ""):
+    """폭은 '가장 큰 값 + 앞뒤 글자 + 위아래 버튼'이 다 들어가게 스타일이 잰 크기로 고정한다.
+    (고정 64px이면 Windows 스타일 — 버튼이 가로로 나란히 — 에서 'Lv '가 잘려 '19'·'.v ('로 보였다, 사용자 11-16)"""
+
+    def __init__(self, lo: int, hi: int, prefix: str = "", suffix: str = "", widest: int | None = None):
         super().__init__()
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        self.setRange(lo, hi)
         self.setPrefix(prefix)
         self.setSuffix(suffix)
+        self._widest = max(hi, widest or 0)
+        self.setRange(lo, self._widest)
+        self._fit()
+        self.setRange(lo, hi)
+
+    def _fit(self) -> None:
+        hi = self.maximum()
+        self.setMaximum(max(hi, self._widest))  # 칸 폭은 범위의 가장 큰 값 기준(지금 상한이 작아도 같은 폭)
+        self.setFixedWidth(self.sizeHint().width())
+        self.setMaximum(hi)
+
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if event.type() in (QEvent.Type.FontChange, QEvent.Type.StyleChange) and hasattr(self, "_widest"):
+            self._fit()
 
     def wheelEvent(self, event):
         if self.hasFocus():
@@ -212,8 +229,7 @@ class _ReforgeLine(QWidget):
         h = QHBoxLayout(self)
         h.setContentsMargins(0, 0, 0, 0)
         self.option = _Combo([("없음", None)] + [(o["name"], o["id"]) for o in opts])
-        self.level = _Spin(0, 0, prefix="Lv ")
-        self.level.setFixedWidth(64)
+        self.level = _Spin(0, 0, prefix="Lv ", widest=max(o["max"] for o in opts))
         h.addWidget(self.option, 1)
         h.addWidget(self.level)
         self.option.currentIndexChanged.connect(self._limit)
@@ -390,7 +406,6 @@ class MusicBuffTab(QWidget):
         s.row("악기", self._value_combo("instrument", [(e["name"], e["id"]) for e in t["instruments"]]))
         s.row("인챈트", self._combo("inst_prefix", "접두 없음"), self._combo("inst_suffix", "접미 없음"))
         self.special_mod = _Spin(0, len(t["special_mod_bonus"]) - 1, suffix="단계")
-        self.special_mod.setFixedWidth(96)
         self.special_mod.valueChanged.connect(self._changed)
         s.row("특개", self._left(self.special_mod))
         self._reforge(s, "inst_reforge")
