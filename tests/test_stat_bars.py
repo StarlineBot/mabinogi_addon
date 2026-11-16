@@ -225,3 +225,39 @@ def test_existing_screenshots_still_locate(name):
     assert box is not None
     x, y, w, h = box
     assert len(read_stat_bars(f[y:y + h, x:x + w], require_complete=True)) == 3
+
+
+# ---- 직접 지정 영역이 바보다 넓을 때(0.51.0, 테스터 문의 image (31) — 4K·작은 UI·하늘색 인터페이스) ----
+# 예전: 바 행 판정이 '바 색 픽셀 / 영역 전체 폭'이라 영역 폭이 바의 2.4배를 넘으면 판독 0. 직접 지정 상자는 고정 200×46 논리px.
+_WIDE_BAR = (1572, 2123, 103, 32)  # image (31) 바(물리 px)
+
+
+@pytest.mark.parametrize("size", [(200, 46), (300, 69), (400, 92)])
+@pytest.mark.parametrize("align", ["left", "center"])
+def test_wide_manual_region_still_reads_three_bars(size, align):
+    from mabinogi_addon.detect.stat_bars import read_stat_bars
+    f = image_io.imread(_SHOTS / "image (31).png", cv2.IMREAD_COLOR)
+    x, y, w, h = _WIDE_BAR
+    W, H = size
+    x0, y0 = (x - 4, y - 4) if align == "left" else (x + w // 2 - W // 2, y + h // 2 - H // 2)
+    got = {r.stat_id: r.ratio for r in read_stat_bars(f[y0:y0 + H, x0:x0 + W], require_complete=True)}
+    assert got == {"hp": 1.0, "mp": 1.0, "sta": 1.0}
+
+
+@pytest.mark.parametrize("name", [
+    "image55.png",                        # 분홍 인터페이스(배경이 HP 색조), HP 0.656
+    "mabinogi_2026_10_30_214051.png",     # MP 덜 참(0.448)
+    "스크린샷 2026-10-09 200614.png",     # MP 거의 빔(0.046) — 바 왼쪽 숫자 글자
+    "스크린샷 2026-11-14 230836.png",     # 하늘색 인터페이스
+    "image1.png",                         # 위로 넓히면 게임 장면(불꽃)이 바 색 띠로 잡힘
+])
+def test_wide_region_matches_tight_reading(name):
+    """바에 딱 맞는 영역과 가로 2배·세로 2배로 넓힌 영역(바 왼쪽 맞춤)의 판독이 같다(±0.03) — 넓혀도 틀린 값이 나오지 않게."""
+    from mabinogi_addon.detect.stat_bars import locate_stat_bars, read_stat_bars
+    f = image_io.imread(_SHOTS / name, cv2.IMREAD_COLOR)
+    x, y, w, h = locate_stat_bars(f)
+    tight = {r.stat_id: r.ratio for r in read_stat_bars(f[y:y + h, x:x + w], require_complete=True)}
+    y0 = y + h // 2 - h
+    wide = {r.stat_id: r.ratio for r in read_stat_bars(f[y0:y0 + 2 * h, x - 4:x - 4 + 2 * w], require_complete=True)}
+    assert set(tight) == set(wide) == {"hp", "mp", "sta"}
+    assert all(abs(tight[k] - wide[k]) <= 0.03 for k in tight), (tight, wide)

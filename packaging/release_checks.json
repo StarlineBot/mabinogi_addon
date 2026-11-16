@@ -1,6 +1,12 @@
 {
   "version": "0.51.0",
   "tests": [
+    "tests/test_skillbar_testers.py",
+    "tests/test_autofind_diagnostics.py",
+    "tests/test_autofind_v2_engine.py",
+    "tests/test_stat_bars_stability.py",
+    "tests/test_stat_bars_locate.py",
+    "tests/test_stat_bars.py",
     "tests/test_craft_calculator.py",
     "tests/test_craft_width.py",
     "tests/test_navigation.py",
@@ -74,7 +80,18 @@
         "tests/test_release_notes.py",
         "tests/test_release_notes_trigger.py"
       ],
-      "reason": "0.51.0 노트(헤드라인 2개 + 조용히 다듬은 것들 — 미게시 0.50.1 가로 잘림 줄을 합침, v0.50.1 섹션 없음) 파싱·새 버전 표시, 게시된 v0.50.0 이하 섹션은 태그 그대로"
+      "reason": "0.51.0 노트(헤드라인 2개 + 조용히 다듬은 것들 — 미게시 0.50.1 가로 잘림 줄을 합침, v0.50.1 섹션 없음) 파싱·새 버전 표시, 게시된 v0.50.0 이하 섹션은 태그 그대로; 체력바 넓은 영역 줄"
+    },
+    "src/mabinogi_addon/detect/stat_bars.py": {
+      "tests": [
+        "tests/test_stat_bars.py",
+        "tests/test_stat_bars_locate.py",
+        "tests/test_stat_bars_stability.py",
+        "tests/test_autofind_v2_engine.py",
+        "tests/test_autofind_diagnostics.py",
+        "tests/test_skillbar_testers.py"
+      ],
+      "reason": "직접 지정 영역이 바보다 넓으면 바 가로 구간(행마다 가장 긴 바 색 구간의 가운데 값)으로 잘라 읽기, 넓은 영역에서 같은 바 띠가 둘이면 HP·MP·STA로 이어 붙은 세 띠 — 딱 맞는 영역은 예전 그대로"
     }
   }
 }

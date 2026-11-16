@@ -376,6 +376,38 @@ def locate_stat_bars(frame: np.ndarray, *, diagnostics: dict | None = None) -> t
     return best
 
 
+_WIDE_RATIO = 0.8  # 바 가로 구간이 영역 폭의 이만큼보다 좁으면 그 구간으로 잘라 읽는다
+_SPAN_MARGIN = 2
+_RUN_JOIN = 8  # 한 바 안의 작은 틈(글자 외곽선 등)
+_TEXT_GAP = 16  # 바 왼쪽 숫자 글자(흰색) 틈 — 왼쪽으로는 이만큼까지 이어 본다(숫자는 늘 바 왼쪽에 있음)
+
+
+def _bar_columns(region: np.ndarray) -> tuple[int, int] | None:
+    """직접 지정 영역이 바보다 넓을 때 바 가로 구간(왼쪽, 오른쪽).
+    행마다 바 색 픽셀의 가장 긴 연속 구간(틈 _RUN_JOIN px, 왼쪽으로는 숫자 글자 틈 _TEXT_GAP px까지 이어 봄)을 구해, 길이가 _MIN_BAR_WIDTH 이상인 행들의
+    왼쪽·오른쪽 끝 가운데 값. 바 행이 바깥 행(같은 색조 인터페이스 배경 등)보다 많아 가운데 값이 바 자리를 가리킨다.
+    바 색에는 소모(빈 부분) 색도 들어 있어 덜 찬 바도 바 전체 폭이 잡힌다. 그런 행이 _MIN_ROWS×2 미만이면 None."""
+    hsv = cv2.cvtColor(region, cv2.COLOR_BGR2HSV)
+    colored = _bar_pixels(hsv[:, :, 0], hsv[:, :, 1].astype(int), hsv[:, :, 2])
+    lefts, rights = [], []
+    for row in colored:
+        cols = np.flatnonzero(row)
+        if cols.size < _MIN_BAR_WIDTH // 2:
+            continue
+        runs = np.split(cols, np.flatnonzero(np.diff(cols) > _RUN_JOIN) + 1)
+        i = max(range(len(runs)), key=lambda k: runs[k][-1] - runs[k][0])
+        left, right = int(runs[i][0]), int(runs[i][-1])
+        while i > 0 and left - int(runs[i - 1][-1]) <= _TEXT_GAP:  # 왼쪽 숫자 글자 너머의 바 앞부분까지
+            i -= 1
+            left = int(runs[i][0])
+        if right - left + 1 >= _MIN_BAR_WIDTH:
+            lefts.append(left)
+            rights.append(right)
+    if len(lefts) < 2 * _MIN_ROWS:
+        return None
+    return int(np.median(lefts)), int(np.median(rights))
+
+
 def read_stat_bars(region: np.ndarray, *, require_complete: bool = False) -> list[StatReading]:
     """영역(BGR)에서 띠를 찾아 색조로 이름을 붙여 [HP, MP, STA] 순(찾은 것만) 반환.
 
@@ -384,17 +416,35 @@ def read_stat_bars(region: np.ndarray, *, require_complete: bool = False) -> lis
     """
     if region is None or region.shape[0] < 6 or region.shape[1] < 20:
         return []
-    found: dict[str, tuple[int, StatReading]] = {}
-    duplicate = False
+    # 0.51.0(테스터 문의 image (31)): 직접 지정 영역이 바보다 많이 넓으면(4K·작은 UI에 고정 크기 상자) 바 행 비율
+    # (바 색 픽셀 / 영역 전체 폭)이 _ROW_RATIO에 못 미쳐 판독 0이었다 → 바 가로 구간을 먼저 찾아 그 구간으로 잘라 읽는다.
+    # 영역이 바에 딱 맞으면(구간이 폭의 80% 이상) 예전 그대로.
+    span = _bar_columns(region)
+    wide = span is not None and span[1] - span[0] + 1 < region.shape[1] * _WIDE_RATIO
+    if wide:
+        region = region[:, max(0, span[0] - _SPAN_MARGIN):span[1] + 1 + _SPAN_MARGIN]
+    named: list[StatReading] = []
     for r0, r1 in _bands(region):
         ratio, hue = _ratio(region, r0, r1)
         stat = _stat_of(hue) if hue >= 0 else None
-        if stat is None:
-            continue
-        dist = _stat_dist(hue, stat)
-        duplicate = duplicate or stat in found
-        if stat not in found or dist < found[stat][0]:
-            found[stat] = (dist, StatReading(stat, ratio, hue))
+        if stat is not None:
+            named.append(StatReading(stat, ratio, hue))
+    found: dict[str, tuple[int, StatReading]] = {}
+    duplicate = False
+    for reading in named:
+        dist = _stat_dist(reading.hue, reading.stat_id)
+        duplicate = duplicate or reading.stat_id in found
+        if reading.stat_id not in found or dist < found[reading.stat_id][0]:
+            found[reading.stat_id] = (dist, reading)
+    if duplicate and wide:
+        # 0.51.0: 바보다 많이 넓게 잡은 영역(직접 지정)은 위아래로도 넓어 바 위 게임 장면(주황 불꽃·파란 빛)이 바 색 띠로
+        # 잡혀 같은 바가 둘이 됐다 → 위→아래로 HP·MP·STA가 이어 붙은 세 띠가 있으면 그것(여럿이면 맨 아래)이 진짜 바.
+        # 바에 딱 맞는 영역은 예전처럼 엄격(띠 넷이면 확정 안 함 — 앞부분만 잘라 읽지 않게).
+        stacks = [named[i:i + 3] for i in range(len(named) - 2)
+                  if [r.stat_id for r in named[i:i + 3]] == list(STAT_IDS)]
+        if stacks:
+            found = {r.stat_id: (0, r) for r in stacks[-1]}
+            duplicate = False
     if require_complete and (len(found) != 3 or duplicate):
-        return []  # 같은 바 색 띠가 둘이면 어느 쪽이 진짜인지 모름 — 표시·알림엔 쓰지 않는다
+        return []  # 같은 바 색 띠가 둘이면(이어 붙은 세 띠도 없으면) 어느 쪽이 진짜인지 모름 — 표시·알림엔 쓰지 않는다
     return [found[k][1] for k in STAT_IDS if k in found]
