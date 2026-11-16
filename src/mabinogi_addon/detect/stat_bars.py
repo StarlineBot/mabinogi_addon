@@ -408,6 +408,37 @@ def _bar_columns(region: np.ndarray) -> tuple[int, int] | None:
     return int(np.median(lefts)), int(np.median(rights))
 
 
+_SAME_PX = 4  # 넓은 영역 확인: 세 바 왼쪽·오른쪽 끝·폭이 이 안에서 같아야(맞는 판독 ≤4px, 틀린 판독 11px — tests/data 그리드 실측)
+
+
+def _consistent(region: np.ndarray, rows: list[tuple[int, int]], width: int) -> bool:
+    """넓은 영역에서 자른 세 띠가 진짜 체력바인지(0.51.0 QA db6bc1f — 넓은 영역에서 덜 찬 바가 틀린 값으로 읽힌 11건).
+    세 바의 가로 범위(채움 + 소모 색, `_span`)가 같은 왼쪽·오른쪽 끝·같은 폭(±_SAME_PX)이고 그 폭이 바 가로 구간(`_bar_columns`)과
+    같아야 한다. 하나라도 어긋나면(같은 색조 배경이 바 옆에 붙음, 소모 부분이 덜 잡힘 등) 확신 없음."""
+    spans = []
+    for r0, r1 in rows:
+        hsv = cv2.cvtColor(region[r0:r1], cv2.COLOR_BGR2HSV)
+        bh, bs, bv = hsv[:, :, 0].astype(int), hsv[:, :, 1].astype(int), hsv[:, :, 2]
+        colored = _bar_pixels(bh, bs, bv)
+        if not colored.any():
+            return False
+        hue = int(np.median(bh[colored]))
+        stat = _stat_of(hue)
+        got = _span(bh, bs, bv, stat, hue) if stat is not None else None
+        if got is None:
+            return False
+        spans.append(got)
+    return _deviation(spans, width) <= _SAME_PX
+
+
+def _deviation(spans: list[tuple[int, int]], width: int) -> int:
+    """세 바 가로 범위가 서로·바 가로 구간과 얼마나 어긋나는지(px): 왼쪽 끝 차, 오른쪽 끝 차, 폭과 구간 폭 차 중 가장 큰 값."""
+    lefts = [a for a, _b in spans]
+    rights = [b for _a, b in spans]
+    widths = [b - a + 1 for a, b in spans]
+    return max(max(lefts) - min(lefts), max(rights) - min(rights), max(abs(w - width) for w in widths))
+
+
 def read_stat_bars(region: np.ndarray, *, require_complete: bool = False) -> list[StatReading]:
     """영역(BGR)에서 띠를 찾아 색조로 이름을 붙여 [HP, MP, STA] 순(찾은 것만) 반환.
 
@@ -424,11 +455,14 @@ def read_stat_bars(region: np.ndarray, *, require_complete: bool = False) -> lis
     if wide:
         region = region[:, max(0, span[0] - _SPAN_MARGIN):span[1] + 1 + _SPAN_MARGIN]
     named: list[StatReading] = []
+    rows_of: dict[int, tuple[int, int]] = {}  # id(판독) → 띠 행(넓은 영역 확인용)
     for r0, r1 in _bands(region):
         ratio, hue = _ratio(region, r0, r1)
         stat = _stat_of(hue) if hue >= 0 else None
         if stat is not None:
-            named.append(StatReading(stat, ratio, hue))
+            reading = StatReading(stat, ratio, hue)
+            named.append(reading)
+            rows_of[id(reading)] = (r0, r1)
     found: dict[str, tuple[int, StatReading]] = {}
     duplicate = False
     for reading in named:
@@ -447,4 +481,7 @@ def read_stat_bars(region: np.ndarray, *, require_complete: bool = False) -> lis
             duplicate = False
     if require_complete and (len(found) != 3 or duplicate):
         return []  # 같은 바 색 띠가 둘이면(이어 붙은 세 띠도 없으면) 어느 쪽이 진짜인지 모름 — 표시·알림엔 쓰지 않는다
+    if wide and len(found) == 3 and not _consistent(region, [rows_of[id(found[k][1])] for k in STAT_IDS],
+                                                    span[1] - span[0] + 1):
+        return []  # 넓은 영역: 확신 없으면 빈 값 — 틀린 값 금지(덜 찬 바에서 낮은 체력 알림을 놓치거나 거짓 알림)
     return [found[k][1] for k in STAT_IDS if k in found]

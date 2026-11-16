@@ -245,7 +245,7 @@ def test_wide_manual_region_still_reads_three_bars(size, align):
 
 
 @pytest.mark.parametrize("name", [
-    "image55.png",                        # 분홍 인터페이스(배경이 HP 색조), HP 0.656
+    "image55.png",                        # 분홍 인터페이스(배경이 HP 색조), HP 0.656 — 넓히면 빈 값일 수 있음(아래 grid)
     "mabinogi_2026_10_30_214051.png",     # MP 덜 참(0.448)
     "스크린샷 2026-10-09 200614.png",     # MP 거의 빔(0.046) — 바 왼쪽 숫자 글자
     "스크린샷 2026-11-14 230836.png",     # 하늘색 인터페이스
@@ -261,3 +261,46 @@ def test_wide_region_matches_tight_reading(name):
     wide = {r.stat_id: r.ratio for r in read_stat_bars(f[y0:y0 + 2 * h, x - 4:x - 4 + 2 * w], require_complete=True)}
     assert set(tight) == set(wide) == {"hp", "mp", "sta"}
     assert all(abs(tight[k] - wide[k]) <= 0.03 for k in tight), (tight, wide)
+
+
+# ---- 넓은 영역: 확신 없으면 빈 값(0.51.0 QA db6bc1f — 덜 찬 바가 틀린 값으로 읽힌 11건) ----
+_GRID = [(200, 46), (250, 58), (300, 69), (400, 92)]
+_LARGE_SCENES = sorted(str(p.relative_to(_SHOTS)) for p in _SHOTS.rglob("*.png") if _png_width(p) >= 800)
+
+
+@pytest.mark.parametrize("name", _LARGE_SCENES)
+def test_wide_grid_never_reads_a_wrong_value(name):
+    """찾은 바 둘레 W×H ∈ {200×46, 250×58, 300×69, 400×92} × (바 왼쪽 위 −4 / 가운데 맞춤): 읽으면 바에 맞춘 영역 판독과 ±3% 안.
+    빈 값은 괜찮다 — 틀린 값(덜 찬 HP를 1.0, 덜 찬 MP를 0.0)은 낮은 체력 알림을 놓치거나 거짓 알림을 낸다."""
+    from mabinogi_addon.detect.stat_bars import locate_stat_bars, read_stat_bars
+    f = image_io.imread(_SHOTS / name, cv2.IMREAD_COLOR)
+    box = locate_stat_bars(f)
+    if box is None:
+        pytest.skip("바를 못 찾는 장면")
+    x, y, w, h = box
+    truth = {r.stat_id: r.ratio for r in read_stat_bars(f[y:y + h, x:x + w], require_complete=True)}
+    if len(truth) != 3:
+        pytest.skip("바에 맞춘 영역도 완전 판독 아님")
+    wrong = []
+    for W, H in _GRID:
+        for x0, y0 in ((x - 4, y - 4), (x + w // 2 - W // 2, y + h // 2 - H // 2)):
+            x0, y0 = max(0, x0), max(0, y0)
+            got = {r.stat_id: r.ratio for r in read_stat_bars(f[y0:y0 + H, x0:x0 + W], require_complete=True)}
+            if got and any(abs(got[k] - truth[k]) > 0.03 for k in truth):
+                wrong.append((W, H, x0 - x, got, truth))
+    assert not wrong, wrong
+
+
+def test_image31_all_sizes_read_full():
+    """image (31): 영역 폭 110~410 × 높이 40·46·58·69 × 왼쪽/가운데 맞춤 128가지 모두 세 바 1.0."""
+    from mabinogi_addon.detect.stat_bars import read_stat_bars
+    f = image_io.imread(_SHOTS / "image (31).png", cv2.IMREAD_COLOR)
+    x, y, w, h = _WIDE_BAR
+    bad = []
+    for W in range(110, 411, 20):
+        for H in (40, 46, 58, 69):
+            for x0, y0 in ((x - 4, y - 4), (x + w // 2 - W // 2, y + h // 2 - H // 2)):
+                got = {r.stat_id: r.ratio for r in read_stat_bars(f[y0:y0 + H, x0:x0 + W], require_complete=True)}
+                if got != {"hp": 1.0, "mp": 1.0, "sta": 1.0}:
+                    bad.append((W, H, x0 - x, got))
+    assert not bad, bad
