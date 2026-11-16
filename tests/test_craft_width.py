@@ -7,9 +7,9 @@
 import pytest
 from PySide6.QtCore import QPoint, Qt
 from PySide6.QtWidgets import QWidget
+from test_navigation import window  # noqa: F401  (픽스처)
 
 from mabinogi_addon import config
-from test_navigation import window  # noqa: F401  (픽스처)
 
 
 def _open_craft(w, app):
