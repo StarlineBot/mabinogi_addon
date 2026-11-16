@@ -210,9 +210,17 @@ def test_screen_rows_and_bonus_line_follow_saint_bard(qapp):
     tab.close()
 
 
-def test_results_stay_fixed_while_inputs_scroll(qapp):
+@pytest.mark.parametrize("pixels", [None, 15, 17])  # 글꼴 줄 높이가 달라도(CI 글꼴은 줄 높이가 더 큼) 같은 동작
+def test_results_stay_fixed_while_inputs_scroll(qapp, pixels):
+    from PySide6.QtWidgets import QWidget
+
     from mabinogi_addon.ui.music_buff_tab import MusicBuffTab
     tab = MusicBuffTab()
+    if pixels:
+        for widget in [tab] + tab.findChildren(QWidget):
+            font = widget.font()
+            font.setPixelSize(pixels)
+            widget.setFont(font)
     tab.resize(766, 640)
     tab.show()
     qapp.processEvents()
@@ -222,9 +230,16 @@ def test_results_stay_fixed_while_inputs_scroll(qapp):
     bar.setValue(bar.maximum())
     qapp.processEvents()
     assert tab.prob_label.mapTo(tab, tab.prob_label.rect().topLeft()).y() == top
-    tab.resize(766, 1150)  # 창을 키우면 스크롤 없이 다 보임
+    # 창을 입력 내용 높이만큼 키우면 스크롤 없이 다 보임. 필요한 높이는 글꼴(줄 높이)마다 달라 고정 숫자로
+    # 단정하지 않는다(0.52.0 후보 #243: 이 PC 1150 vs CI 글꼴 1190) — 지금 높이 + (내용 높이 − 보이는 높이).
+    need = tab.height() + tab.scroll.widget().sizeHint().height() - tab.scroll.viewport().height()
+    tab.resize(766, need)
     qapp.processEvents()
-    assert tab.scroll.verticalScrollBar().maximum() == 0
+    assert bar.maximum() == 0
+    assert tab.prob_label.mapTo(tab, tab.prob_label.rect().topLeft()).y() == top
+    tab.resize(766, need - 20)  # 조금이라도 작으면 다시 스크롤
+    qapp.processEvents()
+    assert bar.maximum() > 0
     tab.close()
 
 
