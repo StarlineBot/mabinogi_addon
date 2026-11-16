@@ -129,3 +129,18 @@ def test_engine_keeps_4k_buff_through_flicker(catalog):
     for i in range(80):
         result = engine.tick(dipped if i % 8 < 6 else region, 1.0 + i * 0.1)
         assert "march" in {entry.buff_id for entry in result.entries}, i
+
+
+def test_tick_reports_anchor_for_autofind_trial(catalog):
+    """자동 찾기 v2 새 자리 확정용 신호(0.52.0 후보 버그): seen(아이콘 하나라도)과 따로 anchor(기준 버프 보임)를 낸다.
+    엉뚱한 자리(기준 버프 없음)는 아이콘이 걸려도 anchor=False, 기준 버프가 없는 설정은 None."""
+    import numpy as np
+    region, _ = _region("tests/data/2026-10-30_windowed_wireweb_1.png")
+    present = {d.buff_id for d in detect_buffs(region, catalog, (0, 50))}
+    engine = BuffEngine(catalog, list(catalog), anchor_id="premium_battle", favorites=False)
+    got = engine.tick(region, 0.0)
+    assert got.anchor == ("premium_battle" in present) and got.seen
+    blank = BuffEngine(catalog, list(catalog), anchor_id="premium_battle", favorites=False).tick(
+        np.zeros_like(region), 0.0)
+    assert blank.anchor is False and not blank.seen
+    assert BuffEngine(catalog, list(catalog), anchor_id=None, favorites=False).tick(region, 0.0).anchor is None

@@ -307,11 +307,16 @@ def set_reporter(fn) -> None:
     _reporter = fn
 
 
-def report(key: str, ok: bool, frame_id=None) -> None:
+def report(key: str, ok: bool, frame_id=None, strong: bool | None = None) -> None:
     """기능이 자기 영역을 한 번 읽은 결과(찾기 엔진의 다시 찾기·확정 판단용). 꺼짐이면 아무것도 안 함(비용 0).
-    자동으로 찾은 자리가 아닌 데서(직접 지정 고정·저장 영역 v1) 읽은 결과는 'UI 보임' 신호로만 쓴다(auto=False)."""
+    자동으로 찾은 자리가 아닌 데서(직접 지정 고정·저장 영역 v1) 읽은 결과는 'UI 보임' 신호로만 쓴다(auto=False).
+    strong: '확실히 제자리' 신호(버프 = 기준 버프 보임) — 새 자리 확정은 이것까지 보여야 한다(None이면 ok만)."""
     if _active and _reporter is not None:
-        _reporter(key, bool(ok), frame_id, source(key) == "auto" or key not in _saved)
+        auto = source(key) == "auto" or key not in _saved
+        if strong is None:
+            _reporter(key, bool(ok), frame_id, auto)
+        else:
+            _reporter(key, bool(ok), frame_id, auto, bool(strong))
 
 
 def region_property(key: str, attr: str = "_region"):

@@ -61,7 +61,7 @@ class _TrackWorker(QThread):
     alerted = Signal(list)  # list[buff_id] (1차 만료임박)
     alerted2 = Signal(list)  # list[buff_id] (2차 막차 경고)
     foreground_changed = Signal(bool, bool)  # (게임 활성, 자기 앱 활성)
-    health = Signal(bool)  # 자동 찾기 v2: 영역에서 버프가 읽혔나(0.5초에 한 번까지, v2 켜짐일 때만)
+    health = Signal(object)  # 자동 찾기 v2: (버프가 읽혔나, 기준 버프 보였나|None) — 0.5초에 한 번까지, v2 켜짐일 때만
 
     def __init__(
         self,
@@ -143,7 +143,7 @@ class _TrackWorker(QThread):
             now = time.monotonic()
             if now - self._health_at >= 0.5:
                 self._health_at = now
-                self.health.emit(bool(seen))
+                self.health.emit((bool(seen), getattr(result, "anchor", None)))
         if result.alerts:
             self.alerted.emit(result.alerts)
         if result.alerts2:
@@ -220,7 +220,7 @@ class BuffController(QObject):
                                  (self._worker.alerted, self._on_alerted),
                                  (self._worker.alerted2, self._on_alerted2),
                                  (self._worker.foreground_changed, self._on_foreground_changed),
-                                 (self._worker.health, lambda ok: autofind_regions.report("buff", ok))):
+                                 (self._worker.health, lambda h: autofind_regions.report("buff", h[0], strong=h[1]))):
             signal.connect(lambda *args, callback=callback: callback(*args)
                            if self._generation == generation else None)
         self._worker.start()

@@ -4,6 +4,10 @@
     "tests/test_music_buff.py",
     "tests/test_music_auction.py",
     "tests/test_cursor_fx.py",
+    "tests/test_buff_4k_icons.py",
+    "tests/test_autofind_fallback.py",
+    "tests/test_autofind_v2_controller.py",
+    "tests/test_autofind_v2_engine.py",
     "tests/test_navigation.py",
     "tests/test_craft_width.py",
     "tests/test_tracker_layout.py",
@@ -20,6 +24,39 @@
     "tests/test_release_notes_trigger.py"
   ],
   "coverage": {
+    "src/mabinogi_addon/autofind_v2.py": {
+      "tests": [
+        "tests/test_autofind_v2_engine.py",
+        "tests/test_autofind_v2_controller.py"
+      ],
+      "reason": "포커스 복귀 유예(다시 찾기·새 자리 시험 없음), 버프 새 자리는 앵커까지, 확정한 새 자리에서 못 읽으면 바로 앞 자리부터"
+    },
+    "src/mabinogi_addon/autofind_regions.py": {
+      "tests": [
+        "tests/test_autofind_fallback.py",
+        "tests/test_autofind_v2_controller.py"
+      ],
+      "reason": "report(strong) 전달 — 없으면 예전 그대로"
+    },
+    "src/mabinogi_addon/tracker/engine.py": {
+      "tests": [
+        "tests/test_buff_4k_icons.py"
+      ],
+      "reason": "TickResult.anchor(기준 버프 보임) — 자동 찾기 v2 새 자리 확정용"
+    },
+    "src/mabinogi_addon/ui/buff_controller.py": {
+      "tests": [
+        "tests/test_autofind_v2_controller.py",
+        "tests/test_buff_4k_icons.py"
+      ],
+      "reason": "health (seen, anchor) → report(strong)"
+    },
+    "src/mabinogi_addon/ui/autofind_v2_controller.py": {
+      "tests": [
+        "tests/test_autofind_v2_controller.py"
+      ],
+      "reason": "그사이 게임에서 나갔다 온 다시 찾기 결과 버림, 바로 앞 자리 시험 기록"
+    },
     "src/mabinogi_addon/market/music_auction.py": {
       "tests": [
         "tests/test_music_auction.py"

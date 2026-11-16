@@ -524,3 +524,61 @@ def test_perf_meter_lists_autofind_jobs(app):
     names = {name for name, _thread in perf_meter.take()}
     assert {"자동 찾기", "자동 찾기·처음", "자동 찾기·UI 확인"} <= names
     c.shutdown()
+
+
+def test_research_captured_while_leaving_game_is_dropped_and_retried_after_grace(app, caplog):
+    """0.52.0 후보 버그(app.log 11-16): 다시 찾기가 게임으로 돌아오는 순간 찍혀 엉뚱한 자리를 버프로 확정.
+    찍는 사이 게임에서 나갔다 오면 그 결과는 버리고(실패 아님), 유예(5초) 뒤 다시 찾는다."""
+    import logging
+
+    from mabinogi_addon import autofind_v2 as v2
+    c, clock, cap, fnd, watcher, _ = _make(app, wanted=lambda k: k == "buff")
+    _run(c, clock, 1.5)
+    autofind_regions.report("buff", False)
+    caplog.set_level(logging.INFO)
+    while not any("다시 찾기: 버프" in r.message for r in caplog.records):
+        clock.t += 0.5
+        autofind_regions.report("buff", False)
+        c.tick()
+    fnd.boxes["buff"] = (353, 343, 304, 1097)       # 그 순간 화면엔 엉뚱한 자리
+    watcher.active = False                           # 결과를 받기 전에 게임에서 나갔다
+    clock.t += 0.5
+    c.tick()
+    watcher.active = True                            # 돌아옴
+    clock.t += 0.5
+    c.tick()
+    assert any("다시 찾기 결과 버림" in r.message for r in caplog.records)
+    it = c.engine.items["buff"]
+    assert it.candidate is None and it.failures == 0 and it.box == (1700, 200, 30, 300)
+    fnd.boxes["buff"] = (1700, 210, 30, 300)        # 제대로 보이는 화면
+    caplog.clear()
+    t0 = clock.t
+    while clock.t - t0 < v2.FOCUS_GRACE - 0.5:
+        clock.t += 0.5
+        autofind_regions.report("buff", False)
+        c.tick()
+        assert not any("다시 찾기: 버프" in r.message for r in caplog.records)  # 유예 중엔 안 찾음
+    for _ in range(4):
+        clock.t += 0.5
+        autofind_regions.report("buff", False)
+        c.tick()
+    assert any("다시 찾기: 버프" in r.message for r in caplog.records)
+    assert c.engine.items["buff"].candidate.box == (1700, 210, 30, 300)
+
+
+def test_buff_trial_needs_anchor_signal(app):
+    """버프 새 자리는 기준 버프(앵커)가 보여야 확정 — report(strong=False)면 아이콘이 보여도 확정 안 됨."""
+    c, clock, *_ = _make(app, wanted=lambda k: k == "buff")
+    _run(c, clock, 1.5)
+    gen = c.engine.start_search(["buff"])
+    c.engine.search_result(gen, "buff", (353, 343, 304, 1097), clock.t)
+    for _ in range(12):
+        clock.t += 0.5
+        autofind_regions.report("buff", True, strong=False)
+    assert c.engine.items["buff"].box == (1700, 200, 30, 300)
+    gen = c.engine.start_search(["buff"])
+    c.engine.search_result(gen, "buff", (1700, 210, 30, 300), clock.t)
+    for _ in range(8):
+        clock.t += 0.5
+        autofind_regions.report("buff", True, strong=True)
+    assert c.engine.items["buff"].box == (1700, 210, 30, 300)

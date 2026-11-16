@@ -7,6 +7,11 @@ Qt·캡처와 분리된 상태 기계다. 시계·프레임·탐지기를 밖에
   (0.39.0 CPU 상승 원인: 안정 뒤에도 0.5초마다 움직이는 항목을 직접 찍어 판독하고, 대기 항목 전체 탐색을 돌렸다).
 - 다시 찾기(3.3): 10초 넘게 못 읽은 켜진 항목만, 3번 연속 실패하면 1분 간격, 다시 읽히면 초기화. 게임이 앞에 없는 동안은 시간을 세지 않는다.
 - 새 자리 확정: 새 자리에서 새 판독이 약 3초 연속 성공해야 확정(실패 한 번이면 처음부터, 10초 안에 못 하면 실패 1회).
+  버프는 '아이콘 하나라도 보임'이 아니라 기준 버프(앵커)까지 보여야 성공으로 센다(strong — 0.52.0 후보 QA: 엉뚱한 자리 확정).
+- 포커스 복귀 유예(0.52.0): 게임이 뒤에 갔다 앞에 오면 FOCUS_GRACE초 동안은 다시 찾기를 시작하지 않고 새 자리 시험도 세지 않는다
+  (돌아오는 순간엔 다른 창이 남은 화면이 찍힐 수 있다). 그 사이 시작된 다시 찾기 결과는 버린다.
+- 지난 자리로 돌아가 보기(0.52.0): 다시 찾기로 확정한 새 자리에서 LOST_SECONDS 넘게 못 읽으면, 화면 전체를 다시 찾기 전에
+  바로 앞까지 잘 읽히던 자리를 먼저 시험(3초 연속이면 그 자리로 확정, 못 하면 실패 1회 → 보통 다시 찾기).
 - 나타나면 찾기(3.4): 대기 항목은 예상 자리만 1초에 1번, 화면 전체는 60초에 1번.
 - 게임 창 크기·재시작: 세대 번호를 올리고 진행 결과를 버린 뒤 처음 찾기부터.
 """
@@ -30,6 +35,7 @@ SLOW_RETRY_SECONDS = 60.0
 SLOW_AFTER = 3          # 연속 실패 횟수 → 1분 간격
 CONFIRM_SECONDS = 3.0
 TRIAL_LIMIT = 10.0      # 새 자리 시험 상한
+FOCUS_GRACE = 5.0      # 게임으로 돌아온 뒤 이만큼은 다시 찾기·새 자리 시험 없음(사라짐 경고 유예와 같은 5초)
 APPEAR_SMALL_EVERY = 1.0
 APPEAR_FULL_EVERY = 60.0
 PENDING_FULL_EVERY = 300.0  # 지난 자리(확인 전) 보스바·전투 시간: 화면 전체 확인은 5분에 한 번(게임 UI 배율을 바꾼 경우 대비)
@@ -83,6 +89,7 @@ class Item:
     pending: bool = False     # 지난 자리를 바로 씀 — 그 자리에서 아직 읽히지 않음(보스바·전투 시간, 나타나면 확인)
     bad_since: float = 0.0    # 못 읽기 시작한 시각
     hidden_since_ok: bool = False  # UI가 안 보이기 전에, 다른 것은 읽히는데 이것만 못 읽던 항목(다시 보여도 그대로 — 간격 유지)
+    fallback: tuple | None = None  # 다시 찾기로 새 자리를 확정하기 직전까지 쓰던 자리(새 자리에서 못 읽으면 먼저 돌아가 봄)
 
     def label(self, now: float | None = None) -> str:
         if self.user:
@@ -249,6 +256,9 @@ class Engine:
         self.ui_hidden = False
         self.last_ok = float("-inf")  # 기능 판독이 마지막으로 읽힌 시각(하나라도 읽히면 UI 보임)
         self.next_ui_check = 0.0
+        self._away = False                   # 게임이 앞에 없던 적이 있음(돌아오면 유예 시작)
+        self.resume_until = float("-inf")    # 포커스 복귀 유예 끝 시각
+        self.resumes = 0                     # 게임으로 돌아온 횟수(그 사이 시작한 다시 찾기 결과를 버리는 기준)
 
     # ---- 단계 -------------------------------------------------------------------------------
     def reset(self, now: float, phase: str = "waiting_ui") -> None:
@@ -307,9 +317,14 @@ class Engine:
         """0.5초쯤마다. 게임이 앞에 없으면 시간을 세지 않는다(못 읽은 시간·시험 시간 모두)."""
         if running and self.last_tick is None:
             self.next_ui_check = now  # 게임 창이 다시 앞에 옴 → 바로 'UI 보이나' 확인(명세 6.1 ③)
+        if running and self._away:
+            self._away = False
+            self.resume_until = now + FOCUS_GRACE
+            self.resumes += 1
         dt = 0.0 if self.last_tick is None else min(1.0, max(0.0, now - self.last_tick))
         self.last_tick = now if running else None
         if not running:
+            self._away = True
             for it in self.items.values():
                 if it.candidate is not None:
                     it.candidate.pause()
@@ -320,9 +335,14 @@ class Engine:
             if it.unhealthy and it.candidate is None:
                 it.lost += dt
 
-    def note_read(self, key: str, ok: bool, now: float, frame_id=None) -> str | None:
+    def in_grace(self, now: float) -> bool:
+        """게임으로 돌아온 직후 유예 중(다시 찾기·새 자리 시험 없음)."""
+        return now < self.resume_until
+
+    def note_read(self, key: str, ok: bool, now: float, frame_id=None, strong: bool | None = None) -> str | None:
         """기능의 판독 한 번. 시험 중이면 확정 판단 — 'confirmed'/'failed'/None.
-        지난 자리(확인 전)에서 처음 읽히면 'confirmed_last'."""
+        지난 자리(확인 전)에서 처음 읽히면 'confirmed_last'.
+        strong: 그 기능의 '확실히 제자리' 신호(버프 = 기준 버프 보임). False면 ok여도 새 자리 시험에선 실패로 센다."""
         it = self.items.get(key)
         if it is None or self.phase == "off":
             return None
@@ -332,7 +352,15 @@ class Engine:
             if it.candidate.generation != self.generation:
                 it.candidate = None
                 return None
-            if it.candidate.observe(frame_id=now if frame_id is None else frame_id, now=now, ok=ok):
+            if self.in_grace(now):
+                it.candidate.pause()  # 돌아온 순간의 화면은 세지 않는다
+                return None
+            if it.candidate.observe(frame_id=now if frame_id is None else frame_id, now=now,
+                                    ok=ok and strong is not False):
+                if it.candidate.box == it.fallback:
+                    it.fallback = None  # 바로 앞 자리로 돌아와 확정(엉뚱했던 자리는 기억하지 않음)
+                elif it.box is not None and tuple(it.box) != tuple(it.candidate.box) and it.status == FOUND:
+                    it.fallback = tuple(it.box)  # 새 자리에서 못 읽으면 먼저 돌아가 볼 자리
                 it.box, it.status, it.source = it.candidate.box, FOUND, "research"
                 it.candidate = None
                 it.lost, it.unhealthy, it.failures = 0.0, False, 0
@@ -392,9 +420,24 @@ class Engine:
             return "visible"
         return None
 
+    def revert_due(self, now: float, wanted) -> list[tuple[str, tuple]]:
+        """다시 찾기로 확정한 새 자리에서 LOST_SECONDS 넘게 못 읽은 항목 → 화면 전체를 찾기 전에 바로 앞 자리를 먼저 시험.
+        시험을 시작한 (항목, 자리) 목록. 유예·UI 안 보임이면 없음."""
+        if self.phase != "stable" or self.ui_hidden or self.in_grace(now):
+            return []
+        out = []
+        for key, it in self.items.items():
+            if (it.fallback is None or it.user or it.candidate is not None or not wanted(key)
+                    or not (it.unhealthy and it.lost > LOST_SECONDS)):
+                continue
+            it.candidate = Trial(it.fallback, self.generation, now)
+            out.append((key, it.fallback))
+        return out
+
     def due(self, now: float, wanted) -> list[str]:
-        """다시 찾을 항목(켜진 기능만): 10초 넘게 못 읽음, 또는 처음에 못 찾음 — 다음 시도 시각이 됐을 때. UI가 안 보이면 없음."""
-        if self.phase != "stable" or self.ui_hidden:
+        """다시 찾을 항목(켜진 기능만): 10초 넘게 못 읽음, 또는 처음에 못 찾음 — 다음 시도 시각이 됐을 때.
+        UI가 안 보이거나 게임으로 돌아온 직후(유예)면 없음."""
+        if self.phase != "stable" or self.ui_hidden or self.in_grace(now):
             return []
         out = []
         for key, it in self.items.items():
@@ -418,6 +461,8 @@ class Engine:
         if it.user:
             return False
         if box is None:
+            if it.fallback is not None and it.box is not None:
+                it.fallback = None  # 지난 자리도 못 읽었고 화면에도 없음 — 이후엔 보통 다시 찾기
             self._failed(it, now, "화면에서 못 찾음")
             return True
         if it.box is not None and tuple(box) == tuple(it.box):
