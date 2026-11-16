@@ -388,9 +388,12 @@ class MainWindow(QMainWindow):
         # 제작 재료 계산기(docs/craft-material-calculator-spec.md, 0.50.0 모든 사용자): 환전비율·던전 입장 사이(사용자 결정 11-15)
         from .craft_tab import CraftTab
         self.craft_tab = CraftTab()
+        # 음악 버프 계산기(docs/music-buff-calculator-spec.md, 0.52.0 모든 사용자): 계산기 줄 끝(던전 입장 다음)
+        from .music_buff_tab import MusicBuffTab
+        self.music_buff_tab = MusicBuffTab()
         for page, title in ((self.distribution_tab, "분배 계산기"), (self.bead_split_tab, "구슬 분배 계산기"),
                             (self.exchange_tab, "환전비율 계산기"), (self.craft_tab, "제작 재료 계산기"),
-                            (self.dungeon_cost_tab, "던전 입장 계산기")):
+                            (self.dungeon_cost_tab, "던전 입장 계산기"), (self.music_buff_tab, "음악 버프 계산기")):
             self._convenience_tabs.addTab(_scrolled(page), title)
         self._convenience_tabs.addTab(self._sketch_scroll, "그림대화 만들기")
         # 알람(alarm-spec, 0.48.0): PC 시계 기준. 판정은 최적화 화면의 0.25초 주기에서(아래 tick_hooks)

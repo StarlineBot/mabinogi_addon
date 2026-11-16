@@ -2194,3 +2194,16 @@ def set_craft_last(series: str, item: str, path: Path = LOCAL_CONFIG_PATH) -> No
     sec["lastSeries"], sec["lastItem"] = series, items
     data["craftCalculator"] = sec
     _write_local_config(data, path)
+
+
+# ---- 음악 버프 계산기(docs/music-buff-calculator-spec.md, 0.52.0) — 설정 내보내기·동기화 대상 ----
+def load_music_buff(path: Path = LOCAL_CONFIG_PATH) -> dict:
+    """입력 원본(dict). 표에 없는 값 정리는 계산 쪽 `market.music_buff.normalize`가 한다."""
+    raw = _read_local_config(path).get("musicBuff")
+    return raw if isinstance(raw, dict) else {}
+
+
+def save_music_buff(state: dict, path: Path = LOCAL_CONFIG_PATH) -> None:
+    data = _read_local_config(path)
+    data["musicBuff"] = state
+    _write_local_config(data, path)

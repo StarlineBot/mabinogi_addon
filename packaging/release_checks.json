@@ -1,6 +1,9 @@
 {
   "version": "0.52.0",
   "tests": [
+    "tests/test_music_buff.py",
+    "tests/test_cursor_fx.py",
+    "tests/test_navigation.py",
     "tests/test_dialogue_login.py",
     "tests/test_dialogue_tips.py",
     "tests/test_creator_dialogue.py",
@@ -13,6 +16,37 @@
     "tests/test_release_notes_trigger.py"
   ],
   "coverage": {
+    "src/mabinogi_addon/market/music_buff.py": {
+      "tests": [
+        "tests/test_music_buff.py"
+      ],
+      "reason": "음악 버프 공식(명세 3절)·test_vectors 4개·세인트 바드 확률 분기·에코스톤 큰 쪽·표에 없는 값 '없음'"
+    },
+    "src/mabinogi_addon/assets/music_buff/music_buff_tables.json": {
+      "tests": [
+        "tests/test_music_buff.py"
+      ],
+      "reason": "기획 표와 같음, 지속·풍년가 없음, buff > 0, 이름 중복 없음"
+    },
+    "src/mabinogi_addon/ui/music_buff_tab.py": {
+      "tests": [
+        "tests/test_music_buff.py"
+      ],
+      "reason": "위 결과 고정·아래 2단 스크롤, 보너스뎀 줄은 세인트 바드일 때만, 즉시 저장·재시작 복원"
+    },
+    "src/mabinogi_addon/ui/feature_copy.py": {
+      "tests": [
+        "tests/test_music_buff.py",
+        "tests/test_navigation.py"
+      ],
+      "reason": "음악 버프 계산기 머리 설명"
+    },
+    "tests/test_music_buff.py": {
+      "tests": [
+        "tests/test_music_buff.py"
+      ],
+      "reason": "음악 버프 명세 5절 테스트"
+    },
     "src/mabinogi_addon/creator_dialogue.py": {
       "tests": [
         "tests/test_dialogue_login.py",
@@ -30,15 +64,19 @@
     },
     "src/mabinogi_addon/ui/main_window.py": {
       "tests": [
-        "tests/test_dialogue_login.py"
+        "tests/test_dialogue_login.py",
+        "tests/test_navigation.py",
+        "tests/test_cursor_fx.py",
+        "tests/test_music_buff.py"
       ],
-      "reason": "open_account — 설정 › 계정, 로그인 버튼이 보이게"
+      "reason": "open_account(설정 › 계정) · 편의기능 탭 순서에 음악 버프 계산기"
     },
     "src/mabinogi_addon/config.py": {
       "tests": [
-        "tests/test_dialogue_login.py"
+        "tests/test_dialogue_login.py",
+        "tests/test_music_buff.py"
       ],
-      "reason": "loginInvite 기록(설정 동기화 대상)"
+      "reason": "loginInvite·musicBuff 기록(설정 내보내기·동기화 대상)"
     },
     "src/mabinogi_addon/assets/dialogues.json": {
       "tests": [
