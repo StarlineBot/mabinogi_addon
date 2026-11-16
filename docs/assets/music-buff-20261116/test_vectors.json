@@ -1,0 +1,314 @@
+[
+ {
+  "name": "사이트 기본 화면(타이틀 없음) — 사이트 표시값과 일치 확인됨",
+  "master_title": false,
+  "input": {},
+  "expected": {
+   "prob": {
+    "normal": 80.0,
+    "excellent": 16.6667,
+    "divine": 3.3333
+   },
+   "overture": {
+    "normal": {
+     "damage": 33.17,
+     "critical": 17.05,
+     "bonus_damage": null
+    },
+    "excellent": {
+     "damage": 36.487,
+     "critical": 18.755,
+     "bonus_damage": null
+    },
+    "divine": {
+     "damage": 43.121,
+     "critical": 22.165,
+     "bonus_damage": null
+    }
+   },
+   "vivace": {
+    "normal": {
+     "magic_attack": 33.17,
+     "magic_cast_speed": 17.05,
+     "attack_speed": 17.05,
+     "alchemy_cast_speed": 17.05,
+     "bonus_damage": null
+    },
+    "excellent": {
+     "magic_attack": 36.487,
+     "magic_cast_speed": 18.755,
+     "attack_speed": 18.755,
+     "alchemy_cast_speed": 18.755,
+     "bonus_damage": null
+    },
+    "divine": {
+     "magic_attack": 43.121,
+     "magic_cast_speed": 22.165,
+     "attack_speed": 22.165,
+     "alchemy_cast_speed": 22.165,
+     "bonus_damage": null
+    }
+   },
+   "march": {
+    "normal": {
+     "move_speed": 18.6
+    },
+    "excellent": {
+     "move_speed": 20.46
+    },
+    "divine": {
+     "move_speed": 24.18
+    }
+   }
+  }
+ },
+ {
+  "name": "앱 기본(입력 없음, 곡별 마스터 +8)",
+  "master_title": true,
+  "input": {},
+  "expected": {
+   "prob": {
+    "normal": 80.0,
+    "excellent": 16.6667,
+    "divine": 3.3333
+   },
+   "overture": {
+    "normal": {
+     "damage": 34.882,
+     "critical": 17.93,
+     "bonus_damage": null
+    },
+    "excellent": {
+     "damage": 38.3702,
+     "critical": 19.723,
+     "bonus_damage": null
+    },
+    "divine": {
+     "damage": 45.3466,
+     "critical": 23.309,
+     "bonus_damage": null
+    }
+   },
+   "vivace": {
+    "normal": {
+     "magic_attack": 34.882,
+     "magic_cast_speed": 17.93,
+     "attack_speed": 17.93,
+     "alchemy_cast_speed": 17.93,
+     "bonus_damage": null
+    },
+    "excellent": {
+     "magic_attack": 38.3702,
+     "magic_cast_speed": 19.723,
+     "attack_speed": 19.723,
+     "alchemy_cast_speed": 19.723,
+     "bonus_damage": null
+    },
+    "divine": {
+     "magic_attack": 45.3466,
+     "magic_cast_speed": 23.309,
+     "attack_speed": 23.309,
+     "alchemy_cast_speed": 23.309,
+     "bonus_damage": null
+    }
+   },
+   "march": {
+    "normal": {
+     "move_speed": 19.56
+    },
+    "excellent": {
+     "move_speed": 21.516
+    },
+    "divine": {
+     "move_speed": 25.428
+    }
+   }
+  }
+ },
+ {
+  "name": "시안 예시(리라·폴리포니 9·템포 5·특개 6·세공·세인트 바드)",
+  "master_title": true,
+  "input": {
+   "secondary_title": "renen_miir",
+   "instrument": "lyre",
+   "inst_prefix": "inst_polyphony_7",
+   "inst_suffix": "inst_tempo_3",
+   "special_mod": 6,
+   "inst_reforge": [
+    [
+     "inst_music_buff",
+     20
+    ],
+    [
+     "inst_divine_effect",
+     10
+    ]
+   ],
+   "head_equipment": "head_fluia_4",
+   "head_suffix": "head_chorus_3",
+   "armor_prefix": "armor_sonata_6",
+   "gloves_prefix": "gloves_soloist",
+   "shoes_reforge": [
+    [
+     "shoes_vivace_attack",
+     4
+    ]
+   ],
+   "acc1_reforge": [
+    [
+     "acc_divine_effect",
+     4
+    ]
+   ],
+   "horn": "sweet_rose_horn",
+   "cloud_cushion": true,
+   "music_boost_potion": true,
+   "saint_bard_arcana": true
+  },
+  "expected": {
+   "prob": {
+    "normal": 80.0,
+    "excellent": 16.6667,
+    "divine": 3.3333
+   },
+   "overture": {
+    "normal": {
+     "damage": 51.6328,
+     "critical": 25.63,
+     "bonus_damage": 5.1633
+    },
+    "excellent": {
+     "damage": 56.7961,
+     "critical": 28.193,
+     "bonus_damage": 5.6796
+    },
+    "divine": {
+     "damage": 74.3512,
+     "critical": 36.9072,
+     "bonus_damage": 7.4351
+    }
+   },
+   "vivace": {
+    "normal": {
+     "magic_attack": 51.6328,
+     "magic_cast_speed": 25.63,
+     "attack_speed": 34.95,
+     "alchemy_cast_speed": 25.63,
+     "bonus_damage": 5.1633
+    },
+    "excellent": {
+     "magic_attack": 56.7961,
+     "magic_cast_speed": 28.193,
+     "attack_speed": 38.445,
+     "alchemy_cast_speed": 28.193,
+     "bonus_damage": 5.6796
+    },
+    "divine": {
+     "magic_attack": 74.3512,
+     "magic_cast_speed": 36.9072,
+     "attack_speed": 50.328,
+     "alchemy_cast_speed": 36.9072,
+     "bonus_damage": 7.4351
+    }
+   },
+   "march": {
+    "normal": {
+     "move_speed": 27.96
+    },
+    "excellent": {
+     "move_speed": 30.756
+    },
+    "divine": {
+     "move_speed": 40.2624
+    }
+   }
+  }
+ },
+ {
+  "name": "글루미·확률 세공·펫 하모니·주화·유물·성수",
+  "master_title": true,
+  "input": {
+   "instrument": "gloomy",
+   "inst_reforge": [
+    [
+     "inst_excellent_rate",
+     9
+    ],
+    [
+     "inst_divine_rate",
+     8
+    ]
+   ],
+   "acc1_reforge": [
+    [
+     "acc_divine_rate",
+     4
+    ]
+   ],
+   "pet": "red_fairy_dragon",
+   "brirehe_attack": 1,
+   "tala_attack": 0.5,
+   "relic_suffix_count": 3,
+   "relic_prefix_count": 2,
+   "murias_holy_water": 8
+  },
+  "expected": {
+   "prob": {
+    "normal": 38.0952,
+    "excellent": 41.2698,
+    "divine": 20.6349
+   },
+   "overture": {
+    "normal": {
+     "damage": 34.6112,
+     "critical": 18.59,
+     "bonus_damage": null
+    },
+    "excellent": {
+     "damage": 38.0314,
+     "critical": 20.427,
+     "bonus_damage": null
+    },
+    "divine": {
+     "damage": 44.8717,
+     "critical": 24.101,
+     "bonus_damage": null
+    }
+   },
+   "vivace": {
+    "normal": {
+     "magic_attack": 34.2016,
+     "magic_cast_speed": 18.37,
+     "attack_speed": 18.37,
+     "alchemy_cast_speed": 18.37,
+     "bonus_damage": null
+    },
+    "excellent": {
+     "magic_attack": 37.6218,
+     "magic_cast_speed": 20.207,
+     "attack_speed": 20.207,
+     "alchemy_cast_speed": 20.207,
+     "bonus_damage": null
+    },
+    "divine": {
+     "magic_attack": 44.4621,
+     "magic_cast_speed": 23.881,
+     "attack_speed": 23.881,
+     "alchemy_cast_speed": 23.881,
+     "bonus_damage": null
+    }
+   },
+   "march": {
+    "normal": {
+     "move_speed": 20.04
+    },
+    "excellent": {
+     "move_speed": 22.044
+    },
+    "divine": {
+     "move_speed": 26.052
+    }
+   }
+  }
+ }
+]

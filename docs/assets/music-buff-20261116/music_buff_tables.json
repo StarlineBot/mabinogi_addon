@@ -1,0 +1,894 @@
+{
+ "source": "It's 마비노기 음악 버프 계산기(itsmabi.com) 스크립트의 표를 글자로 읽어 정리(2026-11-16). 지속시간·풍년가·랭크 표 제외.",
+ "fixed": {
+  "skill_rank_buff": {
+   "악기연주": 15,
+   "노래": 15
+  },
+  "master_title_buff": 8,
+  "quality_weights": {
+   "normal": 24,
+   "excellent": 5,
+   "divine": 1
+  },
+  "grandmaster_buff": 5
+ },
+ "effects_rank1": {
+  "overture": {
+   "damage": 20,
+   "critical": 11
+  },
+  "vivace": {
+   "magicAttack": 20,
+   "speed": 11
+  },
+  "march": {
+   "moveSpeed": 12
+  }
+ },
+ "instruments": [
+  {
+   "id": "lyre",
+   "name": "소울 리버레이트 리라",
+   "baseDuration": 0,
+   "defaultModBonus": 25,
+   "defaultGradeBonus": 7,
+   "hasMasterGrade": true
+  },
+  {
+   "id": "gloomy",
+   "name": "데모닉 글루미 선데이",
+   "baseDuration": 0,
+   "defaultModBonus": 16,
+   "defaultGradeBonus": 0,
+   "hasMasterGrade": false
+  }
+ ],
+ "special_mod_bonus": {
+  "0": 0,
+  "1": 0.5,
+  "2": 1,
+  "3": 1.5,
+  "4": 2.3,
+  "5": 3,
+  "6": 3.8,
+  "7": 4.5,
+  "8": 5.5
+ },
+ "enchants": {
+  "instrument": {
+   "prefix": [
+    {
+     "id": "inst_andante",
+     "name": "안단테 (+1)",
+     "buff": 1
+    },
+    {
+     "id": "inst_moderato",
+     "name": "모데라토 (+2)",
+     "buff": 2
+    },
+    {
+     "id": "inst_allegro",
+     "name": "알레그로 (+3)",
+     "buff": 3
+    },
+    {
+     "id": "inst_ensemble",
+     "name": "조화(앙상블) (+5)",
+     "buff": 5
+    },
+    {
+     "id": "inst_polyphony_4",
+     "name": "폴리포니 (+6)",
+     "buff": 6
+    },
+    {
+     "id": "inst_polyphony_5",
+     "name": "폴리포니 (+7)",
+     "buff": 7
+    },
+    {
+     "id": "inst_polyphony_6",
+     "name": "폴리포니 (+8)",
+     "buff": 8
+    },
+    {
+     "id": "inst_polyphony_7",
+     "name": "폴리포니 (+9)",
+     "buff": 9
+    }
+   ],
+   "suffix": [
+    {
+     "id": "inst_code",
+     "name": "코드 (+1)",
+     "buff": 1
+    },
+    {
+     "id": "inst_tempo_2",
+     "name": "템포 (+4)",
+     "buff": 4
+    },
+    {
+     "id": "inst_tempo_3",
+     "name": "템포 (+5)",
+     "buff": 5
+    }
+   ]
+  },
+  "head": {
+   "equipment": [
+    {
+     "id": "head_fluia_2",
+     "name": "플루아의 풀잎 관 (+2)",
+     "buff": 2
+    },
+    {
+     "id": "head_fluia_3",
+     "name": "플루아의 풀잎 관 (+3)",
+     "buff": 3
+    },
+    {
+     "id": "head_fluia_4",
+     "name": "플루아의 풀잎 관 (+4)",
+     "buff": 4
+    }
+   ],
+   "suffix": [
+    {
+     "id": "head_chorus_2",
+     "name": "코러스 (+2)",
+     "buff": 2
+    },
+    {
+     "id": "head_chorus_3",
+     "name": "코러스 (+3)",
+     "buff": 3
+    }
+   ]
+  },
+  "armor": {
+   "prefix": [
+    {
+     "id": "armor_encore",
+     "name": "앙코르 (+3)",
+     "buff": 3
+    },
+    {
+     "id": "armor_sonata_4",
+     "name": "소나타 (+4)",
+     "buff": 4
+    },
+    {
+     "id": "armor_sonata_5",
+     "name": "소나타 (+5)",
+     "buff": 5
+    },
+    {
+     "id": "armor_sonata_6",
+     "name": "소나타 (+6)",
+     "buff": 6
+    },
+    {
+     "id": "armor_comfort",
+     "name": "안락의 (+4)",
+     "buff": 4
+    }
+   ]
+  },
+  "gloves": {
+   "prefix": [
+    {
+     "id": "gloves_soloist",
+     "name": "솔리스트 (+2)",
+     "buff": 2
+    }
+   ]
+  },
+  "shoes": {
+   "prefix": [
+    {
+     "id": "shoes_soloist",
+     "name": "솔리스트 (+2)",
+     "buff": 2
+    },
+    {
+     "id": "shoes_janheo",
+     "name": "잔허의 (+2)",
+     "buff": 2
+    }
+   ]
+  },
+  "accessory": {
+   "prefix": [
+    {
+     "id": "acc_andante",
+     "name": "안단테 (+1)",
+     "buff": 1
+    },
+    {
+     "id": "acc_lively_1",
+     "name": "활발한 (+1)",
+     "buff": 1
+    },
+    {
+     "id": "acc_lively_2",
+     "name": "활발한 (+2)",
+     "buff": 2
+    },
+    {
+     "id": "acc_sobokan",
+     "name": "소복한 (+1)",
+     "buff": 1
+    }
+   ],
+   "suffix": [
+    {
+     "id": "acc_cadenza",
+     "name": "카덴차 (+1)",
+     "buff": 1
+    }
+   ]
+  }
+ },
+ "reforge_options": {
+  "instrument": [
+   {
+    "id": "inst_music_buff",
+    "name": "악기 연주 효과",
+    "max": 25
+   },
+   {
+    "id": "inst_divine_rate",
+    "name": "신들린 연주 비율",
+    "max": 8
+   },
+   {
+    "id": "inst_divine_effect",
+    "name": "신들린 연주 효과",
+    "max": 13
+   },
+   {
+    "id": "inst_excellent_rate",
+    "name": "훌륭한 연주 비율",
+    "max": 9
+   },
+   {
+    "id": "inst_excellent_effect",
+    "name": "훌륭한 연주 효과",
+    "max": 13
+   },
+   {
+    "id": "inst_normal_effect",
+    "name": "보통 연주 효과",
+    "max": 13
+   }
+  ],
+  "shoes": [
+   {
+    "id": "shoes_vivace_magic",
+    "name": "비바체 마법 시전 속도",
+    "max": 4
+   },
+   {
+    "id": "shoes_vivace_attack",
+    "name": "비바체 공격 속도",
+    "max": 4
+   },
+   {
+    "id": "shoes_vivace_alchemy",
+    "name": "비바체 연금술 시전 속도",
+    "max": 4
+   },
+   {
+    "id": "shoes_march_move",
+    "name": "행진곡 도보 이동 속도",
+    "max": 4
+   }
+  ],
+  "accessory": [
+   {
+    "id": "acc_divine_rate",
+    "name": "신들린 연주 비율",
+    "max": 4
+   },
+   {
+    "id": "acc_divine_effect",
+    "name": "신들린 연주 효과",
+    "max": 4
+   },
+   {
+    "id": "acc_excellent_rate",
+    "name": "훌륭한 연주 비율",
+    "max": 4
+   },
+   {
+    "id": "acc_excellent_effect",
+    "name": "훌륭한 연주 효과",
+    "max": 4
+   },
+   {
+    "id": "acc_normal_effect",
+    "name": "보통 연주 효과",
+    "max": 4
+   },
+   {
+    "id": "acc_vivace_magic",
+    "name": "비바체 마법 시전 속도",
+    "max": 4
+   },
+   {
+    "id": "acc_vivace_attack",
+    "name": "비바체 공격 속도",
+    "max": 4
+   },
+   {
+    "id": "acc_vivace_alchemy",
+    "name": "비바체 연금술 시전 속도",
+    "max": 4
+   },
+   {
+    "id": "acc_march_move",
+    "name": "행진곡 도보 이동 속도",
+    "max": 4
+   }
+  ],
+  "ecostone": [
+   {
+    "id": "eco_music_buff",
+    "name": "악기 연주 효과",
+    "max": 20
+   },
+   {
+    "id": "eco_divine_rate",
+    "name": "신들린 연주 비율",
+    "max": 6
+   },
+   {
+    "id": "eco_divine_effect",
+    "name": "신들린 연주 효과",
+    "max": 10
+   },
+   {
+    "id": "eco_excellent_rate",
+    "name": "훌륭한 연주 비율",
+    "max": 6
+   },
+   {
+    "id": "eco_excellent_effect",
+    "name": "훌륭한 연주 효과",
+    "max": 10
+   },
+   {
+    "id": "eco_normal_effect",
+    "name": "보통 연주 효과",
+    "max": 10
+   },
+   {
+    "id": "eco_vivace_magic",
+    "name": "비바체 마법 시전 속도",
+    "max": 6
+   },
+   {
+    "id": "eco_vivace_attack",
+    "name": "비바체 공격 속도",
+    "max": 6
+   },
+   {
+    "id": "eco_vivace_alchemy",
+    "name": "비바체 연금술 시전 속도",
+    "max": 6
+   },
+   {
+    "id": "eco_march_move",
+    "name": "행진곡 도보 이동 속도",
+    "max": 6
+   }
+  ]
+ },
+ "secondary_titles": [
+  {
+   "id": "renen_miir",
+   "name": "레넨의 미이르: 회한",
+   "buff": 10
+  },
+  {
+   "id": "neil",
+   "name": "네일",
+   "buff": 9
+  },
+  {
+   "id": "royal_penguin",
+   "name": "로열 펭귄",
+   "buff": 9
+  },
+  {
+   "id": "jerrier",
+   "name": "제리에",
+   "buff": 9
+  },
+  {
+   "id": "fortissimo",
+   "name": "포르티시모",
+   "buff": 9
+  },
+  {
+   "id": "purple_bard",
+   "name": "스페셜 자색의 음유시인",
+   "buff": 8
+  },
+  {
+   "id": "marued",
+   "name": "마르에드",
+   "buff": 8
+  },
+  {
+   "id": "melwin",
+   "name": "멜윈",
+   "buff": 8
+  },
+  {
+   "id": "ivona",
+   "name": "이보나",
+   "buff": 8
+  },
+  {
+   "id": "forte",
+   "name": "포르테",
+   "buff": 8
+  },
+  {
+   "id": "darkness_special",
+   "name": "스페셜 어둠의 기운",
+   "buff": 8
+  },
+  {
+   "id": "diva",
+   "name": "디바",
+   "buff": 8
+  },
+  {
+   "id": "pianissimo",
+   "name": "피아니시모",
+   "buff": 7
+  },
+  {
+   "id": "kipri_witchhat_atelier",
+   "name": "키프리 (고깔모자의 아틀리에)",
+   "buff": 6
+  },
+  {
+   "id": "dalcom_coffee",
+   "name": "달.콤커피",
+   "buff": 6
+  },
+  {
+   "id": "cheodol",
+   "name": "처돌지 않은 처돌이",
+   "buff": 6
+  },
+  {
+   "id": "hochi",
+   "name": "호치",
+   "buff": 6
+  },
+  {
+   "id": "erin_pass",
+   "name": "에린 패스 정복자",
+   "buff": 5
+  },
+  {
+   "id": "erin_pass_s2",
+   "name": "에린 패스 시즌2 정복자",
+   "buff": 5
+  },
+  {
+   "id": "erin_pass_s3",
+   "name": "에린 패스 시즌3 정복자",
+   "buff": 5
+  },
+  {
+   "id": "darkness",
+   "name": "어둠의 기운",
+   "buff": 5
+  },
+  {
+   "id": "erin_diary_s1",
+   "name": "에린 모험 일지 시즌1 정복자",
+   "buff": 5
+  },
+  {
+   "id": "erin_diary_s3",
+   "name": "에린 모험 일지 시즌3 정복자",
+   "buff": 5
+  },
+  {
+   "id": "mirol",
+   "name": "미르올",
+   "buff": 4
+  },
+  {
+   "id": "enya",
+   "name": "엔야",
+   "buff": 4
+  },
+  {
+   "id": "max_level",
+   "name": "만렙",
+   "buff": 4
+  },
+  {
+   "id": "fantastic_harmony",
+   "name": "판타스틱 하모니",
+   "buff": 4
+  },
+  {
+   "id": "moonflower_moon",
+   "name": "달맞이꽃을 그리워하는 달",
+   "buff": 4
+  },
+  {
+   "id": "blizzard_special",
+   "name": "스페셜 눈보라",
+   "buff": 3
+  },
+  {
+   "id": "hatsune_miku",
+   "name": "하츠네 미쿠",
+   "buff": 3
+  },
+  {
+   "id": "kagamine_len",
+   "name": "카가미네 렌",
+   "buff": 3
+  },
+  {
+   "id": "kagamine_rin",
+   "name": "카가미네 린",
+   "buff": 3
+  },
+  {
+   "id": "kaito",
+   "name": "카이토",
+   "buff": 3
+  },
+  {
+   "id": "mixed",
+   "name": "뒤죽박죽",
+   "buff": 3
+  },
+  {
+   "id": "himeralda",
+   "name": "히메랄다",
+   "buff": 3
+  },
+  {
+   "id": "cold_wind",
+   "name": "스페셜 칼바람",
+   "buff": 3
+  },
+  {
+   "id": "red_star",
+   "name": "스페셜 광명의 붉은별",
+   "buff": 3
+  },
+  {
+   "id": "snowflake_firework",
+   "name": "스페셜 눈송이 폭죽",
+   "buff": 2
+  },
+  {
+   "id": "heavy_snow",
+   "name": "스페셜 함박눈",
+   "buff": 2
+  },
+  {
+   "id": "illa",
+   "name": "일라",
+   "buff": 2
+  },
+  {
+   "id": "hameln",
+   "name": "하멜른",
+   "buff": 2
+  },
+  {
+   "id": "epi",
+   "name": "에피",
+   "buff": 2
+  },
+  {
+   "id": "11th_fantasista",
+   "name": "11주년 판타지스타",
+   "buff": 2
+  },
+  {
+   "id": "rainbow_aurora",
+   "name": "무지개 빛 오로라",
+   "buff": 2
+  },
+  {
+   "id": "superstar_special",
+   "name": "스페셜 슈퍼스타",
+   "buff": 2
+  },
+  {
+   "id": "constellation",
+   "name": "스페셜 별자리와 함께",
+   "buff": 2
+  },
+  {
+   "id": "popular",
+   "name": "인기쟁이",
+   "buff": 1
+  }
+ ],
+ "farm_installations": {
+  "extra": [
+   {
+    "id": "saibh",
+    "name": "사이브 엑스트라 미니어처",
+    "buff": 3
+   },
+   {
+    "id": "siyu",
+    "name": "시유 엑스트라 미니어처",
+    "buff": 2
+   },
+   {
+    "id": "irusha_altar",
+    "name": "이루샤의 제단 엑스트라 미니어처",
+    "buff": 2
+   },
+   {
+    "id": "golden_trophy",
+    "name": "판타스틱 메모리 골든 트로피",
+    "buff": 1
+   }
+  ],
+  "normal": [
+   {
+    "id": "nao_jangmang",
+    "name": "스페셜 나오 잔망루피 미니어처",
+    "buff": 3
+   },
+   {
+    "id": "spring_fountain",
+    "name": "스프링 가든 분수",
+    "buff": 3
+   },
+   {
+    "id": "fern",
+    "name": "스페셜 페른 미니어처",
+    "buff": 3
+   },
+   {
+    "id": "bain",
+    "name": "베인 미니어처",
+    "buff": 2
+   },
+   {
+    "id": "devbla",
+    "name": "데이르블라 미니어처",
+    "buff": 2
+   },
+   {
+    "id": "aileen_set",
+    "name": "아일린 미니어처 세트 + 소녀의 이젤",
+    "buff": 1
+   },
+   {
+    "id": "bazzi",
+    "name": "배찌 미니어처",
+    "buff": 1
+   },
+   {
+    "id": "summer_farm_set",
+    "name": "여름 방학 농장 세트 (곤충 채집, 낚시 연못, 여름 쉼터)",
+    "buff": 1
+   },
+   {
+    "id": "cherry_tree",
+    "name": "낭만 농장 아름드리 벚꽃나무",
+    "buff": 1
+   },
+   {
+    "id": "lost_page_set",
+    "name": "잃어버린 페이지를 찾아서 세트 효과 (미니어처 4종)",
+    "buff": 1
+   }
+  ],
+  "other": [
+   {
+    "id": "cloud_cushion",
+    "name": "구름방석 (4단계)",
+    "buff": 1
+   }
+  ]
+ },
+ "horn": [
+  {
+   "id": "sweet_rose_horn",
+   "name": "스위트 로즈 코르플레의 나팔",
+   "buff": 5
+  },
+  {
+   "id": "great_blessing_horn",
+   "name": "대 축복이 담긴 코르플레의 나팔",
+   "buff": 5
+  },
+  {
+   "id": "corple_horn",
+   "name": "코르플레의 나팔",
+   "buff": 3
+  }
+ ],
+ "doll_bag": [
+  {
+   "id": "arcana_flame_bag",
+   "name": "아르카나 불꽃 인형 가방",
+   "buff": 2
+  },
+  {
+   "id": "dunbarton_celebrity_bag",
+   "name": "던바튼 셀러브리티 프리미엄 세트 인형 가방",
+   "buff": 1
+  },
+  {
+   "id": "tara_ball_bag",
+   "name": "타라 왕성 무도회 세트 인형 가방",
+   "buff": 1
+  },
+  {
+   "id": "poinshe_kiria_set_bag",
+   "name": "포인셰&키리아 세트 인형 가방",
+   "buff": 1
+  },
+  {
+   "id": "poinshe_kiria_premium_bag",
+   "name": "포인셰&키리아 프리미엄 세트 인형 가방",
+   "buff": 1
+  },
+  {
+   "id": "saetbaram_set_bag",
+   "name": "샛바람 용병단 세트 인형 가방",
+   "buff": 2
+  },
+  {
+   "id": "saetbaram_premium_bag",
+   "name": "샛바람 용병단 프리미엄 세트 인형 가방",
+   "buff": 2
+  },
+  {
+   "id": "gods_city_set_bag",
+   "name": "신들의 도시 주민들 세트 인형 가방",
+   "buff": 2
+  },
+  {
+   "id": "gods_city_premium_bag",
+   "name": "신들의 도시 주민들 프리미엄 세트 인형 가방",
+   "buff": 2
+  }
+ ],
+ "checkbox": [
+  {
+   "id": "music_boost_potion",
+   "name": "음악 부스트 포션",
+   "buff": 2
+  },
+  {
+   "id": "rose_couple_bracelet",
+   "name": "로즈 커플 팔찌",
+   "buff": 1
+  },
+  {
+   "id": "saint_bard_arcana",
+   "name": "세인트 바드 링크 개방 10단계",
+   "buff": 3
+  }
+ ],
+ "murias_holy_water": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7,
+  8
+ ],
+ "pets": [
+  {
+   "id": "none",
+   "name": "미사용",
+   "baseBuff": 0,
+   "harmonyBonus": 0,
+   "skill": null
+  },
+  {
+   "id": "fairy_dragon",
+   "name": "페어리 드래곤",
+   "baseBuff": 3,
+   "harmonyBonus": 0,
+   "skill": null
+  },
+  {
+   "id": "red_fairy_dragon",
+   "name": "붉은 페어리 드래곤",
+   "baseBuff": 3,
+   "harmonyBonus": 0.02,
+   "skill": "overture"
+  },
+  {
+   "id": "blue_fairy_dragon",
+   "name": "푸른빛 페어리 드래곤",
+   "baseBuff": 3,
+   "harmonyBonus": 0.02,
+   "skill": "vivace"
+  }
+ ],
+ "brirehe_attack_options": [
+  0,
+  0.1,
+  0.2,
+  0.3,
+  0.4,
+  0.5,
+  0.6,
+  0.7,
+  0.8,
+  0.9,
+  1
+ ],
+ "tala_attack_options": [
+  0,
+  0.1,
+  0.2,
+  0.3,
+  0.4,
+  0.5,
+  0.6,
+  0.7,
+  0.8,
+  0.9,
+  1
+ ],
+ "relic_prefix_count_options": [
+  {
+   "count": 0,
+   "label": "없음"
+  },
+  {
+   "count": 1,
+   "label": "순수한 (+1)"
+  },
+  {
+   "count": 2,
+   "label": "순수한 ×2 (+2)"
+  },
+  {
+   "count": 3,
+   "label": "순수한 ×3 (+3)"
+  }
+ ],
+ "relic_suffix_count_options": [
+  {
+   "count": 0,
+   "label": "없음"
+  },
+  {
+   "count": 1,
+   "label": "선물 (공격력 +0.3%)"
+  },
+  {
+   "count": 2,
+   "label": "선물 ×2 (공격력 +0.6%)"
+  },
+  {
+   "count": 3,
+   "label": "선물 ×3 (공격력 +0.9%)"
+  }
+ ]
+}
