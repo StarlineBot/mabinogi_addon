@@ -17,9 +17,19 @@ import urllib.request
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QColor, QStandardItem, QStandardItemModel
 from PySide6.QtWidgets import (
+    QAbstractItemView,
+    QAbstractSpinBox,
+    QCheckBox,
+    QComboBox,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QSpinBox,
     QStyledItemDelegate,
-    QAbstractItemView, QAbstractSpinBox, QCheckBox, QComboBox, QHBoxLayout, QHeaderView, QLabel, QSpinBox,
-    QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
+    QTreeWidget,
+    QTreeWidgetItem,
+    QVBoxLayout,
+    QWidget,
 )
 
 from .. import config
@@ -39,6 +49,10 @@ NO_KEY = "넥슨 API 키가 없어 시세를 조회할 수 없어요."
 LOADING = "시세 조회 중…"
 FAILED_ALL = "시세 조회에 실패했어요. 다시 시도해 주세요."
 COLUMNS = ["재료", "필요", "보유", "남음", "개당 최저가", "남은 가격"]
+BEAD_COLUMNS = ["개당 구슬", "남은 구슬"]  # 공정형 시리즈만(명세 5절 '구슬 열', 0.51.0)
+ALL_COLUMNS = COLUMNS + BEAD_COLUMNS
+SUB_NOTE = "▸ 표시 재료를 누르면 만드는 데 드는 재료가 펼쳐져요."
+_ROLE = Qt.ItemDataRole.UserRole
 _OWNED_COL = 2
 
 
@@ -67,6 +81,15 @@ class _MenuDelegate(QStyledItemDelegate):
         if self.indent and index.data(Qt.ItemDataRole.UserRole) is not None:
             option.rect.adjust(_INDENT, 0, 0, 0)
         super().paint(painter, option, index)
+
+
+class _RowDelegate(QStyledItemDelegate):
+    """트리 표 줄 높이 — 보유 숫자 칸이 눌리지 않게(표 QTableWidget 때와 같은 높이)."""
+
+    def sizeHint(self, option, index):
+        size = super().sizeHint(option, index)
+        size.setHeight(max(size.height(), option.fontMetrics.height() + 16))
+        return size
 
 
 def _fetch(result, names, key, cancelled):
@@ -101,7 +124,7 @@ class CraftTab(QWidget):
         self._pending_names: list[str] = []
         self._cancelled = threading.Event()
         self._order: list[tuple[str, str]] = []  # 지금 표의 줄 ("head", 묶음) | ("row", 재료) — 입력 중에는 그대로
-        self._spins: dict[str, QSpinBox] = {}
+        self._spins: dict[str, list[QSpinBox]] = {}
         self._poll = QTimer(self)
         self._poll.setInterval(100)
         self._poll.timeout.connect(self._receive)
@@ -171,28 +194,41 @@ class CraftTab(QWidget):
         self.summary = QLabel()
         self.summary.setTextFormat(Qt.TextFormat.RichText)
         right.addWidget(self.summary)
+        self.beads = QLabel()  # 구슬 합계(공정형 — 명세 5절)
+        self.beads.setTextFormat(Qt.TextFormat.RichText)
+        right.addWidget(self.beads)
         self.status = QLabel()
         self.status.setWordWrap(True)
         self.status.setStyleSheet(f"color:{color('muted')};")
         right.addWidget(self.status)
 
-        self.table = QTableWidget(0, len(COLUMNS))
-        self.table.setHorizontalHeaderLabels(COLUMNS)
-        self.table.verticalHeader().hide()
-        self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        # 0.51.0(명세 6절): 트리 표 — 만들 수 있는 재료(▸)를 누르면 하위 재료가 아래로 펼쳐짐(최대 깊이 2)
+        self.table = QTreeWidget()
+        self.table.setColumnCount(len(ALL_COLUMNS))
+        self.table.setHeaderLabels(ALL_COLUMNS)
+        self.table.setRootIsDecorated(True)
+        self.table.setItemDelegate(_RowDelegate(self.table))
+        self.table.setIndentation(14)
+        self.table.setExpandsOnDoubleClick(False)
         self.table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
         self.table.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.table.setAlternatingRowColors(True)
         self.table.setMinimumWidth(0)
-        # 0.50.1: 재료 칸은 남는 폭만 — 숫자 칸(필요·보유·남음·개당 최저가·남은 가격)이 먼저 자리를 잡고, 긴 재료 이름은 말줄임 + 툴팁
+        # 0.50.1: 재료 칸은 남는 폭만 — 숫자 칸이 먼저 자리를 잡고, 긴 재료 이름은 말줄임 + 툴팁
         self.table.setTextElideMode(Qt.TextElideMode.ElideRight)
         self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.table.setWordWrap(False)
-        header = self.table.horizontalHeader()
+        header = self.table.header()
+        header.setStretchLastSection(False)
         header.setMinimumSectionSize(40)
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        for col in range(1, len(COLUMNS)):
+        for col in range(1, len(ALL_COLUMNS)):
             header.setSectionResizeMode(col, QHeaderView.ResizeMode.ResizeToContents)
+            self.table.headerItem().setTextAlignment(col, Qt.AlignmentFlag.AlignCenter)
+        self.table.itemClicked.connect(self._on_item_clicked)
+        self.table.itemExpanded.connect(self._on_expanded)
+        self.table.itemCollapsed.connect(self._on_collapsed)
+        self._expanded: set[tuple[str, ...]] = set()  # 펼친 줄(재료 경로) — 무기를 바꾸면 비움
         right.addWidget(self.table, 1)
 
         foot = QHBoxLayout()
@@ -265,7 +301,11 @@ class CraftTab(QWidget):
         self.weapon.blockSignals(False)
         process = self.is_process()
         self.choice_row.setVisible(process)  # 부위·공정 줄은 공정형만
-        self.note.setText(PROCESS_NOTE if process else OWNED_NOTE)
+        self.note.setText(PROCESS_NOTE if process else SUB_NOTE if series is not None and series.crafts else OWNED_NOTE)
+        self.beads.setVisible(process)
+        for col in range(len(COLUMNS), len(ALL_COLUMNS)):
+            self.table.setColumnHidden(col, not process)  # 구슬 열은 공정형만
+        self._expanded.clear()
         self._on_weapon()
 
     def parts_checked(self) -> list[bool]:
@@ -313,6 +353,7 @@ class CraftTab(QWidget):
                 self.weapon.setCurrentIndex(nxt)
             return
         config.set_craft_last(self.current_series().name, item.name)
+        self._expanded.clear()  # 무기를 바꾸면 모두 접힘
         self.skill.setText(item.skill)
         if self.is_process():
             self._load_choice(item)
@@ -334,15 +375,18 @@ class CraftTab(QWidget):
         self._resort()
 
     # ---- 계산·표 ----
-    def _prices(self, item: craft.Item) -> dict:
+    def _prices_for(self, names) -> dict:
         out = {}
-        for material in item.material_names():
+        for material in names:
             hit, value = self._cache.get(material)
             if hit:
                 out[material] = value
             elif material in self._failed:
                 out[material] = craft.FAILED
         return out
+
+    def _prices(self, item: craft.Item) -> dict:
+        return self._prices_for(item.material_names())
 
     def summary_now(self) -> craft.Summary | None:
         item = self.current_item()
@@ -359,9 +403,41 @@ class CraftTab(QWidget):
             return f"마감 재료 · 부위마다 1번 × {parts}부위"
         return ""
 
+    def _span_item(self, parent, kind: str, key, bold: bool = True) -> QTreeWidgetItem:
+        """칸 합친 한 줄(묶음 줄·만들기 비교 줄)."""
+        entry = QTreeWidgetItem()
+        entry.setData(0, _ROLE, (kind, key))
+        entry.setFlags(Qt.ItemFlag.ItemIsEnabled)
+        font = entry.font(0)
+        font.setBold(bold)
+        entry.setFont(0, font)
+        (parent.addChild if parent is not None else self.table.addTopLevelItem)(entry)
+        entry.setFirstColumnSpanned(True)
+        return entry
+
+    def _row_item(self, parent, material: str, owned: int, depth: int, path: tuple[str, ...]) -> QTreeWidgetItem:
+        entry = QTreeWidgetItem()
+        entry.setData(0, _ROLE, ("row", material, depth, path))
+        entry.setFlags(Qt.ItemFlag.ItemIsEnabled)
+        for col in range(1, len(ALL_COLUMNS)):
+            entry.setTextAlignment(col, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight)
+        series = self.current_series()
+        if series.recipe(material) is not None and depth < craft.MAX_DEPTH:
+            entry.setChildIndicatorPolicy(QTreeWidgetItem.ChildIndicatorPolicy.ShowIndicator)
+        (parent.addChild if parent is not None else self.table.addTopLevelItem)(entry)
+        spin = QSpinBox()
+        spin.setRange(0, craft.OWNED_MAX)
+        spin.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
+        spin.setAlignment(Qt.AlignmentFlag.AlignRight)
+        spin.setValue(owned)
+        spin.valueChanged.connect(lambda value, m=material, w=spin: self._on_owned(m, value, w))
+        self.table.setItemWidget(entry, _OWNED_COL, spin)
+        self._spins.setdefault(material, []).append(spin)
+        return entry
+
     def _resort(self) -> None:
         """남은 재료 위·다 모은 재료 아래로 다시 늘어놓고 표를 새로 만든다(장비·부위·공정 변경, 탭 진입, 숨기기 토글 때만).
-        공정형은 묶음 줄('공정 재료'·'마감 재료')을 칸 합쳐 넣는다."""
+        공정형은 묶음 줄('공정 재료'·'마감 재료')을 칸 합쳐 넣는다. 펼쳐 둔 재료는 다시 펼친다(무기를 바꿨으면 모두 접힘)."""
         summary = self.summary_now()
         if summary is None:
             return
@@ -375,90 +451,166 @@ class CraftTab(QWidget):
             layout.append(("row", r.material))
         self._order = layout
         self._spins = {}
-        for spin in self.table.findChildren(QSpinBox):  # 예전 칸 위젯이 자리에 남지 않게 모두 지우고 새로
-            spin.hide()
-            spin.deleteLater()
-        self.table.clearSpans()
-        self.table.clearContents()
-        self.table.setRowCount(0)
-        self.table.setRowCount(len(layout))
+        expanded = set(self._expanded)
+        self.table.clear()
         by_name = {r.material: r for r in rows}
-        for i, (kind, key) in enumerate(layout):
+        for kind, key in layout:
             if kind == "head":
-                cell = QTableWidgetItem()
-                font = cell.font()
-                font.setBold(True)
-                cell.setFont(font)
-                self.table.setItem(i, 0, cell)
-                self.table.setSpan(i, 0, 1, len(COLUMNS))
-                continue
-            row = by_name[key]
-            for col in range(len(COLUMNS)):
-                if col == _OWNED_COL:
-                    spin = QSpinBox()
-                    spin.setRange(0, craft.OWNED_MAX)
-                    spin.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
-                    spin.setAlignment(Qt.AlignmentFlag.AlignRight)
-                    spin.setValue(row.owned)
-                    spin.valueChanged.connect(lambda value, m=row.material: self._on_owned(m, value))
-                    self.table.setCellWidget(i, col, spin)
-                    self._spins[row.material] = spin
-                else:
-                    cell = QTableWidgetItem()
-                    cell.setTextAlignment(Qt.AlignmentFlag.AlignVCenter |
-                                          (Qt.AlignmentFlag.AlignLeft if col == 0 else Qt.AlignmentFlag.AlignRight))
-                    self.table.setItem(i, col, cell)
+                self._span_item(None, "head", key)
+            else:
+                self._row_item(None, key, by_name[key].owned, 0, (key,))
+        self._expanded = set()
+        self._reexpand(expanded)
         self._update()
 
-    def _on_owned(self, material: str, value: int) -> None:
+    def _reexpand(self, paths: set) -> None:
+        """경로가 짧은 것부터(부모가 먼저 펼쳐져야 자식 줄이 생김)."""
+        for path in sorted(paths, key=len):
+            entry = self._find(path)
+            if entry is not None:
+                entry.setExpanded(True)
+
+    def _find(self, path: tuple[str, ...]) -> QTreeWidgetItem | None:
+        items = [self.table.topLevelItem(i) for i in range(self.table.topLevelItemCount())]
+        for depth in range(len(path)):
+            hit = next((e for e in items if (e.data(0, _ROLE) or ("",))[0] == "row" and e.data(0, _ROLE)[3] == path[:depth + 1]), None)
+            if hit is None:
+                return None
+            if depth == len(path) - 1:
+                return hit
+            items = [hit.child(i) for i in range(hit.childCount())]
+        return None
+
+    def _on_item_clicked(self, entry: QTreeWidgetItem, _col: int) -> None:
+        if entry.childIndicatorPolicy() == QTreeWidgetItem.ChildIndicatorPolicy.ShowIndicator:
+            entry.setExpanded(not entry.isExpanded())  # 줄을 눌러도 펼침/접힘
+
+    def _on_expanded(self, entry: QTreeWidgetItem) -> None:
+        data = entry.data(0, _ROLE)
+        if not data or data[0] != "row":
+            return
+        _kind, material, depth, path = data
+        self._expanded.add(path)
+        if entry.childCount() == 0:  # 처음 펼칠 때 하위 줄을 만든다: 만들기 비교 줄 + 하위 재료
+            series = self.current_series()
+            self._span_item(entry, "cmp", path)
+            owned = config.load_craft_owned()
+            for name, _per in series.recipe(material)[1]:
+                self._row_item(entry, name, craft.clamp_owned(owned.get(name, 0)), depth + 1, path + (name,))
+        self._update()
+        names = [n for n, _ in self.current_series().recipe(material)[1] if n not in self.current_series().shop]
+        if self._cache.missing(n for n in names if n not in self._failed):
+            self._request(force=False)  # 하위 시세는 펼칠 때만
+
+    def _on_collapsed(self, entry: QTreeWidgetItem) -> None:
+        data = entry.data(0, _ROLE)
+        if data and data[0] == "row":
+            self._expanded = {p for p in self._expanded if p[:len(data[3])] != data[3]}
+
+    def _on_owned(self, material: str, value: int, source=None) -> None:
         config.set_craft_owned(material, value)
+        for spin in self._spins.get(material, []):  # 같은 재료가 여러 줄(1단계·하위)에 있으면 같이
+            if spin is not source and spin.value() != value:
+                spin.blockSignals(True)
+                spin.setValue(value)
+                spin.blockSignals(False)
         self._update()  # 줄 순서는 그대로
 
+    def _fill_row(self, entry: QTreeWidgetItem, r: craft.Row) -> None:
+        muted, accent, warn = QColor(color("muted")), QColor(color("accent")), QColor(color("warn"))
+        default = self.table.palette().text().color()
+        if r.done:
+            price_text, cost_text, price_color = "—", "", muted
+        elif r.price == craft.SHOP:
+            price_text, cost_text, price_color = "상점", "—", muted
+        elif r.price is None:
+            price_text, cost_text, price_color = "매물 없음", "—", warn
+        elif r.price == craft.FAILED:
+            price_text, cost_text, price_color = "조회 실패", "—", warn
+        elif r.price == "":
+            price_text, cost_text, price_color = "—", "—", default
+        else:
+            price_text, cost_text, price_color = f"{r.price:,}", auction.korean_gold(r.cost), default
+        coin = craft.coin_of(r.material)
+        bead_one = str(coin[1]) if coin else ""
+        bead_left = f"{r.left * coin[1]:,}" if coin and not r.done else ""
+        texts = [r.material, str(r.need), None, "✓" if r.done else str(r.left), price_text, cost_text, bead_one, bead_left]
+        for col, text in enumerate(texts):
+            if text is None:
+                continue
+            entry.setText(col, text)
+            if col == 0:
+                entry.setToolTip(0, text)  # 좁으면 말줄임 — 전체 이름은 툴팁
+            if r.done:
+                entry.setForeground(col, muted)
+            elif col == 4:
+                entry.setForeground(col, price_color)
+            elif col == 5 and r.cost is not None:
+                entry.setForeground(col, accent)
+            else:
+                entry.setForeground(col, default)
+        font = entry.font(7)
+        font.setBold(True)
+        entry.setFont(7, font)
+
+    def _update_children(self, entry: QTreeWidgetItem, parent_row: craft.Row, owned: dict) -> None:
+        series = self.current_series()
+        names = [n for n, _ in series.recipe(parent_row.material)[1]]
+        children = craft.sub_rows(series, parent_row.material, parent_row.left, owned, self._prices_for(names))
+        by_name = {c.material: c for c in children}
+        for i in range(entry.childCount()):
+            child = entry.child(i)
+            data = child.data(0, _ROLE)
+            if data[0] == "cmp":
+                child.setText(0, self._compare_text(craft.make_compare(series, parent_row, children)))
+                child.setForeground(0, QColor(color("accent")))
+                font = child.font(0)
+                font.setBold(True)
+                child.setFont(0, font)
+            elif data[0] == "row":
+                row = by_name[data[1]]
+                self._fill_row(child, row)
+                if child.childCount():
+                    self._update_children(child, row, owned)
+
+    @staticmethod
+    def _compare_text(c: craft.MakeCompare) -> str:
+        make = auction.korean_gold(c.make) if c.known else "—"
+        buy = auction.korean_gold(c.buy) if c.buy is not None else "—"
+        text = f"만들기 · {c.skill} · 직접 만들면 약 {make} (사면 {buy})"
+        if c.shop_left_out:
+            text += " · 상점 재료 제외"
+        if c.no_listing_left_out:
+            text += " · 매물 없는 재료 제외"
+        return text
+
     def _update(self) -> None:
-        """표 글자·합계·상태만 다시(줄 순서는 _order 그대로)."""
+        """표 글자·합계·상태만 다시(줄 순서는 _order 그대로). 위쪽 합계는 1단계 재료 기준(펼친 하위는 넣지 않음)."""
         summary = self.summary_now()
         if summary is None:
             return
         by_name = {r.material: r for r in summary.rows}
-        muted, accent, warn = QColor(color("muted")), QColor(color("accent")), QColor(color("warn"))
-        default = self.table.palette().text().color()
-        for i, (kind, material) in enumerate(self._order):
-            if kind == "head":
-                cell = self.table.item(i, 0)
-                cell.setText(self._group_title(material))
-                cell.setForeground(muted)
+        owned = config.load_craft_owned()
+        muted = QColor(color("muted"))
+        for i in range(self.table.topLevelItemCount()):
+            entry = self.table.topLevelItem(i)
+            data = entry.data(0, _ROLE)
+            if data[0] == "head":
+                entry.setText(0, self._group_title(data[1]))
+                entry.setForeground(0, muted)
+                font = entry.font(0)
+                font.setBold(True)
+                entry.setFont(0, font)
                 continue
-            r = by_name.get(material)
+            r = by_name.get(data[1])
             if r is None:
                 continue
-            if r.done:
-                price_text, cost_text, price_color = "—", "", muted
-            elif r.price is None:
-                price_text, cost_text, price_color = "매물 없음", "—", warn
-            elif r.price == craft.FAILED:
-                price_text, cost_text, price_color = "조회 실패", "—", warn
-            elif r.price == "":
-                price_text, cost_text, price_color = "—", "—", default
-            else:
-                price_text, cost_text, price_color = f"{r.price:,}", auction.korean_gold(r.cost), default
-            texts = [r.material, str(r.need), None, "✓" if r.done else str(r.left), price_text, cost_text]
-            for col, text in enumerate(texts):
-                if text is None:
-                    continue
-                cell = self.table.item(i, col)
-                cell.setText(text)
-                if col == 0:
-                    cell.setToolTip(text)  # 좁으면 말줄임 — 전체 이름은 툴팁
-                if r.done:
-                    cell.setForeground(muted)
-                elif col == 4:
-                    cell.setForeground(price_color)
-                elif col == 5 and r.cost is not None:
-                    cell.setForeground(accent)
-                else:
-                    cell.setForeground(default)
+            self._fill_row(entry, r)
+            if entry.childCount():
+                self._update_children(entry, r, owned)
         total = auction.korean_gold(summary.total) if summary.total or self._known(summary) else "—"
         self.refresh.setEnabled(self._pending is None)
+        self.beads.setText(self._bead_text(summary))
         if not summary.rows and self.is_process():  # 부위 0개
             self.summary.setText(NO_PARTS)
             self.status.setText(self._status_text(summary))
@@ -467,7 +619,15 @@ class CraftTab(QWidget):
             f"남은 재료 {summary.left_kinds}종 · 경매장 최저가 합계 "
             f"<span style='color:{color('accent')};font-size:17px;font-weight:800;'>{total}</span> 골드")
         self.status.setText(self._status_text(summary))
-        self.refresh.setEnabled(self._pending is None)
+
+    @staticmethod
+    def _bead_text(summary: craft.Summary) -> str:
+        """'구슬로 바꾸면 탈라가흐 구슬 N개 · 구슬 교환 재료 K종 기준'(교환표에 없는 재료는 표시 없이 제외)."""
+        totals, kinds = craft.bead_total(summary)
+        if not kinds:
+            return ""
+        parts = " · ".join(f"{region} 구슬 <b>{n:,}개</b>" for region, n in totals.items())
+        return f"구슬로 바꾸면 {parts} <span style='color:{color('muted')};'>· 구슬 교환 재료 {kinds}종 기준</span>"
 
     @staticmethod
     def _known(summary: craft.Summary) -> bool:
@@ -488,21 +648,34 @@ class CraftTab(QWidget):
         return text
 
     # ---- 시세 ----
+    def _wanted(self) -> list[str]:
+        """조회할 재료: 장비 재료 전부 + 펼친 줄의 하위 재료(상점 재료 제외)."""
+        item = self.current_item()
+        series = self.current_series()
+        names = list(item.material_names()) if item is not None else []
+        for path in sorted(self._expanded, key=len):
+            recipe = series.recipe(path[-1])
+            if recipe is not None:
+                names += [n for n, _ in recipe[1] if n not in series.shop]
+        return list(dict.fromkeys(names))
+
     def _request(self, *, force: bool) -> None:
         if self._cancelled.is_set():
             return
         item = self.current_item()
         if item is None:
             return
-        if self._pending is not None:  # 조회 중: 끝나면 _receive가 지금 무기에 빠진 것을 다시 조회
+        if self._pending is not None:  # 조회 중: 끝나면 _receive가 지금 빠진 것을 다시 조회
             self._status_override = LOADING
             self._update()
             return
-        names = item.material_names()
+        names = self._wanted()
         if force:
             self._cache.drop(names)
         else:
             names = self._cache.missing(names)
+        if not names:
+            return
         key = config.get_nexon_api_key()
         if not key:
             self._status_override = NO_KEY
@@ -535,9 +708,8 @@ class CraftTab(QWidget):
             self._stamp[name] = stamp
         all_failed = bool(self._pending_names) and all(prices.get(n, craft.FAILED) == craft.FAILED for n in self._pending_names)
         self._status_override = FAILED_ALL if all_failed else None
-        item = self.current_item()
-        if item is not None and self._cache.missing(m for m in item.material_names() if m not in self._failed):
-            self._request(force=False)  # 조회 중에 무기를 바꿨으면 그 무기 재료를 이어서
+        if self.current_item() is not None and self._cache.missing(m for m in self._wanted() if m not in self._failed):
+            self._request(force=False)  # 조회 중에 무기를 바꾸거나 펼쳤으면 이어서
             return
         self._update()
 

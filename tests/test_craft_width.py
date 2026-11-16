@@ -55,8 +55,9 @@ def test_craft_tab_fits_content_width_for_every_series_and_item(window, monkeypa
             # 새로고침 버튼·표 마지막 칸 오른쪽 끝이 보이는 곳 안
             right = scroll.viewport().mapToGlobal(QPoint(scroll.viewport().width(), 0)).x()
             refresh = tab.refresh.mapToGlobal(QPoint(tab.refresh.width(), 0)).x()
-            header = tab.table.horizontalHeader()
-            last = header.sectionViewportPosition(header.count() - 1) + header.sectionSize(header.count() - 1)
+            header = tab.table.header()
+            visible = [c for c in range(header.count()) if not header.isSectionHidden(c)]
+            last = header.sectionViewportPosition(visible[-1]) + header.sectionSize(visible[-1])
             table_right = tab.table.viewport().mapToGlobal(QPoint(last, 0)).x()
             if refresh > right or table_right > right or last > tab.table.viewport().width() + 1:
                 failures.append((name, "clipped", refresh, table_right, right))
@@ -87,6 +88,6 @@ def test_long_material_names_elide_with_tooltip(window, monkeypatch):  # noqa: F
     tab.series_list.setCurrentRow(1)
     app.processEvents()
     assert tab.table.textElideMode() == Qt.TextElideMode.ElideRight
-    names = [tab.table.item(r, 0) for r in range(tab.table.rowCount())]
-    rows = [c for c in names if c is not None and c.text() and not tab.table.columnSpan(names.index(c), 0) > 1]
-    assert rows and all(c.toolTip() == c.text() for c in rows)
+    items = [tab.table.topLevelItem(r) for r in range(tab.table.topLevelItemCount())]
+    rows = [c for c in items if not c.isFirstColumnSpanned()]
+    assert rows and all(c.toolTip(0) == c.text(0) for c in rows)

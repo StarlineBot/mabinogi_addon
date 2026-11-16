@@ -198,9 +198,9 @@ def test_tab_typing_does_not_reorder_and_hide_done(tab_env):
         _finish(tab, started, {m: 10 for m, _ in item.materials})
         first, need = item.materials[0]
         order = list(tab._order)
-        tab._spins[first].setValue(need)  # 첫 재료를 다 모음
+        tab._spins[first][0].setValue(need)  # 첫 재료를 다 모음
         assert tab._order == order  # 입력 중에는 줄이 그대로
-        assert tab.table.item(0, 3).text() == "✓"
+        assert tab.table.topLevelItem(0).text(3) == "✓"
         assert config.load_craft_owned()[first] == need
         assert "남은 재료 7종" in tab.summary.text()
         tab._resort()  # 탭에 다시 들어오면
@@ -221,7 +221,7 @@ def test_tab_shows_no_listing_and_failed(tab_env):
         prices[names[0]] = None
         prices[names[1]] = craft.FAILED
         _finish(tab, started, prices)
-        texts = {tab.table.item(r, 0).text(): tab.table.item(r, 4).text() for r in range(tab.table.rowCount())}
+        texts = {tab.table.topLevelItem(r).text(0): tab.table.topLevelItem(r).text(4) for r in range(tab.table.topLevelItemCount())}
         assert texts[names[0]] == "매물 없음" and texts[names[1]] == "조회 실패"
         assert "매물 없는 재료 1종" in tab.status.text() and "조회에 실패한 재료 1종" in tab.status.text()
     finally:
@@ -297,18 +297,18 @@ def test_dusk_tab_parts_processes_and_group_rows(tab_env):
         names = _set("이지스").material_names()
         assert sorted(started[-1][1][1]) == sorted(names)  # 세트 재료 전부 조회
         _finish(tab, started, {n: 1000 for n in names})
-        heads = [tab.table.item(i, 0).text() for i, (k, _m) in enumerate(tab._order) if k == "head"]
+        heads = [tab.table.topLevelItem(i).text(0) for i, (k, _m) in enumerate(tab._order) if k == "head"]
         assert heads == ["공정 재료 · 1공정 수량 × 공정 7회 × 4부위", "마감 재료 · 부위마다 1번 × 4부위"]
-        need = {m: tab.table.item(i, 1).text() for i, (k, m) in enumerate(tab._order) if k == "row"}
+        need = {m: tab.table.topLevelItem(i).text(1) for i, (k, m) in enumerate(tab._order) if k == "row"}
         assert need["달아오른 광두정"] == "840" and need["고리아스 동력원"] == "4"
         tab.part_checks[1].setChecked(False)  # 헬멧 빼기 → 3부위
         tab.processes.setValue(5)
-        need = {m: tab.table.item(i, 1).text() for i, (k, m) in enumerate(tab._order) if k == "row"}
+        need = {m: tab.table.topLevelItem(i).text(1) for i, (k, m) in enumerate(tab._order) if k == "row"}
         assert need["달아오른 광두정"] == "450" and need["고리아스 동력원"] == "3"  # 30 × 5 × 3
         assert config.load_craft_choice("더스크 바운드", "이지스", 4, 7) == ([True, False, True, True], 5)
         for box in tab.part_checks:
             box.setChecked(False)
-        assert tab.table.rowCount() == 0 and tab.summary.text() == ct.NO_PARTS
+        assert tab.table.topLevelItemCount() == 0 and tab.summary.text() == ct.NO_PARTS
     finally:
         tab.shutdown()
         tab.deleteLater()
@@ -318,15 +318,15 @@ def test_dusk_shared_owned_across_sets_and_simple_hides_choice(tab_env):
     ct, started = tab_env
     tab = _open_dusk(ct, started)
     try:
-        tab._spins["빛바랜 에너지 회로"].setValue(5)
+        tab._spins["빛바랜 에너지 회로"][0].setValue(5)
         tab.weapon.setCurrentIndex(2)  # 에테리얼
         assert tab.skill.text() == "천옷 만들기"
-        assert tab._spins["빛바랜 에너지 회로"].value() == 5  # 공통 재료 보유 공유
+        assert tab._spins["빛바랜 에너지 회로"][0].value() == 5  # 공통 재료 보유 공유
         assert [b.text() for b in tab.part_checks] == ["슈트", "튜더 베레모", "글러브", "슈즈"]
         tab.series_list.setCurrentRow(0)  # 소울 리버레이트
         assert tab.item_label.text() == "무기"
         assert not any(b.isVisibleTo(tab) for b in tab.part_checks) and not tab.processes.isVisibleTo(tab)
-        assert tab.note.text() == ct.OWNED_NOTE
+        assert tab.note.text() == ct.SUB_NOTE  # 소울 리버레이트는 하위 재료 안내(명세 6절 그림)
         assert all(k == "row" for k, _m in tab._order)  # simple은 묶음 줄 없음
     finally:
         tab.shutdown()
@@ -401,3 +401,118 @@ def test_last_selection_restored(tab_env):
     finally:
         again.shutdown()
         again.deleteLater()
+
+
+# ---- 더스크 바운드 구슬(명세 5절 '구슬 합계'·'구슬 열', 7절) ----
+def test_bead_total_aegis_zero_owned_and_owned():
+    aegis = _set("이지스")
+    s = craft.compute(aegis, {}, {}, parts=4, processes=7)
+    assert craft.bead_total(s) == ({"탈라가흐": 840 * 3 + 28 * 35 + 84 * 6 + 4 * 200}, 4)  # 4,804
+    s2 = craft.compute(aegis, {"달아오른 광두정": 840, "빛바랜 에너지 회로": 5}, {}, parts=4, processes=7)
+    assert craft.bead_total(s2) == ({"탈라가흐": 23 * 35 + 84 * 6 + 4 * 200}, 3)  # 다 모은 광두정 제외
+    assert craft.coin_of("미스릴 대못") is None and craft.coin_of("희미한 에너지 조각") is None  # 교환표에 없음
+
+
+def test_bead_follows_exchange_table(monkeypatch):
+    from mabinogi_addon.market import exchange
+    table = {k: [dict(m) for m in v] for k, v in exchange.REGIONS.items()}
+    next(m for m in table["탈라가흐"] if m["name"] == "고리아스 동력원")["coin"] = 250
+    monkeypatch.setattr(exchange, "REGIONS", table)
+    s = craft.compute(_set("이지스"), {}, {}, parts=4, processes=7)
+    assert craft.bead_total(s)[0]["탈라가흐"] == 840 * 3 + 28 * 35 + 84 * 6 + 4 * 250
+
+
+def test_dusk_bead_line_and_columns(tab_env):
+    ct, started = tab_env
+    tab = _open_dusk(ct, started)
+    try:
+        assert tab.beads.isVisible() or tab.beads.isVisibleTo(tab)
+        assert "탈라가흐 구슬 <b>4,804개</b>" in tab.beads.text() and "구슬 교환 재료 4종 기준" in tab.beads.text()
+        assert not tab.table.isColumnHidden(6) and not tab.table.isColumnHidden(7)
+        rows = {tab.table.topLevelItem(i).text(0): tab.table.topLevelItem(i) for i in range(tab.table.topLevelItemCount())}
+        assert (rows["달아오른 광두정"].text(6), rows["달아오른 광두정"].text(7)) == ("3", "2,520")
+        assert (rows["미스릴 대못"].text(6), rows["미스릴 대못"].text(7)) == ("", "")  # 교환표에 없음
+        column = sum(int(e.text(7).replace(",", "")) for e in rows.values() if e.text(7))
+        assert column == 4804  # 남은 구슬 열 합 = 구슬 합계 줄
+        tab._spins["달아오른 광두정"][0].setValue(840)
+        assert rows["달아오른 광두정"].text(7) == ""  # 다 모은 재료는 남은 구슬 비움
+        tab.series_list.setCurrentRow(0)
+        assert tab.table.isColumnHidden(6) and tab.table.isColumnHidden(7) and not tab.beads.isVisibleTo(tab)
+    finally:
+        tab.shutdown()
+        tab.deleteLater()
+
+
+# ---- 하위 재료 펼치기(명세 6절, 7절) ----
+def _soul_item(name):
+    return next(i for i in _series().items if i.name.endswith(name))
+
+
+def test_crafts_data_28_no_cycles_no_tags():
+    s = _series()
+    assert len(s.crafts) == 28 and s.shop == frozenset({"마력이 깃든 융합제", "각성된 힘의 가루"})
+    for name, (skill, mats) in s.crafts.items():
+        assert skill and mats and all(not any(t in n for t in ("(제작)", "(분해)", "(상점)")) for n, _ in mats)
+
+    def depth(name, seen=()):
+        assert name not in seen, f"순환 {seen + (name,)}"
+        recipe = s.recipe(name)
+        return 0 if recipe is None else 1 + max(depth(n, seen + (name,)) for n, _ in recipe[1])
+    assert all(depth(n) >= 1 for n in s.crafts)
+    first_level = {m for item in s.items for m, _ in item.materials}
+    assert len(first_level & set(s.crafts)) == 23  # 1단계 재료 중 23종 펼칠 수 있음
+
+
+def test_sub_rows_need_parent_left_times_per_and_compare():
+    s = _series()
+    shield = _soul_item("워리어 실드")
+    summary = craft.compute(shield, {"견고한 기억의 결정": 2}, {"견고한 기억의 결정": 19_999_999})
+    parent = next(r for r in summary.rows if r.material == "견고한 기억의 결정")
+    kids = craft.sub_rows(s, parent.material, parent.left, {}, {"퓨어 젬스톤": 1_500_000, "금빛 기억의 조각": 900_000, "오피먼트": 25_000})
+    need = {c.material: c.need for c in kids}
+    assert need["오피먼트"] == 30 and need["퓨어 젬스톤"] == 6  # 남음 3 × 개당
+    assert {c.material: c.price for c in kids}["마력이 깃든 융합제"] == craft.SHOP
+    cmp = craft.make_compare(s, parent, kids)
+    assert cmp.make == 6 * 1_500_000 + 9 * 900_000 + 30 * 25_000 and cmp.buy == 3 * 19_999_999
+    assert cmp.shop_left_out and not cmp.no_listing_left_out
+    done = craft.sub_rows(s, parent.material, 0, {}, {})
+    assert all(c.need == 0 and c.done for c in done)  # 부모 다 모음 → 하위 필요 0
+
+
+def test_tree_expand_two_levels_compare_row_and_top_total_unchanged(tab_env):
+    ct, started = tab_env
+    config.set_craft_owned("견고한 기억의 결정", 2)  # 명세 6절 그림과 같은 보유 → 남음 3
+    tab = ct.CraftTab()
+    try:
+        _finish(tab, started, {})
+        tab.select_item("소울리버레이트 워리어 실드")
+        prices = {"견고한 기억의 결정": 19_999_999, "퓨어 젬스톤": 1_500_000, "금빛 기억의 조각": 900_000, "오피먼트": 25_000}
+        _finish(tab, started, prices)
+        before = tab.summary.text()
+        top = {tab.table.topLevelItem(i).text(0): tab.table.topLevelItem(i) for i in range(tab.table.topLevelItemCount())}
+        crystal = top["견고한 기억의 결정"]
+        assert crystal.childIndicatorPolicy() == crystal.ChildIndicatorPolicy.ShowIndicator
+        tab._on_item_clicked(crystal, 0)  # 줄을 누르면 펼침
+        assert crystal.isExpanded()
+        asked = started[-1][1][1] if started else []
+        assert "마력이 깃든 융합제" not in asked and "퓨어 젬스톤" in asked  # 하위 시세는 펼칠 때, 상점 재료는 조회 안 함
+        _finish(tab, started, prices)
+        assert crystal.child(0).isFirstColumnSpanned()
+        assert crystal.child(0).text(0).startswith("만들기 · ") and "직접 만들면 약 1,785만 (사면 5,999만)" in crystal.child(0).text(0)
+        assert crystal.child(0).text(0).endswith("· 상점 재료 제외")
+        kids = {crystal.child(i).text(0): crystal.child(i) for i in range(1, crystal.childCount())}
+        assert kids["마력이 깃든 융합제"].text(4) == "상점" and kids["오피먼트"].text(1) == "30"
+        gem = kids["퓨어 젬스톤"]
+        assert gem.childIndicatorPolicy() == gem.ChildIndicatorPolicy.ShowIndicator
+        gem.setExpanded(True)  # 2단계
+        _finish(tab, started, {})
+        grand = [gem.child(i) for i in range(1, gem.childCount())]
+        assert grand and all(g.childIndicatorPolicy() != g.ChildIndicatorPolicy.ShowIndicator for g in grand)  # 최대 깊이 2
+        assert tab.summary.text() == before  # 위쪽 합계는 1단계 기준 그대로
+        tab._spins["견고한 기억의 결정"][0].setValue(5)  # 부모 다 모음 → 하위 필요 0
+        assert kids["오피먼트"].text(1) == "0"
+        tab.select_item("소울리버레이트 실드")
+        assert not tab._expanded  # 무기를 바꾸면 모두 접힘
+    finally:
+        tab.shutdown()
+        tab.deleteLater()

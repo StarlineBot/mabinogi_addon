@@ -56,6 +56,17 @@ class Series:
     default_processes: int = 7
     # 드롭다운 분류(0.50.0, 사용자 결정 11-15): ((분류 이름, (items 순번, …)), …). 비면 분류 없이 데이터 순서.
     categories: tuple[tuple[str, tuple[int, ...]], ...] = ()
+    # 하위 재료(명세 6절, 0.51.0): {재료: (제작 스킬, ((하위 재료, 1개당 수량), …))} — 펼쳐 보기만, 합계는 1단계 기준
+    crafts: dict = None  # type: ignore[assignment]
+    shop: frozenset = frozenset()  # 상점 재료 — 경매장 조회 안 함, 어떤 합에도 넣지 않음
+
+    def __post_init__(self):
+        if self.crafts is None:
+            object.__setattr__(self, "crafts", {})
+
+    def recipe(self, material: str):
+        """(제작 스킬, ((하위 재료, 개당), …)) 또는 None."""
+        return self.crafts.get(material)
 
     def menu(self) -> list[tuple[str, int | None]]:
         """드롭다운 줄: [(글자, items 순번 | None=분류 머리)]. 분류가 없으면 장비만."""
@@ -115,9 +126,12 @@ def load_series(directory: Path | None = None) -> list[Series]:
                     categories = _categories(raw.get("categories"), items)
                 except (KeyError, TypeError, ValueError):
                     categories = ()  # 분류가 틀리면 분류 없이(장비는 그대로 보임)
+                crafts = {str(name): (str(r["skill"]), _pairs(r["materials"]))
+                          for name, r in (raw.get("crafts") or {}).items()}
                 series = Series(str(raw["series"]), str(raw.get("source", "")), items, kind,
                                 str(raw.get("item_label") or ("세트" if kind == PROCESS else "무기")),
-                                int(raw.get("default_processes", 7)), categories)
+                                int(raw.get("default_processes", 7)), categories, crafts,
+                                frozenset(str(n) for n in raw.get("shop") or ()))
                 found.append((int(raw.get("order", 100)), path.name, series))
         except (OSError, ValueError, KeyError, TypeError):
             continue
@@ -221,3 +235,70 @@ class PriceCache:
     def drop(self, names) -> None:
         for n in names:
             self._data.pop(n, None)
+
+
+# ---- 하위 재료(명세 6절) ----
+SHOP = "shop"  # 시세 칸: 상점 재료(조회 안 함·합에서 제외)
+MAX_DEPTH = 2  # 1단계 재료 아래로 펼칠 수 있는 단계 수
+
+
+def sub_rows(series: Series, material: str, parent_left: int, owned: dict[str, int], prices: dict) -> list[Row]:
+    """재료 하나를 펼친 하위 줄: 필요 = 부모 남음 × 1개당(가진 만큼은 만들 필요 없음), 보유는 재료별 공유."""
+    recipe = series.recipe(material)
+    if recipe is None:
+        return []
+    rows = []
+    for name, per in recipe[1]:
+        need = max(0, int(parent_left)) * per
+        have = clamp_owned(owned.get(name, 0))
+        left = max(0, need - have)
+        price = SHOP if name in series.shop else prices.get(name, "")
+        cost = left * price if isinstance(price, int) and not isinstance(price, bool) else None
+        rows.append(Row(name, need, have, left, price, cost))
+    return rows
+
+
+@dataclass(frozen=True)
+class MakeCompare:
+    skill: str
+    make: int  # X: 하위 재료 남은 가격 합(값을 아는 것만, 상점·매물 없음·실패·모름 제외)
+    buy: int | None  # Y: 부모 남은 가격(모르면 None)
+    known: bool  # X에 들어간 값이 하나라도 있나
+    shop_left_out: bool
+    no_listing_left_out: bool  # 매물 없음·조회 실패·아직 모름
+
+
+def make_compare(series: Series, parent: Row, children: list[Row]) -> MakeCompare:
+    left = [c for c in children if c.left]
+    return MakeCompare(
+        skill=series.recipe(parent.material)[0],
+        make=sum(c.cost for c in left if c.cost is not None),
+        buy=parent.cost,
+        known=any(c.cost is not None for c in left),
+        shop_left_out=any(c.price == SHOP for c in left),
+        no_listing_left_out=any(c.cost is None and c.price != SHOP for c in left),
+    )
+
+
+# ---- 구슬(명세 5절 '구슬 합계'·'구슬 열') — 환전비율 계산기 교환표가 하나의 출처 ----
+def coin_of(material: str) -> tuple[str, int] | None:
+    """(지역, 재료 1개 교환에 드는 구슬 수) 또는 None(교환표에 없음)."""
+    from .exchange import REGIONS
+    for region, mats in REGIONS.items():
+        for m in mats:
+            if m["name"] == material:
+                return region, int(m["coin"])
+    return None
+
+
+def bead_total(summary: Summary) -> tuple[dict[str, int], int]:
+    """({지역: 남은 구슬 합}, 구슬 교환 재료 종 수) — 남은 재료 중 교환표에 있는 것만(다 모은 재료·없는 재료 제외)."""
+    totals: dict[str, int] = {}
+    kinds = 0
+    for r in summary.rows:
+        hit = coin_of(r.material)
+        if r.done or hit is None:
+            continue
+        kinds += 1
+        totals[hit[0]] = totals.get(hit[0], 0) + r.left * hit[1]
+    return totals, kinds
