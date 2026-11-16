@@ -363,7 +363,7 @@ def test_bad_categories_fall_back_to_plain_list(tmp_path):
 def test_menu_headers_not_selectable_and_keys_skip_them(tab_env):
     from PySide6.QtCore import Qt
     from PySide6.QtTest import QTest
-    ct, started = tab_env
+    ct, _started = tab_env
     tab = ct.CraftTab()
     try:
         model = tab.weapon.model()
@@ -386,7 +386,7 @@ def test_menu_headers_not_selectable_and_keys_skip_them(tab_env):
 
 
 def test_last_selection_restored(tab_env):
-    ct, started = tab_env
+    ct, _started = tab_env
     tab = ct.CraftTab()
     tab.select_item("소울리버레이트 리라")
     tab.series_list.setCurrentRow(1)
@@ -427,7 +427,8 @@ def test_dusk_bead_line_and_columns(tab_env):
     tab = _open_dusk(ct, started)
     try:
         assert tab.beads.isVisible() or tab.beads.isVisibleTo(tab)
-        assert "탈라가흐 구슬 <b>4,804개</b>" in tab.beads.text() and "구슬 교환 재료 4종 기준" in tab.beads.text()
+        assert "탈라가흐 구슬 <span" in tab.beads.text() and "4,804개" in tab.beads.text()
+        assert "구슬 교환 재료 4종 기준" in tab.beads.text()
         assert not tab.table.isColumnHidden(6) and not tab.table.isColumnHidden(7)
         rows = {tab.table.topLevelItem(i).text(0): tab.table.topLevelItem(i) for i in range(tab.table.topLevelItemCount())}
         assert (rows["달아오른 광두정"].text(6), rows["달아오른 광두정"].text(7)) == ("3", "2,520")
@@ -436,8 +437,8 @@ def test_dusk_bead_line_and_columns(tab_env):
         assert column == 4804  # 남은 구슬 열 합 = 구슬 합계 줄
         tab._spins["달아오른 광두정"][0].setValue(840)
         assert rows["달아오른 광두정"].text(7) == ""  # 다 모은 재료는 남은 구슬 비움
-        tab.series_list.setCurrentRow(0)
-        assert tab.table.isColumnHidden(6) and tab.table.isColumnHidden(7) and not tab.beads.isVisibleTo(tab)
+        tab.series_list.setCurrentRow(0)  # 소울 리버레이트도 구슬 열·구슬 줄(사용자 요청 11-16)
+        assert not tab.table.isColumnHidden(6) and not tab.table.isColumnHidden(7) and tab.beads.isVisibleTo(tab)
     finally:
         tab.shutdown()
         tab.deleteLater()
@@ -451,7 +452,7 @@ def _soul_item(name):
 def test_crafts_data_28_no_cycles_no_tags():
     s = _series()
     assert len(s.crafts) == 28 and s.shop == frozenset({"마력이 깃든 융합제", "각성된 힘의 가루"})
-    for name, (skill, mats) in s.crafts.items():
+    for skill, mats in s.crafts.values():
         assert skill and mats and all(not any(t in n for t in ("(제작)", "(분해)", "(상점)")) for n, _ in mats)
 
     def depth(name, seen=()):
@@ -513,6 +514,35 @@ def test_tree_expand_two_levels_compare_row_and_top_total_unchanged(tab_env):
         assert kids["오피먼트"].text(1) == "0"
         tab.select_item("소울리버레이트 실드")
         assert not tab._expanded  # 무기를 바꾸면 모두 접힘
+    finally:
+        tab.shutdown()
+        tab.deleteLater()
+
+
+# ---- 소울 리버레이트 구슬(사용자 요청 11-16 — 두 시리즈 공통, 하위 줄은 표시만) ----
+def test_soul_beads_brileh_first_level_only(tab_env):
+    ct, started = tab_env
+    config.set_craft_owned("브리 레흐의 코어", 1)
+    config.set_craft_owned("브리 레흐의 정수", 8)
+    config.set_craft_owned("견고한 기억의 결정", 2)
+    tab = ct.CraftTab()
+    try:
+        _finish(tab, started, {})
+        tab.select_item("소울리버레이트 워리어 실드")
+        _finish(tab, started, {})
+        assert "브리레흐 구슬" in tab.beads.text() and "300개" in tab.beads.text()  # 코어 남음 3 × 100
+        assert "구슬 교환 재료 1종 기준" in tab.beads.text()  # 정수는 다 모음 → 제외
+        top = {tab.table.topLevelItem(i).text(0): tab.table.topLevelItem(i) for i in range(tab.table.topLevelItemCount())}
+        assert (top["브리 레흐의 코어"].text(6), top["브리 레흐의 코어"].text(7)) == ("100", "300")
+        assert (top["브리 레흐의 정수"].text(6), top["브리 레흐의 정수"].text(7)) == ("100", "")  # 다 모음 → 남은 구슬 비움
+        assert top["마력이 충만한 스핀 기어"].text(6) == ""  # 교환표에 없음
+        crystal = top["견고한 기억의 결정"]
+        crystal.setExpanded(True)
+        _finish(tab, started, {})
+        kids = {crystal.child(i).text(0): crystal.child(i) for i in range(1, crystal.childCount())}
+        assert (kids["오피먼트"].text(6), kids["오피먼트"].text(7)) == ("3", "90")  # 하위 줄에도 구슬 칸
+        assert (kids["금빛 기억의 조각"].text(6), kids["금빛 기억의 조각"].text(7)) == ("25", "225")
+        assert "300개" in tab.beads.text()  # 위쪽 구슬 합계는 1단계만(펼쳐도 그대로)
     finally:
         tab.shutdown()
         tab.deleteLater()

@@ -49,8 +49,11 @@ NO_KEY = "넥슨 API 키가 없어 시세를 조회할 수 없어요."
 LOADING = "시세 조회 중…"
 FAILED_ALL = "시세 조회에 실패했어요. 다시 시도해 주세요."
 COLUMNS = ["재료", "필요", "보유", "남음", "개당 최저가", "남은 가격"]
-BEAD_COLUMNS = ["개당 구슬", "남은 구슬"]  # 공정형 시리즈만(명세 5절 '구슬 열', 0.51.0)
+BEAD_COLUMNS = ["개당 구슬", "남은 구슬"]  # 두 시리즈 공통(명세 5절 '구슬 열', 사용자 요청 11-16) — 하위 줄에도 표시, 합계는 1단계만
 ALL_COLUMNS = COLUMNS + BEAD_COLUMNS
+# 좁을 때(글자가 크거나 금액이 길 때) 머리를 두 줄로 — 구슬 머리는 숫자보다 훨씬 넓다(0.51.0, '화면 안 넘치게')
+NARROW_COLUMNS = ["재료", "필요", "보유", "남음", "개당\n최저가", "남은\n가격", "개당\n구슬", "남은\n구슬"]
+_MATERIAL_MIN = 80  # 재료 칸이 이만큼은 남아야 한 줄 머리
 SUB_NOTE = "▸ 표시 재료를 누르면 만드는 데 드는 재료가 펼쳐져요."
 _ROLE = Qt.ItemDataRole.UserRole
 _OWNED_COL = 2
@@ -194,7 +197,7 @@ class CraftTab(QWidget):
         self.summary = QLabel()
         self.summary.setTextFormat(Qt.TextFormat.RichText)
         right.addWidget(self.summary)
-        self.beads = QLabel()  # 구슬 합계(공정형 — 명세 5절)
+        self.beads = QLabel()  # 구슬 합계(두 시리즈 공통, 1단계 재료 기준 — 명세 5절)
         self.beads.setTextFormat(Qt.TextFormat.RichText)
         right.addWidget(self.beads)
         self.status = QLabel()
@@ -225,6 +228,8 @@ class CraftTab(QWidget):
         for col in range(1, len(ALL_COLUMNS)):
             header.setSectionResizeMode(col, QHeaderView.ResizeMode.ResizeToContents)
             self.table.headerItem().setTextAlignment(col, Qt.AlignmentFlag.AlignCenter)
+        self._narrow = False
+        self.table.viewport().installEventFilter(self)
         self.table.itemClicked.connect(self._on_item_clicked)
         self.table.itemExpanded.connect(self._on_expanded)
         self.table.itemCollapsed.connect(self._on_collapsed)
@@ -302,9 +307,6 @@ class CraftTab(QWidget):
         process = self.is_process()
         self.choice_row.setVisible(process)  # 부위·공정 줄은 공정형만
         self.note.setText(PROCESS_NOTE if process else SUB_NOTE if series is not None and series.crafts else OWNED_NOTE)
-        self.beads.setVisible(process)
-        for col in range(len(COLUMNS), len(ALL_COLUMNS)):
-            self.table.setColumnHidden(col, not process)  # 구슬 열은 공정형만
         self._expanded.clear()
         self._on_weapon()
 
@@ -481,6 +483,31 @@ class CraftTab(QWidget):
             items = [hit.child(i) for i in range(hit.childCount())]
         return None
 
+    def eventFilter(self, obj, event):
+        if obj is self.table.viewport() and event.type() == event.Type.Resize:
+            self._fit_headers()
+        return super().eventFilter(obj, event)
+
+    def _fit_headers(self) -> None:
+        """숫자 칸이 다 들어가지 않으면 머리를 두 줄로(재료 칸이 _MATERIAL_MIN 이상 남게). 넓으면 한 줄."""
+        header = self.table.header()
+
+        def need(labels) -> int:
+            total = 0
+            for col in range(1, len(ALL_COLUMNS)):
+                if header.isSectionHidden(col):
+                    continue
+                text_w = max(header.fontMetrics().horizontalAdvance(line) for line in labels[col].split("\n")) + 24
+                total += max(text_w, self.table.sizeHintForColumn(col))
+            return total + _MATERIAL_MIN + self.table.indentation()
+
+        narrow = need(ALL_COLUMNS) > self.table.viewport().width()
+        if narrow != self._narrow:
+            self._narrow = narrow
+            self.table.setHeaderLabels(NARROW_COLUMNS if narrow else ALL_COLUMNS)
+            for col in range(1, len(ALL_COLUMNS)):
+                self.table.headerItem().setTextAlignment(col, Qt.AlignmentFlag.AlignCenter)
+
     def _on_item_clicked(self, entry: QTreeWidgetItem, _col: int) -> None:
         if entry.childIndicatorPolicy() == QTreeWidgetItem.ChildIndicatorPolicy.ShowIndicator:
             entry.setExpanded(not entry.isExpanded())  # 줄을 눌러도 펼침/접힘
@@ -610,7 +637,10 @@ class CraftTab(QWidget):
                 self._update_children(entry, r, owned)
         total = auction.korean_gold(summary.total) if summary.total or self._known(summary) else "—"
         self.refresh.setEnabled(self._pending is None)
-        self.beads.setText(self._bead_text(summary))
+        self._fit_headers()
+        bead = self._bead_text(summary)
+        self.beads.setText(bead)
+        self.beads.setVisible(bool(bead))  # 교환표 재료가 하나도 안 남았으면 줄 없음
         if not summary.rows and self.is_process():  # 부위 0개
             self.summary.setText(NO_PARTS)
             self.status.setText(self._status_text(summary))
@@ -626,7 +656,8 @@ class CraftTab(QWidget):
         totals, kinds = craft.bead_total(summary)
         if not kinds:
             return ""
-        parts = " · ".join(f"{region} 구슬 <b>{n:,}개</b>" for region, n in totals.items())
+        parts = " · ".join(f"{region} 구슬 <span style='font-size:16px;font-weight:800;'>{n:,}개</span>"
+                           for region, n in totals.items())
         return f"구슬로 바꾸면 {parts} <span style='color:{color('muted')};'>· 구슬 교환 재료 {kinds}종 기준</span>"
 
     @staticmethod

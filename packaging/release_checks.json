@@ -21,7 +21,7 @@
         "tests/test_navigation.py",
         "tests/test_navigation_all_widths.py"
       ],
-      "reason": "트리 표(하위 재료 펼치기·만들기 비교 줄·최대 깊이 2·무기 바꾸면 접힘), 구슬 합계 줄·구슬 열(공정형만), 가로 잘림 없음(0.50.1 포함)"
+      "reason": "트리 표(하위 재료 펼치기·만들기 비교 줄·최대 깊이 2·무기 바꾸면 접힘), 구슬 합계 줄·구슬 열(두 시리즈 공통, 하위 줄 표시·합계는 1단계), 좁으면 머리 두 줄 — 큰 글자·큰 시세에서도 가로 잘림 없음"
     },
     "src/mabinogi_addon/market/craft.py": {
       "tests": [
@@ -52,7 +52,7 @@
       "tests": [
         "tests/test_craft_width.py"
       ],
-      "reason": "폭 회귀(8열 구슬 포함)"
+      "reason": "폭 회귀(8열 구슬·하위 2단계·큰 시세 × 글자 16/20px)"
     },
     "packaging/release_checks.json": {
       "tests": [

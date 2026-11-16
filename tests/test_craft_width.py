@@ -10,6 +10,7 @@ from PySide6.QtWidgets import QWidget
 from test_navigation import window  # noqa: F401  (픽스처)
 
 from mabinogi_addon import config
+from mabinogi_addon.market import craft
 
 
 def _open_craft(w, app):
@@ -91,3 +92,52 @@ def test_long_material_names_elide_with_tooltip(window, monkeypatch):  # noqa: F
     items = [tab.table.topLevelItem(r) for r in range(tab.table.topLevelItemCount())]
     rows = [c for c in items if not c.isFirstColumnSpanned()]
     assert rows and all(c.toolTip(0) == c.text(0) for c in rows)
+
+
+@pytest.mark.parametrize("pixels", [None, 16, 20])
+def test_big_prices_and_expanded_rows_still_fit(window, monkeypatch, pixels):  # noqa: F811
+    """0.51.0 구슬 열 8칸 + 하위 재료 2단계 + 아주 큰 시세(남은 가격 '1,795억 5,000만' 급)에서도 표 마지막 칸이 보이는 곳 안.
+    넓이가 모자라면 머리가 두 줄('개당\\n구슬' 등)로 바뀐다(QA 0.50.1 확인과 같은 큰 시세)."""
+    w, app = window
+    monkeypatch.setattr(config, "get_nexon_api_key", lambda: "")
+    tab = w.craft_tab
+    if pixels:
+        for widget in [tab] + tab.findChildren(QWidget):
+            font = widget.font()
+            font.setPixelSize(pixels)
+            widget.setFont(font)
+    scroll = _open_craft(w, app)
+    out = []
+    for row in range(tab.series_list.count()):
+        tab.series_list.setCurrentRow(row)
+        model = tab.weapon.model()
+        for i in range(model.rowCount()):
+            if model.item(i).data(Qt.ItemDataRole.UserRole) is None:
+                continue
+            tab.weapon.setCurrentIndex(i)
+            for n in tab._wanted():
+                tab._cache.put(n, 213_750_000)
+            for n in list(craft.load_series()[0].crafts):
+                tab._cache.put(n, 213_750_000)
+            tab._update()
+            if row == 0:  # 펼쳐 2단계
+                for t in range(tab.table.topLevelItemCount()):
+                    e = tab.table.topLevelItem(t)
+                    if e.childIndicatorPolicy() == e.ChildIndicatorPolicy.ShowIndicator:
+                        e.setExpanded(True)
+                        for c in range(e.childCount()):
+                            ch = e.child(c)
+                            if ch.childIndicatorPolicy() == ch.ChildIndicatorPolicy.ShowIndicator:
+                                ch.setExpanded(True)
+                        break
+                tab._update()
+            for _ in range(3):
+                app.processEvents()
+            tab.layout().activate()
+            header = tab.table.header()
+            vis = [c for c in range(header.count()) if not header.isSectionHidden(c)]
+            last = header.sectionViewportPosition(vis[-1]) + header.sectionSize(vis[-1])
+            need, have = tab.minimumSizeHint().width(), scroll.viewport().width()
+            if last > tab.table.viewport().width() + 1 or need > have or scroll.horizontalScrollBar().maximum():
+                out.append((tab.current_item().label, last, tab.table.viewport().width(), need, have, header.sectionSize(0)))
+    assert not out, out[:5]
