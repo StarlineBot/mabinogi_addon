@@ -89,7 +89,7 @@ def test_other_pages_keep_reserved_space_and_switches_do_not_drift(window):
     face = d.face.mapTo(w, QPoint())
     for _ in range(12):
         for top, sub in ((0, 2), (0, 3), (0, 4), (0, 5), (0, 6), (0, 7), (0, 8),
-                         (1, 0), (2, 0), (2, 1), (2, 4), (3, 0)):  # 0.37.0 편의기능 2단 한 줄 5개(계산기 4 + 그림대화 만들기)
+                         (1, 0), (2, 0), (2, 1), (2, 2), (3, 0)):  # 0.52.0 편의기능 2단 = 계산기(3단) · 그림대화 만들기 · 알람
             w._tabs.setCurrentIndex(top)
             if top == 0:
                 w._tracker_tabs.setCurrentIndex(sub)

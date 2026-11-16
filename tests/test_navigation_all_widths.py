@@ -73,10 +73,16 @@ def test_shared_headers_wrap_without_losing_controls_or_saved_state(window, them
     try:
         pages = [(0, i) for i in range(w._tracker_tabs.count())]
         # 0.37.0 명세 변경(사용자 결정 안 A): 편의기능 2단 한 줄 5개, 마우스 커서는 최적화 › 마우스 커서
-        pages += [(2, i) for i in range(w._convenience_tabs.count())] + [('cursor', 0), (1, 0)]
+        # 0.52.0: 편의기능 2단 = 계산기(3단 6종) · 그림대화 만들기 · 알람
+        pages += [('calc', i) for i in range(w._calculator_tabs.count())]
+        pages += [(2, i) for i in range(1, w._convenience_tabs.count())] + [('cursor', 0), (1, 0)]
         for main, sub in pages:
             if main == 'cursor':
                 w._home_open_feature('cursor')
+            elif main == 'calc':
+                w._tabs.setCurrentIndex(2)
+                w._convenience_tabs.setCurrentWidget(w._calculator_tabs)
+                w._calculator_tabs.setCurrentIndex(sub)
             else:
                 w._tabs.setCurrentIndex(main)
             if main == 0:
@@ -90,6 +96,8 @@ def test_shared_headers_wrap_without_losing_controls_or_saved_state(window, them
                 scroll = w._tracker_tabs.currentWidget()
             elif main == 'cursor':
                 scroll = w._cursor_scroll
+            elif main == 'calc':
+                scroll = w._calculator_tabs.currentWidget()
             else:
                 scroll = w._convenience_tabs.currentWidget()
             headers = [h for h in scroll.widget().findChildren(FeatureHeader) if h.isVisible()]

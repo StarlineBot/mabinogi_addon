@@ -4,6 +4,9 @@
     "tests/test_music_buff.py",
     "tests/test_cursor_fx.py",
     "tests/test_navigation.py",
+    "tests/test_craft_width.py",
+    "tests/test_tracker_layout.py",
+    "tests/test_navigation_all_widths.py",
     "tests/test_dialogue_login.py",
     "tests/test_dialogue_tips.py",
     "tests/test_creator_dialogue.py",
@@ -67,9 +70,12 @@
         "tests/test_dialogue_login.py",
         "tests/test_navigation.py",
         "tests/test_cursor_fx.py",
-        "tests/test_music_buff.py"
+        "tests/test_music_buff.py",
+        "tests/test_navigation_all_widths.py",
+        "tests/test_tracker_layout.py",
+        "tests/test_craft_width.py"
       ],
-      "reason": "open_account(설정 › 계정) · 편의기능 탭 순서에 음악 버프 계산기"
+      "reason": "open_account(설정 › 계정) · 편의기능 2단 계산기·그림대화·알람, 계산기 3단 6종(음악 버프 포함)"
     },
     "src/mabinogi_addon/config.py": {
       "tests": [

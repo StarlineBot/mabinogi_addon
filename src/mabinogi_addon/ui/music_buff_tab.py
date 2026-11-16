@@ -30,8 +30,7 @@ from .palette import color
 from .widgets import FeatureHeader, checkbox, divider
 
 TITLE = "음악 버프 계산기"
-DESCRIPTION = ("전장의 서곡·비바체·행진곡 수치를 장비 구성으로 계산해요. 입력은 자동 저장돼요. "
-               "수치 참고: It's 마비노기 음악 버프 계산기")
+DESCRIPTION = "전장의 서곡·비바체·행진곡 수치를 장비 구성으로 계산해요. 입력은 자동 저장돼요."  # 참고 사이트 표기는 뺌(사용자 11-16)
 INSTRUMENT_NOTE = "스킬 7종 1랭 · 개조·등급 보너스 최대(리라 25+7, 글루미 16) · 곡별 마스터 타이틀 기준"
 BOTTOM_NOTE = "곡마다 그 곡의 마스터 타이틀(+8)을 단 기준 · 보너스뎀은 세인트 바드 링크 개방 10단계 효과"
 CHECK_LABELS = (("cloud_cushion", "구름방석 4단계 (+1)"), ("music_boost_potion", "음악 부스트 포션 (+2)"),

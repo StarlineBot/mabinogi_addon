@@ -203,7 +203,7 @@ class CreatorDialogue(QObject):
         window.settings_tab.creator_avatar.clicked.connect(self.request)
         window.settings_tab.dialogue_enabled.toggled.connect(self.set_enabled)
         window.settings_tab.dialogue_sound_enabled.toggled.connect(self.set_sound_enabled)
-        for tabs in (window._tabs, window._tracker_tabs, window._convenience_tabs, window._pages):
+        for tabs in (window._tabs, window._tracker_tabs, window._convenience_tabs, window._calculator_tabs, window._pages):
             tabs.currentChanged.connect(self.refresh)
         window._settings_scroll.verticalScrollBar().valueChanged.connect(self._scrolled)
         window.installEventFilter(self)

@@ -19,9 +19,10 @@ def _open_craft(w, app):
     while page is not None and w._tabs.indexOf(page) < 0:
         page = page.parentWidget()
     w._tabs.setCurrentWidget(page)
-    titles = [w._convenience_tabs.tabText(i) for i in range(w._convenience_tabs.count())]
-    w._convenience_tabs.setCurrentIndex(titles.index("제작 재료 계산기"))
-    scroll = w._convenience_tabs.currentWidget()
+    w._convenience_tabs.setCurrentWidget(w._calculator_tabs)  # 0.52.0 계산기 3단
+    titles = [w._calculator_tabs.tabText(i) for i in range(w._calculator_tabs.count())]
+    w._calculator_tabs.setCurrentIndex(titles.index("제작 재료 계산기"))
+    scroll = w._calculator_tabs.currentWidget()
     for _ in range(5):
         app.processEvents()
     return scroll

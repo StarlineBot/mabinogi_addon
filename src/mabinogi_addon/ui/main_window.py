@@ -391,10 +391,14 @@ class MainWindow(QMainWindow):
         # 음악 버프 계산기(docs/music-buff-calculator-spec.md, 0.52.0 모든 사용자): 계산기 줄 끝(던전 입장 다음)
         from .music_buff_tab import MusicBuffTab
         self.music_buff_tab = MusicBuffTab()
+        # 0.52.0(사용자 요청 11-16 '계산기 3단으로'): 편의기능 2단 = 계산기 · 그림대화 만들기 · 알람, 계산기 6종은 3단(회색 탭)
+        self._calculator_tabs = QTabWidget()
+        self._calculator_tabs.setObjectName("calculatorTabs")
         for page, title in ((self.distribution_tab, "분배 계산기"), (self.bead_split_tab, "구슬 분배 계산기"),
                             (self.exchange_tab, "환전비율 계산기"), (self.craft_tab, "제작 재료 계산기"),
                             (self.dungeon_cost_tab, "던전 입장 계산기"), (self.music_buff_tab, "음악 버프 계산기")):
-            self._convenience_tabs.addTab(_scrolled(page), title)
+            self._calculator_tabs.addTab(_scrolled(page), title)
+        self._convenience_tabs.addTab(self._calculator_tabs, "계산기")
         self._convenience_tabs.addTab(self._sketch_scroll, "그림대화 만들기")
         # 알람(alarm-spec, 0.48.0): PC 시계 기준. 판정은 최적화 화면의 0.25초 주기에서(아래 tick_hooks)
         from .alarm_tab import AlarmTab
@@ -568,7 +572,8 @@ class MainWindow(QMainWindow):
         from .creator_dialogue import CreatorDialogue
         self.creator_dialogue = CreatorDialogue(self)
         # 도구 화면을 처음 열면 기록(잡담 기능 추천 17.3 — 연 적 있는 도구는 추천하지 않음)
-        for tabs in (self._tabs, self._tracker_tabs, self._convenience_tabs, self.optimization_tools.panel.tabs):
+        for tabs in (self._tabs, self._tracker_tabs, self._convenience_tabs, self._calculator_tabs,
+                     self.optimization_tools.panel.tabs):
             tabs.currentChanged.connect(self._record_tool_opened)
         self._apply_frame_colors()  # 저장된 테마(개인화면 틀/내용 칸)로 처음 칠하기
         if not needs_start_screen():
@@ -1289,6 +1294,7 @@ class MainWindow(QMainWindow):
         _set_qss(self._tracker_tabs, sub and sub + "QTabBar::tab { padding:6px 9px; }")
         _set_qss(self._convenience_tabs, sub)
         _set_qss(self.boss_tab.pattern_tabs, _tertiary_qss(dark))  # 3단: 2단 색을 물려받지 않게
+        _set_qss(self._calculator_tabs, _tertiary_qss(dark))
         _set_qss(self.optimization_tools.panel.tabs, sub)
         _set_qss(self._tabs, "" if custom else _tab_qss(dark))
         self._apply_frame_colors()
