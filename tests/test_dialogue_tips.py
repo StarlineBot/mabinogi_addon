@@ -73,17 +73,18 @@ BUILTIN = paths.resource_dir() / "dialogues.json"
 
 def test_builtin_has_18_draft_tips_and_old_parse_ignores_them():
     raw = json.loads(BUILTIN.read_text(encoding="utf-8"))
-    recommend = [t for t in raw["tips"] if "when" not in t and t["feature"] != "inquiry"]
+    recommend = [t for t in raw["tips"] if "when" not in t and t["feature"] not in ("inquiry", "login")]
     assert {t["feature"] for t in recommend} == set(TIP_FEATURES) and len(recommend) == 18
     # 0.48.0(17.7): 일반 문의 권유 1 + 콕 집어 묻기 8
     assert sum(t["feature"] == "inquiry" for t in raw["tips"]) == 1
+    assert sum(t["feature"] == "login" for t in raw["tips"]) == 1  # 0.52.0(17.8) 로그인 권유
     assert {t["feature"] for t in raw["tips"] if t.get("when") == "failing"} == set(FAILING_FEATURES)
     entries = read(BUILTIN)  # 지금 배포된 앱의 parse는 entries만 읽는다
     assert len(entries) == 12
     without = dict(raw)
     without.pop("tips")
     assert parse(json.dumps(without, ensure_ascii=False).encode()) == entries
-    assert len(read_tips(BUILTIN)) == 27
+    assert len(read_tips(BUILTIN)) == 28
 
 
 @pytest.mark.parametrize("tips,expected", [
@@ -110,7 +111,7 @@ def test_missing_tips_key_keeps_builtin_tips_in_feed(monkeypatch, tmp_path):
     monkeypatch.setattr(paths, "user_data_dir", lambda: tmp_path)
     (tmp_path / "creator-dialogues.json").write_text(json.dumps(raw, ensure_ascii=False), encoding="utf-8")
     feed = DialogueFeed()
-    assert len(feed.tips) == 27 and len(feed.entries) == 12
+    assert len(feed.tips) == 28 and len(feed.entries) == 12
     feed.shutdown()
     raw["tips"] = {"잘못": True}
     (tmp_path / "creator-dialogues.json").write_text(json.dumps(raw, ensure_ascii=False), encoding="utf-8")
@@ -141,7 +142,7 @@ def window(monkeypatch):
 def test_all_draft_tips_fit_two_lines(window):
     w, _ = window
     d = w.creator_dialogue
-    assert len(d.feed.tips) == 27  # 17.5 문장 18 + 17.7 문의 권유 9 전부 말풍선 두 줄 안(넘치면 건너뜀)
+    assert len(d.feed.tips) == 28  # 17.5 문장 18 + 17.7 문의 권유 9 + 17.8 로그인 권유 1 전부 말풍선 두 줄 안(넘치면 건너뜀)
     assert all(d.bubble.measure(d._shortest(t.parts))[2] for t in d.feed.tips)
     too_long = Tip("x", "buff", (("가나다라마바사아자차카타파하 " * 4,),), "보러 가기")
     assert d._usable_tips((too_long,)) == ()

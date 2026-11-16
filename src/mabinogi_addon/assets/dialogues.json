@@ -123,6 +123,7 @@
     {"id": "ask-stat-bars", "feature": "stat_bars", "when": "failing", "parts": ["체력바가 잘 안 읽히나요? 문의하기로 알려 주시면 고쳐 볼게요"]},
     {"id": "ask-dorcha", "feature": "dorcha", "when": "failing", "parts": ["도르카 수치가 잘 안 읽히나요? 문의하기로 알려 주시면 고쳐 볼게요"]},
     {"id": "ask-tuarim", "feature": "tuarim", "when": "failing", "parts": ["투아림 수치가 잘 안 읽히나요? 문의하기로 알려 주시면 고쳐 볼게요"]},
-    {"id": "ask-skillbar", "feature": "skillbar", "when": "failing", "parts": ["단축바 위치를 못 찾나요? 문의하기로 알려 주시면 고쳐 볼게요"]}
+    {"id": "ask-skillbar", "feature": "skillbar", "when": "failing", "parts": ["단축바 위치를 못 찾나요? 문의하기로 알려 주시면 고쳐 볼게요"]},
+    {"id": "tip-login", "feature": "login", "parts": ["디스코드로 로그인하면 설정이 서버에 저장돼서 다른 PC나 포맷 뒤에도 그대로 불러올 수 있어요."], "button": "로그인하러 가기"}
   ]
 }

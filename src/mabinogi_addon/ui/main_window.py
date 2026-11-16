@@ -764,6 +764,17 @@ class MainWindow(QMainWindow):
         if card is not None:
             self._inquiry.preselect(card)
 
+    def open_account(self) -> None:
+        """잡담 [로그인하러 가기](17.8): 설정 › 계정 — 로그인 버튼이 보이게."""
+        if self._setup_busy() or self._config_pending_restart:
+            return
+        self._hide_home()
+        self._pages.setCurrentWidget(self._tabs)
+        self._tabs.setCurrentWidget(self._settings_scroll)
+        button = self.settings_tab._login_btn
+        self._settings_scroll.ensureWidgetVisible(button)
+        button.setFocus()
+
     def unused_tip_features(self) -> set:
         from ..creator_dialogue import TIP_FEATURES
         return {key for key in TIP_FEATURES if not self.feature_in_use(key)}

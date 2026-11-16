@@ -2002,6 +2002,21 @@ def save_discord_invite(path: Path = LOCAL_CONFIG_PATH, **changes) -> None:
     _write_local_config(data, path)
 
 
+def load_login_invite(path: Path = LOCAL_CONFIG_PATH) -> dict:
+    """잡담 로그인 권유 기록(잡담 명세 17.8, 0.52.0) {'declinedAt': 초, 'shownAt': 초} — 설정 동기화 대상(디스코드 권유와 같음)."""
+    value = _read_local_config(path).get("loginInvite")
+    return dict(value) if isinstance(value, dict) else {}
+
+
+def save_login_invite(path: Path = LOCAL_CONFIG_PATH, **changes) -> None:
+    data = _read_local_config(path)
+    value = data.get("loginInvite")
+    value = dict(value) if isinstance(value, dict) else {}
+    value.update(changes)
+    data["loginInvite"] = value
+    _write_local_config(data, path)
+
+
 def load_dialogue_tip_day(path: Path = LOCAL_CONFIG_PATH) -> str | None:
     value = _read_local_config(path).get("dialogueTips")
     day = value.get("day") if isinstance(value, dict) else None

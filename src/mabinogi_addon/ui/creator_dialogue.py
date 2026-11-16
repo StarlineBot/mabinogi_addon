@@ -11,7 +11,8 @@ from PySide6.QtWidgets import QApplication, QHBoxLayout, QLabel, QPushButton, QT
 
 from .palette import color
 from .. import config
-from ..creator_dialogue import (DialogueSession, INVITE_TEXT, INVITE_URL, MAX_CHARS, TipPicker, invite_due)
+from ..creator_dialogue import (DialogueSession, INVITE_TEXT, INVITE_URL, LOGIN_BUTTON, LOGIN_TEXT, MAX_CHARS, TipPicker,
+                                invite_due, login_due)
 from ..system.dialogue_visibility import display_available, exposed
 from ..system.window_watcher import is_main_window_foreground
 from .dialogue_feed import DialogueFeed
@@ -152,7 +153,7 @@ class CreatorDialogue(QObject):
         self.wall = wall  # 날짜·권유 주기(17.2)는 벽시계로
         self.open_url = open_url or (lambda url: QDesktopServices.openUrl(QUrl(url)))
         self._buttons = ()  # 지금 말풍선의 버튼(노출 확인 때 그대로 다시 배치)
-        self.current_extra = None  # 지금 말풍선이 기능 추천·권유면 ('tip', Tip) / ('invite', None)
+        self.current_extra = None  # 지금 말풍선이 기능 추천·권유면 ('tip', Tip) / ('invite', None) / ('login', Tip|None)
         self._notifier = None
         self._sound_allowed = False
         self._sound_reason = "display_blocked"
@@ -230,10 +231,18 @@ class CreatorDialogue(QObject):
         """대사를 띄우기로 정해졌을 때 약 25%로 일반 대사 대신 권유·기능 추천(같은 날 겹치지 않게)."""
         now, today = self.wall(), self._today()
         invite = config.load_discord_invite()
-        shown = invite.get("shownAt")
-        invite_today = isinstance(shown, (int, float)) and time.strftime(
-            "%Y-%m-%d", time.localtime(shown)) == today
+        login = config.load_login_invite()
+
+        def on_day(record):
+            shown = record.get("shownAt")
+            return isinstance(shown, (int, float)) and time.strftime("%Y-%m-%d", time.localtime(shown)) == today
+        invite_today, login_today = on_day(invite), on_day(login)
         tip_today = config.load_dialogue_tip_day() == today
+        from .. import feature_access
+        try:
+            logged_in = feature_access.is_logged_in()
+        except Exception:  # noqa: BLE001 — 판정 실패면 권유하지 않음
+            logged_in = True
         unused_fn = getattr(self.window, "unused_tip_features", None)
         try:
             unused = set(unused_fn()) if unused_fn is not None else set()
@@ -247,12 +256,24 @@ class CreatorDialogue(QObject):
         except Exception:  # noqa: BLE001
             _log.debug("못 찾음·못 읽음 판정 실패", exc_info=True)
             failing = set()
-        return self.picker.pick(unused, invite_ok=invite_due(invite, now) and not tip_today,
-                                tip_ok=not invite_today, failing=failing)
+        # 디스코드 권유·로그인 권유·기능 추천은 같은 날 겹치지 않게(17.2·17.8)
+        return self.picker.pick(unused, invite_ok=invite_due(invite, now) and not tip_today and not login_today,
+                                tip_ok=not invite_today and not login_today, failing=failing,
+                                login_ok=(not logged_in and login_due(login, now)
+                                          and not tip_today and not invite_today))
 
     def _extra_message(self, extra):
         if extra[0] == "invite":
             return INVITE_TEXT, [("join", "참가하기", True), ("decline", "괜찮아요", False)]
+        if extra[0] == "login":
+            tip = extra[1]
+            text, button = LOGIN_TEXT, LOGIN_BUTTON
+            if tip is not None:
+                text = "".join(self.session.rng.choice(choices) for choices in tip.parts)
+                if not self.bubble.measure(text)[2]:
+                    text = self._shortest(tip.parts)
+                button = tip.button
+            return text, [("login", button, True), ("login_decline", "괜찮아요", False)]
         tip = extra[1]
         text = "".join(self.session.rng.choice(choices) for choices in tip.parts)
         if not self.bubble.measure(text)[2]:
@@ -265,6 +286,8 @@ class CreatorDialogue(QObject):
         try:
             if extra[0] == "invite":
                 config.save_discord_invite(shownAt=self.wall())
+            elif extra[0] == "login":
+                config.save_login_invite(shownAt=self.wall())
             elif extra[1].when == "failing":
                 config.save_failing_asked(extra[1].feature, self._today())  # 같은 기능은 하루 1번까지
             else:
@@ -282,6 +305,12 @@ class CreatorDialogue(QObject):
                 config.save_discord_invite(joined=True)
             elif key == "decline":
                 config.save_discord_invite(declinedAt=self.wall())
+            elif key == "login":  # 설정 › 계정(로그인 버튼이 보이게)
+                opener = getattr(self.window, "open_account", None)
+                if opener is not None:
+                    opener()
+            elif key == "login_decline":
+                config.save_login_invite(declinedAt=self.wall())
             elif key.startswith("inquiry:"):
                 feature = key[len("inquiry:"):]
                 opener = getattr(self.window, "open_inquiry_for", None)

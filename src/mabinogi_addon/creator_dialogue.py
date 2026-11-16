@@ -108,6 +108,11 @@ INVITE_URL = "https://discord.gg/VTbJ29HPma"
 INVITE_TEXT = "섯다라인 디스코드에서 새 기능 소식 먼저 보실래요? 아이디어도 받아요"
 INVITE_DECLINE_DAYS = 45
 INVITE_REPEAT_DAYS = 30
+# 로그인 권유(17.8, 0.52.0 사용자 결정 11-16) — 비로그인에게만, 디스코드 권유와 같은 주기. 문구는 dialogues.json tips의
+# feature "login" 항목(없으면 아래 내장 문장). 로그인이 풀린 사람도 같은 문장(말풍선 두 줄 — 사용자 결정 11-16).
+LOGIN = "login"
+LOGIN_BUTTON = "로그인하러 가기"
+LOGIN_TEXT = "디스코드로 로그인하면 설정이 서버에 저장돼서 다른 PC나 포맷 뒤에도 그대로 불러올 수 있어요."
 
 
 class Tip(tuple):
@@ -167,8 +172,10 @@ def parse_tips(data: bytes):
         ident, feature, when = tip.get("id"), tip.get("feature"), tip.get("when")
         if when not in (None, "failing") or (when == "failing" and feature not in FAILING_FEATURES):
             continue  # 모르는 조건·대상 아닌 기능은 건너뜀
-        known = feature in TIP_FEATURES or (feature == INQUIRY and when is None)
-        button = tip.get("button", INQUIRY_BUTTON if (feature == INQUIRY or when == "failing") else DEFAULT_BUTTON)
+        known = feature in TIP_FEATURES or (feature in (INQUIRY, LOGIN) and when is None)
+        default_button = LOGIN_BUTTON if feature == LOGIN else (
+            INQUIRY_BUTTON if (feature == INQUIRY or when == "failing") else DEFAULT_BUTTON)
+        button = tip.get("button", default_button)
         if (not isinstance(ident, str) or not 1 <= len(ident) <= 100 or ident in seen or not known
                 or not isinstance(button, str) or not 1 <= len(button) <= MAX_BUTTON or not button.strip()):
             continue
@@ -198,6 +205,15 @@ def invite_due(state: dict, now: float) -> bool:
     return True
 
 
+def login_due(state: dict, now: float) -> bool:
+    """로그인 권유를 띄울 때인지(17.8): 괜찮아요는 45일 뒤, 그 밖엔 30일에 한 번(로그인 여부는 부르는 쪽에서 — 로그인하면 안 나옴)."""
+    state = state if isinstance(state, dict) else {}
+    declined, shown = state.get("declinedAt"), state.get("shownAt")
+    if isinstance(declined, (int, float)) and now < declined + INVITE_DECLINE_DAYS * 86400:
+        return False
+    return not (isinstance(shown, (int, float)) and now < shown + INVITE_REPEAT_DAYS * 86400)
+
+
 class TipPicker:
     """대사를 띄우기로 정해졌을 때 일반 대사 대신 무엇을 보일지(17.1·17.2). 순수 로직."""
 
@@ -206,9 +222,9 @@ class TipPicker:
         self.rng = rng or random.Random()
         self.last_feature = None
 
-    def pick(self, unused, *, invite_ok: bool, tip_ok: bool = True, failing=()):
-        """('invite', None) / ('tip', Tip) / None(일반 대사). 25% 차례에서: 콕 집어 묻기(failing — 오늘 아직 안 물은
-        못 찾음·못 읽음 기능) → 디스코드 권유 → 기능 추천·일반 문의 권유(직전 것만 뺌)."""
+    def pick(self, unused, *, invite_ok: bool, tip_ok: bool = True, failing=(), login_ok: bool = False):
+        """('invite', None) / ('login', Tip|None) / ('tip', Tip) / None(일반 대사). 25% 차례에서: 콕 집어 묻기(failing — 오늘
+        아직 안 물은 못 찾음·못 읽음 기능) → 디스코드 권유 → 로그인 권유(비로그인) → 기능 추천·일반 문의 권유(직전 것만 뺌)."""
         if self.rng.random() >= TIP_CHANCE:
             return None
         asks = [t for t in self.tips if t.when == "failing" and t.feature in failing]
@@ -216,9 +232,12 @@ class TipPicker:
             return ("tip", self.rng.choice(asks))
         if invite_ok:
             return ("invite", None)
+        if login_ok:
+            logins = [t for t in self.tips if t.feature == LOGIN]
+            return ("login", self.rng.choice(logins) if logins else None)
         if not tip_ok:
             return None
-        candidates = [t for t in self.tips if t.when is None and (t.feature in unused or t.feature == INQUIRY)
+        candidates = [t for t in self.tips if t.when is None and t.feature != LOGIN and (t.feature in unused or t.feature == INQUIRY)
                       and t.feature != self.last_feature]
         if not candidates:
             return None
