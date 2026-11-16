@@ -6,6 +6,7 @@
 
 ## 배포와 검증
 
+- **0.52.0 후보 #244 성공(run 43859805092, 811795bd, verify-only)** — 산출물 verified-windows-43859805092-1(164,850,266바이트, 만료 2026-11-17 20:49 KST). 0.51.0 내용 포함 한 번에 사용자 Windows 확인 대기.
 - **0.52.0 스크롤 테스트 수정(a1424514) 확인: 통과 — 후보 다시 가능** — 고정 1150 대신 '지금 높이 + (내용 높이 − 보이는 높이)'로 키우면 스크롤 0, 20px 작으면 다시 스크롤, 글꼴 기본·15·17px 세 경우.
   배포 검사 0.52.0: 이 PC 기본 글꼴 533 통과, **CI 글꼴 설정(fonts-ci.conf) 533 통과**, preflight 0. 제품 코드 변경 없음.
 - **0.52.0 후보 #243 실패(run 43847577406, a4db9fca) — 아무것도 안 만들어짐** — regression 'Release feature checks'에서 `tests/test_music_buff.py::test_results_stay_fixed_while_inputs_scroll` 1건 실패(`assert 40 == 0`), Windows 빌드 건너뜀.
