@@ -88,13 +88,23 @@ def test_v2_guide_notes_are_new_and_do_not_rewrite_published_069():
     assert "종료 정리를 보강" not in upgrade
 
 
-def test_unpublished_0501_folded_into_0510():
-    """0.50.1은 후보·태그 없이 0.51.0으로 넘어감 — 섹션은 v0.51.0이 새것, 가로 잘림 줄은 그 아래 '조용히 다듬은 것들'(0.51.0 QA 11-16)."""
+def test_unpublished_0510_and_0501_folded_into_0520():
+    """0.51.0(후보 #242)은 게시하지 않고 0.52.0 한 번으로(사용자 결정 11-16) — 0.50.1도 그 전에 0.51.0으로 합쳐짐.
+    0.50.0 사용자에게는 v0.52.0 한 섹션만 새로 보이고, 그 안에 0.51.0 내용(헤드라인 둘·다듬은 것 둘)이 지정된 순서로 있다."""
     text = Path(release_notes.RELEASE_NOTES_FILE).read_text(encoding="utf-8")
     versions = [v for v, _body in release_notes._parse_sections(text)]
-    i = versions.index("0.51.0")
-    assert versions[i:i + 2] == ["0.51.0", "0.50.0"] and "0.50.1" not in versions
-    body = dict(release_notes._parse_sections(text))["0.51.0"]
-    assert "조용히 다듬은 것들" in body and "가격 칸이 잘리던 문제" in body
-    shown = release_notes.notes_since("0.50.0", "0.51.0")
-    assert "v0.51.0" in shown and "v0.50.0" not in shown and "v0.50.1" not in shown
+    assert versions[:2] == ["0.52.0", "0.50.0"]
+    assert "0.51.0" not in versions and "0.50.1" not in versions
+    body = dict(release_notes._parse_sections(text))["0.52.0"]
+    order = ["편의기능에 '음악 버프 계산기'가 생겼어요.", "만드는 데 드는 재료를 펼쳐 볼 수 있어요.",
+             "남은 재료를 구슬로 바꾸면 몇 개인지도 보여줘요.", "조용히 다듬은 것들",
+             "'계산기' 탭 하나로 모았어요.", "설정 동기화를 알려 드려요.",
+             "가격 칸이 잘리던 문제를 고쳤어요.", "바보다 넓게 잡으면 못 읽던 문제를 고쳤어요."]
+    at = [body.index(x) for x in order]
+    assert at == sorted(at)
+    assert "`경매장` 버튼" in body
+    shown = release_notes.notes_since("0.50.0", "0.52.0")
+    assert shown.count("## v") == 1 and "v0.52.0" in shown
+    assert "v0.51.0" not in shown and "v0.50.0" not in shown and "v0.50.1" not in shown
+    for x in order:
+        assert x in shown

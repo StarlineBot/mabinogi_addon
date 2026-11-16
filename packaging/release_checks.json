@@ -133,7 +133,7 @@
         "tests/test_release_notes.py",
         "tests/test_release_notes_trigger.py"
       ],
-      "reason": "0.52.0 노트 파싱·새 버전 표시, v0.51.0 이하 섹션 그대로"
+      "reason": "0.52.0 노트 파싱·새 버전 표시, 미게시 v0.51.0을 v0.52.0에 합침(0.50.0 사용자에게 v0.52.0 한 섹션), v0.50.0 이하 섹션 그대로"
     }
   }
 }
