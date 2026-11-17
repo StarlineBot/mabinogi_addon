@@ -31,7 +31,10 @@
   3. 전체 테스트(≈14분)는 AGENTS.md '변경 영향 검사'의 넓은 변경일 때만. 대상 없는 pytest는 **프로젝트 훅(`.claude/hooks/test_guard.py`)이 막으며**,
      필요하면 명령 앞에 `FULL_REGRESSION_REASON='이유'`를 붙이고 배포 검사와 동시에(백그라운드) 돌린다.
   4. 2분 넘는 명령은 시작 전에 예상 시간을 사용자에게 말한다.
-- 사용자가 후보를 실행했다고 하면 1~2분 안에 작업 시작(jobs 수)을 확인하고, 대기 중이면 바로 알린다.
+- **배포 실행은 QA 세션이 직접**(사용자 결정 11-17): QA 통과 → 버전·노트·검사 목록 main 반영 → GitHub MCP `actions_run_trigger`로
+  `windows.yml` `verify-only` 실행(묻지 않음). 사용자가 후보 확인 뒤 "배포해" → 그 run을 `candidate_run`으로 `publish-existing` 실행.
+  사용자에게 `gh` 명령을 넘기지 않는다(권한 오류일 때만 오류 원문과 함께). `validate-and-publish` 금지. 자세히는 AGENTS.md 'QA 통과 후 배포 안내'.
+- 후보 실행 뒤 1~2분 안에 작업 시작(jobs 수)을 확인하고, 대기 중이면 바로 알린다.
 - 새 자산·모듈이 들어간 버전은 Windows 실행 확인 전에 게시를 권하지 않는다(CI는 exe를 실행하지 않음).
 
 ## 개발 환경
