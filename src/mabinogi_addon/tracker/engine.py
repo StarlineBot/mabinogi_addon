@@ -80,6 +80,7 @@ class TickResult:
     frame_valid: bool  # 정상 프레임 여부(앵커 보임)
     alerts2: list[str] = field(default_factory=list)  # 2차(막차) 알림이 발생한 buff_id
     seen: bool | None = None  # 이번 틱에 기준 버프나 버프 아이콘이 하나라도 보였나(자동 찾기 v2 판독 상태용, 디버프는 None)
+    anchor: bool | None = None  # 기준 버프가 보였나(기준 버프 없는 설정·디버프는 None) — 자동 찾기 v2 새 자리 확정용
 
 
 class BuffEngine:
@@ -288,7 +289,7 @@ class BuffEngine:
                 )
         return TickResult(
             entries=entries, alerts=alerts, frame_valid=frame_valid, alerts2=alerts2,
-            seen=bool(present),
+            seen=bool(present), anchor=None if self._anchor is None else anchor_present,
         )
 
     _GONE_REASONS = {"invalid": "판정 불가 중 만료(내부 시계 0)", Event.EXPIRED: "내부 시계 0(미검출)",

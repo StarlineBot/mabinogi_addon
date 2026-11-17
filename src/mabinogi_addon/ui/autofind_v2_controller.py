@@ -279,6 +279,14 @@ class AutofindV2Controller(QObject):
         if self.engine.ui_check_due(now):
             if self._start_ui_check():
                 return
+        reverted = self.engine.revert_due(now, self._wanted)
+        if reverted:
+            for key, box in reverted:
+                _log.info("[자동 찾기 v2] 새 자리에서 %d초 넘게 못 읽어 바로 앞 자리로 돌아가 확인: %s %s",
+                          int(v2.LOST_SECONDS), v2.NAMES[key], box)
+            self._publish()
+            self.changed.emit()
+            return
         due = self.engine.due(now, self._wanted)
         if due:
             group = "resources" if due[0] in v2.RESOURCE_KEYS else due[0]
@@ -423,7 +431,7 @@ class AutofindV2Controller(QObject):
             else:
                 boxes = {group: found}
             return {"boxes": {k: (None if b is None else (b[0] + x, b[1] + y, b[2], b[3])) for k, b in boxes.items()}}
-        self._submit({"kind": "research", "keys": keys, "search_generation": gen}, work)
+        self._submit({"kind": "research", "keys": keys, "search_generation": gen, "resumes": self.engine.resumes}, work)
 
     def _start_appear(self, keys: list, mode: str) -> None:
         target = self.target
@@ -478,6 +486,11 @@ class AutofindV2Controller(QObject):
                 _log.info("[자동 찾기 v2] %s — %s", self.engine.initial_summary, parts)
                 self._save_last()
         elif job["kind"] == "research":
+            if job.get("resumes") != self.engine.resumes or self.engine.in_grace(now):
+                # 찍는 사이 게임이 뒤로 갔다 왔다 — 다른 창이 찍혔을 수 있어 버리고(실패로 세지 않음) 유예 뒤 다시
+                _log.info("[자동 찾기 v2] 다시 찾기 결과 버림(그사이 게임에서 나갔다 옴): %s",
+                          "·".join(v2.NAMES[k] for k in job["keys"]))
+                return
             for key in job["keys"]:
                 box = result["boxes"].get(key)
                 self.engine.search_result(job["search_generation"], key, box, now)
@@ -499,7 +512,7 @@ class AutofindV2Controller(QObject):
         self._publish()
         self.changed.emit()
 
-    def note_read(self, key: str, ok: bool, frame_id=None, auto: bool = True) -> None:
+    def note_read(self, key: str, ok: bool, frame_id=None, auto: bool = True, strong: bool | None = None) -> None:
         """기능의 판독 결과(autofind_regions.report) — 확정·실패만 기록하고 표시 갱신.
         auto=False(직접 지정 고정·저장 영역 v1에서 읽음): 엔진 항목 상태는 건드리지 않고 'UI 보임' 신호로만."""
         if self.closed:
@@ -511,7 +524,7 @@ class AutofindV2Controller(QObject):
         if frame_id is None:
             self._frame_seq += 1
             frame_id = self._frame_seq
-        outcome = self.engine.note_read(key, ok, self._clock(), frame_id)
+        outcome = self.engine.note_read(key, ok, self._clock(), frame_id, strong)
         if outcome == "confirmed":
             _log.info("[자동 찾기 v2] 새 자리 확정: %s %s", v2.NAMES.get(key, key), self.engine.items[key].box)
             self._save_last()

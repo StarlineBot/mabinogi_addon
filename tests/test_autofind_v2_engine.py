@@ -322,3 +322,110 @@ def test_last_spot_pending_moves_when_full_check_finds_other_place():
     assert it.box == (5, 40, 60, 10) and not it.pending and it.source == "appear"
     assert e.appear_result(e.generation, "boss", (99, 99, 9, 9)) is None  # 확인된 자리는 덮지 않음
 
+
+
+# ---- 0.52.0 후보 버그(사용자 app.log 11-16): 게임으로 돌아온 순간 엉뚱한 자리를 버프로 확정 ----
+ONLY_BUFF = lambda k: k == "buff"  # noqa: E731
+
+
+def _lose_buff(e, start, seconds, running=True):
+    """버프만 못 읽는 상태로 seconds초(0.5초 틱)."""
+    t = start
+    for _ in range(int(seconds / 0.5)):
+        t += 0.5
+        e.tick(t, running)
+        e.note_read("buff", False, t)
+        e.note_read("skillbar", True, t)  # 다른 것은 읽힘(UI는 보임)
+    return t
+
+
+def test_no_research_right_after_returning_to_game():
+    """요구 1: 게임으로 돌아온 직후 FOCUS_GRACE 동안은 다시 찾기 없음(돌아온 순간 다른 창이 남은 화면)."""
+    e = _stable_engine()
+    t = _lose_buff(e, 0.0, 12.0)            # 12초 못 읽음 → 다시 찾기 대상
+    assert e.due(t, ONLY_BUFF) == ["buff"]
+    for _ in range(20):                      # 게임에서 나감(10초) — 시간 안 셈
+        t += 0.5
+        e.tick(t, False)
+    t += 0.5
+    e.tick(t, True)                          # 돌아옴
+    assert e.in_grace(t) and e.due(t, ONLY_BUFF) == []
+    t = _lose_buff(e, t, v2.FOCUS_GRACE - 1.0)
+    assert e.due(t, ONLY_BUFF) == []
+    t = _lose_buff(e, t, 1.5)
+    assert not e.in_grace(t) and e.due(t, ONLY_BUFF) == ["buff"]
+
+
+def test_first_start_is_not_a_return():
+    """앱을 켜고 처음 게임이 보일 때는 유예가 없다(나갔다 온 게 아님)."""
+    e = _stable_engine()
+    e.tick(0.5, True)
+    assert not e.in_grace(0.5)
+
+
+def test_trial_reads_during_grace_do_not_count():
+    e = _stable_engine()
+    gen = e.start_search(["buff"])
+    e.search_result(gen, "buff", (9, 9, 10, 10), 0.0)
+    e.tick(0.0, True)
+    e.tick(0.5, False)
+    e.tick(1.0, True)                        # 돌아옴 → 1~6초 유예
+    for i, t in enumerate((1.0, 2.0, 3.0, 4.5, 5.5)):
+        assert e.note_read("buff", True, t, frame_id=i) is None
+    assert e.items["buff"].candidate is not None
+    assert e.note_read("buff", True, 6.5, frame_id=10) is None   # 유예 끝 — 여기서부터 3초
+    assert e.note_read("buff", True, 8.0, frame_id=11) is None
+    assert e.note_read("buff", True, 9.6, frame_id=12) == "confirmed"
+
+
+def test_one_read_or_reads_without_anchor_do_not_confirm():
+    """요구 2: 한 번 판독으로는 확정 안 됨, 버프는 기준 버프(앵커)까지 보여야 성공으로 센다."""
+    e = _stable_engine()
+    gen = e.start_search(["buff"])
+    e.search_result(gen, "buff", (353, 343, 304, 1097), 0.0)
+    assert e.note_read("buff", True, 0.0, frame_id=1, strong=True) is None  # 한 번 — 확정 아님
+    for i in range(2, 12):  # 아이콘은 보이지만 기준 버프는 없음(엉뚱한 자리) — 확정 안 됨
+        assert e.note_read("buff", True, i * 0.5, frame_id=i, strong=False) is None
+    assert e.items["buff"].candidate is not None and e.items["buff"].box == (1, 1, 10, 10)
+    assert e.note_read("buff", True, 11.0, frame_id=20, strong=False) == "failed"  # 10초 안에 못 함 → 버림
+    assert e.region("buff") == (1, 1, 10, 10)
+    e2 = _stable_engine()
+    g2 = e2.start_search(["buff"])
+    e2.search_result(g2, "buff", (9, 9, 10, 10), 0.0)
+    out = [e2.note_read("buff", True, t, frame_id=i, strong=True) for i, t in enumerate((0.0, 1.0, 2.0, 3.1))]
+    assert out[-1] == "confirmed"
+
+
+def test_unreadable_new_spot_returns_to_previous_spot_first():
+    """요구 3: 확정한 새 자리에서 못 읽으면 화면 전체를 찾기 전에 바로 앞 자리부터 다시 시험."""
+    e = _stable_engine()
+    old = e.items["buff"].box
+    gen = e.start_search(["buff"])
+    e.search_result(gen, "buff", (353, 343, 304, 1097), 0.0)
+    for i, t in enumerate((0.0, 1.0, 2.0, 3.1)):
+        e.note_read("buff", True, t, frame_id=i)
+    assert e.items["buff"].box == (353, 343, 304, 1097) and e.items["buff"].fallback == old
+    e.tick(3.1, True)
+    t = _lose_buff(e, 3.1, 8.0)
+    assert e.revert_due(t, ONLY_BUFF) == []          # 아직 10초 안 됨
+    t = _lose_buff(e, t, 3.0)
+    assert e.revert_due(t, ONLY_BUFF) == [("buff", old)]
+    assert e.region("buff") == old and e.due(t, ONLY_BUFF) == []  # 시험 중엔 화면 전체 찾기 안 함
+    for i, dt in enumerate((0.5, 1.5, 2.5, 3.6)):
+        res = e.note_read("buff", True, t + dt, frame_id=100 + i, strong=True)
+    assert res == "confirmed" and e.items["buff"].box == old and e.items["buff"].fallback is None
+
+
+def test_previous_spot_also_unreadable_falls_back_to_normal_research():
+    e = _stable_engine()
+    gen = e.start_search(["buff"])
+    e.search_result(gen, "buff", (353, 343, 304, 1097), 0.0)
+    for i, t in enumerate((0.0, 1.0, 2.0, 3.1)):
+        e.note_read("buff", True, t, frame_id=i)
+    e.tick(3.1, True)
+    t = _lose_buff(e, 3.1, 11.0)
+    assert e.revert_due(t, ONLY_BUFF)
+    assert e.note_read("buff", False, t + 10.5, frame_id=999) == "failed"  # 앞 자리도 10초 안에 못 읽음
+    assert e.items["buff"].failures == 1 and e.items["buff"].candidate is None
+    t2 = _lose_buff(e, t + 10.5, 11.0)
+    assert e.due(t2, ONLY_BUFF) == ["buff"]       # 이제 보통 다시 찾기
