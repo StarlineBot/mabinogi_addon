@@ -149,3 +149,46 @@ def test_font_setting_and_untracked_contents_change_the_stamp(tmp_path, monkeypa
     new.write_text('b', encoding='utf-8')                    # 커밋 안 한 파일 내용만 바뀜
     assert checks.main(['--version', '0.10.1']) == 0
     assert len(calls) == 4
+
+
+ANSWER_HOOK = ROOT / '.claude/hooks/answer_guard.py'
+_aspec = importlib.util.spec_from_file_location('answer_guard', ANSWER_HOOK)
+answer = importlib.util.module_from_spec(_aspec)
+_aspec.loader.exec_module(answer)
+
+
+def _transcript(tmp_path, reply):
+    rows = [
+        {'type': 'user', 'message': {'role': 'user', 'content': '권한 되나?'}},
+        {'type': 'assistant', 'message': {'role': 'assistant', 'content': [{'type': 'tool_use', 'name': 'Bash'}]}},
+        {'type': 'user', 'message': {'role': 'user', 'content': [{'type': 'tool_result', 'content': 'ok'}]}},
+        {'type': 'assistant', 'message': {'role': 'assistant', 'content': [{'type': 'text', 'text': reply}]}},
+    ]
+    path = tmp_path / 't.jsonl'
+    path.write_text('\n'.join(json.dumps(r, ensure_ascii=False) for r in rows), encoding='utf-8')
+    return path
+
+
+def _stop(path, active=False):
+    payload = {'transcript_path': str(path), 'stop_hook_active': active}
+    return subprocess.run([sys.executable, str(ANSWER_HOOK)], input=json.dumps(payload), capture_output=True, text=True)
+
+
+@pytest.mark.parametrize('reply', ['권한은 확인 못 했습니다.', '될지는 해 봐야 압니다.', '그건 모르겠습니다.',
+                                   '실행 권한이 있는지는 확인하지 못했습니다.', '아직 확인 전입니다.'])
+def test_unverified_answers_are_sent_back(tmp_path, reply):
+    result = _stop(_transcript(tmp_path, reply))
+    assert result.returncode == 2 and '된다' in result.stderr
+
+
+@pytest.mark.parametrize('reply', ['됩니다. 후보 #248 성공.', "안 된다: 런북 파일이 이 저장소에 없음", '`확인 못 함` 문구는 코드 예시'])
+def test_concluded_answers_pass(tmp_path, reply):
+    assert _stop(_transcript(tmp_path, reply)).returncode == 0
+
+
+def test_answer_guard_blocks_only_once_and_never_breaks(tmp_path):
+    assert _stop(_transcript(tmp_path, '확인 못 했습니다'), active=True).returncode == 0
+    broken = subprocess.run([sys.executable, str(ANSWER_HOOK)], input='{}', capture_output=True, text=True)
+    assert broken.returncode == 0
+    settings = json.loads((ROOT / '.claude/settings.json').read_text(encoding='utf-8'))
+    assert any('answer_guard.py' in h['command'] for e in settings['hooks']['Stop'] for h in e['hooks'])
