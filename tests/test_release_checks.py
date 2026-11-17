@@ -34,6 +34,7 @@ def test_new_version_requires_its_own_explicit_plan(tmp_path):
 def test_runner_keeps_result_and_never_falls_back_to_all_tests(tmp_path, monkeypatch, result):
     plan(tmp_path)
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv('GITHUB_ACTIONS', 'true')  # CI 조건 그대로(-n 2). 로컬 병렬·재실행 방지는 test_qa_speed_guards
     calls = []
     def run(args):
         calls.append(args)

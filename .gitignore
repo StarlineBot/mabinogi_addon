@@ -47,3 +47,6 @@ test-diagnostics/
 # 배포 검사 결과(scripts.run_release_checks가 만든다 — 커밋하지 않음)
 unit-results.xml
 test-diagnostics/
+
+# 로컬 배포 검사 통과 기록(같은 코드 재실행 방지)
+.qa-stamps/

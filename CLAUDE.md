@@ -26,10 +26,10 @@
   차이가 나면 앱·공식·데이터 원인을 찾고, 필요한 자료만 묻는다.
 - 검사 순서(목표 5분 안팎, 차례로 쌓지 말 것):
   1. 바뀐 파일의 테스트만 먼저(실패하면 멈춤).
-  2. 배포 검사는 **CI 글꼴·`-n 4`로 한 번만**:
-     `FONTCONFIG_FILE=$S/fonts-ci.conf uv run --frozen python -m pytest -n 4 -q -p no:cacheprovider --tb=short -m "not windows_integration" <packaging/release_checks.json 의 tests>` (≈2.5분).
-     `scripts.run_release_checks`는 CI용 `-n 2`라 이 컨테이너에선 2배 느리다. 기본 글꼴로 한 번 더 돌리지 않는다.
-  3. 전체 테스트(≈14분)는 AGENTS.md '변경 영향 검사'의 넓은 변경일 때만, 이유를 적고 돌린다. 단일 기능·문구·QA 재확인엔 안 돌린다.
+  2. 배포 검사는 **CI 글꼴로 한 번만**: `FONTCONFIG_FILE=$S/fonts-ci.conf uv run --frozen python -m scripts.run_release_checks --version X.Y.Z`
+     (로컬은 코어 전부 사용 ≈1.5~2.5분, CI는 `-n 2` 그대로). 같은 코드·버전으로 이미 통과했으면 스크립트가 다시 돌지 않는다(`.qa-stamps/`, 꼭 필요하면 `--again`).
+  3. 전체 테스트(≈14분)는 AGENTS.md '변경 영향 검사'의 넓은 변경일 때만. 대상 없는 pytest는 **프로젝트 훅(`.claude/hooks/test_guard.py`)이 막으며**,
+     필요하면 명령 앞에 `FULL_REGRESSION_REASON='이유'`를 붙이고 배포 검사와 동시에(백그라운드) 돌린다.
   4. 2분 넘는 명령은 시작 전에 예상 시간을 사용자에게 말한다.
 - 사용자가 후보를 실행했다고 하면 1~2분 안에 작업 시작(jobs 수)을 확인하고, 대기 중이면 바로 알린다.
 - 새 자산·모듈이 들어간 버전은 Windows 실행 확인 전에 게시를 권하지 않는다(CI는 exe를 실행하지 않음).
