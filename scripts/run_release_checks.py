@@ -45,7 +45,15 @@ def _fingerprint(root, version):
         h.update(version.encode())
         h.update(git('rev-parse', 'HEAD^{tree}'))
         h.update(git('diff', 'HEAD', '--binary'))
-        h.update(git('ls-files', '--others', '--exclude-standard', '-z'))
+        for name in git('ls-files', '--others', '--exclude-standard', '-z').split(b'\0'):
+            if name:                                    # 커밋 안 한 새 파일은 이름뿐 아니라 내용까지
+                h.update(name)
+                h.update((root / name.decode('utf-8')).read_bytes())
+        # 글꼴 조건이 다르면 다른 검사(11-17 QA: 기본 글꼴 통과 기록으로 CI 글꼴 실행이 건너뛰어짐 — #243은 글꼴 차이로 실패)
+        font = os.environ.get('FONTCONFIG_FILE', '')
+        h.update(font.encode())
+        if font and Path(font).is_file():
+            h.update(Path(font).read_bytes())
         return h.hexdigest()[:16]
     except (OSError, subprocess.CalledProcessError):
         return None

@@ -25,6 +25,10 @@ _spec.loader.exec_module(guard)
     'uv run --frozen python -m pytest -n 4 -q -m "not windows_integration"',
     'uv run python -m scripts.run_regressions --diagnostics d -- -n 2 -vv',
     'echo start; pytest -x',
+    'uv run --frozen python -m pytest -q -n 4 -p no:cacheprovider --ignore=tests/test_startup_splash.py',
+    'uv run pytest -q --ignore tests/test_startup_splash.py',
+    'uv run pytest -q --deselect tests/test_a.py::test_one --ignore-glob=tests/windows/*',
+    "python3 - <<'EOF'\nprint(1)\nEOF\nuv run pytest -q -n 4",
 ])
 def test_full_runs_are_blocked(command):
     assert guard.full_run(command)
@@ -37,6 +41,8 @@ def test_full_runs_are_blocked(command):
     'uv run pytest -k music',
     'uv run pytest --co -q',
     'uv run pytest tests',
+    'uv run pytest -q --ignore=tests/test_x.py tests/test_y.py',
+    "python3 - <<'EOF'\nx = ['echo start; pytest -x', 'uv run pytest -q']\nEOF\nuv run pytest -q tests/test_a.py",
     "FULL_REGRESSION_REASON='공통 설정 이전' uv run pytest -n 4",
     'uv run python -m scripts.run_release_checks --version 0.52.0',
     'uv run pytest -n 4 $(python -c "import json;print(1)")',
@@ -120,3 +126,26 @@ def test_failure_leaves_no_stamp_and_ci_never_skips(tmp_path, monkeypatch):
     assert checks.main(['--version', '0.10.1']) == 0
     assert checks.main(['--version', '0.10.1']) == 0
     assert len(calls) == 3 and not (tmp_path / '.qa-stamps').exists()
+
+
+def test_font_setting_and_untracked_contents_change_the_stamp(tmp_path, monkeypatch):
+    _plan(tmp_path)
+    (tmp_path / '.gitignore').write_text('.qa-stamps/\n', encoding='utf-8')
+    _git(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv('GITHUB_ACTIONS', raising=False)
+    monkeypatch.delenv('FONTCONFIG_FILE', raising=False)
+    calls = []
+    monkeypatch.setattr(checks.run_regressions, 'main', lambda args: calls.append(args) or 0)
+    assert checks.main(['--version', '0.10.1']) == 0          # 기본 글꼴 통과
+    conf = tmp_path.parent / 'fonts-ci.conf'
+    conf.write_text('<fontconfig/>', encoding='utf-8')
+    monkeypatch.setenv('FONTCONFIG_FILE', str(conf))
+    assert checks.main(['--version', '0.10.1']) == 0
+    assert len(calls) == 2                                   # CI 글꼴은 다른 검사 — 건너뛰지 않음
+    new = tmp_path / 'tests/data.txt'
+    new.write_text('a', encoding='utf-8')
+    assert checks.main(['--version', '0.10.1']) == 0
+    new.write_text('b', encoding='utf-8')                    # 커밋 안 한 파일 내용만 바뀜
+    assert checks.main(['--version', '0.10.1']) == 0
+    assert len(calls) == 4

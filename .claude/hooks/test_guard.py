@@ -31,9 +31,31 @@ def _is_target(arg: str) -> bool:
             or arg.startswith('test_support') or arg in ('tests', 'tests/', './tests'))
 
 
+# 값으로 테스트 경로를 받지만 '빼기'라서 대상 지정이 아닌 옵션(11-17 QA: --ignore=tests/x.py 붙은 전체 실행이 통과됨)
+_EXCLUDE_FLAGS = {'--ignore', '--ignore-glob', '--deselect'}
+# heredoc 본문(<<'EOF' … EOF)은 실행 명령이 아니라 글자 — 그 안의 'pytest'로 막지 않는다(11-17 QA: 편집 스크립트가 막힘)
+_HEREDOC = re.compile(r"<<-?\s*(['\"]?)(\w+)\1[^\n]*\n.*?^\s*\2\s*$", re.S | re.M)
+
+
+def _has_target(args: list[str]) -> bool:
+    skip_next = False
+    for a in args:
+        if skip_next:
+            skip_next = False
+            continue
+        flag = a.split('=', 1)[0]
+        if flag in _EXCLUDE_FLAGS:
+            skip_next = '=' not in a
+            continue
+        if _is_target(a) or flag in _TARGET_FLAGS:
+            return True
+    return False
+
+
 def full_run(command: str) -> bool:
     if 'FULL_REGRESSION_REASON=' in command:
         return False
+    command = _HEREDOC.sub('', command)
     for part in re.split(r'&&|\|\||;|\|', command):
         try:
             words = shlex.split(part)
@@ -56,7 +78,7 @@ def full_run(command: str) -> bool:
         args = words[runner:]
         if any('$(' in a or '`' in a for a in args) or '$(' in part or '`' in part:
             continue  # 목록을 명령 치환으로 넘김 — 판단 불가, 막지 않음
-        if any(_is_target(a) or a.split('=', 1)[0] in _TARGET_FLAGS for a in args):
+        if _has_target(args):
             continue
         return True
     return False

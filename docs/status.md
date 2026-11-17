@@ -25,6 +25,12 @@
 
 ## 배포와 검증
 
+- **11-17 QA 장치 변경(a5572861) 확인 + 빈틈 3개 고침 — ⚠️ 0.52.0 후보 #246은 이제 게시 불가, 새 후보 필요.**
+  a5572861이 scripts/·tests/를 바꿔 게시 관문(`release_candidate.gate`: origin/main과 후보 SHA b6fabd69의 검증 입력 지문 비교)에서
+  'validation inputs changed after validation'으로 막힘. 제품(src/·packaging/)은 b6fabd69와 같음 → 새 verify-only 후보를 지금 main에서 다시 만들면 됨.
+  빈틈(재현 후 수정·테스트 추가, 43 통과): ① 훅이 `--ignore=tests/...`·`--deselect`·`--ignore-glob` 붙은 전체 실행을 '대상 지정'으로 보고 통과시킴(11-16에 쓴 전체 명령이 그대로 통과) →
+  빼기 옵션 값은 대상 아님. ② 통과 기록 지문에 글꼴 설정이 없어 기본 글꼴 통과 뒤 CI 글꼴 실행이 '이미 통과'로 건너뛰어짐(#243 실패 유형) → FONTCONFIG_FILE 경로·내용 포함,
+  커밋 안 한 새 파일은 이름뿐 아니라 내용까지. ③ heredoc 본문 안 'pytest' 글자로 편집 명령이 막힘 → heredoc 본문 제외.
 - **0.52.0 후보 #246 성공(run 43918161493, b6fabd69, verify-only)** — 17:25 시작 즉시 실행, 17:35 완료. 산출물 verified-windows-43918161493-1(164,996,904바이트, 만료 2026-11-18 02:35 KST). #245(4616dcaa)는 GitHub 대기열에 남은 채 — 게시 대상 아님.
 - **0.52.0 후보 #245(run 43913922212, 4616dcaa) — 17:01 UTC 실행 뒤 10분 넘게 '대기(queued)'·작업 0개** — 같은 동시 실행 그룹(verified-windows-candidate)에 진행 중인 다른 실행 없음 → GitHub 쪽 러너 배정 지연으로 보임. 대기 중.
 - **0.52.0 추가 수정 QA(63cbce60): 통과 — 후보 다시 가능** — ① 자동 찾기 v2(041c1301): 게임 복귀 뒤 5초(FOCUS_GRACE) 다시 찾기·새 자리 시험 안 함, 그 사이 시작된 다시 찾기 결과 버림,
