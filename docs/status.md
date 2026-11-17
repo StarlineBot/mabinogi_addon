@@ -25,6 +25,11 @@
 
 ## 배포와 검증
 
+- **v0.52.0 게시 완료(11-17 11:03 UTC = 20:03 KST, QA 세션이 직접 실행)** — 사용자 '배포'(후보 #249 Windows 확인) → GitHub MCP로 windows.yml publish-existing(candidate_run=44002508865) 실행:
+  run [44070288743](https://github.com/StarlineBot/mabinogi_addon/actions/runs/44070288743) 성공(request만, 검사·빌드 0) → 게시 [44070367121](https://github.com/StarlineBot/mabinogi_addon/actions/runs/44070367121) promote 성공.
+  게시 후 확인 1단계(QA): 태그 v0.52.0 = afc1a775(후보 SHA), 공개 저장소 main fca8ddf 'release: v0.52.0', version.json 0.52.0·sha256 66b1f911…a50c·164,780,077바이트,
+  공개 exe 직접 받아 sha256·크기 일치. 게시 관문이 후보 봉인 목록(candidate.json)의 exe 해시와 version.json을 대조하므로 공개 exe = 후보 #249 exe.
+  raw version.json은 CDN 캐시(5분) 뒤 11:07에 0.52.0 확인 — 기존 사용자 자동 업데이트 시작. 남은 것: 2단계 사용자 실제 업데이트 경로 확인.
 - **0.52.0 후보 #249 성공(run 44002508865, afc1a775, verify-only) — 게시 대상** — 02:22 실행 → 02:34 완료(약 12분). 산출물 verified-windows-44002508865-1(164,996,626바이트, 만료 2026-11-18 11:33 KST). 제품(src)은 #247·#248과 같음. 사용자 Windows 확인 → '배포해'면 candidate_run=44002508865로 publish-existing. 게시 전 tests/·scripts/·packaging/·src/ 변경 금지(지문).
 - **0.52.0 후보 #247·#248 게시 불가 → 후보 #249(run 44002508865, afc1a775) 실행(11-17 02:22 UTC, 기획 세션)** — #248 뒤 main에 훅 테스트(tests/test_qa_speed_guards.py)·.claude 훅이 들어가 검증 입력 지문이 바뀜(90dab91·b6beb2a = 5b9d4b3c…, afc1a77 = ffabae9b…) → main에서 publish-existing을 부르면 맞는 후보가 없어 실패. 제품(src)은 같음. 앞으로 후보 확인 중에는 tests/·scripts/·packaging/·src/를 바꾸지 않거나, 바꾸면 바로 새 후보.
 - **0.52.0 후보 #248 성공(run 43993870986, b6beb2a8, verify-only) — 에이전트가 직접 실행한 첫 후보(기획 세션, actions_run_trigger)** — 01:13:14 실행 → 13초 뒤 시작 → 01:24 완료(약 11분). 산출물 verified-windows-43993870986-1(164,996,270바이트, 만료 2026-11-18 10:24 KST). 제품은 #247(90dab91)과 같고 이후 .md만. 사용자 Windows 확인 대기 → '배포해'면 candidate_run=43993870986으로 publish-existing.
