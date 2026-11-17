@@ -25,6 +25,9 @@
 
 ## 배포와 검증
 
+- **0.52.0 후보 #247 성공(run 43991315810, 90dab914, verify-only) — 게시 대상(#246 대체)** — 00:53 UTC 시작, 01:04 완료, request·regression·validate 모두 성공.
+  산출물 verified-windows-43991315810-1(164,995,693바이트, 만료 2026-11-18 01:04 UTC = 10:04 KST). 이후 main 변경은 .md 문서뿐(검증 입력 지문 같음, QA 확인).
+  사용자 Windows 확인 뒤 '배포해' → QA 세션이 candidate_run=43991315810으로 publish-existing 직접 실행.
 - **배포 실행 권한 확인(11-17, 기획 세션)**: 세션 GitHub 연결 = StarlineBot(get_me). `actions_run_trigger`로 windows.yml에 허용 안 된 mode 값을 보내 시험 → GitHub가 권한 확인 뒤 입력 검사에서 거절(422 'not in the list of allowed values'), 실행은 안 생김(#247 그대로) → **QA 세션이 verify-only·publish-existing을 직접 실행 가능**. 이전 후보 #245·#246도 같은 StarlineBot이 실행. release.yml은 실행자를 보지 않음(workflow_run).
 - **11-17 QA 장치 변경(a5572861) 확인 + 빈틈 3개 고침 — ⚠️ 0.52.0 후보 #246은 이제 게시 불가, 새 후보 필요.**
   a5572861이 scripts/·tests/를 바꿔 게시 관문(`release_candidate.gate`: origin/main과 후보 SHA b6fabd69의 검증 입력 지문 비교)에서
