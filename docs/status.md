@@ -25,6 +25,7 @@
 
 ## 배포와 검증
 
+- **배포 실행 권한 확인(11-17, 기획 세션)**: 세션 GitHub 연결 = StarlineBot(get_me). `actions_run_trigger`로 windows.yml에 허용 안 된 mode 값을 보내 시험 → GitHub가 권한 확인 뒤 입력 검사에서 거절(422 'not in the list of allowed values'), 실행은 안 생김(#247 그대로) → **QA 세션이 verify-only·publish-existing을 직접 실행 가능**. 이전 후보 #245·#246도 같은 StarlineBot이 실행. release.yml은 실행자를 보지 않음(workflow_run).
 - **11-17 QA 장치 변경(a5572861) 확인 + 빈틈 3개 고침 — ⚠️ 0.52.0 후보 #246은 이제 게시 불가, 새 후보 필요.**
   a5572861이 scripts/·tests/를 바꿔 게시 관문(`release_candidate.gate`: origin/main과 후보 SHA b6fabd69의 검증 입력 지문 비교)에서
   'validation inputs changed after validation'으로 막힘. 제품(src/·packaging/)은 b6fabd69와 같음 → 새 verify-only 후보를 지금 main에서 다시 만들면 됨.
