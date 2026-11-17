@@ -25,6 +25,7 @@
 
 ## 배포와 검증
 
+- **0.52.0 후보 #247·#248 게시 불가 → 후보 #249(run 44002508865, afc1a775) 실행(11-17 02:22 UTC, 기획 세션)** — #248 뒤 main에 훅 테스트(tests/test_qa_speed_guards.py)·.claude 훅이 들어가 검증 입력 지문이 바뀜(90dab91·b6beb2a = 5b9d4b3c…, afc1a77 = ffabae9b…) → main에서 publish-existing을 부르면 맞는 후보가 없어 실패. 제품(src)은 같음. 앞으로 후보 확인 중에는 tests/·scripts/·packaging/·src/를 바꾸지 않거나, 바꾸면 바로 새 후보.
 - **0.52.0 후보 #248 성공(run 43993870986, b6beb2a8, verify-only) — 에이전트가 직접 실행한 첫 후보(기획 세션, actions_run_trigger)** — 01:13:14 실행 → 13초 뒤 시작 → 01:24 완료(약 11분). 산출물 verified-windows-43993870986-1(164,996,270바이트, 만료 2026-11-18 10:24 KST). 제품은 #247(90dab91)과 같고 이후 .md만. 사용자 Windows 확인 대기 → '배포해'면 candidate_run=43993870986으로 publish-existing.
 - **0.52.0 후보 #247 성공(run 43991315810, 90dab914, verify-only) — 게시 대상(#246 대체)** — 00:53 UTC 시작, 01:04 완료, request·regression·validate 모두 성공.
   산출물 verified-windows-43991315810-1(164,995,693바이트, 만료 2026-11-18 01:04 UTC = 10:04 KST). 이후 main 변경은 .md 문서뿐(검증 입력 지문 같음, QA 확인).
