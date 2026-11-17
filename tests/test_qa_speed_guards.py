@@ -181,7 +181,8 @@ def test_unverified_answers_are_sent_back(tmp_path, reply):
     assert result.returncode == 2 and '된다' in result.stderr
 
 
-@pytest.mark.parametrize('reply', ['됩니다. 후보 #248 성공.', "안 된다: 런북 파일이 이 저장소에 없음", '`확인 못 함` 문구는 코드 예시'])
+@pytest.mark.parametrize('reply', ['됩니다. 후보 #248 성공.', "안 된다: 런북 파일이 이 저장소에 없음", '`확인 못 함` 문구는 코드 예시',
+                                   '답에 "확인 못 했다", "모르겠다" 같은 표현이 있으면 막습니다.'])
 def test_concluded_answers_pass(tmp_path, reply):
     assert _stop(_transcript(tmp_path, reply)).returncode == 0
 
