@@ -25,6 +25,7 @@
 
 ## 배포와 검증
 
+- **0.52.0 후보 #248 성공(run 43993870986, b6beb2a8, verify-only) — 에이전트가 직접 실행한 첫 후보(기획 세션, actions_run_trigger)** — 01:13:14 실행 → 13초 뒤 시작 → 01:24 완료(약 11분). 산출물 verified-windows-43993870986-1(164,996,270바이트, 만료 2026-11-18 10:24 KST). 제품은 #247(90dab91)과 같고 이후 .md만. 사용자 Windows 확인 대기 → '배포해'면 candidate_run=43993870986으로 publish-existing.
 - **0.52.0 후보 #247 성공(run 43991315810, 90dab914, verify-only) — 게시 대상(#246 대체)** — 00:53 UTC 시작, 01:04 완료, request·regression·validate 모두 성공.
   산출물 verified-windows-43991315810-1(164,995,693바이트, 만료 2026-11-18 01:04 UTC = 10:04 KST). 이후 main 변경은 .md 문서뿐(검증 입력 지문 같음, QA 확인).
   사용자 Windows 확인 뒤 '배포해' → QA 세션이 candidate_run=43991315810으로 publish-existing 직접 실행.
