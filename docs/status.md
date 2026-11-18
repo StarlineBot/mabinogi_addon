@@ -25,6 +25,14 @@
 
 ## 배포와 검증
 
+- **QA 5fbb5f09(북미 클라이언트 게임 프로세스 안 열기, 0.52.3): 반려 — 차단 2건** (배포 검사 CI 글꼴 370 통과·가드 위치 검토는 맞음: 프로세스를 여는 곳 전부 is_protected_pid 거침, process_job은 앱 자식만, process_threads는 시스템 목록이라 안 엶)
+  ① **보호 빈틈(재현)**: 보호 pid는 창 목록을 2초마다만 다시 훑음 → 북미 게임 창이 뜬 뒤 최대 2초 동안 is_protected_pid=False·active=False(QA 재현: 뜬 직후 0초·1초 False, 2.1초 True).
+     그 사이 게임 확인(약 1초마다) → optimization.game() → registered_game_target(해외 창 아직 모름 → 등록 실행파일 경로) → find_game_window가 해외 제목 분기로 그 창을 고름 → `_process`가 OpenProcess(게임).
+     NA 사용자는 gameExe=client.exe 등록 상태(로그) → 이 경로를 탐. 최적화 자동 적용이면 쓰기 권한으로도 열 수 있음. 게임을 앱보다 늦게 켜는 경우마다 해당.
+  ② **한국 오탐**: is_overseas_game_window = 제목에 'mabinogi'(대소문자 무시) 포함 + 크롬·파이어폭스·탐색기 등 몇 개 창 클래스만 제외 → 그 밖의 프로그램은 전부 '북미 게임 창'.
+     한국 게임 스크린샷 파일 이름이 mabinogi_YYYY_MM_DD_HHMMSS(tests/data에 10장) → 꿀뷰·팟플레이어 등으로 열면, 또 카톡방·OBS 프로필 이름에 Mabinogi가 있으면 해당(함수로 확인: True).
+     그러면 그 실행 동안 최적화·FPS·블랙박스 꺼짐, '북미' 안내 1회(이 PC 영구 기록), registered_game_target이 그 뷰어 창을 게임 창으로 씀(미리보기·위치), 앞 창이면 오버레이도 '게임'으로 봄.
+  고칠 방향(개발 요청): 북미 게임 창 = 제목이 정확히 'Mabinogi'(앞뒤 공백 제거·대소문자 무시, NA 로그 제목 그대로) + 기존 클래스 제외. 창을 찾는 순간(find_game_window 해외 분기·_classify·dialogue_visibility의 hwnd) 그 pid를 바로 보호 등록(또는 registered_game_target에서 강제 훑기) — 테스트: 창이 뜬 0.1초 뒤에도 열지 않음, 한국 오탐 제목들 False.
 - **북미(영문 제목) 클라이언트에서 게임 프로세스를 열지 않는 모드(사용자 결정 11-18, 0.52.3 노트 한 줄)**: NA 사용자가 애드온만 켠 상태(유튜브 시청)로 두 번 NA 보안 프로그램에 끊김 — 원인 기능 미확정, 가장 유력한 후보 = 게임 프로세스 열기(OpenProcess). 화면 캡처(바탕화면 복사)·판독은 그대로.
   구조: 새 `system/overseas_guard.py` — 창 목록(EnumWindows)에서 제목·창 클래스·pid만 읽어(GetWindowText·GetClassName·GetWindowThreadProcessId, 프로세스 안 엶) 제목이 해외(`is_overseas_title`)이고 브라우저·탐색기 창 클래스(Chrome_WidgetWin_*·MozillaWindowClass·CabinetWClass 등)가 아니면 해외 게임 창 → 그 pid는 '보호 pid'(이번 실행 동안), 해외 게임 창을 본 적 있으면 `active()`. 2초마다 다시 훑음(수 ms, 프로세스를 여는 곳에서 필요할 때만).
   가드: `_exe_basename_of_pid`(실행 파일 이름 확인 — 모든 경로의 공통 지점)·`optimization._process`·`perf_metrics`(메모리·우선순위 조회)·`blackbox_capture.target_identity`·`dialogue_visibility`(가린 창 진단)·`process_priority`(읽기·쓰기)는 보호 pid를 열지 않음. `WindowsWatcher._classify`·`foreground_info`·`list_windows`: 해외 제목이면 실행 파일 확인 없이(등록된 gameExe가 있어도) 창 목록 판정으로. `dwm_thumbnail.find_game_window`·`window_capture.registered_game_target`: 해외 게임 창은 제목·창 클래스로(판독 기능은 그대로 그 창 위치). 해외면 끔: 최적화·FPS(`WindowsOptimization.game()` 없음 → 시작 안 함), 블랙박스(`blackbox_events.sample` 대상 없음), `GameProcessProbe.identity`는 창 pid만((pid, 0) — 재시작 감지는 pid로). 한국('마비노기' 제목)은 기존 경로 그대로.
