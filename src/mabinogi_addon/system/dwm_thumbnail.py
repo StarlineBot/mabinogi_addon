@@ -97,13 +97,14 @@ def find_game_window(exe: str | None, titles: tuple[str, ...]) -> int:
         title = raw_title.lower()
         if is_overseas_title(raw_title):
             # 해외 제목: 실행 파일 확인 없이 제목·창 클래스로(pid만 받는다 — 프로세스를 열지 않음)
-            from .overseas_guard import is_overseas_game_window
+            from . import overseas_guard
             try:
                 _, pid = win32process.GetWindowThreadProcessId(hwnd)
-                ok = pid != os.getpid() and is_overseas_game_window(raw_title, win32gui.GetClassName(hwnd))
+                ok = pid != os.getpid() and overseas_guard.is_overseas_game_window(raw_title, win32gui.GetClassName(hwnd))
             except Exception:  # noqa: BLE001
                 ok = False
             if ok:
+                overseas_guard.protect(pid, hwnd)  # 찾은 순간 보호 등록(QA 5fbb5f09 ①)
                 found.append(hwnd)
                 return False
             return True

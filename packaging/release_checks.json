@@ -22,14 +22,14 @@
         "tests/test_overseas_guard.py",
         "tests/test_overseas_client.py"
       ],
-      "reason": "새 모듈 — 창 목록(제목·창 클래스·pid)만으로 해외 게임 창 판정, 그 pid는 열지 않음, 한국만 있으면 그대로"
+      "reason": "새 모듈 — 창 목록(제목·창 클래스·pid)만으로 해외 게임 창 판정, 그 pid는 열지 않음, 한국만 있으면 그대로 — 창을 찾는 순간 protect(QA 5fbb5f09 ①), 제목이 정확히 'Mabinogi'(②)"
     },
     "src/mabinogi_addon/system/window_watcher.py": {
       "tests": [
         "tests/test_overseas_guard.py",
         "tests/test_game_window_judge.py"
       ],
-      "reason": "해외 제목이면 _classify·foreground_info·list_windows가 실행 파일을 열지 않음(등록돼 있어도), 한국은 기존 판정"
+      "reason": "해외 제목이면 _classify·foreground_info·list_windows가 실행 파일을 열지 않음(등록돼 있어도), 한국은 기존 판정 — is_overseas_title은 제목이 정확히 'Mabinogi'(QA ②), _classify는 창 클래스로 판정·바로 보호 등록(QA ①)"
     },
     "src/mabinogi_addon/system/dwm_thumbnail.py": {
       "tests": [
@@ -44,7 +44,7 @@
         "tests/test_dorcha_game_target.py",
         "tests/test_dorcha_thread.py"
       ],
-      "reason": "registered_game_target: 해외 게임 창은 등록·확인 없이 그 창(판독 그대로), 한국은 기존 캐시·재확인"
+      "reason": "registered_game_target: 해외 게임 창은 등록·확인 없이 그 창(판독 그대로), 한국은 기존 캐시·재확인 — 이전 창이 북미 제목이 되면 그 창 제목만 보고 보호(QA ①)"
     },
     "src/mabinogi_addon/system/optimization.py": {
       "tests": [

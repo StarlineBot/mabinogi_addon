@@ -88,6 +88,18 @@ def scan(enum: Callable[[], Iterable[tuple[int, str, str, int]]] | None = None,
         return _active
 
 
+def protect(pid, hwnd=None) -> None:
+    """창을 찾은 쪽이 북미 게임 창이라고 본 그 순간 pid를 보호 등록(다음 훑기를 기다리지 않음 — QA 5fbb5f09 ①)."""
+    global _window, _active
+    if not pid:
+        return
+    with _lock:
+        _pids.add(int(pid))
+        _active = True
+        if hwnd:
+            _window = (int(hwnd), int(pid))
+
+
 def _refresh() -> None:
     with _lock:
         stale = time.monotonic() - _scanned_at >= SCAN_SECONDS
@@ -112,7 +124,7 @@ def active() -> bool:
 
 
 def game_window() -> tuple[int, int] | None:
-    """마지막으로 본 해외 게임 창 (hwnd, pid) — 판독 기능이 창 위치를 잡을 때(프로세스는 열지 않음)."""
+    """지금 떠 있는 북미 게임 창 (hwnd, pid) — 판독 기능이 창 위치를 잡을 때(프로세스는 열지 않음)."""
     _refresh()
     with _lock:
         return _window

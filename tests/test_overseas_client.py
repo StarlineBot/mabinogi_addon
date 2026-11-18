@@ -10,9 +10,13 @@ from mabinogi_addon.system.window_watcher import is_game_title, is_overseas_titl
 
 
 @pytest.mark.parametrize("title,overseas", [
-    ("Mabinogi", True), ("MABINOGI", True), ("mabinogi - Client", True),
+    ("Mabinogi", True), ("MABINOGI", True), ("  mabinogi  ", True),   # 제목이 정확히 'Mabinogi'(공백·대소문자 무시)
     ("마비노기", False), ("마비노기 Mabinogi", False), ("Mabinogi 마비노기", False),
     ("", False), (None, False), ("메모장", False),
+    # QA 5fbb5f09 ②: 'mabinogi'를 포함만 하는 한국 사용자의 다른 프로그램은 북미 게임 창이 아님
+    ("mabinogi_2026_11_18_123456.jpg - 꿀뷰", False), ("Mabinogi 길드", False),
+    ("OBS 31.0.0 - Profile: Mabinogi - Scenes: 기본", False), ("Mabinogi - 다음 팟플레이어", False),
+    ("mabinogi - Client", False),
 ])
 def test_title_decision(title, overseas):
     assert is_overseas_title(title) is overseas
@@ -21,8 +25,9 @@ def test_title_decision(title, overseas):
 @pytest.mark.parametrize("title,exe,shown", [
     ("Mabinogi", "client.exe", True),               # NA 게임 창
     ("Mabinogi", "", True),                         # 실행파일을 못 읽으면 제목만(게임 판정과 같은 규칙)
-    ("Mabinogi - Google Chrome", "chrome.exe", False),  # 브라우저 제외 목록은 게임이 아님 → 안내 없음
+    ("Mabinogi - Google Chrome", "chrome.exe", False),  # 브라우저 탭 — 제목이 'Mabinogi'만이 아님
     ("Mabinogi wiki", "explorer.exe", False),
+    ("Mabinogi", "chrome.exe", False),               # 제목이 딱 'Mabinogi'인 브라우저 창도 게임 아님
     ("마비노기", "client.exe", False),               # 한국 게임 창
 ])
 def test_with_not_game_exclusions(title, exe, shown):

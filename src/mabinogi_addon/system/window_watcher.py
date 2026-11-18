@@ -49,11 +49,11 @@ def is_game_title(title: str, exe: str | None, titles: tuple[str, ...] = DEFAULT
 
 
 def is_overseas_title(title: str | None) -> bool:
-    """해외(영문 제목) 마비노기 클라이언트인지 — 제목에 '마비노기'가 없고 'mabinogi'만 있으면 해외(NA 'Mabinogi').
-    실행파일은 한국·해외 모두 Client.exe라 제목으로만 구분한다(사용자 결정 11-18). 게임 창인지 판단은 따로
-    (is_game_title — 브라우저 등 제외 목록)라 함께 써야 한다. 순수 함수(맥에서 테스트)."""
-    title = title or ""
-    return "마비노기" not in title and "mabinogi" in title.lower()
+    """북미(영문) 마비노기 게임 창 제목인지 — 제목이 정확히 'Mabinogi'(앞뒤 공백 무시, 대소문자 무시. NA 로그의 제목 그대로).
+    'mabinogi'를 '포함'만 하면 안 된다(QA 5fbb5f09: 한국 스크린샷 'mabinogi_2026_….jpg - 꿀뷰', 카톡방 'Mabinogi 길드',
+    'OBS … Profile: Mabinogi' 등이 북미 게임 창이 됨). 실행파일은 한국·북미 모두 Client.exe라 제목으로만 구분한다(사용자 결정 11-18).
+    창 클래스(브라우저 등) 제외는 system/overseas_guard.is_overseas_game_window. 순수 함수(맥에서 테스트)."""
+    return (title or "").strip().lower() == "mabinogi"
 
 
 def is_game_window(title: str, exe: str | None, pid: int = 0, own_pid: int | None = None,
@@ -116,6 +116,14 @@ class WindowWatcher(ABC):
     def is_self_active(self) -> bool:
         """포그라운드가 우리 앱 창인지(편집 중 오버레이 유지에 사용)."""
         return False
+
+    def _foreground_class(self) -> str:
+        """포그라운드 창의 창 클래스(프로세스를 열지 않음)."""
+        try:
+            import win32gui
+            return win32gui.GetClassName(win32gui.GetForegroundWindow()) or ""
+        except Exception:  # noqa: BLE001
+            return ""
 
     def foreground_info(self) -> tuple[str, str]:
         """현재 포그라운드 창의 (제목, 실행파일명). 자동 찾기·진단용."""
@@ -257,9 +265,13 @@ class WindowsWatcher(WindowWatcher):
         if pid == self._own_pid:
             return "self"
         if is_overseas_title(title):
-            # 해외 제목: 실행 파일을 열지 않고(등록된 실행 파일이 있어도) 창 클래스로 고른 해외 게임 창인지만
+            # 북미 제목: 실행 파일을 열지 않고(등록된 실행 파일이 있어도) 창 클래스로만 판정하고,
+            # 게임 창이면 그 pid를 바로 보호 등록(다음 창 목록 훑기까지 기다리지 않음 — QA 5fbb5f09 ①)
             from . import overseas_guard
-            return "game" if overseas_guard.is_protected_pid(pid) else "other"
+            if overseas_guard.is_overseas_game_window(title, self._foreground_class()):
+                overseas_guard.protect(pid)
+                return "game"
+            return "other"
         if self._game_exe:  # 등록된 실행파일이 있으면 그걸로 판정(정확)
             return "game" if _exe_basename_of_pid(pid) == self._game_exe else "other"
         # 폴백: 제목 매칭 + 브라우저·탐색기·메신저 제외(실행파일을 못 읽으면 제목만)

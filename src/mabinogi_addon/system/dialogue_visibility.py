@@ -105,6 +105,11 @@ def _blocker_identity(gui, hwnd, detail):
         _, pid = win32process.GetWindowThreadProcessId(hwnd)
         detail["blocker_pid"] = pid
         from . import overseas_guard
+        try:
+            if overseas_guard.is_overseas_game_window(gui.GetWindowText(hwnd), gui.GetClassName(hwnd)):
+                overseas_guard.protect(pid, hwnd)  # 이 창을 본 순간 보호 등록(QA 5fbb5f09 ①)
+        except Exception:  # noqa: BLE001, S110
+            pass
         if overseas_guard.is_protected_pid(pid):
             detail["blocker_exe"] = "overseas-game"  # 해외 게임 프로세스는 열지 않음(사용자 결정 11-18)
             return

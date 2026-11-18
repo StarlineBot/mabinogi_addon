@@ -56,6 +56,18 @@ def _owner_confirmed(hwnd, pid, exe):
     return ok
 
 
+def _overseas_now(gui, hwnd, pid) -> bool:
+    """그 창 하나의 제목·창 클래스만 보고(프로세스 안 엶) 북미 게임 창이면 바로 보호 등록. 창 목록 전체를 훑지 않는다."""
+    from . import overseas_guard
+    try:
+        if overseas_guard.is_overseas_game_window(gui.GetWindowText(hwnd), gui.GetClassName(hwnd)):
+            overseas_guard.protect(pid, hwnd)
+            return True
+    except Exception:  # noqa: BLE001, S110
+        pass
+    return False
+
+
 def clear_target_cache():
     """설정에서 게임 실행 파일을 바꿨을 때 등 — 다음 조회에서 바로 다시 읽는다."""
     with _cache_lock:
@@ -88,7 +100,9 @@ def registered_game_target(previous=None):
                 candidate, previous_pid = previous[:2]
                 if win32gui.IsWindow(candidate) and win32gui.IsWindowVisible(candidate):
                     _, pid = win32process.GetWindowThreadProcessId(candidate)
-                    if pid == previous_pid and _owner_confirmed(candidate, pid, exe):
+                    if pid == previous_pid and _overseas_now(win32gui, candidate, pid):
+                        hwnd = candidate  # 이 창이 북미 게임 창(막 뜸) — 실행 파일 확인 없이(QA 5fbb5f09 ①)
+                    elif pid == previous_pid and _owner_confirmed(candidate, pid, exe):
                         hwnd = candidate
             if not hwnd:
                 hwnd = dwm_thumbnail.find_game_window(exe, DEFAULT_GAME_TITLES)
