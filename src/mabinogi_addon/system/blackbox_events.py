@@ -68,8 +68,6 @@ class WindowsEvents:
         if not found:
             return None, False
         hwnd, pid = found[:2]
-        if overseas_guard.is_protected_pid(pid):
-            return None, False  # 막 뜬 북미 창(찾는 순간 보호 등록됨 — QA 5fbb5f09 ①)
         # 제목 일치만으로 대상을 받아들이지 않는다.
         if _exe_basename_of_pid(pid) != (config.load_game_exe() or '').lower():
             return None, False

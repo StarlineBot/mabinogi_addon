@@ -254,7 +254,7 @@ class WindowsOptimization:
             return None  # 해외(영문 제목) 클라이언트 — 최적화·FPS는 게임을 못 찾은 것처럼 시작하지 않음(사용자 결정 11-18)
         from .window_capture import registered_game_target
         target = self._game_window = registered_game_target(self._game_window)
-        if target is None or overseas_guard.is_protected_pid(target[1]): return None  # 막 뜬 북미 창(QA 5fbb5f09 ①)
+        if target is None: return None
         with self._process({'pid':target[1]}) as (_,handle,birth):
             return {'pid':target[1],'birth':birth}
 
