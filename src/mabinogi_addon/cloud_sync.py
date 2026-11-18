@@ -119,6 +119,8 @@ def merge_incoming(incoming: dict, local: dict, *, same_resolution: bool) -> dic
                 sec[key] = copy.deepcopy(sec_local[key])
         merged[section] = sec
     _keep_local_game_exe(merged, incoming, local)
+    from .feature_usage import keep_local
+    keep_local(merged, local)  # 사용 기능 날짜(명세 3.4.2): 올리긴 하지만 받을 때는 이 PC 값 유지
     return merged
 
 

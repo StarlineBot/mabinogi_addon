@@ -1411,11 +1411,74 @@ class MainWindow(QMainWindow):
             except Exception:  # noqa: BLE001 — 한 탭 실패가 나머지 초기화를 막지 않게
                 _cap_log.exception("게임 재시작 초기화 실패: %s", type(tab).__name__)
 
+    # ---- 사용 기능 보고 featureUsage(계정 명세 3.4.2, 사용자 결정 11-18) ----
+    _USAGE_EVERY = 5.0  # 초 — 상태만 훑으므로 가볍다(판독·캡처 없음)
+
+    def _note_feature_usage(self, now: float | None = None) -> list[str]:
+        """게임 실행 중·일시정지 아님일 때, 오늘 처음 동작한 기능 키를 featureUsage에 적는다. 새로 적은 키."""
+        import time
+
+        from .. import feature_usage
+        now = time.monotonic() if now is None else now
+        if now < getattr(self, "_usage_at", 0.0):
+            return []
+        self._usage_at = now + self._USAGE_EVERY
+        if getattr(self, "_usage", None) is None:
+            self._usage = feature_usage.Recorder(config.load_feature_usage, config.save_feature_usage)
+        running = self._game_session.identity is not None  # 게임 프로세스(약 1초마다 갱신, Windows)
+        if not running or self._paused:
+            return []
+        try:
+            return self._usage.observe(self._feature_usage_active(), game_running=running, paused=bool(self._paused))
+        except OSError:
+            _cap_log.warning("사용 기능 기록 실패", exc_info=True)
+            return []
+
+    def _feature_usage_active(self) -> set[str]:
+        """지금 '동작 중'인 기능 키(명세 3.4.2 표). 화면 상태만 읽고 새로 판독하지 않는다 — 한 항목 실패는 그 키만 뺀다."""
+
+        def shown(*widgets) -> bool:
+            return any(w is not None and w.isVisible() for w in widgets)
+
+        checks = {
+            "buff": lambda: self.buff_controller is not None and self.buff_controller.item_count > 0,
+            "debuff": lambda: (self.debuff_controller is not None and self.debuff_controller.item_count > 0
+                               and self.debuff_overlay.isVisible()),
+            "boss": lambda: self.boss_tab._cur_boss is not None,
+            "halo": lambda: bool(getattr(getattr(self.boss_tab.halo_capture, "_clock", None), "armed", False)),
+            "tuarim": lambda: (self.tuarim_tab.enable.isChecked()
+                               and getattr(self.tuarim_tab, "_stable_value", None) is not None),
+            "dorcha": lambda: self.dorcha_tab.enable.isChecked() and shown(self.dorcha_tab._overlay),
+            "stat_bars": lambda: shown(*self.stat_bars_tab._overlays.values()),
+            "skillbar": lambda: shown(*self.skillbar_tab._overlays.values()),
+            "custom": lambda: self.custom_overlay_tab.enable.isChecked() and shown(*self.custom_overlay_tab._mgr._overlays),
+            "cooldown": lambda: shown(*self.skillbar_tab.cooldown._overlays.values()),
+            "boss_bar": lambda: shown(self.boss_tab.bar_section._overlay),
+            "fps": lambda: (self.optimization_tools.panel is not None
+                            and self.optimization_tools.panel.frames_toggle.isChecked()
+                            and shown(self.optimization_tools._overlay)),
+            "opt": lambda: self.optimization_tools.home_state()[0] == "적용 중",
+            "cursor": lambda: self.cursor_fx.is_enabled(),
+            "blackbox": lambda: (self.blackbox_tools.service is not None
+                                 and self.blackbox_tools.service.status == "recording"),
+            "alarm": lambda: self.alarm_tab.enable.isChecked() and any(a.enabled for a in self.alarm_tab.clock.alarms),
+            "keywords": lambda: bool(self.party_tab._keywords),
+        }
+        active = set()
+        for key, check in checks.items():
+            try:
+                if check():
+                    active.add(key)
+            except Exception:  # noqa: BLE001 — 기록용 상태 확인 실패가 추적 틱을 막지 않게
+                _cap_log.debug("사용 기능 상태 확인 실패: %s", key, exc_info=True)
+        return active
+
     def _update_tracking_status(self) -> None:
         if self._closing or self._config_pending_restart:
             return
         self._maybe_retry_live_capture()
         self._check_game_process()
+        self._note_feature_usage()
         self._update_tray_tooltip()
         self.buff_tab.set_status(*self._buff_status())
         self.buff_tab.set_favorites_info(*self._favorites_info())

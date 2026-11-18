@@ -187,9 +187,12 @@ def _merge_config_text(text: str, path: Path) -> None:
         raise ValueError("설정 파일 형식이 올바르지 않습니다")  # noqa: TRY004
     data = _read_local_config(path)
     local_exe = (data.get("general") or {}).get("gameExe") if isinstance(data.get("general"), dict) else None
+    local_usage = {k: data[k] for k in ("featureUsage",) if k in data}
     for key, value in incoming.items():
         if key not in _LOCAL_ONLY_KEYS:
             data[key] = value
+    from .feature_usage import keep_local
+    keep_local(data, local_usage)  # 사용 기능 날짜(명세 3.4.2)는 이 PC 값 유지 — 다른 PC 기록으로 덮지 않음
     # 0.48.0: 들어온 게임창 등록이 게임이 아닌 이름(앱 자신·브라우저 등)이면 이 PC 값 유지(동기화 받기와 같은 규칙)
     general = data.get("general")
     if isinstance(general, dict) and isinstance(incoming.get("general"), dict) and "gameExe" in incoming["general"]:
@@ -2206,4 +2209,20 @@ def load_music_buff(path: Path = LOCAL_CONFIG_PATH) -> dict:
 def save_music_buff(state: dict, path: Path = LOCAL_CONFIG_PATH) -> None:
     data = _read_local_config(path)
     data["musicBuff"] = state
+    _write_local_config(data, path)
+
+
+# ---- 사용 기능 보고(docs/account-management-spec.md 3.4.2, 사용자 결정 11-18) — 설정 동기화 대상 ----
+def load_feature_usage(path: Path = LOCAL_CONFIG_PATH) -> dict[str, str]:
+    from .feature_usage import clean
+    return clean(_read_local_config(path).get("featureUsage"))
+
+
+def save_feature_usage(updates: dict[str, str], path: Path = LOCAL_CONFIG_PATH) -> None:
+    """{키: 날짜}를 featureUsage에 더한다(다른 키는 그대로)."""
+    data = _read_local_config(path)
+    sec = data.get("featureUsage") if isinstance(data.get("featureUsage"), dict) else {}
+    sec = dict(sec)
+    sec.update(updates)
+    data["featureUsage"] = sec
     _write_local_config(data, path)
