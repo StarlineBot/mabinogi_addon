@@ -25,6 +25,10 @@
 
 ## 배포와 검증
 
+- **v0.52.1 게시 완료(11-18 04:09 UTC = 13:09 KST, QA 세션 직접 실행, 사용자 조건부 지시 '윈도우 실행 문제 없을 거 같으면 바로 배포')** — 후보 #250 [44233974397](https://github.com/StarlineBot/mabinogi_addon/actions/runs/44233974397) 성공(04:06) →
+  publish-existing [44235003574](https://github.com/StarlineBot/mabinogi_addon/actions/runs/44235003574) 성공 → 게시 [44235091521](https://github.com/StarlineBot/mabinogi_addon/actions/runs/44235091521) promote 성공.
+  1단계 확인: 태그 v0.52.1 = f1e48648(후보 SHA), 공개 저장소 21829bf 'release: v0.52.1', version.json 0.52.1·sha256 60a4a429…0674·164,785,453바이트, 공개 exe 받아 일치, raw(자동 업데이트 주소) 04:10 0.52.1.
+  사용자 후보 직접 실행 확인은 이번엔 생략(사용자 지시). 남은 것: 2단계 사용자 실제 업데이트 확인.
 - **0.52.1 QA(9e5b1c06 featureUsage) 통과 → 사용자 '확인하고 윈도우 실행 문제 없을 거 같으면 바로 배포'(11-18) — 후보 #250 run 44233974397(f1e48648, verify-only) 실행.**
   검토: 새 모듈 feature_usage.py(순수 Python, 자산 없음, 일반 import → PyInstaller 묶음 경로 그대로), 메인 창 상태 틱 5초마다 상태만 훑음(판독·캡처 없음), 항목별 예외는 그 키만 빼고 기록 실패(OSError)는 경고만,
   게임 실행 중·일시정지 아님·하루 한 번만 저장, 동기화 받기·파일 가져오기 때 이 PC 값 유지. 실제 메인 창에서 17개 상태 확인 모두 예외 없음(임시 테스트). 관련 75 통과.
