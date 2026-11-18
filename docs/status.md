@@ -25,6 +25,10 @@
 
 ## 배포와 검증
 
+- **NA 사용자(Mersinary) 디스코드 대화 확인(11-18, 사용자 제공)** — 사실(사용자 말 그대로): GitHub 둘러보다 찾음·NA 오래 플레이 / 1차: 켠 뒤 'suspicious activity'로 끊김 /
+  평소엔 오토클리커를 켜 둔 채면 끊긴 적 있어 마비 할 땐 재부팅 후 플레이 / NA 지원은 사유를 안 알려 줌 / 창 제목 'Mabinogi'·Client.exe /
+  **2차(0.52.2, 문의하기로 화면 보낸 그 실행): 애드온만 켠 상태, 한동안 괜찮다가 유튜브 보는 사이 끊김(사용자 확인 'indeed')** → 애드온이 원인으로 판단, 사용자가 'NA에선 자동으로 멈추게 하겠다'고 답함.
+  QA 메모: 2차 실행의 app.log는 문의 묶음(02:51~02:57 현지)까지만 — 끊긴 시각은 그 뒤라 안 들어 있음. 그 실행에서 돌던 것: 블랙박스 녹화·FPS/최적화 측정·도르카·투아림·체력바·단축바 판독.
 - **QA 5fbb5f09 반려 2건 수정(개발, 0.52.3 그대로)**: ① 보호 빈틈 — 창 목록 훑기가 2초 간격이라 북미 창이 뜬 직후 최대 2초 동안 보호 전 → 창을 찾는 순간 `overseas_guard.protect(pid, hwnd)`: `find_game_window` 북미 분기, `WindowsWatcher._classify` 북미 분기(포그라운드 창 클래스로 판정), `dialogue_visibility` 가린 창, `registered_game_target`의 이전 창(그 창 하나의 제목·창 클래스만 — 도르카가 초당 5번 부르는 길이라 창 목록 전체는 훑지 않음). `optimization.game()`·`blackbox_events.sample`은 찾은 창이 보호 pid면 없음. ② 한국 오탐 — `is_overseas_title`을 '제목이 정확히 Mabinogi'(앞뒤 공백·대소문자 무시)로: 'mabinogi_….jpg - 꿀뷰'·'Mabinogi 길드'·'OBS … Profile: Mabinogi'·'Mabinogi - 다음 팟플레이어' 아님(안내 판정·list_windows·foreground_info 모두 같은 함수). 테스트: 마지막 훑기 직후 북미 창이 떠도 최적화 game()·게임 식별·블랙박스·perf·포그라운드 판정·잡담 진단·이전 창 경로 모두 북미 pid를 안 엶(5개), 위 제목들 False. 고치기 전 코드에서 14개 실패 확인 → 수정 후 53 통과, 관련 821 통과(-n 8), 배포 검사 0.52.3 CI 글꼴 385 통과.
 - **QA 5fbb5f09(북미 클라이언트 게임 프로세스 안 열기, 0.52.3): 반려 — 차단 2건** (배포 검사 CI 글꼴 370 통과·가드 위치 검토는 맞음: 프로세스를 여는 곳 전부 is_protected_pid 거침, process_job은 앱 자식만, process_threads는 시스템 목록이라 안 엶)
   ① **보호 빈틈(재현)**: 보호 pid는 창 목록을 2초마다만 다시 훑음 → 북미 게임 창이 뜬 뒤 최대 2초 동안 is_protected_pid=False·active=False(QA 재현: 뜬 직후 0초·1초 False, 2.1초 True).
