@@ -104,10 +104,6 @@ def _blocker_identity(gui, hwnd, detail):
         import win32process
         _, pid = win32process.GetWindowThreadProcessId(hwnd)
         detail["blocker_pid"] = pid
-        from . import overseas_guard
-        if overseas_guard.is_protected_pid(pid):
-            detail["blocker_exe"] = "overseas-game"  # 해외 게임 프로세스는 열지 않음(사용자 결정 11-18)
-            return
         stage = 'open_process'
         handle = win32api.OpenProcess(0x1000, False, pid)
         try:

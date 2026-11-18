@@ -44,10 +44,8 @@ def _owner_confirmed(hwnd, pid, exe):
     with _cache_lock:
         if now < _owner_cache.get(key, 0.0):
             return True
-    from . import overseas_guard
     from .window_watcher import _exe_basename_of_pid
-    # 해외 게임 창은 실행 파일을 열어 보지 않고 창 목록 판정(제목·창 클래스)으로 확인
-    ok = overseas_guard.is_protected_pid(pid) or _exe_basename_of_pid(pid) == exe.lower()
+    ok = _exe_basename_of_pid(pid) == exe.lower()
     with _cache_lock:
         if len(_owner_cache) > 16:
             _owner_cache.clear()
@@ -72,26 +70,19 @@ def registered_game_target(previous=None):
         from . import dwm_thumbnail
         from .window_watcher import DEFAULT_GAME_TITLES
 
-        from . import overseas_guard
-        overseas = overseas_guard.game_window()
-        if overseas is not None:
-            # 해외(영문 제목) 게임 창 — 실행 파일 등록·확인 없이 창 목록 판정(제목·창 클래스)으로 고른 그 창.
-            # 프로세스를 열지 않는다(사용자 결정 11-18). 판독 기능은 그대로 이 창 위치를 쓴다.
-            hwnd = overseas[0]
-        else:
-            exe = _cached_game_exe()
-            if not exe:
-                return None
-            hwnd = 0
-            if previous is not None:
-                import win32gui
-                candidate, previous_pid = previous[:2]
-                if win32gui.IsWindow(candidate) and win32gui.IsWindowVisible(candidate):
-                    _, pid = win32process.GetWindowThreadProcessId(candidate)
-                    if pid == previous_pid and _owner_confirmed(candidate, pid, exe):
-                        hwnd = candidate
-            if not hwnd:
-                hwnd = dwm_thumbnail.find_game_window(exe, DEFAULT_GAME_TITLES)
+        exe = _cached_game_exe()
+        if not exe:
+            return None
+        hwnd = 0
+        if previous is not None:
+            import win32gui
+            candidate, previous_pid = previous[:2]
+            if win32gui.IsWindow(candidate) and win32gui.IsWindowVisible(candidate):
+                _, pid = win32process.GetWindowThreadProcessId(candidate)
+                if pid == previous_pid and _owner_confirmed(candidate, pid, exe):
+                    hwnd = candidate
+        if not hwnd:
+            hwnd = dwm_thumbnail.find_game_window(exe, DEFAULT_GAME_TITLES)
         rect = dwm_thumbnail.window_rect(hwnd) if hwnd else None
         if rect is None:
             return None

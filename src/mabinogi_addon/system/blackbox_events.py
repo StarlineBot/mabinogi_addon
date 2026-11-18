@@ -57,9 +57,6 @@ class WindowsEvents:
         return None if self.locked or self.suspended else event
 
     def sample(self):
-        from . import overseas_guard
-        if overseas_guard.active():
-            return None, False  # 해외(영문 제목) 클라이언트 — 블랙박스는 시작하지 않음(사용자 결정 11-18)
         import win32gui
         from .. import config
         from .window_capture import registered_game_target

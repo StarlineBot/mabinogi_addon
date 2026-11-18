@@ -133,12 +133,8 @@ class AlwaysActiveWatcher(WindowWatcher):
 
 
 def _exe_basename_of_pid(pid: int) -> str:
-    """pid의 실행파일 basename(소문자). 실패 시 빈 문자열. Windows 전용(ctypes).
-    해외(영문 제목) 게임 창의 프로세스는 열지 않고 빈 문자열(사용자 결정 11-18, system/overseas_guard)."""
+    """pid의 실행파일 basename(소문자). 실패 시 빈 문자열. Windows 전용(ctypes)."""
     if not pid:
-        return ""
-    from . import overseas_guard
-    if overseas_guard.is_protected_pid(pid):
         return ""
     import ctypes
     from ctypes import wintypes
@@ -186,8 +182,8 @@ def list_windows() -> list[tuple[str, str]]:
             _, pid = win32process.GetWindowThreadProcessId(hwnd)
         except Exception:  # noqa: BLE001
             pid = 0
-        if not pid or pid == own or is_overseas_title(title):
-            return True  # 해외 제목 창은 실행 파일을 열지 않는다(목록에 없음 — 해외는 제목으로 판정)
+        if not pid or pid == own:
+            return True
         exe = _exe_basename_of_pid(pid)
         if not exe:
             return True
@@ -242,8 +238,6 @@ class WindowsWatcher(WindowWatcher):
     def foreground_info(self) -> tuple[str, str]:
         try:
             title, pid = self._foreground()
-            if is_overseas_title(title):
-                return title, ""  # 해외 제목은 실행 파일을 확인하지 않는다(프로세스를 열지 않음)
             return title, _exe_basename_of_pid(pid)
         except Exception:  # noqa: BLE001
             return "", ""
@@ -256,10 +250,6 @@ class WindowsWatcher(WindowWatcher):
             return "game"
         if pid == self._own_pid:
             return "self"
-        if is_overseas_title(title):
-            # 해외 제목: 실행 파일을 열지 않고(등록된 실행 파일이 있어도) 창 클래스로 고른 해외 게임 창인지만
-            from . import overseas_guard
-            return "game" if overseas_guard.is_protected_pid(pid) else "other"
         if self._game_exe:  # 등록된 실행파일이 있으면 그걸로 판정(정확)
             return "game" if _exe_basename_of_pid(pid) == self._game_exe else "other"
         # 폴백: 제목 매칭 + 브라우저·탐색기·메신저 제외(실행파일을 못 읽으면 제목만)
