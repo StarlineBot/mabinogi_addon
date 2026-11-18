@@ -25,6 +25,7 @@
 
 ## 배포와 검증
 
+- **개발 대기(사용자 결정 11-18): 봇 '켠 기능'이 실제 사용과 다름 → 앱이 `featureUsage`(기능별 마지막 실제 동작 날짜)를 적고 봇은 그것만 읽기(B안)** — [계정 명세 3.4.2](account-management-spec.md#342-사용-기능-보고-featureusage-사용자-결정-2026-11-18-b안--개발-대기). 원인: 봇 extract_features는 `enabled` 불값만 보는데 버프·디버프·보스 패턴·헤일로는 켜짐 값이 없음(보스 탭은 bossPattern.enabled를 안 씀) → 써도 안 나옴, 제작자의 buffTracker·bossPattern·autofindV2는 옛 값. 앱(이 저장소)과 봇(discord_bot addon_server) 둘 다 수정. 사용자에게 보이는 변화 없음(노트 불필요).
 - **v0.52.0 게시 완료(11-17 11:03 UTC = 20:03 KST, QA 세션이 직접 실행)** — 사용자 '배포'(후보 #249 Windows 확인) → GitHub MCP로 windows.yml publish-existing(candidate_run=44002508865) 실행:
   run [44070288743](https://github.com/StarlineBot/mabinogi_addon/actions/runs/44070288743) 성공(request만, 검사·빌드 0) → 게시 [44070367121](https://github.com/StarlineBot/mabinogi_addon/actions/runs/44070367121) promote 성공.
   게시 후 확인 1단계(QA): 태그 v0.52.0 = afc1a775(후보 SHA), 공개 저장소 main fca8ddf 'release: v0.52.0', version.json 0.52.0·sha256 66b1f911…a50c·164,780,077바이트,
