@@ -93,7 +93,8 @@ def test_unpublished_0510_and_0501_folded_into_0520():
     0.50.0 사용자에게는 v0.52.0 한 섹션만 새로 보이고, 그 안에 0.51.0 내용(헤드라인 둘·다듬은 것 둘)이 지정된 순서로 있다."""
     text = Path(release_notes.RELEASE_NOTES_FILE).read_text(encoding="utf-8")
     versions = [v for v, _body in release_notes._parse_sections(text)]
-    assert versions[:2] == ["0.52.0", "0.50.0"]
+    i = versions.index("0.52.0")  # 0.52.0 게시 뒤 위에 새 버전이 올 수 있음 — 0.52.0 바로 아래가 0.50.0
+    assert versions[i:i + 2] == ["0.52.0", "0.50.0"]
     assert "0.51.0" not in versions and "0.50.1" not in versions
     body = dict(release_notes._parse_sections(text))["0.52.0"]
     order = ["편의기능에 '음악 버프 계산기'가 생겼어요.", "만드는 데 드는 재료를 펼쳐 볼 수 있어요.",

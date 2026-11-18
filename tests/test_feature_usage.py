@@ -115,11 +115,6 @@ def test_file_import_keeps_this_pc_usage(tmp_path):
 
 
 # ---- 메인 창: 동작 판단 + 기록 시점 ----
-class _Count:
-    def __init__(self, n):
-        self.item_count = n
-
-
 def test_window_records_only_while_game_runs_and_not_paused(window, monkeypatch):  # noqa: F811
     w, _ = window
     monkeypatch.setattr(w, "_feature_usage_active", lambda: {"buff", "keywords"})
@@ -136,25 +131,34 @@ def test_window_records_only_while_game_runs_and_not_paused(window, monkeypatch)
     assert config.load_feature_usage() == {"buff": "2026-11-18", "keywords": "2026-11-18"}
 
 
+class _Count:
+    def __init__(self, n):
+        self.item_count = n
+
+
+# 바꾼 값은 테스트 안에서 되돌린다(monkeypatch.context) — 컨트롤러가 가짜인 채로 창을 닫으면 stop()이 실패해
+# 다음 테스트 창까지 깨진다(11-18 QA: 배포 검사에서 release_notes_trigger 닫기 오류·세그폴트).
 def test_window_active_set_reads_feature_state(window, monkeypatch):  # noqa: F811
     w, _ = window
     assert "buff" not in w._feature_usage_active()
-    monkeypatch.setattr(w, "buff_controller", _Count(2))
-    monkeypatch.setattr(w.party_tab, "_keywords", ["브리레흐"])
-    monkeypatch.setattr(w.boss_tab, "_cur_boss", "glas")
-    w.alarm_tab.enable.setChecked(True)
-    from mabinogi_addon import alarm as alarm_model
-    assert "alarm" not in w._feature_usage_active()  # 켬 + 알람 0개 → 아님
-    monkeypatch.setattr(w.alarm_tab.clock, "alarms", [alarm_model.new_timer(5, 0.0, name="t")])
-    active = w._feature_usage_active()
-    assert {"buff", "keywords", "boss", "alarm"} <= active
-    assert "autofindV2" not in active and active <= set(feature_usage.KEYS)
-    w.alarm_tab.enable.setChecked(False)
-    assert "alarm" not in w._feature_usage_active()
+    with monkeypatch.context() as mp:
+        mp.setattr(w, "buff_controller", _Count(2))
+        mp.setattr(w.party_tab, "_keywords", ["브리레흐"])
+        mp.setattr(w.boss_tab, "_cur_boss", "glas")
+        w.alarm_tab.enable.setChecked(True)
+        from mabinogi_addon import alarm as alarm_model
+        assert "alarm" not in w._feature_usage_active()  # 켬 + 알람 0개 → 아님
+        mp.setattr(w.alarm_tab.clock, "alarms", [alarm_model.new_timer(5, 0.0, name="t")])
+        active = w._feature_usage_active()
+        assert {"buff", "keywords", "boss", "alarm"} <= active
+        assert "autofindV2" not in active and active <= set(feature_usage.KEYS)
+        w.alarm_tab.enable.setChecked(False)
+        assert "alarm" not in w._feature_usage_active()
 
 
 def test_window_active_check_failure_skips_only_that_key(window, monkeypatch):  # noqa: F811
     w, _ = window
-    monkeypatch.setattr(w.party_tab, "_keywords", ["x"])
-    monkeypatch.setattr(w, "buff_controller", object())  # item_count 없음 → 예외 → buff만 빠짐
-    assert "keywords" in w._feature_usage_active()
+    with monkeypatch.context() as mp:
+        mp.setattr(w.party_tab, "_keywords", ["x"])
+        mp.setattr(w, "buff_controller", object())  # item_count 없음 → 예외 → buff만 빠짐
+        assert "keywords" in w._feature_usage_active()

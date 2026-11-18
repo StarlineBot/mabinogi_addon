@@ -1,20 +1,8 @@
 {
-  "version": "0.52.0",
+  "version": "0.52.1",
   "tests": [
-    "tests/test_music_buff.py",
-    "tests/test_music_auction.py",
-    "tests/test_cursor_fx.py",
-    "tests/test_buff_4k_icons.py",
-    "tests/test_autofind_fallback.py",
-    "tests/test_autofind_v2_controller.py",
-    "tests/test_autofind_v2_engine.py",
-    "tests/test_navigation.py",
-    "tests/test_craft_width.py",
-    "tests/test_tracker_layout.py",
-    "tests/test_navigation_all_widths.py",
-    "tests/test_dialogue_login.py",
-    "tests/test_dialogue_tips.py",
-    "tests/test_creator_dialogue.py",
+    "tests/test_feature_usage.py",
+    "tests/test_cloud_sync.py",
     "tests/test_release_checks.py",
     "tests/test_startup_build.py",
     "tests/test_release_candidate.py",
@@ -24,153 +12,52 @@
     "tests/test_release_notes_trigger.py"
   ],
   "coverage": {
-    "src/mabinogi_addon/autofind_v2.py": {
+    "src/mabinogi_addon/feature_usage.py": {
       "tests": [
-        "tests/test_autofind_v2_engine.py",
-        "tests/test_autofind_v2_controller.py"
+        "tests/test_feature_usage.py"
       ],
-      "reason": "포커스 복귀 유예(다시 찾기·새 자리 시험 없음), 버프 새 자리는 앵커까지, 확정한 새 자리에서 못 읽으면 바로 앞 자리부터"
-    },
-    "src/mabinogi_addon/autofind_regions.py": {
-      "tests": [
-        "tests/test_autofind_fallback.py",
-        "tests/test_autofind_v2_controller.py"
-      ],
-      "reason": "report(strong) 전달 — 없으면 예전 그대로"
-    },
-    "src/mabinogi_addon/tracker/engine.py": {
-      "tests": [
-        "tests/test_buff_4k_icons.py"
-      ],
-      "reason": "TickResult.anchor(기준 버프 보임) — 자동 찾기 v2 새 자리 확정용"
-    },
-    "src/mabinogi_addon/ui/buff_controller.py": {
-      "tests": [
-        "tests/test_autofind_v2_controller.py",
-        "tests/test_buff_4k_icons.py"
-      ],
-      "reason": "health (seen, anchor) → report(strong)"
-    },
-    "src/mabinogi_addon/ui/autofind_v2_controller.py": {
-      "tests": [
-        "tests/test_autofind_v2_controller.py"
-      ],
-      "reason": "그사이 게임에서 나갔다 온 다시 찾기 결과 버림, 바로 앞 자리 시험 기록"
-    },
-    "src/mabinogi_addon/market/music_auction.py": {
-      "tests": [
-        "tests/test_music_auction.py"
-      ],
-      "reason": "부위별 경매장 조건(인챈트 접두·접미·같은 이름 다른 수치, 세공 레벨 이상, 특개 이상) AND·최저가·next_cursor·옷 세 카테고리"
-    },
-    "tests/test_music_auction.py": {
-      "tests": [
-        "tests/test_music_auction.py"
-      ],
-      "reason": "음악 버프 명세 6.2 테스트"
-    },
-    "src/mabinogi_addon/market/music_buff.py": {
-      "tests": [
-        "tests/test_music_buff.py"
-      ],
-      "reason": "음악 버프 공식(명세 3절)·test_vectors 4개·세인트 바드 확률 분기·에코스톤 큰 쪽·표에 없는 값 '없음'"
-    },
-    "src/mabinogi_addon/assets/music_buff/music_buff_tables.json": {
-      "tests": [
-        "tests/test_music_buff.py",
-        "tests/test_music_auction.py"
-      ],
-      "reason": "기획 표와 같음, 지속·풍년가 없음, buff > 0, 이름 중복 없음, 세공 auction_name(게임 표기)"
-    },
-    "src/mabinogi_addon/ui/music_buff_tab.py": {
-      "tests": [
-        "tests/test_music_buff.py",
-        "tests/test_music_auction.py"
-      ],
-      "reason": "위 결과 고정·아래 2단 스크롤, 보너스뎀 줄은 세인트 바드일 때만, 즉시 저장·재시작 복원, 경매장 버튼 비활성·찾는 중·찾음·없음·실패·키 없음·옵션 바꾸면 지움"
-    },
-    "src/mabinogi_addon/ui/feature_copy.py": {
-      "tests": [
-        "tests/test_music_buff.py",
-        "tests/test_navigation.py"
-      ],
-      "reason": "음악 버프 계산기 머리 설명"
-    },
-    "tests/test_music_buff.py": {
-      "tests": [
-        "tests/test_music_buff.py"
-      ],
-      "reason": "음악 버프 명세 5절 테스트"
-    },
-    "src/mabinogi_addon/creator_dialogue.py": {
-      "tests": [
-        "tests/test_dialogue_login.py",
-        "tests/test_dialogue_tips.py",
-        "tests/test_creator_dialogue.py"
-      ],
-      "reason": "로그인 권유 항목(feature login)·login_due 주기·추첨 순서(디스코드 권유 다음, 기능 추천에 안 섞임)"
-    },
-    "src/mabinogi_addon/ui/creator_dialogue.py": {
-      "tests": [
-        "tests/test_dialogue_login.py",
-        "tests/test_dialogue_tips.py"
-      ],
-      "reason": "비로그인에게만, 같은 날 겹침 없음, [로그인하러 가기]·[괜찮아요]"
+      "reason": "새 모듈 — 하루 한 번·게임 실행 중·일시정지 아님일 때만 기록, 키·날짜 형식 정리, 가져오기 때 이 PC 값 유지"
     },
     "src/mabinogi_addon/ui/main_window.py": {
       "tests": [
-        "tests/test_dialogue_login.py",
-        "tests/test_navigation.py",
-        "tests/test_cursor_fx.py",
-        "tests/test_music_buff.py",
-        "tests/test_navigation_all_widths.py",
-        "tests/test_tracker_layout.py",
-        "tests/test_craft_width.py"
+        "tests/test_feature_usage.py",
+        "tests/test_startup_smoke.py"
       ],
-      "reason": "open_account(설정 › 계정) · 편의기능 2단 계산기·그림대화·알람, 계산기 3단 6종(음악 버프 포함)"
+      "reason": "상태 틱에서 5초마다 기능 상태만 훑어 기록(판독·캡처 없음), 한 항목 실패는 그 키만 뺌 — 창 시작·종료 계약"
     },
     "src/mabinogi_addon/config.py": {
       "tests": [
-        "tests/test_dialogue_login.py",
-        "tests/test_music_buff.py"
+        "tests/test_feature_usage.py"
       ],
-      "reason": "loginInvite·musicBuff 기록(설정 내보내기·동기화 대상)"
+      "reason": "load/save_feature_usage, 파일 가져오기 때 featureUsage는 이 PC 값 유지"
     },
-    "src/mabinogi_addon/assets/dialogues.json": {
+    "src/mabinogi_addon/cloud_sync.py": {
       "tests": [
-        "tests/test_dialogue_login.py",
-        "tests/test_dialogue_tips.py",
-        "tests/test_creator_dialogue.py"
+        "tests/test_feature_usage.py",
+        "tests/test_cloud_sync.py"
       ],
-      "reason": "tips에 로그인 권유 1개(말풍선 두 줄), docs/examples 사본과 같음"
-    },
-    "tests/test_dialogue_login.py": {
-      "tests": [
-        "tests/test_dialogue_login.py"
-      ],
-      "reason": "명세 17.8 테스트"
+      "reason": "올리기는 그대로(동기화 대상), 받기 때 featureUsage는 이 PC 값 유지 — 기존 병합 규칙 회귀"
     },
     "packaging/release_checks.json": {
       "tests": [
-        "tests/test_release_checks.py"
+        "tests/test_release_checks.py",
+        "tests/test_release_candidate.py",
+        "tests/test_windows_ci.py"
       ],
-      "reason": "버전·선택 경로 유효성·범위 근거"
+      "reason": "0.52.1 검사 목록·후보 봉인·CI 계약"
     },
     "packaging/build_windows.py": {
       "tests": [
-        "tests/test_startup_build.py",
-        "tests/test_release_candidate.py",
-        "tests/test_windows_ci.py",
-        "tests/test_startup_smoke.py"
+        "tests/test_startup_build.py"
       ],
-      "reason": "배포 계약: 빌드·후보·Windows CI·시작 확인"
+      "reason": "새 모듈이 exe 묶음에 들어가는 빌드 경로 그대로"
     },
     "src/mabinogi_addon/assets/release_notes.md": {
       "tests": [
         "tests/test_release_notes.py",
         "tests/test_release_notes_trigger.py"
       ],
-      "reason": "0.52.0 노트 파싱·새 버전 표시, 미게시 v0.51.0을 v0.52.0에 합침(0.50.0 사용자에게 v0.52.0 한 섹션), v0.50.0 이하 섹션 그대로"
+      "reason": "0.52.1 노트 맨 위·첫 실행 표시"
     }
   }
 }

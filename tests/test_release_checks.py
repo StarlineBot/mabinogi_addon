@@ -70,18 +70,18 @@ def test_current_plan_maps_every_selected_file_to_changed_code_or_shared_contrac
 
 
 def test_current_release_keeps_feature_boundaries_and_delivery_contracts():
-    """0.52.0: 음악 버프 계산기 + 잡담 로그인 권유 + 배포 계약. (릴리즈마다 경계를 바꾼다 — 누적하지 않음)"""
+    """0.52.1: 사용 기능 보고 featureUsage + 배포 계약. (릴리즈마다 경계를 바꾼다 — 누적하지 않음)"""
     root = Path(__file__).resolve().parents[1]
     plan = json.loads((root / 'packaging/release_checks.json').read_text(encoding='utf-8'))
     paths = set(plan['tests'])
     assert {
-        'tests/test_music_buff.py', 'tests/test_dialogue_login.py', 'tests/test_dialogue_tips.py',
+        'tests/test_feature_usage.py', 'tests/test_cloud_sync.py',
         'tests/test_startup_build.py', 'tests/test_release_checks.py', 'tests/test_release_candidate.py',
         'tests/test_windows_ci.py', 'tests/test_startup_smoke.py',
     } <= paths
     assert {
-        'src/mabinogi_addon/market/music_buff.py', 'src/mabinogi_addon/ui/music_buff_tab.py',
-        'src/mabinogi_addon/creator_dialogue.py', 'src/mabinogi_addon/ui/creator_dialogue.py',
+        'src/mabinogi_addon/feature_usage.py', 'src/mabinogi_addon/ui/main_window.py',
+        'src/mabinogi_addon/config.py', 'src/mabinogi_addon/cloud_sync.py',
         'packaging/build_windows.py', 'src/mabinogi_addon/assets/release_notes.md',
     } <= set(plan['coverage'])
     # The separate development entry must continue collecting the whole suite.
