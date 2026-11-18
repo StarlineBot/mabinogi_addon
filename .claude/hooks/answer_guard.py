@@ -45,6 +45,8 @@ def violations(text: str) -> list[str]:
     # 코드 블록·인라인 코드 안 글자는 제외(명령·인용 예시)
     text = re.sub(r'```.*?```', '', text, flags=re.S)
     text = re.sub(r'`[^`]*`', '', text)
+    # 인용 블록(> 로 시작하는 줄 — 번역·남의 말 옮김)은 제외
+    text = re.sub(r'(?m)^\s*>.*$', '', text)
     # 따옴표로 인용한 표현(규칙 설명 등)은 제외 — 실제 결론이 아님
     text = re.sub(r'"[^"\n]*"|“[^”\n]*”|‘[^’\n]*’|\'[^\'\n]*\'', '', text)
     return sorted({m.group(0) for m in BANNED.finditer(text)})
