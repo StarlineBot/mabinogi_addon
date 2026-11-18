@@ -48,6 +48,14 @@ def is_game_title(title: str, exe: str | None, titles: tuple[str, ...] = DEFAULT
     return not exe or is_acceptable_game_exe(exe)
 
 
+def is_overseas_title(title: str | None) -> bool:
+    """해외(영문 제목) 마비노기 클라이언트인지 — 제목에 '마비노기'가 없고 'mabinogi'만 있으면 해외(NA 'Mabinogi').
+    실행파일은 한국·해외 모두 Client.exe라 제목으로만 구분한다(사용자 결정 11-18). 게임 창인지 판단은 따로
+    (is_game_title — 브라우저 등 제외 목록)라 함께 써야 한다. 순수 함수(맥에서 테스트)."""
+    title = title or ""
+    return "마비노기" not in title and "mabinogi" in title.lower()
+
+
 def is_game_window(title: str, exe: str | None, pid: int = 0, own_pid: int | None = None,
                    titles: tuple[str, ...] = DEFAULT_GAME_TITLES) -> bool:
     """떠 있는 창이 '마비노기 게임 창'으로 보이는지: 앱 자신 아님 + 제목 마비노기 + 제외 목록 아님(실행파일 필요)."""

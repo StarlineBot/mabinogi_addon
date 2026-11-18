@@ -1,8 +1,10 @@
 {
-  "version": "0.52.1",
+  "version": "0.52.2",
   "tests": [
-    "tests/test_feature_usage.py",
+    "tests/test_overseas_client.py",
     "tests/test_cloud_sync.py",
+    "tests/test_home_page.py",
+    "tests/test_navigation.py",
     "tests/test_release_checks.py",
     "tests/test_startup_build.py",
     "tests/test_release_candidate.py",
@@ -12,31 +14,33 @@
     "tests/test_release_notes_trigger.py"
   ],
   "coverage": {
-    "src/mabinogi_addon/feature_usage.py": {
+    "src/mabinogi_addon/system/window_watcher.py": {
       "tests": [
-        "tests/test_feature_usage.py"
+        "tests/test_overseas_client.py"
       ],
-      "reason": "새 모듈 — 하루 한 번·게임 실행 중·일시정지 아님일 때만 기록, 키·날짜 형식 정리, 가져오기 때 이 PC 값 유지"
+      "reason": "is_overseas_title — 제목에 '마비노기' 없고 'mabinogi'만이면 해외, 게임 창 판정(브라우저 등 제외)과 함께"
+    },
+    "src/mabinogi_addon/ui/home_page.py": {
+      "tests": [
+        "tests/test_overseas_client.py",
+        "tests/test_home_page.py"
+      ],
+      "reason": "홈 맨 위 안내 띠(한글+영문, 닫기) — 기존 홈 배치 회귀"
     },
     "src/mabinogi_addon/ui/main_window.py": {
       "tests": [
-        "tests/test_feature_usage.py",
+        "tests/test_overseas_client.py",
+        "tests/test_navigation.py",
         "tests/test_startup_smoke.py"
       ],
-      "reason": "상태 틱에서 5초마다 기능 상태만 훑어 기록(판독·캡처 없음), 한 항목 실패는 그 키만 뺌 — 창 시작·종료 계약"
-    },
-    "src/mabinogi_addon/config.py": {
-      "tests": [
-        "tests/test_feature_usage.py"
-      ],
-      "reason": "load/save_feature_usage, 파일 가져오기 때 featureUsage는 이 PC 값 유지"
+      "reason": "상태 틱에서 해외 클라이언트 1회 안내(홈 띠+트레이), 차단 없음 — 창 시작·종료 계약"
     },
     "src/mabinogi_addon/cloud_sync.py": {
       "tests": [
-        "tests/test_feature_usage.py",
+        "tests/test_overseas_client.py",
         "tests/test_cloud_sync.py"
       ],
-      "reason": "올리기는 그대로(동기화 대상), 받기 때 featureUsage는 이 PC 값 유지 — 기존 병합 규칙 회귀"
+      "reason": "general.nonKoreanNoticeShown 동기화 제외(올리기·받기) — 기존 병합 규칙 회귀"
     },
     "packaging/release_checks.json": {
       "tests": [
@@ -44,20 +48,20 @@
         "tests/test_release_candidate.py",
         "tests/test_windows_ci.py"
       ],
-      "reason": "0.52.1 검사 목록·후보 봉인·CI 계약"
+      "reason": "0.52.2 검사 목록·후보 봉인·CI 계약"
     },
     "packaging/build_windows.py": {
       "tests": [
         "tests/test_startup_build.py"
       ],
-      "reason": "새 모듈이 exe 묶음에 들어가는 빌드 경로 그대로"
+      "reason": "새 자산·모듈 없음 — 빌드 경로 그대로"
     },
     "src/mabinogi_addon/assets/release_notes.md": {
       "tests": [
         "tests/test_release_notes.py",
         "tests/test_release_notes_trigger.py"
       ],
-      "reason": "0.52.1 노트 맨 위·첫 실행 표시"
+      "reason": "0.52.2 노트 맨 위(조용히 다듬은 것 한 줄)·첫 실행 표시, v0.52.1 이하 그대로"
     }
   }
 }

@@ -1411,6 +1411,43 @@ class MainWindow(QMainWindow):
             except Exception:  # noqa: BLE001 — 한 탭 실패가 나머지 초기화를 막지 않게
                 _cap_log.exception("게임 재시작 초기화 실패: %s", type(tab).__name__)
 
+    # ---- 해외(영문 제목) 클라이언트 안내(사용자 결정 11-18) — 차단 없음, 처음 볼 때 한 번 ----
+    OVERSEAS_KO = ("한국 서버용으로 만들어서 일부 기능(버프 남은 시간·보스 알림·경매장 시세)이 동작하지 않을 수 있어요. "
+                   "설정 › 문의하기 › 그 밖의 문제로 게임 화면을 보내 주시면 개선할 수 있어요.")
+    OVERSEAS_EN = ("This addon is made for the Korean server, so some features (buff timers, boss alerts, auction prices) "
+                   "may not work. Send us your game screen via 설정 › 문의하기 › 그 밖의 문제 (Settings › Contact › Other) "
+                   "and we can improve it.")
+    OVERSEAS_TRAY_TITLE = "한국 서버 전용 · Made for the Korean server"
+    # Windows 트레이 알림 본문은 약 255자에서 잘려 한글 전체 + 영문 첫 문장만(문의 안내 영문은 홈 띠에)
+    OVERSEAS_TRAY = OVERSEAS_KO + "\n" + OVERSEAS_EN.split(" Send us")[0]
+
+    def _check_overseas_client(self) -> bool:
+        """앞에 있는 게임 창 제목이 해외(영문)면 홈 맨 위 띠 + 트레이 알림을 한 번(general.nonKoreanNoticeShown). 보이면 True.
+        판독·기능은 그대로 둔다(NA 보안 프로그램 끊김의 애드온 원인 근거 없음 — 차단하지 않음)."""
+        if getattr(self, "_overseas_done", False):
+            return False
+        try:
+            if not self._watcher.is_game_active():
+                return False
+            title, exe = self._watcher.foreground_info()
+        except Exception:  # noqa: BLE001 — 안내용 확인 실패가 상태 틱을 막지 않게
+            return False
+        from ..system.window_watcher import is_game_title, is_overseas_title
+        if not (is_overseas_title(title) and is_game_title(title, exe)):
+            return False
+        self._overseas_done = True
+        if config.load_general_flag("nonKoreanNoticeShown", False):
+            return False
+        try:
+            config.save_general_flag("nonKoreanNoticeShown", True)
+        except OSError:
+            _cap_log.warning("해외 클라이언트 안내 기록 실패", exc_info=True)
+        _cap_log.info("[해외 클라이언트] 게임 창 제목 %r — 한국 서버 전용 안내(1회)", title)
+        self.home_page.show_notice(self.OVERSEAS_KO, self.OVERSEAS_EN)
+        if self._tray is not None:
+            self._tray.showMessage(self.OVERSEAS_TRAY_TITLE, self.OVERSEAS_TRAY, app_icon(), 15000)
+        return True
+
     # ---- 사용 기능 보고 featureUsage(계정 명세 3.4.2, 사용자 결정 11-18) ----
     _USAGE_EVERY = 5.0  # 초 — 상태만 훑으므로 가볍다(판독·캡처 없음)
 
@@ -1479,6 +1516,7 @@ class MainWindow(QMainWindow):
         self._maybe_retry_live_capture()
         self._check_game_process()
         self._note_feature_usage()
+        self._check_overseas_client()
         self._update_tray_tooltip()
         self.buff_tab.set_status(*self._buff_status())
         self.buff_tab.set_favorites_info(*self._favorites_info())

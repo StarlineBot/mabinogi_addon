@@ -243,6 +243,30 @@ class HomePage(QWidget):
         self._content_layout = v
         self._tight = False
 
+        # 0. 해외(영문 제목) 클라이언트 안내 띠(사용자 결정 11-18) — 처음 볼 때 한 번, 닫기(×)까지
+        self.notice_box = _box("homeWarn")
+        notice = QHBoxLayout(self.notice_box)
+        notice.setContentsMargins(14, 8, 8, 8)
+        notice.setSpacing(8)
+        notice_text = QVBoxLayout()
+        notice_text.setSpacing(3)
+        self.notice_ko = _label("", 12, "warn_text", bold=True)
+        self.notice_en = _label("", 11, "warn_sub")
+        for lbl in (self.notice_ko, self.notice_en):
+            lbl.setWordWrap(True)
+            notice_text.addWidget(lbl)
+        notice.addLayout(notice_text, 1)
+        self.notice_close = QPushButton("✕")
+        self.notice_close.setObjectName("homeNoticeClose")
+        self.notice_close.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.notice_close.setToolTip("닫기 · Close")
+        self.notice_close.setFixedSize(24, 24)
+        self.notice_close.setStyleSheet("QPushButton{border:none;background:transparent;}")
+        self.notice_close.clicked.connect(self.notice_box.hide)
+        notice.addWidget(self.notice_close, 0, Qt.AlignmentFlag.AlignTop)
+        self.notice_box.hide()
+        v.addWidget(self.notice_box)
+
         # 1. 위 줄: 로고 · 전체 메뉴 ›
         top = QHBoxLayout()
         top.setContentsMargins(0, 0, 0, 0)
@@ -381,6 +405,12 @@ class HomePage(QWidget):
         v.addLayout(bottom)
         v.addStretch(1)
         self.update_state({})
+
+    def show_notice(self, ko: str, en: str) -> None:
+        """맨 위 안내 띠(한글 + 영문)."""
+        self.notice_ko.setText(ko)
+        self.notice_en.setText(en)
+        self.notice_box.show()
 
     def set_box_visible(self, title: str, visible: bool) -> None:
         """아래 줄 칸 보이기(공개 범위가 아닌 기능 칸은 숨겨 나머지 칸이 넓어진다)."""
