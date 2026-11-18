@@ -25,6 +25,9 @@
 
 ## 배포와 검증
 
+- **v0.52.2 게시 완료(11-18 06:46 UTC = 15:46 KST, QA 세션 직접 실행, 사용자 '배포하는걸로' — 후보 Windows 직접 확인은 생략: 한국 클라이언트에선 안내가 안 떠 확인할 것이 없고 자산·모듈 변경 없음)** —
+  publish-existing [44253591053](https://github.com/StarlineBot/mabinogi_addon/actions/runs/44253591053)(candidate_run=44252034061) 성공 → 게시 [44253657234](https://github.com/StarlineBot/mabinogi_addon/actions/runs/44253657234) promote 성공.
+  1단계 확인: 태그 v0.52.2 = d510681d(후보 SHA), 공개 저장소 24710f0 'release: v0.52.2', version.json 0.52.2·sha256 5acd780f…5e24·164,788,339바이트, 공개 exe 받아 일치, raw(자동 업데이트 주소) 06:46 0.52.2. 남은 것: 2단계 사용자 업데이트 확인.
 - **0.52.2 QA(d510681d 해외 클라이언트 안내) 통과 → 후보 #251 run 44252034061 성공(06:29→06:41 UTC), 산출물 verified-windows-44252034061-1(164,837,561바이트, 만료 2026-11-19 15:41 KST) — 게시 대상.**
   검토: is_overseas_title(제목 '마비노기' 없고 'mabinogi'만) + is_game_title(브라우저 등 제외) 둘 다일 때만, 게임이 앞에 있을 때 1회(general.nonKoreanNoticeShown, 동기화 올리기·받기 제외), 판독·기능 그대로.
   상태 틱(0.7초)마다 앞 창 제목·실행파일 조회 1번 추가(이미 _classify가 같은 조회를 함 — 부담 미미), 실패는 False로 넘김. 트레이 제목 37자·본문 220자(Windows 한도 안). 홈 띠 렌더 확인(docs/assets/overseas-notice-20261118/home_notice.png).
