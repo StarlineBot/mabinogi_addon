@@ -1412,18 +1412,20 @@ class MainWindow(QMainWindow):
                 _cap_log.exception("게임 재시작 초기화 실패: %s", type(tab).__name__)
 
     # ---- 해외(영문 제목) 클라이언트 안내(사용자 결정 11-18) — 차단 없음, 처음 볼 때 한 번 ----
-    OVERSEAS_KO = ("한국 서버용으로 만들어서 일부 기능(버프 남은 시간·보스 알림·경매장 시세)이 동작하지 않을 수 있어요. "
-                   "설정 › 문의하기 › 그 밖의 문제로 게임 화면을 보내 주시면 개선할 수 있어요.")
-    OVERSEAS_EN = ("This addon is made for the Korean server, so some features (buff timers, boss alerts, auction prices) "
-                   "may not work. Send us your game screen via 설정 › 문의하기 › 그 밖의 문제 (Settings › Contact › Other) "
-                   "and we can improve it.")
-    OVERSEAS_TRAY_TITLE = "한국 서버 전용 · Made for the Korean server"
-    # Windows 트레이 알림 본문은 약 255자에서 잘려 한글 전체 + 영문 첫 문장만(문의 안내 영문은 홈 띠에)
-    OVERSEAS_TRAY = OVERSEAS_KO + "\n" + OVERSEAS_EN.split(" Send us")[0]
+    # 북미(영문 제목) 클라이언트 경고(사용자 결정 11-18 — 자동 차단 폐기, 안내만 강화). '문의하기로 게임 화면 보내기' 권유는 뺌(실행을 권하게 됨).
+    OVERSEAS_KO = ("한국 서버 전용 애드온이에요. 북미(NA) 클라이언트에서 애드온을 켠 채 보안 프로그램에 게임이 끊긴 사례가 있어요. "
+                   "계정 보호를 위해 북미에서는 애드온을 끄고 플레이해 주세요.")
+    OVERSEAS_EN = ("This addon is for the Korean server only. NA players have been disconnected by the anti-cheat while it "
+                   "was running. To keep your account safe, please close the addon while playing on NA.")
+    OVERSEAS_TRAY_TITLE = "한국 서버 전용 · Korean server only"
+    # Windows 트레이 알림 본문은 약 255자에서 잘려 영문은 줄인 문장(210자)
+    OVERSEAS_TRAY = (OVERSEAS_KO + "\n" + "Korean server only. NA anti-cheat has disconnected players while it was running. "
+                     "Please close the addon on NA.")
 
     def _check_overseas_client(self) -> bool:
-        """앞에 있는 게임 창 제목이 해외(영문)면 홈 맨 위 띠 + 트레이 알림을 한 번(general.nonKoreanNoticeShown). 보이면 True.
-        판독·기능은 그대로 둔다(NA 보안 프로그램 끊김의 애드온 원인 근거 없음 — 차단하지 않음)."""
+        """앞에 있는 게임 창 제목이 북미(정확히 'Mabinogi')면 홈 맨 위 띠 + 트레이 알림 — 앱 실행마다 한 번. 보이면 True.
+        판독·기능은 그대로 둔다(차단 없음). 예전 general.nonKoreanNoticeShown(한 번 보면 영구히 안 뜸)은 쓰지 않는다 —
+        0.52.2 안내를 본 북미 사용자도 바뀐 경고를 봐야 한다(사용자 결정 11-18)."""
         if getattr(self, "_overseas_done", False):
             return False
         try:
@@ -1435,14 +1437,8 @@ class MainWindow(QMainWindow):
         from ..system.window_watcher import is_game_title, is_overseas_title
         if not (is_overseas_title(title) and is_game_title(title, exe)):
             return False
-        self._overseas_done = True
-        if config.load_general_flag("nonKoreanNoticeShown", False):
-            return False
-        try:
-            config.save_general_flag("nonKoreanNoticeShown", True)
-        except OSError:
-            _cap_log.warning("해외 클라이언트 안내 기록 실패", exc_info=True)
-        _cap_log.info("[해외 클라이언트] 게임 창 제목 %r — 한국 서버 전용 안내(1회)", title)
+        self._overseas_done = True  # 이번 실행에서는 다시 안 띄움
+        _cap_log.info("[해외 클라이언트] 게임 창 제목 %r — 북미 경고(이번 실행 1회)", title)
         self.home_page.show_notice(self.OVERSEAS_KO, self.OVERSEAS_EN)
         if self._tray is not None:
             self._tray.showMessage(self.OVERSEAS_TRAY_TITLE, self.OVERSEAS_TRAY, app_icon(), 15000)

@@ -1,10 +1,10 @@
 {
-  "version": "0.52.2",
+  "version": "0.52.3",
   "tests": [
     "tests/test_overseas_client.py",
-    "tests/test_cloud_sync.py",
     "tests/test_home_page.py",
     "tests/test_navigation.py",
+    "tests/test_game_window_judge.py",
     "tests/test_release_checks.py",
     "tests/test_startup_build.py",
     "tests/test_release_candidate.py",
@@ -16,16 +16,10 @@
   "coverage": {
     "src/mabinogi_addon/system/window_watcher.py": {
       "tests": [
-        "tests/test_overseas_client.py"
-      ],
-      "reason": "is_overseas_title — 제목에 '마비노기' 없고 'mabinogi'만이면 해외, 게임 창 판정(브라우저 등 제외)과 함께"
-    },
-    "src/mabinogi_addon/ui/home_page.py": {
-      "tests": [
         "tests/test_overseas_client.py",
-        "tests/test_home_page.py"
+        "tests/test_game_window_judge.py"
       ],
-      "reason": "홈 맨 위 안내 띠(한글+영문, 닫기) — 기존 홈 배치 회귀"
+      "reason": "is_overseas_title — 제목이 정확히 'Mabinogi'(공백·대소문자 무시), 꿀뷰·카톡·OBS 제목 아님. 게임 창 판정(is_game_title) 그대로"
     },
     "src/mabinogi_addon/ui/main_window.py": {
       "tests": [
@@ -33,14 +27,14 @@
         "tests/test_navigation.py",
         "tests/test_startup_smoke.py"
       ],
-      "reason": "상태 틱에서 해외 클라이언트 1회 안내(홈 띠+트레이), 차단 없음 — 창 시작·종료 계약"
+      "reason": "북미 경고 문구·트레이(210자), 앱 실행마다 1번(nonKoreanNoticeShown 안 씀), 차단 없음 — 창 시작·종료 계약"
     },
-    "src/mabinogi_addon/cloud_sync.py": {
+    "src/mabinogi_addon/ui/home_page.py": {
       "tests": [
         "tests/test_overseas_client.py",
-        "tests/test_cloud_sync.py"
+        "tests/test_home_page.py"
       ],
-      "reason": "general.nonKoreanNoticeShown 동기화 제외(올리기·받기) — 기존 병합 규칙 회귀"
+      "reason": "홈 맨 위 안내 띠(0.52.2와 같은 부품) — 긴 문구 줄바꿈, 기존 홈 배치"
     },
     "packaging/release_checks.json": {
       "tests": [
@@ -48,7 +42,7 @@
         "tests/test_release_candidate.py",
         "tests/test_windows_ci.py"
       ],
-      "reason": "0.52.2 검사 목록·후보 봉인·CI 계약"
+      "reason": "0.52.3 검사 목록·후보 봉인·CI 계약"
     },
     "packaging/build_windows.py": {
       "tests": [
@@ -61,7 +55,7 @@
         "tests/test_release_notes.py",
         "tests/test_release_notes_trigger.py"
       ],
-      "reason": "0.52.2 노트 맨 위(조용히 다듬은 것 한 줄)·첫 실행 표시, v0.52.1 이하 그대로"
+      "reason": "0.52.3 노트 맨 위(조용히 다듬은 것 한 줄)·첫 실행 표시, v0.52.2 이하 그대로"
     }
   }
 }
