@@ -78,7 +78,11 @@ def find_game_window(exe: str | None, titles: tuple[str, ...]) -> int:
         import win32gui
         import win32process
 
-        from .window_watcher import _exe_basename_of_pid, is_game_title
+        from .window_watcher import (
+            _exe_basename_of_pid,
+            is_game_title,
+            is_overseas_title,
+        )
     except Exception:  # noqa: BLE001
         return 0
 
@@ -89,7 +93,20 @@ def find_game_window(exe: str | None, titles: tuple[str, ...]) -> int:
     def _cb(hwnd, _lparam):
         if not win32gui.IsWindowVisible(hwnd):
             return True
-        title = (win32gui.GetWindowText(hwnd) or "").lower()
+        raw_title = win32gui.GetWindowText(hwnd) or ""
+        title = raw_title.lower()
+        if is_overseas_title(raw_title):
+            # 해외 제목: 실행 파일 확인 없이 제목·창 클래스로(pid만 받는다 — 프로세스를 열지 않음)
+            from .overseas_guard import is_overseas_game_window
+            try:
+                _, pid = win32process.GetWindowThreadProcessId(hwnd)
+                ok = pid != os.getpid() and is_overseas_game_window(raw_title, win32gui.GetClassName(hwnd))
+            except Exception:  # noqa: BLE001
+                ok = False
+            if ok:
+                found.append(hwnd)
+                return False
+            return True
         if exe:
             try:
                 _, pid = win32process.GetWindowThreadProcessId(hwnd)

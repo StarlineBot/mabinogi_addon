@@ -5,6 +5,7 @@ import pytest
 from test_navigation import window  # noqa: F401  (픽스처)
 
 from mabinogi_addon import cloud_sync, config
+from mabinogi_addon.system import overseas_guard as og
 from mabinogi_addon.system.window_watcher import is_game_title, is_overseas_title
 
 
@@ -36,29 +37,34 @@ class Tray:
         self.messages.append((title, body))
 
 
-def _foreground(mp, w, title, exe="client.exe", active=True):
-    mp.setattr(w._watcher, "is_game_active", lambda: active)
-    mp.setattr(w._watcher, "foreground_info", lambda: (title, exe))
+@pytest.fixture(autouse=True)
+def _reset_guard():
+    og.reset_for_tests()
+    yield
+    og.reset_for_tests()
 
 
-# 창을 닫기(픽스처 정리) 전에 가짜 트레이·감시를 되돌린다 — 가짜를 단 채 닫으면 다음 창 테스트가 흔들림
+def _windows(*rows):
+    """창 목록(제목·창 클래스·pid — 프로세스는 열지 않음)을 가짜로 훑는다."""
+    og.scan(lambda: list(rows))
 
 
+# 창을 닫기(픽스처 정리) 전에 가짜 트레이를 되돌린다 — 가짜를 단 채 닫으면 다음 창 테스트가 흔들림
 def test_overseas_client_notice_once(window, monkeypatch):  # noqa: F811
     w, _ = window
     with monkeypatch.context() as mp:
         tray = Tray()
         mp.setattr(w, "_tray", tray)
-        _foreground(mp, w, "마비노기")
-        assert not w._check_overseas_client() and w.home_page.notice_box.isHidden()  # 한국 클라이언트 — 없음
-        _foreground(mp, w, "Mabinogi", active=False)
-        assert not w._check_overseas_client()  # 게임이 앞에 없으면 판단 안 함
-        _foreground(mp, w, "Mabinogi")
+        _windows((103, "마비노기", "Mabinogi", 7777), (102, "Mabinogi - YouTube - Chrome", "Chrome_WidgetWin_1", 5555))
+        assert not w._check_overseas_client() and w.home_page.notice_box.isHidden()  # 한국 + 'Mabinogi' 유튜브 탭 — 없음
+        _windows((101, "Mabinogi", "Mabinogi", 4242))
         assert w._check_overseas_client()
         assert not w.home_page.notice_box.isHidden()
         assert w.home_page.notice_ko.text() == w.OVERSEAS_KO and w.home_page.notice_en.text() == w.OVERSEAS_EN
+        assert "최적화·FPS·블랙박스" in w.OVERSEAS_KO and "(optimization, FPS, blackbox) are turned off" in w.OVERSEAS_EN
         assert tray.messages == [(w.OVERSEAS_TRAY_TITLE, w.OVERSEAS_TRAY)]
         assert len(w.OVERSEAS_TRAY) <= 255  # Windows 트레이 알림 본문 한도
+        assert "껐어요" in w.OVERSEAS_TRAY and "turned off" in w.OVERSEAS_TRAY
         assert config.load_general_flag("nonKoreanNoticeShown") is True
         assert not w._check_overseas_client() and len(tray.messages) == 1  # 이 실행에서 다시 안 함
         w.home_page.notice_close.click()
@@ -71,17 +77,18 @@ def test_seen_before_no_notice_again(window, monkeypatch):  # noqa: F811
         config.save_general_flag("nonKoreanNoticeShown", True)  # 예전 실행에서 봄
         tray = Tray()
         mp.setattr(w, "_tray", tray)
-        _foreground(mp, w, "Mabinogi")
+        _windows((101, "Mabinogi", "Mabinogi", 4242))
         assert not w._check_overseas_client()
         assert w.home_page.notice_box.isHidden() and tray.messages == []
+        assert og.active()  # 안내는 안 해도 보호(프로세스 안 열기)는 그대로
 
 
-def test_features_keep_running_on_overseas_client(window, monkeypatch):  # noqa: F811
-    """차단 없음 — 안내 뒤에도 게임 활성 판단·추적은 그대로."""
+def test_screen_reading_keeps_running_on_overseas_client(window, monkeypatch):  # noqa: F811
+    """판독은 그대로 — 안내 뒤에도 게임 활성 판단·추적(일시정지 아님)은 그대로."""
+    w, _ = window
     with monkeypatch.context() as mp:
-        w, _ = window
         mp.setattr(w, "_tray", Tray())
-        _foreground(mp, w, "Mabinogi")
+        _windows((101, "Mabinogi", "Mabinogi", 4242))
         w._check_overseas_client()
         assert w._watcher.is_game_active() and not w._paused
 

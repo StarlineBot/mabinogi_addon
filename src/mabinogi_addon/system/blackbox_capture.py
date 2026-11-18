@@ -39,6 +39,9 @@ class Target:
 def target_identity(hwnd: int, pid: int) -> Target:
     if sys.platform != 'win32':
         raise OSError('Windows required')
+    from . import overseas_guard
+    if overseas_guard.is_protected_pid(pid):
+        raise PermissionError('해외 클라이언트 — 게임 프로세스를 열지 않아요')  # 사용자 결정 11-18
     from ctypes import wintypes as W
     k = C.WinDLL('kernel32', use_last_error=True)
     k.OpenProcess.argtypes = [W.DWORD, W.BOOL, W.DWORD]

@@ -1,9 +1,12 @@
 {
-  "version": "0.52.2",
+  "version": "0.52.3",
   "tests": [
+    "tests/test_overseas_guard.py",
     "tests/test_overseas_client.py",
-    "tests/test_cloud_sync.py",
-    "tests/test_home_page.py",
+    "tests/test_game_window_judge.py",
+    "tests/test_dorcha_game_target.py",
+    "tests/test_dorcha_thread.py",
+    "tests/test_dwm_thumbnail.py",
     "tests/test_navigation.py",
     "tests/test_release_checks.py",
     "tests/test_startup_build.py",
@@ -14,18 +17,76 @@
     "tests/test_release_notes_trigger.py"
   ],
   "coverage": {
-    "src/mabinogi_addon/system/window_watcher.py": {
+    "src/mabinogi_addon/system/overseas_guard.py": {
       "tests": [
+        "tests/test_overseas_guard.py",
         "tests/test_overseas_client.py"
       ],
-      "reason": "is_overseas_title — 제목에 '마비노기' 없고 'mabinogi'만이면 해외, 게임 창 판정(브라우저 등 제외)과 함께"
+      "reason": "새 모듈 — 창 목록(제목·창 클래스·pid)만으로 해외 게임 창 판정, 그 pid는 열지 않음, 한국만 있으면 그대로"
     },
-    "src/mabinogi_addon/ui/home_page.py": {
+    "src/mabinogi_addon/system/window_watcher.py": {
       "tests": [
-        "tests/test_overseas_client.py",
-        "tests/test_home_page.py"
+        "tests/test_overseas_guard.py",
+        "tests/test_game_window_judge.py"
       ],
-      "reason": "홈 맨 위 안내 띠(한글+영문, 닫기) — 기존 홈 배치 회귀"
+      "reason": "해외 제목이면 _classify·foreground_info·list_windows가 실행 파일을 열지 않음(등록돼 있어도), 한국은 기존 판정"
+    },
+    "src/mabinogi_addon/system/dwm_thumbnail.py": {
+      "tests": [
+        "tests/test_overseas_guard.py",
+        "tests/test_dwm_thumbnail.py"
+      ],
+      "reason": "find_game_window: 해외 제목은 실행 파일 확인 없이 제목·창 클래스로"
+    },
+    "src/mabinogi_addon/system/window_capture.py": {
+      "tests": [
+        "tests/test_overseas_guard.py",
+        "tests/test_dorcha_game_target.py",
+        "tests/test_dorcha_thread.py"
+      ],
+      "reason": "registered_game_target: 해외 게임 창은 등록·확인 없이 그 창(판독 그대로), 한국은 기존 캐시·재확인"
+    },
+    "src/mabinogi_addon/system/optimization.py": {
+      "tests": [
+        "tests/test_overseas_guard.py"
+      ],
+      "reason": "해외면 game() 없음(최적화·FPS 시작 안 함), _process는 보호 pid를 열지 않음"
+    },
+    "src/mabinogi_addon/system/perf_metrics.py": {
+      "tests": [
+        "tests/test_overseas_guard.py"
+      ],
+      "reason": "보호 pid 메모리·우선순위 조회 안 함"
+    },
+    "src/mabinogi_addon/system/blackbox_capture.py": {
+      "tests": [
+        "tests/test_overseas_guard.py"
+      ],
+      "reason": "보호 pid target_identity 안 함"
+    },
+    "src/mabinogi_addon/system/blackbox_events.py": {
+      "tests": [
+        "tests/test_overseas_guard.py"
+      ],
+      "reason": "해외면 녹화 대상 없음(블랙박스 시작 안 함)"
+    },
+    "src/mabinogi_addon/system/dialogue_visibility.py": {
+      "tests": [
+        "tests/test_overseas_guard.py"
+      ],
+      "reason": "가린 창 진단에서 보호 pid는 열지 않음"
+    },
+    "src/mabinogi_addon/system/process_priority.py": {
+      "tests": [
+        "tests/test_overseas_guard.py"
+      ],
+      "reason": "보호 pid 우선순위 읽기·쓰기 안 함"
+    },
+    "src/mabinogi_addon/system/game_process.py": {
+      "tests": [
+        "tests/test_overseas_guard.py"
+      ],
+      "reason": "해외면 창의 pid만으로 게임 식별(프로세스 조회 안 함)"
     },
     "src/mabinogi_addon/ui/main_window.py": {
       "tests": [
@@ -33,14 +94,7 @@
         "tests/test_navigation.py",
         "tests/test_startup_smoke.py"
       ],
-      "reason": "상태 틱에서 해외 클라이언트 1회 안내(홈 띠+트레이), 차단 없음 — 창 시작·종료 계약"
-    },
-    "src/mabinogi_addon/cloud_sync.py": {
-      "tests": [
-        "tests/test_overseas_client.py",
-        "tests/test_cloud_sync.py"
-      ],
-      "reason": "general.nonKoreanNoticeShown 동기화 제외(올리기·받기) — 기존 병합 규칙 회귀"
+      "reason": "안내 판정을 창 목록 판정으로(유튜브 'Mabinogi' 탭 제외), 문구에 '최적화·FPS·블랙박스 끔' 추가 — 창 시작·종료 계약"
     },
     "packaging/release_checks.json": {
       "tests": [
@@ -48,20 +102,20 @@
         "tests/test_release_candidate.py",
         "tests/test_windows_ci.py"
       ],
-      "reason": "0.52.2 검사 목록·후보 봉인·CI 계약"
+      "reason": "0.52.3 검사 목록·후보 봉인·CI 계약"
     },
     "packaging/build_windows.py": {
       "tests": [
         "tests/test_startup_build.py"
       ],
-      "reason": "새 자산·모듈 없음 — 빌드 경로 그대로"
+      "reason": "새 모듈(system/overseas_guard.py, 순수 Python) — 일반 import라 묶음 경로 그대로"
     },
     "src/mabinogi_addon/assets/release_notes.md": {
       "tests": [
         "tests/test_release_notes.py",
         "tests/test_release_notes_trigger.py"
       ],
-      "reason": "0.52.2 노트 맨 위(조용히 다듬은 것 한 줄)·첫 실행 표시, v0.52.1 이하 그대로"
+      "reason": "0.52.3 노트 맨 위·첫 실행 표시, v0.52.2 이하 그대로"
     }
   }
 }

@@ -136,6 +136,9 @@ class WindowsOptimization:
     @contextmanager
     def _process(self, target, *, write=False, affinity=False):
         self._windows()
+        from . import overseas_guard
+        if overseas_guard.is_protected_pid(target['pid']):
+            raise ProcessLookupError('해외 클라이언트 — 게임 프로세스를 열지 않아요')  # 사용자 결정 11-18
         kernel = self._kernel()
         handle = kernel.OpenProcess((0x400 if affinity else 0x1000) | (0x200 if write else 0), False, target['pid'])
         if not handle:
@@ -246,6 +249,9 @@ class WindowsOptimization:
                 or (bundle is not None and path.is_relative_to(PureWindowsPath(bundle))))
 
     def game(self):
+        from . import overseas_guard
+        if overseas_guard.active():
+            return None  # 해외(영문 제목) 클라이언트 — 최적화·FPS는 게임을 못 찾은 것처럼 시작하지 않음(사용자 결정 11-18)
         from .window_capture import registered_game_target
         target = self._game_window = registered_game_target(self._game_window)
         if target is None: return None

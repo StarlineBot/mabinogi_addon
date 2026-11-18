@@ -25,6 +25,11 @@
 
 ## 배포와 검증
 
+- **북미(영문 제목) 클라이언트에서 게임 프로세스를 열지 않는 모드(사용자 결정 11-18, 0.52.3 노트 한 줄)**: NA 사용자가 애드온만 켠 상태(유튜브 시청)로 두 번 NA 보안 프로그램에 끊김 — 원인 기능 미확정, 가장 유력한 후보 = 게임 프로세스 열기(OpenProcess). 화면 캡처(바탕화면 복사)·판독은 그대로.
+  구조: 새 `system/overseas_guard.py` — 창 목록(EnumWindows)에서 제목·창 클래스·pid만 읽어(GetWindowText·GetClassName·GetWindowThreadProcessId, 프로세스 안 엶) 제목이 해외(`is_overseas_title`)이고 브라우저·탐색기 창 클래스(Chrome_WidgetWin_*·MozillaWindowClass·CabinetWClass 등)가 아니면 해외 게임 창 → 그 pid는 '보호 pid'(이번 실행 동안), 해외 게임 창을 본 적 있으면 `active()`. 2초마다 다시 훑음(수 ms, 프로세스를 여는 곳에서 필요할 때만).
+  가드: `_exe_basename_of_pid`(실행 파일 이름 확인 — 모든 경로의 공통 지점)·`optimization._process`·`perf_metrics`(메모리·우선순위 조회)·`blackbox_capture.target_identity`·`dialogue_visibility`(가린 창 진단)·`process_priority`(읽기·쓰기)는 보호 pid를 열지 않음. `WindowsWatcher._classify`·`foreground_info`·`list_windows`: 해외 제목이면 실행 파일 확인 없이(등록된 gameExe가 있어도) 창 목록 판정으로. `dwm_thumbnail.find_game_window`·`window_capture.registered_game_target`: 해외 게임 창은 제목·창 클래스로(판독 기능은 그대로 그 창 위치). 해외면 끔: 최적화·FPS(`WindowsOptimization.game()` 없음 → 시작 안 함), 블랙박스(`blackbox_events.sample` 대상 없음), `GameProcessProbe.identity`는 창 pid만((pid, 0) — 재시작 감지는 pid로). 한국('마비노기' 제목)은 기존 경로 그대로.
+  안내: 판정을 위 창 목록 판정으로 바꿈(유튜브 'Mabinogi' 탭에 안내가 뜨지 않게 — 예전엔 foreground 제목+실행 파일), 문구에 '북미 클라이언트에서는 게임 프로세스를 건드리는 기능(최적화·FPS·블랙박스)을 껐어요 / On the NA client, features that access the game process (optimization, FPS, blackbox) are turned off.' 추가. 트레이는 한글 앞 두 문장 + 영문 '껐어요' 문장(209자, 문의 안내는 홈 띠). 렌더 `docs/assets/overseas-notice-20261118/`(갱신).
+  테스트 `tests/test_overseas_guard.py` 20개(창 클래스 판정·한국만이면 그대로·창 닫혀도 보호 유지, NA면 OpenProcess 한 번도 없음 — 실행 파일 확인·_classify(등록 있어도)·find_game_window·registered_game_target, 한국은 기존 함수 호출, 최적화·FPS·블랙박스 시작 안 함·perf·잡담 진단·우선순위·게임 식별) + `test_overseas_client.py` 갱신. 관련 917 통과(-n 8), 배포 검사 0.52.3 CI 글꼴 370 통과.
 - **NA 사용자 문의 자료 확인(11-18, 0.52.2, guest-27b1c04e, 1440×900, 상태목록창 '줄여 보기')** — 해외 안내 1회 정상(02:55:34 'Mabinogi'), 업데이트·노트 정상, 판독 계속.
   QA가 같은 화면으로 탐지기 재실행: 단축바 찾음(2,12,1168,89) / 체력바 찾음(371,863)·판독 HP·MP·STA 100% = 화면 6070/6070·5250/5250·4873/4873 맞음 /
   **투아림: 자리는 찾지만(777,618,42,16) 값 못 읽음** — 숫자 '66%'가 상자 위쪽에 걸쳐 잘림, 상자를 약 5px 위(613)로 올리면 66으로 읽힘(NA 표시 위치가 한국과 조금 다름) /

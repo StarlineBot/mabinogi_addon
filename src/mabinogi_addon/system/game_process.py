@@ -15,6 +15,11 @@ class GameProcessProbe:
         살아 있으면 그 프로세스를 돌려준다. Windows가 아니면 항상 None(초기화하지 않음)."""
         if sys.platform != 'win32':
             return None
+        from . import overseas_guard
+        if overseas_guard.active():
+            # 해외 클라이언트: 프로세스를 열지 않고 창의 pid만(시작 시각 0) — 게임 재시작 감지는 pid가 바뀌면
+            window = overseas_guard.game_window()
+            return None if window is None else (window[1], 0)
         try:
             game = self._backend.game()
         except PermissionError:

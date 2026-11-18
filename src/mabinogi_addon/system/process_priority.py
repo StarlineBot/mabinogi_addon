@@ -73,6 +73,10 @@ def _kernel():
 def api_priority(pid, access=0x1000):
     """GetPriorityClass. access 기본은 PROCESS_QUERY_LIMITED_INFORMATION. (값 또는 None, 오류 문구)."""
     import ctypes
+
+    from . import overseas_guard
+    if overseas_guard.is_protected_pid(pid):
+        return None, '해외 클라이언트 — 게임 프로세스를 열지 않아요'
     kernel = _kernel()
     handle = kernel.OpenProcess(access, False, int(pid))
     if not handle:
@@ -144,6 +148,9 @@ def write(pid, value):
     import ctypes
     if value not in WRITABLE:
         raise ValueError('허용하지 않는 우선순위예요(실시간 금지).')
+    from . import overseas_guard
+    if overseas_guard.is_protected_pid(pid):
+        raise PermissionError('해외 클라이언트 — 게임 프로세스를 열지 않아요')
     kernel = _kernel()
     handle = kernel.OpenProcess(0x0200 | 0x1000, False, int(pid))
     if not handle:

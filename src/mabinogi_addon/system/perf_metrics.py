@@ -134,6 +134,10 @@ def process_private_bytes(pid) -> int | None:
     import win32api
     import win32con
     import win32process
+
+    from . import overseas_guard
+    if overseas_guard.is_protected_pid(pid):
+        return None  # 해외 게임 프로세스는 열지 않음(사용자 결정 11-18)
     try:
         handle = win32api.OpenProcess(win32con.PROCESS_QUERY_LIMITED_INFORMATION, False, int(pid))
     except Exception:
@@ -152,6 +156,10 @@ def process_state(pid, cores=None) -> dict | None:
     import win32api
     import win32con
     import win32process
+
+    from . import overseas_guard
+    if overseas_guard.is_protected_pid(pid):
+        return None  # 해외 게임 프로세스는 열지 않음(사용자 결정 11-18)
     try:
         handle = win32api.OpenProcess(win32con.PROCESS_QUERY_LIMITED_INFORMATION, False, int(pid))
     except Exception:
