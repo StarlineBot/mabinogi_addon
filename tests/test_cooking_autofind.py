@@ -157,16 +157,38 @@ def _tab(monkeypatch, frame=None, origin=(100, 50)):
     tab = CookingTab(fg)
     calls = []
 
-    def target():
+    def registered():
         calls.append("target")
-        if frame is None:
+        if tab._frame is None:
             return None
-        return (*origin, frame.shape[1], frame.shape[0])
-    tab.autofind._target = target
-    tab.autofind._grab = lambda left, top: _grabber(tab._frame)
+        return (*origin, tab._frame.shape[1], tab._frame.shape[0])
+    tab.autofind._registered = registered
+    tab.autofind._open_camera = lambda: _Camera(lambda: _screen(tab._frame, origin))
     tab.autofind.submit = lambda fn: _Done(fn())  # 작업 스레드 대신 바로
     tab._frame = frame
     return tab, fg, calls
+
+
+def _screen(frame, origin):
+    """주 모니터 전체 프레임 흉내 — 게임 창 화면을 origin 자리에."""
+    if frame is None:
+        return None
+    ox, oy = origin
+    screen = np.full((frame.shape[0] + oy + 20, frame.shape[1] + ox + 20, 3), 90, np.uint8)
+    screen[oy:oy + frame.shape[0], ox:ox + frame.shape[1]] = frame
+    return screen
+
+
+class _Camera:
+    def __init__(self, frame_fn):
+        self._frame_fn = frame_fn
+        self.released = 0
+
+    def full_frame(self):
+        return self._frame_fn()
+
+    def release(self):
+        self.released += 1
 
 
 def test_no_capture_while_off_or_game_not_front(monkeypatch):
@@ -240,12 +262,11 @@ def test_job_runs_on_worker_thread_one_at_a_time():
     from mabinogi_addon.ui.cooking_autofind import CookingAutoFind
     frame = imread(DATA / "11image.png")
     threads = []
-    auto = CookingAutoFind(target=lambda: (0, 0, frame.shape[1], frame.shape[0]))
-
-    def grab(left, top):
+    def full_frame():
         threads.append(threading.current_thread().name)
-        return _grabber(frame)
-    auto._grab = grab
+        return frame
+    auto = CookingAutoFind(registered=lambda: (0, 0, frame.shape[1], frame.shape[0]),
+                           camera=lambda: _Camera(full_frame))
     assert auto.tick(True) is None            # 작업 걸기
     first = auto._future
     auto.tick(True)
@@ -258,3 +279,132 @@ def test_job_runs_on_worker_thread_one_at_a_time():
     assert state is not None and state.kind == "found"
     assert threads and all(name.startswith("cooking-find") for name in threads)
     auto.shutdown()
+
+
+# ---- QA 반려 11-19: 실기에서 한 번도 못 찾음 → 원인 줄이기 + 진단 로그 ----
+def test_template_loads_from_non_ascii_path(tmp_path, monkeypatch):
+    """Windows cv2.imread는 한글 경로를 못 읽는다 — 사용자 폴더 아래 exe 풀림 자리에서도 템플릿을 읽어야 함."""
+    import shutil
+
+    from mabinogi_addon import paths
+    root = tmp_path / "사용자" / "templates"
+    (root / "cooking").mkdir(parents=True)
+    shutil.copy(paths.detect_templates_dir() / "cooking" / "gauge_row.png", root / "cooking" / "gauge_row.png")
+    monkeypatch.setattr(paths, "detect_templates_dir", lambda: root)
+    cw.template.cache_clear()
+    try:
+        assert cw.template().shape == (42, 247)
+        source = Path(cw.__file__).read_text(encoding="utf-8")
+        assert "cv2.imread(" not in source  # 경로 인코딩과 무관한 image_io.imread만
+    finally:
+        cw.template.cache_clear()
+
+
+def test_unregistered_uses_primary_monitor_from_live_frame():
+    from mabinogi_addon.ui.cooking_autofind import CookingAutoFind
+    frame = imread(DATA / "11image.png")
+    auto = CookingAutoFind(registered=lambda: None, camera=lambda: _Camera(lambda: frame))
+    state, origin, where = auto._job()
+    assert state.kind == "found" and state.bar[:2] == (348, 850) and origin == (0, 0)
+    assert "주 모니터" in where and "라이브" in where
+
+
+def test_registered_window_cropped_from_live_frame():
+    from mabinogi_addon.ui.cooking_autofind import CookingAutoFind
+    game = imread(DATA / "11image.png")
+    screen = _screen(game, (100, 50))
+    auto = CookingAutoFind(registered=lambda: (100, 50, game.shape[1], game.shape[0]),
+                           camera=lambda: _Camera(lambda: screen))
+    state, origin, where = auto._job()
+    assert state.kind == "found" and state.bar[:2] == (348, 850) and origin == (100, 50)
+    assert "등록 게임 창" in where and "라이브" in where
+
+
+def test_window_outside_live_frame_falls_back_to_mss():
+    from mabinogi_addon.ui.cooking_autofind import CookingAutoFind
+    game = imread(DATA / "11image.png")
+    auto = CookingAutoFind(registered=lambda: (3000, 0, game.shape[1], game.shape[0]),
+                           camera=lambda: _Camera(lambda: np.zeros((1080, 1920, 3), np.uint8)))
+    auto._mss_grab = lambda left, top: _grabber(game)  # 두 번째 모니터의 게임 창을 mss로
+    state, origin, where = auto._job()
+    assert state.kind == "found" and origin == (3000, 0) and "mss" in where
+
+
+def test_logs_target_ratio_score_state_and_failures(caplog):
+    import logging
+
+    from mabinogi_addon.ui.cooking_autofind import CookingAutoFind
+    frame = imread(DATA / "11image.png")
+    current = {"frame": frame}
+    auto = CookingAutoFind(registered=lambda: None, camera=lambda: _Camera(lambda: current["frame"]))
+    auto.submit = lambda fn: _Done(fn())
+    with caplog.at_level(logging.INFO, logger="mabinogi_addon.cooking"):
+        auto.tick(True)
+        assert auto.tick(True).kind == "found"
+    line = [r.getMessage() for r in caplog.records if "요리창 찾기: 상태=found" in r.getMessage()][-1]
+    assert "대상=주 모니터" in line and "띠검은비율=1.00" in line and "신호=켜짐" in line
+    assert "최고점수=0.86" in line and "자리=348,850" in line
+    caplog.clear()
+    with caplog.at_level(logging.INFO, logger="mabinogi_addon.cooking"):
+        auto.tick(True)                      # 같은 상태 → 30초 안엔 다시 안 찍음
+        assert not [r for r in caplog.records if "상태=" in r.getMessage()]
+        current["frame"] = np.full_like(frame, 120)
+        auto.tick(True)
+        auto.tick(True)
+    line = [r.getMessage() for r in caplog.records if "상태=closed" in r.getMessage()][-1]
+    assert "신호=꺼짐" in line and "최고점수=-" in line
+
+
+def test_no_target_and_exception_logged(caplog):
+    import logging
+
+    from mabinogi_addon.ui.cooking_autofind import CookingAutoFind
+
+    def broken_camera():
+        raise RuntimeError("dxcam 없음")
+
+    def broken_registered():
+        raise OSError("창 조회 실패")
+    auto = CookingAutoFind(registered=broken_registered, camera=broken_camera)
+    auto._thread_mss = lambda: (_ for _ in ()).throw(RuntimeError("mss 없음"))
+    auto.submit = lambda fn: _Done(fn())
+    with caplog.at_level(logging.INFO, logger="mabinogi_addon.cooking"):
+        assert auto.tick(True) is None
+        assert auto.tick(True) is None
+    text = "\n".join(r.getMessage() for r in caplog.records)
+    assert "게임 창 조회 실패" in text and "라이브 카메라를 못 써서" in text and "모니터 조회 실패" in text
+    assert "상태=대상 없음" in text
+
+    class Boom:
+        def done(self):
+            return True
+
+        def result(self):
+            raise ValueError("작업 예외")
+    auto.submit = lambda fn: Boom()
+    caplog.clear()
+    with caplog.at_level(logging.INFO, logger="mabinogi_addon.cooking"):
+        auto.tick(True)
+        auto.tick(True)
+    assert any("요리창 찾기 실패(예외)" in r.getMessage() for r in caplog.records)
+
+
+def test_capture_none_counts_failures():
+    finder = cw.CookingFinder()
+    state = finder.step(lambda *a: None, 1920, 1080)
+    assert state.kind == "manual" and finder.capture_failures == 1 and finder.last_ratio is None
+
+
+def test_overlay_off_releases_camera(monkeypatch):
+    tab, _fg, _calls = _tab(monkeypatch, imread(DATA / "11image.png"))
+    tab.select("모둠회덮밥")
+    tab.set_overlay(True)
+    tab._auto_tick()
+    camera = tab.autofind._camera
+    assert camera is not None
+    tab.autofind._executor = None
+    released = []
+    tab.autofind.submit = lambda fn: (fn(), released.append(True), _Done(None))[-1]
+    tab.set_overlay(False)
+    assert camera.released == 1 and tab.autofind._camera is None
+    tab.shutdown()

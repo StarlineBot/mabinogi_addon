@@ -17,6 +17,7 @@ import cv2
 import numpy as np
 
 from .. import paths
+from ..image_io import imread
 
 cv2.setNumThreads(1)
 
@@ -33,7 +34,8 @@ _CANNY = (40, 120)
 @lru_cache(maxsize=1)
 def template() -> np.ndarray:
     """경계선 템플릿(uint8, 42×247)."""
-    gray = cv2.imread(str(paths.detect_templates_dir() / "cooking" / "gauge_row.png"), cv2.IMREAD_GRAYSCALE)
+    # image_io.imread: cv2.imread는 Windows에서 한글 등 비ASCII 경로(사용자 폴더 아래 exe 풀림 자리)를 못 읽는다(QA 반려 11-19)
+    gray = imread(paths.detect_templates_dir() / "cooking" / "gauge_row.png", cv2.IMREAD_GRAYSCALE)
     if gray is None:
         raise FileNotFoundError("cooking/gauge_row.png")
     return cv2.Canny(gray, *_CANNY)
@@ -67,17 +69,23 @@ class Match:
     score: float
 
 
-def locate(frame: np.ndarray, offset: tuple[int, int] = (0, 0)) -> Match | None:
-    """이미지 안에서 요리창 게이지 줄을 찾는다(기준 미만이면 None)."""
+def best(frame: np.ndarray, offset: tuple[int, int] = (0, 0)) -> Match | None:
+    """기준과 무관하게 가장 비슷한 자리(진단 로그용). 이미지가 템플릿보다 작으면 None."""
     tpl = template()
     gray = to_gray(frame)
     if gray.shape[0] < tpl.shape[0] or gray.shape[1] < tpl.shape[1]:
         return None
     result = cv2.matchTemplate(cv2.Canny(gray, *_CANNY), tpl, cv2.TM_CCOEFF_NORMED)
     _, score, _, (x, y) = cv2.minMaxLoc(result)
-    if not np.isfinite(score) or score < MATCH_MIN:
+    if not np.isfinite(score):
         return None
     return Match((offset[0] + x + BAR_OFFSET[0], offset[1] + y + BAR_OFFSET[1], *BAR_SIZE), float(score))
+
+
+def locate(frame: np.ndarray, offset: tuple[int, int] = (0, 0)) -> Match | None:
+    """이미지 안에서 요리창 게이지 줄을 찾는다(기준 미만이면 None)."""
+    match = best(frame, offset)
+    return match if match is not None and match.score >= MATCH_MIN else None
 
 
 @dataclass(frozen=True)
@@ -99,15 +107,31 @@ class CookingFinder:
         self.misses = 0
         self.full_searches = 0
         self.state = State("manual")
+        # 진단(마지막 step): 띠 검은 비율(None = 띠 캡처 실패), 가장 비슷한 자리·점수, 캡처 실패 횟수
+        self.last_ratio: float | None = None
+        self.last_best: Match | None = None
+        self.capture_failures = 0
 
     def _lost(self) -> State:
         self.bar = None
         self.state = State("closed" if self.seen else "manual")
         return self.state
 
+    def _find(self, image, offset) -> Match | None:
+        if image is None:
+            return None
+        candidate = best(image, offset)
+        if candidate is not None and (self.last_best is None or candidate.score > self.last_best.score):
+            self.last_best = candidate
+        return candidate if candidate is not None and candidate.score >= MATCH_MIN else None
+
     def step(self, grab, width: int, height: int) -> State:
         band = grab(*band_rect(width, height))
-        if band is None or not signal(band):
+        self.last_ratio = None if band is None else black_ratio(band)
+        self.last_best = None
+        if band is None:
+            self.capture_failures += 1
+        if band is None or self.last_ratio < SIGNAL_RATIO:
             self.misses = 0
             return self._lost()
         match = None
@@ -118,11 +142,13 @@ class CookingFinder:
             x0, y0 = max(0, tx - margin), max(0, ty - margin)
             x1, y1 = min(width, tx + tw + margin), min(height, ty + th + margin)
             roi = grab(x0, y0, x1 - x0, y1 - y0) if x1 > x0 and y1 > y0 else None
-            match = locate(roi, (x0, y0)) if roi is not None else None
+            match = self._find(roi, (x0, y0))
         if match is None:  # 처음이거나 창을 옮김 → 전체
             self.full_searches += 1
             frame = grab(0, 0, width, height)
-            match = locate(frame) if frame is not None else None
+            if frame is None:
+                self.capture_failures += 1
+            match = self._find(frame, (0, 0))
         if match is None:
             self.misses += 1
             if self.misses >= MISSES_TO_CLOSE:

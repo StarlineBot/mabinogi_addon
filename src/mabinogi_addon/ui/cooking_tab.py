@@ -376,6 +376,7 @@ class CookingTab(QWidget):
         else:
             self._timer.stop()
             self._find_timer.stop()  # 끈 동안 캡처·찾기 0
+            self.autofind.release()  # 라이브 카메라·mss 놓기
             self._apply_auto(None, reset=True)
             if self.overlay is not None:
                 self.overlay.hide()
