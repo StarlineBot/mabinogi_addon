@@ -342,4 +342,28 @@ def test_overlay_position_scale_saved_and_restored_and_hidden_without_game():
 
 def test_overlay_config_rejects_bad_values():
     config.save_cooking_overlay(pos={"x": "a", "y": 1}, scale=9, locked="yes")
-    assert config.load_cooking_overlay() == {"pos": None, "scale": 1.0, "locked": False}
+    assert config.load_cooking_overlay() == {"pos": None, "scale": None, "locked": False}
+
+
+@pytest.mark.parametrize("dpr", [1.0, 1.25, 1.5, 2.0])
+def test_first_bar_is_physical_245x10_for_display_scale(monkeypatch, dpr):
+    """첫 사용(저장 배율 없음): Windows 배율과 무관하게 물리 픽셀 245×10(±1) — 게임 요리창 바 측정값(QA 반려 11-19)."""
+    from mabinogi_addon.ui import cooking_tab, dpi
+    monkeypatch.setattr(dpi, "screen_scale", lambda: dpr)
+    tab = cooking_tab.CookingTab()
+    tab.select("모둠회덮밥")
+    tab.set_overlay(True)
+    w, h = tab.overlay.bar_size()
+    assert abs(w * dpr - 245) <= 1 and abs(h * dpr - 10) <= 1
+    tab.shutdown()
+
+
+def test_saved_scale_kept_regardless_of_display_scale(monkeypatch):
+    from mabinogi_addon.ui import cooking_tab, dpi
+    monkeypatch.setattr(dpi, "screen_scale", lambda: 1.5)
+    config.save_cooking_overlay(scale=1.2)
+    tab = cooking_tab.CookingTab()
+    tab.select("모둠회덮밥")
+    tab.set_overlay(True)
+    assert tab.overlay.scale == 1.2
+    tab.shutdown()

@@ -2236,7 +2236,8 @@ def load_cooking_overlay(path: Path = LOCAL_CONFIG_PATH) -> dict:
     if not (isinstance(pos, dict) and all(type(pos.get(k)) is int for k in ("x", "y"))):
         pos = None
     scale = sec.get("scale")
-    scale = float(scale) if isinstance(scale, (int, float)) and not isinstance(scale, bool) and 0.5 <= scale <= 3.0 else 1.0
+    # 저장된 배율이 없으면 None — 첫 크기는 화면 배율로 정한다(cooking_tab, 게임 바 물리 245×10)
+    scale = float(scale) if isinstance(scale, (int, float)) and not isinstance(scale, bool) and 0.5 <= scale <= 3.0 else None
     return {"pos": pos, "scale": scale, "locked": sec.get("locked") is True}
 
 

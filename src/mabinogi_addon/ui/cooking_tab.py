@@ -356,7 +356,7 @@ class CookingTab(QWidget):
         if on:
             if self.overlay is None:
                 saved = config.load_cooking_overlay()
-                self.overlay = CookingBarOverlay(saved["scale"])
+                self.overlay = CookingBarOverlay(first_scale() if saved["scale"] is None else saved["scale"])
                 self.overlay.moved.connect(self._save_position)
                 self.overlay.scaled.connect(self._save_position)
                 pos = saved["pos"]
@@ -421,6 +421,13 @@ class CookingTab(QWidget):
         if self.overlay is not None:
             self.overlay.close()
             self.overlay = None
+
+
+def first_scale() -> float:
+    """첫 바 배율 — 명세 6절 245×10은 게임 화면(물리 픽셀) 측정값인데 Qt 위젯 크기는 논리 픽셀이라
+    Windows 배율 125%·150%면 그만큼 커진다(QA 반려 11-19). 물리 245×10이 되게 1/배율로 시작. 사용자가 맞춘 저장 배율은 그대로."""
+    from . import dpi
+    return 1.0 / (dpi.screen_scale() or 1.0)
 
 
 def _drop_layout(layout) -> None:
