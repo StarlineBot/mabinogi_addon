@@ -119,6 +119,10 @@ class CookingBarOverlay(QWidget):
         self.update()
 
     @property
+    def dragging(self) -> bool:
+        return self._drag is not None
+
+    @property
     def locked(self) -> bool:
         return self._locked
 

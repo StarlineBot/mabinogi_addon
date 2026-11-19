@@ -399,10 +399,14 @@ class CookingTab(QWidget):
             pass
 
     def _game_visible(self) -> bool:
+        """게임이 앞일 때, 또는 애드온이 앞이면서 요리 탭이 실제로 보일 때(위치 맞추는 중)만 — 커스텀 오버레이와 같은 규칙
+        (사용자 결정 11-19). 바를 누르면 애드온이 앞이 되므로 끄는 중·바가 활성 창일 때는 유지(끄다 사라지지 않게)."""
         if self._watcher is None:
             return True
+        if self.overlay is not None and (self.overlay.dragging or self.overlay.isActiveWindow()):
+            return True
         try:
-            return self._watcher.is_game_active() or self._watcher.is_self_active()
+            return self._watcher.is_game_active() or (self._watcher.is_self_active() and self.isVisible())
         except Exception:  # noqa: BLE001
             return True
 

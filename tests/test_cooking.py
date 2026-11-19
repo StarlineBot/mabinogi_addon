@@ -396,3 +396,54 @@ def test_bar_drags_freely_without_grid(monkeypatch):
     assert (o.x(), o.y()) == (405, 303)  # 스냅 없이 정확히 (+5, +3)
     assert shown == [] and moved == [o.pos()]
     o.close()
+
+
+class _Fg:
+    """전경 창 흉내: 'game' · 'self'(애드온) · 'other'."""
+    def __init__(self):
+        self.front = "game"
+
+    def is_game_active(self):
+        return self.front == "game"
+
+    def is_self_active(self):
+        return self.front == "self"
+
+
+def test_bar_shows_only_when_game_or_cooking_tab_front():
+    """사용자 결정 11-19: 다른 오버레이처럼 게임이 앞일 때만 — 애드온이 앞이면 요리 탭이 보일 때만, 끄는 중엔 유지."""
+    from PySide6.QtWidgets import QTabWidget
+
+    from mabinogi_addon.ui.cooking_tab import CookingTab
+    fg = _Fg()
+    tabs = QTabWidget()
+    tab = CookingTab(fg)
+    tabs.addTab(tab, "요리")
+    tabs.addTab(QLabel("다른"), "다른")
+    tabs.show()
+    tab.select("모둠회덮밥")
+    tab.set_overlay(True)
+    o = tab.overlay
+
+    def shown():
+        tab._sync_overlay()
+        return o.isVisible()
+    assert shown()                      # 게임 앞
+    fg.front = "self"
+    assert shown()                      # 애드온 앞 + 요리 탭 보임(위치 맞추는 중)
+    tabs.setCurrentIndex(1)
+    assert not shown()                  # 애드온 앞 + 다른 탭
+    o._drag = QPoint(1, 1)
+    assert shown()                      # 끄는 중엔 숨지 않음
+    o._drag = None
+    tabs.hide()                         # 트레이로 숨김
+    tabs.setCurrentIndex(0)
+    assert not shown()
+    fg.front = "other"
+    tabs.show()
+    assert not shown()                  # 다른 프로그램 앞
+    fg.front = "game"
+    tabs.hide()
+    assert shown()                      # 앱이 숨어 있어도 게임 앞이면 보임
+    tab.shutdown()
+    tabs.close()

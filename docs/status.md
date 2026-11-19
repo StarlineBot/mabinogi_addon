@@ -66,6 +66,7 @@
   **격자 변경 철회 + 요리 바만 자유 이동(사용자 결정 11-19, QA 전달)**: 11px로도 못 맞춤 — 격자는 '중앙 + 칸 배수' 자리라 홀수 칸이어도 1px 자리 불가. 19bd504 revert(선택지 8·16·24·32·48·64·기본 32·노트 줄 삭제),
   load_grid_size는 목록에 없는 저장값 → 가장 가까운 값(같으면 작은 쪽: 11→8·19→16·40→32·56→48)만 남김(콤보 = 스냅). `ui/cooking_gauge.py` 끌기에서 grid.snap·안내선 제거(다른 오버레이 그대로, test_grid_all_overlays FREE_DRAG 예외에 이유 기록).
   → `tests/test_cooking.py::test_bar_drags_freely_without_grid`(격자 켬·32에서 +5,+3 그대로·안내선 없음), `tests/test_grid_snap.py`(옮기기 16건).
+  **바 표시 조건(사용자 결정 11-19)**: 게임 앞, 또는 애드온 앞 + 요리 탭이 실제로 보일 때만(커스텀 오버레이 규칙) — 다른 탭·트레이 숨김·다른 프로그램 앞이면 숨김. 바를 끄는 중·바가 활성 창이면 유지. `ui/cooking_tab.py`·`cooking_gauge.py`(dragging) → `tests/test_cooking.py::test_bar_shows_only_when_game_or_cooking_tab_front`.
 - **봇 앱 버전 저장·표시 → 봇 DEV 세션(session_01R3AWN43b3yw3h5TNfWuuAs)에 전달(11-19, 기획 세션)** — sync.json app 값 저장(app_version 컬럼)·!현황 표시·VM 재시작. 앱 쪽 featureUsage 미등록 사용자 버그는 2d40b99로 수정, v0.52.3에 포함(태그 확인).
 - **v0.52.3 게시 완료(11-19 01:59 UTC = 10:59 KST, QA 세션 직접 실행, 사용자 '확인하고 실행에 문제없으면 바로 배포')** — 범위(v0.52.2 대비 src): 북미 차단 개발 되돌림(0f336f63·598598a6 — overseas_guard 등 전부 없어짐),
   북미 안내 문구 강화·판정 '정확히 Mabinogi'·실행마다 1번(8da151ab), featureUsage 실행 판정에 창 판정 추가(2d40b99e). QA: 관련 86 통과, 배포 검사 CI 글꼴 348 통과, preflight 0, 홈 띠 렌더 잘림 없음.
