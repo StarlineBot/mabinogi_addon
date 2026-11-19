@@ -110,6 +110,8 @@ class CookingFinder:
         # 진단(마지막 step): 띠 검은 비율(None = 띠 캡처 실패), 가장 비슷한 자리·점수, 캡처 실패 횟수
         self.last_ratio: float | None = None
         self.last_best: Match | None = None
+        self.last_full = False                    # 이번 step에서 전체 찾기를 했는지
+        self.last_frame: np.ndarray | None = None  # 이번 step의 전체 프레임(전체 찾기 때만 — 실패 프레임 저장용)
         self.capture_failures = 0
 
     def _lost(self) -> State:
@@ -129,6 +131,8 @@ class CookingFinder:
         band = grab(*band_rect(width, height))
         self.last_ratio = None if band is None else black_ratio(band)
         self.last_best = None
+        self.last_full = False
+        self.last_frame = None
         if band is None:
             self.capture_failures += 1
         if band is None or self.last_ratio < SIGNAL_RATIO:
@@ -145,7 +149,8 @@ class CookingFinder:
             match = self._find(roi, (x0, y0))
         if match is None:  # 처음이거나 창을 옮김 → 전체
             self.full_searches += 1
-            frame = grab(0, 0, width, height)
+            self.last_full = True
+            frame = self.last_frame = grab(0, 0, width, height)
             if frame is None:
                 self.capture_failures += 1
             match = self._find(frame, (0, 0))

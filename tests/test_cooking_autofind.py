@@ -330,7 +330,8 @@ def test_window_outside_live_frame_falls_back_to_mss():
     assert state.kind == "found" and origin == (3000, 0) and "mss" in where
 
 
-def test_logs_target_ratio_score_state_and_failures(caplog):
+def test_logs_by_signal_every_step_while_on(caplog):
+    """QA 반려 11-19: 신호가 켜져 있는 동안은 매 step 한 줄(못 찾아 manual이 이어져도), 꺼져 있으면 30초에 한 줄."""
     import logging
 
     from mabinogi_addon.ui.cooking_autofind import CookingAutoFind
@@ -338,21 +339,68 @@ def test_logs_target_ratio_score_state_and_failures(caplog):
     current = {"frame": frame}
     auto = CookingAutoFind(registered=lambda: None, camera=lambda: _Camera(lambda: current["frame"]))
     auto.submit = lambda fn: _Done(fn())
+
+    def lines():
+        return [r.getMessage() for r in caplog.records if r.getMessage().startswith("요리창 찾기:")]
     with caplog.at_level(logging.INFO, logger="mabinogi_addon.cooking"):
         auto.tick(True)
         assert auto.tick(True).kind == "found"
-    line = [r.getMessage() for r in caplog.records if "요리창 찾기: 상태=found" in r.getMessage()][-1]
-    assert "대상=주 모니터" in line and "띠검은비율=1.00" in line and "신호=켜짐" in line
-    assert "최고점수=0.86" in line and "자리=348,850" in line
+    line = lines()[0]
+    assert "신호 바뀜" in line and "상태=found" in line and "대상=주 모니터" in line
+    assert "띠검은비율=1.00" in line and "신호=켜짐" in line and "전체찾기=예" in line
+    assert "최고점수=0.86" in line and "자리=348,850" in line and "못찾음=0" in line
     caplog.clear()
     with caplog.at_level(logging.INFO, logger="mabinogi_addon.cooking"):
-        auto.tick(True)                      # 같은 상태 → 30초 안엔 다시 안 찍음
-        assert not [r for r in caplog.records if "상태=" in r.getMessage()]
-        current["frame"] = np.full_like(frame, 120)
-        auto.tick(True)
-        auto.tick(True)
-    line = [r.getMessage() for r in caplog.records if "상태=closed" in r.getMessage()][-1]
-    assert "신호=꺼짐" in line and "최고점수=-" in line
+        auto.tick(True)                      # 신호 켜짐 → 상태가 같아도 매번
+    assert len(lines()) == 1 and "전체찾기=아니오" in lines()[0] and "신호 바뀜" not in lines()[0]
+
+    # 신호는 켜졌는데 요리창 모양이 없음(실사용 실패 재현) → 매 step 줄 + 실패 프레임
+    caplog.clear()
+    current["frame"] = np.zeros_like(frame)
+    with caplog.at_level(logging.INFO, logger="mabinogi_addon.cooking"):
+        for _ in range(4):
+            auto.tick(True)
+    got = lines()
+    assert len(got) == 4 and all("신호=켜짐" in x for x in got)
+    assert "못찾음=1" in got[0] and "상태=found" in got[0] and "상태=closed" in got[1]
+
+    # 신호 꺼짐: 바뀔 때 한 줄, 그 뒤 30초 안엔 없음
+    caplog.clear()
+    current["frame"] = np.full_like(frame, 120)
+    with caplog.at_level(logging.INFO, logger="mabinogi_addon.cooking"):
+        for _ in range(3):
+            auto.tick(True)
+    got = lines()
+    assert len(got) == 1 and "신호 바뀜" in got[0] and "신호=꺼짐" in got[0] and "최고점수=-" in got[0]
+
+
+def test_failure_frames_saved_up_to_limit(caplog):
+    """신호 켜짐 + 못 찾음 프레임은 실행당 3장, 신호 꺼짐 프레임은 30초 간격 2장까지 logs/cooking-find에."""
+    import logging
+
+    from mabinogi_addon.ui import cooking_autofind as ca
+    frame = np.zeros((1080, 1920, 3), np.uint8)     # 아래 띠 검음 → 신호 켜짐, 요리창 모양 없음
+    current = {"frame": frame}
+    auto = ca.CookingAutoFind(registered=lambda: None, camera=lambda: _Camera(lambda: current["frame"]))
+    auto.submit = lambda fn: _Done(fn())
+    with caplog.at_level(logging.INFO, logger="mabinogi_addon.cooking"):
+        for _ in range(8):
+            auto.tick(True)
+    misses = sorted(ca.shot_dir().glob("*_miss*.png"))
+    assert 1 <= len(misses) <= ca.MAX_MISS_SHOTS
+    assert any(f"저장={misses[0].name}" in r.getMessage() for r in caplog.records)
+    current["frame"] = np.full_like(frame, 120)       # 신호 꺼짐
+    clock = {"t": 1000.0}
+    ca.time.monotonic, real = (lambda: clock["t"]), ca.time.monotonic
+    try:
+        for _ in range(5):
+            clock["t"] += 31
+            auto.tick(True)
+            auto.tick(True)
+    finally:
+        ca.time.monotonic = real
+    offs = sorted(ca.shot_dir().glob("*_off*.png"))
+    assert len(offs) == ca.MAX_OFF_SHOTS == 2
 
 
 def test_no_target_and_exception_logged(caplog):
@@ -374,6 +422,7 @@ def test_no_target_and_exception_logged(caplog):
     text = "\n".join(r.getMessage() for r in caplog.records)
     assert "게임 창 조회 실패" in text and "라이브 카메라를 못 써서" in text and "모니터 조회 실패" in text
     assert "상태=대상 없음" in text
+    assert text.count("상태=대상 없음") == 1  # 같은 실패를 매 초 반복해 찍지 않음
 
     class Boom:
         def done(self):
