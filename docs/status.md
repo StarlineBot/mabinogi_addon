@@ -63,6 +63,9 @@
   ② 빌드 로그 반려 — Windows 러너 stdout cp1252에서 build_cookings 한글 요약 print가 UnicodeEncodeError → 종료 1 → '저장소 JSON 사용' 경고(실제론 파일은 이미 새로 씀, 로그가 반대). `packaging/build_windows.py` 하위 실행에 PYTHONIOENCODING=utf-8, `scripts/build_cookings.py` 출력 errors=replace.
   → `tests/test_cooking.py::test_build_summary_survives_cp1252_console`(cp1252 콘솔로 실행 종료 0·요약 줄), `test_startup_build`(env 확인). 관련 119 통과, 배포 검사 354 통과.
   **QA 반려(11-19) 게임 위 바 첫 크기 배율**: 245×10은 게임 물리 픽셀인데 Qt 위젯은 논리 픽셀 → 125%·150%에서 25~50% 큼. 저장 배율이 없을 때만 첫 배율 = 1/dpi.screen_scale()(저장 배율은 그대로, config 없으면 scale None). `ui/cooking_tab.py`·`config.py` → `tests/test_cooking.py`(배율 1.0/1.25/1.5/2.0 첫 바 × dpr ≈ 245×10, 저장 배율 유지). test_cooking 22 통과.
+  **격자 변경 철회 + 요리 바만 자유 이동(사용자 결정 11-19, QA 전달)**: 11px로도 못 맞춤 — 격자는 '중앙 + 칸 배수' 자리라 홀수 칸이어도 1px 자리 불가. 19bd504 revert(선택지 8·16·24·32·48·64·기본 32·노트 줄 삭제),
+  load_grid_size는 목록에 없는 저장값 → 가장 가까운 값(같으면 작은 쪽: 11→8·19→16·40→32·56→48)만 남김(콤보 = 스냅). `ui/cooking_gauge.py` 끌기에서 grid.snap·안내선 제거(다른 오버레이 그대로, test_grid_all_overlays FREE_DRAG 예외에 이유 기록).
+  → `tests/test_cooking.py::test_bar_drags_freely_without_grid`(격자 켬·32에서 +5,+3 그대로·안내선 없음), `tests/test_grid_snap.py`(옮기기 16건).
 - **봇 앱 버전 저장·표시 → 봇 DEV 세션(session_01R3AWN43b3yw3h5TNfWuuAs)에 전달(11-19, 기획 세션)** — sync.json app 값 저장(app_version 컬럼)·!현황 표시·VM 재시작. 앱 쪽 featureUsage 미등록 사용자 버그는 2d40b99로 수정, v0.52.3에 포함(태그 확인).
 - **v0.52.3 게시 완료(11-19 01:59 UTC = 10:59 KST, QA 세션 직접 실행, 사용자 '확인하고 실행에 문제없으면 바로 배포')** — 범위(v0.52.2 대비 src): 북미 차단 개발 되돌림(0f336f63·598598a6 — overseas_guard 등 전부 없어짐),
   북미 안내 문구 강화·판정 '정확히 Mabinogi'·실행마다 1번(8da151ab), featureUsage 실행 판정에 창 판정 추가(2d40b99e). QA: 관련 86 통과, 배포 검사 CI 글꼴 348 통과, preflight 0, 홈 띠 렌더 잘림 없음.

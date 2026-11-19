@@ -23,3 +23,17 @@ def test_snap_is_center_based(monkeypatch):
     # 중앙에서 떨어진 임의 좌표도 중앙 기준 격자에 정렬(0 기준 아님).
     p = grid.snap(QPoint(1003, 500), 32)
     assert (p.x() - 1000) % 32 == 0
+
+
+@pytest.mark.parametrize(("saved", "expected"), [
+    (11, 8), (19, 16), (40, 32), (56, 48), (12, 8), (20, 16), (100, 64), (4, 8),
+    (32, 32), (8, 8), (64, 64), (0, 32), (-1, 32), ("16", 32), (None, 32), (True, 32),
+])
+def test_grid_size_not_in_list_moves_to_nearest(saved, expected):
+    """목록에 없는 저장값(11-19 잠깐 있던 11·19 등) → 원래 목록에서 가장 가까운 값(같은 거리면 작은 쪽) — 콤보 표시 = 스냅."""
+    from mabinogi_addon import config
+    assert config.GRID_SIZES == (8, 16, 24, 32, 48, 64)
+    data = config._read_local_config()
+    data["general"] = {"gridSize": saved}
+    config._write_local_config(data)
+    assert config.load_grid_size() == expected

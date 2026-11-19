@@ -1040,11 +1040,20 @@ def save_last_seen_version(version: str, path: Path = LOCAL_CONFIG_PATH) -> None
     _write_local_config(data, path)
 
 
+GRID_SIZES = (8, 16, 24, 32, 48, 64)  # 격자 크기 선택지(px) — 설정 콤보와 같음
+
+
 def load_grid_size(path: Path = LOCAL_CONFIG_PATH) -> int:
-    """오버레이 격자 칸 크기(px). 기본 32. 작을수록 미세, 클수록 큼직한 이동."""
+    """오버레이 격자 칸 크기(px). 기본 32. 작을수록 미세, 클수록 큼직한 이동.
+
+    목록에 없는 저장값(11-19 잠깐 있던 11·19 등)은 목록에서 가장 가까운 값(같은 거리면 작은 쪽) —
+    설정 콤보 표시와 실제 스냅이 같게.
+    """
     g = _read_local_config(path).get("general") or {}
     v = g.get("gridSize")
-    return int(v) if isinstance(v, (int, float)) and int(v) > 0 else 32
+    if not isinstance(v, (int, float)) or isinstance(v, bool) or v <= 0:
+        return 32
+    return min(GRID_SIZES, key=lambda s: (abs(s - v), s))
 
 
 def save_grid_size(px: int, path: Path = LOCAL_CONFIG_PATH) -> None:

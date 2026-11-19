@@ -3,7 +3,7 @@
 - 상세: 게임 기본 인터페이스(하늘 유리) 요리창 그림(assets/cooking/cook_ui_reference.png)의 게이지 바
   (기준 좌표 안쪽 x 39~523, y 111~124)를 비율대로 재료 색으로 채우고, 재료 경계마다 흰 점선(바 아래 → 버튼 줄 위).
 - 게임 위: 바 + 경계 점선만. 첫 크기 바 245×10px(테두리 포함), 점선은 바 위로 바 높이의 약 4배.
-  끌어서 요리창 바에 맞추고(격자 맞춤), 휠로 크기, 잠그면 클릭 통과 — 다른 오버레이와 같은 조작.
+  끌어서 요리창 바에 맞추고(격자 맞춤 없이 1px 단위), 휠로 크기, 잠그면 클릭 통과 — 다른 오버레이와 같은 조작.
 """
 from __future__ import annotations
 
@@ -62,7 +62,7 @@ SCALE_MIN, SCALE_MAX, SCALE_STEP = 0.5, 3.0, 0.05
 
 
 class CookingBarOverlay(QWidget):
-    """게임 위 비율 바 — 바 + 경계 점선만. 끌기·격자 맞춤·휠 크기·잠금(클릭 통과)."""
+    """게임 위 비율 바 — 바 + 경계 점선만. 끌기(격자 없이 1px)·휠 크기·잠금(클릭 통과)."""
     moved = Signal()     # 끌어서 위치가 바뀜 → 저장
     scaled = Signal()    # 휠로 크기가 바뀜 → 저장
 
@@ -122,30 +122,21 @@ class CookingBarOverlay(QWidget):
     def locked(self) -> bool:
         return self._locked
 
+    # 끌기는 격자 맞춤 없이 1px 단위(사용자 결정 11-19): 격자는 '화면 중앙 + 칸의 배수' 자리에만 서서 게임 요리창 바에
+    # 정확히 못 맞춘다 → gridSnap 설정이 켜져 있어도 이 바만 자유 이동, 격자 안내선도 띄우지 않음(다른 오버레이는 그대로).
     def mousePressEvent(self, event) -> None:
         if not self._locked and event.button() == Qt.MouseButton.LeftButton:
-            from . import grid
             self._drag = event.globalPosition().toPoint() - self.pos()
-            self._snap = grid.enabled()
-            self._grid_size = grid.size() if self._snap else None
-            if self._snap:
-                grid.show_guide(self)
             event.accept()
 
     def mouseMoveEvent(self, event) -> None:
         if not self._locked and self._drag is not None:
-            target = event.globalPosition().toPoint() - self._drag
-            if getattr(self, "_snap", False):
-                from . import grid
-                target = grid.snap(target, self._grid_size)
-            self.move(target)
+            self.move(event.globalPosition().toPoint() - self._drag)
             event.accept()
 
     def mouseReleaseEvent(self, event) -> None:
         if self._drag is not None:
             self._drag = None
-            from . import grid
-            grid.hide_guide()
             self.moved.emit()
 
     def wheelEvent(self, event) -> None:

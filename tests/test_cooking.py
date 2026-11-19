@@ -367,3 +367,32 @@ def test_saved_scale_kept_regardless_of_display_scale(monkeypatch):
     tab.set_overlay(True)
     assert tab.overlay.scale == 1.2
     tab.shutdown()
+
+
+def test_bar_drags_freely_without_grid(monkeypatch):
+    """사용자 결정 11-19: 격자 맞춤을 켜도 요리 바는 1px 단위로 자유 이동, 안내선 없음(다른 오버레이는 그대로 격자)."""
+    from PySide6.QtCore import QEvent
+    from PySide6.QtGui import QMouseEvent
+
+    from mabinogi_addon.ui import grid
+    from mabinogi_addon.ui.cooking_gauge import CookingBarOverlay
+    config.save_general_flag("gridSnap", True)
+    config.save_grid_size(32)
+    assert grid.enabled() and grid.size() == 32
+    shown = []
+    monkeypatch.setattr(grid, "show_guide", lambda *a, **k: shown.append(a))
+    o = CookingBarOverlay()
+    o.move(400, 300)
+    moved = []
+    o.moved.connect(lambda: moved.append(o.pos()))
+
+    def mouse(kind, gx, gy):
+        button = Qt.MouseButton.LeftButton
+        buttons = Qt.MouseButton.NoButton if kind == QEvent.Type.MouseButtonRelease else button
+        return QMouseEvent(kind, QPointF(10, 10), QPointF(gx, gy), button, buttons, Qt.KeyboardModifier.NoModifier)
+    o.mousePressEvent(mouse(QEvent.Type.MouseButtonPress, 410, 310))
+    o.mouseMoveEvent(mouse(QEvent.Type.MouseMove, 415, 313))
+    o.mouseReleaseEvent(mouse(QEvent.Type.MouseButtonRelease, 415, 313))
+    assert (o.x(), o.y()) == (405, 303)  # 스냅 없이 정확히 (+5, +3)
+    assert shown == [] and moved == [o.pos()]
+    o.close()

@@ -39,8 +39,17 @@ def test_draggable_overlays_found():
     assert {"BuffOverlay", "CooldownOverlay", "BossBarOverlay", "MemoOverlay"} <= names
 
 
+# 격자 맞춤을 일부러 쓰지 않는 오버레이(사용자 결정 이유와 함께 — 새로 넣을 땐 결정 근거를 적는다)
+FREE_DRAG = {
+    "CookingBarOverlay": "11-19 사용자 결정: 게임 요리창 바에 1px 단위로 맞춰야 해서 격자 없이 자유 이동(tests/test_cooking.py)",
+}
+
+
 @pytest.mark.parametrize("module,cls,src", DRAGGABLE, ids=[c for _f, c, _s in DRAGGABLE])
 def test_every_draggable_overlay_snaps_to_grid(module, cls, src):
+    if cls in FREE_DRAG:
+        assert "grid.snap(" not in src, f"{module}:{cls}는 격자 없이 자유 이동이어야 함 — {FREE_DRAG[cls]}"
+        return
     assert "grid.snap(" in src, f"{module}:{cls} 드래그가 격자 맞춤(grid.snap)을 쓰지 않음"
 
 

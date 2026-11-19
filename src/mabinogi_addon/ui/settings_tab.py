@@ -112,7 +112,7 @@ def _checked(text: str, on: bool = True) -> QCheckBox:
 # general 설정 키 ↔ 체크박스 라벨
 _TRAY_MINIMIZE = "minimizeToTray"
 _GRID_SNAP = "gridSnap"
-_GRID_SIZES = [8, 16, 24, 32, 48, 64]  # 격자 크기 선택지(px)
+_GRID_SIZES = list(config.GRID_SIZES)  # 격자 크기 선택지(px) — config가 단일 출처
 _TRAY_START = "startInTray"
 # 토스트 알림 위치 선택지(라벨, config 모서리 코드)
 _TOAST_CORNER_CHOICES = [

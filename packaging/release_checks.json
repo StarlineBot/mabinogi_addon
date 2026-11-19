@@ -11,7 +11,9 @@
     "tests/test_windows_ci.py",
     "tests/test_startup_smoke.py",
     "tests/test_release_notes.py",
-    "tests/test_release_notes_trigger.py"
+    "tests/test_release_notes_trigger.py",
+    "tests/test_grid_snap.py",
+    "tests/test_grid_all_overlays.py"
   ],
   "coverage": {
     "src/mabinogi_addon/cooking.py": {
@@ -28,15 +30,17 @@
     },
     "src/mabinogi_addon/ui/cooking_gauge.py": {
       "tests": [
-        "tests/test_cooking.py"
+        "tests/test_cooking.py",
+        "tests/test_grid_all_overlays.py"
       ],
-      "reason": "상세 요리창 그림 게이지 채움·흰 점선, 게임 위 바 245×10·점선 4배·휠 크기·잠금 클릭 통과"
+      "reason": "상세 요리창 그림 게이지 채움·흰 점선, 게임 위 바 245×10·점선 4배·휠 크기·잠금 클릭 통과 · 끌기는 격자 없이 1px(안내선 없음), 다른 오버레이 격자 계약 그대로"
     },
     "src/mabinogi_addon/config.py": {
       "tests": [
-        "tests/test_cooking.py"
+        "tests/test_cooking.py",
+        "tests/test_grid_snap.py"
       ],
-      "reason": "cooking.overlay 위치·배율·잠금 저장/복원, 틀린 값 거름"
+      "reason": "cooking.overlay 위치·배율·잠금 저장/복원, 틀린 값 거름 · 목록에 없는 격자 저장값 → 가장 가까운 선택지(콤보 = 스냅)"
     },
     "scripts/build_cookings.py": {
       "tests": [
@@ -80,6 +84,12 @@
         "tests/test_release_notes_trigger.py"
       ],
       "reason": "0.53.0 노트 맨 위(요리 계산기 헤드라인)·첫 실행 표시, v0.52.3 이하 그대로"
+    },
+    "src/mabinogi_addon/ui/settings_tab.py": {
+      "tests": [
+        "tests/test_grid_snap.py"
+      ],
+      "reason": "격자 선택지를 config.GRID_SIZES에서 읽기만(값 8·16·24·32·48·64 그대로)"
     }
   }
 }
