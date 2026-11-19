@@ -25,6 +25,10 @@
 
 ## 배포와 검증
 
+- **도롱 '켠 기능'이 옛 규칙인 이유(11-19 QA 코드 확인)** — ① 버전 안 보임: 앱은 동기화 묶음 sync.json에 "app"(버전)을 넣어 올리지만(cloud_sync.build_blob), 봇 서버는 device·resolution·size·features만 DB에 저장(discord_bot addon_server main.py·db.py) → 버전은 저장·표시 안 함.
+  ② **featureUsage 버그(0.52.1·0.52.2)**: '게임 실행 중' 판정이 `_game_session.identity` → GameProcessProbe → optimization.game() → window_capture.registered_game_target인데, 이 함수는 **등록된 게임 실행파일(gameExe)이 없으면 바로 None** →
+  게임창을 등록하지 않은(제목 폴백으로 쓰는) 사용자는 게임을 해도 featureUsage가 영영 안 적힘 → 봇은 옛 enabled 규칙으로 표시. 도롱은 '0.52.0 이하' 또는 '0.52.1+인데 게임창 미등록' 둘 중 하나(봇 화면만으론 구분 안 됨).
+  고칠 것: 앱 — featureUsage의 '게임 실행 중'을 등록 여부와 무관하게(창 판정 is_game_active 또는 게임 창 존재) / 봇 — 묶음 sync.json의 app 버전 저장·표시.
 - **봇 '!현황' 켠 기능 확인(11-19, 사용자 제공 출력)**: 채단·예설·OYO·Starline 4명은 키 이름이 앱 featureUsage 키 그대로(buff·debuff·boss·custom·opt·stat_bars·cursor·fps 등) → 실제 사용 기록(0.52.1+) 기준.
   **도롱은 cursorFx·customOverlay 같은 옛 설정 이름(카멜표기)** → 그 사용자 설정에 featureUsage가 없어 봇이 옛 규칙(enabled 값)으로 표시한 것 — 버프·디버프·보스처럼 스위치 없는 기능은 안 나옴. 한 화면에 두 기준이 섞여 있음.
   featureUsage 기준의 뜻은 '최근 7일 안에 실제로 동작한 기능'(명세 3.4.2)이지 '지금 켜 둔 기능'은 아님.
