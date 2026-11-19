@@ -39,6 +39,10 @@
   3. 전체 테스트(≈14분)는 AGENTS.md '변경 영향 검사'의 넓은 변경일 때만. 대상 없는 pytest는 **프로젝트 훅(`.claude/hooks/test_guard.py`)이 막으며**,
      필요하면 명령 앞에 `FULL_REGRESSION_REASON='이유'`를 붙이고 배포 검사와 동시에(백그라운드) 돌린다.
   4. 2분 넘는 명령은 시작 전에 예상 시간을 사용자에게 말한다.
+- **QA 반려는 개발 세션에 바로 보낸다(사용자 지시 11-19).** 개발이 넘긴 코드를 확인해 다시 고칠 것이 있으면 사용자에게 블록을 넘기지 않고
+  `mcp__claude-code-remote__send_message`로 개발 세션(제목 `DEV`, 소스 mabinogi_addon — `list_sessions`(mine)·`get_session`으로 찾음; 요청을 보낸 세션이 있으면 그 세션)에 보낸다.
+  보내는 글: 반려 대상 SHA, 재현 근거(명령·결과), 고칠 것, 테스트, 완료 기준. 사용자 결정이 필요한 문제면 보내지 않고 사용자에게 그것만 묻는다.
+  사용자에게는 '무엇을 반려해 어느 세션에 보냈는지'만 알리고, docs/status.md 해당 QA 항목에 보낸 사실을 한 줄 남긴다. 보내기 실패면 실패 사실과 보낼 내용을 사용자에게.
 - **배포 실행은 QA 세션이 직접**(사용자 결정 11-17): QA 통과 → 버전·노트·검사 목록 main 반영 → GitHub MCP `actions_run_trigger`로
   `windows.yml` `verify-only` 실행(묻지 않음). 사용자가 후보 확인 뒤 "배포해" → 그 run을 `candidate_run`으로 `publish-existing` 실행.
   사용자에게 `gh` 명령을 넘기지 않는다(권한 오류일 때만 오류 원문과 함께). `validate-and-publish` 금지. 자세히는 AGENTS.md 'QA 통과 후 배포 안내'.
