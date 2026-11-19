@@ -2226,3 +2226,25 @@ def save_feature_usage(updates: dict[str, str], path: Path = LOCAL_CONFIG_PATH) 
     sec.update(updates)
     data["featureUsage"] = sec
     _write_local_config(data, path)
+
+
+# ---- 요리 계산기(docs/cooking-spec.md 6절) — 게임 위 비율 바 위치·배율·잠금(설정 동기화 대상, 위치는 해상도별 규칙) ----
+def load_cooking_overlay(path: Path = LOCAL_CONFIG_PATH) -> dict:
+    raw = _read_local_config(path).get("cooking")
+    sec = raw.get("overlay") if isinstance(raw, dict) and isinstance(raw.get("overlay"), dict) else {}
+    pos = sec.get("pos")
+    if not (isinstance(pos, dict) and all(type(pos.get(k)) is int for k in ("x", "y"))):
+        pos = None
+    scale = sec.get("scale")
+    scale = float(scale) if isinstance(scale, (int, float)) and not isinstance(scale, bool) and 0.5 <= scale <= 3.0 else 1.0
+    return {"pos": pos, "scale": scale, "locked": sec.get("locked") is True}
+
+
+def save_cooking_overlay(path: Path = LOCAL_CONFIG_PATH, **fields) -> None:
+    """pos({x, y})·scale·locked 중 준 것만 바꾼다."""
+    data = _read_local_config(path)
+    raw = data.get("cooking") if isinstance(data.get("cooking"), dict) else {}
+    sec = dict(raw.get("overlay") or {}) if isinstance(raw.get("overlay"), dict) else {}
+    sec.update(fields)
+    data["cooking"] = {**raw, "overlay": sec}
+    _write_local_config(data, path)

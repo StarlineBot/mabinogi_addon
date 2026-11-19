@@ -1,10 +1,10 @@
 {
-  "version": "0.52.3",
+  "version": "0.53.0",
   "tests": [
-    "tests/test_overseas_client.py",
-    "tests/test_home_page.py",
+    "tests/test_cooking.py",
     "tests/test_navigation.py",
-    "tests/test_game_window_judge.py",
+    "tests/test_cursor_fx.py",
+    "tests/test_bundle_layout.py",
     "tests/test_release_checks.py",
     "tests/test_startup_build.py",
     "tests/test_release_candidate.py",
@@ -14,27 +14,57 @@
     "tests/test_release_notes_trigger.py"
   ],
   "coverage": {
-    "src/mabinogi_addon/system/window_watcher.py": {
+    "src/mabinogi_addon/cooking.py": {
       "tests": [
-        "tests/test_overseas_client.py",
-        "tests/test_game_window_judge.py"
+        "tests/test_cooking.py"
       ],
-      "reason": "is_overseas_title — 제목이 정확히 'Mabinogi'(공백·대소문자 무시), 꿀뷰·카톡·OBS 제목 아님. 게임 창 판정(is_game_title) 그대로"
+      "reason": "요리 데이터 읽기·검색 필터 세 종류(공백 무시)·카테고리 개수·비율 합계 정규화·재료 이동 기록(순환 없음)"
+    },
+    "src/mabinogi_addon/ui/cooking_tab.py": {
+      "tests": [
+        "tests/test_cooking.py"
+      ],
+      "reason": "요리 탭 — 회색·개수·선택 유지·강조, ▸ 이동·← 되돌아가기 3단계, 게임 위 바 표시·위치/배율/잠금 저장·게임 없을 때 숨김"
+    },
+    "src/mabinogi_addon/ui/cooking_gauge.py": {
+      "tests": [
+        "tests/test_cooking.py"
+      ],
+      "reason": "상세 요리창 그림 게이지 채움·흰 점선, 게임 위 바 245×10·점선 4배·휠 크기·잠금 클릭 통과"
+    },
+    "src/mabinogi_addon/config.py": {
+      "tests": [
+        "tests/test_cooking.py"
+      ],
+      "reason": "cooking.overlay 위치·배율·잠금 저장/복원, 틀린 값 거름"
+    },
+    "scripts/build_cookings.py": {
+      "tests": [
+        "tests/test_cooking.py"
+      ],
+      "reason": "봇 cookings.js 형식 파싱·단체+조리방법+레시피만(387개, 79개 제외)·380개 미만이면 거부"
+    },
+    "src/mabinogi_addon/assets/cooking/cookings.json": {
+      "tests": [
+        "tests/test_cooking.py",
+        "tests/test_bundle_layout.py"
+      ],
+      "reason": "생성 데이터 형식·개수, assets 번들에 포함"
     },
     "src/mabinogi_addon/ui/main_window.py": {
       "tests": [
-        "tests/test_overseas_client.py",
         "tests/test_navigation.py",
+        "tests/test_cursor_fx.py",
         "tests/test_startup_smoke.py"
       ],
-      "reason": "북미 경고 문구·트레이(210자), 앱 실행마다 1번(nonKoreanNoticeShown 안 씀), 차단 없음 — 창 시작·종료 계약"
+      "reason": "계산기 줄 끝 '요리' 탭·종료 시 오버레이 닫기 — 창 시작·종료 계약"
     },
-    "src/mabinogi_addon/ui/home_page.py": {
+    "packaging/build_windows.py": {
       "tests": [
-        "tests/test_overseas_client.py",
-        "tests/test_home_page.py"
+        "tests/test_startup_build.py",
+        "tests/test_bundle_layout.py"
       ],
-      "reason": "홈 맨 위 안내 띠(0.52.2와 같은 부품) — 긴 문구 줄바꿈, 기존 홈 배치"
+      "reason": "빌드 전 요리 데이터 다시 만들기(실패하면 경고 후 저장소 JSON) → PyInstaller 순서"
     },
     "packaging/release_checks.json": {
       "tests": [
@@ -42,20 +72,14 @@
         "tests/test_release_candidate.py",
         "tests/test_windows_ci.py"
       ],
-      "reason": "0.52.3 검사 목록·후보 봉인·CI 계약"
-    },
-    "packaging/build_windows.py": {
-      "tests": [
-        "tests/test_startup_build.py"
-      ],
-      "reason": "새 자산·모듈 없음 — 빌드 경로 그대로"
+      "reason": "0.53.0 검사 목록·후보 봉인·CI 계약"
     },
     "src/mabinogi_addon/assets/release_notes.md": {
       "tests": [
         "tests/test_release_notes.py",
         "tests/test_release_notes_trigger.py"
       ],
-      "reason": "0.52.3 노트 맨 위(조용히 다듬은 것 한 줄)·첫 실행 표시, v0.52.2 이하 그대로"
+      "reason": "0.53.0 노트 맨 위(요리 계산기 헤드라인)·첫 실행 표시, v0.52.3 이하 그대로"
     }
   }
 }

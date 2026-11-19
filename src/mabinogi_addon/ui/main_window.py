@@ -391,12 +391,16 @@ class MainWindow(QMainWindow):
         # 음악 버프 계산기(docs/music-buff-calculator-spec.md, 0.52.0 모든 사용자): 계산기 줄 끝(던전 입장 다음)
         from .music_buff_tab import MusicBuffTab
         self.music_buff_tab = MusicBuffTab()
+        # 요리 계산기(docs/cooking-spec.md, 사용자 확정 11-19): 계산기 줄 끝
+        from .cooking_tab import CookingTab
+        self.cooking_tab = CookingTab(self._watcher)
         # 0.52.0(사용자 요청 11-16 '계산기 3단으로'): 편의기능 2단 = 계산기 · 그림대화 만들기 · 알람, 계산기 6종은 3단(회색 탭)
         self._calculator_tabs = QTabWidget()
         self._calculator_tabs.setObjectName("calculatorTabs")
         for page, title in ((self.distribution_tab, "분배 계산기"), (self.bead_split_tab, "구슬 분배 계산기"),
                             (self.exchange_tab, "환전비율 계산기"), (self.craft_tab, "제작 재료 계산기"),
-                            (self.dungeon_cost_tab, "던전 입장 계산기"), (self.music_buff_tab, "음악 버프 계산기")):
+                            (self.dungeon_cost_tab, "던전 입장 계산기"), (self.music_buff_tab, "음악 버프 계산기"),
+                            (self.cooking_tab, "요리")):
             self._calculator_tabs.addTab(_scrolled(page), title)
         self._convenience_tabs.addTab(self._calculator_tabs, "계산기")
         self._convenience_tabs.addTab(self._sketch_scroll, "그림대화 만들기")
@@ -3002,6 +3006,7 @@ class MainWindow(QMainWindow):
         self.dungeon_cost_tab.shutdown()
         self.craft_tab.shutdown()
         self.music_buff_tab.shutdown()
+        self.cooking_tab.shutdown()
         self.cursor_fx.shutdown()
         self.harp_tab.shutdown()
         self.alarm_tab.shutdown()

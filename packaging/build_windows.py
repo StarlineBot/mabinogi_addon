@@ -105,6 +105,18 @@ def build(root: Path, *, blackbox_options=()) -> None:
         )
 
 
+def refresh_cookings(root: Path) -> bool:
+    """요리 계산기 데이터를 봇 공개 main에서 다시 만든다(docs/cooking-spec.md 2절 — 봇 데이터 수정이 다음 배포에 자동 반영).
+
+    받기·형식 검사가 실패하면 경고만 하고 저장소에 들어 있는 cookings.json으로 빌드를 이어 간다(빌드를 막지 않음).
+    """
+    result = subprocess.run([sys.executable, "-m", "scripts.build_cookings"], cwd=root, check=False)
+    if result.returncode != 0:
+        print("warning: 요리 데이터를 새로 만들지 못해 저장소의 cookings.json을 그대로 씁니다", file=sys.stderr)
+        return False
+    return True
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--version", required=True)
@@ -119,6 +131,7 @@ def main():
         cwd=root,
         check=True,
     )
+    refresh_cookings(root)
     from blackbox_bundle import prepare
     with tempfile.TemporaryDirectory(prefix="mabinogi-blackbox-") as temporary:
         extra = prepare(root, Path(temporary) / "blackbox")

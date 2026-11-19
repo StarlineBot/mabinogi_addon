@@ -141,6 +141,17 @@ def test_existing_main_build_entry_calls_bundle_preparation_before_pyinstaller(b
     monkeypatch.setitem(sys.modules, 'blackbox_bundle', SimpleNamespace(prepare=prepare))
     monkeypatch.setattr(sys, 'platform', 'win32')
     monkeypatch.setattr(sys, 'argv', ['build_windows.py', '--version', '0.11.0'])
-    monkeypatch.setattr(builder['subprocess'], 'run', lambda *a, **k: events.append('version'))
+    def run(cmd, **kwargs):
+        events.append('cookings' if 'scripts.build_cookings' in cmd else 'version')
+        return SimpleNamespace(returncode=0)
+    monkeypatch.setattr(builder['subprocess'], 'run', run)
     builder['main']()
-    assert events == ['version', 'prepare-native-and-codec', 'pyinstaller']
+    # 요리 데이터는 PyInstaller 전에 봇 공개 main에서 다시 만든다(docs/cooking-spec.md 2절)
+    assert events == ['version', 'cookings', 'prepare-native-and-codec', 'pyinstaller']
+
+
+def test_build_keeps_committed_cookings_when_refresh_fails(builder, monkeypatch, capsys):
+    from types import SimpleNamespace
+    monkeypatch.setattr(builder['subprocess'], 'run', lambda *a, **k: SimpleNamespace(returncode=1))
+    assert builder['refresh_cookings'](ROOT) is False
+    assert '저장소의 cookings.json을 그대로' in capsys.readouterr().err
