@@ -331,7 +331,7 @@ def test_release_linux_installs_synthetic_codec_dependency():
     import yaml
     workflow = yaml.safe_load((Path(__file__).resolve().parents[1] / '.github/workflows/windows.yml').read_text(encoding="utf-8"))
     installs = [step.get('run', '') for step in workflow['jobs']['regression']['steps']]
-    assert any('run_apt install 120s install' in command and 'ffmpeg' in command.split() for command in installs)
+    assert any('run_apt install 300s install' in command and 'ffmpeg' in command.split() for command in installs)
 
 
 @pytest.mark.parametrize('result', [100, 124])
@@ -378,7 +378,7 @@ def test_apt_priority_and_required_packages_preserved(tmp_path):
     calls=(tmp_path/'calls').read_text(encoding="utf-8").splitlines()
     assert len(calls)==2
     assert '--kill-after=10s 60s' in calls[0] and calls[0].endswith(' update')
-    assert '--kill-after=10s 120s' in calls[1]
+    assert '--kill-after=10s 300s' in calls[1]
     assert 'install --no-install-recommends -y libegl1 libopengl0 libxkbcommon0 libdbus-1-3 libpulse0 fonts-noto-cjk ffmpeg' in calls[1]
     assert all('Acquire::Retries=1' in call and 'APT::Update::Error-Mode=any' in call for call in calls)
     assert 'allow-unauthenticated' not in command and 'trusted=yes' not in command
