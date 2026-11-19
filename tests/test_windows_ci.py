@@ -353,7 +353,7 @@ def test_apt_failure_stops_before_install_with_diagnostics(tmp_path, result):
         env={**os.environ,'PATH':str(tmp_path)+os.pathsep+os.environ['PATH']},capture_output=True,text=True)
     assert completed.returncode==result
     assert 'apt update failed' in completed.stdout
-    assert 'limit=60s' in completed.stdout
+    assert 'limit=180s' in completed.stdout
     assert 'apt install failed' not in completed.stdout
     assert 'Acquire::Retries=1' in command and 'APT::Update::Error-Mode=any' in command
 
@@ -377,7 +377,7 @@ def test_apt_priority_and_required_packages_preserved(tmp_path):
         'https://archive.ubuntu.com/ubuntu/\tpriority:1\nhttps://security.ubuntu.com/ubuntu/\tpriority:3\n')
     calls=(tmp_path/'calls').read_text(encoding="utf-8").splitlines()
     assert len(calls)==2
-    assert '--kill-after=10s 60s' in calls[0] and calls[0].endswith(' update')
+    assert '--kill-after=10s 180s' in calls[0] and calls[0].endswith(' update')
     assert '--kill-after=10s 300s' in calls[1]
     assert 'install --no-install-recommends -y libegl1 libopengl0 libxkbcommon0 libdbus-1-3 libpulse0 fonts-noto-cjk ffmpeg' in calls[1]
     assert all('Acquire::Retries=1' in call and 'APT::Update::Error-Mode=any' in call for call in calls)
