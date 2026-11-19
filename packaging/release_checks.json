@@ -13,7 +13,8 @@
     "tests/test_release_notes.py",
     "tests/test_release_notes_trigger.py",
     "tests/test_grid_snap.py",
-    "tests/test_grid_all_overlays.py"
+    "tests/test_grid_all_overlays.py",
+    "tests/test_cooking_autofind.py"
   ],
   "coverage": {
     "src/mabinogi_addon/cooking.py": {
@@ -24,9 +25,11 @@
     },
     "src/mabinogi_addon/ui/cooking_tab.py": {
       "tests": [
-        "tests/test_cooking.py"
+        "tests/test_cooking.py",
+        "tests/test_cooking_autofind.py",
+        "tests/test_startup_smoke.py"
       ],
-      "reason": "요리 탭 — 회색·개수·선택 유지·강조, ▸ 이동·← 되돌아가기 3단계, 게임 위 바 표시·위치/배율/잠금 저장·게임 없을 때 숨김"
+      "reason": "요리 탭 — 회색·개수·선택 유지·강조, ▸ 이동·← 되돌아가기 3단계, 게임 위 바 표시·위치/배율/잠금 저장·게임 없을 때 숨김 · 자동 찾기: 바 켠 동안 + 게임 앞일 때만 찾기(끈 동안 캡처 0), 찾은 자리 정확히·클릭 통과·저장 위치 안 덮음, 닫히면 숨김, 손으로 맞추기 대체 그대로 · 창 시작·종료(작업 스레드 정리)"
     },
     "src/mabinogi_addon/ui/cooking_gauge.py": {
       "tests": [
@@ -76,20 +79,40 @@
         "tests/test_release_candidate.py",
         "tests/test_windows_ci.py"
       ],
-      "reason": "0.53.0 검사 목록·후보 봉인·CI 계약"
+      "reason": "0.53.0 검사 목록(요리 계산기 + 요리창 자동 찾기)·후보 봉인·CI 계약"
     },
     "src/mabinogi_addon/assets/release_notes.md": {
       "tests": [
         "tests/test_release_notes.py",
         "tests/test_release_notes_trigger.py"
       ],
-      "reason": "0.53.0 노트 맨 위(요리 계산기 헤드라인)·첫 실행 표시, v0.52.3 이하 그대로"
+      "reason": "0.53.0 노트 맨 위(요리 계산기 + 자동 찾기 헤드라인)·첫 실행 표시, v0.52.3 이하 그대로"
     },
     "src/mabinogi_addon/ui/settings_tab.py": {
       "tests": [
         "tests/test_grid_snap.py"
       ],
       "reason": "격자 선택지를 config.GRID_SIZES에서 읽기만(값 8·16·24·32·48·64 그대로)"
+    },
+    "src/mabinogi_addon/detect/cooking_window.py": {
+      "tests": [
+        "tests/test_cooking_autofind.py"
+      ],
+      "reason": "요리 화면 5장 바 자리 ±3px, 요리창 없는 화면 신호·찾기 오검출 0, 신호 임계 경계, 추적(둘레·옮김·사라짐 2회·다시 뜸), 못 찾으면 손으로"
+    },
+    "src/mabinogi_addon/detect/templates/cooking/gauge_row.png": {
+      "tests": [
+        "tests/test_cooking_autofind.py",
+        "tests/test_bundle_layout.py",
+        "tests/test_startup_build.py"
+      ],
+      "reason": "요리창 '농도 조절 줄 + 바' 247×42 기준 그림(11image) — 번들 detect/templates에 포함 · 빌드 --add-data detect/templates 경로 그대로"
+    },
+    "src/mabinogi_addon/ui/cooking_autofind.py": {
+      "tests": [
+        "tests/test_cooking_autofind.py"
+      ],
+      "reason": "작업 스레드 1개·하나씩, 끝난 결과만 화면 스레드에서 반영"
     }
   }
 }

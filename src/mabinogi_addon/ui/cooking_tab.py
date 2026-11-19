@@ -113,6 +113,13 @@ class CookingTab(QWidget):
         self._timer = QTimer(self)  # 게임 위 바를 켠 동안만
         self._timer.setInterval(500)
         self._timer.timeout.connect(self._sync_overlay)
+        # 요리창 자동 찾기(명세 7절, 0.54.0): 바를 켠 동안 + 게임이 앞일 때만 1초마다
+        from .cooking_autofind import CookingAutoFind
+        self.autofind = CookingAutoFind()
+        self.auto_state = "manual"  # manual(손으로 맞추기) · found(찾은 자리) · closed(요리창 꺼짐 → 숨김)
+        self._find_timer = QTimer(self)
+        self._find_timer.setInterval(1000)
+        self._find_timer.timeout.connect(self._auto_tick)
         self._refresh_lists()
         self._render_detail()
 
@@ -364,9 +371,12 @@ class CookingTab(QWidget):
                 self.overlay.set_locked(saved["locked"])
             self.overlay.set_dish(self._selected)
             self._timer.start()
+            self._find_timer.start()
             self._sync_overlay()
         else:
             self._timer.stop()
+            self._find_timer.stop()  # 끈 동안 캡처·찾기 0
+            self._apply_auto(None, reset=True)
             if self.overlay is not None:
                 self.overlay.hide()
 
@@ -383,7 +393,7 @@ class CookingTab(QWidget):
         return x, y
 
     def _save_position(self) -> None:
-        if self.overlay is None:
+        if self.overlay is None or self.auto_state == "found":  # 자동 자리는 저장 위치를 덮지 않음
             return
         try:
             config.save_cooking_overlay(pos={"x": self.overlay.x(), "y": self.overlay.y()}, scale=self.overlay.scale)
@@ -391,7 +401,7 @@ class CookingTab(QWidget):
             pass
 
     def _set_locked(self, locked: bool) -> None:
-        if self.overlay is not None:
+        if self.overlay is not None and self.auto_state != "found":  # 찾은 자리는 늘 클릭 통과
             self.overlay.set_locked(locked)
         try:
             config.save_cooking_overlay(locked=bool(locked))
@@ -410,11 +420,57 @@ class CookingTab(QWidget):
         except Exception:  # noqa: BLE001
             return True
 
+    # ---- 요리창 자동 찾기 ----
+    def _auto_tick(self) -> None:
+        run = self._overlay_on and self._selected is not None and self._game_front()
+        state = self.autofind.tick(run)
+        if state is not None:
+            self._apply_auto(state)
+
+    def _game_front(self) -> bool:
+        if self._watcher is None:
+            return False
+        try:
+            return bool(self._watcher.is_game_active())
+        except Exception:  # noqa: BLE001
+            return False
+
+    def _apply_auto(self, state, reset: bool = False) -> None:
+        """찾은 자리면 바를 그 자리에(잠금·저장 안 함), 요리창이 꺼지면 숨김, 못 찾으면 손으로 맞춘 자리로."""
+        if reset:
+            self.autofind.reset()
+        kind = "manual" if state is None else state.kind
+        before, self.auto_state = self.auto_state, kind
+        if self.overlay is None:
+            return
+        if kind == "found":
+            from . import dpi
+            ratio = dpi.screen_scale() or 1.0
+            ox, oy = self.autofind.origin
+            bx, by, _bw, bh = state.bar
+            self.overlay.set_scale(first_scale())          # 물리 245×10(사용자 배율은 저장값 그대로)
+            self.overlay.set_locked(True)                   # 찾은 자리는 클릭 통과(끌어서 저장 위치를 덮지 않게)
+            x = round((ox + bx) / ratio)
+            bottom = round((oy + by + bh) / ratio)
+            self.overlay.move(x, bottom - self.overlay.height())
+        elif before == "found" and kind != "found":
+            self._restore_manual()
+        self._sync_overlay()
+
+    def _restore_manual(self) -> None:
+        """자동 자리에서 벗어나면 손으로 맞춘 저장 위치·배율·잠금으로."""
+        saved = config.load_cooking_overlay()
+        self.overlay.set_scale(first_scale() if saved["scale"] is None else saved["scale"])
+        pos = saved["pos"]
+        self.overlay.move(*self._first_position() if pos is None else self._on_screen(pos["x"], pos["y"]))
+        self.overlay.set_locked(self.lock_btn.isChecked() if self.lock_btn is not None else saved["locked"])
+
     def _sync_overlay(self) -> None:
         """게임(또는 이 앱)이 앞에 있을 때만 — 다른 오버레이와 같은 규칙. 전투 보조 일시정지와는 무관(편의기능)."""
         if self.overlay is None:
             return
-        want = self._overlay_on and self._selected is not None and self._game_visible()
+        want = (self._overlay_on and self._selected is not None and self._game_visible()
+                and self.auto_state != "closed")  # 요리창이 꺼지면 숨김(자동 찾기)
         if want and not self.overlay.isVisible():
             self.overlay.show()
         elif not want and self.overlay.isVisible():
@@ -422,6 +478,8 @@ class CookingTab(QWidget):
 
     def shutdown(self) -> None:
         self._timer.stop()
+        self._find_timer.stop()
+        self.autofind.shutdown()
         if self.overlay is not None:
             self.overlay.close()
             self.overlay = None
