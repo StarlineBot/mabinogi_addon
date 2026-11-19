@@ -11,7 +11,10 @@
     "tests/test_windows_ci.py",
     "tests/test_startup_smoke.py",
     "tests/test_release_notes.py",
-    "tests/test_release_notes_trigger.py"
+    "tests/test_release_notes_trigger.py",
+    "tests/test_grid_snap.py",
+    "tests/test_grid_all_overlays.py",
+    "tests/test_grid_guide_cleanup.py"
   ],
   "coverage": {
     "src/mabinogi_addon/cooking.py": {
@@ -34,9 +37,10 @@
     },
     "src/mabinogi_addon/config.py": {
       "tests": [
-        "tests/test_cooking.py"
+        "tests/test_cooking.py",
+        "tests/test_grid_snap.py"
       ],
-      "reason": "cooking.overlay 위치·배율·잠금 저장/복원, 틀린 값 거름"
+      "reason": "cooking.overlay 위치·배율·잠금 저장/복원, 틀린 값 거름 · 격자 크기 선택지·예전 값 옮기기(32↑→24, 그 밖 가까운 값)"
     },
     "scripts/build_cookings.py": {
       "tests": [
@@ -80,6 +84,20 @@
         "tests/test_release_notes_trigger.py"
       ],
       "reason": "0.53.0 노트 맨 위(요리 계산기 헤드라인)·첫 실행 표시, v0.52.3 이하 그대로"
+    },
+    "src/mabinogi_addon/ui/grid.py": {
+      "tests": [
+        "tests/test_grid_snap.py",
+        "tests/test_grid_all_overlays.py",
+        "tests/test_grid_guide_cleanup.py"
+      ],
+      "reason": "격자 기본 16, 홀수 칸(11·19) 중앙 기준 스냅·안내선 — 모든 오버레이 공용"
+    },
+    "src/mabinogi_addon/ui/settings_tab.py": {
+      "tests": [
+        "tests/test_grid_snap.py"
+      ],
+      "reason": "격자 크기 콤보 8·11·16·19·24, 콤보 = 저장 = 스냅"
     }
   }
 }

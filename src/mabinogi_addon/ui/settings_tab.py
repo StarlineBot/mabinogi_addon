@@ -112,7 +112,7 @@ def _checked(text: str, on: bool = True) -> QCheckBox:
 # general 설정 키 ↔ 체크박스 라벨
 _TRAY_MINIMIZE = "minimizeToTray"
 _GRID_SNAP = "gridSnap"
-_GRID_SIZES = [8, 16, 24, 32, 48, 64]  # 격자 크기 선택지(px)
+_GRID_SIZES = list(config.GRID_SIZES)  # 격자 크기 선택지(px) — config가 단일 출처
 _TRAY_START = "startInTray"
 # 토스트 알림 위치 선택지(라벨, config 모서리 코드)
 _TOAST_CORNER_CHOICES = [
@@ -997,7 +997,7 @@ class SettingsTab(QWidget):
         for px in _GRID_SIZES:
             self._grid_size.addItem(f"{px} px", px)
         cur = config.load_grid_size()
-        idx = _GRID_SIZES.index(cur) if cur in _GRID_SIZES else _GRID_SIZES.index(32)
+        idx = _GRID_SIZES.index(cur)  # load_grid_size가 늘 선택지 값을 돌려줌
         self._grid_size.setCurrentIndex(idx)
         self._grid_size.currentIndexChanged.connect(
             lambda _i: config.save_grid_size(self._grid_size.currentData())
@@ -1006,7 +1006,7 @@ class SettingsTab(QWidget):
         size_row.addStretch(1)
         v.addLayout(size_row)
         v.addWidget(
-            hint_label("격자가 작을수록 촘촘하게, 클수록 큰 간격으로 이동해요. 기본 크기는 32px이에요.")
+            hint_label("격자가 작을수록 촘촘하게, 클수록 큰 간격으로 이동해요. 홀수 칸(11·19px)은 1px 단위 자리에도 맞출 수 있어요. 기본 크기는 16px이에요.")
         )
 
         v.addSpacing(8)

@@ -1040,11 +1040,25 @@ def save_last_seen_version(version: str, path: Path = LOCAL_CONFIG_PATH) -> None
     _write_local_config(data, path)
 
 
+# 격자 크기 선택지(px, 사용자 결정 11-19): 격자는 화면 정중앙 기준이라 짝수 칸만 있으면 홀수 픽셀 자리로 못 옮긴다 →
+# 홀수 칸(11·19)을 섞어 1px 단위 자리도 맞출 수 있게. 4px 같은 아주 작은 칸·32px 이상은 안 씀.
+GRID_SIZES = (8, 11, 16, 19, 24)
+GRID_SIZE_DEFAULT = 16
+
+
+def grid_size_choice(value) -> int:
+    """저장값 → 선택지 값. 24보다 크면(예전 32·48·64) 24, 그 밖엔 가장 가까운 값(같으면 작은 쪽)."""
+    if not isinstance(value, (int, float)) or isinstance(value, bool) or value <= 0:
+        return GRID_SIZE_DEFAULT
+    if value > GRID_SIZES[-1]:
+        return GRID_SIZES[-1]
+    return min(GRID_SIZES, key=lambda s: (abs(s - value), s))
+
+
 def load_grid_size(path: Path = LOCAL_CONFIG_PATH) -> int:
-    """오버레이 격자 칸 크기(px). 기본 32. 작을수록 미세, 클수록 큼직한 이동."""
+    """오버레이 격자 칸 크기(px). 기본 16. 선택지에 없는 예전 저장값은 맞춰 돌려준다(설정 표시 = 실제 스냅)."""
     g = _read_local_config(path).get("general") or {}
-    v = g.get("gridSize")
-    return int(v) if isinstance(v, (int, float)) and int(v) > 0 else 32
+    return grid_size_choice(g.get("gridSize"))
 
 
 def save_grid_size(px: int, path: Path = LOCAL_CONFIG_PATH) -> None:

@@ -1,7 +1,7 @@
 """오버레이 격자 맞춤(스냅) 공용 유틸.
 
 설정(general.gridSnap)이 켜져 있으면 모든 오버레이(버프·디버프·메모·미러)를 드래그로
-옮길 때 좌표를 16px 격자에 맞춰 이동한다. 격자 선은 **드래그하는 동안에만** 전체 화면에
+옮길 때 좌표를 격자(설정 8·11·16·19·24px, 기본 16)에 맞춰 이동한다. 격자 선은 **드래그하는 동안에만** 전체 화면에
 표시(클릭 통과)되고, 떼면 사라진다.
 """
 
@@ -11,7 +11,7 @@ from PySide6.QtCore import QEvent, QObject, QPoint, Qt, QTimer
 from PySide6.QtGui import QColor, QGuiApplication, QPainter, QPen
 from PySide6.QtWidgets import QWidget
 
-_DEFAULT_SIZE = 32  # 격자 한 칸(px) 기본값. 설정에서 조절 가능.
+_DEFAULT_SIZE = 16  # 격자 한 칸(px) 기본값(config.GRID_SIZE_DEFAULT와 같음). 설정에서 조절 가능.
 
 
 def enabled() -> bool:
