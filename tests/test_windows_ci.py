@@ -258,7 +258,8 @@ def test_watchdog_bounds_keep_feature_gate_and_publish_only_safe_diagnostics():
         assert store['with']['path']=='test-diagnostics/**/public/*'
         assert store['with']['retention-days']=='1'
         assert '.raw' not in store['with']['path'] and 'continue-on-error' not in store
-    assert all(jobs[name]['timeout-minutes']=='15' for name in ('request','regression','validate'))
+    assert all(jobs[name]['timeout-minutes']=='15' for name in ('request','validate'))
+    assert jobs['regression']['timeout-minutes']=='25'  # 11-19 QA: apt 대체 경로(원래 미러 순서로 한 번 더) 포함
     feature=next(s for s in jobs['regression']['steps'] if s.get('id')=='unit')
     assert feature['timeout-minutes']=='14'
     assert 'scripts.run_release_checks' in feature['run']
@@ -331,7 +332,9 @@ def test_release_linux_installs_synthetic_codec_dependency():
     import yaml
     workflow = yaml.safe_load((Path(__file__).resolve().parents[1] / '.github/workflows/windows.yml').read_text(encoding="utf-8"))
     installs = [step.get('run', '') for step in workflow['jobs']['regression']['steps']]
-    assert any('run_apt install 300s install' in command and 'ffmpeg' in command.split() for command in installs)
+    assert any('run_apt install 300s install' in command and '$packages' in command
+               and 'ffmpeg' in next(l for l in command.splitlines() if l.strip().startswith('packages=')).strip('" ').split()
+               for command in installs)
 
 
 @pytest.mark.parametrize('result', [100, 124])
@@ -460,3 +463,30 @@ def test_apt_demotes_any_regional_mirror(tmp_path, regional):
     assert result.returncode==0, result.stderr
     assert mirrors.read_text(encoding="utf-8")==(f'{regional}\tpriority:2\nhttps://archive.ubuntu.com/ubuntu/\tpriority:1\n'
                                                  'http://security.ubuntu.com/ubuntu/\tpriority:3\n')
+
+
+def test_apt_falls_back_to_original_mirror_order_once(tmp_path):
+    """11-19 QA: archive.ubuntu.com이 응답 안 하면(후보 44520162166) 러너 원래 미러 순서로 되돌려 한 번 더."""
+    import os
+    import subprocess
+    command=next(s['run'] for s in workflow('windows.yml')['jobs']['regression']['steps']
+                 if s.get('name')=='Install Qt runtime libraries')
+    mirrors=tmp_path/'mirrors'
+    original='http://azure.archive.ubuntu.com/ubuntu/\tpriority:1\nhttps://archive.ubuntu.com/ubuntu/\tpriority:2\n'
+    mirrors.write_text(original, encoding="utf-8")
+    command=command.replace('/etc/apt/apt-mirrors.txt',str(mirrors))
+    # 첫 update만 실패(124), 그다음은 성공 — 그때 미러 파일 내용을 기록
+    fake=('#!/bin/sh\nn=$(cat count 2>/dev/null || echo 0); n=$((n+1)); echo $n > count\n'
+          'cp "'+str(mirrors)+'" mirrors.$n\nprintf "%s\\n" "$*" >> calls\n[ "$n" = 1 ] && exit 124\nexit 0\n')
+    for name, body in [('sudo', '#!/bin/sh\nexec "$@"\n'), ('timeout', fake)]:
+        path=tmp_path/name
+        path.write_text(body, encoding="utf-8")
+        path.chmod(0o755)
+    result=subprocess.run(['bash','-e','-c',command],cwd=tmp_path,
+        env={**os.environ,'PATH':str(tmp_path)+os.pathsep+os.environ['PATH']},capture_output=True,text=True)
+    assert result.returncode==0, result.stdout+result.stderr
+    calls=(tmp_path/'calls').read_text(encoding="utf-8").splitlines()
+    assert len(calls)==3 and calls[0].endswith(' update') and calls[1].endswith(' update') and ' install ' in calls[2]
+    assert 'retrying once' in result.stdout
+    assert (tmp_path/'mirrors.1').read_text(encoding="utf-8").startswith('http://azure.archive.ubuntu.com/ubuntu/\tpriority:2')
+    assert (tmp_path/'mirrors.2').read_text(encoding="utf-8")==original  # 두 번째는 원래 순서
