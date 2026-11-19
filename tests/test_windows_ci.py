@@ -436,3 +436,27 @@ def test_crash_dump_script_survives_cp1252_console(tmp_path, command):
     assert result.returncode == 0, result.stderr.decode("utf-8", "replace")
     text = result.stdout.decode("utf-8")
     assert "[crash-dumps]" in text and ("덤프 없음" in text if command == "report" else "python" in text)
+
+
+@pytest.mark.parametrize('regional', ['http://azure.archive.ubuntu.com/ubuntu/',
+                                      'http://us-east-2.ec2.archive.ubuntu.com/ubuntu/'])
+def test_apt_demotes_any_regional_mirror(tmp_path, regional):
+    """11-19 QA: 러너의 지역 미러(us-east-2.ec2 등)가 priority:1로 남으면 apt가 둘로 나눠 받다 느린 쪽 때문에 시간 초과.
+    어떤 지역 미러(*.archive.ubuntu.com)든 2로 내리고 archive.ubuntu.com만 1."""
+    import os
+    import subprocess
+    command=next(s['run'] for s in workflow('windows.yml')['jobs']['regression']['steps']
+                 if s.get('name')=='Install Qt runtime libraries')
+    mirrors=tmp_path/'mirrors'
+    mirrors.write_text(f'{regional}\tpriority:1\nhttps://archive.ubuntu.com/ubuntu/\tpriority:2\n'
+                       'http://security.ubuntu.com/ubuntu/\tpriority:3\n', encoding="utf-8")
+    command=command.replace('/etc/apt/apt-mirrors.txt',str(mirrors))
+    for name, body in [('sudo', 'exec "$@"'), ('timeout', 'exit 0')]:
+        path=tmp_path/name
+        path.write_text('#!/bin/sh\n'+body+'\n', encoding="utf-8")
+        path.chmod(0o755)
+    result=subprocess.run(['bash','-e','-c',command],cwd=tmp_path,
+        env={**os.environ,'PATH':str(tmp_path)+os.pathsep+os.environ['PATH']},capture_output=True,text=True)
+    assert result.returncode==0, result.stderr
+    assert mirrors.read_text(encoding="utf-8")==(f'{regional}\tpriority:2\nhttps://archive.ubuntu.com/ubuntu/\tpriority:1\n'
+                                                 'http://security.ubuntu.com/ubuntu/\tpriority:3\n')

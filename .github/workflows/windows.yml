@@ -88,8 +88,10 @@ jobs:
             fi
           }
           # Keep the runner's signed Ubuntu sources; only swap its existing priorities.
-          sudo sed -i \
-            -e 's|^http://azure.archive.ubuntu.com/ubuntu/[[:space:]]*priority:1$|http://azure.archive.ubuntu.com/ubuntu/\tpriority:2|' \
+          # 11-19 QA: 러너마다 지역 미러가 다름(azure.…, us-east-2.ec2.…). 같은 priority:1이면 apt가 둘로 나눠 받아
+          # 느린 지역 미러 때문에 시간 초과 → 모든 지역 미러(*.archive.ubuntu.com)를 2로 내리고 archive.ubuntu.com만 1.
+          sudo sed -i -E \
+            -e 's#^(https?://[A-Za-z0-9.-]+\.archive\.ubuntu\.com/ubuntu/)[[:space:]]*priority:1$#\1\tpriority:2#' \
             -e 's|^https://archive.ubuntu.com/ubuntu/[[:space:]]*priority:2$|https://archive.ubuntu.com/ubuntu/\tpriority:1|' \
             /etc/apt/apt-mirrors.txt
           grep -Eq '^https://archive.ubuntu.com/ubuntu/[[:space:]]+priority:1$' /etc/apt/apt-mirrors.txt || {
