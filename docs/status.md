@@ -25,6 +25,7 @@
 
 ## 배포와 검증
 
+- **봇 앱 버전 저장·표시 → 봇 DEV 세션(session_01R3AWN43b3yw3h5TNfWuuAs)에 전달(11-19, 기획 세션)** — sync.json app 값 저장(app_version 컬럼)·!현황 표시·VM 재시작. 앱 쪽 featureUsage 미등록 사용자 버그는 2d40b99로 수정, v0.52.3에 포함(태그 확인).
 - **v0.52.3 게시 완료(11-19 01:59 UTC = 10:59 KST, QA 세션 직접 실행, 사용자 '확인하고 실행에 문제없으면 바로 배포')** — 범위(v0.52.2 대비 src): 북미 차단 개발 되돌림(0f336f63·598598a6 — overseas_guard 등 전부 없어짐),
   북미 안내 문구 강화·판정 '정확히 Mabinogi'·실행마다 1번(8da151ab), featureUsage 실행 판정에 창 판정 추가(2d40b99e). QA: 관련 86 통과, 배포 검사 CI 글꼴 348 통과, preflight 0, 홈 띠 렌더 잘림 없음.
   후보 [44438893514](https://github.com/StarlineBot/mabinogi_addon/actions/runs/44438893514) 1차 시도 실패 = 우분투 apt 패키지 받기 시간 초과(exit 124, 테스트 시작 전 — 코드 무관) → 실패 작업만 1회 재실행, 2차 성공(산출물 verified-windows-44438893514-2).
