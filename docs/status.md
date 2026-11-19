@@ -25,6 +25,12 @@
 
 ## 배포와 검증
 
+- **QA 요리 계산기 v0.53.0(5b8a3fb1): 코드·검사 통과, 사용자 화면 피드백으로 상세 레이아웃 수정 → 개발 세션(DEV session_01SbFuD9LBQUw7gFTz2Mmv9g)에 11-19 08:5x UTC 전달.**
+  QA: 관련 234 통과(test_cooking 21·startup_build·navigation·cursor_fx·release_notes·skillbar_testers), 배포 검사 0.53.0 CI 글꼴 352 통과, preflight 0. 명세 8절 항목 테스트 모두 있음(직접 선택 시 기록 삭제 포함).
+  잠금 클릭 통과는 공용 system.clickthrough.set_click_through(다른 오버레이와 같음). build_cookings를 지금 봇 main으로 다시 만들면 저장소 JSON과 같음(466 중 387, 제외 79, 형식 틀림 0).
+  빌드 때 봇 main에서 다시 받는 구조(명세 2절 결정) — exe 데이터가 검증한 저장소 JSON과 달라질 수 있음(테스트는 저장소 JSON 기준, 380개 미만이면 거부). 표시 숫자는 원문 상대값(예 44·33·33, 합 110), 바는 합계로 나눈 비율(명세 4절).
+  **CI 수정(QA, dddaec47)**: 리눅스 패키지 설치 제한 120s→300s — 오늘 후보 두 번(44438893514 1차, 44489527413) 글꼴 61MB·ffmpeg 받기 시간 초과(exit 124, 테스트 전). 이후 후보 44490198665(dddaec47) 성공 — 레이아웃 수정 뒤 새 후보로 대체 예정.
+  사용자 피드백(11-19): 조리방법 타이틀보다 작게·지금보다 크고 진하게 / 능력치 h3 정도로 잘 보이게 / '게임 위에 이 바 띄우기'·'위치 잠금'을 비율 그림 바로 아래 그림 폭에 맞게.
 - **요리 계산기 기획 확정(11-19) → 애드온 DEV 세션(session_01SbFuD9LBQUw7gFTz2Mmv9g)에 전달** — [명세](cooking-spec.md): 봇 cookings.js를 빌드 때 JSON으로(387개), 검색=필터, 재료 요리로 이동·되돌아가기, 상세에 하늘 유리 요리창 그림+게이지, 게임 위 비율 바(245×10, 손으로 맞춤). 자동 찾기는 2단계(원본 크기 인터페이스별 스크린샷 필요).
   **개발 완료(11-19, DEV, v0.53.0 노트 헤드라인)** — 편의기능 › 계산기 줄 끝 '요리' 탭. 렌더: `docs/assets/cooking-20261119/tab_search.png`·`tab_ingredient.png`·`overlay.png`(사용자에게 보냄).
   변경 파일 → 영향 → 검사: `scripts/build_cookings.py`(봇 공개 main cookings.js → JSON, 단체 466 중 387 넣음·조리방법 없음 79·형식 틀림 0, 380 미만이면 거부) + `assets/cooking/cookings.json`(생성물)·`cook_ui_reference.png` → `tests/test_cooking.py`;
