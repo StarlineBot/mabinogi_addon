@@ -25,6 +25,8 @@
 
 ## 배포와 검증
 
+- **0.53.0 후보 #4 run [44495800191](https://github.com/StarlineBot/mabinogi_addon/actions/runs/44495800191) 성공(a5ce7faa, 09:31 UTC) — 게시 대상(#3 44493577416 대체), Windows 실행 확인 대기.** 산출물 verified-windows-44495800191-1(164,905,386바이트, 만료 2026-11-20 18:31 KST).
+  QA a5ce7faa(바 첫 크기 = 1/화면 배율, 저장 배율 있으면 그대로, 저장 없으면 config scale None): test_cooking 22 통과(배율 1.0/1.25/1.5/2.0 첫 바 물리 245×10 ±1), 배포 검사 361 통과, preflight 0. save_cooking_overlay는 준 필드만 저장(None 저장 없음).
 - **QA 반려(11-19, 개발 DEV 전달): 요리 게임 위 바 첫 크기가 Windows 디스플레이 배율 무시** — BAR 245×10은 실게임 물리 픽셀인데 Qt 위젯은 논리 픽셀 → 125%면 306×12.5, 150%면 368×15 물리로 그려짐. 첫 사용(저장 배율 없음) 때 scale=1/devicePixelRatio로. 후보 44493577416은 이 수정 뒤 새 후보로 대체.
   바는 자동으로 게임 바를 찾지 않음(명세 1·7절 — 자동 찾기는 2단계): 화면 가운데 아래(높이 60%)에 처음 뜨고 사용자가 끌어서 맞춤, 휠로 0.5~3.0배(5%씩), 위치·배율 저장.
 - **0.53.0(요리 계산기) 후보 #3 run [44493577416](https://github.com/StarlineBot/mabinogi_addon/actions/runs/44493577416) 성공(c3eb2f74, 09:17 UTC) — 게시 대상, Windows 실행 확인 대기.** 산출물 verified-windows-44493577416-1(164,905,602바이트, 만료 2026-11-20 18:17 KST).
