@@ -7,6 +7,7 @@ import json
 import pytest
 from PySide6.QtCore import QPoint, QPointF, Qt
 from PySide6.QtGui import QColor, QWheelEvent
+from PySide6.QtWidgets import QLabel
 
 from mabinogi_addon import config, cooking
 from scripts import build_cookings
@@ -72,6 +73,27 @@ def test_parse_js_and_recipe_from_bot_format():
                        "status": [{"name": "생명력", "value": 35}, {"name": "마나", "value": 25}]}]
     assert build_cookings.parse_recipe("밥(20%) 이상한 글") is None
     assert build_cookings.parse_recipe("우유(12.5%)") == [{"name": "우유", "ratio": 12.5}]
+
+
+def test_build_summary_survives_cp1252_console(tmp_path):
+    """Windows 러너 stdout이 cp1252여도 요약 줄을 찍고 0으로 끝난다(QA 반려 11-19 — 예외로 '실패' 경고가 났었음)."""
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path
+    root = Path(build_cookings.__file__).resolve().parents[1]
+    source = tmp_path / "cookings.js"
+    raw = json.loads(cooking.data_path().read_text(encoding="utf-8"))["dishes"]
+    items = [{"localName": d["name"], "isCatering": True, "localCookingType": d["method"],
+              "localRecipe": " ".join(f"{r['name']}({r['ratio']}%)" for r in d["recipe"]), "status": d["status"]}
+             for d in raw]
+    source.write_text("const cookings = " + json.dumps(items, ensure_ascii=False, indent=2) + "\nmodule.exports = { cookings }\n",
+                      encoding="utf-8")
+    result = subprocess.run([sys.executable, "-m", "scripts.build_cookings", "--source", str(source), "--out",
+                             str(tmp_path / "out.json")], cwd=root, capture_output=True, check=False,
+                            env={**os.environ, "PYTHONIOENCODING": "cp1252"})
+    assert result.returncode == 0, result.stderr.decode("utf-8", "replace")
+    assert b"387" in result.stdout and (tmp_path / "out.json").is_file()
 
 
 def test_build_refuses_too_few_dishes(tmp_path):
@@ -172,7 +194,16 @@ def test_detail_order_buttons_right_under_gauge():
     widgets = [tab.detail_layout.itemAt(i).widget() for i in range(tab.detail_layout.count())]
     at = widgets.index(tab.gauge)
     assert widgets[at + 1] is tab.overlay_buttons
-    assert widgets[at + 2].text() == "능력치" and widgets[at + 3] is tab.stats
+    from mabinogi_addon.ui.widgets import divider
+    assert type(widgets[at + 2]) is type(divider()) and widgets[at + 2].height() <= 1  # 구역 구분선
+    assert widgets[at + 3].text() == "능력치" and widgets[at + 4] is tab.stats
+    titles = [w.text() for w in widgets if isinstance(w, QLabel) and w.text() in
+              ("재료", "비율 — 점선 위치에서 농도 조절을 멈추기", "능력치")]
+    assert len(titles) == 3
+    # 구역: [이름·조리방법] | [재료] | [비율 그림 + 버튼] | [능력치] — 제목마다 바로 앞이 구분선
+    for w in widgets:
+        if isinstance(w, QLabel) and w.text() in titles:
+            assert widgets[widgets.index(w) - 1].maximumHeight() == 1
     assert tab.overlay_btn.parent() is tab.overlay_buttons and tab.lock_btn.parent() is tab.overlay_buttons
     assert tab.overlay_buttons.width() == GAUGE_VIEW_W == tab.gauge.pixmap().width()
     for pixels in (None, 20):  # 기본·큰 글꼴 모두 타이틀 > 조리방법·능력치 > 본문
@@ -184,8 +215,8 @@ def test_detail_order_buttons_right_under_gauge():
         body = QFontInfo(tab.font()).pixelSize()
         title = next(w for w in widgets if w is not None and getattr(w, "text", lambda: "")() == "모둠회덮밥")
         stats_title = widgets[widgets.index(tab.stats) - 1]
-        size = [QFontInfo(w.font()).pixelSize() for w in (title, tab.method_label, stats_title, tab.stats)]
-        assert size[0] > size[1] == size[2] == size[3] > body
+        size = [QFontInfo(w.font()).pixelSize() for w in (title, tab.method_label, tab.stats, stats_title)]
+        assert size[0] > size[1] == size[2] > size[3] > body  # 타이틀 > 조리방법 = 능력치 값 > 구역 제목 > 본문
         assert body == (pixels or body)
     tab.shutdown()
 

@@ -95,6 +95,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--source", help="내려받은 cookings.js 경로(없으면 공개 main에서 받음)")
     parser.add_argument("--out", default=str(OUT))
     args = parser.parse_args(argv)
+    for stream in (sys.stdout, sys.stderr):  # 콘솔이 cp1252여도 한글 요약 줄 때문에 실패하지 않게
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(errors="replace")
     text = Path(args.source).read_text(encoding="utf-8") if args.source else fetch()
     stats = build(text, Path(args.out))
     print(f"요리 데이터: 단체 요리 {stats['catering']}개 중 넣음 {stats['kept']}개 · 조리방법 없음 {stats['no_method']}개 · "

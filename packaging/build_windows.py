@@ -110,7 +110,9 @@ def refresh_cookings(root: Path) -> bool:
 
     받기·형식 검사가 실패하면 경고만 하고 저장소에 들어 있는 cookings.json으로 빌드를 이어 간다(빌드를 막지 않음).
     """
-    result = subprocess.run([sys.executable, "-m", "scripts.build_cookings"], cwd=root, check=False)
+    # Windows 러너 stdout은 cp1252 — 한글 요약 print가 깨져 실패로 보이지 않게 UTF-8로(QA 반려 11-19)
+    env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
+    result = subprocess.run([sys.executable, "-m", "scripts.build_cookings"], cwd=root, check=False, env=env)
     if result.returncode != 0:
         print("warning: 요리 데이터를 새로 만들지 못해 저장소의 cookings.json을 그대로 씁니다", file=sys.stderr)
         return False

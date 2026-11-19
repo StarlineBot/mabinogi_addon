@@ -31,11 +31,11 @@ from PySide6.QtWidgets import (
 from .. import config, cooking
 from .cooking_gauge import CookingBarOverlay, color, detail_pixmap
 from .palette import color as pcolor
-from .widgets import FeatureHeader, section_label
+from .widgets import FeatureHeader, divider
 
 TITLE = "요리"
 # 글자 위계(사용자 피드백 11-19): 본문 글꼴 기준 +px — 타이틀 > 조리방법·능력치 > 본문. 큰 글꼴에서도 위계 유지(스타일시트 px 고정 안 씀)
-TITLE_UP, SUB_UP = 4, 2
+TITLE_UP, SUB_UP, SECTION_UP = 4, 2, 1  # 기본 13px → 17·15·14
 GAUGE_VIEW_W = 400  # 상세 요리창 그림 표시 너비(원본 패널 530px을 줄여 상세 칸에 맞춤 — 시안 detail_gauge_mock.png)
 DESCRIPTION = "요리를 찾아 재료·비율·능력치를 보고, 비율 바를 게임 위에 띄워 요리창 바에 맞출 수 있어요."
 _DISH = Qt.ItemDataRole.UserRole
@@ -254,12 +254,14 @@ class CookingTab(QWidget):
         self.method_label = QLabel(f"조리방법 · {dish.method}")
         self.method_label.setFont(self._font(SUB_UP, QFont.Weight.Bold))  # 타이틀보다 작고 본문보다 크게(중요 정보)
         lay.addWidget(self.method_label)
-        lay.addWidget(section_label("재료"))
+        lay.addWidget(divider())
+        lay.addWidget(self._section_title("재료"))
         kind, query = self.kind.currentText(), self.query_text()
         for i, ing in enumerate(dish.recipe):
             lay.addWidget(self._ingredient_row(i, ing, highlight=kind == "재료" and cooking.norm(query) != ""
                                                and cooking.norm(query) in cooking.norm(ing.name)))
-        lay.addWidget(section_label("비율 — 점선 위치에서 농도 조절을 멈추기"))
+        lay.addWidget(divider())
+        lay.addWidget(self._section_title("비율 — 점선 위치에서 농도 조절을 멈추기"))
         self.gauge = QLabel()
         self.gauge.setPixmap(detail_pixmap(dish).scaledToWidth(GAUGE_VIEW_W, Qt.TransformationMode.SmoothTransformation))
         self.gauge.setFixedSize(self.gauge.pixmap().size())  # 칸이 낮아도 그림이 눌려 잘리지 않게(상세는 스크롤)
@@ -281,9 +283,8 @@ class CookingTab(QWidget):
         self.lock_btn.toggled.connect(self._set_locked)
         buttons.addWidget(self.lock_btn, 2)
         lay.addWidget(self.overlay_buttons, 0, Qt.AlignmentFlag.AlignHCenter)
-        stats_title = QLabel("능력치")
-        stats_title.setFont(self._font(SUB_UP, QFont.Weight.Bold))
-        lay.addWidget(stats_title)
+        lay.addWidget(divider())
+        lay.addWidget(self._section_title("능력치"))
         parts = []
         for stat, value in dish.status:
             text = f"{stat} {value:+g}"
@@ -303,6 +304,12 @@ class CookingTab(QWidget):
         font.setPixelSize(QFontInfo(self.font()).pixelSize() + up)
         font.setWeight(weight)
         return font
+
+    def _section_title(self, text: str) -> QLabel:
+        """구역 제목 — 음악 버프 계산기와 같은 14px·700(ui-rules 계산기 예외), 탭 글꼴 기준이라 큰 글꼴에서도 본문보다 큼."""
+        label = QLabel(text)
+        label.setFont(self._font(SECTION_UP, QFont.Weight.Bold))
+        return label
 
     def changeEvent(self, event) -> None:
         super().changeEvent(event)

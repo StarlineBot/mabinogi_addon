@@ -142,6 +142,8 @@ def test_existing_main_build_entry_calls_bundle_preparation_before_pyinstaller(b
     monkeypatch.setattr(sys, 'platform', 'win32')
     monkeypatch.setattr(sys, 'argv', ['build_windows.py', '--version', '0.11.0'])
     def run(cmd, **kwargs):
+        if 'scripts.build_cookings' in cmd:
+            assert kwargs['env']['PYTHONIOENCODING'] == 'utf-8'  # Windows cp1252 콘솔에서 한글 요약 print 실패 방지
         events.append('cookings' if 'scripts.build_cookings' in cmd else 'version')
         return SimpleNamespace(returncode=0)
     monkeypatch.setattr(builder['subprocess'], 'run', run)
