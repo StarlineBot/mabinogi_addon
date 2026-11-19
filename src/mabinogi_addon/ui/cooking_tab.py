@@ -10,8 +10,8 @@
 """
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QBrush, QColor, QGuiApplication
+from PySide6.QtCore import QEvent, Qt, QTimer
+from PySide6.QtGui import QBrush, QColor, QFont, QFontInfo, QGuiApplication
 from PySide6.QtWidgets import (
     QComboBox,
     QFrame,
@@ -34,6 +34,8 @@ from .palette import color as pcolor
 from .widgets import FeatureHeader, section_label
 
 TITLE = "요리"
+# 글자 위계(사용자 피드백 11-19): 본문 글꼴 기준 +px — 타이틀 > 조리방법·능력치 > 본문. 큰 글꼴에서도 위계 유지(스타일시트 px 고정 안 씀)
+TITLE_UP, SUB_UP = 4, 2
 GAUGE_VIEW_W = 400  # 상세 요리창 그림 표시 너비(원본 패널 530px을 줄여 상세 칸에 맞춤 — 시안 detail_gauge_mock.png)
 DESCRIPTION = "요리를 찾아 재료·비율·능력치를 보고, 비율 바를 게임 위에 띄워 요리창 바에 맞출 수 있어요."
 _DISH = Qt.ItemDataRole.UserRole
@@ -241,14 +243,17 @@ class CookingTab(QWidget):
         if self.history.peek():
             self.back_btn = QPushButton(f"← {self.history.peek()}")
             self.back_btn.setFlat(True)
+            self.back_btn.setFont(self._font(0, QFont.Weight.Normal))  # 스타일시트를 줘도 큰 글꼴 그대로
             self.back_btn.setCursor(Qt.CursorShape.PointingHandCursor)
             self.back_btn.setStyleSheet(f"text-align:left; color:{pcolor('accent')}; padding:0;")
             self.back_btn.clicked.connect(self.go_back)
             lay.addWidget(self.back_btn, 0, Qt.AlignmentFlag.AlignLeft)
         name = QLabel(dish.name)
-        name.setStyleSheet("font-size:17px; font-weight:700;")
+        name.setFont(self._font(TITLE_UP, QFont.Weight.Bold))
         lay.addWidget(name)
-        lay.addWidget(QLabel(f"조리방법 · {dish.method}"))
+        self.method_label = QLabel(f"조리방법 · {dish.method}")
+        self.method_label.setFont(self._font(SUB_UP, QFont.Weight.Bold))  # 타이틀보다 작고 본문보다 크게(중요 정보)
+        lay.addWidget(self.method_label)
         lay.addWidget(section_label("재료"))
         kind, query = self.kind.currentText(), self.query_text()
         for i, ing in enumerate(dish.recipe):
@@ -257,34 +262,52 @@ class CookingTab(QWidget):
         lay.addWidget(section_label("비율 — 점선 위치에서 농도 조절을 멈추기"))
         self.gauge = QLabel()
         self.gauge.setPixmap(detail_pixmap(dish).scaledToWidth(GAUGE_VIEW_W, Qt.TransformationMode.SmoothTransformation))
-        self.gauge.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lay.addWidget(self.gauge)
-        lay.addWidget(section_label("능력치"))
-        parts = []
-        for stat, value in dish.status:
-            text = f"{stat} {value:+g}"
-            if kind == "능력치" and query and cooking.norm(stat) == cooking.norm(query):
-                text = f"<span style='color:{pcolor('accent')}; font-weight:700;'>{text}</span>"
-            parts.append(text)
-        self.stats = QLabel("  ".join(parts) or "없음")
-        self.stats.setTextFormat(Qt.TextFormat.RichText)
-        self.stats.setWordWrap(True)
-        lay.addWidget(self.stats)
-        buttons = QHBoxLayout()
+        self.gauge.setFixedSize(self.gauge.pixmap().size())  # 칸이 낮아도 그림이 눌려 잘리지 않게(상세는 스크롤)
+        lay.addWidget(self.gauge, 0, Qt.AlignmentFlag.AlignHCenter)
+        # 비율 그림 바로 아래, 그림 폭 안에 두 버튼(사용자 피드백 11-19: 재료 → 그림 → 버튼 → 능력치)
+        self.overlay_buttons = QWidget()
+        self.overlay_buttons.setFixedWidth(GAUGE_VIEW_W)
+        buttons = QHBoxLayout(self.overlay_buttons)
+        buttons.setContentsMargins(0, 0, 0, 0)
         self.overlay_btn = QPushButton("게임 위에 이 바 띄우기")
         self.overlay_btn.setCheckable(True)
         self.overlay_btn.setChecked(self._overlay_on)
         self.overlay_btn.toggled.connect(self.set_overlay)
-        buttons.addWidget(self.overlay_btn)
+        buttons.addWidget(self.overlay_btn, 3)
         self.lock_btn = QPushButton("위치 잠금")
         self.lock_btn.setCheckable(True)
         self.lock_btn.setChecked(config.load_cooking_overlay()["locked"])
         self.lock_btn.setToolTip("잠그면 바를 클릭해도 게임으로 통과해요. 풀면 끌어서 옮기고 휠로 크기를 바꿔요.")
         self.lock_btn.toggled.connect(self._set_locked)
-        buttons.addWidget(self.lock_btn)
-        buttons.addStretch(1)
-        lay.addLayout(buttons)
+        buttons.addWidget(self.lock_btn, 2)
+        lay.addWidget(self.overlay_buttons, 0, Qt.AlignmentFlag.AlignHCenter)
+        stats_title = QLabel("능력치")
+        stats_title.setFont(self._font(SUB_UP, QFont.Weight.Bold))
+        lay.addWidget(stats_title)
+        parts = []
+        for stat, value in dish.status:
+            text = f"{stat} {value:+g}"
+            if kind == "능력치" and query and cooking.norm(stat) == cooking.norm(query):
+                text = f"<span style='color:{pcolor('accent')}; font-weight:800;'>{text}</span>"
+            parts.append(text)
+        self.stats = QLabel("&nbsp;&nbsp;&nbsp;".join(parts) or "없음")
+        self.stats.setTextFormat(Qt.TextFormat.RichText)
+        self.stats.setWordWrap(True)
+        self.stats.setFont(self._font(SUB_UP, QFont.Weight.DemiBold))  # 능력치 값이 잘 보이게(h3 정도)
+        lay.addWidget(self.stats)
         lay.addStretch(1)
+
+    def _font(self, up: int, weight: QFont.Weight) -> QFont:
+        """이 탭 글꼴(사용자 큰 글꼴 포함) 기준으로 +up px·굵기."""
+        font = QFont(self.font())
+        font.setPixelSize(QFontInfo(self.font()).pixelSize() + up)
+        font.setWeight(weight)
+        return font
+
+    def changeEvent(self, event) -> None:
+        super().changeEvent(event)
+        if event.type() == QEvent.Type.FontChange and hasattr(self, "detail_layout"):
+            self._render_detail()  # 글꼴 크기가 바뀌면 위계를 새 기준으로
 
     def _ingredient_row(self, i: int, ing: cooking.Ingredient, highlight: bool) -> QWidget:
         row = QWidget()
@@ -294,22 +317,25 @@ class CookingTab(QWidget):
         dot.setStyleSheet(f"color:{color(i).name()};")
         h.addWidget(dot)
         target = cooking.ingredient_dish(ing.name, self._index)
-        weight = "font-weight:700;" if highlight else ""
+        strong = self._font(0, QFont.Weight.Bold)
         if target is not None:
             btn = QPushButton(f"▸ {ing.name}")
             btn.setFlat(True)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.setToolTip(f"{target.name}(으)로 이동")
-            btn.setStyleSheet(f"text-align:left; color:{pcolor('accent')}; font-weight:700; padding:0;")
+            btn.setFont(strong)
+            btn.setStyleSheet(f"text-align:left; color:{pcolor('accent')}; padding:0;")
             btn.clicked.connect(lambda _=False, n=ing.name: self.open_ingredient(n))
             h.addWidget(btn)
         else:
             label = QLabel(ing.name)
-            label.setStyleSheet(weight)
+            if highlight:
+                label.setFont(strong)
             h.addWidget(label)
         h.addStretch(1)
         number = QLabel(f"{ing.ratio:g}")
-        number.setStyleSheet(weight)
+        if highlight:
+            number.setFont(strong)
         h.addWidget(number)
         if highlight:  # 검색한 재료 줄 강조
             row.setStyleSheet("background: rgba(0,201,162,0.14); border-radius:4px;")

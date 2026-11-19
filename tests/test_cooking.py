@@ -157,11 +157,39 @@ def test_ingredient_search_highlights_row():
     assert [row.property("searchHit") for row in tab.ingredient_rows] == [False, True, False]
     tab.kind.setCurrentText("능력치")
     tab.stat.setCurrentIndex(tab.stat.findData("마나"))
-    assert "font-weight:700;'>마나 +25" in tab.stats.text()
+    assert "font-weight:800;'>마나 +25" in tab.stats.text()
     tab.shutdown()
 
 
 # ---- 재료 이동·되돌아가기 ----
+def test_detail_order_buttons_right_under_gauge():
+    """사용자 피드백 11-19: 재료 → 비율 그림 → 두 버튼(그림 폭) → 능력치, 조리방법·능력치는 타이틀보다 작고 본문보다 큼."""
+    from PySide6.QtGui import QFontInfo
+
+    from mabinogi_addon.ui.cooking_tab import GAUGE_VIEW_W, CookingTab
+    tab = CookingTab()
+    tab.select("모둠회덮밥")
+    widgets = [tab.detail_layout.itemAt(i).widget() for i in range(tab.detail_layout.count())]
+    at = widgets.index(tab.gauge)
+    assert widgets[at + 1] is tab.overlay_buttons
+    assert widgets[at + 2].text() == "능력치" and widgets[at + 3] is tab.stats
+    assert tab.overlay_btn.parent() is tab.overlay_buttons and tab.lock_btn.parent() is tab.overlay_buttons
+    assert tab.overlay_buttons.width() == GAUGE_VIEW_W == tab.gauge.pixmap().width()
+    for pixels in (None, 20):  # 기본·큰 글꼴 모두 타이틀 > 조리방법·능력치 > 본문
+        if pixels:
+            font = tab.font()
+            font.setPixelSize(pixels)
+            tab.setFont(font)
+        widgets = [tab.detail_layout.itemAt(i).widget() for i in range(tab.detail_layout.count())]
+        body = QFontInfo(tab.font()).pixelSize()
+        title = next(w for w in widgets if w is not None and getattr(w, "text", lambda: "")() == "모둠회덮밥")
+        stats_title = widgets[widgets.index(tab.stats) - 1]
+        size = [QFontInfo(w.font()).pixelSize() for w in (title, tab.method_label, stats_title, tab.stats)]
+        assert size[0] > size[1] == size[2] == size[3] > body
+        assert body == (pixels or body)
+    tab.shutdown()
+
+
 def test_history_back_in_order_and_no_cycle():
     h = cooking.History()
     h.enter("A", "B")
