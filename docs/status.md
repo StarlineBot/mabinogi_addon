@@ -25,6 +25,11 @@
 
 ## 배포와 검증
 
+- **v0.52.3 게시 완료(11-19 01:59 UTC = 10:59 KST, QA 세션 직접 실행, 사용자 '확인하고 실행에 문제없으면 바로 배포')** — 범위(v0.52.2 대비 src): 북미 차단 개발 되돌림(0f336f63·598598a6 — overseas_guard 등 전부 없어짐),
+  북미 안내 문구 강화·판정 '정확히 Mabinogi'·실행마다 1번(8da151ab), featureUsage 실행 판정에 창 판정 추가(2d40b99e). QA: 관련 86 통과, 배포 검사 CI 글꼴 348 통과, preflight 0, 홈 띠 렌더 잘림 없음.
+  후보 [44438893514](https://github.com/StarlineBot/mabinogi_addon/actions/runs/44438893514) 1차 시도 실패 = 우분투 apt 패키지 받기 시간 초과(exit 124, 테스트 시작 전 — 코드 무관) → 실패 작업만 1회 재실행, 2차 성공(산출물 verified-windows-44438893514-2).
+  publish-existing [44440721565](https://github.com/StarlineBot/mabinogi_addon/actions/runs/44440721565) → 게시 [44440808998](https://github.com/StarlineBot/mabinogi_addon/actions/runs/44440808998) promote 성공.
+  1단계 확인: 태그 v0.52.3 = 2d40b99e, 공개 저장소 1639970, version.json 0.52.3·sha256 f6218c97…87cf·164,789,367바이트, 공개 exe 받아 일치, raw 02:00 UTC 0.52.3. 남은 것: 2단계 사용자 업데이트 확인.
 - **featureUsage 미등록 사용자 기록 안 됨 수정(QA 11-19, '도롱 켠 기능이 옛 규칙인 이유', 개발 — 노트 없음)**: 원인 '게임 실행 중' = `_game_session.identity`(GameProcessProbe → optimization.game() → registered_game_target)라 gameExe가 등록되지 않은 제목 폴백 사용자는 늘 None → 영영 기록 안 됨. 수정: `MainWindow._note_feature_usage`의 실행 판정을 '게임 프로세스 있음(등록 사용자, 기존) 또는 창 판정상 게임 창이 앞에 있음(`_watcher.is_game_active` — 미등록은 제목 폴백)'으로. 등록 사용자 동작(게임이 뒤에 있어도 프로세스로 기록)은 그대로, 일시정지면 안 씀도 그대로.
   변경 파일 → 영향 → 검사: `ui/main_window.py`(_note_feature_usage 실행 판정 한 줄) → featureUsage 기록 시점 → `tests/test_feature_usage.py`(미등록+제목 폴백 앞 → 기록, 등록+뒤 → 기록, 등록+앞 → 기록, 미등록 일시정지 → 안 씀, 게임 꺼짐 = 프로세스 없음+창 앞 아님 → 안 씀). 고치기 전 코드에서 미등록 사례 1건 실패 확인 → 수정 후 18 통과, test_feature_usage+release_notes_trigger+navigation 한 프로세스 43 통과(창 테스트 간 누수 없음).
 - **도롱 '켠 기능'이 옛 규칙인 이유(11-19 QA 코드 확인)** — ① 버전 안 보임: 앱은 동기화 묶음 sync.json에 "app"(버전)을 넣어 올리지만(cloud_sync.build_blob), 봇 서버는 device·resolution·size·features만 DB에 저장(discord_bot addon_server main.py·db.py) → 버전은 저장·표시 안 함.
