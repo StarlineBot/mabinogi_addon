@@ -1458,7 +1458,9 @@ class MainWindow(QMainWindow):
         self._usage_at = now + self._USAGE_EVERY
         if getattr(self, "_usage", None) is None:
             self._usage = feature_usage.Recorder(config.load_feature_usage, config.save_feature_usage)
-        running = self._game_session.identity is not None  # 게임 프로세스(약 1초마다 갱신, Windows)
+        # 게임 실행 중 = 게임 프로세스(등록 사용자 — 약 1초마다 갱신, Windows) 또는 창 판정상 게임 창이 앞에 있음.
+        # 프로세스 쪽은 등록된 gameExe가 있어야 잡혀서, 미등록(제목 폴백) 사용자는 영영 기록되지 않았다(QA 11-19).
+        running = self._game_session.identity is not None or self._watcher.is_game_active()
         if not running or self._paused:
             return []
         try:

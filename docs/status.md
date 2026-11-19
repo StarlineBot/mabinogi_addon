@@ -25,6 +25,8 @@
 
 ## 배포와 검증
 
+- **featureUsage 미등록 사용자 기록 안 됨 수정(QA 11-19, '도롱 켠 기능이 옛 규칙인 이유', 개발 — 노트 없음)**: 원인 '게임 실행 중' = `_game_session.identity`(GameProcessProbe → optimization.game() → registered_game_target)라 gameExe가 등록되지 않은 제목 폴백 사용자는 늘 None → 영영 기록 안 됨. 수정: `MainWindow._note_feature_usage`의 실행 판정을 '게임 프로세스 있음(등록 사용자, 기존) 또는 창 판정상 게임 창이 앞에 있음(`_watcher.is_game_active` — 미등록은 제목 폴백)'으로. 등록 사용자 동작(게임이 뒤에 있어도 프로세스로 기록)은 그대로, 일시정지면 안 씀도 그대로.
+  변경 파일 → 영향 → 검사: `ui/main_window.py`(_note_feature_usage 실행 판정 한 줄) → featureUsage 기록 시점 → `tests/test_feature_usage.py`(미등록+제목 폴백 앞 → 기록, 등록+뒤 → 기록, 등록+앞 → 기록, 미등록 일시정지 → 안 씀, 게임 꺼짐 = 프로세스 없음+창 앞 아님 → 안 씀). 고치기 전 코드에서 미등록 사례 1건 실패 확인 → 수정 후 18 통과, test_feature_usage+release_notes_trigger+navigation 한 프로세스 43 통과(창 테스트 간 누수 없음).
 - **도롱 '켠 기능'이 옛 규칙인 이유(11-19 QA 코드 확인)** — ① 버전 안 보임: 앱은 동기화 묶음 sync.json에 "app"(버전)을 넣어 올리지만(cloud_sync.build_blob), 봇 서버는 device·resolution·size·features만 DB에 저장(discord_bot addon_server main.py·db.py) → 버전은 저장·표시 안 함.
   ② **featureUsage 버그(0.52.1·0.52.2)**: '게임 실행 중' 판정이 `_game_session.identity` → GameProcessProbe → optimization.game() → window_capture.registered_game_target인데, 이 함수는 **등록된 게임 실행파일(gameExe)이 없으면 바로 None** →
   게임창을 등록하지 않은(제목 폴백으로 쓰는) 사용자는 게임을 해도 featureUsage가 영영 안 적힘 → 봇은 옛 enabled 규칙으로 표시. 도롱은 '0.52.0 이하' 또는 '0.52.1+인데 게임창 미등록' 둘 중 하나(봇 화면만으론 구분 안 됨).

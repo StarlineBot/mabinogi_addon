@@ -119,7 +119,8 @@ def test_window_records_only_while_game_runs_and_not_paused(window, monkeypatch)
     w, _ = window
     monkeypatch.setattr(w, "_feature_usage_active", lambda: {"buff", "keywords"})
     w._usage = feature_usage.Recorder(config.load_feature_usage, config.save_feature_usage, today=lambda: "2026-11-18")
-    w._game_session.identity = None  # 게임 꺼짐
+    w._game_session.identity = None  # 게임 꺼짐(프로세스 없음 + 게임 창이 앞에 없음)
+    monkeypatch.setattr(w._watcher, "is_game_active", lambda: False)
     assert w._note_feature_usage(now=100.0) == [] and config.load_feature_usage() == {}
     w._game_session.identity = (1234, 1.0)
     w._paused = True
@@ -129,6 +130,26 @@ def test_window_records_only_while_game_runs_and_not_paused(window, monkeypatch)
     assert w._note_feature_usage(now=301.0) == []  # 5초 간격
     assert w._note_feature_usage(now=400.0) == []  # 같은 날 다시 안 씀
     assert config.load_feature_usage() == {"buff": "2026-11-18", "keywords": "2026-11-18"}
+
+
+@pytest.mark.parametrize("identity,foreground", [
+    (None, True),          # 게임창 미등록 — 프로세스는 못 잡지만 창 판정(제목 폴백)으로 게임이 앞에 있음(QA 11-19)
+    ((1234, 1.0), False),  # 등록 사용자 — 게임이 뒤에 있어도 프로세스가 있으면 기록(기존 동작)
+    ((1234, 1.0), True),
+])
+def test_records_without_registered_game_exe(window, monkeypatch, identity, foreground):  # noqa: F811
+    w, _ = window
+    monkeypatch.setattr(w, "_feature_usage_active", lambda: {"buff"})
+    monkeypatch.setattr(w._watcher, "is_game_active", lambda: foreground)
+    w._usage = feature_usage.Recorder(config.load_feature_usage, config.save_feature_usage, today=lambda: "2026-11-19")
+    w._game_session.identity = identity
+    assert w._note_feature_usage(now=100.0) == ["buff"]
+    assert config.load_feature_usage() == {"buff": "2026-11-19"}
+    w._usage = feature_usage.Recorder(config.load_feature_usage, lambda u: pytest.fail("일시정지 중 기록"),
+                                      today=lambda: "2026-11-20")
+    w._paused = True  # 미등록이어도 일시정지면 안 씀
+    assert w._note_feature_usage(now=200.0) == []
+    w._paused = False
 
 
 class _Count:
