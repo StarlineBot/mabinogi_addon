@@ -25,6 +25,11 @@
 
 ## 배포와 검증
 
+- **0.53.0(요리 계산기) 후보 #3 run [44493577416](https://github.com/StarlineBot/mabinogi_addon/actions/runs/44493577416) 성공(c3eb2f74, 09:17 UTC) — 게시 대상, Windows 실행 확인 대기.** 산출물 verified-windows-44493577416-1(164,905,602바이트, 만료 2026-11-20 18:17 KST).
+  QA b5da9020(영역 구분·빌드 로그 인코딩): 관련 51 통과, 배포 검사 354 통과, preflight 0, cp1252 콘솔 재현 rc 0(전 rc 1). 렌더 tab_ingredient(구역 제목+구분선, 버튼 그림 바로 아래) 확인.
+  빌드 로그 'Verify exe build' 09:11:07: `요리 데이터: 단체 요리 466개 중 넣음 387개 · 조리방법 없음 79개 · 형식 틀림 0개` — 개발 완료 기준 충족.
+  **CI 수정(QA, c3eb2f74)**: 후보 44492281978(b5da9020) 또 apt 시간 초과 — 원인: 이 러너의 지역 미러가 us-east-2.ec2.archive.ubuntu.com(priority 1)이라 archive.ubuntu.com과 나눠 받았고 ec2 쪽이 약 55kB/s(300초에 135MB 중 37MB).
+  기존 sed는 azure만 내림 → 모든 지역 미러(*.archive.ubuntu.com) priority 2로. 다음 후보에서 apt 단계 39초. 테스트 test_apt_demotes_any_regional_mirror(azure·us-east-2.ec2).
 - **QA 요리 계산기 v0.53.0(5b8a3fb1): 코드·검사 통과, 사용자 화면 피드백으로 상세 레이아웃 수정 → 개발 세션(DEV session_01SbFuD9LBQUw7gFTz2Mmv9g)에 11-19 08:5x UTC 전달.**
   QA: 관련 234 통과(test_cooking 21·startup_build·navigation·cursor_fx·release_notes·skillbar_testers), 배포 검사 0.53.0 CI 글꼴 352 통과, preflight 0. 명세 8절 항목 테스트 모두 있음(직접 선택 시 기록 삭제 포함).
   잠금 클릭 통과는 공용 system.clickthrough.set_click_through(다른 오버레이와 같음). build_cookings를 지금 봇 main으로 다시 만들면 저장소 JSON과 같음(466 중 387, 제외 79, 형식 틀림 0).
