@@ -32,6 +32,7 @@
   `cooking.py`(검색 3종 공백 무시·능력치 정확히, 카테고리 개수, 비율 ÷합계, 재료 이동 기록·순환 되감기)·`ui/cooking_tab.py`(회색·개수·선택 유지·강조, ▸/← 3단계, 직접 고르면 기록 삭제)·`ui/cooking_gauge.py`(상세 게이지 채움·흰 점선, 게임 위 바 245×10·점선 4배·휠·격자 끌기·잠금 클릭 통과)·`config.py`(cooking.overlay pos/scale/locked) → `tests/test_cooking.py` 21건;
   `ui/main_window.py`·`feature_copy.py`(탭·설명·종료 시 닫기) → `tests/test_navigation.py`·`test_cursor_fx.py`(계산기 탭 순서)·`test_navigation_all_widths.py`. 게임 위 바 표시 = 게임 또는 이 앱이 앞에 있을 때(500ms), 전투 일시정지와 무관.
   결과: 관련 134 + 폭 8 통과, 배포 검사(0.53.0, CI 글꼴) 352 통과. 새 자산·모듈 → Windows 실행 확인 전 게시 권하지 않음.
+  main 5b8a3fb 푸시 → QA 세션(session_01QCaG6uqY7nLBoMh5YcDzD4)에 확인 요청 보냄(11-19).
 - **봇 앱 버전 저장·표시 → 봇 DEV 세션(session_01R3AWN43b3yw3h5TNfWuuAs)에 전달(11-19, 기획 세션)** — sync.json app 값 저장(app_version 컬럼)·!현황 표시·VM 재시작. 앱 쪽 featureUsage 미등록 사용자 버그는 2d40b99로 수정, v0.52.3에 포함(태그 확인).
 - **v0.52.3 게시 완료(11-19 01:59 UTC = 10:59 KST, QA 세션 직접 실행, 사용자 '확인하고 실행에 문제없으면 바로 배포')** — 범위(v0.52.2 대비 src): 북미 차단 개발 되돌림(0f336f63·598598a6 — overseas_guard 등 전부 없어짐),
   북미 안내 문구 강화·판정 '정확히 Mabinogi'·실행마다 1번(8da151ab), featureUsage 실행 판정에 창 판정 추가(2d40b99e). QA: 관련 86 통과, 배포 검사 CI 글꼴 348 통과, preflight 0, 홈 띠 렌더 잘림 없음.
