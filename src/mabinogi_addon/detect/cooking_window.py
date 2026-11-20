@@ -6,7 +6,7 @@
   만들어 TM_CCOEFF_NORMED. 11-20부터 밝은 반투명 스킨 그림을 더해 두 점수 맵 평균, 기준 0.47(아래 MATCH_MIN).
   UI 크기는 해상도와 무관하게 같아(4K도 바 245px) 배율 탐색 없음.
 - 추적(CookingFinder): 1초마다 신호 → 지난 자리 둘레(max(32px, 템플릿 높이))만 대조 → 없으면 전체 다시 찾기.
-  신호가 사라지면 '닫힘'(찾은 적 있을 때), 신호는 있는데 두 번 연속 못 찾으면 '손으로'(사용자 결정 11-20), 한 번도 못 찾았으면 '손으로'.
+  신호가 없으면 '닫힘'(숨김), 신호는 있는데 두 번 연속 못 찾으면 '손으로'(사용자 결정 11-20). 첫 찾기 전은 '손으로'.
 """
 from __future__ import annotations
 
@@ -108,8 +108,8 @@ def locate(frame: np.ndarray, offset: tuple[int, int] = (0, 0)) -> Match | None:
 
 @dataclass(frozen=True)
 class State:
-    """found: 바 자리(게임 창 기준 x, y, w, h) / closed: 찾은 적 있고 신호가 사라짐 = 요리창 꺼짐(숨김) /
-    manual: 손으로 맞추기 — 한 번도 못 찾았거나, 신호는 있는데 2회 연속 못 알아봄(사용자 결정 11-20)."""
+    """found: 바 자리(게임 창 기준 x, y, w, h) / closed: 신호 없음 = 요리창 없음(숨김 — 한 번도 못 찾았어도, 11-20 사용자 보고) /
+    manual: 손으로 맞추기 — 신호는 있는데 2회 연속 못 알아봄(사용자 결정 11-20), 또는 아직 첫 찾기 전."""
     kind: str
     bar: tuple[int, int, int, int] | None = None
 
@@ -134,9 +134,9 @@ class CookingFinder:
         self.capture_failures = 0
 
     def _signal_gone(self) -> State:
-        """신호 사라짐(띠 캡처 실패 포함): 찾은 적 있으면 요리창 꺼짐(closed), 아니면 손으로(manual)."""
+        """신호 없음(띠 캡처 실패 포함) = 요리창 없음 → 숨김(closed). 찾은 적 없어도 같음(요리창 없는데 바가 떠 있던 문제)."""
         self.bar = None
-        self.state = State("closed" if self.seen else "manual")
+        self.state = State("closed")
         return self.state
 
     def _not_recognized(self) -> State:

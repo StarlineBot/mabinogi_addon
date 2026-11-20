@@ -122,13 +122,15 @@ def test_tracking_nearby_then_moved_then_closed():
     assert finder.step(_grabber(bright), w, h).kind == "closed"
 
 
-def test_never_found_stays_manual():
-    """한 번도 못 찾았으면(다른 인터페이스 등) 닫힘이 아니라 손으로 맞추기 — 0.53.0처럼 저장 자리에 표시."""
+def test_never_found_signal_decides_manual_or_closed():
+    """한 번도 못 찾았어도: 신호 있음 + 못 알아봄 → 손으로, 신호 없음(요리창 없음) → 숨김(사용자 보고 11-20)."""
     finder = cw.CookingFinder()
+    assert finder.state.kind == "manual"   # 첫 찾기 전(애드온 요리 탭에서 막 켠 바는 보임)
     empty = np.zeros((1080, 1920, 3), np.uint8)
     assert finder.step(_grabber(empty), 1920, 1080).kind == "manual"
     assert finder.step(_grabber(empty), 1920, 1080).kind == "manual"
-    assert finder.step(_grabber(np.full_like(empty, 120)), 1920, 1080).kind == "manual"
+    assert finder.step(_grabber(np.full_like(empty, 120)), 1920, 1080).kind == "closed"
+    assert finder.step(lambda *a: None, 1920, 1080).kind == "closed"   # 띠 캡처 실패도 신호 없음
 
 
 # ---- 탭 연결 ----
@@ -447,7 +449,7 @@ def test_no_target_and_exception_logged(caplog):
 def test_capture_none_counts_failures():
     finder = cw.CookingFinder()
     state = finder.step(lambda *a: None, 1920, 1080)
-    assert state.kind == "manual" and finder.capture_failures == 1 and finder.last_ratio is None
+    assert state.kind == "closed" and finder.capture_failures == 1 and finder.last_ratio is None
 
 
 def test_overlay_off_releases_camera(monkeypatch):
@@ -498,4 +500,27 @@ def test_tab_not_recognized_returns_to_manual_spot(monkeypatch):
     tab._auto_tick()
     tab._auto_tick()
     assert tab.auto_state == "found" and o.locked
+    tab.shutdown()
+
+
+def test_tab_hides_bar_without_cooking_window_even_if_never_found(monkeypatch):
+    """사용자 보고 11-20: 요리창 안 떴는데 바가 떠 있음 → 신호 없으면 숨김, 신호 있는데 못 알아보면 저장 자리, 찾으면 그 자리."""
+    config.save_cooking_overlay(pos={"x": 10, "y": 20}, scale=1.0, locked=False)
+    frame = imread(DATA / "11image.png")
+    tab, _fg, _calls = _tab(monkeypatch, np.full_like(frame, 120), origin=(100, 50))
+    tab.select("모둠회덮밥")
+    tab.set_overlay(True)
+    o = tab.overlay
+    assert tab.auto_state == "manual" and o.isVisible()   # 첫 찾기 전
+    tab._auto_tick()
+    tab._auto_tick()
+    assert tab.auto_state == "closed" and not o.isVisible()
+    tab._frame = np.zeros_like(frame)                     # 신호 있음, 못 알아봄
+    for _ in range(3):
+        tab._auto_tick()
+    assert tab.auto_state == "manual" and o.isVisible() and (o.x(), o.y()) == (10, 20) and not o.locked
+    tab._frame = frame
+    tab._auto_tick()
+    tab._auto_tick()
+    assert tab.auto_state == "found" and o.isVisible()
     tab.shutdown()

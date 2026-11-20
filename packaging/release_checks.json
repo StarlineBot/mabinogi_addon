@@ -11,7 +11,9 @@
     "tests/test_windows_ci.py",
     "tests/test_startup_smoke.py",
     "tests/test_release_notes.py",
-    "tests/test_release_notes_trigger.py"
+    "tests/test_release_notes_trigger.py",
+    "tests/test_cooking_autofind.py",
+    "tests/test_cooking.py"
   ],
   "coverage": {
     "src/mabinogi_addon/detect/status_panel.py": {
@@ -43,7 +45,20 @@
         "tests/test_release_notes.py",
         "tests/test_release_notes_trigger.py"
       ],
-      "reason": "0.53.1 노트 맨 위(조용히 다듬은 것 한 줄)·첫 실행 표시, v0.53.0 이하 그대로"
+      "reason": "0.53.1 노트 맨 위(조용히 다듬은 것 두 줄: 요리 바 표시·한글 경로)·첫 실행 표시, v0.53.0 이하 그대로"
+    },
+    "src/mabinogi_addon/detect/cooking_window.py": {
+      "tests": [
+        "tests/test_cooking_autofind.py"
+      ],
+      "reason": "신호 없음 = 요리창 없음 → 한 번도 못 찾았어도 숨김(closed), 신호 있음 + 2회 못 알아봄 → 손으로"
+    },
+    "src/mabinogi_addon/ui/cooking_tab.py": {
+      "tests": [
+        "tests/test_cooking_autofind.py",
+        "tests/test_cooking.py"
+      ],
+      "reason": "첫 찾기 전 보임 → 신호 없음 숨김 → 못 알아봄 저장 자리 → 찾음 그 자리(탭 반영 경로 그대로)"
     }
   }
 }

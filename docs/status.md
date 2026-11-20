@@ -10,6 +10,7 @@
 
 - **0.53.1 개발(11-20 DEV, v0.53.0 게시 뒤): 버프 앵커 아이콘 한글 경로** — `detect/status_panel.anchor_template`이 `cv2.imread(str(...))`라 Windows 비ASCII 경로(한글 사용자 이름 → exe 풀림 자리)에서 None → 버프 자동 찾기(autofind_replay)·즐겨찾기 앵커 실패 가능. `image_io.imread`로.
   재발 방지: `tests/test_unicode_io_contract.py`에 앱 코드 전체 cv2.imread/imwrite 직접 호출 금지(image_io 제외) + 한글 폴더에서 앵커 로드. 노트 v0.53.1 '조용히 다듬은 것들' 한 줄. 관련(앵커·자동 찾기 테스트 28개 파일) 669 통과, 배포 검사 0.53.1 345 통과.
+  **같은 0.53.1: 요리창 없으면 바 숨김(사용자 보고 11-20 '요리창 안 떴는데 바가 떠 있음')** — 원인: 신호 없음인데 한 번도 못 찾았으면(seen False) manual → 저장 자리에 표시. 수정: 신호 없음(띠 캡처 실패 포함) → seen 무관 closed, 신호 있음 + 2회 못 알아봄 → manual, 첫 찾기 전만 manual. 명세 7절·노트 한 줄. `detect/cooking_window.py` → `tests/test_cooking_autofind.py`(한 번도 못 찾음: 신호로 manual/closed, 탭: 첫 보임 → 숨김 → 저장 자리 → 찾은 자리). test_cooking_autofind·test_cooking 52 통과, 배포 검사 0.53.1 397 통과.
 - **사용자가 실측·사용 조건을 말하면 그대로 사실로 받는다.** '설정을 잘못 넣었는지·소환했는지·확인했는지'처럼 사용자 사용 실수를 의심하는 되묻기를 하지 않는다(11-16 세 번째 지적).
   차이가 나면 앱·공식·데이터 쪽 원인을 먼저 찾고, 필요한 자료가 있으면 '무엇이 필요한지'만 묻는다.
 - **QA 검사 시간(11-16 사용자 지적 — 20분 넘음)**: 배포 검사(run_release_checks)는 **CI 글꼴 설정(fonts-ci.conf)으로 한 번만**(CI와 같은 조건). 기본 글꼴 중복 실행 안 함.
