@@ -202,6 +202,7 @@ def test_blurry_screenshot_locates_full_width():
 _LOCATE_MISSING = {
     "mabinogi_2026_10_30_213927.png", "mabinogi_2026_10_30_213942.png", "mabinogi_2026_10_30_214016.png",
     "스크린샷 2026-10-16 205627.png", "스크린샷 2026-10-17 012459.png", "스크린샷 2026-10-18 124011.png",
+    "22image1.png",  # 4K 요리창 화면(11-19) — 아래가 검게 가려져 체력바가 화면에 없음
 }
 
 
