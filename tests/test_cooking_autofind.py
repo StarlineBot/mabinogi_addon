@@ -109,10 +109,12 @@ def test_tracking_nearby_then_moved_then_closed():
     assert state.kind == "found" and state.bar[:2] == (348 - 200 + 1200, 850 - 700 + 300)
     assert finder.full_searches == 2
 
-    # 신호는 남았는데 요리창이 없음: 1번은 지난 자리 유지, 2번 연속이면 닫힘
+    # 신호는 남았는데 못 알아봄: 1번은 지난 자리 유지, 2번 연속이면 손으로(숨기지 않음 — 사용자 결정 11-20)
     empty = np.zeros_like(base)
     assert finder.step(_grabber(empty), w, h).kind == "found"
-    assert finder.step(_grabber(empty), w, h).kind == "closed"
+    state = finder.step(_grabber(empty), w, h)
+    assert state.kind == "manual" and state.bar is None and finder.bar is None
+    assert finder.step(_grabber(empty), w, h).kind == "manual"
     # 다시 뜨면 다시 찾음
     assert finder.step(_grabber(base), w, h).kind == "found"
     # 신호가 사라지면 바로 닫힘
@@ -366,7 +368,7 @@ def test_logs_by_signal_every_step_while_on(caplog):
             auto.tick(True)
     got = lines()
     assert len(got) == 4 and all("신호=켜짐" in x for x in got)
-    assert "못찾음=1" in got[0] and "상태=found" in got[0] and "상태=closed" in got[1]
+    assert "못찾음=1" in got[0] and "상태=found" in got[0] and "상태=manual" in got[1]
 
     # 신호 꺼짐: 바뀔 때 한 줄, 그 뒤 30초 안엔 없음
     caplog.clear()
@@ -471,3 +473,29 @@ def test_full_search_time_2560():
     started = time.perf_counter()
     cw.best(frame)
     assert time.perf_counter() - started < 2.0
+
+
+def test_tab_not_recognized_returns_to_manual_spot(monkeypatch):
+    """사용자 결정 11-20: 찾은 뒤 신호는 있는데 2회 못 알아보면 숨기지 않고 손으로 맞춘 자리(저장 위치·잠금)로, 끌면 저장."""
+    frame = imread(DATA / "11image.png")
+    config.save_cooking_overlay(pos={"x": 10, "y": 20}, scale=1.0, locked=False)
+    tab, _fg, _calls = _tab(monkeypatch, frame, origin=(100, 50))
+    tab.select("모둠회덮밥")
+    tab.set_overlay(True)
+    o = tab.overlay
+    tab._auto_tick()
+    tab._auto_tick()
+    assert tab.auto_state == "found" and o.locked          # 찾은 자리는 클릭 통과
+    tab._frame = np.zeros_like(frame)                     # 신호 켜짐, 요리창 모양 없음
+    for _ in range(3):
+        tab._auto_tick()
+    assert tab.auto_state == "manual" and o.isVisible()
+    assert (o.x(), o.y()) == (10, 20) and not o.locked
+    o.move(15, 25)
+    o.moved.emit()
+    assert config.load_cooking_overlay()["pos"] == {"x": 15, "y": 25}
+    tab._frame = frame                                    # 다시 알아보면 그 자리로
+    tab._auto_tick()
+    tab._auto_tick()
+    assert tab.auto_state == "found" and o.locked
+    tab.shutdown()

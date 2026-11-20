@@ -47,7 +47,7 @@
   **개발 완료(11-19 DEV) — 사용자 결정으로 0.53.0에 합침**(따로 게시 안 함, 버전 정책: 미사용 v0.53.0 그대로). 노트는 ## v0.53.0에 자동 찾기 문단, release_checks 0.53.0에 자동 찾기 tests·coverage 더함, 경계 테스트도 0.53.0 기준.
   기준 그림: 11image (347,818) 247×42 '농도 조절 줄 + 바'(경계선 Canny 40/120) → `detect/templates/cooking/gauge_row.png`, 바 = 템플릿 +(1,32) 245×10.
   다시 잰 값: 요리 화면 5장 0.765~0.880(바 자리 테두리 픽셀까지 정확), 요리창 없는 136장 최고 0.496 → 기준 0.6 유지. 신호: 요리 5장 0.82~1.0, 없는 화면 최고 0.42(1024px로 줄인 요리 사본 2장은 신호만 켜지고 찾기는 안 됨 — 게임 해상도 아님).
-  변경 파일 → 영향 → 검사: `detect/cooking_window.py`(신호·찾기·CookingFinder: 둘레 max(32, 42)·옮기면 전체·2회 못 찾으면 닫힘·한 번도 못 찾았으면 손으로) → `tests/test_cooking_autofind.py`;
+  변경 파일 → 영향 → 검사: `detect/cooking_window.py`(신호·찾기·CookingFinder: 둘레 max(32, 42)·옮기면 전체·2회 못 찾으면 손으로·신호 꺼지면 닫힘·한 번도 못 찾았으면 손으로) → `tests/test_cooking_autofind.py`;
   `ui/cooking_autofind.py`(작업 스레드 1개, 등록 게임 창 → 없으면 주 모니터, 스레드 mss 재사용·종료 때 그 스레드에서 닫음) → 같은 파일(작업 스레드 이름·하나씩);
   `ui/cooking_tab.py`(바 켠 동안 + 게임 앞일 때만 1초 tick, 끄면 타이머 정지·캡처 0, 찾은 자리 = 물리 바 → 논리 좌표·배율 1/화면 배율·클릭 통과·저장 안 덮음, 닫히면 숨김, 자동 자리에서 벗어나면 손으로 맞춘 저장 자리·배율·잠금 복원) → `test_cooking_autofind.py`·`test_cooking.py`.
   결과: test_cooking_autofind 13 + test_cooking 24 통과, 배포 검사(0.53.0 합친 목록, CI 글꼴) 409 통과.
@@ -60,6 +60,7 @@
   `ui/cooking_autofind.py`·`detect/cooking_window.py`(last_full·last_frame) → `tests/test_cooking_autofind.py`(신호 켜짐 매 step 줄·꺼짐 30초, 실패 PNG 최대 개수). 배포 검사 0.53.0 418 통과.
   **QA 반려 3(11-20, 결함 확정)**: `CookingBarOverlay`가 `overlay_capture.OVERLAYS`에 없어 판독 캡처 제외(WDA_EXCLUDEFROMCAPTURE)가 안 걸림 → 손으로 게이지 위에 맞춰 둔 우리 바가 dxcam 프레임에 찍혀 게이지 줄을 덮음(QA 합성: 22image1 0.779 → 0.55~0.60). OVERLAYS에 추가, test_overlay_capture(배포 검사 목록에도 추가) + test_cooking 한 줄 확인. 진단 로그·PNG는 유지. 배포 검사 0.53.0 426 통과.
   **QA 반려 4(11-20, 스킨 차이 확정)**: 사용자 밝은 반투명 스킨은 한 그림 점수 0.47~0.52(자리는 정답 347,844) → 기준 그림 추가 `gauge_row_light.png`(174704 (346,812) 247×42), 두 그림 각각 Canny+TM_CCOEFF_NORMED 점수 맵 평균, MATCH_MIN 0.6→0.47(둘레 대조도 같음). 측정: 요리 7장 0.564~0.715 모두 정답 ±2px(174447은 다른 배경 검증), 비요리 <0.47(테스트), 2560×1440 전체 찾기 1회 약 0.2초. test_cooking_autofind 25·test_cooking·test_overlay_capture·test_stat_bars·test_skillbar_testers 501 통과, 배포 검사 0.53.0 429 통과.
+  **보완(사용자 결정 11-20 '보완까지 해서 53으로')**: 찾은 뒤 신호는 있는데 2회 연속 못 알아보면 closed(숨김) 대신 manual — 손으로 맞춘 저장 자리·배율·잠금으로 돌아와 끌어 맞출 수 있음(closed는 신호 사라짐만). `detect/cooking_window.py`(_signal_gone·_not_recognized)·`ui/cooking_tab.py`(closed→manual도 복원) → `tests/test_cooking_autofind.py`(추적 기대 manual, 탭 found→manual 복원·끌어 저장·다시 found). 명세 7절·노트 v0.53.0 문장 맞춤. test_cooking_autofind·test_cooking 51 통과.
 - **요리창 자동 찾기 시험(11-19 QA, 사용자 원본 스크린샷 3장 f1aca55a)** — 11image.png(2546×1410 회색/검정), 22image1.png(4K 하늘 유리), mabinogi_2026_11_19_171429.png(4K 분홍): 세 장 모두 요리창 배치·크기 같음(4K에서도 바 약 245px — UI 배율 안 바뀜).
   방법: 11image의 '농도 조절 버튼 줄 + 바'(251×46)를 경계선(Canny 40/120)으로 만들어 화면 전체에 TM_CCOEFF_NORMED. 결과: 요리 화면 5장(위 3장 + 회색 1920 webp 2장) 0.962·0.865·0.801·0.720·0.719, 자리 모두 정확(눈으로 확인),
   요리창 없는 tests/data 60장 최고 0.417 → 0.6 기준이면 다 갈림. 시간: 1920 약 50ms, 4K 약 250ms(전체 화면 1회) → 상시 훑기 대신 '요리창 뜨면 화면 위아래 어두워짐' 같은 가벼운 신호 뒤에만 돌리는 설계 필요. 2단계 기획 자료로 충분.

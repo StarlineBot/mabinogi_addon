@@ -6,7 +6,7 @@
   만들어 TM_CCOEFF_NORMED. 11-20부터 밝은 반투명 스킨 그림을 더해 두 점수 맵 평균, 기준 0.47(아래 MATCH_MIN).
   UI 크기는 해상도와 무관하게 같아(4K도 바 245px) 배율 탐색 없음.
 - 추적(CookingFinder): 1초마다 신호 → 지난 자리 둘레(max(32px, 템플릿 높이))만 대조 → 없으면 전체 다시 찾기.
-  신호가 사라지거나 두 번 연속 못 찾으면 '닫힘'. 한 번도 못 찾았으면 '손으로'(0.53.0 손으로 맞추기 대체).
+  신호가 사라지면 '닫힘'(찾은 적 있을 때), 신호는 있는데 두 번 연속 못 찾으면 '손으로'(사용자 결정 11-20), 한 번도 못 찾았으면 '손으로'.
 """
 from __future__ import annotations
 
@@ -108,7 +108,8 @@ def locate(frame: np.ndarray, offset: tuple[int, int] = (0, 0)) -> Match | None:
 
 @dataclass(frozen=True)
 class State:
-    """found: 바 자리(게임 창 기준 x, y, w, h) / closed: 요리창 꺼짐(숨김) / manual: 한 번도 못 찾음(손으로 맞추기)."""
+    """found: 바 자리(게임 창 기준 x, y, w, h) / closed: 찾은 적 있고 신호가 사라짐 = 요리창 꺼짐(숨김) /
+    manual: 손으로 맞추기 — 한 번도 못 찾았거나, 신호는 있는데 2회 연속 못 알아봄(사용자 결정 11-20)."""
     kind: str
     bar: tuple[int, int, int, int] | None = None
 
@@ -132,9 +133,16 @@ class CookingFinder:
         self.last_frame: np.ndarray | None = None  # 이번 step의 전체 프레임(전체 찾기 때만 — 실패 프레임 저장용)
         self.capture_failures = 0
 
-    def _lost(self) -> State:
+    def _signal_gone(self) -> State:
+        """신호 사라짐(띠 캡처 실패 포함): 찾은 적 있으면 요리창 꺼짐(closed), 아니면 손으로(manual)."""
         self.bar = None
         self.state = State("closed" if self.seen else "manual")
+        return self.state
+
+    def _not_recognized(self) -> State:
+        """신호는 있는데 2회 연속 못 알아봄: 요리창은 떠 있으니 숨기지 않고 손으로 맞춘 자리로(seen과 무관)."""
+        self.bar = None
+        self.state = State("manual")
         return self.state
 
     def _find(self, image, offset) -> Match | None:
@@ -155,7 +163,7 @@ class CookingFinder:
             self.capture_failures += 1
         if band is None or self.last_ratio < SIGNAL_RATIO:
             self.misses = 0
-            return self._lost()
+            return self._signal_gone()
         match = None
         if self.bar is not None:  # 지난 자리 둘레만
             th, tw = template().shape
@@ -175,7 +183,7 @@ class CookingFinder:
         if match is None:
             self.misses += 1
             if self.misses >= MISSES_TO_CLOSE:
-                return self._lost()
+                return self._not_recognized()
             return self.state  # 한 번 못 찾음은 지난 상태 유지
         self.misses = 0
         self.seen = True
