@@ -27,8 +27,10 @@ _THRESHOLD = 0.85
 def anchor_template() -> np.ndarray | None:
     """앵커(프리미엄 배틀 멤버십) 아이콘 템플릿을 로드한다(없으면 None)."""
     from ..catalog import DEFAULT_ICON_DIR
+    from ..image_io import imread
 
-    return cv2.imread(str(DEFAULT_ICON_DIR / "premium_battle.png"))
+    # image_io.imread: cv2.imread는 Windows에서 한글 등 비ASCII 경로(사용자 폴더 아래 exe 풀림 자리)를 못 읽는다
+    return imread(DEFAULT_ICON_DIR / "premium_battle.png")
 
 
 @dataclass(frozen=True)

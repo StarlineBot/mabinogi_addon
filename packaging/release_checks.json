@@ -1,79 +1,27 @@
 {
-  "version": "0.53.0",
+  "version": "0.53.1",
   "tests": [
-    "tests/test_cooking.py",
-    "tests/test_navigation.py",
-    "tests/test_cursor_fx.py",
-    "tests/test_bundle_layout.py",
+    "tests/test_unicode_io_contract.py",
+    "tests/test_status_panel.py",
+    "tests/test_buff_favorites.py",
+    "tests/test_autofind_mvp.py",
     "tests/test_release_checks.py",
     "tests/test_startup_build.py",
     "tests/test_release_candidate.py",
     "tests/test_windows_ci.py",
     "tests/test_startup_smoke.py",
     "tests/test_release_notes.py",
-    "tests/test_release_notes_trigger.py",
-    "tests/test_grid_snap.py",
-    "tests/test_grid_all_overlays.py",
-    "tests/test_cooking_autofind.py",
-    "tests/test_overlay_capture.py"
+    "tests/test_release_notes_trigger.py"
   ],
   "coverage": {
-    "src/mabinogi_addon/cooking.py": {
+    "src/mabinogi_addon/detect/status_panel.py": {
       "tests": [
-        "tests/test_cooking.py"
+        "tests/test_unicode_io_contract.py",
+        "tests/test_status_panel.py",
+        "tests/test_buff_favorites.py",
+        "tests/test_autofind_mvp.py"
       ],
-      "reason": "요리 데이터 읽기·검색 필터 세 종류(공백 무시)·카테고리 개수·비율 합계 정규화·재료 이동 기록(순환 없음)"
-    },
-    "src/mabinogi_addon/ui/cooking_tab.py": {
-      "tests": [
-        "tests/test_cooking.py",
-        "tests/test_cooking_autofind.py",
-        "tests/test_startup_smoke.py"
-      ],
-      "reason": "요리 탭 — 회색·개수·선택 유지·강조, ▸ 이동·← 되돌아가기 3단계, 게임 위 바 표시·위치/배율/잠금 저장·게임 없을 때 숨김 · 자동 찾기: 바 켠 동안 + 게임 앞일 때만 찾기(끈 동안 캡처 0), 찾은 자리 정확히·클릭 통과·저장 위치 안 덮음, 닫히면 숨김, 손으로 맞추기 대체 그대로 · 창 시작·종료(작업 스레드 정리)"
-    },
-    "src/mabinogi_addon/ui/cooking_gauge.py": {
-      "tests": [
-        "tests/test_cooking.py",
-        "tests/test_grid_all_overlays.py",
-        "tests/test_overlay_capture.py"
-      ],
-      "reason": "상세 요리창 그림 게이지 채움·흰 점선, 게임 위 바 245×10·점선 4배·휠 크기·잠금 클릭 통과 · 끌기는 격자 없이 1px(안내선 없음), 다른 오버레이 격자 계약 그대로"
-    },
-    "src/mabinogi_addon/config.py": {
-      "tests": [
-        "tests/test_cooking.py",
-        "tests/test_grid_snap.py"
-      ],
-      "reason": "cooking.overlay 위치·배율·잠금 저장/복원, 틀린 값 거름 · 목록에 없는 격자 저장값 → 가장 가까운 선택지(콤보 = 스냅)"
-    },
-    "scripts/build_cookings.py": {
-      "tests": [
-        "tests/test_cooking.py"
-      ],
-      "reason": "봇 cookings.js 형식 파싱·단체+조리방법+레시피만(387개, 79개 제외)·380개 미만이면 거부"
-    },
-    "src/mabinogi_addon/assets/cooking/cookings.json": {
-      "tests": [
-        "tests/test_cooking.py",
-        "tests/test_bundle_layout.py"
-      ],
-      "reason": "생성 데이터 형식·개수, assets 번들에 포함"
-    },
-    "src/mabinogi_addon/ui/main_window.py": {
-      "tests": [
-        "tests/test_navigation.py",
-        "tests/test_cursor_fx.py",
-        "tests/test_startup_smoke.py"
-      ],
-      "reason": "계산기 줄 끝 '요리' 탭·종료 시 오버레이 닫기 — 창 시작·종료 계약"
-    },
-    "packaging/build_windows.py": {
-      "tests": [
-        "tests/test_startup_build.py",
-        "tests/test_bundle_layout.py"
-      ],
-      "reason": "빌드 전 요리 데이터 다시 만들기(실패하면 경고 후 저장소 JSON) → PyInstaller 순서"
+      "reason": "anchor_template를 image_io.imread로 — 한글 폴더에서 로드, 앵커 찾기·즐겨찾기·자동 찾기 결과 그대로"
     },
     "packaging/release_checks.json": {
       "tests": [
@@ -81,55 +29,21 @@
         "tests/test_release_candidate.py",
         "tests/test_windows_ci.py"
       ],
-      "reason": "0.53.0 검사 목록(요리 계산기 + 요리창 자동 찾기)·후보 봉인·CI 계약"
+      "reason": "0.53.1 검사 목록·후보 봉인·CI 계약"
+    },
+    "packaging/build_windows.py": {
+      "tests": [
+        "tests/test_startup_build.py",
+        "tests/test_startup_smoke.py"
+      ],
+      "reason": "새 자산·모듈 없음 — 빌드·시작 경로 그대로"
     },
     "src/mabinogi_addon/assets/release_notes.md": {
       "tests": [
         "tests/test_release_notes.py",
         "tests/test_release_notes_trigger.py"
       ],
-      "reason": "0.53.0 노트 맨 위(요리 계산기 + 자동 찾기 헤드라인)·첫 실행 표시, v0.52.3 이하 그대로"
-    },
-    "src/mabinogi_addon/ui/settings_tab.py": {
-      "tests": [
-        "tests/test_grid_snap.py"
-      ],
-      "reason": "격자 선택지를 config.GRID_SIZES에서 읽기만(값 8·16·24·32·48·64 그대로)"
-    },
-    "src/mabinogi_addon/detect/cooking_window.py": {
-      "tests": [
-        "tests/test_cooking_autofind.py"
-      ],
-      "reason": "요리 화면 5장 바 자리 ±3px, 요리창 없는 화면 신호·찾기 오검출 0, 신호 임계 경계, 추적(둘레·옮김·사라짐 2회·다시 뜸), 못 찾으면 손으로 · 11-20 두 그림 평균·기준 0.47(요리 7장 ±2px, 비요리 <0.47)"
-    },
-    "src/mabinogi_addon/detect/templates/cooking/gauge_row.png": {
-      "tests": [
-        "tests/test_cooking_autofind.py",
-        "tests/test_bundle_layout.py",
-        "tests/test_startup_build.py"
-      ],
-      "reason": "요리창 '농도 조절 줄 + 바' 247×42 기준 그림(11image) — 번들 detect/templates에 포함 · 빌드 --add-data detect/templates 경로 그대로"
-    },
-    "src/mabinogi_addon/ui/cooking_autofind.py": {
-      "tests": [
-        "tests/test_cooking_autofind.py"
-      ],
-      "reason": "작업 스레드 1개·하나씩, 끝난 결과만 화면 스레드에서 반영"
-    },
-    "src/mabinogi_addon/ui/overlay_capture.py": {
-      "tests": [
-        "tests/test_overlay_capture.py",
-        "tests/test_cooking.py"
-      ],
-      "reason": "CookingBarOverlay를 판독 캡처 제외 목록에 — 항상 위 창 분류·자기 등록 계약"
-    },
-    "src/mabinogi_addon/detect/templates/cooking/gauge_row_light.png": {
-      "tests": [
-        "tests/test_cooking_autofind.py",
-        "tests/test_bundle_layout.py",
-        "tests/test_startup_build.py"
-      ],
-      "reason": "밝은 반투명 스킨 기준 그림(174704 (346,812) 247×42) — 두 그림 점수 맵 평균, 번들 detect/templates에 포함"
+      "reason": "0.53.1 노트 맨 위(조용히 다듬은 것 한 줄)·첫 실행 표시, v0.53.0 이하 그대로"
     }
   }
 }

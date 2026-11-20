@@ -3,8 +3,8 @@
 import ast
 import io
 import json
-from pathlib import Path
 import textwrap
+from pathlib import Path
 
 import cv2
 import numpy as np
@@ -114,3 +114,33 @@ def test_explicit_utf8_survives_cp1252_default(tmp_path, monkeypatch):
     with pytest.raises(UnicodeDecodeError):
         log.read_text(encoding="cp1252")
     assert log.read_text(encoding="utf-8") == message
+
+
+def test_app_images_use_unicode_safe_io():
+    """앱 코드도 cv2.imread/imwrite를 직접 쓰지 않는다(0.53.x: 요리창 템플릿·버프 앵커가 한글 경로에서 None).
+    exe는 사용자 폴더 아래(%TEMP%\\_MEI…)에 풀려 사용자 이름이 한글이면 경로가 비ASCII가 된다."""
+    root = Path(__file__).parents[1] / "src" / "mabinogi_addon"
+    violations = []
+    for path in sorted(root.rglob("*.py")):
+        if path.name == "image_io.py":
+            continue
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            func = getattr(node, "func", None) if isinstance(node, ast.Call) else None
+            if (isinstance(func, ast.Attribute) and func.attr in ("imread", "imwrite")
+                    and isinstance(func.value, ast.Name) and func.value.id == "cv2"):
+                violations.append(f"{path.relative_to(root)}:{node.lineno}")
+    assert not violations, f"image_io.imread/imwrite를 쓰세요: {violations}"
+
+
+def test_status_anchor_loads_from_non_ascii_dir(tmp_path, monkeypatch):
+    import shutil
+
+    from mabinogi_addon import catalog
+    from mabinogi_addon.detect.status_panel import anchor_template
+    folder = tmp_path / "사용자" / "icon"
+    folder.mkdir(parents=True)
+    shutil.copy(catalog.DEFAULT_ICON_DIR / "premium_battle.png", folder / "premium_battle.png")
+    monkeypatch.setattr(catalog, "DEFAULT_ICON_DIR", folder)
+    image = anchor_template()
+    assert image is not None and image.ndim == 3
