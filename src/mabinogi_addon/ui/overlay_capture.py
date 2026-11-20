@@ -20,6 +20,7 @@ OVERLAYS = frozenset({
     "UpcomingPatternsOverlay", "DorchaOverlay", "FrameOverlay", "Toast", "_GridGuide", "_FxWindow",
     "InquiryChip",  # 문의 자료 모으는 중 진행 표시(문의 일원화 6.2 4항 — 클릭 통과·판독 캡처 제외)
     "CooldownOverlay", "BossBarOverlay",  # 쿨타임 오버레이 한 줄(쿨타임 명세 10절 — 자기 자신을 원본으로 다시 찍지 않게)
+    "CookingBarOverlay",  # 요리 게임 위 비율 바 — 요리창 자동 찾기가 자기 바를 게이지 위에서 다시 찍지 않게(QA 반려 11-20)
     "GameNotice", "AlarmListOverlay",  # ② 게임 위 알림(BlackboxToast도 이 부모로 — is_overlay는 상속을 봄)·게임 위 알람 목록(알람 명세 0.48.0)
 })
 # 항상 위에 뜨지만 오버레이가 아닌 창 — 영역 지정·안내·시작 화면(사용자가 캡처해 보낼 수 있어야 함)

@@ -447,3 +447,12 @@ def test_bar_shows_only_when_game_or_cooking_tab_front():
     assert shown()                      # 앱이 숨어 있어도 게임 앞이면 보임
     tab.shutdown()
     tabs.close()
+
+
+def test_bar_overlay_excluded_from_reading_capture():
+    """QA 반려 11-20: 바가 판독 캡처에 찍히면 요리창 게이지 자리를 덮어 자동 찾기가 실패 — 캡처 제외 목록에 있어야 함."""
+    from mabinogi_addon.ui import overlay_capture
+    from mabinogi_addon.ui.cooking_gauge import CookingBarOverlay
+    o = CookingBarOverlay()
+    assert "CookingBarOverlay" in overlay_capture.OVERLAYS and overlay_capture.is_overlay(o)
+    o.close()

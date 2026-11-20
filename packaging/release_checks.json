@@ -14,7 +14,8 @@
     "tests/test_release_notes_trigger.py",
     "tests/test_grid_snap.py",
     "tests/test_grid_all_overlays.py",
-    "tests/test_cooking_autofind.py"
+    "tests/test_cooking_autofind.py",
+    "tests/test_overlay_capture.py"
   ],
   "coverage": {
     "src/mabinogi_addon/cooking.py": {
@@ -34,7 +35,8 @@
     "src/mabinogi_addon/ui/cooking_gauge.py": {
       "tests": [
         "tests/test_cooking.py",
-        "tests/test_grid_all_overlays.py"
+        "tests/test_grid_all_overlays.py",
+        "tests/test_overlay_capture.py"
       ],
       "reason": "상세 요리창 그림 게이지 채움·흰 점선, 게임 위 바 245×10·점선 4배·휠 크기·잠금 클릭 통과 · 끌기는 격자 없이 1px(안내선 없음), 다른 오버레이 격자 계약 그대로"
     },
@@ -113,6 +115,13 @@
         "tests/test_cooking_autofind.py"
       ],
       "reason": "작업 스레드 1개·하나씩, 끝난 결과만 화면 스레드에서 반영"
+    },
+    "src/mabinogi_addon/ui/overlay_capture.py": {
+      "tests": [
+        "tests/test_overlay_capture.py",
+        "tests/test_cooking.py"
+      ],
+      "reason": "CookingBarOverlay를 판독 캡처 제외 목록에 — 항상 위 창 분류·자기 등록 계약"
     }
   }
 }
