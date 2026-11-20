@@ -3,7 +3,7 @@
 - 시작 신호(가벼움): 요리창이 뜨면 게임 화면 아래쪽이 검게 가려진다 → 게임 창 높이 80~88% 띠의 검은 픽셀(밝기 < 8)
   비율이 0.7 이상이면 '요리창이 떠 있음'. 측정: 요리 화면 0.82~1.0, 요리창 없는 화면 최고 0.42.
 - 찾기: 요리창의 '농도 조절 버튼 줄 + 게이지 바'(기준 그림 tests/data/11image.png의 247×42)를 경계선(Canny 40/120)으로
-  만들어 TM_CCOEFF_NORMED. 기준 0.6 — tests/data 요리 화면 5장 0.765~0.860, 요리창 없는 화면 136장 최고 0.496(11-19 측정).
+  만들어 TM_CCOEFF_NORMED. 11-20부터 밝은 반투명 스킨 그림을 더해 두 점수 맵 평균, 기준 0.47(아래 MATCH_MIN).
   UI 크기는 해상도와 무관하게 같아(4K도 바 245px) 배율 탐색 없음.
 - 추적(CookingFinder): 1초마다 신호 → 지난 자리 둘레(max(32px, 템플릿 높이))만 대조 → 없으면 전체 다시 찾기.
   신호가 사라지거나 두 번 연속 못 찾으면 '닫힘'. 한 번도 못 찾았으면 '손으로'(0.53.0 손으로 맞추기 대체).
@@ -24,21 +24,35 @@ cv2.setNumThreads(1)
 BAND = (0.80, 0.88)        # 신호 띠(게임 창 높이 비율)
 BLACK_LEVEL = 8            # 이보다 어두우면 검은 픽셀
 SIGNAL_RATIO = 0.7
-MATCH_MIN = 0.6
+MATCH_MIN = 0.47  # 두 기준 그림 점수 맵 평균 기준(11-20 QA): 요리 7장 최저 0.565, 요리창 없는 135장 최고 0.371
 BAR_OFFSET = (1, 32)       # 템플릿 왼쪽 위 → 게이지 바(테두리 포함) 왼쪽 위
 BAR_SIZE = (245, 10)       # 게이지 바(테두리 포함, 물리 픽셀)
 MISSES_TO_CLOSE = 2
 _CANNY = (40, 120)
 
 
+# 기준 그림(둘 다 247×42, 바 = +(1,32) 245×10): 어두운 불투명 스킨(11image) + 밝은 반투명 스킨(스크린샷 2026-11-20 174704 (346,812)).
+# 반투명 스킨은 버튼 가운데 줄이 없고 바 테두리가 흐리며 뒤 배경 무늬가 섞여, 한 그림만으로는 0.47~0.52(QA 반려 11-20) →
+# 두 그림 각각의 점수 맵을 평균해 최댓값을 쓴다.
+TEMPLATE_FILES = ("gauge_row.png", "gauge_row_light.png")
+
+
 @lru_cache(maxsize=1)
+def templates() -> tuple[np.ndarray, ...]:
+    """경계선 템플릿들(uint8, 42×247)."""
+    out = []
+    for name in TEMPLATE_FILES:
+        # image_io.imread: cv2.imread는 Windows에서 한글 등 비ASCII 경로(사용자 폴더 아래 exe 풀림 자리)를 못 읽는다(QA 반려 11-19)
+        gray = imread(paths.detect_templates_dir() / "cooking" / name, cv2.IMREAD_GRAYSCALE)
+        if gray is None:
+            raise FileNotFoundError(f"cooking/{name}")
+        out.append(cv2.Canny(gray, *_CANNY))
+    return tuple(out)
+
+
 def template() -> np.ndarray:
-    """경계선 템플릿(uint8, 42×247)."""
-    # image_io.imread: cv2.imread는 Windows에서 한글 등 비ASCII 경로(사용자 폴더 아래 exe 풀림 자리)를 못 읽는다(QA 반려 11-19)
-    gray = imread(paths.detect_templates_dir() / "cooking" / "gauge_row.png", cv2.IMREAD_GRAYSCALE)
-    if gray is None:
-        raise FileNotFoundError("cooking/gauge_row.png")
-    return cv2.Canny(gray, *_CANNY)
+    """첫 기준 그림(크기 기준 — 모든 기준 그림은 같은 크기)."""
+    return templates()[0]
 
 
 def to_gray(frame: np.ndarray) -> np.ndarray:
@@ -71,11 +85,15 @@ class Match:
 
 def best(frame: np.ndarray, offset: tuple[int, int] = (0, 0)) -> Match | None:
     """기준과 무관하게 가장 비슷한 자리(진단 로그용). 이미지가 템플릿보다 작으면 None."""
-    tpl = template()
+    tpls = templates()
     gray = to_gray(frame)
-    if gray.shape[0] < tpl.shape[0] or gray.shape[1] < tpl.shape[1]:
+    if gray.shape[0] < tpls[0].shape[0] or gray.shape[1] < tpls[0].shape[1]:
         return None
-    result = cv2.matchTemplate(cv2.Canny(gray, *_CANNY), tpl, cv2.TM_CCOEFF_NORMED)
+    edges = cv2.Canny(gray, *_CANNY)
+    result = cv2.matchTemplate(edges, tpls[0], cv2.TM_CCOEFF_NORMED)
+    for tpl in tpls[1:]:
+        result += cv2.matchTemplate(edges, tpl, cv2.TM_CCOEFF_NORMED)
+    result /= len(tpls)
     _, score, _, (x, y) = cv2.minMaxLoc(result)
     if not np.isfinite(score):
         return None

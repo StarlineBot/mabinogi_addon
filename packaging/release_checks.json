@@ -100,7 +100,7 @@
       "tests": [
         "tests/test_cooking_autofind.py"
       ],
-      "reason": "요리 화면 5장 바 자리 ±3px, 요리창 없는 화면 신호·찾기 오검출 0, 신호 임계 경계, 추적(둘레·옮김·사라짐 2회·다시 뜸), 못 찾으면 손으로"
+      "reason": "요리 화면 5장 바 자리 ±3px, 요리창 없는 화면 신호·찾기 오검출 0, 신호 임계 경계, 추적(둘레·옮김·사라짐 2회·다시 뜸), 못 찾으면 손으로 · 11-20 두 그림 평균·기준 0.47(요리 7장 ±2px, 비요리 <0.47)"
     },
     "src/mabinogi_addon/detect/templates/cooking/gauge_row.png": {
       "tests": [
@@ -122,6 +122,14 @@
         "tests/test_cooking.py"
       ],
       "reason": "CookingBarOverlay를 판독 캡처 제외 목록에 — 항상 위 창 분류·자기 등록 계약"
+    },
+    "src/mabinogi_addon/detect/templates/cooking/gauge_row_light.png": {
+      "tests": [
+        "tests/test_cooking_autofind.py",
+        "tests/test_bundle_layout.py",
+        "tests/test_startup_build.py"
+      ],
+      "reason": "밝은 반투명 스킨 기준 그림(174704 (346,812) 247×42) — 두 그림 점수 맵 평균, 번들 detect/templates에 포함"
     }
   }
 }

@@ -18,6 +18,9 @@ COOKING = {
     "mabinogi_2026_11_19_171429.png": (347, 1144),
     "mabinogi_2026_11_19_162740.webp": (957, 733),
     "mabinogi_2026_11_19_162700.webp": (956, 701),
+    # 11-20 밝은 반투명 스킨(사용자 실측 0.47~0.52로 못 붙던 화면) — 174704는 기준 그림 출처, 174447은 다른 배경으로 검증
+    "스크린샷 2026-11-20 174704.png": (347, 844),
+    "스크린샷 2026-11-20 174447.png": (1242, 862),
 }
 # 요리 화면을 1024px로 줄인 사본(게임 해상도 아님 — UI 크기가 달라 찾지 않는 게 맞음)
 SHRUNK = {"mabinogi_2026_11_19_171429.webp", "image (31).webp"}
@@ -36,7 +39,7 @@ def test_finds_bar_on_cooking_screens(name):
     assert match is not None and match.score >= cw.MATCH_MIN
     x, y, w, h = match.bar
     ex, ey = COOKING[name]
-    assert abs(x - ex) <= 3 and abs(y - ey) <= 3 and (w, h) == (245, 10)
+    assert abs(x - ex) <= 2 and abs(y - ey) <= 2 and (w, h) == (245, 10)
     assert cw.signal(_band(frame))  # 요리창이 뜨면 아래 띠가 검다
 
 
@@ -55,7 +58,7 @@ def _others():
 
 
 def test_no_false_positive_without_cooking_window():
-    """요리창 없는 화면: 신호(아래 띠 검은 비율)도 기준 미만이고, 찾기도 0건(11-19 측정 최고 0.496 < 0.6)."""
+    """요리창 없는 화면: 신호(아래 띠 검은 비율)도 기준 미만이고, 찾기도 0건(11-20 두 그림 평균 최고 0.371 < 0.47)."""
     checked = 0
     for name in _others():
         frame = imread(DATA / name)
@@ -289,15 +292,16 @@ def test_template_loads_from_non_ascii_path(tmp_path, monkeypatch):
     from mabinogi_addon import paths
     root = tmp_path / "사용자" / "templates"
     (root / "cooking").mkdir(parents=True)
-    shutil.copy(paths.detect_templates_dir() / "cooking" / "gauge_row.png", root / "cooking" / "gauge_row.png")
+    for name in cw.TEMPLATE_FILES:
+        shutil.copy(paths.detect_templates_dir() / "cooking" / name, root / "cooking" / name)
     monkeypatch.setattr(paths, "detect_templates_dir", lambda: root)
-    cw.template.cache_clear()
+    cw.templates.cache_clear()
     try:
-        assert cw.template().shape == (42, 247)
+        assert [t.shape for t in cw.templates()] == [(42, 247), (42, 247)]
         source = Path(cw.__file__).read_text(encoding="utf-8")
         assert "cv2.imread(" not in source  # 경로 인코딩과 무관한 image_io.imread만
     finally:
-        cw.template.cache_clear()
+        cw.templates.cache_clear()
 
 
 def test_unregistered_uses_primary_monitor_from_live_frame():
@@ -348,7 +352,7 @@ def test_logs_by_signal_every_step_while_on(caplog):
     line = lines()[0]
     assert "신호 바뀜" in line and "상태=found" in line and "대상=주 모니터" in line
     assert "띠검은비율=1.00" in line and "신호=켜짐" in line and "전체찾기=예" in line
-    assert "최고점수=0.86" in line and "자리=348,850" in line and "못찾음=0" in line
+    assert "최고점수=0.699" in line and "자리=348,850" in line and "못찾음=0" in line
     caplog.clear()
     with caplog.at_level(logging.INFO, logger="mabinogi_addon.cooking"):
         auto.tick(True)                      # 신호 켜짐 → 상태가 같아도 매번
@@ -457,3 +461,13 @@ def test_overlay_off_releases_camera(monkeypatch):
     tab.set_overlay(False)
     assert camera.released == 1 and tab.autofind._camera is None
     tab.shutdown()
+
+
+def test_full_search_time_2560():
+    """성능 기록(11-20): 두 그림 평균 전체 찾기 1회 — 2560×1440 약 0.2초(작업 스레드, 신호 켜졌을 때만). 느린 CI 여유 2초."""
+    import time
+    frame = imread(DATA / "스크린샷 2026-11-20 174704.png")
+    cw.best(frame)  # 템플릿 읽기 제외
+    started = time.perf_counter()
+    cw.best(frame)
+    assert time.perf_counter() - started < 2.0
