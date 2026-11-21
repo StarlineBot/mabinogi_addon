@@ -8,6 +8,9 @@
 
 > 11-17: 이 규칙들은 CLAUDE.md 'QA 세션 필수 규칙'에도 옮김 — status.md는 매번 자동으로 읽히지 않아 지켜지지 않았음(사용자 지적).
 
+- **0.53.2 개발(11-21 DEV, QA 전달 사용자 보고 '목록 아래로 내려서 누르면 포커스가 이상하게 바뀜')** — 요리: 목록에서 누를 때마다 `select()`→`_fill_dishes()`가 clear·다시 채움 → 스크롤 0 + EnsureVisible로 누른 줄이 맨 아래로 튐 → 같은 카테고리면 다시 채우지 않고 선택 표시만(`_mark_selected`), 다시 채울 때도 같은 카테고리면 스크롤 유지, 다른 카테고리면 맨 위에서 고른 요리가 화면 밖일 때만 가운데로.
+  버프·디버프: 이름 칸 포커스 아웃 저장이 `_rebuild_list()`(clear)로 스크롤을 바꿔 그 직후 마우스 누름이 다른 줄을 고름 → 이름 저장은 그 줄만 `_style_item`(`_restyle`), `_rebuild_list`도 같은 구성이면 스크롤 복원. 커스텀 오버레이 표 `_refresh_overlays`도 같은 개수면 스크롤 복원(클릭 경로는 원래 다시 안 그림).
+  → `tests/test_list_click_scroll.py`(QTest 실제 클릭 5: 요리 스크롤·줄 y 그대로, ▸ 다른 카테고리 이동 화면 안, 버프·디버프 이름 고친 뒤 가운데 줄 클릭 = 그 줄·스크롤 그대로·이름 저장, 커스텀 표) — 예전 코드에서 3개 실패 확인. 노트 v0.53.2 한 줄. 배포 검사 0.53.2 420 통과.
 - **0.53.1 개발(11-20 DEV, v0.53.0 게시 뒤): 버프 앵커 아이콘 한글 경로** — `detect/status_panel.anchor_template`이 `cv2.imread(str(...))`라 Windows 비ASCII 경로(한글 사용자 이름 → exe 풀림 자리)에서 None → 버프 자동 찾기(autofind_replay)·즐겨찾기 앵커 실패 가능. `image_io.imread`로.
   재발 방지: `tests/test_unicode_io_contract.py`에 앱 코드 전체 cv2.imread/imwrite 직접 호출 금지(image_io 제외) + 한글 폴더에서 앵커 로드. 노트 v0.53.1 '조용히 다듬은 것들' 한 줄. 관련(앵커·자동 찾기 테스트 28개 파일) 669 통과, 배포 검사 0.53.1 345 통과.
   **같은 0.53.1: 요리창 없으면 바 숨김(사용자 보고 11-20 '요리창 안 떴는데 바가 떠 있음')** — 원인: 신호 없음인데 한 번도 못 찾았으면(seen False) manual → 저장 자리에 표시. 수정: 신호 없음(띠 캡처 실패 포함) → seen 무관 closed, 신호 있음 + 2회 못 알아봄 → manual, 첫 찾기 전만 manual. 명세 7절·노트 한 줄. `detect/cooking_window.py` → `tests/test_cooking_autofind.py`(한 번도 못 찾음: 신호로 manual/closed, 탭: 첫 보임 → 숨김 → 저장 자리 → 찾은 자리). test_cooking_autofind·test_cooking 52 통과, 배포 검사 0.53.1 397 통과.

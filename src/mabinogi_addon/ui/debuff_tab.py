@@ -649,6 +649,9 @@ class DebuffTab(QWidget):
 
     def _rebuild_list(self) -> None:
         keep = self._current
+        bar = self.debuff_list.verticalScrollBar()
+        before = [self.debuff_list.item(i).data(Qt.ItemDataRole.UserRole) for i in range(self.debuff_list.count())]
+        scroll = bar.value()  # 0.53.2: 같은 목록 구성이면 다시 만든 뒤에도 스크롤 자리 그대로
         self.debuff_list.blockSignals(True)
         self.debuff_list.clear()
         for did in self._order:
@@ -661,6 +664,16 @@ class DebuffTab(QWidget):
             self.debuff_list.setCurrentRow(self._order.index(keep))
         elif self.debuff_list.count():
             self.debuff_list.setCurrentRow(0)
+        if before == list(self._order):
+            bar.setValue(scroll)
+
+    def _restyle(self, did: str) -> None:
+        for i in range(self.debuff_list.count()):
+            item = self.debuff_list.item(i)
+            if item.data(Qt.ItemDataRole.UserRole) == did:
+                self._style_item(item, did)
+                return
+        self._rebuild_list()
 
     def _style_item(self, item, did: str) -> None:
         """추적을 끈 디버프는 흐리게 + '추적 안 함'(버프 목록과 같은 구분, 0.32.0)."""
@@ -866,7 +879,7 @@ class DebuffTab(QWidget):
             return
         s.name = self.name_edit.text().strip()
         self._save()
-        self._rebuild_list()
+        self._restyle(self._name_id)  # 0.53.2: 다시 만들지 않고 그 줄만(버프와 같음)
         self.tracking_changed.emit()
 
     def _pick_match_icon(self) -> None:

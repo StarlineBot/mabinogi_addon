@@ -13,6 +13,7 @@ from __future__ import annotations
 from PySide6.QtCore import QEvent, Qt, QTimer
 from PySide6.QtGui import QBrush, QColor, QFont, QFontInfo, QGuiApplication
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QComboBox,
     QFrame,
     QHBoxLayout,
@@ -157,6 +158,12 @@ class CookingTab(QWidget):
         self._fill_dishes()
 
     def _fill_dishes(self) -> None:
+        """요리 목록 다시 채우기 — 같은 카테고리면 스크롤 자리 그대로(검색 회색 갱신 등), 고른 요리가 화면 밖이면 가운데로.
+        (0.53.2: 내린 목록에서 누를 때마다 다시 채워 스크롤이 0이 되고 누른 줄이 아래로 튀던 문제)"""
+        bar = self.dish_list.verticalScrollBar()
+        same = self._category is not None and self._category == getattr(self, "_filled_category", None)
+        scroll = bar.value()
+        current = None
         self.dish_list.blockSignals(True)
         self.dish_list.clear()
         muted = QBrush(QColor(pcolor("muted")))
@@ -170,9 +177,40 @@ class CookingTab(QWidget):
                     item.setForeground(muted)
                 self.dish_list.addItem(item)
                 if self._selected is not None and dish.name == self._selected.name and hit:
-                    item.setSelected(True)
-                    self.dish_list.setCurrentItem(item)
+                    current = item
+        if current is not None:
+            current.setSelected(True)
+            self.dish_list.setCurrentItem(current)
         self.dish_list.blockSignals(False)
+        self._filled_category = self._category
+        bar.setValue(scroll if same else 0)
+        if current is not None:
+            self._center_if_hidden(current)
+
+    def _center_if_hidden(self, item) -> None:
+        rect = self.dish_list.visualItemRect(item)
+        if rect.top() < 0 or rect.bottom() > self.dish_list.viewport().height():  # 세로로만 본다(가로 넘침 무관)
+            self.dish_list.scrollToItem(item, QAbstractItemView.ScrollHint.PositionAtCenter)
+
+    def _mark_selected(self) -> None:
+        """같은 카테고리 안 선택 — 목록을 다시 만들지 않고 표시만(스크롤 그대로, 화면 밖이면 가운데로)."""
+        bar = self.dish_list.verticalScrollBar()
+        scroll = bar.value()
+        self.dish_list.blockSignals(True)
+        target = None
+        for i in range(self.dish_list.count()):
+            item = self.dish_list.item(i)
+            if self._selected is not None and item.data(_DISH) == self._selected.name and item.flags() & Qt.ItemFlag.ItemIsEnabled:
+                target = item
+        if target is not None:
+            self.dish_list.setCurrentItem(target)
+            target.setSelected(True)
+        else:
+            self.dish_list.clearSelection()
+        self.dish_list.blockSignals(False)
+        bar.setValue(scroll)
+        if target is not None:
+            self._center_if_hidden(target)
 
     # ---- 선택 ----
     def _category_changed(self, current, _previous=None) -> None:
@@ -194,6 +232,7 @@ class CookingTab(QWidget):
         if dish is None:
             return
         self._selected = dish
+        refill = dish.method != getattr(self, "_filled_category", None) or self.dish_list.count() == 0
         self._category = dish.method
         for i in range(self.category_list.count()):
             item = self.category_list.item(i)
@@ -201,7 +240,10 @@ class CookingTab(QWidget):
                 self.category_list.blockSignals(True)
                 self.category_list.setCurrentItem(item)
                 self.category_list.blockSignals(False)
-        self._fill_dishes()
+        if refill:
+            self._fill_dishes()
+        else:
+            self._mark_selected()
         self._render_detail()
         if self.overlay is not None:
             self.overlay.set_dish(dish)

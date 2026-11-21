@@ -540,6 +540,9 @@ class BuffTab(QWidget):
 
     def _rebuild_list(self) -> None:
         keep = self._current
+        bar = self.buff_list.verticalScrollBar()
+        before = [self.buff_list.item(i).data(Qt.ItemDataRole.UserRole) for i in range(self.buff_list.count())]
+        scroll = bar.value()  # 0.53.2: 같은 목록 구성이면 다시 만든 뒤에도 스크롤 자리 그대로
         self.buff_list.blockSignals(True)
         self.buff_list.clear()
         for bid in self._rows():
@@ -558,6 +561,16 @@ class BuffTab(QWidget):
         rows = self._rows()
         row = rows.index(keep) if keep in rows else 0
         self.buff_list.setCurrentRow(row)
+        if before == rows:
+            bar.setValue(scroll)
+
+    def _restyle(self, bid: str) -> None:
+        for i in range(self.buff_list.count()):
+            item = self.buff_list.item(i)
+            if item.data(Qt.ItemDataRole.UserRole) == bid:
+                self._style_item(item, bid)
+                return
+        self._rebuild_list()
 
     def _style_item(self, item, bid: str) -> None:
         """목록 한 줄의 글자·아이콘. 추적을 끈 버프는 흐리게 + '추적 안 함'(사라진 것처럼 보이지 않게, 0.32.0)."""
@@ -882,7 +895,7 @@ class BuffTab(QWidget):
             return
         s.name = new
         self._save()
-        self._rebuild_list()
+        self._restyle(self._name_id)  # 0.53.2: 다시 만들지 않고 그 줄만 — 이름 칸 포커스 아웃 직후 누른 줄이 그대로 골라지게
         self.tracking_changed.emit()
 
     def _pick_match_icon(self) -> None:

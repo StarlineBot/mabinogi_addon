@@ -1,29 +1,55 @@
 {
-  "version": "0.53.1",
+  "version": "0.53.2",
   "tests": [
-    "tests/test_unicode_io_contract.py",
-    "tests/test_status_panel.py",
-    "tests/test_buff_favorites.py",
-    "tests/test_autofind_mvp.py",
+    "tests/test_list_click_scroll.py",
+    "tests/test_cooking.py",
+    "tests/test_cooking_autofind.py",
+    "tests/test_buff_hidden_kept.py",
+    "tests/test_buff_opacity_reorder.py",
+    "tests/test_debuff_applied.py",
+    "tests/test_debuff_auto.py",
+    "tests/test_custom_autosave.py",
+    "tests/test_custom_config_replacement.py",
     "tests/test_release_checks.py",
     "tests/test_startup_build.py",
     "tests/test_release_candidate.py",
     "tests/test_windows_ci.py",
     "tests/test_startup_smoke.py",
     "tests/test_release_notes.py",
-    "tests/test_release_notes_trigger.py",
-    "tests/test_cooking_autofind.py",
-    "tests/test_cooking.py"
+    "tests/test_release_notes_trigger.py"
   ],
   "coverage": {
-    "src/mabinogi_addon/detect/status_panel.py": {
+    "src/mabinogi_addon/ui/cooking_tab.py": {
       "tests": [
-        "tests/test_unicode_io_contract.py",
-        "tests/test_status_panel.py",
-        "tests/test_buff_favorites.py",
-        "tests/test_autofind_mvp.py"
+        "tests/test_list_click_scroll.py",
+        "tests/test_cooking.py",
+        "tests/test_cooking_autofind.py"
       ],
-      "reason": "anchor_template를 image_io.imread로 — 한글 폴더에서 로드, 앵커 찾기·즐겨찾기·자동 찾기 결과 그대로"
+      "reason": "목록에서 직접 누른 선택은 다시 채우지 않음(스크롤·줄 그대로), 다른 카테고리로 갈 때만 다시 채우고 화면 밖이면 가운데"
+    },
+    "src/mabinogi_addon/ui/buff_tab.py": {
+      "tests": [
+        "tests/test_list_click_scroll.py",
+        "tests/test_buff_hidden_kept.py",
+        "tests/test_buff_opacity_reorder.py"
+      ],
+      "reason": "이름 저장은 그 줄만 다시 그림, 목록 다시 만들 때 같은 구성이면 스크롤 유지 — 이름 고친 뒤 누른 줄이 골라짐"
+    },
+    "src/mabinogi_addon/ui/debuff_tab.py": {
+      "tests": [
+        "tests/test_list_click_scroll.py",
+        "tests/test_debuff_applied.py",
+        "tests/test_debuff_auto.py"
+      ],
+      "reason": "버프와 같음(이름 저장 그 줄만, 스크롤 유지)"
+    },
+    "src/mabinogi_addon/ui/custom_overlay_tab.py": {
+      "tests": [
+        "tests/test_list_click_scroll.py",
+        "tests/test_custom_autosave.py",
+        "tests/test_custom_config_replacement.py"
+      ],
+      "reason": "표 다시 그릴 때 같은 개수면 스크롤 유지"
     },
     "packaging/release_checks.json": {
       "tests": [
@@ -31,7 +57,7 @@
         "tests/test_release_candidate.py",
         "tests/test_windows_ci.py"
       ],
-      "reason": "0.53.1 검사 목록·후보 봉인·CI 계약"
+      "reason": "0.53.2 검사 목록·후보 봉인·CI 계약"
     },
     "packaging/build_windows.py": {
       "tests": [
@@ -45,20 +71,7 @@
         "tests/test_release_notes.py",
         "tests/test_release_notes_trigger.py"
       ],
-      "reason": "0.53.1 노트 맨 위(조용히 다듬은 것 두 줄: 요리 바 표시·한글 경로)·첫 실행 표시, v0.53.0 이하 그대로"
-    },
-    "src/mabinogi_addon/detect/cooking_window.py": {
-      "tests": [
-        "tests/test_cooking_autofind.py"
-      ],
-      "reason": "신호 없음 = 요리창 없음 → 한 번도 못 찾았어도 숨김(closed), 신호 있음 + 2회 못 알아봄 → 손으로"
-    },
-    "src/mabinogi_addon/ui/cooking_tab.py": {
-      "tests": [
-        "tests/test_cooking_autofind.py",
-        "tests/test_cooking.py"
-      ],
-      "reason": "첫 찾기 전 보임 → 신호 없음 숨김 → 못 알아봄 저장 자리 → 찾음 그 자리(탭 반영 경로 그대로)"
+      "reason": "0.53.2 노트 맨 위(조용히 다듬은 것 한 줄)·첫 실행 표시, v0.53.1 이하 그대로"
     }
   }
 }

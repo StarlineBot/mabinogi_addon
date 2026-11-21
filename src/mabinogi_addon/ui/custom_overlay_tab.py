@@ -384,6 +384,8 @@ class CustomOverlayTab(QWidget):
         if self._editing_lock:
             return
         selected = self._selected_rows(self.overlay_list)
+        bar = self.overlay_list.verticalScrollBar()
+        count, scroll = self.overlay_list.topLevelItemCount(), bar.value()  # 0.53.2: 같은 개수면 스크롤 자리 그대로
         with QSignalBlocker(self.overlay_list):
             self.overlay_list.clear()
             for i, data in enumerate(self._mgr.to_dicts()):
@@ -397,6 +399,8 @@ class CustomOverlayTab(QWidget):
                 item.setToolTip(0, item.text(0))
                 item.setToolTip(1, item.text(1))
                 item.setSelected(i in selected)
+        if self.overlay_list.topLevelItemCount() == count:
+            bar.setValue(scroll)
         self._update_commands()
 
     def _on_item_lock(self, item, column):
