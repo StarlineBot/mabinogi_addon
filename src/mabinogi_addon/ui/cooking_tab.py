@@ -209,9 +209,10 @@ class CookingTab(QWidget):
         (0.53.2: 내린 목록에서 누를 때마다 다시 채워 스크롤이 0이 되고 누른 줄이 아래로 튀던 문제)"""
         bar = self.dish_list.verticalScrollBar()
         stat = self._stat_query()
-        # 같은 카테고리·같은 능력치 검색일 때만 스크롤 유지(능력치를 바꾸면 순서가 바뀌므로 맨 위로)
+        # 같은 카테고리·같은 검색일 때만 스크롤 유지(검색이 바뀌면 순서가 바뀌므로 맨 위로)
+        query = (self.kind.currentText(), cooking.norm(self.query_text()))
         same = (self._category is not None and self._category == getattr(self, "_filled_category", None)
-                and stat == getattr(self, "_filled_stat", ""))
+                and query == getattr(self, "_filled_query", None))
         scroll = bar.value()
         current = None
         self.dish_list.blockSignals(True)
@@ -219,7 +220,13 @@ class CookingTab(QWidget):
         muted = QBrush(QColor(pcolor("muted")))
         if self._category is not None:
             dishes = cooking.in_category(self._dishes, self._category)
-            rows = cooking.ranked(dishes, stat) if stat else [(d, None) for d in dishes]
+            if stat:
+                rows = cooking.ranked(dishes, stat)
+            elif self._hits is not None:  # 이름·재료 검색: 맞는 요리 위(이름순), 안 맞는 요리 회색 아래(사용자 결정 11-21)
+                rows = ([(d, None) for d in dishes if d.name in self._hits]
+                        + [(d, None) for d in dishes if d.name not in self._hits])
+            else:
+                rows = [(d, None) for d in dishes]
             stars = getattr(self, "_stars", set())
             for dish, value in rows:
                 # 능력치 검색: 수치 높은 순, 수치는 줄 오른쪽(_ValueDelegate)
@@ -239,7 +246,7 @@ class CookingTab(QWidget):
             self.dish_list.setCurrentItem(current)
         self.dish_list.blockSignals(False)
         self._filled_category = self._category
-        self._filled_stat = stat
+        self._filled_query = query
         bar.setValue(scroll if same else 0)
         if current is not None:
             self._center_if_hidden(current)

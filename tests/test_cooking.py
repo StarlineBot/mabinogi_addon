@@ -518,3 +518,32 @@ def test_tab_stat_change_scrolls_to_top():
     tab.stat.setCurrentIndex(tab.stat.findData("행운"))  # 능력치를 바꾸면 순서가 바뀌므로 맨 위
     assert bar.value() == 0
     tab.shutdown()
+
+
+def test_tab_name_and_ingredient_search_puts_hits_on_top():
+    """사용자 결정 11-21: 이름·재료로 찾을 때도 맞는 요리는 위(이름순), 안 맞는 요리는 회색 아래(이름순), 수치·★ 없음."""
+    from PySide6.QtWidgets import QApplication
+
+    from mabinogi_addon.ui.cooking_tab import _DISH, _VALUE, CookingTab
+    tab = CookingTab()
+    tab.resize(760, 500)
+    tab.show()
+    for kind, query in (("재료", "밥"), ("요리 이름", "버거")):
+        tab.kind.setCurrentText(kind)
+        tab.query.setText(query)
+        row = next(i for i in range(tab.category_list.count()) if tab.category_list.item(i).data(_DISH) == "혼합")
+        tab.category_list.setCurrentRow(row)
+        QApplication.processEvents()
+        rows = [tab.dish_list.item(i) for i in range(tab.dish_list.count())]
+        hit = [bool(r.flags() & Qt.ItemFlag.ItemIsEnabled) for r in rows]
+        n = sum(hit)
+        assert 0 < n < len(rows) and hit == [True] * n + [False] * (len(rows) - n)   # 맞는 것 위, 회색 아래
+        assert [r.text() for r in rows[:n]] == sorted(r.text() for r in rows[:n])
+        assert [r.text() for r in rows[n:]] == sorted(r.text() for r in rows[n:])
+        assert not any(r.data(_VALUE) or r.text().startswith("★") for r in rows)
+    bar = tab.dish_list.verticalScrollBar()
+    tab.query.setText("")
+    bar.setValue(bar.maximum())
+    tab.query.setText("버")                       # 검색어가 바뀌면 맨 위
+    assert bar.value() == 0
+    tab.shutdown()
