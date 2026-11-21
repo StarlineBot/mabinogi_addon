@@ -19,7 +19,9 @@
     "tests/test_release_notes_trigger.py",
     "tests/test_dialogue_tips.py",
     "tests/test_creator_dialogue.py",
-    "tests/test_navigation.py"
+    "tests/test_navigation.py",
+    "tests/test_cpu_layouts.py",
+    "tests/test_optimization_priority.py"
   ],
   "coverage": {
     "src/mabinogi_addon/ui/cooking_tab.py": {
@@ -28,7 +30,7 @@
         "tests/test_cooking.py",
         "tests/test_cooking_autofind.py"
       ],
-      "reason": "목록에서 직접 누른 선택은 다시 채우지 않음(스크롤·줄 그대로), 다른 카테고리로 갈 때만 다시 채우고 화면 밖이면 가운데 · 능력치 검색 수치순·줄 오른쪽 수치·★(요리·카테고리)·능력치 바꾸면 맨 위, 다른 검색은 이름순"
+      "reason": "목록에서 직접 누른 선택은 다시 채우지 않음(스크롤·줄 그대로), 다른 카테고리로 갈 때만 다시 채우고 화면 밖이면 가운데 · 능력치 검색 수치순·줄 오른쪽 수치·★(요리·카테고리)·능력치 바꾸면 맨 위, 다른 검색은 이름순 · 수치 델리게이트 글자색은 스타일이(Windows 11 옅은 선택 칸에서도 보임)"
     },
     "src/mabinogi_addon/ui/buff_tab.py": {
       "tests": [
@@ -103,6 +105,14 @@
         "tests/test_startup_smoke.py"
       ],
       "reason": "지금 화면 = 계산기 › 요리 탭이면 cooking(+calc) 기록, '보러 가기' cooking → 편의기능 › 계산기 › 요리"
+    },
+    "src/mabinogi_addon/ui/optimization_panel.py": {
+      "tests": [
+        "tests/test_cooking.py",
+        "tests/test_cpu_layouts.py",
+        "tests/test_optimization_priority.py"
+      ],
+      "reason": "CPU 배치 두 줄 목록 — 글자색을 스타일이 그림(선택 글자색 직접 칠하기 없음)"
     }
   }
 }

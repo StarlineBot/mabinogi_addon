@@ -24,19 +24,25 @@ class _TwoLineDelegate(QStyledItemDelegate):
         from PySide6.QtWidgets import QApplication, QStyle, QStyleOptionViewItem
         item = QStyleOptionViewItem(option)
         self.initStyleOption(item, index)
-        item.text = ''
         style = item.widget.style() if item.widget is not None else QApplication.style()
-        style.drawControl(QStyle.ControlElement.CE_ItemViewItem, item, painter, item.widget)
+        # 글자 색은 스타일이 정한다(0.54.0: Windows 11 스타일은 선택 줄을 옅은 칸 + Text 글자로 그려 선택 글자색 직접 칠하기가 묻힘)
         name, _, detail = popup.partition('\n')
         selected = bool(option.state & QStyle.StateFlag.State_Selected)
-        palette = option.palette
-        rect = option.rect.adjusted(8, 3, -8, -3)
+        rect = option.rect
         half = rect.height() // 2
+        item.text = name
+        item.displayAlignment = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop
+        style.drawControl(QStyle.ControlElement.CE_ItemViewItem, item, painter, item.widget)   # 배경·선택·이름(위 줄)
+        second = QStyleOptionViewItem(item)
+        second.text = detail
+        second.displayAlignment = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignBottom
+        if not selected:  # 둘째 줄 회색 — 선택 줄은 스타일의 선택 글자색 그대로
+            palette = QPalette(second.palette)
+            palette.setColor(QPalette.ColorRole.Text, palette.color(QPalette.ColorRole.PlaceholderText))
+            second.palette = palette
         painter.save()
-        painter.setPen(palette.color(QPalette.ColorRole.HighlightedText if selected else QPalette.ColorRole.Text))
-        painter.drawText(rect.adjusted(0, 0, 0, -half), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, name)
-        painter.setPen(palette.color(QPalette.ColorRole.HighlightedText if selected else QPalette.ColorRole.PlaceholderText))
-        painter.drawText(rect.adjusted(0, half, 0, 0), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, detail)
+        painter.setClipRect(rect.adjusted(0, half, 0, 0))
+        style.drawControl(QStyle.ControlElement.CE_ItemViewItem, second, painter, item.widget)  # 배분(아래 줄)
         painter.restore()
 
     def sizeHint(self, option, index):

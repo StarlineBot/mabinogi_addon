@@ -10,8 +10,8 @@
 """
 from __future__ import annotations
 
-from PySide6.QtCore import QEvent, Qt, QTimer
-from PySide6.QtGui import QBrush, QColor, QFont, QFontInfo, QGuiApplication, QPalette
+from PySide6.QtCore import QEvent, QRect, Qt, QTimer
+from PySide6.QtGui import QBrush, QColor, QFont, QFontInfo, QGuiApplication
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -48,7 +48,11 @@ _VALUE = Qt.ItemDataRole.UserRole + 1  # 능력치 검색 때 줄 오른쪽에 �
 
 
 class _ValueDelegate(QStyledItemDelegate):
-    """능력치 수치를 줄 오른쪽에 따로 그린다 — 요리 이름이 길어 잘려도 수치는 늘 보이게(이름만 말줄임)."""
+    """능력치 수치를 줄 오른쪽에 따로 그린다 — 요리 이름이 길어 잘려도 수치는 늘 보이게(이름만 말줄임).
+
+    글자 색은 델리게이트가 고르지 않고 스타일이 그린다(0.54.0 QA 반려: Windows 11 스타일은 선택 줄을 옅은 칸 + Text 글자로
+    그려, HighlightedText로 직접 칠한 글자가 묻혔다). 이름 = drawControl 한 번(배경·선택·이름), 수치 = 수치 칸에만 잘라
+    같은 옵션으로 drawControl 한 번 더(같은 배경이라 겉보기 같음)."""
 
     def paint(self, painter, option, index) -> None:
         value = index.data(_VALUE)
@@ -57,23 +61,25 @@ class _ValueDelegate(QStyledItemDelegate):
             return
         opt = QStyleOptionViewItem(option)
         self.initStyleOption(opt, index)
-        text, opt.text = opt.text, ""
         widget = opt.widget
         style = widget.style() if widget is not None else QApplication.style()
-        style.drawControl(QStyle.ControlElement.CE_ItemViewItem, opt, painter, widget)  # 배경·선택 표시
-        selected = bool(opt.state & QStyle.StateFlag.State_Selected)
-        pen = opt.palette.color(QPalette.ColorRole.HighlightedText if selected else QPalette.ColorRole.Text)
-        rect = opt.rect.adjusted(4, 0, -4, 0)
+        rect = QRect(opt.rect)
         if widget is not None and hasattr(widget, "viewport"):  # 줄 너비가 보이는 칸보다 넓어도 수치는 보이는 오른쪽 끝에
-            rect.setRight(min(rect.right(), widget.viewport().width() - 4))
+            rect.setRight(min(rect.right(), widget.viewport().width() - 1))
+        opt.rect = rect
         fm = opt.fontMetrics
-        value_w = fm.horizontalAdvance(value) + 8
-        name_rect = rect.adjusted(0, 0, -value_w, 0)
+        value_w = fm.horizontalAdvance(value) + 12
+        name_w = max(0, rect.width() - value_w - 12)
+        name = fm.elidedText(opt.text, Qt.TextElideMode.ElideRight, name_w)
+        opt.text = name
+        opt.textElideMode = Qt.TextElideMode.ElideNone
+        style.drawControl(QStyle.ControlElement.CE_ItemViewItem, opt, painter, widget)   # 배경·선택·이름
+        number = QStyleOptionViewItem(opt)
+        number.text = value
+        number.displayAlignment = Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
         painter.save()
-        painter.setPen(pen)
-        painter.drawText(name_rect, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
-                         fm.elidedText(text, Qt.TextElideMode.ElideRight, name_rect.width()))
-        painter.drawText(rect, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight, value)
+        painter.setClipRect(QRect(rect.right() - value_w, rect.top(), value_w + 1, rect.height()))
+        style.drawControl(QStyle.ControlElement.CE_ItemViewItem, number, painter, widget)  # 수치(스타일 글자색)
         painter.restore()
 
 

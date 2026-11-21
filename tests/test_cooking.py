@@ -547,3 +547,79 @@ def test_tab_name_and_ingredient_search_puts_hits_on_top():
     tab.query.setText("버")                       # 검색어가 바뀌면 맨 위
     assert bar.value() == 0
     tab.shutdown()
+
+
+# ---- 0.54.0 QA 반려: 선택 줄 글자색은 스타일이 정한다(Windows 11 = 옅은 칸 + Text 글자) ----
+def _stat_tab():
+    from PySide6.QtWidgets import QApplication
+
+    from mabinogi_addon.ui.cooking_tab import _DISH, CookingTab
+    tab = CookingTab()
+    tab.resize(760, 500)
+    tab.show()
+    tab.kind.setCurrentText("능력치")
+    tab.stat.setCurrentIndex(tab.stat.findData("마법공격력"))
+    row = next(i for i in range(tab.category_list.count()) if tab.category_list.item(i).data(_DISH) == "혼합")
+    tab.category_list.setCurrentRow(row)
+    tab.select(tab.dish_list.item(0).data(_DISH))
+    QApplication.processEvents()
+    return tab
+
+
+def _light_selection_style():
+    """선택을 Highlight로 채우지 않고 옅은 칸 + Text 글자로 그리는 스타일(Windows 11 흉내) + drawControl 기록."""
+    from PySide6.QtGui import QColor, QPalette
+    from PySide6.QtWidgets import QProxyStyle, QStyle, QStyleFactory
+
+    class Style(QProxyStyle):
+        def __init__(self):
+            super().__init__(QStyleFactory.create("Fusion"))
+            self.calls = []
+
+        def drawControl(self, element, option, painter, widget=None):
+            if element == QStyle.ControlElement.CE_ItemViewItem:
+                self.calls.append((option.text, bool(option.state & QStyle.StateFlag.State_Selected)))
+                if option.state & QStyle.StateFlag.State_Selected:
+                    from PySide6.QtWidgets import QStyleOptionViewItem
+                    light = QStyleOptionViewItem(option)
+                    light.state &= ~QStyle.StateFlag.State_Selected
+                    painter.fillRect(option.rect, QColor(225, 222, 235))  # 옅은 선택 칸
+                    pal = QPalette(light.palette)
+                    pal.setColor(QPalette.ColorRole.Text, QColor(20, 20, 20))
+                    light.palette = pal
+                    light.backgroundBrush = QColor(0, 0, 0, 0)
+                    return super().drawControl(element, light, painter, widget)
+            return super().drawControl(element, option, painter, widget)
+    return Style()
+
+
+def test_selected_value_row_text_drawn_by_style_and_visible_on_light_selection():
+    from PySide6.QtGui import QColor, QPalette
+
+    from mabinogi_addon.ui.cooking_tab import _VALUE
+    tab = _stat_tab()
+    style = _light_selection_style()
+    lst = tab.dish_list
+    lst.setStyle(style)
+    pal = lst.palette()
+    pal.setColor(QPalette.ColorRole.HighlightedText, QColor(225, 222, 235))  # on-accent를 일부러 옅은 칸과 같게
+    lst.setPalette(pal)
+    item = lst.item(0)
+    assert item.isSelected() and item.data(_VALUE) == "+5"
+    image = lst.viewport().grab().toImage()
+    texts = [t for t, sel in style.calls if sel]
+    assert any(t.startswith("★ 불금") for t in texts) and "+5" in texts   # 이름·수치 모두 스타일이 그림(선택 상태 유지)
+    rect = lst.visualItemRect(item)
+    right = min(rect.right(), lst.viewport().width() - 1)
+    dark = [image.pixelColor(x, y).lightness() for x in range(right - 20, right) for y in range(rect.top(), rect.bottom())]
+    assert max(dark) - min(dark) >= 60   # 수치 글자가 옅은 선택 칸과 구분됨
+    tab.shutdown()
+
+
+def test_value_delegate_never_picks_text_color_itself():
+    import inspect
+
+    from mabinogi_addon.ui import cooking_tab, optimization_panel
+    for cls in (cooking_tab._ValueDelegate, optimization_panel._TwoLineDelegate):
+        src = inspect.getsource(cls.paint)
+        assert "HighlightedText" not in src and "drawText" not in src
