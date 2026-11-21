@@ -154,7 +154,7 @@ def test_tab_filter_counts_grey_and_keeps_selection(kind, query):
     assert tab.count.text() == f"{len(hits)}개 요리"
     for item in _items(tab.category_list):
         n = counts[item.data(_DISH)]
-        assert item.text() == f"{item.data(_DISH)} ({n})"
+        assert item.text().removeprefix("★ ") == f"{item.data(_DISH)} ({n})"
         assert bool(item.flags() & Qt.ItemFlag.ItemIsEnabled) == (n > 0)  # 0개 카테고리는 회색·못 고름
     for item in _items(tab.dish_list):
         assert bool(item.flags() & Qt.ItemFlag.ItemIsEnabled) == (item.data(_DISH) in hits)
@@ -456,3 +456,65 @@ def test_bar_overlay_excluded_from_reading_capture():
     o = CookingBarOverlay()
     assert "CookingBarOverlay" in overlay_capture.OVERLAYS and overlay_capture.is_overlay(o)
     o.close()
+
+
+# ---- 능력치 검색 정렬·★ (사용자 결정 11-21, 0.54.0) ----
+def _d(name, method, **stats):
+    return cooking.Dish(name, method, (cooking.Ingredient("물", 1),), tuple(stats.items()))
+
+
+def test_stat_ranked_and_top_pure():
+    dishes = [_d("가", "굽기", 생명력=30), _d("나", "굽기", 생명력=50), _d("다", "굽기"), _d("라", "굽기", 생명력=50),
+              _d("마", "굽기", 마나=10), _d("바", "혼합", 생명력=50)]
+    order = [(d.name, v) for d, v in cooking.ranked(dishes[:5], "생명력")]
+    assert order == [("나", 50), ("라", 50), ("가", 30), ("다", None), ("마", None)]  # 높은 순·같으면 이름순, 없는 건 이름순 아래
+    assert cooking.top_dishes(dishes, "생명력") == {"나", "라", "바"}                 # 전체 최고 동점 모두
+    assert cooking.top_dishes(dishes, "행운") == set()
+    assert [v for _d_, v in cooking.ranked([_d("x", "삶기")], "생명력")] == [None]     # 능력치 없는 카테고리
+    assert cooking.stat_value(_d("y", "굽기", 생명력=-12), " 생명 력") == -12
+
+
+def test_tab_stat_search_orders_values_and_stars():
+    from mabinogi_addon.ui.cooking_tab import _DISH, _VALUE, CookingTab
+    tab = CookingTab()
+    tab.kind.setCurrentText("능력치")
+    tab.stat.setCurrentIndex(tab.stat.findData("생명력"))
+    cats = {tab.category_list.item(i).data(_DISH): tab.category_list.item(i) for i in range(tab.category_list.count())}
+    assert cats["굽기"].text() == "★ 굽기 (60)"                    # 전체 최고 300이 굽기
+    assert not cats["혼합"].text().startswith("★")
+    tab.category_list.setCurrentItem(cats["굽기"])
+    rows = [tab.dish_list.item(i) for i in range(tab.dish_list.count())]
+    assert rows[0].text() == "★ 까맣게 구워진 드래곤 심장" and rows[0].data(_VALUE) == "+300"
+    assert sum(r.text().startswith("★") for r in rows) == 1
+    values = [float(r.data(_VALUE)) for r in rows if r.data(_VALUE)]
+    assert values == sorted(values, reverse=True)
+    greys = [r for r in rows if not r.data(_VALUE)]
+    assert greys and all(not (r.flags() & Qt.ItemFlag.ItemIsEnabled) for r in greys)
+    assert rows[-len(greys):] == greys and [r.text() for r in greys] == sorted(r.text() for r in greys)
+    # 다른 검색 종류·검색 없음은 이름순 그대로(수치·별 없음)
+    tab.kind.setCurrentText("요리 이름")
+    rows = [tab.dish_list.item(i) for i in range(tab.dish_list.count())]
+    assert [r.text() for r in rows] == sorted(r.text() for r in rows)
+    assert not any(r.data(_VALUE) for r in rows) and not any(r.text().startswith("★") for r in rows)
+    assert not any(tab.category_list.item(i).text().startswith("★") for i in range(tab.category_list.count()))
+    tab.shutdown()
+
+
+def test_tab_stat_change_scrolls_to_top():
+    from PySide6.QtWidgets import QApplication
+
+    from mabinogi_addon.ui.cooking_tab import _DISH, CookingTab
+    tab = CookingTab()
+    tab.resize(760, 500)
+    tab.show()
+    tab.kind.setCurrentText("능력치")
+    tab.stat.setCurrentIndex(tab.stat.findData("생명력"))
+    row = next(i for i in range(tab.category_list.count()) if tab.category_list.item(i).data(_DISH) == "굽기")
+    tab.category_list.setCurrentRow(row)
+    QApplication.processEvents()
+    bar = tab.dish_list.verticalScrollBar()
+    bar.setValue(bar.maximum())
+    assert bar.value() > 0
+    tab.stat.setCurrentIndex(tab.stat.findData("행운"))  # 능력치를 바꾸면 순서가 바뀌므로 맨 위
+    assert bar.value() == 0
+    tab.shutdown()

@@ -1,5 +1,5 @@
 {
-  "version": "0.53.2",
+  "version": "0.54.0",
   "tests": [
     "tests/test_list_click_scroll.py",
     "tests/test_cooking.py",
@@ -25,7 +25,7 @@
         "tests/test_cooking.py",
         "tests/test_cooking_autofind.py"
       ],
-      "reason": "목록에서 직접 누른 선택은 다시 채우지 않음(스크롤·줄 그대로), 다른 카테고리로 갈 때만 다시 채우고 화면 밖이면 가운데"
+      "reason": "목록에서 직접 누른 선택은 다시 채우지 않음(스크롤·줄 그대로), 다른 카테고리로 갈 때만 다시 채우고 화면 밖이면 가운데 · 능력치 검색 수치순·줄 오른쪽 수치·★(요리·카테고리)·능력치 바꾸면 맨 위, 다른 검색은 이름순"
     },
     "src/mabinogi_addon/ui/buff_tab.py": {
       "tests": [
@@ -57,7 +57,7 @@
         "tests/test_release_candidate.py",
         "tests/test_windows_ci.py"
       ],
-      "reason": "0.53.2 검사 목록·후보 봉인·CI 계약"
+      "reason": "0.54.0 검사 목록·후보 봉인·CI 계약"
     },
     "packaging/build_windows.py": {
       "tests": [
@@ -71,7 +71,13 @@
         "tests/test_release_notes.py",
         "tests/test_release_notes_trigger.py"
       ],
-      "reason": "0.53.2 노트 맨 위(조용히 다듬은 것 한 줄)·첫 실행 표시, v0.53.1 이하 그대로"
+      "reason": "0.54.0 노트 맨 위(능력치 정렬·★ 헤드라인 + 목록 튐 한 줄, 미게시 0.53.2 합침)·첫 실행 표시, v0.53.1 이하 그대로"
+    },
+    "src/mabinogi_addon/cooking.py": {
+      "tests": [
+        "tests/test_cooking.py"
+      ],
+      "reason": "능력치 값·정렬(높은 순·동점 이름순·없는 건 아래)·전체 최고(동점 모두)"
     }
   }
 }

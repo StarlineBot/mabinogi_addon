@@ -11,9 +11,10 @@
 from __future__ import annotations
 
 from PySide6.QtCore import QEvent, Qt, QTimer
-from PySide6.QtGui import QBrush, QColor, QFont, QFontInfo, QGuiApplication
+from PySide6.QtGui import QBrush, QColor, QFont, QFontInfo, QGuiApplication, QPalette
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QApplication,
     QComboBox,
     QFrame,
     QHBoxLayout,
@@ -25,6 +26,9 @@ from PySide6.QtWidgets import (
     QScrollArea,
     QSizePolicy,
     QStackedWidget,
+    QStyle,
+    QStyledItemDelegate,
+    QStyleOptionViewItem,
     QVBoxLayout,
     QWidget,
 )
@@ -40,6 +44,37 @@ TITLE_UP, SUB_UP, SECTION_UP = 4, 2, 1  # 기본 13px → 17·15·14
 GAUGE_VIEW_W = 400  # 상세 요리창 그림 표시 너비(원본 패널 530px을 줄여 상세 칸에 맞춤 — 시안 detail_gauge_mock.png)
 DESCRIPTION = "요리를 찾아 재료·비율·능력치를 보고, 비율 바를 게임 위에 띄워 요리창 바에 맞출 수 있어요."
 _DISH = Qt.ItemDataRole.UserRole
+_VALUE = Qt.ItemDataRole.UserRole + 1  # 능력치 검색 때 줄 오른쪽에 그릴 수치('+300')
+
+
+class _ValueDelegate(QStyledItemDelegate):
+    """능력치 수치를 줄 오른쪽에 따로 그린다 — 요리 이름이 길어 잘려도 수치는 늘 보이게(이름만 말줄임)."""
+
+    def paint(self, painter, option, index) -> None:
+        value = index.data(_VALUE)
+        if not value:
+            super().paint(painter, option, index)
+            return
+        opt = QStyleOptionViewItem(option)
+        self.initStyleOption(opt, index)
+        text, opt.text = opt.text, ""
+        widget = opt.widget
+        style = widget.style() if widget is not None else QApplication.style()
+        style.drawControl(QStyle.ControlElement.CE_ItemViewItem, opt, painter, widget)  # 배경·선택 표시
+        selected = bool(opt.state & QStyle.StateFlag.State_Selected)
+        pen = opt.palette.color(QPalette.ColorRole.HighlightedText if selected else QPalette.ColorRole.Text)
+        rect = opt.rect.adjusted(4, 0, -4, 0)
+        if widget is not None and hasattr(widget, "viewport"):  # 줄 너비가 보이는 칸보다 넓어도 수치는 보이는 오른쪽 끝에
+            rect.setRight(min(rect.right(), widget.viewport().width() - 4))
+        fm = opt.fontMetrics
+        value_w = fm.horizontalAdvance(value) + 8
+        name_rect = rect.adjusted(0, 0, -value_w, 0)
+        painter.save()
+        painter.setPen(pen)
+        painter.drawText(name_rect, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
+                         fm.elidedText(text, Qt.TextElideMode.ElideRight, name_rect.width()))
+        painter.drawText(rect, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight, value)
+        painter.restore()
 
 
 class CookingTab(QWidget):
@@ -98,6 +133,9 @@ class CookingTab(QWidget):
         body.addWidget(self.category_list)
         self.dish_list = QListWidget()
         self.dish_list.setFixedWidth(170)
+        self.dish_list.setItemDelegate(_ValueDelegate(self.dish_list))
+        self.dish_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)  # 긴 이름은 말줄임(가로 스크롤 없음)
+        self.dish_list.setTextElideMode(Qt.TextElideMode.ElideRight)
         self.dish_list.itemClicked.connect(self._dish_clicked)
         body.addWidget(self.dish_list)
         self.detail_scroll = QScrollArea()
@@ -142,16 +180,25 @@ class CookingTab(QWidget):
         self._refresh_lists()
         self._render_detail()  # 검색한 재료·능력치 줄 강조
 
+    def _stat_query(self) -> str:
+        """능력치 검색 중이면 그 능력치 이름, 아니면 ''."""
+        return self.query_text() if self.kind.currentText() == "능력치" else ""
+
     def _refresh_lists(self) -> None:
         counts = cooking.category_counts(self._dishes, self._hits)
         searching = self._hits is not None
+        stat = self._stat_query()
+        # 능력치 검색: 전체 요리 중 최고값 요리(동점 모두)와 그 카테고리에만 ★(사용자 결정 11-21)
+        self._stars = cooking.top_dishes(self._dishes, stat) if stat else set()
+        star_methods = {self._by_name[n].method for n in self._stars}
         self.count.setText(f"{len(self._hits)}개 요리" if searching else f"{len(self._dishes)}개 요리")
         muted = QBrush(QColor(pcolor("muted")))
         for i in range(self.category_list.count()):
             item = self.category_list.item(i)
             name = item.data(_DISH)
             n = counts.get(name, 0)
-            item.setText(f"{name} ({n})" if searching else name)
+            text = f"{name} ({n})" if searching else name
+            item.setText(f"★ {text}" if name in star_methods else text)
             enabled = n > 0
             item.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable if enabled else Qt.ItemFlag.NoItemFlags)
             item.setForeground(QBrush() if enabled else muted)
@@ -161,15 +208,24 @@ class CookingTab(QWidget):
         """요리 목록 다시 채우기 — 같은 카테고리면 스크롤 자리 그대로(검색 회색 갱신 등), 고른 요리가 화면 밖이면 가운데로.
         (0.53.2: 내린 목록에서 누를 때마다 다시 채워 스크롤이 0이 되고 누른 줄이 아래로 튀던 문제)"""
         bar = self.dish_list.verticalScrollBar()
-        same = self._category is not None and self._category == getattr(self, "_filled_category", None)
+        stat = self._stat_query()
+        # 같은 카테고리·같은 능력치 검색일 때만 스크롤 유지(능력치를 바꾸면 순서가 바뀌므로 맨 위로)
+        same = (self._category is not None and self._category == getattr(self, "_filled_category", None)
+                and stat == getattr(self, "_filled_stat", ""))
         scroll = bar.value()
         current = None
         self.dish_list.blockSignals(True)
         self.dish_list.clear()
         muted = QBrush(QColor(pcolor("muted")))
         if self._category is not None:
-            for dish in cooking.in_category(self._dishes, self._category):
-                item = QListWidgetItem(dish.name)
+            dishes = cooking.in_category(self._dishes, self._category)
+            rows = cooking.ranked(dishes, stat) if stat else [(d, None) for d in dishes]
+            stars = getattr(self, "_stars", set())
+            for dish, value in rows:
+                # 능력치 검색: 수치 높은 순, 수치는 줄 오른쪽(_ValueDelegate)
+                item = QListWidgetItem(f"★ {dish.name}" if dish.name in stars else dish.name)
+                if value is not None:
+                    item.setData(_VALUE, f"{value:+g}")
                 item.setData(_DISH, dish.name)
                 hit = self._hits is None or dish.name in self._hits
                 if not hit:
@@ -183,6 +239,7 @@ class CookingTab(QWidget):
             self.dish_list.setCurrentItem(current)
         self.dish_list.blockSignals(False)
         self._filled_category = self._category
+        self._filled_stat = stat
         bar.setValue(scroll if same else 0)
         if current is not None:
             self._center_if_hidden(current)

@@ -97,6 +97,33 @@ def search(dishes, kind: str, query: str) -> set[str] | None:
     return {d.name for d in dishes if matches(d, kind, query)}
 
 
+def stat_value(dish: Dish, stat: str) -> float | None:
+    """그 요리의 능력치 값(이름 공백 무시·정확히). 없으면 None."""
+    q = norm(stat)
+    for name, value in dish.status:
+        if norm(name) == q:
+            return value
+    return None
+
+
+def ranked(dishes, stat: str) -> list[tuple[Dish, float | None]]:
+    """능력치 검색 목록 순서(사용자 결정 11-21): 그 능력치가 있는 요리를 수치 높은 순(같으면 이름순) 위로,
+    없는 요리는 이름순으로 아래(화면에선 회색). [(요리, 값 또는 None)]."""
+    pairs = [(d, stat_value(d, stat)) for d in dishes]
+    hits = sorted((p for p in pairs if p[1] is not None), key=lambda p: (-p[1], p[0].name))
+    misses = sorted((p for p in pairs if p[1] is None), key=lambda p: p[0].name)
+    return hits + misses
+
+
+def top_dishes(dishes, stat: str) -> set[str]:
+    """그 능력치의 전체 요리 중 최고값 요리 이름(동점이면 모두, 없으면 빈 묶음) — ★ 표시."""
+    values = {d.name: v for d in dishes if (v := stat_value(d, stat)) is not None}
+    if not values:
+        return set()
+    best = max(values.values())
+    return {name for name, v in values.items() if v == best}
+
+
 def category_counts(dishes, hits: set[str] | None) -> dict[str, int]:
     """카테고리별 (맞는) 요리 수."""
     counts = dict.fromkeys(categories(dishes), 0)
