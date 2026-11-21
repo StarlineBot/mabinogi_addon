@@ -2244,6 +2244,27 @@ def load_cooking_favorites(path: Path = LOCAL_CONFIG_PATH) -> list[str]:
     return [n for n in favs if isinstance(n, str)] if isinstance(favs, list) else []
 
 
+def load_cooking_last_dish(path: Path = LOCAL_CONFIG_PATH) -> str | None:
+    """마지막으로 고른 요리 이름(사용자 보고 11-21 — 다음 실행에 그대로)."""
+    raw = _read_local_config(path).get("cooking")
+    name = raw.get("lastDish") if isinstance(raw, dict) else None
+    return name if isinstance(name, str) and name else None
+
+
+def save_cooking_last_dish(name: str, path: Path = LOCAL_CONFIG_PATH) -> None:
+    data = _read_local_config(path)
+    raw = data.get("cooking") if isinstance(data.get("cooking"), dict) else {}
+    data["cooking"] = {**raw, "lastDish": str(name)}
+    _write_local_config(data, path)
+
+
+def load_cooking_overlay_on(path: Path = LOCAL_CONFIG_PATH) -> bool:
+    """'게임 위에 이 바 띄우기' 켬 상태(cooking.overlay.on, 사용자 보고 11-21)."""
+    raw = _read_local_config(path).get("cooking")
+    sec = raw.get("overlay") if isinstance(raw, dict) and isinstance(raw.get("overlay"), dict) else {}
+    return sec.get("on") is True
+
+
 def save_cooking_favorites(names: list[str], path: Path = LOCAL_CONFIG_PATH) -> None:
     data = _read_local_config(path)
     raw = data.get("cooking") if isinstance(data.get("cooking"), dict) else {}

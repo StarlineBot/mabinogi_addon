@@ -174,6 +174,20 @@ class CookingTab(QWidget):
         self._find_timer.timeout.connect(self._auto_tick)
         self._refresh_lists()
         self._render_detail()
+        self._restore_last()
+
+    def _restore_last(self) -> None:
+        """지난 실행의 고른 요리·'게임 위에 이 바 띄우기' 켬 상태(사용자 보고 11-21). 요리가 데이터에 없으면 바도 안 켬."""
+        try:
+            name, on = config.load_cooking_last_dish(), config.load_cooking_overlay_on()
+        except OSError:
+            return
+        if name not in self._by_name:
+            return
+        self.select(name)
+        if on:
+            self.set_overlay(True)
+            self._render_detail()  # 버튼 체크 상태 맞춤
 
     # ---- 검색 ----
     def _kind_changed(self) -> None:
@@ -357,6 +371,11 @@ class CookingTab(QWidget):
         dish = self._by_name.get(name)
         if dish is None:
             return
+        if self._selected is not dish:
+            try:
+                config.save_cooking_last_dish(dish.name)  # 다음 실행에 그대로(사용자 보고 11-21)
+            except OSError:
+                pass
         self._selected = dish
         category = self._category if stay else dish.method
         refill = category != getattr(self, "_filled_category", None) or self.dish_list.count() == 0
@@ -528,6 +547,11 @@ class CookingTab(QWidget):
 
     # ---- 게임 위 비율 바 ----
     def set_overlay(self, on: bool) -> None:
+        if bool(on) != self._overlay_on:
+            try:
+                config.save_cooking_overlay(on=bool(on))  # 켬 상태 저장(사용자 보고 11-21)
+            except OSError:
+                pass
         self._overlay_on = bool(on)
         if on:
             if self.overlay is None:

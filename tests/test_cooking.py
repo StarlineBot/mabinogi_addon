@@ -731,3 +731,34 @@ def test_right_click_menu_toggles_even_grey_rows():
     tab.dish_list.customContextMenuRequested.emit(QPoint(5, 5))
     assert len(shown) == 2                                    # 메뉴 안 뜸
     tab.shutdown()
+
+
+# ---- 0.55.0: 고른 요리·'게임 위에 이 바 띄우기' 켬 상태 저장(사용자 보고 11-21) ----
+def test_last_dish_and_overlay_on_restored_next_run():
+    from mabinogi_addon.ui.cooking_tab import CookingTab
+    tab = CookingTab()
+    tab.select("모둠회덮밥")
+    tab.overlay_btn.click()
+    assert config.load_cooking_last_dish() == "모둠회덮밥" and config.load_cooking_overlay_on()
+    tab.shutdown()
+    again = CookingTab()                                  # 다시 실행
+    assert again.selected.name == "모둠회덮밥" and again._category == "혼합"
+    assert again.dish_list.currentItem().text() == "모둠회덮밥"
+    assert again._overlay_on and again.overlay_btn.isChecked() and again.overlay is not None
+    assert again._find_timer.isActive()
+    again.overlay_btn.click()                             # 끄고 다시
+    assert not config.load_cooking_overlay_on()
+    again.shutdown()
+    third = CookingTab()
+    assert third.selected.name == "모둠회덮밥" and not third._overlay_on and not third.overlay_btn.isChecked()
+    assert third.overlay is None and not third._find_timer.isActive()
+    third.shutdown()
+
+
+def test_missing_last_dish_keeps_overlay_off():
+    from mabinogi_addon.ui.cooking_tab import CookingTab
+    config.save_cooking_last_dish("없어진 요리")
+    config.save_cooking_overlay(on=True)
+    tab = CookingTab()
+    assert tab.selected is None and not tab._overlay_on and tab.overlay is None and tab.overlay_btn is None
+    tab.shutdown()
