@@ -18,6 +18,7 @@ from . import paths
 CATEGORIES = ("혼합", "굽기", "삶기", "반죽", "끓이기", "면 만들기", "튀기기", "볶기", "파스타 만들기", "잼 만들기",
               "파이 만들기", "찌기", "피자 만들기", "발효", "수비드", "저미기")
 SEARCH_KINDS = ("요리 이름", "재료", "능력치")
+FAVORITES = "즐겨찾기"  # 카테고리 맨 위 가상 카테고리(사용자 결정 11-21, 0.55.0)
 
 
 @dataclass(frozen=True)
@@ -122,6 +123,27 @@ def top_dishes(dishes, stat: str) -> set[str]:
         return set()
     best = max(values.values())
     return {name for name, v in values.items() if v == best}
+
+
+def normalize_favorites(raw, dishes) -> list[str]:
+    """저장된 즐겨찾기 → 데이터에 있는 요리 이름만, 추가 순서 유지·중복 없음."""
+    names = {d.name for d in dishes}
+    out: list[str] = []
+    for name in raw if isinstance(raw, list) else []:
+        if isinstance(name, str) and name in names and name not in out:
+            out.append(name)
+    return out
+
+
+def favorite_dishes(dishes, favorites) -> list[Dish]:
+    """즐겨찾기 카테고리의 요리(이름순 — 다른 카테고리와 같은 기본 순서)."""
+    names = set(favorites)
+    return sorted((d for d in dishes if d.name in names), key=lambda d: d.name)
+
+
+def favorites_count(favorites, hits: set[str] | None) -> int:
+    """즐겨찾기 줄 개수(검색 중이면 맞는 것만)."""
+    return len(favorites) if hits is None else sum(1 for n in favorites if n in hits)
 
 
 def category_counts(dishes, hits: set[str] | None) -> dict[str, int]:

@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QListWidget,
     QListWidgetItem,
+    QMenu,
     QPushButton,
     QScrollArea,
     QSizePolicy,
@@ -131,6 +132,10 @@ class CookingTab(QWidget):
         body = QHBoxLayout()
         self.category_list = QListWidget()
         self.category_list.setFixedWidth(130)
+        self.favorites = cooking.normalize_favorites(config.load_cooking_favorites(), self._dishes)
+        fav_item = QListWidgetItem(cooking.FAVORITES)  # 맨 위 가상 카테고리(사용자 결정 11-21)
+        fav_item.setData(_DISH, cooking.FAVORITES)
+        self.category_list.addItem(fav_item)
         for name in cooking.categories(self._dishes):
             item = QListWidgetItem(name)
             item.setData(_DISH, name)
@@ -142,6 +147,8 @@ class CookingTab(QWidget):
         self.dish_list.setItemDelegate(_ValueDelegate(self.dish_list))
         self.dish_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)  # 긴 이름은 말줄임(가로 스크롤 없음)
         self.dish_list.setTextElideMode(Qt.TextElideMode.ElideRight)
+        self.dish_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)  # 오른쪽 클릭 = 즐겨찾기 넣기·빼기
+        self.dish_list.customContextMenuRequested.connect(self._dish_menu)
         self.dish_list.itemClicked.connect(self._dish_clicked)
         body.addWidget(self.dish_list)
         self.detail_scroll = QScrollArea()
@@ -199,11 +206,18 @@ class CookingTab(QWidget):
         star_methods = {self._by_name[n].method for n in self._stars}
         self.count.setText(f"{len(self._hits)}개 요리" if searching else f"{len(self._dishes)}개 요리")
         muted = QBrush(QColor(pcolor("muted")))
+        if self._stars & set(self.favorites):
+            star_methods.add(cooking.FAVORITES)
         for i in range(self.category_list.count()):
             item = self.category_list.item(i)
             name = item.data(_DISH)
-            n = counts.get(name, 0)
-            text = f"{name} ({n})" if searching else name
+            if name == cooking.FAVORITES:
+                n = cooking.favorites_count(self.favorites, self._hits)
+                text = f"{name} ({n})" if searching or not self.favorites else name
+                item.setToolTip("" if self.favorites else "요리를 오른쪽 클릭해 추가")
+            else:
+                n = counts.get(name, 0)
+                text = f"{name} ({n})" if searching else name
             item.setText(f"★ {text}" if name in star_methods else text)
             enabled = n > 0
             item.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable if enabled else Qt.ItemFlag.NoItemFlags)
@@ -225,7 +239,7 @@ class CookingTab(QWidget):
         self.dish_list.clear()
         muted = QBrush(QColor(pcolor("muted")))
         if self._category is not None:
-            dishes = cooking.in_category(self._dishes, self._category)
+            dishes = self._category_dishes(self._category)
             if stat:
                 rows = cooking.ranked(dishes, stat)
             elif self._hits is not None:  # 이름·재료 검색: 맞는 요리 위(이름순), 안 맞는 요리 회색 아래(사용자 결정 11-21)
@@ -235,8 +249,9 @@ class CookingTab(QWidget):
                 rows = [(d, None) for d in dishes]
             stars = getattr(self, "_stars", set())
             for dish, value in rows:
-                # 능력치 검색: 수치 높은 순, 수치는 줄 오른쪽(_ValueDelegate)
-                item = QListWidgetItem(f"★ {dish.name}" if dish.name in stars else dish.name)
+                # 능력치 검색: 수치 높은 순, 수치는 줄 오른쪽(_ValueDelegate). 앞 표시: 최고 ★, 즐겨찾기 ♥ — 글자로(색은 스타일이)
+                mark = ("★" if dish.name in stars else "") + ("♥" if dish.name in self.favorites else "")
+                item = QListWidgetItem(f"{mark} {dish.name}" if mark else dish.name)
                 if value is not None:
                     item.setData(_VALUE, f"{value:+g}")
                 item.setData(_DISH, dish.name)
@@ -256,6 +271,46 @@ class CookingTab(QWidget):
         bar.setValue(scroll if same else 0)
         if current is not None:
             self._center_if_hidden(current)
+
+    def _category_dishes(self, category: str) -> list:
+        if category == cooking.FAVORITES:
+            return cooking.favorite_dishes(self._dishes, self.favorites)
+        return cooking.in_category(self._dishes, category)
+
+    # ---- 즐겨찾기(사용자 결정 11-21) ----
+    def is_favorite(self, name: str) -> bool:
+        return name in self.favorites
+
+    def toggle_favorite(self, name: str) -> None:
+        """추가·빼기 → 저장 → 목록·카테고리 다시(같은 카테고리·검색이면 스크롤 유지)."""
+        if name not in self._by_name:
+            return
+        if name in self.favorites:
+            self.favorites.remove(name)
+        else:
+            self.favorites.append(name)
+        try:
+            config.save_cooking_favorites(self.favorites)
+        except OSError:
+            pass
+        self._refresh_lists()
+
+    def _favorite_menu(self, name: str) -> QMenu:
+        menu = QMenu(self.dish_list)
+        action = menu.addAction("즐겨찾기에서 빼기" if self.is_favorite(name) else "즐겨찾기에 추가")
+        action.triggered.connect(lambda _=False, n=name: self.toggle_favorite(n))
+        return menu
+
+    def _dish_menu(self, pos) -> None:
+        """요리 목록 오른쪽 클릭 — 회색(검색에 안 맞는) 줄도 넣기·빼기 가능."""
+        item = self.dish_list.itemAt(pos)
+        if item is None or item.data(_DISH) not in self._by_name:
+            return
+        self.menu = self._favorite_menu(item.data(_DISH))
+        self._exec_menu(self.menu, self.dish_list.viewport().mapToGlobal(pos))
+
+    def _exec_menu(self, menu: QMenu, global_pos) -> None:
+        menu.exec(global_pos)
 
     def _center_if_hidden(self, item) -> None:
         rect = self.dish_list.visualItemRect(item)
@@ -294,19 +349,21 @@ class CookingTab(QWidget):
         if dish is None or not (item.flags() & Qt.ItemFlag.ItemIsEnabled):
             return
         self.history.clear()  # 목록에서 직접 고름 → 되돌아가기 기록 지움
-        self.select(dish.name)
+        # 즐겨찾기 카테고리 안에서 고르면 그 요리의 조리방법으로 옮기지 않고 즐겨찾기에 머묾
+        self.select(dish.name, stay=self._category == cooking.FAVORITES and dish.name in self.favorites)
 
-    def select(self, name: str) -> None:
-        """요리 선택 — 카테고리·목록 선택·상세·게임 위 바가 그 요리로."""
+    def select(self, name: str, stay: bool = False) -> None:
+        """요리 선택 — 카테고리·목록 선택·상세·게임 위 바가 그 요리로. stay면 지금 카테고리(즐겨찾기) 그대로."""
         dish = self._by_name.get(name)
         if dish is None:
             return
         self._selected = dish
-        refill = dish.method != getattr(self, "_filled_category", None) or self.dish_list.count() == 0
-        self._category = dish.method
+        category = self._category if stay else dish.method
+        refill = category != getattr(self, "_filled_category", None) or self.dish_list.count() == 0
+        self._category = category
         for i in range(self.category_list.count()):
             item = self.category_list.item(i)
-            if item.data(_DISH) == dish.method:
+            if item.data(_DISH) == category:
                 self.category_list.blockSignals(True)
                 self.category_list.setCurrentItem(item)
                 self.category_list.blockSignals(False)

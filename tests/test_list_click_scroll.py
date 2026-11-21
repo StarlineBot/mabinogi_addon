@@ -39,7 +39,7 @@ def test_cooking_click_keeps_scroll_and_row():
     tab = CookingTab()
     tab.resize(900, 500)
     tab.show()
-    tab.category_list.setCurrentRow(0)  # 첫 카테고리(혼합, 80개)
+    tab.category_list.setCurrentRow(1)  # 혼합(80개) — 0.55.0부터 맨 위는 '즐겨찾기'
     QApplication.processEvents()
     bar = tab.dish_list.verticalScrollBar()
     assert bar.maximum() > 20

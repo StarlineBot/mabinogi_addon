@@ -152,7 +152,7 @@ def test_tab_filter_counts_grey_and_keeps_selection(kind, query):
     hits = cooking.search(cooking.load(), kind, query)
     counts = cooking.category_counts(cooking.load(), hits)
     assert tab.count.text() == f"{len(hits)}개 요리"
-    for item in _items(tab.category_list):
+    for item in _items(tab.category_list)[1:]:  # 맨 위 '즐겨찾기'(0.55.0)는 따로 확인
         n = counts[item.data(_DISH)]
         assert item.text().removeprefix("★ ") == f"{item.data(_DISH)} ({n})"
         assert bool(item.flags() & Qt.ItemFlag.ItemIsEnabled) == (n > 0)  # 0개 카테고리는 회색·못 고름
@@ -163,7 +163,7 @@ def test_tab_filter_counts_grey_and_keeps_selection(kind, query):
     tab.query.setText("")
     tab.kind.setCurrentText("요리 이름")
     assert tab.selected.name == "모둠회덮밥"
-    for item in _items(tab.category_list):  # 숫자 없음, 요리가 하나도 없는 카테고리(반죽)만 회색
+    for item in _items(tab.category_list)[1:]:  # 숫자 없음, 요리가 하나도 없는 카테고리(반죽)만 회색
         assert item.text() == item.data(_DISH)
         assert bool(item.flags() & Qt.ItemFlag.ItemIsEnabled) == (item.text() != "반죽")
     assert tab.count.text() == "387개 요리"
@@ -623,3 +623,111 @@ def test_value_delegate_never_picks_text_color_itself():
     for cls in (cooking_tab._ValueDelegate, optimization_panel._TwoLineDelegate):
         src = inspect.getsource(cls.paint)
         assert "HighlightedText" not in src and "drawText" not in src
+
+
+# ---- 0.55.0 요리 즐겨찾기(사용자 결정 11-21) ----
+def test_favorites_pure_and_config_roundtrip():
+    dishes = cooking.load()
+    raw = ["모둠회덮밥", "없는 요리", "모둠회덮밥", 3, "BnR"]
+    assert cooking.normalize_favorites(raw, dishes) == ["모둠회덮밥", "BnR"]   # 없는 이름·중복·형식 틀림 무시, 순서 유지
+    assert cooking.normalize_favorites("x", dishes) == []
+    assert [d.name for d in cooking.favorite_dishes(dishes, ["모둠회덮밥", "BnR"])] == ["BnR", "모둠회덮밥"]
+    assert cooking.favorites_count(["a", "b"], None) == 2 and cooking.favorites_count(["a", "b"], {"b"}) == 1
+    config.save_cooking_favorites(["모둠회덮밥", "BnR"])
+    config.save_cooking_overlay(locked=True)               # 같은 cooking 칸 — 서로 덮지 않음
+    assert config.load_cooking_favorites() == ["모둠회덮밥", "BnR"] and config.load_cooking_overlay()["locked"]
+
+
+def _cat_item(tab, name):
+    from mabinogi_addon.ui.cooking_tab import _DISH
+    return next(i for i in _items(tab.category_list) if i.data(_DISH) == name)
+
+
+def _texts(tab):
+    return [i.text() for i in _items(tab.dish_list)]
+
+
+def test_favorites_category_top_empty_grey_and_toggle_saves():
+    from mabinogi_addon.ui.cooking_tab import CookingTab
+    tab = CookingTab()
+    fav = tab.category_list.item(0)
+    assert fav.text() == "즐겨찾기 (0)" and not (fav.flags() & Qt.ItemFlag.ItemIsEnabled)
+    assert fav.toolTip() == "요리를 오른쪽 클릭해 추가"
+    tab.toggle_favorite("모둠회덮밥")
+    tab.toggle_favorite("까맣게 구워진 드래곤 심장")
+    assert config.load_cooking_favorites() == ["모둠회덮밥", "까맣게 구워진 드래곤 심장"]
+    assert fav.text() == "즐겨찾기" and fav.flags() & Qt.ItemFlag.ItemIsEnabled and fav.toolTip() == ""
+    tab.category_list.setCurrentItem(fav)
+    assert _texts(tab) == ["♥ 까맣게 구워진 드래곤 심장", "♥ 모둠회덮밥"]
+    tab.toggle_favorite("모둠회덮밥")                         # 즐겨찾기에서 빼면 바로 사라짐
+    assert _texts(tab) == ["♥ 까맣게 구워진 드래곤 심장"]
+    tab.shutdown()
+    again = CookingTab()                                       # 다시 읽기
+    assert again.favorites == ["까맣게 구워진 드래곤 심장"] and again.category_list.item(0).text() == "즐겨찾기"
+    again.shutdown()
+
+
+def test_click_inside_favorites_stays_and_hearts_everywhere():
+    from mabinogi_addon.ui.cooking_tab import CookingTab
+    config.save_cooking_favorites(["모둠회덮밥", "까맣게 구워진 드래곤 심장"])
+    tab = CookingTab()
+    tab.category_list.setCurrentItem(tab.category_list.item(0))
+    tab._dish_clicked(_items(tab.dish_list)[1])                # 모둠회덮밥(혼합)
+    assert tab.selected.name == "모둠회덮밥" and tab._category == "즐겨찾기"
+    assert tab.category_list.currentItem() is tab.category_list.item(0)
+    tab.open_ingredient("모둠생선회")                           # 재료 ▸는 그 요리의 조리방법 카테고리로
+    assert tab._category == "혼합"
+    assert "♥ 모둠회덮밥" in _texts(tab) and "모둠생선회" in _texts(tab)
+    tab.shutdown()
+
+
+def test_favorites_follow_search_rules():
+    from mabinogi_addon.ui.cooking_tab import _VALUE, CookingTab
+    config.save_cooking_favorites(["모둠회덮밥", "까맣게 구워진 드래곤 심장", "불금 반반 치맥 세트"])
+    tab = CookingTab()
+    fav = tab.category_list.item(0)
+    tab.category_list.setCurrentItem(fav)
+    assert _texts(tab) == ["♥ 까맣게 구워진 드래곤 심장", "♥ 모둠회덮밥", "♥ 불금 반반 치맥 세트"]
+    tab.kind.setCurrentText("능력치")
+    tab.stat.setCurrentIndex(tab.stat.findData("생명력"))      # 최고 300 = 드래곤 심장(즐겨찾기 안)
+    assert fav.text() == "★ 즐겨찾기 (2)"
+    rows = _items(tab.dish_list)
+    assert [r.text() for r in rows] == ["★♥ 까맣게 구워진 드래곤 심장", "♥ 모둠회덮밥", "♥ 불금 반반 치맥 세트"]
+    assert [r.data(_VALUE) for r in rows] == ["+300", "+35", None]
+    assert not (rows[2].flags() & Qt.ItemFlag.ItemIsEnabled)   # 생명력 없는 요리 회색 아래
+    tab.kind.setCurrentText("재료")
+    tab.query.setText("밥")
+    assert fav.text() == "즐겨찾기 (1)"
+    assert _texts(tab)[0] == "♥ 모둠회덮밥"
+    tab.query.setText("없는재료")
+    assert fav.text() == "즐겨찾기 (0)" and not (fav.flags() & Qt.ItemFlag.ItemIsEnabled)
+    tab.shutdown()
+
+
+def test_right_click_menu_toggles_even_grey_rows():
+    from PySide6.QtCore import QPoint
+    from PySide6.QtWidgets import QApplication
+
+    from mabinogi_addon.ui.cooking_tab import _DISH, CookingTab
+    tab = CookingTab()
+    tab.resize(760, 500)
+    tab.show()
+    tab.kind.setCurrentText("재료")
+    tab.query.setText("밥")
+    tab.category_list.setCurrentItem(_cat_item(tab, "혼합"))
+    QApplication.processEvents()
+    grey = next(i for i in _items(tab.dish_list) if not (i.flags() & Qt.ItemFlag.ItemIsEnabled))
+    name = grey.data(_DISH)
+    shown = []
+    tab._exec_menu = lambda menu, pos: (shown.append([a.text() for a in menu.actions()]), menu.actions()[0].trigger())
+    rect = tab.dish_list.visualItemRect(grey)
+    tab.dish_list.customContextMenuRequested.emit(rect.center())
+    assert shown == [["즐겨찾기에 추가"]] and name in tab.favorites   # 목록을 다시 채워 예전 줄 객체는 사라짐
+    row = next(i for i in _items(tab.dish_list) if i.data(_DISH) == name)
+    assert row.text().startswith("♥ ")
+    tab.dish_list.customContextMenuRequested.emit(tab.dish_list.visualItemRect(row).center())
+    assert shown[-1] == ["즐겨찾기에서 빼기"] and name not in tab.favorites
+    tab.dish_list.itemAt = lambda _pos: None                    # 줄이 없는 빈 곳
+    tab.dish_list.customContextMenuRequested.emit(QPoint(5, 5))
+    assert len(shown) == 2                                    # 메뉴 안 뜸
+    tab.shutdown()

@@ -2237,6 +2237,20 @@ def save_feature_usage(updates: dict[str, str], path: Path = LOCAL_CONFIG_PATH) 
     _write_local_config(data, path)
 
 
+# ---- 요리 즐겨찾기(docs/cooking-spec.md 3절, 사용자 결정 11-21) — 요리 이름 목록(추가 순서), 설정 내보내기·동기화 대상 ----
+def load_cooking_favorites(path: Path = LOCAL_CONFIG_PATH) -> list[str]:
+    raw = _read_local_config(path).get("cooking")
+    favs = raw.get("favorites") if isinstance(raw, dict) else None
+    return [n for n in favs if isinstance(n, str)] if isinstance(favs, list) else []
+
+
+def save_cooking_favorites(names: list[str], path: Path = LOCAL_CONFIG_PATH) -> None:
+    data = _read_local_config(path)
+    raw = data.get("cooking") if isinstance(data.get("cooking"), dict) else {}
+    data["cooking"] = {**raw, "favorites": [str(n) for n in names]}
+    _write_local_config(data, path)
+
+
 # ---- 요리 계산기(docs/cooking-spec.md 6절) — 게임 위 비율 바 위치·배율·잠금(설정 동기화 대상, 위치는 해상도별 규칙) ----
 def load_cooking_overlay(path: Path = LOCAL_CONFIG_PATH) -> dict:
     raw = _read_local_config(path).get("cooking")
