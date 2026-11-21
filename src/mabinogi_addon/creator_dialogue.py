@@ -96,8 +96,9 @@ class DialogueSession:
 # ---- 기능 추천·디스코드 권유(잡담 명세 17절, 0.47.0) ----------------------------------------------
 # 추천할 수 있는 기능 키(17.3·17.5). 모르는 키는 tips에서 건너뛴다.
 TIP_FEATURES = ("buff", "debuff", "boss", "halo", "stat_bars", "dorcha", "tuarim", "custom", "skillbar",
-                "memo", "opt", "fps", "cursor", "blackbox", "keywords", "calc", "sketch", "harp")
-TOOL_FEATURES = ("memo", "calc", "sketch", "harp")
+                "memo", "opt", "fps", "cursor", "blackbox", "keywords", "calc", "sketch", "harp",
+                "cooking")  # 요리 계산기(사용자 결정 11-21)
+TOOL_FEATURES = ("memo", "calc", "sketch", "harp", "cooking")
 INQUIRY = "inquiry"  # 일반 문의 권유(17.7) — 기능 사용 여부와 무관
 FAILING_FEATURES = ("buff", "debuff", "boss", "halo", "stat_bars", "dorcha", "tuarim", "skillbar")  # 콕 집어 묻기 대상
 INQUIRY_BUTTON = "문의하기"  # 켜고 끄는 값이 없는 도구 = 화면을 연 적 있는지로 판정

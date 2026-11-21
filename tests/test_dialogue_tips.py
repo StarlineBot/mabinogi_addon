@@ -71,10 +71,10 @@ def test_invite_schedule(state, days, due):
 BUILTIN = paths.resource_dir() / "dialogues.json"
 
 
-def test_builtin_has_18_draft_tips_and_old_parse_ignores_them():
+def test_builtin_has_19_draft_tips_and_old_parse_ignores_them():
     raw = json.loads(BUILTIN.read_text(encoding="utf-8"))
     recommend = [t for t in raw["tips"] if "when" not in t and t["feature"] not in ("inquiry", "login")]
-    assert {t["feature"] for t in recommend} == set(TIP_FEATURES) and len(recommend) == 18
+    assert {t["feature"] for t in recommend} == set(TIP_FEATURES) and len(recommend) == 19  # 0.54.0 요리 추가
     # 0.48.0(17.7): 일반 문의 권유 1 + 콕 집어 묻기 8
     assert sum(t["feature"] == "inquiry" for t in raw["tips"]) == 1
     assert sum(t["feature"] == "login" for t in raw["tips"]) == 1  # 0.52.0(17.8) 로그인 권유
@@ -84,7 +84,7 @@ def test_builtin_has_18_draft_tips_and_old_parse_ignores_them():
     without = dict(raw)
     without.pop("tips")
     assert parse(json.dumps(without, ensure_ascii=False).encode()) == entries
-    assert len(read_tips(BUILTIN)) == 28
+    assert len(read_tips(BUILTIN)) == 29
 
 
 @pytest.mark.parametrize("tips,expected", [
@@ -111,7 +111,7 @@ def test_missing_tips_key_keeps_builtin_tips_in_feed(monkeypatch, tmp_path):
     monkeypatch.setattr(paths, "user_data_dir", lambda: tmp_path)
     (tmp_path / "creator-dialogues.json").write_text(json.dumps(raw, ensure_ascii=False), encoding="utf-8")
     feed = DialogueFeed()
-    assert len(feed.tips) == 28 and len(feed.entries) == 12
+    assert len(feed.tips) == 29 and len(feed.entries) == 12
     feed.shutdown()
     raw["tips"] = {"잘못": True}
     (tmp_path / "creator-dialogues.json").write_text(json.dumps(raw, ensure_ascii=False), encoding="utf-8")
@@ -142,7 +142,7 @@ def window(monkeypatch):
 def test_all_draft_tips_fit_two_lines(window):
     w, _ = window
     d = w.creator_dialogue
-    assert len(d.feed.tips) == 28  # 17.5 문장 18 + 17.7 문의 권유 9 + 17.8 로그인 권유 1 전부 말풍선 두 줄 안(넘치면 건너뜀)
+    assert len(d.feed.tips) == 29  # 17.5 문장 19(0.54.0 요리) + 17.7 문의 권유 9 + 17.8 로그인 권유 1 전부 말풍선 두 줄 안(넘치면 건너뜀)
     assert all(d.bubble.measure(d._shortest(t.parts))[2] for t in d.feed.tips)
     too_long = Tip("x", "buff", (("가나다라마바사아자차카타파하 " * 4,),), "보러 가기")
     assert d._usable_tips((too_long,)) == ()
@@ -295,3 +295,30 @@ def test_failing_needs_ten_minutes_and_opens_card(window, monkeypatch):
     finally:
         w._inquiry.shutdown()
         w._inquiry.close()
+
+
+@pytest.mark.dialogue_tips
+def test_cooking_tip_until_cooking_tab_opened_and_go_opens_it(window, monkeypatch):
+    """사용자 결정 11-21: 요리 탭을 연 적 없으면 '요리' 추천, '보러 가기' = 편의기능 › 계산기 › 요리. 열면 계산기도 연 것으로."""
+    w, app = window
+    assert "cooking" in w.unused_tip_features()
+    w._tabs.setCurrentWidget(w._convenience_tabs)   # 계산기 첫 화면(분배)만 → 요리는 아직
+    app.processEvents()
+    assert "cooking" in w.unused_tip_features() and "calc" not in w.unused_tip_features()
+    d = w.creator_dialogue
+    tip = next(t for t in d.feed.tips if t.feature == "cooking")
+    _force(d, monkeypatch, ("tip", tip))
+    assert d.request()
+    assert [b.text() for b in d.bubble.buttons] == ["보러 가기"]
+    d.bubble.buttons[0].click()
+    app.processEvents()
+    assert w._convenience_tabs.currentWidget() is w._calculator_tabs
+    assert w._calculator_tabs.tabText(w._calculator_tabs.currentIndex()) == "요리"
+    assert "cooking" not in w.unused_tip_features()
+    assert {"cooking", "calc"} <= config.load_opened_tools()
+
+
+def test_parse_tips_accepts_cooking():
+    raw = json.loads(BUILTIN.read_text(encoding="utf-8"))
+    tips = parse_tips(json.dumps(raw, ensure_ascii=False).encode())
+    assert "cooking" in {t.feature for t in tips} and "cooking" in TIP_FEATURES

@@ -16,7 +16,10 @@
     "tests/test_windows_ci.py",
     "tests/test_startup_smoke.py",
     "tests/test_release_notes.py",
-    "tests/test_release_notes_trigger.py"
+    "tests/test_release_notes_trigger.py",
+    "tests/test_dialogue_tips.py",
+    "tests/test_creator_dialogue.py",
+    "tests/test_navigation.py"
   ],
   "coverage": {
     "src/mabinogi_addon/ui/cooking_tab.py": {
@@ -78,6 +81,28 @@
         "tests/test_cooking.py"
       ],
       "reason": "능력치 값·정렬(높은 순·동점 이름순·없는 건 아래)·전체 최고(동점 모두)"
+    },
+    "src/mabinogi_addon/creator_dialogue.py": {
+      "tests": [
+        "tests/test_dialogue_tips.py",
+        "tests/test_creator_dialogue.py"
+      ],
+      "reason": "추천 기능·도구 키에 cooking(요리 탭을 연 적 없을 때 추천)"
+    },
+    "src/mabinogi_addon/assets/dialogues.json": {
+      "tests": [
+        "tests/test_dialogue_tips.py",
+        "tests/test_creator_dialogue.py"
+      ],
+      "reason": "tips에 tip-cooking(말풍선 두 줄 안), docs/examples 사본과 같음"
+    },
+    "src/mabinogi_addon/ui/main_window.py": {
+      "tests": [
+        "tests/test_dialogue_tips.py",
+        "tests/test_navigation.py",
+        "tests/test_startup_smoke.py"
+      ],
+      "reason": "지금 화면 = 계산기 › 요리 탭이면 cooking(+calc) 기록, '보러 가기' cooking → 편의기능 › 계산기 › 요리"
     }
   }
 }

@@ -685,19 +685,28 @@ class MainWindow(QMainWindow):
             current = self._convenience_tabs.currentWidget()
             if current is self._sketch_scroll:
                 return "sketch"
+            if current is self._calculator_tabs and self._calculator_tabs.currentIndex() == self._cooking_tab_index():
+                return "cooking"  # 요리 탭(계산기 사용으로도 함께 기록 — _record_tool_opened)
             return None if current is getattr(self, "_alarm_scroll", None) else "calc"
         panel = getattr(self.optimization_tools, "panel", None)
         if panel is not None and tab is panel:
             return "harp" if panel.tabs.currentWidget() is self._harp_scroll else None
         return None
 
+    def _cooking_tab_index(self) -> int:
+        for i in range(self._calculator_tabs.count()):
+            if self._calculator_tabs.tabText(i) == "요리":
+                return i
+        return -1
+
     def _record_tool_opened(self, *_args) -> None:
         tool = self._current_tool()
         if tool is None:
             return
         try:
-            if config.mark_tool_opened(tool):
-                logging.getLogger(__name__).info("[잡담 추천] 도구 화면 처음 열기: %s", tool)
+            for key in (("cooking", "calc") if tool == "cooking" else (tool,)):
+                if config.mark_tool_opened(key):
+                    logging.getLogger(__name__).info("[잡담 추천] 도구 화면 처음 열기: %s", key)
         except OSError:
             logging.getLogger(__name__).debug("도구 열기 기록 실패", exc_info=True)
 
@@ -793,13 +802,16 @@ class MainWindow(QMainWindow):
 
     def open_tip_feature(self, key: str) -> None:
         """잡담 '보러 가기' → 그 기능 화면(홈 줄을 누른 것과 같은 길)."""
-        if key == "calc":
+        if key in ("calc", "cooking"):
             if self._setup_busy() or self._config_pending_restart:
                 return
             self._hide_home()
             self._pages.setCurrentWidget(self._tabs)
             self._tabs.setCurrentWidget(self._convenience_tabs)
             self._convenience_tabs.setCurrentIndex(0)
+            if key == "cooking":  # 편의기능 › 계산기 › 요리
+                self._convenience_tabs.setCurrentWidget(self._calculator_tabs)
+                self._calculator_tabs.setCurrentIndex(self._cooking_tab_index())
         elif key == "sketch":
             if self._setup_busy() or self._config_pending_restart:
                 return
