@@ -69,6 +69,7 @@ def _urgent_edge(rate: str, pitch: str) -> tuple[str, str]:
 # 팩 정의 — 성격마다 목소리·말투를 다르게. 자유롭게 추가/수정하세요.
 PACKS: list[dict] = [
     {
+        # 11-22부터 이 팩의 11개는 사용자 제공 녹음(파티 알림.mp3만 생성본) — 이 팩을 스크립트로 다시 생성하면 녹음을 덮어쓴다.
         "name": "부드러운 여성",
         "edge_voice": "ko-KR-SunHiNeural",
         "rate": "-6%",

@@ -1,10 +1,9 @@
 {
-  "version": "0.55.1",
+  "version": "0.55.2",
   "tests": [
-    "tests/test_cooking_autofind.py",
-    "tests/test_cooking.py",
-    "tests/test_skillbar_testers.py",
-    "tests/test_stat_bars.py",
+    "tests/test_config_buffs.py",
+    "tests/test_bundle_layout.py",
+    "tests/test_alarm.py",
     "tests/test_release_checks.py",
     "tests/test_startup_build.py",
     "tests/test_release_candidate.py",
@@ -14,21 +13,19 @@
     "tests/test_release_notes_trigger.py"
   ],
   "coverage": {
-    "src/mabinogi_addon/detect/cooking_window.py": {
+    "src/mabinogi_addon/assets/sounds/부드러운 여성/비바체 연장.mp3": {
       "tests": [
-        "tests/test_cooking_autofind.py",
-        "tests/test_skillbar_testers.py",
-        "tests/test_stat_bars.py"
+        "tests/test_config_buffs.py",
+        "tests/test_bundle_layout.py",
+        "tests/test_alarm.py"
       ],
-      "reason": "신호는 있는데 2회 못 알아보면 숨김(핀즈 크래프트 192845), 요리 화면 찾기 그대로 — 새 tests/data 스크린샷이 다른 판독(단축바 CASES·체력바)도 안 깨는지"
+      "reason": "'부드러운 여성' 11개 새 녹음으로 교체(파티 알림만 기존) — 팩 하나·이름 12개 그대로, '부드러운 여성2' 없음, assets 번들 포함"
     },
-    "src/mabinogi_addon/ui/cooking_tab.py": {
+    "scripts/gen_tts.py": {
       "tests": [
-        "tests/test_cooking_autofind.py",
-        "tests/test_cooking.py",
-        "tests/test_startup_smoke.py"
+        "tests/test_config_buffs.py"
       ],
-      "reason": "manual 복원은 켜기/끄기 때만, 숨김·찾은 자리 경로 그대로"
+      "reason": "주석만 — 이 팩은 사용자 녹음(다시 생성하면 덮어씀)"
     },
     "packaging/release_checks.json": {
       "tests": [
@@ -36,21 +33,22 @@
         "tests/test_release_candidate.py",
         "tests/test_windows_ci.py"
       ],
-      "reason": "0.55.1 검사 목록·후보 봉인·CI 계약"
+      "reason": "0.55.2 검사 목록·후보 봉인·CI 계약"
     },
     "packaging/build_windows.py": {
       "tests": [
         "tests/test_startup_build.py",
-        "tests/test_startup_smoke.py"
+        "tests/test_startup_smoke.py",
+        "tests/test_bundle_layout.py"
       ],
-      "reason": "새 자산·모듈 없음 — 빌드·시작 경로 그대로"
+      "reason": "새 모듈 없음 — assets 통째 포함 경로 그대로"
     },
     "src/mabinogi_addon/assets/release_notes.md": {
       "tests": [
         "tests/test_release_notes.py",
         "tests/test_release_notes_trigger.py"
       ],
-      "reason": "0.55.1 노트 맨 위(조용히 다듬은 것 한 줄)·첫 실행 표시, v0.55.0 이하 그대로"
+      "reason": "0.55.2 노트 맨 위(조용히 다듬은 것 한 줄)·첫 실행 표시, v0.55.1 이하 그대로"
     }
   }
 }

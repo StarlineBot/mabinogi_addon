@@ -121,3 +121,16 @@ def test_save_preserves_other_sections(tmp_path):
     data = json.loads(path.read_text(encoding="utf-8"))
     assert data["party"]["keywords"] == ["글렌"]  # 다른 섹션 보존
     assert data["buffTracker"]["buffs"][0]["id"] == "vivace"
+
+
+def test_soft_female_pack_is_one_folder_with_user_recordings():
+    """0.55.2(사용자 요청 11-22): '부드러운 여성' 11개를 새 녹음으로 교체 — '부드러운 여성2'는 별도 팩으로 남지 않음, 이름 12개 그대로."""
+    from mabinogi_addon import paths
+    from mabinogi_addon.ui.notifier import list_voice_packs
+    assert "부드러운 여성" in list_voice_packs() and "부드러운 여성2" not in list_voice_packs()
+    folder = paths.resource_dir() / "sounds" / "부드러운 여성"
+    assert sorted(p.name for p in folder.glob("*.mp3")) == sorted([
+        "비바체 연장.mp3", "비바체 연장2.mp3", "상태지원 알림.mp3", "상태지원 알림2.mp3", "전장의 서곡 연장.mp3",
+        "전장의 서곡 연장2.mp3", "투아림 부스트 발동 직전.mp3", "파티 알림.mp3", "햄 버닝 연장.mp3", "햄 버닝 연장2.mp3",
+        "행진곡 연장.mp3", "행진곡 연장2.mp3"])
+    assert (folder / "비바체 연장.mp3").stat().st_size > 30_000   # 새 녹음(약 170~190kbps, 2초 넘음 — 예전 32kbps는 1만 바이트대)
