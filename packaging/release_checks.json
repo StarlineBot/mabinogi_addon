@@ -1,9 +1,8 @@
 {
-  "version": "0.55.2",
+  "version": "0.55.3",
   "tests": [
     "tests/test_config_buffs.py",
     "tests/test_bundle_layout.py",
-    "tests/test_alarm.py",
     "tests/test_release_checks.py",
     "tests/test_startup_build.py",
     "tests/test_release_candidate.py",
@@ -13,19 +12,11 @@
     "tests/test_release_notes_trigger.py"
   ],
   "coverage": {
-    "src/mabinogi_addon/assets/sounds/부드러운 여성/비바체 연장.mp3": {
-      "tests": [
-        "tests/test_config_buffs.py",
-        "tests/test_bundle_layout.py",
-        "tests/test_alarm.py"
-      ],
-      "reason": "'부드러운 여성' 11개 새 녹음으로 교체(파티 알림만 기존) — 팩 하나·이름 12개 그대로, '부드러운 여성2' 없음, assets 번들 포함"
-    },
     "scripts/gen_tts.py": {
       "tests": [
         "tests/test_config_buffs.py"
       ],
-      "reason": "주석만 — 이 팩은 사용자 녹음(다시 생성하면 덮어씀) · '화난 여성'은 스크립트 대상 아님"
+      "reason": "주석만 — '화난 여성'·'조용한 여성'은 사용자 녹음(스크립트 대상 아님)"
     },
     "packaging/release_checks.json": {
       "tests": [
@@ -33,7 +24,7 @@
         "tests/test_release_candidate.py",
         "tests/test_windows_ci.py"
       ],
-      "reason": "0.55.2 검사 목록·후보 봉인·CI 계약"
+      "reason": "0.55.3 검사 목록·후보 봉인·CI 계약"
     },
     "packaging/build_windows.py": {
       "tests": [
@@ -48,14 +39,14 @@
         "tests/test_release_notes.py",
         "tests/test_release_notes_trigger.py"
       ],
-      "reason": "0.55.2 노트 맨 위(조용히 다듬은 것 두 줄: 부드러운 여성 교체·화난 여성 추가)·첫 실행 표시, v0.55.1 이하 그대로"
+      "reason": "0.55.3 노트 맨 위(조용히 다듬은 것 한 줄)·첫 실행 표시, v0.55.2 이하 그대로"
     },
-    "src/mabinogi_addon/assets/sounds/화난 여성/비바체 연장.mp3": {
+    "src/mabinogi_addon/assets/sounds/조용한 여성/비바체 연장.mp3": {
       "tests": [
         "tests/test_config_buffs.py",
         "tests/test_bundle_layout.py"
       ],
-      "reason": "새 목소리 팩 '화난 여성' 11개(사용자 녹음) — 목록 자동 인식, 파티 알림은 기본 녹음본 폴백, assets 번들 포함"
+      "reason": "새 목소리 팩 '조용한 여성' 11개(사용자 녹음) — 목록 자동 인식, 파티 알림은 기본 녹음본 폴백, assets 번들 포함"
     }
   }
 }

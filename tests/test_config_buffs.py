@@ -1,3 +1,4 @@
+import pytest
 from mabinogi_addon.config import (
     AlertConfig,
     BuffSettings,
@@ -136,16 +137,17 @@ def test_soft_female_pack_is_one_folder_with_user_recordings():
     assert (folder / "비바체 연장.mp3").stat().st_size > 30_000   # 새 녹음(약 170~190kbps, 2초 넘음 — 예전 32kbps는 1만 바이트대)
 
 
-def test_angry_female_pack_added_and_falls_back_for_missing(monkeypatch):
-    """0.55.2(사용자 요청 11-22): '화난 여성' 팩 — 폴더만으로 목록에 나옴, 파일은 '부드러운 여성' 이름의 부분집합,
+@pytest.mark.parametrize("pack", ["화난 여성", "조용한 여성"])  # 0.55.2·0.55.3 사용자 녹음 팩
+def test_user_recorded_pack_added_and_falls_back_for_missing(monkeypatch, pack):
+    """사용자 요청 11-22: 폴더만으로 목록에 나옴, 파일은 '부드러운 여성' 이름의 부분집합,
     없는 '파티 알림'은 기본 녹음본으로 폴백."""
     from mabinogi_addon import config, paths
     from mabinogi_addon.ui import notifier
-    assert "화난 여성" in notifier.list_voice_packs()
+    assert pack in notifier.list_voice_packs()
     root = paths.resource_dir() / "sounds"
-    angry = {p.name for p in (root / "화난 여성").glob("*.mp3")}
+    angry = {p.name for p in (root / pack).glob("*.mp3")}
     soft = {p.name for p in (root / "부드러운 여성").glob("*.mp3")}
     assert len(angry) == 11 and angry < soft and "파티 알림.mp3" not in angry
-    monkeypatch.setattr(config, "load_voice_pack", lambda *a, **k: "화난 여성")
-    assert notifier.sound_path("비바체 연장.mp3") == notifier.SOUND_DIR / "화난 여성" / "비바체 연장.mp3"
+    monkeypatch.setattr(config, "load_voice_pack", lambda *a, **k: pack)
+    assert notifier.sound_path("비바체 연장.mp3") == notifier.SOUND_DIR / pack / "비바체 연장.mp3"
     assert notifier.sound_path("파티 알림.mp3") == notifier.SOUND_DIR / "파티 알림.mp3"
