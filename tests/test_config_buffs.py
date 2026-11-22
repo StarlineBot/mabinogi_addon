@@ -1,4 +1,5 @@
 import pytest
+
 from mabinogi_addon.config import (
     AlertConfig,
     BuffSettings,
