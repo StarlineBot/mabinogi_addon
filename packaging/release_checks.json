@@ -25,7 +25,7 @@
       "tests": [
         "tests/test_config_buffs.py"
       ],
-      "reason": "주석만 — 이 팩은 사용자 녹음(다시 생성하면 덮어씀)"
+      "reason": "주석만 — 이 팩은 사용자 녹음(다시 생성하면 덮어씀) · '화난 여성'은 스크립트 대상 아님"
     },
     "packaging/release_checks.json": {
       "tests": [
@@ -48,7 +48,14 @@
         "tests/test_release_notes.py",
         "tests/test_release_notes_trigger.py"
       ],
-      "reason": "0.55.2 노트 맨 위(조용히 다듬은 것 한 줄)·첫 실행 표시, v0.55.1 이하 그대로"
+      "reason": "0.55.2 노트 맨 위(조용히 다듬은 것 두 줄: 부드러운 여성 교체·화난 여성 추가)·첫 실행 표시, v0.55.1 이하 그대로"
+    },
+    "src/mabinogi_addon/assets/sounds/화난 여성/비바체 연장.mp3": {
+      "tests": [
+        "tests/test_config_buffs.py",
+        "tests/test_bundle_layout.py"
+      ],
+      "reason": "새 목소리 팩 '화난 여성' 11개(사용자 녹음) — 목록 자동 인식, 파티 알림은 기본 녹음본 폴백, assets 번들 포함"
     }
   }
 }
