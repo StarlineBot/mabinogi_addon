@@ -8,6 +8,8 @@
 
 > 11-17: 이 규칙들은 CLAUDE.md 'QA 세션 필수 규칙'에도 옮김 — status.md는 매번 자동으로 읽히지 않아 지켜지지 않았음(사용자 지적).
 
+- **0.55.1 개발(11-22 DEV, QA 전달 사용자 보고·결정 '알아볼 때만 표시')** — 핀즈 크래프트 창(`tests/data/스크린샷 2026-11-22 192845.png`, 위아래 검은 띠: 신호 0.771, 최고 0.288)에서 '신호 있음 + 못 알아봄 → manual(손으로 맞춘 자리)'로 바가 뜸 → `CookingFinder._not_recognized`를 closed(숨김)로, 11-20 규칙 폐기. manual은 첫 찾기 전(켜기/끄기)만. 명세 7절·노트 v0.55.1.
+  → `tests/test_cooking_autofind.py`(192845 2회 → closed·탭 숨김, 오검출 테스트의 신호 단언에서 이 이미지만 분리·찾기 None 유지, 추적·탭 기대 manual → closed, 껐다 켜면 손으로 맞춘 자리), `tests/test_skillbar_testers.py` CASES에 192845 (2,12,1168,89). tests/data 전체 도는 판독 테스트 543 통과. 배포 검사 0.55.1 CI 글꼴 777 통과(7 skip).
 - **0.55.0 개발(11-21 DEV, QA 전달 사용자 결정 '요리 즐겨찾기')** — `cooking.py` FAVORITES·normalize_favorites·favorite_dishes·favorites_count, `config.py` load/save_cooking_favorites(`cooking.favorites`, overlay와 같은 칸, 동기화·내보내기 포함 — 제외 목록에 없음 확인). `ui/cooking_tab.py`: 카테고리 맨 위 '즐겨찾기'(검색 중 (N)·비면 '즐겨찾기 (0)' 회색+툴팁·최고 요리 있으면 ★), 즐겨찾기 카테고리 = 다른 카테고리와 같은 정렬·회색·수치·★, 요리 앞 ♥/★♥(item 글자 — 델리게이트 추가 없음), 즐겨찾기 안 클릭은 머묾(select stay), 재료 ▸는 조리방법 카테고리로, 오른쪽 클릭 메뉴 한 줄(회색 줄도), 빼면 즉시 사라짐.
   렌더 `docs/assets/cooking-favorites-20261121/` 1_favorites·2_favorites_hp(★ 즐겨찾기 (2)·★♥ +300)·3_mix_heart_menu(♥ 모둠회덮밥 + '즐겨찾기에서 빼기' 메뉴 합성)·4_empty(즐겨찾기 (0) 회색) — 사용자 확인 대기. 명세 3절·노트 v0.55.0.
   → `tests/test_cooking.py`(순수·저장 왕복, 맨 위·회색·툴팁·토글 저장·다시 읽기, 즐겨찾기 안 클릭 머묾·▸ 이동, 검색 세 종류, 오른쪽 클릭 메뉴 회색 줄·빼기·빈 곳) + test_list_click_scroll(혼합 줄 번호 1). 배포 검사 0.55.0 332 통과.

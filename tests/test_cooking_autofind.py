@@ -22,6 +22,8 @@ COOKING = {
     "스크린샷 2026-11-20 174704.png": (347, 844),
     "스크린샷 2026-11-20 174447.png": (1242, 862),
 }
+# 신호는 켜지지만(아래 띠 검음) 요리창이 아닌 화면 — 찾기로 걸러 숨김(사용자 결정 11-22)
+SIGNAL_NOT_COOKING = {"스크린샷 2026-11-22 192845.png"}  # 핀즈 크래프트 창, 위아래 검은 띠
 # 요리 화면을 1024px로 줄인 사본(게임 해상도 아님 — UI 크기가 달라 찾지 않는 게 맞음)
 SHRUNK = {"mabinogi_2026_11_19_171429.webp", "image (31).webp"}
 
@@ -65,7 +67,8 @@ def test_no_false_positive_without_cooking_window():
         if frame is None or frame.shape[0] < 200:
             continue
         checked += 1
-        assert cw.black_ratio(_band(frame)) < cw.SIGNAL_RATIO, name
+        if name not in SIGNAL_NOT_COOKING:
+            assert cw.black_ratio(_band(frame)) < cw.SIGNAL_RATIO, name
         assert cw.locate(frame) is None, name
     assert checked >= 100
 
@@ -109,12 +112,12 @@ def test_tracking_nearby_then_moved_then_closed():
     assert state.kind == "found" and state.bar[:2] == (348 - 200 + 1200, 850 - 700 + 300)
     assert finder.full_searches == 2
 
-    # 신호는 남았는데 못 알아봄: 1번은 지난 자리 유지, 2번 연속이면 손으로(숨기지 않음 — 사용자 결정 11-20)
+    # 신호는 남았는데 못 알아봄: 1번은 지난 자리 유지, 2번 연속이면 숨김(사용자 결정 11-22 — 11-20 '손으로' 폐기)
     empty = np.zeros_like(base)
     assert finder.step(_grabber(empty), w, h).kind == "found"
     state = finder.step(_grabber(empty), w, h)
-    assert state.kind == "manual" and state.bar is None and finder.bar is None
-    assert finder.step(_grabber(empty), w, h).kind == "manual"
+    assert state.kind == "closed" and state.bar is None and finder.bar is None
+    assert finder.step(_grabber(empty), w, h).kind == "closed"
     # 다시 뜨면 다시 찾음
     assert finder.step(_grabber(base), w, h).kind == "found"
     # 신호가 사라지면 바로 닫힘
@@ -122,13 +125,13 @@ def test_tracking_nearby_then_moved_then_closed():
     assert finder.step(_grabber(bright), w, h).kind == "closed"
 
 
-def test_never_found_signal_decides_manual_or_closed():
-    """한 번도 못 찾았어도: 신호 있음 + 못 알아봄 → 손으로, 신호 없음(요리창 없음) → 숨김(사용자 보고 11-20)."""
+def test_never_found_hides_unless_recognized():
+    """신호 있음 + 못 알아봄 2회 → 숨김(사용자 결정 11-22), 신호 없음 → 숨김(사용자 보고 11-20). 첫 찾기 전만 손으로."""
     finder = cw.CookingFinder()
     assert finder.state.kind == "manual"   # 첫 찾기 전(애드온 요리 탭에서 막 켠 바는 보임)
     empty = np.zeros((1080, 1920, 3), np.uint8)
-    assert finder.step(_grabber(empty), 1920, 1080).kind == "manual"
-    assert finder.step(_grabber(empty), 1920, 1080).kind == "manual"
+    assert finder.step(_grabber(empty), 1920, 1080).kind == "manual"   # 1회 못 찾음은 지난 상태 유지
+    assert finder.step(_grabber(empty), 1920, 1080).kind == "closed"
     assert finder.step(_grabber(np.full_like(empty, 120)), 1920, 1080).kind == "closed"
     assert finder.step(lambda *a: None, 1920, 1080).kind == "closed"   # 띠 캡처 실패도 신호 없음
 
@@ -246,19 +249,20 @@ def test_tab_places_bar_on_found_spot_and_hides_when_closed(monkeypatch):
     tab.shutdown()
 
 
-def test_manual_fallback_when_not_found(monkeypatch):
-    """요리창을 못 찾는 화면이면 0.53.0처럼 저장 자리에 보이고 끌기·잠금 그대로."""
+def test_manual_spot_before_first_find_then_hidden_when_not_recognized(monkeypatch):
+    """바를 막 켰을 때(첫 찾기 전)는 저장 자리에 보이고 끌기 그대로, 요리창을 못 알아보면 숨김(사용자 결정 11-22)."""
     config.save_cooking_overlay(pos={"x": 30, "y": 40}, scale=1.0, locked=False)
     tab, _fg, _calls = _tab(monkeypatch, np.zeros((1080, 1920, 3), np.uint8))
     tab.select("모둠회덮밥")
     tab.set_overlay(True)
-    for _ in range(4):
-        tab._auto_tick()
     o = tab.overlay
     assert tab.auto_state == "manual" and o.isVisible() and (o.x(), o.y()) == (30, 40) and not o.locked
     o.move(33, 44)
     o.moved.emit()
     assert config.load_cooking_overlay()["pos"] == {"x": 33, "y": 44}
+    for _ in range(4):
+        tab._auto_tick()
+    assert tab.auto_state == "closed" and not o.isVisible()
     tab.shutdown()
 
 
@@ -370,7 +374,7 @@ def test_logs_by_signal_every_step_while_on(caplog):
             auto.tick(True)
     got = lines()
     assert len(got) == 4 and all("신호=켜짐" in x for x in got)
-    assert "못찾음=1" in got[0] and "상태=found" in got[0] and "상태=manual" in got[1]
+    assert "못찾음=1" in got[0] and "상태=found" in got[0] and "상태=closed" in got[1]
 
     # 신호 꺼짐: 바뀔 때 한 줄, 그 뒤 30초 안엔 없음
     caplog.clear()
@@ -477,8 +481,8 @@ def test_full_search_time_2560():
     assert time.perf_counter() - started < 2.0
 
 
-def test_tab_not_recognized_returns_to_manual_spot(monkeypatch):
-    """사용자 결정 11-20: 찾은 뒤 신호는 있는데 2회 못 알아보면 숨기지 않고 손으로 맞춘 자리(저장 위치·잠금)로, 끌면 저장."""
+def test_tab_not_recognized_hides_and_off_restores_manual_spot(monkeypatch):
+    """사용자 결정 11-22: 찾은 뒤 신호는 있는데 2회 못 알아보면 숨김(11-20 '손으로' 폐기). 바를 껐다 켜면 손으로 맞춘 자리로."""
     frame = imread(DATA / "11image.png")
     config.save_cooking_overlay(pos={"x": 10, "y": 20}, scale=1.0, locked=False)
     tab, _fg, _calls = _tab(monkeypatch, frame, origin=(100, 50))
@@ -491,11 +495,10 @@ def test_tab_not_recognized_returns_to_manual_spot(monkeypatch):
     tab._frame = np.zeros_like(frame)                     # 신호 켜짐, 요리창 모양 없음
     for _ in range(3):
         tab._auto_tick()
-    assert tab.auto_state == "manual" and o.isVisible()
-    assert (o.x(), o.y()) == (10, 20) and not o.locked
-    o.move(15, 25)
-    o.moved.emit()
-    assert config.load_cooking_overlay()["pos"] == {"x": 15, "y": 25}
+    assert tab.auto_state == "closed" and not o.isVisible()
+    tab.set_overlay(False)
+    tab.set_overlay(True)                                 # 다시 켜면 첫 찾기 전 = 손으로 맞춘 자리
+    assert tab.auto_state == "manual" and o.isVisible() and (o.x(), o.y()) == (10, 20) and not o.locked
     tab._frame = frame                                    # 다시 알아보면 그 자리로
     tab._auto_tick()
     tab._auto_tick()
@@ -504,7 +507,7 @@ def test_tab_not_recognized_returns_to_manual_spot(monkeypatch):
 
 
 def test_tab_hides_bar_without_cooking_window_even_if_never_found(monkeypatch):
-    """사용자 보고 11-20: 요리창 안 떴는데 바가 떠 있음 → 신호 없으면 숨김, 신호 있는데 못 알아보면 저장 자리, 찾으면 그 자리."""
+    """사용자 보고 11-20·결정 11-22: 신호 없으면 숨김, 신호 있는데 못 알아봐도 숨김, 찾으면 그 자리."""
     config.save_cooking_overlay(pos={"x": 10, "y": 20}, scale=1.0, locked=False)
     frame = imread(DATA / "11image.png")
     tab, _fg, _calls = _tab(monkeypatch, np.full_like(frame, 120), origin=(100, 50))
@@ -518,9 +521,27 @@ def test_tab_hides_bar_without_cooking_window_even_if_never_found(monkeypatch):
     tab._frame = np.zeros_like(frame)                     # 신호 있음, 못 알아봄
     for _ in range(3):
         tab._auto_tick()
-    assert tab.auto_state == "manual" and o.isVisible() and (o.x(), o.y()) == (10, 20) and not o.locked
+    assert tab.auto_state == "closed" and not o.isVisible()
     tab._frame = frame
     tab._auto_tick()
     tab._auto_tick()
     assert tab.auto_state == "found" and o.isVisible()
+    tab.shutdown()
+
+
+def test_pinz_craft_window_with_black_bands_hides_bar(monkeypatch):
+    """사용자 보고 11-22: 핀즈 크래프트 창(위아래 검은 띠)은 신호가 켜지지만 요리창이 아님 → 2회 못 알아봄 → 숨김."""
+    frame = imread(DATA / "스크린샷 2026-11-22 192845.png")
+    h, w = frame.shape[:2]
+    assert cw.signal(_band(frame)) and cw.locate(frame) is None
+    finder = cw.CookingFinder()
+    finder.step(_grabber(frame), w, h)
+    assert finder.step(_grabber(frame), w, h).kind == "closed"
+    config.save_cooking_overlay(pos={"x": 10, "y": 20}, scale=1.0, locked=False)
+    tab, _fg, _calls = _tab(monkeypatch, frame)
+    tab.select("모둠회덮밥")
+    tab.set_overlay(True)
+    for _ in range(4):
+        tab._auto_tick()
+    assert tab.auto_state == "closed" and not tab.overlay.isVisible()
     tab.shutdown()

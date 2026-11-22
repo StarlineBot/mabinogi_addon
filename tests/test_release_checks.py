@@ -70,17 +70,17 @@ def test_current_plan_maps_every_selected_file_to_changed_code_or_shared_contrac
 
 
 def test_current_release_keeps_feature_boundaries_and_delivery_contracts():
-    """0.55.0: 요리 즐겨찾기 + 배포 계약. (릴리즈마다 경계를 바꾼다 — 누적하지 않음)"""
+    """0.55.1: 요리 바 — 못 알아보면 숨김(핀즈 크래프트 등) + 배포 계약. (릴리즈마다 경계를 바꾼다 — 누적하지 않음)"""
     root = Path(__file__).resolve().parents[1]
     plan = json.loads((root / 'packaging/release_checks.json').read_text(encoding='utf-8'))
     paths = set(plan['tests'])
     assert {
-        'tests/test_cooking.py', 'tests/test_list_click_scroll.py',
+        'tests/test_cooking_autofind.py', 'tests/test_skillbar_testers.py',
         'tests/test_startup_build.py', 'tests/test_release_checks.py', 'tests/test_release_candidate.py',
         'tests/test_windows_ci.py', 'tests/test_startup_smoke.py',
     } <= paths
     assert {
-        'src/mabinogi_addon/cooking.py', 'src/mabinogi_addon/config.py', 'src/mabinogi_addon/ui/cooking_tab.py',
+        'src/mabinogi_addon/detect/cooking_window.py', 'src/mabinogi_addon/ui/cooking_tab.py',
         'packaging/build_windows.py', 'src/mabinogi_addon/assets/release_notes.md',
     } <= set(plan['coverage'])
     # The separate development entry must continue collecting the whole suite.

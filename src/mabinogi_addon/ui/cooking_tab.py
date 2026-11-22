@@ -648,7 +648,7 @@ class CookingTab(QWidget):
             bottom = round((oy + by + bh) / ratio)
             self.overlay.move(x, bottom - self.overlay.height())
         elif kind == "manual" and before in ("found", "closed"):
-            self._restore_manual()  # 못 알아보면(신호는 있음) 손으로 맞춘 자리·배율·잠금으로 — 숨기지 않음
+            self._restore_manual()  # 켜기/끄기(reset) 때 — 손으로 맞춘 자리·배율·잠금으로(0.55.1부터 찾기 결과로 manual은 안 옴)
         self._sync_overlay()
 
     def _restore_manual(self) -> None:

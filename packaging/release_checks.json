@@ -1,9 +1,10 @@
 {
-  "version": "0.55.0",
+  "version": "0.55.1",
   "tests": [
-    "tests/test_cooking.py",
-    "tests/test_list_click_scroll.py",
     "tests/test_cooking_autofind.py",
+    "tests/test_cooking.py",
+    "tests/test_skillbar_testers.py",
+    "tests/test_stat_bars.py",
     "tests/test_release_checks.py",
     "tests/test_startup_build.py",
     "tests/test_release_candidate.py",
@@ -13,26 +14,21 @@
     "tests/test_release_notes_trigger.py"
   ],
   "coverage": {
-    "src/mabinogi_addon/cooking.py": {
+    "src/mabinogi_addon/detect/cooking_window.py": {
       "tests": [
-        "tests/test_cooking.py"
+        "tests/test_cooking_autofind.py",
+        "tests/test_skillbar_testers.py",
+        "tests/test_stat_bars.py"
       ],
-      "reason": "즐겨찾기 정규화(없는 이름·중복 무시, 순서 유지)·즐겨찾기 요리·개수"
-    },
-    "src/mabinogi_addon/config.py": {
-      "tests": [
-        "tests/test_cooking.py"
-      ],
-      "reason": "cooking.favorites 저장·읽기(같은 cooking 칸의 overlay와 서로 안 덮음)"
+      "reason": "신호는 있는데 2회 못 알아보면 숨김(핀즈 크래프트 192845), 요리 화면 찾기 그대로 — 새 tests/data 스크린샷이 다른 판독(단축바 CASES·체력바)도 안 깨는지"
     },
     "src/mabinogi_addon/ui/cooking_tab.py": {
       "tests": [
-        "tests/test_cooking.py",
-        "tests/test_list_click_scroll.py",
         "tests/test_cooking_autofind.py",
+        "tests/test_cooking.py",
         "tests/test_startup_smoke.py"
       ],
-      "reason": "카테고리 맨 위 즐겨찾기(개수·회색·툴팁·★), ♥·★♥, 검색 규칙 그대로, 즐겨찾기 안 클릭은 머묾, 오른쪽 클릭 메뉴(회색 줄 포함)"
+      "reason": "manual 복원은 켜기/끄기 때만, 숨김·찾은 자리 경로 그대로"
     },
     "packaging/release_checks.json": {
       "tests": [
@@ -40,7 +36,7 @@
         "tests/test_release_candidate.py",
         "tests/test_windows_ci.py"
       ],
-      "reason": "0.55.0 검사 목록·후보 봉인·CI 계약"
+      "reason": "0.55.1 검사 목록·후보 봉인·CI 계약"
     },
     "packaging/build_windows.py": {
       "tests": [
@@ -54,7 +50,7 @@
         "tests/test_release_notes.py",
         "tests/test_release_notes_trigger.py"
       ],
-      "reason": "0.55.0 노트 맨 위(요리 즐겨찾기 헤드라인)·첫 실행 표시, v0.54.0 이하 그대로"
+      "reason": "0.55.1 노트 맨 위(조용히 다듬은 것 한 줄)·첫 실행 표시, v0.55.0 이하 그대로"
     }
   }
 }

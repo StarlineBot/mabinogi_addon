@@ -6,7 +6,7 @@
   만들어 TM_CCOEFF_NORMED. 11-20부터 밝은 반투명 스킨 그림을 더해 두 점수 맵 평균, 기준 0.47(아래 MATCH_MIN).
   UI 크기는 해상도와 무관하게 같아(4K도 바 245px) 배율 탐색 없음.
 - 추적(CookingFinder): 1초마다 신호 → 지난 자리 둘레(max(32px, 템플릿 높이))만 대조 → 없으면 전체 다시 찾기.
-  신호가 없으면 '닫힘'(숨김), 신호는 있는데 두 번 연속 못 찾으면 '손으로'(사용자 결정 11-20). 첫 찾기 전은 '손으로'.
+  신호가 없거나 신호는 있는데 두 번 연속 못 찾으면 '닫힘'(숨김, 사용자 결정 11-22). 첫 찾기 전만 '손으로'.
 """
 from __future__ import annotations
 
@@ -108,8 +108,8 @@ def locate(frame: np.ndarray, offset: tuple[int, int] = (0, 0)) -> Match | None:
 
 @dataclass(frozen=True)
 class State:
-    """found: 바 자리(게임 창 기준 x, y, w, h) / closed: 신호 없음 = 요리창 없음(숨김 — 한 번도 못 찾았어도, 11-20 사용자 보고) /
-    manual: 손으로 맞추기 — 신호는 있는데 2회 연속 못 알아봄(사용자 결정 11-20), 또는 아직 첫 찾기 전."""
+    """found: 바 자리(게임 창 기준 x, y, w, h) / closed: 숨김 — 신호 없음(요리창 없음) 또는 신호는 있는데 2회 연속 못 알아봄
+    (사용자 결정 11-22: 알아볼 때만 표시) / manual: 첫 찾기 전(바를 막 켰을 때 손으로 맞춘 자리)."""
     kind: str
     bar: tuple[int, int, int, int] | None = None
 
@@ -140,9 +140,10 @@ class CookingFinder:
         return self.state
 
     def _not_recognized(self) -> State:
-        """신호는 있는데 2회 연속 못 알아봄: 요리창은 떠 있으니 숨기지 않고 손으로 맞춘 자리로(seen과 무관)."""
+        """신호는 있는데 2회 연속 못 알아봄 → 숨김(closed). 위아래가 검은 다른 창(핀즈 크래프트 등)에서 바가 뜨던 문제 —
+        요리창을 알아볼 때만 붙인다(사용자 결정 11-22, 11-20의 '못 알아보면 손으로 맞춘 자리' 폐기)."""
         self.bar = None
-        self.state = State("manual")
+        self.state = State("closed")
         return self.state
 
     def _find(self, image, offset) -> Match | None:
