@@ -1,10 +1,9 @@
 {
-  "version": "0.55.5",
+  "version": "0.55.6",
   "tests": [
-    "tests/test_cloud_sync.py",
-    "tests/test_settings_sync.py",
-    "tests/test_account.py",
-    "tests/test_home_page.py",
+    "tests/test_bundle_layout.py",
+    "tests/test_skillbar_testers.py",
+    "tests/test_creator_dialogue.py",
     "tests/test_release_checks.py",
     "tests/test_startup_build.py",
     "tests/test_release_candidate.py",
@@ -14,33 +13,20 @@
     "tests/test_release_notes_trigger.py"
   ],
   "coverage": {
-    "src/mabinogi_addon/cloud_sync.py": {
+    "src/mabinogi_addon/assets/profile.png": {
       "tests": [
-        "tests/test_cloud_sync.py",
-        "tests/test_settings_sync.py"
-      ],
-      "reason": "비로그인 묶음(메모·PC 이름·절대 경로 뺌, 계정 명세 3.4.3), 로그인 동기화 그대로"
-    },
-    "src/mabinogi_addon/account.py": {
-      "tests": [
-        "tests/test_cloud_sync.py",
-        "tests/test_account.py"
-      ],
-      "reason": "PUT /guest/settings(토큰 없음, X-Install-Id)"
-    },
-    "src/mabinogi_addon/ui/account_controller.py": {
-      "tests": [
-        "tests/test_cloud_sync.py",
-        "tests/test_account.py",
+        "tests/test_bundle_layout.py",
+        "tests/test_creator_dialogue.py",
         "tests/test_startup_smoke.py"
       ],
-      "reason": "비로그인만 켜고 60초 뒤 + 1시간마다 guest 올리기(설정 바뀜·종료 때 안 감, 실패 조용, 적용 없음), 로그인 동기화 그대로"
+      "reason": "제작자 프로필 새 그림(원본 (250,290) 750 정사각 → 256, 사용자 결정 11-23 B) — 설정 제작자 머리·잡담 아바타 48px 원형"
     },
-    "tests/test_home_page.py": {
+    "docs/assets/profile/섯다라인.png": {
       "tests": [
-        "tests/test_home_page.py"
+        "tests/test_bundle_layout.py",
+        "tests/test_skillbar_testers.py"
       ],
-      "reason": "병렬 실행에서 QApplication 없이 먼저 돌면 abort하던 순서 의존 보강(제품 변경 없음)"
+      "reason": "원본을 tests/data에서 옮김 — 큰 스크린샷 목록·판독 자료에서 빠짐"
     },
     "packaging/release_checks.json": {
       "tests": [
@@ -48,21 +34,21 @@
         "tests/test_release_candidate.py",
         "tests/test_windows_ci.py"
       ],
-      "reason": "0.55.5 검사 목록·후보 봉인·CI 계약"
+      "reason": "0.55.6 검사 목록·후보 봉인·CI 계약"
     },
     "packaging/build_windows.py": {
       "tests": [
         "tests/test_startup_build.py",
         "tests/test_startup_smoke.py"
       ],
-      "reason": "새 자산·모듈 없음 — 빌드·시작 경로 그대로"
+      "reason": "새 모듈 없음 — assets 통째 포함 경로 그대로"
     },
     "src/mabinogi_addon/assets/release_notes.md": {
       "tests": [
         "tests/test_release_notes.py",
         "tests/test_release_notes_trigger.py"
       ],
-      "reason": "0.55.5 노트 맨 위(조용히 다듬은 것 한 줄)·첫 실행 표시, v0.55.4 이하 그대로(미게시 0.56.0 섹션 없앰)"
+      "reason": "0.55.6 노트 맨 위(조용히 다듬은 것 한 줄)·첫 실행 표시, v0.55.5 이하 그대로"
     }
   }
 }

@@ -8,6 +8,7 @@
 
 > 11-17: 이 규칙들은 CLAUDE.md 'QA 세션 필수 규칙'에도 옮김 — status.md는 매번 자동으로 읽히지 않아 지켜지지 않았음(사용자 지적).
 
+- **0.55.6 개발(11-23 DEV, 사용자 결정 B — 제작자 프로필 그림)** — 원본 3e24f8df `tests/data/섯다라인.png`를 `docs/assets/profile/`로 옮기고(게임 스크린샷 아님 — 큰 스크린샷 목록·판독 자료에서 뺌), (250,290) 750 정사각 크롭 → 256×256 INTER_AREA BGRA로 `assets/profile.png` 교체(코드 변경 없음). 렌더 docs/assets/profile/home_avatar.png·settings_creator.png. `tests/test_bundle_layout.py::test_creator_profile_image_is_new_face_crop`. 노트 v0.55.6 한 줄.
 - **0.55.5 정리(11-23 DEV, 사용자 결정 '비로그인 현황 먼저 보고 정하기')** — 로그인 1.0 예고 제품 변경(1771833e·d44d3473)을 main에서 되돌림(명세 4.1·렌더 docs/assets/login-notice-20261123·status 기록은 남김, 다시 넣을 땐 이 되돌림 커밋을 revert). 비로그인 설정 올리기(960a7d9f·ac32fa57·1eb22842)는 그대로. 버전 0.55.5, 노트 '앱 내부를 조금 다듬었어요.'(미게시 ## v0.56.0 섹션 없앰), release_checks 0.55.5·경계(login_notice.py 없음 확인). test_home_page 순서 의존 보강은 유지. 배포 검사 0.55.5 319 통과.
   서버: discord_bot main 9848a86에 `PUT /guest/settings` 있음. 봇 CI는 VM 코드만 갱신하고 addon-server는 재시작하지 않으므로, VM에서 `sudo systemctl restart addon-server` 해야 새 경로가 뜸(이 컨테이너는 starline-bot.duckdns.org 접속이 프록시 403으로 막혀 직접 시험 불가).
 - **0.55.3 개발(11-22 DEV, QA 전달 사용자 '음성파일 추가했어')** — 사용자 6703bbd8 `assets/sounds/조용한 여성/` 11개(파티 알림 없음 → 기본 녹음본 폴백, 코드 변경 없음). 노트 v0.55.3 한 줄, gen_tts 주석, `tests/test_config_buffs.py` 사용자 녹음 팩 테스트를 팩 이름 매개변수화(화난 여성·조용한 여성), release_checks 0.55.3·경계.

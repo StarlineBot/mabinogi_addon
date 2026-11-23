@@ -93,3 +93,17 @@ def test_no_asset_reads_relative_to_module_file():
             if "__file__" in line or any(re.search(rf"\b{re.escape(n)}\b", line) for n in names):
                 offenders.append(f"{py.relative_to(ROOT)}:{no}: {line.strip()}")
     assert not offenders, "assets는 paths.resource_dir()로만 읽는다(exe 번들 경로):\n" + "\n".join(offenders)
+
+
+def test_creator_profile_image_is_new_face_crop():
+    """0.55.6(사용자 결정 11-23 B): 원본 docs/assets/profile/섯다라인.png (250,290) 750 정사각 → 256 — 앱 그림과 같은지."""
+    import cv2
+    import numpy as np
+
+    from mabinogi_addon import image_io, paths
+    app = image_io.imread(paths.resource_dir() / "profile.png", cv2.IMREAD_UNCHANGED)
+    src = image_io.imread(ROOT / "docs" / "assets" / "profile" / "섯다라인.png", cv2.IMREAD_COLOR)
+    assert app is not None and app.shape == (256, 256, 4)
+    want = cv2.resize(src[290:1040, 250:1000], (256, 256), interpolation=cv2.INTER_AREA)
+    assert np.abs(app[:, :, :3].astype(int) - want.astype(int)).max() <= 1
+    assert not (ROOT / "tests" / "data" / "섯다라인.png").exists()   # 게임 스크린샷 아님 — 판독 자료에서 뺌
