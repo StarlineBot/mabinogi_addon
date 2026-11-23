@@ -28,8 +28,9 @@ def before_1_0(version: str) -> bool:
 
 
 def pinned_notes_block(version: str) -> str:
-    """릴리즈 노트 창 맨 위 고정 블록(마크다운). 1.0.0 이상이면 빈 문자열."""
-    return f"> **{TITLE}** {BODY}\n\n" if before_1_0(version) else ""
+    """릴리즈 노트 창 맨 위 고정 섹션(마크다운) — 버전 섹션(`## vX.Y.Z` + 문단)과 같은 규격(사용자 피드백 11-23).
+    창 렌더에만 앞붙인다(release_notes.md에는 안 넣음 — 버전 파서는 `## v숫자`만 버전으로 봄). 1.0.0 이상이면 빈 문자열."""
+    return f"## {TITLE}\n\n{BODY}\n\n" if before_1_0(version) else ""
 
 
 def show_home_notice(logged_in: bool, agreed: str | None) -> bool:

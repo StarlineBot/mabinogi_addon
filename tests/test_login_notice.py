@@ -11,7 +11,10 @@ def test_pure_rules():
     assert login_notice.show_home_notice(False, None)
     assert not login_notice.show_home_notice(True, None)
     assert not login_notice.show_home_notice(False, "2026-11-23")
-    assert login_notice.pinned_notes_block("0.55.4").startswith("> **❗ 꼭 읽어보세요 ❗**")
+    block = login_notice.pinned_notes_block("0.55.4")
+    assert block == f"## ❗ 꼭 읽어보세요 ❗\n\n{login_notice.BODY}\n\n"      # 버전 섹션과 같은 규격(인용 아님)
+    from mabinogi_addon.ui.release_notes import _parse_sections
+    assert _parse_sections(block + "## v0.56.0\n\n노트\n") == [("0.56.0", "노트")]   # 버전 파싱에 안 섞임
     assert login_notice.BODY in login_notice.pinned_notes_block("0.99.9")
     assert login_notice.pinned_notes_block("1.0.0") == "" and login_notice.pinned_notes_block("1.2.3") == ""
 
@@ -111,8 +114,13 @@ def test_release_notes_window_pins_block_before_1_0():
     QApplication.instance() or QApplication([])
     from mabinogi_addon.ui.release_notes import ReleaseNotesDialog
     dlg = ReleaseNotesDialog("## v0.55.4\n\n노트", "0.55.4")
-    text = dlg.findChild(QTextBrowser).toPlainText()
+    browser = dlg.findChild(QTextBrowser)
+    text = browser.toPlainText()
     assert text.startswith("❗ 꼭 읽어보세요 ❗") and login_notice.BODY in text and "노트" in text
+    doc = browser.document()
+    first, version = doc.firstBlock(), doc.findBlock(text.index("v0.55.4"))
+    assert first.blockFormat().headingLevel() == version.blockFormat().headingLevel() == 2   # 버전 헤더와 같은 수준
+    assert first.blockFormat().indent() == 0 and doc.findBlock(text.index(login_notice.BODY)).blockFormat().indent() == 0
     dlg.close()
     dlg = ReleaseNotesDialog("## v1.0.0\n\n노트", "1.0.0")
     assert "꼭 읽어보세요" not in dlg.findChild(QTextBrowser).toPlainText()
