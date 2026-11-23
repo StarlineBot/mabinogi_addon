@@ -13,6 +13,7 @@ import copy
 import hashlib
 import io
 import json
+import re
 import time
 import zipfile
 from pathlib import Path
@@ -206,6 +207,42 @@ def build_blob(path: Path = None, user_dir: Path = None, *, resolution: str, dev
     raw, digest = local_state(path, user_dir)
     blob = config.export_bundle_bytes(path, user_dir, transform=strip_for_sync,
                                       extra={META_NAME: json.dumps({"resolution": resolution, "device": device,
+                                                                    "app": app_version, "created": time.time()},
+                                                                   ensure_ascii=False)})
+    if len(blob) > MAX_BYTES:
+        raise ValueError(f"설정 묶음이 {MAX_BYTES // (1024 * 1024)}MB를 넘어요(아이콘이 너무 많음).")
+    return blob, digest
+
+
+# ---- 비로그인 설정 올리기(사용 현황 보기용, 계정 명세 3.4.3 — 사용자 결정 11-23) ------------------------------
+_ABS_PATH = re.compile(r"^(?:[A-Za-z]:[\\/]|\\\\)")  # 드라이브 문자(C:\ · C:/) 또는 \\서버 — 윈도우 사용자 이름이 들어갈 수 있음
+
+
+def _drop_abs_paths(value):
+    """절대 경로 문자열을 키와 상관없이 뺀다(dict는 그 키를 없앰, list는 그 항목을 없앰)."""
+    if isinstance(value, dict):
+        return {k: _drop_abs_paths(v) for k, v in value.items()
+                if not (isinstance(v, str) and _ABS_PATH.match(v))}
+    if isinstance(value, list):
+        return [_drop_abs_paths(v) for v in value if not (isinstance(v, str) and _ABS_PATH.match(v))]
+    return value
+
+
+def strip_for_guest(doc: dict) -> dict:
+    """비로그인 묶음: 로그인 묶음(strip_for_sync)에서 메모 섹션 전체·절대 경로 문자열 전부를 더 뺀다."""
+    out = strip_for_sync(doc)
+    out.pop("memo", None)
+    return _drop_abs_paths(out)
+
+
+def build_guest_blob(path: Path | None = None, user_dir: Path | None = None, *, resolution: str, app_version: str = "") -> tuple[bytes, str]:
+    """비로그인 올릴 ZIP(PC 이름 빈 값)과 그 내용 지문(같으면 다시 안 올림). 2MB를 넘으면 ValueError."""
+    path = config.LOCAL_CONFIG_PATH if path is None else path
+    user_dir = paths.user_data_dir() if user_dir is None else Path(user_dir)
+    doc = strip_for_guest(config._read_local_config(path))
+    digest = hashlib.sha256(json.dumps(doc, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
+    blob = config.export_bundle_bytes(path, user_dir, transform=strip_for_guest,
+                                      extra={META_NAME: json.dumps({"resolution": resolution, "device": "",
                                                                     "app": app_version, "created": time.time()},
                                                                    ensure_ascii=False)})
     if len(blob) > MAX_BYTES:

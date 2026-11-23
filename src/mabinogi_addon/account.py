@@ -216,6 +216,14 @@ class Client:
         return info
 
 
+def put_guest_settings(client: Client, blob: bytes, *, install_id: str, resolution: str) -> None:
+    """비로그인 올리기 `PUT /guest/settings?resolution=`(토큰 없음, 헤더 X-Install-Id) — 계정 명세 3.4.3."""
+    import urllib.parse
+    query = urllib.parse.urlencode({"resolution": str(resolution)})
+    client._request("PUT", "/guest/settings?" + query, body=blob, headers={
+        "X-Install-Id": str(install_id), "Content-Type": "application/zip"})
+
+
 def _json(data: bytes) -> dict:
     try:
         value = json.loads((data or b"{}").decode("utf-8"))

@@ -109,16 +109,80 @@ def test_changes_are_collected_30s_then_uploaded_once_and_on_exit(app):
     assert [(m, p) for m, p, _ in server.calls] == [("PUT", "/settings")] and server.rev == 3
 
 
-def test_not_logged_in_makes_zero_requests(app):
+def test_not_logged_in_only_guest_upload(app):
+    """비로그인(계정 명세 3.4.3, 11-23): 동기화·토큰 요청은 0회, 같은 때(30초 모으기·종료) 사용 현황 묶음만 PUT /guest/settings."""
     _local()
     server = FakeServer()
     c = _controller(server)
     c.start()
+    assert server.calls == []                                          # 시작 때는 아무것도 안 보냄
     config._write_local_config({**config._read_local_config(), "x": 1})
     app.processEvents()
+    assert c._debounce.isActive()                                     # 같은 30초 모으기
+    c.upload_now()
+    assert [(m, p) for m, p, _ in server.calls] == [("PUT", "/guest/settings")]
+    method, path, headers = server.calls[0]
+    assert "authorization" not in headers and len(headers["x-install-id"]) == 32
+    assert server.guest_query == {"resolution": "2560x1440"}
+    c.upload_now()                                                    # 내용 그대로면 다시 안 보냄
+    assert len(server.calls) == 1
+    config._write_local_config({**config._read_local_config(), "x": 2})
+    c.shutdown()                                                      # 끌 때 한 번
+    assert [(m, p) for m, p, _ in server.calls] == [("PUT", "/guest/settings")] * 2
+    assert server.blob is None and server.info is None                # 로그인 동기화 경로는 안 씀
+
+
+def _guest_doc(blob):
+    with zipfile.ZipFile(io.BytesIO(blob)) as z:
+        names = z.namelist()
+        return json.loads(z.read(config._BUNDLE_CONFIG_NAME)), json.loads(z.read(cloud_sync.META_NAME)), names
+
+
+def test_guest_blob_drops_memo_pc_name_and_absolute_paths(app):
+    _local(memo={"memos": [{"text": "길드원 홍길동 비번 1234"}], "pos": dict(POS_A)},
+           blackbox={"outputFolder": "C:\\Users\\홍길동\\Videos", "on": True},
+           sketch={"dir": "D:/그림대화/홍길동", "size": 3},
+           general={"gameExe": "Client.exe", "gameImagePath": "\\\\NAS\\share\\a.png", "theme": "dark",
+                    "recent": ["E:\\x.png", "보통 글"]},
+           note="C:/Users/someone/file.txt")
+    blob, _digest = cloud_sync.build_guest_blob(resolution="1920x1080", app_version="0.56.0")
+    doc, meta, _names = _guest_doc(blob)
+    text = json.dumps(doc, ensure_ascii=False)
+    assert "memo" not in doc and "홍길동" not in text and "Users" not in text and "NAS" not in text
+    assert "outputFolder" not in doc["blackbox"] and doc["blackbox"]["on"] is True
+    assert "dir" not in doc["sketch"] and doc["sketch"]["size"] == 3
+    assert "gameImagePath" not in doc["general"] and doc["general"]["theme"] == "dark"
+    assert doc["general"]["recent"] == ["보통 글"] and "note" not in doc
+    assert "nexonApiKey" not in doc and "installId" not in doc            # 로그인 묶음과 같이 빠지는 값
+    assert meta["device"] == "" and meta["resolution"] == "1920x1080" and meta["app"] == "0.56.0"
+
+
+def test_guest_upload_failure_is_silent_and_logged_in_stops_guest(app):
+    _local()
+    down = FakeServer(down=True)
+    c = _controller(down)
+    c.start()
+    c.upload_now()                                                    # 서버 꺼짐 → 조용히(오류 표시 없음)
+    assert c.last_error == "" and [(m, p) for m, p, _ in down.calls] == [("PUT", "/guest/settings")]
+    c._client = lambda t: account.Client(t, opener=FakeServer().opener)
+    c.shutdown(flush=False)
+    config.save_account_token(make_token())                          # 로그인하면 guest 경로 멈춤
+    server = FakeServer()
+    c2 = _controller(server)
+    c2._job_guest_upload()
+    assert server.calls == []
+    c2.shutdown(flush=False)
+
+
+def test_guest_never_applies_server_settings(app):
+    """받아 적용 없음 — guest 경로에는 GET이 없다."""
+    _local()
+    server = FakeServer()
+    c = _controller(server)
+    c.start()
     c.upload_now()
     c.shutdown()
-    assert server.calls == [] and not c._debounce.isActive()
+    assert all(m == "PUT" and p == "/guest/settings" for m, p, _ in server.calls)
 
 
 def _server_with(raw_doc, *, resolution, rev=5):

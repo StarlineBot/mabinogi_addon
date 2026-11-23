@@ -12,7 +12,9 @@
     "tests/test_windows_ci.py",
     "tests/test_startup_smoke.py",
     "tests/test_release_notes.py",
-    "tests/test_release_notes_trigger.py"
+    "tests/test_release_notes_trigger.py",
+    "tests/test_cloud_sync.py",
+    "tests/test_settings_sync.py"
   ],
   "coverage": {
     "src/mabinogi_addon/login_notice.py": {
@@ -46,10 +48,12 @@
     },
     "src/mabinogi_addon/cloud_sync.py": {
       "tests": [
+        "tests/test_account.py",
+        "tests/test_cloud_sync.py",
         "tests/test_login_notice.py",
-        "tests/test_account.py"
+        "tests/test_settings_sync.py"
       ],
-      "reason": "loginNoticeAgreed 동기화 올림·받기 제외"
+      "reason": "loginNoticeAgreed 동기화 올림·받기 제외 · 비로그인 묶음(메모·PC 이름·절대 경로 뺌, 계정 명세 3.4.3)"
     },
     "src/mabinogi_addon/ui/release_notes.py": {
       "tests": [
@@ -80,6 +84,21 @@
         "tests/test_release_notes_trigger.py"
       ],
       "reason": "0.56.0 노트 맨 위(1.0 안내 헤드라인)·첫 실행 표시, v0.55.4 이하 그대로"
+    },
+    "src/mabinogi_addon/account.py": {
+      "tests": [
+        "tests/test_cloud_sync.py",
+        "tests/test_account.py"
+      ],
+      "reason": "PUT /guest/settings(토큰 없음, X-Install-Id)"
+    },
+    "src/mabinogi_addon/ui/account_controller.py": {
+      "tests": [
+        "tests/test_cloud_sync.py",
+        "tests/test_account.py",
+        "tests/test_startup_smoke.py"
+      ],
+      "reason": "비로그인만 guest 올리기(30초 모으기·종료, 같은 내용 다시 안 보냄, 실패 조용, 받아 적용 없음), 로그인 동기화 그대로"
     }
   }
 }

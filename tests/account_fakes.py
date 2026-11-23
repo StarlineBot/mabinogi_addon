@@ -73,6 +73,12 @@ class FakeServer:
         self.last_query = query
         if self.down:
             raise urllib.error.URLError("서버 꺼짐")
+        if "/" + path == "/guest/settings" and method == "PUT":  # 비로그인 사용 현황(계정 명세 3.4.3) — 토큰 없음
+            import re
+            if not re.fullmatch(r"[0-9a-f]{16,32}", headers.get("x-install-id", "")):
+                raise urllib.error.HTTPError(req.full_url, 400, "install id", {}, io.BytesIO(b"{}"))
+            self.guest_blob, self.guest_query = bytes(req.data), query
+            return _Resp(b"{}", status=204)
         if self.reject or "authorization" not in headers:
             raise urllib.error.HTTPError(req.full_url, 401, "unauthorized", {}, io.BytesIO(b"{}"))
         path = "/" + path
