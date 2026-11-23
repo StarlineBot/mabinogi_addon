@@ -168,6 +168,10 @@ def test_guest_upload_failure_is_silent_and_logged_in_stops_guest(app):
     c._guest_tick()                                                   # 서버 꺼짐 → 조용히(오류 표시 없음), 다음 차례 그대로
     assert c.last_error == "" and [(m, p) for m, p, _ in down.calls] == [("PUT", "/guest/settings")]
     assert c._guest_timer.isActive()
+    up = FakeServer()
+    c._client = lambda t: account.Client(t, opener=up.opener)
+    c._guest_tick()                                                   # 다음 차례(1시간 뒤)에 다시 → 보냄
+    assert [(m, p) for m, p, _ in up.calls] == [("PUT", "/guest/settings")]
     c._client = lambda t: account.Client(t, opener=FakeServer().opener)
     c.shutdown(flush=False)
     config.save_account_token(make_token())                          # 로그인하면 guest 경로 멈춤
