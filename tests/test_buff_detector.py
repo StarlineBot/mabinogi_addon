@@ -170,3 +170,9 @@ def test_buff_tab_new_fortification_defaults_to_hidden():
         assert settings["fortification"].hidden is True and settings["vivace"].hidden is False
     finally:
         tab.close()
+
+
+def test_buff_help_mentions_compact_status_view():
+    """11-23 기획(11-18 결정 ②): 상태 목록창 '줄여 보기'(아이콘만)면 남은 시간 글자가 없어 시간 알림이 안 됨 — 도움말 안내만."""
+    from mabinogi_addon.ui.buff_tab import HELP_HTML
+    assert "‘줄여 보기’(아이콘만)" in HELP_HTML and "펼쳐 보기로 바꿔 주세요" in HELP_HTML

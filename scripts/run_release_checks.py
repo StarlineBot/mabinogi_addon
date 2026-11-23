@@ -59,6 +59,15 @@ def _fingerprint(root, version):
         return None
 
 
+def _has_noto_cjk() -> bool:
+    """CI가 설치하는 한글 글꼴(Noto Sans CJK)이 있는지. fc-list가 없으면(맥 등) 확인하지 않음."""
+    try:
+        out = subprocess.run(['fc-list', ':', 'family'], capture_output=True, text=True, check=False, timeout=10).stdout
+    except (OSError, subprocess.SubprocessError):
+        return True
+    return 'Noto Sans CJK' in out
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument('--version', required=True)
@@ -68,6 +77,13 @@ def main(argv=None):
     root = Path.cwd()
     paths = release_tests(root, args.version)
     local = not os.environ.get('GITHUB_ACTIONS')
+    ci_fonts = root / 'packaging' / 'fonts-ci.conf'
+    if local and not os.environ.get('FONTCONFIG_FILE') and ci_fonts.is_file():
+        # 로컬도 CI와 같은 글꼴로(packaging/fonts-ci.conf) — 글꼴 폭 차이로 로컬 통과·CI 실패가 나지 않게(0.52.0 #243)
+        os.environ['FONTCONFIG_FILE'] = str(ci_fonts)
+        print(f'Release feature checks: CI 글꼴 설정 자동 적용({ci_fonts.relative_to(root)})', flush=True)
+        if not _has_noto_cjk():
+            print('경고: fonts-noto-cjk가 없어 CI와 한글 글꼴이 달라요 — sudo apt-get install -y fonts-noto-cjk', flush=True)
     stamp = None
     if local:
         key = _fingerprint(root, args.version)

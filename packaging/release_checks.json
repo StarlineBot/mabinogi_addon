@@ -1,8 +1,9 @@
 {
-  "version": "0.55.3",
+  "version": "0.55.4",
   "tests": [
-    "tests/test_config_buffs.py",
-    "tests/test_bundle_layout.py",
+    "tests/test_buff_detector.py",
+    "tests/test_guide_images.py",
+    "tests/test_qa_speed_guards.py",
     "tests/test_release_checks.py",
     "tests/test_startup_build.py",
     "tests/test_release_candidate.py",
@@ -12,11 +13,25 @@
     "tests/test_release_notes_trigger.py"
   ],
   "coverage": {
-    "scripts/gen_tts.py": {
+    "src/mabinogi_addon/ui/feature_copy.py": {
       "tests": [
-        "tests/test_config_buffs.py"
+        "tests/test_buff_detector.py",
+        "tests/test_guide_images.py"
       ],
-      "reason": "주석만 — '화난 여성'·'조용한 여성'은 사용자 녹음(스크립트 대상 아님)"
+      "reason": "버프 트래커 도움말에 '줄여 보기'면 시간 알림 안 됨 안내 한 줄(11-23 기획) — 도움말 렌더·문구"
+    },
+    "scripts/run_release_checks.py": {
+      "tests": [
+        "tests/test_qa_speed_guards.py",
+        "tests/test_release_checks.py"
+      ],
+      "reason": "로컬은 packaging/fonts-ci.conf 자동 적용(직접 지정·CI는 그대로), Noto CJK 없으면 경고"
+    },
+    "packaging/fonts-ci.conf": {
+      "tests": [
+        "tests/test_qa_speed_guards.py"
+      ],
+      "reason": "CI에 없는 글꼴(inter·wqy·unifont·nanum·ipafont) 제외 → 한글 Noto Sans CJK·라틴 DejaVu Sans"
     },
     "packaging/release_checks.json": {
       "tests": [
@@ -24,29 +39,21 @@
         "tests/test_release_candidate.py",
         "tests/test_windows_ci.py"
       ],
-      "reason": "0.55.3 검사 목록·후보 봉인·CI 계약"
+      "reason": "0.55.4 검사 목록·후보 봉인·CI 계약"
     },
     "packaging/build_windows.py": {
       "tests": [
         "tests/test_startup_build.py",
-        "tests/test_startup_smoke.py",
-        "tests/test_bundle_layout.py"
+        "tests/test_startup_smoke.py"
       ],
-      "reason": "새 모듈 없음 — assets 통째 포함 경로 그대로"
+      "reason": "새 자산·모듈 없음 — 빌드·시작 경로 그대로"
     },
     "src/mabinogi_addon/assets/release_notes.md": {
       "tests": [
         "tests/test_release_notes.py",
         "tests/test_release_notes_trigger.py"
       ],
-      "reason": "0.55.3 노트 맨 위(조용히 다듬은 것 한 줄)·첫 실행 표시, v0.55.2 이하 그대로"
-    },
-    "src/mabinogi_addon/assets/sounds/조용한 여성/비바체 연장.mp3": {
-      "tests": [
-        "tests/test_config_buffs.py",
-        "tests/test_bundle_layout.py"
-      ],
-      "reason": "새 목소리 팩 '조용한 여성' 11개(사용자 녹음) — 목록 자동 인식, 파티 알림은 기본 녹음본 폴백, assets 번들 포함"
+      "reason": "0.55.4 노트 맨 위(조용히 다듬은 것 한 줄)·첫 실행 표시, v0.55.3 이하 그대로"
     }
   }
 }

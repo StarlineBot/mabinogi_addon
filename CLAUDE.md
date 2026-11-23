@@ -34,7 +34,7 @@
   차이가 나면 앱·공식·데이터 원인을 찾고, 필요한 자료만 묻는다.
 - 검사 순서(목표 5분 안팎, 차례로 쌓지 말 것):
   1. 바뀐 파일의 테스트만 먼저(실패하면 멈춤).
-  2. 배포 검사는 **CI 글꼴로 한 번만**: `FONTCONFIG_FILE=$S/fonts-ci.conf uv run --frozen python -m scripts.run_release_checks --version X.Y.Z`
+  2. 배포 검사는 **CI 글꼴로 한 번만**: `uv run --frozen python -m scripts.run_release_checks --version X.Y.Z` — 로컬에선 스크립트가 `packaging/fonts-ci.conf`(CI와 같은 글꼴)를 자동 적용(FONTCONFIG_FILE을 직접 주면 그대로)
      (로컬은 코어 전부 사용 ≈1.5~2.5분, CI는 `-n 2` 그대로). 같은 코드·버전으로 이미 통과했으면 스크립트가 다시 돌지 않는다(`.qa-stamps/`, 꼭 필요하면 `--again`).
   3. 전체 테스트(≈14분)는 AGENTS.md '변경 영향 검사'의 넓은 변경일 때만. 대상 없는 pytest는 **프로젝트 훅(`.claude/hooks/test_guard.py`)이 막으며**,
      필요하면 명령 앞에 `FULL_REGRESSION_REASON='이유'`를 붙이고 배포 검사와 동시에(백그라운드) 돌린다.

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -194,3 +195,37 @@ def test_answer_guard_blocks_only_once_and_never_breaks(tmp_path):
     assert broken.returncode == 0
     settings = json.loads((ROOT / '.claude/settings.json').read_text(encoding='utf-8'))
     assert any('answer_guard.py' in h['command'] for e in settings['hooks']['Stop'] for h in e['hooks'])
+
+
+def test_local_run_uses_repo_ci_fonts_unless_set(tmp_path, monkeypatch):
+    """로컬은 FONTCONFIG_FILE이 비어 있으면 packaging/fonts-ci.conf 자동 적용, 지정돼 있거나 CI면 그대로(11-23 기획)."""
+    _plan(tmp_path)
+    (tmp_path / '.gitignore').write_text('.qa-stamps/\n', encoding='utf-8')
+    (tmp_path / 'packaging').mkdir(exist_ok=True)
+    conf = tmp_path / 'packaging' / 'fonts-ci.conf'
+    conf.write_text('<fontconfig/>', encoding='utf-8')
+    _git(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    seen = []
+    monkeypatch.setattr(checks.run_regressions, 'main', lambda args: seen.append(os.environ.get('FONTCONFIG_FILE')) or 0)
+    monkeypatch.setattr(checks, '_has_noto_cjk', lambda: True)
+    monkeypatch.delenv('GITHUB_ACTIONS', raising=False)
+    monkeypatch.delenv('FONTCONFIG_FILE', raising=False)
+    assert checks.main(['--version', '0.10.1', '--again']) == 0
+    assert seen[-1] == str(conf)
+    own = tmp_path.parent / 'mine.conf'
+    own.write_text('<fontconfig/>', encoding='utf-8')
+    monkeypatch.setenv('FONTCONFIG_FILE', str(own))
+    assert checks.main(['--version', '0.10.1', '--again']) == 0
+    assert seen[-1] == str(own)                               # 직접 지정은 그대로
+    monkeypatch.delenv('FONTCONFIG_FILE', raising=False)
+    monkeypatch.setenv('GITHUB_ACTIONS', 'true')
+    assert checks.main(['--version', '0.10.1']) == 0
+    assert seen[-1] is None                                   # CI 동작 그대로
+
+
+def test_repo_ci_fonts_rejects_fonts_missing_on_ci():
+    text = (ROOT / 'packaging' / 'fonts-ci.conf').read_text(encoding='utf-8')
+    assert '/etc/fonts/fonts.conf' in text
+    for folder in ('inter', 'wqy', 'unifont', 'nanum', 'ipafont'):   # CI에 없는 글꼴 → 한글은 Noto Sans CJK(CI와 같음)
+        assert folder in text
