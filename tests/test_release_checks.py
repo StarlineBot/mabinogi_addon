@@ -70,18 +70,20 @@ def test_current_plan_maps_every_selected_file_to_changed_code_or_shared_contrac
 
 
 def test_current_release_keeps_feature_boundaries_and_delivery_contracts():
-    """0.55.6: 제작자 프로필 그림 교체 + 배포 계약. (릴리즈마다 경계를 바꾼다 — 누적하지 않음)"""
+    """0.55.7: 알림 목소리 '부드러운 여성' 다시 녹음 교체 + 배포 계약. (릴리즈마다 경계를 바꾼다 — 누적하지 않음)"""
     root = Path(__file__).resolve().parents[1]
     plan = json.loads((root / 'packaging/release_checks.json').read_text(encoding='utf-8'))
     paths = set(plan['tests'])
     assert {
-        'tests/test_bundle_layout.py', 'tests/test_skillbar_testers.py',
+        'tests/test_config_buffs.py', 'tests/test_bundle_layout.py',
         'tests/test_startup_build.py', 'tests/test_release_checks.py', 'tests/test_release_candidate.py',
         'tests/test_windows_ci.py', 'tests/test_startup_smoke.py',
     } <= paths
     assert {
-        'src/mabinogi_addon/assets/profile.png', 'packaging/build_windows.py', 'src/mabinogi_addon/assets/release_notes.md',
+        'scripts/gen_tts.py', 'packaging/build_windows.py', 'src/mabinogi_addon/assets/release_notes.md',
+        'src/mabinogi_addon/assets/sounds/부드러운 여성/비바체 연장.mp3',
     } <= set(plan['coverage'])
+    assert not (root / 'src/mabinogi_addon/assets/sounds/부드러운 여성1').exists()
     # The separate development entry must continue collecting the whole suite.
     regression = (root / '.github/workflows/regression.yml').read_text(encoding='utf-8')
     assert 'scripts.run_regressions' in regression

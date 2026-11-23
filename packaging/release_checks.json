@@ -1,9 +1,9 @@
 {
-  "version": "0.55.6",
+  "version": "0.55.7",
   "tests": [
+    "tests/test_config_buffs.py",
     "tests/test_bundle_layout.py",
-    "tests/test_skillbar_testers.py",
-    "tests/test_creator_dialogue.py",
+    "tests/test_alarm.py",
     "tests/test_release_checks.py",
     "tests/test_startup_build.py",
     "tests/test_release_candidate.py",
@@ -13,20 +13,19 @@
     "tests/test_release_notes_trigger.py"
   ],
   "coverage": {
-    "src/mabinogi_addon/assets/profile.png": {
+    "src/mabinogi_addon/assets/sounds/부드러운 여성/비바체 연장.mp3": {
       "tests": [
+        "tests/test_config_buffs.py",
         "tests/test_bundle_layout.py",
-        "tests/test_creator_dialogue.py",
-        "tests/test_startup_smoke.py"
+        "tests/test_alarm.py"
       ],
-      "reason": "제작자 프로필 새 그림(원본 (250,290) 750 정사각 → 256, 사용자 결정 11-23 B) — 설정 제작자 머리·잡담 아바타 48px 원형"
+      "reason": "'부드러운 여성' 11개를 다시 녹음(ce55fbba)으로 교체, 파티 알림 기존 — 팩 하나·이름 12개, '부드러운 여성1' 없음, assets 번들 포함"
     },
-    "docs/assets/profile/섯다라인.png": {
+    "scripts/gen_tts.py": {
       "tests": [
-        "tests/test_bundle_layout.py",
-        "tests/test_skillbar_testers.py"
+        "tests/test_config_buffs.py"
       ],
-      "reason": "원본을 tests/data에서 옮김 — 큰 스크린샷 목록·판독 자료에서 빠짐"
+      "reason": "주석만 — 이 팩은 사용자 녹음(11-23 교체)"
     },
     "packaging/release_checks.json": {
       "tests": [
@@ -34,12 +33,13 @@
         "tests/test_release_candidate.py",
         "tests/test_windows_ci.py"
       ],
-      "reason": "0.55.6 검사 목록·후보 봉인·CI 계약"
+      "reason": "0.55.7 검사 목록·후보 봉인·CI 계약"
     },
     "packaging/build_windows.py": {
       "tests": [
         "tests/test_startup_build.py",
-        "tests/test_startup_smoke.py"
+        "tests/test_startup_smoke.py",
+        "tests/test_bundle_layout.py"
       ],
       "reason": "새 모듈 없음 — assets 통째 포함 경로 그대로"
     },
@@ -48,7 +48,7 @@
         "tests/test_release_notes.py",
         "tests/test_release_notes_trigger.py"
       ],
-      "reason": "0.55.6 노트 맨 위(조용히 다듬은 것 한 줄)·첫 실행 표시, v0.55.5 이하 그대로"
+      "reason": "0.55.7 노트 맨 위(조용히 다듬은 것 한 줄)·첫 실행 표시, v0.55.6 이하 그대로"
     }
   }
 }
