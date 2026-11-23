@@ -26,8 +26,7 @@ META_NAME = "sync.json"
 # 빼는 값(명세 3.3): 비밀·장치 값(_SECRET_KEYS·_MACHINE_KEYS — export가 이미 뺌) + 아래
 EXCLUDE_TOP = ("installId", "discordUser", "discordAccount", SYNC_KEY)
 EXCLUDE_NESTED = {"general": ("lastSeenVersion", "firstUse", "firstUseGuideShown", "tourShown",
-                              "nonKoreanNoticeShown",  # 해외 클라이언트 안내를 본 기록 — 이 PC 것(11-18)
-                              "loginNoticeAgreed"),  # 로그인 1.0 예고 동의 — 이 PC 것(계정 명세 4.1, 11-23)
+                              "nonKoreanNoticeShown"),  # 해외 클라이언트 안내를 본 기록 — 이 PC 것(11-18)
                   "autofindV2": ("last",)}
 # 해상도가 다르면 이 PC 것을 유지하는 값 — 좌표 dict({x, y}·{x, y, w, h}) 전부 + 직접 지정 고정 목록(영역과 한 묶음)
 POSITION_LISTS = {"autofindV2": ("fixed",)}

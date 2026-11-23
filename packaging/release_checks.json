@@ -1,89 +1,25 @@
 {
-  "version": "0.56.0",
+  "version": "0.55.5",
   "tests": [
-    "tests/test_login_notice.py",
-    "tests/test_home_page.py",
-    "tests/test_overseas_client.py",
-    "tests/test_dialogue_login.py",
+    "tests/test_cloud_sync.py",
+    "tests/test_settings_sync.py",
     "tests/test_account.py",
+    "tests/test_home_page.py",
     "tests/test_release_checks.py",
     "tests/test_startup_build.py",
     "tests/test_release_candidate.py",
     "tests/test_windows_ci.py",
     "tests/test_startup_smoke.py",
     "tests/test_release_notes.py",
-    "tests/test_release_notes_trigger.py",
-    "tests/test_cloud_sync.py",
-    "tests/test_settings_sync.py"
+    "tests/test_release_notes_trigger.py"
   ],
   "coverage": {
-    "src/mabinogi_addon/login_notice.py": {
-      "tests": [
-        "tests/test_login_notice.py"
-      ],
-      "reason": "문구·띠 보이기 판정·노트 고정 블록(1.0.0 미만만)"
-    },
-    "src/mabinogi_addon/ui/home_page.py": {
-      "tests": [
-        "tests/test_login_notice.py",
-        "tests/test_home_page.py",
-        "tests/test_overseas_client.py"
-      ],
-      "reason": "해외 안내 위 로그인 예고 띠(제목·본문·로그인 버튼·✕), 기존 홈 배치·해외 띠 그대로"
-    },
-    "src/mabinogi_addon/ui/main_window.py": {
-      "tests": [
-        "tests/test_login_notice.py",
-        "tests/test_dialogue_login.py",
-        "tests/test_startup_smoke.py"
-      ],
-      "reason": "비로그인만 띠·로그인 변화 따라감, ✕ 확인 창 세 버튼(로그인=설정›계정·동의 기록·취소)"
-    },
-    "src/mabinogi_addon/config.py": {
-      "tests": [
-        "tests/test_login_notice.py",
-        "tests/test_account.py"
-      ],
-      "reason": "general.loginNoticeAgreed 저장·내보내기 제외·가져오기로 안 덮음"
-    },
     "src/mabinogi_addon/cloud_sync.py": {
       "tests": [
-        "tests/test_account.py",
         "tests/test_cloud_sync.py",
-        "tests/test_login_notice.py",
         "tests/test_settings_sync.py"
       ],
-      "reason": "loginNoticeAgreed 동기화 올림·받기 제외 · 비로그인 묶음(메모·PC 이름·절대 경로 뺌, 계정 명세 3.4.3)"
-    },
-    "src/mabinogi_addon/ui/release_notes.py": {
-      "tests": [
-        "tests/test_login_notice.py",
-        "tests/test_release_notes.py",
-        "tests/test_release_notes_trigger.py"
-      ],
-      "reason": "노트 창 맨 위 고정 블록(1.0.0 이상이면 없음)"
-    },
-    "packaging/release_checks.json": {
-      "tests": [
-        "tests/test_release_checks.py",
-        "tests/test_release_candidate.py",
-        "tests/test_windows_ci.py"
-      ],
-      "reason": "0.56.0 검사 목록·후보 봉인·CI 계약"
-    },
-    "packaging/build_windows.py": {
-      "tests": [
-        "tests/test_startup_build.py",
-        "tests/test_startup_smoke.py"
-      ],
-      "reason": "새 자산 없음 — 빌드·시작 경로 그대로"
-    },
-    "src/mabinogi_addon/assets/release_notes.md": {
-      "tests": [
-        "tests/test_release_notes.py",
-        "tests/test_release_notes_trigger.py"
-      ],
-      "reason": "0.56.0 노트 맨 위(1.0 안내 헤드라인)·첫 실행 표시, v0.55.4 이하 그대로"
+      "reason": "비로그인 묶음(메모·PC 이름·절대 경로 뺌, 계정 명세 3.4.3), 로그인 동기화 그대로"
     },
     "src/mabinogi_addon/account.py": {
       "tests": [
@@ -98,7 +34,35 @@
         "tests/test_account.py",
         "tests/test_startup_smoke.py"
       ],
-      "reason": "비로그인만 guest 올리기(30초 모으기·종료, 같은 내용 다시 안 보냄, 실패 조용, 받아 적용 없음), 로그인 동기화 그대로"
+      "reason": "비로그인만 켜고 60초 뒤 + 1시간마다 guest 올리기(설정 바뀜·종료 때 안 감, 실패 조용, 적용 없음), 로그인 동기화 그대로"
+    },
+    "tests/test_home_page.py": {
+      "tests": [
+        "tests/test_home_page.py"
+      ],
+      "reason": "병렬 실행에서 QApplication 없이 먼저 돌면 abort하던 순서 의존 보강(제품 변경 없음)"
+    },
+    "packaging/release_checks.json": {
+      "tests": [
+        "tests/test_release_checks.py",
+        "tests/test_release_candidate.py",
+        "tests/test_windows_ci.py"
+      ],
+      "reason": "0.55.5 검사 목록·후보 봉인·CI 계약"
+    },
+    "packaging/build_windows.py": {
+      "tests": [
+        "tests/test_startup_build.py",
+        "tests/test_startup_smoke.py"
+      ],
+      "reason": "새 자산·모듈 없음 — 빌드·시작 경로 그대로"
+    },
+    "src/mabinogi_addon/assets/release_notes.md": {
+      "tests": [
+        "tests/test_release_notes.py",
+        "tests/test_release_notes_trigger.py"
+      ],
+      "reason": "0.55.5 노트 맨 위(조용히 다듬은 것 한 줄)·첫 실행 표시, v0.55.4 이하 그대로(미게시 0.56.0 섹션 없앰)"
     }
   }
 }

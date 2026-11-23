@@ -483,7 +483,6 @@ class MainWindow(QMainWindow):
         self.settings_tab.login_changed.connect(self.dorcha_tab.login_refresh)
         self.settings_tab.login_changed.connect(self.boss_tab.halo_capture.login_refresh)
         self.settings_tab.login_changed.connect(self._refresh_harp_access)
-        self.settings_tab.login_changed.connect(self.refresh_login_notice)  # 로그인 1.0 예고 띠(계정 명세 4.1)
         self.setCentralWidget(central)
         # 홈(탐색 구조 명세 12절): 상위 탭이 아니라 앱 창 전체(상태 줄·탭 포함)를 덮는 중앙 위젯의 자식.
         from .home_page import HomePage
@@ -498,10 +497,6 @@ class MainWindow(QMainWindow):
         self.home_page.switch_toggled.connect(self._home_switch)
         self.home_page.combat_toggled.connect(lambda on: self._set_paused(not on))
         self.home_page.refind_requested.connect(self._home_refind)
-        # 로그인 1.0 예고(계정 명세 4.1): 비로그인만 홈 맨 위 띠, ✕는 확인 창
-        self.home_page.login_notice_login.connect(self.open_account)
-        self.home_page.login_notice_close.connect(self._confirm_login_notice)
-        self.refresh_login_notice()
         self.home_page.channel_refresh.connect(self._home_refresh_channels)
         self.harp_tab.summary_changed.connect(self._home_channel_changed)
         self._refresh_cursor_access()
@@ -789,46 +784,6 @@ class MainWindow(QMainWindow):
         card = self._INQUIRY_CARDS.get(feature) if feature else None
         if card is not None:
             self._inquiry.preselect(card)
-
-    def refresh_login_notice(self, *_args) -> None:
-        """로그인 1.0 예고 띠 — 비로그인이고 '다시 보지 않기' 기록이 없을 때만(로그인하면 사라지고 로그아웃·풀림이면 다시)."""
-        from .. import feature_access, login_notice
-        try:
-            agreed = config.load_login_notice_agreed()
-        except OSError:
-            agreed = None
-        self.home_page.set_login_notice(login_notice.show_home_notice(feature_access.is_logged_in(), agreed))
-
-    def _confirm_login_notice(self) -> None:
-        """✕ → 확인 창: 디스코드로 로그인(설정 › 계정) · 다시 보지 않기(동의 기록) · 취소."""
-        import datetime
-
-        from PySide6.QtWidgets import QMessageBox
-
-        from .. import login_notice as ln
-        box = QMessageBox(self)
-        box.setWindowTitle(ln.CONFIRM_TITLE)
-        box.setText(ln.CONFIRM_TITLE)
-        box.setInformativeText(ln.CONFIRM_BODY)
-        login = box.addButton(ln.LOGIN_BUTTON, QMessageBox.ButtonRole.AcceptRole)
-        agree = box.addButton(ln.AGREE_BUTTON, QMessageBox.ButtonRole.DestructiveRole)
-        cancel = box.addButton(ln.CANCEL_BUTTON, QMessageBox.ButtonRole.RejectRole)
-        box.setDefaultButton(login)
-        box.setEscapeButton(cancel)
-        self._login_notice_box = box
-        self._run_login_notice_box(box)
-        clicked = box.clickedButton()
-        if clicked is login:
-            self.open_account()
-        elif clicked is agree:
-            try:
-                config.save_login_notice_agreed(datetime.date.today().isoformat())
-            except OSError:
-                logging.getLogger(__name__).warning("로그인 예고 동의 기록 실패", exc_info=True)
-            self.refresh_login_notice()
-
-    def _run_login_notice_box(self, box) -> None:
-        box.exec()
 
     def open_account(self) -> None:
         """잡담 [로그인하러 가기](17.8): 설정 › 계정 — 로그인 버튼이 보이게."""

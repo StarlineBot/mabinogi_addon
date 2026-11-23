@@ -8,18 +8,8 @@ from __future__ import annotations
 
 from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QLinearGradient, QPainter, QPainterPath, QPen, QPixmap
-from PySide6.QtWidgets import (
-    QAbstractButton,
-    QFrame,
-    QGridLayout,
-    QHBoxLayout,
-    QLabel,
-    QPushButton,
-    QScrollArea,
-    QSizePolicy,
-    QVBoxLayout,
-    QWidget,
-)
+from PySide6.QtWidgets import (QAbstractButton, QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton,
+                               QScrollArea, QSizePolicy, QVBoxLayout, QWidget)
 
 from .. import paths
 from .palette import color
@@ -229,8 +219,6 @@ class HomePage(QWidget):
     combat_toggled = Signal(bool)  # 전투 보조 켜짐(True)/일시정지(False)
     channel_refresh = Signal()  # 0.42.0: 가장 빠른 채널 새로고침(1회 측정)
     refind_requested = Signal()  # 0.45.0: 위치 다시 찾기(처음 찾기 한 번 더 — first-use-v3 4.1)
-    login_notice_login = Signal()  # 로그인 1.0 예고 띠의 '디스코드로 로그인'(계정 명세 4.1)
-    login_notice_close = Signal()  # 그 띠의 ✕ → 확인 창(바로 닫지 않음)
 
     def __init__(self, parent=None, extra_switches=()):
         super().__init__(parent)
@@ -254,40 +242,6 @@ class HomePage(QWidget):
         v.setSpacing(8)
         self._content_layout = v
         self._tight = False
-
-        # 0-1. 로그인 1.0 예고 띠(계정 명세 4.1, 사용자 결정 11-23) — 비로그인만, 매 실행. 해외 안내 띠 위.
-        from .. import login_notice as _ln
-        self.login_box = _box("homeWarn")
-        login = QHBoxLayout(self.login_box)
-        login.setContentsMargins(14, 8, 8, 8)
-        login.setSpacing(8)
-        login_text = QVBoxLayout()
-        login_text.setSpacing(3)
-        self.login_title = _label(_ln.TITLE, 12, "warn_text", bold=True)
-        self.login_body = _label(_ln.BODY, 12, "warn_sub")
-        self.login_body.setWordWrap(True)
-        login_text.addWidget(self.login_title)
-        login_text.addWidget(self.login_body)
-        self.login_btn = QPushButton(_ln.LOGIN_BUTTON)
-        self.login_btn.setObjectName("homeLoginNotice")
-        self.login_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.login_btn.clicked.connect(self.login_notice_login.emit)
-        btn_row = QHBoxLayout()
-        btn_row.setContentsMargins(0, 4, 0, 0)
-        btn_row.addWidget(self.login_btn)
-        btn_row.addStretch(1)
-        login_text.addLayout(btn_row)
-        login.addLayout(login_text, 1)
-        self.login_close = QPushButton("✕")
-        self.login_close.setObjectName("homeNoticeClose")
-        self.login_close.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.login_close.setToolTip("다시 보지 않기")
-        self.login_close.setFixedSize(24, 24)
-        self.login_close.setStyleSheet("QPushButton{border:none;background:transparent;}")
-        self.login_close.clicked.connect(self.login_notice_close.emit)
-        login.addWidget(self.login_close, 0, Qt.AlignmentFlag.AlignTop)
-        self.login_box.hide()
-        v.addWidget(self.login_box)
 
         # 0. 해외(영문 제목) 클라이언트 안내 띠(사용자 결정 11-18) — 처음 볼 때 한 번, 닫기(×)까지
         self.notice_box = _box("homeWarn")
@@ -452,10 +406,6 @@ class HomePage(QWidget):
         v.addStretch(1)
         self.update_state({})
 
-    def set_login_notice(self, visible: bool) -> None:
-        """로그인 1.0 예고 띠 보이기/숨기기."""
-        self.login_box.setVisible(bool(visible))
-
     def show_notice(self, ko: str, en: str) -> None:
         """맨 위 안내 띠(한글 + 영문)."""
         self.notice_ko.setText(ko)
@@ -481,9 +431,6 @@ class HomePage(QWidget):
             QPushButton#homeMenu {{ color:{d['text']}; background:{d['menu_bg']}; border:1px solid {d['menu_border']}; border-radius:8px;
                                     padding:8px 14px; font-size:12px; }}
             QPushButton#homeMenu:hover {{ border-color:{d['accent']}; }}
-            QPushButton#homeLoginNotice {{ color:#ffffff; background:#5865F2; border:none; border-radius:6px;
-                                          padding:6px 14px; font-size:12px; font-weight:700; }}
-            QPushButton#homeLoginNotice:hover {{ background:#4752C4; }}
             #homeChannel {{ background:{d['box']}; border:1px solid {d['border']}; border-radius:8px; }}
             QLabel#homeChannelText {{ background:transparent; font-size:12px; }}
             QPushButton#homeChannelRefresh {{ color:{d['text']}; background:transparent; border:1px solid {d['border']}; border-radius:6px;
