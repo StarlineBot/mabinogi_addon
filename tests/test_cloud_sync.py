@@ -109,27 +109,30 @@ def test_changes_are_collected_30s_then_uploaded_once_and_on_exit(app):
     assert [(m, p) for m, p, _ in server.calls] == [("PUT", "/settings")] and server.rev == 3
 
 
-def test_not_logged_in_only_guest_upload(app):
-    """비로그인(계정 명세 3.4.3, 11-23): 동기화·토큰 요청은 0회, 같은 때(30초 모으기·종료) 사용 현황 묶음만 PUT /guest/settings."""
+def test_not_logged_in_guest_upload_on_start_and_hourly_only(app):
+    """비로그인(계정 명세 3.4.3, 사용자 결정 11-23): 동기화·토큰 요청 0회, 켜고 60초 뒤 한 번 + 1시간마다
+    사용 현황 묶음만 PUT /guest/settings. 설정이 바뀔 때·종료 때는 안 보냄."""
+    from mabinogi_addon.ui import account_controller as ac
     _local()
     server = FakeServer()
     c = _controller(server)
     c.start()
-    assert server.calls == []                                          # 시작 때는 아무것도 안 보냄
+    assert server.calls == [] and c._guest_timer.isActive() and c._guest_timer.interval() == ac.GUEST_FIRST_MS == 60_000
     config._write_local_config({**config._read_local_config(), "x": 1})
     app.processEvents()
-    assert c._debounce.isActive()                                     # 같은 30초 모으기
     c.upload_now()
+    assert server.calls == [] and not c._debounce.isActive()           # 설정 바뀜 → 안 보냄
+    c._guest_tick()                                                    # 가짜 시계: 60초 지남
     assert [(m, p) for m, p, _ in server.calls] == [("PUT", "/guest/settings")]
-    method, path, headers = server.calls[0]
+    _method, _path, headers = server.calls[0]
     assert "authorization" not in headers and len(headers["x-install-id"]) == 32
     assert server.guest_query == {"resolution": "2560x1440"}
-    c.upload_now()                                                    # 내용 그대로면 다시 안 보냄
-    assert len(server.calls) == 1
-    config._write_local_config({**config._read_local_config(), "x": 2})
-    c.shutdown()                                                      # 끌 때 한 번
-    assert [(m, p) for m, p, _ in server.calls] == [("PUT", "/guest/settings")] * 2
-    assert server.blob is None and server.info is None                # 로그인 동기화 경로는 안 씀
+    assert c._guest_timer.interval() == ac.GUEST_EVERY_MS == 3_600_000  # 그 뒤 1시간마다
+    c._guest_tick()                                                    # 1시간 지남 — 내용이 같아도 보냄(접속 시각)
+    assert len(server.calls) == 2
+    c.shutdown()                                                       # 종료 때 안 보냄
+    assert len(server.calls) == 2 and not c._guest_timer.isActive()
+    assert server.blob is None and server.info is None                 # 로그인 동기화 경로는 안 씀
 
 
 def _guest_doc(blob):
@@ -162,15 +165,17 @@ def test_guest_upload_failure_is_silent_and_logged_in_stops_guest(app):
     down = FakeServer(down=True)
     c = _controller(down)
     c.start()
-    c.upload_now()                                                    # 서버 꺼짐 → 조용히(오류 표시 없음)
+    c._guest_tick()                                                   # 서버 꺼짐 → 조용히(오류 표시 없음), 다음 차례 그대로
     assert c.last_error == "" and [(m, p) for m, p, _ in down.calls] == [("PUT", "/guest/settings")]
+    assert c._guest_timer.isActive()
     c._client = lambda t: account.Client(t, opener=FakeServer().opener)
     c.shutdown(flush=False)
     config.save_account_token(make_token())                          # 로그인하면 guest 경로 멈춤
     server = FakeServer()
     c2 = _controller(server)
-    c2._job_guest_upload()
-    assert server.calls == []
+    c2.start()
+    c2._guest_tick()                                                  # 로그인 상태면 차례가 와도 안 보냄
+    assert all(p != "/guest/settings" for _m, p, _h in server.calls)
     c2.shutdown(flush=False)
 
 
@@ -180,9 +185,9 @@ def test_guest_never_applies_server_settings(app):
     server = FakeServer()
     c = _controller(server)
     c.start()
-    c.upload_now()
+    c._guest_tick()
     c.shutdown()
-    assert all(m == "PUT" and p == "/guest/settings" for m, p, _ in server.calls)
+    assert server.calls and all(m == "PUT" and p == "/guest/settings" for m, p, _ in server.calls)
 
 
 def _server_with(raw_doc, *, resolution, rev=5):

@@ -2,8 +2,9 @@
 
 코드 → 런타임 동작 → 시스템 영향:
 - 네트워크·압축·파일 일은 모두 작업 스레드 하나(ThreadPoolExecutor)에서 — 화면 스레드는 신호만 받는다(16ms 규칙, 커서 꼬리 끊김 방지).
-- 비로그인이면 동기화·토큰 일은 없고, 같은 때(설정 바뀌면 30초 모아서·종료할 때) **사용 현황용 묶음만 올린다**
-  (`PUT /guest/settings`, 계정 명세 3.4.3 — 메모·PC 이름·절대 경로 뺌, 받아 적용 없음, 실패는 조용히 다음 때).
+- 비로그인이면 동기화·토큰 일은 없고, **켜고 60초 뒤 한 번 + 켜져 있는 동안 1시간마다** 사용 현황용 묶음만 올린다
+  (`PUT /guest/settings`, 계정 명세 3.4.3 — 메모·PC 이름·절대 경로 뺌, 받아 적용 없음, 설정 바뀔 때·종료 때는 안 보냄,
+  실패는 조용히 다음 차례에).
 - 토큰: 시작할 때 + 켜진 동안 하루 1번 `/me`로 새 토큰. 서버가 꺼져 있으면 마지막 확인 뒤 7일 유지(account), 401·403이면 비로그인.
 - 동기화: 설정 파일이 바뀌면(config 쓰기 알림) 30초 뒤 한 번(연달아 바꾸면 마지막 것만) + 앱을 끌 때 한 번 올림.
   올리기 전에 '빼는 값을 뺀 내용 지문'을 비교해 그대로면 보내지 않는다.
@@ -24,6 +25,8 @@ from .. import account, cloud_sync, config, feature_access
 _log = logging.getLogger("mabinogi_addon.account")
 
 DEBOUNCE_MS = 30_000
+GUEST_FIRST_MS = 60_000           # 비로그인 사용 현황: 켜고 60초 뒤 한 번(계정 명세 3.4.3, 사용자 결정 11-23)
+GUEST_EVERY_MS = 60 * 60 * 1000   # 그 뒤 켜져 있는 동안 1시간마다
 REFRESH_CHECK_MS = 60 * 60 * 1000  # 1시간마다 '하루 지났나' 확인(자는 동안 놓친 갱신도 깨어나면 바로)
 FLUSH_TIMEOUT = 5.0  # 종료 때 올리기 최대 대기(초)
 
@@ -58,6 +61,9 @@ class AccountController(QObject):
         self._refresh_timer = QTimer(self)
         self._refresh_timer.setInterval(REFRESH_CHECK_MS)
         self._refresh_timer.timeout.connect(self._maybe_refresh)
+        self._guest_timer = QTimer(self)
+        self._guest_timer.setSingleShot(False)
+        self._guest_timer.timeout.connect(self._guest_tick)
         self._wrote.connect(self._schedule)
         self._done.connect(self._on_done)
         self._last_refresh = None
@@ -71,6 +77,7 @@ class AccountController(QObject):
         self._resolution = self._resolution_fn() or ""
         config.add_write_listener(self._on_write)
         self._refresh_timer.start()
+        self._guest_timer.start(GUEST_FIRST_MS)  # 비로그인이면 60초 뒤 첫 올리기(그때 로그인 상태면 아무것도 안 함)
         if self._token() is None:
             return
         self._submit("refresh", self._job_refresh)
@@ -90,12 +97,11 @@ class AccountController(QObject):
         config.remove_write_listener(self._on_write)
         self._debounce.stop()
         self._refresh_timer.stop()
+        self._guest_timer.stop()
         self._flush_future = None
         self._flush_started = time.monotonic()
         if flush and not self.held and self._token() is not None and self.sync_enabled():
             self._flush_future = self._executor_or_new().submit(self._job_upload, None, False)
-        elif flush and self._token() is None:
-            self._flush_future = self._executor_or_new().submit(self._job_guest_upload)
 
     def finish_shutdown(self) -> float:
         """올리기가 끝나길 기다린다(시작부터 최대 FLUSH_TIMEOUT초 — 올림이 끝나기 전에 꺼지지 않게). 기다린 ms를 돌려준다."""
@@ -154,39 +160,33 @@ class AccountController(QObject):
             self._wrote.emit()  # 어느 스레드에서 불려도 화면 스레드로(Qt 대기열)
 
     def _schedule(self) -> None:
-        if self.closed:
-            return
-        if self._token() is None:  # 비로그인: 사용 현황용 올리기(같은 30초 모으기)
-            self._debounce.start()
-            return
-        if self.held or not self.sync_enabled():
+        if self.closed or self.held or self._token() is None or not self.sync_enabled():
             return
         self._debounce.start()  # 다시 시작 = 마지막 변경 뒤 30초
 
     def upload_now(self) -> None:
-        if self.closed:
-            return
-        if self._token() is None:
-            self._submit("guest", self._job_guest_upload)
-            return
-        if self.held or not self.sync_enabled():
+        if self.closed or self.held or self._token() is None or not self.sync_enabled():
             return
         self._submit("upload", lambda: self._job_upload(None, False))
 
+    def _guest_tick(self) -> None:
+        """켜고 60초 뒤 첫 차례, 그 뒤 1시간마다 — 비로그인일 때만 올림(로그인이면 이번 차례는 건너뜀)."""
+        self._guest_timer.setInterval(GUEST_EVERY_MS)
+        if self.closed or self._token() is not None:
+            return
+        self._submit("guest", self._job_guest_upload)
+
     def _job_guest_upload(self):
-        """비로그인 올리기 — 내용이 지난번과 같으면 안 보냄. 실패(서버 꺼짐 등)는 조용히(다음 때 다시)."""
+        """비로그인 올리기(차례마다 — 접속 시각 갱신이라 내용이 같아도 보냄). 실패(서버 꺼짐 등)는 조용히 다음 차례에."""
         if feature_access.is_logged_in():
             return None
         try:
             from ..inquiry_session import install_id
-            blob, digest = cloud_sync.build_guest_blob(resolution=self._resolution, app_version=self._app_version)
-            if digest == getattr(self, "_guest_digest", None):
-                return ("guest_same", None)
+            blob, _digest = cloud_sync.build_guest_blob(resolution=self._resolution, app_version=self._app_version)
             account.put_guest_settings(self._client(None), blob, install_id=install_id(), resolution=self._resolution)
         except Exception as exc:  # noqa: BLE001 — 사용 현황용: 어떤 실패도 화면에 알리지 않음
-            _log.info("[사용 현황] 비로그인 설정 올리기 못 함(다음 때 다시): %r", exc)
+            _log.info("[사용 현황] 비로그인 설정 올리기 못 함(다음 차례에 다시): %r", exc)
             return ("guest_failed", None)
-        self._guest_digest = digest
         return ("guest_uploaded", None)
 
     # ---- 물음 답 ---------------------------------------------------------------------------------
