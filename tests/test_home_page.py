@@ -208,12 +208,17 @@ def test_moving_to_another_screen_from_code_closes_home(window):
 
 
 def test_many_needs_scroll_with_dark_scrollbar():
+    from PySide6.QtWidgets import QApplication
+    QApplication.instance() or QApplication([])  # 병렬 실행에서 이 테스트가 먼저 돌면 앱이 없어 Qt가 abort(0.56.0 배포 검사에서 재현)
     page = HomePage()
     page.resize(790, 800)
     page.update_state({"needs": [(str(i), "기능") for i in range(10)], "title": "running"})
     page.show()
-    QTest.qWait(1)
     bar = page.scroll.verticalScrollBar()
+    for _ in range(100):  # 레이아웃 반영 기다리기(병렬 실행에서 qWait(1)로는 부족 — 0.56.0 배포 검사에서 재현)
+        QTest.qWait(10)
+        if bar.maximum() > 0:
+            break
     assert bar.maximum() > 0  # 아주 많을 때만 스크롤
     assert "QScrollBar::handle:vertical" in page.styleSheet()  # 밝은 기본 스크롤바 대신 어두운 모양
     page.close()

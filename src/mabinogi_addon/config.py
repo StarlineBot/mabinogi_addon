@@ -174,10 +174,30 @@ _ACCOUNT_KEYS = ("discordAccount", "discordUser", "settingsSync", "installId")
 _LOCAL_ONLY_KEYS = _SECRET_KEYS + _MACHINE_KEYS + _ACCOUNT_KEYS
 
 
+# 이 PC 값 — 내보내기·동기화에서 빼고 가져오기로 덮지 않는 general 안 값(로그인 1.0 예고 동의, 계정 명세 4.1)
+_LOCAL_ONLY_GENERAL = ("loginNoticeAgreed",)
+
+
 def config_json_for_export(path: Path = LOCAL_CONFIG_PATH) -> str:
     """내보낼 설정 JSON 문자열(비밀값·장치 고유 값 제외). 파일 저장·디스코드 전송 공용."""
     data = {k: v for k, v in _read_local_config(path).items() if k not in _LOCAL_ONLY_KEYS}
+    if isinstance(data.get("general"), dict):
+        data["general"] = {k: v for k, v in data["general"].items() if k not in _LOCAL_ONLY_GENERAL}
     return json.dumps(data, ensure_ascii=False, indent=2)
+
+
+def load_login_notice_agreed(path: Path = LOCAL_CONFIG_PATH) -> str | None:
+    """로그인 1.0 예고 '다시 보지 않기'(동의) 날짜. 없으면 None."""
+    g = _read_local_config(path).get("general") or {}
+    value = g.get("loginNoticeAgreed") if isinstance(g, dict) else None
+    return value if isinstance(value, str) and value else None
+
+
+def save_login_notice_agreed(day: str, path: Path = LOCAL_CONFIG_PATH) -> None:
+    data = _read_local_config(path)
+    g = data.get("general") if isinstance(data.get("general"), dict) else {}
+    data["general"] = {**g, "loginNoticeAgreed": str(day)}
+    _write_local_config(data, path)
 
 
 def _merge_config_text(text: str, path: Path) -> None:
@@ -187,10 +207,15 @@ def _merge_config_text(text: str, path: Path) -> None:
         raise ValueError("설정 파일 형식이 올바르지 않습니다")  # noqa: TRY004
     data = _read_local_config(path)
     local_exe = (data.get("general") or {}).get("gameExe") if isinstance(data.get("general"), dict) else None
+    local_general = {k: v for k, v in (data.get("general") or {}).items() if k in _LOCAL_ONLY_GENERAL} \
+        if isinstance(data.get("general"), dict) else {}
     local_usage = {k: data[k] for k in ("featureUsage",) if k in data}
     for key, value in incoming.items():
         if key not in _LOCAL_ONLY_KEYS:
             data[key] = value
+    if isinstance(data.get("general"), dict):  # 이 PC 값(로그인 예고 동의)은 가져온 값으로 덮지 않음
+        general = {k: v for k, v in data["general"].items() if k not in _LOCAL_ONLY_GENERAL}
+        data["general"] = {**general, **local_general}
     from .feature_usage import keep_local
     keep_local(data, local_usage)  # 사용 기능 날짜(명세 3.4.2)는 이 PC 값 유지 — 다른 PC 기록으로 덮지 않음
     # 0.48.0: 들어온 게임창 등록이 게임이 아닌 이름(앱 자신·브라우저 등)이면 이 PC 값 유지(동기화 받기와 같은 규칙)

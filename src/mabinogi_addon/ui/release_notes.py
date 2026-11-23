@@ -19,8 +19,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
-from .palette import color
 from .. import paths
+from .palette import color
 
 RELEASE_NOTES_FILE = paths.resource_dir() / "release_notes.md"
 
@@ -102,7 +102,8 @@ class ReleaseNotesDialog(QDialog):
 
         body = QTextBrowser()
         body.setOpenExternalLinks(True)
-        body.setMarkdown(markdown)
+        from ..login_notice import pinned_notes_block
+        body.setMarkdown(pinned_notes_block(version) + markdown)  # 1.0.0 전까지 맨 위 고정(계정 명세 4.1)
         # QTextBrowser 기본 리스트 들여쓰기가 과하게 넓다. 불릿 앞 여백을 줄인다.
         doc = body.document()
         doc.setIndentWidth(14)  # 리스트/인용 한 단계 들여쓰기 폭(기본보다 좁게)
