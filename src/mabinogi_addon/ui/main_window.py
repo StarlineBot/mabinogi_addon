@@ -355,7 +355,7 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(5000, self._account.start)  # 트레이로 시작해 창이 안 떠도(첫 표시 때 이미 시작했으면 아무것도 안 함)
         self.settings_tab.voice_pack_changed.connect(self._on_voice_pack_changed)
         # 캐릭터(docs/character-pet-spec.md): 알림 목소리 고르기를 옮겨 온 탭 + 화면 펫. 알파는 제작자 전용(11-24) —
-        # 비제작자는 탭 없음·펫 없음·설정의 목소리 고르기 그대로(_refresh_character_access)
+        # 캐릭터 베타(11-24): 모든 사용자 — 호감도 바·조절은 제작자만(_refresh_character_access)
         from .character_controller import CharacterController
         from .character_tab import CharacterTab
         self.character_tab = CharacterTab()
@@ -457,7 +457,7 @@ class MainWindow(QMainWindow):
         tabs.addTab(self._party_scroll, "파티 모집")
         tabs.addTab(self._convenience_tabs, "편의기능")
         # 탭 순서 … · 최적화 · 블랙박스 · 캐릭터 · 설정(명세 3절 1번) — 최적화·블랙박스는 _tail_anchor() 앞에 끼운다.
-        # 캐릭터 탭은 제작자일 때만 설정 바로 앞에(_refresh_character_access)
+        # 캐릭터 탭은 설정 바로 앞에(_refresh_character_access)
         self._character_scroll = _scrolled(self.character_tab)
         self._settings_scroll = _scrolled(self.settings_tab)
         tabs.addTab(self._settings_scroll, "설정")
@@ -2040,22 +2040,19 @@ class MainWindow(QMainWindow):
         self._save_overlay(self.debuff_overlay, "debuffTracker")
 
     def _refresh_character_access(self) -> None:
-        """캐릭터 알파는 제작자 전용(11-24): 제작자면 캐릭터 탭(설정 바로 앞)·펫, 아니면 탭 없음·설정의 목소리 고르기."""
+        """캐릭터 베타(11-24): 모든 사용자에게 캐릭터 탭(설정 바로 앞)·펫·인사, 알림 목소리는 캐릭터 탭에서만 고름(설정 줄 숨김).
+        제작자만 카드 아래 호감도 바·퀘스트·조절 칸(로그인 바뀔 때 다시 판정)."""
         from ..feature_access import is_creator
         try:
-            allowed = bool(is_creator())
+            creator = bool(is_creator())
         except Exception:  # noqa: BLE001 — 판정 실패는 비제작자로
-            allowed = False
+            creator = False
         tabs = self._tabs
-        index = tabs.indexOf(self._character_scroll)
-        if allowed and index < 0:
+        if tabs.indexOf(self._character_scroll) < 0:
             tabs.insertTab(tabs.indexOf(self._settings_scroll), self._character_scroll, "캐릭터")
-        elif not allowed and index >= 0:
-            if tabs.currentWidget() is self._character_scroll:
-                tabs.setCurrentWidget(self._settings_scroll)
-            tabs.removeTab(index)
-        self.settings_tab.set_voice_visible(not allowed)
-        self.character_tools.set_enabled(allowed)
+        self.settings_tab.set_voice_visible(False)
+        self.character_tab.set_creator(creator)
+        self.character_tools.set_enabled(True)
 
     def _tail_anchor(self):
         """최적화·블랙박스 탭을 끼울 자리(그 앞에) — 캐릭터 탭(없으면 설정)."""

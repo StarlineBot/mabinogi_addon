@@ -20,6 +20,10 @@ from collections import deque
 from dataclasses import dataclass, field, fields
 
 MAX_VALUE = 100
+# 호감도 쌓기 스위치(사용자 11-24 베타 공개 — '기획에서 채우는 법·혜택을 다시 정할 때까지 호감도가 안 올라가게').
+# False면 켜기·쓰다듬기·알림·구석 +, 반복 −1, 퀘스트 누적이 모두 멈춤(짜증 반응·쓰다듬기 하루 횟수는 그대로).
+# 규칙 숫자(Rules)·저장 형식은 그대로 — 다시 켤 때 이 값만 True로. 제작자 직접 조절(set_value)은 따로 늘 됨.
+GROWTH = False
 STAGES = (0, 25, 50, 75, 100)
 SEGMENT = 25
 
@@ -202,6 +206,8 @@ class Affinity:
     # ---- 행동 ------------------------------------------------------------------------------
     def launched(self, today: str) -> int:
         """앱 켜기 — 연속 켠 날을 세고 그날 처음이면 +2."""
+        if not GROWTH:
+            return 0
         if self.last_launch != today:
             try:
                 yesterday = (datetime.date.fromisoformat(today) - datetime.timedelta(days=1)).isoformat()
@@ -212,11 +218,15 @@ class Affinity:
         return self.gain("launch", today)
 
     def alerted(self, today: str) -> int:
+        if not GROWTH:
+            return 0
         self.totals["alerts"] = self.totals.get("alerts", 0) + 1
         return self.gain("alert", today)
 
     def corner_minute(self, today: str) -> int:
         """게임 중 구석에서 함께 1분 — 퀘스트 누적, 오늘 30분마다 +1."""
+        if not GROWTH:
+            return 0
         self._roll(today)
         self.totals["corner_minutes"] = self.totals.get("corner_minutes", 0) + 1
         self.corner_today += 1
@@ -231,8 +241,9 @@ class Affinity:
         if now - self.last_penalty < self.rules.penalty_gap:
             return False
         self.last_penalty = now
-        self.value = max(self.stage, self.value - self.rules.penalty)
-        return True
+        if GROWTH:
+            self.value = max(self.stage, self.value - self.rules.penalty)
+        return True   # 짜증 반응은 쌓기를 꺼도 그대로
 
     def click(self, now: float) -> bool:
         """클릭 하나 기록. 10초 안 5번 이상이면 −1(짜증) → True."""
@@ -248,6 +259,9 @@ class Affinity:
     def petted(self, now: float, today: str) -> str:
         """쓰다듬기를 끝까지 함 → 'gain'(+1·퀘스트 누적) / 'annoyed'(오늘 다 채운 뒤 또 → −1) / 'none'."""
         if self.times_left("pet", today) > 0:
+            if not GROWTH:  # 값·퀘스트는 그대로, 하루 횟수만 세어 3번 넘으면 짜증 반응
+                self.counts["pet"] = self.counts.get("pet", 0) + 1
+                return "gain"
             self.totals["pets"] = self.totals.get("pets", 0) + 1
             self.gain("pet", today)
             return "gain"

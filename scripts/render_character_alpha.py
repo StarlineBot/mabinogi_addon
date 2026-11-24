@@ -25,6 +25,9 @@ def main():
     import sys
     # 사용: … render_character_alpha [목소리 팩] — 아리아 고른 화면은 '부드러운 여성'(파일 main_character_tab_aria.png)
     pack = sys.argv[1] if len(sys.argv) > 1 else '조용한 여성'
+    # 둘째 인자 user/creator — 캐릭터 베타(11-24) 탭 전체(카드 6장)를 비제작자/제작자로: beta_tab_<role>.png
+    role = sys.argv[2] if len(sys.argv) > 2 else ''
+    creator = role != 'user'
     suffix = {'조용한 여성': '', '부드러운 여성': '_aria', '차분한 남성': '_ian', '화난 여성': '_lena', '장난스러운 남성': '_starline'}.get(pack, '_other')
     OUT.mkdir(parents=True, exist_ok=True)
     app = QApplication.instance() or QApplication([]); app.setStyle('Fusion'); apply_theme('custom', DARK)
@@ -41,15 +44,16 @@ def main():
         stack.enter_context(patch.object(config, '_write_local_config', lambda *a, **k: None))
         stack.enter_context(patch.object(config, 'load_discord_user', lambda *a, **k: {'id': 'preview', 'name': '미리보기'}))
         stack.enter_context(patch.object(config, 'get_nexon_api_key', lambda: None))
-        stack.enter_context(patch.object(module, 'is_creator', lambda: True))
+        stack.enter_context(patch.object(module, 'is_creator', lambda: creator))
         from mabinogi_addon import feature_access
-        stack.enter_context(patch.object(feature_access, 'is_creator', lambda: True))  # 캐릭터 알파는 제작자 전용
+        stack.enter_context(patch.object(feature_access, 'is_creator', lambda: creator))
         stack.enter_context(patch.object(QApplication, 'quit', lambda: None))
         stack.enter_context(patch.object(QMessageBox, 'question', lambda *a, **k: QMessageBox.StandardButton.No))
         screen = type(app.primaryScreen())
         for name in ('availableGeometry', 'geometry'):
-            stack.enter_context(patch.object(screen, name, lambda self: QRect(0, 0, 1600, 1200)))
-        w = MainWindow(); w._post_show_done = True; w._booting = False; w._leave_setup(); w.resize(790, 900); w.show()
+            stack.enter_context(patch.object(screen, name, lambda self: QRect(0, 0, 1600, 1600)))
+        w = MainWindow(); w._post_show_done = True; w._booting = False; w._leave_setup()
+        w.resize(790, 1260 if role else 900); w.show()
         for timer in w.findChildren(QTimer):
             timer.stop()
         w.optimization_tools.refresh_access(); w.blackbox_tools.refresh_access()
@@ -57,6 +61,9 @@ def main():
             w._tabs.setCurrentWidget(w._character_scroll)
             for _ in range(6):
                 app.processEvents()
+            if role:
+                assert w.grab().save(str(OUT / f'beta_tab_{role}.png'))
+                return
             if suffix:  # 고른 카드(두 번째 줄일 수 있음)가 보이게
                 chosen = next(c for c in w.character_tab.cards if c.selected())
                 w._character_scroll.ensureWidgetVisible(chosen, 0, 120)

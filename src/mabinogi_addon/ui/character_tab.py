@@ -43,7 +43,8 @@ class CharacterCard(QWidget):
         self._selected = False
         self._affinity = 0
         self._quest = ""
-        self.setFixedSize(CARD_W, CARD_H + BAR_H + QUEST_H + 8)
+        self._details = True   # ♥ 호감도 바·퀘스트 줄(베타 11-24: 제작자만)
+        self.setFixedSize(self.sizeHint())
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setToolTip(f"{character.name if character.known else '아직 이름이 없는 캐릭터'} — 목소리: {character.pack}")
         self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
@@ -60,6 +61,16 @@ class CharacterCard(QWidget):
 
     def selected(self) -> bool:
         return self._selected
+
+    def set_details_visible(self, on: bool) -> None:
+        """호감도 바·퀘스트 줄 보이기(제작자) / 숨기기(비제작자 — 카드 아래 자리도 줄임)."""
+        if bool(on) != self._details:
+            self._details = bool(on)
+            self.setFixedSize(self.sizeHint())
+            self.update()
+
+    def details_visible(self) -> bool:
+        return self._details
 
     def mouseReleaseEvent(self, event) -> None:  # noqa: N802
         if event.button() == Qt.MouseButton.LeftButton and self.rect().contains(event.position().toPoint()):
@@ -83,7 +94,8 @@ class CharacterCard(QWidget):
         p.setPen(QPen(border, 3 if self._selected else 1))
         p.setBrush(Qt.BrushStyle.NoBrush)
         p.drawRoundedRect(card, 10, 10)
-        self._paint_bar(p)
+        if self._details:
+            self._paint_bar(p)
         p.end()
 
     def _paint_art(self, p: QPainter, card: QRectF) -> None:
@@ -148,7 +160,7 @@ class CharacterCard(QWidget):
                        self._quest)
 
     def sizeHint(self) -> QSize:  # noqa: N802
-        return QSize(CARD_W, CARD_H + BAR_H + QUEST_H + 8)
+        return QSize(CARD_W, CARD_H + BAR_H + QUEST_H + 8 if self._details else CARD_H)
 
 
 def _dark() -> bool:
@@ -194,7 +206,7 @@ class AffinityEditor(QWidget):
 
 
 class CharacterTab(QWidget):
-    """캐릭터 고르기 + 화면에 띄우기 스위치 + (제작자) 호감도 바로 바꾸기."""
+    """캐릭터 고르기 + 화면에 띄우기 스위치 + (제작자) 호감도 바·퀘스트·바로 바꾸기(베타 11-24 — 비제작자는 숨김)."""
     voice_pack_changed = Signal()
     pet_toggled = Signal(bool)
     affinity_edited = Signal()
@@ -243,7 +255,15 @@ class CharacterTab(QWidget):
         v.addLayout(grid)
         v.addStretch(1)
         self._preview = None
+        self.set_creator(False)
         self.refresh()
+
+    def set_creator(self, on: bool) -> None:
+        """제작자면 카드 아래 ♥ 바·퀘스트 줄·호감도 조절 칸을 보임, 아니면 모두 숨김(베타 — 호감도가 오르지 않으므로)."""
+        self._creator = bool(on)
+        for card, editor in zip(self.cards, self.editors):
+            card.set_details_visible(self._creator)
+            editor.setVisible(self._creator)
 
     def refresh(self) -> None:
         """고른 캐릭터 강조·호감도 바·안내 글을 저장 값으로 다시 맞춘다."""
