@@ -22,7 +22,13 @@ import random
 from dataclasses import dataclass, field
 
 FIGURE_H = 190
-WALK_SPEED = 45.0          # 논리 px/초
+WALK_SPEED = 45.0          # 논리 px/초(캐릭터 값이 없을 때)
+# 캐릭터별 걷기(사용자 11-24 '걷기가 미끄러짐'): 속도 = 걷기 그림 한 바퀴 이동 거리 / 한 바퀴 시간이 되게.
+# 한 바퀴 거리는 걷기 6장의 발 간격(접지 때 가장 넓은 폭 − 가장 좁은 폭, 190px 기준) × 2로 잼(11-24):
+#   다래 48.7 → 97px, 아리아 60.0 → 120px, 이안 39.3 → 79px(기획 시안 약 90px).
+DARE_WALK_FRAME, DARE_WALK_SPEED = 0.20, 80.0    # 한 바퀴 1.2초 × 80 = 96px
+ARIA_WALK_FRAME, ARIA_WALK_SPEED = 0.22, 90.0    # 1.32초 × 90 = 119px
+IAN_WALK_FRAME, IAN_WALK_SPEED = 0.20, 75.0      # 기획 지정(시안) 1.2초 × 75 = 90px
 GRAVITY = 1800.0           # 떨어질 때 px/초²
 DRAG_START = 6.0           # 이만큼 움직이면 클릭이 아니라 끌기
 FRONT_DELAY = 1.0          # 게임이 앞으로 온 뒤 이만큼 지나야 구석으로(잠깐 전환 무시)
@@ -36,7 +42,7 @@ LONG_HUNT = 7200.0         # 오래 사냥 중(앉아서 2시간마다)
 # 동작 → (프레임, 한 장 시간(초)). loop=True면 반복
 ANIMS: dict[str, tuple[tuple[str, ...], tuple[float, ...], bool]] = {
     "stand": (("stand_0",), (1.0,), True),
-    "walk": (tuple(f"walk_{i}" for i in range(6)), (0.12,) * 6, True),
+    "walk": (tuple(f"walk_{i}" for i in range(6)), (DARE_WALK_FRAME,) * 6, True),
     "surprise": (("surprise_0", "surprise_1", "surprise_0", "surprise_1"), (0.22,) * 4, False),
     "drag": (tuple(f"drag_{i}" for i in range(4)), (0.18,) * 4, True),
     "fall": (("drag_0",), (1.0,), True),
@@ -84,6 +90,7 @@ class Profile:
     idle_gap: tuple[float, float] = (8.0, 15.0)   # 그 동작 사이 간격(초, 무작위)
     idle_laps: tuple[int, int] = (1, 2)            # 한 번에 몇 바퀴
     talk_after_surprise: bool = False     # 클릭 반응(짧은 그림) 뒤 말풍선이 아직 나오는 중이면 말하기로 이어감(이안)
+    walk_speed: float = WALK_SPEED        # 걷는 빠르기(논리 px/초) — 걷기 그림 한 바퀴 거리에 맞춤
 
     def with_timing(self, raw) -> Profile:
         """설정 값(config character.idle {gap: [최소, 최대], laps: [최소, 최대]})으로 대기 동작 시간 덮어쓰기."""
@@ -101,13 +108,13 @@ class Profile:
         return replace(self, idle_gap=gap or self.idle_gap, idle_laps=laps or self.idle_laps)
 
 
-DARE = Profile(ANIMS, _NEXT, SITTING, "sit_drowsy", doze_state="sit_doze")
+DARE = Profile(ANIMS, _NEXT, SITTING, "sit_drowsy", doze_state="sit_doze", walk_speed=DARE_WALK_SPEED)
 
 # 아리아(docs/characters/아리아.md): 졸기·자다 깨기 없음 — 구석에서 머리를 안고 앉아 웃음(0 길게 → 3 → 0 → 1 → 2 → 0),
 # 앉아서 클릭 = 웃음 프레임. 서 있기 두 자세 번갈아 + 가만히 서 있는 동안 가끔 머리 쓰다듬기(사용자 11-24).
 ARIA_ANIMS = {
     "stand": (("stand_0", "stand_1"), (2.2, 2.2), True),
-    "walk": (tuple(f"walk_{i}" for i in range(6)), (0.12,) * 6, True),
+    "walk": (tuple(f"walk_{i}" for i in range(6)), (ARIA_WALK_FRAME,) * 6, True),
     "surprise": (tuple(f"surprise_{i}" for i in range(4)), (0.22,) * 4, False),
     "drag": (("drag_0", "drag_1"), (0.25, 0.25), True),
     "fall": (("drag_1",), (1.0,), True),
@@ -131,12 +138,13 @@ ARIA_ANIMS = {
 ARIA = Profile(ARIA_ANIMS,
                {"surprise": "stand", "land": "getup", "getup": "stand", "pet_in": "pet_loop", "pet_out": "stand",
                 "alert": "stand", "crouch": "sit_loop", "sit_notice": "sit_loop", "rise": "stand", "talk_end": "stand"},
-               ("crouch", "sit_loop", "sit_notice"), "sit_loop", idle_extra="hairstroke")
+               ("crouch", "sit_loop", "sit_notice"), "sit_loop", idle_extra="hairstroke",
+               walk_speed=ARIA_WALK_SPEED)
 # 이안(docs/characters/이안.md): 졸기 없음·놀람 그림 없음(서서 클릭 = 쓰다듬기 첫 장 0.5초 → 말하기),
 # 서 있기 ↔ 시계 보기 번갈아, 떨어지면 두 발 착지 → 바로 서기(엉덩방아·일어나기 없음), 알림 = 시계 가리키며 말함.
 IAN_ANIMS = {
     "stand": (("stand_1",), (1.0,), True),
-    "walk": (tuple(f"walk_{i}" for i in range(6)), (0.12,) * 6, True),
+    "walk": (tuple(f"walk_{i}" for i in range(6)), (IAN_WALK_FRAME,) * 6, True),
     "surprise": (("pet_0",), (0.5,), False),
     "drag": (tuple(f"drag_{i}" for i in range(4)), (0.18,) * 4, True),
     "fall": (("fall_0", "fall_1"), (0.2, 0.2), True),
@@ -158,7 +166,7 @@ IAN = Profile(IAN_ANIMS,
               {"surprise": "stand", "land": "stand", "pet_in": "pet_loop", "pet_out": "stand", "alert": "stand",
                "crouch": "sit_loop", "sit_notice": "sit_loop", "rise": "stand", "talk_end": "stand"},
               ("crouch", "sit_loop", "sit_notice"), "sit_loop", idle_extra="watch", idle_laps=(1, 1),
-              talk_after_surprise=True)
+              talk_after_surprise=True, walk_speed=IAN_WALK_SPEED)
 PROFILES = {"다래": DARE, "아리아": ARIA, "이안": IAN}
 
 
@@ -201,6 +209,7 @@ class Brain:
     _corner_time: float = 0.0
     _hunt_time: float = 0.0
     _speed: float = WALK_SPEED
+    _walk_rate: float = 1.0
     _talk_until: float = 0.0
     _next_extra: float = 0.0
     _extra_until: float = 0.0
@@ -214,6 +223,8 @@ class Brain:
     def frame(self, now: float) -> str:
         frames, times, loop = self.profile.anims[self.state]
         t = now - self._t0
+        if self.state == "walk":
+            t *= self._walk_rate
         total = sum(times)
         if loop:
             t = t % total
@@ -244,7 +255,7 @@ class Brain:
 
     def _walk_to(self, target: tuple[float, float], now: float) -> None:
         self._target = target
-        self._speed = max(WALK_SPEED * 2.0, math.dist(self.pos, target) / 3.0)
+        self._speed = max(self.profile.walk_speed * 2.0, math.dist(self.pos, target) / 3.0)
         self.facing_left = target[0] < self.pos[0]
         self._go("walk", now)
 
@@ -361,7 +372,8 @@ class Brain:
         dx, dy = target[0] - self.pos[0], target[1] - self.pos[1]
         dist = math.hypot(dx, dy)
         # 게임에 들어가면 서둘러 구석으로 — 멀어도 약 3초 안에 닿게(출발할 때 정한 빠르기)
-        speed = self._speed if self._goal == "corner" else WALK_SPEED
+        speed = self._speed if self._goal == "corner" else self.profile.walk_speed
+        self._walk_rate = speed / self.profile.walk_speed  # 빨리 걸을 땐 걸음 그림도 그만큼 빨리(미끄러짐 줄임)
         if dist <= speed * dt or dist < 1.0:
             self.pos = target
             self._target = None

@@ -1056,3 +1056,35 @@ def test_ian_alert_points_at_watch():
     assert b.state == "alert" and b.frame(1) == "talk_alert_0"
     _run(b, 1, 2.0, False)
     assert b.state in ("stand", "walk", "watch")
+
+
+def test_walk_values_come_from_character_data_and_corner_rush_speeds_up_steps():
+    """걷기 미끄러짐(사용자 11-24): 캐릭터별 프레임 시간·속도, 이안 0.2초·75px/초."""
+    assert br.IAN.walk_speed == 75.0 and br.IAN.anims["walk"][1] == (0.2,) * 6
+    for profile in (br.DARE, br.ARIA, br.IAN):
+        cycle = sum(profile.anims["walk"][1])
+        assert 60 <= profile.walk_speed <= 90 and 80 <= profile.walk_speed * cycle <= 125  # 한 바퀴 거리 ≈ 보폭
+    b = _ian()
+    b._walk_to((800.0, 700.0), 0)
+    _run(b, 0, 1.0, False)
+    assert abs(b.pos[0] - 375.0) < 6  # 75px/초(첫 틱은 시간 0)
+    b2 = _ian(corner=(900.0, 700.0))
+    _run(b2, 0, 2.0, True)
+    assert b2.state == "walk" and b2._walk_rate > 1.5  # 구석으로 서두를 땐 걸음 그림도 빨리
+
+
+def test_ian_fall_and_land_keep_head_size():
+    """이안 떨어지기·착지(사용자 11-24 '낙하가 어색'): 떨어지기 머리 폭 = 서 있기 머리 폭, 착지는 첫 장 머리 폭 → 끝 서 있는 키."""
+    import cv2
+    import numpy as np
+    from mabinogi_addon.image_io import imread
+
+    def head_width(name):
+        a = imread(IAN_DIR / f"{name}.png", cv2.IMREAD_UNCHANGED)[..., 3] > 100
+        cols = np.where(a[: int(a.shape[0] * 0.4)].any(0))[0]
+        return cols.max() - cols.min()
+
+    stand = head_width("stand_1")
+    for name in ("fall_0", "fall_1", "land_0"):
+        assert abs(head_width(name) - stand) / stand <= 0.03, name
+    assert imread(IAN_DIR / "land_2.png", cv2.IMREAD_UNCHANGED).shape[0] == 285
