@@ -8,6 +8,9 @@
   · 쓰다듬기 3·4번: 2번 그림 위에 얼굴 타원만(가운데·키 42% 높이, 반지름 폭 22%·키 11%, phaseCorrelate 맞춤, 가장자리 σ6)
   · 앉아 있기 1·2·3번: 0번 그림 위에 0번과 다른 가장 큰 덩어리(발끝·얼굴)만 팽창·흐림 마스크로
 - 말하기 끝: '말하기_한장모음' 오른쪽 두 장(끝 사이·서기와 같은 자세).
+- 쓰다듬기 머리색(사용자 11-24 '쓰다듬을 때 머리색이 달라짐'): 시트 머리가 더 어둡고 보랏빛(L128·a142·b96 vs 서 있기 L142·a140·b94)
+  → 머리 마스크(HSV H 100~140·S≥40·V≥60, 1.2px 흐림)에만 Lab 차이(서 있기 − 그 프레임, 위 20% 머리 픽셀 중앙값)를 더함.
+  얼굴 부분 합성(3·4)은 보정한 그림끼리.
 - 카드: 상반신이 가로형(1312×1199)이라 얼굴 중심으로 가로를 잘라 다른 카드와 같은 세로 비율(1199:1312)로.
 """
 from __future__ import annotations
@@ -55,6 +58,34 @@ def face_only(base: np.ndarray, other: np.ndarray) -> np.ndarray:
     mask = np.zeros((h, w), np.float32)
     cv2.ellipse(mask, (int(cx), int(cy)), (int(rx), int(ry)), 0, 0, 360, 1.0, -1)
     return _blend(base, aligned, cv2.GaussianBlur(mask, (0, 0), 6))
+
+
+def _hair_mask(frame: np.ndarray) -> np.ndarray:
+    """레나 머리(파랑~보라): HSV H 100~140·S≥40·V≥60 — 검은 드레스·붉은 눈·피부는 빠짐."""
+    hsv = cv2.cvtColor(np.ascontiguousarray(frame[..., :3]), cv2.COLOR_BGR2HSV)
+    h, s, v = hsv[..., 0], hsv[..., 1], hsv[..., 2]
+    return (h >= 100) & (h <= 140) & (s >= 40) & (v >= 60) & (frame[..., 3] > 0)
+
+
+def hair_lab(frame: np.ndarray) -> np.ndarray:
+    """위 20%의 머리 픽셀(알파>220) Lab 중앙값."""
+    top = frame[: max(1, int(frame.shape[0] * 0.2))]
+    sel = _hair_mask(top) & (top[..., 3] > 220)
+    lab = cv2.cvtColor(np.ascontiguousarray(top[..., :3]), cv2.COLOR_BGR2LAB).reshape(-1, 3)[sel.reshape(-1)]
+    return np.median(lab.astype(np.float32), axis=0)
+
+
+def match_hair(frame: np.ndarray, target: np.ndarray) -> np.ndarray:
+    """머리 마스크(1.2px 흐림)만큼 Lab에 (target − 이 프레임 머리 중앙값)을 더함."""
+    diff = target - hair_lab(frame)
+    mask = cv2.GaussianBlur(_hair_mask(frame).astype(np.float32), (0, 0), 1.2)[..., None]
+    bgr = np.ascontiguousarray(frame[..., :3])
+    lab = cv2.cvtColor(bgr, cv2.COLOR_BGR2LAB).astype(np.float32)
+    fixed = cv2.cvtColor(np.clip(lab + mask * diff, 0, 255).astype(np.uint8), cv2.COLOR_LAB2BGR)
+    out = frame.copy()
+    touched = mask[..., 0] >= 1 / 255  # Lab 왕복 반올림(±1~2)이 머리 밖 픽셀(드레스·눈·피부)에 묻지 않게
+    out[touched, :3] = fixed[touched]
+    return out
 
 
 def changed_part(base: np.ndarray, other: np.ndarray) -> np.ndarray:
@@ -111,6 +142,8 @@ def build() -> dict[str, list[np.ndarray]]:
     s_sit = crouch[2].shape[0] * s_crouch / np.median([f.shape[0] for f in sit])
     out["sit"] = [scaled(sit[0], s_sit)] + [scaled(changed_part(sit[0], f), s_sit) for f in sit[1:]]
     pet = sheet("레나_쓰다듬기")  # 0 움찔 · 1 이 악묾 · 2·3·4 참는 중 · 5 '흥' 팔짱
+    target = hair_lab(rise[2])
+    pet = [match_hair(f, target) for f in pet]  # 머리색을 서 있기에 맞춘 뒤 합성
     s_pet = head / float(np.median([head_width(f) for f in pet]))  # 이 시트만 머리 110% → 머리 폭 맞춤
     composed = pet[:3] + [face_only(pet[2], pet[3]), face_only(pet[2], pet[4])] + pet[5:]
     out["pet"] = [scaled(f, s_pet) for f in composed]

@@ -1394,3 +1394,25 @@ def test_lena_lines_situations_stage_lines_and_voices():
     assert set(voices) == {f"대사/{n}.mp3" for n in names}  # 녹음목록.md '레나' 표(인사·투아림2 뺀 14줄)
     assert voices["대사/착지.mp3"] == ("dropped", "…방금 거, 못 본 걸로 해.")
     assert voices["대사/구간_100.mp3"] == ("stage_up", "…이 초커, 너 가져. 잃어버리면 화낼 거야.")
+
+
+def test_lena_pet_hair_color_matches_standing_and_leaves_dress_and_eyes():
+    """쓰다듬기 머리색(사용자 11-24 '쓰다듬을 때 머리색이 달라짐'): 빌드에서 머리만 서 있기 색으로 — 결과 ΔE<4, 드레스·눈 그대로."""
+    import cv2
+    import numpy as np
+    from scripts.build_lena_frames import _hair_mask, hair_lab, match_hair, sheet
+
+    stand = hair_lab(_img("stand_0"))
+    for i in range(6):
+        lab = hair_lab(_img(f"pet_{i}"))
+        delta = (lab - stand) * np.array([100 / 255, 1, 1])  # OpenCV 8비트 Lab → L 0~100
+        assert np.linalg.norm(delta) < 4, (i, lab, stand)
+    raw = sheet("레나_쓰다듬기")[2]
+    fixed = match_hair(raw, hair_lab(sheet("레나_일어나기")[2]))
+    hsv = cv2.cvtColor(np.ascontiguousarray(raw[..., :3]), cv2.COLOR_BGR2HSV)
+    near_hair = cv2.dilate(_hair_mask(raw).astype(np.uint8), np.ones((9, 9), np.uint8)) > 0
+    dark = (hsv[..., 2] < 60) & (raw[..., 3] > 0) & ~near_hair            # 검은 드레스
+    red = ((hsv[..., 0] < 10) | (hsv[..., 0] > 170)) & (hsv[..., 1] > 80) & ~near_hair  # 붉은 눈
+    assert dark.sum() > 200 and red.sum() > 20
+    assert np.array_equal(fixed[dark], raw[dark]) and np.array_equal(fixed[red], raw[red])
+    assert not np.array_equal(fixed[_hair_mask(raw)], raw[_hair_mask(raw)])  # 머리는 바뀜
