@@ -29,8 +29,11 @@ WALK_SPEED = 45.0          # 논리 px/초(캐릭터 값이 없을 때)
 DARE_WALK_FRAME, DARE_WALK_SPEED = 0.20, 80.0    # 한 바퀴 1.2초 × 80 = 96px
 ARIA_WALK_FRAME, ARIA_WALK_SPEED = 0.22, 90.0    # 1.32초 × 90 = 119px
 IAN_WALK_FRAME, IAN_WALK_SPEED = 0.18, 62.0      # v2 걷기 1.08초 × 62 = 67px
-LENA_WALK_FRAME, LENA_WALK_SPEED = 0.22, 90.0    # 레나 발 간격 60.0 → 120px, 1.32초 × 90 = 119px
-STARLINE_WALK_FRAME, STARLINE_WALK_SPEED = 0.22, 65.0  # B안 새 걷기(11-24) 발끝 간격 → 약 85px, 1.32초 × 65 = 86px
+# 캐릭터별 그리기 배율(사용자 11-24 B안 — 눈 사이 간격 Starline 45·이안 47·다래·아리아 53·레나 57로 얼굴이 달라 보임).
+# 그림이 커지면 보폭도 커져 걷기 속도도 같은 배율(발 미끄러짐 방지).
+STARLINE_SCALE, LENA_SCALE = 1.15, 0.95
+LENA_WALK_FRAME, LENA_WALK_SPEED = 0.22, round(90.0 * LENA_SCALE, 1)    # 발 간격 60.0 → 120px(×0.95 = 114px), 1.32초 × 85.5
+STARLINE_WALK_FRAME, STARLINE_WALK_SPEED = 0.22, round(65.0 * STARLINE_SCALE, 1)  # 발끝 간격 → 약 85px(×1.15 = 98px), 1.32초 × 74.8
 GRAVITY = 1800.0           # 떨어질 때 px/초²
 DRAG_START = 6.0           # 이만큼 움직이면 클릭이 아니라 끌기
 FRONT_DELAY = 1.0          # 게임이 앞으로 온 뒤 이만큼 지나야 구석으로(잠깐 전환 무시)
@@ -134,6 +137,7 @@ class Profile:
     walk_speed: float = WALK_SPEED        # 걷는 빠르기(논리 px/초) — 걷기 그림 한 바퀴 거리에 맞춤
     talk_sets: tuple = ()                 # 말하기 그림 벌(아리아는 A·B — 말 한 번마다 무작위)
     pet_shake: bool = False               # 쓰다듬기 참는 중 좌우 1px 떨림(레나)
+    scale: float = 1.0                    # 그리기 배율(사용자 11-24 B안 — 얼굴 크기 맞춤: Starline 1.15·레나 0.95). 그림 파일은 그대로
 
     def with_timing(self, raw) -> Profile:
         """설정 값(config character.idle {gap: [최소, 최대], laps: [최소, 최대]})으로 대기 동작 시간 덮어쓰기."""
@@ -234,7 +238,7 @@ LENA = Profile(LENA_ANIMS,
                {"surprise": "stand", "land": "stand", "pet_in": "pet_loop", "pet_out": "stand", "alert": "stand",
                 "crouch": "sit_loop", "sit_notice": "sit_loop", "rise": "stand", "talk_end": "stand"},
                ("crouch", "sit_loop", "sit_notice"), "sit_loop", click_talks=True, walk_speed=LENA_WALK_SPEED,
-               talk_sets=LENA_TALK, pet_shake=True)
+               talk_sets=LENA_TALK, pet_shake=True, scale=LENA_SCALE)
 # Starline(docs/characters/Starline.md, 기획 11-24): 졸기 없음, 서 있기 한 장(B안 긴 체형), 가만히 서 있으면 가끔
 # 손바닥 불꽃(아리아 머리 쓰다듬기·이안 시계와 같은 틀), 서서 클릭 = 바로 말하기, 착지 3장 → 서기,
 # 쓰다듬기 귀 젖힘 → 걷어내기 반복 → 손 털고 씩, 구석은 앉기 → 마법진 돌리기 반복 → 일어나기, 말 끝 두 장.
@@ -261,7 +265,7 @@ STARLINE = Profile(STARLINE_ANIMS,
                    {"surprise": "stand", "land": "stand", "pet_in": "pet_loop", "pet_out": "stand", "alert": "stand",
                     "crouch": "sit_loop", "sit_notice": "sit_loop", "rise": "stand", "talk_end": "stand"},
                    ("crouch", "sit_loop", "sit_notice"), "sit_loop", idle_extra="flame", idle_laps=(1, 1),
-                   click_talks=True, walk_speed=STARLINE_WALK_SPEED, talk_sets=STARLINE_TALK)
+                   click_talks=True, walk_speed=STARLINE_WALK_SPEED, talk_sets=STARLINE_TALK, scale=STARLINE_SCALE)
 PROFILES = {"다래": DARE, "아리아": ARIA, "이안": IAN, "레나": LENA, "Starline": STARLINE}
 
 
