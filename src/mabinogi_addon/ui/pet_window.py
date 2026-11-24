@@ -22,8 +22,7 @@ from ..character import brain as brain_mod
 FRAME_DIR_H = 285            # 저장 프레임의 서 있는 키(scripts/build_dare_frames.py STAND_H)
 WIN_W = 300                  # 창 폭(가장 넓은 프레임 + 말풍선 여유)
 BUBBLE_H = 74                # 머리 위 말풍선 자리
-MAX_SCALE = 1.2              # 캐릭터 그리기 배율 상한(Profile.scale — Starline 1.15) — 창 높이를 이만큼 키워 둠
-WIN_H = round(brain_mod.FIGURE_H * MAX_SCALE) + BUBBLE_H + 40
+WIN_H = brain_mod.FIGURE_H + BUBBLE_H + 40
 FOOT = 6                     # 창 아래에서 발 밑까지
 BUBBLE_SECONDS = 4.5
 TICK_MS = 50
@@ -175,7 +174,7 @@ class PetWindow(QWidget):
         cached = self._scaled.get(name)
         if cached is None:
             dpr = max(1.0, self.devicePixelRatioF())
-            k = self._k() * dpr
+            k = brain_mod.FIGURE_H / FRAME_DIR_H * dpr
             cached = image.scaled(round(image.width() * k), round(image.height() * k),
                                   Qt.AspectRatioMode.IgnoreAspectRatio, Qt.TransformationMode.SmoothTransformation)
             cached.setDevicePixelRatio(dpr)
@@ -183,12 +182,8 @@ class PetWindow(QWidget):
         return cached
 
     # ---- 그리기 ------------------------------------------------------------------------------
-    def _k(self) -> float:
-        """저장 프레임 → 화면 배율(키 190 기준 × 캐릭터 배율)."""
-        return brain_mod.FIGURE_H / FRAME_DIR_H * min(MAX_SCALE, self.brain.profile.scale)
-
     def _frame_rect(self, image: QImage) -> QRectF:
-        k = self._k()
+        k = brain_mod.FIGURE_H / FRAME_DIR_H
         w, h = image.width() * k, image.height() * k
         dx = dy = 0.0
         anchor = image.text("anchor")
