@@ -35,10 +35,30 @@ def load_frames(folder: str, profile: brain_mod.Profile | None = None) -> dict[s
     profile = profile or brain_mod.PROFILES.get(folder, brain_mod.DARE)
     out = {}
     names = {name for frames, _times, _loop in profile.anims.values() for name in frames}
+    anchors = _anchors(base)
     for name in sorted(names):
         image = QImage(str(base / f"{name}.png"))
         if not image.isNull():
+            if name in anchors:  # 프레임별 그리기 오프셋(저장 px) — 예: 이안 떨어지기 두 장의 머리 위치 맞춤
+                image.setText("anchor", "{},{}".format(*anchors[name]))
             out[name] = image
+    return out
+
+
+def _anchors(base) -> dict[str, tuple[float, float]]:
+    """assets/characters/<폴더>/anchors.json {프레임: [dx, dy]} — 없거나 잘못되면 {}(발 밑 가운데 그대로)."""
+    import json
+
+    try:
+        raw = json.loads((base / "anchors.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    out = {}
+    if isinstance(raw, dict):
+        for name, value in raw.items():
+            if (isinstance(value, list) and len(value) == 2
+                    and all(isinstance(v, (int, float)) and not isinstance(v, bool) and abs(v) < 200 for v in value)):
+                out[name] = (float(value[0]), float(value[1]))
     return out
 
 
@@ -156,7 +176,11 @@ class PetWindow(QWidget):
     def _frame_rect(self, image: QImage) -> QRectF:
         k = brain_mod.FIGURE_H / FRAME_DIR_H
         w, h = image.width() * k, image.height() * k
-        return QRectF(WIN_W / 2 - w / 2, WIN_H - FOOT - h, w, h)
+        dx = dy = 0.0
+        anchor = image.text("anchor")
+        if anchor:
+            dx, dy = (float(v) * k for v in anchor.split(","))
+        return QRectF(WIN_W / 2 - w / 2 + dx, WIN_H - FOOT - h + dy, w, h)
 
     def paintEvent(self, _event) -> None:  # noqa: N802
         now = self._clock()

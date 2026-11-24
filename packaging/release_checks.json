@@ -39,7 +39,7 @@
         "tests/test_character.py",
         "tests/test_overlay_capture.py"
       ],
-      "reason": "펫 창 — 판독 캡처 제외·포커스 안 가져감·키 190·말풍선 한 글자씩·말하기"
+      "reason": "펫 창 — 판독 캡처 제외·포커스 안 가져감·키 190·말풍선 한 글자씩·말하기·프레임별 기준점(anchors.json)"
     },
     "src/mabinogi_addon/ui/character_controller.py": {
       "tests": [
