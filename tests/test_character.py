@@ -1034,7 +1034,10 @@ def test_ian_roster_card_frames_and_heights():
         assert abs(h(name)[0] - 285) <= 3, name
     assert abs(h("rise_0")[1] - h("crouch_2")[1]) <= 3  # 일어나기 첫 장 = 쪼그림 폭
     assert abs(_head(IAN_DIR / "rise_2.png") / _head(IAN_DIR / "stand_1.png") - 1) <= 0.05  # 끝 = 서 있는 머리 폭
-    assert abs(h("sit_0")[0] - h("crouch_2")[0]) <= 4  # 앉아 기다리기 = 웅크리기 끝 높이
+    # 앉아 기다리기(v2, 기획 11-24): 웅크리기 끝 높이로 맞추면 머리 94% → 머리 폭 배율(몸이 조금 커지는 건 기획이 받아들임)
+    assert abs(_head(IAN_DIR / "sit_0.png") / _head(IAN_DIR / "stand_1.png") - 1) <= 0.05
+    for n in ("talk_end1_0", "talk_end2_0"):  # v2 말 끝 두 장
+        assert n in br.IAN.anims["talk_end"][0]
 
 
 def test_ian_lines_have_alerts_stage_lines_and_watch_click():
@@ -1111,15 +1114,15 @@ def test_ian_alert_points_at_watch():
 
 
 def test_walk_values_come_from_character_data_and_corner_rush_speeds_up_steps():
-    """걷기 미끄러짐(사용자 11-24): 캐릭터별 프레임 시간·속도, 이안 0.2초·75px/초."""
-    assert br.IAN.walk_speed == 75.0 and br.IAN.anims["walk"][1] == (0.2,) * 6
+    """걷기 미끄러짐(사용자 11-24): 캐릭터별 프레임 시간·속도, 이안 v2 0.18초·62px/초(보폭 67px)."""
+    assert br.IAN.walk_speed == 62.0 and br.IAN.anims["walk"][1] == (0.18,) * 6
     for profile in (br.DARE, br.ARIA, br.IAN, br.LENA):
         cycle = sum(profile.anims["walk"][1])
-        assert 60 <= profile.walk_speed <= 90 and 80 <= profile.walk_speed * cycle <= 125  # 한 바퀴 거리 ≈ 보폭
+        assert 60 <= profile.walk_speed <= 90 and 60 <= profile.walk_speed * cycle <= 125  # 한 바퀴 거리 ≈ 보폭
     b = _ian()
     b._walk_to((800.0, 700.0), 0)
     _run(b, 0, 1.0, False)
-    assert abs(b.pos[0] - 375.0) < 6  # 75px/초(첫 틱은 시간 0)
+    assert abs(b.pos[0] - 362.0) < 6  # 62px/초(첫 틱은 시간 0)
     b2 = _ian(corner=(900.0, 700.0))
     _run(b2, 0, 2.0, True)
     assert b2.state == "walk" and b2._walk_rate > 1.5  # 구석으로 서두를 땐 걸음 그림도 빨리

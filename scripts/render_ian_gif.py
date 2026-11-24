@@ -1,5 +1,5 @@
-"""이안 펫 동작 GIF(사용자 확인용) — 서기↔시계 보기, 서서 클릭(시선 위 → 말하기), 끌기→떨어지기→착지,
-구석(쪼그려 앉아 시계), 말하기·알림(시계 가리키며).
+"""이안 펫 동작 GIF(사용자 확인용, v2 시트 11-24) — 서기↔시계 보기, 걷기, 서서 클릭(바로 말하기 → 끝 두 장),
+말하기·알림 말하기, 쓰다듬기, 끌기→떨어지기→착지, 구석(쪼그려 앉아 기다리기).
 
 실행: QT_QPA_PLATFORM=offscreen uv run --with pillow python -m scripts.render_ian_gif
 """
@@ -45,8 +45,13 @@ def main() -> None:
     shoot(1.5, "서 있기")
     brain._next_extra = clock.t
     shoot(2.5, "가만히 서 있으면 가끔 시계 보기")
+    brain._next_extra = clock.t + 99
+    brain._go("stand", clock.t)
+    brain._walk_to((440.0, floor.y), clock.t)
+    shoot(3.2, "걷기 — 0.18초·초당 62px(보폭 67px)")
+    brain._next_walk = clock.t + 99
     brain.press(clock.t, *brain.pos); window.events.emit(brain.release(clock.t))
-    shoot(3.0, "서서 클릭 — 바로 말하기(사이 → 입)")
+    shoot(3.0, "서서 클릭 — 바로 말하기(사이 → 입 → 끝 두 장)")
     brain._go("watch", clock.t); brain._extra_until = clock.t + 5
     shoot(0.6, "시계 보는 중")
     brain.press(clock.t, *brain.pos); window.events.emit(brain.release(clock.t))
@@ -58,7 +63,12 @@ def main() -> None:
         shoot(3.2, label)
     brain.notify(clock.t)
     window.say(picker.alert("비바체 연장.mp3"))
-    shoot(3.0, "알림 — 시계를 가리키며 말함")
+    shoot(3.0, "알림 말하기")
+    hx = brain.pos[0]
+    window.events.emit(brain.hover(clock.t, hx, True))
+    shoot(3.0, "쓰다듬기", each=lambda i: window.events.emit(brain.hover(clock.t, hx + (12 if (i // 3) % 2 else -12), True)))
+    shoot(2.2, "손 떼면")
+    brain._next_walk = clock.t + 99
     x0, y0 = brain.pos[0], brain.pos[1] - 100
     brain.press(clock.t, x0, y0)
     shoot(1.6, "끌기 — 늘어진 회사원", each=lambda i: window.events.emit(brain.move(clock.t, x0 + i * 5, y0 - i * 6)))

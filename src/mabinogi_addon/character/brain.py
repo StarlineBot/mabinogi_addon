@@ -25,10 +25,10 @@ FIGURE_H = 190
 WALK_SPEED = 45.0          # 논리 px/초(캐릭터 값이 없을 때)
 # 캐릭터별 걷기(사용자 11-24 '걷기가 미끄러짐'): 속도 = 걷기 그림 한 바퀴 이동 거리 / 한 바퀴 시간이 되게.
 # 한 바퀴 거리는 걷기 6장의 발 간격(접지 때 가장 넓은 폭 − 가장 좁은 폭, 190px 기준) × 2로 잼(11-24):
-#   다래 48.7 → 97px, 아리아 60.0 → 120px, 이안 39.3 → 79px(기획 시안 약 90px).
+#   다래 48.7 → 97px, 아리아 60.0 → 120px, 이안 v2(11-24 다시 그림) 33.3 → 67px, 레나 60.0 → 120px.
 DARE_WALK_FRAME, DARE_WALK_SPEED = 0.20, 80.0    # 한 바퀴 1.2초 × 80 = 96px
 ARIA_WALK_FRAME, ARIA_WALK_SPEED = 0.22, 90.0    # 1.32초 × 90 = 119px
-IAN_WALK_FRAME, IAN_WALK_SPEED = 0.20, 75.0      # 기획 지정(시안) 1.2초 × 75 = 90px
+IAN_WALK_FRAME, IAN_WALK_SPEED = 0.18, 62.0      # v2 걷기 1.08초 × 62 = 67px
 LENA_WALK_FRAME, LENA_WALK_SPEED = 0.22, 90.0    # 레나 발 간격 60.0 → 120px, 1.32초 × 90 = 119px
 GRAVITY = 1800.0           # 떨어질 때 px/초²
 DRAG_START = 6.0           # 이만큼 움직이면 클릭이 아니라 끌기
@@ -199,7 +199,7 @@ IAN_ANIMS = {
     "rise": (("rise_0", "rise_1", "rise_2"), (0.25,) * 3, False),
     "watch": (("watch_0", "watch_1", "watch_2", "watch_3"), (0.25, 0.25, 1.0, 0.25), True),
 }
-IAN_TALK = (talk_set(),)
+IAN_TALK = ({**talk_set(), "end1": "talk_end1_0", "end2": "talk_end2_0"},)   # v2: 말 끝 두 장(레나와 같은 틀)
 IAN_ANIMS.update(_talk_anims(IAN_TALK))
 IAN = Profile(IAN_ANIMS,
               {"surprise": "stand", "land": "stand", "pet_in": "pet_loop", "pet_out": "stand", "alert": "stand",
