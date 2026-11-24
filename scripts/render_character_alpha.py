@@ -28,11 +28,11 @@ def main():
     # 둘째 인자 user/creator — 캐릭터 베타(11-24) 탭 전체(카드 6장)를 비제작자/제작자로: beta_tab_<role>.png
     role = sys.argv[2] if len(sys.argv) > 2 else ''
     creator = role != 'user'
-    suffix = {'조용한 여성': '', '부드러운 여성': '_aria', '차분한 남성': '_ian', '화난 여성': '_lena', '장난스러운 남성': '_starline'}.get(pack, '_other')
+    suffix = {'조용한 여성': '', '부드러운 여성': '_aria', '차분한 남성': '_ian', '화난 여성': '_lena', '장난스러운 남성': '_starline', 'default': '_default'}.get(pack, '_other')
     OUT.mkdir(parents=True, exist_ok=True)
     app = QApplication.instance() or QApplication([]); app.setStyle('Fusion'); apply_theme('custom', DARK)
     raw = {'general': {'skipSetup': True, 'theme': 'dark'}, 'buffTracker': {'enabled': False},
-           'debuffTracker': {'enabled': False}, 'voice': {'pack': pack},
+           'debuffTracker': {'enabled': False}, 'voice': {'pack': '' if pack == 'default' else pack},
            'character': {'pet': True, 'affinity': {'조용한 여성': {'value': 34, 'cleared': 1, 'totals': {'pets': 4, 'corner_minutes': 35}},
                                                      '부드러운 여성': {'value': 12, 'totals': {'alerts': 3}},
                                                      '차분한 남성': {'value': 52, 'cleared': 2, 'totals': {'alerts': 4}}}}}
@@ -62,7 +62,7 @@ def main():
             for _ in range(6):
                 app.processEvents()
             if role:
-                assert w.grab().save(str(OUT / f'beta_tab_{role}.png'))
+                assert w.grab().save(str(OUT / f'beta_tab_{role}{suffix}.png'))
                 return
             if suffix:  # 고른 카드(두 번째 줄일 수 있음)가 보이게
                 chosen = next(c for c in w.character_tab.cards if c.selected())

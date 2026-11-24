@@ -234,6 +234,14 @@ class CharacterTab(QWidget):
         voice_row.addStretch(1)
         v.addLayout(voice_row)
         v.addWidget(hint_label("캐릭터가 말할 때 녹음된 대사는 목소리로도 들려줘요. 버프 알림 목소리와는 따로예요."))
+        # 기본 녹음 목소리로 돌아가기(0.56.0 — 설정의 목소리 고르기가 캐릭터 탭으로 옮겨와 카드만 누르면 돌아갈 길이 없었음)
+        default_row = QHBoxLayout()
+        self.default_button = QPushButton("기본 목소리로")
+        self.default_button.setToolTip("캐릭터를 고르지 않고 기본 녹음 목소리로 알림을 들어요.")
+        self.default_button.clicked.connect(self.choose_default)
+        default_row.addWidget(self.default_button)
+        default_row.addStretch(1)
+        v.addLayout(default_row)
         grid = QGridLayout()
         grid.setHorizontalSpacing(16)
         grid.setVerticalSpacing(14)
@@ -282,6 +290,7 @@ class CharacterTab(QWidget):
         else:
             text = "게임 중엔 구석에서 조용히 기다리고, 게임 밖에선 화면 아래를 돌아다녀요. 끌어서 옮길 수 있어요."
         self.pet_hint.setText(text)
+        self.default_button.setEnabled(bool(pack))   # 이미 기본이면 누를 일 없음
 
     def set_affinity(self, key: str, value: int) -> None:
         """제작자가 호감도를 바로 바꿈 → 값 + 그 값까지의 구간 퀘스트는 깬 것으로(오늘 횟수·누적은 그대로)."""
@@ -294,6 +303,13 @@ class CharacterTab(QWidget):
     def choose(self, character: roster.Character) -> None:
         """카드 누름 → 그 목소리 미리듣기 + 바로 선택(알림 목소리 팩 저장)."""
         config.save_voice_pack(character.pack)  # 먼저 저장 → sound_path가 선택 팩을 가리킴
+        self._play_sample()
+        self.refresh()
+        self.voice_pack_changed.emit()
+
+    def choose_default(self) -> None:
+        """'기본 목소리로' — 고른 캐릭터를 풀고 기본 녹음으로(카드 누름과 같이 미리듣기 한 번)."""
+        config.save_voice_pack("")
         self._play_sample()
         self.refresh()
         self.voice_pack_changed.emit()

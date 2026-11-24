@@ -1773,3 +1773,24 @@ def test_creator_affinity_edit_still_saves_in_beta(app, cfg):
     assert config.load_affinity("조용한 여성")["value"] == 50 and tab.cards[i]._affinity == 50
     tab.set_creator(False)
     assert not tab.cards[i].details_visible() and tab.cards[i].height() == ct.CARD_H
+
+
+def test_default_voice_button_returns_to_recorded_voice(app, cfg, monkeypatch):
+    """0.56.0(사용자 11-24 '기본을 원하는 사람이 있긴 할 거 같은데'): 카드를 고른 뒤 `기본 목소리로` → 팩 "" ·
+    카드 선택 없음 · voice_pack_changed 1번 · 기본 안내 글 · 기본 녹음 미리듣기. 이미 기본이면 버튼 비활성."""
+    from mabinogi_addon.ui import character_tab as ct
+    from mabinogi_addon.ui import notifier
+
+    played = []
+    monkeypatch.setattr(ct.CharacterTab, "_play_sample",
+                        lambda self: played.append(notifier.greeting_path(config.load_voice_pack())))
+    tab = ct.CharacterTab()
+    assert not tab.default_button.isEnabled()   # 처음엔 기본
+    tab.choose(roster.DARE)
+    assert tab.default_button.isEnabled()
+    changed = []
+    tab.voice_pack_changed.connect(lambda: changed.append(1))
+    tab.default_button.click()
+    assert config.load_voice_pack() == "" and not any(c.selected() for c in tab.cards) and changed == [1]
+    assert "기본 녹음 목소리" in tab.pet_hint.text() and not tab.default_button.isEnabled()
+    assert played[-1] == notifier.SOUND_DIR / notifier.SAMPLE_FILE   # 기본 녹음 미리듣기

@@ -34,7 +34,7 @@
         "tests/test_navigation.py",
         "tests/test_tour_layout.py"
       ],
-      "reason": "새 캐릭터 탭(제작자 전용) — 카드 5장·고르면 목소리 저장·펫 스위치·호감도 바·제작자 호감도 바로 바꾸기, 탭 7개 순서·'대사 목소리' 스위치 · 카드 이름 외곽선 캐릭터별(Starline 금) · 비제작자 카드 ♥ 바·퀘스트·조절 칸 숨김(set_creator)"
+      "reason": "새 캐릭터 탭(제작자 전용) — 카드 5장·고르면 목소리 저장·펫 스위치·호감도 바·제작자 호감도 바로 바꾸기, 탭 7개 순서·'대사 목소리' 스위치 · 카드 이름 외곽선 캐릭터별(Starline 금) · 비제작자 카드 ♥ 바·퀘스트·조절 칸 숨김(set_creator) · '기본 목소리로' 버튼(팩 \"\"·선택 해제·미리듣기, 이미 기본이면 비활성)"
     },
     "src/mabinogi_addon/ui/pet_window.py": {
       "tests": [
@@ -165,7 +165,7 @@
         "tests/test_release_notes.py",
         "tests/test_release_notes_trigger.py"
       ],
-      "reason": "0.56.0 노트 맨 위 — 캐릭터(베타) 공개 헤드라인·호감도 안 오름 주의, v0.55.10 이하 그대로(게시본과 같음)"
+      "reason": "0.56.0 노트 맨 위 — 캐릭터(베타) 공개 헤드라인·호감도 안 오름 주의, v0.55.10 이하 그대로(게시본과 같음) · 기본 목소리로 버튼 안내"
     },
     "src/mabinogi_addon/character/roster.py": {
       "tests": [
