@@ -1687,3 +1687,15 @@ def test_starline_click_and_land_show_one_picture_at_a_time(app):
             assert len(w.layers(clock["t"])) == 1
     finally:
         w.close()
+
+
+def test_known_cards_fill_down_to_card_bottom():
+    """카드 그림(폭 맞춤·위 8px)이 카드 아래 끝까지 덮음 — 가로형 상반신이면 아래가 비어 보임(사용자 11-24 이안)."""
+    from mabinogi_addon.ui import character_tab as ct
+
+    width, bottom = ct.CARD_W - 3, 1.5 + ct.CARD_H - 3
+    for c in roster.ROSTER:
+        if not c.known:
+            continue
+        art = _img_of(ASSETS / c.card)
+        assert 1.5 + 8 + art.shape[0] * width / art.shape[1] >= bottom, c.name
