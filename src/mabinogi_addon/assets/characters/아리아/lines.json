@@ -1,9 +1,12 @@
 {
- "schemaVersion": 1,
+ "schemaVersion": 2,
  "character": "아리아",
  "lines": {
   "click_stand": [
-   "앗, 깜짝이야! 불렀어?",
+   {
+    "text": "앗, 깜짝이야! 불렀어?",
+    "voice": "대사/클릭.mp3"
+   },
    {
     "text": "응? 무슨 일 있어?",
     "mood": "think"
@@ -19,12 +22,33 @@
    {
     "text": "뭐 도와줄 거 있어?",
     "mood": "explain"
+   },
+   {
+    "text": "응? 나 보고 싶어서 불렀구나~",
+    "stage": 25,
+    "mood": "happy"
+   },
+   {
+    "text": "부르면 언제든 달려갈게!",
+    "stage": 50,
+    "mood": "explain"
+   },
+   {
+    "text": "헤헤, 너랑 얘기하는 게 제일 좋아.",
+    "stage": 75,
+    "mood": "happy"
+   },
+   {
+    "text": "응! 네 옆이 내 자리야~",
+    "stage": 100,
+    "mood": "happy"
    }
   ],
   "stroke_click": [
    {
     "text": "아, 머리 정리하고 있었어. 헤헤",
-    "mood": "happy"
+    "mood": "happy",
+    "voice": "대사/머리정리.mp3"
    },
    {
     "text": "이 리본 예쁘지? 아끼는 거야.",
@@ -78,11 +102,32 @@
   "pet_end": [
    {
     "text": "고마워! 덕분에 기운 났어.",
-    "mood": "happy"
+    "mood": "happy",
+    "voice": "대사/쓰다듬기끝.mp3"
    },
    "벌써 끝? 다음에 또 해 줘~",
    {
     "text": "헤헤, 얼굴 빨개진 거 아니야!",
+    "mood": "happy"
+   },
+   {
+    "text": "헤헤, 이제 좀 익숙해졌어.",
+    "stage": 25,
+    "mood": "happy"
+   },
+   {
+    "text": "고마워. 나까지 위로받는 기분이야.",
+    "stage": 50,
+    "mood": "happy"
+   },
+   {
+    "text": "…조금 부끄럽지만, 좋았어.",
+    "stage": 75,
+    "mood": "happy"
+   },
+   {
+    "text": "헤헤… 이제 너 없으면 안 되겠다.",
+    "stage": 100,
     "mood": "happy"
    }
   ],
@@ -104,7 +149,8 @@
    },
    {
     "text": "다녀와~ 버프는 내가 챙길게.",
-    "mood": "explain"
+    "mood": "explain",
+    "voice": "대사/게임시작.mp3"
    },
    {
     "text": "무리하지 말고 조심해서 다녀와!",
@@ -114,7 +160,8 @@
   "game_exit": [
    {
     "text": "수고 많았어! 오늘도 멋졌어.",
-    "mood": "happy"
+    "mood": "happy",
+    "voice": "대사/게임끝.mp3"
    },
    {
     "text": "돌아왔구나~ 이제 좀 쉬자.",
@@ -123,12 +170,33 @@
    {
     "text": "다친 데는 없지?",
     "mood": "think"
+   },
+   {
+    "text": "오늘도 무사히 돌아왔네! 다행이다.",
+    "stage": 25,
+    "mood": "happy"
+   },
+   {
+    "text": "오늘 정말 잘했어! 내가 다 뿌듯해.",
+    "stage": 50,
+    "mood": "happy"
+   },
+   {
+    "text": "힘들었지? 오늘은 내가 토닥토닥.",
+    "stage": 75,
+    "mood": "explain"
+   },
+   {
+    "text": "오늘도 수고했어. 언제나 네 편이야!",
+    "stage": 100,
+    "mood": "happy"
    }
   ],
   "long_hunt": [
    {
     "text": "벌써 두 시간째야. 기지개 한번 켜자!",
-    "mood": "explain"
+    "mood": "explain",
+    "voice": "대사/휴식.mp3"
    },
    {
     "text": "눈 깜빡깜빡~ 잠깐 쉬어 가.",
@@ -142,21 +210,44 @@
   "hello": [
    {
     "text": "왔구나! 오늘도 반가워~",
-    "mood": "happy"
+    "mood": "happy",
+    "voice": "대사/켜기_1.mp3"
    },
    {
     "text": "기다리고 있었어. 어서 와!",
-    "mood": "happy"
+    "mood": "happy",
+    "voice": "대사/켜기_2.mp3"
    },
    {
     "text": "좋은 하루! 오늘도 같이 힘내자.",
+    "mood": "happy"
+   },
+   {
+    "text": "왔다! 오늘은 무슨 얘기 해 줄 거야?",
+    "stage": 25,
+    "mood": "think"
+   },
+   {
+    "text": "어서 와! 너 오는 시간 기다렸어~",
+    "stage": 50,
+    "mood": "happy"
+   },
+   {
+    "text": "왔구나! 얼굴 보니까 힘이 난다~",
+    "stage": 75,
+    "mood": "happy"
+   },
+   {
+    "text": "매일 와 줘서 고마워. 정말로!",
+    "stage": 100,
     "mood": "happy"
    }
   ],
   "hello_long": [
    {
     "text": "오랜만이야! 보고 싶었어.",
-    "mood": "happy"
+    "mood": "happy",
+    "voice": "대사/오랜만.mp3"
    },
    {
     "text": "많이 바빴어? 무리하진 않았지?",
@@ -166,7 +257,8 @@
   "night": [
    {
     "text": "이렇게 늦게까지? 내일 피곤하겠다…",
-    "mood": "think"
+    "mood": "think",
+    "voice": "대사/밤.mp3"
    },
    {
     "text": "따뜻한 차 한 잔 하고 자는 건 어때?",
@@ -217,6 +309,26 @@
    {
     "text": "다음엔 어떤 꽃을 꽂아 볼까?",
     "mood": "think"
+   },
+   {
+    "text": "다음엔 허브차 끓여 줘야지~",
+    "stage": 25,
+    "mood": "think"
+   },
+   {
+    "text": "이 리본, 사실 엄마가 준 거야.",
+    "stage": 50,
+    "mood": "explain"
+   },
+   {
+    "text": "너는 어떤 꽃을 좋아할까~?",
+    "stage": 75,
+    "mood": "think"
+   },
+   {
+    "text": "앞으로도 계속 같이 있자, 응?",
+    "stage": 100,
+    "mood": "happy"
    }
   ],
   "annoyed_click": [
@@ -232,6 +344,32 @@
     "mood": "explain"
    },
    "으응… 너무 자주 누르면 어지러워."
+  ],
+  "stage_up": [
+   {
+    "text": "우리 꽤 친해진 것 같지? 헤헤",
+    "stage": 25,
+    "mood": "happy",
+    "voice": "대사/구간_25.mp3"
+   },
+   {
+    "text": "이제 너는 내 소중한 친구야!",
+    "stage": 50,
+    "mood": "happy",
+    "voice": "대사/구간_50.mp3"
+   },
+   {
+    "text": "있지… 너 덕분에 매일이 즐거워.",
+    "stage": 75,
+    "mood": "happy",
+    "voice": "대사/구간_75.mp3"
+   },
+   {
+    "text": "이 꽃 핀, 너한테 주고 싶어. 받아 줄래?",
+    "stage": 100,
+    "mood": "explain",
+    "voice": "대사/구간_100.mp3"
+   }
   ]
  },
  "alerts": {

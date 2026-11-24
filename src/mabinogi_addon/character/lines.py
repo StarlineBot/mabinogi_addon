@@ -7,6 +7,9 @@
 한 줄은 말풍선 두 줄(약 30자) 안 — 넘으면 그 줄만 버린다. 모르는 상황 이름도 받아 둔다(앞으로 늘릴 자리).
 분위기(사용자 11-24 말하기): normal(보통 — 입 3단계)·explain(설명 — 손짓·가리키기)·think(생각 — 턱에 손)·happy(기쁨 — 웃음).
 없거나 모르는 값이면 normal.
+schemaVersion 2(호감도 구간 대사, 사용자 11-24): 줄 객체에 선택 키 `stage`(0/25/50/75/100, 없거나 잘못되면 0)와
+`voice`(팩 폴더 기준 상대 경로 예 "대사/구간_25.mp3" — 지금은 보관만, 재생은 녹음 뒤). 1도 그대로 읽는다.
+고르기: 지금 구간 이하 stage 줄만 후보, 지금 구간과 같은 stage(>0) 줄은 2배 자주. 구간이 오르는 순간은 `stage_up`.
 """
 from __future__ import annotations
 
@@ -18,6 +21,8 @@ from pathlib import Path
 MAX_BYTES = 128 * 1024
 MAX_CHARS = 30
 MOODS = ("normal", "explain", "think", "happy")
+STAGES = (0, 25, 50, 75, 100)
+SCHEMAS = (1, 2)
 SITUATIONS = (
     "click_stand", "click_sit", "click_sleep", "pet_start", "pet_during", "pet_end", "drag", "dropped",
     "game_enter", "game_exit", "long_hunt", "hello", "hello_long", "night", "morning", "idle",
@@ -34,6 +39,20 @@ def _ok(text) -> bool:
 class Line:
     text: str
     mood: str = "normal"
+    stage: int = 0              # 이 구간부터 나옴
+    voice: str | None = None    # 목소리 파일(팩 폴더 기준) — 보관만
+
+
+def _voice(value) -> str | None:
+    """팩 폴더 안 상대 경로만(절대 경로·'..'·제어 문자 없음, .mp3)."""
+    if not isinstance(value, str) or not 0 < len(value) <= 80 or not value.endswith(".mp3"):
+        return None
+    parts = value.replace("\\", "/").split("/")
+    if value.startswith(("/", "\\")) or ":" in value or any(p in ("", ".", "..") for p in parts):
+        return None
+    if any(ord(c) < 32 for c in value):
+        return None
+    return "/".join(parts)
 
 
 @dataclass
@@ -44,13 +63,17 @@ class Lines:
 
 
 def _line(item) -> Line | None:
+    stage, voice = 0, None
     if isinstance(item, dict):
         text, mood = item.get("text"), item.get("mood", "normal")
+        raw = item.get("stage", 0)
+        stage = raw if type(raw) is int and raw in STAGES else 0
+        voice = _voice(item.get("voice"))
     else:
         text, mood = item, "normal"
     if not _ok(text):
         return None
-    return Line(text, mood if mood in MOODS else "normal")
+    return Line(text, mood if mood in MOODS else "normal", stage, voice)
 
 
 def parse(data: bytes) -> Lines:
@@ -60,7 +83,7 @@ def parse(data: bytes) -> Lines:
         raw = json.loads(data)
     except RecursionError as exc:
         raise ValueError("lines data too deeply nested") from exc
-    if not isinstance(raw, dict) or raw.get("schemaVersion") != 1 or type(raw.get("schemaVersion")) is not int:
+    if not isinstance(raw, dict) or type(raw.get("schemaVersion")) is not int or raw["schemaVersion"] not in SCHEMAS:
         raise ValueError("unsupported lines format")
     name, lines, alerts = raw.get("character"), raw.get("lines"), raw.get("alerts", {})
     if not isinstance(name, str) or not isinstance(lines, dict) or not isinstance(alerts, dict):
@@ -88,14 +111,21 @@ class Picker:
     rng: random.Random = field(default_factory=random.Random)
     _last: dict[str, Line] = field(default_factory=dict)
 
-    def pick(self, situation: str) -> Line | None:
-        items = self.data.lines.get(situation, ())
+    def pick(self, situation: str, stage: int = 0) -> Line | None:
+        """지금 구간(stage) 이하 줄 중 무작위 — 지금 구간과 같은 구간(>0) 줄은 2배. 바로 앞 줄은 다시 안 고름."""
+        items = [line for line in self.data.lines.get(situation, ()) if line.stage <= stage]
         if not items:
             return None
-        choices = [line for line in items if line != self._last.get(situation)] or list(items)
-        line = self.rng.choice(choices)
+        choices = [line for line in items if line != self._last.get(situation)] or items
+        weights = [2 if stage > 0 and line.stage == stage else 1 for line in choices]
+        line = self.rng.choices(choices, weights=weights)[0]
         self._last[situation] = line
         return line
+
+    def stage_up(self, stage: int) -> Line | None:
+        """구간이 오르는 순간 한 번 — 그 구간의 stage_up 줄(없으면 None)."""
+        items = [line for line in self.data.lines.get("stage_up", ()) if line.stage == stage]
+        return self.rng.choice(items) if items else None
 
     def alert(self, sound_file: str) -> Line | None:
         """알림 녹음 파일 이름 → 같은 뜻의 말풍선(보통 분위기, 없으면 None — 말풍선 없이 알아챔만)."""

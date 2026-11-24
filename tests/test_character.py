@@ -725,3 +725,110 @@ def test_second_alert_bubble_falls_back_to_first_line_and_counts_as_alert(app, c
         assert ctrl.affinity.totals == {"alerts": 1}  # 추가 알림도 같은 '알림 받기'
     finally:
         ctrl.shutdown()
+
+
+# ---- 호감도 구간 대사(사용자 11-24 '대사는 일단 넣어' — 목소리는 녹음 뒤) -----------------------------------
+def _doc(lines, version=2):
+    return json.dumps({"schemaVersion": version, "character": "다래", "lines": lines}).encode()
+
+
+def test_lines_schema_reads_old_and_new_stage_voice_keys():
+    old = ln.parse(_doc({"idle": ["가"]}, version=1))
+    assert old.lines["idle"] == (ln.Line("가"),)
+    data = ln.parse(_doc({"idle": [
+        {"text": "가", "stage": 25, "voice": "대사/구간_25.mp3"},
+        {"text": "나", "stage": 30},                  # 모르는 구간 → 0
+        {"text": "다", "stage": "50"},                # 문자열 → 0
+        {"text": "라", "voice": "../밖.mp3"},          # 팩 밖 경로 → 버림
+        {"text": "마", "voice": "C:/x.mp3"},
+        {"text": "바", "voice": "대사/소리.wav"},
+        {"text": "x" * 31, "stage": 25},              # 30자 넘으면 그 줄만 버림
+    ], "stage_up": [{"text": "올랐다", "stage": 25}]}))
+    got = {line.text: (line.stage, line.voice) for line in data.lines["idle"]}
+    assert got == {"가": (25, "대사/구간_25.mp3"), "나": (0, None), "다": (0, None), "라": (0, None),
+                   "마": (0, None), "바": (0, None)}
+    assert data.lines["stage_up"][0].stage == 25
+    with pytest.raises(ValueError):
+        ln.parse(_doc({"idle": ["가"]}, version=3))
+
+
+def test_pick_uses_only_unlocked_stages_and_doubles_the_current_one():
+    data = ln.parse(_doc({"idle": [
+        {"text": "영", "stage": 0}, {"text": "이오", "stage": 25}, {"text": "오십", "stage": 50}]}))
+    picker = ln.Picker(data, random.Random(11))
+    assert {picker.pick("idle", 0).text for _ in range(50)} == {"영"}
+    picker = ln.Picker(data, random.Random(11))
+    seq = [picker.pick("idle", 25).text for _ in range(3000)]
+    assert set(seq) == {"영", "이오"} and all(a != b for a, b in zip(seq, seq[1:]))
+    # 연속 금지 때문에 두 줄이면 번갈아 — 세 줄(구간 50)에서 지금 구간 줄이 2배인지 본다
+    picker = ln.Picker(data, random.Random(11))
+    seq = [picker.pick("idle", 50).text for _ in range(6000)]
+    share = seq.count("오십") / len(seq)
+    assert 0.37 < share < 0.44, share  # 2:1:1 가중 + 연속 금지 → 정상 상태 0.40(가중치 없으면 0.33)
+
+
+def test_both_characters_have_24_stage_lines_and_voices_kept():
+    for name, extra_voice in (("다래", "자다깸"), ("아리아", "머리정리")):
+        data = ln.read(ASSETS / name / "lines.json")
+        staged = [line for items in data.lines.values() for line in items if line.stage > 0]
+        assert len(staged) == 24 and sorted({line.stage for line in staged}) == [25, 50, 75, 100]
+        ups = data.lines["stage_up"]
+        assert [line.stage for line in ups] == [25, 50, 75, 100]
+        assert [line.voice for line in ups] == [f"대사/구간_{s}.mp3" for s in (25, 50, 75, 100)]
+        voices = {line.voice for items in data.lines.values() for line in items if line.voice}
+        assert len(voices) == 14 and f"대사/{extra_voice}.mp3" in voices  # 0구간 10줄 + 구간 오름 4줄
+        assert {"hello", "click_stand", "pet_end", "game_exit", "idle"} <= {
+            k for k, items in data.lines.items() if any(line.stage == 100 for line in items)}
+
+
+class _FakeWindow:
+    def __init__(self):
+        self.said = []
+        self.brain = br.Brain(br.Floor(0, 1000, 700))
+
+    def say(self, line, mood="normal"):
+        self.said.append(line.text if line is not None and not isinstance(line, str) else line)
+
+
+def test_stage_up_once_highest_only_no_drop_line_and_silent_without_pet(app, cfg):
+    from mabinogi_addon.ui import character_controller as cc
+    from mabinogi_addon.ui import character_tab as ct
+
+    config.save_voice_pack("조용한 여성")
+    ctrl = cc.CharacterController()
+    ctrl.set_enabled(True)
+    tab = ct.CharacterTab()
+    tab.affinity_edited.connect(ctrl.reload_affinity)
+    ctrl.window = fake = _FakeWindow()
+    try:
+        tab.set_affinity("조용한 여성", 25)  # 제작자 구간 버튼으로 올림
+        assert fake.said == ["…너, 생각보다 괜찮은 사람이네."]
+        tab.set_affinity("조용한 여성", 100)  # 50·75를 건너뜀 → 가장 높은 구간 것 하나만
+        assert fake.said[-1] == "…이 열쇠, 너한테 줄게. 내 마음 열쇠야." and len(fake.said) == 2
+        tab.set_affinity("조용한 여성", 50)  # 내려감 → 말 없음
+        assert len(fake.said) == 2
+        assert ctrl._pick("hello").stage <= 50
+        ctrl.window = None  # 펫 꺼짐 → 말하지 않고 밀린 것도 안 쌓음
+        tab.set_affinity("조용한 여성", 75)
+        ctrl.window = fake
+        tab.set_affinity("조용한 여성", 75)
+        assert len(fake.said) == 2
+    finally:
+        ctrl.window = None
+        ctrl.shutdown()
+
+
+def test_quest_clear_triggers_stage_up_line(app, cfg):
+    from mabinogi_addon.ui import character_controller as cc
+
+    config.save_voice_pack("부드러운 여성")
+    config.save_character(affinity=("부드러운 여성", {"value": 25}))
+    ctrl = cc.CharacterController()
+    ctrl.set_enabled(True)
+    ctrl.window = fake = _FakeWindow()
+    try:
+        ctrl._on_events([("pet_done",)])  # 처음 쓰다듬기 → 0→25 퀘스트 깸 → 구간 25
+        assert ctrl.affinity.stage == 25 and fake.said == ["우리 꽤 친해진 것 같지? 헤헤"]
+    finally:
+        ctrl.window = None
+        ctrl.shutdown()

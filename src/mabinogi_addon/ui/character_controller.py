@@ -63,6 +63,7 @@ class CharacterController(QObject):
         self._feeds: dict = {}
         self.character = roster.by_pack(config.load_voice_pack())
         self.affinity = self._load_affinity()
+        self._stage = self._current_stage()
         from .notifier import on_play
         on_play(self._on_sound)
 
@@ -74,8 +75,9 @@ class CharacterController(QObject):
             self.sync_window()
 
     def reload_affinity(self) -> None:
-        """제작자가 캐릭터 탭에서 호감도를 바꿈 → 저장 값으로 다시 읽는다."""
+        """제작자가 캐릭터 탭에서 호감도를 바꿈 → 저장 값으로 다시 읽는다(구간이 올랐으면 stage_up 한 번)."""
         self.affinity = self._load_affinity()
+        self._check_stage()
 
     def start(self, now: datetime.datetime | None = None) -> None:
         self._started = True
@@ -90,11 +92,12 @@ class CharacterController(QObject):
         config.save_character(lastSeen=today(now))
         self.sync_window()
         if hello and self.window is not None:
-            self.window.say(self.picker().pick(hello) if self.picker() else None)
+            self.window.say(self._pick(hello))
 
     def voice_changed(self) -> None:
         self.character = roster.by_pack(config.load_voice_pack())
         self.affinity = self._load_affinity()
+        self._stage = self._current_stage()  # 캐릭터를 바꾼 건 구간이 오른 게 아님
         self.sync_window()
 
     def sync_window(self) -> None:
@@ -136,6 +139,25 @@ class CharacterController(QObject):
         if self.character is not None and self.affinity is not None:
             config.save_character(affinity=(self.character.key, self.affinity.to_dict()))
             self.affinity_changed.emit()
+            self._check_stage()
+
+    def _current_stage(self) -> int:
+        return self.affinity.stage if self.affinity is not None else 0
+
+    def _check_stage(self) -> None:
+        """구간이 오른 순간 그 구간 stage_up 한 줄을 한 번(여러 구간을 건너뛰면 가장 높은 구간 것만).
+        내려가면 말 없음. 펫이 꺼져 있으면 말하지 않고 밀린 것도 쌓지 않는다(지금 구간만 기억)."""
+        stage, before = self._current_stage(), self._stage
+        self._stage = stage
+        if stage > before and self.window is not None:
+            picker = self.picker()
+            if picker is not None:
+                self.window.say(picker.stage_up(stage))
+
+    def _pick(self, situation: str):
+        """지금 구간 대사로 고르기(구간 이하 줄, 지금 구간 줄 2배)."""
+        picker = self.picker()
+        return picker.pick(situation, self._current_stage()) if picker is not None else None
 
     def picker(self) -> Picker | None:
         if self.character is None or not self.character.has_pet:
@@ -194,18 +216,18 @@ class CharacterController(QObject):
         for event in events:
             kind = event[0]
             if kind == "say" and picker is not None and self.window is not None:
-                self.window.say(picker.pick(event[1]))
+                self.window.say(self._pick(event[1]))
             elif kind == "click" and self.affinity is not None:
                 if self.affinity.click(now):
                     self._save_affinity()
                     if picker is not None and self.window is not None:
-                        self.window.say(picker.pick("annoyed_click"))
+                        self.window.say(self._pick("annoyed_click"))
             elif kind == "pet_done" and self.affinity is not None:
                 result = self.affinity.petted(now, today())
                 if result != "none":
                     self._save_affinity()
                 if result == "annoyed" and picker is not None and self.window is not None:
-                    self.window.say(picker.pick("annoyed_pet"))
+                    self.window.say(self._pick("annoyed_pet"))
             elif kind == "corner_minute" and self.affinity is not None:
                 # 1분마다 누적 — 저장은 오를 때·10분마다만(설정 동기화가 매분 올리지 않게), 끌 때 한 번 더
                 got = self.affinity.corner_minute(today())

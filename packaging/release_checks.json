@@ -45,7 +45,7 @@
       "tests": [
         "tests/test_character.py"
       ],
-      "reason": "알림→호감도·알아챔, 켜기, 인사, 캐릭터 바꾸면 펫도 그 캐릭터로(창 다시 만듦)"
+      "reason": "알림→호감도·알아챔, 켜기, 인사, 캐릭터 바꾸면 펫도 그 캐릭터로(창 다시 만듦)·구간 오름 stage_up 1회"
     },
     "src/mabinogi_addon/ui/character_lines_feed.py": {
       "tests": [
@@ -69,14 +69,14 @@
       "tests": [
         "tests/test_character.py"
       ],
-      "reason": "대사 무작위·연속 금지·형식 검사·분위기(보통·설명·생각·기쁨)·2차 알림 말풍선 없으면 1차로"
+      "reason": "대사 무작위·연속 금지·형식 검사·분위기(보통·설명·생각·기쁨)·2차 알림 말풍선 없으면 1차로·schemaVersion 2 구간(stage)·목소리(voice) 키, 구간 필터·2배"
     },
     "src/mabinogi_addon/assets/characters/다래/lines.json": {
       "tests": [
         "tests/test_character.py",
         "tests/test_bundle_layout.py"
       ],
-      "reason": "다래 대사·알림 말풍선(조용한 여성 11개 전부), assets 번들 포함"
+      "reason": "다래 대사·알림 말풍선(조용한 여성 11개 전부), assets 번들 포함·구간 대사 24줄·voice"
     },
     "src/mabinogi_addon/ui/main_window.py": {
       "tests": [
@@ -175,7 +175,7 @@
         "tests/test_character.py",
         "tests/test_bundle_layout.py"
       ],
-      "reason": "아리아 대사·알림 11개·stroke_click, 자다가 클릭 없음, assets 번들 포함"
+      "reason": "아리아 대사·알림 11개·stroke_click, 자다가 클릭 없음, assets 번들 포함·구간 대사 24줄·voice"
     },
     "src/mabinogi_addon/ui/tuarim_tab.py": {
       "tests": [
