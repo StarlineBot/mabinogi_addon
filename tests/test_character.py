@@ -1705,33 +1705,3 @@ def test_known_cards_fill_down_to_card_bottom():
             continue
         art = _img_of(ASSETS / c.card)
         assert 1.5 + 8 + art.shape[0] * width / art.shape[1] >= bottom, c.name
-
-
-@pytest.mark.parametrize("profile,folder,scale", [(br.DARE, "다래", 1.0), (br.ARIA, "아리아", 1.0), (br.IAN, "이안", 1.0),
-                                                  (br.LENA, "레나", 0.95), (br.STARLINE, "Starline", 1.15)])
-def test_character_scale_applies_to_every_frame_and_fits_window(app, profile, folder, scale):
-    """캐릭터별 그리기 배율(사용자 11-24 B안 — 얼굴 크기 맞춤: Starline ×1.15, 레나 ×0.95): 서 있기 그리기 키 = 190×배율,
-    모든 프레임이 창 안(위·옆 잘림 없음), 잡기 판정(그림 영역)이 그림 크기를 따라감."""
-    from mabinogi_addon.ui import pet_window
-
-    assert profile.scale == scale
-    b = br.Brain(br.Floor(0, 1000, 700), rng=random.Random(1), profile=profile)
-    frames = pet_window.load_frames(folder, profile)
-    w = pet_window.PetWindow(b, frames, "#888888")
-    try:
-        stand = profile.anims["stand"][0][0]
-        rect = w._frame_rect(frames[stand])
-        assert abs(rect.height() - br.FIGURE_H * scale * frames[stand].height() / pet_window.FRAME_DIR_H) < 0.5
-        for name, image in frames.items():
-            r = w._frame_rect(image)
-            assert r.top() >= 0 and r.left() >= 0 and r.right() <= pet_window.WIN_W, name
-        w.step()
-        w.grab()   # paintEvent가 그린 자리(_sprite)를 정함
-        sprite = w._sprite
-        assert abs(sprite.height() - w._frame_rect(frames[w._cur_name]).height()) < 0.01   # 그린 자리 = 배율 적용 크기
-        from PySide6.QtCore import QPointF
-        inside = QPointF(sprite.center().x(), sprite.top() + sprite.height() * 0.6)
-        above = QPointF(sprite.center().x(), sprite.top() - 4)
-        assert w._on_figure(inside) and not w._on_figure(above)   # 판정이 그려진 크기를 따라감
-    finally:
-        w.close()
