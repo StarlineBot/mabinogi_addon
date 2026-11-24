@@ -24,16 +24,16 @@ class Character:
 
 DARE = Character("조용한 여성", "다래", "조용한 여성", "#B48CE6", "다래/card.png", True, True)
 
-ROSTER: tuple[Character, ...] = (
-    DARE,
-    Character("부드러운 여성", "아리아", "부드러운 여성", "#F5A25D", "아리아/card.png", True, True),
-    Character("자연스러운 여성", UNKNOWN_NAME, "자연스러운 여성", "#9AA0AA", "silhouette_f.png", False, False),
-    Character("화난 여성", "레나", "화난 여성", "#5B6BC9", "레나/card.png", True, True),
-    Character("차분한 남성", "이안", "차분한 남성", "#3B5B9A", "이안/card.png", True, True),
-    # Starline(11-24): 이름은 영어 그대로, 목소리 팩은 자리만(녹음 오기 전엔 기본 녹음), 이름 글자 금 외곽선
-    Character("장난스러운 남성", "Starline", "장난스러운 남성", "#3A0729", "Starline/card.png", True, True,
-              outline="#D8AA5E"),
-)
+_ARIA = Character("부드러운 여성", "아리아", "부드러운 여성", "#F5A25D", "아리아/card.png", True, True)
+_NATURAL = Character("자연스러운 여성", UNKNOWN_NAME, "자연스러운 여성", "#9AA0AA", "silhouette_f.png", False, False)
+_LENA = Character("화난 여성", "레나", "화난 여성", "#5B6BC9", "레나/card.png", True, True)
+_IAN = Character("차분한 남성", "이안", "차분한 남성", "#3B5B9A", "이안/card.png", True, True)
+# Starline(11-24): 이름은 영어 그대로, 이름 글자 금 외곽선
+_STARLINE = Character("장난스러운 남성", "Starline", "장난스러운 남성", "#3A0729", "Starline/card.png", True, True,
+                      outline="#D8AA5E")
+
+# 카드 순서(사용자 11-24): Starline → 레나 → 다래 → 이안 → 아리아 → 나머지. 저장 키(팩 이름)는 순서와 무관.
+ROSTER: tuple[Character, ...] = (_STARLINE, _LENA, DARE, _IAN, _ARIA, _NATURAL)
 
 
 def by_pack(pack: str) -> Character | None:

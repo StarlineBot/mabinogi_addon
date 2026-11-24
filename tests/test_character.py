@@ -548,13 +548,14 @@ def test_character_tab_cards_choose_voice_and_toggle_pet(app, cfg, monkeypatch):
     changed, toggled = [], []
     tab.voice_pack_changed.connect(lambda: changed.append(1))
     tab.pet_toggled.connect(toggled.append)
-    assert [c.character.name for c in tab.cards] == ["다래", "아리아", "???", "레나", "이안", "Starline"]
+    # 카드 순서(사용자 11-24): Starline → 레나 → 다래 → 이안 → 아리아 → 나머지
+    assert [c.character.name for c in tab.cards] == ["Starline", "레나", "다래", "이안", "아리아", "???"]
     assert not any(c.selected() for c in tab.cards)  # 기본 녹음 — 고른 카드 없음
-    tab.cards[3].clicked.emit(tab.cards[3].character)  # 미정 카드도 그 목소리로 선택
-    assert config.load_voice_pack() == "화난 여성" and played == ["화난 여성"] and changed == [1]
-    assert [c.selected() for c in tab.cards] == [False, False, False, True, False, False]
+    tab.cards[5].clicked.emit(tab.cards[5].character)  # 미정 카드도 그 목소리로 선택
+    assert config.load_voice_pack() == "자연스러운 여성" and played == ["자연스러운 여성"] and changed == [1]
+    assert [c.selected() for c in tab.cards] == [False, False, False, False, False, True]
     tab.choose(roster.DARE)
-    assert tab.cards[0].selected() and "돌아다녀요" in tab.pet_hint.text()
+    assert tab.cards[2].selected() and "돌아다녀요" in tab.pet_hint.text()
     tab.pet_switch.setChecked(True)
     assert toggled == [True] and config.load_pet_on() is True
     tab.grab()
@@ -574,18 +575,18 @@ def test_creator_sets_affinity_directly_with_number_and_stage_buttons(app, cfg, 
     tab = ct.CharacterTab()
     edited = []
     tab.affinity_edited.connect(lambda: edited.append(1))
-    editor = tab.editors[0]
+    editor = tab.editors[2]   # 다래(카드 순서 11-24)
     assert editor.spin.value() == 3 and [b.text() for b in editor.buttons] == ["0", "25", "50", "75", "100"]
     editor.buttons[3].click()
     saved = config.load_affinity("조용한 여성")
     assert saved["value"] == 75 and saved["cleared"] == 3  # 0→25·25→50·50→75 퀘스트 깬 것으로
     assert saved["gained"] == 3 and saved["counts"] == {"launch": 1} and saved["totals"] == {"alerts": 4}  # 하루 상한과 무관
-    assert tab.cards[0]._affinity == 75 and tab.cards[0]._quest == "퀘스트: 7일 연속 켜기 · 0/7일" and edited == [1]
-    assert tab.cards[1]._quest == "퀘스트: 아리아를 처음으로 쓰다듬어 주기 · 0/1번"  # 고른 캐릭터 이름
-    assert tab.cards[2]._quest == "퀘스트: 처음 쓰다듬기 · 0/1번"  # 이름 없는 캐릭터
+    assert tab.cards[2]._affinity == 75 and tab.cards[2]._quest == "퀘스트: 7일 연속 켜기 · 0/7일" and edited == [1]
+    assert tab.cards[4]._quest == "퀘스트: 아리아를 처음으로 쓰다듬어 주기 · 0/1번"  # 고른 캐릭터 이름
+    assert tab.cards[5]._quest == "퀘스트: 처음 쓰다듬기 · 0/1번"  # 이름 없는 캐릭터
     editor.spin.setValue(42)
     assert config.load_affinity("조용한 여성")["value"] == 42
-    tab.editors[4].buttons[4].click()
+    tab.editors[3].buttons[4].click()   # 이안
     assert config.load_affinity("차분한 남성")["value"] == 100
 
 
@@ -625,7 +626,7 @@ def test_aria_roster_card_and_frames():
     aria = roster.by_pack("부드러운 여성")
     assert (aria.name, aria.known, aria.has_pet, aria.color) == ("아리아", True, True, "#F5A25D")
     assert (ASSETS / aria.card).is_file() and roster.folder(aria) == "아리아"
-    assert [c.name for c in roster.ROSTER][:2] == ["다래", "아리아"]
+    assert [c.name for c in roster.ROSTER] == ["Starline", "레나", "다래", "이안", "아리아", "???"]   # 카드 순서(사용자 11-24)
     names = {n for frames, _t, _l in br.ARIA.anims.values() for n in frames}
     assert not [n for n in names if not (ARIA / f"{n}.png").exists()]
 
@@ -1079,7 +1080,7 @@ def test_ian_roster_card_frames_and_heights():
 
     ian = roster.by_pack("차분한 남성")
     assert (ian.name, ian.known, ian.has_pet, ian.color) == ("이안", True, True, "#3B5B9A")
-    assert (ASSETS / ian.card).is_file() and [c.name for c in roster.ROSTER][-2:] == ["이안", "Starline"]
+    assert (ASSETS / ian.card).is_file() and [c.name for c in roster.ROSTER][3] == "이안"
     names = {n for frames, _t, _l in br.IAN.anims.values() for n in frames}
     assert not [n for n in names if not (IAN_DIR / f"{n}.png").exists()]
     h = lambda n: imread(IAN_DIR / f"{n}.png", cv2.IMREAD_UNCHANGED).shape  # noqa: E731
@@ -1512,9 +1513,9 @@ def _starline(**kw):
 
 
 def test_starline_roster_english_name_gold_outline_and_frames():
-    sl = roster.ROSTER[-1]
+    sl = roster.ROSTER[0]   # 카드 맨 앞(11-24)
     assert (sl.key, sl.name, sl.pack, sl.color, sl.outline) == ("장난스러운 남성", "Starline", "장난스러운 남성", "#3A0729", "#D8AA5E")
-    assert len(roster.ROSTER) == 6 and all(c.outline == "#FFFFFF" for c in roster.ROSTER[:-1])
+    assert len(roster.ROSTER) == 6 and all(c.outline == "#FFFFFF" for c in roster.ROSTER[1:])
     assert sl.name.isascii() and roster.folder(sl) == "Starline"
     card = _img_of(SL_DIR / "card.png")
     assert abs(card.shape[1] / card.shape[0] - 1199 / 1312) < 0.02
@@ -1526,16 +1527,18 @@ def test_starline_roster_english_name_gold_outline_and_frames():
 
 
 def test_starline_talk_sheet_split_six_loop_and_two_end():
-    """한장모음: 윗줄 2·가운데 줄 6(반복)·아랫줄 2(끝) — 빌드가 10장으로 나누고 가운데 6·아래 2를 씀."""
+    """말하기(B안 11-24): 반복 시트 6장, 끝 = 시작 2장 거꾸로(손 든 자세 → 중간 = 사이 그림과 같음) → 서기."""
     import cv2
     from scripts.build_aria_frames import clean
     from scripts.build_dare_frames import ROOT, imread, split
 
-    frames = split(clean(imread(ROOT / "docs/characters/assets/Starline/SD/Starline_말하기_한장모음.png", cv2.IMREAD_UNCHANGED)))
-    assert len(frames) == 10
+    frames = split(clean(imread(ROOT / "docs/characters/assets/Starline/SD/Starline_말하기_반복.png", cv2.IMREAD_UNCHANGED)))
+    assert len(frames) == 6   # B안(11-24) 새 반복 시트 — 끝은 시작 2장 거꾸로
     for key in ("base", "m1", "m2", "emph", "emph2", "blink", "mid", "end1", "end2"):
         assert (SL_DIR / f"talk_{key}_0.png").exists()
     assert br.STARLINE.anims["talk_end"][0] == ("talk_base_0", "talk_end1_0", "talk_end2_0")
+    import numpy as np
+    assert np.array_equal(_img_of(SL_DIR / "talk_end2_0.png"), _img_of(SL_DIR / "talk_mid_0.png"))
 
 
 def test_starline_flame_idle_click_talks_and_corner():
@@ -1643,24 +1646,27 @@ def test_starline_bubble_has_gold_outline(app):
 
 
 def test_starline_head_size_matches_standing_within_5_percent():
-    """Starline 머리 크기(사용자 11-24 Windows '불꽃·잡기·떨어지기는 머리가 작고 착지 때 커짐'): 후광·토끼귀로 위 30% 폭은 못 써서
-    얼굴 맞추기(점수 0.5 이상) 또는 눈 간격으로 잼 — 잴 수 있는 그림은 모두 서 있기 ±5%.
-    예외: talk_blink(눈 감음 — 얼굴 맞추기가 틀어짐, 같은 시트 배율), 걷기(옆모습 — 얼굴·눈 둘 다 안 잡혀 None)."""
+    """Starline 머리 크기(사용자 11-24 Windows '불꽃·잡기·떨어지기는 머리가 작고 착지 때 커짐', B안 긴 체형): 후광·토끼귀로 위 30%
+    폭은 못 써서 얼굴 맞추기(점수 0.5 이상) 또는 눈 간격으로 잼 — 시트(동작)마다 중앙값이 서 있기 ±5%, 그림 하나는 ±10%
+    (손이 얼굴을 가리거나 귀를 젖힌 장은 재는 값이 흔들림). 예외: 눈 감은 장(talk_blink·sit_3 — 얼굴 맞추기가 틀어짐),
+    걷기(옆모습 — None)."""
     from scripts.build_starline_frames import eye_gap, face_crop, head_ratio
 
     stand = _img_of(SL_DIR / "stand_0.png")
     face, eyes = face_crop(stand), eye_gap(stand)
-    bad, measured = {}, 0
+    sheets, bad = {}, {}
     for path in SL_DIR.glob("*.png"):
-        if path.stem in ("card", "talk_blink_0"):
+        if path.stem in ("card", "talk_blink_0", "sit_3"):
             continue
         r = head_ratio(face, eyes, _img_of(path))
         if r is None:
             continue
-        measured += 1
-        if not 0.95 <= r <= 1.05:
+        sheets.setdefault(path.stem.rsplit("_", 1)[0], []).append(r)
+        if not 0.9 <= r <= 1.1:
             bad[path.stem] = round(r, 3)
-    assert not bad and measured >= 35
+    medians = {k: round(float(sorted(v)[len(v) // 2]), 3) for k, v in sheets.items()}
+    assert not bad and not {k: m for k, m in medians.items() if not 0.95 <= m <= 1.05}
+    assert sum(len(v) for v in sheets.values()) >= 30
     for name in ("flame_0", "drag_0", "fall_0", "land_2"):   # 사용자가 짚은 그림은 꼭 잼
         assert head_ratio(face, eyes, _img_of(SL_DIR / f"{name}.png")) is not None, name
 

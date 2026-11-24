@@ -30,7 +30,7 @@ DARE_WALK_FRAME, DARE_WALK_SPEED = 0.20, 80.0    # 한 바퀴 1.2초 × 80 = 96p
 ARIA_WALK_FRAME, ARIA_WALK_SPEED = 0.22, 90.0    # 1.32초 × 90 = 119px
 IAN_WALK_FRAME, IAN_WALK_SPEED = 0.18, 62.0      # v2 걷기 1.08초 × 62 = 67px
 LENA_WALK_FRAME, LENA_WALK_SPEED = 0.22, 90.0    # 레나 발 간격 60.0 → 120px, 1.32초 × 90 = 119px
-STARLINE_WALK_FRAME, STARLINE_WALK_SPEED = 0.22, 75.0  # Starline 발끝 간격(망토 빼고 아래 3~5%) → 약 100px, 1.32초 × 75 = 99px
+STARLINE_WALK_FRAME, STARLINE_WALK_SPEED = 0.22, 65.0  # B안 새 걷기(11-24) 발끝 간격 → 약 85px, 1.32초 × 65 = 86px
 GRAVITY = 1800.0           # 떨어질 때 px/초²
 DRAG_START = 6.0           # 이만큼 움직이면 클릭이 아니라 끌기
 FRONT_DELAY = 1.0          # 게임이 앞으로 온 뒤 이만큼 지나야 구석으로(잠깐 전환 무시)
@@ -235,11 +235,11 @@ LENA = Profile(LENA_ANIMS,
                 "crouch": "sit_loop", "sit_notice": "sit_loop", "rise": "stand", "talk_end": "stand"},
                ("crouch", "sit_loop", "sit_notice"), "sit_loop", click_talks=True, walk_speed=LENA_WALK_SPEED,
                talk_sets=LENA_TALK, pet_shake=True)
-# Starline(docs/characters/Starline.md, 기획 11-24): 졸기 없음, 서 있기 씩 웃음 ↔ 가끔 깜빡임, 가만히 서 있으면 가끔
+# Starline(docs/characters/Starline.md, 기획 11-24): 졸기 없음, 서 있기 한 장(B안 긴 체형), 가만히 서 있으면 가끔
 # 손바닥 불꽃(아리아 머리 쓰다듬기·이안 시계와 같은 틀), 서서 클릭 = 바로 말하기, 착지 3장 → 서기,
 # 쓰다듬기 귀 젖힘 → 걷어내기 반복 → 손 털고 씩, 구석은 앉기 → 마법진 돌리기 반복 → 일어나기, 말 끝 두 장.
 STARLINE_ANIMS = {
-    "stand": (("stand_0", "stand_1"), (3.6, 0.15), True),
+    "stand": (("stand_0",), (1.0,), True),   # B안 서 있기 한 장(11-24)
     "walk": (tuple(f"walk_{i}" for i in range(6)), (STARLINE_WALK_FRAME,) * 6, True),
     "surprise": (("stand_0",), (0.3,), False),   # click_talks라 쓰지 않음(자리만)
     "drag": (tuple(f"drag_{i}" for i in range(4)), (0.18,) * 4, True),
@@ -249,10 +249,10 @@ STARLINE_ANIMS = {
     "pet_loop": (("pet_1", "pet_2", "pet_3", "pet_4"), (0.3,) * 4, True),
     "pet_out": (("pet_5",), (1.6,), False),
     "alert": (("talk_emph_0",), (1.5,), False),   # 손가락 튕기며 알림
-    "crouch": (("crouch_0", "crouch_1", "crouch_2"), (0.25,) * 3, False),
+    "crouch": (("crouch_0", "crouch_1"), (0.3, 0.3), False),   # 앉기 시트 1·2번(0번 서 있는 장은 짧은 체형이라 뺌)
     "sit_loop": (("sit_0", "sit_1", "sit_2", "sit_3"), (0.3,) * 4, True),   # 마법진 돌리기
     "sit_notice": (("sit_0",), (1.2,), False),    # 앉아서 클릭 = 그림 그대로(말풍선만)
-    "rise": (("rise_0", "rise_1", "rise_2"), (0.25,) * 3, False),
+    "rise": (("rise_0", "rise_1"), (0.3, 0.3), False),         # 끝 서 있는 장 빼고 → 바로 서기
     "flame": (("flame_0", "flame_1", "flame_2", "flame_3"), (0.35, 0.8, 0.8, 0.35), True),   # 불꽃 피웠다 쥐어 끔
 }
 STARLINE_TALK = ({**talk_set(), "end1": "talk_end1_0", "end2": "talk_end2_0"},)

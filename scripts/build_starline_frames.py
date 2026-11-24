@@ -5,9 +5,9 @@
 - 크기: 후광·토끼귀 때문에 위 30% 폭(head_width)이 머리가 아님 → 시트마다 기준 그림 키로 배율 하나(기획 11-24):
   서 있는 시트는 키 중앙값 285, 착지는 끝(선) 그림, 앉기는 첫(선) 그림, 앉아 있기 = 앉기 끝 키, 일어나기 첫 장 = 앉기 끝 키,
   떨어지기(다리 굽힘)는 270. 얼굴 크기는 face_scale(서 있기 얼굴 창 matchTemplate)로 재서 status 표에 남김.
-- 말하기: 시작 2장(0번 = 사이), 반복 = 한장모음 가운데 줄 6장(0 기준·1·2 입·3 강조·4 중간·5 깜빡임 — 입만 합성),
-  끝 = 한장모음 아랫줄 2장(end1·end2). 한장모음 윗줄 2장은 안 씀.
-- 구석: 구석_앉기 3 → 구석_앉아있기 4(반복) → 일어나기 = 구석(10장) 마지막 3장. 구석_앉기B·구석 앞 7장은 예비(안 씀).
+- 서 있기·걷기·말하기 반복은 B안 긴 체형 새 시트(사용자 11-24 '들었다 놓으면 작아짐' — 체형 통일).
+- 말하기: 시작 0번 = 사이, 반복 6장(0 기준·1·2 입·3 강조·4 중간·5 깜빡임 — 입만 합성), 끝 = 시작 2장 거꾸로(1 → 0).
+- 구석: 구석_앉기 1·2 → 구석_앉아있기 4(반복) → 일어나기 = 구석 7·8번 → 바로 서기(짧은 체형 서 있는 장은 안 씀).
 - 마지막에 시트 색 맞추기(scripts/sheet_colors, 부위 scripts/color_parts 'Starline').
 """
 from __future__ import annotations
@@ -23,7 +23,7 @@ SHEETS = ROOT / "docs/characters/assets/Starline/SD"
 OUT = ROOT / "src/mabinogi_addon/assets/characters/Starline"
 STAND_H = 285
 FACE = (0.35, 0.53, 0.33, 0.77)   # 서 있기 얼굴 창(키·폭 비율: 위, 아래, 왼, 오른)
-MOUTH = (105, 134)                # 한장모음 가운데 줄 0번 원본 입 대략 위치
+MOUTH = (170, 205)                # 말하기_반복 0번 원본 입 대략 위치(B안 긴 체형, 11-24)
 
 
 def sheet(name: str) -> list[np.ndarray]:
@@ -99,13 +99,13 @@ def head_ratio(face: np.ndarray, eyes: float, frame: np.ndarray) -> float | None
 
 
 def build() -> dict[str, list[np.ndarray]]:
-    """크기(사용자 11-24 Windows '불꽃·잡기·떨어지기는 머리가 작고 착지 때 커짐'): 시트마다 먼저 기준 그림 키로 맞춘 뒤,
-    그 시트 그림들의 머리 크기(head_ratio — 얼굴 맞추기, 안 되면 눈 간격) 중앙값으로 한 번 더 나눠 머리를 서 있기에 맞춤.
-    걷기(옆모습 — 얼굴·눈 둘 다 안 잡힘)는 키 그대로(사용자 관찰로도 서 있기와 같음)."""
+    """크기(사용자 11-24 B안 — 서 있기·걷기·말하기를 긴 체형으로 다시 그림): 서 있는 계열은 모두 긴 체형이라 시트별 기준 그림 키
+    (서 있는 시트 키 중앙값 285·착지 끝 285). 서 있는 기준이 없는 떨어지기와 짧은 체형으로 남은 구석(앉기·앉아 있기·
+    일어나기)은 머리 크기(head_ratio — 얼굴 맞추기, 안 되면 눈 간격)로 서 있기에 맞춤.
+    구석 시트의 서 있는 장(앉기 0번·일어나기 끝)은 짧은 체형이라 안 씀 — 서기 → 앉기 1번, 일어나기 → 바로 서기."""
     out: dict[str, list[np.ndarray]] = {}
-    stand = sheet("Starline_서있기_4면도")  # 0 씩 웃음 · 1 눈 깜빡임 · 2~5 옆·뒤(안 씀)
-    s_stand = STAND_H / stand[0].shape[0]
-    out["stand"] = [scaled(f, s_stand) for f in stand[:2]]
+    stand = sheet("Starline_서있기")  # 0 씩 웃음(1번은 거의 같은 그림 — 안 씀)
+    out["stand"] = [scaled(stand[0], STAND_H / stand[0].shape[0])]
     face = face_crop(out["stand"][0])
     eyes = eye_gap(out["stand"][0])
 
@@ -118,43 +118,47 @@ def build() -> dict[str, list[np.ndarray]]:
     def k_height(frames, ref=None, h=STAND_H):
         return h / (ref.shape[0] if ref is not None else float(np.median([f.shape[0] for f in frames])))
 
+    def by_height(frames, ref=None):
+        k = k_height(frames, ref)
+        return [scaled(f, k) for f in frames]
+
     flame = sheet("Starline_대기불꽃")
-    out["flame"] = fit(flame, k_height(flame))
-    walk = sheet("Starline_걷기")
-    out["walk"] = [scaled(f, k_height(walk)) for f in walk]
-    drag = sheet("Starline_끌기")
-    out["drag"] = fit(drag, k_height(drag))
+    out["flame"] = fit(flame, k_height(flame))   # 키로는 머리 0.93~0.96 — 머리로 맞춤
+    out["walk"] = by_height(sheet("Starline_걷기"))
+    out["drag"] = by_height(sheet("Starline_끌기"))
     fall = sheet("Starline_떨어지기")
     out["fall"] = fit(fall, k_height(fall, h=270))
     land = sheet("Starline_착지")
-    out["land"] = fit(land, k_height(land, land[2]))
+    out["land"] = by_height(land, land[2])           # 끝 = 서기
     pet = sheet("Starline_쓰다듬기")
-    out["pet"] = fit(pet, k_height(pet))
-    crouch = sheet("Starline_구석_앉기")
-    out["crouch"] = fit(crouch, k_height(crouch, crouch[0]))
+    out["pet"] = fit(pet, k_height(pet))         # 키로는 머리 1.06~1.15 — 머리로 맞춤
+    crouch = sheet("Starline_구석_앉기")[1:]          # 0번(짧은 체형 서 있는 장) 건너뜀
+    out["crouch"] = fit(crouch, k_height(crouch, crouch[0], 0.9 * STAND_H))
     sit = sheet("Starline_구석_앉아있기")
-    out["sit"] = fit(sit, k_height(sit, h=out["crouch"][2].shape[0]))
-    rise = sheet("Starline_구석")[7:]
-    out["rise"] = fit(rise, k_height(rise, rise[0], out["crouch"][2].shape[0]))
-    start = sheet("Starline_말하기_시작")
-    talk = sheet("Starline_말하기_한장모음")  # 윗줄 2 · 가운데 줄 6(반복) · 아랫줄 2(끝)
-    loop, end = talk[2:8], talk[8:10]
+    out["sit"] = fit(sit, k_height(sit, h=out["crouch"][-1].shape[0]))
+    rise = sheet("Starline_구석")[7:9]               # 끝 서 있는 장(짧은 체형) 빼고 → 바로 서기
+    out["rise"] = fit(rise, k_height(rise, rise[0], out["crouch"][-1].shape[0]))
+    start = sheet("Starline_말하기_시작")            # 0 중간(손 허리) · 1 손 든 자세
+    loop = sheet("Starline_말하기_반복")             # 0 기준 · 1·2 입 · 3 강조 · 4 중간 · 5 깜빡임
     base = loop[0]
     m1, _ = mouth_swap(base, loop[1], MOUTH)
     m2, _ = mouth_swap(base, loop[2], MOUTH)
-    frames = [base, m1, m2, loop[3], loop[4], loop[5], end[0], end[1]]
-    fitted = fit(frames, k_height(loop))   # 반복·끝은 같은 시트 — 배율 하나
-    for key, frame in zip(("base", "m1", "m2", "emph", "emph2", "blink", "end1", "end2"), fitted):
-        out[f"talk_{key}"] = [frame]
-    out["talk_mid"] = fit(start, k_height(start))[:1]
+    k = k_height(loop)
+    for key, frame in zip(("base", "m1", "m2", "emph", "emph2", "blink"), (base, m1, m2, loop[3], loop[4], loop[5])):
+        out[f"talk_{key}"] = [scaled(frame, k)]
+    k_start = k_height(start)
+    out["talk_mid"] = [scaled(start[0], k_start)]
+    # 말하기 끝 시트가 없어 시작 2장을 거꾸로(기획 11-24): 손 든 자세 → 중간 → 서기
+    out["talk_end1"] = [scaled(start[1], k_start)]
+    out["talk_end2"] = [scaled(start[0], k_start)]
     from scripts.color_parts import PARTS
     from scripts.sheet_colors import harmonize
     groups = {("talk_m1", 0): ("talk_base", 0), ("talk_m2", 0): ("talk_base", 0)}
     return harmonize(out, out["stand"][0], PARTS["Starline"], groups)
 
 
-EXPECTED = {"stand": 2, "flame": 4, "walk": 6, "drag": 4, "fall": 1, "land": 3, "pet": 6, "crouch": 3, "sit": 4,
-            "rise": 3, **{f"talk_{k}": 1 for k in ("base", "m1", "m2", "emph", "emph2", "blink", "mid", "end1", "end2")}}
+EXPECTED = {"stand": 1, "flame": 4, "walk": 6, "drag": 4, "fall": 1, "land": 3, "pet": 6, "crouch": 2, "sit": 4,
+            "rise": 2, **{f"talk_{k}": 1 for k in ("base", "m1", "m2", "emph", "emph2", "blink", "mid", "end1", "end2")}}
 
 
 def card() -> np.ndarray:
