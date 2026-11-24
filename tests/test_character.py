@@ -1525,20 +1525,32 @@ def test_starline_lines_alerts_and_stage_lines():
     assert not [line for items in data.lines.values() for line in items if line.voice]   # 녹음 전 — 목소리 키 없음
 
 
-def test_empty_starline_pack_hidden_from_settings_and_falls_back_to_default(monkeypatch):
-    """목소리 팩 자리만(11-24): 폴더는 있지만 녹음이 없으면 설정 목록에 안 보이고, 알림·카드 미리듣기는 기본 녹음."""
+def test_empty_voice_pack_hidden_from_settings_and_falls_back_to_default(monkeypatch, tmp_path):
+    """목소리 팩 자리만(11-24 Starline 처음): 폴더는 있지만 녹음이 없으면 설정 목록에 안 보이고, 알림·카드 미리듣기는 기본 녹음."""
     from mabinogi_addon import config
     from mabinogi_addon.ui import notifier
 
+    tmp_path = tmp_path / "sounds"
+    tmp_path.mkdir()
+    (tmp_path / "빈 팩").mkdir()
+    (tmp_path / "빈 팩" / ".gitkeep").write_bytes(b"")
+    (tmp_path / "찬 팩").mkdir()
+    (tmp_path / "찬 팩" / "비바체 연장.mp3").write_bytes(b"x")
+    for name in ("비바체 연장.mp3", "투아림 부스트 발동 직전.mp3"):
+        (tmp_path / name).write_bytes(b"x")
+    monkeypatch.setattr(notifier, "SOUND_DIR", tmp_path)
+    assert notifier.list_voice_packs() == ["찬 팩"]
+    assert notifier.list_voice_packs(include_empty=True) == ["빈 팩", "찬 팩"]
+    monkeypatch.setattr(config, "load_voice_pack", lambda *a, **k: "빈 팩")
+    assert notifier.sound_path("비바체 연장.mp3") == tmp_path / "비바체 연장.mp3"
+    assert notifier.greeting_path("빈 팩") == tmp_path / "투아림 부스트 발동 직전.mp3"
+
+
+def test_starline_pack_has_recordings_and_shows_in_settings():
+    from mabinogi_addon.ui import notifier
+
     folder = notifier.SOUND_DIR / "장난스러운 남성"
-    assert folder.is_dir() and not list(folder.glob("*.mp3"))
-    assert "장난스러운 남성" not in notifier.list_voice_packs()
-    assert "장난스러운 남성" in notifier.list_voice_packs(include_empty=True)
-    assert {"화난 여성", "차분한 남성", "조용한 여성", "부드러운 여성"} <= set(notifier.list_voice_packs())
-    monkeypatch.setattr(config, "load_voice_pack", lambda *a, **k: "장난스러운 남성")
-    assert notifier.sound_path("비바체 연장.mp3") == notifier.SOUND_DIR / "비바체 연장.mp3"
-    assert notifier.greeting_path("장난스러운 남성") == notifier.SOUND_DIR / "투아림 부스트 발동 직전.mp3"
-    assert notifier.second_sound_path("투아림 부스트 발동 직전.mp3").exists()
+    assert len(notifier.alert_files(folder)) == 12 and "장난스러운 남성" in notifier.list_voice_packs()
 
 
 def test_starline_bubble_has_gold_outline(app):
