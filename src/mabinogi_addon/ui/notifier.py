@@ -49,6 +49,26 @@ def list_voice_packs() -> list[str]:
     return sorted(p.name for p in SOUND_DIR.iterdir() if p.is_dir())
 
 
+# 캐릭터 카드를 누를 때 나오는 인사 녹음(캐릭터 명세 '카드 인사 녹음', 사용자 11-24). 알림 소리가 아니다 —
+# 버프·알림 목록에 섞지 않고, 팩 안에 있을 때만 쓴다(기본 녹음으로 폴백하지 않음).
+GREETING_FILE = "인사.mp3"
+SAMPLE_FILE = "투아림 부스트 발동 직전.mp3"
+
+
+def alert_files(folder: Path) -> set[str]:
+    """그 팩 폴더의 알림 소리 파일 이름들(인사 녹음 제외)."""
+    return {p.name for p in folder.glob("*.mp3") if p.name != GREETING_FILE}
+
+
+def greeting_path(pack: str) -> Path:
+    """카드 미리듣기 소리 — 그 팩의 인사.mp3가 있으면 그것, 없으면 지금처럼 투아림 알림(sound_path 규칙)."""
+    if pack:
+        greeting = SOUND_DIR / pack / GREETING_FILE
+        if greeting.exists():
+            return greeting
+    return sound_path(SAMPLE_FILE)
+
+
 def sound_path(filename: str) -> Path:
     """활성 목소리 팩에 그 파일이 있으면 그 경로, 없으면 기본(flat) 경로.
 

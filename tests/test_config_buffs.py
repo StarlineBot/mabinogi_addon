@@ -128,11 +128,12 @@ def test_save_preserves_other_sections(tmp_path):
 def test_soft_female_pack_is_one_folder_with_user_recordings():
     """0.55.2(사용자 요청 11-22): '부드러운 여성' 11개를 새 녹음으로 교체 — '부드러운 여성2'는 별도 팩으로 남지 않음, 이름 12개 그대로."""
     from mabinogi_addon import paths
+    from mabinogi_addon.ui.notifier import alert_files as notifier_alert_files
     from mabinogi_addon.ui.notifier import list_voice_packs
     packs = list_voice_packs()
     assert "부드러운 여성" in packs and "부드러운 여성1" not in packs and "부드러운 여성2" not in packs  # 0.55.7 교체 폴더도 안 남음
     folder = paths.resource_dir() / "sounds" / "부드러운 여성"
-    assert sorted(p.name for p in folder.glob("*.mp3")) == sorted([
+    assert sorted(notifier_alert_files(folder)) == sorted([
         "비바체 연장.mp3", "비바체 연장2.mp3", "상태지원 알림.mp3", "상태지원 알림2.mp3", "전장의 서곡 연장.mp3",
         "전장의 서곡 연장2.mp3", "투아림 부스트 발동 직전.mp3", "파티 알림.mp3", "햄 버닝 연장.mp3", "햄 버닝 연장2.mp3",
         "행진곡 연장.mp3", "행진곡 연장2.mp3"])
@@ -147,8 +148,8 @@ def test_user_recorded_pack_added_and_falls_back_for_missing(monkeypatch, pack):
     from mabinogi_addon.ui import notifier
     assert pack in notifier.list_voice_packs()
     root = paths.resource_dir() / "sounds"
-    angry = {p.name for p in (root / pack).glob("*.mp3")}
-    soft = {p.name for p in (root / "부드러운 여성").glob("*.mp3")}
+    angry = notifier.alert_files(root / pack)  # 인사.mp3(카드 인사 녹음)는 알림 파일로 세지 않음
+    soft = notifier.alert_files(root / "부드러운 여성")
     assert len(angry) == 11 and angry < soft and "파티 알림.mp3" not in angry
     monkeypatch.setattr(config, "load_voice_pack", lambda *a, **k: pack)
     assert notifier.sound_path("비바체 연장.mp3") == notifier.SOUND_DIR / pack / "비바체 연장.mp3"

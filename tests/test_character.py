@@ -154,7 +154,8 @@ def test_rules_are_settings_values_and_state_round_trips():
 def test_builtin_lines_cover_every_situation_and_every_quiet_voice_alert():
     data = ln.read(ASSETS / "다래" / "lines.json")
     assert set(ln.SITUATIONS) <= set(data.lines)
-    sounds = {p.name for p in (paths.resource_dir() / "sounds" / "조용한 여성").glob("*.mp3")}
+    from mabinogi_addon.ui.notifier import alert_files
+    sounds = alert_files(paths.resource_dir() / "sounds" / "조용한 여성")
     assert sounds and sounds <= set(data.alerts)
     assert data.alerts["비바체 연장.mp3"] == "비바체… 잊은 거 아니지…?"
     moods = {line.mood for items in data.lines.values() for line in items}
@@ -558,7 +559,8 @@ def test_aria_lines_have_stroke_click_and_no_sleep_click():
     assert data.character == "아리아"
     assert set(ln.SITUATIONS) - {"click_sleep"} <= set(data.lines)
     assert "stroke_click" in data.lines and "click_sleep" not in data.lines
-    sounds = {p.name for p in (paths.resource_dir() / "sounds" / "부드러운 여성").glob("*.mp3")} - {"파티 알림.mp3"}
+    from mabinogi_addon.ui.notifier import alert_files
+    sounds = alert_files(paths.resource_dir() / "sounds" / "부드러운 여성") - {"파티 알림.mp3"}
     assert len(data.alerts) == 11 and sounds == set(data.alerts)
     assert data.alerts["비바체 연장.mp3"] == "비바체~ 잊은 거 아니지?"
     assert data.lines["annoyed_click"][0].text == "으응… 너무 자주 누르면 어지러워."
@@ -648,3 +650,32 @@ def test_quest_text_uses_character_name_with_particles():
     c = aff.Affinity.load({"value": 55, "cleared": 2})
     assert c.quest_text("아리아") == "퀘스트: 아리아 목소리로 알림 10번 · 0/10번"
     assert aff._has_final("곰") and not aff._has_final("다래")
+
+
+def test_card_preview_plays_pack_greeting_first_without_flat_fallback(tmp_path, monkeypatch):
+    """카드 인사 녹음(사용자 11-24): 그 팩에 인사.mp3가 있으면 그것, 없으면 투아림 알림. 기본 녹음 인사로 폴백하지 않음."""
+    from mabinogi_addon.ui import notifier
+
+    sounds = tmp_path / "sounds"
+    (sounds / "인사 있음").mkdir(parents=True)
+    (sounds / "인사 없음").mkdir()
+    for folder in (sounds / "인사 있음", sounds / "인사 없음", sounds):
+        (folder / notifier.SAMPLE_FILE).write_bytes(b"x")
+    (sounds / "인사 있음" / "인사.mp3").write_bytes(b"x")
+    (sounds / "인사.mp3").write_bytes(b"x")  # 팩 밖(기본 녹음) 인사는 쓰지 않음
+    monkeypatch.setattr(notifier, "SOUND_DIR", sounds)
+    monkeypatch.setattr(config, "load_voice_pack", lambda *a, **k: "인사 없음")
+    assert notifier.greeting_path("인사 있음") == sounds / "인사 있음" / "인사.mp3"
+    assert notifier.greeting_path("인사 없음") == sounds / "인사 없음" / notifier.SAMPLE_FILE
+    assert notifier.alert_files(sounds / "인사 있음") == {notifier.SAMPLE_FILE}  # 인사는 알림 파일로 안 셈
+
+
+def test_card_click_plays_greeting_of_chosen_pack(app, cfg, monkeypatch):
+    from mabinogi_addon.ui import character_tab as ct
+    from mabinogi_addon.ui import notifier
+
+    played = []
+    monkeypatch.setattr(notifier, "greeting_path", lambda pack: played.append(pack) or Path("없음.mp3"))
+    tab = ct.CharacterTab()
+    tab.choose(roster.DARE)
+    assert played == ["조용한 여성"]

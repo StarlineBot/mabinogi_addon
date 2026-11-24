@@ -270,9 +270,10 @@ class CharacterTab(QWidget):
         self.voice_pack_changed.emit()
 
     def _play_sample(self) -> None:
-        from .notifier import SoundNotifier, sound_path
+        """고른 캐릭터 미리듣기 — 그 팩의 인사.mp3(있으면, 사용자 11-24), 없으면 투아림 알림."""
+        from .notifier import SoundNotifier, greeting_path
 
-        sample = sound_path("투아림 부스트 발동 직전.mp3")
+        sample = greeting_path(config.load_voice_pack())
         if not sample.exists():
             return
         if self._preview is None:

@@ -115,7 +115,7 @@
         "tests/test_alert_volume.py",
         "tests/test_config_buffs.py"
       ],
-      "reason": "알림 소리 받는 곳(on_play) — 미리듣기 제외"
+      "reason": "알림 소리 받는 곳(on_play) — 미리듣기 제외, 카드 인사 녹음(greeting_path·alert_files 인사 제외)"
     },
     "src/mabinogi_addon/ui/overlay_capture.py": {
       "tests": [
