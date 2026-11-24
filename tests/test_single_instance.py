@@ -9,13 +9,15 @@ import pytest
 
 pytest.importorskip("PySide6")
 
-from PySide6.QtCore import QCoreApplication
+from PySide6.QtWidgets import QApplication
 
 from mabinogi_addon.system.single_instance import SingleInstance
 
 
 def _app():
-    return QCoreApplication.instance() or QCoreApplication([])
+    # QApplication으로 — conftest의 자동 정리 픽스처가 topLevelWidgets를 부르므로 QCoreApplication이면
+    # 이 파일만 돌리거나 같은 작업자에서 먼저 돌 때 다른 테스트까지 에러가 난다(0.55.8 QA).
+    return QApplication.instance() or QApplication([])
 
 
 def test_second_instance_detected():
