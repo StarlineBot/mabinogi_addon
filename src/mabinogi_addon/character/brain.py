@@ -116,7 +116,8 @@ class Profile:
     idle_extra: str | None = None         # 가만히 서 있는 동안 가끔 하는 동작(서 있기와 번갈아)
     idle_gap: tuple[float, float] = (8.0, 15.0)   # 그 동작 사이 간격(초, 무작위)
     idle_laps: tuple[int, int] = (1, 2)            # 한 번에 몇 바퀴
-    talk_after_surprise: bool = False     # 클릭 반응(짧은 그림) 뒤 말풍선이 아직 나오는 중이면 말하기로 이어감(이안)
+    talk_after_surprise: bool = False     # 클릭 반응(짧은 그림) 뒤 말풍선이 아직 나오는 중이면 말하기로 이어감
+    click_talks: bool = False             # 서서 클릭 = 놀람 그림 없이 바로 말하기(이안, 사용자 11-24)
     walk_speed: float = WALK_SPEED        # 걷는 빠르기(논리 px/초) — 걷기 그림 한 바퀴 거리에 맞춤
     talk_sets: tuple = ()                 # 말하기 그림 벌(아리아는 A·B — 말 한 번마다 무작위)
 
@@ -167,7 +168,7 @@ ARIA = Profile(ARIA_ANIMS,
                 "alert": "stand", "crouch": "sit_loop", "sit_notice": "sit_loop", "rise": "stand", "talk_end": "stand"},
                ("crouch", "sit_loop", "sit_notice"), "sit_loop", idle_extra="hairstroke",
                walk_speed=ARIA_WALK_SPEED, talk_sets=ARIA_TALK)
-# 이안(docs/characters/이안.md): 졸기 없음·놀람 그림 없음(서서 클릭 = 쓰다듬기 첫 장 0.5초 → 말하기),
+# 이안(docs/characters/이안.md): 졸기 없음·놀람 그림 없음(서서 클릭 = 바로 말하기 — 사용자 11-24),
 # 서 있기 ↔ 시계 보기 번갈아, 떨어지면 두 발 착지 → 바로 서기(엉덩방아·일어나기 없음), 알림 = 시계 가리키며 말함.
 IAN_ANIMS = {
     "stand": (("stand_1",), (1.0,), True),
@@ -192,7 +193,7 @@ IAN = Profile(IAN_ANIMS,
               {"surprise": "stand", "land": "stand", "pet_in": "pet_loop", "pet_out": "stand", "alert": "stand",
                "crouch": "sit_loop", "sit_notice": "sit_loop", "rise": "stand", "talk_end": "stand"},
               ("crouch", "sit_loop", "sit_notice"), "sit_loop", idle_extra="watch", idle_laps=(1, 1),
-              talk_after_surprise=True, walk_speed=IAN_WALK_SPEED, talk_sets=IAN_TALK)
+              click_talks=True, walk_speed=IAN_WALK_SPEED, talk_sets=IAN_TALK)
 PROFILES = {"다래": DARE, "아리아": ARIA, "이안": IAN}
 
 
@@ -529,7 +530,9 @@ class Brain:
         if self.state in UPRIGHT:
             stroking = self.profile.idle_extra is not None and self.state == self.profile.idle_extra
             self._target = None
-            self._go("surprise", now)
+            # 이안: 클릭 반응 그림(쓰다듬기 첫 장)은 머리 크기가 달라 튀어 보여(사용자 11-24) 바로 말하기 — 말풍선이 뜨면
+            # talk가 사이 → 입으로 시작(덮기 전환)
+            self._go("stand" if self.profile.click_talks else "surprise", now)
             self._schedule_extra(now)
             events.append(("say", "idle_extra_click" if stroking else "click_stand"))
         elif self.profile.doze_state is not None and self.state == self.profile.doze_state:

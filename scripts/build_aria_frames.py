@@ -16,7 +16,7 @@ import pathlib
 import cv2
 import numpy as np
 
-from scripts.build_dare_frames import ALPHA_MIN, ROOT, _tight, imread, imwrite, scaled, split
+from scripts.build_dare_frames import ALPHA_MIN, ROOT, _tight, head_width, imread, imwrite, scaled, split
 
 SHEETS = ROOT / "docs/characters/assets/아리아/SD"
 OUT = ROOT / "src/mabinogi_addon/assets/characters/아리아"
@@ -68,19 +68,25 @@ def build() -> dict[str, list[np.ndarray]]:
     stand = sheet("양쪽 포즈의 꽃장식 소녀 캐릭터 스프라이트.png")
     s_stand = by_height(stand, 1.0)
     out["stand"] = [scaled(f, s_stand) for f in stand]
+    # 서 있는 계열은 머리 폭을 서 있기 머리 폭에 맞춤(사용자 11-24 — 키로 맞추면 동작마다 머리 크기가 달라짐:
+    # land 109%·pet 107%·talk 94%). 앉은 계열은 이어지는 프레임과 맞춤 그대로.
+    head = head_width(stand[0]) * s_stand
+    by_head = lambda frame: head / head_width(frame)  # noqa: E731
+    # 여러 장 시트는 머리 폭 중앙값으로(장식 표시 '!'·땀이 머리 옆에 붙은 장 하나에 끌려가지 않게)
+    by_heads = lambda frames: head / float(np.median([head_width(f) for f in frames]))  # noqa: E731
     target = _top_lab(out["stand"][0])
     walk = sheet("파스텔 치비 소녀 걷기 스프라이트.png")
-    out["walk"] = [match_hair(scaled(f, by_height(walk, 1.0)), target) for f in walk]
+    out["walk"] = [match_hair(scaled(f, by_head(walk[0])), target) for f in walk]
     surprise = sheet("투명 배경 치비 캐릭터 4컷 스프라이트.png")
-    out["surprise"] = [scaled(f, by_height(surprise, 1.0)) for f in surprise]
+    out["surprise"] = [scaled(f, by_heads(surprise)) for f in surprise]
     drag = sheet("떨어지는 치비 소녀 애니메이션 프레임.png")
-    out["drag"] = [scaled(f, s_stand) for f in drag]  # 끌기는 서 있기 시트 배율(같은 크기 시트)
+    out["drag"] = [scaled(f, by_head(drag[0])) for f in drag]
     getup = sheet("일어나는 치비 소녀 3단계 포즈.png")
-    s_getup = STAND_H / getup[2].shape[0]
-    out["land"] = [scaled(f, s_getup) for f in sheet("세 가지 포즈의 귀여운 착지 소녀.png")]
-    out["getup"] = [scaled(f, s_getup) for f in getup]
+    land = sheet("세 가지 포즈의 귀여운 착지 소녀.png")
+    out["land"] = [scaled(f, by_head(land[0])) for f in land]
+    out["getup"] = [scaled(f, by_head(getup[2])) for f in getup]
     pet = sheet("귀여운 소녀 쓰다듬기 반응 스프라이트 시트.png")
-    out["pet"] = [scaled(f, by_height(pet, 1.0)) for f in pet]
+    out["pet"] = [scaled(f, by_heads(pet)) for f in pet]
     crouch = sheet("세 장면으로 이어지는 귀여운 소녀의 웅크리기 변화.png")
     s_crouch = STAND_H / crouch[0].shape[0]
     out["crouch"] = [scaled(f, s_crouch) for f in crouch]
@@ -88,18 +94,18 @@ def build() -> dict[str, list[np.ndarray]]:
     sit = sheet("머리카락을 안은 꼬마 요정 4컷.png")  # 보통·웃음·눈 감고 웃음·보통
     out["sit"] = [scaled(f, crouch_h / np.median([x.shape[0] for x in sit])) for f in sit]
     rise = sheet("쪼그려 앉아 일어나는 요정 소녀 3컷.png")
-    r0, r2 = crouch_h / rise[0].shape[0], STAND_H / rise[2].shape[0]
+    r0, r2 = crouch_h / rise[0].shape[0], by_head(rise[2])
     out["rise"] = [scaled(f, r) for f, r in zip(rise, (r0, (r0 + r2) / 2, r2))]
     stroke = sheet("복숭아빛 머리 소녀 치비 4종 세트.png")
-    out["hair"] = [scaled(f, by_height(stroke, 1.0)) for f in stroke]
+    out["hair"] = [scaled(f, by_heads(stroke)) for f in stroke]
     # 말하기(사용자 11-24 다시 만들기): 보통·설명·강조·깜빡임은 새 시트 A·B 입만 바꾸기(build_talk_frames),
     # 기쁨은 예전 그림(두 꼬마 요정 + 입 시트 웃음) 그대로
     mouth = sheet("말하는 귀여운 소녀 6컷 스프라이트 시트.png")  # 3번 = 웃음만 씀
-    out["talk_laugh"] = [scaled(mouth[3], by_height(mouth, 1.0))]
+    out["talk_laugh"] = [scaled(mouth[3], by_head(mouth[3]))]
     from scripts.build_talk_frames import talk_frames
-    out.update(talk_frames("아리아"))
+    out.update(talk_frames("아리아", head))
     happy = sheet("말하는 귀여운 두 꼬마 요정.png")
-    out["talk_happy"] = [scaled(f, by_height(happy, 1.0)) for f in happy]
+    out["talk_happy"] = [scaled(f, by_heads(happy)) for f in happy]
     return out
 
 

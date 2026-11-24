@@ -587,7 +587,7 @@ def test_aria_standing_height_drag_edges_and_walk_hair_color():
 
     stand = imread(ARIA / "stand_0.png", cv2.IMREAD_UNCHANGED)
     assert stand.shape[0] == 285
-    for name in ("hair_0", "walk_0", "talk_a_base_0", "talk_b_mid_0", "surprise_0", "getup_2", "rise_2"):
+    for name in ():  # 11-24부터 서 있는 계열은 키 대신 머리 폭으로 맞춤 — test_standing_frames_keep_head_size_within_5_percent
         assert abs(imread(ARIA / f"{name}.png", cv2.IMREAD_UNCHANGED).shape[0] - 285) <= 3, name
     for name in ("drag_0", "drag_1"):  # 옅은 막(알파 1~40)을 지워 가장자리는 투명
         a = imread(ARIA / f"{name}.png", cv2.IMREAD_UNCHANGED)[..., 3]
@@ -1030,10 +1030,10 @@ def test_ian_roster_card_frames_and_heights():
     names = {n for frames, _t, _l in br.IAN.anims.values() for n in frames}
     assert not [n for n in names if not (IAN_DIR / f"{n}.png").exists()]
     h = lambda n: imread(IAN_DIR / f"{n}.png", cv2.IMREAD_UNCHANGED).shape  # noqa: E731
-    for name in ("stand_0", "stand_1", "watch_2", "walk_0", "land_2", "crouch_0", "talk_base_0", "talk_alert_0"):
+    for name in ("stand_0", "stand_1", "crouch_0"):  # 나머지 서 있는 계열은 머리 폭 기준(아래 ±5% 테스트)
         assert abs(h(name)[0] - 285) <= 3, name
     assert abs(h("rise_0")[1] - h("crouch_2")[1]) <= 3  # 일어나기 첫 장 = 쪼그림 폭
-    assert h("rise_2")[0] == 285  # 끝 = 서 있는 키
+    assert abs(_head(IAN_DIR / "rise_2.png") / _head(IAN_DIR / "stand_1.png") - 1) <= 0.05  # 끝 = 서 있는 머리 폭
     assert abs(h("sit_0")[0] - h("crouch_2")[0]) <= 4  # 앉아 기다리기 = 웅크리기 끝 높이
 
 
@@ -1089,19 +1089,17 @@ def test_ian_alternates_watch_and_click_while_watching():
     assert b.release(t) == [("click",), ("say", "idle_extra_click")]  # 시계 보는 중 클릭
 
 
-def test_ian_standing_click_looks_up_then_talks():
+def test_ian_standing_click_talks_right_away():
+    """이안 서서 클릭(사용자 11-24): 쓰다듬기 첫 장(머리 크기 달라 튐) 없이 바로 말하기 — 사이 → 입."""
     b = _ian()
     b.press(1, 300, 600)
-    assert b.release(1)[-1] == ("say", "click_stand") and b.frame(1) == "pet_0"  # 시선 위 0.5초
-    assert b.talk(1, 10, "normal") is False  # 클릭 반응 중엔 바로 안 바꾸고
-    _run(b, 1, 0.55, False)
-    assert b.state == "talk" and b.frame(1.55) == "talk_mid_0"  # 끝나면 말하기로 이어감(사이 → 입)
+    assert b.release(1)[-1] == ("say", "click_stand") and b.state == "stand"
+    assert b.talk(1, 10, "normal") is True and b.frame(1.05) == "talk_mid_0" and b.frame(1.25) == "talk_m1_0"
+    assert "pet_0" not in {b.frame(1 + i * 0.05) for i in range(20)}
     d = _brain()  # 다래는 그대로(놀람 뒤 서 있기)
     d.press(1, 300, 600)
     d.release(1)
-    d.talk(1, 10)
-    _run(d, 1, 1.0, False)
-    assert d.state in ("stand", "walk")
+    assert d.state == "surprise" and d.talk(1, 10) is False
 
 
 def test_ian_alert_points_at_watch():
@@ -1141,7 +1139,7 @@ def test_ian_fall_and_land_keep_head_size():
     stand = head_width("stand_1")
     for name in ("fall_0", "fall_1", "land_0"):
         assert abs(head_width(name) - stand) / stand <= 0.03, name
-    assert imread(IAN_DIR / "land_2.png", cv2.IMREAD_UNCHANGED).shape[0] == 285
+    assert abs(head_width("land_2") - stand) / stand <= 0.05  # 끝 = 서 있는 머리 폭
 
 
 def test_ian_falls_with_one_frame():
@@ -1211,3 +1209,42 @@ def test_saved_corner_still_wins_over_nearest_edge():
     b.pos = (100.0, 700.0)
     t, _ = _run(b, 0, 6, True)
     assert b.pos == (400.0, 500.0)
+
+
+
+def _head(path):
+    import cv2
+    import numpy as np
+    from mabinogi_addon.image_io import imread
+
+    a = imread(path, cv2.IMREAD_UNCHANGED)[..., 3] > 40
+    cols = np.where(a[: int(a.shape[0] * 0.3)].any(0))[0]
+    return cols.max() - cols.min() + 1
+
+
+# 서 있는 계열(머리가 보이는 선 자세) — 사용자 11-24 '동작마다 머리 크기가 달라짐'
+STANDING_FRAMES = {
+    "아리아": ("stand", "walk", "surprise", "pet", "hair", "drag", "talk_a_", "talk_b_", "talk_happy", "talk_laugh",
+             "getup_2", "rise_2", "land_0"),
+    "이안": ("stand", "walk", "watch", "pet", "drag", "talk_", "fall_0", "land_2", "rise_2"),
+}
+HEAD_EXEMPT = {
+    "pet_0",    # 아리아: 머리 옆 '!' 표시가 위 30% 폭에 들어감(머리는 같은 배율)
+    "drag_3",   # 이안: 몸이 기울어진 자세
+}
+
+
+@pytest.mark.parametrize("folder", ["아리아", "이안"])
+def test_standing_frames_keep_head_size_within_5_percent(folder):
+    """서 있는 계열 머리 폭(위 30% 폭)이 stand의 ±5% — 다래는 헤일로·뿔 때문에 이 잣대가 머리가 아니라 제외."""
+    d = ASSETS / folder
+    ref = _head(d / ("stand_1.png" if folder == "이안" else "stand_0.png"))
+    bad = {}
+    for path in d.glob("*.png"):
+        name = path.stem
+        if name == "card" or name in HEAD_EXEMPT or not name.startswith(STANDING_FRAMES[folder]):
+            continue
+        ratio = _head(path) / ref
+        if not 0.95 <= ratio <= 1.05:
+            bad[name] = round(ratio, 3)
+    assert not bad

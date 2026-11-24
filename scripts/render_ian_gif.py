@@ -46,7 +46,7 @@ def main() -> None:
     brain._next_extra = clock.t
     shoot(2.5, "가만히 서 있으면 가끔 시계 보기")
     brain.press(clock.t, *brain.pos); window.events.emit(brain.release(clock.t))
-    shoot(3.0, "서서 클릭 — 시선 위 → 말하기")
+    shoot(3.0, "서서 클릭 — 바로 말하기(사이 → 입)")
     brain._go("watch", clock.t); brain._extra_until = clock.t + 5
     shoot(0.6, "시계 보는 중")
     brain.press(clock.t, *brain.pos); window.events.emit(brain.release(clock.t))

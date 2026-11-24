@@ -16,7 +16,7 @@ import cv2
 import numpy as np
 
 from scripts.build_aria_frames import clean
-from scripts.build_dare_frames import ROOT, imread, scaled, split
+from scripts.build_dare_frames import ROOT, head_width, imread, scaled, split
 
 STAND_H = 285
 ASSETS = ROOT / "docs/characters/assets"
@@ -89,14 +89,15 @@ def mouth_swap(base: np.ndarray, other: np.ndarray, mouth: tuple[int, int]) -> t
     return out, mask
 
 
-def talk_frames(character: str) -> dict[str, list[np.ndarray]]:
+def talk_frames(character: str, head: float | None = None) -> dict[str, list[np.ndarray]]:
+    """head(저장 크기 서 있기 머리 폭)를 주면 키 대신 머리 폭으로 배율을 맞춤(이안·아리아, 사용자 11-24)."""
     out: dict[str, list[np.ndarray]] = {}
     for loop_rel, mid_rel, mouth, prefix in SETS[character]:
         loop = _sheet(loop_rel)
         if len(loop) != 6:
             raise SystemExit(f"{loop_rel}: 프레임 {len(loop)}개(기대 6)")
         base = loop[0]
-        k = STAND_H / base.shape[0]
+        k = head / head_width(base) if head else STAND_H / base.shape[0]
         m1, _ = mouth_swap(base, loop[1], mouth)
         m2, _ = mouth_swap(base, loop[2], mouth)
         out[f"{prefix}base"] = [scaled(base, k)]
@@ -106,5 +107,5 @@ def talk_frames(character: str) -> dict[str, list[np.ndarray]]:
         out[f"{prefix}emph2"] = [scaled(loop[4], k)]
         out[f"{prefix}blink"] = [scaled(loop[5], k)]
         mid = _sheet(mid_rel)[0]
-        out[f"{prefix}mid"] = [scaled(mid, STAND_H / mid.shape[0])]
+        out[f"{prefix}mid"] = [scaled(mid, head / head_width(mid) if head else STAND_H / mid.shape[0])]
     return out

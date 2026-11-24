@@ -51,6 +51,14 @@ def split(image: np.ndarray) -> list[np.ndarray]:
     return frames
 
 
+def head_width(image: np.ndarray) -> int:
+    """머리 폭 = 위 30% 구간의 알파 가로 폭(사용자 11-24 '이안 머리 크기가 동작마다 달라짐' — 시트마다 등신이 달라
+    서 있는 키로 맞추면 머리가 커졌다 작아짐 → 이안·아리아는 시트 배율을 이 값으로 맞춤. 다래는 헤일로·뿔 때문에 안 씀)."""
+    band = image[: max(1, int(image.shape[0] * 0.3)), :, 3] > ALPHA_MIN
+    cols = np.where(band.any(0))[0]
+    return int(cols.max() - cols.min() + 1) if cols.size else 0
+
+
 def _tight(image: np.ndarray) -> np.ndarray:
     ys, xs = np.where(image[..., 3] > ALPHA_MIN)
     return image[ys.min():ys.max() + 1, xs.min():xs.max() + 1]
