@@ -61,7 +61,7 @@ F_OVERTURE2 = "전장의 서곡 연장2.mp3"
 # --- 2차 급박도(prosody) 오버라이드 ---
 # 2차 파일은 같은 목소리라도 더 빠르고 높게 읽어 다급함을 준다. 들어보고 약하면/과하면
 # 아래 숫자만 바꿔 재생성(--pack 으로 한 팩만 빠르게 비교 가능).
-URGENT_FILES = {F_VIVACE2, F_SHARP2, F_HAM2, F_MARCH2, F_OVERTURE2, F_TUARIM2}
+URGENT_FILES = {F_VIVACE2, F_SHARP2, F_HAM2, F_MARCH2, F_OVERTURE2}  # 투아림 2차는 1차와 같은 속도(사용자 11-24 '톤이 너무 달라짐')
 URGENT_EDGE_RATE_ADD = 12   # edge-tts rate(%)에 가산 (예: -6% → +6%)
 URGENT_EDGE_PITCH_ADD = 15  # edge-tts pitch(Hz)에 가산
 URGENT_GOOGLE_RATE_MULT = 1.15  # Google speakingRate 배수(Chirp3는 pitch 미지원)

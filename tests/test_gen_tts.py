@@ -9,10 +9,10 @@ import pytest
 from scripts import gen_tts
 
 
-def test_ian_pack_has_tuarim_second_line_and_it_is_urgent():
+def test_ian_pack_has_tuarim_second_line_at_same_speed():
     ian = next(p for p in gen_tts.PACKS if p["name"] == "차분한 남성")
     assert ian["lines"][gen_tts.F_TUARIM2] == "투아림, 지금 발동합니다. 준비하십시오."
-    assert gen_tts.F_TUARIM2 in gen_tts.URGENT_FILES
+    assert gen_tts.F_TUARIM2 not in gen_tts.URGENT_FILES and gen_tts.F_VIVACE2 in gen_tts.URGENT_FILES  # 투아림 2차는 같은 속도
     assert not {"화난 여성", "조용한 여성", "장난스러운 남성"} & {p["name"] for p in gen_tts.PACKS}  # 사용자 녹음 팩은 대상 아님
 
 
@@ -47,7 +47,7 @@ def test_only_generates_named_files_and_leaves_others(tmp_path, monkeypatch):
     assert (pack_dir / gen_tts.F_VIVACE).read_bytes() == b"old" and (pack_dir / gen_tts.F_TUARIM2).read_bytes() == b"new"
     assert len(sent) == 1 and sent[0]["input"]["text"] == "투아림, 지금 발동합니다. 준비하십시오."
     assert sent[0]["voice"]["name"] == "ko-KR-Chirp3-HD-Algieba"
-    assert sent[0]["audioConfig"]["speakingRate"] == round(0.97 * gen_tts.URGENT_GOOGLE_RATE_MULT, 3)
+    assert sent[0]["audioConfig"]["speakingRate"] == 0.97   # 1차와 같은 속도(급박 배수 없음)
 
 
 def test_only_with_unknown_file_stops(tmp_path, monkeypatch):
