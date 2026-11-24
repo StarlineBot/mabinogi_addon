@@ -61,8 +61,8 @@ def extend_spec(spec: Path, root: Path) -> None:
         keyword for keyword in call.keywords if keyword.arg not in {"minify_script", "always_on_top"}
     ]
     call.keywords.append(ast.keyword(arg="minify_script", value=ast.Constant(False)))
-    # 0.40.0(사용자): 압축 푸는 시작 화면도 맨 위 고정 없이(PyInstaller 기본값 True는 뒤 창을 가렸다)
-    call.keywords.append(ast.keyword(arg="always_on_top", value=ast.Constant(False)))
+    # 0.55.8(사용자 11-24): 실행 안 된 줄 알고 여러 번 켜는 일 — 압축 푸는 시작 화면을 다시 맨 위(0.40.0에 껐던 것)
+    call.keywords.append(ast.keyword(arg="always_on_top", value=ast.Constant(True)))
     spec.write_text(preamble + ast.unparse(tree) + "\n", encoding="utf-8")
 
 

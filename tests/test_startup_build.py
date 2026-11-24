@@ -38,9 +38,9 @@ exe = EXE(a.scripts, splash, splash.binaries, a.binaries, a.datas,
     expected.keywords.append(
         ast.keyword(arg="minify_script", value=ast.Constant(False))
     )
-    # 0.40.0 명세 변경(사용자): 시작 화면 맨 위 고정 끔
+    # 0.55.8(사용자 11-24): 시작 화면 다시 맨 위 고정
     expected.keywords.append(
-        ast.keyword(arg="always_on_top", value=ast.Constant(False))
+        ast.keyword(arg="always_on_top", value=ast.Constant(True))
     )
     assert [ast.dump(node) for node in original] == [
         ast.dump(node) for node in before.body

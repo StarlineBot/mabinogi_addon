@@ -306,3 +306,30 @@ def test_installed_update_with_failed_relaunch_asks_restart_instead_of_running_o
     monkeypatch.setattr(QMessageBox, "information", lambda parent, title, text: shown.append(text))
     assert mabinogi_addon._apply_update_before_launch(screen) is True  # 옛 버전으로 계속 띄우지 않음
     assert shown[0] == "close" and "앱을 다시 실행해 주세요" in shown[1]
+
+
+@pytest.mark.parametrize("ending", ["duplicate_return", "start_failure"])
+def test_on_top_loading_window_never_outlives_startup(app, monkeypatch, ending):
+    """0.55.8(사용자 11-24): 맨 위 로딩 창이 중복 실행·시작 실패 뒤 남아 게임·메인 창을 가리지 않게."""
+    from PySide6.QtCore import Qt
+
+    monkeypatch.setitem(sys.modules, "pyi_splash", None)
+    monkeypatch.setattr(paths, "is_frozen", lambda: False)
+    seen = []
+
+    def fake_main(screen):
+        screen.configure(start_in_tray=False)
+        seen.append(screen._fallback)
+        if ending == "start_failure":
+            raise RuntimeError("MainWindow 구성 실패")
+
+    monkeypatch.setattr(mabinogi_addon, "_main", fake_main)
+    if ending == "start_failure":
+        with pytest.raises(RuntimeError):
+            mabinogi_addon.main()
+    else:
+        mabinogi_addon.main()
+    window = seen[0]
+    assert window is not None
+    assert window.windowFlags() & Qt.WindowType.WindowStaysOnTopHint
+    assert not window.isVisible() and not window._timer.isActive()

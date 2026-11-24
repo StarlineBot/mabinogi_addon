@@ -22,9 +22,11 @@ class Splash(QWidget):
     def __init__(self, *, typing: bool = True, status: str = "") -> None:
         super().__init__(
             None,
-            # 0.40.0(사용자): 맨 위 고정 없음 — 로딩 중에도 다른 창을 앞으로 가져올 수 있게
+            # 0.55.8(사용자 11-24): 실행 안 된 줄 알고 여러 번 켜는 일 — 다시 맨 위(0.40.0에 껐던 것).
+            # 메인 창을 띄우기 전·중복 실행·시작 실패 때 모두 닫힌다(StartupScreen.close, main의 finally).
             Qt.WindowType.FramelessWindowHint
-            | Qt.WindowType.SplashScreen,
+            | Qt.WindowType.SplashScreen
+            | Qt.WindowType.WindowStaysOnTopHint,
         )
         self.setFixedSize(440, 240)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)

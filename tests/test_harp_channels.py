@@ -338,14 +338,14 @@ def test_channel_tab_is_public_and_renamed(window, monkeypatch):
     assert tabs.currentWidget() is w._harp_scroll
 
 
-def test_startup_windows_are_not_always_on_top():
-    """0.40.0(사용자): 로딩 창이 맨 위에 떠 뒤 창을 가리지 않게."""
+def test_startup_window_is_always_on_top():
+    """0.55.8(사용자 11-24): 실행 중인지 알게 로딩 창을 다시 맨 위로(0.40.0에 껐던 것)."""
     from PySide6.QtCore import Qt
     from mabinogi_addon.ui.splash import Splash
     QApplication.instance() or QApplication([])
     s = Splash(typing=False)
     try:
-        assert not s.windowFlags() & Qt.WindowType.WindowStaysOnTopHint
+        assert s.windowFlags() & Qt.WindowType.WindowStaysOnTopHint
     finally:
         s.close()
         s.deleteLater()
