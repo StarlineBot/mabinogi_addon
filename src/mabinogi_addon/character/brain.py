@@ -29,6 +29,7 @@ WALK_SPEED = 45.0          # 논리 px/초(캐릭터 값이 없을 때)
 DARE_WALK_FRAME, DARE_WALK_SPEED = 0.20, 80.0    # 한 바퀴 1.2초 × 80 = 96px
 ARIA_WALK_FRAME, ARIA_WALK_SPEED = 0.22, 90.0    # 1.32초 × 90 = 119px
 IAN_WALK_FRAME, IAN_WALK_SPEED = 0.20, 75.0      # 기획 지정(시안) 1.2초 × 75 = 90px
+LENA_WALK_FRAME, LENA_WALK_SPEED = 0.22, 90.0    # 레나 발 간격 60.0 → 120px, 1.32초 × 90 = 119px
 GRAVITY = 1800.0           # 떨어질 때 px/초²
 DRAG_START = 6.0           # 이만큼 움직이면 클릭이 아니라 끌기
 FRONT_DELAY = 1.0          # 게임이 앞으로 온 뒤 이만큼 지나야 구석으로(잠깐 전환 무시)
@@ -77,7 +78,9 @@ EMPH_MIN_CHARS = 12
 BLINK_SECONDS = 0.13
 BLINK_GAP = (3.0, 5.0)
 END_BASE_SECONDS = 0.3
+END_STEP_SECONDS = 0.2      # 말 끝 두 장(레나 end1·end2) 한 장 시간
 COVER_SECONDS = 0.13
+SHAKE_SECONDS = 0.13        # 참는 중 좌우 1px 떨림 한 칸(레나)
 
 
 def talk_set(prefix: str = "talk_") -> dict[str, str]:
@@ -85,12 +88,19 @@ def talk_set(prefix: str = "talk_") -> dict[str, str]:
     return {key: f"{prefix}{key}_0" for key in TALK_KEYS}
 
 
+def _end_steps(s: dict) -> tuple[tuple[str, float], ...]:
+    """말 끝 시간표 — base 잠시 → 사이(기본) 또는 끝 두 장(레나 end1 → end2, 서기와 같은 자세)."""
+    if "end1" in s:
+        return (("base", END_BASE_SECONDS), ("end1", END_STEP_SECONDS), ("end2", END_STEP_SECONDS))
+    return (("base", END_BASE_SECONDS), ("mid", MID_SECONDS))
+
+
 def _talk_anims(sets) -> dict:
     """load_frames가 말하기 그림을 모두 읽게 하는 자리(재생은 Brain._talk_frame이 시간표로)."""
     names = tuple(name for s in sets for name in s.values())
+    steps = [(s[k], d) for s in sets for k, d in _end_steps(s)]
     return {"talk": (names, (1.0,) * len(names), True),
-            "talk_end": (tuple(s[k] for s in sets for k in ("base", "mid")), (END_BASE_SECONDS, MID_SECONDS) * len(sets),
-                         False)}
+            "talk_end": (tuple(n for n, _ in steps), tuple(d for _, d in steps), False)}
 
 
 DARE_TALK = (talk_set(),)
@@ -120,6 +130,8 @@ class Profile:
     click_talks: bool = False             # 서서 클릭 = 놀람 그림 없이 바로 말하기(이안, 사용자 11-24)
     walk_speed: float = WALK_SPEED        # 걷는 빠르기(논리 px/초) — 걷기 그림 한 바퀴 거리에 맞춤
     talk_sets: tuple = ()                 # 말하기 그림 벌(아리아는 A·B — 말 한 번마다 무작위)
+    cover_from: tuple[str, ...] = ()      # 이 그림에서 다음 그림으로 갈 때 덮기 전환(레나 착지·'흥' → 서기)
+    pet_shake: bool = False               # 쓰다듬기 참는 중 좌우 1px 떨림(레나)
 
     def with_timing(self, raw) -> Profile:
         """설정 값(config character.idle {gap: [최소, 최대], laps: [최소, 최대]})으로 대기 동작 시간 덮어쓰기."""
@@ -194,7 +206,34 @@ IAN = Profile(IAN_ANIMS,
                "crouch": "sit_loop", "sit_notice": "sit_loop", "rise": "stand", "talk_end": "stand"},
               ("crouch", "sit_loop", "sit_notice"), "sit_loop", idle_extra="watch", idle_laps=(1, 1),
               click_talks=True, walk_speed=IAN_WALK_SPEED, talk_sets=IAN_TALK)
-PROFILES = {"다래": DARE, "아리아": ARIA, "이안": IAN}
+# 레나(docs/characters/레나.md·기획 11-24): 졸기·대기 동작 없음, 서서 클릭 = 바로 말하기(이안과 같음),
+# 떨어지기 한 장 → 착지 4장(엎어짐·일으킴·옷 털기·팔짱) → 덮기 전환으로 서기, 쓰다듬기 참는 중 1px 떨림 → '흥' → 덮기로 서기,
+# 앉아 있기 0 길게 + 가끔 발끝 까딱·한숨·깜빡임, 말 끝은 사이 대신 끝 두 장.
+LENA_ANIMS = {
+    "stand": (("stand_0",), (1.0,), True),
+    "walk": (tuple(f"walk_{i}" for i in range(6)), (LENA_WALK_FRAME,) * 6, True),
+    "surprise": (("stand_0",), (0.3,), False),   # click_talks라 쓰지 않음(자리만)
+    "drag": (tuple(f"drag_{i}" for i in range(4)), (0.18,) * 4, True),
+    "fall": (("fall_0",), (1.0,), True),
+    "land": (("land_0", "land_1", "land_2", "land_3"), (0.6, 0.35, 0.5, 0.8), False),
+    "pet_in": (("pet_0", "pet_1"), (0.4, 0.4), False),
+    "pet_loop": (("pet_2", "pet_3", "pet_4"), (0.45,) * 3, True),
+    "pet_out": (("pet_5",), (1.6,), False),
+    "alert": (("talk_emph_0",), (1.5,), False),   # 손가락으로 짚으며 알림
+    "crouch": (("crouch_0", "crouch_1", "crouch_2"), (0.25,) * 3, False),
+    "sit_loop": (("sit_0", "sit_1", "sit_0", "sit_3", "sit_0", "sit_2", "sit_0", "sit_3"),
+                 (3.5, 0.8, 3.0, 0.15, 3.5, 1.4, 2.5, 0.15), True),
+    "sit_notice": (("sit_0",), (1.2,), False),    # 앉아서 클릭 = 그림 그대로(말풍선만)
+    "rise": (("rise_0", "rise_1", "rise_2"), (0.25,) * 3, False),
+}
+LENA_TALK = ({**talk_set(), "end1": "talk_end1_0", "end2": "talk_end2_0"},)
+LENA_ANIMS.update(_talk_anims(LENA_TALK))
+LENA = Profile(LENA_ANIMS,
+               {"surprise": "stand", "land": "stand", "pet_in": "pet_loop", "pet_out": "stand", "alert": "stand",
+                "crouch": "sit_loop", "sit_notice": "sit_loop", "rise": "stand", "talk_end": "stand"},
+               ("crouch", "sit_loop", "sit_notice"), "sit_loop", click_talks=True, walk_speed=LENA_WALK_SPEED,
+               talk_sets=LENA_TALK, cover_from=("land_3", "pet_5"), pet_shake=True)
+PROFILES = {"다래": DARE, "아리아": ARIA, "이안": IAN, "레나": LENA}
 
 
 @dataclass
@@ -254,8 +293,14 @@ class Brain:
     def frame(self, now: float) -> str:
         if self.state == "talk" and self._talk_set is not None:
             return self._talk_frame(now)
-        if self.state == "talk_end" and self._talk_set is not None:  # base 잠시 → 사이 → (서 있기)
-            return self._talk_set["base" if now - self._t0 < END_BASE_SECONDS else "mid"]
+        if self.state == "talk_end" and self._talk_set is not None:  # base 잠시 → 사이(또는 끝 두 장) → (서 있기)
+            t = now - self._t0
+            steps = _end_steps(self._talk_set)
+            for key, d in steps:
+                if t < d:
+                    return self._talk_set[key]
+                t -= d
+            return self._talk_set[steps[-1][0]]
         frames, times, loop = self.profile.anims[self.state]
         t = now - self._t0
         if self.state == "walk":
@@ -268,6 +313,12 @@ class Brain:
                 return name
             t -= d
         return frames[-1]
+
+    def shake(self, now: float) -> int:
+        """쓰다듬기 참는 중 좌우 떨림(논리 px) — 0.13초마다 0 → +1 → 0 → −1. 떨림 없는 캐릭터·다른 동작은 0."""
+        if not self.profile.pet_shake or self.state != "pet_loop":
+            return 0
+        return (0, 1, 0, -1)[int((now - self._t0) / SHAKE_SECONDS) % 4]
 
     def zzz(self) -> bool:
         """꾸벅 조는 동안만 Zzz(코드로 그림). 졸지 않는 캐릭터는 없음."""
@@ -295,7 +346,7 @@ class Brain:
 
     def _done(self, now: float) -> bool:
         if self.state == "talk_end" and self._talk_set is not None:
-            return now - self._t0 >= END_BASE_SECONDS + MID_SECONDS
+            return now - self._t0 >= sum(d for _, d in _end_steps(self._talk_set))
         frames, times, loop = self.profile.anims[self.state]
         return not loop and now - self._t0 >= sum(times)
 
@@ -319,6 +370,8 @@ class Brain:
         """그림이 바뀔 때 덮기 전환을 할지 — 말하기로 들고 날 때·사이·강조·분위기 그림. 입만 바뀌는 건 바로."""
         if not old or old == new:
             return False
+        if old in self.profile.cover_from:
+            return True
         mouth = {s[k] for s in self.profile.talk_sets for k in ("base", "m1", "m2", "blink")}
         if old in mouth and new in mouth:
             return False

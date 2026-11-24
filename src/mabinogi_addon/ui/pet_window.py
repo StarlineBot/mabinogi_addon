@@ -154,7 +154,7 @@ class PetWindow(QWidget):
         covering = self._cover is not None and now - self._cover[1] < brain_mod.COVER_SECONDS
         if not covering:
             self._cover = None
-        shown = (name, self.brain.facing_left, self.bubble_shown(now))
+        shown = (name, self.brain.facing_left, self.bubble_shown(now), self.brain.shake(now))
         if shown != self._shown or self.brain.zzz() or covering:
             self._shown = shown
             self.update()
@@ -215,6 +215,7 @@ class PetWindow(QWidget):
                 small, rect = self._image(layer), self._frame_rect(self.frames[layer])
                 if "_m2_" in layer:
                     rect.translate(0, -1)  # 입 크게일 때 1px 끄덕임
+                rect.translate(self.brain.shake(now), 0)  # 쓰다듬기 참는 중 좌우 1px 떨림(레나)
                 p.setOpacity(opacity)
                 if self.brain.state == "walk" and self.brain.facing_left:  # 걷기 시트는 오른쪽 — 왼쪽은 뒤집기
                     p.save()
