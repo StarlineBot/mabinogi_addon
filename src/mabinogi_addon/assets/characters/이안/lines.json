@@ -3,7 +3,10 @@
  "character": "이안",
  "lines": {
   "click_stand": [
-   "네, 부르셨습니까.",
+   {
+    "text": "네, 부르셨습니까.",
+    "voice": "대사/클릭.mp3"
+   },
    "무슨 일이십니까.",
    "여기 있습니다.",
    {
@@ -31,7 +34,8 @@
   "idle_extra_click": [
    {
     "text": "시각 확인 중이었습니다.",
-    "mood": "explain"
+    "mood": "explain",
+    "voice": "대사/시계.mp3"
    },
    {
     "text": "일정대로 가고 있습니다.",
@@ -70,7 +74,10 @@
     "text": "다음엔 미리 말씀해 주세요.",
     "mood": "explain"
    },
-   "…고맙다고는 안 하겠습니다.",
+   {
+    "text": "…고맙다고는 안 하겠습니다.",
+    "voice": "대사/쓰다듬기끝.mp3"
+   },
    {
     "text": "…익숙해지면 곤란합니다.",
     "stage": 25
@@ -113,12 +120,16 @@
    },
    {
     "text": "다녀오세요. 버프는 제가 보겠습니다.",
-    "mood": "explain"
+    "mood": "explain",
+    "voice": "대사/게임시작.mp3"
    },
    "무리하지 마십시오."
   ],
   "game_exit": [
-   "수고하셨습니다.",
+   {
+    "text": "수고하셨습니다.",
+    "voice": "대사/게임끝.mp3"
+   },
    {
     "text": "오늘 기록, 정리해 두겠습니다.",
     "mood": "explain"
@@ -144,7 +155,8 @@
   "long_hunt": [
    {
     "text": "두 시간 지났습니다. 잠깐 쉬시죠.",
-    "mood": "explain"
+    "mood": "explain",
+    "voice": "대사/휴식.mp3"
    },
    {
     "text": "휴식도 일정입니다.",
@@ -158,10 +170,14 @@
   "hello": [
    {
     "text": "오셨습니까. 오늘 일정 시작하죠.",
-    "mood": "explain"
+    "mood": "explain",
+    "voice": "대사/켜기_1.mp3"
    },
    "좋은 하루입니다.",
-   "기다리고 있었습니다.",
+   {
+    "text": "기다리고 있었습니다.",
+    "voice": "대사/켜기_2.mp3"
+   },
    {
     "text": "오셨군요. 예정보다 조금 이릅니다.",
     "stage": 25
@@ -184,7 +200,10 @@
     "text": "오랜만입니다. 밀린 일정은 없습니다.",
     "mood": "explain"
    },
-   "돌아오셨군요. …다행입니다."
+   {
+    "text": "돌아오셨군요. …다행입니다.",
+    "voice": "대사/오랜만.mp3"
+   }
   ],
   "night": [
    {
@@ -193,7 +212,8 @@
    },
    {
     "text": "늦었습니다. 오늘은 여기까지 하시죠.",
-    "mood": "explain"
+    "mood": "explain",
+    "voice": "대사/밤.mp3"
    }
   ],
   "morning": [
@@ -258,22 +278,26 @@
    {
     "text": "…당신 일정, 이제 대충 외웠습니다.",
     "stage": 25,
-    "mood": "explain"
+    "mood": "explain",
+    "voice": "대사/구간_25.mp3"
    },
    {
     "text": "당신과 일하는 건, 나쁘지 않습니다.",
     "stage": 50,
-    "mood": "explain"
+    "mood": "explain",
+    "voice": "대사/구간_50.mp3"
    },
    {
     "text": "제 일정표 맨 위엔 당신 이름이 있습니다.",
     "stage": 75,
-    "mood": "explain"
+    "mood": "explain",
+    "voice": "대사/구간_75.mp3"
    },
    {
     "text": "이 시계, 이제 당신 시간에 맞추겠습니다.",
     "stage": 100,
-    "mood": "explain"
+    "mood": "explain",
+    "voice": "대사/구간_100.mp3"
    }
   ]
  },
