@@ -44,7 +44,7 @@ def main() -> None:
     brain._next_idle = clock.t + 999
     shoot(1.2, "서 있기(팔짱)")
     brain._walk_to((420.0, floor.y), clock.t)
-    shoot(2.2, "걷기 — 0.22초·초당 90px")
+    shoot(2.2, "걷기 — 0.22초·초당 85.5px(×0.95)")
     brain._next_walk = clock.t + 99
     brain.press(clock.t, *brain.pos); window.events.emit(brain.release(clock.t))
     shoot(3.2, "서서 클릭 — 바로 말하기 → 끝 두 장 → 서기")
