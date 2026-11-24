@@ -119,6 +119,21 @@ def check_latest() -> dict | None:
     return None
 
 
+def just_updated() -> bool:
+    """방금 업데이트로 교체돼 실행된 exe인지(``<exe>.old``가 남아 있음 — cleanup_old 전에 본다).
+
+    0.55.8: 단일 인스턴스 가드를 업데이트 확인보다 앞에 두면서, 업데이트 재실행된 새 프로세스는
+    옛 프로세스(.old로 실행 중)가 끝날 때까지 자리를 기다려야 한다. 옛 버전(0.55.7 이하)이 새 exe를
+    띄울 때는 표시 인자를 넘기지 않으므로, 인자 대신 .old 파일로 판정한다.
+    """
+    if not paths.is_frozen():
+        return False
+    try:
+        return Path(sys.executable + ".old").exists()
+    except OSError:
+        return False
+
+
 def cleanup_old() -> None:
     """교체 후 남은 ``<exe>.old`` 를 지운다(실행 시작 시 1회 호출)."""
     if not paths.is_frozen():
@@ -219,6 +234,10 @@ def _relaunch(exe: Path, args: tuple[str, ...] = ()) -> None:
     740이면 ShellExecuteEx(runas)로 UAC 승인을 받아 띄운다. 관리자면 그대로 권한을 이어받는다."""
     import subprocess
 
+    # 0.55.8: 새 프로세스가 단일 인스턴스 자리를 바로 잡게 먼저 비운다(호출 측은 곧 종료한다).
+    from .single_instance import release_held
+
+    release_held()
     if sys.platform == "win32" and not _is_admin():
         _launch_elevated(exe, *([args] if args else []))
         return

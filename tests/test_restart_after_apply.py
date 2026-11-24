@@ -206,9 +206,13 @@ def test_acquire_waits_for_old_process_only_when_restarting():
     assert other is None and t[0] == pytest.approx(15.0, abs=0.3)  # 끝까지 안 비면 최대 15초 뒤 포기
 
 
+@pytest.mark.parametrize("updated", [False, True])
 @pytest.mark.parametrize("restarted", [True, False])
-def test_main_restart_flag_waits_for_slot_and_shows_window_even_in_tray(monkeypatch, restarted):
-    """`--restart`: 자리를 15초까지 기다리고, '트레이로 시작'이어도 창을 보여 줌·업데이트 확인 건너뜀."""
+def test_main_restart_flag_waits_for_slot_and_shows_window_even_in_tray(monkeypatch, restarted, updated):
+    """`--restart`: 자리를 15초까지 기다리고, '트레이로 시작'이어도 창을 보여 줌·업데이트 확인 건너뜀.
+
+    0.55.8: 업데이트로 교체돼 실행된 새 프로세스(.old 남음 — 옛 버전은 표시 인자를 안 넘김)도 같은 15초를 기다린다
+    (가드가 업데이트 확인 앞으로 오면서, 옛 프로세스가 끝나기 전에 '이미 실행 중'으로 꺼지지 않게)."""
     import faulthandler
     import logging
 
@@ -234,10 +238,11 @@ def test_main_restart_flag_waits_for_slot_and_shows_window_even_in_tray(monkeypa
     monkeypatch.setattr(main_window, "app_icon", QIcon)
     monkeypatch.setattr(config, "load_general_flag", lambda key, default: key == "startInTray")
     monkeypatch.setattr(updater, "cleanup_old", lambda: None)
+    monkeypatch.setattr(updater, "just_updated", lambda: updated)
     monkeypatch.setattr(updater, "can_update", lambda: True)
     monkeypatch.setattr(updater, "check_latest", lambda: events.append("update-check"))
     monkeypatch.setattr(startup.StartupScreen, "step", lambda *a, **k: None, raising=False)
-    monkeypatch.setattr(single_instance, "acquire", lambda wait=0.0, **k: events.append(("acquire", wait)) or SimpleNamespace())
+    monkeypatch.setattr(single_instance, "acquire", lambda wait=0.0, **k: events.append(("acquire", wait)) or SimpleNamespace(watch=lambda on_show: events.append("watch")))
 
     class Window:
         def start(self):
@@ -245,6 +250,9 @@ def test_main_restart_flag_waits_for_slot_and_shows_window_even_in_tray(monkeypa
 
         def show(self):
             events.append("show")
+
+        def _show_from_tray(self):
+            events.append("front")
     monkeypatch.setattr(main_window, "MainWindow", Window)
     try:
         with pytest.raises(SystemExit):
@@ -254,7 +262,8 @@ def test_main_restart_flag_waits_for_slot_and_shows_window_even_in_tray(monkeypa
             logging.getLogger().removeHandler(handler)
             handler.close()
         logging.getLogger().setLevel(level)
-    assert ("acquire", mabinogi_addon.RESTART_WAIT if restarted else 0.0) in events
+    assert ("acquire", mabinogi_addon.RESTART_WAIT if restarted or updated else 0.0) in events
+    assert events.index("start") < events.index("watch")
     assert ("show" in events) is restarted  # 평소엔 '트레이로 시작'이라 창 없음
     assert "update-check" not in events  # 트레이 시작은 원래 확인 안 함, 다시 켜기도 건너뜀
     assert mabinogi_addon.RESTART_WAIT == 15.0

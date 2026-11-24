@@ -4,6 +4,11 @@
     "tests/test_harp_channels.py",
     "tests/test_startup_integration.py",
     "tests/test_overlay_capture.py",
+    "tests/test_manual_update_progress.py",
+    "tests/test_updater_relaunch_env.py",
+    "tests/test_updater.py",
+    "tests/test_restart_after_apply.py",
+    "tests/test_single_instance.py",
     "tests/test_release_checks.py",
     "tests/test_startup_build.py",
     "tests/test_release_candidate.py",
@@ -14,6 +19,31 @@
     "tests/test_release_notes_trigger.py"
   ],
   "coverage": {
+    "src/mabinogi_addon/system/single_instance.py": {
+      "tests": [
+        "tests/test_single_instance.py",
+        "tests/test_startup_integration.py",
+        "tests/test_restart_after_apply.py"
+      ],
+      "reason": "두 번째 실행 → 켜진 창 앞으로 요청(공유 메모리 한 바이트·0.5초 확인), 재실행 전 자리 비우기"
+    },
+    "src/mabinogi_addon/__init__.py": {
+      "tests": [
+        "tests/test_startup_integration.py",
+        "tests/test_restart_after_apply.py"
+      ],
+      "reason": "가드를 업데이트 확인 앞으로 — 두 번째는 확인·다운로드 0회, 다시 켜기·업데이트 재실행은 15초 기다림, 메인 창 뒤 watch"
+    },
+    "src/mabinogi_addon/system/updater.py": {
+      "tests": [
+        "tests/test_single_instance.py",
+        "tests/test_updater.py",
+        "tests/test_updater_relaunch_env.py",
+        "tests/test_manual_update_progress.py",
+        "tests/test_restart_after_apply.py"
+      ],
+      "reason": "_relaunch 전 release_held, just_updated(.old 남음)"
+    },
     "src/mabinogi_addon/ui/splash.py": {
       "tests": [
         "tests/test_harp_channels.py",
@@ -43,7 +73,7 @@
         "tests/test_release_notes.py",
         "tests/test_release_notes_trigger.py"
       ],
-      "reason": "0.55.8 노트 맨 위(조용히 다듬은 것 한 줄)·첫 실행 표시, v0.55.7 이하 그대로"
+      "reason": "0.55.8 노트 맨 위(조용히 다듬은 것 두 줄)·첫 실행 표시, v0.55.7 이하 그대로"
     }
   }
 }

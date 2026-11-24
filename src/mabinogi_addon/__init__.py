@@ -98,6 +98,7 @@ def _main(startup) -> None:
     from mabinogi_addon.system import updater
     from mabinogi_addon.ui.main_window import MainWindow, app_icon
 
+    just_updated = updater.just_updated()  # .old가 지워지기 전에 본다(업데이트 재실행된 새 프로세스)
     updater.cleanup_old()  # 지난 업데이트 교체 후 남은 <exe>.old 정리(배포본만)
 
     app = QApplication(sys.argv)
@@ -119,6 +120,17 @@ def _main(startup) -> None:
     # '트레이로 시작'이어도 창을 보여 주고, 옛 프로세스가 끝날 때까지 단일 인스턴스 자리를 기다린다.
     restarted = updater.RESTART_ARG in sys.argv[1:]
     start_in_tray = config.load_general_flag("startInTray", False) and not restarted
+    # 단일 인스턴스 가드: 업데이트 확인 '전'에 둔다(0.55.8 — 여러 번 누르면 프로세스마다 업데이트 확인·
+    # 다운로드·교체를 동시에 하던 문제). 이미 떠 있으면 그 창을 앞으로 꺼내 달라고 남기고 바로 끝낸다
+    # (로딩 창은 main()의 finally가 닫는다). 다시 켜기·업데이트 재실행은 옛 프로세스가 자리를 비우고
+    # 끝날 때까지 최대 RESTART_WAIT초 다시 시도한다.
+    from mabinogi_addon.system.single_instance import acquire, request_show
+
+    single = acquire(wait=RESTART_WAIT if restarted or just_updated else 0.0)
+    if single is None:
+        request_show()
+        return
+
     # Keep the bootloader's actual window through Python initialization. Source
     # runs use the same-design Qt fallback; tray startup opens no follow-up screen.
     startup.configure(start_in_tray=start_in_tray)
@@ -128,17 +140,6 @@ def _main(startup) -> None:
     # (옛 버전 창을 먼저 보여준 뒤 배너로 안내하던 흐름을 대체)
     if not restarted and _apply_update_before_launch(splash):
         return  # 교체 + 새 exe 재실행됨 → 이 프로세스는 조용히 종료
-
-    # 단일 인스턴스 가드: 이미 떠 있으면 두 번째는 조용히 종료(트레이 아이콘 둘 방지).
-    # 업데이트 자가-재실행 '이후'에 둬서, 재실행 과도기의 세그먼트 경합을 피한다.
-    # 다시 켜기 표시가 있으면 옛 프로세스 종료까지 최대 RESTART_WAIT초 다시 시도, 없으면 바로 꺼짐.
-    from mabinogi_addon.system.single_instance import acquire
-
-    single = acquire(wait=RESTART_WAIT if restarted else 0.0)
-    if single is None:
-        if splash is not None:
-            splash.close()
-        return
 
     if splash is not None:
         splash.step(45)
@@ -151,6 +152,8 @@ def _main(startup) -> None:
         splash.close()  # 창을 띄우기 '전'에 닫는다(뒤에 흰 빈 창이 비치지 않게)
     if not start_in_tray:
         window.show()  # '트레이로 시작'이면 창 없이 트레이만
+    # 다시 실행하면 이 창을 앞으로(트레이에 숨어 있어도 — 트레이에서 여는 것과 같은 길). 로딩 중 들어온 요청은 여기서 한 번.
+    single.watch(window._show_from_tray)
     sys.exit(app.exec())
 
 

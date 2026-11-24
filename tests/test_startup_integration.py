@@ -114,8 +114,13 @@ def test_real_main_startup_lifetime_and_existing_entry_policy(
     monkeypatch.setattr(
         single_instance,
         "SingleInstance",
-        lambda *a: SimpleNamespace(already_running=case == "duplicate"),
+        lambda *a: SimpleNamespace(
+            already_running=case == "duplicate",
+            watch=lambda on_show: events.append("watch"),
+        ),
     )
+    monkeypatch.setattr(single_instance, "_held", None)
+    monkeypatch.setattr(single_instance, "request_show", lambda: events.append("request_show"))
     monkeypatch.setattr(splash, "Splash", lambda: pytest.fail("second loading window"))
 
     def check():
@@ -147,6 +152,9 @@ def test_real_main_startup_lifetime_and_existing_entry_policy(
         def show(self):
             events.append("show")
 
+        def _show_from_tray(self):
+            events.append("front")
+
     monkeypatch.setattr(main_window, "MainWindow", Window)
     try:
         if case in ("construct_failure", "start_failure"):
@@ -170,6 +178,9 @@ def test_real_main_startup_lifetime_and_existing_entry_policy(
         assert events.index("close") < events.index("construct")
     elif case == "duplicate":
         assert "construct" not in events and "exec" not in events
+        # 0.55.8: 가드가 업데이트 확인보다 먼저 — 두 번째 실행은 확인·다운로드 0회, 켜진 창 앞으로 요청만
+        assert "check" not in events and "download" not in events
+        assert events.index("request_show") < events.index("close")
     elif case == "update":
         assert "construct" not in events
         assert "@status:새 버전 v0.8.0 받는 중 37%" in events
@@ -178,6 +189,7 @@ def test_real_main_startup_lifetime_and_existing_entry_policy(
         assert events.index("construct") < events.index("close")
         if case not in ("construct_failure", "start_failure"):
             assert events.index("start") < events.index("close") < events.index("show")
+            assert events.index("show") < events.index("watch") < events.index("exec")
     if case == "check_failure":
         assert (
             events.index("check") < events.index("@resume") < events.index("construct")
