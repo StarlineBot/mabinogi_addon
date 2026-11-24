@@ -20,7 +20,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 from mabinogi_addon.image_io import imread, imwrite  # noqa: E402
 
-SHEETS = ROOT / "docs/characters/assets/다래_SD"
+SHEETS = ROOT / "docs/characters/assets/다래/SD"
 OUT = ROOT / "src/mabinogi_addon/assets/characters/다래"
 STAND_H = 285
 ALPHA_MIN = 40
