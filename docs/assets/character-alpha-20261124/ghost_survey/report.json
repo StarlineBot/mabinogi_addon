@@ -1,0 +1,537 @@
+{
+ "다래": {
+  "covered": [
+   {
+    "pair": "stand_0->talk_mid_0",
+    "n": 4,
+    "iou": 0.859,
+    "ghost": 0.16
+   },
+   {
+    "pair": "stand_0->talk_smile_0",
+    "n": 1,
+    "iou": 0.817,
+    "ghost": 0.211
+   },
+   {
+    "pair": "talk_base_0->talk_mid_0",
+    "n": 6,
+    "iou": 0.893,
+    "ghost": 0.11
+   },
+   {
+    "pair": "talk_emph2_0->talk_base_0",
+    "n": 1,
+    "iou": 0.945,
+    "ghost": 0.056
+   },
+   {
+    "pair": "talk_emph2_0->talk_m2_0",
+    "n": 2,
+    "iou": 0.945,
+    "ghost": 0.056
+   },
+   {
+    "pair": "talk_emph_0->talk_emph2_0",
+    "n": 3,
+    "iou": 0.964,
+    "ghost": 0.037
+   },
+   {
+    "pair": "talk_m1_0->talk_emph_0",
+    "n": 1,
+    "iou": 0.927,
+    "ghost": 0.076
+   },
+   {
+    "pair": "talk_m2_0->talk_emph_0",
+    "n": 1,
+    "iou": 0.927,
+    "ghost": 0.076
+   },
+   {
+    "pair": "talk_mid_0->stand_0",
+    "n": 6,
+    "iou": 0.859,
+    "ghost": 0.145
+   },
+   {
+    "pair": "talk_mid_0->talk_emph_0",
+    "n": 1,
+    "iou": 0.857,
+    "ghost": 0.158
+   },
+   {
+    "pair": "talk_mid_0->talk_m1_0",
+    "n": 3,
+    "iou": 0.893,
+    "ghost": 0.116
+   },
+   {
+    "pair": "talk_smile_0->talk_base_0",
+    "n": 1,
+    "iou": 0.87,
+    "ghost": 0.143
+   },
+   {
+    "pair": "talk_think_0->talk_base_0",
+    "n": 1,
+    "iou": 0.85,
+    "ghost": 0.168
+   },
+   {
+    "pair": "walk_0->talk_think_0",
+    "n": 1,
+    "iou": 0.699,
+    "ghost": 0.341
+   }
+  ],
+  "all_pairs": 59
+ },
+ "아리아": {
+  "covered": [
+   {
+    "pair": "hair_1->talk_a_mid_0",
+    "n": 1,
+    "iou": 0.84,
+    "ghost": 0.175
+   },
+   {
+    "pair": "stand_1->talk_a_mid_0",
+    "n": 1,
+    "iou": 0.772,
+    "ghost": 0.262
+   },
+   {
+    "pair": "stand_1->talk_b_mid_0",
+    "n": 2,
+    "iou": 0.794,
+    "ghost": 0.229
+   },
+   {
+    "pair": "stand_1->talk_happy_0",
+    "n": 1,
+    "iou": 0.85,
+    "ghost": 0.167
+   },
+   {
+    "pair": "talk_a_base_0->talk_a_mid_0",
+    "n": 2,
+    "iou": 0.859,
+    "ghost": 0.157
+   },
+   {
+    "pair": "talk_a_emph2_0->talk_a_m2_0",
+    "n": 1,
+    "iou": 0.96,
+    "ghost": 0.041
+   },
+   {
+    "pair": "talk_a_emph_0->talk_a_emph2_0",
+    "n": 1,
+    "iou": 0.954,
+    "ghost": 0.047
+   },
+   {
+    "pair": "talk_a_m2_0->talk_a_emph_0",
+    "n": 1,
+    "iou": 0.948,
+    "ghost": 0.053
+   },
+   {
+    "pair": "talk_a_mid_0->stand_0",
+    "n": 2,
+    "iou": 0.774,
+    "ghost": 0.253
+   },
+   {
+    "pair": "talk_a_mid_0->talk_a_m1_0",
+    "n": 2,
+    "iou": 0.859,
+    "ghost": 0.147
+   },
+   {
+    "pair": "talk_b_base_0->talk_b_mid_0",
+    "n": 4,
+    "iou": 0.867,
+    "ghost": 0.145
+   },
+   {
+    "pair": "talk_b_emph2_0->talk_b_base_0",
+    "n": 1,
+    "iou": 0.975,
+    "ghost": 0.025
+   },
+   {
+    "pair": "talk_b_emph2_0->talk_b_m2_0",
+    "n": 2,
+    "iou": 0.975,
+    "ghost": 0.025
+   },
+   {
+    "pair": "talk_b_emph_0->talk_b_emph2_0",
+    "n": 3,
+    "iou": 0.93,
+    "ghost": 0.073
+   },
+   {
+    "pair": "talk_b_m1_0->talk_b_emph_0",
+    "n": 2,
+    "iou": 0.922,
+    "ghost": 0.08
+   },
+   {
+    "pair": "talk_b_mid_0->stand_0",
+    "n": 4,
+    "iou": 0.794,
+    "ghost": 0.232
+   },
+   {
+    "pair": "talk_b_mid_0->talk_b_emph_0",
+    "n": 1,
+    "iou": 0.858,
+    "ghost": 0.148
+   },
+   {
+    "pair": "talk_b_mid_0->talk_b_m1_0",
+    "n": 2,
+    "iou": 0.867,
+    "ghost": 0.141
+   },
+   {
+    "pair": "talk_happy_0->talk_happy_1",
+    "n": 2,
+    "iou": 0.952,
+    "ghost": 0.049
+   },
+   {
+    "pair": "talk_happy_1->talk_laugh_0",
+    "n": 2,
+    "iou": 0.824,
+    "ghost": 0.186
+   },
+   {
+    "pair": "talk_laugh_0->talk_b_base_0",
+    "n": 1,
+    "iou": 0.792,
+    "ghost": 0.228
+   },
+   {
+    "pair": "talk_laugh_0->talk_happy_0",
+    "n": 1,
+    "iou": 0.832,
+    "ghost": 0.19
+   },
+   {
+    "pair": "walk_1->talk_b_mid_0",
+    "n": 1,
+    "iou": 0.855,
+    "ghost": 0.159
+   }
+  ],
+  "all_pairs": 84
+ },
+ "이안": {
+  "covered": [
+   {
+    "pair": "stand_1->talk_mid_0",
+    "n": 4,
+    "iou": 0.943,
+    "ghost": 0.058
+   },
+   {
+    "pair": "talk_alert_5->stand_1",
+    "n": 1,
+    "iou": 0.779,
+    "ghost": 0.255
+   },
+   {
+    "pair": "talk_base_0->talk_end1_0",
+    "n": 6,
+    "iou": 0.918,
+    "ghost": 0.087
+   },
+   {
+    "pair": "talk_emph2_0->talk_base_0",
+    "n": 1,
+    "iou": 0.938,
+    "ghost": 0.063
+   },
+   {
+    "pair": "talk_emph2_0->talk_m2_0",
+    "n": 4,
+    "iou": 0.938,
+    "ghost": 0.063
+   },
+   {
+    "pair": "talk_emph_0->talk_emph2_0",
+    "n": 5,
+    "iou": 0.978,
+    "ghost": 0.022
+   },
+   {
+    "pair": "talk_end1_0->talk_end2_0",
+    "n": 6,
+    "iou": 0.978,
+    "ghost": 0.022
+   },
+   {
+    "pair": "talk_end2_0->stand_1",
+    "n": 6,
+    "iou": 0.928,
+    "ghost": 0.073
+   },
+   {
+    "pair": "talk_m1_0->talk_emph_0",
+    "n": 3,
+    "iou": 0.946,
+    "ghost": 0.056
+   },
+   {
+    "pair": "talk_m2_0->talk_emph_0",
+    "n": 1,
+    "iou": 0.946,
+    "ghost": 0.056
+   },
+   {
+    "pair": "talk_mid_0->talk_emph_0",
+    "n": 1,
+    "iou": 0.919,
+    "ghost": 0.085
+   },
+   {
+    "pair": "talk_mid_0->talk_m1_0",
+    "n": 5,
+    "iou": 0.956,
+    "ghost": 0.044
+   },
+   {
+    "pair": "walk_0->talk_alert_0",
+    "n": 1,
+    "iou": 0.703,
+    "ghost": 0.335
+   },
+   {
+    "pair": "walk_0->talk_mid_0",
+    "n": 1,
+    "iou": 0.756,
+    "ghost": 0.274
+   },
+   {
+    "pair": "walk_2->talk_mid_0",
+    "n": 1,
+    "iou": 0.734,
+    "ghost": 0.288
+   }
+  ],
+  "all_pairs": 65
+ },
+ "레나": {
+  "covered": [
+   {
+    "pair": "land_3->stand_0",
+    "n": 1,
+    "iou": 0.942,
+    "ghost": 0.059
+   },
+   {
+    "pair": "pet_5->stand_0",
+    "n": 1,
+    "iou": 0.822,
+    "ghost": 0.189
+   },
+   {
+    "pair": "stand_0->talk_emph_0",
+    "n": 1,
+    "iou": 0.929,
+    "ghost": 0.075
+   },
+   {
+    "pair": "stand_0->talk_mid_0",
+    "n": 6,
+    "iou": 0.954,
+    "ghost": 0.047
+   },
+   {
+    "pair": "talk_base_0->talk_end1_0",
+    "n": 6,
+    "iou": 0.944,
+    "ghost": 0.058
+   },
+   {
+    "pair": "talk_emph2_0->talk_base_0",
+    "n": 1,
+    "iou": 0.983,
+    "ghost": 0.017
+   },
+   {
+    "pair": "talk_emph2_0->talk_m2_0",
+    "n": 4,
+    "iou": 0.983,
+    "ghost": 0.017
+   },
+   {
+    "pair": "talk_emph_0->stand_0",
+    "n": 1,
+    "iou": 0.929,
+    "ghost": 0.072
+   },
+   {
+    "pair": "talk_emph_0->talk_emph2_0",
+    "n": 5,
+    "iou": 0.986,
+    "ghost": 0.014
+   },
+   {
+    "pair": "talk_end1_0->talk_end2_0",
+    "n": 6,
+    "iou": 0.969,
+    "ghost": 0.031
+   },
+   {
+    "pair": "talk_end2_0->stand_0",
+    "n": 6,
+    "iou": 0.929,
+    "ghost": 0.072
+   },
+   {
+    "pair": "talk_m1_0->talk_emph_0",
+    "n": 3,
+    "iou": 0.987,
+    "ghost": 0.014
+   },
+   {
+    "pair": "talk_m2_0->talk_emph_0",
+    "n": 1,
+    "iou": 0.987,
+    "ghost": 0.014
+   },
+   {
+    "pair": "talk_mid_0->talk_emph_0",
+    "n": 1,
+    "iou": 0.93,
+    "ghost": 0.074
+   },
+   {
+    "pair": "talk_mid_0->talk_m1_0",
+    "n": 5,
+    "iou": 0.931,
+    "ghost": 0.073
+   }
+  ],
+  "all_pairs": 56
+ },
+ "Starline": {
+  "covered": [
+   {
+    "pair": "flame_1->talk_mid_0",
+    "n": 1,
+    "iou": 0.849,
+    "ghost": 0.16
+   },
+   {
+    "pair": "land_2->stand_0",
+    "n": 1,
+    "iou": 0.824,
+    "ghost": 0.191
+   },
+   {
+    "pair": "pet_5->stand_0",
+    "n": 1,
+    "iou": 0.822,
+    "ghost": 0.203
+   },
+   {
+    "pair": "rise_2->stand_0",
+    "n": 1,
+    "iou": 0.811,
+    "ghost": 0.22
+   },
+   {
+    "pair": "stand_0->talk_mid_0",
+    "n": 4,
+    "iou": 0.905,
+    "ghost": 0.099
+   },
+   {
+    "pair": "stand_1->talk_emph_0",
+    "n": 1,
+    "iou": 0.835,
+    "ghost": 0.179
+   },
+   {
+    "pair": "talk_base_0->talk_end1_0",
+    "n": 6,
+    "iou": 0.938,
+    "ghost": 0.064
+   },
+   {
+    "pair": "talk_emph2_0->talk_base_0",
+    "n": 1,
+    "iou": 0.934,
+    "ghost": 0.068
+   },
+   {
+    "pair": "talk_emph2_0->talk_m2_0",
+    "n": 4,
+    "iou": 0.934,
+    "ghost": 0.068
+   },
+   {
+    "pair": "talk_emph_0->stand_0",
+    "n": 1,
+    "iou": 0.832,
+    "ghost": 0.184
+   },
+   {
+    "pair": "talk_emph_0->talk_emph2_0",
+    "n": 5,
+    "iou": 0.839,
+    "ghost": 0.175
+   },
+   {
+    "pair": "talk_end1_0->talk_end2_0",
+    "n": 6,
+    "iou": 0.972,
+    "ghost": 0.028
+   },
+   {
+    "pair": "talk_end2_0->stand_0",
+    "n": 6,
+    "iou": 0.927,
+    "ghost": 0.077
+   },
+   {
+    "pair": "talk_m1_0->talk_emph_0",
+    "n": 3,
+    "iou": 0.826,
+    "ghost": 0.192
+   },
+   {
+    "pair": "talk_m2_0->talk_emph_0",
+    "n": 1,
+    "iou": 0.826,
+    "ghost": 0.192
+   },
+   {
+    "pair": "talk_mid_0->talk_emph_0",
+    "n": 1,
+    "iou": 0.837,
+    "ghost": 0.177
+   },
+   {
+    "pair": "talk_mid_0->talk_m1_0",
+    "n": 5,
+    "iou": 0.882,
+    "ghost": 0.125
+   },
+   {
+    "pair": "walk_0->talk_mid_0",
+    "n": 1,
+    "iou": 0.769,
+    "ghost": 0.251
+   }
+  ],
+  "all_pairs": 64
+ }
+}
