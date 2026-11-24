@@ -5,8 +5,9 @@
 - 모든 시트: 가장자리와 이어진 알파 40 이하(옅은 막 — 끌기 시트에 깔려 있음)를 먼저 지운다(다른 시트에는 무해).
 - 크기: 시트마다 서 있는 프레임 키 = 285. 착지는 일어나기 시트의 서 있는 프레임 배율, 끌기는 서 있기 시트 배율,
   앉아 있기는 웅크리기 끝 프레임 높이에 맞춤, 일어나기(쪼그려 앉아 일어나는 3컷)는 쪼그림 높이→서 있는 키로 점점.
-- 걷기('파스텔 치비 소녀 걷기')는 정수리 머리색이 서 있기보다 노래서 보정: 서 있기 프레임 위 18%의 알파>220 픽셀 Lab
-  중앙값과의 차이(L은 절반)를 HSV H 5~25·S 30~150·V>150 픽셀(1.5px 흐린 마스크)에만 더한다.
+- 시트 색 맞추기(사용자 11-24 '걸을 때 톤이 다르고 말할 때·클릭할 때 머리색이 다름'): 마지막에 공통 단계
+  (scripts/sheet_colors, 부위 scripts/color_parts '아리아')로 머리·피부를 서 있기 색에 따로 맞춤 — 예전 걷기 머리 보정
+  (match_hair, 피부까지 바꿈)은 쓰지 않음. 입만 합성(m1·m2)은 base의 차이를 그대로.
 - 결과: src/mabinogi_addon/assets/characters/아리아/<동작>_<번호>.png + card.png(상반신).
 """
 from __future__ import annotations
@@ -38,30 +39,6 @@ def sheet(name: str) -> list[np.ndarray]:
     return split(clean(imread(SHEETS / name, cv2.IMREAD_UNCHANGED)))
 
 
-def _top_lab(frame: np.ndarray) -> np.ndarray:
-    """프레임 위 18%의 알파>220 픽셀 Lab 중앙값(정수리 머리색)."""
-    top = frame[: max(1, int(frame.shape[0] * 0.18))]
-    solid = top[..., 3] > 220
-    lab = cv2.cvtColor(np.ascontiguousarray(top[..., :3]), cv2.COLOR_BGR2LAB).reshape(-1, 3)[solid.reshape(-1)]
-    return np.median(lab.astype(np.float32), axis=0)
-
-
-def match_hair(frame: np.ndarray, target_lab: np.ndarray) -> np.ndarray:
-    """머리색(노랑~살구, 중간 채도, 밝음) 픽셀에만 서 있기와의 Lab 차이를 더한다(L은 절반, 경계 1.5px 흐림)."""
-    diff = target_lab - _top_lab(frame)
-    diff[0] *= 0.5
-    bgr = np.ascontiguousarray(frame[..., :3])
-    hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
-    h, s, v = hsv[..., 0], hsv[..., 1], hsv[..., 2]
-    mask = ((h >= 5) & (h <= 25) & (s >= 30) & (s <= 150) & (v > 150) & (frame[..., 3] > 0)).astype(np.float32)
-    mask = cv2.GaussianBlur(mask, (0, 0), 1.5)[..., None]
-    lab = cv2.cvtColor(bgr, cv2.COLOR_BGR2LAB).astype(np.float32)
-    lab = np.clip(lab + mask * diff, 0, 255).astype(np.uint8)
-    out = frame.copy()
-    out[..., :3] = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
-    return out
-
-
 def build() -> dict[str, list[np.ndarray]]:
     by_height = lambda frames, h: STAND_H * h / np.median([f.shape[0] for f in frames])  # noqa: E731
     out: dict[str, list[np.ndarray]] = {}
@@ -74,9 +51,8 @@ def build() -> dict[str, list[np.ndarray]]:
     by_head = lambda frame: head / head_width(frame)  # noqa: E731
     # 여러 장 시트는 머리 폭 중앙값으로(장식 표시 '!'·땀이 머리 옆에 붙은 장 하나에 끌려가지 않게)
     by_heads = lambda frames: head / float(np.median([head_width(f) for f in frames]))  # noqa: E731
-    target = _top_lab(out["stand"][0])
     walk = sheet("파스텔 치비 소녀 걷기 스프라이트.png")
-    out["walk"] = [match_hair(scaled(f, by_head(walk[0])), target) for f in walk]
+    out["walk"] = [scaled(f, by_head(walk[0])) for f in walk]  # 머리·피부는 마지막 색 맞추기에서(예전 머리 보정은 피부까지 바꿈)
     surprise = sheet("투명 배경 치비 캐릭터 4컷 스프라이트.png")
     out["surprise"] = [scaled(f, by_heads(surprise)) for f in surprise]
     drag = sheet("떨어지는 치비 소녀 애니메이션 프레임.png")
@@ -106,7 +82,10 @@ def build() -> dict[str, list[np.ndarray]]:
     out.update(talk_frames("아리아", head))
     happy = sheet("말하는 귀여운 두 꼬마 요정.png")
     out["talk_happy"] = [scaled(f, by_heads(happy)) for f in happy]
-    return out
+    from scripts.color_parts import PARTS
+    from scripts.sheet_colors import harmonize
+    groups = {(f"talk_{v}_{k}", 0): (f"talk_{v}_base", 0) for v in "ab" for k in ("m1", "m2")}
+    return harmonize(out, out["stand"][0], PARTS["아리아"], groups)
 
 
 EXPECTED = {"stand": 2, "walk": 6, "surprise": 4, "drag": 2, "land": 3, "getup": 3, "pet": 6, "crouch": 3, "sit": 4,

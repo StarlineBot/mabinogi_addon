@@ -133,7 +133,11 @@ def build() -> dict[str, list[np.ndarray]]:
     out.update(talk_frames("다래"))
     wake = sheet("잠에서 깨어나는 꼬마 천사 악마_sprite.sheet.png")
     out["wake"] = [scaled(f, crouch_w / wake[0].shape[1]) for f in wake]
-    return out
+    # 시트 색 맞추기(사용자 11-24): 크림 머리·얼굴을 서 있기 색에(scripts/sheet_colors), 입만 합성은 base 차이 그대로
+    from scripts.color_parts import PARTS
+    from scripts.sheet_colors import harmonize
+    groups = {("talk_m1", 0): ("talk_base", 0), ("talk_m2", 0): ("talk_base", 0)}
+    return harmonize(out, out["stand"][0], PARTS["다래"], groups)
 
 
 EXPECTED = {"stand": 1, "walk": 6, "surprise": 2, "pet": 6, "drag": 4, "land": 3, "getup": 3, "crouch": 3,

@@ -1396,23 +1396,53 @@ def test_lena_lines_situations_stage_lines_and_voices():
     assert voices["대사/구간_100.mp3"] == ("stage_up", "…이 초커, 너 가져. 잃어버리면 화낼 거야.")
 
 
-def test_lena_pet_hair_color_matches_standing_and_leaves_dress_and_eyes():
-    """쓰다듬기 머리색(사용자 11-24 '쓰다듬을 때 머리색이 달라짐'): 빌드에서 머리만 서 있기 색으로 — 결과 ΔE<4, 드레스·눈 그대로."""
+@pytest.mark.parametrize("folder", ["다래", "아리아", "레나"])
+def test_sheet_colors_match_standing_hair_and_skin(folder):
+    """시트 색 맞추기(사용자 11-24 '동작마다 머리색·피부 톤이 다름'): 모든 그림의 머리·피부가 서 있기 대비 ΔE<3."""
+    import cv2
+    from scripts.color_parts import PARTS, STAND
+    from scripts.sheet_colors import report
+
+    d = ASSETS / folder
+    frames = {p.stem: _img_of(p) for p in d.glob("*.png") if p.stem != "card"}
+    rows = report(frames, frames[STAND[folder]], PARTS[folder])
+    bad = {name: row for name, row in rows.items() if any(v is not None and v >= 3 for v in row)}
+    assert not bad
+    assert sum(row[0] is not None for row in rows.values()) >= len(rows) * 0.9  # 머리는 거의 모든 그림에서 잼
+    del cv2
+
+
+@pytest.mark.parametrize("folder,sheet_path", [
+    ("아리아", "아리아/SD/파스텔 치비 소녀 걷기 스프라이트.png"),
+    ("아리아", "아리아/SD/투명 배경 치비 캐릭터 4컷 스프라이트.png"),
+    ("레나", "레나/SD/레나_쓰다듬기.png"),
+    ("다래", "다래/SD/부끄러운 치비 천사 악마 스티커 세트.png"),
+])
+def test_sheet_colors_touch_only_hair_and_skin(folder, sheet_path):
+    """바뀌는 픽셀은 머리·피부 마스크(+흐림 둘레 5px) 안뿐 — 옷(검정·크림 드레스·리본·장화)·눈은 그대로."""
     import cv2
     import numpy as np
-    from scripts.build_lena_frames import _hair_mask, hair_lab, match_hair, sheet
+    from scripts.build_aria_frames import clean
+    from scripts.build_dare_frames import ROOT, imread, split
+    from scripts.color_parts import PARTS, STAND
+    from scripts.sheet_colors import apply, colors, diffs, masks
 
-    stand = hair_lab(_img("stand_0"))
-    for i in range(6):
-        lab = hair_lab(_img(f"pet_{i}"))
-        delta = (lab - stand) * np.array([100 / 255, 1, 1])  # OpenCV 8비트 Lab → L 0~100
-        assert np.linalg.norm(delta) < 4, (i, lab, stand)
-    raw = sheet("레나_쓰다듬기")[2]
-    fixed = match_hair(raw, hair_lab(sheet("레나_일어나기")[2]))
-    hsv = cv2.cvtColor(np.ascontiguousarray(raw[..., :3]), cv2.COLOR_BGR2HSV)
-    near_hair = cv2.dilate(_hair_mask(raw).astype(np.uint8), np.ones((9, 9), np.uint8)) > 0
-    dark = (hsv[..., 2] < 60) & (raw[..., 3] > 0) & ~near_hair            # 검은 드레스
-    red = ((hsv[..., 0] < 10) | (hsv[..., 0] > 170)) & (hsv[..., 1] > 80) & ~near_hair  # 붉은 눈
-    assert dark.sum() > 200 and red.sum() > 20
-    assert np.array_equal(fixed[dark], raw[dark]) and np.array_equal(fixed[red], raw[red])
-    assert not np.array_equal(fixed[_hair_mask(raw)], raw[_hair_mask(raw)])  # 머리는 바뀜
+    parts = PARTS[folder]
+    targets = colors(_img_of(ASSETS / folder / f"{STAND[folder]}.png"), parts)
+    for raw in split(clean(imread(ROOT / "docs/characters/assets" / sheet_path, cv2.IMREAD_UNCHANGED)))[:3]:
+        fixed = apply(raw, parts, diffs(raw, parts, targets))
+        changed = (fixed != raw).any(-1)
+        union = np.zeros(raw.shape[:2], np.uint8)
+        for m in masks(raw, parts):
+            union |= m.astype(np.uint8)
+        near = cv2.dilate(union, np.ones((11, 11), np.uint8)) > 0  # 흐림(σ1.2)이 닿는 둘레
+        assert not (changed & ~near).any()
+        hsv = cv2.cvtColor(np.ascontiguousarray(raw[..., :3]), cv2.COLOR_BGR2HSV)
+        dark = (hsv[..., 2] < 60) & (raw[..., 3] > 0)   # 검은 옷·눈동자·외곽선
+        assert not (changed & dark).any()
+
+
+def _img_of(path):
+    import cv2
+    from mabinogi_addon.image_io import imread
+    return imread(path, cv2.IMREAD_UNCHANGED)
