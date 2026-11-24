@@ -5,6 +5,7 @@
 - 펫 사건: 말풍선(상황별 무작위·같은 줄 연속 금지), 클릭 반복 −1 + 짜증, 쓰다듬기 끝까지 +2(다 채운 뒤 또 → −1),
   구석에서 함께 30분 +1(하루 4번), 끌어서 정한 구석 저장.
 - 펫 창은 '화면에 캐릭터 띄우기'가 켜져 있고 고른 캐릭터에 SD 그림이 있을 때만(알파는 다래만) 뜬다.
+- 알파는 제작자 전용(사용자 결정 11-24): set_enabled(False)면 펫·호감도·인사 모두 하지 않는다(알림 소리도 무시).
 """
 from __future__ import annotations
 
@@ -54,6 +55,8 @@ class CharacterController(QObject):
         self._watcher = watcher
         self._clock = clock
         self.window = None
+        self.enabled = False
+        self._started = False
         self._lines: dict[str, Picker] = {}
         self._feeds: dict = {}
         self.character = roster.by_pack(config.load_voice_pack())
@@ -62,7 +65,20 @@ class CharacterController(QObject):
         on_play(self._on_sound)
 
     # ---- 시작·바뀜 ---------------------------------------------------------------------------
+    def set_enabled(self, on: bool) -> None:
+        """제작자 권한이 바뀜(로그인·로그아웃). 꺼지면 펫을 닫는다."""
+        self.enabled = bool(on)
+        if self._started or not self.enabled:
+            self.sync_window()
+
+    def reload_affinity(self) -> None:
+        """제작자가 캐릭터 탭에서 호감도를 바꿈 → 저장 값으로 다시 읽는다."""
+        self.affinity = self._load_affinity()
+
     def start(self, now: datetime.datetime | None = None) -> None:
+        self._started = True
+        if not self.enabled:
+            return
         now = now or datetime.datetime.now()
         last = config.load_pet_last_seen()
         hello = greeting(last, now)
@@ -80,7 +96,8 @@ class CharacterController(QObject):
 
     def sync_window(self) -> None:
         """펫 창을 켜야 하면 만들고, 아니면 닫는다."""
-        want = config.load_pet_on() and self.character is not None and self.character.has_pet
+        want = (self.enabled and config.load_pet_on() and self.character is not None
+                and self.character.has_pet)
         if want and self.window is None:
             self.window = self._make_window()
             if self.window is not None:
@@ -181,7 +198,7 @@ class CharacterController(QObject):
 
     def _on_sound(self, _buff_id: str, path) -> None:
         """알림 소리 → 그 캐릭터 목소리면 호감도 +1·알아챔·말풍선."""
-        if self.character is None or self.affinity is None:
+        if not self.enabled or self.character is None or self.affinity is None:
             return
         try:
             pack = path.parent.name

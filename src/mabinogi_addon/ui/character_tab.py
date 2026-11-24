@@ -4,16 +4,19 @@
 - 상반신 카드 한 줄 3개(탭 스크롤로 위아래). 이름은 캐릭터 색 + 흰 테두리, 미정 캐릭터는 실루엣을 테마 회색으로 칠하고 `???`.
 - 카드를 누르면 그 목소리가 나오고 바로 선택(알림 목소리 팩 저장), 고른 카드는 둘레 강조.
 - 카드 아래 ♥ 호감도 바만(0~100).
+- 알파는 제작자 전용(11-24): 카드 아래 호감도 숫자 칸(0~100) + 구간 버튼(0/25/50/75/100)으로 바로 바꿈
+  (하루 상한과 무관, 구간별 대사·반응 확인용).
 """
 from __future__ import annotations
 
 from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QPainter, QPainterPath, QPalette, QPen, QPixmap
-from PySide6.QtWidgets import QGridLayout, QHBoxLayout, QSizePolicy, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (QGridLayout, QHBoxLayout, QPushButton, QSizePolicy, QSpinBox, QVBoxLayout,
+                               QWidget)
 
 from .. import config, paths
 from ..character import roster
-from ..character.affinity import MAX_VALUE, Affinity
+from ..character.affinity import MAX_VALUE, STAGES, Affinity
 from .palette import color
 from .widgets import FeatureHeader, hint_label, switch
 
@@ -145,10 +148,45 @@ def _dark() -> bool:
         return True
 
 
+class AffinityEditor(QWidget):
+    """제작자용 호감도 바로 바꾸기 — 숫자 칸 + 구간 버튼. 바꾸면 edited(캐릭터 키, 값)."""
+    edited = Signal(str, int)
+
+    def __init__(self, key: str, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.key = key
+        self.setFixedWidth(CARD_W)
+        row = QHBoxLayout(self)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(3)
+        self.spin = QSpinBox()
+        self.spin.setRange(0, MAX_VALUE)
+        self.spin.setToolTip("호감도(제작자 확인용 — 하루 상한과 무관하게 바로 저장)")
+        self.spin.setKeyboardTracking(False)
+        self.spin.setFixedWidth(54)
+        self.spin.valueChanged.connect(lambda v: self.edited.emit(self.key, int(v)))
+        row.addWidget(self.spin)
+        self.buttons = []
+        for stage in STAGES:
+            button = QPushButton(str(stage))
+            button.setFixedWidth(31)
+            button.setToolTip(f"호감도 {stage}으로")
+            button.clicked.connect(lambda _c=False, v=stage: self.spin.setValue(v))
+            row.addWidget(button)
+            self.buttons.append(button)
+        row.addStretch(1)
+
+    def show_value(self, value: int) -> None:
+        self.spin.blockSignals(True)
+        self.spin.setValue(int(value))
+        self.spin.blockSignals(False)
+
+
 class CharacterTab(QWidget):
-    """캐릭터 고르기 + 화면에 띄우기 스위치."""
+    """캐릭터 고르기 + 화면에 띄우기 스위치 + (제작자) 호감도 바로 바꾸기."""
     voice_pack_changed = Signal()
     pet_toggled = Signal(bool)
+    affinity_edited = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -168,11 +206,19 @@ class CharacterTab(QWidget):
         grid.setHorizontalSpacing(16)
         grid.setVerticalSpacing(14)
         self.cards: list[CharacterCard] = []
+        self.editors: list[AffinityEditor] = []
         for i, character in enumerate(roster.ROSTER):
+            cell = QVBoxLayout()
+            cell.setSpacing(4)
             card = CharacterCard(character)
             card.clicked.connect(self.choose)
-            grid.addWidget(card, i // COLUMNS, i % COLUMNS, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+            editor = AffinityEditor(character.key)
+            editor.edited.connect(self.set_affinity)
+            cell.addWidget(card)
+            cell.addWidget(editor)
+            grid.addLayout(cell, i // COLUMNS, i % COLUMNS, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
             self.cards.append(card)
+            self.editors.append(editor)
         grid.setColumnStretch(COLUMNS, 1)
         v.addLayout(grid)
         v.addStretch(1)
@@ -183,9 +229,11 @@ class CharacterTab(QWidget):
         """고른 캐릭터 강조·호감도 바·안내 글을 저장 값으로 다시 맞춘다."""
         pack = config.load_voice_pack()
         rules = None
-        for card in self.cards:
+        for card, editor in zip(self.cards, self.editors):
             card.set_selected(card.character.pack == pack)
-            card.set_affinity(Affinity.load(config.load_affinity(card.character.key), rules).value)
+            value = Affinity.load(config.load_affinity(card.character.key), rules).value
+            card.set_affinity(value)
+            editor.show_value(value)
         chosen = roster.by_pack(pack)
         if chosen is None:
             text = "카드를 누르면 그 캐릭터 목소리로 알림을 말해 줘요. 지금은 기본 녹음 목소리예요."
@@ -194,6 +242,14 @@ class CharacterTab(QWidget):
         else:
             text = "게임 중엔 구석에서 조용히 기다리고, 게임 밖에선 화면 아래를 돌아다녀요. 끌어서 옮길 수 있어요."
         self.pet_hint.setText(text)
+
+    def set_affinity(self, key: str, value: int) -> None:
+        """제작자가 호감도를 바로 바꿈 → 값만 저장(오늘 횟수·오른 양은 그대로)."""
+        affinity = Affinity.load(config.load_affinity(key))
+        affinity.value = max(0, min(MAX_VALUE, int(value)))
+        config.save_character(affinity=(key, affinity.to_dict()))
+        self.refresh()
+        self.affinity_edited.emit()
 
     def choose(self, character: roster.Character) -> None:
         """카드 누름 → 그 목소리 미리듣기 + 바로 선택(알림 목소리 팩 저장)."""

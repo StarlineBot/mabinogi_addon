@@ -353,14 +353,20 @@ class MainWindow(QMainWindow):
         self._account.logged_out.connect(lambda: self.settings_tab.login_changed.emit())
         self.settings_tab.attach_account(self._account)
         QTimer.singleShot(5000, self._account.start)  # 트레이로 시작해 창이 안 떠도(첫 표시 때 이미 시작했으면 아무것도 안 함)
-        # 캐릭터(docs/character-pet-spec.md): 설정의 '알림 목소리 고르기'를 옮겨 온 탭 + 화면 펫
+        self.settings_tab.voice_pack_changed.connect(self._on_voice_pack_changed)
+        # 캐릭터(docs/character-pet-spec.md): 알림 목소리 고르기를 옮겨 온 탭 + 화면 펫. 알파는 제작자 전용(11-24) —
+        # 비제작자는 탭 없음·펫 없음·설정의 목소리 고르기 그대로(_refresh_character_access)
         from .character_controller import CharacterController
         from .character_tab import CharacterTab
         self.character_tab = CharacterTab()
         self.character_tools = CharacterController(self._watcher, self)
         self.character_tab.voice_pack_changed.connect(self._on_voice_pack_changed)
         self.character_tab.voice_pack_changed.connect(self.character_tools.voice_changed)
+        self.character_tab.voice_pack_changed.connect(self.settings_tab.sync_voice_choice)
+        self.settings_tab.voice_pack_changed.connect(self.character_tools.voice_changed)
+        self.settings_tab.voice_pack_changed.connect(self.character_tab.refresh)
         self.character_tab.pet_toggled.connect(lambda _on: self.character_tools.sync_window())
+        self.character_tab.affinity_edited.connect(self.character_tools.reload_affinity)
         self.character_tools.affinity_changed.connect(self.character_tab.refresh)
         self.settings_tab.replay_tour.connect(self._replay_tour)
         self.settings_tab.theme_changed.connect(self._apply_tab_styles)
@@ -450,9 +456,9 @@ class MainWindow(QMainWindow):
         self._party_scroll = _scrolled(self.party_tab)  # 토스트 클릭 시 이 탭으로 전환
         tabs.addTab(self._party_scroll, "파티 모집")
         tabs.addTab(self._convenience_tabs, "편의기능")
-        # 탭 순서 … · 최적화 · 블랙박스 · 캐릭터 · 설정(명세 3절 1번) — 최적화·블랙박스는 _tail_anchor() 앞에 끼운다
+        # 탭 순서 … · 최적화 · 블랙박스 · 캐릭터 · 설정(명세 3절 1번) — 최적화·블랙박스는 _tail_anchor() 앞에 끼운다.
+        # 캐릭터 탭은 제작자일 때만 설정 바로 앞에(_refresh_character_access)
         self._character_scroll = _scrolled(self.character_tab)
-        tabs.addTab(self._character_scroll, "캐릭터")
         self._settings_scroll = _scrolled(self.settings_tab)
         tabs.addTab(self._settings_scroll, "설정")
         self.optimization_tools.refresh_access()
@@ -464,6 +470,8 @@ class MainWindow(QMainWindow):
         from .blackbox_controller import BlackboxController
         self.blackbox_tools = BlackboxController(self)
         self.settings_tab.login_changed.connect(self.blackbox_tools.refresh_access)
+        self.settings_tab.login_changed.connect(self._refresh_character_access)
+        self._refresh_character_access()
         self._apply_tab_styles()  # 테마에 맞는 탭 색 적용(테마 변경 시 재적용)
 
         # 중앙: 상단 업데이트 배너(기본 숨김) + 탭
@@ -2030,6 +2038,24 @@ class MainWindow(QMainWindow):
 
     def _save_debuff_overlay_state(self) -> None:
         self._save_overlay(self.debuff_overlay, "debuffTracker")
+
+    def _refresh_character_access(self) -> None:
+        """캐릭터 알파는 제작자 전용(11-24): 제작자면 캐릭터 탭(설정 바로 앞)·펫, 아니면 탭 없음·설정의 목소리 고르기."""
+        from ..feature_access import is_creator
+        try:
+            allowed = bool(is_creator())
+        except Exception:  # noqa: BLE001 — 판정 실패는 비제작자로
+            allowed = False
+        tabs = self._tabs
+        index = tabs.indexOf(self._character_scroll)
+        if allowed and index < 0:
+            tabs.insertTab(tabs.indexOf(self._settings_scroll), self._character_scroll, "캐릭터")
+        elif not allowed and index >= 0:
+            if tabs.currentWidget() is self._character_scroll:
+                tabs.setCurrentWidget(self._settings_scroll)
+            tabs.removeTab(index)
+        self.settings_tab.set_voice_visible(not allowed)
+        self.character_tools.set_enabled(allowed)
 
     def _tail_anchor(self):
         """최적화·블랙박스 탭을 끼울 자리(그 앞에) — 캐릭터 탭(없으면 설정)."""

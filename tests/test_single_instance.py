@@ -163,7 +163,7 @@ def test_just_updated_is_read_from_leftover_old_exe(monkeypatch, tmp_path):
 
 
 def test_release_from_worker_thread_detaches_on_main_thread():
-    """0.56.0(QA 11-24): 앱 안 업데이트 작업 스레드가 자리를 비워도 실제 비우기는 메인 스레드에서(타이머와 겹치지 않게)."""
+    """0.55.9(QA 11-24): 앱 안 업데이트 작업 스레드가 자리를 비워도 실제 비우기는 메인 스레드에서(타이머와 겹치지 않게)."""
     import threading
     import time as _time
 

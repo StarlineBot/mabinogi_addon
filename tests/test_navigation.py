@@ -40,7 +40,7 @@ def window(monkeypatch):
 def test_structure_and_default_editor_space(window):
     w, app = window
     # 0.16.0: 로그인 사용자(픽스처)는 블랙박스 탭, 0.22.0(13.15): 최적화 탭도 공개. 0.22.1: 순서 최적화 · 블랙박스(사용자 결정)
-    assert [w._tabs.tabText(i) for i in range(w._tabs.count())] == ['전투 보조','파티 모집','편의기능','최적화','블랙박스','캐릭터','설정']
+    assert [w._tabs.tabText(i) for i in range(w._tabs.count())] == ['전투 보조','파티 모집','편의기능','최적화','블랙박스','설정']
     assert [w._tracker_tabs.tabText(i) for i in range(w._tracker_tabs.count())] == LABELS
     # 0.37.0 명세 변경(사용자 결정 안 A): 편의기능 2단 한 줄(탭 이름 = 화면 제목), 마우스 커서는 최적화 2단 세 번째
     assert [w._convenience_tabs.tabText(i) for i in range(w._convenience_tabs.count())] == ['계산기','그림대화 만들기','알람']
@@ -225,3 +225,21 @@ def test_embedded_dorcha_preview_clears_background_but_game_overlay_stays_transp
     finally:
         overlay.close()
         overlay.deleteLater()
+
+
+def test_character_tab_is_creator_only_and_sits_right_before_settings(window, monkeypatch):
+    """캐릭터 알파는 제작자 전용(11-24): 제작자 = … · 최적화 · 블랙박스 · 캐릭터 · 설정, 설정의 목소리 고르기는 숨김."""
+    from mabinogi_addon import feature_access
+
+    w, app = window
+    assert '캐릭터' not in [w._tabs.tabText(i) for i in range(w._tabs.count())]
+    assert w.settings_tab._voice_box.isVisibleTo(w.settings_tab) and not w.character_tools.enabled
+    monkeypatch.setattr(feature_access, 'is_creator', lambda: True)
+    w.settings_tab.login_changed.emit()
+    assert [w._tabs.tabText(i) for i in range(w._tabs.count())] == ['전투 보조','파티 모집','편의기능','최적화','블랙박스','캐릭터','설정']
+    assert not w.settings_tab._voice_box.isVisibleTo(w.settings_tab) and w.character_tools.enabled
+    w._tabs.setCurrentWidget(w._character_scroll)
+    monkeypatch.setattr(feature_access, 'is_creator', lambda: False)
+    w.settings_tab.login_changed.emit()
+    assert '캐릭터' not in [w._tabs.tabText(i) for i in range(w._tabs.count())]
+    assert w._tabs.currentWidget() is w._settings_scroll and not w.character_tools.enabled

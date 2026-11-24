@@ -36,6 +36,8 @@ def main():
         stack.enter_context(patch.object(config, 'load_discord_user', lambda *a, **k: {'id': 'preview', 'name': '미리보기'}))
         stack.enter_context(patch.object(config, 'get_nexon_api_key', lambda: None))
         stack.enter_context(patch.object(module, 'is_creator', lambda: True))
+        from mabinogi_addon import feature_access
+        stack.enter_context(patch.object(feature_access, 'is_creator', lambda: True))  # 캐릭터 알파는 제작자 전용
         stack.enter_context(patch.object(QApplication, 'quit', lambda: None))
         stack.enter_context(patch.object(QMessageBox, 'question', lambda *a, **k: QMessageBox.StandardButton.No))
         screen = type(app.primaryScreen())

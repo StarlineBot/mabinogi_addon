@@ -285,8 +285,11 @@ def test_sound_listener_raises_affinity_and_notices_only_for_chosen_voice(app, c
 
     config.save_voice_pack("조용한 여성")
     ctrl = cc.CharacterController()
+    sounds = paths.resource_dir() / "sounds"
+    notifier._announce("vivace", sounds / "조용한 여성" / "비바체 연장.mp3")
+    assert ctrl.affinity.value == 0  # 제작자 아님(알파는 제작자 전용) — 아무것도 안 함
+    ctrl.set_enabled(True)
     try:
-        sounds = paths.resource_dir() / "sounds"
         notifier._announce("vivace", sounds / "조용한 여성" / "비바체 연장.mp3")
         notifier._announce("vivace", sounds / "비바체 연장.mp3")  # 기본 녹음 — 다른 목소리
         notifier._announce("preview", sounds / "조용한 여성" / "투아림 부스트 발동 직전.mp3")  # 미리듣기
@@ -305,6 +308,9 @@ def test_launch_bonus_once_a_day_and_greeting(app, cfg):
     ctrl = cc.CharacterController()
     try:
         now = datetime.datetime(2026, 11, 24, 13, 0)
+        ctrl.start(now)
+        assert ctrl.affinity.value == 0  # 비제작자: 켜기 보너스·인사 없음
+        ctrl.set_enabled(True)
         ctrl.start(now)
         ctrl.start(now)
         assert ctrl.affinity.value == 3 and config.load_pet_last_seen() == "2026-11-24"
@@ -344,9 +350,36 @@ def test_tab_min_width_is_96_for_seven_tabs():
     assert "min-width: 96px" in main_window._tab_qss(True) and "104px" not in main_window._tab_qss(False)
 
 
-def test_settings_tab_no_longer_has_voice_choice():
-    source = (Path(__file__).resolve().parents[1] / "src/mabinogi_addon/ui/settings_tab.py").read_text(encoding="utf-8")
-    assert "list_voice_packs" not in source and "알림 음량" in source
+def test_creator_sets_affinity_directly_with_number_and_stage_buttons(app, cfg, monkeypatch):
+    from mabinogi_addon.ui import character_tab as ct
+
+    config.save_character(affinity=("조용한 여성", {"value": 3, "day": DAY, "gained": 3, "counts": {"launch": 1}}))
+    tab = ct.CharacterTab()
+    edited = []
+    tab.affinity_edited.connect(lambda: edited.append(1))
+    editor = tab.editors[0]
+    assert editor.spin.value() == 3 and [b.text() for b in editor.buttons] == ["0", "25", "50", "75", "100"]
+    editor.buttons[3].click()
+    saved = config.load_affinity("조용한 여성")
+    assert saved["value"] == 75 and saved["gained"] == 3 and saved["counts"] == {"launch": 1}  # 하루 상한과 무관
+    assert tab.cards[0]._affinity == 75 and edited == [1]
+    editor.spin.setValue(42)
+    assert config.load_affinity("조용한 여성")["value"] == 42
+    tab.editors[4].buttons[4].click()
+    assert config.load_affinity("차분한 남성")["value"] == 100
+
+
+def test_settings_voice_choice_hides_for_creator_and_follows_character_tab(app, cfg):
+    from mabinogi_addon.ui.settings_tab import SettingsTab
+
+    tab = SettingsTab(None)
+    tab.set_voice_visible(False)
+    assert not tab._voice_box.isVisibleTo(tab)
+    config.save_voice_pack("조용한 여성")
+    tab.sync_voice_choice()
+    assert tab._voice_pack.currentData() == "조용한 여성"
+    tab.set_voice_visible(True)
+    assert tab._voice_box.isVisibleTo(tab)
 
 
 def test_frame_sizes_match_standing_height():

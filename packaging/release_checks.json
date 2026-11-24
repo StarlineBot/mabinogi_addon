@@ -1,5 +1,5 @@
 {
-  "version": "0.56.0",
+  "version": "0.55.9",
   "tests": [
     "tests/test_character.py",
     "tests/test_navigation.py",
@@ -31,7 +31,7 @@
         "tests/test_navigation.py",
         "tests/test_tour_layout.py"
       ],
-      "reason": "새 캐릭터 탭 — 카드 5장·고르면 목소리 저장·펫 스위치·호감도 바, 탭 7개 순서"
+      "reason": "새 캐릭터 탭(제작자 전용) — 카드 5장·고르면 목소리 저장·펫 스위치·호감도 바·제작자 호감도 바로 바꾸기, 탭 7개 순서"
     },
     "src/mabinogi_addon/ui/pet_window.py": {
       "tests": [
@@ -85,7 +85,7 @@
         "tests/test_character.py",
         "tests/test_close_overlap.py"
       ],
-      "reason": "캐릭터 탭 끼우기(블랙박스 뒤·설정 앞), 탭 최소 폭 96, 종료 정리"
+      "reason": "캐릭터 탭(제작자 전용, 블랙박스 뒤·설정 앞)·로그인 바뀔 때 다시 판정, 탭 최소 폭 96, 종료 정리"
     },
     "src/mabinogi_addon/ui/optimization_controller.py": {
       "tests": [
@@ -107,7 +107,7 @@
         "tests/test_character.py",
         "tests/test_alert_volume.py"
       ],
-      "reason": "알림 목소리 고르기 제거(캐릭터 탭으로) — 알림 음량만"
+      "reason": "알림 목소리 줄: 제작자면 숨김(캐릭터 탭에서 고름)·캐릭터 탭 선택과 맞춤, 비제작자 그대로"
     },
     "src/mabinogi_addon/ui/notifier.py": {
       "tests": [
@@ -146,7 +146,7 @@
         "tests/test_release_candidate.py",
         "tests/test_windows_ci.py"
       ],
-      "reason": "0.56.0 검사 목록·후보 봉인·CI 계약"
+      "reason": "0.55.9 검사 목록·후보 봉인·CI 계약"
     },
     "packaging/build_windows.py": {
       "tests": [
@@ -161,7 +161,7 @@
         "tests/test_release_notes.py",
         "tests/test_release_notes_trigger.py"
       ],
-      "reason": "0.56.0 노트 맨 위(헤드라인 캐릭터·주의 한 줄), v0.55.8 이하 그대로"
+      "reason": "0.55.9 노트 맨 위(조용히 다듬은 것 한 줄 — 제작자 전용 알파라 일반 사용자엔 안 알림), v0.55.8 이하 그대로"
     }
   }
 }

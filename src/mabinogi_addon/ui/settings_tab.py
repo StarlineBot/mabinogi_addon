@@ -196,6 +196,7 @@ class SettingsTab(QWidget):
     # 적용 뒤 앱 다시 켜기 요청(제목, 적용 문구) — 메인이 정상 종료 경로로 정리한 뒤 자기 자신을 다시 실행(0.46.0).
     restart_requested = Signal(str, str)
     # 알림 목소리 팩 변경 → 메인이 실행 중 재생기들을 새 팩으로 갱신(바로 적용).
+    voice_pack_changed = Signal()
     # '앱 둘러보기 다시 열기' → 메인이 온보딩 투어를 다시 실행.
     replay_tour = Signal()
     reopen_setup = Signal()
@@ -1033,7 +1034,32 @@ class SettingsTab(QWidget):
             hint_label("파티 모집 등 토스트 알림이 뜰 화면 모서리. (기본 우측 하단)")
         )
 
-        # 알림 목소리 고르기는 캐릭터 탭으로 옮겼다(캐릭터 명세 3절 1번) — 설정엔 알림 음량만
+        from .notifier import list_voice_packs
+
+        # 알림 목소리 고르기 — 제작자는 캐릭터 탭에서 고른다(캐릭터 알파는 제작자 전용, 11-24). 제작자면 이 줄을 숨김(set_voice_visible)
+        self._voice_box = QWidget()
+        voice_v = QVBoxLayout(self._voice_box)
+        voice_v.setContentsMargins(0, 0, 0, 0)
+        voice_row = QHBoxLayout()
+        voice_row.addWidget(QLabel("알림 목소리"))
+        self._voice_pack = QComboBox()
+        self._voice_pack.addItem("기본(녹음)", "")  # flat 녹음본
+        for pack in list_voice_packs():
+            self._voice_pack.addItem(pack, pack)
+        cur_pack = config.load_voice_pack()
+        vi = self._voice_pack.findData(cur_pack)
+        self._voice_pack.setCurrentIndex(max(vi, 0))
+        self._voice_pack.currentIndexChanged.connect(self._on_voice_pack_changed)
+        voice_row.addWidget(self._voice_pack)
+        voice_row.addStretch(1)
+        voice_v.addLayout(voice_row)
+        voice_v.addWidget(
+            hint_label(
+                "버프·투아림 알림에 사용할 목소리를 골라주세요. 선택하면 미리듣기가 재생되고 바로 적용돼요."
+            )
+        )
+        v.addWidget(self._voice_box)
+
         # 0.38.0: 전체 알림 음량 — 앱의 모든 알림 소리를 한 번에(소리별 상대 크기는 그대로)
         from .notifier import master_volume
 
@@ -1100,6 +1126,25 @@ class SettingsTab(QWidget):
         from .toast import show_toast
 
         show_toast("테스트 알림", "토스트가 이 위치에 이렇게 표시돼요 🎉", 3000)
+
+    def set_voice_visible(self, visible: bool) -> None:
+        """알림 목소리 줄 보이기(비제작자) / 숨기기(제작자 — 캐릭터 탭에서 고름). 숨길 땐 저장 값으로 맞춰 둔다."""
+        self._voice_box.setVisible(visible)
+        self.sync_voice_choice()
+
+    def sync_voice_choice(self) -> None:
+        """다른 곳(캐릭터 탭)에서 바꾼 목소리를 이 줄에도 맞춘다(신호 없이)."""
+        index = max(self._voice_pack.findData(config.load_voice_pack()), 0)
+        if index != self._voice_pack.currentIndex():
+            self._voice_pack.blockSignals(True)
+            self._voice_pack.setCurrentIndex(index)
+            self._voice_pack.blockSignals(False)
+
+    def _on_voice_pack_changed(self, _index: int) -> None:
+        pack = self._voice_pack.currentData()
+        config.save_voice_pack(pack)  # 먼저 저장 → sound_path가 선택 팩을 가리킴
+        self._preview_voice()
+        self.voice_pack_changed.emit()  # 실행 중 재생기도 새 팩으로 갱신(바로 적용)
 
     def _on_alert_volume_changed(self, value: int) -> None:
         """끄는 동안은 숫자만, 놓을 때(또는 키보드로 바꿀 때) 저장·적용. 5단위로 맞춘다."""
