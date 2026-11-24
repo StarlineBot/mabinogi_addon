@@ -832,3 +832,125 @@ def test_quest_clear_triggers_stage_up_line(app, cfg):
     finally:
         ctrl.window = None
         ctrl.shutdown()
+
+
+# ---- 대사 목소리 재생(사용자 11-24 — docs/character-pet-spec.md '대사 목소리 재생') ----------------------------
+class _FakeVoice:
+    def __init__(self):
+        self.played, self.stops = [], 0
+        self.on_duration = None
+
+    def play(self, path):
+        self.played.append(path)
+        return True
+
+    def stop(self):
+        self.stops += 1
+
+
+@pytest.fixture
+def voiced(app, cfg, tmp_path, monkeypatch):
+    """임시 sounds 폴더(다래 팩에 대사/구간_25.mp3·대사/클릭.mp3만) + 가짜 펫 창·재생기."""
+    from mabinogi_addon.ui import character_controller as cc
+    from mabinogi_addon.ui import notifier
+
+    sounds = tmp_path / "sounds"
+    (sounds / "조용한 여성" / "대사").mkdir(parents=True)
+    for name in ("구간_25.mp3", "클릭.mp3"):
+        (sounds / "조용한 여성" / "대사" / name).write_bytes(b"x")
+    (sounds / "대사").mkdir()
+    (sounds / "대사" / "켜기_1.mp3").write_bytes(b"x")  # 팩 밖(기본 녹음) — 쓰지 않음
+    monkeypatch.setattr(notifier, "SOUND_DIR", sounds)
+    config.save_voice_pack("조용한 여성")
+    ctrl = cc.CharacterController()
+    ctrl.set_enabled(True)
+    ctrl.voice = _FakeVoice()
+    ctrl.window = _FakeWindow()
+    yield ctrl, sounds
+    ctrl.window = None
+    ctrl.shutdown()
+
+
+def test_voice_plays_only_existing_file_in_chosen_pack(voiced):
+    ctrl, sounds = voiced
+    ctrl._say(ln.Line("응…? 불렀어…?", voice="대사/클릭.mp3"))
+    ctrl._say(ln.Line("왔어…? 기다렸어… 조금.", voice="대사/켜기_1.mp3"))  # 팩에 없음 → 기본 폴더로 안 감
+    ctrl._say(ln.Line("…졸려."))  # 목소리 없는 줄
+    assert ctrl.voice.played == [sounds / "조용한 여성" / "대사" / "클릭.mp3"]
+    assert ctrl.window.said == ["응…? 불렀어…?", "왔어…? 기다렸어… 조금.", "…졸려."]  # 말풍선은 언제나
+    assert ctrl.voice.stops >= 3  # 새 말풍선마다 앞 소리 멈춤
+
+
+def test_voice_switch_off_and_pause_keep_bubbles_silent(voiced):
+    ctrl, _ = voiced
+    config.save_character(voiceLines=False)
+    ctrl._say(ln.Line("응…? 불렀어…?", voice="대사/클릭.mp3"))
+    config.save_character(voiceLines=True)
+    ctrl.set_paused(True)
+    ctrl._say(ln.Line("응…? 불렀어…?", voice="대사/클릭.mp3"))
+    assert ctrl.voice.played == [] and len(ctrl.window.said) == 2
+    ctrl.set_paused(False)
+    ctrl._say(ln.Line("응…? 불렀어…?", voice="대사/클릭.mp3"))
+    assert len(ctrl.voice.played) == 1
+
+
+def test_alert_sound_stops_dialogue_voice(voiced):
+    from mabinogi_addon.ui import notifier
+
+    ctrl, sounds = voiced
+    before = ctrl.voice.stops
+    notifier._announce("vivace", sounds / "조용한 여성" / "비바체 연장.mp3")
+    assert ctrl.voice.stops == before + 1
+
+
+def test_stage_up_line_plays_its_voice(voiced):
+    ctrl, sounds = voiced
+    ctrl.affinity.set_value(25)
+    ctrl._check_stage()
+    assert ctrl.window.said == ["…너, 생각보다 괜찮은 사람이네."]
+    assert ctrl.voice.played == [sounds / "조용한 여성" / "대사" / "구간_25.mp3"]
+
+
+def test_voice_player_skips_while_alert_plays_or_volume_zero(app, monkeypatch, tmp_path):
+    from mabinogi_addon.ui import notifier, voice_lines
+
+    path = tmp_path / "a.mp3"
+    path.write_bytes(b"x")
+    player = voice_lines.VoiceLinePlayer()
+    monkeypatch.setattr(notifier, "alert_playing", lambda: True)
+    assert player.play(path) is False  # 알림 우선
+    monkeypatch.setattr(notifier, "alert_playing", lambda: False)
+    monkeypatch.setattr(notifier, "master_volume", lambda: 0)
+    assert player.play(path) is False  # 알림 음량 0%
+    assert voice_lines.voice_file("조용한 여성", "../부드러운 여성/인사.mp3") is None  # 팩 밖으로 못 나감
+
+
+def test_talking_picture_lasts_as_long_as_the_voice(app):
+    from mabinogi_addon.ui.pet_window import PetWindow, load_frames
+
+    clock = [10.0]
+    b = _brain()
+    w = PetWindow(b, load_frames("다래"), roster.DARE.color, clock=lambda: clock[0])
+    try:
+        w.say(ln.Line("응… 안녕."))  # 6글자 → 글자 기준 약 0.4초
+        w.hold_talk(2.5)  # 가짜 소리 길이 2.5초
+        clock[0] += 1.5
+        w.step()
+        assert b.state == "talk_normal"  # 글자는 끝났지만 소리 동안 입 움직임 유지
+        clock[0] += 1.2
+        w.step()
+        assert b.state == "talk_end"
+        w.say(ln.Line("오늘도… 같이 있자."))
+        w.hold_talk(0.1)  # 소리가 짧으면 글자 기준 그대로
+        assert b._talk_until >= clock[0] + 0.6
+    finally:
+        w.close()
+
+
+def test_character_tab_has_voice_lines_switch_default_on(app, cfg):
+    from mabinogi_addon.ui import character_tab as ct
+
+    tab = ct.CharacterTab()
+    assert tab.voice_switch.text() == "대사 목소리" and tab.voice_switch.isChecked()
+    tab.voice_switch.setChecked(False)
+    assert config.load_voice_lines() is False

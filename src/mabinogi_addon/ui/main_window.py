@@ -2689,6 +2689,7 @@ class MainWindow(QMainWindow):
         """
         self._paused = paused
         self.optimization_tools.set_paused(paused)
+        self.character_tools.set_paused(paused)  # 대사 목소리도 멈춤
         for c in (self.buff_controller, self.debuff_controller):
             if c is not None:
                 c.set_paused(paused)

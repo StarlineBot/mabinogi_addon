@@ -444,5 +444,10 @@ class Brain:
         self._go(f"talk_{mood}" if f"talk_{mood}" in self.profile.anims else "talk_normal", now)
         return True
 
+    def hold_talk(self, until: float) -> None:
+        """대사 목소리가 글자보다 길면 말하기 그림을 소리 끝까지 유지(입 움직임). 짧으면 글자 기준 그대로."""
+        if self.state in TALKING and self.state != "talk_end":
+            self._talk_until = max(self._talk_until, until)
+
     def dragging(self) -> bool:
         return self._dragging

@@ -2332,6 +2332,11 @@ def load_pet_idle(path: Path = LOCAL_CONFIG_PATH) -> dict:
     return raw if isinstance(raw, dict) else {}
 
 
+def load_voice_lines(path: Path = LOCAL_CONFIG_PATH) -> bool:
+    """'대사 목소리'(기본 켬) — 끄면 펫 말풍선만, 알림 목소리에는 영향 없음."""
+    return _character(path).get("voiceLines") is not False
+
+
 def load_pet_last_seen(path: Path = LOCAL_CONFIG_PATH) -> str:
     """마지막으로 앱을 켠 날(YYYY-MM-DD) — '오랜만에 켰을 때' 인사."""
     v = _character(path).get("lastSeen")

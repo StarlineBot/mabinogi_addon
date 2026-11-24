@@ -59,6 +59,10 @@ class CharacterController(QObject):
         self._last_pos = None         # 캐릭터를 바꿀 때 새 펫이 이어받을 자리
         self.enabled = False
         self._started = False
+        self._paused = False          # 앱 일시정지(알림 멈춤) — 대사 목소리도 안 냄
+        from .voice_lines import VoiceLinePlayer
+        self.voice = VoiceLinePlayer(self)
+        self.voice.on_duration = self._hold_talk
         self._lines: dict[str, Picker] = {}
         self._feeds: dict = {}
         self.character = roster.by_pack(config.load_voice_pack())
@@ -92,7 +96,7 @@ class CharacterController(QObject):
         config.save_character(lastSeen=today(now))
         self.sync_window()
         if hello and self.window is not None:
-            self.window.say(self._pick(hello))
+            self._say(self._pick(hello))
 
     def voice_changed(self) -> None:
         self.character = roster.by_pack(config.load_voice_pack())
@@ -124,6 +128,7 @@ class CharacterController(QObject):
             self._save_affinity()  # 구석 분 누적(10분마다 저장) 나머지
         from .notifier import off_play
         off_play(self._on_sound)
+        self.voice.stop()
         for feed in self._feeds.values():
             feed.shutdown()
         if self.window is not None:
@@ -152,7 +157,32 @@ class CharacterController(QObject):
         if stage > before and self.window is not None:
             picker = self.picker()
             if picker is not None:
-                self.window.say(picker.stage_up(stage))
+                self._say(picker.stage_up(stage))
+
+    def set_paused(self, paused: bool) -> None:
+        """앱 일시정지(사냥 안 할 때) — 대사 목소리도 멈추고 안 냄."""
+        self._paused = bool(paused)
+        if paused:
+            self.voice.stop()
+
+    def _say(self, line) -> None:
+        """말풍선 + (줄에 목소리가 있고 그 팩에 파일이 있으면) 대사 목소리 — 글자가 나오기 시작할 때 함께."""
+        if self.window is None or not line:
+            return
+        self.voice.stop()  # 앞 대사 소리는 멈추고 새 것
+        self.window.say(line)
+        voice = getattr(line, "voice", None)
+        if not voice or self._paused or not config.load_voice_lines() or self.character is None:
+            return
+        from .voice_lines import voice_file
+
+        path = voice_file(self.character.pack, voice)
+        if path is not None:
+            self.voice.play(path)
+
+    def _hold_talk(self, seconds: float) -> None:
+        if self.window is not None:
+            self.window.hold_talk(seconds)
 
     def _pick(self, situation: str):
         """지금 구간 대사로 고르기(구간 이하 줄, 지금 구간 줄 2배)."""
@@ -216,18 +246,18 @@ class CharacterController(QObject):
         for event in events:
             kind = event[0]
             if kind == "say" and picker is not None and self.window is not None:
-                self.window.say(self._pick(event[1]))
+                self._say(self._pick(event[1]))
             elif kind == "click" and self.affinity is not None:
                 if self.affinity.click(now):
                     self._save_affinity()
                     if picker is not None and self.window is not None:
-                        self.window.say(self._pick("annoyed_click"))
+                        self._say(self._pick("annoyed_click"))
             elif kind == "pet_done" and self.affinity is not None:
                 result = self.affinity.petted(now, today())
                 if result != "none":
                     self._save_affinity()
                 if result == "annoyed" and picker is not None and self.window is not None:
-                    self.window.say(self._pick("annoyed_pet"))
+                    self._say(self._pick("annoyed_pet"))
             elif kind == "corner_minute" and self.affinity is not None:
                 # 1분마다 누적 — 저장은 오를 때·10분마다만(설정 동기화가 매분 올리지 않게), 끌 때 한 번 더
                 got = self.affinity.corner_minute(today())
@@ -237,7 +267,8 @@ class CharacterController(QObject):
                 config.save_character(corner={"x": round(event[1]), "y": round(event[2])})
 
     def _on_sound(self, _buff_id: str, path) -> None:
-        """알림 소리 → 그 캐릭터 목소리면 호감도 +1·알아챔·말풍선."""
+        """알림 소리 → 대사 목소리는 멈춤(알림 우선), 그 캐릭터 목소리면 호감도 +1·알아챔·말풍선."""
+        self.voice.stop()
         if not self.enabled or self.character is None or self.affinity is None:
             return
         try:
