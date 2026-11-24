@@ -234,7 +234,8 @@ class CharacterController(QObject):
         if self._last_pos is not None:
             brain.pos = (floor.clamp_x(self._last_pos[0]), min(self._last_pos[1], floor.y))
         game = (lambda: self._watcher.is_game_active()) if self._watcher is not None else (lambda: False)
-        window = PetWindow(brain, frames, self.character.color, game_front=game, clock=self._clock)
+        window = PetWindow(brain, frames, self.character.color, game_front=game, clock=self._clock,
+                           outline=self.character.outline)
         window.events.connect(self._on_events)
         self._window_for = self.character
         return window

@@ -499,11 +499,11 @@ def test_character_tab_cards_choose_voice_and_toggle_pet(app, cfg, monkeypatch):
     changed, toggled = [], []
     tab.voice_pack_changed.connect(lambda: changed.append(1))
     tab.pet_toggled.connect(toggled.append)
-    assert [c.character.name for c in tab.cards] == ["다래", "아리아", "???", "레나", "이안"]
+    assert [c.character.name for c in tab.cards] == ["다래", "아리아", "???", "레나", "이안", "Starline"]
     assert not any(c.selected() for c in tab.cards)  # 기본 녹음 — 고른 카드 없음
     tab.cards[3].clicked.emit(tab.cards[3].character)  # 미정 카드도 그 목소리로 선택
     assert config.load_voice_pack() == "화난 여성" and played == ["화난 여성"] and changed == [1]
-    assert [c.selected() for c in tab.cards] == [False, False, False, True, False]
+    assert [c.selected() for c in tab.cards] == [False, False, False, True, False, False]
     tab.choose(roster.DARE)
     assert tab.cards[0].selected() and "돌아다녀요" in tab.pet_hint.text()
     tab.pet_switch.setChecked(True)
@@ -704,6 +704,8 @@ def test_quest_text_uses_character_name_with_particles():
     c = aff.Affinity.load({"value": 55, "cleared": 2})
     assert c.quest_text("아리아") == "퀘스트: 아리아 목소리로 알림 10번 · 0/10번"
     assert aff._has_final("곰") and not aff._has_final("다래")
+    assert a.quest_text("Starline") == "퀘스트: Starline을 처음으로 쓰다듬어 주기 · 0/1번"   # 읽는 소리 '스타라인'
+    assert b.quest_text("Starline") == "퀘스트: 구석에서 Starline과 함께 1시간 · 0/60분"
 
 
 def test_card_preview_plays_pack_greeting_first_without_flat_fallback(tmp_path, monkeypatch):
@@ -1026,7 +1028,7 @@ def test_ian_roster_card_frames_and_heights():
 
     ian = roster.by_pack("차분한 남성")
     assert (ian.name, ian.known, ian.has_pet, ian.color) == ("이안", True, True, "#3B5B9A")
-    assert (ASSETS / ian.card).is_file() and [c.name for c in roster.ROSTER][-1] == "이안"
+    assert (ASSETS / ian.card).is_file() and [c.name for c in roster.ROSTER][-2:] == ["이안", "Starline"]
     names = {n for frames, _t, _l in br.IAN.anims.values() for n in frames}
     assert not [n for n in names if not (IAN_DIR / f"{n}.png").exists()]
     h = lambda n: imread(IAN_DIR / f"{n}.png", cv2.IMREAD_UNCHANGED).shape  # noqa: E731
@@ -1116,7 +1118,7 @@ def test_ian_alert_points_at_watch():
 def test_walk_values_come_from_character_data_and_corner_rush_speeds_up_steps():
     """걷기 미끄러짐(사용자 11-24): 캐릭터별 프레임 시간·속도, 이안 v2 0.18초·62px/초(보폭 67px)."""
     assert br.IAN.walk_speed == 62.0 and br.IAN.anims["walk"][1] == (0.18,) * 6
-    for profile in (br.DARE, br.ARIA, br.IAN, br.LENA):
+    for profile in (br.DARE, br.ARIA, br.IAN, br.LENA, br.STARLINE):
         cycle = sum(profile.anims["walk"][1])
         assert 60 <= profile.walk_speed <= 90 and 60 <= profile.walk_speed * cycle <= 125  # 한 바퀴 거리 ≈ 보폭
     b = _ian()
@@ -1159,7 +1161,7 @@ def test_frame_anchor_loader_is_harmless_without_or_with_bad_file(app, tmp_path)
     assert pet_window._anchors(tmp_path) == {"a": (1.0, 2.0)}
     (tmp_path / "anchors.json").write_text("not json", encoding="utf-8")
     assert pet_window._anchors(tmp_path) == {}
-    assert not any((ASSETS / folder / "anchors.json").exists() for folder in ("다래", "아리아", "이안", "레나"))
+    assert not any((ASSETS / folder / "anchors.json").exists() for folder in ("다래", "아리아", "이안", "레나", "Starline"))
     frames = pet_window.load_frames("이안", br.IAN)
     w = pet_window.PetWindow(_ian(), frames, "#3B5B9A")
     try:
@@ -1169,7 +1171,7 @@ def test_frame_anchor_loader_is_harmless_without_or_with_bad_file(app, tmp_path)
 
 
 @pytest.mark.parametrize("folder,prefix", [("다래", "talk_"), ("아리아", "talk_a_"), ("아리아", "talk_b_"), ("이안", "talk_"),
-                                           ("레나", "talk_")])
+                                           ("레나", "talk_"), ("Starline", "talk_")])
 def test_mouth_only_frames_differ_only_around_the_mouth(folder, prefix):
     """입만 바꾸기(빌드 합성, 사용자 11-24): talk_base·m1·m2는 입 둘레 작은 곳 밖에서 알파·색이 똑같다."""
     import cv2
@@ -1188,7 +1190,7 @@ def test_mouth_only_frames_differ_only_around_the_mouth(folder, prefix):
         assert h * 0.3 < ys.mean() < h * 0.65  # 얼굴(입) 높이
 
 
-@pytest.mark.parametrize("profile", [br.DARE, br.ARIA, br.IAN, br.LENA])
+@pytest.mark.parametrize("profile", [br.DARE, br.ARIA, br.IAN, br.LENA, br.STARLINE])
 def test_corner_without_saved_spot_is_nearest_screen_edge(profile):
     """사용자 11-24: 끌어서 정한 구석이 없으면 가까운 화면 끝(왼쪽일 수도) — 앉은 동안 유지, 다시 게임이 오면 다시 정함."""
     b = br.Brain(br.Floor(0, 1000, 700), rng=random.Random(2), profile=profile)
@@ -1239,7 +1241,7 @@ HEAD_EXEMPT = {
 }
 
 
-@pytest.mark.parametrize("folder", ["아리아", "이안", "레나"])
+@pytest.mark.parametrize("folder", ["아리아", "이안", "레나"])   # Starline은 후광·토끼귀라 위 30% 폭이 머리가 아님(시트별 키)
 def test_standing_frames_keep_head_size_within_5_percent(folder):
     """서 있는 계열 머리 폭(위 30% 폭)이 stand의 ±5% — 다래는 헤일로·뿔 때문에 이 잣대가 머리가 아니라 제외."""
     d = ASSETS / folder
@@ -1396,7 +1398,7 @@ def test_lena_lines_situations_stage_lines_and_voices():
     assert voices["대사/구간_100.mp3"] == ("stage_up", "…이 초커, 너 가져. 잃어버리면 화낼 거야.")
 
 
-@pytest.mark.parametrize("folder", ["다래", "아리아", "레나"])
+@pytest.mark.parametrize("folder", ["다래", "아리아", "레나", "Starline"])
 def test_sheet_colors_match_standing_hair_and_skin(folder):
     """시트 색 맞추기(사용자 11-24 '동작마다 머리색·피부 톤이 다름'): 모든 그림의 머리·피부가 서 있기 대비 ΔE<3."""
     import cv2
@@ -1417,6 +1419,7 @@ def test_sheet_colors_match_standing_hair_and_skin(folder):
     ("아리아", "아리아/SD/투명 배경 치비 캐릭터 4컷 스프라이트.png"),
     ("레나", "레나/SD/레나_쓰다듬기.png"),
     ("다래", "다래/SD/부끄러운 치비 천사 악마 스티커 세트.png"),
+    ("Starline", "Starline/SD/Starline_구석_앉아있기.png"),   # 금 동전(마법진)·후광은 그대로
 ])
 def test_sheet_colors_touch_only_hair_and_skin(folder, sheet_path):
     """바뀌는 픽셀은 머리·피부 마스크(+흐림 둘레 5px) 안뿐 — 옷(검정·크림 드레스·리본·장화)·눈은 그대로."""
@@ -1446,3 +1449,106 @@ def _img_of(path):
     import cv2
     from mabinogi_addon.image_io import imread
     return imread(path, cv2.IMREAD_UNCHANGED)
+
+
+# ---- Starline(장난스러운 남성, 기획 11-24 '음성팩 들어갈 자리만 만들고 같이 알파로' — docs/characters/Starline.md) ----
+SL_DIR = ASSETS / "Starline"
+
+
+def _starline(**kw):
+    b = br.Brain(br.Floor(0, 1000, 700), rng=random.Random(4), profile=br.STARLINE, **kw)
+    b.pos = (300.0, 700.0)
+    return b
+
+
+def test_starline_roster_english_name_gold_outline_and_frames():
+    sl = roster.ROSTER[-1]
+    assert (sl.key, sl.name, sl.pack, sl.color, sl.outline) == ("장난스러운 남성", "Starline", "장난스러운 남성", "#3A0729", "#D8AA5E")
+    assert len(roster.ROSTER) == 6 and all(c.outline == "#FFFFFF" for c in roster.ROSTER[:-1])
+    assert sl.name.isascii() and roster.folder(sl) == "Starline"
+    card = _img_of(SL_DIR / "card.png")
+    assert abs(card.shape[1] / card.shape[0] - 1199 / 1312) < 0.02
+    names = {n for frames, _t, _l in br.STARLINE.anims.values() for n in frames}
+    assert not [n for n in names if not (SL_DIR / f"{n}.png").exists()]
+    assert _img_of(SL_DIR / "stand_0.png").shape[0] == 285 and _img_of(SL_DIR / "land_2.png").shape[0] == 285
+    from mabinogi_addon.ui import character_lines_feed
+    assert character_lines_feed.REMOTE_NAMES["Starline"] == "starline-lines.json"
+
+
+def test_starline_talk_sheet_split_six_loop_and_two_end():
+    """한장모음: 윗줄 2·가운데 줄 6(반복)·아랫줄 2(끝) — 빌드가 10장으로 나누고 가운데 6·아래 2를 씀."""
+    import cv2
+    from scripts.build_aria_frames import clean
+    from scripts.build_dare_frames import ROOT, imread, split
+
+    frames = split(clean(imread(ROOT / "docs/characters/assets/Starline/SD/Starline_말하기_한장모음.png", cv2.IMREAD_UNCHANGED)))
+    assert len(frames) == 10
+    for key in ("base", "m1", "m2", "emph", "emph2", "blink", "mid", "end1", "end2"):
+        assert (SL_DIR / f"talk_{key}_0.png").exists()
+    assert br.STARLINE.anims["talk_end"][0] == ("talk_base_0", "talk_end1_0", "talk_end2_0")
+
+
+def test_starline_flame_idle_click_talks_and_corner():
+    b = _starline()
+    b._next_walk = 1e9
+    t, _ = _run(b, 0, 16, False)
+    assert b.state == "flame" or b._extra_until > 0   # 가만히 서 있으면 가끔 손바닥 불꽃
+    b._go("flame", t)
+    b._extra_until = t + 5
+    b.press(t, 300, 600)
+    assert b.release(t) == [("click",), ("say", "idle_extra_click")]   # 불꽃 중 클릭
+    s = _starline()
+    s.press(1, 300, 600)
+    assert s.release(1)[-1] == ("say", "click_stand") and s.state == "stand"
+    assert s.talk(1, 20, "explain") and s.frame(1.25) == "talk_emph_0"
+    c = _starline(corner=(900.0, 700.0))
+    t, _ = _run(c, 0, 6, True)
+    seen = set()
+    for _ in range(100):
+        t += 0.05
+        c.tick(t, True)
+        seen.add(c.frame(t))
+        assert not c.zzz()
+    assert {"sit_0", "sit_1", "sit_2", "sit_3"} <= seen
+    c.press(t, 900, 600)
+    assert c.release(t)[-1] == ("say", "click_sit") and c.frame(t) == "sit_0"
+    assert c.covered("land_2", "stand_0") and c.covered("pet_5", "stand_0") and c.covered("rise_2", "stand_0")
+
+
+def test_starline_lines_alerts_and_stage_lines():
+    data = ln.read(SL_DIR / "lines.json")
+    assert data.character == "Starline" and "click_sleep" not in data.lines
+    assert set(ln.SITUATIONS) - {"click_sleep"} <= set(data.lines) and "idle_extra_click" in data.lines
+    assert len(data.alerts) == 13 and {"투아림 부스트 발동 직전2.mp3", "파티 알림.mp3"} <= set(data.alerts)
+    staged = [line for items in data.lines.values() for line in items if line.stage > 0]
+    assert len(staged) == 24 and [line.stage for line in data.lines["stage_up"]] == [25, 50, 75, 100]
+    assert not [line for items in data.lines.values() for line in items if line.voice]   # 녹음 전 — 목소리 키 없음
+
+
+def test_empty_starline_pack_hidden_from_settings_and_falls_back_to_default(monkeypatch):
+    """목소리 팩 자리만(11-24): 폴더는 있지만 녹음이 없으면 설정 목록에 안 보이고, 알림·카드 미리듣기는 기본 녹음."""
+    from mabinogi_addon import config
+    from mabinogi_addon.ui import notifier
+
+    folder = notifier.SOUND_DIR / "장난스러운 남성"
+    assert folder.is_dir() and not list(folder.glob("*.mp3"))
+    assert "장난스러운 남성" not in notifier.list_voice_packs()
+    assert "장난스러운 남성" in notifier.list_voice_packs(include_empty=True)
+    assert {"화난 여성", "차분한 남성", "조용한 여성", "부드러운 여성"} <= set(notifier.list_voice_packs())
+    monkeypatch.setattr(config, "load_voice_pack", lambda *a, **k: "장난스러운 남성")
+    assert notifier.sound_path("비바체 연장.mp3") == notifier.SOUND_DIR / "비바체 연장.mp3"
+    assert notifier.greeting_path("장난스러운 남성") == notifier.SOUND_DIR / "투아림 부스트 발동 직전.mp3"
+    assert notifier.second_sound_path("투아림 부스트 발동 직전.mp3").exists()
+
+
+def test_starline_bubble_has_gold_outline(app):
+    from mabinogi_addon.ui import pet_window
+
+    frames = pet_window.load_frames("Starline", br.STARLINE)
+    w = pet_window.PetWindow(_starline(), frames, "#3A0729", outline="#D8AA5E")
+    d = pet_window.PetWindow(_starline(), frames, "#B48CE6", outline="#FFFFFF")
+    try:
+        assert w.outline is not None and w.outline.name() == "#d8aa5e" and d.outline is None
+    finally:
+        w.close()
+        d.close()

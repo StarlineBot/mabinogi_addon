@@ -53,11 +53,16 @@ def seed(frame: np.ndarray, part: Part) -> np.ndarray:
 
 
 def colors(frame: np.ndarray, parts) -> list[np.ndarray | None]:
-    """부위별 그 프레임 색(잴 픽셀 Lab 중앙값, 8비트). 잴 픽셀이 적으면 None."""
+    """부위별 그 프레임 색(잴 픽셀 Lab 중앙값, 8비트). 잴 픽셀이 적으면 None. 피할 색(avoid)에 가까운 잴 픽셀은 뺌."""
     lab = _lab(frame)
     out = []
     for part in parts:
         sel = seed(frame, part)
+        if part.avoid and sel.any():
+            first = np.median(lab[sel], axis=0)
+            mine = np.linalg.norm(lab - first, axis=-1)
+            for color in part.avoid:
+                sel &= mine < np.linalg.norm(lab - np.float32(color), axis=-1)
         out.append(np.median(lab[sel], axis=0) if sel.sum() >= part.min_pixels else None)
     return out
 

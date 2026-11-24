@@ -113,8 +113,8 @@ class CharacterCard(QWidget):
         path.addText(QPointF(0, 0), font, self.character.name)
         box = path.boundingRect()
         path.translate(card.center().x() - box.center().x(), card.bottom() - 14 - box.bottom())
-        # 이름: 캐릭터 색 + 흰 테두리. 미정(???)은 흰 글자 + 어두운 테두리(시안 charsel_*)
-        edge = "#ffffff" if self.character.known else "#3a3d44"
+        # 이름: 캐릭터 색 + 캐릭터 외곽선(기본 흰색, Starline 금). 미정(???)은 흰 글자 + 어두운 테두리(시안 charsel_*)
+        edge = self.character.outline if self.character.known else "#3a3d44"
         p.setPen(QPen(QColor(edge), 5, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
         p.setBrush(Qt.BrushStyle.NoBrush)
         p.drawPath(path)

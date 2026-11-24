@@ -19,6 +19,7 @@ class Character:
     card: str         # 카드 그림(assets/characters/ 아래 경로)
     known: bool       # False면 실루엣을 테마 회색으로 칠해 씀
     has_pet: bool     # 화면을 돌아다니는 SD 펫 그림이 있는지(알파는 다래만)
+    outline: str = "#FFFFFF"   # 이름 글자 외곽선·말풍선 바깥선(Starline 금 — 진한 메인색이 어두운 배경에 묻히지 않게)
 
 
 DARE = Character("조용한 여성", "다래", "조용한 여성", "#B48CE6", "다래/card.png", True, True)
@@ -29,6 +30,9 @@ ROSTER: tuple[Character, ...] = (
     Character("자연스러운 여성", UNKNOWN_NAME, "자연스러운 여성", "#9AA0AA", "silhouette_f.png", False, False),
     Character("화난 여성", "레나", "화난 여성", "#5B6BC9", "레나/card.png", True, True),
     Character("차분한 남성", "이안", "차분한 남성", "#3B5B9A", "이안/card.png", True, True),
+    # Starline(11-24): 이름은 영어 그대로, 목소리 팩은 자리만(녹음 오기 전엔 기본 녹음), 이름 글자 금 외곽선
+    Character("장난스러운 남성", "Starline", "장난스러운 남성", "#3A0729", "Starline/card.png", True, True,
+              outline="#D8AA5E"),
 )
 
 

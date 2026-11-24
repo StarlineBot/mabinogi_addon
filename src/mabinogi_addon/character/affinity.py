@@ -70,8 +70,12 @@ QUESTS = (
 )
 
 
+READINGS = {"Starline": "스타라인"}   # 영어 이름의 읽는 소리(조사 을/를·과/와 고르기용)
+
+
 def _has_final(word: str) -> bool:
-    """마지막 글자에 받침이 있는지(한글이 아니면 없음으로)."""
+    """마지막 글자에 받침이 있는지(한글이 아니면 없음으로, 영어 이름은 READINGS의 읽는 소리로)."""
+    word = READINGS.get(word, word)
     if not word:
         return False
     code = ord(word[-1]) - 0xAC00

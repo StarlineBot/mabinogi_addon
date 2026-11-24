@@ -42,11 +42,14 @@ def _sync_default_device(audio) -> None:
         pass
 
 
-def list_voice_packs() -> list[str]:
-    """사용 가능한 목소리 팩(하위 폴더) 이름들. 기본(녹음본)은 flat이라 제외."""
+def list_voice_packs(include_empty: bool = False) -> list[str]:
+    """사용 가능한 목소리 팩(하위 폴더) 이름들. 기본(녹음본)은 flat이라 제외.
+    녹음 파일(.mp3)이 하나도 없는 팩(자리만 만든 Starline '장난스러운 남성', 11-24)은 빼서 설정 목록에 안 보이게 —
+    캐릭터 탭(제작자)은 roster로 고르므로 상관없음. include_empty=True면 빈 팩도."""
     if not SOUND_DIR.exists():
         return []
-    return sorted(p.name for p in SOUND_DIR.iterdir() if p.is_dir())
+    return sorted(p.name for p in SOUND_DIR.iterdir()
+                  if p.is_dir() and (include_empty or any(p.glob("*.mp3"))))
 
 
 # 캐릭터 카드를 누를 때 나오는 인사 녹음(캐릭터 명세 '카드 인사 녹음', 사용자 11-24). 알림 소리가 아니다 —

@@ -25,7 +25,7 @@ def main():
     import sys
     # 사용: … render_character_alpha [목소리 팩] — 아리아 고른 화면은 '부드러운 여성'(파일 main_character_tab_aria.png)
     pack = sys.argv[1] if len(sys.argv) > 1 else '조용한 여성'
-    suffix = {'조용한 여성': '', '부드러운 여성': '_aria', '차분한 남성': '_ian', '화난 여성': '_lena'}.get(pack, '_other')
+    suffix = {'조용한 여성': '', '부드러운 여성': '_aria', '차분한 남성': '_ian', '화난 여성': '_lena', '장난스러운 남성': '_starline'}.get(pack, '_other')
     OUT.mkdir(parents=True, exist_ok=True)
     app = QApplication.instance() or QApplication([]); app.setStyle('Fusion'); apply_theme('custom', DARK)
     raw = {'general': {'skipSetup': True, 'theme': 'dark'}, 'buffTracker': {'enabled': False},

@@ -67,7 +67,8 @@ class PetWindow(QWidget):
     events = Signal(list)
 
     def __init__(self, brain: brain_mod.Brain, frames: dict[str, QImage], tint: str,
-                 game_front=lambda: False, clock=time.monotonic, parent: QWidget | None = None) -> None:
+                 game_front=lambda: False, clock=time.monotonic, parent: QWidget | None = None,
+                 outline: str | None = None) -> None:
         super().__init__(parent, Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint
                          | Qt.WindowType.Tool | Qt.WindowType.WindowDoesNotAcceptFocus)
         from . import overlay_capture
@@ -79,6 +80,8 @@ class PetWindow(QWidget):
         self.brain = brain
         self.frames = frames
         self.tint = QColor(tint)
+        # 말풍선 바깥선(Starline 금 — 진한 메인색 테두리만으로는 어두운 화면에 묻힘). 흰색·없음이면 그리지 않음
+        self.outline = QColor(outline) if outline and outline.lower() != "#ffffff" else None
         self._game_front = game_front
         self._clock = clock
         self._front = False
@@ -272,6 +275,10 @@ class PetWindow(QWidget):
         tail.lineTo(cx, rect.bottom() + 7)
         tail.lineTo(cx + 7, rect.bottom() - 1)
         path = path.united(tail)
+        if self.outline is not None:
+            p.setPen(QPen(self.outline, 5, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.drawPath(path)
         p.setPen(QPen(self.tint, 2))
         p.setBrush(QColor(255, 255, 255, 245))
         p.drawPath(path)

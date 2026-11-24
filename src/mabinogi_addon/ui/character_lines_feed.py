@@ -16,7 +16,7 @@ from ..character.lines import MAX_BYTES, parse
 
 _log = logging.getLogger(__name__)
 BASE_URL = "https://raw.githubusercontent.com/StarlineBot/mabinogi_addon-releases/refs/heads/main/data/characters/"
-REMOTE_NAMES = {"다래": "dare-lines.json", "아리아": "aria-lines.json", "이안": "ian-lines.json", "레나": "lena-lines.json"}
+REMOTE_NAMES = {"다래": "dare-lines.json", "아리아": "aria-lines.json", "이안": "ian-lines.json", "레나": "lena-lines.json", "Starline": "starline-lines.json"}
 
 
 def cache_path(folder: str):
