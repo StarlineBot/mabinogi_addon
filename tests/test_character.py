@@ -1093,3 +1093,21 @@ def test_ian_fall_and_land_keep_head_size():
 def test_ian_falls_with_one_frame():
     """이안 떨어지기(사용자 11-24): 두 장을 번갈면 두근거려 보여 fall_0 한 장만."""
     assert br.IAN.anims["fall"][0] == ("fall_0",)
+
+
+def test_frame_anchor_loader_is_harmless_without_or_with_bad_file(app, tmp_path):
+    """기준점 불러오기는 범용으로 남김(이안 떨어지기 한 장 결정 뒤 파일 없음) — 없거나 잘못되면 발 밑 그대로."""
+    from mabinogi_addon.ui import pet_window
+
+    assert pet_window._anchors(tmp_path) == {}
+    (tmp_path / "anchors.json").write_text('{"a": [1, 2], "b": [1], "c": ["x", 1], "d": [999, 0], "e": [true, 0]}')
+    assert pet_window._anchors(tmp_path) == {"a": (1.0, 2.0)}
+    (tmp_path / "anchors.json").write_text("not json")
+    assert pet_window._anchors(tmp_path) == {}
+    assert not any((ASSETS / folder / "anchors.json").exists() for folder in ("다래", "아리아", "이안"))
+    frames = pet_window.load_frames("이안", br.IAN)
+    w = pet_window.PetWindow(_ian(), frames, "#3B5B9A")
+    try:
+        assert all(w._frame_rect(image).bottom() == w.height() - 6 for image in frames.values())
+    finally:
+        w.close()
