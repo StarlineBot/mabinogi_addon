@@ -1,5 +1,5 @@
 {
-  "version": "0.55.9",
+  "version": "0.55.10",
   "tests": [
     "tests/test_character.py",
     "tests/test_navigation.py",
@@ -150,7 +150,7 @@
         "tests/test_release_candidate.py",
         "tests/test_windows_ci.py"
       ],
-      "reason": "0.55.9 검사 목록·후보 봉인·CI 계약"
+      "reason": "0.55.10 검사 목록·후보 봉인·CI 계약"
     },
     "packaging/build_windows.py": {
       "tests": [
@@ -165,7 +165,7 @@
         "tests/test_release_notes.py",
         "tests/test_release_notes_trigger.py"
       ],
-      "reason": "0.55.9 노트 맨 위(조용히 다듬은 것 한 줄 — 제작자 전용 알파라 일반 사용자엔 안 알림), v0.55.8 이하 그대로"
+      "reason": "0.55.10 노트 맨 위(조용히 다듬은 것 한 줄 — 제작자 전용 캐릭터 크기 배율), v0.55.9 이하 그대로"
     },
     "src/mabinogi_addon/character/roster.py": {
       "tests": [
