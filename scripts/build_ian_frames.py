@@ -79,7 +79,15 @@ EXPECTED = {"stand": 2, "watch": 4, "walk": 6, "pet": 6, "drag": 4, "fall": 2, "
 
 
 def card() -> np.ndarray:
+    """상반신이 가로형이라(폭 맞춤하면 카드 아래가 비어 보임 — 사용자 11-24 Windows) 얼굴(위 45% 알파 무게중심 x)
+    가운데로 다른 카드와 같은 세로 비율(1199:1312)로 자름(레나·Starline과 같은 방식)."""
     art = _tight(imread(ROOT / "docs/characters/assets/이안/이안_상반신.png", cv2.IMREAD_UNCHANGED))
+    h, w = art.shape[:2]
+    cw = int(round(h * 1199 / 1312))
+    if w > cw:
+        cx = float(np.where(art[: int(h * 0.45), :, 3] > 40)[1].mean())
+        x0 = int(min(max(0, cx - cw / 2), w - cw))
+        art = _tight(art[:, x0:x0 + cw])
     return scaled(art, 480 / art.shape[0])
 
 
