@@ -285,6 +285,20 @@ def off_play(listener) -> None:
         _play_listeners.remove(listener)
 
 
+def alert_playing() -> bool:
+    """알림 소리(버프·투아림 등 SoundNotifier)가 지금 나오는 중인지 — 캐릭터 대사 목소리는 알림이 우선이라 이때 건너뜀."""
+    for notifier in list(_live):
+        player = getattr(notifier, "_player", None)
+        try:
+            from PySide6.QtMultimedia import QMediaPlayer
+
+            if player is not None and player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
+                return True
+        except Exception:  # noqa: BLE001 — 판정 실패는 '아님'
+            continue
+    return False
+
+
 def _announce(buff_id: str, path: Path) -> None:
     if buff_id == "preview":
         return

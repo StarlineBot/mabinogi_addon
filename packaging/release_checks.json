@@ -32,7 +32,7 @@
         "tests/test_navigation.py",
         "tests/test_tour_layout.py"
       ],
-      "reason": "새 캐릭터 탭(제작자 전용) — 카드 5장·고르면 목소리 저장·펫 스위치·호감도 바·제작자 호감도 바로 바꾸기, 탭 7개 순서"
+      "reason": "새 캐릭터 탭(제작자 전용) — 카드 5장·고르면 목소리 저장·펫 스위치·호감도 바·제작자 호감도 바로 바꾸기, 탭 7개 순서·'대사 목소리' 스위치"
     },
     "src/mabinogi_addon/ui/pet_window.py": {
       "tests": [
@@ -86,7 +86,7 @@
         "tests/test_character.py",
         "tests/test_close_overlap.py"
       ],
-      "reason": "캐릭터 탭(제작자 전용, 블랙박스 뒤·설정 앞)·로그인 바뀔 때 다시 판정, 탭 최소 폭 96, 종료 정리"
+      "reason": "캐릭터 탭(제작자 전용, 블랙박스 뒤·설정 앞)·로그인 바뀔 때 다시 판정, 탭 최소 폭 96, 종료 정리·일시정지 때 대사 목소리 멈춤"
     },
     "src/mabinogi_addon/ui/optimization_controller.py": {
       "tests": [
@@ -183,6 +183,12 @@
         "tests/test_tuarim.py"
       ],
       "reason": "투아림 추가 알림 = '…2.mp3' 자리(없으면 첫 알림 소리), 팩 바꾸면 둘 다 갱신"
+    },
+    "src/mabinogi_addon/ui/voice_lines.py": {
+      "tests": [
+        "tests/test_character.py"
+      ],
+      "reason": "대사 목소리 재생 — 팩 안 파일만·알림 우선·음량 0·팩 밖 경로 막음"
     }
   }
 }

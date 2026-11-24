@@ -92,6 +92,13 @@ class PetWindow(QWidget):
         self.brain.talk(now, len(text), mood)
         self.update()
 
+    def hold_talk(self, seconds: float) -> None:
+        """말풍선이 뜬 때부터 seconds초 동안 말하기 그림 유지(대사 목소리 길이)."""
+        if self._bubble:
+            text, start, end = self._bubble
+            self.brain.hold_talk(start + seconds)
+            self._bubble = (text, start, max(end, start + seconds + 1.5))
+
     def bubble(self) -> str | None:
         return self._bubble[0] if self._bubble else None
 
