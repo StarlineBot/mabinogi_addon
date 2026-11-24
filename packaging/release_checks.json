@@ -23,7 +23,8 @@
     "tests/test_startup_smoke.py",
     "tests/test_release_notes.py",
     "tests/test_release_notes_trigger.py",
-    "tests/test_tuarim.py"
+    "tests/test_tuarim.py",
+    "tests/test_gen_tts.py"
   ],
   "coverage": {
     "src/mabinogi_addon/ui/character_tab.py": {
@@ -208,6 +209,12 @@
         "tests/test_character.py"
       ],
       "reason": "Starline 대사 — 알림 13·상황·불꽃 클릭·구간 24·stage_up 4(목소리 키 없음)"
+    },
+    "scripts/gen_tts.py": {
+      "tests": [
+        "tests/test_gen_tts.py"
+      ],
+      "reason": "TTS 생성기 --only(파일 몇 개만, 나머지 안 건드림)·이안 투아림 2차 줄"
     }
   }
 }

@@ -14,6 +14,12 @@
     set GOOGLE_TTS_API_KEY=...      (Windows cmd)   /   $env:GOOGLE_TTS_API_KEY="..." (PowerShell)
     uv run python scripts/gen_tts.py --backend google
     uv run python scripts/gen_tts.py --backend google --pack "차분한 남성"
+    # 파일 몇 개만(나머지는 그대로 둠) — 예: 이안 투아림 2차만
+    uv run python scripts/gen_tts.py --backend google --pack "차분한 남성" --only "투아림 부스트 발동 직전2.mp3"
+
+팩 상태(11-24): 스크립트로 만드는 팩 = 차분한 남성(이안, Google Chirp3 Algieba)·자연스러운 여성.
+사용자 녹음 팩(스크립트 대상 아님 — 다시 만들면 녹음을 덮어씀) = 부드러운 여성(파티 알림.mp3만 생성본)·조용한 여성·
+화난 여성·장난스러운 남성(Starline).
 
 편집 포인트:
 - lines: 파일명 → 읽을 문구(말투). 파일명은 기본 팩과 동일해야 앱이 매칭한다.
@@ -42,6 +48,7 @@ F_MARCH = "행진곡 연장.mp3"
 F_OVERTURE = "전장의 서곡 연장.mp3"
 F_PARTY = "파티 알림.mp3"
 F_TUARIM = "투아림 부스트 발동 직전.mp3"
+F_TUARIM2 = "투아림 부스트 발동 직전2.mp3"   # 투아림 추가 알림(11-24)
 
 # 2차(막차 경고) — 1차 파일명 뒤에 '2'. 앱은 임박이 '더' 가까워지면 이 파일을 재생한다
 # (없으면 1차로 폴백). 1차=여유 안내, 2차=짧고 급한 막차 경고.
@@ -54,7 +61,7 @@ F_OVERTURE2 = "전장의 서곡 연장2.mp3"
 # --- 2차 급박도(prosody) 오버라이드 ---
 # 2차 파일은 같은 목소리라도 더 빠르고 높게 읽어 다급함을 준다. 들어보고 약하면/과하면
 # 아래 숫자만 바꿔 재생성(--pack 으로 한 팩만 빠르게 비교 가능).
-URGENT_FILES = {F_VIVACE2, F_SHARP2, F_HAM2, F_MARCH2, F_OVERTURE2}
+URGENT_FILES = {F_VIVACE2, F_SHARP2, F_HAM2, F_MARCH2, F_OVERTURE2, F_TUARIM2}
 URGENT_EDGE_RATE_ADD = 12   # edge-tts rate(%)에 가산 (예: -6% → +6%)
 URGENT_EDGE_PITCH_ADD = 15  # edge-tts pitch(Hz)에 가산
 URGENT_GOOGLE_RATE_MULT = 1.15  # Google speakingRate 배수(Chirp3는 pitch 미지원)
@@ -67,7 +74,7 @@ def _urgent_edge(rate: str, pitch: str) -> tuple[str, str]:
     return f"{r:+d}%", f"{p:+d}Hz"
 
 # 팩 정의 — 성격마다 목소리·말투를 다르게. 자유롭게 추가/수정하세요.
-# ('화난 여성'·'조용한 여성' 팩(11-22)은 사용자 제공 녹음 — 이 스크립트 대상 아님)
+# ('화난 여성'·'조용한 여성'·'장난스러운 남성' 팩은 사용자 제공 녹음 — 이 스크립트 대상 아님, 머리 주석 '팩 상태')
 PACKS: list[dict] = [
     {
         # 11-22부터(11-23 다시 녹음으로 교체) 이 팩의 11개는 사용자 제공 녹음(파티 알림.mp3만 생성본) — 이 팩을 스크립트로 다시 생성하면 녹음을 덮어쓴다.
@@ -137,19 +144,25 @@ PACKS: list[dict] = [
             F_OVERTURE2: "전장의서곡 꺼집니다.",
             F_PARTY: "파티 모집이 올라왔습니다.",
             F_TUARIM: "투아림 부스트 발동 직전입니다.",
+            F_TUARIM2: "투아림, 지금 발동합니다. 준비하십시오.",   # 말풍선과 같은 문장(이안_대사.md 알림 표)
         },
     },
 ]
 
 
 # ---- edge-tts 백엔드 (무료) ----
-async def _gen_edge(pack: dict) -> None:
+def _lines(pack: dict, only: set[str] | None) -> dict[str, str]:
+    """만들 파일 — only가 있으면 그 파일만(나머지 파일은 건드리지 않음)."""
+    return {f: t for f, t in pack["lines"].items() if only is None or f in only}
+
+
+async def _gen_edge(pack: dict, only: set[str] | None = None) -> None:
     import edge_tts  # 지연 import
 
     out = SOUNDS_DIR / pack["name"]
     out.mkdir(parents=True, exist_ok=True)
     print(f"[edge] {pack['name']}  {pack['edge_voice']} rate={pack['rate']} pitch={pack['pitch']}")
-    for filename, text in pack["lines"].items():
+    for filename, text in _lines(pack, only).items():
         rate, pitch = pack["rate"], pack["pitch"]
         tag = ""
         if filename in URGENT_FILES:  # 2차(막차) → 더 빠르고 높게
@@ -164,11 +177,11 @@ async def _gen_edge(pack: dict) -> None:
 _GOOGLE_URL = "https://texttospeech.googleapis.com/v1/text:synthesize"
 
 
-def _gen_google(pack: dict, api_key: str) -> None:
+def _gen_google(pack: dict, api_key: str, only: set[str] | None = None) -> None:
     out = SOUNDS_DIR / pack["name"]
     out.mkdir(parents=True, exist_ok=True)
     print(f"[google] {pack['name']}  {pack['google_voice']} rate={pack['speaking_rate']}")
-    for filename, text in pack["lines"].items():
+    for filename, text in _lines(pack, only).items():
         rate = float(pack.get("speaking_rate", 1.0))
         tag = ""
         if filename in URGENT_FILES:  # 2차(막차) → 더 빠르게(Chirp3는 pitch 미지원)
@@ -195,16 +208,23 @@ def _gen_google(pack: dict, api_key: str) -> None:
         print(f"  ✓ {filename}  ←  “{text}”{tag}")
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(description="알림 목소리 팩 생성기")
     ap.add_argument("--backend", choices=["edge", "google"], default="edge")
     ap.add_argument("--pack", help="특정 팩만 생성(이름). 생략 시 전체")
-    args = ap.parse_args()
+    ap.add_argument("--only", nargs="+", metavar="파일명", help="이 파일만 생성(여러 개 가능), 나머지 파일은 그대로")
+    args = ap.parse_args(argv)
 
     targets = [p for p in PACKS if args.pack is None or p["name"] == args.pack]
     if not targets:
         print(f"'{args.pack}' 팩을 못 찾음. 사용 가능: {[p['name'] for p in PACKS]}")
         sys.exit(1)
+    only = set(args.only) if args.only else None
+    if only:
+        unknown = only - {f for p in targets for f in p["lines"]}
+        if unknown:
+            print(f"대상 팩에 없는 파일: {sorted(unknown)}")
+            sys.exit(1)
 
     if args.backend == "google":
         import os
@@ -222,10 +242,10 @@ def main() -> None:
             print("GOOGLE_TTS_API_KEY 가 없습니다. .env에 한 줄 넣거나(따옴표 X) 쉘에 설정하세요.")
             sys.exit(1)
         for pack in targets:
-            _gen_google(pack, key)
+            _gen_google(pack, key, only)
     else:
         for pack in targets:
-            asyncio.run(_gen_edge(pack))
+            asyncio.run(_gen_edge(pack, only))
 
     print(f"\n완료 → {SOUNDS_DIR}")
     print("생성된 폴더를 git add/commit 하면 exe 빌드에도 포함됩니다.")
