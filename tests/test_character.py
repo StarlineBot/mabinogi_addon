@@ -157,7 +157,7 @@ def test_builtin_lines_cover_every_situation_and_every_quiet_voice_alert():
     from mabinogi_addon.ui.notifier import alert_files
     sounds = alert_files(paths.resource_dir() / "sounds" / "조용한 여성")
     assert sounds and sounds <= set(data.alerts)
-    assert data.alerts["비바체 연장.mp3"] == "비바체… 잊은 거 아니지…?"
+    assert data.alerts["비바체 연장.mp3"] == ("비바체… 잊은 거 아니지…?",)
     moods = {line.mood for items in data.lines.values() for line in items}
     assert moods == set(ln.MOODS)  # 보통·설명·생각·기쁨 모두 쓰임
 
@@ -178,7 +178,7 @@ def test_lines_parse_drops_bad_lines_and_rejects_bad_files():
                                                 {"text": "와", "mood": "angry"}, {"mood": "happy"}], "b": []},
                                 "alerts": {"a.mp3": "알림", "b.mp3": "y" * 40}}).encode())
     assert data.lines == {"a": (ln.Line("좋아"), ln.Line("음…", "think"), ln.Line("와"))}  # 모르는 분위기 = 보통
-    assert data.alerts == {"a.mp3": "알림"}
+    assert data.alerts == {"a.mp3": ("알림",)}
     for bad in (b"[]", b'{"schemaVersion": 2}', b'{"schemaVersion": true, "character": "a", "lines": {"a": ["b"]}}',
                 b"x" * (ln.MAX_BYTES + 1)):
         with pytest.raises(ValueError):
@@ -499,7 +499,7 @@ def test_character_tab_cards_choose_voice_and_toggle_pet(app, cfg, monkeypatch):
     changed, toggled = [], []
     tab.voice_pack_changed.connect(lambda: changed.append(1))
     tab.pet_toggled.connect(toggled.append)
-    assert [c.character.name for c in tab.cards] == ["다래", "아리아", "???", "???", "이안"]
+    assert [c.character.name for c in tab.cards] == ["다래", "아리아", "???", "레나", "이안"]
     assert not any(c.selected() for c in tab.cards)  # 기본 녹음 — 고른 카드 없음
     tab.cards[3].clicked.emit(tab.cards[3].character)  # 미정 카드도 그 목소리로 선택
     assert config.load_voice_pack() == "화난 여성" and played == ["화난 여성"] and changed == [1]
@@ -616,7 +616,7 @@ def test_aria_lines_have_stroke_click_and_no_sleep_click():
     from mabinogi_addon.ui.notifier import alert_files
     sounds = alert_files(paths.resource_dir() / "sounds" / "부드러운 여성") - {"파티 알림.mp3"}
     assert len(data.alerts) == 11 and sounds == set(data.alerts)
-    assert data.alerts["비바체 연장.mp3"] == "비바체~ 잊은 거 아니지?"
+    assert data.alerts["비바체 연장.mp3"] == ("비바체~ 잊은 거 아니지?",)
     assert data.lines["annoyed_click"][0].text == "으응… 너무 자주 누르면 어지러워."
 
 
@@ -688,7 +688,7 @@ def test_choosing_other_character_swaps_the_pet(app, cfg, monkeypatch):
         ctrl.voice_changed()
         assert ctrl.window is not None and ctrl.window is not first and ctrl.window.brain.profile.idle_extra == "hairstroke"
         assert ctrl.window.tint.name() == "#f5a25d" and ctrl.picker().data.character == "아리아"
-        config.save_voice_pack("화난 여성")
+        config.save_voice_pack("자연스러운 여성")
         ctrl.voice_changed()
         assert ctrl.window is None  # 그림 없는 캐릭터 → 펫 없음
     finally:
@@ -1113,7 +1113,7 @@ def test_ian_alert_points_at_watch():
 def test_walk_values_come_from_character_data_and_corner_rush_speeds_up_steps():
     """걷기 미끄러짐(사용자 11-24): 캐릭터별 프레임 시간·속도, 이안 0.2초·75px/초."""
     assert br.IAN.walk_speed == 75.0 and br.IAN.anims["walk"][1] == (0.2,) * 6
-    for profile in (br.DARE, br.ARIA, br.IAN):
+    for profile in (br.DARE, br.ARIA, br.IAN, br.LENA):
         cycle = sum(profile.anims["walk"][1])
         assert 60 <= profile.walk_speed <= 90 and 80 <= profile.walk_speed * cycle <= 125  # 한 바퀴 거리 ≈ 보폭
     b = _ian()
@@ -1156,7 +1156,7 @@ def test_frame_anchor_loader_is_harmless_without_or_with_bad_file(app, tmp_path)
     assert pet_window._anchors(tmp_path) == {"a": (1.0, 2.0)}
     (tmp_path / "anchors.json").write_text("not json", encoding="utf-8")
     assert pet_window._anchors(tmp_path) == {}
-    assert not any((ASSETS / folder / "anchors.json").exists() for folder in ("다래", "아리아", "이안"))
+    assert not any((ASSETS / folder / "anchors.json").exists() for folder in ("다래", "아리아", "이안", "레나"))
     frames = pet_window.load_frames("이안", br.IAN)
     w = pet_window.PetWindow(_ian(), frames, "#3B5B9A")
     try:
@@ -1165,7 +1165,8 @@ def test_frame_anchor_loader_is_harmless_without_or_with_bad_file(app, tmp_path)
         w.close()
 
 
-@pytest.mark.parametrize("folder,prefix", [("다래", "talk_"), ("아리아", "talk_a_"), ("아리아", "talk_b_"), ("이안", "talk_")])
+@pytest.mark.parametrize("folder,prefix", [("다래", "talk_"), ("아리아", "talk_a_"), ("아리아", "talk_b_"), ("이안", "talk_"),
+                                           ("레나", "talk_")])
 def test_mouth_only_frames_differ_only_around_the_mouth(folder, prefix):
     """입만 바꾸기(빌드 합성, 사용자 11-24): talk_base·m1·m2는 입 둘레 작은 곳 밖에서 알파·색이 똑같다."""
     import cv2
@@ -1184,7 +1185,7 @@ def test_mouth_only_frames_differ_only_around_the_mouth(folder, prefix):
         assert h * 0.3 < ys.mean() < h * 0.65  # 얼굴(입) 높이
 
 
-@pytest.mark.parametrize("profile", [br.DARE, br.ARIA, br.IAN])
+@pytest.mark.parametrize("profile", [br.DARE, br.ARIA, br.IAN, br.LENA])
 def test_corner_without_saved_spot_is_nearest_screen_edge(profile):
     """사용자 11-24: 끌어서 정한 구석이 없으면 가까운 화면 끝(왼쪽일 수도) — 앉은 동안 유지, 다시 게임이 오면 다시 정함."""
     b = br.Brain(br.Floor(0, 1000, 700), rng=random.Random(2), profile=profile)
@@ -1227,6 +1228,7 @@ STANDING_FRAMES = {
     "아리아": ("stand", "walk", "surprise", "pet", "hair", "drag", "talk_a_", "talk_b_", "talk_happy", "talk_laugh",
              "getup_2", "rise_2", "land_0"),
     "이안": ("stand", "walk", "watch", "pet", "drag", "talk_", "fall_0", "land_2", "rise_2"),
+    "레나": ("stand", "walk", "pet", "drag", "talk_", "rise_2", "land_3"),  # 쓰다듬기 시트도 머리 폭으로(사용자 11-24)
 }
 HEAD_EXEMPT = {
     "pet_0",    # 아리아: 머리 옆 '!' 표시가 위 30% 폭에 들어감(머리는 같은 배율)
@@ -1234,7 +1236,7 @@ HEAD_EXEMPT = {
 }
 
 
-@pytest.mark.parametrize("folder", ["아리아", "이안"])
+@pytest.mark.parametrize("folder", ["아리아", "이안", "레나"])
 def test_standing_frames_keep_head_size_within_5_percent(folder):
     """서 있는 계열 머리 폭(위 30% 폭)이 stand의 ±5% — 다래는 헤일로·뿔 때문에 이 잣대가 머리가 아니라 제외."""
     d = ASSETS / folder
@@ -1248,3 +1250,144 @@ def test_standing_frames_keep_head_size_within_5_percent(folder):
         if not 0.95 <= ratio <= 1.05:
             bad[name] = round(ratio, 3)
     assert not bad
+
+
+# ---- 레나(화난 여성, 기획 11-24 '레나는 마무리해서 넘겨줘' — docs/characters/레나.md) ------------------------------
+LENA_DIR = ASSETS / "레나"
+
+
+def _lena(**kw):
+    b = br.Brain(br.Floor(0, 1000, 700), rng=random.Random(5), profile=br.LENA, **kw)
+    b.pos = (300.0, 700.0)
+    return b
+
+
+def _img(name):
+    import cv2
+    from mabinogi_addon.image_io import imread
+    return imread(LENA_DIR / f"{name}.png", cv2.IMREAD_UNCHANGED)
+
+
+def test_lena_roster_card_and_every_frame():
+    lena = roster.by_pack("화난 여성")
+    assert (lena.name, lena.known, lena.has_pet, lena.color) == ("레나", True, True, "#5B6BC9")
+    card = _img("card")
+    assert abs(card.shape[1] / card.shape[0] - 1199 / 1312) < 0.02  # 가로형 상반신을 다른 카드와 같은 세로 비율로
+    names = {n for frames, _t, _l in br.LENA.anims.values() for n in frames}
+    assert not [n for n in names if not (LENA_DIR / f"{n}.png").exists()]
+    assert _img("stand_0").shape[0] == 285 and _img("rise_2").shape[0] == 285 and _img("crouch_0").shape[0] == 285
+    assert abs(_img("sit_0").shape[0] - _img("crouch_2").shape[0]) <= 3  # 앉아 있기 = 웅크리기 끝 높이
+    from mabinogi_addon.ui import character_lines_feed
+    assert character_lines_feed.REMOTE_NAMES["레나"] == "lena-lines.json"
+
+
+def test_lena_falls_with_one_frame_and_lands_through_four_to_standing_with_cover():
+    assert br.LENA.anims["fall"][0] == ("fall_0",)
+    assert br.LENA.anims["land"][:2] == (("land_0", "land_1", "land_2", "land_3"), (0.6, 0.35, 0.5, 0.8))
+    b = _lena()
+    b.press(0, 300, 600)
+    b.move(0.1, 300, 300)
+    b.release(0.2)
+    assert b.state == "fall" and b.frame(0.3) == "fall_0"
+    t, events = _run(b, 0.2, 0.8, False)
+    assert b.state == "land" and ("say", "dropped") in events
+    seen = set()
+    while t < 4:
+        t += 0.05
+        b.tick(t, False)
+        seen.add(b.state)
+    assert "getup" not in seen and b.state in ("stand", "walk")
+    assert b.covered("land_3", "stand_0") and b.covered("pet_5", "stand_0")  # 팔짱 → 서기는 덮기 전환
+    assert not b.covered("walk_0", "walk_1") and not b.covered("land_0", "land_1")
+
+
+def test_lena_standing_click_talks_right_away_and_ends_with_two_end_frames():
+    b = _lena()
+    b.press(1, 300, 600)
+    assert b.release(1)[-1] == ("say", "click_stand") and b.state == "stand"
+    assert b.talk(1, 6, "normal") is True and b.frame(1.05) == "talk_mid_0" and b.frame(1.25) == "talk_m1_0"
+    assert "pet_0" not in {b.frame(1 + i * 0.05) for i in range(20)}
+    t, _ = _run(b, 1, 0.85, False)
+    assert b.state == "talk_end"
+    t0 = b._t0
+    assert [b.frame(t0 + x) for x in (0.1, 0.4, 0.6)] == ["talk_base_0", "talk_end1_0", "talk_end2_0"]
+    _run(b, t, t0 + 0.75, False)
+    assert b.state in ("stand", "walk")
+    e = _lena()
+    assert e.talk(1, 20, "explain") and e.frame(1.25) == "talk_emph_0"  # 설명 = 손가락 먼저
+    for mood in ("think", "happy"):  # 생각·기쁨 그림 없음 → 보통
+        m = _lena()
+        assert m.talk(1, 6, mood) and m.state == "talk"
+
+
+def test_lena_sits_without_dozing_click_keeps_sit_picture():
+    b = _lena(corner=(900.0, 700.0))
+    t, _ = _run(b, 0, 6, True)
+    seen = set()
+    for _ in range(600):
+        t += 0.05
+        b.tick(t, True)
+        seen.add(b.frame(t))
+        assert not b.zzz() and b.state not in ("sit_doze", "wake")
+    assert {"sit_0", "sit_1", "sit_2", "sit_3"} <= seen
+    frames, times, _loop = br.LENA.anims["sit_loop"]
+    zero = sum(d for f, d in zip(frames, times) if f == "sit_0")
+    assert zero / sum(times) > 0.7  # 0번이 길게, 나머지는 가끔
+    b.press(t, 900, 600)
+    assert b.release(t)[-1] == ("say", "click_sit") and b.frame(t) == "sit_0"
+
+
+def test_lena_pet_sequence_and_one_pixel_shake():
+    assert br.LENA.anims["pet_in"][:2] == (("pet_0", "pet_1"), (0.4, 0.4))
+    assert br.LENA.anims["pet_out"][:2] == (("pet_5",), (1.6,))
+    b = _lena()
+    b._go("pet_loop", 0)
+    b._last_rub = 0
+    shakes = {b.shake(i * 0.13 + 0.01) for i in range(4)}
+    assert shakes == {-1, 0, 1}
+    b._go("stand", 1)
+    assert b.shake(1.2) == 0 and _ian().shake(0.2) == 0
+
+
+def test_lena_partial_composites_keep_body_identical():
+    """부분 합성(빌드): 쓰다듬기 3·4번은 2번과 얼굴 둘레 밖이 같고, 앉아 있기 1·2·3번은 0번과 바뀐 덩어리 밖이 같다."""
+    import numpy as np
+
+    for base, others, limit in (("pet_2", ("pet_3", "pet_4"), 0.5), ("sit_0", ("sit_1", "sit_2", "sit_3"), 0.5)):
+        a = _img(base)
+        for name in others:
+            o = _img(name)
+            assert o.shape == a.shape
+            diff = np.abs(o.astype(int) - a.astype(int)).max(-1) > 0
+            assert diff.any() and diff.mean() < 0.15, name
+            ys, xs = np.where(diff)
+            assert xs.max() - xs.min() < a.shape[1] * limit + 40 and ys.max() - ys.min() < a.shape[0] * limit, name
+
+
+def test_lena_alert_lines_pick_one_of_two_and_old_string_format_still_reads():
+    data = ln.read(LENA_DIR / "lines.json")
+    from mabinogi_addon.ui.notifier import alert_files
+    sounds = alert_files(paths.resource_dir() / "sounds" / "화난 여성") - {"파티 알림.mp3"}
+    assert len(data.alerts) == 11 and sounds <= set(data.alerts) and all(len(v) == 2 for v in data.alerts.values())
+    picker = ln.Picker(data, random.Random(3))
+    seen = {picker.alert("비바체 연장.mp3").text for _ in range(40)}
+    assert seen == {"비바체, 설마 잊은 거 아니지?", "비바체 또 잊었지? 이런 것도 못 해?"}
+    assert picker.alert("투아림 부스트 발동 직전2.mp3").text in data.alerts["투아림 부스트 발동 직전.mp3"]
+    old = ln.parse(json.dumps({"schemaVersion": 2, "character": "x", "lines": {"idle": ["a"]},
+                               "alerts": {"a.mp3": "알림", "b.mp3": ["하나", "y" * 40, 3], "c.mp3": []}}).encode())
+    assert old.alerts == {"a.mp3": ("알림",), "b.mp3": ("하나",)}
+    assert ln.Picker(old).alert("a.mp3") == ln.Line("알림")
+
+
+def test_lena_lines_situations_stage_lines_and_voices():
+    data = ln.read(LENA_DIR / "lines.json")
+    assert data.character == "레나" and "click_sleep" not in data.lines
+    assert set(ln.SITUATIONS) - {"click_sleep"} <= set(data.lines)
+    staged = [line for items in data.lines.values() for line in items if line.stage > 0]
+    assert len(staged) == 24 and [line.stage for line in data.lines["stage_up"]] == [25, 50, 75, 100]
+    voices = {line.voice: (key, line.text) for key, items in data.lines.items() for line in items if line.voice}
+    names = ["켜기_1", "켜기_2", "오랜만", "밤", "게임시작", "게임끝", "휴식", "쓰다듬기끝", "클릭", "착지",
+             "구간_25", "구간_50", "구간_75", "구간_100"]
+    assert set(voices) == {f"대사/{n}.mp3" for n in names}  # 녹음목록.md '레나' 표(인사·투아림2 뺀 14줄)
+    assert voices["대사/착지.mp3"] == ("dropped", "…방금 거, 못 본 걸로 해.")
+    assert voices["대사/구간_100.mp3"] == ("stage_up", "…이 초커, 너 가져. 잃어버리면 화낼 거야.")

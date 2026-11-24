@@ -39,7 +39,7 @@
         "tests/test_character.py",
         "tests/test_overlay_capture.py"
       ],
-      "reason": "펫 창 — 판독 캡처 제외·포커스 안 가져감·키 190·말풍선 한 글자씩·말하기·프레임별 기준점(anchors.json)·덮기 전환·m2 끄덕임"
+      "reason": "펫 창 — 판독 캡처 제외·포커스 안 가져감·키 190·말풍선 한 글자씩·말하기·프레임별 기준점(anchors.json)·덮기 전환·m2 끄덕임 · 쓰다듬기 참는 중 좌우 1px 떨림"
     },
     "src/mabinogi_addon/ui/character_controller.py": {
       "tests": [
@@ -51,13 +51,13 @@
       "tests": [
         "tests/test_character.py"
       ],
-      "reason": "대사 원격 갱신(형식 검사는 character/lines)"
+      "reason": "대사 원격 갱신(형식 검사는 character/lines) · 레나 lena-lines.json"
     },
     "src/mabinogi_addon/character/brain.py": {
       "tests": [
         "tests/test_character.py"
       ],
-      "reason": "펫 상태 전환 — 캐릭터별 Profile(다래 그대로 / 아리아: 졸기 없음·앉아 웃음·서기↔머리 쓰다듬기·생각→보통), 말하기 분위기별 그림·이안 Profile(놀람 대신 시선 위→말하기, 착지 → 바로 서기, 시계 보기 번갈아, 알림 = 시계 가리키기), 대기 동작 클릭 = idle_extra_click·캐릭터별 걷기 속도·프레임 시간(보폭 맞춤), 서두를 때 걸음 그림 빨리·새 말하기 시간표(사이·입만 바꾸기·강조 1번·깜빡임·끝), 덮기 전환 판정·구석 없으면 가까운 화면 끝·이안 클릭 = 바로 말하기"
+      "reason": "펫 상태 전환 — 캐릭터별 Profile(다래 그대로 / 아리아: 졸기 없음·앉아 웃음·서기↔머리 쓰다듬기·생각→보통), 말하기 분위기별 그림·이안 Profile(놀람 대신 시선 위→말하기, 착지 → 바로 서기, 시계 보기 번갈아, 알림 = 시계 가리키기), 대기 동작 클릭 = idle_extra_click·캐릭터별 걷기 속도·프레임 시간(보폭 맞춤), 서두를 때 걸음 그림 빨리·새 말하기 시간표(사이·입만 바꾸기·강조 1번·깜빡임·끝), 덮기 전환 판정·구석 없으면 가까운 화면 끝·이안 클릭 = 바로 말하기 · 레나 Profile(서서 클릭 바로 말하기·떨어지기 한 장·착지 4장 → 덮기로 서기·쓰다듬기 1px 떨림·'흥' → 덮기·앉아 있기 0 길게·말 끝 end1·end2)"
     },
     "src/mabinogi_addon/character/affinity.py": {
       "tests": [
@@ -69,7 +69,7 @@
       "tests": [
         "tests/test_character.py"
       ],
-      "reason": "대사 무작위·연속 금지·형식 검사·분위기(보통·설명·생각·기쁨)·2차 알림 말풍선 없으면 1차로·schemaVersion 2 구간(stage)·목소리(voice) 키, 구간 필터·2배"
+      "reason": "대사 무작위·연속 금지·형식 검사·분위기(보통·설명·생각·기쁨)·2차 알림 말풍선 없으면 1차로·schemaVersion 2 구간(stage)·목소리(voice) 키, 구간 필터·2배 · 알림 값 글 목록(무작위 하나, 예전 글 하나 형식도 읽음)"
     },
     "src/mabinogi_addon/assets/characters/다래/lines.json": {
       "tests": [
@@ -168,7 +168,7 @@
       "tests": [
         "tests/test_character.py"
       ],
-      "reason": "아리아(부드러운 여성) known·has_pet·#F5A25D·card, 카드 순서 다래→아리아→??? 3장·이안(차분한 남성) #3B5B9A·card"
+      "reason": "아리아(부드러운 여성) known·has_pet·#F5A25D·card, 카드 순서 다래→아리아→??? 3장·이안(차분한 남성) #3B5B9A·card · 레나(화난 여성) #5B6BC9·card"
     },
     "src/mabinogi_addon/assets/characters/아리아/lines.json": {
       "tests": [
@@ -196,6 +196,12 @@
         "tests/test_bundle_layout.py"
       ],
       "reason": "이안 대사·알림 11·구간 24·idle_extra_click(시계 보는 중 클릭), assets 번들 포함"
+    },
+    "src/mabinogi_addon/assets/characters/레나/lines.json": {
+      "tests": [
+        "tests/test_character.py"
+      ],
+      "reason": "레나 대사 — 상황·알림 11개(두 줄 무작위)·구간 대사 24줄·stage_up 4·목소리 14"
     }
   }
 }

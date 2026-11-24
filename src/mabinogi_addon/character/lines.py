@@ -4,6 +4,7 @@
     {"schemaVersion": 1, "character": "다래",
      "lines": {"click_stand": ["…", {"text": "…", "mood": "explain"}, …], …},  # 상황 → 줄 목록(분위기는 선택)
      "alerts": {"비바체 연장.mp3": "…", …}}        # 알림 녹음 파일 → 같은 뜻의 말풍선
+알림 값은 글 하나 또는 글 목록(레나 — 둘 중 무작위, 사용자 11-24). 예전 글 하나 형식도 그대로 읽는다.
 한 줄은 말풍선 두 줄(약 30자) 안 — 넘으면 그 줄만 버린다. 모르는 상황 이름도 받아 둔다(앞으로 늘릴 자리).
 분위기(사용자 11-24 말하기): normal(보통 — 입 3단계)·explain(설명 — 손짓·가리키기)·think(생각 — 턱에 손)·happy(기쁨 — 웃음).
 없거나 모르는 값이면 normal.
@@ -59,7 +60,7 @@ def _voice(value) -> str | None:
 class Lines:
     character: str
     lines: dict[str, tuple[Line, ...]]
-    alerts: dict[str, str]
+    alerts: dict[str, tuple[str, ...]]
 
 
 def _line(item) -> Line | None:
@@ -96,7 +97,13 @@ def parse(data: bytes) -> Lines:
                 out[key] = kept
     if not out:
         raise ValueError("no usable lines")
-    return Lines(name, out, {k: v for k, v in alerts.items() if isinstance(k, str) and _ok(v)})
+    return Lines(name, out, {k: v for k, v in ((k, _alert(v)) for k, v in alerts.items() if isinstance(k, str)) if v})
+
+
+def _alert(value) -> tuple[str, ...]:
+    """알림 값 — 글 하나 또는 글 목록(맞지 않는 글은 버림)."""
+    items = value[:8] if isinstance(value, list) else [value]
+    return tuple(text for text in items if _ok(text))
 
 
 def read(path: Path) -> Lines:
@@ -129,7 +136,7 @@ class Picker:
 
     def alert(self, sound_file: str) -> Line | None:
         """알림 녹음 파일 이름 → 같은 뜻의 말풍선(보통 분위기, 없으면 None — 말풍선 없이 알아챔만)."""
-        text = self.data.alerts.get(sound_file)
-        if text is None and sound_file.endswith("2.mp3"):  # 추가 알림 줄이 아직 없으면 1차 말풍선으로
-            text = self.data.alerts.get(sound_file[:-5] + ".mp3")
-        return Line(text) if text else None
+        texts = self.data.alerts.get(sound_file)
+        if not texts and sound_file.endswith("2.mp3"):  # 추가 알림 줄이 아직 없으면 1차 말풍선으로
+            texts = self.data.alerts.get(sound_file[:-5] + ".mp3")
+        return Line(self.rng.choice(texts)) if texts else None
