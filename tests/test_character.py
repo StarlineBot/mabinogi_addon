@@ -1184,3 +1184,30 @@ def test_mouth_only_frames_differ_only_around_the_mouth(folder, prefix):
         h, w = base.shape[:2]
         assert xs.max() - xs.min() < w * 0.25 and ys.max() - ys.min() < h * 0.13  # 입 둘레 밖은 0 차이
         assert h * 0.3 < ys.mean() < h * 0.65  # 얼굴(입) 높이
+
+
+@pytest.mark.parametrize("profile", [br.DARE, br.ARIA, br.IAN])
+def test_corner_without_saved_spot_is_nearest_screen_edge(profile):
+    """사용자 11-24: 끌어서 정한 구석이 없으면 가까운 화면 끝(왼쪽일 수도) — 앉은 동안 유지, 다시 게임이 오면 다시 정함."""
+    b = br.Brain(br.Floor(0, 1000, 700), rng=random.Random(2), profile=profile)
+    b.pos = (300.0, 700.0)
+    b._next_walk = 1e9
+    t, _ = _run(b, 0, 1.3, True)
+    assert b.state == "walk" and b.facing_left  # 왼쪽 끝으로 걸어감(걷기 그림 뒤집기)
+    t, _ = _run(b, t, 6, True)
+    assert b.pos == (150.0, 700.0) and b.state in profile.sitting  # 왼쪽 끝(창 폭 절반 안쪽)에 앉음
+    b.pos = (900.0, 700.0)  # 앉은 동안 다시 계산하지 않음(좌우로 안 튐)
+    assert b.home() == (150.0, 700.0)
+    b.pos = (150.0, 700.0)
+    t, _ = _run(b, t, 3, False)  # 게임이 뒤로
+    b.pos = (800.0, 700.0)
+    b._go("stand", t)
+    t, _ = _run(b, t, 6, True)  # 다시 앞 — 지금 자리(오른쪽) 기준
+    assert b.pos == (850.0, 700.0) and b.state in profile.sitting
+
+
+def test_saved_corner_still_wins_over_nearest_edge():
+    b = _brain(corner=(400.0, 500.0))
+    b.pos = (100.0, 700.0)
+    t, _ = _run(b, 0, 6, True)
+    assert b.pos == (400.0, 500.0)

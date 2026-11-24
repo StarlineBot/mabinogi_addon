@@ -243,6 +243,7 @@ class Brain:
     _talk_set: dict | None = None
     _emph_at: float | None = None
     _blinks: tuple = ()
+    _edge: tuple[float, float] | None = None   # 끌어서 정한 구석이 없을 때 이번 게임에 앉을 화면 끝
 
     def __post_init__(self) -> None:
         if self.pos == (0.0, 0.0):
@@ -272,9 +273,18 @@ class Brain:
         return self.profile.doze_state is not None and self.state == self.profile.doze_state
 
     def home(self) -> tuple[float, float]:
+        """게임 중 앉을 자리 — 끌어서 정한 구석이 있으면 그곳, 없으면 가까운 화면 끝(사용자 11-24 — 왼쪽일 수도)."""
         if self.corner is not None:
             return self.corner
+        if self._edge is not None:
+            return self._edge
         return (self.floor.clamp_x(self.floor.right), self.floor.y)
+
+    def _pick_edge(self) -> None:
+        """구석으로 출발하는 순간 한 번만 정함 — 바닥 가운데보다 왼쪽이면 왼쪽 끝, 아니면 오른쪽 끝(앉은 동안 유지)."""
+        middle = (self.floor.left + self.floor.right) / 2
+        x = self.floor.left if self.pos[0] < middle else self.floor.right
+        self._edge = (self.floor.clamp_x(x), self.floor.y)
 
     # ---- 내부 -------------------------------------------------------------------------------
     def _go(self, state: str, now: float) -> None:
@@ -367,6 +377,7 @@ class Brain:
         if self._front and now - self._front_since >= FRONT_DELAY and self._goal != "corner":
             self._goal = "corner"
             self._hunt_time = 0.0
+            self._pick_edge()
             if not self._dragging and self.state in STANDING:
                 events.append(("say", "game_enter"))
                 if self.state == "walk":  # 돌아다니던 걸음을 구석 쪽으로 바꿈(빠르기도 다시 정함)
