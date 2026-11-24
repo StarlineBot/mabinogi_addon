@@ -165,7 +165,7 @@
         "tests/test_release_notes.py",
         "tests/test_release_notes_trigger.py"
       ],
-      "reason": "0.56.0 노트 맨 위 — 캐릭터(베타) 공개 헤드라인·호감도 안 오름 주의·크기 맞춤, v0.55.9 이하 그대로(게시본과 같음)"
+      "reason": "0.56.0 노트 맨 위 — 캐릭터(베타) 공개 헤드라인·호감도 안 오름 주의, v0.55.10 이하 그대로(게시본과 같음)"
     },
     "src/mabinogi_addon/character/roster.py": {
       "tests": [
