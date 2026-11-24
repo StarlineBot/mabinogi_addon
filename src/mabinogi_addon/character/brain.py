@@ -10,6 +10,8 @@
 - 끌기: 끌려 다니기 → 놓으면 떨어져 착지 → 앉기 → 일어나기. 게임이 앞일 때 놓은 자리는 새 구석(저장).
 - 쓰다듬기: 서 있을 때 머리 위를 좌우로 문지르면 알아챔 → 깜짝 → 부끄 → (문지르는 동안 반복) → 손 떼면 삐침.
 - 알림: 앉아 있으면 알아챔, 서 있으면 알아챔(!) 한 번 + 말풍선.
+- 말하기: 서 있을 때 말풍선이 뜨면 글자가 다 나올 때까지 분위기별 그림(보통=입 3단계·설명=손짓·생각=턱에 손·
+  기쁨=웃음) → 말 끝 다묾 잠시 → 서 있기. 앉아 있으면 그림 그대로 말풍선만.
 tick·입력은 사건 목록을 돌려준다: ("say", 상황) / ("say_text", 글) / ("click",) / ("pet_done",) /
 ("corner_saved", x, y) / ("corner_minute",) — 말풍선·호감도·저장은 창이 처리한다.
 """
@@ -51,13 +53,23 @@ ANIMS: dict[str, tuple[tuple[str, ...], tuple[float, ...], bool]] = {
     "sit_notice": (("sit_notice_0",), (1.6,), False),
     "rise": (("rise_0", "rise_1", "rise_2"), (0.25,) * 3, False),
     "wake": (("wake_0", "wake_1", "wake_2", "wake_3"), (0.3, 0.5, 0.3, 0.6), False),
+    # 말하기(사용자 11-24): 글자가 나오는 동안 분위기별 그림 → 다 나오면 말 끝 다묾 잠시 → 서 있기
+    "talk_normal": (("talk_small_0", "talk_big_0", "talk_small_0", "talk_closed_0"), (0.2,) * 4, True),
+    "talk_explain": (("talk_hand_up_0", "talk_hand_out_0", "talk_point_0"), (0.22,) * 3, True),
+    "talk_think": (("talk_think_0",), (1.0,), True),
+    "talk_happy": (("talk_smile_0",), (1.0,), True),
+    "talk_end": (("talk_end_0",), (0.7,), False),
 }
+TYPE_SECONDS = 0.07        # 말풍선 글자 한 자가 나오는 시간(창이 같은 값으로 한 글자씩 보여 줌)
+TALKING = ("talk_normal", "talk_explain", "talk_think", "talk_happy", "talk_end")
 SITTING = ("crouch", "sit_drowsy", "sit_doze", "sit_half", "sit_notice")
 STANDING = ("stand", "walk")
+UPRIGHT = STANDING + TALKING   # 서 있는 자세(클릭 놀람·쓰다듬기·알림 알아챔이 되는 상태)
 # 한 번 도는 동작이 끝나면 다음 동작
 _NEXT = {"surprise": "stand", "land": "getup", "getup": "stand", "pet_in": "pet_loop", "pet_out": "stand",
          "alert": "stand", "crouch": "sit_drowsy", "sit_drowsy": "sit_doze", "sit_doze": "sit_half",
-         "sit_half": "sit_drowsy", "sit_notice": "sit_drowsy", "rise": "stand", "wake": "stand"}
+         "sit_half": "sit_drowsy", "sit_notice": "sit_drowsy", "rise": "stand", "wake": "stand",
+         "talk_end": "stand"}
 
 
 @dataclass
@@ -66,7 +78,7 @@ class Floor:
     right: float
     y: float          # 바닥(작업 표시줄 위 끝) — 발 밑 y
 
-    def clamp_x(self, x: float, half: float = 60.0) -> float:
+    def clamp_x(self, x: float, half: float = 150.0) -> float:  # 창 폭(300)의 절반 — 말풍선이 화면 밖으로 안 잘리게
         return max(self.left + half, min(self.right - half, x))
 
 
@@ -98,6 +110,7 @@ class Brain:
     _corner_time: float = 0.0
     _hunt_time: float = 0.0
     _speed: float = WALK_SPEED
+    _talk_until: float = 0.0
 
     def __post_init__(self) -> None:
         if self.pos == (0.0, 0.0):
@@ -177,6 +190,8 @@ class Brain:
                 self._go("land", now)
                 events.append(("say", "dropped"))
             return events
+        if self.state in TALKING and self.state != "talk_end" and now >= self._talk_until:
+            self._go("talk_end", now)  # 글자가 다 나옴 → 입 다묾 잠시
         if self.state == "pet_loop" and now - self._last_rub > RUB_STOP:
             self._go("pet_out", now)
             events.append(("say", "pet_end"))
@@ -285,7 +300,7 @@ class Brain:
                 events.append(("say", "dropped"))
             return events
         events.append(("click",))
-        if self.state in STANDING:
+        if self.state in UPRIGHT:
             self._target = None
             self._go("surprise", now)
             events.append(("say", "click_stand"))
@@ -305,7 +320,7 @@ class Brain:
         if self.state in ("pet_in", "pet_loop"):
             self._last_rub = now
             return []
-        if self.state not in STANDING:
+        if self.state not in UPRIGHT:
             return []
         if self._rub_x is not None:
             d = x - self._rub_x
@@ -330,9 +345,19 @@ class Brain:
         """목소리 알림 — 앉아 있으면 알아챔, 서 있으면 알아챔(!) 한 번(말풍선은 창이 띄움)."""
         if self.state in SITTING:
             self._go("sit_notice", now)
-        elif self.state in STANDING:
+        elif self.state in UPRIGHT:
             self._target = None
             self._go("alert", now)
+
+    def talk(self, now: float, chars: int, mood: str = "normal") -> bool:
+        """말풍선이 뜸 — 서 있으면(걷던 중이면 멈추고) 말하기: 글자가 다 나올 때까지 분위기별 그림.
+        앉아 있거나 다른 동작 중이면 그림은 그대로(말풍선만). 말하기로 바꿨으면 True."""
+        if self.state not in UPRIGHT or self._dragging:
+            return False
+        self._target = None
+        self._talk_until = now + max(0.6, chars * TYPE_SECONDS)
+        self._go(f"talk_{mood}" if f"talk_{mood}" in ANIMS else "talk_normal", now)
+        return True
 
     def dragging(self) -> bool:
         return self._dragging

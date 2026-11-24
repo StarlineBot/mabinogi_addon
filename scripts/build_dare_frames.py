@@ -116,13 +116,21 @@ def build() -> dict[str, list[np.ndarray]]:
     rise = sheet("졸린 천사 캐릭터의 상승 애니메이션.png")
     r0, r2 = crouch_w / rise[0].shape[1], STAND_H / rise[2].shape[0]
     out["rise"] = [scaled(f, r) for f, r in zip(rise, (r0, (r0 + r2) / 2, r2))]
+    talk = sheet("6종 천사 악마 치비 스프라이트 시트.png")  # 입 다묾·조금 벌림·크게 벌림·손 들고·손 내밀고·말 끝 다묾
+    for key, frame in zip(("talk_closed", "talk_small", "talk_big", "talk_hand_up", "talk_hand_out", "talk_end"), talk):
+        out[key] = [scaled(frame, by_height(talk, 1.0))]
+    mood = sheet("세 가지 표정의 천사 소녀들.png")  # 가리키며 설명·턱에 손 생각·눈 감고 웃음
+    for key, frame in zip(("talk_point", "talk_think", "talk_smile"), mood):
+        out[key] = [scaled(frame, by_height(mood, 1.0))]
     wake = sheet("잠에서 깨어나는 꼬마 천사 악마_sprite.sheet.png")
     out["wake"] = [scaled(f, crouch_w / wake[0].shape[1]) for f in wake]
     return out
 
 
 EXPECTED = {"stand": 1, "walk": 6, "surprise": 2, "pet": 6, "drag": 4, "land": 3, "getup": 3, "crouch": 3,
-            "sit_drowsy": 1, "sit_notice": 1, "sit_doze": 1, "sit_half": 1, "rise": 3, "wake": 4}
+            "sit_drowsy": 1, "sit_notice": 1, "sit_doze": 1, "sit_half": 1, "rise": 3, "wake": 4,
+            "talk_closed": 1, "talk_small": 1, "talk_big": 1, "talk_hand_up": 1, "talk_hand_out": 1, "talk_end": 1,
+            "talk_point": 1, "talk_think": 1, "talk_smile": 1}
 
 
 def main() -> None:

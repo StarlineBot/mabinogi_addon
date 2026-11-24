@@ -157,23 +157,27 @@ def test_builtin_lines_cover_every_situation_and_every_quiet_voice_alert():
     sounds = {p.name for p in (paths.resource_dir() / "sounds" / "조용한 여성").glob("*.mp3")}
     assert sounds and sounds <= set(data.alerts)
     assert data.alerts["비바체 연장.mp3"] == "비바체… 잊은 거 아니지…?"
+    moods = {line.mood for items in data.lines.values() for line in items}
+    assert moods == set(ln.MOODS)  # 보통·설명·생각·기쁨 모두 쓰임
 
 
 def test_picker_is_random_but_never_repeats_the_same_line_in_a_row():
     picker = ln.Picker(ln.parse(json.dumps({"schemaVersion": 1, "character": "다래",
                                             "lines": {"idle": ["가", "나", "다"], "one": ["하나"]}}).encode()),
                        random.Random(1))
-    seq = [picker.pick("idle") for _ in range(200)]
+    seq = [picker.pick("idle").text for _ in range(200)]
     assert all(a != b for a, b in zip(seq, seq[1:])) and set(seq) == {"가", "나", "다"}
-    assert picker.pick("one") == picker.pick("one") == "하나"  # 한 줄뿐이면 그 줄
+    assert picker.pick("one") == picker.pick("one") == ln.Line("하나")  # 한 줄뿐이면 그 줄
     assert picker.pick("missing") is None
 
 
 def test_lines_parse_drops_bad_lines_and_rejects_bad_files():
     data = ln.parse(json.dumps({"schemaVersion": 1, "character": "다래",
-                                "lines": {"a": ["좋아", "x" * 31, "\x07", 3], "b": []},
+                                "lines": {"a": ["좋아", "x" * 31, "\x07", 3, {"text": "음…", "mood": "think"},
+                                                {"text": "와", "mood": "angry"}, {"mood": "happy"}], "b": []},
                                 "alerts": {"a.mp3": "알림", "b.mp3": "y" * 40}}).encode())
-    assert data.lines == {"a": ("좋아",)} and data.alerts == {"a.mp3": "알림"}
+    assert data.lines == {"a": (ln.Line("좋아"), ln.Line("음…", "think"), ln.Line("와"))}  # 모르는 분위기 = 보통
+    assert data.alerts == {"a.mp3": "알림"}
     for bad in (b"[]", b'{"schemaVersion": 2}', b'{"schemaVersion": true, "character": "a", "lines": {"a": ["b"]}}',
                 b"x" * (ln.MAX_BYTES + 1)):
         with pytest.raises(ValueError):
@@ -293,6 +297,40 @@ def test_corner_minute_event_every_minute_while_sitting_in_game():
     assert ("corner_minute",) not in events[4:]  # 게임 밖이면 안 셈
 
 
+@pytest.mark.parametrize("mood,frames", [
+    ("normal", {"talk_small_0", "talk_big_0", "talk_closed_0"}),
+    ("explain", {"talk_hand_up_0", "talk_hand_out_0", "talk_point_0"}),
+    ("think", {"talk_think_0"}),
+    ("happy", {"talk_smile_0"}),
+    ("angry", {"talk_small_0", "talk_big_0", "talk_closed_0"}),
+])
+def test_talking_picks_frames_by_mood_then_closes_mouth(mood, frames):
+    b = _brain()
+    b._target = (800.0, 700.0)
+    b._go("walk", 0)
+    assert b.talk(1.0, 10, mood) is True and b._target is None  # 걷다 멈추고 말함
+    seen = {b.frame(1.0 + i * 0.05) for i in range(14)}  # 10글자 × 0.07초 = 0.7초 동안
+    assert seen == frames
+    _run(b, 1.0, 0.75, False)
+    assert b.state == "talk_end" and b.frame(1.8) == "talk_end_0"
+    _run(b, 1.75, 1.0, False)
+    assert b.state in ("stand", "walk")
+
+
+def test_talking_while_sitting_or_busy_keeps_the_picture():
+    b = _brain()
+    for state in ("sit_drowsy", "sit_doze", "crouch", "land", "pet_loop", "drag"):
+        b._go(state, 1)
+        assert b.talk(1, 8, "happy") is False and b.state == state
+
+
+def test_click_while_talking_is_surprise():
+    b = _brain()
+    b.talk(1, 20)
+    b.press(1.1, 300, 600)
+    assert b.release(1.1)[-1] == ("say", "click_stand") and b.state == "surprise"
+
+
 def test_alert_notice_pose():
     b = _brain()
     b.notify(1)
@@ -337,11 +375,17 @@ def test_pet_window_draws_figure_190px_and_follows_feet(app):
         w.grab()
         assert round(w._sprite.height()) == br.FIGURE_H  # 서 있을 때 키 190
         assert (w.x() + w.width() / 2, w.y() + WIN_H - FOOT) == b.pos
-        w.say("응… 안녕.")
-        assert w.bubble() == "응… 안녕."
+        w.say(ln.Line("응… 안녕.", "happy"))
+        assert w.bubble() == "응… 안녕." and w.bubble_shown() == "응"  # 한 글자씩
+        assert b.state == "talk_happy" and b.frame(clock[0]) == "talk_smile_0"
+        clock[0] += 0.15
+        assert w.bubble_shown() == "응… "[:3]
+        clock[0] += 1
+        w.step()
+        assert w.bubble_shown() == "응… 안녕." and b.state == "talk_end"  # 다 나옴 → 입 다묾
         clock[0] += 10
         w.step()
-        assert w.bubble() is None
+        assert w.bubble() is None and b.state in ("stand", "walk")
     finally:
         w.close()
 

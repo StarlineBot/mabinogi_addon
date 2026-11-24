@@ -17,7 +17,7 @@ from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from mabinogi_addon import paths  # noqa: E402
 from mabinogi_addon.character.brain import Brain, Floor  # noqa: E402
-from mabinogi_addon.character.lines import Picker, read  # noqa: E402
+from mabinogi_addon.character.lines import Line, Picker, read  # noqa: E402
 from mabinogi_addon.ui.pet_window import PetWindow, load_frames  # noqa: E402
 
 OUT = Path("docs/assets/character-alpha-20261124")
@@ -67,6 +67,14 @@ def main() -> None:
     # 2) 클릭 → 놀람
     brain.press(clock.t, *brain.pos); window.events.emit(brain.release(clock.t))
     shoot(2.5, "서 있을 때 클릭 — 놀람")
+    # 2-1) 말하기: 글자가 한 자씩, 분위기별 그림(보통 입 3단계·설명 손짓·생각·기쁨)
+    brain._next_walk = clock.t + 99
+    for text, mood, label in (("나 여기 있어… 계속.", "normal", "말하기 — 보통(입 3단계)"),
+                              ("버프 끝나면… 내가 말해 줄게.", "explain", "말하기 — 설명(손짓·가리키기)"),
+                              ("…구름 같은 거 보고 싶다.", "think", "말하기 — 생각(턱에 손)"),
+                              ("오늘도… 같이 있자.", "happy", "말하기 — 기쁨(웃음)")):
+        window.say(Line(text, mood))
+        shoot(3.0, label)
     # 3) 쓰다듬기: 머리 위 좌우로 문지름
     brain._target = None; brain._go("stand", clock.t); brain._next_walk = clock.t + 99
     head_y = brain.pos[1] - 165

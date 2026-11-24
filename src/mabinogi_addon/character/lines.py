@@ -2,9 +2,11 @@
 
 데이터 파일 형식(제작자 잡담처럼 앱 배포 없이 늘릴 수 있게 — 내장본 + 원격 갱신본):
     {"schemaVersion": 1, "character": "다래",
-     "lines": {"click_stand": ["…", …], …},        # 상황 → 줄 목록
+     "lines": {"click_stand": ["…", {"text": "…", "mood": "explain"}, …], …},  # 상황 → 줄 목록(분위기는 선택)
      "alerts": {"비바체 연장.mp3": "…", …}}        # 알림 녹음 파일 → 같은 뜻의 말풍선
 한 줄은 말풍선 두 줄(약 30자) 안 — 넘으면 그 줄만 버린다. 모르는 상황 이름도 받아 둔다(앞으로 늘릴 자리).
+분위기(사용자 11-24 말하기): normal(보통 — 입 3단계)·explain(설명 — 손짓·가리키기)·think(생각 — 턱에 손)·happy(기쁨 — 웃음).
+없거나 모르는 값이면 normal.
 """
 from __future__ import annotations
 
@@ -15,6 +17,7 @@ from pathlib import Path
 
 MAX_BYTES = 128 * 1024
 MAX_CHARS = 30
+MOODS = ("normal", "explain", "think", "happy")
 SITUATIONS = (
     "click_stand", "click_sit", "click_sleep", "pet_start", "pet_during", "pet_end", "drag", "dropped",
     "game_enter", "game_exit", "long_hunt", "hello", "hello_long", "night", "morning", "idle",
@@ -27,11 +30,27 @@ def _ok(text) -> bool:
             and not any(ord(c) < 32 or 127 <= ord(c) <= 159 for c in text))
 
 
+@dataclass(frozen=True)
+class Line:
+    text: str
+    mood: str = "normal"
+
+
 @dataclass
 class Lines:
     character: str
-    lines: dict[str, tuple[str, ...]]
+    lines: dict[str, tuple[Line, ...]]
     alerts: dict[str, str]
+
+
+def _line(item) -> Line | None:
+    if isinstance(item, dict):
+        text, mood = item.get("text"), item.get("mood", "normal")
+    else:
+        text, mood = item, "normal"
+    if not _ok(text):
+        return None
+    return Line(text, mood if mood in MOODS else "normal")
 
 
 def parse(data: bytes) -> Lines:
@@ -46,10 +65,10 @@ def parse(data: bytes) -> Lines:
     name, lines, alerts = raw.get("character"), raw.get("lines"), raw.get("alerts", {})
     if not isinstance(name, str) or not isinstance(lines, dict) or not isinstance(alerts, dict):
         raise ValueError("invalid lines data")
-    out: dict[str, tuple[str, ...]] = {}
+    out: dict[str, tuple[Line, ...]] = {}
     for key, items in lines.items():
         if isinstance(key, str) and isinstance(items, list):
-            kept = tuple(s for s in items[:64] if _ok(s))
+            kept = tuple(line for line in map(_line, items[:64]) if line is not None)
             if kept:
                 out[key] = kept
     if not out:
@@ -67,17 +86,18 @@ class Picker:
     """상황별 무작위 고르기. 같은 상황에서 바로 앞 줄은 다시 안 고른다(줄이 둘 이상일 때)."""
     data: Lines
     rng: random.Random = field(default_factory=random.Random)
-    _last: dict[str, str] = field(default_factory=dict)
+    _last: dict[str, Line] = field(default_factory=dict)
 
-    def pick(self, situation: str) -> str | None:
+    def pick(self, situation: str) -> Line | None:
         items = self.data.lines.get(situation, ())
         if not items:
             return None
-        choices = [s for s in items if s != self._last.get(situation)] or list(items)
-        text = self.rng.choice(choices)
-        self._last[situation] = text
-        return text
+        choices = [line for line in items if line != self._last.get(situation)] or list(items)
+        line = self.rng.choice(choices)
+        self._last[situation] = line
+        return line
 
-    def alert(self, sound_file: str) -> str | None:
-        """알림 녹음 파일 이름 → 같은 뜻의 말풍선(없으면 None — 말풍선 없이 알아챔만)."""
-        return self.data.alerts.get(sound_file)
+    def alert(self, sound_file: str) -> Line | None:
+        """알림 녹음 파일 이름 → 같은 뜻의 말풍선(보통 분위기, 없으면 None — 말풍선 없이 알아챔만)."""
+        text = self.data.alerts.get(sound_file)
+        return Line(text) if text else None

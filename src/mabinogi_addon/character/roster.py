@@ -21,7 +21,7 @@ class Character:
     has_pet: bool     # 화면을 돌아다니는 SD 펫 그림이 있는지(알파는 다래만)
 
 
-DARE = Character("조용한 여성", "다래", "조용한 여성", "#B9A3E3", "다래/card.png", True, True)
+DARE = Character("조용한 여성", "다래", "조용한 여성", "#B48CE6", "다래/card.png", True, True)
 
 ROSTER: tuple[Character, ...] = (
     DARE,

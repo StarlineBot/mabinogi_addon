@@ -147,6 +147,9 @@ def test_config_restart_blocks_new_alpha_operations_and_stops_capture(window,mon
     c=w.optimization_tools
     monkeypatch.setattr(module, 'optimization_available',lambda:True)
     c.open()
+    # open()이 탭을 열며 시작한 읽기 전용 확인(자동 점검) 스레드가 끝난 뒤에 본다 — 병렬 부하에서 아직 돌던 그 확인을
+    # '새 최적화'로 잘못 세던 순서 의존(0.55.9 배포 검사에서 재현, 한 줄 실행은 통과)
+    if c.engine.thread is not None: c.engine.thread.join(10)
     c.frames=True
     w._config_pending_restart=True
     monkeypatch.setattr(c.engine,'start',lambda *a:pytest.fail('no new optimization while restart pending'))

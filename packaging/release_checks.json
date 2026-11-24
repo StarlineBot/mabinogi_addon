@@ -38,7 +38,7 @@
         "tests/test_character.py",
         "tests/test_overlay_capture.py"
       ],
-      "reason": "펫 창 — 판독 캡처 제외·포커스 안 가져감·키 190·말풍선"
+      "reason": "펫 창 — 판독 캡처 제외·포커스 안 가져감·키 190·말풍선 한 글자씩·말하기"
     },
     "src/mabinogi_addon/ui/character_controller.py": {
       "tests": [
@@ -56,7 +56,7 @@
       "tests": [
         "tests/test_character.py"
       ],
-      "reason": "펫 상태 전환(게임 앞/뒤·클릭·끌기·쓰다듬기·자다 깨기)"
+      "reason": "펫 상태 전환(게임 앞/뒤·클릭·끌기·쓰다듬기·자다 깨기·말하기 분위기별 그림)"
     },
     "src/mabinogi_addon/character/affinity.py": {
       "tests": [
@@ -68,7 +68,7 @@
       "tests": [
         "tests/test_character.py"
       ],
-      "reason": "대사 무작위·연속 금지·형식 검사"
+      "reason": "대사 무작위·연속 금지·형식 검사·분위기(보통·설명·생각·기쁨)"
     },
     "src/mabinogi_addon/assets/characters/다래/lines.json": {
       "tests": [

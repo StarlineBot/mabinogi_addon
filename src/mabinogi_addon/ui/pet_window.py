@@ -62,7 +62,7 @@ class PetWindow(QWidget):
         self._clock = clock
         self._front = False
         self._front_checked = -1e9
-        self._bubble: tuple[str, float] | None = None
+        self._bubble: tuple[str, float, float] | None = None   # (글, 나오기 시작, 사라질 때)
         self._sprite = QRectF()
         self._shown = None            # 마지막으로 그린 것(프레임·위치·말풍선) — 같으면 다시 안 그림(CPU)
         self._scaled: dict[str, QImage] = {}
@@ -80,13 +80,27 @@ class PetWindow(QWidget):
         self._timer.stop()
         self.hide()
 
-    def say(self, text: str | None) -> None:
-        if text:
-            self._bubble = (text, self._clock() + BUBBLE_SECONDS)
-            self.update()
+    def say(self, line, mood: str = "normal") -> None:
+        """말풍선 — 글자가 한 자씩 나오고(TYPE_SECONDS), 서 있으면 그동안 말하기 그림(분위기별).
+        line은 글(str) 또는 character.lines.Line."""
+        if not line:
+            return
+        text, mood = (line, mood) if isinstance(line, str) else (line.text, line.mood)
+        now = self._clock()
+        self._bubble = (text, now, now + len(text) * brain_mod.TYPE_SECONDS + BUBBLE_SECONDS)
+        self.brain.talk(now, len(text), mood)
+        self.update()
 
     def bubble(self) -> str | None:
         return self._bubble[0] if self._bubble else None
+
+    def bubble_shown(self, now: float | None = None) -> str:
+        """지금 보이는 만큼의 글(한 글자씩 나옴)."""
+        if not self._bubble:
+            return ""
+        text, start, _end = self._bubble
+        now = self._clock() if now is None else now
+        return text[:max(1, min(len(text), int((now - start) / brain_mod.TYPE_SECONDS) + 1))]
 
     # ---- 시간 --------------------------------------------------------------------------------
     def step(self) -> None:
@@ -98,11 +112,11 @@ class PetWindow(QWidget):
             except Exception:  # noqa: BLE001 — 판정 실패는 '게임 밖'으로
                 self._front = False
         events = self.brain.tick(now, self._front)
-        if self._bubble and now >= self._bubble[1]:
+        if self._bubble and now >= self._bubble[2]:
             self._bubble = None
         self._place()
         # 서 있기·앉아 있기처럼 그림이 그대로면 다시 그리지 않는다(Zzz가 떠오르는 동안만 매번)
-        shown = (self.brain.frame(now), self.brain.facing_left, self._bubble and self._bubble[0])
+        shown = (self.brain.frame(now), self.brain.facing_left, self.bubble_shown(now))
         if shown != self._shown or self.brain.zzz():
             self._shown = shown
             self.update()
@@ -157,7 +171,7 @@ class PetWindow(QWidget):
             if self.brain.zzz():
                 self._paint_zzz(p, rect, now)
         if self._bubble:
-            self._paint_bubble(p, self._bubble[0])
+            self._paint_bubble(p, self._bubble[0], self.bubble_shown(now))
         p.end()
 
     def _paint_zzz(self, p: QPainter, rect: QRectF, now: float) -> None:
@@ -182,12 +196,13 @@ class PetWindow(QWidget):
             p.drawPath(path)
         p.setOpacity(1.0)
 
-    def _paint_bubble(self, p: QPainter, text: str) -> None:
+    def _paint_bubble(self, p: QPainter, text: str, shown: str) -> None:
+        """흰 바탕·캐릭터 색 테두리·꼬리, 머리 위. 크기는 다 나온 글 기준(한 글자씩 나와도 말풍선이 흔들리지 않게)."""
         font = QFont(self.font())
         font.setPixelSize(13)
         metrics = QFontMetricsF(font)
         box = metrics.boundingRect(QRectF(0, 0, WIN_W - 40, 200),
-                                   int(Qt.TextFlag.TextWordWrap | Qt.AlignmentFlag.AlignCenter), text)
+                                   int(Qt.TextFlag.TextWordWrap | Qt.AlignmentFlag.AlignLeft), text)
         w, h = box.width() + 22, box.height() + 14
         head = self._sprite.top() if not self._sprite.isNull() else BUBBLE_H
         rect = QRectF(WIN_W / 2 - w / 2, max(2.0, head - h - 6), w, h)
@@ -199,12 +214,14 @@ class PetWindow(QWidget):
         tail.lineTo(cx, rect.bottom() + 7)
         tail.lineTo(cx + 7, rect.bottom() - 1)
         path = path.united(tail)
-        p.setPen(QPen(self.tint.darker(130), 1.5))
-        p.setBrush(QColor(255, 255, 255, 240))
+        p.setPen(QPen(self.tint, 2))
+        p.setBrush(QColor(255, 255, 255, 245))
         p.drawPath(path)
         p.setFont(font)
         p.setPen(QColor("#2b2d33"))
-        p.drawText(rect, int(Qt.TextFlag.TextWordWrap | Qt.AlignmentFlag.AlignCenter), text)
+        # 왼쪽 위 기준으로 — 한 글자씩 나와도 이미 나온 글자가 움직이지 않게
+        inner = rect.adjusted(11, 7, -11, -7)
+        p.drawText(inner, int(Qt.TextFlag.TextWordWrap | Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop), shown)
 
     # ---- 마우스(캐릭터 위만) ------------------------------------------------------------------
     def _on_figure(self, pos) -> bool:
