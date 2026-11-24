@@ -369,29 +369,56 @@ def test_aria_picks_talk_set_a_or_b_each_time():
     assert picked == {"talk_a_base_0", "talk_b_base_0"}
 
 
-def test_cover_transition_only_entering_leaving_talk_and_keeps_old_opaque(app):
+@pytest.mark.parametrize("profile,folder", [(br.DARE, "다래"), (br.ARIA, "아리아"), (br.IAN, "이안"), (br.LENA, "레나"),
+                                            (br.STARLINE, "Starline")])
+def test_every_picture_change_is_instant_no_ghost(app, profile, folder):
+    """잔상 없음(사용자 11-24 '클릭·착지·손짓 때 잔상' — QA ghost_survey: 덮기 전환이 포즈가 다른 두 그림을 0.13초 겹침).
+    덮기 전환을 없애 모든 캐릭터·시나리오(서서 클릭·말 4분위기·강조·대기 동작·알림·끌기→착지·쓰다듬기·구석→일어나기)에서
+    그리는 그림은 늘 한 장."""
     from mabinogi_addon.ui.pet_window import PetWindow, load_frames
 
-    b = _brain()
-    assert b.covered("stand_0", "talk_mid_0") and b.covered("talk_mid_0", "talk_base_0")
-    assert b.covered("talk_base_0", "talk_emph_0") and b.covered("talk_mid_0", "stand_0")
-    assert not b.covered("talk_m1_0", "talk_m2_0") and not b.covered("talk_base_0", "talk_blink_0")
-    assert not b.covered("walk_0", "walk_1") and not b.covered(None, "stand_0")
     clock = [5.0]
-    b._next_walk = 1e9
-    w = PetWindow(b, load_frames("다래"), roster.DARE.color, clock=lambda: clock[0])
+    b = br.Brain(br.Floor(0, 1000, 700), rng=random.Random(3), profile=profile)
+    b.pos = (300.0, 700.0)
+    w = PetWindow(b, load_frames(folder, profile), "#888888", clock=lambda: clock[0])
+    seen = set()
+
+    def run(seconds, front=False, each=None):
+        for i in range(int(seconds * 60)):
+            clock[0] += 1 / 60
+            if each:
+                each(i)
+            w._game_front = lambda: front
+            w.step()
+            layers = w.layers(clock[0])
+            assert len(layers) == 1 and layers[0][1] == 1.0, layers
+            seen.add(layers[0][0])
+
     try:
-        w.step()
-        b.talk(clock[0], 10)
-        clock[0] += 0.01
-        w.step()
-        layers = w.layers(clock[0] + 0.05)
-        assert layers[0] == ("stand_0", 1.0) and layers[1][0] == "talk_mid_0" and 0 < layers[1][1] < 1
-        clock[0] += 0.2
-        w.step()
-        assert w.layers(clock[0] + 0.2) == [(b.frame(clock[0] + 0.2), 1.0)]
+        b._next_walk = 1e9
+        run(0.3)
+        b.press(clock[0], 300, 600)
+        w.events.emit(b.release(clock[0]))
+        for mood in ("normal", "explain", "think", "happy"):
+            b.talk(clock[0], 24, mood)
+            run(2.5)
+        b._next_extra = clock[0]
+        run(3)
+        b.notify(clock[0])
+        run(2)
+        b.press(clock[0], 300, 600)
+        run(0.5, each=lambda i: b.move(clock[0], 300 + i * 3, 600 - i * 4))
+        b.release(clock[0])
+        run(3)
+        x0 = b.pos[0]
+        run(3, each=lambda i: b.hover(clock[0], x0 + (25 if (i // 6) % 2 else -25), True))
+        run(2.5)
+        b.corner = (900.0, 700.0)
+        run(9, front=True)
+        run(3, front=False)
     finally:
         w.close()
+    assert any(n.startswith("talk_") for n in seen) and any(n.startswith(("land", "pet")) for n in seen)
 
 
 def test_talking_while_sitting_or_busy_keeps_the_picture():
@@ -1310,7 +1337,7 @@ def test_lena_roster_card_and_every_frame():
     assert character_lines_feed.REMOTE_NAMES["레나"] == "lena-lines.json"
 
 
-def test_lena_falls_with_one_frame_and_lands_through_four_to_standing_with_cover():
+def test_lena_falls_with_one_frame_and_lands_through_four_to_standing():
     assert br.LENA.anims["fall"][0] == ("fall_0",)
     assert br.LENA.anims["land"][:2] == (("land_0", "land_1", "land_2", "land_3"), (0.6, 0.35, 0.5, 0.8))
     b = _lena()
@@ -1326,8 +1353,6 @@ def test_lena_falls_with_one_frame_and_lands_through_four_to_standing_with_cover
         b.tick(t, False)
         seen.add(b.state)
     assert "getup" not in seen and b.state in ("stand", "walk")
-    assert b.covered("land_3", "stand_0") and b.covered("pet_5", "stand_0")  # 팔짱 → 서기는 덮기 전환
-    assert not b.covered("walk_0", "walk_1") and not b.covered("land_0", "land_1")
 
 
 def test_lena_standing_click_talks_right_away_and_ends_with_two_end_frames():
@@ -1537,11 +1562,6 @@ def test_starline_flame_idle_click_talks_and_corner():
     assert {"sit_0", "sit_1", "sit_2", "sit_3"} <= seen
     c.press(t, 900, 600)
     assert c.release(t)[-1] == ("say", "click_sit") and c.frame(t) == "sit_0"
-    # 덮기 전환 없음(사용자 11-24 '클릭·착지 때 헤일로 여러 개·잔상') — 서기 → 사이·착지 → 서기 모두 바로 바뀜
-    for old, new in (("land_2", "stand_0"), ("pet_5", "stand_0"), ("rise_2", "stand_0"), ("stand_0", "talk_mid_0"),
-                     ("talk_mid_0", "talk_m1_0"), ("talk_end2_0", "stand_0"), ("stand_0", "talk_emph_0")):
-        assert not c.covered(old, new)
-    assert _lena().covered("stand_0", "talk_mid_0")   # 다른 캐릭터는 그대로
 
 
 def test_starline_lines_alerts_and_stage_lines():

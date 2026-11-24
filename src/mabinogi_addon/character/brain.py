@@ -72,7 +72,7 @@ TYPE_SECONDS = 0.07        # 말풍선 글자 한 자가 나오는 시간(창이
 TALKING = ("talk", "talk_think", "talk_happy", "talk_end")
 # 새 말하기(사용자 11-24 '말할 때 모션이 어색' — docs/character-pet-spec.md '말하기 모션 어색함'):
 # 서 있기 → 사이(0.2초) → 입만 바꾸기(m1·m2·m1·base 0.2초씩, m2 때 1px 끄덕임) → 강조(한 문장 최대 1번) → base → 사이 → 서 있기.
-# 사이·강조·생각·기쁨으로 들고 날 때는 덮기 전환(앞 그림 그대로 + 새 그림 알파 0→1, 0.13초 — pet_window).
+# 그림은 늘 바로 바뀜(예전 덮기 전환은 포즈가 다른 두 그림이 겹쳐 잔상 — 사용자 11-24, QA ghost_survey로 없앰).
 TALK_KEYS = ("base", "m1", "m2", "emph", "emph2", "blink", "mid")
 MID_SECONDS = 0.2
 MOUTH_SECONDS = 0.2
@@ -83,7 +83,6 @@ BLINK_SECONDS = 0.13
 BLINK_GAP = (3.0, 5.0)
 END_BASE_SECONDS = 0.3
 END_STEP_SECONDS = 0.2      # 말 끝 두 장(레나 end1·end2) 한 장 시간
-COVER_SECONDS = 0.13
 SHAKE_SECONDS = 0.13        # 참는 중 좌우 1px 떨림 한 칸(레나)
 
 
@@ -134,9 +133,7 @@ class Profile:
     click_talks: bool = False             # 서서 클릭 = 놀람 그림 없이 바로 말하기(이안, 사용자 11-24)
     walk_speed: float = WALK_SPEED        # 걷는 빠르기(논리 px/초) — 걷기 그림 한 바퀴 거리에 맞춤
     talk_sets: tuple = ()                 # 말하기 그림 벌(아리아는 A·B — 말 한 번마다 무작위)
-    cover_from: tuple[str, ...] = ()      # 이 그림에서 다음 그림으로 갈 때 덮기 전환(레나 착지·'흥' → 서기)
     pet_shake: bool = False               # 쓰다듬기 참는 중 좌우 1px 떨림(레나)
-    cover: bool = True                    # 덮기 전환 쓰기 — Starline은 끔(후광 가시·자세 차이로 두 그림이 겹쳐 잔상, 사용자 11-24)
 
     def with_timing(self, raw) -> Profile:
         """설정 값(config character.idle {gap: [최소, 최대], laps: [최소, 최대]})으로 대기 동작 시간 덮어쓰기."""
@@ -212,7 +209,7 @@ IAN = Profile(IAN_ANIMS,
               ("crouch", "sit_loop", "sit_notice"), "sit_loop", idle_extra="watch", idle_laps=(1, 1),
               click_talks=True, walk_speed=IAN_WALK_SPEED, talk_sets=IAN_TALK)
 # 레나(docs/characters/레나.md·기획 11-24): 졸기·대기 동작 없음, 서서 클릭 = 바로 말하기(이안과 같음),
-# 떨어지기 한 장 → 착지 4장(엎어짐·일으킴·옷 털기·팔짱) → 덮기 전환으로 서기, 쓰다듬기 참는 중 1px 떨림 → '흥' → 덮기로 서기,
+# 떨어지기 한 장 → 착지 4장(엎어짐·일으킴·옷 털기·팔짱) → 서기, 쓰다듬기 참는 중 1px 떨림 → '흥' → 서기,
 # 앉아 있기 0 길게 + 가끔 발끝 까딱·한숨·깜빡임, 말 끝은 사이 대신 끝 두 장.
 LENA_ANIMS = {
     "stand": (("stand_0",), (1.0,), True),
@@ -237,12 +234,10 @@ LENA = Profile(LENA_ANIMS,
                {"surprise": "stand", "land": "stand", "pet_in": "pet_loop", "pet_out": "stand", "alert": "stand",
                 "crouch": "sit_loop", "sit_notice": "sit_loop", "rise": "stand", "talk_end": "stand"},
                ("crouch", "sit_loop", "sit_notice"), "sit_loop", click_talks=True, walk_speed=LENA_WALK_SPEED,
-               talk_sets=LENA_TALK, cover_from=("land_3", "pet_5"), pet_shake=True)
+               talk_sets=LENA_TALK, pet_shake=True)
 # Starline(docs/characters/Starline.md, 기획 11-24): 졸기 없음, 서 있기 씩 웃음 ↔ 가끔 깜빡임, 가만히 서 있으면 가끔
-# 손바닥 불꽃(아리아 머리 쓰다듬기·이안 시계와 같은 틀), 서서 클릭 = 바로 말하기, 착지 3장 → 덮기로 서기,
+# 손바닥 불꽃(아리아 머리 쓰다듬기·이안 시계와 같은 틀), 서서 클릭 = 바로 말하기, 착지 3장 → 서기,
 # 쓰다듬기 귀 젖힘 → 걷어내기 반복 → 손 털고 씩, 구석은 앉기 → 마법진 돌리기 반복 → 일어나기, 말 끝 두 장.
-# 덮기 전환 없음(사용자 11-24 Windows '클릭·착지 때 헤일로가 여러 개·잔상' — 앞 그림 위에 새 그림을 0.13초 겹치면
-# 후광 가시와 자세가 달라 두 그림이 보임) → 그림이 바로 바뀜.
 STARLINE_ANIMS = {
     "stand": (("stand_0", "stand_1"), (3.6, 0.15), True),
     "walk": (tuple(f"walk_{i}" for i in range(6)), (STARLINE_WALK_FRAME,) * 6, True),
@@ -266,7 +261,7 @@ STARLINE = Profile(STARLINE_ANIMS,
                    {"surprise": "stand", "land": "stand", "pet_in": "pet_loop", "pet_out": "stand", "alert": "stand",
                     "crouch": "sit_loop", "sit_notice": "sit_loop", "rise": "stand", "talk_end": "stand"},
                    ("crouch", "sit_loop", "sit_notice"), "sit_loop", idle_extra="flame", idle_laps=(1, 1),
-                   click_talks=True, walk_speed=STARLINE_WALK_SPEED, talk_sets=STARLINE_TALK, cover=False)
+                   click_talks=True, walk_speed=STARLINE_WALK_SPEED, talk_sets=STARLINE_TALK)
 PROFILES = {"다래": DARE, "아리아": ARIA, "이안": IAN, "레나": LENA, "Starline": STARLINE}
 
 
@@ -400,19 +395,6 @@ class Brain:
         if any(0 <= now - b < BLINK_SECONDS for b in self._blinks):
             return s["blink"]
         return s[MOUTH_ORDER[int((t - MID_SECONDS) / MOUTH_SECONDS) % len(MOUTH_ORDER)]]
-
-    def covered(self, old: str | None, new: str) -> bool:
-        """그림이 바뀔 때 덮기 전환을 할지 — 말하기로 들고 날 때·사이·강조·분위기 그림. 입만 바뀌는 건 바로."""
-        if not old or old == new or not self.profile.cover:
-            return False
-        if old in self.profile.cover_from:
-            return True
-        mouth = {s[k] for s in self.profile.talk_sets for k in ("base", "m1", "m2", "blink")}
-        if old in mouth and new in mouth:
-            return False
-        if old.startswith("talk_alert") and new.startswith("talk_alert"):
-            return False
-        return old.startswith("talk_") or new.startswith("talk_")
 
     def _start_talk(self, now: float, until: float, mood: str, chars: int) -> None:
         sets = self.profile.talk_sets
@@ -619,7 +601,7 @@ class Brain:
             stroking = self.profile.idle_extra is not None and self.state == self.profile.idle_extra
             self._target = None
             # 이안: 클릭 반응 그림(쓰다듬기 첫 장)은 머리 크기가 달라 튀어 보여(사용자 11-24) 바로 말하기 — 말풍선이 뜨면
-            # talk가 사이 → 입으로 시작(덮기 전환)
+            # talk가 사이 → 입으로 시작
             self._go("stand" if self.profile.click_talks else "surprise", now)
             self._schedule_extra(now)
             events.append(("say", "idle_extra_click" if stroking else "click_stand"))

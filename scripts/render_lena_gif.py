@@ -54,13 +54,13 @@ def main() -> None:
     window.events.emit(brain.hover(clock.t, x0, True))
     shoot(3.5, "쓰다듬기 — 움찔 → 이 악묾 → 참는 중(1px 떨림)",
           each=lambda i: window.events.emit(brain.hover(clock.t, x0 + (12 if (i // 3) % 2 else -12), True)))
-    shoot(2.4, "손 떼면 '흥' → 덮기 전환으로 서기")
+    shoot(2.4, "손 떼면 '흥' → 서기")
     brain._next_walk = clock.t + 99
     x0, y0 = brain.pos[0], brain.pos[1] - 100
     brain.press(clock.t, x0, y0)
     shoot(1.4, "끌기", each=lambda i: window.events.emit(brain.move(clock.t, x0 + i * 4, y0 - i * 6)))
     window.events.emit(brain.release(clock.t))
-    shoot(3.8, "떨어지기(한 장) → 착지 4장 → 덮기 전환으로 서기")
+    shoot(3.8, "떨어지기(한 장) → 착지 4장 → 서기")
     front["on"] = True
     shoot(12.0, "게임이 앞 — 구석에 앉아 기다림(가끔 발끝·한숨·깜빡임)")
     brain.press(clock.t, brain.pos[0], brain.pos[1] - 60); window.events.emit(brain.release(clock.t))
