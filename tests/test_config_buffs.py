@@ -135,8 +135,8 @@ def test_soft_female_pack_is_one_folder_with_user_recordings():
     folder = paths.resource_dir() / "sounds" / "부드러운 여성"
     assert sorted(notifier_alert_files(folder)) == sorted([
         "비바체 연장.mp3", "비바체 연장2.mp3", "상태지원 알림.mp3", "상태지원 알림2.mp3", "전장의 서곡 연장.mp3",
-        "전장의 서곡 연장2.mp3", "투아림 부스트 발동 직전.mp3", "파티 알림.mp3", "햄 버닝 연장.mp3", "햄 버닝 연장2.mp3",
-        "행진곡 연장.mp3", "행진곡 연장2.mp3"])
+        "전장의 서곡 연장2.mp3", "투아림 부스트 발동 직전.mp3", "투아림 부스트 발동 직전2.mp3", "파티 알림.mp3",
+        "햄 버닝 연장.mp3", "햄 버닝 연장2.mp3", "행진곡 연장.mp3", "행진곡 연장2.mp3"])  # 11-24 투아림 2차 녹음 추가
     assert (folder / "비바체 연장.mp3").stat().st_size > 30_000   # 새 녹음(약 170~190kbps, 2초 넘음 — 예전 32kbps는 1만 바이트대)
 
 
@@ -150,7 +150,9 @@ def test_user_recorded_pack_added_and_falls_back_for_missing(monkeypatch, pack):
     root = paths.resource_dir() / "sounds"
     angry = notifier.alert_files(root / pack)  # 인사.mp3(카드 인사 녹음)는 알림 파일로 세지 않음
     soft = notifier.alert_files(root / "부드러운 여성")
-    assert len(angry) == 11 and angry < soft and "파티 알림.mp3" not in angry
+    # 11-24 투아림 2차 녹음(투아림 부스트 발동 직전2.mp3)이 들어와 12개
+    assert len(angry) == 12 and angry < soft and "파티 알림.mp3" not in angry
+    assert "투아림 부스트 발동 직전2.mp3" in angry
     monkeypatch.setattr(config, "load_voice_pack", lambda *a, **k: pack)
     assert notifier.sound_path("비바체 연장.mp3") == notifier.SOUND_DIR / pack / "비바체 연장.mp3"
     assert notifier.sound_path("파티 알림.mp3") == notifier.SOUND_DIR / "파티 알림.mp3"
