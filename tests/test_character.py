@@ -992,7 +992,13 @@ def test_ian_lines_have_alerts_stage_lines_and_watch_click():
     assert len(data.alerts) == 11 and sounds == set(data.alerts)
     staged = [line for items in data.lines.values() for line in items if line.stage > 0]
     assert len(staged) == 24 and [line.stage for line in data.lines["stage_up"]] == [25, 50, 75, 100]
-    assert not any(line.voice for items in data.lines.values() for line in items)  # 이안 대사 녹음 계획 없음
+    voices = {line.voice: (key, line.text) for key, items in data.lines.items() for line in items if line.voice}
+    names = ["켜기_1", "켜기_2", "오랜만", "밤", "게임시작", "게임끝", "휴식", "쓰다듬기끝", "클릭", "시계",
+             "구간_25", "구간_50", "구간_75", "구간_100"]
+    assert set(voices) == {f"대사/{n}.mp3" for n in names}  # 녹음목록.md '이안' 표 14줄(사용자 11-24 오디오 추가)
+    assert voices["대사/시계.mp3"] == ("idle_extra_click", "시각 확인 중이었습니다.")
+    assert voices["대사/켜기_1.mp3"] == ("hello", "오셨습니까. 오늘 일정 시작하죠.")
+    assert voices["대사/구간_100.mp3"] == ("stage_up", "이 시계, 이제 당신 시간에 맞추겠습니다.")
 
 
 def test_ian_never_dozes_or_gets_up_and_lands_straight_to_standing():
