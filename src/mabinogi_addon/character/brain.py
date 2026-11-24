@@ -136,6 +136,7 @@ class Profile:
     talk_sets: tuple = ()                 # 말하기 그림 벌(아리아는 A·B — 말 한 번마다 무작위)
     cover_from: tuple[str, ...] = ()      # 이 그림에서 다음 그림으로 갈 때 덮기 전환(레나 착지·'흥' → 서기)
     pet_shake: bool = False               # 쓰다듬기 참는 중 좌우 1px 떨림(레나)
+    cover: bool = True                    # 덮기 전환 쓰기 — Starline은 끔(후광 가시·자세 차이로 두 그림이 겹쳐 잔상, 사용자 11-24)
 
     def with_timing(self, raw) -> Profile:
         """설정 값(config character.idle {gap: [최소, 최대], laps: [최소, 최대]})으로 대기 동작 시간 덮어쓰기."""
@@ -240,6 +241,8 @@ LENA = Profile(LENA_ANIMS,
 # Starline(docs/characters/Starline.md, 기획 11-24): 졸기 없음, 서 있기 씩 웃음 ↔ 가끔 깜빡임, 가만히 서 있으면 가끔
 # 손바닥 불꽃(아리아 머리 쓰다듬기·이안 시계와 같은 틀), 서서 클릭 = 바로 말하기, 착지 3장 → 덮기로 서기,
 # 쓰다듬기 귀 젖힘 → 걷어내기 반복 → 손 털고 씩, 구석은 앉기 → 마법진 돌리기 반복 → 일어나기, 말 끝 두 장.
+# 덮기 전환 없음(사용자 11-24 Windows '클릭·착지 때 헤일로가 여러 개·잔상' — 앞 그림 위에 새 그림을 0.13초 겹치면
+# 후광 가시와 자세가 달라 두 그림이 보임) → 그림이 바로 바뀜.
 STARLINE_ANIMS = {
     "stand": (("stand_0", "stand_1"), (3.6, 0.15), True),
     "walk": (tuple(f"walk_{i}" for i in range(6)), (STARLINE_WALK_FRAME,) * 6, True),
@@ -263,8 +266,7 @@ STARLINE = Profile(STARLINE_ANIMS,
                    {"surprise": "stand", "land": "stand", "pet_in": "pet_loop", "pet_out": "stand", "alert": "stand",
                     "crouch": "sit_loop", "sit_notice": "sit_loop", "rise": "stand", "talk_end": "stand"},
                    ("crouch", "sit_loop", "sit_notice"), "sit_loop", idle_extra="flame", idle_laps=(1, 1),
-                   click_talks=True, walk_speed=STARLINE_WALK_SPEED, talk_sets=STARLINE_TALK,
-                   cover_from=("land_2", "pet_5", "rise_2"))
+                   click_talks=True, walk_speed=STARLINE_WALK_SPEED, talk_sets=STARLINE_TALK, cover=False)
 PROFILES = {"다래": DARE, "아리아": ARIA, "이안": IAN, "레나": LENA, "Starline": STARLINE}
 
 
@@ -401,7 +403,7 @@ class Brain:
 
     def covered(self, old: str | None, new: str) -> bool:
         """그림이 바뀔 때 덮기 전환을 할지 — 말하기로 들고 날 때·사이·강조·분위기 그림. 입만 바뀌는 건 바로."""
-        if not old or old == new:
+        if not old or old == new or not self.profile.cover:
             return False
         if old in self.profile.cover_from:
             return True

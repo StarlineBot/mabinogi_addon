@@ -81,12 +81,20 @@ def watch(widget) -> None:
 import weakref  # noqa: E402
 
 _front: "weakref.WeakSet" = weakref.WeakSet()
+# 0.55.9(사용자 11-24 Windows '펫이 미러링 창 뒤에 떠서 가려짐'): 캐릭터 펫도 미러·오버레이보다 앞 — 순서는 펫 → 커서
+# (커서가 펫보다 위). 같은 경로(오버레이 Show·raise_overlay)에서 함께 올림. 포커스는 안 가져감(NOACTIVATE).
+_pets: "weakref.WeakSet" = weakref.WeakSet()
 _pending = False
 
 
 def keep_in_front(widget) -> None:
     """커서 창 등록(생성자에서)."""
     _front.add(widget)
+
+
+def keep_pet_front(widget) -> None:
+    """펫 창 등록(생성자에서) — 미러·오버레이가 뜨거나 올라오면 펫을 다시 그 위로(커서 창보다는 아래)."""
+    _pets.add(widget)
 
 
 def raise_overlay(widget) -> None:
@@ -96,9 +104,9 @@ def raise_overlay(widget) -> None:
 
 
 def keep_cursor_front() -> None:
-    """한 이벤트 루프 차례 뒤 한 번(여러 창이 한꺼번에 떠도 한 번만) 보이는 커서 창들을 맨 앞으로."""
+    """한 이벤트 루프 차례 뒤 한 번(여러 창이 한꺼번에 떠도 한 번만) 보이는 펫 → 커서 창들을 맨 앞으로."""
     global _pending
-    if _pending or not len(_front):
+    if _pending or not (len(_front) or len(_pets)):
         return
     _pending = True
     from PySide6.QtCore import QTimer
@@ -111,7 +119,7 @@ def _bring_front() -> None:
     from shiboken6 import isValid
 
     from ..system.zorder import bring_to_front
-    for widget in list(_front):
+    for widget in list(_pets) + list(_front):   # 나중에 올린 창이 위 → 커서가 펫보다 앞
         try:
             if isValid(widget) and widget.isVisible():
                 bring_to_front(widget)

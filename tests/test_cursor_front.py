@@ -148,3 +148,37 @@ def test_yellow_swatch_returns_to_default_colors(fx):
         assert tab.tail_row.default.toolTip() == "노랑(기본): 여러 색 반짝이"
     finally:
         tab.deleteLater()
+
+
+def test_pet_goes_over_mirror_but_under_cursor(fx, order, monkeypatch):
+    """0.55.9(사용자 11-24 '펫이 미러링 창 뒤에 떠서 가려짐'): 미러가 뜨면 펫 → 커서 순으로 다시 맨 앞, 숨은 펫은 안 올림."""
+    import random
+
+    from mabinogi_addon.character import brain as br
+    from mabinogi_addon.ui import pet_window
+
+    f, clock, pos, watcher = fx
+    app = QApplication.instance()
+    f.update_settings(enabled=True)
+    _run(f, clock, 0.2)
+    pet = pet_window.PetWindow(br.Brain(br.Floor(0, 1000, 700), rng=random.Random(1)), {}, "#B48CE6")
+    mirror = MirrorOverlay()
+    try:
+        pet.show()
+        app.processEvents()
+        order.clear()
+        mirror.show()
+        app.processEvents()
+        assert order == [pet, f._ring]   # 펫 먼저, 커서가 마지막(맨 위)
+        order.clear()
+        overlay_capture.raise_overlay(mirror)
+        app.processEvents()
+        assert order[-2:] == [pet, f._ring]
+        pet.hide()
+        order.clear()
+        overlay_capture.raise_overlay(mirror)
+        app.processEvents()
+        assert pet not in order and order[-1] is f._ring
+    finally:
+        mirror.close()
+        pet.close()

@@ -61,44 +61,92 @@ def sheet_scale(face: np.ndarray, frames: list[np.ndarray]) -> float:
     return float(np.median([face_scale(face, f)[0] for f in frames]))
 
 
+def eye_gap(frame: np.ndarray) -> float | None:
+    """노란 눈동자 두 개(키 22~60% 구간, 작은 덩어리) 사이 거리 — 얼굴 맞추기가 안 잡히는 기울어진 그림용."""
+    h = frame.shape[0]
+    hsv = cv2.cvtColor(np.ascontiguousarray(frame[..., :3]), cv2.COLOR_BGR2HSV)
+    m = ((hsv[..., 0] >= 14) & (hsv[..., 0] <= 32) & (hsv[..., 1] > 110) & (hsv[..., 2] > 150)
+         & (frame[..., 3] > 200)).astype(np.uint8)
+    m[: int(h * 0.22)] = 0
+    m[int(h * 0.6):] = 0
+    count, _labels, stats, cents = cv2.connectedComponentsWithStats(m)
+    blobs = [(stats[i, cv2.CC_STAT_AREA], cents[i]) for i in range(1, count) if 8 <= stats[i, cv2.CC_STAT_AREA] <= 150]
+    pairs = []   # 두 눈 = 크기가 비슷하고(3배 안) 거의 가로로(높이 차 < 가로 35%) 20~70px 떨어진 쌍
+    for i, (a1, c1) in enumerate(blobs):
+        for a2, c2 in blobs[i + 1:]:
+            dx, dy = abs(c1[0] - c2[0]), abs(c1[1] - c2[1])
+            if 20 <= dx <= 70 and dy < 0.35 * dx and max(a1, a2) < 3 * min(a1, a2):
+                pairs.append((a1 + a2, float(np.hypot(dx, dy))))
+    return max(pairs)[1] if pairs else None
+
+
+def head_ratio(face: np.ndarray, eyes: float, frame: np.ndarray) -> float | None:
+    """서 있기 대비 이 그림의 머리 크기(1 = 같음). 얼굴 맞추기 점수 0.5 이상이면 그 배율, 아니면 눈 간격, 둘 다 없으면 None."""
+    best = (1.0, -1.0)
+    gray = _gray(frame)
+    for k in np.linspace(0.75, 1.35, 61):
+        small = cv2.resize(gray, None, fx=k, fy=k, interpolation=cv2.INTER_AREA)
+        if small.shape[0] < face.shape[0] or small.shape[1] < face.shape[1]:
+            continue
+        score = float(cv2.matchTemplate(small, face, cv2.TM_CCOEFF_NORMED).max())
+        if score > best[1]:
+            best = (float(k), score)
+    ratio = 1.0 / best[0] if best[1] >= 0.5 else None
+    if ratio is None:
+        gap = eye_gap(frame)
+        ratio = gap / eyes if gap else None
+    return ratio if ratio is not None and 0.75 <= ratio <= 1.33 else None   # 범위 끝 = 못 잰 것
+
+
 def build() -> dict[str, list[np.ndarray]]:
+    """크기(사용자 11-24 Windows '불꽃·잡기·떨어지기는 머리가 작고 착지 때 커짐'): 시트마다 먼저 기준 그림 키로 맞춘 뒤,
+    그 시트 그림들의 머리 크기(head_ratio — 얼굴 맞추기, 안 되면 눈 간격) 중앙값으로 한 번 더 나눠 머리를 서 있기에 맞춤.
+    걷기(옆모습 — 얼굴·눈 둘 다 안 잡힘)는 키 그대로(사용자 관찰로도 서 있기와 같음)."""
     out: dict[str, list[np.ndarray]] = {}
     stand = sheet("Starline_서있기_4면도")  # 0 씩 웃음 · 1 눈 깜빡임 · 2~5 옆·뒤(안 씀)
     s_stand = STAND_H / stand[0].shape[0]
     out["stand"] = [scaled(f, s_stand) for f in stand[:2]]
     face = face_crop(out["stand"][0])
+    eyes = eye_gap(out["stand"][0])
 
-    def by_height(frames, ref=None, h=STAND_H):
-        """시트 하나 배율 하나 — 기준 그림(없으면 키 중앙값)의 키가 h가 되게."""
-        k = h / (ref.shape[0] if ref is not None else float(np.median([f.shape[0] for f in frames])))
-        return [scaled(f, k) for f in frames]
+    def fit(frames, k):
+        """배율 k로 줄인 그림들의 머리 크기 중앙값으로 k를 고쳐 다시 줄임."""
+        ratios = [r for r in (head_ratio(face, eyes, scaled(f, k)) for f in frames) if r]
+        c = float(np.median(ratios)) if ratios else 1.0
+        return [scaled(f, k / c) for f in frames]
 
-    out["flame"] = by_height(sheet("Starline_대기불꽃"))
-    out["walk"] = by_height(sheet("Starline_걷기"))
-    out["drag"] = by_height(sheet("Starline_끌기"))   # 매달린 키 = 서 있는 키
-    out["fall"] = by_height(sheet("Starline_떨어지기"), h=270)  # 다리를 조금 굽힌 자세 — 서 있는 키의 95%
+    def k_height(frames, ref=None, h=STAND_H):
+        return h / (ref.shape[0] if ref is not None else float(np.median([f.shape[0] for f in frames])))
+
+    flame = sheet("Starline_대기불꽃")
+    out["flame"] = fit(flame, k_height(flame))
+    walk = sheet("Starline_걷기")
+    out["walk"] = [scaled(f, k_height(walk)) for f in walk]
+    drag = sheet("Starline_끌기")
+    out["drag"] = fit(drag, k_height(drag))
+    fall = sheet("Starline_떨어지기")
+    out["fall"] = fit(fall, k_height(fall, h=270))
     land = sheet("Starline_착지")
-    out["land"] = by_height(land, land[2])           # 끝 = 서기
-    out["pet"] = by_height(sheet("Starline_쓰다듬기"))
+    out["land"] = fit(land, k_height(land, land[2]))
+    pet = sheet("Starline_쓰다듬기")
+    out["pet"] = fit(pet, k_height(pet))
     crouch = sheet("Starline_구석_앉기")
-    out["crouch"] = by_height(crouch, crouch[0])     # 첫 장 = 선 자세
-    crouch_h = out["crouch"][2].shape[0]
+    out["crouch"] = fit(crouch, k_height(crouch, crouch[0]))
     sit = sheet("Starline_구석_앉아있기")
-    out["sit"] = by_height(sit, h=crouch_h)          # 앉아 있기 = 앉기 끝 키
+    out["sit"] = fit(sit, k_height(sit, h=out["crouch"][2].shape[0]))
     rise = sheet("Starline_구석")[7:]
-    k_rise = crouch_h / rise[0].shape[0]             # 첫 장(앉음) = 앉기 끝 키, 같은 배율
-    out["rise"] = [scaled(f, k_rise) for f in rise]
+    out["rise"] = fit(rise, k_height(rise, rise[0], out["crouch"][2].shape[0]))
     start = sheet("Starline_말하기_시작")
     talk = sheet("Starline_말하기_한장모음")  # 윗줄 2 · 가운데 줄 6(반복) · 아랫줄 2(끝)
     loop, end = talk[2:8], talk[8:10]
-    k = STAND_H / loop[0].shape[0]
     base = loop[0]
     m1, _ = mouth_swap(base, loop[1], MOUTH)
     m2, _ = mouth_swap(base, loop[2], MOUTH)
-    for key, frame in (("base", base), ("m1", m1), ("m2", m2), ("emph", loop[3]), ("emph2", loop[4]),
-                       ("blink", loop[5]), ("end1", end[0]), ("end2", end[1])):
-        out[f"talk_{key}"] = [scaled(frame, k)]
-    out["talk_mid"] = [scaled(start[0], STAND_H / float(np.median([f.shape[0] for f in start])))]
+    frames = [base, m1, m2, loop[3], loop[4], loop[5], end[0], end[1]]
+    fitted = fit(frames, k_height(loop))   # 반복·끝은 같은 시트 — 배율 하나
+    for key, frame in zip(("base", "m1", "m2", "emph", "emph2", "blink", "end1", "end2"), fitted):
+        out[f"talk_{key}"] = [frame]
+    out["talk_mid"] = fit(start, k_height(start))[:1]
     from scripts.color_parts import PARTS
     from scripts.sheet_colors import harmonize
     groups = {("talk_m1", 0): ("talk_base", 0), ("talk_m2", 0): ("talk_base", 0)}

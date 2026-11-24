@@ -73,6 +73,7 @@ class PetWindow(QWidget):
                          | Qt.WindowType.Tool | Qt.WindowType.WindowDoesNotAcceptFocus)
         from . import overlay_capture
         overlay_capture.watch(self)  # 판독 캡처에서 빼기(다른 오버레이와 같음)
+        overlay_capture.keep_pet_front(self)  # 미러링·오버레이보다 앞(커서 창보다는 뒤, 사용자 11-24)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
         self.setMouseTracking(True)

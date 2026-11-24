@@ -1495,7 +1495,7 @@ def test_starline_roster_english_name_gold_outline_and_frames():
     assert abs(card.shape[1] / card.shape[0] - 1199 / 1312) < 0.02
     names = {n for frames, _t, _l in br.STARLINE.anims.values() for n in frames}
     assert not [n for n in names if not (SL_DIR / f"{n}.png").exists()]
-    assert _img_of(SL_DIR / "stand_0.png").shape[0] == 285 and _img_of(SL_DIR / "land_2.png").shape[0] == 285
+    assert _img_of(SL_DIR / "stand_0.png").shape[0] == 285   # 나머지는 머리 크기 기준(아래 ±5% 테스트)
     from mabinogi_addon.ui import character_lines_feed
     assert character_lines_feed.REMOTE_NAMES["Starline"] == "starline-lines.json"
 
@@ -1537,7 +1537,11 @@ def test_starline_flame_idle_click_talks_and_corner():
     assert {"sit_0", "sit_1", "sit_2", "sit_3"} <= seen
     c.press(t, 900, 600)
     assert c.release(t)[-1] == ("say", "click_sit") and c.frame(t) == "sit_0"
-    assert c.covered("land_2", "stand_0") and c.covered("pet_5", "stand_0") and c.covered("rise_2", "stand_0")
+    # 덮기 전환 없음(사용자 11-24 '클릭·착지 때 헤일로 여러 개·잔상') — 서기 → 사이·착지 → 서기 모두 바로 바뀜
+    for old, new in (("land_2", "stand_0"), ("pet_5", "stand_0"), ("rise_2", "stand_0"), ("stand_0", "talk_mid_0"),
+                     ("talk_mid_0", "talk_m1_0"), ("talk_end2_0", "stand_0"), ("stand_0", "talk_emph_0")):
+        assert not c.covered(old, new)
+    assert _lena().covered("stand_0", "talk_mid_0")   # 다른 캐릭터는 그대로
 
 
 def test_starline_lines_alerts_and_stage_lines():
@@ -1616,3 +1620,50 @@ def test_starline_bubble_has_gold_outline(app):
     finally:
         w.close()
         d.close()
+
+
+def test_starline_head_size_matches_standing_within_5_percent():
+    """Starline 머리 크기(사용자 11-24 Windows '불꽃·잡기·떨어지기는 머리가 작고 착지 때 커짐'): 후광·토끼귀로 위 30% 폭은 못 써서
+    얼굴 맞추기(점수 0.5 이상) 또는 눈 간격으로 잼 — 잴 수 있는 그림은 모두 서 있기 ±5%.
+    예외: talk_blink(눈 감음 — 얼굴 맞추기가 틀어짐, 같은 시트 배율), 걷기(옆모습 — 얼굴·눈 둘 다 안 잡혀 None)."""
+    from scripts.build_starline_frames import eye_gap, face_crop, head_ratio
+
+    stand = _img_of(SL_DIR / "stand_0.png")
+    face, eyes = face_crop(stand), eye_gap(stand)
+    bad, measured = {}, 0
+    for path in SL_DIR.glob("*.png"):
+        if path.stem in ("card", "talk_blink_0"):
+            continue
+        r = head_ratio(face, eyes, _img_of(path))
+        if r is None:
+            continue
+        measured += 1
+        if not 0.95 <= r <= 1.05:
+            bad[path.stem] = round(r, 3)
+    assert not bad and measured >= 35
+    for name in ("flame_0", "drag_0", "fall_0", "land_2"):   # 사용자가 짚은 그림은 꼭 잼
+        assert head_ratio(face, eyes, _img_of(SL_DIR / f"{name}.png")) is not None, name
+
+
+def test_starline_click_and_land_show_one_picture_at_a_time(app):
+    """덮기 전환 없음 — 서서 클릭(서기 → 사이)·착지 → 서기 동안 layers()가 늘 한 장."""
+    from mabinogi_addon.ui import pet_window
+
+    clock = {"t": 1.0}
+    b = _starline()
+    w = pet_window.PetWindow(b, pet_window.load_frames("Starline", br.STARLINE), "#3A0729", clock=lambda: clock["t"],
+                             outline="#D8AA5E")
+    try:
+        w.step()
+        b.talk(clock["t"], 10)
+        for _ in range(20):
+            clock["t"] += 0.03
+            w.step()
+            assert len(w.layers(clock["t"])) == 1
+        b._go("land", clock["t"])
+        for _ in range(80):
+            clock["t"] += 0.03
+            w.step()
+            assert len(w.layers(clock["t"])) == 1
+    finally:
+        w.close()
