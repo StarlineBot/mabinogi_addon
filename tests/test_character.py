@@ -1100,9 +1100,9 @@ def test_frame_anchor_loader_is_harmless_without_or_with_bad_file(app, tmp_path)
     from mabinogi_addon.ui import pet_window
 
     assert pet_window._anchors(tmp_path) == {}
-    (tmp_path / "anchors.json").write_text('{"a": [1, 2], "b": [1], "c": ["x", 1], "d": [999, 0], "e": [true, 0]}')
+    (tmp_path / "anchors.json").write_text('{"a": [1, 2], "b": [1], "c": ["x", 1], "d": [999, 0], "e": [true, 0]}', encoding="utf-8")
     assert pet_window._anchors(tmp_path) == {"a": (1.0, 2.0)}
-    (tmp_path / "anchors.json").write_text("not json")
+    (tmp_path / "anchors.json").write_text("not json", encoding="utf-8")
     assert pet_window._anchors(tmp_path) == {}
     assert not any((ASSETS / folder / "anchors.json").exists() for folder in ("다래", "아리아", "이안"))
     frames = pet_window.load_frames("이안", br.IAN)
