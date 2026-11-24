@@ -282,6 +282,28 @@ def test_rubbing_head_pets_and_releasing_completes():
     assert ("pet_done",) in events and ("say", "pet_end") in events and b.state == "pet_out"
 
 
+def test_pet_needs_two_round_trips_of_20px_within_two_seconds():
+    """사용자 11-24 '마우스만 지나가도 쓰다듬는 모션': 한 방향으로 20px 이상 간 뒤 돌아서야 1번, 왕복 2번(전환 3번)·2초 안."""
+    def run(xs, dt=0.1, heads=None):
+        b = _brain()
+        events, t = [], 1.0
+        for i, x in enumerate(xs):
+            t += dt
+            events += b.hover(t, x, True if heads is None else heads[i])
+        return ("say", "pet_start") in events
+
+    assert not run([200 + i * 8 for i in range(20)])                     # 한 방향으로 지나가기
+    assert not run([300 + (5 if i % 2 else -5) for i in range(40)])      # 떨림 ±5(10px 되돌림)
+    assert not run([300 + (3 if i % 2 else -3) for i in range(40)])
+    assert not run([280, 300, 320, 300, 280, 300, 320])                  # 왕복 1번 반(전환 2번)
+    assert run([280, 300, 320, 300, 280, 300, 320, 300])                 # 왕복 2번(전환 3번)
+    assert not run([280, 300, 320, 300, 280, 300, 320, 300], dt=0.6)     # 천천히 — 전환 사이가 2초 창 밖
+    xs = [280, 320, 280, 320, 300, 300, 280, 320, 280]                   # 전환 2번 뒤 머리를 벗어나면 처음부터
+    assert not run(xs, heads=[True] * 4 + [False] + [True] * 4)
+    assert run(xs)
+    assert run([280, 320, 280, 320, 280])                                # 크게 빨리
+
+
 def test_hover_below_head_or_while_sitting_does_not_pet():
     b = _brain()
     assert not any(b.hover(1 + i * 0.1, 300 + (10 if i % 2 else -10), False) for i in range(8))
@@ -615,7 +637,7 @@ def test_aria_lines_have_stroke_click_and_no_sleep_click():
     assert "idle_extra_click" in data.lines and "click_sleep" not in data.lines  # 머리 쓰다듬는 중 클릭(공통 이름)
     from mabinogi_addon.ui.notifier import alert_files
     sounds = alert_files(paths.resource_dir() / "sounds" / "부드러운 여성") - {"파티 알림.mp3"}
-    assert len(data.alerts) == 11 and sounds == set(data.alerts)
+    assert len(data.alerts) == 12 and sounds <= set(data.alerts)   # 11 + 투아림 2차 말풍선(11-24, 녹음은 나중)
     assert data.alerts["비바체 연장.mp3"] == ("비바체~ 잊은 거 아니지?",)
     assert data.lines["annoyed_click"][0].text == "으응… 너무 자주 누르면 어지러워."
 
@@ -770,8 +792,10 @@ def test_second_alert_bubble_falls_back_to_first_line_and_counts_as_alert(app, c
     from mabinogi_addon.ui import character_controller as cc
     from mabinogi_addon.ui import notifier
 
+    picker = ln.Picker(ln.parse(json.dumps({"schemaVersion": 2, "character": "x", "lines": {"idle": ["a"]},
+                                            "alerts": {"투아림 부스트 발동 직전.mp3": "곧 터져"}}).encode()))
+    assert picker.alert("투아림 부스트 발동 직전2.mp3") == picker.alert("투아림 부스트 발동 직전.mp3")  # 2차 줄 없으면 1차
     picker = ln.Picker(ln.read(ARIA / "lines.json"))
-    assert picker.alert("투아림 부스트 발동 직전2.mp3") == picker.alert("투아림 부스트 발동 직전.mp3")
     assert picker.alert("비바체 연장2.mp3").text == "비바체, 잊으면 안 돼!"  # 있는 2차 줄은 그대로
     config.save_voice_pack("부드러운 여성")
     ctrl = cc.CharacterController()
@@ -1048,7 +1072,7 @@ def test_ian_lines_have_alerts_stage_lines_and_watch_click():
     assert set(ln.SITUATIONS) - {"click_sleep"} <= set(data.lines) and "idle_extra_click" in data.lines
     from mabinogi_addon.ui.notifier import alert_files
     sounds = alert_files(paths.resource_dir() / "sounds" / "차분한 남성") - {"파티 알림.mp3"}
-    assert len(data.alerts) == 11 and sounds == set(data.alerts)
+    assert len(data.alerts) == 12 and sounds <= set(data.alerts)   # 11 + 투아림 2차 말풍선(11-24, 녹음은 나중)
     staged = [line for items in data.lines.values() for line in items if line.stage > 0]
     assert len(staged) == 24 and [line.stage for line in data.lines["stage_up"]] == [25, 50, 75, 100]
     voices = {line.voice: (key, line.text) for key, items in data.lines.items() for line in items if line.voice}
@@ -1373,11 +1397,12 @@ def test_lena_alert_lines_pick_one_of_two_and_old_string_format_still_reads():
     data = ln.read(LENA_DIR / "lines.json")
     from mabinogi_addon.ui.notifier import alert_files
     sounds = alert_files(paths.resource_dir() / "sounds" / "화난 여성") - {"파티 알림.mp3"}
-    assert len(data.alerts) == 11 and sounds <= set(data.alerts) and all(len(v) == 2 for v in data.alerts.values())
+    assert len(data.alerts) == 12 and sounds <= set(data.alerts)  # 11 + 투아림 2차(한 줄, 11-24)
+    assert all(len(v) == 2 for k, v in data.alerts.items() if k != "투아림 부스트 발동 직전2.mp3")
     picker = ln.Picker(data, random.Random(3))
     seen = {picker.alert("비바체 연장.mp3").text for _ in range(40)}
     assert seen == {"비바체, 설마 잊은 거 아니지?", "비바체 또 잊었지? 이런 것도 못 해?"}
-    assert picker.alert("투아림 부스트 발동 직전2.mp3").text in data.alerts["투아림 부스트 발동 직전.mp3"]
+    assert picker.alert("투아림 부스트 발동 직전2.mp3").text == "투아림 터진다고! 준비 안 했으면 혼나!"
     old = ln.parse(json.dumps({"schemaVersion": 2, "character": "x", "lines": {"idle": ["a"]},
                                "alerts": {"a.mp3": "알림", "b.mp3": ["하나", "y" * 40, 3], "c.mp3": []}}).encode())
     assert old.alerts == {"a.mp3": ("알림",), "b.mp3": ("하나",)}
@@ -1546,11 +1571,38 @@ def test_empty_voice_pack_hidden_from_settings_and_falls_back_to_default(monkeyp
     assert notifier.greeting_path("빈 팩") == tmp_path / "투아림 부스트 발동 직전.mp3"
 
 
-def test_starline_pack_has_recordings_and_shows_in_settings():
+def test_starline_pack_has_recordings_and_shows_in_settings(monkeypatch):
+    """Starline 녹음 12개(사용자 11-24 '목소리 추가했어 연결해줘'): 설정 목록에 보임, 투아림 2차는 이 팩 파일, 파티는 기본 녹음."""
+    from mabinogi_addon import config
     from mabinogi_addon.ui import notifier
 
     folder = notifier.SOUND_DIR / "장난스러운 남성"
-    assert len(notifier.alert_files(folder)) == 12 and "장난스러운 남성" in notifier.list_voice_packs()
+    files = notifier.alert_files(folder)
+    assert len(files) == 12 and "파티 알림.mp3" not in files and "장난스러운 남성" in notifier.list_voice_packs()
+    monkeypatch.setattr(config, "load_voice_pack", lambda *a, **k: "장난스러운 남성")
+    assert notifier.sound_path("비바체 연장.mp3") == folder / "비바체 연장.mp3"
+    assert notifier.second_sound_path("투아림 부스트 발동 직전.mp3") == folder / "투아림 부스트 발동 직전2.mp3"
+    assert notifier.sound_path("파티 알림.mp3") == notifier.SOUND_DIR / "파티 알림.mp3"
+    data = ln.read(SL_DIR / "lines.json")
+    assert files <= set(data.alerts)   # 녹음마다 같은 문장 말풍선
+
+
+def test_alert_bubble_outlasts_longest_recording():
+    """알림은 말하기 그림이 아니라 알림 자세(짧게) + 말풍선 — 말풍선은 가장 짧은 글도 4.5초+글자 시간이라
+    Starline 녹음(가장 긴 3.9초)보다 오래 남음(기획 11-24 '녹음이 3초 넘는 게 있어' 확인)."""
+    from mabinogi_addon.ui import pet_window
+
+    for folder in ("다래", "아리아", "이안", "레나", "Starline"):
+        shortest = min(len(t) for texts in ln.read(ASSETS / folder / "lines.json").alerts.values() for t in texts)
+        assert shortest * br.TYPE_SECONDS + pet_window.BUBBLE_SECONDS > 3.9 + 1.0
+
+
+@pytest.mark.parametrize("folder,first", [("다래", None), ("아리아", None), ("이안", None), ("레나", None)])
+def test_tuarim_second_alert_bubble_differs_from_first(folder, first):
+    """투아림 추가 알림 말풍선(기획 11-24 '목소리 있는 애들 투아림 2차 대사 정리') — 1차와 다른 줄."""
+    data = ln.read(ASSETS / folder / "lines.json")
+    second = data.alerts["투아림 부스트 발동 직전2.mp3"]
+    assert len(second) == 1 and second[0] not in data.alerts["투아림 부스트 발동 직전.mp3"]
 
 
 def test_starline_bubble_has_gold_outline(app):

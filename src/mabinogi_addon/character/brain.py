@@ -35,8 +35,11 @@ GRAVITY = 1800.0           # 떨어질 때 px/초²
 DRAG_START = 6.0           # 이만큼 움직이면 클릭이 아니라 끌기
 FRONT_DELAY = 1.0          # 게임이 앞으로 온 뒤 이만큼 지나야 구석으로(잠깐 전환 무시)
 BACK_DELAY = 1.5
-RUB_REVERSALS = 2          # 머리 위에서 좌우로 이만큼 방향을 바꾸면 쓰다듬기
-RUB_WINDOW = 1.5
+# 쓰다듬기 시작(사용자 11-24 '마우스만 지나가도 쓰다듬는 모션 — 최소 2번 이상 흔들어야'): 머리 위에서 한 방향으로
+# RUB_MIN 이상 움직인 뒤 돌아설 때만 전환 1번(손 떨림 무시), 전환 RUB_REVERSALS번(좌→우→좌→우 = 왕복 2번)이 RUB_WINDOW 안
+RUB_MIN = 20.0             # 논리 px(펫 키 190 기준)
+RUB_REVERSALS = 3
+RUB_WINDOW = 2.0
 RUB_STOP = 0.9             # 이만큼 안 문지르면 손 뗀 것
 IDLE_LINE = (240.0, 480.0)  # 혼잣말 간격(초) — 몇 분에 한 번
 LONG_HUNT = 7200.0         # 오래 사냥 중(앉아서 2시간마다)
@@ -299,6 +302,7 @@ class Brain:
     _rub_x: float | None = None
     _rub_dir: int = 0
     _rub_turns: list = field(default_factory=list)
+    _rub_from: float = 0.0           # 지금 방향으로 움직이기 시작한 x
     _last_rub: float = 0.0
     _pet_reached_loop: bool = False
     _corner_time: float = 0.0
@@ -626,25 +630,30 @@ class Brain:
         return events
 
     def hover(self, now: float, x: float, on_head: bool) -> list[tuple]:
-        """누르지 않은 채 캐릭터 위를 움직임. 머리 위를 좌우로 문지르면 쓰다듬기."""
+        """누르지 않은 채 캐릭터 위를 움직임. 머리 위를 좌우로 2번 이상 왕복(한 번에 RUB_MIN 이상)하면 쓰다듬기."""
         if self._press is not None or not on_head:
-            self._rub_x = None
+            self._rub_x, self._rub_dir, self._rub_turns = None, 0, []   # 머리를 벗어나면 처음부터 셈
             return []
         if self.state in ("pet_in", "pet_loop"):
             self._last_rub = now
             return []
         if self.state not in UPRIGHT:
             return []
-        if self._rub_x is not None:
-            d = x - self._rub_x
-            if abs(d) >= 3:
-                direction = 1 if d > 0 else -1
-                if self._rub_dir and direction != self._rub_dir:
-                    self._rub_turns = [t for t in self._rub_turns if now - t <= RUB_WINDOW] + [now]
-                self._rub_dir = direction
-                self._rub_x = x
-        else:
-            self._rub_x, self._rub_dir = x, 0
+        if self._rub_x is None:
+            self._rub_x, self._rub_dir, self._rub_from = x, 0, x
+            return []
+        d = x - self._rub_x
+        if d == 0:
+            return []
+        direction = 1 if d > 0 else -1
+        if self._rub_dir and direction != self._rub_dir:  # 돌아섬 — 지난 방향으로 충분히 움직였을 때만 전환 1번
+            if abs(self._rub_x - self._rub_from) >= RUB_MIN:
+                self._rub_turns = [t for t in self._rub_turns if now - t <= RUB_WINDOW] + [now]
+            self._rub_from = self._rub_x
+        elif not self._rub_dir:
+            self._rub_from = self._rub_x
+        self._rub_dir = direction
+        self._rub_x = x
         if len(self._rub_turns) >= RUB_REVERSALS:
             self._rub_turns = []
             self._target = None
