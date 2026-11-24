@@ -1,64 +1,144 @@
 {
-  "version": "0.55.8",
+  "version": "0.56.0",
   "tests": [
-    "tests/test_harp_channels.py",
-    "tests/test_startup_integration.py",
+    "tests/test_character.py",
+    "tests/test_navigation.py",
+    "tests/test_tour_layout.py",
     "tests/test_overlay_capture.py",
-    "tests/test_manual_update_progress.py",
-    "tests/test_updater_relaunch_env.py",
-    "tests/test_updater.py",
-    "tests/test_restart_after_apply.py",
+    "tests/test_bundle_layout.py",
+    "tests/test_optimization_ui.py",
+    "tests/test_blackbox_access.py",
+    "tests/test_close_overlap.py",
+    "tests/test_settings_grouping.py",
+    "tests/test_alert_volume.py",
+    "tests/test_config_buffs.py",
+    "tests/test_cloud_sync.py",
     "tests/test_single_instance.py",
+    "tests/test_startup_integration.py",
+    "tests/test_restart_after_apply.py",
     "tests/test_release_checks.py",
-    "tests/test_startup_build.py",
     "tests/test_release_candidate.py",
     "tests/test_windows_ci.py",
+    "tests/test_startup_build.py",
     "tests/test_startup_smoke.py",
-    "tests/test_bundle_layout.py",
     "tests/test_release_notes.py",
     "tests/test_release_notes_trigger.py"
   ],
   "coverage": {
+    "src/mabinogi_addon/ui/character_tab.py": {
+      "tests": [
+        "tests/test_character.py",
+        "tests/test_navigation.py",
+        "tests/test_tour_layout.py"
+      ],
+      "reason": "새 캐릭터 탭 — 카드 5장·고르면 목소리 저장·펫 스위치·호감도 바, 탭 7개 순서"
+    },
+    "src/mabinogi_addon/ui/pet_window.py": {
+      "tests": [
+        "tests/test_character.py",
+        "tests/test_overlay_capture.py"
+      ],
+      "reason": "펫 창 — 판독 캡처 제외·포커스 안 가져감·키 190·말풍선"
+    },
+    "src/mabinogi_addon/ui/character_controller.py": {
+      "tests": [
+        "tests/test_character.py"
+      ],
+      "reason": "알림 소리→호감도·알아챔, 그날 처음 켜기 +3, 인사"
+    },
+    "src/mabinogi_addon/ui/character_lines_feed.py": {
+      "tests": [
+        "tests/test_character.py"
+      ],
+      "reason": "대사 원격 갱신(형식 검사는 character/lines)"
+    },
+    "src/mabinogi_addon/character/brain.py": {
+      "tests": [
+        "tests/test_character.py"
+      ],
+      "reason": "펫 상태 전환(게임 앞/뒤·클릭·끌기·쓰다듬기·자다 깨기)"
+    },
+    "src/mabinogi_addon/character/affinity.py": {
+      "tests": [
+        "tests/test_character.py"
+      ],
+      "reason": "호감도 하루 20·횟수·반복 −1·자정 초기화"
+    },
+    "src/mabinogi_addon/character/lines.py": {
+      "tests": [
+        "tests/test_character.py"
+      ],
+      "reason": "대사 무작위·연속 금지·형식 검사"
+    },
+    "src/mabinogi_addon/assets/characters/다래/lines.json": {
+      "tests": [
+        "tests/test_character.py",
+        "tests/test_bundle_layout.py"
+      ],
+      "reason": "다래 대사·알림 말풍선(조용한 여성 11개 전부), assets 번들 포함"
+    },
+    "src/mabinogi_addon/ui/main_window.py": {
+      "tests": [
+        "tests/test_navigation.py",
+        "tests/test_optimization_ui.py",
+        "tests/test_blackbox_access.py",
+        "tests/test_character.py",
+        "tests/test_close_overlap.py"
+      ],
+      "reason": "캐릭터 탭 끼우기(블랙박스 뒤·설정 앞), 탭 최소 폭 96, 종료 정리"
+    },
+    "src/mabinogi_addon/ui/optimization_controller.py": {
+      "tests": [
+        "tests/test_optimization_ui.py",
+        "tests/test_navigation.py"
+      ],
+      "reason": "최적화 탭을 캐릭터 탭 앞에"
+    },
+    "src/mabinogi_addon/ui/blackbox_controller.py": {
+      "tests": [
+        "tests/test_blackbox_access.py",
+        "tests/test_optimization_ui.py"
+      ],
+      "reason": "블랙박스 탭을 캐릭터 탭 앞에"
+    },
+    "src/mabinogi_addon/ui/settings_tab.py": {
+      "tests": [
+        "tests/test_settings_grouping.py",
+        "tests/test_character.py",
+        "tests/test_alert_volume.py"
+      ],
+      "reason": "알림 목소리 고르기 제거(캐릭터 탭으로) — 알림 음량만"
+    },
+    "src/mabinogi_addon/ui/notifier.py": {
+      "tests": [
+        "tests/test_character.py",
+        "tests/test_alert_volume.py",
+        "tests/test_config_buffs.py"
+      ],
+      "reason": "알림 소리 받는 곳(on_play) — 미리듣기 제외"
+    },
+    "src/mabinogi_addon/ui/overlay_capture.py": {
+      "tests": [
+        "tests/test_overlay_capture.py",
+        "tests/test_character.py"
+      ],
+      "reason": "PetWindow 상시 캡처 제외"
+    },
+    "src/mabinogi_addon/config.py": {
+      "tests": [
+        "tests/test_character.py",
+        "tests/test_cloud_sync.py",
+        "tests/test_config_buffs.py"
+      ],
+      "reason": "character 섹션(pet·corner·affinity·lastSeen) — 동기화 대상, 구석은 위치 규칙"
+    },
     "src/mabinogi_addon/system/single_instance.py": {
       "tests": [
         "tests/test_single_instance.py",
         "tests/test_startup_integration.py",
         "tests/test_restart_after_apply.py"
       ],
-      "reason": "두 번째 실행 → 켜진 창 앞으로 요청(공유 메모리 한 바이트·0.5초 확인), 재실행 전 자리 비우기"
-    },
-    "src/mabinogi_addon/__init__.py": {
-      "tests": [
-        "tests/test_startup_integration.py",
-        "tests/test_restart_after_apply.py"
-      ],
-      "reason": "가드를 업데이트 확인 앞으로 — 두 번째는 확인·다운로드 0회, 다시 켜기·업데이트 재실행은 15초 기다림, 메인 창 뒤 watch"
-    },
-    "src/mabinogi_addon/system/updater.py": {
-      "tests": [
-        "tests/test_single_instance.py",
-        "tests/test_updater.py",
-        "tests/test_updater_relaunch_env.py",
-        "tests/test_manual_update_progress.py",
-        "tests/test_restart_after_apply.py"
-      ],
-      "reason": "_relaunch 전 release_held, just_updated(.old 남음)"
-    },
-    "src/mabinogi_addon/ui/splash.py": {
-      "tests": [
-        "tests/test_harp_channels.py",
-        "tests/test_startup_integration.py",
-        "tests/test_overlay_capture.py"
-      ],
-      "reason": "로딩 창 다시 맨 위(WindowStaysOnTopHint) — 플래그·중복 실행/시작 실패/정상 시작 때 닫힘, 맨 위 창 분류(NOT_OVERLAYS)"
-    },
-    "packaging/build_windows.py": {
-      "tests": [
-        "tests/test_startup_build.py",
-        "tests/test_startup_smoke.py",
-        "tests/test_bundle_layout.py"
-      ],
-      "reason": "압축 푸는 시작 화면 always_on_top=True로 spec 보정(minify_script 그대로)"
+      "reason": "작업 스레드에서 자리 비우기는 메인 스레드로(QA 11-24 지적)"
     },
     "packaging/release_checks.json": {
       "tests": [
@@ -66,14 +146,22 @@
         "tests/test_release_candidate.py",
         "tests/test_windows_ci.py"
       ],
-      "reason": "0.55.8 검사 목록·후보 봉인·CI 계약"
+      "reason": "0.56.0 검사 목록·후보 봉인·CI 계약"
+    },
+    "packaging/build_windows.py": {
+      "tests": [
+        "tests/test_startup_build.py",
+        "tests/test_startup_smoke.py",
+        "tests/test_bundle_layout.py"
+      ],
+      "reason": "새 패키지(character)·자산(assets/characters) — 빌드 경로 그대로, 번들 포함 확인"
     },
     "src/mabinogi_addon/assets/release_notes.md": {
       "tests": [
         "tests/test_release_notes.py",
         "tests/test_release_notes_trigger.py"
       ],
-      "reason": "0.55.8 노트 맨 위(조용히 다듬은 것 두 줄)·첫 실행 표시, v0.55.7 이하 그대로"
+      "reason": "0.56.0 노트 맨 위(헤드라인 캐릭터·주의 한 줄), v0.55.8 이하 그대로"
     }
   }
 }

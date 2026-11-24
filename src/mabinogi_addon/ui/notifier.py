@@ -10,6 +10,7 @@ QtMultimedia가 없거나 백엔드가 없으면(헤드리스 등) 조용히 no-
 
 from __future__ import annotations
 
+import logging
 import weakref
 
 from pathlib import Path
@@ -242,6 +243,31 @@ def play_debuff_gone_sound() -> bool:
     return _play_gone(DEBUFF_GONE_SOUND_FILE)
 
 
+# 알림 소리가 날 때 알려 받을 곳(캐릭터 펫: 알아챔 + 말풍선 + 호감도, docs/character-pet-spec.md 2절).
+# 받는 쪽은 (buff_id, 파일 경로)를 받는다. 미리듣기(buff_id "preview")는 알림이 아니다.
+_play_listeners: list = []
+
+
+def on_play(listener) -> None:
+    if listener not in _play_listeners:
+        _play_listeners.append(listener)
+
+
+def off_play(listener) -> None:
+    if listener in _play_listeners:
+        _play_listeners.remove(listener)
+
+
+def _announce(buff_id: str, path: Path) -> None:
+    if buff_id == "preview":
+        return
+    for listener in list(_play_listeners):
+        try:
+            listener(buff_id, path)
+        except Exception:  # noqa: BLE001 — 받는 쪽 오류가 알림 소리를 막지 않게
+            logging.getLogger(__name__).debug("알림 받는 쪽 오류", exc_info=True)
+
+
 class SoundNotifier(QObject):
     """buff_id별 알림 사운드 재생기. 사운드 꺼진 버프는 호출 측에서 걸러준다."""
 
@@ -317,6 +343,7 @@ class SoundNotifier(QObject):
         _sync_default_device(self._audio)  # 지금 쓰는 출력 장치로 맞춤
         self._load(path)
         self._player.play()
+        _announce(buff_id, path)
         return True
 
     def alert(self, buff_ids) -> None:

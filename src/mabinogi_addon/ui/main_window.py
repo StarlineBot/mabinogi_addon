@@ -129,7 +129,7 @@ def _tab_qss(dark: bool) -> str:
         f"QTabWidget::pane {{ border: none; border-top: 1px solid {pane}; }}"
         "QTabBar { qproperty-drawBase: 0; }"
         f"QTabBar::tab {{ background: transparent; color: {color('muted', dark)}; padding: 9px 4px;"
-        " min-width: 104px; border: none; border-bottom: 2px solid transparent;"
+        " min-width: 96px; border: none; border-bottom: 2px solid transparent;"
         " font-size: 13px; }"
         f"QTabBar::tab:hover {{ color: {hover}; }}"
         f"QTabBar::tab:selected {{ color: {color('accent', dark)}; font-weight: 800;"
@@ -148,7 +148,7 @@ def _custom_tab_qss(custom: dict) -> str:
         f" background: {custom['roles']['window']}; }}"
         f"{bar} {{ qproperty-drawBase: 0; background: transparent; }}"
         f"{bar}::tab {{ background: transparent; color: {frame['muted']}; padding: 9px 4px;"
-        " min-width: 104px; border: none; border-bottom: 2px solid transparent;"
+        " min-width: 96px; border: none; border-bottom: 2px solid transparent;"
         " font-size: 13px; }"
         f"{bar}::tab:hover {{ color: {custom['frame_text']}; }}"
         f"{bar}::tab:selected {{ color: {frame['accent']}; font-weight: 800;"
@@ -353,7 +353,15 @@ class MainWindow(QMainWindow):
         self._account.logged_out.connect(lambda: self.settings_tab.login_changed.emit())
         self.settings_tab.attach_account(self._account)
         QTimer.singleShot(5000, self._account.start)  # 트레이로 시작해 창이 안 떠도(첫 표시 때 이미 시작했으면 아무것도 안 함)
-        self.settings_tab.voice_pack_changed.connect(self._on_voice_pack_changed)
+        # 캐릭터(docs/character-pet-spec.md): 설정의 '알림 목소리 고르기'를 옮겨 온 탭 + 화면 펫
+        from .character_controller import CharacterController
+        from .character_tab import CharacterTab
+        self.character_tab = CharacterTab()
+        self.character_tools = CharacterController(self._watcher, self)
+        self.character_tab.voice_pack_changed.connect(self._on_voice_pack_changed)
+        self.character_tab.voice_pack_changed.connect(self.character_tools.voice_changed)
+        self.character_tab.pet_toggled.connect(lambda _on: self.character_tools.sync_window())
+        self.character_tools.affinity_changed.connect(self.character_tab.refresh)
         self.settings_tab.replay_tour.connect(self._replay_tour)
         self.settings_tab.theme_changed.connect(self._apply_tab_styles)
         # Keep the full editor width: one combat tab row, without a sidebar.
@@ -442,6 +450,9 @@ class MainWindow(QMainWindow):
         self._party_scroll = _scrolled(self.party_tab)  # 토스트 클릭 시 이 탭으로 전환
         tabs.addTab(self._party_scroll, "파티 모집")
         tabs.addTab(self._convenience_tabs, "편의기능")
+        # 탭 순서 … · 최적화 · 블랙박스 · 캐릭터 · 설정(명세 3절 1번) — 최적화·블랙박스는 _tail_anchor() 앞에 끼운다
+        self._character_scroll = _scrolled(self.character_tab)
+        tabs.addTab(self._character_scroll, "캐릭터")
         self._settings_scroll = _scrolled(self.settings_tab)
         tabs.addTab(self._settings_scroll, "설정")
         self.optimization_tools.refresh_access()
@@ -2020,12 +2031,18 @@ class MainWindow(QMainWindow):
     def _save_debuff_overlay_state(self) -> None:
         self._save_overlay(self.debuff_overlay, "debuffTracker")
 
+    def _tail_anchor(self):
+        """최적화·블랙박스 탭을 끼울 자리(그 앞에) — 캐릭터 탭(없으면 설정)."""
+        page = getattr(self, "_character_scroll", None)
+        return page if page is not None and self._tabs.indexOf(page) >= 0 else self._settings_scroll
+
     def start(self) -> None:
         """탐지/폴링 시작. 실제 앱 실행(main)에서만 호출한다(스크린샷 렌더 땐 미호출)."""
         if self._closing or self._config_pending_restart or self._started:
             return
         self._started = True
         self.creator_dialogue.start()
+        self.character_tools.start()  # 그날 처음 켜기 호감도 +3, 펫 띄우기·인사
         from ..system import autostart
 
         # 자동실행: 저장된 '의도'대로 현재 exe에 강제 동기화(신버전 실행=자동실행 대상).
@@ -3022,6 +3039,7 @@ class MainWindow(QMainWindow):
         self.cursor_fx.shutdown()
         self.harp_tab.shutdown()
         self.alarm_tab.shutdown()
+        self.character_tools.shutdown()
         inquiry = getattr(self, "_inquiry", None)
         if inquiry is not None:  # 문의 회차 정리(모은 자료·진행 표시)
             inquiry.shutdown()

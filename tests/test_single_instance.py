@@ -160,3 +160,24 @@ def test_just_updated_is_read_from_leftover_old_exe(monkeypatch, tmp_path):
     assert updater.just_updated() is True
     monkeypatch.setattr(paths, "is_frozen", lambda: False)
     assert updater.just_updated() is False
+
+
+def test_release_from_worker_thread_detaches_on_main_thread():
+    """0.56.0(QA 11-24): 앱 안 업데이트 작업 스레드가 자리를 비워도 실제 비우기는 메인 스레드에서(타이머와 겹치지 않게)."""
+    import threading
+    import time as _time
+
+    from mabinogi_addon.system import single_instance
+
+    app = _app()
+    key = "test_" + uuid.uuid4().hex
+    guard = single_instance.SingleInstance(key)
+    worker = threading.Thread(target=guard.release)
+    worker.start()
+    worker.join()
+    assert guard._shm.isAttached()  # 작업 스레드에선 바로 안 뗌
+    deadline = _time.monotonic() + 2
+    while guard._shm.isAttached() and _time.monotonic() < deadline:
+        app.processEvents()
+    assert not guard._shm.isAttached()
+    assert not single_instance.SingleInstance(key).already_running

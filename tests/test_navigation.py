@@ -40,7 +40,7 @@ def window(monkeypatch):
 def test_structure_and_default_editor_space(window):
     w, app = window
     # 0.16.0: 로그인 사용자(픽스처)는 블랙박스 탭, 0.22.0(13.15): 최적화 탭도 공개. 0.22.1: 순서 최적화 · 블랙박스(사용자 결정)
-    assert [w._tabs.tabText(i) for i in range(w._tabs.count())] == ['전투 보조','파티 모집','편의기능','최적화','블랙박스','설정']
+    assert [w._tabs.tabText(i) for i in range(w._tabs.count())] == ['전투 보조','파티 모집','편의기능','최적화','블랙박스','캐릭터','설정']
     assert [w._tracker_tabs.tabText(i) for i in range(w._tracker_tabs.count())] == LABELS
     # 0.37.0 명세 변경(사용자 결정 안 A): 편의기능 2단 한 줄(탭 이름 = 화면 제목), 마우스 커서는 최적화 2단 세 번째
     assert [w._convenience_tabs.tabText(i) for i in range(w._convenience_tabs.count())] == ['계산기','그림대화 만들기','알람']

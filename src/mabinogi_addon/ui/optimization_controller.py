@@ -239,10 +239,10 @@ class OptimizationController(QObject):
                 self._tabs_watched = True
                 tabs.currentChanged.connect(lambda _index: self._maybe_auto_inspect())
             if needed and index<0:
-                # 탭 순서 … · 최적화 · 블랙박스 · 설정(2026-10-26 사용자 결정): 블랙박스가 이미 있으면 그 앞에
+                # 탭 순서 … · 최적화 · 블랙박스 · 캐릭터 · 설정(2026-10-26·11-24 사용자 결정): 블랙박스가 이미 있으면 그 앞에
                 blackbox = getattr(getattr(self.window, 'blackbox_tools', None), '_page', None)
                 before = tabs.indexOf(blackbox) if blackbox is not None else -1
-                index=tabs.insertTab(before if before >= 0 else tabs.indexOf(self.window._settings_scroll),self.panel,'최적화')
+                index=tabs.insertTab(before if before >= 0 else tabs.indexOf(getattr(self.window, '_tail_anchor', lambda: self.window._settings_scroll)()),self.panel,'최적화')
             elif not needed and index>=0:
                 if tabs.currentWidget() is self.panel: tabs.setCurrentWidget(self.window._settings_scroll)
                 tabs.removeTab(index)

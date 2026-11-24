@@ -79,8 +79,20 @@ class SingleInstance:
     def release(self) -> None:
         """자리를 비운다(새 exe를 띄우기 직전 — 새 프로세스가 기다리지 않고 자리를 잡게).
 
-        앱 안 업데이트는 작업 스레드에서 부르므로 타이머는 건드리지 않는다(다른 스레드에서 멈출 수 없음) —
-        비운 뒤의 tick은 take_show_request가 바로 False를 돌려 아무것도 안 한다."""
+        앱 안 업데이트는 작업 스레드에서 부른다. 같은 조각을 메인 스레드의 watch 타이머(take_show_request)도
+        만지므로, 다른 스레드에서 부르면 비우기를 메인 스레드로 넘긴다(0.56.0 — QA 11-24 지적). 새 프로세스는
+        업데이트 직후(.old 남음)라 옛 자리가 비워질 때까지 RESTART_WAIT 동안 기다리므로 순서가 늦어도 된다.
+        """
+        import threading
+
+        from PySide6.QtCore import QTimer
+
+        if threading.current_thread() is not threading.main_thread():
+            QTimer.singleShot(0, self._shm, self._detach)  # 조각이 사는 메인 스레드에서 실행
+            return
+        self._detach()
+
+    def _detach(self) -> None:
         if self._shm.isAttached():
             self._shm.detach()
 

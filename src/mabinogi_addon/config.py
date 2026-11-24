@@ -2293,3 +2293,55 @@ def save_cooking_overlay(path: Path = LOCAL_CONFIG_PATH, **fields) -> None:
     sec.update(fields)
     data["cooking"] = {**raw, "overlay": sec}
     _write_local_config(data, path)
+
+
+# ---- 캐릭터·데스크톱 펫(docs/character-pet-spec.md) — 설정 동기화 대상(구석 위치는 해상도별 규칙) ----
+def _character(path: Path) -> dict:
+    raw = _read_local_config(path).get("character")
+    return raw if isinstance(raw, dict) else {}
+
+
+def load_pet_on(path: Path = LOCAL_CONFIG_PATH) -> bool:
+    """'화면에 캐릭터 띄우기'(기본 꺼짐)."""
+    return _character(path).get("pet") is True
+
+
+def load_pet_corner(path: Path = LOCAL_CONFIG_PATH) -> tuple[int, int] | None:
+    """게임 중 앉아 있을 구석(발 밑 가운데, 끌어서 정함). 없으면 None(바닥 오른쪽 끝)."""
+    pos = _character(path).get("corner")
+    if isinstance(pos, dict) and all(type(pos.get(k)) is int for k in ("x", "y")):
+        return pos["x"], pos["y"]
+    return None
+
+
+def load_affinity(key: str, path: Path = LOCAL_CONFIG_PATH) -> dict:
+    raw = _character(path).get("affinity")
+    item = raw.get(key) if isinstance(raw, dict) else None
+    return item if isinstance(item, dict) else {}
+
+
+def load_affinity_rules(path: Path = LOCAL_CONFIG_PATH) -> dict:
+    """호감도 숫자 덮어쓰기(명세 3절 3번 — 설정 값으로 빼 둠). 없으면 {}(기본 규칙)."""
+    raw = _character(path).get("rules")
+    return raw if isinstance(raw, dict) else {}
+
+
+def load_pet_last_seen(path: Path = LOCAL_CONFIG_PATH) -> str:
+    """마지막으로 앱을 켠 날(YYYY-MM-DD) — '오랜만에 켰을 때' 인사."""
+    v = _character(path).get("lastSeen")
+    return v if isinstance(v, str) else ""
+
+
+def save_character(path: Path = LOCAL_CONFIG_PATH, **fields) -> None:
+    """pet(bool)·corner({x, y})·lastSeen 중 준 것만, affinity=(key, dict)면 그 캐릭터 호감도만 바꾼다."""
+    data = _read_local_config(path)
+    sec = dict(_character(path))
+    affinity = fields.pop("affinity", None)
+    if affinity is not None:
+        key, value = affinity
+        table = dict(sec.get("affinity") or {}) if isinstance(sec.get("affinity"), dict) else {}
+        table[key] = value
+        sec["affinity"] = table
+    sec.update(fields)
+    data["character"] = sec
+    _write_local_config(data, path)
