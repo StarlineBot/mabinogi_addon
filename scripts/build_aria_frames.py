@@ -92,21 +92,20 @@ def build() -> dict[str, list[np.ndarray]]:
     out["rise"] = [scaled(f, r) for f, r in zip(rise, (r0, (r0 + r2) / 2, r2))]
     stroke = sheet("복숭아빛 머리 소녀 치비 4종 세트.png")
     out["hair"] = [scaled(f, by_height(stroke, 1.0)) for f in stroke]
-    mouth = sheet("말하는 귀여운 소녀 6컷 스프라이트 시트.png")  # 닫음·작게·크게·웃음·벌림·말 끝
-    for key, frame in zip(("talk_closed", "talk_small", "talk_big", "talk_laugh", "talk_open", "talk_end"), mouth):
-        out[key] = [scaled(frame, by_height(mouth, 1.0))]
-    hand = sheet("복숭아빛 소녀의 대화 애니메이션 시트.png")
-    out["talk_hand"] = [scaled(f, by_height(hand, 1.0)) for f in hand]
-    point = sheet("말하는 귀여운 꽃머리 소녀 포즈 세트.png")
-    out["talk_point"] = [scaled(f, by_height(point, 1.0)) for f in point]
+    # 말하기(사용자 11-24 다시 만들기): 보통·설명·강조·깜빡임은 새 시트 A·B 입만 바꾸기(build_talk_frames),
+    # 기쁨은 예전 그림(두 꼬마 요정 + 입 시트 웃음) 그대로
+    mouth = sheet("말하는 귀여운 소녀 6컷 스프라이트 시트.png")  # 3번 = 웃음만 씀
+    out["talk_laugh"] = [scaled(mouth[3], by_height(mouth, 1.0))]
+    from scripts.build_talk_frames import talk_frames
+    out.update(talk_frames("아리아"))
     happy = sheet("말하는 귀여운 두 꼬마 요정.png")
     out["talk_happy"] = [scaled(f, by_height(happy, 1.0)) for f in happy]
     return out
 
 
 EXPECTED = {"stand": 2, "walk": 6, "surprise": 4, "drag": 2, "land": 3, "getup": 3, "pet": 6, "crouch": 3, "sit": 4,
-            "rise": 3, "hair": 4, "talk_closed": 1, "talk_small": 1, "talk_big": 1, "talk_laugh": 1, "talk_open": 1,
-            "talk_end": 1, "talk_hand": 6, "talk_point": 2, "talk_happy": 2}
+            "rise": 3, "hair": 4, "talk_laugh": 1, "talk_happy": 2,
+            **{f"talk_{v}_{k}": 1 for v in "ab" for k in ("base", "m1", "m2", "emph", "emph2", "blink", "mid")}}
 
 
 def card() -> np.ndarray:

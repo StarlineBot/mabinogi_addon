@@ -58,15 +58,17 @@ def build() -> dict[str, list[np.ndarray]]:
     rise = sheet("이안의 웅크림부터 기립까지 애니메이션 스프라이트셋.png")
     r0, r2 = crouch_w / rise[0].shape[1], STAND_H / rise[2].shape[0]
     out["rise"] = [scaled(f, r) for f, r in zip(rise, (r0, (r0 + r2) / 2, r2))]
-    point = sheet("말하는 이안의 두 가지 포즈.png")
-    out["talk_point"] = [scaled(f, by_height(point)) for f in point]
+    # 말하기(사용자 11-24 다시 만들기): 새 시트 입만 바꾸기(build_talk_frames), 알림은 시계 가리키기 그대로
+    from scripts.build_talk_frames import talk_frames
+    out.update(talk_frames("이안"))
     alert = sheet("시계를 가리키는 치비 캐릭터 스프라이트 시트.png")
     out["talk_alert"] = [scaled(f, by_height(alert)) for f in alert]
     return out
 
 
 EXPECTED = {"stand": 2, "watch": 4, "walk": 6, "pet": 6, "drag": 4, "fall": 2, "land": 3, "crouch": 3, "sit": 4,
-            "rise": 3, "talk_point": 2, "talk_alert": 6}
+            "rise": 3, "talk_alert": 6, "talk_base": 1, "talk_m1": 1, "talk_m2": 1, "talk_emph": 1,
+            "talk_emph2": 1, "talk_blink": 1, "talk_mid": 1}
 
 
 def card() -> np.ndarray:

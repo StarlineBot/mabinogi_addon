@@ -60,14 +60,41 @@ ANIMS: dict[str, tuple[tuple[str, ...], tuple[float, ...], bool]] = {
     "rise": (("rise_0", "rise_1", "rise_2"), (0.25,) * 3, False),
     "wake": (("wake_0", "wake_1", "wake_2", "wake_3"), (0.3, 0.5, 0.3, 0.6), False),
     # 말하기(사용자 11-24): 글자가 나오는 동안 분위기별 그림 → 다 나오면 말 끝 다묾 잠시 → 서 있기
-    "talk_normal": (("talk_small_0", "talk_big_0", "talk_small_0", "talk_closed_0"), (0.2,) * 4, True),
-    "talk_explain": (("talk_hand_up_0", "talk_hand_out_0", "talk_point_0"), (0.22,) * 3, True),
-    "talk_think": (("talk_think_0",), (1.0,), True),
+    "talk_think": (("talk_think_0",), (1.0,), True),     # 생각·기쁨은 예전 그림 그대로(사용자 11-24)
     "talk_happy": (("talk_smile_0",), (1.0,), True),
-    "talk_end": (("talk_end_0",), (0.7,), False),
 }
 TYPE_SECONDS = 0.07        # 말풍선 글자 한 자가 나오는 시간(창이 같은 값으로 한 글자씩 보여 줌)
-TALKING = ("talk_normal", "talk_explain", "talk_think", "talk_happy", "talk_end")
+TALKING = ("talk", "talk_think", "talk_happy", "talk_end")
+# 새 말하기(사용자 11-24 '말할 때 모션이 어색' — docs/character-pet-spec.md '말하기 모션 어색함'):
+# 서 있기 → 사이(0.2초) → 입만 바꾸기(m1·m2·m1·base 0.2초씩, m2 때 1px 끄덕임) → 강조(한 문장 최대 1번) → base → 사이 → 서 있기.
+# 사이·강조·생각·기쁨으로 들고 날 때는 덮기 전환(앞 그림 그대로 + 새 그림 알파 0→1, 0.13초 — pet_window).
+TALK_KEYS = ("base", "m1", "m2", "emph", "emph2", "blink", "mid")
+MID_SECONDS = 0.2
+MOUTH_SECONDS = 0.2
+MOUTH_ORDER = ("m1", "m2", "m1", "base")
+EMPH_SECONDS = (0.4, 0.2)   # 강조 손짓 → 완화
+EMPH_MIN_CHARS = 12
+BLINK_SECONDS = 0.13
+BLINK_GAP = (3.0, 5.0)
+END_BASE_SECONDS = 0.3
+COVER_SECONDS = 0.13
+
+
+def talk_set(prefix: str = "talk_") -> dict[str, str]:
+    """말하기 한 벌(빌드 build_talk_frames의 이름) — base·m1·m2·emph·emph2·blink·mid."""
+    return {key: f"{prefix}{key}_0" for key in TALK_KEYS}
+
+
+def _talk_anims(sets) -> dict:
+    """load_frames가 말하기 그림을 모두 읽게 하는 자리(재생은 Brain._talk_frame이 시간표로)."""
+    names = tuple(name for s in sets for name in s.values())
+    return {"talk": (names, (1.0,) * len(names), True),
+            "talk_end": (tuple(s[k] for s in sets for k in ("base", "mid")), (END_BASE_SECONDS, MID_SECONDS) * len(sets),
+                         False)}
+
+
+DARE_TALK = (talk_set(),)
+ANIMS.update(_talk_anims(DARE_TALK))
 SITTING = ("crouch", "sit_drowsy", "sit_doze", "sit_half", "sit_notice")
 STANDING = ("stand", "walk", "hairstroke", "watch")   # 서서 대기 동작(아리아 머리 쓰다듬기·이안 시계 보기)도 서 있는 것
 UPRIGHT = STANDING + TALKING   # 서 있는 자세(클릭 놀람·쓰다듬기·알림 알아챔이 되는 상태)
@@ -91,6 +118,7 @@ class Profile:
     idle_laps: tuple[int, int] = (1, 2)            # 한 번에 몇 바퀴
     talk_after_surprise: bool = False     # 클릭 반응(짧은 그림) 뒤 말풍선이 아직 나오는 중이면 말하기로 이어감(이안)
     walk_speed: float = WALK_SPEED        # 걷는 빠르기(논리 px/초) — 걷기 그림 한 바퀴 거리에 맞춤
+    talk_sets: tuple = ()                 # 말하기 그림 벌(아리아는 A·B — 말 한 번마다 무작위)
 
     def with_timing(self, raw) -> Profile:
         """설정 값(config character.idle {gap: [최소, 최대], laps: [최소, 최대]})으로 대기 동작 시간 덮어쓰기."""
@@ -108,7 +136,8 @@ class Profile:
         return replace(self, idle_gap=gap or self.idle_gap, idle_laps=laps or self.idle_laps)
 
 
-DARE = Profile(ANIMS, _NEXT, SITTING, "sit_drowsy", doze_state="sit_doze", walk_speed=DARE_WALK_SPEED)
+DARE = Profile(ANIMS, _NEXT, SITTING, "sit_drowsy", doze_state="sit_doze", walk_speed=DARE_WALK_SPEED,
+               talk_sets=DARE_TALK)
 
 # 아리아(docs/characters/아리아.md): 졸기·자다 깨기 없음 — 구석에서 머리를 안고 앉아 웃음(0 길게 → 3 → 0 → 1 → 2 → 0),
 # 앉아서 클릭 = 웃음 프레임. 서 있기 두 자세 번갈아 + 가만히 서 있는 동안 가끔 머리 쓰다듬기(사용자 11-24).
@@ -129,17 +158,15 @@ ARIA_ANIMS = {
     "sit_notice": (("sit_1",), (1.6,), False),
     "rise": (("rise_0", "rise_1", "rise_2"), (0.25,) * 3, False),
     "hairstroke": (("hair_0", "hair_1", "hair_2", "hair_3"), (0.9, 0.33, 0.33, 0.34), True),
-    "talk_normal": (("talk_small_0", "talk_big_0", "talk_small_0", "talk_closed_0"), (0.2,) * 4, True),
-    "talk_explain": (tuple(f"talk_hand_{i}" for i in range(6)) + ("talk_point_0", "talk_point_1"),
-                     (0.2,) * 6 + (0.4, 0.4), True),
-    "talk_happy": (("talk_happy_0", "talk_happy_1", "talk_laugh_0"), (0.3,) * 3, True),
-    "talk_end": (("talk_end_0",), (0.7,), False),
+    "talk_happy": (("talk_happy_0", "talk_happy_1", "talk_laugh_0"), (0.3,) * 3, True),  # 기쁨은 예전 그림
 }
+ARIA_TALK = (talk_set("talk_a_"), talk_set("talk_b_"))   # 머리 다발 잡고 말하기(A)·두 손 모음(B)
+ARIA_ANIMS.update(_talk_anims(ARIA_TALK))
 ARIA = Profile(ARIA_ANIMS,
                {"surprise": "stand", "land": "getup", "getup": "stand", "pet_in": "pet_loop", "pet_out": "stand",
                 "alert": "stand", "crouch": "sit_loop", "sit_notice": "sit_loop", "rise": "stand", "talk_end": "stand"},
                ("crouch", "sit_loop", "sit_notice"), "sit_loop", idle_extra="hairstroke",
-               walk_speed=ARIA_WALK_SPEED)
+               walk_speed=ARIA_WALK_SPEED, talk_sets=ARIA_TALK)
 # 이안(docs/characters/이안.md): 졸기 없음·놀람 그림 없음(서서 클릭 = 쓰다듬기 첫 장 0.5초 → 말하기),
 # 서 있기 ↔ 시계 보기 번갈아, 떨어지면 두 발 착지 → 바로 서기(엉덩방아·일어나기 없음), 알림 = 시계 가리키며 말함.
 IAN_ANIMS = {
@@ -158,15 +185,14 @@ IAN_ANIMS = {
     "sit_notice": (("sit_0",), (1.2,), False),
     "rise": (("rise_0", "rise_1", "rise_2"), (0.25,) * 3, False),
     "watch": (("watch_0", "watch_1", "watch_2", "watch_3"), (0.25, 0.25, 1.0, 0.25), True),
-    "talk_normal": (("stand_0", "stand_1"), (0.2, 0.2), True),
-    "talk_explain": (("talk_point_0", "talk_point_1"), (0.4, 0.4), True),
-    "talk_end": (("stand_1",), (0.5,), False),
 }
+IAN_TALK = (talk_set(),)
+IAN_ANIMS.update(_talk_anims(IAN_TALK))
 IAN = Profile(IAN_ANIMS,
               {"surprise": "stand", "land": "stand", "pet_in": "pet_loop", "pet_out": "stand", "alert": "stand",
                "crouch": "sit_loop", "sit_notice": "sit_loop", "rise": "stand", "talk_end": "stand"},
               ("crouch", "sit_loop", "sit_notice"), "sit_loop", idle_extra="watch", idle_laps=(1, 1),
-              talk_after_surprise=True, walk_speed=IAN_WALK_SPEED)
+              talk_after_surprise=True, walk_speed=IAN_WALK_SPEED, talk_sets=IAN_TALK)
 PROFILES = {"다래": DARE, "아리아": ARIA, "이안": IAN}
 
 
@@ -214,6 +240,9 @@ class Brain:
     _next_extra: float = 0.0
     _extra_until: float = 0.0
     _queued_talk: tuple | None = None
+    _talk_set: dict | None = None
+    _emph_at: float | None = None
+    _blinks: tuple = ()
 
     def __post_init__(self) -> None:
         if self.pos == (0.0, 0.0):
@@ -221,6 +250,10 @@ class Brain:
 
     # ---- 보이는 것 ----------------------------------------------------------------------------
     def frame(self, now: float) -> str:
+        if self.state == "talk" and self._talk_set is not None:
+            return self._talk_frame(now)
+        if self.state == "talk_end" and self._talk_set is not None:  # base 잠시 → 사이 → (서 있기)
+            return self._talk_set["base" if now - self._t0 < END_BASE_SECONDS else "mid"]
         frames, times, loop = self.profile.anims[self.state]
         t = now - self._t0
         if self.state == "walk":
@@ -250,8 +283,62 @@ class Brain:
             self._pet_reached_loop = True
 
     def _done(self, now: float) -> bool:
+        if self.state == "talk_end" and self._talk_set is not None:
+            return now - self._t0 >= END_BASE_SECONDS + MID_SECONDS
         frames, times, loop = self.profile.anims[self.state]
         return not loop and now - self._t0 >= sum(times)
+
+    def _talk_frame(self, now: float) -> str:
+        """말하는 동안 시간표 — 사이 → 입만 바꾸기(m1·m2·m1·base), 강조 1번, 3~5초마다 깜빡임."""
+        s = self._talk_set
+        t = now - self._t0
+        if t < MID_SECONDS:
+            return s["mid"]
+        if self._emph_at is not None:
+            e = now - self._emph_at
+            if 0 <= e < EMPH_SECONDS[0]:
+                return s["emph"]
+            if EMPH_SECONDS[0] <= e < sum(EMPH_SECONDS):
+                return s["emph2"]
+        if any(0 <= now - b < BLINK_SECONDS for b in self._blinks):
+            return s["blink"]
+        return s[MOUTH_ORDER[int((t - MID_SECONDS) / MOUTH_SECONDS) % len(MOUTH_ORDER)]]
+
+    def covered(self, old: str | None, new: str) -> bool:
+        """그림이 바뀔 때 덮기 전환을 할지 — 말하기로 들고 날 때·사이·강조·분위기 그림. 입만 바뀌는 건 바로."""
+        if not old or old == new:
+            return False
+        mouth = {s[k] for s in self.profile.talk_sets for k in ("base", "m1", "m2", "blink")}
+        if old in mouth and new in mouth:
+            return False
+        if old.startswith("talk_alert") and new.startswith("talk_alert"):
+            return False
+        return old.startswith("talk_") or new.startswith("talk_")
+
+    def _start_talk(self, now: float, until: float, mood: str, chars: int) -> None:
+        sets = self.profile.talk_sets
+        self._talk_set = self.rng.choice(sets) if sets else None  # 아리아 A/B 무작위(직전과 같아도 됨)
+        self._talk_until = until
+        mood_state = f"talk_{mood}"
+        if mood in ("think", "happy") and mood_state in self.profile.anims:
+            self._go(mood_state, now)  # 생각·기쁨 그림이 있는 캐릭터는 그 그림 그대로
+            return
+        if self._talk_set is None:
+            return
+        speak = now + MID_SECONDS
+        self._talk_until = max(until + MID_SECONDS, speak + MOUTH_SECONDS * 2)  # 사이 프레임만큼 늦게 끝내 글자 끝까지 입이 움직임
+        if mood == "explain":
+            self._emph_at = speak  # 설명은 첫머리에 한 번
+        elif chars >= EMPH_MIN_CHARS:
+            self._emph_at = speak + max(0.0, (self._talk_until - speak) / 2 - sum(EMPH_SECONDS) / 2)
+        else:
+            self._emph_at = None
+        blinks, t = [], speak
+        while t < speak + 120:
+            t += self.rng.uniform(*BLINK_GAP)
+            blinks.append(t)
+        self._blinks = tuple(blinks)
+        self._go("talk", now)
 
     def _walk_to(self, target: tuple[float, float], now: float) -> None:
         self._target = target
@@ -315,12 +402,12 @@ class Brain:
             nxt = self.profile.next_map[self.state]
             queued, self._queued_talk = self._queued_talk, None
             if self.state == "surprise" and queued is not None and now < queued[0]:
-                mood = queued[1]
-                nxt = f"talk_{mood}" if f"talk_{mood}" in self.profile.anims else "talk_normal"
-                self._talk_until = queued[0]
+                self._start_talk(now, queued[0], queued[1], queued[2])  # 클릭 반응 뒤 이어서 말함(이안)
+                nxt = self.state
             if self.state == "getup" and self._goal == "corner" and self._near(self.home()):
                 nxt = "crouch"  # 게임 중 구석에 놓였으면 그 자리에서 다시 앉는다
-            self._go(nxt, now)
+            if nxt != self.state:
+                self._go(nxt, now)
             if nxt == "stand":
                 self._schedule_walk(now)
                 self._schedule_extra(now)
@@ -483,14 +570,13 @@ class Brain:
         """말풍선이 뜸 — 서 있으면(걷던 중이면 멈추고) 말하기: 글자가 다 나올 때까지 분위기별 그림.
         앉아 있거나 다른 동작 중이면 그림은 그대로(말풍선만). 말하기로 바꿨으면 True."""
         if self.state == "surprise" and self.profile.talk_after_surprise and not self._dragging:
-            self._queued_talk = (now + max(0.6, chars * TYPE_SECONDS), mood)  # 클릭 반응이 끝나면 이어서 말함
+            self._queued_talk = (now + max(0.6, chars * TYPE_SECONDS), mood, chars)  # 클릭 반응이 끝나면 이어서 말함
             return False
         if self.state not in UPRIGHT or self._dragging:
             return False
         self._target = None
-        self._talk_until = now + max(0.6, chars * TYPE_SECONDS)
-        # 그 분위기 그림이 없는 캐릭터(아리아 '생각')는 보통으로
-        self._go(f"talk_{mood}" if f"talk_{mood}" in self.profile.anims else "talk_normal", now)
+        # 그 분위기 그림이 없는 캐릭터(아리아 '생각', 이안 생각·기쁨)는 보통 말하기로
+        self._start_talk(now, now + max(0.6, chars * TYPE_SECONDS), mood, chars)
         return True
 
     def hold_talk(self, until: float) -> None:

@@ -86,6 +86,8 @@ class PetWindow(QWidget):
         self._bubble: tuple[str, float, float] | None = None   # (글, 나오기 시작, 사라질 때)
         self._sprite = QRectF()
         self._shown = None            # 마지막으로 그린 것(프레임·위치·말풍선) — 같으면 다시 안 그림(CPU)
+        self._cur_name: str | None = None
+        self._cover: tuple[str, float] | None = None   # 덮기 전환(앞 그림 이름, 시작 시각)
         self._scaled: dict[str, QImage] = {}
         self._timer = QTimer(self)
         self._timer.setInterval(TICK_MS)
@@ -143,9 +145,17 @@ class PetWindow(QWidget):
         if self._bubble and now >= self._bubble[2]:
             self._bubble = None
         self._place()
-        # 서 있기·앉아 있기처럼 그림이 그대로면 다시 그리지 않는다(Zzz가 떠오르는 동안만 매번)
-        shown = (self.brain.frame(now), self.brain.facing_left, self.bubble_shown(now))
-        if shown != self._shown or self.brain.zzz():
+        # 서 있기·앉아 있기처럼 그림이 그대로면 다시 그리지 않는다(Zzz가 떠오르는 동안·덮기 전환 0.13초 동안만 매번)
+        name = self.brain.frame(now)
+        if name != self._cur_name:
+            if self.brain.covered(self._cur_name, name):
+                self._cover = (self._cur_name, now)
+            self._cur_name = name
+        covering = self._cover is not None and now - self._cover[1] < brain_mod.COVER_SECONDS
+        if not covering:
+            self._cover = None
+        shown = (name, self.brain.facing_left, self.bubble_shown(now))
+        if shown != self._shown or self.brain.zzz() or covering:
             self._shown = shown
             self.update()
         if events:
@@ -182,6 +192,16 @@ class PetWindow(QWidget):
             dx, dy = (float(v) * k for v in anchor.split(","))
         return QRectF(WIN_W / 2 - w / 2 + dx, WIN_H - FOOT - h + dy, w, h)
 
+    def layers(self, now: float) -> list[tuple[str, float]]:
+        """그릴 그림과 불투명도 — 덮기 전환 중엔 앞 그림(1.0, 그대로) 위에 새 그림(0→1). 둘 다 흐리게 하면 비쳐 보임."""
+        name = self.brain.frame(now)
+        if self._cover is not None and name == self._cur_name:
+            old, start = self._cover
+            t = (now - start) / brain_mod.COVER_SECONDS
+            if 0 <= t < 1 and old in self.frames:
+                return [(old, 1.0), (name, max(0.0, t))]
+        return [(name, 1.0)]
+
     def paintEvent(self, _event) -> None:  # noqa: N802
         now = self._clock()
         name = self.brain.frame(now)
@@ -190,16 +210,21 @@ class PetWindow(QWidget):
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
         if image is not None:
-            rect = self._frame_rect(image)
-            self._sprite = rect
-            small = self._image(name)
-            if self.brain.state == "walk" and self.brain.facing_left:  # 걷기 시트는 오른쪽 — 왼쪽은 뒤집기
-                p.save()
-                p.setTransform(QTransform(-1, 0, 0, 1, WIN_W, 0))
-                p.drawImage(QRectF(WIN_W - rect.right(), rect.top(), rect.width(), rect.height()), small)
-                p.restore()
-            else:
-                p.drawImage(rect, small)
+            self._sprite = self._frame_rect(image)
+            for layer, opacity in self.layers(now):
+                small, rect = self._image(layer), self._frame_rect(self.frames[layer])
+                if "_m2_" in layer:
+                    rect.translate(0, -1)  # 입 크게일 때 1px 끄덕임
+                p.setOpacity(opacity)
+                if self.brain.state == "walk" and self.brain.facing_left:  # 걷기 시트는 오른쪽 — 왼쪽은 뒤집기
+                    p.save()
+                    p.setTransform(QTransform(-1, 0, 0, 1, WIN_W, 0))
+                    p.drawImage(QRectF(WIN_W - rect.right(), rect.top(), rect.width(), rect.height()), small)
+                    p.restore()
+                else:
+                    p.drawImage(rect, small)
+            p.setOpacity(1.0)
+            rect = self._sprite
             if self.brain.zzz():
                 self._paint_zzz(p, rect, now)
         if self._bubble:

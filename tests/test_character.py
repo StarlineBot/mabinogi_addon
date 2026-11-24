@@ -299,23 +299,77 @@ def test_corner_minute_event_every_minute_while_sitting_in_game():
 
 
 @pytest.mark.parametrize("mood,frames", [
-    ("normal", {"talk_small_0", "talk_big_0", "talk_closed_0"}),
-    ("explain", {"talk_hand_up_0", "talk_hand_out_0", "talk_point_0"}),
+    ("normal", {"talk_mid_0", "talk_m1_0", "talk_m2_0", "talk_emph_0", "talk_emph2_0"}),  # 20자 → 중간 강조
+    ("explain", {"talk_mid_0", "talk_emph_0", "talk_emph2_0", "talk_m1_0", "talk_base_0", "talk_m2_0"}),
     ("think", {"talk_think_0"}),
     ("happy", {"talk_smile_0"}),
-    ("angry", {"talk_small_0", "talk_big_0", "talk_closed_0"}),
+    ("angry", {"talk_mid_0", "talk_m1_0", "talk_m2_0", "talk_emph_0", "talk_emph2_0"}),
 ])
 def test_talking_picks_frames_by_mood_then_closes_mouth(mood, frames):
+    """새 말하기(사용자 11-24): 사이 → 입만 바꾸기, 설명은 첫머리 강조, 생각·기쁨은 그 그림, 끝은 base → 사이 → 서기."""
     b = _brain()
     b._target = (800.0, 700.0)
     b._go("walk", 0)
-    assert b.talk(1.0, 10, mood) is True and b._target is None  # 걷다 멈추고 말함
-    seen = {b.frame(1.0 + i * 0.05) for i in range(14)}  # 10글자 × 0.07초 = 0.7초 동안
-    assert seen == frames
-    _run(b, 1.0, 0.75, False)
-    assert b.state == "talk_end" and b.frame(1.8) == "talk_end_0"
-    _run(b, 1.75, 1.0, False)
+    assert b.talk(1.0, 20, mood) is True and b._target is None  # 걷다 멈추고 말함
+    until = b._talk_until
+    seen = {b.frame(1.0 + i * 0.05) for i in range(int((until - 1.0) / 0.05))}
+    seen.discard("talk_blink_0")
+    assert frames <= seen <= frames | {"talk_base_0"}
+    _run(b, 1.0, until - 1.0 + 0.1, False)
+    assert b.state == "talk_end"
+    end0 = b._t0
+    assert b.frame(end0 + 0.1) == "talk_base_0" and b.frame(end0 + 0.4) == "talk_mid_0"
+    _run(b, until, 1.0, False)
     assert b.state in ("stand", "walk")
+
+
+def test_talk_start_order_emphasis_once_and_blinks():
+    b = _brain()
+    b.talk(10.0, 30, "normal")  # 30글자 → 2.1초
+    assert b.frame(10.05) == "talk_mid_0"  # 서기 → 사이
+    assert b.frame(10.25) == "talk_m1_0"  # → 입만 바꾸기(m1·m2·m1·base)
+    seq = [b.frame(10.2 + 0.2 * i + 0.01) for i in range(30)]
+    assert sum(1 for x, y in zip(seq, seq[1:]) if y == "talk_emph_0" and x != "talk_emph_0") == 1  # 강조 한 문장 1번
+    short = _brain()
+    short.talk(0.0, 8, "normal")  # 12자 미만 → 강조 없음
+    assert short._emph_at is None
+    gaps = [y - x for x, y in zip(b._blinks, b._blinks[1:])]
+    assert all(3.0 <= g <= 5.0 for g in gaps) and 3.0 <= b._blinks[0] - 10.2 <= 5.0
+
+
+def test_aria_picks_talk_set_a_or_b_each_time():
+    b = _aria()
+    picked = set()
+    for i in range(40):
+        b._go("stand", i * 10)
+        b.talk(i * 10.0, 10)
+        picked.add(b._talk_set["base"])
+    assert picked == {"talk_a_base_0", "talk_b_base_0"}
+
+
+def test_cover_transition_only_entering_leaving_talk_and_keeps_old_opaque(app):
+    from mabinogi_addon.ui.pet_window import PetWindow, load_frames
+
+    b = _brain()
+    assert b.covered("stand_0", "talk_mid_0") and b.covered("talk_mid_0", "talk_base_0")
+    assert b.covered("talk_base_0", "talk_emph_0") and b.covered("talk_mid_0", "stand_0")
+    assert not b.covered("talk_m1_0", "talk_m2_0") and not b.covered("talk_base_0", "talk_blink_0")
+    assert not b.covered("walk_0", "walk_1") and not b.covered(None, "stand_0")
+    clock = [5.0]
+    b._next_walk = 1e9
+    w = PetWindow(b, load_frames("다래"), roster.DARE.color, clock=lambda: clock[0])
+    try:
+        w.step()
+        b.talk(clock[0], 10)
+        clock[0] += 0.01
+        w.step()
+        layers = w.layers(clock[0] + 0.05)
+        assert layers[0] == ("stand_0", 1.0) and layers[1][0] == "talk_mid_0" and 0 < layers[1][1] < 1
+        clock[0] += 0.2
+        w.step()
+        assert w.layers(clock[0] + 0.2) == [(b.frame(clock[0] + 0.2), 1.0)]
+    finally:
+        w.close()
 
 
 def test_talking_while_sitting_or_busy_keeps_the_picture():
@@ -533,7 +587,7 @@ def test_aria_standing_height_drag_edges_and_walk_hair_color():
 
     stand = imread(ARIA / "stand_0.png", cv2.IMREAD_UNCHANGED)
     assert stand.shape[0] == 285
-    for name in ("hair_0", "walk_0", "talk_closed_0", "surprise_0", "getup_2", "rise_2"):
+    for name in ("hair_0", "walk_0", "talk_a_base_0", "talk_b_mid_0", "surprise_0", "getup_2", "rise_2"):
         assert abs(imread(ARIA / f"{name}.png", cv2.IMREAD_UNCHANGED).shape[0] - 285) <= 3, name
     for name in ("drag_0", "drag_1"):  # 옅은 막(알파 1~40)을 지워 가장자리는 투명
         a = imread(ARIA / f"{name}.png", cv2.IMREAD_UNCHANGED)[..., 3]
@@ -609,7 +663,7 @@ def test_aria_click_while_stroking_hair_says_stroke_click():
 
 def test_aria_think_mood_falls_back_to_normal_mouth():
     b = _aria()
-    assert b.talk(1, 10, "think") and b.state == "talk_normal"
+    assert b.talk(1, 10, "think") and b.state == "talk"  # 생각 그림 없음 → 보통 말하기
     assert b.talk(2, 10, "happy") and b.state == "talk_happy"
 
 
@@ -936,7 +990,7 @@ def test_talking_picture_lasts_as_long_as_the_voice(app):
         w.hold_talk(2.5)  # 가짜 소리 길이 2.5초
         clock[0] += 1.5
         w.step()
-        assert b.state == "talk_normal"  # 글자는 끝났지만 소리 동안 입 움직임 유지
+        assert b.state == "talk"  # 글자는 끝났지만 소리 동안 입 움직임 유지
         clock[0] += 1.2
         w.step()
         assert b.state == "talk_end"
@@ -976,7 +1030,7 @@ def test_ian_roster_card_frames_and_heights():
     names = {n for frames, _t, _l in br.IAN.anims.values() for n in frames}
     assert not [n for n in names if not (IAN_DIR / f"{n}.png").exists()]
     h = lambda n: imread(IAN_DIR / f"{n}.png", cv2.IMREAD_UNCHANGED).shape  # noqa: E731
-    for name in ("stand_0", "stand_1", "watch_2", "walk_0", "land_2", "crouch_0", "talk_point_0", "talk_alert_0"):
+    for name in ("stand_0", "stand_1", "watch_2", "walk_0", "land_2", "crouch_0", "talk_base_0", "talk_alert_0"):
         assert abs(h(name)[0] - 285) <= 3, name
     assert abs(h("rise_0")[1] - h("crouch_2")[1]) <= 3  # 일어나기 첫 장 = 쪼그림 폭
     assert h("rise_2")[0] == 285  # 끝 = 서 있는 키
@@ -1041,7 +1095,7 @@ def test_ian_standing_click_looks_up_then_talks():
     assert b.release(1)[-1] == ("say", "click_stand") and b.frame(1) == "pet_0"  # 시선 위 0.5초
     assert b.talk(1, 10, "normal") is False  # 클릭 반응 중엔 바로 안 바꾸고
     _run(b, 1, 0.55, False)
-    assert b.state == "talk_normal" and b.frame(1.6) in ("stand_0", "stand_1")  # 끝나면 말하기로 이어감
+    assert b.state == "talk" and b.frame(1.55) == "talk_mid_0"  # 끝나면 말하기로 이어감(사이 → 입)
     d = _brain()  # 다래는 그대로(놀람 뒤 서 있기)
     d.press(1, 300, 600)
     d.release(1)
@@ -1111,3 +1165,22 @@ def test_frame_anchor_loader_is_harmless_without_or_with_bad_file(app, tmp_path)
         assert all(w._frame_rect(image).bottom() == w.height() - 6 for image in frames.values())
     finally:
         w.close()
+
+
+@pytest.mark.parametrize("folder,prefix", [("다래", "talk_"), ("아리아", "talk_a_"), ("아리아", "talk_b_"), ("이안", "talk_")])
+def test_mouth_only_frames_differ_only_around_the_mouth(folder, prefix):
+    """입만 바꾸기(빌드 합성, 사용자 11-24): talk_base·m1·m2는 입 둘레 작은 곳 밖에서 알파·색이 똑같다."""
+    import cv2
+    import numpy as np
+    from mabinogi_addon.image_io import imread
+
+    base = imread(ASSETS / folder / f"{prefix}base_0.png", cv2.IMREAD_UNCHANGED)
+    for key in ("m1", "m2"):
+        other = imread(ASSETS / folder / f"{prefix}{key}_0.png", cv2.IMREAD_UNCHANGED)
+        assert other.shape == base.shape
+        diff = np.abs(other.astype(int) - base.astype(int)).max(-1) > 0
+        ys, xs = np.where(diff)
+        assert diff.any()  # 입은 달라야 함
+        h, w = base.shape[:2]
+        assert xs.max() - xs.min() < w * 0.25 and ys.max() - ys.min() < h * 0.13  # 입 둘레 밖은 0 차이
+        assert h * 0.3 < ys.mean() < h * 0.65  # 얼굴(입) 높이
