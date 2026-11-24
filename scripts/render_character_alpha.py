@@ -25,13 +25,14 @@ def main():
     import sys
     # 사용: … render_character_alpha [목소리 팩] — 아리아 고른 화면은 '부드러운 여성'(파일 main_character_tab_aria.png)
     pack = sys.argv[1] if len(sys.argv) > 1 else '조용한 여성'
-    suffix = '' if pack == '조용한 여성' else '_aria'
+    suffix = {'조용한 여성': '', '부드러운 여성': '_aria', '차분한 남성': '_ian'}.get(pack, '_other')
     OUT.mkdir(parents=True, exist_ok=True)
     app = QApplication.instance() or QApplication([]); app.setStyle('Fusion'); apply_theme('custom', DARK)
     raw = {'general': {'skipSetup': True, 'theme': 'dark'}, 'buffTracker': {'enabled': False},
            'debuffTracker': {'enabled': False}, 'voice': {'pack': pack},
            'character': {'pet': True, 'affinity': {'조용한 여성': {'value': 34, 'cleared': 1, 'totals': {'pets': 4, 'corner_minutes': 35}},
-                                                     '부드러운 여성': {'value': 12, 'totals': {'alerts': 3}}}}}
+                                                     '부드러운 여성': {'value': 12, 'totals': {'alerts': 3}},
+                                                     '차분한 남성': {'value': 52, 'cleared': 2, 'totals': {'alerts': 4}}}}}
     with tempfile.TemporaryDirectory() as folder, ExitStack() as stack:
         data = Path(folder) / 'data'; data.mkdir()
         boundary = stack.enter_context(ExternalBoundaries())
@@ -56,6 +57,11 @@ def main():
             w._tabs.setCurrentWidget(w._character_scroll)
             for _ in range(6):
                 app.processEvents()
+            if suffix:  # 고른 카드(두 번째 줄일 수 있음)가 보이게
+                chosen = next(c for c in w.character_tab.cards if c.selected())
+                w._character_scroll.ensureWidgetVisible(chosen, 0, 120)
+                for _ in range(4):
+                    app.processEvents()
             assert w.grab().save(str(OUT / f'main_character_tab{suffix}.png'))
             if suffix:
                 return

@@ -63,7 +63,7 @@ ANIMS: dict[str, tuple[tuple[str, ...], tuple[float, ...], bool]] = {
 TYPE_SECONDS = 0.07        # 말풍선 글자 한 자가 나오는 시간(창이 같은 값으로 한 글자씩 보여 줌)
 TALKING = ("talk_normal", "talk_explain", "talk_think", "talk_happy", "talk_end")
 SITTING = ("crouch", "sit_drowsy", "sit_doze", "sit_half", "sit_notice")
-STANDING = ("stand", "walk", "hairstroke")   # hairstroke: 아리아 서서 대기 동작(서 있기와 번갈아)
+STANDING = ("stand", "walk", "hairstroke", "watch")   # 서서 대기 동작(아리아 머리 쓰다듬기·이안 시계 보기)도 서 있는 것
 UPRIGHT = STANDING + TALKING   # 서 있는 자세(클릭 놀람·쓰다듬기·알림 알아챔이 되는 상태)
 # 한 번 도는 동작이 끝나면 다음 동작
 _NEXT = {"surprise": "stand", "land": "getup", "getup": "stand", "pet_in": "pet_loop", "pet_out": "stand",
@@ -83,6 +83,7 @@ class Profile:
     idle_extra: str | None = None         # 가만히 서 있는 동안 가끔 하는 동작(서 있기와 번갈아)
     idle_gap: tuple[float, float] = (8.0, 15.0)   # 그 동작 사이 간격(초, 무작위)
     idle_laps: tuple[int, int] = (1, 2)            # 한 번에 몇 바퀴
+    talk_after_surprise: bool = False     # 클릭 반응(짧은 그림) 뒤 말풍선이 아직 나오는 중이면 말하기로 이어감(이안)
 
     def with_timing(self, raw) -> Profile:
         """설정 값(config character.idle {gap: [최소, 최대], laps: [최소, 최대]})으로 대기 동작 시간 덮어쓰기."""
@@ -131,7 +132,34 @@ ARIA = Profile(ARIA_ANIMS,
                {"surprise": "stand", "land": "getup", "getup": "stand", "pet_in": "pet_loop", "pet_out": "stand",
                 "alert": "stand", "crouch": "sit_loop", "sit_notice": "sit_loop", "rise": "stand", "talk_end": "stand"},
                ("crouch", "sit_loop", "sit_notice"), "sit_loop", idle_extra="hairstroke")
-PROFILES = {"다래": DARE, "아리아": ARIA}
+# 이안(docs/characters/이안.md): 졸기 없음·놀람 그림 없음(서서 클릭 = 쓰다듬기 첫 장 0.5초 → 말하기),
+# 서 있기 ↔ 시계 보기 번갈아, 떨어지면 두 발 착지 → 바로 서기(엉덩방아·일어나기 없음), 알림 = 시계 가리키며 말함.
+IAN_ANIMS = {
+    "stand": (("stand_1",), (1.0,), True),
+    "walk": (tuple(f"walk_{i}" for i in range(6)), (0.12,) * 6, True),
+    "surprise": (("pet_0",), (0.5,), False),
+    "drag": (tuple(f"drag_{i}" for i in range(4)), (0.18,) * 4, True),
+    "fall": (("fall_0", "fall_1"), (0.2, 0.2), True),
+    "land": (("land_0", "land_1", "land_2"), (0.2, 0.3, 0.4), False),
+    "pet_in": (("pet_0", "pet_1"), (0.45, 0.45), False),
+    "pet_loop": (("pet_2", "pet_3", "pet_4"), (0.45,) * 3, True),
+    "pet_out": (("pet_5",), (1.6,), False),
+    "alert": (tuple(f"talk_alert_{i}" for i in range(6)), (0.3,) * 6, False),
+    "crouch": (("crouch_0", "crouch_1", "crouch_2"), (0.25,) * 3, False),
+    "sit_loop": (("sit_0", "sit_1", "sit_2", "sit_3"), (3.0, 0.8, 0.8, 0.8), True),
+    "sit_notice": (("sit_0",), (1.2,), False),
+    "rise": (("rise_0", "rise_1", "rise_2"), (0.25,) * 3, False),
+    "watch": (("watch_0", "watch_1", "watch_2", "watch_3"), (0.25, 0.25, 1.0, 0.25), True),
+    "talk_normal": (("stand_0", "stand_1"), (0.2, 0.2), True),
+    "talk_explain": (("talk_point_0", "talk_point_1"), (0.4, 0.4), True),
+    "talk_end": (("stand_1",), (0.5,), False),
+}
+IAN = Profile(IAN_ANIMS,
+              {"surprise": "stand", "land": "stand", "pet_in": "pet_loop", "pet_out": "stand", "alert": "stand",
+               "crouch": "sit_loop", "sit_notice": "sit_loop", "rise": "stand", "talk_end": "stand"},
+              ("crouch", "sit_loop", "sit_notice"), "sit_loop", idle_extra="watch", idle_laps=(1, 1),
+              talk_after_surprise=True)
+PROFILES = {"다래": DARE, "아리아": ARIA, "이안": IAN}
 
 
 @dataclass
@@ -176,6 +204,7 @@ class Brain:
     _talk_until: float = 0.0
     _next_extra: float = 0.0
     _extra_until: float = 0.0
+    _queued_talk: tuple | None = None
 
     def __post_init__(self) -> None:
         if self.pos == (0.0, 0.0):
@@ -263,8 +292,8 @@ class Brain:
             return events
         if self.state in TALKING and self.state != "talk_end" and now >= self._talk_until:
             self._go("talk_end", now)  # 글자가 다 나옴 → 입 다묾 잠시
-        if self.state == "hairstroke" and now >= self._extra_until:
-            self._go("stand", now)  # 머리 쓰다듬기 1~2바퀴 끝 → 서 있기
+        if self.profile.idle_extra and self.state == self.profile.idle_extra and now >= self._extra_until:
+            self._go("stand", now)  # 대기 동작(머리 쓰다듬기·시계 보기) 끝 → 서 있기
             self._schedule_extra(now)
         if self.state == "pet_loop" and now - self._last_rub > RUB_STOP:
             self._go("pet_out", now)
@@ -273,6 +302,11 @@ class Brain:
             return events
         if self._done(now):
             nxt = self.profile.next_map[self.state]
+            queued, self._queued_talk = self._queued_talk, None
+            if self.state == "surprise" and queued is not None and now < queued[0]:
+                mood = queued[1]
+                nxt = f"talk_{mood}" if f"talk_{mood}" in self.profile.anims else "talk_normal"
+                self._talk_until = queued[0]
             if self.state == "getup" and self._goal == "corner" and self._near(self.home()):
                 nxt = "crouch"  # 게임 중 구석에 놓였으면 그 자리에서 다시 앉는다
             self._go(nxt, now)
@@ -294,7 +328,7 @@ class Brain:
 
         if self.state == "walk":
             self._step(dt, now)
-        elif self.state in ("stand", "hairstroke"):  # 머리 쓰다듬기 중이어도 걸을 차례·게임이 오면 바로 끊음
+        elif self.state == "stand" or self.state == self.profile.idle_extra:  # 대기 동작 중이어도 걸을 차례·게임이 오면 바로 끊음
             if self._goal == "corner":
                 if self._near(self.home()):
                     self._go("crouch", now)
@@ -383,11 +417,11 @@ class Brain:
             return events
         events.append(("click",))
         if self.state in UPRIGHT:
-            stroking = self.state == "hairstroke"
+            stroking = self.profile.idle_extra is not None and self.state == self.profile.idle_extra
             self._target = None
             self._go("surprise", now)
             self._schedule_extra(now)
-            events.append(("say", "stroke_click" if stroking else "click_stand"))
+            events.append(("say", "idle_extra_click" if stroking else "click_stand"))
         elif self.profile.doze_state is not None and self.state == self.profile.doze_state:
             self._go("wake", now)
             events.append(("say", "click_sleep"))
@@ -436,6 +470,9 @@ class Brain:
     def talk(self, now: float, chars: int, mood: str = "normal") -> bool:
         """말풍선이 뜸 — 서 있으면(걷던 중이면 멈추고) 말하기: 글자가 다 나올 때까지 분위기별 그림.
         앉아 있거나 다른 동작 중이면 그림은 그대로(말풍선만). 말하기로 바꿨으면 True."""
+        if self.state == "surprise" and self.profile.talk_after_surprise and not self._dragging:
+            self._queued_talk = (now + max(0.6, chars * TYPE_SECONDS), mood)  # 클릭 반응이 끝나면 이어서 말함
+            return False
         if self.state not in UPRIGHT or self._dragging:
             return False
         self._target = None

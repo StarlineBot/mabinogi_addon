@@ -28,7 +28,7 @@ ROSTER: tuple[Character, ...] = (
     Character("부드러운 여성", "아리아", "부드러운 여성", "#F5A25D", "아리아/card.png", True, True),
     Character("자연스러운 여성", UNKNOWN_NAME, "자연스러운 여성", "#9AA0AA", "silhouette_f.png", False, False),
     Character("화난 여성", UNKNOWN_NAME, "화난 여성", "#9AA0AA", "silhouette_f.png", False, False),
-    Character("차분한 남성", UNKNOWN_NAME, "차분한 남성", "#9AA0AA", "silhouette_m.png", False, False),
+    Character("차분한 남성", "이안", "차분한 남성", "#3B5B9A", "이안/card.png", True, True),
 )
 
 

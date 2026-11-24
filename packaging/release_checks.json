@@ -57,7 +57,7 @@
       "tests": [
         "tests/test_character.py"
       ],
-      "reason": "펫 상태 전환 — 캐릭터별 Profile(다래 그대로 / 아리아: 졸기 없음·앉아 웃음·서기↔머리 쓰다듬기·생각→보통), 말하기 분위기별 그림"
+      "reason": "펫 상태 전환 — 캐릭터별 Profile(다래 그대로 / 아리아: 졸기 없음·앉아 웃음·서기↔머리 쓰다듬기·생각→보통), 말하기 분위기별 그림·이안 Profile(놀람 대신 시선 위→말하기, 착지 → 바로 서기, 시계 보기 번갈아, 알림 = 시계 가리키기), 대기 동작 클릭 = idle_extra_click"
     },
     "src/mabinogi_addon/character/affinity.py": {
       "tests": [
@@ -168,14 +168,14 @@
       "tests": [
         "tests/test_character.py"
       ],
-      "reason": "아리아(부드러운 여성) known·has_pet·#F5A25D·card, 카드 순서 다래→아리아→??? 3장"
+      "reason": "아리아(부드러운 여성) known·has_pet·#F5A25D·card, 카드 순서 다래→아리아→??? 3장·이안(차분한 남성) #3B5B9A·card"
     },
     "src/mabinogi_addon/assets/characters/아리아/lines.json": {
       "tests": [
         "tests/test_character.py",
         "tests/test_bundle_layout.py"
       ],
-      "reason": "아리아 대사·알림 11개·stroke_click, 자다가 클릭 없음, assets 번들 포함·구간 대사 24줄·voice"
+      "reason": "아리아 대사·알림 11개·stroke_click, 자다가 클릭 없음, assets 번들 포함·구간 대사 24줄·voice·stroke_click → idle_extra_click"
     },
     "src/mabinogi_addon/ui/tuarim_tab.py": {
       "tests": [
@@ -189,6 +189,13 @@
         "tests/test_character.py"
       ],
       "reason": "대사 목소리 재생 — 팩 안 파일만·알림 우선·음량 0·팩 밖 경로 막음"
+    },
+    "src/mabinogi_addon/assets/characters/이안/lines.json": {
+      "tests": [
+        "tests/test_character.py",
+        "tests/test_bundle_layout.py"
+      ],
+      "reason": "이안 대사·알림 11·구간 24·idle_extra_click(시계 보는 중 클릭), assets 번들 포함"
     }
   }
 }

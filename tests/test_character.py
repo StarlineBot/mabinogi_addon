@@ -445,7 +445,7 @@ def test_character_tab_cards_choose_voice_and_toggle_pet(app, cfg, monkeypatch):
     changed, toggled = [], []
     tab.voice_pack_changed.connect(lambda: changed.append(1))
     tab.pet_toggled.connect(toggled.append)
-    assert [c.character.name for c in tab.cards] == ["다래", "아리아", "???", "???", "???"]
+    assert [c.character.name for c in tab.cards] == ["다래", "아리아", "???", "???", "이안"]
     assert not any(c.selected() for c in tab.cards)  # 기본 녹음 — 고른 카드 없음
     tab.cards[3].clicked.emit(tab.cards[3].character)  # 미정 카드도 그 목소리로 선택
     assert config.load_voice_pack() == "화난 여성" and played == ["화난 여성"] and changed == [1]
@@ -558,7 +558,7 @@ def test_aria_lines_have_stroke_click_and_no_sleep_click():
     data = ln.read(ARIA / "lines.json")
     assert data.character == "아리아"
     assert set(ln.SITUATIONS) - {"click_sleep"} <= set(data.lines)
-    assert "stroke_click" in data.lines and "click_sleep" not in data.lines
+    assert "idle_extra_click" in data.lines and "click_sleep" not in data.lines  # 머리 쓰다듬는 중 클릭(공통 이름)
     from mabinogi_addon.ui.notifier import alert_files
     sounds = alert_files(paths.resource_dir() / "sounds" / "부드러운 여성") - {"파티 알림.mp3"}
     assert len(data.alerts) == 11 and sounds == set(data.alerts)
@@ -601,7 +601,7 @@ def test_aria_click_while_stroking_hair_says_stroke_click():
     b._go("hairstroke", 1)
     b._extra_until = 10
     b.press(1.2, 300, 600)
-    assert b.release(1.2) == [("click",), ("say", "stroke_click")] and b.state == "surprise"
+    assert b.release(1.2) == [("click",), ("say", "idle_extra_click")] and b.state == "surprise"
     b._go("stand", 2)
     b.press(2.1, 300, 600)
     assert b.release(2.1)[-1] == ("say", "click_stand")
@@ -954,3 +954,99 @@ def test_character_tab_has_voice_lines_switch_default_on(app, cfg):
     assert tab.voice_switch.text() == "대사 목소리" and tab.voice_switch.isChecked()
     tab.voice_switch.setChecked(False)
     assert config.load_voice_lines() is False
+
+
+# ---- 이안(차분한 남성, 사용자 11-24 알파 포함 — docs/characters/이안.md) ----------------------------------------
+IAN_DIR = ASSETS / "이안"
+
+
+def _ian(**kw):
+    b = br.Brain(br.Floor(0, 1000, 700), rng=random.Random(9), profile=br.IAN, **kw)
+    b.pos = (300.0, 700.0)
+    return b
+
+
+def test_ian_roster_card_frames_and_heights():
+    import cv2
+    from mabinogi_addon.image_io import imread
+
+    ian = roster.by_pack("차분한 남성")
+    assert (ian.name, ian.known, ian.has_pet, ian.color) == ("이안", True, True, "#3B5B9A")
+    assert (ASSETS / ian.card).is_file() and [c.name for c in roster.ROSTER][-1] == "이안"
+    names = {n for frames, _t, _l in br.IAN.anims.values() for n in frames}
+    assert not [n for n in names if not (IAN_DIR / f"{n}.png").exists()]
+    h = lambda n: imread(IAN_DIR / f"{n}.png", cv2.IMREAD_UNCHANGED).shape  # noqa: E731
+    for name in ("stand_0", "stand_1", "watch_2", "walk_0", "land_2", "crouch_0", "talk_point_0", "talk_alert_0"):
+        assert abs(h(name)[0] - 285) <= 3, name
+    assert abs(h("rise_0")[1] - h("crouch_2")[1]) <= 3  # 일어나기 첫 장 = 쪼그림 폭
+    assert h("rise_2")[0] == 285  # 끝 = 서 있는 키
+    assert abs(h("sit_0")[0] - h("crouch_2")[0]) <= 4  # 앉아 기다리기 = 웅크리기 끝 높이
+
+
+def test_ian_lines_have_alerts_stage_lines_and_watch_click():
+    data = ln.read(IAN_DIR / "lines.json")
+    assert data.character == "이안" and "click_sleep" not in data.lines
+    assert set(ln.SITUATIONS) - {"click_sleep"} <= set(data.lines) and "idle_extra_click" in data.lines
+    from mabinogi_addon.ui.notifier import alert_files
+    sounds = alert_files(paths.resource_dir() / "sounds" / "차분한 남성") - {"파티 알림.mp3"}
+    assert len(data.alerts) == 11 and sounds == set(data.alerts)
+    staged = [line for items in data.lines.values() for line in items if line.stage > 0]
+    assert len(staged) == 24 and [line.stage for line in data.lines["stage_up"]] == [25, 50, 75, 100]
+    assert not any(line.voice for items in data.lines.values() for line in items)  # 이안 대사 녹음 계획 없음
+
+
+def test_ian_never_dozes_or_gets_up_and_lands_straight_to_standing():
+    b = _ian()
+    b.press(0, 300, 600)
+    b.move(0.1, 300, 300)
+    assert b.state == "drag"
+    assert b.release(0.2) == [] and b.state == "fall"
+    t, events = _run(b, 0.2, 0.8, False)
+    assert b.state == "land" and ("say", "dropped") in events
+    seen = set()
+    while t < 3:
+        t += 0.05
+        b.tick(t, False)
+        seen.add(b.state)
+    assert "getup" not in seen and b.state in ("stand", "walk", "watch")  # 착지 → 바로 서기
+    b2 = _ian(corner=(900.0, 700.0))
+    t, _ = _run(b2, 0, 6, True)
+    for _ in range(400):
+        t += 0.05
+        b2.tick(t, True)
+        assert b2.state not in ("sit_doze", "wake", "getup") and not b2.zzz()
+    assert b2.state in br.IAN.sitting
+
+
+def test_ian_alternates_watch_and_click_while_watching():
+    b = _ian()
+    b._next_walk = 1e9
+    t, _ = _run(b, 0, 16, False)
+    assert b.state == "watch" or b._extra_until > 0
+    b._go("watch", t)
+    b._extra_until = t + 5
+    b.press(t, 300, 600)
+    assert b.release(t) == [("click",), ("say", "idle_extra_click")]  # 시계 보는 중 클릭
+
+
+def test_ian_standing_click_looks_up_then_talks():
+    b = _ian()
+    b.press(1, 300, 600)
+    assert b.release(1)[-1] == ("say", "click_stand") and b.frame(1) == "pet_0"  # 시선 위 0.5초
+    assert b.talk(1, 10, "normal") is False  # 클릭 반응 중엔 바로 안 바꾸고
+    _run(b, 1, 0.55, False)
+    assert b.state == "talk_normal" and b.frame(1.6) in ("stand_0", "stand_1")  # 끝나면 말하기로 이어감
+    d = _brain()  # 다래는 그대로(놀람 뒤 서 있기)
+    d.press(1, 300, 600)
+    d.release(1)
+    d.talk(1, 10)
+    _run(d, 1, 1.0, False)
+    assert d.state in ("stand", "walk")
+
+
+def test_ian_alert_points_at_watch():
+    b = _ian()
+    b.notify(1)
+    assert b.state == "alert" and b.frame(1) == "talk_alert_0"
+    _run(b, 1, 2.0, False)
+    assert b.state in ("stand", "walk", "watch")
