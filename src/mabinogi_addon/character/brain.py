@@ -11,7 +11,7 @@
 - 쓰다듬기: 서 있을 때 머리 위를 좌우로 문지르면 알아챔 → 깜짝 → 부끄 → (문지르는 동안 반복) → 손 떼면 삐침.
 - 알림: 앉아 있으면 알아챔, 서 있으면 알아챔(!) 한 번 + 말풍선.
 tick·입력은 사건 목록을 돌려준다: ("say", 상황) / ("say_text", 글) / ("click",) / ("pet_done",) /
-("corner_saved", x, y) / ("corner_time",) — 말풍선·호감도·저장은 창이 처리한다.
+("corner_saved", x, y) / ("corner_minute",) — 말풍선·호감도·저장은 창이 처리한다.
 """
 from __future__ import annotations
 
@@ -195,9 +195,9 @@ class Brain:
         if self.state in SITTING and self._front:
             self._corner_time += dt
             self._hunt_time += dt
-            if self._corner_time >= 1800.0:  # 30분마다(호감도는 창이 하루 횟수로 거른다)
-                self._corner_time -= 1800.0
-                events.append(("corner_time",))
+            if self._corner_time >= 60.0:  # 1분마다 — 호감도(30분마다 +1·퀘스트 누적 분)는 창 쪽에서
+                self._corner_time -= 60.0
+                events.append(("corner_minute",))
             if self._hunt_time >= LONG_HUNT and self.state != "sit_doze":
                 self._hunt_time = 0.0
                 events.append(("say", "long_hunt"))

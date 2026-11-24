@@ -35,54 +35,119 @@ def cfg(tmp_path, monkeypatch):
     return path
 
 
-# ---- 호감도(명세 3절 3번) ------------------------------------------------------------------------
-def test_daily_full_is_twenty_and_each_action_has_its_own_limit():
+# ---- 호감도(명세 3절 3번 — 사용자 최종 규칙 11-24 c8797ef) ----------------------------------------
+def test_daily_full_is_ten_and_each_action_has_its_own_limit():
     a = aff.Affinity()
-    got = [a.gain("launch", DAY) for _ in range(2)]
+    got = [a.launched(DAY), a.launched(DAY)]
     got += [a.gain("pet", DAY) for _ in range(4)]
-    got += [a.gain("alert", DAY) for _ in range(9)]
-    got += [a.gain("corner", DAY) for _ in range(6)]
-    assert got == [3, 0] + [2, 2, 2, 0] + [1] * 7 + [0, 0] + [1] * 4 + [0, 0]
-    assert a.value == a.gained == 20  # 3 + 6 + 7 + 4 = 하루 상한
-    assert a.stage == 0
+    got += [a.alerted(DAY) for _ in range(5)]
+    got += [a.corner_minute(DAY) for _ in range(120)]
+    assert got[:11] == [2, 0, 1, 1, 1, 0, 1, 1, 1, 0, 0]
+    assert sum(got[11:]) == 2 and got[11 + 29] == 1 and got[11 + 59] == 1  # 30분마다 +1, 하루 2번
+    assert a.value == a.gained == 10  # 2 + 3 + 3 + 2 = 하루 상한
+    assert a.totals == {"alerts": 5, "corner_minutes": 120} and a.streak == 1
 
 
-def test_daily_cap_and_100_ceiling_and_midnight_reset():
-    a = aff.Affinity(aff.Rules(daily_cap=4))
-    assert [a.gain("launch", DAY), a.gain("pet", DAY)] == [3, 1]  # 상한 4에서 잘림
-    assert a.gain("alert", DAY) == 0
-    a.gain("alert", "2026-11-25")  # 자정 지남 → 오늘 횟수·오른 양 초기화, 값은 그대로
-    assert a.value == 5 and a.gained == 1 and a.counts == {"alert": 1}
-    b = aff.Affinity(value=99)
-    assert b.gain("launch", DAY) == 1 and b.value == 100 and b.stage == 100
+def test_stops_at_segment_end_until_quest_then_continues():
+    a = aff.Affinity(value=24)
+    a.alerted(DAY)
+    a.alerted(DAY)
+    assert a.value == 25 and a.stage == 0 and a.cleared == 0  # 25에서 멈춤(0→25 퀘스트 = 처음 쓰다듬기 아직)
+    assert a.quest_text() == "퀘스트: 처음 쓰다듬기 · 0/1번"
+    assert a.petted(1, DAY) == "gain"  # 쓰다듬기 퀘스트 깸 → 다음 구간, 그 +1이 이어서 쌓임
+    assert a.cleared == 1 and a.stage == 25 and a.value == 26
+    assert a.quest_text() == "퀘스트: 구석에서 함께 1시간 · 0/60분"
 
 
-def test_repeat_clicks_penalty_once_a_minute_never_below_zero():
+def test_quest_progress_counts_ahead_and_unlocks_on_arrival():
+    a = aff.Affinity()
+    a.totals = {"pets": 1, "corner_minutes": 75}  # 미리 깨 둔 두 퀘스트
+    a.value = 49
+    a._settle()
+    assert a.cleared == 1 and a.value == 49  # 25를 넘은 값 + 미리 깬 쓰다듬기 → 25→50 구간
+    a.gain("launch", DAY)
+    assert a.value == 51 and a.cleared == 2  # 50 도착 즉시 미리 깬 구석 60분으로 넘어가 이어 쌓임
+    d = aff.Affinity(value=49)
+    d.gain("launch", DAY)
+    assert d.value == 25 and d.cleared == 0  # 퀘스트 없이 저장된 값은 구간 끝으로 맞춤
+    b = aff.Affinity.load({"value": 50, "cleared": 1, "totals": {"pets": 1, "corner_minutes": 75}})
+    assert b.cleared == 2 and b.stage == 50 and "목소리 알림 10번 · 0/10번" in b.quest_text()
+    c = aff.Affinity.load({"value": 75, "cleared": 3, "streak": 6})
+    assert c.quest_text() == "퀘스트: 7일 연속 켜기 · 6/7일"
+
+
+def test_launch_streak_counts_consecutive_days_and_resets_on_gap():
+    a = aff.Affinity()
+    for d in ("2026-11-20", "2026-11-21", "2026-11-22"):
+        a.launched(d)
+    assert a.streak == 3
+    a.launched("2026-11-22")
+    assert a.streak == 3  # 같은 날 다시 켜도 그대로
+    a.launched("2026-11-24")
+    assert a.streak == 1  # 하루 빠짐 → 다시 1일
+
+
+def test_hundred_needs_seven_day_streak_quest():
+    a = aff.Affinity.load({"value": 99, "cleared": 3, "streak": 6, "lastLaunch": "2026-11-23"})
+    a.alerted(DAY)
+    assert a.value == 100 and a.stage == 75  # 100에 닿았지만 7일 연속 퀘스트 전
+    a.launched(DAY)
+    assert a.streak == 7 and a.cleared == 4 and a.stage == 100 and a.quest_text() == "퀘스트: 모두 깼어요"
+
+
+def test_midnight_reset_keeps_value_and_quest_totals():
+    a = aff.Affinity(aff.Rules(daily_cap=3))
+    assert [a.launched(DAY), a.gain("pet", DAY), a.alerted(DAY)] == [2, 1, 0]  # 상한 3에서 잘림
+    a.alerted("2026-11-25")  # 자정 지남 → 오늘 횟수·오른 양 초기화
+    assert a.value == 4 and a.gained == 1 and a.counts == {"alert": 1} and a.totals == {"alerts": 2}
+
+
+def test_repeat_penalty_once_a_minute_never_below_zero_or_segment_start():
     a = aff.Affinity(value=1)
     assert [a.click(t) for t in (0, 1, 2, 3)] == [False] * 4
     assert a.click(4) is True and a.value == 0  # 10초 안 5번 → −1
     assert not any(a.click(5 + t) for t in range(5))  # 1분 안엔 다시 안 내림
-    assert a.value == 0
     assert [a.click(100 + t) for t in range(5)][-1] is True and a.value == 0  # 0 아래로 안 내려감
+    b = aff.Affinity.load({"value": 26, "cleared": 1})
+    for t in (0, 100, 200):
+        for i in range(5):
+            b.click(t + i)
+    assert b.value == 25  # 지금 구간 시작점(25) 아래로 안 내려감
     c = aff.Affinity(value=5)
     assert not any(c.click(t * 3) for t in range(10))  # 3초 간격(10초 안 4번)은 반복 아님
 
 
 def test_petting_after_daily_three_is_annoyed():
-    a = aff.Affinity(value=10)
-    assert [a.petted(t, DAY) for t in (0, 1, 2)] == ["gain"] * 3 and a.value == 16
-    assert a.petted(3, DAY) == "annoyed" and a.value == 15
-    assert a.petted(10, DAY) == "none" and a.value == 15  # 1분에 한 번만
+    a = aff.Affinity.load({"value": 10, "cleared": 0})
+    assert [a.petted(t, DAY) for t in (0, 1, 2)] == ["gain"] * 3 and a.value == 13 and a.totals["pets"] == 3
+    assert a.petted(3, DAY) == "annoyed" and a.value == 12
+    assert a.petted(10, DAY) == "none" and a.value == 12  # 1분에 한 번만
+
+
+def test_creator_set_value_clears_quests_up_to_that_stage():
+    a = aff.Affinity()
+    a.set_value(50)
+    assert a.cleared == 2 and a.stage == 50 and a.quest_text().startswith("퀘스트: 목소리 알림")
+    a.set_value(42)
+    assert a.cleared == 1 and a.value == 42
+    a.set_value(100)
+    assert a.cleared == 4 and a.stage == 100
+    a.set_value(0)
+    assert a.cleared == 0
 
 
 def test_rules_are_settings_values_and_state_round_trips():
-    rules = aff.Rules.from_dict({"alert_times": 9, "penalty_gap": 30, "daily_cap": True, "unknown": 1, "pet": -2})
-    assert rules.alert_times == 9 and rules.penalty_gap == 30.0 and rules.daily_cap == 20 and rules.pet == 2
+    rules = aff.Rules.from_dict({"alert_times": 9, "penalty_gap": 30, "daily_cap": True, "unknown": 1, "pet": -2,
+                                 "quest_corner_minutes": 90})
+    assert rules.alert_times == 9 and rules.penalty_gap == 30.0 and rules.daily_cap == 10 and rules.pet == 1
     a = aff.Affinity(rules)
-    a.gain("alert", DAY)
+    a.alerted(DAY)
+    a.launched(DAY)
     b = aff.Affinity.load(json.loads(json.dumps(a.to_dict())), rules)
-    assert (b.value, b.day, b.gained, b.counts) == (1, DAY, 1, {"alert": 1})
-    assert aff.Affinity.load({"value": 500, "counts": {"x": 1, "pet": "2"}}).value == 100
+    assert (b.value, b.day, b.gained, b.counts, b.totals, b.streak, b.last_launch) == \
+        (3, DAY, 3, {"alert": 1, "launch": 1}, {"alerts": 1}, 1, DAY)
+    assert aff.Affinity.load({"value": 500, "counts": {"x": 1, "pet": "2"}}).value == 25
+    assert aff.Affinity.load({"value": 30, "cleared": 1}, rules).quest_text() == "퀘스트: 구석에서 함께 90분 · 0/90분"
 
 
 # ---- 대사 --------------------------------------------------------------------------------------
@@ -219,11 +284,13 @@ def test_hover_below_head_or_while_sitting_does_not_pet():
     assert not any(b.hover(3 + i * 0.1, 300 + (10 if i % 2 else -10), True) for i in range(8))
 
 
-def test_corner_time_event_every_thirty_minutes_while_sitting_in_game():
+def test_corner_minute_event_every_minute_while_sitting_in_game():
     b = _brain(corner=(300.0, 700.0))
     t, _ = _run(b, 0, 2, True)
-    t, events = _run(b, t, 1800, True, step=0.5)
-    assert events.count(("corner_time",)) == 1
+    t, events = _run(b, t, 600, True, step=0.5)
+    assert events.count(("corner_minute",)) == 10
+    t, events = _run(b, t, 120, False, step=0.5)
+    assert ("corner_minute",) not in events[4:]  # 게임 밖이면 안 셈
 
 
 def test_alert_notice_pose():
@@ -294,7 +361,8 @@ def test_sound_listener_raises_affinity_and_notices_only_for_chosen_voice(app, c
         notifier._announce("vivace", sounds / "비바체 연장.mp3")  # 기본 녹음 — 다른 목소리
         notifier._announce("preview", sounds / "조용한 여성" / "투아림 부스트 발동 직전.mp3")  # 미리듣기
         assert ctrl.affinity.value == 1
-        assert config.load_affinity("조용한 여성")["counts"] == {"alert": 1}
+        saved = config.load_affinity("조용한 여성")
+        assert saved["counts"] == {"alert": 1} and saved["totals"] == {"alerts": 1}
     finally:
         ctrl.shutdown()
     notifier._announce("vivace", sounds / "조용한 여성" / "비바체 연장.mp3")
@@ -313,7 +381,7 @@ def test_launch_bonus_once_a_day_and_greeting(app, cfg):
         ctrl.set_enabled(True)
         ctrl.start(now)
         ctrl.start(now)
-        assert ctrl.affinity.value == 3 and config.load_pet_last_seen() == "2026-11-24"
+        assert ctrl.affinity.value == 2 and ctrl.affinity.streak == 1 and config.load_pet_last_seen() == "2026-11-24"
     finally:
         ctrl.shutdown()
     g = cc.greeting
@@ -353,7 +421,8 @@ def test_tab_min_width_is_96_for_seven_tabs():
 def test_creator_sets_affinity_directly_with_number_and_stage_buttons(app, cfg, monkeypatch):
     from mabinogi_addon.ui import character_tab as ct
 
-    config.save_character(affinity=("조용한 여성", {"value": 3, "day": DAY, "gained": 3, "counts": {"launch": 1}}))
+    config.save_character(affinity=("조용한 여성", {"value": 3, "day": DAY, "gained": 3, "counts": {"launch": 1},
+                                                   "totals": {"alerts": 4}}))
     tab = ct.CharacterTab()
     edited = []
     tab.affinity_edited.connect(lambda: edited.append(1))
@@ -361,8 +430,10 @@ def test_creator_sets_affinity_directly_with_number_and_stage_buttons(app, cfg, 
     assert editor.spin.value() == 3 and [b.text() for b in editor.buttons] == ["0", "25", "50", "75", "100"]
     editor.buttons[3].click()
     saved = config.load_affinity("조용한 여성")
-    assert saved["value"] == 75 and saved["gained"] == 3 and saved["counts"] == {"launch": 1}  # 하루 상한과 무관
-    assert tab.cards[0]._affinity == 75 and edited == [1]
+    assert saved["value"] == 75 and saved["cleared"] == 3  # 0→25·25→50·50→75 퀘스트 깬 것으로
+    assert saved["gained"] == 3 and saved["counts"] == {"launch": 1} and saved["totals"] == {"alerts": 4}  # 하루 상한과 무관
+    assert tab.cards[0]._affinity == 75 and tab.cards[0]._quest == "퀘스트: 7일 연속 켜기 · 0/7일" and edited == [1]
+    assert tab.cards[1]._quest == "퀘스트: 처음 쓰다듬기 · 0/1번"
     editor.spin.setValue(42)
     assert config.load_affinity("조용한 여성")["value"] == 42
     tab.editors[4].buttons[4].click()

@@ -26,7 +26,7 @@ def main():
     app = QApplication.instance() or QApplication([]); app.setStyle('Fusion'); apply_theme('custom', DARK)
     raw = {'general': {'skipSetup': True, 'theme': 'dark'}, 'buffTracker': {'enabled': False},
            'debuffTracker': {'enabled': False}, 'voice': {'pack': '조용한 여성'},
-           'character': {'pet': True, 'affinity': {'조용한 여성': {'value': 34}}}}
+           'character': {'pet': True, 'affinity': {'조용한 여성': {'value': 34, 'cleared': 1, 'totals': {'pets': 4, 'corner_minutes': 35}}}}}
     with tempfile.TemporaryDirectory() as folder, ExitStack() as stack:
         data = Path(folder) / 'data'; data.mkdir()
         boundary = stack.enter_context(ExternalBoundaries())

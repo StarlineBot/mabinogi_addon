@@ -3,7 +3,7 @@
 - 맨 위 `화면에 캐릭터 띄우기` 스위치(펫 창 켜기·끄기).
 - 상반신 카드 한 줄 3개(탭 스크롤로 위아래). 이름은 캐릭터 색 + 흰 테두리, 미정 캐릭터는 실루엣을 테마 회색으로 칠하고 `???`.
 - 카드를 누르면 그 목소리가 나오고 바로 선택(알림 목소리 팩 저장), 고른 카드는 둘레 강조.
-- 카드 아래 ♥ 호감도 바만(0~100).
+- 카드 아래 ♥ 호감도 바(0~100) + 바 아래 한 줄 지금 구간 퀘스트와 진행(사용자 최종 규칙 11-24).
 - 알파는 제작자 전용(11-24): 카드 아래 호감도 숫자 칸(0~100) + 구간 버튼(0/25/50/75/100)으로 바로 바꿈
   (하루 상한과 무관, 구간별 대사·반응 확인용).
 """
@@ -16,13 +16,14 @@ from PySide6.QtWidgets import (QGridLayout, QHBoxLayout, QPushButton, QSizePolic
 
 from .. import config, paths
 from ..character import roster
-from ..character.affinity import MAX_VALUE, STAGES, Affinity
+from ..character.affinity import MAX_VALUE, STAGES, Affinity, Rules
 from .palette import color
 from .widgets import FeatureHeader, hint_label, switch
 
 DESCRIPTION = "고른 캐릭터가 알림을 말해 주고, 화면에서 함께 지내요."
 CARD_W, CARD_H = 224, 248
 BAR_H = 22
+QUEST_H = 18
 HEART = "#FF6B9A"
 COLUMNS = 3
 
@@ -41,7 +42,8 @@ class CharacterCard(QWidget):
         self._art = card_pixmap(character)
         self._selected = False
         self._affinity = 0
-        self.setFixedSize(CARD_W, CARD_H + BAR_H + 8)
+        self._quest = ""
+        self.setFixedSize(CARD_W, CARD_H + BAR_H + QUEST_H + 8)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setToolTip(f"{character.name if character.known else '아직 이름이 없는 캐릭터'} — 목소리: {character.pack}")
         self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
@@ -51,8 +53,9 @@ class CharacterCard(QWidget):
             self._selected = on
             self.update()
 
-    def set_affinity(self, value: int) -> None:
+    def set_affinity(self, value: int, quest: str = "") -> None:
         self._affinity = max(0, min(MAX_VALUE, int(value)))
+        self._quest = quest
         self.update()
 
     def selected(self) -> bool:
@@ -135,9 +138,16 @@ class CharacterCard(QWidget):
             fill = QRectF(track.left(), track.top(), max(10.0, track.width() * self._affinity / MAX_VALUE), track.height())
             p.setBrush(heart_col)
             p.drawRoundedRect(fill, 5, 5)
+        if self._quest:  # 바 아래 한 줄 — 지금 구간 퀘스트와 진행
+            small = QFont(self.font())
+            small.setPixelSize(11)
+            p.setFont(small)
+            p.setPen(self.palette().color(QPalette.ColorRole.PlaceholderText))
+            p.drawText(QRectF(6, y + BAR_H, CARD_W - 8, QUEST_H),
+                       int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter), self._quest)
 
     def sizeHint(self) -> QSize:  # noqa: N802
-        return QSize(CARD_W, CARD_H + BAR_H + 8)
+        return QSize(CARD_W, CARD_H + BAR_H + QUEST_H + 8)
 
 
 def _dark() -> bool:
@@ -228,12 +238,12 @@ class CharacterTab(QWidget):
     def refresh(self) -> None:
         """고른 캐릭터 강조·호감도 바·안내 글을 저장 값으로 다시 맞춘다."""
         pack = config.load_voice_pack()
-        rules = None
+        rules = Rules.from_dict(config.load_affinity_rules())
         for card, editor in zip(self.cards, self.editors):
             card.set_selected(card.character.pack == pack)
-            value = Affinity.load(config.load_affinity(card.character.key), rules).value
-            card.set_affinity(value)
-            editor.show_value(value)
+            affinity = Affinity.load(config.load_affinity(card.character.key), rules)
+            card.set_affinity(affinity.value, affinity.quest_text())
+            editor.show_value(affinity.value)
         chosen = roster.by_pack(pack)
         if chosen is None:
             text = "카드를 누르면 그 캐릭터 목소리로 알림을 말해 줘요. 지금은 기본 녹음 목소리예요."
@@ -244,9 +254,9 @@ class CharacterTab(QWidget):
         self.pet_hint.setText(text)
 
     def set_affinity(self, key: str, value: int) -> None:
-        """제작자가 호감도를 바로 바꿈 → 값만 저장(오늘 횟수·오른 양은 그대로)."""
-        affinity = Affinity.load(config.load_affinity(key))
-        affinity.value = max(0, min(MAX_VALUE, int(value)))
+        """제작자가 호감도를 바로 바꿈 → 값 + 그 값까지의 구간 퀘스트는 깬 것으로(오늘 횟수·누적은 그대로)."""
+        affinity = Affinity.load(config.load_affinity(key), Rules.from_dict(config.load_affinity_rules()))
+        affinity.set_value(value)
         config.save_character(affinity=(key, affinity.to_dict()))
         self.refresh()
         self.affinity_edited.emit()

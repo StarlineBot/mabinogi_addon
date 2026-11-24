@@ -1,9 +1,9 @@
 """캐릭터 컨트롤러 — 고른 캐릭터의 호감도·대사·펫 창을 묶는다(docs/character-pet-spec.md 2·3절).
 
-- 앱을 켜면: 그날 처음이면 호감도 +3, 펫이 떠 있으면 인사(오랜만·밤·아침·보통).
-- 알림 소리(notifier.on_play)가 고른 캐릭터 목소리 팩이면: 호감도 +1(하루 7번), 펫은 알아챔 + 같은 뜻 말풍선.
-- 펫 사건: 말풍선(상황별 무작위·같은 줄 연속 금지), 클릭 반복 −1 + 짜증, 쓰다듬기 끝까지 +2(다 채운 뒤 또 → −1),
-  구석에서 함께 30분 +1(하루 4번), 끌어서 정한 구석 저장.
+- 앱을 켜면: 연속 켠 날 세기, 그날 처음이면 호감도 +2, 펫이 떠 있으면 인사(오랜만·밤·아침·보통).
+- 알림 소리(notifier.on_play)가 고른 캐릭터 목소리 팩이면: 알림 누적 + 호감도 +1(하루 3번), 펫은 알아챔 + 같은 뜻 말풍선.
+- 펫 사건: 말풍선(상황별 무작위·같은 줄 연속 금지), 클릭 반복 −1 + 짜증, 쓰다듬기 끝까지 +1(다 채운 뒤 또 → −1),
+  구석에서 함께 1분마다 누적(오늘 30분마다 +1, 하루 2번), 끌어서 정한 구석 저장. 규칙은 character/affinity.py.
 - 펫 창은 '화면에 캐릭터 띄우기'가 켜져 있고 고른 캐릭터에 SD 그림이 있을 때만(알파는 다래만) 뜬다.
 - 알파는 제작자 전용(사용자 결정 11-24): set_enabled(False)면 펫·호감도·인사 모두 하지 않는다(알림 소리도 무시).
 """
@@ -82,7 +82,8 @@ class CharacterController(QObject):
         now = now or datetime.datetime.now()
         last = config.load_pet_last_seen()
         hello = greeting(last, now)
-        if self.affinity is not None and self.affinity.gain("launch", today(now)):
+        if self.affinity is not None:
+            self.affinity.launched(today(now))  # 연속 켠 날(75→100 퀘스트)·그날 처음 +2
             self._save_affinity()
         config.save_character(lastSeen=today(now))
         self.sync_window()
@@ -108,6 +109,8 @@ class CharacterController(QObject):
             self.window = None
 
     def shutdown(self) -> None:
+        if self.enabled and self._started:
+            self._save_affinity()  # 구석 분 누적(10분마다 저장) 나머지
         from .notifier import off_play
         off_play(self._on_sound)
         for feed in self._feeds.values():
@@ -190,8 +193,10 @@ class CharacterController(QObject):
                     self._save_affinity()
                 if result == "annoyed" and picker is not None and self.window is not None:
                     self.window.say(picker.pick("annoyed_pet"))
-            elif kind == "corner_time" and self.affinity is not None:
-                if self.affinity.gain("corner", today()):
+            elif kind == "corner_minute" and self.affinity is not None:
+                # 1분마다 누적 — 저장은 오를 때·10분마다만(설정 동기화가 매분 올리지 않게), 끌 때 한 번 더
+                got = self.affinity.corner_minute(today())
+                if got or self.affinity.totals.get("corner_minutes", 0) % 10 == 0:
                     self._save_affinity()
             elif kind == "corner_saved":
                 config.save_character(corner={"x": round(event[1]), "y": round(event[2])})
@@ -206,8 +211,8 @@ class CharacterController(QObject):
             return
         if pack != self.character.pack:
             return  # 기본 녹음 등 다른 목소리(팩에 없는 알림은 기본 녹음으로 대신 남)
-        if self.affinity.gain("alert", today()):
-            self._save_affinity()
+        self.affinity.alerted(today())  # 알림 누적(50→75 퀘스트) + 오늘 3번까지 +1
+        self._save_affinity()
         if self.window is not None:
             self.window.brain.notify(self._clock())
             picker = self.picker()

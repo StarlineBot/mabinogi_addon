@@ -62,7 +62,7 @@
       "tests": [
         "tests/test_character.py"
       ],
-      "reason": "호감도 하루 20·횟수·반복 −1·자정 초기화"
+      "reason": "호감도 최종 규칙 — 하루 +10·횟수·구간 끝 멈춤·구간 퀘스트(미리 셈·이어 쌓임)·반복 −1 구간 시작점 아래 없음·자정 초기화·제작자 값 바꾸기"
     },
     "src/mabinogi_addon/character/lines.py": {
       "tests": [
