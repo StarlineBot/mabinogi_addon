@@ -45,7 +45,7 @@ def build() -> dict[str, list[np.ndarray]]:
     # (사용자 11-24 '낙하가 어색') → 떨어지기는 머리 폭을 서 있기 머리 폭에, 착지는 첫 장 머리 폭 → 마지막 서 있는 키로 보간.
     head = HEAD_STAND * s_stand  # 서 있기 머리 폭(저장 크기)
     fall = sheet("이안의 두 가지 추락 포즈 스프라이트.png")
-    out["fall"] = [scaled(f, head / w) for f, w in zip(fall, HEAD_FALL)]
+    out["fall"] = [scaled(f, head / w) for f, w in zip(fall, HEAD_FALL)]  # 앱은 fall_0만 씀(사용자 11-24), fall_1은 예비
     land = sheet(next(SHEETS.glob("이안의 착지 애니메이션*.png")).name)
     l0, l2 = head / HEAD_LAND0, STAND_H / land[2].shape[0]  # 마지막 = 선 자세
     out["land"] = [scaled(f, r) for f, r in zip(land, (l0, (l0 + l2) / 2, l2))]
@@ -69,28 +69,6 @@ EXPECTED = {"stand": 2, "watch": 4, "walk": 6, "pet": 6, "drag": 4, "fall": 2, "
             "rise": 3, "talk_point": 2, "talk_alert": 6}
 
 
-def head_center(frame: np.ndarray) -> tuple[float, float]:
-    """위 40% 알파 무게중심(머리 중심) — 프레임 왼쪽 위 기준 px."""
-    top = frame[: int(frame.shape[0] * 0.4), :, 3].astype(np.float64)
-    ys, xs = np.mgrid[0:top.shape[0], 0:top.shape[1]]
-    total = top.sum()
-    return float((xs * top).sum() / total), float((ys * top).sum() / total)
-
-
-def anchors(frames: dict[str, list[np.ndarray]]) -> dict[str, list[float]]:
-    """떨어지기 두 장의 머리 중심이 같은 자리에 오게 하는 그리기 오프셋(저장 px, 발 밑 가운데 기준에 더함).
-    사용자 11-24 '낙하가 두근두근해 보임' — 원본 크기·머리 위치가 달라 발 기준이면 머리가 위아래로 튐."""
-    def head_from_feet(frame):
-        cx, cy = head_center(frame)
-        return cx - frame.shape[1] / 2, cy - frame.shape[0]
-    ref = head_from_feet(frames["fall"][0])
-    out = {}
-    for i, frame in enumerate(frames["fall"]):
-        hx, hy = head_from_feet(frame)
-        out[f"fall_{i}"] = [round(ref[0] - hx, 1), round(ref[1] - hy, 1)]
-    return out
-
-
 def card() -> np.ndarray:
     art = _tight(imread(ROOT / "docs/characters/assets/이안/이안_상반신.png", cv2.IMREAD_UNCHANGED))
     return scaled(art, 480 / art.shape[0])
@@ -109,8 +87,6 @@ def main() -> None:
             imwrite(OUT / f"{key}_{i}.png", frame)
             print(f"{key}_{i}: {frame.shape[1]}×{frame.shape[0]}")
     imwrite(OUT / "card.png", card())
-    import json
-    (OUT / "anchors.json").write_text(json.dumps(anchors(frames), ensure_ascii=False) + "\n", encoding="utf-8")
 
 
 if __name__ == "__main__":

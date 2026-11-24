@@ -1090,26 +1090,6 @@ def test_ian_fall_and_land_keep_head_size():
     assert imread(IAN_DIR / "land_2.png", cv2.IMREAD_UNCHANGED).shape[0] == 285
 
 
-def test_ian_fall_frames_keep_head_in_place(app):
-    """이안 떨어지기(사용자 11-24 '두근두근해 보임'): 두 장의 머리 중심이 같은 자리에 오게 프레임별 기준점, 0.2초 간격."""
-    import numpy as np
-    from mabinogi_addon.ui.pet_window import PetWindow, load_frames
-
-    assert br.IAN.anims["fall"][1] == (0.2, 0.2)
-    frames = load_frames("이안", br.IAN)
-    w = PetWindow(_ian(), frames, "#3B5B9A")
-    try:
-        centers = []
-        for name in ("fall_0", "fall_1"):
-            image = frames[name]
-            rect = w._frame_rect(image)
-            a = np.frombuffer(image.convertToFormat(image.Format.Format_RGBA8888).constBits(), np.uint8)
-            a = a.reshape(image.height(), image.width(), 4)[: int(image.height() * 0.4), :, 3].astype(float)
-            ys, xs = np.mgrid[0:a.shape[0], 0:a.shape[1]]
-            k = rect.width() / image.width()
-            centers.append((rect.left() + (xs * a).sum() / a.sum() * k, rect.top() + (ys * a).sum() / a.sum() * k))
-        assert abs(centers[0][0] - centers[1][0]) < 1.5 and abs(centers[0][1] - centers[1][1]) < 1.5
-        stand = w._frame_rect(frames["stand_1"])
-        assert stand.bottom() == w.height() - 6  # 기준점 없는 프레임은 발 밑 그대로
-    finally:
-        w.close()
+def test_ian_falls_with_one_frame():
+    """이안 떨어지기(사용자 11-24): 두 장을 번갈면 두근거려 보여 fall_0 한 장만."""
+    assert br.IAN.anims["fall"][0] == ("fall_0",)

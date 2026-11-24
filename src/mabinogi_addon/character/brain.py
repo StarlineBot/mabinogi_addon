@@ -147,7 +147,7 @@ IAN_ANIMS = {
     "walk": (tuple(f"walk_{i}" for i in range(6)), (IAN_WALK_FRAME,) * 6, True),
     "surprise": (("pet_0",), (0.5,), False),
     "drag": (tuple(f"drag_{i}" for i in range(4)), (0.18,) * 4, True),
-    "fall": (("fall_0", "fall_1"), (0.2, 0.2), True),
+    "fall": (("fall_0",), (1.0,), True),  # 사용자 11-24: 두 장을 번갈면 두근거려 보여 한 장만
     "land": (("land_0", "land_1", "land_2"), (0.2, 0.3, 0.4), False),
     "pet_in": (("pet_0", "pet_1"), (0.45, 0.45), False),
     "pet_loop": (("pet_2", "pet_3", "pet_4"), (0.45,) * 3, True),
