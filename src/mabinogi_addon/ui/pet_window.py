@@ -29,15 +29,16 @@ TICK_MS = 50
 FRONT_CHECK = 0.25           # 게임 앞/뒤 판정 주기(초)
 
 
-def load_frames(folder: str) -> dict[str, QImage]:
+def load_frames(folder: str, profile: brain_mod.Profile | None = None) -> dict[str, QImage]:
+    """그 캐릭터 동작에 쓰는 프레임만 읽는다(assets/characters/<폴더>/<이름>.png)."""
     base = paths.resource_dir() / "characters" / folder
+    profile = profile or brain_mod.PROFILES.get(folder, brain_mod.DARE)
     out = {}
-    names = {name for frames, _times, _loop in brain_mod.ANIMS.values() for name in frames}
+    names = {name for frames, _times, _loop in profile.anims.values() for name in frames}
     for name in sorted(names):
-        if name not in out:
-            image = QImage(str(base / f"{name}.png"))
-            if not image.isNull():
-                out[name] = image
+        image = QImage(str(base / f"{name}.png"))
+        if not image.isNull():
+            out[name] = image
     return out
 
 

@@ -444,7 +444,7 @@ def test_character_tab_cards_choose_voice_and_toggle_pet(app, cfg, monkeypatch):
     changed, toggled = [], []
     tab.voice_pack_changed.connect(lambda: changed.append(1))
     tab.pet_toggled.connect(toggled.append)
-    assert [c.character.name for c in tab.cards] == ["다래", "???", "???", "???", "???"]
+    assert [c.character.name for c in tab.cards] == ["다래", "아리아", "???", "???", "???"]
     assert not any(c.selected() for c in tab.cards)  # 기본 녹음 — 고른 카드 없음
     tab.cards[3].clicked.emit(tab.cards[3].character)  # 미정 카드도 그 목소리로 선택
     assert config.load_voice_pack() == "화난 여성" and played == ["화난 여성"] and changed == [1]
@@ -477,7 +477,8 @@ def test_creator_sets_affinity_directly_with_number_and_stage_buttons(app, cfg, 
     assert saved["value"] == 75 and saved["cleared"] == 3  # 0→25·25→50·50→75 퀘스트 깬 것으로
     assert saved["gained"] == 3 and saved["counts"] == {"launch": 1} and saved["totals"] == {"alerts": 4}  # 하루 상한과 무관
     assert tab.cards[0]._affinity == 75 and tab.cards[0]._quest == "퀘스트: 7일 연속 켜기 · 0/7일" and edited == [1]
-    assert tab.cards[1]._quest == "퀘스트: 처음 쓰다듬기 · 0/1번"
+    assert tab.cards[1]._quest == "퀘스트: 아리아를 처음으로 쓰다듬어 주기 · 0/1번"  # 고른 캐릭터 이름
+    assert tab.cards[2]._quest == "퀘스트: 처음 쓰다듬기 · 0/1번"  # 이름 없는 캐릭터
     editor.spin.setValue(42)
     assert config.load_affinity("조용한 여성")["value"] == 42
     tab.editors[4].buttons[4].click()
@@ -504,3 +505,146 @@ def test_frame_sizes_match_standing_height():
     stand = imread(ASSETS / "다래" / "stand_0.png", cv2.IMREAD_UNCHANGED)
     walk = [imread(p, cv2.IMREAD_UNCHANGED).shape[0] for p in sorted((ASSETS / "다래").glob("walk_*.png"))]
     assert stand.shape[0] == 285 and all(abs(h - 285) <= 3 for h in walk)  # 서 있는 키로 맞춤(시트마다 머리 크기 달라도)
+
+
+# ---- 아리아(부드러운 여성, 사용자 11-24 알파 포함 — docs/characters/아리아.md) -------------------------------
+ARIA = ASSETS / "아리아"
+
+
+def _aria(**kw):
+    b = br.Brain(br.Floor(0, 1000, 700), rng=random.Random(5), profile=br.ARIA, **kw)
+    b.pos = (300.0, 700.0)
+    return b
+
+
+def test_aria_roster_card_and_frames():
+    aria = roster.by_pack("부드러운 여성")
+    assert (aria.name, aria.known, aria.has_pet, aria.color) == ("아리아", True, True, "#F5A25D")
+    assert (ASSETS / aria.card).is_file() and roster.folder(aria) == "아리아"
+    assert [c.name for c in roster.ROSTER][:2] == ["다래", "아리아"]
+    names = {n for frames, _t, _l in br.ARIA.anims.values() for n in frames}
+    assert not [n for n in names if not (ARIA / f"{n}.png").exists()]
+
+
+def test_aria_standing_height_drag_edges_and_walk_hair_color():
+    import cv2
+    from mabinogi_addon.image_io import imread
+
+    stand = imread(ARIA / "stand_0.png", cv2.IMREAD_UNCHANGED)
+    assert stand.shape[0] == 285
+    for name in ("hair_0", "walk_0", "talk_closed_0", "surprise_0", "getup_2", "rise_2"):
+        assert abs(imread(ARIA / f"{name}.png", cv2.IMREAD_UNCHANGED).shape[0] - 285) <= 3, name
+    for name in ("drag_0", "drag_1"):  # 옅은 막(알파 1~40)을 지워 가장자리는 투명
+        a = imread(ARIA / f"{name}.png", cv2.IMREAD_UNCHANGED)[..., 3]
+        corners = [a[0, 0], a[0, -1], a[-1, 0], a[-1, -1]]
+        assert max(corners) == 0 and ((a > 0) & (a <= 40)).mean() < 0.02  # 막이 남으면 네 귀퉁이·옅은 칸이 차 있음
+
+    import numpy as np
+
+    def top_lab(frame):
+        top = frame[: int(frame.shape[0] * 0.18)]
+        solid = top[..., 3] > 220
+        lab = cv2.cvtColor(top[..., :3].copy(), cv2.COLOR_BGR2LAB).reshape(-1, 3)[solid.reshape(-1)]
+        return np.median(lab.astype(float), axis=0)
+
+    walk = imread(ARIA / "walk_0.png", cv2.IMREAD_UNCHANGED)
+    d = top_lab(walk) - top_lab(stand)
+    delta = float(np.sqrt(((d * np.array([100 / 255, 1, 1])) ** 2).sum()))  # OpenCV Lab(8비트) → L 0~100
+    assert delta < 4, delta  # 걷기 정수리 머리색을 서 있기에 맞춤
+
+
+def test_aria_lines_have_stroke_click_and_no_sleep_click():
+    data = ln.read(ARIA / "lines.json")
+    assert data.character == "아리아"
+    assert set(ln.SITUATIONS) - {"click_sleep"} <= set(data.lines)
+    assert "stroke_click" in data.lines and "click_sleep" not in data.lines
+    sounds = {p.name for p in (paths.resource_dir() / "sounds" / "부드러운 여성").glob("*.mp3")} - {"파티 알림.mp3"}
+    assert len(data.alerts) == 11 and sounds == set(data.alerts)
+    assert data.alerts["비바체 연장.mp3"] == "비바체~ 잊은 거 아니지?"
+    assert data.lines["annoyed_click"][0].text == "으응… 너무 자주 누르면 어지러워."
+
+
+def test_aria_sits_without_dozing_and_smiles_when_clicked():
+    b = _aria(corner=(900.0, 700.0))
+    t, _ = _run(b, 0, 0.5, False)
+    t, _ = _run(b, t, 5, True)
+    assert b.state in br.ARIA.sitting
+    seen = set()
+    for _ in range(400):
+        t += 0.05
+        b.tick(t, True)
+        seen.add(b.frame(t))
+        assert b.state not in ("sit_doze", "wake") and not b.zzz()
+    assert {"sit_0", "sit_1", "sit_2", "sit_3"} <= seen  # 머리 안고 앉아 웃음 반복
+    b.press(t, 900, 640)
+    assert b.release(t)[-1] == ("say", "click_sit") and b.frame(t) == "sit_1"  # 앉아서 클릭 = 웃음
+
+
+def test_aria_alternates_stand_and_hair_stroke_and_walking_cuts_it():
+    b = _aria()
+    b._next_walk = 1e9
+    t, _ = _run(b, 0, 16, False)
+    assert b.state == "hairstroke" or b._extra_until > 0  # 8~15초 안에 머리 쓰다듬기 시작
+    t, _ = _run(b, t, 4.0, False)
+    assert b.state == "stand"  # 1~2바퀴(약 1.9초씩) 뒤 서 있기로
+    b._go("hairstroke", t)
+    b._extra_until = t + 10
+    b._next_walk = t
+    t, _ = _run(b, t, 0.1, False)
+    assert b.state == "walk"  # 걸을 차례면 바로 끊음
+
+
+def test_aria_click_while_stroking_hair_says_stroke_click():
+    b = _aria()
+    b._go("hairstroke", 1)
+    b._extra_until = 10
+    b.press(1.2, 300, 600)
+    assert b.release(1.2) == [("click",), ("say", "stroke_click")] and b.state == "surprise"
+    b._go("stand", 2)
+    b.press(2.1, 300, 600)
+    assert b.release(2.1)[-1] == ("say", "click_stand")
+
+
+def test_aria_think_mood_falls_back_to_normal_mouth():
+    b = _aria()
+    assert b.talk(1, 10, "think") and b.state == "talk_normal"
+    assert b.talk(2, 10, "happy") and b.state == "talk_happy"
+
+
+def test_idle_timing_is_a_settings_value():
+    p = br.ARIA.with_timing({"gap": [3, 4], "laps": [2, 2]})
+    assert p.idle_gap == (3.0, 4.0) and p.idle_laps == (2, 2)
+    assert br.ARIA.with_timing({"gap": [5, 1]}).idle_gap == (8.0, 15.0)  # 잘못된 값은 무시
+
+
+def test_choosing_other_character_swaps_the_pet(app, cfg, monkeypatch):
+    from mabinogi_addon.ui import character_controller as cc
+
+    config.save_voice_pack("조용한 여성")
+    config.save_character(pet=True)
+    ctrl = cc.CharacterController()
+    ctrl.set_enabled(True)
+    try:
+        ctrl.start(datetime.datetime(2026, 11, 24, 13))
+        assert ctrl.window is not None and ctrl.window.brain.profile.doze_state == "sit_doze"  # 다래
+        first = ctrl.window
+        config.save_voice_pack("부드러운 여성")
+        ctrl.voice_changed()
+        assert ctrl.window is not None and ctrl.window is not first and ctrl.window.brain.profile.idle_extra == "hairstroke"
+        assert ctrl.window.tint.name() == "#f5a25d" and ctrl.picker().data.character == "아리아"
+        config.save_voice_pack("화난 여성")
+        ctrl.voice_changed()
+        assert ctrl.window is None  # 그림 없는 캐릭터 → 펫 없음
+    finally:
+        ctrl.shutdown()
+
+
+def test_quest_text_uses_character_name_with_particles():
+    a = aff.Affinity()
+    assert a.quest_text("아리아") == "퀘스트: 아리아를 처음으로 쓰다듬어 주기 · 0/1번"
+    assert a.quest_text("???") == "퀘스트: 처음 쓰다듬기 · 0/1번"
+    b = aff.Affinity.load({"value": 30, "cleared": 1})
+    assert b.quest_text("다래") == "퀘스트: 구석에서 다래와 함께 1시간 · 0/60분"
+    c = aff.Affinity.load({"value": 55, "cleared": 2})
+    assert c.quest_text("아리아") == "퀘스트: 아리아 목소리로 알림 10번 · 0/10번"
+    assert aff._has_final("곰") and not aff._has_final("다래")

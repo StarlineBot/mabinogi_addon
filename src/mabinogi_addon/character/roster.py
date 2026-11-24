@@ -1,7 +1,7 @@
 """캐릭터 목록(명세 1절·3절 4번). 카드 순서 = 이 목록 순서.
 
-목소리 팩(assets/sounds/<팩>/)마다 캐릭터 하나. 이름이 정해진 캐릭터는 다래(조용한 여성)뿐이고,
-나머지는 실루엣 + `???`(사용자 제작 예정). 미정 캐릭터도 고르면 그 목소리 팩이 그대로 쓰인다.
+목소리 팩(assets/sounds/<팩>/)마다 캐릭터 하나. 이름이 정해진 캐릭터는 다래(조용한 여성)·
+아리아(부드러운 여성, 11-24 알파 포함), 나머지는 실루엣 + `???`(사용자 제작 예정). 미정 캐릭터도 고르면 그 목소리 팩이 그대로 쓰인다.
 """
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ DARE = Character("조용한 여성", "다래", "조용한 여성", "#B48CE6", "�
 
 ROSTER: tuple[Character, ...] = (
     DARE,
-    Character("부드러운 여성", UNKNOWN_NAME, "부드러운 여성", "#9AA0AA", "silhouette_f.png", False, False),
+    Character("부드러운 여성", "아리아", "부드러운 여성", "#F5A25D", "아리아/card.png", True, True),
     Character("자연스러운 여성", UNKNOWN_NAME, "자연스러운 여성", "#9AA0AA", "silhouette_f.png", False, False),
     Character("화난 여성", UNKNOWN_NAME, "화난 여성", "#9AA0AA", "silhouette_f.png", False, False),
     Character("차분한 남성", UNKNOWN_NAME, "차분한 남성", "#9AA0AA", "silhouette_m.png", False, False),
@@ -35,3 +35,8 @@ ROSTER: tuple[Character, ...] = (
 def by_pack(pack: str) -> Character | None:
     """그 목소리 팩의 캐릭터(없으면 None — 기본 녹음 등)."""
     return next((c for c in ROSTER if c.pack == pack), None)
+
+
+def folder(character: Character) -> str:
+    """그림·대사 폴더 이름(assets/characters/<폴더>/) — 카드 그림 경로의 첫 칸."""
+    return character.card.split("/")[0]

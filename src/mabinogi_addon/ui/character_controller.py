@@ -19,7 +19,7 @@ from PySide6.QtGui import QGuiApplication
 from .. import config, paths
 from ..character import roster
 from ..character.affinity import Affinity, Rules
-from ..character.brain import Brain, Floor
+from ..character.brain import DARE, PROFILES, Brain, Floor
 from ..character.lines import Lines, Picker, read
 
 _log = logging.getLogger(__name__)
@@ -55,6 +55,8 @@ class CharacterController(QObject):
         self._watcher = watcher
         self._clock = clock
         self.window = None
+        self._window_for = None       # 펫 창이 어느 캐릭터 것인지
+        self._last_pos = None         # 캐릭터를 바꿀 때 새 펫이 이어받을 자리
         self.enabled = False
         self._started = False
         self._lines: dict[str, Picker] = {}
@@ -99,6 +101,12 @@ class CharacterController(QObject):
         """펫 창을 켜야 하면 만들고, 아니면 닫는다."""
         want = (self.enabled and config.load_pet_on() and self.character is not None
                 and self.character.has_pet)
+        if want and self.window is not None and self._window_for is not self.character:
+            # 캐릭터 탭에서 다른 캐릭터를 고름 → 펫도 그 캐릭터로(창을 다시 만듦, 위치는 이어받음)
+            self._last_pos = self.window.brain.pos
+            self.window.stop()
+            self.window.deleteLater()
+            self.window = None
         if want and self.window is None:
             self.window = self._make_window()
             if self.window is not None:
@@ -132,7 +140,7 @@ class CharacterController(QObject):
     def picker(self) -> Picker | None:
         if self.character is None or not self.character.has_pet:
             return None
-        key = self.character.card.split("/")[0]
+        key = roster.folder(self.character)
         if key not in self._lines:
             self._lines[key] = Picker(self._read_lines(key))
             self._fetch_lines(key)
@@ -159,7 +167,9 @@ class CharacterController(QObject):
     def _make_window(self):
         from .pet_window import PetWindow, load_frames
 
-        frames = load_frames(self.character.card.split("/")[0])
+        folder = roster.folder(self.character)
+        profile = PROFILES.get(folder, DARE).with_timing(config.load_pet_idle())
+        frames = load_frames(folder, profile)
         if not frames:
             _log.warning("펫 그림을 찾지 못함 — 펫 창 안 띄움")
             return None
@@ -168,10 +178,13 @@ class CharacterController(QObject):
         corner = config.load_pet_corner()
         if corner is not None and not area.adjusted(-40, -40, 40, 40).contains(*corner):
             corner = None  # 해상도가 바뀌어 화면 밖이면 기본 구석(바닥 오른쪽 끝)
-        brain = Brain(floor, corner=corner)
+        brain = Brain(floor, corner=corner, profile=profile)
+        if self._last_pos is not None:
+            brain.pos = (floor.clamp_x(self._last_pos[0]), min(self._last_pos[1], floor.y))
         game = (lambda: self._watcher.is_game_active()) if self._watcher is not None else (lambda: False)
         window = PetWindow(brain, frames, self.character.color, game_front=game, clock=self._clock)
         window.events.connect(self._on_events)
+        self._window_for = self.character
         return window
 
     # ---- 사건 --------------------------------------------------------------------------------

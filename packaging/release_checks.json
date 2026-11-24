@@ -44,7 +44,7 @@
       "tests": [
         "tests/test_character.py"
       ],
-      "reason": "알림 소리→호감도·알아챔, 그날 처음 켜기 +3, 인사"
+      "reason": "알림→호감도·알아챔, 켜기, 인사, 캐릭터 바꾸면 펫도 그 캐릭터로(창 다시 만듦)"
     },
     "src/mabinogi_addon/ui/character_lines_feed.py": {
       "tests": [
@@ -56,7 +56,7 @@
       "tests": [
         "tests/test_character.py"
       ],
-      "reason": "펫 상태 전환(게임 앞/뒤·클릭·끌기·쓰다듬기·자다 깨기·말하기 분위기별 그림)"
+      "reason": "펫 상태 전환 — 캐릭터별 Profile(다래 그대로 / 아리아: 졸기 없음·앉아 웃음·서기↔머리 쓰다듬기·생각→보통), 말하기 분위기별 그림"
     },
     "src/mabinogi_addon/character/affinity.py": {
       "tests": [
@@ -162,6 +162,19 @@
         "tests/test_release_notes_trigger.py"
       ],
       "reason": "0.55.9 노트 맨 위(조용히 다듬은 것 한 줄 — 제작자 전용 알파라 일반 사용자엔 안 알림), v0.55.8 이하 그대로"
+    },
+    "src/mabinogi_addon/character/roster.py": {
+      "tests": [
+        "tests/test_character.py"
+      ],
+      "reason": "아리아(부드러운 여성) known·has_pet·#F5A25D·card, 카드 순서 다래→아리아→??? 3장"
+    },
+    "src/mabinogi_addon/assets/characters/아리아/lines.json": {
+      "tests": [
+        "tests/test_character.py",
+        "tests/test_bundle_layout.py"
+      ],
+      "reason": "아리아 대사·알림 11개·stroke_click, 자다가 클릭 없음, assets 번들 포함"
     }
   }
 }

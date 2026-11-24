@@ -61,12 +61,21 @@ class Rules:
 ACTIONS = ("launch", "pet", "alert", "corner")
 TOTALS = ("pets", "corner_minutes", "alerts")
 # 구간 퀘스트(깬 수 = 인덱스): (진행 값 이름, 목표 Rules 이름, 화면 글, 단위)
+# 화면 글: (이름 없을 때, 이름 있을 때) — 고른 캐릭터 이름이 들어감(예: '아리아를 처음으로 쓰다듬어 주기')
 QUESTS = (
-    ("pets", "quest_pets", "처음 쓰다듬기", "번"),
-    ("corner_minutes", "quest_corner_minutes", "구석에서 함께 {hours}", "분"),
-    ("alerts", "quest_alerts", "목소리 알림 {n}번", "번"),
-    ("streak", "quest_streak_days", "{n}일 연속 켜기", "일"),
+    ("pets", "quest_pets", ("처음 쓰다듬기", "{name}{eul} 처음으로 쓰다듬어 주기"), "번"),
+    ("corner_minutes", "quest_corner_minutes", ("구석에서 함께 {hours}", "구석에서 {name}{wa} 함께 {hours}"), "분"),
+    ("alerts", "quest_alerts", ("목소리 알림 {n}번", "{name} 목소리로 알림 {n}번"), "번"),
+    ("streak", "quest_streak_days", ("{n}일 연속 켜기", "{n}일 연속 켜기"), "일"),
 )
+
+
+def _has_final(word: str) -> bool:
+    """마지막 글자에 받침이 있는지(한글이 아니면 없음으로)."""
+    if not word:
+        return False
+    code = ord(word[-1]) - 0xAC00
+    return 0 <= code <= 11171 and code % 28 != 0
 
 
 def _int(value, default: int = 0) -> int:
@@ -131,14 +140,18 @@ class Affinity:
     def quest_done(self, index: int) -> bool:
         return self.progress(index) >= getattr(self.rules, QUESTS[index][1])
 
-    def quest_text(self) -> str:
-        """카드 아래 한 줄 — 지금 구간 퀘스트와 진행(예: '퀘스트: 구석에서 함께 1시간 · 35/60분')."""
+    def quest_text(self, name: str | None = None) -> str:
+        """카드 아래 한 줄 — 지금 구간 퀘스트와 진행(예: '퀘스트: 구석에서 다래와 함께 1시간 · 35/60분').
+        name이 있으면 그 캐릭터 이름을 넣는다(없거나 '???'면 이름 없는 글)."""
         if self.cleared >= len(QUESTS):
             return "퀘스트: 모두 깼어요"
-        key, goal_name, label, unit = QUESTS[self.cleared]
+        key, goal_name, labels, unit = QUESTS[self.cleared]
         goal = getattr(self.rules, goal_name)
         hours = f"{goal // 60}시간" if goal % 60 == 0 else f"{goal}분"
-        text = label.format(n=goal, hours=hours)
+        named = bool(name) and name != "???"
+        final = _has_final(name or "")
+        text = labels[1 if named else 0].format(n=goal, hours=hours, name=name or "",
+                                                eul="을" if final else "를", wa="과" if final else "와")
         return f"퀘스트: {text} · {min(self.progress(self.cleared), goal)}/{goal}{unit}"
 
     def _settle(self) -> None:

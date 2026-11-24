@@ -23,7 +23,7 @@ from .widgets import FeatureHeader, hint_label, switch
 DESCRIPTION = "고른 캐릭터가 알림을 말해 주고, 화면에서 함께 지내요."
 CARD_W, CARD_H = 224, 248
 BAR_H = 22
-QUEST_H = 18
+QUEST_H = 30   # 퀘스트 글 두 줄까지(이름이 들어가면 길어짐)
 HEART = "#FF6B9A"
 COLUMNS = 3
 
@@ -144,7 +144,8 @@ class CharacterCard(QWidget):
             p.setFont(small)
             p.setPen(self.palette().color(QPalette.ColorRole.PlaceholderText))
             p.drawText(QRectF(6, y + BAR_H, CARD_W - 8, QUEST_H),
-                       int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter), self._quest)
+                       int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop | Qt.TextFlag.TextWordWrap),
+                       self._quest)
 
     def sizeHint(self) -> QSize:  # noqa: N802
         return QSize(CARD_W, CARD_H + BAR_H + QUEST_H + 8)
@@ -242,7 +243,7 @@ class CharacterTab(QWidget):
         for card, editor in zip(self.cards, self.editors):
             card.set_selected(card.character.pack == pack)
             affinity = Affinity.load(config.load_affinity(card.character.key), rules)
-            card.set_affinity(affinity.value, affinity.quest_text())
+            card.set_affinity(affinity.value, affinity.quest_text(card.character.name))
             editor.show_value(affinity.value)
         chosen = roster.by_pack(pack)
         if chosen is None:

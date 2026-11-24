@@ -2326,6 +2326,12 @@ def load_affinity_rules(path: Path = LOCAL_CONFIG_PATH) -> dict:
     return raw if isinstance(raw, dict) else {}
 
 
+def load_pet_idle(path: Path = LOCAL_CONFIG_PATH) -> dict:
+    """서서 대기 동작(아리아 머리 쓰다듬기) 시간 덮어쓰기 {gap: [최소, 최대]초, laps: [최소, 최대]} — 없으면 {}(8~15초·1~2바퀴)."""
+    raw = _character(path).get("idle")
+    return raw if isinstance(raw, dict) else {}
+
+
 def load_pet_last_seen(path: Path = LOCAL_CONFIG_PATH) -> str:
     """마지막으로 앱을 켠 날(YYYY-MM-DD) — '오랜만에 켰을 때' 인사."""
     v = _character(path).get("lastSeen")
