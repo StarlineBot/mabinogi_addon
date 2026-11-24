@@ -679,3 +679,49 @@ def test_card_click_plays_greeting_of_chosen_pack(app, cfg, monkeypatch):
     tab = ct.CharacterTab()
     tab.choose(roster.DARE)
     assert played == ["조용한 여성"]
+
+
+def test_tuarim_extra_alert_uses_second_recording_slot(tmp_path, monkeypatch):
+    """투아림 추가 알림 자리(사용자 11-24): '…2.mp3'가 팩에 있으면 그것, 없으면 첫 알림 소리. 팩 바꾸면 둘 다 갱신."""
+    from types import SimpleNamespace
+
+    from mabinogi_addon.ui import notifier, tuarim_tab
+
+    sounds = tmp_path / "sounds"
+    for pack in ("둘 있음", "하나만"):
+        (sounds / pack).mkdir(parents=True)
+        (sounds / pack / tuarim_tab.TUARIM_SOUND).write_bytes(b"x")
+    (sounds / "둘 있음" / "투아림 부스트 발동 직전2.mp3").write_bytes(b"x")
+    monkeypatch.setattr(notifier, "SOUND_DIR", sounds)
+    pack = {"name": "둘 있음"}
+    monkeypatch.setattr(config, "load_voice_pack", lambda *a, **k: pack["name"])
+    assert tuarim_tab._tuarim_sounds() == {"tuarim": sounds / "둘 있음" / tuarim_tab.TUARIM_SOUND,
+                                           "tuarim2": sounds / "둘 있음" / "투아림 부스트 발동 직전2.mp3"}
+    played, loaded = [], []
+    fake = SimpleNamespace(_paused=False, _thresholds=[80, 95], _sounds=[True, True],
+                           _notifier=SimpleNamespace(play=lambda key: played.append(key) or True,
+                                                     set_sounds=loaded.append))
+    tuarim_tab.TuarimTab._play(fake, 80)
+    tuarim_tab.TuarimTab._play(fake, 95)
+    assert played == ["tuarim", "tuarim2"]
+    pack["name"] = "하나만"
+    tuarim_tab.TuarimTab.refresh_sound(fake)
+    assert loaded[-1] == {"tuarim": sounds / "하나만" / tuarim_tab.TUARIM_SOUND,
+                          "tuarim2": sounds / "하나만" / tuarim_tab.TUARIM_SOUND}  # 2 없으면 첫 알림 소리
+
+
+def test_second_alert_bubble_falls_back_to_first_line_and_counts_as_alert(app, cfg):
+    from mabinogi_addon.ui import character_controller as cc
+    from mabinogi_addon.ui import notifier
+
+    picker = ln.Picker(ln.read(ARIA / "lines.json"))
+    assert picker.alert("투아림 부스트 발동 직전2.mp3") == picker.alert("투아림 부스트 발동 직전.mp3")
+    assert picker.alert("비바체 연장2.mp3").text == "비바체, 잊으면 안 돼!"  # 있는 2차 줄은 그대로
+    config.save_voice_pack("부드러운 여성")
+    ctrl = cc.CharacterController()
+    ctrl.set_enabled(True)
+    try:
+        notifier._announce("tuarim2", paths.resource_dir() / "sounds" / "부드러운 여성" / "투아림 부스트 발동 직전2.mp3")
+        assert ctrl.affinity.totals == {"alerts": 1}  # 추가 알림도 같은 '알림 받기'
+    finally:
+        ctrl.shutdown()

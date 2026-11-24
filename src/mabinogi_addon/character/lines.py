@@ -100,4 +100,6 @@ class Picker:
     def alert(self, sound_file: str) -> Line | None:
         """알림 녹음 파일 이름 → 같은 뜻의 말풍선(보통 분위기, 없으면 None — 말풍선 없이 알아챔만)."""
         text = self.data.alerts.get(sound_file)
+        if text is None and sound_file.endswith("2.mp3"):  # 추가 알림 줄이 아직 없으면 1차 말풍선으로
+            text = self.data.alerts.get(sound_file[:-5] + ".mp3")
         return Line(text) if text else None

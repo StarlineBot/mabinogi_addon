@@ -69,6 +69,13 @@ def greeting_path(pack: str) -> Path:
     return sound_path(SAMPLE_FILE)
 
 
+def second_sound_path(filename: str) -> Path:
+    """추가(2차) 알림 소리 — '<이름>2.mp3'가 팩/기본에 있으면 그것, 없으면 1차 파일(second_sound_map과 같은 규칙).
+    투아림 추가 알림(사용자 11-24 — 녹음 들어오면 자리에 넣기만 하면 됨)."""
+    second = sound_path(filename[:-4] + "2.mp3")
+    return second if second.exists() else sound_path(filename)
+
+
 def sound_path(filename: str) -> Path:
     """활성 목소리 팩에 그 파일이 있으면 그 경로, 없으면 기본(flat) 경로.
 

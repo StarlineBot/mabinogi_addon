@@ -493,13 +493,12 @@ class TuarimTab(QWidget):
         idx = self._thresholds.index(threshold) if threshold in self._thresholds else 0
         if idx < len(self._sounds) and not self._sounds[idx]:
             return
-        from .notifier import SoundNotifier, sound_path
+        from .notifier import SoundNotifier
 
         if self._notifier is None:
-            self._notifier = SoundNotifier(
-                {"tuarim": sound_path("투아림 부스트 발동 직전.mp3")}
-            )
-        if not self._notifier.play("tuarim"):
+            self._notifier = SoundNotifier(_tuarim_sounds())
+        # 추가 알림(두 번째 기준)은 '…2.mp3' 자리(없으면 첫 알림 소리, 사용자 11-24)
+        if not self._notifier.play("tuarim2" if idx >= 1 else "tuarim"):
             from PySide6.QtWidgets import QApplication
 
             QApplication.beep()
@@ -512,11 +511,7 @@ class TuarimTab(QWidget):
     def refresh_sound(self) -> None:
         """목소리 팩이 바뀌면 재생기 소스를 새 팩으로 갱신(바로 적용)."""
         if self._notifier is not None:
-            from .notifier import sound_path
-
-            self._notifier.set_sounds(
-                {"tuarim": sound_path("투아림 부스트 발동 직전.mp3")}
-            )
+            self._notifier.set_sounds(_tuarim_sounds())  # 첫 알림·추가 알림 둘 다
 
     def shutdown(self) -> None:
         self._shutting_down = True
@@ -536,3 +531,13 @@ class TuarimTab(QWidget):
                 logging.getLogger(__name__).warning("투아림 캡처 정리 실패",exc_info=True)
             finally:
                 self._sct = None
+
+
+TUARIM_SOUND = "투아림 부스트 발동 직전.mp3"
+
+
+def _tuarim_sounds() -> dict:
+    """첫 알림 = 투아림 부스트 발동 직전.mp3, 추가 알림 = 그 '…2.mp3'(없으면 첫 알림 소리) — 활성 목소리 팩 우선."""
+    from .notifier import second_sound_path, sound_path
+
+    return {"tuarim": sound_path(TUARIM_SOUND), "tuarim2": second_sound_path(TUARIM_SOUND)}
