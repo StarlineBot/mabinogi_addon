@@ -283,6 +283,7 @@ def test_overlay_size_render_and_lock():
     dish = {d.name: d for d in cooking.load()}["모둠회덮밥"]
     o = CookingBarOverlay()
     o.set_dish(dish)
+    o.set_opacity(100)   # 불투명 100%면 예전과 같은 색(0.56.1부터 기본은 50%)
     assert o.bar_size() == (BAR_W, BAR_H) == (245, 10)
     assert (o.width(), o.height()) == (245, BAR_H * (DASH_FACTOR + 1))
     image = o.grab().toImage()
@@ -323,7 +324,8 @@ def test_overlay_position_scale_saved_and_restored_and_hidden_without_game():
     o.set_scale(1.5)
     o.scaled.emit()
     tab.lock_btn.click()
-    assert config.load_cooking_overlay() == {"pos": {"x": o.x(), "y": o.y()}, "scale": 1.5, "locked": True}
+    assert config.load_cooking_overlay() == {"pos": {"x": o.x(), "y": o.y()}, "scale": 1.5, "locked": True,
+                                             "opacity": 50}
     watcher.game = False
     tab._sync_overlay()
     assert not o.isVisible()  # 게임이 앞에 없으면 숨김
@@ -341,8 +343,49 @@ def test_overlay_position_scale_saved_and_restored_and_hidden_without_game():
 
 
 def test_overlay_config_rejects_bad_values():
-    config.save_cooking_overlay(pos={"x": "a", "y": 1}, scale=9, locked="yes")
-    assert config.load_cooking_overlay() == {"pos": None, "scale": None, "locked": False}
+    config.save_cooking_overlay(pos={"x": "a", "y": 1}, scale=9, locked="yes", opacity=5)
+    assert config.load_cooking_overlay() == {"pos": None, "scale": None, "locked": False, "opacity": 50}
+    for bad in (150, "70", 70.5, True, None):
+        config.save_cooking_overlay(opacity=bad)
+        assert config.load_cooking_overlay()["opacity"] == 50
+
+
+def test_bar_opacity_dims_bar_only_dashes_stay_solid():
+    """요리 바 불투명도(사용자 11-24 '게임바를 완전히 가려서 차는 걸 볼 수 없어' — 0.56.1): 기본 50%에서 바(바탕·재료 칸)만
+    반쯤 비치고 경계 점선은 흰색 그대로(알파 255). 100%면 예전과 같음."""
+    from mabinogi_addon.ui.cooking_gauge import CookingBarOverlay
+
+    dish = {d.name: d for d in cooking.load()}["모둠회덮밥"]
+    o = CookingBarOverlay()
+    o.set_dish(dish)
+    assert o.opacity() == 0.5
+    image = o.grab().toImage()
+    bar = image.pixelColor(30, o.height() - 5)
+    assert abs(bar.alpha() - 128) <= 3   # 재료 칸 알파 ≈ 50%
+    x = round(1 + (o.bar_size()[0] - 2) * cooking.boundaries(dish.recipe)[0])
+    column = [image.pixelColor(x, y) for y in range(o.height() - o.bar_size()[1])]
+    assert any(c.alpha() == 255 and c.red() > 240 and c.green() > 240 and c.blue() > 240 for c in column)  # 점선 그대로
+    o.set_opacity(100)
+    assert o.grab().toImage().pixelColor(30, o.height() - 5).alpha() == 255
+    o.close()
+
+
+def test_opacity_spin_saves_and_applies_right_away():
+    from mabinogi_addon.ui.cooking_tab import CookingTab
+    watcher = _Watcher()
+    tab = CookingTab(watcher)
+    tab.select("모둠회덮밥")
+    assert tab.opacity_spin.value() == 50 and (tab.opacity_spin.minimum(), tab.opacity_spin.maximum()) == (20, 100)
+    tab.overlay_btn.click()
+    assert tab.overlay.opacity() == 0.5
+    tab.opacity_spin.setValue(80)
+    assert tab.overlay.opacity() == 0.8 and config.load_cooking_overlay()["opacity"] == 80
+    tab.shutdown()
+    again = CookingTab(watcher)
+    again.select("모둠회덮밥")
+    again.set_overlay(True)
+    assert again.opacity_spin.value() == 80 and again.overlay.opacity() == 0.8   # 다시 켜도 저장값
+    again.shutdown()
 
 
 @pytest.mark.parametrize("dpr", [1.0, 1.25, 1.5, 2.0])

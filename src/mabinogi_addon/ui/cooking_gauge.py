@@ -8,7 +8,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import QPoint, QPointF, QRectF, Qt, Signal
-from PySide6.QtGui import QColor, QPainter, QPen, QPixmap
+from PySide6.QtGui import QColor, QImage, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import QWidget
 
 from .. import cooking, paths
@@ -77,9 +77,20 @@ class CookingBarOverlay(QWidget):
         self._scale = max(SCALE_MIN, min(SCALE_MAX, scale))
         self._locked = False
         self._drag = None
+        self._opacity = 0.5   # 바 불투명도(0.56.1 기본 50%) — 요리 탭이 저장값으로 바꿈
         self._relayout()
 
     # ---- 값 ----
+    def set_opacity(self, percent: int) -> None:
+        """바만 비치게(20~100 %) — 경계 점선은 그대로. setWindowOpacity는 점선까지 흐려져서 안 씀."""
+        value = max(0.2, min(1.0, percent / 100))
+        if value != self._opacity:
+            self._opacity = value
+            self.update()
+
+    def opacity(self) -> float:
+        return self._opacity
+
     def set_dish(self, dish: cooking.Dish | None) -> None:
         self._dish = dish
         self.update()
@@ -162,13 +173,26 @@ class CookingBarOverlay(QWidget):
         p.setRenderHint(QPainter.RenderHint.Antialiasing, False)
         bar = QRectF(0, top, bw, bh)
         inner = bar.adjusted(1, 1, -1, -1)
-        p.fillRect(bar, QColor(20, 20, 24, 230))  # 테두리(1px)
-        p.fillRect(inner, QColor(0, 0, 0, 230))
+        # 바(테두리·바탕·재료 칸)만 불투명도 — 게임 게이지가 차는 게 비쳐 보이게(사용자 11-24). 경계 점선은 늘 100%.
+        # 바를 한 장(불투명)으로 먼저 그린 뒤 그 장을 불투명도로 얹음 — 칸마다 따로 흐리게 하면 바탕과 겹쳐 더 진해짐
+        layer = QImage(bw, bh, QImage.Format.Format_ARGB32_Premultiplied)
+        layer.fill(Qt.GlobalColor.transparent)
+        lp = QPainter(layer)
+        lp.setRenderHint(QPainter.RenderHint.Antialiasing, False)
+        whole = QRectF(0, 0, bw, bh)
+        body = whole.adjusted(1, 1, -1, -1)
+        lp.fillRect(whole, QColor(20, 20, 24, 230))  # 테두리(1px)
+        lp.fillRect(body, QColor(0, 0, 0, 230))
         if self._dish is not None:
-            left = inner.left()
+            left = body.left()
             for i, r in enumerate(cooking.ratios(self._dish.recipe)):
-                p.fillRect(QRectF(left, inner.top(), inner.width() * r, inner.height()), color(i))
-                left += inner.width() * r
+                lp.fillRect(QRectF(left, body.top(), body.width() * r, body.height()), color(i))
+                left += body.width() * r
+        lp.end()
+        p.setOpacity(self._opacity)
+        p.drawImage(bar.topLeft(), layer)
+        p.setOpacity(1.0)
+        if self._dish is not None:
             p.setPen(_dash_pen(max(1.0, self._scale)))
             for b in cooking.boundaries(self._dish.recipe):
                 x = round(inner.left() + inner.width() * b)

@@ -2273,6 +2273,7 @@ def save_cooking_favorites(names: list[str], path: Path = LOCAL_CONFIG_PATH) -> 
 
 
 # ---- 요리 계산기(docs/cooking-spec.md 6절) — 게임 위 비율 바 위치·배율·잠금(설정 동기화 대상, 위치는 해상도별 규칙) ----
+COOKING_OPACITY_DEFAULT = 50   # 처음부터 게임 게이지가 비쳐 보이게(사용자 11-24)
 def load_cooking_overlay(path: Path = LOCAL_CONFIG_PATH) -> dict:
     raw = _read_local_config(path).get("cooking")
     sec = raw.get("overlay") if isinstance(raw, dict) and isinstance(raw.get("overlay"), dict) else {}
@@ -2282,11 +2283,15 @@ def load_cooking_overlay(path: Path = LOCAL_CONFIG_PATH) -> dict:
     scale = sec.get("scale")
     # 저장된 배율이 없으면 None — 첫 크기는 화면 배율로 정한다(cooking_tab, 게임 바 물리 245×10)
     scale = float(scale) if isinstance(scale, (int, float)) and not isinstance(scale, bool) and 0.5 <= scale <= 3.0 else None
-    return {"pos": pos, "scale": scale, "locked": sec.get("locked") is True}
+    # 바 불투명도(사용자 11-24 '게임바를 완전히 가려서 차는 걸 볼 수 없어' — 0.56.1): 20~100 %, 없거나 잘못되면 50
+    opacity = sec.get("opacity")
+    opacity = (opacity if type(opacity) is int and OPACITY_MIN <= opacity <= OPACITY_MAX
+               else COOKING_OPACITY_DEFAULT)
+    return {"pos": pos, "scale": scale, "locked": sec.get("locked") is True, "opacity": opacity}
 
 
 def save_cooking_overlay(path: Path = LOCAL_CONFIG_PATH, **fields) -> None:
-    """pos({x, y})·scale·locked 중 준 것만 바꾼다."""
+    """pos({x, y})·scale·locked·opacity 중 준 것만 바꾼다."""
     data = _read_local_config(path)
     raw = data.get("cooking") if isinstance(data.get("cooking"), dict) else {}
     sec = dict(raw.get("overlay") or {}) if isinstance(raw.get("overlay"), dict) else {}

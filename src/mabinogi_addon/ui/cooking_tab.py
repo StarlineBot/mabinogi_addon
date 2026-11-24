@@ -477,6 +477,11 @@ class CookingTab(QWidget):
         self.lock_btn.setToolTip("잠그면 바를 클릭해도 게임으로 통과해요. 풀면 끌어서 옮기고 휠로 크기를 바꿔요.")
         self.lock_btn.toggled.connect(self._set_locked)
         buttons.addWidget(self.lock_btn, 2)
+        from .settings_layout import opacity_spin
+        self.opacity_spin = opacity_spin(config.load_cooking_overlay()["opacity"])
+        self.opacity_spin.setToolTip("바만 비쳐 보여요. 게임 게이지가 차는 게 보이고, 경계 점선은 그대로 보여요(20~100%).")
+        self.opacity_spin.valueChanged.connect(self._set_opacity)
+        buttons.addWidget(self.opacity_spin, 2)
         lay.addWidget(self.overlay_buttons, 0, Qt.AlignmentFlag.AlignHCenter)
         lay.addWidget(divider())
         lay.addWidget(self._section_title("능력치"))
@@ -562,6 +567,7 @@ class CookingTab(QWidget):
                 pos = saved["pos"]
                 self.overlay.move(*self._first_position() if pos is None else self._on_screen(pos["x"], pos["y"]))
                 self.overlay.set_locked(saved["locked"])
+                self.overlay.set_opacity(saved["opacity"])
             self.overlay.set_dish(self._selected)
             self._timer.start()
             self._find_timer.start()
@@ -591,6 +597,15 @@ class CookingTab(QWidget):
             return
         try:
             config.save_cooking_overlay(pos={"x": self.overlay.x(), "y": self.overlay.y()}, scale=self.overlay.scale)
+        except OSError:
+            pass
+
+    def _set_opacity(self, percent: int) -> None:
+        """바 불투명도 — 바로 반영(자동 찾기 자리도 같은 값), 저장."""
+        if self.overlay is not None:
+            self.overlay.set_opacity(percent)
+        try:
+            config.save_cooking_overlay(opacity=int(percent))
         except OSError:
             pass
 
