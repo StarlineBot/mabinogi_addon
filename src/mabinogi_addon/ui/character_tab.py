@@ -32,6 +32,8 @@ PLATE_W, PLATE_H = 76, 22
 DRAWER_DELAY_MS = 300   # 카드에 0.3초 머물면 서랍(지나가는 마우스에 번쩍이지 않게)
 DRAWER_GAP = 16         # 카드와 서랍 사이(테두리 장식이 넘치는 만큼)
 # 이름을 테두리 띠 위로 올리는 양(기획 11-25)
+# 카드 그림이 이미 카드 비율(224:260)이라 머리 위 20px 아래 높이에 꽉 맞추고 양옆을 자르지 않는 캐릭터(Starline 손 — 기획 11-25)
+CARD_FIT_HEIGHT = {"Starline"}
 NAME_LIFT = {"Starline": 12, "이안": 6, "다래": 4, "아리아": 2, "레나": 0}
 BAR_H = 22
 QUEST_H = 30   # 퀘스트 글 두 줄까지(이름이 들어가면 길어짐)
@@ -256,6 +258,10 @@ class CharacterCard(QWidget):
             tp.fillRect(tinted.rect(), QColor("#4a4f58") if _dark() else QColor("#c4c8cf"))
             tp.end()
             art = tinted
+        if roster.folder(self.character) in CARD_FIT_HEIGHT and self.outfit == outfits.BASE:
+            p.drawPixmap(QRectF(card.left(), card.top() + HEAD_ROOM, card.width(), card.height() - HEAD_ROOM + 3),
+                         art, QRectF(art.rect()))
+            return
         # 카드가 그림보다 길어(224×280) 양옆을 잘라 높이를 채움(가운데 기준), 머리 위 20px 띄움 — 아래는 그만큼 잘림
         src_w = min(art.width(), art.height() * CARD_W / CARD_H)
         source = QRectF((art.width() - src_w) / 2, 0, src_w, art.height())

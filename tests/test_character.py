@@ -1530,7 +1530,9 @@ def test_starline_roster_english_name_gold_outline_and_frames():
     assert len(roster.ROSTER) == 6 and all(c.outline == "#FFFFFF" for c in roster.ROSTER[1:])
     assert sl.name.isascii() and roster.folder(sl) == "Starline"
     card = _img_of(SL_DIR / "card.png")
-    assert abs(card.shape[1] / card.shape[0] - 1199 / 1312) < 0.02
+    assert abs(card.shape[1] / card.shape[0] - 224 / 260) < 0.005   # 손 전체 보이게(기획 11-25) — 카드 비율 그대로
+    from mabinogi_addon.ui import character_tab as ct
+    assert ct.CARD_FIT_HEIGHT == {"Starline"}
     names = {n for frames, _t, _l in br.STARLINE.anims.values() for n in frames}
     assert not [n for n in names if not (SL_DIR / f"{n}.png").exists()]
     assert _img_of(SL_DIR / "stand_0.png").shape[0] == 285   # 나머지는 머리 크기 기준(아래 ±5% 테스트)

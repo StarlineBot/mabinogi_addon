@@ -198,15 +198,15 @@ EXPECTED = {"sneeze": 6, "stand": 1, "flame": 4, "walk": 6, "drag": 4, "fall": 1
 
 
 def card() -> np.ndarray:
-    """가로형 상반신(1355×1160) → 얼굴(위 45% 알파 무게중심 x) 가운데로 다른 카드와 같은 세로 비율(1199:1312)."""
+    """가로형 상반신(1355×1160) → 손 든 포즈가 다 보이게(기획 11-25 '손 전체 보이게'): x0 = 100, 폭 999
+    (= 1160 × 224 / 260 — 카드 224×280에서 머리 위 20px을 뺀 260에 높이를 꽉 맞춤). 손·반지·금 팔찌가 보이고 얼굴은 오른쪽.
+    이미 카드 비율이라 카드 그리기에서 양옆을 다시 자르지 않음(character_tab.CARD_FIT_HEIGHT)."""
     art = imread(ROOT / "docs/characters/assets/Starline/Starline_상반신.png", cv2.IMREAD_UNCHANGED)
-    h, w = art.shape[:2]
-    top = art[: int(h * 0.45), :, 3] > 40
-    cx = float(np.where(top)[1].mean())
-    cw = int(round(h * 1199 / 1312))
-    x0 = int(min(max(0, cx - cw / 2), w - cw))
-    art = _tight(art[:, x0:x0 + cw])
+    art = art[:, CARD_X0:CARD_X0 + CARD_CW]
     return scaled(art, 480 / art.shape[0])
+
+
+CARD_X0, CARD_CW = 100, 999
 
 
 def main() -> None:
