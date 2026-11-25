@@ -549,7 +549,7 @@ def test_character_tab_cards_choose_voice_and_toggle_pet(app, cfg, monkeypatch):
     from mabinogi_addon.ui import character_tab as ct
 
     played = []
-    monkeypatch.setattr(ct.CharacterTab, "_play_sample", lambda self: played.append(config.load_voice_pack()))
+    monkeypatch.setattr(ct.CharacterTab, "_play_sample", lambda self, pack: played.append(pack))
     tab = ct.CharacterTab()
     changed, toggled = [], []
     tab.voice_pack_changed.connect(lambda: changed.append(1))
@@ -557,9 +557,13 @@ def test_character_tab_cards_choose_voice_and_toggle_pet(app, cfg, monkeypatch):
     # 카드 순서(사용자 11-24): Starline → 레나 → 다래 → 이안 → 아리아 → 나머지
     assert [c.character.name for c in tab.cards] == ["Starline", "레나", "다래", "이안", "아리아", "???"]
     assert not any(c.selected() for c in tab.cards)  # 기본 녹음 — 고른 카드 없음
-    tab.cards[5].clicked.emit(tab.cards[5].character)  # 미정 카드도 그 목소리로 선택
-    assert config.load_voice_pack() == "자연스러운 여성" and played == ["자연스러운 여성"] and changed == [1]
+    tab.cards[5].clicked.emit(tab.cards[5].character)  # 누르면 인사만(사용자 11-25 B안) — 선택은 그대로
+    assert config.load_voice_pack() == "" and played == ["자연스러운 여성"] and changed == []
+    assert tab.cards[5].pending() and tab.cards[5].apply_button.isVisibleTo(tab.cards[5])
+    tab.cards[5].apply_button.click()                  # 카드 안 '이 캐릭터로 적용' → 미정 카드도 그 목소리로
+    assert config.load_voice_pack() == "자연스러운 여성" and changed == [1] and played == ["자연스러운 여성"]
     assert [c.selected() for c in tab.cards] == [False, False, False, False, False, True]
+    assert not tab.cards[5].pending()
     tab.choose(roster.DARE)
     assert tab.cards[2].selected() and "돌아다녀요" in tab.pet_hint.text()
     tab.pet_switch.setChecked(True)
@@ -789,7 +793,9 @@ def test_card_click_plays_greeting_of_chosen_pack(app, cfg, monkeypatch):
     played = []
     monkeypatch.setattr(notifier, "greeting_path", lambda pack: played.append(pack) or Path("없음.mp3"))
     tab = ct.CharacterTab()
-    tab.choose(roster.DARE)
+    tab.preview(roster.DARE)
+    assert played == ["조용한 여성"]
+    tab.choose(roster.DARE)            # 적용은 인사를 다시 안 틂
     assert played == ["조용한 여성"]
 
 
@@ -1783,7 +1789,7 @@ def test_default_voice_button_returns_to_recorded_voice(app, cfg, monkeypatch):
 
     played = []
     monkeypatch.setattr(ct.CharacterTab, "_play_sample",
-                        lambda self: played.append(notifier.greeting_path(config.load_voice_pack())))
+                        lambda self, pack: played.append(notifier.greeting_path(pack)))
     tab = ct.CharacterTab()
     assert not tab.default_button.isEnabled()   # 처음엔 기본
     tab.choose(roster.DARE)
@@ -1794,3 +1800,59 @@ def test_default_voice_button_returns_to_recorded_voice(app, cfg, monkeypatch):
     assert config.load_voice_pack() == "" and not any(c.selected() for c in tab.cards) and changed == [1]
     assert "기본 녹음 목소리" in tab.pet_hint.text() and not tab.default_button.isEnabled()
     assert played[-1] == notifier.SOUND_DIR / notifier.SAMPLE_FILE   # 기본 녹음 미리듣기
+
+
+def test_card_click_previews_only_and_apply_button_moves(app, cfg, monkeypatch):
+    """카드 고르기(사용자 11-25 B안): 누르면 인사만(저장 안 함), 쓰는 중이 아닌 카드엔 안쪽 '이 캐릭터로 적용'(한 번에 하나 —
+    다른 카드 누르면 옮겨 감), 쓰는 중인 카드는 눌러도 버튼 없음·대기 풀림, 적용 = 저장·신호, 기본 목소리로·탭 떠나기는 대기 풀림."""
+    from mabinogi_addon.ui import character_tab as ct
+
+    played, saved = [], []
+    monkeypatch.setattr(ct.CharacterTab, "_play_sample", lambda self, pack: played.append(pack))
+    real_save = config.save_voice_pack
+    monkeypatch.setattr(config, "save_voice_pack", lambda pack, *a, **k: saved.append(pack) or real_save(pack, *a, **k))
+    tab = ct.CharacterTab()
+    changed = []
+    tab.voice_pack_changed.connect(lambda: changed.append(1))
+    by = {c.character.name: c for c in tab.cards}
+    by["레나"].clicked.emit(by["레나"].character)
+    assert saved == [] and played == ["화난 여성"] and [c for c in tab.cards if c.pending()] == [by["레나"]]
+    by["다래"].clicked.emit(by["다래"].character)
+    assert [c for c in tab.cards if c.pending()] == [by["다래"]]   # 버튼이 옮겨 감
+    by["다래"].apply_button.click()
+    assert saved == ["조용한 여성"] and changed == [1] and by["다래"].selected() and not any(c.pending() for c in tab.cards)
+    by["다래"].clicked.emit(by["다래"].character)                  # 쓰는 중 카드 — 인사만, 버튼 없음
+    assert played[-1] == "조용한 여성" and not by["다래"].pending() and saved == ["조용한 여성"]
+    by["이안"].clicked.emit(by["이안"].character)
+    tab.default_button.click()
+    assert not any(c.pending() for c in tab.cards)
+    by["이안"].clicked.emit(by["이안"].character)
+    tab.show()
+    tab.hide()
+    assert not any(c.pending() for c in tab.cards)
+    assert by["이안"].size() == by["레나"].size()   # 버튼이 카드 안 — 크기 그대로
+
+
+def test_greeting_random_among_existing_without_repeat(tmp_path, monkeypatch):
+    """인사 여러 개(사용자 11-25): 인사.mp3·인사2~5.mp3 중 있는 것만 무작위, 같은 것 연속 금지, 하나면 그것, 없으면 투아림.
+    '인사'로 시작하는 파일은 알림 소리 목록에 안 들어감."""
+    from mabinogi_addon.ui import notifier
+
+    sounds = tmp_path / "sounds"
+    pack = sounds / "팩"
+    pack.mkdir(parents=True)
+    (sounds / notifier.SAMPLE_FILE).write_bytes(b"x")
+    for name in ("인사.mp3", "인사2.mp3", "인사4.mp3", "비바체 연장.mp3"):
+        (pack / name).write_bytes(b"x")
+    monkeypatch.setattr(notifier, "SOUND_DIR", sounds)
+    monkeypatch.setattr(notifier, "_last_greeting", {})
+    seq = [notifier.greeting_path("팩", random.Random(i)).name for i in range(40)]
+    assert set(seq) == {"인사.mp3", "인사2.mp3", "인사4.mp3"} and all(a != b for a, b in zip(seq, seq[1:]))
+    assert notifier.alert_files(pack) == {"비바체 연장.mp3"}
+    one = sounds / "하나"
+    one.mkdir()
+    (one / "인사3.mp3").write_bytes(b"x")
+    assert {notifier.greeting_path("하나").name for _ in range(3)} == {"인사3.mp3"}
+    (sounds / "없음").mkdir()
+    monkeypatch.setattr(config, "load_voice_pack", lambda *a, **k: "")
+    assert notifier.greeting_path("없음") == sounds / notifier.SAMPLE_FILE

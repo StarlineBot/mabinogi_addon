@@ -11,6 +11,7 @@ QtMultimedia가 없거나 백엔드가 없으면(헤드리스 등) 조용히 no-
 from __future__ import annotations
 
 import logging
+import random
 import weakref
 
 from pathlib import Path
@@ -54,21 +55,28 @@ def list_voice_packs(include_empty: bool = False) -> list[str]:
 
 # 캐릭터 카드를 누를 때 나오는 인사 녹음(캐릭터 명세 '카드 인사 녹음', 사용자 11-24). 알림 소리가 아니다 —
 # 버프·알림 목록에 섞지 않고, 팩 안에 있을 때만 쓴다(기본 녹음으로 폴백하지 않음).
+# 인사 여러 개(사용자 11-25): 인사.mp3 + 인사2~5.mp3 중 있는 것 무작위, 같은 파일 연속 금지.
 GREETING_FILE = "인사.mp3"
+GREETING_FILES = (GREETING_FILE,) + tuple(f"인사{i}.mp3" for i in range(2, 6))
 SAMPLE_FILE = "투아림 부스트 발동 직전.mp3"
+_last_greeting: dict[str, str] = {}
 
 
 def alert_files(folder: Path) -> set[str]:
-    """그 팩 폴더의 알림 소리 파일 이름들(인사 녹음 제외)."""
-    return {p.name for p in folder.glob("*.mp3") if p.name != GREETING_FILE}
+    """그 팩 폴더의 알림 소리 파일 이름들(인사 녹음 — '인사'로 시작하는 mp3 — 제외)."""
+    return {p.name for p in folder.glob("*.mp3") if not p.name.startswith("인사")}
 
 
-def greeting_path(pack: str) -> Path:
-    """카드 미리듣기 소리 — 그 팩의 인사.mp3가 있으면 그것, 없으면 지금처럼 투아림 알림(sound_path 규칙)."""
+def greeting_path(pack: str, rng=None) -> Path:
+    """카드 미리듣기 소리 — 그 팩의 인사 녹음(있는 것 중 무작위, 바로 앞과 다른 것), 없으면 투아림 알림(sound_path 규칙)."""
     if pack:
-        greeting = SOUND_DIR / pack / GREETING_FILE
-        if greeting.exists():
-            return greeting
+        have = [SOUND_DIR / pack / name for name in GREETING_FILES if (SOUND_DIR / pack / name).exists()]
+        if have:
+            last = _last_greeting.get(pack)
+            choices = [p for p in have if p.name != last] or have
+            pick = (rng or random).choice(choices)
+            _last_greeting[pack] = pick.name
+            return pick
     return sound_path(SAMPLE_FILE)
 
 

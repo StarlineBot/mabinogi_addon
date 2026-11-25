@@ -57,3 +57,10 @@ def test_only_with_unknown_file_stops(tmp_path, monkeypatch):
     with pytest.raises(SystemExit):
         gen_tts.main(["--pack", "차분한 남성", "--only", "없는 파일.mp3"])
     assert not any(sounds.iterdir())
+
+
+def test_ian_card_greetings_two_to_five_same_speed():
+    """이안 카드 인사 2~5(11-25 — 녹음목록.md 이안 표): 같은 목소리·속도(급박 배수 없음)로 --only 생성."""
+    ian = next(p for p in gen_tts.PACKS if p["name"] == "차분한 남성")
+    for name in ("인사2.mp3", "인사3.mp3", "인사4.mp3", "인사5.mp3"):
+        assert ian["lines"][name] and name not in gen_tts.URGENT_FILES

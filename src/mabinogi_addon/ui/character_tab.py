@@ -10,7 +10,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal
-from PySide6.QtGui import QColor, QFont, QPainter, QPainterPath, QPalette, QPen, QPixmap
+from PySide6.QtGui import QColor, QFont, QLinearGradient, QPainter, QPainterPath, QPalette, QPen, QPixmap
 from PySide6.QtWidgets import (QGridLayout, QHBoxLayout, QPushButton, QSizePolicy, QSpinBox, QVBoxLayout,
                                QWidget)
 
@@ -26,6 +26,8 @@ BAR_H = 22
 QUEST_H = 30   # 퀘스트 글 두 줄까지(이름이 들어가면 길어짐)
 HEART = "#FF6B9A"
 COLUMNS = 3
+APPLY_BAND = 80     # 대기 카드 아래 어두운 띠 높이
+APPLY_BOTTOM = 10   # 적용 버튼 아래 여백
 
 
 def card_pixmap(character: roster.Character) -> QPixmap:
@@ -33,8 +35,11 @@ def card_pixmap(character: roster.Character) -> QPixmap:
 
 
 class CharacterCard(QWidget):
-    """카드 하나 — 그림(윗부분 채움) + 이름 + 아래 ♥ 호감도 바. 누르면 clicked."""
+    """카드 하나 — 그림(윗부분 채움) + 이름 + 아래 ♥ 호감도 바. 누르면 clicked(인사 듣기).
+    대기(pending — 사용자 11-25 B안): 카드 아래 어두운 띠 + 안쪽 `이 캐릭터로 적용` 버튼(누르면 applied), 이름은 버튼 위로.
+    쓰는 중(selected): 강조 테두리 + 왼쪽 위 `✓ 사용 중` 배지."""
     clicked = Signal(object)
+    applied = Signal(object)
 
     def __init__(self, character: roster.Character, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -44,6 +49,19 @@ class CharacterCard(QWidget):
         self._affinity = 0
         self._quest = ""
         self._details = True   # ♥ 호감도 바·퀘스트 줄(베타 11-24: 제작자만)
+        self._pending = False  # 인사를 들은 뒤 '이 캐릭터로 적용' 대기
+        self.apply_button = QPushButton("이 캐릭터로 적용", self)
+        self.apply_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.apply_button.setStyleSheet(
+            f"QPushButton {{ background:{color('accent')}; color:{color('on-accent')}; font-weight:600;"
+            " border:none; border-radius:6px; padding:0 12px; }")
+        from .settings_layout import plain_button_height
+        self.apply_button.setFixedHeight(plain_button_height())
+        self.apply_button.adjustSize()
+        self.apply_button.move(round((CARD_W - self.apply_button.width()) / 2),
+                               round(CARD_H - 1.5 - APPLY_BOTTOM - self.apply_button.height()))
+        self.apply_button.clicked.connect(lambda: self.applied.emit(self.character))
+        self.apply_button.hide()
         self.setFixedSize(self.sizeHint())
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setToolTip(f"{character.name if character.known else '아직 이름이 없는 캐릭터'} — 목소리: {character.pack}")
@@ -52,6 +70,8 @@ class CharacterCard(QWidget):
     def set_selected(self, on: bool) -> None:
         if on != self._selected:
             self._selected = on
+            if on:
+                self.set_pending(False)
             self.update()
 
     def set_affinity(self, value: int, quest: str = "") -> None:
@@ -61,6 +81,17 @@ class CharacterCard(QWidget):
 
     def selected(self) -> bool:
         return self._selected
+
+    def set_pending(self, on: bool) -> None:
+        """'이 캐릭터로 적용' 대기(쓰는 중인 카드는 대기가 되지 않음)."""
+        on = bool(on) and not self._selected
+        if on != self._pending:
+            self._pending = on
+            self.apply_button.setVisible(on)
+            self.update()
+
+    def pending(self) -> bool:
+        return self._pending
 
     def set_details_visible(self, on: bool) -> None:
         """호감도 바·퀘스트 줄 보이기(제작자) / 숨기기(비제작자 — 카드 아래 자리도 줄임)."""
@@ -88,8 +119,15 @@ class CharacterCard(QWidget):
         p.save()
         p.setClipPath(clip)
         self._paint_art(p, card)
+        if self._pending:  # 아래 어두운 띠(버튼·이름이 그림 위에서도 잘 보이게)
+            band = QLinearGradient(0, card.bottom() - APPLY_BAND, 0, card.bottom())
+            band.setColorAt(0.0, QColor(0, 0, 0, 0))
+            band.setColorAt(1.0, QColor(0, 0, 0, 150))
+            p.fillRect(QRectF(card.left(), card.bottom() - APPLY_BAND, card.width(), APPLY_BAND), band)
         p.restore()
         self._paint_name(p, card)
+        if self._selected:
+            self._paint_badge(p)
         border = QColor(color("accent")) if self._selected else self.palette().color(QPalette.ColorRole.Mid)
         p.setPen(QPen(border, 3 if self._selected else 1))
         p.setBrush(Qt.BrushStyle.NoBrush)
@@ -117,6 +155,19 @@ class CharacterCard(QWidget):
         top = card.top() + (8 if self.character.known else 18)
         p.drawPixmap(QRectF(card.left(), top, card.width(), h), art, QRectF(art.rect()))
 
+    def _paint_badge(self, p: QPainter) -> None:
+        """왼쪽 위 `✓ 사용 중`(강조색 둥근 알약)."""
+        font = QFont(self.font())
+        font.setPixelSize(12)
+        font.setWeight(QFont.Weight.Bold)
+        p.setFont(font)
+        rect = QRectF(10, 10, 66, 22)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor(color("accent")))
+        p.drawRoundedRect(rect, 11, 11)
+        p.setPen(QColor(color("on-accent")))
+        p.drawText(rect, int(Qt.AlignmentFlag.AlignCenter), "✓ 사용 중")
+
     def _paint_name(self, p: QPainter, card: QRectF) -> None:
         font = QFont(self.font())
         font.setPixelSize(30)
@@ -124,7 +175,8 @@ class CharacterCard(QWidget):
         path = QPainterPath()
         path.addText(QPointF(0, 0), font, self.character.name)
         box = path.boundingRect()
-        path.translate(card.center().x() - box.center().x(), card.bottom() - 14 - box.bottom())
+        lift = self.apply_button.height() + 12 if self._pending else 0   # 대기 중엔 버튼 위로
+        path.translate(card.center().x() - box.center().x(), card.bottom() - 14 - lift - box.bottom())
         # 이름: 캐릭터 색 + 캐릭터 외곽선(기본 흰색, Starline 금). 미정(???)은 흰 글자 + 어두운 테두리(시안 charsel_*)
         edge = self.character.outline if self.character.known else "#3a3d44"
         p.setPen(QPen(QColor(edge), 5, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
@@ -251,7 +303,8 @@ class CharacterTab(QWidget):
             cell = QVBoxLayout()
             cell.setSpacing(4)
             card = CharacterCard(character)
-            card.clicked.connect(self.choose)
+            card.clicked.connect(self.preview)   # 누르면 인사만(사용자 11-25 B안)
+            card.applied.connect(self.choose)    # 카드 안 '이 캐릭터로 적용' → 선택
             editor = AffinityEditor(character.key)
             editor.edited.connect(self.set_affinity)
             cell.addWidget(card)
@@ -274,8 +327,10 @@ class CharacterTab(QWidget):
             editor.setVisible(self._creator)
 
     def refresh(self) -> None:
-        """고른 캐릭터 강조·호감도 바·안내 글을 저장 값으로 다시 맞춘다."""
+        """고른 캐릭터 강조·호감도 바·안내 글을 저장 값으로 다시 맞춘다(적용 대기는 풀림)."""
         pack = config.load_voice_pack()
+        for card in self.cards:
+            card.set_pending(False)
         rules = Rules.from_dict(config.load_affinity_rules())
         for card, editor in zip(self.cards, self.editors):
             card.set_selected(card.character.pack == pack)
@@ -284,7 +339,7 @@ class CharacterTab(QWidget):
             editor.show_value(affinity.value)
         chosen = roster.by_pack(pack)
         if chosen is None:
-            text = "카드를 누르면 그 캐릭터 목소리로 알림을 말해 줘요. 지금은 기본 녹음 목소리예요."
+            text = "카드를 누르면 인사를 들어 볼 수 있고, '이 캐릭터로 적용'을 누르면 그 목소리로 알림을 말해 줘요. 지금은 기본 녹음 목소리예요."
         elif not chosen.has_pet:
             text = "이 캐릭터는 아직 화면에 띄울 그림이 없어요. 목소리 알림만 바뀌어요."
         else:
@@ -300,31 +355,43 @@ class CharacterTab(QWidget):
         self.refresh()
         self.affinity_edited.emit()
 
+    def preview(self, character: roster.Character) -> None:
+        """카드 누름 → 그 캐릭터 인사만 듣기(선택은 그대로). 쓰는 중이 아니면 그 카드에 '이 캐릭터로 적용'(한 번에 하나)."""
+        self._play_sample(character.pack)
+        current = config.load_voice_pack()
+        for card in self.cards:
+            card.set_pending(card.character is character and character.pack != current)
+
     def choose(self, character: roster.Character) -> None:
-        """카드 누름 → 그 목소리 미리듣기 + 바로 선택(알림 목소리 팩 저장)."""
-        config.save_voice_pack(character.pack)  # 먼저 저장 → sound_path가 선택 팩을 가리킴
-        self._play_sample()
+        """'이 캐릭터로 적용' → 알림 목소리 팩 저장(인사는 이미 들었으므로 다시 안 틂)."""
+        config.save_voice_pack(character.pack)
         self.refresh()
         self.voice_pack_changed.emit()
 
     def choose_default(self) -> None:
         """'기본 목소리로' — 고른 캐릭터를 풀고 기본 녹음으로(카드 누름과 같이 미리듣기 한 번)."""
         config.save_voice_pack("")
-        self._play_sample()
+        self._play_sample("")
         self.refresh()
         self.voice_pack_changed.emit()
 
-    def _play_sample(self) -> None:
-        """고른 캐릭터 미리듣기 — 그 팩의 인사.mp3(있으면, 사용자 11-24), 없으면 투아림 알림."""
+    def _play_sample(self, pack: str) -> None:
+        """그 팩 인사 듣기 — 인사.mp3·인사2~5.mp3 중 있는 것 무작위(연속 같은 것 없음), 없으면 투아림 알림."""
         from .notifier import SoundNotifier, greeting_path
 
-        sample = greeting_path(config.load_voice_pack())
+        sample = greeting_path(pack)
         if not sample.exists():
             return
         if self._preview is None:
             self._preview = SoundNotifier({})
         self._preview.set_sounds({"preview": sample})
         self._preview.play("preview")
+
+    def hideEvent(self, event) -> None:  # noqa: N802
+        """탭을 떠나면 적용 대기는 풀림."""
+        for card in self.cards:
+            card.set_pending(False)
+        super().hideEvent(event)
 
     def _on_pet(self, on: bool) -> None:
         config.save_character(pet=bool(on))

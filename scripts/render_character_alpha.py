@@ -27,7 +27,7 @@ def main():
     pack = sys.argv[1] if len(sys.argv) > 1 else '조용한 여성'
     # 둘째 인자 user/creator — 캐릭터 베타(11-24) 탭 전체(카드 6장)를 비제작자/제작자로: beta_tab_<role>.png
     role = sys.argv[2] if len(sys.argv) > 2 else ''
-    creator = role != 'user'
+    creator = role not in ('user', 'apply')   # apply = 비제작자 + 레나 카드에 '이 캐릭터로 적용' 대기(11-25 B안)
     suffix = {'조용한 여성': '', '부드러운 여성': '_aria', '차분한 남성': '_ian', '화난 여성': '_lena', '장난스러운 남성': '_starline', 'default': '_default'}.get(pack, '_other')
     OUT.mkdir(parents=True, exist_ok=True)
     app = QApplication.instance() or QApplication([]); app.setStyle('Fusion'); apply_theme('custom', DARK)
@@ -61,6 +61,12 @@ def main():
             w._tabs.setCurrentWidget(w._character_scroll)
             for _ in range(6):
                 app.processEvents()
+            if role == 'apply':
+                stack.enter_context(patch.object(type(w.character_tab), '_play_sample', lambda self, pack: None))
+                lena = next(c for c in w.character_tab.cards if c.character.name == '레나')
+                w.character_tab.preview(lena.character)
+                for _ in range(4):
+                    app.processEvents()
             if role:
                 assert w.grab().save(str(OUT / f'beta_tab_{role}{suffix}.png'))
                 return

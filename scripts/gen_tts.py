@@ -14,8 +14,9 @@
     set GOOGLE_TTS_API_KEY=...      (Windows cmd)   /   $env:GOOGLE_TTS_API_KEY="..." (PowerShell)
     uv run python scripts/gen_tts.py --backend google
     uv run python scripts/gen_tts.py --backend google --pack "차분한 남성"
-    # 파일 몇 개만(나머지는 그대로 둠) — 예: 이안 투아림 2차만
+    # 파일 몇 개만(나머지는 그대로 둠) — 예: 이안 투아림 2차만 / 이안 카드 인사 2~5
     uv run python scripts/gen_tts.py --backend google --pack "차분한 남성" --only "투아림 부스트 발동 직전2.mp3"
+    uv run python scripts/gen_tts.py --backend google --pack "차분한 남성" --only 인사2.mp3 인사3.mp3 인사4.mp3 인사5.mp3
 
 팩 상태(11-24): 스크립트로 만드는 팩 = 차분한 남성(이안, Google Chirp3 Algieba)·자연스러운 여성.
 사용자 녹음 팩(스크립트 대상 아님 — 다시 만들면 녹음을 덮어씀) = 부드러운 여성(파티 알림.mp3만 생성본)·조용한 여성·
@@ -49,6 +50,8 @@ F_OVERTURE = "전장의 서곡 연장.mp3"
 F_PARTY = "파티 알림.mp3"
 F_TUARIM = "투아림 부스트 발동 직전.mp3"
 F_TUARIM2 = "투아림 부스트 발동 직전2.mp3"   # 투아림 추가 알림(11-24)
+# 카드 인사 여러 개(11-25 — 인사.mp3와 함께 무작위). 알림이 아니라 카드 누를 때만
+F_GREET2, F_GREET3, F_GREET4, F_GREET5 = (f"인사{i}.mp3" for i in range(2, 6))
 
 # 2차(막차 경고) — 1차 파일명 뒤에 '2'. 앱은 임박이 '더' 가까워지면 이 파일을 재생한다
 # (없으면 1차로 폴백). 1차=여유 안내, 2차=짧고 급한 막차 경고.
@@ -145,6 +148,11 @@ PACKS: list[dict] = [
             F_PARTY: "파티 모집이 올라왔습니다.",
             F_TUARIM: "투아림 부스트 발동 직전입니다.",
             F_TUARIM2: "투아림, 지금 발동합니다. 준비하십시오.",   # 말풍선과 같은 문장(이안_대사.md 알림 표)
+            # 카드 인사(녹음목록.md 이안 표 인사2~5, 11-25) — 1차 알림과 같은 속도
+            F_GREET2: "길드 사무관 이안입니다. 잘 부탁드립니다.",
+            F_GREET3: "일정 관리는 맡겨 주십시오.",
+            F_GREET4: "…저를 고르시겠습니까?",
+            F_GREET5: "버프 시간, 1초도 놓치지 않겠습니다.",
         },
     },
 ]
