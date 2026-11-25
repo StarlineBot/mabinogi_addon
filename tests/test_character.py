@@ -691,7 +691,7 @@ def test_aria_sits_without_dozing_and_smiles_when_clicked():
         b.tick(t, True)
         seen.add(b.frame(t))
         assert b.state not in ("sit_doze", "wake") and not b.zzz()
-    assert {"sit_0", "sit_1", "sit_2", "sit_3"} <= seen  # 머리 안고 앉아 웃음 반복
+    assert {"sit_0", "sit_1", "sit_3"} <= seen and "sit_2" not in seen   # 눈 흘김 sit_2는 뺌(11-25)  # 머리 안고 앉아 웃음 반복
     b.press(t, 900, 640)
     assert b.release(t)[-1] == ("say", "click_sit") and b.frame(t) == "sit_1"  # 앉아서 클릭 = 웃음
 
@@ -1397,7 +1397,7 @@ def test_lena_sits_without_dozing_click_keeps_sit_picture():
         b.tick(t, True)
         seen.add(b.frame(t))
         assert not b.zzz() and b.state not in ("sit_doze", "wake")
-    assert {"sit_0", "sit_1", "sit_2", "sit_3"} <= seen
+    assert {"sit_0", "sit_1", "sit_3"} <= seen and "sit_2" not in seen   # 눈 흘김 sit_2는 뺌(11-25)
     frames, times, _loop = br.LENA.anims["sit_loop"]
     zero = sum(d for f, d in zip(frames, times) if f == "sit_0")
     assert zero / sum(times) > 0.7  # 0번이 길게, 나머지는 가끔
@@ -1577,7 +1577,7 @@ def test_starline_flame_idle_click_talks_and_corner():
         c.tick(t, True)
         seen.add(c.frame(t))
         assert not c.zzz()
-    assert {"sit_0", "sit_1", "sit_2", "sit_3"} <= seen
+    assert {"sit_0", "sit_1", "sit_3"} <= seen and "sit_2" not in seen   # 눈 흘김 sit_2는 뺌(11-25)
     c.press(t, 900, 600)
     assert c.release(t)[-1] == ("say", "click_sit") and c.frame(t) == "sit_0"
 
@@ -2530,3 +2530,9 @@ def test_natural_male_candidate_silhouette_and_pack(app, cfg, monkeypatch):
     tab.preview(nm)
     card.applied.emit(nm)
     assert played == ["자연스러운 남성"] and config.load_voice_pack() == "자연스러운 남성"
+
+
+def test_lena_corner_sit_loop_without_side_glance():
+    """레나 구석 앉기: 눈을 옆으로 흘기는 sit_2 뺌(사용자 11-25), 주기 15초 그대로."""
+    frames, times, loop = br.LENA.anims["sit_loop"]
+    assert "sit_2" not in frames and loop and abs(sum(times) - 15.0) < 1e-9

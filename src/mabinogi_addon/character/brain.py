@@ -254,8 +254,9 @@ LENA_ANIMS = {
     "pet_out": (("pet_5",), (1.6,), False),
     "alert": (("talk_emph_0",), (1.5,), False),   # 손가락으로 짚으며 알림
     "crouch": (("crouch_0", "crouch_1", "crouch_2"), (0.25,) * 3, False),
-    "sit_loop": (("sit_0", "sit_1", "sit_0", "sit_3", "sit_0", "sit_2", "sit_0", "sit_3"),
-                 (3.5, 0.8, 3.0, 0.15, 3.5, 1.4, 2.5, 0.15), True),
+    # 눈을 옆으로 흘기는 sit_2는 뺌(사용자 11-25 '눈이 움직인다' → '3프레임째만 빼면') — 그 시간은 앞뒤 sit_0에 합쳐 주기 15초 그대로
+    "sit_loop": (("sit_0", "sit_1", "sit_0", "sit_3", "sit_0", "sit_3"),
+                 (3.5, 0.8, 3.0, 0.15, 7.4, 0.15), True),
     "sit_notice": (("sit_0",), (1.2,), False),    # 앉아서 클릭 = 그림 그대로(말풍선만)
     "rise": (("rise_0", "rise_1", "rise_2"), (0.25,) * 3, False),
 }
