@@ -31,7 +31,7 @@ def main() -> None:
             patch.object(config, "_write_local_config", lambda *a, **k: None):
         from mabinogi_addon.ui.cooking_tab import CookingTab
         tab = CookingTab()
-        tab.resize(760, 470)
+        tab.resize(760, 680)
         tab.show()
         tab.category_list.setCurrentItem(tab.category_list.item(0))
         tab.select("모둠회덮밥", stay=True)
