@@ -43,7 +43,8 @@ class CharacterCard(QWidget):
         self._selected = False
         self._affinity = 0
         self._quest = ""
-        self.setFixedSize(CARD_W, CARD_H + BAR_H + QUEST_H + 8)
+        self._details = True   # ♥ 호감도 바·퀘스트 줄(베타 11-24: 제작자만)
+        self.setFixedSize(self.sizeHint())
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setToolTip(f"{character.name if character.known else '아직 이름이 없는 캐릭터'} — 목소리: {character.pack}")
         self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
@@ -60,6 +61,16 @@ class CharacterCard(QWidget):
 
     def selected(self) -> bool:
         return self._selected
+
+    def set_details_visible(self, on: bool) -> None:
+        """호감도 바·퀘스트 줄 보이기(제작자) / 숨기기(비제작자 — 카드 아래 자리도 줄임)."""
+        if bool(on) != self._details:
+            self._details = bool(on)
+            self.setFixedSize(self.sizeHint())
+            self.update()
+
+    def details_visible(self) -> bool:
+        return self._details
 
     def mouseReleaseEvent(self, event) -> None:  # noqa: N802
         if event.button() == Qt.MouseButton.LeftButton and self.rect().contains(event.position().toPoint()):
@@ -83,7 +94,8 @@ class CharacterCard(QWidget):
         p.setPen(QPen(border, 3 if self._selected else 1))
         p.setBrush(Qt.BrushStyle.NoBrush)
         p.drawRoundedRect(card, 10, 10)
-        self._paint_bar(p)
+        if self._details:
+            self._paint_bar(p)
         p.end()
 
     def _paint_art(self, p: QPainter, card: QRectF) -> None:
@@ -148,7 +160,7 @@ class CharacterCard(QWidget):
                        self._quest)
 
     def sizeHint(self) -> QSize:  # noqa: N802
-        return QSize(CARD_W, CARD_H + BAR_H + QUEST_H + 8)
+        return QSize(CARD_W, CARD_H + BAR_H + QUEST_H + 8 if self._details else CARD_H)
 
 
 def _dark() -> bool:
@@ -194,7 +206,7 @@ class AffinityEditor(QWidget):
 
 
 class CharacterTab(QWidget):
-    """캐릭터 고르기 + 화면에 띄우기 스위치 + (제작자) 호감도 바로 바꾸기."""
+    """캐릭터 고르기 + 화면에 띄우기 스위치 + (제작자) 호감도 바·퀘스트·바로 바꾸기(베타 11-24 — 비제작자는 숨김)."""
     voice_pack_changed = Signal()
     pet_toggled = Signal(bool)
     affinity_edited = Signal()
@@ -222,6 +234,14 @@ class CharacterTab(QWidget):
         voice_row.addStretch(1)
         v.addLayout(voice_row)
         v.addWidget(hint_label("캐릭터가 말할 때 녹음된 대사는 목소리로도 들려줘요. 버프 알림 목소리와는 따로예요."))
+        # 기본 녹음 목소리로 돌아가기(0.56.0 — 설정의 목소리 고르기가 캐릭터 탭으로 옮겨와 카드만 누르면 돌아갈 길이 없었음)
+        default_row = QHBoxLayout()
+        self.default_button = QPushButton("기본 목소리로")
+        self.default_button.setToolTip("캐릭터를 고르지 않고 기본 녹음 목소리로 알림을 들어요.")
+        self.default_button.clicked.connect(self.choose_default)
+        default_row.addWidget(self.default_button)
+        default_row.addStretch(1)
+        v.addLayout(default_row)
         grid = QGridLayout()
         grid.setHorizontalSpacing(16)
         grid.setVerticalSpacing(14)
@@ -243,7 +263,15 @@ class CharacterTab(QWidget):
         v.addLayout(grid)
         v.addStretch(1)
         self._preview = None
+        self.set_creator(False)
         self.refresh()
+
+    def set_creator(self, on: bool) -> None:
+        """제작자면 카드 아래 ♥ 바·퀘스트 줄·호감도 조절 칸을 보임, 아니면 모두 숨김(베타 — 호감도가 오르지 않으므로)."""
+        self._creator = bool(on)
+        for card, editor in zip(self.cards, self.editors):
+            card.set_details_visible(self._creator)
+            editor.setVisible(self._creator)
 
     def refresh(self) -> None:
         """고른 캐릭터 강조·호감도 바·안내 글을 저장 값으로 다시 맞춘다."""
@@ -262,6 +290,7 @@ class CharacterTab(QWidget):
         else:
             text = "게임 중엔 구석에서 조용히 기다리고, 게임 밖에선 화면 아래를 돌아다녀요. 끌어서 옮길 수 있어요."
         self.pet_hint.setText(text)
+        self.default_button.setEnabled(bool(pack))   # 이미 기본이면 누를 일 없음
 
     def set_affinity(self, key: str, value: int) -> None:
         """제작자가 호감도를 바로 바꿈 → 값 + 그 값까지의 구간 퀘스트는 깬 것으로(오늘 횟수·누적은 그대로)."""
@@ -274,6 +303,13 @@ class CharacterTab(QWidget):
     def choose(self, character: roster.Character) -> None:
         """카드 누름 → 그 목소리 미리듣기 + 바로 선택(알림 목소리 팩 저장)."""
         config.save_voice_pack(character.pack)  # 먼저 저장 → sound_path가 선택 팩을 가리킴
+        self._play_sample()
+        self.refresh()
+        self.voice_pack_changed.emit()
+
+    def choose_default(self) -> None:
+        """'기본 목소리로' — 고른 캐릭터를 풀고 기본 녹음으로(카드 누름과 같이 미리듣기 한 번)."""
+        config.save_voice_pack("")
         self._play_sample()
         self.refresh()
         self.voice_pack_changed.emit()

@@ -1,5 +1,5 @@
 {
-  "version": "0.55.10",
+  "version": "0.56.1",
   "tests": [
     "tests/test_character.py",
     "tests/test_navigation.py",
@@ -25,7 +25,9 @@
     "tests/test_release_notes_trigger.py",
     "tests/test_tuarim.py",
     "tests/test_gen_tts.py",
-    "tests/test_cursor_front.py"
+    "tests/test_cursor_front.py",
+    "tests/test_cooking.py",
+    "tests/test_cooking_autofind.py"
   ],
   "coverage": {
     "src/mabinogi_addon/ui/character_tab.py": {
@@ -34,7 +36,7 @@
         "tests/test_navigation.py",
         "tests/test_tour_layout.py"
       ],
-      "reason": "새 캐릭터 탭(제작자 전용) — 카드 5장·고르면 목소리 저장·펫 스위치·호감도 바·제작자 호감도 바로 바꾸기, 탭 7개 순서·'대사 목소리' 스위치 · 카드 이름 외곽선 캐릭터별(Starline 금)"
+      "reason": "새 캐릭터 탭(제작자 전용) — 카드 5장·고르면 목소리 저장·펫 스위치·호감도 바·제작자 호감도 바로 바꾸기, 탭 7개 순서·'대사 목소리' 스위치 · 카드 이름 외곽선 캐릭터별(Starline 금) · 비제작자 카드 ♥ 바·퀘스트·조절 칸 숨김(set_creator) · '기본 목소리로' 버튼(팩 \"\"·선택 해제·미리듣기, 이미 기본이면 비활성)"
     },
     "src/mabinogi_addon/ui/pet_window.py": {
       "tests": [
@@ -65,7 +67,7 @@
       "tests": [
         "tests/test_character.py"
       ],
-      "reason": "호감도 최종 규칙 — 하루 +10·횟수·구간 끝 멈춤·구간 퀘스트(미리 셈·이어 쌓임)·반복 −1 구간 시작점 아래 없음·자정 초기화·제작자 값 바꾸기 · 퀘스트 조사 — 영어 이름 읽는 소리(Starline → 스타라인: 을·과)"
+      "reason": "호감도 최종 규칙 — 하루 +10·횟수·구간 끝 멈춤·구간 퀘스트(미리 셈·이어 쌓임)·반복 −1 구간 시작점 아래 없음·자정 초기화·제작자 값 바꾸기 · 퀘스트 조사 — 영어 이름 읽는 소리(Starline → 스타라인: 을·과) · 베타 호감도 쌓기 스위치 GROWTH=False(값·퀘스트 고정, 짜증 반응 유지)"
     },
     "src/mabinogi_addon/character/lines.py": {
       "tests": [
@@ -88,7 +90,7 @@
         "tests/test_character.py",
         "tests/test_close_overlap.py"
       ],
-      "reason": "캐릭터 탭(제작자 전용, 블랙박스 뒤·설정 앞)·로그인 바뀔 때 다시 판정, 탭 최소 폭 96, 종료 정리·일시정지 때 대사 목소리 멈춤"
+      "reason": "캐릭터 탭(제작자 전용, 블랙박스 뒤·설정 앞)·로그인 바뀔 때 다시 판정, 탭 최소 폭 96, 종료 정리·일시정지 때 대사 목소리 멈춤 · 캐릭터 탭·펫 모든 사용자, 설정 목소리 줄 숨김"
     },
     "src/mabinogi_addon/ui/optimization_controller.py": {
       "tests": [
@@ -132,9 +134,10 @@
       "tests": [
         "tests/test_character.py",
         "tests/test_cloud_sync.py",
-        "tests/test_config_buffs.py"
+        "tests/test_config_buffs.py",
+        "tests/test_cooking.py"
       ],
-      "reason": "character 섹션(pet·corner·affinity·lastSeen) — 동기화 대상, 구석은 위치 규칙"
+      "reason": "character 섹션(pet·corner·affinity·lastSeen) — 동기화 대상, 구석은 위치 규칙 · cooking.overlay.opacity(20~100 정수, 아니면 50)"
     },
     "src/mabinogi_addon/system/single_instance.py": {
       "tests": [
@@ -150,7 +153,7 @@
         "tests/test_release_candidate.py",
         "tests/test_windows_ci.py"
       ],
-      "reason": "0.55.10 검사 목록·후보 봉인·CI 계약"
+      "reason": "0.56.1 검사 목록·후보 봉인·CI 계약"
     },
     "packaging/build_windows.py": {
       "tests": [
@@ -165,7 +168,7 @@
         "tests/test_release_notes.py",
         "tests/test_release_notes_trigger.py"
       ],
-      "reason": "0.55.10 노트 맨 위(조용히 다듬은 것 한 줄 — 제작자 전용 캐릭터 크기 배율), v0.55.9 이하 그대로"
+      "reason": "0.56.1 노트 맨 위 — 요리 비율 바 반투명·불투명도 칸, v0.56.0 이하 그대로(게시본과 같음)"
     },
     "src/mabinogi_addon/character/roster.py": {
       "tests": [
@@ -217,6 +220,20 @@
         "tests/test_gen_tts.py"
       ],
       "reason": "TTS 생성기 --only(파일 몇 개만, 나머지 안 건드림)·이안 투아림 2차 줄"
+    },
+    "src/mabinogi_addon/ui/cooking_gauge.py": {
+      "tests": [
+        "tests/test_cooking.py",
+        "tests/test_cooking_autofind.py"
+      ],
+      "reason": "요리 바 불투명도 — 바만 한 장으로 그려 불투명도로 얹음, 경계 점선은 100%"
+    },
+    "src/mabinogi_addon/ui/cooking_tab.py": {
+      "tests": [
+        "tests/test_cooking.py",
+        "tests/test_cooking_autofind.py"
+      ],
+      "reason": "요리 탭 불투명도 칸(20~100%, 기본 50) — 바로 반영·저장"
     }
   }
 }

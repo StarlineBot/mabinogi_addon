@@ -21,6 +21,12 @@ DAY = "2026-11-24"
 
 
 @pytest.fixture
+def growth(monkeypatch):
+    """호감도 쌓기 규칙 테스트용 — 베타(11-24)엔 꺼 두었으므로(aff.GROWTH) 켜고 확인."""
+    monkeypatch.setattr(aff, "GROWTH", True)
+
+
+@pytest.fixture
 def app():
     return QApplication.instance() or QApplication([])
 
@@ -36,7 +42,7 @@ def cfg(tmp_path, monkeypatch):
 
 
 # ---- 호감도(명세 3절 3번 — 사용자 최종 규칙 11-24 c8797ef) ----------------------------------------
-def test_daily_full_is_ten_and_each_action_has_its_own_limit():
+def test_daily_full_is_ten_and_each_action_has_its_own_limit(growth):
     a = aff.Affinity()
     got = [a.launched(DAY), a.launched(DAY)]
     got += [a.gain("pet", DAY) for _ in range(4)]
@@ -48,7 +54,7 @@ def test_daily_full_is_ten_and_each_action_has_its_own_limit():
     assert a.totals == {"alerts": 5, "corner_minutes": 120} and a.streak == 1
 
 
-def test_stops_at_segment_end_until_quest_then_continues():
+def test_stops_at_segment_end_until_quest_then_continues(growth):
     a = aff.Affinity(value=24)
     a.alerted(DAY)
     a.alerted(DAY)
@@ -76,7 +82,7 @@ def test_quest_progress_counts_ahead_and_unlocks_on_arrival():
     assert c.quest_text() == "퀘스트: 7일 연속 켜기 · 6/7일"
 
 
-def test_launch_streak_counts_consecutive_days_and_resets_on_gap():
+def test_launch_streak_counts_consecutive_days_and_resets_on_gap(growth):
     a = aff.Affinity()
     for d in ("2026-11-20", "2026-11-21", "2026-11-22"):
         a.launched(d)
@@ -87,7 +93,7 @@ def test_launch_streak_counts_consecutive_days_and_resets_on_gap():
     assert a.streak == 1  # 하루 빠짐 → 다시 1일
 
 
-def test_hundred_needs_seven_day_streak_quest():
+def test_hundred_needs_seven_day_streak_quest(growth):
     a = aff.Affinity.load({"value": 99, "cleared": 3, "streak": 6, "lastLaunch": "2026-11-23"})
     a.alerted(DAY)
     assert a.value == 100 and a.stage == 75  # 100에 닿았지만 7일 연속 퀘스트 전
@@ -95,14 +101,14 @@ def test_hundred_needs_seven_day_streak_quest():
     assert a.streak == 7 and a.cleared == 4 and a.stage == 100 and a.quest_text() == "퀘스트: 모두 깼어요"
 
 
-def test_midnight_reset_keeps_value_and_quest_totals():
+def test_midnight_reset_keeps_value_and_quest_totals(growth):
     a = aff.Affinity(aff.Rules(daily_cap=3))
     assert [a.launched(DAY), a.gain("pet", DAY), a.alerted(DAY)] == [2, 1, 0]  # 상한 3에서 잘림
     a.alerted("2026-11-25")  # 자정 지남 → 오늘 횟수·오른 양 초기화
     assert a.value == 4 and a.gained == 1 and a.counts == {"alert": 1} and a.totals == {"alerts": 2}
 
 
-def test_repeat_penalty_once_a_minute_never_below_zero_or_segment_start():
+def test_repeat_penalty_once_a_minute_never_below_zero_or_segment_start(growth):
     a = aff.Affinity(value=1)
     assert [a.click(t) for t in (0, 1, 2, 3)] == [False] * 4
     assert a.click(4) is True and a.value == 0  # 10초 안 5번 → −1
@@ -117,7 +123,7 @@ def test_repeat_penalty_once_a_minute_never_below_zero_or_segment_start():
     assert not any(c.click(t * 3) for t in range(10))  # 3초 간격(10초 안 4번)은 반복 아님
 
 
-def test_petting_after_daily_three_is_annoyed():
+def test_petting_after_daily_three_is_annoyed(growth):
     a = aff.Affinity.load({"value": 10, "cleared": 0})
     assert [a.petted(t, DAY) for t in (0, 1, 2)] == ["gain"] * 3 and a.value == 13 and a.totals["pets"] == 3
     assert a.petted(3, DAY) == "annoyed" and a.value == 12
@@ -136,7 +142,7 @@ def test_creator_set_value_clears_quests_up_to_that_stage():
     assert a.cleared == 0
 
 
-def test_rules_are_settings_values_and_state_round_trips():
+def test_rules_are_settings_values_and_state_round_trips(growth):
     rules = aff.Rules.from_dict({"alert_times": 9, "penalty_gap": 30, "daily_cap": True, "unknown": 1, "pet": -2,
                                  "quest_corner_minutes": 90})
     assert rules.alert_times == 9 and rules.penalty_gap == 30.0 and rules.daily_cap == 10 and rules.pet == 1
@@ -494,7 +500,7 @@ def test_pet_window_draws_figure_190px_and_follows_feet(app):
         w.close()
 
 
-def test_sound_listener_raises_affinity_and_notices_only_for_chosen_voice(app, cfg, monkeypatch):
+def test_sound_listener_raises_affinity_and_notices_only_for_chosen_voice(growth, app, cfg, monkeypatch):
     from mabinogi_addon.ui import character_controller as cc
     from mabinogi_addon.ui import notifier
 
@@ -517,7 +523,7 @@ def test_sound_listener_raises_affinity_and_notices_only_for_chosen_voice(app, c
     assert ctrl.affinity.value == 1  # 끈 뒤엔 안 받음
 
 
-def test_launch_bonus_once_a_day_and_greeting(app, cfg):
+def test_launch_bonus_once_a_day_and_greeting(growth, app, cfg):
     from mabinogi_addon.ui import character_controller as cc
 
     config.save_voice_pack("조용한 여성")
@@ -816,7 +822,7 @@ def test_tuarim_extra_alert_uses_second_recording_slot(tmp_path, monkeypatch):
                           "tuarim2": sounds / "하나만" / tuarim_tab.TUARIM_SOUND}  # 2 없으면 첫 알림 소리
 
 
-def test_second_alert_bubble_falls_back_to_first_line_and_counts_as_alert(app, cfg):
+def test_second_alert_bubble_falls_back_to_first_line_and_counts_as_alert(growth, app, cfg):
     from mabinogi_addon.ui import character_controller as cc
     from mabinogi_addon.ui import notifier
 
@@ -926,7 +932,7 @@ def test_stage_up_once_highest_only_no_drop_line_and_silent_without_pet(app, cfg
         ctrl.shutdown()
 
 
-def test_quest_clear_triggers_stage_up_line(app, cfg):
+def test_quest_clear_triggers_stage_up_line(growth, app, cfg):
     from mabinogi_addon.ui import character_controller as cc
 
     config.save_voice_pack("부드러운 여성")
@@ -1735,3 +1741,56 @@ def test_character_scale_applies_to_every_frame_and_fits_window(app, profile, fo
         assert w._on_figure(inside) and not w._on_figure(above)   # 판정이 그려진 크기를 따라감
     finally:
         w.close()
+
+
+def test_affinity_frozen_in_beta_but_reactions_stay():
+    """캐릭터 베타(사용자 11-24 '당분간 호감도가 안 올라가게'): 켜기·쓰다듬기 끝까지·알림·구석 30분·반복 클릭 뒤에도
+    값·오늘 오른 양·퀘스트 누적·연속 켜기 그대로. 짜증 반응(반복 클릭·쓰다듬기 4번째)은 그대로. 제작자 직접 조절은 됨."""
+    assert aff.GROWTH is False
+    a = aff.Affinity.load({"value": 30, "cleared": 1, "streak": 2, "lastLaunch": "2026-11-23",
+                           "totals": {"pets": 1, "corner_minutes": 5, "alerts": 2}})
+    before = a.to_dict()
+    assert a.launched(DAY) == 0 and a.alerted(DAY) == 0
+    for _ in range(31):
+        assert a.corner_minute(DAY) == 0
+    results = [a.petted(100.0 + i * 70, DAY) for i in range(4)]
+    assert results[:3] == ["gain"] * 3 and results[3] == "annoyed"   # 4번째는 짜증(값은 그대로)
+    assert any(a.click(500.0 + i * 0.5) for i in range(6))           # 반복 클릭 짜증 반응
+    after = a.to_dict()
+    for key in ("value", "cleared", "streak", "totals", "gained"):
+        assert after.get(key) == before.get(key), key
+    a.set_value(75)   # 제작자 조절은 그대로 됨
+    assert a.value == 75
+
+
+def test_creator_affinity_edit_still_saves_in_beta(app, cfg):
+    from mabinogi_addon.ui import character_tab as ct
+
+    tab = ct.CharacterTab()
+    tab.set_creator(True)
+    i = [c.character.key for c in tab.cards].index("조용한 여성")
+    tab.editors[i].buttons[2].click()
+    assert config.load_affinity("조용한 여성")["value"] == 50 and tab.cards[i]._affinity == 50
+    tab.set_creator(False)
+    assert not tab.cards[i].details_visible() and tab.cards[i].height() == ct.CARD_H
+
+
+def test_default_voice_button_returns_to_recorded_voice(app, cfg, monkeypatch):
+    """0.56.0(사용자 11-24 '기본을 원하는 사람이 있긴 할 거 같은데'): 카드를 고른 뒤 `기본 목소리로` → 팩 "" ·
+    카드 선택 없음 · voice_pack_changed 1번 · 기본 안내 글 · 기본 녹음 미리듣기. 이미 기본이면 버튼 비활성."""
+    from mabinogi_addon.ui import character_tab as ct
+    from mabinogi_addon.ui import notifier
+
+    played = []
+    monkeypatch.setattr(ct.CharacterTab, "_play_sample",
+                        lambda self: played.append(notifier.greeting_path(config.load_voice_pack())))
+    tab = ct.CharacterTab()
+    assert not tab.default_button.isEnabled()   # 처음엔 기본
+    tab.choose(roster.DARE)
+    assert tab.default_button.isEnabled()
+    changed = []
+    tab.voice_pack_changed.connect(lambda: changed.append(1))
+    tab.default_button.click()
+    assert config.load_voice_pack() == "" and not any(c.selected() for c in tab.cards) and changed == [1]
+    assert "기본 녹음 목소리" in tab.pet_hint.text() and not tab.default_button.isEnabled()
+    assert played[-1] == notifier.SOUND_DIR / notifier.SAMPLE_FILE   # 기본 녹음 미리듣기

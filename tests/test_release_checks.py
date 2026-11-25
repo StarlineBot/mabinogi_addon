@@ -70,7 +70,7 @@ def test_current_plan_maps_every_selected_file_to_changed_code_or_shared_contrac
 
 
 def test_current_release_keeps_feature_boundaries_and_delivery_contracts():
-    """0.55.10: 캐릭터 알파(제작자 전용 — 캐릭터 탭·펫·호감도·대사·캐릭터별 크기 배율) + 배포 계약. (릴리즈마다 경계를 바꾼다 — 누적하지 않음)"""
+    """0.56.0: 캐릭터(베타) 공개 — 모든 사용자 캐릭터 탭·펫, 호감도 고정·조절은 제작자 + 배포 계약. (릴리즈마다 경계를 바꾼다 — 누적하지 않음)"""
     root = Path(__file__).resolve().parents[1]
     plan = json.loads((root / 'packaging/release_checks.json').read_text(encoding='utf-8'))
     paths = set(plan['tests'])
