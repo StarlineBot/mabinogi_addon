@@ -2242,3 +2242,56 @@ def test_drawer_opens_after_300ms_hover_and_follows_floating_card(app, cfg):
     assert lena.pending()
     tab.drawer.close_drawer()                          # 서랍만 닫힘
     assert lena.pending() and not lena.keep_bright
+
+
+# ---- 11-25 Starline 말하기: 발 그대로·색 서 있기와 같게(QA 반려) ----
+def _sl(name):
+    import cv2
+
+    from mabinogi_addon.image_io import imread
+    return imread(SL_DIR / f"{name}.png", cv2.IMREAD_UNCHANGED)
+
+
+def test_starline_talk_loop_feet_match_base():
+    """말하기 반복 장(강조·깜빡임)의 발 띠(아래 12%, 가운데 맞춤)가 talk_base와 같음 — 예전 emph 19.4·emph2 34.3."""
+    import numpy as np
+
+    def band(f):
+        return f[int(f.shape[0] * 0.88):].astype(np.float32)
+
+    base = band(_sl("talk_base_0"))
+    for name in ("talk_m1_0", "talk_m2_0", "talk_emph_0", "talk_emph2_0", "talk_blink_0"):
+        other = band(_sl(name))
+        h, w = min(base.shape[0], other.shape[0]), max(base.shape[1], other.shape[1])
+
+        def centered(x):
+            out = np.zeros((h, w, 4), np.float32)
+            off = (w - x.shape[1]) // 2
+            out[:, off:off + x.shape[1]] = x[-h:]
+            return out
+        assert float(np.abs(centered(base) - centered(other)).mean()) <= 6.0, name
+
+
+def test_starline_talk_tones_match_stand():
+    """모든 talk_* 장: 중간 톤(L 80~170)·어두운 톤(L < 80) Lab 평균이 stand_0 ±1.5, 채도(HSV S 평균) ±3 —
+    예전 시작 시트 채도 64.8·어두운 L 21.9, 반복 시트 73.4·25.3(QA 11-25)."""
+    import cv2
+    import numpy as np
+
+    def tones(f):
+        a = f[..., 3] > 200
+        lab = cv2.cvtColor(np.ascontiguousarray(f[..., :3]), cv2.COLOR_BGR2LAB).astype(np.float64)
+        hsv = cv2.cvtColor(np.ascontiguousarray(f[..., :3]), cv2.COLOR_BGR2HSV).astype(np.float64)
+        out = []
+        for sel in (a & (lab[..., 0] >= 80) & (lab[..., 0] <= 170), a & (lab[..., 0] < 80)):
+            m = lab[sel].mean(0)
+            out.append(np.array([m[0] / 2.55, m[1] - 128, m[2] - 128]))
+        return out, hsv[a][:, 1].mean()
+
+    (mid0, dark0), sat0 = tones(_sl("stand_0"))
+    names = sorted(p.stem for p in SL_DIR.glob("talk_*.png"))
+    assert len(names) >= 9
+    for name in names:
+        (mid, dark), sat = tones(_sl(name))
+        assert (np.abs(mid - mid0) <= 1.5).all() and (np.abs(dark - dark0) <= 1.5).all(), (name, mid, dark)
+        assert abs(sat - sat0) <= 3, (name, sat, sat0)

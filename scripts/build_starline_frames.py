@@ -17,12 +17,13 @@ import numpy as np
 
 from scripts.build_aria_frames import clean
 from scripts.build_dare_frames import ROOT, _tight, imread, imwrite, scaled, split
-from scripts.build_talk_frames import mouth_swap
+from scripts.build_talk_frames import legs_swap, mouth_swap
 
 SHEETS = ROOT / "docs/characters/assets/Starline/SD"
 OUT = ROOT / "src/mabinogi_addon/assets/characters/Starline"
 STAND_H = 285
 FACE = (0.35, 0.53, 0.33, 0.77)   # 서 있기 얼굴 창(키·폭 비율: 위, 아래, 왼, 오른)
+LEGS_Y = 350                       # 말하기_반복 원본 무릎 위(주머니 아래) — 그 아래 발·바지·망토 끝은 0번 것(QA 11-25)
 MOUTH = (170, 205)                # 말하기_반복 0번 원본 입 대략 위치(B안 긴 체형, 11-24)
 
 
@@ -149,7 +150,9 @@ def build() -> dict[str, list[np.ndarray]]:
     m1, _ = mouth_swap(base, loop[1], MOUTH)
     m2, _ = mouth_swap(base, loop[2], MOUTH)
     k = k_height(loop)
-    for key, frame in zip(("base", "m1", "m2", "emph", "emph2", "blink"), (base, m1, m2, loop[3], loop[4], loop[5])):
+    # 반복 장(강조·깜빡임)은 발이 장마다 다르게 그려져 말하는 동안 발이 바뀜(QA 11-25) → 허리 아래는 0번 것으로
+    emph, emph2, blink = (legs_swap(base, loop[i], LEGS_Y) for i in (3, 4, 5))
+    for key, frame in zip(("base", "m1", "m2", "emph", "emph2", "blink"), (base, m1, m2, emph, emph2, blink)):
         out[f"talk_{key}"] = [scaled(frame, k)]
     k_start = k_height(start)
     out["talk_mid"] = [scaled(start[0], k_start)]
@@ -162,30 +165,42 @@ def build() -> dict[str, list[np.ndarray]]:
     out = harmonize(out, out["stand"][0], PARTS["Starline"], groups)
     # 재채기 시트 옷·망토 톤(QA 11-25 '색감이 달라짐', 새 시트도 1번이 L −1.6) — 중간 톤(옷·망토) 평균을 서 있기에 맞춤
     out["sneeze"] = [match_midtone(f, out["stand"][0]) for f in out["sneeze"]]
+    # 말하기 두 시트(시작 = 탁하고 어두움, 반복 = 더 진함 — QA 11-25 '말할 때 색감이 달라져'): 어두운 톤·중간 톤 둘 다 서 있기에
+    raw = {k: out[k][0] for k in ("talk_base", "talk_m1", "talk_m2")}
+    for key in [k for k in out if k.startswith("talk_")]:
+        out[key] = [match_tones(f, out["stand"][0]) for f in out[key]]
+    for key in ("talk_m1", "talk_m2"):   # 입만 다른 장은 입 밖을 base와 똑같이(입만 바꾸기 규칙 유지)
+        same = (raw[key] == raw["talk_base"]).all(axis=-1)
+        merged = out[key][0].copy()
+        merged[same] = out["talk_base"][0][same]
+        out[key] = [merged]
     return out
 
 
 MID = (80, 170)   # 옷·망토 중간 톤(OpenCV 8비트 L) — 머리카락(밝음)·외곽선(검정)은 밖
+DARK = (0, 79)    # 어두운 톤(망토 그림자·바지·외곽선)
 
 
-def _midtone(frame: np.ndarray):
+def _midtone(frame: np.ndarray, band: tuple[int, int] = MID, gold_too: bool = False):
     lab = cv2.cvtColor(np.ascontiguousarray(frame[..., :3]), cv2.COLOR_BGR2LAB).astype(np.float32)
     hsv = cv2.cvtColor(np.ascontiguousarray(frame[..., :3]), cv2.COLOR_BGR2HSV)
     gold = (hsv[..., 0] >= 12) & (hsv[..., 0] <= 32) & (hsv[..., 1] > 80)   # 후광·장신구는 그대로
-    sel = (frame[..., 3] > 200) & (lab[..., 0] >= MID[0]) & (lab[..., 0] <= MID[1]) & ~gold
+    if gold_too:   # 말하기: 측정(불투명 전체)과 같은 픽셀로 맞춤 — 금색 장신구도 두 시트가 같이 다름
+        gold[:] = False
+    sel = (frame[..., 3] > 200) & (lab[..., 0] >= band[0]) & (lab[..., 0] <= band[1]) & ~gold
     return lab, sel
 
 
-def match_midtone(frame: np.ndarray, stand: np.ndarray) -> np.ndarray:
+def match_midtone(frame: np.ndarray, stand: np.ndarray, band: tuple[int, int] = MID, gold_too: bool = False) -> np.ndarray:
     """중간 톤 픽셀(옷·망토)의 Lab 평균을 서 있기에 맞춤 — 그 픽셀만 바꿈(머리카락·피부 밝은 톤·후광·외곽선은 그대로)."""
-    ref_lab, ref_sel = _midtone(stand)
+    ref_lab, ref_sel = _midtone(stand, band, gold_too)
     out = frame.copy()
     for _ in range(4):   # 옮긴 픽셀이 중간 톤 경계를 넘나들어 한 번에 안 맞음 — 몇 번 되풀이
-        lab, sel = _midtone(out)
+        lab, sel = _midtone(out, band, gold_too)
         if sel.sum() < 200 or ref_sel.sum() < 200:
             return out
         diff = ref_lab[ref_sel].mean(0) - lab[sel].mean(0)
-        if np.abs(diff).max() < 0.5:
+        if np.abs(diff).max() < 0.3:
             break
         lab[sel] = np.clip(lab[sel] + diff, 0, 255)
         fixed = cv2.cvtColor(lab.astype(np.uint8), cv2.COLOR_LAB2BGR)
@@ -209,6 +224,37 @@ def card() -> np.ndarray:
 CARD_X0, CARD_CW = 100, 999
 
 
+def match_tones(frame: np.ndarray, stand: np.ndarray) -> np.ndarray:
+    """채도 → 어두운 톤 → 중간 톤 Lab을 서 있기에(서로 조금씩 밀어내서 네 번 되풀이)."""
+    for _ in range(4):
+        frame = match_midtone(match_midtone(match_saturation(frame, stand), stand, DARK, True), stand, MID, True)
+    return frame
+
+
+def match_saturation(frame: np.ndarray, stand: np.ndarray) -> np.ndarray:
+    """채도(HSV S, 불투명 픽셀 평균)를 서 있기에 — 불투명 픽셀 전체(중간·어두운 톤 Lab 맞추기가 채도를 도로 내리므로
+    밝은 톤까지 함께 올려야 평균이 맞음)."""
+    def stats(img):
+        hsv = cv2.cvtColor(np.ascontiguousarray(img[..., :3]), cv2.COLOR_BGR2HSV)
+        _lab, sel = _midtone(img, (0, 255), True)
+        return hsv, img[..., 3] > 200, sel
+
+    ref_hsv, ref_a, _ = stats(stand)
+    target = ref_hsv[ref_a][:, 1].astype(np.float32).mean()
+    out = frame.copy()
+    for _ in range(4):
+        hsv, opaque, sel = stats(out)
+        diff = target - hsv[opaque][:, 1].astype(np.float32).mean()
+        if abs(diff) < 0.5 or sel.sum() < 200:
+            break
+        s = hsv[..., 1].astype(np.float32)
+        s[sel] = np.clip(s[sel] + diff * opaque.sum() / sel.sum(), 0, 255)
+        hsv[..., 1] = s.astype(np.uint8)
+        fixed = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
+        out[sel, :3] = fixed[sel]
+    return out
+
+
 def main() -> None:
     frames = build()
     for key, count in EXPECTED.items():
@@ -216,7 +262,8 @@ def main() -> None:
             raise SystemExit(f"{key}: 프레임 {len(frames[key])}개(기대 {count}) — 시트가 바뀌었나요?")
     OUT.mkdir(parents=True, exist_ok=True)
     for old in OUT.glob("*.png"):
-        old.unlink()
+        if old.name != "frame.png":   # 카드 테두리(build_card_frames)는 남김
+            old.unlink()
     for key, items in frames.items():
         for i, frame in enumerate(items):
             imwrite(OUT / f"{key}_{i}.png", frame)

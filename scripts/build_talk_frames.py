@@ -110,3 +110,26 @@ def talk_frames(character: str, head: float | None = None) -> dict[str, list[np.
         mid = _sheet(mid_rel)[0]
         out[f"{prefix}mid"] = [scaled(mid, head / head_width(mid) if head else STAND_H / mid.shape[0])]
     return out
+
+
+def legs_swap(base: np.ndarray, other: np.ndarray, waist: int, feather: float = 8.0) -> np.ndarray:
+    """other 위쪽(팔·얼굴) + base 허리 아래(발·바지·망토 끝) — 같은 시트·같은 자세에서 발이 장마다 다르게 그려진 것 맞춤
+    (Starline 말하기 반복 emph·emph2, QA 11-25). 아래 띠로 other를 base에 맞춘 뒤 waist 근처를 부드럽게 이어 붙임."""
+    # 앱은 그림을 발 밑 가운데로 놓음 → base가 캔버스 가운데에 오게 양옆을 같게 늘림(폭이 다른 장이 옆으로 밀리지 않게)
+    extra = max(0, other.shape[1] - base.shape[1])
+    h, w = max(base.shape[0], other.shape[0]), base.shape[1] + 2 * extra
+
+    def centered(img):
+        out = np.zeros((h, w, 4), np.uint8)
+        out[:img.shape[0], extra:extra + img.shape[1]] = img[:, :w - extra]
+        return out
+    base, other = centered(base), centered(other)
+    r = h * 0.05
+    dx, dy = _shift(base, other, (waist, h, 0, w), r, hann=True)
+    dx, dy = (0.0, 0.0) if dx is None else (dx, dy)
+    aligned = cv2.warpAffine(other, np.float32([[1, 0, -dx], [0, 1, -dy]]), (w, h), flags=cv2.INTER_LINEAR,
+                             borderValue=(0, 0, 0, 0))
+    ys = np.arange(h, dtype=np.float32)
+    m = np.clip((ys - waist) / (2 * feather) + 0.5, 0, 1)[:, None, None]   # 1 = base(아래)
+    out = aligned.astype(np.float32) * (1 - m) + base.astype(np.float32) * m
+    return np.clip(out, 0, 255).astype(np.uint8)

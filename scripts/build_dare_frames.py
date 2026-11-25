@@ -176,7 +176,7 @@ def main() -> None:
             raise SystemExit(f"{key}: 프레임 {len(frames[key])}개(기대 {count}) — 시트가 바뀌었나요?")
     OUT.mkdir(parents=True, exist_ok=True)
     for old in OUT.glob("*.png"):
-        if old.name != "card.png":
+        if old.name not in ("card.png", "frame.png"):   # 카드·카드 테두리(build_card_frames)는 남김
             old.unlink()
     for key, items in frames.items():
         for i, frame in enumerate(items):
