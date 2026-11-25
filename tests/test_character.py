@@ -2148,9 +2148,9 @@ def test_saved_outfit_shows_on_card_and_pet_frames_fall_back(app, cfg, tmp_path,
 
     _tab, cards = _drawer_tab(cfg, outfit={"부드러운 여성": "tshirt", "화난 여성": "없는옷"})
     assert cards["아리아"].outfit == "tshirt" and cards["레나"].outfit == ""
-    # 착장 SD가 아직 없음 → 기본 프레임 그대로
+    # SD가 없는 착장(여름 드레스) → 기본 프레임 그대로(티셔츠·이안 조끼는 11-25부터 SD 있음)
     base = pet_window.load_frames("아리아", br.ARIA)
-    dressed = pet_window.load_frames("아리아", br.ARIA, "tshirt")
+    dressed = pet_window.load_frames("아리아", br.ARIA, "summer_dress")
     assert set(base) == set(dressed) and all(base[n] == dressed[n] for n in base)
     # 착장 폴더에 같은 이름 프레임이 생기면 그걸 먼저
     root = tmp_path / "res"
@@ -2446,3 +2446,41 @@ def test_wearing_vest_tie_swaps_pet_frames(app):
     vest = pet_window.load_frames("이안", br.IAN, "vest_tie")
     assert set(base) == set(vest)
     assert all(base[n].size() != vest[n].size() or base[n] != vest[n] for n in ("stand_1", "walk_0"))
+
+
+# ---- 11-25 아리아 착장 '티셔츠 차림' 펫 SD 프레임(기획 — 이안 조끼와 같은 방식) ----
+TSHIRT = ASSETS / "아리아" / "outfits" / "tshirt"
+
+
+def test_aria_tshirt_frames_match_base_names_height_and_head():
+    """기본 아리아와 이름 1:1(+ 모션 물주기 8·화관 8), 키·머리(위 42%) 실루엣 배율 ±5% — 새 그림 선이 굵어 얼굴 템플릿은
+    치우치므로 실루엣으로(기획 11-25)."""
+    import cv2
+
+    from mabinogi_addon.image_io import imread
+    from scripts.silhouette import best_scale
+
+    base = {p.stem for p in ARIA.glob("*.png")} - {"card", "frame"}
+    dressed = {p.stem for p in TSHIRT.glob("*.png")} - {"card"}
+    assert base <= dressed
+    assert sorted(dressed - base) == sorted([f"motion_water_{i}" for i in range(8)] + [f"motion_wreath_{i}" for i in range(8)])
+    for name in sorted(base):
+        b = imread(ARIA / f"{name}.png", cv2.IMREAD_UNCHANGED)
+        o = imread(TSHIRT / f"{name}.png", cv2.IMREAD_UNCHANGED)
+        assert abs(o.shape[0] / b.shape[0] - 1) <= 0.05, name
+        head = lambda f: f[: int(f.shape[0] * 0.42)]  # noqa: E731
+        assert abs(best_scale(head(b), head(o)) - 1) <= 0.05, name
+
+
+def test_aria_tshirt_props_kept_and_pet_swaps(app):
+    """소품(물뿌리개·화분·화관)이 2% 덩어리 기준에 안 지워짐 — 모션 장은 서 있기보다 넓음, 입으면 펫 프레임 교체."""
+    import cv2
+
+    from mabinogi_addon.image_io import imread
+    from mabinogi_addon.ui import pet_window
+
+    stand_w = imread(TSHIRT / "stand_0.png", cv2.IMREAD_UNCHANGED).shape[1]
+    assert imread(TSHIRT / "motion_water_3.png", cv2.IMREAD_UNCHANGED).shape[1] > stand_w * 1.05   # 물뿌리개·화분
+    base = pet_window.load_frames("아리아", br.ARIA)
+    shirt = pet_window.load_frames("아리아", br.ARIA, "tshirt")
+    assert set(base) == set(shirt) and shirt["stand_0"].size() != base["stand_0"].size() or shirt["stand_0"] != base["stand_0"]
