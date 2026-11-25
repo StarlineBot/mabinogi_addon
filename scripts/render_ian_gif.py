@@ -24,7 +24,7 @@ def main() -> None:
     clock = Clock()
     front = {"on": False}
     floor = Floor(0, W, H - TASKBAR)
-    ian = roster.by_pack("차분한 남성")
+    ian = roster.by_pack("부드러운 남성")
     brain = Brain(floor, rng=random.Random(7), profile=IAN, corner=(W - 170.0, floor.y))
     brain.pos = (260.0, floor.y)
     window = PetWindow(brain, load_frames("이안", IAN), ian.color, game_front=lambda: front["on"], clock=clock)

@@ -555,14 +555,14 @@ def test_character_tab_cards_choose_voice_and_toggle_pet(app, cfg, monkeypatch):
     tab.voice_pack_changed.connect(lambda: changed.append(1))
     tab.pet_toggled.connect(toggled.append)
     # 카드 순서(사용자 11-24): Starline → 레나 → 다래 → 이안 → 아리아 → 나머지
-    assert [c.character.name for c in tab.cards] == ["Starline", "레나", "다래", "이안", "아리아", "???"]
+    assert [c.character.name for c in tab.cards] == ["Starline", "레나", "다래", "이안", "아리아", "???", "???"]
     assert not any(c.selected() for c in tab.cards)  # 기본 녹음 — 고른 카드 없음
     tab.cards[5].clicked.emit(tab.cards[5].character)  # 누르면 인사만(사용자 11-25 B안) — 선택은 그대로
     assert config.load_voice_pack() == "" and played == ["자연스러운 여성"] and changed == []
     assert tab.cards[5].pending() and tab.cards[5].apply_button.isVisibleTo(tab.cards[5])
     tab.cards[5].apply_button.click()                  # 카드 안 '이 캐릭터로 적용' → 미정 카드도 그 목소리로
     assert config.load_voice_pack() == "자연스러운 여성" and changed == [1] and played == ["자연스러운 여성"]
-    assert [c.selected() for c in tab.cards] == [False, False, False, False, False, True]
+    assert [c.selected() for c in tab.cards] == [False, False, False, False, False, True, False]
     assert not tab.cards[5].pending()
     tab.choose(roster.DARE)
     assert tab.cards[2].selected() and "돌아다녀요" in tab.pet_hint.text()
@@ -636,7 +636,7 @@ def test_aria_roster_card_and_frames():
     aria = roster.by_pack("부드러운 여성")
     assert (aria.name, aria.known, aria.has_pet, aria.color) == ("아리아", True, True, "#F5A25D")
     assert (ASSETS / aria.card).is_file() and roster.folder(aria) == "아리아"
-    assert [c.name for c in roster.ROSTER] == ["Starline", "레나", "다래", "이안", "아리아", "???"]   # 카드 순서(사용자 11-24)
+    assert [c.name for c in roster.ROSTER] == ["Starline", "레나", "다래", "이안", "아리아", "???", "???"]   # 카드 순서(사용자 11-24)
     names = {n for frames, _t, _l in br.ARIA.anims.values() for n in frames}
     assert not [n for n in names if not (ARIA / f"{n}.png").exists()]
 
@@ -1090,7 +1090,7 @@ def test_ian_roster_card_frames_and_heights():
     import cv2
     from mabinogi_addon.image_io import imread
 
-    ian = roster.by_pack("차분한 남성")
+    ian = roster.by_pack("부드러운 남성")   # 11-25 사용자 녹음 팩(저장 키는 예전 '차분한 남성')
     assert (ian.name, ian.known, ian.has_pet, ian.color) == ("이안", True, True, "#3B5B9A")
     assert (ASSETS / ian.card).is_file() and [c.name for c in roster.ROSTER][3] == "이안"
     names = {n for frames, _t, _l in br.IAN.anims.values() for n in frames}
@@ -1112,7 +1112,7 @@ def test_ian_lines_have_alerts_stage_lines_and_watch_click():
     assert data.character == "이안" and "click_sleep" not in data.lines
     assert set(ln.SITUATIONS) - {"click_sleep"} <= set(data.lines) and "idle_extra_click" in data.lines
     from mabinogi_addon.ui.notifier import alert_files
-    sounds = alert_files(paths.resource_dir() / "sounds" / "차분한 남성") - {"파티 알림.mp3"}
+    sounds = alert_files(paths.resource_dir() / "sounds" / "부드러운 남성") - {"파티 알림.mp3"}
     assert len(data.alerts) == 12 and sounds <= set(data.alerts)   # 11 + 투아림 2차 말풍선(11-24, 녹음은 나중)
     staged = [line for items in data.lines.values() for line in items if line.stage > 0]
     assert len(staged) == 24 and [line.stage for line in data.lines["stage_up"]] == [25, 50, 75, 100]
@@ -1528,7 +1528,7 @@ def _starline(profile=br.STARLINE, **kw):
 def test_starline_roster_english_name_gold_outline_and_frames():
     sl = roster.ROSTER[0]   # 카드 맨 앞(11-24)
     assert (sl.key, sl.name, sl.pack, sl.color, sl.outline) == ("장난스러운 남성", "Starline", "장난스러운 남성", "#3A0729", "#D8AA5E")
-    assert len(roster.ROSTER) == 6 and all(c.outline == "#FFFFFF" for c in roster.ROSTER[1:])
+    assert len(roster.ROSTER) == 7 and all(c.outline == "#FFFFFF" for c in roster.ROSTER[1:])
     assert sl.name.isascii() and roster.folder(sl) == "Starline"
     card = _img_of(SL_DIR / "card.png")
     assert abs(card.shape[1] / card.shape[0] - 224 / 260) < 0.005   # 손 전체 보이게(기획 11-25) — 카드 비율 그대로
@@ -2484,3 +2484,49 @@ def test_aria_tshirt_props_kept_and_pet_swaps(app):
     base = pet_window.load_frames("아리아", br.ARIA)
     shirt = pet_window.load_frames("아리아", br.ARIA, "tshirt")
     assert set(base) == set(shirt) and shirt["stand_0"].size() != base["stand_0"].size() or shirt["stand_0"] != base["stand_0"]
+
+
+
+# ---- 11-25 이안 새 목소리(부드러운 남성)·예전 팩은 이름 없는 후보 '자연스러운 남성'(기획 c57120b6) ----
+def test_ian_voice_pack_is_soft_male_and_keeps_saved_state(cfg):
+    """이안 카드 팩 = 부드러운 남성(인사 1·2), 저장 키는 예전 '차분한 남성' 그대로 — 예전 설정 'voice.pack=차분한 남성'은
+    이안으로 이어지고 호감도·옷도 같은 키로 읽힘."""
+    import json
+
+    from mabinogi_addon.ui import notifier
+
+    ian = next(c for c in roster.ROSTER if c.name == "이안")
+    assert (ian.key, ian.pack) == ("차분한 남성", "부드러운 남성")
+    pack_dir = paths.resource_dir() / "sounds" / "부드러운 남성"
+    assert {p.name for p in pack_dir.glob("인사*.mp3")} >= {"인사.mp3", "인사2.mp3"}
+    picks = {notifier.greeting_path("부드러운 남성", random.Random(seed)).name for seed in range(20)}
+    assert picks == {p.name for p in pack_dir.glob("인사*.mp3")}
+    cfg.write_text(json.dumps({"voice": {"pack": "차분한 남성"},
+                               "character": {"affinity": {"차분한 남성": {"value": 60, "cleared": 2}},
+                                             "outfit": {"차분한 남성": "vest_tie"}}}), encoding="utf-8")
+    assert config.load_voice_pack() == "부드러운 남성" and roster.by_pack(config.load_voice_pack()) is ian
+    assert config.load_affinity(ian.key)["value"] == 60 and config.load_outfit(ian.key) == "vest_tie"
+
+
+def test_natural_male_candidate_silhouette_and_pack(app, cfg, monkeypatch):
+    """자연스러운 남성: 실루엣·??? 카드(자연스러운 여성 다음), 인사 녹음 없음(투아림 녹음으로 대신), 팩 목록에 '차분한 남성' 없음."""
+    from mabinogi_addon.ui import character_tab as ct
+    from mabinogi_addon.ui import notifier
+
+    names = [c.pack for c in roster.ROSTER]
+    assert names.index("자연스러운 남성") == names.index("자연스러운 여성") + 1
+    nm = roster.by_pack("자연스러운 남성")
+    assert (nm.name, nm.known, nm.has_pet, nm.card) == (roster.UNKNOWN_NAME, False, False, "silhouette_m.png")
+    pack_dir = paths.resource_dir() / "sounds" / "자연스러운 남성"
+    assert not list(pack_dir.glob("인사*.mp3")) and len(list(pack_dir.glob("*.mp3"))) == 13
+    assert notifier.greeting_path("자연스러운 남성").name == notifier.SAMPLE_FILE
+    packs = notifier.list_voice_packs()
+    assert "차분한 남성" not in packs and {"부드러운 남성", "자연스러운 남성"} <= set(packs)
+    played = []
+    monkeypatch.setattr(ct.CharacterTab, "_play_sample", lambda self, pack: played.append(pack))
+    tab = ct.CharacterTab()
+    card = next(c for c in tab.cards if c.character is nm)
+    assert ct.card_frame(nm) is None
+    tab.preview(nm)
+    card.applied.emit(nm)
+    assert played == ["자연스러운 남성"] and config.load_voice_pack() == "자연스러운 남성"

@@ -33,7 +33,7 @@ def main() -> None:
     app = QApplication.instance() or QApplication([])
     clock = Clock()
     windows = []
-    for i, pack in enumerate(("조용한 여성", "부드러운 여성", "차분한 남성")):
+    for i, pack in enumerate(("조용한 여성", "부드러운 여성", "부드러운 남성")):
         character = roster.by_pack(pack)
         folder = roster.folder(character)
         brain = Brain(Floor(0, 10000, H - 10), rng=random.Random(5 + i), profile=PROFILES[folder])

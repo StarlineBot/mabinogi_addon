@@ -590,11 +590,17 @@ def save_party_alert_sound(on: bool, path: Path = LOCAL_CONFIG_PATH) -> None:
     _write_local_config(data, path)
 
 
+# 이름이 바뀐 목소리 팩(예전 저장 값 → 지금 팩). 11-25: 이안 '차분한 남성'(TTS) → '부드러운 남성'(녹음),
+# 예전 TTS 팩은 '자연스러운 남성'(이름 없는 후보)이 됨 — 이안을 고른 사용자는 이안으로 이어짐
+VOICE_PACK_RENAMED = {"차분한 남성": "부드러운 남성"}
+
+
 def load_voice_pack(path: Path = LOCAL_CONFIG_PATH) -> str:
     """알림 목소리 팩 폴더 이름. 빈 문자열이면 기본(녹음본)."""
     v = _read_local_config(path).get("voice")
     pack = v.get("pack") if isinstance(v, dict) else None
-    return pack if isinstance(pack, str) else ""
+    pack = pack if isinstance(pack, str) else ""
+    return VOICE_PACK_RENAMED.get(pack, pack)
 
 
 def save_voice_pack(pack: str, path: Path = LOCAL_CONFIG_PATH) -> None:

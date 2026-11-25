@@ -28,7 +28,7 @@ def main():
     # 둘째 인자 user/creator — 캐릭터 베타(11-24) 탭 전체(카드 6장)를 비제작자/제작자로: beta_tab_<role>.png
     role = sys.argv[2] if len(sys.argv) > 2 else ''
     creator = role not in ('user', 'apply')   # apply = 비제작자 + 레나 카드에 '이 캐릭터로 적용' 대기(11-25 B안)
-    suffix = {'조용한 여성': '', '부드러운 여성': '_aria', '차분한 남성': '_ian', '화난 여성': '_lena', '장난스러운 남성': '_starline', 'default': '_default'}.get(pack, '_other')
+    suffix = {'조용한 여성': '', '부드러운 여성': '_aria', '부드러운 남성': '_ian', '화난 여성': '_lena', '장난스러운 남성': '_starline', 'default': '_default'}.get(pack, '_other')
     OUT.mkdir(parents=True, exist_ok=True)
     app = QApplication.instance() or QApplication([]); app.setStyle('Fusion'); apply_theme('custom', DARK)
     raw = {'general': {'skipSetup': True, 'theme': 'dark'}, 'buffTracker': {'enabled': False},
