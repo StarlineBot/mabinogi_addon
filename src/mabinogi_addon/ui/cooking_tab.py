@@ -150,6 +150,8 @@ class CookingTab(QWidget):
         self.dish_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)  # 오른쪽 클릭 = 즐겨찾기 넣기·빼기
         self.dish_list.customContextMenuRequested.connect(self._dish_menu)
         self.dish_list.itemClicked.connect(self._dish_clicked)
+        from .settings_layout import enable_drag_reorder
+        enable_drag_reorder(self.dish_list, self._favorites_dropped)   # 즐겨찾기 순서 바꾸기(11-25) — 즐겨찾기 카테고리에서만 켬
         body.addWidget(self.dish_list)
         self.detail_scroll = QScrollArea()
         self.detail_scroll.setWidgetResizable(True)
@@ -228,7 +230,8 @@ class CookingTab(QWidget):
             if name == cooking.FAVORITES:
                 n = cooking.favorites_count(self.favorites, self._hits)
                 text = f"{name} ({n})" if searching or not self.favorites else name
-                item.setToolTip("" if self.favorites else "요리를 오른쪽 클릭해 추가")
+                item.setToolTip("끌어서 순서를 바꿀 수 있어요" if self.favorites
+                                else "요리를 오른쪽 클릭해 추가해요. 끌어서 순서를 바꿀 수 있어요")
             else:
                 n = counts.get(name, 0)
                 text = f"{name} ({n})" if searching else name
@@ -280,6 +283,7 @@ class CookingTab(QWidget):
             current.setSelected(True)
             self.dish_list.setCurrentItem(current)
         self.dish_list.blockSignals(False)
+        self._set_drag(self.can_reorder())
         self._filled_category = self._category
         self._filled_query = query
         bar.setValue(scroll if same else 0)
@@ -292,6 +296,28 @@ class CookingTab(QWidget):
         return cooking.in_category(self._dishes, category)
 
     # ---- 즐겨찾기(사용자 결정 11-21) ----
+    def can_reorder(self) -> bool:
+        """끌어서 순서 바꾸기 — 즐겨찾기 카테고리를 검색 없이 볼 때만(일부만 보이거나 수치순이면 순서가 꼬임)."""
+        return self._category == cooking.FAVORITES and self._hits is None and not self._stat_query()
+
+    def _set_drag(self, on: bool) -> None:
+        from PySide6.QtWidgets import QAbstractItemView
+        self.dish_list.setDragEnabled(on)
+        self.dish_list.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove if on
+                                       else QAbstractItemView.DragDropMode.NoDragDrop)
+        self.dish_list.setToolTip("끌어서 순서를 바꿀 수 있어요" if on else "")
+
+    def _favorites_dropped(self, order: list, _dropped) -> None:
+        """놓음 → 새 순서 저장 → 목록 다시(선택·스크롤 그대로)."""
+        if not self.can_reorder():
+            return
+        self.favorites = cooking.reorder_favorites(self.favorites, [n for n in order if isinstance(n, str)])
+        try:
+            config.save_cooking_favorites(self.favorites)
+        except OSError:
+            pass
+        self._fill_dishes()
+
     def is_favorite(self, name: str) -> bool:
         return name in self.favorites
 

@@ -681,7 +681,7 @@ def test_favorites_pure_and_config_roundtrip():
     raw = ["모둠회덮밥", "없는 요리", "모둠회덮밥", 3, "BnR"]
     assert cooking.normalize_favorites(raw, dishes) == ["모둠회덮밥", "BnR"]   # 없는 이름·중복·형식 틀림 무시, 순서 유지
     assert cooking.normalize_favorites("x", dishes) == []
-    assert [d.name for d in cooking.favorite_dishes(dishes, ["모둠회덮밥", "BnR"])] == ["BnR", "모둠회덮밥"]
+    assert [d.name for d in cooking.favorite_dishes(dishes, ["모둠회덮밥", "BnR"])] == ["모둠회덮밥", "BnR"]   # 저장 순서(11-25)
     assert cooking.favorites_count(["a", "b"], None) == 2 and cooking.favorites_count(["a", "b"], {"b"}) == 1
     config.save_cooking_favorites(["모둠회덮밥", "BnR"])
     config.save_cooking_overlay(locked=True)               # 같은 cooking 칸 — 서로 덮지 않음
@@ -702,13 +702,13 @@ def test_favorites_category_top_empty_grey_and_toggle_saves():
     tab = CookingTab()
     fav = tab.category_list.item(0)
     assert fav.text() == "즐겨찾기 (0)" and not (fav.flags() & Qt.ItemFlag.ItemIsEnabled)
-    assert fav.toolTip() == "요리를 오른쪽 클릭해 추가"
+    assert fav.toolTip() == "요리를 오른쪽 클릭해 추가해요. 끌어서 순서를 바꿀 수 있어요"
     tab.toggle_favorite("모둠회덮밥")
     tab.toggle_favorite("까맣게 구워진 드래곤 심장")
     assert config.load_cooking_favorites() == ["모둠회덮밥", "까맣게 구워진 드래곤 심장"]
-    assert fav.text() == "즐겨찾기" and fav.flags() & Qt.ItemFlag.ItemIsEnabled and fav.toolTip() == ""
+    assert fav.text() == "즐겨찾기" and fav.flags() & Qt.ItemFlag.ItemIsEnabled and fav.toolTip() == "끌어서 순서를 바꿀 수 있어요"
     tab.category_list.setCurrentItem(fav)
-    assert _texts(tab) == ["♥ 까맣게 구워진 드래곤 심장", "♥ 모둠회덮밥"]
+    assert _texts(tab) == ["♥ 모둠회덮밥", "♥ 까맣게 구워진 드래곤 심장"]   # 넣은 순서(11-25)
     tab.toggle_favorite("모둠회덮밥")                         # 즐겨찾기에서 빼면 바로 사라짐
     assert _texts(tab) == ["♥ 까맣게 구워진 드래곤 심장"]
     tab.shutdown()
@@ -722,7 +722,7 @@ def test_click_inside_favorites_stays_and_hearts_everywhere():
     config.save_cooking_favorites(["모둠회덮밥", "까맣게 구워진 드래곤 심장"])
     tab = CookingTab()
     tab.category_list.setCurrentItem(tab.category_list.item(0))
-    tab._dish_clicked(_items(tab.dish_list)[1])                # 모둠회덮밥(혼합)
+    tab._dish_clicked(_items(tab.dish_list)[0])                # 모둠회덮밥(혼합) — 저장 순서 맨 위
     assert tab.selected.name == "모둠회덮밥" and tab._category == "즐겨찾기"
     assert tab.category_list.currentItem() is tab.category_list.item(0)
     tab.open_ingredient("모둠생선회")                           # 재료 ▸는 그 요리의 조리방법 카테고리로
@@ -737,7 +737,7 @@ def test_favorites_follow_search_rules():
     tab = CookingTab()
     fav = tab.category_list.item(0)
     tab.category_list.setCurrentItem(fav)
-    assert _texts(tab) == ["♥ 까맣게 구워진 드래곤 심장", "♥ 모둠회덮밥", "♥ 불금 반반 치맥 세트"]
+    assert _texts(tab) == ["♥ 모둠회덮밥", "♥ 까맣게 구워진 드래곤 심장", "♥ 불금 반반 치맥 세트"]
     tab.kind.setCurrentText("능력치")
     tab.stat.setCurrentIndex(tab.stat.findData("생명력"))      # 최고 300 = 드래곤 심장(즐겨찾기 안)
     assert fav.text() == "★ 즐겨찾기 (2)"
@@ -812,3 +812,52 @@ def test_missing_last_dish_keeps_overlay_off():
     tab = CookingTab()
     assert tab.selected is None and not tab._overlay_on and tab.overlay is None and tab.overlay_btn is None
     tab.shutdown()
+
+
+
+# ---- 11-25 요리 즐겨찾기 순서 바꾸기(사용자 — 버프·디버프 끌기와 같게) ----
+def test_reorder_favorites_pure():
+    assert cooking.reorder_favorites(["a", "b", "c"], ["c", "a", "b"]) == ["c", "a", "b"]
+    assert cooking.reorder_favorites(["a", "b", "c"], ["b", "a"]) == ["b", "a", "c"]   # 목록에 없던 건 뒤에 그대로
+    assert cooking.reorder_favorites(["a", "b"], ["x", "b", "a"]) == ["b", "a"]       # 즐겨찾기 아닌 이름 무시
+    dishes = cooking.load()
+    assert cooking.normalize_favorites(["BnR", "없는 요리", "모둠회덮밥"], dishes) == ["BnR", "모둠회덮밥"]
+
+
+def test_favorites_drag_reorder_saves_and_only_in_plain_favorites():
+    from PySide6.QtWidgets import QAbstractItemView, QApplication
+
+    from mabinogi_addon.ui.cooking_tab import _DISH, CookingTab
+    config.save_cooking_favorites(["모둠회덮밥", "까맣게 구워진 드래곤 심장", "불금 반반 치맥 세트"])
+    tab = CookingTab()
+    tab.select("까맣게 구워진 드래곤 심장", stay=False)
+    tab.category_list.setCurrentItem(tab.category_list.item(0))
+    assert tab.can_reorder() and tab.dish_list.dragEnabled()
+    assert tab.dish_list.dragDropMode() == QAbstractItemView.DragDropMode.InternalMove
+    # 끌어서 놓음 흉내: 맨 아래 요리를 맨 위로(rowsMoved → on_dropped)
+    tab.dish_list.model().moveRow(tab.dish_list.model().index(0, 0).parent(), 2,
+                                  tab.dish_list.model().index(0, 0).parent(), 0)
+    QApplication.processEvents()
+    assert config.load_cooking_favorites() == ["불금 반반 치맥 세트", "모둠회덮밥", "까맣게 구워진 드래곤 심장"]
+    assert [i.data(_DISH) for i in _items(tab.dish_list)] == ["불금 반반 치맥 세트", "모둠회덮밥", "까맣게 구워진 드래곤 심장"]
+    assert tab.selected.name == "까맣게 구워진 드래곤 심장"           # 선택 그대로
+    tab.toggle_favorite("BnR")                                          # 새로 넣으면 맨 아래
+    assert [i.data(_DISH) for i in _items(tab.dish_list)][-1] == "BnR"
+    tab.toggle_favorite("모둠회덮밥")                                    # 빼도 나머지 순서 그대로
+    assert config.load_cooking_favorites() == ["불금 반반 치맥 세트", "까맣게 구워진 드래곤 심장", "BnR"]
+    tab.query.setText("치맥")                                           # 이름 검색 중 → 끌기 꺼짐
+    assert not tab.can_reorder() and not tab.dish_list.dragEnabled()
+    tab.query.setText("")
+    assert tab.can_reorder()
+    tab.kind.setCurrentText("능력치")
+    tab.stat.setCurrentIndex(tab.stat.findData("생명력"))                # 능력치 검색(수치순) → 꺼짐
+    assert not tab.can_reorder() and not tab.dish_list.dragEnabled()
+    tab.stat.setCurrentIndex(0)
+    tab.kind.setCurrentText("요리 이름")
+    tab.category_list.setCurrentItem(next(i for i in _items(tab.category_list) if i.data(_DISH) == "혼합"))
+    assert not tab.can_reorder() and not tab.dish_list.dragEnabled()     # 다른 카테고리 → 꺼짐
+    tab.shutdown()
+    again = CookingTab()                                                # 다시 열어도 순서 유지
+    again.category_list.setCurrentItem(again.category_list.item(0))
+    assert [i.data(_DISH) for i in _items(again.dish_list)] == ["불금 반반 치맥 세트", "까맣게 구워진 드래곤 심장", "BnR"]
+    again.shutdown()
