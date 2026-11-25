@@ -1182,14 +1182,14 @@ def test_ian_alert_points_at_watch():
 
 def test_walk_values_come_from_character_data_and_corner_rush_speeds_up_steps():
     """걷기 미끄러짐(사용자 11-24): 캐릭터별 프레임 시간·속도, 이안 v2 0.18초·62px/초(보폭 67px), 다래 새 걷기(11-25) 100px/초(디딘 발 장마다 약 21px 그리기 크기)."""
-    assert br.IAN.walk_speed == 62.0 and br.IAN.anims["walk"][1] == (0.18,) * 6
+    assert br.IAN.walk_speed == 66.0 and br.IAN.anims["walk"][1] == (0.15,) * 8   # v3 8장(11-25)
     for profile in (br.DARE, br.ARIA, br.IAN, br.LENA, br.STARLINE):
         cycle = sum(profile.anims["walk"][1])
         assert 60 <= profile.walk_speed <= 100 and 60 <= profile.walk_speed * cycle <= 125  # 한 바퀴 거리 ≈ 보폭
     b = _ian()
     b._walk_to((800.0, 700.0), 0)
     _run(b, 0, 1.0, False)
-    assert abs(b.pos[0] - 362.0) < 6  # 62px/초(첫 틱은 시간 0)
+    assert abs(b.pos[0] - 366.0) < 6  # 66px/초(첫 틱은 시간 0)
     b2 = _ian(corner=(900.0, 700.0))
     _run(b2, 0, 2.0, True)
     assert b2.state == "walk" and b2._walk_rate > 1.5  # 구석으로 서두를 땐 걸음 그림도 빨리
@@ -2583,3 +2583,34 @@ def test_dare_stand_is_getup_end_picture():
     """다래 기본 서 있기 = 일어나기 v2 끝 장(사용자 11-25 '착지하고 서 있을 때가 더 이쁨') — 키 285 그대로."""
     assert (ASSETS / "다래" / "stand_0.png").read_bytes() == (ASSETS / "다래" / "getup_2.png").read_bytes()
     assert _img_of(ASSETS / "다래" / "stand_0.png").shape[0] == 285
+
+
+
+def test_ian_walk_v3_eight_frames_alternate_legs():
+    """이안 걷기 v3(기획 11-25 — 예전 6장은 반걸음뿐): walk_0~7(기본·조끼), 키·머리(위 42%) 실루엣 ±5%(서 있기 대비),
+    이웃 장끼리 다리 구역(아래 40%)이 다름(7·8번째 장 제외 — 4+4 박자로 거의 같음)."""
+    import cv2
+    import numpy as np
+
+    from mabinogi_addon.image_io import imread
+    from scripts.silhouette import best_scale
+
+    for folder in (IAN_DIR, IAN_DIR / "outfits" / "vest_tie"):
+        names = {p.stem for p in folder.glob("walk_*.png")}
+        assert names == {f"walk_{i}" for i in range(8)}, folder
+        stand = imread(folder / "stand_1.png", cv2.IMREAD_UNCHANGED)
+        frames = [imread(folder / f"walk_{i}.png", cv2.IMREAD_UNCHANGED) for i in range(8)]
+        head = lambda f: f[: int(f.shape[0] * 0.42)]  # noqa: E731
+        for i, f in enumerate(frames):
+            assert abs(f.shape[0] / stand.shape[0] - 1) <= 0.05, (folder, i)
+            assert abs(best_scale(head(stand), head(f)) - 1) <= 0.05, (folder, i)
+
+        def legs(f):
+            h, w = f.shape[:2]
+            out = np.zeros((120, 200), np.float32)
+            leg = cv2.resize((f[int(h * 0.6):, :, 3] > 128).astype(np.float32), (w, 120))
+            out[:, (200 - w) // 2:(200 - w) // 2 + w] = leg
+            return out
+        for i in range(6):
+            assert np.abs(legs(frames[i]) - legs(frames[i + 1])).mean() > 0.03, (folder, i)
+    assert br.IAN.anims["walk"][0] == tuple(f"walk_{i}" for i in range(8))

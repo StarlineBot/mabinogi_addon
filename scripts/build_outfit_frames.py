@@ -32,6 +32,8 @@ ASSETS = ROOT / "docs" / "characters" / "assets"
 APP_ROOT = ROOT / "src" / "mabinogi_addon" / "assets" / "characters"
 # (캐릭터 폴더, 옷 key) → (옷 이름 폴더, 색 기준 프레임)
 OUTFITS = {("이안", "vest_tie"): ("넥타이 조끼", "stand_1"), ("아리아", "tshirt"): ("티셔츠 차림", "stand_0")}
+# 템플릿 뒤에 다시 그려 받은 시트(가이드 방식) — (키, 파일, 열, 행, 가이드 크기, 쓸 칸). 배율 = 앱 기본 프레임 키 중앙값 ÷ 칸 키 중앙값
+REDRAWN = {("이안", "vest_tie"): [("walk", "걷기_v3.png", 5, 2, (1500, 1120), (1, 2, 3, 4, 6, 7, 8, 9))]}
 MOTION_NAMES = {"옷매무새(25)": "motion_tidy", "차(75)": "motion_tea", "물주기(25)": "motion_water", "화관(75)": "motion_wreath"}
 
 
@@ -75,6 +77,21 @@ def build(folder: str, outfit_dir: Path) -> dict[str, np.ndarray]:
     return out
 
 
+def redraw(folder: str, key: str, frames: dict[str, np.ndarray], outfit_dir: Path) -> dict[str, np.ndarray]:
+    """REDRAWN 시트로 그 동작 프레임을 바꿈(예: 이안 걷기 v3 8장 — 템플릿 6장 대신)."""
+    from scripts.build_dare_frames import guide_cells
+
+    app_dir = APP_ROOT / folder
+    for prefix, name, cols, rows, size, cells in REDRAWN.get((folder, key), []):
+        cut = guide_cells(name, cols, rows, outfit_dir, size, loose=True)
+        images = [cut[i] for i in cells]
+        base_h = np.median([imread(p, cv2.IMREAD_UNCHANGED).shape[0] for p in app_dir.glob(f"{prefix}_*.png")])
+        k = float(base_h / np.median([im.shape[0] for im in images]))
+        frames = {n: v for n, v in frames.items() if not re.fullmatch(rf"{prefix}_\d+", n)}
+        frames.update({f"{prefix}_{i}": scaled(im, k) for i, im in enumerate(images)})
+    return frames
+
+
 def harmonize_colors(frames: dict[str, np.ndarray], ref_name: str) -> dict[str, np.ndarray]:
     """시트마다 다른 밝기(바지 ΔE 2~17·머리 1.4~11, 기획 측정)를 이 옷의 stand_1(다문 입)에 — 어두운 톤(머리·바지·조끼)과
     중간 톤(피부·그림자) Lab 평균을 각각 맞춤. 흰 셔츠 같은 밝은 톤은 그대로(기준 = 그 옷의 서 있기)."""
@@ -87,7 +104,8 @@ def harmonize_colors(frames: dict[str, np.ndarray], ref_name: str) -> dict[str, 
 
 def main() -> None:
     for (folder, key), (name, ref) in OUTFITS.items():
-        frames = harmonize_colors(build(folder, ASSETS / folder / "의상" / name), ref)
+        outfit_dir = ASSETS / folder / "의상" / name
+        frames = harmonize_colors(redraw(folder, key, build(folder, outfit_dir), outfit_dir), ref)
         dest = APP_ROOT / folder / "outfits" / key
         dest.mkdir(parents=True, exist_ok=True)
         for old in dest.glob("*.png"):

@@ -28,7 +28,7 @@ WALK_SPEED = 45.0          # 논리 px/초(캐릭터 값이 없을 때)
 #   다래 48.7 → 97px, 아리아 60.0 → 120px, 이안 v2(11-24 다시 그림) 33.3 → 67px, 레나 60.0 → 120px.
 DARE_WALK_FRAME, DARE_WALK_SPEED = 0.20, 100.0   # 새 걷기 시트(11-25) 디딘 발이 장마다 약 31px(예전 25px — 80) → 100
 ARIA_WALK_FRAME, ARIA_WALK_SPEED = 0.22, 90.0    # 1.32초 × 90 = 119px
-IAN_WALK_FRAME, IAN_WALK_SPEED = 0.18, 62.0      # v2 걷기 1.08초 × 62 = 67px
+IAN_WALK_FRAME, IAN_WALK_SPEED = 0.15, 66.0      # v3 걷기 8장(11-25) 1.2초 × 66 = 79px — 디딘 발이 한 바퀴에 원본 약 120px(그리기 80px)
 # 캐릭터별 그리기 배율(사용자 11-24 B안 — 눈 사이 간격 Starline 45·이안 47·다래·아리아 53·레나 57로 얼굴이 달라 보임).
 # 그림이 커지면 보폭도 커져 걷기 속도도 같은 배율(발 미끄러짐 방지).
 STARLINE_SCALE, LENA_SCALE = 1.15, 0.95
@@ -216,7 +216,7 @@ ARIA = Profile(ARIA_ANIMS,
 # 서 있기 ↔ 시계 보기 번갈아, 떨어지면 두 발 착지 → 바로 서기(엉덩방아·일어나기 없음), 알림 = 시계 가리키며 말함.
 IAN_ANIMS = {
     "stand": (("stand_1",), (1.0,), True),
-    "walk": (tuple(f"walk_{i}" for i in range(6)), (IAN_WALK_FRAME,) * 6, True),
+    "walk": (tuple(f"walk_{i}" for i in range(8)), (IAN_WALK_FRAME,) * 8, True),   # v3 8장(11-25 — 양발 번갈아)
     "surprise": (("pet_0",), (0.5,), False),
     "drag": (tuple(f"drag_{i}" for i in range(4)), (0.18,) * 4, True),
     "fall": (("fall_0",), (1.0,), True),  # 사용자 11-24: 두 장을 번갈면 두근거려 보여 한 장만
