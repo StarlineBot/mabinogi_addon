@@ -22,9 +22,9 @@ from scripts.render_pet_gif import FPS, H, OUT, TASKBAR, W, Clock, compose  # no
 def run(folder: str, frames_out: list) -> None:
     character = next(c for c in roster.ROSTER if roster.folder(c) == folder)
     profile = PROFILES[folder]
-    if profile.sleep_after:   # 렌더용으로 짧게(앱은 5~10분)
+    if profile.sleep_gap:   # 렌더용으로 짧게(앱은 구석 3~6분마다·20~40초)
         from dataclasses import replace
-        profile = replace(profile, sleep_after=(6.0, 6.0))
+        profile = replace(profile, sleep_gap=(6.0, 6.0), sleep_hold=(5.0, 5.0))
     clock = Clock()
     front = {"on": False}
     floor = Floor(0, W, H - TASKBAR)
@@ -49,10 +49,9 @@ def run(folder: str, frames_out: list) -> None:
         shoot(length + 1.5, {"stretch": "기지개", "magic": "마법 연습 펑", "sneeze": "재채기"}[profile.rare_extra])
     else:  # 다래: 구석에서 졸다가 엎드려 자기
         front["on"] = True
-        shoot(9.0, "구석에서 졸다가(앱은 5~10분 뒤) 엎드림")
-        shoot(4.0, "엎드려 숨쉬기(Zzz)")
-        front["on"] = False
-        shoot(7.0, "게임이 끝나면 눈 비비며 앉고 일어남")
+        shoot(9.0, "구석에 앉아 있다가(앱은 3~6분마다) 엎드림")
+        shoot(5.0, "엎드려 숨쉬기(Zzz, 앱은 20~40초)")
+        shoot(4.0, "눈 비비며 다시 앉음")
     window.close()
 
 

@@ -1906,9 +1906,10 @@ def test_rare_motion_waits_for_idle_line_and_settings_override():
     b._next_rare, b._next_walk, b._next_idle = 1.0, 1e9, 10.0   # 혼잣말이 곧 → 미룸
     b.tick(2, False)
     assert b.state != "stretch" and b._next_rare >= 2 + br.RARE_DEFER - 0.01
-    custom = br.ARIA.with_timing({"rareGap": [60, 90], "sleepAfter": [40, 50]})
-    assert custom.rare_gap == (60.0, 90.0) and custom.sleep_after is None   # 졸지 않는 캐릭터는 그대로
-    assert br.DARE.with_timing({"sleepAfter": [40, 50]}).sleep_after == (40.0, 50.0)
+    custom = br.ARIA.with_timing({"rareGap": [60, 90], "sleepGap": [40, 50]})
+    assert custom.rare_gap == (60.0, 90.0) and custom.sleep_gap is None   # 엎드려 자기 없는 캐릭터는 그대로
+    dare = br.DARE.with_timing({"sleepGap": [40, 50], "sleepHold": [10, 12]})
+    assert dare.sleep_gap == (40.0, 50.0) and dare.sleep_hold == (10.0, 12.0)
 
 
 def test_starline_sneeze_says_line_at_frame_four_once():
@@ -1926,35 +1927,45 @@ def test_starline_sneeze_says_line_at_frame_four_once():
     assert "누가 내 욕하나?" in [line.text for line in lines]
 
 
-def test_dare_sleeps_lying_after_long_doze_then_wakes_or_rises():
-    """다래 엎드려 자기(기획 11-25): 구석에서 조는 흐름이 5~10분 이어지면 엎드림(0→2) → 3·4·5 숨쉬기 유지(Zzz),
-    게임이 끝나면 6·7·8로 앉은 뒤 일어나기, 클릭하면 자다가 깜짝 깨기."""
-    assert br.DARE.sleep_after == (300.0, 600.0) and br.IAN.sleep_after is None
-
-    def asleep():
-        b = br.Brain(br.Floor(0, 1000, 700), rng=random.Random(3), profile=br.DARE, corner=(900.0, 700.0))
-        b.pos = (300.0, 700.0)
-        t, seen = 0.0, []
-        while t < 700 and b.state != "sleep_loop":
-            t += 0.25
-            b.tick(t, True)
-            seen.append((t, b.state))
-        return b, t, seen
-
-    b, t, seen = asleep()
-    first_down = next(x for x, s in seen if s == "sleep_down")
-    sat = next(x for x, s in seen if s == "sit_drowsy")
-    assert b.state == "sleep_loop" and 300 <= first_down - sat <= 600 + 10 and b.zzz()
-    for _ in range(80):
+def test_dare_lies_down_every_3_to_6_minutes_in_corner_then_sits_again():
+    """다래 엎드려 자기(기획 11-25 정정 — '구석에서는 자주 보이게'): 구석에 앉은 뒤 3~6분에 한 번 엎드림(0→2) →
+    숨쉬기 20~40초(Zzz) → 6·7·8로 앉아 원래 앉아 있기로. 엎드린 동안 클릭 = 자다 깸, 게임 끝 = 앉은 뒤 일어나기."""
+    assert br.DARE.sleep_gap == (180.0, 360.0) and br.DARE.sleep_hold == (20.0, 40.0) and br.IAN.sleep_gap is None
+    b = br.Brain(br.Floor(0, 1000, 700), rng=random.Random(3), profile=br.DARE, corner=(900.0, 700.0))
+    b.pos = (300.0, 700.0)
+    t, seen = 0.0, []
+    while t < 1000:
         t += 0.25
         b.tick(t, True)
-        assert b.state == "sleep_loop"   # 계속 엎드려 숨쉬기
+        seen.append((t, b.state))
+    sat = next(x for x, s in seen if s == "crouch")
+    downs = [x for (x, s), (_, prev) in zip(seen[1:], seen) if s == "sleep_down" and prev != "sleep_down"]
+    assert downs and 180 <= downs[0] - sat <= 365
+    loop = [x for x, s in seen if s == "sleep_loop" and downs[0] < x < downs[0] + 60]
+    assert 19 <= loop[-1] - loop[0] <= 41   # 숨쉬기 20~40초
+    after = [s for x, s in seen if loop[-1] < x < loop[-1] + 6]
+    assert "sleep_up" in after and br.DARE.sit_state in after   # 다시 구석 앉아 있기로
+    assert all(s in br.DARE.sitting for x, s in seen if x > sat + 1)   # 게임 중엔 계속 구석
+    assert len(downs) >= 2 and all(175 <= b2 - a <= 420 for a, b2 in zip(downs, downs[1:]))
+    # 엎드린 동안 클릭 → 자다 깸 / 게임 끝 → 앉은 뒤 일어나기
+    c = br.Brain(br.Floor(0, 1000, 700), rng=random.Random(3), profile=br.DARE, corner=(900.0, 700.0))
+    c.pos = (300.0, 700.0)
+    t = 0.0
+    while c.state != "sleep_loop":
+        t += 0.25
+        c.tick(t, True)
+    assert c.zzz()
+    c.press(t, 900, 650)
+    assert c.release(t)[-1] == ("say", "click_sleep") and c.state == "wake"
+    d = br.Brain(br.Floor(0, 1000, 700), rng=random.Random(3), profile=br.DARE, corner=(900.0, 700.0))
+    d.pos = (300.0, 700.0)
+    t = 0.0
+    while d.state != "sleep_loop":
+        t += 0.25
+        d.tick(t, True)
     states = []
     for _ in range(40):
         t += 0.25
-        b.tick(t, False)
-        states.append(b.state)
-    assert "sleep_up" in states and "rise" in states   # 게임 끝 → 앉아 일어남 → 일어나기
-    c, t, _ = asleep()
-    c.press(t, 900, 650)
-    assert c.release(t)[-1] == ("say", "click_sleep") and c.state == "wake"
+        d.tick(t, False)
+        states.append(d.state)
+    assert "sleep_up" in states and "rise" in states

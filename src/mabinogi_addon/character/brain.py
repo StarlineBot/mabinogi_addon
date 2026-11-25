@@ -49,8 +49,10 @@ IDLE_LINE = (240.0, 480.0)  # 혼잣말 간격(초) — 몇 분에 한 번
 # 혼잣말·대기 동작과 겹치면 다음 차례로 미룸. 숫자는 설정(character.idle.rareGap)으로 바꿀 수 있음
 RARE_GAP = (180.0, 360.0)
 RARE_DEFER = 30.0          # 혼잣말이 곧 나올 차례면 이만큼 미룸
-# 다래 엎드려 자기(기획 11-25): 구석에서 꾸벅 조는 흐름이 5~10분 이어지면 엎드림(설정 character.idle.sleepAfter)
-SLEEP_AFTER = (300.0, 600.0)
+# 다래 엎드려 자기(기획 11-25 정정 — '구석에서는 자주 보이게'): 구석에 앉아 있는 동안 3~6분에 한 번 엎드려
+# 20~40초 숨쉬다 다시 앉음(설정 character.idle.sleepGap·sleepHold)
+SLEEP_GAP = (180.0, 360.0)
+SLEEP_HOLD = (20.0, 40.0)
 SLEEPING = ("sleep_down", "sleep_loop", "sleep_up")
 LONG_HUNT = 7200.0         # 오래 사냥 중(앉아서 2시간마다)
 
@@ -152,7 +154,8 @@ class Profile:
     rare_extra: str | None = None         # 드문 기본 동작(게임 밖 서 있기에서 3~6분에 한 번, 1바퀴)
     rare_gap: tuple[float, float] = RARE_GAP
     rare_say: tuple[int, str] | None = None   # 드문 동작 그 프레임에서 말풍선 상황(Starline 재채기 4번 '누가 내 욕하나?')
-    sleep_after: tuple[float, float] | None = None   # 다래: 구석에서 조는 흐름이 이만큼 이어지면 엎드려 자기
+    sleep_gap: tuple[float, float] | None = None    # 다래: 구석에 앉아 있는 동안 엎드려 자기 간격(없으면 안 함)
+    sleep_hold: tuple[float, float] = SLEEP_HOLD    # 엎드려 숨쉬는 시간
     scale: float = 1.0                    # 그리기 배율(사용자 11-24 B안 — 얼굴 크기 맞춤: Starline 1.15·레나 0.95). 그림 파일은 그대로
 
     def with_timing(self, raw) -> Profile:
@@ -168,14 +171,16 @@ class Profile:
         if not isinstance(raw, dict):
             return self
         gap, laps = pair(raw.get("gap"), float, 1.0), pair(raw.get("laps"), int, 1)
-        rare, sleep = pair(raw.get("rareGap"), float, 30.0), pair(raw.get("sleepAfter"), float, 30.0)
+        rare, sleep = pair(raw.get("rareGap"), float, 30.0), pair(raw.get("sleepGap"), float, 30.0)
+        hold = pair(raw.get("sleepHold"), float, 5.0)
         return replace(self, idle_gap=gap or self.idle_gap, idle_laps=laps or self.idle_laps,
                        rare_gap=rare or self.rare_gap,
-                       sleep_after=(sleep or self.sleep_after) if self.sleep_after else None)
+                       sleep_gap=(sleep or self.sleep_gap) if self.sleep_gap else None,
+                       sleep_hold=hold or self.sleep_hold)
 
 
 DARE = Profile(ANIMS, _NEXT, SITTING, "sit_drowsy", doze_state="sit_doze", walk_speed=DARE_WALK_SPEED,
-               talk_sets=DARE_TALK, sleep_after=SLEEP_AFTER)
+               talk_sets=DARE_TALK, sleep_gap=SLEEP_GAP)
 
 # 아리아(docs/characters/아리아.md): 졸기·자다 깨기 없음 — 구석에서 머리를 안고 앉아 웃음(0 길게 → 3 → 0 → 1 → 2 → 0),
 # 앉아서 클릭 = 웃음 프레임. 서 있기 두 자세 번갈아 + 가만히 서 있는 동안 가끔 머리 쓰다듬기(사용자 11-24).
@@ -340,8 +345,8 @@ class Brain:
     _next_extra: float = 0.0
     _next_rare: float = 0.0
     _rare_said: bool = False
-    _doze_time: float = 0.0          # 다래: 구석에서 조는 흐름(졸림·꾸벅·반쯤 뜸)이 이어진 시간
-    _sleep_at: float = 0.0
+    _sleep_next: float = 0.0         # 다래: 다음 엎드려 자기 시각(구석에 앉으면 정함)
+    _sleep_until: float = 0.0
     _extra_until: float = 0.0
     _queued_talk: tuple | None = None
     _talk_set: dict | None = None
@@ -526,6 +531,8 @@ class Brain:
                 nxt = self.state
             if self.state == "getup" and self._goal == "corner" and self._near(self.home()):
                 nxt = "crouch"  # 게임 중 구석에 놓였으면 그 자리에서 다시 앉는다
+            if self.state == "sleep_up" and self._goal == "corner":
+                nxt = self.profile.sit_state   # 게임 중이면 다시 구석 앉아 있기로(게임이 끝났으면 일어나기)
             if nxt != self.state:
                 self._go(nxt, now)
             if nxt == "stand":
@@ -540,15 +547,19 @@ class Brain:
             if self.frame(now) == self.profile.anims[rare][0][index]:
                 self._rare_said = True
                 events.append(("say", situation))
-        if self.profile.sleep_after:
-            if self.state in ("sit_drowsy", "sit_doze", "sit_half") and self._front:
-                if self._doze_time == 0.0:
-                    self._sleep_at = self.rng.uniform(*self.profile.sleep_after)
-                self._doze_time += dt
-                if self.state == self.profile.doze_state and self._doze_time >= self._sleep_at:
-                    self._go("sleep_down", now)   # 오래 졸면 엎드려 자기
-            elif self.state not in SLEEPING:
-                self._doze_time = 0.0
+        if self.profile.sleep_gap:
+            if self.state in self.profile.sitting and self._front:
+                if self._sleep_next == 0.0:
+                    self._sleep_next = now + self.rng.uniform(*self.profile.sleep_gap)
+                if self.state in ("sit_drowsy", "sit_doze", "sit_half") and now >= self._sleep_next:
+                    down = sum(self.profile.anims["sleep_down"][1])
+                    self._sleep_until = now + down + self.rng.uniform(*self.profile.sleep_hold)
+                    self._go("sleep_down", now)   # 엎드려 자기
+                elif self.state == "sleep_loop" and now >= self._sleep_until:
+                    self._go("sleep_up", now)     # 숨쉬다 다시 앉음
+                    self._sleep_next = now + self.rng.uniform(*self.profile.sleep_gap)
+            elif self.state not in self.profile.sitting:
+                self._sleep_next = 0.0
 
         if self.state in self.profile.sitting and self._front:
             self._corner_time += dt
