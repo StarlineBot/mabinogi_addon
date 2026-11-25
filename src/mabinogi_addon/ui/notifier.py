@@ -68,7 +68,8 @@ def alert_files(folder: Path) -> set[str]:
 
 
 def greeting_path(pack: str, rng=None) -> Path:
-    """카드 미리듣기 소리 — 그 팩의 인사 녹음(있는 것 중 무작위, 바로 앞과 다른 것), 없으면 투아림 알림(sound_path 규칙)."""
+    """카드 미리듣기 소리 — 그 팩의 인사 녹음(있는 것 중 무작위, 바로 앞과 다른 것), 없으면 **그 팩의** 투아림 알림,
+    그것도 없으면 기본(flat) 투아림. (QA 11-25: 예전엔 지금 고른 팩 기준이라 ??? 카드가 고른 캐릭터 목소리로 나왔음)"""
     if pack:
         have = [SOUND_DIR / pack / name for name in GREETING_FILES if (SOUND_DIR / pack / name).exists()]
         if have:
@@ -77,7 +78,10 @@ def greeting_path(pack: str, rng=None) -> Path:
             pick = (rng or random).choice(choices)
             _last_greeting[pack] = pick.name
             return pick
-    return sound_path(SAMPLE_FILE)
+        own = SOUND_DIR / pack / SAMPLE_FILE
+        if own.exists():
+            return own
+    return SOUND_DIR / SAMPLE_FILE
 
 
 def second_sound_path(filename: str) -> Path:

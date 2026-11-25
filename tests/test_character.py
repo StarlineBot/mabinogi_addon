@@ -2564,3 +2564,16 @@ def test_write_sprite_keeps_visible_pixels(tmp_path):
     back = imread(tmp_path / "a.png", cv2.IMREAD_UNCHANGED)
     seen = image[..., 3] > 0
     assert np.array_equal(back[seen], image[seen]) and not back[~seen, :3].any()
+
+
+def test_silhouette_card_preview_uses_its_own_pack_not_selected_one(monkeypatch):
+    """??? 카드 미리듣기(QA 11-25 — 고른 팩이 화난 여성이면 자연스러운 남성·여성 카드도 화난 여성 투아림이 나왔음):
+    인사가 없으면 **그 카드 팩**의 투아림, 그 팩에도 없으면 기본(flat)."""
+    from mabinogi_addon.ui import notifier
+
+    monkeypatch.setattr(config, "load_voice_pack", lambda *a, **k: "화난 여성")
+    sounds = notifier.SOUND_DIR
+    for pack in ("자연스러운 남성", "자연스러운 여성"):
+        assert notifier.greeting_path(pack) == sounds / pack / notifier.SAMPLE_FILE
+    assert notifier.greeting_path("") == sounds / notifier.SAMPLE_FILE
+    assert notifier.greeting_path("없는 팩") == sounds / notifier.SAMPLE_FILE
