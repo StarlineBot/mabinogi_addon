@@ -123,8 +123,12 @@ def build() -> dict[str, list[np.ndarray]]:
         k = k_height(frames, ref)
         return [scaled(f, k) for f in frames]
 
+    from scripts.silhouette import best_scale   # 크기는 같은 자세 장 실루엣을 서 있기에 맞춤(QA 11-25)
     flame = sheet("Starline_대기불꽃")
-    out["flame"] = fit(flame, k_height(flame))   # 키로는 머리 0.93~0.96 — 머리로 맞춤
+    # 머리 크기 fit이 시트 전체를 약 7% 키웠음(QA 11-25 '불꽃 나올 때 커져') → 같은 자세인 0번 실루엣으로 시트 배율 하나
+    k = k_height(flame)
+    k *= best_scale(out["stand"][0], scaled(flame[0], k))
+    out["flame"] = [scaled(f, k) for f in flame]
     out["walk"] = by_height(sheet("Starline_걷기"))
     out["drag"] = by_height(sheet("Starline_끌기"))
     fall = sheet("Starline_떨어지기")
@@ -134,7 +138,6 @@ def build() -> dict[str, list[np.ndarray]]:
     pet = sheet("Starline_쓰다듬기")
     out["pet"] = fit(pet, k_height(pet))         # 키로는 머리 1.06~1.15 — 머리로 맞춤
     sneeze = sheet("Starline_재채기_v2")   # 기획 11-25 새 시트(머리·몸 비율을 서 있기와 맞춰 다시 그림)
-    from scripts.silhouette import best_scale   # 크기는 같은 자세인 0번 실루엣을 서 있기에 맞춤(QA 11-25)
     k = k_height(sneeze)
     k *= best_scale(out["stand"][0], scaled(sneeze[0], k))
     out["sneeze"] = [scaled(f, k) for f in sneeze]
