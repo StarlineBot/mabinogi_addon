@@ -168,7 +168,7 @@
         "tests/test_release_notes.py",
         "tests/test_release_notes_trigger.py"
       ],
-      "reason": "0.56.3 노트 맨 위 — Starline 재채기 다시(새 시트), v0.56.2 이하 그대로(게시본과 같음)"
+      "reason": "0.56.3 노트 맨 위 — Starline 재채기 다시(새 시트)·요리 82개, v0.56.2 이하 그대로(게시본과 같음)"
     },
     "src/mabinogi_addon/character/roster.py": {
       "tests": [

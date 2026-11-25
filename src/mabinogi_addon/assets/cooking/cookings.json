@@ -558,6 +558,36 @@
    ]
   },
   {
+   "name": "개다래 도미 볶음",
+   "method": "볶기",
+   "recipe": [
+    {
+     "name": "개다래 도미",
+     "ratio": 50
+    },
+    {
+     "name": "라인산 진",
+     "ratio": 35
+    }
+   ],
+   "status": []
+  },
+  {
+   "name": "개다래 차",
+   "method": "끓이기",
+   "recipe": [
+    {
+     "name": "개다래 열매",
+     "ratio": 10
+    },
+    {
+     "name": "물이 든 병",
+     "ratio": 85
+    }
+   ],
+   "status": []
+  },
+  {
    "name": "거대한 별사탕",
    "method": "굽기",
    "recipe": [
@@ -886,6 +916,25 @@
    ]
   },
   {
+   "name": "고기양념",
+   "method": "혼합",
+   "recipe": [
+    {
+     "name": "소금",
+     "ratio": 10
+    },
+    {
+     "name": "후추",
+     "ratio": 10
+    },
+    {
+     "name": "마늘",
+     "ratio": 80
+    }
+   ],
+   "status": []
+  },
+  {
    "name": "고등어 스테이크",
    "method": "굽기",
    "recipe": [
@@ -1012,6 +1061,25 @@
      "value": 3
     }
    ]
+  },
+  {
+   "name": "고추장",
+   "method": "발효",
+   "recipe": [
+    {
+     "name": "물이 든 병",
+     "ratio": 69
+    },
+    {
+     "name": "엿기름",
+     "ratio": 12
+    },
+    {
+     "name": "고춧가루",
+     "ratio": 19
+    }
+   ],
+   "status": []
   },
   {
    "name": "고추장 돼지불고기",
@@ -1150,6 +1218,25 @@
    ]
   },
   {
+   "name": "구운 콩",
+   "method": "굽기",
+   "recipe": [
+    {
+     "name": "콩",
+     "ratio": 90
+    },
+    {
+     "name": "올리브유",
+     "ratio": 5
+    },
+    {
+     "name": "소금",
+     "ratio": 5
+    }
+   ],
+   "status": []
+  },
+  {
    "name": "구운 콩국수",
    "method": "면 만들기",
    "recipe": [
@@ -1172,6 +1259,21 @@
      "value": 3
     }
    ]
+  },
+  {
+   "name": "구운 콩물",
+   "method": "혼합",
+   "recipe": [
+    {
+     "name": "구운 콩가루",
+     "ratio": 75
+    },
+    {
+     "name": "물이 든 병",
+     "ratio": 25
+    }
+   ],
+   "status": []
   },
   {
    "name": "구운 파인애플",
@@ -1510,6 +1612,21 @@
    ]
   },
   {
+   "name": "껍질 벗긴 콩물",
+   "method": "혼합",
+   "recipe": [
+    {
+     "name": "껍질 벗긴 콩가루",
+     "ratio": 75
+    },
+    {
+     "name": "물이 든 병",
+     "ratio": 25
+    }
+   ],
+   "status": []
+  },
+  {
    "name": "꿀밤 라떼",
    "method": "끓이기",
    "recipe": [
@@ -1654,6 +1771,25 @@
    ]
   },
   {
+   "name": "누들",
+   "method": "면 만들기",
+   "recipe": [
+    {
+     "name": "밀가루",
+     "ratio": 40
+    },
+    {
+     "name": "달걀",
+     "ratio": 20
+    },
+    {
+     "name": "물이 든 병",
+     "ratio": 40
+    }
+   ],
+   "status": []
+  },
+  {
    "name": "눈물 우동",
    "method": "끓이기",
    "recipe": [
@@ -1744,6 +1880,21 @@
      "value": 10
     }
    ]
+  },
+  {
+   "name": "단호박 퓌레",
+   "method": "삶기",
+   "recipe": [
+    {
+     "name": "단호박",
+     "ratio": 90
+    },
+    {
+     "name": "물이 든 병",
+     "ratio": 10
+    }
+   ],
+   "status": []
   },
   {
    "name": "단호박 해물찜",
@@ -1980,6 +2131,17 @@
      "value": 20
     }
    ]
+  },
+  {
+   "name": "담백한 피자 도우",
+   "method": "피자 만들기",
+   "recipe": [
+    {
+     "name": "밀가루 빵 반죽",
+     "ratio": 100
+    }
+   ],
+   "status": []
   },
   {
    "name": "돈가스",
@@ -2306,6 +2468,25 @@
    ]
   },
   {
+   "name": "드래곤의 살덩어리",
+   "method": "혼합",
+   "recipe": [
+    {
+     "name": "드래곤의 살점",
+     "ratio": 33
+    },
+    {
+     "name": "드래곤의 살점",
+     "ratio": 34
+    },
+    {
+     "name": "드래곤의 살점",
+     "ratio": 33
+    }
+   ],
+   "status": []
+  },
+  {
    "name": "따끈한 온천 달걀",
    "method": "수비드",
    "recipe": [
@@ -2428,6 +2609,44 @@
      "value": 2
     }
    ]
+  },
+  {
+   "name": "딸기 찹살떡",
+   "method": "발효",
+   "recipe": [
+    {
+     "name": "하얀 떡",
+     "ratio": 65
+    },
+    {
+     "name": "딸기",
+     "ratio": 25
+    },
+    {
+     "name": "팥소",
+     "ratio": 10
+    }
+   ],
+   "status": []
+  },
+  {
+   "name": "딸기 향 시럽",
+   "method": "혼합",
+   "recipe": [
+    {
+     "name": "딸기",
+     "ratio": 25
+    },
+    {
+     "name": "설탕",
+     "ratio": 65
+    },
+    {
+     "name": "물이 든 병",
+     "ratio": 10
+    }
+   ],
+   "status": []
   },
   {
    "name": "딸기우유",
@@ -2604,6 +2823,25 @@
    ]
   },
   {
+   "name": "라브의 밥",
+   "method": "혼합",
+   "recipe": [
+    {
+     "name": "베이컨",
+     "ratio": 50
+    },
+    {
+     "name": "밥",
+     "ratio": 25
+    },
+    {
+     "name": "고기 조각",
+     "ratio": 25
+    }
+   ],
+   "status": []
+  },
+  {
    "name": "라씨",
    "method": "혼합",
    "recipe": [
@@ -2772,6 +3010,25 @@
    ]
   },
   {
+   "name": "레몬즙",
+   "method": "혼합",
+   "recipe": [
+    {
+     "name": "레몬",
+     "ratio": 85
+    },
+    {
+     "name": "물이 든 병",
+     "ratio": 5
+    },
+    {
+     "name": "나무열매",
+     "ratio": 10
+    }
+   ],
+   "status": []
+  },
+  {
    "name": "레몬티",
    "method": "끓이기",
    "recipe": [
@@ -2900,6 +3157,21 @@
    ]
   },
   {
+   "name": "롱 파스타",
+   "method": "파스타 만들기",
+   "recipe": [
+    {
+     "name": "파스타 반죽",
+     "ratio": 20
+    },
+    {
+     "name": "물이 든 병",
+     "ratio": 80
+    }
+   ],
+   "status": []
+  },
+  {
    "name": "루벤 샌드위치",
    "method": "혼합",
    "recipe": [
@@ -2962,6 +3234,25 @@
      "value": 5
     }
    ]
+  },
+  {
+   "name": "리파이 차",
+   "method": "끓이기",
+   "recipe": [
+    {
+     "name": "리파이 뿌리",
+     "ratio": 30
+    },
+    {
+     "name": "물이 든 병",
+     "ratio": 55
+    },
+    {
+     "name": "신선한 벌꿀",
+     "ratio": 15
+    }
+   ],
+   "status": []
   },
   {
    "name": "마끼아또",
@@ -3076,6 +3367,21 @@
    ]
   },
   {
+   "name": "마요네즈",
+   "method": "혼합",
+   "recipe": [
+    {
+     "name": "달걀",
+     "ratio": 75
+    },
+    {
+     "name": "올리브유",
+     "ratio": 20
+    }
+   ],
+   "status": []
+  },
+  {
    "name": "마카롱",
    "method": "굽기",
    "recipe": [
@@ -3180,6 +3486,25 @@
    ]
   },
   {
+   "name": "매운 전골",
+   "method": "혼합",
+   "recipe": [
+    {
+     "name": "커다란 고기덩어리",
+     "ratio": 40
+    },
+    {
+     "name": "양배추",
+     "ratio": 40
+    },
+    {
+     "name": "고춧가루",
+     "ratio": 20
+    }
+   ],
+   "status": []
+  },
+  {
    "name": "메기 야채 샐러드",
    "method": "혼합",
    "recipe": [
@@ -3266,6 +3591,25 @@
      "value": 20
     }
    ]
+  },
+  {
+   "name": "멧돼지 버섯 꼬치",
+   "method": "굽기",
+   "recipe": [
+    {
+     "name": "개암버섯",
+     "ratio": 45
+    },
+    {
+     "name": "커다란 고기덩어리",
+     "ratio": 45
+    },
+    {
+     "name": "소금",
+     "ratio": 10
+    }
+   ],
+   "status": []
   },
   {
    "name": "모둠 볶음밥",
@@ -3484,6 +3828,25 @@
    ]
   },
   {
+   "name": "물에 불린 콩",
+   "method": "혼합",
+   "recipe": [
+    {
+     "name": "콩",
+     "ratio": 70
+    },
+    {
+     "name": "물이 든 병",
+     "ratio": 25
+    },
+    {
+     "name": "소금",
+     "ratio": 5
+    }
+   ],
+   "status": []
+  },
+  {
    "name": "물에 불린 콩국수",
    "method": "면 만들기",
    "recipe": [
@@ -3506,6 +3869,40 @@
      "value": 3
     }
    ]
+  },
+  {
+   "name": "물에 불린 콩물",
+   "method": "혼합",
+   "recipe": [
+    {
+     "name": "물에 불린 콩가루",
+     "ratio": 75
+    },
+    {
+     "name": "물이 든 병",
+     "ratio": 25
+    }
+   ],
+   "status": []
+  },
+  {
+   "name": "물엿",
+   "method": "끓이기",
+   "recipe": [
+    {
+     "name": "물이 든 병",
+     "ratio": 27
+    },
+    {
+     "name": "설탕",
+     "ratio": 33
+    },
+    {
+     "name": "쌀",
+     "ratio": 40
+    }
+   ],
+   "status": []
   },
   {
    "name": "뭉개진 구운 콩가루 두부",
@@ -3636,6 +4033,25 @@
    ]
   },
   {
+   "name": "민트 시럽",
+   "method": "잼 만들기",
+   "recipe": [
+    {
+     "name": "박하",
+     "ratio": 65
+    },
+    {
+     "name": "물이 든 병",
+     "ratio": 20
+    },
+    {
+     "name": "설탕",
+     "ratio": 15
+    }
+   ],
+   "status": []
+  },
+  {
    "name": "민트초코 프라페",
    "method": "혼합",
    "recipe": [
@@ -3694,6 +4110,25 @@
      "value": 1
     }
    ]
+  },
+  {
+   "name": "밀가루 빵 반죽",
+   "method": "반죽",
+   "recipe": [
+    {
+     "name": "밀가루",
+     "ratio": 75
+    },
+    {
+     "name": "이스트",
+     "ratio": 14
+    },
+    {
+     "name": "물이 든 병",
+     "ratio": 26
+    }
+   ],
+   "status": []
   },
   {
    "name": "밀크티",
@@ -4122,6 +4557,25 @@
      "value": 20
     }
    ]
+  },
+  {
+   "name": "버섯 조개 찜",
+   "method": "찌기",
+   "recipe": [
+    {
+     "name": "개암버섯",
+     "ratio": 45
+    },
+    {
+     "name": "조개",
+     "ratio": 45
+    },
+    {
+     "name": "소금",
+     "ratio": 10
+    }
+   ],
+   "status": []
   },
   {
    "name": "버섯 카나페",
@@ -4676,6 +5130,89 @@
    ]
   },
   {
+   "name": "볶은 커피",
+   "method": "굽기",
+   "recipe": [
+    {
+     "name": "쿠르클레 커피 열매",
+     "ratio": 90
+    },
+    {
+     "name": "물이 든 병",
+     "ratio": 10
+    }
+   ],
+   "status": []
+  },
+  {
+   "name": "볼살바토르의 특제 삶은 고구마",
+   "method": "삶기",
+   "recipe": [
+    {
+     "name": "볼살바토르의 고구마",
+     "ratio": 85
+    },
+    {
+     "name": "물이 든 병",
+     "ratio": 15
+    }
+   ],
+   "status": []
+  },
+  {
+   "name": "볼살바토르의 특제 옥수수 구이",
+   "method": "굽기",
+   "recipe": [
+    {
+     "name": "볼살바토르의 옥수수",
+     "ratio": 95
+    },
+    {
+     "name": "버터",
+     "ratio": 5
+    }
+   ],
+   "status": []
+  },
+  {
+   "name": "볼살바토르의 특제 클럽 샌드위치",
+   "method": "혼합",
+   "recipe": [
+    {
+     "name": "식빵",
+     "ratio": 50
+    },
+    {
+     "name": "양배추",
+     "ratio": 30
+    },
+    {
+     "name": "볼살바토르의 땅콩버터잼",
+     "ratio": 20
+    }
+   ],
+   "status": []
+  },
+  {
+   "name": "볼살바토르의 특제 토마토 바질 샐러드",
+   "method": "혼합",
+   "recipe": [
+    {
+     "name": "볼살바토르의 토마토",
+     "ratio": 50
+    },
+    {
+     "name": "바질",
+     "ratio": 30
+    },
+    {
+     "name": "삶은감자",
+     "ratio": 20
+    }
+   ],
+   "status": []
+  },
+  {
    "name": "봉골레",
    "method": "파스타 만들기",
    "recipe": [
@@ -5156,6 +5693,17 @@
    ]
   },
   {
+   "name": "빵가루",
+   "method": "혼합",
+   "recipe": [
+    {
+     "name": "식빵",
+     "ratio": 100
+    }
+   ],
+   "status": []
+  },
+  {
    "name": "사과 수플레",
    "method": "굽기",
    "recipe": [
@@ -5220,6 +5768,25 @@
    ]
   },
   {
+   "name": "사과잼",
+   "method": "잼 만들기",
+   "recipe": [
+    {
+     "name": "사과",
+     "ratio": 65
+    },
+    {
+     "name": "설탕",
+     "ratio": 30
+    },
+    {
+     "name": "소금",
+     "ratio": 5
+    }
+   ],
+   "status": []
+  },
+  {
    "name": "사우어크라우트",
    "method": "발효",
    "recipe": [
@@ -5250,6 +5817,25 @@
      "value": 1
     }
    ]
+  },
+  {
+   "name": "살라미",
+   "method": "발효",
+   "recipe": [
+    {
+     "name": "고기 조각",
+     "ratio": 80
+    },
+    {
+     "name": "소금",
+     "ratio": 10
+    },
+    {
+     "name": "고기양념",
+     "ratio": 10
+    }
+   ],
+   "status": []
   },
   {
    "name": "삶은 고구마",
@@ -5532,6 +6118,25 @@
    ]
   },
   {
+   "name": "새우 조련 미끼",
+   "method": "반죽",
+   "recipe": [
+    {
+     "name": "새우",
+     "ratio": 30
+    },
+    {
+     "name": "설탕",
+     "ratio": 38
+    },
+    {
+     "name": "마늘",
+     "ratio": 32
+    }
+   ],
+   "status": []
+  },
+  {
    "name": "새우볶음밥",
    "method": "볶기",
    "recipe": [
@@ -5812,6 +6417,25 @@
    ]
   },
   {
+   "name": "소면",
+   "method": "면 만들기",
+   "recipe": [
+    {
+     "name": "밀가루",
+     "ratio": 45
+    },
+    {
+     "name": "소금",
+     "ratio": 5
+    },
+    {
+     "name": "물이 든 병",
+     "ratio": 50
+    }
+   ],
+   "status": []
+  },
+  {
    "name": "소시지",
    "method": "굽기",
    "recipe": [
@@ -5986,6 +6610,25 @@
      "value": 15
     }
    ]
+  },
+  {
+   "name": "쇼트 파스타",
+   "method": "파스타 만들기",
+   "recipe": [
+    {
+     "name": "파스타 반죽",
+     "ratio": 20
+    },
+    {
+     "name": "물이 든 병",
+     "ratio": 80
+    },
+    {
+     "name": "달걀",
+     "ratio": 5
+    }
+   ],
+   "status": []
   },
   {
    "name": "수비드 소갈비찜",
@@ -6256,6 +6899,44 @@
    ]
   },
   {
+   "name": "스쿠압틴산 빨판 꼬치",
+   "method": "굽기",
+   "recipe": [
+    {
+     "name": "크라켄 빨판",
+     "ratio": 70
+    },
+    {
+     "name": "소금",
+     "ratio": 15
+    },
+    {
+     "name": "후추",
+     "ratio": 15
+    }
+   ],
+   "status": []
+  },
+  {
+   "name": "스쿠압틴산 빨판 다이어트 수비드",
+   "method": "수비드",
+   "recipe": [
+    {
+     "name": "크라켄 빨판",
+     "ratio": 70
+    },
+    {
+     "name": "레몬즙",
+     "ratio": 15
+    },
+    {
+     "name": "후추",
+     "ratio": 15
+    }
+   ],
+   "status": []
+  },
+  {
    "name": "스크류 드라이버",
    "method": "혼합",
    "recipe": [
@@ -6378,6 +7059,25 @@
      "value": 3
     }
    ]
+  },
+  {
+   "name": "식초",
+   "method": "발효",
+   "recipe": [
+    {
+     "name": "물이 든 병",
+     "ratio": 70
+    },
+    {
+     "name": "설탕",
+     "ratio": 15
+    },
+    {
+     "name": "사과",
+     "ratio": 15
+    }
+   ],
+   "status": []
   },
   {
    "name": "아귀찜",
@@ -6796,6 +7496,44 @@
    ]
   },
   {
+   "name": "앤초비",
+   "method": "발효",
+   "recipe": [
+    {
+     "name": "청어",
+     "ratio": 85
+    },
+    {
+     "name": "소금",
+     "ratio": 9
+    },
+    {
+     "name": "올리브유",
+     "ratio": 6
+    }
+   ],
+   "status": []
+  },
+  {
+   "name": "야채 모둠",
+   "method": "혼합",
+   "recipe": [
+    {
+     "name": "당근",
+     "ratio": 30
+    },
+    {
+     "name": "양파",
+     "ratio": 35
+    },
+    {
+     "name": "샐러리",
+     "ratio": 35
+    }
+   ],
+   "status": []
+  },
+  {
    "name": "야채볶음",
    "method": "볶기",
    "recipe": [
@@ -7196,6 +7934,21 @@
    ]
   },
   {
+   "name": "연어 샐러드",
+   "method": "혼합",
+   "recipe": [
+    {
+     "name": "연어",
+     "ratio": 80
+    },
+    {
+     "name": "샐러리",
+     "ratio": 15
+    }
+   ],
+   "status": []
+  },
+  {
    "name": "연어 오야코동",
    "method": "수비드",
    "recipe": [
@@ -7296,6 +8049,21 @@
    ]
   },
   {
+   "name": "열빙어 튀김",
+   "method": "튀기기",
+   "recipe": [
+    {
+     "name": "열빙어",
+     "ratio": 60
+    },
+    {
+     "name": "튀김옷",
+     "ratio": 30
+    }
+   ],
+   "status": []
+  },
+  {
    "name": "영양만점 호두과자",
    "method": "굽기",
    "recipe": [
@@ -7382,6 +8150,25 @@
      "value": 5
     }
    ]
+  },
+  {
+   "name": "오렌지 향 시럽",
+   "method": "혼합",
+   "recipe": [
+    {
+     "name": "오렌지",
+     "ratio": 25
+    },
+    {
+     "name": "설탕",
+     "ratio": 65
+    },
+    {
+     "name": "물이 든 병",
+     "ratio": 10
+    }
+   ],
+   "status": []
   },
   {
    "name": "오므라이스",
@@ -7528,6 +8315,25 @@
    ]
   },
   {
+   "name": "옥수수 빵 반죽",
+   "method": "반죽",
+   "recipe": [
+    {
+     "name": "옥수수 가루",
+     "ratio": 35
+    },
+    {
+     "name": "밀가루",
+     "ratio": 35
+    },
+    {
+     "name": "물이 든 병",
+     "ratio": 30
+    }
+   ],
+   "status": []
+  },
+  {
    "name": "옥수수 스콘",
    "method": "굽기",
    "recipe": [
@@ -7672,6 +8478,25 @@
    ]
   },
   {
+   "name": "와인 식초",
+   "method": "발효",
+   "recipe": [
+    {
+     "name": "물이 든 병",
+     "ratio": 70
+    },
+    {
+     "name": "이멘 마하산 와인",
+     "ratio": 20
+    },
+    {
+     "name": "포도",
+     "ratio": 10
+    }
+   ],
+   "status": []
+  },
+  {
    "name": "우메보시",
    "method": "발효",
    "recipe": [
@@ -7702,6 +8527,25 @@
      "value": 1
     }
    ]
+  },
+  {
+   "name": "우스터 소스",
+   "method": "끓이기",
+   "recipe": [
+    {
+     "name": "야채 모둠",
+     "ratio": 55
+    },
+    {
+     "name": "물이 든 병",
+     "ratio": 45
+    },
+    {
+     "name": "앤초비",
+     "ratio": 20
+    }
+   ],
+   "status": []
   },
   {
    "name": "우유식빵",
@@ -7792,6 +8636,21 @@
    ]
   },
   {
+   "name": "육수",
+   "method": "끓이기",
+   "recipe": [
+    {
+     "name": "쇠고기",
+     "ratio": 60
+    },
+    {
+     "name": "물이 든 병",
+     "ratio": 40
+    }
+   ],
+   "status": []
+  },
+  {
    "name": "육회",
    "method": "저미기",
    "recipe": [
@@ -7872,6 +8731,25 @@
    ]
   },
   {
+   "name": "은붕어 조련 미끼",
+   "method": "반죽",
+   "recipe": [
+    {
+     "name": "은붕어",
+     "ratio": 35
+    },
+    {
+     "name": "물엿",
+     "ratio": 33
+    },
+    {
+     "name": "마늘",
+     "ratio": 32
+    }
+   ],
+   "status": []
+  },
+  {
    "name": "은어 소금구이",
    "method": "굽기",
    "recipe": [
@@ -7934,6 +8812,40 @@
      "value": 25
     }
    ]
+  },
+  {
+   "name": "자숙 크라켄",
+   "method": "찌기",
+   "recipe": [
+    {
+     "name": "크라켄 다리살",
+     "ratio": 80
+    },
+    {
+     "name": "레몬즙",
+     "ratio": 20
+    }
+   ],
+   "status": []
+  },
+  {
+   "name": "자파리 빵을 흉내낸 빵",
+   "method": "혼합",
+   "recipe": [
+    {
+     "name": "재료 초콜릿",
+     "ratio": 15
+    },
+    {
+     "name": "치즈 조각",
+     "ratio": 15
+    },
+    {
+     "name": "빵",
+     "ratio": 70
+    }
+   ],
+   "status": []
   },
   {
    "name": "잔치국수",
@@ -8300,6 +9212,40 @@
    ]
   },
   {
+   "name": "참치 베이컨 말이",
+   "method": "굽기",
+   "recipe": [
+    {
+     "name": "참다랑어",
+     "ratio": 60
+    },
+    {
+     "name": "베이컨",
+     "ratio": 35
+    },
+    {
+     "name": "후추",
+     "ratio": 5
+    }
+   ],
+   "status": []
+  },
+  {
+   "name": "참치 양파 무침",
+   "method": "혼합",
+   "recipe": [
+    {
+     "name": "참다랑어",
+     "ratio": 60
+    },
+    {
+     "name": "양파",
+     "ratio": 30
+    }
+   ],
+   "status": []
+  },
+  {
    "name": "참치뱃살초밥",
    "method": "혼합",
    "recipe": [
@@ -8474,6 +9420,25 @@
      "value": 15
     }
    ]
+  },
+  {
+   "name": "초장",
+   "method": "혼합",
+   "recipe": [
+    {
+     "name": "식초",
+     "ratio": 45
+    },
+    {
+     "name": "고추장",
+     "ratio": 44
+    },
+    {
+     "name": "마늘",
+     "ratio": 11
+    }
+   ],
+   "status": []
   },
   {
    "name": "초코 크레이프 케이크",
@@ -9036,6 +10001,25 @@
    ]
   },
   {
+   "name": "카레 페이스트",
+   "method": "혼합",
+   "recipe": [
+    {
+     "name": "감자",
+     "ratio": 15
+    },
+    {
+     "name": "고기 조각",
+     "ratio": 15
+    },
+    {
+     "name": "카레가루",
+     "ratio": 70
+    }
+   ],
+   "status": []
+  },
+  {
    "name": "카레빵",
    "method": "굽기",
    "recipe": [
@@ -9130,6 +10114,25 @@
      "value": -3
     }
    ]
+  },
+  {
+   "name": "카카오 초콜릿 케익",
+   "method": "혼합",
+   "recipe": [
+    {
+     "name": "카카오",
+     "ratio": 33
+    },
+    {
+     "name": "밀가루 빵 반죽",
+     "ratio": 34
+    },
+    {
+     "name": "설탕",
+     "ratio": 33
+    }
+   ],
+   "status": []
   },
   {
    "name": "카페 모카",
@@ -9580,6 +10583,123 @@
    ]
   },
   {
+   "name": "크라켄 매운탕",
+   "method": "끓이기",
+   "recipe": [
+    {
+     "name": "크라켄 탕탕이",
+     "ratio": 35
+    },
+    {
+     "name": "자숙 크라켄",
+     "ratio": 35
+    },
+    {
+     "name": "크라켄 호롱구이",
+     "ratio": 30
+    }
+   ],
+   "status": []
+  },
+  {
+   "name": "크라켄 먹물 파스타",
+   "method": "파스타 만들기",
+   "recipe": [
+    {
+     "name": "크라켄 먹물",
+     "ratio": 75
+    },
+    {
+     "name": "마늘",
+     "ratio": 15
+    },
+    {
+     "name": "올리브유",
+     "ratio": 10
+    }
+   ],
+   "status": []
+  },
+  {
+   "name": "크라켄 볶음 모둠",
+   "method": "볶기",
+   "recipe": [
+    {
+     "name": "크라켄 뽈뽀",
+     "ratio": 35
+    },
+    {
+     "name": "타바스코 프라이드 크라켄",
+     "ratio": 35
+    },
+    {
+     "name": "크라켄 먹물 파스타",
+     "ratio": 30
+    }
+   ],
+   "status": []
+  },
+  {
+   "name": "크라켄 뽈뽀",
+   "method": "삶기",
+   "recipe": [
+    {
+     "name": "크라켄 다리살",
+     "ratio": 80
+    },
+    {
+     "name": "후추",
+     "ratio": 20
+    }
+   ],
+   "status": []
+  },
+  {
+   "name": "크라켄 탕탕이",
+   "method": "혼합",
+   "recipe": [
+    {
+     "name": "크라켄 다리살",
+     "ratio": 80
+    },
+    {
+     "name": "마늘",
+     "ratio": 20
+    }
+   ],
+   "status": []
+  },
+  {
+   "name": "크라켄 한상 차림",
+   "method": "혼합",
+   "recipe": [
+    {
+     "name": "크라켄 매운탕",
+     "ratio": 50
+    },
+    {
+     "name": "크라켄 볶음 모둠",
+     "ratio": 50
+    }
+   ],
+   "status": []
+  },
+  {
+   "name": "크라켄 호롱구이",
+   "method": "굽기",
+   "recipe": [
+    {
+     "name": "크라켄 다리살",
+     "ratio": 80
+    },
+    {
+     "name": "고춧가루",
+     "ratio": 20
+    }
+   ],
+   "status": []
+  },
+  {
    "name": "크레이지 초코볼",
    "method": "굽기",
    "recipe": [
@@ -9610,6 +10730,25 @@
      "value": 6
     }
    ]
+  },
+  {
+   "name": "크레이프",
+   "method": "굽기",
+   "recipe": [
+    {
+     "name": "밀가루 빵 반죽",
+     "ratio": 83
+    },
+    {
+     "name": "달걀",
+     "ratio": 9
+    },
+    {
+     "name": "우유",
+     "ratio": 8
+    }
+   ],
+   "status": []
   },
   {
    "name": "크레이프 케이크",
@@ -9734,6 +10873,32 @@
      "value": 3
     }
    ]
+  },
+  {
+   "name": "크리스마스 케이크",
+   "method": "혼합",
+   "recipe": [
+    {
+     "name": "케이크 만들기 키트",
+     "ratio": 100
+    }
+   ],
+   "status": []
+  },
+  {
+   "name": "크림 소스",
+   "method": "끓이기",
+   "recipe": [
+    {
+     "name": "생크림",
+     "ratio": 60
+    },
+    {
+     "name": "우유",
+     "ratio": 30
+    }
+   ],
+   "status": []
   },
   {
    "name": "크림 파르팔레",
@@ -9976,6 +11141,44 @@
    ]
   },
   {
+   "name": "타르트 틀",
+   "method": "파이 만들기",
+   "recipe": [
+    {
+     "name": "밀가루",
+     "ratio": 60
+    },
+    {
+     "name": "버터",
+     "ratio": 30
+    },
+    {
+     "name": "달걀",
+     "ratio": 10
+    }
+   ],
+   "status": []
+  },
+  {
+   "name": "타바스코 프라이드 크라켄",
+   "method": "튀기기",
+   "recipe": [
+    {
+     "name": "크라켄 다리살",
+     "ratio": 75
+    },
+    {
+     "name": "튀김옷",
+     "ratio": 15
+    },
+    {
+     "name": "레몬",
+     "ratio": 10
+    }
+   ],
+   "status": []
+  },
+  {
    "name": "타임티",
    "method": "끓이기",
    "recipe": [
@@ -10040,6 +11243,17 @@
    ]
   },
   {
+   "name": "토르티야",
+   "method": "굽기",
+   "recipe": [
+    {
+     "name": "옥수수 빵 반죽",
+     "ratio": 100
+    }
+   ],
+   "status": []
+  },
+  {
    "name": "토마토 달걀 볶음",
    "method": "볶기",
    "recipe": [
@@ -10102,6 +11316,36 @@
      "value": -8
     }
    ]
+  },
+  {
+   "name": "토마토 소스",
+   "method": "끓이기",
+   "recipe": [
+    {
+     "name": "토마토",
+     "ratio": 70
+    },
+    {
+     "name": "고기 조각",
+     "ratio": 20
+    }
+   ],
+   "status": []
+  },
+  {
+   "name": "토마토 소스 피자 도우",
+   "method": "피자 만들기",
+   "recipe": [
+    {
+     "name": "밀가루 빵 반죽",
+     "ratio": 88
+    },
+    {
+     "name": "토마토 소스",
+     "ratio": 12
+    }
+   ],
+   "status": []
   },
   {
    "name": "토마토 스파게티",
@@ -10210,6 +11454,25 @@
      "value": 5
     }
    ]
+  },
+  {
+   "name": "튀김옷",
+   "method": "반죽",
+   "recipe": [
+    {
+     "name": "튀김가루",
+     "ratio": 15
+    },
+    {
+     "name": "달걀",
+     "ratio": 25
+    },
+    {
+     "name": "물이 든 병",
+     "ratio": 60
+    }
+   ],
+   "status": []
   },
   {
    "name": "트뤼프 오믈렛",
@@ -10420,6 +11683,59 @@
    ]
   },
   {
+   "name": "파스타 반죽",
+   "method": "파스타 만들기",
+   "recipe": [
+    {
+     "name": "밀가루",
+     "ratio": 60
+    },
+    {
+     "name": "달걀",
+     "ratio": 30
+    }
+   ],
+   "status": []
+  },
+  {
+   "name": "파스타 재료 모둠",
+   "method": "볶기",
+   "recipe": [
+    {
+     "name": "양파",
+     "ratio": 45
+    },
+    {
+     "name": "마늘",
+     "ratio": 15
+    },
+    {
+     "name": "베이컨",
+     "ratio": 40
+    }
+   ],
+   "status": []
+  },
+  {
+   "name": "파이 틀",
+   "method": "파이 만들기",
+   "recipe": [
+    {
+     "name": "밀가루",
+     "ratio": 70
+    },
+    {
+     "name": "우유",
+     "ratio": 20
+    },
+    {
+     "name": "달걀",
+     "ratio": 10
+    }
+   ],
+   "status": []
+  },
+  {
    "name": "파인애플 베이컨 꼬치",
    "method": "굽기",
    "recipe": [
@@ -10576,6 +11892,21 @@
    ]
   },
   {
+   "name": "팥소",
+   "method": "삶기",
+   "recipe": [
+    {
+     "name": "팥",
+     "ratio": 85
+    },
+    {
+     "name": "물이 든 병",
+     "ratio": 15
+    }
+   ],
+   "status": []
+  },
+  {
    "name": "페퍼로니 피자",
    "method": "피자 만들기",
    "recipe": [
@@ -10606,6 +11937,59 @@
      "value": 3
     }
    ]
+  },
+  {
+   "name": "포도 향 시럽",
+   "method": "혼합",
+   "recipe": [
+    {
+     "name": "포도",
+     "ratio": 25
+    },
+    {
+     "name": "설탕",
+     "ratio": 65
+    },
+    {
+     "name": "물이 든 병",
+     "ratio": 10
+    }
+   ],
+   "status": []
+  },
+  {
+   "name": "포도잼",
+   "method": "잼 만들기",
+   "recipe": [
+    {
+     "name": "포도",
+     "ratio": 50
+    },
+    {
+     "name": "설탕",
+     "ratio": 45
+    }
+   ],
+   "status": []
+  },
+  {
+   "name": "포춘쿠키",
+   "method": "굽기",
+   "recipe": [
+    {
+     "name": "밀가루",
+     "ratio": 50
+    },
+    {
+     "name": "달걀",
+     "ratio": 15
+    },
+    {
+     "name": "버터",
+     "ratio": 35
+    }
+   ],
+   "status": []
   },
   {
    "name": "포카치아",
@@ -11268,6 +12652,21 @@
    ]
   },
   {
+   "name": "해물 소스",
+   "method": "끓이기",
+   "recipe": [
+    {
+     "name": "새우",
+     "ratio": 60
+    },
+    {
+     "name": "마늘",
+     "ratio": 20
+    }
+   ],
+   "status": []
+  },
+  {
    "name": "해물 스파게티",
    "method": "파스타 만들기",
    "recipe": [
@@ -11478,6 +12877,21 @@
      "value": 30
     }
    ]
+  },
+  {
+   "name": "호박잼",
+   "method": "잼 만들기",
+   "recipe": [
+    {
+     "name": "청둥호박",
+     "ratio": 70
+    },
+    {
+     "name": "설탕",
+     "ratio": 30
+    }
+   ],
+   "status": []
   },
   {
    "name": "홍차",

@@ -93,7 +93,7 @@ def test_build_summary_survives_cp1252_console(tmp_path):
                              str(tmp_path / "out.json")], cwd=root, capture_output=True, check=False,
                             env={**os.environ, "PYTHONIOENCODING": "cp1252"})
     assert result.returncode == 0, result.stderr.decode("utf-8", "replace")
-    assert b"389" in result.stdout and (tmp_path / "out.json").is_file()
+    assert b"471" in result.stdout and (tmp_path / "out.json").is_file()
 
 
 def test_build_refuses_too_few_dishes(tmp_path):
@@ -105,13 +105,17 @@ def test_build_refuses_too_few_dishes(tmp_path):
 def test_generated_json_shape_and_count():
     raw = json.loads(cooking.data_path().read_text(encoding="utf-8"))
     assert raw["source"] == build_cookings.URL
-    assert len(raw["dishes"]) == 389 >= build_cookings.MIN_COUNT  # 11-19: 단체 466 중 조리방법 없는 79개 제외, 11-25 잼 2개 추가
+    assert len(raw["dishes"]) == 471 >= build_cookings.MIN_COUNT  # 11-19: 단체 466 중 조리방법 없는 79개 제외, 11-25 잼 2개·봇 7ae79a6 82개 추가
     for d in raw["dishes"]:
         assert set(d) == {"name", "method", "recipe", "status"} and d["method"] and d["recipe"]
         assert all(r["ratio"] > 0 and r["name"] for r in d["recipe"])
     dishes = cooking.load()
-    assert len(dishes) == 389 and len({d.name for d in dishes}) == 389
+    assert len(dishes) == 471 and len({d.name for d in dishes}) == 471
     assert set(cooking.categories(dishes)) == set(cooking.CATEGORIES)  # 모르는 조리방법 없음
+    # 11-25 봇 7ae79a6: 중간 재료 49개·일반 요리 33개(능력치 빈 것은 '없음'으로 표시), 조리방법 '반죽' 5개
+    assert sum(1 for d in dishes if d.method == "반죽") == 5
+    by_name = {d.name: d for d in dishes}
+    assert [(r.name, r.ratio > 0) for r in by_name["마요네즈"].recipe][:2] == [("달걀", True), ("올리브유", True)]
     jam = {d.name: d for d in dishes if d.method == "잼 만들기"}  # 11-25 봇 d6a57cf에서 추가
     assert [(r.name, r.ratio) for r in jam["딸기잼"].recipe] == [("딸기", 60), ("설탕", 35), ("레몬즙", 5)]
     assert [(r.name, r.ratio) for r in jam["땅콩버터잼"].recipe] == [("땅콩", 65), ("올리브유", 30)]
@@ -135,7 +139,7 @@ def test_search_three_kinds_ignore_spaces():
     assert cooking.search(dishes, "능력치", "마법") == set()  # 능력치는 이름 정확히
     assert cooking.search(dishes, "재료", "   ") is None    # 빈 검색 = 필터 없음
     counts = cooking.category_counts(dishes, cooking.search(dishes, "재료", "밥"))
-    assert counts["혼합"] == 7 and counts["삶기"] == 0 and sum(counts.values()) == 20
+    assert counts["혼합"] == 8 and counts["삶기"] == 0 and sum(counts.values()) == 21  # 11-25 새우 개밥 추가
 
 
 def _items(widget):
@@ -166,10 +170,10 @@ def test_tab_filter_counts_grey_and_keeps_selection(kind, query):
     tab.query.setText("")
     tab.kind.setCurrentText("요리 이름")
     assert tab.selected.name == "모둠회덮밥"
-    for item in _items(tab.category_list)[1:]:  # 숫자 없음, 요리가 하나도 없는 카테고리(반죽)만 회색
+    for item in _items(tab.category_list)[1:]:  # 숫자 없음, 모두 고를 수 있음(11-25 봇 7ae79a6로 '반죽'도 5개 생김)
         assert item.text() == item.data(_DISH)
-        assert bool(item.flags() & Qt.ItemFlag.ItemIsEnabled) == (item.text() != "반죽")
-    assert tab.count.text() == "389개 요리"
+        assert item.flags() & Qt.ItemFlag.ItemIsEnabled
+    assert tab.count.text() == "471개 요리"
     tab.shutdown()
 
 
