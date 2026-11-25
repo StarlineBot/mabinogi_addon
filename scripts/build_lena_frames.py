@@ -118,6 +118,10 @@ def build() -> dict[str, list[np.ndarray]]:
     s_pet = head / float(np.median([head_width(f) for f in pet]))  # 이 시트만 머리 110% → 머리 폭 맞춤
     composed = pet[:3] + [face_only(pet[2], pet[3]), face_only(pet[2], pet[4])] + pet[5:]
     out["pet"] = [scaled(f, s_pet) for f in composed]
+    # 마법 연습 펑 실패(기획 11-25 기본 동작 — 3~6분에 한 번): 서 있기 머리 폭에 맞춤
+    magic = split(clean(imread(ROOT / "docs/characters/assets/레나/마법 폭발을 겪은 소녀의 6컷 감정극.png",
+                               cv2.IMREAD_UNCHANGED)))
+    out["magic"] = [scaled(f, head / float(np.median([head_width(f) for f in magic]))) for f in magic]
     from scripts.build_talk_frames import talk_frames
     out.update(talk_frames("레나"))
     end_mid, end_stand = end_frames()
@@ -130,7 +134,7 @@ GROUPS = {("pet", 3): ("pet", 2), ("pet", 4): ("pet", 2), ("sit", 1): ("sit", 0)
           ("sit", 3): ("sit", 0), ("talk_m1", 0): ("talk_base", 0), ("talk_m2", 0): ("talk_base", 0)}
 
 
-EXPECTED = {"stand": 1, "rise": 3, "walk": 6, "drag": 4, "fall": 1, "land": 4, "crouch": 3, "sit": 4, "pet": 6,
+EXPECTED = {"magic": 6, "stand": 1, "rise": 3, "walk": 6, "drag": 4, "fall": 1, "land": 4, "crouch": 3, "sit": 4, "pet": 6,
             "talk_base": 1, "talk_m1": 1, "talk_m2": 1, "talk_emph": 1, "talk_emph2": 1, "talk_blink": 1,
             "talk_mid": 1, "talk_end1": 1, "talk_end2": 1}
 

@@ -132,6 +132,8 @@ def build() -> dict[str, list[np.ndarray]]:
     out["land"] = by_height(land, land[2])           # 끝 = 서기
     pet = sheet("Starline_쓰다듬기")
     out["pet"] = fit(pet, k_height(pet))         # 키로는 머리 1.06~1.15 — 머리로 맞춤
+    sneeze = sheet("스타라인의 재채기 애니메이션 스프라이트 시트")   # 기획 11-25 기본 동작(3~6분에 한 번)
+    out["sneeze"] = fit(sneeze, k_height(sneeze))
     crouch = sheet("Starline_구석_앉기")[1:]          # 0번(짧은 체형 서 있는 장) 건너뜀
     out["crouch"] = fit(crouch, k_height(crouch, crouch[0], 0.9 * STAND_H))
     sit = sheet("Starline_구석_앉아있기")
@@ -157,7 +159,7 @@ def build() -> dict[str, list[np.ndarray]]:
     return harmonize(out, out["stand"][0], PARTS["Starline"], groups)
 
 
-EXPECTED = {"stand": 1, "flame": 4, "walk": 6, "drag": 4, "fall": 1, "land": 3, "pet": 6, "crouch": 2, "sit": 4,
+EXPECTED = {"sneeze": 6, "stand": 1, "flame": 4, "walk": 6, "drag": 4, "fall": 1, "land": 3, "pet": 6, "crouch": 2, "sit": 4,
             "rise": 2, **{f"talk_{k}": 1 for k in ("base", "m1", "m2", "emph", "emph2", "blink", "mid", "end1", "end2")}}
 
 

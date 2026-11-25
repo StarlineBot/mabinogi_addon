@@ -91,6 +91,22 @@ def scaled(frame: np.ndarray, factor: float) -> np.ndarray:
     return np.dstack([np.clip(out_rgb, 0, 255), np.clip(a, 0, 255)]).astype(np.uint8)
 
 
+def grid(image: np.ndarray, cols: int, rows: int) -> list[np.ndarray]:
+    """같은 칸으로 자르기(읽는 순서) — 칸마다 알파 경계로 꼭 맞게. 그림끼리 닿아 빈 줄로 안 나뉘는 시트용."""
+    h, w = image.shape[:2]
+    out = []
+    for r in range(rows):
+        for c in range(cols):
+            cell = image[r * h // rows:(r + 1) * h // rows, c * w // cols:(c + 1) * w // cols]
+            out.append(_tight(cell))
+    return out
+
+
+def sheet_image(name: str, folder=None) -> np.ndarray:
+    from scripts.build_aria_frames import clean
+    return clean(imread((folder or SHEETS) / name, cv2.IMREAD_UNCHANGED))
+
+
 def sheet(name: str) -> list[np.ndarray]:
     return split(imread(SHEETS / name, cv2.IMREAD_UNCHANGED))
 
@@ -133,6 +149,10 @@ def build() -> dict[str, list[np.ndarray]]:
     out.update(talk_frames("다래"))
     wake = sheet("잠에서 깨어나는 꼬마 천사 악마_sprite.sheet.png")
     out["wake"] = [scaled(f, crouch_w / wake[0].shape[1]) for f in wake]
+    # 구석에서 엎드려 자기(기획 11-25 기본 동작): 머리끼리 닿아 빈 줄로 안 나뉨 → 3×3 같은 칸으로 자른 뒤 칸마다 꼭 맞게.
+    # 0 무릎 안고 졺(= 앉아 있기 자세) → 0번 폭을 쪼그림 폭에 맞춘 배율 하나
+    sleep = grid(sheet_image("다래의 포근한 수면 루프.png", ROOT / "docs/characters/assets/다래"), 3, 3)
+    out["sleep"] = [scaled(f, crouch_w / sleep[0].shape[1]) for f in sleep]
     # 시트 색 맞추기(사용자 11-24): 크림 머리·얼굴을 서 있기 색에(scripts/sheet_colors), 입만 합성은 base 차이 그대로
     from scripts.color_parts import PARTS
     from scripts.sheet_colors import harmonize
@@ -141,7 +161,7 @@ def build() -> dict[str, list[np.ndarray]]:
 
 
 EXPECTED = {"stand": 1, "walk": 6, "surprise": 2, "pet": 6, "drag": 4, "land": 3, "getup": 3, "crouch": 3,
-            "sit_drowsy": 1, "sit_notice": 1, "sit_doze": 1, "sit_half": 1, "rise": 3, "wake": 4,
+            "sit_drowsy": 1, "sit_notice": 1, "sit_doze": 1, "sit_half": 1, "rise": 3, "wake": 4, "sleep": 9,
             "talk_think": 1, "talk_smile": 1, "talk_base": 1, "talk_m1": 1, "talk_m2": 1, "talk_emph": 1,
             "talk_emph2": 1, "talk_blink": 1, "talk_mid": 1}
 

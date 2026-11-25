@@ -82,13 +82,17 @@ def build() -> dict[str, list[np.ndarray]]:
     out.update(talk_frames("아리아", head))
     happy = sheet("말하는 귀여운 두 꼬마 요정.png")
     out["talk_happy"] = [scaled(f, by_heads(happy)) for f in happy]
+    # 기지개(기획 11-25 기본 동작 — 3~6분에 한 번): 서 있기 머리 폭에 맞춤
+    stretch = split(clean(imread(ROOT / "docs/characters/assets/아리아/스트레칭하는 복숭아빛 머리 소녀 스프라이트 시트.png",
+                                 cv2.IMREAD_UNCHANGED)))
+    out["stretch"] = [scaled(f, by_heads(stretch)) for f in stretch]
     from scripts.color_parts import PARTS
     from scripts.sheet_colors import harmonize
     groups = {(f"talk_{v}_{k}", 0): (f"talk_{v}_base", 0) for v in "ab" for k in ("m1", "m2")}
     return harmonize(out, out["stand"][0], PARTS["아리아"], groups)
 
 
-EXPECTED = {"stand": 2, "walk": 6, "surprise": 4, "drag": 2, "land": 3, "getup": 3, "pet": 6, "crouch": 3, "sit": 4,
+EXPECTED = {"stretch": 6, "stand": 2, "walk": 6, "surprise": 4, "drag": 2, "land": 3, "getup": 3, "pet": 6, "crouch": 3, "sit": 4,
             "rise": 3, "hair": 4, "talk_laugh": 1, "talk_happy": 2,
             **{f"talk_{v}_{k}": 1 for v in "ab" for k in ("base", "m1", "m2", "emph", "emph2", "blink", "mid")}}
 

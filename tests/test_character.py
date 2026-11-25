@@ -1668,7 +1668,7 @@ def test_starline_head_size_matches_standing_within_5_percent():
     face, eyes = face_crop(stand), eye_gap(stand)
     sheets, bad = {}, {}
     for path in SL_DIR.glob("*.png"):
-        if path.stem in ("card", "talk_blink_0", "sit_3"):
+        if path.stem in ("card", "talk_blink_0", "sit_3", "sneeze_2", "sneeze_3"):   # 재채기 2·3 = 손으로 코·얼굴 가림
             continue
         r = head_ratio(face, eyes, _img_of(path))
         if r is None:
@@ -1856,3 +1856,105 @@ def test_greeting_random_among_existing_without_repeat(tmp_path, monkeypatch):
     (sounds / "없음").mkdir()
     monkeypatch.setattr(config, "load_voice_pack", lambda *a, **k: "")
     assert notifier.greeting_path("없음") == sounds / notifier.SAMPLE_FILE
+
+
+@pytest.mark.parametrize("profile,rare", [(br.ARIA, "stretch"), (br.LENA, "magic"), (br.STARLINE, "sneeze")])
+def test_rare_basic_motion_only_standing_out_of_game_every_3_to_6_minutes(profile, rare):
+    """드문 기본 동작(기획 11-25 '너무 자주 나오면 이상함'): 게임 밖 서 있기에서만 3~6분에 한 번·1바퀴 뒤 서기,
+    간격 안엔 안 나옴, 게임 중엔 안 나옴, 클릭하면 바로 끊김, 대기 동작과 같은 때 겹치지 않음."""
+    assert profile.rare_extra == rare and profile.rare_gap == (180.0, 360.0)
+    b = br.Brain(br.Floor(0, 1000, 700), rng=random.Random(2), profile=profile)
+    b.pos = (300.0, 700.0)
+    b._next_walk = 1e9
+    t, starts, last = 0.0, [], None
+    while t < 1500:
+        t += 0.25
+        b._next_walk = max(b._next_walk, 1e9)
+        b._next_idle = 1e9
+        b.tick(t, False)
+        if b.state == rare and last != rare:
+            starts.append(t)
+            assert profile.idle_extra is None or b._next_extra > t   # 대기 동작이 같은 때 끼지 않음
+        last = b.state
+    gaps = [b2 - a for a, b2 in zip(starts, starts[1:])]
+    assert starts and starts[0] >= 180 and all(175 <= g <= 375 for g in gaps), (starts, gaps)
+    c = br.Brain(br.Floor(0, 1000, 700), rng=random.Random(2), profile=profile)
+    c.pos = (300.0, 700.0)
+    c.corner = (900.0, 700.0)
+    t = 0.0
+    while t < 800:
+        t += 0.5
+        c.tick(t, True)
+        assert c.state != rare   # 게임 중엔 안 나옴
+    d = br.Brain(br.Floor(0, 1000, 700), rng=random.Random(2), profile=profile)
+    d.pos = (300.0, 700.0)
+    d._next_walk = 1e9
+    d.tick(0, False)
+    d._next_rare, d._next_walk, d._next_idle = 1.0, 1e9, 1e9
+    d.tick(2, False)
+    assert d.state == rare
+    d.press(2.1, 300, 600)
+    d.release(2.1)
+    assert d.state != rare   # 클릭하면 바로 끊김
+
+
+def test_rare_motion_waits_for_idle_line_and_settings_override():
+    b = br.Brain(br.Floor(0, 1000, 700), rng=random.Random(1), profile=br.ARIA)
+    b.pos = (300.0, 700.0)
+    b._next_walk = 1e9
+    b.tick(0, False)
+    b._next_rare, b._next_walk, b._next_idle = 1.0, 1e9, 10.0   # 혼잣말이 곧 → 미룸
+    b.tick(2, False)
+    assert b.state != "stretch" and b._next_rare >= 2 + br.RARE_DEFER - 0.01
+    custom = br.ARIA.with_timing({"rareGap": [60, 90], "sleepAfter": [40, 50]})
+    assert custom.rare_gap == (60.0, 90.0) and custom.sleep_after is None   # 졸지 않는 캐릭터는 그대로
+    assert br.DARE.with_timing({"sleepAfter": [40, 50]}).sleep_after == (40.0, 50.0)
+
+
+def test_starline_sneeze_says_line_at_frame_four_once():
+    b = br.Brain(br.Floor(0, 1000, 700), rng=random.Random(1), profile=br.STARLINE)
+    b.pos = (300.0, 700.0)
+    b._next_walk = 1e9
+    b.tick(0, False)
+    b._next_rare, b._next_walk, b._next_idle, b._next_extra = 1.0, 1e9, 1e9, 1e9
+    t, events = 0.0, []
+    while t < 8:
+        t += 0.05
+        events += b.tick(t, False)
+    assert events.count(("say", "sneeze")) == 1
+    lines = ln.read(SL_DIR / "lines.json").lines["sneeze"]
+    assert "누가 내 욕하나?" in [line.text for line in lines]
+
+
+def test_dare_sleeps_lying_after_long_doze_then_wakes_or_rises():
+    """다래 엎드려 자기(기획 11-25): 구석에서 조는 흐름이 5~10분 이어지면 엎드림(0→2) → 3·4·5 숨쉬기 유지(Zzz),
+    게임이 끝나면 6·7·8로 앉은 뒤 일어나기, 클릭하면 자다가 깜짝 깨기."""
+    assert br.DARE.sleep_after == (300.0, 600.0) and br.IAN.sleep_after is None
+
+    def asleep():
+        b = br.Brain(br.Floor(0, 1000, 700), rng=random.Random(3), profile=br.DARE, corner=(900.0, 700.0))
+        b.pos = (300.0, 700.0)
+        t, seen = 0.0, []
+        while t < 700 and b.state != "sleep_loop":
+            t += 0.25
+            b.tick(t, True)
+            seen.append((t, b.state))
+        return b, t, seen
+
+    b, t, seen = asleep()
+    first_down = next(x for x, s in seen if s == "sleep_down")
+    sat = next(x for x, s in seen if s == "sit_drowsy")
+    assert b.state == "sleep_loop" and 300 <= first_down - sat <= 600 + 10 and b.zzz()
+    for _ in range(80):
+        t += 0.25
+        b.tick(t, True)
+        assert b.state == "sleep_loop"   # 계속 엎드려 숨쉬기
+    states = []
+    for _ in range(40):
+        t += 0.25
+        b.tick(t, False)
+        states.append(b.state)
+    assert "sleep_up" in states and "rise" in states   # 게임 끝 → 앉아 일어남 → 일어나기
+    c, t, _ = asleep()
+    c.press(t, 900, 650)
+    assert c.release(t)[-1] == ("say", "click_sleep") and c.state == "wake"
