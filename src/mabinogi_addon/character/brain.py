@@ -741,6 +741,8 @@ class Brain:
             return False
         if self.state not in UPRIGHT or self._dragging:
             return False
+        if self.profile.rare_extra and self.state == self.profile.rare_extra:
+            return False   # 드문 동작 중 말풍선(Starline 재채기 '누가 내 욕하나?')은 그림 위에만 — 동작은 끝까지(QA 11-25)
         self._target = None
         # 그 분위기 그림이 없는 캐릭터(아리아 '생각', 이안 생각·기쁨)는 보통 말하기로
         self._start_talk(now, now + max(0.6, chars * TYPE_SECONDS), mood, chars)

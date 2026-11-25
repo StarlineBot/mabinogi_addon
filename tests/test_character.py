@@ -1984,3 +1984,36 @@ def test_basic_motion_same_pose_frames_match_neighbour_silhouette(folder, ref, o
     from scripts.silhouette import best_scale
 
     assert 0.97 <= best_scale(_img_of(ASSETS / folder / f"{ref}.png"), _img_of(ASSETS / folder / f"{other}.png")) <= 1.03
+
+
+def test_starline_sneeze_bubble_keeps_sneeze_frames_to_the_end(app):
+    """QA 11-25: 재채기 4번 말풍선이 말하기로 바꿔 4·5번이 안 나오고 크기가 튀었음 → 말풍선은 그림 위에만,
+    재채기 0~5번 그대로 뒤 서기(talk_* 없음), 말풍선 1번, 말풍선이 떠 있는 동안 state == 'sneeze'."""
+    from mabinogi_addon.ui import pet_window
+
+    clock = {"t": 1.0}
+    b = _starline()
+    b._next_walk = 1e9
+    w = pet_window.PetWindow(b, pet_window.load_frames("Starline", br.STARLINE), "#3A0729",
+                             clock=lambda: clock["t"], outline="#D8AA5E")
+    picker = ln.Picker(ln.read(SL_DIR / "lines.json"), random.Random(1))
+    said = []
+    w.events.connect(lambda events: [said.append(e[1]) or w.say(picker.pick(e[1])) for e in events if e[0] == "say"])
+    try:
+        w.step()
+        b._next_rare, b._next_walk, b._next_idle, b._next_extra = clock["t"] + 0.01, 1e9, 1e9, 1e9
+        frames = []
+        for _ in range(int(6.5 * 30)):
+            clock["t"] += 1 / 30
+            w.step()
+            name = b.frame(clock["t"])
+            if not frames or frames[-1] != name:
+                frames.append(name)
+            if w.bubble() and b.state != "stand":
+                assert b.state == "sneeze"
+        assert said == ["sneeze"]
+        start = frames.index("sneeze_0")
+        assert frames[start:start + 7] == [f"sneeze_{i}" for i in range(6)] + ["stand_0"]
+        assert not [f for f in frames if f.startswith("talk_")]
+    finally:
+        w.close()
