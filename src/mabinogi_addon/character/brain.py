@@ -295,8 +295,9 @@ STARLINE = Profile(STARLINE_ANIMS,
                     "crouch": "sit_loop", "sit_notice": "sit_loop", "rise": "stand", "talk_end": "stand",
                     "sneeze": "stand"},
                    ("crouch", "sit_loop", "sit_notice"), "sit_loop", idle_extra="flame", idle_laps=(1, 1),
-                   click_talks=True, walk_speed=STARLINE_WALK_SPEED, talk_sets=STARLINE_TALK, scale=STARLINE_SCALE,
-                   rare_extra="sneeze", rare_say=(4, "sneeze"))
+                   click_talks=True, walk_speed=STARLINE_WALK_SPEED, talk_sets=STARLINE_TALK, scale=STARLINE_SCALE)
+# 재채기는 0.56.2에서 끔(사용자 11-25 '재채기만 제외' — 시트 비율이 서 있기와 달라 기획이 재생성 중).
+# 새 시트가 오면 위 Profile에 rare_extra="sneeze", rare_say=(4, "sneeze") 를 다시 넣는다.
 PROFILES = {"다래": DARE, "아리아": ARIA, "이안": IAN, "레나": LENA, "Starline": STARLINE}
 
 

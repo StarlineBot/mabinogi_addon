@@ -1,4 +1,5 @@
 """캐릭터 알파(docs/character-pet-spec.md) — 호감도 규칙·대사·펫 상태 전환·캡처 제외·캐릭터 탭."""
+import dataclasses
 import datetime
 import json
 import os
@@ -1518,8 +1519,12 @@ def _img_of(path):
 SL_DIR = ASSETS / "Starline"
 
 
-def _starline(**kw):
-    b = br.Brain(br.Floor(0, 1000, 700), rng=random.Random(4), profile=br.STARLINE, **kw)
+# 재채기는 0.56.2에서 꺼 둠(기획 재생성 대기) — 동작 자체는 켠 Profile로 계속 검사
+STARLINE_SNEEZE = dataclasses.replace(br.STARLINE, rare_extra="sneeze", rare_say=(4, "sneeze"))
+
+
+def _starline(profile=br.STARLINE, **kw):
+    b = br.Brain(br.Floor(0, 1000, 700), rng=random.Random(4), profile=profile, **kw)
     b.pos = (300.0, 700.0)
     return b
 
@@ -1859,7 +1864,7 @@ def test_greeting_random_among_existing_without_repeat(tmp_path, monkeypatch):
     assert notifier.greeting_path("없음") == sounds / notifier.SAMPLE_FILE
 
 
-@pytest.mark.parametrize("profile,rare", [(br.ARIA, "stretch"), (br.LENA, "magic"), (br.STARLINE, "sneeze")])
+@pytest.mark.parametrize("profile,rare", [(br.ARIA, "stretch"), (br.LENA, "magic"), (STARLINE_SNEEZE, "sneeze")])
 def test_rare_basic_motion_only_standing_out_of_game_every_3_to_6_minutes(profile, rare):
     """드문 기본 동작(기획 11-25 '너무 자주 나오면 이상함'): 게임 밖 서 있기에서만 3~6분에 한 번·1바퀴 뒤 서기,
     간격 안엔 안 나옴, 게임 중엔 안 나옴, 클릭하면 바로 끊김, 대기 동작과 같은 때 겹치지 않음."""
@@ -1914,7 +1919,7 @@ def test_rare_motion_waits_for_idle_line_and_settings_override():
 
 
 def test_starline_sneeze_says_line_at_frame_four_once():
-    b = br.Brain(br.Floor(0, 1000, 700), rng=random.Random(1), profile=br.STARLINE)
+    b = br.Brain(br.Floor(0, 1000, 700), rng=random.Random(1), profile=STARLINE_SNEEZE)
     b.pos = (300.0, 700.0)
     b._next_walk = 1e9
     b.tick(0, False)
@@ -1992,7 +1997,7 @@ def test_starline_sneeze_bubble_keeps_sneeze_frames_to_the_end(app):
     from mabinogi_addon.ui import pet_window
 
     clock = {"t": 1.0}
-    b = _starline()
+    b = _starline(STARLINE_SNEEZE)
     b._next_walk = 1e9
     w = pet_window.PetWindow(b, pet_window.load_frames("Starline", br.STARLINE), "#3A0729",
                              clock=lambda: clock["t"], outline="#D8AA5E")
@@ -2017,3 +2022,9 @@ def test_starline_sneeze_bubble_keeps_sneeze_frames_to_the_end(app):
         assert not [f for f in frames if f.startswith("talk_")]
     finally:
         w.close()
+
+
+def test_starline_sneeze_is_off_in_this_release():
+    """0.56.2: Starline 재채기 끔(사용자 11-25 '재채기만 제외하고 배포') — 기본 Profile은 드문 동작 없음."""
+    assert br.STARLINE.rare_extra is None and br.STARLINE.rare_say is None
+    assert br.PROFILES["Starline"].rare_extra is None
