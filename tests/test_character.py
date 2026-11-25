@@ -691,7 +691,7 @@ def test_aria_sits_without_dozing_and_smiles_when_clicked():
         b.tick(t, True)
         seen.add(b.frame(t))
         assert b.state not in ("sit_doze", "wake") and not b.zzz()
-    assert {"sit_0", "sit_1", "sit_3"} <= seen and "sit_2" not in seen   # 눈 흘김 sit_2는 뺌(11-25)  # 머리 안고 앉아 웃음 반복
+    assert {"sit_0", "sit_1", "sit_2", "sit_3"} <= seen  # 머리 안고 앉아 웃음 반복
     b.press(t, 900, 640)
     assert b.release(t)[-1] == ("say", "click_sit") and b.frame(t) == "sit_1"  # 앉아서 클릭 = 웃음
 
@@ -1577,7 +1577,7 @@ def test_starline_flame_idle_click_talks_and_corner():
         c.tick(t, True)
         seen.add(c.frame(t))
         assert not c.zzz()
-    assert {"sit_0", "sit_1", "sit_3"} <= seen and "sit_2" not in seen   # 눈 흘김 sit_2는 뺌(11-25)
+    assert {"sit_0", "sit_1", "sit_2", "sit_3"} <= seen
     c.press(t, 900, 600)
     assert c.release(t)[-1] == ("say", "click_sit") and c.frame(t) == "sit_0"
 
