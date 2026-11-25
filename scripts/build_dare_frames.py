@@ -18,7 +18,8 @@ import numpy as np
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
-from mabinogi_addon.image_io import imread, imwrite  # noqa: E402
+from mabinogi_addon.image_io import imread  # noqa: E402
+from mabinogi_addon.image_io import write_sprite as imwrite  # noqa: E402  캐릭터 그림은 작게(알파 0 RGB 0·압축 9)
 
 SHEETS = ROOT / "docs/characters/assets/다래/SD"
 OUT = ROOT / "src/mabinogi_addon/assets/characters/다래"

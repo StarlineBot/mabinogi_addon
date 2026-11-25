@@ -12,7 +12,7 @@ import subprocess
 import urllib.request
 import xml.etree.ElementTree as ET
 
-MAX_BYTES = 200 * 1024 * 1024
+MAX_BYTES = 300 * 1024 * 1024   # 0.57.0: 캐릭터 그림이 늘어 exe ≈ 211MB(200 MiB 넘음, QA 11-25)
 TTL = timedelta(days=1)
 PROFILE = 'release-features-windows-smoke-v2'
 REQUIRED_JOBS = {

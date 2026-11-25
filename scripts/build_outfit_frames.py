@@ -23,7 +23,8 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from mabinogi_addon.image_io import imread, imwrite
+from mabinogi_addon.image_io import imread
+from mabinogi_addon.image_io import write_sprite as imwrite   # 알파 0 RGB 0·압축 9
 from scripts.build_dare_frames import guide_cells, scaled
 
 ROOT = Path(__file__).resolve().parents[1]

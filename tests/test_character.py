@@ -2536,3 +2536,31 @@ def test_lena_corner_sit_loop_without_side_glance():
     """레나 구석 앉기: 눈을 옆으로 흘기는 sit_2 뺌(사용자 11-25), 주기 15초 그대로."""
     frames, times, loop = br.LENA.anims["sit_loop"]
     assert "sit_2" not in frames and loop and abs(sum(times) - 15.0) < 1e-9
+
+
+def test_character_pngs_have_no_hidden_color_under_transparent_pixels():
+    """캐릭터 PNG는 알파 0 픽셀의 RGB가 0(QA 11-25 — exe 200 MiB 초과로 무손실 줄임, 빌드도 write_sprite로 저장)."""
+    import cv2
+    import numpy as np
+
+    from mabinogi_addon.image_io import imread
+
+    for path in sorted(ASSETS.rglob("*.png")):
+        image = imread(path, cv2.IMREAD_UNCHANGED)
+        if image.ndim == 3 and image.shape[2] == 4:
+            assert not image[image[..., 3] == 0, :3].any(), path
+
+
+def test_write_sprite_keeps_visible_pixels(tmp_path):
+    import numpy as np
+
+    from mabinogi_addon.image_io import imread, write_sprite
+
+    rng = np.random.default_rng(1)
+    image = rng.integers(0, 256, (20, 30, 4), dtype=np.uint8)
+    image[::3, ::2, 3] = 0
+    assert write_sprite(tmp_path / "a.png", image)
+    import cv2
+    back = imread(tmp_path / "a.png", cv2.IMREAD_UNCHANGED)
+    seen = image[..., 3] > 0
+    assert np.array_equal(back[seen], image[seen]) and not back[~seen, :3].any()

@@ -14,7 +14,8 @@ import cv2
 import numpy as np
 
 from mabinogi_addon.character import outfits
-from mabinogi_addon.image_io import imread, imwrite
+from mabinogi_addon.image_io import imread
+from mabinogi_addon.image_io import write_sprite as imwrite   # 알파 0 RGB 0·압축 9
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "docs" / "characters" / "assets"
