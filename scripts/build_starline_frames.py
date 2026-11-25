@@ -159,7 +159,38 @@ def build() -> dict[str, list[np.ndarray]]:
     from scripts.color_parts import PARTS
     from scripts.sheet_colors import harmonize
     groups = {("talk_m1", 0): ("talk_base", 0), ("talk_m2", 0): ("talk_base", 0)}
-    return harmonize(out, out["stand"][0], PARTS["Starline"], groups)
+    out = harmonize(out, out["stand"][0], PARTS["Starline"], groups)
+    # 재채기 시트만 옷·망토 톤이 탁함(QA 11-25 '색감이 달라짐') — 중간 톤(옷·망토) 평균을 서 있기에 맞춤
+    out["sneeze"] = [match_midtone(f, out["stand"][0]) for f in out["sneeze"]]
+    return out
+
+
+MID = (80, 170)   # 옷·망토 중간 톤(OpenCV 8비트 L) — 머리카락(밝음)·외곽선(검정)은 밖
+
+
+def _midtone(frame: np.ndarray):
+    lab = cv2.cvtColor(np.ascontiguousarray(frame[..., :3]), cv2.COLOR_BGR2LAB).astype(np.float32)
+    hsv = cv2.cvtColor(np.ascontiguousarray(frame[..., :3]), cv2.COLOR_BGR2HSV)
+    gold = (hsv[..., 0] >= 12) & (hsv[..., 0] <= 32) & (hsv[..., 1] > 80)   # 후광·장신구는 그대로
+    sel = (frame[..., 3] > 200) & (lab[..., 0] >= MID[0]) & (lab[..., 0] <= MID[1]) & ~gold
+    return lab, sel
+
+
+def match_midtone(frame: np.ndarray, stand: np.ndarray) -> np.ndarray:
+    """중간 톤 픽셀(옷·망토)의 Lab 평균을 서 있기에 맞춤 — 그 픽셀만 바꿈(머리카락·피부 밝은 톤·후광·외곽선은 그대로)."""
+    ref_lab, ref_sel = _midtone(stand)
+    out = frame.copy()
+    for _ in range(4):   # 옮긴 픽셀이 중간 톤 경계를 넘나들어 한 번에 안 맞음 — 몇 번 되풀이
+        lab, sel = _midtone(out)
+        if sel.sum() < 200 or ref_sel.sum() < 200:
+            return out
+        diff = ref_lab[ref_sel].mean(0) - lab[sel].mean(0)
+        if np.abs(diff).max() < 0.5:
+            break
+        lab[sel] = np.clip(lab[sel] + diff, 0, 255)
+        fixed = cv2.cvtColor(lab.astype(np.uint8), cv2.COLOR_LAB2BGR)
+        out[sel, :3] = fixed[sel]
+    return out
 
 
 EXPECTED = {"sneeze": 6, "stand": 1, "flame": 4, "walk": 6, "drag": 4, "fall": 1, "land": 3, "pet": 6, "crouch": 2, "sit": 4,

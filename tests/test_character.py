@@ -2017,3 +2017,23 @@ def test_starline_sneeze_bubble_keeps_sneeze_frames_to_the_end(app):
         assert not [f for f in frames if f.startswith("talk_")]
     finally:
         w.close()
+
+
+def test_starline_sneeze_cloth_tone_matches_stand():
+    """재채기 시트 옷·망토 톤(중간 톤 Lab 평균)이 서 있기와 같아야 한다(QA 11-25 '색감이 달라짐')."""
+    import cv2
+    import numpy as np
+
+    from mabinogi_addon.image_io import imread
+
+    def mid(name):
+        f = imread(ASSETS / "Starline" / f"{name}.png", cv2.IMREAD_UNCHANGED)
+        lab = cv2.cvtColor(np.ascontiguousarray(f[..., :3]), cv2.COLOR_BGR2LAB).astype(np.float64)
+        sel = (f[..., 3] > 200) & (lab[..., 0] >= 80) & (lab[..., 0] <= 170)
+        m = lab[sel].mean(0)
+        return np.array([m[0] / 2.55, m[1] - 128, m[2] - 128])
+
+    stand = mid("stand_0")
+    for i in range(6):
+        diff = np.abs(mid(f"sneeze_{i}") - stand)
+        assert (diff <= 1.5).all(), (i, diff.round(2))
