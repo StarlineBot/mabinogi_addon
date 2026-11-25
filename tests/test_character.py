@@ -2577,3 +2577,9 @@ def test_silhouette_card_preview_uses_its_own_pack_not_selected_one(monkeypatch)
         assert notifier.greeting_path(pack) == sounds / pack / notifier.SAMPLE_FILE
     assert notifier.greeting_path("") == sounds / notifier.SAMPLE_FILE
     assert notifier.greeting_path("없는 팩") == sounds / notifier.SAMPLE_FILE
+
+
+def test_dare_stand_is_getup_end_picture():
+    """다래 기본 서 있기 = 일어나기 v2 끝 장(사용자 11-25 '착지하고 서 있을 때가 더 이쁨') — 키 285 그대로."""
+    assert (ASSETS / "다래" / "stand_0.png").read_bytes() == (ASSETS / "다래" / "getup_2.png").read_bytes()
+    assert _img_of(ASSETS / "다래" / "stand_0.png").shape[0] == 285

@@ -190,7 +190,11 @@ def build() -> dict[str, list[np.ndarray]]:
     from scripts.color_parts import PARTS
     from scripts.sheet_colors import harmonize
     groups = {("talk_m1", 0): ("talk_base", 0), ("talk_m2", 0): ("talk_base", 0)}
-    return harmonize(out, out["stand"][0], PARTS["다래"], groups)
+    # 색 맞추기 기준은 예전 정면 서 있기 그대로(다른 그림 색이 바뀌지 않게) — 그 뒤 서 있기를 일어나기 끝 장으로(사용자 11-25
+    # '착지하고 서 있을 때가 더 이쁨' — 일어나기 v2 4번째 칸, 일어나기 끝 = 서 있기라 이어짐도 매끄러움)
+    out = harmonize(out, out["stand"][0], PARTS["다래"], groups)
+    out["stand"] = [out["getup"][-1].copy()]
+    return out
 
 
 EXPECTED = {"stand": 1, "walk": 6, "surprise": 2, "pet": 6, "drag": 4, "land": 3, "getup": 3, "crouch": 3,
