@@ -1,0 +1,84 @@
+{
+ "2-1_떨어지기_착지": [
+  {
+   "cell": 0,
+   "frame": "(정답 예시 — 버림)"
+  },
+  {
+   "cell": 1,
+   "frame": "fall_0"
+  },
+  {
+   "cell": 2,
+   "frame": "fall_1"
+  },
+  {
+   "cell": 3,
+   "frame": "land_0"
+  },
+  {
+   "cell": 4,
+   "frame": "land_1"
+  },
+  {
+   "cell": 5,
+   "frame": "land_2"
+  }
+ ],
+ "2-2_쓰다듬기": [
+  {
+   "cell": 0,
+   "frame": "(정답 예시 — 버림)"
+  },
+  {
+   "cell": 1,
+   "frame": "pet_0"
+  },
+  {
+   "cell": 2,
+   "frame": "pet_1"
+  },
+  {
+   "cell": 3,
+   "frame": "pet_2"
+  },
+  {
+   "cell": 4,
+   "frame": "pet_3"
+  },
+  {
+   "cell": 5,
+   "frame": "pet_4"
+  },
+  {
+   "cell": 6,
+   "frame": "pet_5"
+  }
+ ],
+ "2-3_웅크리기_앉기": [
+  {
+   "cell": 0,
+   "frame": "(정답 예시 — 버림)"
+  },
+  {
+   "cell": 1,
+   "frame": "crouch_0"
+  },
+  {
+   "cell": 2,
+   "frame": "crouch_1"
+  },
+  {
+   "cell": 3,
+   "frame": "crouch_2"
+  },
+  {
+   "cell": 4,
+   "frame": "sit_0"
+  },
+  {
+   "cell": 5,
+   "frame": "sit_1"
+  }
+ ]
+}
