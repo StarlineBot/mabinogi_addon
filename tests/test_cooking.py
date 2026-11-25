@@ -93,7 +93,7 @@ def test_build_summary_survives_cp1252_console(tmp_path):
                              str(tmp_path / "out.json")], cwd=root, capture_output=True, check=False,
                             env={**os.environ, "PYTHONIOENCODING": "cp1252"})
     assert result.returncode == 0, result.stderr.decode("utf-8", "replace")
-    assert b"387" in result.stdout and (tmp_path / "out.json").is_file()
+    assert b"389" in result.stdout and (tmp_path / "out.json").is_file()
 
 
 def test_build_refuses_too_few_dishes(tmp_path):
@@ -105,13 +105,16 @@ def test_build_refuses_too_few_dishes(tmp_path):
 def test_generated_json_shape_and_count():
     raw = json.loads(cooking.data_path().read_text(encoding="utf-8"))
     assert raw["source"] == build_cookings.URL
-    assert len(raw["dishes"]) == 387 >= build_cookings.MIN_COUNT  # 11-19: 단체 466 중 조리방법 없는 79개 제외
+    assert len(raw["dishes"]) == 389 >= build_cookings.MIN_COUNT  # 11-19: 단체 466 중 조리방법 없는 79개 제외, 11-25 잼 2개 추가
     for d in raw["dishes"]:
         assert set(d) == {"name", "method", "recipe", "status"} and d["method"] and d["recipe"]
         assert all(r["ratio"] > 0 and r["name"] for r in d["recipe"])
     dishes = cooking.load()
-    assert len(dishes) == 387 and len({d.name for d in dishes}) == 387
+    assert len(dishes) == 389 and len({d.name for d in dishes}) == 389
     assert set(cooking.categories(dishes)) == set(cooking.CATEGORIES)  # 모르는 조리방법 없음
+    jam = {d.name: d for d in dishes if d.method == "잼 만들기"}  # 11-25 봇 d6a57cf에서 추가
+    assert [(r.name, r.ratio) for r in jam["딸기잼"].recipe] == [("딸기", 60), ("설탕", 35), ("레몬즙", 5)]
+    assert [(r.name, r.ratio) for r in jam["땅콩버터잼"].recipe] == [("땅콩", 65), ("올리브유", 30)]
 
 
 def test_ratio_normalized_by_sum():
@@ -166,7 +169,7 @@ def test_tab_filter_counts_grey_and_keeps_selection(kind, query):
     for item in _items(tab.category_list)[1:]:  # 숫자 없음, 요리가 하나도 없는 카테고리(반죽)만 회색
         assert item.text() == item.data(_DISH)
         assert bool(item.flags() & Qt.ItemFlag.ItemIsEnabled) == (item.text() != "반죽")
-    assert tab.count.text() == "387개 요리"
+    assert tab.count.text() == "389개 요리"
     tab.shutdown()
 
 
