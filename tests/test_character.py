@@ -2336,3 +2336,43 @@ def test_starline_talk_start_v2_eyes_match_stand():
         assert abs(f.shape[0] - stand.shape[0]) <= 3, name
     for name in ("talk_mid_0", "talk_end2_0"):
         assert abs(eye_height(_sl(name)) / eye_height(stand) - 1) <= 0.03, name
+
+
+# 원본 상반신이 짧아 얼굴 크기 5%·위치 6px 안에선 카드 아래를 못 채우는 착장 — 기획에 긴 상반신 재생성 요청(QA 11-25)
+OUTFIT_CARDS_AWAITING_REDRAW = {("다래", "frill_pajama"), ("다래", "white_offshoulder"), ("레나", "red_dress"),
+                                ("아리아", "tshirt"), ("이안", "vest_tie"), ("이안", "guild_uniform")}
+
+
+def test_outfit_cards_fill_to_bottom_and_keep_face():
+    """착장 카드(QA 11-25 '아래가 비어 짧아 보임'): 아래 끝 줄 가운데가 불투명(기본 카드처럼), 얼굴은 기본 카드와
+    크기 ±5%·위치 ±6px. 다시 그려 받을 옷은 얼굴 조건만."""
+    import cv2
+    import numpy as np
+
+    from mabinogi_addon.character import outfits
+    from mabinogi_addon.image_io import imread
+    from scripts.build_outfit_cards import FACE
+
+    def gray(im):
+        a = im[..., 3] / 255
+        return (cv2.cvtColor(np.ascontiguousarray(im[..., :3]), cv2.COLOR_BGR2GRAY) * a + 255 * (1 - a)).astype(np.uint8)
+
+    for folder, items in outfits.OUTFITS.items():
+        base = imread(ASSETS / folder / "card.png", cv2.IMREAD_UNCHANGED)
+        h, w = base.shape[:2]
+        y0, y1, x0, x1 = int(FACE[0] * h), int(FACE[1] * h), int(FACE[2] * w), int(FACE[3] * w)
+        tmpl = gray(base)[y0:y1, x0:x1]
+        for o in items[1:]:
+            card = imread(ASSETS / outfits.asset(folder, o.key, "card.png"), cv2.IMREAD_UNCHANGED)
+            best = (-1.0, 1.0, 0.0, 0.0)
+            for k in np.linspace(0.9, 1.1, 41):
+                t = cv2.resize(tmpl, None, fx=k, fy=k)
+                _, score, _, loc = cv2.minMaxLoc(cv2.matchTemplate(gray(card), t, cv2.TM_CCOEFF_NORMED))
+                if score > best[0]:
+                    best = (score, k, loc[0] + t.shape[1] / 2 - (x0 + x1) / 2, loc[1] + t.shape[0] / 2 - (y0 + y1) / 2)
+            _, k, dx, dy = best
+            assert abs(k - 1) <= 0.05 + 1e-9 and abs(dx) <= 6 and abs(dy) <= 6, (folder, o.key, best)
+            if (folder, o.key) in OUTFIT_CARDS_AWAITING_REDRAW:
+                continue
+            bottom = card[-1, w // 3: 2 * w // 3, 3] > 128
+            assert bottom.mean() > 0.5, (folder, o.key)
