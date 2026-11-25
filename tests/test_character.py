@@ -2345,8 +2345,7 @@ def test_drawer_cells_use_card_ratio_and_fill_to_bottom(app, cfg):
     from mabinogi_addon.ui import character_tab as ct
 
     assert abs(ct.CELL_W / ct.CELL_H - ct.CARD_W / ct.CARD_H) < 0.01
-    # 이안 두 벌은 원본 상반신이 허리 위에서 끝나 큰 카드에서도 아래가 빔 — 기획에 긴 상반신 재생성 요청(11-25)
-    awaiting = {("이안", "vest_tie"), ("이안", "guild_uniform")}
+    awaiting = set()   # 이안 두 벌은 전신.png에서 잘라 아래까지 참(사용자 11-25 '전신이 있으니 잘라 쓰면 되잖아')
     for folder, items in outfits.OUTFITS.items():
         character = next(c for c in roster.ROSTER if c.known and roster.folder(c) == folder)
         for o in items:
@@ -2359,3 +2358,36 @@ def test_drawer_cells_use_card_ratio_and_fill_to_bottom(app, cfg):
             y = int(1 + frame_h - 5)   # 칸 그림 아래 끝 바로 위(흰 테두리 안쪽)
             white = sum(1 for x in range(w // 3, 2 * w // 3) if image.pixelColor(x, y).lightness() > 245)
             assert white < (w // 3) * 0.5, (folder, o.key, white)
+
+
+
+def test_outfit_card_images_reach_bottom_with_face_in_place():
+    """착장 card.png 8장: 얼굴은 기본 카드와 크기 ±5%·위치 ±6px, 전신에서 자른 이안 두 벌은 아래 끝 줄까지 그림."""
+    import cv2
+    import numpy as np
+
+    from mabinogi_addon.character import outfits
+    from mabinogi_addon.image_io import imread
+    from scripts.build_outfit_cards import FACE, FROM_FULL
+
+    def gray(im):
+        a = im[..., 3] / 255
+        return (cv2.cvtColor(np.ascontiguousarray(im[..., :3]), cv2.COLOR_BGR2GRAY) * a + 255 * (1 - a)).astype(np.uint8)
+
+    for folder, items in outfits.OUTFITS.items():
+        base = imread(ASSETS / folder / "card.png", cv2.IMREAD_UNCHANGED)
+        h, w = base.shape[:2]
+        y0, y1, x0, x1 = int(FACE[0] * h), int(FACE[1] * h), int(FACE[2] * w), int(FACE[3] * w)
+        tmpl = gray(base)[y0:y1, x0:x1]
+        for o in items[1:]:
+            card = imread(ASSETS / outfits.asset(folder, o.key, "card.png"), cv2.IMREAD_UNCHANGED)
+            if (folder, o.key) in FROM_FULL:   # 나머지 6벌은 아래 띠가 화면에서 잘리는 자리(서랍·카드 테스트가 확인)
+                assert (card[-4:, w // 3: 2 * w // 3, 3] > 128).mean() > 0.9, (folder, o.key)
+            best = (-1.0, 1.0, 0.0, 0.0)
+            for k in np.linspace(0.9, 1.1, 41):
+                t = cv2.resize(tmpl, None, fx=k, fy=k)
+                _, score, _, loc = cv2.minMaxLoc(cv2.matchTemplate(gray(card), t, cv2.TM_CCOEFF_NORMED))
+                if score > best[0]:
+                    best = (score, k, loc[0] + t.shape[1] / 2 - (x0 + x1) / 2, loc[1] + t.shape[0] / 2 - (y0 + y1) / 2)
+            _, k, dx, dy = best
+            assert abs(k - 1) <= 0.05 + 1e-9 and abs(dx) <= 6 and abs(dy) <= 6, (folder, o.key, best)
