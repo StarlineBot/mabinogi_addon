@@ -38,6 +38,30 @@ def thirds(frame: np.ndarray) -> list[np.ndarray]:
     return [_tight(frame[:, a:b]) for a, b in zip(cuts, cuts[1:])]
 
 
+def face_ratio(stand: np.ndarray, frame: np.ndarray) -> float:
+    """frame 얼굴이 stand 얼굴의 몇 배인지 — stand 얼굴 영역(머리 꼭대기에서 키 10~30%, 가운데 폭 40%)을 템플릿으로
+    배율 0.75~1.35(61단계) matchTemplate(기획 11-25 측정 방법)."""
+    import cv2
+
+    def gray(img):
+        a = img[..., 3:].astype(np.float32) / 255
+        g = cv2.cvtColor(np.ascontiguousarray(img[..., :3]), cv2.COLOR_BGR2GRAY).astype(np.float32)[..., None]
+        return (g * a + 235 * (1 - a))[..., 0].astype(np.uint8)
+
+    h, w = stand.shape[:2]
+    tmpl = gray(stand)[int(h * 0.10):int(h * 0.30), int(w * 0.30):int(w * 0.70)]
+    target = gray(frame)
+    best = (-2.0, 1.0)
+    for k in np.linspace(0.75, 1.35, 61):
+        t = cv2.resize(tmpl, None, fx=k, fy=k, interpolation=cv2.INTER_AREA)
+        if t.shape[0] > target.shape[0] or t.shape[1] > target.shape[1]:
+            continue
+        score = float(cv2.matchTemplate(target, t, cv2.TM_CCOEFF_NORMED).max())
+        if score > best[0]:
+            best = (score, float(k))
+    return best[1]
+
+
 def build() -> dict[str, list[np.ndarray]]:
     """시트마다 배율 하나 = 서 있기 머리 폭 / 그 시트 머리 폭 중앙값(사용자 11-24 머리 크기 규칙 — 한 시트 안에선 같은 배율이라
     프레임끼리 꿈틀거리지 않음). 웅크리기만 첫 장(선 자세) 키 285, 일어나기는 쪼그림 폭 → 끝 머리 폭 보간."""
@@ -53,9 +77,14 @@ def build() -> dict[str, list[np.ndarray]]:
     fall = sheet("이안의 두 가지 추락 포즈 스프라이트.png", SHEETS)  # 그대로(앱은 fall_0 한 장)
     out["fall"] = [scaled(f, by_head(f)) for f in fall]
     for key, name in (("walk", "이안_걷기.png"), ("drag", "이안_끌기.png"), ("land", "이안_착지.png"),
-                      ("pet", "이안_쓰다듬기.png"), ("sit", "이안_앉아기다리기.png")):
+                      ("pet", "이안_쓰다듬기.png")):
         frames = sheet(name)
         out[key] = [scaled(f, by_heads(frames)) for f in frames]
+    # 앉아 있기: 머리 폭 구간에 머리카락·어깨가 섞여 머리 폭으론 얼굴이 약 8% 커짐(사용자 11-25) → 얼굴 템플릿 배율로 서 있기와 같게
+    sit = sheet("이안_앉아기다리기.png")
+    k_sit = by_heads(sit)
+    k_sit /= float(np.median([face_ratio(out["stand"][1], scaled(f, k_sit)) for f in sit]))
+    out["sit"] = [scaled(f, k_sit) for f in sit]
     crouch = sheet("이안_웅크리기.png")
     s_crouch = STAND_H / crouch[0].shape[0]
     out["crouch"] = [scaled(f, s_crouch) for f in crouch]

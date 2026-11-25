@@ -2296,3 +2296,17 @@ def test_starline_talk_tones_match_stand():
         (mid, dark), sat = tones(_sl(name))
         assert (np.abs(mid - mid0) <= 1.5).all() and (np.abs(dark - dark0) <= 1.5).all(), (name, mid, dark)
         assert abs(sat - sat0) <= 3, (name, sat, sat0)
+
+
+def test_ian_sit_face_matches_crouch_and_rise():
+    """이안 구석: 쪼그림 → 앉아 있기 → 일어나기에서 얼굴 크기가 서 있기와 같음(±2%) — 예전 sit 1.07~1.085(사용자 11-25)."""
+    import cv2
+
+    from mabinogi_addon.image_io import imread
+    from scripts.build_ian_frames import face_ratio
+
+    read = lambda n: imread(IAN_DIR / f"{n}.png", cv2.IMREAD_UNCHANGED)  # noqa: E731
+    stand = read("stand_1")
+    for name in ("crouch_2", "sit_0", "sit_1", "sit_2", "sit_3", "rise_0"):
+        assert abs(face_ratio(stand, read(name)) - 1) <= 0.02 + 1e-9, name
+    assert len({read(f"sit_{i}").shape[0] for i in range(4)}) == 1   # 한 배율(꿈틀거림 없음)
