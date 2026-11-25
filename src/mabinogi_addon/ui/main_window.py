@@ -367,6 +367,7 @@ class MainWindow(QMainWindow):
         self.settings_tab.voice_pack_changed.connect(self.character_tab.refresh)
         self.character_tab.pet_toggled.connect(lambda _on: self.character_tools.sync_window())
         self.character_tab.affinity_edited.connect(self.character_tools.reload_affinity)
+        self.character_tab.outfit_changed.connect(self.character_tools.outfit_changed)
         self.character_tools.affinity_changed.connect(self.character_tab.refresh)
         self.settings_tab.replay_tour.connect(self._replay_tour)
         self.settings_tab.theme_changed.connect(self._apply_tab_styles)

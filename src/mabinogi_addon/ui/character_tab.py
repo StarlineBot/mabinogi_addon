@@ -9,13 +9,13 @@
 """
 from __future__ import annotations
 
-from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal
-from PySide6.QtGui import QColor, QFont, QLinearGradient, QPainter, QPainterPath, QPalette, QPen, QPixmap
-from PySide6.QtWidgets import (QGridLayout, QHBoxLayout, QPushButton, QSizePolicy, QSpinBox, QVBoxLayout,
+from PySide6.QtCore import QEasingCurve, QPoint, QPointF, QPropertyAnimation, QRect, QRectF, QSize, Qt, QTimer, Signal
+from PySide6.QtGui import QColor, QCursor, QFont, QImage, QLinearGradient, QPainter, QPainterPath, QPalette, QPen, QPixmap
+from PySide6.QtWidgets import (QGridLayout, QHBoxLayout, QPushButton, QSizePolicy, QSpinBox, QToolTip, QVBoxLayout,
                                QWidget)
 
 from .. import config, paths
-from ..character import roster
+from ..character import outfits, roster
 from ..character.affinity import MAX_VALUE, STAGES, Affinity, Rules
 from .palette import color
 from .widgets import FeatureHeader, hint_label, switch
@@ -30,7 +30,12 @@ APPLY_BAND = 80     # 대기 카드 아래 어두운 띠 높이
 APPLY_BOTTOM = 10   # 적용 버튼 아래 여백
 
 
-def card_pixmap(character: roster.Character) -> QPixmap:
+def card_pixmap(character: roster.Character, outfit: str = outfits.BASE) -> QPixmap:
+    """카드 그림 — 착장을 입었으면 outfits/<key>/card.png(없으면 기본 카드)."""
+    if outfit != outfits.BASE:
+        dressed = paths.resource_dir() / "characters" / outfits.asset(roster.folder(character), outfit, "card.png")
+        if dressed.is_file():
+            return QPixmap(str(dressed))
     return QPixmap(str(paths.resource_dir() / "characters" / character.card))
 
 
@@ -40,10 +45,13 @@ class CharacterCard(QWidget):
     쓰는 중(selected): 강조 테두리 + 왼쪽 위 `✓ 사용 중` 배지."""
     clicked = Signal(object)
     applied = Signal(object)
+    hovered = Signal(object)   # 마우스가 카드에 들어옴(착장 서랍 열기)
+    left = Signal(object)      # 마우스가 카드를 나감(서랍 닫을지 확인)
 
     def __init__(self, character: roster.Character, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.character = character
+        self.outfit = outfits.BASE
         self._art = card_pixmap(character)
         self._selected = False
         self._affinity = 0
@@ -73,6 +81,24 @@ class CharacterCard(QWidget):
             if on:
                 self.set_pending(False)
             self.update()
+
+    def set_outfit(self, key: str) -> None:
+        """지금 입은 옷으로 카드 그림을 바꿈(기본 옷 = "")."""
+        if key != self.outfit:
+            self.outfit = key
+            self._art = card_pixmap(self.character, key)
+            self.update()
+
+    def affinity(self) -> int:
+        return self._affinity
+
+    def enterEvent(self, event) -> None:  # noqa: N802
+        self.hovered.emit(self)
+        super().enterEvent(event)
+
+    def leaveEvent(self, event) -> None:  # noqa: N802
+        self.left.emit(self)
+        super().leaveEvent(event)
 
     def set_affinity(self, value: int, quest: str = "") -> None:
         self._affinity = max(0, min(MAX_VALUE, int(value)))
@@ -223,6 +249,185 @@ def _dark() -> bool:
         return True
 
 
+# ---- 착장 서랍(기획 11-25, 시안 docs/characters/assets/공용/시안/카드_착장서랍.png) ----
+DRAWER_BG = "#3a3d44"
+CELL_W, CELL_H = 112, 196     # 칸 그림 — 서랍이 옆 카드 한 장 폭 정도(창 760px에서도 안 잘림)
+CELL_GAP = 10
+CAPTION_H = 22
+DRAWER_W = CELL_GAP + 2 * (CELL_W + CELL_GAP)
+DRAWER_OPEN_MS = 170
+
+
+def _gray(pixmap: QPixmap) -> QPixmap:
+    image = pixmap.toImage().convertToFormat(QImage.Format.Format_ARGB32)
+    gray = image.convertToFormat(QImage.Format.Format_Grayscale8).convertToFormat(QImage.Format.Format_ARGB32)
+    # 투명도는 원래 그림 그대로
+    alpha = image.convertToFormat(QImage.Format.Format_Alpha8)
+    out = QImage(gray)
+    painter = QPainter(out)
+    painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_DestinationIn)
+    painter.drawImage(0, 0, alpha)
+    painter.end()
+    return QPixmap.fromImage(out)
+
+
+class OutfitCell(QWidget):
+    """서랍 칸 하나 — 카드 그림(칸에 꽉, 위 기준) + 흰 3px 테두리·아래 그림자 + 아래 작은 글.
+    잠김: 흑백 + 가운데 가로 띠 '해금'(사용자 11-25). 누르면 picked(옷)."""
+    picked = Signal(object)
+
+    def __init__(self, character: roster.Character, outfit: outfits.Outfit, unlocked: bool,
+                 parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.outfit = outfit
+        self.unlocked = unlocked
+        art = card_pixmap(character, outfit.key)
+        self._art = art if unlocked or art.isNull() else _gray(art)
+        self.setFixedSize(CELL_W, CELL_H + CAPTION_H)
+        self.setCursor(Qt.CursorShape.PointingHandCursor if unlocked else Qt.CursorShape.ForbiddenCursor)
+        self.setToolTip("" if unlocked else self.locked_text())
+
+    def caption(self) -> str:
+        if self.outfit.level == 0:
+            return "기본"
+        return f"♥ {self.outfit.level} · 입을 수 있음" if self.unlocked else f"♥ {self.outfit.level}"
+
+    def locked_text(self) -> str:
+        return f"호감도 {self.outfit.level}에서 열려요"
+
+    def mouseReleaseEvent(self, event) -> None:  # noqa: N802
+        if event.button() == Qt.MouseButton.LeftButton and self.rect().contains(event.position().toPoint()):
+            self.picked.emit(self.outfit)
+        super().mouseReleaseEvent(event)
+
+    def paintEvent(self, _event) -> None:  # noqa: N802
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        frame = QRectF(2, 1, CELL_W - 4, CELL_H - 6)
+        p.setPen(Qt.PenStyle.NoPen)   # 아래 그림자
+        p.setBrush(QColor(0, 0, 0, 110))
+        p.drawRoundedRect(frame.translated(0, 4), 8, 8)
+        clip = QPainterPath()
+        clip.addRoundedRect(frame, 8, 8)
+        p.fillPath(clip, QColor("#ffffff"))
+        if not self._art.isNull():   # cover(위 기준) — 칸 폭·높이 중 큰 배율로 채우고 가운데·위 맞춤
+            art = self._art
+            k = max(frame.width() / art.width(), frame.height() / art.height())
+            w, h = art.width() * k, art.height() * k
+            p.save()
+            p.setClipPath(clip)
+            p.drawPixmap(QRectF(frame.center().x() - w / 2, frame.top(), w, h), art, QRectF(art.rect()))
+            if not self.unlocked:   # 가운데 가로 띠 '해금'(가슴 높이 62%)
+                band = QRectF(frame.left(), frame.top() + frame.height() * 0.62 - 17, frame.width(), 34)
+                p.fillRect(band, QColor(20, 20, 26, 190))
+                p.fillRect(QRectF(band.left(), band.top(), band.width(), 3), QColor(HEART))
+                p.fillRect(QRectF(band.left(), band.bottom() - 3, band.width(), 3), QColor(HEART))
+                font = QFont(self.font())
+                font.setPixelSize(16)
+                font.setWeight(QFont.Weight.Bold)
+                p.setFont(font)
+                p.setPen(QColor("#ffffff"))
+                p.drawText(band, int(Qt.AlignmentFlag.AlignCenter), "해금")
+            p.restore()
+        p.setPen(QPen(QColor("#ffffff"), 3))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawRoundedRect(frame, 8, 8)
+        small = QFont(self.font())
+        small.setPixelSize(11)
+        p.setFont(small)
+        p.setPen(QColor(HEART) if self.unlocked and self.outfit.level else QColor("#b8bcc4"))
+        p.drawText(QRectF(0, CELL_H - 2, CELL_W, CAPTION_H), int(Qt.AlignmentFlag.AlignCenter), self.caption())
+        p.end()
+
+
+class OutfitDrawer(QWidget):
+    """카드 옆에 겹쳐 뜨는 서랍 — 지금 입은 옷을 뺀 두 벌(기본 → 50 → 100 순서).
+    열린 칸 누름 → chosen(카드, 옷 key), 잠긴 칸 누름 → 짧은 안내."""
+    chosen = Signal(object, str)
+
+    def __init__(self, parent: QWidget) -> None:
+        super().__init__(parent)
+        self.card: CharacterCard | None = None
+        self.cells: list[OutfitCell] = []
+        self.opens_left = False
+        self.notice = ""
+        self._anim = QPropertyAnimation(self, b"geometry", self)
+        self._anim.setDuration(DRAWER_OPEN_MS)
+        self._anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self.hide()
+
+    def open_for(self, card: "CharacterCard", animate: bool = True) -> None:
+        folder = roster.folder(card.character)
+        items = outfits.drawer(folder, card.outfit)
+        if not items:
+            self.close_drawer()
+            return
+        self.card = card
+        self.notice = ""
+        for cell in self.cells:
+            cell.hide()   # deleteLater는 다음 이벤트 때 지워짐 — 그 전에 겹쳐 그려지지 않게
+            cell.deleteLater()
+        self.cells = []
+        for i, outfit in enumerate(items):
+            cell = OutfitCell(card.character, outfit, outfits.unlocked(outfit, card.affinity()), self)
+            cell.move(CELL_GAP + i * (CELL_W + CELL_GAP), CELL_GAP)
+            cell.picked.connect(self._picked)
+            cell.show()
+            self.cells.append(cell)
+        tab = self.parentWidget()
+        top_left = card.mapTo(tab, QPoint(0, 0))
+        height = CARD_H
+        right = QRect(top_left.x() + CARD_W + 4, top_left.y(), DRAWER_W, height)
+        # 맨 오른쪽 줄은 왼쪽으로(창 밖으로 안 잘리게), 왼쪽·가운데 줄은 오른쪽으로
+        cards = getattr(tab, "cards", [])
+        column = cards.index(card) % COLUMNS if card in cards else 0
+        self.opens_left = column == COLUMNS - 1
+        target = QRect(top_left.x() - 4 - DRAWER_W, top_left.y(), DRAWER_W, height) if self.opens_left else right
+        target.moveLeft(max(2, min(target.left(), tab.width() - DRAWER_W - 2)))   # 창이 좁아도 탭 안에
+        self.raise_()
+        self.show()
+        if animate:
+            start = QRect(target.right() - 20, target.top(), 20, height) if self.opens_left \
+                else QRect(target.left(), target.top(), 20, height)
+            self._anim.stop()
+            self._anim.setStartValue(start)
+            self._anim.setEndValue(target)
+            self._anim.start()
+        else:
+            self._anim.stop()
+            self.setGeometry(target)
+
+    def close_drawer(self) -> None:
+        self._anim.stop()
+        self.card = None
+        self.hide()
+
+    def _picked(self, outfit: outfits.Outfit) -> None:
+        cell = next(c for c in self.cells if c.outfit is outfit)
+        if not cell.unlocked:
+            self.notice = cell.locked_text()
+            QToolTip.showText(cell.mapToGlobal(QPoint(CELL_W // 2, CELL_H // 2)), self.notice, cell)
+            return
+        if self.card is not None:
+            self.chosen.emit(self.card, outfit.key)
+
+    def leaveEvent(self, event) -> None:  # noqa: N802
+        parent = self.parentWidget()
+        if hasattr(parent, "_maybe_close_drawer"):
+            QTimer.singleShot(60, parent._maybe_close_drawer)
+        super().leaveEvent(event)
+
+    def paintEvent(self, _event) -> None:  # noqa: N802
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        rect = QRectF(1.5, 1.5, self.width() - 3, self.height() - 3)
+        p.setPen(QPen(QColor(color("accent")), 3))
+        p.setBrush(QColor(DRAWER_BG))
+        p.drawRoundedRect(rect, 10, 10)
+        p.end()
+
+
 class AffinityEditor(QWidget):
     """제작자용 호감도 바로 바꾸기 — 숫자 칸 + 구간 버튼. 바꾸면 edited(캐릭터 키, 값)."""
     edited = Signal(str, int)
@@ -262,6 +467,7 @@ class CharacterTab(QWidget):
     voice_pack_changed = Signal()
     pet_toggled = Signal(bool)
     affinity_edited = Signal()
+    outfit_changed = Signal(str)   # 캐릭터 key — 그 캐릭터 옷을 갈아입음
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -305,6 +511,8 @@ class CharacterTab(QWidget):
             card = CharacterCard(character)
             card.clicked.connect(self.preview)   # 누르면 인사만(사용자 11-25 B안)
             card.applied.connect(self.choose)    # 카드 안 '이 캐릭터로 적용' → 선택
+            card.hovered.connect(self.open_drawer)
+            card.left.connect(lambda _c: QTimer.singleShot(60, self._maybe_close_drawer))
             editor = AffinityEditor(character.key)
             editor.edited.connect(self.set_affinity)
             cell.addWidget(card)
@@ -316,6 +524,8 @@ class CharacterTab(QWidget):
         v.addLayout(grid)
         v.addStretch(1)
         self._preview = None
+        self.drawer = OutfitDrawer(self)
+        self.drawer.chosen.connect(self.wear)
         self.set_creator(False)
         self.refresh()
 
@@ -334,6 +544,7 @@ class CharacterTab(QWidget):
         rules = Rules.from_dict(config.load_affinity_rules())
         for card, editor in zip(self.cards, self.editors):
             card.set_selected(card.character.pack == pack)
+            card.set_outfit(outfits.wearing(roster.folder(card.character), config.load_outfit(card.character.key)))
             affinity = Affinity.load(config.load_affinity(card.character.key), rules)
             card.set_affinity(affinity.value, affinity.quest_text(card.character.name))
             editor.show_value(affinity.value)
@@ -354,6 +565,29 @@ class CharacterTab(QWidget):
         config.save_character(affinity=(key, affinity.to_dict()))
         self.refresh()
         self.affinity_edited.emit()
+
+    def open_drawer(self, card: CharacterCard) -> None:
+        """카드에 마우스 → 옆에 착장 서랍(착장 없는 캐릭터·미정 캐릭터는 안 열림)."""
+        if self.drawer.card is card and self.drawer.isVisible():
+            return
+        self.drawer.open_for(card)
+
+    def _maybe_close_drawer(self, pos: QPoint | None = None) -> None:
+        """마우스가 카드·서랍 둘 다 밖이면 닫음(pos는 이 탭 좌표, 없으면 지금 커서)."""
+        card = self.drawer.card
+        if card is None:
+            return
+        pos = self.mapFromGlobal(QCursor.pos()) if pos is None else pos
+        card_rect = QRect(card.mapTo(self, QPoint(0, 0)), card.size())
+        if not card_rect.contains(pos) and not self.drawer.geometry().contains(pos):
+            self.drawer.close_drawer()
+
+    def wear(self, card: CharacterCard, key: str) -> None:
+        """열린 옷 누름 → 바로 갈아입기(확인 창·호감도 감소 없음). 그 캐릭터 옷만 저장 — 고른 캐릭터·적용 대기는 그대로."""
+        config.save_character(outfit=(card.character.key, key))
+        card.set_outfit(key)
+        self.drawer.open_for(card, animate=False)   # 서랍은 '지금 옷 뺀 두 벌'로 다시
+        self.outfit_changed.emit(card.character.key)
 
     def preview(self, character: roster.Character) -> None:
         """카드 누름 → 그 캐릭터 인사만 듣기(선택은 그대로). 쓰는 중이 아니면 그 카드에 '이 캐릭터로 적용'(한 번에 하나)."""
@@ -391,6 +625,7 @@ class CharacterTab(QWidget):
         """탭을 떠나면 적용 대기는 풀림."""
         for card in self.cards:
             card.set_pending(False)
+        self.drawer.close_drawer()
         super().hideEvent(event)
 
     def _on_pet(self, on: bool) -> None:

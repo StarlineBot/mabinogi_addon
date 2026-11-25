@@ -136,9 +136,15 @@ def normalize_favorites(raw, dishes) -> list[str]:
 
 
 def favorite_dishes(dishes, favorites) -> list[Dish]:
-    """즐겨찾기 카테고리의 요리(이름순 — 다른 카테고리와 같은 기본 순서)."""
-    names = set(favorites)
-    return sorted((d for d in dishes if d.name in names), key=lambda d: d.name)
+    """즐겨찾기 카테고리의 요리 — 저장된 순서 그대로(사용자가 끌어서 정함, 11-25). 새로 넣은 요리는 맨 아래."""
+    by_name = {d.name: d for d in dishes}
+    return [by_name[n] for n in favorites if n in by_name]
+
+
+def reorder_favorites(favorites: list[str], shown: list[str]) -> list[str]:
+    """끌어서 바꾼 목록 순서(shown) → 새 즐겨찾기 순서. 목록에 없던 즐겨찾기(데이터에 없는 이름 등)는 원래 자리 뒤쪽에 그대로."""
+    order = [n for n in shown if n in favorites]
+    return order + [n for n in favorites if n not in order]
 
 
 def favorites_count(favorites, hits: set[str] | None) -> int:

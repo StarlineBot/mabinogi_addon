@@ -2044,3 +2044,126 @@ def test_starline_sneeze_v2_matches_stand_eyes_and_cloth_tone():
     assert abs(eye_gap(read("sneeze_5")) / eye_gap(stand) - 1) <= 0.03
     for i in range(6):
         assert (np.abs(mid(read(f"sneeze_{i}")) - mid(stand)) <= 1.5).all(), i
+
+
+# ---- 착장(옷) 8벌 + 카드 서랍(기획 11-25, docs/character-pet-spec.md 3-2절) ----------------------------
+def test_outfit_unlock_levels_and_drawer_order():
+    from mabinogi_addon.character import outfits
+
+    lab, red = outfits.find("레나", "lab"), outfits.find("레나", "red_dress")
+    assert (outfits.unlocked(lab, 49), outfits.unlocked(lab, 50)) == (False, True)
+    assert (outfits.unlocked(red, 99), outfits.unlocked(red, 100)) == (False, True)
+    names = lambda items: [o.key for o in items]  # noqa: E731
+    assert names(outfits.drawer("레나", "")) == ["lab", "red_dress"]          # 기본 입음 → 50·100
+    assert names(outfits.drawer("레나", "lab")) == ["", "red_dress"]          # 50 입음 → 기본·100(돌아갈 길)
+    assert names(outfits.drawer("레나", "red_dress")) == ["", "lab"]
+    assert names(outfits.drawer("레나", "모름")) == ["lab", "red_dress"]       # 모르는 값 = 기본
+    assert outfits.drawer("Starline", "") == [] and outfits.of("Starline") == ()
+    assert sorted(outfits.OUTFITS) == sorted(["다래", "아리아", "레나", "이안"])
+    for folder, items in outfits.OUTFITS.items():
+        assert [o.level for o in items] == [0, 50, 100]
+        for o in items[1:]:   # 착장 카드 8장(상반신을 얼굴로 맞춰 card.png 틀로)
+            card = ASSETS / outfits.asset(folder, o.key, "card.png")
+            assert card.is_file(), card
+            assert (SRC_ASSETS / folder / "의상" / o.name / "상반신.png").is_file()
+
+
+SRC_ASSETS = Path(__file__).resolve().parents[1] / "docs" / "characters" / "assets"
+
+
+def _drawer_tab(cfg_path, affinity=None, outfit=None, pack="조용한 여성"):
+    import json
+
+    cfg_path.write_text(json.dumps({"voice": {"pack": pack},
+                                    "character": {"affinity": affinity or {}, "outfit": outfit or {}}}), encoding="utf-8")
+    from mabinogi_addon.ui import character_tab as ct
+    tab = ct.CharacterTab()
+    tab.resize(760, 680)
+    tab.show()
+    return tab, {c.character.name: c for c in tab.cards}
+
+
+def test_drawer_open_click_wears_and_locked_only_notices(app, cfg):
+    """열린 옷 누름 → 그 캐릭터 옷 저장·카드 그림·서랍 다시(지금 옷 뺀 두 벌)·신호, 잠긴 옷 → 저장 안 함·안내.
+    다른 캐릭터 옷을 바꿔도 고른 캐릭터(알림 목소리)는 그대로."""
+    tab, cards = _drawer_tab(cfg, affinity={"화난 여성": {"value": 60, "cleared": 2}})
+    changed = []
+    tab.outfit_changed.connect(changed.append)
+    lena = cards["레나"]
+    assert lena.affinity() == 60
+    tab.open_drawer(lena)
+    assert tab.drawer.isVisible() and [c.outfit.key for c in tab.drawer.cells] == ["lab", "red_dress"]
+    assert [c.unlocked for c in tab.drawer.cells] == [True, False]
+    assert [c.caption() for c in tab.drawer.cells] == ["♥ 50 · 입을 수 있음", "♥ 100"]
+    locked = tab.drawer.cells[1]
+    locked.picked.emit(locked.outfit)
+    assert config.load_outfit("화난 여성") == "" and changed == [] and tab.drawer.notice == "호감도 100에서 열려요"
+    old_art = lena._art.cacheKey()
+    tab.drawer.cells[0].picked.emit(tab.drawer.cells[0].outfit)
+    assert config.load_outfit("화난 여성") == "lab" and changed == ["화난 여성"]
+    assert lena.outfit == "lab" and lena._art.cacheKey() != old_art
+    assert [c.outfit.key for c in tab.drawer.cells] == ["", "red_dress"]
+    assert tab.drawer.cells[0].caption() == "기본"
+    assert config.load_voice_pack() == "조용한 여성"            # 고른 캐릭터 그대로
+    assert not lena.selected() and not lena.pending()
+    tab.drawer.cells[0].picked.emit(tab.drawer.cells[0].outfit)  # 기본으로 돌아감
+    assert config.load_outfit("화난 여성") == "" and lena.outfit == ""
+    tab.refresh()                                               # 저장 값으로 다시 맞춰도 같음
+    assert lena.outfit == ""
+
+
+def test_drawer_direction_starline_none_and_closes_outside(app, cfg):
+    from PySide6.QtCore import QPoint
+
+    tab, cards = _drawer_tab(cfg)
+    tab.open_drawer(cards["Starline"])
+    assert not tab.drawer.isVisible()                       # 착장 없음 → 서랍 없음
+    tab.open_drawer(cards["???"])
+    assert not tab.drawer.isVisible()
+    tab.open_drawer(cards["레나"])                            # 가운데 줄 → 오른쪽
+    lena = cards["레나"].geometry()
+    assert not tab.drawer.opens_left
+    tab.drawer.open_for(cards["레나"], animate=False)
+    assert tab.drawer.geometry().left() > lena.right() and tab.drawer.geometry().right() <= tab.width()
+    tab.drawer.open_for(cards["다래"], animate=False)        # 맨 오른쪽 줄 → 왼쪽
+    assert tab.drawer.opens_left and tab.drawer.geometry().right() < cards["다래"].geometry().left()
+    assert tab.drawer.cells and all(not c.unlocked for c in tab.drawer.cells)   # 베타 호감도 0 — 잠긴 채로 보임
+    inside = tab.drawer.geometry().center()
+    tab._maybe_close_drawer(inside)
+    assert tab.drawer.isVisible()
+    tab._maybe_close_drawer(cards["다래"].geometry().center())
+    assert tab.drawer.isVisible()
+    tab._maybe_close_drawer(QPoint(2, 2))
+    assert not tab.drawer.isVisible()
+
+
+def test_saved_outfit_shows_on_card_and_pet_frames_fall_back(app, cfg, tmp_path, monkeypatch):
+    from mabinogi_addon.ui import pet_window
+
+    _tab, cards = _drawer_tab(cfg, outfit={"부드러운 여성": "tshirt", "화난 여성": "없는옷"})
+    assert cards["아리아"].outfit == "tshirt" and cards["레나"].outfit == ""
+    # 착장 SD가 아직 없음 → 기본 프레임 그대로
+    base = pet_window.load_frames("아리아", br.ARIA)
+    dressed = pet_window.load_frames("아리아", br.ARIA, "tshirt")
+    assert set(base) == set(dressed) and all(base[n] == dressed[n] for n in base)
+    # 착장 폴더에 같은 이름 프레임이 생기면 그걸 먼저
+    root = tmp_path / "res"
+    (root / "characters" / "아리아" / "outfits" / "tshirt").mkdir(parents=True)
+    from PySide6.QtGui import QImage
+    for name, size in (("stand_0", 10), ("walk_0", 10)):
+        img = QImage(size, size, QImage.Format.Format_ARGB32)
+        img.fill(0xFF00FF00)
+        img.save(str(root / "characters" / "아리아" / f"{name}.png"))
+    big = QImage(20, 20, QImage.Format.Format_ARGB32)
+    big.fill(0xFFFF0000)
+    big.save(str(root / "characters" / "아리아" / "outfits" / "tshirt" / "stand_0.png"))
+    monkeypatch.setattr(pet_window.paths, "resource_dir", lambda: root)
+    frames = pet_window.load_frames("아리아", br.ARIA, "tshirt")
+    assert frames["stand_0"].width() == 20 and frames["walk_0"].width() == 10
+
+
+def test_config_outfit_saves_per_character(cfg):
+    assert config.load_outfit("화난 여성") == ""
+    config.save_character(outfit=("화난 여성", "lab"))
+    config.save_character(outfit=("조용한 여성", "frill_pajama"))
+    assert config.load_outfit("화난 여성") == "lab" and config.load_outfit("조용한 여성") == "frill_pajama"

@@ -30,15 +30,18 @@ TICK_MS = 50
 FRONT_CHECK = 0.25           # 게임 앞/뒤 판정 주기(초)
 
 
-def load_frames(folder: str, profile: brain_mod.Profile | None = None) -> dict[str, QImage]:
-    """그 캐릭터 동작에 쓰는 프레임만 읽는다(assets/characters/<폴더>/<이름>.png)."""
+def load_frames(folder: str, profile: brain_mod.Profile | None = None, outfit: str = "") -> dict[str, QImage]:
+    """그 캐릭터 동작에 쓰는 프레임만 읽는다(assets/characters/<폴더>/<이름>.png).
+    outfit(착장 key)이면 outfits/<key>/<이름>.png를 먼저 — 없는 프레임은 기본 옷 그대로(착장 SD는 아직 없음, 기획 11-25)."""
     base = paths.resource_dir() / "characters" / folder
+    dressed = base / "outfits" / outfit if outfit else None
     profile = profile or brain_mod.PROFILES.get(folder, brain_mod.DARE)
     out = {}
     names = {name for frames, _times, _loop in profile.anims.values() for name in frames}
     anchors = _anchors(base)
     for name in sorted(names):
-        image = QImage(str(base / f"{name}.png"))
+        path = dressed / f"{name}.png" if dressed is not None and (dressed / f"{name}.png").is_file() else base / f"{name}.png"
+        image = QImage(str(path))
         if not image.isNull():
             if name in anchors:  # 프레임별 그리기 오프셋(저장 px) — 예: 이안 떨어지기 두 장의 머리 위치 맞춤
                 image.setText("anchor", "{},{}".format(*anchors[name]))
