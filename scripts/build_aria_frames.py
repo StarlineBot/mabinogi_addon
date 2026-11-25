@@ -85,7 +85,11 @@ def build() -> dict[str, list[np.ndarray]]:
     # 기지개(기획 11-25 기본 동작 — 3~6분에 한 번): 서 있기 머리 폭에 맞춤
     stretch = split(clean(imread(ROOT / "docs/characters/assets/아리아/스트레칭하는 복숭아빛 머리 소녀 스프라이트 시트.png",
                                  cv2.IMREAD_UNCHANGED)))
-    out["stretch"] = [scaled(f, by_heads(stretch)) for f in stretch]
+    # 크기는 같은 자세인 0번 실루엣을 서 있기에 맞춤(QA 11-25 — 머리 폭은 머리카락에 끌려 1.07배로 튐)
+    from scripts.silhouette import best_scale
+    k = by_heads(stretch)
+    k *= best_scale(out["stand"][0], scaled(stretch[0], k))
+    out["stretch"] = [scaled(f, k) for f in stretch]
     from scripts.color_parts import PARTS
     from scripts.sheet_colors import harmonize
     groups = {(f"talk_{v}_{k}", 0): (f"talk_{v}_base", 0) for v in "ab" for k in ("m1", "m2")}

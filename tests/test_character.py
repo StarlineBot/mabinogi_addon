@@ -1668,7 +1668,8 @@ def test_starline_head_size_matches_standing_within_5_percent():
     face, eyes = face_crop(stand), eye_gap(stand)
     sheets, bad = {}, {}
     for path in SL_DIR.glob("*.png"):
-        if path.stem in ("card", "talk_blink_0", "sit_3", "sneeze_2", "sneeze_3"):   # 재채기 2·3 = 손으로 코·얼굴 가림
+        if path.stem == "card" or path.stem in ("talk_blink_0", "sit_3") or path.stem.startswith("sneeze_"):
+            # 재채기는 같은 자세 0·5번 실루엣으로 맞춤(QA 11-25 — 얼굴 창은 머리카락에 끌림) → 실루엣 테스트가 맡음
             continue
         r = head_ratio(face, eyes, _img_of(path))
         if r is None:
@@ -1969,3 +1970,17 @@ def test_dare_lies_down_every_3_to_6_minutes_in_corner_then_sits_again():
         d.tick(t, False)
         states.append(d.state)
     assert "sleep_up" in states and "rise" in states
+
+
+@pytest.mark.parametrize("folder,ref,other", [
+    ("아리아", "stand_0", "stretch_0"), ("아리아", "stand_0", "stretch_5"),
+    ("레나", "stand_0", "magic_0"), ("레나", "stand_0", "magic_5"),
+    ("Starline", "stand_0", "sneeze_0"), ("Starline", "stand_0", "sneeze_5"),
+    ("다래", "sit_doze_0", "sleep_0"), ("다래", "sit_drowsy_0", "sleep_8"),
+])
+def test_basic_motion_same_pose_frames_match_neighbour_silhouette(folder, ref, other):
+    """기본 동작 크기 튐 방지(QA 11-25 '기지개 전에 커지고, 엎드리기 전에 작아지고…'): 이웃 그림과 같은 자세인 장을
+    발 밑 가운데 맞춰 겹쳤을 때 실루엣이 가장 잘 맞는 배율이 0.97~1.03(머리 폭·얼굴 창은 머리카락·귀에 끌려 못 씀)."""
+    from scripts.silhouette import best_scale
+
+    assert 0.97 <= best_scale(_img_of(ASSETS / folder / f"{ref}.png"), _img_of(ASSETS / folder / f"{other}.png")) <= 1.03

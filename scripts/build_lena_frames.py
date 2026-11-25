@@ -121,7 +121,10 @@ def build() -> dict[str, list[np.ndarray]]:
     # 마법 연습 펑 실패(기획 11-25 기본 동작 — 3~6분에 한 번): 서 있기 머리 폭에 맞춤
     magic = split(clean(imread(ROOT / "docs/characters/assets/레나/마법 폭발을 겪은 소녀의 6컷 감정극.png",
                                cv2.IMREAD_UNCHANGED)))
-    out["magic"] = [scaled(f, head / float(np.median([head_width(f) for f in magic]))) for f in magic]
+    from scripts.silhouette import best_scale   # 크기는 같은 자세인 0번 실루엣을 서 있기에 맞춤(QA 11-25)
+    k = head / float(np.median([head_width(f) for f in magic]))
+    k *= best_scale(out["stand"][0], scaled(magic[0], k))
+    out["magic"] = [scaled(f, k) for f in magic]
     from scripts.build_talk_frames import talk_frames
     out.update(talk_frames("레나"))
     end_mid, end_stand = end_frames()

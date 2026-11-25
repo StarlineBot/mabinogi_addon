@@ -234,6 +234,12 @@
         "tests/test_cooking_autofind.py"
       ],
       "reason": "요리 탭 불투명도 칸(20~100%, 기본 50) — 바로 반영·저장"
+    },
+    "scripts/silhouette.py": {
+      "tests": [
+        "tests/test_character.py"
+      ],
+      "reason": "기본 동작 크기 실루엣 맞춤 배율(빌드·테스트 공용)"
     }
   }
 }

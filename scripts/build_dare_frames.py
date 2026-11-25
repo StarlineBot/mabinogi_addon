@@ -152,7 +152,10 @@ def build() -> dict[str, list[np.ndarray]]:
     # 구석에서 엎드려 자기(기획 11-25 기본 동작): 머리끼리 닿아 빈 줄로 안 나뉨 → 3×3 같은 칸으로 자른 뒤 칸마다 꼭 맞게.
     # 0 무릎 안고 졺(= 앉아 있기 자세) → 0번 폭을 쪼그림 폭에 맞춘 배율 하나
     sleep = grid(sheet_image("다래의 포근한 수면 루프.png", ROOT / "docs/characters/assets/다래"), 3, 3)
-    out["sleep"] = [scaled(f, crouch_w / sleep[0].shape[1]) for f in sleep]
+    from scripts.silhouette import best_scale   # 0번(무릎 안고 졺) 실루엣을 꾸벅 졸기에 맞춤(QA 11-25 — 폭 맞춤은 0.9배로 작음)
+    k = crouch_w / sleep[0].shape[1]
+    k *= best_scale(out["sit_doze"][0], scaled(sleep[0], k))
+    out["sleep"] = [scaled(f, k) for f in sleep]
     # 시트 색 맞추기(사용자 11-24): 크림 머리·얼굴을 서 있기 색에(scripts/sheet_colors), 입만 합성은 base 차이 그대로
     from scripts.color_parts import PARTS
     from scripts.sheet_colors import harmonize
