@@ -2311,3 +2311,28 @@ def test_ian_sit_face_matches_crouch_and_rise():
     for name in ("crouch_2", "sit_0", "sit_1", "sit_2", "sit_3", "rise_0"):
         assert abs(face_ratio(stand, read(name)) - 1) <= 0.02 + 1e-9, name
     assert len({read(f"sit_{i}").shape[0] for i in range(4)}) == 1   # 한 배율(꿈틀거림 없음)
+
+
+def test_starline_talk_start_v2_eyes_match_stand():
+    """말하기 시작 v2(기획 11-25 — 예전 시트는 머리 1.14배·눈 흰자 넓음): talk_mid·end1·end2 눈 간격이 stand_0 ±3%,
+    키 같음, 눈 높이 ±3%(end1은 손목 금 팔찌가 눈 구간에 들어와 눈 높이 측정 제외)."""
+    import cv2
+    import numpy as np
+
+    from scripts.build_starline_frames import eye_gap
+
+    def eye_height(f):
+        h = f.shape[0]
+        hsv = cv2.cvtColor(np.ascontiguousarray(f[..., :3]), cv2.COLOR_BGR2HSV)
+        m = ((hsv[..., 0] >= 14) & (hsv[..., 0] <= 32) & (hsv[..., 1] > 110) & (hsv[..., 2] > 150) & (f[..., 3] > 200))
+        m[: int(h * 0.22)] = False
+        m[int(h * 0.6):] = False
+        return h - np.nonzero(m)[0].mean()
+
+    stand = _sl("stand_0")
+    for name in ("talk_mid_0", "talk_end1_0", "talk_end2_0"):
+        f = _sl(name)
+        assert abs(eye_gap(f) / eye_gap(stand) - 1) <= 0.03, name
+        assert abs(f.shape[0] - stand.shape[0]) <= 3, name
+    for name in ("talk_mid_0", "talk_end2_0"):
+        assert abs(eye_height(_sl(name)) / eye_height(stand) - 1) <= 0.03, name

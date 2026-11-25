@@ -147,7 +147,10 @@ def build() -> dict[str, list[np.ndarray]]:
     out["sit"] = fit(sit, k_height(sit, h=out["crouch"][-1].shape[0]))
     rise = sheet("Starline_구석")[7:9]               # 끝 서 있는 장(짧은 체형) 빼고 → 바로 서기
     out["rise"] = fit(rise, k_height(rise, rise[0], out["crouch"][-1].shape[0]))
-    start = sheet("Starline_말하기_시작")            # 0 중간(손 허리) · 1 손 든 자세
+    # 말하기 시작 v2(기획 11-25 — 예전 시트는 머리 1.14배·눈 흰자 넓음): 가이드 3칸(0 기준 서 있기 · 1 사이 · 2 손 든 자세)
+    from scripts.build_dare_frames import guide_cells
+    guide = guide_cells("Starline_말하기_시작_v2.png", 3, 1, SHEETS, (1800, 960), loose=True)
+    start = guide[1:]                                 # 0 중간(사이) · 1 손 든 자세
     loop = sheet("Starline_말하기_반복")             # 0 기준 · 1·2 입 · 3 강조 · 4 중간 · 5 깜빡임
     base = loop[0]
     m1, _ = mouth_swap(base, loop[1], MOUTH)
@@ -157,7 +160,7 @@ def build() -> dict[str, list[np.ndarray]]:
     emph, emph2, blink = (legs_swap(base, loop[i], LEGS_Y) for i in (3, 4, 5))
     for key, frame in zip(("base", "m1", "m2", "emph", "emph2", "blink"), (base, m1, m2, emph, emph2, blink)):
         out[f"talk_{key}"] = [scaled(frame, k)]
-    k_start = k_height(start)
+    k_start = STAND_H / guide[0].shape[0]   # 기준 칸(서 있기) 키 = 서 있기 키
     out["talk_mid"] = [scaled(start[0], k_start)]
     # 말하기 끝 시트가 없어 시작 2장을 거꾸로(기획 11-24): 손 든 자세 → 중간 → 서기
     out["talk_end1"] = [scaled(start[1], k_start)]
@@ -229,18 +232,17 @@ CARD_X0, CARD_CW = 100, 999
 
 
 def match_tones(frame: np.ndarray, stand: np.ndarray) -> np.ndarray:
-    """채도 → 어두운 톤 → 중간 톤 Lab을 서 있기에(서로 조금씩 밀어내서 네 번 되풀이)."""
-    for _ in range(4):
+    """채도 → 어두운 톤 → 중간 톤 Lab을 서 있기에(서로 조금씩 밀어내서 여섯 번 되풀이)."""
+    for _ in range(6):
         frame = match_midtone(match_midtone(match_saturation(frame, stand), stand, DARK, True), stand, MID, True)
     return frame
 
 
 def match_saturation(frame: np.ndarray, stand: np.ndarray) -> np.ndarray:
-    """채도(HSV S, 불투명 픽셀 평균)를 서 있기에 — 불투명 픽셀 전체(중간·어두운 톤 Lab 맞추기가 채도를 도로 내리므로
-    밝은 톤까지 함께 올려야 평균이 맞음)."""
+    """채도(HSV S, 불투명 픽셀 평균)를 서 있기에 — 옷·망토·그림자(L ≤ 170)만 바꿈(머리카락 밝은 톤은 시트 색 맞추기가 맡음)."""
     def stats(img):
         hsv = cv2.cvtColor(np.ascontiguousarray(img[..., :3]), cv2.COLOR_BGR2HSV)
-        _lab, sel = _midtone(img, (0, 255), True)
+        _lab, sel = _midtone(img, (0, MID[1]), True)
         return hsv, img[..., 3] > 200, sel
 
     ref_hsv, ref_a, _ = stats(stand)

@@ -102,12 +102,17 @@ def grid(image: np.ndarray, cols: int, rows: int) -> list[np.ndarray]:
     return out
 
 
-def guide_cells(name: str, cols: int, rows: int) -> list[np.ndarray]:
+def guide_cells(name: str, cols: int, rows: int, folder=None, size: tuple[int, int] | None = None,
+                loose: bool = False) -> list[np.ndarray]:
     """가이드 방식 시트(기획 11-25 — 칸마다 기준 그림·분홍 높이선·파란 칸 테두리): 같은 칸으로 나눠(가장자리 6px 안쪽)
     분홍(R>170·B>170·G<110)·파란(R<90·G>120·B>190) 선을 지우고, 가장 큰 알파 덩어리의 2% 이상만 남겨 꼭 맞춤."""
-    image = sheet_image(name)
+    image = sheet_image(name, folder)
+    if size is not None:   # 받은 그림이 가이드와 크기가 다르면 가이드 크기로(칸이 가이드 칸과 맞게)
+        image = cv2.resize(image, size, interpolation=cv2.INTER_AREA)
     b, g, r = (image[..., i].astype(np.int16) for i in range(3))
     lines = ((r > 170) & (b > 170) & (g < 110)) | ((r < 90) & (g > 120) & (b > 190))
+    if loose:   # 줄인 그림은 선 가장자리가 옷 색과 섞여 옅은 자홍이 남음(Starline 말하기 시작 v2) — R·B가 G보다 크게 높은 자홍
+        lines |= (r - g > 60) & (b - g > 50) & (np.abs(r - b) < 70) & (g < 150)
     image = image.copy()
     image[lines, 3] = 0
     h, w = image.shape[:2]
