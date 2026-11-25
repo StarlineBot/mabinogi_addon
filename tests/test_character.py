@@ -2391,3 +2391,58 @@ def test_outfit_card_images_reach_bottom_with_face_in_place():
                     best = (score, k, loc[0] + t.shape[1] / 2 - (x0 + x1) / 2, loc[1] + t.shape[0] / 2 - (y0 + y1) / 2)
             _, k, dx, dy = best
             assert abs(k - 1) <= 0.05 + 1e-9 and abs(dx) <= 6 and abs(dy) <= 6, (folder, o.key, best)
+
+
+# ---- 11-25 이안 착장 '넥타이 조끼' 펫 SD 프레임(기획 — 명세 3-2 착장) ----
+VEST = ASSETS / "이안" / "outfits" / "vest_tie"
+
+
+def test_ian_vest_tie_frames_match_base_names_size_and_face():
+    """기본 이안 프레임과 이름 1:1(+ 모션 옷매무새 8·차 6), 프레임마다 키·얼굴 비율이 기본 프레임과 ±5%."""
+    import cv2
+
+    from mabinogi_addon.image_io import imread
+    from scripts.build_ian_frames import face_ratio
+
+    base = {p.stem for p in IAN_DIR.glob("*.png")} - {"card", "frame"}
+    dressed = {p.stem for p in VEST.glob("*.png")} - {"card"}
+    motions = dressed - base
+    assert base <= dressed
+    assert sorted(motions) == sorted([f"motion_tidy_{i}" for i in range(8)] + [f"motion_tea_{i}" for i in range(6)])
+    read = lambda p: imread(p, cv2.IMREAD_UNCHANGED)  # noqa: E731
+    stand_b, stand_o = read(IAN_DIR / "stand_1.png"), read(VEST / "stand_1.png")
+    for name in sorted(base):
+        b, o = read(IAN_DIR / f"{name}.png"), read(VEST / f"{name}.png")
+        assert abs(o.shape[0] / b.shape[0] - 1) <= 0.05, name
+        assert abs(face_ratio(stand_o, o) / face_ratio(stand_b, b) - 1) <= 0.05, name
+
+
+def test_ian_vest_tie_tones_match_its_stand():
+    """시트마다 다르던 바지·머리 밝기(기획 측정 ΔE 2~17): 어두운 톤·중간 톤 Lab 평균이 이 옷 stand_1과 ΔE(8비트 Lab) ≤ 10."""
+    import cv2
+    import numpy as np
+
+    from mabinogi_addon.image_io import imread
+
+    def tones(path):
+        f = imread(path, cv2.IMREAD_UNCHANGED)
+        a = f[..., 3] > 200
+        lab = cv2.cvtColor(np.ascontiguousarray(f[..., :3]), cv2.COLOR_BGR2LAB).astype(np.float64)
+        return [lab[a & (lab[..., 0] < 80)].mean(0), lab[a & (lab[..., 0] >= 80) & (lab[..., 0] <= 170)].mean(0)]
+
+    ref = tones(VEST / "stand_1.png")
+    for path in VEST.glob("*.png"):
+        if path.stem == "card":
+            continue
+        dark, mid = tones(path)
+        assert np.linalg.norm(dark - ref[0]) <= 10 and np.linalg.norm(mid - ref[1]) <= 10, path.stem
+
+
+def test_wearing_vest_tie_swaps_pet_frames(app):
+    """조끼를 입으면 펫 창 프레임이 착장 폴더 그림으로(없는 프레임 없음)."""
+    from mabinogi_addon.ui import pet_window
+
+    base = pet_window.load_frames("이안", br.IAN)
+    vest = pet_window.load_frames("이안", br.IAN, "vest_tie")
+    assert set(base) == set(vest)
+    assert all(base[n].size() != vest[n].size() or base[n] != vest[n] for n in ("stand_1", "walk_0"))

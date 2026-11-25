@@ -126,7 +126,7 @@ def guide_cells(name: str, cols: int, rows: int, folder=None, size: tuple[int, i
                 keep = np.zeros(count, bool)
                 keep[1:] = areas >= areas.max() * 0.02
                 cell[~keep[labels], 3] = 0
-            out.append(_tight(cell))
+            out.append(_tight(cell) if (cell[..., 3] > 20).any() else None)   # 빈 칸 = None
     return out
 
 
