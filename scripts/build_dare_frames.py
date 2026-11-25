@@ -114,6 +114,7 @@ def guide_cells(name: str, cols: int, rows: int, folder=None, size: tuple[int, i
     lines = ((r > 170) & (b > 170) & (g < 110)) | ((r < 90) & (g > 120) & (b > 190))
     if loose:   # 줄인 그림은 선 가장자리가 옷 색과 섞여 옅은 자홍이 남음(Starline 말하기 시작 v2) — R·B가 G보다 크게 높은 자홍
         lines |= (r - g > 60) & (b - g > 50) & (np.abs(r - b) < 70) & (g < 150)
+        lines |= (b - r > 70) & (b > 150) & (b >= g)   # 옅은 파란 칸 테두리(이안 조끼 걷기 v3)
     image = image.copy()
     image[lines, 3] = 0
     h, w = image.shape[:2]

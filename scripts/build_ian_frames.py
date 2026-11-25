@@ -76,7 +76,12 @@ def build() -> dict[str, list[np.ndarray]]:
     out["watch"] = [scaled(f, by_heads(watch)) for f in watch]
     fall = sheet("이안의 두 가지 추락 포즈 스프라이트.png", SHEETS)  # 그대로(앱은 fall_0 한 장)
     out["fall"] = [scaled(f, by_head(f)) for f in fall]
-    for key, name in (("walk", "이안_걷기.png"), ("drag", "이안_끌기.png"), ("land", "이안_착지.png"),
+    # 걷기 v3(기획 11-25 — 예전 6장은 반걸음뿐이라 다리가 번갈아 안 움직임): 가이드 5×2, 줄마다 0열 = 기준 칸(버림),
+    # 1~4열 = 프레임(윗줄 → 아랫줄 walk_0~7)
+    from scripts.build_dare_frames import guide_cells
+    walk = [c for i, c in enumerate(guide_cells("이안_걷기_v3.png", 5, 2, SHEETS, (1500, 1120), loose=True)) if i % 5]
+    out["walk"] = [scaled(f, by_heads(walk)) for f in walk]
+    for key, name in (("drag", "이안_끌기.png"), ("land", "이안_착지.png"),
                       ("pet", "이안_쓰다듬기.png")):
         frames = sheet(name)
         out[key] = [scaled(f, by_heads(frames)) for f in frames]
@@ -102,7 +107,7 @@ def build() -> dict[str, list[np.ndarray]]:
     return out
 
 
-EXPECTED = {"stand": 2, "watch": 4, "walk": 6, "pet": 6, "drag": 4, "fall": 2, "land": 3, "crouch": 3, "sit": 4,
+EXPECTED = {"stand": 2, "watch": 4, "walk": 8, "pet": 6, "drag": 4, "fall": 2, "land": 3, "crouch": 3, "sit": 4,
             "rise": 3, "talk_alert": 6, "talk_base": 1, "talk_m1": 1, "talk_m2": 1, "talk_emph": 1,
             "talk_emph2": 1, "talk_blink": 1, "talk_mid": 1, "talk_end1": 1, "talk_end2": 1}
 
