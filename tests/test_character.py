@@ -2311,3 +2311,51 @@ def test_ian_sit_face_matches_crouch_and_rise():
     for name in ("crouch_2", "sit_0", "sit_1", "sit_2", "sit_3", "rise_0"):
         assert abs(face_ratio(stand, read(name)) - 1) <= 0.02 + 1e-9, name
     assert len({read(f"sit_{i}").shape[0] for i in range(4)}) == 1   # 한 배율(꿈틀거림 없음)
+
+
+def test_starline_talk_start_v2_eyes_match_stand():
+    """말하기 시작 v2(기획 11-25 — 예전 시트는 머리 1.14배·눈 흰자 넓음): talk_mid·end1·end2 눈 간격이 stand_0 ±3%,
+    키 같음, 눈 높이 ±3%(end1은 손목 금 팔찌가 눈 구간에 들어와 눈 높이 측정 제외)."""
+    import cv2
+    import numpy as np
+
+    from scripts.build_starline_frames import eye_gap
+
+    def eye_height(f):
+        h = f.shape[0]
+        hsv = cv2.cvtColor(np.ascontiguousarray(f[..., :3]), cv2.COLOR_BGR2HSV)
+        m = ((hsv[..., 0] >= 14) & (hsv[..., 0] <= 32) & (hsv[..., 1] > 110) & (hsv[..., 2] > 150) & (f[..., 3] > 200))
+        m[: int(h * 0.22)] = False
+        m[int(h * 0.6):] = False
+        return h - np.nonzero(m)[0].mean()
+
+    stand = _sl("stand_0")
+    for name in ("talk_mid_0", "talk_end1_0", "talk_end2_0"):
+        f = _sl(name)
+        assert abs(eye_gap(f) / eye_gap(stand) - 1) <= 0.03, name
+        assert abs(f.shape[0] - stand.shape[0]) <= 3, name
+    for name in ("talk_mid_0", "talk_end2_0"):
+        assert abs(eye_height(_sl(name)) / eye_height(stand) - 1) <= 0.03, name
+
+
+def test_drawer_cells_use_card_ratio_and_fill_to_bottom(app, cfg):
+    """서랍 칸 = 카드와 같은 4:5, 그림 놓는 규칙도 카드와 같음(사용자 11-25 '서랍 칸 비율이 달라 그림 높낮이가 달라 보임') —
+    8벌 모두 칸 아래 끝까지 그림(흰 칸 바탕 띠 없음)."""
+    from mabinogi_addon.character import outfits
+    from mabinogi_addon.ui import character_tab as ct
+
+    assert abs(ct.CELL_W / ct.CELL_H - ct.CARD_W / ct.CARD_H) < 0.01
+    # 이안 두 벌은 원본 상반신이 허리 위에서 끝나 큰 카드에서도 아래가 빔 — 기획에 긴 상반신 재생성 요청(11-25)
+    awaiting = {("이안", "vest_tie"), ("이안", "guild_uniform")}
+    for folder, items in outfits.OUTFITS.items():
+        character = next(c for c in roster.ROSTER if c.known and roster.folder(c) == folder)
+        for o in items:
+            if (folder, o.key) in awaiting:
+                continue
+            cell = ct.OutfitCell(character, o, True)
+            image = cell.grab().toImage()
+            w = image.width()
+            frame_h = (ct.CELL_W - 4) * ct.CARD_H / ct.CARD_W
+            y = int(1 + frame_h - 5)   # 칸 그림 아래 끝 바로 위(흰 테두리 안쪽)
+            white = sum(1 for x in range(w // 3, 2 * w // 3) if image.pixelColor(x, y).lightness() > 245)
+            assert white < (w // 3) * 0.5, (folder, o.key, white)
