@@ -1100,8 +1100,9 @@ def test_ian_roster_card_frames_and_heights():
         assert abs(h(name)[0] - 285) <= 3, name
     assert abs(h("rise_0")[1] - h("crouch_2")[1]) <= 3  # 일어나기 첫 장 = 쪼그림 폭
     assert abs(_head(IAN_DIR / "rise_2.png") / _head(IAN_DIR / "stand_1.png") - 1) <= 0.05  # 끝 = 서 있는 머리 폭
-    # 앉아 기다리기(v2, 기획 11-24): 웅크리기 끝 높이로 맞추면 머리 94% → 머리 폭 배율(몸이 조금 커지는 건 기획이 받아들임)
-    assert abs(_head(IAN_DIR / "sit_0.png") / _head(IAN_DIR / "stand_1.png") - 1) <= 0.05
+    # 앉아 기다리기: 머리 폭 구간에 머리카락·어깨가 섞여 머리 폭으론 얼굴이 8% 커졌음(사용자 11-25) → 얼굴 템플릿으로 맞춤
+    # (test_ian_sit_face_matches_crouch_and_rise). 머리 폭은 그만큼 작게 나옴(0.94)
+    assert 0.90 <= _head(IAN_DIR / "sit_0.png") / _head(IAN_DIR / "stand_1.png") <= 1.0
     for n in ("talk_end1_0", "talk_end2_0"):  # v2 말 끝 두 장
         assert n in br.IAN.anims["talk_end"][0]
 
