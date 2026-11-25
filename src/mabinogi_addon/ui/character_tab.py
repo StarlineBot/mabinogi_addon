@@ -77,6 +77,19 @@ def _dimmed(pixmap: QPixmap) -> QPixmap:
     return out
 
 
+def draw_card_art(p: QPainter, rect: QRectF, art: QPixmap, fit_height: bool = False) -> None:
+    """카드 그림 놓기(카드·서랍 칸 공용 — 4:5 칸): 머리 위 HEAD_ROOM(칸 폭 비례)을 띄우고, 양옆을 잘라 칸 높이를 채움
+    (가운데 기준) — 아래는 그만큼 잘림. fit_height(이미 카드 비율인 그림 — Starline)면 머리 위 아래 높이에 꽉, 양옆 안 자름."""
+    head = HEAD_ROOM * rect.width() / (CARD_W - 3)
+    if fit_height:
+        p.drawPixmap(QRectF(rect.left(), rect.top() + head, rect.width(), rect.height() - head + 3 * rect.width() / CARD_W),
+                     art, QRectF(art.rect()))
+        return
+    src_w = min(art.width(), art.height() * rect.width() / rect.height())
+    source = QRectF((art.width() - src_w) / 2, 0, src_w, art.height())
+    p.drawPixmap(QRectF(rect.left(), rect.top() + head, rect.width(), rect.height()), art, source)
+
+
 class CharacterCard(QWidget):
     """카드 하나 — 그림(카드 224×280, 머리 위 20px, 둥근 모서리로 자름) + 아래 ♥ 호감도 바(제작자). 누르면 clicked(인사 듣기).
     테두리·이름·`✓ 사용 중` 명판은 탭 위 CardFrameLayer가 그림(장식이 칸 밖으로 넘쳐도 잘리지 않게, 기획 11-25).
@@ -258,14 +271,8 @@ class CharacterCard(QWidget):
             tp.fillRect(tinted.rect(), QColor("#4a4f58") if _dark() else QColor("#c4c8cf"))
             tp.end()
             art = tinted
-        if roster.folder(self.character) in CARD_FIT_HEIGHT and self.outfit == outfits.BASE:
-            p.drawPixmap(QRectF(card.left(), card.top() + HEAD_ROOM, card.width(), card.height() - HEAD_ROOM + 3),
-                         art, QRectF(art.rect()))
-            return
-        # 카드가 그림보다 길어(224×280) 양옆을 잘라 높이를 채움(가운데 기준), 머리 위 20px 띄움 — 아래는 그만큼 잘림
-        src_w = min(art.width(), art.height() * CARD_W / CARD_H)
-        source = QRectF((art.width() - src_w) / 2, 0, src_w, art.height())
-        p.drawPixmap(QRectF(card.left(), card.top() + HEAD_ROOM, card.width(), card.height()), art, source)
+        fit = roster.folder(self.character) in CARD_FIT_HEIGHT and self.outfit == outfits.BASE
+        draw_card_art(p, card, art, fit)
 
     def paint_overlay(self, p: QPainter, origin: QPointF) -> None:
         """테두리 층이 부름 — 테두리 그림·이름·명판(origin = 이 카드 위젯의 왼쪽 위, 층 좌표)."""
@@ -375,7 +382,7 @@ def _dark() -> bool:
 
 # ---- 착장 서랍(기획 11-25, 시안 docs/characters/assets/공용/시안/카드_착장서랍.png) ----
 DRAWER_BG = "#3a3d44"
-CELL_W, CELL_H = 112, 196     # 칸 그림 — 서랍이 옆 카드 한 장 폭 정도(창 760px에서도 안 잘림)
+CELL_W, CELL_H = 112, 140     # 칸 그림 — 카드와 같은 4:5(사용자 11-25 '서랍 칸 비율이 카드와 달라 그림 높낮이가 달라 보임')
 CELL_GAP = 10
 CAPTION_H = 22
 DRAWER_W = CELL_GAP + 2 * (CELL_W + CELL_GAP)
@@ -428,20 +435,17 @@ class OutfitCell(QWidget):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
-        frame = QRectF(2, 1, CELL_W - 4, CELL_H - 6)
+        frame = QRectF(2, 1, CELL_W - 4, (CELL_W - 4) * CARD_H / CARD_W)   # 4:5
         p.setPen(Qt.PenStyle.NoPen)   # 아래 그림자
         p.setBrush(QColor(0, 0, 0, 110))
         p.drawRoundedRect(frame.translated(0, 4), 8, 8)
         clip = QPainterPath()
         clip.addRoundedRect(frame, 8, 8)
         p.fillPath(clip, QColor("#ffffff"))
-        if not self._art.isNull():   # cover(위 기준) — 칸 폭·높이 중 큰 배율로 채우고 가운데·위 맞춤
-            art = self._art
-            k = max(frame.width() / art.width(), frame.height() / art.height())
-            w, h = art.width() * k, art.height() * k
+        if not self._art.isNull():   # 카드와 같은 규칙(머리 위 여백·양옆 자르기·아래 잘림)
             p.save()
             p.setClipPath(clip)
-            p.drawPixmap(QRectF(frame.center().x() - w / 2, frame.top(), w, h), art, QRectF(art.rect()))
+            draw_card_art(p, frame, self._art)
             if not self.unlocked:   # 가운데 가로 띠 '해금'(가슴 높이 62%)
                 band = QRectF(frame.left(), frame.top() + frame.height() * 0.62 - 17, frame.width(), 34)
                 p.fillRect(band, QColor(20, 20, 26, 190))
@@ -505,7 +509,7 @@ class OutfitDrawer(QWidget):
         tab = self.parentWidget()
         rect = card.card_rect().translated(QPointF(card.mapTo(tab, QPoint(0, 0)))).toAlignedRect()
         top_left = rect.topLeft()
-        height = CARD_H
+        height = CELL_GAP * 2 + CELL_H + CAPTION_H   # 칸(4:5) + 아래 글
         right = QRect(rect.right() + DRAWER_GAP, top_left.y(), DRAWER_W, height)
         # 맨 오른쪽 줄은 왼쪽으로(창 밖으로 안 잘리게), 왼쪽·가운데 줄은 오른쪽으로
         cards = getattr(tab, "cards", [])
