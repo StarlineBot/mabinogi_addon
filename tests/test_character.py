@@ -1668,7 +1668,7 @@ def test_starline_head_size_matches_standing_within_5_percent():
     face, eyes = face_crop(stand), eye_gap(stand)
     sheets, bad = {}, {}
     for path in SL_DIR.glob("*.png"):
-        if path.stem == "card" or path.stem in ("talk_blink_0", "sit_3") or path.stem.startswith("sneeze_"):
+        if path.stem in ("card", "frame") or path.stem in ("talk_blink_0", "sit_3") or path.stem.startswith("sneeze_"):
             # 재채기는 같은 자세 0·5번 실루엣으로 맞춤(QA 11-25 — 얼굴 창은 머리카락에 끌림) → 실루엣 테스트가 맡음
             continue
         r = head_ratio(face, eyes, _img_of(path))
@@ -1709,15 +1709,17 @@ def test_starline_click_and_land_show_one_picture_at_a_time(app):
 
 
 def test_known_cards_fill_down_to_card_bottom():
-    """카드 그림(폭 맞춤·위 8px)이 카드 아래 끝까지 덮음 — 가로형 상반신이면 아래가 비어 보임(사용자 11-24 이안)."""
+    """카드 224×280(기획 11-25): 그림은 양옆을 잘라 높이를 채움(가운데 기준 폭 = 높이×224/280) — 모든 카드·착장 카드가
+    그만큼 넓어야 아래가 비지 않음(머리 위 20px만큼 아래가 잘림)."""
+    from mabinogi_addon.character import outfits
     from mabinogi_addon.ui import character_tab as ct
 
-    width, bottom = ct.CARD_W - 3, 1.5 + ct.CARD_H - 3
-    for c in roster.ROSTER:
-        if not c.known:
-            continue
-        art = _img_of(ASSETS / c.card)
-        assert 1.5 + 8 + art.shape[0] * width / art.shape[1] >= bottom, c.name
+    assert (ct.CARD_W, ct.CARD_H, ct.HEAD_ROOM) == (224, 280, 20)
+    paths = [ASSETS / c.card for c in roster.ROSTER if c.known]
+    paths += [ASSETS / outfits.asset(f, o.key, "card.png") for f, items in outfits.OUTFITS.items() for o in items[1:]]
+    for path in paths:
+        art = _img_of(path)
+        assert art.shape[1] >= art.shape[0] * ct.CARD_W / ct.CARD_H, path
 
 
 @pytest.mark.parametrize("profile,folder,scale", [(br.DARE, "다래", 1.0), (br.ARIA, "아리아", 1.0), (br.IAN, "이안", 1.0),
@@ -1779,7 +1781,7 @@ def test_creator_affinity_edit_still_saves_in_beta(app, cfg):
     tab.editors[i].buttons[2].click()
     assert config.load_affinity("조용한 여성")["value"] == 50 and tab.cards[i]._affinity == 50
     tab.set_creator(False)
-    assert not tab.cards[i].details_visible() and tab.cards[i].height() == ct.CARD_H
+    assert not tab.cards[i].details_visible() and tab.cards[i].height() == ct.PAD_TOP + ct.CARD_H + ct.PAD_BOTTOM
 
 
 def test_default_voice_button_returns_to_recorded_voice(app, cfg, monkeypatch):
@@ -2167,3 +2169,74 @@ def test_config_outfit_saves_per_character(cfg):
     config.save_character(outfit=("화난 여성", "lab"))
     config.save_character(outfit=("조용한 여성", "frill_pajama"))
     assert config.load_outfit("화난 여성") == "lab" and config.load_outfit("조용한 여성") == "frill_pajama"
+
+
+
+# ---- 11-25 카드 테두리·상태 표시·서랍 열기 지연(기획 — docs/characters/카드_테두리.md) ----
+def test_card_frames_built_for_known_characters_only(app, cfg):
+    import json
+
+    from mabinogi_addon.ui import character_tab as ct
+
+    for c in roster.ROSTER:
+        frame = ct.card_frame(c)
+        if not c.known:
+            assert frame is None                       # ??? 테두리 없음
+            continue
+        pixmap, rect = frame
+        meta = json.loads((ASSETS / roster.folder(c) / "frame.json").read_text(encoding="utf-8"))
+        assert rect.x() == meta["x"] <= 0 and rect.y() <= 0   # 선 밖 장식은 카드 밖으로 넘침
+        assert rect.right() >= ct.CARD_W and rect.bottom() >= ct.CARD_H
+        assert abs(pixmap.width() / 2 - rect.width()) <= 1   # 2배 해상도
+    assert ct.NAME_LIFT == {"Starline": 12, "이안": 6, "다래": 4, "아리아": 2, "레나": 0}
+
+
+def test_card_states_dim_plate_and_pending_float(app, cfg):
+    tab, cards = _drawer_tab(cfg)                     # 다래 사용 중
+    dare, lena, ian = cards["다래"], cards["레나"], cards["이안"]
+    assert dare.selected() and dare.bright()           # 사용 중은 늘 밝게(명판)
+    assert not lena.bright() and not ian.bright()      # 나머지 25% 어둡게
+    assert cards["다래"].card_rect().top() == ct_pad() + 1.5
+    tab._play_sample = lambda pack: None
+    tab.preview(lena.character)                       # 눌러 인사 → 적용 대기
+    assert lena.pending() and lena.bright() and lena.apply_button.isVisible()
+    assert lena.card_rect().top() == ct_pad() + 1.5 - 6       # 6px 떠오름
+    button = lena.apply_button.geometry()
+    assert button.bottom() < lena.card_rect().bottom() - 30   # 이름 바로 위(이름 자리 위)
+    ian._hover = True
+    assert ian.bright()                                # 마우스 올리면 원래 밝기
+    tab._leave_card(ian)
+    ian._hover = False
+    assert not ian.bright()
+    # 그리기 — 층이 카드마다 테두리·이름·명판을 그림(예외 없이)
+    image = tab.grab()
+    assert not image.isNull()
+
+
+def ct_pad():
+    from mabinogi_addon.ui import character_tab as ct
+    return ct.PAD_TOP
+
+
+def test_drawer_opens_after_300ms_hover_and_follows_floating_card(app, cfg):
+    tab, cards = _drawer_tab(cfg, affinity={"화난 여성": {"value": 60, "cleared": 2}})
+    lena = cards["레나"]
+    tab._hover_card(lena)
+    assert not tab.drawer.isVisible() and tab._hover_timer.isActive()
+    assert tab._hover_timer.interval() == 300
+    tab._leave_card(lena)                              # 지나가는 마우스 → 안 열림
+    assert not tab._hover_timer.isActive()
+    tab._hover_card(lena)
+    tab._hover_timer.timeout.emit()                    # 0.3초 머묾
+    assert tab.drawer.isVisible() and tab.drawer.card is lena and lena.bright()   # 서랍 열린 카드는 밝게
+    tab._play_sample = lambda pack: None
+    tab.resize(800, 680)                               # 창 폭 여유(좁으면 서랍이 탭 안으로 당겨짐)
+    tab.preview(lena.character)                        # 적용 대기 → 떠오른 카드에 맞춰 서랍도
+    from PySide6.QtCore import QPoint, QPointF
+    rect = lena.card_rect().translated(QPointF(lena.mapTo(tab, QPoint(0, 0)))).toAlignedRect()
+    assert tab.drawer.geometry().top() == rect.top()
+    assert tab.drawer.geometry().left() - rect.right() == 16    # 테두리 장식만큼 간격
+    tab.drawer.cells[0].picked.emit(tab.drawer.cells[0].outfit)   # 서랍에서 옷 → 대기 유지
+    assert lena.pending()
+    tab.drawer.close_drawer()                          # 서랍만 닫힘
+    assert lena.pending() and not lena.keep_bright
