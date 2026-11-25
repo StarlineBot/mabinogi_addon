@@ -1,5 +1,5 @@
 {
-  "version": "0.57.1",
+  "version": "0.57.0",
   "tests": [
     "tests/test_character.py",
     "tests/test_navigation.py",
@@ -153,7 +153,7 @@
         "tests/test_release_candidate.py",
         "tests/test_windows_ci.py"
       ],
-      "reason": "0.57.1 검사 목록·후보 봉인·CI 계약"
+      "reason": "0.57.0 검사 목록·후보 봉인·CI 계약"
     },
     "packaging/build_windows.py": {
       "tests": [
@@ -168,7 +168,7 @@
         "tests/test_release_notes.py",
         "tests/test_release_notes_trigger.py"
       ],
-      "reason": "0.57.1 노트 맨 위 — 이안 앉기 얼굴, v0.57.0 이하 그대로(후보와 같음)"
+      "reason": "0.57.0 노트 맨 위 — 착장 서랍·카드 테두리(헤드라인 둘)·서랍 0.3초·대기 떠오름·이안 앉기 얼굴·다래 새 걷기/착지/일어나기·Starline 말하기/불꽃·재채기·요리 82개·즐겨찾기 순서, v0.56.2 이하 그대로(게시본과 같음)"
     },
     "src/mabinogi_addon/character/roster.py": {
       "tests": [
