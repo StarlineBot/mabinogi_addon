@@ -17,7 +17,8 @@ from datetime import datetime
 KEY = "featureUsage"
 # 명세 3.4.2 표 — 홈 화면 키와 같은 이름. 새 기능을 만들면 여기에 키를 더한다.
 KEYS = ("buff", "debuff", "boss", "halo", "tuarim", "dorcha", "stat_bars", "skillbar", "custom",
-        "cooldown", "boss_bar", "fps", "opt", "cursor", "blackbox", "alarm", "keywords")
+        "cooldown", "boss_bar", "fps", "opt", "cursor", "blackbox", "alarm", "keywords",
+        "pet", "character_voice")   # 11-25 캐릭터: 펫이 화면에 보임 / 고른 캐릭터 목소리로 알림이 울림
 _DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 

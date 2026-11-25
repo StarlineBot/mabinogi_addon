@@ -1534,6 +1534,8 @@ class MainWindow(QMainWindow):
                                  and self.blackbox_tools.service.status == "recording"),
             "alarm": lambda: self.alarm_tab.enable.isChecked() and any(a.enabled for a in self.alarm_tab.clock.alarms),
             "keywords": lambda: bool(self.party_tab._keywords),
+            "pet": lambda: self.character_tools.pet_visible(),
+            "character_voice": lambda: self.character_tools.voice_used_today(),
         }
         active = set()
         for key, check in checks.items():

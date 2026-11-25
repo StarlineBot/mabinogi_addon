@@ -68,6 +68,7 @@ class CharacterController(QObject):
         self.character = roster.by_pack(config.load_voice_pack())
         self.affinity = self._load_affinity()
         self._stage = self._current_stage()
+        self.voice_alert_day = ""     # 캐릭터 목소리 팩으로 알림이 울린 날(featureUsage character_voice, 11-25)
         from .notifier import on_play
         on_play(self._on_sound)
 
@@ -109,6 +110,14 @@ class CharacterController(QObject):
         if self.window is not None and self.character is not None and self.character.key == key:
             self._window_for = None
             self.sync_window()
+
+    def pet_visible(self) -> bool:
+        """'화면에 캐릭터 띄우기' 켬 + 펫 창이 실제로 보임(featureUsage pet)."""
+        return config.load_pet_on() and self.window is not None and self.window.isVisible()
+
+    def voice_used_today(self) -> bool:
+        """오늘 캐릭터 목소리로 알림이 울렸는지 + 지금도 캐릭터 목소리(featureUsage character_voice)."""
+        return bool(config.load_voice_pack()) and self.voice_alert_day == today()
 
     def sync_window(self) -> None:
         """펫 창을 켜야 하면 만들고, 아니면 닫는다."""
@@ -276,6 +285,8 @@ class CharacterController(QObject):
     def _on_sound(self, _buff_id: str, path) -> None:
         """알림 소리 → 대사 목소리는 멈춤(알림 우선), 그 캐릭터 목소리면 호감도 +1·알아챔·말풍선."""
         self.voice.stop()
+        if config.load_voice_pack():   # 기본 목소리가 아닌 팩을 고른 채 알림이 울림 — 사용 기록용(호감도와 무관)
+            self.voice_alert_day = today()
         if not self.enabled or self.character is None or self.affinity is None:
             return
         try:

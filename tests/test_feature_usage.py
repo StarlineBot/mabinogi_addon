@@ -73,7 +73,7 @@ def test_unknown_keys_ignored_and_failed_save_retried():
 def test_keys_match_spec_table():
     assert set(feature_usage.KEYS) == {"buff", "debuff", "boss", "halo", "tuarim", "dorcha", "stat_bars", "skillbar",
                                        "custom", "cooldown", "boss_bar", "fps", "opt", "cursor", "blackbox", "alarm",
-                                       "keywords"}
+                                       "keywords", "pet", "character_voice"}   # 11-25 캐릭터 두 줄
 
 
 # ---- 저장·동기화·가져오기 ----
@@ -183,3 +183,69 @@ def test_window_active_check_failure_skips_only_that_key(window, monkeypatch):  
         mp.setattr(w.party_tab, "_keywords", ["x"])
         mp.setattr(w, "buff_controller", object())  # item_count 없음 → 예외 → buff만 빠짐
         assert "keywords" in w._feature_usage_active()
+
+
+# ---- 11-25 캐릭터 사용 기록(기획 — 명세 3.4.2 끝 두 줄) ----
+def test_character_keys_are_known_and_in_bundle():
+    assert {"pet", "character_voice"} <= set(feature_usage.KEYS)
+    assert feature_usage.clean({"pet": "2026-11-25", "character_voice": "2026-11-25"}) == {
+        "pet": "2026-11-25", "character_voice": "2026-11-25"}
+
+
+def test_window_records_pet_and_character_voice_once_a_day(window, monkeypatch):  # noqa: F811
+    from pathlib import Path
+
+    from mabinogi_addon.ui import character_controller as cc
+    from mabinogi_addon.ui import notifier
+
+    w, _ = window
+    tools = w.character_tools
+    with monkeypatch.context() as mp:
+        # 펫: 켬 + 창 보임일 때만
+        assert "pet" not in w._feature_usage_active()
+        mp.setattr(config, "load_pet_on", lambda *a, **k: True)
+        assert "pet" not in w._feature_usage_active()            # 켰지만 창 없음(숨김)
+
+        class _Win:
+            visible = False
+
+            def isVisible(self):  # noqa: N802
+                return self.visible
+
+            def stop(self):
+                pass
+
+            def deleteLater(self):  # noqa: N802
+                pass
+        win = _Win()
+        mp.setattr(tools, "window", win)
+        assert "pet" not in w._feature_usage_active()            # 창이 숨음
+        win.visible = True
+        assert "pet" in w._feature_usage_active()
+        mp.setattr(config, "load_pet_on", lambda *a, **k: False)
+        assert "pet" not in w._feature_usage_active()            # 스위치 끔
+        mp.setattr(tools, "window", None)
+        # 캐릭터 목소리: 기본 목소리면 알림이 울려도 안 적음
+        mp.setattr(cc, "today", lambda now=None: "2026-11-25")
+        mp.setattr(config, "load_voice_pack", lambda *a, **k: "")
+        notifier._announce("buff1", Path("sounds/기본/a.mp3"))
+        assert "character_voice" not in w._feature_usage_active()
+        mp.setattr(config, "load_voice_pack", lambda *a, **k: "조용한 여성")
+        assert "character_voice" not in w._feature_usage_active()   # 아직 안 울림
+        notifier._announce("preview", Path("sounds/조용한 여성/인사.mp3"))
+        assert "character_voice" not in w._feature_usage_active()   # 미리듣기는 알림 아님
+        notifier._announce("buff1", Path("sounds/조용한 여성/a.mp3"))
+        assert "character_voice" in w._feature_usage_active()
+        mp.setattr(cc, "today", lambda now=None: "2026-11-26")
+        assert "character_voice" not in w._feature_usage_active()   # 다음 날은 다시 울려야
+        mp.setattr(cc, "today", lambda now=None: "2026-11-25")
+        # 하루 한 번 기록(Recorder 규칙 그대로)
+        mp.setattr(config, "load_pet_on", lambda *a, **k: True)
+        mp.setattr(tools, "window", win)
+        w._usage = feature_usage.Recorder(config.load_feature_usage, config.save_feature_usage, today=lambda: "2026-11-25")
+        w._game_session.identity = (1234, 1.0)
+        assert {"pet", "character_voice"} <= set(w._note_feature_usage(now=100.0))
+        assert "pet" not in w._note_feature_usage(now=200.0)
+        usage = config.load_feature_usage()
+        assert usage["pet"] == "2026-11-25" and usage["character_voice"] == "2026-11-25"
+        mp.setattr(tools, "window", None)
