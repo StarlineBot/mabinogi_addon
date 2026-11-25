@@ -102,6 +102,29 @@ def grid(image: np.ndarray, cols: int, rows: int) -> list[np.ndarray]:
     return out
 
 
+def guide_cells(name: str, cols: int, rows: int) -> list[np.ndarray]:
+    """가이드 방식 시트(기획 11-25 — 칸마다 기준 그림·분홍 높이선·파란 칸 테두리): 같은 칸으로 나눠(가장자리 6px 안쪽)
+    분홍(R>170·B>170·G<110)·파란(R<90·G>120·B>190) 선을 지우고, 가장 큰 알파 덩어리의 2% 이상만 남겨 꼭 맞춤."""
+    image = sheet_image(name)
+    b, g, r = (image[..., i].astype(np.int16) for i in range(3))
+    lines = ((r > 170) & (b > 170) & (g < 110)) | ((r < 90) & (g > 120) & (b > 190))
+    image = image.copy()
+    image[lines, 3] = 0
+    h, w = image.shape[:2]
+    out = []
+    for row in range(rows):
+        for col in range(cols):
+            cell = image[row * h // rows + 6:(row + 1) * h // rows - 6, col * w // cols + 6:(col + 1) * w // cols - 6].copy()
+            count, labels, stats, _ = cv2.connectedComponentsWithStats((cell[..., 3] > 20).astype(np.uint8))
+            if count > 1:
+                areas = stats[1:, cv2.CC_STAT_AREA]
+                keep = np.zeros(count, bool)
+                keep[1:] = areas >= areas.max() * 0.02
+                cell[~keep[labels], 3] = 0
+            out.append(_tight(cell))
+    return out
+
+
 def sheet_image(name: str, folder=None) -> np.ndarray:
     from scripts.build_aria_frames import clean
     return clean(imread((folder or SHEETS) / name, cv2.IMREAD_UNCHANGED))
@@ -116,18 +139,19 @@ def build() -> dict[str, list[np.ndarray]]:
     out: dict[str, list[np.ndarray]] = {}
     stand = front_view()
     out["stand"] = [scaled(stand, STAND_H / stand.shape[0])]
-    walk = sheet("오른쪽을 향한 고딕 치비 걷기 애니메이션 스프라이트.png")
-    out["walk"] = [scaled(f, by_height(walk, 1.0)) for f in walk]
+    # 걷기·착지·일어나기 새 시트(기획 11-25 '걸을 때 머리 커짐'·'떨어진 뒤 머리가 작았다 커짐'): 가이드 방식 —
+    # 시트마다 기준 칸(서 있기와 같은 그림) 키 = 서 있기 키가 되는 배율 하나
+    walk = guide_cells("다래_걷기_v2.png", 4, 2)   # 0·4 = 기준, 1·2·3 → 5·6·7 = 걷기
+    out["walk"] = [scaled(walk[i], STAND_H / walk[0].shape[0]) for i in (1, 2, 3, 5, 6, 7)]
     surprise = sheet("깜짝 놀란 고딕 천사 소녀 애니메이션 시트.png")
     out["surprise"] = [scaled(f, by_height(surprise, 1.0)) for f in surprise]
     pet = sheet("부끄러운 치비 천사 악마 스티커 세트.png")
     out["pet"] = [scaled(f, by_height(pet, 1.0)) for f in pet]
     drag = sheet("움직이는 꼬마 천사 드래그 포즈 시트.png")
     out["drag"] = [scaled(f, by_height(drag, 1.0)) for f in drag]
-    rise3 = sheet("세 가지 자세의 놀란 뿔소녀 스프라이트.png")
-    s3 = STAND_H / rise3[2].shape[0]
-    out["land"] = [scaled(f, s3) for f in sheet(next(SHEETS.glob("착지부터*.png")).name)]
-    out["getup"] = [scaled(f, s3) for f in rise3]
+    for key, name in (("land", "다래_착지_v2.png"), ("getup", "다래_일어나기_v2.png")):
+        cells = guide_cells(name, 4, 1)   # 0 = 기준, 1·2·3 = 동작
+        out[key] = [scaled(f, STAND_H / cells[0].shape[0]) for f in cells[1:]]
     crouch = sheet("졸린 천사 캐릭터의 웅크리기 3단계.png")
     sc = STAND_H / crouch[0].shape[0]
     out["crouch"] = [scaled(f, sc) for f in crouch]

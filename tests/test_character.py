@@ -1181,11 +1181,11 @@ def test_ian_alert_points_at_watch():
 
 
 def test_walk_values_come_from_character_data_and_corner_rush_speeds_up_steps():
-    """걷기 미끄러짐(사용자 11-24): 캐릭터별 프레임 시간·속도, 이안 v2 0.18초·62px/초(보폭 67px)."""
+    """걷기 미끄러짐(사용자 11-24): 캐릭터별 프레임 시간·속도, 이안 v2 0.18초·62px/초(보폭 67px), 다래 새 걷기(11-25) 100px/초(디딘 발 장마다 약 21px 그리기 크기)."""
     assert br.IAN.walk_speed == 62.0 and br.IAN.anims["walk"][1] == (0.18,) * 6
     for profile in (br.DARE, br.ARIA, br.IAN, br.LENA, br.STARLINE):
         cycle = sum(profile.anims["walk"][1])
-        assert 60 <= profile.walk_speed <= 90 and 60 <= profile.walk_speed * cycle <= 125  # 한 바퀴 거리 ≈ 보폭
+        assert 60 <= profile.walk_speed <= 100 and 60 <= profile.walk_speed * cycle <= 125  # 한 바퀴 거리 ≈ 보폭
     b = _ian()
     b._walk_to((800.0, 700.0), 0)
     _run(b, 0, 1.0, False)
