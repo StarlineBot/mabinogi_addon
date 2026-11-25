@@ -2342,6 +2342,13 @@ def load_voice_lines(path: Path = LOCAL_CONFIG_PATH) -> bool:
     return _character(path).get("voiceLines") is not False
 
 
+def load_outfit(key: str, path: Path = LOCAL_CONFIG_PATH) -> str:
+    """그 캐릭터가 입은 옷 key(착장 — 기획 11-25). 없으면 ""(기본 옷)."""
+    raw = _character(path).get("outfit")
+    value = raw.get(key) if isinstance(raw, dict) else None
+    return value if isinstance(value, str) else ""
+
+
 def load_pet_last_seen(path: Path = LOCAL_CONFIG_PATH) -> str:
     """마지막으로 앱을 켠 날(YYYY-MM-DD) — '오랜만에 켰을 때' 인사."""
     v = _character(path).get("lastSeen")
@@ -2349,9 +2356,14 @@ def load_pet_last_seen(path: Path = LOCAL_CONFIG_PATH) -> str:
 
 
 def save_character(path: Path = LOCAL_CONFIG_PATH, **fields) -> None:
-    """pet(bool)·corner({x, y})·lastSeen 중 준 것만, affinity=(key, dict)면 그 캐릭터 호감도만 바꾼다."""
+    """pet(bool)·corner({x, y})·lastSeen 중 준 것만, affinity=(key, dict)면 그 캐릭터 호감도만, outfit=(key, 옷 key)면 그 캐릭터 옷만 바꾼다."""
     data = _read_local_config(path)
     sec = dict(_character(path))
+    outfit = fields.pop("outfit", None)
+    if outfit is not None:   # (캐릭터 key, 옷 key) — 그 캐릭터 옷만 바꿈
+        table = dict(sec.get("outfit") or {}) if isinstance(sec.get("outfit"), dict) else {}
+        table[outfit[0]] = outfit[1]
+        sec["outfit"] = table
     affinity = fields.pop("affinity", None)
     if affinity is not None:
         key, value = affinity

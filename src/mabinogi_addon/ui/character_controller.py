@@ -104,6 +104,12 @@ class CharacterController(QObject):
         self._stage = self._current_stage()  # 캐릭터를 바꾼 건 구간이 오른 게 아님
         self.sync_window()
 
+    def outfit_changed(self, key: str) -> None:
+        """캐릭터 탭에서 옷을 갈아입음 → 지금 펫이 그 캐릭터면 창을 다시 만듦(착장 프레임이 있으면 그걸로)."""
+        if self.window is not None and self.character is not None and self.character.key == key:
+            self._window_for = None
+            self.sync_window()
+
     def sync_window(self) -> None:
         """펫 창을 켜야 하면 만들고, 아니면 닫는다."""
         want = (self.enabled and config.load_pet_on() and self.character is not None
@@ -221,7 +227,7 @@ class CharacterController(QObject):
 
         folder = roster.folder(self.character)
         profile = PROFILES.get(folder, DARE).with_timing(config.load_pet_idle())
-        frames = load_frames(folder, profile)
+        frames = load_frames(folder, profile, config.load_outfit(self.character.key))
         if not frames:
             _log.warning("펫 그림을 찾지 못함 — 펫 창 안 띄움")
             return None
