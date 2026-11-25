@@ -555,14 +555,14 @@ def test_character_tab_cards_choose_voice_and_toggle_pet(app, cfg, monkeypatch):
     tab.voice_pack_changed.connect(lambda: changed.append(1))
     tab.pet_toggled.connect(toggled.append)
     # 카드 순서(사용자 11-24): Starline → 레나 → 다래 → 이안 → 아리아 → 나머지
-    assert [c.character.name for c in tab.cards] == ["Starline", "레나", "다래", "이안", "아리아", "???"]
+    assert [c.character.name for c in tab.cards] == ["Starline", "레나", "다래", "이안", "아리아", "???", "???"]
     assert not any(c.selected() for c in tab.cards)  # 기본 녹음 — 고른 카드 없음
     tab.cards[5].clicked.emit(tab.cards[5].character)  # 누르면 인사만(사용자 11-25 B안) — 선택은 그대로
     assert config.load_voice_pack() == "" and played == ["자연스러운 여성"] and changed == []
     assert tab.cards[5].pending() and tab.cards[5].apply_button.isVisibleTo(tab.cards[5])
     tab.cards[5].apply_button.click()                  # 카드 안 '이 캐릭터로 적용' → 미정 카드도 그 목소리로
     assert config.load_voice_pack() == "자연스러운 여성" and changed == [1] and played == ["자연스러운 여성"]
-    assert [c.selected() for c in tab.cards] == [False, False, False, False, False, True]
+    assert [c.selected() for c in tab.cards] == [False, False, False, False, False, True, False]
     assert not tab.cards[5].pending()
     tab.choose(roster.DARE)
     assert tab.cards[2].selected() and "돌아다녀요" in tab.pet_hint.text()
@@ -636,7 +636,7 @@ def test_aria_roster_card_and_frames():
     aria = roster.by_pack("부드러운 여성")
     assert (aria.name, aria.known, aria.has_pet, aria.color) == ("아리아", True, True, "#F5A25D")
     assert (ASSETS / aria.card).is_file() and roster.folder(aria) == "아리아"
-    assert [c.name for c in roster.ROSTER] == ["Starline", "레나", "다래", "이안", "아리아", "???"]   # 카드 순서(사용자 11-24)
+    assert [c.name for c in roster.ROSTER] == ["Starline", "레나", "다래", "이안", "아리아", "???", "???"]   # 카드 순서(사용자 11-24)
     names = {n for frames, _t, _l in br.ARIA.anims.values() for n in frames}
     assert not [n for n in names if not (ARIA / f"{n}.png").exists()]
 
@@ -1090,7 +1090,7 @@ def test_ian_roster_card_frames_and_heights():
     import cv2
     from mabinogi_addon.image_io import imread
 
-    ian = roster.by_pack("차분한 남성")
+    ian = roster.by_pack("부드러운 남성")   # 11-25 사용자 녹음 팩(저장 키는 예전 '차분한 남성')
     assert (ian.name, ian.known, ian.has_pet, ian.color) == ("이안", True, True, "#3B5B9A")
     assert (ASSETS / ian.card).is_file() and [c.name for c in roster.ROSTER][3] == "이안"
     names = {n for frames, _t, _l in br.IAN.anims.values() for n in frames}
@@ -1112,7 +1112,7 @@ def test_ian_lines_have_alerts_stage_lines_and_watch_click():
     assert data.character == "이안" and "click_sleep" not in data.lines
     assert set(ln.SITUATIONS) - {"click_sleep"} <= set(data.lines) and "idle_extra_click" in data.lines
     from mabinogi_addon.ui.notifier import alert_files
-    sounds = alert_files(paths.resource_dir() / "sounds" / "차분한 남성") - {"파티 알림.mp3"}
+    sounds = alert_files(paths.resource_dir() / "sounds" / "부드러운 남성") - {"파티 알림.mp3"}
     assert len(data.alerts) == 12 and sounds <= set(data.alerts)   # 11 + 투아림 2차 말풍선(11-24, 녹음은 나중)
     staged = [line for items in data.lines.values() for line in items if line.stage > 0]
     assert len(staged) == 24 and [line.stage for line in data.lines["stage_up"]] == [25, 50, 75, 100]
@@ -1528,7 +1528,7 @@ def _starline(profile=br.STARLINE, **kw):
 def test_starline_roster_english_name_gold_outline_and_frames():
     sl = roster.ROSTER[0]   # 카드 맨 앞(11-24)
     assert (sl.key, sl.name, sl.pack, sl.color, sl.outline) == ("장난스러운 남성", "Starline", "장난스러운 남성", "#3A0729", "#D8AA5E")
-    assert len(roster.ROSTER) == 6 and all(c.outline == "#FFFFFF" for c in roster.ROSTER[1:])
+    assert len(roster.ROSTER) == 7 and all(c.outline == "#FFFFFF" for c in roster.ROSTER[1:])
     assert sl.name.isascii() and roster.folder(sl) == "Starline"
     card = _img_of(SL_DIR / "card.png")
     assert abs(card.shape[1] / card.shape[0] - 224 / 260) < 0.005   # 손 전체 보이게(기획 11-25) — 카드 비율 그대로
@@ -2148,9 +2148,9 @@ def test_saved_outfit_shows_on_card_and_pet_frames_fall_back(app, cfg, tmp_path,
 
     _tab, cards = _drawer_tab(cfg, outfit={"부드러운 여성": "tshirt", "화난 여성": "없는옷"})
     assert cards["아리아"].outfit == "tshirt" and cards["레나"].outfit == ""
-    # 착장 SD가 아직 없음 → 기본 프레임 그대로
+    # SD가 없는 착장(여름 드레스) → 기본 프레임 그대로(티셔츠·이안 조끼는 11-25부터 SD 있음)
     base = pet_window.load_frames("아리아", br.ARIA)
-    dressed = pet_window.load_frames("아리아", br.ARIA, "tshirt")
+    dressed = pet_window.load_frames("아리아", br.ARIA, "summer_dress")
     assert set(base) == set(dressed) and all(base[n] == dressed[n] for n in base)
     # 착장 폴더에 같은 이름 프레임이 생기면 그걸 먼저
     root = tmp_path / "res"
@@ -2391,3 +2391,142 @@ def test_outfit_card_images_reach_bottom_with_face_in_place():
                     best = (score, k, loc[0] + t.shape[1] / 2 - (x0 + x1) / 2, loc[1] + t.shape[0] / 2 - (y0 + y1) / 2)
             _, k, dx, dy = best
             assert abs(k - 1) <= 0.05 + 1e-9 and abs(dx) <= 6 and abs(dy) <= 6, (folder, o.key, best)
+
+
+# ---- 11-25 이안 착장 '넥타이 조끼' 펫 SD 프레임(기획 — 명세 3-2 착장) ----
+VEST = ASSETS / "이안" / "outfits" / "vest_tie"
+
+
+def test_ian_vest_tie_frames_match_base_names_size_and_face():
+    """기본 이안 프레임과 이름 1:1(+ 모션 옷매무새 8·차 6), 프레임마다 키·얼굴 비율이 기본 프레임과 ±5%."""
+    import cv2
+
+    from mabinogi_addon.image_io import imread
+    from scripts.build_ian_frames import face_ratio
+
+    base = {p.stem for p in IAN_DIR.glob("*.png")} - {"card", "frame"}
+    dressed = {p.stem for p in VEST.glob("*.png")} - {"card"}
+    motions = dressed - base
+    assert base <= dressed
+    assert sorted(motions) == sorted([f"motion_tidy_{i}" for i in range(8)] + [f"motion_tea_{i}" for i in range(6)])
+    read = lambda p: imread(p, cv2.IMREAD_UNCHANGED)  # noqa: E731
+    stand_b, stand_o = read(IAN_DIR / "stand_1.png"), read(VEST / "stand_1.png")
+    for name in sorted(base):
+        b, o = read(IAN_DIR / f"{name}.png"), read(VEST / f"{name}.png")
+        assert abs(o.shape[0] / b.shape[0] - 1) <= 0.05, name
+        assert abs(face_ratio(stand_o, o) / face_ratio(stand_b, b) - 1) <= 0.05, name
+
+
+def test_ian_vest_tie_tones_match_its_stand():
+    """시트마다 다르던 바지·머리 밝기(기획 측정 ΔE 2~17): 어두운 톤·중간 톤 Lab 평균이 이 옷 stand_1과 ΔE(8비트 Lab) ≤ 10."""
+    import cv2
+    import numpy as np
+
+    from mabinogi_addon.image_io import imread
+
+    def tones(path):
+        f = imread(path, cv2.IMREAD_UNCHANGED)
+        a = f[..., 3] > 200
+        lab = cv2.cvtColor(np.ascontiguousarray(f[..., :3]), cv2.COLOR_BGR2LAB).astype(np.float64)
+        return [lab[a & (lab[..., 0] < 80)].mean(0), lab[a & (lab[..., 0] >= 80) & (lab[..., 0] <= 170)].mean(0)]
+
+    ref = tones(VEST / "stand_1.png")
+    for path in VEST.glob("*.png"):
+        if path.stem == "card":
+            continue
+        dark, mid = tones(path)
+        assert np.linalg.norm(dark - ref[0]) <= 10 and np.linalg.norm(mid - ref[1]) <= 10, path.stem
+
+
+def test_wearing_vest_tie_swaps_pet_frames(app):
+    """조끼를 입으면 펫 창 프레임이 착장 폴더 그림으로(없는 프레임 없음)."""
+    from mabinogi_addon.ui import pet_window
+
+    base = pet_window.load_frames("이안", br.IAN)
+    vest = pet_window.load_frames("이안", br.IAN, "vest_tie")
+    assert set(base) == set(vest)
+    assert all(base[n].size() != vest[n].size() or base[n] != vest[n] for n in ("stand_1", "walk_0"))
+
+
+# ---- 11-25 아리아 착장 '티셔츠 차림' 펫 SD 프레임(기획 — 이안 조끼와 같은 방식) ----
+TSHIRT = ASSETS / "아리아" / "outfits" / "tshirt"
+
+
+def test_aria_tshirt_frames_match_base_names_height_and_head():
+    """기본 아리아와 이름 1:1(+ 모션 물주기 8·화관 8), 키·머리(위 42%) 실루엣 배율 ±5% — 새 그림 선이 굵어 얼굴 템플릿은
+    치우치므로 실루엣으로(기획 11-25)."""
+    import cv2
+
+    from mabinogi_addon.image_io import imread
+    from scripts.silhouette import best_scale
+
+    base = {p.stem for p in ARIA.glob("*.png")} - {"card", "frame"}
+    dressed = {p.stem for p in TSHIRT.glob("*.png")} - {"card"}
+    assert base <= dressed
+    assert sorted(dressed - base) == sorted([f"motion_water_{i}" for i in range(8)] + [f"motion_wreath_{i}" for i in range(8)])
+    for name in sorted(base):
+        b = imread(ARIA / f"{name}.png", cv2.IMREAD_UNCHANGED)
+        o = imread(TSHIRT / f"{name}.png", cv2.IMREAD_UNCHANGED)
+        assert abs(o.shape[0] / b.shape[0] - 1) <= 0.05, name
+        head = lambda f: f[: int(f.shape[0] * 0.42)]  # noqa: E731
+        assert abs(best_scale(head(b), head(o)) - 1) <= 0.05, name
+
+
+def test_aria_tshirt_props_kept_and_pet_swaps(app):
+    """소품(물뿌리개·화분·화관)이 2% 덩어리 기준에 안 지워짐 — 모션 장은 서 있기보다 넓음, 입으면 펫 프레임 교체."""
+    import cv2
+
+    from mabinogi_addon.image_io import imread
+    from mabinogi_addon.ui import pet_window
+
+    stand_w = imread(TSHIRT / "stand_0.png", cv2.IMREAD_UNCHANGED).shape[1]
+    assert imread(TSHIRT / "motion_water_3.png", cv2.IMREAD_UNCHANGED).shape[1] > stand_w * 1.05   # 물뿌리개·화분
+    base = pet_window.load_frames("아리아", br.ARIA)
+    shirt = pet_window.load_frames("아리아", br.ARIA, "tshirt")
+    assert set(base) == set(shirt) and shirt["stand_0"].size() != base["stand_0"].size() or shirt["stand_0"] != base["stand_0"]
+
+
+
+# ---- 11-25 이안 새 목소리(부드러운 남성)·예전 팩은 이름 없는 후보 '자연스러운 남성'(기획 c57120b6) ----
+def test_ian_voice_pack_is_soft_male_and_keeps_saved_state(cfg):
+    """이안 카드 팩 = 부드러운 남성(인사 1·2), 저장 키는 예전 '차분한 남성' 그대로 — 예전 설정 'voice.pack=차분한 남성'은
+    이안으로 이어지고 호감도·옷도 같은 키로 읽힘."""
+    import json
+
+    from mabinogi_addon.ui import notifier
+
+    ian = next(c for c in roster.ROSTER if c.name == "이안")
+    assert (ian.key, ian.pack) == ("차분한 남성", "부드러운 남성")
+    pack_dir = paths.resource_dir() / "sounds" / "부드러운 남성"
+    assert {p.name for p in pack_dir.glob("인사*.mp3")} >= {"인사.mp3", "인사2.mp3"}
+    picks = {notifier.greeting_path("부드러운 남성", random.Random(seed)).name for seed in range(20)}
+    assert picks == {p.name for p in pack_dir.glob("인사*.mp3")}
+    cfg.write_text(json.dumps({"voice": {"pack": "차분한 남성"},
+                               "character": {"affinity": {"차분한 남성": {"value": 60, "cleared": 2}},
+                                             "outfit": {"차분한 남성": "vest_tie"}}}), encoding="utf-8")
+    assert config.load_voice_pack() == "부드러운 남성" and roster.by_pack(config.load_voice_pack()) is ian
+    assert config.load_affinity(ian.key)["value"] == 60 and config.load_outfit(ian.key) == "vest_tie"
+
+
+def test_natural_male_candidate_silhouette_and_pack(app, cfg, monkeypatch):
+    """자연스러운 남성: 실루엣·??? 카드(자연스러운 여성 다음), 인사 녹음 없음(투아림 녹음으로 대신), 팩 목록에 '차분한 남성' 없음."""
+    from mabinogi_addon.ui import character_tab as ct
+    from mabinogi_addon.ui import notifier
+
+    names = [c.pack for c in roster.ROSTER]
+    assert names.index("자연스러운 남성") == names.index("자연스러운 여성") + 1
+    nm = roster.by_pack("자연스러운 남성")
+    assert (nm.name, nm.known, nm.has_pet, nm.card) == (roster.UNKNOWN_NAME, False, False, "silhouette_m.png")
+    pack_dir = paths.resource_dir() / "sounds" / "자연스러운 남성"
+    assert not list(pack_dir.glob("인사*.mp3")) and len(list(pack_dir.glob("*.mp3"))) == 13
+    assert notifier.greeting_path("자연스러운 남성").name == notifier.SAMPLE_FILE
+    packs = notifier.list_voice_packs()
+    assert "차분한 남성" not in packs and {"부드러운 남성", "자연스러운 남성"} <= set(packs)
+    played = []
+    monkeypatch.setattr(ct.CharacterTab, "_play_sample", lambda self, pack: played.append(pack))
+    tab = ct.CharacterTab()
+    card = next(c for c in tab.cards if c.character is nm)
+    assert ct.card_frame(nm) is None
+    tab.preview(nm)
+    card.applied.emit(nm)
+    assert played == ["자연스러운 남성"] and config.load_voice_pack() == "자연스러운 남성"

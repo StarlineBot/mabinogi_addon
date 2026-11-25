@@ -27,13 +27,16 @@ DARE = Character("조용한 여성", "다래", "조용한 여성", "#B48CE6", "�
 _ARIA = Character("부드러운 여성", "아리아", "부드러운 여성", "#F5A25D", "아리아/card.png", True, True)
 _NATURAL = Character("자연스러운 여성", UNKNOWN_NAME, "자연스러운 여성", "#9AA0AA", "silhouette_f.png", False, False)
 _LENA = Character("화난 여성", "레나", "화난 여성", "#5B6BC9", "레나/card.png", True, True)
-_IAN = Character("차분한 남성", "이안", "차분한 남성", "#3B5B9A", "이안/card.png", True, True)
+# 이안(11-25): 목소리가 사용자 녹음 '부드러운 남성'으로 바뀜 — 저장 키는 예전 팩 이름 그대로(호감도·옷·기록이 이어지게)
+_IAN = Character("차분한 남성", "이안", "부드러운 남성", "#3B5B9A", "이안/card.png", True, True)
+# 예전 이안 TTS 팩 → 이름 없는 후보(11-25 사용자 '자연스러운 여성처럼 후보로 실루엣만')
+_NATURAL_M = Character("자연스러운 남성", UNKNOWN_NAME, "자연스러운 남성", "#9AA0AA", "silhouette_m.png", False, False)
 # Starline(11-24): 이름은 영어 그대로, 이름 글자 금 외곽선
 _STARLINE = Character("장난스러운 남성", "Starline", "장난스러운 남성", "#3A0729", "Starline/card.png", True, True,
                       outline="#D8AA5E")
 
-# 카드 순서(사용자 11-24): Starline → 레나 → 다래 → 이안 → 아리아 → 나머지. 저장 키(팩 이름)는 순서와 무관.
-ROSTER: tuple[Character, ...] = (_STARLINE, _LENA, DARE, _IAN, _ARIA, _NATURAL)
+# 카드 순서(사용자 11-24): Starline → 레나 → 다래 → 이안 → 아리아 → 나머지(자연스러운 여성 → 남성). 저장 키는 순서와 무관.
+ROSTER: tuple[Character, ...] = (_STARLINE, _LENA, DARE, _IAN, _ARIA, _NATURAL, _NATURAL_M)
 
 
 def by_pack(pack: str) -> Character | None:
