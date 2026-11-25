@@ -1670,8 +1670,7 @@ def test_starline_head_size_matches_standing_within_5_percent():
     face, eyes = face_crop(stand), eye_gap(stand)
     sheets, bad = {}, {}
     for path in SL_DIR.glob("*.png"):
-        if (path.stem in ("card", "frame") or path.stem in ("talk_blink_0", "sit_3") or path.stem.startswith("sneeze_")
-                or path.stem.startswith("flame_")):   # 불꽃: 몸 실루엣으로 맞춤(QA 11-25), 머리 −5%는 기획 재생성 요청
+        if path.stem in ("card", "frame") or path.stem in ("talk_blink_0", "sit_3") or path.stem.startswith("sneeze_"):
             # 재채기는 같은 자세 0·5번 실루엣으로 맞춤(QA 11-25 — 얼굴 창은 머리카락에 끌림) → 실루엣 테스트가 맡음
             continue
         r = head_ratio(face, eyes, _img_of(path))
@@ -2291,8 +2290,8 @@ def test_starline_talk_tones_match_stand():
         return out, hsv[a][:, 1].mean()
 
     (mid0, dark0), sat0 = tones(_sl("stand_0"))
-    names = sorted(p.stem for p in SL_DIR.glob("talk_*.png"))
-    assert len(names) >= 9
+    names = sorted(p.stem for p in [*SL_DIR.glob("talk_*.png"), *SL_DIR.glob("flame_*.png")])   # 불꽃 새 시트도(11-25)
+    assert len(names) >= 13
     for name in names:
         (mid, dark), sat = tones(_sl(name))
         assert (np.abs(mid - mid0) <= 1.5).all() and (np.abs(dark - dark0) <= 1.5).all(), (name, mid, dark)

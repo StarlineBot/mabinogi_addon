@@ -124,7 +124,7 @@ def build() -> dict[str, list[np.ndarray]]:
         return [scaled(f, k) for f in frames]
 
     from scripts.silhouette import best_scale   # 크기는 같은 자세 장 실루엣을 서 있기에 맞춤(QA 11-25)
-    flame = sheet("Starline_대기불꽃")
+    flame = sheet("Starline_대기불꽃_v2")   # 기획 11-25 새 시트(머리·몸 비율을 서 있기와 맞춰 다시 그림)
     # 머리 크기 fit이 시트 전체를 약 7% 키웠음(QA 11-25 '불꽃 나올 때 커져') → 같은 자세인 0번 실루엣으로 시트 배율 하나
     k = k_height(flame)
     k *= best_scale(out["stand"][0], scaled(flame[0], k))
@@ -170,7 +170,8 @@ def build() -> dict[str, list[np.ndarray]]:
     out["sneeze"] = [match_midtone(f, out["stand"][0]) for f in out["sneeze"]]
     # 말하기 두 시트(시작 = 탁하고 어두움, 반복 = 더 진함 — QA 11-25 '말할 때 색감이 달라져'): 어두운 톤·중간 톤 둘 다 서 있기에
     raw = {k: out[k][0] for k in ("talk_base", "talk_m1", "talk_m2")}
-    for key in [k for k in out if k.startswith("talk_")]:
+    # 불꽃 새 시트(11-25)도 같은 기준으로(중간 톤 b·채도가 조금 다름)
+    for key in [k for k in out if k.startswith("talk_")] + ["flame"]:
         out[key] = [match_tones(f, out["stand"][0]) for f in out[key]]
     for key in ("talk_m1", "talk_m2"):   # 입만 다른 장은 입 밖을 base와 똑같이(입만 바꾸기 규칙 유지)
         same = (raw[key] == raw["talk_base"]).all(axis=-1)
