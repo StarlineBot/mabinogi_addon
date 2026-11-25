@@ -140,6 +140,7 @@
   - 안내·끄기 스위치 없음(사용자 결정 — 위 값을 빼면 사람을 특정할 값이 없음).
 - **서버**(discord_bot addon_server): `PUT /guest/settings` — 토큰 없음, `X-Install-Id`가 `[0-9a-f]{16,32}`가 아니면 400. 묶음 검사는 `PUT /settings`와 같음(2MB·형식·비밀값 키 422).
   별도 테이블 `guests(install_id, updated, resolution, size, features, app_version, blob)`에 덮어쓰기(rev·충돌 없음). 받아 가는 주소 없음(GET 없음).
+  **실제 구현(봇 DEV 11-25 확인 — 위 줄 정정)**: 비로그인 묶음(blob)은 **저장하지 않음**(검사만 하고 버림). guests에는 정보 칸만(install_id·updated·resolution·size·features·app_version·`character`) 저장, 크기 상한은 2GB가 아니라 **10만 행**.
   **IP를 저장하지 않는다**(앱 로그·DB 모두). 요청 수 제한: install당 10분에 1회(켤 때 한 번이므로), 전체 분당 300회. guests 전체 크기 상한(예: 2GB)을 넘으면 가장 오래된 것부터 지움.
   `!현황`: 맨 위 `비로그인 N명(최근 7일)`, 로그인 사용자 아래에 `guest-<앞 8자>` 줄(접속 시각·해상도·앱 버전·켠 기능 — 로그인과 같은 형식, featureUsage 기준). 같은 installId가 나중에 로그인하면 guest 줄은 7일 뒤 자연히 빠짐(연결은 하지 않음).
 - 테스트: 앱 — 비로그인만 guest 경로·로그인이면 안 감, 빼는 값(메모·PC 이름·절대 경로 문자열 전부) 묶음에 없음, 실패해도 조용, 받아 적용 없음. 서버 — 헤더 형식, 크기·형식 거절, 덮어쓰기, IP 미저장, 요청 수 제한, 크기 상한 정리, !현황 표시.
@@ -153,6 +154,7 @@
   - `호감도` — 고른 캐릭터의 호감도 구간 분포(0~24 / 25~49 / 50~74 / 75~99 / 100) 사람 수. 베타는 호감도가 고정이라 지금은 대부분 0~24(2차 뒤 의미).
   - 사용자 줄(로그인·`guest-…` 모두)에 `캐릭터: 다래(펫)` 한 칸 — 펫은 최근 7일 `pet`(또는 옛 앱 `character.pet`)일 때만 표시, 기본 목소리면 `캐릭터: 기본`.
 - 개인 식별 값 없음(지금 묶음 그대로, IP 미저장 그대로).
+- **구현(봇 DEV 11-25, discord_bot main 98742fe, 운영 반영)**: 비로그인 묶음을 저장하지 않으므로 서버가 올릴 때 `voice.pack`·`character.pet`·고른 캐릭터의 `character.affinity.<팩>.value`만 뽑아 settings·guests의 `character` JSON 칸에 저장(로그인 기존 사용자는 서버 시작 때 보관 묶음에서 채움, 비로그인은 다음 올림 때). featureUsage `pet`·`character_voice`는 추가 작업 없이 저장됨. 펫 7일 = 서버 받은 날(KST) 포함 0~6일, 호감도 구간은 value 내림.
 
 ### 3.5 VM 운영
 - **준비 상태(2026-11-11 사용자 확인)**: 스왑 1GB ✓, `starline-bot.duckdns.org` → VM ✓, GCP 방화벽 80·443 ✓, Caddy 설치·인증서 발급(테스트 응답 `ok`) ✓, DuckDNS 5분 자동 갱신(cron) ✓. 남은 것: 서버 코드·systemd·백업·디스코드 포털 Redirect.
