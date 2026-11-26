@@ -126,7 +126,9 @@ def card() -> np.ndarray:
 
 
 def main() -> None:
+    from scripts.build_walk_v2 import build as build_walk
     frames = build()
+    frames["walk"] = build_walk("이안")   # 걷기는 GPT 워크 8장(11-26, scripts/build_walk_v2) — 예전 시트 걷기 대신
     for key, count in EXPECTED.items():
         if len(frames[key]) != count:
             raise SystemExit(f"{key}: 프레임 {len(frames[key])}개(기대 {count}) — 시트가 바뀌었나요?")

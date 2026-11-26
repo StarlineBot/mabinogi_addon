@@ -137,7 +137,7 @@ GROUPS = {("pet", 3): ("pet", 2), ("pet", 4): ("pet", 2), ("sit", 1): ("sit", 0)
           ("sit", 3): ("sit", 0), ("talk_m1", 0): ("talk_base", 0), ("talk_m2", 0): ("talk_base", 0)}
 
 
-EXPECTED = {"magic": 6, "stand": 1, "rise": 3, "walk": 6, "drag": 4, "fall": 1, "land": 4, "crouch": 3, "sit": 4, "pet": 6,
+EXPECTED = {"magic": 6, "stand": 1, "rise": 3, "walk": 8, "drag": 4, "fall": 1, "land": 4, "crouch": 3, "sit": 4, "pet": 6,
             "talk_base": 1, "talk_m1": 1, "talk_m2": 1, "talk_emph": 1, "talk_emph2": 1, "talk_blink": 1,
             "talk_mid": 1, "talk_end1": 1, "talk_end2": 1}
 
@@ -155,7 +155,9 @@ def card() -> np.ndarray:
 
 
 def main() -> None:
+    from scripts.build_walk_v2 import build as build_walk
     frames = build()
+    frames["walk"] = build_walk("레나")   # 걷기는 GPT 워크 8장(11-26, scripts/build_walk_v2) — 예전 시트 걷기 대신
     for key, count in EXPECTED.items():
         if len(frames[key]) != count:
             raise SystemExit(f"{key}: 프레임 {len(frames[key])}개(기대 {count}) — 시트가 바뀌었나요?")

@@ -619,7 +619,7 @@ def test_frame_sizes_match_standing_height():
 
     stand = imread(ASSETS / "다래" / "stand_0.png", cv2.IMREAD_UNCHANGED)
     walk = [imread(p, cv2.IMREAD_UNCHANGED).shape[0] for p in sorted((ASSETS / "다래").glob("walk_*.png"))]
-    assert stand.shape[0] == 285 and all(abs(h - 285) <= 3 for h in walk)  # 서 있는 키로 맞춤(시트마다 머리 크기 달라도)
+    assert stand.shape[0] == 285 and len(walk) == 8 and all(abs(h - 285) <= 285 * 0.03 for h in walk)  # 걷기 8장(11-26)은 머리를 예전 걷기에 맞춤 — 키 288~291
 
 
 # ---- 아리아(부드러운 여성, 사용자 11-24 알파 포함 — docs/characters/아리아.md) -------------------------------

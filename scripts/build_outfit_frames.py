@@ -33,7 +33,7 @@ APP_ROOT = ROOT / "src" / "mabinogi_addon" / "assets" / "characters"
 # (캐릭터 폴더, 옷 key) → (옷 이름 폴더, 색 기준 프레임)
 OUTFITS = {("이안", "vest_tie"): ("넥타이 조끼", "stand_1"), ("아리아", "tshirt"): ("티셔츠 차림", "stand_0")}
 # 템플릿 뒤에 다시 그려 받은 시트(가이드 방식) — (키, 파일, 열, 행, 가이드 크기, 쓸 칸). 배율 = 앱 기본 프레임 키 중앙값 ÷ 칸 키 중앙값
-REDRAWN = {("이안", "vest_tie"): [("walk", "걷기_v3.png", 5, 2, (1500, 1120), (1, 2, 3, 4, 6, 7, 8, 9))]}
+REDRAWN: dict = {}   # 걷기는 기획이 앱 크기로 정리한 걷기_v2/walk_0~7.png를 그대로(11-26, scripts/build_walk_v2.OUTFIT_WALKS)
 MOTION_NAMES = {"옷매무새(25)": "motion_tidy", "차(75)": "motion_tea", "물주기(25)": "motion_water", "화관(75)": "motion_wreath"}
 
 
@@ -106,6 +106,11 @@ def main() -> None:
     for (folder, key), (name, ref) in OUTFITS.items():
         outfit_dir = ASSETS / folder / "의상" / name
         frames = harmonize_colors(redraw(folder, key, build(folder, outfit_dir), outfit_dir), ref)
+        from scripts.build_walk_v2 import FRAMES, OUTFIT_WALKS
+        walk_dir = OUTFIT_WALKS.get((folder, key))
+        if walk_dir is not None:   # 걷기 8장은 정리해 둔 PNG 그대로(색 맞추기·배율 없음)
+            frames = {n: v for n, v in frames.items() if not re.fullmatch(r"walk_\d+", n)}
+            frames.update({f"walk_{i}": imread(walk_dir / f"walk_{i}.png", cv2.IMREAD_UNCHANGED) for i in range(FRAMES)})
         dest = APP_ROOT / folder / "outfits" / key
         dest.mkdir(parents=True, exist_ok=True)
         for old in dest.glob("*.png"):

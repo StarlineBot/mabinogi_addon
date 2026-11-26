@@ -198,14 +198,16 @@ def build() -> dict[str, list[np.ndarray]]:
     return out
 
 
-EXPECTED = {"stand": 1, "walk": 6, "surprise": 2, "pet": 6, "drag": 4, "land": 3, "getup": 3, "crouch": 3,
+EXPECTED = {"stand": 1, "walk": 8, "surprise": 2, "pet": 6, "drag": 4, "land": 3, "getup": 3, "crouch": 3,
             "sit_drowsy": 1, "sit_notice": 1, "sit_doze": 1, "sit_half": 1, "rise": 3, "wake": 4, "sleep": 9,
             "talk_think": 1, "talk_smile": 1, "talk_base": 1, "talk_m1": 1, "talk_m2": 1, "talk_emph": 1,
             "talk_emph2": 1, "talk_blink": 1, "talk_mid": 1}
 
 
 def main() -> None:
+    from scripts.build_walk_v2 import build as build_walk
     frames = build()
+    frames["walk"] = build_walk("다래")   # 걷기는 GPT 워크 8장(11-26, scripts/build_walk_v2) — 예전 시트 걷기 대신
     for key, count in EXPECTED.items():
         if len(frames[key]) != count:
             raise SystemExit(f"{key}: 프레임 {len(frames[key])}개(기대 {count}) — 시트가 바뀌었나요?")

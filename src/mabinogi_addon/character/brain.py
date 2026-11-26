@@ -26,14 +26,15 @@ WALK_SPEED = 45.0          # 논리 px/초(캐릭터 값이 없을 때)
 # 캐릭터별 걷기(사용자 11-24 '걷기가 미끄러짐'): 속도 = 걷기 그림 한 바퀴 이동 거리 / 한 바퀴 시간이 되게.
 # 한 바퀴 거리는 걷기 6장의 발 간격(접지 때 가장 넓은 폭 − 가장 좁은 폭, 190px 기준) × 2로 잼(11-24):
 #   다래 48.7 → 97px, 아리아 60.0 → 120px, 이안 v2(11-24 다시 그림) 33.3 → 67px, 레나 60.0 → 120px.
-DARE_WALK_FRAME, DARE_WALK_SPEED = 0.20, 100.0   # 새 걷기 시트(11-25) 디딘 발이 장마다 약 31px(예전 25px — 80) → 100
-ARIA_WALK_FRAME, ARIA_WALK_SPEED = 0.22, 90.0    # 1.32초 × 90 = 119px
+# 걷기 8장(11-26): 한 바퀴 시간(다래 1.2초·나머지 1.32초)과 빠르기는 그대로, 장 수만 6 → 8
+DARE_WALK_FRAME, DARE_WALK_SPEED = 0.15, 100.0   # 새 걷기 시트(11-25) 디딘 발이 장마다 약 31px(예전 25px — 80) → 100
+ARIA_WALK_FRAME, ARIA_WALK_SPEED = 0.165, 90.0    # 1.32초 × 90 = 119px
 IAN_WALK_FRAME, IAN_WALK_SPEED = 0.15, 66.0      # v3 걷기 8장(11-25) 1.2초 × 66 = 79px — 디딘 발이 한 바퀴에 원본 약 120px(그리기 80px)
 # 캐릭터별 그리기 배율(사용자 11-24 B안 — 눈 사이 간격 Starline 45·이안 47·다래·아리아 53·레나 57로 얼굴이 달라 보임).
 # 그림이 커지면 보폭도 커져 걷기 속도도 같은 배율(발 미끄러짐 방지).
 STARLINE_SCALE, LENA_SCALE = 1.15, 0.95
-LENA_WALK_FRAME, LENA_WALK_SPEED = 0.22, round(90.0 * LENA_SCALE, 1)    # 발 간격 60.0 → 120px(×0.95 = 114px), 1.32초 × 85.5
-STARLINE_WALK_FRAME, STARLINE_WALK_SPEED = 0.22, round(65.0 * STARLINE_SCALE, 1)  # 발끝 간격 → 약 85px(×1.15 = 98px), 1.32초 × 74.8
+LENA_WALK_FRAME, LENA_WALK_SPEED = 0.165, round(90.0 * LENA_SCALE, 1)    # 발 간격 60.0 → 120px(×0.95 = 114px), 1.32초 × 85.5
+STARLINE_WALK_FRAME, STARLINE_WALK_SPEED = 0.165, round(65.0 * STARLINE_SCALE, 1)  # 발끝 간격 → 약 85px(×1.15 = 98px), 1.32초 × 74.8
 GRAVITY = 1800.0           # 떨어질 때 px/초²
 DRAG_START = 6.0           # 이만큼 움직이면 클릭이 아니라 끌기
 FRONT_DELAY = 1.0          # 게임이 앞으로 온 뒤 이만큼 지나야 구석으로(잠깐 전환 무시)
@@ -59,7 +60,7 @@ LONG_HUNT = 7200.0         # 오래 사냥 중(앉아서 2시간마다)
 # 동작 → (프레임, 한 장 시간(초)). loop=True면 반복
 ANIMS: dict[str, tuple[tuple[str, ...], tuple[float, ...], bool]] = {
     "stand": (("stand_0",), (1.0,), True),
-    "walk": (tuple(f"walk_{i}" for i in range(6)), (DARE_WALK_FRAME,) * 6, True),
+    "walk": (tuple(f"walk_{i}" for i in range(8)), (DARE_WALK_FRAME,) * 8, True),   # GPT 워크 8장(11-26 — 양발·팔 번갈아)
     "surprise": (("surprise_0", "surprise_1", "surprise_0", "surprise_1"), (0.22,) * 4, False),
     "drag": (tuple(f"drag_{i}" for i in range(4)), (0.18,) * 4, True),
     "fall": (("drag_0",), (1.0,), True),
@@ -186,7 +187,7 @@ DARE = Profile(ANIMS, _NEXT, SITTING, "sit_drowsy", doze_state="sit_doze", walk_
 # 앉아서 클릭 = 웃음 프레임. 서 있기 두 자세 번갈아 + 가만히 서 있는 동안 가끔 머리 쓰다듬기(사용자 11-24).
 ARIA_ANIMS = {
     "stand": (("stand_0", "stand_1"), (2.2, 2.2), True),
-    "walk": (tuple(f"walk_{i}" for i in range(6)), (ARIA_WALK_FRAME,) * 6, True),
+    "walk": (tuple(f"walk_{i}" for i in range(8)), (ARIA_WALK_FRAME,) * 8, True),   # GPT 워크 8장(11-26 — 양발·팔 번갈아)
     "surprise": (tuple(f"surprise_{i}" for i in range(4)), (0.22,) * 4, False),
     "drag": (("drag_0", "drag_1"), (0.25, 0.25), True),
     "fall": (("drag_1",), (1.0,), True),
@@ -244,7 +245,7 @@ IAN = Profile(IAN_ANIMS,
 LENA_ANIMS = {
     "stand": (("stand_0",), (1.0,), True),
     "magic": (tuple(f"magic_{i}" for i in range(6)), (0.5, 0.6, 0.6, 0.8, 0.7, 0.6), False),   # 마법 연습 펑(11-25)
-    "walk": (tuple(f"walk_{i}" for i in range(6)), (LENA_WALK_FRAME,) * 6, True),
+    "walk": (tuple(f"walk_{i}" for i in range(8)), (LENA_WALK_FRAME,) * 8, True),   # GPT 워크 8장(11-26 — 양발·팔 번갈아)
     "surprise": (("stand_0",), (0.3,), False),   # click_talks라 쓰지 않음(자리만)
     "drag": (tuple(f"drag_{i}" for i in range(4)), (0.18,) * 4, True),
     "fall": (("fall_0",), (1.0,), True),
@@ -272,7 +273,7 @@ LENA = Profile(LENA_ANIMS,
 # 쓰다듬기 귀 젖힘 → 걷어내기 반복 → 손 털고 씩, 구석은 앉기 → 마법진 돌리기 반복 → 일어나기, 말 끝 두 장.
 STARLINE_ANIMS = {
     "stand": (("stand_0",), (1.0,), True),   # B안 서 있기 한 장(11-24)
-    "walk": (tuple(f"walk_{i}" for i in range(6)), (STARLINE_WALK_FRAME,) * 6, True),
+    "walk": (tuple(f"walk_{i}" for i in range(8)), (STARLINE_WALK_FRAME,) * 8, True),   # GPT 워크 8장(11-26 — 양발·팔 번갈아)
     "surprise": (("stand_0",), (0.3,), False),   # click_talks라 쓰지 않음(자리만)
     "drag": (tuple(f"drag_{i}" for i in range(4)), (0.18,) * 4, True),
     "fall": (("fall_0",), (1.0,), True),

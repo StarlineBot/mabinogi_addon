@@ -70,21 +70,17 @@ def test_current_plan_maps_every_selected_file_to_changed_code_or_shared_contrac
 
 
 def test_current_release_keeps_feature_boundaries_and_delivery_contracts():
-    """0.56.0: 캐릭터(베타) 공개 — 모든 사용자 캐릭터 탭·펫, 호감도 고정·조절은 제작자 + 배포 계약. (릴리즈마다 경계를 바꾼다 — 누적하지 않음)"""
+    """0.57.2: 다섯 캐릭터·착장 2벌 걷기 8장 + 배포 계약. (릴리즈마다 경계를 바꾼다 — 누적하지 않음)"""
     root = Path(__file__).resolve().parents[1]
     plan = json.loads((root / 'packaging/release_checks.json').read_text(encoding='utf-8'))
     paths = set(plan['tests'])
     assert {
-        'tests/test_character.py', 'tests/test_navigation.py', 'tests/test_optimization_ui.py',
-        'tests/test_overlay_capture.py', 'tests/test_single_instance.py', 'tests/test_bundle_layout.py',
-        'tests/test_startup_build.py', 'tests/test_release_checks.py', 'tests/test_release_candidate.py',
-        'tests/test_windows_ci.py', 'tests/test_startup_smoke.py',
+        'tests/test_walk_v2.py', 'tests/test_character.py', 'tests/test_bundle_layout.py',
+        'tests/test_release_checks.py', 'tests/test_release_candidate.py', 'tests/test_windows_ci.py',
     } <= paths
     assert {
-        'src/mabinogi_addon/ui/character_tab.py', 'src/mabinogi_addon/ui/pet_window.py',
-        'src/mabinogi_addon/character/brain.py', 'src/mabinogi_addon/character/affinity.py',
-        'src/mabinogi_addon/ui/main_window.py', 'src/mabinogi_addon/ui/overlay_capture.py',
-        'src/mabinogi_addon/assets/release_notes.md',
+        'src/mabinogi_addon/character/brain.py', 'scripts/build_walk_v2.py',
+        'src/mabinogi_addon/assets/release_notes.md', 'packaging/release_checks.json',
     } <= set(plan['coverage'])
     assert (root / 'src/mabinogi_addon/assets/characters/다래/stand_0.png').is_file()
     # The separate development entry must continue collecting the whole suite.

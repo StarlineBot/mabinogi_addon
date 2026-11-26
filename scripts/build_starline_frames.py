@@ -215,7 +215,7 @@ def match_midtone(frame: np.ndarray, stand: np.ndarray, band: tuple[int, int] = 
     return out
 
 
-EXPECTED = {"sneeze": 6, "stand": 1, "flame": 4, "walk": 6, "drag": 4, "fall": 1, "land": 3, "pet": 6, "crouch": 2, "sit": 4,
+EXPECTED = {"sneeze": 6, "stand": 1, "flame": 4, "walk": 8, "drag": 4, "fall": 1, "land": 3, "pet": 6, "crouch": 2, "sit": 4,
             "rise": 2, **{f"talk_{k}": 1 for k in ("base", "m1", "m2", "emph", "emph2", "blink", "mid", "end1", "end2")}}
 
 
@@ -262,7 +262,9 @@ def match_saturation(frame: np.ndarray, stand: np.ndarray) -> np.ndarray:
 
 
 def main() -> None:
+    from scripts.build_walk_v2 import build as build_walk
     frames = build()
+    frames["walk"] = build_walk("Starline")   # 걷기는 GPT 워크 8장(11-26, scripts/build_walk_v2) — 예전 시트 걷기 대신
     for key, count in EXPECTED.items():
         if len(frames[key]) != count:
             raise SystemExit(f"{key}: 프레임 {len(frames[key])}개(기대 {count}) — 시트가 바뀌었나요?")

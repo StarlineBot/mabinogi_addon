@@ -96,7 +96,7 @@ def build() -> dict[str, list[np.ndarray]]:
     return harmonize(out, out["stand"][0], PARTS["아리아"], groups)
 
 
-EXPECTED = {"stretch": 6, "stand": 2, "walk": 6, "surprise": 4, "drag": 2, "land": 3, "getup": 3, "pet": 6, "crouch": 3, "sit": 4,
+EXPECTED = {"stretch": 6, "stand": 2, "walk": 8, "surprise": 4, "drag": 2, "land": 3, "getup": 3, "pet": 6, "crouch": 3, "sit": 4,
             "rise": 3, "hair": 4, "talk_laugh": 1, "talk_happy": 2,
             **{f"talk_{v}_{k}": 1 for v in "ab" for k in ("base", "m1", "m2", "emph", "emph2", "blink", "mid")}}
 
@@ -107,7 +107,9 @@ def card() -> np.ndarray:
 
 
 def main() -> None:
+    from scripts.build_walk_v2 import build as build_walk
     frames = build()
+    frames["walk"] = build_walk("아리아")   # 걷기는 GPT 워크 8장(11-26, scripts/build_walk_v2) — 예전 시트 걷기 대신
     for key, count in EXPECTED.items():
         if len(frames[key]) != count:
             raise SystemExit(f"{key}: 프레임 {len(frames[key])}개(기대 {count}) — 시트가 바뀌었나요?")
