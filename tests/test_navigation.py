@@ -40,7 +40,7 @@ def window(monkeypatch):
 def test_structure_and_default_editor_space(window):
     w, app = window
     # 0.16.0: 로그인 사용자(픽스처)는 블랙박스 탭, 0.22.0(13.15): 최적화 탭도 공개. 0.22.1: 순서 최적화 · 블랙박스(사용자 결정)
-    assert [w._tabs.tabText(i) for i in range(w._tabs.count())] == ['전투 보조','파티 모집','편의기능','최적화','블랙박스','캐릭터','설정']
+    assert [w._tabs.tabText(i) for i in range(w._tabs.count())] == ['전투 보조','파티 모집','편의기능','최적화','블랙박스','동행','설정']
     assert [w._tracker_tabs.tabText(i) for i in range(w._tracker_tabs.count())] == LABELS
     # 0.37.0 명세 변경(사용자 결정 안 A): 편의기능 2단 한 줄(탭 이름 = 화면 제목), 마우스 커서는 최적화 2단 세 번째
     assert [w._convenience_tabs.tabText(i) for i in range(w._convenience_tabs.count())] == ['계산기','그림대화 만들기','알람']
@@ -229,15 +229,15 @@ def test_embedded_dorcha_preview_clears_background_but_game_overlay_stays_transp
 
 def test_character_tab_open_to_everyone_and_affinity_controls_creator_only(window, monkeypatch):
     """캐릭터 베타(11-24): 모든 사용자에게 … · 블랙박스 · 캐릭터 · 설정, 펫 켜짐, 설정의 목소리 고르기는 숨김(캐릭터 탭에서 고름).
-    ♥ 호감도 바·퀘스트 줄·조절 칸은 제작자만."""
+    ♥ 호감도 바·퀘스트 줄은 모두에게(11-26 게이지 배포 — 탭 이름 '동행'), 조절 칸은 제작자만."""
     from mabinogi_addon import feature_access
 
     w, app = window
-    tabs = ['전투 보조','파티 모집','편의기능','최적화','블랙박스','캐릭터','설정']
+    tabs = ['전투 보조','파티 모집','편의기능','최적화','블랙박스','동행','설정']
     assert [w._tabs.tabText(i) for i in range(w._tabs.count())] == tabs
     assert not w.settings_tab._voice_box.isVisibleTo(w.settings_tab) and w.character_tools.enabled
     tab = w.character_tab
-    assert not any(c.details_visible() or e.isVisibleTo(tab) for c, e in zip(tab.cards, tab.editors))
+    assert all(c.details_visible() and not e.isVisibleTo(tab) for c, e in zip(tab.cards, tab.editors))
     monkeypatch.setattr(feature_access, 'is_creator', lambda: True)
     w.settings_tab.login_changed.emit()
     assert [w._tabs.tabText(i) for i in range(w._tabs.count())] == tabs
@@ -245,6 +245,6 @@ def test_character_tab_open_to_everyone_and_affinity_controls_creator_only(windo
     monkeypatch.setattr(feature_access, 'is_creator', lambda: False)
     w.settings_tab.login_changed.emit()
     assert [w._tabs.tabText(i) for i in range(w._tabs.count())] == tabs and w.character_tools.enabled
-    assert not any(c.details_visible() for c in tab.cards)
+    assert all(c.details_visible() for c in tab.cards) and not any(e.isVisibleTo(tab) for e in tab.editors)
 
 

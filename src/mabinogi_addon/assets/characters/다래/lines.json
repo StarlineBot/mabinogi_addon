@@ -2,6 +2,12 @@
  "schemaVersion": 2,
  "character": "다래",
  "lines": {
+  "came_back": [
+   {
+    "text": "…돌아왔네. 조금… 쓸쓸했어.",
+    "mood": "think"
+   }
+  ],
   "click_stand": [
    {
     "text": "응…? 불렀어…?",

@@ -18,7 +18,7 @@ from .. import config, paths
 from ..character import outfits, roster
 from ..character.affinity import MAX_VALUE, STAGES, Affinity, Rules
 from .palette import color
-from .widgets import FeatureHeader, hint_label, switch
+from .widgets import VOICE_CREDIT, FeatureHeader, credit_label, hint_label, switch
 
 DESCRIPTION = "고른 캐릭터가 알림을 말해 주고, 화면에서 함께 지내요."
 CARD_W, CARD_H = 224, 280   # 카드(기획 11-25 — 4:5, 머리 위 20px)
@@ -602,6 +602,7 @@ class CharacterTab(QWidget):
     pet_toggled = Signal(bool)
     affinity_edited = Signal()
     outfit_changed = Signal(str)   # 캐릭터 key — 그 캐릭터 옷을 갈아입음
+    motion_requested = Signal(str)   # 제작자: 호감도 모션 key — 펫이 바로 한 번(Windows 확인용, 기획 11-26)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -634,6 +635,12 @@ class CharacterTab(QWidget):
         default_row.addWidget(self.default_button)
         default_row.addStretch(1)
         v.addLayout(default_row)
+        # 제작자 전용 — 지금 캐릭터·지금 옷에 그림이 있는 호감도 모션을 바로 한 번(25·75를 기다리지 않고 확인)
+        self.motion_row = QHBoxLayout()
+        self.motion_box = QWidget()
+        self.motion_box.setLayout(self.motion_row)
+        self.motion_row.setContentsMargins(0, 0, 0, 0)
+        v.addWidget(self.motion_box)
         v.addSpacing(10)   # 첫 줄 테두리 장식이 위로 넘치는 자리
         grid = QGridLayout()
         grid.setContentsMargins(8, 0, 0, 0)   # 왼쪽 줄 장식(리본·꽃)이 탭 밖으로 안 잘리게
@@ -659,6 +666,7 @@ class CharacterTab(QWidget):
         grid.setColumnStretch(COLUMNS, 1)
         v.addLayout(grid)
         v.addStretch(1)
+        v.addWidget(credit_label(VOICE_CREDIT))   # 목소리 출처(ElevenLabs 무료 요금제 표기, 기획 11-26)
         self._preview = None
         self.frames = CardFrameLayer(self, self.cards)   # 테두리·이름·명판(카드 위, 서랍 아래)
         self._hover_timer = QTimer(self)
@@ -672,11 +680,40 @@ class CharacterTab(QWidget):
         self.refresh()
 
     def set_creator(self, on: bool) -> None:
-        """제작자면 카드 아래 ♥ 바·퀘스트 줄·호감도 조절 칸을 보임, 아니면 모두 숨김(베타 — 호감도가 오르지 않으므로)."""
+        """카드 아래 ♥ 바·퀘스트 줄은 모두에게(11-26 게이지 배포), 호감도 조절 칸은 제작자만."""
         self._creator = bool(on)
         for card, editor in zip(self.cards, self.editors):
-            card.set_details_visible(self._creator)
+            card.set_details_visible(True)
             editor.setVisible(self._creator)
+        self._refresh_motion_buttons()
+
+    def _refresh_motion_buttons(self) -> None:
+        """제작자: 고른 캐릭터·입은 옷의 호감도 모션 버튼(그림이 다 있는 것만). 비제작자는 숨김."""
+        from ..character import motions
+        while self.motion_row.count():
+            item = self.motion_row.takeAt(0)
+            if item.widget() is not None:
+                item.widget().deleteLater()
+        chosen = roster.by_pack(config.load_voice_pack())
+        buttons = []
+        if self._creator and chosen is not None and chosen.has_pet:
+            folder = roster.folder(chosen)
+            outfit = outfits.wearing(folder, config.load_outfit(chosen.key))
+            base = paths.resource_dir() / "characters" / folder
+            where = base / "outfits" / outfit if outfit and (base / "outfits" / outfit).is_dir() else base
+            for m in motions.of(folder):
+                if all((where / f"{n}.png").is_file() for n in m.names()):
+                    btn = QPushButton(f"♥ {m.stage} 모션")
+                    btn.setToolTip(f"{m.key} — 펫이 서 있으면 바로 한 번(제작자 확인용)")
+                    btn.clicked.connect(lambda _=False, k=m.key: self.motion_requested.emit(k))
+                    buttons.append(btn)
+        if buttons:
+            label = hint_label("모션 바로 보기(제작자)")
+            self.motion_row.addWidget(label)
+            for btn in buttons:
+                self.motion_row.addWidget(btn)
+            self.motion_row.addStretch(1)
+        self.motion_box.setVisible(bool(buttons))
 
     def refresh(self) -> None:
         """고른 캐릭터 강조·호감도 바·안내 글을 저장 값으로 다시 맞춘다(적용 대기는 풀림)."""
@@ -699,6 +736,8 @@ class CharacterTab(QWidget):
             text = "게임 중엔 구석에서 조용히 기다리고, 게임 밖에선 화면 아래를 돌아다녀요. 끌어서 옮길 수 있어요."
         self.pet_hint.setText(text)
         self.default_button.setEnabled(bool(pack))   # 이미 기본이면 누를 일 없음
+        if hasattr(self, "_creator"):
+            self._refresh_motion_buttons()
 
     def set_affinity(self, key: str, value: int) -> None:
         """제작자가 호감도를 바로 바꿈 → 값 + 그 값까지의 구간 퀘스트는 깬 것으로(오늘 횟수·누적은 그대로)."""
@@ -755,6 +794,7 @@ class CharacterTab(QWidget):
         card.set_outfit(key)
         self.drawer.open_for(card, animate=False)   # 서랍은 '지금 옷 뺀 두 벌'로 다시
         self.outfit_changed.emit(card.character.key)
+        self._refresh_motion_buttons()
 
     def preview(self, character: roster.Character) -> None:
         """카드 누름 → 그 캐릭터 인사만 듣기(선택은 그대로). 쓰는 중이 아니면 그 카드에 '이 캐릭터로 적용'(한 번에 하나)."""
@@ -762,11 +802,22 @@ class CharacterTab(QWidget):
         current = config.load_voice_pack()
         for card in self.cards:
             card.set_pending(card.character is character and character.pack != current)
+        leaving = roster.by_pack(current)
+        if leaving is not None and character.pack != current:   # 확정 전 안내(호감도 2차 '캐릭터 바꾸기')
+            from ..character.affinity import _has_final
+            josa = "이" if _has_final(leaving.name) else "가"
+            self.pet_hint.setText(f"'이 캐릭터로 적용'을 누르면 {leaving.name}{josa} 서운해할 거예요(♥ −3).")
         if self.drawer.isVisible() and self.drawer.card is not None:   # 떠오른 카드 자리에 맞춰 서랍도
             self.drawer.open_for(self.drawer.card, animate=False)
 
     def choose(self, character: roster.Character) -> None:
-        """'이 캐릭터로 적용' → 알림 목소리 팩 저장(인사는 이미 들었으므로 다시 안 틂)."""
+        """'이 캐릭터로 적용' → 알림 목소리 팩 저장(인사는 이미 들었으므로 다시 안 틂). 떠나는 캐릭터는 −3(하루 한 번)."""
+        leaving = roster.by_pack(config.load_voice_pack())
+        if leaving is not None and leaving.pack != character.pack:
+            from .character_controller import today
+            affinity = Affinity.load(config.load_affinity(leaving.key), Rules.from_dict(config.load_affinity_rules()))
+            affinity.leave(today())
+            config.save_character(affinity=(leaving.key, affinity.to_dict()))
         config.save_voice_pack(character.pack)
         self.refresh()
         self.voice_pack_changed.emit()

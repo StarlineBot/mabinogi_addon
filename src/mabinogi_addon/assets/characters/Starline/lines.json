@@ -2,6 +2,12 @@
  "schemaVersion": 2,
  "character": "Starline",
  "lines": {
+  "came_back": [
+   {
+    "text": "크크, 딴 녀석한테 갔다 왔냐? …늦었잖아.",
+    "mood": "think"
+   }
+  ],
   "click_stand": [
    "응? 나한테 볼일 있어?",
    "감히 날 불러? …뭐, 들어는 주지.",

@@ -41,119 +41,7 @@ def cfg(tmp_path, monkeypatch):
     return path
 
 
-# ---- 호감도(명세 3절 3번 — 사용자 최종 규칙 11-24 c8797ef) ----------------------------------------
-def test_daily_full_is_ten_and_each_action_has_its_own_limit(growth):
-    a = aff.Affinity()
-    got = [a.launched(DAY), a.launched(DAY)]
-    got += [a.gain("pet", DAY) for _ in range(4)]
-    got += [a.alerted(DAY) for _ in range(5)]
-    got += [a.corner_minute(DAY) for _ in range(120)]
-    assert got[:11] == [2, 0, 1, 1, 1, 0, 1, 1, 1, 0, 0]
-    assert sum(got[11:]) == 2 and got[11 + 29] == 1 and got[11 + 59] == 1  # 30분마다 +1, 하루 2번
-    assert a.value == a.gained == 10  # 2 + 3 + 3 + 2 = 하루 상한
-    assert a.totals == {"alerts": 5, "corner_minutes": 120} and a.streak == 1
-
-
-def test_stops_at_segment_end_until_quest_then_continues(growth):
-    a = aff.Affinity(value=24)
-    a.alerted(DAY)
-    a.alerted(DAY)
-    assert a.value == 25 and a.stage == 0 and a.cleared == 0  # 25에서 멈춤(0→25 퀘스트 = 처음 쓰다듬기 아직)
-    assert a.quest_text() == "퀘스트: 처음 쓰다듬기 · 0/1번"
-    assert a.petted(1, DAY) == "gain"  # 쓰다듬기 퀘스트 깸 → 다음 구간, 그 +1이 이어서 쌓임
-    assert a.cleared == 1 and a.stage == 25 and a.value == 26
-    assert a.quest_text() == "퀘스트: 구석에서 함께 1시간 · 0/60분"
-
-
-def test_quest_progress_counts_ahead_and_unlocks_on_arrival():
-    a = aff.Affinity()
-    a.totals = {"pets": 1, "corner_minutes": 75}  # 미리 깨 둔 두 퀘스트
-    a.value = 49
-    a._settle()
-    assert a.cleared == 1 and a.value == 49  # 25를 넘은 값 + 미리 깬 쓰다듬기 → 25→50 구간
-    a.gain("launch", DAY)
-    assert a.value == 51 and a.cleared == 2  # 50 도착 즉시 미리 깬 구석 60분으로 넘어가 이어 쌓임
-    d = aff.Affinity(value=49)
-    d.gain("launch", DAY)
-    assert d.value == 25 and d.cleared == 0  # 퀘스트 없이 저장된 값은 구간 끝으로 맞춤
-    b = aff.Affinity.load({"value": 50, "cleared": 1, "totals": {"pets": 1, "corner_minutes": 75}})
-    assert b.cleared == 2 and b.stage == 50 and "목소리 알림 10번 · 0/10번" in b.quest_text()
-    c = aff.Affinity.load({"value": 75, "cleared": 3, "streak": 6})
-    assert c.quest_text() == "퀘스트: 7일 연속 켜기 · 6/7일"
-
-
-def test_launch_streak_counts_consecutive_days_and_resets_on_gap(growth):
-    a = aff.Affinity()
-    for d in ("2026-11-20", "2026-11-21", "2026-11-22"):
-        a.launched(d)
-    assert a.streak == 3
-    a.launched("2026-11-22")
-    assert a.streak == 3  # 같은 날 다시 켜도 그대로
-    a.launched("2026-11-24")
-    assert a.streak == 1  # 하루 빠짐 → 다시 1일
-
-
-def test_hundred_needs_seven_day_streak_quest(growth):
-    a = aff.Affinity.load({"value": 99, "cleared": 3, "streak": 6, "lastLaunch": "2026-11-23"})
-    a.alerted(DAY)
-    assert a.value == 100 and a.stage == 75  # 100에 닿았지만 7일 연속 퀘스트 전
-    a.launched(DAY)
-    assert a.streak == 7 and a.cleared == 4 and a.stage == 100 and a.quest_text() == "퀘스트: 모두 깼어요"
-
-
-def test_midnight_reset_keeps_value_and_quest_totals(growth):
-    a = aff.Affinity(aff.Rules(daily_cap=3))
-    assert [a.launched(DAY), a.gain("pet", DAY), a.alerted(DAY)] == [2, 1, 0]  # 상한 3에서 잘림
-    a.alerted("2026-11-25")  # 자정 지남 → 오늘 횟수·오른 양 초기화
-    assert a.value == 4 and a.gained == 1 and a.counts == {"alert": 1} and a.totals == {"alerts": 2}
-
-
-def test_repeat_penalty_once_a_minute_never_below_zero_or_segment_start(growth):
-    a = aff.Affinity(value=1)
-    assert [a.click(t) for t in (0, 1, 2, 3)] == [False] * 4
-    assert a.click(4) is True and a.value == 0  # 10초 안 5번 → −1
-    assert not any(a.click(5 + t) for t in range(5))  # 1분 안엔 다시 안 내림
-    assert [a.click(100 + t) for t in range(5)][-1] is True and a.value == 0  # 0 아래로 안 내려감
-    b = aff.Affinity.load({"value": 26, "cleared": 1})
-    for t in (0, 100, 200):
-        for i in range(5):
-            b.click(t + i)
-    assert b.value == 25  # 지금 구간 시작점(25) 아래로 안 내려감
-    c = aff.Affinity(value=5)
-    assert not any(c.click(t * 3) for t in range(10))  # 3초 간격(10초 안 4번)은 반복 아님
-
-
-def test_petting_after_daily_three_is_annoyed(growth):
-    a = aff.Affinity.load({"value": 10, "cleared": 0})
-    assert [a.petted(t, DAY) for t in (0, 1, 2)] == ["gain"] * 3 and a.value == 13 and a.totals["pets"] == 3
-    assert a.petted(3, DAY) == "annoyed" and a.value == 12
-    assert a.petted(10, DAY) == "none" and a.value == 12  # 1분에 한 번만
-
-
-def test_creator_set_value_clears_quests_up_to_that_stage():
-    a = aff.Affinity()
-    a.set_value(50)
-    assert a.cleared == 2 and a.stage == 50 and a.quest_text().startswith("퀘스트: 목소리 알림")
-    a.set_value(42)
-    assert a.cleared == 1 and a.value == 42
-    a.set_value(100)
-    assert a.cleared == 4 and a.stage == 100
-    a.set_value(0)
-    assert a.cleared == 0
-
-
-def test_rules_are_settings_values_and_state_round_trips(growth):
-    rules = aff.Rules.from_dict({"alert_times": 9, "penalty_gap": 30, "daily_cap": True, "unknown": 1, "pet": -2,
-                                 "quest_corner_minutes": 90})
-    assert rules.alert_times == 9 and rules.penalty_gap == 30.0 and rules.daily_cap == 10 and rules.pet == 1
-    a = aff.Affinity(rules)
-    a.alerted(DAY)
-    a.launched(DAY)
-    b = aff.Affinity.load(json.loads(json.dumps(a.to_dict())), rules)
-    assert (b.value, b.day, b.gained, b.counts, b.totals, b.streak, b.last_launch) == \
-        (3, DAY, 3, {"alert": 1, "launch": 1}, {"alerts": 1}, 1, DAY)
-    assert aff.Affinity.load({"value": 500, "counts": {"x": 1, "pet": "2"}}).value == 25
-    assert aff.Affinity.load({"value": 30, "cleared": 1}, rules).quest_text() == "퀘스트: 구석에서 함께 90분 · 0/90분"
+# ---- 호감도 규칙은 tests/test_affinity_v2.py(2차 규칙, 11-26 게이지 배포) ----------------------------------
 
 
 # ---- 대사 --------------------------------------------------------------------------------------
@@ -505,6 +393,7 @@ def test_sound_listener_raises_affinity_and_notices_only_for_chosen_voice(growth
     from mabinogi_addon.ui import notifier
 
     config.save_voice_pack("조용한 여성")
+    config.save_character(rules={"action_chance": 1})   # 행동 점수 확률을 1로(규칙 값 덮어쓰기)
     ctrl = cc.CharacterController()
     sounds = paths.resource_dir() / "sounds"
     notifier._announce("vivace", sounds / "조용한 여성" / "비바체 연장.mp3")
@@ -514,9 +403,9 @@ def test_sound_listener_raises_affinity_and_notices_only_for_chosen_voice(growth
         notifier._announce("vivace", sounds / "조용한 여성" / "비바체 연장.mp3")
         notifier._announce("vivace", sounds / "비바체 연장.mp3")  # 기본 녹음 — 다른 목소리
         notifier._announce("preview", sounds / "조용한 여성" / "투아림 부스트 발동 직전.mp3")  # 미리듣기
-        assert ctrl.affinity.value == 1
+        assert ctrl.affinity.value == 1   # 처음 알림 +1, 같은 5분 안엔 안 오름
         saved = config.load_affinity("조용한 여성")
-        assert saved["counts"] == {"alert": 1} and saved["totals"] == {"alerts": 1}
+        assert saved["actionPoints"] == 1 and saved["value"] == 1
     finally:
         ctrl.shutdown()
     notifier._announce("vivace", sounds / "조용한 여성" / "비바체 연장.mp3")
@@ -527,6 +416,7 @@ def test_launch_bonus_once_a_day_and_greeting(growth, app, cfg):
     from mabinogi_addon.ui import character_controller as cc
 
     config.save_voice_pack("조용한 여성")
+    config.save_character(rules={"action_chance": 1})
     ctrl = cc.CharacterController()
     try:
         now = datetime.datetime(2026, 11, 24, 13, 0)
@@ -535,7 +425,7 @@ def test_launch_bonus_once_a_day_and_greeting(growth, app, cfg):
         ctrl.set_enabled(True)
         ctrl.start(now)
         ctrl.start(now)
-        assert ctrl.affinity.value == 2 and ctrl.affinity.streak == 1 and config.load_pet_last_seen() == "2026-11-24"
+        assert ctrl.affinity.value == 1 and config.load_pet_last_seen() == "2026-11-24"   # 켜기 = 행동 점수(5분 쿨다운)
     finally:
         ctrl.shutdown()
     g = cc.greeting
@@ -580,8 +470,7 @@ def test_tab_min_width_is_96_for_seven_tabs():
 def test_creator_sets_affinity_directly_with_number_and_stage_buttons(app, cfg, monkeypatch):
     from mabinogi_addon.ui import character_tab as ct
 
-    config.save_character(affinity=("조용한 여성", {"value": 3, "day": DAY, "gained": 3, "counts": {"launch": 1},
-                                                   "totals": {"alerts": 4}}))
+    config.save_character(affinity=("조용한 여성", {"rules": 2, "value": 3, "day": DAY, "gained": 3, "actionPoints": 3}))
     tab = ct.CharacterTab()
     edited = []
     tab.affinity_edited.connect(lambda: edited.append(1))
@@ -589,11 +478,10 @@ def test_creator_sets_affinity_directly_with_number_and_stage_buttons(app, cfg, 
     assert editor.spin.value() == 3 and [b.text() for b in editor.buttons] == ["0", "25", "50", "75", "100"]
     editor.buttons[3].click()
     saved = config.load_affinity("조용한 여성")
-    assert saved["value"] == 75 and saved["cleared"] == 3  # 0→25·25→50·50→75 퀘스트 깬 것으로
-    assert saved["gained"] == 3 and saved["counts"] == {"launch": 1} and saved["totals"] == {"alerts": 4}  # 하루 상한과 무관
-    assert tab.cards[2]._affinity == 75 and tab.cards[2]._quest == "퀘스트: 7일 연속 켜기 · 0/7일" and edited == [1]
-    assert tab.cards[4]._quest == "퀘스트: 아리아를 처음으로 쓰다듬어 주기 · 0/1번"  # 고른 캐릭터 이름
-    assert tab.cards[5]._quest == "퀘스트: 처음 쓰다듬기 · 0/1번"  # 이름 없는 캐릭터
+    assert saved["value"] == 75 and saved["cleared"] == 3  # 25·50·75 구간 깬 것으로
+    assert saved["gained"] == 3 and saved["actionPoints"] == 3  # 오늘 값은 그대로(하루 상한과 무관)
+    assert tab.cards[2]._affinity == 75 and tab.cards[2]._quest == "다음 이야기는 준비 중이에요" and edited == [1]
+    assert tab.cards[4]._quest.startswith("퀘스트: 2일 연속 — 쓰다듬기 0/2")
     editor.spin.setValue(42)
     assert config.load_affinity("조용한 여성")["value"] == 42
     tab.editors[3].buttons[4].click()   # 이안
@@ -755,17 +643,12 @@ def test_choosing_other_character_swaps_the_pet(app, cfg, monkeypatch):
         ctrl.shutdown()
 
 
-def test_quest_text_uses_character_name_with_particles():
+def test_quest_text_shows_25_quest_progress_then_next_story():
     a = aff.Affinity()
-    assert a.quest_text("아리아") == "퀘스트: 아리아를 처음으로 쓰다듬어 주기 · 0/1번"
-    assert a.quest_text("???") == "퀘스트: 처음 쓰다듬기 · 0/1번"
+    assert a.quest_text("아리아") == "퀘스트: 2일 연속 — 쓰다듬기 0/2 · 찔러 보기 0/2 · 같이 게임하기 0/2"
     b = aff.Affinity.load({"value": 30, "cleared": 1})
-    assert b.quest_text("다래") == "퀘스트: 구석에서 다래와 함께 1시간 · 0/60분"
-    c = aff.Affinity.load({"value": 55, "cleared": 2})
-    assert c.quest_text("아리아") == "퀘스트: 아리아 목소리로 알림 10번 · 0/10번"
-    assert aff._has_final("곰") and not aff._has_final("다래")
-    assert a.quest_text("Starline") == "퀘스트: Starline을 처음으로 쓰다듬어 주기 · 0/1번"   # 읽는 소리 '스타라인'
-    assert b.quest_text("Starline") == "퀘스트: 구석에서 Starline과 함께 1시간 · 0/60분"
+    assert b.quest_text("다래") == "다음 이야기는 준비 중이에요"
+    assert aff._has_final("곰") and not aff._has_final("다래") and aff._has_final("Starline")
 
 
 def test_card_preview_plays_pack_greeting_first_without_flat_fallback(tmp_path, monkeypatch):
@@ -838,11 +721,12 @@ def test_second_alert_bubble_falls_back_to_first_line_and_counts_as_alert(growth
     picker = ln.Picker(ln.read(ARIA / "lines.json"))
     assert picker.alert("비바체 연장2.mp3").text == "비바체, 잊으면 안 돼!"  # 있는 2차 줄은 그대로
     config.save_voice_pack("부드러운 여성")
+    config.save_character(rules={"action_chance": 1})
     ctrl = cc.CharacterController()
     ctrl.set_enabled(True)
     try:
         notifier._announce("tuarim2", paths.resource_dir() / "sounds" / "부드러운 여성" / "투아림 부스트 발동 직전2.mp3")
-        assert ctrl.affinity.totals == {"alerts": 1}  # 추가 알림도 같은 '알림 받기'
+        assert ctrl.affinity.action_points == 1  # 추가 알림도 같은 '목소리 알림' 행동(확률 1로)
     finally:
         ctrl.shutdown()
 
@@ -941,14 +825,17 @@ def test_stage_up_once_highest_only_no_drop_line_and_silent_without_pet(app, cfg
 def test_quest_clear_triggers_stage_up_line(growth, app, cfg):
     from mabinogi_addon.ui import character_controller as cc
 
+    yesterday = (datetime.date.today() - datetime.timedelta(days=1)).isoformat()
     config.save_voice_pack("부드러운 여성")
-    config.save_character(affinity=("부드러운 여성", {"value": 25}))
+    config.save_character(rules={"action_chance": 1})
+    config.save_character(affinity=("부드러운 여성", {"rules": 2, "value": 24, "quest": {
+        "pet": {"last": yesterday, "run": 1}, "click": {"done": True}, "game": {"done": True}}}))
     ctrl = cc.CharacterController()
     ctrl.set_enabled(True)
     ctrl.window = fake = _FakeWindow()
     try:
-        ctrl._on_events([("pet_done",)])  # 처음 쓰다듬기 → 0→25 퀘스트 깸 → 구간 25
-        assert ctrl.affinity.stage == 25 and fake.said == ["우리 꽤 친해진 것 같지? 헤헤"]
+        ctrl._on_events([("pet_done",)])  # 이틀째 쓰다듬기 → 25 퀘스트 깸 + 행동 +1 → 25 → 구간 25
+        assert ctrl.affinity.stage == 25 and fake.said[0] == "우리 꽤 친해진 것 같지? 헤헤"
     finally:
         ctrl.window = None
         ctrl.shutdown()
@@ -1671,7 +1558,8 @@ def test_starline_head_size_matches_standing_within_5_percent():
     face, eyes = face_crop(stand), eye_gap(stand)
     sheets, bad = {}, {}
     for path in SL_DIR.glob("*.png"):
-        if path.stem in ("card", "frame") or path.stem in ("talk_blink_0", "sit_3") or path.stem.startswith("sneeze_"):
+        if (path.stem in ("card", "frame") or path.stem in ("talk_blink_0", "sit_3") or path.stem.startswith("sneeze_")
+                or path.stem.startswith("motion_")):   # 호감도 모션(11-26)은 소품이 얼굴을 가림 → 실루엣 테스트(test_affinity_v2)
             # 재채기는 같은 자세 0·5번 실루엣으로 맞춤(QA 11-25 — 얼굴 창은 머리카락에 끌림) → 실루엣 테스트가 맡음
             continue
         r = head_ratio(face, eyes, _img_of(path))
@@ -1755,24 +1643,20 @@ def test_character_scale_applies_to_every_frame_and_fits_window(app, profile, fo
         w.close()
 
 
-def test_affinity_frozen_in_beta_but_reactions_stay():
-    """캐릭터 베타(사용자 11-24 '당분간 호감도가 안 올라가게'): 켜기·쓰다듬기 끝까지·알림·구석 30분·반복 클릭 뒤에도
-    값·오늘 오른 양·퀘스트 누적·연속 켜기 그대로. 짜증 반응(반복 클릭·쓰다듬기 4번째)은 그대로. 제작자 직접 조절은 됨."""
-    assert aff.GROWTH is False
-    a = aff.Affinity.load({"value": 30, "cleared": 1, "streak": 2, "lastLaunch": "2026-11-23",
-                           "totals": {"pets": 1, "corner_minutes": 5, "alerts": 2}})
+def test_affinity_grows_after_gauge_release_and_frozen_switch_still_works(monkeypatch):
+    """11-26 게이지 배포로 GROWTH 켬. 끄면(스위치) 점수·퀘스트·줄어들기는 멈추고 짜증 반응은 그대로."""
+    assert aff.GROWTH is True
+    monkeypatch.setattr(aff, "GROWTH", False)
+    a = aff.Affinity.load({"value": 30, "cleared": 1})
     before = a.to_dict()
-    assert a.launched(DAY) == 0 and a.alerted(DAY) == 0
+    assert a.launched(0, DAY) == 0 and a.alerted(0, DAY) == 0 and a.decay(10) == 0 and a.leave(DAY) == 0
     for _ in range(31):
         assert a.corner_minute(DAY) == 0
     results = [a.petted(100.0 + i * 70, DAY) for i in range(4)]
-    assert results[:3] == ["gain"] * 3 and results[3] == "annoyed"   # 4번째는 짜증(값은 그대로)
-    assert any(a.click(500.0 + i * 0.5) for i in range(6))           # 반복 클릭 짜증 반응
+    assert results[:3] == ["gain"] * 3 and results[3] == "annoyed"
     after = a.to_dict()
-    for key in ("value", "cleared", "streak", "totals", "gained"):
+    for key in ("value", "cleared", "quest", "gained"):
         assert after.get(key) == before.get(key), key
-    a.set_value(75)   # 제작자 조절은 그대로 됨
-    assert a.value == 75
 
 
 def test_creator_affinity_edit_still_saves_in_beta(app, cfg):
@@ -1784,7 +1668,7 @@ def test_creator_affinity_edit_still_saves_in_beta(app, cfg):
     tab.editors[i].buttons[2].click()
     assert config.load_affinity("조용한 여성")["value"] == 50 and tab.cards[i]._affinity == 50
     tab.set_creator(False)
-    assert not tab.cards[i].details_visible() and tab.cards[i].height() == ct.PAD_TOP + ct.CARD_H + ct.PAD_BOTTOM
+    assert tab.cards[i].details_visible() and not tab.editors[i].isVisibleTo(tab)   # 게이지는 모두에게, 조절 칸은 제작자만
 
 
 def test_default_voice_button_returns_to_recorded_voice(app, cfg, monkeypatch):
@@ -2404,7 +2288,7 @@ def test_ian_vest_tie_frames_match_base_names_size_and_face():
     from mabinogi_addon.image_io import imread
     from scripts.build_ian_frames import face_ratio
 
-    base = {p.stem for p in IAN_DIR.glob("*.png")} - {"card", "frame"}
+    base = {p.stem for p in IAN_DIR.glob("*.png") if not p.stem.startswith("motion_")} - {"card", "frame"}   # 기본 옷 모션(11-26)은 따로
     dressed = {p.stem for p in VEST.glob("*.png")} - {"card"}
     motions = dressed - base
     assert base <= dressed
@@ -2460,7 +2344,7 @@ def test_aria_tshirt_frames_match_base_names_height_and_head():
     from mabinogi_addon.image_io import imread
     from scripts.silhouette import best_scale
 
-    base = {p.stem for p in ARIA.glob("*.png")} - {"card", "frame"}
+    base = {p.stem for p in ARIA.glob("*.png") if not p.stem.startswith("motion_")} - {"card", "frame"}   # 기본 옷 모션(11-26)은 따로
     dressed = {p.stem for p in TSHIRT.glob("*.png")} - {"card"}
     assert base <= dressed
     assert sorted(dressed - base) == sorted([f"motion_water_{i}" for i in range(8)] + [f"motion_wreath_{i}" for i in range(8)])

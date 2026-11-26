@@ -39,7 +39,7 @@ from ..market import auction
 from ..market import music_auction as ma
 from ..market import music_buff as mb
 from .palette import color
-from .widgets import FeatureHeader, checkbox, divider
+from .widgets import NEXON_CREDIT, FeatureHeader, credit_label, checkbox, divider
 
 TITLE = "음악 버프 계산기"
 DESCRIPTION = "전장의 서곡·비바체·행진곡 수치를 장비 구성으로 계산해요. 입력은 자동 저장돼요."  # 참고 사이트 표기는 뺌(사용자 11-16)
@@ -372,6 +372,7 @@ class MusicBuffTab(QWidget):
         self.songs = _Fold(columns, 28)
         v.addWidget(self.songs)
         v.addWidget(_muted(BOTTOM_NOTE, wrap=True))
+        v.addWidget(credit_label(NEXON_CREDIT))
         return box
 
     # ---- 아래: 입력 ----

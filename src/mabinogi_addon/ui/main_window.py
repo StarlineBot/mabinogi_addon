@@ -368,6 +368,7 @@ class MainWindow(QMainWindow):
         self.character_tab.pet_toggled.connect(lambda _on: self.character_tools.sync_window())
         self.character_tab.affinity_edited.connect(self.character_tools.reload_affinity)
         self.character_tab.outfit_changed.connect(self.character_tools.outfit_changed)
+        self.character_tab.motion_requested.connect(self.character_tools.preview_motion)
         self.character_tools.affinity_changed.connect(self.character_tab.refresh)
         self.settings_tab.replay_tour.connect(self._replay_tour)
         self.settings_tab.theme_changed.connect(self._apply_tab_styles)
@@ -2052,7 +2053,7 @@ class MainWindow(QMainWindow):
             creator = False
         tabs = self._tabs
         if tabs.indexOf(self._character_scroll) < 0:
-            tabs.insertTab(tabs.indexOf(self._settings_scroll), self._character_scroll, "캐릭터")
+            tabs.insertTab(tabs.indexOf(self._settings_scroll), self._character_scroll, "동행")
         self.settings_tab.set_voice_visible(False)
         self.character_tab.set_creator(creator)
         self.character_tools.set_enabled(True)

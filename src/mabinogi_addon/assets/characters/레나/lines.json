@@ -2,6 +2,12 @@
  "schemaVersion": 2,
  "character": "레나",
  "lines": {
+  "came_back": [
+   {
+    "text": "…딴 데 갔다 왔지? 흥, 신경 안 써.",
+    "mood": "think"
+   }
+  ],
   "click_stand": [
    {
     "text": "뭐야. 할 말 있으면 빨리 해.",

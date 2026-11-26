@@ -36,7 +36,7 @@ from .. import config
 from ..market import auction, craft
 from .calculator_sidebar import calculator_sidebar, refresh_button
 from .palette import color
-from .widgets import FeatureHeader
+from .widgets import NEXON_CREDIT, FeatureHeader, credit_label
 
 TITLE = "제작 재료 계산기"
 DESCRIPTION = "장비별 필요 재료를 보고, 가진 개수를 적어 두면 남은 재료와 경매장 가격 합계를 보여 줘요."
@@ -204,6 +204,7 @@ class CraftTab(QWidget):
         self.status.setWordWrap(True)
         self.status.setStyleSheet(f"color:{color('muted')};")
         right.addWidget(self.status)
+        right.addWidget(credit_label(NEXON_CREDIT))
 
         # 0.51.0(명세 6절): 트리 표 — 만들 수 있는 재료(▸)를 누르면 하위 재료가 아래로 펼쳐짐(최대 깊이 2)
         self.table = QTreeWidget()

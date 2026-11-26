@@ -128,7 +128,7 @@ def _talk_anims(sets) -> dict:
 DARE_TALK = (talk_set(),)
 ANIMS.update(_talk_anims(DARE_TALK))
 SITTING = ("crouch", "sit_drowsy", "sit_doze", "sit_half", "sit_notice") + SLEEPING
-STANDING = ("stand", "walk", "hairstroke", "watch", "flame", "stretch", "magic", "sneeze")   # 서서 대기 동작(아리아 머리 쓰다듬기·이안 시계 보기)도 서 있는 것
+STANDING = ("stand", "walk", "hairstroke", "watch", "flame", "stretch", "magic", "sneeze", "motion")   # 서서 대기 동작(아리아 머리 쓰다듬기·이안 시계 보기)도 서 있는 것
 UPRIGHT = STANDING + TALKING   # 서 있는 자세(클릭 놀람·쓰다듬기·알림 알아챔이 되는 상태)
 # 한 번 도는 동작이 끝나면 다음 동작
 _NEXT = {"surprise": "stand", "land": "getup", "getup": "stand", "pet_in": "pet_loop", "pet_out": "stand",
@@ -351,6 +351,11 @@ class Brain:
     _walk_rate: float = 1.0
     _talk_until: float = 0.0
     _next_extra: float = 0.0
+    motions: dict = field(default_factory=dict)          # 열린 호감도 모션 key → character.motions.Motion
+    motion_weights: dict = field(default_factory=dict)   # key → 고를 무게(새로 열린 것 2배)
+    _motion_seq: tuple = ()                              # 지금 하는 모션 (프레임, 초) 순서
+    motion_key: str | None = None
+    _queued_motion: str | None = None                    # 구간 오름 대사를 말하는 중 → 끝나고 서면 바로
     _next_rare: float = 0.0
     _rare_said: bool = False
     _sleep_next: float = 0.0         # 다래: 다음 엎드려 자기 시각(구석에 앉으면 정함)
@@ -368,6 +373,13 @@ class Brain:
 
     # ---- 보이는 것 ----------------------------------------------------------------------------
     def frame(self, now: float) -> str:
+        if self.state == "motion":
+            t = now - self._t0
+            for name, d in self._motion_seq:
+                if t < d:
+                    return name
+                t -= d
+            return self._motion_seq[-1][0] if self._motion_seq else self.profile.anims["stand"][0][0]
         if self.state == "talk" and self._talk_set is not None:
             return self._talk_frame(now)
         if self.state == "talk_end" and self._talk_set is not None:  # base 잠시 → 사이(또는 끝 두 장) → (서 있기)
@@ -423,6 +435,8 @@ class Brain:
             self._pet_reached_loop = True
 
     def _done(self, now: float) -> bool:
+        if self.state == "motion":
+            return now - self._t0 >= sum(d for _n, d in self._motion_seq)
         if self.state == "talk_end" and self._talk_set is not None:
             return now - self._t0 >= sum(d for _, d in _end_steps(self._talk_set))
         frames, times, loop = self.profile.anims[self.state]
@@ -480,8 +494,50 @@ class Brain:
 
     def _schedule_extra(self, now: float) -> None:
         """서서 대기 동작(아리아 머리 쓰다듬기) 다음 차례 — 8~15초 뒤 무작위(설정 값)."""
-        if self.profile.idle_extra:
+        if self.profile.idle_extra or self.motion_weights:
             self._next_extra = now + self.rng.uniform(*self.profile.idle_gap)
+
+    # ---- 호감도 모션(25·75 보상, 호감도_모션.md '앱 동작') ------------------------------------------
+    def set_motions(self, specs: dict, weights: dict) -> None:
+        """열린 모션(key → Motion)과 고를 무게. 서 있는 동안 대기 번갈아 후보에 더해짐."""
+        self.motions = dict(specs)
+        self.motion_weights = {k: w for k, w in weights.items() if k in self.motions}
+
+    def show_motion(self, key: str, now: float) -> None:
+        """구간이 오른 순간 새 모션 한 번 — 지금 말하는 중이면(구간 오름 대사) 말이 끝나고 서 있게 되면 바로."""
+        if not self.play_motion(key, now) and key in self.motions and self.state in TALKING:
+            self._queued_motion = key
+
+    def play_motion(self, key: str, now: float) -> bool:
+        """모션을 바로 한 번. 서 있을 때만 — 구석·걷기·끌기·말하기 중이면 안 함."""
+        motion = self.motions.get(key)
+        if (motion is None or self._goal != "roam" or self._dragging
+                or self.state not in ("stand", self.profile.idle_extra, "motion")):
+            return False
+        self._motion_seq = motion.sequence(self.rng)
+        self.motion_key = key
+        length = sum(d for _n, d in self._motion_seq)
+        self._target = None
+        self._next_walk = max(self._next_walk, now + length + 1.0)   # 끝까지 하고 걷기
+        self._next_extra = max(self._next_extra, now + length + 1.0)
+        self._go("motion", now)
+        return True
+
+    def _pick_idle(self, now: float) -> None:
+        """대기 번갈아 — 원래 대기 동작(무게 1)과 열린 모션(새 것 2배) 중 무작위."""
+        options = ([(None, 1.0)] if self.profile.idle_extra else []) + list(self.motion_weights.items())
+        if not options:
+            return
+        choice = self.rng.choices([k for k, _w in options], [w for _k, w in options])[0]
+        if choice is not None and self.play_motion(choice, now):
+            return
+        if self.profile.idle_extra:
+            laps = self.rng.randint(*self.profile.idle_laps)
+            _frames, times, _loop = self.profile.anims[self.profile.idle_extra]
+            self._extra_until = now + laps * sum(times)
+            self._go(self.profile.idle_extra, now)
+        else:
+            self._schedule_extra(now)
 
     # ---- 시간 --------------------------------------------------------------------------------
     # ---- 빈 바닥(진짜 창모드 — 보이는 게임 화면 피하기, QA 11-26) --------------------------------------
@@ -567,7 +623,7 @@ class Brain:
             events.append(("pet_done",))
             return events
         if self._done(now):
-            nxt = self.profile.next_map[self.state]
+            nxt = "stand" if self.state == "motion" else self.profile.next_map[self.state]
             queued, self._queued_talk = self._queued_talk, None
             if self.state == "surprise" and queued is not None and now < queued[0]:
                 self._start_talk(now, queued[0], queued[1], queued[2])  # 클릭 반응 뒤 이어서 말함(이안)
@@ -581,6 +637,9 @@ class Brain:
             if nxt == "stand":
                 self._schedule_walk(now)
                 self._schedule_extra(now)
+                queued_motion, self._queued_motion = self._queued_motion, None
+                if queued_motion is not None:
+                    self.play_motion(queued_motion, now)
             elif nxt == "pet_loop":
                 events.append(("say", "pet_during"))
 
@@ -617,11 +676,11 @@ class Brain:
         if self._goal == "roam" and self._spans is not None and not self._dragging:
             if self.state == "walk" and self._target is not None and not self._allowed(self._target[0]):
                 self._walk_to((self._roam_x(), self.floor.y), now)    # 걷는 중 그 앞이 막힘 → 지금 빈 구간 안으로
-            elif self.state in ("stand", self.profile.idle_extra) and not self._allowed(self.pos[0]):
+            elif self.state in ("stand", self.profile.idle_extra, "motion") and not self._allowed(self.pos[0]):
                 self._walk_to((self._nearest_free(self.pos[0]), self.floor.y), now)   # 막힌 곳에 서 있음 → 가까운 빈 곳으로
         if self.state == "walk":
             self._step(dt, now)
-        elif self.state in ("stand", self.profile.idle_extra, rare):  # 대기·드문 동작 중이어도 걸을 차례·게임이 오면 바로 끊음
+        elif self.state in ("stand", self.profile.idle_extra, rare, "motion"):  # 대기·드문 동작·모션 중이어도 걸을 차례·게임이 오면 바로 끊음
             if self._goal == "corner":
                 if self._near(self.home()):
                     self._go("crouch", now)
@@ -639,11 +698,10 @@ class Brain:
                     self._next_extra = max(self._next_extra, now + length + 1.0)     # 대기 동작과 안 겹침
                     self._rare_said = False
                     self._go(rare, now)
-            elif self.state == "stand" and self.profile.idle_extra and now >= self._next_extra > 0:
-                laps = self.rng.randint(*self.profile.idle_laps)
-                _frames, times, _loop = self.profile.anims[self.profile.idle_extra]
-                self._extra_until = now + laps * sum(times)
-                self._go(self.profile.idle_extra, now)
+            elif self.state == "stand" and (self.profile.idle_extra or self.motion_weights) and now >= self._next_extra > 0:
+                self._pick_idle(now)
+            elif self.state == "stand" and self.motion_weights and self._next_extra == 0.0:
+                self._schedule_extra(now)
 
         if now >= self._next_idle and rare and self.state == rare:
             self._next_idle = now + RARE_DEFER   # 드문 동작 중엔 혼잣말을 미룸
