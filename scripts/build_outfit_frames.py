@@ -48,7 +48,10 @@ TEMPLATES = {("레나", "lab"): ("전체프레임_v2", 3, 4, (930, 1320), True),
              ("레나", "red_dress"): ("전체프레임_v2", 3, 4, (930, 1320), True)}
 HEAD = 0.42
 FACE_FIX = {("레나", "lab"): ("walk",)}
-HALO_FIT = {"다래": ("drag",)}   # 옷 그림 끌기 칸마다 몸 크기가 달라(후광 폭 142→163) 후광 폭으로 칸 배율을 맞춤
+HALO_FIT = {"다래": ("drag",)}
+# 다래 하얀 오프숄더 drag_0만 다리 편 서 있는 자세로 그려져(키 282 vs 249~258, 몸통 폭 198 vs 179~191) 잡을 때 몸이 커짐 →
+# 이번 배포는 drag_1 그림으로 대신(반복 = drag_1, drag_1, drag_2, drag_3, fall도 drag_1). 새 drag_0은 사용자에게 물어 따로.
+FRAME_COPY = {("다래", "white_offshoulder"): (("drag_1", "drag_0"),)}   # 옷 그림 끌기 칸마다 몸 크기가 달라(후광 폭 142→163) 후광 폭으로 칸 배율을 맞춤
 HALO_BAND = 0.09                 # 맨 위 9% 띠 = 날개 달린 후광
 # 머리 위 장식(밀짚모자)으로 머리 실루엣을 못 쓰는 옷 → 같은 템플릿 자세 옷(티셔츠)의 같은 칸 '모자 아래 띠(키 25~55%) 폭'에 맞춤
 REF_FIT = {("아리아", "summer_dress"): ("tshirt", ("pet",))}
@@ -197,6 +200,8 @@ def main() -> None:
         if walk_dir is not None:   # 걷기 8장은 정리해 둔 PNG 그대로(색 맞추기·배율 없음)
             frames = {n: v for n, v in frames.items() if not re.fullmatch(r"walk_\d+", n)}
             frames.update({f"walk_{i}": imread(walk_dir / f"walk_{i}.png", cv2.IMREAD_UNCHANGED) for i in range(FRAMES)})
+        for src, dst in FRAME_COPY.get((folder, key), ()):   # 다른 자세로 그려진 칸을 같은 묶음 다른 칸으로(임시, QA 11-26)
+            frames[dst] = frames[src].copy()
         if folder in HALO_FIT:   # 다래 끌기(QA 11-26): 후광(모양이 안 변하는 물체) 폭을 기본 다래 같은 칸 × (이 옷/기본 서 있기)에
             for name in [n for n in frames if group_of(n) in HALO_FIT[folder]]:
                 base = imread(APP_ROOT / folder / f"{name}.png", cv2.IMREAD_UNCHANGED)

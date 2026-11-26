@@ -207,3 +207,17 @@ def test_lena_lab_walk_head_is_one_drawing():
         lb = cv2.cvtColor(np.ascontiguousarray(b[:top, :, :3]), cv2.COLOR_BGR2LAB)[..., 0].astype(float)
         solid = (a[:top, :, 3] > 200) & (b[:top, :, 3] > 200)
         assert np.abs(la - lb)[solid].mean() * 100 / 255 <= 2, i
+
+
+def test_dare_offshoulder_drag_body_width_close_to_base():
+    """QA 11-26 오프숄더 잡을 때 몸이 커지는 칸(drag_0 다른 자세) → drag_1로 대신: 몸통 폭(키 40~70%) 180/180/184/192.
+    drag_3은 치마가 더 퍼진 그림이라 192 — 범위 6.7%(기본 다래 2.5%), 전 drag_0 198이 있던 때(10%)보다 줄어든 값으로 고정."""
+    def body(frame):
+        h = frame.shape[0]
+        xs = np.where((frame[round(h * 0.4):round(h * 0.7), :, 3] > 128).any(axis=0))[0]
+        return xs.max() - xs.min() + 1
+
+    def spread(folder):
+        ws = [body(_read(folder / f"drag_{i}.png")) for i in range(4)]
+        return (max(ws) - min(ws)) / min(ws)
+    assert spread(CHARS / "다래" / "outfits" / "white_offshoulder") <= spread(CHARS / "다래") + 0.045
