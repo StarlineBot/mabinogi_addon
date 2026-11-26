@@ -358,6 +358,19 @@ def hint_label(text: str) -> QLabel:
     return lbl
 
 
+NEXON_CREDIT = "Data based on NEXON Open API"
+VOICE_CREDIT = "목소리: ElevenLabs (elevenlabs.io)"
+
+
+def credit_label(text: str) -> QLabel:
+    """출처 표기 한 줄 — 작은 회색 글씨(넥슨 오픈 API·ElevenLabs 무료 요금제 표기, 기획 11-26)."""
+    lbl = QLabel(text)
+    lbl.setWordWrap(True)
+    lbl.setObjectName("creditLabel")
+    lbl.setStyleSheet(f"color:{color('muted')}; font-size:10px;")
+    return lbl
+
+
 def section_label(text: str) -> QLabel:
     lbl = QLabel(text)
     lbl.setStyleSheet("font-weight:600;")

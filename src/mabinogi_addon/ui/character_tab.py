@@ -18,7 +18,7 @@ from .. import config, paths
 from ..character import outfits, roster
 from ..character.affinity import MAX_VALUE, STAGES, Affinity, Rules
 from .palette import color
-from .widgets import FeatureHeader, hint_label, switch
+from .widgets import VOICE_CREDIT, FeatureHeader, credit_label, hint_label, switch
 
 DESCRIPTION = "고른 캐릭터가 알림을 말해 주고, 화면에서 함께 지내요."
 CARD_W, CARD_H = 224, 280   # 카드(기획 11-25 — 4:5, 머리 위 20px)
@@ -659,6 +659,7 @@ class CharacterTab(QWidget):
         grid.setColumnStretch(COLUMNS, 1)
         v.addLayout(grid)
         v.addStretch(1)
+        v.addWidget(credit_label(VOICE_CREDIT))   # 목소리 출처(ElevenLabs 무료 요금제 표기, 기획 11-26)
         self._preview = None
         self.frames = CardFrameLayer(self, self.cards)   # 테두리·이름·명판(카드 위, 서랍 아래)
         self._hover_timer = QTimer(self)

@@ -16,7 +16,7 @@ from .palette import color
 from .. import config
 from ..market import auction, dungeon_cost as calc
 from .calculator_sidebar import calculator_sidebar, refresh_button
-from .widgets import FeatureHeader
+from .widgets import NEXON_CREDIT, FeatureHeader, credit_label
 
 
 def _fetch(result, key, cancelled):
@@ -75,6 +75,7 @@ class DungeonCostTab(QWidget):
         self.status = QLabel()
         self.status.setWordWrap(True)
         right.addWidget(self.status)
+        right.addWidget(credit_label(NEXON_CREDIT))
         self.table = QTableWidget()
         self.table.verticalHeader().hide()
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)

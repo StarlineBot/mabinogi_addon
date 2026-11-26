@@ -27,7 +27,7 @@ from PySide6.QtWidgets import (
 from .palette import color
 from .. import config
 from ..market import auction, fee
-from .widgets import FeatureHeader, SuffixSpinBox, hint_label
+from .widgets import NEXON_CREDIT, FeatureHeader, SuffixSpinBox, credit_label, hint_label
 
 def _gray():
     return f"color:{color('muted')}; font-size:12px;"
@@ -95,6 +95,7 @@ class DistributionTab(QWidget):
         v.addWidget(self.calc_btn)
         self.result_status = hint_label("")
         v.addWidget(self.result_status)
+        v.addWidget(credit_label(NEXON_CREDIT))
 
         # 결과: 2열 카드 그리드
         self.result_area = QWidget()

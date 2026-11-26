@@ -37,7 +37,7 @@ from ..party.service import build_board, humanize_age
 from ..party.worker import PartyWorker
 from .notifier import PARTY_ALERT_FILE, SoundNotifier
 from .toast import show_toast
-from .widgets import FeatureHeader, hint_label
+from .widgets import NEXON_CREDIT, FeatureHeader, credit_label, hint_label
 
 
 _DIM = QColor("#9aa0a6")
@@ -172,6 +172,7 @@ class PartyTab(QWidget):
 
         self.status_label = hint_label("대기 중 · 탐지 시작 시 5초마다 갱신")
         v.addWidget(self.status_label)
+        v.addWidget(credit_label(NEXON_CREDIT))
         return box
 
     def _on_server_changed(self, server: str) -> None:

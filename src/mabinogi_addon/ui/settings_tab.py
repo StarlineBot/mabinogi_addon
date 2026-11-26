@@ -727,6 +727,8 @@ class SettingsTab(QWidget):
         desc.setStyleSheet(f"color:{color('muted')}; font-size:11px;")
         col.addWidget(name)
         col.addWidget(desc)
+        from .widgets import NEXON_CREDIT, VOICE_CREDIT, credit_label
+        col.addWidget(credit_label(f"{NEXON_CREDIT}\n{VOICE_CREDIT}"))
         row.addLayout(col, 1)
         return box
 

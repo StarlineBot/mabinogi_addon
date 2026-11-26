@@ -29,7 +29,7 @@ from .palette import color
 from .. import config
 from ..market import auction, exchange
 from .calculator_sidebar import calculator_sidebar, refresh_button
-from .widgets import FeatureHeader, hint_label
+from .widgets import NEXON_CREDIT, FeatureHeader, credit_label, hint_label
 
 _CACHE_TTL = 10 * 60  # 경매 데이터가 ~10분 지연이라 던전별 10분 캐시
 def _gray():
@@ -72,6 +72,7 @@ class ExchangeTab(QWidget):
         self.asof = QLabel("경매 시세는 넥슨 API 특성상 10분가량 지연돼요.")
         self.asof.setStyleSheet(_gray())
         right.addWidget(self.asof)
+        right.addWidget(credit_label(NEXON_CREDIT))
 
         self.table = QTableWidget(0, 4)
         self.table.setHorizontalHeaderLabels(

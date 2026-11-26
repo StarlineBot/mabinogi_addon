@@ -6,6 +6,7 @@
     "tests/test_affinity_motions.py",
     "tests/test_pet_floor_space.py",
     "tests/test_navigation.py",
+    "tests/test_credits.py",
     "tests/test_optimization_ui.py",
     "tests/test_bundle_layout.py",
     "tests/test_outfit_v2_frames.py",
@@ -57,9 +58,10 @@
       "tests": [
         "tests/test_affinity_v2.py",
         "tests/test_character.py",
-        "tests/test_navigation.py"
+        "tests/test_navigation.py",
+        "tests/test_credits.py"
       ],
-      "reason": "♥ 바·퀘스트 모두에게(조절은 제작자), 적용 때 떠나는 캐릭터 −3·확정 전 안내"
+      "reason": "♥ 바·퀘스트 모두에게(조절은 제작자), 적용 때 떠나는 캐릭터 −3·확정 전 안내 · 맨 아래 목소리 출처"
     },
     "src/mabinogi_addon/ui/pet_window.py": {
       "tests": [
@@ -114,6 +116,55 @@
         "tests/test_release_checks.py"
       ],
       "reason": "현재 릴리즈 경계 테스트를 0.58.0(호감도 게이지)로"
+    },
+    "src/mabinogi_addon/ui/widgets.py": {
+      "tests": [
+        "tests/test_credits.py"
+      ],
+      "reason": "출처 표기 한 줄(credit_label·NEXON_CREDIT·VOICE_CREDIT)"
+    },
+    "src/mabinogi_addon/ui/exchange_tab.py": {
+      "tests": [
+        "tests/test_credits.py"
+      ],
+      "reason": "넥슨 오픈 API 출처 표기"
+    },
+    "src/mabinogi_addon/ui/craft_tab.py": {
+      "tests": [
+        "tests/test_credits.py"
+      ],
+      "reason": "넥슨 오픈 API 출처 표기"
+    },
+    "src/mabinogi_addon/ui/dungeon_cost_tab.py": {
+      "tests": [
+        "tests/test_credits.py"
+      ],
+      "reason": "넥슨 오픈 API 출처 표기"
+    },
+    "src/mabinogi_addon/ui/distribution_tab.py": {
+      "tests": [
+        "tests/test_credits.py"
+      ],
+      "reason": "넥슨 오픈 API 출처 표기"
+    },
+    "src/mabinogi_addon/ui/party_tab.py": {
+      "tests": [
+        "tests/test_credits.py"
+      ],
+      "reason": "넥슨 오픈 API 출처 표기"
+    },
+    "src/mabinogi_addon/ui/music_buff_tab.py": {
+      "tests": [
+        "tests/test_credits.py"
+      ],
+      "reason": "넥슨 오픈 API 출처 표기"
+    },
+    "src/mabinogi_addon/ui/settings_tab.py": {
+      "tests": [
+        "tests/test_credits.py",
+        "tests/test_navigation.py"
+      ],
+      "reason": "설정 제작자 소개 아래 출처 두 줄"
     }
   }
 }
