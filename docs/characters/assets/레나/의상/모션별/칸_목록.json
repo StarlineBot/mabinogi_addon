@@ -1,0 +1,197 @@
+{
+ "서있기": {
+  "cols": 1,
+  "rows": 1,
+  "cell": [
+   310,
+   330
+  ],
+  "frames": [
+   "stand_0"
+  ]
+ },
+ "걷기": {
+  "cols": 4,
+  "rows": 2,
+  "cell": [
+   310,
+   330
+  ],
+  "frames": [
+   "walk_0",
+   "walk_1",
+   "walk_2",
+   "walk_3",
+   "walk_4",
+   "walk_5",
+   "walk_6",
+   "walk_7"
+  ]
+ },
+ "끌기": {
+  "cols": 4,
+  "rows": 1,
+  "cell": [
+   310,
+   330
+  ],
+  "frames": [
+   "drag_0",
+   "drag_1",
+   "drag_2",
+   "drag_3"
+  ]
+ },
+ "떨어지기": {
+  "cols": 1,
+  "rows": 1,
+  "cell": [
+   310,
+   330
+  ],
+  "frames": [
+   "fall_0"
+  ]
+ },
+ "착지": {
+  "cols": 4,
+  "rows": 1,
+  "cell": [
+   310,
+   330
+  ],
+  "frames": [
+   "land_0",
+   "land_1",
+   "land_2",
+   "land_3"
+  ]
+ },
+ "쓰다듬기": {
+  "cols": 3,
+  "rows": 2,
+  "cell": [
+   310,
+   330
+  ],
+  "frames": [
+   "pet_0",
+   "pet_1",
+   "pet_2",
+   "pet_3",
+   "pet_4",
+   "pet_5"
+  ]
+ },
+ "마법연습": {
+  "cols": 3,
+  "rows": 2,
+  "cell": [
+   310,
+   330
+  ],
+  "frames": [
+   "magic_0",
+   "magic_1",
+   "magic_2",
+   "magic_3",
+   "magic_4",
+   "magic_5"
+  ]
+ },
+ "웅크리기": {
+  "cols": 3,
+  "rows": 1,
+  "cell": [
+   310,
+   330
+  ],
+  "frames": [
+   "crouch_0",
+   "crouch_1",
+   "crouch_2"
+  ]
+ },
+ "구석앉기": {
+  "cols": 4,
+  "rows": 1,
+  "cell": [
+   310,
+   330
+  ],
+  "frames": [
+   "sit_0",
+   "sit_1",
+   "sit_2",
+   "sit_3"
+  ]
+ },
+ "구석에서일어나기": {
+  "cols": 3,
+  "rows": 1,
+  "cell": [
+   310,
+   330
+  ],
+  "frames": [
+   "rise_0",
+   "rise_1",
+   "rise_2"
+  ]
+ },
+ "말하기": {
+  "cols": 3,
+  "rows": 3,
+  "cell": [
+   310,
+   330
+  ],
+  "frames": [
+   "talk_base_0",
+   "talk_blink_0",
+   "talk_emph2_0",
+   "talk_emph_0",
+   "talk_end1_0",
+   "talk_end2_0",
+   "talk_m1_0",
+   "talk_m2_0",
+   "talk_mid_0"
+  ]
+ },
+ "모션25_마법서": {
+  "cols": 4,
+  "rows": 2,
+  "cell": [
+   310,
+   330
+  ],
+  "frames": [
+   "motion:마법서(25)_0",
+   "motion:마법서(25)_1",
+   "motion:마법서(25)_2",
+   "motion:마법서(25)_3",
+   "motion:마법서(25)_4",
+   "motion:마법서(25)_5",
+   "motion:마법서(25)_6",
+   "motion:마법서(25)_7"
+  ]
+ },
+ "모션75_공중앉기": {
+  "cols": 4,
+  "rows": 2,
+  "cell": [
+   310,
+   330
+  ],
+  "frames": [
+   "motion:공중앉기(75)_0",
+   "motion:공중앉기(75)_1",
+   "motion:공중앉기(75)_2",
+   "motion:공중앉기(75)_3",
+   "motion:공중앉기(75)_4",
+   "motion:공중앉기(75)_5",
+   "motion:공중앉기(75)_6",
+   "motion:공중앉기(75)_7"
+  ]
+ }
+}
