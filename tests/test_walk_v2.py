@@ -72,3 +72,24 @@ def test_walk_loop_time_and_speed_kept():
         assert names == tuple(f"walk_{i}" for i in range(8)) and looping, key
         assert len(times) == 8 and sum(times) == pytest.approx(loop), key
         assert profile.walk_speed == speed, key
+
+
+def test_starline_walk_tone_match_keeps_texture():
+    """QA 11-26 '걷기 팔·다리가 자글자글': 톤 맞추기 뒤 어두운 안쪽 노이즈(|L − 흐림|)가 맞추기 전 ×1.1 안, 서 있기 대비
+    어두운(L<80)·중간(80~170) Lab 평균 ΔE ≤ 3 (예전 경계 자르기 방식은 노이즈 +65%)."""
+    from scripts.build_dare_frames import scaled
+    from scripts.build_starline_frames import _band_means
+    from scripts.build_walk_v2 import WALKS, clean, read_frames
+
+    def noise(img):
+        L = cv2.cvtColor(np.ascontiguousarray(img[..., :3]), cv2.COLOR_BGR2LAB).astype(np.float32)[..., 0]
+        inner = cv2.erode((img[..., 3] > 250).astype(np.uint8), np.ones((11, 11), np.uint8)) > 0
+        return float(np.abs(L - cv2.GaussianBlur(L, (0, 0), 1.5))[inner & (L < 90)].mean())
+
+    stand = _read(CHARS / "Starline" / "stand_0.png")
+    ref = _band_means(stand)
+    zip_path, folder, factor = WALKS["Starline"]
+    for i, raw in enumerate(read_frames(zip_path, folder)):
+        made = _read(CHARS / "Starline" / f"walk_{i}.png")
+        assert noise(made) <= noise(scaled(clean(raw), factor)) * 1.1, i
+        assert all(np.linalg.norm(a - b) <= 3 for a, b in zip(_band_means(made), ref)), i

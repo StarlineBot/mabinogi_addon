@@ -47,6 +47,7 @@ TEMPLATES = {("레나", "lab"): ("전체프레임_v2", 3, 4, (930, 1320), True),
              ("다래", "white_offshoulder"): ("전체프레임_v2", 3, 4, (930, 1320), True),
              ("레나", "red_dress"): ("전체프레임_v2", 3, 4, (930, 1320), True)}
 HEAD = 0.42
+FACE_FIX = {("레나", "lab"): ("walk",)}   # 옷 그림 걷기 얼굴 옆선이 무너진 옷 → scripts/outfit_face_fix
 # 템플릿 뒤에 다시 그려 받은 시트(가이드 방식) — (키, 파일, 열, 행, 가이드 크기, 쓸 칸). 배율 = 앱 기본 프레임 키 중앙값 ÷ 칸 키 중앙값
 REDRAWN: dict = {}   # 걷기는 기획이 앱 크기로 정리한 걷기_v2/walk_0~7.png를 그대로(11-26, scripts/build_walk_v2.OUTFIT_WALKS)
 MOTION_NAMES = {"옷매무새(25)": "motion_tidy", "차(75)": "motion_tea", "물주기(25)": "motion_water", "화관(75)": "motion_wreath",
@@ -62,6 +63,38 @@ def frame_name(raw: str) -> str:
 
 def cells_of(folder: Path, name: str, cols: int, rows: int, size: tuple[int, int]) -> list:
     return guide_cells(name, cols, rows, folder, size)
+
+
+def group_scales(pending, head_fit) -> list[tuple[str, np.ndarray, float]]:
+    """칸마다 (이름, 그림, 키 배율, 칸 머리 배율) → (이름, 그림, 최종 배율).
+    한 동작(걷기·모션·말하기 세트·앉기 등) 안에서는 머리 배율 하나(그 묶음 칸들의 중앙값) — 칸마다 다르면 걷는 동안 크기가
+    들쭉날쭉(QA 11-26 아리아 여름 드레스 걷기 298~312). 묶음 사이 머리 맞춤은 그대로.
+    "median": 머리 위에 새 장식(아리아 여름 드레스 밀짚모자)이 있어 위 42% 실루엣이 커 보이는 옷 — 머리 배율 ÷ 전 칸 중앙값
+    (모자 몫을 빼고, 0.9~1.1로 자름 — 기획 11-26)."""
+    if not pending:
+        return []
+    middle = float(np.median([h for *_, h in pending])) if head_fit == "median" else 1.0
+    groups: dict[str, list[float]] = {}
+    for name, _image, _k, head in pending:
+        groups.setdefault(group_of(name), []).append(head)
+    out = []
+    for name, image, k, _head_cell in pending:
+        h = float(np.median(groups[group_of(name)])) / middle
+        if head_fit == "median":
+            h = min(1.1, max(0.9, h))
+        out.append((name, image, k * h))
+    return out
+
+
+def group_of(name: str) -> str:
+    """프레임 이름 → 같은 애니메이션 묶음(walk_3 → walk, motion_water_2 → motion_water, talk_a_m1_0 → talk_a,
+    talk_base_0·talk_happy_1 → talk, sit_doze_0 → sit)."""
+    parts = name.split("_")
+    if parts[0] == "motion" and len(parts) > 2:
+        return "_".join(parts[:-1])
+    if parts[0] == "talk" and len(parts) > 2 and len(parts[1]) == 1:
+        return f"talk_{parts[1]}"
+    return parts[0]
 
 
 def _head(frame: np.ndarray) -> np.ndarray:
@@ -102,16 +135,8 @@ def build(folder: str, outfit_dir: Path, template=DEFAULT_TEMPLATE) -> dict[str,
                 pending.append((name, image, k * fit, best_scale(_head(template[index]), _head(scaled(image, fit)), 0.85, 1.15, 61)))
                 continue
             out[name] = scaled(image, k) if abs(k - 1) > 0.005 else image
-    if pending:
-        # "median": 머리 위에 새 장식(아리아 여름 드레스 밀짚모자)이 있어 위 42% 실루엣이 커 보이는 옷 — 칸 머리 배율 ÷ 전 칸 중앙값
-        # (모자 몫을 빼고 칸끼리 차이만, 0.9~1.1로 자름 — 기획 11-26)
-        middle = float(np.median([h for *_, h in pending])) if head_fit == "median" else 1.0
-        for name, image, k, head in pending:
-            h = head / middle
-            if head_fit == "median":
-                h = min(1.1, max(0.9, h))
-            k *= h
-            out[name] = scaled(image, k) if abs(k - 1) > 0.005 else image
+    for name, image, k in group_scales(pending, head_fit):
+        out[name] = scaled(image, k) if abs(k - 1) > 0.005 else image
     return out
 
 
@@ -150,6 +175,11 @@ def main() -> None:
         if walk_dir is not None:   # 걷기 8장은 정리해 둔 PNG 그대로(색 맞추기·배율 없음)
             frames = {n: v for n, v in frames.items() if not re.fullmatch(r"walk_\d+", n)}
             frames.update({f"walk_{i}": imread(walk_dir / f"walk_{i}.png", cv2.IMREAD_UNCHANGED) for i in range(FRAMES)})
+        if (folder, key) in FACE_FIX:   # 걷기 얼굴 옆선(QA 11-26) — 기본 걷기 얼굴을 옮겨 붙이고 옷의 안경만 다시
+            from scripts.outfit_face_fix import fix_face
+            for name in [n for n in frames if group_of(n) in FACE_FIX[(folder, key)]]:
+                base = imread(APP_ROOT / folder / f"{name}.png", cv2.IMREAD_UNCHANGED)
+                frames[name] = fix_face(frames[name], base, frames["stand_0"])
         dest = APP_ROOT / folder / "outfits" / key
         dest.mkdir(parents=True, exist_ok=True)
         for old in dest.glob("*.png"):
