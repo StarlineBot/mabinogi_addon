@@ -538,13 +538,14 @@ class AutofindV2Controller(QObject):
             self.changed.emit()
 
     def _publish(self) -> None:
-        """엔진의 자리 → 런타임 영역(논리 좌표). 단축바는 {x, y}, 디버프는 보스바 위 띠."""
+        """엔진의 자리 → 런타임 영역(논리 좌표). 단축바는 {x, y}(작은 인터페이스는 {x, y, w, h}), 디버프는 보스바 위 띠."""
         from .dpi import to_logical
         for key in v2.KEYS:
             box = self.engine.region(key)
             logical = None if box is None else dict(zip(("x", "y", "w", "h"), to_logical(*box)))
-            if key == "skillbar" and logical is not None:
-                logical = {"x": logical["x"], "y": logical["y"]}
+            if key == "skillbar" and logical is not None:  # 기본 배치는 {x, y}, 작은 인터페이스는 폭·높이까지
+                from ..detect.skillbar_anchor import anchor_of
+                logical = anchor_of((logical["x"], logical["y"], logical["w"], logical["h"]))
             autofind_regions.set_region(key, logical)
             if key == "boss":
                 debuff = None if box is None else dict(zip(("x", "y", "w", "h"), to_logical(*debuff_from_boss(box))))

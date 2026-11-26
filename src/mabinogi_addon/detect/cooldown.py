@@ -92,28 +92,33 @@ PAGE_BOX = (34, 12, 15, 16)      # 선택기 기준 숫자 상자(x, y, w, h), �
 ROW_Y = (0, 49)
 
 
+SMALL_PAGE_DX = 10   # 작은 인터페이스: 단축바 끝 → 숫자 상자 왼쪽(원래 크기 px, 테스터 11-26 image (34) 실측 432 = 3 + 548·0.764 + 10)
+
+
 def page_rect(frame: np.ndarray, source_box, row: int) -> tuple[int, int, int, int] | None:
     """그 줄의 페이지 숫자 상자(프레임 좌표). 어두운 상자 + 흰 글자가 있는 후보 위치. 없으면 None.
     한 줄에 선택기는 하나(그 줄 전체 페이지) — 배치에 따라 블록 사이(540) 또는 오른쪽 끝(1160)에 있다(tests/data 실측: 둘이 함께 보이는 화면 없음)."""
-    x, y, w, _h = source_box
-    s = w / 1168.0
-    bx, by, bw, bh = PAGE_BOX
-    for offset in PAGE_OFFSETS:
-        rect = (round(x + (offset + bx) * s), round(y + (ROW_Y[row] + by) * s), max(1, round(bw * s)), max(1, round(bh * s)))
-        mask = _box_mask(frame, rect)
-        if mask is not None:
+    for rect in selector_rects(source_box, row).values():
+        if _box_mask(frame, rect) is not None:
             return rect
     return None
 
 
 def selector_rects(source_box, row: int) -> dict[int, tuple[int, int, int, int]]:
     """그 줄 페이지 선택기 후보 자리(프레임 좌표) — 블록 번호 → 상자. 게임은 F키·숫자키를 쓸 단축바(키 블록)를 왼쪽/가운데 중 고르고,
-    고른 쪽에만 줄마다 '◀n▶'이 있다: 왼쪽(블록 0) 선택 → 블록 사이 540, 가운데(블록 1) 선택 → 오른쪽 끝 1160(제작자 확인 11-06)."""
+    고른 쪽에만 줄마다 '◀n▶'이 있다: 왼쪽(블록 0) 선택 → 블록 사이 540, 가운데(블록 1) 선택 → 오른쪽 끝 1160(제작자 확인 11-06).
+    작은 인터페이스(둘째 단축바가 떨어진 상자)는 아이콘만 줄고 ◀n▶은 원래 크기 — 각 단축바 끝 + 10px, 줄 가운데."""
+    from .skillbar_anchor import BLOCK_W, STD_GAP, layout
     x, y, w, _h = source_box
-    s = w / 1168.0
     bx, by, bw, bh = PAGE_BOX
-    return {block: (round(x + (offset + bx) * s), round(y + (ROW_Y[row] + by) * s), max(1, round(bw * s)), max(1, round(bh * s)))
-            for block, offset in enumerate(PAGE_OFFSETS)}
+    s, gap = layout(source_box)
+    if gap == STD_GAP:
+        s = w / 1168.0
+        return {block: (round(x + (offset + bx) * s), round(y + (ROW_Y[row] + by) * s), max(1, round(bw * s)), max(1, round(bh * s)))
+                for block, offset in enumerate(PAGE_OFFSETS)}
+    top = round(y + (40 * s - bh) / 2) + round(ROW_Y[row] * s)
+    return {block: (round(x + (start + BLOCK_W) * s) + SMALL_PAGE_DX, top, bw, bh)
+            for block, start in enumerate((0, gap))}
 
 
 ARROW_SPAN = 11          # 상자 양옆 화살표(◀▶)를 보는 너비(상자 폭 15 기준 px, 배율 s = 상자 폭/15)

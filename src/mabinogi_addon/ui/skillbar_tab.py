@@ -51,6 +51,12 @@ HELP_TITLE = '단축바 사용법'
 HELP_HTML = HELP['단축바']
 
 
+def _compatible(box) -> bool:
+    """자동 찾기 결과를 미러 격자로 쓸 수 있나: 기본 배치 1168×89, 또는 작은 인터페이스(둘째 단축바가 떨어진 상자)."""
+    from ..detect.skillbar_anchor import split_layout
+    return (abs(box[2] - SRC_W) <= 1 and abs(box[3] - SRC_H) <= 1) or split_layout(box)
+
+
 class SkillbarTab(QWidget):
     from .. import autofind_regions as _afr
     _anchor = _afr.region_property("skillbar", "_anchor")  # 자동 찾기 v2: 읽기 = 쓸 자리, 쓰기 = 저장 자리
@@ -244,9 +250,8 @@ class SkillbarTab(QWidget):
             return
         from .dpi import to_physical
 
-        rect = to_physical(
-            {"x": self._anchor["x"], "y": self._anchor["y"], "w": SRC_W, "h": SRC_H}
-        )
+        from ..detect.skillbar_anchor import compose, source_box_of
+        rect = to_physical(dict(zip(("x", "y", "w", "h"), source_box_of(self._anchor))))
         # 쿨타임 명세 9.1: 캡처·크기 조정·자르기는 공유 캡처의 작업 스레드에서(화면 스레드는 칸 그림만 바꾼다).
         keys = [key for key, ov in self._overlays.items() if ov.isVisible()]
         if self.groups.isVisible():  # 묶음 목록이 보이면 꺼 둔 묶음의 아이콘도(목록 칸 그림)
@@ -258,9 +263,8 @@ class SkillbarTab(QWidget):
         every = [True] * CELLS  # 4칸 모두 자른다 — 숨긴 칸은 오버레이가 안 그림(잠금 해제면 흐린 자리), 목록은 흐리게
 
         def crop(frame):  # 작업 스레드
-            if frame.shape[1] != SRC_W or frame.shape[0] != SRC_H:  # 물리픽셀 → 논리 격자(150% 보정)
-                import cv2
-                frame = cv2.resize(frame, (SRC_W, SRC_H), interpolation=cv2.INTER_AREA)
+            if frame.shape[1] != SRC_W or frame.shape[0] != SRC_H:  # 물리픽셀 → 논리 격자(150% 보정, 작은 인터페이스는 두 단축바를 붙여서)
+                frame = compose(frame, (0, 0, frame.shape[1], frame.shape[0]))
             return {key: slice_group_np(frame, defs[key], every) for key in keys}
         self._capture().set_request("mirror", rect, MIRROR_INTERVAL, crop, grab=self._grab_rect)
 
@@ -310,10 +314,12 @@ class SkillbarTab(QWidget):
         connect_selection(self, self._selector, self._on_anchor_selected)
         self._selector.start()
 
-    def _on_anchor_selected(self, x: int, y: int, _w: int, _h: int) -> None:
-        config.save_skillbar({"anchor": {"x": x, "y": y}})
+    def _on_anchor_selected(self, x: int, y: int, w: int, h: int) -> None:
+        from ..detect.skillbar_anchor import anchor_of
+        anchor = anchor_of((x, y, w, h))  # 직접 지정(첫 칸 40×40)·기본 배치는 {x, y}, 작은 인터페이스 자동 찾기는 폭·높이까지
+        config.save_skillbar({"anchor": anchor})
         self._afr.user_set("skillbar")  # 직접 지정 고정(다음 실행에도) + 그 기능 사용 켬
-        self._anchor = {"x": x, "y": y}
+        self._anchor = anchor
         self._update_anchor_label()
 
     def _region_cleared(self):
@@ -335,9 +341,11 @@ class SkillbarTab(QWidget):
         for mark in getattr(self,"_source_marks",[]):
             mark.close()
             mark.deleteLater()
-        x,y = self._anchor["x"],self._anchor["y"]
+        from ..detect.skillbar_anchor import layout, source_box_of
+        x, y, sw, sh = source_box_of(self._anchor)
+        cell = round(ICON * layout((x, y, sw, sh))[0])
         self._source_marks = []
-        for w,h,title in ((SRC_W,SRC_H,"복제 원본 전체 · 12개 그룹"),(ICON,ICON,"기준 첫 칸")):
+        for w,h,title in ((sw,sh,"복제 원본 전체 · 12개 그룹"),(cell,cell,"기준 첫 칸")):
             mark = RegionHighlight()
             mark.flash(x,y,w,h,"단축바 원본",title)
             self._source_marks.append(mark)
@@ -346,7 +354,7 @@ class SkillbarTab(QWidget):
         from .autofind_confirm import confirm_autofind
         confirm_autofind(self, "skillbar", "원본 단축바 12개 그룹",
                          self._on_anchor_selected,
-                         compatible=lambda box: abs(box[2] - SRC_W) <= 1 and abs(box[3] - SRC_H) <= 1)
+                         compatible=_compatible)
 
     def _update_anchor_label(self) -> None:
         self.clear_region_btn.setEnabled(self._anchor is not None)

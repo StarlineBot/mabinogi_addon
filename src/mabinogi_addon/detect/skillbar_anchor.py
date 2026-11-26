@@ -7,8 +7,7 @@ from .autofind_anchors import assets, candidates, native_band_candidates
 
 
 def _grid_score(frame, box):
-    x, y, w, h = box
-    crop = cv2.resize(frame[y:y + h, x:x + w], (1168, 89), interpolation=cv2.INTER_AREA)
+    crop = compose(frame, box)
     edges = cv2.Canny(cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY), 50, 120)
     edges = cv2.dilate(edges, np.ones((3, 3), np.uint8)) > 0
     scores = []
@@ -143,6 +142,177 @@ def _verify(frame, matches):
     return unique
 
 
+# ---- 작은 인터페이스(게임 인터페이스 크기를 줄인 화면, 테스터 11-26 image (34)) ----------------------------------
+# 아이콘·간격은 배율 s(≈0.77)로 줄지만 ◀n▶ 화살표는 원래 픽셀 그대로이고 두 줄 사이만 좁아진다(기본 49 → 37).
+# 둘째 단축바는 다른 UI(보라 원)에 밀려 기본 자리(620·s)가 아닐 수 있다 → 상자 폭에 실제 거리를 담는다:
+# 상자 = (x, y, (gap + 548)·s, 89·s), 배율 s = 높이/89, 둘째 단축바 시작 = gap·s(기본 gap 620 → 폭 1168·s).
+BLOCK_W = 548          # 한 단축바(4칸 × 3묶음) 폭(배율 1.0)
+STD_GAP = 620          # 기본 배치의 둘째 단축바 시작
+SMALL_CUTS = range(4, 21)   # 화살표 두 줄 사이를 줄인 양(px) — 작은 인터페이스 후보
+
+
+def layout(box) -> tuple[float, float]:
+    """단축바 상자 → (배율 s, 둘째 단축바 시작 gap — 배율 1.0 단위). 기본 배치는 (w/1168, 620)."""
+    x, y, w, h = box
+    s = h / 89.0
+    gap = w / s - BLOCK_W if s > 0 else STD_GAP
+    tol = 2 + 1168 * 0.6 / max(h, 1)  # 높이 반올림(±0.5px)이 폭 환산에 주는 오차(배율 0.75 → ±12)
+    return s, (STD_GAP if abs(gap - STD_GAP) <= tol else gap)
+
+
+def split_layout(box) -> bool:
+    """둘째 단축바가 기본 자리(620·s)보다 오른쪽에 떨어진 상자(작은 인터페이스)인가."""
+    if box is None or len(box) != 4 or box[3] <= 0:
+        return False
+    return layout(box)[1] > STD_GAP
+
+
+def source_box_of(anchor) -> tuple[int, int, int, int] | None:
+    """저장된 단축바 자리 {x, y[, w, h]} → 원본 상자(논리 좌표). w·h는 작은 인터페이스일 때만 저장된다."""
+    if not isinstance(anchor, dict) or not all(isinstance(anchor.get(k), (int, float)) for k in ("x", "y")):
+        return None
+    w, h = anchor.get("w"), anchor.get("h")
+    if isinstance(w, (int, float)) and isinstance(h, (int, float)) and split_layout((0, 0, w, h)):
+        return int(anchor["x"]), int(anchor["y"]), int(w), int(h)
+    return int(anchor["x"]), int(anchor["y"]), 1168, 89
+
+
+def anchor_of(box) -> dict:
+    """원본 상자 → 저장할 단축바 자리. 기본 배치는 예전처럼 {x, y}만(크기는 1168×89 고정)."""
+    x, y, w, h = (int(v) for v in box)
+    return {"x": x, "y": y, "w": w, "h": h} if split_layout(box) else {"x": x, "y": y}
+
+
+def compose(frame, box):
+    """상자 안 단축바를 기본 배치 원본(1168×89)으로 — 둘째 단축바가 떨어져 있으면 두 블록을 잘라 붙인다."""
+    x, y, w, h = (int(round(v)) for v in box)
+    s, gap = layout(box)
+    if gap == STD_GAP:
+        return cv2.resize(frame[y:y + h, x:x + w], (1168, 89), interpolation=cv2.INTER_AREA)
+    out = np.zeros((89, 1168, 3), np.uint8)
+    for src_x, dst_x in ((0, 0), (gap, STD_GAP)):
+        x0 = x + int(round(src_x * s))
+        part = frame[y:y + h, x0:x0 + int(round(BLOCK_W * s))]
+        if part.size:
+            out[:, dst_x:dst_x + BLOCK_W] = cv2.resize(part, (BLOCK_W, 89), interpolation=cv2.INTER_AREA)
+    return out
+
+
+def _cell_map(edges_cum_rows, edges_cum_cols, n):
+    """모든 (y, x)에서 n×n 칸 테두리 점수(_grid_score와 같은 규칙: 위·아래·왼·오른 안쪽 1줄 평균)."""
+    rows, cols = edges_cum_rows, edges_cum_cols
+    h, w = rows.shape[0], rows.shape[1] - 1
+    if h < n or w < n:
+        return None
+    hh, ww = h - n + 1, w - n + 1
+
+    def hline(dy):  # y+dy 줄, x..x+n
+        r = rows[dy:dy + hh]
+        return r[:, n:n + ww] - r[:, 0:ww]
+
+    def vline(dx):  # x+dx 열, y..y+n
+        c = cols[:, dx:dx + ww]
+        return c[n:n + hh] - c[0:hh]
+    return (hline(1) + hline(n - 2) + vline(1) + vline(n - 2)) / (4.0 * n)
+
+
+_SMALL_CELLS = [(ry, gx + c * 44) for ry in (0, 49) for gx in (0, 188, 376) for c in range(4)]
+
+
+def _block_maps(edges, s):
+    """배율 s 한 단축바(24칸) — 모든 (y, x) 시작점의 칸 평균 점수 지도와 묶음(6) 최소 점수 지도."""
+    e = edges.astype(np.float32)
+    rows = np.pad(np.cumsum(e, axis=1), ((0, 0), (1, 0)))
+    cols = np.pad(np.cumsum(e, axis=0), ((1, 0), (0, 0)))
+    cells = _cell_map(rows, cols, max(3, int(round(40 * s))))
+    if cells is None:
+        return None, None
+    offs = [(int(round(ry * s)), int(round(cx * s))) for ry, cx in _SMALL_CELLS]
+    hh = cells.shape[0] - max(o[0] for o in offs)
+    ww = cells.shape[1] - max(o[1] for o in offs)
+    if hh <= 0 or ww <= 0:
+        return None, None
+    groups = []
+    for g in range(6):
+        acc = np.zeros((hh, ww), np.float32)
+        for dy, dx in offs[g * 4:g * 4 + 4]:
+            acc += cells[dy:dy + hh, dx:dx + ww]
+        groups.append(acc / 4)
+    groups = np.stack(groups)
+    return groups.mean(axis=0), groups.min(axis=0)
+
+
+def _small_ui(frame, templates, trace):
+    """작은 인터페이스: 줄 사이를 줄인 화살표를 위쪽 띠 원본에서 찾고, 그 옆 단축바 격자(배율 s)와 떨어진 둘째 단축바를 찾는다."""
+    anchor, mask = templates.get("anchor"), templates.get("mask")
+    if anchor is None or mask is None or frame is None or getattr(frame, "ndim", 0) != 3:
+        return None
+    band = frame[:min(frame.shape[0], BAND_HEIGHT)]
+    if band.shape[0] < anchor.shape[0] or band.shape[1] < anchor.shape[1]:
+        return None
+    # 위 화살표(◀n▶ 한 줄)만 먼저 찾고, 봉우리마다 줄 사이를 줄인 전체 화살표로 확인한다(전체 띠를 17번 비교하면 2초 넘게 걸림).
+    top = np.nan_to_num(cv2.matchTemplate(band, anchor[:20], cv2.TM_CCORR_NORMED, mask=mask[:20]),
+                        nan=0, posinf=0, neginf=0)
+    hits = []
+    for _ in range(6):
+        _, score, _, (px, py) = cv2.minMaxLoc(top)
+        if score < 0.97:
+            break
+        top[max(0, py - 10):py + 11, max(0, px - 20):px + 21] = 0
+        crop = band[max(0, py - 2):py + anchor.shape[0] + 2, max(0, px - 2):px + anchor.shape[1] + 2]
+        for cut in SMALL_CUTS:
+            a = np.vstack([anchor[:20], anchor[20 + cut:]])
+            m = np.vstack([mask[:20], mask[20 + cut:]])
+            if crop.shape[0] < a.shape[0] or crop.shape[1] < a.shape[1]:
+                continue
+            r = np.nan_to_num(cv2.matchTemplate(crop, a, cv2.TM_CCORR_NORMED, mask=m), nan=0, posinf=0, neginf=0)
+            _, sc, _, (cx, cy) = cv2.minMaxLoc(r)
+            if sc >= 0.985:
+                hits.append((float(sc), cut, max(0, px - 2) + cx, max(0, py - 2) + cy))
+    trace["small_ui_anchors"] = [list(h) for h in hits]
+    for _score, cut, ax, ay in sorted(hits, reverse=True)[:3]:
+        top_y = max(0, ay - 40)
+        strip = frame[top_y:min(frame.shape[0], ay + 120)]
+        edges = cv2.dilate(cv2.Canny(cv2.cvtColor(strip, cv2.COLOR_BGR2GRAY), 50, 120), np.ones((3, 3), np.uint8)) > 0
+        s0 = (49 - cut) / 49.0
+        best = None
+        for s in np.arange(s0 - 0.03, s0 + 0.031, 0.005):
+            mean, low = _block_maps(edges, s)
+            if mean is None:
+                continue
+            # 첫 단축바: 화살표 왼쪽에 붙어 있다(블록 끝 ≈ 화살표 왼쪽)
+            x_lo, x_hi = int(round(ax - BLOCK_W * s)) - 14, int(round(ax - BLOCK_W * s)) + 15
+            y_lo, y_hi = ay - top_y - 14, ay - top_y + 3
+            x_lo, y_lo = max(0, x_lo), max(0, y_lo)
+            win = mean[y_lo:y_hi, x_lo:x_hi]
+            if win.size == 0:
+                continue
+            iy, ix = np.unravel_index(int(np.argmax(win)), win.shape)
+            if best is None or win[iy, ix] > best[0]:
+                best = (float(win[iy, ix]), x_lo + ix, y_lo + iy, float(s), mean, low)
+        if best is None:
+            continue
+        score1, x1, y1, s, mean, low = best
+        if not (low[y1, x1] >= 0.60 and score1 >= 0.80):
+            continue
+        # 둘째 단축바: 같은 줄 오른쪽 어딘가
+        start = int(x1 + BLOCK_W * s + 20 * s)
+        row_mean, row_low = mean[y1, start:], low[y1, start:]
+        if row_mean.size == 0:
+            trace["small_ui_rejection"] = "second_block_not_found"
+            continue
+        i2 = int(np.argmax(row_mean))
+        if not (row_low[i2] >= 0.60 and row_mean[i2] >= 0.80):
+            trace["small_ui_rejection"] = "second_block_not_found"
+            continue
+        gap = (start + i2 - x1) / s
+        box = (int(x1), int(y1 + top_y), int(round((gap + BLOCK_W) * s)), int(round(89 * s)))
+        trace.update(small_ui={"scale": round(s, 3), "gap": round(float(gap), 1), "first": round(score1, 3),
+                               "second": round(float(row_mean[i2]), 3)})
+        return box
+    return None
+
+
 def locate_skillbar(frame, templates=None, diagnostics=None):
     trace = diagnostics if diagnostics is not None else {}
     templates = assets("skillbar") if templates is None else templates
@@ -162,6 +332,11 @@ def locate_skillbar(frame, templates=None, diagnostics=None):
             trace.update(stage="native_band", result=list(valid[0][1]))
             return valid[0][1]
         trace["band_valid"] = [list(b) for _, b in valid]
+    # 1.5단계: 작은 인터페이스(화살표는 원래 크기, 아이콘만 작음 — 둘째 단축바가 떨어져 있을 수 있음)
+    small = _small_ui(frame, templates, trace)
+    if small is not None:
+        trace.update(stage="small_ui", result=list(small))
+        return small
     # 2단계: 기존 전체 탐색(축소 → 원본 정밀). 배율마다 봉우리 10개까지 확인한다.
     matches = candidates(frame, templates, trace, peaks=10)
     if trace.get("rejection") in ("invalid_frame", "invalid_mask"):

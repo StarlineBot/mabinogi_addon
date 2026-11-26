@@ -30,12 +30,13 @@ class Target:
 
 
 def skill_cells(source_box) -> list[Target]:
-    """단축바 소스 사각형(1168×89 기준 배율) → 칸 48개."""
-    from ..ui.skillbar_mirror import BLOCK_X, CELLS, GROUP_DX, ICON, IPITCH, ROW_Y
+    """단축바 소스 사각형(1168×89 기준 배율, 작은 인터페이스는 둘째 단축바가 떨어진 폭) → 칸 48개."""
+    from ..ui.skillbar_mirror import CELLS, GROUP_DX, ICON, IPITCH, ROW_Y
+    from .skillbar_anchor import layout
     x, y, w, _h = source_box
-    s = w / 1168.0
+    s, gap = layout(source_box)
     out = []
-    for b, bx in enumerate(BLOCK_X):
+    for b, bx in enumerate((0, gap)):
         for r, ry in enumerate(ROW_Y):
             for g, gx in enumerate(GROUP_DX):
                 for i in range(CELLS):
