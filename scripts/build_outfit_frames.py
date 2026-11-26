@@ -51,12 +51,12 @@ FACE_FIX = {("레나", "lab"): ("walk",)}
 HALO_FIT = {"다래": ("drag",)}
 # 다래 하얀 오프숄더 drag_0만 다리 편 서 있는 자세로 그려져(키 282 vs 249~258, 몸통 폭 198 vs 179~191) 잡을 때 몸이 커짐 →
 # 이번 배포는 drag_1 그림으로 대신(반복 = drag_1, drag_1, drag_2, drag_3, fall도 drag_1). 새 drag_0은 사용자에게 물어 따로.
-FRAME_COPY = {("다래", "white_offshoulder"): (("drag_1", "drag_0"),),
-              }
+FRAME_COPY: dict = {}   # 다래 오프숄더 drag_0 임시 복사는 전체 다시 그림(11-26)으로 없앰
 # 기획이 다시 그려 앱 크기로 맞춘 칸(배경 정리·기본 옷 같은 칸 키 × 머리 맞춤, 11-26) — 템플릿 칸 대신 그대로 넣고 색 맞추기만 같이
 OVERRIDES = {
     ("이안", "guild_uniform"): ("모션별/다시_앱크기", tuple(f"drag_{i}" for i in range(4))),
     ("아리아", "tshirt"): ("모션별/다시_앱크기", ("drag_0", "drag_1", "land_0", "land_1", "land_2")),
+    ("다래", "white_offshoulder"): ("다시_앱크기", None),   # 전체 다시 그림(사용자 확인 11-26) — 폴더의 75장 전부
 }
 # 그림 후처리(scripts/outfit_fixes) — 옷 → 할 일
 FIXES = {("이안", "guild_uniform"): ("one_coat_line",), ("이안", "vest_tie"): ("vest_badge",)}   # 옷 그림 끌기 칸마다 몸 크기가 달라(후광 폭 142→163) 후광 폭으로 칸 배율을 맞춤
@@ -204,6 +204,11 @@ def main() -> None:
         built = redraw(folder, key, build(folder, outfit_dir, TEMPLATES.get((folder, key), DEFAULT_TEMPLATE)), outfit_dir)
         if (folder, key) in OVERRIDES:
             sub, names = OVERRIDES[(folder, key)]
+            if names is None:
+                names = sorted(p.stem for p in (outfit_dir / sub).glob("*.png"))
+                missing = set(built) - set(names)
+                if missing:
+                    raise SystemExit(f"{folder} {key} 다시 그림에 없는 칸: {sorted(missing)}")
             for name in names:
                 built[name] = imread(outfit_dir / sub / f"{name}.png", cv2.IMREAD_UNCHANGED)
         frames = harmonize_colors(built, ref)
