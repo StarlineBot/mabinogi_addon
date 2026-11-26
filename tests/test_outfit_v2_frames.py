@@ -163,12 +163,12 @@ def test_walk_height_range_within_two_percent(char, outfit):
 
 def test_lena_lab_walk_face_taken_from_base_walk():
     """QA 11-26: 레나 연구실 차림 걷기 얼굴 옆선 — 기본 걷기 얼굴을 옮겨 붙임(scripts/outfit_face_fix). 고치기 전 피부 모양 IoU
-    0.70~0.77 → 지금 0.78~0.84(귀는 옷 그림 것이라 1이 아님)."""
+    0.70~0.77 → 기준 장 0.78(귀는 옷 그림 것이라 1이 아님)."""
     from scripts.outfit_face_fix import align
-    for i in range(8):
-        base = _read(CHARS / "레나" / f"walk_{i}.png")
-        lab = _read(CHARS / "레나" / "outfits" / "lab" / f"walk_{i}.png")
-        assert align(base, lab)[1] >= 0.77, i
+    ious = [align(_read(CHARS / "레나" / f"walk_{i}.png"), _read(CHARS / "레나" / "outfits" / "lab" / f"walk_{i}.png"))[1]
+            for i in range(8)]
+    # 머리는 walk_0 한 장을 모든 장에 붙임(아래 테스트) — 기준 장은 기본 walk_0 얼굴, 나머지는 기본 걷기 장마다의 얼굴과 조금 다름
+    assert ious[0] >= 0.78 and min(ious) >= 0.74, ious
 
 
 @pytest.mark.parametrize("outfit", ["frill_pajama", "white_offshoulder"])
@@ -193,3 +193,17 @@ def test_aria_summer_dress_pet_matches_tshirt_band():
     for name in ["stand_0", "stand_1"] + [f"pet_{i}" for i in range(6)]:
         r = band_width(_read(summer / f"{name}.png")) / band_width(_read(tshirt / f"{name}.png"))
         assert abs(r - 0.955) <= 0.02, (name, r)
+
+
+def test_lena_lab_walk_head_is_one_drawing():
+    """QA 11-26 '레나 lab 걷기 머리가 자글자글': 머리(정수리 ~ 턱 아래)는 walk_0 한 장을 장마다 정렬해 붙임 — 다시 붙여도
+    머리 영역이 거의 그대로(평균 |ΔL| ≤ 2)."""
+    from scripts.outfit_face_fix import CUT, FEATHER, unify_head
+    frames = [_read(CHARS / "레나" / "outfits" / "lab" / f"walk_{i}.png") for i in range(8)]
+    again = unify_head(frames)
+    for i, (a, b) in enumerate(zip(frames, again)):
+        top = round(a.shape[0] * CUT) - FEATHER
+        la = cv2.cvtColor(np.ascontiguousarray(a[:top, :, :3]), cv2.COLOR_BGR2LAB)[..., 0].astype(float)
+        lb = cv2.cvtColor(np.ascontiguousarray(b[:top, :, :3]), cv2.COLOR_BGR2LAB)[..., 0].astype(float)
+        solid = (a[:top, :, 3] > 200) & (b[:top, :, 3] > 200)
+        assert np.abs(la - lb)[solid].mean() * 100 / 255 <= 2, i

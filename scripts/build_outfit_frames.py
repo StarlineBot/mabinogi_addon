@@ -215,6 +215,11 @@ def main() -> None:
             for name in [n for n in frames if group_of(n) in FACE_FIX[(folder, key)]]:
                 base = imread(APP_ROOT / folder / f"{name}.png", cv2.IMREAD_UNCHANGED)
                 frames[name] = fix_face(frames[name], base, frames["stand_0"])
+            # 머리는 걷는 동안 움직이지 않는 부분 — 기준 장(walk_0) 머리 하나로 맞춤(장마다 땋은 머리·하이라이트가 달라 지글거림, QA 11-26)
+            from scripts.outfit_face_fix import unify_head
+            walk = sorted((n for n in frames if group_of(n) == "walk"), key=lambda n: int(n.rsplit("_", 1)[1]))
+            for name, image in zip(walk, unify_head([frames[n] for n in walk])):
+                frames[name] = image
         dest = APP_ROOT / folder / "outfits" / key
         dest.mkdir(parents=True, exist_ok=True)
         for old in dest.glob("*.png"):
