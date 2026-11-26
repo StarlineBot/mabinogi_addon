@@ -255,3 +255,11 @@ def test_water_holds_showing_can_and_pot():
     seq = water.sequence(random.Random(1))
     assert {n: d for n, d in seq if d != mo.FRAME} == {"motion_water_6": 1.2}
     assert seq[0][0] == "motion_water_0" and seq[-2] == ("motion_water_6", 1.2)
+
+
+def test_wreath_worn_frame_holds():
+    """사용자 11-26(후보 #342): 아리아 화관 — 화관 쓰고 두 팔 든 5번을 2.0초 보여 줌(모든 옷 공통)."""
+    wreath = mo.MOTIONS["아리아"][1]
+    seq = wreath.sequence(random.Random(1))
+    assert {n: d for n, d in seq if d != mo.FRAME} == {"motion_wreath_5": 2.0}
+    assert [n for n, _d in seq[-3:]] == ["motion_wreath_5", "motion_wreath_6", "motion_wreath_7"]
