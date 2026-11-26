@@ -1,0 +1,45 @@
+{
+ "끌기": {
+  "cols": 2,
+  "rows": 1,
+  "cell": [
+   249,
+   330
+  ],
+  "frames": [
+   "drag_0",
+   "drag_1"
+  ]
+ },
+ "착지": {
+  "cols": 3,
+  "rows": 1,
+  "cell": [
+   249,
+   330
+  ],
+  "frames": [
+   "land_0",
+   "land_1",
+   "land_2"
+  ]
+ },
+ "걷기": {
+  "cols": 4,
+  "rows": 2,
+  "cell": [
+   249,
+   330
+  ],
+  "frames": [
+   "walk_0",
+   "walk_1",
+   "walk_2",
+   "walk_3",
+   "walk_4",
+   "walk_5",
+   "walk_6",
+   "walk_7"
+  ]
+ }
+}
