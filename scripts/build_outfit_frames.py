@@ -52,8 +52,12 @@ HALO_FIT = {"다래": ("drag",)}
 # 다래 하얀 오프숄더 drag_0만 다리 편 서 있는 자세로 그려져(키 282 vs 249~258, 몸통 폭 198 vs 179~191) 잡을 때 몸이 커짐 →
 # 이번 배포는 drag_1 그림으로 대신(반복 = drag_1, drag_1, drag_2, drag_3, fall도 drag_1). 새 drag_0은 사용자에게 물어 따로.
 FRAME_COPY = {("다래", "white_offshoulder"): (("drag_1", "drag_0"),),
-              # 이안 길드 정복 끌기: 코트 모양이 장마다 완전히 달라짐 — 새 그림 올 때까지 맞는 두 장(0·2)만 반복(QA·기획 11-26)
-              ("이안", "guild_uniform"): (("drag_0", "drag_1"), ("drag_2", "drag_3"))}
+              }
+# 기획이 다시 그려 앱 크기로 맞춘 칸(배경 정리·기본 옷 같은 칸 키 × 머리 맞춤, 11-26) — 템플릿 칸 대신 그대로 넣고 색 맞추기만 같이
+OVERRIDES = {
+    ("이안", "guild_uniform"): ("모션별/다시_앱크기", tuple(f"drag_{i}" for i in range(4))),
+    ("아리아", "tshirt"): ("모션별/다시_앱크기", ("drag_0", "drag_1", "land_0", "land_1", "land_2")),
+}
 # 그림 후처리(scripts/outfit_fixes) — 옷 → 할 일
 FIXES = {("이안", "guild_uniform"): ("one_coat_line",), ("이안", "vest_tie"): ("vest_badge",)}   # 옷 그림 끌기 칸마다 몸 크기가 달라(후광 폭 142→163) 후광 폭으로 칸 배율을 맞춤
 HALO_BAND = 0.09                 # 맨 위 9% 띠 = 날개 달린 후광
@@ -197,8 +201,12 @@ def harmonize_colors(frames: dict[str, np.ndarray], ref_name: str) -> dict[str, 
 def main() -> None:
     for (folder, key), (name, ref) in OUTFITS.items():
         outfit_dir = ASSETS / folder / "의상" / name
-        frames = harmonize_colors(redraw(folder, key, build(folder, outfit_dir, TEMPLATES.get((folder, key), DEFAULT_TEMPLATE)),
-                                         outfit_dir), ref)
+        built = redraw(folder, key, build(folder, outfit_dir, TEMPLATES.get((folder, key), DEFAULT_TEMPLATE)), outfit_dir)
+        if (folder, key) in OVERRIDES:
+            sub, names = OVERRIDES[(folder, key)]
+            for name in names:
+                built[name] = imread(outfit_dir / sub / f"{name}.png", cv2.IMREAD_UNCHANGED)
+        frames = harmonize_colors(built, ref)
         from scripts.build_walk_v2 import FRAMES, OUTFIT_WALKS
         walk_dir = OUTFIT_WALKS.get((folder, key))
         if walk_dir is not None:   # 걷기 8장은 정리해 둔 PNG 그대로(색 맞추기·배율 없음)

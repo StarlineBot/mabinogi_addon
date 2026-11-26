@@ -226,14 +226,14 @@ def test_dare_offshoulder_drag_body_width_close_to_base():
 
 
 def test_ian_guild_coat_has_one_front_gold_line_and_drag_uses_two_drawings():
-    """QA 11-26: 길드 정복 코트 앞자락 세로 금줄은 한 줄(원본 전신) — 두 줄로 그려진 칸은 오른쪽 줄 지움. 끌기는 0·2만 반복."""
+    """QA 11-26: 길드 정복 코트 앞자락 세로 금줄은 한 줄(원본 전신) — 두 줄로 그려진 칸은 오른쪽 줄 지움. 끌기는 다시 그린 4장."""
     from scripts.outfit_fixes import coat_lines
     folder = CHARS / "이안" / "outfits" / "guild_uniform"
     for path in folder.glob("*.png"):
         if path.stem != "card":
             assert len(coat_lines(_read(path), min_len=15)) <= 1, path.stem
-    assert np.array_equal(_read(folder / "drag_0.png"), _read(folder / "drag_1.png"))
-    assert np.array_equal(_read(folder / "drag_2.png"), _read(folder / "drag_3.png"))
+    drags = [_read(folder / f"drag_{i}.png") for i in range(4)]   # 기획이 다시 그린 4장(11-26) — 복사 아님
+    assert not np.array_equal(drags[0], drags[1]) and not np.array_equal(drags[2], drags[3])
 
 
 # 배지 자리를 못 정하거나(찻잔·손이 넥타이를 가림) 손이 가슴을 가린 칸 — 그림 그대로
@@ -252,3 +252,11 @@ def test_ian_vest_badge_on_every_front_frame():
         _img, state = add_badge(_read(path), stand)
         assert state == "present", (name, state)
     assert BADGE_BOX[2] > 0
+
+
+def test_aria_tshirt_redrawn_walk_height_matches_stand():
+    """기획 11-26 다시 그린 티셔츠 걷기: 키 중앙값 ÷ 그 옷 stand_0 1.00~1.02."""
+    folder = CHARS / "아리아" / "outfits" / "tshirt"
+    heights = sorted(_read(folder / f"walk_{i}.png").shape[0] for i in range(8))
+    ratio = (heights[3] + heights[4]) / 2 / _read(folder / "stand_0.png").shape[0]
+    assert 1.0 <= ratio <= 1.02, ratio
