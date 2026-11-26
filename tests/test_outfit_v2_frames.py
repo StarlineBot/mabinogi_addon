@@ -223,3 +223,32 @@ def test_dare_offshoulder_drag_body_width_close_to_base():
         ws = [body(_read(folder / f"drag_{i}.png")) for i in range(4)]
         return (max(ws) - min(ws)) / min(ws)
     assert spread(CHARS / "다래" / "outfits" / "white_offshoulder") <= spread(CHARS / "다래") + 0.045
+
+
+def test_ian_guild_coat_has_one_front_gold_line_and_drag_uses_two_drawings():
+    """QA 11-26: 길드 정복 코트 앞자락 세로 금줄은 한 줄(원본 전신) — 두 줄로 그려진 칸은 오른쪽 줄 지움. 끌기는 0·2만 반복."""
+    from scripts.outfit_fixes import coat_lines
+    folder = CHARS / "이안" / "outfits" / "guild_uniform"
+    for path in folder.glob("*.png"):
+        if path.stem != "card":
+            assert len(coat_lines(_read(path), min_len=15)) <= 1, path.stem
+    assert np.array_equal(_read(folder / "drag_0.png"), _read(folder / "drag_1.png"))
+    assert np.array_equal(_read(folder / "drag_2.png"), _read(folder / "drag_3.png"))
+
+
+# 배지 자리를 못 정하거나(찻잔·손이 넥타이를 가림) 손이 가슴을 가린 칸 — 그림 그대로
+BADGE_SKIP = {"motion_tea_0", "motion_tea_1", "motion_tea_2", "motion_tea_3", "motion_tidy_0", "motion_tidy_1", "motion_tidy_2"}
+
+
+def test_ian_vest_badge_on_every_front_frame():
+    """QA 11-26: 조끼 가슴 금 방패 배지가 서 있기·시계·끌기에만 있던 것 → 앞모습 칸(걷기 빼고) 모두에 stand_1 배지."""
+    from scripts.outfit_fixes import BADGE_BOX, add_badge
+    folder = CHARS / "이안" / "outfits" / "vest_tie"
+    stand = _read(folder / "stand_1.png")
+    for path in sorted(folder.glob("*.png")):
+        name = path.stem
+        if name in ("card", "stand_1") or name.startswith("walk_") or name in BADGE_SKIP:
+            continue
+        _img, state = add_badge(_read(path), stand)
+        assert state == "present", (name, state)
+    assert BADGE_BOX[2] > 0

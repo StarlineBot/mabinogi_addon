@@ -68,7 +68,7 @@
         "tests/test_outfit_v2_frames.py",
         "tests/test_character.py"
       ],
-      "reason": "프레임표 v2 옷 6벌(호감도 50 레나·다래 + 100 네 벌, 칸마다 머리 맞춤·아리아 여름 드레스는 머리 배율 중앙값으로 모자 몫 뺌·큰 시트는 템플릿 크기로) — 기존 옷 결과 그대로(해시 같음) · 한 동작 묶음 안 머리 배율 하나(중앙값)·레나 lab 걷기 얼굴 옮겨 붙이기(QA 11-26) · 다래 끌기 후광 폭으로 칸 배율 · 오프숄더 drag_0 = drag_1"
+      "reason": "프레임표 v2 옷 6벌(호감도 50 레나·다래 + 100 네 벌, 칸마다 머리 맞춤·아리아 여름 드레스는 머리 배율 중앙값으로 모자 몫 뺌·큰 시트는 템플릿 크기로) — 기존 옷 결과 그대로(해시 같음) · 한 동작 묶음 안 머리 배율 하나(중앙값)·레나 lab 걷기 얼굴 옮겨 붙이기(QA 11-26) · 다래 끌기 후광 폭으로 칸 배율 · 오프숄더 drag_0 = drag_1 · 이안 정복 끌기 0·2 반복·FIXES 후처리"
     },
     "src/mabinogi_addon/assets/characters/다래/outfits/frill_pajama/stand_0.png": {
       "tests": [
@@ -236,6 +236,12 @@
         "tests/test_navigation.py"
       ],
       "reason": "설정 제작자 소개 아래 출처 두 줄"
+    },
+    "scripts/outfit_fixes.py": {
+      "tests": [
+        "tests/test_outfit_v2_frames.py"
+      ],
+      "reason": "이안 길드 정복 코트 금줄 한 줄(inpaint)·조끼 가슴 배지 붙이기"
     }
   }
 }
