@@ -81,9 +81,18 @@ for p in parts:
         if not os.path.exists(bp): rep.append((name,"기본 없음")); continue
         base=_tight(imread(bp,-1)); k0=base.shape[0]/f.shape[0]; sc=best_scale(top(base),top(scaled(f,k0)),.7,1.2,101)
         todo.append((name,f,k0,sc,base.shape[0]))
-med=float(np.median([t[3] for t in todo])) if HAT else 1.0
-print("머리 배율 중앙값",round(med,3),"(모자 보정)" if HAT else "")
+side=lambda n:n.startswith("walk_")          # 옆모습은 모자가 머리를 덜 가려 보정을 따로
+med=float(np.median([t[3] for t in todo if not side(t[0])])) if HAT else 1.0
+meds=float(np.median([t[3] for t in todo if side(t[0])] or [1.0])) if HAT else 1.0
+print("머리 배율 중앙값 앞",round(med,3),"옆",round(meds,3),"(모자 보정)" if HAT else "")
+# 옆모습(걷기)은 '걷기 키 ÷ 서 있기 키'를 기본 캐릭터와 같게(QA ③) — 모자 때문에 머리 맞춤만으론 어긋남
+wf=1.0
+if HAT and any(side(t[0]) for t in todo):
+    st=[t for t in todo if t[0]=="stand_0"][0]; sh=st[1].shape[0]*st[2]*min(1.15,max(0.85,st[3]/med))
+    wh=float(np.median([t[1].shape[0]*t[2]*min(1.15,max(0.85,t[3]/meds)) for t in todo if side(t[0])]))
+    bw=float(np.median([_tight(imread(A+f"walk_{i}.png",-1)).shape[0] for i in range(8)])); bs=_tight(imread(A+"stand_0.png",-1)).shape[0]
+    wf=(bw/bs)/(wh/sh); print("걷기 비율 맞춤",round(wh/sh,3),"→",round(bw/bs,3),"배",round(wf,3))
 for name,f,k0,sc,bh in todo:
-    s2=min(1.15,max(0.85,sc/med)); g=scaled(f,k0*s2); imwrite(out+name+".png",g); rep.append((name,round(s2,3),g.shape[0],bh))
+    s2=min(1.15,max(0.85,sc/(meds if side(name) else med)))*(wf if side(name) else 1.0); g=scaled(f,k0*s2); imwrite(out+name+".png",g); rep.append((name,round(s2,3),g.shape[0],bh))
 print("칸",len(rep),"문제",[r for r in rep if not isinstance(r[1],float)])
 print("머리보정 ±6% 밖",[r for r in rep if isinstance(r[1],float) and abs(r[1]-1)>0.06])
