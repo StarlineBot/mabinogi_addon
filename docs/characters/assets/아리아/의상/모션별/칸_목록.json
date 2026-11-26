@@ -1,0 +1,233 @@
+{
+ "서있기": {
+  "cols": 2,
+  "rows": 1,
+  "cell": [
+   249,
+   330
+  ],
+  "frames": [
+   "stand_0",
+   "stand_1"
+  ]
+ },
+ "머리쓰다듬기": {
+  "cols": 4,
+  "rows": 1,
+  "cell": [
+   249,
+   330
+  ],
+  "frames": [
+   "hair_0",
+   "hair_1",
+   "hair_2",
+   "hair_3"
+  ]
+ },
+ "걷기": {
+  "cols": 4,
+  "rows": 2,
+  "cell": [
+   249,
+   330
+  ],
+  "frames": [
+   "walk_0",
+   "walk_1",
+   "walk_2",
+   "walk_3",
+   "walk_4",
+   "walk_5",
+   "walk_6",
+   "walk_7"
+  ]
+ },
+ "기지개": {
+  "cols": 3,
+  "rows": 2,
+  "cell": [
+   249,
+   330
+  ],
+  "frames": [
+   "stretch_0",
+   "stretch_1",
+   "stretch_2",
+   "stretch_3",
+   "stretch_4",
+   "stretch_5"
+  ]
+ },
+ "놀람": {
+  "cols": 4,
+  "rows": 1,
+  "cell": [
+   249,
+   330
+  ],
+  "frames": [
+   "surprise_0",
+   "surprise_1",
+   "surprise_2",
+   "surprise_3"
+  ]
+ },
+ "끌기": {
+  "cols": 2,
+  "rows": 1,
+  "cell": [
+   249,
+   330
+  ],
+  "frames": [
+   "drag_0",
+   "drag_1"
+  ]
+ },
+ "착지": {
+  "cols": 3,
+  "rows": 1,
+  "cell": [
+   249,
+   330
+  ],
+  "frames": [
+   "land_0",
+   "land_1",
+   "land_2"
+  ]
+ },
+ "넘어졌다일어나기": {
+  "cols": 3,
+  "rows": 1,
+  "cell": [
+   249,
+   330
+  ],
+  "frames": [
+   "getup_0",
+   "getup_1",
+   "getup_2"
+  ]
+ },
+ "쓰다듬기": {
+  "cols": 3,
+  "rows": 2,
+  "cell": [
+   249,
+   330
+  ],
+  "frames": [
+   "pet_0",
+   "pet_1",
+   "pet_2",
+   "pet_3",
+   "pet_4",
+   "pet_5"
+  ]
+ },
+ "웅크리기": {
+  "cols": 3,
+  "rows": 1,
+  "cell": [
+   249,
+   330
+  ],
+  "frames": [
+   "crouch_0",
+   "crouch_1",
+   "crouch_2"
+  ]
+ },
+ "구석앉기": {
+  "cols": 4,
+  "rows": 1,
+  "cell": [
+   249,
+   330
+  ],
+  "frames": [
+   "sit_0",
+   "sit_1",
+   "sit_2",
+   "sit_3"
+  ]
+ },
+ "구석에서일어나기": {
+  "cols": 3,
+  "rows": 1,
+  "cell": [
+   249,
+   330
+  ],
+  "frames": [
+   "rise_0",
+   "rise_1",
+   "rise_2"
+  ]
+ },
+ "말하기": {
+  "cols": 4,
+  "rows": 5,
+  "cell": [
+   249,
+   330
+  ],
+  "frames": [
+   "talk_a_base_0",
+   "talk_a_blink_0",
+   "talk_a_emph2_0",
+   "talk_a_emph_0",
+   "talk_a_m1_0",
+   "talk_a_m2_0",
+   "talk_a_mid_0",
+   "talk_b_base_0",
+   "talk_b_blink_0",
+   "talk_b_emph2_0",
+   "talk_b_emph_0",
+   "talk_b_m1_0",
+   "talk_b_m2_0",
+   "talk_b_mid_0",
+   "talk_happy_0",
+   "talk_happy_1",
+   "talk_laugh_0"
+  ]
+ },
+ "모션25_물주기": {
+  "cols": 4,
+  "rows": 2,
+  "cell": [
+   249,
+   330
+  ],
+  "frames": [
+   "motion:물주기(25)_0",
+   "motion:물주기(25)_1",
+   "motion:물주기(25)_2",
+   "motion:물주기(25)_3",
+   "motion:물주기(25)_4",
+   "motion:물주기(25)_5",
+   "motion:물주기(25)_6",
+   "motion:물주기(25)_7"
+  ]
+ },
+ "모션75_화관": {
+  "cols": 4,
+  "rows": 2,
+  "cell": [
+   249,
+   330
+  ],
+  "frames": [
+   "motion:화관(75)_0",
+   "motion:화관(75)_1",
+   "motion:화관(75)_2",
+   "motion:화관(75)_3",
+   "motion:화관(75)_4",
+   "motion:화관(75)_5",
+   "motion:화관(75)_6",
+   "motion:화관(75)_7"
+  ]
+ }
+}
