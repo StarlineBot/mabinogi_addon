@@ -2052,7 +2052,7 @@ class MainWindow(QMainWindow):
             creator = False
         tabs = self._tabs
         if tabs.indexOf(self._character_scroll) < 0:
-            tabs.insertTab(tabs.indexOf(self._settings_scroll), self._character_scroll, "캐릭터")
+            tabs.insertTab(tabs.indexOf(self._settings_scroll), self._character_scroll, "동행")
         self.settings_tab.set_voice_visible(False)
         self.character_tab.set_creator(creator)
         self.character_tools.set_enabled(True)

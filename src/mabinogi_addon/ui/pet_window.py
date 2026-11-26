@@ -35,13 +35,17 @@ def load_frames(folder: str, profile: brain_mod.Profile | None = None, outfit: s
     """그 캐릭터 동작에 쓰는 프레임만 읽는다(assets/characters/<폴더>/<이름>.png).
     outfit(착장 key)이면 outfits/<key>/<이름>.png를 먼저 — 없는 프레임은 기본 옷 그대로(착장 SD는 아직 없음, 기획 11-25)."""
     base = paths.resource_dir() / "characters" / folder
-    dressed = base / "outfits" / outfit if outfit else None
+    dressed = base / "outfits" / outfit if outfit and (base / "outfits" / outfit).is_dir() else None   # SD 없는 옷 = 기본 그대로
     profile = profile or brain_mod.PROFILES.get(folder, brain_mod.DARE)
     out = {}
     names = {name for frames, _times, _loop in profile.anims.values() for name in frames}
+    from ..character import motions
+    motion_names = motions.frame_names(folder)   # 호감도 모션 — 입은 옷 폴더에 있는 것만(기본 옷 모션으로 대신하지 않음)
     anchors = _anchors(base)
-    for name in sorted(names):
+    for name in sorted(names | motion_names):
         path = dressed / f"{name}.png" if dressed is not None and (dressed / f"{name}.png").is_file() else base / f"{name}.png"
+        if name in motion_names and dressed is not None and path.parent != dressed:
+            continue
         image = QImage(str(path))
         if not image.isNull():
             if name in anchors:  # 프레임별 그리기 오프셋(저장 px) — 예: 이안 떨어지기 두 장의 머리 위치 맞춤

@@ -19,7 +19,7 @@ def test_creator_entry_no_automatic_measurement_and_access_revocation(window,mon
     monkeypatch.setattr(module, 'optimization_available',lambda:True)
     c.refresh_access()
     assert w._tabs.tabText(w._tabs.indexOf(c.panel))=='최적화'
-    assert [w._tabs.tabText(i) for i in range(w._tabs.count())]==['전투 보조','파티 모집','편의기능','최적화','블랙박스','캐릭터','설정']  # 0.16.0: 로그인 사용자는 블랙박스 탭도 보임, 0.22.1: 최적화 · 블랙박스 순서, 0.55.9: 캐릭터(베타)
+    assert [w._tabs.tabText(i) for i in range(w._tabs.count())]==['전투 보조','파티 모집','편의기능','최적화','블랙박스','동행','설정']  # 0.16.0: 로그인 사용자는 블랙박스 탭도 보임, 0.22.1: 최적화 · 블랙박스 순서, 0.55.9: 캐릭터(베타)
     assert not hasattr(w.settings_tab,'optimization_button')
     c.open()
     assert c.panel is not None and not c.frames

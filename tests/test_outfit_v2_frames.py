@@ -38,7 +38,8 @@ def _head(frame):
 
 
 def _names(folder):
-    return {p.stem for p in folder.glob("*.png") if p.stem not in ("card", "frame")}
+    """동작 프레임 이름(호감도 모션 제외 — 기본 옷 모션(11-26)과 옷 모션은 그림이 달라 따로 봄)."""
+    return {p.stem for p in folder.glob("*.png") if p.stem not in ("card", "frame") and not p.stem.startswith("motion_")}
 
 
 # 머리는 맞지만 자세가 낮아 키만 6% 넘게 다른 칸(렌더 확인 11-26): 다래 sleep_5 엎드림 — 기본 옷 머리카락·꼬리 장식이 더 내려옴(163 vs 176)
@@ -67,7 +68,8 @@ def test_outfit_has_every_base_frame_and_motions(char, outfit):
     profile, motions, _ref = OUTFITS[(char, outfit)]
     folder = CHARS / char / "outfits" / outfit
     counts = [(m, 8) if isinstance(m, str) else m for m in motions]
-    assert _names(folder) == _names(CHARS / char) | {f"{m}_{i}" for m, n in counts for i in range(n)}
+    every = {p.stem for p in folder.glob("*.png")} - {"card"}
+    assert every == _names(CHARS / char) | {f"{m}_{i}" for m, n in counts for i in range(n)}
     used = {n for frames, _t, _l in profile.anims.values() for n in frames}
     assert not [n for n in used if not (folder / f"{n}.png").is_file()]   # 펫이 쓰는 모든 동작이 이 폴더에
 

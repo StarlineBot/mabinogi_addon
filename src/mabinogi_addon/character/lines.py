@@ -28,6 +28,7 @@ SITUATIONS = (
     "click_stand", "click_sit", "click_sleep", "pet_start", "pet_during", "pet_end", "drag", "dropped",
     "game_enter", "game_exit", "long_hunt", "hello", "hello_long", "night", "morning", "idle",
     "annoyed_click", "annoyed_pet",
+    "came_back",   # 다른 캐릭터로 바꿨다가 돌아옴(호감도 2차 '캐릭터 바꾸기', 11-26)
 )
 
 

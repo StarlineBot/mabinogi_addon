@@ -2,6 +2,12 @@
  "schemaVersion": 2,
  "character": "아리아",
  "lines": {
+  "came_back": [
+   {
+    "text": "다른 애랑 있었지? 그래도 와 줘서 다행이야~",
+    "mood": "think"
+   }
+  ],
   "click_stand": [
    {
     "text": "앗, 깜짝이야! 불렀어?",

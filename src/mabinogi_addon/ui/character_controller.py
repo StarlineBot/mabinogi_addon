@@ -17,7 +17,7 @@ from PySide6.QtCore import QObject, Signal
 from PySide6.QtGui import QGuiApplication
 
 from .. import config, paths
-from ..character import roster
+from ..character import motions, roster
 from ..character.affinity import Affinity, Rules
 from ..character.brain import DARE, PROFILES, Brain, Floor
 from ..character.lines import Lines, Picker, read
@@ -91,8 +91,10 @@ class CharacterController(QObject):
         now = now or datetime.datetime.now()
         last = config.load_pet_last_seen()
         hello = greeting(last, now)
+        self._decay_all(last, today(now))   # 3일 넘게 안 켰으면 4일째부터 하루 −1(모든 캐릭터, 바닥 = 깬 구간)
+        self.affinity = self._load_affinity()
         if self.affinity is not None:
-            self.affinity.launched(today(now))  # 연속 켠 날(75→100 퀘스트)·그날 처음 +2
+            self.affinity.launched(self._clock(), today(now))  # 앱 켜기 — 행동 점수(25%)
             self._save_affinity()
         config.save_character(lastSeen=today(now))
         self.sync_window()
@@ -104,6 +106,24 @@ class CharacterController(QObject):
         self.affinity = self._load_affinity()
         self._stage = self._current_stage()  # 캐릭터를 바꾼 건 구간이 오른 게 아님
         self.sync_window()
+        if self.affinity is not None and self.affinity.take_sulk():   # 떠났던 캐릭터로 돌아옴 → 서운함 한 줄
+            config.save_character(affinity=(self.character.key, self.affinity.to_dict()))
+            if self.enabled and self.window is not None:
+                self._say(self._pick("came_back"))
+
+    def _decay_all(self, last_seen: str, now_day: str) -> None:
+        """앱을 오래 안 켬 → 저장된 모든 캐릭터 호감도 줄어들기(그날 처음 켤 때 한 번)."""
+        from ..character.affinity import days_between
+        missed = days_between(last_seen, now_day) - 1 if last_seen else 0
+        if missed <= 0:
+            return
+        rules = Rules.from_dict(config.load_affinity_rules())
+        for character in roster.ROSTER:
+            raw = config.load_affinity(character.key)
+            if raw:
+                affinity = Affinity.load(raw, rules)
+                if affinity.decay(missed):
+                    config.save_character(affinity=(character.key, affinity.to_dict()))
 
     def outfit_changed(self, key: str) -> None:
         """캐릭터 탭에서 옷을 갈아입음 → 지금 펫이 그 캐릭터면 창을 다시 만듦(착장 프레임이 있으면 그걸로)."""
@@ -153,7 +173,15 @@ class CharacterController(QObject):
     def _load_affinity(self) -> Affinity | None:
         if self.character is None:
             return None
-        return Affinity.load(config.load_affinity(self.character.key), Rules.from_dict(config.load_affinity_rules()))
+        affinity = Affinity.load(config.load_affinity(self.character.key), Rules.from_dict(config.load_affinity_rules()))
+        # 행동 점수 5분 쿨다운은 이 실행 안의 시각 — 다시 읽어도(캐릭터 바꿈·제작자 조절) 이어지게 캐릭터마다 기억
+        cooldowns = self.__dict__.setdefault("_last_action", {})
+        old = getattr(self, "affinity", None)
+        if old is not None and getattr(self, "_affinity_key", None):
+            cooldowns[self._affinity_key] = max(cooldowns.get(self._affinity_key, -1e18), old.last_action)
+        affinity.last_action = cooldowns.get(self.character.key, -1e18)
+        self._affinity_key = self.character.key
+        return affinity
 
     def _save_affinity(self) -> None:
         if self.character is not None and self.affinity is not None:
@@ -169,10 +197,23 @@ class CharacterController(QObject):
         내려가면 말 없음. 펫이 꺼져 있으면 말하지 않고 밀린 것도 쌓지 않는다(지금 구간만 기억)."""
         stage, before = self._current_stage(), self._stage
         self._stage = stage
+        if self.window is not None and stage != before:
+            self._apply_motions(self.window)
         if stage > before and self.window is not None:
             picker = self.picker()
             if picker is not None:
                 self._say(picker.stage_up(stage))
+            new = [m.key for m in motions.of(roster.folder(self.character)) if m.stage == stage]
+            if new and new[0] in self.window.brain.motions:   # 구간 오름 — 새 모션을 한 번 바로(말풍선 뒤 서 있으면)
+                self.window.brain.show_motion(new[0], self._clock())
+
+    def _apply_motions(self, window) -> None:
+        """열린 호감도 모션(구간까지, 입은 옷에 그림이 있는 것) → 펫 대기 번갈아 후보."""
+        if self.character is None:
+            return
+        folder = roster.folder(self.character)
+        weights = motions.unlocked(folder, self._current_stage(), getattr(window, "frames", {}))
+        window.brain.set_motions({m.key: m for m in motions.of(folder) if m.key in weights}, weights)
 
     def set_paused(self, paused: bool) -> None:
         """앱 일시정지(사냥 안 할 때) — 대사 목소리도 멈추고 안 냄."""
@@ -186,6 +227,8 @@ class CharacterController(QObject):
             return
         self.voice.stop()  # 앞 대사 소리는 멈추고 새 것
         self.window.say(line)
+        if self.affinity is not None and self.affinity.spoke(self._clock(), today()):   # 말풍선 대사 — 행동 점수(25%)
+            self._save_affinity()
         voice = getattr(line, "voice", None)
         if not voice or self._paused or not config.load_voice_lines() or self.character is None:
             return
@@ -253,6 +296,7 @@ class CharacterController(QObject):
                            outline=self.character.outline, blocked=self._blocked_fn(floor, profile))
         window.events.connect(self._on_events)
         self._window_for = self.character
+        self._apply_motions(window)
         return window
 
     def _blocked_fn(self, floor, profile):
@@ -279,20 +323,23 @@ class CharacterController(QObject):
             if kind == "say" and picker is not None and self.window is not None:
                 self._say(self._pick(event[1]))
             elif kind == "click" and self.affinity is not None:
+                before = self.affinity.to_dict()
+                self.affinity.poked(now, today())   # 25 퀘스트 '찔러 보기' + 행동 점수(25%)
+                if self.affinity.to_dict() != before:
+                    self._save_affinity()
                 if self.affinity.click(now):
                     self._save_affinity()
                     if picker is not None and self.window is not None:
                         self._say(self._pick("annoyed_click"))
             elif kind == "pet_done" and self.affinity is not None:
                 result = self.affinity.petted(now, today())
-                if result != "none":
-                    self._save_affinity()
+                self._save_affinity()
                 if result == "annoyed" and picker is not None and self.window is not None:
                     self._say(self._pick("annoyed_pet"))
             elif kind == "corner_minute" and self.affinity is not None:
                 # 1분마다 누적 — 저장은 오를 때·10분마다만(설정 동기화가 매분 올리지 않게), 끌 때 한 번 더
                 got = self.affinity.corner_minute(today())
-                if got or self.affinity.totals.get("corner_minutes", 0) % 10 == 0:
+                if got or self.affinity.game_minutes % 10 == 0:
                     self._save_affinity()
             elif kind == "corner_saved":
                 config.save_character(corner={"x": round(event[1]), "y": round(event[2])})
@@ -310,7 +357,7 @@ class CharacterController(QObject):
             return
         if pack != self.character.pack:
             return  # 기본 녹음 등 다른 목소리(팩에 없는 알림은 기본 녹음으로 대신 남)
-        self.affinity.alerted(today())  # 알림 누적(50→75 퀘스트) + 오늘 3번까지 +1
+        self.affinity.alerted(self._clock(), today())  # 그 캐릭터 목소리 알림 — 행동 점수(25%)
         self._save_affinity()
         if self.window is not None:
             self.window.brain.notify(self._clock())

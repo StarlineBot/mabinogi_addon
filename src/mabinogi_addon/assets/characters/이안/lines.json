@@ -2,6 +2,12 @@
  "schemaVersion": 2,
  "character": "이안",
  "lines": {
+  "came_back": [
+   {
+    "text": "다른 분과 계셨군요. …돌아오셨으니 됐습니다.",
+    "mood": "think"
+   }
+  ],
   "click_stand": [
    {
     "text": "네, 부르셨습니까.",

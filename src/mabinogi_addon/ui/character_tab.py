@@ -672,10 +672,10 @@ class CharacterTab(QWidget):
         self.refresh()
 
     def set_creator(self, on: bool) -> None:
-        """제작자면 카드 아래 ♥ 바·퀘스트 줄·호감도 조절 칸을 보임, 아니면 모두 숨김(베타 — 호감도가 오르지 않으므로)."""
+        """카드 아래 ♥ 바·퀘스트 줄은 모두에게(11-26 게이지 배포), 호감도 조절 칸은 제작자만."""
         self._creator = bool(on)
         for card, editor in zip(self.cards, self.editors):
-            card.set_details_visible(self._creator)
+            card.set_details_visible(True)
             editor.setVisible(self._creator)
 
     def refresh(self) -> None:
@@ -762,11 +762,22 @@ class CharacterTab(QWidget):
         current = config.load_voice_pack()
         for card in self.cards:
             card.set_pending(card.character is character and character.pack != current)
+        leaving = roster.by_pack(current)
+        if leaving is not None and character.pack != current:   # 확정 전 안내(호감도 2차 '캐릭터 바꾸기')
+            from ..character.affinity import _has_final
+            josa = "이" if _has_final(leaving.name) else "가"
+            self.pet_hint.setText(f"'이 캐릭터로 적용'을 누르면 {leaving.name}{josa} 서운해할 거예요(♥ −3).")
         if self.drawer.isVisible() and self.drawer.card is not None:   # 떠오른 카드 자리에 맞춰 서랍도
             self.drawer.open_for(self.drawer.card, animate=False)
 
     def choose(self, character: roster.Character) -> None:
-        """'이 캐릭터로 적용' → 알림 목소리 팩 저장(인사는 이미 들었으므로 다시 안 틂)."""
+        """'이 캐릭터로 적용' → 알림 목소리 팩 저장(인사는 이미 들었으므로 다시 안 틂). 떠나는 캐릭터는 −3(하루 한 번)."""
+        leaving = roster.by_pack(config.load_voice_pack())
+        if leaving is not None and leaving.pack != character.pack:
+            from .character_controller import today
+            affinity = Affinity.load(config.load_affinity(leaving.key), Rules.from_dict(config.load_affinity_rules()))
+            affinity.leave(today())
+            config.save_character(affinity=(leaving.key, affinity.to_dict()))
         config.save_voice_pack(character.pack)
         self.refresh()
         self.voice_pack_changed.emit()

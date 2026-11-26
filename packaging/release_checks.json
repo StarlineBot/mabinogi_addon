@@ -1,39 +1,98 @@
 {
-  "version": "0.57.2",
+  "version": "0.58.0",
   "tests": [
-    "tests/test_walk_v2.py",
+    "tests/test_affinity_v2.py",
     "tests/test_character.py",
+    "tests/test_affinity_motions.py",
     "tests/test_pet_floor_space.py",
+    "tests/test_navigation.py",
+    "tests/test_optimization_ui.py",
     "tests/test_bundle_layout.py",
+    "tests/test_outfit_v2_frames.py",
     "tests/test_release_checks.py",
     "tests/test_release_candidate.py",
     "tests/test_windows_ci.py",
     "tests/test_release_notes.py",
-    "tests/test_release_notes_trigger.py",
-    "tests/test_outfit_v2_frames.py"
+    "tests/test_release_notes_trigger.py"
   ],
   "coverage": {
+    "src/mabinogi_addon/character/affinity.py": {
+      "tests": [
+        "tests/test_affinity_v2.py",
+        "tests/test_character.py"
+      ],
+      "reason": "호감도 2차 규칙 — 하루 10(게임 4·행동 6, 25%·5분), 24·49 멈춤, 25 퀘스트 2일 연속, 줄어들기·바꾸기 −3 바닥, 알파 저장 이전, GROWTH 켬"
+    },
+    "src/mabinogi_addon/character/motions.py": {
+      "tests": [
+        "tests/test_affinity_motions.py"
+      ],
+      "reason": "호감도 모션 표(25·75) — 시작·반복 2~3번·끝, 해금·새 것 2배·옷에 그림 있을 때만"
+    },
     "src/mabinogi_addon/character/brain.py": {
       "tests": [
-        "tests/test_walk_v2.py",
+        "tests/test_affinity_v2.py",
+        "tests/test_affinity_motions.py",
         "tests/test_character.py",
         "tests/test_pet_floor_space.py"
       ],
-      "reason": "걷기 8장(다래·아리아·레나·Starline) — 한 바퀴 시간·빠르기 그대로, 한 장 시간만 0.15·0.165초 · 막힌 구간(보이는 게임 화면) 피해 빈 바닥에서만 돌아다님·빈 곳 없으면 구석(호감도·게임 대사 없음)"
+      "reason": "모션 상태 — 대기 번갈아 후보, 구간 오름 때 한 번(말 끝나고), 걷기·클릭·끌기·말하기·게임에 끊김, 구석 중 없음"
     },
-    "src/mabinogi_addon/assets/characters/Starline/walk_0.png": {
+    "src/mabinogi_addon/character/lines.py": {
       "tests": [
-        "tests/test_walk_v2.py",
+        "tests/test_affinity_v2.py",
+        "tests/test_character.py"
+      ],
+      "reason": "came_back 상황(돌아오면 서운함 한 줄)"
+    },
+    "src/mabinogi_addon/ui/character_controller.py": {
+      "tests": [
+        "tests/test_affinity_v2.py",
+        "tests/test_affinity_motions.py",
+        "tests/test_character.py"
+      ],
+      "reason": "행동 점수(켜기·찔러 보기·쓰다듬기·말풍선·알림), 줄어들기(모든 캐릭터), 돌아오면 서운함, 모션 해금·구간 오름 모션, 쿨다운 이어짐"
+    },
+    "src/mabinogi_addon/ui/character_tab.py": {
+      "tests": [
+        "tests/test_affinity_v2.py",
         "tests/test_character.py",
+        "tests/test_navigation.py"
+      ],
+      "reason": "♥ 바·퀘스트 모두에게(조절은 제작자), 적용 때 떠나는 캐릭터 −3·확정 전 안내"
+    },
+    "src/mabinogi_addon/ui/pet_window.py": {
+      "tests": [
+        "tests/test_affinity_motions.py",
+        "tests/test_character.py"
+      ],
+      "reason": "모션 프레임 읽기 — 입은 옷 폴더에 있을 때만, SD 없는 옷은 기본 그대로"
+    },
+    "src/mabinogi_addon/ui/main_window.py": {
+      "tests": [
+        "tests/test_navigation.py",
+        "tests/test_optimization_ui.py"
+      ],
+      "reason": "탭 이름 '캐릭터' → '동행'"
+    },
+    "scripts/build_base_motions.py": {
+      "tests": [
+        "tests/test_affinity_motions.py"
+      ],
+      "reason": "기본 옷 모션 프레임(4명 프레임표 v2 + Starline 시트·머리 맞춤·색) — 머리 ±5% 검사"
+    },
+    "src/mabinogi_addon/assets/characters/Starline/motion_flame_shot_0.png": {
+      "tests": [
+        "tests/test_affinity_motions.py",
         "tests/test_bundle_layout.py"
       ],
-      "reason": "새 걷기 8장(다섯 캐릭터 + 티셔츠 아리아·조끼 이안) — 머리 크기·키·이웃 장 크기·시트 색, assets 번들 포함"
+      "reason": "기본 옷 모션 74장(5명 × 25·75) — 서 있기 머리 ±5%, 번들 포함"
     },
-    "scripts/build_walk_v2.py": {
+    "tests/test_outfit_v2_frames.py": {
       "tests": [
-        "tests/test_walk_v2.py"
+        "tests/test_outfit_v2_frames.py"
       ],
-      "reason": "걷기 다시 그리기 빌드(묶음 zip 정리·배율·색 맞추기, 착장 그대로 복사) — 결과물 검사"
+      "reason": "기본 옷에도 모션이 생겨 이름 비교에서 모션 따로"
     },
     "packaging/release_checks.json": {
       "tests": [
@@ -41,72 +100,20 @@
         "tests/test_release_candidate.py",
         "tests/test_windows_ci.py"
       ],
-      "reason": "0.57.2 검사 목록·후보 봉인·CI 계약"
+      "reason": "0.58.0 검사 목록·후보 봉인·CI 계약"
     },
     "src/mabinogi_addon/assets/release_notes.md": {
       "tests": [
         "tests/test_release_notes.py",
         "tests/test_release_notes_trigger.py"
       ],
-      "reason": "0.57.2 노트 맨 위 — 새 걷기 · 새 옷 6벌 펫 · 창모드 게임 화면 피하기"
+      "reason": "0.58.0 노트 — 동행 탭·호감도 게이지"
     },
     "tests/test_release_checks.py": {
       "tests": [
         "tests/test_release_checks.py"
       ],
-      "reason": "현재 릴리즈 경계 테스트를 0.57.2(걷기)로"
-    },
-    "scripts/build_outfit_frames.py": {
-      "tests": [
-        "tests/test_outfit_v2_frames.py",
-        "tests/test_character.py"
-      ],
-      "reason": "프레임표 v2 옷 6벌(호감도 50 레나·다래 + 100 네 벌, 칸마다 머리 맞춤·아리아 여름 드레스는 머리 배율 중앙값으로 모자 몫 뺌·큰 시트는 템플릿 크기로) — 기존 옷 결과 그대로(해시 같음)"
-    },
-    "src/mabinogi_addon/assets/characters/다래/outfits/frill_pajama/stand_0.png": {
-      "tests": [
-        "tests/test_outfit_v2_frames.py",
-        "tests/test_bundle_layout.py"
-      ],
-      "reason": "옷 6벌(lab 65·frill_pajama 75·guild_uniform 68·summer_dress 81·white_offshoulder 75·red_dress 65) — 기본 이름 전부·머리 ±5%·키 ±6%(자세·모자 예외)·톤·펫 창이 착장 폴더 사용"
-    },
-    "src/mabinogi_addon/character/floor_space.py": {
-      "tests": [
-        "tests/test_pet_floor_space.py"
-      ],
-      "reason": "보이는 사각형 → 막힌 x 구간·빈 구간·DPI 변환(순수 계산)"
-    },
-    "src/mabinogi_addon/system/game_visibility.py": {
-      "tests": [
-        "tests/test_pet_floor_space.py"
-      ],
-      "reason": "게임 창 중 보이는 부분(Z 순서 위 창 빼기, 우리 앱·투명 오버레이 제외, 실패 None) — 가짜 win32로"
-    },
-    "src/mabinogi_addon/ui/pet_window.py": {
-      "tests": [
-        "tests/test_pet_floor_space.py",
-        "tests/test_character.py"
-      ],
-      "reason": "막힌 구간을 1초에 한 번, 게임이 포그라운드가 아닐 때만 구해 brain에"
-    },
-    "src/mabinogi_addon/ui/character_controller.py": {
-      "tests": [
-        "tests/test_pet_floor_space.py",
-        "tests/test_character.py"
-      ],
-      "reason": "watcher 보이는 게임 사각형 → 논리 px 막힌 구간(모르면 없음)"
-    },
-    "src/mabinogi_addon/system/window_watcher.py": {
-      "tests": [
-        "tests/test_pet_floor_space.py"
-      ],
-      "reason": "visible_game_rects(기본 None, Windows는 system/game_visibility)"
-    },
-    "tests/test_character.py": {
-      "tests": [
-        "tests/test_character.py"
-      ],
-      "reason": "SD 없는 옷 대신 없는 key로 기본 프레임 폴백 확인(옷 8벌 모두 SD)"
+      "reason": "현재 릴리즈 경계 테스트를 0.58.0(호감도 게이지)로"
     }
   }
 }
