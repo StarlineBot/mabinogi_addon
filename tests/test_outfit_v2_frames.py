@@ -81,6 +81,8 @@ def test_outfit_has_every_base_frame_and_motions(char, outfit):
 def test_outfit_frame_matches_base_head_and_height(char, outfit, name):
     if char == "다래" and name.startswith("drag_"):
         pytest.skip("다래 끌기는 후광 폭으로 맞춤(QA 11-26) — test_dare_drag_halo_width_steady가 봄")
+    if outfit == "summer_dress" and name.startswith("pet_"):
+        pytest.skip("여름 드레스 쓰다듬기는 모자 아래 띠 폭으로 맞춤(QA 11-26) — test_aria_summer_dress_pet_matches_tshirt_band가 봄")
     base, dressed = _read(CHARS / char / f"{name}.png"), _read(CHARS / char / "outfits" / outfit / f"{name}.png")
     k = best_scale(_head(base), _head(dressed), 0.85, 1.15, 61) / _hat_median(char, outfit)
     assert HEAD_TOL.get((char, outfit, name), 0.95) <= k <= 1.05, k
@@ -147,6 +149,8 @@ def test_drag_and_pet_height_close_to_base_range(char, outfit):
     for prefix in ("drag", "pet"):
         if char == "다래" and prefix == "drag":
             continue   # 키는 drag_0만 다리를 펴서 달라 — 후광 폭으로 봄
+        if outfit == "summer_dress" and prefix == "pet":
+            continue   # 쓰다듬을 때 모자가 눌려 키가 바뀜(263~284) — 모자 아래 띠 폭으로 봄
         allowed = max(0.025, spread(CHARS / char, prefix) + 0.005)
         assert spread(CHARS / char / "outfits" / outfit, prefix) <= allowed, prefix
 
@@ -179,3 +183,13 @@ def test_dare_drag_halo_width_steady(outfit):
         mine = w / halo_width(_read(dressed / "stand_0.png"))
         ref = halo_width(_read(base / f"drag_{i}.png")) / halo_width(_read(base / "stand_0.png"))
         assert abs(mine / ref - 1) <= 0.03, (i, mine, ref)
+
+
+def test_aria_summer_dress_pet_matches_tshirt_band():
+    """QA 11-26 여름 드레스 쓰다듬기 때 얼굴이 4~7% 커짐(모자로 머리 실루엣 못 씀): 모자 아래 띠(키 25~55%) 폭 ÷ 티셔츠 같은 칸이
+    서 있기 비(0.955)와 ±0.02."""
+    from scripts.build_outfit_frames import band_width
+    summer, tshirt = CHARS / "아리아" / "outfits" / "summer_dress", CHARS / "아리아" / "outfits" / "tshirt"
+    for name in ["stand_0", "stand_1"] + [f"pet_{i}" for i in range(6)]:
+        r = band_width(_read(summer / f"{name}.png")) / band_width(_read(tshirt / f"{name}.png"))
+        assert abs(r - 0.955) <= 0.02, (name, r)

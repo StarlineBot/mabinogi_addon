@@ -49,7 +49,10 @@ TEMPLATES = {("레나", "lab"): ("전체프레임_v2", 3, 4, (930, 1320), True),
 HEAD = 0.42
 FACE_FIX = {("레나", "lab"): ("walk",)}
 HALO_FIT = {"다래": ("drag",)}   # 옷 그림 끌기 칸마다 몸 크기가 달라(후광 폭 142→163) 후광 폭으로 칸 배율을 맞춤
-HALO_BAND = 0.09                 # 맨 위 9% 띠 = 날개 달린 후광   # 옷 그림 걷기 얼굴 옆선이 무너진 옷 → scripts/outfit_face_fix
+HALO_BAND = 0.09                 # 맨 위 9% 띠 = 날개 달린 후광
+# 머리 위 장식(밀짚모자)으로 머리 실루엣을 못 쓰는 옷 → 같은 템플릿 자세 옷(티셔츠)의 같은 칸 '모자 아래 띠(키 25~55%) 폭'에 맞춤
+REF_FIT = {("아리아", "summer_dress"): ("tshirt", ("pet",))}
+BAND = (0.25, 0.55)   # 옷 그림 걷기 얼굴 옆선이 무너진 옷 → scripts/outfit_face_fix
 # 템플릿 뒤에 다시 그려 받은 시트(가이드 방식) — (키, 파일, 열, 행, 가이드 크기, 쓸 칸). 배율 = 앱 기본 프레임 키 중앙값 ÷ 칸 키 중앙값
 REDRAWN: dict = {}   # 걷기는 기획이 앱 크기로 정리한 걷기_v2/walk_0~7.png를 그대로(11-26, scripts/build_walk_v2.OUTFIT_WALKS)
 MOTION_NAMES = {"옷매무새(25)": "motion_tidy", "차(75)": "motion_tea", "물주기(25)": "motion_water", "화관(75)": "motion_wreath",
@@ -88,6 +91,14 @@ def group_scales(pending, head_fit) -> list[tuple[str, np.ndarray, float]]:
             h = min(1.1, max(0.9, h))
         out.append((name, image, k * h))
     return out
+
+
+def band_width(frame: np.ndarray) -> float:
+    """키 25~55% 띠(모자 아래 얼굴·머리카락)의 알파(>128) 가로 폭."""
+    h = frame.shape[0]
+    band = frame[round(h * BAND[0]):round(h * BAND[1]), :, 3] > 128
+    xs = np.where(band.any(axis=0))[0]
+    return float(xs.max() - xs.min() + 1) if xs.size else float(frame.shape[1])
 
 
 def halo_width(frame: np.ndarray) -> float:
@@ -192,6 +203,13 @@ def main() -> None:
                 base_stand = imread(APP_ROOT / folder / "stand_0.png", cv2.IMREAD_UNCHANGED)
                 target = halo_width(base) * halo_width(frames["stand_0"]) / halo_width(base_stand)
                 frames[name] = scaled(frames[name], target / halo_width(frames[name]))
+        if (folder, key) in REF_FIT:   # 아리아 여름 드레스 쓰다듬기(QA 11-26): 모자 아래 띠 폭을 티셔츠 같은 칸 × 서 있기 비에
+            other, groups_fit = REF_FIT[(folder, key)]
+            ref_dir = APP_ROOT / folder / "outfits" / other
+            ratio = band_width(frames["stand_0"]) / band_width(imread(ref_dir / "stand_0.png", cv2.IMREAD_UNCHANGED))
+            for name in [n for n in frames if group_of(n) in groups_fit]:
+                ref = imread(ref_dir / f"{name}.png", cv2.IMREAD_UNCHANGED)
+                frames[name] = scaled(frames[name], band_width(ref) * ratio / band_width(frames[name]))
         if (folder, key) in FACE_FIX:   # 걷기 얼굴 옆선(QA 11-26) — 기본 걷기 얼굴을 옮겨 붙이고 옷의 안경만 다시
             from scripts.outfit_face_fix import fix_face
             for name in [n for n in frames if group_of(n) in FACE_FIX[(folder, key)]]:
