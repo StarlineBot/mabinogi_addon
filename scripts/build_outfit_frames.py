@@ -55,7 +55,7 @@ FRAME_COPY: dict = {}   # 다래 오프숄더 drag_0 임시 복사는 전체 다
 # 기획이 다시 그려 앱 크기로 맞춘 칸(배경 정리·기본 옷 같은 칸 키 × 머리 맞춤, 11-26) — 템플릿 칸 대신 그대로 넣고 색 맞추기만 같이
 OVERRIDES = {
     ("이안", "guild_uniform"): ("모션별/다시_앱크기", tuple(f"drag_{i}" for i in range(4))),
-    ("아리아", "tshirt"): ("모션별/다시_앱크기", ("drag_0", "drag_1", "land_0", "land_1", "land_2")),
+    ("아리아", "tshirt"): ("다시_앱크기", None),            # 전체 다시 그림(사용자 확인 11-26) — v2 81장, 옛 79칸·걷기_v2·끌기/착지 덮어쓰기 대신
     ("다래", "white_offshoulder"): ("다시_앱크기", None),   # 전체 다시 그림(사용자 확인 11-26) — 폴더의 75장 전부
     ("레나", "red_dress"): ("다시_앱크기", None),           # 전체 다시 그림(사용자 확인 11-26) — 65장, 검정 배경은 기획이 뺌
 }
@@ -202,14 +202,17 @@ def harmonize_colors(frames: dict[str, np.ndarray], ref_name: str) -> dict[str, 
 def main() -> None:
     for (folder, key), (name, ref) in OUTFITS.items():
         outfit_dir = ASSETS / folder / "의상" / name
-        built = redraw(folder, key, build(folder, outfit_dir, TEMPLATES.get((folder, key), DEFAULT_TEMPLATE)), outfit_dir)
-        if (folder, key) in OVERRIDES:
-            sub, names = OVERRIDES[(folder, key)]
-            if names is None:
-                names = sorted(p.stem for p in (outfit_dir / sub).glob("*.png"))
-                missing = set(built) - set(names)
-                if missing:
-                    raise SystemExit(f"{folder} {key} 다시 그림에 없는 칸: {sorted(missing)}")
+        sub, names = OVERRIDES.get((folder, key), (None, ()))
+        if names is None:   # 통째 다시 그림 — 템플릿 시트를 자르지 않고 폴더 그림 전부, 기본 캐릭터 프레임이 다 있어야 함
+            names = sorted(p.stem for p in (outfit_dir / sub).glob("*.png"))
+            needed = {p.stem for p in (APP_ROOT / folder).glob("*.png")} - {"card", "frame"}
+            missing = needed - set(names)
+            if missing:
+                raise SystemExit(f"{folder} {key} 다시 그림에 없는 칸: {sorted(missing)}")
+            built = {}
+        else:
+            built = redraw(folder, key, build(folder, outfit_dir, TEMPLATES.get((folder, key), DEFAULT_TEMPLATE)), outfit_dir)
+        if sub is not None:
             for name in names:
                 built[name] = imread(outfit_dir / sub / f"{name}.png", cv2.IMREAD_UNCHANGED)
         frames = harmonize_colors(built, ref)

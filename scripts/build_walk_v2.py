@@ -29,7 +29,6 @@ WALKS = {   # 캐릭터: (묶음 zip, zip 안 칸 폴더, 최종 배율)
 }
 MATCH_COLORS = {"Starline"}
 OUTFIT_WALKS = {
-    ("아리아", "tshirt"): ASSETS / "아리아/의상/티셔츠 차림/걷기_v2",
     ("이안", "vest_tie"): ASSETS / "이안/의상/넥타이 조끼/걷기_v2",
 }
 FRAMES = 8
