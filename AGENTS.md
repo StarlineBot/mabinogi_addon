@@ -295,6 +295,10 @@ QA·문제 수정의 지속 승인 범위 외 작업은 푸시 직전에 사용�
   1. 독립 QA의 검증 가능한 범위에 차단 문제가 없으면 사용하지 않은 버전·노트·검사 목록을 맞춰 main에 반영한 뒤
      **QA 세션이 `verify-only`를 바로 실행한다**(지속 승인 — 따로 묻지 않음). 1~2분 안에 jobs가 시작됐는지 확인하고,
      끝나면 run ID·산출물·만료 시각과 후보 다운로드 위치·확인 항목을 사용자에게 안내한다.
+     **후보 내려받기 명령은 늘 아래 형식 하나로 준다(사용자 지시 11-26 — 받는 폴더를 매번 `Downloads` 아래 버전 폴더로 고정).**
+     PowerShell 기준, 폴더 이름은 `mabinogi_` + 버전 숫자만(0.57.2 → `mabinogi_0572`, 같은 버전 재후보는 뒤에 a·b… 붙임):
+     `gh run download <run> --repo StarlineBot/mabinogi_addon -n verified-windows-<run>-<attempt> -D "$env:USERPROFILE\Downloads\mabinogi_<버전>"`
+     `-D`를 빼거나 다른 위치(현재 폴더 등)를 주지 않는다.
   2. 사용자가 Windows 후보 확인 뒤 **"배포해"**(같은 뜻)라고 하면 QA 세션이 그 후보 run을 `candidate_run`으로 지정해
      `publish-existing`을 실행하고, 아래 게시 후 확인 1단계까지 한다. 사용자의 후보 확인·게시 지시 없이 게시하지 않으며
      `validate-and-publish`는 쓰지 않는다(후보 확인을 건너뜀).
