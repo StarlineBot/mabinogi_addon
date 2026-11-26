@@ -161,6 +161,11 @@ def test_drag_and_pet_height_close_to_base_range(char, outfit):
 @pytest.mark.parametrize("char,outfit", list(OUTFITS))
 def test_walk_height_range_within_two_percent(char, outfit):
     heights = [_read(CHARS / char / "outfits" / outfit / f"walk_{i}.png").shape[0] for i in range(8)]
+    if outfit == "red_dress":
+        # 전체 다시 그림(11-26)은 기본 레나 걷기(286~291)처럼 장마다 오르내림 — 같은 장 기본 키와 1.5% 안이면 크기 튐 아님
+        base = [_read(CHARS / char / f"walk_{i}.png").shape[0] for i in range(8)]
+        assert all(abs(h - b) / b <= 0.015 for h, b in zip(heights, base)), (heights, base)
+        return
     assert (max(heights) - min(heights)) / min(heights) <= 0.021, heights
 
 

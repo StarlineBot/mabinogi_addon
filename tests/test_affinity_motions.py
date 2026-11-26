@@ -238,3 +238,12 @@ def test_sheep_doll_hug_frame_holds():
     loop = [n for n, _d in seq[2:-4]]
     assert len(loop) in (4, 6) and set(loop) == {"motion_sheep_doll_2", "motion_sheep_doll_3"}
     assert all(d == mo.FRAME for n, d in seq if n != "motion_sheep_doll_6")
+
+
+def test_grimoire_clench_and_slam_frames_hold():
+    """사용자 11-26: 레나 마법서 — 4번(이 악묾) 0.6초, 5번('탁' 덮음) 1.2초 머묾. 옷과 상관없이 같은 모션."""
+    grimoire = mo.MOTIONS["레나"][0]
+    seq = grimoire.sequence(random.Random(1))
+    held = {n: d for n, d in seq if d != mo.FRAME}
+    assert held == {"motion_grimoire_4": 0.6, "motion_grimoire_5": 1.2}
+    assert [n for n, _d in seq[-4:]] == [f"motion_grimoire_{i}" for i in range(4, 8)]

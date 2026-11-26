@@ -19,7 +19,7 @@ class Motion:
     count: int                         # 장 수
     loop: tuple[int, int] | None       # 반복 구간 [시작, 끝) — 없으면 한 번
     long_loop: tuple[float, float] | None = None   # 반복을 이 초만큼(레나 공중 앉기)
-    hold: tuple[tuple[int, float], ...] = ()       # 장마다 머무는 시간(번호, 초) — 없으면 FRAME(다래 양인형 안기 2.1초, 11-26)
+    hold: tuple[tuple[int, float], ...] = ()       # 장마다 머무는 시간(번호, 초) — 없으면 FRAME(다래 양인형 안기 2.1초, 레나 마법서 이 악묾 0.6·'탁' 1.2초, 11-26)
 
     def names(self) -> tuple[str, ...]:
         return tuple(f"{self.key}_{i}" for i in range(self.count))
@@ -45,7 +45,7 @@ MOTIONS: dict[str, tuple[Motion, ...]] = {
     "아리아": (Motion(25, "motion_water", 8, (2, 4)), Motion(75, "motion_wreath", 8, (2, 4))),
     # 양인형: 6번(인형을 안아 올림)은 2.1초 머묾(사용자 11-26 '껴안고 있는 프레임이 좀 유지되어야')
     "다래": (Motion(25, "motion_sheep_doll", 8, (2, 4), hold=((6, 2.1),)), Motion(75, "motion_bubbles", 8, (2, 4))),
-    "레나": (Motion(25, "motion_grimoire", 8, (2, 4)), Motion(75, "motion_float_sit", 8, (2, 5), (10.0, 20.0))),
+    "레나": (Motion(25, "motion_grimoire", 8, (2, 4), hold=((4, 0.6), (5, 1.2))), Motion(75, "motion_float_sit", 8, (2, 5), (10.0, 20.0))),
     "이안": (Motion(25, "motion_tidy", 8, None), Motion(75, "motion_tea", 6, (2, 4))),
     "Starline": (Motion(25, "motion_flame_shot", 6, None), Motion(75, "motion_hat_magic", 6, None)),
 }
