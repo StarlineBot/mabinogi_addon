@@ -31,10 +31,18 @@ ROOT = Path(__file__).resolve().parents[1]
 ASSETS = ROOT / "docs" / "characters" / "assets"
 APP_ROOT = ROOT / "src" / "mabinogi_addon" / "assets" / "characters"
 # (캐릭터 폴더, 옷 key) → (옷 이름 폴더, 색 기준 프레임)
-OUTFITS = {("이안", "vest_tie"): ("넥타이 조끼", "stand_1"), ("아리아", "tshirt"): ("티셔츠 차림", "stand_0")}
+OUTFITS = {("이안", "vest_tie"): ("넥타이 조끼", "stand_1"), ("아리아", "tshirt"): ("티셔츠 차림", "stand_0"),
+           ("레나", "lab"): ("연구실 차림", "stand_0")}
+# 옷마다 템플릿(폴더, 열, 행, 시트 크기, 칸마다 머리 맞춤). 기본 = 옛 전체프레임(4×4, 960×1320), 키 비율만.
+# 레나 연구실 차림(기획 11-26): 프레임표 v2(3×4, 930×1320, 테두리 없음, 새 걷기 8장 포함) — 옷 칸 키가 +1~5%로 들쭉날쭉하고
+# 머리가 끌기·일어나기·웅크리기에서 크고 걷기 몇 장에서 작아, 칸마다 위 42% 실루엣으로 템플릿 머리에 맞춤(QA 11-25 규칙).
+DEFAULT_TEMPLATE = ("전체프레임", 4, 4, (960, 1320), False)
+TEMPLATES = {("레나", "lab"): ("전체프레임_v2", 3, 4, (930, 1320), True)}
+HEAD = 0.42
 # 템플릿 뒤에 다시 그려 받은 시트(가이드 방식) — (키, 파일, 열, 행, 가이드 크기, 쓸 칸). 배율 = 앱 기본 프레임 키 중앙값 ÷ 칸 키 중앙값
 REDRAWN: dict = {}   # 걷기는 기획이 앱 크기로 정리한 걷기_v2/walk_0~7.png를 그대로(11-26, scripts/build_walk_v2.OUTFIT_WALKS)
-MOTION_NAMES = {"옷매무새(25)": "motion_tidy", "차(75)": "motion_tea", "물주기(25)": "motion_water", "화관(75)": "motion_wreath"}
+MOTION_NAMES = {"옷매무새(25)": "motion_tidy", "차(75)": "motion_tea", "물주기(25)": "motion_water", "화관(75)": "motion_wreath",
+                "마법서(25)": "motion_grimoire", "공중앉기(75)": "motion_float_sit"}
 
 
 def frame_name(raw: str) -> str:
@@ -47,8 +55,13 @@ def cells_of(folder: Path, name: str, cols: int, rows: int, size: tuple[int, int
     return guide_cells(name, cols, rows, folder, size)
 
 
-def build(folder: str, outfit_dir: Path) -> dict[str, np.ndarray]:
-    template_dir = ASSETS / folder / "의상" / "전체프레임"
+def _head(frame: np.ndarray) -> np.ndarray:
+    return frame[:max(1, round(frame.shape[0] * HEAD))]
+
+
+def build(folder: str, outfit_dir: Path, template=DEFAULT_TEMPLATE) -> dict[str, np.ndarray]:
+    template_name_dir, t_cols, t_rows, t_size, head_fit = template
+    template_dir = ASSETS / folder / "의상" / template_name_dir
     app_dir = APP_ROOT / folder
     plan = json.loads((template_dir / "칸_목록.json").read_text(encoding="utf-8"))
     split_path = template_dir / "나눔_칸_목록.json"   # 이안만(part 2를 나눔 3장이 대신)
@@ -56,7 +69,7 @@ def build(folder: str, outfit_dir: Path) -> dict[str, np.ndarray]:
     skip = {2} if split else set()
     jobs = []   # (템플릿 시트, 옷 시트, 열, 행, 크기, [(칸, 이름)])
     for part in sorted({x["part"] for x in plan} - skip):
-        jobs.append((f"전체프레임_{part}.png", f"전체프레임_{part}.png", 4, 4, (960, 1320),
+        jobs.append((f"전체프레임_{part}.png", f"전체프레임_{part}.png", t_cols, t_rows, t_size,
                      [(x["cell"], x["frame"]) for x in plan if x["part"] == part]))
     for key, items in split.items():
         part = key.split("_")[0]
@@ -73,6 +86,10 @@ def build(folder: str, outfit_dir: Path) -> dict[str, np.ndarray]:
                 raise SystemExit(f"{outfit_name} 칸 {index}({raw})가 비었어요")
             app = app_dir / f"{name}.png"
             k = imread(app, cv2.IMREAD_UNCHANGED).shape[0] / template[index].shape[0] if app.is_file() else 1.0
+            if head_fit:   # 옷 칸을 템플릿 칸 키로 맞춘 뒤 머리(위 42%)를 템플릿 칸 머리에
+                from scripts.silhouette import best_scale
+                fit = template[index].shape[0] / image.shape[0]
+                k *= fit * best_scale(_head(template[index]), _head(scaled(image, fit)), 0.85, 1.15, 61)
             out[name] = scaled(image, k) if abs(k - 1) > 0.005 else image
     return out
 
@@ -105,7 +122,8 @@ def harmonize_colors(frames: dict[str, np.ndarray], ref_name: str) -> dict[str, 
 def main() -> None:
     for (folder, key), (name, ref) in OUTFITS.items():
         outfit_dir = ASSETS / folder / "의상" / name
-        frames = harmonize_colors(redraw(folder, key, build(folder, outfit_dir), outfit_dir), ref)
+        frames = harmonize_colors(redraw(folder, key, build(folder, outfit_dir, TEMPLATES.get((folder, key), DEFAULT_TEMPLATE)),
+                                         outfit_dir), ref)
         from scripts.build_walk_v2 import FRAMES, OUTFIT_WALKS
         walk_dir = OUTFIT_WALKS.get((folder, key))
         if walk_dir is not None:   # 걷기 8장은 정리해 둔 PNG 그대로(색 맞추기·배율 없음)
