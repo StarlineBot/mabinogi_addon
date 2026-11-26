@@ -19,6 +19,13 @@ def keyblack(a):
     seed|=cv2.dilate(line.astype(np.uint8),np.ones((5,5),np.uint8))>0
     keep=set(np.unique(lab[seed&dark]))-{0}
     bg=np.isin(lab,list(keep))|line
+    # 머리카락 사이 등에 갇힌 검정 틈(사용자 11-26): 순검정(≤14) 덩어리 8px 이상도 배경
+    nn,lab2,st2,_=cv2.connectedComponentsWithStats(dark.astype(np.uint8),connectivity=4)
+    pocket=np.isin(lab2,[i for i in range(1,nn) if st2[i,4]>=8])
+    bg|=pocket
+    # 틈 가장자리의 검정 번짐(≤30)도 1px
+    near=cv2.dilate(pocket.astype(np.uint8),np.ones((3,3),np.uint8))>0
+    bg|=near&(np.maximum(np.maximum(b,g),r)<=30)
     al=np.where(bg,0,255).astype(np.uint8)
     return np.dstack([a,al])
 def gridlines(a):
