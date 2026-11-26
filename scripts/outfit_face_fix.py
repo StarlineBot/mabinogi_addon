@@ -101,3 +101,55 @@ def fix_face(dressed, base, stand):
     # 원래 옷 칸 자리로 잘라 냄(크기 그대로)
     x0 = (w - dressed.shape[1]) // 2
     return out[top:top + dressed.shape[0], x0:x0 + dressed.shape[1]]
+
+
+# ---- 걷기 머리 하나로(QA 11-26 '레나 lab 걷기 머리가 자글자글' — 사용자 '머리는 움직이는 구간이 아니라 한 장으로') ----------------
+CUT = 0.47          # 머리 경계(키 비율) — 턱 아래 초커 높이. 이 위는 기준 장 머리, 아래(등 뒤로 늘어진 머리·몸)는 장마다 그대로
+FEATHER = 6         # 경계 페더(px)
+
+
+def _place(img, h, w, x0, y0, s=1.0):
+    if s != 1.0:
+        img = cv2.resize(img, None, fx=s, fy=s, interpolation=cv2.INTER_AREA)
+    out = np.zeros((h, w, 4), np.uint8)
+    ih, iw = img.shape[:2]
+    xs, ys, xe, ye = max(0, x0), max(0, y0), min(w, x0 + iw), min(h, y0 + ih)
+    if xe > xs and ye > ys:
+        out[ys:ye, xs:xe] = img[ys - y0:ye - y0, xs - x0:xe - x0]
+    return out
+
+
+def unify_head(frames: list[np.ndarray], ref_index: int = 0) -> list[np.ndarray]:
+    """기준 장 머리(정수리 ~ 턱 아래 CUT)를 다른 장마다 위치(dx, dy)·배율(±2%)을 맞춰 붙임 — 위 40% 알파 IoU 정렬."""
+    ref = frames[ref_index]
+    rh, rw = ref.shape[:2]
+    out = []
+    for i, frame in enumerate(frames):
+        if i == ref_index:
+            out.append(frame)
+            continue
+        fh, fw = frame.shape[:2]
+        target = frame[: round(fh * 0.40), :, 3] > 128
+        best = (-1.0, (1.0, 0, 0))
+        for s in (0.98, 0.99, 1.0, 1.01, 1.02):
+            sw, sh = round(rw * s), round(rh * s)
+            base_x, base_y = (fw - sw) // 2, fh - sh   # 발 밑 가운데 맞춤에서 시작
+            for dy in range(-8, 9):
+                for dx in range(-15, 16):
+                    p = _place(ref, fh, fw, base_x + dx, base_y + dy, s)[: round(fh * 0.40), :, 3] > 128
+                    iou = (p & target).sum() / max(1, (p | target).sum())
+                    if iou > best[0]:
+                        best = (iou, (s, base_x + dx, base_y + dy))
+        s, x0, y0 = best[1]
+        head = _place(ref, fh, fw, x0, y0, s)
+        cut = y0 + round(rh * s * CUT)
+        rows = np.arange(fh, dtype=np.float32)[:, None, None]
+        w = np.clip((cut + FEATHER / 2 - rows) / FEATHER, 0, 1)   # 경계 위 1 → 아래 0
+        a_f = frame[..., 3:].astype(np.float32) / 255
+        a_h = head[..., 3:].astype(np.float32) / 255
+        a = a_h * w + a_f * (1 - w)
+        rgb = (head[..., :3] * a_h * w + frame[..., :3] * a_f * (1 - w)) / np.maximum(a, 1e-6)
+        mixed = np.dstack([np.clip(rgb, 0, 255), np.clip(a * 255, 0, 255)]).astype(np.uint8)
+        mixed[mixed[..., 3] == 0, :3] = 0
+        out.append(mixed)
+    return out
