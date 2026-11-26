@@ -78,8 +78,10 @@ def group_scales(pending, head_fit) -> list[tuple[str, np.ndarray, float]]:
     for name, _image, _k, head in pending:
         groups.setdefault(group_of(name), []).append(head)
     out = []
-    for name, image, k, _head_cell in pending:
-        h = float(np.median(groups[group_of(name)])) / middle
+    for name, image, k, head_cell in pending:
+        # 모션(호감도 보상)은 칸마다 그대로(사용자 11-26 '모션은 이번에 건드리지 말 것')
+        own = name.startswith("motion_")
+        h = (head_cell if own else float(np.median(groups[group_of(name)]))) / middle
         if head_fit == "median":
             h = min(1.1, max(0.9, h))
         out.append((name, image, k * h))

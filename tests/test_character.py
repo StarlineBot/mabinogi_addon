@@ -2536,6 +2536,8 @@ def test_lena_corner_sit_loop_without_side_glance():
     """레나 구석 앉기: 눈을 옆으로 흘기는 sit_2 뺌(사용자 11-25), 주기 15초 그대로."""
     frames, times, loop = br.LENA.anims["sit_loop"]
     assert "sit_2" not in frames and loop and abs(sum(times) - 15.0) < 1e-9
+    winks = [d for f, d in zip(frames, times) if f == "sit_3"]
+    assert len(winks) == 1 and winks[0] >= 0.6   # 윙크는 한 번, 휙 지나가지 않게(11-26)
 
 
 def test_character_pngs_have_no_hidden_color_under_transparent_pixels():

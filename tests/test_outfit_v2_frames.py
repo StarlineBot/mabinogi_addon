@@ -130,8 +130,21 @@ def test_one_scale_per_animation_group():
     pending = [("walk_0", img, 1.0, 0.98), ("walk_1", img, 1.1, 1.04), ("walk_2", img, 0.9, 1.00), ("pet_0", img, 1.0, 0.9)]
     got = {n: k for n, _i, k in group_scales(pending, True)}
     assert got == pytest.approx({"walk_0": 1.0, "walk_1": 1.1, "walk_2": 0.9, "pet_0": 0.9})   # 키 배율 × 묶음 머리 1.00
+    motion = [("motion_water_0", img, 1.0, 0.98), ("motion_water_1", img, 1.0, 1.04)]
+    assert [k for _n, _i, k in group_scales(motion, True)] == pytest.approx([0.98, 1.04])   # 모션은 칸마다(사용자 11-26)
     hat = {n: k for n, _i, k in group_scales(pending, "median")}
     assert hat["walk_0"] == pytest.approx(1.0 / 0.99)                                         # 전 칸 중앙값 0.99로 나눔
+
+
+@pytest.mark.parametrize("char,outfit", list(OUTFITS))
+def test_drag_and_pet_height_close_to_base_range(char, outfit):
+    """QA 11-26 다래 오프숄더 잡아 들기 크기 들쭉날쭉: 끌기·쓰다듬기 키 범위 ≤ 2.5%(기본 캐릭터가 더 크면 그만큼)."""
+    def spread(folder, prefix):
+        hs = [_read(p).shape[0] for p in folder.glob(f"{prefix}_*.png")]
+        return (max(hs) - min(hs)) / min(hs)
+    for prefix in ("drag", "pet"):
+        allowed = max(0.025, spread(CHARS / char, prefix) + 0.005)
+        assert spread(CHARS / char / "outfits" / outfit, prefix) <= allowed, prefix
 
 
 @pytest.mark.parametrize("char,outfit", list(OUTFITS))

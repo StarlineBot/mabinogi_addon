@@ -19,7 +19,7 @@
         "tests/test_character.py",
         "tests/test_pet_floor_space.py"
       ],
-      "reason": "걷기 8장(다래·아리아·레나·Starline) — 한 바퀴 시간·빠르기 그대로, 한 장 시간만 0.15·0.165초 · 막힌 구간(보이는 게임 화면) 피해 빈 바닥에서만 돌아다님·빈 곳 없으면 구석(호감도·게임 대사 없음)"
+      "reason": "걷기 8장(다래·아리아·레나·Starline) — 한 바퀴 시간·빠르기 그대로, 한 장 시간만 0.15·0.165초 · 막힌 구간(보이는 게임 화면) 피해 빈 바닥에서만 돌아다님·빈 곳 없으면 구석(호감도·게임 대사 없음) · 레나 구석 앉기 윙크 한 번 0.8초(11-26)"
     },
     "src/mabinogi_addon/assets/characters/Starline/walk_0.png": {
       "tests": [
