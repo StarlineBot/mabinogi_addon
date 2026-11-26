@@ -32,13 +32,20 @@ ASSETS = ROOT / "docs" / "characters" / "assets"
 APP_ROOT = ROOT / "src" / "mabinogi_addon" / "assets" / "characters"
 # (캐릭터 폴더, 옷 key) → (옷 이름 폴더, 색 기준 프레임)
 OUTFITS = {("이안", "vest_tie"): ("넥타이 조끼", "stand_1"), ("아리아", "tshirt"): ("티셔츠 차림", "stand_0"),
-           ("레나", "lab"): ("연구실 차림", "stand_0"), ("다래", "frill_pajama"): ("프릴 잠옷 원피스", "stand_0")}
+           ("레나", "lab"): ("연구실 차림", "stand_0"), ("다래", "frill_pajama"): ("프릴 잠옷 원피스", "stand_0"),
+           ("이안", "guild_uniform"): ("길드 고위 정복", "stand_1"), ("아리아", "summer_dress"): ("가벼운 여름 드레스", "stand_0"),
+           ("다래", "white_offshoulder"): ("하얀 오프숄더 프릴 원피스", "stand_0"), ("레나", "red_dress"): ("빨간 원피스", "stand_0")}
 # 옷마다 템플릿(폴더, 열, 행, 시트 크기, 칸마다 머리 맞춤). 기본 = 옛 전체프레임(4×4, 960×1320), 키 비율만.
 # 레나 연구실 차림(기획 11-26): 프레임표 v2(3×4, 930×1320, 테두리 없음, 새 걷기 8장 포함) — 옷 칸 키가 +1~5%로 들쭉날쭉하고
 # 머리가 끌기·일어나기·웅크리기에서 크고 걷기 몇 장에서 작아, 칸마다 위 42% 실루엣으로 템플릿 머리에 맞춤(QA 11-25 규칙).
 DEFAULT_TEMPLATE = ("전체프레임", 4, 4, (960, 1320), False)
 TEMPLATES = {("레나", "lab"): ("전체프레임_v2", 3, 4, (930, 1320), True),
-             ("다래", "frill_pajama"): ("전체프레임_v2", 3, 4, (930, 1320), True)}
+             ("다래", "frill_pajama"): ("전체프레임_v2", 3, 4, (930, 1320), True),
+             # 호감도 100 옷 4벌(기획 11-26) — 다래·레나 일부 시트는 1053×1496으로 와서 템플릿 크기로 줄여 자름(cells_of size)
+             ("이안", "guild_uniform"): ("전체프레임_v2", 4, 4, (960, 1320), True),
+             ("아리아", "summer_dress"): ("전체프레임_v2", 4, 4, (996, 1320), "median"),   # 밀짚모자 — 머리 배율 중앙값으로 나눔
+             ("다래", "white_offshoulder"): ("전체프레임_v2", 3, 4, (930, 1320), True),
+             ("레나", "red_dress"): ("전체프레임_v2", 3, 4, (930, 1320), True)}
 HEAD = 0.42
 # 템플릿 뒤에 다시 그려 받은 시트(가이드 방식) — (키, 파일, 열, 행, 가이드 크기, 쓸 칸). 배율 = 앱 기본 프레임 키 중앙값 ÷ 칸 키 중앙값
 REDRAWN: dict = {}   # 걷기는 기획이 앱 크기로 정리한 걷기_v2/walk_0~7.png를 그대로(11-26, scripts/build_walk_v2.OUTFIT_WALKS)
@@ -78,6 +85,7 @@ def build(folder: str, outfit_dir: Path, template=DEFAULT_TEMPLATE) -> dict[str,
         jobs.append((f"나눔_{key}.png", f"나눔_{part}.png", 4, 2, (960, 660),
                      [(c["cell"], c["frame"]) for c in items if not c["frame"].startswith("(")]))
     out: dict[str, np.ndarray] = {}
+    pending = []   # (이름, 그림, 키 배율, 머리 배율) — 머리 배율 중앙값으로 나눌 옷(밀짚모자)은 다 모은 뒤 정함
     for template_name, outfit_name, cols, rows, size, cells in jobs:
         template = cells_of(template_dir, template_name, cols, rows, size)
         dressed = cells_of(outfit_dir, outfit_name, cols, rows, size)
@@ -91,7 +99,18 @@ def build(folder: str, outfit_dir: Path, template=DEFAULT_TEMPLATE) -> dict[str,
             if head_fit:   # 옷 칸을 템플릿 칸 키로 맞춘 뒤 머리(위 42%)를 템플릿 칸 머리에
                 from scripts.silhouette import best_scale
                 fit = template[index].shape[0] / image.shape[0]
-                k *= fit * best_scale(_head(template[index]), _head(scaled(image, fit)), 0.85, 1.15, 61)
+                pending.append((name, image, k * fit, best_scale(_head(template[index]), _head(scaled(image, fit)), 0.85, 1.15, 61)))
+                continue
+            out[name] = scaled(image, k) if abs(k - 1) > 0.005 else image
+    if pending:
+        # "median": 머리 위에 새 장식(아리아 여름 드레스 밀짚모자)이 있어 위 42% 실루엣이 커 보이는 옷 — 칸 머리 배율 ÷ 전 칸 중앙값
+        # (모자 몫을 빼고 칸끼리 차이만, 0.9~1.1로 자름 — 기획 11-26)
+        middle = float(np.median([h for *_, h in pending])) if head_fit == "median" else 1.0
+        for name, image, k, head in pending:
+            h = head / middle
+            if head_fit == "median":
+                h = min(1.1, max(0.9, h))
+            k *= h
             out[name] = scaled(image, k) if abs(k - 1) > 0.005 else image
     return out
 

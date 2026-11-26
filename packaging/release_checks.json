@@ -48,7 +48,7 @@
         "tests/test_release_notes.py",
         "tests/test_release_notes_trigger.py"
       ],
-      "reason": "0.57.2 노트 맨 위 — 새 걷기 · 레나 연구실 차림·다래 프릴 잠옷 펫 · 창모드 게임 화면 피하기"
+      "reason": "0.57.2 노트 맨 위 — 새 걷기 · 새 옷 6벌 펫 · 창모드 게임 화면 피하기"
     },
     "tests/test_release_checks.py": {
       "tests": [
@@ -61,14 +61,14 @@
         "tests/test_outfit_v2_frames.py",
         "tests/test_character.py"
       ],
-      "reason": "레나 연구실 차림·다래 프릴 잠옷(프레임표 v2 3×4·칸마다 머리 맞춤·모션 2개씩) — 기존 옷 결과 그대로(해시 같음)"
+      "reason": "프레임표 v2 옷 6벌(호감도 50 레나·다래 + 100 네 벌, 칸마다 머리 맞춤·아리아 여름 드레스는 머리 배율 중앙값으로 모자 몫 뺌·큰 시트는 템플릿 크기로) — 기존 옷 결과 그대로(해시 같음)"
     },
     "src/mabinogi_addon/assets/characters/다래/outfits/frill_pajama/stand_0.png": {
       "tests": [
         "tests/test_outfit_v2_frames.py",
         "tests/test_bundle_layout.py"
       ],
-      "reason": "레나 lab 65·다래 frill_pajama 75프레임 — 기본 이름 전부·머리 ±5%·키 ±6%·톤·펫 창이 착장 폴더 사용"
+      "reason": "옷 6벌(lab 65·frill_pajama 75·guild_uniform 68·summer_dress 81·white_offshoulder 75·red_dress 65) — 기본 이름 전부·머리 ±5%·키 ±6%(자세·모자 예외)·톤·펫 창이 착장 폴더 사용"
     },
     "src/mabinogi_addon/character/floor_space.py": {
       "tests": [
@@ -101,6 +101,12 @@
         "tests/test_pet_floor_space.py"
       ],
       "reason": "visible_game_rects(기본 None, Windows는 system/game_visibility)"
+    },
+    "tests/test_character.py": {
+      "tests": [
+        "tests/test_character.py"
+      ],
+      "reason": "SD 없는 옷 대신 없는 key로 기본 프레임 폴백 확인(옷 8벌 모두 SD)"
     }
   }
 }

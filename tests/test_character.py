@@ -2148,9 +2148,9 @@ def test_saved_outfit_shows_on_card_and_pet_frames_fall_back(app, cfg, tmp_path,
 
     _tab, cards = _drawer_tab(cfg, outfit={"부드러운 여성": "tshirt", "화난 여성": "없는옷"})
     assert cards["아리아"].outfit == "tshirt" and cards["레나"].outfit == ""
-    # SD가 없는 착장(여름 드레스) → 기본 프레임 그대로(티셔츠·이안 조끼는 11-25부터 SD 있음)
+    # SD가 없는 착장 → 기본 프레임 그대로(11-26부터 옷 8벌 모두 SD 있음 — 폴더가 없는 key로 확인)
     base = pet_window.load_frames("아리아", br.ARIA)
-    dressed = pet_window.load_frames("아리아", br.ARIA, "summer_dress")
+    dressed = pet_window.load_frames("아리아", br.ARIA, "no_such_outfit")
     assert set(base) == set(dressed) and all(base[n] == dressed[n] for n in base)
     # 착장 폴더에 같은 이름 프레임이 생기면 그걸 먼저
     root = tmp_path / "res"
