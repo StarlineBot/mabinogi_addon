@@ -3,7 +3,8 @@
 진짜 창모드에서 게임이 포그라운드가 아니어도 화면에 보이는 게임 창 위로 펫이 지나가지 않게, 보이는 사각형을 구한다.
 - 게임 창: 등록 실행파일(없으면 제목 폴백 — window_watcher와 같은 규칙)의 보이는 top-level 창 중 가장 큰 것. 최소화·숨김·cloaked 제외.
 - 영역은 DWMWA_EXTENDED_FRAME_BOUNDS(그림자 제외). Z 순서에서 그보다 위의 보이는 창 영역을 뺀다
-  (우리 앱 창, cloaked 창, 클릭 통과 투명 오버레이 WS_EX_TRANSPARENT+LAYERED는 가리지 않는 것으로).
+  (cloaked 창, 클릭 통과 투명 오버레이 WS_EX_TRANSPARENT+LAYERED, 우리 앱의 도구 창 WS_EX_TOOLWINDOW — 펫·오버레이 — 는 가리지 않는 것으로.
+  우리 앱 메인 창·대화상자는 실제로 화면을 덮으므로 다른 앱 창처럼 뺀다 — QA 11-26: 전체창 게임 위에 애드온 창을 띄우면 roam).
 - 주 화면 안으로 자른 물리 px (left, top, right, bottom) 목록. 판정 실패면 None(호출 쪽이 '막힌 곳 없음'으로).
 화면을 읽기만 한다(키·클릭 없음). 1초에 한 번, 게임이 포그라운드가 아닐 때만 부른다.
 """
@@ -13,7 +14,7 @@ import sys
 
 from .dialogue_visibility import subtract
 
-WS_EX_TRANSPARENT, WS_EX_LAYERED = 0x20, 0x80000
+WS_EX_TRANSPARENT, WS_EX_LAYERED, WS_EX_TOOLWINDOW = 0x20, 0x80000, 0x80
 DWMWA_EXTENDED_FRAME_BOUNDS, DWMWA_CLOAKED = 9, 14
 
 
@@ -89,11 +90,13 @@ def visible_game_rects(game_exe: str | None, titles: tuple[str, ...], own_pid: i
         for h in order[:index]:
             if not pieces:
                 break
-            if not shown(h) or win32process.GetWindowThreadProcessId(h)[1] == own_pid:
+            if not shown(h):
                 continue
             style = win32gui.GetWindowLong(h, -20)
-            if style & WS_EX_TRANSPARENT and style & WS_EX_LAYERED:   # 클릭 통과 투명 오버레이(다른 앱 HUD 등)
+            if style & WS_EX_TRANSPARENT and style & WS_EX_LAYERED:   # 클릭 통과 투명 오버레이(다른 앱 HUD·우리 오버레이)
                 continue
+            if style & WS_EX_TOOLWINDOW and win32process.GetWindowThreadProcessId(h)[1] == own_pid:
+                continue   # 우리 펫·오버레이(Qt.Tool) — 게임을 가리는 창이 아님
             cover = _bounds(win32gui, ctypes, wintypes, h)
             if cover[2] <= cover[0] or cover[3] <= cover[1]:
                 continue

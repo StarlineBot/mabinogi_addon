@@ -221,7 +221,7 @@ def test_visible_game_rects_with_fake_windows(monkeypatch):
 
     # hwnd: (pid, exe, 보임, 최소화, 영역, 확장 스타일, 제목) — 앞(위) 창부터
     wins = {
-        1: (50, "mine.exe", True, False, (0, 0, 400, 400), 0, "앱"),               # 우리 앱(가리지 않음)
+        1: (50, "mine.exe", True, False, (0, 0, 400, 400), 0x80, "펫"),            # 우리 펫·오버레이(도구 창 — 가리지 않음)
         2: (60, "hud.exe", True, False, (0, 0, 3000, 2000), 0x80020, "HUD"),     # 클릭 통과 투명 오버레이
         3: (70, "discord.exe", True, False, (1500, 800, 1800, 1100), 0, "디스코드"),  # 게임 오른쪽 아래 일부 가림
         4: (80, "chrome.exe", False, False, (0, 0, 1920, 1080), 0, "숨김"),
@@ -250,3 +250,38 @@ def test_visible_game_rects_with_fake_windows(monkeypatch):
     assert gv.visible_game_rects(None, ("마비노기",), 50) == rects   # 미등록이면 제목 폴백(같은 창)
     monkeypatch.setattr(gv, "_bounds", lambda *a: 1 / 0)
     assert gv.visible_game_rects("client.exe", ("마비노기",), 50) is None   # 실패 → 모름
+
+
+def test_own_main_window_covers_but_own_tool_window_does_not(monkeypatch):
+    """QA 반려 11-26: 우리 앱 일반 창(메인·대화상자)은 실제로 게임을 덮음 → 전체창 위에 띄우면 roam. 도구 창(펫·오버레이)은 안 가림."""
+    import sys
+    import types
+
+    from mabinogi_addon.system import game_visibility as gv
+    from mabinogi_addon.system import window_watcher as ww
+
+    def run(front_style, front_rect):
+        wins = {1: (50, front_style, front_rect), 2: (90, 0, (0, 0, 1920, 1080))}   # 우리 창 / 전체창 게임
+        gui = types.SimpleNamespace(
+            EnumWindows=lambda cb, extra: [cb(h, extra) for h in wins],
+            IsWindowVisible=lambda h: True, IsIconic=lambda h: False,
+            GetWindowText=lambda h: "마비노기", GetWindowLong=lambda h, i: wins[h][1],
+            GetWindowRect=lambda h: wins[h][2])
+        monkeypatch.setitem(sys.modules, "win32gui", gui)
+        monkeypatch.setitem(sys.modules, "win32process",
+                            types.SimpleNamespace(GetWindowThreadProcessId=lambda h: (0, wins[h][0])))
+        monkeypatch.setitem(sys.modules, "win32api", types.SimpleNamespace(
+            MonitorFromPoint=lambda p, f: 1, GetMonitorInfo=lambda m: {"Monitor": (0, 0, 1920, 1080)}))
+        monkeypatch.setattr(sys, "platform", "win32")
+        monkeypatch.setattr(gv, "_bounds", lambda g, c, w, h: wins[h][2])
+        monkeypatch.setattr(gv, "_cloaked", lambda c, w, h: False)
+        monkeypatch.setattr(ww, "_exe_basename_of_pid", lambda pid: {50: "mabinogi_addon.exe", 90: "client.exe"}[pid])
+        floor = br.Floor(0, 1920, 1039)
+        return fs.blocked_spans(gv.visible_game_rects("client.exe", ("마비노기",), 50), floor, 190)
+
+    assert run(0, (0, 0, 1920, 1040)) == []                      # (1) 우리 메인 창이 거의 덮음 → 막힌 곳 없음 → roam
+    b = _brain(900.0)
+    targets, _, _ = _run(b, 120, run(0, (0, 0, 1920, 1040)))
+    assert b._goal == "roam" and targets
+    assert run(0x80, (0, 0, 1920, 1040)) == [(0, 1920)]          # (2) 도구 창(펫·오버레이)은 가림으로 안 침
+    assert run(0x80020 | 0x80, (0, 0, 1920, 1040)) == [(0, 1920)]
