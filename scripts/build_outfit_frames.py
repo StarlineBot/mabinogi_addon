@@ -57,6 +57,7 @@ OVERRIDES = {
     ("이안", "guild_uniform"): ("모션별/다시_앱크기", tuple(f"drag_{i}" for i in range(4))),
     ("아리아", "tshirt"): ("모션별/다시_앱크기", ("drag_0", "drag_1", "land_0", "land_1", "land_2")),
     ("다래", "white_offshoulder"): ("다시_앱크기", None),   # 전체 다시 그림(사용자 확인 11-26) — 폴더의 75장 전부
+    ("레나", "red_dress"): ("다시_앱크기", None),           # 전체 다시 그림(사용자 확인 11-26) — 65장, 검정 배경은 기획이 뺌
 }
 # 그림 후처리(scripts/outfit_fixes) — 옷 → 할 일
 FIXES = {("이안", "guild_uniform"): ("one_coat_line",), ("이안", "vest_tie"): ("vest_badge",)}   # 옷 그림 끌기 칸마다 몸 크기가 달라(후광 폭 142→163) 후광 폭으로 칸 배율을 맞춤
