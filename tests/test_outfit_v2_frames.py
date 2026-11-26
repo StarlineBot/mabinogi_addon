@@ -270,3 +270,18 @@ def test_aria_summer_dress_talk_ribbon_present():
     for name in ("talk_a_base_0", "talk_a_blink_0", "talk_a_m1_0", "talk_a_m2_0"):
         assert ribbon_orange(_read(folder / f"{name}.png")) >= ref * 0.30, name   # 팔 아래 꼬리
     assert ribbon_orange(_read(folder / "talk_happy_0.png")) >= ribbon_orange(_read(folder / "talk_happy_1.png")) * 0.6
+
+
+# 걷기는 옆모습이라 리본이 몸 뒤(왼쪽 절반 기준이 안 맞음). stretch_4는 팔이 리본 반쯤을 가린 그림(553 ≈ 44%, 렌더로 리본 있음 — QA 11-26)
+HAIRBOW_SKIP = {f"walk_{i}" for i in range(8)} | {"card", "stretch_4"}
+
+
+def test_aria_summer_dress_hair_ribbon_everywhere():
+    """사용자 11-26(후보 #342): 여름 드레스 서 있기·머리 쓰다듬기 대기·기지개에서 땋은 머리 리본이 빠져 클릭할 때마다 나타났다 사라짐
+    → 티셔츠 같은 장 리본을 옮겨 붙임(scripts/outfit_fixes.add_hairbow). 앞모습 장마다 리본 덩어리 ≥ 전 장 중앙값의 50%."""
+    from scripts.outfit_fixes import HAIRBOW_FRAMES, hairbow_size
+    folder = CHARS / "아리아" / "outfits" / "summer_dress"
+    sizes = {p.stem: hairbow_size(_read(p)) for p in folder.glob("*.png") if p.stem not in HAIRBOW_SKIP}
+    median = float(np.median(list(sizes.values())))
+    assert set(HAIRBOW_FRAMES) <= set(sizes)
+    assert not [n for n, v in sizes.items() if v < median * 0.5], median

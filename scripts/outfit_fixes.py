@@ -248,3 +248,110 @@ def apply_summer_ribbon(frames: dict, _folder: str, _key: str) -> dict:
     for name, src in RIBBON_FROM.items():
         out[name] = add_ribbon(frames[name], frames[src])
     return out
+
+
+# 아리아 여름 드레스 머리 리본(사용자 11-26, QA 전달): 서 있기·머리 쓰다듬기 대기·기지개 몇 장에 땋은 머리 왼쪽 큰 주황 리본이 빠짐
+# → 같은 자세에 옷만 다른 티셔츠 같은 장의 리본(그 장의 가림 그대로)을 얼굴로 자리 맞춰 옮기고, 색은 여름 드레스 리본(talk_b_base_0)에 맞춤.
+HAIRBOW_FRAMES = ("stand_0", "stand_1", "hair_0", "hair_1", "hair_2", "hair_3", "stretch_0", "stretch_1")
+# 티셔츠 stand_1·stretch_1은 리본 일부가 팔에 가려 그려져(잘린 조각만 옮겨짐, 렌더 11-26) → 머리 자세가 같은 옆 장 리본을 씀
+HAIRBOW_DONOR = {"stand_1": "stand_0", "stretch_1": "stretch_0"}
+HAIRBOW_BAND = (0.38, 0.80)      # 리본 높이(키 비율), 왼쪽 절반
+HAIRBOW_FACE = (0.30, 0.50)      # 자리 맞춤 기준(눈~입)
+
+
+def _orange(frame: np.ndarray, s_min: int = 130) -> np.ndarray:
+    hsv = _hsv(frame)
+    return (hsv[..., 0] >= 3) & (hsv[..., 0] <= 22) & (hsv[..., 1] > s_min) & (hsv[..., 2] > 140) & (frame[..., 3] > 200)
+
+
+def hairbow_blob(frame: np.ndarray) -> np.ndarray:
+    """땋은 머리 리본 = 키 38~80%, 왼쪽 절반에서 가장 큰 주황 덩어리."""
+    h, w = frame.shape[:2]
+    m = _orange(frame).astype(np.uint8)
+    m[:round(h * HAIRBOW_BAND[0])] = 0
+    m[round(h * HAIRBOW_BAND[1]):] = 0
+    m[:, w // 2:] = 0
+    k, lab, st, _ = cv2.connectedComponentsWithStats(m, 8)
+    if k < 2:
+        return np.zeros((h, w), bool)
+    return lab == 1 + int(np.argmax(st[1:, 4]))
+
+
+def hairbow_size(frame: np.ndarray) -> int:
+    return int(hairbow_blob(frame).sum())
+
+
+def _hairbow_sprite(frame: np.ndarray) -> np.ndarray:
+    """리본 덩어리 + 붙은 매듭·그늘(주황 계열) + 외곽선(어두운 곳) — 리본 둘레 3px 안."""
+    blob = hairbow_blob(frame)
+    grown = cv2.dilate(blob.astype(np.uint8), np.ones((7, 7), np.uint8)) > 0
+    hsv = _hsv(frame)
+    warm = (hsv[..., 0] <= 22) & (hsv[..., 1] > 110)
+    dark = hsv[..., 2] < 140
+    return blob | (grown & (warm | dark) & (frame[..., 3] > 200))
+
+
+def _face_align(frame: np.ndarray, source: np.ndarray) -> tuple[float, int, int]:
+    g = lambda im: cv2.cvtColor(np.ascontiguousarray(im[..., :3]), cv2.COLOR_BGR2GRAY)
+    hs, ws = source.shape[:2]
+    y0, y1 = round(hs * HAIRBOW_FACE[0]), round(hs * HAIRBOW_FACE[1])
+    x0, x1 = round(ws * 0.2), round(ws * 0.85)
+    face = g(source)[y0:y1, x0:x1]
+    img = g(frame)
+    best = (-1.0, (1.0, 0, 0))
+    for s in np.arange(0.9, 1.1001, 0.0125):
+        t = cv2.resize(face, None, fx=s, fy=s, interpolation=cv2.INTER_AREA)
+        if img.shape[0] < t.shape[0] or img.shape[1] < t.shape[1]:
+            continue
+        _, score, _, (x, y) = cv2.minMaxLoc(cv2.matchTemplate(img, t, cv2.TM_CCOEFF_NORMED))
+        if score > best[0]:
+            best = (score, (float(s), round(x - x0 * s), round(y - y0 * s)))
+    return best[1]
+
+
+def _match_orange(sprite: np.ndarray, mask: np.ndarray, target_ref: np.ndarray) -> np.ndarray:
+    """옮긴 리본 색을 여름 드레스 리본 색(Lab 평균)에 맞춤 — 외곽선 포함 전체를 같은 만큼 이동."""
+    lab = cv2.cvtColor(np.ascontiguousarray(sprite[..., :3]), cv2.COLOR_BGR2LAB).astype(np.float64)
+    ref = cv2.cvtColor(np.ascontiguousarray(target_ref[..., :3]), cv2.COLOR_BGR2LAB).astype(np.float64)
+    src_o = _orange(sprite) & mask
+    ref_o = hairbow_blob(target_ref)
+    if src_o.sum() == 0 or ref_o.sum() == 0:
+        return sprite
+    lab[mask] += ref[ref_o].mean(0) - lab[src_o].mean(0)
+    out = sprite.copy()
+    out[..., :3] = cv2.cvtColor(np.clip(lab, 0, 255).astype(np.uint8), cv2.COLOR_LAB2BGR)
+    return out
+
+
+def add_hairbow(frame: np.ndarray, donor: np.ndarray, color_ref: np.ndarray) -> np.ndarray:
+    s, ox, oy = _face_align(frame, donor)
+    src = cv2.resize(donor, None, fx=s, fy=s, interpolation=cv2.INTER_AREA)
+    mask = cv2.resize(_hairbow_sprite(donor).astype(np.uint8), (src.shape[1], src.shape[0]),
+                      interpolation=cv2.INTER_NEAREST) > 0
+    src = _match_orange(src, mask, color_ref)
+    H, W = frame.shape[:2]
+    ys, xs = np.nonzero(mask)
+    ty, tx = ys + oy, xs + ox
+    inside = (ty >= 0) & (ty < H) & (tx >= 0) & (tx < W)
+    big = np.zeros((H, W), bool)
+    sprite = np.zeros_like(frame)
+    big[ty[inside], tx[inside]] = True
+    sprite[ty[inside], tx[inside]] = src[ys[inside], xs[inside]]
+    ok = big & ~_skin(frame)                                    # 머리카락은 덮고, 앞을 지나는 팔·손은 그대로
+    out = frame.copy()
+    out[ok] = sprite[ok]
+    out[ok, 3] = np.maximum(frame[ok, 3], sprite[ok, 3])
+    return out
+
+
+def apply_summer_hairbow(frames: dict, folder: str, _key: str) -> dict:
+    """티셔츠(같은 캐릭터 폴더의 tshirt, 앱 결과물)에서 리본을 옮김 — tshirt가 먼저 빌드됨(OUTFITS 순서)."""
+    from pathlib import Path
+
+    from mabinogi_addon import image_io
+    donor_dir = Path(__file__).resolve().parents[1] / "src/mabinogi_addon/assets/characters" / folder / "outfits" / "tshirt"
+    out = dict(frames)
+    for name in HAIRBOW_FRAMES:
+        donor = image_io.imread(donor_dir / f"{HAIRBOW_DONOR.get(name, name)}.png", cv2.IMREAD_UNCHANGED)
+        out[name] = add_hairbow(frames[name], donor, frames["talk_b_base_0"])
+    return out

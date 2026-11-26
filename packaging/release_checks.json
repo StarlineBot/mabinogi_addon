@@ -68,7 +68,7 @@
         "tests/test_outfit_v2_frames.py",
         "tests/test_character.py"
       ],
-      "reason": "프레임표 v2 옷 6벌(호감도 50 레나·다래 + 100 네 벌, 칸마다 머리 맞춤·아리아 여름 드레스는 머리 배율 중앙값으로 모자 몫 뺌·큰 시트는 템플릿 크기로) — 기존 옷 결과 그대로(해시 같음) · 한 동작 묶음 안 머리 배율 하나(중앙값)·레나 lab 걷기 얼굴 옮겨 붙이기(QA 11-26) · 다래 끌기 후광 폭으로 칸 배율 · 오프숄더 drag_0 = drag_1 · 이안 정복 끌기 0·2 반복·FIXES 후처리 · 다시 그린 칸 덮어쓰기(OVERRIDES — 이안 정복 끌기 4장·아리아 티셔츠 끌기/착지), 정복 끌기 임시 반복 제거 · 다래 오프숄더 전체 다시 그림(OVERRIDES 75장) · 레나 빨간 원피스 전체 다시 그림(OVERRIDES 65장)·오프숄더 구멍 정정본 · 아리아 티셔츠 전체 다시 그림(OVERRIDES 81장, 통째면 템플릿 안 자름·기본 프레임 다 있는지 확인)·레나 갇힌 검정 틈 정정본 · 아리아 여름 드레스 전체 다시 그림(OVERRIDES 81장, 쓰다듬기 띠 폭 맞춤 REF_FIT 없앰) · 여름 드레스 FIXES summer_ribbon"
+      "reason": "프레임표 v2 옷 6벌(호감도 50 레나·다래 + 100 네 벌, 칸마다 머리 맞춤·아리아 여름 드레스는 머리 배율 중앙값으로 모자 몫 뺌·큰 시트는 템플릿 크기로) — 기존 옷 결과 그대로(해시 같음) · 한 동작 묶음 안 머리 배율 하나(중앙값)·레나 lab 걷기 얼굴 옮겨 붙이기(QA 11-26) · 다래 끌기 후광 폭으로 칸 배율 · 오프숄더 drag_0 = drag_1 · 이안 정복 끌기 0·2 반복·FIXES 후처리 · 다시 그린 칸 덮어쓰기(OVERRIDES — 이안 정복 끌기 4장·아리아 티셔츠 끌기/착지), 정복 끌기 임시 반복 제거 · 다래 오프숄더 전체 다시 그림(OVERRIDES 75장) · 레나 빨간 원피스 전체 다시 그림(OVERRIDES 65장)·오프숄더 구멍 정정본 · 아리아 티셔츠 전체 다시 그림(OVERRIDES 81장, 통째면 템플릿 안 자름·기본 프레임 다 있는지 확인)·레나 갇힌 검정 틈 정정본 · 아리아 여름 드레스 전체 다시 그림(OVERRIDES 81장, 쓰다듬기 띠 폭 맞춤 REF_FIT 없앰) · 여름 드레스 FIXES summer_ribbon·summer_hairbow"
     },
     "src/mabinogi_addon/assets/characters/다래/outfits/frill_pajama/stand_0.png": {
       "tests": [
@@ -241,7 +241,7 @@
       "tests": [
         "tests/test_outfit_v2_frames.py"
       ],
-      "reason": "이안 길드 정복 코트 금줄 한 줄(inpaint)·조끼 가슴 배지 붙이기 · 아리아 여름 드레스 talk_a_mid 가슴 리본 붙이기(add_ribbon — 같은 자세 talk_a_emph_0에서, 천 위에만·팔 가림 그대로)"
+      "reason": "이안 길드 정복 코트 금줄 한 줄(inpaint)·조끼 가슴 배지 붙이기 · 아리아 여름 드레스 talk_a_mid 가슴 리본 붙이기(add_ribbon — 같은 자세 talk_a_emph_0에서, 천 위에만·팔 가림 그대로) · 여름 드레스 머리 리본(add_hairbow — 티셔츠 같은 장 리본을 얼굴로 맞춰 옮김, 색은 여름 드레스 리본, 팔 가림 그대로)"
     }
   }
 }

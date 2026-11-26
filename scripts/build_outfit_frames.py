@@ -62,7 +62,7 @@ OVERRIDES = {
 }
 # 그림 후처리(scripts/outfit_fixes) — 옷 → 할 일
 FIXES = {("이안", "guild_uniform"): ("one_coat_line",), ("이안", "vest_tie"): ("vest_badge",),
-         ("아리아", "summer_dress"): ("summer_ribbon",)}   # 옷 그림 끌기 칸마다 몸 크기가 달라(후광 폭 142→163) 후광 폭으로 칸 배율을 맞춤
+         ("아리아", "summer_dress"): ("summer_ribbon", "summer_hairbow")}   # 옷 그림 끌기 칸마다 몸 크기가 달라(후광 폭 142→163) 후광 폭으로 칸 배율을 맞춤
 HALO_BAND = 0.09                 # 맨 위 9% 띠 = 날개 달린 후광
 # 머리 위 장식(밀짚모자)으로 머리 실루엣을 못 쓰는 옷 → 같은 템플릿 자세 옷(티셔츠)의 같은 칸 '모자 아래 띠(키 25~55%) 폭'에 맞춤
 REF_FIT: dict = {}   # 여름 드레스 쓰다듬기 띠 폭 맞춤은 전체 다시 그림(11-26)으로 없앰
