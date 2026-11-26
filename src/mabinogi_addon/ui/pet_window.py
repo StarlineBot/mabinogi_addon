@@ -28,6 +28,7 @@ FOOT = 6                     # 창 아래에서 발 밑까지
 BUBBLE_SECONDS = 4.5
 TICK_MS = 50
 FRONT_CHECK = 0.25           # 게임 앞/뒤 판정 주기(초)
+BLOCK_CHECK = 1.0            # 보이는 게임 화면(진짜 창모드) 다시 구하는 주기(초) — 게임이 포그라운드가 아닐 때만
 
 
 def load_frames(folder: str, profile: brain_mod.Profile | None = None, outfit: str = "") -> dict[str, QImage]:
@@ -72,7 +73,7 @@ class PetWindow(QWidget):
 
     def __init__(self, brain: brain_mod.Brain, frames: dict[str, QImage], tint: str,
                  game_front=lambda: False, clock=time.monotonic, parent: QWidget | None = None,
-                 outline: str | None = None) -> None:
+                 outline: str | None = None, blocked=lambda: ()) -> None:
         super().__init__(parent, Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint
                          | Qt.WindowType.Tool | Qt.WindowType.WindowDoesNotAcceptFocus)
         from . import overlay_capture
@@ -91,6 +92,9 @@ class PetWindow(QWidget):
         self._clock = clock
         self._front = False
         self._front_checked = -1e9
+        self._blocked_fn = blocked      # 보이는 게임 화면이 바닥과 겹치는 x 구간(진짜 창모드, QA 11-26)
+        self._blocked: tuple = ()
+        self._blocked_checked = -1e9
         self._bubble: tuple[str, float, float] | None = None   # (글, 나오기 시작, 사라질 때)
         self._sprite = QRectF()
         self._shown = None            # 마지막으로 그린 것(프레임·위치·말풍선) — 같으면 다시 안 그림(CPU)
@@ -148,7 +152,15 @@ class PetWindow(QWidget):
                 self._front = bool(self._game_front())
             except Exception:  # noqa: BLE001 — 판정 실패는 '게임 밖'으로
                 self._front = False
-        events = self.brain.tick(now, self._front)
+        if self._front:
+            self._blocked = ()   # 게임 중엔 구석으로 — 창 영역 계산 안 함(CPU)
+        elif now - self._blocked_checked >= BLOCK_CHECK:
+            self._blocked_checked = now
+            try:
+                self._blocked = tuple(self._blocked_fn() or ())
+            except Exception:  # noqa: BLE001 — 판정 실패는 '막힌 곳 없음'(지금 동작 그대로)
+                self._blocked = ()
+        events = self.brain.tick(now, self._front, self._blocked)
         if self._bubble and now >= self._bubble[2]:
             self._bubble = None
         self._place()

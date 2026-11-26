@@ -21,6 +21,8 @@ import math
 import random
 from dataclasses import dataclass, field
 
+from . import floor_space
+
 FIGURE_H = 190
 WALK_SPEED = 45.0          # 논리 px/초(캐릭터 값이 없을 때)
 # 캐릭터별 걷기(사용자 11-24 '걷기가 미끄러짐'): 속도 = 걷기 그림 한 바퀴 이동 거리 / 한 바퀴 시간이 되게.
@@ -329,6 +331,9 @@ class Brain:
     _goal: str = "roam"              # roam / corner
     _front: bool = False
     _front_since: float = 0.0
+    _game_front: bool = False        # 진짜 게임 포그라운드(호감도 구석 시간은 이것만) — _front는 '빈 바닥 없음'도 포함
+    _front_by_game: bool = False     # 구석으로 간 까닭이 게임이었나(빈 바닥이 없어서면 게임 대사 안 함)
+    _spans: tuple | None = None      # 빈 바닥(보이는 게임 화면을 뺀 x 구간) — None이면 바닥 전체
     _press: tuple[float, float] | None = None
     _grab: tuple[float, float] = (0.0, 0.0)
     _dragging: bool = False
@@ -478,8 +483,37 @@ class Brain:
             self._next_extra = now + self.rng.uniform(*self.profile.idle_gap)
 
     # ---- 시간 --------------------------------------------------------------------------------
-    def tick(self, now: float, game_front: bool) -> list[tuple]:
+    # ---- 빈 바닥(진짜 창모드 — 보이는 게임 화면 피하기, QA 11-26) --------------------------------------
+    def _centers(self) -> list[tuple[float, float]]:
+        """빈 구간마다 펫 가운데가 설 수 있는 x 범위(창 폭 절반씩 안쪽)."""
+        half = floor_space.PET_WIDTH / 2
+        return [(lo + half, hi - half) for lo, hi in self._spans or ()]
+
+    def _allowed(self, x: float) -> bool:
+        return self._spans is None or any(a - 1.0 <= x <= b + 1.0 for a, b in self._centers())
+
+    def _nearest_free(self, x: float) -> float:
+        """막힌 구간 안이면 가장 가까운 빈 구간 안쪽 점."""
+        return min((min(b, max(a, x)) for a, b in self._centers()), key=lambda c: abs(c - x))
+
+    def _roam_x(self) -> float:
+        """돌아다닐 다음 목표 x — 빈 바닥이 정해져 있으면 지금 선 빈 구간 안에서만(막힌 구간을 건너가지 않음)."""
+        if self._spans is None:
+            return self.floor.clamp_x(self.rng.uniform(self.floor.left, self.floor.right))
+        x = self.pos[0]
+        here = [(a, b) for a, b in self._centers() if a - 1.0 <= x <= b + 1.0]
+        if not here:
+            return self._nearest_free(x)
+        a, b = here[0]
+        return self.rng.uniform(a, b)
+
+    def tick(self, now: float, game_front: bool, blocked=()) -> list[tuple]:
+        """blocked: 보이는 게임 화면이 바닥 띠와 겹치는 x 구간(논리 px, 게임이 포그라운드가 아닐 때만 의미)."""
         events: list[tuple] = []
+        self._game_front = bool(game_front)
+        spans = floor_space.free_spans(self.floor, blocked) if blocked and not game_front else None
+        self._spans = tuple(spans) if spans else None   # 빈 바닥이 없으면 아래 '구석에서 졸기'가 맡음
+        game_front = self._game_front or (spans is not None and not spans)   # 설 빈 바닥이 없으면 게임 때처럼 구석에서 졸기
         dt = 0.0 if self._last is None else max(0.0, min(0.5, now - self._last))
         self._last = now
         if self._next_idle == 0.0:
@@ -489,12 +523,16 @@ class Brain:
             self._next_rare = now + self.rng.uniform(*self.profile.rare_gap)
         if game_front != self._front:
             self._front, self._front_since = game_front, now
+        if self._front and self._game_front:
+            self._front_by_game = True
         if self._front and now - self._front_since >= FRONT_DELAY and self._goal != "corner":
             self._goal = "corner"
             self._hunt_time = 0.0
             self._pick_edge()
+            self._front_by_game = self._game_front
             if not self._dragging and self.state in STANDING:
-                events.append(("say", "game_enter"))
+                if self._front_by_game:
+                    events.append(("say", "game_enter"))
                 if self.state == "walk":  # 돌아다니던 걸음을 구석 쪽으로 바꿈(빠르기도 다시 정함)
                     self._walk_to(self.home(), now)
         elif not self._front and now - self._front_since >= BACK_DELAY and self._goal != "roam":
@@ -502,7 +540,9 @@ class Brain:
             if self.state in self.profile.sitting:
                 # 엎드려 자던 다래는 눈 비비며 일어나 앉은 뒤(6·7·8) 일어나기
                 self._go("sleep_up" if self.state in ("sleep_down", "sleep_loop") else "rise", now)
-                events.append(("say", "game_exit"))
+                if self._front_by_game:
+                    events.append(("say", "game_exit"))
+            self._front_by_game = False
             self._schedule_walk(now)
 
         if self._dragging:
@@ -563,7 +603,7 @@ class Brain:
             elif self.state not in self.profile.sitting:
                 self._sleep_next = 0.0
 
-        if self.state in self.profile.sitting and self._front:
+        if self.state in self.profile.sitting and self._game_front:   # 호감도는 진짜 게임 중일 때만(빈 바닥 없음은 안 셈)
             self._corner_time += dt
             self._hunt_time += dt
             if self._corner_time >= 60.0:  # 1분마다 — 호감도(30분마다 +1·퀘스트 누적 분)는 창 쪽에서
@@ -573,6 +613,11 @@ class Brain:
                 self._hunt_time = 0.0
                 events.append(("say", "long_hunt"))
 
+        if self._goal == "roam" and self._spans is not None and not self._dragging:
+            if self.state == "walk" and self._target is not None and not self._allowed(self._target[0]):
+                self._walk_to((self._roam_x(), self.floor.y), now)    # 걷는 중 그 앞이 막힘 → 지금 빈 구간 안으로
+            elif self.state in ("stand", self.profile.idle_extra) and not self._allowed(self.pos[0]):
+                self._walk_to((self._nearest_free(self.pos[0]), self.floor.y), now)   # 막힌 곳에 서 있음 → 가까운 빈 곳으로
         if self.state == "walk":
             self._step(dt, now)
         elif self.state in ("stand", self.profile.idle_extra, rare):  # 대기·드문 동작 중이어도 걸을 차례·게임이 오면 바로 끊음
@@ -582,8 +627,7 @@ class Brain:
                 else:
                     self._walk_to(self.home(), now)
             elif now >= self._next_walk:
-                x = self.floor.clamp_x(self.rng.uniform(self.floor.left, self.floor.right))
-                self._walk_to((x, self.floor.y), now)
+                self._walk_to((self._roam_x(), self.floor.y), now)
             elif self.state == "stand" and rare and now >= self._next_rare > 0:
                 if self._next_idle - now < RARE_DEFER:   # 혼잣말이 곧 나올 차례 → 드문 동작은 다음 차례로
                     self._next_rare = now + RARE_DEFER

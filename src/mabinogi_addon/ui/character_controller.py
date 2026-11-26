@@ -250,10 +250,25 @@ class CharacterController(QObject):
             brain.pos = (floor.clamp_x(self._last_pos[0]), min(self._last_pos[1], floor.y))
         game = (lambda: self._watcher.is_game_active()) if self._watcher is not None else (lambda: False)
         window = PetWindow(brain, frames, self.character.color, game_front=game, clock=self._clock,
-                           outline=self.character.outline)
+                           outline=self.character.outline, blocked=self._blocked_fn(floor, profile))
         window.events.connect(self._on_events)
         self._window_for = self.character
         return window
+
+    def _blocked_fn(self, floor, profile):
+        """진짜 창모드(QA 11-26): 게임 창 중 보이는 부분이 바닥 띠와 겹치는 x 구간(논리 px). 모르면 ()."""
+        def blocked():
+            if self._watcher is None:
+                return ()
+            rects = self._watcher.visible_game_rects()
+            if not rects:
+                return ()
+            from ..character import brain as brain_mod
+            from ..character import floor_space
+            from .dpi import screen_scale
+            return floor_space.blocked_spans(floor_space.to_logical(rects, screen_scale()), floor,
+                                             brain_mod.FIGURE_H * profile.scale)
+        return blocked
 
     # ---- 사건 --------------------------------------------------------------------------------
     def _on_events(self, events: list) -> None:

@@ -124,6 +124,10 @@ class WindowWatcher(ABC):
     def set_game_exe(self, exe: str | None) -> None:
         """게임으로 볼 실행파일명(basename). None/빈값이면 제목 기반 폴백."""
 
+    def visible_game_rects(self) -> list[tuple] | None:
+        """게임 창 중 다른 창에 안 가려진 부분(주 화면 물리 px (l, t, r, b)). 모르면 None — 펫 '게임 화면 피하기'용."""
+        return None
+
 
 class AlwaysActiveWatcher(WindowWatcher):
     """맥/리눅스 개발용 — 게임이 항상 활성인 것으로 취급."""
@@ -261,6 +265,10 @@ class WindowsWatcher(WindowWatcher):
 
     def is_self_active(self) -> bool:
         return self._classify() == "self"
+
+    def visible_game_rects(self) -> list[tuple] | None:
+        from .game_visibility import visible_game_rects
+        return visible_game_rects(self._game_exe, self._titles, self._own_pid)
 
 
 def create_window_watcher(

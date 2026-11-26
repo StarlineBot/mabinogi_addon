@@ -1,0 +1,252 @@
+"""진짜 창모드 — 펫이 보이는 게임 화면을 피해 빈 바닥에서만 돌아다님(QA 11-26, 사용자 결정 ①안)."""
+import random
+
+import pytest
+
+from mabinogi_addon.character import brain as br
+from mabinogi_addon.character import floor_space as fs
+
+FLOOR = br.Floor(0, 1920, 1040)
+BLOCK = [(600.0, 1400.0)]      # 창모드 게임 창이 바닥 띠와 겹치는 x
+
+
+def _brain(x=200.0, seed=3):
+    b = br.Brain(FLOOR, rng=random.Random(seed), profile=br.ARIA)
+    b.pos = (x, FLOOR.y)
+    return b
+
+
+def _run(b, seconds, blocked=(), game_front=False, start=0.0, dt=0.05):
+    """tick을 돌리며 (걷기 목표 x 목록, 위치 x 목록)을 모음."""
+    targets, xs, events = [], [], []
+    t = start
+    while t < start + seconds:
+        events += b.tick(t, game_front, blocked)
+        if b._target is not None:
+            targets.append(b._target[0])
+        xs.append(b.pos[0])
+        t += dt
+    return targets, xs, events
+
+
+# ---- 순수 계산 --------------------------------------------------------------------------------
+def test_merge_and_free_spans():
+    assert fs.merge([(5, 8), (0, 3), (2, 4), (8, 9)]) == [(0, 4), (5, 9)]
+    assert fs.free_spans(FLOOR, BLOCK) == [(0, 600), (1400, 1920)]
+    assert fs.free_spans(FLOOR, [(250, 1700)]) == []              # 양쪽 다 300보다 좁음
+    assert fs.free_spans(FLOOR, []) == [(0, 1920)]
+
+
+def test_windowed_game_blocks_its_x_range():
+    """창모드: 게임 창이 가운데, 위에 아무것도 없음 → 게임 창 x 범위가 막힘."""
+    assert fs.blocked_spans([(600, 200, 1400, 1000)], FLOOR, 190) == [(600, 1400)]
+
+
+def test_fullscreen_covered_by_browser_blocks_nothing():
+    """전체창 + 브라우저가 전부 덮음 → 보이는 사각형 없음 → 막힌 구간 없음(지금처럼 화면 전체)."""
+    game = (0, 0, 1920, 1080)
+    visible = fs_subtract_all(game, [(0, 0, 1920, 1080)])
+    assert visible == [] and fs.blocked_spans(visible, FLOOR, 190) == []
+
+
+def test_fullscreen_with_small_browser_leaves_no_room():
+    """전체창 + 작은 브라우저 창 → 바닥 띠 대부분이 게임 → 설 자리 없음."""
+    visible = fs_subtract_all((0, 0, 1920, 1080), [(700, 100, 1300, 700)])
+    blocked = fs.blocked_spans(visible, FLOOR, 190)
+    assert blocked == [(0, 1920)] and fs.free_spans(FLOOR, blocked) == []
+
+
+def test_small_window_above_floor_band_blocks_nothing():
+    """게임 창 아래 끝이 바닥 띠보다 위(창이 작고 화면 위쪽) → 막힌 구간 없음."""
+    assert fs.blocked_spans([(600, 100, 1400, 800)], FLOOR, 190) == []
+
+
+def test_dpi_150_conversion():
+    rects = fs.to_logical([(900, 300, 2100, 1500)], 1.5)
+    assert rects == [(600, 200, 1400, 1000)]
+    assert fs.blocked_spans(rects, FLOOR, 190) == [(600, 1400)]
+
+
+def fs_subtract_all(rect, covers):
+    from mabinogi_addon.system.dialogue_visibility import subtract
+    pieces = [rect]
+    for cover in covers:
+        pieces = [p for piece in pieces for p in subtract(piece, cover)]
+    return pieces
+
+
+# ---- brain --------------------------------------------------------------------------------
+def test_roam_targets_never_enter_blocked_span():
+    """(a)·(c) 막힌 구간이 있으면 목표 x가 그 안에 들어가지 않고, 반대편으로 건너가지도 않음."""
+    for seed, x in ((1, 200.0), (2, 1700.0), (3, 450.0)):
+        b = _brain(x, seed)
+        targets, xs, _ = _run(b, 240, BLOCK)
+        assert targets, seed
+        assert not [t for t in targets if 600 - 150 < t < 1400 + 150], seed
+        side = x < 600
+        assert all((p < 600) == side for p in xs), seed
+
+
+def test_standing_inside_blocked_walks_out_to_nearest():
+    """(b) 막힌 구간 안에 서 있으면(창을 옮김) 가까운 빈 구간으로 걸어 나감."""
+    b = _brain(1300.0)
+    _run(b, 2, ())                        # 막힘 없을 때 서 있음
+    _, xs, _ = _run(b, 20, BLOCK, start=2)
+    assert xs[-1] >= 1400 + 150 - 1       # 오른쪽이 더 가까움
+    b = _brain(700.0)
+    _, xs, _ = _run(b, 20, BLOCK)
+    assert xs[-1] <= 600 - 150 + 1
+
+
+def test_no_room_goes_home_and_dozes_without_affinity_or_game_lines():
+    """(d) 빈 구간이 펫 폭보다 좁으면 구석(home)으로 가서 졸고 — 호감도 시간·게임 대사는 없음."""
+    b = _brain(900.0)
+    _, _, events = _run(b, 90, [(250, 1700)])
+    assert b._goal == "corner" and b.state in b.profile.sitting
+    assert b.pos == b.home()
+    assert ("corner_minute",) not in events
+    assert ("say", "game_enter") not in events
+
+
+def test_block_gone_roams_whole_floor_again():
+    """(e) 막힌 구간이 사라지면 다시 화면 전체를 돌아다님."""
+    b = _brain(200.0, seed=5)
+    _run(b, 60, BLOCK)
+    targets, _, _ = _run(b, 400, (), start=60)
+    assert any(600 < t < 1400 for t in targets) and any(t > 1400 for t in targets)
+
+
+def test_game_front_unchanged_and_counts_affinity():
+    """(f) 게임 포그라운드 동작은 그대로 — 막힌 구간을 받아도 무시하고 구석·호감도."""
+    b = _brain(900.0)
+    _, _, events = _run(b, 90, BLOCK, game_front=True)
+    assert b._goal == "corner" and b.state in b.profile.sitting
+    assert ("say", "game_enter") in events and ("corner_minute",) in events
+
+
+def test_fullscreen_alt_tab_roams_everywhere():
+    """전체창 회귀 금지: 브라우저가 게임을 덮어 막힌 구간이 없으면 구석에서 자지 않고 화면 전체."""
+    b = _brain(900.0, seed=7)
+    targets, _, _ = _run(b, 300, ())
+    assert b._goal == "roam" and min(targets) < 600 and max(targets) > 1400
+
+
+@pytest.mark.parametrize("profile", [br.DARE, br.ARIA, br.IAN, br.LENA, br.STARLINE])
+def test_every_profile_avoids_block(profile):
+    b = br.Brain(FLOOR, rng=random.Random(11), profile=profile)
+    b.pos = (300.0, FLOOR.y)
+    targets, _, _ = _run(b, 200, BLOCK)
+    assert not [t for t in targets if 450 < t < 1550]
+
+
+# ---- 창·컨트롤러 연결 ----------------------------------------------------------------------
+@pytest.fixture
+def app():
+    import os
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtWidgets import QApplication
+    return QApplication.instance() or QApplication([])
+
+
+def test_pet_window_asks_blocked_once_a_second_only_when_game_not_front(app):
+    from PySide6.QtGui import QImage
+
+    from mabinogi_addon.ui.pet_window import PetWindow
+
+    clock = [0.0]
+    calls, front, seen = [], [False], []
+    b = _brain(200.0)
+    real = b.tick
+    b.tick = lambda now, game_front, blocked=(): seen.append(tuple(blocked)) or real(now, game_front, blocked)
+    image = QImage(100, 280, QImage.Format.Format_ARGB32)
+    w = PetWindow(b, {n: image for f, _t, _l in b.profile.anims.values() for n in f}, "#ffffff",
+                  game_front=lambda: front[0], clock=lambda: clock[0], blocked=lambda: calls.append(1) or BLOCK)
+    for _ in range(60):          # 3초(0.05초마다)
+        w.step()
+        clock[0] += 0.05
+    assert len(calls) == 3 and seen[-1] == tuple(BLOCK)
+    front[0] = True
+    for _ in range(60):
+        w.step()
+        clock[0] += 0.05
+    assert len(calls) == 3 and seen[-1] == ()        # 게임 중엔 부르지 않음
+    front[0] = False
+    w._blocked_fn = lambda: 1 / 0                    # 판정 실패 → 막힌 곳 없음
+    for _ in range(30):
+        w.step()
+        clock[0] += 0.05
+    assert seen[-1] == ()
+    w.close()
+
+
+def test_controller_converts_visible_rects_to_blocked_spans(app, monkeypatch):
+    from mabinogi_addon.ui import character_controller as cc
+    from mabinogi_addon.ui import dpi
+
+    class Watcher:
+        def __init__(self):
+            self.rects = [(900, 300, 2100, 1500)]
+
+        def visible_game_rects(self):
+            return self.rects
+
+    monkeypatch.setattr(dpi, "screen_scale", lambda: 1.5)
+    ctrl = cc.CharacterController.__new__(cc.CharacterController)
+    ctrl._watcher = watcher = Watcher()
+    fn = ctrl._blocked_fn(FLOOR, br.ARIA)
+    assert fn() == [(600, 1400)]
+    watcher.rects = None                              # 모름 → 막힌 곳 없음
+    assert fn() == ()
+    ctrl._watcher = None
+    assert fn() == ()
+
+
+def test_watchers_default_to_unknown():
+    from mabinogi_addon.system.game_visibility import visible_game_rects
+    from mabinogi_addon.system.window_watcher import AlwaysActiveWatcher
+
+    assert AlwaysActiveWatcher().visible_game_rects() is None
+    import sys
+    if sys.platform != "win32":
+        assert visible_game_rects("client.exe", ("마비노기",), 1) is None
+
+
+def test_visible_game_rects_with_fake_windows(monkeypatch):
+    """Z 순서 위 창 영역 빼기 — 우리 앱·투명 클릭 통과·숨김 창은 안 가림, 주 화면으로 자름(가짜 win32)."""
+    import sys
+    import types
+
+    from mabinogi_addon.system import game_visibility as gv
+    from mabinogi_addon.system import window_watcher as ww
+
+    # hwnd: (pid, exe, 보임, 최소화, 영역, 확장 스타일, 제목) — 앞(위) 창부터
+    wins = {
+        1: (50, "mine.exe", True, False, (0, 0, 400, 400), 0, "앱"),               # 우리 앱(가리지 않음)
+        2: (60, "hud.exe", True, False, (0, 0, 3000, 2000), 0x80020, "HUD"),     # 클릭 통과 투명 오버레이
+        3: (70, "discord.exe", True, False, (1500, 800, 1800, 1100), 0, "디스코드"),  # 게임 오른쪽 아래 일부 가림
+        4: (80, "chrome.exe", False, False, (0, 0, 1920, 1080), 0, "숨김"),
+        5: (90, "client.exe", True, False, (600, 200, 1600, 1100), 0, "마비노기"),   # 게임(화면 밖 20px)
+        6: (91, "client.exe", True, False, (0, 0, 100, 100), 0, "마비노기 작은 창"),
+    }
+    gui = types.SimpleNamespace(
+        EnumWindows=lambda cb, extra: [cb(h, extra) for h in wins],
+        IsWindowVisible=lambda h: wins[h][2], IsIconic=lambda h: wins[h][3],
+        GetWindowText=lambda h: wins[h][6], GetWindowLong=lambda h, i: wins[h][5],
+        GetWindowRect=lambda h: wins[h][4])
+    proc = types.SimpleNamespace(GetWindowThreadProcessId=lambda h: (0, wins[h][0]))
+    api = types.SimpleNamespace(MonitorFromPoint=lambda p, f: 1, GetMonitorInfo=lambda m: {"Monitor": (0, 0, 1920, 1080)})
+    monkeypatch.setitem(sys.modules, "win32gui", gui)
+    monkeypatch.setitem(sys.modules, "win32process", proc)
+    monkeypatch.setitem(sys.modules, "win32api", api)
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setattr(gv, "_bounds", lambda g, c, w, h: wins[h][4])
+    monkeypatch.setattr(gv, "_cloaked", lambda c, w, h: False)
+    pids = {v[0]: v[1] for v in wins.values()}
+    monkeypatch.setattr(ww, "_exe_basename_of_pid", lambda pid: pids[pid])
+    rects = gv.visible_game_rects("client.exe", ("마비노기",), 50)
+    covered = sum((r - l) * (b - t) for l, t, r, b in rects)
+    assert covered == 1000 * 880 - 100 * 280            # 게임(주 화면 안) − 디스코드가 가린 부분
+    assert fs.blocked_spans(rects, FLOOR, 190) == [(600, 1500)]           # 바닥 띠 오른쪽 끝은 디스코드가 덮음
+    assert gv.visible_game_rects(None, ("마비노기",), 50) == rects   # 미등록이면 제목 폴백(같은 창)
+    monkeypatch.setattr(gv, "_bounds", lambda *a: 1 / 0)
+    assert gv.visible_game_rects("client.exe", ("마비노기",), 50) is None   # 실패 → 모름
