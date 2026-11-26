@@ -8,7 +8,8 @@
     "tests/test_release_candidate.py",
     "tests/test_windows_ci.py",
     "tests/test_release_notes.py",
-    "tests/test_release_notes_trigger.py"
+    "tests/test_release_notes_trigger.py",
+    "tests/test_outfit_lena_lab.py"
   ],
   "coverage": {
     "src/mabinogi_addon/character/brain.py": {
@@ -45,13 +46,27 @@
         "tests/test_release_notes.py",
         "tests/test_release_notes_trigger.py"
       ],
-      "reason": "0.57.2 노트 맨 위 — 새 걷기"
+      "reason": "0.57.2 노트 맨 위 — 새 걷기 · 레나 연구실 차림 펫"
     },
     "tests/test_release_checks.py": {
       "tests": [
         "tests/test_release_checks.py"
       ],
       "reason": "현재 릴리즈 경계 테스트를 0.57.2(걷기)로"
+    },
+    "scripts/build_outfit_frames.py": {
+      "tests": [
+        "tests/test_outfit_lena_lab.py",
+        "tests/test_character.py"
+      ],
+      "reason": "레나 연구실 차림(프레임표 v2 3×4·칸마다 머리 맞춤·모션 마법서/공중앉기) — 기존 두 옷 결과 그대로(해시 같음)"
+    },
+    "src/mabinogi_addon/assets/characters/레나/outfits/lab/stand_0.png": {
+      "tests": [
+        "tests/test_outfit_lena_lab.py",
+        "tests/test_bundle_layout.py"
+      ],
+      "reason": "레나 lab 65프레임 — 기본 이름 전부·머리 ±5%·키 ±6%·톤·펫 창이 착장 폴더 사용"
     }
   }
 }
