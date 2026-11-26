@@ -92,7 +92,16 @@ if HAT and any(side(t[0]) for t in todo):
     wh=float(np.median([t[1].shape[0]*t[2]*min(1.15,max(0.85,t[3]/meds)) for t in todo if side(t[0])]))
     bw=float(np.median([_tight(imread(A+f"walk_{i}.png",-1)).shape[0] for i in range(8)])); bs=_tight(imread(A+"stand_0.png",-1)).shape[0]
     wf=(bw/bs)/(wh/sh); print("걷기 비율 맞춤",round(wh/sh,3),"→",round(bw/bs,3),"배",round(wf,3))
+# 모자 옷(사용자 11-26 '놀람·말하기가 이상'): 모자 챙 각도가 장마다 달라 머리 맞춤이 흔들림 → 앞모습은
+# '기본 캐릭터 같은 장 키 ÷ 기본 서 있기 키' 비율을 그대로(서 있기 키 기준), 옆모습(걷기)만 위 방식
+if HAT:
+    stt=[t for t in todo if t[0]=="stand_0"][0]; stand_h=stt[1].shape[0]*stt[2]*min(1.15,max(0.85,stt[3]/med))
+    bstand=_tight(imread(A+"stand_0.png",-1)).shape[0]
 for name,f,k0,sc,bh in todo:
-    s2=min(1.15,max(0.85,sc/(meds if side(name) else med)))*(wf if side(name) else 1.0); g=scaled(f,k0*s2); imwrite(out+name+".png",g); rep.append((name,round(s2,3),g.shape[0],bh))
+    if HAT and not side(name):
+        s2=(bh/bstand*stand_h)/(f.shape[0]*k0)
+    else:
+        s2=min(1.15,max(0.85,sc/(meds if side(name) else med)))*(wf if side(name) else 1.0)
+    g=scaled(f,k0*s2); imwrite(out+name+".png",g); rep.append((name,round(s2,3),g.shape[0],bh))
 print("칸",len(rep),"문제",[r for r in rep if not isinstance(r[1],float)])
 print("머리보정 ±6% 밖",[r for r in rep if isinstance(r[1],float) and abs(r[1]-1)>0.06])
