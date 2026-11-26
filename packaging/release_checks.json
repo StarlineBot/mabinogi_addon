@@ -242,6 +242,43 @@
         "tests/test_character.py"
       ],
       "reason": "기본 동작 크기 실루엣 맞춤 배율(빌드·테스트 공용)"
+    },
+    "src/mabinogi_addon/detect/skillbar_anchor.py": {
+      "tests": [
+        "tests/test_skillbar_small_ui.py",
+        "tests/test_skillbar_testers.py"
+      ],
+      "reason": "작은 인터페이스 단축바 찾기(원래 크기 화살표·아이콘 배율 격자·떨어진 둘째 단축바, 상자 폭에 거리) + layout/compose/anchor_of — 기존 화면 상자 그대로"
+    },
+    "src/mabinogi_addon/detect/cooldown.py": {
+      "tests": [
+        "tests/test_skillbar_small_ui.py"
+      ],
+      "reason": "작은 인터페이스 페이지 선택기 자리(원래 크기, 단축바 끝 + 10px)"
+    },
+    "src/mabinogi_addon/detect/click_targets.py": {
+      "tests": [
+        "tests/test_skillbar_small_ui.py"
+      ],
+      "reason": "단축바 칸 48개가 떨어진 둘째 단축바를 따름"
+    },
+    "src/mabinogi_addon/ui/skillbar_tab.py": {
+      "tests": [
+        "tests/test_skillbar_small_ui.py"
+      ],
+      "reason": "미러 캡처가 저장된 폭·높이로 찍고 두 단축바를 붙여 자름, 자동 찾기 작은 배치 허용"
+    },
+    "src/mabinogi_addon/ui/autofind_v2_controller.py": {
+      "tests": [
+        "tests/test_skillbar_small_ui.py"
+      ],
+      "reason": "단축바 런타임 영역이 작은 배치면 폭·높이까지"
+    },
+    "src/mabinogi_addon/inquiry_session.py": {
+      "tests": [
+        "tests/test_skillbar_small_ui.py"
+      ],
+      "reason": "문의 쿨타임 영역이 저장된 단축바 폭·높이를 따름"
     }
   }
 }
