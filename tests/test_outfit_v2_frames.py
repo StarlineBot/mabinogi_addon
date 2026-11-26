@@ -44,7 +44,8 @@ def _names(folder):
 
 # 머리는 맞지만 자세가 낮아 키만 6% 넘게 다른 칸(렌더 확인 11-26): 다래 sleep_5 엎드림 — 기본 옷 머리카락·꼬리 장식이 더 내려옴(163 vs 176)
 # 다래 오프숄더 sleep_1·wake_3도 같은 까닭(−7.6%, 렌더 확인). 아리아 여름 드레스는 밀짚모자만큼 키가 큼(getup·walk_2 +6~8%).
-HEIGHT_TOL = {("다래", "sleep_5"): 0.08, ("다래", "sleep_1"): 0.08, ("다래", "wake_3"): 0.08}
+HEIGHT_TOL = {("다래", "sleep_5"): 0.08, ("다래", "sleep_1"): 0.08, ("다래", "wake_3"): 0.08,
+              ("다래", "crouch_2"): 0.09}   # 오프숄더 다시 그림(11-26) 쪼그림 끝은 머리 맞춤 1.08(기획 측정)
 HAT_HEIGHT_TOL = 0.08
 # 한 동작 안 배율을 하나로 맞춘 뒤(QA 11-26) 옷 그림 자체의 머리가 그 동작 다른 칸보다 6~9% 큰 칸 — 칸마다 따로 맞추면
 # 동작 안에서 크기가 들쭉날쭉해지므로 이 칸들은 머리 0.90까지(그림 그대로, 렌더 확인)
@@ -149,8 +150,8 @@ def test_drag_and_pet_height_close_to_base_range(char, outfit):
         hs = [_read(p).shape[0] for p in folder.glob(f"{prefix}_*.png")]
         return (max(hs) - min(hs)) / min(hs)
     for prefix in ("drag", "pet"):
-        if char == "다래" and prefix == "drag":
-            continue   # 키는 drag_0만 다리를 펴서 달라 — 후광 폭으로 봄
+        if char == "다래" and (prefix == "drag" or outfit == "white_offshoulder"):
+            continue   # 키는 자세(다리 폄·머리 기울임)로 달라 — 후광 폭으로 봄(test_dare_drag_halo_width_steady)
         if outfit == "summer_dress" and prefix == "pet":
             continue   # 쓰다듬을 때 모자가 눌려 키가 바뀜(263~284) — 모자 아래 띠 폭으로 봄
         allowed = max(0.025, spread(CHARS / char, prefix) + 0.005)
@@ -171,6 +172,15 @@ def test_lena_lab_walk_face_taken_from_base_walk():
             for i in range(8)]
     # 머리는 walk_0 한 장을 모든 장에 붙임(아래 테스트) — 기준 장은 기본 walk_0 얼굴, 나머지는 기본 걷기 장마다의 얼굴과 조금 다름
     assert ious[0] >= 0.78 and min(ious) >= 0.74, ious
+
+
+@pytest.mark.parametrize("outfit", ["white_offshoulder"])
+def test_dare_pet_halo_width_steady(outfit):
+    """다래 오프숄더(다시 그림) 쓰다듬기 크기: 후광 폭 범위 ≤ 3% — 키가 자세로 285~301이라 후광으로 봄.
+    (잠옷·기본 다래는 쓰다듬는 손이 후광을 가리는 칸이 있어 이 측정이 안 맞음)"""
+    from scripts.build_outfit_frames import halo_width
+    widths = [halo_width(_read(CHARS / "다래" / "outfits" / outfit / f"pet_{i}.png")) for i in range(6)]
+    assert (max(widths) - min(widths)) / min(widths) <= 0.03, widths
 
 
 @pytest.mark.parametrize("outfit", ["frill_pajama", "white_offshoulder"])
