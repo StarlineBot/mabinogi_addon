@@ -41,15 +41,26 @@ def cellsof(a):
 def mask(c): return cv2.resize((c[...,3]>128).astype(np.uint8),(60,64),interpolation=cv2.INTER_AREA)>0
 # 매칭 확인
 tm={p:[mask(c) for c in cellsof(imread(D+f"전체프레임_v2/전체프레임_{p}.png",-1))] for p in parts}
-SRC={p:p for p in parts}
-for p in parts:
-    a=cleanup(imread(O+f"전체프레임_{p}_다시.png",-1)); cs=[mask(c) for c in cellsof(a)]
-    sc={q:np.mean([(cs[k]&tm[q][k]).sum()/max(1,(cs[k]|tm[q][k]).sum()) for k in range(len(cs))]) for q in parts}
-    best=max(sc,key=sc.get); print(f"파일 {p}: 가장 닮은 템플릿 {best} ({sc[best]:.3f}) / 자기 {sc[p]:.3f}"); SRC[best]=p
-if len(set(SRC.values()))!=len(parts): print("!! 매칭 겹침",SRC); sys.exit(1)
-print("템플릿 장 → 파일",SRC)
+import glob,re
+files=sorted(int(re.search(r"전체프레임_(\d+)_다시",f).group(1)) for f in glob.glob(O+"전체프레임_*_다시.png"))
+score={}
+for fno in files:
+    a=cleanup(imread(O+f"전체프레임_{fno}_다시.png",-1)); cs=[mask(c) for c in cellsof(a)]
+    for q in parts:
+        n=len([x for x in m if x["part"]==q])
+        score[(fno,q)]=float(np.mean([(cs[k]&tm[q][k]).sum()/max(1,(cs[k]|tm[q][k]).sum()) for k in range(n)]))
+SRC={}; used=set()
+for (fno,q),v in sorted(score.items(),key=lambda kv:-kv[1]):
+    if q in SRC or fno in used: continue
+    SRC[q]=fno; used.add(fno)
+print("파일별 점수",{f:{q:round(score[(f,q)],2) for q in parts} for f in files})
+print("템플릿 장 → 파일(일치)",{q:(SRC[q],round(score[(SRC[q],q)],3)) for q in sorted(SRC)},"남는 파일",[f for f in files if f not in used])
+if len(SRC)!=len(parts): print("!! 장 빠짐",[q for q in parts if q not in SRC]); sys.exit(1)
 top=lambda x:x[:int(x.shape[0]*.42)]
-out=O+"다시_앱크기/"; os.makedirs(out,exist_ok=True); rep=[]
+HAT=len(sys.argv)>5 and sys.argv[5]=="hat"
+if len(sys.argv)>6:
+    SRC={int(k):v for k,v in json.loads(sys.argv[6]).items()}; parts=sorted(SRC); print("직접 지정",SRC)
+out=O+"다시_앱크기/"; os.makedirs(out,exist_ok=True); rep=[]; todo=[]
 for p in parts:
     cs=cellsof(cleanup(imread(O+f"전체프레임_{SRC[p]}_다시.png",-1)))
     for x in [e for e in m if e["part"]==p]:
@@ -61,7 +72,11 @@ for p in parts:
         big=1+int(np.argmax(st[1:,4])); cell[~np.isin(l,[i for i in range(1,n) if st[i,4]>=st[big,4]*0.02])]=0
         f=_tight(cell); bp=A+name+".png"
         if not os.path.exists(bp): rep.append((name,"기본 없음")); continue
-        base=_tight(imread(bp,-1)); k0=base.shape[0]/f.shape[0]; s=best_scale(top(base),top(scaled(f,k0)),.85,1.15,61); g=scaled(f,k0*s)
-        imwrite(out+name+".png",g); rep.append((name,round(s,3),g.shape[0],base.shape[0]))
+        base=_tight(imread(bp,-1)); k0=base.shape[0]/f.shape[0]; sc=best_scale(top(base),top(scaled(f,k0)),.7,1.2,101)
+        todo.append((name,f,k0,sc,base.shape[0]))
+med=float(np.median([t[3] for t in todo])) if HAT else 1.0
+print("머리 배율 중앙값",round(med,3),"(모자 보정)" if HAT else "")
+for name,f,k0,sc,bh in todo:
+    s2=min(1.15,max(0.85,sc/med)); g=scaled(f,k0*s2); imwrite(out+name+".png",g); rep.append((name,round(s2,3),g.shape[0],bh))
 print("칸",len(rep),"문제",[r for r in rep if not isinstance(r[1],float)])
 print("머리보정 ±6% 밖",[r for r in rep if isinstance(r[1],float) and abs(r[1]-1)>0.06])

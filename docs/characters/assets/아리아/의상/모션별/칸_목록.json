@@ -264,5 +264,23 @@
    "land_1",
    "land_2"
   ]
+ },
+ "서있기_머리_기지개": {
+  "cols": 4,
+  "rows": 2,
+  "cell": [
+   249,
+   330
+  ],
+  "frames": [
+   "stand_0",
+   "stand_1",
+   "hair_0",
+   "hair_1",
+   "hair_2",
+   "hair_3",
+   "stretch_0",
+   "stretch_1"
+  ]
  }
 }
