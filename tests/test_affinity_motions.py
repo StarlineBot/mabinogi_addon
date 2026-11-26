@@ -46,7 +46,7 @@ def test_sequence_start_loop_end():
     rng = random.Random(1)
     water = mo.MOTIONS["아리아"][0]
     for _ in range(20):
-        names = [n for n, _d in water.sequence(rng)][1:]       # 맨 앞 6번(시작 장, test_water_shows_can_and_pot_first)
+        names = [n for n, _d in water.sequence(rng)]
         assert names[:2] == ["motion_water_0", "motion_water_1"] and names[-4:] == [f"motion_water_{i}" for i in range(4, 8)]
         assert len(names) - 6 in (4, 6)                       # 반복 구간(2장) 2~3번
     tidy = mo.MOTIONS["이안"][0]
@@ -249,12 +249,9 @@ def test_grimoire_clench_and_slam_frames_hold():
     assert [n for n, _d in seq[-4:]] == [f"motion_grimoire_{i}" for i in range(4, 8)]
 
 
-def test_water_shows_can_and_pot_first():
-    """사용자 11-26: 아리아 물주기 — 물뿌리개·화분 든 6번을 맨 앞에 0.9초 → 0 → 1(0.6초) → 2·3 반복 → 4 → 5 → 6(0.9초) → 7."""
+def test_water_holds_showing_can_and_pot():
+    """사용자 11-26: 아리아 물주기 — 순서는 그대로, 6번(화분·물뿌리개 들어 보이기)만 1.2초 머묾."""
     water = mo.MOTIONS["아리아"][0]
     seq = water.sequence(random.Random(1))
-    assert seq[:3] == (("motion_water_6", 0.9), ("motion_water_0", mo.FRAME), ("motion_water_1", 0.6))
-    assert [n for n, _d in seq[-4:]] == [f"motion_water_{i}" for i in range(4, 8)]
-    assert seq[-2] == ("motion_water_6", 0.9)
-    loop = [n for n, _d in seq[3:-4]]
-    assert len(loop) in (4, 6) and set(loop) == {"motion_water_2", "motion_water_3"}
+    assert {n: d for n, d in seq if d != mo.FRAME} == {"motion_water_6": 1.2}
+    assert seq[0][0] == "motion_water_0" and seq[-2] == ("motion_water_6", 1.2)

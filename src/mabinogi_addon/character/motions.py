@@ -19,8 +19,7 @@ class Motion:
     count: int                         # 장 수
     loop: tuple[int, int] | None       # 반복 구간 [시작, 끝) — 없으면 한 번
     long_loop: tuple[float, float] | None = None   # 반복을 이 초만큼(레나 공중 앉기)
-    intro: tuple[tuple[int, float], ...] = ()      # 맨 앞에 먼저 보여 줄 장(번호, 초) — 아리아 물주기: 물뿌리개·화분 든 6번 먼저(11-26)
-    hold: tuple[tuple[int, float], ...] = ()       # 장마다 머무는 시간(번호, 초) — 없으면 FRAME(다래 양인형 안기 2.1초, 레나 마법서 이 악묾 0.6·'탁' 1.2초, 11-26)
+    hold: tuple[tuple[int, float], ...] = ()       # 장마다 머무는 시간(번호, 초) — 없으면 FRAME(다래 양인형 안기 2.1초, 레나 마법서 이 악묾 0.6·'탁' 1.2초, 아리아 물주기 들어 보이기 1.2초, 11-26)
 
     def names(self) -> tuple[str, ...]:
         return tuple(f"{self.key}_{i}" for i in range(self.count))
@@ -30,9 +29,8 @@ class Motion:
         names = self.names()
         held = dict(self.hold)
         dur = {f"{self.key}_{i}": held.get(i, FRAME) for i in range(self.count)}
-        lead = tuple((f"{self.key}_{i}", d) for i, d in self.intro)
         if self.loop is None:
-            return lead + tuple((n, dur[n]) for n in names)
+            return tuple((n, dur[n]) for n in names)
         a, b = self.loop
         part = names[a:b]
         if self.long_loop is not None:
@@ -40,11 +38,11 @@ class Motion:
         else:
             reps = rng.randint(2, 3)
         order = names[:a] + part * reps + names[b:]
-        return lead + tuple((n, dur[n]) for n in order)
+        return tuple((n, dur[n]) for n in order)
 
 
 MOTIONS: dict[str, tuple[Motion, ...]] = {
-    "아리아": (Motion(25, "motion_water", 8, (2, 4), intro=((6, 0.9),), hold=((1, 0.6), (6, 0.9))), Motion(75, "motion_wreath", 8, (2, 4))),
+    "아리아": (Motion(25, "motion_water", 8, (2, 4), hold=((6, 1.2),)), Motion(75, "motion_wreath", 8, (2, 4))),
     # 양인형: 6번(인형을 안아 올림)은 2.1초 머묾(사용자 11-26 '껴안고 있는 프레임이 좀 유지되어야')
     "다래": (Motion(25, "motion_sheep_doll", 8, (2, 4), hold=((6, 2.1),)), Motion(75, "motion_bubbles", 8, (2, 4))),
     "레나": (Motion(25, "motion_grimoire", 8, (2, 4), hold=((4, 0.6), (5, 1.2))), Motion(75, "motion_float_sit", 8, (2, 5), (10.0, 20.0))),
