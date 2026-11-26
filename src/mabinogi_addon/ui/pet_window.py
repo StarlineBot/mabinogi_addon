@@ -173,7 +173,8 @@ class PetWindow(QWidget):
         # 두 그림이 겹쳐 보임, ghost_survey)
         name = self.brain.frame(now)
         self._cur_name = name
-        shown = (name, self.brain.facing_left, self.bubble_shown(now), self.brain.shake(now))
+        shown = (name, self.brain.facing_left, self.bubble_shown(now), self.brain.shake(now),
+                 round(self.brain.float_offset(now)))
         if shown != self._shown or self.brain.zzz():
             self._shown = shown
             self.update()
@@ -227,12 +228,13 @@ class PetWindow(QWidget):
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
         if image is not None:
-            self._sprite = self._frame_rect(image)
+            lift = self.brain.float_offset(now)   # 레나 앉아 떠 있기(마법) — 그림·클릭 판정 같이 위로
+            self._sprite = self._frame_rect(image).translated(0, lift)
             for layer, opacity in self.layers(now):
                 small, rect = self._image(layer), self._frame_rect(self.frames[layer])
                 if "_m2_" in layer:
                     rect.translate(0, -1)  # 입 크게일 때 1px 끄덕임
-                rect.translate(self.brain.shake(now), 0)  # 쓰다듬기 참는 중 좌우 1px 떨림(레나)
+                rect.translate(self.brain.shake(now), lift)  # 쓰다듬기 참는 중 좌우 1px 떨림(레나)·앉아 떠 있기
                 p.setOpacity(opacity)
                 if self.brain.state == "walk" and self.brain.facing_left:  # 걷기 시트는 오른쪽 — 왼쪽은 뒤집기
                     p.save()

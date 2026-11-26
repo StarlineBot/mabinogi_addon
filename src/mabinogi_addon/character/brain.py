@@ -159,6 +159,7 @@ class Profile:
     rare_say: tuple[int, str] | None = None   # 드문 동작 그 프레임에서 말풍선 상황(Starline 재채기 4번 '누가 내 욕하나?')
     sleep_gap: tuple[float, float] | None = None    # 다래: 구석에 앉아 있는 동안 엎드려 자기 간격(없으면 안 함)
     sleep_hold: tuple[float, float] = SLEEP_HOLD    # 엎드려 숨쉬는 시간
+    sit_float: tuple | None = None        # 앉아 있을 때 떠 있기(레나 마법, 사용자 11-26): (올림 px, 둥둥 ±px, 주기 초, 오르내림 초) — 키 190 기준
     scale: float = 1.0                    # 그리기 배율(사용자 11-24 B안 — 얼굴 크기 맞춤: Starline 1.15·레나 0.95). 그림 파일은 그대로
 
     def with_timing(self, raw) -> Profile:
@@ -270,7 +271,7 @@ LENA = Profile(LENA_ANIMS,
                {"surprise": "stand", "land": "stand", "pet_in": "pet_loop", "pet_out": "stand", "alert": "stand",
                 "crouch": "sit_loop", "sit_notice": "sit_loop", "rise": "stand", "talk_end": "stand", "magic": "stand"},
                ("crouch", "sit_loop", "sit_notice"), "sit_loop", click_talks=True, walk_speed=LENA_WALK_SPEED,
-               talk_sets=LENA_TALK, pet_shake=True, scale=LENA_SCALE, rare_extra="magic")
+               talk_sets=LENA_TALK, pet_shake=True, scale=LENA_SCALE, sit_float=(14.0, 3.0, 2.4, 0.4), rare_extra="magic")
 # Starline(docs/characters/Starline.md, 기획 11-24): 졸기 없음, 서 있기 한 장(B안 긴 체형), 가만히 서 있으면 가끔
 # 손바닥 불꽃(아리아 머리 쓰다듬기·이안 시계와 같은 틀), 서서 클릭 = 바로 말하기, 착지 3장 → 서기,
 # 쓰다듬기 귀 젖힘 → 걷어내기 반복 → 손 털고 씩, 구석은 앉기 → 마법진 돌리기 반복 → 일어나기, 말 끝 두 장.
@@ -355,7 +356,9 @@ class Brain:
     motion_weights: dict = field(default_factory=dict)   # key → 고를 무게(새로 열린 것 2배)
     _motion_seq: tuple = ()                              # 지금 하는 모션 (프레임, 초) 순서
     motion_key: str | None = None
-    _queued_motion: str | None = None                    # 구간 오름 대사를 말하는 중 → 끝나고 서면 바로
+    _queued_motion: str | None = None
+    _float_since: float = 0.0                            # 앉아 떠 있기 시작(레나)
+    _float_from: float = 0.0                             # 일어나기 시작 때 떠 있던 높이                    # 구간 오름 대사를 말하는 중 → 끝나고 서면 바로
     _next_rare: float = 0.0
     _rare_said: bool = False
     _sleep_next: float = 0.0         # 다래: 다음 엎드려 자기 시각(구석에 앉으면 정함)
@@ -409,6 +412,21 @@ class Brain:
             return 0
         return (0, 1, 0, -1)[int((now - self._t0) / SHAKE_SECONDS) % 4]
 
+    def float_offset(self, now: float) -> float:
+        """앉아 떠 있는 높이(논리 px, 음수 = 위) — 레나: 앉으면 0.4초에 걸쳐 14px 올라 ±3px 둥둥(2.4초), 일어나며 0.4초에 내려옴.
+        떠 있기 없는 캐릭터·다른 동작은 0."""
+        if not self.profile.sit_float:
+            return 0.0
+        lift, amp, period, ease = self.profile.sit_float
+        k = self.profile.scale
+        if self.state in ("sit_loop", "sit_notice"):
+            t = now - self._float_since
+            r = min(1.0, max(0.0, t / ease))
+            return -(lift * r + amp * r * math.sin(2 * math.pi * t / period)) * k
+        if self.state == "rise":
+            return self._float_from * max(0.0, 1.0 - (now - self._t0) / ease)
+        return 0.0
+
     def zzz(self) -> bool:
         """꾸벅 조는 동안만 Zzz(코드로 그림). 졸지 않는 캐릭터는 없음."""
         return self.profile.doze_state is not None and (self.state == self.profile.doze_state
@@ -430,6 +448,12 @@ class Brain:
 
     # ---- 내부 -------------------------------------------------------------------------------
     def _go(self, state: str, now: float) -> None:
+        if self.profile.sit_float:
+            afloat = ("sit_loop", "sit_notice")
+            if state in afloat and self.state not in afloat:
+                self._float_since = now
+            elif state == "rise" and self.state in afloat:
+                self._float_from = self.float_offset(now)
         self.state, self._t0 = state, now
         if state == "pet_loop":
             self._pet_reached_loop = True

@@ -333,3 +333,45 @@ def test_petting_while_walking_in_pet_window(app):
                                      Qt.MouseButton.NoButton, Qt.KeyboardModifier.NoModifier))
     assert ("say", "pet_start") in got
     w.close()
+
+
+# ---- 레나 앉아 떠 있기(사용자 11-26 '마법으로 떠 있는 자세 — 둥둥') ------------------------------------
+def test_lena_sit_floats_and_bobs_then_lands_smoothly():
+    b = br.Brain(br.Floor(0, 1920, 1000), rng=random.Random(2), profile=br.LENA)
+    b.pos = (1700.0, 1000.0)
+    t, offs = 0.0, []
+    while t < 30:
+        b.tick(t, True)
+        offs.append((t, b.state, b.float_offset(t)))
+        t += 0.05
+    k = br.LENA.scale
+    sitting = [(t, o) for t, s, o in offs if s == "sit_loop" and t - b._float_since >= 0.4]
+    assert sitting
+    vals = [o for _t, o in sitting]
+    assert -(14 + 3) * k - 0.01 <= min(vals) and max(vals) <= -(14 - 3) * k + 0.01       # −14 ± 3(배율)
+    assert all(o == 0 for _t, s, o in offs if s in ("stand", "walk", "crouch"))
+    steps = [abs(b2 - a2) for (_t1, _s1, a2), (_t2, _s2, b2) in zip(offs, offs[1:])]
+    assert max(steps) <= 14 * k * 0.05 / 0.4 + 0.5                                         # 앉을 때 튀지 않음
+    # 주기 2.4초: 2.4초 뒤 같은 높이
+    t0 = sitting[0][0]
+    assert abs(b.float_offset(t0 + 2.4) - b.float_offset(t0)) < 0.05 or b.state != "sit_loop"
+    # 게임이 끝나면 일어나며 내려옴(튀지 않음)
+    seen = []
+    while t < 40:
+        b.tick(t, False)
+        seen.append((b.state, b.float_offset(t)))
+        t += 0.05
+    rise = [o for s, o in seen if s == "rise"]
+    assert rise and rise[0] < -5 and all(abs(a - c) <= 14 * k * 0.05 / 0.4 * 1.2 + 3 for a, c in zip(rise, rise[1:]))
+    assert seen[-1][1] == 0
+
+
+@pytest.mark.parametrize("profile", [br.DARE, br.ARIA, br.IAN, br.STARLINE])
+def test_other_characters_never_float(profile):
+    b = br.Brain(br.Floor(0, 1920, 1000), rng=random.Random(2), profile=profile)
+    b.pos = (1700.0, 1000.0)
+    t = 0.0
+    while t < 20:
+        b.tick(t, True)
+        assert b.float_offset(t) == 0
+        t += 0.1
