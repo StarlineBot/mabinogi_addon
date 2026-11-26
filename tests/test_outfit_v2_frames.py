@@ -258,3 +258,15 @@ def test_aria_tshirt_redrawn_walk_height_matches_stand():
     heights = sorted(_read(folder / f"walk_{i}.png").shape[0] for i in range(8))
     ratio = (heights[3] + heights[4]) / 2 / _read(folder / "stand_0.png").shape[0]
     assert 1.0 <= ratio <= 1.02, ratio
+
+
+def test_aria_summer_dress_talk_ribbon_present():
+    """사용자 11-26(후보 #342): 여름 드레스 말하기 때 가슴 아래 주황 리본이 사라짐 → talk_a_mid는 talk_a_emph_0 리본을 붙임
+    (scripts/outfit_fixes.add_ribbon). 팔짱 장은 매듭이 팔 뒤·꼬리만 팔 아래로 보이고, talk_happy_0은 손 사이로 매듭이 보이는 게 원래 그림."""
+    from scripts.outfit_fixes import ribbon_orange
+    folder = CHARS / "아리아" / "outfits" / "summer_dress"
+    ref = ribbon_orange(_read(folder / "talk_a_emph_0.png"))
+    assert ribbon_orange(_read(folder / "talk_a_mid_0.png")) >= ref * 0.35   # 꼬리는 팔에 가려 매듭만(그림 확인)
+    for name in ("talk_a_base_0", "talk_a_blink_0", "talk_a_m1_0", "talk_a_m2_0"):
+        assert ribbon_orange(_read(folder / f"{name}.png")) >= ref * 0.30, name   # 팔 아래 꼬리
+    assert ribbon_orange(_read(folder / "talk_happy_0.png")) >= ribbon_orange(_read(folder / "talk_happy_1.png")) * 0.6

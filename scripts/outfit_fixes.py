@@ -148,3 +148,103 @@ def apply_vest_badge(frames: dict, _folder: str, _key: str) -> dict:
             continue
         out[name], _state = add_badge(image, stand)
     return out
+
+
+# 아리아 여름 드레스 말하기 리본(사용자 11-26, QA 전달): 몇 장은 가슴 아래 주황 리본이 빠져 그려짐 → 같은 자세의 리본 있는 장에서
+# 리본(매듭·꼬리 + 외곽선)을 잘라 얼굴로 맞춘 자리에, 드레스 천 위에만 얹음. 팔·손이 앞을 가린 곳(피부·외곽선)은 그대로 둠.
+# 팔짱 장(talk_a_base·blink·m1·m2)은 매듭이 팔 뒤에 있고 꼬리는 팔 아래로 이미 그려져 있어(주황 ≈ 기준의 37%) 덧붙이면
+# 꼬리가 두 겹이 됨(렌더 확인 11-26) → 그대로 둠. talk_happy_0도 손 사이·아래로 매듭이 이미 보여(주황 ≈ happy_1의 72%) 덧붙이면
+# 손 사이가 얼룩짐 → 그대로. 리본 자리(팔 위 가슴 아래)가 보이는데 비어 있는 talk_a_mid만 붙임.
+RIBBON_FROM = {"talk_a_mid_0": "talk_a_emph_0"}
+RIBBON_BAND = (0.55, 0.75)       # 리본 높이(키 비율)
+RIBBON_X = (0.48, 0.72)          # 리본 가운데 가로 범위(폭 비율) — 왼쪽 머리 리본은 빠짐
+FIT_BAND = (0.62, 0.92)          # 자리 맞춤 기준(리본 꼬리 아래 치마·다리 — 몸통과 같이 움직임)
+
+
+def _hsv(frame: np.ndarray) -> np.ndarray:
+    return cv2.cvtColor(np.ascontiguousarray(frame[..., :3]), cv2.COLOR_BGR2HSV)
+
+
+def ribbon_mask(frame: np.ndarray) -> np.ndarray:
+    """가슴 아래 주황 리본(채움 + 2px 안 외곽선)."""
+    hsv = _hsv(frame)
+    h, w = frame.shape[:2]
+    orange = ((hsv[..., 0] >= 3) & (hsv[..., 0] <= 22) & (hsv[..., 1] > 130) & (hsv[..., 2] > 140)
+              & (frame[..., 3] > 200)).astype(np.uint8)
+    k, lab, st, cen = cv2.connectedComponentsWithStats(orange, 8)
+    keep = np.zeros((h, w), bool)
+    for i in range(1, k):
+        cx, cy = cen[i]
+        if st[i][4] > 15 and RIBBON_X[0] * w <= cx <= RIBBON_X[1] * w and RIBBON_BAND[0] * h <= cy <= RIBBON_BAND[1] * h:
+            keep |= lab == i
+    grown = cv2.dilate(keep.astype(np.uint8), np.ones((5, 5), np.uint8)) > 0
+    shade = (hsv[..., 0] <= 22) & (hsv[..., 1] > 90)          # 리본 그늘
+    dark = hsv[..., 2] < 140                                    # 외곽선
+    return keep | (grown & (shade | dark) & (frame[..., 3] > 200))
+
+
+def ribbon_orange(frame: np.ndarray) -> int:
+    """리본 띠(높이·가로 범위) 안 주황 픽셀 수 — 테스트용."""
+    hsv = _hsv(frame)
+    h, w = frame.shape[:2]
+    band = np.zeros((h, w), bool)
+    band[round(h * RIBBON_BAND[0]):round(h * RIBBON_BAND[1]), round(w * 0.45):round(w * 0.75)] = True
+    return int((band & (hsv[..., 0] >= 3) & (hsv[..., 0] <= 22) & (hsv[..., 1] > 130) & (hsv[..., 2] > 140)
+                & (frame[..., 3] > 200)).sum())
+
+
+def _skin(frame: np.ndarray) -> np.ndarray:
+    """팔·손 피부(고르게 밝은 분홍, 덩어리) — 드레스 천(크림·꽃무늬)은 b가 더 노랗고 얼룩짐."""
+    lab = cv2.cvtColor(np.ascontiguousarray(frame[..., :3]), cv2.COLOR_BGR2LAB).astype(int)
+    m = ((lab[..., 0] > 212) & (np.abs(lab[..., 1] - 136) <= 5) & (lab[..., 2] <= 139)).astype(np.uint8)
+    m = cv2.morphologyEx(m, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
+    k, lab_, st, _ = cv2.connectedComponentsWithStats(m, 8)
+    big = np.isin(lab_, [i for i in range(1, k) if st[i][4] >= 40])
+    return cv2.dilate(big.astype(np.uint8), np.ones((3, 3), np.uint8)) > 0
+
+
+def _align(frame: np.ndarray, source: np.ndarray) -> tuple[float, int, int]:
+    """source 치마·다리(키 62~92%)를 frame에서 찾음 → (배율, source 원점이 frame에서 놓일 x, y)."""
+    g = lambda im: cv2.cvtColor(np.ascontiguousarray(im[..., :3]), cv2.COLOR_BGR2GRAY)
+    hs = source.shape[0]
+    y0, y1 = round(hs * FIT_BAND[0]), round(hs * FIT_BAND[1])
+    face = g(source)[y0:y1]
+    best = (-1.0, (1.0, 0, 0))
+    for s in np.arange(0.95, 1.0501, 0.0125):
+        t = cv2.resize(face, None, fx=s, fy=s, interpolation=cv2.INTER_AREA)
+        img = g(frame)
+        if img.shape[0] < t.shape[0] or img.shape[1] < t.shape[1]:
+            continue
+        r = cv2.matchTemplate(img, t, cv2.TM_CCOEFF_NORMED)
+        _, score, _, (x, y) = cv2.minMaxLoc(r)
+        if score > best[0]:
+            best = (score, (float(s), round(x), round(y - y0 * s)))
+    return best[1]
+
+
+def add_ribbon(frame: np.ndarray, source: np.ndarray) -> np.ndarray:
+    s, ox, oy = _align(frame, source)
+    src = cv2.resize(source, None, fx=s, fy=s, interpolation=cv2.INTER_AREA)
+    mask = cv2.resize(ribbon_mask(source).astype(np.uint8), (src.shape[1], src.shape[0]),
+                      interpolation=cv2.INTER_NEAREST) > 0
+    H, W = frame.shape[:2]
+    out = frame.copy()
+    big = np.zeros((H, W), bool)
+    sprite = np.zeros_like(frame)
+    ys, xs = np.nonzero(mask)
+    ty, tx = ys + oy, xs + ox
+    inside = (ty >= 0) & (ty < H) & (tx >= 0) & (tx < W)
+    big[ty[inside], tx[inside]] = True
+    sprite[ty[inside], tx[inside]] = src[ys[inside], xs[inside]]
+    hsv = _hsv(frame)
+    cover = _skin(frame) | (hsv[..., 2] < 120)                  # 앞을 가린 팔·손과 그 외곽선
+    ok = big & ~cover & (frame[..., 3] > 200)
+    out[ok] = sprite[ok]
+    return out
+
+
+def apply_summer_ribbon(frames: dict, _folder: str, _key: str) -> dict:
+    out = dict(frames)
+    for name, src in RIBBON_FROM.items():
+        out[name] = add_ribbon(frames[name], frames[src])
+    return out
