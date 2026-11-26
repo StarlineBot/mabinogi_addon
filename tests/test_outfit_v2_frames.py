@@ -79,6 +79,8 @@ def test_outfit_has_every_base_frame_and_motions(char, outfit):
 
 @pytest.mark.parametrize("char,outfit,name", FRAMES, ids=[f"{c}-{o}-{n}" for c, o, n in FRAMES])
 def test_outfit_frame_matches_base_head_and_height(char, outfit, name):
+    if char == "다래" and name.startswith("drag_"):
+        pytest.skip("다래 끌기는 후광 폭으로 맞춤(QA 11-26) — test_dare_drag_halo_width_steady가 봄")
     base, dressed = _read(CHARS / char / f"{name}.png"), _read(CHARS / char / "outfits" / outfit / f"{name}.png")
     k = best_scale(_head(base), _head(dressed), 0.85, 1.15, 61) / _hat_median(char, outfit)
     assert HEAD_TOL.get((char, outfit, name), 0.95) <= k <= 1.05, k
@@ -143,6 +145,8 @@ def test_drag_and_pet_height_close_to_base_range(char, outfit):
         hs = [_read(p).shape[0] for p in folder.glob(f"{prefix}_*.png")]
         return (max(hs) - min(hs)) / min(hs)
     for prefix in ("drag", "pet"):
+        if char == "다래" and prefix == "drag":
+            continue   # 키는 drag_0만 다리를 펴서 달라 — 후광 폭으로 봄
         allowed = max(0.025, spread(CHARS / char, prefix) + 0.005)
         assert spread(CHARS / char / "outfits" / outfit, prefix) <= allowed, prefix
 
@@ -161,3 +165,17 @@ def test_lena_lab_walk_face_taken_from_base_walk():
         base = _read(CHARS / "레나" / f"walk_{i}.png")
         lab = _read(CHARS / "레나" / "outfits" / "lab" / f"walk_{i}.png")
         assert align(base, lab)[1] >= 0.77, i
+
+
+@pytest.mark.parametrize("outfit", ["frill_pajama", "white_offshoulder"])
+def test_dare_drag_halo_width_steady(outfit):
+    """QA 11-26 다래 오프숄더 잡아 들기 크기 들쭉날쭉(후광 폭 142→163): 끌기 묶음 안 후광 폭 범위 ≤ 3%,
+    후광 폭 ÷ 서 있기 후광 폭이 기본 다래 같은 칸과 ±3%."""
+    from scripts.build_outfit_frames import halo_width
+    base, dressed = CHARS / "다래", CHARS / "다래" / "outfits" / outfit
+    widths = [halo_width(_read(dressed / f"drag_{i}.png")) for i in range(4)]
+    assert (max(widths) - min(widths)) / min(widths) <= 0.03, widths
+    for i, w in enumerate(widths):
+        mine = w / halo_width(_read(dressed / "stand_0.png"))
+        ref = halo_width(_read(base / f"drag_{i}.png")) / halo_width(_read(base / "stand_0.png"))
+        assert abs(mine / ref - 1) <= 0.03, (i, mine, ref)

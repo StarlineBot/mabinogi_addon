@@ -47,7 +47,9 @@ TEMPLATES = {("레나", "lab"): ("전체프레임_v2", 3, 4, (930, 1320), True),
              ("다래", "white_offshoulder"): ("전체프레임_v2", 3, 4, (930, 1320), True),
              ("레나", "red_dress"): ("전체프레임_v2", 3, 4, (930, 1320), True)}
 HEAD = 0.42
-FACE_FIX = {("레나", "lab"): ("walk",)}   # 옷 그림 걷기 얼굴 옆선이 무너진 옷 → scripts/outfit_face_fix
+FACE_FIX = {("레나", "lab"): ("walk",)}
+HALO_FIT = {"다래": ("drag",)}   # 옷 그림 끌기 칸마다 몸 크기가 달라(후광 폭 142→163) 후광 폭으로 칸 배율을 맞춤
+HALO_BAND = 0.09                 # 맨 위 9% 띠 = 날개 달린 후광   # 옷 그림 걷기 얼굴 옆선이 무너진 옷 → scripts/outfit_face_fix
 # 템플릿 뒤에 다시 그려 받은 시트(가이드 방식) — (키, 파일, 열, 행, 가이드 크기, 쓸 칸). 배율 = 앱 기본 프레임 키 중앙값 ÷ 칸 키 중앙값
 REDRAWN: dict = {}   # 걷기는 기획이 앱 크기로 정리한 걷기_v2/walk_0~7.png를 그대로(11-26, scripts/build_walk_v2.OUTFIT_WALKS)
 MOTION_NAMES = {"옷매무새(25)": "motion_tidy", "차(75)": "motion_tea", "물주기(25)": "motion_water", "화관(75)": "motion_wreath",
@@ -86,6 +88,13 @@ def group_scales(pending, head_fit) -> list[tuple[str, np.ndarray, float]]:
             h = min(1.1, max(0.9, h))
         out.append((name, image, k * h))
     return out
+
+
+def halo_width(frame: np.ndarray) -> float:
+    """다래 후광 폭 — 맨 위 HALO_BAND 띠의 알파(>128) 가로 폭."""
+    band = frame[:max(1, round(frame.shape[0] * HALO_BAND)), :, 3] > 128
+    xs = np.where(band.any(axis=0))[0]
+    return float(xs.max() - xs.min() + 1) if xs.size else float(frame.shape[1])
 
 
 def group_of(name: str) -> str:
@@ -177,6 +186,12 @@ def main() -> None:
         if walk_dir is not None:   # 걷기 8장은 정리해 둔 PNG 그대로(색 맞추기·배율 없음)
             frames = {n: v for n, v in frames.items() if not re.fullmatch(r"walk_\d+", n)}
             frames.update({f"walk_{i}": imread(walk_dir / f"walk_{i}.png", cv2.IMREAD_UNCHANGED) for i in range(FRAMES)})
+        if folder in HALO_FIT:   # 다래 끌기(QA 11-26): 후광(모양이 안 변하는 물체) 폭을 기본 다래 같은 칸 × (이 옷/기본 서 있기)에
+            for name in [n for n in frames if group_of(n) in HALO_FIT[folder]]:
+                base = imread(APP_ROOT / folder / f"{name}.png", cv2.IMREAD_UNCHANGED)
+                base_stand = imread(APP_ROOT / folder / "stand_0.png", cv2.IMREAD_UNCHANGED)
+                target = halo_width(base) * halo_width(frames["stand_0"]) / halo_width(base_stand)
+                frames[name] = scaled(frames[name], target / halo_width(frames[name]))
         if (folder, key) in FACE_FIX:   # 걷기 얼굴 옆선(QA 11-26) — 기본 걷기 얼굴을 옮겨 붙이고 옷의 안경만 다시
             from scripts.outfit_face_fix import fix_face
             for name in [n for n in frames if group_of(n) in FACE_FIX[(folder, key)]]:

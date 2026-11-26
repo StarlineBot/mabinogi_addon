@@ -285,3 +285,51 @@ def test_own_main_window_covers_but_own_tool_window_does_not(monkeypatch):
     assert b._goal == "roam" and targets
     assert run(0x80, (0, 0, 1920, 1040)) == [(0, 1920)]          # (2) 도구 창(펫·오버레이)은 가림으로 안 침
     assert run(0x80020 | 0x80, (0, 0, 1920, 1040)) == [(0, 1920)]
+
+
+# ---- 걷는 중 쓰다듬기(QA 11-26 '걸어다닐 때 해도 안 됨') -------------------------------------------
+@pytest.mark.parametrize("profile", [br.DARE, br.LENA])
+def test_petting_while_walking_stops_and_pets(profile):
+    b = br.Brain(br.Floor(0, 1920, 1000), rng=random.Random(1), profile=profile)
+    b.pos = (300.0, 1000.0)
+    b.tick(0.0, False)
+    b._walk_to((1500.0, 1000.0), 0.0)
+    t, events, stood = 0.0, [], None
+    while t < 2.0:
+        t += 0.05
+        events += b.tick(t, False)
+        side = 1 if int(t / 0.15) % 2 else -1          # 머리 위에서 ±25px로 흔들며 따라감(커서도 펫과 같이 움직임)
+        events += b.hover(t, b.pos[0] + 25 * side, True)
+        if stood is None and b._rub_turns:
+            stood = b.state
+        if ("say", "pet_start") in events:
+            break
+    assert ("say", "pet_start") in events and t <= 2.0
+    assert stood == "stand"                             # 첫 전환에 멈춰 섬
+
+
+def test_petting_while_walking_in_pet_window(app):
+    from PySide6.QtCore import QPointF, Qt
+    from PySide6.QtGui import QImage, QMouseEvent
+
+    from mabinogi_addon.ui.pet_window import PetWindow, load_frames
+    clock = [0.0]
+    b = br.Brain(br.Floor(0, 1920, 1000), rng=random.Random(1), profile=br.DARE)
+    b.pos = (300.0, 1000.0)
+    w = PetWindow(b, load_frames("다래", br.DARE), "#ffffff", game_front=lambda: False, clock=lambda: clock[0])
+    w.step()
+    b._walk_to((1500.0, 1000.0), 0.0)
+    got = []
+    w.events.connect(lambda ev: got.extend(ev))
+    while clock[0] < 2.0 and ("say", "pet_start") not in got:
+        clock[0] += 0.05
+        w.step()
+        w.grab()                                        # 오프스크린 — 그려야 그림 자리(_sprite)가 정해짐
+        head = w._sprite.center().x(), w._sprite.top() + w._sprite.height() * 0.15
+        side = 1 if int(clock[0] / 0.15) % 2 else -1
+        local = QPointF(head[0] + 25 * side, head[1])
+        glob = QPointF(w.x() + local.x(), w.y() + local.y())
+        w.mouseMoveEvent(QMouseEvent(QMouseEvent.Type.MouseMove, local, glob, Qt.MouseButton.NoButton,
+                                     Qt.MouseButton.NoButton, Qt.KeyboardModifier.NoModifier))
+    assert ("say", "pet_start") in got
+    w.close()

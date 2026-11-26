@@ -748,6 +748,7 @@ class Brain:
             return []
         if self.state not in UPRIGHT:
             return []
+        x = x - self.pos[0]   # 펫 기준 x — 걷는 중 펫 이동이 더해져 왕복 폭이 모자라지 않게(QA 11-26 '걸을 때 쓰다듬기 안 됨')
         if self._rub_x is None:
             self._rub_x, self._rub_dir, self._rub_from = x, 0, x
             return []
@@ -758,6 +759,10 @@ class Brain:
         if self._rub_dir and direction != self._rub_dir:  # 돌아섬 — 지난 방향으로 충분히 움직였을 때만 전환 1번
             if abs(self._rub_x - self._rub_from) >= RUB_MIN:
                 self._rub_turns = [t for t in self._rub_turns if now - t <= RUB_WINDOW] + [now]
+                if self.state == "walk":   # 걷다가 머리 위에서 손이 왔다 갔다 → 멈춰 서서 손을 기다림
+                    self._target = None
+                    self._go("stand", now)
+                    self._schedule_walk(now)
             self._rub_from = self._rub_x
         elif not self._rub_dir:
             self._rub_from = self._rub_x
