@@ -1,5 +1,5 @@
 {
-  "version": "0.57.0",
+  "version": "0.57.1",
   "tests": [
     "tests/test_character.py",
     "tests/test_navigation.py",
@@ -27,7 +27,9 @@
     "tests/test_gen_tts.py",
     "tests/test_cursor_front.py",
     "tests/test_cooking.py",
-    "tests/test_cooking_autofind.py"
+    "tests/test_cooking_autofind.py",
+    "tests/test_skillbar_small_ui.py",
+    "tests/test_skillbar_testers.py"
   ],
   "coverage": {
     "src/mabinogi_addon/ui/character_tab.py": {

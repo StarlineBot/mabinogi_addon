@@ -133,11 +133,9 @@ def cooldown_region() -> dict | None:
         x0, y0 = min(r[0] for r in rects), min(r[1] for r in rects)
         x1, y1 = max(r[0] + r[2] for r in rects), max(r[1] + r[3] for r in rects)
         return dict(zip(("x", "y", "w", "h"), to_logical(x0, y0, x1 - x0, y1 - y0)))  # 칸 좌표는 물리 픽셀
-    anchor = config.load_skillbar().get("anchor")
-    if isinstance(anchor, dict) and all(isinstance(anchor.get(k), int) for k in ("x", "y")):
-        from .ui.skillbar_mirror import SRC_H, SRC_W
-        return {"x": anchor["x"], "y": anchor["y"], "w": SRC_W, "h": SRC_H}
-    return None
+    from .detect.skillbar_anchor import source_box_of
+    box = source_box_of(config.load_skillbar().get("anchor"))
+    return None if box is None else dict(zip(("x", "y", "w", "h"), box))
 
 
 def has_cooldown_slots() -> bool:

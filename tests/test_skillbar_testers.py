@@ -155,7 +155,10 @@ CASES = [
     ('스크린샷 2026-11-20 174447.png', (2, 12, 1168, 89), None),  # 2560 밝은 반투명 요리창(옮긴 자리, 11-20)
     ('스크린샷 2026-11-20 174704.png', (2, 12, 1168, 89), None),  # 2560 밝은 반투명 요리창(원래 자리, 11-20)
     ('스크린샷 2026-11-22 192845.png', (2, 12, 1168, 89), None),  # 2560 핀즈 크래프트 창(위아래 검은 띠, 요리창 아님, 11-22)
+    # 2544 작은 인터페이스: 아이콘 배율 0.764·◀n▶ 원래 크기·둘째 단축바가 보라 원 오른쪽으로 떨어짐(gap≈804) — 테스터 11-26 image (34)
+    ('small_ui_skillbar_20261126.png', (3, 17, 1033, 68), None),
 ]
+SPLIT = {'small_ui_skillbar_20261126.png'}  # 폭에 둘째 단축바까지 거리를 담는 작은 인터페이스 상자
 
 
 def test_case_list_covers_all_large_screenshots():
@@ -173,5 +176,5 @@ def test_tester_screenshot(name, expected, old_found):
     trace = {}
     box = locate_skillbar(img, None, trace)
     assert (tuple(box) if box else None) == expected, trace.get("rejection")
-    if expected is not None:
+    if expected is not None and name not in SPLIT:
         assert expected[2:] == (1168, 89)  # 해상도와 무관한 고정 크기
