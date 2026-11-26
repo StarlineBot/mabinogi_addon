@@ -228,3 +228,13 @@ def test_creator_motion_buttons_play_now(app, tmp_path, monkeypatch):
         ctrl.shutdown()
         if ctrl.window is not None:
             ctrl.window.close()
+
+
+def test_sheep_doll_hug_frame_holds():
+    """사용자 11-26: 다래 양인형 — 6번(안아 올림) 2.1초 머문 뒤 7번(서 있기). 반복 구간 규칙은 그대로."""
+    sheep = mo.MOTIONS["다래"][0]
+    seq = sheep.sequence(random.Random(1))
+    assert seq[-2] == ("motion_sheep_doll_6", 2.1) and seq[-1] == ("motion_sheep_doll_7", mo.FRAME)
+    loop = [n for n, _d in seq[2:-4]]
+    assert len(loop) in (4, 6) and set(loop) == {"motion_sheep_doll_2", "motion_sheep_doll_3"}
+    assert all(d == mo.FRAME for n, d in seq if n != "motion_sheep_doll_6")
