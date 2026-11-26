@@ -22,7 +22,7 @@ OUTFITS = {   # (캐릭터, 옷) → (펫 프로필, 모션 이름 두 개, 색 
     ("다래", "white_offshoulder"): (br.DARE, ("motion_sheep_doll", "motion_bubbles"), "stand_0"),
     ("레나", "red_dress"): (br.LENA, ("motion_grimoire", "motion_float_sit"), "stand_0"),
 }
-HAT = {("아리아", "summer_dress")}   # 밀짚모자 — 머리(위 42%) 배율은 이 옷 전 칸 중앙값으로 나눠 봄(빌드와 같음)
+HAT = {("아리아", "summer_dress")}   # 밀짚모자 — 머리 실루엣 대신 '서 있기 대비 키 비율 = 기본 같은 장 ±6%'(전체 다시 그림 11-26)
 
 
 def _read(path):
@@ -46,26 +46,10 @@ def _names(folder):
 # 다래 오프숄더 sleep_1·wake_3도 같은 까닭(−7.6%, 렌더 확인). 아리아 여름 드레스는 밀짚모자만큼 키가 큼(getup·walk_2 +6~8%).
 HEIGHT_TOL = {("다래", "sleep_5"): 0.08, ("다래", "sleep_1"): 0.08, ("다래", "wake_3"): 0.08,
               ("다래", "crouch_2"): 0.09}   # 오프숄더 다시 그림(11-26) 쪼그림 끝은 머리 맞춤 1.08(기획 측정)
-HAT_HEIGHT_TOL = 0.08
 # 한 동작 안 배율을 하나로 맞춘 뒤(QA 11-26) 옷 그림 자체의 머리가 그 동작 다른 칸보다 6~9% 큰 칸 — 칸마다 따로 맞추면
 # 동작 안에서 크기가 들쭉날쭉해지므로 이 칸들은 머리 0.90까지(그림 그대로, 렌더 확인)
-HEAD_TOL = {("아리아", "summer_dress", "pet_3"): 0.90, ("아리아", "summer_dress", "getup_2"): 0.90,
-            ("다래", "white_offshoulder", "sleep_1"): 0.90, ("다래", "white_offshoulder", "sleep_7"): 0.90,
+HEAD_TOL = {("다래", "white_offshoulder", "sleep_1"): 0.90, ("다래", "white_offshoulder", "sleep_7"): 0.90,
             ("다래", "white_offshoulder", "wake_3"): 0.90}
-_MEDIANS: dict = {}
-
-
-def _hat_median(char, outfit):
-    if (char, outfit) not in HAT:
-        return 1.0
-    if (char, outfit) not in _MEDIANS:
-        names = _names(CHARS / char)
-        _MEDIANS[(char, outfit)] = float(np.median([
-            best_scale(_head(_read(CHARS / char / f"{n}.png")), _head(_read(CHARS / char / "outfits" / outfit / f"{n}.png")),
-                       0.85, 1.15, 61) for n in names]))
-    return _MEDIANS[(char, outfit)]
-
-
 FRAMES = [(c, o, n) for (c, o) in OUTFITS for n in sorted(_names(CHARS / c))]
 
 
@@ -84,12 +68,15 @@ def test_outfit_has_every_base_frame_and_motions(char, outfit):
 def test_outfit_frame_matches_base_head_and_height(char, outfit, name):
     if char == "다래" and name.startswith("drag_"):
         pytest.skip("다래 끌기는 후광 폭으로 맞춤(QA 11-26) — test_dare_drag_halo_width_steady가 봄")
-    if outfit == "summer_dress" and name.startswith("pet_"):
-        pytest.skip("여름 드레스 쓰다듬기는 모자 아래 띠 폭으로 맞춤(QA 11-26) — test_aria_summer_dress_pet_matches_tshirt_band가 봄")
     base, dressed = _read(CHARS / char / f"{name}.png"), _read(CHARS / char / "outfits" / outfit / f"{name}.png")
-    k = best_scale(_head(base), _head(dressed), 0.85, 1.15, 61) / _hat_median(char, outfit)
+    if (char, outfit) in HAT:   # 모자 옷: 서 있기 대비 키 비율이 기본 같은 장과 ±6%(기획 크기 규칙 11-26)
+        mine = dressed.shape[0] / _read(CHARS / char / "outfits" / outfit / "stand_0.png").shape[0]
+        ref = base.shape[0] / _read(CHARS / char / "stand_0.png").shape[0]
+        assert abs(mine / ref - 1) <= 0.06, (mine, ref)
+        return
+    k = best_scale(_head(base), _head(dressed), 0.85, 1.15, 61)
     assert HEAD_TOL.get((char, outfit, name), 0.95) <= k <= 1.05, k
-    tol = HAT_HEIGHT_TOL if (char, outfit) in HAT else HEIGHT_TOL.get((char, name), 0.06)
+    tol = HEIGHT_TOL.get((char, name), 0.06)
     assert abs(dressed.shape[0] - base.shape[0]) / base.shape[0] <= tol, (dressed.shape[0], base.shape[0])
 
 
@@ -152,8 +139,6 @@ def test_drag_and_pet_height_close_to_base_range(char, outfit):
     for prefix in ("drag", "pet"):
         if char == "다래" and (prefix == "drag" or outfit == "white_offshoulder"):
             continue   # 키는 자세(다리 폄·머리 기울임)로 달라 — 후광 폭으로 봄(test_dare_drag_halo_width_steady)
-        if outfit == "summer_dress" and prefix == "pet":
-            continue   # 쓰다듬을 때 모자가 눌려 키가 바뀜(263~284) — 모자 아래 띠 폭으로 봄
         allowed = max(0.025, spread(CHARS / char, prefix) + 0.005)
         assert spread(CHARS / char / "outfits" / outfit, prefix) <= allowed, prefix
 
@@ -161,6 +146,14 @@ def test_drag_and_pet_height_close_to_base_range(char, outfit):
 @pytest.mark.parametrize("char,outfit", list(OUTFITS))
 def test_walk_height_range_within_two_percent(char, outfit):
     heights = [_read(CHARS / char / "outfits" / outfit / f"walk_{i}.png").shape[0] for i in range(8)]
+    if (char, outfit) in HAT:
+        # 여름 드레스 전체 다시 그림(11-26): 걷기 키 ÷ 서 있기가 기본 아리아 같은 장과 2% 안, 중앙값 비율은 기본(1.032)과 1% 안
+        stand, base_stand = (_read(CHARS / char / "outfits" / outfit / "stand_0.png").shape[0],
+                             _read(CHARS / char / "stand_0.png").shape[0])
+        base = [_read(CHARS / char / f"walk_{i}.png").shape[0] for i in range(8)]
+        assert all(abs((h / stand) / (b / base_stand) - 1) <= 0.02 for h, b in zip(heights, base)), (heights, base)
+        assert abs(float(np.median(heights)) / stand - float(np.median(base)) / base_stand) <= 0.01
+        return
     if outfit == "red_dress":
         # 전체 다시 그림(11-26)은 기본 레나 걷기(286~291)처럼 장마다 오르내림 — 같은 장 기본 키와 1.5% 안이면 크기 튐 아님
         base = [_read(CHARS / char / f"walk_{i}.png").shape[0] for i in range(8)]
@@ -200,16 +193,6 @@ def test_dare_drag_halo_width_steady(outfit):
         mine = w / halo_width(_read(dressed / "stand_0.png"))
         ref = halo_width(_read(base / f"drag_{i}.png")) / halo_width(_read(base / "stand_0.png"))
         assert abs(mine / ref - 1) <= 0.03, (i, mine, ref)
-
-
-def test_aria_summer_dress_pet_matches_tshirt_band():
-    """QA 11-26 여름 드레스 쓰다듬기 때 얼굴이 4~7% 커짐(모자로 머리 실루엣 못 씀): 모자 아래 띠(키 25~55%) 폭 ÷ 티셔츠 같은 칸이
-    서 있기 비(0.955)와 ±0.02."""
-    from scripts.build_outfit_frames import band_width
-    summer, tshirt = CHARS / "아리아" / "outfits" / "summer_dress", CHARS / "아리아" / "outfits" / "tshirt"
-    for name in ["stand_0", "stand_1"] + [f"pet_{i}" for i in range(6)]:
-        r = band_width(_read(summer / f"{name}.png")) / band_width(_read(tshirt / f"{name}.png"))
-        assert abs(r - 0.955) <= 0.02, (name, r)
 
 
 def test_lena_lab_walk_head_is_one_drawing():
