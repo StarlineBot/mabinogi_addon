@@ -19,7 +19,7 @@
         "tests/test_character.py",
         "tests/test_pet_floor_space.py"
       ],
-      "reason": "걷기 8장(다래·아리아·레나·Starline) — 한 바퀴 시간·빠르기 그대로, 한 장 시간만 0.15·0.165초 · 막힌 구간(보이는 게임 화면) 피해 빈 바닥에서만 돌아다님·빈 곳 없으면 구석(호감도·게임 대사 없음)"
+      "reason": "걷기 8장(다래·아리아·레나·Starline) — 한 바퀴 시간·빠르기 그대로, 한 장 시간만 0.15·0.165초 · 막힌 구간(보이는 게임 화면) 피해 빈 바닥에서만 돌아다님·빈 곳 없으면 구석(호감도·게임 대사 없음) · 레나 구석 앉기 윙크 한 번 0.8초(11-26)"
     },
     "src/mabinogi_addon/assets/characters/Starline/walk_0.png": {
       "tests": [
@@ -61,7 +61,7 @@
         "tests/test_outfit_v2_frames.py",
         "tests/test_character.py"
       ],
-      "reason": "프레임표 v2 옷 6벌(호감도 50 레나·다래 + 100 네 벌, 칸마다 머리 맞춤·아리아 여름 드레스는 머리 배율 중앙값으로 모자 몫 뺌·큰 시트는 템플릿 크기로) — 기존 옷 결과 그대로(해시 같음)"
+      "reason": "프레임표 v2 옷 6벌(호감도 50 레나·다래 + 100 네 벌, 칸마다 머리 맞춤·아리아 여름 드레스는 머리 배율 중앙값으로 모자 몫 뺌·큰 시트는 템플릿 크기로) — 기존 옷 결과 그대로(해시 같음) · 한 동작 묶음 안 머리 배율 하나(중앙값)·레나 lab 걷기 얼굴 옮겨 붙이기(QA 11-26)"
     },
     "src/mabinogi_addon/assets/characters/다래/outfits/frill_pajama/stand_0.png": {
       "tests": [
@@ -107,6 +107,19 @@
         "tests/test_character.py"
       ],
       "reason": "SD 없는 옷 대신 없는 key로 기본 프레임 폴백 확인(옷 8벌 모두 SD)"
+    },
+    "scripts/outfit_face_fix.py": {
+      "tests": [
+        "tests/test_outfit_v2_frames.py"
+      ],
+      "reason": "착장 걷기 얼굴 옆선 고치기(기본 걷기 얼굴 정렬·안경 다시 얹기) — 레나 lab"
+    },
+    "scripts/build_starline_frames.py": {
+      "tests": [
+        "tests/test_walk_v2.py",
+        "tests/test_character.py"
+      ],
+      "reason": "match_tones·match_saturation 경계 없는 무게(얼룩 없음) — 걷기·말하기·불꽃 노이즈·톤"
     }
   }
 }

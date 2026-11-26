@@ -45,6 +45,11 @@ def _names(folder):
 # 다래 오프숄더 sleep_1·wake_3도 같은 까닭(−7.6%, 렌더 확인). 아리아 여름 드레스는 밀짚모자만큼 키가 큼(getup·walk_2 +6~8%).
 HEIGHT_TOL = {("다래", "sleep_5"): 0.08, ("다래", "sleep_1"): 0.08, ("다래", "wake_3"): 0.08}
 HAT_HEIGHT_TOL = 0.08
+# 한 동작 안 배율을 하나로 맞춘 뒤(QA 11-26) 옷 그림 자체의 머리가 그 동작 다른 칸보다 6~9% 큰 칸 — 칸마다 따로 맞추면
+# 동작 안에서 크기가 들쭉날쭉해지므로 이 칸들은 머리 0.90까지(그림 그대로, 렌더 확인)
+HEAD_TOL = {("아리아", "summer_dress", "pet_3"): 0.90, ("아리아", "summer_dress", "getup_2"): 0.90,
+            ("다래", "white_offshoulder", "sleep_1"): 0.90, ("다래", "white_offshoulder", "sleep_7"): 0.90,
+            ("다래", "white_offshoulder", "wake_3"): 0.90}
 _MEDIANS: dict = {}
 
 
@@ -76,7 +81,7 @@ def test_outfit_has_every_base_frame_and_motions(char, outfit):
 def test_outfit_frame_matches_base_head_and_height(char, outfit, name):
     base, dressed = _read(CHARS / char / f"{name}.png"), _read(CHARS / char / "outfits" / outfit / f"{name}.png")
     k = best_scale(_head(base), _head(dressed), 0.85, 1.15, 61) / _hat_median(char, outfit)
-    assert 0.95 <= k <= 1.05, k
+    assert HEAD_TOL.get((char, outfit, name), 0.95) <= k <= 1.05, k
     tol = HAT_HEIGHT_TOL if (char, outfit) in HAT else HEIGHT_TOL.get((char, name), 0.06)
     assert abs(dressed.shape[0] - base.shape[0]) / base.shape[0] <= tol, (dressed.shape[0], base.shape[0])
 
@@ -114,3 +119,45 @@ def test_wearing_outfit_swaps_pet_frames(char, outfit):
     dressed = pet_window.load_frames(char, profile, outfit)
     assert set(base) == set(dressed)
     assert all(base[n].size() != dressed[n].size() or base[n] != dressed[n] for n in (ref, "walk_0", "pet_0"))
+
+
+def test_one_scale_per_animation_group():
+    """QA 11-26: 같은 동작 묶음 칸은 머리 배율이 하나(중앙값) — 걷기·모션·말하기 세트·앉기 각각."""
+    from scripts.build_outfit_frames import group_of, group_scales
+    assert [group_of(n) for n in ("walk_3", "motion_water_2", "talk_a_m1_0", "talk_base_0", "talk_happy_1", "sit_doze_0",
+                                  "stand_1", "sleep_8")] == ["walk", "motion_water", "talk_a", "talk", "talk", "sit", "stand", "sleep"]
+    img = np.zeros((2, 2, 4), np.uint8)
+    pending = [("walk_0", img, 1.0, 0.98), ("walk_1", img, 1.1, 1.04), ("walk_2", img, 0.9, 1.00), ("pet_0", img, 1.0, 0.9)]
+    got = {n: k for n, _i, k in group_scales(pending, True)}
+    assert got == pytest.approx({"walk_0": 1.0, "walk_1": 1.1, "walk_2": 0.9, "pet_0": 0.9})   # 키 배율 × 묶음 머리 1.00
+    motion = [("motion_water_0", img, 1.0, 0.98), ("motion_water_1", img, 1.0, 1.04)]
+    assert [k for _n, _i, k in group_scales(motion, True)] == pytest.approx([0.98, 1.04])   # 모션은 칸마다(사용자 11-26)
+    hat = {n: k for n, _i, k in group_scales(pending, "median")}
+    assert hat["walk_0"] == pytest.approx(1.0 / 0.99)                                         # 전 칸 중앙값 0.99로 나눔
+
+
+@pytest.mark.parametrize("char,outfit", list(OUTFITS))
+def test_drag_and_pet_height_close_to_base_range(char, outfit):
+    """QA 11-26 다래 오프숄더 잡아 들기 크기 들쭉날쭉: 끌기·쓰다듬기 키 범위 ≤ 2.5%(기본 캐릭터가 더 크면 그만큼)."""
+    def spread(folder, prefix):
+        hs = [_read(p).shape[0] for p in folder.glob(f"{prefix}_*.png")]
+        return (max(hs) - min(hs)) / min(hs)
+    for prefix in ("drag", "pet"):
+        allowed = max(0.025, spread(CHARS / char, prefix) + 0.005)
+        assert spread(CHARS / char / "outfits" / outfit, prefix) <= allowed, prefix
+
+
+@pytest.mark.parametrize("char,outfit", list(OUTFITS))
+def test_walk_height_range_within_two_percent(char, outfit):
+    heights = [_read(CHARS / char / "outfits" / outfit / f"walk_{i}.png").shape[0] for i in range(8)]
+    assert (max(heights) - min(heights)) / min(heights) <= 0.021, heights
+
+
+def test_lena_lab_walk_face_taken_from_base_walk():
+    """QA 11-26: 레나 연구실 차림 걷기 얼굴 옆선 — 기본 걷기 얼굴을 옮겨 붙임(scripts/outfit_face_fix). 고치기 전 피부 모양 IoU
+    0.70~0.77 → 지금 0.78~0.84(귀는 옷 그림 것이라 1이 아님)."""
+    from scripts.outfit_face_fix import align
+    for i in range(8):
+        base = _read(CHARS / "레나" / f"walk_{i}.png")
+        lab = _read(CHARS / "레나" / "outfits" / "lab" / f"walk_{i}.png")
+        assert align(base, lab)[1] >= 0.77, i

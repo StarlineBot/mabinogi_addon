@@ -231,33 +231,92 @@ def card() -> np.ndarray:
 CARD_X0, CARD_CW = 100, 999
 
 
+# 부드러운 톤 맞추기(QA 11-26 '걷기 팔·다리가 자글자글'): L 경계(0~79 / 80~170)로 딱 잘라 다른 오프셋을 여섯 번 더하던 방식은
+# 경계 근처 질감 픽셀이 반은 이쪽·반은 저쪽으로 갈려 위장무늬 얼룩이 됨(어두운 내부 노이즈 +65%). → 원래 L에 따른 연속 무게
+# (어두운 쪽·중간 쪽을 넓은 램프로 섞음, 밝은 머리카락은 0)로 오프셋 두 개를 섞어 한 번만 더함. 오프셋만 되풀이해 맞추고
+# 무게는 처음 L로 고정 — 픽셀마다 원래 값의 매끄러운 함수라 얼룩이 생기지 않음.
+SOFT_DARK = (95.0, 135.0)     # 어두운 무게 1 → 0(어두운 안쪽은 한 오프셋으로 통째로 — 질감 그대로)
+SOFT_TOP = (175.0, 210.0)     # 중간 무게 1 → 0(밝은 머리카락·피부는 그대로) — 걷기 8장 노이즈 ≤ 0.99×·ΔE ≤ 2.7로 고름
+
+
+def _soft_weights(lab: np.ndarray, alpha: np.ndarray):
+    L = lab[..., 0]
+    dark = np.clip((SOFT_DARK[1] - L) / (SOFT_DARK[1] - SOFT_DARK[0]), 0, 1)
+    top = np.clip((SOFT_TOP[1] - L) / (SOFT_TOP[1] - SOFT_TOP[0]), 0, 1)
+    mid = np.clip(top - dark, 0, 1)
+    solid = (alpha > 200).astype(np.float32)
+    return dark * solid, mid * solid
+
+
+def _band_means(img: np.ndarray):
+    """측정(QA와 같은 칸): 불투명 픽셀 중 L < 80 / 80 ≤ L ≤ 170 Lab 평균."""
+    lab = cv2.cvtColor(np.ascontiguousarray(img[..., :3]), cv2.COLOR_BGR2LAB).astype(np.float32)
+    a = img[..., 3] > 200
+    L = lab[..., 0]
+    out = []
+    for sel in (a & (L < 80), a & (L >= 80) & (L <= 170)):
+        out.append(lab[sel].mean(0) if sel.sum() > 50 else None)
+    return out
+
+
+def _weighted_means(img: np.ndarray):
+    lab = cv2.cvtColor(np.ascontiguousarray(img[..., :3]), cv2.COLOR_BGR2LAB).astype(np.float32)
+    wd, wm = _soft_weights(lab, img[..., 3])
+    return lab, wd, wm
+
+
 def match_tones(frame: np.ndarray, stand: np.ndarray) -> np.ndarray:
-    """채도 → 어두운 톤 → 중간 톤 Lab을 서 있기에(서로 조금씩 밀어내서 여섯 번 되풀이)."""
-    for _ in range(6):
-        frame = match_midtone(match_midtone(match_saturation(frame, stand), stand, DARK, True), stand, MID, True)
-    return frame
+    """채도 → 어두운·중간 톤 Lab을 서 있기에 — 경계 없는 무게로 섞은 오프셋 두 개를 한 번에(되풀이 없음).
+    오프셋은 '무게 평균이 서 있기의 무게 평균과 같아지게' 2×2 연립으로 풂."""
+    base = match_saturation(frame, stand)
+    lab0, wd, wm = _weighted_means(base)
+    ref_lab, rd, rm = _weighted_means(stand)
+    if wd.sum() < 50 or wm.sum() < 50 or rd.sum() < 50 or rm.sum() < 50:
+        return base
+    want_d = (ref_lab * rd[..., None]).sum((0, 1)) / rd.sum()
+    want_m = (ref_lab * rm[..., None]).sum((0, 1)) / rm.sum()
+    cur_d = (lab0 * wd[..., None]).sum((0, 1)) / wd.sum()
+    cur_m = (lab0 * wm[..., None]).sum((0, 1)) / wm.sum()
+    # 바꾼 뒤 무게 평균: cur_d + (Σwd²·D + Σwd·wm·M)/Σwd = want_d,  cur_m + (Σwd·wm·D + Σwm²·M)/Σwm = want_m
+    a11, a12 = (wd * wd).sum() / wd.sum(), (wd * wm).sum() / wd.sum()
+    a21, a22 = (wd * wm).sum() / wm.sum(), (wm * wm).sum() / wm.sum()
+    inv = np.linalg.inv(np.array([[a11, a12], [a21, a22]], np.float64))
+    rhs = np.stack([want_d - cur_d, want_m - cur_m])          # 2 × 3
+    off = inv @ rhs                                           # 2 × 3 — 어두운·중간 오프셋
+    lab = lab0 + wd[..., None] * off[0].astype(np.float32) + wm[..., None] * off[1].astype(np.float32)
+    bgr = cv2.cvtColor(np.clip(lab, 0, 255).astype(np.uint8), cv2.COLOR_LAB2BGR)
+    out = base.copy()
+    touched = (wd + wm) > 0
+    out[touched, :3] = bgr[touched]
+    return match_saturation(out, stand)   # Lab 이동으로 조금 바뀐 채도를 다시(같은 부드러운 무게)
 
 
 def match_saturation(frame: np.ndarray, stand: np.ndarray) -> np.ndarray:
-    """채도(HSV S, 불투명 픽셀 평균)를 서 있기에 — 옷·망토·그림자(L ≤ 170)만 바꿈(머리카락 밝은 톤은 시트 색 맞추기가 맡음)."""
-    def stats(img):
-        hsv = cv2.cvtColor(np.ascontiguousarray(img[..., :3]), cv2.COLOR_BGR2HSV)
-        _lab, sel = _midtone(img, (0, MID[1]), True)
-        return hsv, img[..., 3] > 200, sel
-
-    ref_hsv, ref_a, _ = stats(stand)
-    target = ref_hsv[ref_a][:, 1].astype(np.float32).mean()
-    out = frame.copy()
-    for _ in range(4):
-        hsv, opaque, sel = stats(out)
+    """채도(HSV S, 불투명 픽셀 평균)를 서 있기에 — 옷·망토·그림자(L ≤ 160 무게 1, 190까지 줄어 0)만 바꿈(머리카락 밝은 톤은
+    시트 색 맞추기가 맡음). 무게는 처음 L로 고정, 되풀이는 바꿀 양만(경계 없는 한 번 — QA 11-26 얼룩)."""
+    ref_hsv = cv2.cvtColor(np.ascontiguousarray(stand[..., :3]), cv2.COLOR_BGR2HSV)
+    target = ref_hsv[stand[..., 3] > 200][:, 1].astype(np.float32).mean()
+    hsv0 = cv2.cvtColor(np.ascontiguousarray(frame[..., :3]), cv2.COLOR_BGR2HSV)
+    lab0 = cv2.cvtColor(np.ascontiguousarray(frame[..., :3]), cv2.COLOR_BGR2LAB).astype(np.float32)
+    opaque = frame[..., 3] > 200
+    w_dark, w_mid = _soft_weights(lab0, frame[..., 3])
+    weight = np.clip(w_dark + w_mid, 0, 1)
+    if weight.sum() < 200 or opaque.sum() < 200:
+        return frame.copy()
+    shift, out = 0.0, frame.copy()
+    for _ in range(6):
+        hsv = cv2.cvtColor(np.ascontiguousarray(out[..., :3]), cv2.COLOR_BGR2HSV)
         diff = target - hsv[opaque][:, 1].astype(np.float32).mean()
-        if abs(diff) < 0.5 or sel.sum() < 200:
+        if abs(diff) < 0.5:
             break
-        s = hsv[..., 1].astype(np.float32)
-        s[sel] = np.clip(s[sel] + diff * opaque.sum() / sel.sum(), 0, 255)
-        hsv[..., 1] = s.astype(np.uint8)
-        fixed = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
-        out[sel, :3] = fixed[sel]
+        shift += diff * opaque.sum() / weight[opaque].sum()
+        sat = np.clip(hsv0[..., 1].astype(np.float32) + weight * shift, 0, 255)
+        moved = hsv0.copy()
+        moved[..., 1] = sat.astype(np.uint8)
+        fixed = cv2.cvtColor(moved, cv2.COLOR_HSV2BGR)
+        out = frame.copy()
+        touched = weight > 0
+        out[touched, :3] = fixed[touched]
     return out
 
 
