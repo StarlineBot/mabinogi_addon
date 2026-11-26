@@ -12,5 +12,59 @@
    "drag_2",
    "drag_3"
   ]
+ },
+ "걷기": {
+  "cols": 4,
+  "rows": 2,
+  "cell": [
+   310,
+   330
+  ],
+  "frames": [
+   "walk_0",
+   "walk_1",
+   "walk_2",
+   "walk_3",
+   "walk_4",
+   "walk_5",
+   "walk_6",
+   "walk_7"
+  ]
+ },
+ "서있기": {
+  "cols": 1,
+  "rows": 1,
+  "cell": [
+   310,
+   330
+  ],
+  "frames": [
+   "stand_0"
+  ]
+ },
+ "놀람": {
+  "cols": 2,
+  "rows": 1,
+  "cell": [
+   310,
+   330
+  ],
+  "frames": [
+   "surprise_0",
+   "surprise_1"
+  ]
+ },
+ "착지": {
+  "cols": 3,
+  "rows": 1,
+  "cell": [
+   310,
+   330
+  ],
+  "frames": [
+   "land_0",
+   "land_1",
+   "land_2"
+  ]
  }
 }

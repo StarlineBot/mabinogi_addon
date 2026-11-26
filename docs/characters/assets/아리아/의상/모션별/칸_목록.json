@@ -244,5 +244,25 @@
    "land_1",
    "land_2"
   ]
+ },
+ "서있기_놀람_끌기_착지": {
+  "cols": 4,
+  "rows": 3,
+  "cell": [
+   249,
+   330
+  ],
+  "frames": [
+   "stand_0",
+   "surprise_0",
+   "surprise_1",
+   "surprise_2",
+   "surprise_3",
+   "drag_0",
+   "drag_1",
+   "land_0",
+   "land_1",
+   "land_2"
+  ]
  }
 }
