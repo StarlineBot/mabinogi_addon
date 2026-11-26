@@ -32,17 +32,19 @@ ASSETS = ROOT / "docs" / "characters" / "assets"
 APP_ROOT = ROOT / "src" / "mabinogi_addon" / "assets" / "characters"
 # (캐릭터 폴더, 옷 key) → (옷 이름 폴더, 색 기준 프레임)
 OUTFITS = {("이안", "vest_tie"): ("넥타이 조끼", "stand_1"), ("아리아", "tshirt"): ("티셔츠 차림", "stand_0"),
-           ("레나", "lab"): ("연구실 차림", "stand_0")}
+           ("레나", "lab"): ("연구실 차림", "stand_0"), ("다래", "frill_pajama"): ("프릴 잠옷 원피스", "stand_0")}
 # 옷마다 템플릿(폴더, 열, 행, 시트 크기, 칸마다 머리 맞춤). 기본 = 옛 전체프레임(4×4, 960×1320), 키 비율만.
 # 레나 연구실 차림(기획 11-26): 프레임표 v2(3×4, 930×1320, 테두리 없음, 새 걷기 8장 포함) — 옷 칸 키가 +1~5%로 들쭉날쭉하고
 # 머리가 끌기·일어나기·웅크리기에서 크고 걷기 몇 장에서 작아, 칸마다 위 42% 실루엣으로 템플릿 머리에 맞춤(QA 11-25 규칙).
 DEFAULT_TEMPLATE = ("전체프레임", 4, 4, (960, 1320), False)
-TEMPLATES = {("레나", "lab"): ("전체프레임_v2", 3, 4, (930, 1320), True)}
+TEMPLATES = {("레나", "lab"): ("전체프레임_v2", 3, 4, (930, 1320), True),
+             ("다래", "frill_pajama"): ("전체프레임_v2", 3, 4, (930, 1320), True)}
 HEAD = 0.42
 # 템플릿 뒤에 다시 그려 받은 시트(가이드 방식) — (키, 파일, 열, 행, 가이드 크기, 쓸 칸). 배율 = 앱 기본 프레임 키 중앙값 ÷ 칸 키 중앙값
 REDRAWN: dict = {}   # 걷기는 기획이 앱 크기로 정리한 걷기_v2/walk_0~7.png를 그대로(11-26, scripts/build_walk_v2.OUTFIT_WALKS)
 MOTION_NAMES = {"옷매무새(25)": "motion_tidy", "차(75)": "motion_tea", "물주기(25)": "motion_water", "화관(75)": "motion_wreath",
-                "마법서(25)": "motion_grimoire", "공중앉기(75)": "motion_float_sit"}
+                "마법서(25)": "motion_grimoire", "공중앉기(75)": "motion_float_sit",
+                "양인형(25)": "motion_sheep_doll", "비눗방울(75)": "motion_bubbles"}
 
 
 def frame_name(raw: str) -> str:
