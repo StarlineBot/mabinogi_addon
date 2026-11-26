@@ -1,0 +1,392 @@
+[
+ {
+  "part": 1,
+  "cell": 0,
+  "frame": "stand_0",
+  "shrink": 1.0
+ },
+ {
+  "part": 1,
+  "cell": 1,
+  "frame": "walk_0",
+  "shrink": 1.0
+ },
+ {
+  "part": 1,
+  "cell": 2,
+  "frame": "walk_1",
+  "shrink": 1.0
+ },
+ {
+  "part": 1,
+  "cell": 3,
+  "frame": "walk_2",
+  "shrink": 1.0
+ },
+ {
+  "part": 1,
+  "cell": 4,
+  "frame": "walk_3",
+  "shrink": 1.0
+ },
+ {
+  "part": 1,
+  "cell": 5,
+  "frame": "walk_4",
+  "shrink": 1.0
+ },
+ {
+  "part": 1,
+  "cell": 6,
+  "frame": "walk_5",
+  "shrink": 1.0
+ },
+ {
+  "part": 1,
+  "cell": 7,
+  "frame": "walk_6",
+  "shrink": 1.0
+ },
+ {
+  "part": 1,
+  "cell": 8,
+  "frame": "walk_7",
+  "shrink": 1.0
+ },
+ {
+  "part": 1,
+  "cell": 9,
+  "frame": "drag_0",
+  "shrink": 1.0
+ },
+ {
+  "part": 1,
+  "cell": 10,
+  "frame": "drag_1",
+  "shrink": 1.0
+ },
+ {
+  "part": 1,
+  "cell": 11,
+  "frame": "drag_2",
+  "shrink": 1.0
+ },
+ {
+  "part": 2,
+  "cell": 0,
+  "frame": "drag_3",
+  "shrink": 1.0
+ },
+ {
+  "part": 2,
+  "cell": 1,
+  "frame": "fall_0",
+  "shrink": 1.0
+ },
+ {
+  "part": 2,
+  "cell": 2,
+  "frame": "land_0",
+  "shrink": 1.0
+ },
+ {
+  "part": 2,
+  "cell": 3,
+  "frame": "land_1",
+  "shrink": 1.0
+ },
+ {
+  "part": 2,
+  "cell": 4,
+  "frame": "land_2",
+  "shrink": 1.0
+ },
+ {
+  "part": 2,
+  "cell": 5,
+  "frame": "land_3",
+  "shrink": 1.0
+ },
+ {
+  "part": 2,
+  "cell": 6,
+  "frame": "pet_0",
+  "shrink": 1.0
+ },
+ {
+  "part": 2,
+  "cell": 7,
+  "frame": "pet_1",
+  "shrink": 1.0
+ },
+ {
+  "part": 2,
+  "cell": 8,
+  "frame": "pet_2",
+  "shrink": 1.0
+ },
+ {
+  "part": 2,
+  "cell": 9,
+  "frame": "pet_3",
+  "shrink": 1.0
+ },
+ {
+  "part": 2,
+  "cell": 10,
+  "frame": "pet_4",
+  "shrink": 1.0
+ },
+ {
+  "part": 2,
+  "cell": 11,
+  "frame": "pet_5",
+  "shrink": 1.0
+ },
+ {
+  "part": 3,
+  "cell": 0,
+  "frame": "magic_0",
+  "shrink": 1.0
+ },
+ {
+  "part": 3,
+  "cell": 1,
+  "frame": "magic_1",
+  "shrink": 1.0
+ },
+ {
+  "part": 3,
+  "cell": 2,
+  "frame": "magic_2",
+  "shrink": 1.0
+ },
+ {
+  "part": 3,
+  "cell": 3,
+  "frame": "magic_3",
+  "shrink": 1.0
+ },
+ {
+  "part": 3,
+  "cell": 4,
+  "frame": "magic_4",
+  "shrink": 1.0
+ },
+ {
+  "part": 3,
+  "cell": 5,
+  "frame": "magic_5",
+  "shrink": 1.0
+ },
+ {
+  "part": 3,
+  "cell": 6,
+  "frame": "crouch_0",
+  "shrink": 1.0
+ },
+ {
+  "part": 3,
+  "cell": 7,
+  "frame": "crouch_1",
+  "shrink": 1.0
+ },
+ {
+  "part": 3,
+  "cell": 8,
+  "frame": "crouch_2",
+  "shrink": 1.0
+ },
+ {
+  "part": 3,
+  "cell": 9,
+  "frame": "sit_0",
+  "shrink": 1.0
+ },
+ {
+  "part": 3,
+  "cell": 10,
+  "frame": "sit_1",
+  "shrink": 1.0
+ },
+ {
+  "part": 3,
+  "cell": 11,
+  "frame": "sit_2",
+  "shrink": 1.0
+ },
+ {
+  "part": 4,
+  "cell": 0,
+  "frame": "sit_3",
+  "shrink": 1.0
+ },
+ {
+  "part": 4,
+  "cell": 1,
+  "frame": "rise_0",
+  "shrink": 1.0
+ },
+ {
+  "part": 4,
+  "cell": 2,
+  "frame": "rise_1",
+  "shrink": 1.0
+ },
+ {
+  "part": 4,
+  "cell": 3,
+  "frame": "rise_2",
+  "shrink": 1.0
+ },
+ {
+  "part": 4,
+  "cell": 4,
+  "frame": "talk_base_0",
+  "shrink": 1.0
+ },
+ {
+  "part": 4,
+  "cell": 5,
+  "frame": "talk_blink_0",
+  "shrink": 1.0
+ },
+ {
+  "part": 4,
+  "cell": 6,
+  "frame": "talk_emph2_0",
+  "shrink": 1.0
+ },
+ {
+  "part": 4,
+  "cell": 7,
+  "frame": "talk_emph_0",
+  "shrink": 1.0
+ },
+ {
+  "part": 4,
+  "cell": 8,
+  "frame": "talk_end1_0",
+  "shrink": 1.0
+ },
+ {
+  "part": 4,
+  "cell": 9,
+  "frame": "talk_end2_0",
+  "shrink": 1.0
+ },
+ {
+  "part": 4,
+  "cell": 10,
+  "frame": "talk_m1_0",
+  "shrink": 1.0
+ },
+ {
+  "part": 4,
+  "cell": 11,
+  "frame": "talk_m2_0",
+  "shrink": 1.0
+ },
+ {
+  "part": 5,
+  "cell": 0,
+  "frame": "talk_mid_0",
+  "shrink": 1.0
+ },
+ {
+  "part": 5,
+  "cell": 1,
+  "frame": "motion:마법서(25)_0",
+  "shrink": 1.0
+ },
+ {
+  "part": 5,
+  "cell": 2,
+  "frame": "motion:마법서(25)_1",
+  "shrink": 1.0
+ },
+ {
+  "part": 5,
+  "cell": 3,
+  "frame": "motion:마법서(25)_2",
+  "shrink": 1.0
+ },
+ {
+  "part": 5,
+  "cell": 4,
+  "frame": "motion:마법서(25)_3",
+  "shrink": 1.0
+ },
+ {
+  "part": 5,
+  "cell": 5,
+  "frame": "motion:마법서(25)_4",
+  "shrink": 1.0
+ },
+ {
+  "part": 5,
+  "cell": 6,
+  "frame": "motion:마법서(25)_5",
+  "shrink": 1.0
+ },
+ {
+  "part": 5,
+  "cell": 7,
+  "frame": "motion:마법서(25)_6",
+  "shrink": 1.0
+ },
+ {
+  "part": 5,
+  "cell": 8,
+  "frame": "motion:마법서(25)_7",
+  "shrink": 1.0
+ },
+ {
+  "part": 5,
+  "cell": 9,
+  "frame": "motion:공중앉기(75)_0",
+  "shrink": 1.0
+ },
+ {
+  "part": 5,
+  "cell": 10,
+  "frame": "motion:공중앉기(75)_1",
+  "shrink": 1.0
+ },
+ {
+  "part": 5,
+  "cell": 11,
+  "frame": "motion:공중앉기(75)_2",
+  "shrink": 1.0
+ },
+ {
+  "part": 6,
+  "cell": 0,
+  "frame": "motion:공중앉기(75)_3",
+  "shrink": 1.0
+ },
+ {
+  "part": 6,
+  "cell": 1,
+  "frame": "motion:공중앉기(75)_4",
+  "shrink": 1.0
+ },
+ {
+  "part": 6,
+  "cell": 2,
+  "frame": "motion:공중앉기(75)_5",
+  "shrink": 1.0
+ },
+ {
+  "part": 6,
+  "cell": 3,
+  "frame": "motion:공중앉기(75)_6",
+  "shrink": 1.0
+ },
+ {
+  "part": 6,
+  "cell": 4,
+  "frame": "motion:공중앉기(75)_7",
+  "shrink": 1.0
+ }
+]

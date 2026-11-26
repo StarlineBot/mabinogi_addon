@@ -8,433 +8,481 @@
  {
   "part": 1,
   "cell": 1,
+  "frame": "stand_1",
+  "shrink": 1.0
+ },
+ {
+  "part": 1,
+  "cell": 2,
+  "frame": "hair_0",
+  "shrink": 1.0
+ },
+ {
+  "part": 1,
+  "cell": 3,
+  "frame": "hair_1",
+  "shrink": 1.0
+ },
+ {
+  "part": 1,
+  "cell": 4,
+  "frame": "hair_2",
+  "shrink": 1.0
+ },
+ {
+  "part": 1,
+  "cell": 5,
+  "frame": "hair_3",
+  "shrink": 1.0
+ },
+ {
+  "part": 1,
+  "cell": 6,
   "frame": "walk_0",
   "shrink": 1.0
  },
  {
   "part": 1,
-  "cell": 2,
+  "cell": 7,
   "frame": "walk_1",
   "shrink": 1.0
  },
  {
   "part": 1,
-  "cell": 3,
+  "cell": 8,
   "frame": "walk_2",
   "shrink": 1.0
  },
  {
   "part": 1,
-  "cell": 4,
+  "cell": 9,
   "frame": "walk_3",
   "shrink": 1.0
  },
  {
   "part": 1,
-  "cell": 5,
+  "cell": 10,
   "frame": "walk_4",
   "shrink": 1.0
  },
  {
   "part": 1,
-  "cell": 6,
+  "cell": 11,
   "frame": "walk_5",
   "shrink": 1.0
  },
  {
   "part": 1,
-  "cell": 7,
-  "frame": "drag_0",
+  "cell": 12,
+  "frame": "walk_6",
   "shrink": 1.0
  },
  {
   "part": 1,
-  "cell": 8,
-  "frame": "drag_1",
+  "cell": 13,
+  "frame": "walk_7",
   "shrink": 1.0
  },
  {
   "part": 1,
-  "cell": 9,
-  "frame": "drag_2",
+  "cell": 14,
+  "frame": "stretch_0",
   "shrink": 1.0
  },
  {
   "part": 1,
-  "cell": 10,
-  "frame": "drag_3",
-  "shrink": 1.0
- },
- {
-  "part": 1,
-  "cell": 11,
-  "frame": "land_0",
+  "cell": 15,
+  "frame": "stretch_1",
   "shrink": 1.0
  },
  {
   "part": 2,
   "cell": 0,
-  "frame": "land_1",
+  "frame": "stretch_2",
   "shrink": 1.0
  },
  {
   "part": 2,
   "cell": 1,
-  "frame": "land_2",
+  "frame": "stretch_3",
   "shrink": 1.0
  },
  {
   "part": 2,
   "cell": 2,
-  "frame": "getup_0",
+  "frame": "stretch_4",
   "shrink": 1.0
  },
  {
   "part": 2,
   "cell": 3,
-  "frame": "getup_1",
+  "frame": "stretch_5",
   "shrink": 1.0
  },
  {
   "part": 2,
   "cell": 4,
-  "frame": "getup_2",
-  "shrink": 1.0
- },
- {
-  "part": 2,
-  "cell": 5,
   "frame": "surprise_0",
   "shrink": 1.0
  },
  {
   "part": 2,
-  "cell": 6,
+  "cell": 5,
   "frame": "surprise_1",
   "shrink": 1.0
  },
  {
   "part": 2,
+  "cell": 6,
+  "frame": "surprise_2",
+  "shrink": 1.0
+ },
+ {
+  "part": 2,
   "cell": 7,
-  "frame": "pet_0",
+  "frame": "surprise_3",
   "shrink": 1.0
  },
  {
   "part": 2,
   "cell": 8,
-  "frame": "pet_1",
+  "frame": "drag_0",
   "shrink": 1.0
  },
  {
   "part": 2,
   "cell": 9,
-  "frame": "pet_2",
+  "frame": "drag_1",
   "shrink": 1.0
  },
  {
   "part": 2,
   "cell": 10,
-  "frame": "pet_3",
+  "frame": "land_0",
   "shrink": 1.0
  },
  {
   "part": 2,
   "cell": 11,
+  "frame": "land_1",
+  "shrink": 1.0
+ },
+ {
+  "part": 2,
+  "cell": 12,
+  "frame": "land_2",
+  "shrink": 1.0
+ },
+ {
+  "part": 2,
+  "cell": 13,
+  "frame": "getup_0",
+  "shrink": 1.0
+ },
+ {
+  "part": 2,
+  "cell": 14,
+  "frame": "getup_1",
+  "shrink": 1.0
+ },
+ {
+  "part": 2,
+  "cell": 15,
+  "frame": "getup_2",
+  "shrink": 1.0
+ },
+ {
+  "part": 3,
+  "cell": 0,
+  "frame": "pet_0",
+  "shrink": 1.0
+ },
+ {
+  "part": 3,
+  "cell": 1,
+  "frame": "pet_1",
+  "shrink": 1.0
+ },
+ {
+  "part": 3,
+  "cell": 2,
+  "frame": "pet_2",
+  "shrink": 1.0
+ },
+ {
+  "part": 3,
+  "cell": 3,
+  "frame": "pet_3",
+  "shrink": 1.0
+ },
+ {
+  "part": 3,
+  "cell": 4,
   "frame": "pet_4",
   "shrink": 1.0
  },
  {
   "part": 3,
-  "cell": 0,
+  "cell": 5,
   "frame": "pet_5",
   "shrink": 1.0
  },
  {
   "part": 3,
-  "cell": 1,
+  "cell": 6,
   "frame": "crouch_0",
   "shrink": 1.0
  },
  {
   "part": 3,
-  "cell": 2,
+  "cell": 7,
   "frame": "crouch_1",
   "shrink": 1.0
  },
  {
   "part": 3,
-  "cell": 3,
+  "cell": 8,
   "frame": "crouch_2",
   "shrink": 1.0
  },
  {
   "part": 3,
-  "cell": 4,
-  "frame": "sit_doze_0",
-  "shrink": 1.0
- },
- {
-  "part": 3,
-  "cell": 5,
-  "frame": "sit_drowsy_0",
-  "shrink": 1.0
- },
- {
-  "part": 3,
-  "cell": 6,
-  "frame": "sit_half_0",
-  "shrink": 1.0
- },
- {
-  "part": 3,
-  "cell": 7,
-  "frame": "sit_notice_0",
-  "shrink": 1.0
- },
- {
-  "part": 3,
-  "cell": 8,
-  "frame": "sleep_0",
-  "shrink": 1.0
- },
- {
-  "part": 3,
   "cell": 9,
-  "frame": "sleep_1",
+  "frame": "sit_0",
   "shrink": 1.0
  },
  {
   "part": 3,
   "cell": 10,
-  "frame": "sleep_2",
+  "frame": "sit_1",
   "shrink": 1.0
  },
  {
   "part": 3,
   "cell": 11,
-  "frame": "sleep_3",
+  "frame": "sit_2",
   "shrink": 1.0
  },
  {
-  "part": 4,
-  "cell": 0,
-  "frame": "sleep_4",
+  "part": 3,
+  "cell": 12,
+  "frame": "sit_3",
   "shrink": 1.0
  },
  {
-  "part": 4,
-  "cell": 1,
-  "frame": "sleep_5",
-  "shrink": 1.0
- },
- {
-  "part": 4,
-  "cell": 2,
-  "frame": "sleep_6",
-  "shrink": 1.0
- },
- {
-  "part": 4,
-  "cell": 3,
-  "frame": "sleep_7",
-  "shrink": 1.0
- },
- {
-  "part": 4,
-  "cell": 4,
-  "frame": "sleep_8",
-  "shrink": 1.0
- },
- {
-  "part": 4,
-  "cell": 5,
-  "frame": "wake_0",
-  "shrink": 1.0
- },
- {
-  "part": 4,
-  "cell": 6,
-  "frame": "wake_1",
-  "shrink": 1.0
- },
- {
-  "part": 4,
-  "cell": 7,
-  "frame": "wake_2",
-  "shrink": 1.0
- },
- {
-  "part": 4,
-  "cell": 8,
-  "frame": "wake_3",
-  "shrink": 1.0
- },
- {
-  "part": 4,
-  "cell": 9,
+  "part": 3,
+  "cell": 13,
   "frame": "rise_0",
   "shrink": 1.0
  },
  {
-  "part": 4,
-  "cell": 10,
+  "part": 3,
+  "cell": 14,
   "frame": "rise_1",
   "shrink": 1.0
  },
  {
-  "part": 4,
-  "cell": 11,
+  "part": 3,
+  "cell": 15,
   "frame": "rise_2",
   "shrink": 1.0
  },
  {
+  "part": 4,
+  "cell": 0,
+  "frame": "talk_a_base_0",
+  "shrink": 1.0
+ },
+ {
+  "part": 4,
+  "cell": 1,
+  "frame": "talk_a_blink_0",
+  "shrink": 1.0
+ },
+ {
+  "part": 4,
+  "cell": 2,
+  "frame": "talk_a_emph2_0",
+  "shrink": 1.0
+ },
+ {
+  "part": 4,
+  "cell": 3,
+  "frame": "talk_a_emph_0",
+  "shrink": 1.0
+ },
+ {
+  "part": 4,
+  "cell": 4,
+  "frame": "talk_a_m1_0",
+  "shrink": 1.0
+ },
+ {
+  "part": 4,
+  "cell": 5,
+  "frame": "talk_a_m2_0",
+  "shrink": 1.0
+ },
+ {
+  "part": 4,
+  "cell": 6,
+  "frame": "talk_a_mid_0",
+  "shrink": 1.0
+ },
+ {
+  "part": 4,
+  "cell": 7,
+  "frame": "talk_b_base_0",
+  "shrink": 1.0
+ },
+ {
+  "part": 4,
+  "cell": 8,
+  "frame": "talk_b_blink_0",
+  "shrink": 1.0
+ },
+ {
+  "part": 4,
+  "cell": 9,
+  "frame": "talk_b_emph2_0",
+  "shrink": 1.0
+ },
+ {
+  "part": 4,
+  "cell": 10,
+  "frame": "talk_b_emph_0",
+  "shrink": 1.0
+ },
+ {
+  "part": 4,
+  "cell": 11,
+  "frame": "talk_b_m1_0",
+  "shrink": 1.0
+ },
+ {
+  "part": 4,
+  "cell": 12,
+  "frame": "talk_b_m2_0",
+  "shrink": 1.0
+ },
+ {
+  "part": 4,
+  "cell": 13,
+  "frame": "talk_b_mid_0",
+  "shrink": 1.0
+ },
+ {
+  "part": 4,
+  "cell": 14,
+  "frame": "talk_happy_0",
+  "shrink": 1.0
+ },
+ {
+  "part": 4,
+  "cell": 15,
+  "frame": "talk_happy_1",
+  "shrink": 1.0
+ },
+ {
   "part": 5,
   "cell": 0,
-  "frame": "talk_base_0",
+  "frame": "talk_laugh_0",
   "shrink": 1.0
  },
  {
   "part": 5,
   "cell": 1,
-  "frame": "talk_blink_0",
+  "frame": "motion:물주기(25)_0",
   "shrink": 1.0
  },
  {
   "part": 5,
   "cell": 2,
-  "frame": "talk_emph2_0",
+  "frame": "motion:물주기(25)_1",
   "shrink": 1.0
  },
  {
   "part": 5,
   "cell": 3,
-  "frame": "talk_emph_0",
+  "frame": "motion:물주기(25)_2",
   "shrink": 1.0
  },
  {
   "part": 5,
   "cell": 4,
-  "frame": "talk_m1_0",
+  "frame": "motion:물주기(25)_3",
   "shrink": 1.0
  },
  {
   "part": 5,
   "cell": 5,
-  "frame": "talk_m2_0",
+  "frame": "motion:물주기(25)_4",
   "shrink": 1.0
  },
  {
   "part": 5,
   "cell": 6,
-  "frame": "talk_mid_0",
+  "frame": "motion:물주기(25)_5",
   "shrink": 1.0
  },
  {
   "part": 5,
   "cell": 7,
-  "frame": "talk_smile_0",
+  "frame": "motion:물주기(25)_6",
   "shrink": 1.0
  },
  {
   "part": 5,
   "cell": 8,
-  "frame": "talk_think_0",
+  "frame": "motion:물주기(25)_7",
   "shrink": 1.0
  },
  {
   "part": 5,
   "cell": 9,
-  "frame": "motion:양인형(25)_0",
+  "frame": "motion:화관(75)_0",
   "shrink": 1.0
  },
  {
   "part": 5,
   "cell": 10,
-  "frame": "motion:양인형(25)_1",
+  "frame": "motion:화관(75)_1",
   "shrink": 1.0
  },
  {
   "part": 5,
   "cell": 11,
-  "frame": "motion:양인형(25)_2",
+  "frame": "motion:화관(75)_2",
+  "shrink": 1.0
+ },
+ {
+  "part": 5,
+  "cell": 12,
+  "frame": "motion:화관(75)_3",
+  "shrink": 1.0
+ },
+ {
+  "part": 5,
+  "cell": 13,
+  "frame": "motion:화관(75)_4",
+  "shrink": 1.0
+ },
+ {
+  "part": 5,
+  "cell": 14,
+  "frame": "motion:화관(75)_5",
+  "shrink": 1.0
+ },
+ {
+  "part": 5,
+  "cell": 15,
+  "frame": "motion:화관(75)_6",
   "shrink": 1.0
  },
  {
   "part": 6,
   "cell": 0,
-  "frame": "motion:양인형(25)_3",
-  "shrink": 1.0
- },
- {
-  "part": 6,
-  "cell": 1,
-  "frame": "motion:양인형(25)_4",
-  "shrink": 1.0
- },
- {
-  "part": 6,
-  "cell": 2,
-  "frame": "motion:양인형(25)_5",
-  "shrink": 1.0
- },
- {
-  "part": 6,
-  "cell": 3,
-  "frame": "motion:양인형(25)_6",
-  "shrink": 1.0
- },
- {
-  "part": 6,
-  "cell": 4,
-  "frame": "motion:양인형(25)_7",
-  "shrink": 1.0
- },
- {
-  "part": 6,
-  "cell": 5,
-  "frame": "motion:비눗방울(75)_0",
-  "shrink": 1.0
- },
- {
-  "part": 6,
-  "cell": 6,
-  "frame": "motion:비눗방울(75)_1",
-  "shrink": 1.0
- },
- {
-  "part": 6,
-  "cell": 7,
-  "frame": "motion:비눗방울(75)_2",
-  "shrink": 1.0
- },
- {
-  "part": 6,
-  "cell": 8,
-  "frame": "motion:비눗방울(75)_3",
-  "shrink": 1.0
- },
- {
-  "part": 6,
-  "cell": 9,
-  "frame": "motion:비눗방울(75)_4",
-  "shrink": 1.0
- },
- {
-  "part": 6,
-  "cell": 10,
-  "frame": "motion:비눗방울(75)_5",
-  "shrink": 1.0
- },
- {
-  "part": 6,
-  "cell": 11,
-  "frame": "motion:비눗방울(75)_6",
-  "shrink": 1.0
- },
- {
-  "part": 7,
-  "cell": 0,
-  "frame": "motion:비눗방울(75)_7",
+  "frame": "motion:화관(75)_7",
   "shrink": 1.0
  }
 ]
