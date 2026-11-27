@@ -1,42 +1,34 @@
 {
-  "version": "0.59.1",
+  "version": "0.59.0",
   "tests": [
+    "tests/test_affinity_motions.py",
+    "tests/test_affinity_v2.py",
     "tests/test_bundle_layout.py",
     "tests/test_character.py",
+    "tests/test_pet_floor_space.py",
     "tests/test_release_candidate.py",
     "tests/test_release_checks.py",
     "tests/test_release_notes.py",
     "tests/test_release_notes_trigger.py",
     "tests/test_starline_video.py",
+    "tests/test_walk_v2.py",
     "tests/test_windows_ci.py"
   ],
   "coverage": {
-    "scripts/build_starline_video.py": {
+    "src/mabinogi_addon/character/motions.py": {
       "tests": [
-        "tests/test_starline_video.py"
-      ],
-      "reason": "서 있기 30장 입을 0번(다문 웃음)으로 고정 — 얼굴(눈 줄·입 뺀 마스크)로 맞춰 입만 섞기(QA 11-27 사용자 제보)"
-    },
-    "src/mabinogi_addon/assets/characters/Starline/stand_0.webp": {
-      "tests": [
+        "tests/test_affinity_motions.py",
         "tests/test_starline_video.py",
-        "tests/test_character.py",
-        "tests/test_bundle_layout.py"
+        "tests/test_character.py"
       ],
-      "reason": "Starline 서 있기 30장 입 고정 다시 빌드"
-    },
-    "tests/test_starline_video.py": {
-      "tests": [
-        "tests/test_starline_video.py"
-      ],
-      "reason": "서 있기 입 고정 검사"
+      "reason": "Starline 영상판 모션 30장·한 장 0.1초(Motion.frame), 장난 불꽃 9번·모자 마술 7번 1.0초 유지(사용자 11-27)"
     },
     "src/mabinogi_addon/assets/release_notes.md": {
       "tests": [
         "tests/test_release_notes.py",
         "tests/test_release_notes_trigger.py"
       ],
-      "reason": "v0.59.1 노트"
+      "reason": "v0.58.1 노트 — 섹션 헤더·첫 실행 노트"
     },
     "packaging/release_checks.json": {
       "tests": [
@@ -44,13 +36,94 @@
         "tests/test_release_candidate.py",
         "tests/test_windows_ci.py"
       ],
-      "reason": "0.59.1 검사 목록·배포 계약"
+      "reason": "0.59.0 검사 목록·배포 계약"
     },
     "tests/test_release_checks.py": {
       "tests": [
         "tests/test_release_checks.py"
       ],
-      "reason": "0.59.1 경계"
+      "reason": "0.59.0 경계"
+    },
+    "src/mabinogi_addon/character/brain.py": {
+      "tests": [
+        "tests/test_starline_video.py",
+        "tests/test_character.py",
+        "tests/test_walk_v2.py",
+        "tests/test_pet_floor_space.py",
+        "tests/test_affinity_v2.py"
+      ],
+      "reason": "Starline 영상판 동작표(0.1초, 서기 30장 반복·걷기 14장 92px/초·앉아 마법진 왕복), 대기 동작 셋 중 무작위(idle_variants — 불꽃·웃음·턱괴기), 재채기 말풍선 22번"
+    },
+    "src/mabinogi_addon/ui/pet_window.py": {
+      "tests": [
+        "tests/test_starline_video.py",
+        "tests/test_character.py"
+      ],
+      "reason": "장이 많은 캐릭터는 그때그때 읽기(LazyFrames — 늘 쓰는 서기·걷기·말하기만 미리, 나머지 최근 40장, 화면용 사본도) + WebP는 OpenCV로 읽기(frame_file) — Starline 다 읽으면 72MB → 최악 약 23MB"
+    },
+    "scripts/build_starline_video.py": {
+      "tests": [
+        "tests/test_starline_video.py"
+      ],
+      "reason": "영상판 설치(WebP)·말하기 입 합성·anchors"
+    },
+    "scripts/build_starline_frames.py": {
+      "tests": [
+        "tests/test_starline_video.py",
+        "tests/test_walk_v2.py",
+        "tests/test_affinity_motions.py"
+      ],
+      "reason": "옛 시트로 Starline 프레임을 덮지 않게(영상판 11-27)"
+    },
+    "scripts/build_walk_v2.py": {
+      "tests": [
+        "tests/test_starline_video.py",
+        "tests/test_walk_v2.py",
+        "tests/test_affinity_motions.py"
+      ],
+      "reason": "옛 시트로 Starline 프레임을 덮지 않게(영상판 11-27)"
+    },
+    "scripts/build_base_motions.py": {
+      "tests": [
+        "tests/test_starline_video.py",
+        "tests/test_walk_v2.py",
+        "tests/test_affinity_motions.py"
+      ],
+      "reason": "옛 시트로 Starline 프레임을 덮지 않게(영상판 11-27)"
+    },
+    "src/mabinogi_addon/ui/character_tab.py": {
+      "tests": [
+        "tests/test_character.py",
+        "tests/test_affinity_motions.py"
+      ],
+      "reason": "제작자 모션 바로 보기 — 장 파일 PNG 또는 WebP"
+    },
+    "tests/test_character.py": {
+      "tests": [
+        "tests/test_character.py"
+      ],
+      "reason": "Starline 영상판(WebP) — 그림 읽기 PNG→WebP 폴백, 옛 그림 전용 검사 정리"
+    },
+    "tests/test_walk_v2.py": {
+      "tests": [
+        "tests/test_walk_v2.py"
+      ],
+      "reason": "Starline 영상판(WebP) — 그림 읽기 PNG→WebP 폴백, 옛 그림 전용 검사 정리"
+    },
+    "tests/test_affinity_motions.py": {
+      "tests": [
+        "tests/test_affinity_motions.py"
+      ],
+      "reason": "Starline 영상판(WebP) — 그림 읽기 PNG→WebP 폴백, 옛 그림 전용 검사 정리"
+    },
+    "src/mabinogi_addon/assets/characters/Starline/stand_0.webp": {
+      "tests": [
+        "tests/test_starline_video.py",
+        "tests/test_character.py",
+        "tests/test_bundle_layout.py",
+        "tests/test_affinity_motions.py"
+      ],
+      "reason": "Starline 영상판 350장 WebP(화질 90, 말하기만 무손실 — 29MB → 7.9MB)·anchors.json(동작 틀마다 발 자리 맞춤) — 쓰는 장만, 예전 장 없음, 번들 포함"
     }
   }
 }

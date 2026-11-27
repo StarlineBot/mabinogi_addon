@@ -67,30 +67,9 @@ def _shift(src: np.ndarray, base: np.ndarray) -> tuple[int, int]:
     return bx - pad, by - pad
 
 
-FACE_BOX = (55, 70, 85, 70)   # 얼굴 맞춤(서 있기 — 숨쉬며 머리가 ~10px 오르내리고 20~22번은 눈 감음): 눈 줄·입은 빼고 맞춤
-
-
-def face_shift(src: np.ndarray, base: np.ndarray, pad: int = 14) -> tuple[int, int]:
-    """src 얼굴(눈 줄·입 뺀 마스크)을 base에서 찾아 (dx, dy)."""
-    x, y, w, h = FACE_BOX
-    g = lambda im: cv2.cvtColor(np.ascontiguousarray(im[..., :3]), cv2.COLOR_BGR2GRAY).astype(np.float32)   # noqa: E731
-    t = g(src)[y:y + h, x:x + w]
-    mask = np.ones_like(t)
-    ex, ey, ew, eh = EYES_BOX
-    mask[max(0, ey - y - 2):ey - y + eh + 2, :] = 0
-    mx, my, mw, mh = MOUTH_BOX
-    mask[my - y:my - y + mh, mx - x:mx - x + mw] = 0
-    area = g(base)
-    top, left = max(0, y - pad), max(0, x - pad)
-    area = area[top:y + h + pad, left:x + w + pad]
-    r = cv2.matchTemplate(area, t, cv2.TM_SQDIFF, mask=mask)
-    _, _, (bx, by), _ = cv2.minMaxLoc(r)
-    return bx + left - x, by + top - y
-
-
-def mouth_on(base: np.ndarray, src: np.ndarray, shift=None) -> np.ndarray:
+def mouth_on(base: np.ndarray, src: np.ndarray) -> np.ndarray:
     """base 몸에 src 입만 — 입 둘레 타원(가장자리 3px 흐림)으로 섞음."""
-    dx, dy = (shift or _shift)(src, base)
+    dx, dy = _shift(src, base)
     x, y, w, h = MOUTH_BOX
     patch = src[y:y + h, x:x + w].astype(np.float32)
     mask = np.zeros((h, w), np.float32)
@@ -104,10 +83,7 @@ def mouth_on(base: np.ndarray, src: np.ndarray, shift=None) -> np.ndarray:
 
 def frames() -> dict[str, np.ndarray]:
     out: dict[str, np.ndarray] = {}
-    stand = [imread(SRC / f"stand_{i:02d}.png", cv2.IMREAD_UNCHANGED) for i in range(30)]
-    # 서 있기 입은 0번(다문 웃음) 하나로(QA 11-27 사용자 제보 '가만히 있는데 입이 말하듯 움직임' — 3초마다 큰 입만큼 벌어졌다
-    # 닫힘). 숨쉬기·흔들림·깜빡임은 그대로
-    out.update({f"stand_{i}": im if i == 0 else mouth_on(im, stand[0], face_shift) for i, im in enumerate(stand)})
+    out.update({f"stand_{i}": imread(SRC / f"stand_{i:02d}.png", cv2.IMREAD_UNCHANGED) for i in range(30)})
     out.update({f"walk_{i}": imread(WALK_SRC / f"vwalk14_{i}.png", cv2.IMREAD_UNCHANGED) for i in range(14)})
     for prefix, (folder, indices) in FOLDERS.items():
         out.update({f"{prefix}_{i}": _src(folder, i) for i in indices})
