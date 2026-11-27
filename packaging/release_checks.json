@@ -1,5 +1,5 @@
 {
-  "version": "0.59.2",
+  "version": "0.59.1",
   "tests": [
     "tests/test_affinity_motions.py",
     "tests/test_affinity_v2.py",
@@ -16,6 +16,63 @@
     "tests/test_windows_ci.py"
   ],
   "coverage": {
+    "src/mabinogi_addon/assets/characters/Starline/lines.json": {
+      "tests": [
+        "tests/test_character.py"
+      ],
+      "reason": "인사(·아리아 파티 알림) 소리 말풍선 — 녹음 문장(녹음목록 39줄·이안 대본·gen_tts), 말풍선 없이 말하는 그림만 뜨던 것(QA 11-27)"
+    },
+    "src/mabinogi_addon/assets/characters/다래/lines.json": {
+      "tests": [
+        "tests/test_character.py"
+      ],
+      "reason": "인사(·아리아 파티 알림) 소리 말풍선 — 녹음 문장(녹음목록 39줄·이안 대본·gen_tts), 말풍선 없이 말하는 그림만 뜨던 것(QA 11-27)"
+    },
+    "src/mabinogi_addon/assets/characters/레나/lines.json": {
+      "tests": [
+        "tests/test_character.py"
+      ],
+      "reason": "인사(·아리아 파티 알림) 소리 말풍선 — 녹음 문장(녹음목록 39줄·이안 대본·gen_tts), 말풍선 없이 말하는 그림만 뜨던 것(QA 11-27)"
+    },
+    "src/mabinogi_addon/assets/characters/아리아/lines.json": {
+      "tests": [
+        "tests/test_character.py"
+      ],
+      "reason": "인사(·아리아 파티 알림) 소리 말풍선 — 녹음 문장(녹음목록 39줄·이안 대본·gen_tts), 말풍선 없이 말하는 그림만 뜨던 것(QA 11-27)"
+    },
+    "src/mabinogi_addon/assets/characters/이안/lines.json": {
+      "tests": [
+        "tests/test_character.py"
+      ],
+      "reason": "인사(·아리아 파티 알림) 소리 말풍선 — 녹음 문장(녹음목록 39줄·이안 대본·gen_tts), 말풍선 없이 말하는 그림만 뜨던 것(QA 11-27)"
+    },
+    "tests/test_character.py": {
+      "tests": [
+        "tests/test_character.py"
+      ],
+      "reason": "팩 소리마다 말풍선·인사 미리듣기 말풍선 검사 · 캐릭터별 저장 키·Starline 서기 키 ≥440"
+    },
+    "src/mabinogi_addon/assets/release_notes.md": {
+      "tests": [
+        "tests/test_release_notes.py",
+        "tests/test_release_notes_trigger.py"
+      ],
+      "reason": "v0.59.1 노트(인사 말풍선·Starline 또렷하게)"
+    },
+    "packaging/release_checks.json": {
+      "tests": [
+        "tests/test_release_checks.py",
+        "tests/test_release_candidate.py",
+        "tests/test_windows_ci.py"
+      ],
+      "reason": "0.59.1 검사 목록·배포 계약"
+    },
+    "tests/test_release_checks.py": {
+      "tests": [
+        "tests/test_release_checks.py"
+      ],
+      "reason": "0.59.1 경계"
+    },
     "scripts/build_starline_video.py": {
       "tests": [
         "tests/test_starline_video.py"
@@ -47,33 +104,6 @@
         "tests/test_starline_video.py"
       ],
       "reason": "원본 크기 좌표·투명 픽셀 색값 무시"
-    },
-    "tests/test_character.py": {
-      "tests": [
-        "tests/test_character.py"
-      ],
-      "reason": "캐릭터별 저장 키·Starline 서기 키 ≥440"
-    },
-    "src/mabinogi_addon/assets/release_notes.md": {
-      "tests": [
-        "tests/test_release_notes.py",
-        "tests/test_release_notes_trigger.py"
-      ],
-      "reason": "v0.59.2 노트"
-    },
-    "packaging/release_checks.json": {
-      "tests": [
-        "tests/test_release_checks.py",
-        "tests/test_release_candidate.py",
-        "tests/test_windows_ci.py"
-      ],
-      "reason": "0.59.2 검사 목록·배포 계약"
-    },
-    "tests/test_release_checks.py": {
-      "tests": [
-        "tests/test_release_checks.py"
-      ],
-      "reason": "0.59.2 경계"
     }
   }
 }
