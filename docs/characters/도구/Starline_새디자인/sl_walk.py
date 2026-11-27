@@ -15,3 +15,10 @@ fr=[big(w[y0:y1,x0:x1]) for (y0,y1) in ys for (x0,x1) in xs]
 k=APPH/fr[0].shape[0]    # 0번(정면 서기)을 앱 서 있기 키에 맞춤 — 시트 전체 같은 배율
 for i,f in enumerate(fr): imwrite(out+f"walk12_{i}.png",scaled(f,k))
 print("서기 원본 키",st.shape[0],"걷기 0번 키",fr[0].shape[0],"배율",round(k,3),"앱 키",[round(f.shape[0]*k) for f in fr])
+
+# 왼쪽 걷기 12장(사용자 11-27)
+wl=cleanup(imread(O+"왼쪽걷기_12장.png",-1)); xs=[(104,312),(435,676),(790,1022),(1156,1359)]; ys=[(7,352),(370,708),(732,1073)]
+frl=[big(wl[y0:y1,x0:x1]) for (y0,y1) in ys for (x0,x1) in xs]
+kl=APPH/frl[0].shape[0]
+for i,f in enumerate(frl): imwrite(out+f"walkL12_{i}.png",scaled(f,kl))
+print("왼쪽 걷기 0번 키",frl[0].shape[0],"배율",round(kl,3),"앱 키",[round(f.shape[0]*kl) for f in frl])
