@@ -1,6 +1,6 @@
 import sys,os,glob,numpy as np,cv2
 S=sys.argv[1]; sys.path.insert(0,S); sys.path.insert(0,"/home/user/mabinogi_addon")
-from sl_iv3 import ivory2
+from sl_iv4 import ivory2
 from scripts.build_dare_frames import imread,imwrite,_tight
 R="/home/user/mabinogi_addon/"; D=R+"docs/characters/assets/Starline/"; O=D+"의상/새디자인/"
 src=O+"장색맞춤/"; fin=O+"새디자인_앱크기/"; os.makedirs(fin,exist_ok=True)
