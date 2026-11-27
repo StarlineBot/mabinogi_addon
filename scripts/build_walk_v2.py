@@ -24,10 +24,11 @@ WALKS = {   # 캐릭터: (묶음 zip, zip 안 칸 폴더, 최종 배율)
     "아리아": (COMMON, "aria-walk-side-v2/frames", 0.7505),
     "다래": (COMMON, "darae-walk-side-v2/frames", 0.7117),
     "레나": (COMMON, "lena-walk-side-v2/frames", 0.7427),
-    "Starline": (ASSETS / "Starline/SD/Starline_걷기_주머니_묶음.zip", "starline-pocket-walk/frames", 0.6819),
     "이안": (ASSETS / "이안/SD/이안_걷기_GPT워크_묶음.zip", "ian-walk-side/frames", 0.7073),
 }
-MATCH_COLORS = {"Starline"}
+# Starline 걷기는 영상판(11-27, scripts/build_starline_video)으로 바뀜 — 옛 주머니 걷기 묶음 기록:
+# "Starline": (ASSETS / "Starline/SD/Starline_걷기_주머니_묶음.zip", "starline-pocket-walk/frames", 0.6819)
+MATCH_COLORS: set = set()
 OUTFIT_WALKS = {
     ("이안", "vest_tie"): ASSETS / "이안/의상/넥타이 조끼/걷기_v2",
 }

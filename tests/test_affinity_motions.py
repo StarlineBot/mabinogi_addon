@@ -38,7 +38,8 @@ def test_base_motion_frames_exist_for_25_and_75_with_standing_head(folder):
     for m in mo.of(folder):
         for name in m.names():
             k = best_scale(stand, _head(_read(CHARS / folder / f"{name}.png")), 0.8, 1.25, 91)
-            assert 0.95 <= k <= 1.05, (name, k)
+            low = 0.9 if folder == "Starline" else 0.95   # 영상판(11-27) 모자 마술은 모자·박쥐가 머리 위를 지나감(0.93)
+            assert low <= k <= 1.05, (name, k)
 
 
 # ---- 순서·해금 --------------------------------------------------------------------------------
@@ -266,9 +267,10 @@ def test_wreath_worn_frame_holds():
 
 
 def test_starline_pauses_before_flame_and_hat_trick():
-    """사용자 11-27: Starline 장난 불꽃은 손가락 총(0번), 모자 마술은 모자에 손 넣은 장(1번)에서 1.0초 쉬었다가 나옴. 순서 그대로."""
+    """사용자 11-27: 장난 불꽃은 손가락 총 겨눈 장, 모자 마술은 모자에 손 넣은 장에서 1.0초 쉬었다가 나옴. 영상판(11-27)은
+    30장 0.1초 — 손가락 총 9번·모자에 손 넣기 7번. 순서 그대로."""
     flame, hat = mo.MOTIONS["Starline"]
-    for motion, held in ((flame, 0), (hat, 1)):
+    for motion, held in ((flame, 9), (hat, 7)):
         seq = motion.sequence(random.Random(1))
-        assert [n for n, _d in seq] == list(motion.names())
-        assert {n: d for n, d in seq if d != mo.FRAME} == {f"{motion.key}_{held}": 1.0}
+        assert motion.count == 30 and [n for n, _d in seq] == list(motion.names())
+        assert {n: d for n, d in seq if d != 0.1} == {f"{motion.key}_{held}": 1.0}

@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import math
 import time
+from collections import OrderedDict
+from collections.abc import Mapping
 
 from PySide6.QtCore import QPointF, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QFontMetricsF, QImage, QPainter, QPainterPath, QPen, QTransform
@@ -31,7 +33,65 @@ FRONT_CHECK = 0.25           # 게임 앞/뒤 판정 주기(초)
 BLOCK_CHECK = 1.0            # 보이는 게임 화면(진짜 창모드) 다시 구하는 주기(초) — 게임이 포그라운드가 아닐 때만
 
 
-def load_frames(folder: str, profile: brain_mod.Profile | None = None, outfit: str = "") -> dict[str, QImage]:
+LAZY_OVER = 150      # 이보다 장이 많은 캐릭터(Starline 영상판 350장, 11-27)는 늘 쓰는 장만 미리 읽고 나머지는 그때그때
+LAZY_KEEP = 40       # 그때그때 읽은 장을 이만큼만 들고 있음(한 동작 30장 + 여유) — 다 읽으면 72MB(+화면용 사본) → 약 33MB
+PINNED = ("stand", "walk", "talk", "talk_end")   # 늘 들고 있는 동작
+
+
+class LazyFrames(Mapping):
+    """{이름: QImage} — 이름·경로는 다 알고, 그림은 처음 쓸 때 읽음. 늘 쓰는 장(pinned)은 미리 읽어 두고 안 버림,
+    나머지는 최근 LAZY_KEEP장만(가장 오래 안 쓴 것부터 버림). 한 장 읽기 ≈ 1ms(PNG 약 80KB) — 동작 중 0.1초마다 한 장."""
+
+    def __init__(self, paths_by_name: dict, anchors: dict, pinned: set, keep: int = LAZY_KEEP) -> None:
+        self._paths = dict(paths_by_name)
+        self._anchors = anchors
+        self.pinned = set(pinned) & set(self._paths)
+        self._keep = keep
+        self._fixed: dict[str, QImage] = {}
+        self._recent: OrderedDict[str, QImage] = OrderedDict()
+        for name in sorted(self.pinned):
+            image = self._read(name)
+            if image is not None:
+                self._fixed[name] = image
+
+    def _read(self, name: str) -> QImage | None:
+        image = QImage(str(self._paths[name]))
+        if image.isNull():
+            return None
+        if name in self._anchors:
+            image.setText("anchor", "{},{}".format(*self._anchors[name]))
+        return image
+
+    def __getitem__(self, name: str) -> QImage:
+        if name in self._fixed:
+            return self._fixed[name]
+        if name in self._recent:
+            self._recent.move_to_end(name)
+            return self._recent[name]
+        if name not in self._paths:
+            raise KeyError(name)
+        image = self._read(name)
+        if image is None:
+            raise KeyError(name)
+        self._recent[name] = image
+        while len(self._recent) > self._keep:
+            self._recent.popitem(last=False)
+        return image
+
+    def __contains__(self, name) -> bool:
+        return name in self._paths
+
+    def __iter__(self):
+        return iter(self._paths)
+
+    def __len__(self) -> int:
+        return len(self._paths)
+
+    def loaded(self) -> set[str]:
+        return set(self._fixed) | set(self._recent)
+
+
+def load_frames(folder: str, profile: brain_mod.Profile | None = None, outfit: str = "") -> Mapping[str, QImage]:
     """그 캐릭터 동작에 쓰는 프레임만 읽는다(assets/characters/<폴더>/<이름>.png).
     outfit(착장 key)이면 outfits/<key>/<이름>.png를 먼저 — 없는 프레임은 기본 옷 그대로(착장 SD는 아직 없음, 기획 11-25)."""
     base = paths.resource_dir() / "characters" / folder
@@ -42,6 +102,16 @@ def load_frames(folder: str, profile: brain_mod.Profile | None = None, outfit: s
     from ..character import motions
     motion_names = motions.frame_names(folder)   # 호감도 모션 — 입은 옷 폴더에 있는 것만(기본 옷 모션으로 대신하지 않음)
     anchors = _anchors(base)
+    if len(names | motion_names) > LAZY_OVER:
+        found = {}
+        for name in sorted(names | motion_names):
+            path = dressed / f"{name}.png" if dressed is not None and (dressed / f"{name}.png").is_file() else base / f"{name}.png"
+            if name in motion_names and dressed is not None and path.parent != dressed:
+                continue
+            if path.is_file():
+                found[name] = path
+        pinned = {n for state in PINNED if state in profile.anims for n in profile.anims[state][0]}
+        return LazyFrames(found, anchors, pinned)
     for name in sorted(names | motion_names):
         path = dressed / f"{name}.png" if dressed is not None and (dressed / f"{name}.png").is_file() else base / f"{name}.png"
         if name in motion_names and dressed is not None and path.parent != dressed:
@@ -75,7 +145,7 @@ class PetWindow(QWidget):
     """펫 창. events 신호로 말풍선·호감도 처리할 사건을 넘긴다(컨트롤러가 받음)."""
     events = Signal(list)
 
-    def __init__(self, brain: brain_mod.Brain, frames: dict[str, QImage], tint: str,
+    def __init__(self, brain: brain_mod.Brain, frames: Mapping[str, QImage], tint: str,
                  game_front=lambda: False, clock=time.monotonic, parent: QWidget | None = None,
                  outline: str | None = None, blocked=lambda: ()) -> None:
         super().__init__(parent, Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint
@@ -103,7 +173,7 @@ class PetWindow(QWidget):
         self._sprite = QRectF()
         self._shown = None            # 마지막으로 그린 것(프레임·위치·말풍선) — 같으면 다시 안 그림(CPU)
         self._cur_name: str | None = None
-        self._scaled: dict[str, QImage] = {}
+        self._scaled: OrderedDict[str, QImage] = OrderedDict()   # 화면 크기로 줄인 장(그때그때 읽는 캐릭터는 최근 것만)
         self._timer = QTimer(self)
         self._timer.setInterval(TICK_MS)
         self._timer.timeout.connect(self.step)
@@ -200,6 +270,13 @@ class PetWindow(QWidget):
                                   Qt.AspectRatioMode.IgnoreAspectRatio, Qt.TransformationMode.SmoothTransformation)
             cached.setDevicePixelRatio(dpr)
             self._scaled[name] = cached
+            pinned = getattr(self.frames, "pinned", None)
+            if pinned is not None:   # LazyFrames — 늘 쓰는 장 말고는 최근 LAZY_KEEP장만
+                extra = [n for n in self._scaled if n not in pinned]
+                for old in extra[:max(0, len(extra) - LAZY_KEEP)]:
+                    del self._scaled[old]
+        else:
+            self._scaled.move_to_end(name)
         return cached
 
     # ---- 그리기 ------------------------------------------------------------------------------

@@ -36,7 +36,9 @@ IAN_WALK_FRAME, IAN_WALK_SPEED = 0.15, 66.0      # v3 걷기 8장(11-25) 1.2초 
 # 그림이 커지면 보폭도 커져 걷기 속도도 같은 배율(발 미끄러짐 방지).
 STARLINE_SCALE, LENA_SCALE = 1.15, 0.95
 LENA_WALK_FRAME, LENA_WALK_SPEED = 0.165, round(90.0 * LENA_SCALE, 1)    # 발 간격 60.0 → 120px(×0.95 = 114px), 1.32초 × 85.5
-STARLINE_WALK_FRAME, STARLINE_WALK_SPEED = 0.165, round(65.0 * STARLINE_SCALE, 1)  # 발끝 간격 → 약 85px(×1.15 = 98px), 1.32초 × 74.8
+# 영상 걷기 14장 0.1초(11-27): 두 발 다 디딘 장(4·11)의 발 사이 47~64px(앞꿈치끼리 51~72) → 한 걸음 약 56px, 한 바퀴(1.4초)
+# 두 걸음 약 112px × 1.15 = 129px → 92px/초
+STARLINE_WALK_FRAME, STARLINE_WALK_SPEED = 0.1, round(112.0 * STARLINE_SCALE / 1.4, 1)
 GRAVITY = 1800.0           # 떨어질 때 px/초²
 DRAG_START = 6.0           # 이만큼 움직이면 클릭이 아니라 끌기
 FRONT_DELAY = 1.0          # 게임이 앞으로 온 뒤 이만큼 지나야 구석으로(잠깐 전환 무시)
@@ -128,7 +130,7 @@ def _talk_anims(sets) -> dict:
 DARE_TALK = (talk_set(),)
 ANIMS.update(_talk_anims(DARE_TALK))
 SITTING = ("crouch", "sit_drowsy", "sit_doze", "sit_half", "sit_notice") + SLEEPING
-STANDING = ("stand", "walk", "hairstroke", "watch", "flame", "stretch", "magic", "sneeze", "motion")   # 서서 대기 동작(아리아 머리 쓰다듬기·이안 시계 보기)도 서 있는 것
+STANDING = ("stand", "walk", "hairstroke", "watch", "flame", "laugh", "chin", "stretch", "magic", "sneeze", "motion")   # 서서 대기 동작(아리아 머리 쓰다듬기·이안 시계 보기)도 서 있는 것
 UPRIGHT = STANDING + TALKING   # 서 있는 자세(클릭 놀람·쓰다듬기·알림 알아챔이 되는 상태)
 # 한 번 도는 동작이 끝나면 다음 동작
 _NEXT = {"surprise": "stand", "land": "getup", "getup": "stand", "pet_in": "pet_loop", "pet_out": "stand",
@@ -147,6 +149,7 @@ class Profile:
     sit_state: str                        # 쪼그려 앉은 뒤 들어가는 앉아 있기 상태
     doze_state: str | None = None         # Zzz를 그리고 클릭하면 깜짝 깨는 상태(없으면 졸지 않음)
     idle_extra: str | None = None         # 가만히 서 있는 동안 가끔 하는 동작(서 있기와 번갈아)
+    idle_variants: tuple[str, ...] = ()   # 그 동작 대신 고를 다른 대기 동작들(Starline 영상판 웃음·턱괴기 — 셋 중 무작위, 11-27)
     idle_gap: tuple[float, float] = (8.0, 15.0)   # 그 동작 사이 간격(초, 무작위)
     idle_laps: tuple[int, int] = (1, 2)            # 한 번에 몇 바퀴
     talk_after_surprise: bool = False     # 클릭 반응(짧은 그림) 뒤 말풍선이 아직 나오는 중이면 말하기로 이어감
@@ -161,6 +164,10 @@ class Profile:
     sleep_hold: tuple[float, float] = SLEEP_HOLD    # 엎드려 숨쉬는 시간
     sit_float: tuple | None = None        # 앉아 있을 때 떠 있기(레나 마법, 사용자 11-26): (올림 px, 둥둥 ±px, 주기 초, 오르내림 초) — 키 190 기준
     scale: float = 1.0                    # 그리기 배율(사용자 11-24 B안 — 얼굴 크기 맞춤: Starline 1.15·레나 0.95). 그림 파일은 그대로
+
+    @property
+    def idle_states(self) -> tuple[str, ...]:
+        return (self.idle_extra, *self.idle_variants) if self.idle_extra else ()
 
     def with_timing(self, raw) -> Profile:
         """설정 값(config character.idle {gap: [최소, 최대], laps: [최소, 최대]})으로 대기 동작 시간 덮어쓰기."""
@@ -275,34 +282,46 @@ LENA = Profile(LENA_ANIMS,
 # Starline(docs/characters/Starline.md, 기획 11-24): 졸기 없음, 서 있기 한 장(B안 긴 체형), 가만히 서 있으면 가끔
 # 손바닥 불꽃(아리아 머리 쓰다듬기·이안 시계와 같은 틀), 서서 클릭 = 바로 말하기, 착지 3장 → 서기,
 # 쓰다듬기 귀 젖힘 → 걷어내기 반복 → 손 털고 씩, 구석은 앉기 → 마법진 돌리기 반복 → 일어나기, 말 끝 두 장.
+V = 0.1   # Starline 영상판(11-27) — 모든 장 0.1초 간격으로 만들어짐
+
+
+def _v(prefix: str, indices) -> tuple[tuple[str, ...], tuple[float, ...]]:
+    names = tuple(f"{prefix}_{i}" for i in indices)
+    return names, (V,) * len(names)
+
+
+_SIT = tuple(range(16, 30)) + tuple(range(28, 16, -1))   # 앉아 마법진 돌리기 — 효과가 커졌다 작아짐(왕복, 이음매 없음)
 STARLINE_ANIMS = {
-    "stand": (("stand_0",), (1.0,), True),   # B안 서 있기 한 장(11-24)
-    "walk": (tuple(f"walk_{i}" for i in range(8)), (STARLINE_WALK_FRAME,) * 8, True),   # GPT 워크 8장(11-26 — 양발·팔 번갈아)
+    "stand": (*_v("stand", range(30)), True),   # 숨쉬기·흔들림·깜빡임 30장 반복
+    "walk": (*_v("walk", range(14)), True),     # 영상 걷기 14장(한 바퀴 1.4초)
     "surprise": (("stand_0",), (0.3,), False),   # click_talks라 쓰지 않음(자리만)
-    "drag": (tuple(f"drag_{i}" for i in range(4)), (0.18,) * 4, True),
-    "fall": (("fall_0",), (1.0,), True),
-    "land": (("land_0", "land_1", "land_2"), (0.25, 0.35, 0.6), False),
-    "pet_in": (("pet_0",), (0.45,), False),
-    "pet_loop": (("pet_1", "pet_2", "pet_3", "pet_4"), (0.3,) * 4, True),
-    "pet_out": (("pet_5",), (1.6,), False),
+    "drag": (*_v("drag", (6, 7, 8, 9, 14, 15, 16, 17)), True),   # 10~13은 귀 끝이 잘려 뺌
+    "fall": (("land_4",), (1.0,), True),
+    "land": (*_v("land", range(12, 30)), False),
+    "pet_in": (*_v("pet", range(7)), False),
+    "pet_loop": (*_v("pet", range(7, 21)), True),
+    "pet_out": (*_v("pet", range(21, 30)), False),
     "alert": (("talk_emph_0",), (1.5,), False),   # 손가락 튕기며 알림
-    "crouch": (("crouch_0", "crouch_1"), (0.3, 0.3), False),   # 앉기 시트 1·2번(0번 서 있는 장은 짧은 체형이라 뺌)
-    "sit_loop": (("sit_0", "sit_1", "sit_2", "sit_3"), (0.3,) * 4, True),   # 마법진 돌리기
-    "sit_notice": (("sit_0",), (1.2,), False),    # 앉아서 클릭 = 그림 그대로(말풍선만)
-    "rise": (("rise_0", "rise_1"), (0.3, 0.3), False),         # 끝 서 있는 장 빼고 → 바로 서기
-    "flame": (("flame_0", "flame_1", "flame_2", "flame_3"), (0.35, 0.8, 0.8, 0.35), True),   # 불꽃 피웠다 쥐어 끔
-    # 큰 재채기(11-25): 4번(두리번)에서 말풍선 '누가 내 욕하나?'
-    "sneeze": (tuple(f"sneeze_{i}" for i in range(6)), (0.4, 0.4, 0.5, 0.6, 1.3, 0.6), False),
+    "crouch": (*_v("crouch", range(16)), False),   # 웅크려 앉아 손가락 듦
+    "sit_loop": (*_v("crouch", _SIT), True),
+    "sit_notice": (("crouch_29",), (1.2,), False),    # 앉아서 클릭 = 그림 그대로(말풍선만)
+    "rise": (*_v("rise", range(30)), False),   # 첫 장 = 앉기 끝 장
+    "flame": (*_v("flame", range(30)), False),   # 대기 불꽃·웃음·턱괴기(서기 → 서기) 셋 중 무작위
+    "laugh": (*_v("laugh", range(30)), False),
+    "chin": (*_v("chin", range(30)), False),
+    # 큰 재채기: 22번(두리번 시작)에서 말풍선 '누가 내 욕하나?'
+    "sneeze": (*_v("sneeze", range(30)), False),
 }
 STARLINE_TALK = ({**talk_set(), "end1": "talk_end1_0", "end2": "talk_end2_0"},)
 STARLINE_ANIMS.update(_talk_anims(STARLINE_TALK))
 STARLINE = Profile(STARLINE_ANIMS,
                    {"surprise": "stand", "land": "stand", "pet_in": "pet_loop", "pet_out": "stand", "alert": "stand",
                     "crouch": "sit_loop", "sit_notice": "sit_loop", "rise": "stand", "talk_end": "stand",
-                    "sneeze": "stand"},
-                   ("crouch", "sit_loop", "sit_notice"), "sit_loop", idle_extra="flame", idle_laps=(1, 1),
+                    "sneeze": "stand", "flame": "stand", "laugh": "stand", "chin": "stand"},
+                   ("crouch", "sit_loop", "sit_notice"), "sit_loop", idle_extra="flame", idle_variants=("laugh", "chin"),
+                   idle_laps=(1, 1),
                    click_talks=True, walk_speed=STARLINE_WALK_SPEED, talk_sets=STARLINE_TALK, scale=STARLINE_SCALE,
-                   rare_extra="sneeze", rare_say=(4, "sneeze"))   # 0.56.2엔 꺼 뒀다가 새 시트(재채기_v2)로 다시 켬
+                   rare_extra="sneeze", rare_say=(22, "sneeze"))
 PROFILES = {"다래": DARE, "아리아": ARIA, "이안": IAN, "레나": LENA, "Starline": STARLINE}
 
 
@@ -536,7 +555,7 @@ class Brain:
         """모션을 바로 한 번. 서 있을 때만 — 구석·걷기·끌기·말하기 중이면 안 함."""
         motion = self.motions.get(key)
         if (motion is None or self._goal != "roam" or self._dragging
-                or self.state not in ("stand", self.profile.idle_extra, "motion")):
+                or self.state not in ("stand", "motion", *self.profile.idle_states)):
             return False
         self._motion_seq = motion.sequence(self.rng)
         self.motion_key = key
@@ -556,10 +575,11 @@ class Brain:
         if choice is not None and self.play_motion(choice, now):
             return
         if self.profile.idle_extra:
+            state = self.rng.choice(self.profile.idle_states) if self.profile.idle_variants else self.profile.idle_extra
             laps = self.rng.randint(*self.profile.idle_laps)
-            _frames, times, _loop = self.profile.anims[self.profile.idle_extra]
+            _frames, times, _loop = self.profile.anims[state]
             self._extra_until = now + laps * sum(times)
-            self._go(self.profile.idle_extra, now)
+            self._go(state, now)
         else:
             self._schedule_extra(now)
 
@@ -638,7 +658,7 @@ class Brain:
             return events
         if self.state in TALKING and self.state != "talk_end" and now >= self._talk_until:
             self._go("talk_end", now)  # 글자가 다 나옴 → 입 다묾 잠시
-        if self.profile.idle_extra and self.state == self.profile.idle_extra and now >= self._extra_until:
+        if self.state in self.profile.idle_states and now >= self._extra_until:
             self._go("stand", now)  # 대기 동작(머리 쓰다듬기·시계 보기) 끝 → 서 있기
             self._schedule_extra(now)
         if self.state == "pet_loop" and now - self._last_rub > RUB_STOP:
@@ -700,11 +720,11 @@ class Brain:
         if self._goal == "roam" and self._spans is not None and not self._dragging:
             if self.state == "walk" and self._target is not None and not self._allowed(self._target[0]):
                 self._walk_to((self._roam_x(), self.floor.y), now)    # 걷는 중 그 앞이 막힘 → 지금 빈 구간 안으로
-            elif self.state in ("stand", self.profile.idle_extra, "motion") and not self._allowed(self.pos[0]):
+            elif self.state in ("stand", "motion", *self.profile.idle_states) and not self._allowed(self.pos[0]):
                 self._walk_to((self._nearest_free(self.pos[0]), self.floor.y), now)   # 막힌 곳에 서 있음 → 가까운 빈 곳으로
         if self.state == "walk":
             self._step(dt, now)
-        elif self.state in ("stand", self.profile.idle_extra, rare, "motion"):  # 대기·드문 동작·모션 중이어도 걸을 차례·게임이 오면 바로 끊음
+        elif self.state in ("stand", rare, "motion", *self.profile.idle_states):  # 대기·드문 동작·모션 중이어도 걸을 차례·게임이 오면 바로 끊음
             if self._goal == "corner":
                 if self._near(self.home()):
                     self._go("crouch", now)

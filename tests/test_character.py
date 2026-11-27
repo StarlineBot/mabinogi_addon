@@ -1072,7 +1072,7 @@ def test_walk_values_come_from_character_data_and_corner_rush_speeds_up_steps():
     assert br.IAN.walk_speed == 66.0 and br.IAN.anims["walk"][1] == (0.15,) * 8   # v3 8장(11-25)
     for profile in (br.DARE, br.ARIA, br.IAN, br.LENA, br.STARLINE):
         cycle = sum(profile.anims["walk"][1])
-        assert 60 <= profile.walk_speed <= 100 and 60 <= profile.walk_speed * cycle <= 125  # 한 바퀴 거리 ≈ 보폭
+        assert 60 <= profile.walk_speed <= 100 and 60 <= profile.walk_speed * cycle <= 130  # 한 바퀴 거리 ≈ 보폭(Starline 영상 걷기 129)
     b = _ian()
     b._walk_to((800.0, 700.0), 0)
     _run(b, 0, 1.0, False)
@@ -1113,7 +1113,8 @@ def test_frame_anchor_loader_is_harmless_without_or_with_bad_file(app, tmp_path)
     assert pet_window._anchors(tmp_path) == {"a": (1.0, 2.0)}
     (tmp_path / "anchors.json").write_text("not json", encoding="utf-8")
     assert pet_window._anchors(tmp_path) == {}
-    assert not any((ASSETS / folder / "anchors.json").exists() for folder in ("다래", "아리아", "이안", "레나", "Starline"))
+    assert not any((ASSETS / folder / "anchors.json").exists() for folder in ("다래", "아리아", "이안", "레나"))
+    assert (ASSETS / "Starline" / "anchors.json").exists()   # 영상판(11-27) 동작 틀마다 발 자리 맞춤 — test_starline_video
     frames = pet_window.load_frames("이안", br.IAN)
     w = pet_window.PetWindow(_ian(), frames, "#3B5B9A")
     try:
@@ -1167,7 +1168,6 @@ def test_saved_corner_still_wins_over_nearest_edge():
     b.pos = (100.0, 700.0)
     t, _ = _run(b, 0, 6, True)
     assert b.pos == (400.0, 500.0)
-
 
 
 def _head(path):
@@ -1349,7 +1349,7 @@ def test_lena_lines_situations_stage_lines_and_voices():
     assert voices["대사/구간_100.mp3"] == ("stage_up", "…이 초커, 너 가져. 잃어버리면 화낼 거야.")
 
 
-@pytest.mark.parametrize("folder", ["다래", "아리아", "레나", "Starline"])
+@pytest.mark.parametrize("folder", ["다래", "아리아", "레나"])   # Starline은 영상판(11-27) — 기획이 색까지 끝낸 그림
 def test_sheet_colors_match_standing_hair_and_skin(folder):
     """시트 색 맞추기(사용자 11-24 '동작마다 머리색·피부 톤이 다름'): 모든 그림의 머리·피부가 서 있기 대비 ΔE<3."""
     import cv2
@@ -1423,24 +1423,9 @@ def test_starline_roster_english_name_gold_outline_and_frames():
     assert ct.CARD_FIT_HEIGHT == {"Starline"}
     names = {n for frames, _t, _l in br.STARLINE.anims.values() for n in frames}
     assert not [n for n in names if not (SL_DIR / f"{n}.png").exists()]
-    assert _img_of(SL_DIR / "stand_0.png").shape[0] == 285   # 나머지는 머리 크기 기준(아래 ±5% 테스트)
+    assert _img_of(SL_DIR / "stand_0.png").shape[0] == 286   # 영상판(11-27) 서 있기 틀 키
     from mabinogi_addon.ui import character_lines_feed
     assert character_lines_feed.REMOTE_NAMES["Starline"] == "starline-lines.json"
-
-
-def test_starline_talk_sheet_split_six_loop_and_two_end():
-    """말하기(B안 11-24): 반복 시트 6장, 끝 = 시작 2장 거꾸로(손 든 자세 → 중간 = 사이 그림과 같음) → 서기."""
-    import cv2
-    from scripts.build_aria_frames import clean
-    from scripts.build_dare_frames import ROOT, imread, split
-
-    frames = split(clean(imread(ROOT / "docs/characters/assets/Starline/SD/Starline_말하기_반복.png", cv2.IMREAD_UNCHANGED)))
-    assert len(frames) == 6   # B안(11-24) 새 반복 시트 — 끝은 시작 2장 거꾸로
-    for key in ("base", "m1", "m2", "emph", "emph2", "blink", "mid", "end1", "end2"):
-        assert (SL_DIR / f"talk_{key}_0.png").exists()
-    assert br.STARLINE.anims["talk_end"][0] == ("talk_base_0", "talk_end1_0", "talk_end2_0")
-    import numpy as np
-    assert np.array_equal(_img_of(SL_DIR / "talk_end2_0.png"), _img_of(SL_DIR / "talk_mid_0.png"))
 
 
 def test_starline_flame_idle_click_talks_and_corner():
@@ -1464,9 +1449,9 @@ def test_starline_flame_idle_click_talks_and_corner():
         c.tick(t, True)
         seen.add(c.frame(t))
         assert not c.zzz()
-    assert {"sit_0", "sit_1", "sit_2", "sit_3"} <= seen
+    assert {f"crouch_{i}" for i in range(17, 29)} <= seen   # 영상판(11-27) 앉아 마법진 왕복
     c.press(t, 900, 600)
-    assert c.release(t)[-1] == ("say", "click_sit") and c.frame(t) == "sit_0"
+    assert c.release(t)[-1] == ("say", "click_sit") and c.frame(t) == "crouch_29"
 
 
 def test_starline_lines_alerts_and_stage_lines():
@@ -1545,34 +1530,6 @@ def test_starline_bubble_has_gold_outline(app):
     finally:
         w.close()
         d.close()
-
-
-def test_starline_head_size_matches_standing_within_5_percent():
-    """Starline 머리 크기(사용자 11-24 Windows '불꽃·잡기·떨어지기는 머리가 작고 착지 때 커짐', B안 긴 체형): 후광·토끼귀로 위 30%
-    폭은 못 써서 얼굴 맞추기(점수 0.5 이상) 또는 눈 간격으로 잼 — 시트(동작)마다 중앙값이 서 있기 ±5%, 그림 하나는 ±10%
-    (손이 얼굴을 가리거나 귀를 젖힌 장은 재는 값이 흔들림). 예외: 눈 감은 장(talk_blink·sit_3 — 얼굴 맞추기가 틀어짐),
-    걷기(옆모습 — None)."""
-    from scripts.build_starline_frames import eye_gap, face_crop, head_ratio
-
-    stand = _img_of(SL_DIR / "stand_0.png")
-    face, eyes = face_crop(stand), eye_gap(stand)
-    sheets, bad = {}, {}
-    for path in SL_DIR.glob("*.png"):
-        if (path.stem in ("card", "frame") or path.stem in ("talk_blink_0", "sit_3") or path.stem.startswith("sneeze_")
-                or path.stem.startswith("motion_")):   # 호감도 모션(11-26)은 소품이 얼굴을 가림 → 실루엣 테스트(test_affinity_v2)
-            # 재채기는 같은 자세 0·5번 실루엣으로 맞춤(QA 11-25 — 얼굴 창은 머리카락에 끌림) → 실루엣 테스트가 맡음
-            continue
-        r = head_ratio(face, eyes, _img_of(path))
-        if r is None:
-            continue
-        sheets.setdefault(path.stem.rsplit("_", 1)[0], []).append(r)
-        if not 0.9 <= r <= 1.1:
-            bad[path.stem] = round(r, 3)
-    medians = {k: round(float(sorted(v)[len(v) // 2]), 3) for k, v in sheets.items()}
-    assert not bad and not {k: m for k, m in medians.items() if not 0.95 <= m <= 1.05}
-    assert sum(len(v) for v in sheets.values()) >= 30
-    for name in ("flame_0", "drag_0", "fall_0", "land_2"):   # 사용자가 짚은 그림은 꼭 잼
-        assert head_ratio(face, eyes, _img_of(SL_DIR / f"{name}.png")) is not None, name
 
 
 def test_starline_click_and_land_show_one_picture_at_a_time(app):
@@ -1893,7 +1850,7 @@ def test_starline_sneeze_bubble_keeps_sneeze_frames_to_the_end(app):
         w.step()
         b._next_rare, b._next_walk, b._next_idle, b._next_extra = clock["t"] + 0.01, 1e9, 1e9, 1e9
         frames = []
-        for _ in range(int(6.5 * 30)):
+        for _ in range(int(4.0 * 30)):   # 영상판 재채기 3초 — 뒤 걷기(3~9초 뒤) 전까지
             clock["t"] += 1 / 30
             w.step()
             name = b.frame(clock["t"])
@@ -1903,37 +1860,15 @@ def test_starline_sneeze_bubble_keeps_sneeze_frames_to_the_end(app):
                 assert b.state == "sneeze"
         assert said == ["sneeze"]
         start = frames.index("sneeze_0")
-        assert frames[start:start + 7] == [f"sneeze_{i}" for i in range(6)] + ["stand_0"]
+        assert frames[start:start + 31] == [f"sneeze_{i}" for i in range(30)] + ["stand_0"]   # 영상판 30장(11-27)
         assert not [f for f in frames if f.startswith("talk_")]
     finally:
         w.close()
 
 
 def test_starline_sneeze_is_on_with_new_sheet():
-    """0.56.2엔 꺼 뒀던 재채기를 새 시트(Starline_재채기_v2 — 서 있기와 같은 비율)로 다시 켬(기획 11-25)."""
-    assert br.STARLINE.rare_extra == "sneeze" and br.STARLINE.rare_say == (4, "sneeze")
-
-
-def test_starline_sneeze_v2_matches_stand_eyes_and_cloth_tone():
-    """새 재채기 시트(기획 11-25): 끝(서기로 돌아가는) 프레임 눈 간격이 서 있기 ±3%, 0~5번 옷·망토 중간 톤 Lab ±1.5."""
-    import cv2
-    import numpy as np
-
-    from mabinogi_addon.image_io import imread
-    from scripts.build_starline_frames import eye_gap
-
-    read = lambda n: imread(ASSETS / "Starline" / f"{n}.png", cv2.IMREAD_UNCHANGED)  # noqa: E731
-
-    def mid(f):
-        lab = cv2.cvtColor(np.ascontiguousarray(f[..., :3]), cv2.COLOR_BGR2LAB).astype(np.float64)
-        sel = (f[..., 3] > 200) & (lab[..., 0] >= 80) & (lab[..., 0] <= 170)
-        m = lab[sel].mean(0)
-        return np.array([m[0] / 2.55, m[1] - 128, m[2] - 128])
-
-    stand = read("stand_0")
-    assert abs(eye_gap(read("sneeze_5")) / eye_gap(stand) - 1) <= 0.03
-    for i in range(6):
-        assert (np.abs(mid(read(f"sneeze_{i}")) - mid(stand)) <= 1.5).all(), i
+    """재채기 켬 — 영상판(11-27) 22번(두리번 시작)에서 '누가 내 욕하나?'."""
+    assert br.STARLINE.rare_extra == "sneeze" and br.STARLINE.rare_say == (22, "sneeze")
 
 
 # ---- 착장(옷) 8벌 + 카드 서랍(기획 11-25, docs/character-pet-spec.md 3-2절) ----------------------------
@@ -2059,7 +1994,6 @@ def test_config_outfit_saves_per_character(cfg):
     assert config.load_outfit("화난 여성") == "lab" and config.load_outfit("조용한 여성") == "frill_pajama"
 
 
-
 # ---- 11-25 카드 테두리·상태 표시·서랍 열기 지연(기획 — docs/characters/카드_테두리.md) ----
 def test_card_frames_built_for_known_characters_only(app, cfg):
     import json
@@ -2138,51 +2072,6 @@ def _sl(name):
     return imread(SL_DIR / f"{name}.png", cv2.IMREAD_UNCHANGED)
 
 
-def test_starline_talk_loop_feet_match_base():
-    """말하기 반복 장(강조·깜빡임)의 발 띠(아래 12%, 가운데 맞춤)가 talk_base와 같음 — 예전 emph 19.4·emph2 34.3."""
-    import numpy as np
-
-    def band(f):
-        return f[int(f.shape[0] * 0.88):].astype(np.float32)
-
-    base = band(_sl("talk_base_0"))
-    for name in ("talk_m1_0", "talk_m2_0", "talk_emph_0", "talk_emph2_0", "talk_blink_0"):
-        other = band(_sl(name))
-        h, w = min(base.shape[0], other.shape[0]), max(base.shape[1], other.shape[1])
-
-        def centered(x):
-            out = np.zeros((h, w, 4), np.float32)
-            off = (w - x.shape[1]) // 2
-            out[:, off:off + x.shape[1]] = x[-h:]
-            return out
-        assert float(np.abs(centered(base) - centered(other)).mean()) <= 6.0, name
-
-
-def test_starline_talk_tones_match_stand():
-    """모든 talk_* 장: 중간 톤(L 80~170)·어두운 톤(L < 80) Lab 평균이 stand_0 ±1.5, 채도(HSV S 평균) ±3 —
-    예전 시작 시트 채도 64.8·어두운 L 21.9, 반복 시트 73.4·25.3(QA 11-25)."""
-    import cv2
-    import numpy as np
-
-    def tones(f):
-        a = f[..., 3] > 200
-        lab = cv2.cvtColor(np.ascontiguousarray(f[..., :3]), cv2.COLOR_BGR2LAB).astype(np.float64)
-        hsv = cv2.cvtColor(np.ascontiguousarray(f[..., :3]), cv2.COLOR_BGR2HSV).astype(np.float64)
-        out = []
-        for sel in (a & (lab[..., 0] >= 80) & (lab[..., 0] <= 170), a & (lab[..., 0] < 80)):
-            m = lab[sel].mean(0)
-            out.append(np.array([m[0] / 2.55, m[1] - 128, m[2] - 128]))
-        return out, hsv[a][:, 1].mean()
-
-    (mid0, dark0), sat0 = tones(_sl("stand_0"))
-    names = sorted(p.stem for p in [*SL_DIR.glob("talk_*.png"), *SL_DIR.glob("flame_*.png")])   # 불꽃 새 시트도(11-25)
-    assert len(names) >= 13
-    for name in names:
-        (mid, dark), sat = tones(_sl(name))
-        assert (np.abs(mid - mid0) <= 1.5).all() and (np.abs(dark - dark0) <= 1.5).all(), (name, mid, dark)
-        assert abs(sat - sat0) <= 3, (name, sat, sat0)
-
-
 def test_ian_sit_face_matches_crouch_and_rise():
     """이안 구석: 쪼그림 → 앉아 있기 → 일어나기에서 얼굴 크기가 서 있기와 같음(±2%) — 예전 sit 1.07~1.085(사용자 11-25)."""
     import cv2
@@ -2195,31 +2084,6 @@ def test_ian_sit_face_matches_crouch_and_rise():
     for name in ("crouch_2", "sit_0", "sit_1", "sit_2", "sit_3", "rise_0"):
         assert abs(face_ratio(stand, read(name)) - 1) <= 0.02 + 1e-9, name
     assert len({read(f"sit_{i}").shape[0] for i in range(4)}) == 1   # 한 배율(꿈틀거림 없음)
-
-
-def test_starline_talk_start_v2_eyes_match_stand():
-    """말하기 시작 v2(기획 11-25 — 예전 시트는 머리 1.14배·눈 흰자 넓음): talk_mid·end1·end2 눈 간격이 stand_0 ±3%,
-    키 같음, 눈 높이 ±3%(end1은 손목 금 팔찌가 눈 구간에 들어와 눈 높이 측정 제외)."""
-    import cv2
-    import numpy as np
-
-    from scripts.build_starline_frames import eye_gap
-
-    def eye_height(f):
-        h = f.shape[0]
-        hsv = cv2.cvtColor(np.ascontiguousarray(f[..., :3]), cv2.COLOR_BGR2HSV)
-        m = ((hsv[..., 0] >= 14) & (hsv[..., 0] <= 32) & (hsv[..., 1] > 110) & (hsv[..., 2] > 150) & (f[..., 3] > 200))
-        m[: int(h * 0.22)] = False
-        m[int(h * 0.6):] = False
-        return h - np.nonzero(m)[0].mean()
-
-    stand = _sl("stand_0")
-    for name in ("talk_mid_0", "talk_end1_0", "talk_end2_0"):
-        f = _sl(name)
-        assert abs(eye_gap(f) / eye_gap(stand) - 1) <= 0.03, name
-        assert abs(f.shape[0] - stand.shape[0]) <= 3, name
-    for name in ("talk_mid_0", "talk_end2_0"):
-        assert abs(eye_height(_sl(name)) / eye_height(stand) - 1) <= 0.03, name
 
 
 def test_drawer_cells_use_card_ratio_and_fill_to_bottom(app, cfg):
@@ -2242,7 +2106,6 @@ def test_drawer_cells_use_card_ratio_and_fill_to_bottom(app, cfg):
             y = int(1 + frame_h - 5)   # 칸 그림 아래 끝 바로 위(흰 테두리 안쪽)
             white = sum(1 for x in range(w // 3, 2 * w // 3) if image.pixelColor(x, y).lightness() > 245)
             assert white < (w // 3) * 0.5, (folder, o.key, white)
-
 
 
 def test_outfit_card_images_reach_bottom_with_face_in_place():
@@ -2370,7 +2233,6 @@ def test_aria_tshirt_props_kept_and_pet_swaps(app):
     assert set(base) == set(shirt) and shirt["stand_0"].size() != base["stand_0"].size() or shirt["stand_0"] != base["stand_0"]
 
 
-
 # ---- 11-25 이안 새 목소리(부드러운 남성)·예전 팩은 이름 없는 후보 '자연스러운 남성'(기획 c57120b6) ----
 def test_ian_voice_pack_is_soft_male_and_keeps_saved_state(cfg):
     """이안 카드 팩 = 부드러운 남성(인사 1·2), 저장 키는 예전 '차분한 남성' 그대로 — 예전 설정 'voice.pack=차분한 남성'은
@@ -2469,7 +2331,6 @@ def test_dare_stand_is_getup_end_picture():
     """다래 기본 서 있기 = 일어나기 v2 끝 장(사용자 11-25 '착지하고 서 있을 때가 더 이쁨') — 키 285 그대로."""
     assert (ASSETS / "다래" / "stand_0.png").read_bytes() == (ASSETS / "다래" / "getup_2.png").read_bytes()
     assert _img_of(ASSETS / "다래" / "stand_0.png").shape[0] == 285
-
 
 
 def test_ian_walk_v3_eight_frames_alternate_legs():

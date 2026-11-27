@@ -16,7 +16,7 @@ from scripts.silhouette import best_scale
 ROOT = Path(__file__).resolve().parents[1]
 CHARS = ROOT / "src/mabinogi_addon/assets/characters"
 REF = Path(__file__).parent / "data/walk_ref"
-CASES = [("아리아", None), ("다래", None), ("레나", None), ("Starline", None), ("이안", None),
+CASES = [("아리아", None), ("다래", None), ("레나", None), ("이안", None),   # Starline은 영상 걷기 14장(11-27, 아래 따로)
          ("아리아", "tshirt"), ("이안", "vest_tie")]
 HEAD = 0.42
 
@@ -66,7 +66,7 @@ def test_walk_height_matches_stand(name, outfit):
 def test_walk_loop_time_and_speed_kept():
     """기획 '기본안': 한 바퀴 시간·빠르기는 그대로, 장 수만 8장(이안은 이미 8장 0.15초)."""
     loops = {"DARE": (br.DARE, 1.2, 100.0), "ARIA": (br.ARIA, 1.32, 90.0), "LENA": (br.LENA, 1.32, 85.5),
-             "STARLINE": (br.STARLINE, 1.32, 74.8), "IAN": (br.IAN, 1.2, 66.0)}
+             "IAN": (br.IAN, 1.2, 66.0)}
     for key, (profile, loop, speed) in loops.items():
         names, times, looping = profile.anims["walk"]
         assert names == tuple(f"walk_{i}" for i in range(8)) and looping, key
@@ -74,22 +74,16 @@ def test_walk_loop_time_and_speed_kept():
         assert profile.walk_speed == speed, key
 
 
-def test_starline_walk_tone_match_keeps_texture():
-    """QA 11-26 '걷기 팔·다리가 자글자글': 톤 맞추기 뒤 어두운 안쪽 노이즈(|L − 흐림|)가 맞추기 전 ×1.1 안, 서 있기 대비
-    어두운(L<80)·중간(80~170) Lab 평균 ΔE ≤ 3 (예전 경계 자르기 방식은 노이즈 +65%)."""
-    from scripts.build_dare_frames import scaled
-    from scripts.build_starline_frames import _band_means
-    from scripts.build_walk_v2 import WALKS, clean, read_frames
-
-    def noise(img):
-        L = cv2.cvtColor(np.ascontiguousarray(img[..., :3]), cv2.COLOR_BGR2LAB).astype(np.float32)[..., 0]
-        inner = cv2.erode((img[..., 3] > 250).astype(np.uint8), np.ones((11, 11), np.uint8)) > 0
-        return float(np.abs(L - cv2.GaussianBlur(L, (0, 0), 1.5))[inner & (L < 90)].mean())
-
-    stand = _read(CHARS / "Starline" / "stand_0.png")
-    ref = _band_means(stand)
-    zip_path, folder, factor = WALKS["Starline"]
-    for i, raw in enumerate(read_frames(zip_path, folder)):
-        made = _read(CHARS / "Starline" / f"walk_{i}.png")
-        assert noise(made) <= noise(scaled(clean(raw), factor)) * 1.1, i
-        assert all(np.linalg.norm(a - b) <= 3 for a, b in zip(_band_means(made), ref)), i
+def test_starline_video_walk_fourteen_frames():
+    """Starline 영상 걷기(11-27): 14장 0.1초(한 바퀴 1.4초), 장마다 꽉 맞춘 그림 — 키가 서 있기 ±3%, 이웃 장 키 차 ≤ 3%.
+    빠르기 = 한 바퀴 두 걸음 약 112px × 1.15 ÷ 1.4초 = 92."""
+    names, times, looping = br.STARLINE.anims["walk"]
+    assert names == tuple(f"walk_{i}" for i in range(14)) and looping and times == (0.1,) * 14
+    assert br.STARLINE.walk_speed == 92.0
+    folder = CHARS / "Starline"
+    assert sorted(p.name for p in folder.glob("walk_*.png")) == sorted(f"walk_{i}.png" for i in range(14))
+    stand = _read(folder / "stand_0.png").shape[0]
+    heights = [_read(folder / f"walk_{i}.png").shape[0] for i in range(14)]
+    assert all(abs(h - stand) / stand <= 0.03 for h in heights), heights
+    for a, b in zip(heights, heights[1:] + heights[:1]):
+        assert abs(a - b) / a <= 0.03, heights

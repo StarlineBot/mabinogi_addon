@@ -66,10 +66,7 @@ def main() -> None:
         for name, image in sorted(frames.items()):
             imwrite(APP_ROOT / folder / f"{name}.png", image)
         print(folder, len(frames))
-    frames = starline_motions()
-    for name, image in sorted(frames.items()):
-        imwrite(APP_ROOT / "Starline" / f"{name}.png", image)
-    print("Starline", len(frames), [f.shape[0] for f in frames.values()])
+    # Starline 모션은 영상판(11-27, scripts/build_starline_video) — 옛 시트(starline_motions)로 덮지 않음
 
 
 if __name__ == "__main__":
