@@ -34,25 +34,25 @@ BLOCK_CHECK = 1.0            # 보이는 게임 화면(진짜 창모드) 다시 
 
 
 LAZY_OVER = 150      # 이보다 장이 많은 캐릭터(Starline 영상판 350장, 11-27)는 늘 쓰는 장만 미리 읽고 나머지는 그때그때
-LAZY_KEEP = 40       # 그때그때 읽은 장을 이만큼만 들고 있음(한 동작 30장 + 여유) — 다 읽으면 72MB(+화면용 사본) → 약 33MB
-PINNED = ("stand", "walk", "talk", "talk_end")   # 늘 들고 있는 동작
+LAZY_KEEP = 40       # 화면 크기로 줄인 장을 늘 쓰는 동작 말고 이만큼만 들고 있음(한 동작 30장 + 여유)
+LAZY_ORIGINALS = 6   # 원본(저장 크기) 장은 줄이는 동안만 — 원본 크기 그림(Starline 서기 키 약 520, 11-27)은 장당 약 0.7MB
+PINNED = ("stand", "walk", "talk", "talk_end")   # 화면용 장을 늘 들고 있는 동작
 
 
 class LazyFrames(Mapping):
-    """{이름: QImage} — 이름·경로는 다 알고, 그림은 처음 쓸 때 읽음. 늘 쓰는 장(pinned)은 미리 읽어 두고 안 버림,
-    나머지는 최근 LAZY_KEEP장만(가장 오래 안 쓴 것부터 버림). 한 장 읽기 ≈ 1ms(PNG 약 80KB) — 동작 중 0.1초마다 한 장."""
+    """{이름: QImage} — 이름·경로는 다 알고, 그림은 처음 쓸 때 읽음(원본은 최근 몇 장만). 펫 창은 화면 크기로 줄인 장을
+    캐시하고(늘 쓰는 동작 pinned는 안 버림) 크기·기준점은 meta로 — 원본을 오래 들고 있지 않음. 한 장 읽기 ≈ 2ms.
+    frame_h = 저장 그림의 서 있는 키(frames.json standH, 없으면 FRAME_DIR_H) — 앱은 이 키에서 한 번만 줄여 그림."""
 
-    def __init__(self, paths_by_name: dict, anchors: dict, pinned: set, keep: int = LAZY_KEEP) -> None:
+    def __init__(self, paths_by_name: dict, anchors: dict, pinned: set, keep: int = LAZY_ORIGINALS,
+                 frame_h: float = 0.0) -> None:
         self._paths = dict(paths_by_name)
         self._anchors = anchors
         self.pinned = set(pinned) & set(self._paths)
+        self.frame_h = frame_h or FRAME_DIR_H
         self._keep = keep
-        self._fixed: dict[str, QImage] = {}
         self._recent: OrderedDict[str, QImage] = OrderedDict()
-        for name in sorted(self.pinned):
-            image = self._read(name)
-            if image is not None:
-                self._fixed[name] = image
+        self._meta: dict[str, tuple[int, int, str]] = {}
 
     def _read(self, name: str) -> QImage | None:
         path = self._paths[name]
@@ -71,11 +71,16 @@ class LazyFrames(Mapping):
             return None
         if name in self._anchors:
             image.setText("anchor", "{},{}".format(*self._anchors[name]))
+        self._meta[name] = (image.width(), image.height(), image.text("anchor"))
         return image
 
+    def meta(self, name: str) -> tuple[int, int, str] | None:
+        """(폭, 키, 기준점 글) — 한 번 읽으면 원본을 버려도 남음."""
+        if name not in self._meta and self.get(name) is None:
+            return None
+        return self._meta[name]
+
     def __getitem__(self, name: str) -> QImage:
-        if name in self._fixed:
-            return self._fixed[name]
         if name in self._recent:
             self._recent.move_to_end(name)
             return self._recent[name]
@@ -99,7 +104,7 @@ class LazyFrames(Mapping):
         return len(self._paths)
 
     def loaded(self) -> set[str]:
-        return set(self._fixed) | set(self._recent)
+        return set(self._recent)
 
 
 def frame_file(folder, name: str):
@@ -131,7 +136,7 @@ def load_frames(folder: str, profile: brain_mod.Profile | None = None, outfit: s
                 continue
             found[name] = path
         pinned = {n for state in PINNED if state in profile.anims for n in profile.anims[state][0]}
-        return LazyFrames(found, anchors, pinned)
+        return LazyFrames(found, anchors, pinned, frame_h=_frame_h(base))
     for name in sorted(names | motion_names):
         path = dressed / f"{name}.png" if dressed is not None and (dressed / f"{name}.png").is_file() else base / f"{name}.png"
         if name in motion_names and dressed is not None and path.parent != dressed:
@@ -142,6 +147,17 @@ def load_frames(folder: str, profile: brain_mod.Profile | None = None, outfit: s
                 image.setText("anchor", "{},{}".format(*anchors[name]))
             out[name] = image
     return out
+
+
+def _frame_h(base) -> float:
+    """assets/characters/<폴더>/frames.json {"standH": 저장 그림 서 있는 키} — 없거나 잘못되면 0(= FRAME_DIR_H)."""
+    import json
+
+    try:
+        value = json.loads((base / "frames.json").read_text(encoding="utf-8")).get("standH")
+    except (OSError, ValueError, AttributeError):
+        return 0.0
+    return float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) and 100 <= value <= 2000 else 0.0
 
 
 def _anchors(base) -> dict[str, tuple[float, float]]:
@@ -302,13 +318,21 @@ class PetWindow(QWidget):
     # ---- 그리기 ------------------------------------------------------------------------------
     def _k(self) -> float:
         """저장 프레임 → 화면 배율(키 190 기준 × 캐릭터 배율)."""
-        return brain_mod.FIGURE_H / FRAME_DIR_H * min(MAX_SCALE, self.brain.profile.scale)
+        return brain_mod.FIGURE_H / getattr(self.frames, "frame_h", FRAME_DIR_H) * min(MAX_SCALE, self.brain.profile.scale)
 
-    def _frame_rect(self, image: QImage) -> QRectF:
+    def _rect(self, name: str) -> QRectF:
+        """그 장을 그릴 자리 — 그때그때 읽는 캐릭터는 원본 없이 크기·기준점(meta)으로."""
+        meta = getattr(self.frames, "meta", None)
+        if meta is None:
+            return self._frame_rect(self.frames[name])
+        w, h, anchor = meta(name)
+        return self._frame_rect(None, (w, h, anchor))
+
+    def _frame_rect(self, image: QImage | None, meta: tuple | None = None) -> QRectF:
         k = self._k()
-        w, h = image.width() * k, image.height() * k
+        w, h, anchor = meta if meta is not None else (image.width(), image.height(), image.text("anchor"))
+        w, h = w * k, h * k
         dx = dy = 0.0
-        anchor = image.text("anchor")
         if anchor:
             dx, dy = (float(v) * k for v in anchor.split(","))
         return QRectF(WIN_W / 2 - w / 2 + dx, WIN_H - FOOT - h + dy, w, h)
@@ -320,15 +344,15 @@ class PetWindow(QWidget):
     def paintEvent(self, _event) -> None:  # noqa: N802
         now = self._clock()
         name = self.brain.frame(now)
-        image = self.frames.get(name)
+        image = self._image(name)
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
         if image is not None:
             lift = self.brain.float_offset(now)   # 레나 앉아 떠 있기(마법) — 그림·클릭 판정 같이 위로
-            self._sprite = self._frame_rect(image).translated(0, lift)
+            self._sprite = self._rect(name).translated(0, lift)
             for layer, opacity in self.layers(now):
-                small, rect = self._image(layer), self._frame_rect(self.frames[layer])
+                small, rect = self._image(layer), self._rect(layer)
                 if "_m2_" in layer:
                     rect.translate(0, -1)  # 입 크게일 때 1px 끄덕임
                 rect.translate(self.brain.shake(now), lift)  # 쓰다듬기 참는 중 좌우 1px 떨림(레나)·앉아 떠 있기
@@ -405,7 +429,8 @@ class PetWindow(QWidget):
     def _on_figure(self, pos) -> bool:
         if not self._sprite.contains(pos):
             return False
-        image = self.frames.get(self.brain.frame(self._clock()))
+        name = self.brain.frame(self._clock())
+        image = self._image(name) if hasattr(self.frames, "meta") else self.frames.get(name)   # 그때그때 읽기: 화면용 장으로
         if image is None:
             return False
         k = image.width() / self._sprite.width()
