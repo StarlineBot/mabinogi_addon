@@ -92,14 +92,20 @@ def test_sneeze_bubble_on_frame_22_and_sit_loop_ping_pong():
 
 def test_talk_mouth_only_frames_keep_one_body():
     """말하기: 입 다문 몸(talk_base = 영상 10번)에 작은 입·큰 입만 — 입 둘레 밖은 똑같고, 입은 달라야 함(몸 튐 없음)."""
+    from scripts.build_starline_video import MOUTH_BOX
+
     base = _read("talk_base_0")
+    mx, my, mw, mh = MOUTH_BOX
+    pad = mw // 2   # 눈 줄 맞춤으로 옮겨 붙인 만큼 여유
     for key in ("m1", "m2"):
         other = _read(f"talk_{key}_0")
         assert other.shape == base.shape
         diff = np.abs(other.astype(int) - base.astype(int)).max(-1) > 3
+        diff &= (base[..., 3] > 0) | (other[..., 3] > 0)   # 완전히 투명한 픽셀 색값은 무손실 WebP가 바꿈 — 안 봄
         ys, xs = np.nonzero(diff)
         assert diff.sum() > 40, key
-        assert 80 <= xs.min() and xs.max() <= 130 and 100 <= ys.min() and ys.max() <= 140, (key, xs.min(), xs.max(), ys.min(), ys.max())
+        assert mx - pad <= xs.min() and xs.max() <= mx + mw + pad and my - pad <= ys.min() and ys.max() <= my + mh + pad, (
+            key, xs.min(), xs.max(), ys.min(), ys.max())
     assert (_read("talk_blink_0") == base).all()   # 영상에 깜빡이는 장 없음 → base 그대로
 
 

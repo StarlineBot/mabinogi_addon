@@ -3,7 +3,7 @@
 실행: uv run python -m scripts.build_starline_video
 - 소스: docs/characters/assets/Starline/영상/앱크기/ — 기획이 배경 빼기·크기(서기 키 약 282)·높이·효과까지 끝낸 투명 PNG,
   0.1초 간격. 동작 폴더 안에서는 같은 틀 크기(아래·가운데 맞춰 그리면 위치 맞음). 색 처리 다시 하지 않음(harmonize 없음).
-- 걷기: docs/characters/assets/Starline/의상/새디자인2/영상걷기/앱크기2/vwalk14_0~13.png(장마다 꽉 맞춘 그림).
+- 걷기: 같은 원본크기 폴더 vwalk14_0~13.png(장마다 꽉 맞춘 그림).
 - 앱 폴더(assets/characters/Starline)의 예전 프레임은 지우고 쓰는 장만 넣음(card.png·frame.png·frame.json·lines.json은 그대로).
 - 저장: 장마다 WebP(화질 90) — PNG 29MB → 약 6MB, 알파 그대로(차 0), 색 평균 차 ≤3.1/255, 한 장 읽기 약 1.8ms
   (사용자 11-27 '장 수 줄이기보다 다른 대안'). 앱은 OpenCV로 읽음(Qt webp 플러그인에 기대지 않음, ui/pet_window.LazyFrames).
@@ -18,15 +18,19 @@ import numpy as np
 from scripts.build_dare_frames import imread, imwrite
 from scripts.build_outfit_frames import APP_ROOT, ASSETS
 
-SRC = ASSETS / "Starline" / "영상" / "앱크기"
-WALK_SRC = ASSETS / "Starline" / "의상" / "새디자인2" / "영상걷기" / "앱크기2"
+# 원본 크기(사용자 11-27 '앱에 들어오니 구려짐' — 서기 키 286으로 줄여 저장한 뒤 앱이 화면배율 1.25 이상에서 다시 키워 흐림):
+# 기획이 같은 처리를 원본 해상도로 다시 한 세트(앱크기 × K, 서기 키 약 518). 앱은 frames.json standH에서 한 번만 줄여 그림
+SRC = ASSETS / "Starline" / "영상" / "원본크기"
+WALK_SRC = SRC
+K = 1.8369   # 원본크기/배율.json k — 아래 좌표(앱크기 기준 측정)를 이만큼 늘려 씀
 OUT = APP_ROOT / "Starline"
 KEEP = {"card.png", "frame.png"}
 WEBP_QUALITY = 90
 # 동작 틀마다 서 있는 발 자리가 서기 틀(아래 끝·발 가운데 +13.5)과 달라 동작이 바뀔 때 튐 → 그리기 오프셋(저장 px, anchors.json).
 # 쓰다듬기·모자 마술은 몸이 왼쪽으로 7·5px(귀·모자 자리 때문에 틀이 넓음), 앉기·일어나기는 서 있는 장 발이 틀 바닥 10px 위
 # (앉은 장은 공중에 떠 있는 그림이라 그대로 같이 내림), 착지는 끝 장 발이 13px 위·1.5px 왼쪽(떨어지는 4번도 같은 틀).
-ANCHORS = {"pet": (7, 0), "motion_hat_magic": (5, 0), "crouch": (0, 10), "rise": (0, 10), "land": (2, 13)}
+_A = {"pet": (7, 0), "motion_hat_magic": (5, 0), "crouch": (0, 10), "rise": (0, 10), "land": (2, 13)}   # 앱크기 px
+ANCHORS = {k: (round(x * K), round(y * K)) for k, (x, y) in _A.items()}
 # 앱 이름 앞부분 → (소스 폴더, 쓸 장 번호)
 FOLDERS = {
     "flame": ("1_대기불꽃", range(30)),
@@ -45,8 +49,9 @@ TALK = "12_말하기"
 TALK_PICK = {"mid": 4, "emph": 15, "emph2": 16, "end1": 25, "end2": 27}
 TALK_BODY = 10                  # 입 다문 장 = talk_base(몸)
 TALK_MOUTH = {"m1": 6, "m2": 11}   # 작은 입·큰 입
-MOUTH_BOX = (88, 111, 34, 22)      # (x, y, w, h) 입 둘레 — 10번 기준 입 선 y≈118, 큰 입 y 116~125
-EYES_BOX = (72, 95, 62, 18)        # 얼굴 맞춤 기준(눈 줄)
+_s = lambda box: tuple(round(v * K) for v in box)   # noqa: E731
+MOUTH_BOX = _s((88, 111, 34, 22))  # (x, y, w, h) 입 둘레 — 10번 기준 입 선 y≈118, 큰 입 y 116~125(앱크기 px)
+EYES_BOX = _s((72, 95, 62, 18))    # 얼굴 맞춤 기준(눈 줄)
 
 
 def _src(folder: str, index: int) -> np.ndarray:
@@ -61,7 +66,7 @@ def _shift(src: np.ndarray, base: np.ndarray) -> tuple[int, int]:
     x, y, w, h = EYES_BOX
     g = lambda im: cv2.cvtColor(np.ascontiguousarray(im[..., :3]), cv2.COLOR_BGR2GRAY)   # noqa: E731
     t = g(src)[y:y + h, x:x + w]
-    pad = 6
+    pad = round(6 * K)
     area = g(base)[y - pad:y + h + pad, x - pad:x + w + pad]
     _, _, _, (bx, by) = cv2.minMaxLoc(cv2.matchTemplate(area, t, cv2.TM_CCOEFF_NORMED))
     return bx - pad, by - pad
@@ -73,8 +78,10 @@ def mouth_on(base: np.ndarray, src: np.ndarray) -> np.ndarray:
     x, y, w, h = MOUTH_BOX
     patch = src[y:y + h, x:x + w].astype(np.float32)
     mask = np.zeros((h, w), np.float32)
-    cv2.ellipse(mask, (w // 2, h // 2), (w // 2 - 3, h // 2 - 3), 0, 0, 360, 1.0, -1)
-    mask = cv2.GaussianBlur(mask, (7, 7), 0)[..., None]
+    edge = round(3 * K)
+    cv2.ellipse(mask, (w // 2, h // 2), (w // 2 - edge, h // 2 - edge), 0, 0, 360, 1.0, -1)
+    blur = 2 * round(3 * K) + 1
+    mask = cv2.GaussianBlur(mask, (blur, blur), 0)[..., None]
     out = base.astype(np.float32)
     region = out[y + dy:y + dy + h, x + dx:x + dx + w]
     out[y + dy:y + dy + h, x + dx:x + dx + w] = region * (1 - mask) + patch * mask
@@ -114,6 +121,8 @@ def main() -> None:
     import json
     anchors = {name: list(ANCHORS[name.rsplit("_", 1)[0]]) for name in sorted(made) if name.rsplit("_", 1)[0] in ANCHORS}
     (OUT / "anchors.json").write_text(json.dumps(anchors, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    stand_h = int(made["stand_0"].shape[0])   # 저장 그림 서 있는 키 — 앱(ui/pet_window)이 여기서 한 번만 줄임
+    (OUT / "frames.json").write_text(json.dumps({"standH": stand_h}) + "\n", encoding="utf-8")
     print("Starline", len(made), "anchors", len(anchors))
 
 
