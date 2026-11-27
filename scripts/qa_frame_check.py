@@ -147,6 +147,11 @@ def check(folder: str, outfit: str = "", source: Path | None = None, base: str |
             cache[name] = (image, path) if image is not None else None
         return cache[name]
 
+    try:   # 저장 키가 큰 캐릭터(Starline 원본 크기 524)는 px 기준을 같은 비율로(기준 = 서기 키 285)
+        stand_h = float(json.loads((base_dir / "frames.json").read_text(encoding="utf-8")).get("standH", 285))
+    except (OSError, ValueError):
+        stand_h = 285.0
+    px = stand_h / 285.0
     shapes: dict[str, Shape] = {}
     info: list[tuple[str, str, str]] = []   # 원본 영상 이웃 장 — 앱이 만든 튐이 아니라 검사 대상 밖(원본 비교로 따로 봄)
     problems: list[str] = []
@@ -173,11 +178,11 @@ def check(folder: str, outfit: str = "", source: Path | None = None, base: str |
             return
         sa, sb = shapes[a], shapes[b]
         dy, dx = abs(sa.foot_y - sb.foot_y), abs(sa.foot_x - sb.foot_x)
-        if not moving and dy > FOOT_Y_LIMIT:
-            problems.append(f"{label}: {a}→{b} 발 높이 {dy:.0f}px 튐")
+        if not moving and dy > FOOT_Y_LIMIT * px:
+            problems.append(f"{label}: {a}→{b} 발 높이 {dy / px:.0f}px 튐(서기 키 285 기준)")
             flagged.append((a, b))
-        if dx > (FOOT_X_LIMIT * 3 if moving else FOOT_X_LIMIT):
-            problems.append(f"{label}: {a}→{b} 발 가로 {dx:.0f}px 튐")
+        if dx > (FOOT_X_LIMIT * 3 if moving else FOOT_X_LIMIT) * px:
+            problems.append(f"{label}: {a}→{b} 발 가로 {dx / px:.0f}px 튐(서기 키 285 기준)")
             flagged.append((a, b))
         k = best_scale(sa.head, sb.head, 0.85, 1.15, 31)
         if abs(k - 1) > HEAD_LIMIT:
