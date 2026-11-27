@@ -22,6 +22,9 @@ HEAD = 0.42
 
 
 def _read(path):
+    path = Path(path)
+    if not path.is_file() and path.suffix == ".png" and path.with_suffix(".webp").is_file():
+        path = path.with_suffix(".webp")   # Starline 영상판(11-27)은 WebP
     image = image_io.imread(path, cv2.IMREAD_UNCHANGED)
     assert image is not None, path
     return image
@@ -81,7 +84,7 @@ def test_starline_video_walk_fourteen_frames():
     assert names == tuple(f"walk_{i}" for i in range(14)) and looping and times == (0.1,) * 14
     assert br.STARLINE.walk_speed == 92.0
     folder = CHARS / "Starline"
-    assert sorted(p.name for p in folder.glob("walk_*.png")) == sorted(f"walk_{i}.png" for i in range(14))
+    assert sorted(p.name for p in folder.glob("walk_*.webp")) == sorted(f"walk_{i}.webp" for i in range(14))
     stand = _read(folder / "stand_0.png").shape[0]
     heights = [_read(folder / f"walk_{i}.png").shape[0] for i in range(14)]
     assert all(abs(h - stand) / stand <= 0.03 for h in heights), heights

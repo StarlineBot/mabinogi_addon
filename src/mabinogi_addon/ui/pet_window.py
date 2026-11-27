@@ -55,7 +55,18 @@ class LazyFrames(Mapping):
                 self._fixed[name] = image
 
     def _read(self, name: str) -> QImage | None:
-        image = QImage(str(self._paths[name]))
+        path = self._paths[name]
+        if path.suffix == ".webp":   # OpenCV로(빌드에 Qt webp 플러그인이 없어도 읽힘) — BGRA = QImage ARGB32(리틀 엔디언)
+            import cv2
+
+            from .. import image_io
+            data = image_io.imread(path, cv2.IMREAD_UNCHANGED)
+            if data is None or data.ndim != 3 or data.shape[2] != 4:
+                return None
+            h, w = data.shape[:2]
+            image = QImage(data.data, w, h, w * 4, QImage.Format.Format_ARGB32).copy()
+        else:
+            image = QImage(str(path))
         if image.isNull():
             return None
         if name in self._anchors:
@@ -91,6 +102,15 @@ class LazyFrames(Mapping):
         return set(self._fixed) | set(self._recent)
 
 
+def frame_file(folder, name: str):
+    """그 장 파일 — PNG, 없으면 WebP(Starline 영상판, 11-27). 둘 다 없으면 None."""
+    for ext in (".png", ".webp"):
+        path = folder / f"{name}{ext}"
+        if path.is_file():
+            return path
+    return None
+
+
 def load_frames(folder: str, profile: brain_mod.Profile | None = None, outfit: str = "") -> Mapping[str, QImage]:
     """그 캐릭터 동작에 쓰는 프레임만 읽는다(assets/characters/<폴더>/<이름>.png).
     outfit(착장 key)이면 outfits/<key>/<이름>.png를 먼저 — 없는 프레임은 기본 옷 그대로(착장 SD는 아직 없음, 기획 11-25)."""
@@ -105,11 +125,11 @@ def load_frames(folder: str, profile: brain_mod.Profile | None = None, outfit: s
     if len(names | motion_names) > LAZY_OVER:
         found = {}
         for name in sorted(names | motion_names):
-            path = dressed / f"{name}.png" if dressed is not None and (dressed / f"{name}.png").is_file() else base / f"{name}.png"
-            if name in motion_names and dressed is not None and path.parent != dressed:
+            path = frame_file(dressed, name) if dressed is not None else None
+            path = path or frame_file(base, name)
+            if path is None or (name in motion_names and dressed is not None and path.parent != dressed):
                 continue
-            if path.is_file():
-                found[name] = path
+            found[name] = path
         pinned = {n for state in PINNED if state in profile.anims for n in profile.anims[state][0]}
         return LazyFrames(found, anchors, pinned)
     for name in sorted(names | motion_names):

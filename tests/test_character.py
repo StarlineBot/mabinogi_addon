@@ -1131,9 +1131,9 @@ def test_mouth_only_frames_differ_only_around_the_mouth(folder, prefix):
     import numpy as np
     from mabinogi_addon.image_io import imread
 
-    base = imread(ASSETS / folder / f"{prefix}base_0.png", cv2.IMREAD_UNCHANGED)
+    base = _img_of(ASSETS / folder / f"{prefix}base_0.png")
     for key in ("m1", "m2"):
-        other = imread(ASSETS / folder / f"{prefix}{key}_0.png", cv2.IMREAD_UNCHANGED)
+        other = _img_of(ASSETS / folder / f"{prefix}{key}_0.png")
         assert other.shape == base.shape
         diff = np.abs(other.astype(int) - base.astype(int)).max(-1) > 0
         ys, xs = np.where(diff)
@@ -1370,7 +1370,7 @@ def test_sheet_colors_match_standing_hair_and_skin(folder):
     ("아리아", "아리아/SD/투명 배경 치비 캐릭터 4컷 스프라이트.png"),
     ("레나", "레나/SD/레나_쓰다듬기.png"),
     ("다래", "다래/SD/부끄러운 치비 천사 악마 스티커 세트.png"),
-    ("Starline", "Starline/SD/Starline_구석_앉아있기.png"),   # 금 동전(마법진)·후광은 그대로
+    # Starline은 영상판(11-27) — 옛 시트 색 맞추기 안 씀
 ])
 def test_sheet_colors_touch_only_hair_and_skin(folder, sheet_path):
     """바뀌는 픽셀은 머리·피부 마스크(+흐림 둘레 5px) 안뿐 — 옷(검정·크림 드레스·리본·장화)·눈은 그대로."""
@@ -1399,6 +1399,9 @@ def test_sheet_colors_touch_only_hair_and_skin(folder, sheet_path):
 def _img_of(path):
     import cv2
     from mabinogi_addon.image_io import imread
+    path = Path(path)
+    if not path.is_file() and path.suffix == ".png" and path.with_suffix(".webp").is_file():
+        path = path.with_suffix(".webp")   # Starline 영상판(11-27)은 WebP
     return imread(path, cv2.IMREAD_UNCHANGED)
 
 
@@ -1422,7 +1425,8 @@ def test_starline_roster_english_name_gold_outline_and_frames():
     from mabinogi_addon.ui import character_tab as ct
     assert ct.CARD_FIT_HEIGHT == {"Starline"}
     names = {n for frames, _t, _l in br.STARLINE.anims.values() for n in frames}
-    assert not [n for n in names if not (SL_DIR / f"{n}.png").exists()]
+    from mabinogi_addon.ui.pet_window import frame_file
+    assert not [n for n in names if frame_file(SL_DIR, n) is None]   # 영상판(11-27)은 WebP
     assert _img_of(SL_DIR / "stand_0.png").shape[0] == 286   # 영상판(11-27) 서 있기 틀 키
     from mabinogi_addon.ui import character_lines_feed
     assert character_lines_feed.REMOTE_NAMES["Starline"] == "starline-lines.json"
@@ -1821,8 +1825,8 @@ def test_dare_lies_down_every_3_to_6_minutes_in_corner_then_sits_again():
 @pytest.mark.parametrize("folder,ref,other", [
     ("아리아", "stand_0", "stretch_0"), ("아리아", "stand_0", "stretch_5"),
     ("레나", "stand_0", "magic_0"), ("레나", "stand_0", "magic_5"),
-    ("Starline", "stand_0", "sneeze_0"), ("Starline", "stand_0", "sneeze_5"),
-    ("Starline", "stand_0", "flame_0"), ("Starline", "stand_0", "flame_3"),   # 불꽃(QA 11-25 — 예전 1.07)
+    ("Starline", "stand_0", "sneeze_0"), ("Starline", "stand_0", "sneeze_29"),   # 영상판(11-27) 30장 — 처음·끝 = 서기
+    ("Starline", "stand_0", "flame_0"), ("Starline", "stand_0", "flame_29"),   # 불꽃(QA 11-25 — 예전 1.07)
     ("다래", "sit_doze_0", "sleep_0"), ("다래", "sit_drowsy_0", "sleep_8"),
 ])
 def test_basic_motion_same_pose_frames_match_neighbour_silhouette(folder, ref, other):
@@ -2068,8 +2072,7 @@ def test_drawer_opens_after_300ms_hover_and_follows_floating_card(app, cfg):
 def _sl(name):
     import cv2
 
-    from mabinogi_addon.image_io import imread
-    return imread(SL_DIR / f"{name}.png", cv2.IMREAD_UNCHANGED)
+    return _img_of(SL_DIR / f"{name}.png")
 
 
 def test_ian_sit_face_matches_crouch_and_rise():

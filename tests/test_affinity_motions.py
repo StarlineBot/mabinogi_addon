@@ -1,6 +1,7 @@
 """호감도 모션(25·75 보상 — docs/characters/호감도_모션.md '앱 동작', 11-26 게이지 배포)."""
 import os
 import random
+from pathlib import Path
 
 import cv2
 import numpy as np
@@ -19,6 +20,9 @@ STAND = {"이안": "stand_1"}
 
 
 def _read(path):
+    path = Path(path)
+    if not path.is_file() and path.suffix == ".png" and path.with_suffix(".webp").is_file():
+        path = path.with_suffix(".webp")   # Starline 영상판(11-27)은 WebP
     image = image_io.imread(path, cv2.IMREAD_UNCHANGED)
     assert image is not None, path
     return image

@@ -59,22 +59,13 @@
         "tests/test_starline_video.py",
         "tests/test_character.py"
       ],
-      "reason": "장이 많은 캐릭터는 그때그때 읽기(LazyFrames — 늘 쓰는 서기·걷기·말하기만 미리, 나머지 최근 40장) — Starline 다 읽으면 72MB → 약 29MB"
-    },
-    "src/mabinogi_addon/assets/characters/Starline/stand_0.png": {
-      "tests": [
-        "tests/test_starline_video.py",
-        "tests/test_character.py",
-        "tests/test_bundle_layout.py",
-        "tests/test_affinity_motions.py"
-      ],
-      "reason": "Starline 영상판 350장(기획이 크기·색 끝냄)·anchors.json(동작 틀마다 발 자리 맞춤) — 쓰는 장만, 예전 장 없음, 번들 포함"
+      "reason": "장이 많은 캐릭터는 그때그때 읽기(LazyFrames — 늘 쓰는 서기·걷기·말하기만 미리, 나머지 최근 40장, 화면용 사본도) + WebP는 OpenCV로 읽기(frame_file) — Starline 다 읽으면 72MB → 최악 약 23MB"
     },
     "scripts/build_starline_video.py": {
       "tests": [
         "tests/test_starline_video.py"
       ],
-      "reason": "영상판 설치·말하기 입 합성·anchors"
+      "reason": "영상판 설치(WebP)·말하기 입 합성·anchors"
     },
     "scripts/build_starline_frames.py": {
       "tests": [
@@ -99,6 +90,40 @@
         "tests/test_affinity_motions.py"
       ],
       "reason": "옛 시트로 Starline 프레임을 덮지 않게(영상판 11-27)"
+    },
+    "src/mabinogi_addon/ui/character_tab.py": {
+      "tests": [
+        "tests/test_character.py",
+        "tests/test_affinity_motions.py"
+      ],
+      "reason": "제작자 모션 바로 보기 — 장 파일 PNG 또는 WebP"
+    },
+    "tests/test_character.py": {
+      "tests": [
+        "tests/test_character.py"
+      ],
+      "reason": "Starline 영상판(WebP) — 그림 읽기 PNG→WebP 폴백, 옛 그림 전용 검사 정리"
+    },
+    "tests/test_walk_v2.py": {
+      "tests": [
+        "tests/test_walk_v2.py"
+      ],
+      "reason": "Starline 영상판(WebP) — 그림 읽기 PNG→WebP 폴백, 옛 그림 전용 검사 정리"
+    },
+    "tests/test_affinity_motions.py": {
+      "tests": [
+        "tests/test_affinity_motions.py"
+      ],
+      "reason": "Starline 영상판(WebP) — 그림 읽기 PNG→WebP 폴백, 옛 그림 전용 검사 정리"
+    },
+    "src/mabinogi_addon/assets/characters/Starline/stand_0.webp": {
+      "tests": [
+        "tests/test_starline_video.py",
+        "tests/test_character.py",
+        "tests/test_bundle_layout.py",
+        "tests/test_affinity_motions.py"
+      ],
+      "reason": "Starline 영상판 350장 WebP(화질 90, 말하기만 무손실 — 29MB → 7.9MB)·anchors.json(동작 틀마다 발 자리 맞춤) — 쓰는 장만, 예전 장 없음, 번들 포함"
     }
   }
 }

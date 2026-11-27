@@ -5,6 +5,8 @@
   0.1초 간격. 동작 폴더 안에서는 같은 틀 크기(아래·가운데 맞춰 그리면 위치 맞음). 색 처리 다시 하지 않음(harmonize 없음).
 - 걷기: docs/characters/assets/Starline/의상/새디자인2/영상걷기/앱크기2/vwalk14_0~13.png(장마다 꽉 맞춘 그림).
 - 앱 폴더(assets/characters/Starline)의 예전 프레임은 지우고 쓰는 장만 넣음(card.png·frame.png·frame.json·lines.json은 그대로).
+- 저장: 장마다 WebP(화질 90) — PNG 29MB → 약 6MB, 알파 그대로(차 0), 색 평균 차 ≤3.1/255, 한 장 읽기 약 1.8ms
+  (사용자 11-27 '장 수 줄이기보다 다른 대안'). 앱은 OpenCV로 읽음(Qt webp 플러그인에 기대지 않음, ui/pet_window.LazyFrames).
 - 말하기: 장마다 몸이 조금씩 달라 그대로 쓰면 말할 때 몸이 튐 → 입 다문 10번 몸에 작은 입(6번)·큰 입(11번)만 얼굴로 맞춰 붙임.
 - 사이 모션 10(6_어깨금장·7_소매팔찌)은 기능이 아직 없어 넣지 않음.
 """
@@ -20,6 +22,7 @@ SRC = ASSETS / "Starline" / "영상" / "앱크기"
 WALK_SRC = ASSETS / "Starline" / "의상" / "새디자인2" / "영상걷기" / "앱크기2"
 OUT = APP_ROOT / "Starline"
 KEEP = {"card.png", "frame.png"}
+WEBP_QUALITY = 90
 # 동작 틀마다 서 있는 발 자리가 서기 틀(아래 끝·발 가운데 +13.5)과 달라 동작이 바뀔 때 튐 → 그리기 오프셋(저장 px, anchors.json).
 # 쓰다듬기·모자 마술은 몸이 왼쪽으로 7·5px(귀·모자 자리 때문에 틀이 넓음), 앉기·일어나기는 서 있는 장 발이 틀 바닥 10px 위
 # (앉은 장은 공중에 떠 있는 그림이라 그대로 같이 내림), 착지는 끝 장 발이 13px 위·1.5px 왼쪽(떨어지는 4번도 같은 틀).
@@ -98,11 +101,16 @@ def frames() -> dict[str, np.ndarray]:
 
 def main() -> None:
     made = frames()
-    for old in OUT.glob("*.png"):
+    for old in [*OUT.glob("*.png"), *OUT.glob("*.webp")]:
         if old.name not in KEEP:
             old.unlink()
     for name, image in sorted(made.items()):
-        imwrite(OUT / f"{name}.png", image)
+        # 말하기 장은 무손실(101) — 입만 바뀌는 장끼리 몸 픽셀이 똑같아야 말할 때 몸이 지글거리지 않음
+        quality = 101 if name.startswith("talk_") else WEBP_QUALITY
+        ok, data = cv2.imencode(".webp", image, [cv2.IMWRITE_WEBP_QUALITY, quality])
+        if not ok:
+            raise SystemExit(f"{name} WebP로 못 바꿨어요")
+        (OUT / f"{name}.webp").write_bytes(data.tobytes())
     import json
     anchors = {name: list(ANCHORS[name.rsplit("_", 1)[0]]) for name in sorted(made) if name.rsplit("_", 1)[0] in ANCHORS}
     (OUT / "anchors.json").write_text(json.dumps(anchors, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")

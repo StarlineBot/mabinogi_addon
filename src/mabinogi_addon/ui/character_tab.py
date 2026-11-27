@@ -701,8 +701,9 @@ class CharacterTab(QWidget):
             outfit = outfits.wearing(folder, config.load_outfit(chosen.key))
             base = paths.resource_dir() / "characters" / folder
             where = base / "outfits" / outfit if outfit and (base / "outfits" / outfit).is_dir() else base
+            from .pet_window import frame_file
             for m in motions.of(folder):
-                if all((where / f"{n}.png").is_file() for n in m.names()):
+                if all(frame_file(where, n) is not None for n in m.names()):   # PNG 또는 WebP(Starline 영상판)
                     btn = QPushButton(f"♥ {m.stage} 모션")
                     btn.setToolTip(f"{m.key} — 펫이 서 있으면 바로 한 번(제작자 확인용)")
                     btn.clicked.connect(lambda _=False, k=m.key: self.motion_requested.emit(k))

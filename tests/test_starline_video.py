@@ -16,7 +16,7 @@ SB = br.STARLINE
 
 
 def _read(name):
-    image = image_io.imread(SL / f"{name}.png", cv2.IMREAD_UNCHANGED)
+    image = image_io.imread(SL / f"{name}.webp", cv2.IMREAD_UNCHANGED)
     assert image is not None, name
     return image
 
@@ -29,7 +29,8 @@ def _used():
 def test_every_used_frame_exists_and_nothing_extra():
     """쓰는 장이 다 있고, 앱 폴더엔 쓰는 장(+카드·테두리)만 — 예전 시트 그림이 남지 않음."""
     used = _used()
-    on_disk = {p.stem for p in SL.glob("*.png")} - {"card", "frame"}
+    on_disk = {p.stem for p in SL.glob("*.webp")}
+    assert {p.stem for p in SL.glob("*.png")} == {"card", "frame"}   # 장은 모두 WebP(11-27), PNG는 카드·테두리만
     assert used == on_disk, (sorted(used - on_disk)[:5], sorted(on_disk - used)[:5])
 
 
@@ -50,7 +51,7 @@ def test_same_action_frames_share_one_canvas():
     """동작 안 장은 같은 틀 크기 — 아래·가운데 맞춰 그리면 그대로 위치가 맞음(걷기·말하기 합성 장은 따로)."""
     for prefix in ("stand", "flame", "laugh", "chin", "sneeze", "pet", "crouch", "rise", "drag", "land",
                    "motion_flame_shot", "motion_hat_magic"):
-        shapes = {_read(p.stem).shape for p in SL.glob(f"{prefix}_*.png") if p.stem.rsplit("_", 1)[0] == prefix}
+        shapes = {_read(p.stem).shape for p in SL.glob(f"{prefix}_*.webp") if p.stem.rsplit("_", 1)[0] == prefix}
         assert len(shapes) == 1, (prefix, shapes)
     assert _read("crouch_0").shape == _read("rise_0").shape   # 앉기 끝 → 일어나기 첫 장 이어짐
 
