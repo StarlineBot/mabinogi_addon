@@ -18,10 +18,17 @@ def stats(names):
 for f in list(byfile): byfile[f]=[n for n in byfile[f] if not n.startswith("motion_tidy10")]
 byfile["A"]=[f"motion_tidy10a_{i}" for i in range(12)]; byfile["B"]=[f"motion_tidy10b_{i}" for i in range(12)]
 mt,st=stats(byfile[6])
+# 밝기 옮김 = 띠별(어두운·중간·밝은) L 차이의 평균 — 전체 평균은 그림 내용(망토 비율 등)에 휘둘림
+dL={f:float(np.mean(mt[:,0]-stats(n)[0][:,0])) for f,n in byfile.items() if n and f!=6}; print("장 밝기 옮김",{k:round(v,1) for k,v in dL.items()})
 for f,names in sorted([kv for kv in byfile.items() if kv[1]],key=lambda kv:str(kv[0])):
     ms,ss=stats(names); k=np.clip(st/np.maximum(ss,1),0.85,1.18)
     print("파일",f,"평균 차(L,a,b 띠별)",np.round(ms-mt,1).tolist())
     for n in names:
         a=imread(src+n+".png",-1); lab=cv2.cvtColor(a[...,:3],cv2.COLOR_BGR2LAB).astype(float); w=wts(lab[...,0])
-        o=sum(w[...,i:i+1]*((lab-ms[i])*k[i]+mt[i]) for i in range(3)) if f!=6 else lab
+        # 색(a·b)만 띠별 평균 맞춤, 밝기(L)는 장 전체 한 번만 옮김 — 띠별 L·표준편차까지 맞추면 머리 잔결이 10% 진해져
+        # 자글자글(사용자 11-27 사이 모션 10)
+        o=lab.copy()
+        if f!=6:
+            o[...,1:]=sum(w[...,i:i+1]*(lab[...,1:]-ms[i][1:]+mt[i][1:]) for i in range(3))
+            o[...,0]=lab[...,0]+(dL[f] if f in dL else 0)
         b=a.copy(); b[...,:3]=cv2.cvtColor(np.clip(o,0,255).astype(np.uint8),cv2.COLOR_LAB2BGR); imwrite(dst+n+".png",b)

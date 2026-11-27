@@ -44,5 +44,12 @@ for t in range(T):
     for j,(lab,s) in enumerate(M):
         r,c=divmod(j,5); n=s[min(t,len(s)-1)] if t<len(s)+2 else s[-1]; n=s[t%len(s)] if lab in("걷기","서 있기") else (s[t] if t<len(s) else s[-1])
         im=fr[n]; can.paste(im,(c*cw+cw//2-im.size[0]//2,r*chh+chh-8-im.size[1]),im); d.text((c*cw+6,r*chh+6),lab,fill=(50,50,50),font=font)
-    out.append(can.quantize(colors=160,method=Image.Quantize.MEDIANCUT))
+    out.append(can)
+def gif_frames(frames):
+    # 모든 장이 같은 256색 팔레트를 쓰고 점찍기(디더링) 없이 — 장마다 팔레트가 바뀌면 머리 색이 장마다 달라져 자글자글해 보임(사용자 11-27)
+    W,H=frames[0].size; mont=Image.new("RGB",(W,H*len(frames)))
+    for i,f in enumerate(frames): mont.paste(f,(0,H*i))
+    pal=mont.quantize(colors=256,method=Image.Quantize.MEDIANCUT)
+    return [f.quantize(palette=pal,dither=Image.Dither.NONE) for f in frames]
+out=gif_frames(out)
 g=D+"Starline_새디자인_전체동작.gif"; out[0].save(g,save_all=True,append_images=out[1:],duration=150,loop=0,optimize=True); print(g,T,"틱")
