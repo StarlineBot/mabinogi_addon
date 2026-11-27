@@ -5320,3 +5320,4 @@
 - **아리아 화관 쓴 장 유지 DEV 반영(사용자 제보 11-26, 후보 #342 뒤, QA 전달)**: motion_wreath hold 5번 2.0초(모든 옷), 테스트 test_wreath_worn_frame_holds, 노트 1줄. 리본(말하기) 건은 QA가 사용자 확인 중.
 - **아리아 여름 드레스 말하기 리본(사용자 11-26, QA 전달)**: QA가 짚은 6장 중 실제로 리본 자리가 보이는데 빈 건 talk_a_mid 하나 — talk_a_emph_0 리본을 치마로 자리 맞춰 천 위에만 붙임(outfit_fixes.add_ribbon). 팔짱 4장은 매듭이 팔 뒤·꼬리는 팔 아래로 이미 있고(덧붙이면 꼬리 두 겹), talk_happy_0은 손 사이로 매듭이 이미 보임(덧붙이면 얼룩) → 그대로. 전후 GIF 사용자에게.
 - **아리아 여름 드레스 머리 리본(사용자 11-26, QA 전달)**: stand_0·1, hair_0~3, stretch_0·1에 티셔츠 같은 장 리본을 얼굴로 자리 맞춰 옮김(outfit_fixes.add_hairbow, 색은 여름 드레스 talk_b_base_0 리본, 팔·손 가림 그대로; stand_1·stretch_1은 티셔츠 쪽이 팔에 반쯤 가려 옆 장 stand_0·stretch_0 리본 씀). 테스트: 걷기·stretch_4(팔이 반 가림) 빼고 리본 ≥ 중앙값 50%. 전후 GIF 사용자에게.
+- **0.58.1 Starline 모션 장별 유지 DEV 반영(사용자 11-27, 기획 전달)**: motion_flame_shot 0번(손가락 총)·motion_hat_magic 1번(모자에 손 넣음) 1.0초 hold, 순서 그대로. 테스트 test_starline_pauses_before_flame_and_hat_trick, 노트 v0.58.1 한 줄, release_checks 0.58.1(경계 테스트 갱신).

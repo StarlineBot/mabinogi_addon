@@ -263,3 +263,12 @@ def test_wreath_worn_frame_holds():
     seq = wreath.sequence(random.Random(1))
     assert {n: d for n, d in seq if d != mo.FRAME} == {"motion_wreath_5": 2.0}
     assert [n for n, _d in seq[-3:]] == ["motion_wreath_5", "motion_wreath_6", "motion_wreath_7"]
+
+
+def test_starline_pauses_before_flame_and_hat_trick():
+    """사용자 11-27: Starline 장난 불꽃은 손가락 총(0번), 모자 마술은 모자에 손 넣은 장(1번)에서 1.0초 쉬었다가 나옴. 순서 그대로."""
+    flame, hat = mo.MOTIONS["Starline"]
+    for motion, held in ((flame, 0), (hat, 1)):
+        seq = motion.sequence(random.Random(1))
+        assert [n for n, _d in seq] == list(motion.names())
+        assert {n: d for n, d in seq if d != mo.FRAME} == {f"{motion.key}_{held}": 1.0}

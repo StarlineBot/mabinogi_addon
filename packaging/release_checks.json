@@ -1,46 +1,28 @@
 {
-  "version": "0.58.0",
+  "version": "0.58.1",
   "tests": [
-    "tests/test_walk_v2.py",
-    "tests/test_character.py",
-    "tests/test_pet_floor_space.py",
-    "tests/test_affinity_v2.py",
     "tests/test_affinity_motions.py",
-    "tests/test_bundle_layout.py",
+    "tests/test_character.py",
     "tests/test_release_checks.py",
     "tests/test_release_candidate.py",
     "tests/test_windows_ci.py",
     "tests/test_release_notes.py",
-    "tests/test_release_notes_trigger.py",
-    "tests/test_outfit_v2_frames.py",
-    "tests/test_navigation.py",
-    "tests/test_credits.py",
-    "tests/test_optimization_ui.py"
+    "tests/test_release_notes_trigger.py"
   ],
   "coverage": {
-    "src/mabinogi_addon/character/brain.py": {
+    "src/mabinogi_addon/character/motions.py": {
       "tests": [
-        "tests/test_walk_v2.py",
-        "tests/test_character.py",
-        "tests/test_pet_floor_space.py",
-        "tests/test_affinity_v2.py",
-        "tests/test_affinity_motions.py"
+        "tests/test_affinity_motions.py",
+        "tests/test_character.py"
       ],
-      "reason": "걷기 8장(다래·아리아·레나·Starline) — 한 바퀴 시간·빠르기 그대로, 한 장 시간만 0.15·0.165초 · 막힌 구간(보이는 게임 화면) 피해 빈 바닥에서만 돌아다님·빈 곳 없으면 구석(호감도·게임 대사 없음) · 레나 구석 앉기 윙크 한 번 0.8초(11-26) · 걷는 중 쓰다듬기(펫 기준 x, 첫 전환에 멈춤) · 모션 상태 — 대기 번갈아 후보, 구간 오름 때 한 번(말 끝나고), 걷기·클릭·끌기·말하기·게임에 끊김, 구석 중 없음 · 레나 앉아 떠 있기(float_offset)"
+      "reason": "Starline 장난 불꽃 0번·모자 마술 1번 1.0초 유지(사용자 11-27) — 순서 그대로"
     },
-    "src/mabinogi_addon/assets/characters/Starline/walk_0.png": {
+    "src/mabinogi_addon/assets/release_notes.md": {
       "tests": [
-        "tests/test_walk_v2.py",
-        "tests/test_character.py",
-        "tests/test_bundle_layout.py"
+        "tests/test_release_notes.py",
+        "tests/test_release_notes_trigger.py"
       ],
-      "reason": "새 걷기 8장(다섯 캐릭터 + 티셔츠 아리아·조끼 이안) — 머리 크기·키·이웃 장 크기·시트 색, assets 번들 포함"
-    },
-    "scripts/build_walk_v2.py": {
-      "tests": [
-        "tests/test_walk_v2.py"
-      ],
-      "reason": "걷기 다시 그리기 빌드(묶음 zip 정리·배율·색 맞추기, 착장 그대로 복사) — 결과물 검사 · 티셔츠 아리아는 전체 다시 그림으로 빠짐(조끼 이안만)"
+      "reason": "v0.58.1 노트 — 섹션 헤더·첫 실행 노트"
     },
     "packaging/release_checks.json": {
       "tests": [
@@ -48,200 +30,13 @@
         "tests/test_release_candidate.py",
         "tests/test_windows_ci.py"
       ],
-      "reason": "0.58.0 검사 목록(0.57.2 합침)·후보 봉인·CI 계약"
-    },
-    "src/mabinogi_addon/assets/release_notes.md": {
-      "tests": [
-        "tests/test_release_notes.py",
-        "tests/test_release_notes_trigger.py"
-      ],
-      "reason": "0.58.0 노트 하나(0.57.2 내용 합침) — 동행 탭·호감도 게이지·새 걷기·옷 8벌 펫·창모드 피하기"
+      "reason": "0.58.1 검사 목록·배포 계약"
     },
     "tests/test_release_checks.py": {
       "tests": [
         "tests/test_release_checks.py"
       ],
-      "reason": "현재 릴리즈 경계 테스트를 0.58.0(0.57.2 합침)로"
-    },
-    "scripts/build_outfit_frames.py": {
-      "tests": [
-        "tests/test_outfit_v2_frames.py",
-        "tests/test_character.py"
-      ],
-      "reason": "프레임표 v2 옷 6벌(호감도 50 레나·다래 + 100 네 벌, 칸마다 머리 맞춤·아리아 여름 드레스는 머리 배율 중앙값으로 모자 몫 뺌·큰 시트는 템플릿 크기로) — 기존 옷 결과 그대로(해시 같음) · 한 동작 묶음 안 머리 배율 하나(중앙값)·레나 lab 걷기 얼굴 옮겨 붙이기(QA 11-26) · 다래 끌기 후광 폭으로 칸 배율 · 오프숄더 drag_0 = drag_1 · 이안 정복 끌기 0·2 반복·FIXES 후처리 · 다시 그린 칸 덮어쓰기(OVERRIDES — 이안 정복 끌기 4장·아리아 티셔츠 끌기/착지), 정복 끌기 임시 반복 제거 · 다래 오프숄더 전체 다시 그림(OVERRIDES 75장) · 레나 빨간 원피스 전체 다시 그림(OVERRIDES 65장)·오프숄더 구멍 정정본 · 아리아 티셔츠 전체 다시 그림(OVERRIDES 81장, 통째면 템플릿 안 자름·기본 프레임 다 있는지 확인)·레나 갇힌 검정 틈 정정본 · 아리아 여름 드레스 전체 다시 그림(OVERRIDES 81장, 쓰다듬기 띠 폭 맞춤 REF_FIT 없앰) · 여름 드레스 FIXES summer_ribbon·summer_hairbow"
-    },
-    "src/mabinogi_addon/assets/characters/다래/outfits/frill_pajama/stand_0.png": {
-      "tests": [
-        "tests/test_outfit_v2_frames.py",
-        "tests/test_bundle_layout.py"
-      ],
-      "reason": "옷 6벌(lab 65·frill_pajama 75·guild_uniform 68·summer_dress 81·white_offshoulder 75·red_dress 65) — 기본 이름 전부·머리 ±5%·키 ±6%(자세·모자 예외)·톤·펫 창이 착장 폴더 사용 · 다시 그린 아리아 티셔츠 걷기·끌기·착지, 이안 정복 끌기"
-    },
-    "src/mabinogi_addon/character/floor_space.py": {
-      "tests": [
-        "tests/test_pet_floor_space.py"
-      ],
-      "reason": "보이는 사각형 → 막힌 x 구간·빈 구간·DPI 변환(순수 계산)"
-    },
-    "src/mabinogi_addon/system/game_visibility.py": {
-      "tests": [
-        "tests/test_pet_floor_space.py"
-      ],
-      "reason": "게임 창 중 보이는 부분(Z 순서 위 창 빼기, 우리 앱·투명 오버레이 제외, 실패 None) — 가짜 win32로"
-    },
-    "src/mabinogi_addon/ui/pet_window.py": {
-      "tests": [
-        "tests/test_pet_floor_space.py",
-        "tests/test_character.py",
-        "tests/test_affinity_motions.py"
-      ],
-      "reason": "막힌 구간을 1초에 한 번, 게임이 포그라운드가 아닐 때만 구해 brain에 · 모션 프레임 읽기 — 입은 옷 폴더에 있을 때만, SD 없는 옷은 기본 그대로 · 떠 있는 높이만큼 그림·클릭 판정 위로"
-    },
-    "src/mabinogi_addon/ui/character_controller.py": {
-      "tests": [
-        "tests/test_pet_floor_space.py",
-        "tests/test_character.py",
-        "tests/test_affinity_v2.py",
-        "tests/test_affinity_motions.py"
-      ],
-      "reason": "watcher 보이는 게임 사각형 → 논리 px 막힌 구간(모르면 없음) · 행동 점수(켜기·찔러 보기·쓰다듬기·말풍선·알림), 줄어들기(모든 캐릭터), 돌아오면 서운함, 모션 해금·구간 오름 모션, 쿨다운 이어짐 · 제작자 '모션 바로 보기'"
-    },
-    "src/mabinogi_addon/system/window_watcher.py": {
-      "tests": [
-        "tests/test_pet_floor_space.py"
-      ],
-      "reason": "visible_game_rects(기본 None, Windows는 system/game_visibility)"
-    },
-    "tests/test_character.py": {
-      "tests": [
-        "tests/test_character.py"
-      ],
-      "reason": "SD 없는 옷 대신 없는 key로 기본 프레임 폴백 확인(옷 8벌 모두 SD)"
-    },
-    "scripts/outfit_face_fix.py": {
-      "tests": [
-        "tests/test_outfit_v2_frames.py"
-      ],
-      "reason": "착장 걷기 얼굴 옆선 고치기(기본 걷기 얼굴 정렬·안경 다시 얹기) — 레나 lab"
-    },
-    "scripts/build_starline_frames.py": {
-      "tests": [
-        "tests/test_walk_v2.py",
-        "tests/test_character.py"
-      ],
-      "reason": "match_tones·match_saturation 경계 없는 무게(얼룩 없음) — 걷기·말하기·불꽃 노이즈·톤"
-    },
-    "src/mabinogi_addon/character/affinity.py": {
-      "tests": [
-        "tests/test_affinity_v2.py",
-        "tests/test_character.py"
-      ],
-      "reason": "호감도 2차 규칙 — 하루 10(게임 4·행동 6, 25%·5분), 24·49 멈춤, 25 퀘스트 2일 연속, 줄어들기·바꾸기 −3 바닥, 알파 저장 이전, GROWTH 켬"
-    },
-    "src/mabinogi_addon/character/motions.py": {
-      "tests": [
-        "tests/test_affinity_motions.py"
-      ],
-      "reason": "호감도 모션 표(25·75) — 시작·반복 2~3번·끝, 해금·새 것 2배·옷에 그림 있을 때만 · 장마다 머무는 시간(다래 양인형 6번 2.1초·레나 마법서 4번 0.6초·5번 1.2초·아리아 물주기 6번 1.2초·화관 5번 2.0초)"
-    },
-    "src/mabinogi_addon/character/lines.py": {
-      "tests": [
-        "tests/test_affinity_v2.py",
-        "tests/test_character.py"
-      ],
-      "reason": "came_back 상황(돌아오면 서운함 한 줄)"
-    },
-    "src/mabinogi_addon/ui/character_tab.py": {
-      "tests": [
-        "tests/test_affinity_v2.py",
-        "tests/test_character.py",
-        "tests/test_navigation.py",
-        "tests/test_credits.py",
-        "tests/test_affinity_motions.py"
-      ],
-      "reason": "♥ 바·퀘스트 모두에게(조절은 제작자), 적용 때 떠나는 캐릭터 −3·확정 전 안내 · 맨 아래 목소리 출처 · 제작자 '모션 바로 보기'"
-    },
-    "src/mabinogi_addon/ui/main_window.py": {
-      "tests": [
-        "tests/test_navigation.py",
-        "tests/test_optimization_ui.py",
-        "tests/test_affinity_motions.py"
-      ],
-      "reason": "탭 이름 '캐릭터' → '동행' · 제작자 '모션 바로 보기'"
-    },
-    "scripts/build_base_motions.py": {
-      "tests": [
-        "tests/test_affinity_motions.py"
-      ],
-      "reason": "기본 옷 모션 프레임(4명 프레임표 v2 + Starline 시트·머리 맞춤·색) — 머리 ±5% 검사"
-    },
-    "src/mabinogi_addon/assets/characters/Starline/motion_flame_shot_0.png": {
-      "tests": [
-        "tests/test_affinity_motions.py",
-        "tests/test_bundle_layout.py"
-      ],
-      "reason": "기본 옷 모션 74장(5명 × 25·75) — 서 있기 머리 ±5%, 번들 포함"
-    },
-    "tests/test_outfit_v2_frames.py": {
-      "tests": [
-        "tests/test_outfit_v2_frames.py"
-      ],
-      "reason": "기본 옷에도 모션이 생겨 이름 비교에서 모션 따로"
-    },
-    "src/mabinogi_addon/ui/widgets.py": {
-      "tests": [
-        "tests/test_credits.py"
-      ],
-      "reason": "출처 표기 한 줄(credit_label·NEXON_CREDIT·VOICE_CREDIT)"
-    },
-    "src/mabinogi_addon/ui/exchange_tab.py": {
-      "tests": [
-        "tests/test_credits.py"
-      ],
-      "reason": "넥슨 오픈 API 출처 표기"
-    },
-    "src/mabinogi_addon/ui/craft_tab.py": {
-      "tests": [
-        "tests/test_credits.py"
-      ],
-      "reason": "넥슨 오픈 API 출처 표기"
-    },
-    "src/mabinogi_addon/ui/dungeon_cost_tab.py": {
-      "tests": [
-        "tests/test_credits.py"
-      ],
-      "reason": "넥슨 오픈 API 출처 표기"
-    },
-    "src/mabinogi_addon/ui/distribution_tab.py": {
-      "tests": [
-        "tests/test_credits.py"
-      ],
-      "reason": "넥슨 오픈 API 출처 표기"
-    },
-    "src/mabinogi_addon/ui/party_tab.py": {
-      "tests": [
-        "tests/test_credits.py"
-      ],
-      "reason": "넥슨 오픈 API 출처 표기"
-    },
-    "src/mabinogi_addon/ui/music_buff_tab.py": {
-      "tests": [
-        "tests/test_credits.py"
-      ],
-      "reason": "넥슨 오픈 API 출처 표기"
-    },
-    "src/mabinogi_addon/ui/settings_tab.py": {
-      "tests": [
-        "tests/test_credits.py",
-        "tests/test_navigation.py"
-      ],
-      "reason": "설정 제작자 소개 아래 출처 두 줄"
-    },
-    "scripts/outfit_fixes.py": {
-      "tests": [
-        "tests/test_outfit_v2_frames.py"
-      ],
-      "reason": "이안 길드 정복 코트 금줄 한 줄(inpaint)·조끼 가슴 배지 붙이기 · 아리아 여름 드레스 talk_a_mid 가슴 리본 붙이기(add_ribbon — 같은 자세 talk_a_emph_0에서, 천 위에만·팔 가림 그대로) · 여름 드레스 머리 리본(add_hairbow — 티셔츠 같은 장 리본을 얼굴로 맞춰 옮김, 색은 여름 드레스 리본, 팔 가림 그대로)"
+      "reason": "0.58.1 경계"
     }
   }
 }
