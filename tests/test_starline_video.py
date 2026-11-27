@@ -157,3 +157,17 @@ def test_anchors_put_each_action_on_the_stand_feet():
     for name in ("stand_0", "crouch_0", "rise_29", "land_29", "pet_0", "motion_hat_magic_0"):
         assert abs(foot_bottom(name)) <= 2, (name, foot_bottom(name))
     assert all(abs(v) < 200 for xy in anchors.values() for v in xy)
+
+
+def test_sit_click_keeps_shown_frame_and_resumes_loop():
+    """QA 11-27: 앉아서 클릭(sit_notice)이 crouch_29를 1.2초 보여 준 뒤 마법진 반복을 16번부터 다시 시작해 발 높이가 28px 튐 →
+    클릭 동안 그때 보이던 장 그대로, 끝나면 반복을 멈춘 자리부터."""
+    b = br.Brain(br.Floor(0, 2000, 700), rng=random.Random(1), profile=SB)
+    b._go("sit_loop", 10.0)
+    now = 10.0 + 0.1 * 5 + 0.05          # 반복 6번째 장(crouch_21)
+    shown = b.frame(now)
+    assert shown == "crouch_21"
+    b._go("sit_notice", now)
+    assert b.frame(now + 0.6) == shown   # 클릭 반응 동안 그대로
+    b._go("sit_loop", now + 1.2)
+    assert b.frame(now + 1.2) == shown and b.frame(now + 1.3) == "crouch_22"   # 멈춘 자리부터 이어감

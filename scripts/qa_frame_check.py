@@ -133,6 +133,11 @@ def check(folder: str, outfit: str = "", source: Path | None = None, base: str |
         anchors = json.loads((base_dir / "anchors.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
         anchors = {}
+    # 저장 px 경계는 서기 키 285 기준 — 원본 크기로 저장한 캐릭터(frames.json standH, Starline 524)는 그만큼 늘림
+    try:
+        unit = float(json.loads((base_dir / "frames.json").read_text(encoding="utf-8"))["standH"]) / 285
+    except (OSError, ValueError, KeyError, TypeError):
+        unit = 1.0
     seqs: dict[str, list[str]] = {state: list(frames) for state, (frames, _t, _l) in profile.anims.items()}
     for m in motions.of(folder):
         seqs[f"motion:{m.key}"] = list(m.names())
@@ -173,10 +178,10 @@ def check(folder: str, outfit: str = "", source: Path | None = None, base: str |
             return
         sa, sb = shapes[a], shapes[b]
         dy, dx = abs(sa.foot_y - sb.foot_y), abs(sa.foot_x - sb.foot_x)
-        if not moving and dy > FOOT_Y_LIMIT:
+        if not moving and dy > FOOT_Y_LIMIT * unit:
             problems.append(f"{label}: {a}→{b} 발 높이 {dy:.0f}px 튐")
             flagged.append((a, b))
-        if dx > (FOOT_X_LIMIT * 3 if moving else FOOT_X_LIMIT):
+        if dx > (FOOT_X_LIMIT * 3 if moving else FOOT_X_LIMIT) * unit:
             problems.append(f"{label}: {a}→{b} 발 가로 {dx:.0f}px 튐")
             flagged.append((a, b))
         k = best_scale(sa.head, sb.head, 0.85, 1.15, 31)
@@ -194,6 +199,8 @@ def check(folder: str, outfit: str = "", source: Path | None = None, base: str |
         if state.startswith("motion:") or state in profile.idle_states or state in ("pet_in", "crouch", "sneeze"):
             compare(f"서기→{state}", stand_first, names[0], False)
         nxt = "stand" if state.startswith("motion:") else profile.next_map.get(state)
+        if state == "sit_notice" and getattr(profile, "notice_holds", False):
+            continue   # 앉아서 클릭 동안 그때 장 그대로·끝나면 반복 멈춘 자리부터(brain notice_holds) — 정해진 장 이음이 없음
         if nxt in seqs and nxt not in MOVING:
             compare(f"{state}→{nxt}", names[-1], seqs[nxt][0], False)
 

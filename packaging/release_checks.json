@@ -7,6 +7,7 @@
     "tests/test_character.py",
     "tests/test_cursor_front.py",
     "tests/test_pet_floor_space.py",
+    "tests/test_qa_frame_check.py",
     "tests/test_release_candidate.py",
     "tests/test_release_checks.py",
     "tests/test_release_notes.py",
@@ -104,6 +105,20 @@
         "tests/test_starline_video.py"
       ],
       "reason": "원본 크기 좌표·투명 픽셀 색값 무시"
+    },
+    "src/mabinogi_addon/character/brain.py": {
+      "tests": [
+        "tests/test_starline_video.py",
+        "tests/test_character.py",
+        "tests/test_qa_frame_check.py"
+      ],
+      "reason": "Starline 앉아서 클릭(sit_notice) 동안 그때 장 그대로·끝나면 마법진 반복 멈춘 자리부터(Profile.notice_holds — 16번부터 다시 해 28px 튀던 것, QA 11-27)"
+    },
+    "scripts/qa_frame_check.py": {
+      "tests": [
+        "tests/test_qa_frame_check.py"
+      ],
+      "reason": "저장 px 경계를 frames.json standH/285만큼(원본 크기), notice_holds면 sit_notice→sit_loop 정해진 이음 없음"
     }
   }
 }

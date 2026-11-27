@@ -163,6 +163,8 @@ class Profile:
     sleep_gap: tuple[float, float] | None = None    # 다래: 구석에 앉아 있는 동안 엎드려 자기 간격(없으면 안 함)
     sleep_hold: tuple[float, float] = SLEEP_HOLD    # 엎드려 숨쉬는 시간
     sit_float: tuple | None = None        # 앉아 있을 때 떠 있기(레나 마법, 사용자 11-26): (올림 px, 둥둥 ±px, 주기 초, 오르내림 초) — 키 190 기준
+    notice_holds: bool = False            # 앉아서 클릭(sit_notice) 동안 그때 보이던 장 그대로, 끝나면 반복을 멈춘 자리부터(Starline
+    #                                       영상판 — 마법진 왕복 중 떠 있는 높이가 장마다 달라 처음부터 다시 하면 28px 튐, QA 11-27)
     scale: float = 1.0                    # 그리기 배율(사용자 11-24 B안 — 얼굴 크기 맞춤: Starline 1.15·레나 0.95). 그림 파일은 그대로
 
     @property
@@ -321,7 +323,7 @@ STARLINE = Profile(STARLINE_ANIMS,
                    ("crouch", "sit_loop", "sit_notice"), "sit_loop", idle_extra="flame", idle_variants=("laugh", "chin"),
                    idle_laps=(1, 1),
                    click_talks=True, walk_speed=STARLINE_WALK_SPEED, talk_sets=STARLINE_TALK, scale=STARLINE_SCALE,
-                   rare_extra="sneeze", rare_say=(22, "sneeze"))
+                   rare_extra="sneeze", rare_say=(22, "sneeze"), notice_holds=True)
 PROFILES = {"다래": DARE, "아리아": ARIA, "이안": IAN, "레나": LENA, "Starline": STARLINE}
 
 
@@ -383,6 +385,8 @@ class Brain:
     _sleep_next: float = 0.0         # 다래: 다음 엎드려 자기 시각(구석에 앉으면 정함)
     _sleep_until: float = 0.0
     _extra_until: float = 0.0
+    _held: str | None = None          # 앉아서 클릭 동안 그대로 둘 장(Profile.notice_holds)
+    _loop_phase: float | None = None  # 그때 반복이 어디까지 왔는지(초)
     _queued_talk: tuple | None = None
     _talk_set: dict | None = None
     _emph_at: float | None = None
@@ -402,6 +406,8 @@ class Brain:
                     return name
                 t -= d
             return self._motion_seq[-1][0] if self._motion_seq else self.profile.anims["stand"][0][0]
+        if self.state == "sit_notice" and self._held is not None:
+            return self._held
         if self.state == "talk" and self._talk_set is not None:
             return self._talk_frame(now)
         if self.state == "talk_end" and self._talk_set is not None:  # base 잠시 → 사이(또는 끝 두 장) → (서 있기)
@@ -473,6 +479,15 @@ class Brain:
                 self._float_since = now
             elif state == "rise" and self.state in afloat:
                 self._float_from = self.float_offset(now)
+        if self.profile.notice_holds:
+            if state == "sit_notice" and self.state != "sit_notice":
+                self._held = self.frame(now)
+                self._loop_phase = now - self._t0 if self.state == "sit_loop" else None
+            elif state == "sit_loop" and self.state == "sit_notice" and self._loop_phase is not None:
+                self.state, self._t0, self._held = state, now - self._loop_phase, None
+                return
+            elif state != "sit_notice":
+                self._held = None
         self.state, self._t0 = state, now
         if state == "pet_loop":
             self._pet_reached_loop = True
