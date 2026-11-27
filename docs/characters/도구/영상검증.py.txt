@@ -1,0 +1,118 @@
+# 영상 모션 자동 검증 (기획 도구 — 배포 지문에서 빼려고 .py.txt; 실행: cp 로 .py 만들어 uv run --with pillow python -I)
+# 사용자 11-27 '제대로 검증할 수 있게 툴을 — 매번 사람이 보게 하지 말고'
+#
+# 기준 = 그 캐릭터 서 있기 영상 0번 장. 동작 영상(초록 배경 GIF)마다 장별로:
+#  1) 머리 크기: 서 있기 머리(위 35% — 후광·뿔·얼굴)를 템플릿으로, 배율을 바꿔가며 가장 잘 맞는 배율 = 그 장의 머리 크기(서 있기=1.00)
+#     눈 감기·표정과 무관(머리 윤곽 전체로 맞춤).
+#  2) 크기 흔들림: 한 영상 안 머리 크기 최대/최소 — 6% 넘으면 문제(장이 넘어갈 때 커졌다 작아짐)
+#  3) 몸 비율: '서 있는 장'(머리 크기로 맞춘 뒤 서 있기와 실루엣 겹침 ≥0.80)의 키 ÷ 서 있기 키 — ±5% 넘으면 문제(뚱뚱/길쭉)
+#  4) 시작·끝 자세: 머리 크기로 맞춘 첫 장·끝 장 ↔ 서 있기 실루엣 겹침(서기에서 시작/끝나는 동작만) — 0.85 미만이면 문제
+#  5) 색: 어두운·중간·밝은 띠 Lab 평균 ΔE ≤6
+#  6) 화면 끝 잘림: 몸이 영상 위·양옆 끝에 닿은 장(경고)
+# 결과: 동작마다 '통과' 또는 '문제: …' 한 줄 + 숫자. 사람이 그림을 안 봐도 되게.
+import sys, glob, os, json
+import numpy as np, cv2
+from PIL import Image
+
+def key(img):
+    f = img.astype(np.float32); b, g, r = f[..., 0], f[..., 1], f[..., 2]
+    al = np.clip(1 - ((g - np.maximum(r, b)) - 25) / 70, 0, 1)
+    m = (al > 0.5).astype(np.uint8); n, l, st, _ = cv2.connectedComponentsWithStats(m)
+    if n <= 1: return np.dstack([img, np.zeros(img.shape[:2], np.uint8)])
+    bi = 1 + int(np.argmax(st[1:, 4])); keep = np.isin(l, [i for i in range(1, n) if st[i, 4] >= st[bi, 4] * 0.02])
+    al = al * cv2.dilate(keep.astype(np.uint8), np.ones((3, 3), np.uint8))
+    g2 = np.minimum(g, np.maximum(r, b) + 8)
+    return np.dstack([b, g2, r, al * 255]).clip(0, 255).astype(np.uint8)
+
+def load(p):
+    g = Image.open(p); out = []
+    for i in range(getattr(g, "n_frames", 1)):
+        g.seek(i); out.append(key(cv2.cvtColor(np.asarray(g.convert("RGB")), cv2.COLOR_RGB2BGR)))
+    return out
+
+def tight(a):
+    ys, xs = np.where(a[..., 3] > 128); return a[ys.min():ys.max() + 1, xs.min():xs.max() + 1]
+
+def gray(a):  # 회색 바탕에 합성한 밝기(템플릿 맞춤용)
+    al = a[..., 3:] / 255.0
+    return (cv2.cvtColor(a[..., :3], cv2.COLOR_BGR2GRAY)[..., None] * al + 128 * (1 - al))[..., 0].astype(np.float32)
+
+SCALES = np.linspace(0.80, 1.25, 46)
+
+def _rot(img, ang):
+    if ang == 0: return img
+    h, w = img.shape[:2]; M = cv2.getRotationMatrix2D((w / 2, h / 2), ang, 1.0)
+    return cv2.warpAffine(img, M, (w, h), borderValue=(0, 0, 0, 0))
+
+def head_scale(ref_head, frame):
+    """frame 머리 크기(ref=1)와 맞춤 신뢰도. 고개 기울기(±24°)도 찾음 — 기울어진 장에서 크기를 잘못 재지 않게."""
+    rg = gray(ref_head); best = (-2, 1.0)
+    for ang in (0, -8, 8, -16, 16, -24, 24):
+        rr = gray(_rot(ref_head, ang)) if ang else rg
+        for s in SCALES:
+            f = cv2.resize(frame, None, fx=1 / s, fy=1 / s, interpolation=cv2.INTER_AREA)
+            if f.shape[0] < rr.shape[0] or f.shape[1] < rr.shape[1]:
+                f = np.pad(f, ((0, max(0, rr.shape[0] - f.shape[0] + 2)), (0, max(0, rr.shape[1] - f.shape[1] + 2)), (0, 0)))
+            r = cv2.matchTemplate(gray(f), rr, cv2.TM_CCOEFF_NORMED).max()
+            if r > best[0]: best = (r, s)
+        if ang == 0 and best[0] > 0.85: break      # 똑바른 장은 빨리 끝
+    return best[1], best[0]
+
+def place(m, h, w):
+    o = np.zeros((h, w), bool); mh, mw = m.shape; x = (w - mw) // 2; o[h - mh:, x:x + mw] = m; return o
+
+def iou(a, b):
+    h, w = max(a.shape[0], b.shape[0]), max(a.shape[1], b.shape[1]) + 2
+    pa, pb = place(a, h, w), place(b, h, w); return float((pa & pb).sum() / max(1, (pa | pb).sum()))
+
+def bands(fs):
+    px = np.concatenate([cv2.cvtColor(a[..., :3], cv2.COLOR_BGR2LAB).astype(float)[a[..., 3] > 200] for a in fs]); L = px[:, 0]
+    return np.array([px[(L >= lo) & (L < hi)].mean(0) for lo, hi in [(0, 90), (90, 190), (190, 256)]])
+
+def check(stand_gif, motion_gif, from_stand=True, to_stand=True):
+    S = tight(load(stand_gif)[0]); SH = S.shape[0]; ref_head = S[: int(SH * 0.35)]; sm = S[..., 3] > 128
+    F = load(motion_gif); res = {"장": len(F)}
+    hs, conf, src = [], [], []
+    area0 = float((S[..., 3] > 128).sum())
+    for a in F:
+        t = tight(a); s, c = head_scale(ref_head, t)
+        if c <= 0.75:   # 머리가 기울거나 돌아가 템플릿이 안 맞는 장 → 몸 전체 넓이로(넓이 ∝ 크기²)
+            s = float(np.sqrt((t[..., 3] > 128).sum() / area0)); src.append("넓이")
+        else: src.append("머리")
+        hs.append(s); conf.append(c)
+    hs = np.array(hs); good = np.ones(len(hs), bool)
+    res["판정 못한 장"] = [i for i, x in enumerate(src) if x == "넓이"]   # 머리 대신 몸 넓이로 잰 장
+    med = float(np.median(hs[good])) if good.any() else float(np.median(hs))
+    res["머리크기"] = round(med, 3); res["머리 흔들림%"] = round((hs[good].max() / hs[good].min() - 1) * 100, 1) if good.any() else None
+    norm = [cv2.resize(tight(a), None, fx=1 / s, fy=1 / s, interpolation=cv2.INTER_AREA)[..., 3] > 128 for a, s in zip(F, hs)]
+    ious = [iou(sm, m) for m in norm]
+    standing = [i for i, v in enumerate(ious) if v >= 0.80]
+    if standing:
+        r = [norm[i].shape[0] / SH for i in standing]; res["서 있는 장 키비"] = (round(min(r), 3), round(max(r), 3))
+    res["시작 겹침"] = round(ious[0], 2); res["끝 겹침"] = round(ious[-1], 2)
+    res["색 ΔE"] = [round(x, 1) for x in np.linalg.norm(bands(F[::3]) - bands([S]), axis=1)]
+    edge = [i for i, a in enumerate(F) if (a[:2, :, 3] > 128).any() or (a[:, :2, 3] > 128).any() or (a[:, -2:, 3] > 128).any()]
+    res["화면끝 닿은 장"] = edge
+    prob = []
+    if res["머리 흔들림%"] is not None and res["머리 흔들림%"] > 6: prob.append(f"크기 흔들림 {res['머리 흔들림%']}%(장 {int(np.argmin(hs))}↔{int(np.argmax(hs))})")
+    if standing and (min(r) < 0.95 or max(r) > 1.05): prob.append(f"몸 비율 다름(서 있는 장 키 {min(r):.2f}~{max(r):.2f}배)")
+    if from_stand and ious[0] < 0.85: prob.append(f"시작 자세가 서 있기와 다름({ious[0]:.2f})")
+    if to_stand and ious[-1] < 0.85: prob.append(f"끝 자세가 서 있기와 다름({ious[-1]:.2f})")
+    if max(res["색 ΔE"]) > 6: prob.append(f"색 다름 ΔE {max(res['색 ΔE'])}")
+    res["판정"] = "통과" if not prob else "문제: " + " / ".join(prob)
+    if edge: res["판정"] += f" (경고: 화면 끝 닿음 {len(edge)}장)"
+    res["장별 머리크기"] = [round(x, 2) for x in hs]
+    return res
+
+if __name__ == "__main__":
+    # 사용: python 영상검증.py <캐릭터 영상 폴더> [동작파일 …]  — 기본은 폴더의 *.gif 전부(0_서있기 제외)
+    # 서 있기에서 시작/끝나지 않는 동작은 이름표로: NOSTART(앞 영상 장에서 시작), NOEND(앉은 채·매달린 채 끝)
+    V = sys.argv[1].rstrip("/") + "/"
+    spec = json.loads(sys.argv[2]) if len(sys.argv) > 2 else {}
+    for p in sorted(glob.glob(V + "*.gif"), key=lambda x: (len(os.path.basename(x)), x)):
+        n = os.path.basename(p)[:-4]
+        if n.startswith("0_") or "1차" in n: continue
+        fs, ts = spec.get(n, [True, True])
+        r = check(V + "0_서있기.gif", p, fs, ts)
+        print(f"{n:16s} {r['판정']}")
+        print(f"{'':16s} 몸 넓이로 잰 장 {r['판정 못한 장']}"); print(f"{'':16s} 머리 {r['머리크기']}(흔들림 {r['머리 흔들림%']}%) 서있는장 키비 {r.get('서 있는 장 키비')} 시작/끝 겹침 {r['시작 겹침']}/{r['끝 겹침']} 색ΔE {r['색 ΔE']}")
