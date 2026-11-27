@@ -76,17 +76,15 @@ def check(stand_gif, motion_gif, from_stand=True, to_stand=True):
     area0 = float((S[..., 3] > 128).sum())
     for a in F:
         t = tight(a); s, c = head_scale(ref_head, t)
-        if c <= 0.75:   # 머리가 기울거나 돌아가 템플릿이 안 맞는 장 → 몸 전체 넓이로(넓이 ∝ 크기²)
-            s = float(np.sqrt((t[..., 3] > 128).sum() / area0)); src.append("넓이")
-        else: src.append("머리")
+        src.append("머리" if c > 0.75 else "못 잼")   # 머리가 기울거나 가려져 안 맞는 장은 크기 판정에서 뺌(몸 넓이는 자세 따라 변해 못 씀 — Starline 시험 11-27)
         hs.append(s); conf.append(c)
-    hs = np.array(hs); good = np.ones(len(hs), bool)
-    res["판정 못한 장"] = [i for i, x in enumerate(src) if x == "넓이"]   # 머리 대신 몸 넓이로 잰 장
+    hs = np.array(hs); good = np.array([x == "머리" for x in src])
+    res["판정 못한 장"] = [i for i, x in enumerate(src) if x != "머리"]
     med = float(np.median(hs[good])) if good.any() else float(np.median(hs))
     res["머리크기"] = round(med, 3); res["머리 흔들림%"] = round((hs[good].max() / hs[good].min() - 1) * 100, 1) if good.any() else None
     norm = [cv2.resize(tight(a), None, fx=1 / s, fy=1 / s, interpolation=cv2.INTER_AREA)[..., 3] > 128 for a, s in zip(F, hs)]
     ious = [iou(sm, m) for m in norm]
-    standing = [i for i, v in enumerate(ious) if v >= 0.80]
+    standing = [i for i, v in enumerate(ious) if v >= 0.85 and good[i]]
     if standing:
         r = [norm[i].shape[0] / SH for i in standing]; res["서 있는 장 키비"] = (round(min(r), 3), round(max(r), 3))
     res["시작 겹침"] = round(ious[0], 2); res["끝 겹침"] = round(ious[-1], 2)
@@ -115,4 +113,4 @@ if __name__ == "__main__":
         fs, ts = spec.get(n, [True, True])
         r = check(V + "0_서있기.gif", p, fs, ts)
         print(f"{n:16s} {r['판정']}")
-        print(f"{'':16s} 몸 넓이로 잰 장 {r['판정 못한 장']}"); print(f"{'':16s} 머리 {r['머리크기']}(흔들림 {r['머리 흔들림%']}%) 서있는장 키비 {r.get('서 있는 장 키비')} 시작/끝 겹침 {r['시작 겹침']}/{r['끝 겹침']} 색ΔE {r['색 ΔE']}")
+        print(f"{'':16s} 머리 크기 못 잰 장 {r['판정 못한 장']}"); print(f"{'':16s} 머리 {r['머리크기']}(흔들림 {r['머리 흔들림%']}%) 서있는장 키비 {r.get('서 있는 장 키비')} 시작/끝 겹침 {r['시작 겹침']}/{r['끝 겹침']} 색ΔE {r['색 ΔE']}")
