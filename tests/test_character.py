@@ -1136,6 +1136,7 @@ def test_mouth_only_frames_differ_only_around_the_mouth(folder, prefix):
         other = _img_of(ASSETS / folder / f"{prefix}{key}_0.png")
         assert other.shape == base.shape
         diff = np.abs(other.astype(int) - base.astype(int)).max(-1) > 0
+        diff &= (base[..., 3] > 0) | (other[..., 3] > 0)   # 완전히 투명한 픽셀의 색값은 안 봄(무손실 WebP가 바꿈 — Starline)
         ys, xs = np.where(diff)
         assert diff.any()  # 입은 달라야 함
         h, w = base.shape[:2]
@@ -1427,7 +1428,8 @@ def test_starline_roster_english_name_gold_outline_and_frames():
     names = {n for frames, _t, _l in br.STARLINE.anims.values() for n in frames}
     from mabinogi_addon.ui.pet_window import frame_file
     assert not [n for n in names if frame_file(SL_DIR, n) is None]   # 영상판(11-27)은 WebP
-    assert _img_of(SL_DIR / "stand_0.png").shape[0] == 286   # 영상판(11-27) 서 있기 틀 키
+    standh = json.loads((SL_DIR / "frames.json").read_text(encoding="utf-8"))["standH"]   # 원본 크기(11-27) 저장 키
+    assert _img_of(SL_DIR / "stand_0.png").shape[0] == standh >= 440   # 화면배율 2.0 화면 키(약 440) 이상 — 앱은 줄이기만
     from mabinogi_addon.ui import character_lines_feed
     assert character_lines_feed.REMOTE_NAMES["Starline"] == "starline-lines.json"
 
@@ -1588,7 +1590,8 @@ def test_character_scale_applies_to_every_frame_and_fits_window(app, profile, fo
     try:
         stand = profile.anims["stand"][0][0]
         rect = w._frame_rect(frames[stand])
-        assert abs(rect.height() - br.FIGURE_H * scale * frames[stand].height() / pet_window.FRAME_DIR_H) < 0.5
+        frame_h = getattr(frames, "frame_h", pet_window.FRAME_DIR_H)   # Starline 원본 크기(frames.json standH, 11-27)
+        assert abs(rect.height() - br.FIGURE_H * scale * frames[stand].height() / frame_h) < 0.5
         for name, image in frames.items():
             r = w._frame_rect(image)
             assert r.top() >= 0 and r.left() >= 0 and r.right() <= pet_window.WIN_W, name
