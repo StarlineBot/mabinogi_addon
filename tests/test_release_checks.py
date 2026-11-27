@@ -70,17 +70,16 @@ def test_current_plan_maps_every_selected_file_to_changed_code_or_shared_contrac
 
 
 def test_current_release_keeps_feature_boundaries_and_delivery_contracts():
-    """0.59.0: Starline 영상판(동작표·대기 셋·그때그때 읽기) + 배포 계약. (릴리즈마다 경계를 바꾼다 — 누적하지 않음)"""
+    """0.59.1: 인사 소리 말풍선(말풍선 없이 말하는 그림만 뜨던 것) + 배포 계약. (릴리즈마다 경계를 바꾼다 — 누적하지 않음)"""
     root = Path(__file__).resolve().parents[1]
     plan = json.loads((root / 'packaging/release_checks.json').read_text(encoding='utf-8'))
     paths = set(plan['tests'])
     assert {
-        'tests/test_affinity_motions.py', 'tests/test_character.py', 'tests/test_release_checks.py',
-        'tests/test_release_candidate.py', 'tests/test_windows_ci.py', 'tests/test_starline_video.py',
+        'tests/test_character.py', 'tests/test_release_checks.py', 'tests/test_release_candidate.py', 'tests/test_windows_ci.py',
     } <= paths
     assert {
-        'src/mabinogi_addon/character/motions.py', 'src/mabinogi_addon/character/brain.py',
-        'src/mabinogi_addon/ui/pet_window.py', 'src/mabinogi_addon/assets/release_notes.md', 'packaging/release_checks.json',
+        'src/mabinogi_addon/assets/characters/Starline/lines.json', 'src/mabinogi_addon/assets/release_notes.md',
+        'packaging/release_checks.json',
     } <= set(plan['coverage'])
     assert (root / 'src/mabinogi_addon/assets/characters/다래/stand_0.png').is_file()
     # The separate development entry must continue collecting the whole suite.

@@ -563,7 +563,7 @@ def test_aria_lines_have_stroke_click_and_no_sleep_click():
     assert "idle_extra_click" in data.lines and "click_sleep" not in data.lines  # 머리 쓰다듬는 중 클릭(공통 이름)
     from mabinogi_addon.ui.notifier import alert_files
     sounds = alert_files(paths.resource_dir() / "sounds" / "부드러운 여성") - {"파티 알림.mp3"}
-    assert len(data.alerts) == 12 and sounds <= set(data.alerts)   # 11 + 투아림 2차 말풍선(11-24, 녹음은 나중)
+    assert len(data.alerts) == 14 and sounds <= set(data.alerts)   # 11 + 투아림 2차 말풍선(11-24, 녹음은 나중)   # + 아리아 인사2·파티 알림 말풍선(11-27)
     assert data.alerts["비바체 연장.mp3"] == ("비바체~ 잊은 거 아니지?",)
     assert data.lines["annoyed_click"][0].text == "으응… 너무 자주 누르면 어지러워."
 
@@ -1000,7 +1000,7 @@ def test_ian_lines_have_alerts_stage_lines_and_watch_click():
     assert set(ln.SITUATIONS) - {"click_sleep"} <= set(data.lines) and "idle_extra_click" in data.lines
     from mabinogi_addon.ui.notifier import alert_files
     sounds = alert_files(paths.resource_dir() / "sounds" / "부드러운 남성") - {"파티 알림.mp3"}
-    assert len(data.alerts) == 12 and sounds <= set(data.alerts)   # 11 + 투아림 2차 말풍선(11-24, 녹음은 나중)
+    assert len(data.alerts) == 14 and sounds <= set(data.alerts)   # 11 + 투아림 2차 말풍선(11-24, 녹음은 나중)   # + 이안 인사·인사2 말풍선(11-27)
     staged = [line for items in data.lines.values() for line in items if line.stage > 0]
     assert len(staged) == 24 and [line.stage for line in data.lines["stage_up"]] == [25, 50, 75, 100]
     voices = {line.voice: (key, line.text) for key, items in data.lines.items() for line in items if line.voice}
@@ -1323,8 +1323,8 @@ def test_lena_alert_lines_pick_one_of_two_and_old_string_format_still_reads():
     data = ln.read(LENA_DIR / "lines.json")
     from mabinogi_addon.ui.notifier import alert_files
     sounds = alert_files(paths.resource_dir() / "sounds" / "화난 여성") - {"파티 알림.mp3"}
-    assert len(data.alerts) == 12 and sounds <= set(data.alerts)  # 11 + 투아림 2차(한 줄, 11-24)
-    assert all(len(v) == 2 for k, v in data.alerts.items() if k != "투아림 부스트 발동 직전2.mp3")
+    assert len(data.alerts) == 13 and sounds <= set(data.alerts)  # 11 + 투아림 2차(한 줄, 11-24)   # + 레나 인사2 말풍선(11-27)
+    assert all(len(v) == 2 for k, v in data.alerts.items() if k not in ("투아림 부스트 발동 직전2.mp3", "인사2.mp3"))   # 인사는 녹음 한 줄
     picker = ln.Picker(data, random.Random(3))
     seen = {picker.alert("비바체 연장.mp3").text for _ in range(40)}
     assert seen == {"비바체, 설마 잊은 거 아니지?", "비바체 또 잊었지? 이런 것도 못 해?"}
@@ -1462,7 +1462,7 @@ def test_starline_lines_alerts_and_stage_lines():
     data = ln.read(SL_DIR / "lines.json")
     assert data.character == "Starline" and "click_sleep" not in data.lines
     assert set(ln.SITUATIONS) - {"click_sleep"} <= set(data.lines) and "idle_extra_click" in data.lines
-    assert len(data.alerts) == 13 and {"투아림 부스트 발동 직전2.mp3", "파티 알림.mp3"} <= set(data.alerts)
+    assert len(data.alerts) == 14 and {"투아림 부스트 발동 직전2.mp3", "파티 알림.mp3"} <= set(data.alerts)   # + Starline 인사2 말풍선(11-27)
     staged = [line for items in data.lines.values() for line in items if line.stage > 0]
     assert len(staged) == 24 and [line.stage for line in data.lines["stage_up"]] == [25, 50, 75, 100]
     assert not [line for items in data.lines.values() for line in items if line.voice]   # 녹음 전 — 목소리 키 없음
@@ -2364,3 +2364,42 @@ def test_ian_walk_v3_eight_frames_alternate_legs():
         for i in range(6):
             assert np.abs(legs(frames[i]) - legs(frames[i + 1])).mean() > 0.03, (folder, i)
     assert br.IAN.anims["walk"][0] == tuple(f"walk_{i}" for i in range(8))
+
+
+def test_every_pack_sound_has_a_bubble():
+    """사용자 11-27(QA 전달) '목소리만 나오고 말풍선 없이 말하는 그림': 펫 캐릭터 팩 폴더의 모든 mp3(인사·파티 알림 포함)에
+    말풍선이 있어야 함 — 없으면 알아챔(말하는 그림)만 하고 말풍선이 비었음."""
+    sounds = paths.resource_dir() / "sounds"
+    for character in roster.ROSTER:
+        lines_file = ASSETS / roster.folder(character) / "lines.json"
+        if not lines_file.exists():
+            continue
+        picker = ln.Picker(ln.read(lines_file), random.Random(1))
+        missing = [f.name for f in (sounds / character.pack).glob("*.mp3") if picker.alert(f.name) is None]
+        assert not missing, (character.pack, missing)
+
+
+@pytest.mark.parametrize("pack,text", [("장난스러운 남성", "…응? 날 부른 건가? 크크"), ("부드러운 여성", "헤헤, 불러 줘서 고마워~"),
+                                       ("부드러운 남성", "일정 관리는 맡겨 주십시오.")])
+def test_greeting_preview_shows_bubble(app, tmp_path, monkeypatch, pack, text):
+    """동행 탭 카드 인사(미리듣기) → 알아챔 그림과 함께 말풍선(녹음 문장)."""
+    from mabinogi_addon.ui import character_controller as cc
+    path = tmp_path / "config.json"
+    monkeypatch.setattr(config, "LOCAL_CONFIG_PATH", path)
+    real_read, real_write = config._read_local_config, config._write_local_config
+    monkeypatch.setattr(config, "_read_local_config", lambda *a, **k: real_read(path))
+    monkeypatch.setattr(config, "_write_local_config", lambda data, *a, **k: real_write(data, path))
+    config.save_voice_pack(pack)
+    config.save_character(pet=True)
+    ctrl = cc.CharacterController()
+    ctrl.set_enabled(True)
+    ctrl.start()
+    try:
+        assert ctrl.window is not None
+        ctrl.window._bubble = None   # 켜기 인사 말풍선 지움
+        ctrl._on_sound("preview", paths.resource_dir() / "sounds" / pack / "인사2.mp3")
+        assert ctrl.window.bubble() == text   # 녹음 문장 그대로(녹음목록 39줄 — 파형 소리 길이·쉼으로 맞춤)
+    finally:
+        ctrl.shutdown()
+        if ctrl.window is not None:
+            ctrl.window.close()
