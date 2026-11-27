@@ -53,8 +53,8 @@ def _func(words: list[str]) -> int:
 def _clean(text: str) -> str:
     text = re.sub(r'```.*?```', '', text, flags=re.S)          # 코드 블록
     text = re.sub(r'`[^`]*`', '', text)                         # 인라인 코드(명령·경로·이름)
+    text = re.sub(r'\[[^\]\n]*\]\([^)\n]*\)', '', text)          # 마크다운 링크 통째(출처 제목은 남의 글)
     text = re.sub(r'https?://\S+', '', text)                    # 주소
-    text = re.sub(r'\[([^\]]*)\]\([^)]*\)', r'\1', text)        # 링크는 글자만
     text = re.sub(r'(?<!\w)[\w.\-]*[/\\][\w./\\\-가-힣]+', '', text)  # 파일 경로
     return text
 
