@@ -14,8 +14,11 @@ def stats(names):
     px=np.concatenate([cv2.cvtColor(a[...,:3],cv2.COLOR_BGR2LAB).astype(float)[a[...,3]>200] for a in (imread(src+n+".png",-1) for n in names)])
     w=wts(px[:,0]); mu=np.array([(px*w[:,i:i+1]).sum(0)/w[:,i].sum() for i in range(3)])
     sd=np.array([np.sqrt(((px-mu[i])**2*w[:,i:i+1]).sum(0)/w[:,i].sum()) for i in range(3)]); return mu,sd
+# 사이모션10 다시 그림(사용자 11-27): 모션마다 한 장 → 그 장끼리 묶어 맞춤
+for f in list(byfile): byfile[f]=[n for n in byfile[f] if not n.startswith("motion_tidy10")]
+byfile["A"]=[f"motion_tidy10a_{i}" for i in range(12)]; byfile["B"]=[f"motion_tidy10b_{i}" for i in range(12)]
 mt,st=stats(byfile[6])
-for f,names in sorted(byfile.items()):
+for f,names in sorted([kv for kv in byfile.items() if kv[1]],key=lambda kv:str(kv[0])):
     ms,ss=stats(names); k=np.clip(st/np.maximum(ss,1),0.85,1.18)
     print("파일",f,"평균 차(L,a,b 띠별)",np.round(ms-mt,1).tolist())
     for n in names:
