@@ -3,6 +3,10 @@
 말로 한 약속은 세션이 압축되면 사라지므로 장치로 둔다. 마지막 사용자 메시지 뒤 에이전트가 쓴 글에
 금지 표현이 있으면 응답 종료를 막고, 직접 확인한 뒤 '된다' 또는 '안 된다(이유)'로 다시 답하게 한다.
 같은 종료 시도에서 한 번만 막는다(stop_hook_active) — 정말 확인이 불가능한 경우가 무한 반복되지 않게.
+
+원인 단정 금지(사용자 지시 11-27 — 제보를 그림·인식 문제로 바꿔 읽고 재현 없이 '원인을 찾았다'고 답한 일):
+답에 '원인'을 쓰면 같은 답에 '재현:' 줄(실제로 돌린 명령·결과, 또는 '재현: 안 됨 — 다음에 볼 곳')이 있어야 한다.
+이 규칙은 stop_hook_active여도 막는다 — '재현:' 줄을 쓰면 언제든 풀리므로 무한 반복되지 않는다.
 훅이 실패하면 막지 않는다.
 """
 from __future__ import annotations
@@ -41,6 +45,23 @@ def last_reply(transcript: Path) -> str:
     return '\n'.join(reversed(texts))
 
 
+CAUSE = re.compile(r'원인')
+REPRO_LINE = re.compile(r'(?m)^[ \t>*\-]*(?:\*\*)?재현(?:\*\*)?\s*[:：]')
+
+
+def _strip_quotes(text: str) -> str:
+    """코드·인용 블록·따옴표 안 글자 빼기 — 명령·남의 말·규칙 설명은 결론이 아님."""
+    text = re.sub(r'```.*?```', '', text, flags=re.S)
+    text = re.sub(r'`[^`]*`', '', text)
+    text = re.sub(r'(?m)^\s*>.*$', '', text)
+    return re.sub(r'"[^"\n]*"|“[^”\n]*”|‘[^’\n]*’|\'[^\'\n]*\'', '', text)
+
+
+def unproven_cause(text: str) -> bool:
+    """'원인'을 말하는데 '재현:' 줄이 없음(사용자 지시 11-27)."""
+    return bool(CAUSE.search(_strip_quotes(text))) and not REPRO_LINE.search(text)
+
+
 def violations(text: str) -> list[str]:
     # 코드 블록·인라인 코드 안 글자는 제외(명령·인용 예시)
     text = re.sub(r'```.*?```', '', text, flags=re.S)
@@ -55,11 +76,19 @@ def violations(text: str) -> list[str]:
 def main() -> int:
     try:
         data = json.load(sys.stdin)
-        if data.get('stop_hook_active'):
-            return 0
-        found = violations(last_reply(Path(data['transcript_path'])))
+        reply = last_reply(Path(data['transcript_path']))
+        cause = unproven_cause(reply)
+        found = [] if data.get('stop_hook_active') else violations(reply)
     except Exception:
         return 0
+    if cause:
+        print(
+            "답에 '원인'이 있는데 '재현:' 줄이 없습니다 — 프로젝트 훅 .claude/hooks/answer_guard.py (사용자 지시 11-27).\n"
+            '사용자 제보는 문장 그대로 증상으로 받고(그림·인식 문제로 바꿔 읽지 않음), 앱을 돌려 재현한 뒤에만 원인을 말하세요. '
+            "답에 '재현: <돌린 명령과 결과>' 줄을 넣거나, 재현이 안 됐으면 '재현: 안 됨 — <다음에 볼 곳>'으로 쓰고 원인은 단정하지 마세요.",
+            file=sys.stderr,
+        )
+        return 2
     if not found:
         return 0
     print(

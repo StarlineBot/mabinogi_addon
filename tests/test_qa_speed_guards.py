@@ -184,8 +184,24 @@ def test_unverified_answers_are_sent_back(tmp_path, reply):
 
 @pytest.mark.parametrize('reply', ['됩니다. 후보 #248 성공.', "안 된다: 런북 파일이 이 저장소에 없음", '`확인 못 함` 문구는 코드 예시',
                                    '답에 "확인 못 했다", "모르겠다" 같은 표현이 있으면 막습니다.',
-                                   '해석입니다.\n> 정확히는 모르겠지만 유튜브만 봤어요.\n결론: 애드온이 원인.'])
+                                   '해석입니다.\n> 정확히는 모르겠지만 유튜브만 봤어요.\n결론: 애드온 쪽 문제.'])
 def test_concluded_answers_pass(tmp_path, reply):
+    assert _stop(_transcript(tmp_path, reply)).returncode == 0
+
+
+@pytest.mark.parametrize('reply', ['원인을 찾았습니다. 웃음 대기 동작 때문입니다.', '원인은 그림입니다.',
+                                   '**원인**\n- 서 있기 그림 입 모양'])
+def test_cause_without_repro_line_is_sent_back_even_when_active(tmp_path, reply):
+    """사용자 지시 11-27: 재현 없이 원인 단정 금지 — '재현:' 줄 없으면 stop_hook_active여도 막음."""
+    for active in (False, True):
+        result = _stop(_transcript(tmp_path, reply), active=active)
+        assert result.returncode == 2 and '재현:' in result.stderr
+
+
+@pytest.mark.parametrize('reply', ['재현: brain 오프스크린 600틱, talk 상태인데 _bubble None (12.35초)\n원인: hold_talk.',
+                                   '- **재현:** 안 됨 — 다음에 voice on_duration 경로를 봄\n원인은 아직 단정하지 않습니다.',
+                                   '게시 끝났습니다. 태그 v0.59.0.', '규칙: "원인"을 쓰면 재현 줄이 필요합니다.'])
+def test_cause_with_repro_line_or_no_cause_passes(tmp_path, reply):
     assert _stop(_transcript(tmp_path, reply)).returncode == 0
 
 
