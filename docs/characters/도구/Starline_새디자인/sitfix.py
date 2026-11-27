@@ -29,6 +29,16 @@ print("보정 뒤 9 끝 땅",fb(out9[-1]),"키",fb(out9[-1])-hd(out9[-1]),"/ 9 �
 cxs=lambda a: np.where((a[...,3]>128)[fb(a)-30:fb(a)+1].any(0))[0].mean()
 dx=cxs(C8[0])-cxs(out9[-1]); print("9 끝 발 가로 차",round(dx,1))
 out9=[cv2.warpAffine(a,np.float32([[1,0,dx*i/(N-1)],[0,1,0]]),(Wc,Hc),borderValue=(0,0,0,0)) for i,a in enumerate(out9)]
+# 앉은 높이 더 올리기(사용자 11-27): 원래 뜬 정도에 비례해 LIFT만큼 더 — 뜨기 시작하면 서서히, 내려오면 서서히
+LIFT=float(sys.argv[2]) if len(sys.argv)>2 else 40.0
+G=fb(C8[0]); end8=G-fb(C8[-1]); start9=G-fb(out9[0])
+def lifted(fr,base):
+    res=[]
+    for a in fr:
+        f=np.clip((G-fb(a))/max(base,1),0,1); res.append(cv2.warpAffine(a,np.float32([[1,0,0],[0,1,-LIFT*f]]),(Wc,Hc),flags=cv2.INTER_LINEAR,borderValue=(0,0,0,0)))
+    return res
+C8=lifted(C8,end8); out9=lifted(out9,start9)
+print("뜬 높이(원본 px): 원래",end8,"→",end8+LIFT)
 k=K*HW0/headw(F8[0])
 U=np.any([a[...,3]>20 for a in C8+out9],axis=0); yy,xx=np.where(U); box=(yy.min(),yy.max()+1,xx.min(),xx.max()+1)
 for name,fr in (("8_웅크리기_구석앉기",C8),("9_일어나기",out9)):
