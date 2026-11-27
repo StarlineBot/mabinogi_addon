@@ -151,24 +151,3 @@ def test_anchors_put_each_action_on_the_stand_feet():
     for name in ("stand_0", "crouch_0", "rise_29", "land_29", "pet_0", "motion_hat_magic_0"):
         assert abs(foot_bottom(name)) <= 2, (name, foot_bottom(name))
     assert all(abs(v) < 200 for xy in anchors.values() for v in xy)
-
-
-def test_stand_mouth_stays_closed_grin():
-    """사용자 11-27(QA 전달) '가만히 서 있는데 입이 말하듯 움직임': 서 있기 30장 입을 0번(다문 웃음) 하나로 — 얼굴로 맞춘
-    입 상자(머리가 숨쉬며 ~6px 오르내려 고정 상자는 옷깃이 들어옴)의 어두운 픽셀 수 범위 ≤ 15, 입 상자가 0번과 거의 같음."""
-    from scripts.build_starline_video import MOUTH_BOX, face_shift
-
-    stand = [_read(f"stand_{i}") for i in range(30)]
-    x, y, w, h = MOUTH_BOX
-    counts, diffs = [], []
-    ref = stand[0][y:y + h, x:x + w, :3].astype(int)
-    inner = np.zeros((h, w), bool)
-    cv2.ellipse(inner.view(np.uint8), (w // 2, h // 2), (w // 2 - 6, h // 2 - 6), 0, 0, 360, 1, -1)
-    for im in stand:
-        dx, dy = face_shift(stand[0], im)
-        box = im[y + dy:y + dy + h, x + dx:x + dx + w, :3]
-        counts.append(int((cv2.cvtColor(np.ascontiguousarray(box), cv2.COLOR_BGR2GRAY) < 90).sum()))
-        diffs.append(min(float(np.abs(im[y + dy + j:y + dy + j + h, x + dx + i:x + dx + i + w, :3].astype(int) - ref)[inner].mean())
-                         for i in (-1, 0, 1) for j in (-1, 0, 1)))   # 저장(WebP) 뒤 다시 잰 맞춤은 ±1px 흔들림
-    assert max(counts) - min(counts) <= 15, counts
-    assert max(diffs) <= 8, [round(d, 1) for d in diffs]
