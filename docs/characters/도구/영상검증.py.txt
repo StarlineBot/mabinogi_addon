@@ -25,7 +25,16 @@ def key(img):
     return np.dstack([b, g2, r, al * 255]).clip(0, 255).astype(np.uint8)
 
 def load(p):
-    g = Image.open(p); out = []
+    """GIF·mp4·png 모두 — 초록 배경을 빼서 장 목록으로."""
+    p = str(p); out = []
+    if p.lower().endswith((".mp4", ".mov", ".webm")):
+        cap = cv2.VideoCapture(p)
+        while True:
+            ok, f = cap.read()
+            if not ok: break
+            out.append(key(f))
+        return out
+    g = Image.open(p)
     for i in range(getattr(g, "n_frames", 1)):
         g.seek(i); out.append(key(cv2.cvtColor(np.asarray(g.convert("RGB")), cv2.COLOR_RGB2BGR)))
     return out
@@ -102,7 +111,7 @@ def check(stand_gif, motion_gif, from_stand=True, to_stand=True):
     res["장별 머리크기"] = [round(x, 2) for x in hs]
     return res
 
-if __name__ == "__main__":
+if __name__ == "__main__" and sys.argv[1:2] != ["폴더"]:
     # 사용: python 영상검증.py <캐릭터 영상 폴더> [동작파일 …]  — 기본은 폴더의 *.gif 전부(0_서있기 제외)
     # 서 있기에서 시작/끝나지 않는 동작은 이름표로: NOSTART(앞 영상 장에서 시작), NOEND(앉은 채·매달린 채 끝)
     V = sys.argv[1].rstrip("/") + "/"
@@ -114,3 +123,37 @@ if __name__ == "__main__":
         r = check(V + "0_서있기.gif", p, fs, ts)
         print(f"{n:16s} {r['판정']}")
         print(f"{'':16s} 머리 크기 못 잰 장 {r['판정 못한 장']}"); print(f"{'':16s} 머리 {r['머리크기']}(흔들림 {r['머리 흔들림%']}%) 서있는장 키비 {r.get('서 있는 장 키비')} 시작/끝 겹침 {r['시작 겹침']}/{r['끝 겹침']} 색ΔE {r['색 ΔE']}")
+
+
+def check_folder(folder, stand_gif):
+    """요청 폴더 하나(1_시작.png·2_끝.png·결과.*) 검증 → 요청.md '검증' 칸에 적음."""
+    folder = folder.rstrip("/") + "/"
+    res_file = ([f for f in glob.glob(folder + "결과.*")] or [None])[0]
+    if res_file is None: return "결과 파일 없음"
+    F = load(res_file)
+    S = tight(load(stand_gif)[0]); SH = S.shape[0]; ref_head = S[: int(SH * 0.35)]
+    def norm(a):
+        t = tight(a); s, c = head_scale(ref_head, t)
+        return cv2.resize(t, None, fx=1 / s, fy=1 / s, interpolation=cv2.INTER_AREA)[..., 3] > 128, s, c
+    st0, _, _ = norm(load(folder + "1_시작.png")[0]); en0, _, _ = norm(load(folder + "2_끝.png")[0])
+    a0, s0, _ = norm(F[0]); a1, s1, c1 = norm(F[-1])
+    r = check(stand_gif, res_file, from_stand=False, to_stand=False)
+    i_start, i_end = iou(st0, a0), iou(en0, a1)
+    prob = [] if r["판정"].startswith("통과") else [r["판정"].split("(경고")[0].replace("문제: ", "")]
+    if i_start < 0.85: prob.append(f"시작 장면이 1_시작.png와 다름(겹침 {i_start:.2f})")
+    if i_end < 0.88: prob.append(f"끝 장면이 2_끝.png와 다름(겹침 {i_end:.2f})")
+    verdict = "통과" if not prob else "다시: " + " / ".join(prob)
+    lines = [f"- 판정: **{verdict}**",
+             f"- 시작 겹침 {i_start:.2f} · 끝 겹침 {i_end:.2f} (기준 시작 0.85·끝 0.88 이상)",
+             f"- 머리 크기 {r['머리크기']}(장끼리 흔들림 {r['머리 흔들림%']}%, 기준 6% 이하) · 색 ΔE {[float(x) for x in r['색 ΔE']]}(기준 6 이하)",
+             f"- 화면 끝 닿은 장 {len(r['화면끝 닿은 장'])}개 · 장 수 {len(F)}"]
+    md = folder + "요청.md"
+    t = open(md, encoding="utf-8").read()
+    head = t.split("## 3. 검증")[0]
+    open(md, "w", encoding="utf-8").write(head + "## 3. 검증 (기획이 씀)\n" + "\n".join(lines) + "\n")
+    return verdict
+
+
+if __name__ == "__main__" and sys.argv[1:2] == ["폴더"]:
+    # 사용: python 영상검증.py 폴더 <요청 폴더> <서 있기 gif>
+    print(check_folder(sys.argv[2], sys.argv[3]))
