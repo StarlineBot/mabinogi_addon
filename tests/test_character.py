@@ -1429,7 +1429,7 @@ def test_starline_roster_english_name_gold_outline_and_frames():
     from mabinogi_addon.ui.pet_window import frame_file
     assert not [n for n in names if frame_file(SL_DIR, n) is None]   # 영상판(11-27)은 WebP
     standh = json.loads((SL_DIR / "frames.json").read_text(encoding="utf-8"))["standH"]   # 원본 크기(11-27) 저장 키
-    assert _img_of(SL_DIR / "stand_0.png").shape[0] == standh >= 440   # 화면배율 2.0 화면 키(약 440) 이상 — 앱은 줄이기만
+    assert _img_of(SL_DIR / "stand_6.png").shape[0] == standh >= 440   # 화면배율 2.0 화면 키(약 440) 이상 — 앱은 줄이기만
     from mabinogi_addon.ui import character_lines_feed
     assert character_lines_feed.REMOTE_NAMES["Starline"] == "starline-lines.json"
 
@@ -1829,8 +1829,8 @@ def test_dare_lies_down_every_3_to_6_minutes_in_corner_then_sits_again():
 @pytest.mark.parametrize("folder,ref,other", [
     ("아리아", "stand_0", "stretch_0"), ("아리아", "stand_0", "stretch_5"),
     ("레나", "stand_0", "magic_0"), ("레나", "stand_0", "magic_5"),
-    ("Starline", "stand_0", "sneeze_0"), ("Starline", "stand_0", "sneeze_29"),   # 영상판(11-27) 30장 — 처음·끝 = 서기
-    ("Starline", "stand_0", "flame_0"), ("Starline", "stand_0", "flame_29"),   # 불꽃(QA 11-25 — 예전 1.07)
+    ("Starline", "stand_6", "sneeze_0"), ("Starline", "stand_6", "sneeze_29"),   # 영상판(11-27) 30장 — 처음·끝 = 서기
+    ("Starline", "stand_6", "flame_0"), ("Starline", "stand_6", "flame_29"),   # 불꽃(QA 11-25 — 예전 1.07)
     ("다래", "sit_doze_0", "sleep_0"), ("다래", "sit_drowsy_0", "sleep_8"),
 ])
 def test_basic_motion_same_pose_frames_match_neighbour_silhouette(folder, ref, other):
@@ -1868,7 +1868,7 @@ def test_starline_sneeze_bubble_keeps_sneeze_frames_to_the_end(app):
                 assert b.state == "sneeze"
         assert said == ["sneeze"]
         start = frames.index("sneeze_0")
-        assert frames[start:start + 31] == [f"sneeze_{i}" for i in range(30)] + ["stand_0"]   # 영상판 30장(11-27)
+        assert frames[start:start + 31] == [f"sneeze_{i}" for i in range(30)] + ["stand_6"]   # 영상판 30장(11-27)
         assert not [f for f in frames if f.startswith("talk_")]
     finally:
         w.close()

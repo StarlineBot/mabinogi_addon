@@ -294,9 +294,11 @@ def _v(prefix: str, indices) -> tuple[tuple[str, ...], tuple[float, ...]]:
 
 _SIT = tuple(range(16, 30)) + tuple(range(28, 16, -1))   # 앉아 마법진 돌리기 — 효과가 커졌다 작아짐(왕복, 이음매 없음)
 STARLINE_ANIMS = {
-    "stand": (*_v("stand", range(30)), True),   # 숨쉬기·흔들림·깜빡임 30장 반복
+    # 서 있기: 입 모양이 같은 6~18번만 왕복(사용자 11-28 '가만히 있는데 입이 말하듯 움직임' — 0~5·19~29는 입을 다물었다
+    # 벌리고 20~22는 눈 깜빡임이라 뺌, 그림은 그대로). 6→18→7, 다시 6
+    "stand": (*_v("stand", tuple(range(6, 19)) + tuple(range(17, 6, -1))), True),
     "walk": (*_v("walk", range(14)), True),     # 영상 걷기 14장(한 바퀴 1.4초)
-    "surprise": (("stand_0",), (0.3,), False),   # click_talks라 쓰지 않음(자리만)
+    "surprise": (("stand_6",), (0.3,), False),   # click_talks라 쓰지 않음(자리만)
     "drag": (*_v("drag", (6, 7, 8, 9, 14, 15, 16, 17)), True),   # 10~13은 귀 끝이 잘려 뺌
     "fall": (("land_4",), (1.0,), True),
     "land": (*_v("land", range(12, 30)), False),
