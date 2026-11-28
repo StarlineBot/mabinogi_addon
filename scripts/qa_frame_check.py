@@ -34,6 +34,7 @@ BLOCK_LIMIT = 8.0       # 칸 평균 색 차(0~255) — 원본 그대로 WebP는
 FOOT_Y_LIMIT = 4        # 저장 px — 발 바닥 줄이 이어지는 장 사이에 이보다 많이 바뀌면 튐
 FOOT_X_LIMIT = 6        # 저장 px — 발 가운데
 HEAD_LIMIT = 0.05       # 머리 배율 ±5%
+STAND_LIMIT = 0.03      # 서기로 들어가고 나오는 장의 키 차 ±3%(사용자 11-28 '착지 다음 서기로 바뀔 때 작아짐' — 머리 0.96·키 1.066을 놓침)
 MOVING = {"walk", "drag", "fall", "land"}   # 발이 원래 움직이는 동작(가로 튐만 느슨히, 세로는 안 봄)
 
 
@@ -66,6 +67,7 @@ class Shape:
     foot_y: float     # 그림 아래에서 알파 바닥 줄까지(저장 px) — 앱은 그림 아래를 발 자리로 그림
     foot_x: float     # 바닥 띠(아래 10%) 알파 가운데 − 그림 가운데
     head: np.ndarray  # 알파 상자 위 35%(BGRA)
+    height: float = 0.0   # 알파 상자 키(저장 px)
 
 
 def shape(image: np.ndarray, anchor: tuple[float, float]) -> Shape:
@@ -81,7 +83,7 @@ def shape(image: np.ndarray, anchor: tuple[float, float]) -> Shape:
     tight = image[top:bottom + 1, cols[0]:cols[-1] + 1]
     return Shape(foot_y=(h - 1 - bottom) - anchor[1],
                  foot_x=(xs.mean() if xs.size else w / 2) - w / 2 + anchor[0],
-                 head=tight[:max(1, round(tight.shape[0] * 0.35))])
+                 head=tight[:max(1, round(tight.shape[0] * 0.35))], height=float(bottom - top))
 
 
 def block_diff(a: np.ndarray, b: np.ndarray) -> tuple[float, tuple[int, int]]:
@@ -179,7 +181,7 @@ def check(folder: str, outfit: str = "", source: Path | None = None, base: str |
         pb, _, ib = b.rpartition("_")
         return pa == pb and ia.isdigit() and ib.isdigit() and abs(int(ia) - int(ib)) == 1
 
-    def compare(label: str, a: str, b: str, moving: bool) -> None:
+    def compare(label: str, a: str, b: str, moving: bool, stand_edge: bool = False) -> None:
         if a not in shapes or b not in shapes or a == b:
             return
         if neighbours(a, b):
@@ -194,7 +196,10 @@ def check(folder: str, outfit: str = "", source: Path | None = None, base: str |
             problems.append(f"{label}: {a}→{b} 발 가로 {dx / px:.0f}px 튐(서기 키 285 기준)")
             flagged.append((a, b))
         k = best_scale(sa.head, sb.head, 0.85, 1.15, 31)
-        if abs(k - 1) > HEAD_LIMIT:
+        if stand_edge and sb.height and abs(sa.height / sb.height - 1) > STAND_LIMIT:
+            problems.append(f"{label}: {a}→{b} 키 {sa.height / sb.height:.3f}배(서기 이음은 ±{STAND_LIMIT:.0%})")
+            flagged.append((a, b))
+        if abs(k - 1) > (STAND_LIMIT if stand_edge else HEAD_LIMIT):
             problems.append(f"{label}: {a}→{b} 머리 크기 {k:.2f}배")
             flagged.append((a, b))
 
@@ -206,12 +211,12 @@ def check(folder: str, outfit: str = "", source: Path | None = None, base: str |
         if state in loops and len(names) > 1:
             compare(f"{state}(반복)", names[-1], names[0], moving)
         if state.startswith("motion:") or state in profile.idle_states or state in ("pet_in", "crouch", "sneeze"):
-            compare(f"서기→{state}", stand_first, names[0], False)
+            compare(f"서기→{state}", stand_first, names[0], False, stand_edge=True)
         nxt = "stand" if state.startswith("motion:") else profile.next_map.get(state)
         if state == "sit_notice" and getattr(profile, "notice_holds", False):
             continue   # 앉아서 클릭 동안 그때 장 그대로·끝나면 반복 멈춘 자리부터(brain notice_holds) — 정해진 장 이음이 없음
         if nxt in seqs and nxt not in MOVING:
-            compare(f"{state}→{nxt}", names[-1], seqs[nxt][0], False)
+            compare(f"{state}→{nxt}", names[-1], seqs[nxt][0], False, stand_edge=(nxt == "stand"))
 
     if source is not None or folder == "Starline":
         pairs = source_map(folder)
