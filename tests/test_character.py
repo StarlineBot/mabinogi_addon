@@ -1078,9 +1078,9 @@ def test_ian_alert_points_at_watch():
 def test_walk_values_come_from_character_data_and_corner_rush_speeds_up_steps():
     """걷기 미끄러짐(사용자 11-24): 캐릭터별 프레임 시간·속도, 이안 v2 0.18초·62px/초(보폭 67px), 다래 새 걷기(11-25) 100px/초(디딘 발 장마다 약 21px 그리기 크기)."""
     assert br.IAN.walk_speed == 66.0 and br.IAN.anims["walk"][1] == (0.15,) * 8   # v3 8장(11-25)
-    for profile in (br.DARE, br.DARE_SHEET, br.ARIA, br.IAN, br.LENA, br.STARLINE):
+    for profile in (br.DARE, br.DARE_SHEET, br.ARIA, br.IAN, br.LENA, br.LENA_SHEET, br.STARLINE):
         cycle = sum(profile.anims["walk"][1])
-        low = 40 if profile is br.DARE else 60   # 영상판 다래(11-28)는 꼬마 체형 — 디딘 발이 Starline의 약 절반만 움직임(44px/초)
+        low = 40 if profile in (br.DARE, br.LENA) else 60   # 영상판 다래·레나(11-28) — 디딘 발 잼(44·54px/초)
         assert low <= profile.walk_speed <= 100 and 60 <= profile.walk_speed * cycle <= 130  # 한 바퀴 거리 ≈ 보폭(Starline 영상 걷기 129)
     b = _ian()
     b._walk_to((800.0, 700.0), 0)
@@ -1122,7 +1122,8 @@ def test_frame_anchor_loader_is_harmless_without_or_with_bad_file(app, tmp_path)
     assert pet_window._anchors(tmp_path) == {"a": (1.0, 2.0)}
     (tmp_path / "anchors.json").write_text("not json", encoding="utf-8")
     assert pet_window._anchors(tmp_path) == {}
-    assert not any((ASSETS / folder / "anchors.json").exists() for folder in ("아리아", "이안", "레나"))
+    assert not any((ASSETS / folder / "anchors.json").exists() for folder in ("아리아", "이안"))
+    assert (ASSETS / "레나" / "anchors.json").exists()   # 레나 영상판(11-28)
     assert (ASSETS / "다래" / "anchors.json").exists()   # 다래 영상판(11-28)도 동작 상자마다 발 자리 맞춤 — test_dare_video
     assert (ASSETS / "Starline" / "anchors.json").exists()   # 영상판(11-27) 동작 틀마다 발 자리 맞춤 — test_starline_video
     frames = pet_window.load_frames("이안", br.IAN)
@@ -1154,7 +1155,7 @@ def test_mouth_only_frames_differ_only_around_the_mouth(folder, prefix):
         assert h * 0.3 < ys.mean() < h * 0.65  # 얼굴(입) 높이
 
 
-@pytest.mark.parametrize("profile", [br.DARE, br.DARE_SHEET, br.ARIA, br.IAN, br.LENA, br.STARLINE])
+@pytest.mark.parametrize("profile", [br.DARE, br.DARE_SHEET, br.ARIA, br.IAN, br.LENA, br.LENA_SHEET, br.STARLINE])
 def test_corner_without_saved_spot_is_nearest_screen_edge(profile):
     """사용자 11-24: 끌어서 정한 구석이 없으면 가까운 화면 끝(왼쪽일 수도) — 앉은 동안 유지, 다시 게임이 오면 다시 정함."""
     b = br.Brain(br.Floor(0, 1000, 700), rng=random.Random(2), profile=profile)
@@ -1204,7 +1205,7 @@ HEAD_EXEMPT = {
 }
 
 
-@pytest.mark.parametrize("folder", ["아리아", "이안", "레나"])   # Starline은 후광·토끼귀라 위 30% 폭이 머리가 아님(시트별 키)
+@pytest.mark.parametrize("folder", ["아리아", "이안"])   # Starline은 후광·토끼귀라 위 30% 폭이 머리가 아님(시트별 키), 레나·다래는 영상판(11-28)
 def test_standing_frames_keep_head_size_within_5_percent(folder):
     """서 있는 계열 머리 폭(위 30% 폭)이 stand의 ±5% — 다래는 헤일로·뿔 때문에 이 잣대가 머리가 아니라 제외."""
     d = ASSETS / folder
@@ -1222,10 +1223,12 @@ def test_standing_frames_keep_head_size_within_5_percent(folder):
 
 # ---- 레나(화난 여성, 기획 11-24 '레나는 마무리해서 넘겨줘' — docs/characters/레나.md) ------------------------------
 LENA_DIR = ASSETS / "레나"
+# 레나 기본 옷은 영상판(0.60.0, test_lena_video) — 아래 예전 시트 동작 테스트는 착장(LENA_SHEET)과 앱 밖 보관 시트 그림으로
+LENA_SHEET_DIR = Path(__file__).resolve().parents[1] / "docs/characters/assets/레나/시트_앱크기"
 
 
 def _lena(**kw):
-    b = br.Brain(br.Floor(0, 1000, 700), rng=random.Random(5), profile=br.LENA, **kw)
+    b = br.Brain(br.Floor(0, 1000, 700), rng=random.Random(5), profile=br.LENA_SHEET, **kw)
     b.pos = (300.0, 700.0)
     return b
 
@@ -1233,16 +1236,17 @@ def _lena(**kw):
 def _img(name):
     import cv2
     from mabinogi_addon.image_io import imread
-    return imread(LENA_DIR / f"{name}.png", cv2.IMREAD_UNCHANGED)
+    return imread(LENA_SHEET_DIR / f"{name}.png", cv2.IMREAD_UNCHANGED)
 
 
 def test_lena_roster_card_and_every_frame():
     lena = roster.by_pack("화난 여성")
     assert (lena.name, lena.known, lena.has_pet, lena.color) == ("레나", True, True, "#5B6BC9")
-    card = _img("card")
+    from mabinogi_addon.image_io import imread
+    card = imread(LENA_DIR / "card.png", -1)   # 카드는 앱 폴더 그대로
     assert abs(card.shape[1] / card.shape[0] - 1199 / 1312) < 0.02  # 가로형 상반신을 다른 카드와 같은 세로 비율로
-    names = {n for frames, _t, _l in br.LENA.anims.values() for n in frames}
-    assert not [n for n in names if not (LENA_DIR / f"{n}.png").exists()]
+    names = {n for frames, _t, _l in br.LENA_SHEET.anims.values() for n in frames}
+    assert not [n for n in names if not (LENA_SHEET_DIR / f"{n}.png").exists()]
     assert _img("stand_0").shape[0] == 285 and _img("rise_2").shape[0] == 285 and _img("crouch_0").shape[0] == 285
     assert abs(_img("sit_0").shape[0] - _img("crouch_2").shape[0]) <= 3  # 앉아 있기 = 웅크리기 끝 높이
     from mabinogi_addon.ui import character_lines_feed
@@ -1250,8 +1254,8 @@ def test_lena_roster_card_and_every_frame():
 
 
 def test_lena_falls_with_one_frame_and_lands_through_four_to_standing():
-    assert br.LENA.anims["fall"][0] == ("fall_0",)
-    assert br.LENA.anims["land"][:2] == (("land_0", "land_1", "land_2", "land_3"), (0.6, 0.35, 0.5, 0.8))
+    assert br.LENA_SHEET.anims["fall"][0] == ("fall_0",)
+    assert br.LENA_SHEET.anims["land"][:2] == (("land_0", "land_1", "land_2", "land_3"), (0.6, 0.35, 0.5, 0.8))
     b = _lena()
     b.press(0, 300, 600)
     b.move(0.1, 300, 300)
@@ -1296,7 +1300,7 @@ def test_lena_sits_without_dozing_click_keeps_sit_picture():
         seen.add(b.frame(t))
         assert not b.zzz() and b.state not in ("sit_doze", "wake")
     assert {"sit_0", "sit_1", "sit_3"} <= seen and "sit_2" not in seen   # 눈 흘김 sit_2는 뺌(11-25)
-    frames, times, _loop = br.LENA.anims["sit_loop"]
+    frames, times, _loop = br.LENA_SHEET.anims["sit_loop"]
     zero = sum(d for f, d in zip(frames, times) if f == "sit_0")
     assert zero / sum(times) > 0.7  # 0번이 길게, 나머지는 가끔
     b.press(t, 900, 600)
@@ -1304,8 +1308,8 @@ def test_lena_sits_without_dozing_click_keeps_sit_picture():
 
 
 def test_lena_pet_sequence_and_one_pixel_shake():
-    assert br.LENA.anims["pet_in"][:2] == (("pet_0", "pet_1"), (0.4, 0.4))
-    assert br.LENA.anims["pet_out"][:2] == (("pet_5",), (1.6,))
+    assert br.LENA_SHEET.anims["pet_in"][:2] == (("pet_0", "pet_1"), (0.4, 0.4))
+    assert br.LENA_SHEET.anims["pet_out"][:2] == (("pet_5",), (1.6,))
     b = _lena()
     b._go("pet_loop", 0)
     b._last_rub = 0
@@ -1360,7 +1364,7 @@ def test_lena_lines_situations_stage_lines_and_voices():
     assert voices["대사/구간_100.mp3"] == ("stage_up", "…이 초커, 너 가져. 잃어버리면 화낼 거야.")
 
 
-@pytest.mark.parametrize("folder", ["아리아", "레나"])   # Starline(11-27)·다래(11-28)는 영상판 — 기획이 색까지 끝낸 그림
+@pytest.mark.parametrize("folder", ["아리아"])   # Starline(11-27)·다래·레나(11-28)는 영상판 — 기획이 색까지 끝낸 그림
 def test_sheet_colors_match_standing_hair_and_skin(folder):
     """시트 색 맞추기(사용자 11-24 '동작마다 머리색·피부 톤이 다름'): 모든 그림의 머리·피부가 서 있기 대비 ΔE<3."""
     import cv2
@@ -1588,7 +1592,7 @@ def test_known_cards_fill_down_to_card_bottom():
 
 
 @pytest.mark.parametrize("profile,folder,scale", [(br.DARE, "다래", br.DARE_SCALE), (br.ARIA, "아리아", 1.0), (br.IAN, "이안", 1.0),
-                                                  (br.LENA, "레나", 0.95), (br.STARLINE, "Starline", 1.15)])
+                                                  (br.LENA, "레나", br.LENA_V_SCALE), (br.STARLINE, "Starline", 1.15)])
 def test_character_scale_applies_to_every_frame_and_fits_window(app, profile, folder, scale):
     """캐릭터별 그리기 배율(사용자 11-24 B안 — 얼굴 크기 맞춤: Starline ×1.15, 레나 ×0.95): 서 있기 그리기 키 = 190×배율,
     모든 프레임이 창 안(위·옆 잘림 없음), 잡기 판정(그림 영역)이 그림 크기를 따라감."""
@@ -2296,7 +2300,7 @@ def test_natural_male_candidate_silhouette_and_pack(app, cfg, monkeypatch):
 
 def test_lena_corner_sit_loop_without_side_glance():
     """레나 구석 앉기: 눈을 옆으로 흘기는 sit_2 뺌(사용자 11-25), 주기 15초 그대로."""
-    frames, times, loop = br.LENA.anims["sit_loop"]
+    frames, times, loop = br.LENA_SHEET.anims["sit_loop"]   # 착장(예전 시트) — 영상판은 L8 30장(test_lena_video)
     assert "sit_2" not in frames and loop and abs(sum(times) - 15.0) < 1e-9
     winks = [d for f, d in zip(frames, times) if f == "sit_3"]
     assert len(winks) == 1 and winks[0] >= 0.6   # 윙크는 한 번, 휙 지나가지 않게(11-26)
@@ -2418,7 +2422,7 @@ def test_greeting_preview_shows_bubble(app, tmp_path, monkeypatch, pack, text):
             ctrl.window.close()
 
 
-@pytest.mark.parametrize("profile", [br.DARE, br.DARE_SHEET, br.ARIA, br.IAN, br.LENA, br.STARLINE])
+@pytest.mark.parametrize("profile", [br.DARE, br.DARE_SHEET, br.ARIA, br.IAN, br.LENA, br.LENA_SHEET, br.STARLINE])
 def test_pet_lines_only_while_petting_motion_plays(profile):
     """사용자 11-28 '쓰다듬기 대사는 쓰다듬기 모션이 나올 때만': 문지르기를 알아챈 pet_in 동안은 대사 없음, pet_loop 첫 장에서 시작 대사,
     그 말풍선이 다 찍히고 읽을 틈(READ_GAP) 뒤 아직 쓰다듬는 중이면 쓰는 중 대사, 손 떼면 pet_out 시작 때 끝 대사."""

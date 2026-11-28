@@ -9,6 +9,7 @@
     "tests/test_dare_video.py",
     "tests/test_inquiry.py",
     "tests/test_inquiry_unified.py",
+    "tests/test_lena_video.py",
     "tests/test_outfit_v2_frames.py",
     "tests/test_pet_floor_space.py",
     "tests/test_pet_window_probe.py",
@@ -29,11 +30,12 @@
         "tests/test_character.py",
         "tests/test_cursor_front.py",
         "tests/test_dare_video.py",
+        "tests/test_lena_video.py",
         "tests/test_pet_floor_space.py",
         "tests/test_qa_frame_check.py",
         "tests/test_starline_video.py"
       ],
-      "reason": "Starline sit_loop = 마법진 한 바퀴 반복 영상 8b sit_0→29(기획 11-28, 사용자 제보 '마법진이 한 바퀴 다 안 돌아감'), sit_notice sit_0 · 대기 불꽃·웃음(새 영상)·턱괴기 셋 중 무작위(사용자 확인 11-28) · Profile.sit_settle: 앉은 반복 들어갈 때 앉기 끝 높이에서 1.5초에 걸쳐 서서히 뜸(QA 11-28 일어날 때 28px 튐·뜬 높이 사라짐) · 다 뜨기 전 일어나면 남은 만큼 이어받아 0.4초에 0으로 · 쓰다듬기 시작 대사가 다 나오고 읽을 틈(0.6초) 뒤에 쓰다듬는 중 대사(bubble_until, 모든 캐릭터 — QA 11-28) · 쓰다듬기 시작 대사는 pet_loop 첫 장(pet_in 동안 대사 없음, 사용자 11-28) · 다래 영상판 프로필(DARE, 장 매핑 기획 11-28)·예전 시트 DARE_SHEET(착장)·profile_for, 졸기 반복 sit_loop에서도 엎드려 자기, 엎드려 깨기가 서며 끝나면 게임 중 다시 웅크림 · 끌기 시작 drag_start 사건(사용자 11-28 말하는 중 잡으면 앞 말풍선 남음) · 잡을 때마다 drag 대사(사용자 11-28) · 대기 동작·모션·드문 동작 중엔 걷기·구석 가기를 끝난 뒤로(사용자 11-28)"
+      "reason": "Starline sit_loop = 마법진 한 바퀴 반복 영상 8b sit_0→29(기획 11-28, 사용자 제보 '마법진이 한 바퀴 다 안 돌아감'), sit_notice sit_0 · 대기 불꽃·웃음(새 영상)·턱괴기 셋 중 무작위(사용자 확인 11-28) · Profile.sit_settle: 앉은 반복 들어갈 때 앉기 끝 높이에서 1.5초에 걸쳐 서서히 뜸(QA 11-28 일어날 때 28px 튐·뜬 높이 사라짐) · 다 뜨기 전 일어나면 남은 만큼 이어받아 0.4초에 0으로 · 쓰다듬기 시작 대사가 다 나오고 읽을 틈(0.6초) 뒤에 쓰다듬는 중 대사(bubble_until, 모든 캐릭터 — QA 11-28) · 쓰다듬기 시작 대사는 pet_loop 첫 장(pet_in 동안 대사 없음, 사용자 11-28) · 다래 영상판 프로필(DARE, 장 매핑 기획 11-28)·예전 시트 DARE_SHEET(착장)·profile_for, 졸기 반복 sit_loop에서도 엎드려 자기, 엎드려 깨기가 서며 끝나면 게임 중 다시 웅크림 · 끌기 시작 drag_start 사건(사용자 11-28 말하는 중 잡으면 앞 말풍선 남음) · 잡을 때마다 drag 대사(사용자 11-28) · 대기 동작·모션·드문 동작 중엔 걷기·구석 가기를 끝난 뒤로(사용자 11-28) · 레나 영상판 프로필(LENA, 장 매핑 기획 11-28)·LENA_SHEET(착장), 끌기 시작 장 drag_in 한 번 → drag, 호감도 모션 떠오르기(_motion_lift)"
     },
     "scripts/build_starline_video.py": {
       "tests": [
@@ -59,7 +61,7 @@
       "tests": [
         "tests/test_character.py"
       ],
-      "reason": "구석 앉기 sit_* 장 · 쓰다듬기 대사 덮지 않기(모든 캐릭터)"
+      "reason": "구석 앉기 sit_* 장 · 쓰다듬기 대사 덮지 않기(모든 캐릭터) · 레나 예전 시트 기준(착장)·영상판"
     },
     "src/mabinogi_addon/assets/release_notes.md": {
       "tests": [
@@ -92,9 +94,10 @@
     "scripts/qa_frame_check.py": {
       "tests": [
         "tests/test_dare_video.py",
+        "tests/test_lena_video.py",
         "tests/test_qa_frame_check.py"
       ],
-      "reason": "앉기 끝 → 앉은 반복을 sit_settle만큼 내려 둔 자리로 비교 · 다래 원본 짝·착장은 옷 폴더 한 벌(시트 프로필)"
+      "reason": "앉기 끝 → 앉은 반복을 sit_settle만큼 내려 둔 자리로 비교 · 다래 원본 짝·착장은 옷 폴더 한 벌(시트 프로필) · 레나 원본 짝·입 합성 상자"
     },
     "src/mabinogi_addon/ui/pet_window.py": {
       "tests": [
@@ -116,9 +119,10 @@
       "tests": [
         "tests/test_affinity_motions.py",
         "tests/test_character.py",
-        "tests/test_dare_video.py"
+        "tests/test_dare_video.py",
+        "tests/test_lena_video.py"
       ],
-      "reason": "다래 영상판 양 인형·비눗방울 30장 0.1초(15번 1.0초), 착장은 SHEET_MOTIONS 8장, of(folder, dressed)"
+      "reason": "다래 영상판 양 인형·비눗방울 30장 0.1초(15번 1.0초), 착장은 SHEET_MOTIONS 8장, of(folder, dressed) · Motion.frames·lift, 레나 마법서 60장·공중 앉기(구석 앉기 장 + 55px 떠오름), 착장 SHEET_MOTIONS"
     },
     "src/mabinogi_addon/ui/character_controller.py": {
       "tests": [
@@ -138,9 +142,10 @@
     },
     "scripts/build_dare_video.py": {
       "tests": [
-        "tests/test_dare_video.py"
+        "tests/test_dare_video.py",
+        "tests/test_lena_video.py"
       ],
-      "reason": "다래 영상판 원본크기 344장 WebP·앵커(기준 장 발 = 서기 발)·입 합성"
+      "reason": "다래 영상판 원본크기 344장 WebP·앵커(기준 장 발 = 서기 발)·입 합성 · mouth_on 상자 인자(레나와 같이 씀)"
     },
     "src/mabinogi_addon/assets/characters/다래/stand_0.webp": {
       "tests": [
@@ -169,27 +174,29 @@
     },
     "scripts/build_base_motions.py": {
       "tests": [
-        "tests/test_dare_video.py"
+        "tests/test_dare_video.py",
+        "tests/test_lena_video.py"
       ],
-      "reason": "옛 시트 빌드가 다래 영상판을 덮지 않게"
+      "reason": "옛 시트 빌드가 다래 영상판을 덮지 않게 · 레나도 영상판 — 옛 시트로 덮지 않음"
     },
     "scripts/build_walk_v2.py": {
       "tests": [
-        "tests/test_dare_video.py"
+        "tests/test_dare_video.py",
+        "tests/test_lena_video.py"
       ],
-      "reason": "옛 시트 빌드가 다래 영상판을 덮지 않게"
+      "reason": "옛 시트 빌드가 다래 영상판을 덮지 않게 · 레나도 영상판 — 옛 시트로 덮지 않음"
     },
     "tests/test_outfit_v2_frames.py": {
       "tests": [
         "tests/test_outfit_v2_frames.py"
       ],
-      "reason": "다래 착장 비교 기준 = 예전 시트(docs/characters/assets/다래/시트_앱크기)"
+      "reason": "다래 착장 비교 기준 = 예전 시트(docs/characters/assets/다래/시트_앱크기) · 레나 예전 시트 기준(착장)·영상판"
     },
     "tests/test_walk_v2.py": {
       "tests": [
         "tests/test_walk_v2.py"
       ],
-      "reason": "다래 기본 걷기 비교 = 예전 시트 보관본, 걷기 값은 DARE_SHEET"
+      "reason": "다래 기본 걷기 비교 = 예전 시트 보관본, 걷기 값은 DARE_SHEET · 레나 예전 시트 기준(착장)·영상판"
     },
     "src/mabinogi_addon/system/pet_window_probe.py": {
       "tests": [
@@ -218,6 +225,43 @@
         "tests/test_pet_window_probe.py"
       ],
       "reason": "새 테스트"
+    },
+    "scripts/build_lena_video.py": {
+      "tests": [
+        "tests/test_lena_video.py",
+        "tests/test_qa_frame_check.py"
+      ],
+      "reason": "레나 영상판 318장 WebP·앵커·입 합성"
+    },
+    "scripts/build_lena_frames.py": {
+      "tests": [
+        "tests/test_lena_video.py"
+      ],
+      "reason": "옛 시트 빌드가 레나 영상판을 덮지 않게"
+    },
+    "src/mabinogi_addon/assets/characters/레나/stand_0.webp": {
+      "tests": [
+        "tests/test_affinity_motions.py",
+        "tests/test_bundle_layout.py",
+        "tests/test_character.py",
+        "tests/test_lena_video.py",
+        "tests/test_outfit_v2_frames.py",
+        "tests/test_qa_frame_check.py",
+        "tests/test_walk_v2.py"
+      ],
+      "reason": "레나 영상판 그림(원본 그대로 WebP)·anchors.json·frames.json standH 407, 예전 기본 옷 PNG는 docs 보관"
+    },
+    "tests/test_lena_video.py": {
+      "tests": [
+        "tests/test_lena_video.py"
+      ],
+      "reason": "새 테스트"
+    },
+    "tests/test_affinity_motions.py": {
+      "tests": [
+        "tests/test_affinity_motions.py"
+      ],
+      "reason": "레나 예전 시트 기준(착장)·영상판"
     }
   }
 }

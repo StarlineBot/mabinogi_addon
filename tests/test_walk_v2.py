@@ -31,8 +31,8 @@ def _read(path):
 
 
 def _folder(name, outfit):
-    if name == "다래" and outfit is None:   # 다래 기본 옷은 영상판(0.60.0) — 예전 시트 걷기는 앱 밖 보관(착장 기준)
-        return ROOT / "docs/characters/assets/다래/시트_앱크기"
+    if name in ("다래", "레나") and outfit is None:   # 다래·레나 기본 옷은 영상판(0.60.0) — 예전 시트 걷기는 앱 밖 보관(착장 기준)
+        return ROOT / f"docs/characters/assets/{name}/시트_앱크기"
     return CHARS / name if outfit is None else CHARS / name / "outfits" / outfit
 
 
@@ -70,7 +70,7 @@ def test_walk_height_matches_stand(name, outfit):
 
 def test_walk_loop_time_and_speed_kept():
     """기획 '기본안': 한 바퀴 시간·빠르기는 그대로, 장 수만 8장(이안은 이미 8장 0.15초)."""
-    loops = {"DARE": (br.DARE_SHEET, 1.2, 100.0),   # 착장(예전 시트) — 영상판 다래 걷기는 test_dare_video "ARIA": (br.ARIA, 1.32, 90.0), "LENA": (br.LENA, 1.32, 85.5),
+    loops = {"DARE": (br.DARE_SHEET, 1.2, 100.0),   # 착장(예전 시트) — 영상판 다래 걷기는 test_dare_video "ARIA": (br.ARIA, 1.32, 90.0), "LENA": (br.LENA_SHEET, 1.32, 85.5),
              "IAN": (br.IAN, 1.2, 66.0)}
     for key, (profile, loop, speed) in loops.items():
         names, times, looping = profile.anims["walk"]

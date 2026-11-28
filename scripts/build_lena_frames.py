@@ -155,6 +155,10 @@ def card() -> np.ndarray:
 
 
 def main() -> None:
+    raise SystemExit("레나 기본 옷 앱 프레임은 영상판(11-28) — scripts.build_lena_video로 만들어요(이 스크립트는 옛 시트용)")
+
+
+def _old_main() -> None:   # 옛 시트 빌드(영상판 전, 기록용)
     from scripts.build_walk_v2 import build as build_walk
     frames = build()
     frames["walk"] = build_walk("레나")   # 걷기는 GPT 워크 8장(11-26, scripts/build_walk_v2) — 예전 시트 걷기 대신

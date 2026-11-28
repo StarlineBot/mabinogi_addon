@@ -114,6 +114,16 @@ def source_map(folder: str) -> dict[str, Path]:
         out.update({f"talk_{k}_0": d.SRC / d.TALK / f"{i:02d}.png" for k, i in d.TALK_PICK.items()})
         out["talk_base_0"] = d.SRC / d.TALK / f"{d.TALK_BODY:02d}.png"
         return {k: v for k, v in out.items() if v.is_file()}
+    if folder == "레나":
+        from scripts import build_lena_video as e
+        out = {f"stand_{i}": e.SRC / f"stand_{i:02d}.png" for i in range(30)}
+        for prefix, (sub, indices, _ref) in e.FOLDERS.items():
+            out.update({f"{prefix}_{i}": e.SRC / sub / f"{i:02d}.png" for i in indices})
+        for part, (sub, _ref) in enumerate(e.GRIMOIRE):
+            out.update({f"motion_grimoire_{part * 30 + i}": e.SRC / sub / f"{i:02d}.png" for i in range(30)})
+        out.update({f"talk_{k}_0": e.SRC / e.TALK / f"{i:02d}.png" for k, i in e.TALK_PICK.items()})
+        out["talk_base_0"] = e.SRC / e.TALK / f"{e.TALK_BODY:02d}.png"
+        return {k: v for k, v in out.items() if v.is_file()}
     if folder != "Starline":
         return {}
     from scripts import build_starline_video as b
@@ -137,6 +147,8 @@ def composite_boxes(folder: str) -> dict[str, tuple[int, int, int, int]]:
             from scripts import build_starline_video as b
         elif folder == "다래":
             from scripts import build_dare_video as b
+        elif folder == "레나":
+            from scripts import build_lena_video as b
         else:
             return {}
     except ImportError:
@@ -263,7 +275,7 @@ def check(folder: str, outfit: str = "", source: Path | None = None, base: str |
                 for name in dict.fromkeys(seqs[state]):
                     compare(f"{state}(아무 장)→rise", name, rise[0], False)
 
-    if source is not None or (folder in ("Starline", "다래") and not outfit):
+    if source is not None or (folder in ("Starline", "다래", "레나") and not outfit):
         pairs = source_map(folder)
         for name, src in sorted(pairs.items()):
             got = get(name)
