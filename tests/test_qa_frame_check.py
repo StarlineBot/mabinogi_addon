@@ -46,3 +46,19 @@ def test_current_starline_sitting_loop_to_rise_has_no_jump():
     """QA 11-28: 앉아 있다 일어나기는 반복 중 아무 장에서나 시작 — 반복의 모든 장 → rise 첫 장에 튐이 없어야 함."""
     problems = q.check("Starline")
     assert not [p for p in problems if "(아무 장)→rise" in p], problems
+
+
+@pytest.mark.parametrize("folder", ["Starline", "다래"])
+def test_mouth_composite_spill_is_caught(folder):
+    """QA 11-28: 입 합성 장은 입 상자 밖이 몸 장과 같아야 함 — 지금 그림은 통과, 상자 밖에 얼룩을 넣으면 잡힘."""
+    boxes = q.composite_boxes(folder)
+    assert boxes
+    assert not [p for p in q.check(folder) if p.startswith("입 합성 번짐")]
+    name, (bx, by, bw, bh) = next(iter(boxes.items()))
+    img = q.read(q.CHARS / folder / f"{name}.webp")
+    y = max(0, by - 30)
+    img[y:y + 12, bx:bx + 12, :3] = 255 - img[y:y + 12, bx:bx + 12, :3]
+    base = q.read(q.CHARS / folder / "talk_base_0.webp")
+    out = img.copy()
+    out[by:by + bh, bx:bx + bw] = base[by:by + bh, bx:bx + bw]
+    assert q.block_diff(out, base)[0] > q.BLOCK_LIMIT

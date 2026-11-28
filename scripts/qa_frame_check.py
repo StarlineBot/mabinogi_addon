@@ -130,6 +130,21 @@ def source_map(folder: str) -> dict[str, Path]:
     return {k: v for k, v in out.items() if v.is_file()}
 
 
+def composite_boxes(folder: str) -> dict[str, tuple[int, int, int, int]]:
+    """입 합성 장 이름 → 입 상자(저장 px) — 빌드 스크립트 표 그대로(Starline·다래 영상판)."""
+    try:
+        if folder == "Starline":
+            from scripts import build_starline_video as b
+        elif folder == "다래":
+            from scripts import build_dare_video as b
+        else:
+            return {}
+    except ImportError:
+        return {}
+    box = tuple(int(round(v)) for v in b.MOUTH_BOX)
+    return {f"talk_{key}_0": box for key in b.TALK_MOUTH}
+
+
 def check(folder: str, outfit: str = "", source: Path | None = None, base: str | None = None,
           sheet: Path | None = None) -> list[str]:
     from mabinogi_addon.character import brain as br
@@ -259,6 +274,19 @@ def check(folder: str, outfit: str = "", source: Path | None = None, base: str |
             if value > BLOCK_LIMIT:
                 problems.append(f"원본과 다름: {name} ↔ {src.relative_to(ROOT).as_posix()} 칸({x},{y}) 차 {value:.1f}")
                 flagged.append((name, name))
+        # 입 합성 장(talk_m1·m2 — 몸 장에 다른 장 입만 붙임, QA 11-28): 입 상자 밖은 몸 장과 같아야 함(번짐·얼룩 없음)
+        comp = composite_boxes(folder)
+        body = get("talk_base_0")
+        for name, (bx, by, bw, bh) in comp.items():
+            got = get(name)
+            if got is None or body is None or got[0].shape != body[0].shape:
+                continue
+            outside = got[0].copy()
+            outside[by:by + bh, bx:bx + bw] = body[0][by:by + bh, bx:bx + bw]
+            value, (x, y) = block_diff(outside, body[0])
+            if value > BLOCK_LIMIT:
+                problems.append(f"입 합성 번짐: {name} 입 상자 밖 칸({x},{y}) 차 {value:.1f}")
+                flagged.append((name, "talk_base_0"))
     if base:
         for name in sorted(shapes):
             got = get(name)
