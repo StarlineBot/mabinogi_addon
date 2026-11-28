@@ -1,6 +1,8 @@
-"""Claude Code Stop 훅 — 영어로 답하면 응답 종료를 막는다(사용자 지시 11-27 '앞으로 모든 세션에서 영어는 금지').
+"""Claude Code Stop 훅 — 사용자에게 결과를 알리는 마지막 답이 영어면 응답 종료를 막는다.
 
-마지막 사용자 메시지 뒤 에이전트가 쓴 글(중간 진행 알림 포함)에서 코드 블록·인라인 코드·URL·파일 경로를 뺀 뒤,
+사용자 지시 11-27 '모든 세션에서 영어 금지' → 11-28 정정 '작업할 때는 영어로 해도 됨, 나한테 결과 알려줄 때만 한글로'.
+그래서 마지막 도구 호출 뒤에 쓴 글(= 사용자에게 보내는 최종 답)만 본다. 작업 중 진행 알림·생각·도구 입력은 보지 않는다.
+최종 답에서 코드 블록·인라인 코드·URL·파일 경로를 뺀 뒤,
 1) 한글 없는 줄 중 '영어 문장'(영어 낱말 5개 이상 + the·is·and 같은 영어 기능어 2개 이상)이 하나라도 있거나
 2) 글 전체가 영어 위주(영문자가 한글보다 많고 기능어 8개 이상)면
 막고 한국어로 다시 쓰게 한다. main·verify-only·명령·파일 이름·식별자만 쓴 줄은 기능어가 없어 막지 않는다
@@ -15,25 +17,29 @@ import sys
 from pathlib import Path
 
 
-def _is_user_turn(row: dict) -> bool:
-    if row.get('type') != 'user':
-        return False
-    content = row.get('message', {}).get('content')
-    if isinstance(content, str):
-        return True
-    return isinstance(content, list) and any(c.get('type') == 'text' for c in content)
-
-
 def last_reply(transcript: Path) -> str:
+    """마지막 도구 호출(또는 사용자 메시지) 뒤 에이전트가 쓴 글 — 사용자에게 보내는 최종 답."""
     rows = [json.loads(line) for line in transcript.read_text(encoding='utf-8').splitlines() if line.strip()]
     texts: list[str] = []
     for row in reversed(rows):
-        if _is_user_turn(row):
+        if row.get('type') == 'user':          # 사용자 메시지·도구 결과 → 그 앞은 작업 중
             break
-        if row.get('type') == 'assistant':
-            for c in row.get('message', {}).get('content') or []:
+        if row.get('type') != 'assistant':
+            continue
+        content = row.get('message', {}).get('content') or []
+        if any(isinstance(c, dict) and c.get('type') == 'tool_use' for c in content):
+            # 같은 줄에 도구 호출과 글이 같이 있으면 도구 호출 뒤 글만
+            tail = []
+            for c in reversed(content):
+                if isinstance(c, dict) and c.get('type') == 'tool_use':
+                    break
                 if isinstance(c, dict) and c.get('type') == 'text':
-                    texts.append(c.get('text', ''))
+                    tail.append(c.get('text', ''))
+            texts.extend(tail)
+            break
+        for c in reversed(content):
+            if isinstance(c, dict) and c.get('type') == 'text':
+                texts.append(c.get('text', ''))
     return '\n'.join(reversed(texts))
 
 
@@ -88,8 +94,8 @@ def main() -> int:
         return 0
     sample = ('\n- ' + '\n- '.join(lines[:3])) if lines else ''
     print(
-        '영어로 쓴 답이 있습니다 — 프로젝트 훅 .claude/hooks/korean_guard.py (사용자 지시 11-27: 모든 세션에서 영어 금지).\n'
-        '중간 진행 알림을 포함해 사용자에게 보이는 글은 전부 한국어로 다시 쓰세요(명령·경로·코드 이름은 `백틱` 안에 두면 됩니다).'
+        '마지막 답이 영어입니다 — 프로젝트 훅 .claude/hooks/korean_guard.py (사용자 지시 11-28: 결과를 알려 줄 때는 한국어).\n'
+        '사용자에게 결과를 알리는 마지막 답을 한국어로 다시 쓰세요(작업 중 글은 영어여도 됨, 명령·경로·코드 이름은 `백틱` 안에 두면 됩니다).'
         + sample,
         file=sys.stderr,
     )
