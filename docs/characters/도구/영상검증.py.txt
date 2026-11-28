@@ -154,7 +154,13 @@ def check_folder(folder, stand_gif, loop=None):
         return cv2.resize(t, None, fx=1 / sc, fy=1 / sc, interpolation=cv2.INTER_AREA)[..., 3] > 128, sc, c
     st0 = norm(s_img)[0]; en0 = norm(e_img)[0]
     a0 = norm(F[0])[0]; a1 = norm(F[-1])[0]
-    i_start, i_end = iou(st0, a0), iou(en0, a1)
+    # 11-28: 머리 맞춤 신뢰가 낮으면(레나 말하기 '잘 된 0장') 머리 기준 정규화가 틀려 겹침 0.82로 오판(재현: 레나 L3 — 상자 맞춤 겹침 0.95).
+    # 상자(키·폭)를 맞춘 겹침도 재서 큰 쪽을 씀.
+    def boxfit(ref, a):
+        r, t = tight(ref)[..., 3] > 128, tight(a)
+        t = cv2.resize(t, (r.shape[1], r.shape[0]), interpolation=cv2.INTER_AREA)[..., 3] > 128
+        return float((r & t).sum() / max((r | t).sum(), 1))
+    i_start = max(iou(st0, a0), boxfit(s_img, F[0])); i_end = max(iou(en0, a1), boxfit(e_img, F[-1]))
     hs = []
     for a in F:
         sc, c = head_scale(ref_head, tight(a))
