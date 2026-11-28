@@ -366,7 +366,7 @@ def test_lena_sit_floats_and_bobs_then_lands_smoothly():
     assert seen[-1][1] == 0
 
 
-@pytest.mark.parametrize("profile", [br.DARE, br.ARIA, br.IAN, br.STARLINE])
+@pytest.mark.parametrize("profile", [br.DARE, br.ARIA, br.IAN])
 def test_other_characters_never_float(profile):
     b = br.Brain(br.Floor(0, 1920, 1000), rng=random.Random(2), profile=profile)
     b.pos = (1700.0, 1000.0)
@@ -375,3 +375,22 @@ def test_other_characters_never_float(profile):
         b.tick(t, True)
         assert b.float_offset(t) == 0
         t += 0.1
+
+
+def test_starline_only_settles_into_its_drawn_float():
+    """Starline은 둥둥 떠 있기(sit_float)가 없고, 앉은 반복에 들어갈 때만 앉기 끝 높이에서 1.5초 동안 제자리로 올라옴(sit_settle,
+    QA 11-28 — 앉아 뜬 높이는 그림 자리(앵커)로). 그래서 offset은 0 이상(아래)이고 다 오르면 0."""
+    b = br.Brain(br.Floor(0, 1920, 1000), rng=random.Random(2), profile=br.STARLINE)
+    b.pos = (1700.0, 1000.0)
+    assert br.STARLINE.sit_float is None and br.STARLINE.sit_settle
+    t, entered = 0.0, None
+    while t < 20:
+        b.tick(t, True)
+        off = b.float_offset(t)
+        assert off >= 0
+        if b.state == "sit_loop" and entered is None:
+            entered = t
+        if entered is not None and t > entered + br.STARLINE.sit_settle[1] + 0.1 and b.state == "sit_loop":
+            assert off == 0
+        t += 0.1
+    assert entered is not None

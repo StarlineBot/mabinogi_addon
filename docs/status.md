@@ -5393,3 +5393,4 @@
 
 - **영어 훅 정정(11-28, 사용자 '작업할 때는 영어로 해도 됨, 결과 알려 줄 때만 한글로')**: `korean_guard.py`가 마지막 도구 호출 뒤 최종 답만 검사(작업 중 진행 글·생각·도구 입력은 안 봄). CLAUDE.md 소통 절 같이 고침. 시험: 작업 중 영어+결과 한글 통과, 결과 영어 막음, 도구 없이 영어 답 막음.
   - QA 반려(11-28) 고침: 다 뜨기 전(1.5초 안)에 일어나면 남은 settle만큼 튐(0.1초 17px) → rise가 _float_from을 이어받아 0.4초에 걸쳐 0으로. 테스트(0.1·0.4·0.9초에 일어나도 직전·직후 ≤1px, 줄어들기만).
+- **0.59.3 쓰다듬기 첫 대사 덮임 DEV 반영(11-28, QA 전달 사용자 제보)**: pet_in(0.7초) 뒤 pet_loop 진입의 '쓰다듬는 중' 대사가 아직 찍히는 pet_start 말풍선을 덮음 → PetWindow.say가 brain.bubble_until(글자 끝)을 알리고, pet_loop 진입 때 그 시각 + READ_GAP 0.6초 전이면 미뤘다가 그때 아직 쓰다듬는 중이면 띄움(손 떼면 끝 대사만). 모든 캐릭터. 같이: 79fecced의 sit_settle이 test_pet_floor_space 'Starline 안 뜸' 검사를 깨뜨리던 것(배포 검사 목록에 그 파일이 없어 못 잡음) — Starline은 settle만 보는 검사로 따로, 검사 목록에 test_pet_floor_space·affinity_v2·cursor_front 추가.

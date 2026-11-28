@@ -248,6 +248,7 @@ class PetWindow(QWidget):
         text, mood = (line, mood) if isinstance(line, str) else (line.text, line.mood)
         now = self._clock()
         self._bubble = (text, now, now + len(text) * brain_mod.TYPE_SECONDS + BUBBLE_SECONDS)
+        self.brain.bubble_until(now + len(text) * brain_mod.TYPE_SECONDS)
         self.brain.talk(now, len(text), mood)
         self.update()
 

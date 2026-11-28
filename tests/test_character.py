@@ -2407,3 +2407,38 @@ def test_greeting_preview_shows_bubble(app, tmp_path, monkeypatch, pack, text):
         ctrl.shutdown()
         if ctrl.window is not None:
             ctrl.window.close()
+
+
+@pytest.mark.parametrize("profile", [br.DARE, br.ARIA, br.IAN, br.LENA, br.STARLINE])
+def test_pet_during_waits_until_pet_start_bubble_is_read(profile):
+    """QA 11-28(사용자 제보 Starline '쓰다듬지 말라니까? 같은 메세지가 나오다가 쓰다듬는 모션'): 쓰다듬기 시작 대사가 다 찍히기 전에
+    pet_loop 진입의 '쓰다듬는 중' 대사가 덮었음 → 시작 대사 글자 수 × TYPE_SECONDS + 읽을 틈 동안은 안 덮고 그 뒤에 나옴.
+    그 사이 손을 떼면 쓰다듬는 중 대사 없이 끝 대사만."""
+    def start(b):
+        t, events = 1.0, []
+        while ("say", "pet_start") not in events:
+            t += 0.05
+            events += b.hover(t, 300 + (12 if int(t * 20) % 2 else -12), True)
+        return t
+
+    chars = 20                                   # '감히 머리를 쓰다듬다니, 제정신이야?'
+    b = br.Brain(br.Floor(0, 1000, 700), rng=random.Random(3), profile=profile)
+    b.pos = (300.0, 700.0)
+    t = start(b)
+    b.bubble_until(t + chars * br.TYPE_SECONDS)  # 창 say()가 알려 주는 것
+    shown_until = t + chars * br.TYPE_SECONDS + br.READ_GAP
+    said = []
+    while t < shown_until + 1.0:
+        t += 0.05
+        b.hover(t, 300 + (12 if int(t * 20) % 2 else -12), True)
+        for e in b.tick(t, False):
+            if e == ("say", "pet_during"):
+                said.append(t)
+    assert said and said[0] >= shown_until - 1e-6 and len(said) == 1, (said, shown_until)
+    c = br.Brain(br.Floor(0, 1000, 700), rng=random.Random(3), profile=profile)
+    c.pos = (300.0, 700.0)
+    t = start(c)
+    c.bubble_until(t + 40 * br.TYPE_SECONDS)     # 긴 대사 — 다 나오기 전에 손 뗌
+    t, events = _run(c, t, 2.0, False)
+    t, more = _run(c, t, 3.0, False)
+    assert ("say", "pet_during") not in events + more and ("say", "pet_end") in events + more

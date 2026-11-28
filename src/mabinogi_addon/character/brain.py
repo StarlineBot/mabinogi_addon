@@ -90,6 +90,7 @@ ANIMS: dict[str, tuple[tuple[str, ...], tuple[float, ...], bool]] = {
     "talk_happy": (("talk_smile_0",), (1.0,), True),
 }
 TYPE_SECONDS = 0.07        # 말풍선 글자 한 자가 나오는 시간(창이 같은 값으로 한 글자씩 보여 줌)
+READ_GAP = 0.6             # 말풍선 글자가 다 나온 뒤 읽을 틈 — 그 전엔 다음 쓰다듬기 대사로 덮지 않음(QA 11-28)
 TALKING = ("talk", "talk_think", "talk_happy", "talk_end")
 # 새 말하기(사용자 11-24 '말할 때 모션이 어색' — docs/character-pet-spec.md '말하기 모션 어색함'):
 # 서 있기 → 사이(0.2초) → 입만 바꾸기(m1·m2·m1·base 0.2초씩, m2 때 1px 끄덕임) → 강조(한 문장 최대 1번) → base → 사이 → 서 있기.
@@ -391,6 +392,8 @@ class Brain:
     _sleep_until: float = 0.0
     _extra_until: float = 0.0
     _held: str | None = None          # 앉아서 클릭 동안 그대로 둘 장(Profile.notice_holds)
+    _bubble_until: float = 0.0        # 지금 말풍선 글자가 다 나오는 시각(창 say가 알려 줌)
+    _pet_during_at: float = 0.0       # 미뤄 둔 '쓰다듬는 중' 대사 시각(0 = 없음)
     _loop_phase: float | None = None  # 그때 반복이 어디까지 왔는지(초)
     _queued_talk: tuple | None = None
     _talk_set: dict | None = None
@@ -441,6 +444,10 @@ class Brain:
         if not self.profile.pet_shake or self.state != "pet_loop":
             return 0
         return (0, 1, 0, -1)[int((now - self._t0) / SHAKE_SECONDS) % 4]
+
+    def bubble_until(self, until: float) -> None:
+        """창이 말풍선을 띄울 때 — 글자가 다 나오는 시각(쓰다듬는 중 대사가 앞 대사를 덮지 않게)."""
+        self._bubble_until = until
 
     def float_offset(self, now: float) -> float:
         """앉아 떠 있는 높이(논리 px, 음수 = 위) — 레나: 앉으면 0.4초에 걸쳐 14px 올라 ±3px 둥둥(2.4초), 일어나며 0.4초에 내려옴.
@@ -688,6 +695,7 @@ class Brain:
             self._go("stand", now)  # 대기 동작(머리 쓰다듬기·시계 보기) 끝 → 서 있기
             self._schedule_extra(now)
         if self.state == "pet_loop" and now - self._last_rub > RUB_STOP:
+            self._pet_during_at = 0.0   # 멈추면 미뤄 둔 쓰다듬는 중 대사 없이 끝 대사만
             self._go("pet_out", now)
             events.append(("say", "pet_end"))
             events.append(("pet_done",))
@@ -711,7 +719,14 @@ class Brain:
                 if queued_motion is not None:
                     self.play_motion(queued_motion, now)
             elif nxt == "pet_loop":
+                if now < self._bubble_until + READ_GAP:   # 쓰다듬기 시작 대사가 아직 찍히는 중 — 다 나오고 읽을 틈 뒤에(QA 11-28)
+                    self._pet_during_at = self._bubble_until + READ_GAP
+                else:
+                    events.append(("say", "pet_during"))
+        if self._pet_during_at and now >= self._pet_during_at:
+            if self.state == "pet_loop":
                 events.append(("say", "pet_during"))
+            self._pet_during_at = 0.0
 
         rare = self.profile.rare_extra
         if rare and self.state == rare and self.profile.rare_say and not self._rare_said:
