@@ -125,30 +125,51 @@ if __name__ == "__main__" and sys.argv[1:2] != ["폴더"]:
         print(f"{'':16s} 머리 크기 못 잰 장 {r['판정 못한 장']}"); print(f"{'':16s} 머리 {r['머리크기']}(흔들림 {r['머리 흔들림%']}%) 서있는장 키비 {r.get('서 있는 장 키비')} 시작/끝 겹침 {r['시작 겹침']}/{r['끝 겹침']} 색ΔE {r['색 ΔE']}")
 
 
-def check_folder(folder, stand_gif):
-    """요청 폴더 하나(1_시작.png·2_끝.png·결과.*) 검증 → 요청.md '검증' 칸에 적음."""
+def check_folder(folder, stand_gif, loop=None):
+    """요청 폴더 하나(1_시작.png·2_끝.png·결과.*) 검증 → 요청.md '검증' 칸에 적음.
+    11-28 고침(재현: Starline·다래 결과로 오판 확인): 색은 같은 자세끼리(첫 장↔시작 그림, 끝 장↔끝 그림)만 비교 — 영상 전체 평균은 자세가 바뀌면
+    색 비율이 달라져 틀림. 크기는 머리 맞춤 신뢰 0.85 넘는 장만. 시작·끝 그림이 같으면(반복 동작) 끝↔처음 이음매로 판정."""
     folder = folder.rstrip("/") + "/"
     res_file = ([f for f in glob.glob(folder + "결과.*")] or [None])[0]
     if res_file is None: return "결과 파일 없음"
     F = load(res_file)
     S = tight(load(stand_gif)[0]); SH = S.shape[0]; ref_head = S[: int(SH * 0.35)]
+    s_img, e_img = load(folder + "1_시작.png")[0], load(folder + "2_끝.png")[0]
+    if loop is None: loop = bool(np.array_equal(s_img, e_img))
     def norm(a):
-        t = tight(a); s, c = head_scale(ref_head, t)
-        return cv2.resize(t, None, fx=1 / s, fy=1 / s, interpolation=cv2.INTER_AREA)[..., 3] > 128, s, c
-    st0, _, _ = norm(load(folder + "1_시작.png")[0]); en0, _, _ = norm(load(folder + "2_끝.png")[0])
-    a0, s0, _ = norm(F[0]); a1, s1, c1 = norm(F[-1])
-    r = check(stand_gif, res_file, from_stand=False, to_stand=False)
+        t = tight(a); sc, c = head_scale(ref_head, t)
+        return cv2.resize(t, None, fx=1 / sc, fy=1 / sc, interpolation=cv2.INTER_AREA)[..., 3] > 128, sc, c
+    st0 = norm(s_img)[0]; en0 = norm(e_img)[0]
+    a0 = norm(F[0])[0]; a1 = norm(F[-1])[0]
     i_start, i_end = iou(st0, a0), iou(en0, a1)
-    prob = [] if r["판정"].startswith("통과") else [r["판정"].split("(경고")[0].replace("문제: ", "")]
+    hs = []
+    for a in F:
+        sc, c = head_scale(ref_head, tight(a))
+        if c > 0.85: hs.append(sc)
+    spread = (max(hs) / min(hs) - 1) * 100 if len(hs) >= 2 else 0.0
+    def bands1(a):
+        px = cv2.cvtColor(a[..., :3], cv2.COLOR_BGR2LAB).astype(float)[a[..., 3] > 200]; L = px[:, 0]
+        return np.array([px[(L >= lo) & (L < hi)].mean(0) if ((L >= lo) & (L < hi)).sum() > 30 else np.zeros(3) for lo, hi in [(0, 90), (90, 190), (190, 256)]])
+    c_start = np.linalg.norm(bands1(F[0]) - bands1(s_img), axis=1); c_end = np.linalg.norm(bands1(F[-1]) - bands1(e_img), axis=1)
+    g = [cv2.cvtColor(a[..., :3], cv2.COLOR_BGR2GRAY).astype(float) for a in F]; m = [a[..., 3] > 128 for a in F]
+    d = lambda i, j: float(np.abs(g[i] - g[j])[m[i] | m[j]].mean())
+    nb = [d(i, i + 1) for i in range(len(F) - 1)]; seam = d(len(F) - 1, 0)
+    edge = [i for i, a in enumerate(F) if (a[:2, :, 3] > 128).any() or (a[:, :2, 3] > 128).any() or (a[:, -2:, 3] > 128).any()]
+    prob = []
     if i_start < 0.85: prob.append(f"시작 장면이 1_시작.png와 다름(겹침 {i_start:.2f})")
-    if i_end < 0.88: prob.append(f"끝 장면이 2_끝.png와 다름(겹침 {i_end:.2f})")
+    if loop:
+        if seam > max(nb) * 1.2: prob.append(f"반복 이음매가 튐(끝→처음 차 {seam:.1f}, 이웃 장 최대 {max(nb):.1f})")
+    elif i_end < 0.88: prob.append(f"끝 장면이 2_끝.png와 다름(겹침 {i_end:.2f})")
+    if spread > 6: prob.append(f"크기 흔들림 {spread:.1f}%")
+    if max(c_start[1:].max(), c_end[1:].max()) > 6 or max(c_start[0], c_end[0]) > 8:
+        prob.append(f"색 다름(시작 ΔE {[round(float(x),1) for x in c_start]}, 끝 ΔE {[round(float(x),1) for x in c_end]})")
     verdict = "통과" if not prob else "다시: " + " / ".join(prob)
     lines = [f"- 판정: **{verdict}**",
-             f"- 시작 겹침 {i_start:.2f} · 끝 겹침 {i_end:.2f} (기준 시작 0.85·끝 0.88 이상)",
-             f"- 머리 크기 {r['머리크기']}(장끼리 흔들림 {r['머리 흔들림%']}%, 기준 6% 이하) · 색 ΔE {[float(x) for x in r['색 ΔE']]}(기준 6 이하)",
-             f"- 화면 끝 닿은 장 {len(r['화면끝 닿은 장'])}개 · 장 수 {len(F)}"]
+             f"- 시작 겹침 {i_start:.2f}" + (f" · 반복 이음매 끝→처음 차 {seam:.1f}(이웃 장 평균 {np.mean(nb):.1f}, 최대 {max(nb):.1f})" if loop else f" · 끝 겹침 {i_end:.2f}(기준 0.88)"),
+             f"- 머리 크기 흔들림 {spread:.1f}%(기준 6%, 머리 맞춤 잘 된 {len(hs)}장으로) · 색 ΔE 시작 {[round(float(x),1) for x in c_start]} 끝 {[round(float(x),1) for x in c_end]}(어두운·중간·밝은, 기준 8·6·6)",
+             f"- 화면 끝 닿은 장 {len(edge)}개 · 장 수 {len(F)}"]
     md = folder + "요청.md"
-    t = open(md, encoding="utf-8").read()
+    t = open(md, encoding="utf-8").read() if os.path.exists(md) else ""
     head = t.split("## 3. 검증")[0]
     open(md, "w", encoding="utf-8").write(head + "## 3. 검증 (기획이 씀)\n" + "\n".join(lines) + "\n")
     return verdict
