@@ -49,17 +49,17 @@ def test_all_video_steps_are_tenth_of_a_second():
 
 def test_same_action_frames_share_one_canvas():
     """동작 안 장은 같은 틀 크기 — 아래·가운데 맞춰 그리면 그대로 위치가 맞음(걷기·말하기 합성 장은 따로)."""
-    for prefix in ("stand", "flame", "laugh", "chin", "sneeze", "pet", "crouch", "rise", "drag", "land",
+    for prefix in ("stand", "flame", "laugh", "chin", "sneeze", "pet", "crouch", "sit", "rise", "drag", "land",
                    "motion_flame_shot", "motion_hat_magic"):
         shapes = {_read(p.stem).shape for p in SL.glob(f"{prefix}_*.webp") if p.stem.rsplit("_", 1)[0] == prefix}
         assert len(shapes) == 1, (prefix, shapes)
     assert _read("crouch_0").shape == _read("rise_0").shape   # 앉기 끝 → 일어나기 첫 장 이어짐
 
 
-def test_idle_picks_flame_or_chin_and_returns_to_stand():
-    """가만히 서 있으면 대기 불꽃·턱괴기 중 무작위(서기 → 서기). 클릭 대사 '불꽃' 줄은 불꽃 때만.
-    laugh(13_대기_웃음)는 서서 말하는 영상이라 대기에서 뺌(사용자 11-28 — 대사 없이 말하는 장면이 나왔음)."""
-    assert SB.idle_states == ("flame", "chin")
+def test_idle_picks_flame_laugh_or_chin_and_returns_to_stand():
+    """가만히 서 있으면 대기 불꽃·웃음·턱괴기 셋 중 무작위(서기 → 서기). 클릭 대사 '불꽃' 줄은 불꽃 때만.
+    웃음은 새 영상(눈 감고 씩 웃음, 사용자 확인 11-28) — 예전 것은 서서 말하는 영상이라 뺐었음."""
+    assert SB.idle_states == ("flame", "laugh", "chin")
     seen = set()
     for seed in range(30):
         b = br.Brain(br.Floor(0, 2000, 700), rng=random.Random(seed), profile=SB)
@@ -75,7 +75,7 @@ def test_idle_picks_flame_or_chin_and_returns_to_stand():
             t += 0.05
             b.tick(t, False)
         assert b.state == "stand"
-    assert seen == {"flame", "chin"}
+    assert seen == {"flame", "laugh", "chin"}
     b = br.Brain(br.Floor(0, 2000, 700), rng=random.Random(1), profile=SB)
     b.pos = (1000.0, 700.0)
     b._go("chin", 1.0)
@@ -84,11 +84,17 @@ def test_idle_picks_flame_or_chin_and_returns_to_stand():
     assert b.release(1.0)[-1] == ("say", "click_stand")
 
 
-def test_sneeze_bubble_on_frame_22_and_sit_loop_ping_pong():
+def test_sneeze_bubble_on_frame_22_and_sit_loop_one_turn():
+    """구석 앉기: crouch 0~15 → 마법진 한 바퀴 반복 영상 8b(sit_0→29 앞으로만, 기획 11-28 — 예전 crouch 16→29→17 왕복은 한 바퀴가
+    안 돎). sit_0은 crouch_16 자리에 겹치게 anchors."""
+    import json
+
     assert SB.rare_say == (22, "sneeze") and len(SB.anims["sneeze"][0]) == 30
-    sit = SB.anims["sit_loop"][0]
-    assert sit[0] == "crouch_16" and "crouch_29" in sit and sit[-1] == "crouch_17"   # 16→29→17, 다시 16(이음매 없음)
-    assert SB.anims["crouch"][0][-1] == "crouch_15"
+    assert SB.anims["sit_loop"][0] == tuple(f"sit_{i}" for i in range(30)) and SB.anims["sit_loop"][2]
+    assert SB.anims["crouch"][0][-1] == "crouch_15" and SB.next_map["crouch"] == "sit_loop"
+    anchors = json.loads((SL / "anchors.json").read_text(encoding="utf-8"))
+    assert anchors["sit_0"] == [0, -23] and anchors["crouch_15"] == [0, 18]
+    assert not list(SL.glob("crouch_16.webp"))
 
 
 def test_talk_mouth_only_frames_keep_one_body():
@@ -165,13 +171,13 @@ def test_sit_click_keeps_shown_frame_and_resumes_loop():
     클릭 동안 그때 보이던 장 그대로, 끝나면 반복을 멈춘 자리부터."""
     b = br.Brain(br.Floor(0, 2000, 700), rng=random.Random(1), profile=SB)
     b._go("sit_loop", 10.0)
-    now = 10.0 + 0.1 * 5 + 0.05          # 반복 6번째 장(crouch_21)
+    now = 10.0 + 0.1 * 5 + 0.05          # 반복 6번째 장(sit_5)
     shown = b.frame(now)
-    assert shown == "crouch_21"
+    assert shown == "sit_5"
     b._go("sit_notice", now)
     assert b.frame(now + 0.6) == shown   # 클릭 반응 동안 그대로
     b._go("sit_loop", now + 1.2)
-    assert b.frame(now + 1.2) == shown and b.frame(now + 1.3) == "crouch_22"   # 멈춘 자리부터 이어감
+    assert b.frame(now + 1.2) == shown and b.frame(now + 1.3) == "sit_6"   # 멈춘 자리부터 이어감
 
 
 def test_landing_drawn_at_stand_size():
@@ -220,13 +226,14 @@ def test_landing_drawn_at_stand_size():
         w.close()
 
 
-def test_idle_hour_never_plays_talking_laugh():
-    """조작 없이 1시간 서 있기(게임 없음): 서서 말하는 영상(laugh)이 한 번도 안 나옴 — 예전엔 약 79번(QA 11-28)."""
-    b = br.Brain(br.Floor(0, 2000, 700), rng=random.Random(7), profile=SB)
-    b.pos = (1000.0, 700.0)
-    seen, t = set(), 0.0
-    while t < 3600.0:
-        t += 0.1
-        b.tick(t, False)
-        seen.add(b.state)
-    assert "laugh" not in seen and {"flame", "chin"} <= seen
+def test_laugh_is_new_grin_video_not_talking():
+    """대기 웃음 = 원본크기/13_대기_웃음 새 영상(사용자 확인 11-28 — 눈 감고 씩 웃음). 예전 서서 말하는 영상(0.59.0~0.59.2 앱 파일)이 아님:
+    앱 장이 지금 원본과 같고(칸 색 차 ≤ 8), 첫 장이 서기와 같은 틀."""
+    from scripts.build_starline_video import SRC
+
+    for i in (0, 10, 29):
+        app = _read(f"laugh_{i}")
+        src = image_io.imread(SRC / "13_대기_웃음" / f"{i:02d}.png", cv2.IMREAD_UNCHANGED)
+        assert app.shape == src.shape
+        vis = (app[..., 3] > 0) | (src[..., 3] > 0)
+        assert float(np.abs(app.astype(int) - src.astype(int))[..., :3][vis].mean()) <= 8, i

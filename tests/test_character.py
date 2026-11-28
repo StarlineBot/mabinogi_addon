@@ -1455,7 +1455,7 @@ def test_starline_flame_idle_click_talks_and_corner():
         c.tick(t, True)
         seen.add(c.frame(t))
         assert not c.zzz()
-    assert {f"crouch_{i}" for i in range(17, 29)} <= seen   # 영상판(11-27) 앉아 마법진 왕복
+    assert {f"sit_{i}" for i in range(30)} <= seen   # 마법진 한 바퀴 반복(8b, 11-28)
     shown = c.frame(t)
     c.press(t, 900, 600)
     assert c.release(t)[-1] == ("say", "click_sit") and c.frame(t) == shown   # 그때 보이던 장 그대로(QA 11-27)

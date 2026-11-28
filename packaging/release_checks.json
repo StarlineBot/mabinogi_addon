@@ -1,8 +1,8 @@
 {
-  "version": "0.59.2",
+  "version": "0.59.3",
   "tests": [
+    "tests/test_bundle_layout.py",
     "tests/test_character.py",
-    "tests/test_cursor_front.py",
     "tests/test_qa_frame_check.py",
     "tests/test_release_candidate.py",
     "tests/test_release_checks.py",
@@ -12,45 +12,46 @@
     "tests/test_windows_ci.py"
   ],
   "coverage": {
-    "src/mabinogi_addon/ui/pet_window.py": {
+    "src/mabinogi_addon/character/brain.py": {
       "tests": [
         "tests/test_starline_video.py",
         "tests/test_character.py",
-        "tests/test_cursor_front.py"
+        "tests/test_qa_frame_check.py"
       ],
-      "reason": "동작별 그리기 배율(frames.json drawScale) — 크기·기준점(발 자리)·화면용 장에 같이 곱함, 그림 파일은 그대로(사용자 11-28 Starline 착지 → 서기 작아짐)"
-    },
-    "src/mabinogi_addon/assets/characters/Starline/frames.json": {
-      "tests": [
-        "tests/test_starline_video.py",
-        "tests/test_character.py"
-      ],
-      "reason": "drawScale land 0.95 — 착지 영상이 서기보다 키 1.066·머리 1.04배로 찍힘 → 그린 키 +1.3%·머리 −1.2% · talk_emph 0.975(말하기 강조·알림 장 머리 1.03배, 키 같음 → 머리 1.00·키 0.975)"
+      "reason": "Starline sit_loop = 마법진 한 바퀴 반복 영상 8b sit_0→29(기획 11-28, 사용자 제보 '마법진이 한 바퀴 다 안 돌아감'), sit_notice sit_0 · 대기 불꽃·웃음(새 영상)·턱괴기 셋 중 무작위(사용자 확인 11-28)"
     },
     "scripts/build_starline_video.py": {
       "tests": [
         "tests/test_starline_video.py"
       ],
-      "reason": "frames.json에 DRAW_SCALE"
+      "reason": "8b_구석_마법진반복 설치(sit_*), crouch 0~15만, sit 앵커(0,-23 — crouch_16과 겹침 0.91), laugh = 새 13_대기_웃음(눈 감고 씩 웃음)"
     },
-    "scripts/qa_frame_check.py": {
+    "src/mabinogi_addon/assets/characters/Starline/sit_0.webp": {
       "tests": [
-        "tests/test_qa_frame_check.py"
+        "tests/test_starline_video.py",
+        "tests/test_character.py",
+        "tests/test_bundle_layout.py"
       ],
-      "reason": "drawScale을 발 자리·머리에 곱해 비교 · 배율 뒤에도 키(height) 유지"
+      "reason": "8b 30장 WebP(원본 그대로), crouch_16~29 빠짐, anchors.json sit"
     },
     "tests/test_starline_video.py": {
       "tests": [
         "tests/test_starline_video.py"
       ],
-      "reason": "착지 그리기 배율 검사 · 1시간 대기에 laugh 없음"
+      "reason": "마법진 한 바퀴 반복·앵커"
+    },
+    "tests/test_character.py": {
+      "tests": [
+        "tests/test_character.py"
+      ],
+      "reason": "구석 앉기 sit_* 장"
     },
     "src/mabinogi_addon/assets/release_notes.md": {
       "tests": [
         "tests/test_release_notes.py",
         "tests/test_release_notes_trigger.py"
       ],
-      "reason": "v0.59.2 노트"
+      "reason": "v0.59.3 노트"
     },
     "packaging/release_checks.json": {
       "tests": [
@@ -58,21 +59,20 @@
         "tests/test_release_candidate.py",
         "tests/test_windows_ci.py"
       ],
-      "reason": "0.59.2 검사 목록·배포 계약"
+      "reason": "0.59.3 검사 목록·배포 계약"
     },
     "tests/test_release_checks.py": {
       "tests": [
         "tests/test_release_checks.py"
       ],
-      "reason": "0.59.2 경계"
+      "reason": "0.59.3 경계"
     },
-    "src/mabinogi_addon/character/brain.py": {
+    "src/mabinogi_addon/assets/characters/Starline/laugh_0.webp": {
       "tests": [
         "tests/test_starline_video.py",
-        "tests/test_character.py",
-        "tests/test_qa_frame_check.py"
+        "tests/test_character.py"
       ],
-      "reason": "Starline 대기에서 laugh(13_대기_웃음 — 서서 말하는 영상) 뺌(사용자 11-28 '가만히 서 있는데 말함')"
+      "reason": "새 대기 웃음 30장 WebP(원본 그대로)"
     }
   }
 }
