@@ -25,6 +25,9 @@ WALK_SRC = SRC
 K = 1.8369   # 원본크기/배율.json k — 아래 좌표(앱크기 기준 측정)를 이만큼 늘려 씀
 OUT = APP_ROOT / "Starline"
 KEEP = {"card.png", "frame.png"}
+# 예전 laugh(13_대기_웃음 — 서서 말하는 영상, 대기에서 뺌 11-28)는 앱 파일 그대로 둠: 원본 폴더는 기획이 새 웃음 영상으로 덮었고
+# 그건 사용자 확인 뒤 따로 넣음 — 그 전엔 다시 만들지도 지우지도 않음
+KEEP_PREFIX = ("laugh_",)
 WEBP_QUALITY = 90
 # 동작 틀마다 서 있는 발 자리가 서기 틀(아래 끝·발 가운데 +13.5)과 달라 동작이 바뀔 때 튐 → 그리기 오프셋(저장 px, anchors.json).
 # 쓰다듬기·모자 마술은 몸이 왼쪽으로 7·5px(귀·모자 자리 때문에 틀이 넓음), 앉기·일어나기는 서 있는 장 발이 틀 바닥 10px 위
@@ -35,6 +38,7 @@ DRAW_SCALE = {"land": 0.95,
               "talk_emph": 0.975}   # 손가락 튕기는 장(말하기 강조·알림) 머리가 서기보다 3% 큼(키는 같음) → 머리 1.00·키 0.975
 _A = {"pet": (7, 0), "motion_hat_magic": (5, 0), "crouch": (0, 10), "rise": (0, 10), "land": (2, 13)}   # 앱크기 px
 ANCHORS = {k: (round(x * K), round(y * K)) for k, (x, y) in _A.items()}
+ANCHORS["sit"] = (0, -23)   # 저장 px — 8b 00이 crouch_16(앵커 0,18)과 가장 겹치는 자리(알파 겹침 0.91)
 # 앱 이름 앞부분 → (소스 폴더, 쓸 장 번호)
 FOLDERS = {
     "flame": ("1_대기불꽃", range(30)),
@@ -42,11 +46,11 @@ FOLDERS = {
     "pet": ("3_쓰다듬기", range(30)),
     "motion_flame_shot": ("4_장난불꽃", range(30)),
     "motion_hat_magic": ("5_모자마술", range(30)),
-    "crouch": ("8_웅크리기_구석앉기", range(30)),
+    "crouch": ("8_웅크리기_구석앉기", range(16)),   # 앉기 0~15 — 앉은 뒤 반복은 8b(사용자 11-28 '마법진이 한 바퀴 다 안 돌아감')
+    "sit": ("8b_구석_마법진반복", range(30)),        # 마법진 한 바퀴 반복 영상(기획 11-28, 끝→처음 이음 5.7 < 이웃 장 7.0)
     "rise": ("9_일어나기", range(30)),
     "drag": ("10_끌기", (6, 7, 8, 9, 14, 15, 16, 17)),   # 10~13은 귀 끝이 잘려 뺌
     "land": ("11_떨어지기착지", (4, *range(12, 30))),      # 4 = 떨어지는 한 장
-    "laugh": ("13_대기_웃음", range(30)),
     "chin": ("14_대기_턱괴기", range(30)),
 }
 TALK = "12_말하기"
@@ -113,7 +117,7 @@ def frames() -> dict[str, np.ndarray]:
 def main() -> None:
     made = frames()
     for old in [*OUT.glob("*.png"), *OUT.glob("*.webp")]:
-        if old.name not in KEEP:
+        if old.name not in KEEP and not old.name.startswith(KEEP_PREFIX):
             old.unlink()
     for name, image in sorted(made.items()):
         # 말하기 장은 무손실(101) — 입만 바뀌는 장끼리 몸 픽셀이 똑같아야 말할 때 몸이 지글거리지 않음

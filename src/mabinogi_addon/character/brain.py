@@ -292,7 +292,6 @@ def _v(prefix: str, indices) -> tuple[tuple[str, ...], tuple[float, ...]]:
     return names, (V,) * len(names)
 
 
-_SIT = tuple(range(16, 30)) + tuple(range(28, 16, -1))   # 앉아 마법진 돌리기 — 효과가 커졌다 작아짐(왕복, 이음매 없음)
 STARLINE_ANIMS = {
     "stand": (*_v("stand", range(30)), True),   # 숨쉬기·흔들림·깜빡임 30장 반복
     "walk": (*_v("walk", range(14)), True),     # 영상 걷기 14장(한 바퀴 1.4초)
@@ -305,8 +304,8 @@ STARLINE_ANIMS = {
     "pet_out": (*_v("pet", range(21, 30)), False),
     "alert": (("talk_emph_0",), (1.5,), False),   # 손가락 튕기며 알림
     "crouch": (*_v("crouch", range(16)), False),   # 웅크려 앉아 손가락 듦
-    "sit_loop": (*_v("crouch", _SIT), True),
-    "sit_notice": (("crouch_29",), (1.2,), False),    # 앉아서 클릭 = 그림 그대로(말풍선만)
+    "sit_loop": (*_v("sit", range(30)), True),   # 마법진 한 바퀴 반복 영상 8b 00→29(기획 11-28 — 예전 crouch 16→29→17 왕복은 한 바퀴가 안 돎)
+    "sit_notice": (("sit_0",), (1.2,), False),    # 앉아서 클릭 = 그림 그대로(말풍선만, notice_holds로 그때 장)
     "rise": (*_v("rise", range(30)), False),   # 첫 장 = 앉기 끝 장
     "flame": (*_v("flame", range(30)), False),   # 대기 불꽃·웃음·턱괴기(서기 → 서기) 셋 중 무작위
     "laugh": (*_v("laugh", range(30)), False),
