@@ -76,10 +76,15 @@ def body(ch, head, act, cam="카메라 고정, 캐릭터 크기와 위치 그대
 def img(p, alt):
     return f"![{alt}]({p})"
 
+def passed(tid):
+    """결과가 '통과'로 시작할 때만(‘다시 — 동작은 통과인데…’는 남은 작업 — 재현: 아리아 A0가 목록에서 빠짐)."""
+    return RES.get(tid, "").lstrip("*").startswith("통과")
+
+
 def chain_start(ch, pid):
     """앞 작업이 통과해 요청 폴더에 2_끝.png(마지막 장)가 있으면 그 경로."""
     for d in sorted((R / "assets" / ch / "요청").glob(f"{pid}_*")):
-        if "통과" in RES.get(pid, ""):
+        if passed(pid):
             for n in ("3_다음시작_세로.png", "2_끝.png"):
                 if (d / n).exists():
                     return f"assets/{ch}/요청/{d.name}/{n}"
@@ -99,7 +104,7 @@ def section(ch):
             where = "Gemini 이미지(첨부 2장)"
         else:
             where = "Flow"
-        if "통과" in RES.get(tid, ""):
+        if passed(tid):
             continue   # 11-28 사용자 '통과된 건 문서에 남기지 마' — 기록은 영상작업_결과.json·status·요청 폴더
         rows.append((tid, name, where))
         out.append(f"### {tid} {ch} {name}")
