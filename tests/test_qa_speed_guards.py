@@ -205,6 +205,24 @@ def test_cause_with_repro_line_or_no_cause_passes(tmp_path, reply):
     assert _stop(_transcript(tmp_path, reply)).returncode == 0
 
 
+@pytest.mark.parametrize('reply', ['혹시 다른 동작을 보신 것 아닐까요.', '사용자가 잘못 보셨을 수 있습니다.',
+                                   '착각일 가능성이 있습니다.', '그때 캐릭터를 클릭하셨나요?',
+                                   '게임 알림 소리가 켜져 있었나요?'])
+def test_blaming_user_is_sent_back_even_when_active(tmp_path, reply):
+    """사용자 지시 11-28: 사용자가 잘못 봤다·조작 되묻기 금지 — stop_hook_active여도 막음."""
+    for active in (False, True):
+        result = _stop(_transcript(tmp_path, reply), active=active)
+        assert result.returncode == 2 and '사실' in result.stderr
+
+
+@pytest.mark.parametrize('reply', ['사용자 말씀 "사용자가 잘못봤는데?" 그대로 제가 몰아간 것이 잘못입니다.',
+                                   '웃음 대기에서 말하기 영상이 나옵니다. 몸은 서 있기와 같습니다.',
+                                   '클릭하면 말풍선이 뜹니다.',
+                                   '사용자분이 잘못 보셨다고 몰아간 것이 제 잘못입니다.'])
+def test_no_blame_passes(tmp_path, reply):
+    assert _stop(_transcript(tmp_path, reply)).returncode == 0
+
+
 def test_answer_guard_blocks_only_once_and_never_breaks(tmp_path):
     assert _stop(_transcript(tmp_path, '확인 못 했습니다'), active=True).returncode == 0
     broken = subprocess.run([sys.executable, str(ANSWER_HOOK)], input='{}', capture_output=True, text=True)

@@ -7,6 +7,10 @@
 원인 단정 금지(사용자 지시 11-27 — 제보를 그림·인식 문제로 바꿔 읽고 재현 없이 '원인을 찾았다'고 답한 일):
 답에 '원인'을 쓰면 같은 답에 '재현:' 줄(실제로 돌린 명령·결과, 또는 '재현: 안 됨 — 다음에 볼 곳')이 있어야 한다.
 이 규칙은 stop_hook_active여도 막는다 — '재현:' 줄을 쓰면 언제든 풀리므로 무한 반복되지 않는다.
+사용자 탓 금지(사용자 지시 11-28 — 웃음 대기로 잘못 들어간 말하기 영상을 QA가 보지 않고 통과시킨 뒤
+'다른 동작을 보신 것', '클릭하셨나요'처럼 사용자가 잘못 본 것으로 몰아간 일. 세션이 압축되면 말로 한 반성은 사라지므로 장치로 둔다):
+사용자가 잘못 봤다·착각했다는 말, 사용자가 한 조작·조건을 되묻는 말이 따옴표·인용 밖에 있으면 막는다.
+stop_hook_active여도 막는다 — 그 말을 빼고 다시 쓰면 풀린다.
 훅이 실패하면 막지 않는다.
 """
 from __future__ import annotations
@@ -62,6 +66,21 @@ def unproven_cause(text: str) -> bool:
     return bool(CAUSE.search(_strip_quotes(text))) and not REPRO_LINE.search(text)
 
 
+BLAME = re.compile(
+    r'잘못\s*(?:보|들|이해하|아)(?:신|셨|시)|착각|오인하|헷갈리(?:신|셨)'
+    r'|다른\s*(?:동작|장면|화면|캐릭터|창)을?\s*(?:보|들)(?:신|셨)'
+    r'|(?:클릭|조작|소리|게임|설정|마우스|알림)[^.?!\n]{0,24}(?:하셨|켜셨|누르셨|움직이셨|켜져\s*있었|켜\s*두셨)[^.?!\n]{0,8}\?'
+)
+
+
+def blames_user(text: str) -> list[str]:
+    """사용자가 잘못 봤다고 하거나 사용자 조작을 되묻는 말(사용자 지시 11-28)."""
+    text = _strip_quotes(text)
+    # 자기 잘못을 적은 말('잘못 보셨다고 몰아간 것')은 사용자 탓이 아님
+    return sorted({m.group(0) for m in BLAME.finditer(text)
+                   if not re.match(r'[^.?!\n]{0,8}(?:몰아|탓|말한|한\s*것|처럼\s*말)', text[m.end():])})
+
+
 def violations(text: str) -> list[str]:
     # 코드 블록·인라인 코드 안 글자는 제외(명령·인용 예시)
     text = re.sub(r'```.*?```', '', text, flags=re.S)
@@ -78,9 +97,18 @@ def main() -> int:
         data = json.load(sys.stdin)
         reply = last_reply(Path(data['transcript_path']))
         cause = unproven_cause(reply)
+        blame = blames_user(reply)
         found = [] if data.get('stop_hook_active') else violations(reply)
     except Exception:
         return 0
+    if blame:
+        print(
+            f"답에 '{', '.join(blame)}' 표현이 있습니다 — 프로젝트 훅 .claude/hooks/answer_guard.py (사용자 지시 11-28).\n"
+            '사용자가 본 것·한 조작은 사실입니다. 잘못 봤다고 하거나 조작 여부를 되묻지 말고, '
+            '그 말 그대로의 증상을 앱·자료에서 찾아 재현한 결과로 다시 답하세요.',
+            file=sys.stderr,
+        )
+        return 2
     if cause:
         print(
             "답에 '원인'이 있는데 '재현:' 줄이 없습니다 — 프로젝트 훅 .claude/hooks/answer_guard.py (사용자 지시 11-27).\n"
