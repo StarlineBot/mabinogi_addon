@@ -1,0 +1,40 @@
+# 레나 영상판 원본크기 — Starline 원본크기(stand 키 517, 귀 포함)와 같은 규칙: 키 맞춤 결과(레나 478 : Starline 611 = 0.782, 머리 맞춘 눈 높이 0.857 — 다래 0.73보다 큼)로 서 있기 키 결정,
+# 동작마다 서 있는 장의 머리 폭으로 서 있기 영상에 맞춤, 동작마다 모든 장을 합친 상자로 자름(장끼리 자리 그대로), 화면 끝에 닿은 머리끝은 10px 흐리게.
+import sys, os, json, shutil, numpy as np, cv2
+sys.path.insert(0, "/tmp/claude-0/-home-user-mabinogi-addon/5eadae52-74cf-5bff-9103-5e037310a3e4/scratchpad"); import vcheck as V
+R = "/home/user/mabinogi_addon/docs/characters/assets/레나/"; OUT = R + "영상/원본크기/"
+def fade(a):
+    a = a.copy(); h, w = a.shape[:2]; r = np.ones((h, w), np.float32); n = 10
+    ramp = np.linspace(0, 1, n, endpoint=False)
+    r[:, :n] *= ramp[None, :]; r[:, -n:] *= ramp[::-1][None, :]; r[:n, :] *= ramp[:, None]
+    a[..., 3] = (a[..., 3] * r).astype(np.uint8); return a
+def headw(a):
+    m = a[..., 3] > 128; ys = np.where(m.any(1))[0]; t, b = ys.min(), ys.max()
+    band = m[t + int((b - t) * .30): t + int((b - t) * .38)]; xs = np.where(band.any(0))[0]; return xs.max() - xs.min()
+def hgt(a):
+    ys = np.where((a[..., 3] > 128).any(1))[0]; return ys.max() - ys.min() + 1
+ST = [fade(a) for a in V.load(R + "요청/L0_서있기/결과.gif")]
+H0 = hgt(ST[0]); TARGET = round(517 * 478 / 611); K = TARGET / H0; HW0 = headw(ST[0])
+M = [("stand", "요청/L0_서있기/결과.gif", "stand"), ("L2_걷기", "요청/L2_걷기/결과.gif", "height"), ("L3_말하기", "요청/L3_말하기/결과.gif", 0),
+     ("L4_쓰다듬기", "요청/L4_쓰다듬기/결과.gif", 0), ("L5_끌기", "요청/L5_끌기/결과.gif", 0), ("L6_떨어지기착지", "요청/L6_떨어지기착지/결과.gif", -1),
+     ("L7_구석앉기", "요청/L7_구석앉기/결과.gif", 0), ("L8_구석가만히", "요청/L8_구석가만히/결과.gif", "after7"), ("L9_구석에서내려오기", "요청/L9_구석에서내려오기/결과.gif", -1),
+     ("L10_마법펑", "요청/L10_마법펑/결과.gif", 0), ("L11_마법서펼치기", "요청/L11_마법서펼치기/결과.gif", 0), ("L12_마법서덮기", "요청/L12_마법서덮기/결과.webp", -1)]
+shutil.rmtree(OUT, ignore_errors=True); os.makedirs(OUT)
+rep = {"서있기_키_원본": TARGET, "k_서있기": round(K, 4), "기준": "키 맞춤 결과 — 레나 478 : Starline 611(귀 포함) → Starline 원본 서 있기 517 × 0.782"}
+last7 = None
+for name, src, ref in M:
+    F = [fade(a) for a in V.load(R + src)]
+    if ref == "stand": s = 1.0
+    elif ref == "height": s = max(hgt(a) for a in ST) / max(hgt(a) for a in F)
+    elif ref == "after7": s = s7 * hgt(last7) / hgt(F[0])
+    else: s = hgt(ST[0]) / hgt(F[ref])   # 레나: 서 있는 장 키로(머리 띠 폭은 긴 머리 폭이라 안 맞음 — 재현: 키 388~405로 갈림)
+    k = K * s
+    if name == "L7_구석앉기": s7, last7 = s, F[-1]
+    U = np.any([a[..., 3] > 20 for a in F], axis=0); yy, xx = np.where(U); box = (yy.min(), yy.max() + 1, xx.min(), xx.max() + 1)
+    d = OUT if name == "stand" else OUT + name + "/"; os.makedirs(d, exist_ok=True)
+    for i, a in enumerate(F):
+        c = a[box[0]:box[1], box[2]:box[3]]; g = cv2.resize(c, None, fx=k, fy=k, interpolation=cv2.INTER_AREA if k < 1 else cv2.INTER_CUBIC)
+        cv2.imencode(".png", g)[1].tofile(d + (f"stand_{i:02d}.png" if name == "stand" else f"{i:02d}.png"))
+    rep[name] = dict(원본=src, 배율=round(k, 4), 머리보정=round(s, 3), 틀=list(g.shape[:2]), 장수=len(F))
+    print(name, rep[name], flush=True)
+json.dump(rep, open(OUT + "배율.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
