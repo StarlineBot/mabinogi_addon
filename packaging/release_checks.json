@@ -18,13 +18,13 @@
         "tests/test_character.py",
         "tests/test_qa_frame_check.py"
       ],
-      "reason": "Starline sit_loop = 마법진 한 바퀴 반복 영상 8b sit_0→29(기획 11-28, 사용자 제보 '마법진이 한 바퀴 다 안 돌아감'), sit_notice sit_0"
+      "reason": "Starline sit_loop = 마법진 한 바퀴 반복 영상 8b sit_0→29(기획 11-28, 사용자 제보 '마법진이 한 바퀴 다 안 돌아감'), sit_notice sit_0 · 대기 불꽃·웃음(새 영상)·턱괴기 셋 중 무작위(사용자 확인 11-28)"
     },
     "scripts/build_starline_video.py": {
       "tests": [
         "tests/test_starline_video.py"
       ],
-      "reason": "8b_구석_마법진반복 설치(sit_*), crouch 0~15만, sit 앵커(0,-23 — crouch_16과 겹침 0.91), 예전 laugh 앱 파일 그대로 둠(원본 폴더는 새 웃음으로 덮였음)"
+      "reason": "8b_구석_마법진반복 설치(sit_*), crouch 0~15만, sit 앵커(0,-23 — crouch_16과 겹침 0.91), laugh = 새 13_대기_웃음(눈 감고 씩 웃음)"
     },
     "src/mabinogi_addon/assets/characters/Starline/sit_0.webp": {
       "tests": [
@@ -66,6 +66,13 @@
         "tests/test_release_checks.py"
       ],
       "reason": "0.59.3 경계"
+    },
+    "src/mabinogi_addon/assets/characters/Starline/laugh_0.webp": {
+      "tests": [
+        "tests/test_starline_video.py",
+        "tests/test_character.py"
+      ],
+      "reason": "새 대기 웃음 30장 WebP(원본 그대로)"
     }
   }
 }
