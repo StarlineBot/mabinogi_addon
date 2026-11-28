@@ -9,6 +9,7 @@
 """
 from __future__ import annotations
 
+import logging
 import math
 import time
 from collections import OrderedDict
@@ -20,6 +21,9 @@ from PySide6.QtWidgets import QWidget
 
 from .. import paths
 from ..character import brain as brain_mod
+
+_log = logging.getLogger(__name__)
+PROBE_AFTER = (0.0, 0.5, 2.0, 5.0)   # 게임 앞/뒤가 바뀐 뒤 펫 창 상태를 남길 때(초) — QA 11-28 알트탭 사라짐 조사
 
 FRAME_DIR_H = 285            # 저장 프레임의 서 있는 키(scripts/build_dare_frames.py STAND_H)
 WIN_W = 300                  # 창 폭(가장 넓은 프레임 + 말풍선 여유)
@@ -208,7 +212,7 @@ class PetWindow(QWidget):
 
     def __init__(self, brain: brain_mod.Brain, frames: Mapping[str, QImage], tint: str,
                  game_front=lambda: False, clock=time.monotonic, parent: QWidget | None = None,
-                 outline: str | None = None, blocked=lambda: ()) -> None:
+                 outline: str | None = None, blocked=lambda: (), foreground=lambda: "") -> None:
         super().__init__(parent, Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint
                          | Qt.WindowType.Tool | Qt.WindowType.WindowDoesNotAcceptFocus)
         from . import overlay_capture
@@ -230,6 +234,11 @@ class PetWindow(QWidget):
         self._blocked_fn = blocked      # 보이는 게임 화면이 바닥과 겹치는 x 구간(진짜 창모드, QA 11-26)
         self._blocked: tuple = ()
         self._blocked_checked = -1e9
+        self._foreground = foreground   # 지금 포그라운드 실행 파일 이름(진단 기록용)
+        self._probe_front: bool | None = None
+        self._probes: list[tuple[float, float, str]] = []   # (남길 시각, 바뀐 뒤 몇 초, 무엇이 바뀜)
+        self._fg_before = ""
+        self._fg_now = ""
         self._bubble: tuple[str, float, float] | None = None   # (글, 나오기 시작, 사라질 때)
         self._sprite = QRectF()
         self._shown = None            # 마지막으로 그린 것(프레임·위치·말풍선) — 같으면 다시 안 그림(CPU)
@@ -260,6 +269,12 @@ class PetWindow(QWidget):
         self.brain.bubble_until(now + len(text) * brain_mod.TYPE_SECONDS)
         self.brain.talk(now, len(text), mood)
         self.update()
+
+    def hush(self) -> None:
+        """말풍선 지움 — 잡혀서 하던 말이 끊김(사용자 11-28). 대사 목소리는 컨트롤러가 drag_start 사건으로 멈춤."""
+        if self._bubble:
+            self._bubble = None
+            self.update()
 
     def hold_talk(self, seconds: float) -> None:
         """말풍선이 뜬 때부터 seconds초 동안 말하기 그림 유지(대사 목소리 길이)."""
@@ -297,6 +312,7 @@ class PetWindow(QWidget):
             except Exception:  # noqa: BLE001 — 판정 실패는 '막힌 곳 없음'(지금 동작 그대로)
                 self._blocked = ()
         events = self.brain.tick(now, self._front, self._blocked)
+        self._probe_step(now)
         if self._bubble and now >= self._bubble[2]:
             self._bubble = None
         self._place()
@@ -312,6 +328,50 @@ class PetWindow(QWidget):
             self.update()
         if events:
             self.events.emit(events)
+
+    def _probe_step(self, now: float) -> None:
+        """게임 앞/뒤가 바뀌면 그 순간·0.5·2·5초 뒤 펫 창 상태를 app.log에 한 줄씩(QA 11-28 — 알트탭 때 캐릭터가 간헐적으로
+        사라진다는 제보, 재현 안 됨). 보이는지·위치·모니터·Win32 창 상태·가운데 점에 실제로 보이는 창·brain 상태·포그라운드."""
+        if self._front != self._probe_front:
+            first = self._probe_front is None
+            self._probe_front = self._front
+            if not first:
+                try:
+                    fg = str(self._foreground() or "")
+                except Exception:  # noqa: BLE001
+                    fg = "?"
+                self._fg_before, self._fg_now = self._fg_now, fg
+                why = "게임 앞" if self._front else "게임 밖"
+                self._probes = [(now + d, d, why) for d in PROBE_AFTER]
+            else:
+                try:
+                    self._fg_now = str(self._foreground() or "")
+                except Exception:  # noqa: BLE001
+                    self._fg_now = "?"
+        while self._probes and now >= self._probes[0][0]:
+            _due, after, why = self._probes.pop(0)
+            try:
+                _log.info(self.probe_line(why, after))
+            except Exception as exc:  # noqa: BLE001 — 진단이 펫을 멈추지 않게
+                _log.info("[펫 창] why=%s after=%s 기록 실패 %s", why, after, type(exc).__name__)
+
+    def probe_line(self, why: str, after: float, api=None) -> str:
+        from ..system import pet_window_probe
+        dpr = self.devicePixelRatioF() or 1.0
+        g = self.geometry()
+        screen = self.screen()
+        center = (round((g.x() + g.width() / 2) * dpr), round((g.y() + g.height() - FOOT - 60) * dpr))
+        b = self.brain
+        info = {
+            "why": why, "after": after, "shown": self.isVisible(),
+            "logical": (g.x(), g.y(), g.width(), g.height()),
+            "physical": (round(g.x() * dpr), round(g.y() * dpr), round(g.width() * dpr), round(g.height() * dpr)),
+            "screen": f"{screen.name() if screen else '?'}@{dpr:g}",
+            "win32": pet_window_probe.probe(int(self.winId()), center, api),
+            "state": b.state, "pos": (round(b.pos[0]), round(b.pos[1])), "goal": b._goal,
+            "blocked": tuple(self._blocked), "fg_before": self._fg_before or "-", "fg_now": self._fg_now or "-",
+        }
+        return pet_window_probe.line(info)
 
     def _place(self) -> None:
         x, y = self.brain.pos
@@ -484,6 +544,8 @@ class PetWindow(QWidget):
         g = event.globalPosition()
         if event.buttons() & Qt.MouseButton.LeftButton:
             events = self.brain.move(now, g.x(), g.y())
+            if ("drag_start",) in events:
+                self.hush()
             self._place()
             self.update()
         else:

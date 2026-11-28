@@ -2451,3 +2451,48 @@ def test_pet_lines_only_while_petting_motion_plays(profile):
         c.hover(t, rub(t), True)
     t, events = _run(c, t, 4.0, False)            # 알아채자마자 손 뗌 — 쓰다듬기 모션 전이라 시작·쓰는 중 대사 없음
     assert ("say", "pet_start") not in events and ("say", "pet_during") not in events
+
+
+@pytest.mark.parametrize("folder", ["다래", "아리아", "이안", "레나", "Starline"])
+def test_grabbing_while_talking_drops_the_old_bubble_and_voice(app, folder):
+    """사용자 11-28 '말하고 있을 때 잡으면 앞의 말풍선이 사라지지 않아서 잡혔을 때 말풍선이 안 나와': 끌기가 시작되는 순간
+    하던 말풍선은 지우고(drag_start 사건) 대사 목소리도 멈춤 — 그 뒤 잡힘 대사가 나오면 그것만 보임. 모든 캐릭터."""
+    from PySide6.QtCore import QPointF, Qt
+    from PySide6.QtGui import QMouseEvent
+    from mabinogi_addon.ui import character_controller as cc
+    from mabinogi_addon.ui import pet_window
+
+    profile = br.PROFILES[folder]
+    clock = [10.0]
+    b = br.Brain(br.Floor(0, 1000, 700), rng=random.Random(1), profile=profile)
+    b.pos = (300.0, 700.0)
+    w = pet_window.PetWindow(b, pet_window.load_frames(folder, profile), "#888888", clock=lambda: clock[0])
+    got = []
+    w.events.connect(got.extend)
+    try:
+        w.grab()
+        w.say("아주 긴 혼잣말을 하는 중이에요, 끝까지 들어 주세요.")
+        assert w.bubble()
+        clock[0] += 0.5
+        inside = QPointF(w._sprite.center().x(), w._sprite.top() + w._sprite.height() * 0.6)
+        glob = QPointF(w.x() + inside.x(), w.y() + inside.y())
+
+        def ev(kind, local, globl, buttons):
+            return QMouseEvent(kind, local, globl, Qt.MouseButton.LeftButton, buttons, Qt.KeyboardModifier.NoModifier)
+        w.mousePressEvent(ev(QMouseEvent.Type.MouseButtonPress, inside, glob, Qt.MouseButton.LeftButton))
+        far = QPointF(glob.x() + 40, glob.y() - 40)
+        w.mouseMoveEvent(ev(QMouseEvent.Type.MouseMove, inside, far, Qt.MouseButton.LeftButton))
+        assert b.state == "drag" and ("drag_start",) in got
+        assert w.bubble() is None   # 앞 말풍선 지움(잡힘 대사는 컨트롤러가 이 뒤에 띄움)
+    finally:
+        w.close()
+    stopped = []
+
+    class Voice:
+        def stop(self):
+            stopped.append(1)
+    ctrl = cc.CharacterController.__new__(cc.CharacterController)
+    ctrl.voice, ctrl.window, ctrl.affinity = Voice(), None, None
+    ctrl._clock, ctrl.picker = (lambda: 0.0), (lambda: None)
+    ctrl._on_events([("drag_start",)])
+    assert stopped == [1]   # 대사 목소리 멈춤
