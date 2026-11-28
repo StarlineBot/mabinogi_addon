@@ -21,15 +21,17 @@ class Motion:
     long_loop: tuple[float, float] | None = None   # 반복을 이 초만큼(레나 공중 앉기)
     hold: tuple[tuple[int, float], ...] = ()       # 장마다 머무는 시간(번호, 초) — 없으면 FRAME(다래 양인형 안기 2.1초, 레나 마법서 이 악묾 0.6·'탁' 1.2초, 아리아 물주기 들어 보이기 1.2초·화관 쓴 5번 2.0초, 11-26 · Starline 영상판 손가락 총 9번·모자에 손 넣기 7번 1.0초, 11-27)
     frame: float = FRAME                            # 한 장 시간(Starline 영상판 0.1초, 11-27)
+    frames: tuple[str, ...] = ()                    # 장 이름을 직접(레나 영상판 공중 앉기 = 구석 앉기·가만히·내려오기 장 그대로)
+    lift: tuple | None = None                       # 떠오르기(올림 px, 둥둥 ±px, 주기 초, 올라가는 장 수, 내려오는 장 수) — 키 190 기준
 
     def names(self) -> tuple[str, ...]:
-        return tuple(f"{self.key}_{i}" for i in range(self.count))
+        return self.frames or tuple(f"{self.key}_{i}" for i in range(self.count))
 
     def sequence(self, rng: random.Random) -> tuple[tuple[str, float], ...]:
         """(프레임, 초) 순서 — 반복 구간은 2~3번(긴 반복이면 그 시간만큼)."""
         names = self.names()
         held = dict(self.hold)
-        dur = {f"{self.key}_{i}": held.get(i, self.frame) for i in range(self.count)}
+        dur = {name: held.get(i, self.frame) for i, name in enumerate(names)}
         if self.loop is None:
             return tuple((n, dur[n]) for n in names)
         a, b = self.loop
@@ -48,7 +50,13 @@ MOTIONS: dict[str, tuple[Motion, ...]] = {
     # 다래 영상판(기획 11-28): 30장 0.1초 한 번 — 양 인형 15번(꼭 안음) 1.0초
     "다래": (Motion(25, "motion_sheep_doll", 30, None, hold=((15, 1.0),), frame=0.1),
              Motion(75, "motion_bubbles", 30, None, frame=0.1)),
-    "레나": (Motion(25, "motion_grimoire", 8, (2, 4), hold=((4, 0.6), (5, 1.2))), Motion(75, "motion_float_sit", 8, (2, 5), (10.0, 20.0))),
+    # 레나 영상판(기획 11-28): 마법서 = 펼치기 30장 → 덮기 30장(펼친 29번 1.0초), 공중 앉기 = 구석 앉기 → 가만히 반복 10~20초 →
+    # 내려오기(구석과 같은 장) + 머리 하나 높이(키 190 기준 55px)로 떠오름·±5 둥둥(사용자 11-28 '앉기에서 위로 띄우기만 하면 공중 앉기')
+    "레나": (Motion(25, "motion_grimoire", 60, None, hold=((29, 1.0),), frame=0.1),
+             Motion(75, "motion_float_sit", 90, (30, 60), (10.0, 20.0), frame=0.1,
+                    frames=(*(f"crouch_{i}" for i in range(30)), *(f"sit_{i}" for i in range(30)),
+                            *(f"rise_{i}" for i in range(30))),
+                    lift=(55.0, 5.0, 2.4, 30, 30))),
     "이안": (Motion(25, "motion_tidy", 8, None), Motion(75, "motion_tea", 6, (2, 4))),
     "Starline": (Motion(25, "motion_flame_shot", 30, None, hold=((9, 1.0),), frame=0.1),   # 영상판(11-27) 30장 0.1초
                   Motion(75, "motion_hat_magic", 30, None, hold=((7, 1.0),), frame=0.1)),
@@ -58,6 +66,7 @@ MOTIONS: dict[str, tuple[Motion, ...]] = {
 # 착장(영상판 그림 없음)을 입었을 때 — 예전 시트 8장 모션(양인형 6번 2.1초: 사용자 11-26 '껴안고 있는 프레임이 좀 유지되어야')
 SHEET_MOTIONS: dict[str, tuple[Motion, ...]] = {
     "다래": (Motion(25, "motion_sheep_doll", 8, (2, 4), hold=((6, 2.1),)), Motion(75, "motion_bubbles", 8, (2, 4))),
+    "레나": (Motion(25, "motion_grimoire", 8, (2, 4), hold=((4, 0.6), (5, 1.2))), Motion(75, "motion_float_sit", 8, (2, 5), (10.0, 20.0))),
 }
 
 

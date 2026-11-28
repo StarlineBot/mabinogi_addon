@@ -17,7 +17,7 @@ import numpy as np
 from scripts.build_dare_frames import imread, imwrite, scaled
 from scripts.build_outfit_frames import ASSETS, APP_ROOT, TEMPLATES, cells_of, frame_name
 
-FOLDERS = ("아리아", "레나", "이안")   # 다래는 영상판(11-28, scripts/build_dare_video) — 옛 시트 모션으로 덮지 않음
+FOLDERS = ("아리아", "이안")   # 다래·레나는 영상판(11-28, scripts/build_dare_video·build_lena_video) — 옛 시트 모션으로 덮지 않음
 STARLINE = {"motion_flame_shot": "스타 발사 마법사 6컷 애니메이션", "motion_hat_magic": "토끼 귀 마법사의 모자 소동"}
 HEAD = 0.42
 

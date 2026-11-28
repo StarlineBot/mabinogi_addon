@@ -15,18 +15,19 @@ from scripts.silhouette import best_scale
 
 CHARS = Path(__file__).resolve().parents[1] / "src/mabinogi_addon/assets/characters"
 # 다래 기본 옷은 영상판(0.60.0) — 착장 비교 기준은 예전 시트 기본 옷(앱 밖 보관)
-SHEET_BASE = {"다래": Path(__file__).resolve().parents[1] / "docs/characters/assets/다래/시트_앱크기"}
+SHEET_BASE = {"다래": Path(__file__).resolve().parents[1] / "docs/characters/assets/다래/시트_앱크기",
+              "레나": Path(__file__).resolve().parents[1] / "docs/characters/assets/레나/시트_앱크기"}
 
 
 def _base(char):
     return SHEET_BASE.get(char, CHARS / char)
 OUTFITS = {   # (캐릭터, 옷) → (펫 프로필, 모션 이름 두 개, 색 기준)
-    ("레나", "lab"): (br.LENA, ("motion_grimoire", "motion_float_sit"), "stand_0"),
+    ("레나", "lab"): (br.LENA_SHEET, ("motion_grimoire", "motion_float_sit"), "stand_0"),
     ("다래", "frill_pajama"): (br.DARE_SHEET, ("motion_sheep_doll", "motion_bubbles"), "stand_0"),
     ("이안", "guild_uniform"): (br.IAN, ("motion_tidy", ("motion_tea", 6)), "stand_1"),   # 차 6장(조끼와 같음)
     ("아리아", "summer_dress"): (br.ARIA, ("motion_water", "motion_wreath"), "stand_0"),
     ("다래", "white_offshoulder"): (br.DARE_SHEET, ("motion_sheep_doll", "motion_bubbles"), "stand_0"),
-    ("레나", "red_dress"): (br.LENA, ("motion_grimoire", "motion_float_sit"), "stand_0"),
+    ("레나", "red_dress"): (br.LENA_SHEET, ("motion_grimoire", "motion_float_sit"), "stand_0"),
 }
 HAT = {("아리아", "summer_dress")}   # 밀짚모자 — 머리 실루엣 대신 '서 있기 대비 키 비율 = 기본 같은 장 ±6%'(전체 다시 그림 11-26)
 
@@ -160,14 +161,14 @@ def test_walk_height_range_within_two_percent(char, outfit):
     if (char, outfit) in HAT:
         # 여름 드레스 전체 다시 그림(11-26): 걷기 키 ÷ 서 있기가 기본 아리아 같은 장과 2% 안, 중앙값 비율은 기본(1.032)과 1% 안
         stand, base_stand = (_read(CHARS / char / "outfits" / outfit / "stand_0.png").shape[0],
-                             _read(CHARS / char / "stand_0.png").shape[0])
-        base = [_read(CHARS / char / f"walk_{i}.png").shape[0] for i in range(8)]
+                             _read(_base(char) / "stand_0.png").shape[0])
+        base = [_read(_base(char) / f"walk_{i}.png").shape[0] for i in range(8)]
         assert all(abs((h / stand) / (b / base_stand) - 1) <= 0.02 for h, b in zip(heights, base)), (heights, base)
         assert abs(float(np.median(heights)) / stand - float(np.median(base)) / base_stand) <= 0.01
         return
     if outfit == "red_dress":
         # 전체 다시 그림(11-26)은 기본 레나 걷기(286~291)처럼 장마다 오르내림 — 같은 장 기본 키와 1.5% 안이면 크기 튐 아님
-        base = [_read(CHARS / char / f"walk_{i}.png").shape[0] for i in range(8)]
+        base = [_read(_base(char) / f"walk_{i}.png").shape[0] for i in range(8)]
         assert all(abs(h - b) / b <= 0.015 for h, b in zip(heights, base)), (heights, base)
         return
     assert (max(heights) - min(heights)) / min(heights) <= 0.021, heights
@@ -177,7 +178,7 @@ def test_lena_lab_walk_face_taken_from_base_walk():
     """QA 11-26: 레나 연구실 차림 걷기 얼굴 옆선 — 기본 걷기 얼굴을 옮겨 붙임(scripts/outfit_face_fix). 고치기 전 피부 모양 IoU
     0.70~0.77 → 기준 장 0.78(귀는 옷 그림 것이라 1이 아님)."""
     from scripts.outfit_face_fix import align
-    ious = [align(_read(CHARS / "레나" / f"walk_{i}.png"), _read(CHARS / "레나" / "outfits" / "lab" / f"walk_{i}.png"))[1]
+    ious = [align(_read(_base("레나") / f"walk_{i}.png"), _read(CHARS / "레나" / "outfits" / "lab" / f"walk_{i}.png"))[1]
             for i in range(8)]
     # 머리는 walk_0 한 장을 모든 장에 붙임(아래 테스트) — 기준 장은 기본 walk_0 얼굴, 나머지는 기본 걷기 장마다의 얼굴과 조금 다름
     assert ious[0] >= 0.78 and min(ious) >= 0.74, ious

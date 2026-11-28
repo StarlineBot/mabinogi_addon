@@ -56,9 +56,9 @@ def _src(folder: str, index: int) -> np.ndarray:
     return image
 
 
-def _shift(src: np.ndarray, base: np.ndarray) -> tuple[int, int]:
+def _shift(src: np.ndarray, base: np.ndarray, eyes_box=None) -> tuple[int, int]:
     """src 눈 줄을 base에서 찾아 (dx, dy) — src 좌표 + 이 값 = base 좌표."""
-    x, y, w, h = EYES_BOX
+    x, y, w, h = eyes_box or EYES_BOX
     g = lambda im: cv2.cvtColor(np.ascontiguousarray(im[..., :3]), cv2.COLOR_BGR2GRAY)   # noqa: E731
     t = g(src)[y:y + h, x:x + w]
     pad = 12
@@ -67,10 +67,11 @@ def _shift(src: np.ndarray, base: np.ndarray) -> tuple[int, int]:
     return bx - pad, by - pad
 
 
-def mouth_on(base: np.ndarray, src: np.ndarray) -> np.ndarray:
-    """base 몸에 src 입만 — 입 둘레 타원(가장자리 흐림)으로 섞음(Starline build_starline_video.mouth_on과 같은 방식)."""
-    dx, dy = _shift(src, base)
-    x, y, w, h = MOUTH_BOX
+def mouth_on(base: np.ndarray, src: np.ndarray, mouth_box=None, eyes_box=None) -> np.ndarray:
+    """base 몸에 src 입만 — 입 둘레 타원(가장자리 흐림)으로 섞음(Starline build_starline_video.mouth_on과 같은 방식).
+    상자는 이 모듈 값(다래), 다른 캐릭터(레나 build_lena_video)는 넘겨서."""
+    dx, dy = _shift(src, base, eyes_box)
+    x, y, w, h = mouth_box or MOUTH_BOX
     sx, sy = x - dx, y - dy             # src에서 base 입 자리에 해당하는 곳
     patch = src[sy:sy + h, sx:sx + w].astype(np.float32)
     mask = np.zeros((h, w), np.float32)

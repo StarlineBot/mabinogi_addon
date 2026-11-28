@@ -280,7 +280,8 @@ LENA_ANIMS = {
 }
 LENA_TALK = ({**talk_set(), "end1": "talk_end1_0", "end2": "talk_end2_0"},)
 LENA_ANIMS.update(_talk_anims(LENA_TALK))
-LENA = Profile(LENA_ANIMS,
+# 예전 시트 그림 레나 — 착장(빨간 원피스·연구실 차림)은 영상판 그림이 없어 이 프로필 그대로(기획 11-28, profile_for)
+LENA_SHEET = Profile(LENA_ANIMS,
                {"surprise": "stand", "land": "stand", "pet_in": "pet_loop", "pet_out": "stand", "alert": "stand",
                 "crouch": "sit_loop", "sit_notice": "sit_loop", "rise": "stand", "talk_end": "stand", "magic": "stand"},
                ("crouch", "sit_loop", "sit_notice"), "sit_loop", click_talks=True, walk_speed=LENA_WALK_SPEED,
@@ -374,8 +375,41 @@ DARE = Profile(DARE_ANIMS,
                ("crouch", "sit_loop", "sit_notice") + SLEEPING, "sit_loop", doze_state="sit_loop",
                walk_speed=DARE_WALK_V_SPEED, talk_sets=DARE_V_TALK, sleep_gap=SLEEP_GAP, notice_holds=True,
                scale=DARE_SCALE)
+# 레나 영상판(기획 11-28 — docs/status.md '레나 원본크기', scripts/build_lena_video): 원본크기 30장 0.1초, 그리기 배율은
+# Starline·다래와 같은 화면 px/저장 px(예전 LENA_SCALE 0.95는 착장 시트만). 걷기: 디딘 발 가운데가 장마다 약 11.3 저장 px
+# 뒤로(Starline 같은 잼 19.2) → Starline 걷기 빠르기 × 11.3/19.2.
+LENA_STAND_H = 407
+LENA_V_SCALE = round(STARLINE_SCALE * LENA_STAND_H / 524, 4)
+LENA_V_WALK_SPEED = round(STARLINE_WALK_SPEED * 11.3 / 19.2, 1)
+LENA_V_ANIMS = {
+    "stand": (*_v("stand", _r("stand", 0, 29)), True),   # 0→29→1 왕복(끝 장 머리가 3px 낮아 0→29 반복은 이음이 튐)
+    "walk": (*_v("walk", range(10, 25)), True),         # 오른쪽 보는 옆모습 15장
+    "surprise": (("stand_0",), (0.3,), False),          # click_talks라 쓰지 않음(자리만)
+    "alert": (("talk_alert_0",), (1.5,), False),        # 검지 세운 장(L3 14번)
+    "pet_in": (*_v("pet", range(6)), False),
+    "pet_loop": (*_v("pet", range(6, 12)), True),        # 눈 질끈 감고 떠는 구간(영상이 떨어서 pet_shake 끔)
+    "pet_out": (*_v("pet", range(12, 30)), False),
+    "drag_in": (*_v("drag", range(8)), False),           # 잡히면 한 번(매달리기 시작) → drag
+    "drag": (*_v("drag", _r("drag", 8, 29)), True),       # 다리 걷어차며 매달림 왕복
+    "fall": (("land_7",), (1.0,), True),
+    "land": (*_v("land", range(8, 30)), False),
+    "crouch": (*_v("crouch", range(30)), False),         # 살짝 떠올라 다리 꼬고 팔짱 끼며 앉음
+    "sit_loop": (*_v("sit", range(30)), True),
+    "sit_notice": (("sit_0",), (1.2,), False),           # 그때 장 그대로(notice_holds), 말풍선만
+    "rise": (*_v("rise", range(30)), False),             # 구석에서 내려오기
+    "magic": (*_v("magic", range(30)), False),           # 가끔 마법 펑(드문 동작)
+}
+LENA_V_TALK = ({**talk_set(), "end1": "talk_end1_0", "end2": "talk_end2_0"},)
+LENA_V_ANIMS.update(_talk_anims(LENA_V_TALK))
+LENA = Profile(LENA_V_ANIMS,
+               {"surprise": "stand", "land": "stand", "pet_in": "pet_loop", "pet_out": "stand", "alert": "stand",
+                "crouch": "sit_loop", "sit_notice": "sit_loop", "rise": "stand", "talk_end": "stand", "magic": "stand",
+                },
+               ("crouch", "sit_loop", "sit_notice"), "sit_loop", click_talks=True, walk_speed=LENA_V_WALK_SPEED,
+               talk_sets=LENA_V_TALK, scale=LENA_V_SCALE, sit_float=(14.0, 3.0, 2.4, 0.4), rare_extra="magic",
+               notice_holds=True)
 PROFILES = {"다래": DARE, "아리아": ARIA, "이안": IAN, "레나": LENA, "Starline": STARLINE}
-SHEET_PROFILES = {"다래": DARE_SHEET}   # 착장(영상판 그림 없음)을 입었을 때
+SHEET_PROFILES = {"다래": DARE_SHEET, "레나": LENA_SHEET}   # 착장(영상판 그림 없음)을 입었을 때
 
 
 def profile_for(folder: str, dressed: bool = False) -> Profile:
@@ -480,6 +514,12 @@ class Brain:
             return self._talk_set[steps[-1][0]]
         frames, times, loop = self.profile.anims[self.state]
         t = now - self._t0
+        if self.state == "drag" and "drag_in" in self.profile.anims:   # 잡히면 시작 장 한 번 → 반복(레나 영상판)
+            in_frames, in_times, _ = self.profile.anims["drag_in"]
+            if t < sum(in_times):
+                frames, times, loop = in_frames, in_times, False
+            else:
+                t -= sum(in_times)
         if self.state == "walk":
             t *= self._walk_rate
         total = sum(times)
@@ -501,9 +541,30 @@ class Brain:
         """창이 말풍선을 띄울 때 — 글자가 다 나오는 시각(쓰다듬는 중 대사가 앞 대사를 덮지 않게)."""
         self._bubble_until = until
 
+    def _motion_lift(self, now: float) -> float:
+        """호감도 모션이 떠오르는 동안(레나 영상판 공중 앉기, 사용자 11-28 '앉기에서 위로 띄우기만 하면 공중 앉기'): 첫 구간(앉기)
+        동안 0 → 올림, 가운데 둥둥, 끝 구간(내려오기) 동안 올림 → 0. 논리 px, 음수 = 위."""
+        motion = self.motions.get(self.motion_key) if self.motion_key else None
+        lift = getattr(motion, "lift", None)
+        if not lift or not self._motion_seq:
+            return 0.0
+        height, amp, period, up_n, down_n = lift
+        t = now - self._t0
+        times = [d for _n, d in self._motion_seq]
+        total, up, down = sum(times), sum(times[:up_n]), sum(times[-down_n:])
+        if t < up:
+            r, bob = t / up, 0.0
+        elif t > total - down:
+            r, bob = max(0.0, (total - t) / down), 0.0
+        else:
+            r, bob = 1.0, amp * math.sin(2 * math.pi * (t - up) / period)
+        return -(height * r + bob) * self.profile.scale
+
     def float_offset(self, now: float) -> float:
         """앉아 떠 있는 높이(논리 px, 음수 = 위) — 레나: 앉으면 0.4초에 걸쳐 14px 올라 ±3px 둥둥(2.4초), 일어나며 0.4초에 내려옴.
         떠 있기 없는 캐릭터·다른 동작은 0."""
+        if self.state == "motion":
+            return self._motion_lift(now)
         if self.profile.sit_settle and self.state in ("sit_loop", "sit_notice"):
             drop, ease = self.profile.sit_settle
             r = min(1.0, max(0.0, (now - self._float_since) / ease))

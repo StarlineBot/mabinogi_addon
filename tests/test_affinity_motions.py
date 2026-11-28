@@ -41,9 +41,12 @@ def test_base_motion_frames_exist_for_25_and_75_with_standing_head(folder):
     stand = _head(_read(CHARS / folder / f"{STAND.get(folder, 'stand_0')}.png"))
     for m in mo.of(folder):
         for name in m.names():
+            if not name.startswith(m.key):
+                continue   # 다른 동작 장을 그대로 쓰는 모션(레나 영상판 공중 앉기 = 구석 앉기 장) — 그 동작 이음은 qa_frame_check가 봄
             k = best_scale(stand, _head(_read(CHARS / folder / f"{name}.png")), 0.8, 1.25, 91)
             low = 0.9 if folder == "Starline" else 0.95   # 영상판(11-27) 모자 마술은 모자·박쥐가 머리 위를 지나감(0.93)
-            high = 1.12 if name == "motion_bubbles_21" else 1.05   # 다래 영상판(11-28) 21번은 비눗방울이 머리 위로 떠 알파 상자가 커짐(1.10)
+            # 영상판(11-28) 효과가 머리 위로 떠 알파 상자가 커지는 장 — 다래 21번 비눗방울(1.10), 레나 덮기 22번 반짝이(1.065)
+            high = 1.12 if name in ("motion_bubbles_21", "motion_grimoire_52") else 1.05
             assert low <= k <= high, (name, k)
 
 
@@ -57,9 +60,13 @@ def test_sequence_start_loop_end():
         assert len(names) - 6 in (4, 6)                       # 반복 구간(2장) 2~3번
     tidy = mo.MOTIONS["이안"][0]
     assert [n for n, _d in tidy.sequence(rng)] == list(tidy.names())   # 반복 설명 없음 → 한 번
-    float_sit = mo.MOTIONS["레나"][1]
+    float_sit = mo.SHEET_MOTIONS["레나"][1]   # 착장(예전 시트 8장)
     total = sum(d for _n, d in float_sit.sequence(rng))
     assert 10.0 - 3 * mo.FRAME <= total - 5 * mo.FRAME <= 20.0 + 3 * mo.FRAME     # 공중 앉기 반복 10~20초(한 바퀴 단위로 반올림)
+    video = mo.MOTIONS["레나"][1]   # 영상판(11-28): 구석 앉기 3초 → 가만히 30장 반복 10~20초(3초 단위) → 내려오기 3초
+    names = [n for n, _d in video.sequence(rng)]
+    assert names[:30] == [f"crouch_{i}" for i in range(30)] and names[-30:] == [f"rise_{i}" for i in range(30)]
+    assert 10.0 - 1.5 <= (len(names) - 60) * 0.1 <= 20.0 + 1.5 and set(names[30:-30]) == {f"sit_{i}" for i in range(30)}
 
 
 def test_unlocked_by_stage_new_one_double_and_needs_frames():
@@ -257,7 +264,10 @@ def test_sheep_doll_hug_frame_holds():
 
 def test_grimoire_clench_and_slam_frames_hold():
     """사용자 11-26: 레나 마법서 — 4번(이 악묾) 0.6초, 5번('탁' 덮음) 1.2초 머묾. 옷과 상관없이 같은 모션."""
-    grimoire = mo.MOTIONS["레나"][0]
+    video = mo.MOTIONS["레나"][0]   # 영상판(11-28): 펼치기 30장 → 덮기 30장, 펼친 29번 1.0초
+    vseq = video.sequence(random.Random(1))
+    assert len(vseq) == 60 and {n: d for n, d in vseq if d != 0.1} == {"motion_grimoire_29": 1.0}
+    grimoire = mo.SHEET_MOTIONS["레나"][0]   # 착장(예전 시트)
     seq = grimoire.sequence(random.Random(1))
     held = {n: d for n, d in seq if d != mo.FRAME}
     assert held == {"motion_grimoire_4": 0.6, "motion_grimoire_5": 1.2}
