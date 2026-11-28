@@ -5,7 +5,7 @@
   uv run --frozen python -m scripts.qa_frame_check Starline [--outfit KEY] [--source DIR] [--base REV] [--sheet out.png]
 
 검사
-1. 튐(동작 안·동작 사이): 앱이 그리는 자리(그림 아래 가운데 + anchors.json)에서 발 위치(알파 바닥 줄·바닥 띠 가운데)가
+1. 튐(동작 안·동작 사이 — 앉은 반복은 모든 장 → 일어나기 첫 장도): 앱이 그리는 자리(그림 아래 가운데 + anchors.json)에서 발 위치(알파 바닥 줄·바닥 띠 가운데)가
    이어지는 두 장 사이에 크게 바뀌는지. 동작 안 이어지는 장, 반복 동작의 끝→처음, 서기→동작 첫 장·동작 끝 장→다음 상태(next_map).
    끌기·떨어지기·착지·걷기는 원래 발이 움직이므로 가로 튐만 느슨하게 본다.
 2. 머리 크기 튐: 이어지는 두 장의 머리(알파 상자 위 35%) 실루엣 맞춤 배율(scripts.silhouette.best_scale)이 ±5% 넘는지.
@@ -217,6 +217,14 @@ def check(folder: str, outfit: str = "", source: Path | None = None, base: str |
             continue   # 앉아서 클릭 동안 그때 장 그대로·끝나면 반복 멈춘 자리부터(brain notice_holds) — 정해진 장 이음이 없음
         if nxt in seqs and nxt not in MOVING:
             compare(f"{state}→{nxt}", names[-1], seqs[nxt][0], False, stand_edge=(nxt == "stand"))
+
+    # 앉아 있다 일어나기는 반복 중 아무 장에서나 시작함(brain: 게임에서 나가면 그때 장 → rise) — 반복의 모든 장 → rise 첫 장(QA 11-28)
+    rise = seqs.get("rise")
+    if rise:
+        for state in profile.sitting:
+            if state in loops and state in seqs and profile.next_map.get(state) != "sleep_up" and not state.startswith("sleep"):
+                for name in dict.fromkeys(seqs[state]):
+                    compare(f"{state}(아무 장)→rise", name, rise[0], False)
 
     if source is not None or folder == "Starline":
         pairs = source_map(folder)
