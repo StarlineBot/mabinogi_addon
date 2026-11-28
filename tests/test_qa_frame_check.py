@@ -40,3 +40,9 @@ def test_reverted_bad_mouth_build_is_caught_when_available():
 def test_current_starline_has_no_source_edits():
     problems = q.check("Starline")
     assert not [p for p in problems if p.startswith("원본과 다름")], problems
+
+
+def test_current_starline_sitting_loop_to_rise_has_no_jump():
+    """QA 11-28: 앉아 있다 일어나기는 반복 중 아무 장에서나 시작 — 반복의 모든 장 → rise 첫 장에 튐이 없어야 함."""
+    problems = q.check("Starline")
+    assert not [p for p in problems if "(아무 장)→rise" in p], problems
