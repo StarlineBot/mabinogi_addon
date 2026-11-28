@@ -449,6 +449,8 @@ class Brain:
             drop, ease = self.profile.sit_settle
             r = min(1.0, max(0.0, (now - self._float_since) / ease))
             return drop * (1.0 - r) * (1.0 - r) * self.profile.scale   # 처음엔 빠르게, 끝엔 천천히(제곱 감속)
+        if self.profile.sit_settle and self.state == "rise":   # 다 뜨기 전에 일어나면 남은 만큼 이어받아 0.4초에 걸쳐 0으로(QA 11-28)
+            return self._float_from * max(0.0, 1.0 - (now - self._t0) / 0.4)
         if not self.profile.sit_float:
             return 0.0
         lift, amp, period, ease = self.profile.sit_float

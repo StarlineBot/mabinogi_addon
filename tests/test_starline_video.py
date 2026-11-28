@@ -259,3 +259,12 @@ def test_sitting_floats_up_gradually_and_rises_without_jump():
     assert all(a >= c for a, c in zip(offs, offs[1:])) and offs[-1] == 0.0   # 서서히 올라 1.5초 뒤 제자리(뜬 높이)
     b._go("rise", 3.0)
     assert b.float_offset(3.0) == 0.0                                     # 일어나기 첫 장은 원래 그 높이
+    for early in (0.1, 0.4, 0.9):                                         # 다 뜨기 전에 일어나도(게임에서 나가면 그때 바로 rise) 순간 이동 없음
+        c = br.Brain(br.Floor(0, 2000, 700), profile=SB)
+        c._go("crouch", 0.0)
+        c._go("sit_loop", 1.6)
+        before = c.float_offset(1.6 + early)
+        c._go("rise", 1.6 + early)
+        after = [c.float_offset(1.6 + early + i / 20) for i in range(12)]
+        assert abs(after[0] - before) <= 1.0, (early, before, after[0])
+        assert all(x >= y for x, y in zip(after, after[1:])) and after[-1] == 0.0, (early, after)
