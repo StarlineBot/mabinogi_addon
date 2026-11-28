@@ -816,11 +816,13 @@ class Brain:
         if self._goal == "roam" and self._spans is not None and not self._dragging:
             if self.state == "walk" and self._target is not None and not self._allowed(self._target[0]):
                 self._walk_to((self._roam_x(), self.floor.y), now)    # 걷는 중 그 앞이 막힘 → 지금 빈 구간 안으로
-            elif self.state in ("stand", "motion", *self.profile.idle_states) and not self._allowed(self.pos[0]):
+            elif self.state == "stand" and not self._allowed(self.pos[0]):   # 대기 동작·모션 중이면 끝나고(사용자 11-28)
                 self._walk_to((self._nearest_free(self.pos[0]), self.floor.y), now)   # 막힌 곳에 서 있음 → 가까운 빈 곳으로
         if self.state == "walk":
             self._step(dt, now)
-        elif self.state in ("stand", rare, "motion", *self.profile.idle_states):  # 대기·드문 동작·모션 중이어도 걸을 차례·게임이 오면 바로 끊음
+        elif self.state != "stand" and self.state in (rare, "motion", *self.profile.idle_states):
+            pass   # 대기·드문 동작·모션은 끝까지 — 걷기(돌아다니기·구석 가기)는 서 있기로 돌아온 뒤(사용자 11-28 'idle 중에는 끝나고 걷게')
+        elif self.state == "stand":
             if self._goal == "corner":
                 if self._near(self.home()):
                     self._go("crouch", now)
@@ -893,8 +895,7 @@ class Brain:
             self._go("drag", now)
             # 잡힌 순간 하던 말은 끊음(창 말풍선·대사 목소리 — 사용자 11-28 '말하고 있을 때 잡으면 앞 말풍선이 안 사라짐')
             events.append(("drag_start",))
-            if self.rng.random() < 0.5:
-                events.append(("say", "drag"))
+            events.append(("say", "drag"))   # 잡을 때마다 늘 한마디(사용자 11-28 '잡을 때마다 항상 나오게')
         if self._dragging:
             self.pos = (x - self._grab[0], y - self._grab[1])
         return events

@@ -131,8 +131,11 @@ def test_motion_stops_at_once(interrupt):
     elif interrupt == "talk":
         assert b.talk(1.2, 10)
         assert b.state != "motion"
-    else:
-        _run(b, 3, start=1.2, game=True)
+    else:   # 게임이 와도 모션은 끝까지, 끝나면 구석으로(사용자 11-28 'idle 중에는 끝나고 걷게')
+        length = sum(d for _n, d in b._motion_seq)
+        _run(b, length - 0.5, start=1.2, game=True)
+        assert b.state == "motion" and b._goal == "corner"
+        _run(b, 2.0, start=0.7 + length, game=True)
         assert b.state != "motion" and b._goal == "corner"
 
 

@@ -598,10 +598,12 @@ def test_aria_alternates_stand_and_hair_stroke_and_walking_cuts_it():
     t, _ = _run(b, t, 4.0, False)
     assert b.state == "stand"  # 1~2바퀴(약 1.9초씩) 뒤 서 있기로
     b._go("hairstroke", t)
-    b._extra_until = t + 10
+    b._extra_until = t + 2
     b._next_walk = t
     t, _ = _run(b, t, 0.1, False)
-    assert b.state == "walk"  # 걸을 차례면 바로 끊음
+    assert b.state == "hairstroke"  # 걸을 차례여도 끝까지(사용자 11-28 'idle 중에는 끝나고 걷게')
+    t, _ = _run(b, t, 2.0, False)
+    assert b.state == "walk"  # 끝나 서 있기로 돌아오면 바로 걸음
 
 
 def test_aria_click_while_stroking_hair_says_stroke_click():
@@ -2496,3 +2498,74 @@ def test_grabbing_while_talking_drops_the_old_bubble_and_voice(app, folder):
     ctrl._clock, ctrl.picker = (lambda: 0.0), (lambda: None)
     ctrl._on_events([("drag_start",)])
     assert stopped == [1]   # 대사 목소리 멈춤
+
+
+def _with_motions(b, folder):
+    from mabinogi_addon.character import motions as mo
+    opened = {m.key: m for m in mo.of(folder)}
+    b.set_motions(opened, {k: 1.0 for k in opened})
+
+
+@pytest.mark.parametrize("folder", ["다래", "아리아", "이안", "레나", "Starline"])
+def test_idle_motions_finish_before_walking(folder):
+    """사용자 11-28 'idle 모션 나오는 중인데 걷기를 시작해서 모션 중간에 걸어가 — idle 중에는 끝나고 걷게': 게임 밖 900초 ×
+    여러 시드, 호감도 모션 열림 — 대기 동작·모션·드문 동작이 걷기로 끊긴 횟수 0(끝난 뒤 서 있기 → 걷기)."""
+    profile = br.PROFILES[folder]
+    long_states = {"motion", *profile.idle_states} | ({profile.rare_extra} if profile.rare_extra else set())
+    finished = 0
+    for seed in range(6):
+        b = br.Brain(br.Floor(0, 1600, 700), rng=random.Random(seed), profile=profile)
+        b.pos = (800.0, 700.0)
+        _with_motions(b, folder)
+        prev, t, end = b.state, 0.0, 0.0
+        while t < 900:
+            t += 0.05
+            b.tick(t, False)
+            if b.state != prev and b.state in long_states:   # 시작 — 끝날 시각
+                if b.state == "motion":
+                    end = t + sum(d for _n, d in b._motion_seq)
+                elif b.state in profile.idle_states:
+                    end = b._extra_until
+                else:
+                    end = t + sum(profile.anims[b.state][1])
+            if prev in long_states and b.state != prev:
+                if b.state == "walk":
+                    assert t >= end - 0.06, (seed, prev, t, end)   # 걷기는 그 동작이 다 끝난 뒤(같은 틱에 서 있기 → 걷기)
+                finished += 1
+            prev = b.state
+    assert finished > 5
+
+
+@pytest.mark.parametrize("folder", ["아리아", "이안", "Starline"])
+def test_game_coming_front_waits_for_idle_to_finish_then_goes_to_corner(folder):
+    """게임이 앞으로 와도 대기 동작은 끝까지 — 끝나 서 있기로 돌아온 뒤 구석으로 출발(사용자 11-28)."""
+    profile = br.PROFILES[folder]
+    b = br.Brain(br.Floor(0, 1600, 700), rng=random.Random(1), profile=profile)
+    b.pos = (800.0, 700.0)
+    b._next_walk = 1e9
+    b._go(profile.idle_extra, 0.0)
+    length = sum(profile.anims[profile.idle_extra][1])
+    b._extra_until = length
+    seen, t = [], 0.0
+    while t < length + 6:
+        t += 0.05
+        b.tick(t, True)
+        seen.append((t, b.state))
+    assert all(s == profile.idle_extra for x, s in seen if x < length - 0.05)   # 게임이 와도(1초 뒤 구석 목표) 끝까지
+    after = [s for x, s in seen if x >= length]
+    assert after[0] in ("stand", "walk") and "walk" in after
+
+
+@pytest.mark.parametrize("folder", ["다래", "아리아", "이안", "레나", "Starline"])
+def test_every_grab_says_drag_line(folder):
+    """사용자 11-28 '잡을 때마다 항상 나오게': 끌기 시작마다 drag_start(앞 말풍선·목소리 끊기) + 잡힘 대사 한 번 — 서 있을 때·말할 때."""
+    profile = br.PROFILES[folder]
+    for seed in range(20):
+        b = br.Brain(br.Floor(0, 1000, 700), rng=random.Random(seed), profile=profile)
+        b.pos = (300.0, 700.0)
+        if seed % 2:
+            b.talk(0.0, 20)
+        b.press(0.1, 300, 600)
+        events = b.move(0.2, 340, 560)
+        assert events == [("drag_start",), ("say", "drag")], (seed, events)
+        assert b.move(0.3, 360, 540) == []   # 끄는 동안 다시 안 나옴
