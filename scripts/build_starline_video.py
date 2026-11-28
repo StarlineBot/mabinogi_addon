@@ -29,6 +29,9 @@ WEBP_QUALITY = 90
 # 동작 틀마다 서 있는 발 자리가 서기 틀(아래 끝·발 가운데 +13.5)과 달라 동작이 바뀔 때 튐 → 그리기 오프셋(저장 px, anchors.json).
 # 쓰다듬기·모자 마술은 몸이 왼쪽으로 7·5px(귀·모자 자리 때문에 틀이 넓음), 앉기·일어나기는 서 있는 장 발이 틀 바닥 10px 위
 # (앉은 장은 공중에 떠 있는 그림이라 그대로 같이 내림), 착지는 끝 장 발이 13px 위·1.5px 왼쪽(떨어지는 4번도 같은 틀).
+# 그리기 배율(그림 파일은 그대로 — 사용자 원칙): 착지 영상이 서기보다 크게 찍힘(land_29 키 1.066배·머리 1.04배 — 기획 원본부터,
+# 사용자 11-28 '내려놓은 뒤 서기로 바뀔 때 작아짐') → 떨어지기·착지(land_*)를 0.95로 그림: 키 +1.3%·머리 −1.2%
+DRAW_SCALE = {"land": 0.95}
 _A = {"pet": (7, 0), "motion_hat_magic": (5, 0), "crouch": (0, 10), "rise": (0, 10), "land": (2, 13)}   # 앱크기 px
 ANCHORS = {k: (round(x * K), round(y * K)) for k, (x, y) in _A.items()}
 # 앱 이름 앞부분 → (소스 폴더, 쓸 장 번호)
@@ -122,7 +125,7 @@ def main() -> None:
     anchors = {name: list(ANCHORS[name.rsplit("_", 1)[0]]) for name in sorted(made) if name.rsplit("_", 1)[0] in ANCHORS}
     (OUT / "anchors.json").write_text(json.dumps(anchors, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     stand_h = int(made["stand_0"].shape[0])   # 저장 그림 서 있는 키 — 앱(ui/pet_window)이 여기서 한 번만 줄임
-    (OUT / "frames.json").write_text(json.dumps({"standH": stand_h}) + "\n", encoding="utf-8")
+    (OUT / "frames.json").write_text(json.dumps({"standH": stand_h, "drawScale": DRAW_SCALE}) + "\n", encoding="utf-8")
     print("Starline", len(made), "anchors", len(anchors))
 
 

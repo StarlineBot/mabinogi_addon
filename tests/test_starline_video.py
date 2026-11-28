@@ -171,3 +171,49 @@ def test_sit_click_keeps_shown_frame_and_resumes_loop():
     assert b.frame(now + 0.6) == shown   # 클릭 반응 동안 그대로
     b._go("sit_loop", now + 1.2)
     assert b.frame(now + 1.2) == shown and b.frame(now + 1.3) == "crouch_22"   # 멈춘 자리부터 이어감
+
+
+def test_landing_drawn_at_stand_size():
+    """사용자 11-28 '내려놓은 뒤 서기로 바뀔 때 작아짐': 착지 영상이 서기보다 크게 찍힘(land_29 키 1.066·머리 1.04배, 기획 원본부터)
+    → 그림 파일은 그대로, 앱이 land_*(떨어지기·착지)를 frames.json drawScale 0.95로 그림. 그린 키·머리가 서기와 ±2%, 발 자리 그대로."""
+    import json
+    import os
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtWidgets import QApplication
+    QApplication.instance() or QApplication([])
+    from mabinogi_addon.ui import pet_window as pw
+    from scripts.silhouette import best_scale
+
+    meta = json.loads((SL / "frames.json").read_text(encoding="utf-8"))
+    assert meta["drawScale"] == {"land": 0.95}
+    k = meta["drawScale"]["land"]
+
+    def alpha_rows(a):
+        rows = np.nonzero((a[..., 3] > 128).any(1))[0]
+        return rows.min(), rows.max()
+
+    def head(a):
+        ys, xs = np.nonzero(a[..., 3] > 128)
+        t = a[ys.min():ys.max() + 1, xs.min():xs.max() + 1]
+        return t[:round(t.shape[0] * 0.42)]
+
+    stand, land = _read("stand_0"), _read("land_29")
+    hs = np.subtract(*alpha_rows(stand)[::-1]) + 1
+    hl = (np.subtract(*alpha_rows(land)[::-1]) + 1) * k
+    assert abs(hl / hs - 1) <= 0.02, hl / hs
+    small = cv2.resize(land, None, fx=k, fy=k, interpolation=cv2.INTER_AREA)
+    assert abs(best_scale(head(stand), head(small), 0.85, 1.15, 61) - 1) <= 0.02
+    frames = pw.load_frames("Starline", SB)
+    assert frames.draw_scale == {"land": 0.95}
+    w = pw.PetWindow(br.Brain(br.Floor(0, 1600, 700), profile=SB), frames, "#3A0729")
+    try:
+        floor = pw.WIN_H - pw.FOOT
+        for name in ("stand_0", "land_29", "land_12"):
+            rect = w._rect(name)
+            a = _read(name)
+            gap = a.shape[0] - 1 - alpha_rows(a)[1]   # 그림 아래 투명 줄
+            foot = rect.bottom() - gap * rect.height() / a.shape[0]
+            assert abs(foot - floor) <= 2, (name, foot, floor)   # 배율을 줘도 발은 바닥
+        assert abs(w._rect("land_29").height() / w._rect("stand_0").height() - 0.95 * land.shape[0] / stand.shape[0]) < 0.01
+    finally:
+        w.close()

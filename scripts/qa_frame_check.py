@@ -152,6 +152,10 @@ def check(folder: str, outfit: str = "", source: Path | None = None, base: str |
     except (OSError, ValueError):
         stand_h = 285.0
     px = stand_h / 285.0
+    try:
+        draw_scale = json.loads((base_dir / "frames.json").read_text(encoding="utf-8")).get("drawScale", {}) or {}
+    except (OSError, ValueError, AttributeError):
+        draw_scale = {}
     shapes: dict[str, Shape] = {}
     info: list[tuple[str, str, str]] = []   # 원본 영상 이웃 장 — 앱이 만든 튐이 아니라 검사 대상 밖(원본 비교로 따로 봄)
     problems: list[str] = []
@@ -162,7 +166,12 @@ def check(folder: str, outfit: str = "", source: Path | None = None, base: str |
             if got is None:
                 problems.append(f"{state}: {name} 그림 없음")
                 continue
-            shapes[name] = shape(got[0], tuple(anchors.get(name, (0, 0))))
+            sh = shape(got[0], tuple(anchors.get(name, (0, 0))))
+            k = draw_scale.get(name.rsplit("_", 1)[0], 1.0)   # 앱이 그릴 때 곱하는 배율(frames.json drawScale)
+            if k != 1.0:
+                head = cv2.resize(sh.head, None, fx=k, fy=k, interpolation=cv2.INTER_AREA)
+                sh = Shape(foot_y=sh.foot_y * k, foot_x=sh.foot_x * k, head=head)
+            shapes[name] = sh
 
     def neighbours(a: str, b: str) -> bool:
         """원본 영상에서 바로 이웃한 두 장(같은 앞부분, 번호 차 1) — 그 사이 움직임은 그림 자체(영상)의 것."""

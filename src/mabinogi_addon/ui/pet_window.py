@@ -45,11 +45,12 @@ class LazyFrames(Mapping):
     frame_h = 저장 그림의 서 있는 키(frames.json standH, 없으면 FRAME_DIR_H) — 앱은 이 키에서 한 번만 줄여 그림."""
 
     def __init__(self, paths_by_name: dict, anchors: dict, pinned: set, keep: int = LAZY_ORIGINALS,
-                 frame_h: float = 0.0) -> None:
+                 frame_h: float = 0.0, draw_scale: dict | None = None) -> None:
         self._paths = dict(paths_by_name)
         self._anchors = anchors
         self.pinned = set(pinned) & set(self._paths)
         self.frame_h = frame_h or FRAME_DIR_H
+        self.draw_scale = dict(draw_scale or {})   # 동작(이름 앞부분) → 그리기 배율(frames.json drawScale)
         self._keep = keep
         self._recent: OrderedDict[str, QImage] = OrderedDict()
         self._meta: dict[str, tuple[int, int, str]] = {}
@@ -136,7 +137,7 @@ def load_frames(folder: str, profile: brain_mod.Profile | None = None, outfit: s
                 continue
             found[name] = path
         pinned = {n for state in PINNED if state in profile.anims for n in profile.anims[state][0]}
-        return LazyFrames(found, anchors, pinned, frame_h=_frame_h(base))
+        return LazyFrames(found, anchors, pinned, frame_h=_frame_h(base), draw_scale=_draw_scale(base))
     for name in sorted(names | motion_names):
         path = dressed / f"{name}.png" if dressed is not None and (dressed / f"{name}.png").is_file() else base / f"{name}.png"
         if name in motion_names and dressed is not None and path.parent != dressed:
@@ -158,6 +159,21 @@ def _frame_h(base) -> float:
     except (OSError, ValueError, AttributeError):
         return 0.0
     return float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) and 100 <= value <= 2000 else 0.0
+
+
+def _draw_scale(base) -> dict[str, float]:
+    """frames.json {"drawScale": {동작: 배율}} — 원본 영상 자체가 서기보다 크게 찍힌 동작을 그릴 때만 맞춤(그림 파일은 그대로,
+    Starline 착지 0.95 — 사용자 11-28 '내려놓은 뒤 서기로 바뀔 때 작아짐'). 잘못된 값은 버림."""
+    import json
+
+    try:
+        raw = json.loads((base / "frames.json").read_text(encoding="utf-8")).get("drawScale", {})
+    except (OSError, ValueError, AttributeError):
+        return {}
+    if not isinstance(raw, dict):
+        return {}
+    return {k: float(v) for k, v in raw.items()
+            if isinstance(k, str) and isinstance(v, (int, float)) and not isinstance(v, bool) and 0.5 <= v <= 1.5}
 
 
 def _anchors(base) -> dict[str, tuple[float, float]]:
@@ -301,7 +317,7 @@ class PetWindow(QWidget):
         cached = self._scaled.get(name)
         if cached is None:
             dpr = max(1.0, self.devicePixelRatioF())
-            k = self._k() * dpr
+            k = self._k() * dpr * self._scale_of(name)
             cached = image.scaled(round(image.width() * k), round(image.height() * k),
                                   Qt.AspectRatioMode.IgnoreAspectRatio, Qt.TransformationMode.SmoothTransformation)
             cached.setDevicePixelRatio(dpr)
@@ -326,10 +342,14 @@ class PetWindow(QWidget):
         if meta is None:
             return self._frame_rect(self.frames[name])
         w, h, anchor = meta(name)
-        return self._frame_rect(None, (w, h, anchor))
+        return self._frame_rect(None, (w, h, anchor), self._scale_of(name))
 
-    def _frame_rect(self, image: QImage | None, meta: tuple | None = None) -> QRectF:
-        k = self._k()
+    def _scale_of(self, name: str) -> float:
+        table = getattr(self.frames, "draw_scale", None)
+        return table.get(name.rsplit("_", 1)[0], 1.0) if table else 1.0
+
+    def _frame_rect(self, image: QImage | None, meta: tuple | None = None, scale: float = 1.0) -> QRectF:
+        k = self._k() * scale   # 그리기 배율 — 크기·기준점(발 자리)을 같이 늘리고 줄여 발은 그대로
         w, h, anchor = meta if meta is not None else (image.width(), image.height(), image.text("anchor"))
         w, h = w * k, h * k
         dx = dy = 0.0
