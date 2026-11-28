@@ -18,13 +18,13 @@
         "tests/test_character.py",
         "tests/test_qa_frame_check.py"
       ],
-      "reason": "Starline sit_loop = 마법진 한 바퀴 반복 영상 8b sit_0→29(기획 11-28, 사용자 제보 '마법진이 한 바퀴 다 안 돌아감'), sit_notice sit_0 · 대기 불꽃·웃음(새 영상)·턱괴기 셋 중 무작위(사용자 확인 11-28)"
+      "reason": "Starline sit_loop = 마법진 한 바퀴 반복 영상 8b sit_0→29(기획 11-28, 사용자 제보 '마법진이 한 바퀴 다 안 돌아감'), sit_notice sit_0 · 대기 불꽃·웃음(새 영상)·턱괴기 셋 중 무작위(사용자 확인 11-28) · Profile.sit_settle: 앉은 반복 들어갈 때 앉기 끝 높이에서 1.5초에 걸쳐 서서히 뜸(QA 11-28 일어날 때 28px 튐·뜬 높이 사라짐)"
     },
     "scripts/build_starline_video.py": {
       "tests": [
         "tests/test_starline_video.py"
       ],
-      "reason": "8b_구석_마법진반복 설치(sit_*), crouch 0~15만, sit 앵커(0,-23 — crouch_16과 겹침 0.91), laugh = 새 13_대기_웃음(눈 감고 씩 웃음)"
+      "reason": "8b_구석_마법진반복 설치(sit_*), crouch 0~15만, sit 앵커(0,-74 — crouch_16 겹침 자리 −23에서 51 위 = rise_0 높이), laugh = 새 13_대기_웃음(눈 감고 씩 웃음)"
     },
     "src/mabinogi_addon/assets/characters/Starline/sit_0.webp": {
       "tests": [
@@ -38,7 +38,7 @@
       "tests": [
         "tests/test_starline_video.py"
       ],
-      "reason": "마법진 한 바퀴 반복·앵커"
+      "reason": "마법진 한 바퀴 반복·앵커 · 서서히 뜨고 일어날 때 튐 없음"
     },
     "tests/test_character.py": {
       "tests": [
@@ -73,6 +73,12 @@
         "tests/test_character.py"
       ],
       "reason": "새 대기 웃음 30장 WebP(원본 그대로)"
+    },
+    "scripts/qa_frame_check.py": {
+      "tests": [
+        "tests/test_qa_frame_check.py"
+      ],
+      "reason": "앉기 끝 → 앉은 반복을 sit_settle만큼 내려 둔 자리로 비교"
     }
   }
 }

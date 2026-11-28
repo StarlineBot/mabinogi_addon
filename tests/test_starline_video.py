@@ -93,7 +93,7 @@ def test_sneeze_bubble_on_frame_22_and_sit_loop_one_turn():
     assert SB.anims["sit_loop"][0] == tuple(f"sit_{i}" for i in range(30)) and SB.anims["sit_loop"][2]
     assert SB.anims["crouch"][0][-1] == "crouch_15" and SB.next_map["crouch"] == "sit_loop"
     anchors = json.loads((SL / "anchors.json").read_text(encoding="utf-8"))
-    assert anchors["sit_0"] == [0, -23] and anchors["crouch_15"] == [0, 18]
+    assert anchors["sit_0"] == [0, -74] and anchors["crouch_15"] == [0, 18]   # 앉아 뜬 높이 = 일어나기 첫 장(11-28)
     assert not list(SL.glob("crouch_16.webp"))
 
 
@@ -237,3 +237,25 @@ def test_laugh_is_new_grin_video_not_talking():
         assert app.shape == src.shape
         vis = (app[..., 3] > 0) | (src[..., 3] > 0)
         assert float(np.abs(app.astype(int) - src.astype(int))[..., :3][vis].mean()) <= 8, i
+
+
+def test_sitting_floats_up_gradually_and_rises_without_jump():
+    """QA 11-28: 앉은 반복 발 −24(저장 px)·일어나기 첫 장 −75라 일어날 때 28px 튀고, 사용자 승인(11-27) 높이 뜬 자리도 사라짐 →
+    앉은 장을 rise_0 높이(앵커)에 그리고, 들어갈 때 앉기 끝(crouch_15) 높이에서 1.5초에 걸쳐 서서히 뜸(brain sit_settle). 그림 그대로."""
+    import json
+    from scripts import qa_frame_check as q
+
+    anchors = json.loads((SL / "anchors.json").read_text(encoding="utf-8"))
+    foot = lambda n: q.shape(_read(n), tuple(anchors.get(n, (0, 0)))).foot_y   # noqa: E731 — 그린 발 바닥이 바닥에서 위로(저장 px)
+    sits = [foot(f"sit_{i}") for i in range(30)]
+    assert all(abs(f - foot("rise_0")) <= 3 for f in sits), sits          # 어느 장에서 일어나도 튐 없음
+    b = br.Brain(br.Floor(0, 2000, 700), profile=SB)
+    b._go("crouch", 0.0)
+    b._go("sit_loop", 1.0)
+    k = 190 / 524 * SB.scale                                              # 저장 px → 그리는 px
+    start = foot("sit_0") - b.float_offset(1.0) / k                       # 들어가는 순간 그리는 발
+    assert abs(start - foot("crouch_15")) <= 3                           # 앉기 끝과 같은 높이에서 시작
+    offs = [b.float_offset(1.0 + t / 10) for t in range(16)]
+    assert all(a >= c for a, c in zip(offs, offs[1:])) and offs[-1] == 0.0   # 서서히 올라 1.5초 뒤 제자리(뜬 높이)
+    b._go("rise", 3.0)
+    assert b.float_offset(3.0) == 0.0                                     # 일어나기 첫 장은 원래 그 높이

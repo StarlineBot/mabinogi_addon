@@ -162,6 +162,8 @@ class Profile:
     rare_say: tuple[int, str] | None = None   # 드문 동작 그 프레임에서 말풍선 상황(Starline 재채기 4번 '누가 내 욕하나?')
     sleep_gap: tuple[float, float] | None = None    # 다래: 구석에 앉아 있는 동안 엎드려 자기 간격(없으면 안 함)
     sleep_hold: tuple[float, float] = SLEEP_HOLD    # 엎드려 숨쉬는 시간
+    sit_settle: tuple | None = None       # 앉은 반복 들어갈 때 아래(앉기 끝 높이)에서 서서히 제자리로: (내려 둔 px — 키 190 기준, 초).
+    #                                       Starline 영상판 — 앉은 장은 일어나기 첫 장 높이에 그려 두고 들어갈 때만 서서히 뜸(QA 11-28)
     sit_float: tuple | None = None        # 앉아 있을 때 떠 있기(레나 마법, 사용자 11-26): (올림 px, 둥둥 ±px, 주기 초, 오르내림 초) — 키 190 기준
     notice_holds: bool = False            # 앉아서 클릭(sit_notice) 동안 그때 보이던 장 그대로, 끝나면 반복을 멈춘 자리부터(Starline
     #                                       영상판 — 마법진 왕복 중 떠 있는 높이가 장마다 달라 처음부터 다시 하면 28px 튐, QA 11-27)
@@ -285,6 +287,9 @@ LENA = Profile(LENA_ANIMS,
 # 손바닥 불꽃(아리아 머리 쓰다듬기·이안 시계와 같은 틀), 서서 클릭 = 바로 말하기, 착지 3장 → 서기,
 # 쓰다듬기 귀 젖힘 → 걷어내기 반복 → 손 털고 씩, 구석은 앉기 → 마법진 돌리기 반복 → 일어나기, 말 끝 두 장.
 V = 0.1   # Starline 영상판(11-27) — 모든 장 0.1초 간격으로 만들어짐
+# 앉은 반복(sit_*) 발은 일어나기 첫 장 높이(저장 px −75)에 그려 둠 — 앉기 끝(crouch_15, −28)과 47 저장 px 차이 → 키 190 기준
+# 47 × 190 / 524(저장 서기 키) ≈ 17px를 들어갈 때 1.5초에 걸쳐 올라감(scale 1.15는 float_offset에서 곱함)
+STARLINE_SIT_DROP = round(47 * 190 / 524, 2)
 
 
 def _v(prefix: str, indices) -> tuple[tuple[str, ...], tuple[float, ...]]:
@@ -322,7 +327,8 @@ STARLINE = Profile(STARLINE_ANIMS,
                    ("crouch", "sit_loop", "sit_notice"), "sit_loop", idle_extra="flame", idle_variants=("laugh", "chin"),
                    idle_laps=(1, 1),   # 대기 불꽃·웃음(새 영상 11-28)·턱괴기 셋 중 무작위
                    click_talks=True, walk_speed=STARLINE_WALK_SPEED, talk_sets=STARLINE_TALK, scale=STARLINE_SCALE,
-                   rare_extra="sneeze", rare_say=(22, "sneeze"), notice_holds=True)
+                   rare_extra="sneeze", rare_say=(22, "sneeze"), notice_holds=True,
+                   sit_settle=(STARLINE_SIT_DROP, 1.5))
 PROFILES = {"다래": DARE, "아리아": ARIA, "이안": IAN, "레나": LENA, "Starline": STARLINE}
 
 
@@ -439,6 +445,10 @@ class Brain:
     def float_offset(self, now: float) -> float:
         """앉아 떠 있는 높이(논리 px, 음수 = 위) — 레나: 앉으면 0.4초에 걸쳐 14px 올라 ±3px 둥둥(2.4초), 일어나며 0.4초에 내려옴.
         떠 있기 없는 캐릭터·다른 동작은 0."""
+        if self.profile.sit_settle and self.state in ("sit_loop", "sit_notice"):
+            drop, ease = self.profile.sit_settle
+            r = min(1.0, max(0.0, (now - self._float_since) / ease))
+            return drop * (1.0 - r) * (1.0 - r) * self.profile.scale   # 처음엔 빠르게, 끝엔 천천히(제곱 감속)
         if not self.profile.sit_float:
             return 0.0
         lift, amp, period, ease = self.profile.sit_float
@@ -472,7 +482,7 @@ class Brain:
 
     # ---- 내부 -------------------------------------------------------------------------------
     def _go(self, state: str, now: float) -> None:
-        if self.profile.sit_float:
+        if self.profile.sit_float or self.profile.sit_settle:
             afloat = ("sit_loop", "sit_notice")
             if state in afloat and self.state not in afloat:
                 self._float_since = now
