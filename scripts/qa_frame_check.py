@@ -215,6 +215,16 @@ def check(folder: str, outfit: str = "", source: Path | None = None, base: str |
         nxt = "stand" if state.startswith("motion:") else profile.next_map.get(state)
         if state == "sit_notice" and getattr(profile, "notice_holds", False):
             continue   # 앉아서 클릭 동안 그때 장 그대로·끝나면 반복 멈춘 자리부터(brain notice_holds) — 정해진 장 이음이 없음
+        settle = getattr(profile, "sit_settle", None)
+        if settle and nxt == profile.sit_state and seqs.get(nxt):
+            # 앉은 반복 들어갈 때 brain이 sit_settle만큼 아래에서 시작해 서서히 제자리로(Starline) — 그 순간 그리는 자리로 비교
+            first = seqs[nxt][0]
+            if first in shapes:
+                sh = shapes[first]
+                drop = settle[0] * px * 285.0 / 190.0   # 키 190 기준 px → 저장 px
+                shapes["__settle__"] = Shape(foot_y=sh.foot_y - drop, foot_x=sh.foot_x, head=sh.head, height=sh.height)
+                compare(f"{state}→{nxt}(내려 둔 자리)", names[-1], "__settle__", False)
+            continue
         if nxt in seqs and nxt not in MOVING:
             compare(f"{state}→{nxt}", names[-1], seqs[nxt][0], False, stand_edge=(nxt == "stand"))
 

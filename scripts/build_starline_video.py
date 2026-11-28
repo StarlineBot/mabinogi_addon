@@ -36,7 +36,9 @@ DRAW_SCALE = {"land": 0.95,
               "talk_emph": 0.975}   # 손가락 튕기는 장(말하기 강조·알림) 머리가 서기보다 3% 큼(키는 같음) → 머리 1.00·키 0.975
 _A = {"pet": (7, 0), "motion_hat_magic": (5, 0), "crouch": (0, 10), "rise": (0, 10), "land": (2, 13)}   # 앱크기 px
 ANCHORS = {k: (round(x * K), round(y * K)) for k, (x, y) in _A.items()}
-ANCHORS["sit"] = (0, -23)   # 저장 px — 8b 00이 crouch_16(앵커 0,18)과 가장 겹치는 자리(알파 겹침 0.91)
+# 저장 px — 8b 00이 crouch_16(앵커 0,18)과 가장 겹치는 자리(0, −23)에서 51 더 위: 앉아 뜬 높이를 일어나기 첫 장(rise_0 발 −75)과
+# 같게(사용자 승인 11-27 '앉아 뜬 높이 30 → 75px', QA 11-28 일어날 때 28px 튐). 앉는 순간엔 brain sit_settle로 앉기 끝 높이에서 서서히 뜸
+ANCHORS["sit"] = (0, -74)
 # 앱 이름 앞부분 → (소스 폴더, 쓸 장 번호)
 FOLDERS = {
     "flame": ("1_대기불꽃", range(30)),
