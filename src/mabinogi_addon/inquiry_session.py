@@ -188,6 +188,22 @@ def attach_buff_gone(session: "Session") -> None:
         session.add_file(target, target.name, "사라짐 경고 기록(app.log)")
 
 
+PET_WINDOW_LOG_LINES = 200
+
+
+def attach_pet_window(session: "Session") -> None:
+    """모든 문의(QA 11-28): app.log의 '[펫 창]' 줄(최근 200줄 — 게임 앞/뒤가 바뀔 때 펫 창 상태)이 있으면 붙인다."""
+    try:
+        lines = _app_log().read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        lines = []
+    picked = [line for line in lines if "[펫 창]" in line][-PET_WINDOW_LOG_LINES:]
+    if picked:
+        target = session.folder / "pet_window_log.txt"
+        target.write_text("\n".join(picked) + "\n", encoding="utf-8")
+        session.add_file(target, target.name, "펫 창 기록(app.log)")
+
+
 def _app_log() -> Path:
     return paths.user_data_dir() / "logs" / "app.log"
 

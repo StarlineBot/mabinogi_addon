@@ -861,6 +861,8 @@ class InquiryWindow(QWidget):
             return
         s = self.session or inq.Session(self.card)
         self.session = s
+        if not any(a.name == "pet_window_log.txt" for a in s.attachments):
+            inq.attach_pet_window(s)   # 게임 앞/뒤 바뀔 때 펫 창 상태(QA 11-28 알트탭 사라짐 조사)
         who = inq.sender()
         logs = self._summary_text(full_logs=True)
         try:

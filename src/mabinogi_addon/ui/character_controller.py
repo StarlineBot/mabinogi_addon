@@ -312,8 +312,9 @@ class CharacterController(QObject):
         if self._last_pos is not None:
             brain.pos = (floor.clamp_x(self._last_pos[0]), min(self._last_pos[1], floor.y))
         game = (lambda: self._watcher.is_game_active()) if self._watcher is not None else (lambda: False)
+        fg = (lambda: self._watcher.foreground_info()[1]) if self._watcher is not None else (lambda: "")
         window = PetWindow(brain, frames, self.character.color, game_front=game, clock=self._clock,
-                           outline=self.character.outline, blocked=self._blocked_fn(floor, profile))
+                           outline=self.character.outline, blocked=self._blocked_fn(floor, profile), foreground=fg)
         window.events.connect(self._on_events)
         self._window_for = self.character
         self._apply_motions(window)
@@ -361,6 +362,8 @@ class CharacterController(QObject):
                 got = self.affinity.corner_minute(today())
                 if got or self.affinity.game_minutes % 10 == 0:
                     self._save_affinity()
+            elif kind == "drag_start":   # 잡힘 — 하던 말 목소리 멈춤(말풍선은 창이 지움, 사용자 11-28)
+                self.voice.stop()
             elif kind == "corner_saved":
                 config.save_character(corner={"x": round(event[1]), "y": round(event[2])})
 

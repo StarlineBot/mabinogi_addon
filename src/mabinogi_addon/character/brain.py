@@ -891,6 +891,8 @@ class Brain:
         if not self._dragging and math.dist(self._press, (x, y)) >= DRAG_START:
             self._dragging = True
             self._go("drag", now)
+            # 잡힌 순간 하던 말은 끊음(창 말풍선·대사 목소리 — 사용자 11-28 '말하고 있을 때 잡으면 앞 말풍선이 안 사라짐')
+            events.append(("drag_start",))
             if self.rng.random() < 0.5:
                 events.append(("say", "drag"))
         if self._dragging:
