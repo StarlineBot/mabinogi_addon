@@ -24,7 +24,7 @@
         "tests/test_qa_frame_check.py",
         "tests/test_starline_video.py"
       ],
-      "reason": "Starline sit_loop = 마법진 한 바퀴 반복 영상 8b sit_0→29(기획 11-28, 사용자 제보 '마법진이 한 바퀴 다 안 돌아감'), sit_notice sit_0 · 대기 불꽃·웃음(새 영상)·턱괴기 셋 중 무작위(사용자 확인 11-28) · Profile.sit_settle: 앉은 반복 들어갈 때 앉기 끝 높이에서 1.5초에 걸쳐 서서히 뜸(QA 11-28 일어날 때 28px 튐·뜬 높이 사라짐) · 다 뜨기 전 일어나면 남은 만큼 이어받아 0.4초에 0으로 · 쓰다듬기 시작 대사가 다 나오고 읽을 틈(0.6초) 뒤에 쓰다듬는 중 대사(bubble_until, 모든 캐릭터 — QA 11-28)"
+      "reason": "Starline sit_loop = 마법진 한 바퀴 반복 영상 8b sit_0→29(기획 11-28, 사용자 제보 '마법진이 한 바퀴 다 안 돌아감'), sit_notice sit_0 · 대기 불꽃·웃음(새 영상)·턱괴기 셋 중 무작위(사용자 확인 11-28) · Profile.sit_settle: 앉은 반복 들어갈 때 앉기 끝 높이에서 1.5초에 걸쳐 서서히 뜸(QA 11-28 일어날 때 28px 튐·뜬 높이 사라짐) · 다 뜨기 전 일어나면 남은 만큼 이어받아 0.4초에 0으로 · 쓰다듬기 시작 대사가 다 나오고 읽을 틈(0.6초) 뒤에 쓰다듬는 중 대사(bubble_until, 모든 캐릭터 — QA 11-28) · 쓰다듬기 시작 대사는 pet_loop 첫 장(pet_in 동안 대사 없음, 사용자 11-28)"
     },
     "scripts/build_starline_video.py": {
       "tests": [
@@ -97,7 +97,7 @@
       "tests": [
         "tests/test_pet_floor_space.py"
       ],
-      "reason": "Starline은 sit_settle만(둥둥 없음) — 떠 있지 않는 캐릭터 검사에서 빼고 따로"
+      "reason": "Starline은 sit_settle만(둥둥 없음) — 떠 있지 않는 캐릭터 검사에서 빼고 따로 · 걷다 쓰다듬기 = pet_in 알아챔"
     }
   }
 }

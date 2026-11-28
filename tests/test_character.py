@@ -166,7 +166,7 @@ def test_rubbing_head_pets_and_releasing_completes():
     for i in range(8):
         t += 0.1
         events += b.hover(t, 300 + (10 if i % 2 else -10), True)
-    assert ("say", "pet_start") in events and b.state == "pet_in"
+    assert b.state == "pet_in" and not events   # 알아챔 — 대사는 쓰다듬기 모션(pet_loop)에서(사용자 11-28)
     for i in range(30):  # 문지르는 동안 반복
         t += 0.1
         b.hover(t, 300 + (10 if i % 2 else -10), True)
@@ -183,8 +183,10 @@ def test_pet_needs_two_round_trips_of_20px_within_two_seconds():
         events, t = [], 1.0
         for i, x in enumerate(xs):
             t += dt
-            events += b.hover(t, x, True if heads is None else heads[i])
-        return ("say", "pet_start") in events
+            b.hover(t, x, True if heads is None else heads[i])
+            if b.state == "pet_in":
+                return True   # 쓰다듬기 알아챔(대사는 pet_loop에서 — 사용자 11-28)
+        return False
 
     assert not run([200 + i * 8 for i in range(20)])                     # 한 방향으로 지나가기
     assert not run([300 + (5 if i % 2 else -5) for i in range(40)])      # 떨림 ±5(10px 되돌림)
@@ -2410,35 +2412,37 @@ def test_greeting_preview_shows_bubble(app, tmp_path, monkeypatch, pack, text):
 
 
 @pytest.mark.parametrize("profile", [br.DARE, br.ARIA, br.IAN, br.LENA, br.STARLINE])
-def test_pet_during_waits_until_pet_start_bubble_is_read(profile):
-    """QA 11-28(사용자 제보 Starline '쓰다듬지 말라니까? 같은 메세지가 나오다가 쓰다듬는 모션'): 쓰다듬기 시작 대사가 다 찍히기 전에
-    pet_loop 진입의 '쓰다듬는 중' 대사가 덮었음 → 시작 대사 글자 수 × TYPE_SECONDS + 읽을 틈 동안은 안 덮고 그 뒤에 나옴.
-    그 사이 손을 떼면 쓰다듬는 중 대사 없이 끝 대사만."""
-    def start(b):
-        t, events = 1.0, []
-        while ("say", "pet_start") not in events:
-            t += 0.05
-            events += b.hover(t, 300 + (12 if int(t * 20) % 2 else -12), True)
-        return t
-
-    chars = 20                                   # '감히 머리를 쓰다듬다니, 제정신이야?'
+def test_pet_lines_only_while_petting_motion_plays(profile):
+    """사용자 11-28 '쓰다듬기 대사는 쓰다듬기 모션이 나올 때만': 문지르기를 알아챈 pet_in 동안은 대사 없음, pet_loop 첫 장에서 시작 대사,
+    그 말풍선이 다 찍히고 읽을 틈(READ_GAP) 뒤 아직 쓰다듬는 중이면 쓰는 중 대사, 손 떼면 pet_out 시작 때 끝 대사."""
+    chars = 20                                    # '감히 머리를 쓰다듬다니, 제정신이야?'
     b = br.Brain(br.Floor(0, 1000, 700), rng=random.Random(3), profile=profile)
     b.pos = (300.0, 700.0)
-    t = start(b)
-    b.bubble_until(t + chars * br.TYPE_SECONDS)  # 창 say()가 알려 주는 것
-    shown_until = t + chars * br.TYPE_SECONDS + br.READ_GAP
-    said = []
-    while t < shown_until + 1.0:
+    t, log = 1.0, []
+    rub = lambda t: 300 + (12 if int(t * 20) % 2 else -12)   # noqa: E731
+    while b.state != "pet_in":
         t += 0.05
-        b.hover(t, 300 + (12 if int(t * 20) % 2 else -12), True)
+        assert not [e for e in b.hover(t, rub(t), True) if e[0] == "say"]
+    while t < 12.0:
+        t += 0.05
+        b.hover(t, rub(t), True)
         for e in b.tick(t, False):
-            if e == ("say", "pet_during"):
-                said.append(t)
-    assert said and said[0] >= shown_until - 1e-6 and len(said) == 1, (said, shown_until)
+            if e[0] == "say":
+                log.append((round(t, 2), e[1], b.state))
+                if e[1] == "pet_start":
+                    b.bubble_until(t + chars * br.TYPE_SECONDS)   # 창 say()가 알려 주는 것
+    starts = [x for x in log if x[1] == "pet_start"]
+    durings = [x for x in log if x[1] == "pet_during"]
+    assert starts and starts[0][2] == "pet_loop" and log[0][1] == "pet_start", log   # pet_in 동안 대사 없음 → 첫 대사는 pet_loop
+    assert durings and durings[0][0] >= starts[0][0] + chars * br.TYPE_SECONDS + br.READ_GAP - 0.051, log
+    t, events = _run(b, t, 3.0, False)            # 손 뗌 → pet_out 시작과 함께 끝 대사
+    says = [e[1] for e in events if e[0] == "say"]
+    assert says == ["pet_end"], says
     c = br.Brain(br.Floor(0, 1000, 700), rng=random.Random(3), profile=profile)
     c.pos = (300.0, 700.0)
-    t = start(c)
-    c.bubble_until(t + 40 * br.TYPE_SECONDS)     # 긴 대사 — 다 나오기 전에 손 뗌
-    t, events = _run(c, t, 2.0, False)
-    t, more = _run(c, t, 3.0, False)
-    assert ("say", "pet_during") not in events + more and ("say", "pet_end") in events + more
+    t = 1.0
+    while c.state != "pet_in":
+        t += 0.05
+        c.hover(t, rub(t), True)
+    t, events = _run(c, t, 4.0, False)            # 알아채자마자 손 뗌 — 쓰다듬기 모션 전이라 시작·쓰는 중 대사 없음
+    assert ("say", "pet_start") not in events and ("say", "pet_during") not in events

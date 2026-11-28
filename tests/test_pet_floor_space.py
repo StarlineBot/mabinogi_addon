@@ -302,9 +302,9 @@ def test_petting_while_walking_stops_and_pets(profile):
         events += b.hover(t, b.pos[0] + 25 * side, True)
         if stood is None and b._rub_turns:
             stood = b.state
-        if ("say", "pet_start") in events:
+        if b.state == "pet_in":   # 쓰다듬기 알아챔(대사는 쓰다듬기 모션 pet_loop에서 — 사용자 11-28)
             break
-    assert ("say", "pet_start") in events and t <= 2.0
+    assert b.state == "pet_in" and t <= 2.0
     assert stood == "stand"                             # 첫 전환에 멈춰 섬
 
 

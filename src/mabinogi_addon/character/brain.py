@@ -393,7 +393,7 @@ class Brain:
     _extra_until: float = 0.0
     _held: str | None = None          # 앉아서 클릭 동안 그대로 둘 장(Profile.notice_holds)
     _bubble_until: float = 0.0        # 지금 말풍선 글자가 다 나오는 시각(창 say가 알려 줌)
-    _pet_during_at: float = 0.0       # 미뤄 둔 '쓰다듬는 중' 대사 시각(0 = 없음)
+    _pet_during_at: float = 0.0       # 쓰다듬기 시작 대사를 띄운 시각(0 = 없음) — 그 말풍선이 다 나온 뒤 '쓰다듬는 중' 대사
     _loop_phase: float | None = None  # 그때 반복이 어디까지 왔는지(초)
     _queued_talk: tuple | None = None
     _talk_set: dict | None = None
@@ -718,15 +718,17 @@ class Brain:
                 queued_motion, self._queued_motion = self._queued_motion, None
                 if queued_motion is not None:
                     self.play_motion(queued_motion, now)
-            elif nxt == "pet_loop":
-                if now < self._bubble_until + READ_GAP:   # 쓰다듬기 시작 대사가 아직 찍히는 중 — 다 나오고 읽을 틈 뒤에(QA 11-28)
-                    self._pet_during_at = self._bubble_until + READ_GAP
-                else:
-                    events.append(("say", "pet_during"))
-        if self._pet_during_at and now >= self._pet_during_at:
-            if self.state == "pet_loop":
+            elif nxt == "pet_loop" and now - self._last_rub <= RUB_STOP / 3:   # 지금도 문지르는 중일 때만(막 손 뗐으면 끝 대사만)
+                # 쓰다듬기 대사는 쓰다듬기 모션이 나올 때만(사용자 11-28): 시작 대사는 pet_loop 첫 장에서, 쓰는 중 대사는 그 말풍선이
+                # 다 나오고 읽을 틈 뒤 아직 쓰다듬는 중일 때 — pet_in(알아채는 앞부분) 동안은 대사 없음
+                events.append(("say", "pet_start"))
+                self._pet_during_at = now
+        if self._pet_during_at:
+            if self.state != "pet_loop":
+                self._pet_during_at = 0.0
+            elif now >= max(self._bubble_until, self._pet_during_at) + READ_GAP:   # 창 say()가 시작 말풍선 글자 끝을 알려 줌
                 events.append(("say", "pet_during"))
-            self._pet_during_at = 0.0
+                self._pet_during_at = 0.0
 
         rare = self.profile.rare_extra
         if rare and self.state == rare and self.profile.rare_say and not self._rare_said:
@@ -917,7 +919,7 @@ class Brain:
             self._pet_reached_loop = False
             self._last_rub = now
             self._go("pet_in", now)
-            return [("say", "pet_start")]
+            return []   # 쓰다듬기 대사는 쓰다듬기 모션(pet_loop)이 시작될 때(사용자 11-28)
         return []
 
     def notify(self, now: float) -> None:
