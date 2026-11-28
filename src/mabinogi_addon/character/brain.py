@@ -320,8 +320,8 @@ STARLINE = Profile(STARLINE_ANIMS,
                    {"surprise": "stand", "land": "stand", "pet_in": "pet_loop", "pet_out": "stand", "alert": "stand",
                     "crouch": "sit_loop", "sit_notice": "sit_loop", "rise": "stand", "talk_end": "stand",
                     "sneeze": "stand", "flame": "stand", "laugh": "stand", "chin": "stand"},
-                   ("crouch", "sit_loop", "sit_notice"), "sit_loop", idle_extra="flame", idle_variants=("laugh", "chin"),
-                   idle_laps=(1, 1),
+                   ("crouch", "sit_loop", "sit_notice"), "sit_loop", idle_extra="flame", idle_variants=("chin",),
+                   idle_laps=(1, 1),   # laugh(13_대기_웃음)는 서서 말하는 영상이라 대기에서 뺌(사용자 11-28)
                    click_talks=True, walk_speed=STARLINE_WALK_SPEED, talk_sets=STARLINE_TALK, scale=STARLINE_SCALE,
                    rare_extra="sneeze", rare_say=(22, "sneeze"), notice_holds=True)
 PROFILES = {"다래": DARE, "아리아": ARIA, "이안": IAN, "레나": LENA, "Starline": STARLINE}

@@ -56,9 +56,10 @@ def test_same_action_frames_share_one_canvas():
     assert _read("crouch_0").shape == _read("rise_0").shape   # 앉기 끝 → 일어나기 첫 장 이어짐
 
 
-def test_idle_picks_flame_laugh_or_chin_and_returns_to_stand():
-    """가만히 서 있으면 대기 불꽃·웃음·턱괴기 셋 중 무작위(서기 → 서기). 클릭 대사 '불꽃' 줄은 불꽃 때만."""
-    assert SB.idle_states == ("flame", "laugh", "chin")
+def test_idle_picks_flame_or_chin_and_returns_to_stand():
+    """가만히 서 있으면 대기 불꽃·턱괴기 중 무작위(서기 → 서기). 클릭 대사 '불꽃' 줄은 불꽃 때만.
+    laugh(13_대기_웃음)는 서서 말하는 영상이라 대기에서 뺌(사용자 11-28 — 대사 없이 말하는 장면이 나왔음)."""
+    assert SB.idle_states == ("flame", "chin")
     seen = set()
     for seed in range(30):
         b = br.Brain(br.Floor(0, 2000, 700), rng=random.Random(seed), profile=SB)
@@ -74,10 +75,10 @@ def test_idle_picks_flame_laugh_or_chin_and_returns_to_stand():
             t += 0.05
             b.tick(t, False)
         assert b.state == "stand"
-    assert seen == {"flame", "laugh", "chin"}
+    assert seen == {"flame", "chin"}
     b = br.Brain(br.Floor(0, 2000, 700), rng=random.Random(1), profile=SB)
     b.pos = (1000.0, 700.0)
-    b._go("laugh", 1.0)
+    b._go("chin", 1.0)
     b._extra_until = 5.0
     b.press(1.0, 1000, 600)
     assert b.release(1.0)[-1] == ("say", "click_stand")
@@ -217,3 +218,15 @@ def test_landing_drawn_at_stand_size():
         assert abs(w._rect("land_29").height() / w._rect("stand_0").height() - 0.95 * land.shape[0] / stand.shape[0]) < 0.01
     finally:
         w.close()
+
+
+def test_idle_hour_never_plays_talking_laugh():
+    """조작 없이 1시간 서 있기(게임 없음): 서서 말하는 영상(laugh)이 한 번도 안 나옴 — 예전엔 약 79번(QA 11-28)."""
+    b = br.Brain(br.Floor(0, 2000, 700), rng=random.Random(7), profile=SB)
+    b.pos = (1000.0, 700.0)
+    seen, t = set(), 0.0
+    while t < 3600.0:
+        t += 0.1
+        b.tick(t, False)
+        seen.add(b.state)
+    assert "laugh" not in seen and {"flame", "chin"} <= seen

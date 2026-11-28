@@ -43,7 +43,7 @@
       "tests": [
         "tests/test_starline_video.py"
       ],
-      "reason": "착지 그리기 배율 검사"
+      "reason": "착지 그리기 배율 검사 · 1시간 대기에 laugh 없음"
     },
     "src/mabinogi_addon/assets/release_notes.md": {
       "tests": [
@@ -65,6 +65,14 @@
         "tests/test_release_checks.py"
       ],
       "reason": "0.59.2 경계"
+    },
+    "src/mabinogi_addon/character/brain.py": {
+      "tests": [
+        "tests/test_starline_video.py",
+        "tests/test_character.py",
+        "tests/test_qa_frame_check.py"
+      ],
+      "reason": "Starline 대기에서 laugh(13_대기_웃음 — 서서 말하는 영상) 뺌(사용자 11-28 '가만히 서 있는데 말함')"
     }
   }
 }
