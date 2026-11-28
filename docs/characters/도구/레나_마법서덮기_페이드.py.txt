@@ -1,0 +1,32 @@
+# 레나 L12 마법서 덮기 2차(사용자 11-28 '얼굴 높이까진 보이게, 그 뒤로 4장 페이드아웃'):
+# 17·18번 원본 그대로(책이 얼굴 높이까지 올라옴) → 19~22번은 책이 18번 자리에 멈춘 채 0.75·0.5·0.25·0으로 사라짐(위로 날아가 잘리는 책은 지움)
+import sys; sys.path.insert(0,"/tmp/claude-0/-home-user-mabinogi-addon/5eadae52-74cf-5bff-9103-5e037310a3e4/scratchpad"); import vcheck as V
+import numpy as np, cv2
+from PIL import Image
+d="docs/characters/assets/레나/요청/L12_마법서덮기/"
+F=V.load(d+"결과_원본.gif"); ref=F[21].astype(np.float32)
+def bookmask(i, thr=60, grow=11):
+    f=F[i].astype(np.float32)
+    diff=np.abs(f[...,:3]*f[...,3:]/255-ref[...,:3]*ref[...,3:]/255).max(2)+np.abs(f[...,3]-ref[...,3])
+    bm=cv2.morphologyEx((diff>thr).astype(np.uint8),cv2.MORPH_OPEN,np.ones((5,5),np.uint8))
+    n,l,st,_=cv2.connectedComponentsWithStats(bm); bi=1+int(np.argmax(st[1:,4]))
+    return cv2.GaussianBlur(cv2.dilate((l==bi).astype(np.uint8),np.ones((grow,grow),np.uint8)).astype(np.float32),(9,9),0)[...,None]
+out=[a.astype(np.float32) for a in F]
+for i in (19,20):   # 위로 날아간 책 지움
+    m=bookmask(i); out[i]=out[i]*(1-m)+ref*m
+m18=bookmask(18,grow=5); b18=F[18].astype(np.float32)
+for i,a in zip((19,20,21,22),(0.75,0.5,0.25,0.0)):
+    k=m18*a; out[i]=out[i]*(1-k)+b18*k
+frames=[]
+for a in out:
+    a=a.clip(0,255).astype(np.uint8); bg=np.zeros(a.shape[:2]+(3,),np.uint8); bg[:]=(0,255,0); al=a[...,3:]/255.
+    frames.append(Image.fromarray(cv2.cvtColor((a[...,:3]*al+bg*(1-al)).astype(np.uint8),cv2.COLOR_BGR2RGB)))
+frames[0].save(d+"결과.webp",save_all=True,append_images=frames[1:],duration=100,loop=0,lossless=True)
+S="/tmp/claude-0/-home-user-mabinogi-addon/5eadae52-74cf-5bff-9103-5e037310a3e4/scratchpad/"
+w=Image.new("RGB",(160*8,300),"white")
+for k,i in enumerate(range(16,24)): w.paste(frames[i].crop((20,0,340,600)).resize((160,300)),(k*160,0))
+w.save(S+"l12fade.jpg")
+pal=frames[15].quantize(colors=255,method=Image.Quantize.MEDIANCUT)
+q=[f.quantize(palette=pal,dither=Image.Dither.NONE) for f in frames]
+q[0].save(S+"레나_마법서덮기_페이드2.gif",save_all=True,append_images=q[1:],duration=100,loop=0)
+print("ok")
