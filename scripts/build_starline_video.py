@@ -32,8 +32,7 @@ WEBP_QUALITY = 90
 # 그리기 배율(그림 파일은 그대로 — 사용자 원칙): 착지 영상이 서기보다 크게 찍힘(land_29 키 1.066배·머리 1.04배 — 기획 원본부터,
 # 사용자 11-28 '내려놓은 뒤 서기로 바뀔 때 작아짐') → 떨어지기·착지(land_*)를 0.95로 그림: 키 +1.3%·머리 −1.2%
 DRAW_SCALE = {"land": 0.95,
-              "talk_emph": 0.975,
-              "motion_flame_shot": 0.99}   # 장난 불꽃 끝 장 머리가 서기(6번)보다 3% 큼(경계) — 처음 장 1.00 → 0.99   # 손가락 튕기는 장(말하기 강조·알림) 머리가 서기보다 3% 큼(키는 같음) → 머리 1.00·키 0.975
+              "talk_emph": 0.975}   # 손가락 튕기는 장(말하기 강조·알림) 머리가 서기보다 3% 큼(키는 같음) → 머리 1.00·키 0.975
 _A = {"pet": (7, 0), "motion_hat_magic": (5, 0), "crouch": (0, 10), "rise": (0, 10), "land": (2, 13)}   # 앱크기 px
 ANCHORS = {k: (round(x * K), round(y * K)) for k, (x, y) in _A.items()}
 # 앱 이름 앞부분 → (소스 폴더, 쓸 장 번호)
@@ -50,7 +49,6 @@ FOLDERS = {
     "laugh": ("13_대기_웃음", range(30)),
     "chin": ("14_대기_턱괴기", range(30)),
 }
-STAND_USE = range(6, 19)
 TALK = "12_말하기"
 TALK_PICK = {"mid": 4, "emph": 15, "emph2": 16, "end1": 25, "end2": 27}
 TALK_BODY = 10                  # 입 다문 장 = talk_base(몸)
@@ -96,8 +94,7 @@ def mouth_on(base: np.ndarray, src: np.ndarray) -> np.ndarray:
 
 def frames() -> dict[str, np.ndarray]:
     out: dict[str, np.ndarray] = {}
-    # 서 있기는 입 모양이 같은 6~18번만 씀(사용자 11-28 — ui 반복은 brain STARLINE stand 6→18→7), 그림은 그대로
-    out.update({f"stand_{i}": imread(SRC / f"stand_{i:02d}.png", cv2.IMREAD_UNCHANGED) for i in STAND_USE})
+    out.update({f"stand_{i}": imread(SRC / f"stand_{i:02d}.png", cv2.IMREAD_UNCHANGED) for i in range(30)})
     out.update({f"walk_{i}": imread(WALK_SRC / f"vwalk14_{i}.png", cv2.IMREAD_UNCHANGED) for i in range(14)})
     for prefix, (folder, indices) in FOLDERS.items():
         out.update({f"{prefix}_{i}": _src(folder, i) for i in indices})
@@ -128,7 +125,7 @@ def main() -> None:
     import json
     anchors = {name: list(ANCHORS[name.rsplit("_", 1)[0]]) for name in sorted(made) if name.rsplit("_", 1)[0] in ANCHORS}
     (OUT / "anchors.json").write_text(json.dumps(anchors, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
-    stand_h = int(made["stand_6"].shape[0])   # 저장 그림 서 있는 키 — 앱(ui/pet_window)이 여기서 한 번만 줄임
+    stand_h = int(made["stand_0"].shape[0])   # 저장 그림 서 있는 키 — 앱(ui/pet_window)이 여기서 한 번만 줄임
     (OUT / "frames.json").write_text(json.dumps({"standH": stand_h, "drawScale": DRAW_SCALE}) + "\n", encoding="utf-8")
     print("Starline", len(made), "anchors", len(anchors))
 

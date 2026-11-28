@@ -85,7 +85,7 @@ def test_starline_video_walk_fourteen_frames():
     assert br.STARLINE.walk_speed == 92.0
     folder = CHARS / "Starline"
     assert sorted(p.name for p in folder.glob("walk_*.webp")) == sorted(f"walk_{i}.webp" for i in range(14))
-    stand = _read(folder / "stand_6.png").shape[0]
+    stand = _read(folder / "stand_0.png").shape[0]
     heights = [_read(folder / f"walk_{i}.png").shape[0] for i in range(14)]
     assert all(abs(h - stand) / stand <= 0.03 for h in heights), heights
     for a, b in zip(heights, heights[1:] + heights[:1]):

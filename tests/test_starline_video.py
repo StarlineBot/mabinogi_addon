@@ -41,7 +41,7 @@ def test_all_video_steps_are_tenth_of_a_second():
         if state in single or state in ("talk", "talk_end"):
             continue
         assert set(times) == {0.1}, state
-    assert len(SB.anims["stand"][0]) == 24 and SB.anims["stand"][2]   # 6~18 왕복(11-28)
+    assert len(SB.anims["stand"][0]) == 30 and SB.anims["stand"][2]
     assert SB.anims["drag"][0] == tuple(f"drag_{i}" for i in (6, 7, 8, 9, 14, 15, 16, 17))   # 귀 끝 잘린 10~13 뺌
     assert SB.anims["fall"][0] == ("land_4",) and SB.anims["land"][0][0] == "land_12"
     assert SB.anims["pet_in"][0][-1] == "pet_6" and SB.anims["pet_loop"][0] == tuple(f"pet_{i}" for i in range(7, 21))
@@ -126,7 +126,7 @@ def test_lazy_frames_keep_memory_close_to_other_characters():
 
     frames = pw.load_frames("Starline", SB)
     assert isinstance(frames, pw.LazyFrames) and len(frames) == len(_used())
-    assert {f"stand_{i}" for i in range(6, 19)} | {f"walk_{i}" for i in range(14)} <= frames.pinned
+    assert {f"stand_{i}" for i in range(30)} | {f"walk_{i}" for i in range(14)} <= frames.pinned
     assert "laugh_3" in frames and "nope" not in frames and frames.get("nope") is None
     w = pw.PetWindow(br.Brain(br.Floor(0, 1600, 700), profile=SB), frames, "#3A0729")
     try:
@@ -154,7 +154,7 @@ def test_anchors_put_each_action_on_the_stand_feet():
         a = _read(name)[..., 3] > 40
         return a.shape[0] - 1 - np.nonzero(a.any(1))[0].max() - anchors.get(name, (0, 0))[1]   # 그린 뒤 바닥과의 틈
 
-    for name in ("stand_6", "crouch_0", "rise_29", "land_29", "pet_0", "motion_hat_magic_0"):
+    for name in ("stand_0", "crouch_0", "rise_29", "land_29", "pet_0", "motion_hat_magic_0"):
         assert abs(foot_bottom(name)) <= 2, (name, foot_bottom(name))
     assert all(abs(v) < 200 for xy in anchors.values() for v in xy)
 
@@ -185,7 +185,7 @@ def test_landing_drawn_at_stand_size():
     from scripts.silhouette import best_scale
 
     meta = json.loads((SL / "frames.json").read_text(encoding="utf-8"))
-    assert meta["drawScale"] == {"land": 0.95, "talk_emph": 0.975, "motion_flame_shot": 0.99}   # 강조·알림 장 머리 3%·장난 불꽃 끝 3%
+    assert meta["drawScale"] == {"land": 0.95, "talk_emph": 0.975}   # 말하기 강조·알림 장 머리 3% 큼 → 0.975
     k = meta["drawScale"]["land"]
 
     def alpha_rows(a):
@@ -197,49 +197,23 @@ def test_landing_drawn_at_stand_size():
         t = a[ys.min():ys.max() + 1, xs.min():xs.max() + 1]
         return t[:round(t.shape[0] * 0.42)]
 
-    stand, land = _read("stand_6"), _read("land_29")
+    stand, land = _read("stand_0"), _read("land_29")
     hs = np.subtract(*alpha_rows(stand)[::-1]) + 1
     hl = (np.subtract(*alpha_rows(land)[::-1]) + 1) * k
     assert abs(hl / hs - 1) <= 0.02, hl / hs
     small = cv2.resize(land, None, fx=k, fy=k, interpolation=cv2.INTER_AREA)
-    assert abs(best_scale(head(stand), head(small), 0.85, 1.15, 61) - 1) <= 0.025   # 서기 기준 장 6번(11-28) — 1.02
+    assert abs(best_scale(head(stand), head(small), 0.85, 1.15, 61) - 1) <= 0.02
     frames = pw.load_frames("Starline", SB)
     assert frames.draw_scale == meta["drawScale"]
     w = pw.PetWindow(br.Brain(br.Floor(0, 1600, 700), profile=SB), frames, "#3A0729")
     try:
         floor = pw.WIN_H - pw.FOOT
-        for name in ("stand_6", "land_29", "land_12"):
+        for name in ("stand_0", "land_29", "land_12"):
             rect = w._rect(name)
             a = _read(name)
             gap = a.shape[0] - 1 - alpha_rows(a)[1]   # 그림 아래 투명 줄
             foot = rect.bottom() - gap * rect.height() / a.shape[0]
             assert abs(foot - floor) <= 2, (name, foot, floor)   # 배율을 줘도 발은 바닥
-        assert abs(w._rect("land_29").height() / w._rect("stand_6").height() - 0.95 * land.shape[0] / stand.shape[0]) < 0.01
+        assert abs(w._rect("land_29").height() / w._rect("stand_0").height() - 0.95 * land.shape[0] / stand.shape[0]) < 0.01
     finally:
         w.close()
-
-
-def test_stand_loop_keeps_one_mouth_shape():
-    """사용자 11-28 '가만히 서 있는데 말하듯 입이 움직임': 서 있기 반복은 입 모양이 같은 6~18번만 왕복(6→18→7) — 그림은 그대로,
-    0~5·19~29(입 다물기·벌리기, 20~22 깜빡임)는 안 씀. 얼굴로 맞춘 입 상자 어두운 픽셀이 반복 안에서 고르게(QA 재기 43~62)."""
-    from scripts.build_starline_video import EYES_BOX, MOUTH_BOX
-
-    names = SB.anims["stand"][0]
-    assert names == tuple(f"stand_{i}" for i in (*range(6, 19), *range(17, 6, -1)))
-    assert SB.anims["surprise"][0] == ("stand_6",)
-    assert not list(SL.glob("stand_0.webp")) and not list(SL.glob("stand_20.webp"))
-    g = lambda im: cv2.cvtColor(np.ascontiguousarray(im[..., :3]), cv2.COLOR_BGR2GRAY)   # noqa: E731
-    ref = _read("stand_6")
-    ex, ey, ew, eh = EYES_BOX
-    mx, my, mw, mh = MOUTH_BOX
-    pad = round(mw * 0.6)
-    counts = []
-    for name in sorted(set(names)):
-        im = _read(name)
-        area = g(im)[ey - pad:ey + eh + pad, ex - pad:ex + ew + pad]
-        _, _, _, (bx, by) = cv2.minMaxLoc(cv2.matchTemplate(area, g(ref)[ey:ey + eh, ex:ex + ew], cv2.TM_CCOEFF_NORMED))
-        dx, dy = bx - pad, by - pad
-        box = g(im)[my + dy:my + dy + mh, mx + dx:mx + dx + mw]
-        counts.append(int((box < 90).sum()))
-    # 이 재기(원본 크기 524): 6~18번 132~215, 뺀 장 0~4번 285~302·19번 241·20~22번 488~561(눈 감음) — 섞이면 넘음
-    assert max(counts) < 240 and max(counts) <= 1.7 * min(counts), counts

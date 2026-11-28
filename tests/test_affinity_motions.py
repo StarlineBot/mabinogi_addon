@@ -16,7 +16,7 @@ from scripts.silhouette import best_scale  # noqa: E402
 
 CHARS = paths.resource_dir() / "characters"
 FOLDERS = {"아리아": br.ARIA, "다래": br.DARE, "레나": br.LENA, "이안": br.IAN, "Starline": br.STARLINE}
-STAND = {"이안": "stand_1", "Starline": "stand_6"}   # Starline 서 있기는 6~18번 왕복(11-28)
+STAND = {"이안": "stand_1"}
 
 
 def _read(path):
