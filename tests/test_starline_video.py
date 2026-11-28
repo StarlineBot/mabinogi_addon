@@ -145,7 +145,8 @@ def test_lazy_frames_keep_memory_close_to_other_characters():
         assert w._image("laugh_0") is not None   # 버린 장도 다시 읽힘
     finally:
         w.close()
-    assert isinstance(pw.load_frames("다래", br.DARE), dict)
+    assert isinstance(pw.load_frames("아리아", br.ARIA), dict)
+    assert isinstance(pw.load_frames("다래", br.DARE), pw.LazyFrames)   # 다래 영상판(11-28)도 그때그때 읽기
 
 
 def test_anchors_put_each_action_on_the_stand_feet():

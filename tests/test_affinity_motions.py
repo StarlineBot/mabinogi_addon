@@ -43,7 +43,8 @@ def test_base_motion_frames_exist_for_25_and_75_with_standing_head(folder):
         for name in m.names():
             k = best_scale(stand, _head(_read(CHARS / folder / f"{name}.png")), 0.8, 1.25, 91)
             low = 0.9 if folder == "Starline" else 0.95   # 영상판(11-27) 모자 마술은 모자·박쥐가 머리 위를 지나감(0.93)
-            assert low <= k <= 1.05, (name, k)
+            high = 1.12 if name == "motion_bubbles_21" else 1.05   # 다래 영상판(11-28) 21번은 비눗방울이 머리 위로 떠 알파 상자가 커짐(1.10)
+            assert low <= k <= high, (name, k)
 
 
 # ---- 순서·해금 --------------------------------------------------------------------------------
@@ -236,8 +237,14 @@ def test_creator_motion_buttons_play_now(app, tmp_path, monkeypatch):
 
 
 def test_sheep_doll_hug_frame_holds():
-    """사용자 11-26: 다래 양인형 — 6번(안아 올림) 2.1초 머문 뒤 7번(서 있기). 반복 구간 규칙은 그대로."""
-    sheep = mo.MOTIONS["다래"][0]
+    """사용자 11-26: 다래 양인형 — 6번(안아 올림) 2.1초 머문 뒤 7번(서 있기). 반복 구간 규칙은 그대로(착장 = 예전 시트 8장).
+    영상판(기본 옷, 기획 11-28): 30장 0.1초 한 번, 15번(꼭 안음) 1.0초."""
+    video = mo.MOTIONS["다래"][0]
+    vseq = video.sequence(random.Random(1))
+    assert [n for n, _d in vseq] == list(video.names()) and len(vseq) == 30
+    assert dict(vseq)["motion_sheep_doll_15"] == 1.0 and all(d == 0.1 for n, d in vseq if n != "motion_sheep_doll_15")
+    assert mo.of("다래", True) is mo.SHEET_MOTIONS["다래"] and mo.of("다래") is mo.MOTIONS["다래"]
+    sheep = mo.SHEET_MOTIONS["다래"][0]
     seq = sheep.sequence(random.Random(1))
     assert seq[-2] == ("motion_sheep_doll_6", 2.1) and seq[-1] == ("motion_sheep_doll_7", mo.FRAME)
     loop = [n for n, _d in seq[2:-4]]

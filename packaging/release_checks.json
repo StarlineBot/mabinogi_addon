@@ -1,10 +1,13 @@
 {
   "version": "0.60.0",
   "tests": [
+    "tests/test_affinity_motions.py",
     "tests/test_affinity_v2.py",
     "tests/test_bundle_layout.py",
     "tests/test_character.py",
     "tests/test_cursor_front.py",
+    "tests/test_dare_video.py",
+    "tests/test_outfit_v2_frames.py",
     "tests/test_pet_floor_space.py",
     "tests/test_qa_frame_check.py",
     "tests/test_release_candidate.py",
@@ -12,19 +15,22 @@
     "tests/test_release_notes.py",
     "tests/test_release_notes_trigger.py",
     "tests/test_starline_video.py",
+    "tests/test_walk_v2.py",
     "tests/test_windows_ci.py"
   ],
   "coverage": {
     "src/mabinogi_addon/character/brain.py": {
       "tests": [
+        "tests/test_affinity_motions.py",
         "tests/test_affinity_v2.py",
         "tests/test_character.py",
         "tests/test_cursor_front.py",
+        "tests/test_dare_video.py",
         "tests/test_pet_floor_space.py",
         "tests/test_qa_frame_check.py",
         "tests/test_starline_video.py"
       ],
-      "reason": "Starline sit_loop = 마법진 한 바퀴 반복 영상 8b sit_0→29(기획 11-28, 사용자 제보 '마법진이 한 바퀴 다 안 돌아감'), sit_notice sit_0 · 대기 불꽃·웃음(새 영상)·턱괴기 셋 중 무작위(사용자 확인 11-28) · Profile.sit_settle: 앉은 반복 들어갈 때 앉기 끝 높이에서 1.5초에 걸쳐 서서히 뜸(QA 11-28 일어날 때 28px 튐·뜬 높이 사라짐) · 다 뜨기 전 일어나면 남은 만큼 이어받아 0.4초에 0으로 · 쓰다듬기 시작 대사가 다 나오고 읽을 틈(0.6초) 뒤에 쓰다듬는 중 대사(bubble_until, 모든 캐릭터 — QA 11-28) · 쓰다듬기 시작 대사는 pet_loop 첫 장(pet_in 동안 대사 없음, 사용자 11-28)"
+      "reason": "Starline sit_loop = 마법진 한 바퀴 반복 영상 8b sit_0→29(기획 11-28, 사용자 제보 '마법진이 한 바퀴 다 안 돌아감'), sit_notice sit_0 · 대기 불꽃·웃음(새 영상)·턱괴기 셋 중 무작위(사용자 확인 11-28) · Profile.sit_settle: 앉은 반복 들어갈 때 앉기 끝 높이에서 1.5초에 걸쳐 서서히 뜸(QA 11-28 일어날 때 28px 튐·뜬 높이 사라짐) · 다 뜨기 전 일어나면 남은 만큼 이어받아 0.4초에 0으로 · 쓰다듬기 시작 대사가 다 나오고 읽을 틈(0.6초) 뒤에 쓰다듬는 중 대사(bubble_until, 모든 캐릭터 — QA 11-28) · 쓰다듬기 시작 대사는 pet_loop 첫 장(pet_in 동안 대사 없음, 사용자 11-28) · 다래 영상판 프로필(DARE, 장 매핑 기획 11-28)·예전 시트 DARE_SHEET(착장)·profile_for, 졸기 반복 sit_loop에서도 엎드려 자기, 엎드려 깨기가 서며 끝나면 게임 중 다시 웅크림"
     },
     "scripts/build_starline_video.py": {
       "tests": [
@@ -71,7 +77,7 @@
       "tests": [
         "tests/test_release_checks.py"
       ],
-      "reason": "0.60.0 경계"
+      "reason": "0.60.0 경계 · 다래 stand_0 WebP(영상판)"
     },
     "src/mabinogi_addon/assets/characters/Starline/laugh_0.webp": {
       "tests": [
@@ -82,22 +88,103 @@
     },
     "scripts/qa_frame_check.py": {
       "tests": [
+        "tests/test_dare_video.py",
         "tests/test_qa_frame_check.py"
       ],
-      "reason": "앉기 끝 → 앉은 반복을 sit_settle만큼 내려 둔 자리로 비교"
+      "reason": "앉기 끝 → 앉은 반복을 sit_settle만큼 내려 둔 자리로 비교 · 다래 원본 짝·착장은 옷 폴더 한 벌(시트 프로필)"
     },
     "src/mabinogi_addon/ui/pet_window.py": {
       "tests": [
+        "tests/test_affinity_motions.py",
         "tests/test_character.py",
+        "tests/test_dare_video.py",
         "tests/test_starline_video.py"
       ],
-      "reason": "say()가 brain에 말풍선 글자 끝 시각을 알림"
+      "reason": "say()가 brain에 말풍선 글자 끝 시각을 알림 · dressed(), 영상판 캐릭터 착장은 옷 폴더 그림만(예전 크기·시트 프로필)"
     },
     "tests/test_pet_floor_space.py": {
       "tests": [
         "tests/test_pet_floor_space.py"
       ],
       "reason": "Starline은 sit_settle만(둥둥 없음) — 떠 있지 않는 캐릭터 검사에서 빼고 따로 · 걷다 쓰다듬기 = pet_in 알아챔"
+    },
+    "src/mabinogi_addon/character/motions.py": {
+      "tests": [
+        "tests/test_affinity_motions.py",
+        "tests/test_character.py",
+        "tests/test_dare_video.py"
+      ],
+      "reason": "다래 영상판 양 인형·비눗방울 30장 0.1초(15번 1.0초), 착장은 SHEET_MOTIONS 8장, of(folder, dressed)"
+    },
+    "src/mabinogi_addon/ui/character_controller.py": {
+      "tests": [
+        "tests/test_affinity_motions.py",
+        "tests/test_character.py",
+        "tests/test_dare_video.py"
+      ],
+      "reason": "profile_for(착장 여부)·모션 목록도 착장 여부로"
+    },
+    "src/mabinogi_addon/ui/character_tab.py": {
+      "tests": [
+        "tests/test_affinity_motions.py",
+        "tests/test_character.py"
+      ],
+      "reason": "제작자 모션 바로 보기 — 착장이면 예전 시트 모션"
+    },
+    "scripts/build_dare_video.py": {
+      "tests": [
+        "tests/test_dare_video.py"
+      ],
+      "reason": "다래 영상판 원본크기 344장 WebP·앵커(기준 장 발 = 서기 발)·입 합성"
+    },
+    "src/mabinogi_addon/assets/characters/다래/stand_0.webp": {
+      "tests": [
+        "tests/test_affinity_motions.py",
+        "tests/test_bundle_layout.py",
+        "tests/test_character.py",
+        "tests/test_dare_video.py",
+        "tests/test_outfit_v2_frames.py",
+        "tests/test_qa_frame_check.py",
+        "tests/test_starline_video.py",
+        "tests/test_walk_v2.py"
+      ],
+      "reason": "다래 영상판 그림(원본 그대로 WebP)·anchors.json·frames.json standH 412, 예전 기본 옷 PNG 지움"
+    },
+    "tests/test_dare_video.py": {
+      "tests": [
+        "tests/test_dare_video.py"
+      ],
+      "reason": "새 테스트"
+    },
+    "scripts/build_dare_frames.py": {
+      "tests": [
+        "tests/test_dare_video.py"
+      ],
+      "reason": "옛 시트 빌드가 다래 영상판을 덮지 않게"
+    },
+    "scripts/build_base_motions.py": {
+      "tests": [
+        "tests/test_dare_video.py"
+      ],
+      "reason": "옛 시트 빌드가 다래 영상판을 덮지 않게"
+    },
+    "scripts/build_walk_v2.py": {
+      "tests": [
+        "tests/test_dare_video.py"
+      ],
+      "reason": "옛 시트 빌드가 다래 영상판을 덮지 않게"
+    },
+    "tests/test_outfit_v2_frames.py": {
+      "tests": [
+        "tests/test_outfit_v2_frames.py"
+      ],
+      "reason": "다래 착장 비교 기준 = 예전 시트(docs/characters/assets/다래/시트_앱크기)"
+    },
+    "tests/test_walk_v2.py": {
+      "tests": [
+        "tests/test_walk_v2.py"
+      ],
+      "reason": "다래 기본 걷기 비교 = 예전 시트 보관본, 걷기 값은 DARE_SHEET"
     }
   }
 }

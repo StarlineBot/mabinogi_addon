@@ -81,6 +81,7 @@ def test_lines_parse_drops_bad_lines_and_rejects_bad_files():
 
 # ---- 펫 상태 전환(명세 2절 표) ----------------------------------------------------------------------
 def _brain(**kw):
+    kw.setdefault("profile", br.DARE_SHEET)   # 아래 일반 동작 테스트는 예전 시트 다래(착장 입었을 때) 기준 — 영상판 다래는 test_dare_video
     b = br.Brain(br.Floor(0, 1000, 700), rng=random.Random(3), **kw)
     b.pos = (300.0, 700.0)
     return b
@@ -95,9 +96,11 @@ def _run(b, t0, seconds, front, step=0.05):
 
 
 def test_every_animation_frame_exists_in_assets():
+    """예전 시트 다래 그림은 착장 폴더마다 한 벌(기본 옷은 영상판 — test_dare_video)."""
     names = {n for frames, _t, _l in br.ANIMS.values() for n in frames}
-    missing = [n for n in names if not (ASSETS / "다래" / f"{n}.png").exists()]
-    assert not missing
+    for outfit in ("frill_pajama", "white_offshoulder"):
+        missing = [n for n in names if not (ASSETS / "다래" / "outfits" / outfit / f"{n}.png").exists()]
+        assert not missing, outfit
 
 
 def test_game_front_walks_to_corner_crouches_and_dozes_then_rises_when_game_goes_back():
@@ -352,7 +355,7 @@ def test_pet_window_is_excluded_from_capture_and_takes_no_focus(app, monkeypatch
     monkeypatch.setattr(capture_exclusion, "available", lambda: True)
     monkeypatch.setattr(capture_exclusion, "set_excluded", lambda hwnd, on: calls.append(on) or True)
     assert "PetWindow" in overlay_capture.OVERLAYS
-    w = PetWindow(_brain(), load_frames("다래"), roster.DARE.color)
+    w = PetWindow(_brain(), load_frames("다래", br.DARE_SHEET, "frill_pajama"), roster.DARE.color)
     try:
         assert overlay_capture.is_overlay(w)
         w.show()
@@ -370,10 +373,10 @@ def test_pet_window_draws_figure_190px_and_follows_feet(app):
 
     clock = [5.0]
     b = _brain()
-    w = PetWindow(b, load_frames("다래"), roster.DARE.color, clock=lambda: clock[0])
+    w = PetWindow(b, load_frames("다래", br.DARE_SHEET, "frill_pajama"), roster.DARE.color, clock=lambda: clock[0])
     try:
         w.grab()
-        assert round(w._sprite.height()) == br.FIGURE_H  # 서 있을 때 키 190
+        assert abs(w._sprite.height() - br.FIGURE_H) <= 1  # 서 있을 때 키 190(착장 그림 키 284~285)
         assert (w.x() + w.width() / 2, w.y() + WIN_H - FOOT) == b.pos
         w.say(ln.Line("응… 안녕.", "happy"))
         assert w.bubble() == "응… 안녕." and w.bubble_shown() == "응"  # 한 글자씩
@@ -507,9 +510,10 @@ def test_frame_sizes_match_standing_height():
     from mabinogi_addon.image_io import imread
     import cv2
 
-    stand = imread(ASSETS / "다래" / "stand_0.png", cv2.IMREAD_UNCHANGED)
-    walk = [imread(p, cv2.IMREAD_UNCHANGED).shape[0] for p in sorted((ASSETS / "다래").glob("walk_*.png"))]
-    assert stand.shape[0] == 285 and len(walk) == 8 and all(abs(h - 285) <= 285 * 0.03 for h in walk)  # 걷기 8장(11-26)은 머리를 예전 걷기에 맞춤 — 키 288~291
+    # 다래 영상판(11-28): 서 있기 상자 키 412(Starline 524 × 0.787), 걷기 14장 상자 그대로
+    stand = imread(ASSETS / "다래" / "stand_0.webp", cv2.IMREAD_UNCHANGED)
+    walk = [imread(ASSETS / "다래" / f"walk_{i}.webp", cv2.IMREAD_UNCHANGED).shape[0] for i in range(15, 29)]
+    assert stand.shape[0] == 412 and len(set(walk)) == 1 and abs(walk[0] - 412) <= 412 * 0.03
 
 
 # ---- 아리아(부드러운 여성, 사용자 11-24 알파 포함 — docs/characters/아리아.md) -------------------------------
@@ -632,7 +636,7 @@ def test_choosing_other_character_swaps_the_pet(app, cfg, monkeypatch):
     ctrl.set_enabled(True)
     try:
         ctrl.start(datetime.datetime(2026, 11, 24, 13))
-        assert ctrl.window is not None and ctrl.window.brain.profile.doze_state == "sit_doze"  # 다래
+        assert ctrl.window is not None and ctrl.window.brain.profile.anims is br.DARE.anims  # 다래(기본 옷 = 영상판)
         first = ctrl.window
         config.save_voice_pack("부드러운 여성")
         ctrl.voice_changed()
@@ -939,7 +943,7 @@ def test_talking_picture_lasts_as_long_as_the_voice(app):
 
     clock = [10.0]
     b = _brain()
-    w = PetWindow(b, load_frames("다래"), roster.DARE.color, clock=lambda: clock[0])
+    w = PetWindow(b, load_frames("다래", br.DARE_SHEET, "frill_pajama"), roster.DARE.color, clock=lambda: clock[0])
     try:
         w.say(ln.Line("응… 안녕."))  # 6글자 → 글자 기준 약 0.4초
         w.hold_talk(2.5)  # 가짜 소리 길이 2.5초
@@ -1072,9 +1076,10 @@ def test_ian_alert_points_at_watch():
 def test_walk_values_come_from_character_data_and_corner_rush_speeds_up_steps():
     """걷기 미끄러짐(사용자 11-24): 캐릭터별 프레임 시간·속도, 이안 v2 0.18초·62px/초(보폭 67px), 다래 새 걷기(11-25) 100px/초(디딘 발 장마다 약 21px 그리기 크기)."""
     assert br.IAN.walk_speed == 66.0 and br.IAN.anims["walk"][1] == (0.15,) * 8   # v3 8장(11-25)
-    for profile in (br.DARE, br.ARIA, br.IAN, br.LENA, br.STARLINE):
+    for profile in (br.DARE, br.DARE_SHEET, br.ARIA, br.IAN, br.LENA, br.STARLINE):
         cycle = sum(profile.anims["walk"][1])
-        assert 60 <= profile.walk_speed <= 100 and 60 <= profile.walk_speed * cycle <= 130  # 한 바퀴 거리 ≈ 보폭(Starline 영상 걷기 129)
+        low = 40 if profile is br.DARE else 60   # 영상판 다래(11-28)는 꼬마 체형 — 디딘 발이 Starline의 약 절반만 움직임(44px/초)
+        assert low <= profile.walk_speed <= 100 and 60 <= profile.walk_speed * cycle <= 130  # 한 바퀴 거리 ≈ 보폭(Starline 영상 걷기 129)
     b = _ian()
     b._walk_to((800.0, 700.0), 0)
     _run(b, 0, 1.0, False)
@@ -1115,7 +1120,8 @@ def test_frame_anchor_loader_is_harmless_without_or_with_bad_file(app, tmp_path)
     assert pet_window._anchors(tmp_path) == {"a": (1.0, 2.0)}
     (tmp_path / "anchors.json").write_text("not json", encoding="utf-8")
     assert pet_window._anchors(tmp_path) == {}
-    assert not any((ASSETS / folder / "anchors.json").exists() for folder in ("다래", "아리아", "이안", "레나"))
+    assert not any((ASSETS / folder / "anchors.json").exists() for folder in ("아리아", "이안", "레나"))
+    assert (ASSETS / "다래" / "anchors.json").exists()   # 다래 영상판(11-28)도 동작 상자마다 발 자리 맞춤 — test_dare_video
     assert (ASSETS / "Starline" / "anchors.json").exists()   # 영상판(11-27) 동작 틀마다 발 자리 맞춤 — test_starline_video
     frames = pet_window.load_frames("이안", br.IAN)
     w = pet_window.PetWindow(_ian(), frames, "#3B5B9A")
@@ -1146,7 +1152,7 @@ def test_mouth_only_frames_differ_only_around_the_mouth(folder, prefix):
         assert h * 0.3 < ys.mean() < h * 0.65  # 얼굴(입) 높이
 
 
-@pytest.mark.parametrize("profile", [br.DARE, br.ARIA, br.IAN, br.LENA, br.STARLINE])
+@pytest.mark.parametrize("profile", [br.DARE, br.DARE_SHEET, br.ARIA, br.IAN, br.LENA, br.STARLINE])
 def test_corner_without_saved_spot_is_nearest_screen_edge(profile):
     """사용자 11-24: 끌어서 정한 구석이 없으면 가까운 화면 끝(왼쪽일 수도) — 앉은 동안 유지, 다시 게임이 오면 다시 정함."""
     b = br.Brain(br.Floor(0, 1000, 700), rng=random.Random(2), profile=profile)
@@ -1352,7 +1358,7 @@ def test_lena_lines_situations_stage_lines_and_voices():
     assert voices["대사/구간_100.mp3"] == ("stage_up", "…이 초커, 너 가져. 잃어버리면 화낼 거야.")
 
 
-@pytest.mark.parametrize("folder", ["다래", "아리아", "레나"])   # Starline은 영상판(11-27) — 기획이 색까지 끝낸 그림
+@pytest.mark.parametrize("folder", ["아리아", "레나"])   # Starline(11-27)·다래(11-28)는 영상판 — 기획이 색까지 끝낸 그림
 def test_sheet_colors_match_standing_hair_and_skin(folder):
     """시트 색 맞추기(사용자 11-24 '동작마다 머리색·피부 톤이 다름'): 모든 그림의 머리·피부가 서 있기 대비 ΔE<3."""
     import cv2
@@ -1579,7 +1585,7 @@ def test_known_cards_fill_down_to_card_bottom():
         assert art.shape[1] >= art.shape[0] * ct.CARD_W / ct.CARD_H, path
 
 
-@pytest.mark.parametrize("profile,folder,scale", [(br.DARE, "다래", 1.0), (br.ARIA, "아리아", 1.0), (br.IAN, "이안", 1.0),
+@pytest.mark.parametrize("profile,folder,scale", [(br.DARE, "다래", br.DARE_SCALE), (br.ARIA, "아리아", 1.0), (br.IAN, "이안", 1.0),
                                                   (br.LENA, "레나", 0.95), (br.STARLINE, "Starline", 1.15)])
 def test_character_scale_applies_to_every_frame_and_fits_window(app, profile, folder, scale):
     """캐릭터별 그리기 배율(사용자 11-24 B안 — 얼굴 크기 맞춤: Starline ×1.15, 레나 ×0.95): 서 있기 그리기 키 = 190×배율,
@@ -1765,7 +1771,7 @@ def test_rare_motion_waits_for_idle_line_and_settings_override():
     assert b.state != "stretch" and b._next_rare >= 2 + br.RARE_DEFER - 0.01
     custom = br.ARIA.with_timing({"rareGap": [60, 90], "sleepGap": [40, 50]})
     assert custom.rare_gap == (60.0, 90.0) and custom.sleep_gap is None   # 엎드려 자기 없는 캐릭터는 그대로
-    dare = br.DARE.with_timing({"sleepGap": [40, 50], "sleepHold": [10, 12]})
+    dare = br.DARE_SHEET.with_timing({"sleepGap": [40, 50], "sleepHold": [10, 12]})
     assert dare.sleep_gap == (40.0, 50.0) and dare.sleep_hold == (10.0, 12.0)
 
 
@@ -1787,8 +1793,8 @@ def test_starline_sneeze_says_line_at_frame_four_once():
 def test_dare_lies_down_every_3_to_6_minutes_in_corner_then_sits_again():
     """다래 엎드려 자기(기획 11-25 정정 — '구석에서는 자주 보이게'): 구석에 앉은 뒤 3~6분에 한 번 엎드림(0→2) →
     숨쉬기 20~40초(Zzz) → 6·7·8로 앉아 원래 앉아 있기로. 엎드린 동안 클릭 = 자다 깸, 게임 끝 = 앉은 뒤 일어나기."""
-    assert br.DARE.sleep_gap == (180.0, 360.0) and br.DARE.sleep_hold == (20.0, 40.0) and br.IAN.sleep_gap is None
-    b = br.Brain(br.Floor(0, 1000, 700), rng=random.Random(3), profile=br.DARE, corner=(900.0, 700.0))
+    assert br.DARE_SHEET.sleep_gap == (180.0, 360.0) and br.DARE_SHEET.sleep_hold == (20.0, 40.0) and br.IAN.sleep_gap is None
+    b = br.Brain(br.Floor(0, 1000, 700), rng=random.Random(3), profile=br.DARE_SHEET, corner=(900.0, 700.0))
     b.pos = (300.0, 700.0)
     t, seen = 0.0, []
     while t < 1000:
@@ -1801,11 +1807,11 @@ def test_dare_lies_down_every_3_to_6_minutes_in_corner_then_sits_again():
     loop = [x for x, s in seen if s == "sleep_loop" and downs[0] < x < downs[0] + 60]
     assert 19 <= loop[-1] - loop[0] <= 41   # 숨쉬기 20~40초
     after = [s for x, s in seen if loop[-1] < x < loop[-1] + 6]
-    assert "sleep_up" in after and br.DARE.sit_state in after   # 다시 구석 앉아 있기로
-    assert all(s in br.DARE.sitting for x, s in seen if x > sat + 1)   # 게임 중엔 계속 구석
+    assert "sleep_up" in after and br.DARE_SHEET.sit_state in after   # 다시 구석 앉아 있기로
+    assert all(s in br.DARE_SHEET.sitting for x, s in seen if x > sat + 1)   # 게임 중엔 계속 구석
     assert len(downs) >= 2 and all(175 <= b2 - a <= 420 for a, b2 in zip(downs, downs[1:]))
     # 엎드린 동안 클릭 → 자다 깸 / 게임 끝 → 앉은 뒤 일어나기
-    c = br.Brain(br.Floor(0, 1000, 700), rng=random.Random(3), profile=br.DARE, corner=(900.0, 700.0))
+    c = br.Brain(br.Floor(0, 1000, 700), rng=random.Random(3), profile=br.DARE_SHEET, corner=(900.0, 700.0))
     c.pos = (300.0, 700.0)
     t = 0.0
     while c.state != "sleep_loop":
@@ -1814,7 +1820,7 @@ def test_dare_lies_down_every_3_to_6_minutes_in_corner_then_sits_again():
     assert c.zzz()
     c.press(t, 900, 650)
     assert c.release(t)[-1] == ("say", "click_sleep") and c.state == "wake"
-    d = br.Brain(br.Floor(0, 1000, 700), rng=random.Random(3), profile=br.DARE, corner=(900.0, 700.0))
+    d = br.Brain(br.Floor(0, 1000, 700), rng=random.Random(3), profile=br.DARE_SHEET, corner=(900.0, 700.0))
     d.pos = (300.0, 700.0)
     t = 0.0
     while d.state != "sleep_loop":
@@ -1833,7 +1839,6 @@ def test_dare_lies_down_every_3_to_6_minutes_in_corner_then_sits_again():
     ("레나", "stand_0", "magic_0"), ("레나", "stand_0", "magic_5"),
     ("Starline", "stand_0", "sneeze_0"), ("Starline", "stand_0", "sneeze_29"),   # 영상판(11-27) 30장 — 처음·끝 = 서기
     ("Starline", "stand_0", "flame_0"), ("Starline", "stand_0", "flame_29"),   # 불꽃(QA 11-25 — 예전 1.07)
-    ("다래", "sit_doze_0", "sleep_0"), ("다래", "sit_drowsy_0", "sleep_8"),
 ])
 def test_basic_motion_same_pose_frames_match_neighbour_silhouette(folder, ref, other):
     """기본 동작 크기 튐 방지(QA 11-25 '기지개 전에 커지고, 엎드리기 전에 작아지고…'): 이웃 그림과 같은 자세인 장을
@@ -2336,10 +2341,10 @@ def test_silhouette_card_preview_uses_its_own_pack_not_selected_one(monkeypatch)
     assert notifier.greeting_path("없는 팩") == sounds / notifier.SAMPLE_FILE
 
 
-def test_dare_stand_is_getup_end_picture():
-    """다래 기본 서 있기 = 일어나기 v2 끝 장(사용자 11-25 '착지하고 서 있을 때가 더 이쁨') — 키 285 그대로."""
-    assert (ASSETS / "다래" / "stand_0.png").read_bytes() == (ASSETS / "다래" / "getup_2.png").read_bytes()
-    assert _img_of(ASSETS / "다래" / "stand_0.png").shape[0] == 285
+def test_dare_outfit_stand_keeps_sheet_height():
+    """다래 착장은 예전 시트 그림 그대로(기본 옷만 영상판, 기획 11-28) — 예전 앱 크기(서 있기 키 약 285, 영상판 412 아님)."""
+    for outfit in ("frill_pajama", "white_offshoulder"):
+        assert 270 <= _img_of(ASSETS / "다래" / "outfits" / outfit / "stand_0.png").shape[0] <= 290
 
 
 def test_ian_walk_v3_eight_frames_alternate_legs():
@@ -2411,7 +2416,7 @@ def test_greeting_preview_shows_bubble(app, tmp_path, monkeypatch, pack, text):
             ctrl.window.close()
 
 
-@pytest.mark.parametrize("profile", [br.DARE, br.ARIA, br.IAN, br.LENA, br.STARLINE])
+@pytest.mark.parametrize("profile", [br.DARE, br.DARE_SHEET, br.ARIA, br.IAN, br.LENA, br.STARLINE])
 def test_pet_lines_only_while_petting_motion_plays(profile):
     """사용자 11-28 '쓰다듬기 대사는 쓰다듬기 모션이 나올 때만': 문지르기를 알아챈 pet_in 동안은 대사 없음, pet_loop 첫 장에서 시작 대사,
     그 말풍선이 다 찍히고 읽을 틈(READ_GAP) 뒤 아직 쓰다듬는 중이면 쓰는 중 대사, 손 떼면 pet_out 시작 때 끝 대사."""

@@ -117,30 +117,39 @@ def frame_file(folder, name: str):
     return None
 
 
+def dressed(folder: str, outfit: str) -> bool:
+    """착장 폴더 그림을 입는지(그 옷 폴더가 있음) — 영상판 캐릭터(다래)는 그때 예전 시트 프로필·모션(brain.profile_for)."""
+    return bool(outfit) and (paths.resource_dir() / "characters" / folder / "outfits" / outfit).is_dir()
+
+
 def load_frames(folder: str, profile: brain_mod.Profile | None = None, outfit: str = "") -> Mapping[str, QImage]:
     """그 캐릭터 동작에 쓰는 프레임만 읽는다(assets/characters/<폴더>/<이름>.png).
-    outfit(착장 key)이면 outfits/<key>/<이름>.png를 먼저 — 없는 프레임은 기본 옷 그대로(착장 SD는 아직 없음, 기획 11-25)."""
+    outfit(착장 key)이면 outfits/<key>/<이름>.png를 먼저 — 없는 프레임은 기본 옷 그대로(착장 SD는 아직 없음, 기획 11-25).
+    영상판 캐릭터(다래, 기획 11-28)가 착장을 입으면 그 옷 폴더 그림만(예전 시트 한 벌 — 기본 옷 영상 장과 섞지 않음)."""
     base = paths.resource_dir() / "characters" / folder
-    dressed = base / "outfits" / outfit if outfit and (base / "outfits" / outfit).is_dir() else None   # SD 없는 옷 = 기본 그대로
-    profile = profile or brain_mod.PROFILES.get(folder, brain_mod.DARE)
+    wearing = dressed(folder, outfit)
+    dressed_dir = base / "outfits" / outfit if wearing else None   # SD 없는 옷 = 기본 그대로
+    if wearing and folder in brain_mod.SHEET_PROFILES:
+        base, dressed_dir = dressed_dir, None   # 크기(frames.json)·놓는 자리(anchors.json)도 옷 폴더 것(없음 = 예전 기준)
+    profile = profile or brain_mod.profile_for(folder, wearing)
     out = {}
     names = {name for frames, _times, _loop in profile.anims.values() for name in frames}
     from ..character import motions
-    motion_names = motions.frame_names(folder)   # 호감도 모션 — 입은 옷 폴더에 있는 것만(기본 옷 모션으로 대신하지 않음)
+    motion_names = motions.frame_names(folder, wearing)   # 호감도 모션 — 입은 옷 폴더에 있는 것만(기본 옷 모션으로 대신하지 않음)
     anchors = _anchors(base)
     if len(names | motion_names) > LAZY_OVER:
         found = {}
         for name in sorted(names | motion_names):
-            path = frame_file(dressed, name) if dressed is not None else None
+            path = frame_file(dressed_dir, name) if dressed_dir is not None else None
             path = path or frame_file(base, name)
-            if path is None or (name in motion_names and dressed is not None and path.parent != dressed):
+            if path is None or (name in motion_names and dressed_dir is not None and path.parent != dressed_dir):
                 continue
             found[name] = path
         pinned = {n for state in PINNED if state in profile.anims for n in profile.anims[state][0]}
         return LazyFrames(found, anchors, pinned, frame_h=_frame_h(base), draw_scale=_draw_scale(base))
     for name in sorted(names | motion_names):
-        path = dressed / f"{name}.png" if dressed is not None and (dressed / f"{name}.png").is_file() else base / f"{name}.png"
-        if name in motion_names and dressed is not None and path.parent != dressed:
+        path = dressed_dir / f"{name}.png" if dressed_dir is not None and (dressed_dir / f"{name}.png").is_file() else base / f"{name}.png"
+        if name in motion_names and dressed_dir is not None and path.parent != dressed_dir:
             continue
         image = QImage(str(path))
         if not image.isNull():
