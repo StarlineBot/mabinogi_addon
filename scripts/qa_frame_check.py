@@ -172,7 +172,7 @@ def check(folder: str, outfit: str = "", source: Path | None = None, base: str |
             k = draw_scale.get(name.rsplit("_", 1)[0], 1.0)   # 앱이 그릴 때 곱하는 배율(frames.json drawScale)
             if k != 1.0:
                 head = cv2.resize(sh.head, None, fx=k, fy=k, interpolation=cv2.INTER_AREA)
-                sh = Shape(foot_y=sh.foot_y * k, foot_x=sh.foot_x * k, head=head)
+                sh = Shape(foot_y=sh.foot_y * k, foot_x=sh.foot_x * k, head=head, height=sh.height * k)
             shapes[name] = sh
 
     def neighbours(a: str, b: str) -> bool:

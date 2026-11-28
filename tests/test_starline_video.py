@@ -185,7 +185,7 @@ def test_landing_drawn_at_stand_size():
     from scripts.silhouette import best_scale
 
     meta = json.loads((SL / "frames.json").read_text(encoding="utf-8"))
-    assert meta["drawScale"] == {"land": 0.95}
+    assert meta["drawScale"] == {"land": 0.95, "talk_emph": 0.975}   # 말하기 강조·알림 장 머리 3% 큼 → 0.975
     k = meta["drawScale"]["land"]
 
     def alpha_rows(a):
@@ -204,7 +204,7 @@ def test_landing_drawn_at_stand_size():
     small = cv2.resize(land, None, fx=k, fy=k, interpolation=cv2.INTER_AREA)
     assert abs(best_scale(head(stand), head(small), 0.85, 1.15, 61) - 1) <= 0.02
     frames = pw.load_frames("Starline", SB)
-    assert frames.draw_scale == {"land": 0.95}
+    assert frames.draw_scale == meta["drawScale"]
     w = pw.PetWindow(br.Brain(br.Floor(0, 1600, 700), profile=SB), frames, "#3A0729")
     try:
         floor = pw.WIN_H - pw.FOOT
