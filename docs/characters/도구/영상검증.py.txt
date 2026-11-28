@@ -19,7 +19,12 @@ def key(img):
     al = np.clip(1 - ((g - np.maximum(r, b)) - 25) / 70, 0, 1)
     m = (al > 0.5).astype(np.uint8); n, l, st, _ = cv2.connectedComponentsWithStats(m)
     if n <= 1: return np.dstack([img, np.zeros(img.shape[:2], np.uint8)])
-    bi = 1 + int(np.argmax(st[1:, 4])); keep = np.isin(l, [i for i in range(1, n) if st[i, 4] >= st[bi, 4] * 0.02])
+    bi = 1 + int(np.argmax(st[1:, 4]))
+    # 11-28: Gemini GIF 오른쪽 아래 별 표시(워터마크)가 2%를 넘어 상자를 키움(재현: 레나 GIF 시작 겹침 0.34) →
+    # 큰 덩어리 상자를 25% 넓힌 범위와 겹치는 조각만 남김(몸 옆 마법 효과는 남고, 구석 표시는 빠짐)
+    x, y, w, h = st[bi, :4]; px, py = int(w * 0.25), int(h * 0.25)
+    near = lambda i: not (st[i, 0] > x + w + px or st[i, 0] + st[i, 2] < x - px or st[i, 1] > y + h + py or st[i, 1] + st[i, 3] < y - py)
+    keep = np.isin(l, [i for i in range(1, n) if st[i, 4] >= st[bi, 4] * 0.02 and near(i)])
     al = al * cv2.dilate(keep.astype(np.uint8), np.ones((3, 3), np.uint8))
     g2 = np.minimum(g, np.maximum(r, b) + 8)
     return np.dstack([b, g2, r, al * 255]).clip(0, 255).astype(np.uint8)
@@ -136,6 +141,14 @@ def check_folder(folder, stand_gif, loop=None):
     S = tight(load(stand_gif)[0]); SH = S.shape[0]; ref_head = S[: int(SH * 0.35)]
     s_img, e_img = load(folder + "1_시작.png")[0], load(folder + "2_끝.png")[0]
     if loop is None: loop = bool(np.array_equal(s_img, e_img))
+    # 끝 칸 비움 작업(끌기·구석 앉기 등 — 요청.md에 '끝 칸 비움'): 2_끝.png는 결과 마지막 장이라 끝 겹침은 보지 않음
+    md0 = folder + "요청.md"
+    hold = os.path.exists(md0) and "끝 칸 비움" in open(md0, encoding="utf-8").read().split("## 3. 검증")[0]
+    # 11-28: Gemini 앱 GIF는 640×360, 시작 그림은 1280×720 — 머리 맞춤 범위(0.80~1.25)를 벗어나 겹침 0.34로 오판(재현: 레나 L9).
+    # 카메라 고정이라 첫 장 키를 시작 그림 키에 맞춘 배율 하나로 모든 장을 먼저 맞춤.
+    f0 = tight(s_img).shape[0] / tight(F[0]).shape[0]
+    if abs(f0 - 1) > 0.15:
+        F = [cv2.resize(a, None, fx=f0, fy=f0, interpolation=cv2.INTER_LINEAR) for a in F]
     def norm(a):
         t = tight(a); sc, c = head_scale(ref_head, t)
         return cv2.resize(t, None, fx=1 / sc, fy=1 / sc, interpolation=cv2.INTER_AREA)[..., 3] > 128, sc, c
@@ -159,13 +172,13 @@ def check_folder(folder, stand_gif, loop=None):
     if i_start < 0.85: prob.append(f"시작 장면이 1_시작.png와 다름(겹침 {i_start:.2f})")
     if loop:
         if seam > max(nb) * 1.2: prob.append(f"반복 이음매가 튐(끝→처음 차 {seam:.1f}, 이웃 장 최대 {max(nb):.1f})")
-    elif i_end < 0.88: prob.append(f"끝 장면이 2_끝.png와 다름(겹침 {i_end:.2f})")
+    elif i_end < 0.88 and not hold: prob.append(f"끝 장면이 2_끝.png와 다름(겹침 {i_end:.2f})")
     if spread > 6: prob.append(f"크기 흔들림 {spread:.1f}%")
     if max(c_start[1:].max(), c_end[1:].max()) > 6 or max(c_start[0], c_end[0]) > 8:
         prob.append(f"색 다름(시작 ΔE {[round(float(x),1) for x in c_start]}, 끝 ΔE {[round(float(x),1) for x in c_end]})")
     verdict = "통과" if not prob else "다시: " + " / ".join(prob)
     lines = [f"- 판정: **{verdict}**",
-             f"- 시작 겹침 {i_start:.2f}" + (f" · 반복 이음매 끝→처음 차 {seam:.1f}(이웃 장 평균 {np.mean(nb):.1f}, 최대 {max(nb):.1f})" if loop else f" · 끝 겹침 {i_end:.2f}(기준 0.88)"),
+             f"- 시작 겹침 {i_start:.2f}" + (f" · 반복 이음매 끝→처음 차 {seam:.1f}(이웃 장 평균 {np.mean(nb):.1f}, 최대 {max(nb):.1f})" if loop else (" · 끝 칸 비움 작업 — 끝 겹침 안 봄" if hold else f" · 끝 겹침 {i_end:.2f}(기준 0.88)")),
              f"- 머리 크기 흔들림 {spread:.1f}%(기준 6%, 머리 맞춤 잘 된 {len(hs)}장으로) · 색 ΔE 시작 {[round(float(x),1) for x in c_start]} 끝 {[round(float(x),1) for x in c_end]}(어두운·중간·밝은, 기준 8·6·6)",
              f"- 화면 끝 닿은 장 {len(edge)}개 · 장 수 {len(F)}"]
     md = folder + "요청.md"
