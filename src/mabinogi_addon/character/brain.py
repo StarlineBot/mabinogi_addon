@@ -195,8 +195,9 @@ class Profile:
                        sleep_hold=hold or self.sleep_hold)
 
 
-DARE = Profile(ANIMS, _NEXT, SITTING, "sit_drowsy", doze_state="sit_doze", walk_speed=DARE_WALK_SPEED,
-               talk_sets=DARE_TALK, sleep_gap=SLEEP_GAP)
+# 예전 시트 그림 다래 — 착장(프릴 잠옷·오프숄더)은 영상판 그림이 없어 이 프로필 그대로(기획 11-28, profile_for)
+DARE_SHEET = Profile(ANIMS, _NEXT, SITTING, "sit_drowsy", doze_state="sit_doze", walk_speed=DARE_WALK_SPEED,
+                     talk_sets=DARE_TALK, sleep_gap=SLEEP_GAP)
 
 # 아리아(docs/characters/아리아.md): 졸기·자다 깨기 없음 — 구석에서 머리를 안고 앉아 웃음(0 길게 → 3 → 0 → 1 → 2 → 0),
 # 앉아서 클릭 = 웃음 프레임. 서 있기 두 자세 번갈아 + 가만히 서 있는 동안 가끔 머리 쓰다듬기(사용자 11-24).
@@ -330,7 +331,58 @@ STARLINE = Profile(STARLINE_ANIMS,
                    click_talks=True, walk_speed=STARLINE_WALK_SPEED, talk_sets=STARLINE_TALK, scale=STARLINE_SCALE,
                    rare_extra="sneeze", rare_say=(22, "sneeze"), notice_holds=True,
                    sit_settle=(STARLINE_SIT_DROP, 1.5))
+# 다래 영상판(기획 11-28 — docs/status.md '다래 영상판 원본크기·DEV 넘김', scripts/build_dare_video): 원본크기 30장 0.1초.
+# 그리기 배율은 Starline과 같음 — 화면 px/저장 px = 190 × 1.15 / 524(Starline 서기 상자)이 되게 다래 서기 상자 412에 맞춤
+# (다래 키 ≈ Starline × 0.787, 머리 크기 같음). 걷기: 디딘 발 가운데가 장마다 약 9.2 저장 px 뒤로(Starline 같은 잼 19.2) →
+# Starline 걷기 빠르기 × 9.2/19.2.
+DARE_STAND_H = 412
+DARE_SCALE = round(STARLINE_SCALE * DARE_STAND_H / 524, 4)
+DARE_WALK_V_SPEED = round(STARLINE_WALK_SPEED * 9.2 / 19.2, 1)
+
+
+def _r(prefix: str, a: int, b: int) -> tuple[int, ...]:
+    """a → b → a 쪽으로 되돌아오는 왕복 반복(끝 장 두 번 안 겹침): 4~21 → 4…21, 20…5."""
+    return (*range(a, b + 1), *range(b - 1, a, -1))
+
+
+DARE_ANIMS = {
+    "stand": (*_v("stand", range(30)), True),
+    "walk": (*_v("walk", range(15, 29)), True),        # 오른쪽 보는 옆모습 14장(왼쪽은 창이 뒤집음)
+    "surprise": (*_v("surprise", range(30)), False),
+    "alert": (*_v("surprise", range(30)), False),
+    "pet_in": (*_v("pet", range(4)), False),
+    "pet_loop": (*_v("pet", _r("pet", 4, 21)), True),
+    "pet_out": (*_v("pet", range(22, 30)), False),
+    "drag": (*_v("drag", _r("drag", 0, 29)), True),
+    "fall": (("land_3",), (1.0,), True),               # 1·2번은 머리·헤일로가 화면 위로 잘림
+    "land": (*_v("land", range(4, 30)), False),
+    "crouch": (*_v("crouch", range(21)), False),
+    "sit_loop": (*_v("crouch", range(21, 28)), True),   # 구석에서 꾸벅 졸기 반복(Zzz·클릭하면 깨기)
+    "sit_notice": (("crouch_21",), (1.2,), False),      # 앉아서 알림 = 그때 장 그대로(notice_holds), 말풍선만
+    "sleep_down": (*_v("sleep", range(20)), False),
+    "sleep_loop": (*_v("sleep", range(20, 28)), True),
+    "sleep_up": (*_v("sleepup", range(30)), False),     # 엎드려 있다 깨어 일어나 섬
+    "wake": (*_v("wake", range(30)), False),            # 앉아 졸다 깨어 일어나 섬
+    "rise": (*_v("wake", range(30)), False),            # 게임 끝 — 졸다 깨어 일어남(기획 11-28 DEV 질문 답: 20~29는 자세가 툭 바뀜)
+}
+DARE_V_TALK = (talk_set(),)
+DARE_ANIMS.update(_talk_anims(DARE_V_TALK))
+DARE = Profile(DARE_ANIMS,
+               {"surprise": "stand", "alert": "stand", "land": "stand", "pet_in": "pet_loop", "pet_out": "stand",
+                "crouch": "sit_loop", "sit_notice": "sit_loop", "sleep_down": "sleep_loop", "sleep_up": "stand",
+                "wake": "stand", "rise": "stand", "talk_end": "stand"},
+               ("crouch", "sit_loop", "sit_notice") + SLEEPING, "sit_loop", doze_state="sit_loop",
+               walk_speed=DARE_WALK_V_SPEED, talk_sets=DARE_V_TALK, sleep_gap=SLEEP_GAP, notice_holds=True,
+               scale=DARE_SCALE)
 PROFILES = {"다래": DARE, "아리아": ARIA, "이안": IAN, "레나": LENA, "Starline": STARLINE}
+SHEET_PROFILES = {"다래": DARE_SHEET}   # 착장(영상판 그림 없음)을 입었을 때
+
+
+def profile_for(folder: str, dressed: bool = False) -> Profile:
+    """그 캐릭터 프로필 — 착장 폴더 그림을 입었고(dressed) 그 캐릭터가 영상판이면 예전 시트 프로필."""
+    if dressed and folder in SHEET_PROFILES:
+        return SHEET_PROFILES[folder]
+    return PROFILES.get(folder, DARE)
 
 
 @dataclass
@@ -709,7 +761,8 @@ class Brain:
             if self.state == "getup" and self._goal == "corner" and self._near(self.home()):
                 nxt = "crouch"  # 게임 중 구석에 놓였으면 그 자리에서 다시 앉는다
             if self.state == "sleep_up" and self._goal == "corner":
-                nxt = self.profile.sit_state   # 게임 중이면 다시 구석 앉아 있기로(게임이 끝났으면 일어나기)
+                # 게임 중이면 다시 구석 앉아 있기로(게임이 끝났으면 일어나기). 다래 영상판은 깨어 일어서며 끝나 → 다시 웅크려 앉기
+                nxt = "crouch" if nxt == "stand" else self.profile.sit_state
             if nxt != self.state:
                 self._go(nxt, now)
             if nxt == "stand":
@@ -740,7 +793,7 @@ class Brain:
             if self.state in self.profile.sitting and self._front:
                 if self._sleep_next == 0.0:
                     self._sleep_next = now + self.rng.uniform(*self.profile.sleep_gap)
-                if self.state in ("sit_drowsy", "sit_doze", "sit_half") and now >= self._sleep_next:
+                if self.state in ("sit_drowsy", "sit_doze", "sit_half", "sit_loop") and now >= self._sleep_next:
                     down = sum(self.profile.anims["sleep_down"][1])
                     self._sleep_until = now + down + self.rng.uniform(*self.profile.sleep_hold)
                     self._go("sleep_down", now)   # 엎드려 자기

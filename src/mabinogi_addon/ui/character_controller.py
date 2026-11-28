@@ -19,7 +19,7 @@ from PySide6.QtGui import QGuiApplication
 from .. import config, paths
 from ..character import motions, roster
 from ..character.affinity import Affinity, Rules
-from ..character.brain import DARE, PROFILES, Brain, Floor
+from ..character.brain import Brain, Floor, profile_for
 from ..character.lines import Lines, Picker, read
 
 _log = logging.getLogger(__name__)
@@ -203,7 +203,7 @@ class CharacterController(QObject):
             picker = self.picker()
             if picker is not None:
                 self._say(picker.stage_up(stage))
-            new = [m.key for m in motions.of(roster.folder(self.character)) if m.stage == stage]
+            new = [m.key for m in self._motions() if m.stage == stage]
             if new and new[0] in self.window.brain.motions:   # 구간 오름 — 새 모션을 한 번 바로(말풍선 뒤 서 있으면)
                 self.window.brain.show_motion(new[0], self._clock())
 
@@ -211,7 +211,7 @@ class CharacterController(QObject):
         """제작자 '모션 바로 보기' — 해금과 무관하게 지금 옷에 그림이 있으면 바로 한 번(구석·말하기 중이면 안 함)."""
         if self.window is None or self.character is None:
             return False
-        spec = next((m for m in motions.of(roster.folder(self.character)) if m.key == key), None)
+        spec = next((m for m in self._motions() if m.key == key), None)
         if spec is None or not all(n in self.window.frames for n in spec.names()):
             return False
         brain = self.window.brain
@@ -223,8 +223,16 @@ class CharacterController(QObject):
         if self.character is None:
             return
         folder = roster.folder(self.character)
-        weights = motions.unlocked(folder, self._current_stage(), getattr(window, "frames", {}))
-        window.brain.set_motions({m.key: m for m in motions.of(folder) if m.key in weights}, weights)
+        weights = motions.unlocked(folder, self._current_stage(), getattr(window, "frames", {}), self._dressed())
+        window.brain.set_motions({m.key: m for m in self._motions() if m.key in weights}, weights)
+
+    def _dressed(self) -> bool:
+        """지금 착장 폴더 그림을 입었는지 — 영상판 캐릭터(다래)는 그때 예전 시트 모션(motions.of)."""
+        from .pet_window import dressed
+        return dressed(roster.folder(self.character), config.load_outfit(self.character.key))
+
+    def _motions(self):
+        return motions.of(roster.folder(self.character), self._dressed())
 
     def set_paused(self, paused: bool) -> None:
         """앱 일시정지(사냥 안 할 때) — 대사 목소리도 멈추고 안 냄."""
@@ -286,11 +294,12 @@ class CharacterController(QObject):
             return read(paths.resource_dir() / "characters" / folder / "lines.json")
 
     def _make_window(self):
-        from .pet_window import PetWindow, load_frames
+        from .pet_window import PetWindow, dressed, load_frames
 
         folder = roster.folder(self.character)
-        profile = PROFILES.get(folder, DARE).with_timing(config.load_pet_idle())
-        frames = load_frames(folder, profile, config.load_outfit(self.character.key))
+        outfit = config.load_outfit(self.character.key)
+        profile = profile_for(folder, dressed(folder, outfit)).with_timing(config.load_pet_idle())
+        frames = load_frames(folder, profile, outfit)
         if not frames:
             _log.warning("펫 그림을 찾지 못함 — 펫 창 안 띄움")
             return None

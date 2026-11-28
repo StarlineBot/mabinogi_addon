@@ -14,12 +14,18 @@ from mabinogi_addon.character import brain as br
 from scripts.silhouette import best_scale
 
 CHARS = Path(__file__).resolve().parents[1] / "src/mabinogi_addon/assets/characters"
+# 다래 기본 옷은 영상판(0.60.0) — 착장 비교 기준은 예전 시트 기본 옷(앱 밖 보관)
+SHEET_BASE = {"다래": Path(__file__).resolve().parents[1] / "docs/characters/assets/다래/시트_앱크기"}
+
+
+def _base(char):
+    return SHEET_BASE.get(char, CHARS / char)
 OUTFITS = {   # (캐릭터, 옷) → (펫 프로필, 모션 이름 두 개, 색 기준)
     ("레나", "lab"): (br.LENA, ("motion_grimoire", "motion_float_sit"), "stand_0"),
-    ("다래", "frill_pajama"): (br.DARE, ("motion_sheep_doll", "motion_bubbles"), "stand_0"),
+    ("다래", "frill_pajama"): (br.DARE_SHEET, ("motion_sheep_doll", "motion_bubbles"), "stand_0"),
     ("이안", "guild_uniform"): (br.IAN, ("motion_tidy", ("motion_tea", 6)), "stand_1"),   # 차 6장(조끼와 같음)
     ("아리아", "summer_dress"): (br.ARIA, ("motion_water", "motion_wreath"), "stand_0"),
-    ("다래", "white_offshoulder"): (br.DARE, ("motion_sheep_doll", "motion_bubbles"), "stand_0"),
+    ("다래", "white_offshoulder"): (br.DARE_SHEET, ("motion_sheep_doll", "motion_bubbles"), "stand_0"),
     ("레나", "red_dress"): (br.LENA, ("motion_grimoire", "motion_float_sit"), "stand_0"),
 }
 HAT = {("아리아", "summer_dress")}   # 밀짚모자 — 머리 실루엣 대신 '서 있기 대비 키 비율 = 기본 같은 장 ±6%'(전체 다시 그림 11-26)
@@ -50,7 +56,7 @@ HEIGHT_TOL = {("다래", "sleep_5"): 0.08, ("다래", "sleep_1"): 0.08, ("다래
 # 동작 안에서 크기가 들쭉날쭉해지므로 이 칸들은 머리 0.90까지(그림 그대로, 렌더 확인)
 HEAD_TOL = {("다래", "white_offshoulder", "sleep_1"): 0.90, ("다래", "white_offshoulder", "sleep_7"): 0.90,
             ("다래", "white_offshoulder", "wake_3"): 0.90}
-FRAMES = [(c, o, n) for (c, o) in OUTFITS for n in sorted(_names(CHARS / c))]
+FRAMES = [(c, o, n) for (c, o) in OUTFITS for n in sorted(_names(_base(c)))]
 
 
 @pytest.mark.parametrize("char,outfit", list(OUTFITS))
@@ -59,7 +65,7 @@ def test_outfit_has_every_base_frame_and_motions(char, outfit):
     folder = CHARS / char / "outfits" / outfit
     counts = [(m, 8) if isinstance(m, str) else m for m in motions]
     every = {p.stem for p in folder.glob("*.png")} - {"card"}
-    assert every == _names(CHARS / char) | {f"{m}_{i}" for m, n in counts for i in range(n)}
+    assert every == _names(_base(char)) | {f"{m}_{i}" for m, n in counts for i in range(n)}
     used = {n for frames, _t, _l in profile.anims.values() for n in frames}
     assert not [n for n in used if not (folder / f"{n}.png").is_file()]   # 펫이 쓰는 모든 동작이 이 폴더에
 
@@ -68,10 +74,10 @@ def test_outfit_has_every_base_frame_and_motions(char, outfit):
 def test_outfit_frame_matches_base_head_and_height(char, outfit, name):
     if char == "다래" and name.startswith("drag_"):
         pytest.skip("다래 끌기는 후광 폭으로 맞춤(QA 11-26) — test_dare_drag_halo_width_steady가 봄")
-    base, dressed = _read(CHARS / char / f"{name}.png"), _read(CHARS / char / "outfits" / outfit / f"{name}.png")
+    base, dressed = _read(_base(char) / f"{name}.png"), _read(CHARS / char / "outfits" / outfit / f"{name}.png")
     if (char, outfit) in HAT:   # 모자 옷: 서 있기 대비 키 비율이 기본 같은 장과 ±6%(기획 크기 규칙 11-26)
         mine = dressed.shape[0] / _read(CHARS / char / "outfits" / outfit / "stand_0.png").shape[0]
-        ref = base.shape[0] / _read(CHARS / char / "stand_0.png").shape[0]
+        ref = base.shape[0] / _read(_base(char) / "stand_0.png").shape[0]
         assert abs(mine / ref - 1) <= 0.06, (mine, ref)
         return
     k = best_scale(_head(base), _head(dressed), 0.85, 1.15, 61)
@@ -109,8 +115,13 @@ def test_wearing_outfit_swaps_pet_frames(char, outfit):
     from mabinogi_addon.ui import pet_window
 
     profile, _m, ref = OUTFITS[(char, outfit)]
-    base = pet_window.load_frames(char, profile)
     dressed = pet_window.load_frames(char, profile, outfit)
+    if char in SHEET_BASE:   # 영상판 다래: 착장은 옷 폴더 그림만(예전 시트 한 벌) — 기본 옷(영상)과 이름이 겹쳐도 섞이지 않음
+        folder = CHARS / char / "outfits" / outfit
+        assert {n for f, _t, _l in profile.anims.values() for n in f} <= set(dressed)
+        assert all(dressed[n].size() == pet_window.QImage(str(folder / f"{n}.png")).size() for n in (ref, "walk_0", "pet_0"))
+        return
+    base = pet_window.load_frames(char, profile)
     assert set(base) == set(dressed)
     assert all(base[n].size() != dressed[n].size() or base[n] != dressed[n] for n in (ref, "walk_0", "pet_0"))
 
@@ -139,7 +150,7 @@ def test_drag_and_pet_height_close_to_base_range(char, outfit):
     for prefix in ("drag", "pet"):
         if char == "다래" and (prefix == "drag" or outfit == "white_offshoulder"):
             continue   # 키는 자세(다리 폄·머리 기울임)로 달라 — 후광 폭으로 봄(test_dare_drag_halo_width_steady)
-        allowed = max(0.025, spread(CHARS / char, prefix) + 0.005)
+        allowed = max(0.025, spread(_base(char), prefix) + 0.005)
         assert spread(CHARS / char / "outfits" / outfit, prefix) <= allowed, prefix
 
 
@@ -186,7 +197,7 @@ def test_dare_drag_halo_width_steady(outfit):
     """QA 11-26 다래 오프숄더 잡아 들기 크기 들쭉날쭉(후광 폭 142→163): 끌기 묶음 안 후광 폭 범위 ≤ 3%,
     후광 폭 ÷ 서 있기 후광 폭이 기본 다래 같은 칸과 ±3%."""
     from scripts.build_outfit_frames import halo_width
-    base, dressed = CHARS / "다래", CHARS / "다래" / "outfits" / outfit
+    base, dressed = _base("다래"), CHARS / "다래" / "outfits" / outfit
     widths = [halo_width(_read(dressed / f"drag_{i}.png")) for i in range(4)]
     assert (max(widths) - min(widths)) / min(widths) <= 0.03, widths
     for i, w in enumerate(widths):
@@ -220,7 +231,7 @@ def test_dare_offshoulder_drag_body_width_close_to_base():
     def spread(folder):
         ws = [body(_read(folder / f"drag_{i}.png")) for i in range(4)]
         return (max(ws) - min(ws)) / min(ws)
-    assert spread(CHARS / "다래" / "outfits" / "white_offshoulder") <= spread(CHARS / "다래") + 0.045
+    assert spread(CHARS / "다래" / "outfits" / "white_offshoulder") <= spread(_base("다래")) + 0.045
 
 
 def test_ian_guild_coat_has_one_front_gold_line_and_drag_uses_two_drawings():

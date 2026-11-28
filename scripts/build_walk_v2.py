@@ -74,6 +74,8 @@ def build(name: str) -> list[np.ndarray]:
 
 def main() -> None:
     for name in WALKS:
+        if name == "다래":   # 다래 기본 옷 걷기는 영상판(11-28, scripts/build_dare_video) — 옛 GPT 걷기로 덮지 않음(착장 걷기는 아래 그대로)
+            continue
         for i, frame in enumerate(build(name)):
             imwrite(OUT / name / f"walk_{i}.png", frame)
         print(name, [f.shape[0] for f in (imread(OUT / name / f"walk_{i}.png", cv2.IMREAD_UNCHANGED) for i in range(FRAMES))])

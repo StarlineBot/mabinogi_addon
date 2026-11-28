@@ -702,7 +702,7 @@ class CharacterTab(QWidget):
             base = paths.resource_dir() / "characters" / folder
             where = base / "outfits" / outfit if outfit and (base / "outfits" / outfit).is_dir() else base
             from .pet_window import frame_file
-            for m in motions.of(folder):
+            for m in motions.of(folder, where != base):   # 영상판 다래가 착장을 입으면 예전 시트 모션
                 if all(frame_file(where, n) is not None for n in m.names()):   # PNG 또는 WebP(Starline 영상판)
                     btn = QPushButton(f"♥ {m.stage} 모션")
                     btn.setToolTip(f"{m.key} — 펫이 서 있으면 바로 한 번(제작자 확인용)")

@@ -45,7 +45,9 @@ class Motion:
 MOTIONS: dict[str, tuple[Motion, ...]] = {
     "아리아": (Motion(25, "motion_water", 8, (2, 4), hold=((6, 1.2),)), Motion(75, "motion_wreath", 8, (2, 4), hold=((5, 2.0),))),
     # 양인형: 6번(인형을 안아 올림)은 2.1초 머묾(사용자 11-26 '껴안고 있는 프레임이 좀 유지되어야')
-    "다래": (Motion(25, "motion_sheep_doll", 8, (2, 4), hold=((6, 2.1),)), Motion(75, "motion_bubbles", 8, (2, 4))),
+    # 다래 영상판(기획 11-28): 30장 0.1초 한 번 — 양 인형 15번(꼭 안음) 1.0초
+    "다래": (Motion(25, "motion_sheep_doll", 30, None, hold=((15, 1.0),), frame=0.1),
+             Motion(75, "motion_bubbles", 30, None, frame=0.1)),
     "레나": (Motion(25, "motion_grimoire", 8, (2, 4), hold=((4, 0.6), (5, 1.2))), Motion(75, "motion_float_sit", 8, (2, 5), (10.0, 20.0))),
     "이안": (Motion(25, "motion_tidy", 8, None), Motion(75, "motion_tea", 6, (2, 4))),
     "Starline": (Motion(25, "motion_flame_shot", 30, None, hold=((9, 1.0),), frame=0.1),   # 영상판(11-27) 30장 0.1초
@@ -53,18 +55,27 @@ MOTIONS: dict[str, tuple[Motion, ...]] = {
 }
 
 
-def of(folder: str) -> tuple[Motion, ...]:
+# 착장(영상판 그림 없음)을 입었을 때 — 예전 시트 8장 모션(양인형 6번 2.1초: 사용자 11-26 '껴안고 있는 프레임이 좀 유지되어야')
+SHEET_MOTIONS: dict[str, tuple[Motion, ...]] = {
+    "다래": (Motion(25, "motion_sheep_doll", 8, (2, 4), hold=((6, 2.1),)), Motion(75, "motion_bubbles", 8, (2, 4))),
+}
+
+
+def of(folder: str, dressed: bool = False) -> tuple[Motion, ...]:
+    """그 캐릭터 모션 — 착장 폴더 그림을 입었고(dressed) 그 캐릭터가 영상판이면 예전 시트 모션."""
+    if dressed and folder in SHEET_MOTIONS:
+        return SHEET_MOTIONS[folder]
     return MOTIONS.get(folder, ())
 
 
-def frame_names(folder: str) -> set[str]:
-    return {n for m in of(folder) for n in m.names()}
+def frame_names(folder: str, dressed: bool = False) -> set[str]:
+    return {n for m in of(folder, dressed) for n in m.names()}
 
 
-def unlocked(folder: str, stage: int, frames) -> dict[str, float]:
+def unlocked(folder: str, stage: int, frames, dressed: bool = False) -> dict[str, float]:
     """열린 모션 → 고를 무게(지금 구간에서 새로 열린 것 2배). 그림이 다 있는 것만(입은 옷에 없으면 빠짐)."""
     out = {}
-    for m in of(folder):
+    for m in of(folder, dressed):
         if m.stage <= stage and all(n in frames for n in m.names()):
             out[m.key] = 2.0 if m.stage == stage else 1.0
     return out

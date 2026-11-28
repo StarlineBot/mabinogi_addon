@@ -105,7 +105,15 @@ def block_diff(a: np.ndarray, b: np.ndarray) -> tuple[float, tuple[int, int]]:
 
 
 def source_map(folder: str) -> dict[str, Path]:
-    """앱 장 이름 → 기획 원본 파일(빌드 스크립트 표 그대로). 지금은 Starline 영상판만."""
+    """앱 장 이름 → 기획 원본 파일(빌드 스크립트 표 그대로). Starline·다래 영상판."""
+    if folder == "다래":
+        from scripts import build_dare_video as d
+        out = {f"stand_{i}": d.SRC / f"stand_{i:02d}.png" for i in range(30)}
+        for prefix, (sub, indices, _ref) in d.FOLDERS.items():
+            out.update({f"{prefix}_{i}": d.SRC / sub / f"{i:02d}.png" for i in indices})
+        out.update({f"talk_{k}_0": d.SRC / d.TALK / f"{i:02d}.png" for k, i in d.TALK_PICK.items()})
+        out["talk_base_0"] = d.SRC / d.TALK / f"{d.TALK_BODY:02d}.png"
+        return {k: v for k, v in out.items() if v.is_file()}
     if folder != "Starline":
         return {}
     from scripts import build_starline_video as b
@@ -130,13 +138,17 @@ def check(folder: str, outfit: str = "", source: Path | None = None, base: str |
 
     base_dir = CHARS / folder
     look = [base_dir / "outfits" / outfit, base_dir] if outfit else [base_dir]
-    profile = br.PROFILES[folder]
+    sheet_outfit = bool(outfit) and folder in br.SHEET_PROFILES   # 영상판 다래 착장 = 옷 폴더 한 벌(예전 시트 프로필·크기)
+    if sheet_outfit:
+        base_dir = base_dir / "outfits" / outfit
+        look = [base_dir]
+    profile = br.profile_for(folder, sheet_outfit)
     try:
         anchors = json.loads((base_dir / "anchors.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
         anchors = {}
     seqs: dict[str, list[str]] = {state: list(frames) for state, (frames, _t, _l) in profile.anims.items()}
-    for m in motions.of(folder):
+    for m in motions.of(folder, sheet_outfit):
         seqs[f"motion:{m.key}"] = list(m.names())
     loops = {state for state, (_f, _t, loop) in profile.anims.items() if loop}
 
@@ -236,7 +248,7 @@ def check(folder: str, outfit: str = "", source: Path | None = None, base: str |
                 for name in dict.fromkeys(seqs[state]):
                     compare(f"{state}(아무 장)→rise", name, rise[0], False)
 
-    if source is not None or folder == "Starline":
+    if source is not None or (folder in ("Starline", "다래") and not outfit):
         pairs = source_map(folder)
         for name, src in sorted(pairs.items()):
             got = get(name)

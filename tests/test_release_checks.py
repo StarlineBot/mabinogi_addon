@@ -82,7 +82,7 @@ def test_current_release_keeps_feature_boundaries_and_delivery_contracts():
         'src/mabinogi_addon/character/brain.py', 'scripts/build_starline_video.py',
         'src/mabinogi_addon/assets/release_notes.md', 'packaging/release_checks.json',
     } <= set(plan['coverage'])
-    assert (root / 'src/mabinogi_addon/assets/characters/다래/stand_0.png').is_file()
+    assert (root / 'src/mabinogi_addon/assets/characters/다래/stand_0.webp').is_file()   # 다래 영상판(0.60.0) — 기본 옷 장은 WebP
     # The separate development entry must continue collecting the whole suite.
     regression = (root / '.github/workflows/regression.yml').read_text(encoding='utf-8')
     assert 'scripts.run_regressions' in regression
