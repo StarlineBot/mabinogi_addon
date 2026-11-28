@@ -1,5 +1,5 @@
 {
-  "version": "0.59.3",
+  "version": "0.60.0",
   "tests": [
     "tests/test_affinity_v2.py",
     "tests/test_bundle_layout.py",
@@ -57,7 +57,7 @@
         "tests/test_release_notes.py",
         "tests/test_release_notes_trigger.py"
       ],
-      "reason": "v0.59.3 노트"
+      "reason": "v0.60.0 노트"
     },
     "packaging/release_checks.json": {
       "tests": [
@@ -65,13 +65,13 @@
         "tests/test_release_candidate.py",
         "tests/test_windows_ci.py"
       ],
-      "reason": "0.59.3 검사 목록·배포 계약"
+      "reason": "0.60.0 검사 목록·배포 계약"
     },
     "tests/test_release_checks.py": {
       "tests": [
         "tests/test_release_checks.py"
       ],
-      "reason": "0.59.3 경계"
+      "reason": "0.60.0 경계"
     },
     "src/mabinogi_addon/assets/characters/Starline/laugh_0.webp": {
       "tests": [
